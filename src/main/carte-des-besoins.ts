@@ -112,6 +112,7 @@ export function demandesDuFil(conversation: ConversationPourLaCarte): DemandeDeL
       rang: etape.rang,
       ...(etape.messageId ? { messageId: etape.messageId } : {}),
       titre: etape.titre,
+      ...(etape.texte ? { texte: etape.texte } : {}),
       statut: etape.statut,
       constat: borner(etape.constat, MAX_CONSTAT),
       ...(etape.debut === undefined ? {} : { debut: etape.debut }),

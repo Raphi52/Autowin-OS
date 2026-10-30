@@ -20,6 +20,24 @@ describe('kaizenNamedConversationId', () => {
     )
     expect(kaizenNamedConversationId('/kaizen Conv-61 puis conv-60')).toBe('conv-61')
   })
+  it('lit le numero seul en tete (kaizen conv-1266, tour 9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f)', () => {
+    // Demande reelle : le dossier recu etait celui de conv-1266 elle-meme, vide.
+    expect(
+      kaizenNamedConversationId(
+        "/kaizen 1263 le petit modele de l'app a parlé de dialogue c nimporte quoi il doit lui manquer du contexte pour faire ses actions interne a autowin OS"
+      )
+    ).toBe('conv-1263')
+    expect(kaizenNamedConversationId('/kaizen la 1256 parallelise pas tout')).toBe('conv-1256')
+    expect(kaizenNamedConversationId('/kaizen 1263')).toBe('conv-1263')
+    // Une mention `conv N` reste prioritaire.
+    expect(kaizenNamedConversationId('/kaizen 12 conv 150 le lien')).toBe('conv-150')
+  })
+  it('un nombre qui est une QUANTITE ne designe pas une conversation', () => {
+    expect(kaizenNamedConversationId('/kaizen 3 fois il a rate le build')).toBeUndefined()
+    expect(kaizenNamedConversationId('/kaizen 1/10 cette reponse')).toBeUndefined()
+    expect(kaizenNamedConversationId('/kaizen 2 tours de suite il boucle')).toBeUndefined()
+    expect(kaizenNamedConversationId('/kaizen il a fait 1263 lignes')).toBeUndefined()
+  })
   it('rien si aucune conversation nommee', () => {
     expect(kaizenNamedConversationId('/kaizen le lien est casse')).toBeUndefined()
     expect(kaizenNamedConversationId('/frame conv-61')).toBeUndefined()

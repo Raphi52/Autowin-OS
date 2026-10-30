@@ -278,7 +278,13 @@ export function lirePlanDeLots(brut: unknown): LecturePlan {
       return refus(
         `plafond de ${t} tours : ${TOURS_PAR_LOT_MAX} par lot au plus (${n * TOURS_PAR_LOT_MAX}).`
       )
-    if (t < n) avertissements.push(`le plafond de ${t} tours ne couvre que ${t} lots sur ${n}.`)
+    // Refus, plus un simple avertissement : les chefs lisaient « 2 par lot » et donnaient 2 pour
+    // tout le plan (conv-1256 : 2 tours pour 5 lots ; conv-1236 : 3 pour 6). Le budget épuisé
+    // faisait partir les lots UN PAR UN puis arrêtait le plan à mi-chemin (conv-1273).
+    if (t < n)
+      return refus(
+        `plafond de ${t} tours pour ${n} lots : plafondTours est le TOTAL du plan, pas un nombre par lot — mets au moins ${n} (un tour par lot), ou omets-le (défaut ${n * TOURS_PAR_LOT_DEFAUT}).`
+      )
     plafondTours = t
   }
   for (let i = 0; i < n; i++)

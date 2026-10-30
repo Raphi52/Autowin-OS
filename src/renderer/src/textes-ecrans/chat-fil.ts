@@ -178,7 +178,7 @@ export const TEXTES_FR = {
   'message.revenir.titre':
     'Revenir à ce tour : le code de son début dans une copie séparée, le fil juste avant ce message',
   'message.revenir': 'Revenir à ce tour, code et fil',
-  'message.lectureRetenue': 'lecture',
+  'message.lectureRetenue': 'compréhension',
   'message.orchestrationIndisponible': 'orchestration indisponible',
   'reponse.echec': 'Réponse en échec',
   'reponse.annulee': 'Réponse annulée',
@@ -685,7 +685,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'message.revenir.titre':
     'Go back to this turn: the code as it was at its start in a separate copy, the thread just before this message',
   'message.revenir': 'Go back to this turn, code and thread',
-  'message.lectureRetenue': 'reading',
+  'message.lectureRetenue': 'understood',
   'message.orchestrationIndisponible': 'orchestration unavailable',
   'reponse.echec': 'Answer failed',
   'reponse.annulee': 'Answer cancelled',

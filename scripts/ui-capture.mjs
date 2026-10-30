@@ -75,7 +75,8 @@
  *                                    relache la souris (barre « repondre a un passage »).
  *                                    `point:<sel>` (conv-1130) = clic AVEC la position de la souris,
  *                                    au centre de la cible (un geste qui lit clientX/clientY).
- *         [--state attention] [--state-selector <sel>] force un etat DOM (defaut
+ *         [--state attention|occupe|atterrissage-reussi|atterrissage-echec|arrivee]
+ *         [--state-selector <sel>] force un etat DOM (defaut
  *                                    `.chat-mosaic-window`) que la navigation seule ne produit pas.
  *                                    Zero element touche = echec nomme (code 7).
  *         [--largeur <px>] [--hauteur <px>] emule une fenetre de cette taille (defaut hauteur =
@@ -710,17 +711,27 @@ export const ENV_CONVERSATION_SEMEE = 'AUTOWIN_CAPTURE_CONVERSATION_SEMEE'
 /** Clé de la conversation rouverte au démarrage (`derniere-conversation.ts`, renderer). */
 export const CLE_DERNIERE_CONVERSATION = 'autowin.chat.derniereConversation'
 
-export const ETATS_CONNUS = ['attention', 'occupe', 'atterrissage-reussi', 'atterrissage-echec']
+export const ETATS_CONNUS = [
+  'attention',
+  'occupe',
+  'atterrissage-reussi',
+  'atterrissage-echec',
+  'arrivee'
+]
 
 /**
  * L'attribut qu'un etat force ECRIT, tel que le composant le pose. Pure. La mosaique ecrit
  * `data-etat` ; le rond de verre ecrit `data-atterrissage` a la fin d'un run vu en cours
- * (anneau-activite.tsx, conv-981) : reflet si reussi, secousse si echec.
+ * (anneau-activite.tsx, conv-981) : reflet si reussi, secousse si echec. La pastille
+ * « compréhension » du fil ecrit `data-arrivee` pendant le tour qui l'a vue arriver
+ * (ChatMessageRow.tsx, conv-1280) : son reflet ne passe qu'a ce moment-la, jamais sur un fil rouvert.
  */
 export const attributDEtat = (etat) =>
-  etat.startsWith('atterrissage-')
-    ? { nom: 'data-atterrissage', valeur: etat.slice('atterrissage-'.length) }
-    : { nom: 'data-etat', valeur: etat }
+  etat === 'arrivee'
+    ? { nom: 'data-arrivee', valeur: '' }
+    : etat.startsWith('atterrissage-')
+      ? { nom: 'data-atterrissage', valeur: etat.slice('atterrissage-'.length) }
+      : { nom: 'data-etat', valeur: etat }
 
 export const resoudreEtat = (valeur) => {
   const brut = String(valeur ?? '')

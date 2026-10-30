@@ -1550,7 +1550,7 @@ export class AgentPilot {
       emit({
         kind: 'delta',
         streamId: FLUX_LECTURE_RETENUE,
-        text: `${annonceDeLaLectureRetenue(issue.retenue, issue.ecartee)}\n\n`,
+        text: `${annonceDeLaLectureRetenue(issue.retenue)}\n\n`,
         iteration: 0
       })
     }

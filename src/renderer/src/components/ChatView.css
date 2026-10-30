@@ -4374,10 +4374,12 @@ button.chat-project-dot:disabled {
    capsule. 2 px depuis Fumé net. Tour fini : le bord palit a 55 %, la capsule reste lisible sans
    tirer l'oeil. Le liseré de « Garder » sur la carte de suppression des fils (conv-1078) prend ce
    même calque, par un sélecteur LÉGER : sa règle propre, plus haut et plus lourde, en change
-   l'épaisseur, la couleur et le plan quel que soit l'ordre. */
+   l'épaisseur, la couleur et le plan quel que soit l'ordre. La pastille « compréhension » du fil
+   (conv-1280) aussi, en 1 px, dans son propre plan (isolation). */
 .thinking-block > summary .thinking-capsule::before,
 .capsule-bouton .thinking-capsule::before,
-.delete-confirm-card--fils .delete-confirm-cancel::before {
+.delete-confirm-card--fils .delete-confirm-cancel::before,
+.msg-lecture-etiquette::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -6311,17 +6313,91 @@ button.chat-project-dot:disabled {
   color: var(--text-dim);
   word-break: break-word;
 }
+/* « PASTILLE NACRÉE » (/draft conv-1280, 2026-10-29, choix 1 : « des apparences plus jolies et qui
+   mettent plus en valeur ») : cadre de 1 px en dégradé bleu > rose, intérieur teinté de l'accent,
+   coche, libellé dans l'encre d'accent du thème (`--gold`, lisible en clair comme en sombre). Le
+   cadre est le calque évidé des capsules (BORD DEGRADE, plus haut) : l'intérieur reste transparent
+   sur le verre du fil, au lieu d'un aplat qui jurerait avec le fond. */
 .msg-lecture-etiquette {
-  display: inline-block;
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   margin-right: 8px;
-  padding: 0 7px;
-  border: 1px solid var(--line2);
+  padding: 0 9px 0 6px;
   border-radius: 999px;
+  overflow: hidden;
+  background: var(--accent-soft);
   font-family: var(--mono);
   font-size: 10px;
-  line-height: 16px;
+  line-height: 17px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: var(--gold);
   vertical-align: 1px;
+}
+.msg-lecture-etiquette::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, var(--violet), var(--rose));
+  pointer-events: none;
+}
+.msg-lecture-coche {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Le reflet : UN passage quand la ligne arrive pendant le tour (`data-arrivee`), puis plus rien.
+   Pas de garde prefers-reduced-motion : ce poste l'a actif, il ne se verrait jamais (app-shell.css). */
+.msg-lecture-etiquette[data-arrivee]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+      105deg,
+      transparent 35%,
+      rgba(var(--voile-rgb), 0.45) 50%,
+      transparent 65%
+    )
+    no-repeat;
+  background-size: 260% 100%;
+  background-position: 160% 0;
+  animation: msg-lecture-reflet 1.1s ease-in-out 0.15s 1 both;
+  pointer-events: none;
+}
+/* THÈME CLAIR (conv-1280, 2026-10-29 : « rends le reflet plus visible en thème clair ») : le voile y
+   est sombre, et un éclat clair sur une pastille déjà claire ne se voit pas. Le reflet y devient
+   donc un éclat COLORÉ, rose bordé de bleu, les deux couleurs du cadre. Le sombre garde son blanc. */
+:root[data-base='clair'] .msg-lecture-etiquette[data-arrivee]::after {
+  background-image: linear-gradient(
+    105deg,
+    transparent 28%,
+    color-mix(in srgb, var(--violet) 30%, transparent) 40%,
+    color-mix(in srgb, var(--rose) 65%, transparent) 50%,
+    color-mix(in srgb, var(--violet) 30%, transparent) 60%,
+    transparent 72%
+  );
+}
+@keyframes msg-lecture-reflet {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+/* Ce que l'agent a compris, en clair et en gras : la seule chose que la ligne affiche (conv-1280). */
+.msg-lecture-sens {
+  color: var(--text);
+  font-weight: 600;
 }

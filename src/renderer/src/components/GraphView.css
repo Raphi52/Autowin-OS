@@ -82,6 +82,38 @@
   padding: 8px 10px;
 }
 
+/* Filtre des deux Brains (conv-1262) : Équipe · Perso · Les deux, et le compte des ponts. */
+/* Mesure du 2026-10-29 (fenêtre de 900 px) : sans ces deux règles, les trois boutons
+   s'empilaient et « Les deux » passait sur deux lignes. Le compte des ponts, lui, peut aller
+   à la ligne. */
+.graph-brains-filtre {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  max-width: 300px;
+}
+.graph-brains-filtre button {
+  white-space: nowrap;
+  padding: 7px 10px;
+  border: 1px solid #293543;
+  border-radius: 6px;
+  background: rgba(16, 23, 34, 0.95);
+  color: #9fb0c3;
+  cursor: pointer;
+  font-size: 12px;
+}
+.graph-brains-filtre button.is-active {
+  border-color: #c9a55a;
+  color: #f0d9a8;
+}
+.graph-brains-filtre__ponts {
+  margin-left: 6px;
+  color: #f5b942;
+  font-size: 11px;
+}
+
 .graph-refresh {
   width: 32px;
   height: 32px;

@@ -40,6 +40,32 @@ const STATUTS_REPRENABLES = new Set(['suspendu-quota', 'interrompu', 'arrete'])
 const STATUTS_ARRETABLES = new Set(['en-cours', 'suspendu-quota', 'interrompu'])
 
 /*
+ * RÉDUIRE LE TABLEAU (conv-1283, 2026-10-29) : posé au-dessus de la zone de saisie, il prenait
+ * jusqu'à 340 px pendant tout le plan, sans moyen de le replier. Réduit, il ne garde que sa ligne
+ * de titre et de statut. Retenu sur le poste, par plan : sans cela, il se rouvrait à chaque
+ * changement de fil ou rechargement.
+ */
+const CLE_REDUITS = 'autowin:plans-de-lots-reduits'
+const REDUITS_MAX = 100
+
+function lireReduits(): string[] {
+  try {
+    const brut = JSON.parse(window.localStorage.getItem(CLE_REDUITS) ?? '[]') as unknown
+    return Array.isArray(brut) ? brut.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function retenirReduits(ids: string[]): void {
+  try {
+    window.localStorage.setItem(CLE_REDUITS, JSON.stringify(ids.slice(-REDUITS_MAX)))
+  } catch {
+    // Stockage indisponible : le tableau reste réduit jusqu'au prochain remontage, rien de plus.
+  }
+}
+
+/*
  * DURÉE ET COÛT DE CHAQUE LOT (conv-1151, lot 4 — constat d'origine conv-1146 : plus de 20 $ dans un
  * seul fil, sans que rien ne le montre). Le coût d'un lot est celui de SON fil, lu par le même canal
  * `costBreakdown` et résumé par le même `summarizeConversationCost` que la pastille de coût du fil
@@ -298,13 +324,14 @@ export function TableauDesLots({
 }: {
   conversationId?: string | null
 }): React.JSX.Element | null {
-  const { langue, t } = useTextesChatFilsEtLots()
+  const { t } = useTextesChatFilsEtLots()
   // L'état porte le fil qu'il décrit : à un changement de fil, l'ancien plan n'est jamais affiché.
   const [lu, setLu] = useState<{ fil: string; vue: VuePlanDeLots | null }>({ fil: '', vue: null })
   const [geste, setGeste] = useState<{ fil: string; enCours: boolean; erreur?: string }>({
     fil: '',
     enCours: false
   })
+  const [reduits, setReduits] = useState<string[]>(lireReduits)
 
   useEffect(() => {
     if (!conversationId || typeof window.api?.plansDeLots !== 'function') return
@@ -363,8 +390,23 @@ export function TableauDesLots({
     )
   }
 
+  /*
+   * PLAN REFUSÉ = TABLEAU FERMÉ (conv-1283, 2026-10-29) : après « Refuser », le tableau restait
+   * posé au-dessus de la saisie avec son seul statut « refusé » et la liste de lots qui ne partiront
+   * jamais. Plus rien n'y est à suivre ni à cliquer : il disparaît.
+   */
+  if (plan.statut === 'refuse') return null
+
   const erreur = geste.fil === conversationId ? geste.erreur : undefined
   const occupe = geste.fil === conversationId && geste.enCours
+  const reduit = reduits.includes(plan.id)
+  const basculerReduit = (): void => {
+    const suivants = reduit
+      ? reduits.filter((id) => id !== plan.id)
+      : [...reduits.filter((id) => id !== plan.id), plan.id]
+    setReduits(suivants)
+    retenirReduits(suivants)
+  }
   const agir = (action: Exclude<GestePlanDeLots, 'voir'>, lot?: number): void => {
     if (occupe) return
     setGeste({ fil: conversationId, enCours: true })
@@ -373,8 +415,19 @@ export function TableauDesLots({
         ? window.api.plansDeLots(action, conversationId, plan.id)
         : window.api.plansDeLots(action, conversationId, plan.id, lot)
     reponse.then(
-      (r) =>
-        setGeste({ fil: conversationId, enCours: false, ...(r.ok ? {} : { erreur: r.erreur }) }),
+      (r) => {
+        // Le plan rendu par le geste s'affiche tout de suite (un refus ferme le tableau au clic),
+        // sans attendre le signal de rafraîchissement qui le relira de toute façon.
+        if (r.ok && r.plan?.id === plan.id) {
+          const nouveau = r.plan
+          setLu((avant) =>
+            avant.fil === conversationId && avant.vue
+              ? { fil: avant.fil, vue: { ...avant.vue, plan: nouveau } }
+              : avant
+          )
+        }
+        setGeste({ fil: conversationId, enCours: false, ...(r.ok ? {} : { erreur: r.erreur }) })
+      },
       (e: unknown) =>
         setGeste({
           fil: conversationId,
@@ -386,10 +439,11 @@ export function TableauDesLots({
 
   return (
     <section
-      className={`tdl tdl--${plan.statut}`}
+      className={`tdl tdl--${plan.statut}${reduit ? ' tdl--reduit' : ''}`}
       aria-label={t('lots.aria')}
       data-testid="tableau-des-lots"
       data-statut={plan.statut}
+      data-reduit={reduit ? 'oui' : undefined}
     >
       <header className="tdl-tete">
         <span className="tdl-kicker">{t('lots.kicker')}</span>
@@ -397,7 +451,42 @@ export function TableauDesLots({
         <span className={`tdl-statut tdl-statut--${plan.statut}`}>
           {t(CLE_STATUT[plan.statut])}
         </span>
+        <button
+          type="button"
+          className="tdl-reduire"
+          data-testid="tdl-reduire"
+          aria-expanded={!reduit}
+          title={reduit ? t('lots.agrandir.titre') : t('lots.reduire.titre')}
+          onClick={basculerReduit}
+        >
+          {reduit ? t('lots.agrandir') : t('lots.reduire')}
+        </button>
       </header>
+      {reduit ? null : <TableauDeplie plan={plan} couts={couts} occupe={occupe} agir={agir} />}
+      {erreur ? (
+        <div className="tdl-erreur" role="alert">
+          {erreur}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+/** Tout ce qui suit la ligne de titre : masqué d'un bloc quand le tableau est réduit. */
+function TableauDeplie({
+  plan,
+  couts,
+  occupe,
+  agir
+}: {
+  plan: PlanDeLots
+  couts: CoutsParFil
+  occupe: boolean
+  agir: (action: Exclude<GestePlanDeLots, 'voir'>, lot?: number) => void
+}): React.JSX.Element {
+  const { langue, t } = useTextesChatFilsEtLots()
+  return (
+    <>
       <div className="tdl-bilan">
         {texteDuBilan(plan, langue)} ·{' '}
         {selonNombre(langue, plan.parallele, 'lots.parallele.un', 'lots.parallele.plusieurs')} ·{' '}
@@ -483,11 +572,6 @@ export function TableauDesLots({
           ) : null}
         </div>
       ) : null}
-      {erreur ? (
-        <div className="tdl-erreur" role="alert">
-          {erreur}
-        </div>
-      ) : null}
-    </section>
+    </>
   )
 }

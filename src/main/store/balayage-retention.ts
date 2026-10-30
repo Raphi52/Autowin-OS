@@ -1,4 +1,5 @@
 import { WorktreeManager } from './worktree-manager'
+import type { RapportRetention } from '../../shared/rapport-retention'
 
 /**
  * LE PLAN D'UN BALAYAGE DE RETENTION — pur, sans aucun effet, testable seul.
@@ -68,4 +69,50 @@ export function planifierBalayage(entrees: readonly EntreeBalayage[]): PlanDeBal
   }
 
   return { aSupprimer, aSignaler, reportees }
+}
+
+/** Ce que la passe emprunte a l'app, injecte pour la jouer sans Electron ni depot reel. */
+export interface DependancesPasseRetention {
+  recenser: () => Promise<EntreeBalayage[]>
+  poserRapport: (rapport: RapportRetention) => void
+  journal?: Pick<Console, 'info' | 'warn'>
+}
+
+/** UNE passe de retention : recenser, planifier, deposer le rapport. Appelee par `index.ts`. */
+export async function jouerPasseDeRetention(deps: DependancesPasseRetention): Promise<void> {
+  const journal = deps.journal ?? console
+  let entrees: EntreeBalayage[]
+  try {
+    entrees = await deps.recenser()
+  } catch (erreur) {
+    /*
+     * GERE, PAS AVALE (crash.log, 2026-10-28 18:28:45Z) : le recensement passe par la file
+     * d'operations git, plafonnee a 5 min ; un depassement rejetait la promesse et, lancee en
+     * `void` depuis le minuteur, elle finissait en « unhandledRejection ». On ne fabrique pas de
+     * rapport sur un recensement absent : le precedent reste affiche avec sa date, la passe
+     * suivante (une heure) reessaie, et l'echec est ecrit ici avec sa cause.
+     */
+    const cause = erreur instanceof Error ? erreur.message : String(erreur)
+    journal.warn(`[retention] passe abandonnee, aucun nouveau rapport : ${cause}`)
+    return
+  }
+  const plan = planifierBalayage(entrees)
+  /*
+   * ON DEPOSE LE RAPPORT AVANT DE SORTIR, y compris quand il est VIDE. Un plan vide n'est pas
+   * un non-evenement : il affirme que le stock est sain, ce que « rien affiche » ne dit pas.
+   * L'interface distingue « jamais balaye » de « balaye, rien a signaler ».
+   */
+  deps.poserRapport({
+    faitLe: new Date().toISOString(),
+    examines: entrees.length,
+    sansPerte: plan.aSupprimer.map((e) => e.nom),
+    aTrancher: plan.aSignaler.map((e) => e.nom),
+    reportees: plan.reportees
+  })
+  if (plan.aSupprimer.length === 0 && plan.aSignaler.length === 0) return
+  journal.info(
+    `[retention] ${plan.aSupprimer.length} sans perte, ${plan.aSignaler.length} perimes a trancher` +
+      (plan.reportees > 0 ? `, ${plan.reportees} reportes` : '') +
+      ' — AUCUNE suppression automatique.'
+  )
 }

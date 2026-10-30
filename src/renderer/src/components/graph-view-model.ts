@@ -15,6 +15,8 @@ export type GraphNode = {
   graphScore?: number
   fusedScore?: number
   relations?: Array<{ type: string; target: string }>
+  /** Note du Brain perso dans la vue des deux Brains (conv-1262) : id préfixé `perso:`. */
+  perso?: true
   /** Métadonnées uniquement présentes sur les dossiers synthétiques de l'arbre radial. */
   treeNodeId?: string
   treeDepth?: number
@@ -56,7 +58,21 @@ export type GraphLink = {
   weight: number
   relation?: string
 }
-export type GraphData = { nodes: GraphNode[]; links: GraphLink[]; totalNodes?: number }
+/**
+ * Vue des deux Brains (conv-1262) : les notes perso et les ponts ont leur propre couleur, pour se
+ * lire d'un coup d'œil au milieu des thèmes d'équipe. Couleurs de dessin 3D (WebGL), pas de CSS :
+ * le thème de l'app ne les atteint pas, comme les couleurs de santé de `GraphView`.
+ */
+export const COULEUR_NOEUD_PERSO = '#c084fc'
+export const COULEUR_PONT = '#f5b942'
+
+export type GraphData = {
+  nodes: GraphNode[]
+  links: GraphLink[]
+  totalNodes?: number
+  /** Vue des deux Brains (conv-1262) : ponts tracés, ou pourquoi aucun ne l'a été. */
+  ponts?: { nombre: number; raison?: string }
+}
 export type KnowledgeHealthIssue = {
   relation: 'contradicts' | 'supersedes'
   source: GraphNode
@@ -519,7 +535,9 @@ export function mergeGraphDelta(graph: GraphData, delta: GraphData): GraphData {
   return {
     nodes,
     links,
-    totalNodes: Math.max(graph.totalNodes ?? nodes.length, delta.totalNodes ?? nodes.length)
+    totalNodes: Math.max(graph.totalNodes ?? nodes.length, delta.totalNodes ?? nodes.length),
+    // Le compte de ponts appartient au graphe de base (conv-1262) : un voisinage fusionné n'en porte pas.
+    ...(graph.ponts ? { ponts: graph.ponts } : {})
   }
 }
 

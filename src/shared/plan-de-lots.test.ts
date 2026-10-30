@@ -51,6 +51,15 @@ function planAccepte(brut: unknown): PlanDeLots {
   return { ...plan, statut: 'en-cours' }
 }
 
+/**
+ * Plafond posé APRÈS lecture : un plan déjà sur disque peut avoir moins de tours que de lots (déposé
+ * avant le refus de la lecture, conv-1273) ; le mécanisme « plafond atteint » doit rester juste.
+ */
+const avecPlafond = (plan: PlanDeLots, plafondTours: number): PlanDeLots => ({
+  ...plan,
+  plafondTours
+})
+
 /** Lance tout ce qui peut partir, avec des fils `conv-1xx` numérotés par rang. */
 function lancerCeQuiPart(plan: PlanDeLots): PlanDeLots {
   let p = plan
@@ -145,10 +154,18 @@ describe('lirePlanDeLots — lecture stricte du plan déposé par le chef', () =
     expect(lu({ plafondTours: 20, lots: [lot(1), lot(2)] }).plan.plafondTours).toBe(20)
   })
 
-  it('avertit quand le plafond ne couvre pas tous les lots', () => {
-    const r = lu({ plafondTours: 2, lots: [lot(1), lot(2), lot(3)] })
-    expect(r.plan.plafondTours).toBe(2)
-    expect(r.avertissements.join(' ')).toMatch(/ne couvre que 2 lots sur 3/)
+  it('refuse un plafond sous le nombre de lots : c’est un TOTAL, pas un nombre par lot', () => {
+    // Cas réels (29/10) : 2 tours pour 5 lots (conv-1256), 3 pour 6 (conv-1236). Le chef croyait
+    // donner « 2 par lot » : un seul lot partait à la fois, puis le plan s'arrêtait à mi-chemin.
+    const r = lirePlanDeLots({ plafondTours: 2, lots: [lot(1), lot(2), lot(3), lot(4), lot(5)] })
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.erreur).toMatch(/plafond de 2 tours pour 5 lots/)
+      expect(r.erreur).toMatch(/TOTAL/)
+      expect(r.erreur).toMatch(/au moins 5/)
+    }
+    // La borne basse (un tour par lot, aucune relance) reste acceptée.
+    expect(lu({ plafondTours: 3, lots: [lot(1), lot(2), lot(3)] }).plan.plafondTours).toBe(3)
   })
 
   it('signale deux lots qui annoncent le même fichier (ils passeront l’un après l’autre)', () => {
@@ -195,7 +212,7 @@ describe('lotsAPartir — parallélisme, fichiers partagés et plafond', () => {
 
   it('plafond atteint : plus aucun lot ne part, le plan s’arrête avec sa raison', () => {
     let p = lancerCeQuiPart(
-      planAccepte({ parallele: 2, plafondTours: 2, lots: [lot(1), lot(2), lot(3)] })
+      avecPlafond(planAccepte({ parallele: 2, lots: [lot(1), lot(2), lot(3)] }), 2)
     )
     expect(p.toursLances).toBe(2)
     p = noterFinDeTour(p, 'conv-110', { ok: true }, 3000).plan
@@ -309,11 +326,10 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
   it('cas réel : 3 lots coupés par la limite ne vident pas le plafond, « Reprendre » les relance', () => {
     // Plan Golden : 6 lots, 3 en parallèle, plafond de 3 tours.
     let p = lancerCeQuiPart(
-      planAccepte({
-        parallele: 3,
-        plafondTours: 3,
-        lots: [lot(1), lot(2), lot(3), lot(4), lot(5), lot(6)]
-      })
+      avecPlafond(
+        planAccepte({ parallele: 3, lots: [lot(1), lot(2), lot(3), lot(4), lot(5), lot(6)] }),
+        3
+      )
     )
     expect(p.toursLances).toBe(3)
     p = noterFinDeTour(p, 'conv-110', { ok: true, echecOrchestration: murHebdo }, 3000).plan
@@ -735,7 +751,7 @@ describe('apres — dépendances explicites entre lots', () => {
 
   it('jumeau : plafond épuisé, le plan reste « plafond atteint » même si un prérequis a échoué', () => {
     let p = lancerCeQuiPart(
-      planAccepte({ parallele: 2, plafondTours: 2, lots: [lot(1), dep(2, [1]), lot(3)] })
+      avecPlafond(planAccepte({ parallele: 2, lots: [lot(1), dep(2, [1]), lot(3)] }), 2)
     )
     p = noterFinDeTour(p, 'conv-110', { ok: false, erreur: 'rouge' }, 3000).plan
     p = noterFinDeTour(p, 'conv-130', { ok: true }, 3001).plan

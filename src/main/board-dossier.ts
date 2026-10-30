@@ -42,6 +42,8 @@ export interface DemandeEnregistree {
   rang: number
   messageId?: string
   titre: string
+  /** Le message entier, pour la fiche du Board des collègues (conv-1278) ; absent si `titre` suffit. */
+  texte?: string
   statut: StatutDemande
   constat: string
   date?: string
@@ -118,6 +120,7 @@ function demandeEnregistree(d: DemandeDeLaCarte): DemandeEnregistree {
     rang: d.rang,
     ...(d.messageId ? { messageId: d.messageId } : {}),
     titre: d.titre,
+    ...(d.texte ? { texte: d.texte } : {}),
     statut: d.statut,
     constat: d.constat,
     ...(d.debut !== undefined ? { date: iso(d.debut) } : {}),

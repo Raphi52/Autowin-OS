@@ -86,6 +86,7 @@ export function carteAvecCollegues(
           rang: d.rang,
           ...(d.messageId ? { messageId: d.messageId } : {}),
           titre: d.titre,
+          ...(d.texte ? { texte: d.texte } : {}),
           statut: d.statut,
           constat: d.constat,
           ...(debut !== undefined && Number.isFinite(debut) ? { debut } : {}),

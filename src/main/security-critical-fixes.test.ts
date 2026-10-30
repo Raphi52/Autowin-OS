@@ -709,7 +709,25 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:mascotte:choisir-style` — ECRIT ce style ; `ecrireStyleMascotte` refuse tout ce qui n'est
     //     pas `magicien` ou `basique`, puis la fenetre de la mascotte est recreee dans ce style.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(257)
+    // MISE A JOUR 2026-10-29 (conv-1262) — 257 -> 258, MESURE sur l'arbre partage. UN canal, garde
+    //   des sa PREMIERE ligne par `assertTrustedRendererSender(event, 'Brain')` (`ipc/brain.ts`) :
+    //   `os:loadBrainGraphReunis` — LECTURE des deux Brains relies par leurs ponts. Seul argument :
+    //     le plafond d'affichage (`lod`, nombre sinon ignore) ; AUCUN chemin recu de la vue — le
+    //     worker resout lui-meme la racine d'equipe et celle du Brain perso regle.
+    //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-29 (conv-1286, lot 2/5) — 258 -> 278, MESURE sur la copie de travail
+    //   (258 avant, 278 apres). VINGT canaux du navigateur integre du chat (`ipc/navigateur.ts`),
+    //   EXACTEMENT ceux de `CANAUX_NAVIGATEUR` (`src/shared/navigateur.ts`, sauf `evenementEtat`,
+    //   qui va du principal vers le rendu), tous gardes des leur PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Navigateur intégré du chat')`. Chaque argument est
+    //   verifie AVANT d'atteindre le moteur (`navigateur.test.ts`). Ce qu'ils touchent :
+    //   des pages DANS la fenetre principale (`WebContentsView` bac a sable, sans Node), deux
+    //   fichiers de reglages en userData (`navigateur-reglages.json`, `navigateur-sites.json`),
+    //   l'effacement des donnees de SES deux sessions, et une sortie vers le navigateur du systeme
+    //   limitee a http(s) par le moteur. Une adresse recue de la vue n'est QUE chargee dans un
+    //   onglet (http, https ou file:, liste de `normaliserUrlNavigateur`) : aucune ecriture disque.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(278)
     expect(unguarded).toEqual([])
   })
 

@@ -45,11 +45,20 @@ import type { TerminalStatus } from './chat-resume-refine'
 import type { AttachmentMeta, DirectiveReceipt, Msg } from './chat-view-types'
 import type { InspectTurnTarget } from '../observatory-focus'
 import type { ChatArtifact } from '../../../shared/artifacts'
-import { texteDeLaLectureRetenue } from '../../../shared/lecture-retenue'
+import { ceQuiAEteCompris } from '../../../shared/lecture-retenue'
 import { Spinner } from './Spinner'
 import { decouperSkill } from './skill-entete'
 import type { SkillInstallee } from './useSkillsInventory'
 import { ThinkingBlock } from './ThinkingBlock'
+
+/** Le texte de la ligne « compréhension » : ce que l'agent a compris, en clair et en gras, seul. */
+function LigneDeLaLectureRetenue({ texte }: { texte: string }): React.JSX.Element {
+  return (
+    <span className="msg-lecture-texte">
+      <strong className="msg-lecture-sens">{ceQuiAEteCompris(texte)}</strong>
+    </span>
+  )
+}
 
 /** Le texte COPIABLE d'un message : la bulle utilisateur, ou tout le texte rendu par l'agent. */
 function texteCopiable(message: Msg): string {
@@ -639,6 +648,12 @@ export const ChatMessageRow = memo(
       element.kind === 'receipt' ? [] : groupAssistantActivity(element.parts)
     )
     const reponse = placeDeLaReponse(blocsParElement, message.done)
+    // La ligne « compréhension » se lit EN TÊTE du tour, au-dessus des blocs Raisonnement, Actions
+    // et Étapes (conv-1280, 2026-10-29) : elle dit ce que l'agent a compris avant tout ce qu'il
+    // fait. Elle sort donc de la suite du tour (`estLaLigneDeComprehension`) pour passer devant.
+    const estLaLigneDeComprehension = (bloc: ChatRenderBlock): boolean =>
+      bloc.kind === 'text' && bloc.lectureRetenue === true
+    const lignesDeComprehension = blocsParElement.flat().filter(estLaLigneDeComprehension)
     const debut = message.debutDuTour
     // Une colonne d'heures n'a de sens que si le tour a ete enregistre AVEC elles : un texte ou une
     // action date. Les images ont toujours eu leur heure : sur un tour d'avant le rail, elles seules
@@ -688,11 +703,18 @@ export const ChatMessageRow = memo(
         : null
     const rendreBloc = (part: ChatRenderBlock, index: number): React.ReactNode =>
       part.kind === 'text' && part.lectureRetenue ? (
-        // La lecture que l'agent a retenue (conv-1123) : atténuée, sous une petite étiquette, pour
-        // se repérer avant la réponse sans se confondre avec elle.
+        // La lecture que l'agent a retenue (conv-1123), sous la « Pastille nacrée » (/draft
+        // conv-1280) : étiquette « compréhension » à cadre dégradé et coche, puis ce que l'agent a
+        // compris, en clair et en gras, seul. Le reflet ne passe que pendant le tour : un fil
+        // rouvert plus tard ne fait pas reluire toutes ses anciennes pastilles.
         <p key={index} className="msg-lecture-retenue" dir="auto" data-testid="lecture-retenue">
-          <span className="msg-lecture-etiquette">{t('message.lectureRetenue')}</span>
-          <span className="msg-lecture-texte">{texteDeLaLectureRetenue(part.text)}</span>
+          <span className="msg-lecture-etiquette" data-arrivee={message.done ? undefined : ''}>
+            <svg className="msg-lecture-coche" viewBox="0 0 10 10" aria-hidden="true">
+              <path d="M2 5.2 4.2 7.3 8 2.8" />
+            </svg>
+            {t('message.lectureRetenue')}
+          </span>
+          <LigneDeLaLectureRetenue texte={part.text} />
         </p>
       ) : part.kind === 'text' ? (
         // Le clic ne fait qu'ÉCOUTER les liens `#autowin-prompt` du bloc html-render :
@@ -824,6 +846,11 @@ export const ChatMessageRow = memo(
             chiffree (opus-5), tout le journal d'actions s'effacait a la seconde ou le tour finissait
             et il n'en restait aucune trace lisible dans le fil. Le journal des actions suffit donc
             desormais a garder les deux blocs. */}
+        {lignesDeComprehension.map((bloc, rang) =>
+          // Sans heure sur le rail : posée au-dessus du début du tour, la sienne (quelques secondes
+          // plus tard) se lirait à rebours de la colonne.
+          noeud(`comprehension-${rang}`, natureDuBloc(bloc), undefined, rendreBloc(bloc, rang))
+        )}
         {(message.reasoning ||
           message.providerStatusLog?.length ||
           message.providerStatus ||
@@ -856,6 +883,7 @@ export const ChatMessageRow = memo(
             ) : (
               <Fragment key={`parts-${timelineIndex}`}>
                 {blocsParElement[timelineIndex].map((part, index) => {
+                  if (estLaLigneDeComprehension(part)) return null
                   const estReponse = reponse?.[0] === timelineIndex && reponse[1] === index
                   const point = noeud(
                     cleDuBloc(part, index),

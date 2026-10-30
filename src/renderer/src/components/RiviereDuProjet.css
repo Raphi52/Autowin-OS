@@ -486,11 +486,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Le message ENTIER, sur autant de lignes qu'il en faut (conv-1278 : « voir les messages en entier
+   quand j'ouvre le détail ») ; la fiche défile au-delà de la hauteur du tableau. `anywhere` coupe un
+   chemin ou une URL sans espace au lieu d'élargir la fiche. */
 .riviere-fiche-texte {
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* PAS le bouton de l'app (.btn) : chaque thème le peint pour SON fond, avec une règle plus forte

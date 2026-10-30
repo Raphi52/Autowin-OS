@@ -53,6 +53,8 @@ import {
 } from './graph-column-layout'
 import {
   buildThemeSummaries,
+  COULEUR_NOEUD_PERSO,
+  COULEUR_PONT,
   completeProgressiveGraph,
   dynamicGraphForKey,
   filterGraphVisibility,
@@ -179,6 +181,13 @@ export function GraphView({
   const [brains, setBrains] = useState<BrainGraphRef[]>([])
   const [brainsLoading, setBrainsLoading] = useState(true)
   const [selected, setSelected] = useState('')
+  /**
+   * LES DEUX BRAINS DANS UN GRAPHE (conv-1262, 2026-10-29, demande : « un filtre pour voir que les
+   * nodes de l'un ou l'autre dans la vue knowledge »). Vrai = le graphe montre l'équipe ET le perso,
+   * reliés par leurs ponts ; `selected` reste alors le Brain d'équipe, pour tout ce qui lui est
+   * propre (recherche, thèmes, boîte de réception).
+   */
+  const [reunis, setReunis] = useState(false)
   const selectedRef = useRef(selected)
   useLayoutEffect(() => {
     selectedRef.current = selected
@@ -482,10 +491,24 @@ export function GraphView({
    * réception restent propres au Brain d'équipe (le processus principal les borne à sa racine).
    */
   const persoOuvert = selectedBrain?.perso === true
+  const brainPerso = useMemo(() => brains.find((brain) => brain.perso), [brains])
+  const brainEquipe = useMemo(
+    () => brains.find((brain) => brain.kind === 'vault' && !brain.perso),
+    [brains]
+  )
+  // Sans Brain perso (réglage retiré entre deux détections), la vue des deux retombe sur l'équipe.
+  const reunisActif = reunis && Boolean(brainPerso) && selected === brainEquipe?.path
+  const filtreBrains: 'equipe' | 'perso' | 'deux' | undefined = reunisActif
+    ? 'deux'
+    : persoOuvert
+      ? 'perso'
+      : selected && selected === brainEquipe?.path
+        ? 'equipe'
+        : undefined
 
   useEffect(() => {
     if (!selected) return
-    const cacheKey = `${selected}\u0000${settings.lod}`
+    const cacheKey = `${selected}\u0000${settings.lod}${reunisActif ? '\u0000reunis' : ''}`
     if (selectedBrain?.kind === 'vault') {
       // Le renderer ne reçoit pas l'identité de corpus. Chaque reload du vault invalide donc les
       // voisinages dynamiques et leurs lectures en vol avant de fusionner preview puis graphe complet.
@@ -517,15 +540,17 @@ export function GraphView({
       setLoading(true)
       setErr('')
     })
-    window.api
-      .loadBrainGraphPreview(selected, Math.min(settings.lod, 100))
-      .then((loaded) => {
-        if (current) {
-          const next = loaded as GraphData
-          setGraph(next)
-        }
-        return window.api.loadBrainGraph(selected, settings.lod)
-      })
+    // Les deux Brains (conv-1262) : un seul appel, sans aperçu — les ponts demandent les deux index.
+    const complet = reunisActif
+      ? window.api.loadBrainGraphReunis(settings.lod)
+      : window.api.loadBrainGraphPreview(selected, Math.min(settings.lod, 100)).then((loaded) => {
+          if (current) {
+            const next = loaded as GraphData
+            setGraph(next)
+          }
+          return window.api.loadBrainGraph(selected, settings.lod)
+        })
+    complet
       .then((loaded) => {
         if (!current) return
         const next = completeProgressiveGraph(loaded as GraphData, dynamicGraphRef.current)
@@ -542,7 +567,7 @@ export function GraphView({
     return () => {
       current = false
     }
-  }, [graphReload, selected, selectedBrain?.kind, settings.lod])
+  }, [graphReload, reunisActif, selected, selectedBrain?.kind, settings.lod])
 
   useEffect(() => {
     const element = wrap.current
@@ -1522,8 +1547,13 @@ export function GraphView({
     setFile(null)
     setFileErr('')
     setExpandingNodeId(nextNode.id)
-    window.api
-      .loadBrainNeighborhood(selected, nextNode.id)
+    // Vue des deux Brains (conv-1262) : une note perso y est déjà entière avec ses ponts, et son id
+    // préfixé n'existe pas dans le Brain d'équipe — on ne lui cherche pas de voisinage là-bas.
+    const noteDuPerso = reunisActif && nextNode.perso === true
+    ;(noteDuPerso
+      ? Promise.resolve<GraphData>({ nodes: [], links: [] })
+      : window.api.loadBrainNeighborhood(selected, nextNode.id)
+    )
       .then((loaded) => {
         if (requestId !== fileRequestRef.current) return
         const delta = loaded as GraphData
@@ -1551,7 +1581,11 @@ export function GraphView({
     try {
       const loadedFile = await window.api.readNodeFile(
         nextNode.file,
-        selectedBrain?.kind === 'vault' ? selected : undefined
+        noteDuPerso && brainPerso
+          ? brainPerso.path
+          : selectedBrain?.kind === 'vault'
+            ? selected
+            : undefined
       )
       if (requestId === fileRequestRef.current) setFile(loadedFile)
     } catch (error) {
@@ -1607,10 +1641,16 @@ export function GraphView({
     },
     [healthRelationByNode, settings.health]
   )
+  // Santé d'abord ; puis, dans la vue des deux Brains (conv-1262), la couleur propre aux notes perso.
+  const couleurImposee = useCallback(
+    (nextNode: GraphNode): string | undefined =>
+      healthColor(nextNode) ?? (reunisActif && nextNode.perso ? COULEUR_NOEUD_PERSO : undefined),
+    [healthColor, reunisActif]
+  )
   const nodeColor = (value: object): string => {
     const nextNode = value as GraphNode
     return (
-      healthColor(nextNode) ??
+      couleurImposee(nextNode) ??
       nodeColorForTheme(
         nextNode,
         visualActiveThemes,
@@ -1656,7 +1696,7 @@ export function GraphView({
         visualProfile.palette,
         themeCounts
       )
-      appearance.color = healthColor(nextNode) ?? appearance.color
+      appearance.color = couleurImposee(nextNode) ?? appearance.color
       const emphasis = nodeSelectionEmphasis(
         nextNode.id,
         nodeFocus.focusedNodeId,
@@ -1680,7 +1720,7 @@ export function GraphView({
     },
     [
       floatingNodeIds,
-      healthColor,
+      couleurImposee,
       layoutMode,
       nodeFocus,
       settings.contextOpacity,
@@ -1706,7 +1746,7 @@ export function GraphView({
         visualProfile.palette,
         themeCounts
       )
-      appearance.color = healthColor(nextNode) ?? appearance.color
+      appearance.color = couleurImposee(nextNode) ?? appearance.color
       const emphasis = nodeSelectionEmphasis(
         nextNode.id,
         nodeFocus.focusedNodeId,
@@ -1726,7 +1766,7 @@ export function GraphView({
     },
     [
       floatingNodeIds,
-      healthColor,
+      couleurImposee,
       layoutMode,
       nodeFocus,
       settings.contextOpacity,
@@ -1740,11 +1780,29 @@ export function GraphView({
       visualProfile
     ]
   )
+  /**
+   * Quitter le graphe affiché pour un autre — par le sélecteur ou par le filtre des Brains
+   * (conv-1262). `deux` = les deux Brains reliés par leurs ponts, `chemin` restant celui de l'équipe.
+   */
+  function changerDeBrain(chemin: string, deux = false): void {
+    // Les résultats appartiennent au vault quitté : les garder jusqu'à la recherche suivante
+    // ferait momentanément passer une fiche de A pour une fiche de B.
+    resetBrainSearchResults()
+    // Second chemin de sortie de la fiche : il dupliquait la remise à plat et oubliait donc
+    // la caméra, laissant un gros plan sur un nœud qui n'existe plus dans le graphe suivant.
+    clearNodeSelection()
+    setReunis(deux)
+    setSelected(chemin)
+    setActiveThemes(new Set())
+    setCollapsedTreeNodeIds(new Set())
+  }
   const focusedNode = node
   const linkIsHighlighted = (value: object): boolean =>
     Boolean(focusedNode?.id) && isLinkAttachedToNode(value as GraphLink, focusedNode?.id ?? '')
   const linkColor = (value: object): string => {
-    return graphLinkColor(visualMode, visualProfile, linkIsHighlighted(value))
+    const highlighted = linkIsHighlighted(value)
+    if (!highlighted && (value as GraphLink).relation === 'pont') return COULEUR_PONT
+    return graphLinkColor(visualMode, visualProfile, highlighted)
   }
   // Mode détail courant → largeur persistée de CE mode (sinon défaut CSS 20%/88% via la classe).
   const detailMode: 'node' | 'theme' | null = node ? 'node' : activeThemes.size > 0 ? 'theme' : null
@@ -1772,17 +1830,7 @@ export function GraphView({
         <select
           aria-label={t('graphe.selecteur')}
           value={selected}
-          onChange={(event) => {
-            resetBrainSearchResults()
-            // Les résultats appartiennent au vault quitté : les garder jusqu'à la recherche suivante
-            // ferait momentanément passer une fiche de A pour une fiche de B.
-            // Second chemin de sortie de la fiche : il dupliquait la remise à plat et oubliait donc
-            // la caméra, laissant un gros plan sur un nœud qui n'existe plus dans le graphe suivant.
-            clearNodeSelection()
-            setSelected(event.target.value)
-            setActiveThemes(new Set())
-            setCollapsedTreeNodeIds(new Set())
-          }}
+          onChange={(event) => changerDeBrain(event.target.value)}
         >
           {brains.length === 0 && (
             <option value="">
@@ -1795,6 +1843,44 @@ export function GraphView({
             </option>
           ))}
         </select>
+        {brainEquipe && brainPerso && (
+          <div
+            className="graph-brains-filtre"
+            role="radiogroup"
+            aria-label={t('graphe.filtreBrains')}
+          >
+            {(['equipe', 'perso', 'deux'] as const).map((choix) => (
+              <button
+                key={choix}
+                type="button"
+                role="radio"
+                aria-checked={filtreBrains === choix}
+                className={filtreBrains === choix ? 'is-active' : undefined}
+                onClick={() =>
+                  changerDeBrain(
+                    choix === 'perso' ? brainPerso.path : brainEquipe.path,
+                    choix === 'deux'
+                  )
+                }
+              >
+                {t(`graphe.filtreBrains.${choix}`)}
+              </button>
+            ))}
+            {reunisActif && graph.ponts && (
+              <span
+                className="graph-brains-filtre__ponts"
+                data-testid="ponts-brains"
+                title={t('graphe.ponts.titre')}
+              >
+                {graph.ponts.raison
+                  ? t('graphe.ponts.aucun', { raison: graph.ponts.raison })
+                  : graph.ponts.nombre === 1
+                    ? t('graphe.ponts.un')
+                    : t('graphe.ponts.nombre', { n: graph.ponts.nombre })}
+              </span>
+            )}
+          </div>
+        )}
         {/* Un catalogue vide ou en panne n'est plus un cul-de-sac : la détection se relance ici. */}
         {!brainsLoading && (brains.length === 0 || brainsErr) && (
           <span className="graph-brains-recovery" role={brainsErr ? 'alert' : undefined}>
@@ -2442,7 +2528,7 @@ export function GraphView({
                 onClose={clearNodeSelection}
                 onRetry={() => void openNode(node)}
                 onNavigate={(nextNode) => openNode(nextNode)}
-                perso={persoOuvert}
+                perso={persoOuvert || node.perso === true}
                 onRetract={
                   selectedBrain?.kind === 'vault' &&
                   !persoOuvert &&

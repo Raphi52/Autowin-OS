@@ -44,21 +44,39 @@ export const CENTRE_BILLE = { x: 64, y: 70 } as const
 /** Le coin haut-gauche de la boîte de la bille (52 px) dans la fenêtre. */
 const ORIGINE = { x: CENTRE_BILLE.x - 26, y: CENTRE_BILLE.y - 26 }
 
-/** Ce que peut afficher l'étoile : le compte (« 9+ » au-delà de 9) et « ! » sur un échec. */
-const COMPTES = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '9+'] as const
-const suffixe = (valeur: string): string => (valeur === '9+' ? 'p' : valeur === '!' ? 'x' : valeur)
-/** La classe du chiffre affiché ; `null` = rien d'affichable (rien n'entre dans la page). */
-export function classeDeLaValeur(valeur: string | null): string | null {
-  if (valeur === null) return null
-  return (COMPTES as readonly string[]).includes(valeur) || valeur === '!'
-    ? `v${suffixe(valeur)}`
-    : null
+/**
+ * Ce que peut afficher l'étoile : le VRAI compte, de 1 à 99 (conv-1270, « affiche le vrai nombre sur
+ * le chapeau jusqu'à 99 au lieu de 9+ »), et « ! » sur un échec. Un chiffre seul a ses propres
+ * dessins (`SEULS`) ; un nombre à deux chiffres n'a pas 90 dessins : il allume une DIZAINE (1 à 9) et
+ * une UNITÉ (0 à 9), chacune dessinée à sa place (`Place`). Toute la page reste fixe, sans script.
+ */
+const SEULS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const
+const DIZAINES = SEULS
+const UNITES = ['0', ...SEULS] as const
+type Place = 'd' | 'u'
+const CHIFFRES_DE: Record<Place, readonly string[]> = { d: DIZAINES, u: UNITES }
+/** Les suffixes de tous les dessins de chiffres (`v…` affiché, `t…` écrit) : 9 + 9 + 10. */
+const SUFFIXES = [...SEULS, ...DIZAINES.map((c) => `d${c}`), ...UNITES.map((c) => `u${c}`)]
+/** Le compte lu chiffre par chiffre ; `null` = pas un compte de 1 à 99. */
+function lireLeCompte(valeur: string | null): readonly [string] | readonly [string, string] | null {
+  if (valeur === null || !/^[1-9][0-9]?$/u.test(valeur)) return null
+  return valeur.length === 1 ? [valeur] : [valeur[0], valeur[1]]
 }
-/** Le groupe « la baguette écrit ce chiffre » (bras droit, tracé, chiffre qui s'embrase). */
-export function classeDuTrace(valeur: string | null): string | null {
-  return valeur !== null && (COMPTES as readonly string[]).includes(valeur)
-    ? `t${suffixe(valeur)}`
-    : null
+/** Les classes à allumer pour cette valeur (`v` + suffixe) ou pour son tracé (`t` + suffixe). */
+function classesDe(prefixe: 'v' | 't', valeur: string | null): string[] {
+  const chiffres = lireLeCompte(valeur)
+  if (!chiffres) return []
+  return chiffres.length === 1
+    ? [`${prefixe}${chiffres[0]}`]
+    : [`${prefixe}d${chiffres[0]}`, `${prefixe}u${chiffres[1]}`]
+}
+/** Les classes du chiffre affiché ; vide = rien d'affichable (rien n'entre dans la page). */
+export function classesDeLaValeur(valeur: string | null): string[] {
+  return valeur === '!' ? ['vx'] : classesDe('v', valeur)
+}
+/** Les groupes « la baguette écrit ce compte » (bras droit, tracé, chiffre qui s'embrase). */
+export function classesDuTrace(valeur: string | null): string[] {
+  return classesDe('t', valeur)
 }
 
 const r1 = (v: number): number => Math.round(v * 10) / 10
@@ -321,7 +339,12 @@ function resoudre(
   prefere: (ex: number, ey: number) => number,
   duree: number,
   opts: Options = {}
-): { joints: readonly [string, string]; ecart: number; droit: () => string } {
+): {
+  joints: readonly [string, string]
+  ecart: number
+  droit: () => string
+  angles: (t: number) => readonly [number, number]
+} {
   const sols = ([1, -1] as const).map((sg) => cibles.map(([, T]) => ik(S, U, F, T, sg)))
   const note = (sol: Pose[]): number => sol.reduce((a, s) => a + prefere(s.ex, s.ey), 0)
   const sol = note(sols[0]) >= note(sols[1]) ? sols[0] : sols[1]
@@ -376,7 +399,9 @@ function resoudre(
       { courbe: 'linear', ...opts }
     )
   }
-  return { joints: [rot(I1), rot(I2)], ecart, droit }
+  // Les deux angles que la page joue à l'instant `t` (le relais des bras d'un nombre à deux chiffres).
+  const angles = (t: number): readonly [number, number] => [valeur(I1, t), valeur(I2, t)]
+  return { joints: [rot(I1), rot(I2)], ecart, droit, angles }
 }
 
 /**
@@ -396,7 +421,8 @@ const COULEURS_DU_SORT = [
 ] as const
 type Encre = (typeof COULEURS_DU_SORT)[number]
 const lueurDe = (c: string): string => `gl${c.slice(1)}`
-const LUEURS = [...COULEURS_DU_SORT.map((c) => c.vif), OR, CYAN, ROSE]
+// Plus de lueur cyan ni rose : seuls les trois cercles magiques s'en servaient (retirés, conv-1258).
+const LUEURS = [...COULEURS_DU_SORT.map((c) => c.vif), OR]
 
 function seg(dx: number, dy: number, b: number): string {
   const l = Math.hypot(dx, dy) || 1
@@ -459,10 +485,13 @@ function densifier(pts: readonly Pt[], pas: number): Pt[] {
   return out
 }
 const arc = (cx: number, cy: number, r: number, d0: number, d1: number, n: number): Pt[] =>
-  Array.from({ length: n + 1 }, (_, i) => {
+  ovale(r, r, d0, d1, n).map(([x, y]) => [cx + x, cy + y] as const)
+function ovale(rx: number, ry: number, d0: number, d1: number, n: number): Pt[] {
+  return Array.from({ length: n + 1 }, (_, i) => {
     const a = ((d0 + ((d1 - d0) * i) / n) * Math.PI) / 180
-    return [cx + r * Math.cos(a), cy + r * Math.sin(a)] as const
+    return [rx * Math.cos(a), ry * Math.sin(a)] as const
   })
+}
 /**
  * Centre du glyphe, à droite du personnage : assez loin de l'épaule droite pour que la baguette
  * l'atteigne (avant-bras + baguette plus longs que le bras : rien n'est atteignable à moins de 7,4
@@ -499,16 +528,9 @@ const SIGNES: Record<string, Pt[][]> = {
   ],
   '8': [[...arc(0, -4.3, 3.8, 90, 450, 20), ...arc(0, 4.2, 4.4, -90, -450, 22).slice(1)]],
   '9': [[...arc(0, -3.6, 4.2, 0, -360, 22), [4.2, 1], [3.2, 5], [0.5, 7.8], [-2.8, 8.2]]],
-  '+': [
-    [
-      [-4, 0],
-      [4, 0]
-    ],
-    [
-      [0, -4],
-      [0, 4]
-    ]
-  ]
+  // Le 0 n'existe qu'en unité (10, 20…, conv-1270) : un ovale tracé d'un trait, depuis le haut, vers
+  // la gauche, comme à la main. (Le « + » de « 9+ » est parti avec lui.)
+  '0': [ovale(4.2, 8, -100, -460, 30)]
 }
 /**
  * Le chiffre écrit est 1,35 fois plus grand que la boîte des signes (conv-1227, « plus gros ») :
@@ -516,28 +538,67 @@ const SIGNES: Record<string, Pt[][]> = {
  * pour 29,5 au plus), ce que vérifie l'écart mesuré par le test.
  */
 const ECHELLE_TRACE = 1.35
-const poser = (traits: Pt[][], k: number, dx: number): Pt[][] =>
+const poser = (traits: Pt[][], k: number, dx: number, centre: Pt = G): Pt[][] =>
   traits.map((t) =>
-    t.map(([x, y]) => [G[0] + (dx + x * k) * ECHELLE_TRACE, G[1] + y * k * ECHELLE_TRACE] as const)
+    t.map(
+      ([x, y]) =>
+        [centre[0] + (dx + x * k) * ECHELLE_TRACE, centre[1] + y * k * ECHELLE_TRACE] as const
+    )
   )
-/** Les traits du compte, posés à leur place : « 9+ » écrit le 9 puis le +, plus petits. */
-function traitsDuCompte(valeur: string): Pt[][] {
-  if (valeur === '9+') return [...poser(SIGNES['9'], 0.72, -3.8), ...poser(SIGNES['+'], 0.72, 4.6)]
-  return poser(SIGNES[valeur] ?? [], 1, 0)
-}
+/** Les traits d'un chiffre seul, à sa place. */
+const traitsDuChiffre = (valeur: string): Pt[][] => poser(SIGNES[valeur] ?? [], 1, 0)
+/**
+ * DEUX CHIFFRES CÔTE À CÔTE (conv-1270) : la baguette n'atteint que l'anneau compris entre 7,4 et
+ * 29,5 px de l'épaule droite, trop étroit pour deux chiffres de la taille d'un chiffre seul. Chacun
+ * est donc réduit à 0,7 (environ 8,5 × 15 px, la taille du 9 de l'ancien « 9+ »), leurs centres à
+ * 10,8 px l'un de l'autre, et la paire descend un peu (centre `G2`) : c'est la place qui garde le
+ * plus de marge (plus de 0,8 px) sur les deux bords de l'anneau, pour les 19 chiffres possibles —
+ * cherchée par calcul le 2026-10-29, ce que vérifie l'écart mesuré par le test.
+ */
+const K_DEUX = 0.7
+const ECART_DEUX = 4
+const G2: Pt = [66.75, 32]
+const traitsALaPlace = (chiffre: string, place: Place): Pt[][] =>
+  poser(SIGNES[chiffre] ?? [], K_DEUX, place === 'd' ? -ECART_DEUX : ECART_DEUX, G2)
 const dChemin = (pts: readonly Pt[]): string =>
   'M' + pts.map(([x, y]) => `${r1(x)} ${r1(y)}`).join('L')
 
 /**
  * Le chiffre, tel qu'il s'affiche dans l'étoile (`classe` : son allure). Toujours blanc, et plus gros
  * depuis conv-1227 (« celui du chapeau toujours blanc mais plus gros aussi », puis « le chiffre peut
- * dépasser de l'étoile, c'est pas grave ») : 26 px au lieu de 16 (20 au lieu de 13 pour « 9+ »). Il
- * déborde de l'étoile (21 px de large) ; sa ligne de base est abaissée pour que son centre reste
- * sur celui de l'étoile (y = -3).
+ * dépasser de l'étoile, c'est pas grave ») : 26 px au lieu de 16. Il déborde de l'étoile (21 px de
+ * large) ; sa ligne de base est abaissée pour que son centre reste sur celui de l'étoile (y = -3).
  */
 function texteChiffre(valeur: string, classe: string, remplissage: string): string {
-  const deux = valeur.length > 1
-  return `<text class="${classe}" x="25" y="${deux ? 4 : 6}" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-weight="800" font-size="${deux ? 20 : 26}" fill="${remplissage}">${valeur}</text>`
+  return `<text class="${classe}" x="25" y="6" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-weight="800" font-size="26" fill="${remplissage}">${valeur}</text>`
+}
+/**
+ * Un chiffre d'un nombre à deux chiffres, à sa place (conv-1270) : 20 px, comme l'ancien « 9+ ». La
+ * dizaine finit en x = 25 (`end`), l'unité y commence (`start`) : les deux se touchent comme dans
+ * un seul mot, et la paire reste centrée sur l'étoile quels que soient ses chiffres.
+ */
+function texteALaPlace(chiffre: string, place: Place, classe: string, remplissage: string): string {
+  return `<text class="${classe}" x="25" y="4" text-anchor="${place === 'd' ? 'end' : 'start'}" font-family="Segoe UI,Arial,sans-serif" font-weight="800" font-size="20" fill="${remplissage}">${chiffre}</text>`
+}
+/**
+ * Tous les chiffres que l'étoile peut montrer, dans une même allure : les seuls (suffixe `1`…), puis
+ * les dizaines (`d1`…) et les unités (`u0`…) ; `classe(suffixe)` donne les classes de chacun.
+ */
+function textesDuCompte(classe: (suffixe: string) => string, remplissage: string): string {
+  return (
+    SEULS.map((v) => texteChiffre(v, classe(v), remplissage)).join('') +
+    textesALaPlace(classe, remplissage)
+  )
+}
+/** Les seuls chiffres à leur place (dizaines `d1`…, unités `u0`…). */
+function textesALaPlace(classe: (suffixe: string) => string, remplissage: string): string {
+  return (['d', 'u'] as const)
+    .map((place) =>
+      CHIFFRES_DE[place]
+        .map((c) => texteALaPlace(c, place, classe(`${place}${c}`), remplissage))
+        .join('')
+    )
+    .join('')
 }
 
 // ---------------- Le tracé : la pointe de la baguette écrit le compte ----------------
@@ -590,38 +651,45 @@ function allumeDe(f: Feuille, debut: number, fin: number, duree: number): string
   return f.anim(images, duree, { courbe: 'linear' })
 }
 
-function tracer(
-  f: Feuille,
-  valeur: string
-): { joints: readonly [string, string]; dessin: string; eclair: string; ecart: number } {
-  const traits = traitsDuCompte(valeur)
+type Trace = { L: number; images: Array<readonly [number, number]> }
+type Cible = readonly [number, Pt]
+/**
+ * Le chemin de la pointe sur les `traits`, de `t0` à `t1` (en % du cycle) : chaque trait à la vitesse
+ * de l'écriture, les levés de plume plus vite — d'un trait au suivant, et, s'ils sont donnés, depuis
+ * `depuis` jusqu'au premier trait et du dernier jusqu'à `vers`. Rend les cibles de la pointe, quand
+ * chaque trait s'écrit, et le bout du dernier trait (`fin`).
+ */
+function planifier(
+  traits: Pt[][],
+  t0: number,
+  t1: number,
+  depuis?: Pt,
+  vers?: Pt
+): { cibles: Cible[]; traces: Trace[]; fin: Pt } {
   const denses = traits.map((t) => densifier(t, 1.2))
-  // Un trait levé (le + après le 9) : la pointe va d'un trait au suivant, plus vite.
   const morceaux: Array<{ pts: Pt[]; plume: number }> = []
+  const lever = (a: Pt, b: Pt): void => {
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) > 0.01)
+      morceaux.push({ pts: densifier([a, b], 3), plume: -1 })
+  }
+  if (depuis) lever(depuis, denses[0][0])
   denses.forEach((tr, k) => {
-    if (k)
-      morceaux.push({
-        pts: densifier([denses[k - 1][denses[k - 1].length - 1], tr[0]], 3),
-        plume: -1
-      })
+    // Un trait levé : la pointe va d'un trait au suivant, plus vite.
+    if (k) lever(denses[k - 1][denses[k - 1].length - 1], tr[0])
     morceaux.push({ pts: tr, plume: k })
   })
+  const dernier = denses[denses.length - 1]
+  const fin = dernier[dernier.length - 1]
+  if (vers) lever(fin, vers)
   const poids = (m: { pts: Pt[]; plume: number }): number =>
     longueur(m.pts) * (m.plume < 0 ? 0.45 : 1)
   const total = morceaux.reduce((a, m) => a + poids(m), 0)
-  const depart = 3
-  const cibles: Array<readonly [number, Pt]> = [
-    [0, denses[0][0]],
-    [depart, denses[0][0]]
-  ]
-  const traces = denses.map((tr) => ({
-    L: longueur(tr),
-    images: [] as Array<readonly [number, number]>
-  }))
-  let t = depart
+  const cibles: Cible[] = [[t0, morceaux[0].pts[0]]]
+  const traces: Trace[] = denses.map((tr) => ({ L: longueur(tr), images: [] }))
+  let t = t0
   for (const m of morceaux) {
     const L = longueur(m.pts)
-    const duree = ((T_FIN - depart) * poids(m)) / total
+    const duree = ((t1 - t0) * poids(m)) / total
     if (m.plume >= 0) traces[m.plume].images.push([t, 0], [t + duree, L])
     let s = 0
     for (let i = 1; i < m.pts.length; i++) {
@@ -630,23 +698,29 @@ function tracer(
     }
     t += duree
   }
-  // Le chiffre écrit, la pointe s'attarde, puis revient au début pour le suivant.
-  const dernier = denses[denses.length - 1]
-  const fin = dernier[dernier.length - 1]
-  cibles.push([T_TENUE, fin])
-  const retour = densifier([fin, denses[0][0]], 3)
-  retour
-    .slice(1)
-    .forEach((p, i) =>
-      cibles.push([r2(T_TENUE + ((100 - T_TENUE) * (i + 1)) / (retour.length - 1)), p])
-    )
-  const { joints, ecart } = resoudre(f, S_R, U_R, F_BAG, cibles, preferD, D_TRACE)
-  // Chaque trait se dévoile derrière la pointe (pointillé dont le décalage diminue).
+  return { cibles, traces, fin }
+}
+/** Le chiffre écrit, la pointe s'attarde jusqu'à `T_TENUE`, puis revient de `de` à `a` pour le suivant. */
+function revenir(de: Pt, a: Pt): Cible[] {
+  const retour = densifier([de, a], 3)
+  return [
+    [T_TENUE, de],
+    ...retour
+      .slice(1)
+      .map((p, i): Cible => [r2(T_TENUE + ((100 - T_TENUE) * (i + 1)) / (retour.length - 1)), p])
+  ]
+}
+
+/**
+ * Les traits à l'encre du sort : chaque trait se dévoile derrière la pointe (pointillé dont le
+ * décalage diminue), tient, puis s'efface ; le dernier posé, le glyphe s'allume.
+ */
+function encrer(f: Feuille, traits: Pt[][], traces: readonly Trace[]): string {
   const chemins = traces.map((tr, k) => {
     const cache = r1(tr.L + 2)
     const images: Image[] = [
       [0, `stroke-dashoffset:${cache};opacity:1`],
-      [r1(tr.images[0][0] - 0.1), `stroke-dashoffset:${cache}`],
+      [Math.max(0, r1(tr.images[0][0] - 0.1)), `stroke-dashoffset:${cache}`],
       ...tr.images.map(([tt, s]) => [r1(tt), `stroke-dashoffset:${r1(tr.L - s)}`] as const),
       [T_TENUE, 'stroke-dashoffset:0;opacity:1'],
       [T_TENUE + 8, 'stroke-dashoffset:0;opacity:0'],
@@ -657,7 +731,6 @@ function tracer(
     return ({ coeur, vif }: Encre): string =>
       `<path class="${classe} ${lueurDe(vif)}" d="${dChemin(traits[k])}" stroke="${coeur}" stroke-width="2.1" stroke-dasharray="${r1(tr.L)} ${r1(tr.L + 4)}" fill="none"/>`
   })
-  // Le dernier trait posé, le glyphe s'allume, puis s'envole se fondre dans le chiffre du chapeau.
   const eteint = 'filter:drop-shadow(0 0 0 transparent)'
   const allume = (vif: string): string =>
     f.anim(
@@ -674,12 +747,15 @@ function tracer(
     )
   // Le chiffre écrit dans chaque encre ; seule celle du sort en cours est allumée (`teinte`).
   const n = COULEURS_DU_SORT.length
-  const encres = COULEURS_DU_SORT.map(
+  return COULEURS_DU_SORT.map(
     (c, k) =>
       `<g class="${teinte(f, k, n)}"><g class="${allume(c.vif)}">${chemins.map((ch) => ch(c)).join('')}</g></g>`
   ).join('')
-  const versLeChapeau = `translate:${25 - G[0]}px ${-3 - G[1]}px`
-  const vol = f.anim(
+}
+/** Le glyphe écrit autour de `centre` s'envole se fondre dans le chiffre du chapeau. */
+function volVersLeChapeau(f: Feuille, centre: Pt): string {
+  const versLeChapeau = `translate:${r2(25 - centre[0])}px ${r2(-3 - centre[1])}px`
+  return f.anim(
     [
       [0, 'translate:0 0;scale:1;opacity:1'],
       [T_FIN + 2, 'translate:0 0;scale:1;opacity:1'],
@@ -690,7 +766,10 @@ function tracer(
     D_TRACE,
     { courbe: 'ease-in' }
   )
-  const eclair = f.anim(
+}
+/** Le chiffre du chapeau s'embrase quand le glyphe l'atteint. */
+const eclairDuChapeau = (f: Feuille): string =>
+  f.anim(
     [
       [0, 'scale:.6;opacity:0'],
       [T_TENUE - 2, 'scale:.6;opacity:0'],
@@ -700,12 +779,106 @@ function tracer(
     ],
     D_TRACE
   )
+
+/** Un chiffre seul : la pointe part du début du chiffre, l'écrit, s'attarde, puis y revient. */
+function tracer(
+  f: Feuille,
+  valeur: string
+): { joints: readonly [string, string]; dessin: string; ecart: number } {
+  const traits = traitsDuChiffre(valeur)
+  const { cibles: ecriture, traces, fin } = planifier(traits, 3, T_FIN)
+  const debut = ecriture[0][1]
+  const cibles: Cible[] = [[0, debut], ...ecriture, ...revenir(fin, debut)]
+  const { joints, ecart } = resoudre(f, S_R, U_R, F_BAG, cibles, preferD, D_TRACE)
   return {
     joints,
     ecart,
-    eclair,
-    dessin: `<g class="${vol}">${encres}</g>`
+    dessin: `<g class="${volVersLeChapeau(f, G)}">${encrer(f, traits, traces)}</g>`
   }
+}
+
+/**
+ * DEUX CHIFFRES, DEUX BRAS QUI SE RELAIENT (conv-1270). Un bras par chiffre et par place ne peut
+ * pas savoir quel chiffre l'autre écrit : 90 nombres n'ont donc pas 90 bras, mais 19 (9 dizaines,
+ * 10 unités). Le bras de la dizaine part du haut de la dizaine (`ATTENTE`), l'écrit, puis va au
+ * centre de la paire (`RELAIS`) à `T_RELAIS` ; celui de l'unité y prend la main, l'écrit, s'attarde,
+ * et revient à `ATTENTE` pour le cycle suivant. Aux deux passages de main, les deux bras sont dans la
+ * MÊME pose (même cible) : la bascule de l'un à l'autre (`VISIBLE`) ne se voit pas, ce que vérifie
+ * l'écart « relais » du test.
+ */
+const T_RELAIS = 31
+const RELAIS: Pt = G2
+const ATTENTE: Pt = [r2(G2[0] - ECART_DEUX * ECHELLE_TRACE), r2(G2[1] - 8 * K_DEUX * ECHELLE_TRACE)]
+const VISIBLE: Record<Place, readonly Image[]> = {
+  d: [
+    [0, 'opacity:1'],
+    [T_RELAIS - 0.1, 'opacity:1'],
+    [T_RELAIS, 'opacity:0'],
+    [100, 'opacity:0']
+  ],
+  u: [
+    [0, 'opacity:0'],
+    [T_RELAIS - 0.1, 'opacity:0'],
+    [T_RELAIS, 'opacity:1'],
+    [100, 'opacity:1']
+  ]
+}
+type Angles = (t: number) => readonly [number, number]
+function tracerALaPlace(
+  f: Feuille,
+  chiffre: string,
+  place: Place
+): {
+  joints: readonly [string, string]
+  encres: string
+  visible: string
+  ecart: number
+  angles: Angles
+} {
+  const traits = traitsALaPlace(chiffre, place)
+  let cibles: Cible[]
+  let traces: readonly Trace[]
+  if (place === 'd') {
+    const p = planifier(traits, 0, T_RELAIS, ATTENTE, RELAIS)
+    cibles = [...p.cibles, [100, RELAIS]]
+    traces = p.traces
+  } else {
+    const p = planifier(traits, T_RELAIS, T_FIN, RELAIS)
+    cibles = [[0, RELAIS], ...p.cibles, ...revenir(p.fin, ATTENTE)]
+    traces = p.traces
+  }
+  const { joints, ecart, angles } = resoudre(f, S_R, U_R, F_BAG, cibles, preferD, D_TRACE)
+  return {
+    joints,
+    ecart,
+    angles,
+    encres: encrer(f, traits, traces),
+    visible: f.anim(VISIBLE[place], D_TRACE, { courbe: 'linear' })
+  }
+}
+/**
+ * L'écart du relais, en pixels : la plus grande distance, coude ou pointe, entre le bras qui rend la
+ * main et celui qui la prend, à `T_RELAIS` et au tour du cycle, pour toutes les paires de chiffres.
+ */
+function ecartDuRelais(
+  dizaines: ReadonlyArray<{ angles: Angles }>,
+  unites: ReadonlyArray<{ angles: Angles }>
+): number {
+  const pose = ([a1, a2]: readonly [number, number]): readonly [Pt, Pt] => {
+    const u = tourner(U_R, a1)
+    return [[S_R[0] + u[0], S_R[1] + u[1]], main(S_R, U_R, F_BAG, a1, a2)]
+  }
+  const distance = (a: readonly [Pt, Pt], b: readonly [Pt, Pt]): number =>
+    Math.max(...[0, 1].map((i) => Math.hypot(a[i][0] - b[i][0], a[i][1] - b[i][1])))
+  let ecart = 0
+  for (const d of dizaines)
+    for (const u of unites)
+      ecart = Math.max(
+        ecart,
+        distance(pose(d.angles(T_RELAIS)), pose(u.angles(T_RELAIS))),
+        distance(pose(u.angles(100)), pose(d.angles(0)))
+      )
+  return ecart
 }
 
 // ---------------- « Au travail » : ce que tout le reste fait en même temps ----------------
@@ -715,15 +888,21 @@ function tracer(
  * empilés en perspective, des colonnes de runes qui montent, des éclats de cristal). Elle remplace
  * la boule pétrie puis lancée en boule de feu. Même cycle que le tracé (`D_TRACE`) : la sphère
  * culmine quand le chiffre écrit file au chapeau, au moment où les yeux s'allument (`visage`).
+ * Depuis conv-1258, des étoiles en orbite tiennent la place des cercles (`ORBITE`).
  */
 const POIGNET: Pt = [-10, 43.5]
-/** La sphère flotte au-dessus de la paume, les cercles au-dessus d'elle, de plus en plus petits. */
+/** La sphère flotte au-dessus de la paume. */
 const SPHERE: Pt = [-14, 27]
-const CERCLES = [
-  [17, 9.5, CYAN],
-  [10, 8, OR],
-  [4, 6.5, ROSE]
-] as const
+/**
+ * LES ÉTOILES EN ORBITE (conv-1258, /draft, « Implémenter la 3 · Étoiles en orbite ») : trois
+ * étoiles d'or tournent autour de la sphère, passent devant puis derrière elle, et plongent dedans
+ * au sommet du sort. Elles remplacent les trois cercles magiques empilés en perspective, qui à
+ * taille réelle ne se lisaient que comme trois barres rose, or et cyan au-dessus de la main.
+ * L'orbite : une ellipse de `rx` × `ry` px inclinée de `inclinaison` degrés, un tour en `tour`
+ * secondes, les trois étoiles à un tiers de tour l'une de l'autre.
+ */
+const ORBITE = { rx: 14.5, ry: 5.5, inclinaison: -12, tour: 1.8 } as const
+const ETOILE_D_OR = `<path d="M0-4.6L1.15-1.15 4.6 0 1.15 1.15 0 4.6-1.15 1.15-4.6 0-1.15-1.15Z" fill="${OR}"/><circle r="1.2" fill="#fff"/>`
 /** Le poignet, en % du cycle : il s'abaisse, monte avec la sphère, la pousse au sommet, redescend. */
 const GESTE_INVOCATION: ReadonlyArray<readonly [number, Pt]> = [
   [0, POIGNET],
@@ -737,38 +916,12 @@ const GESTE_INVOCATION: ReadonlyArray<readonly [number, Pt]> = [
 /** Le coude gauche en bas : la main tenue paume en l'air, comme on porte un plateau. */
 const coudeEnBas = (_ex: number, ey: number): number => ey
 
-/** Un cercle magique vu de face, de rayon `r` : deux anneaux, une étoile à six branches, des graduations. */
-function cercleMagique(r: number, couleur: string): string {
-  const ri = r * 0.74
-  const triangle = (k0: number): string =>
-    'M' +
-    [0, 2, 4]
-      .map((k) => {
-        const a = (Math.PI / 3) * (k + k0) - Math.PI / 2
-        return `${r2(ri * Math.cos(a))} ${r2(ri * Math.sin(a))}`
-      })
-      .join('L') +
-    'Z'
-  const graduations = Array.from({ length: 12 }, (_, i) => {
-    const a = (Math.PI / 6) * i
-    const [c, s] = [Math.cos(a), Math.sin(a)]
-    return `M${r2(r * 0.8 * c)} ${r2(r * 0.8 * s)}L${r2(r * 0.94 * c)} ${r2(r * 0.94 * s)}`
-  }).join('')
-  return (
-    `<circle r="${r}" stroke="${couleur}" stroke-width="1.2" fill="none"/>` +
-    `<circle r="${r2(ri)}" stroke="${couleur}" stroke-width=".6" fill="none"/>` +
-    `<path d="${triangle(0)}${triangle(1)}" stroke="${couleur}" stroke-width=".6" fill="none"/>` +
-    `<path d="${graduations}" stroke="#fff3c4" stroke-width=".6"/>` +
-    `<circle r="${r2(r * 0.16)}" fill="${couleur}"/>`
-  )
-}
-
 function invocation(f: Feuille): { bras: string; derriere: string; devant: string; ecart: number } {
   const T = D_TRACE
   const { joints, ecart, droit } = resoudre(f, S_L, U_L, F_L, GESTE_INVOCATION, coudeEnBas, T)
   const tenue = `<g transform="translate(${F_L[0]} ${F_L[1]})"><g class="jt ${droit()}">${MAIN_OUVERTE}</g></g>`
   const brasGauche = bras(S_L, U_L, F_L, joints, tenue, 2)
-  // La sphère et ses cercles suivent la main (mêmes instants, même interpolation linéaire).
+  // La sphère et ses étoiles suivent la main (mêmes instants, même interpolation linéaire).
   const suit = f.anim(
     GESTE_INVOCATION.map(
       ([t, [x, y]]) => [t, `translate:${r2(x - POIGNET[0])}px ${r2(y - POIGNET[1])}px`] as const
@@ -822,24 +975,54 @@ function invocation(f: Feuille): { bras: string; derriere: string; devant: strin
     `<g transform="rotate(-35) scale(1 .45)"><g class="${tourne(1.5, -1)}"><circle r="9" stroke="${ROSE}" stroke-width="1.1" stroke-dasharray="12 44" fill="none"/></g></g>` +
     `<g transform="scale(1.3)"><g class="${crepite}"><path d="M-3.2-.8l-1.6 1.6 1.2.6-2 1.8M3.2-.8l1.6 1.6-1.2.6 2 1.8M-.8-3.2l1-2 .8 1 .8-2" stroke="#f3eeff" stroke-width=".6" fill="none"/></g></g>` +
     `<g class="${eclair}"><circle r="12" fill="url(#gFl)"/></g>`
-  // Les cercles apparaissent l'un après l'autre, de bas en haut, et s'effacent après le sommet.
-  const apparait = (k: number): string =>
-    f.anim(
-      [
-        [0, 'scale:.4;opacity:0'],
-        [8 + 8 * k, 'scale:.4;opacity:0'],
-        [18 + 8 * k, 'scale:1;opacity:1'],
-        [64, 'scale:1.12;opacity:1'],
-        [86, 'scale:1;opacity:1'],
-        [96, 'scale:1.2;opacity:0'],
-        [100, 'scale:.4;opacity:0']
-      ],
-      T
-    )
-  const cercles = CERCLES.map(
-    ([y, r, couleur], k) =>
-      `<g transform="translate(${SPHERE[0]} ${y}) scale(1 .3)"><g class="${apparait(k)}"><g class="${lueurDe(couleur)}"><g class="${tourne(4 + k, k % 2 ? -1 : 1)}">${cercleMagique(r, couleur)}</g></g></g></g>`
-  ).join('')
+  // Les étoiles naissent avec la sphère, plongent dedans à son sommet (l'éclair, à 64 %), et en
+  // ressortent un instant quand elle retombe. La ronde se resserre sur le centre de la sphère (`jt`).
+  const ronde = f.anim(
+    [
+      [0, 'scale:.3;opacity:0'],
+      [8, 'scale:.3;opacity:0'],
+      [18, 'scale:.95;opacity:1'],
+      [58, 'scale:1;opacity:1'],
+      [66, 'scale:0;opacity:0'],
+      [80, 'scale:0;opacity:0'],
+      [92, 'scale:.8;opacity:1'],
+      [100, 'scale:.3;opacity:0']
+    ],
+    T
+  )
+  // Un tour d'orbite, sur 12 points de l'ellipse : devant (moitié basse), l'étoile est plus grande et
+  // plus vive ; derrière, plus petite et plus pâle.
+  const orbite = Array.from({ length: 13 }, (_, i): Image => {
+    const a = (i / 12) * 2 * Math.PI
+    const [x, y] = tourner([ORBITE.rx * Math.cos(a), ORBITE.ry * Math.sin(a)], ORBITE.inclinaison)
+    const avant = Math.sin(a)
+    return [
+      (i / 12) * 100,
+      `translate:${r2(x)}px ${r2(y)}px;scale:${r2(0.85 + 0.3 * avant)};opacity:${r2(0.75 + 0.25 * avant)}`
+    ]
+  })
+  // Pour passer VRAIMENT devant puis derrière la sphère, chaque étoile a deux copies, une de chaque
+  // côté d'elle, et une seule se montre à la fois : la première moitié du tour (0 à 50 %) est
+  // devant. La bascule tombe aux deux bouts de l'ellipse, à 14,5 px du centre, hors de la sphère.
+  const etoiles = (devant: boolean): string =>
+    [0, 1, 2]
+      .map((k) => {
+        const delai = r2((k * ORBITE.tour) / 3)
+        const cote = f.anim(
+          [
+            [0, `opacity:${devant ? 1 : 0}`],
+            [50, `opacity:${devant ? 0 : 1}`],
+            [100, `opacity:${devant ? 0 : 1}`]
+          ],
+          ORBITE.tour,
+          { delai, courbe: 'step-end' }
+        )
+        const tour = f.anim(orbite, ORBITE.tour, { delai, courbe: 'linear' })
+        return `<g class="${tour}"><g class="${cote} ${lueurDe(OR)}">${ETOILE_D_OR}</g></g>`
+      })
+      .join('')
+  const enRonde = (devant: boolean): string =>
+    `<g transform="translate(${SPHERE[0]} ${SPHERE[1]})"><g class="jt ${ronde}">${etoiles(devant)}</g></g>`
   // Les colonnes de runes qui montaient au-dessus de la main ont été retirées (conv-1227, « les
   // ronds qui montent c'est trop, enlève-les ») : à la vraie taille, leurs runes ne se lisaient que
   // comme des points de couleur qui grimpaient.
@@ -867,7 +1050,7 @@ function invocation(f: Feuille): { bras: string; derriere: string; devant: strin
     eclatCristal(-9, 38, 2, ROSE, 1.35) +
     eclatCristal(-25, 36, -2, ROSE, 1.8) +
     eclatCristal(-3, 41, 4, '#fff3c4', 1.1)
-  const derriere = `<g class="${suit}">${cercles}${placer(SPHERE[0], SPHERE[1], sphere, grandit)}</g>`
+  const derriere = `<g class="${suit}">${enRonde(false)}${placer(SPHERE[0], SPHERE[1], sphere, grandit)}${enRonde(true)}</g>`
   return { bras: brasGauche, derriere, devant: eclats, ecart }
 }
 
@@ -1958,30 +2141,66 @@ function construire(): Personnage {
   // Le chiffre en DEUX couches, l'étoile entre les deux : la lueur du chiffre (filtre de 6 px)
   // couvrait l'étoile et la rendait gris-bleu (#b0cbce au lieu de #ffd23f, sondé le 2026-10-28). Sa
   // copie lumineuse passe donc DERRIÈRE l'étoile, et le chiffre net, sans lueur, devant.
-  const valeurs = [
-    ...COMPTES.map((v) => [v, `${classeDeLaValeur(v)}`, '#ffffff', 'nb'] as const),
-    ['!', 'vx', '#fff1f0', 'nr'] as const
-  ]
   const chiffres =
-    valeurs.map(([v, c, couleur, lueur]) => texteChiffre(v, `ch ${lueur} ${c}`, couleur)).join('') +
+    textesDuCompte((s) => `ch nb v${s}`, '#ffffff') +
+    texteChiffre('!', 'ch nr vx', '#fff1f0') +
     etoileDuChapeau +
     etoilesDuSort +
-    valeurs.map(([v, c, couleur]) => texteChiffre(v, `ch ${c}`, couleur)).join('')
-  // Au travail, un groupe par compte : la baguette écrit CE chiffre, qui file au chapeau et s'y embrase.
-  const ecritures = COMPTES.map((v) => {
+    textesDuCompte((s) => `ch v${s}`, '#ffffff') +
+    texteChiffre('!', 'ch vx', '#fff1f0')
+  // Au travail, un groupe par chiffre seul : la baguette écrit CE chiffre, qui file au chapeau et s'y
+  // embrase.
+  const eclair = eclairDuChapeau(f)
+  const seuls = SEULS.map((v) => {
     const t = tracer(f, v)
     ecarts[`trace ${v}`] = t.ecart
     return (
-      `<g class="${classeDuTrace(v)}">${t.dessin}${bras(S_R, U_R, F_R, t.joints, baguette('oB'))}` +
-      `<g class="${t.eclair}">${texteChiffre(v, 'fx', '#fff')}</g></g>`
+      `<g class="t${v}">${t.dessin}${bras(S_R, U_R, F_R, t.joints, baguette('oB'))}` +
+      `<g class="${eclair}">${texteChiffre(v, 'fx', '#fff')}</g></g>`
     )
   }).join('')
+  // Deux chiffres (conv-1270) : un groupe par chiffre et par place (`tracerALaPlace`). Les traits des
+  // deux chiffres volent ENSEMBLE au chapeau, dans un seul groupe : il rapetisse autour du centre de
+  // ce qui y est allumé, la paire écrite, et pas chaque chiffre autour du sien. Même chose pour
+  // l'embrasement des deux chiffres du chapeau.
+  const places = (['d', 'u'] as const).flatMap((place) =>
+    CHIFFRES_DE[place].map((c) => {
+      const t = tracerALaPlace(f, c, place)
+      ecarts[`trace ${place}${c}`] = t.ecart
+      return { classe: `t${place}${c}`, place, t }
+    })
+  )
+  ecarts['relais'] = ecartDuRelais(
+    places.filter(({ place }) => place === 'd').map(({ t }) => t),
+    places.filter(({ place }) => place === 'u').map(({ t }) => t)
+  )
+  const deuxChiffres =
+    `<g class="${volVersLeChapeau(f, G2)}">` +
+    places.map(({ classe, t }) => `<g class="${classe}">${t.encres}</g>`).join('') +
+    '</g>' +
+    places
+      .map(
+        ({ classe, t }) =>
+          `<g class="${classe}"><g class="${t.visible}">${bras(S_R, U_R, F_R, t.joints, baguette('oB'))}</g></g>`
+      )
+      .join('') +
+    `<g class="${eclair}">${textesALaPlace((s) => `fx t${s}`, '#fff')}</g>`
+  const ecritures = seuls + deuxChiffres
   // Pour toi : le chiffre s'embrase et flotte, écrit en or, à droite.
-  const enOr = COMPTES.map(
-    (v) =>
-      `<g class="${classeDeLaValeur(v)}"><g class="${fete.eclair}">${texteChiffre(v, 'fx', '#fff')}</g>` +
-      `<path class="${lueurDe(OR)} pu" d="${traitsDuCompte(v).map(dChemin).join('')}" stroke="#fff3c4" stroke-width="1.6" fill="none"/></g>`
-  ).join('')
+  const enOrDe = (traits: Pt[][], classe: string): string =>
+    `<path class="${classe}${lueurDe(OR)} pu" d="${traits.map(dChemin).join('')}" stroke="#fff3c4" stroke-width="1.6" fill="none"/>`
+  const enOr =
+    SEULS.map(
+      (v) =>
+        `<g class="v${v}"><g class="${fete.eclair}">${texteChiffre(v, 'fx', '#fff')}</g>` +
+        `${enOrDe(traitsDuChiffre(v), '')}</g>`
+    ).join('') +
+    `<g class="${fete.eclair}">${textesALaPlace((s) => `fx v${s}`, '#fff')}</g>` +
+    (['d', 'u'] as const)
+      .flatMap((place) =>
+        CHIFFRES_DE[place].map((c) => enOrDe(traitsALaPlace(c, place), `v${place}${c} `))
+      )
+      .join('')
   const corps =
     '<ellipse cx="26" cy="66" rx="16" ry="2.4" fill="url(#gSh)"/>' +
     `<g class="ET">${travail.grimoire}</g>` +
@@ -2004,8 +2223,8 @@ function construire(): Personnage {
     'ER',
     'rD',
     'GF',
-    ...COMPTES.map((v) => classeDuTrace(v)),
-    ...COMPTES.map((v) => classeDeLaValeur(v)),
+    ...SUFFIXES.map((s) => `t${s}`),
+    ...SUFFIXES.map((s) => `v${s}`),
     'vx',
     // Le visage (`visageDeLaBille`) : un visage par état, rallumé par son état.
     'fT',
@@ -2089,15 +2308,17 @@ export function reglesDuPersonnage(
   pastille: string | null
 ): Array<[string, string]> {
   const regles: Array<[string, string]> = []
-  const valeur = classeDeLaValeur(pastille)
-  if (valeur) regles.push([`.${valeur}`, 'display:inline'])
+  for (const valeur of classesDeLaValeur(pastille)) regles.push([`.${valeur}`, 'display:inline'])
   switch (etat) {
     case 'travail': {
-      const trace = classeDuTrace(pastille)
+      const traces = classesDuTrace(pastille)
       // Sans compte lisible, le bras droit reste au repos plutôt que de disparaître.
       regles.push(
         ['.ET', 'display:inline'],
-        [trace ? `.${trace}` : '.rD', 'display:inline'],
+        ...(traces.length ? traces : ['rD']).map((c): [string, string] => [
+          `.${c}`,
+          'display:inline'
+        ]),
         ['.fT', 'display:inline'],
         // L'ouverture du grimoire part ICI, quand le travail commence (voir `Options.une`).
         ...personnage().ouverture

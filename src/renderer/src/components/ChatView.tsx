@@ -313,6 +313,14 @@ import { CLE_MODE_AUTO_CONVS, EVT_ARMER_MODE_AUTO } from './chat-auto-convs'
 import { lireArretsChaine, noterArretChaine, oublierArretChaine } from './arrets-chaine-persistes'
 import { ecrireToursAuto, lireToursAuto } from './tours-auto-persistes'
 import { RunsEnDirect } from './runs-en-direct'
+import { NavigateurIntegre } from './NavigateurIntegre'
+import {
+  apiNavigateur,
+  blocPourLeChat,
+  lienAOuvrirDansLePanneau,
+  texteNavigateur
+} from './navigateur-integre-outils'
+import type { AnnotationNavigateur, ReglagesNavigateur } from '../../../shared/navigateur'
 /**
  * Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions JUSQU'A ce que ce
  * fil naisse : il est alors vide (`consommerDossierNouveauFil`), il ne sert qu'une fois.
@@ -1859,6 +1867,52 @@ export function ChatView({
     })()
   )
   const activeRef = useRef<string | null>(null)
+  /*
+   * NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 3/5) : panneau ouvert ou fermé (Ctrl+Shift+B, bouton
+   * de l'en-tête), et ouvert TOUT SEUL quand l'agent ouvre une page dans le fil actif. Les onglets
+   * déjà vus par fil vivent dans une REF : un événement d'état (chargement, titre) ne re-rend pas la
+   * vue chat, seule une ouverture de panneau le fait.
+   */
+  const [navigateurOuvert, setNavigateurOuvert] = useState(false)
+  const reglagesNavigateurRef = useRef<ReglagesNavigateur | null>(null)
+  const ongletsConnusRef = useRef(new Map<string, Set<string>>())
+  useEffect(() => {
+    const api = apiNavigateur()
+    if (!api) return
+    void api.reglages.lire().then((lus) => {
+      reglagesNavigateurRef.current = lus
+    })
+    return api.surEtat((etat) => {
+      const connus = ongletsConnusRef.current.get(etat.conversationId)
+      const ids = etat.onglets.map((onglet) => onglet.id)
+      ongletsConnusRef.current.set(etat.conversationId, new Set(ids))
+      // Fil pas encore relu : on apprend ses onglets sans ouvrir — ce n'est pas une ouverture vue.
+      if (!connus || etat.conversationId !== activeRef.current) return
+      if (ids.some((id) => !connus.has(id))) setNavigateurOuvert(true)
+    })
+  }, [])
+  useEffect(() => {
+    const api = apiNavigateur()
+    if (!api || !activeId) return
+    void api.etat(activeId).then((etat) => {
+      if (!ongletsConnusRef.current.has(activeId)) {
+        ongletsConnusRef.current.set(activeId, new Set(etat.onglets.map((onglet) => onglet.id)))
+      }
+    })
+  }, [activeId])
+  useEffect(() => {
+    // Fil unique seulement : en mosaïque, le panneau n'a pas de place à côté d'un fil.
+    if (!isActive || convViewMode === 'mosaic') return
+    const surTouche = (event: KeyboardEvent): void => {
+      if (!(event.ctrlKey || event.metaKey) || !event.shiftKey || event.altKey) return
+      // Sans fil ouvert, pas d'onglets à montrer : le raccourci ne bascule rien d'invisible.
+      if (event.key.toLowerCase() !== 'b' || !activeRef.current) return
+      event.preventDefault()
+      setNavigateurOuvert((ouvert) => !ouvert)
+    }
+    document.addEventListener('keydown', surTouche)
+    return () => document.removeEventListener('keydown', surTouche)
+  }, [isActive, convViewMode])
   const loadConversationRequestRef = useRef(0)
   /** Tours déjà rejoués depuis le journal fichier — clé de dédup du rejeu (voir replayTurnJournal). */
   const replayedTurnsRef = useRef(new Set<string>())
@@ -1988,6 +2042,61 @@ export function ChatView({
     window.getSelection()?.removeAllRanges()
     setPassageSelectionne(null)
     requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+  }
+
+  /**
+   * ANNOTATIONS ET ÉLÉMENT CHOISI → SAISIE (conv-1286, lot 3/5) : même chemin que la référence
+   * d'Alt+clic (texte ajouté au brouillon du fil, sans envoyer) et que l'instant de vidéo pointé
+   * (captures jointes par `addFiles`, dédoublonnées par NOM : chaque nom porte l'id de l'annotation).
+   */
+  function insererDepuisLeNavigateur(annotations: AnnotationNavigateur[], choisi: boolean): void {
+    if (annotations.length === 0) return
+    const { texte, images } = blocPourLeChat(annotations, choisi)
+    setDraftInput(composerDraftKeyRef.current, ajouterAuBrouillon(texteDuComposer(), texte))
+    if (images.length > 0) void addFiles(images, undefined, (fichier) => fichier.name)
+    requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+  }
+
+  /**
+   * LIENS DU FIL DANS LE NAVIGATEUR INTÉGRÉ (conv-1286, lot 3/5). Un serveur local (localhost,
+   * 127.0.0.1, [::1]) s'ouvre dans le panneau ; les autres liens aussi quand le réglage « Ouvrir ici
+   * les liens du chat » est actif, sinon ils gardent leur chemin actuel (`target=_blank` de
+   * Markdown.tsx → navigateur du système). Un clic déjà traité (référence de fichier) ou modifié
+   * (Ctrl, Maj, Cmd : « ailleurs ») n'est pas repris.
+   */
+  function surClicLienDuFil(event: React.MouseEvent<HTMLElement>): void {
+    if (event.defaultPrevented || event.button !== 0) return
+    if (event.ctrlKey || event.shiftKey || event.metaKey || !(event.target instanceof Element))
+      return
+    const lien = event.target.closest('a[href]')
+    const conversationId = activeRef.current
+    if (!lien || !conversationId || !apiNavigateur()) return
+    const adresse = lienAOuvrirDansLePanneau(
+      lien.getAttribute('href') ?? '',
+      reglagesNavigateurRef.current?.ouvrirLiensDuChatIci === true
+    )
+    if (!adresse) return
+    event.preventDefault()
+    void ouvrirDansLeNavigateur(conversationId, adresse)
+  }
+
+  async function ouvrirDansLeNavigateur(conversationId: string, adresse: string): Promise<void> {
+    const api = apiNavigateur()
+    if (!api) return
+    setNavigateurOuvert(true)
+    try {
+      // Le même lien recliqué REPREND son onglet au lieu d'en empiler un de plus.
+      const etat = await api.etat(conversationId)
+      const deja = etat.onglets.find((onglet) => onglet.url === adresse)
+      if (deja) await api.activerOnglet(deja.id)
+      else await api.ouvrir(conversationId, adresse)
+    } catch (erreur) {
+      // Adresse refusée ou plafond d'onglets : dit sous la saisie, là où l'utilisateur regarde.
+      setDraftError(
+        composerDraftKeyRef.current,
+        erreur instanceof Error ? erreur.message : String(erreur)
+      )
+    }
   }
 
   /**
@@ -8362,6 +8471,7 @@ export function ChatView({
             setDragActive(false)
             void addFiles(event.dataTransfer.files)
           }}
+          onClick={surClicLienDuFil}
         >
           {dragActive && (
             <div className="file-drop-overlay" aria-hidden="true">
@@ -8526,6 +8636,29 @@ export function ChatView({
               </div>
             </div>
             <div className="row gap2 chat-head-actions">
+              {/* NAVIGATEUR INTÉGRÉ (conv-1286, lot 3/5) : ouvre ou ferme le panneau, comme Ctrl+Shift+B. */}
+              <button
+                type="button"
+                className="btn chat-navigateur-toggle"
+                data-testid="chat-navigateur-toggle"
+                // Les onglets appartiennent à un fil : sans fil ouvert, le clic n'aurait rien à montrer.
+                // fix-ok: cause mesurée (conv-1286, 2026-10-29) — capture réelle sans conversation : clic sans effet visible ; sans cette ligne, NavigateurIntegre.test.tsx « aucun fil ouvert » échoue (code 1), avec elle 31/31 (code 0).
+                disabled={!activeId}
+                aria-pressed={navigateurOuvert}
+                aria-label={texteNavigateur(navigateurOuvert ? 'fermerPanneau' : 'ouvrirPanneau')}
+                title={texteNavigateur(navigateurOuvert ? 'fermerPanneau' : 'ouvrirPanneau')}
+                onClick={() => setNavigateurOuvert((ouvert) => !ouvert)}
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
+                  <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.7" />
+                  <path
+                    d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
               {/* DÉTAILS EN CAPSULE (conv-178, 2026-10-10 : « pareil pour Détails » — la même gueule
                   que les capsules Raisonnement / Actions). Même balisage et mêmes classes que
                   ThinkingBlock (`thinking-block`, `thinking-capsule`…) : ChatView.css et chaque
@@ -9197,6 +9330,22 @@ export function ChatView({
             />
           </VueMesuree>
         </section>
+      )}
+
+      {/* ---- Navigateur intégré (conv-1286, lot 3/5) : entre le fil et les Détails, fil unique
+          seulement. Démonté en mosaïque ou fermé : il retire alors la page native (poserCadre(null)). */}
+      {convViewMode !== 'mosaic' && navigateurOuvert && activeId && (
+        <NavigateurIntegre
+          key={activeId}
+          conversationId={activeId}
+          visible={isActive && !openImage}
+          onFermer={() => setNavigateurOuvert(false)}
+          onEnvoyerAuChat={(annotations) => insererDepuisLeNavigateur(annotations, false)}
+          onElementChoisi={(annotation) => insererDepuisLeNavigateur([annotation], true)}
+          onReglages={(reglages) => {
+            reglagesNavigateurRef.current = reglages
+          }}
+        />
       )}
 
       {/* ---- Panneau droit : workflows + observatoire d'activité (repliable) ---- */}

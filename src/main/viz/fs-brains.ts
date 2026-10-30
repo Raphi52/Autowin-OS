@@ -14,6 +14,7 @@ import { sharedBrainRoot, teamWorkspaces } from '../brain-paths'
 import { racineBrainPerso } from '../brain-perso-racine'
 import { identiteMetier, type IdentiteMetier } from '../identite-entreprise'
 import { brainSourcePathAllowed } from '../brain-corpus-scope'
+import { pontsEntreBrains } from '../brain-ponts'
 import type { BrainNavigation } from '../brain-retrieval'
 import { openVaultNoteDescriptor, readVaultNote, readVaultNoteSync } from './brain-file-reader'
 import {
@@ -746,6 +747,82 @@ export async function loadBrainGraphAsync(
     return loadBrainGraph(path, lod, community)
   const root = assertAuthorizedBrainVaultSync(path)
   return loadVaultBrainGraphAsync(root, lod, corpus)
+}
+
+/** Préfixe des nœuds du Brain perso dans la vue des deux Brains : les deux ont des `knowledge/…`. */
+export const PREFIXE_NOEUD_PERSO = 'perso:'
+
+/**
+ * LES DEUX BRAINS DANS UN SEUL GRAPHE (conv-1262, 2026-10-29, demande : « ajoute les ponts et un
+ * filtre pour voir que les nodes de l'un ou l'autre dans la vue knowledge »).
+ *
+ * Les notes d'équipe gardent leur id ; celles du Brain perso prennent le préfixe `perso:` et la
+ * marque `perso`. Les PONTS (`brain-ponts.ts`, voisines par le sens) relient une note perso à ses
+ * voisines d'équipe — seulement celles du corpus montré, la portée du dossier de travail tient.
+ * Le plafond d'affichage garde d'abord les notes perso et les cibles de leurs ponts : sans cela,
+ * le tri par nombre de liens les noyait sous les 300 notes d'équipe les plus reliées.
+ */
+export async function loadBrainsReunisAsync(
+  racineEquipe: string,
+  racinePerso: string,
+  lod = 300,
+  corpusEquipe?: readonly string[]
+): Promise<VizGraph> {
+  const equipe = assertAuthorizedBrainVaultSync(racineEquipe)
+  const perso = assertAuthorizedBrainVaultSync(racinePerso)
+  const [notesEquipe, notesPerso] = await Promise.all([
+    corpusEquipe?.length === 0 ? [] : vaultNoteRecordsAsync(equipe, corpusEquipe),
+    vaultNoteRecordsAsync(perso)
+  ])
+  const grapheEquipe = graphFromVaultRecords(notesEquipe, Number.MAX_SAFE_INTEGER)
+  const graphePerso = graphFromVaultRecords(notesPerso, Number.MAX_SAFE_INTEGER)
+  const prefixer = (id: string): string => `${PREFIXE_NOEUD_PERSO}${id}`
+  const idsEquipe = new Set(grapheEquipe.nodes.map((node) => node.id))
+  const idsPerso = new Set(graphePerso.nodes.map((node) => node.id))
+  let resultat: Awaited<ReturnType<typeof pontsEntreBrains>>
+  try {
+    resultat = await pontsEntreBrains(perso, equipe, { equipeAutorisee: (id) => idsEquipe.has(id) })
+  } catch (error) {
+    // Un index illisible ne doit pas priver l'utilisateur des deux graphes : on le dit, sans ponts.
+    resultat = {
+      ponts: [],
+      raison: `index illisible : ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+  const ponts = resultat.ponts.filter((pont) => idsPerso.has(pont.perso))
+  const nodes: VizNode[] = [
+    ...grapheEquipe.nodes,
+    ...graphePerso.nodes.map((node) => ({ ...node, id: prefixer(node.id), perso: true as const }))
+  ]
+  const links: VizGraph['links'] = [
+    ...grapheEquipe.links,
+    ...graphePerso.links.map((link) => ({
+      ...link,
+      source: prefixer(link.source),
+      target: prefixer(link.target)
+    })),
+    ...ponts.map((pont) => ({
+      source: prefixer(pont.perso),
+      target: pont.equipe,
+      weight: pont.similarite,
+      relation: 'pont'
+    }))
+  ]
+  const prioritaires = new Set<string>([
+    ...graphePerso.nodes.map((node) => prefixer(node.id)),
+    ...ponts.map((pont) => pont.equipe)
+  ])
+  const keep = new Set([...prioritaires].slice(0, lod))
+  for (const node of topByDegree({ nodes, links }, nodes.length)) {
+    if (keep.size >= lod) break
+    keep.add(node.id)
+  }
+  return {
+    nodes: nodes.filter((node) => keep.has(node.id)),
+    links: links.filter((link) => keep.has(link.source) && keep.has(link.target)),
+    totalNodes: nodes.length,
+    ponts: { nombre: ponts.length, ...(resultat.raison ? { raison: resultat.raison } : {}) }
+  }
 }
 
 /** Charge uniquement un nœud du vault et ses voisins directs. */

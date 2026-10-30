@@ -127,6 +127,16 @@ export function registerBrainIpc({
     const vault = guardString(path, 'path')
     return brainWorker.request('loadGraph', vault, lod, community, porteeDuVault(vault).corpus)
   })
+  // Les deux Brains reliés par leurs ponts (conv-1262) : l'équipe garde le corpus du dossier de
+  // travail ; aucune racine ne vient de la vue, le worker les résout lui-même.
+  ipcMain.handle('os:loadBrainGraphReunis', (event, lod?: number) => {
+    assertTrustedRendererSender(event, 'Brain')
+    return brainWorker.request(
+      'loadGraphReunis',
+      typeof lod === 'number' ? lod : undefined,
+      porteeDuVault(SHARED_BRAIN_ROOT).corpus
+    )
+  })
   ipcMain.handle('os:loadBrainNeighborhood', (event, path: string, nodeId: string) => {
     assertTrustedRendererSender(event, 'Brain')
     const vault = guardString(path, 'path')

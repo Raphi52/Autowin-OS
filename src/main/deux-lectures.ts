@@ -36,6 +36,7 @@
  */
 import type { ReponseAsk } from './ask-options'
 import { DEBUT_LECTURE_RETENUE } from '../shared/lecture-retenue'
+import { VOCABULAIRE_AUTOWIN } from './vocabulaire-autowin'
 
 /**
  * La consigne du petit modèle. Stable d'un appel à l'autre (cache).
@@ -45,11 +46,16 @@ import { DEBUT_LECTURE_RETENUE } from '../shared/lecture-retenue'
  * demandait « la demande est-elle ambiguë ? » ; lue seule, une phrase paraît toujours claire. Ce qui
  * manquait : ce que fait la COMMANDE citée (`/scout` cherche des améliorations dans du code, pas un
  * exercice pour `/arena`), et la question qui compte — le résultat livré risque-t-il d'être jeté.
+ *
+ * Le VOCABULAIRE d'Autowin manquait aussi (kaizen conv-1266) : « fais une super conv » sur un jeu
+ * a été lu « améliorer ses dialogues » (conv-1263, tour 60eda4d2-c6e0-491d-8b34-116257bf3766) —
+ * mesure et cause dans `vocabulaire-autowin.ts`.
  */
 export const CONSIGNE_DEUX_LECTURES = [
   "Tu relis UNE demande adressée à un agent de développement, juste AVANT qu'il ne la traite. Ton",
   "rôle : montrer à l'utilisateur, en une phrase, ce que l'agent va comprendre, pour éviter qu'il",
   'réponde « t’as mal compris » après coup.',
+  VOCABULAIRE_AUTOWIN,
   'Le dernier message de l’agent, s’il t’est donné, est le contexte : une demande courte ou une',
   'relance (« go », « ok », « met le ») porte sur ce dont il parlait, souvent sa dernière proposition.',
   'Question : deux personnes compétentes, qui connaissent les commandes citées, pourraient-elles',
@@ -263,13 +269,13 @@ export function lireDeuxLectures(reponse: unknown, demande: string): [string, st
 }
 
 /**
- * La ligne affichée dans le fil quand une lecture domine : laquelle part, et laquelle est écartée,
- * pour que l'utilisateur corrige d'un mot au lieu d'être arrêté avant (conv-1123).
+ * La ligne affichée dans le fil quand une lecture domine (conv-1123) : ce que l'agent a compris,
+ * et rien d'autre. L'autre lecture n'y figure plus (conv-1280, 2026-10-29 : « le bloc compréhension
+ * met tout le temps : si tu voulais plutôt, c'est nul, mets juste ce qu'il a compris, point ») ;
+ * elle reste dans la tâche du run et la consigne du modèle, qui doivent savoir ce qui est écarté.
  */
-export function annonceDeLaLectureRetenue(retenue: string, ecartee?: string): string {
-  return ecartee
-    ? `${DEBUT_LECTURE_RETENUE}« ${retenue} » — si tu voulais plutôt « ${ecartee} », dis-le.`
-    : `${DEBUT_LECTURE_RETENUE}« ${retenue} »`
+export function annonceDeLaLectureRetenue(retenue: string): string {
+  return `${DEBUT_LECTURE_RETENUE}« ${retenue} »`
 }
 
 /**
@@ -278,8 +284,8 @@ export function annonceDeLaLectureRetenue(retenue: string, ecartee?: string): st
  */
 export function tacheAvecLectureRetenue(tache: string, retenue: string, ecartee?: string): string {
   const precision = ecartee
-    ? `Lecture retenue de la demande, annoncée à l'utilisateur : « ${retenue} » (l'autre lecture, « ${ecartee} », est écartée).`
-    : `Lecture retenue de la demande, annoncée à l'utilisateur : « ${retenue} ».`
+    ? `Compréhension de la demande, annoncée à l'utilisateur : « ${retenue} » (l'autre lecture, « ${ecartee} », est écartée).`
+    : `Compréhension de la demande, annoncée à l'utilisateur : « ${retenue} ».`
   return tache.includes(precision) ? tache : `${tache.trimEnd()}\n\n${precision}`
 }
 
@@ -288,17 +294,25 @@ export function tacheAvecLectureRetenue(tache: string, retenue: string, ecartee?
  * d'affichage). « SYSTÈME: » la fait encadrer comme une relance d'Autowin, jamais comme des mots de
  * l'utilisateur (`baliserRelanceAutomatique`).
  */
+/** Le nom de la ligne pour le modèle (conv-1280, 2026-10-29 : « la balise compréhension doit
+ *  s'appeler compréhension par le modèle ») : c'est le mot de l'étiquette affichée dans le fil. */
+const NOM_DE_LA_LIGNE =
+  'Si tu dois parler de cette ligne, appelle-la « compréhension », jamais « lecture retenue ».'
+
 export function consigneDeLectureRetenue(retenue: string, ecartee?: string): string {
   if (!ecartee)
     return [
       'SYSTÈME: la demande ci-dessus a été relue avant toi, et une seule lecture en est plausible.',
-      `L'utilisateur a déjà vu la ligne : ${annonceDeLaLectureRetenue(retenue)}`,
-      'Ne la réannonce pas. Si tu comprends sa demande autrement, dis-le en une phrase en tête de ta réponse.'
+      `L'utilisateur a déjà vu la ligne « compréhension » : ${annonceDeLaLectureRetenue(retenue)}`,
+      'Ne la réannonce pas. Si tu comprends sa demande autrement, dis-le en une phrase en tête de ta réponse.',
+      NOM_DE_LA_LIGNE
     ].join('\n')
   return [
     'SYSTÈME: la demande ci-dessus pouvait se lire de deux façons ; la plus probable a été retenue.',
-    `L'utilisateur a déjà vu la ligne : ${annonceDeLaLectureRetenue(retenue, ecartee)}`,
-    `Fais le travail selon cette lecture : « ${retenue} ». Ne la réannonce pas et ne pose pas la question.`
+    `L'utilisateur a déjà vu la ligne « compréhension » : ${annonceDeLaLectureRetenue(retenue)}`,
+    `L'autre lecture, écartée : « ${ecartee} ».`,
+    `Fais le travail selon cette lecture : « ${retenue} ». Ne la réannonce pas et ne pose pas la question.`,
+    NOM_DE_LA_LIGNE
   ].join('\n')
 }
 

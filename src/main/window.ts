@@ -91,6 +91,12 @@ export type Fenetres = {
    * ne les atteint. Le calcul, lui, est pur (`src/shared/os-presence.ts`).
    */
   refleterRunsVivants: (etat: EtatRunsVivants) => void
+  /**
+   * La fenêtre PRINCIPALE vivante, ou `null` (fermée : l'app vit dans la barre d'état). Lue par le
+   * navigateur intégré du chat, qui pose ses pages DANS cette fenêtre (conv-1286) ; seule cette
+   * fermeture la connaît, `getAllWindows()` mêlant les fenêtres de question et la mascotte.
+   */
+  fenetrePrincipale: () => BrowserWindow | null
 }
 
 export function createWindowing(deps: WindowingDeps): Fenetres {
@@ -635,6 +641,7 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     rendererLocation,
     estEnFermeture: () => isQuitting,
     questionWindows,
-    refleterRunsVivants
+    refleterRunsVivants,
+    fenetrePrincipale: () => mainWindowVivante
   }
 }

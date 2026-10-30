@@ -300,8 +300,8 @@ const SAUT_ANCRAGE = String.fromCharCode(10)
 /** Au-dela, l'ancrage noie le prompt qu'il accompagne : on le borne. */
 const TACHE_ANCRAGE_MAX = 240
 
-const borner = (texte: string): string =>
-  texte.length > TACHE_ANCRAGE_MAX ? `${texte.slice(0, TACHE_ANCRAGE_MAX).trimEnd()}…` : texte
+const borner = (texte: string, max = TACHE_ANCRAGE_MAX): string =>
+  texte.length > max ? `${texte.slice(0, max).trimEnd()}…` : texte
 
 /** « go », « ok », « continue »… : accepte une suite sans la nommer. Compare sur la forme repliee. */
 const ACCORD_NU =
@@ -393,20 +393,31 @@ export function derniereDemandeHumaine(fil: readonly Msg[]): string | null {
  */
 export type LectureDemande = { genre: 'demande' | 'auto'; texte: string } | { genre: 'accord' }
 
-export function lectureDeLaDemande(fil: readonly Msg[], rang: number): LectureDemande | null {
+/**
+ * `max` : 240 caractères par défaut (l'ancrage du mode auto). La fiche du Board en demande bien plus,
+ * pour montrer le message ENTIER (conv-1278, 2026-10-29).
+ */
+export function lectureDeLaDemande(
+  fil: readonly Msg[],
+  rang: number,
+  max = TACHE_ANCRAGE_MAX
+): LectureDemande | null {
   const m = fil[rang]
   if (!m || m.role !== 'user') return null
   const nu = ((m as Extract<Msg, { role: 'user' }>).content ?? '').trim()
   if (!nu) return null
   if (ANCRE_DEJA_ECRITE.test(nu))
-    return { genre: 'auto', texte: borner(nu.slice(0, nu.search(/\(Mode auto — /u)).trim()) }
-  if (estUneReleve(nu)) return { genre: 'auto', texte: borner(nu) }
+    return {
+      genre: 'auto',
+      texte: borner(nu.slice(0, nu.search(/\(Mode auto — /u)).trim(), max)
+    }
+  if (estUneReleve(nu)) return { genre: 'auto', texte: borner(nu, max) }
   if (ACCORD_NU.test(replierAccord(nu))) return { genre: 'accord' }
   if (CHOIX_PAR_NUMEROS.test(nu)) {
     const resolu = optionsChoisies(fil, rang, nu)
-    return { genre: 'demande', texte: borner(resolu ?? nu) }
+    return { genre: 'demande', texte: borner(resolu ?? nu, max) }
   }
-  return { genre: 'demande', texte: borner(nu) }
+  return { genre: 'demande', texte: borner(nu, max) }
 }
 
 /**

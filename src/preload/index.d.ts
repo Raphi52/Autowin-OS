@@ -13,6 +13,7 @@ import type {
   PropositionAutoriteProd
 } from '../shared/prod-protection'
 import type { RapportRetention } from '../shared/rapport-retention'
+import type { ApiNavigateur } from '../shared/navigateur'
 import type { GestesDesTours } from '../shared/gestes-agent'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
@@ -126,6 +127,8 @@ interface ChatApi {
   hdeskGestionFermer: (id: string) => Promise<ResultatFermetureGeree>
   hdeskGestionCreer: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
   hdeskGestionChoisirExe: () => Promise<ResultatChoixExe>
+  /** Navigateur intégré du chat (conv-1286) : la forme est celle du contrat partagé. */
+  navigateur: ApiNavigateur
   prodPassphraseEtat: () => Promise<EtatPhraseProd>
   prodPassphraseDefinir: (
     phrase: string,
@@ -848,6 +851,8 @@ interface ChatApi {
   listBrains: () => Promise<BrainGraphRef[]>
   loadBrainGraph: (path: string, lod?: number, community?: number) => Promise<VizGraph>
   loadBrainGraphPreview: (path: string, lod?: number) => Promise<VizGraph>
+  /** Les deux Brains dans un graphe, reliés par leurs ponts perso → équipe (conv-1262). */
+  loadBrainGraphReunis: (lod?: number) => Promise<VizGraph>
   loadBrainThemes: (path: string) => Promise<BrainTheme[]>
   loadBrainThemeNodes: (path: string, themeIds: string[]) => Promise<VizGraph['nodes']>
   loadBrainNeighborhood: (path: string, nodeId: string) => Promise<VizGraph>

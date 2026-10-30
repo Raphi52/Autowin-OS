@@ -219,3 +219,91 @@ describe('vue Knowledge — Brain perso à côté du Brain d’équipe', () => {
     expect(container.querySelector('[data-testid="note-perso"]')).toBeNull()
   })
 })
+
+/**
+ * LES DEUX BRAINS ET LEURS PONTS (conv-1262, 2026-10-29, demande utilisateur : « ajoute les ponts
+ * et un filtre pour voir que les nodes de l'un ou l'autre dans la vue knowledge »).
+ */
+describe('vue Knowledge — filtre Équipe · Perso · Les deux', () => {
+  const filtre = (): HTMLButtonElement[] => [
+    ...container.querySelectorAll<HTMLButtonElement>('[aria-label="Brains affichés"] button')
+  ]
+  const cliquer = async (libelle: string): Promise<void> => {
+    const bouton = filtre().find((b) => b.textContent === libelle)
+    if (!bouton) throw new Error(`bouton ${libelle} absent`)
+    await act(async () => bouton.click())
+    await flush()
+  }
+
+  it('propose les trois choix ; « Les deux » charge le graphe relié et dit combien de ponts il trace', async () => {
+    const api = installerApi()
+    api.loadBrainGraphReunis = vi.fn().mockResolvedValue({
+      nodes: [
+        { id: 'knowledge/typecheck', label: 'Typage', group: 0 },
+        { id: 'perso:knowledge/typage', label: 'Mes notes typage', group: 0, perso: true }
+      ],
+      links: [
+        {
+          source: 'perso:knowledge/typage',
+          target: 'knowledge/typecheck',
+          weight: 0.8,
+          relation: 'pont'
+        }
+      ],
+      ponts: { nombre: 1 }
+    })
+    await monter()
+    expect(filtre().map((b) => [b.textContent, b.getAttribute('aria-checked')])).toEqual([
+      ['Équipe', 'true'],
+      ['Perso', 'false'],
+      ['Les deux', 'false']
+    ])
+    expect(api.loadBrainGraphReunis).not.toHaveBeenCalled()
+
+    await cliquer('Les deux')
+    expect(api.loadBrainGraphReunis).toHaveBeenCalledTimes(1)
+    expect(
+      filtre()
+        .find((b) => b.textContent === 'Les deux')
+        ?.getAttribute('aria-checked')
+    ).toBe('true')
+    expect(container.querySelector('[data-testid="ponts-brains"]')?.textContent).toBe(
+      '1 pont perso → équipe'
+    )
+
+    await cliquer('Perso')
+    expect(api.loadBrainGraph).toHaveBeenLastCalledWith(PERSO, expect.any(Number))
+    expect(container.querySelector('[data-testid="ponts-brains"]')).toBeNull()
+    // Le sélecteur suit le filtre : il montre le Brain perso.
+    expect(
+      container.querySelector<HTMLSelectElement>('select[aria-label="Graphe de connaissances"]')
+        ?.value
+    ).toBe(PERSO)
+
+    await cliquer('Équipe')
+    expect(api.loadBrainGraph).toHaveBeenLastCalledWith(EQUIPE, expect.any(Number))
+  })
+
+  it('dit pourquoi aucun pont n’est tracé', async () => {
+    const api = installerApi()
+    api.loadBrainGraphReunis = vi.fn().mockResolvedValue({
+      nodes: [],
+      links: [],
+      ponts: { nombre: 0, raison: 'Brain perso pas encore indexé' }
+    })
+    await monter()
+    await cliquer('Les deux')
+    expect(container.querySelector('[data-testid="ponts-brains"]')?.textContent).toBe(
+      'Aucun pont : Brain perso pas encore indexé'
+    )
+  })
+
+  it('sans Brain perso réglé : aucun filtre', async () => {
+    const api = installerApi()
+    api.listBrains = vi
+      .fn()
+      .mockResolvedValue([{ id: 'brain', label: 'Brain', path: EQUIPE, sizeMb: 1, kind: 'vault' }])
+    await monter()
+    expect(filtre()).toEqual([])
+  })
+})

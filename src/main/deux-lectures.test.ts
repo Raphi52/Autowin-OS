@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AVIS_DEUX_LECTURES,
+  CONSIGNE_DEUX_LECTURES,
   ECART_MAX_POUR_DEMANDER,
   annonceDeLaLectureRetenue,
   chargeDeuxLectures,
@@ -145,12 +146,14 @@ describe('lireLesLectures — question ou lecture retenue (conv-1123)', () => {
       })
   })
 
-  it('l’annonce tient en une ligne : la lecture qui part, puis l’autre', () => {
-    const ligne = annonceDeLaLectureRetenue('zoom de la frise', 'filtre des éléments')
-    expect(ligne).toBe(
-      'Lecture retenue : « zoom de la frise » — si tu voulais plutôt « filtre des éléments », dis-le.'
-    )
+  it('l’annonce tient en une ligne : ce qui a été compris, sans l’autre lecture (conv-1280)', () => {
+    const ligne = annonceDeLaLectureRetenue('zoom de la frise')
+    expect(ligne).toBe('Compréhension : « zoom de la frise »')
     expect(ligne).not.toContain('\n')
+    // L'autre lecture reste connue du modèle, mais ne s'affiche plus dans le fil.
+    const consigne = consigneDeLectureRetenue('zoom de la frise', 'filtre des éléments')
+    expect(consigne).toContain('« filtre des éléments »')
+    expect(consigne).not.toContain('si tu voulais plutôt')
   })
 
   it('la tâche du run garde la demande entière et ne prend la précision qu’une fois', () => {
@@ -204,8 +207,13 @@ describe('une seule lecture : annoncée quand même (conv-1240, « met le tout l
 
   it('la ligne, la tâche du run et la consigne du modèle ne parlent d’aucune autre lecture', () => {
     expect(annonceDeLaLectureRetenue('zoom de la frise')).toBe(
-      'Lecture retenue : « zoom de la frise »'
+      'Compréhension : « zoom de la frise »'
     )
+    // Le modèle nomme la ligne comme l'étiquette du fil (conv-1280).
+    for (const consigne of [consigneDeLectureRetenue('a'), consigneDeLectureRetenue('a', 'b')]) {
+      expect(consigne).toContain('« compréhension »')
+      expect(consigne).not.toMatch(/^L'utilisateur a déjà vu la ligne : /m)
+    }
     const tache = tacheAvecLectureRetenue(DEMANDE_767, 'lecture a')
     expect(tache).toContain('« lecture a ».')
     expect(tache).not.toContain('écartée')
@@ -321,5 +329,13 @@ describe('les filtres déterministes, avant tout appel de modèle', () => {
     const charge = chargeDeuxLectures('nan pas ça', 'x'.repeat(5000))
     expect(charge.length).toBeLessThan(1000)
     expect(charge).toContain('nan pas ça')
+  })
+
+  // conv-1263, tour 60eda4d2-c6e0-491d-8b34-116257bf3766 : « fais une super conv » lu « améliorer
+  // ses dialogues ». Sans le vocabulaire d'Autowin, rejeu Haiku : 0 lecture « plan de lots » sur 3.
+  it('la consigne donne le sens des mots d’Autowin qui ne sont pas des commandes (kaizen conv-1266)', () => {
+    expect(CONSIGNE_DEUX_LECTURES).toContain('Autowin OS')
+    expect(CONSIGNE_DEUX_LECTURES).toMatch(/« super conv ».*« plan de lots »/u)
+    expect(CONSIGNE_DEUX_LECTURES).toMatch(/« conv ».*conversation de travail/su)
   })
 })

@@ -32,6 +32,11 @@ export interface DemandeDeLaCarte {
   rang: number
   messageId?: string
   titre: string
+  /**
+   * Le message ENTIER, sauts de ligne gardés, que la fiche du Board montre (conv-1278) ; absent quand
+   * il ne dit rien de plus que `titre` (première ligne coupée à 120 caractères).
+   */
+  texte?: string
   statut: StatutDemande
   /** Le constat qui justifie l'état : « npm test → exit 0 », « tour arrêté avant la fin »… */
   constat: string
