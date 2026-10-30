@@ -39,7 +39,7 @@ function fauxDocument(): {
       let resoudre!: () => void
       const finished = new Promise<void>((ok) => (resoudre = ok))
       fins.push({ resoudre })
-      return { finished }
+      return { ready: Promise.resolve(), finished }
     }
   }
   return { doc, classes, fins, rappels }
@@ -113,7 +113,8 @@ describe('basculerVue', () => {
         },
         startViewTransition: (rappel: () => void) => {
           rappel()
-          return { finished: Promise.reject(new Error('skipped')) }
+          const saut = new Error('skipped')
+          return { ready: Promise.reject(saut), finished: Promise.reject(saut) }
         }
       },
       false,
@@ -124,6 +125,36 @@ describe('basculerVue', () => {
     await Promise.resolve()
     expect(appliquer).toHaveBeenCalledOnce()
     expect(classes.has(CLASSE_TRANSITION_DE_VUE)).toBe(false)
+  })
+
+  /*
+   * « AbortError: Transition was skipped » rouge dans la console (conv-1322, 2026-10-30). Une
+   * transition remplacee par une plus recente rejette `ready` ET `finished` (spec, « skip the view
+   * transition ») : seule `finished` etait ecoutee. Reproduit 5 fois sur 5 par clics repetes sur Chat
+   * dans une instance cachee, 0 fois quand seule `ready` recoit un gestionnaire.
+   */
+  it('une transition remplacee ne laisse aucun rejet sans gestionnaire', async () => {
+    const orphelins: unknown[] = []
+    const noter = (raison: unknown): void => {
+      orphelins.push(raison)
+    }
+    process.on('unhandledRejection', noter)
+    basculerVue(
+      {
+        documentElement: { classList: { add: () => true, remove: () => true } },
+        startViewTransition: (rappel: () => void) => {
+          rappel()
+          const saut = new Error('Transition was skipped')
+          return { ready: Promise.reject(saut), finished: Promise.reject(saut) }
+        }
+      },
+      false,
+      vi.fn()
+    )
+    // Node signale un rejet orphelin APRES la file des micro-taches.
+    await new Promise((fin) => setTimeout(fin, 0))
+    process.off('unhandledRejection', noter)
+    expect(orphelins).toEqual([])
   })
 })
 

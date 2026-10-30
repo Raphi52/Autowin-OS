@@ -117,7 +117,7 @@ describe('Settings · Interface — cercle du changement de thème', () => {
   const fins: Array<() => void> = []
   const demarrer = vi.fn((rappel: () => void) => {
     rappels.push(rappel)
-    return { finished: new Promise<void>((ok) => fins.push(ok)) }
+    return { ready: Promise.resolve(), finished: new Promise<void>((ok) => fins.push(ok)) }
   })
 
   beforeEach(() => {
