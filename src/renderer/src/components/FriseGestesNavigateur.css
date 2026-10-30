@@ -65,7 +65,8 @@
 /* Le dernier bouton est toujours celui qui change de conducteur : c'est lui qui doit se trouver vite. */
 .navigateur-pilotage-bouton:last-child {
   border-color: var(--gold);
-  color: var(--gold);
+  /* Mêlé au texte : pur, `--gold` tombe à 4,3:1 sur le panneau en thème clair (conv-1324). */
+  color: color-mix(in srgb, var(--gold) 65%, var(--text));
   font-weight: 600;
 }
 .navigateur-frise {
@@ -103,7 +104,6 @@
 }
 .navigateur-jalon.prochain {
   --jalon-trait: color-mix(in srgb, var(--text) 18%, transparent);
-  opacity: 0.85;
 }
 /* Le point et le trait qui relie les jalons : deux fonds d'un même élément, comme sur la maquette. */
 .navigateur-jalon-point {
@@ -133,6 +133,8 @@
     linear-gradient(var(--jalon-trait), var(--jalon-trait));
 }
 .navigateur-jalon.prochain .navigateur-jalon-point {
+  /* Sur le point seul : posée sur le jalon, cette transparence retirait du contraste à son verbe. */
+  opacity: 0.85;
   background-image:
     radial-gradient(circle, transparent 0 3px, var(--jalon) 3.4px 4.6px, transparent 5px),
     linear-gradient(var(--jalon-trait), var(--jalon-trait));
@@ -151,7 +153,9 @@
 .navigateur-jalon.en-cours .navigateur-jalon-verbe,
 .navigateur-jalon.prochain .navigateur-jalon-verbe,
 .navigateur-jalon.refuse .navigateur-jalon-verbe {
-  color: var(--jalon);
+  /* Texte de 10,5 px sur une surface plus foncée que le fond de page : pure, la teinte du jalon tombe
+     entre 3,8 et 4,3:1 en thème clair, 3,9:1 sur NieR:Automata (mesuré en vraie app, conv-1324). */
+  color: color-mix(in srgb, var(--jalon) 65%, var(--text));
 }
 .navigateur-jalon-temps {
   color: var(--text-faint);
