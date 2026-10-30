@@ -612,7 +612,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
        * UNE SÉLECTION DE PISTES SE NOTE ICI, PAS SEULEMENT DANS UN RUN (conv-1341, 2026-10-30). Seul
        * l'orchestrateur l'écrivait : une sélection traitée dans le fil restait invisible, son scout
        * passait pour « sans aucune piste prise » ou ses pistes pour « laissées », et le taux de prise
-       * qui ajuste les notes du scout suivant s'en trouvait faussé (6 sélections sur 25, 12-30/10).
+       * qui ajuste les notes du scout suivant s'en trouvait faussé.
        * Une demande libre sort aussitôt, avant toute lecture du disque.
        */
       if (conversationId && !recovery && !continuation && last?.role === 'user') {
