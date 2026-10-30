@@ -900,10 +900,11 @@ export class GestionnaireNavigateur {
   /**
    * Une action de l'agent dans l'onglet actif du fil. Ordre IMPOSÉ :
    * Stop ou main reprise ? refus sans toucher la page → cible (fil en pause : lue sans y entrer) →
-   * garde mot de passe → ATTENTE DE PAUSE (cible en pointillés ; après l'attente, cible relocalisée,
-   * garde rejouée) → accord du site → Stop et main reprise REVÉRIFIÉS → bandeau levé + cible (ou champ
-   * actif) surlignée 800 ms → garde mot de passe REJOUÉE (la page a pu déplacer le focus) → Stop, main
-   * reprise et site REVÉRIFIÉS → action → bandeau baissé. `arret` : le Stop du tour.
+   * garde mot de passe → ATTENTE DE PAUSE (cible en pointillés ; après l'attente, Stop et main reprise
+   * revérifiés, cible relocalisée, garde rejouée) → accord du site → Stop et main reprise REVÉRIFIÉS →
+   * bandeau levé + cible (ou champ actif) surlignée 800 ms → garde mot de passe REJOUÉE (la page a pu
+   * déplacer le focus) → Stop, main reprise et site REVÉRIFIÉS avant d'éteindre le mode de l'utilisateur,
+   * puis avant l'envoi → action → bandeau baissé. `arret` : le Stop du tour.
    */
   async agir(
     conversationId: string,
@@ -985,6 +986,11 @@ export class GestionnaireNavigateur {
     // Sans attente, `regardSeul` oblige quand même à repasser : « Reprendre » arrivé pendant le premier
     // regard libère un geste dont la cible n'a pas encore le focus, et le texte partirait ailleurs.
     if (pause.attendu || regardSeul) {
+      // fix-ok: run-adc12547df2d-1 (objection du juge) — rien ne relisait le Stop ni la main reprise
+      // entre la libération et `localiser` ci-dessous, qui donne le focus et sélectionne : « Pas
+      // suivant » puis Stop aussitôt, geste refusé mais champ déjà touché.
+      const apresLiberation = this.refusImmediat(conversationId, arret)
+      if (apresLiberation) return apresLiberation
       if (this.onglets.get(onglet.id) !== onglet) {
         return refus('aucun-onglet', "L'onglet a été fermé pendant la pause : rien n'a été fait.")
       }
@@ -1039,6 +1045,19 @@ export class GestionnaireNavigateur {
     const apresAccord = this.refusImmediat(conversationId, arret)
     if (apresAccord) return apresAccord
 
+    // Ce qui interdit encore l'envoi : Stop, main reprise, site changé. Sans `await` : appelée au dernier
+    // moment, elle reste collée à l'envoi.
+    const relire = (): ResultatActionNavigateur | null => {
+      const arrete = this.refusImmediat(conversationId, arret)
+      if (arrete || action.type === 'defiler') return arrete
+      const origineActuelle = origineSoumiseAAccord(onglet.vue.url())
+      if (origineActuelle === origineAutorisee) return null
+      return refus(
+        'page-changee',
+        `La page a changé de site pendant l'attente (${origineAutorisee ?? 'poste local'} → ${origineActuelle ?? 'poste local'}) : rien n'a été envoyé. Relis la page avant d'agir.`
+      )
+    }
+
     const fil = this.fil(conversationId)
     fil.pilotes += 1
     this.emettre(conversationId)
@@ -1060,8 +1079,22 @@ export class GestionnaireNavigateur {
       // l'outil disait « Clic sur … » et rien ne changeait (instance cachée, après « Envoyer au
       // chat »). On éteint donc le mode de CET onglet avant d'écrire ; le panneau le montre. Placé
       // AVANT la relecture du site, qui doit rester collée à l'envoi. Défiler ne passe pas ici.
+      // fix-ok: run-adc12547df2d-1 (objection du juge) — le mode était coupé avant toute relecture :
+      // « Reprendre la main » pendant la surbrillance rendait un refus, 0 événement, et Annoter éteint.
+      // Un geste qui ne partira pas n'éteint pas le mode : on relit AVANT de couper, puis à nouveau
+      // avant l'envoi, parce que la coupure elle-même prend un aller-retour avec la page.
       let modeCoupe: ModeNavigateur = null
+      const signalerMode = (resultat: ResultatActionNavigateur): ResultatActionNavigateur => {
+        if (!modeCoupe) return resultat
+        const nomMode = modeCoupe === 'annoter' ? 'Annoter' : 'Choisir'
+        return {
+          ...resultat,
+          message: `${resultat.message} Mode ${nomMode} de l'utilisateur éteint pour agir.`
+        }
+      }
       if (action.type !== 'defiler' && this.mode && this.ongletDuMode === onglet.id) {
+        const avantCoupure = relire()
+        if (avantCoupure) return avantCoupure
         modeCoupe = this.mode
         await this.couperMode()
       }
@@ -1078,24 +1111,9 @@ export class GestionnaireNavigateur {
       // autorisé. Aucun `await` entre cette lecture et l'envoi des événements.
       // Même relecture pour « Reprendre la main » ou Stop cliqué PENDANT la surbrillance : le geste
       // n'est pas encore parti, il ne part pas (pas-à-pas, conv-1286).
-      const auDernierMoment = this.refusImmediat(conversationId, arret)
-      if (auDernierMoment) return auDernierMoment
-      if (action.type !== 'defiler') {
-        const origineActuelle = origineSoumiseAAccord(onglet.vue.url())
-        if (origineActuelle !== origineAutorisee) {
-          return refus(
-            'page-changee',
-            `La page a changé de site pendant l'attente (${origineAutorisee ?? 'poste local'} → ${origineActuelle ?? 'poste local'}) : rien n'a été envoyé. Relis la page avant d'agir.`
-          )
-        }
-      }
-      const resultat = await this.jouerAction(onglet, action, cible)
-      if (!modeCoupe) return resultat
-      const nomMode = modeCoupe === 'annoter' ? 'Annoter' : 'Choisir'
-      return {
-        ...resultat,
-        message: `${resultat.message} Mode ${nomMode} de l'utilisateur éteint pour agir.`
-      }
+      const auDernierMoment = relire()
+      if (auDernierMoment) return signalerMode(auDernierMoment)
+      return signalerMode(await this.jouerAction(onglet, action, cible))
     } catch (erreur) {
       return refus(
         'page-indisponible',

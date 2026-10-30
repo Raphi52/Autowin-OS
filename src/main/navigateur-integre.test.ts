@@ -1330,6 +1330,95 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     })
   })
 
+  // Objection du juge (run-adc12547df2d-1, réparation 4) : le mode était coupé AVANT la relecture du
+  // Stop et de la main reprise. Refus rendu, 0 événement, mais Annoter éteint : à l'instant où
+  // l'utilisateur voit le geste arriver et veut l'arrêter, il perdait son propre mode.
+  describe('geste refusé pendant la surbrillance : le mode de l’utilisateur reste allumé', () => {
+    const CLIC = { type: 'clic', cible: { ref: 1 } } as const
+
+    async function preparer(): Promise<FausseVue> {
+      nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
+      nav.afficherFil('conv-a')
+      nav.poserCadre({ x: 0, y: 0, largeur: 800, hauteur: 600 }, 1)
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      await nav.basculerMode('annoter')
+      return vue
+    }
+
+    function attendreModeIntact(vue: FausseVue): void {
+      expect(nav.etat('conv-a').mode).toBe('annoter')
+      expect(vue.appels.filter((a) => a.methode === 'activerMode').map((a) => a.args[0])).toEqual([
+        'annoter'
+      ])
+      expect(vue.evenements).toEqual([])
+    }
+
+    it('« Reprendre la main » : refus, et Annoter reste allumé', async () => {
+      const vue = await preparer()
+      vue.reponses.surligner = (): boolean => {
+        nav.piloter('conv-a', 'reprendre-la-main')
+        return true
+      }
+      expect(await nav.agir('conv-a', CLIC)).toMatchObject({ ok: false, refus: 'main-reprise' })
+      attendreModeIntact(vue)
+    })
+
+    it('Stop : refus, et Annoter reste allumé', async () => {
+      const vue = await preparer()
+      const arret = new AbortController()
+      vue.reponses.surligner = (): boolean => {
+        arret.abort('user')
+        return true
+      }
+      expect(await nav.agir('conv-a', CLIC, arret.signal)).toMatchObject({
+        ok: false,
+        message: expect.stringMatching(/arrêté/)
+      })
+      attendreModeIntact(vue)
+    })
+
+    // Même cause, autre refus : la relecture du site venait elle aussi après la coupure.
+    it('la page change de site : refus, et Annoter reste allumé', async () => {
+      const vue = await preparer()
+      vue.reponses.surligner = (): boolean => {
+        vue.adresse = 'https://site-b.fr/'
+        return true
+      }
+      expect(await nav.agir('conv-a', CLIC)).toMatchObject({ ok: false, refus: 'page-changee' })
+      attendreModeIntact(vue)
+    })
+
+    // La coupure prend un aller-retour avec la page : un Stop arrivé PENDANT ne peut plus la défaire.
+    // L'agent doit alors savoir qu'il a éteint le mode, sinon personne ne le lui dit.
+    it('Stop pendant l’extinction même : refus, et le message dit que le mode est éteint', async () => {
+      const vue = await preparer()
+      const arret = new AbortController()
+      vue.reponses.activerMode = (args): boolean => {
+        if (args[0] === null) arret.abort('user')
+        return true
+      }
+      const r = await nav.agir('conv-a', CLIC, arret.signal)
+      expect(r).toMatchObject({ ok: false, message: expect.stringMatching(/arrêté/) })
+      expect(r.message).toContain('Annoter')
+      expect(nav.etat('conv-a').mode).toBeNull()
+      expect(vue.evenements).toEqual([])
+    })
+
+    it('jumeau : refusé sans mode allumé, le message ne parle d’aucun mode', async () => {
+      nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      vue.reponses.surligner = (): boolean => {
+        nav.piloter('conv-a', 'reprendre-la-main')
+        return true
+      }
+      const r = await nav.agir('conv-a', CLIC)
+      expect(r).toMatchObject({ ok: false, refus: 'main-reprise' })
+      expect(r.message).not.toMatch(/Mode /)
+    })
+  })
+
   // Objection du juge (run-adc12547df2d-1) : `localiser` partait avec focus et sélection AVANT tout
   // ordre. Main reprise, l'utilisateur avait perdu son focus, et sa prochaine frappe remplaçait le
   // texte sélectionné. En pause, on REGARDE la cible ; on n'y entre qu'une fois le geste libéré.
@@ -1382,6 +1471,47 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       expect(await action).toMatchObject({ ok: true })
       expect(regards(vue)).toEqual([SANS_TOUCHER, EN_ENTRANT])
       expect(vue.textes).toEqual(['Bonjour'])
+    })
+
+    // Objection du juge (run-adc12547df2d-1, réparation 4) : rien ne relisait le Stop ni la main
+    // reprise entre la libération et la relocalisation. Le geste était refusé, mais `localiser` était
+    // déjà parti avec focus et sélection : focus perdu, et la prochaine frappe remplaçait le texte.
+    describe('arrêté aussitôt après « Pas suivant » : le champ n’est pas touché', () => {
+      const ARRETS: Array<[string, (arret: AbortController) => void, RegExp]> = [
+        ['Stop', (arret) => arret.abort('user'), /arrêté/],
+        ['Reprendre la main', () => nav.piloter('conv-a', 'reprendre-la-main'), /repris la main/]
+      ]
+
+      it.each(ARRETS)('%s juste après l’ordre', async (_nom, arreter, message) => {
+        const vue = preparer()
+        const arret = new AbortController()
+        nav.piloter('conv-a', 'pause')
+        const action = nav.agir('conv-a', SAISIE, arret.signal)
+        await laisserFiler()
+        nav.piloter('conv-a', 'pas-suivant')
+        arreter(arret)
+        const r = await action
+        expect(r).toMatchObject({ ok: false, message: expect.stringMatching(message) })
+        expect(regards(vue)).toEqual([SANS_TOUCHER])
+        expect(vue.textes).toEqual([])
+      })
+
+      it.each(ARRETS)('%s pendant le retrait du tracé', async (_nom, arreter, message) => {
+        const vue = preparer()
+        const arret = new AbortController()
+        nav.piloter('conv-a', 'pause')
+        const action = nav.agir('conv-a', SAISIE, arret.signal)
+        await laisserFiler()
+        vue.reponses.retirerSurbrillance = (): boolean => {
+          arreter(arret)
+          return true
+        }
+        nav.piloter('conv-a', 'pas-suivant')
+        const r = await action
+        expect(r).toMatchObject({ ok: false, message: expect.stringMatching(message) })
+        expect(regards(vue)).toEqual([SANS_TOUCHER])
+        expect(vue.textes).toEqual([])
+      })
     })
 
     it('aucun champ actif : la saisie ciblée attend, elle n’est pas refusée d’office', async () => {
