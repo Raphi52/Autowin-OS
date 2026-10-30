@@ -71,8 +71,11 @@
  *   - « reglages » (conv-1339) : des variables CSS montrées en curseurs sous la proposition (voir
  *     draft-reglages.mjs) ; l'aperçu change tout de suite et les boutons portent les valeurs choisies.
  *     Le carrousel devient là aussi une page ```html-interactif.
- *   Sortie : le fichier .md avec la clôture ```html-render — ou ```html-interactif avec une scène ou
- *   des réglages —, à contrôler par scripts/html-render-apercu.mjs (code 0) — html-interactif-apercu.mjs
+ *   - « visuel » et « fonctionnement » (conv-1338) : les deux axes d'une proposition, sur TOUTES ou
+ *     sur aucune. Ils s'affichent sur la fiche et ouvrent le mélange par axe (draft-axes.mjs), qui
+ *     remplace le Mixer et ses boutons précalculés : page ```html-interactif là aussi.
+ *   Sortie : le fichier .md avec la clôture ```html-render — ou ```html-interactif avec une scène,
+ *   des réglages ou des axes —, à contrôler par scripts/html-render-apercu.mjs (code 0) — html-interactif-apercu.mjs
  *   pour une page, plus scene-3d-apercu.mjs pour une scène — puis à poser dans le fil par `montrer_bloc`
  *   (conv-1306 : recopié à la main, un carrousel de 52 ko ne tenait plus dans la réponse).
  *   Codes : 0 = écrit ; 2 = usage ou propositions invalides (raisons sur stdout) ; 1 = erreur.
@@ -80,6 +83,15 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { CLASSE_PLACE_SCENE } from '../src/renderer/scene-3d/choix-scene.mjs'
+import {
+  carrouselAvecAxes,
+  ficheAxes,
+  panneauAxes,
+  propositionsAvecAxes,
+  SCRIPT_AXES,
+  styleAxes,
+  verifierAxes
+} from './draft-axes.mjs'
 import {
   panneauReglages,
   SCRIPT_REGLAGES,
@@ -140,7 +152,7 @@ export function verifierPropositions(spec) {
     erreurs.push('« propositions » : de 2 à 10 attendues')
     return erreurs
   }
-  if (spec.mixer === true && propositions.length > MIXER_MAX)
+  if (spec.mixer === true && propositions.length > MIXER_MAX && !propositionsAvecAxes(propositions))
     erreurs.push(
       `« mixer » : ${MIXER_MAX} propositions au plus — il en faudrait ${2 ** propositions.length - propositions.length - 1} boutons précalculés`
     )
@@ -160,6 +172,7 @@ export function verifierPropositions(spec) {
     if (/class\s*=\s*["'][^"']*\bdkc-/i.test(p.html))
       erreurs.push(`${rang} : le préfixe de classe « dkc- » est réservé au carrousel`)
   })
+  erreurs.push(...verifierAxes(propositions))
   if (spec.reglages !== undefined)
     erreurs.push(
       ...verifierReglages(
@@ -170,8 +183,9 @@ export function verifierPropositions(spec) {
   return erreurs
 }
 
-/** Un curseur ou une scène exigent du code : le carrousel sort alors en page ```html-interactif. */
-export const carrouselEnPage = (spec) => Boolean(spec.scene3d || spec.reglages)
+/** Un curseur, une scène ou un mélange par axe exigent du code : page ```html-interactif. */
+export const carrouselEnPage = (spec) =>
+  Boolean(spec.scene3d || spec.reglages || carrouselAvecAxes(spec))
 
 /** La copie d'une maquette pour sa vignette : ses `id` renommés, pour ne pas exister en double. */
 function copieVignette(html) {
@@ -269,7 +283,7 @@ ${pour((i) => (i < n ? `#dkp${i}:checked~.dkc-stg .dkc-s${i}~.dkc-sl{transform:t
 .dkc-nm{color:var(--dk-texte);font-size:15px;font-weight:600}
 .dkc-sd{color:var(--dk-dim);font-size:12.5px}
 .dkc-mq{display:block}
-.dkc-film{flex:0 0 100%;display:flex;flex-wrap:nowrap;gap:${ECART_VIGNETTES}px;margin-top:12px}
+.dkc-film{flex:0 0 100%;min-width:0;display:flex;flex-wrap:nowrap;gap:${ECART_VIGNETTES}px;margin-top:12px}
 .dkc-th{flex:1 1 0;min-width:0;display:flex;flex-direction:column;flex-wrap:nowrap;gap:5px;padding:0 0 4px;box-sizing:border-box;border:1px solid transparent;border-radius:12px;color:var(--dk-pale);opacity:.65;transition:opacity .2s}
 .dkc-th:hover{opacity:1}
 .dkc-mini{display:block;height:46px;overflow:hidden;border-radius:10px;border:1px solid transparent;background:linear-gradient(var(--dk-gris),var(--dk-gris)) padding-box,linear-gradient(var(--dk-gris),var(--dk-gris)) border-box}
@@ -313,14 +327,16 @@ export function carrouselDraft(spec) {
   if (erreurs.length) throw new Error(erreurs.join(' ; '))
   const P = spec.propositions.map((p, i) => ({ ...p, n: i + 1 }))
   const n = P.length
+  const avecAxes = carrouselAvecAxes(spec)
   const cssPropositions = [
     spec.reglages && styleReglages(spec.reglages),
+    propositionsAvecAxes(spec.propositions) && styleAxes(),
     spec.css,
     ...P.map((p) => p.css)
   ]
     .filter(Boolean)
     .join('\n')
-  const avecMixer = spec.mixer ?? n <= MIXER_MAX
+  const avecMixer = !avecAxes && (spec.mixer ?? n <= MIXER_MAX)
 
   // FLÈCHES DE CÔTÉ (demande utilisateur, 2026-10-17 : « des flèches à gauche et à droite du draft,
   // pas juste un ptit truc de pagination en haut à droite ») : une colonne de chaque côté de la
@@ -358,7 +374,8 @@ export function carrouselDraft(spec) {
       return fleche(p.n, cible >= 1 && cible <= n ? cible : 0, sens)
     }).join('')}</span>`
   const piste = `<div class="dkc-trk">\n${P.map(
-    (p) => `<div class="dkc-sl dkc-s${p.n}">${tete(p)}<div class="dkc-mq">${p.html}</div></div>`
+    (p) =>
+      `<div class="dkc-sl dkc-s${p.n}">${tete(p)}<div class="dkc-mq">${p.html}</div>${ficheAxes(p)}</div>`
   ).join('\n')}\n</div>`
   // SUJET EN VOLUME (conv-318) : la place de la scène 3D, entre les flèches, au-dessus des fiches.
   const milieu = spec.scene3d
@@ -419,13 +436,13 @@ ${feuilleDeStyle(n, cssPropositions, Boolean(spec.scene3d), avecMixer)}
 </style>
 <div class="dkc-w">
 <div class="dkc-hd">${echapper(spec.titre)}</div>
-${spec.intro ? `<div class="dkc-intro">${spec.intro}</div>\n` : ''}<div class="dkc-aide"><b>Clique une vignette</b> ou les <b>flèches</b> de chaque côté pour passer d’une proposition à l’autre · <b>Tout voir</b> les étale côte à côte · ${spec.reglages ? '<b>les curseurs</b> ajustent toutes les propositions · ' : ''}<b>choisis</b> avec les boutons du bas${carrouselEnPage(spec) ? ' (ils remplissent ta saisie : <b>Entrée</b> pour envoyer)' : ''}, ${avecMixer ? 'ou <b>Mixer</b> pour en cocher plusieurs à mélanger.' : 'ou écris un mélange dans la saisie.'}</div>
+${spec.intro ? `<div class="dkc-intro">${spec.intro}</div>\n` : ''}<div class="dkc-aide"><b>Clique une vignette</b> ou les <b>flèches</b> de chaque côté pour passer d’une proposition à l’autre · <b>Tout voir</b> les étale côte à côte · ${spec.reglages ? '<b>les curseurs</b> ajustent toutes les propositions · ' : ''}<b>choisis</b> avec les boutons du bas${carrouselEnPage(spec) ? ' (ils remplissent ta saisie : <b>Entrée</b> pour envoyer)' : ''}, ${avecAxes ? 'ou <b>Mixer par axe</b> pour combiner le visuel de l’une et le fonctionnement d’une autre.' : avecMixer ? 'ou <b>Mixer</b> pour en cocher plusieurs à mélanger.' : 'ou écris un mélange dans la saisie.'}</div>
 <div class="dkc-car">${champs}
 ${navigation}
 ${scene}
 ${spec.reglages ? `${panneauReglages(spec.reglages)}\n` : ''}${vignettes}
 <div class="dkc-ibar"><span class="dkc-ind"></span></div>
-${casesMixer}${actions}
+${casesMixer}${avecAxes ? `${panneauAxes(P)}\n` : ''}${actions}
 ${interrupteur}
 </div>
 </div>`
@@ -480,6 +497,7 @@ export function pageDuCarrousel(spec) {
   return (
     carrouselDraft(spec) +
     (spec.reglages ? `\n<script>\n${SCRIPT_REGLAGES}\n</script>` : '') +
+    (carrouselAvecAxes(spec) ? `\n<script>\n${SCRIPT_AXES}\n</script>` : '') +
     (spec.scene3d
       ? `\n<script>\n${SCRIPT_PLACE_SCENE}\n</script>\n<script ${ATTRIBUT_SCRIPT_SCENE}>\n` +
         spec.scene3d.trim() +
@@ -537,7 +555,7 @@ if (lanceEnCli) {
         (spec.scene3d
           ? `node scripts/html-interactif-apercu.mjs "${sortie}" et ` +
             `node scripts/scene-3d-apercu.mjs "${sortie}" (code 0 exigé pour chacun)`
-          : spec.reglages
+          : carrouselEnPage(spec)
             ? `node scripts/html-interactif-apercu.mjs "${sortie}" (code 0 exigé)`
             : `node scripts/html-render-apercu.mjs "${sortie}" (code 0 exigé)`) +
         ', puis pose-le dans le fil avec la commande montrer_bloc (path = ce fichier) : ne le recopie pas'
