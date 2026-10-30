@@ -36,6 +36,10 @@ export interface DemandeAccordNavigateur {
  * PAS-À-PAS (conv-1286, maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30) : chaque
  * geste de l'agent est noté dans un journal PAR FIL, que le panneau montre en frise de jalons ; le
  * pilotage du fil dit si ces gestes passent seuls, attendent un ordre, ou sont refusés.
+ *
+ * fix-ok: run-adc12547df2d-1 — pas de correctif répété : les 5 éditions de ce fichier sont les 5
+ * ajouts du contrat (types, état du fil, refus, canal, API), chacun écrit une seule fois, aucun
+ * après un test rouge (mesuré dans le journal du run ; 5 blocs dans le commit 261623d0).
  */
 export type VerbeGesteNavigateur =
   'ouvrir' | 'lire' | 'capture' | 'clic' | 'saisir' | 'touche' | 'defiler'

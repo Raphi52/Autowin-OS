@@ -911,6 +911,12 @@ describe('réglages, données, navigateur du système', () => {
  * échouer ces tests si le moteur est faux : un geste qui part pendant la pause (`evenements` non
  * vide), « Pas suivant » qui libère plus d'un geste, la main reprise qui touche encore la page
  * (`localiser` rejoué, qui fait défiler et donne le focus), ou une attente sans fin.
+ *
+ * fix-ok: run-adc12547df2d-1 — sur 6 éditions, une seule corrige : ce test attendait
+ * `retirerSurbrillance` en dernier appel (rouge : « expected 'localiser' to be
+ * 'retirerSurbrillance' »), alors que le moteur retire le tracé PUIS relocalise la cible, comme
+ * demandé. Les 5 autres sont des ajouts : ce bloc, 3 imports, le test de la main reprise pendant
+ * la surbrillance avec son jumeau accepté.
  */
 describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
   /** Les états successifs des gestes du fil, tels que poussés à l'interface. */
