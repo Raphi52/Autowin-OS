@@ -27,7 +27,8 @@ describe('contrat « Lancer en N fils » dans la consigne du chat', () => {
    * à l'agent dès deux tâches.
    */
   it('fait plusieurs tâches à la suite, sans arrêter le tour sur une carte à valider', () => {
-    expect(prompt).toMatch(/au moins DEUX tâches d'ACTION, fais-les TOUTES dans ce tour/u)
+    expect(prompt).toMatch(/au moins DEUX tâches d'ACTION/u)
+    expect(prompt).toMatch(/fais-les TOUTES dans ce tour, l'une après l'autre/u)
     expect(prompt).toMatch(/sans carte ni demande d'accord/u)
     expect(prompt).toMatch(/ne se rend QUE si l'utilisateur demande LUI-MÊME/u)
     expect(prompt).toMatch(/Jamais de bloc de ta propre initiative : ni pour plusieurs tâches/u)
@@ -35,11 +36,11 @@ describe('contrat « Lancer en N fils » dans la consigne du chat', () => {
   })
 
   /*
-   * Faire « à la suite » ne vaut que pour ce qui tient dans le tour (kaizen de conv-1332). Sans
-   * cette exception, la règle ci-dessus l'emportait sur le plan de lots : voir le test de
+   * fix-ok: conv-1332 — faire « à la suite » ne vaut que pour des tâches liées ou déjà localisées :
+   * sans cette règle, « fais-les toutes » l'emportait sur le plan de lots : voir le test de
    * `chat-pilotage-prompt.plan-de-lots.test.ts`.
    */
-  it('renvoie au plan de lots les tâches indépendantes qui prendraient chacune un tour', () => {
+  it('renvoie au plan de lots les tâches indépendantes', () => {
     expect(prompt).toMatch(/lance-les en parallèle avec `plan_de_lots` quand cet outil existe/u)
     expect(prompt).toMatch(/il part sans carte ni clic/u)
   })
