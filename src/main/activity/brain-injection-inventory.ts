@@ -33,6 +33,68 @@ export interface BrainInjectionInventory {
   totalTraces: number
   /** Points déclarés dont AUCUN appel n'a jamais été tracé (état, pas erreur). */
   pointsJamaisAppeles: string[]
+  /** Notes servies souvent et jamais ouvertes (voir `notesServiesJamaisOuvertes`). */
+  notesBruyantes: NoteBruyante[]
+  /** Première ouverture tracée : avant elle, « jamais ouverte » ne peut pas se dire. */
+  mesureOuverturesDepuis?: string
+  /** Seuil de `notesBruyantes`, transmis pour que l'interface l'affiche sans le recopier. */
+  seuilNotesBruyantes: number
+}
+
+export interface NoteBruyante {
+  chemin: string
+  /** Blocs de notes proches qui l'ont servie depuis le début de la mesure. */
+  servies: number
+  /** Fils distincts où elle a été servie. */
+  fils: number
+}
+
+/** Points du registre lus ici (`brain-injection-points.ts`) ; le test vérifie qu'ils y existent. */
+export const POINT_NOTES_PROCHES = 'chat-titres-du-tour'
+export const POINT_LECTURE = 'command-brain-read'
+export const NOTE_BRUYANTE_SEUIL = 10
+const NOTES_BRUYANTES_MAX = 15
+
+/**
+ * NOTES SERVIES SOUVENT, JAMAIS OUVERTES (conv-1303, 2026-10-30) — de quoi nourrir `/curate`.
+ *
+ * Mesure du 13 au 30/10 : les notes « plan de lots » ont été servies 46 fois sans une ouverture,
+ * une note d'état passager (« conv-1146 : travail non commité… ») 23 fois. Une telle note répond à
+ * des messages génériques (titre trop large, ou état périmé) : c'est à la curation de la resserrer
+ * ou de la retirer, pas au tri de la cacher.
+ *
+ * HONNÊTE SUR SA FENÊTRE : `brain_read` n'était pas tracé avant le 30/10. Compter les blocs servis
+ * avant la PREMIÈRE ouverture tracée ferait passer pour « jamais ouverte » une note lue à l'époque.
+ * Le compte commence donc à cette première ouverture ; sans elle, la liste est vide et le dit.
+ * Seul le champ `notes` des traces fait foi (chemins exacts), pas une sélection rejouée.
+ */
+export function notesServiesJamaisOuvertes(
+  traces: readonly BrainTrace[],
+  seuil = NOTE_BRUYANTE_SEUIL
+): { depuis?: string; notes: NoteBruyante[] } {
+  const lectures = traces.filter((t) => t.point === POINT_LECTURE)
+  if (lectures.length === 0) return { notes: [] }
+  const depuis = lectures
+    .map((t) => t.timestamp)
+    .reduce((min, ts) => (Date.parse(ts) < Date.parse(min) ? ts : min))
+  const ouvertes = new Set(lectures.flatMap((t) => t.notes ?? []))
+  const servies = new Map<string, { servies: number; fils: Set<string> }>()
+  for (const t of traces) {
+    if (t.point !== POINT_NOTES_PROCHES || !t.notes) continue
+    if (Date.parse(t.timestamp) < Date.parse(depuis)) continue
+    for (const chemin of t.notes) {
+      const entree = servies.get(chemin) ?? { servies: 0, fils: new Set<string>() }
+      entree.servies += 1
+      entree.fils.add(t.conversationId)
+      servies.set(chemin, entree)
+    }
+  }
+  const notes = [...servies.entries()]
+    .filter(([chemin, e]) => e.servies >= seuil && !ouvertes.has(chemin))
+    .map(([chemin, e]) => ({ chemin, servies: e.servies, fils: e.fils.size }))
+    .sort((a, b) => b.servies - a.servies || a.chemin.localeCompare(b.chemin))
+    .slice(0, NOTES_BRUYANTES_MAX)
+  return { depuis, notes }
 }
 
 /**
@@ -56,7 +118,8 @@ export function pointDeTrace(trace: Pick<BrainTrace, 'point' | 'kind'>): string 
     empreinte: 'empreinte',
     recherche: 'search',
     depot: 'write',
-    pousse: 'push'
+    pousse: 'push',
+    lecture: 'read'
   }
   const kind = CORRESPONDANCE[trace.kind ?? 'automatic']
   if (!kind) return undefined
@@ -97,12 +160,16 @@ export function buildBrainInjectionInventory(
       entree.caracteresConversation += Math.max(0, trace.injectedChars || 0)
     }
   }
+  const bruyantes = notesServiesJamaisOuvertes(traces)
   return {
     points,
     tracesNonRattachees,
     totalTraces: traces.length,
     pointsJamaisAppeles: points
       .filter((p) => p.emission === 'spool' && p.appelsTotal === 0)
-      .map((p) => p.id)
+      .map((p) => p.id),
+    notesBruyantes: bruyantes.notes,
+    seuilNotesBruyantes: NOTE_BRUYANTE_SEUIL,
+    ...(bruyantes.depuis ? { mesureOuverturesDepuis: bruyantes.depuis } : {})
   }
 }

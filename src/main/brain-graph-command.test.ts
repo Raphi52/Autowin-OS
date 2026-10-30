@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createHmac } from 'node:crypto'
-import { runBrainGraph, runBrainRead } from './brain-graph-command'
+import { runBrainGraph, runBrainRead, tracerLectureBrain } from './brain-graph-command'
+import type { BrainTrace } from './activity/brain-trace-spool'
 import { decideRemember, parseSupersedes } from './brain-remember'
 
 const signed = (context: string, token = 'jeton'): Record<string, unknown> => {
@@ -85,6 +86,47 @@ describe('remember supersedes', () => {
       supersedes: ['autowin-os/old-rule']
     })
     expect(decision.allowed && decision.supersedes).toEqual(['autowin-os/old-rule'])
+  })
+})
+describe('trace des lectures Brain (conv-1303)', () => {
+  it('trace brain_read avec le chemin ouvert, la taille injectée et le tour', () => {
+    const traces: BrainTrace[] = []
+    tracerLectureBrain(
+      'brain_read',
+      { path: 'perso:knowledge\\lessons\\x.md' },
+      { found: true, status: 'found', knowledge: 'contenu de note' },
+      { conversationId: 'conv-1', turnId: 't-1', durationMs: 42 },
+      (t) => traces.push(t)
+    )
+    expect(traces).toHaveLength(1)
+    expect(traces[0]).toMatchObject({
+      conversationId: 'conv-1',
+      turnId: 't-1',
+      kind: 'lecture',
+      point: 'command-brain-read',
+      query: 'brain_read: perso:knowledge/lessons/x.md',
+      found: true,
+      status: 'found',
+      durationMs: 42,
+      injectedChars: 15,
+      notes: ['perso:knowledge/lessons/x.md']
+    })
+  })
+
+  it('trace brain_graph sans chemin de note, et rien sans conversation', () => {
+    const traces: BrainTrace[] = []
+    const vide = { found: false, status: 'not-requested' as const, knowledge: '' }
+    tracerLectureBrain('brain_graph', { entity: 'svc' }, vide, { conversationId: 'c' }, (t) =>
+      traces.push(t)
+    )
+    tracerLectureBrain('brain_read', { path: 'k.md' }, vide, {}, (t) => traces.push(t))
+    expect(traces).toHaveLength(1)
+    expect(traces[0]).toMatchObject({
+      query: 'brain_graph: svc',
+      status: 'empty',
+      injectedChars: 0
+    })
+    expect(traces[0].notes).toBeUndefined()
   })
 })
 // fix-ok: l'echantillon de test etait refuse par la politique existante ; reutilise le fait d'exemple des autres tests

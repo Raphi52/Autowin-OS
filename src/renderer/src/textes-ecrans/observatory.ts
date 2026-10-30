@@ -153,6 +153,10 @@ export const TEXTES_FR = {
   'vue.appelsInjectes': '{n} appel{s} · {caracteres} car. injectés',
   'vue.inventaire.orphelines':
     '{n} trace{s} sans point déclaré — comptée{s} à part plutôt que devinée{s}.',
+  'vue.bruyantes.titre': 'Notes servies {seuil} fois ou plus, jamais ouvertes (depuis le {depuis})',
+  'vue.bruyantes.aucune': 'Aucune note servie {seuil} fois sans être ouverte depuis le {depuis}.',
+  'vue.bruyantes.ligne': 'servie {servies} fois dans {fils} fil{s}',
+  'vue.bruyantes.conseil': 'À relire en /curate : titre trop large, ou état passager à retirer.',
   'vue.anciennesTraces': '{n} ancienne{s} trace{s} Brain · non rattachée{s} à un tour',
   'vue.cesTracesHistoriquesN':
     'Ces traces historiques n’ont pas de turnId. Observatory refuse de leur inventer une position causale.',
@@ -508,6 +512,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'vue.appelsInjectes': '{n} call{s} · {caracteres} chars injected',
   'vue.inventaire.orphelines':
     '{n} trace{s} without a declared point — counted separately rather than guessed.',
+  'vue.bruyantes.titre': 'Notes served {seuil} times or more, never opened (since {depuis})',
+  'vue.bruyantes.aucune': 'No note served {seuil} times without being opened since {depuis}.',
+  'vue.bruyantes.ligne': 'served {servies} times in {fils} thread{s}',
+  'vue.bruyantes.conseil': 'Review in /curate: title too broad, or a passing state to remove.',
   'vue.anciennesTraces': '{n} old Brain trace{s} · not attached to a turn',
   'vue.cesTracesHistoriquesN':
     'These historical traces have no turnId. Observatory refuses to make up a causal position for them.',

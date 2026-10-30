@@ -20,6 +20,8 @@ export type BrainPointKind =
   | 'push'
   /** Recherche déclenchée à la main dans l'interface. */
   | 'search'
+  /** Lecture choisie par le modèle : note entière (`brain_read`) ou liens (`brain_graph`). */
+  | 'read'
   /** Dépôt de savoir vers le Brain (`POST /ingest`). */
   | 'write'
   /** Couche de transport partagée : tracée par ses appelants, jamais deux fois. */
@@ -99,6 +101,26 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     trace: { file: 'src/main/commands.ts', anchor: "kind: 'query'" },
     pourquoi:
       'Récupération à la demande du modèle, rendue dans le résultat de commande — Brain d’équipe et, s’il est réglé, Brain perso (chemins préfixés perso:).'
+  },
+  {
+    id: 'command-brain-read',
+    label: 'Commande · brain_read / brain_graph',
+    kind: 'read',
+    injecte: true,
+    emission: 'spool',
+    sites: [
+      // Brain PERSO (conv-1233) : chemin `perso:`, ouvert sur son propre serveur.
+      { file: 'src/main/commands.ts', anchor: '? await runBrainGraph(argsPerso, depsPerso)' },
+      { file: 'src/main/commands.ts', anchor: ': await runBrainRead(argsPerso, depsPerso)' },
+      {
+        file: 'src/main/commands.ts',
+        anchor:
+          "name === 'brain_graph' ? await runBrainGraph(a, deps) : await runBrainRead(a, deps)"
+      }
+    ],
+    trace: { file: 'src/main/commands.ts', anchor: 'tracerLectureBrain(' },
+    pourquoi:
+      "Note ENTIÈRE ouverte par le modèle (souvent depuis les notes proches), ou liens suivis dans le graphe. Absent du registre jusqu'au 2026-10-30 (conv-1303) : 148 notes, 347 000 caractères injectés du 22 au 30/10 sans trace — le plus gros flux Brain du chat."
   },
   {
     id: 'chat-context-push',
@@ -187,6 +209,16 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     ],
     pourquoi:
       'Couche partagée par tous les points de lecture : la tracer ici doublerait chaque récupération.'
+  },
+  {
+    id: 'brain-read-transport',
+    label: 'Transport · /read + /graph',
+    kind: 'transport',
+    injecte: false,
+    emission: 'porte-par-appelant',
+    sites: [{ file: 'src/main/brain-graph-command.ts', anchor: '(`${origin}${route}`' }],
+    pourquoi:
+      'Couche partagée par brain_read et brain_graph : tracée par la commande qui l’appelle.'
   },
   {
     id: 'brain-ingest-transport',
