@@ -136,4 +136,48 @@ describe('plan_de_lots par le bus', () => {
     expect(messages[0]).toMatchObject({ a: 'conv-A', de: { fil: 'conv-L1' }, nature: 'info' })
     expect(String(messages[0].texte)).toContain('Lot un fait, code 0.')
   })
+
+  // conv-1284 (2026-10-29) : la réponse du chef à un lot bloqué, envoyée en ORDRE, relance le lot
+  // par le coordinateur — sans « relancer » à part, et sans second agent dans le fil du lot.
+  it('l’ordre du chef au fil d’un lot bloqué le relance ; un ordre d’un autre fil part tel quel', async () => {
+    const { bus, coord, lances } = banc()
+    await bus.exec('plan_de_lots', { plan }, 'conv-A')
+    await coord.surFinDeTour('conv-L1', {
+      ok: true,
+      texte: '⛔ Bloqué : j’attends la réponse du chef'
+    })
+    expect(coord.plans()[0].lots[0].etat).toBe('attend-chef')
+    const toursAvant = coord.plans()[0].toursLances
+    const reveils: Array<{ fil: string; prompt: string }> = []
+    bus.tourDeChatActif = () => false
+    bus.lancerDansConversation = async (fil, prompt) => {
+      reveils.push({ fil, prompt })
+      return { ok: true, turnId: `ordre-${reveils.length}` }
+    }
+    const r = await bus.exec(
+      'ecrire_a_un_fil',
+      { destinataire: 'conv-L1', texte: 'Le module s’appelle carte.ts.', nature: 'ordre' },
+      'conv-A'
+    )
+    expect(r.ok).toBe(true)
+    expect(r.data).toMatchObject({ nature: 'ordre', reveil: 'lance' })
+    expect(reveils).toHaveLength(1)
+    expect(reveils[0].fil).toBe('conv-L1')
+    expect(reveils[0].prompt).toMatch(/^Ordre de conv-A /)
+    expect(reveils[0].prompt).toContain('Le module s’appelle carte.ts.')
+    expect(reveils[0].prompt).toMatch(/Ce fil fait le lot 1 sur 2 du plan « Démo »/)
+    expect(coord.plans()[0].lots[0]).toMatchObject({ etat: 'en-cours', tour: 'ordre-1' })
+    expect(coord.plans()[0].toursLances).toBe(toursAvant + 1)
+    expect(lances.filter((l) => l.fil === 'conv-L1')).toHaveLength(1)
+    // Jumeau : un ordre du lot 2 vers le lot 1 n'est pas une réponse du chef — rien n'est ajouté.
+    await coord.surFinDeTour('conv-L1', { ok: true, tour: 'ordre-1', texte: '⛔ Bloqué : encore' })
+    await bus.exec(
+      'ecrire_a_un_fil',
+      { destinataire: 'conv-L1', texte: 'Regarde mon fichier b.ts.', nature: 'ordre' },
+      'conv-L2'
+    )
+    expect(reveils).toHaveLength(2)
+    expect(reveils[1].prompt).not.toMatch(/Ce fil fait le lot/)
+    expect(coord.plans()[0].lots[0].etat).toBe('echec')
+  })
 })
