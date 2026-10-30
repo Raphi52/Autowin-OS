@@ -86,6 +86,28 @@ export function commandeNonInjectable(directive: string): string | undefined {
   return route.skill ?? route.explicitPhase
 }
 
+/**
+ * Phases qu'une commande tapée DANS LE CHAT ne confie pas à un run : le modèle les joue dans le fil,
+ * avec le corps de leur skill, comme `/look` ou `/remake`.
+ *
+ * `/kaizen` partait en orchestration avant toute lecture par un modèle (conv-1332, tour
+ * c7de932e-abac-4f8b-ba34-1b6335b62653) : fil muet, alors que la consigne du chat promettait déjà
+ * « se joue avec tes propres outils » et que « kaizen » sans barre le faisait. Saisie de conv-1334 :
+ * « kaizen lance une orchestration un peu opaque c'est naze ca pourrait le faire comme une conv
+ * normale ». `explicitPhase` reste posé : l'orchestrateur et `task-regime.ts` le lisent pour le run
+ * que le profil de workflow Kaizen, ou un `orchestrate` demandé nommément, lance encore.
+ */
+const PHASES_JOUEES_DANS_LE_FIL: ReadonlySet<PipelinePhase> = new Set<PipelinePhase>(['kaizen'])
+
+/** Cette route part-elle en orchestration SANS passer par le modèle ? */
+export function courtCircuiteLeModele(route: SkillRoute | undefined): boolean {
+  return (
+    route?.reason === 'explicit-skill' &&
+    route.explicitPhase !== undefined &&
+    !PHASES_JOUEES_DANS_LE_FIL.has(route.explicitPhase)
+  )
+}
+
 function isActionClause(text: string): boolean {
   return DIRECT_ACTION.test(text) || POLITE_ACTION.test(text) || OBLIGATION_ACTION.test(text)
 }
