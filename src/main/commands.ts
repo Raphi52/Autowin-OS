@@ -5233,7 +5233,8 @@ export class AppCommandBus {
             unknown: false,
             truncated: false,
             note: 'duplicate',
-            detail: 'une leçon existe déjà ou est en cours pour ce tour ; aucun doublon écrit'
+            detail:
+              'rien n’a été écrit : ce tour a déjà sa leçon suivie. Si celle-ci corrige ou complète la première, rappelle `remember` sans `learningOutcome` : seul ce champ est limité à un par tour'
           }
         }
         if (a.source === 'session:current' && turnId) a = { ...a, source: `session:${turnId}` }
