@@ -339,6 +339,8 @@ interface OngletInterne {
   vue: VueNavigateur
   console: LigneConsole[]
   requetes: RequeteEchouee[]
+  /** Dernier état de chargement vu : `surChangement` y distingue la FIN d'un chargement. */
+  chargeait: boolean
 }
 
 interface AnnotationInterne {
@@ -370,6 +372,8 @@ interface AttentePause {
   geste: GesteNavigateur
   resoudre: (issue: IssuePause) => void
   minuterie: ReturnType<typeof setTimeout>
+  /** Remet les pointillés après un chargement de page, qui efface le calque de la page. */
+  retracer: () => void
 }
 
 type IssueAccord = ReponseAccordNavigateur | 'delai'
@@ -1005,7 +1009,10 @@ export class GestionnaireNavigateur {
     // n'a rien à faire attendre), AVANT l'accord du site (on ne demande pas l'accord d'un geste que
     // l'utilisateur n'a pas encore libéré). Sans cible, une frappe vise le champ actif : c'est lui
     // qu'on trace en pointillés.
-    const pause = await this.franchirPause(conversationId, geste, arret, async () => {
+    const pause = await this.franchirPause(conversationId, geste, arret, async (pageNeuve) => {
+      // Page rechargée : la place lue avant ne vaut plus, et rien n'est tracé pour une cible disparue
+      // ou devenue secrète, que le geste libéré se verra refuser. Sans focus : il n'est pas encore libre.
+      if (pageNeuve && (await viser(false, 'Cible perdue au rechargement.'))) return null
       const zone =
         cible?.rect ??
         (tape ? ((await this.jouer(onglet, 'focus', [])) as FocusPage | null)?.rect : undefined)
@@ -1247,7 +1254,14 @@ export class GestionnaireNavigateur {
         }
       }
     })
-    const onglet: OngletInterne = { id, conversationId, vue, console: [], requetes: [] }
+    const onglet: OngletInterne = {
+      id,
+      conversationId,
+      vue,
+      console: [],
+      requetes: [],
+      chargeait: false
+    }
     this.onglets.set(id, onglet)
     this.fil(conversationId).onglets.push(id)
     return onglet
@@ -1288,6 +1302,11 @@ export class GestionnaireNavigateur {
         )
       })
     }
+    // La FIN d'un chargement seulement, pas chaque changement : relire la cible fait défiler la page, et
+    // une page qui change de titre chaque seconde ramènerait l'utilisateur sans cesse sur la cible.
+    const charge = onglet.vue.chargement()
+    if (onglet.chargeait && !charge) this.retracerPause(onglet)
+    onglet.chargeait = charge
     this.emettre(onglet.conversationId)
   }
 
@@ -1671,17 +1690,20 @@ export class GestionnaireNavigateur {
   /**
    * Le passage obligé de chaque geste de l'agent. Libre : il part. Stop ou main reprise : refusé. En
    * pause : il ATTEND un ordre (« Pas suivant », « Reprendre »), le délai ou le Stop ; `apercu` donne
-   * la zone à tracer en pointillés pendant ce temps. `attendu` dit à l'appelant qu'il doit relire la
-   * page.
+   * la zone à tracer en pointillés pendant ce temps, et se rejoue après chaque chargement de page
+   * (`pageNeuve`). `attendu` dit à l'appelant qu'il doit relire la page.
    *
    * fix-ok: run-adc12547df2d-1 (objection du juge) — le moteur n'avait aucun signal d'arrêt : pause,
    * clic, Stop, puis « Reprendre » → `mouseDown` parti et `ok: true` pour un agent déjà coupé.
+   *
+   * fix-ok: conv-1324 (mesuré, `cadre=null` dans run-rouge-recharge.txt) — le tracé n'avait lieu qu'une
+   * fois et un rechargement efface le calque de la page : le geste attendait, plus rien ne le montrait.
    */
   private async franchirPause(
     conversationId: string,
     geste: GesteNavigateur,
     arret: AbortSignal | undefined,
-    apercu?: () => Promise<{ onglet: OngletInterne; zone: RectNavigateur } | null>
+    apercu?: (pageNeuve: boolean) => Promise<{ onglet: OngletInterne; zone: RectNavigateur } | null>
   ): Promise<{ refus?: ResultatActionNavigateur; attendu: boolean }> {
     const immediat = this.refusImmediat(conversationId, arret)
     if (immediat) return { refus: immediat, attendu: false }
@@ -1699,13 +1721,32 @@ export class GestionnaireNavigateur {
         r(valeur)
       }
     })
+    // `as` et non une annotation : `tracer` l'écrit depuis une fermeture, que TypeScript ne suit pas.
+    let trace = null as OngletInterne | null
+    const tracer = async (pageNeuve: boolean): Promise<void> => {
+      // L'aperçu est un confort : une page qui ne répond pas n'empêche pas d'attendre l'ordre.
+      try {
+        const vu = apercu && !libere ? await apercu(pageNeuve) : null
+        if (!vu || libere) return
+        trace = vu.onglet
+        await this.jouer(trace, 'surligner', [vu.zone, geste.description, { prochain: true }])
+      } catch {
+        // Page fermée ou en pleine navigation : il n'y a rien à tracer pour l'instant.
+      }
+    }
+    // Un seul tracé à la fois : l'appelant relit la cible après la libération, et sa relecture ne doit
+    // pas croiser celle d'un rechargement. La chaîne est attendue avant de retirer le cadre.
+    let traces: Promise<void> = Promise.resolve()
     const attente: AttentePause = {
       geste,
       resoudre,
       minuterie: setTimeout(
         () => this.libererPause(conversationId, attente, 'expire'),
         this.delaiPauseMs
-      )
+      ),
+      retracer: () => {
+        traces = traces.then(() => tracer(true))
+      }
     }
     attente.minuterie.unref?.()
     fil.enPause.push(attente)
@@ -1716,18 +1757,8 @@ export class GestionnaireNavigateur {
     }
     arret?.addEventListener('abort', surArret, { once: true })
 
-    let trace: OngletInterne | null = null
     try {
-      // L'aperçu est un confort : une page qui ne répond pas n'empêche pas d'attendre l'ordre.
-      const apercuVu = apercu ? await apercu().catch(() => null) : null
-      if (apercuVu && !libere) {
-        trace = apercuVu.onglet
-        await this.jouer(trace, 'surligner', [
-          apercuVu.zone,
-          geste.description,
-          { prochain: true }
-        ]).catch(() => undefined)
-      }
+      traces = tracer(false)
       const fin = await issue
       if (fin === 'jouer') return { attendu: true }
       if (fin === 'main')
@@ -1745,8 +1776,16 @@ export class GestionnaireNavigateur {
       }
     } finally {
       arret?.removeEventListener('abort', surArret)
+      await traces
       // La page a pu être quittée pendant l'attente : il n'y a alors plus de tracé à retirer.
       if (trace) await this.jouer(trace, 'retirerSurbrillance', []).catch(() => undefined)
+    }
+  }
+
+  /** Un chargement vient de finir : les gestes en attente sur cet onglet retrouvent leur tracé. */
+  private retracerPause(onglet: OngletInterne): void {
+    for (const attente of this.fils.get(onglet.conversationId)?.enPause ?? []) {
+      if (attente.geste.ongletId === onglet.id) attente.retracer()
     }
   }
 
