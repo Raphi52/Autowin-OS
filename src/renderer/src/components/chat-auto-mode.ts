@@ -748,11 +748,12 @@ const SUITE_A_TROU = /:\s*<[\p{L}][\p{L}\s_'’-]{0,30}>\s*$/mu
 // première personne en tête de suite est une donnée que seul lui détient.
 const SUITE_AFFIRME_GESTE_UTILISATEUR =
   /^\s*j['’]ai\s+(?:bien\s+)?(?:saisi|valid[ée]|accept[ée]|tap[ée]|entr[ée]|confirm[ée]|autoris[ée]|approuv[ée])(?![\p{L}])/iu
-// Mesure conv-1047 (2026-10-13 et 2026-10-28) : le `/gc` propose la purge de ses corbeilles dans ses
-// suites, et une suite libre ne passe par aucun filtre destructeur : celle du 13/10 est partie seule.
-// Vider une corbeille ne se rattrape pas, seul l'utilisateur en décide. La phrase doit COMMENCER par le
-// geste (le texte arrive ici sans accents ni capitales) : « Ajoute un test à gc-purger-corbeilles.mjs »
-// ou « Supprime le bouton Corbeille » restent du travail ordinaire (règles trop larges, conv-787).
+// Mesuré le 2026-10-13 (passe /gc, relevée dans le Brain) et le 2026-10-28 (conv-1047) : le `/gc`
+// propose la purge de ses corbeilles dans ses suites, et une suite libre ne passe par aucun filtre
+// destructeur : celle du 13/10 est partie seule. Vider une corbeille ne se rattrape pas, seul
+// l'utilisateur en décide. La phrase doit COMMENCER par le geste (le texte arrive ici sans accents ni
+// capitales) : « Ajoute un test à gc-purger-corbeilles.mjs » ou « Supprime le bouton Corbeille »
+// restent du travail ordinaire (règles trop larges, conv-787).
 const SUITE_VIDE_UNE_CORBEILLE =
   /^(?:(?:oui|ok|vas-y|yes)[\s,:!-]+)?(?:(?:lance|fais|execute|run)\s+(?:la\s+|une\s+|the\s+)?)?(?:(?:purg\w*|vid(?:e|er|ez)|empty)\b.*\b(?:corbeilles?|trash)\b|(?:supprim\w*|effac\w*|delete)\b.*\bgc-corbeille\b)/mu
 export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {

@@ -10,7 +10,8 @@ import type { Msg } from './chat-view-types'
  * définitivement les 8 corbeilles gc » tout seul, et l'agent a refusé de l'exécuter. Une consigne n'a
  * pas suffi : les passes des 27, 28 et 30/10 ont toutes réécrit la purge dans leur rubrique Recommandé,
  * celle du 28/10 aussi dans une ligne de suite (conv-1047). Les phrases ci-dessous sont les leurs.
- * Seul le gras de leur titre, que `extractRecommendation` ne lit pas, a évité un envoi les 27 et 30/10.
+ * Aucune n'est partie sur ce fil. Le mode auto allumé, seul le gras de leur titre, que
+ * `extractRecommendation` ne lit pas, aurait retenu celles des 27 et 30/10.
  *
  * Le refus reste ÉTROIT : ce fichier a déjà souffert de règles trop larges (conv-787). Un fil qui
  * travaille sur le code de la corbeille, ou qui supprime autre chose, garde son enchaînement.

@@ -32,7 +32,7 @@ import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { supprimerArbre } from '../src/main/fs-supprimer.ts'
 
-export const JOURS_DE_GARDE = 14
+const JOURS_DE_GARDE = 14
 const NOM_DE_LA_RACINE = 'gc-corbeille'
 const NOM_DATE = /^(\d{4})-(\d{2})-(\d{2})$/u
 /** Sauvegardes de l'historique des conversations : uniques, et jamais recréées à l'identique. */
