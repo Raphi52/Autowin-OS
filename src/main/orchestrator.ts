@@ -291,8 +291,20 @@ export function bindingDePhaseValide(
   return { binding: instantane }
 }
 
-/** La forme que le brief du juge IMPOSE pour un rejet : « DEFAUT: <raison> », où qu'elle se trouve. */
-const REJET_FORME_CONTRAT = /\b(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|KO)\s*:/i
+/**
+ * La forme que le brief du juge IMPOSE pour un rejet : « DEFAUT: <raison> ». En MAJUSCULES, elle
+ * compte où qu'elle se trouve ; en toute casse, seulement en tête de ligne (puce, gras ou
+ * « Verdict : » admis devant).
+ *
+ * fix-ok: run-9930e4959cf4-1 (conv-359, trace.json entrée 13) — le juge rend « VALIDE / SCORE: 92 »,
+ * puces toutes OK, dont « Les tests repèrent un vrai défaut : avec l'aléa… ». L'ancien motif unique,
+ * insensible à la casse et valable partout, prenait ce « défaut : » de prose (espace typographique
+ * avant les deux-points) pour le rejet du contrat : verdict lu rouge, case muette « Promis mais pas
+ * fait : 1 point(s) ». Test orchestrator.verdict-gate rouge avant, vert après.
+ */
+const REJET_FORME_CONTRAT = /\b(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|KO)\s*:/
+const REJET_EN_TETE_DE_LIGNE =
+  /^[\s>*•-]*(?:\d+[.)]\s*)?(?:verdict\s*:\s*)?\**\s*(REJET|REJETE|REJETÉ|INVALIDE|DEFAUT|DÉFAUT|KO)\b\**\s*:/im
 /** L'approbation que le brief du juge IMPOSE : « Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: …" ». */
 const APPROBATION_CONTRAT = /\bVALIDE\b/i
 
@@ -313,7 +325,13 @@ export function verdictDePhase(phase: NodePhase, text: string): NodeVerdict {
   if (phase !== 'judge') return 'green'
   const propre = (text ?? '').trim()
   if (!propre) return 'red'
-  if (REJET_EN_TETE.test(propre) || REJET_FORME_CONTRAT.test(propre)) return 'red'
+  if (
+    REJET_EN_TETE.test(propre) ||
+    REJET_FORME_CONTRAT.test(propre) ||
+    REJET_EN_TETE_DE_LIGNE.test(propre)
+  ) {
+    return 'red'
+  }
   // Ni rejet lisible, ni approbation contractuelle : un juge muet sur sa conclusion ne vaut pas un OK.
   return APPROBATION_CONTRAT.test(propre) ? 'green' : 'red'
 }
