@@ -120,7 +120,8 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
      `.autowin-data/sauvegardes/`, vérifier qu'elle y est, puis demander et relancer le script.
    - **Retirer l'accord** : supprimer `gc-purge-auto.json` dès que l'utilisateur le demande, et le dire.
    Une passe qui pose une question de purge finit par `AUTOWIN_FIN_V1` et ne met NI la purge dans sa
-   rubrique Recommandé NI dans une ligne de suite : le mode auto l'enverrait comme un message.
+   rubrique Recommandé NI dans une ligne de suite : elle s'afficherait comme un bouton de suite, et un
+   clic purgerait sans passer par la question. Le mode auto, lui, s'arrête sur cette question.
 5. **Re-mesurer** et rendre le bilan.
 
 ## Format du bilan

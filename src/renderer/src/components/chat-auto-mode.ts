@@ -36,6 +36,7 @@ import {
 import { extractRecommendation } from './markdown-recommandation'
 import { parseAskDecision, promptDeLOption, promptDesOptions } from './ask-choices'
 import {
+  CIBLE_DESTRUCTRICE,
   estCibleDestructrice,
   lireDecisionScout,
   normaliserPisteCible
@@ -754,15 +755,67 @@ const SUITE_AFFIRME_GESTE_UTILISATEUR =
 // l'utilisateur en décide. La phrase doit COMMENCER par le geste (le texte arrive ici sans accents ni
 // capitales) : « Ajoute un test à gc-purger-corbeilles.mjs » ou « Supprime le bouton Corbeille »
 // restent du travail ordinaire (règles trop larges, conv-787).
-const SUITE_VIDE_UNE_CORBEILLE =
-  /^(?:(?:oui|ok|vas-y|yes)[\s,:!-]+)?(?:(?:lance|fais|execute|run)\s+(?:la\s+|une\s+|the\s+)?)?(?:(?:purg\w*|vid(?:e|er|ez)|empty)\b.*\b(?:corbeilles?|trash)\b|(?:supprim\w*|effac\w*|delete)\b.*\bgc-corbeille\b)/mu
+const DEBUT_DE_SUITE = /^[\s`'"«*_>-]*(?:(?:oui|ok|vas-y|yes)[\s,:!-]+)?/.source
+const LANCEMENT = /(?:(?:lance|fais|execute|run)\s+(?:la\s+|une\s+|the\s+)?)?/.source
+const SUITE_VIDE_UNE_CORBEILLE = new RegExp(
+  DEBUT_DE_SUITE +
+    LANCEMENT +
+    `(?:${[
+      /(?:purg\w*|vid(?:e|er|ez)|empty)\b.*\b(?:corbeilles?|trash)\b/.source,
+      /(?:supprim\w*|effac\w*|delete)\b.*\bgc-corbeille\b/.source,
+      // Les réponses exactes de la question du `/gc` (skills/gc/SKILL.md) : aucune ne nomme la corbeille.
+      /purge\s+cette\s+fois\b/.source,
+      /(?:purge\s+et\s+)?vide\s+seul\b/.source,
+      /activ\w*\s+(?:la\s+)?purge\b/.source
+    ].join('|')})`,
+  'mu'
+)
+// Les deux gestes qui autorisent le script. C'est le geste qui compte, pas le nom : « Ajoute un test à
+// l'option --cette-fois » reste du travail. Retirer l'accord (« Supprime gc-purge-auto.json ») ne vide
+// rien : il n'est pas ici.
+const SUITE_LANCE_UNE_PURGE = new RegExp(
+  DEBUT_DE_SUITE + /(?:re)?(?:lanc\w*|execut\w*|joue\w*|run|node|purg\w*)\b.*--cette-fois\b/.source,
+  'mu'
+)
+const SUITE_POSE_L_ACCORD = new RegExp(
+  DEBUT_DE_SUITE +
+    /(?:ecri\w*|cre\w*|activ\w*|pos\w*|mets?|write|create|enable|touch|ajout\w*\s+\S*enabled)\b.*gc-purge-auto/
+      .source,
+  'mu'
+)
 export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
+  const nu = normaliserPisteCible(suite)
   return (
     SUITE_PORTE_DONNEE_UTILISATEUR.test(suite) ||
     SUITE_A_TROU.test(suite) ||
     SUITE_AFFIRME_GESTE_UTILISATEUR.test(suite) ||
-    SUITE_VIDE_UNE_CORBEILLE.test(normaliserPisteCible(suite))
+    SUITE_VIDE_UNE_CORBEILLE.test(nu) ||
+    SUITE_LANCE_UNE_PURGE.test(nu) ||
+    SUITE_POSE_L_ACCORD.test(nu)
   )
+}
+
+/*
+ * CE QU'UNE SUITE VEUT DIRE DÉPEND DE LA RÉPONSE QUI LA PORTE (conv-1341, 2026-10-30).
+ *
+ * « Purge both », texte réel de la question du 28/10 (conv-1047, message 11), ne nomme aucune corbeille :
+ * lue seule, cette phrase ne se distingue pas de « Purge le cache du navigateur ». Toutes les passes
+ * `/gc` de conv-1047 ont une rubrique « ## À purger » (format fixé par skills/gc/SKILL.md), et un fil de
+ * code sur la corbeille n'a aucune raison d'en écrire une : c'est le contexte qui tranche. Dans une telle
+ * réponse, une suite qui COMMENCE par détruire, ou un accord nu, répond à la place de l'utilisateur. Le
+ * verbe doit rester en tête : la passe du 24/10 proposait « Cherche pourquoi … n'a pas été effacée ».
+ */
+const RUBRIQUE_A_PURGER = /^#{1,6}\s*a\s+purger\b/mu
+const SUITE_COMMENCE_PAR_DETRUIRE = new RegExp(
+  `${DEBUT_DE_SUITE}${LANCEMENT}(?:${/(?:vid(?:e|er|ez)|empty)\b/.source}|${CIBLE_DESTRUCTRICE.source})`,
+  'mu'
+)
+const SUITE_ACCORD_NU =
+  /^[\s`'"«*_>-]*(?:oui|ok|d['’]accord|fais-le|yes|go(?:\s+ahead)?|do\s+it)?[\s,.!…-]*(?:vas-y)?[\s,.!…-]*$/u
+function suiteRepondALaPasseGc(suite: string, texteReponse: string): boolean {
+  if (!RUBRIQUE_A_PURGER.test(normaliserPisteCible(texteReponse))) return false
+  const nu = normaliserPisteCible(suite)
+  return SUITE_COMMENCE_PAR_DETRUIRE.test(nu) || SUITE_ACCORD_NU.test(nu)
 }
 
 /**
@@ -965,6 +1018,17 @@ export function attenteFichierAReprendre(
   return decision
 }
 
+/** La dernière question de la dernière réponse, ou null. */
+function dernierAsk(fil: readonly Msg[]): ReturnType<typeof parseAskDecision> {
+  const dernier = [...fil].reverse().find((m) => m.role === 'assistant') as AsstMsg | undefined
+  const decisions = (dernier?.parts ?? []).flatMap((part) => {
+    if (part.kind === 'text') return []
+    const d = parseAskDecision(part as { kind: string })
+    return d ? [d] : []
+  })
+  return decisions[decisions.length - 1] ?? null
+}
+
 // fix-ok: suite identique au tour precedent (turnId 98ce00d9-2276-4a96-bb15-b66c622bfee8, saisie ts 1789970040849) = arret anti-boucle alors que le tour rapportait un travail dans « ✅ Fait » ; titres en gras non reconnus.
 /**
  * QUESTION `ask` OUVERTE AU BOUT DU FIL — en mode auto, l'agent y repond SEUL (demande utilisateur
@@ -973,14 +1037,7 @@ export function attenteFichierAReprendre(
  * destructrice ne part jamais seule : on rend null et la question attend l'humain.
  */
 export function reponseAutoAuDernierAsk(fil: readonly Msg[]): string | null {
-  const dernier = [...fil].reverse().find((m) => m.role === 'assistant') as AsstMsg | undefined
-  if (!dernier) return null
-  const decisions = (dernier.parts ?? []).flatMap((part) => {
-    if (part.kind === 'text') return []
-    const d = parseAskDecision(part as { kind: string })
-    return d ? [d] : []
-  })
-  const decision = decisions[decisions.length - 1]
+  const decision = dernierAsk(fil)
   if (!decision) return null
   const sure = (o: (typeof decision.options)[number]): boolean => {
     const t = promptDeLOption(o).trim()
@@ -1116,7 +1173,17 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
       message: MESSAGES_ARRET['tache-de-fond-coupee']
     }
   if (!suite) return { action: 'attendre', raison: 'aucun-prompt' }
-  if (suiteAttendUneDonneeUtilisateur(suite))
+  /*
+   * fix-ok: une question dont la réponse recommandée est destructrice rendait null plus haut, et le code
+   * passait à la suite libre : « la question attend l'humain » n'était pas tenu. Mesuré le 30/10 :
+   * 14 questions sur 86 dans ce cas, et « Oui, purge cette fois » envoyé seul par deciderRelanceAuto.
+   * `dernierAsk` non nul veut dire ici que le mode auto a refusé d'y répondre : rien ne passe devant.
+   */
+  if (
+    dernierAsk(entree.fil) ||
+    suiteAttendUneDonneeUtilisateur(suite) ||
+    suiteRepondALaPasseGc(suite, texteReponse)
+  )
     return {
       action: 'arreter',
       raison: 'suite-attend-utilisateur',
@@ -1153,7 +1220,12 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
     suite === propositions[0]
       ? propositions
           .slice(1)
-          .filter((p) => !suiteAttendUneDonneeUtilisateur(p) && !suiteEstDifferee(p, null))
+          .filter(
+            (p) =>
+              !suiteAttendUneDonneeUtilisateur(p) &&
+              !suiteRepondALaPasseGc(p, texteReponse) &&
+              !suiteEstDifferee(p, null)
+          )
       : []
   const suites =
     secondaires.length === 0
