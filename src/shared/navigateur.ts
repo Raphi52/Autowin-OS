@@ -32,6 +32,37 @@ export interface DemandeAccordNavigateur {
   action: string
 }
 
+/**
+ * PAS-À-PAS (conv-1286, maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30) : chaque
+ * geste de l'agent est noté dans un journal PAR FIL, que le panneau montre en frise de jalons ; le
+ * pilotage du fil dit si ces gestes passent seuls, attendent un ordre, ou sont refusés.
+ */
+export type VerbeGesteNavigateur =
+  'ouvrir' | 'lire' | 'capture' | 'clic' | 'saisir' | 'touche' | 'defiler'
+
+/** Un geste de l'agent dans le navigateur du fil. */
+export interface GesteNavigateur {
+  id: string
+  /** L'onglet visé ; vide quand le fil n'en avait aucun au moment du geste. */
+  ongletId: string
+  verbe: VerbeGesteNavigateur
+  /** `lit` (lire, capture, defiler) ou `agit` (ouvrir, clic, saisir, touche). */
+  nature: 'lit' | 'agit'
+  /** Ce que fait le geste, en mots courants, 120 caractères au plus. */
+  description: string
+  /** `prochain` = en attente d'un ordre de l'utilisateur (fil en pause). */
+  etat: 'fait' | 'en-cours' | 'prochain' | 'refuse'
+  /** Horodatage du geste en millisecondes (epoch). */
+  debut: number
+}
+
+/** `libre` : l'agent joue ses gestes ; `pause` : chacun attend un ordre ; `main` : tous refusés. */
+export type PilotageNavigateur = 'libre' | 'pause' | 'main'
+
+/** Les boutons du bandeau « l'agent pilote cet onglet ». */
+export type OrdrePilotageNavigateur =
+  'pause' | 'reprendre' | 'pas-suivant' | 'reprendre-la-main' | 'rendre-la-main'
+
 /** L'état d'UN fil, poussé à l'interface à chaque changement (`surEtat`). */
 export interface EtatNavigateur {
   conversationId: string
@@ -45,6 +76,9 @@ export interface EtatNavigateur {
   mode: ModeNavigateur
   /** Nombre d'annotations en attente d'envoi au chat pour ce fil. */
   nombreAnnotations: number
+  /** Les 20 derniers gestes de l'agent dans ce fil, tous onglets, du plus ancien au plus récent. */
+  gestes: GesteNavigateur[]
+  pilotage: PilotageNavigateur
 }
 
 /** Rectangle en pixels CSS de la page (ou du rendu, pour `poserCadre`). */
@@ -159,6 +193,10 @@ export type RefusActionNavigateur =
   | 'page-indisponible'
   /** La page a changé de site entre l'accord et l'action : rien n'est envoyé, l'agent relit. */
   | 'page-changee'
+  /** L'utilisateur a repris la main : plus aucun geste de l'agent jusqu'à ce qu'il la rende. */
+  | 'main-reprise'
+  /** Fil en pause : l'utilisateur n'a libéré ce geste ni par « Pas suivant » ni par « Reprendre ». */
+  | 'pause-expiree'
 
 /** Le compte rendu d'une action, prêt à être rendu à l'agent. */
 export interface ResultatActionNavigateur {
@@ -192,6 +230,7 @@ export const CANAUX_NAVIGATEUR = {
   reglagesEcrire: 'navigateur:reglages-ecrire',
   effacerDonnees: 'navigateur:effacer-donnees',
   ouvrirDansNavigateurParDefaut: 'navigateur:ouvrir-dans-navigateur-par-defaut',
+  piloter: 'navigateur:piloter',
   evenementEtat: 'navigateur:evenement-etat'
 } as const
 
@@ -231,6 +270,8 @@ export interface ApiNavigateur {
   /** Efface cookies, stockage et cache des deux sessions du navigateur. */
   effacerDonnees(): Promise<void>
   ouvrirDansNavigateurParDefaut(url: string): Promise<void>
+  /** Pause, pas suivant, reprise, main reprise ou rendue : le pilotage des gestes de l'agent du fil. */
+  piloter(conversationId: string, ordre: OrdrePilotageNavigateur): Promise<void>
   /** S'abonne aux changements d'état (tous fils confondus) ; rend la fonction de désabonnement. */
   surEtat(rappel: (etat: EtatNavigateur) => void): () => void
 }

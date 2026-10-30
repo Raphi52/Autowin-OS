@@ -199,6 +199,30 @@ describe('surbrillance', () => {
     jouer('retirerSurbrillance')
     expect(calque.querySelector('.surbrillance')).toBeNull()
   })
+
+  // Pas-à-pas (conv-1286, 2026-10-30) : en pause, le geste ATTEND ; sa cible est tracée en
+  // pointillés, étiquette « prochain · … », pour que l'utilisateur voie ce qui partira au clic.
+  it('aperçu du geste suivant : même cadre, en pointillés, étiquette « prochain · … »', () => {
+    jouer('surligner', [
+      { x: 1, y: 2, largeur: 30, hauteur: 40 },
+      'cliquer sur button « Envoyer »',
+      { prochain: true }
+    ])
+    const calque = noyau().calque as ShadowRoot
+    const cadre = calque.querySelector('.surbrillance') as HTMLElement
+    expect(cadre.classList.contains('prochain')).toBe(true)
+    expect(cadre.style.width).toBe('30px')
+    expect(cadre.textContent).toBe('prochain · cliquer sur button « Envoyer »')
+    expect(calque.querySelector('style')?.textContent).toMatch(
+      /\.surbrillance\.prochain \{[^}]*border-style: dashed/
+    )
+    // Jumeau : le geste libéré reprend le cadre plein, sans le mot « prochain ».
+    jouer('surligner', [{ x: 1, y: 2, largeur: 30, hauteur: 40 }, 'cliquer sur la page'])
+    const plein = calque.querySelector('.surbrillance') as HTMLElement
+    expect(calque.querySelectorAll('.surbrillance')).toHaveLength(1)
+    expect(plein.classList.contains('prochain')).toBe(false)
+    expect(plein.textContent).toBe('cliquer sur la page')
+  })
 })
 
 describe('mode annoter', () => {

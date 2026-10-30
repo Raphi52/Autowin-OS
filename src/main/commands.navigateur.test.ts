@@ -58,7 +58,9 @@ function moteurFactice(o: {
       ongletActif: fils.has(fil) ? `onglet-${fil}` : null,
       agentPilote: false,
       mode: null,
-      nombreAnnotations: 0
+      nombreAnnotations: 0,
+      gestes: [],
+      pilotage: 'libre'
     }),
     ouvrir: (fil, url) => {
       appels.push({ methode: 'ouvrir', fil, detail: url })
@@ -113,6 +115,38 @@ describe('navigateur_* — déclarés au catalogue et servis en outils directs',
       expect(Object.keys(spec?.args ?? {}), nom).not.toContain('conversationId')
       expect(spec?.description.length, nom).toBeGreaterThan(40)
     }
+  })
+
+  // Pas-à-pas (conv-1286, 2026-10-30) : un geste peut attendre l'utilisateur ; sans le savoir,
+  // l'agent prendrait l'attente pour une panne, ou réessaierait après « main reprise ».
+  it('les quatre gestes disent qu’ils peuvent attendre une pause, et ce que veut dire « main-reprise »', () => {
+    const description = (nom: string): string =>
+      CATALOG.find((c) => c.name === nom)?.description ?? ''
+    for (const nom of [
+      'navigateur_ouvrir',
+      'navigateur_lire',
+      'navigateur_capture',
+      'navigateur_agir'
+    ]) {
+      expect(description(nom), nom).toMatch(/en pause, ce geste attend/)
+      expect(description(nom), nom).toMatch(
+        /« main-reprise » .*n’agis plus dans la page sans qu’il te le redemande/
+      )
+    }
+    // Jumeau : console et annotations ne sont pas des gestes dans la page, elles n'attendent pas.
+    for (const nom of ['navigateur_console', 'navigateur_annotations'])
+      expect(description(nom), nom).not.toMatch(/pause/)
+  })
+
+  it('un refus du pilotage pendant une lecture arrive à l’agent en phrase lisible', async () => {
+    const moteur = moteurFactice({})
+    const message =
+      "L'utilisateur a repris la main sur le navigateur : rien n'a été fait. N'agis plus dans la page sans qu'il te le redemande."
+    moteur.nav.lire = async () => {
+      throw new Error(message)
+    }
+    const r = await busAvec(moteur).exec('navigateur_lire', {}, 'conv-a')
+    expect(r).toMatchObject({ ok: false, error: message })
   })
 
   it('aucune ne porte horsCanalNatif : outilsDuChat les sert toutes', () => {
