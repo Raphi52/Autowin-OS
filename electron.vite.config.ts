@@ -73,7 +73,8 @@ export default defineConfig({
         '@renderer': resolve('src/renderer/src')
       }
     },
-    // `scene-3d.html` : la page isolee ou tournent les blocs ```threejs du fil (Bloc3D.tsx).
+    // `scene-3d.html` et `page-interactive.html` : les pages isolees ou tournent les blocs ```threejs
+    // (Bloc3D.tsx) et ```html-interactif (BlocHtmlInteractif.tsx) du fil — la seconde sans moteur 3D.
     plugins: [react(), pluginScene3d({ dossier: resolve('src/renderer/scene-3d') })]
   }
 })

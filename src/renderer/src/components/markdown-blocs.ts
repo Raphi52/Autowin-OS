@@ -8,12 +8,25 @@
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { authoritativeOrchestrationClosureSpan } from '../../../shared/orchestration-outcome'
 import { createBoundedCache } from './bounded-cache'
-import { MAX_SCENE_3D_CHARS } from '../../../shared/scene-3d'
+import {
+  FORME_PAGE_INTERACTIVE,
+  MAX_PAGE_INTERACTIVE_CHARS,
+  MAX_SCENE_3D_CHARS
+} from '../../../shared/scene-3d'
 import { estFormeDonnees, lireBlocDonnees, type BlocDonnees } from '../../../shared/blocs-donnees'
 import { FORME_FILS, lireBlocFils, type TacheDeFil } from '../../../shared/lancer-en-fils'
 
 export type MarkdownBlock = {
-  kind: 'text' | 'code' | 'html-render' | 'mermaid' | 'scene-3d' | 'donnees' | 'fils'
+  kind:
+    | 'text'
+    | 'code'
+    | 'html-render'
+    | 'html-interactif'
+    | 'html-interactif-en-cours'
+    | 'mermaid'
+    | 'scene-3d'
+    | 'donnees'
+    | 'fils'
   content: string
   /** Bloc `donnees` seulement : la source deja LUE (conv-1074). Le decoupage est cache par contenu. */
   donnees?: BlocDonnees
@@ -190,6 +203,14 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
       ferme &&
       span.content.trim().length > 0 &&
       span.content.length <= MAX_SCENE_3D_CHARS
+    // Page interactive (conv-1292, BlocHtmlInteractif.tsx) : meme regle — ses scripts ne tournent
+    // qu'une fois la fence close, jamais sur une page a moitie ecrite.
+    const pageInteractive =
+      span.language === FORME_PAGE_INTERACTIVE &&
+      ferme &&
+      span.content.trim().length > 0 &&
+      span.content.length <= MAX_PAGE_INTERACTIVE_CHARS &&
+      !authoritativeOrchestrationClosureSpan(span.content)
     // Bloc de DONNEES (conv-1074, src/shared/blocs-donnees.ts) : fence close ET JSON lisible, sinon
     // du code — un JSON a moitie ecrit pendant le streaming ne doit jamais devenir un tableau faux.
     const donnees =
@@ -218,11 +239,17 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
         ? 'mermaid'
         : scene3dRendue
           ? 'scene-3d'
-          : span.language === 'html-render' &&
-              ferme &&
-              !authoritativeOrchestrationClosureSpan(span.content)
-            ? 'html-render'
-            : 'code',
+          : pageInteractive
+            ? 'html-interactif'
+            : span.language === 'html-render' &&
+                ferme &&
+                !authoritativeOrchestrationClosureSpan(span.content)
+              ? 'html-render'
+              : // Page interactive que le modele ECRIT encore (conv-1304) : une ligne d'attente
+                // au lieu d'un mur de code qui grandit puis disparait d'un coup.
+                span.language === FORME_PAGE_INTERACTIVE && !ferme
+                ? 'html-interactif-en-cours'
+                : 'code',
       content: span.content
     })
     cursor = span.end

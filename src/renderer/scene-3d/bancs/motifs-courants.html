@@ -1,0 +1,47 @@
+<!--
+  BANC DES GESTES COURANTS d'une page ```html-interactif (conv-1304, 2026-10-30). Chaque ligne ecrit
+  « ok » quand le geste marche DANS LE FIL. Avant les compatibilites de l'amorce, six d'entre eux
+  cassaient sans bruit (stockage, session, cookie, formulaire, alerte, copie). Joue par
+  amorce.page.test.ts au travers de scripts/html-interactif-apercu.mjs : code 0 attendu.
+-->
+<div class="aw-kicker">Banc des gestes courants</div>
+<p id="r-storage">storage : ?</p>
+<p id="r-session">session : ?</p>
+<p id="r-cookie">cookie : ?</p>
+<form onsubmit="event.preventDefault(); ecrire('r-form', 'form : soumis ' + document.getElementById('n').value)">
+  <input id="n" value="42"> <button type="submit">Calculer</button>
+</form>
+<p id="r-form">form : pas soumis</p>
+<button onclick="ecrire('r-alert', 'alert : rendu ' + alert('salut'))">Alerte</button>
+<p id="r-alert">alert : ?</p>
+<button id="copie">Copier</button>
+<p id="r-copie">copie : ?</p>
+<a href="#bas">aller en bas</a> · <a href="https://example.com/doc">lien externe</a>
+<p><a href="#autowin-prompt">Affiner   la 2 · Nuit</a> <button id="compose">Composer</button></p>
+<p id="r-css">css var : ?</p>
+<p id="r-moteur">moteur : ?</p>
+<canvas id="c" width="300" height="40"></canvas>
+<p id="bas">bas</p>
+<script>
+const ecrire = (id, texte) => (document.getElementById(id).textContent = texte)
+try {
+  localStorage.setItem('k', '1')
+  localStorage.autre = '2'
+  ecrire('r-storage', 'storage : ok ' + localStorage.getItem('k') + localStorage.autre + localStorage.length)
+} catch (e) { ecrire('r-storage', 'storage : KO ' + e.name) }
+try { sessionStorage.setItem('k', '1'); ecrire('r-session', 'session : ok') } catch (e) { ecrire('r-session', 'session : KO ' + e.name) }
+try { document.cookie = 'a=1; path=/'; ecrire('r-cookie', 'cookie : ok [' + document.cookie + ']') } catch (e) { ecrire('r-cookie', 'cookie : KO ' + e.name) }
+document.getElementById('copie').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText('valeur copiee'); ecrire('r-copie', 'copie : ok') } catch (e) { ecrire('r-copie', 'copie : KO ' + e.name) }
+})
+document.getElementById('compose').addEventListener('click', () => {
+  autowin.remplirSaisie('Mixer 1 + 3')
+})
+const couleur = getComputedStyle(document.documentElement).getPropertyValue('--gold-clair').trim()
+ecrire('r-css', couleur ? 'css var : ok' : 'css var : KO')
+// Page sans 3D : le moteur ne doit pas avoir ete evalue (nom coupe expres, voir amorce.js).
+ecrire('r-moteur', 'moteur : ' + typeof window['TH' + 'REE'])
+const ctx = document.getElementById('c').getContext('2d')
+ctx.fillStyle = couleur || 'red'
+ctx.fillRect(0, 0, 200, 30)
+</script>

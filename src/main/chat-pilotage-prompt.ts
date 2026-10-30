@@ -2,6 +2,7 @@ import { MODEL_QUESTION_INSTRUCTION } from './model-questions'
 import { consigneBureauCacheChat } from './consigne-bureau-cache'
 import { CONSIGNE_CLASSES_PAGES_HTML } from '../shared/classes-pages-html'
 import { CONSIGNE_BLOCS_DONNEES } from '../shared/blocs-donnees'
+import { FORME_PAGE_INTERACTIVE } from '../shared/scene-3d'
 import { CONSIGNE_LANCER_EN_FILS } from '../shared/lancer-en-fils'
 import { CONSIGNE_PLAN_DE_LOTS } from './consigne-plan-de-lots'
 
@@ -458,6 +459,55 @@ export function buildChatPilotagePrompt(
     `donne de VRAIS onglets, des accordeons et des filtres sans une ligne de script — sers-t'en des ` +
     `que ta reponse compare plusieurs options ou porte un avancement chiffre. Aucun autre champ ` +
     `n'est accepte (ni texte, ni envoi) : ce qui se clique ne fait que changer l'affichage.
+` +
+    // Bloc ```html-interactif branche le 2026-10-29 (conv-1292, BlocHtmlInteractif.tsx) : sans ce
+    // paragraphe, aucun agent ne l'ecrirait. Servi a chaque tour comme le paragraphe ci-dessus : le
+    // choix entre une page figee et une page qui tourne se fait sur la FORME de toute reponse.
+    `PAGES INTERACTIVES : quand la reponse gagne a etre MANIPULEE — graphique qu'on survole, ` +
+    `calculateur, simulation, tri ou filtre sur des donnees —, ecris un bloc ferme ` +
+    `\`\`\`${FORME_PAGE_INTERACTIVE} : meme HTML/CSS et memes classes \`aw-*\` que html-render, pose ` +
+    `sans fond sur le fil, mais ses \`<script>\` et ses \`onclick\` TOURNENT, dans un cadre isole SANS ` +
+    `reseau ni acces a Autowin. Tout en ligne : un \`<script src>\`, une police ou une image ` +
+    `externe sont refuses — dessine en \`<canvas>\` ou en SVG ; \`THREE\` est disponible. La hauteur ` +
+    `suit le contenu. Garde html-render quand rien ne bouge. ` +
+    // Boite a outils (conv-1304, graphiques.js) : chaque modele redessinait axes, graduations,
+    // survol et legende a la main. Annoncee ici, sinon personne ne s'en sert.
+    `Pour un graphique, n'ecris NI axes NI survol : \`autowin.graphique('#zone', {type, titre, ` +
+    `categories, valeurs, unite})\` les fait, avec bulle au survol et au clavier, legende, couleurs ` +
+    `du theme et largeur fluide. \`type\` : barres (defaut), lignes, aires, secteurs, points. ` +
+    `Plusieurs series : \`series: [{nom, valeurs}]\` (points : \`points: [[x, y]]\`), \`empile: true\` ` +
+    `pour les empiler, \`format: (v) => texte\` pour les valeurs. Il rend \`{maj(options), detruire()}\` : ` +
+    `\`maj({valeurs})\` pour un simulateur. Bulle a verifier : \`.aw-graphique-bulle\`. ` +
+    // Compatibilites de l'amorce (conv-1304, 2026-10-30) : ce qui marche et ce qui reste refuse,
+    // pour que le modele n'ecrive ni un contournement inutile ni un geste mort.
+    `Marchent comme dans un navigateur : localStorage (survit au redemarrage de l'app), formulaires, ` +
+    `alert, copie et lien http(s) APRES un clic ; l'evenement \`aw-theme\` signale un changement de ` +
+    `theme (redessine tes canvas). Ni confirm, ni prompt, ni telechargement : des boutons dans la ` +
+    `page. ` +
+    // Boutons de choix (conv-1304) : dans une page qui execute du code, ce qui partirait pourrait
+    // differer de ce qu'on lit ; le choix remplit donc la saisie, l'utilisateur relit et envoie.
+    `Un lien \`<a href="#autowin-prompt">Libelle</a>\` y REMPLIT la saisie de l'utilisateur avec ` +
+    `son libelle, sans l'envoyer (\`autowin.remplirSaisie(texte)\` pour un message compose par la ` +
+    `page) ; il relit et envoie lui-meme. ` +
+    // Banc conv-1304 : 6 pages ecrites dans de vrais fils. Les 6 modeles ont relu l'outil pour
+    // connaitre ses options, 3 ont relu page-interactive.ts pour les couleurs d'un canvas, et 4 ont
+    // ecrit un banc prive parce que les clics ne remplissent aucun champ : jusqu'a 2,5 $ par page.
+    `Pour un canvas, lis les couleurs sur la page : ` +
+    `\`getComputedStyle(document.documentElement).getPropertyValue('--gold-clair')\` (--text, ` +
+    `--text-dim, --gold-doux, --gold-clair, --ok, --err, --warn, --line). Avant de montrer, ecris ` +
+    `la page dans \`.autowin-tmp/<id du fil>/\`, puis ` +
+    `\`node scripts/html-interactif-apercu.mjs <fichier>\` (depot Autowin) la fait tourner comme le ` +
+    `fil, en clique et en survole chaque element : code 0 exige ; 3 = erreur JavaScript (clic ` +
+    `compris) ou geste que le fil refuse, 4 = vide, 5 = deborde de la colonne, 6 = hauteur qui ` +
+    `grandit seule, 7 = fond peint, 8 = scenario rouge ; lis ses captures et \`texteFinal\`. Ces ` +
+    `clics ne remplissent aucun champ : des qu'une page calcule, filtre ou enchaine des etapes, ` +
+    `ajoute \`--scenario <fichier.json>\` plutot que d'ecrire ton propre banc d'essai. C'est un ` +
+    `tableau d'etapes jouees a la vraie souris et au vrai clavier, avec des valeurs attendues ` +
+    `calculees a part : \`{"remplir":"#montant","valeur":"200000"}\`, ` +
+    `\`{"choisir":"#type","valeur":"RTT"}\`, \`{"cliquer":"#calculer"}\` ou \`"texte=Calculer"\`, ` +
+    `\`{"survoler":"canvas","x":0.5,"y":0.5}\`, \`{"touche":"Enter"}\`, \`{"attendre":500}\`, ` +
+    `\`{"voir":"1 109,20","dans":"#mensualite"}\`, \`{"pasVoir":"NaN"}\`, ` +
+    `\`{"demande":"prompt","contient":"Conges"}\`.
 ` +
     `DIAGRAMMES : pour un ORGANIGRAMME, un enchainement d'etapes, une sequence d'echanges, un ` +
     `arbre ou une machine a etats, ecris un bloc ferme \`\`\`mermaid — il est RENDU en diagramme ` +

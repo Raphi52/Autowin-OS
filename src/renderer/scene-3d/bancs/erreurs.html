@@ -1,0 +1,30 @@
+<!--
+  BANC DES ERREURS d'une page ```html-interactif (conv-1304, 2026-10-30) : ce que le fil et l'apercu
+  doivent DIRE. Joue par amorce.page.test.ts : code 3 attendu, avec la ligne DANS LE BLOC de
+  l'erreur du second script (ligne 23 : `x.y = 2`), l'attribut et l'element d'un onclick qui leve,
+  une copie, un lien et un remplissage de la saisie tentes sans clic (refuses), un confirm() signale, et une erreur des le
+  demarrage dite en une ligne (ligne 29 : `donnees.total = 3`).
+-->
+<p class="aw-kicker">Banc des erreurs</p>
+<form><input name="q" value="a"><button>Envoyer sans preventDefault</button></form>
+<button onclick="inexistante()">Clic qui plante</button>
+<button id="tard">Plante plus tard</button>
+<button onclick="confirm('vraiment ?')">Confirmer</button>
+<script>
+setTimeout(() => navigator.clipboard.writeText('sans clic').catch(() => {}), 50)
+setTimeout(() => window.open('https://example.org/'), 80); setTimeout(() => autowin.remplirSaisie('saisie sans clic'), 110)
+</script>
+<p>milieu</p>
+<script>
+// le script suivant leve au clic, ligne 23 du bloc
+document.getElementById('tard').addEventListener('click', () => {
+  const x = null
+
+  x.y = 2
+})
+</script>
+<script>
+// leve DES le demarrage, ligne 29 du bloc
+const donnees = null
+donnees.total = 3
+</script>

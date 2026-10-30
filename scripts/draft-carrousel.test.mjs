@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { prepareChatHtml } from '../src/renderer/src/components/chat-html-inline'
 import { promptsDesBoutons } from '../src/renderer/src/components/bouton-prompt-html'
 import {
-  blocHtmlRender,
+  blocDuCarrousel,
   carrouselDraft,
   TRANSITION,
   verifierPropositions
@@ -139,7 +139,7 @@ describe('carrousel /draft : ce que le fil affiche', () => {
   it('échappe le texte des noms et livre un bloc clôturé prêt à recopier', () => {
     const spec = propositions(2)
     spec.propositions[0].nom = 'A <b>&</b> B'
-    const bloc = blocHtmlRender(spec)
+    const bloc = blocDuCarrousel(spec)
     expect(bloc.startsWith('```html-render\n')).toBe(true)
     expect(bloc.trimEnd().endsWith('```')).toBe(true)
     expect(bloc).toContain('A &lt;b&gt;&amp;&lt;/b&gt; B')

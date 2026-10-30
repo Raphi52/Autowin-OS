@@ -598,6 +598,13 @@ const appDataRoot = resolveInstanceAppDataBase(
 )
 app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
 const explicitUserDataDir = explicitUserDataPath !== undefined
+// UN PROCESSUS PAR PAGE ISOLÉE DU FIL (conv-1304, 2026-10-30). Par défaut, Chromium range tous les
+// cadres `sandbox` d'un même site dans UN processus : une page interactive en boucle infinie figeait
+// donc ses voisines, et « Relancer » ouvrait un cadre vide dans ce processus occupé, sans message.
+// Mesuré dans l'app construite, 6 pages : voisine vivante, relance qui marche, processus figé mort
+// (0 % de processeur), pour 43 → 156 Mo de mémoire propre, soit ~19 Mo par page. Les pages loin de
+// l'écran sont libérées (BlocHtmlInteractif.tsx). Doit être posé avant app ready.
+app.commandLine.appendSwitch('enable-features', 'IsolateSandboxedIframes:grouping/per-document')
 // Ouvre le port CDP pour piloter/inspecter le renderer réel. En DEV, systématiquement. En PACKAGÉ,
 // uniquement pour une INSTANCE ISOLÉE DE TEST qui l'a demandé : ailleurs ce serait une surface de
 // debug ouverte chez l'utilisateur. Doit être posé avant app ready — d'où la sonde SYNCHRONE du port.

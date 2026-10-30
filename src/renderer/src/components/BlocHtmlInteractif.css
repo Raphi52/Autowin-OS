@@ -1,0 +1,221 @@
+/* Bloc ```html-interactif du fil (BlocHtmlInteractif.tsx, conv-1292). Aucun bord ni fond : la page
+   se pose sur le fond du fil comme un ```html-render (direction « transparence totale »). Le cadre
+   prend la hauteur que la page lui signale ; la transition evite un saut sec quand elle change. */
+/* `popover` (vue agrandie, conv-1304) : le navigateur cache un popover ferme et le centre avec un
+   cadre. Ferme, le bloc garde sa place normale dans le fil : il ne doit pas disparaitre. */
+.bloc-html-interactif {
+  display: block;
+  position: static;
+  inset: auto;
+  width: 100%;
+  height: auto;
+  min-width: 0;
+  margin: var(--s1, 8px) 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+/* Agrandie : au-dessus de toute l'app, sur le fond du theme — le fil n'est plus derriere pour porter
+   la page. Le cadre prend toute la hauteur et defile dans lui-meme. */
+.bloc-html-interactif:popover-open {
+  position: fixed;
+  inset: 3vh 3vw;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 14px 18px 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-0, Canvas);
+}
+
+.bloc-html-interactif::backdrop {
+  background: color-mix(in srgb, var(--bg-0, #000) 70%, transparent);
+}
+
+.bloc-html-interactif:popover-open .bloc-html-interactif__cadre {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.bloc-html-interactif:popover-open .bloc-html-interactif__code {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
+.bloc-html-interactif:popover-open .bloc-html-interactif__barre {
+  opacity: 1;
+}
+
+.bloc-html-interactif__cadre {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color-scheme: inherit;
+  transition: height 0.12s ease-out;
+}
+
+.bloc-html-interactif__cadre[hidden] {
+  display: none;
+}
+
+.bloc-html-interactif__code {
+  max-height: 480px;
+  margin: 0;
+  overflow: auto;
+}
+
+/* Avis de la page (conv-1304) : une ligne par avis, sans panneau. */
+.bloc-html-interactif__avis {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.bloc-html-interactif__avis li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.bloc-html-interactif__avis-erreur {
+  color: var(--chat-etat-echec);
+}
+
+.bloc-html-interactif__avis-avertissement {
+  color: var(--chat-etat-interrompu);
+}
+
+.bloc-html-interactif__avis-alerte {
+  color: var(--text);
+}
+
+.bloc-html-interactif__fois {
+  opacity: 0.7;
+}
+
+/* Bouton d'action dans un avis : « Corriger », « Relancer ». Discret, mais il ressemble a un bouton. */
+.bloc-html-interactif__corriger {
+  flex: none;
+  margin-left: 6px;
+  padding: 0 7px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bloc-html-interactif__corriger:hover,
+.bloc-html-interactif__corriger:focus-visible {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.bloc-html-interactif__figee {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 0;
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--chat-etat-interrompu);
+}
+
+.bloc-html-interactif__fermer {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Barre du bloc (conv-1304) : toujours a sa place sous la page (rien ne saute quand elle
+   apparait), presque effacee tant que la souris ou le clavier n'est pas sur le bloc. Sous la page
+   et non par-dessus : un bouton de la page en haut a droite reste cliquable. */
+.bloc-html-interactif__barre {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+}
+
+.bloc-html-interactif:hover .bloc-html-interactif__barre,
+.bloc-html-interactif:focus-within .bloc-html-interactif__barre,
+.bloc-html-interactif__barre:has([aria-pressed='true']) {
+  opacity: 1;
+}
+
+.bloc-html-interactif__barre button {
+  padding: 1px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.bloc-html-interactif__barre button:hover,
+.bloc-html-interactif__barre button:focus-visible,
+.bloc-html-interactif__barre button[aria-pressed='true'] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.bloc-html-interactif__barre button[data-copie='oui'] {
+  color: var(--accent);
+}
+
+/* Page dont la fence n'est pas encore close (le modele l'ecrit) : une ligne au lieu d'un mur de
+   code qui grandit puis disparait d'un coup (conv-1304). */
+.bloc-html-interactif-en-cours {
+  margin: var(--s1, 8px) 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.bloc-html-interactif-en-cours summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.bloc-html-interactif-en-cours summary::before {
+  content: '●';
+  margin-right: 6px;
+  color: var(--gold-doux, var(--accent));
+  animation: bloc-html-interactif-pouls 1.2s ease-in-out infinite;
+}
+
+@keyframes bloc-html-interactif-pouls {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bloc-html-interactif__cadre,
+  .bloc-html-interactif__barre {
+    transition: none;
+  }
+  .bloc-html-interactif-en-cours summary::before {
+    animation: none;
+  }
+}

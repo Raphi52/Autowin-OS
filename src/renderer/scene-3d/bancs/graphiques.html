@@ -1,0 +1,54 @@
+<!-- Banc de autowin.graphique (conv-1304) : les 5 types, un survol et une mise a jour. -->
+<div id="barres"></div>
+<div id="lignes"></div>
+<div id="aires"></div>
+<div id="secteurs"></div>
+<div id="points"></div>
+<button id="maj" type="button">Mettre à jour</button>
+<div id="etat"></div>
+<script>
+  const mois = ['jan', 'fév', 'mar', 'avr', 'mai', 'juin', 'juil', 'août', 'sep', 'oct']
+  const ventes = autowin.graphique('#barres', {
+    titre: 'Ventes',
+    categories: mois,
+    valeurs: [120, 135, 98, 160, 175, 150, 90, 70, 180, 210],
+    unite: '€'
+  })
+  autowin.graphique('#lignes', {
+    type: 'lignes',
+    categories: ['T1', 'T2', 'T3', 'T4'],
+    series: [
+      { nom: '2024', valeurs: [410, 455, 390, 520] },
+      { nom: '2025', valeurs: [440, 480, 430, 610] },
+      { nom: '2026', valeurs: [505, 530, 470] }
+    ]
+  })
+  autowin.graphique('#aires', {
+    type: 'aires',
+    empile: true,
+    categories: ['a', 'b', 'c'],
+    series: [
+      { nom: 'x', valeurs: [1, 2, 3] },
+      { nom: 'y', valeurs: [2, 2, 2] }
+    ]
+  })
+  autowin.graphique('#secteurs', {
+    type: 'secteurs',
+    categories: ['Loyer', 'Courses', 'Loisirs'],
+    valeurs: [800, 400, 200],
+    unite: '€'
+  })
+  autowin.graphique('#points', {
+    type: 'points',
+    series: [{ nom: 'mesures', points: [[1, 2.5], [2, 3.1], [3, 2.2], [4, 4.8]] }]
+  })
+  document.getElementById('maj').onclick = () => {
+    ventes.maj({ valeurs: [1, 2, 3, 4, 5, 6, 7, 8, 9, 1000] })
+    document.getElementById('etat').textContent = 'mis à jour'
+  }
+  try {
+    autowin.graphique('#absent', { valeurs: [1] })
+  } catch (erreur) {
+    document.getElementById('etat').textContent = erreur.message
+  }
+</script>

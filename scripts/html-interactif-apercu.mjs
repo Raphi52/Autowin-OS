@@ -18,15 +18,35 @@
  *
  * Usage : node scripts/html-interactif-apercu.mjs <fichier.html|fichier.md> [--bloc 1]
  *           [--largeurs 560,860] [--attente 1500] [--clair] [--theme <id>]
- *           [--out .autowin-tmp/html-interactif-apercu]
+ *           [--scenario <fichier.json>] [--out <dossier>]
  *   Un fichier contenant une cloture ```html-interactif : le n-ieme bloc est pris. Sinon le fichier
  *   entier est le contenu du bloc. `--clair` : jetons du theme clair (fond clair, `color-scheme`
  *   light). `--theme <id>` : jetons de src/renderer/src/assets/theme-<id>.css en plus.
+ *   `--out` absent : `.autowin-tmp/html-interactif-apercu/<fichier>-<empreinte du chemin>`, propre a
+ *   la page. Un dossier unique pour tous faisait lire a un fil les captures d'un autre fil lance en
+ *   meme temps (2 fils sur 6 du banc conv-1304 l'utilisaient). Les chemins sont dans le JSON rendu.
+ *
+ *   `--scenario` (conv-1304) : le PARCOURS de la page, joue sur une page neuve a chaque largeur,
+ *   avant les gestes automatiques. Sans lui, aucun champ n'est rempli : une page de calcul sort en
+ *   code 0 sans avoir calcule. Un tableau JSON d'etapes, regles dans html-interactif-apercu-scenario.mjs :
+ *     {"remplir":"#montant","valeur":"200000"}  vrai clavier (date, curseur : valeur posee)
+ *     {"choisir":"#type","valeur":"RTT"}        option d'un <select>, par libelle ou valeur
+ *     {"cliquer":"#calculer"}                   vraie souris ; "texte=Calculer" vise un libelle ;
+ *                                               "x" et "y" (0 a 1) visent un point de la cible
+ *     {"survoler":"canvas","x":0.5,"y":0.5}     idem sans clic
+ *     {"touche":"Enter"}  {"attendre":500}
+ *     {"voir":"1 234 €"}  {"pasVoir":"Erreur"}  texte de la page, espaces et casse ignores ;
+ *                                               "dans" limite a un selecteur (ordre d'un tri)
+ *     {"demande":"prompt","contient":"Congés"}  la page a demande au fil copier, lien ou prompt,
+ *                                               apres un clic
  *
  * Codes de sortie (un JSON est toujours ecrit sur stdout, champ `defauts`) :
  *   0 = la page tourne, montre quelque chose, tient dans la colonne a chaque largeur ;
  *   3 = ERREUR JavaScript, au demarrage OU pendant un clic — y compris un `<script src>` externe,
- *       refuse (le fil afficherait le message sous la page) ;
+ *       refuse (le fil afficherait le message sous la page) ; ou (conv-1304) un REFUS SILENCIEUX
+ *       du navigateur lu dans la console, un AVERTISSEMENT de l'amorce (confirm, prompt, lien
+ *       relatif, telechargement : ce que le fil ne fait pas), ou une copie / un lien / un
+ *       remplissage de la saisie demandes sans clic (le fil les refuse) ;
  *   4 = RIEN A VOIR : page vide (aucune hauteur, ou capture d'une seule couleur), ou bloc au-dela de
  *       MAX_PAGE_INTERACTIVE_CHARS (le fil le montre en code, sans l'executer) ;
  *   5 = DEBORDEMENT : le contenu est plus large que la colonne (l'utilisateur defile de cote) ;
@@ -35,8 +55,14 @@
  *       le cadre...) ;
  *   7 = FOND OPAQUE : la page peint un fond sur `html` ou `body` (direction « transparence
  *       totale » : la page se pose sur le fond du fil) ;
+ *   8 = SCENARIO ROUGE : une etape de `--scenario` n'a pas abouti (champ `scenario.echec` : l'etape,
+ *       la raison, le texte vu et une capture) ;
  *   2 = usage ; 1 = erreur technique (Electron, construction de la page).
- *   Plusieurs defauts : le code est celui du premier dans l'ordre 3, 4, 5, 6, 7.
+ *   Plusieurs defauts : le code est celui du premier dans l'ordre 3, 8, 4, 5, 6, 7.
+ * Champs par largeur : `demandes` — copies, liens, ancres et boutons de choix (`prompt` : le texte
+ * qui irait dans la saisie, conv-1304) que la page a demandes au fil (relevés,
+ * jamais executes : ni le presse-papiers ni le navigateur de l'utilisateur ne sont touches) ;
+ * `alertes` — les alert() de la page, que le fil affiche sous elle.
  * Champ indicatif par largeur : `gestes` — pour chaque clic ou survol, la part des pixels qui
  * change (`ecart`). Un geste a 0 n'a rien change a l'ecran : bouton mort, ou effet invisible (copie,
  * focus). A LIRE avec ses captures `geste-<largeur>-<n>.png`, ce n'est pas un defaut a lui seul.
@@ -51,6 +77,11 @@ import {
   construirePageScene3d,
   NOM_PAGE_SCENE_3D
 } from '../src/renderer/scene-3d/page-scene-3d.mjs'
+import {
+  dossierDeSortie,
+  dureeMaxScenarioMs,
+  lireScenario
+} from './html-interactif-apercu-scenario.mjs'
 
 const RACINE = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PAGE_INTERACTIVE = join(RACINE, 'src/renderer/src/components/page-interactive.ts')
@@ -148,7 +179,24 @@ const largeurs = argument('--largeurs', '560,860')
 const attente = Number(argument('--attente', '1500'))
 const clair = process.argv.includes('--clair')
 const idTheme = argument('--theme', undefined)
-const out = resolve(argument('--out', join(RACINE, '.autowin-tmp', 'html-interactif-apercu')))
+
+// Une faute dans le scenario est un code 2, verifie AVANT de construire quoi que ce soit : elle ne
+// doit jamais passer pour un rouge de la page.
+const fichierScenario = argument('--scenario', undefined)
+let scenario
+if (fichierScenario !== undefined) {
+  if (!existsSync(fichierScenario)) {
+    sortir(2, {
+      defauts: ['usage'],
+      erreur: `--scenario : fichier introuvable : ${fichierScenario}`
+    })
+  }
+  const lu = lireScenario(readFileSync(fichierScenario, 'utf8'))
+  if (lu.erreur) sortir(2, { defauts: ['usage'], erreur: lu.erreur })
+  scenario = lu.etapes
+}
+
+const out = resolve(argument('--out', dossierDeSortie(RACINE, fichier)))
 const pages = join(out, 'pages')
 mkdirSync(pages, { recursive: true })
 
@@ -167,13 +215,16 @@ if (html.length > bornes.MAX_PAGE_INTERACTIVE_CHARS) {
   })
 }
 
+// La page isolee que le FIL choisirait (conv-1304, `pageIsoleePour`) : sans moteur 3D si le HTML
+// ne nomme pas `THREE`. L'apercu la construit telle qu'elle sera servie.
+const nomPage = bornes.pageIsoleePour(html)
 let page
 try {
-  page = await construirePageScene3d()
+  page = await construirePageScene3d({ avecMoteur: nomPage === NOM_PAGE_SCENE_3D })
 } catch (erreur) {
   sortir(1, { defauts: ['technique'], erreur: `construction de la page : ${erreur}` })
 }
-writeFileSync(join(pages, NOM_PAGE_SCENE_3D), page)
+writeFileSync(join(pages, nomPage), page)
 
 const jetonsTheme = idTheme ? jetonsDuTheme(idTheme) : ''
 if (jetonsTheme === null) {
@@ -205,7 +256,7 @@ writeFileSync(
     '</style></head><body><section class="hote"></section></body></html>'
 )
 
-const config = { pages, html, protocole, largeurs, attente, out }
+const config = { pages, page: nomPage, html, protocole, largeurs, attente, out, scenario }
 const cheminConfig = join(out, 'config.json')
 writeFileSync(cheminConfig, JSON.stringify(config))
 
@@ -215,7 +266,11 @@ delete env.ELECTRON_RUN_AS_NODE
 const lancement = spawnSync(
   electron,
   [join(RACINE, 'scripts', 'html-interactif-apercu.electron.cjs'), cheminConfig],
-  { encoding: 'utf8', env, timeout: 30_000 + largeurs.length * (attente + 20_000) }
+  {
+    encoding: 'utf8',
+    env,
+    timeout: 30_000 + largeurs.length * (attente + 20_000 + dureeMaxScenarioMs(scenario))
+  }
 )
 const cheminRapport = join(out, 'rapport.json')
 if (lancement.status !== 0 || !existsSync(cheminRapport)) {
@@ -236,15 +291,39 @@ for (const r of resultats) {
   const externe = (e) => e.message.startsWith('Script externe')
   if (r.erreurs.some(externe)) ajouter('script-externe')
   if (r.erreurs.some((e) => !externe(e))) ajouter('erreur-javascript')
+  // Refus SILENCIEUX du navigateur (conv-1304) : la page ne plante pas, elle ne fait juste rien.
+  // Avant ce controle, un formulaire jamais soumis ou un alert() ignore sortaient en code 0.
+  if (
+    r.console.some((ligne) =>
+      /Blocked form submission|Ignored call to '|SecurityError/u.test(ligne)
+    )
+  )
+    ajouter('refus-silencieux')
+  // L'amorce signale ce que le fil ne fait pas (confirm, prompt, lien relatif, telechargement).
+  if ((r.avertissements ?? []).length > 0) ajouter('avertissement-page')
+  // Copie ou lien demandes SANS clic : le fil les refuse.
+  if ((r.demandes ?? []).some((d) => !d.accordee)) ajouter('demande-sans-clic')
   if (!r.lancee && r.erreurs.length === 0) ajouter('page-jamais-lancee')
   if (r.hauteur < 4 || r.dessine < 0.001) ajouter('page-vide')
   if (r.debordementPx > 0) ajouter('debordement')
   if (r.hauteurFinale > r.hauteur + 2 || r.hauteur >= bornes.HAUTEUR_MAX_PAGE)
     ajouter('hauteur-instable')
   if (r.fondOpaque.length > 0) ajouter('fond-opaque')
+  if (r.scenario?.echec) ajouter('scenario-rouge')
 }
 const CODES = [
-  [3, ['erreur-javascript', 'script-externe', 'page-jamais-lancee']],
+  [
+    3,
+    [
+      'erreur-javascript',
+      'script-externe',
+      'page-jamais-lancee',
+      'refus-silencieux',
+      'avertissement-page',
+      'demande-sans-clic'
+    ]
+  ],
+  [8, ['scenario-rouge']],
   [4, ['page-vide']],
   [5, ['debordement']],
   [6, ['hauteur-instable']],

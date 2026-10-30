@@ -1,0 +1,13 @@
+<!--
+  Page ```html-interactif qui NOMME le moteur 3D (conv-1304) : l'amorce doit l'evaluer avant ses
+  scripts. Joue par amorce.page.test.ts : code 0 et « three : ok 3.74 » attendus.
+-->
+<p id="r">three : ?</p>
+<canvas id="c" width="200" height="60"></canvas>
+<script>
+const v = new THREE.Vector3(1, 2, 3)
+document.getElementById('r').textContent = 'three : ok ' + v.length().toFixed(2)
+const ctx = document.getElementById('c').getContext('2d')
+ctx.fillStyle = '#c9a227'
+ctx.fillRect(0, 0, 120, 40)
+</script>

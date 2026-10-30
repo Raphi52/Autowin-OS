@@ -156,6 +156,16 @@ export const TEXTES_FR = {
   'pageInteractive.enEcriture': 'Page interactive en cours d’écriture · {lignes} lignes',
   'pageInteractive.saisieSansClic': 'Saisie non remplie : la page l’a demandé sans clic de ta part',
   'pageInteractive.saisieAbsente': 'Aucune zone de saisie ici pour recevoir : {texte}',
+  'pageInteractive.corriger': 'Corriger',
+  'pageInteractive.corrigerMessage': 'Corrige la page interactive{page} : {probleme}{extrait}',
+  'pageInteractive.corrigerExtrait': ' — ligne {ligne} : {code}',
+  'pageInteractive.figee': 'Cette page ne répond plus : elle tourne peut-être en boucle.',
+  'pageInteractive.problemeFigee': 'elle ne répond plus, elle tourne sans doute en boucle',
+  'pageInteractive.agrandir': 'Agrandir',
+  'pageInteractive.reduire': 'Réduire',
+  'pageInteractive.enregistrer': 'Enregistrer en .html',
+  'pageInteractive.enregistrementImpossible':
+    'Enregistrement impossible : la page ne répond pas. Relance-la puis réessaie.',
 
   // Markdown
   'markdown.resumeFinal': 'Résumé final du modèle',
@@ -345,6 +355,16 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'pageInteractive.enEcriture': 'Interactive page being written · {lignes} lines',
   'pageInteractive.saisieSansClic': 'Input not filled: the page asked without a click from you',
   'pageInteractive.saisieAbsente': 'No input box here to receive: {texte}',
+  'pageInteractive.corriger': 'Fix',
+  'pageInteractive.corrigerMessage': 'Fix the interactive page{page}: {probleme}{extrait}',
+  'pageInteractive.corrigerExtrait': ' — line {ligne}: {code}',
+  'pageInteractive.figee': 'This page stopped responding: it may be stuck in a loop.',
+  'pageInteractive.problemeFigee': 'it stopped responding, it is probably stuck in a loop',
+  'pageInteractive.agrandir': 'Expand',
+  'pageInteractive.reduire': 'Collapse',
+  'pageInteractive.enregistrer': 'Save as .html',
+  'pageInteractive.enregistrementImpossible':
+    'Could not save: the page is not responding. Restart it and try again.',
 
   'markdown.resumeFinal': 'Model’s final summary',
   'markdown.htmlIgnore':

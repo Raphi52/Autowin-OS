@@ -25,7 +25,8 @@ process.on('unhandledRejection', echouer)
 app.commandLine.appendSwitch('disable-features', 'IsolateSandboxedIframes')
 
 const config = JSON.parse(readFileSync(process.argv[process.argv.length - 1], 'utf8'))
-const urlScene = pathToFileURL(join(config.pages, 'scene-3d.html')).href
+// La page isolee choisie comme le fil la choisirait (`pageIsoleePour`, conv-1304).
+const urlScene = pathToFileURL(join(config.pages, config.page)).href
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const HAUTEUR_FENETRE = 900
 const GESTES_MAX = 16
@@ -39,36 +40,62 @@ function sondeParent(parametres) {
   const outils = window.__pageInteractive
   const hote = document.querySelector('.hote')
   const messages = (window.__messagesPage = [])
+  // Les demandes de la page (conv-1304) : RELEVEES, jamais executees — l'apercu ne touche ni au
+  // presse-papiers de l'utilisateur ni a son navigateur. Le geste exige est le meme que dans le fil.
+  const demandes = (window.__demandesPage = [])
+  let stockage
   window.__phase = 'demarrage'
   const cadre = document.createElement('iframe')
-  cadre.setAttribute('sandbox', 'allow-scripts')
+  cadre.setAttribute('sandbox', outils.SANDBOX_PAGE_INTERACTIVE)
   cadre.setAttribute('referrerpolicy', 'no-referrer')
   cadre.style.height = `${outils.HAUTEUR_INITIALE_PAGE}px`
   window.addEventListener('message', (event) => {
-    if (event.source !== cadre.contentWindow || !event.data) return
-    const donnees = event.data
-    if (donnees.type !== 'autowin-scene-3d') return
+    if (event.source !== cadre.contentWindow) return
+    const message = outils.lireMessagePage(event.data)
+    if (!message) return
     messages.push({
-      etat: donnees.etat,
-      message: donnees.message,
-      hauteur: donnees.hauteur,
+      etat: message.etat,
+      message: message.message,
+      hauteur: message.hauteur,
       pendant: window.__phase
     })
-    if (donnees.etat === 'pret') {
+    if (message.etat === 'pret') {
       cadre.contentWindow.postMessage(
         {
           type: 'autowin-scene-3d',
           page: {
             html: parametres.html,
             style: outils.STYLE_PAGE_INTERACTIVE,
-            theme: outils.lireThemePourPage(hote)
+            theme: outils.lireThemePourPage(hote),
+            stockage
           }
         },
         '*'
       )
-    } else if (donnees.etat === 'hauteur') {
-      const borne = outils.borneHauteurPage(donnees.hauteur)
-      if (borne !== null) cadre.style.height = `${borne}px`
+    } else if (message.etat === 'hauteur') {
+      cadre.style.height = `${message.hauteur}px`
+    } else if (message.etat === 'stockage') {
+      stockage = message.donnees
+    } else if (
+      message.etat === 'lien' ||
+      message.etat === 'copier' ||
+      message.etat === 'defiler' ||
+      message.etat === 'prompt'
+    ) {
+      // `prompt` (conv-1304) : un bouton de choix qui remplirait la saisie du fil.
+      const geste = outils.gesteRecentDeLUtilisateur()
+      demandes.push({
+        demande: message.etat,
+        detail: (message.href || message.texte || String(message.y ?? '')).slice(0, 200),
+        accordee: message.etat === 'defiler' || geste,
+        pendant: window.__phase
+      })
+      if (message.etat === 'copier') {
+        cadre.contentWindow.postMessage(
+          outils.reponseALaPage(message.demande, geste, geste ? undefined : 'sans clic'),
+          '*'
+        )
+      }
     }
   })
   cadre.src = parametres.url
@@ -93,9 +120,11 @@ function sondePage(gestesMax) {
       fondOpaque.push(`${nom} : ${couleur}${style.backgroundImage !== 'none' ? ' + image' : ''}`)
     }
   }
+  // Liens compris (conv-1304) : un lien de la page s'ouvre par le fil, l'apercu verifie qu'il le
+  // DEMANDE bien (champ `demandes`).
   const CLIQUABLES =
     'button, summary, label, [role=button], input[type=button], input[type=submit], ' +
-    'input[type=reset], input[type=checkbox], input[type=radio], input[type=range]'
+    'input[type=reset], input[type=checkbox], input[type=radio], input[type=range], a[href]'
   const decrire = (element) => {
     const id = element.id ? `#${element.id}` : ''
     const classe =
@@ -175,9 +204,223 @@ function partChangee(a, b) {
 
 const arrondi = (valeur) => Math.round(valeur * 10000) / 10000
 
+/** Joue DANS la page : la cible d'une etape (selecteur CSS ou `texte=<libelle>`) et son point. */
+function sondeCible(selecteur, fractionX, fractionY) {
+  let element = null
+  if (selecteur.startsWith('texte=')) {
+    const cherche = selecteur.slice('texte='.length).trim().toLocaleLowerCase('fr-FR')
+    const porte = (e) =>
+      (e.textContent || e.value || e.getAttribute('aria-label') || '')
+        .replace(/\s+/gu, ' ')
+        .trim()
+        .toLocaleLowerCase('fr-FR')
+    const interactifs = document.querySelectorAll(
+      'button, a[href], summary, label, [role=button], [role=tab], [onclick], th, ' +
+        'input[type=button], input[type=submit]'
+    )
+    element =
+      [...interactifs].find((e) => porte(e) === cherche) ||
+      [...interactifs].find((e) => porte(e).includes(cherche)) ||
+      null
+  } else {
+    element = document.querySelector(selecteur)
+  }
+  if (!element) return { raison: `cible introuvable : ${selecteur}` }
+  window.__cibleScenario = element
+  const r = element.getBoundingClientRect()
+  if (r.width < 1 || r.height < 1)
+    return { raison: `cible invisible (taille nulle) : ${selecteur}` }
+  const x = r.left + r.width * fractionX
+  const y = r.top + r.height * fractionY
+  // Le point vise doit etre celui de la cible : un calque qui la recouvre prendrait le vrai clic.
+  const dessus = document.elementFromPoint(x, y)
+  if (dessus && dessus !== element && !element.contains(dessus) && !dessus.contains(element)) {
+    return { raison: `cible recouverte par <${dessus.tagName.toLowerCase()}> : ${selecteur}` }
+  }
+  return { x, y, balise: element.tagName, type: element.type || '' }
+}
+
+/** Joue DANS la page : pose une valeur et previent la page comme un vrai changement. */
+function poserValeur(valeur) {
+  const element = window.__cibleScenario
+  if (element.tagName === 'SELECT') {
+    const option = [...element.options].find(
+      (o) => o.value === valeur || o.textContent.trim() === valeur
+    )
+    if (!option) return `option absente : ${valeur}`
+    element.value = option.value
+  } else {
+    element.value = valeur
+  }
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+  element.dispatchEvent(new Event('change', { bubbles: true }))
+  return ''
+}
+
+/** Le texte lu dans la page : ce qui s'affiche, plus les champs en lecture seule (un total). */
+const LIRE_TEXTE =
+  "String(document.body.innerText || '') + ' ' + [...document.querySelectorAll(" +
+  "'input[readonly], textarea[readonly], input:disabled, output')]" +
+  ".map((e) => e.value || e.textContent || '').join(' ')"
+
+/** Les types de champ qu'on ne saisit pas lettre a lettre : le navigateur les decoupe. */
+const CHAMPS_POSES = new Set(['date', 'time', 'datetime-local', 'month', 'week', 'color', 'range'])
+
+/** Touches de `TOUCHES` (html-interactif-apercu-scenario.mjs) vers les noms d'Electron. */
+const CODES_TOUCHES = {
+  Enter: 'Return',
+  Tab: 'Tab',
+  Escape: 'Escape',
+  Backspace: 'Backspace',
+  Space: 'Space',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right'
+}
+
+/**
+ * Joue le parcours de `--scenario` (conv-1304) : vraie souris, vrai clavier, sur la page telle qu'elle
+ * vient de se charger. S'arrete a la premiere etape qui n'aboutit pas : la suite n'aurait pas de sens.
+ */
+async function jouerScenario({ etapes, outils, contenu, cadre, largeur, ajuster, capturer }) {
+  const debutDemandes = (await contenu.executeJavaScript('window.__demandesPage')).length
+  const attendreQue = async (condition) => {
+    const limite = Date.now() + outils.DELAI_VERIFICATION_MS
+    for (;;) {
+      if (await condition()) return true
+      if (Date.now() > limite) return false
+      await pause(100)
+    }
+  }
+  const lireTexte = (dans) =>
+    dans
+      ? cadre.executeJavaScript(`document.querySelector(${JSON.stringify(dans)})?.innerText ?? ''`)
+      : cadre.executeJavaScript(LIRE_TEXTE)
+  const pointer = async (etape, cible) => {
+    await ajuster()
+    const lu = await cadre.executeJavaScript(
+      `(${sondeCible.toString()})(${JSON.stringify(cible)}, ${etape.x ?? 0.5}, ${etape.y ?? 0.5})`
+    )
+    if (lu.raison) return lu
+    const decalage = await contenu.executeJavaScript(
+      '(() => { const r = window.__cadrePage.getBoundingClientRect(); return { x: r.left, y: r.top } })()'
+    )
+    return { ...lu, x: Math.round(decalage.x + lu.x), y: Math.round(decalage.y + lu.y) }
+  }
+  const souris = (x, y, clic) => {
+    contenu.sendInputEvent({ type: 'mouseMove', x: x - 2, y })
+    contenu.sendInputEvent({ type: 'mouseMove', x, y })
+    if (clic) {
+      contenu.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 })
+      contenu.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 })
+    }
+  }
+
+  const executer = async (etape) => {
+    const verbe = outils.verbeDe(etape)
+    const valeur = etape[verbe]
+    if (verbe === 'attendre') {
+      await pause(valeur)
+    } else if (verbe === 'touche') {
+      const keyCode = CODES_TOUCHES[valeur]
+      contenu.sendInputEvent({ type: 'keyDown', keyCode })
+      if (valeur === 'Enter') contenu.sendInputEvent({ type: 'char', keyCode: '\r' })
+      if (valeur === 'Space') contenu.sendInputEvent({ type: 'char', keyCode: ' ' })
+      contenu.sendInputEvent({ type: 'keyUp', keyCode })
+    } else if (verbe === 'voir') {
+      if (
+        !(await attendreQue(async () => outils.pageContient(await lireTexte(etape.dans), valeur)))
+      )
+        return `texte absent ${etape.dans ? `de ${etape.dans}` : 'de la page'} : ${valeur}`
+    } else if (verbe === 'pasVoir') {
+      if (
+        !(await attendreQue(async () => !outils.pageContient(await lireTexte(etape.dans), valeur)))
+      )
+        return `texte encore present ${etape.dans ? `dans ${etape.dans}` : 'dans la page'} : ${valeur}`
+    } else if (verbe === 'demande') {
+      const trouvee = await attendreQue(async () => {
+        const demandes = await contenu.executeJavaScript('window.__demandesPage')
+        return demandes
+          .slice(debutDemandes)
+          .some(
+            (d) =>
+              d.demande === valeur &&
+              d.accordee &&
+              (etape.contient === undefined || outils.pageContient(d.detail, etape.contient))
+          )
+      })
+      if (!trouvee)
+        return `aucune demande « ${valeur} » acceptee${
+          etape.contient ? ` contenant « ${etape.contient} »` : ''
+        }`
+    } else {
+      const point = await pointer(etape, valeur)
+      if (point.raison) return point.raison
+      if (verbe === 'cliquer') {
+        souris(point.x, point.y, true)
+      } else if (verbe === 'survoler') {
+        souris(point.x, point.y, false)
+      } else if (verbe === 'choisir' || CHAMPS_POSES.has(point.type)) {
+        const refus = await cadre.executeJavaScript(
+          `(${poserValeur.toString()})(${JSON.stringify(String(etape.valeur))})`
+        )
+        if (refus) return refus
+      } else {
+        // `remplir` : comme l'utilisateur, un clic dans le champ puis la frappe. Le champ est vide
+        // d'abord : un champ prerempli recevrait sinon le texte a la suite de sa valeur.
+        souris(point.x, point.y, true)
+        await pause(60)
+        await cadre.executeJavaScript(
+          'window.__cibleScenario.focus(); window.__cibleScenario.select?.()'
+        )
+        contenu.insertText(String(etape.valeur))
+        await pause(60)
+        const ecrit = await cadre.executeJavaScript('window.__cibleScenario.value')
+        if (String(ecrit) !== String(etape.valeur))
+          return `champ non rempli : ${JSON.stringify(ecrit)} au lieu de ${JSON.stringify(etape.valeur)}`
+      }
+      await pause(120)
+    }
+    return ''
+  }
+
+  let reussies = 0
+  for (const [rang, etape] of etapes.entries()) {
+    await contenu.executeJavaScript(
+      `window.__phase = ${JSON.stringify(`scenario ${outils.decrireEtape(etape)}`)}`
+    )
+    const raison = await executer(etape)
+    if (raison) {
+      const png = join(config.out, `scenario-${largeur}-echec.png`)
+      await ajuster()
+      writeFileSync(png, (await capturer()).toPNG())
+      return {
+        etapes: etapes.length,
+        reussies,
+        echec: {
+          numero: rang + 1,
+          etape: outils.decrireEtape(etape),
+          raison,
+          texteVu: outils.normaliserTexte(await lireTexte()).slice(0, 1500),
+          png
+        }
+      }
+    }
+    reussies += 1
+  }
+  const png = join(config.out, `scenario-${largeur}.png`)
+  await ajuster()
+  writeFileSync(png, (await capturer()).toPNG())
+  return { etapes: etapes.length, reussies, png }
+}
+
 app
   .whenReady()
   .then(async () => {
+    const outilsScenario = config.scenario
+      ? await import(pathToFileURL(join(__dirname, 'html-interactif-apercu-scenario.mjs')).href)
+      : null
     const resultats = []
     for (const largeur of config.largeurs) {
       const fenetre = new BrowserWindow({
@@ -251,6 +494,20 @@ app
       writeFileSync(png, t0.toPNG())
 
       const cadre = contenu.mainFrame.framesInSubtree.find((f) => f !== contenu.mainFrame)
+      // Le parcours passe AVANT la mesure : un debordement apparu quand une ligne s'ajoute, ou un
+      // bouton ne en cours de route, sont ainsi vus par les controles et les gestes automatiques.
+      const scenario =
+        config.scenario && cadre
+          ? await jouerScenario({
+              etapes: config.scenario,
+              outils: outilsScenario,
+              contenu,
+              cadre,
+              largeur,
+              ajuster: async () => ajusterFenetre(await hauteurCadre()),
+              capturer: async () => contenu.capturePage(await zone())
+            })
+          : undefined
       const mesure = cadre
         ? await cadre.executeJavaScript(`(${sondePage.toString()})(${GESTES_MAX})`)
         : { largeurVue: largeur, largeurContenu: largeur, fondOpaque: [], cibles: [] }
@@ -290,7 +547,15 @@ app
         gestes.push({ geste, cible, ecart: arrondi(partChangee(avant, apres)), png: pngGeste })
       }
 
+      // Le texte que la page affiche APRES tous les gestes (conv-1304) : ce que l'utilisateur lirait,
+      // et la preuve qu'un geste a produit son effet (« copie : ok », « form : soumis »).
+      const texteFinal = cadre
+        ? await cadre.executeJavaScript(
+            "String(document.body.innerText || '').replace(/\\n{3,}/g, '\\n\\n').slice(0, 4000)"
+          )
+        : ''
       const messages = await contenu.executeJavaScript('window.__messagesPage')
+      const demandes = await contenu.executeJavaScript('window.__demandesPage')
       resultats.push({
         largeur,
         png,
@@ -298,11 +563,20 @@ app
         erreurs: messages
           .filter((m) => m.etat === 'erreur')
           .map((m) => ({ message: String(m.message ?? ''), pendant: m.pendant })),
+        avertissements: messages
+          .filter((m) => m.etat === 'avertissement')
+          .map((m) => ({ message: String(m.message ?? ''), pendant: m.pendant })),
+        alertes: messages
+          .filter((m) => m.etat === 'alerte')
+          .map((m) => ({ message: String(m.message ?? ''), pendant: m.pendant })),
+        demandes,
+        texteFinal,
         hauteur,
         hauteurFinale,
         dessine: arrondi(partDessinee(t0)),
         debordementPx: Math.max(0, mesure.largeurContenu - mesure.largeurVue),
         fondOpaque: mesure.fondOpaque,
+        ...(scenario ? { scenario } : {}),
         gestes,
         ...(mesure.ciblesIgnorees ? { ciblesIgnorees: mesure.ciblesIgnorees } : {}),
         navigationsRefusees,

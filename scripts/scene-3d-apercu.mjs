@@ -18,10 +18,12 @@
  *           [--out .autowin-tmp/scene-3d-apercu]
  *   Un fichier contenant une cloture ```threejs : le n-ieme bloc est pris. Sinon le fichier entier
  *   est le code du bloc.
- *   SCENE D'UN CARROUSEL /draft (conv-318) : si le bloc est suivi du carrousel qui lui laisse sa
- *   place (`scripts/draft-carrousel.mjs`, champ `scene3d`), la scene tourne avec le MEME prelude que
- *   le fil (`autowin.surChoix`), puis recoit chaque rang 2..N : une capture `scene-<l>-choix-<n>.png`
- *   par proposition, a LIRE.
+ *   SCENE D'UN CARROUSEL /draft (conv-318, format conv-1304) : la page ```html-interactif du
+ *   carrousel (`scripts/draft-carrousel.mjs`, champ `scene3d`) porte sa scene dans un script
+ *   `data-dkc-scene` ; elle compte apres les blocs threejs du fichier. Elle tourne ici en cadre
+ *   entier avec le prelude des rangs (`autowin.surChoix`), puis recoit chaque rang 2..N : une
+ *   capture `scene-<l>-choix-<n>.png` par proposition, a LIRE. La page entiere (la scene DANS sa
+ *   place, les boutons) se controle avec `html-interactif-apercu.mjs`.
  *
  * Codes de sortie (un JSON est toujours ecrit sur stdout, champ `defauts`) :
  *   0 = la scene tourne et dessine quelque chose a chaque largeur ;
@@ -63,22 +65,33 @@ if (!fichier || fichier.startsWith('--') || !existsSync(fichier)) {
 }
 
 const texte = readFileSync(fichier, 'utf8').replace(/\r\n/gu, '\n')
-const blocs = [...texte.matchAll(/^(`{3,})threejs[^\n]*\n([\s\S]*?)^\1[ \t]*$/gmu)].map((m) => m[2])
+// SCENE D'UN CARROUSEL /draft (conv-1304) : elle vit dans la page ```html-interactif du carrousel,
+// dans le script marque `data-dkc-scene` (scripts/draft-carrousel.mjs). Elle est jouee ici seule,
+// en cadre entier, avec le prelude des rangs ; son nombre de propositions = les cases radio.
+const scenesDeCarrousel = [
+  ...texte.matchAll(/^(`{3,})html-interactif[^\n]*\n([\s\S]*?)^\1[ \t]*$/gmu)
+].flatMap((m) => {
+  const scene = /<script data-dkc-scene>\n([\s\S]*?)\n<\/script>/u.exec(m[2])
+  if (!scene || !new RegExp(String.raw`class="${CLASSE_PLACE_SCENE}"`).test(m[2])) return []
+  return [{ code: scene[1], propositions: (m[2].match(/<input\b[^>]*type="radio"/g) ?? []).length }]
+})
+const blocs = [
+  ...[...texte.matchAll(/^(`{3,})threejs[^\n]*\n([\s\S]*?)^\1[ \t]*$/gmu)].map((m) => ({
+    code: m[2],
+    propositions: 0
+  })),
+  ...scenesDeCarrousel
+]
 const rang = Number(argument('--bloc', '1'))
-const codeBloc = blocs.length > 0 ? blocs[rang - 1] : texte
-if (codeBloc === undefined) {
-  sortir(2, { defauts: ['usage'], erreur: `bloc ${rang} absent : ${blocs.length} bloc(s) threejs` })
+const bloc = blocs.length > 0 ? blocs[rang - 1] : { code: texte, propositions: 0 }
+if (bloc === undefined) {
+  sortir(2, {
+    defauts: ['usage'],
+    erreur: `bloc ${rang} absent : ${blocs.length} scene(s) (blocs threejs puis carrousels)`
+  })
 }
-// Le carrousel /draft qui SUIT ce bloc et lui laisse sa place : la scene y est montee par le fil
-// (draft-scene-3d.ts), avec le prelude des rangs. Son nombre de propositions = ses cases radio.
-const apresBloc = blocs.length > 0 ? texte.slice(texte.indexOf(codeBloc) + codeBloc.length) : ''
-const carrousel = /^\s*(`{3,})[ \t]*\n\s*(`{3,})html-render[^\n]*\n([\s\S]*?)^\2[ \t]*$/mu.exec(
-  apresBloc
-)
-const propositionsDuCarrousel =
-  carrousel && new RegExp(String.raw`class\s*=\s*["']${CLASSE_PLACE_SCENE}["']`).test(carrousel[3])
-    ? (carrousel[3].match(/<input\b[^>]*type="radio"/g) ?? []).length
-    : 0
+const codeBloc = bloc.code
+const propositionsDuCarrousel = bloc.propositions
 const code = propositionsDuCarrousel > 0 ? codeSceneDuCarrousel(codeBloc) : codeBloc
 
 const largeurs = argument('--largeurs', '560,860')
