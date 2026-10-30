@@ -1,10 +1,8 @@
 /**
  * SKILL NOMMÉE EN TÊTE D'UN MESSAGE — avec ou sans barre oblique.
  *
- * Pourquoi dans `shared/` : la bulle du fil (renderer, `skill-entete.ts`) et le chargement du corps
- * de la skill (main, `skill-pipeline.ts`) doivent tenir la MÊME règle. Deux règles = l'« étiquette
- * qui mentait » déjà vécue avec la palette slash : une bulle « DRAFT » sur un message dont la
- * procédure n'a jamais été chargée.
+ * Sert au chargement du corps de la skill (main, `skill-pipeline.ts`). La bulle du fil ne s'en sert
+ * plus depuis conv-1334 : un message qui nomme une skill s'affiche tel qu'il a été tapé.
  *
  * Origine (conv-988, 2026-10-16) : « draft des animations… » tapé SANS `/` ne recevait ni la bulle
  * de skill ni le corps de la skill, alors que la consigne du chat dit « SKILL NOMMÉE = SKILL

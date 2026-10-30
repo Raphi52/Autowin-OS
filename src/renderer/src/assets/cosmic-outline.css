@@ -847,10 +847,8 @@
 
 /*
  * Bulle envoyee — draft G1 (2026-10-10). Degrade ROSE -> BLEU en diagonale pour TOUS les messages
- * envoyes (themes sombres). Un message qui lance une skill (`/draft …`) gagne en plus un LISERE BLANC
- * en haut et un bandeau : nom en petites capitales a gauche, description a droite ; le prefixe
- * est retire du texte (ChatMessageRow + skill-entete.ts). Selecteur volontairement fort : il doit
- * passer devant les surcharges `:root[data-theme=…]` des themes sombres.
+ * envoyes (themes sombres). Selecteur volontairement fort : il doit passer devant les surcharges
+ * `:root[data-theme=…]` des themes sombres.
  */
 :root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user .msg-body.msg-bulle {
   border: 1px solid transparent;
@@ -889,41 +887,4 @@
   filter: blur(22px);
   opacity: 0.45;
   pointer-events: none;
-}
-:root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user .msg-body.msg-bulle.avec-skill {
-  padding: 0;
-  /* Blanc comme le nom de skill (demande conv-161, 2026-10-10 ; remplace l'or #e3ba55). Regle
-     limitee aux themes sombres : le blanc en dur n'y disparait jamais. */
-  border-top: 2px solid #ffffff;
-}
-.msg.user .msg-body.avec-skill .msg-skill-entete {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 5px 16px;
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-}
-.msg.user .msg-body.avec-skill .msg-skill-nom {
-  flex-shrink: 0;
-  /* Blanc et gras (demande conv-161, 2026-10-10 ; remplace l'or #ffd77a). `inherit` = la couleur
-     du texte de la bulle : #ffffff sur les themes sombres, et reste lisible sur la bulle rose
-     pale du theme clair, ou un blanc en dur disparaitrait. */
-  color: inherit;
-  font-weight: 700;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.msg.user .msg-body.avec-skill .msg-skill-desc {
-  overflow: hidden;
-  min-width: 0;
-  color: rgba(255, 255, 255, 0.7);
-  letter-spacing: 0.04em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.msg.user .msg-body.avec-skill .msg-skill-texte {
-  padding: 0 16px 9px;
-  white-space: pre-wrap;
 }
