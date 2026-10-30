@@ -1,9 +1,50 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   PLAFOND_PAR_PASSAGE,
+  jouerPasseDeRetention,
   planifierBalayage,
   type EntreeBalayage
 } from './balayage-retention'
+
+/*
+ * LA PASSE HORAIRE NE LAISSE AUCUN REJET SANS GESTIONNAIRE. Mesure : crash.log du 2026-10-28 a
+ * 18:28:45Z porte « unhandledRejection: Opération worktree interrompue après 300000 ms » — le
+ * recensement avait depasse le plafond de la file d'operations git, et `index.ts` lancait la passe
+ * en `void` sans `.catch` (bulletins de maintenance du 29 et du 30/10, conv-1048). Le rejet
+ * polluait le journal de plantage et la passe ne disait nulle part pourquoi elle n'avait rien depose.
+ */
+describe('jouerPasseDeRetention', () => {
+  it('un recensement qui depasse le delai termine la passe et le DIT, sans rapport invente', async () => {
+    const poserRapport = vi.fn()
+    const journal = { info: vi.fn(), warn: vi.fn() }
+    const recenser = (): Promise<EntreeBalayage[]> =>
+      Promise.reject(new Error('Opération worktree interrompue après 300000 ms'))
+
+    await expect(
+      jouerPasseDeRetention({ recenser, poserRapport, journal })
+    ).resolves.toBeUndefined()
+
+    expect(poserRapport).not.toHaveBeenCalled()
+    expect(journal.warn).toHaveBeenCalledTimes(1)
+    expect(String(journal.warn.mock.calls[0]?.[0])).toContain('interrompue après 300000 ms')
+  })
+
+  it('un recensement reussi depose son rapport, meme vide', async () => {
+    const poserRapport = vi.fn()
+    const journal = { info: vi.fn(), warn: vi.fn() }
+
+    await jouerPasseDeRetention({ recenser: async () => [], poserRapport, journal })
+
+    expect(poserRapport).toHaveBeenCalledTimes(1)
+    expect(poserRapport.mock.calls[0]?.[0]).toMatchObject({
+      examines: 0,
+      sansPerte: [],
+      aTrancher: [],
+      reportees: 0
+    })
+    expect(journal.warn).not.toHaveBeenCalled()
+  })
+})
 
 /**
  * LE PLAN D'UN BALAYAGE DE RETENTION.
