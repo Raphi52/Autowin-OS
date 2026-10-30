@@ -430,7 +430,8 @@ import {
   ecrireMascotteAffichee,
   ecrireStyleMascotte,
   lireMascotteAffichee,
-  lireStyleMascotte
+  lireStyleMascotte,
+  styleAffiche
 } from './mascotte-reglage'
 import { photographierLeCode } from './photo-du-code'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
@@ -567,6 +568,8 @@ guardBrokenProcessPipes(process.stdout, process.stderr)
 
 const scheduledTaskDispatch = process.argv.includes('--autowin-task-dispatch')
 const startupTaskOccurrence = taskOccurrenceFromArgs(process.argv)
+/** Le thème que la fenêtre a appliqué en dernier (conv-346) : le thème NieR montre la 2B. */
+let themeDeLaMascotte: string | null = null
 const resolvedAutomationInstanceMode = resolveAutomationInstanceMode(
   process.argv,
   process.env,
@@ -2136,8 +2139,17 @@ function registerChatIpc(): void {
   ipcMain.handle('os:mascotte:choisir-style', (event, style: unknown) => {
     assertTrustedRendererSender(event, 'Mascotte du bureau')
     ecrireStyleMascotte(style)
-    mascotteDuBureau.changerStyle(lireStyleMascotte())
+    mascotteDuBureau.changerStyle(styleAffiche(lireStyleMascotte(), themeDeLaMascotte))
     return lireStyleMascotte()
+  })
+  // Le thème appliqué par la fenêtre (conv-346) : le thème NieR montre la 2B, sans toucher au
+  // style gardé. Seul un identifiant de thème court en lettres, chiffres et tirets est accepté.
+  ipcMain.handle('os:mascotte:theme', (event, theme: unknown) => {
+    assertTrustedRendererSender(event, 'Mascotte du bureau')
+    if (typeof theme !== 'string' || !/^[a-z0-9-]{1,40}$/u.test(theme)) return false
+    themeDeLaMascotte = theme
+    mascotteDuBureau.changerStyle(styleAffiche(lireStyleMascotte(), themeDeLaMascotte))
+    return true
   })
   ipcMain.handle('app:titlebar-symbol-color', (event, couleur: unknown) => {
     assertTrustedRendererSender(event, 'Couleur des boutons de fenêtre')
@@ -3868,7 +3880,7 @@ Le fil reprend ensuite normalement.`
       },
       ouvrirAutowin: () => showMainWindow(),
       titreDuFil: (id) => os.conversations.get(id)?.title
-    }, lireMascotteAffichee(), lireStyleMascotte())
+    }, lireMascotteAffichee(), styleAffiche(lireStyleMascotte(), themeDeLaMascotte))
 
   /*
    * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26, conv-867).
