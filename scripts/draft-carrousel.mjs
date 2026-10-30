@@ -68,15 +68,24 @@
  *     écouter. Ses boutons y REMPLISSENT la saisie au lieu d'envoyer (src/renderer/src/components/
  *     saisie-du-fil.ts) : le code de la page tourne, l'utilisateur relit le choix avant de l'envoyer.
  *     Avant, la scène sortait en clôture ```threejs à part, que le fil montait dans le carrousel.
- *   Sortie : le fichier .md avec la clôture ```html-render — ou ```html-interactif avec une scène —,
- *   à contrôler par scripts/html-render-apercu.mjs (code 0) — html-interactif-apercu.mjs et
- *   scene-3d-apercu.mjs pour une scène — puis à poser dans le fil par la commande `montrer_bloc`
+ *   - « reglages » (conv-1339) : des variables CSS montrées en curseurs sous la proposition (voir
+ *     draft-reglages.mjs) ; l'aperçu change tout de suite et les boutons portent les valeurs choisies.
+ *     Le carrousel devient là aussi une page ```html-interactif.
+ *   Sortie : le fichier .md avec la clôture ```html-render — ou ```html-interactif avec une scène ou
+ *   des réglages —, à contrôler par scripts/html-render-apercu.mjs (code 0) — html-interactif-apercu.mjs
+ *   pour une page, plus scene-3d-apercu.mjs pour une scène — puis à poser dans le fil par `montrer_bloc`
  *   (conv-1306 : recopié à la main, un carrousel de 52 ko ne tenait plus dans la réponse).
  *   Codes : 0 = écrit ; 2 = usage ou propositions invalides (raisons sur stdout) ; 1 = erreur.
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { CLASSE_PLACE_SCENE } from '../src/renderer/scene-3d/choix-scene.mjs'
+import {
+  panneauReglages,
+  SCRIPT_REGLAGES,
+  styleReglages,
+  verifierReglages
+} from './draft-reglages.mjs'
 
 /** La transition C « Pile de cartes », réglée pendant le /draft (tour 3, conv-302). */
 export const TRANSITION = { duree: 0.45, courbe: 'cubic-bezier(.2,.8,.2,1)' }
@@ -151,8 +160,18 @@ export function verifierPropositions(spec) {
     if (/class\s*=\s*["'][^"']*\bdkc-/i.test(p.html))
       erreurs.push(`${rang} : le préfixe de classe « dkc- » est réservé au carrousel`)
   })
+  if (spec.reglages !== undefined)
+    erreurs.push(
+      ...verifierReglages(
+        spec.reglages,
+        [spec.css, ...propositions.flatMap((p) => [p?.css, p?.html])].filter(Boolean).join('\n')
+      )
+    )
   return erreurs
 }
+
+/** Un curseur ou une scène exigent du code : le carrousel sort alors en page ```html-interactif. */
+export const carrouselEnPage = (spec) => Boolean(spec.scene3d || spec.reglages)
 
 /** La copie d'une maquette pour sa vignette : ses `id` renommés, pour ne pas exister en double. */
 function copieVignette(html) {
@@ -294,7 +313,13 @@ export function carrouselDraft(spec) {
   if (erreurs.length) throw new Error(erreurs.join(' ; '))
   const P = spec.propositions.map((p, i) => ({ ...p, n: i + 1 }))
   const n = P.length
-  const cssPropositions = [spec.css, ...P.map((p) => p.css)].filter(Boolean).join('\n')
+  const cssPropositions = [
+    spec.reglages && styleReglages(spec.reglages),
+    spec.css,
+    ...P.map((p) => p.css)
+  ]
+    .filter(Boolean)
+    .join('\n')
   const avecMixer = spec.mixer ?? n <= MIXER_MAX
 
   // FLÈCHES DE CÔTÉ (demande utilisateur, 2026-10-17 : « des flèches à gauche et à droite du draft,
@@ -394,11 +419,11 @@ ${feuilleDeStyle(n, cssPropositions, Boolean(spec.scene3d), avecMixer)}
 </style>
 <div class="dkc-w">
 <div class="dkc-hd">${echapper(spec.titre)}</div>
-${spec.intro ? `<div class="dkc-intro">${spec.intro}</div>\n` : ''}<div class="dkc-aide"><b>Clique une vignette</b> ou les <b>flèches</b> de chaque côté pour passer d’une proposition à l’autre · <b>Tout voir</b> les étale côte à côte · <b>choisis</b> avec les boutons du bas${spec.scene3d ? ' (ils remplissent ta saisie : <b>Entrée</b> pour envoyer)' : ''}, ${avecMixer ? 'ou <b>Mixer</b> pour en cocher plusieurs à mélanger.' : 'ou écris un mélange dans la saisie.'}</div>
+${spec.intro ? `<div class="dkc-intro">${spec.intro}</div>\n` : ''}<div class="dkc-aide"><b>Clique une vignette</b> ou les <b>flèches</b> de chaque côté pour passer d’une proposition à l’autre · <b>Tout voir</b> les étale côte à côte · ${spec.reglages ? '<b>les curseurs</b> ajustent toutes les propositions · ' : ''}<b>choisis</b> avec les boutons du bas${carrouselEnPage(spec) ? ' (ils remplissent ta saisie : <b>Entrée</b> pour envoyer)' : ''}, ${avecMixer ? 'ou <b>Mixer</b> pour en cocher plusieurs à mélanger.' : 'ou écris un mélange dans la saisie.'}</div>
 <div class="dkc-car">${champs}
 ${navigation}
 ${scene}
-${vignettes}
+${spec.reglages ? `${panneauReglages(spec.reglages)}\n` : ''}${vignettes}
 <div class="dkc-ibar"><span class="dkc-ind"></span></div>
 ${casesMixer}${actions}
 ${interrupteur}
@@ -450,15 +475,23 @@ export const SCRIPT_PLACE_SCENE = `;(() => {
 /** Attribut du script de la scène dans la page : scene-3d-apercu.mjs le retrouve par lui. */
 export const ATTRIBUT_SCRIPT_SCENE = 'data-dkc-scene'
 
-/** La page ```html-interactif d'un carrousel EN VOLUME : le carrousel, puis sa scène. */
-export function pageDuCarrousel3d(spec) {
-  if (!spec?.scene3d) throw new Error('« scene3d » absent : le carrousel reste un html-render')
+/** La page ```html-interactif d'un carrousel : ses réglages, puis sa scène, chacun dans son script. */
+export function pageDuCarrousel(spec) {
   return (
     carrouselDraft(spec) +
-    `\n<script>\n${SCRIPT_PLACE_SCENE}\n</script>\n<script ${ATTRIBUT_SCRIPT_SCENE}>\n` +
-    spec.scene3d.trim() +
-    '\n</script>'
+    (spec.reglages ? `\n<script>\n${SCRIPT_REGLAGES}\n</script>` : '') +
+    (spec.scene3d
+      ? `\n<script>\n${SCRIPT_PLACE_SCENE}\n</script>\n<script ${ATTRIBUT_SCRIPT_SCENE}>\n` +
+        spec.scene3d.trim() +
+        '\n</script>'
+      : '')
   )
+}
+
+/** La page d'un carrousel EN VOLUME : refuse un carrousel sans scène. */
+export function pageDuCarrousel3d(spec) {
+  if (!spec?.scene3d) throw new Error('« scene3d » absent : le carrousel reste un html-render')
+  return pageDuCarrousel(spec)
 }
 
 /**
@@ -466,8 +499,8 @@ export function pageDuCarrousel3d(spec) {
  * ```html-interactif avec (la scène tourne dans la page, voir `pageDuCarrousel3d`).
  */
 export const blocDuCarrousel = (spec) =>
-  spec.scene3d
-    ? '```html-interactif\n' + pageDuCarrousel3d(spec) + '\n```\n'
+  carrouselEnPage(spec)
+    ? '```html-interactif\n' + pageDuCarrousel(spec) + '\n```\n'
     : '```html-render\n' + carrouselDraft(spec) + '\n```\n'
 
 const lanceEnCli = Boolean(
@@ -504,7 +537,9 @@ if (lanceEnCli) {
         (spec.scene3d
           ? `node scripts/html-interactif-apercu.mjs "${sortie}" et ` +
             `node scripts/scene-3d-apercu.mjs "${sortie}" (code 0 exigé pour chacun)`
-          : `node scripts/html-render-apercu.mjs "${sortie}" (code 0 exigé)`) +
+          : spec.reglages
+            ? `node scripts/html-interactif-apercu.mjs "${sortie}" (code 0 exigé)`
+            : `node scripts/html-render-apercu.mjs "${sortie}" (code 0 exigé)`) +
         ', puis pose-le dans le fil avec la commande montrer_bloc (path = ce fichier) : ne le recopie pas'
     })
   } catch (erreur) {
