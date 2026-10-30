@@ -570,8 +570,8 @@ describe('bascule avant le lancement', () => {
       removeDir: () => undefined,
       now: () => '2026-10-22T00:00:00.000Z'
     })
-    // Mesures du 22/10 : le compte par défaut à 91 % de sa session, le second à 12 %.
-    const utilisation: Record<string, number> = { [DEFAULT_ACCOUNT_ID]: 91, 'compte-2': 12 }
+    // Le compte par défaut vidé (100 %, seuil de bascule depuis conv-1328), le second à 12 %.
+    const utilisation: Record<string, number> = { [DEFAULT_ACCOUNT_ID]: 100, 'compte-2': 12 }
     const comptesDesAppels: string[] = []
     const claude: ProviderAdapter = {
       id: 'claude',
