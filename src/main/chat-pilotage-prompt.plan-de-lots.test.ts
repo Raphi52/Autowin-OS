@@ -37,9 +37,7 @@ describe('règle « tâche longue → plan de lots » dans la consigne du chat',
     expect(prompt).toMatch(/PLUSIEURS tâches d'action indépendantes, sur des fichiers séparés/u)
     expect(prompt).toMatch(/lance-les en parallèle avec `plan_de_lots`/u)
     // Le petit travail reste dans le fil : chaque lot coûte un tour.
-    expect(prompt).toMatch(
-      /de petites tâches qui tiennent dans ce tour ou qui touchent les mêmes fichiers/u
-    )
+    expect(prompt).toMatch(/de petites tâches qui tiennent dans ce tour ou qui touchent les mêmes fichiers/u)
   })
 
   it('disparaît d’un tour lecture seule, et d’un catalogue sans l’outil', () => {
