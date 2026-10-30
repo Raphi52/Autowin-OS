@@ -20,6 +20,7 @@ import { NavigateurIntegre, type PropsNavigateurIntegre } from './NavigateurInte
 import {
   adresseDeLaSaisie,
   blocPourLeChat,
+  decouperAdresse,
   lienAOuvrirDansLePanneau
 } from './navigateur-integre-outils'
 
@@ -242,6 +243,29 @@ describe('adresseDeLaSaisie — URL ou recherche', () => {
   })
 })
 
+describe('decouperAdresse — ce que la capsule montre au repos', () => {
+  it('site, puis port, chemin et paramètres ; sans protocole ni barre finale', () => {
+    expect(decouperAdresse('http://localhost:5173/tarifs?x=1#a')).toEqual({
+      site: 'localhost',
+      suite: ':5173/tarifs?x=1#a',
+      chiffre: false
+    })
+    expect(decouperAdresse('https://exemple.fr/')).toEqual({
+      site: 'exemple.fr',
+      suite: '',
+      chiffre: true
+    })
+  })
+  it('le vrai site ressort, pas le leurre placé avant le @', () => {
+    expect(decouperAdresse('https://banque.fr@pirate.net/compte')?.site).toBe('pirate.net')
+  })
+  it('jumeaux : saisie en cours, about:blank et data: n’ont pas de lecture', () => {
+    expect(decouperAdresse('doc electron')).toBeNull()
+    expect(decouperAdresse('about:blank')).toBeNull()
+    expect(decouperAdresse('data:text/html,<p>x</p>')).toBeNull()
+  })
+})
+
 describe('blocPourLeChat — ce que reçoit la saisie', () => {
   it('annotations : n°, URL, sélecteur, extrait, styles, commentaire, et la capture en image', () => {
     const { texte, images } = blocPourLeChat(
@@ -419,29 +443,167 @@ describe('NavigateurIntegre — le panneau', () => {
     )
   })
 
-  it('onglets : clic active, × ferme, + en ouvre un', async () => {
+  it('onglets : clic active, × ferme, + en ouvre un, et la rangée reste là', async () => {
     await nav.pousser({})
     await monter()
     await nav.pousser({ onglets: [onglet('onglet-1'), onglet('onglet-2', 'https://exemple.fr/')] })
+    await act(async () => bouton(conteneur!, 'Fermer l’onglet Page de dev').click())
+    expect(nav.api.fermerOnglet).toHaveBeenCalledWith('onglet-1')
     const onglets = conteneur!.querySelectorAll('[role="tab"]')
     expect(onglets).toHaveLength(2)
     await act(async () => (onglets[1] as HTMLButtonElement).click())
     expect(nav.api.activerOnglet).toHaveBeenCalledWith('onglet-2')
-    await act(async () => bouton(conteneur!, 'Fermer l’onglet Page de dev').click())
-    expect(nav.api.fermerOnglet).toHaveBeenCalledWith('onglet-1')
+    expect(conteneur!.querySelector('[role="tablist"]')).toBeTruthy()
     await act(async () => bouton(conteneur!, 'Nouvel onglet (Ctrl+T)').click())
     expect(nav.api.ouvrir).toHaveBeenCalledWith('A', 'about:blank')
+    expect(conteneur!.querySelector('[role="tablist"]')).toBeTruthy()
   })
 
-  it('l’agent pilote : bandeau affiché, puis retiré', async () => {
+  // « il a pas d'onglet le navigateur ? » (conv-1306, 2026-10-30) : repliés dans un compteur, on ne
+  // les trouvait pas. La rangée est toujours là, juste sous l'adresse, même sans aucun onglet.
+  it('onglets toujours visibles juste sous l’adresse, + au bout, sans compteur', async () => {
     await monter()
-    expect(conteneur!.querySelector('[data-testid="navigateur-pilote"]')).toBeNull()
+    const rangee = conteneur!.querySelector('.navigateur-onglets')!
+    expect(rangee.previousElementSibling).toBe(conteneur!.querySelector('.navigateur-barre'))
+    expect(conteneur!.querySelector('.navigateur-compteur')).toBeNull()
+    expect(rangee.querySelector('[role="tablist"] [role="tab"]')).toBeTruthy()
+    // Le + ne défile pas avec les onglets : il reste à portée quand ils débordent.
+    const plus = bouton(conteneur!, 'Nouvel onglet (Ctrl+T)')
+    expect(rangee.lastElementChild).toBe(plus)
+    expect(plus.closest('[role="tablist"]')).toBeNull()
+    await nav.pousser({ onglets: [], ongletActif: null })
+    expect(conteneur!.querySelector('.navigateur-onglets')).toBe(rangee)
+    expect(rangee.lastElementChild).toBe(bouton(conteneur!, 'Nouvel onglet (Ctrl+T)'))
+  })
+
+  it('rangée pleine : la molette la fait défiler, l’onglet actif est ramené à l’écran', async () => {
+    const montrer = vi.fn()
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: montrer
+    })
+    try {
+      await monter()
+      const liste = conteneur!.querySelector('[role="tablist"]')!
+      await act(async () => {
+        liste.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true }))
+      })
+      expect(liste.scrollLeft).toBe(120)
+      montrer.mockClear()
+      await nav.pousser({
+        onglets: [onglet('onglet-1'), onglet('onglet-2', 'https://exemple.fr/')],
+        ongletActif: 'onglet-2'
+      })
+      expect(montrer).toHaveBeenCalledTimes(1)
+      expect(montrer.mock.contexts[0]).toBe(conteneur!.querySelector('.navigateur-onglet.is-actif'))
+    } finally {
+      Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
+    }
+  })
+
+  it('la zone déplacée sans changer de taille : la page suit (l’observateur de taille ne le voit pas)', async () => {
+    await monter()
+    const appels = nav.api.poserCadre.mock.calls.length
+    ZONE.top = 118
+    try {
+      await nav.pousser({ demandeAccord: { origine: 'https://exemple.fr', action: 'cliquer' } })
+      expect(nav.api.poserCadre.mock.calls.length).toBe(appels + 1)
+      expect(nav.api.poserCadre).toHaveBeenLastCalledWith({ ...RECT_ZONE, y: 118 }, 1.25)
+    } finally {
+      ZONE.top = 80
+    }
+  })
+
+  it('Plein cadre vit dans le menu ⋮ et se retire par le même chemin', async () => {
+    await monter()
+    expect(
+      [...conteneur!.querySelectorAll('button')].some((b) => nomAccessible(b) === 'Plein cadre')
+    ).toBe(false)
+    await act(async () => bouton(conteneur!, 'Plus d’options').click())
+    await act(async () => bouton(conteneur!, 'Plein cadre').click())
+    const panneau = conteneur!.querySelector('[data-testid="navigateur-panneau"]')!
+    expect(panneau.classList.contains('is-plein-cadre')).toBe(true)
+    // Choisir referme le menu : la page revient.
+    expect(conteneur!.querySelector('[role="menu"]')).toBeNull()
+    await act(async () => bouton(conteneur!, 'Plus d’options').click())
+    await act(async () => bouton(conteneur!, 'Côte à côte').click())
+    expect(panneau.classList.contains('is-plein-cadre')).toBe(false)
+  })
+
+  // « pas dans la barre d'url la crois dans la barre d'url enleve la » (conv-1317, 2026-10-30).
+  it('la croix ferme le panneau, au bout de la rangée et hors de la barre d’adresse', async () => {
+    await monter()
+    const croix = bouton(conteneur!, 'Fermer le navigateur (Ctrl+Shift+B)')
+    expect(conteneur!.querySelector('.navigateur-capsule button[aria-label*="Fermer"]')).toBeNull()
+    expect(croix.closest('.navigateur-capsule')).toBeNull()
+    expect(conteneur!.querySelector('.navigateur-barre')!.lastElementChild).toBe(croix)
+    await act(async () => croix.click())
+    expect(props.onFermer).toHaveBeenCalledTimes(1)
+  })
+
+  it('capsule : cadenas seulement en https, site lisible, globe sur http', async () => {
+    await monter()
+    const lecture = (): string =>
+      conteneur!.querySelector('.navigateur-adresse-vue')?.textContent ?? ''
+    expect(lecture()).toBe('localhost:5173')
+    expect(conteneur!.querySelector('.navigateur-site rect')).toBeNull()
+    await nav.pousser({ onglets: [onglet('onglet-1', 'https://exemple.fr/doc')] })
+    expect(lecture()).toBe('exemple.fr/doc')
+    expect(conteneur!.querySelector('.navigateur-site rect')).toBeTruthy()
+  })
+
+  it('page en chargement : le tourniquet se voit dans la capsule', async () => {
+    await monter()
+    await nav.pousser({ onglets: [{ ...onglet('onglet-1'), chargement: true }] })
+    expect(conteneur!.querySelector('.navigateur-site .spinner')).toBeTruthy()
+  })
+
+  it('l’agent pilote : bandeau affiché, puis retiré, et sa phrase n’est dite qu’une fois', async () => {
+    await monter()
+    const bandeau = (): Element | null =>
+      conteneur!.querySelector('[data-testid="navigateur-pilotage"]')
+    expect(bandeau()).toBeNull()
     await nav.pousser({ agentPilote: true })
-    expect(conteneur!.querySelector('[data-testid="navigateur-pilote"]')?.textContent).toBe(
+    expect(bandeau()?.querySelector('.navigateur-pilotage-texte')?.textContent).toBe(
       'L’agent pilote cet onglet'
     )
+    // Doublon lu sur la capture du lot 2 (conv-1286) : la tête du cadre répétait le bandeau.
+    expect(conteneur!.textContent?.split('L’agent pilote cet onglet')).toHaveLength(2)
     await nav.pousser({ agentPilote: false })
-    expect(conteneur!.querySelector('[data-testid="navigateur-pilote"]')).toBeNull()
+    expect(bandeau()).toBeNull()
+  })
+
+  it('cadre de page : allumé avec l’agent, éteint sans lui, bande toujours là (la page ne saute pas)', async () => {
+    await monter()
+    const cadre = conteneur!.querySelector('.navigateur-cadre')!
+    const tete = (): string => conteneur!.querySelector('.navigateur-cadre-tete')?.textContent ?? ''
+    expect(cadre.classList.contains('is-agent')).toBe(false)
+    expect(tete()).toBe('Page de dev')
+    await nav.pousser({ agentPilote: true })
+    expect(cadre.classList.contains('is-agent')).toBe(true)
+    // La phrase vit dans le bandeau du pas-à-pas : la bande garde le titre de la page.
+    expect(tete()).toBe('Page de dev')
+    await nav.pousser({ agentPilote: false })
+    expect(cadre.classList.contains('is-agent')).toBe(false)
+    expect(tete()).toBe('Page de dev')
+    // Le cadre reste le même nœud : il ne se remonte pas, donc la zone mesurée non plus.
+    expect(conteneur!.querySelector('.navigateur-cadre')).toBe(cadre)
+  })
+
+  it('demande d’accord sans pilotage (l’ordre réel du principal) : cadre allumé, bande honnête', async () => {
+    await monter()
+    await nav.pousser({
+      agentPilote: false,
+      demandeAccord: { origine: 'https://exemple.fr', action: 'cliquer' }
+    })
+    expect(conteneur!.querySelector('.navigateur-cadre')!.classList.contains('is-agent')).toBe(true)
+    expect(conteneur!.querySelector('.navigateur-cadre-tete')?.textContent).toBe(
+      'L’agent attend votre accord'
+    )
+    expect(conteneur!.querySelector('[data-testid="navigateur-pilotage"]')).toBeNull()
+    // L'accord se donne DANS le cadre, au pied de la page.
+    const cadre = conteneur!.querySelector('.navigateur-cadre')!
+    expect(cadre.lastElementChild?.classList.contains('navigateur-accord')).toBe(true)
   })
 
   it('carte d’accord : site et action lisibles, chaque réponse part au principal', async () => {
@@ -471,6 +633,8 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(liste.textContent).toContain('Annotations (2)')
     expect(liste.textContent).toContain('plus gros')
     expect(liste.textContent).toContain('(sans commentaire)')
+    // Puces : le commentaire se lit au survol.
+    expect(liste.querySelector('li')?.getAttribute('title')).toBe('plus gros')
     await act(async () => bouton(conteneur!, 'Supprimer l’annotation 2').click())
     expect(nav.api.supprimerAnnotation).toHaveBeenCalledWith(lot[1].id)
     await act(async () => bouton(conteneur!, 'Envoyer au chat').click())
@@ -479,6 +643,23 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(conteneur!.querySelector('[data-testid="navigateur-annotations"]')).toBeNull()
     // Une annotation du mode Annoter n'est PAS un élément choisi.
     expect(props.onElementChoisi).not.toHaveBeenCalled()
+  })
+
+  // « enleve le bouton annoter » (conv-1306, 2026-10-30).
+  it('plus de bouton Annoter ni de badge : Choisir reste seul et bascule le mode', async () => {
+    await monter()
+    nav.poserAnnotations([annotation('a', 'déjà posée')])
+    await nav.pousser({ nombreAnnotations: 1 })
+    const noms = [...conteneur!.querySelectorAll('button')].map(
+      (b) => b.getAttribute('aria-label') ?? ''
+    )
+    expect(noms).not.toContain('Annoter')
+    expect(conteneur!.querySelectorAll('.navigateur-mode')).toHaveLength(1)
+    expect(conteneur!.querySelector('[data-testid="navigateur-badge"]')).toBeNull()
+    // Celles déjà posées restent lisibles et envoyables.
+    expect(conteneur!.querySelector('[data-testid="navigateur-annotations"]')).toBeTruthy()
+    await act(async () => bouton(conteneur!, 'Choisir').click())
+    expect(nav.api.basculerMode).toHaveBeenLastCalledWith('choisir')
   })
 
   it('Choisir un élément : l’élément cliqué part tout de suite au chat et quitte la liste', async () => {

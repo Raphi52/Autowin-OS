@@ -1,7 +1,9 @@
 /* NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 3/5) : panneau entre le fil et les Détails.
    Aucune couleur en dur : seulement les variables du thème déjà employées par ChatView.css.
    La page elle-même n'est PAS dans le DOM : `.navigateur-zone` n'est que le cadre mesuré sur lequel
-   le processus principal pose la vue Electron. */
+   le processus principal pose la vue Electron.
+   Habillage « Cadre de page » (/draft de conv-1306, tour 2) : capsule nacre, boutons ronds, bascule
+   en gel, et la page qui prend un cadre ambre quand l'agent est là. */
 .navigateur-panneau {
   width: 520px;
   max-width: calc(100% - 280px);
@@ -16,6 +18,20 @@
   min-height: 0;
   overflow: hidden;
   background: var(--surface-panel);
+  /* La bascule et les libellés suivent la largeur RÉELLE du panneau (poignée), pas celle de l'écran. */
+  container: navigateur / inline-size;
+  --nav-gel: linear-gradient(135deg, var(--violet), var(--rose));
+  --nav-rose-pale: color-mix(in srgb, var(--rose) 50%, white);
+  --nav-nacre: linear-gradient(
+    90deg,
+    var(--violet),
+    var(--rose) 45%,
+    color-mix(in srgb, var(--violet) 18%, white) 75%,
+    var(--nav-rose-pale)
+  );
+  --nav-ambre: linear-gradient(90deg, var(--warn), var(--rose) 60%, var(--nav-rose-pale));
+  /* Opaque : posée sur le dégradé du cadre, une surface translucide le laisserait transparaître. */
+  --nav-surface: color-mix(in srgb, var(--text) 7%, var(--bg-0));
 }
 /* Plein cadre : le panneau prend la place du fil (masqué, pas démonté : la saisie garde son brouillon). */
 .navigateur-panneau.is-plein-cadre {
@@ -48,88 +64,36 @@
   background: var(--accent);
 }
 
-/* ── Onglets ── */
-.navigateur-onglets {
-  display: flex;
-  align-items: center;
-  gap: var(--s1);
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.navigateur-onglet {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  max-width: 200px;
-  flex: 0 1 auto;
-  border: 1px solid var(--line);
-  border-radius: var(--r1);
-  background: var(--bg-2);
-}
-.navigateur-onglet.is-actif {
-  border-color: var(--accent);
-  background: var(--bg-inset);
-}
-.navigateur-onglet-titre {
-  display: flex;
-  align-items: center;
-  gap: var(--s1);
-  min-width: 0;
-  padding: 3px 6px;
-  border: 0;
-  background: transparent;
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-.navigateur-onglet.is-actif .navigateur-onglet-titre {
-  color: var(--text);
-}
-.navigateur-onglet-libelle {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.navigateur-onglet-fermer {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  border: 0;
-  border-radius: var(--r1);
-  background: transparent;
-  color: var(--text-faint);
-  font: inherit;
-  line-height: 1;
-  cursor: pointer;
-}
-.navigateur-onglet-fermer:hover {
-  background: var(--surface-hover);
-  color: var(--text);
-}
-.navigateur-fermer {
-  margin-left: auto;
-}
-
 /* ── Barre d'adresse ── */
 .navigateur-barre {
   display: flex;
   align-items: center;
-  gap: var(--s1);
+  gap: 6px;
   min-width: 0;
 }
-.navigateur-bouton {
+.navigateur-icone {
+  display: block;
   flex: none;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 6px;
-  border: 1px solid var(--line);
-  border-radius: var(--r1);
-  background: var(--bg-2);
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.navigateur-bouton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: var(--bg-3);
   color: var(--text-dim);
-  font: inherit;
-  font-size: 12px;
   cursor: pointer;
 }
 .navigateur-bouton:hover:not(:disabled) {
@@ -137,33 +101,162 @@
   color: var(--text);
 }
 .navigateur-bouton:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: default;
 }
-.navigateur-bouton.is-actif,
-.navigateur-bouton[aria-pressed='true'] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--text);
+
+/* ── Capsule d'adresse : cadre nacre de 1 px, fond plein dedans ── */
+.navigateur-capsule {
+  flex: 1 1 0;
+  min-width: 90px;
+  padding: 1px;
+  border-radius: 99px;
+  background: var(--nav-nacre);
+}
+.navigateur-capsule:focus-within {
+  outline: 1px solid var(--rose);
+  outline-offset: 1px;
+}
+.navigateur-capsule-interieur {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 99px;
+  background: var(--bg-0);
+}
+.navigateur-site {
+  display: flex;
+  flex: none;
+  color: var(--text-faint);
+}
+.navigateur-site .spinner {
+  --aw-spin-size: 14px;
 }
 .navigateur-adresse {
+  position: relative;
   flex: 1;
-  min-width: 80px;
+  min-width: 0;
 }
 .navigateur-adresse-champ {
+  display: block;
   width: 100%;
   height: 26px;
-  padding: 0 var(--s2);
-  border: 1px solid var(--line);
-  border-radius: var(--r1);
-  background: var(--bg-inset);
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--text);
-  font-family: var(--mono);
+  font: inherit;
   font-size: 12px;
 }
-.navigateur-adresse-champ:focus {
+/* Le contour global de `:focus-visible` (theme.css) dessinait un rectangle DANS la capsule : c'est la
+   capsule qui s'allume, voir plus haut. */
+.navigateur-adresse-champ:focus,
+.navigateur-adresse-champ:focus-visible {
   outline: none;
-  border-color: var(--accent);
+}
+/* Au repos, le champ s'efface derrière sa lecture : site en gras, reste atténué. Une saisie qui
+   n'est pas une adresse n'a pas de lecture : `a-une-vue` absent, le champ reste lisible. */
+.navigateur-adresse.a-une-vue:not(:focus-within) .navigateur-adresse-champ {
+  color: transparent;
+}
+.navigateur-adresse-vue {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 26px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.navigateur-adresse-vue b {
+  color: var(--text);
+  font-weight: 600;
+}
+.navigateur-adresse:focus-within .navigateur-adresse-vue {
+  display: none;
+}
+.navigateur-petit-fermer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.navigateur-petit-fermer:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.navigateur-petit-fermer .navigateur-icone {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Bouton Choisir ── */
+.navigateur-bascule {
+  display: inline-flex;
+  flex: none;
+  padding: 2px;
+  border-radius: 99px;
+  background: var(--bg-3);
+}
+.navigateur-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.navigateur-mode:hover:not(:disabled):not(.is-actif) {
+  color: var(--text);
+}
+.navigateur-mode:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.navigateur-mode.is-actif {
+  background: var(--nav-gel);
+  color: var(--on-accent);
+}
+/* Panneau étroit : le libellé cède la place à l'adresse (il reste dans aria-label et title). */
+@container navigateur (max-width: 420px) {
+  .navigateur-mode-libelle {
+    display: none;
+  }
+  .navigateur-mode {
+    padding: 0 6px;
+  }
+}
+/* Très étroit : Reculer et Avancer grisés ne servent à rien, leur place va à l'adresse (à 320 px, elle
+   se réduisait à « loc… » et la rangée débordait de 3 px, mesuré conv-1306). */
+@container navigateur (max-width: 360px) {
+  .navigateur-site,
+  .navigateur-barre > .navigateur-bouton:disabled {
+    display: none;
+  }
+  .navigateur-barre {
+    gap: 4px;
+  }
+  .navigateur-capsule {
+    min-width: 60px;
+  }
 }
 
 /* ── Menu ⋮ (la page est retirée tant qu'il est ouvert : il passerait dessous) ── */
@@ -182,7 +275,7 @@
   padding: var(--s1);
   border: 1px solid var(--line2);
   border-radius: var(--r2);
-  background: var(--surface-panel);
+  background: var(--nav-surface);
   box-shadow: var(--container-shadow);
 }
 .navigateur-menu button {
@@ -215,7 +308,67 @@
   color: var(--accent);
 }
 
-/* ── Bandeaux : erreur, agent qui pilote, accord par site ── */
+/* ── Onglets, toujours là sous l'adresse : seule la liste défile, le « + » reste au bout ── */
+.navigateur-onglets {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.navigateur-onglets-liste {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+/* Parts égales, comme dans un navigateur : à la longueur du titre, l'onglet actif était le plus coupé
+   (lu sur les photos, conv-1306). Quand ils n'y tiennent plus, la liste défile. Le filet garde la forme
+   d'un onglet en thème clair, où `--bg-3` se confond avec le panneau. */
+.navigateur-onglet {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 2px;
+  min-width: 84px;
+  max-width: 200px;
+  padding-right: 4px;
+  border-radius: 99px;
+  background: var(--bg-3);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.navigateur-onglet:hover {
+  background: var(--surface-hover);
+}
+.navigateur-onglet.is-actif {
+  box-shadow: inset 0 0 0 1px var(--rose);
+}
+.navigateur-onglet-titre {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--s1);
+  min-width: 0;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.navigateur-onglet.is-actif .navigateur-onglet-titre {
+  color: var(--text);
+}
+.navigateur-onglet-libelle {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .navigateur-erreur {
   padding: var(--s1) var(--s2);
   border-left: 3px solid var(--err);
@@ -224,43 +377,45 @@
   color: var(--err);
   font-size: 12px;
 }
-.navigateur-pilote {
-  padding: var(--s1) var(--s2);
-  border-left: 3px solid var(--warn);
-  border-radius: var(--r1);
-  background: var(--bg-2);
-  color: var(--text);
-  font-size: 12px;
-}
-.navigateur-accord {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding: var(--s2);
-  border: 1px solid var(--warn);
-  border-radius: var(--r2);
-  background: var(--bg-2);
-}
-.navigateur-accord-texte {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  color: var(--text);
-  font-size: 13px;
-}
-.navigateur-accord-texte span {
-  color: var(--text-dim);
-}
-.navigateur-accord-boutons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s1);
-}
-.navigateur-accord-refuser {
-  color: var(--err);
-}
 
-/* ── Zone d'affichage (cadre de la page native) ── */
+/* ── Le cadre de la page ──
+   Bord transparent et bande réservés AU REPOS aussi : le cadre qui s'allume ne déplace pas la page,
+   l'agent garde les coordonnées de la cible qu'il vient de repérer. La bande occupe donc la même
+   hauteur quel que soit son texte. */
+.navigateur-cadre {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 2px solid transparent;
+  border-radius: 12px;
+}
+.navigateur-cadre.is-agent {
+  background:
+    linear-gradient(var(--bg-0), var(--bg-0)) padding-box,
+    var(--nav-ambre) border-box;
+}
+.navigateur-cadre-tete {
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 10px;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.navigateur-cadre-tete > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.navigateur-cadre.is-agent .navigateur-cadre-tete {
+  background: var(--nav-ambre);
+  /* `--bg-0` et non une encre fixe : `--warn` est foncé en thème clair, l'encre doit s'inverser. */
+  color: var(--bg-0);
+  font-weight: 600;
+}
 .navigateur-zone {
   flex: 1;
   min-height: 120px;
@@ -268,8 +423,24 @@
   align-items: center;
   justify-content: center;
   border: 1px solid var(--line);
-  border-radius: var(--r1);
+  border-radius: 10px;
   background: var(--bg-inset);
+}
+/* La page native garde ses coins arrondis (`setBorderRadius`, côté principal) : ce qui se voit dans
+   ses coins, c'est CE fond. Le dégradé du cadre y continue en haut, la barre d'accord en bas ; le
+   milieu reste sobre pour le temps où la page est retirée (menu ⋮). */
+.navigateur-cadre.is-agent .navigateur-zone {
+  border-color: transparent;
+  border-radius: 0;
+  background:
+    linear-gradient(var(--bg-0), var(--bg-0)) center / 100% calc(100% - 20px) no-repeat,
+    var(--nav-ambre);
+}
+.navigateur-cadre.is-agent:has(> .navigateur-accord) .navigateur-zone {
+  background:
+    linear-gradient(var(--nav-surface), var(--nav-surface)) bottom / 100% 10px no-repeat,
+    linear-gradient(var(--bg-0), var(--bg-0)) center / 100% calc(100% - 20px) no-repeat,
+    var(--nav-ambre);
 }
 .navigateur-vide {
   margin: 0;
@@ -279,73 +450,123 @@
   text-align: center;
 }
 
-/* ── Annotations en attente ── */
-.navigateur-annotations {
+/* ── Accord au pied de la page ── */
+.navigateur-accord {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 6px 6px 10px;
+  border-radius: 0 0 10px 10px;
+  background: var(--nav-surface);
+}
+.navigateur-accord-texte {
+  flex: 1;
+  min-width: 150px;
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: 1px;
+  color: var(--text);
+  font-size: 12px;
+}
+.navigateur-accord-texte span {
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.navigateur-accord-boutons {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+.navigateur-pilule {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 99px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.navigateur-pilule:hover {
+  background: var(--surface-hover);
+}
+.navigateur-pilule-gel,
+.navigateur-pilule-gel:hover {
+  background: var(--nav-gel);
+  box-shadow: none;
+  color: var(--on-accent);
+}
+.navigateur-accord-refuser {
+  box-shadow: none;
+  color: var(--err);
+}
+
+/* ── Annotations en attente : des puces sous le cadre ── */
+.navigateur-annotations {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   max-height: 34%;
   min-height: 0;
+  overflow-y: auto;
 }
 .navigateur-annotations-titre {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 10.5px;
 }
+/* `contents` : les puces coulent dans la même ligne que le titre et le bouton d'envoi. */
 .navigateur-annotations-liste {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-  margin: 0;
-  padding: 0;
+  display: contents;
   list-style: none;
-  overflow-y: auto;
-  min-height: 0;
 }
 .navigateur-annotation {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s2);
-  padding: var(--s1) var(--s2);
-  border: 1px solid var(--line);
-  border-radius: var(--r1);
-  background: var(--bg-2);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 180px;
+  height: 24px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--bg-3);
+  font-size: 11px;
 }
 .navigateur-annotation-numero {
   flex: none;
-  min-width: 20px;
-  height: 20px;
+  min-width: 16px;
+  height: 16px;
   border-radius: 99px;
-  background: var(--accent);
+  background: var(--rose);
   color: var(--on-accent);
-  font-size: 11px;
-  line-height: 20px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 16px;
   text-align: center;
-}
-.navigateur-annotation-corps {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
 }
 .navigateur-annotation-extrait {
   overflow: hidden;
+  color: var(--text);
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--text-dim);
-  font-family: var(--mono);
 }
 .navigateur-annotation-commentaire {
-  color: var(--text);
-  overflow-wrap: anywhere;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .navigateur-envoyer {
-  align-self: flex-end;
-}
-
-/* Bouton de l'en-tête du fil : même gabarit que les capsules voisines. */
-.chat-navigateur-toggle[aria-pressed='true'] {
-  border-color: var(--accent);
-  color: var(--text);
+  margin-left: auto;
 }

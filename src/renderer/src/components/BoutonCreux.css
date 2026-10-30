@@ -1,0 +1,69 @@
+/* LE BOUTON CREUX DE L'EN-TÊTE DU FIL (/draft de conv-1317, proposition 6 « Mini-adresse », 2026-10-30) :
+   un CREUX dans l'en-tête, pas une pastille. La Mini-adresse et Détails portent cette même classe
+   (« le bouton détail met lui le meme look ») : deux voisins ne peuvent donc pas diverger.
+   Hauteur 28 px ; le fond est le plus sombre du thème, celui sur lequel l'en-tête est posé, d'où
+   l'effet de champ enfoncé. Le bord passe par deux couches de fond (comme le carrousel de /draft)
+   pour que l'état ouvert puisse être un dégradé arrondi.
+   Tailles en px à 12 : sous ce seuil, gen-malvoyant-planchers.mjs exigerait un plancher de plus. */
+.bouton-creux {
+  /* Les deux couleurs de la capsule, lues comme elle (ChatView.css, `.thinking-block`). */
+  --capsule-froid: var(--thinking-capsule-froid, var(--cyan));
+  --capsule-chaud: var(--thinking-capsule-chaud, var(--gold-doux));
+  --bouton-creux-bord: linear-gradient(var(--line), var(--line));
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background:
+    linear-gradient(var(--bg-0), var(--bg-0)) padding-box,
+    var(--bouton-creux-bord) border-box;
+  box-shadow: inset 0 1px 2px rgba(var(--ombre-rgb), 0.45);
+  /* Entre le texte et le gris lavande : lisible sans tirer l'œil. */
+  color: color-mix(in srgb, var(--text) 40%, var(--text-dim));
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease);
+}
+/* Le globe et l'icône de Détails à la même taille : ce dernier sort de `chat-view-icons` en 13 px. */
+.bouton-creux svg {
+  flex: none;
+  display: block;
+  width: 15px;
+  height: 15px;
+}
+/* Coupé au-delà de 130 px : l'adresse complète reste dans l'infobulle. */
+.bouton-creux-texte {
+  min-width: 0;
+  max-width: 130px;
+  overflow: hidden;
+  font-family: var(--mono, ui-monospace, monospace);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.bouton-creux:hover:not(:disabled),
+.bouton-creux:focus-visible {
+  --bouton-creux-bord: linear-gradient(var(--line-strong), var(--line-strong));
+  color: var(--text);
+}
+.bouton-creux[aria-pressed='true'] {
+  --bouton-creux-bord: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
+  color: var(--text);
+}
+.bouton-creux:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--capsule-chaud) 72%, transparent);
+  outline-offset: 2px;
+}
+/* Pas d'opacité : à 45 %, le champ entier virait au gris sur gris, le défaut de l'ancien bouton
+   (mesuré sur la capture de conv-1317). Seul le contenu s'éteint, le creux reste net. */
+.bouton-creux:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}

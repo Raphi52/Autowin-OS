@@ -33,8 +33,6 @@ const TEXTES_FR = {
   avancer: 'Avancer',
   recharger: 'Recharger',
   adresse: 'Adresse ou recherche',
-  annoter: 'Annoter',
-  annoterTitre: 'Annoter : cliquez un élément ou glissez une zone, puis commentez',
   choisir: 'Choisir',
   choisirTitre: 'Choisir un élément de la page pour le chat (Ctrl+Shift+S)',
   coteACote: 'Côte à côte',
@@ -45,6 +43,7 @@ const TEXTES_FR = {
   ouvrirDefaut: 'Ouvrir dans le navigateur par défaut',
   liensIci: 'Ouvrir ici les liens du chat',
   agentPilote: 'L’agent pilote cet onglet',
+  agentAttend: 'L’agent attend votre accord',
   accordTitre: 'L’agent veut agir sur {origine}',
   accordUneFois: 'Autoriser une fois',
   accordToujours: 'Toujours',
@@ -72,7 +71,7 @@ const TEXTES_FR = {
   supprimer: 'Supprimer l’annotation {n}',
   sansCommentaire: '(sans commentaire)',
   envoyer: 'Envoyer au chat',
-  vide: 'Aucune page ouverte. Tapez une adresse ou cliquez +.',
+  vide: 'Aucune page ouverte. Tapez une adresse.',
   pageMasquee: 'Page masquée le temps du menu.',
   redimensionner: 'Redimensionner le navigateur'
 } as const
@@ -91,8 +90,6 @@ const TEXTES_EN: Record<CleNavigateur, string> = {
   avancer: 'Forward',
   recharger: 'Reload',
   adresse: 'Address or search',
-  annoter: 'Annotate',
-  annoterTitre: 'Annotate: click an element or drag an area, then comment',
   choisir: 'Pick',
   choisirTitre: 'Pick an element of the page for the chat (Ctrl+Shift+S)',
   coteACote: 'Side by side',
@@ -103,6 +100,7 @@ const TEXTES_EN: Record<CleNavigateur, string> = {
   ouvrirDefaut: 'Open in the default browser',
   liensIci: 'Open chat links here',
   agentPilote: 'The agent is driving this tab',
+  agentAttend: 'The agent is waiting for your approval',
   accordTitre: 'The agent wants to act on {origine}',
   accordUneFois: 'Allow once',
   accordToujours: 'Always',
@@ -130,7 +128,7 @@ const TEXTES_EN: Record<CleNavigateur, string> = {
   supprimer: 'Delete annotation {n}',
   sansCommentaire: '(no comment)',
   envoyer: 'Send to chat',
-  vide: 'No page open. Type an address or click +.',
+  vide: 'No page open. Type an address.',
   pageMasquee: 'Page hidden while the menu is open.',
   redimensionner: 'Resize the browser'
 }
@@ -187,6 +185,45 @@ export function adresseDeLaSaisie(saisie: string): string | null {
     if (adresse) return adresse
   }
   return `https://www.google.com/search?q=${encodeURIComponent(brut)}`
+}
+
+/**
+ * L'adresse telle que la capsule la montre au repos : le site en gras, le reste atténué, sans le
+ * protocole (conv-1306). Lue par `new URL`, jamais découpée à la main : dans
+ * `https://banque.fr@pirate.net/`, le vrai site est pirate.net, et c'est lui qui doit ressortir.
+ * `null` pour ce qui n'est pas une page web (saisie en cours, about:blank, data:) : on montre alors
+ * le texte brut, sans cadenas.
+ */
+export function decouperAdresse(
+  adresse: string
+): { site: string; suite: string; chiffre: boolean } | null {
+  let url: URL
+  try {
+    url = new URL(adresse)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+  const chemin = url.pathname === '/' ? '' : url.pathname
+  return {
+    site: url.hostname,
+    suite: `${url.port ? `:${url.port}` : ''}${chemin}${url.search}${url.hash}`,
+    chiffre: url.protocol === 'https:'
+  }
+}
+
+/**
+ * Le site que le bouton de l'en-tête montre, panneau fermé (Mini-adresse, conv-1317) : hôte et port,
+ * `localhost:5173`. Lu par `new URL` pour la même raison que `decouperAdresse` ; `null` pour ce qui
+ * n'est pas une page web : le bouton reste alors au globe seul.
+ */
+export function siteDeLAdresse(adresse: string): string | null {
+  try {
+    const url = new URL(adresse)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.host : null
+  } catch {
+    return null
+  }
 }
 
 /** `data:image/png;base64,…` → fichier joignable ; `null` si l'adresse n'est pas une image base64. */
