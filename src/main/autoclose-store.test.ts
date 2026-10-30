@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { configureAutowinAppDataBase } from './app-data'
 import {
   loadAutoClose,
+  loadGitApresFil,
   loadLastAutoCloseReport,
   saveAutoClose,
+  saveGitApresFil,
   saveLastAutoCloseReport
 } from './autoclose-store'
 import { AutowinOS } from './os'
@@ -22,6 +24,26 @@ function tempFile(): string {
   dirs.push(dir)
   return join(dir, 'autoclose.json')
 }
+
+describe('persistance de « Publier les fils finis » (conv-1339)', () => {
+  it('reste éteint tant que personne ne l’a allumé : il lance des tours payants', () => {
+    expect(loadGitApresFil(tempFile())).toBe(false)
+  })
+
+  it('un fichier illisible retombe sur éteint, jamais sur « publie »', () => {
+    const path = tempFile()
+    writeFileSync(path, 'pas du json')
+    expect(loadGitApresFil(path)).toBe(false)
+  })
+
+  it('survit à un redémarrage, et s’éteint comme il s’allume', () => {
+    const path = tempFile()
+    expect(saveGitApresFil(true, path)).toBe(true)
+    expect(loadGitApresFil(path)).toBe(true)
+    saveGitApresFil(false, path)
+    expect(loadGitApresFil(path)).toBe(false)
+  })
+})
 
 describe('persistance de l’interrupteur de clôture automatique', () => {
   it('survit à un redémarrage : ce qui est activé reste activé', () => {

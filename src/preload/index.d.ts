@@ -275,8 +275,11 @@ interface ChatApi {
   workflowResultatsReels: () => Promise<
     Record<string, import('../main/activity/resultats-reels-workflows').ResultatsReelsWorkflow>
   >
-  getAutoClose: () => Promise<{ enabled: boolean; last?: AutoCloseReport }>
+  getAutoClose: () => Promise<{ enabled: boolean; gitApresFil?: boolean; last?: AutoCloseReport }>
   setAutoClose: (enabled: boolean) => Promise<{ enabled: boolean; last?: AutoCloseReport }>
+  setGitApresFil: (
+    enabled: boolean
+  ) => Promise<{ enabled: boolean; gitApresFil: boolean; last?: AutoCloseReport }>
   unfinishedTurns: () => Promise<
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
   >

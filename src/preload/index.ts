@@ -365,10 +365,14 @@ const api = {
     etiquette?: string,
     detail?: { messages?: unknown[]; liste?: unknown }
   ) => ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette, detail),
-  getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
+  getAutoClose: (): Promise<{ enabled: boolean; gitApresFil?: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:set', enabled),
+  setGitApresFil: (
+    enabled: boolean
+  ): Promise<{ enabled: boolean; gitApresFil: boolean; last?: AutoCloseReport }> =>
+    ipcRenderer.invoke('run:gitApresFil:set', enabled),
   // Survie niveau 2 : tours restés inachevés (app fermée pendant l'exécution) + leur journal.
   unfinishedTurns: (): Promise<
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>

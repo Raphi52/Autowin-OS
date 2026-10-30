@@ -426,6 +426,14 @@ import { rangerConversationSurLePremierMessage } from './rangement-premier-messa
 import { noterAppelCourt, signalerPanneAppelCourt } from './petites-taches-trace'
 import { photographierDebutDeTour } from './chat-turn-publication'
 import {
+  commitsPublies,
+  decisionGitApresFil,
+  estDepotAutowin,
+  FileGitApresFil,
+  lireAmont
+} from './git-apres-fil'
+import { defaultGitRunner } from './run-autoclose'
+import {
   creerNotifieurDeFinDeTour,
   libelleDeBouton,
   type ContenuNotification
@@ -2772,6 +2780,11 @@ Le fil reprend ensuite normalement.`
     os.setAutoClose(enabled === true)
     return os.getAutoClose()
   })
+  ipcMain.handle('run:gitApresFil:set', (event, enabled: unknown) => {
+    assertTrustedRendererSender(event, 'GitApresFil')
+    os.setGitApresFil(enabled === true)
+    return os.getAutoClose()
+  })
   // Les canaux des copies de travail vivent dans src/main/ipc/worktree.ts. La fixture de test
   // reste posee d'ici (canal `app:test:worktree-fixture`), mais l'etat vit la-bas.
   const worktreeIpc = registerWorktreeIpc({ os })
@@ -3601,6 +3614,8 @@ Le fil reprend ensuite normalement.`
   const relanceTachesDeFond: { relanceur?: RelanceurTachesDeFond } = {}
   /** Assigné plus bas, une fois `lancerDansConversation` câblé (conv-1150, plans de lots). */
   const suiviDesPlans: { coordinateur?: CoordinateurDesPlans } = {}
+  /** Assigné plus bas, une fois `scheduledChatRuntime` construit (il ouvre le tour `/git`). */
+  const suiviGitApresFil: { file?: FileGitApresFil } = {}
   const lancerTour = createRunPilotChat({
     os,
     pilot,
@@ -4001,6 +4016,23 @@ Le fil reprend ensuite normalement.`
               // sans son appelant, et main ne compilait plus alors que les tests de l'arbre étaient verts.
               typerAvantPublication: (repo, fichiers) =>
                 typerCeQuiPart({ repo, fichiers, typer: typeurTsc(process.execPath) })
+            })
+            // Ce que l'enchaînement n'a pas pu rendre à son fil : `/git` s'en charge, si
+            // l'utilisateur l'a accordé (conv-1339, voir git-apres-fil.ts).
+            .then((rapport) => {
+              const decision = decisionGitApresFil({
+                accord: os.gitApresFilActif(),
+                dossierAutowin: estDepotAutowin(dossierDuTour(conversationId)),
+                deFond: args[5]?.background === true,
+                filDePlan: Boolean(suiviDesPlans.coordinateur?.planDuFil(conversationId)),
+                demande,
+                demandesDuFil: (os.conversations.get(conversationId)?.messages ?? [])
+                  .filter((message) => message.role === 'user')
+                  .map((message) => String(message.content)),
+                compteRendu: resultat.text ?? '',
+                rapport
+              })
+              if (decision.lancer) suiviGitApresFil.file?.ajouter(conversationId, decision.fichiers)
             })
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
         }
@@ -4471,6 +4503,24 @@ Le fil reprend ensuite normalement.`
     }
   })
   relanceTachesDeFond.relanceur = relanceurTachesDeFond
+  /*
+   * « PUBLIER LES FILS FINIS » (conv-1339) : une passe `/git` à la fois, ouverte comme les tours de
+   * reprise ci-dessus, hors du devis du tour qui vient de finir. Le tour est visible dans son fil.
+   */
+  suiviGitApresFil.file = new FileGitApresFil({
+    lancerTour: (fil, prompt) =>
+      os.executionSupervisor.runOutsideCurrent(() => scheduledChatRuntime.runPrompt(fil, prompt)),
+    filOccupe: (fil) => activeChatTurns.isInFlight(fil),
+    lireAmont: async (fil) => lireAmont(await defaultGitRunner(), dossierDuTour(fil)),
+    commitsDepuis: async (fil, depuis) =>
+      commitsPublies(await defaultGitRunner(), dossierDuTour(fil), depuis, fil),
+    annoncer: (fil, contenu) => {
+      os.conversations.append(fil, { role: 'assistant', content: contenu })
+      broadcast({ type: 'refresh', scope: 'chat', convId: fil })
+      broadcast({ type: 'refresh', scope: 'conversations' })
+    },
+    journal: (message, detail) => console.warn('[git apres fil]', message, detail ?? '')
+  })
   void relanceurTachesDeFond
     .reprendreAuDemarrage()
     .catch((erreur) => console.warn('[taches de fond] reprise au demarrage impossible :', erreur))

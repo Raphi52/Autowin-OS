@@ -85,3 +85,17 @@ export function saveAutoClose(enabled: boolean, path = autoClosePath()): boolean
     return false
   }
 }
+
+/**
+ * « Publier les fils finis » (conv-1339, voir git-apres-fil.ts) : son PROPRE fichier, pour qu'une
+ * lecture ratée ici ne puisse jamais toucher à l'interrupteur de l'enchaînement. Éteint par défaut :
+ * un fichier absent ou illisible ne doit jamais lancer un tour payant ni une publication.
+ */
+function gitApresFilPath(): string {
+  return join(ensureAutowinAppData(), 'git-apres-fil.json')
+}
+
+export const loadGitApresFil = (path = gitApresFilPath()): boolean => loadAutoClose(path)
+
+export const saveGitApresFil = (enabled: boolean, path = gitApresFilPath()): boolean =>
+  saveAutoClose(enabled, path)
