@@ -106,6 +106,10 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
      Le mot « purge » est obligatoire : c'est lui qui empêche le mode auto de répondre à la place de
      l'utilisateur (« vide seul » ne le déclenche pas). Pas de « sans » ni de « rien » dans ces
      options : ces mots retirent cette protection.
+   - **Réponse « Oui, purge cette fois »** : supprimer les seules corbeilles de `aPurger`, une par une,
+     avec `supprimerArbre` depuis le dépôt Autowin, jamais `rm -rf` ni `rmSync` (une jonction viderait
+     sa cible) : `node --no-warnings -e "import('./src/main/fs-supprimer.ts').then((m) =>
+     m.supprimerArbre('<chemin absolu de la corbeille>'))"`. Le fichier d'accord reste absent.
    - **Réponse « et vide seul à l’avenir »** : écrire `{"enabled": true}` dans `gc-purge-auto.json`,
      puis relancer le script. Il ne s'écrit jamais sans cette réponse de l'utilisateur, dans ce fil.
      Un `/gc` qui est allé chercher cet accord ailleurs (« il l'a dit la semaine dernière ») s'abstient.

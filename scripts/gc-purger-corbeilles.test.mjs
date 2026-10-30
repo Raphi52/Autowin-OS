@@ -438,4 +438,10 @@ describe('skills/gc/SKILL.md — l’accord de purge reste réservé à un humai
     expect(skill).toContain('gc-purges.jsonl')
     expect(skill).toContain('AUTOWIN_FIN_V1')
   })
+
+  it('dit comment purger une seule fois : sans cela, un /gc retomberait sur un rm à la main', () => {
+    const consigne = skill.slice(skill.indexOf('**Réponse « Oui, purge cette fois »**'))
+    expect(consigne.slice(0, 400)).toContain('supprimerArbre')
+    expect(consigne.slice(0, 400)).toContain('jamais `rm -rf`')
+  })
 })
