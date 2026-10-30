@@ -1,0 +1,35 @@
+<!--
+  Banc des scenarios de l'apercu (conv-1304) : chaque type de champ qu'un scenario sait remplir, un
+  envoi au clavier, une copie, et une cible recouverte. Joue par amorce.page.test.ts.
+-->
+<form id="f">
+  <label>Montant <input id="montant" value="10" /></label>
+  <label>
+    Type
+    <select id="type">
+      <option value="a">Aucun</option>
+      <option value="b">Bonus</option>
+    </select>
+  </label>
+  <label>Date <input id="date" type="date" /></label>
+  <label>Curseur <input id="curseur" type="range" min="0" max="10" value="1" /></label>
+  <button id="ok">Calculer</button>
+</form>
+<p id="resultat">rien</p>
+<p id="date-vue"></p>
+<button id="copier" type="button">Copier</button>
+<div style="position: relative; height: 40px; width: 200px">
+  <button id="couvert" type="button">Sous le calque</button>
+  <div style="position: absolute; inset: 0"></div>
+</div>
+<script>
+  const champ = (id) => document.getElementById(id)
+  champ('f').addEventListener('submit', (e) => {
+    e.preventDefault()
+    const bonus = champ('type').value === 'b' ? Number(champ('curseur').value) * 2 : 0
+    const total = Number(champ('montant').value) + bonus
+    champ('resultat').textContent = `${total.toLocaleString('fr-FR')} €`
+    champ('date-vue').textContent = champ('date').value
+  })
+  champ('copier').onclick = () => navigator.clipboard.writeText(champ('resultat').textContent)
+</script>
