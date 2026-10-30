@@ -134,6 +134,7 @@ class FausseVue implements VueNavigateur {
   evenements: EvenementSaisie[] = []
   textes: string[] = []
   navigations: string[] = []
+  enChargement = false
   appels: Array<{ methode: MethodePage; args: unknown[] }> = []
   reponses: Partial<Record<MethodePage, Reponse>> = {}
   /** Ce que la page rend à `focus` (champ actif). */
@@ -163,7 +164,7 @@ class FausseVue implements VueNavigateur {
     return ''
   }
   chargement(): boolean {
-    return false
+    return this.enChargement
   }
   peutReculer(): boolean {
     return false
@@ -1014,6 +1015,462 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     expect(etat.agentPilote).toBe(false)
   })
 
+  // Mesuré dans la vraie app (conv-1324, `cadre=null` dans run-final.txt) : le rechargement efface le
+  // calque de la page. Le geste attendait toujours, la frise disait « prochain », et la page ne
+  // montrait plus ce qui allait partir au prochain ordre.
+  describe('page rechargée pendant l’attente', () => {
+    const NOUVELLE_PLACE = { x: 10, y: 400, largeur: 100, hauteur: 30 }
+    const CIBLE = { selecteur: '#envoyer' }
+    const sequenceChargement = (vue: FausseVue): void => {
+      vue.enChargement = true
+      vue.ecouteurs.surChangement()
+      vue.enChargement = false
+      vue.ecouteurs.surChangement()
+    }
+    const traces = (vue: FausseVue): unknown[][] =>
+      vue.appels.filter((a) => a.methode === 'surligner').map((a) => a.args)
+    const enPause = async (): Promise<{ vue: FausseVue; action: ReturnType<typeof nav.agir> }> => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      nav.piloter('conv-a', 'pause')
+      const action = nav.agir('conv-a', { type: 'clic', cible: CIBLE })
+      await laisserFiler()
+      vue.appels = []
+      return { vue, action }
+    }
+
+    it('la cible retrouvée repasse en pointillés, à sa nouvelle place, sans recevoir le focus', async () => {
+      const { vue, action } = await enPause()
+      vue.reponses.localiser = cibleTrouvee({ rect: NOUVELLE_PLACE })
+      sequenceChargement(vue)
+      await laisserFiler()
+      expect(traces(vue)).toEqual([
+        [NOUVELLE_PLACE, 'cliquer sur button « Envoyer »', { prochain: true }]
+      ])
+      expect(vue.appels.find((a) => a.methode === 'localiser')?.args).toEqual([
+        CIBLE,
+        { focaliser: false, selectionner: false }
+      ])
+      expect(vue.evenements).toEqual([])
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['prochain'])
+      nav.piloter('conv-a', 'reprendre')
+      expect(await action).toMatchObject({ ok: true })
+      expect(vue.methodes()).toContain('retirerSurbrillance')
+    })
+
+    it('une frappe sans cible retrouve le champ actif de la page rechargée', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.focus = { ...vue.focus, rect: { x: 1, y: 2, largeur: 30, hauteur: 10 } }
+      nav.piloter('conv-a', 'pause')
+      void nav.agir('conv-a', { type: 'saisir', texte: 'bonjour' })
+      await laisserFiler()
+      vue.appels = []
+      vue.focus = { ...vue.focus, rect: NOUVELLE_PLACE }
+      sequenceChargement(vue)
+      await laisserFiler()
+      expect(traces(vue).map((args) => args[0])).toEqual([NOUVELLE_PLACE])
+    })
+
+    it('jumeau : une cible disparue n’est pas tracée, et le geste libéré est refusé sans rien envoyer', async () => {
+      const { vue, action } = await enPause()
+      vue.reponses.localiser = () => ({ trouve: false })
+      sequenceChargement(vue)
+      await laisserFiler()
+      expect(traces(vue)).toEqual([])
+      nav.piloter('conv-a', 'reprendre')
+      expect(await action).toMatchObject({ ok: false, refus: 'cible-introuvable' })
+      expect(vue.evenements).toEqual([])
+    })
+
+    // fix-ok: objection du juge (conv-1324, réparation) — mesuré `cadre=null` pour une cible par numéro
+    // dans la vraie app (run-definitif.txt:73) : un rechargement efface les numéros de la lecture, qui
+    // ne reviennent jamais (une lecture neuve renumérote depuis 1). Le geste attendait quand même un
+    // ordre, ou 9 min, alors qu'il ne pouvait plus partir — et `navigateur_agir` recommande le numéro.
+    it('un geste visé par numéro dont la page a perdu le numéro est refusé tout de suite', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      nav.piloter('conv-a', 'pause')
+      const action = nav.agir('conv-a', { type: 'clic', cible: { ref: 3 } })
+      await laisserFiler()
+      vue.appels = []
+      vue.reponses.localiser = () => ({ trouve: false })
+      sequenceChargement(vue)
+      // Entrée qui rougit si la correction est fausse : un geste qui garde son attente rend
+      // « sans réponse » ici, comme avant la correction.
+      expect(await issueSansAttendre(action)).toMatchObject({
+        ok: false,
+        refus: 'cible-introuvable'
+      })
+      expect(traces(vue)).toEqual([])
+      expect(vue.evenements).toEqual([])
+      expect(nav.etat('conv-a').gestes.map((g) => g.etat)).toEqual(['refuse'])
+    })
+
+    it('jumeau : le numéro encore présent après le chargement, le geste attend et part à l’ordre', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      nav.piloter('conv-a', 'pause')
+      const action = nav.agir('conv-a', { type: 'clic', cible: { ref: 3 } })
+      await laisserFiler()
+      vue.appels = []
+      // Fin d'un chargement de ressources sans changement de page : les numéros sont toujours là.
+      vue.reponses.localiser = cibleTrouvee({ rect: NOUVELLE_PLACE })
+      sequenceChargement(vue)
+      expect(await issueSansAttendre(action)).toBe('sans réponse')
+      expect(traces(vue).map((args) => args[0])).toEqual([NOUVELLE_PLACE])
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await action).toMatchObject({ ok: true })
+      expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toHaveLength(1)
+    })
+
+    it('le geste suivant prend les pointillés quand le geste visé par numéro tombe', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      nav.piloter('conv-a', 'pause')
+      const premier = nav.agir('conv-a', { type: 'clic', cible: { ref: 3 } })
+      await laisserFiler()
+      const second = nav.agir('conv-a', { type: 'clic', cible: CIBLE })
+      await laisserFiler()
+      vue.appels = []
+      vue.reponses.localiser = ([cible]) =>
+        'ref' in (cible as object) ? { trouve: false } : cibleTrouvee({ rect: NOUVELLE_PLACE })([])
+      sequenceChargement(vue)
+      expect(await issueSansAttendre(premier)).toMatchObject({ refus: 'cible-introuvable' })
+      await laisserFiler()
+      expect(traces(vue).at(-1)).toEqual([
+        NOUVELLE_PLACE,
+        'cliquer sur button « Envoyer »',
+        { prochain: true }
+      ])
+      expect(await issueSansAttendre(second)).toBe('sans réponse')
+      expect(vue.evenements).toEqual([])
+    })
+
+    it('jumeau : le chargement a effacé le cadre et la cible n’était pas encore là, le relais la trace', async () => {
+      const { vue } = await enPause()
+      // Page qui se construit APRÈS son chargement : à sa fin, le sélecteur ne trouve encore rien.
+      vue.reponses.localiser = () => ({ trouve: false })
+      sequenceChargement(vue)
+      await laisserFiler()
+      expect(traces(vue)).toEqual([])
+      vue.reponses.localiser = ([cible]) =>
+        (cible as { selecteur: string }).selecteur === '#absent'
+          ? { trouve: false }
+          : cibleTrouvee({ rect: NOUVELLE_PLACE })([])
+      expect(
+        await nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#absent' } })
+      ).toMatchObject({ refus: 'cible-introuvable' })
+      await laisserFiler()
+      expect(traces(vue)).toEqual([
+        [NOUVELLE_PLACE, 'cliquer sur button « Envoyer »', { prochain: true }]
+      ])
+    })
+
+    it('jumeau : le champ devenu secret n’est pas tracé', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      nav.piloter('conv-a', 'pause')
+      void nav.agir('conv-a', { type: 'saisir', texte: 'x', cible: CIBLE })
+      await laisserFiler()
+      vue.appels = []
+      vue.reponses.localiser = cibleTrouvee({ secret: true })
+      sequenceChargement(vue)
+      await laisserFiler()
+      expect(traces(vue)).toEqual([])
+    })
+
+    it('jumeau : le champ de la page rechargée ne reçoit ni focus ni sélection avant l’ordre', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = cibleTrouvee()
+      nav.piloter('conv-a', 'pause')
+      void nav.agir('conv-a', { type: 'saisir', texte: 'x', cible: CIBLE, remplacer: true })
+      await laisserFiler()
+      vue.appels = []
+      sequenceChargement(vue)
+      await laisserFiler()
+      expect(vue.appels.find((a) => a.methode === 'localiser')?.args[1]).toEqual({
+        focaliser: false,
+        selectionner: false
+      })
+      expect(traces(vue)).toHaveLength(1)
+    })
+
+    it('jumeau : le chargement d’un autre onglet du fil ne retrace pas la cible', async () => {
+      const a1 = nav.ouvrir('conv-a', 'http://localhost:5173')
+      const a2 = nav.ouvrir('conv-a', 'https://deux.fr')
+      nav.activerOnglet(a1)
+      const [vue, autre] = fabrique.vues
+      vue.reponses.localiser = cibleTrouvee()
+      nav.piloter('conv-a', 'pause')
+      void nav.agir('conv-a', { type: 'clic', cible: CIBLE })
+      await laisserFiler()
+      expect(nav.etat('conv-a').gestes.at(-1)?.ongletId).toBe(a1)
+      expect(nav.etat('conv-a').onglets.map((o) => o.id)).toEqual([a1, a2])
+      vue.appels = []
+      sequenceChargement(autre)
+      await laisserFiler()
+      expect(vue.methodes()).toEqual([])
+    })
+
+    it('jumeau : un titre qui change sans chargement ne relit pas la cible, la page ne défile pas', async () => {
+      const { vue } = await enPause()
+      vue.ecouteurs.surChangement()
+      vue.ecouteurs.surChangement()
+      await laisserFiler()
+      expect(vue.methodes()).not.toContain('localiser')
+      expect(traces(vue)).toEqual([])
+    })
+
+    it('jumeau : tant que la page charge, rien n’est relu', async () => {
+      const { vue } = await enPause()
+      vue.enChargement = true
+      vue.ecouteurs.surChangement()
+      await laisserFiler()
+      expect(vue.methodes()).not.toContain('localiser')
+    })
+
+    it('jumeau : un geste qui attend sans cible (lecture) ne trace rien', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      nav.piloter('conv-a', 'pause')
+      // `lire` rejette à la fermeture du fil, en fin de test : c'est son contrat, pas l'objet du test.
+      nav.lire('conv-a').catch(() => undefined)
+      await laisserFiler()
+      vue.appels = []
+      sequenceChargement(vue)
+      await laisserFiler()
+      expect(vue.methodes()).toEqual([])
+    })
+
+    it('jumeau : un geste déjà libéré ne retrace rien', async () => {
+      const { vue, action } = await enPause()
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await action).toMatchObject({ ok: true })
+      vue.appels = []
+      sequenceChargement(vue)
+      await laisserFiler()
+      expect(vue.methodes().filter((m) => m === 'localiser' || m === 'surligner')).toEqual([])
+    })
+
+    it('ordre donné pendant la relecture : le geste libéré attend sa fin, les deux ne se croisent pas', async () => {
+      const { vue, action } = await enPause()
+      let rendre: (v: unknown) => void = () => undefined
+      vue.reponses.localiser = () => new Promise((r) => (rendre = r))
+      sequenceChargement(vue)
+      await laisserFiler()
+      nav.piloter('conv-a', 'pas-suivant')
+      await laisserFiler()
+      expect(vue.methodes().filter((m) => m === 'localiser')).toHaveLength(1)
+      vue.reponses.localiser = cibleTrouvee()
+      rendre(cibleTrouvee()([]))
+      expect(await action).toMatchObject({ ok: true })
+    })
+
+    it('ordre donné pendant la relecture : aucun cadre ne reste après le geste', async () => {
+      const { vue, action } = await enPause()
+      let rendre: (v: unknown) => void = () => undefined
+      vue.reponses.localiser = () => new Promise((r) => (rendre = r))
+      sequenceChargement(vue)
+      await laisserFiler()
+      nav.piloter('conv-a', 'reprendre-la-main')
+      rendre(cibleTrouvee()([]))
+      expect(await action).toMatchObject({ ok: false, refus: 'main-reprise' })
+      expect(traces(vue)).toEqual([])
+      expect(vue.methodes().at(-1)).toBe('retirerSurbrillance')
+    })
+  })
+
+  // Conv-1324 : chaque geste traçait par-dessus le précédent. La page montrait le DERNIER arrivé alors
+  // que « Pas suivant » joue le PREMIER, et ce premier retirait le cadre en finissant : le second
+  // attendait sans plus rien montrer.
+  describe('deux gestes en attente : la page montre celui que « Pas suivant » va jouer', () => {
+    const PLACE_UN = { x: 10, y: 20, largeur: 100, hauteur: 30 }
+    const PLACE_DEUX = { x: 10, y: 300, largeur: 100, hauteur: 30 }
+    const UN = { type: 'clic', cible: { selecteur: '#un' } } as const
+    const DEUX = { type: 'clic', cible: { selecteur: '#deux' } } as const
+    const traces = (vue: FausseVue): unknown[][] =>
+      vue.appels.filter((a) => a.methode === 'surligner').map((a) => a.args)
+    const deuxEnAttente = async (): Promise<{
+      vue: FausseVue
+      premier: ReturnType<typeof nav.agir>
+      second: ReturnType<typeof nav.agir>
+    }> => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = ([cible]) =>
+        (cible as { selecteur: string }).selecteur === '#deux'
+          ? cibleTrouvee({ rect: PLACE_DEUX, description: 'button « Deux »' })([])
+          : cibleTrouvee({ rect: PLACE_UN, description: 'button « Un »' })([])
+      nav.piloter('conv-a', 'pause')
+      const premier = nav.agir('conv-a', UN)
+      await laisserFiler()
+      const second = nav.agir('conv-a', DEUX)
+      await laisserFiler()
+      return { vue, premier, second }
+    }
+
+    it('le premier arrivé garde les pointillés, le second ne les lui prend pas', async () => {
+      const { vue } = await deuxEnAttente()
+      expect(traces(vue)).toEqual([[PLACE_UN, 'cliquer sur button « Un »', { prochain: true }]])
+    })
+
+    it('le premier joué, le second prend les pointillés et les garde', async () => {
+      const { vue, premier, second } = await deuxEnAttente()
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await premier).toMatchObject({ ok: true })
+      await laisserFiler()
+      const enPointilles = traces(vue).filter((args) => args[2])
+      expect(enPointilles.at(-1)).toEqual([
+        PLACE_DEUX,
+        'cliquer sur button « Deux »',
+        { prochain: true }
+      ])
+      expect(
+        vue
+          .methodes()
+          .filter((m) => m !== 'prendre')
+          .at(-1)
+      ).toBe('surligner')
+      expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toHaveLength(1)
+      nav.piloter('conv-a', 'reprendre')
+      expect(await second).toMatchObject({ ok: true })
+    })
+
+    it('à trois, le relais va au suivant dans l’ordre, pas au dernier arrivé', async () => {
+      const { vue, premier } = await deuxEnAttente()
+      void nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#trois' } })
+      await laisserFiler()
+      nav.piloter('conv-a', 'pas-suivant')
+      expect(await premier).toMatchObject({ ok: true })
+      await laisserFiler()
+      expect(traces(vue).at(-1)?.[0]).toEqual(PLACE_DEUX)
+      expect(
+        vue
+          .methodes()
+          .filter((m) => m !== 'prendre')
+          .at(-1)
+      ).toBe('surligner')
+    })
+
+    it('jumeau : la main reprise fait tomber les deux gestes, rien n’est retracé', async () => {
+      const { vue, premier, second } = await deuxEnAttente()
+      vue.appels = []
+      nav.piloter('conv-a', 'reprendre-la-main')
+      expect(await premier).toMatchObject({ refus: 'main-reprise' })
+      expect(await second).toMatchObject({ refus: 'main-reprise' })
+      await laisserFiler()
+      expect(vue.methodes()).not.toContain('surligner')
+    })
+
+    // fix-ok: objection du juge (conv-1324, réparation) — chaque geste qui finit relisait la cible du
+    // premier en attente même déjà tracée (`terminerGeste`), et `localiser` la recentre
+    // (`scrollIntoView`, navigateur-page-script.ts) : l'utilisateur qui avait défilé ailleurs y était
+    // ramené à chaque geste refusé à côté.
+    it('un geste refusé à côté ne relit pas une cible déjà tracée : la page ne défile pas', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = ([cible]) =>
+        (cible as { selecteur: string }).selecteur === '#absent'
+          ? { trouve: false }
+          : cibleTrouvee({ rect: PLACE_UN, description: 'button « Un »' })([])
+      nav.piloter('conv-a', 'pause')
+      const attendu = nav.agir('conv-a', UN)
+      await laisserFiler()
+      expect(traces(vue)).toHaveLength(1)
+      vue.appels = []
+      expect(
+        await nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#absent' } })
+      ).toMatchObject({ refus: 'cible-introuvable' })
+      await laisserFiler()
+      // Entrée qui rougit si la correction est fausse : sans garde, `localiser` repart sur `#un`.
+      expect(vue.appels.filter((a) => a.methode === 'localiser').map((a) => a.args[0])).toEqual([
+        { selecteur: '#absent' }
+      ])
+      expect(vue.methodes()).not.toContain('surligner')
+      expect(await issueSansAttendre(attendu)).toBe('sans réponse')
+    })
+
+    it('jumeau : un geste joué pendant l’attente a effacé son cadre, le relais le repose', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = ([cible]) =>
+        (cible as { selecteur: string }).selecteur === '#deux'
+          ? cibleTrouvee({ rect: PLACE_DEUX, description: 'button « Deux »' })([])
+          : cibleTrouvee({ rect: PLACE_UN, description: 'button « Un »' })([])
+      // La surbrillance du geste joué reste ouverte : le second arrive et se trace PENDANT ce temps.
+      let lacher: (v: unknown) => void = () => undefined
+      vue.reponses.surligner = (args) => (args[2] ? undefined : new Promise((r) => (lacher = r)))
+      nav.piloter('conv-a', 'pause')
+      const premier = nav.agir('conv-a', UN)
+      await laisserFiler()
+      nav.piloter('conv-a', 'pas-suivant')
+      await laisserFiler()
+      const second = nav.agir('conv-a', DEUX)
+      await laisserFiler()
+      expect(traces(vue).at(-1)).toEqual([
+        PLACE_DEUX,
+        'cliquer sur button « Deux »',
+        { prochain: true }
+      ])
+      // Le premier finit : son `retirerSurbrillance` efface le seul cadre de la page, celui du second.
+      lacher(undefined)
+      expect(await premier).toMatchObject({ ok: true })
+      await laisserFiler()
+      // Une garde « déjà tracé » sans plus laisserait la page sans pointillés ici.
+      const fin = vue.methodes().filter((m) => m !== 'prendre')
+      expect(fin.lastIndexOf('surligner')).toBeGreaterThan(fin.lastIndexOf('retirerSurbrillance'))
+      expect(traces(vue).at(-1)).toEqual([
+        PLACE_DEUX,
+        'cliquer sur button « Deux »',
+        { prochain: true }
+      ])
+      expect(await issueSansAttendre(second)).toBe('sans réponse')
+    })
+
+    it('jumeau : tracé lent, effacé avant sa réponse par le geste joué, le relais le repose', async () => {
+      nav.ouvrir('conv-a', 'http://localhost:5173')
+      const vue = fabrique.vues[0]
+      vue.reponses.localiser = ([cible]) =>
+        (cible as { selecteur: string }).selecteur === '#deux'
+          ? cibleTrouvee({ rect: PLACE_DEUX, description: 'button « Deux »' })([])
+          : cibleTrouvee({ rect: PLACE_UN, description: 'button « Un »' })([])
+      // Deux réponses retenues : la surbrillance du geste joué, et le PREMIER tracé du second.
+      let lacherJoue: (v: unknown) => void = () => undefined
+      let lacherTrace: (v: unknown) => void = () => undefined
+      let traceRetenu = false
+      vue.reponses.surligner = (args) => {
+        if (!args[2]) return new Promise((r) => (lacherJoue = r))
+        if (traceRetenu || String(args[1]).includes('Un')) return undefined
+        traceRetenu = true
+        return new Promise((r) => (lacherTrace = r))
+      }
+      nav.piloter('conv-a', 'pause')
+      const premier = nav.agir('conv-a', UN)
+      await laisserFiler()
+      nav.piloter('conv-a', 'pas-suivant')
+      await laisserFiler()
+      const second = nav.agir('conv-a', DEUX)
+      await laisserFiler()
+      // Le premier finit pendant que le tracé du second attend sa réponse : la page exécute dans
+      // l'ordre des appels, son `retirerSurbrillance` efface donc ce tracé.
+      lacherJoue(undefined)
+      expect(await premier).toMatchObject({ ok: true })
+      lacherTrace(undefined)
+      expect(await issueSansAttendre(second)).toBe('sans réponse')
+      // Entrée qui rougit si le tour du tracé est lu à sa RÉPONSE : il croirait le cadre encore là.
+      const fin = vue.methodes().filter((m) => m !== 'prendre')
+      expect(fin.lastIndexOf('surligner')).toBeGreaterThan(fin.lastIndexOf('retirerSurbrillance'))
+      expect(traces(vue).at(-1)?.[0]).toEqual(PLACE_DEUX)
+    })
+  })
+
   it('pause : la garde mot de passe passe AVANT l’attente, l’accord du site APRÈS', async () => {
     nav.ouvrir('conv-a', 'https://exemple.fr')
     const vue = fabrique.vues[0]
@@ -1058,6 +1515,65 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     nav.piloter('conv-a', 'pas-suivant')
     expect(await second).toMatchObject({ ok: true })
     expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toHaveLength(2)
+  })
+
+  /*
+   * Mesuré en vraie app (conv-1324, run11) : page centrée, agent silencieux depuis 20 s. Le geste fait
+   * réapparaître le bandeau, le cadre perd 44 px, la cible remonte de 22 px APRÈS son repérage ; le clic
+   * partait aux anciennes coordonnées, tombait sur le champ voisin et l'outil répondait « Clic sur button ».
+   * La remise en page d'une vue cachée n'arrive qu'avec l'image forcée : le test la livre là.
+   * ENTRÉE QUI FAIT ÉCHOUER CE TEST si la correction est fausse : relire la cible AVANT `peindre`
+   * (elle se relirait encore à l'ancienne place, y = 448).
+   */
+  it('la page se remet en page avant l’envoi : le clic part là où la cible EST', async () => {
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ x: 252, y: 448 })
+    const peindre = vue.peindre.bind(vue)
+    vue.peindre = () => {
+      vue.reponses.localiser = cibleTrouvee({ x: 252, y: 426 })
+      return peindre()
+    }
+    expect(
+      await nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#bouton' } })
+    ).toMatchObject({
+      ok: true
+    })
+    expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toEqual([
+      { type: 'mouseDown', x: 252, y: 426, button: 'left', clickCount: 1 }
+    ])
+  })
+
+  it('jumeau : page immobile, le clic part au repérage et rien n’est refusé', async () => {
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee({ x: 252, y: 448 })
+    expect(
+      await nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#bouton' } })
+    ).toMatchObject({
+      ok: true
+    })
+    expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toEqual([
+      { type: 'mouseDown', x: 252, y: 448, button: 'left', clickCount: 1 }
+    ])
+  })
+
+  it('la cible disparaît juste avant l’envoi : refus « cible-introuvable », aucun clic', async () => {
+    nav.ouvrir('conv-a', 'http://localhost:5173')
+    const vue = fabrique.vues[0]
+    vue.reponses.localiser = cibleTrouvee()
+    const peindre = vue.peindre.bind(vue)
+    vue.peindre = () => {
+      vue.reponses.localiser = () => ({ trouve: false })
+      return peindre()
+    }
+    expect(
+      await nav.agir('conv-a', { type: 'clic', cible: { selecteur: '#bouton' } })
+    ).toMatchObject({
+      ok: false,
+      refus: 'cible-introuvable'
+    })
+    expect(vue.evenements.filter((e) => e.type === 'mouseDown')).toEqual([])
   })
 
   it('« Pas suivant » sans geste en attente ne fait rien : le geste suivant attend quand même', async () => {
