@@ -3,6 +3,7 @@ import './assets/main.css'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { racineSelonLePont } from './racine-selon-le-pont'
 import { surveillerGelsRenderer } from './gel-renderer'
 import { detailDeGelPourVue, vueDominanteRecente } from './components/rendu-long'
 import { appliquerThemeMode, lireThemeMode } from './theme-mode'
@@ -71,8 +72,10 @@ surveillerGelsRenderer((dureeMs) => {
   else api?.signalerGelRenderer?.(dureeMs, vue)
 })
 
+/*
+ * Ouverte dans un navigateur ordinaire (`localhost:5173` hors d'Electron), l'interface n'a pas le pont
+ * `window.api` et plantait en écran noir : elle n'est alors pas montée, un écran dit pourquoi (conv-1286).
+ */
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>
+  <StrictMode>{racineSelonLePont(window, <App />)}</StrictMode>
 )
