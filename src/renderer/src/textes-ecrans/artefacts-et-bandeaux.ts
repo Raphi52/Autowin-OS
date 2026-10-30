@@ -68,6 +68,15 @@ export const TEXTES_FR = {
   // ArtifactDiagramPreview
   'diagramme.invalide': 'Diagramme invalide ou syntaxe non prise en charge',
   'diagramme.rendu': 'Rendu du diagramme…',
+  // Grande vue d'un schéma (conv-1322)
+  'diagramme.agrandirAria': 'Agrandir le schéma',
+  'diagramme.visionneuse': 'Schéma agrandi',
+  'diagramme.aide': 'Molette : zoomer · Glisser : déplacer · Échap : fermer',
+  'diagramme.zoomPlus': 'Zoomer',
+  'diagramme.zoomMoins': 'Dézoomer',
+  'diagramme.pourcent': '{pourcent} %',
+  'diagramme.ajuster': 'Ajuster',
+  'diagramme.fermer': 'Fermer',
 
   // ArtifactFontPreview : la phrase d'essai contient toutes les lettres de SA langue.
   'police.phraseEssai': 'Portez ce vieux whisky au juge blond qui fume.',
@@ -131,6 +140,22 @@ export const TEXTES_FR = {
   'scene.relancerAria': 'Relancer la scène 3D',
   'scene.plantee': 'La scène a planté : {message}',
   'scene.cadre': 'Scène 3D du fil',
+
+  // BlocHtmlInteractif (conv-1292)
+  'pageInteractive.cadre': 'Page interactive du fil',
+  'pageInteractive.plantee': 'La page a planté : {message}',
+  // Barre, avis et demandes de la page (conv-1304)
+  'pageInteractive.barre': 'Actions de la page interactive',
+  'pageInteractive.relancer': 'Relancer',
+  'pageInteractive.copierCode': 'Copier le code',
+  'pageInteractive.codeCopie': 'Copié',
+  'pageInteractive.alerte': 'La page dit : {message}',
+  'pageInteractive.fermerAlerte': 'Fermer ce message',
+  'pageInteractive.lienSansClic': 'Lien bloqué, la page l’a ouvert sans clic : {adresse}',
+  'pageInteractive.copieSansClic': 'Copie refusée : elle doit suivre un clic dans la page',
+  'pageInteractive.enEcriture': 'Page interactive en cours d’écriture · {lignes} lignes',
+  'pageInteractive.saisieSansClic': 'Saisie non remplie : la page l’a demandé sans clic de ta part',
+  'pageInteractive.saisieAbsente': 'Aucune zone de saisie ici pour recevoir : {texte}',
 
   // Markdown
   'markdown.resumeFinal': 'Résumé final du modèle',
@@ -242,6 +267,14 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
 
   'diagramme.invalide': 'Invalid diagram or unsupported syntax',
   'diagramme.rendu': 'Rendering the diagram…',
+  'diagramme.agrandirAria': 'Enlarge the diagram',
+  'diagramme.visionneuse': 'Enlarged diagram',
+  'diagramme.aide': 'Wheel: zoom · Drag: pan · Esc: close',
+  'diagramme.zoomPlus': 'Zoom in',
+  'diagramme.zoomMoins': 'Zoom out',
+  'diagramme.pourcent': '{pourcent}%',
+  'diagramme.ajuster': 'Fit',
+  'diagramme.fermer': 'Close',
 
   'police.phraseEssai': 'The quick brown fox jumps over the lazy dog.',
 
@@ -298,6 +331,20 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'scene.relancerAria': 'Restart the 3D scene',
   'scene.plantee': 'The scene crashed: {message}',
   'scene.cadre': '3D scene in the thread',
+
+  'pageInteractive.cadre': 'Interactive page in the thread',
+  'pageInteractive.plantee': 'The page crashed: {message}',
+  'pageInteractive.barre': 'Interactive page actions',
+  'pageInteractive.relancer': 'Restart',
+  'pageInteractive.copierCode': 'Copy code',
+  'pageInteractive.codeCopie': 'Copied',
+  'pageInteractive.alerte': 'The page says: {message}',
+  'pageInteractive.fermerAlerte': 'Close this message',
+  'pageInteractive.lienSansClic': 'Link blocked, the page opened it without a click: {adresse}',
+  'pageInteractive.copieSansClic': 'Copy refused: it must follow a click in the page',
+  'pageInteractive.enEcriture': 'Interactive page being written · {lignes} lines',
+  'pageInteractive.saisieSansClic': 'Input not filled: the page asked without a click from you',
+  'pageInteractive.saisieAbsente': 'No input box here to receive: {texte}',
 
   'markdown.resumeFinal': 'Model’s final summary',
   'markdown.htmlIgnore':
