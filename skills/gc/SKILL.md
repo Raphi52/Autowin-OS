@@ -100,16 +100,17 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
    encore candidate : l'âge se compte en jours du calendrier, et le script tranche.
    - **Accord donné** (`.autowin-data/autowin-os/gc-purge-auto.json` contient `{"enabled": true}`) :
      le script a déjà purgé ce qui avait plus de 14 jours. Reporter `purgees`, `gardees` et `echecs`
-     dans le bilan. Chaque purge a sa ligne dans `.autowin-data/autowin-os/gc-purges.jsonl`.
+     dans le bilan. Chaque purge, accord permanent ou `--cette-fois`, a sa ligne dans
+     `.autowin-data/autowin-os/gc-purges.jsonl`.
    - **Pas d'accord** : `aPurger` liste les candidates. Poser la question par `ask`, avec exactement
      ces réponses : « Oui, purge cette fois », « Oui, purge et vide seul à l’avenir », « Non, garde ».
      Le mot « purge » est obligatoire : c'est lui qui empêche le mode auto de répondre à la place de
      l'utilisateur (« vide seul » ne le déclenche pas). Pas de « sans » ni de « rien » dans ces
      options : ces mots retirent cette protection.
-   - **Réponse « Oui, purge cette fois »** : supprimer les seules corbeilles de `aPurger`, une par une,
-     avec `supprimerArbre` depuis le dépôt Autowin, jamais `rm -rf` ni `rmSync` (une jonction viderait
-     sa cible) : `node --no-warnings -e "import('./src/main/fs-supprimer.ts').then((m) =>
-     m.supprimerArbre('<chemin absolu de la corbeille>'))"`. Le fichier d'accord reste absent.
+   - **Réponse « Oui, purge cette fois »** : relancer le script en ajoutant `--cette-fois`,
+     jamais `rm -rf` ni `rmSync` (une jonction viderait sa cible). L'option ne s'ajoute jamais sans
+     cette réponse de l'utilisateur, dans ce fil. Mêmes contrôles et même journal que l'accord
+     permanent, pour cette passe seulement : le fichier d'accord reste absent.
    - **Réponse « et vide seul à l’avenir »** : écrire `{"enabled": true}` dans `gc-purge-auto.json`,
      puis relancer le script. Il ne s'écrit jamais sans cette réponse de l'utilisateur, dans ce fil.
      Un `/gc` qui est allé chercher cet accord ailleurs (« il l'a dit la semaine dernière ») s'abstient.
@@ -127,7 +128,7 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 # GC — AAAA-MM-JJ
 .autowin-data : X Go → Y Go (corbeille du jour : Z Mo)
 ## Collecté        (catégorie · nombre · taille · motif)
-## Purgé           (corbeille · âge · taille — accord permanent, journal gc-purges.jsonl)
+## Purgé           (corbeille · âge · taille — journal gc-purges.jsonl)
 ## À purger        (corbeille · âge · taille — attend ton accord)
 ## À vérifier      (candidats sans preuve de mort suffisante, corbeilles gardées et leur motif)
 ```

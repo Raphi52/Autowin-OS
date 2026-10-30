@@ -11,6 +11,9 @@
  *  - L'ACCORD se lit dans `autowin-os/gc-purge-auto.json`, à côté de la corbeille, et vaut seulement
  *    pour `{"enabled": true}`. Absent, illisible ou mal typé : lecture seule, comme `autoclose-store.ts`.
  *    Le chemin se déduit de la racine et le seuil est écrit ici : aucune option ne peut les changer.
+ *  - `--cette-fois` porte la réponse « Oui, purge cette fois » du `/gc` : elle vaut pour cette passe,
+ *    ne crée aucun accord, et garde les mêmes contrôles et le même journal. Sans elle, cette réponse
+ *    passait par une suppression tapée à la main, sans trace et sans contrôle du chemin.
  *  - L'ÂGE se compte en jours du calendrier. En millisecondes, le changement d'heure du 25/10 donne
  *    14,04 jours du 16/10 au 30/10, et une corbeille de 14 jours pile serait partie un jour trop tôt.
  *  - LE CONTENU est relu à chaque passe, à toute profondeur. La corbeille du 13/10 portait
@@ -22,9 +25,10 @@
  *  - LE JOURNAL est écrit AVANT de supprimer : une purge impossible à tracer n'a pas lieu.
  *
  * Usage, depuis le dépôt Autowin :
- *   node --no-warnings scripts/gc-purger-corbeilles.mjs --racine <chemin absolu>/.autowin-data/gc-corbeille
+ *   node --no-warnings scripts/gc-purger-corbeilles.mjs --racine <chemin absolu>/.autowin-data/gc-corbeille [--cette-fois]
  *
- * Sortie : le bilan en JSON. Code 0 = passe faite, 1 = une purge a échoué, 2 = commande refusée.
+ * Sortie : le bilan en JSON. Code 0 = passe faite, 1 = purge échouée ou corbeille générale illisible,
+ * 2 = commande refusée.
  */
 import { appendFileSync, lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
@@ -114,12 +118,20 @@ function inventaire(corbeille, lireDossier) {
 }
 
 /** Range une entrée : `recente`, `gardee` (avec son motif) ou `candidate` (avec son inventaire). */
-function examiner({ racine, nom, aujourdhui, lireDossier }) {
+function examiner({ racine, nom, aujourdhui, lireDossier, lireInfos }) {
   const jour = jourDuNom(nom)
   if (jour === null) return { rang: 'gardee', nom, motif: 'nom sans date valable' }
   const corbeille = join(racine, nom)
-  if (!lstatSync(corbeille).isDirectory())
-    return { rang: 'gardee', nom, motif: 'pas un vrai dossier' }
+  let infos
+  try {
+    infos = lireInfos(corbeille)
+  } catch (erreur) {
+    // fix-ok: reproduit le 30/10 (conv-1341) : une corbeille retirée entre la liste et son examen
+    // levait ENOENT ici, et la passe s'arrêtait sans bilan. Elle n'a plus rien à dire : on passe.
+    if (absente(erreur)) return { rang: 'disparue', nom }
+    return { rang: 'gardee', nom, motif: `dossier illisible : ${erreur.code ?? erreur.message}` }
+  }
+  if (!infos.isDirectory()) return { rang: 'gardee', nom, motif: 'pas un vrai dossier' }
   const jours = aujourdhui - jour
   if (jours <= JOURS_DE_GARDE) return { rang: 'recente', nom }
   if (!manifesteValable(corbeille))
@@ -133,14 +145,16 @@ function examiner({ racine, nom, aujourdhui, lireDossier }) {
 }
 
 /**
- * Une passe. `maintenant`, `supprimer` et `lireDossier` n'existent que pour les tests : la ligne de
- * commande ne les expose pas, une date passée en option pourrait tout vieillir d'un coup.
+ * Une passe. `maintenant`, `supprimer`, `lireDossier` et `lireInfos` n'existent que pour les tests : la
+ * ligne de commande ne les expose pas, une date passée en option pourrait tout vieillir d'un coup.
  */
 export function purgerLesCorbeilles({
   racine,
+  cetteFois = false,
   maintenant = new Date(),
   supprimer = supprimerArbre,
-  lireDossier = readdirSync
+  lireDossier = readdirSync,
+  lireInfos = lstatSync
 }) {
   const bilan = {
     code: 0,
@@ -157,13 +171,15 @@ export function purgerLesCorbeilles({
 
   const donnees = join(dirname(resolve(racine)), 'autowin-os')
   const journal = join(donnees, 'gc-purges.jsonl')
-  if (accordDonne(join(donnees, 'gc-purge-auto.json'))) bilan.mode = 'purge'
+  if (cetteFois || accordDonne(join(donnees, 'gc-purge-auto.json'))) bilan.mode = 'purge'
 
   let noms = []
   try {
-    noms = readdirSync(racine).sort()
+    noms = lireDossier(racine).sort()
   } catch (erreur) {
-    if (!absente(erreur)) throw erreur
+    if (!absente(erreur)) {
+      return { ...bilan, code: 1, message: `corbeille générale illisible : ${erreur.message}` }
+    }
   }
   const aujourdhui = numeroDuJour(
     maintenant.getFullYear(),
@@ -172,7 +188,7 @@ export function purgerLesCorbeilles({
   )
 
   for (const nom of noms) {
-    const vue = examiner({ racine, nom, aujourdhui, lireDossier })
+    const vue = examiner({ racine, nom, aujourdhui, lireDossier, lireInfos })
     if (vue.rang === 'recente') bilan.recentes.push(nom)
     if (vue.rang === 'gardee') bilan.gardees.push({ nom, motif: vue.motif })
     if (vue.rang !== 'candidate') continue
@@ -218,15 +234,17 @@ export function purgerLesCorbeilles({
 }
 
 function principal() {
-  let racine
+  let options
   try {
-    const { values } = parseArgs({ options: { racine: { type: 'string' } } })
-    racine = values.racine
+    const { values } = parseArgs({
+      options: { racine: { type: 'string' }, 'cette-fois': { type: 'boolean' } }
+    })
+    options = { racine: values.racine, cetteFois: values['cette-fois'] === true }
   } catch (erreur) {
     console.error(`Option refusée : ${erreur.message}`)
     return 2
   }
-  const bilan = purgerLesCorbeilles({ racine })
+  const bilan = purgerLesCorbeilles(options)
   if (bilan.code === 2) console.error(bilan.message)
   else console.log(JSON.stringify(bilan, null, 2))
   return bilan.code

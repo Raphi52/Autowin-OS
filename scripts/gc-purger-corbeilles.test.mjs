@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -170,6 +171,58 @@ describe('gc-purger-corbeilles — accord', () => {
     unlinkSync(accord)
     expect(passe()).toMatchObject({ mode: 'lecture-seule', purgees: [] })
     expect(existsSync(join(racine, VIEILLE))).toBe(true)
+  })
+})
+
+/*
+ * « OUI, PURGE CETTE FOIS » (conv-1341, 30/10) : cette réponse passait par une suppression tapée à la
+ * main, sans ligne au journal et sans aucun contrôle sur le chemin. Elle passe maintenant par la même
+ * passe que l'accord permanent, et n'en garde que le geste : elle ne crée aucun accord.
+ */
+describe('gc-purger-corbeilles — une seule fois', () => {
+  // La ligne de commande lit la vraie date : ces corbeilles restent anciennes quel que soit le jour.
+  const ANCIENNE = '2024-01-01'
+
+  it('sans fichier d’accord : la vieille corbeille part, avec sa ligne au journal', () => {
+    corbeille(ANCIENNE)
+    const r = lancer('--racine', racine, '--cette-fois')
+    expect(r.code).toBe(0)
+    expect(JSON.parse(r.sortie)).toMatchObject({ mode: 'purge', purgees: [{ nom: ANCIENNE }] })
+    expect(existsSync(join(racine, ANCIENNE))).toBe(false)
+    expect(lignesDuJournal()).toMatchObject([{ corbeille: ANCIENNE, geste: 'purge' }])
+  })
+
+  it('le jumeau : la même commande sans l’option ne supprime rien', () => {
+    corbeille(ANCIENNE)
+    const r = lancer('--racine', racine)
+    expect(JSON.parse(r.sortie)).toMatchObject({ mode: 'lecture-seule', purgees: [] })
+    expect(existsSync(join(racine, ANCIENNE))).toBe(true)
+    expect(lignesDuJournal()).toEqual([])
+  })
+
+  it('elle ne vaut que pour cette passe : aucun accord n’est créé', () => {
+    corbeille(ANCIENNE)
+    lancer('--racine', racine, '--cette-fois')
+    expect(existsSync(accord)).toBe(false)
+    corbeille('2024-01-02')
+    expect(JSON.parse(lancer('--racine', racine).sortie).mode).toBe('lecture-seule')
+    expect(existsSync(join(racine, '2024-01-02'))).toBe(true)
+  })
+
+  it('elle garde les mêmes contrôles : âge, sauvegardes et manifeste ne se contournent pas', () => {
+    corbeille('2026-10-16')
+    corbeille('2026-10-14', { fichiers: { 'conversations.json.pre-remake': 'histoire' } })
+    corbeille('2026-10-13', { manifeste: null })
+    corbeille(VIEILLE)
+    const bilan = passe({ cetteFois: true })
+    expect(bilan.purgees.map((p) => p.nom)).toEqual([VIEILLE])
+    expect(bilan.gardees.map((g) => g.nom)).toEqual(['2026-10-13', '2026-10-14'])
+    expect(bilan.recentes).toEqual(['2026-10-16'])
+    expect(existsSync(join(racine, '2026-10-14', 'conversations.json.pre-remake'))).toBe(true)
+  })
+
+  it('une racine refusée reste refusée, avec ou sans l’option', () => {
+    expect(lancer('--racine', 'gc-corbeille', '--cette-fois').code).toBe(2)
   })
 })
 
@@ -407,6 +460,61 @@ describe('gc-purger-corbeilles — suppression', () => {
     expect(existsSync(join(racine, VIEILLE))).toBe(true)
   })
 
+  /*
+   * UNE PASSE REND TOUJOURS SON BILAN (conv-1341, 30/10) : deux `/gc` peuvent se croiser, et la liste
+   * des corbeilles se lit avant leur examen. Le script promet un bilan en JSON : sans lui, le `/gc`
+   * ne saurait pas ce qui vient de partir.
+   */
+  it('une corbeille disparue pendant la passe : le bilan sort et les suivantes sont traitées', () => {
+    const premiere = corbeille('2026-10-13')
+    const disparue = corbeille('2026-10-14')
+    corbeille(VIEILLE)
+    accepter()
+    const bilan = passe({
+      supprimer: (chemin) => {
+        supprimerArbre(chemin)
+        if (chemin === premiere) supprimerArbre(disparue)
+      }
+    })
+    expect(bilan.code).toBe(0)
+    expect(bilan.purgees.map((p) => p.nom)).toEqual(['2026-10-13', VIEILLE])
+    expect(bilan.gardees).toEqual([])
+    expect(bilan.echecs).toEqual([])
+  })
+
+  it('le jumeau : une corbeille présente mais illisible reste gardée et signalée', () => {
+    const illisible = corbeille('2026-10-14')
+    corbeille(VIEILLE)
+    accepter()
+    const bilan = passe({
+      lireInfos: (chemin) => {
+        if (chemin === illisible)
+          throw Object.assign(new Error('EPERM: accès refusé'), { code: 'EPERM' })
+        return lstatSync(chemin)
+      }
+    })
+    expect(bilan.code).toBe(0)
+    expect(bilan.purgees.map((p) => p.nom)).toEqual([VIEILLE])
+    expect(bilan.gardees).toMatchObject([{ nom: '2026-10-14' }])
+    expect(bilan.gardees[0].motif).toMatch(/illisible/iu)
+    expect(existsSync(illisible)).toBe(true)
+  })
+
+  it('une corbeille générale illisible : code 1 et bilan, jamais une sortie muette', () => {
+    corbeille(VIEILLE)
+    accepter()
+    const bilan = passe({
+      lireDossier: (chemin, options) => {
+        if (chemin === racine)
+          throw Object.assign(new Error('EPERM: accès refusé'), { code: 'EPERM' })
+        return readdirSync(chemin, options)
+      }
+    })
+    expect(bilan).toMatchObject({ code: 1, purgees: [] })
+    expect(bilan.message).toMatch(/illisible/iu)
+    expect(existsSync(join(racine, VIEILLE))).toBe(true)
+  })
+
   it('les corbeilles gardées n’empêchent pas de purger les autres', () => {
     corbeille('2026-10-14', { fichiers: { 'conversations.json': 'x' } })
     corbeille(VIEILLE)
@@ -441,7 +549,12 @@ describe('skills/gc/SKILL.md — l’accord de purge reste réservé à un humai
 
   it('dit comment purger une seule fois : sans cela, un /gc retomberait sur un rm à la main', () => {
     const consigne = skill.slice(skill.indexOf('**Réponse « Oui, purge cette fois »**'))
-    expect(consigne.slice(0, 400)).toContain('supprimerArbre')
+    expect(consigne.slice(0, 400)).toContain('--cette-fois')
     expect(consigne.slice(0, 400)).toContain('jamais `rm -rf`')
+  })
+
+  it('toute purge passe par le script : plus aucune suppression écrite à la main', () => {
+    expect(skill).not.toContain('supprimerArbre')
+    expect(skill).not.toContain('fs-supprimer')
   })
 })
