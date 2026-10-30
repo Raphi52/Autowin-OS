@@ -11,6 +11,7 @@ import React, { Fragment, memo, Profiler, useRef, useState } from 'react'
 import { langueCourante } from '../langue'
 import { traduireChatFil, useTextesChatFil } from '../textes-ecrans/chat-fil'
 import { noterRenduMessage } from './rendu-long'
+import { BarriereErreur } from './BarriereErreur'
 import { promptDuClic } from './bouton-prompt-html'
 import { Markdown } from './Markdown'
 import { MessageDuFil, identiteDeLaReponse } from './message-du-fil'
@@ -421,7 +422,7 @@ function LigneMesuree({
   )
 }
 
-export const ChatMessageRow = memo(
+const LigneDuFil = memo(
   function ChatMessageRow({
     message,
     conversationId,
@@ -1013,3 +1014,16 @@ export const ChatMessageRow = memo(
     prev.directiveReceipts === next.directiveReceipts &&
     prev.tourEnCours === next.tourEnCours
 )
+
+/**
+ * UN MESSAGE ILLISIBLE N'EMPORTE PAS LE FIL (conv-1327) : son contenu vient d'un modèle ou d'un outil,
+ * c'est la donnée la plus imprévisible de l'interface. `cle` : la suite d'un message en cours d'écriture
+ * est un nouvel objet, il retente donc seul (un texte encore partiel peut redevenir lisible).
+ */
+export function ChatMessageRow(props: React.ComponentProps<typeof LigneDuFil>): React.JSX.Element {
+  return (
+    <BarriereErreur zone="chat-message" cle={props.message}>
+      <LigneDuFil {...props} />
+    </BarriereErreur>
+  )
+}

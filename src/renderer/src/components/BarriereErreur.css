@@ -1,0 +1,80 @@
+/* LE BLOC EN PANNE (conv-1327, 2026-10-30). Il s'affiche à la place d'un composant qui a levé une
+   erreur, donc n'importe où : dans une colonne du chat, dans le menu, ou seul sur la page quand tout
+   le reste est tombé (`--racine`, hors de `.shell`). D'où les couleurs du thème uniquement, et une
+   largeur qui ne pousse jamais son parent. Tailles en px à 12 ou plus : sous ce seuil,
+   gen-malvoyant-planchers.mjs exigerait un plancher de plus. */
+.barriere-erreur {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 6px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--err) 60%, transparent);
+  border-radius: 8px;
+  background: var(--bg-0);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.barriere-erreur__titre {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+/* Le message brut d'une erreur peut être très long : il défile dans sa boîte au lieu de tout pousser. */
+.barriere-erreur__detail {
+  max-width: 100%;
+  max-height: 7em;
+  overflow: auto;
+  color: var(--err);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.barriere-erreur__suite {
+  color: var(--text-dim);
+}
+.barriere-erreur__bouton {
+  min-height: 28px;
+  margin-top: 2px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.barriere-erreur__bouton:hover {
+  border-color: var(--err);
+}
+
+/* Un écran entier : le bloc se pose au milieu de la place que l'écran occupait. */
+.barriere-erreur--vue {
+  width: min(520px, calc(100% - 24px));
+  margin: auto;
+}
+
+/* Plus rien n'est monté : seul le fond de la page reste, le bloc occupe le milieu de la fenêtre. */
+.barriere-erreur--racine {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: min(520px, calc(100vw - 32px));
+  margin: 0;
+  transform: translate(-50%, -50%);
+}
+
+/* Le fond de l'Accueil est posé derrière tout : son bloc se range dans un coin, par-dessus l'écran. */
+.barriere-erreur[data-zone='decor'] {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  width: min(320px, calc(100vw - 24px));
+  margin: 0;
+}

@@ -10,8 +10,18 @@
  * `@`, les brouillons et la barre technique, tous couples a la conversation ACTIVE unique. Le
  * brancher par fenetre est un chantier a part — a faire quand l'ergonomie de la mosaique est validee.
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactElement
+} from 'react'
 import { useTextesChatFil } from '../textes-ecrans/chat-fil'
+import { BarriereErreur } from './BarriereErreur'
 import { ChatMessageRow } from './ChatMessageRow'
 import { lotsNonLus } from './frise-des-lots'
 import { usePlanDuChef } from './lots-mesures'
@@ -306,7 +316,7 @@ function FenetreChatBrut({
  * le gel. Le comparateur regarde le CONTENU de `fenetre` (l'objet est neuf, ses champs ne le sont
  * pas) : retirer `messages` de cette comparaison figerait la fenetre qui streame.
  */
-const FenetreChat = memo(FenetreChatBrut, (avant, apres) => {
+const FenetreMemorisee = memo(FenetreChatBrut, (avant, apres) => {
   return (
     avant.fenetre.id === apres.fenetre.id &&
     avant.fenetre.title === apres.fenetre.title &&
@@ -323,6 +333,15 @@ const FenetreChat = memo(FenetreChatBrut, (avant, apres) => {
     avant.bandeau === apres.bandeau
   )
 })
+
+/** Une fenêtre en panne n'emporte pas ses voisines de la mosaïque (conv-1327). */
+function FenetreChat(props: ComponentProps<typeof FenetreMemorisee>): ReactElement {
+  return (
+    <BarriereErreur zone="chat-fil" cle={props.fenetre.id}>
+      <FenetreMemorisee {...props} />
+    </BarriereErreur>
+  )
+}
 
 /** Fil d'un lot pas encore peint dans la mosaïque (son ouverture est en route). */
 const FIL_EN_ROUTE: readonly Msg[] = []
@@ -418,7 +437,14 @@ function CaseSuperConv({
   const bandeau = useMemo(
     () =>
       plan ? (
-        <BandeauSuperConv plan={plan} onglet={ongletEffectif} gestesDuPlan onOuvrirLot={choisir} />
+        <BarriereErreur zone="chat-lots" cle={plan.id}>
+          <BandeauSuperConv
+            plan={plan}
+            onglet={ongletEffectif}
+            gestesDuPlan
+            onOuvrirLot={choisir}
+          />
+        </BarriereErreur>
       ) : undefined,
     [plan, ongletEffectif, choisir]
   )
