@@ -36,6 +36,10 @@ param(
   [string]$Registre = ''
 )
 $ErrorActionPreference = 'Stop'
+# conv-1374 (2026-10-31) : le refus cite les titres de fenetres, et Node lit stderr en UTF-8 alors que
+# la console sort en page de code 850 : le e accent grave de « Table des caracteres » partait en octet
+# 8A, illisible en UTF-8 (mesure sur charmap : C3 A8 une fois la console en UTF-8).
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
 # JOURNAL DES GESTES (conv-344, scout n°5) : chaque geste — de la petite TV, de la vue « Bureaux
 # caches » ou d'un agent — ajoute une ligne a <registre>/<id>.gestes.jsonl, reussi ou refuse. JAMAIS le
 # texte tape (un mot de passe passe par ici) : seulement son nombre de caracteres. Borne aux 200
