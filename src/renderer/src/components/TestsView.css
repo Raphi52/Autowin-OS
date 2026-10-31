@@ -4,11 +4,23 @@
   gap: var(--s3, 12px);
   /* Le cadre, le fond et le lisere viennent de .view-page (ViewPage.css) : aucun fond opaque ici. */
 }
+/* LA VUE DÉFILE, AUCUN BLOC NE S'ÉCRASE (conv-1402 : « quand j'ouvre latence ça cache les tickets »).
+   `.view-page` coupe ce qui dépasse et le panneau Latence est plus haut que la place restante : tout
+   le surplus retombait sur le seul bloc autorisé à rétrécir, les tickets, à zéro de haut, et le bas du
+   panneau restait inatteignable. Les deux classes sont sur le MÊME élément : `.tests-view` seul
+   aurait la priorité de `.view-page`, et l'ordre de chargement des feuilles trancherait. Le cadre
+   peut défiler : ses thèmes peignent son trait dans le fond, pas en calque (theme-nebuleuse-verre). */
+.view-page.tests-view {
+  overflow-y: auto;
+}
+.tests-view > * {
+  flex-shrink: 0;
+}
 /* LES TICKETS D'AUTOWIN OS (conv-1397) : la veille, entre les skills et les tests. Hauteur BORNÉE :
    sans plafond, ses deux colonnes (`flex: 1`) prenaient la moitié de la vue aux suites de tests ; ici
    elles défilent dans leur bloc (`.veille-colonnes`, overflow-y). Même retrait que `.maint-skills`. */
 .maint-tickets {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -73,7 +85,8 @@
   grid-template-columns: minmax(200px, 260px) 1fr;
   gap: 14px;
   min-height: 0;
-  flex: 1;
+  /* Remplit ce qui reste, sans descendre sous 320 px : plus bas, la vue défile (conv-1402). */
+  flex: 1 0 320px;
 }
 .tests-projects,
 .tests-results {
