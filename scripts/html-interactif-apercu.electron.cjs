@@ -240,6 +240,74 @@ function sondeCible(selecteur, fractionX, fractionY) {
   return { x, y, balise: element.tagName, type: element.type || '' }
 }
 
+/**
+ * Joue DANS la page : les jauges d'un carrousel /draft (conv-1382). Chaque jauge va d'une borne a
+ * l'autre, et on releve les propositions ou elle est VISIBLE et celles qu'elle CHANGE. Les gestes
+ * automatiques la cliquaient deja, mais rien n'exigeait un effet : une jauge morte sortait en code 0.
+ * Le style calcule voit aussi ce qu'une capture ne montre pas (une duree) et les propositions cachees.
+ * Transitions achevees et animations figees avant chaque lecture : une valeur en cours de transition
+ * ferait croire a une jauge morte, une animation qui tourne a une jauge vivante.
+ */
+function sondeJauges() {
+  const champs = [...document.querySelectorAll('.dkc-rg input')]
+  const cartes = [...document.querySelectorAll('.dkc-sl .dkc-mq')]
+  const radios = [...document.querySelectorAll('input[name=dkp]')]
+  if (!champs.length || !cartes.length) return []
+  const figer = () => {
+    for (const a of document.getAnimations()) {
+      if (a instanceof CSSTransition) a.finish()
+      else a.pause()
+    }
+  }
+  // Sans les variables : la jauge pose la sienne sur tout le carrousel, chaque element en herite.
+  const lire = (element, pseudo) => {
+    const style = getComputedStyle(element, pseudo)
+    return Array.from(style)
+      .filter((nom) => !nom.startsWith('--'))
+      .map((nom) => style.getPropertyValue(nom))
+      .join(';')
+  }
+  const empreinte = (carte) =>
+    [carte, ...carte.querySelectorAll('*')]
+      .slice(0, 300)
+      .flatMap((e) => [lire(e), lire(e, '::before'), lire(e, '::after')])
+      .join('|')
+  const poser = (champ, valeur) => {
+    champ.value = valeur
+    champ.dispatchEvent(new Event('input', { bubbles: true }))
+    figer()
+  }
+  const aller = (radio) => {
+    radio.checked = true
+    radio.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+  // Le cadre garde sa hauteur pendant la sonde : une jauge qui grandit la page y ferait apparaitre une
+  // barre de defilement, et la largeur perdue passerait pour un effet sur TOUTES les propositions.
+  const defilement = document.documentElement.style.overflow
+  document.documentElement.style.overflow = 'hidden'
+  const depart = radios.find((r) => r.checked)
+  const visibles = new Map(champs.map((c) => [c, []]))
+  radios.forEach((radio, i) => {
+    aller(radio)
+    for (const c of champs) if (!c.closest('.dkc-rgl').hidden) visibles.get(c).push(i + 1)
+  })
+  if (depart) aller(depart)
+  const rapport = champs.map((c) => {
+    const avant = c.value
+    const [bas, haut] = c.type === 'color' ? ['#000000', '#ffffff'] : [c.min, c.max]
+    poser(c, bas)
+    const empreintes = cartes.map(empreinte)
+    poser(c, haut)
+    const effet = cartes.flatMap((carte, i) => (empreinte(carte) === empreintes[i] ? [] : [i + 1]))
+    poser(c, avant)
+    return { nom: c.dataset.nom, variable: c.dataset.variable, visible: visibles.get(c), effet }
+  })
+  figer()
+  for (const a of document.getAnimations()) a.play()
+  document.documentElement.style.overflow = defilement
+  return rapport
+}
+
 /** Joue DANS la page : pose une valeur et previent la page comme un vrai changement. */
 function poserValeur(valeur) {
   const element = window.__cibleScenario
@@ -494,6 +562,11 @@ app
       writeFileSync(png, t0.toPNG())
 
       const cadre = contenu.mainFrame.framesInSubtree.find((f) => f !== contenu.mainFrame)
+      // Une seule largeur : une jauge lit la meme variable quelle que soit la colonne.
+      const jauges =
+        cadre && largeur === config.largeurs[0]
+          ? await cadre.executeJavaScript(`(${sondeJauges.toString()})()`)
+          : []
       // Le parcours passe AVANT la mesure : un debordement apparu quand une ligne s'ajoute, ou un
       // bouton ne en cours de route, sont ainsi vus par les controles et les gestes automatiques.
       const scenario =
@@ -577,6 +650,7 @@ app
         debordementPx: Math.max(0, mesure.largeurContenu - mesure.largeurVue),
         fondOpaque: mesure.fondOpaque,
         ...(scenario ? { scenario } : {}),
+        ...(jauges.length ? { jauges } : {}),
         gestes,
         ...(mesure.ciblesIgnorees ? { ciblesIgnorees: mesure.ciblesIgnorees } : {}),
         navigationsRefusees,

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   blocDuCarrousel,
   carrouselDraft,
@@ -44,6 +45,42 @@ describe('verifierReglages', () => {
 
   it('refuse un curseur que rien ne lit : il bougerait sans rien changer', () => {
     expect(verifierReglages([DUREE], 'color:red').join(' ')).toContain('--ex-duree')
+  })
+
+  // conv-1382 : un simple `includes` acceptait ces trois jauges, mortes ou fausses à l'écran.
+  it('refuse une variable seulement voisine d’une variable lue', () => {
+    const erreurs = verifierReglages(
+      [{ ...TAILLE, variable: '--ex-tail' }],
+      'font-size:var(--ex-taille)'
+    )
+    expect(erreurs.join(' ')).toContain('aucune maquette ne lit --ex-tail')
+  })
+
+  it('refuse une variable nommée sans être lue', () => {
+    expect(verifierReglages([TAILLE], '.a{--ex-taille:4px}').join(' ')).toContain('ne lit')
+  })
+
+  it('refuse une maquette qui repose la variable : elle masquerait le curseur', () => {
+    const erreurs = verifierReglages([TAILLE], '.a{--ex-taille:4px;font-size:var(--ex-taille)}')
+    expect(erreurs.join(' ')).toContain('écraserait le curseur')
+  })
+
+  it('accepte une lecture avec repli, ou une variable dérivée de la jauge', () => {
+    expect(verifierReglages([TAILLE], 'font-size:var(--ex-taille, 12px)')).toEqual([])
+    expect(verifierReglages([TAILLE], '.a{--ex-g:calc(var( --ex-taille ) * 2)}')).toEqual([])
+  })
+
+  // Le curseur natif ramène la valeur sur un cran : 0.3 devenait 0.25, et les boutons annonçaient
+  // une retouche que personne n'avait faite (mesuré conv-1382, « Force 0.25 » sans aucun geste).
+  it('refuse une valeur entre deux crans : le curseur la remplacerait', () => {
+    const force = { nom: 'Force', variable: '--ex-f', min: 0, max: 1, pas: 0.25, valeur: 0.3 }
+    expect(verifierReglages([force], 'var(--ex-f)').join(' ')).toContain('entre deux crans')
+    expect(verifierReglages([{ ...force, valeur: 0.75 }], 'var(--ex-f)')).toEqual([])
+  })
+
+  it('juge les crans sans se tromper sur les décimales', () => {
+    expect(verifierReglages([DUREE], LU)).toEqual([])
+    expect(verifierReglages([{ ...DUREE, min: 0.1, valeur: 0.7 }], LU)).toEqual([])
   })
 
   it.each([
@@ -125,11 +162,14 @@ describe('le carrousel avec des réglages', () => {
     expect(blocDuCarrousel(sans)).not.toContain('<script')
   })
 
-  it('pose le panneau sous la proposition, avant les vignettes, et le dit dans l’aide', () => {
+  it('affiche le panneau au-dessus de la proposition et le dit dans l’aide', () => {
     const html = carrouselDraft(spec())
-    expect(html.indexOf('class="dkc-rg"')).toBeGreaterThan(html.indexOf('class="dkc-stg"'))
+    // Une jauge qui agrandit la maquette ne doit pas partir sous la souris : le panneau reste à sa
+    // place dans le document (les règles du carrousel marchent par frères), `order` le remonte.
+    expect(styleReglages([DUREE])).toMatch(/\.dkc-rg\{order:-1/)
     expect(html.indexOf('class="dkc-rg"')).toBeLessThan(html.indexOf('class="dkc-film"'))
     expect(html).toContain('curseurs')
+    expect(html).toContain('qui les utilisent')
     expect(html).toContain('remplissent ta saisie')
   })
 
@@ -160,5 +200,111 @@ describe('le carrousel avec des réglages', () => {
     expect(page).toContain(SCRIPT_REGLAGES)
     expect(page).toContain('data-dkc-scene')
     expect(page.indexOf(SCRIPT_REGLAGES)).toBeLessThan(page.indexOf('data-dkc-scene'))
+  })
+})
+
+// conv-1382 : la proposition 1 lit Rayon et Marge, la 2 lit Rayon, la 3 ne lit rien. Avant, les deux
+// jauges restaient sous les trois, et « Affiner la 3 » portait des valeurs sans effet sur elle.
+describe('une jauge n’existe que pour les propositions qu’elle change', () => {
+  const RAYON = { nom: 'Rayon', variable: '--ex-r', min: 0, max: 32, valeur: 8, unite: 'px' }
+  const MARGE = { nom: 'Marge', variable: '--ex-m', min: 0, max: 40, valeur: 16, unite: 'px' }
+
+  const monter = (partiel = {}) => {
+    document.body.innerHTML = carrouselDraft(
+      spec({
+        css: '.ex-a{padding:var(--ex-m);border-radius:var(--ex-r)}.ex-b:hover{border-radius:var(--ex-r)}',
+        propositions: [
+          { nom: 'Tout', html: '<span class="ex-a">A</span>' },
+          { nom: 'Rayon', html: '<span class="ex-b">B</span>' },
+          { nom: 'Rien', html: '<span class="ex-c">C</span>' }
+        ],
+        reglages: [RAYON, MARGE],
+        ...partiel
+      })
+    )
+    new Function(SCRIPT_REGLAGES)()
+  }
+  const visibles = () =>
+    Array.from(document.querySelectorAll('.dkc-rgl'))
+      .filter((l) => !l.hidden)
+      .map((l) => l.querySelector('.dkc-rgn').textContent)
+  // À la main : happy-dom ignore le clic sur un champ `display:none` et ne décoche pas le groupe.
+  // Le vrai parcours à la souris est joué par html-interactif-apercu.mjs.
+  const cocher = (champ, etat) => {
+    champ.checked = etat
+    champ.dispatchEvent(new Event('change', { bubbles: true }))
+  }
+  const aller = (n) => {
+    for (const r of document.querySelectorAll('input[name=dkp]')) r.checked = false
+    cocher(document.getElementById(`dkp${n}`), true)
+  }
+  const bouger = (rang, valeur) => {
+    const curseur = document.getElementById(`dkr${rang}`)
+    curseur.value = valeur
+    curseur.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  const boutons = (n) =>
+    Array.from(document.querySelectorAll(`.dkc-a${n} a`)).map((a) => a.textContent)
+
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('montre seulement les jauges lues par la proposition affichée', () => {
+    monter()
+    expect(visibles()).toEqual(['Rayon', 'Marge'])
+    aller(2)
+    expect(visibles()).toEqual(['Rayon'])
+  })
+
+  it('cache tout le panneau sur une proposition qui ne lit aucune jauge', () => {
+    monter()
+    aller(3)
+    expect(visibles()).toEqual([])
+    expect(document.querySelector('.dkc-rg').hidden).toBe(true)
+    aller(1)
+    expect(document.querySelector('.dkc-rg').hidden).toBe(false)
+  })
+
+  it('« Tout voir » montre les jauges de toutes les propositions', () => {
+    monter()
+    aller(3)
+    expect(visibles()).toEqual([])
+    cocher(document.getElementById('dkall'), true)
+    expect(visibles()).toEqual(['Rayon', 'Marge'])
+  })
+
+  it('un bouton ne porte que les valeurs qui changent SA proposition', () => {
+    monter()
+    bouger(1, '20')
+    bouger(2, '30')
+    expect(boutons(1)[0]).toBe('Affiner la 1 · Tout — Rayon 20 px, Marge 30 px')
+    expect(boutons(2)[0]).toBe('Affiner la 2 · Rayon — Rayon 20 px')
+    expect(boutons(3)[0]).toBe('Affiner la 3 · Rien')
+  })
+
+  it('un mélange porte les valeurs de chacune des propositions mélangées', () => {
+    monter()
+    bouger(2, '30')
+    const melange = (texte) =>
+      Array.from(document.querySelectorAll('.dkc-mxa a')).find((a) =>
+        a.textContent.startsWith(texte)
+      ).textContent
+    expect(melange('Mixer 1 + 3')).toBe('Mixer 1 + 3 — Marge 30 px')
+    expect(melange('Mixer 2 + 3')).toBe('Mixer 2 + 3')
+  })
+
+  it('lit les règles sous @media et les styles en ligne', () => {
+    monter({
+      css: '@media (min-width:1px){.ex-a{padding:var(--ex-m)}}',
+      propositions: [
+        { nom: 'Média', html: '<span class="ex-a">A</span>' },
+        { nom: 'En ligne', html: '<span style="border-radius:var(--ex-r)">B</span>' },
+        { nom: 'Rien', html: '<span>C</span>' }
+      ]
+    })
+    expect(visibles()).toEqual(['Marge'])
+    aller(2)
+    expect(visibles()).toEqual(['Rayon'])
   })
 })

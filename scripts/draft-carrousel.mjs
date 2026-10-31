@@ -68,7 +68,7 @@
  *     écouter. Ses boutons y REMPLISSENT la saisie au lieu d'envoyer (src/renderer/src/components/
  *     saisie-du-fil.ts) : le code de la page tourne, l'utilisateur relit le choix avant de l'envoyer.
  *     Avant, la scène sortait en clôture ```threejs à part, que le fil montait dans le carrousel.
- *   - « reglages » (conv-1339) : des variables CSS montrées en curseurs sous la proposition (voir
+ *   - « reglages » (conv-1339) : des variables CSS montrées en curseurs au-dessus de la proposition (voir
  *     draft-reglages.mjs) ; l'aperçu change tout de suite et les boutons portent les valeurs choisies.
  *     Le carrousel devient là aussi une page ```html-interactif.
  *   - « visuel » et « fonctionnement » (conv-1338) : les deux axes d'une proposition, sur TOUTES ou
@@ -444,7 +444,7 @@ ${feuilleDeStyle(n, cssPropositions, Boolean(spec.scene3d), avecMixer)}
 </style>
 <div class="dkc-w">
 <div class="dkc-hd">${echapper(spec.titre)}</div>
-${spec.intro ? `<div class="dkc-intro">${spec.intro}</div>\n` : ''}<div class="dkc-aide"><b>Clique une vignette</b> ou les <b>flèches</b> de chaque côté pour passer d’une proposition à l’autre · <b>Tout voir</b> les étale côte à côte · ${spec.reglages ? '<b>les curseurs</b> ajustent toutes les propositions · ' : ''}<b>choisis</b> avec les boutons du bas${carrouselEnPage(spec) ? ' (ils remplissent ta saisie : <b>Entrée</b> pour envoyer)' : ''}, ${avecAxes ? 'ou <b>Mixer par axe</b> pour combiner le visuel de l’une et le fonctionnement d’une autre.' : avecMixer ? 'ou <b>Mixer</b> pour en cocher plusieurs à mélanger.' : 'ou écris un mélange dans la saisie.'}</div>
+${spec.intro ? `<div class="dkc-intro">${spec.intro}</div>\n` : ''}<div class="dkc-aide"><b>Clique une vignette</b> ou les <b>flèches</b> de chaque côté pour passer d’une proposition à l’autre · <b>Tout voir</b> les étale côte à côte · ${spec.reglages ? '<b>les curseurs</b> ajustent les propositions qui les utilisent · ' : ''}<b>choisis</b> avec les boutons du bas${carrouselEnPage(spec) ? ' (ils remplissent ta saisie : <b>Entrée</b> pour envoyer)' : ''}, ${avecAxes ? 'ou <b>Mixer par axe</b> pour combiner le visuel de l’une et le fonctionnement d’une autre.' : avecMixer ? 'ou <b>Mixer</b> pour en cocher plusieurs à mélanger.' : 'ou écris un mélange dans la saisie.'}</div>
 <div class="dkc-car">${champs}
 ${navigation}
 ${scene}

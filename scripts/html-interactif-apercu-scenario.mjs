@@ -141,6 +141,27 @@ export function pageContient(textePage, cherche) {
     .includes(normaliserTexte(cherche).toLocaleLowerCase('fr-FR'))
 }
 
+/**
+ * Les jauges d'un carrousel /draft qui mentent (conv-1382) : aucun effet nulle part, visibles sur une
+ * proposition qu'elles ne changent pas, ou cachees sur une proposition qu'elles changent. Chacune
+ * dit ses rangs, pour corriger la bonne maquette.
+ */
+export function jaugesFausses(jauges) {
+  return (jauges ?? []).flatMap(({ nom, visible, effet }) => {
+    const sansEffet = visible.filter((rang) => !effet.includes(rang))
+    const cachee = effet.filter((rang) => !visible.includes(rang))
+    if (effet.length === 0) return [{ nom, raison: 'ne change aucune proposition' }]
+    return [
+      ...(sansEffet.length
+        ? [{ nom, raison: `visible sans effet sur la ${sansEffet.join(', ')}` }]
+        : []),
+      ...(cachee.length
+        ? [{ nom, raison: `cachee alors qu'elle change la ${cachee.join(', ')}` }]
+        : [])
+    ]
+  })
+}
+
 /** Duree maximale d'un scenario : `html-interactif-apercu.mjs` en deduit son delai de garde. */
 export function dureeMaxScenarioMs(etapes) {
   return (etapes ?? []).reduce(
