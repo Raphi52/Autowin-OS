@@ -850,8 +850,8 @@ const CORBEILLE_EN_DESTINATION =
 // la corbeille a échoué » continue. Comme CORBEILLE_SIMPLE_MOT, ces règles se trompent du côté qui coûte une
 // réponse à la main. Sonde du 31/10, 54 978 phrases (ouverture × cible × liaison × geste) : aucune ne part,
 // hors les 1 365 ouvertes par « Ajoute un test à… », lues comme du code (CORBEILLE_SIMPLE_MOT).
-// Une lecture de mots reste incomplète. Ce qu'elle laisse est su, et une relecture qui le retrouve n'a pas
-// à la rallonger : une phrase sans cible nommée hors passe `/gc` (« Il faut purger les deux »), un verbe
+// Une lecture de mots reste incomplète, et la rallonger à chaque tournure ne la fermerait pas. Classes
+// mesurées le 31/10 : une phrase sans cible nommée hors passe `/gc` (« Il faut purger les deux »), un verbe
 // inconnu sans pronom (« Vérifie la corbeille quand tu peux balance tout »), un pronom devant un lieu
 // (« Brûle-les dans la corbeille »). Le verrou de la purge est ailleurs : le script ne supprime rien sans
 // gc-purge-auto.json ou --cette-fois.
@@ -928,8 +928,9 @@ const LANCE_LE_SCRIPT = new RegExp(
 // partaient seules (sonde du 31/10 : envoyer, 27 rouges avec leurs voisines) : ces verbes annoncent un
 // travail, or leur complément direct est ici le fichier qui autorise la purge. Le complément tranche : une
 // préposition le rattache à autre chose (« Ajoute un test à gc-purge-auto.json »), et un pronom l'y ramène
-// (« Vérifie gc-purge-auto.json, puis ajoute-le »). Le script n'accepte qu'un fichier contenant
-// {"enabled": true}, mais une suite qui le pose ne part pas seule.
+// (« Vérifie gc-purge-auto.json, puis ajoute-le »). La préposition coupe aussi devant un simple lieu :
+// « Ajoute au dépôt gc-purge-auto.json » et « Ajoute une ligne au fichier d'accord » partent. Sans valeur
+// écrite, elles n'autorisent rien : le script n'accepte qu'un fichier contenant {"enabled": true}.
 const VERBE_QUI_ECRIT = /(?:ajout\w*|implement\w*|corrig\w*|add|fix)/.source
 const ECRIT_L_ACCORD = new RegExp(
   `\\b${VERBE_QUI_ECRIT}\\s+` +
