@@ -11,8 +11,12 @@
  *
  * Une seule fonction pour les quatre chemins (écran ou agent, un fil ou un lot) : aucun ne peut
  * rediverger du Stop sans que les tests `*.suppression-arret.test.ts` le voient.
+ *
+ * Les terminaux du fil s'arrêtent ici aussi (conv-1362, lot 3/3) : ce sont les seuls chemins où un
+ * fil disparaît, et un shell laissé derrière n'aurait plus aucun écran pour le fermer.
  */
 import type { ActiveChatTurns } from './active-chat-turns'
+import { fermerTerminauxDuFil } from './terminal-integre'
 
 /** Motif déjà lu comme arrêt VOULU (`terminalDuTour`, `task-manager/watchdog-suppression.ts`). */
 export const MOTIF_SUPPRESSION = 'conversation-deleted'
@@ -40,6 +44,7 @@ export async function arreterLesTravauxDuFil(
   { couperLeRun, tours }: TravauxDuFil,
   depuisSonPropreTour = false
 ): Promise<void> {
+  fermerTerminauxDuFil(conversationId)
   // Le tour EN PREMIER : `abort` et `abortAndWait` marquent l'arrêt comme voulu de façon synchrone,
   // avant que le run coupé ne rende son rouge — sinon cette fin deviendrait un incident à analyser.
   if (depuisSonPropreTour) {
