@@ -753,3 +753,280 @@ describe('mode auto — il ne répond jamais à la question de purge, pas même 
     expect(reponseAutoAuDernierAsk(fil)).toBe('Non, garde')
   })
 })
+
+/*
+ * LA LISTE DE MOTS DE LIAISON EST CE QUI FUYAIT (nettoyage du 31/10, conv-1341). Une phrase ouverte par
+ * un travail restait d'un seul tenant dès que son mot de liaison manquait à la liste : « mais », « sinon »,
+ * une virgule sans espace, un « / ». Ajouter ces mots ne ferme que ces mots : tout ce qui suit la cible
+ * est donc lu pour lui-même, quel que soit ce qui l'y relie. Les phrases ci-dessous sont celles que la
+ * sonde a fait partir seules, plus les formes voisines.
+ */
+const LIAISONS = [
+  ' mais purge-la',
+  ' sinon purge-la',
+  ' ou purge-la',
+  ',puis purge-la',
+  ' ;purge-la',
+  ' / purge-la',
+  ' → purge-la',
+  ' & purge-la',
+  ' + purge-la',
+  ' - purge-la',
+  ' si besoin vide-la',
+  ' au besoin vide-la',
+  ' si c’est bon vide-la',
+  ' si c’est fait vide tout',
+  ' sans oublier de la purger',
+  ' tout en la purgeant',
+  ' en la vidant',
+  ' en la jetant',
+  ' pour tout purger',
+  ' pour bien la vider',
+  ' pour ensuite la balancer',
+  ' et si c’est bon la supprimer',
+  ' but delete it',
+  ' or empty it',
+  ' while emptying it',
+  ' then wipe it'
+]
+// Un verbe qu'aucune liste ne connaît : seul le mot de liaison le sépare du travail annoncé.
+const LIAISON_PUIS_VERBE_INCONNU = [
+  ' mais',
+  ' sinon',
+  ' ou',
+  ' donc',
+  ' alors',
+  ' enfin',
+  ' voire',
+  ' si besoin',
+  ' au besoin',
+  ' si c’est bon',
+  ' si ok',
+  ' une fois fini',
+  ' après quoi',
+  ' dans la foulée',
+  ' quitte à',
+  ' but',
+  ' or',
+  ' else',
+  ' ->',
+  ' =>',
+  ' >',
+  ',',
+  ';',
+  ' /',
+  ' →',
+  ' &',
+  ' +',
+  ' -'
+].map((liaison) => `${liaison}${liaison === ',' || liaison === ';' ? '' : ' '}balance tout`)
+const FORMES_SANS_LISTE = [
+  ' donc la brûler',
+  ' alors les brûler',
+  ' enfin l’incinérer',
+  ' voire la brûlant',
+  ' donc nuke it',
+  ' alors get rid of it',
+  ' enfin get rid of them',
+  ' donc fais place nette',
+  ' donc fais table rase',
+  ' donc lance gc-purger-corbeilles.mjs',
+  ' et au passage relance scripts/gc-purger-corbeilles.mjs',
+  ' en jetant tout',
+  ' en virant tout',
+  ' while clearing it',
+  ' by deleting everything',
+  ' by removing everything',
+  ' by erasing everything',
+  ' by wiping everything',
+  ' by destroying everything',
+  ' by cleaning everything',
+  // Ni verbe connu ni mot de liaison connu : seul le pronom dit que la cible est reprise.
+  ' quand tu peux brûle-la',
+  ' quand tu peux brûle-les',
+  ' quand tu peux la brûler',
+  ' quand tu peux les brûler',
+  ' quand tu peux l’incinérer',
+  ' quand tu peux la brûlant',
+  ' quand tu peux la bannir',
+  ' quand tu peux nuke it',
+  ' quand tu peux nuke them',
+  ' quand tu peux get rid of it',
+  ' quand tu peux lance gc-purger-corbeilles.mjs'
+]
+const SUR_LA_CORBEILLE = [
+  'Vérifie la corbeille',
+  'Regarde la corbeille',
+  'Corrige la corbeille'
+].flatMap((debut) =>
+  [...LIAISONS, ...LIAISON_PUIS_VERBE_INCONNU, ...FORMES_SANS_LISTE].map((fin) => `${debut}${fin}`)
+)
+const SUR_L_ACCORD = [
+  'Vérifie gc-purge-auto.json sinon crée-le',
+  'Vérifie gc-purge-auto.json en le créant',
+  'Relis gc-purge-auto.json mais active-le',
+  'Documente gc-purge-auto.json mais crée-le',
+  'Relis le fichier d’accord sinon pose-le',
+  'Relis gc-purge-auto.json en l’écrivant',
+  'Vérifie gc-purge-auto.json,puis active-le',
+  'Vérifie gc-purge-auto.json / crée-le',
+  'Vérifie --cette-fois mais lance-la',
+  'Vérifie --cette-fois sinon lance le script',
+  'Vérifie si tu peux lancer le script avec --cette-fois',
+  'Vérifie si tu peux créer gc-purge-auto.json',
+  'Vérifie gc-purge-auto.json en le posant',
+  'Relis gc-purge-auto.json sinon mets-le à true',
+  'Vérifie gc-purge-auto.json donc balance tout',
+  'Relis le fichier d’accord alors réactive-le',
+  'Check gc-purge-auto.json else write it',
+  'Vérifie --cette-fois en exécutant le script',
+  'Relis --cette-fois donc run the script',
+  'Vérifie --cette-fois en relançant le script',
+  'Vérifie gc-purge-auto.json en le basculant',
+  'Vérifie gc-purge-auto.json sans oublier de le basculer',
+  'Vérifie que gc-purge-auto.json est recréé',
+  'Vérifie si tu peux réactiver gc-purge-auto.json',
+  'Vérifie si tu peux poser gc-purge-auto.json',
+  'Vérifie si tu peux écrire gc-purge-auto.json',
+  'Vérifie si tu peux mettre gc-purge-auto.json',
+  'Vérifie gc-purge-auto.json en le mettant',
+  'Vérifie gc-purge-auto.json en mettant true',
+  'Check gc-purge-auto.json to enable it',
+  'Check if you can create gc-purge-auto.json',
+  'Check if you can write gc-purge-auto.json',
+  'Check if you can enable gc-purge-auto.json',
+  'Vérifie gc-purge-auto.json quand tu peux remplis-le',
+  'Vérifie gc-purge-auto.json en le remplissant',
+  'Vérifie gc-purge-auto.json en écrivant dedans',
+  'Vérifie gc-purge-auto.json en mettant ça',
+  'Vérifie --cette-fois quand tu peux run the script',
+  'Vérifie si tu peux lancer gc-purger-corbeilles.mjs'
+]
+const SANS_LE_NOM_DE_LA_CIBLE = [
+  'Active l’accord de purge',
+  'Donne l’accord de purge',
+  'Accepte la purge',
+  'Autorise la purge',
+  'Valide la purge',
+  'Approuve la purge',
+  'Confirme la purge',
+  'Autorise cette purge',
+  'Valide une purge',
+  'Donne ton accord pour la purge',
+  'Relis la doc, puis lance le script de purge',
+  'Relis la doc, puis relance script de purge'
+]
+const VERBE_AVANT_LA_CIBLE = [
+  'Vérifie si tu peux purger la corbeille',
+  'Regarde si on peut vider la corbeille',
+  'Vérifie comment supprimer les fichiers de la corbeille',
+  'Cherche un moyen d’effacer la corbeille',
+  'Regarde en vidant la corbeille',
+  'Check if you can empty the trash',
+  ...[
+    'détruire',
+    'faire disparaître',
+    'purger',
+    'vider',
+    'supprimer',
+    'effacer',
+    'jeter',
+    'retirer',
+    'nettoyer',
+    'enlever',
+    'éliminer',
+    'débarrasser',
+    'dégager',
+    'virer',
+    'libérer',
+    'delete',
+    'remove',
+    'wipe',
+    'clear',
+    'erase',
+    'destroy'
+  ].map((verbe) => `Vérifie si tu peux ${verbe} la corbeille`),
+  'Regarde en détruisant la corbeille'
+]
+
+describe('mode auto — ce qui suit la cible se lit, quel que soit le mot qui l’y relie', () => {
+  it.each([
+    ...SUR_LA_CORBEILLE,
+    ...SUR_L_ACCORD,
+    ...SANS_LE_NOM_DE_LA_CIBLE,
+    ...VERBE_AVANT_LA_CIBLE
+  ])('hors passe /gc : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+    expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
+  })
+
+  // Sans corbeille nommée : seul le mot lui-même arrête ces phrases, le contexte de la passe ne suffit pas.
+  it.each([
+    'Vérifie la corbeille en la vidant',
+    'Corrige la corbeille en la vidant',
+    'Compare les tailles en vidant tout',
+    'Compare les tailles en jetant tout',
+    'Compare les tailles en virant tout',
+    'Compare les tailles et fais place nette',
+    'Compare les tailles et fais table rase',
+    'Check both sizes while emptying both',
+    'Check both sizes while clearing both'
+  ])('dans une passe /gc aussi : %s', (suite) => {
+    expect(decider(passeGc(suite))).toMatchObject(arret)
+  })
+
+  // Jumeaux : la phrase nomme la cible et ne fait que la lire, ou dit explicitement qu'elle n'y touche pas.
+  it.each([
+    'Vérifie la corbeille sans la vider',
+    'Vérifie la corbeille sans rien purger',
+    'Regarde la corbeille sans y toucher, sans rien supprimer',
+    'Vérifie que la corbeille a bien été purgée',
+    'Vérifie que la corbeille a été vidée',
+    'Vérifie que la corbeille est vide',
+    'Vérifie si la corbeille reste vide',
+    'Cherche pourquoi la purge de la corbeille a échoué',
+    'Vérifie la corbeille de la dernière passe',
+    'Vérifie la corbeille du fichier en cours',
+    'Vérifie les 6,1 Mo de la corbeille',
+    'Corrige le compteur de la corbeille',
+    'Ajoute un test pour supprimer le cache',
+    'Supprime le doublon, puis vérifie la corbeille',
+    'Vérifie gc-purge-auto.json mais retire-le',
+    'Vérifie gc-purge-auto.json quand tu peux retire-le',
+    'Ajoute un test à gc-purger-corbeilles.mjs',
+    'Relis gc-purger-corbeilles.mjs',
+    'Corrige scripts/gc-purger-corbeilles.mjs',
+    'Vérifie les fichiers partis à la corbeille sans les restaurer',
+    'Déplace les brouillons dans la corbeille au lieu de les supprimer',
+    'Corrige le test de purge de la corbeille',
+    'Vérifie la corbeille selon les tests de purge',
+    'Vérifie la corbeille selon la doc de purge',
+    'Vérifie la corbeille selon le bilan de purge',
+    'Corrige la corbeille selon le journal de la purge',
+    'Corrige la corbeille selon le rapport de purge',
+    'Vérifie la corbeille au lieu de la vider',
+    'Vérifie la corbeille plutôt que de la vider',
+    'Vérifie la corbeille sans l’effacer',
+    'Vérifie la corbeille sans y purger',
+    'Vérifie la corbeille sans en jeter',
+    'Vérifie les corbeilles sans les vider',
+    'Vérifie la corbeille sans le vider',
+    'Vérifie que la corbeille soit bien vide',
+    'Vérifie si la corbeille est toujours vide',
+    'Vérifie si la corbeille reste encore vide',
+    'Vérifie si la corbeille est vraiment vide',
+    'Vérifie que les corbeilles sont vides',
+    'Vérifie que les corbeilles restent vides',
+    'Vérifie que la corbeille devient vide',
+    'Vérifie que la corbeille doit être vide',
+    'Check the trash, then read it',
+    'Vérifie l’accord de purge',
+    'Cherche pourquoi on lance le script de purge',
+    'Documente l’accord de purge',
+    'Relis gc-purge-auto.json pour savoir ce qu’il dit',
+    'Vérifie la consigne, puis cherche pourquoi la purge manque au bilan'
+  ])('jumeau, part toujours : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
+    expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
+  })
+})
