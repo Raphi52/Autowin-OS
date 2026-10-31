@@ -21,7 +21,8 @@
  *    29/10 porte deux sauvegardes `conversations.json.*`. Ces fichiers ne se recréent pas : leur
  *    corbeille est gardée et repart à la question habituelle du `/gc`.
  *  - UNE JONCTION n'est jamais suivie. `supprimerArbre` la retire sans toucher sa cible, là où `rmSync`
- *    viderait le `node_modules` du dépôt (`src/main/fs-supprimer.ts`).
+ *    peut vider le `node_modules` du dépôt selon la version de Node (pas sous 24.19, mesuré le 30/10 ;
+ *    voir `src/main/fs-supprimer.ts`).
  *  - LE JOURNAL est écrit AVANT de supprimer : une purge impossible à tracer n'a pas lieu.
  *
  * Usage, depuis le dépôt Autowin :

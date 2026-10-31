@@ -107,7 +107,7 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
      Le mode auto reconnaît la question à ces textes, et c'est ce qui l'empêche de répondre à la place
      de l'utilisateur : une reformulation retire cette protection.
    - **Réponse « Oui, purge cette fois »** : relancer le script en ajoutant `--cette-fois`,
-     jamais `rm -rf` ni `rmSync` (une jonction viderait sa cible). L'option ne s'ajoute jamais sans
+     jamais `rm -rf` ni `rmSync` (une jonction peut vider sa cible). L'option ne s'ajoute jamais sans
      cette réponse de l'utilisateur, dans ce fil. Mêmes contrôles et même journal que l'accord
      permanent, pour cette passe seulement : le fichier d'accord reste absent.
    - **Réponse « et vide seul à l’avenir »** : écrire `{"enabled": true}` dans `gc-purge-auto.json`,

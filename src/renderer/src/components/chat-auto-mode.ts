@@ -756,7 +756,7 @@ const SUITE_AFFIRME_GESTE_UTILISATEUR =
 // fix-ok: le refus listait des débuts de phrase, et le contrôle final du 31/10 a fait partir seules dans
 // le vrai deciderRelanceAuto « Relance la purge… », « Confirme la purge… », « OK pour purger… »,
 // « Continue : purge… ». Toute liste d'ouvertures laisse passer la suivante : la règle s'inverse. Une
-// phrase qui nomme une purge s'arrête, SAUF si sa clause annonce un travail par son premier verbe (le
+// phrase qui vise la corbeille s'arrête, SAUF si sa clause annonce un travail par son premier verbe (le
 // texte arrive ici sans accents ni capitales). « Ajoute un test à gc-purger-corbeilles.mjs » et
 // « Supprime le bouton Corbeille » restent du travail ordinaire (règles trop larges, conv-787). La phrase
 // se coupe en clauses, car « Vérifie la corbeille puis purge-la » commence par un travail.
@@ -785,7 +785,8 @@ const GESTE_DE_SUPPRESSION = new RegExp(`\\b(?:${SUPPRIMER})`, 'u')
 // Les réponses de la question du `/gc` (skills/gc/SKILL.md) : aucune ne nomme la corbeille.
 const REPONSE_DE_PURGE = /\bpurge\s+cette\s+fois\b|\bvide\s+seul\b|\bactiv\w*\s+(?:la\s+)?purge\b/u
 const NOMME_UNE_CORBEILLE = /\b(?:corbeilles?|trash)\b/u
-// Une corbeille datée n'a qu'un geste possible : la nommer sans annoncer un travail, c'est y toucher.
+// Une corbeille datée est une cible précise : sans travail annoncé, la suite attend, quel que soit le
+// verbe. « Ouvre la corbeille du 16/10 » s'arrête donc aussi : c'est le coût accepté d'un oubli évité.
 const NOMME_UNE_CORBEILLE_DATEE =
   /\b(?:corbeilles?|trash)\s+(?:du\s+|of\s+|from\s+)?\d|gc-corbeille\/\d/u
 function suiteVideUneCorbeille(nu: string): boolean {

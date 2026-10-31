@@ -373,7 +373,7 @@ const SANS_LE_GESTE_EN_TETE = [
   'Passe gc-purge-auto.json à true',
   'Remets enabled à true dans gc-purge-auto.json',
   'Ajoute enabled à gc-purge-auto.json',
-  // Une corbeille datée n'a qu'un seul geste possible, quel que soit le verbe.
+  // Une corbeille datée est une cible précise : sans travail annoncé, le verbe ne compte pas.
   'Jette la corbeille du 16/10',
   'Nettoie la corbeille du 16/10',
   'Retire la corbeille du 16/10',
