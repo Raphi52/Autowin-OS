@@ -32,6 +32,31 @@
   flex: 0 1 auto;
   min-width: 0;
 }
+/* LES ONGLETS « DEMANDES · TICKETS » (conv-1397, 2026-10-31) : sur la ligne du titre, juste après lui,
+   plutôt qu'en rangée dessous comme les autres vues — le kanban garde toute sa hauteur. La marge
+   automatique pousse les compteurs à droite. */
+.besoins-view > .view-topbar > .domain-tabs {
+  align-self: center;
+  margin-right: auto;
+}
+/* Un onglet = un conteneur TRANSPARENT à la mise en page : la rivière, ou la vue des tickets, reste
+   l'enfant flex de la vue et prend la hauteur restante. Masqué, il sort du rendu sans être démonté. */
+.besoins-onglet {
+  display: contents;
+}
+.besoins-onglet[hidden] {
+  display: none;
+}
+/* L'ancien écran Tickets, devenu onglet : il remplit la hauteur sous la barre du Board (son
+   `height: 100%` la dépassait de la hauteur de la barre), et son en-tête de source n'a plus à
+   s'aligner sur un titre — la barre du Board le porte. */
+.besoins-view .tickets-view {
+  flex: 1 1 auto;
+  height: auto;
+}
+.besoins-view .tickets-head {
+  padding-top: 0;
+}
 .besoins-entete,
 .besoins-boutons {
   display: inline-flex;

@@ -4,6 +4,46 @@
   gap: var(--s3, 12px);
   /* Le cadre, le fond et le lisere viennent de .view-page (ViewPage.css) : aucun fond opaque ici. */
 }
+/* LES TICKETS D'AUTOWIN OS (conv-1397) : la veille, entre les skills et les tests. Hauteur BORNÉE :
+   sans plafond, ses deux colonnes (`flex: 1`) prenaient la moitié de la vue aux suites de tests ; ici
+   elles défilent dans leur bloc (`.veille-colonnes`, overflow-y). Même retrait que `.maint-skills`. */
+.maint-tickets {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  max-height: 42vh;
+  padding: 0 16px;
+}
+.maint-tickets-titre {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+/* L'habit des boutons de la veille, qu'elle tenait de `.tickets-view button` dans l'ancien écran
+   Tickets : sans lui, ils retombaient sur le bouton nu du navigateur. */
+.maint-tickets button,
+.maint-tickets select {
+  border: 1px solid var(--container-border);
+  border-radius: 8px;
+  background: var(--surface-card);
+  color: var(--text);
+  font: inherit;
+}
+.maint-tickets button {
+  cursor: pointer;
+}
+.maint-tickets button:hover {
+  border-color: color-mix(in srgb, var(--rose) 60%, var(--container-border));
+}
+.maint-tickets button:focus-visible,
+.maint-tickets select:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
 .tests-actions {
   display: flex;
   align-items: center;
