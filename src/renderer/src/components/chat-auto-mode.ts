@@ -844,11 +844,11 @@ const CORBEILLE_EN_DESTINATION =
 // seul tenant, donc exemptée. « Vérifie la corbeille mais purge-la », « … sinon purge-la », « …,puis
 // purge-la » et « … en la vidant » partaient seules (sonde du 31/10 : envoyer, 88 rouges). Ajouter ces
 // mots ne ferme qu'eux : ce qui SUIT la cible se lit donc pour lui-même, quel que soit ce qui l'y relie,
-// et le mot y compte sous toutes ses formes. Avant la cible, seul l'infinitif la vise : « Vérifie si tu
-// peux purger la corbeille » s'arrête, « Cherche pourquoi la purge de la corbeille a échoué » continue.
-// Comme CORBEILLE_SIMPLE_MOT, ces règles se trompent du côté qui coûte une réponse à la main. Sur 130 872
-// phrases (ouverture × cible × liaison × geste), aucune ne part (sonde du 31/10). Ce qui reste est un verbe
-// inconnu, sans pronom, relié par un mot inconnu : « Vérifie la corbeille quand tu peux balance tout ».
+// et le mot y compte sous toutes ses formes. Avant la cible, dans une phrase ouverte par un travail, seul
+// l'infinitif la vise : « Vérifie si tu peux purger la corbeille » s'arrête, « Cherche pourquoi la purge de
+// la corbeille a échoué » continue. Comme CORBEILLE_SIMPLE_MOT, ces règles se trompent du côté qui coûte une
+// réponse à la main. Sur 130 872 phrases (ouverture × cible × liaison × geste), aucune ne part (sonde du
+// 31/10). Une lecture de mots reste incomplète : « Vérifie la corbeille quand tu peux balance tout » part.
 function ceQuiSuit(cible: RegExp, nu: string): string {
   const prise = cible.exec(nu)
   return prise ? nu.slice(prise.index + prise[0].length) : ''

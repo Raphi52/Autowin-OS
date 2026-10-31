@@ -960,7 +960,7 @@ describe('mode auto — ce qui suit la cible se lit, quel que soit le mot qui l�
     expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
   })
 
-  // Sans corbeille nommée : seul le mot lui-même arrête ces phrases, le contexte de la passe ne suffit pas.
+  // Le travail en tête les exempte : seul le geste lu dans la phrase les arrête, même dans une passe.
   it.each([
     'Vérifie la corbeille en la vidant',
     'Corrige la corbeille en la vidant',
