@@ -35,6 +35,8 @@ import { describe, expect, it } from 'vitest'
  */
 
 const chat = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
+/** L'accueil d'un fil vide a sa feuille à lui, et sa phrase garde le jeton de l'ancien titre (conv-1401). */
+const accueil = readFileSync(new URL('./AnimationAccueilChat.css', import.meta.url), 'utf8')
 const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
 const modes = readFileSync(new URL('../assets/theme-modes.css', import.meta.url), 'utf8')
 
@@ -87,9 +89,9 @@ const blocClair = ((): string => {
   return modes.slice(debut, modes.indexOf('\n}', debut))
 })()
 
-/** Les jetons `--chat-*` reellement appeles par la feuille du chat. */
+/** Les jetons `--chat-*` reellement appeles par les feuilles du chat. */
 const appeles = new Set(
-  [...sansCommentaires(chat).matchAll(/var\((--chat-[a-z0-9-]+)\)/g)].map((m) => m[1])
+  [...sansCommentaires(chat + accueil).matchAll(/var\((--chat-[a-z0-9-]+)\)/g)].map((m) => m[1])
 )
 
 /** Les jetons `--chat-*` definis dans theme.css, avec leur valeur sombre. */

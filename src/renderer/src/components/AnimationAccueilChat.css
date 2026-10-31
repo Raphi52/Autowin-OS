@@ -30,6 +30,14 @@
   pointer-events: none;
 }
 
+/* Fenêtre basse : la mascotte rétrécit. À 900 × 600, sa pleine taille donnait un ascenseur au fil
+   vide et coupait la pointe du chapeau. */
+@media (max-height: 720px) {
+  .am-perso {
+    zoom: 0.7;
+  }
+}
+
 /* Hauteur réservée : la mascotte ne saute pas quand la phrase passe à la ligne ou s'efface. */
 .aa-phrase-zone {
   display: flex;
