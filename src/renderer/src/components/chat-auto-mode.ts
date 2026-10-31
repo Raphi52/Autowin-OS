@@ -856,10 +856,10 @@ function suiteVideUneCorbeille(nu: string): boolean {
 // passait pour un retrait de l'accord alors qu'elle en pose un (sonde du 31/10 : envoyer). Il vaut donc
 // pour sa clause seule, et le verbe doit viser le fichier de près : « pour créer » ne le vise pas.
 const RETIRE_L_ACCORD =
-  /^[\s`'"«*_>-]*(?:puis\s+)?(?:supprim|retir|effac|desactiv|remove|delete)\w*(?:-(?:le|la)\b|\s+(?:\S+\s+){0,3}?\S*gc-purge-auto)/u
+  /^[\s`'"«*_>-]*(?:puis\s+)?(?:supprim|retir|effac|desactiv|remove|delete)\w*(?:-(?:le|la)\b|\s+(?:\S+\s+){0,3}?(?:\S*gc-purge-auto|fichier\s+d['’]accord))/u
 const VALEUR_D_ACCORD = /\b(?:enabled|true)\b/u
 const OPTION_CETTE_FOIS = /--cette-fois\b/u
-const NOMME_L_ACCORD = /gc-purge-auto/u
+const NOMME_L_ACCORD = /gc-purge-auto|fichier\s+d['’]accord/u
 // Après le fichier d'accord, retirer l'accord ou relancer le `/gc` n'en pose aucun.
 const NE_POSE_PAS_L_ACCORD = new RegExp(
   `${RETIRE_L_ACCORD.source}|^[^/]*lance\\w*\\s+(?:le\\s+)?/gc\\b`,

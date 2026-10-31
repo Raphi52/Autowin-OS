@@ -611,6 +611,8 @@ const CIBLE_PUIS_GESTE = [
   'Vérifie la corbeille (et vide-la)',
   'Vérifie la corbeille — vide-la ensuite',
   'Relis gc-purge-auto.json (crée-le si besoin)',
+  // Le fichier se désigne aussi en toutes lettres.
+  'Relis le bilan, puis crée le fichier d’accord',
   // Citer le `/gc` ne suffit pas : seul le relancer ne pose aucun accord.
   'Pose gc-purge-auto.json avec /gc',
   // La corbeille n'est qu'un lieu : seul le pronom renvoie à ce qu'elle contient.
@@ -684,6 +686,8 @@ describe('mode auto — après la cible, seul un travail annoncé continue', () 
     'Relis la doc, puis supprime-la',
     'Relis le bilan, puis publie-le',
     // Le fichier d'accord : le lire, le documenter ou le retirer ne pose rien.
+    'Relis le fichier d’accord',
+    'Supprime le fichier d’accord',
     'Relis gc-purge-auto.json, puis supprime-le',
     'Vérifie gc-purge-auto.json, puis désactive-le',
     'Relis gc-purge-auto.json, puis documente-le',
