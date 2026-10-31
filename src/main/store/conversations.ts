@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import {
   createChatTurn,
   flattenChatParts,
+  rangsEffacesParLeReset,
   reduceChatTurn,
   sansHeureInutile,
   type ChatTurnEvent,
@@ -97,6 +98,42 @@ export function pointDeCoupure(precedent: Msg | undefined): number | undefined {
   if (precedent?.role !== 'assistant' || precedent.status !== 'streaming') return undefined
   const n = precedent.parts?.length ?? 0
   return n > 0 ? n : undefined
+}
+
+/**
+ * Le message que coupe une NOUVELLE consigne : le dernier du fil, en sautant les consignes déjà
+ * écrites pendant le même tour. Avant (conv-1401, 2026-10-31) : seule la 1re consigne d'un tour
+ * notait sa coupure — pour la 2e, le message juste au-dessus était la 1re, pas la réponse.
+ */
+export function reponseAuDessusDesConsignes(messages: readonly Msg[]): Msg | undefined {
+  for (let rang = messages.length - 1; rang >= 0; rang -= 1) {
+    const message = messages[rang]
+    if (message.role === 'user' && message.orientation) continue
+    return message
+  }
+  return undefined
+}
+
+/**
+ * UN EFFACEMENT RECALE LES COUPURES DES CONSIGNES QUI SUIVENT (conv-1401, 2026-10-31).
+ *
+ * La coupure compte des parts : retirer du texte AVANT elle la décale d'autant. Sans ce recalage,
+ * 30 parts retirées laissaient une coupure à 51 sur une réponse de 50 parts, et l'écran remontait
+ * toute la réponse au-dessus des consignes (`couperAuxConsignes`, ChatView.tsx).
+ */
+function recalerLesCoupures(
+  messages: readonly Msg[],
+  reponse: Msg,
+  effaces: readonly number[]
+): void {
+  if (effaces.length === 0) return
+  for (let rang = messages.indexOf(reponse) + 1; rang < messages.length; rang += 1) {
+    const consigne = messages[rang]
+    if (consigne.role !== 'user' || !consigne.orientation) break
+    const coupure = consigne.coupeLaReponse
+    if (typeof coupure !== 'number') continue
+    consigne.coupeLaReponse = coupure - effaces.filter((efface) => efface < coupure).length
+  }
 }
 
 /** D'où vient une conversation créée par un fork — trace d'origine, sans lien vivant. */
@@ -579,6 +616,8 @@ export function applyTurnEventToMessages(
     .reverse()
     .find((candidate) => candidate.role === 'assistant' && candidate.turnId === turnId)
   if (!message) return undefined
+  if (event.kind === 'stream-reset')
+    recalerLesCoupures(messages, message, rangsEffacesParLeReset(message.parts ?? [], event))
   const next = reduceChatTurn(
     {
       turnId,
@@ -1051,7 +1090,10 @@ export class ConversationStore {
       ...(m.orientation ? { orientation: true as const } : {}),
       ...(m.repriseDuChantier ? { repriseDuChantier: m.repriseDuChantier } : {})
     }
-    const coupure = m.orientation && rangReponseEnCours < 0 ? pointDeCoupure(dernier) : undefined
+    const coupure =
+      m.orientation && rangReponseEnCours < 0
+        ? pointDeCoupure(reponseAuDessusDesConsignes(conversation.messages))
+        : undefined
     if (coupure !== undefined) message.coupeLaReponse = coupure
     if (rangReponseEnCours >= 0) conversation.messages.splice(rangReponseEnCours, 0, message)
     else conversation.messages.push(message)

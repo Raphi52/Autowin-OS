@@ -311,7 +311,11 @@ export type ChatTurnEvent =
    * qui plante après ses tests garde quand même leur preuve. `at` date chacun d'eux.
    */
   | { kind: 'tests-du-terminal'; tests: TestDuTerminal[]; at?: number }
-  | { kind: 'stream-reset'; streamId: string }
+  /**
+   * Retire le texte d'un flux. `conclusionSeule` : seulement son DERNIER passage, celui qui suit le
+   * dernier geste (action, image) — voir `rangsEffacesParLeReset`.
+   */
+  | { kind: 'stream-reset'; streamId: string; conclusionSeule?: true }
   | { kind: 'resumed' }
   | {
       kind: 'command'
@@ -446,6 +450,30 @@ export function sansHeureInutile(
   return event
 }
 
+/**
+ * Les RANGS des parts qu'un `stream-reset` retire — LA définition unique, que suivent le réducteur,
+ * la coupure des consignes enregistrées (`conversations.ts`) et celle du direct (`ChatView.tsx`).
+ *
+ * Sans `conclusionSeule` : tout le texte du flux. Avec : seulement son dernier passage, en remontant
+ * depuis sa dernière part de texte jusqu'au premier geste (action, image, autre flux). Mesure du
+ * 2026-10-31 (conv-1401, tour 79a873fa) : une relance « tu promets un compte-rendu » effaçait le
+ * flux ENTIER d'un appel de 3 h — 30 blocs, 8 384 caractères de récit du travail — alors que le
+ * modèle ne refaisait que sa conclusion.
+ */
+export function rangsEffacesParLeReset(
+  parts: readonly { kind: string; streamId?: string }[],
+  event: { streamId: string; conclusionSeule?: true }
+): number[] {
+  const duFlux = (part: { kind: string; streamId?: string } | undefined): boolean =>
+    part?.kind === 'text' && part.streamId === event.streamId
+  if (!event.conclusionSeule) return parts.flatMap((part, rang) => (duFlux(part) ? [rang] : []))
+  let rang = parts.length - 1
+  while (rang >= 0 && !duFlux(parts[rang])) rang -= 1
+  const rangs: number[] = []
+  for (; rang >= 0 && duFlux(parts[rang]); rang -= 1) rangs.unshift(rang)
+  return rangs
+}
+
 export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): ChatTurnState {
   if (event.kind === 'resumed') return { ...state, status: 'streaming', error: undefined }
 
@@ -504,13 +532,10 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
     return { ...state, status: 'streaming', parts }
   }
 
-  if (event.kind === 'stream-reset')
-    return {
-      ...state,
-      parts: state.parts.filter(
-        (part) => !(part.kind === 'text' && part.streamId === event.streamId)
-      )
-    }
+  if (event.kind === 'stream-reset') {
+    const effaces = new Set(rangsEffacesParLeReset(state.parts, event))
+    return { ...state, parts: state.parts.filter((_part, rang) => !effaces.has(rang)) }
+  }
 
   if (event.kind === 'command') {
     /**
