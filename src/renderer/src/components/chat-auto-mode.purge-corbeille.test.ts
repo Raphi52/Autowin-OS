@@ -1030,3 +1030,157 @@ describe('mode auto — ce qui suit la cible se lit, quel que soit le mot qui l�
     expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
   })
 })
+
+/*
+ * AJOUTER, IMPLÉMENTER OU CORRIGER LE FICHIER D'ACCORD, C'EST L'ÉCRIRE (conv-1341, 2026-10-31).
+ *
+ * Ces trois verbes annoncent un travail partout ailleurs, mais leur complément direct est ici le fichier
+ * qui autorise la purge. Seul le complément change la lecture : « Ajoute un test à gc-purge-auto.json »
+ * vise le test. Le nettoyage du 31/10 a vu partir seules les phrases de la première liste.
+ */
+describe('mode auto — écrire le fichier d’accord n’est pas un travail ordinaire', () => {
+  it.each([
+    'Ajoute gc-purge-auto.json',
+    'Ajoute le fichier d’accord',
+    'Ajoute un fichier gc-purge-auto.json',
+    'Ajoute le fichier gc-purge-auto.json',
+    'Ajoute le nouveau fichier gc-purge-auto.json',
+    'Ajoute .autowin-data/autowin-os/gc-purge-auto.json',
+    'Implémente gc-purge-auto.json',
+    'Implémente le fichier d’accord',
+    'Corrige le fichier d’accord pour que la purge passe',
+    'Corrige gc-purge-auto.json',
+    'Add gc-purge-auto.json',
+    'Fix gc-purge-auto.json',
+    'Vérifie gc-purge-auto.json sans oublier de le remplir',
+    'Relis le fichier d’accord sans oublier de le compléter',
+    'Vérifie gc-purge-auto.json, puis ajoute le fichier d’accord',
+    'Relis la doc, puis ajoute gc-purge-auto.json',
+    'Vérifie gc-purge-auto.json quand tu peux le remplir',
+    'Vérifie gc-purge-auto.json quand on peut le remplir',
+    'Vérifie gc-purge-auto.json si tu dois le remplir',
+    'Vérifie gc-purge-auto.json quand il doit le remplir',
+    'Vérifie gc-purge-auto.json quand il faut le remplir',
+    'Vérifie gc-purge-auto.json quand tu peux le compléter',
+    'Vérifie gc-purge-auto.json quand tu peux le reconstruire',
+    'Vérifie gc-purge-auto.json, puis ajoute-le',
+    'Relis gc-purge-auto.json mais corrige-le',
+    'Relis gc-purge-auto.json en l’ajoutant',
+    'Vérifie gc-purge-auto.json pour l’implémenter',
+    'Read gc-purge-auto.json, then add it',
+    'Read gc-purge-auto.json then fix it'
+  ])('s’arrête : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+    expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
+  })
+
+  it.each([
+    'Ajoute un test à gc-purge-auto.json',
+    'Ajoute un test sur gc-purge-auto.json',
+    'Ajoute un test pour gc-purge-auto.json',
+    'Ajoute un test dans gc-purge-auto.json',
+    'Ajoute un test au fichier d’accord',
+    'Ajoute un test aux gc-purge-auto.json',
+    'Ajoute la doc des gc-purge-auto.json',
+    'Add the test to gc-purge-auto.json',
+    'Add the test on gc-purge-auto.json',
+    'Add the test for gc-purge-auto.json',
+    'Add the test in gc-purge-auto.json',
+    'Fix the reading of gc-purge-auto.json',
+    'Ajoute --cette-fois',
+    'Ajoute --cette-fois à la consigne',
+    'Corrige le test de gc-purge-auto.json',
+    'Corrige la doc du fichier d’accord',
+    'Implémente la lecture de gc-purge-auto.json',
+    'Ajoute la lecture du fichier d’accord',
+    'Vérifie gc-purge-auto.json sans le remplir',
+    'Relis gc-purge-auto.json au lieu de le remplir',
+    'Relis gc-purge-auto.json sans oublier de le relire',
+    'Relis gc-purge-auto.json, puis ajoute un test',
+    'Vérifie gc-purge-auto.json, puis corrige le bilan',
+    // Ailleurs, ces verbes restent un travail : seul le fichier d'accord change leur lecture.
+    'Vérifie la corbeille, puis ajoute-le au bilan'
+  ])('jumeau, part toujours : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
+    expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
+  })
+})
+
+/*
+ * RELANCER LES TESTS N'EST PAS LANCER LE SCRIPT (conv-1341, 2026-10-31).
+ *
+ * Une suite de code sur ce script finit naturellement par « puis relance les tests », et toute phrase qui
+ * le nommait avec le verbe s'arrêtait. Le verbe doit viser le script, pas les tests.
+ */
+describe('mode auto — lancer les tests du script de purge reste du travail', () => {
+  it.each([
+    'Relance les tests de gc-purger-corbeilles.mjs',
+    'Lance les tests de gc-purger-corbeilles.mjs',
+    'Ajoute un test à gc-purger-corbeilles.mjs, puis relance les tests',
+    'Ajoute un test à l’option --cette-fois, puis relance les tests',
+    'Corrige gc-purger-corbeilles.mjs, puis lance la suite de tests',
+    'Lance le test de gc-purger-corbeilles.mjs',
+    'Lancer les tests de gc-purger-corbeilles.mjs',
+    'Lancez les tests de gc-purger-corbeilles.mjs',
+    'Lance tests de gc-purger-corbeilles.mjs',
+    'Lance la suite de tests de gc-purger-corbeilles.mjs',
+    'Vérifie la corbeille, puis lance les tests'
+  ])('part toujours : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
+    expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
+  })
+
+  it.each([
+    'Lance gc-purger-corbeilles.mjs',
+    'Relance gc-purger-corbeilles.mjs',
+    'Lance le script gc-purger-corbeilles.mjs',
+    'Relance le script gc-purger-corbeilles.mjs --cette-fois',
+    'Lance les tests, puis relance gc-purger-corbeilles.mjs',
+    'node scripts/gc-purger-corbeilles.mjs --cette-fois',
+    // « la suite » tout court veut dire « continue », pas la suite de tests.
+    'Vérifie la corbeille, puis lance la suite'
+  ])('jumeau, s’arrête : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+    expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
+  })
+
+  it('dans une passe /gc, « Lance la suite » attend aussi l’utilisateur', () => {
+    expect(decider(passeGc('Lance la suite'))).toMatchObject(arret)
+    expect(decider(passeGc('Lance les tests'))).toMatchObject({ action: 'envoyer' })
+  })
+})
+
+/*
+ * DEUX ANCIENNES RÈGLES CONTREDISAIENT LEURS VOISINES (conv-1341, 2026-10-31).
+ *
+ * Le verbe et la corbeille doivent être dans la même clause, et y déplacer se rattrape : rien ne testait
+ * ces deux lignes, leur retrait laissait toute la suite verte. La première liste prouve qu'elles sont
+ * retirées, la seconde que la corbeille reste gardée sans elles.
+ */
+describe('mode auto — une corbeille citée à côté d’un autre geste reste du travail', () => {
+  it.each([
+    'Supprime les doublons, puis liste gc-corbeille',
+    'Supprime le doublon, puis vérifie gc-corbeille/2026-10-16',
+    'Efface le cache, puis mesure gc-corbeille',
+    'Déplace-les dans la corbeille',
+    'Envoie-les à la corbeille',
+    'Mets-les dans la corbeille'
+  ])('part toujours : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
+    expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
+  })
+
+  it.each([
+    'Supprime gc-corbeille/2026-10-16',
+    'Liste gc-corbeille, puis supprime-le',
+    'Supprime tout dans gc-corbeille',
+    'Supprime-les de la corbeille',
+    'Supprime-les dans la corbeille',
+    'Efface-les dans la corbeille',
+    'Relis les fichiers dans la corbeille, puis fais-les disparaître',
+    'Relis les fichiers dans la corbeille, puis supprime-les'
+  ])('jumeau, s’arrête : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+    expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
+  })
+})
