@@ -812,7 +812,7 @@ const RETRAIT_DE_CORBEILLE = new RegExp(
   'u'
 )
 // Un lieu n'est pas une cible (CORBEILLE_EN_DESTINATION), et « sans les restaurer » y reste permis
-// (conv-1167). Seul un pronom renvoie alors à ce qu'il contient, quel que soit son verbe : « Relis les
+// (conv-1279). Seul un pronom renvoie alors à ce qu'il contient, quel que soit son verbe : « Relis les
 // fichiers dans la corbeille, puis fais-les disparaître ». « dis-le-moi » ne renvoie à aucun geste.
 const RENVOI_PAR_PRONOM = /-(?:la|les|le|en|y)(?![\p{L}-])|\b(?:it|them)\b/u
 // Le mot désigne ici l'interface ou le code, pas la poubelle : « Supprime le bouton Corbeille ». Un mot

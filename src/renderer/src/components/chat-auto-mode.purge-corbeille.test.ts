@@ -603,6 +603,8 @@ const CIBLE_PUIS_GESTE = [
   'Documente --cette-fois, puis utilise-la',
   // « pour » et « avant de » annoncent le même geste qu'un « puis ».
   'Vérifie la corbeille pour la vider',
+  'Vérifie la corbeille pour l’effacer',
+  'Vérifie la corbeille afin de la vider',
   'Vérifie la corbeille pour la faire disparaître',
   'Vérifie la corbeille avant de la faire disparaître',
   'Relis le bilan pour purger la corbeille',
@@ -610,6 +612,7 @@ const CIBLE_PUIS_GESTE = [
   // Une parenthèse ou un tiret ouvrent une clause comme une virgule.
   'Vérifie la corbeille (et vide-la)',
   'Vérifie la corbeille — vide-la ensuite',
+  'Vérifie la corbeille – vide-la ensuite',
   'Relis gc-purge-auto.json (crée-le si besoin)',
   // Le fichier se désigne aussi en toutes lettres.
   'Relis le bilan, puis crée le fichier d’accord',
@@ -619,6 +622,10 @@ const CIBLE_PUIS_GESTE = [
   'Relis les fichiers dans la corbeille, puis fais-les disparaître',
   'Regarde ce qu’il y a dans la corbeille, puis supprime-les',
   'Relis les fichiers dans la corbeille, puis vas-y',
+  'Relis le fichier dans la corbeille, puis déplace-le',
+  'Relis la copie dans la corbeille, puis déplace-la',
+  'Regarde dans la corbeille, puis fais-en table rase',
+  'Look in the trash, then delete it',
   'Relis les fichiers dans la corbeille, puis libère la place',
   'Regarde dans la corbeille, puis les faire disparaître',
   'Look in the trash, then delete them'
@@ -673,6 +680,9 @@ describe('mode auto — après la cible, seul un travail annoncé continue', () 
     'Vérifie la corbeille du 16/10 :',
     'Vérifie la corbeille sans la vider',
     'Vérifie la corbeille pour savoir ce qui reste',
+    'Vérifie la corbeille pour comprendre ce qui reste',
+    'Vérifie la corbeille pour voir ce qui reste',
+    'Vérifie la corbeille pour confirmer ce qui reste',
     'Vérifie la corbeille, puis dis-moi ce qu’il reste',
     'Vérifie que la place a été libérée',
     'Libère le verrou du fichier',
