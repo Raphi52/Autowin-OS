@@ -1,0 +1,172 @@
+/* QUESTION À CÔTÉ (conv-1362, lot 1/3, 2026-10-31) : un petit panneau posé au-dessus de la saisie, à
+   sa largeur. Aucune couleur en dur : tout suit le thème de l'app, clair comme sombre. */
+
+.question-a-cote {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+  /* Même colonne que `.cosmic-outline .composer` : le panneau s'aligne sur le champ de saisie. */
+  margin: 0 max(22px, calc((100% - 920px) / 2)) 6px;
+  padding: 8px 10px;
+  max-height: min(46vh, 360px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-card);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.question-a-cote-entete {
+  display: flex;
+  flex: none;
+  align-items: baseline;
+  gap: 8px;
+}
+.question-a-cote-titre {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold-clair);
+}
+.question-a-cote-note {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.question-a-cote-fermer {
+  flex: none;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.question-a-cote-fermer:hover {
+  color: var(--text);
+}
+
+.question-a-cote-saisie {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+.question-a-cote-champ {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  outline: none;
+  background: var(--surface-inset);
+  color: var(--text);
+  font: inherit;
+}
+.question-a-cote-champ:focus {
+  border-color: var(--gold-clair);
+}
+.question-a-cote-envoyer {
+  flex: none;
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
+/* La réponse défile dans le panneau : une longue réponse ne pousse pas la saisie hors du cadre. */
+.question-a-cote-reponse {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.question-a-cote-reponse .md > :first-child {
+  margin-top: 0;
+}
+.question-a-cote-reponse .md > :last-child {
+  margin-bottom: 0;
+}
+.question-a-cote-question {
+  margin: 0 0 2px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.question-a-cote-attente,
+.question-a-cote-avis {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.question-a-cote-erreur {
+  margin: 2px 0 0;
+  color: var(--err);
+}
+
+.question-a-cote-precedentes {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  margin: 0;
+  padding: 4px 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+.question-a-cote-precedentes button {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+  cursor: pointer;
+}
+.question-a-cote-precedentes button:hover:not(:disabled) {
+  opacity: 1;
+}
+.question-a-cote-precedentes button:disabled {
+  cursor: default;
+}
+
+/* La pastille de la rangée d'outils : même rond de 24 px que ∞ et ×3, et même opacité qu'eux
+   (conv-1377, 2026-10-31 : « a un border et pas les autres »). */
+.composer-input-row > .composer-question-a-cote,
+.cosmic-outline .composer-input-row > .composer-question-a-cote {
+  display: inline-flex;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  padding: 0;
+  border-radius: 999px;
+  box-shadow: none;
+}
+.composer-input-row > .composer-question-a-cote.btn:not(:disabled) {
+  border-color: var(--text);
+  color: var(--text);
+  opacity: 1;
+}
+.composer-input-row > .composer-question-a-cote.btn.actif:not(:disabled) {
+  border-color: var(--gold-clair);
+  color: var(--gold-clair);
+  opacity: 1;
+}
+.composer-question-a-cote > svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
