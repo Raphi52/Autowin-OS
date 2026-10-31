@@ -759,29 +759,43 @@ const SUITE_AFFIRME_GESTE_UTILISATEUR =
 // phrase qui vise la corbeille s'arrête, SAUF si sa clause annonce un travail par son premier verbe (le
 // texte arrive ici sans accents ni capitales). « Ajoute un test à gc-purger-corbeilles.mjs » et
 // « Supprime le bouton Corbeille » restent du travail ordinaire (règles trop larges, conv-787). La phrase
-// se coupe en clauses, car « Vérifie la corbeille puis purge-la » commence par un travail.
-// Coût mesuré le 31/10 sur 1 181 fils, 5 911 réponses et 6 633 suites distinctes : aucune décision ne
-// change, et une seule suite s'arrêterait à tort (« …il rejoint l'exclusion ou la corbeille », conv-518).
+// se coupe en clauses, car « Vérifie la corbeille puis purge-la » commence par un travail. « pour » suivi
+// d'un verbe coupe aussi : « Vérifie la corbeille pour la vider » annonce le geste. Les 4 verbes de lecture
+// exclus ne font que garder « pour savoir ce qui reste » dans son travail.
+// Coût mesuré le 31/10 sur 1 180 fils, 5 910 réponses et 7 306 suites distinctes, recommandations comprises :
+// aucune décision ne change, et 3 suites s'arrêtent à tort (conv-504, conv-518, conv-1279).
 const SUITE_DE_TRAVAIL = new RegExp(
-  /^[\s`'"«*_>-]*(?:puis\s+)?/.source +
+  /^[\s`'"«*_>-]*(?:(?:puis|ensuite|then)\s+)?/.source +
     `(?:${[
       /(?:cherch|expliqu|analys|mesur|compar|regard|verifi|montr|list|resum|inspect)(?:e|er|ez)?/
         .source,
       /(?:diagnostiqu|examin|ajout|implement|corrig|document)(?:e|er|ez)?/.source,
-      /reli(?:s|re)|li(?:s|re)|read|check|investigate|explain|find|show|add|fix/.source
+      /reli(?:s|re)|li(?:s|re)|dis-moi|read|check|investigate|explain|find|show|add|fix/.source
     ].join('|')})\\b`,
   'u'
 )
 const CLAUSES =
-  /[,;:.]\s+|\s(?:puis|ensuite|et|then|and|avant\s+de|plutot\s+que|before)\s|\savant\s+d['’]/u
+  /[,;:.]\s+|\s[—–]\s|\s\(|\s(?:puis|ensuite|et|then|and|avant\s+de|plutot\s+que|before)\s|\savant\s+d['’]|\s(?:pour|afin\s+de)\s+(?!savoir\b|comprendre\b|voir\b|confirmer\b)(?=(?:(?:la|les?)\s+|l['’])?\p{L}+(?:er|ir|re)\b)/u
 function uneClauseFait(geste: RegExp, nu: string): boolean {
   return nu.split(CLAUSES).some((clause) => geste.test(clause) && !SUITE_DE_TRAVAIL.test(clause))
+}
+// fix-ok: `uneClauseFait` juge chaque clause seule, et la cible se perd à la virgule : « Vérifie la
+// corbeille, puis fais-la disparaître » et « Relis gc-purge-auto.json, puis crée-le » partaient seules (sonde
+// du 31/10 : envoyer, 28 rouges). Lister les pronoms laisserait passer « puis libère la place » : comme pour
+// les ouvertures, la règle s'inverse. Dès la clause qui nomme la cible, seul un travail annoncé continue.
+function uneClauseFaitDepuisLaCible(cible: RegExp, nu: string, permise?: RegExp): boolean {
+  const clauses = nu.split(CLAUSES)
+  const depart = clauses.findIndex((clause) => cible.test(clause))
+  return (
+    depart >= 0 &&
+    clauses.slice(depart).some((clause) => !SUITE_DE_TRAVAIL.test(clause) && !permise?.test(clause))
+  )
 }
 // La forme en -ée dit un constat, pas un geste : « la copie n'a pas été effacée » (passe du 24/10).
 // fix-ok: une sonde sur 285 formes en a fait partir 96 seules (31/10) : « jeter » manquait à VIDER, et
 // « Supprime la corbeille » ou « Delete the trash » n'étaient lus nulle part hors de `gc-corbeille`.
 const VIDER =
-  /purg(?!ees?\b)\w*|vid(?:e|er|ez|ons)\b|empty\b|jett\w*|jet(?:er|ez|ons)\b|nettoi\w*|nettoy\w*|menage\b|clear\b/
+  /purg(?!ees?\b)\w*|vid(?:e|er|ez|ons)\b|empty\b|jett\w*|jet(?:er|ez|ons)\b|nettoi\w*|nettoy\w*|menage\b|clear\b|liber(?!ees?\b)\w*|disparaitr\w*/
     .source
 const SUPPRIMER = [
   /(?:supprim|effac|detrui|enlev|elimin|debarrass|degag)(?!ees?\b)\w*/.source,
@@ -792,12 +806,15 @@ const SUR_UNE_CORBEILLE = `${SUPPRIMER}|${/retir(?!ees?\b)\w*/.source}`
 const GESTE_DE_VIDAGE = new RegExp(`\\b(?:${VIDER})`, 'u')
 const GESTE_DE_SUPPRESSION = new RegExp(`\\b(?:${SUPPRIMER})`, 'u')
 // Verbe et corbeille dans la même clause : « Supprime le doublon, puis vérifie la corbeille » reste du
-// travail. Le pronom renvoie à la clause d'avant : « Vérifie la corbeille puis supprime-la ».
+// travail.
 const RETRAIT_DE_CORBEILLE = new RegExp(
   `(?=.*\\b(?:corbeilles?|trash)\\b).*\\b(?:${SUR_UNE_CORBEILLE})`,
   'u'
 )
-const RETRAIT_PAR_PRONOM = new RegExp(`\\b(?:${SUR_UNE_CORBEILLE})-(?:la|les|le)\\b`, 'u')
+// Un lieu n'est pas une cible (CORBEILLE_EN_DESTINATION), et « sans les restaurer » y reste permis
+// (conv-1167). Seul un pronom renvoie alors à ce qu'il contient, quel que soit son verbe : « Relis les
+// fichiers dans la corbeille, puis fais-les disparaître ». « dis-le-moi » ne renvoie à aucun geste.
+const RENVOI_PAR_PRONOM = /-(?:la|les|le|en|y)(?![\p{L}-])|\b(?:it|them)\b/u
 // Le mot désigne ici l'interface ou le code, pas la poubelle : « Supprime le bouton Corbeille ». Un mot
 // oublié dans cette liste coûte une réponse à la main, jamais une purge : elle reste courte.
 const CORBEILLE_SIMPLE_MOT = new RegExp(
@@ -821,12 +838,13 @@ const CORBEILLE_EN_DESTINATION =
   /\b(?:dans|a|au|en|vers|into|to|in)\s+(?:(?:la|le|les|un|une|the)\s+)?(?:dossier\s+)?\.?(?:corbeilles?|trash)\b/gu
 function suiteVideUneCorbeille(nu: string): boolean {
   const sansLeMot = nu.replace(CORBEILLE_SIMPLE_MOT, ' ')
+  const visee = sansLeMot.replace(CORBEILLE_EN_DESTINATION, ' ')
   return (
     (NOMME_UNE_CORBEILLE.test(nu) && uneClauseFait(GESTE_DE_VIDAGE, nu)) ||
     (nu.includes('gc-corbeille') && uneClauseFait(GESTE_DE_SUPPRESSION, nu)) ||
     uneClauseFait(RETRAIT_DE_CORBEILLE, sansLeMot) ||
-    (NOMME_UNE_CORBEILLE.test(sansLeMot) && uneClauseFait(RETRAIT_PAR_PRONOM, sansLeMot)) ||
-    uneClauseFait(NOMME_UNE_CORBEILLE, sansLeMot.replace(CORBEILLE_EN_DESTINATION, ' ')) ||
+    (NOMME_UNE_CORBEILLE.test(sansLeMot) && uneClauseFait(RENVOI_PAR_PRONOM, sansLeMot)) ||
+    uneClauseFaitDepuisLaCible(NOMME_UNE_CORBEILLE, visee) ||
     uneClauseFait(REPONSE_DE_PURGE, nu)
   )
 }
@@ -838,19 +856,24 @@ function suiteVideUneCorbeille(nu: string): boolean {
 // passait pour un retrait de l'accord alors qu'elle en pose un (sonde du 31/10 : envoyer). Il vaut donc
 // pour sa clause seule, et le verbe doit viser le fichier de près : « pour créer » ne le vise pas.
 const RETIRE_L_ACCORD =
-  /^[\s`'"«*_>-]*(?:supprim|retir|effac|desactiv|remove|delete)\w*\s+(?:\S+\s+){0,3}?\S*gc-purge-auto/u
+  /^[\s`'"«*_>-]*(?:puis\s+)?(?:supprim|retir|effac|desactiv|remove|delete)\w*(?:-(?:le|la)\b|\s+(?:\S+\s+){0,3}?\S*gc-purge-auto)/u
 const VALEUR_D_ACCORD = /\b(?:enabled|true)\b/u
+const OPTION_CETTE_FOIS = /--cette-fois\b/u
+const NOMME_L_ACCORD = /gc-purge-auto/u
+// Après le fichier d'accord, retirer l'accord ou relancer le `/gc` n'en pose aucun.
+const NE_POSE_PAS_L_ACCORD = new RegExp(
+  `${RETIRE_L_ACCORD.source}|^[^/]*lance\\w*\\s+(?:le\\s+)?/gc\\b`,
+  'u'
+)
 function suiteAutoriseLaPurge(nu: string): boolean {
-  if (uneClauseFait(/--cette-fois\b/u, nu)) return true
-  if (!nu.includes('gc-purge-auto')) return false
-  return nu
-    .split(CLAUSES)
-    .some(
-      (clause) =>
-        !RETIRE_L_ACCORD.test(clause) &&
-        (VALEUR_D_ACCORD.test(clause) ||
-          (clause.includes('gc-purge-auto') && !SUITE_DE_TRAVAIL.test(clause)))
-    )
+  if (uneClauseFaitDepuisLaCible(OPTION_CETTE_FOIS, nu)) return true
+  if (!NOMME_L_ACCORD.test(nu)) return false
+  return (
+    uneClauseFaitDepuisLaCible(NOMME_L_ACCORD, nu, NE_POSE_PAS_L_ACCORD) ||
+    nu
+      .split(CLAUSES)
+      .some((clause) => !RETIRE_L_ACCORD.test(clause) && VALEUR_D_ACCORD.test(clause))
+  )
 }
 export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
   const nu = normaliserPisteCible(suite)

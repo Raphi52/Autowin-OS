@@ -23,7 +23,7 @@ import type { Msg } from './chat-view-types'
  * Ce fichier a déjà souffert de règles trop larges (conv-787) : un fil qui supprime autre chose garde
  * son enchaînement, et un fil de code sur la corbeille aussi si sa phrase commence par un verbe de
  * SUITE_DE_TRAVAIL. Sinon il s'arrête (« Teste la purge de la corbeille ») : ça coûte une réponse à la
- * main, et une seule suite réelle sur 6 633 est dans ce cas (conv-518, mesuré le 31/10).
+ * main, et 3 suites réelles sur 7 306 sont dans ce cas (conv-504, 518 et 1279, mesuré le 31/10).
  */
 const humain = { role: 'user', content: '/gc passe quotidienne' } as Msg
 const base = {
@@ -430,7 +430,8 @@ describe('mode auto — le geste de purge s’arrête où qu’il soit dans la p
     'Liste les fichiers de la corbeille du 16/10',
     'Cherche pourquoi la corbeille du 16/10 n’a pas été purgée',
     'Corrige le test qui laisse des dossiers temporaires',
-    'Check the 16/10 folder'
+    'Check the 16/10 folder',
+    'Vérifie que la place a été libérée'
   ])('jumeau dans une passe /gc, part toujours : %s', (suite) => {
     expect(decider(passeGc(suite))).toMatchObject({ action: 'envoyer' })
   })
@@ -500,7 +501,9 @@ describe('mode auto — toutes les formes du geste s’arrêtent, sur toutes les
     'Relis le bilan, puis débarrasse-toi des deux',
     'Relis le bilan, puis élimine les deux',
     'Compare les tailles, puis vire les deux',
-    'Relis le bilan, puis fais le ménage'
+    'Relis le bilan, puis fais le ménage',
+    'Compare les tailles, puis libère la place',
+    'Relis le bilan, puis fais disparaître les deux'
   ])('dans une passe /gc, un autre verbe de retrait s’arrête aussi : %s', (suite) => {
     expect(decider(passeGc(suite))).toMatchObject(arret)
   })
@@ -564,6 +567,129 @@ describe('mode auto — poser l’accord après un autre retrait s’arrête', (
     'Supprime le bouton, puis vérifie gc-purge-auto.json',
     'Retire le bouton, puis documente gc-purge-auto.json',
     'Passe enabled à true dans settings.json'
+  ])('jumeau, part toujours : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
+    expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
+  })
+})
+
+/*
+ * LA CIBLE NE SE PERD PLUS À LA VIRGULE (conv-1341, contrôle final du 31/10). Chaque clause était jugée
+ * seule : « Vérifie la corbeille, puis fais-la disparaître » ouvre par un travail, et sa seconde clause
+ * n'a plus de cible à lire. Ces phrases partaient seules. Celles qui n'ont pas de pronom (« puis fais de
+ * la place ») montrent pourquoi la règle ne liste pas les pronoms : après la cible, seul un travail
+ * annoncé continue.
+ */
+const CIBLE_PUIS_GESTE = [
+  'Vérifie la corbeille, puis fais-la disparaître',
+  'Regarde la corbeille, puis libère-la',
+  'Vérifie la corbeille, puis débarrasse-toi-en',
+  'Vérifie la corbeille et fais-la disparaître',
+  'Vérifie les corbeilles puis fais-les disparaître',
+  'Compare les corbeilles, puis fais-en table rase',
+  'Relis la corbeille du 16/10, puis la faire disparaître',
+  'Liste gc-corbeille/2026-10-16 ; supprime-le',
+  'Check the trash, then get rid of it',
+  'Regarde la corbeille, puis libère la place',
+  'Vérifie la corbeille du 16/10, puis fais de la place',
+  'Relis gc-purge-auto.json, puis crée-le',
+  'Vérifie gc-purge-auto.json puis active-le',
+  'Relis gc-purge-auto.json et pose-le',
+  'Read gc-purge-auto.json then create it',
+  'Relis gc-purge-auto.json, puis autorise la purge',
+  'Supprime gc-purge-auto.json puis recrée-le',
+  'Supprime gc-purge-auto.json, puis remets-le',
+  'Relis la doc de --cette-fois, puis lance-la',
+  'Documente --cette-fois, puis utilise-la',
+  // « pour » et « avant de » annoncent le même geste qu'un « puis ».
+  'Vérifie la corbeille pour la vider',
+  'Vérifie la corbeille pour la faire disparaître',
+  'Vérifie la corbeille avant de la faire disparaître',
+  'Relis le bilan pour purger la corbeille',
+  'Relis gc-purge-auto.json pour le créer',
+  // Une parenthèse ou un tiret ouvrent une clause comme une virgule.
+  'Vérifie la corbeille (et vide-la)',
+  'Vérifie la corbeille — vide-la ensuite',
+  'Relis gc-purge-auto.json (crée-le si besoin)',
+  // Citer le `/gc` ne suffit pas : seul le relancer ne pose aucun accord.
+  'Pose gc-purge-auto.json avec /gc',
+  // La corbeille n'est qu'un lieu : seul le pronom renvoie à ce qu'elle contient.
+  'Relis les fichiers dans la corbeille, puis fais-les disparaître',
+  'Regarde ce qu’il y a dans la corbeille, puis supprime-les',
+  'Relis les fichiers dans la corbeille, puis vas-y',
+  'Relis les fichiers dans la corbeille, puis libère la place',
+  'Regarde dans la corbeille, puis les faire disparaître',
+  'Look in the trash, then delete them'
+]
+
+// Le contrôle retrouvait chaque fois la variante d'à côté : mêmes ouvertures, toutes les reprises.
+const OUVERTURES = [
+  'Vérifie la corbeille',
+  'Regarde la corbeille du 16/10',
+  'Liste gc-corbeille/2026-10-16',
+  'Compare les deux corbeilles',
+  'Check the trash',
+  'Relis gc-purge-auto.json',
+  'Vérifie gc-purge-auto.json',
+  'Documente --cette-fois'
+]
+const REPRISES = [
+  ', puis fais-la disparaître',
+  ' puis libère-la',
+  ' et pose-le',
+  ' ; lance-le',
+  ', ensuite active-le',
+  ' then do it',
+  ' avant de la faire disparaître'
+]
+const CROISEMENT = OUVERTURES.flatMap((debut) => REPRISES.map((fin) => `${debut}${fin}`))
+
+describe('mode auto — après la cible, seul un travail annoncé continue', () => {
+  it.each(CIBLE_PUIS_GESTE)('hors passe /gc : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+    expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
+    expect(parLaRecommandation(suite)).toMatchObject(arret)
+  })
+
+  it.each(CIBLE_PUIS_GESTE)('dans une passe /gc : %s', (suite) => {
+    expect(decider(passeGc(suite))).toMatchObject(arret)
+  })
+
+  it.each(CROISEMENT)('toutes les reprises : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+  })
+
+  // Jumeaux : la même phrase, mais la seconde clause lit, corrige ou retire l'accord.
+  it.each([
+    'Vérifie la corbeille, puis relis-la',
+    'Vérifie la corbeille, puis regarde-la',
+    'Vérifie la corbeille, puis résume-la',
+    'Compare les deux corbeilles, puis résume',
+    'Relis la corbeille du 16/10, puis liste ce qu’elle contient',
+    'Ajoute un test à la purge de la corbeille, puis documente-la',
+    'Vérifie la corbeille du 16/10.',
+    'Vérifie la corbeille du 16/10 :',
+    'Vérifie la corbeille sans la vider',
+    'Vérifie la corbeille pour savoir ce qui reste',
+    'Vérifie la corbeille, puis dis-moi ce qu’il reste',
+    'Vérifie que la place a été libérée',
+    'Libère le verrou du fichier',
+    'Vérifie la corbeille, ensuite relis-la',
+    'Check the trash, then read it',
+    'Cherche dans la corbeille, puis dis-le-moi',
+    'Ajoute un test pour supprimer le cache',
+    // Pas de corbeille visée : « puis » garde son sens ordinaire.
+    'Vérifie le bouton Corbeille, puis supprime-le',
+    'Cherche ce qui part dans la corbeille, puis corrige le filtre',
+    'Relis la doc, puis supprime-la',
+    'Relis le bilan, puis publie-le',
+    // Le fichier d'accord : le lire, le documenter ou le retirer ne pose rien.
+    'Relis gc-purge-auto.json, puis supprime-le',
+    'Vérifie gc-purge-auto.json, puis désactive-le',
+    'Relis gc-purge-auto.json, puis documente-le',
+    'Relis la doc, puis supprime gc-purge-auto.json',
+    'Supprime gc-purge-auto.json, puis relance le /gc',
+    'Ajoute un test à l’option --cette-fois, puis documente-la'
   ])('jumeau, part toujours : %s', (suite) => {
     expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
     expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
