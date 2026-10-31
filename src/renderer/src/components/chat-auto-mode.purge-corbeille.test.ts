@@ -435,6 +435,139 @@ describe('mode auto — le geste de purge s’arrête où qu’il soit dans la p
 })
 
 /*
+ * TOUTE LA FAMILLE DU GESTE, PAS LA PHRASE CITÉE (conv-1341, 2026-10-31). Une sonde sur 285 formes en a
+ * fait partir 96 seules : « Jeter la corbeille », mais surtout « Supprime la corbeille », « Efface la
+ * corbeille », « Delete the trash » : aucun verbe de suppression n'était lu hors de `gc-corbeille`, pour
+ * épargner « Supprime le bouton Corbeille ». Le contrôle retrouvait chaque fois la variante d'à côté :
+ * ce test croise les formes et les cibles au lieu d'ajouter un exemple de plus.
+ */
+const FORMES_DU_GESTE = [
+  ...['Purge', 'Purger', 'Purgez', 'Purgeons', 'Il faut purger', 'Je vais purger'],
+  ...['Vide', 'Vider', 'Videz', 'Vidons', 'Il faut vider', 'On vide'],
+  ...['Jette', 'Jeter', 'Jetez', 'Jetons', 'Il faut jeter', 'Je vais jeter'],
+  ...['Nettoie', 'Nettoyer', 'Nettoyez', 'Nettoyons', 'Il faut nettoyer'],
+  ...['Supprime', 'Supprimer', 'Supprimez', 'Supprimons', 'Il faut supprimer', 'Je vais supprimer'],
+  ...['Efface', 'Effacer', 'Effacez', 'Effaçons', 'Il faut effacer'],
+  ...['Détruis', 'Détruire', 'Détruisez', 'Il faut détruire'],
+  ...['Enlève', 'Enlever', 'Élimine', 'Dégage', 'Vire', 'Débarrasse-toi de'],
+  ...['Retire', 'Retirer', 'Il faut retirer'],
+  ...['Delete', 'Remove', 'Wipe', 'Erase', 'Destroy', 'Empty', 'Clear', 'Clean', 'Purge']
+]
+const CIBLES_DU_GESTE = [
+  'la corbeille',
+  'les corbeilles de plus de 14 jours',
+  'les 8 corbeilles gc',
+  'la corbeille du 16/10',
+  'the trash',
+  // Ici seule la corbeille est un lieu : c'est le verbe qui arrête, chacun doit donc être connu.
+  'les fichiers dans la corbeille'
+]
+const FAMILLE_DU_GESTE = FORMES_DU_GESTE.flatMap((forme) =>
+  CIBLES_DU_GESTE.map((cible) => `${forme} ${cible}`)
+)
+
+describe('mode auto — toutes les formes du geste s’arrêtent, sur toutes les cibles', () => {
+  it.each(FAMILLE_DU_GESTE)('%s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+    expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
+  })
+
+  it.each([
+    'La corbeille est à supprimer',
+    'Les corbeilles de plus de 14 jours sont à retirer',
+    'Retire le dossier de la corbeille',
+    'Vérifie la corbeille puis supprime-la',
+    'Vérifie les corbeilles puis retire-les',
+    'Supprime le bouton Corbeille puis efface la corbeille',
+    'Supprime le doublon, puis jeter la corbeille',
+    'Supprime les fichiers dans la corbeille',
+    // Aucun verbe connu : c'est la corbeille visée qui arrête, pas une liste de plus.
+    'La corbeille doit être vidée',
+    'Fais disparaître la corbeille',
+    'Fais le ménage dans la corbeille',
+    'Déplace la corbeille hors du disque',
+    'Libère la place prise par la corbeille',
+    'Ouvre la corbeille du 16/10'
+  ])('la cible n’est pas juste après le verbe : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+    expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
+  })
+
+  it.each([
+    'Relis le bilan, puis enlève les deux',
+    'Relis le bilan, puis débarrasse-toi des deux',
+    'Relis le bilan, puis élimine les deux',
+    'Compare les tailles, puis vire les deux',
+    'Relis le bilan, puis fais le ménage'
+  ])('dans une passe /gc, un autre verbe de retrait s’arrête aussi : %s', (suite) => {
+    expect(decider(passeGc(suite))).toMatchObject(arret)
+  })
+
+  // Le jumeau de chaque refus : une corbeille qui n'est qu'un mot de l'interface ou du code.
+  it.each([
+    'Supprime le bouton Corbeille du panneau',
+    'Retire le bouton Corbeille du panneau',
+    'Retire l’icône de la corbeille',
+    'Supprime le libellé Corbeille',
+    'Efface le commentaire sur la corbeille',
+    'Supprime le test de la corbeille',
+    'Remove the trash icon',
+    'Supprime le doublon, puis vérifie la corbeille',
+    'Efface le cache, puis relis le bilan de la corbeille',
+    'Vérifie que la corbeille a été supprimée',
+    'Supprime les jetons expirés',
+    'Supprime ce doublon dans X.ts',
+    // Phrases réelles (conv-504, 518, 743, 1279, 1167) : la corbeille y est un lieu ou une destination.
+    'Déplace les 13 brouillons de la racine dans un dossier .corbeille/ plutôt que de les supprimer.',
+    'Dis-moi ce qu’est page.html à la racine et s’il faut l’exclure, le déplacer dans .corbeille ou le garder.',
+    'Montre-moi le bilan /gc de ce matin et confirme que prompt-observability a été mis en corbeille',
+    'Relis les fils des parties 1 à 4 de la V1 et ses fichiers dans la corbeille, sans les restaurer, puis résume-moi la V1 plan par plan.',
+    'Envoie aussi à la Corbeille %LOCALAPPDATA%/AncienOutil et %LOCALAPPDATA%/AutreOutil.'
+  ])('jumeau, part toujours : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
+    expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
+  })
+})
+
+/*
+ * RETIRER L'ACCORD SE LIT PAR CLAUSE (conv-1341, 2026-10-31). La règle regardait le début de toute la
+ * phrase : « Supprime le bouton, puis crée gc-purge-auto.json » passait pour un retrait de l'accord,
+ * alors qu'elle en pose un.
+ */
+describe('mode auto — poser l’accord après un autre retrait s’arrête', () => {
+  it.each([
+    'Supprime le bouton, puis crée gc-purge-auto.json',
+    'Supprime le bouton puis crée gc-purge-auto.json',
+    'Retire le bouton et ajoute enabled à gc-purge-auto.json',
+    'Retire le bouton, puis écris {"enabled": true} dans gc-purge-auto.json',
+    'Supprime le bouton puis passe gc-purge-auto.json à true',
+    'Efface le cache ; pose gc-purge-auto.json',
+    'Désactive le mode sombre et crée gc-purge-auto.json',
+    'Supprime gc-purge-auto.json puis recrée gc-purge-auto.json',
+    'Supprime gc-purge-auto.json puis recrée-le avec enabled à true',
+    'Supprime le bouton pour créer gc-purge-auto.json'
+  ])('%s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(true)
+    expect(parLaLigneDeSuite(suite)).toMatchObject(arret)
+  })
+
+  it.each([
+    'Supprime gc-purge-auto.json',
+    'Supprime le fichier gc-purge-auto.json',
+    'Retire gc-purge-auto.json du dépôt',
+    'Retire enabled de gc-purge-auto.json',
+    'Remove gc-purge-auto.json',
+    'Supprime gc-purge-auto.json, puis relance le /gc',
+    'Supprime le bouton, puis vérifie gc-purge-auto.json',
+    'Retire le bouton, puis documente gc-purge-auto.json',
+    'Passe enabled à true dans settings.json'
+  ])('jumeau, part toujours : %s', (suite) => {
+    expect(suiteAttendUneDonneeUtilisateur(suite)).toBe(false)
+    expect(parLaLigneDeSuite(suite)).toMatchObject({ action: 'envoyer' })
+  })
+})
+
+/*
  * skills/gc/SKILL.md promet que le mode auto ne répond jamais à la question de purge. C'était faux dès
  * que « Non, garde » était recommandée, ou la question à choix multiple : il envoyait « Non, garde »
  * (objection du contrôle final, 2026-10-31). Rien n'était purgé, mais il tranchait à la place de
