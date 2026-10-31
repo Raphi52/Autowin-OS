@@ -30,7 +30,8 @@
   Usage : powershell -NoProfile -File scripts/hdesk-fermer.ps1 -Id <id> [-Conversation <fil>] [-DelaiDouxSecondes 5]
           powershell -NoProfile -File scripts/hdesk-fermer.ps1 -Id <id> -SansFiche [-DelaiDouxSecondes 5]
   Sortie : JSON {id, desktop, ferme, dejaFerme, fermesDoucement, forces, survivants, epargnes, ficheRetiree, sansFiche?, erreur?}
-  Codes : 0 ferme (ou deja ferme) · 1 entree invalide / echec · 2 aucun bureau a ce nom
+  Codes : 0 ferme (ou deja ferme, y compris bureau absent du registre ET sans fenetre d'apres Windows) · 1 entree invalide / echec
+          2 sans -SansFiche : bureau VIVANT mais absent du registre (rien n'est touche) ; avec -SansFiche : aucun bureau vivant a ce nom
           5 bureau d'une AUTRE conversation (rien n'est touche) · 6 des processus survivent
 #>
 param(
@@ -72,8 +73,6 @@ if (Test-Path -LiteralPath $fichePath) {
     Rendre @{ id = $Id; desktop = $bureau; ferme = $false; conversationOccupante = [string]$fiche.conversationId
       erreur = "Bureau '$Id' inscrit au registre (fil $($fiche.conversationId)) : il se ferme par son fil, pas sans fiche. Rien n'a ete touche." } 1
   }
-} elseif (-not $SansFiche) {
-  Rendre @{ id = $Id; desktop = $bureau; ferme = $false; erreur = "Aucun bureau cache a ce nom ('$Id') dans le registre : rien n'a ete ferme." } 2
 }
 if ($fiche -and [string]$fiche.conversationId -ne $Conversation) {
   Rendre @{ id = $Id; desktop = $bureau; ferme = $false; conversationOccupante = [string]$fiche.conversationId
@@ -131,9 +130,25 @@ function PidsAvecFenetre([string]$nom) {
 }
 function Vivant([int]$p) { return [bool](Get-Process -Id $p -ErrorAction SilentlyContinue) }
 
-# Sans fiche, seul le bureau Windows atteste que l'identifiant designe quelque chose.
-if (-not $fiche -and $null -eq [AutowinHdeskFermeur]::Fenetres($bureau)) {
-  Rendre @{ id = $Id; desktop = $bureau; ferme = $false; sansFiche = $true; erreur = "Aucun bureau cache '$bureau' vivant : rien n'a ete ferme." } 2
+# Sans fiche, seul le bureau Windows atteste ce que l'identifiant designe.
+# conv-1374 (2026-10-31) : 8 fermetures sur 36 en 10 jours echouaient sur un bureau DEJA ferme (fiche
+# retiree par une fermeture precedente) : bureau inexistant ou vide = succes explicite. Mais l'absence
+# de fiche ne prouve pas la fermeture (retour de conv-1370) : un ui-capture-* vit sans fiche, et le
+# dire ferme sans interroger Windows laissait charmap pid 36012 vivant apres un code 0. Des fenetres =
+# refus, rien n'est touche : aucun fil n'en repond, seule la vue « Bureaux caches » ferme sans fiche.
+if (-not $fiche) {
+  $presentes = [AutowinHdeskFermeur]::Fenetres($bureau)
+  if ($SansFiche) {
+    if ($null -eq $presentes) {
+      Rendre @{ id = $Id; desktop = $bureau; ferme = $false; sansFiche = $true; erreur = "Aucun bureau cache '$bureau' vivant : rien n'a ete ferme." } 2
+    }
+  } elseif ($null -eq $presentes -or $presentes.Count -eq 0) {
+    Rendre @{ id = $Id; desktop = $bureau; ferme = $true; dejaFerme = $true; fermesDoucement = @(); forces = @(); survivants = @()
+      epargnes = @(); ficheRetiree = $false; sansFiche = $false } 0
+  } else {
+    Rendre @{ id = $Id; desktop = $bureau; ferme = $false; sansFiche = $false
+      erreur = "Bureau '$Id' vivant ($($presentes.Count) fenetre(s)) mais absent du registre : aucun fil n'en repond, seule la vue Bureaux caches le ferme. Rien n'a ete touche." } 2
+  }
 }
 
 $procs = @{}
