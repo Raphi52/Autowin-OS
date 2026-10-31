@@ -20,6 +20,9 @@ files:
 asarUnpack:
   - resources/**
   - node_modules/@napi-rs/keyring-*/**
+  # Terminal intégré (conv-1362) : le module natif, conpty.dll et OpenConsole.exe doivent exister sur
+  # le disque, Windows ne lance rien depuis l'archive asar.
+  - node_modules/@lydell/node-pty*/**
   # PowerShell ne peut pas executer un fichier situe DANS l'archive asar : le script de lecture
   # d'Outlook doit exister sur le disque. Sans cette ligne, la passerelle marche en developpement et
   # est introuvable en package — le pire des deux mondes.
