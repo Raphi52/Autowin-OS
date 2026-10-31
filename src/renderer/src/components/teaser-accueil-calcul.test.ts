@@ -8,7 +8,7 @@ const SOUS_LE_CERCLE = CERCLE_DANS_L_IMAGE + 0.06
 
 describe('placeDeLaPhrase', () => {
   it('fil au format de la vidéo : la phrase commence sous le cercle de runes', () => {
-    expect(hautDeLaPhrase(1280, 720)).toBeCloseTo(720 * SOUS_LE_CERCLE)
+    expect(hautDeLaPhrase(1600, 900)).toBeCloseTo(900 * SOUS_LE_CERCLE)
   })
 
   it('fil plus large : la vidéo est coupée en haut surtout, la phrase suit le cercle', () => {
@@ -21,11 +21,11 @@ describe('placeDeLaPhrase', () => {
   })
 
   it('fenêtre basse : la phrase garde la place de ses deux lignes', () => {
-    expect(hautDeLaPhrase(900, 300)).toBeLessThanOrEqual(300 - 76)
+    expect(hautDeLaPhrase(900, 300)).toBeLessThanOrEqual(300 - 92)
   })
 
   it('l’écart mène du haut de la phrase au centre du cercle', () => {
-    expect(placeDeLaPhrase(1280, 720).ecart).toBeCloseTo(720 * 0.06)
+    expect(placeDeLaPhrase(1600, 900).ecart).toBeCloseTo(900 * 0.06)
     // Fenêtre basse : la phrase remonte, le chemin des lettres raccourcit.
     expect(placeDeLaPhrase(900, 300).ecart).toBeLessThan(900 * (720 / 1280) * 0.06)
   })
@@ -34,13 +34,13 @@ describe('placeDeLaPhrase', () => {
 describe('etatDeLaPhrase', () => {
   it('la phrase sort juste après le coup de bâton, sur le plan large', () => {
     expect(etatDeLaPhrase(0.9)).toBe('absente')
-    expect(etatDeLaPhrase(1.2)).toBe('presente')
-    expect(etatDeLaPhrase(6.4)).toBe('presente')
+    expect(etatDeLaPhrase(1.1)).toBe('presente')
+    expect(etatDeLaPhrase(5.3)).toBe('presente')
   })
 
   it('elle se disperse avant la coupe vers les plans serrés', () => {
-    expect(etatDeLaPhrase(6.6)).toBe('sortante')
-    expect(etatDeLaPhrase(7)).toBe('absente')
+    expect(etatDeLaPhrase(5.5)).toBe('sortante')
+    expect(etatDeLaPhrase(5.9)).toBe('absente')
     expect(etatDeLaPhrase(9.9)).toBe('absente')
   })
 

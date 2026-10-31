@@ -10,8 +10,8 @@ export const CERCLE_DANS_L_IMAGE = 0.823
 export const CADRAGE_VERTICAL = 0.85
 /** Le bas du cercle, depuis son centre, en part de l'image : la phrase commence juste dessous. */
 const BAS_DU_CERCLE = 0.06
-/** Place gardée sous le haut de la phrase : deux lignes, même dans une fenêtre basse. */
-const PLACE_DE_LA_PHRASE = 76
+/** Place gardée sous le haut de la phrase : son nom et deux lignes, même dans une fenêtre basse. */
+const PLACE_DE_LA_PHRASE = 92
 
 /** Une seule intro par lancement : un fil vide s'ouvre à chaque « Nouveau fil ». */
 export const teaserVu = { intro: false }
@@ -22,13 +22,13 @@ export const VITESSE_AU_TRAVAIL = 1.6
 /**
  * LE MONTAGE DE LA BOUCLE, le même que `scripts/teaser-accueil/timeline.cjs` : un temps de 10 s
  * s'ouvre sur le plan large : le mage lève son bâton et frappe le sol, le cercle lance sa colonne de
- * lumière. Il finit sur deux plans serrés. La phrase sort du cercle juste après le coup de bâton, et
- * se disperse avant la coupe vers le plan serré.
+ * lumière. La caméra tourne autour du cercle, qui reste à sa place à l'écran. Viennent ensuite les
+ * plans serrés, à 6 s. La phrase sort du cercle juste après le coup, et se disperse avant la coupe.
  */
 const DUREE_D_UN_TEMPS = 10
-const ENTREE_PHRASE = 1.1
-const SORTIE_PHRASE = 6.5
-const FIN_DE_LA_SORTIE = 6.95
+const ENTREE_PHRASE = 1
+const SORTIE_PHRASE = 5.35
+const FIN_DE_LA_SORTIE = 5.8
 
 export type EtatDePhrase = 'absente' | 'presente' | 'sortante'
 
