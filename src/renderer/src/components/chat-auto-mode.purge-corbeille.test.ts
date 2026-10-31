@@ -20,8 +20,10 @@ import type { Msg } from './chat-view-types'
  * Aucune n'est partie sur ce fil. Le mode auto allumé, seul le gras de leur titre, que
  * `extractRecommendation` ne lit pas, aurait retenu celles des 27 et 30/10.
  *
- * Le refus reste ÉTROIT : ce fichier a déjà souffert de règles trop larges (conv-787). Un fil qui
- * travaille sur le code de la corbeille, ou qui supprime autre chose, garde son enchaînement.
+ * Ce fichier a déjà souffert de règles trop larges (conv-787) : un fil qui supprime autre chose garde
+ * son enchaînement, et un fil de code sur la corbeille aussi si sa phrase commence par un verbe de
+ * SUITE_DE_TRAVAIL. Sinon il s'arrête (« Teste la purge de la corbeille ») : ça coûte une réponse à la
+ * main, et une seule suite réelle sur 6 633 est dans ce cas (conv-518, mesuré le 31/10).
  */
 const humain = { role: 'user', content: '/gc passe quotidienne' } as Msg
 const base = {
@@ -517,7 +519,8 @@ describe('mode auto — toutes les formes du geste s’arrêtent, sur toutes les
     'Vérifie que la corbeille a été supprimée',
     'Supprime les jetons expirés',
     'Supprime ce doublon dans X.ts',
-    // Phrases réelles (conv-504, 518, 743, 1279, 1167) : la corbeille y est un lieu ou une destination.
+    // Tirées de suites réelles (conv-504, 518, 743, 1279, 1167), parfois abrégées : la corbeille y est
+    // un lieu ou une destination.
     'Déplace les 13 brouillons de la racine dans un dossier .corbeille/ plutôt que de les supprimer.',
     'Dis-moi ce qu’est page.html à la racine et s’il faut l’exclure, le déplacer dans .corbeille ou le garder.',
     'Montre-moi le bilan /gc de ce matin et confirme que prompt-observability a été mis en corbeille',
