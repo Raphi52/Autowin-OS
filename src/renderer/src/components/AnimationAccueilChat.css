@@ -1,0 +1,93 @@
+/* Accueil d'un fil vide (conv-1401, 2026-10-31) : la vraie mascotte et la phrase qui s'écrit.
+   La mascotte vit dans sa propre page (son iframe) : aucune de ses couleurs n'est ici. Le texte
+   passe par les jetons du thème. Pas de garde prefers-reduced-motion : ce poste l'a actif,
+   l'animation ne se verrait jamais. */
+
+.accueil-anim {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: auto;
+  width: min(100%, 640px);
+}
+
+/* Taille posée par le composant : celle de la fenêtre de la mascotte, multipliée par son zoom.
+   `pointer-events: none` : sa croix et son « glisser pour la déplacer » n'ont pas de sens ici. */
+.am-perso {
+  flex: none;
+}
+
+/* Même `color-scheme` que la page qu'elle contient : sinon Chromium peint un fond opaque derrière
+   une iframe transparente. */
+.am-cadre {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: none;
+  color-scheme: normal;
+  pointer-events: none;
+}
+
+/* Hauteur réservée : la mascotte ne saute pas quand la phrase passe à la ligne ou s'efface. */
+.aa-phrase-zone {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 2.5em;
+  font-size: clamp(20px, 2.6vw, 27px);
+}
+
+.aa-phrase {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  box-shadow: none;
+  color: var(--chat-accueil-titre);
+  font:
+    700 1em/1.24 Georgia,
+    serif;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.aa-phrase:hover,
+.aa-phrase:focus-visible {
+  color: var(--gold);
+}
+.aa-phrase:focus-visible {
+  outline: 1px solid color-mix(in srgb, var(--gold) 50%, transparent);
+  outline-offset: 4px;
+}
+.est-sommeil .aa-phrase {
+  opacity: 0.62;
+}
+
+.aa-barre {
+  display: inline-block;
+  width: 2px;
+  height: 0.9em;
+  margin-left: 2px;
+  vertical-align: -0.08em;
+  background: var(--gold);
+  animation: aa-barre 1s steps(1) infinite;
+}
+
+/* Sur la grille de 100 ms : un `steps(1)` sur ce segment fait un changement net, au même cran que
+   les autres indicateurs (animations-par-crans.ts). */
+@keyframes aa-barre {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  60%,
+  100% {
+    opacity: 0;
+  }
+}

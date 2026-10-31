@@ -31,6 +31,7 @@ import {
   glypheDuHalo,
   HAUTEUR_MASCOTTE,
   LARGEUR_MASCOTTE,
+  reglesDeLAccueil,
   reglesDuPersonnage,
   svgDuPersonnage,
   visageDeLaBille
@@ -687,6 +688,37 @@ export function cssDeLEtat(etat: EtatMascotte, style: StyleMascotte = 'magicien'
       break
   }
   return enFeuille(regles)
+}
+
+export const HUMEURS_ACCUEIL = ['coucou', 'eveil', 'lecture', 'sommeil'] as const
+export type HumeurAccueil = (typeof HUMEURS_ACCUEIL)[number]
+
+/**
+ * LA MÊME MASCOTTE SUR L'ACCUEIL D'UN FIL VIDE (conv-1401, 2026-10-31) : `AnimationAccueilChat` montre
+ * la vraie page (`htmlDeMascotte`) et lui pose cette feuille, dans le style choisi en Settings.
+ * Dormir, c'est son état calme ; faire coucou, ses bras levés de « pour toi », sans chiffre. Dès
+ * qu'un agent tourne, elle travaille avec le vrai compte, même si l'utilisateur ne bouge plus :
+ * l'endormir là ferait disparaître le chiffre au moment où il dit quelque chose.
+ */
+export function cssDeLAccueil(
+  humeur: HumeurAccueil,
+  agents: number,
+  style: StyleMascotte = 'magicien'
+): string {
+  if (agents > 0) return cssDeLEtat({ etat: 'travail', pastille: compte(agents), fil: null }, style)
+  switch (humeur) {
+    case 'sommeil':
+      return cssDeLEtat({ etat: 'calme', pastille: null, fil: null }, style)
+    case 'coucou':
+      return cssDeLEtat({ etat: 'attente', pastille: null, fil: null }, style)
+    // La bille basique n'a ni bras ni grimoire : son halo qui tourne dit qu'elle est attentive.
+    case 'lecture':
+      return style === 'basique'
+        ? cssDeLEtat({ etat: 'travail', pastille: null, fil: null }, style)
+        : enFeuille(reglesDeLAccueil('lecture'))
+    case 'eveil':
+      return style === 'basique' ? '' : enFeuille(reglesDeLAccueil('eveil'))
+  }
 }
 
 /** Chaque sélecteur préfixé par `body ` (voir `cssDeLEtat`). */
