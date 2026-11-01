@@ -1,20 +1,35 @@
-/* Accueil d'un fil vide (conv-1401, 2026-10-31) : la vraie mascotte et la phrase qui s'écrit.
-   La mascotte vit dans sa propre page (son iframe) : aucune de ses couleurs n'est ici. Le texte
-   passe par les jetons du thème. Pas de garde prefers-reduced-motion : ce poste l'a actif,
+/* Accueil d'un fil vide (conv-1401, 2026-10-31) : le film et la phrase qui s'écrit ; la vraie mascotte
+   et son sol magique si le film ne se lit pas. Elle vit dans sa propre page (son iframe) : aucune de
+   ses couleurs n'est ici.
+   Le texte passe par les jetons du thème. Pas de garde prefers-reduced-motion : ce poste l'a actif,
    l'animation ne se verrait jamais. */
 
+/* `overflow-y: clip` : le sol, plus large et plus bas que le reste, ne donne aucun ascenseur au fil.
+   Sur les côtés, `.chat-scroll` le coupe déjà, sans barre. `padding-bottom` : la place de son
+   bord avant, sous la phrase. La couronne déborde du carré du glyphe : à 36 px, elle était coupée
+   net. Les deux teintes sont celles du halo de la mascotte, rapprochées du texte du thème. Ce bleu
+   précis : un bleu plus clair serait repeint en violet ou en gris par les couches de thème, et le
+   sol ne dirait plus la même chose que le halo. */
 .accueil-anim {
+  --as-echelle: 1;
+  --as-or: color-mix(in srgb, #f0c75e 72%, var(--text)); /* couleur-fixe: halo de la mascotte */
+  --as-bleu: color-mix(in srgb, #4f9fff 62%, var(--text)); /* couleur-fixe: halo de la mascotte */
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
   margin: auto;
+  padding-bottom: calc(96px * var(--as-echelle));
   width: min(100%, 640px);
+  overflow-y: clip;
 }
 
 /* Taille posée par le composant : celle de la fenêtre de la mascotte, multipliée par son zoom.
    `pointer-events: none` : sa croix et son « glisser pour la déplacer » n'ont pas de sens ici. */
 .am-perso {
+  position: relative;
+  z-index: 1;
   flex: none;
 }
 
@@ -30,16 +45,219 @@
   pointer-events: none;
 }
 
-/* Fenêtre basse : la mascotte rétrécit. À 900 × 600, sa pleine taille donnait un ascenseur au fil
-   vide et coupait la pointe du chapeau. */
-@media (max-height: 720px) {
+/* Fenêtre basse : la mascotte et son sol rétrécissent. À 900 × 600, leur pleine taille donnait un
+   ascenseur au fil vide et coupait la pointe du chapeau. 780 px : en dessous, ils ne tiennent plus. */
+@media (max-height: 780px) {
+  .accueil-anim {
+    --as-echelle: 0.7;
+  }
   .am-perso {
     zoom: 0.7;
   }
 }
 
+/* Très basse (900 × 600, en-tête sur deux lignes) : le fil n'a plus que 300 px. */
+@media (max-height: 640px) {
+  .accueil-anim {
+    --as-echelle: 0.5;
+  }
+  .am-perso {
+    zoom: 0.5;
+  }
+}
+
+/* ---------- Le teaser ---------- */
+
+/* La vidéo couvre tout le fil vide : le fil devient son repère, le temps qu'il est vide. Elle ne suit
+   pas le thème, c'est un film : la phrase y est claire partout, même en thème clair. Ni fond ni voile
+   ici : les couches de thème les repeindraient, un voile noir deviendrait blanc en thème clair. Le
+   bas de l'image est assombri dans le film lui-même, pour la phrase. */
+.chat-scroll:has(> .at-decor) {
+  position: relative;
+}
+.at-decor {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* 85 % : `CADRAGE_VERTICAL` de teaser-accueil-calcul.ts. Coupée en hauteur, la vidéo perd surtout le
+   haut de l'horloge, jamais le cercle de runes ni le magicien. */
+.at-video {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 85%;
+}
+/* `top` vient de `hautDeLaPhrase` : la phrase tombe juste sous le cercle de runes de la vidéo. */
+.accueil-anim.avec-decor {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  gap: 0;
+  margin: 0 auto;
+  padding-bottom: 0;
+  overflow-y: visible; /* les lettres partent du cercle, au-dessus de ce cadre */
+}
+/* Plus petite que sans film : deux lignes tiennent entre le cercle et le bas du fil. */
+.avec-decor .aa-phrase-zone {
+  font-size: clamp(17px, 1.9vw, 23px);
+}
+/* Les lettres partent du centre du cercle (`--de-x`, `--de-y`, mesurés par PhraseInvoquee), montent
+   dans la colonne de lumière en s'écartant, puis viennent se poser. Par `steps()` : le film tourne
+   déjà, elles n'ajoutent pas d'images. Hors de la liste des crans : elles ne jouent qu'une fois, et
+   le recalage sur l'horloge commune les finirait avant qu'elles commencent. Sombres dans leur halo
+   pendant le vol : dorées, elles disparaissaient dans la colonne de lumière. */
+.at-phrase {
+  --at-lueur: #ffb648; /* couleur-fixe: lueur sur le film, tous thèmes */
+  --at-reflet: #ffd98a; /* couleur-fixe: lueur sur le film, tous thèmes */
+  text-shadow:
+    0 0 16px var(--at-lueur),
+    0 0 3px var(--at-reflet);
+}
+/* Un sort : le nom en or, et grand ; son usage dessous. */
+.at-nom {
+  display: block;
+  color: #ffd98a; /* couleur-fixe: texte sur le film, tous thèmes */
+  font-size: 1.32em;
+  letter-spacing: 0.05em;
+  line-height: 1.12;
+}
+.at-usage {
+  display: block;
+  font-size: 0.84em;
+  font-weight: 400;
+}
+.at-mot {
+  display: inline-block;
+  white-space: nowrap;
+}
+.at-lettre {
+  display: inline-block;
+  animation: at-assemble 1.1s steps(26) var(--retard) both;
+}
+.at-sort .at-lettre {
+  animation: at-disperse 0.42s steps(10) both;
+}
+@keyframes at-assemble {
+  0% {
+    opacity: 0;
+    color: #2b1500; /* couleur-fixe: lettre dans la lumière du cercle */
+    transform: translate(var(--de-x), var(--de-y)) scale(0.25) rotate(var(--tour));
+  }
+  14% {
+    opacity: 1;
+  }
+  52% {
+    color: #2b1500; /* couleur-fixe: lettre dans la lumière du cercle */
+    transform: translate(calc(var(--de-x) * 0.5 + var(--ecart)), calc(var(--de-y) - 110px))
+      scale(1.5) rotate(calc(var(--tour) * 0.4));
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes at-disperse {
+  to {
+    opacity: 0;
+    transform: translate(var(--ecart), -56px) scale(0.6) rotate(var(--tour));
+  }
+}
+/* Pendant l'intro, rien par-dessus le film : la phrase arrive à sa fin. */
+.accueil-anim.en-intro {
+  visibility: hidden;
+}
+/* Blanc franc : un blanc grisé serait pris pour un gris en dur et repeint en sombre par
+   theme-clair-gris.css (`estGris`, seuil à 250), illisible sur le film. */
+.avec-decor .aa-phrase {
+  color: #fffdfa; /* couleur-fixe: texte sur le film, tous thèmes */
+}
+.avec-decor .aa-phrase:hover,
+.avec-decor .aa-phrase:focus-visible {
+  color: #ffd98a; /* couleur-fixe: texte sur le film, tous thèmes */
+}
+.avec-decor .aa-barre {
+  background: #ffd98a; /* couleur-fixe: texte sur le film, tous thèmes */
+}
+
+/* ---------- Le sol magique ---------- */
+
+/* 500 px pour le carré du glyphe, soit 720 px de couronne ; 223 px : ses pieds, à 90 % de sa hauteur.
+   Le cercle prend la couleur de son état, comme son halo : or quand elle salue, bleu au travail. */
+.as-tient {
+  --as-cote: calc(500px * var(--as-echelle));
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  top: calc(223px * var(--as-echelle));
+  width: var(--as-cote);
+  height: var(--as-cote);
+  margin: calc(var(--as-cote) / -2) 0 0 calc(var(--as-cote) / -2);
+  opacity: 0.5;
+  color: var(--text-dim);
+  transform: perspective(calc(940px * var(--as-echelle))) rotateX(70deg);
+  pointer-events: none;
+}
+.est-coucou .as-tient {
+  color: var(--as-or);
+}
+.avec-agents .as-tient {
+  color: var(--as-bleu);
+}
+
+.as-sceau {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.est-sommeil:not(.avec-agents) .as-sceau {
+  opacity: 0.34;
+}
+/* Filets d'un pixel quelle que soit la taille : agrandi sans ça, il redevient épais. */
+.as-sceau * {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.as-sceau .gn {
+  fill: currentColor;
+  stroke: none;
+}
+.as-sceau .ge,
+.as-onde {
+  transform-origin: 32px 32px;
+}
+.avec-agents .as-sceau .ge {
+  animation: as-tourne 24s steps(240) infinite;
+}
+
+.as-onde {
+  animation: as-onde 1.2s steps(12) infinite;
+}
+.as-onde-1 {
+  animation-delay: 0.4s;
+}
+.as-onde-2 {
+  animation-delay: 0.8s;
+}
+
+/* ---------- La phrase ---------- */
+
 /* Hauteur réservée : la mascotte ne saute pas quand la phrase passe à la ligne ou s'efface. */
 .aa-phrase-zone {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -73,7 +291,7 @@
   outline: 1px solid color-mix(in srgb, var(--gold) 50%, transparent);
   outline-offset: 4px;
 }
-.est-sommeil .aa-phrase {
+.est-sommeil:not(.avec-decor) .aa-phrase {
   opacity: 0.62;
 }
 
@@ -96,6 +314,26 @@
   }
   60%,
   100% {
+    opacity: 0;
+  }
+}
+
+@keyframes as-tourne {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes as-onde {
+  from {
+    transform: scale(0.25);
+    opacity: 0.95;
+  }
+  to {
+    transform: scale(1.5);
     opacity: 0;
   }
 }
