@@ -265,6 +265,14 @@ export class TaskScheduler {
       onLateUsageSettlement?.(identified)
     }
     try {
+      /*
+       * « Exactement une fois, même après redémarrage » : la revendication s'écrit hors du fil
+       * principal (conv-1368), elle doit donc être sur le disque avant le départ, sinon un plantage
+       * juste après rejouerait la tâche. Attendre ici retarde la tâche, jamais la fenêtre.
+       */
+      if (this.store.attendrePersistance && !(await this.store.attendrePersistance())) {
+        throw new Error('revendication non posée sur le disque : tâche non lancée')
+      }
       const result = await this.dispatcher.run(
         task,
         occurrence,

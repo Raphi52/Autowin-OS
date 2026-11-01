@@ -38,6 +38,8 @@ export class TaskStore {
   private readonly makeId: () => string
   private readonly listeners = new Set<(snapshot: TaskStoreSnapshot) => void>()
   onChange?: (snapshot: TaskStoreSnapshot) => void
+  /** Rend `false` si le dernier état n'a pas pu être posé. Absent : aucun disque derrière ce magasin. */
+  attendrePersistance?: () => Promise<boolean>
 
   constructor(options: TaskStoreOptions = {}) {
     this.now = options.now ?? (() => Date.now())
