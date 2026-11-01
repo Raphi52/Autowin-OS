@@ -1,6 +1,8 @@
 /*
- * Vue « Bureaux cachés » (conv-951) — disposition CONSOLE (conv-1025, 2026-10-20, skill draft,
- * proposition 1) : la liste des bureaux à gauche, l'aperçu du bureau choisi à droite.
+ * Panneau « Bureaux cachés » du chat (conv-1378, 2026-10-31 : plus un écran du menu, le même gabarit
+ * que NavigateurIntegre.css, dont il reprend la poignée et les boutons ronds).
+ * Plus de liste (conv-1378, même jour) : un écran par bureau, pleine largeur, tous à l'image ensemble.
+ * Vue « Bureaux cachés » (conv-951), disposition Console (conv-1025, 2026-10-20, skill draft).
  * RETIRÉS à la demande (« en enlevant le mot multi color et le filtre télévision et en mettant un
  * cadre en fonction du thème au lieu du cadre rose sur le bureau sélectionné ») : le « REGARDER »
  * écrit en dégradé, le liseré irisé qui tournait autour de la TV, ses lignes de balayage et son
@@ -15,21 +17,54 @@
     --nv-choisi-cadre,
     linear-gradient(var(--container-border-strong), var(--container-border-strong))
   );
-  --hdesk-choisi-fond: var(--nv-choisi-fond, var(--surface-selected));
   --hdesk-mono: ui-monospace, Consolas, monospace;
+  width: 520px;
+  max-width: calc(100% - 280px);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  border: 0;
+  border-radius: var(--container-radius-panel);
+  padding: var(--s2);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-panel);
+}
+/* Plein cadre : le panneau prend la place du fil (masqué, pas démonté : la saisie garde son brouillon). */
+.hdesk-gestion-view.is-plein-cadre {
+  flex: 1;
+  max-width: none;
+}
+.chat-layout:has(> .hdesk-gestion-view.is-plein-cadre) > .chat {
+  display: none;
+}
+
+/* ---------- En-tête : titre, compteurs, Nouveau bureau, plein cadre, croix ---------- */
+.hdesk-panneau-tete {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+.hdesk-panneau-tete h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+/* L'en-tête reste à l'écran : seul ce qui suit défile. */
+.hdesk-panneau-corps {
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   gap: var(--s3, 12px);
   min-height: 0;
   overflow: auto;
-  container-type: inline-size;
-}
-
-/* ---------- En-tête : compteurs + Nouveau bureau ---------- */
-.hdesk-entete {
-  display: inline-flex;
-  align-items: center;
-  gap: 14px;
 }
 .hdesk-stats {
   display: inline-flex;
@@ -116,46 +151,34 @@
   flex: 1 1 0;
 }
 
-/* ---------- La console : liste | bureau choisi ---------- */
-.hdesk-console {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
+/* ---------- Les écrans : un par bureau ---------- */
+/* Un seul bureau, ou un panneau étroit : pleine largeur. En plein cadre, la largeur disponible les met
+   côte à côte plutôt que de faire défiler une super conv. */
+.hdesk-teles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(480px, 100%), 1fr));
+  gap: 16px 14px;
+  align-items: start;
   min-width: 0;
-}
-.hdesk-cote {
-  flex: 1 1 220px;
-  max-width: 330px;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.hdesk-console.is-vide .hdesk-cote {
-  max-width: none;
 }
 .hdesk-detail {
-  flex: 3 1 320px;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-/* Colonne étroite : la liste passe au-dessus de l'aperçu, en pleine largeur. */
-@container (max-width: 620px) {
-  .hdesk-console {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  /* En colonne, la base de 200 / 320 px deviendrait une HAUTEUR : un vide sous la liste. */
-  .hdesk-cote,
-  .hdesk-detail {
-    flex: none;
-    max-width: none;
-  }
+.hdesk-tele-titre {
+  flex: 1 0 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
 }
 
-/* Pastille d'état d'une ligne. */
+/* Pastille d'état. */
 .hdesk-point {
   display: inline-block;
   flex: none;
@@ -167,158 +190,7 @@
 .hdesk-point.is-alerte {
   background: var(--warn);
 }
-.hdesk-point.is-eteint {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--text-faint);
-}
 
-/* ---------- Liste des bureaux ---------- */
-.hdesk-liste,
-.hdesk-recents ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.hdesk-ligne-case {
-  position: relative;
-}
-.hdesk-ligne-case.is-fermeture .hdesk-ligne {
-  opacity: 0.45;
-}
-.hdesk-ligne {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  min-width: 0;
-  padding: 7px 32px 7px 10px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.hdesk-ligne:hover {
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-}
-.hdesk-ligne:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-/* LE CHOIX : le voile et le cadre du thème. Le cadre est un calque ÉVIDÉ par masque (même technique
-   que les panneaux du thème) : il se pose sur n'importe quel fond, même translucide, sans le teinter
-   ni décaler le contenu. */
-.hdesk-ligne.is-choisi {
-  background: var(--hdesk-choisi-fond);
-}
-.hdesk-ligne.is-choisi::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 1.5px;
-  border-radius: inherit;
-  background: var(--hdesk-choisi-cadre);
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-.hdesk-ligne-texte {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 0;
-  min-width: 0;
-}
-.hdesk-ligne-texte > b {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text);
-}
-.hdesk-ligne-texte > b,
-.hdesk-ligne-sous {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.hdesk-ligne-sous {
-  /* font-size et non le raccourci `font` : le plancher des thèmes malvoyants ne lit que font-size. */
-  font-family: var(--hdesk-mono);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text-faint);
-}
-/* La croix : au bout de la ligne, discrète, rouge au survol. */
-.hdesk-ligne-fermer {
-  position: absolute;
-  top: 50%;
-  right: 7px;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  transform: translateY(-50%);
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-faint);
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-.hdesk-ligne-fermer svg {
-  width: 10px;
-  height: 10px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-}
-.hdesk-ligne-fermer:hover:not(:disabled),
-.hdesk-ligne-fermer:focus-visible {
-  background: color-mix(in srgb, var(--err) 16%, transparent);
-  color: var(--err);
-}
-.hdesk-ligne-fermer:disabled {
-  cursor: progress;
-  opacity: 0.6;
-}
-
-/* « Récents » (conv-344) : relancer un bureau fermé sans rien retaper. */
-.hdesk-recents h3 {
-  margin: 0 0 4px;
-  padding: 0 10px;
-  font-family: var(--hdesk-mono);
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 1.3;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-.hdesk-recents li {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-  padding: 6px 6px 6px 10px;
-  border-radius: 10px;
-}
-.hdesk-recents li .hdesk-ligne-texte > b {
-  font-weight: 500;
-  color: var(--text-dim);
-}
 .hdesk-btn-discret {
   flex: none;
   border-color: transparent;
@@ -401,7 +273,6 @@
   align-items: center;
   justify-content: center;
   min-height: 220px;
-  max-height: 64vh;
   overflow: hidden;
   padding: 1px;
   border-radius: 8px;
@@ -410,11 +281,12 @@
   color: var(--text-faint);
   font-size: 12px;
 }
+/* `width` et pas `max-width` : une petite fenêtre remplit aussi l'écran (« toute la largeur »). Hauteur
+   libre, sans `object-fit` : avec des marges dans l'image, un clic en Piloter tomberait à côté. */
 .hdesk-ecran img {
   display: block;
-  max-width: 100%;
-  max-height: 64vh;
-  object-fit: contain;
+  width: 100%;
+  height: auto;
   border-radius: 7px;
 }
 .hdesk-ecran img.is-uni {
@@ -486,6 +358,19 @@
 }
 .hdesk-pied .is-alerte {
   color: var(--warn);
+}
+/* Le titre du fil se coupe DANS son bouton (conv-1378, 2026-10-31) : d'un seul bloc, le bouton trop long
+   était remplacé en entier par « … », et le pied du panneau n'affichait plus que « Fil … ». */
+.hdesk-pied > .hdesk-pied-fil {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5ch;
+}
+.hdesk-pied-fil .hdesk-lien {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .hdesk-cadence {
   display: inline-flex;

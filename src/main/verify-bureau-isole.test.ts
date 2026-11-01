@@ -154,6 +154,34 @@ describe('verify — la suite tourne dans une copie isolée, à l’état couran
     expect(existsSync(join(copie, 'src', 'parti.ts'))).toBe(false)
   })
 
+  /*
+   * FAUX ROUGE MESURÉ le 2026-10-31 (conv-1376). La copie vit d'une vérification à l'autre, et seuls
+   * les chemins que git nomme dans le dépôt y sont reportés. Un autre fil a réécrit des tests, un
+   * `verify` les a recopiés, puis ce fil les a rétablis : git ne les nommait plus, et la copie les a
+   * gardés. Résultat, `verify` rendait 6 erreurs de typage et un test rouge sur un fichier supprimé
+   * et un autre déjà rétabli, alors que `npm run typecheck:web` rendait 0 dans le vrai dépôt.
+   */
+  it('la copie oublie ce qui a été rétabli ou supprimé depuis la vérification d’avant', async () => {
+    const workspace = espaceDeTravail()
+    const parent = mkdtempSync(join(tmpdir(), 'aos-verify-wt-'))
+    aNettoyer.push(parent)
+    const copie = join(parent, 'copie')
+    git(workspace, 'worktree', 'add', '--detach', copie, 'HEAD')
+    writeFileSync(join(workspace, 'src', 'a.ts'), 'export const a = 2 // essai\n')
+    writeFileSync(join(workspace, 'src', 'essai.test.ts'), 'export {}\n')
+    const { bus } = busSur(workspace, copie)
+    await bus.exec('verify', {}, 'conv-1')
+    expect(existsSync(join(copie, 'src', 'essai.test.ts'))).toBe(true)
+
+    // Tout est remis en place : git ne nomme plus aucun chemin dans le dépôt.
+    writeFileSync(join(workspace, 'src', 'a.ts'), 'export const a = 1\n')
+    rmSync(join(workspace, 'src', 'essai.test.ts'))
+    await bus.exec('verify', {}, 'conv-1')
+
+    expect(readFileSync(join(copie, 'src', 'a.ts'), 'utf8')).toBe('export const a = 1\n')
+    expect(existsSync(join(copie, 'src', 'essai.test.ts'))).toBe(false)
+  })
+
   it('sans isolation possible, le verdict le DIT au lieu de passer pour un verdict propre', async () => {
     const workspace = espaceDeTravail()
     const { bus, dossiers } = busSur(workspace, undefined)

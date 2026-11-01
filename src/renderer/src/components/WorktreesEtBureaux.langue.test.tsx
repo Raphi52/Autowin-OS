@@ -168,7 +168,7 @@ describe('Worktrees et Bureaux cachés — langue', () => {
         active: true,
         api: apiBureaux(),
         intervalleMs: 60_000,
-        intervallePiloteMs: 1_500
+        intervalleImageMs: 60_000
       })
     )
     const texte = (): string => vue.textContent ?? ''
@@ -187,9 +187,9 @@ describe('Worktrees et Bureaux cachés — langue', () => {
       'Thread conv-951'
     )
     expect(texte()).toContain('frame every 60 s')
-    expect(
-      vue.querySelector('[data-testid="hdesk-fermer-moniteur-zox"]')?.getAttribute('aria-label')
-    ).toBe('Close desktop “ZOX Rapture”')
+    expect(vue.querySelector('[data-testid="hdesk-antenne"]')?.getAttribute('aria-label')).toBe(
+      'Desktop “ZOX Rapture”'
+    )
 
     // En Piloter, le bandeau garde son compte à rebours au milieu de la phrase traduite.
     await act(async () => {
@@ -204,6 +204,6 @@ describe('Worktrees et Bureaux cachés — langue', () => {
       'Tu pilotes ce bureau · retour en Regarder dans 1:00 sans geste'
     )
     expect(vue.querySelector('[data-testid="hdesk-direct"]')?.textContent).toBe('1 ouvert')
-    expect(texte()).toContain('image toutes les 1,5 s')
+    expect(texte()).toContain('image toutes les 60 s')
   })
 })
