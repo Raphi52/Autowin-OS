@@ -420,10 +420,12 @@ const api = {
   afficherMascotte: (affichee: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:mascotte:afficher', affichee),
   /** Le style de la mascotte : le magicien ou la bille basique (conv-1249). */
-  styleMascotte: (): Promise<'magicien' | 'basique'> => ipcRenderer.invoke('os:mascotte:style'),
+  styleMascotte: (): Promise<'magicien' | 'basique' | 'machine'> => ipcRenderer.invoke('os:mascotte:style'),
   /** Le choix de Settings · Interface : rend le style tel que le moteur l'a enregistré. */
-  choisirStyleMascotte: (style: 'magicien' | 'basique'): Promise<'magicien' | 'basique'> =>
+  choisirStyleMascotte: (style: 'magicien' | 'basique' | 'machine'): Promise<'magicien' | 'basique' | 'machine'> =>
     ipcRenderer.invoke('os:mascotte:choisir-style', style),
+  /** Le thème appliqué, pour que la mascotte passe en machine sous le thème NieR (conv-346). */
+  themeMascotte: (theme: string): Promise<boolean> => ipcRenderer.invoke('os:mascotte:theme', theme),
   setTitlebarSymbolColor: (couleur: string): Promise<boolean> =>
     ipcRenderer.invoke('app:titlebar-symbol-color', couleur),
   // Ce que repond `prefers-color-scheme` dans l'app : la base du theme Autowin, pas celle de Windows.

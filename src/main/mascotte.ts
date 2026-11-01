@@ -36,6 +36,12 @@ import {
   svgDuPersonnage,
   visageDeLaBille
 } from './mascotte-personnage'
+import {
+  MACHINE_ATTENTE,
+  MACHINE_CALME,
+  MACHINE_PROBLEME,
+  MACHINE_TRAVAIL
+} from './mascotte-machine-images'
 import type { StyleMascotte } from './mascotte-reglage'
 import { LARGEUR_POPUP, MARGE_CARTE, type Rect, type ZoneDesCartes } from './notification-popup'
 import {
@@ -97,6 +103,15 @@ const GEOMETRIES: Record<StyleMascotte, GeometrieMascotte> = {
     centre: { x: 40, y: 40 },
     retraitCote: (80 - TAILLE_HALO) / 2,
     croix: { x: 56, y: 6, taille: 18 }
+  },
+  // La machine (conv-346) : 104x125 px (agrandie 1,3 fois), posée au bas d'une fenêtre de 124x136 où tiennent sa bulle,
+  // ses étincelles et ses paillettes ; le centre est celui de son corps, la croix en haut à droite.
+  machine: {
+    largeur: 124,
+    hauteur: 136,
+    centre: { x: 62, y: 76 },
+    retraitCote: 8,
+    croix: { x: 94, y: 22, taille: 18 }
   }
 }
 export function geometrieMascotte(style: StyleMascotte = 'magicien'): GeometrieMascotte {
@@ -348,6 +363,7 @@ const ANNEAU =
  */
 export function htmlDeMascotte(style: StyleMascotte = 'magicien'): string {
   if (style === 'basique') return htmlDeLaBilleBasique()
+  if (style === 'machine') return htmlDeLaMachine()
   const cx = CENTRE_BILLE.x
   const cy = CENTRE_BILLE.y
   const halo = HALO_DANS_LA_FENETRE
@@ -412,6 +428,129 @@ body{display:grid;place-items:center;font-family:ui-monospace,Consolas,monospace
 @keyframes ob{0%,100%{opacity:.35}50%{opacity:1}}
 @keyframes oz{0%{opacity:0;transform:none}50%{opacity:1}100%{opacity:0;transform:translate(4px,-6px)}}
 </style></head><body><div class="m"><i class="ob" title="Ouvrir Autowin — glisser pour la déplacer"><svg class="h" viewBox="0 0 40 40"><circle cx="20" cy="20" r="19"/></svg><i class="bw"></i><i class="bk"></i><i class="bl"></i><i class="n"></i><i class="z">z</i></i><a class="f" href="#${FRAGMENT_FERMER}" title="Fermer la mascotte (pour la rouvrir : Réglages · Interface)">×</a></div></body></html>`
+}
+
+/**
+ * LA MACHINE (conv-346, 2026-10-29, « fais de cette machine la mascotte : 1 au repos, 3 au travail,
+ * 4 en erreur, 2 quand le travail est fini… rajoute des effets ») : la petite machine de NieR,
+ * modelée en three.js puis rendue en planches de 16 images (`mascotte-machine-images.ts`), rejouées
+ * ici en CSS — la page n'admet aucun script. Chaque état a sa planche : au repos elle somnole (yeux
+ * mi-clos qui respirent), au travail elle visse (étincelles), quand un fil attend elle salue (bulle
+ * ✓ et paillettes dorées), en échec elle tremble et fume (bulle « ! », lueur rouge au sol). Mêmes
+ * calques que les autres styles (`.ob`, `.h`, `.bw`, `.n`, `.z`, `.f`) : préchargement, croix et
+ * nombre marchent pareil.
+ */
+function htmlDeLaMachine(): string {
+  const etincelles = [0, 1, 2, 3, 4, 5].map((i) => `<i class="et" style="--i:${i}"></i>`).join('')
+  const paillettes = [0, 1, 2, 3, 4, 5, 6].map((i) => `<i class="pl" style="--i:${i}"></i>`).join('')
+  const donnees = [0, 1, 2, 3].map((i) => `<i class="q" style="--i:${i}"></i>`).join('')
+  const fragments = [0, 1, 2, 3, 4].map((i) => `<i class="g" style="--i:${i}"></i>`).join('')
+  const poussieres = [0, 1, 2].map((i) => `<i class="pa" style="--i:${i}"></i>`).join('')
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:"><title>Autowin — mascotte</title><style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+body{font-family:ui-monospace,Consolas,monospace;user-select:none}
+:root{--calme:url("${MACHINE_CALME}");--travail:url("${MACHINE_TRAVAIL}");--attente:url("${MACHINE_ATTENTE}");--probleme:url("${MACHINE_PROBLEME}")}
+.m{position:relative;width:124px;height:136px}
+.m i,.m a{position:absolute;font-style:normal}
+.sh,.ob,.bw{display:block}
+.sh{left:24px;top:118px;width:76px;height:14px;border-radius:50%;background:radial-gradient(closest-side,#000a,#0000);animation:so 3.2s ease-in-out infinite}
+.ob::after{content:"";display:none;position:absolute;inset:0;background:linear-gradient(180deg,#0000 0,#8ff0ff00 40%,#8ff0ff8c 50%,#8ff0ff00 60%,#0000 100%) 0 0/100% 300% no-repeat,repeating-linear-gradient(0deg,#8ff0ff1f 0 1px,#0000 1px 3px);-webkit-mask:var(--travail) 0 0/1664px 125px no-repeat;mask:var(--travail) 0 0/1664px 125px no-repeat;mix-blend-mode:screen;animation:sp 1.2s steps(16) infinite,hs 2.2s linear infinite}
+.y{left:0;top:125px;width:124px;text-align:center;font-size:7px;font-weight:700;letter-spacing:.35em;color:#bdb79c;opacity:.75;text-shadow:0 0 3px currentColor}
+.h{display:none;position:absolute;left:2px;top:58px;width:120px;height:120px;transform:scaleY(.3);color:#ffcf7a;overflow:visible;filter:drop-shadow(0 0 3px currentColor)}
+.h *{fill:none;stroke:currentColor;stroke-linecap:round}
+.h .gn{fill:currentColor;stroke:none}
+.h .ge,.h .gi{transform-origin:60px 60px}
+.h .ge{animation:rt 9s linear infinite}
+.h .gi{animation:rt 6s linear infinite reverse}
+.h .gf{fill:currentColor;stroke:none;opacity:.18}
+.g{display:none;width:6px;height:9px;left:calc(20px + var(--i) * 17px);top:112px;border:1px solid currentColor;border-radius:1px;box-shadow:0 0 4px currentColor;opacity:0;animation:g 3s calc(var(--i) * .5s) ease-out infinite}
+.g::after{content:"";position:absolute;left:1px;top:3px;width:2px;height:1px;background:currentColor}
+.r{display:none;left:12px;top:74px;width:100px;height:100px;border-radius:50%;border:2px solid currentColor;transform:scaleY(.24);opacity:0;animation:rp 1.6s ease-out infinite}
+.q{display:none;width:3px;height:3px;background:currentColor;box-shadow:0 0 4px currentColor;left:calc(26px + var(--i) * 22px);top:118px;opacity:0;animation:q 1.8s calc(var(--i) * .45s) linear infinite}
+.ob{left:10px;top:4px;width:104px;height:125px;cursor:pointer;touch-action:none;transition:scale .2s;transform-origin:50% 100%}
+.ob:active{cursor:grabbing}
+.m:hover .ob{scale:1.06}
+.bw{inset:0;background:var(--calme) 0 0/1664px 125px no-repeat;animation:sp 3.2s steps(16) infinite}
+.n{display:none;place-items:center;left:2px;top:34px;min-width:26px;height:18px;padding:0 4px;box-sizing:border-box;font-weight:700;font-size:11px;letter-spacing:.08em;line-height:1;color:#ffcf7a;text-shadow:0 0 4px #ffcf7a;background:#14120ee6;box-shadow:inset 0 0 0 1px #ffcf7a99;clip-path:polygon(5px 0,100% 0,100% calc(100% - 5px),calc(100% - 5px) 100%,0 100%,0 5px)}
+.n::after{position:static}
+.z{display:none;left:90px;top:26px;font-weight:700;font-size:19px;text-shadow:0 0 4px #e4dfc9;line-height:1;color:#bdb79c;animation:oz 2.4s infinite}
+.z::after{content:"z";position:absolute;left:9px;top:-9px;font-size:11px;animation:oz 2.4s 1.2s infinite;opacity:0}
+.pa{display:none;width:4px;height:4px;box-shadow:0 0 4px #e4dfc9;border-radius:50%;background:#e4dfc9;left:calc(22px + var(--i) * 38px);top:110px;opacity:0;animation:pa 5s calc(var(--i) * 1.6s) ease-in-out infinite}
+.et{display:none;width:5px;height:5px;border-radius:50%;background:#ffd27a;box-shadow:0 0 6px 2px #ff9a2e;left:96px;top:100px;opacity:0;animation:et .6s calc(var(--i) * .1s) ease-out infinite}
+.bu{display:none;place-items:center;left:88px;top:2px;width:26px;height:26px;border-radius:50%;font-weight:700;font-size:16px;line-height:1;background:#e4dfc9;color:#14120e;box-shadow:0 0 0 1.5px #4e4b42,0 0 10px 2px currentColor;animation:bu 1.6s ease-in-out infinite}
+.pl{display:none;width:7px;height:7px;left:58px;top:40px;background:#ffdf8a;filter:drop-shadow(0 0 3px #ffb02e);clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%);opacity:0;animation:pl 1.8s calc(var(--i) * .26s) ease-out infinite}
+.f{z-index:2;display:grid;place-items:center;left:94px;top:22px;width:18px;height:18px;border-radius:50%;background:#14120ee6;box-shadow:0 0 0 1px #e4dfc95c;color:#e4dfc9;font-size:13px;line-height:1;text-decoration:none;cursor:pointer;opacity:0;transition:opacity .2s .4s}
+.m:hover .f{opacity:1;transition-delay:0s}
+.m:hover .z,.m:hover .bu{visibility:hidden}
+@keyframes sp{to{background-position:-1664px 0}}
+@keyframes so{50%{transform:scaleX(.92);opacity:.8}}
+@keyframes ob{0%,100%{opacity:.45}50%{opacity:1}}
+@keyframes od{0%,100%{opacity:.14}50%{opacity:.3}}
+@keyframes ow{0%,100%{opacity:.85}50%{opacity:1}}
+@keyframes oz{0%{opacity:0;transform:none}50%{opacity:1}100%{opacity:0;transform:translate(4px,-8px)}}
+@keyframes pa{0%{opacity:0;transform:none}30%{opacity:.6}100%{opacity:0;transform:translate(calc((var(--i) - 1) * 6px),-60px)}}
+@keyframes et{0%{opacity:1;transform:none}100%{opacity:0;transform:rotate(calc(var(--i) * 60deg - 150deg)) translateX(24px)}}
+@keyframes bu{50%{transform:translateY(-3px)}}
+@keyframes pl{0%{opacity:0;transform:none}20%{opacity:1}100%{opacity:0;transform:rotate(calc(var(--i) * 51deg)) translateX(56px) rotate(90deg) scale(1.6)}}
+@keyframes tr{25%{translate:-1px 0}75%{translate:1px 0}}
+@keyframes rt{to{transform:rotate(360deg)}}
+@keyframes g{0%{opacity:0;transform:none}20%{opacity:.9}100%{opacity:0;transform:translateY(-64px) rotate(calc((var(--i) - 2) * 40deg))}}
+@keyframes hs{0%{background-position:0 100%,0 0}100%{background-position:0 0,0 0}}
+@keyframes rp{0%{opacity:.9;transform:scaleY(.24) scale(.6)}100%{opacity:0;transform:scaleY(.24) scale(1.25)}}
+@keyframes q{0%{opacity:0;transform:none}15%{opacity:1}100%{opacity:0;transform:translateY(-70px) rotate(90deg)}}
+</style></head><body><div class="m"><i class="sh"></i><svg class="h" viewBox="0 0 120 120"><circle cx="60" cy="60" r="56" class="gf"/><g class="ge"><circle cx="60" cy="60" r="50" stroke-width="1.6"/><circle cx="60" cy="60" r="38" stroke-width="1"/><line x1="110.0" y1="60.0" x2="114.0" y2="60.0" stroke-width="1.2"/><line x1="109.6" y1="66.5" x2="111.6" y2="66.8" stroke-width="1.2"/><line x1="108.3" y1="72.9" x2="110.2" y2="73.5" stroke-width="1.2"/><line x1="106.2" y1="79.1" x2="109.9" y2="80.7" stroke-width="1.2"/><line x1="103.3" y1="85.0" x2="105.0" y2="86.0" stroke-width="1.2"/><line x1="99.7" y1="90.4" x2="101.3" y2="91.7" stroke-width="1.2"/><line x1="95.4" y1="95.4" x2="98.2" y2="98.2" stroke-width="1.2"/><line x1="90.4" y1="99.7" x2="91.7" y2="101.3" stroke-width="1.2"/><line x1="85.0" y1="103.3" x2="86.0" y2="105.0" stroke-width="1.2"/><line x1="79.1" y1="106.2" x2="80.7" y2="109.9" stroke-width="1.2"/><line x1="72.9" y1="108.3" x2="73.5" y2="110.2" stroke-width="1.2"/><line x1="66.5" y1="109.6" x2="66.8" y2="111.6" stroke-width="1.2"/><line x1="60.0" y1="110.0" x2="60.0" y2="114.0" stroke-width="1.2"/><line x1="53.5" y1="109.6" x2="53.2" y2="111.6" stroke-width="1.2"/><line x1="47.1" y1="108.3" x2="46.5" y2="110.2" stroke-width="1.2"/><line x1="40.9" y1="106.2" x2="39.3" y2="109.9" stroke-width="1.2"/><line x1="35.0" y1="103.3" x2="34.0" y2="105.0" stroke-width="1.2"/><line x1="29.6" y1="99.7" x2="28.3" y2="101.3" stroke-width="1.2"/><line x1="24.6" y1="95.4" x2="21.8" y2="98.2" stroke-width="1.2"/><line x1="20.3" y1="90.4" x2="18.7" y2="91.7" stroke-width="1.2"/><line x1="16.7" y1="85.0" x2="15.0" y2="86.0" stroke-width="1.2"/><line x1="13.8" y1="79.1" x2="10.1" y2="80.7" stroke-width="1.2"/><line x1="11.7" y1="72.9" x2="9.8" y2="73.5" stroke-width="1.2"/><line x1="10.4" y1="66.5" x2="8.4" y2="66.8" stroke-width="1.2"/><line x1="10.0" y1="60.0" x2="6.0" y2="60.0" stroke-width="1.2"/><line x1="10.4" y1="53.5" x2="8.4" y2="53.2" stroke-width="1.2"/><line x1="11.7" y1="47.1" x2="9.8" y2="46.5" stroke-width="1.2"/><line x1="13.8" y1="40.9" x2="10.1" y2="39.3" stroke-width="1.2"/><line x1="16.7" y1="35.0" x2="15.0" y2="34.0" stroke-width="1.2"/><line x1="20.3" y1="29.6" x2="18.7" y2="28.3" stroke-width="1.2"/><line x1="24.6" y1="24.6" x2="21.8" y2="21.8" stroke-width="1.2"/><line x1="29.6" y1="20.3" x2="28.3" y2="18.7" stroke-width="1.2"/><line x1="35.0" y1="16.7" x2="34.0" y2="15.0" stroke-width="1.2"/><line x1="40.9" y1="13.8" x2="39.3" y2="10.1" stroke-width="1.2"/><line x1="47.1" y1="11.7" x2="46.5" y2="9.8" stroke-width="1.2"/><line x1="53.5" y1="10.4" x2="53.2" y2="8.4" stroke-width="1.2"/><line x1="60.0" y1="10.0" x2="60.0" y2="6.0" stroke-width="1.2"/><line x1="66.5" y1="10.4" x2="66.8" y2="8.4" stroke-width="1.2"/><line x1="72.9" y1="11.7" x2="73.5" y2="9.8" stroke-width="1.2"/><line x1="79.1" y1="13.8" x2="80.7" y2="10.1" stroke-width="1.2"/><line x1="85.0" y1="16.7" x2="86.0" y2="15.0" stroke-width="1.2"/><line x1="90.4" y1="20.3" x2="91.7" y2="18.7" stroke-width="1.2"/><line x1="95.4" y1="24.6" x2="98.2" y2="21.8" stroke-width="1.2"/><line x1="99.7" y1="29.6" x2="101.3" y2="28.3" stroke-width="1.2"/><line x1="103.3" y1="35.0" x2="105.0" y2="34.0" stroke-width="1.2"/><line x1="106.2" y1="40.9" x2="109.9" y2="39.3" stroke-width="1.2"/><line x1="108.3" y1="47.1" x2="110.2" y2="46.5" stroke-width="1.2"/><line x1="109.6" y1="53.5" x2="111.6" y2="53.2" stroke-width="1.2"/><rect x="102.4" y="58.4" width="3.2" height="3.2" class="gn" transform="rotate(45 104.0 60.0)"/><rect x="99.1" y="75.2" width="3.2" height="3.2" class="gn" transform="rotate(68 100.7 76.8)"/><rect x="89.5" y="89.5" width="3.2" height="3.2" class="gn" transform="rotate(90 91.1 91.1)"/><rect x="75.2" y="99.1" width="3.2" height="3.2" class="gn" transform="rotate(112 76.8 100.7)"/><rect x="58.4" y="102.4" width="3.2" height="3.2" class="gn" transform="rotate(135 60.0 104.0)"/><rect x="41.6" y="99.1" width="3.2" height="3.2" class="gn" transform="rotate(158 43.2 100.7)"/><rect x="27.3" y="89.5" width="3.2" height="3.2" class="gn" transform="rotate(180 28.9 91.1)"/><rect x="17.7" y="75.2" width="3.2" height="3.2" class="gn" transform="rotate(202 19.3 76.8)"/><rect x="14.4" y="58.4" width="3.2" height="3.2" class="gn" transform="rotate(225 16.0 60.0)"/><rect x="17.7" y="41.6" width="3.2" height="3.2" class="gn" transform="rotate(248 19.3 43.2)"/><rect x="27.3" y="27.3" width="3.2" height="3.2" class="gn" transform="rotate(270 28.9 28.9)"/><rect x="41.6" y="17.7" width="3.2" height="3.2" class="gn" transform="rotate(292 43.2 19.3)"/><rect x="58.4" y="14.4" width="3.2" height="3.2" class="gn" transform="rotate(315 60.0 16.0)"/><rect x="75.2" y="17.7" width="3.2" height="3.2" class="gn" transform="rotate(338 76.8 19.3)"/><rect x="89.5" y="27.3" width="3.2" height="3.2" class="gn" transform="rotate(360 91.1 28.9)"/><rect x="99.1" y="41.6" width="3.2" height="3.2" class="gn" transform="rotate(382 100.7 43.2)"/></g><g class="gi"><polygon points="94.0,60.0 60.0,94.0 26.0,60.0 60.0,26.0" stroke-width="1.4"/><polygon points="84.0,84.0 36.0,84.0 36.0,36.0 84.0,36.0" stroke-width="1.4"/><circle cx="60" cy="60" r="20" stroke-width="1" stroke-dasharray="3 3"/><polygon points="60.0,46.0 72.1,67.0 47.9,67.0" stroke-width="1.2"/><polygon points="60.0,74.0 47.9,53.0 72.1,53.0" stroke-width="1.2"/><circle cx="60" cy="60" r="3" class="gn"/></g></svg>${fragments}<i class="r"></i><i class="y">YoRHa</i>${donnees}${poussieres}<i class="ob" title="Ouvrir Autowin — glisser pour la déplacer"><i class="bw"></i></i>${etincelles}${paillettes}<i class="bu"></i><i class="n"></i><i class="z">z</i><a class="f" href="#${FRAGMENT_FERMER}" title="Fermer la mascotte (pour la rouvrir : Réglages · Interface)">×</a></div></body></html>`
+}
+
+/** Les règles d'état de la machine : une planche par état, et ses effets. */
+function reglesDeLaMachine(etat: NomEtatMascotte, pastille: string | null): Array<[string, string]> {
+  const regles: Array<[string, string]> = []
+  if (pastille) regles.push(['.n', 'display:grid'], ['.n::after', `content:"${pastille}"`])
+  switch (etat) {
+    case 'calme':
+      regles.push(['.z', 'display:block'], ['.pa', 'display:block'], ['.g', 'display:block;color:#bdb79c;animation-duration:5s'], ['.h', 'display:block;color:#bdb79c;filter:none;animation:od 4.8s ease-in-out infinite'], ['.h .ge', 'animation-duration:18s'], ['.h .gi', 'animation-duration:12s'], ['.h .gf', 'opacity:.06'], ['.y', 'opacity:.3;text-shadow:none'])
+      break
+    case 'travail':
+      regles.push(
+        ['.bw', 'background-image:var(--travail);animation:sp 1.2s steps(16) infinite'],
+        ['.et', 'display:block'],
+        ['.q', 'display:block;color:#ffb347'],
+        ['.g', 'display:block;color:#ffb347'],
+        ['.h .ge', 'animation-duration:3s'],
+        ['.h .gi', 'animation-duration:2s'],
+        ['.ob::after', 'display:block'],
+        ['.h', 'display:block;color:#ffc46a;filter:drop-shadow(0 0 1px #fff8) drop-shadow(0 0 5px currentColor) drop-shadow(0 0 11px currentColor);animation:ow 1.2s ease-in-out infinite'],
+        ['.h .gf', 'opacity:.12'],
+        ['.y', 'color:#ffc46a;opacity:1;text-shadow:0 0 4px currentColor,0 0 9px currentColor']
+      )
+      break
+    case 'attente':
+      regles.push(
+        ['.bw', 'background-image:var(--attente);animation:sp 2.4s steps(16) infinite'],
+        ['.pl', 'display:block'],
+        ['.bu', 'display:grid'],
+        ['.bu::after', 'content:"✓"'],
+        ['.h', 'display:block;color:#ffcf7a;animation:ob 1.6s ease-in-out infinite'],
+        ['.r', 'display:block;color:#ffcf7a'],
+        ['.y', 'color:#ffcf7a'],
+        ['.q', 'display:block;color:#ffdf8a'],
+        ['.g', 'display:block;color:#ffdf8a'],
+        ['.n', 'color:#14120e;text-shadow:none;background:#ffcf7a']
+      )
+      break
+    case 'probleme':
+      regles.push(
+        ['.bw', 'background-image:var(--probleme);animation:sp 1.6s steps(16) infinite'],
+        ['.bu', 'display:grid;background:#b5503f;color:#fff;animation:tr .15s linear infinite'],
+        ['.bu::after', 'content:"!"'],
+        ['.h', 'display:block;color:#ff3b26;animation:ob .6s steps(2) infinite'],
+        ['.r', 'display:block;color:#ff3b26;animation-duration:.8s'],
+        ['.y', 'color:#ff6a50'],
+        ['.h .ge', 'animation:rt 1.2s steps(6) infinite'],
+        ['.n', 'color:#ff6a50;text-shadow:0 0 4px #ff3b26;box-shadow:inset 0 0 0 1px #ff6a50']
+      )
+      break
+  }
+  return regles
 }
 
 /** Les règles d'état de la bille basique : celles d'avant conv-1227, inchangées. */
@@ -644,6 +783,7 @@ for (const type of ['pointercancel', 'lostpointercapture']) {
 export function cssDeLEtat(etat: EtatMascotte, style: StyleMascotte = 'magicien'): string {
   const pastille = etat.pastille && /^[0-9+!]{1,2}$/u.test(etat.pastille) ? etat.pastille : null
   if (style === 'basique') return enFeuille(reglesDeLaBilleBasique(etat.etat, pastille))
+  if (style === 'machine') return enFeuille(reglesDeLaMachine(etat.etat, pastille))
   const regles: Array<[string, string]> = reglesDuPersonnage(etat.etat, pastille)
   switch (etat.etat) {
     case 'calme':
