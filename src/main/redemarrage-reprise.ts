@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 /**
@@ -16,6 +16,13 @@ import { dirname, join } from 'node:path'
  * - peremption : une consigne posee puis jamais reprise (l'utilisateur a ferme, la relance a
  *   echoue) ne doit pas resurgir trois jours plus tard dans une conversation devenue sans rapport.
  * - aucune execution ici : ce module ecrit et lit du texte, il ne redemarre rien.
+ *
+ * UNE CONSIGNE PAR CONVERSATION (conv-1306, 2026-10-30). Il n'y avait qu'UN fichier : conv-1329 a
+ * pose sa consigne a 15:50:32 par-dessus celle de conv-1306 (15:31), dans le meme redemarrage en
+ * file. Les deux fils avaient lu « la consigne sera rejouee dans cette conversation » ; un seul
+ * l'aurait ete. Chaque fil a donc son fichier (`redemarrage/reprises/<fil>.json`), et une seconde
+ * pose du MEME fil remplace seulement la sienne. L'ancien fichier unique reste LU : le processus
+ * qui tourne au moment de ce correctif l'ecrit encore a sa relance.
  */
 export interface RepriseEnAttente {
   /** La conversation ou la tache doit reprendre. */
@@ -31,8 +38,36 @@ export interface RepriseEnAttente {
 /** Au-dela, la consigne est consideree perimee et jetee sans etre rejouee. */
 export const PEREMPTION_REPRISE_MS = 15 * 60 * 1000
 
-export function cheminReprise(racineDonnees: string): string {
-  return join(racineDonnees, 'redemarrage', 'reprise-en-attente.json')
+/**
+ * Sans conversation : l'ANCIEN fichier unique (lu, plus jamais ecrit). Avec : le fichier de ce fil.
+ * L'identifiant est reduit a [A-Za-z0-9_-] : il vient d'un appel d'outil, il ne doit jamais faire
+ * sortir l'ecriture du dossier des reprises.
+ */
+export function cheminReprise(racineDonnees: string, conversationId?: string): string {
+  if (conversationId === undefined)
+    return join(racineDonnees, 'redemarrage', 'reprise-en-attente.json')
+  return join(
+    dossierReprises(racineDonnees),
+    `${conversationId.replace(/[^A-Za-z0-9_-]/g, '_')}.json`
+  )
+}
+
+function dossierReprises(racineDonnees: string): string {
+  return join(racineDonnees, 'redemarrage', 'reprises')
+}
+
+/** L'ancien fichier unique, puis celui de chaque fil. */
+function fichiersEnAttente(racineDonnees: string): string[] {
+  const fichiers: string[] = []
+  const ancien = cheminReprise(racineDonnees)
+  if (existsSync(ancien)) fichiers.push(ancien)
+  const dossier = dossierReprises(racineDonnees)
+  if (existsSync(dossier)) {
+    for (const nom of readdirSync(dossier)) {
+      if (nom.endsWith('.json')) fichiers.push(join(dossier, nom))
+    }
+  }
+  return fichiers
 }
 
 export function poserReprise(
@@ -49,7 +84,7 @@ export function poserReprise(
     ...(reprise.raison?.trim() ? { raison: reprise.raison.trim() } : {}),
     poseeA: reprise.poseeA ?? Date.now()
   }
-  const chemin = cheminReprise(racineDonnees)
+  const chemin = cheminReprise(racineDonnees, conversationId)
   mkdirSync(dirname(chemin), { recursive: true })
   writeFileSync(chemin, JSON.stringify(payload, null, 2), 'utf8')
   return payload
@@ -81,24 +116,63 @@ export function consommerReprise(
   maintenant: number = Date.now(),
   demarreA: number = DEMARRAGE_DU_PROCESSUS
 ): RepriseEnAttente | null {
-  const chemin = cheminReprise(racineDonnees)
-  if (!existsSync(chemin)) return null
-  let brut = ''
-  let parse: unknown
-  try {
-    brut = readFileSync(chemin, 'utf8')
-    parse = JSON.parse(brut)
-  } catch {
-    rmSync(chemin, { force: true })
-    return null
+  /*
+   * UNE consigne par appel, la plus ancienne d'abord : l'interface rappelle jusqu'a `null`
+   * (`reprendreToutesApresRedemarrage`). Seule la consigne RENDUE est effacee, avec les fichiers
+   * invalides ou perimes croises en chemin ; celles des autres fils attendent l'appel suivant.
+   */
+  const lus: Array<{ chemin: string; contenu: unknown }> = []
+  for (const chemin of fichiersEnAttente(racineDonnees)) {
+    try {
+      lus.push({ chemin, contenu: JSON.parse(readFileSync(chemin, 'utf8')) })
+    } catch {
+      // Corrompu : il ferait echouer chaque demarrage suivant de la meme facon.
+      rmSync(chemin, { force: true })
+    }
   }
-  const poseeParCeProcessus =
-    !!parse &&
-    typeof parse === 'object' &&
-    typeof (parse as Partial<RepriseEnAttente>).poseeA === 'number' &&
-    ((parse as Partial<RepriseEnAttente>).poseeA as number) >= demarreA
-  if (poseeParCeProcessus) return null
-  rmSync(chemin, { force: true })
+  const poseeDe = (contenu: unknown): number =>
+    contenu &&
+    typeof contenu === 'object' &&
+    typeof (contenu as Partial<RepriseEnAttente>).poseeA === 'number'
+      ? ((contenu as Partial<RepriseEnAttente>).poseeA as number)
+      : 0
+  lus.sort((a, b) => poseeDe(a.contenu) - poseeDe(b.contenu))
+  for (const { chemin, contenu } of lus) {
+    // Posee par CE processus : elle attend le suivant (voir plus haut).
+    if (poseeDe(contenu) >= demarreA) continue
+    rmSync(chemin, { force: true })
+    const reprise = repriseValide(contenu, maintenant)
+    if (reprise) {
+      retenirConsigneRendue(reprise.consigne)
+      return reprise
+    }
+  }
+  return null
+}
+
+/**
+ * LES CONSIGNES RENDUES PAR CE PROCESSUS (conv-1306, 2026-10-30). L'interface les envoie telles
+ * quelles, comme une frappe : le tour les recoit avec le role `user`, sans aucune marque d'origine.
+ * La bascule de dossier (`depotCiteDansLeMessage`) les prenait donc pour une demande de
+ * l'utilisateur ; celle de conv-1329 citait des dossiers a RETIRER du Board. Le texte recu est
+ * identique a la consigne (mesure sur conv-1330 : 870 caracteres, egaux) : on le reconnait a l'egalite.
+ * Borne : un redemarrage rend au plus quelques consignes ; 50 couvre largement la vie du processus.
+ */
+const CONSIGNES_RENDUES_MAX = 50
+const consignesRendues: string[] = []
+
+function retenirConsigneRendue(consigne: string): void {
+  consignesRendues.push(consigne.trim())
+  if (consignesRendues.length > CONSIGNES_RENDUES_MAX) consignesRendues.shift()
+}
+
+/** Ce message est-il une consigne de reprise rendue par ce processus, et non une frappe ? */
+export function estUneConsigneDeRedemarrage(message: string | undefined): boolean {
+  const texte = (message ?? '').trim()
+  return texte !== '' && consignesRendues.includes(texte)
+}
+
+function repriseValide(parse: unknown, maintenant: number): RepriseEnAttente | null {
   if (!parse || typeof parse !== 'object') return null
   const candidat = parse as Partial<RepriseEnAttente>
   if (typeof candidat.conversationId !== 'string' || !candidat.conversationId.trim()) return null

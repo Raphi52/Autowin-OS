@@ -4,14 +4,14 @@ import { spawn } from 'node:child_process'
  * Lancement du login OFFICIEL d'un provider depuis l'app (bouton « Se reconnecter » de la page Routeur).
  *
  * SÉCURITÉ : l'app LANCE le flow du CLI/provider (qui gère lui-même la saisie), elle ne capture JAMAIS
- * de credential. Claude passe par une commande terminal.
+ * de credential. Claude et ChatGPT passent par une commande terminal.
  *
  * Commandes (confirmées) :
  *  - claude → `claude auth login` (« Sign in to your Anthropic account »).
+ *  - codex  → `codex login` (`codex login status` rend ensuite « Logged in using ChatGPT »).
  *
- * Claude est le SEUL moteur connectable : Codex, Kimi et Gemini sont retirés (voir
- * `routed-providers.ts`). Leur connexion n'est plus proposée ni planifiable — demander leur login
- * lève, au lieu d'ouvrir une console sur un moteur qui n'est plus branché.
+ * Kimi et Gemini sont retirés (voir `routed-providers.ts`) : leur connexion n'est plus proposée ni
+ * planifiable — demander leur login lève, au lieu d'ouvrir une console sur un moteur débranché.
  */
 export type LoginPlan = { kind: 'terminal'; command: string }
 
@@ -47,6 +47,10 @@ export function planProviderLogin(provider: string, bin?: string, configDir?: st
         command: prefix + (bin ? `& "${bin}" auth login` : 'claude auth login')
       }
     }
+    case 'codex':
+      // La session vit dans le dossier du CLI (`~/.codex`), commun à toutes ses installations : ni
+      // préfixe de compte, ni stockage côté Autowin. L'app ne voit jamais le jeton.
+      return { kind: 'terminal', command: bin ? `& "${bin}" login` : 'codex login' }
     default:
       throw new Error(`Aucun login connu pour le provider: ${provider}`)
   }

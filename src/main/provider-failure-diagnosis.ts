@@ -135,7 +135,7 @@ export interface DiagnosedFailure extends ProviderFailure {
 
 /**
  * Classe un message d'erreur d'adaptateur. Les motifs viennent des chaînes RÉELLEMENT jetées :
- *  - `codex non authentifié — lance npm run codex:login` (codex.ts)
+ *  - `codex non authentifié — lance \`codex login\`` (codex.ts)
  *  - `Codex CLI introuvable : …` (codex.ts)
  *  - `spawn claude ENOENT` (Node, quand le binaire n'est pas résolu)
  * Tout le reste reste `other` : inventer un diagnostic serait pire que de rendre le message brut.
@@ -191,7 +191,7 @@ export function classifyProviderFailure(message: string): ProviderFailureKind {
 export function repairHint(provider: string, kind: ProviderFailureKind): string | undefined {
   if (kind === 'auth') {
     if (provider === 'codex')
-      return 'Connecte-toi : bouton « Se connecter » du diagnostic de démarrage.'
+      return 'Connecte-toi à ChatGPT : bouton « Se reconnecter » de la page Routeur, ou `codex login`.'
     if (provider === 'claude') return 'Reconnecte le CLI : `claude auth login`.'
     if (provider === 'kimi') return 'Reconnecte Kimi depuis la page Routeur.'
     return 'Reconnecte ce provider depuis la page Routeur.'

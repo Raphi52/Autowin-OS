@@ -22,8 +22,9 @@
  */
 
 import { SECRET_SHAPES_SOURCE } from './activity/trace-redact'
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { basename, dirname, join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
+import { deposerFichier, relireFichier } from './ecriture-hors-fil'
 import { createHash } from 'node:crypto'
 import { shaHeadSurDisque } from './depot-git'
 import { readSignedBrainPayload, verifySignedBrainPayload } from './brain-protocol'
@@ -568,33 +569,25 @@ export function forgetSessionDeposits(): void {
   persistDepositLedger()
 }
 
+/** Hors du fil principal (conv-1368) : `renameSync` ici a fige la fenetre 10,1 s en 7 jours. */
 function persistDepositLedger(): void {
   if (!depositStorePath) return
-  const temp = `${depositStorePath}.${process.pid}.${Date.now()}.tmp`
-  try {
-    mkdirSync(dirname(depositStorePath), { recursive: true })
-    writeFileSync(
-      temp,
-      JSON.stringify({ version: 2, deposits: [...depositedThisSession.entries()] }),
-      { encoding: 'utf8', mode: 0o600 }
-    )
-    renameSync(temp, depositStorePath)
-  } catch {
-    try {
-      unlinkSync(temp)
-    } catch {
-      // La memoire du processus courant reste active si le disque est indisponible.
-    }
-  }
+  deposerFichier(
+    depositStorePath,
+    JSON.stringify({ version: 2, deposits: [...depositedThisSession.entries()] }),
+    { mode: 0o600 }
+  )
 }
 
 /** Active le ledger durable anti-doublon, ou le desactive sans effacer le fichier. */
 export function configureRememberDepositStore(path?: string): void {
   depositStorePath = path?.trim() || undefined
   depositedThisSession.clear()
-  if (!depositStorePath || !existsSync(depositStorePath)) return
+  if (!depositStorePath) return
   try {
-    const parsed = JSON.parse(readFileSync(depositStorePath, 'utf8')) as {
+    const texte = relireFichier(depositStorePath)
+    if (texte === undefined) return
+    const parsed = JSON.parse(texte) as {
       version?: unknown
       deposits?: unknown
     }

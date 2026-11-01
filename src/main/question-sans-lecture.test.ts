@@ -45,7 +45,9 @@ describe('une question posée sans avoir rien lu est relancée', () => {
   it('la relance ORDONNE de lire, et laisse la question possible après lecture', () => {
     // Une relance qui interdirait de questionner tout court retirerait à l'utilisateur les
     // arbitrages qui lui appartiennent. Elle doit exiger la lecture, puis rouvrir les deux issues.
-    expect(RELANCE_QUESTION_SANS_LECTURE).toMatch(/read_file|find_in_files|list_files/)
+    // Les outils du modele : les commandes texte ont quitte la consigne du chat (conv-1352).
+    expect(RELANCE_QUESTION_SANS_LECTURE).toContain('`Read`')
+    expect(RELANCE_QUESTION_SANS_LECTURE).not.toMatch(/read_file|find_in_files|list_files/)
     expect(RELANCE_QUESTION_SANS_LECTURE).toContain('hypothèse énoncée')
     expect(RELANCE_QUESTION_SANS_LECTURE).toMatch(/repose\s+la\s+question/)
   })

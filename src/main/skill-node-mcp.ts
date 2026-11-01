@@ -1,6 +1,10 @@
 import { createServer, type Server } from 'node:http'
 import { randomUUID } from 'node:crypto'
-import { OUTILS_NOEUD_SKILL, type LanceurCommandeSkill } from './skill-node-tools'
+import {
+  OUTILS_NOEUD_SKILL,
+  type LanceurCommandeSkill,
+  type SpecCommandeSkill
+} from './skill-node-tools'
 import type { ExecutionEvidence } from './providers/types'
 import { sharedBrainRoot } from './brain-paths'
 
@@ -49,12 +53,14 @@ import { sharedBrainRoot } from './brain-paths'
  * transporte pas. Ajouter un nom ici sans l'implementer dans son adaptateur fait donc ROUGIR un test,
  * au lieu de servir un port inutile en silence.
  *
- * Mesure du 2026-08-20 : `codex` fait un POST direct (aucun CLI, donc aucun `--mcp-config`), `gemini`
- * et `kimi` spawnent un CLI sans drapeau MCP. Ouvrir un serveur pour eux reviendrait a annoncer
+ * `codex` passe par `codex exec` et traduit l'option en `-c mcp_servers.*` (`optionsMcpCodex`) ;
+ * ajoute le 2026-10-31 (conv-1414). Son appel HTTP direct, lui, ne la porte pas : il ne reste que
+ * pour un jeton Autowin deja present. `gemini` et `kimi` spawnaient un CLI sans drapeau MCP. Ouvrir
+ * un serveur pour eux reviendrait a annoncer
  * « outils natifs servis » sur un appel qui ne les recevra jamais — exactement le mensonge de trace
  * que ce chantier a corrige pour `describePrompt`.
  */
-export const PROVIDERS_OUTILS_NATIFS: readonly string[] = ['claude']
+export const PROVIDERS_OUTILS_NATIFS: readonly string[] = ['claude', 'codex']
 
 /** Vrai si ce provider transporte les outils d'un noeud skill sur son canal natif. */
 export function porteLesOutilsNatifs(provider: string): boolean {
@@ -215,27 +221,71 @@ export function libelleAppelObserve(appel: AppelMcpObserve, phase: string): stri
 }
 
 /**
+ * Le schéma publié d'UN argument, sous-ensemble de JSON Schema. `CommandSpec.argsTypes` le déclare
+ * quand le texte ne suffit pas : mesure de conv-1370 (2026-10-31), tout partait en `string`, y
+ * compris les nombres et les listes.
+ */
+export interface SchemaArgument {
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object'
+  /** Absente, c'est le texte de `CommandSpec.args` qui part : aucune description à recopier. */
+  description?: string
+  minimum?: number
+  maximum?: number
+  maxLength?: number
+  enum?: ReadonlyArray<string | number | boolean>
+  items?: SchemaArgument
+  properties?: Readonly<Record<string, SchemaArgument>>
+  required?: readonly string[]
+}
+
+/** Ce qu'une commande PEUT déclarer en plus de `args`. Les deux champs sont indépendants. */
+export interface DeclarationArguments {
+  /** Précise un argument de `args` ; n'en crée aucun. Non déclaré, il reste en texte. */
+  argsTypes?: Readonly<Record<string, SchemaArgument>>
+  /** Présent : c'est LA liste des facultatifs, le mot `facultatif` n'est plus lu. */
+  argsFacultatifs?: readonly string[]
+}
+
+/** Les annotations MCP d'un outil, recopiées de `CommandSpec.annotations`. */
+export interface AnnotationsOutil {
+  readOnlyHint?: boolean
+  destructiveHint?: boolean
+  idempotentHint?: boolean
+  openWorldHint?: boolean
+}
+
+/**
+ * Une spec telle que ce module la lit. Type STRUCTUREL local : `CommandSpec` vit dans `commands.ts`
+ * (conv-1370, lot 6) et ne porte pas encore `argsTypes` ni `argsFacultatifs`.
+ */
+type SpecPubliee = SpecCommandeSkill & DeclarationArguments & { annotations?: AnnotationsOutil }
+
+/**
  * Le schema d'entree d'un outil, COPIE de la spec de la commande.
  *
  * Le bus decrit ses arguments en francais (`{ question: 'la question, en langage naturel' }`) : on
  * ne reecrit pas cette description, on la transporte. C'est la lecon de `conv-1339`, ou un prompt
  * ecrit DE MEMOIRE annoncait `brain_query {"query": ...}` quand la commande attend `question` —
- * l'outil etait branche, teste, et strictement inutilisable.
+ * l'outil etait branche, teste, et strictement inutilisable. Les NOMS viennent donc de `args` seul.
  *
- * `required` est derive du MOT `facultatif`, seul marqueur d'optionalite que porte la spec. La
- * degradation est volontairement dissymetrique : un argument exige a tort est simplement fourni par
- * le modele, alors qu'un argument oublie revient en refus NOMME que le modele peut lire et corriger.
+ * Sans `argsFacultatifs`, `required` est derive du MOT `facultatif`. La degradation est
+ * volontairement dissymetrique : un argument exige a tort est simplement fourni par le modele, alors
+ * qu'un argument oublie revient en refus NOMME que le modele peut lire et corriger. Mesure de
+ * conv-1370 : 20 arguments sur 11 outils exiges a tort, d'ou la liste exacte quand elle est declaree.
  */
-export function schemaEntree(args: Record<string, unknown>): {
+export function schemaEntree(
+  args: Record<string, unknown>,
+  { argsTypes, argsFacultatifs }: DeclarationArguments = {}
+): {
   type: 'object'
-  properties: Record<string, { type: 'string'; description: string }>
+  properties: Record<string, SchemaArgument>
   required: string[]
 } {
-  const properties: Record<string, { type: 'string'; description: string }> = {}
+  const properties: Record<string, SchemaArgument> = {}
   const required: string[] = []
   for (const [nom, description] of Object.entries(args ?? {})) {
     const texte = String(description)
-    properties[nom] = { type: 'string', description: texte }
+    properties[nom] = { type: 'string', description: texte, ...argsTypes?.[nom] }
     // MARQUEUR EN TETE, pas sous-chaine : « obligatoire sauf si facultatif » contient le mot et
     // rendait l'argument optionnel — un argument REQUIS devenu optionnel en silence. Le bus ecrit
     // ses arguments facultatifs en commencant par le mot (« facultatif — … »), donc on l'ancre.
@@ -247,7 +297,10 @@ export function schemaEntree(args: Record<string, unknown>): {
     // rien et TOUS les arguments devenaient requis. Ce depot documente deja cette classe de
     // defaut (`veille/audit-interne.ts` : « un octet de controle brut neutralise une expression
     // reguliere »). Une comparaison de chaine ne peut pas porter ce piege.
-    if (!texte.trimStart().toLowerCase().startsWith('facultatif')) required.push(nom)
+    const facultatif = argsFacultatifs
+      ? argsFacultatifs.includes(nom)
+      : texte.trimStart().toLowerCase().startsWith('facultatif')
+    if (!facultatif) required.push(nom)
   }
   return { type: 'object', properties, required }
 }
@@ -275,9 +328,18 @@ export interface PerimetreOutils {
   readonly outils: readonly string[]
   /** Texte du refus d'un nom hors perimetre. */
   refus(nom: string): string
+  /**
+   * Vrai = les outils `readOnlyHint` de ce serveur tournent EN MÊME TEMPS. Absent = un par un : un
+   * nouveau périmètre reste prudent tant que personne n'a vérifié ce qui lit ses appels (voir
+   * `traiterMessageMcp`).
+   */
+  readonly lecturesSimultanees?: boolean
 }
 
 export const PERIMETRE_NOEUD_SKILL: PerimetreOutils = {
+  // Sûr ici (conv-1372) : ni carte ni trace causale, l'observateur reçoit une ligne qui porte sa
+  // cible, et le compteur de notes ne compte que `remember`, qui n'est pas une lecture.
+  lecturesSimultanees: true,
   // GETTER, pas une valeur : le cycle d'import skill-node-mcp -> skill-node-tools -> agent-pilot ->
   // chat-mcp -> skill-node-mcp fait lire OUTILS_NOEUD_SKILL avant son initialisation si on le copie
   // au chargement (mesure le 2026-10-02 sur 7cec6570 : TypeError « reading 'includes' »). Lu a
@@ -296,17 +358,52 @@ export function outilsPublies(
   name: string
   description: string
   inputSchema: ReturnType<typeof schemaEntree>
+  annotations?: AnnotationsOutil
   _meta: { 'anthropic/maxResultSizeChars': number }
 }> {
-  const specs = lanceur.catalogue?.() ?? []
-  return specs
+  return specsDuCatalogue(lanceur)
     .filter((s) => perimetre.outils.includes(s.name))
     .map((s) => ({
       name: s.name,
       description: s.description,
-      inputSchema: schemaEntree(s.args),
+      inputSchema: schemaEntree(s.args, s),
+      // `readOnlyHint` fait tourner les appels ensemble ; lui et `idempotentHint` autorisent le
+      // client à rejouer une fois un appel coupé (https://code.claude.com/docs/en/mcp, « Mark tools
+      // that are safe to call twice »). Sans annotation, il garde son défaut prudent : rien à inventer.
+      ...(s.annotations ? { annotations: s.annotations } : {}),
       _meta: { 'anthropic/maxResultSizeChars': PLAFOND_RESULTAT_OUTIL_CAR }
     }))
+}
+
+function specsDuCatalogue(lanceur: LanceurCommandeSkill): readonly SpecPubliee[] {
+  return lanceur.catalogue?.() ?? []
+}
+
+/**
+ * LES LECTURES D'UN SERVEUR PASSENT UNE PAR UNE, sauf `lecturesSimultanees` (conv-1372, 2026-10-31).
+ *
+ * `readOnlyHint` fait arriver les lectures d'un même message ENSEMBLE. Mesure en vrai sur quatre
+ * appels croisés : cartes du fil (par `actionId`), compteur de commandes en vol, bilan des échecs et
+ * dédoublonnage `cleAppelNatif` restent justes. La TRACE, elle, se trompait : `run-pilot-chat.ts`
+ * rattachait chaque événement au PRÉCÉDENT, et l'Observatoire (`resultOfCall`, `appelsDeLOutil`)
+ * donnait chaque résultat à la dernière commande ouverte : a.md sans résultat, b.md avec les deux notes.
+ *
+ * Le chat a levé sa file en conv-1388 : `run-pilot-chat.ts` rattache le `result` à SA `command`,
+ * `appelsDeLOutil` apparie par action, et `chat-mcp.ts` pose `lecturesSimultanees: true`. Un serveur
+ * sans ce drapeau garde la file : le client met en attente ce qu'il aurait lancé en série, on perd
+ * le gain de vitesse, rien d'autre. Seules les lectures attendent, parce que seule l'annotation les rend
+ * simultanées : `chat_send` et `verify` ne bloquent donc jamais une lecture, ni l'inverse.
+ */
+const filesDeLectures = new WeakMap<LanceurCommandeSkill, Promise<unknown>>()
+
+function aTourDeRole<T>(lanceur: LanceurCommandeSkill, appel: () => Promise<T>): Promise<T> {
+  const tour = (filesDeLectures.get(lanceur) ?? Promise.resolve()).then(appel)
+  // Un appel qui jette ne retient pas les suivants : l'erreur reste à celui qui attend `tour`.
+  filesDeLectures.set(
+    lanceur,
+    tour.catch(() => undefined)
+  )
+  return tour
 }
 
 /**
@@ -416,7 +513,12 @@ export async function traiterMessageMcp(
         })
       }
       try {
-        const resultat = await lanceur.exec(nom, args)
+        const lecture = specsDuCatalogue(lanceur).find((s) => s.name === nom)?.annotations
+          ?.readOnlyHint
+        const executer = (): ReturnType<LanceurCommandeSkill['exec']> => lanceur.exec(nom, args)
+        const resultat = await (lecture === true && !perimetre.lecturesSimultanees
+          ? aTourDeRole(lanceur, executer)
+          : executer())
         const texte = resultat.ok ? enTexte(resultat.data) : ''
         const renvoi =
           resultat.ok && texte.length > PLAFOND_RESULTAT_OUTIL_CAR

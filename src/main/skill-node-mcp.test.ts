@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   NOM_SERVEUR_MCP,
   demarrerServeurOutilsNoeudSkill,
@@ -9,10 +12,16 @@ import {
   lecturesDirectesDuBrain,
   libelleAppelObserve,
   porteLesOutilsNatifs,
-  type AppelMcpObserve
+  type AppelMcpObserve,
+  type DeclarationArguments,
+  type PerimetreOutils
 } from './skill-node-mcp'
 import type { LanceurCommandeSkill, SpecCommandeSkill } from './skill-node-tools'
-import type { ExecutionEvidence } from './providers/types'
+import type { ExecutionEvidence, Message, SendOptions, SendResult } from './providers/types'
+import { AgentPilot, type PilotEvent } from './agent-pilot'
+import { configureAutowinAppDataBase } from './app-data'
+import type { CommandSpec } from './commands'
+import { createChatTurn, reduceChatTurn } from '../shared/chat-turn'
 
 /** Les specs REELLES des commandes, recopiees de `commands.ts` (arguments compris). */
 const SPECS: SpecCommandeSkill[] = [
@@ -634,9 +643,457 @@ describe('corrections de l’audit', () => {
 
   it('seuls les providers qui CONSOMMENT réellement l’option sont déclarés', () => {
     expect(porteLesOutilsNatifs('claude')).toBe(true)
-    // Mesure du 2026-08-20 : codex fait un POST direct, gemini et kimi spawnent sans drapeau MCP.
-    for (const muet of ['codex', 'gemini', 'kimi', 'inconnu']) {
+    // `codex exec` les reçoit par `-c mcp_servers.*` (`optionsMcpCodex`, prouvé en vrai le 2026-10-31).
+    expect(porteLesOutilsNatifs('codex')).toBe(true)
+    // Mesure du 2026-08-20 : gemini et kimi spawnaient sans drapeau MCP.
+    for (const muet of ['gemini', 'kimi', 'inconnu']) {
       expect(porteLesOutilsNatifs(muet), `${muet} ne transporte pas les outils`).toBe(false)
     }
+  })
+})
+
+/**
+ * ANNOTATIONS ET VRAIS TYPES (conv-1370, 2026-10-31).
+ *
+ * Mesure sur 53 outils servis : tout partait en texte, 20 arguments sur 11 outils étaient exigés à
+ * tort, et aucune annotation ne sortait alors que 51 commandes en portent. Documentation
+ * (https://code.claude.com/docs/en/mcp, « Mark tools that are safe to call twice ») : `readOnlyHint`
+ * fait tourner les appels ensemble, `readOnlyHint` et `idempotentHint` autorisent à rejouer une fois
+ * un appel coupé.
+ */
+const LECTURE: NonNullable<CommandSpec['annotations']> = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false
+}
+const ECRITURE: NonNullable<CommandSpec['annotations']> = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: true
+}
+const CATALOGUE_ANNOTE: CommandSpec[] = [
+  {
+    name: 'brain_read',
+    description: 'lire une note',
+    args: { path: 'chemin' },
+    annotations: LECTURE
+  },
+  { name: 'remember', description: 'retenir', args: { type: 'type' }, annotations: ECRITURE }
+]
+const PERIMETRE_CHAT: PerimetreOutils = {
+  outils: ['brain_read', 'remember'],
+  refus: (nom) => `refus ${nom}`
+}
+const lanceurAnnote = (exec: LanceurCommandeSkill['exec']): LanceurCommandeSkill => ({
+  exec,
+  catalogue: () => CATALOGUE_ANNOTE
+})
+const appelDe = (
+  nom: string,
+  args: Record<string, unknown>,
+  id = 1
+): Parameters<typeof traiterMessageMcp>[0] => ({
+  method: 'tools/call',
+  id,
+  params: { name: nom, arguments: args }
+})
+const texteDeLaReponse = (r: { corps?: unknown }): string =>
+  (r.corps as { result: { content: Array<{ text: string }> } }).result.content[0]!.text
+
+describe('annotations publiées', () => {
+  it('chaque outil publie les annotations de sa commande : elles décident du lancement ensemble et du rejeu', () => {
+    const outils = outilsPublies(lanceurAnnote(async () => ({ ok: true })))
+    expect(outils.find((o) => o.name === 'brain_read')?.annotations).toEqual(LECTURE)
+    expect(outils.find((o) => o.name === 'remember')?.annotations).toEqual(ECRITURE)
+  })
+
+  it("une commande sans annotations n'en invente aucune : le client garde son défaut prudent", () => {
+    for (const outil of outilsPublies(lanceur())) expect(outil).not.toHaveProperty('annotations')
+  })
+
+  it('les annotations sortent par tools/list, là où le client les lit', async () => {
+    const rep = await traiterMessageMcp(
+      { method: 'tools/list', id: 1 },
+      lanceurAnnote(async () => ({ ok: true }))
+    )
+    const { result } = JSON.parse(JSON.stringify(rep.corps)) as {
+      result: { tools: Array<{ name: string; annotations?: unknown }> }
+    }
+    expect(result.tools.find((o) => o.name === 'brain_read')?.annotations).toEqual(LECTURE)
+  })
+})
+
+describe('schemaEntree — déclaration des arguments', () => {
+  it('sans déclaration, rien ne change : tout en texte, required lu sur le mot facultatif', () => {
+    const attendu = {
+      type: 'object',
+      properties: {
+        a: { type: 'string', description: 'texte' },
+        b: { type: 'string', description: 'facultatif — x' }
+      },
+      required: ['a']
+    }
+    expect(schemaEntree({ a: 'texte', b: 'facultatif — x' })).toEqual(attendu)
+    expect(schemaEntree({ a: 'texte', b: 'facultatif — x' }, {})).toEqual(attendu)
+  })
+
+  it('argsTypes publie le vrai type et ses bornes ; la description de la commande reste', () => {
+    const s = schemaEntree(
+      { limite: 'facultatif — nombre maximum', mode: 'court|long' },
+      {
+        argsTypes: {
+          limite: { type: 'integer', minimum: 1, maximum: 50 },
+          mode: { type: 'string', enum: ['court', 'long'], maxLength: 5, description: 'le mode' }
+        }
+      }
+    )
+    expect(s.properties).toEqual({
+      limite: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 50,
+        description: 'facultatif — nombre maximum'
+      },
+      mode: { type: 'string', enum: ['court', 'long'], maxLength: 5, description: 'le mode' }
+    })
+    // Sans `argsFacultatifs`, le mot décide encore : les deux déclarations sont indépendantes.
+    expect(s.required).toEqual(['mode'])
+  })
+
+  it('argsFacultatifs donne le required exact, dans les deux sens', () => {
+    const args = {
+      fil: 'conversation destinataire (optionnel)',
+      message: 'texte',
+      note: 'facultatif — x'
+    }
+    // Le défaut mesuré : `fil` était exigé parce que sa description ne COMMENCE pas par le mot.
+    expect(schemaEntree(args, { argsFacultatifs: ['fil', 'note'] }).required).toEqual(['message'])
+    // La liste déclarée prime sur le mot, sinon « exact » ne voudrait rien dire.
+    expect(schemaEntree(args, { argsFacultatifs: ['fil'] }).required).toEqual(['message', 'note'])
+    expect(schemaEntree({ a: 'facultatif — x' }, { argsFacultatifs: [] }).required).toEqual(['a'])
+  })
+
+  it('tableaux et objets gardent items, properties et required imbriqués', () => {
+    const options = {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { x: { type: 'number' }, y: { type: 'string' } },
+        required: ['x']
+      }
+    } as const
+    const s = schemaEntree({ options: 'la liste' }, { argsTypes: { options } })
+    expect(s.properties.options).toEqual({ ...options, description: 'la liste' })
+  })
+
+  it('argsTypes ne crée aucun argument : les noms restent ceux de la commande (défaut de conv-1339)', () => {
+    const s = schemaEntree(
+      { question: 'la question' },
+      { argsTypes: { query: { type: 'string' } } }
+    )
+    expect(Object.keys(s.properties)).toEqual(['question'])
+  })
+
+  it('outilsPublies lit la déclaration sur la spec, sans la laisser sortir dans l’outil publié', () => {
+    const spec: SpecCommandeSkill & DeclarationArguments = {
+      name: 'brain_query',
+      description: 'chercher',
+      args: { question: 'la question', limite: 'nombre maximum' },
+      argsTypes: { limite: { type: 'integer', minimum: 1 } },
+      argsFacultatifs: ['limite']
+    }
+    const [outil] = outilsPublies({ exec: async () => ({ ok: true }), catalogue: () => [spec] })
+    expect(outil!.inputSchema.properties.limite?.type).toBe('integer')
+    expect(outil!.inputSchema.required).toEqual(['question'])
+    expect(Object.keys(outil!)).not.toContain('argsTypes')
+    expect(Object.keys(outil!)).not.toContain('argsFacultatifs')
+  })
+})
+
+type ResultatBus = { ok: boolean; data?: unknown; error?: string }
+
+/** Un bus qui mesure ses appels en vol ; le premier arrivé finit le dernier, pour croiser les fins. */
+function busChronometre(reponse: (args: Record<string, unknown>) => ResultatBus): {
+  exec: (nom: string, args: Record<string, unknown>) => Promise<ResultatBus>
+  pic: () => number
+} {
+  let enVol = 0
+  let pic = 0
+  let rang = 0
+  return {
+    exec: async (_nom, args) => {
+      const duree = 40 - 10 * Math.min(rang++, 3)
+      enVol += 1
+      pic = Math.max(pic, enVol)
+      await new Promise((resolve) => setTimeout(resolve, duree))
+      enVol -= 1
+      return reponse(args)
+    },
+    pic: () => pic
+  }
+}
+
+type ConfigMcp = { mcpServers: { autowin: { url: string; headers: Record<string, string> } } }
+type ReponseRpc = { result?: { content?: Array<{ text?: string }>; isError?: boolean } }
+
+/** Un appel d'outil posté sur le vrai port, comme le fait le CLI. */
+async function posterAppel(options: SendOptions, nom: string, args: unknown): Promise<ReponseRpc> {
+  const config = JSON.parse(options.skillNodeTools!.mcpConfig) as ConfigMcp
+  const r = await fetch(config.mcpServers.autowin.url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...config.mcpServers.autowin.headers },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: nom, arguments: args }
+    })
+  })
+  return (await r.json()) as ReponseRpc
+}
+
+/** Un vrai tour de chat, seul le modèle est simulé : ses appels d'outils partent par `pendant`. */
+function tourDeChat(
+  etapes: Array<{ pendant?: (o: SendOptions) => Promise<void>; texte?: string }>,
+  exec: (nom: string, args: Record<string, unknown>) => Promise<ResultatBus>
+): {
+  jouer: () => Promise<void>
+  evenements: PilotEvent[]
+  appelsBus: () => unknown[][]
+} {
+  const restantes = [...etapes]
+  const registry = {
+    send: vi.fn(async (_p: string, _m: Message[], options: SendOptions): Promise<SendResult> => {
+      const etape = restantes.shift() ?? { texte: 'fin.' }
+      if (etape.pendant) await etape.pendant(options)
+      return { text: etape.texte ?? '' } as SendResult
+    }),
+    describePrompt: vi.fn(() => ({
+      provider: 'claude',
+      messages: [],
+      transport: 't',
+      options: {},
+      limitation: 'test'
+    })),
+    honoursSessionResume: vi.fn(() => false)
+  }
+  const bus = {
+    catalog: vi.fn(() => CATALOGUE_ANNOTE),
+    snapshotForPrompt: vi.fn(async () => ({
+      tab: 'chat',
+      providers: [],
+      runsBlocked: [],
+      conversationsCount: 0
+    })),
+    exec: vi.fn(exec)
+  }
+  const pilote = new AgentPilot(
+    registry as never,
+    { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) } as never,
+    bus as never,
+    undefined,
+    () => '',
+    () => '',
+    true
+  )
+  const evenements: PilotEvent[] = []
+  return {
+    jouer: () =>
+      pilote.chat(
+        [{ role: 'user', content: 'lis ces notes' } as Message],
+        (e) => evenements.push(e),
+        undefined,
+        8
+      ),
+    evenements,
+    appelsBus: () => bus.exec.mock.calls
+  }
+}
+
+describe('appels simultanés', () => {
+  const NOTES = ['a.md', 'b.md', 'c.md', 'd.md']
+  beforeEach(() => configureAutowinAppDataBase(mkdtempSync(join(tmpdir(), 'aos-simultanes-'))))
+  afterEach(() => configureAutowinAppDataBase(undefined))
+
+  it('chat : quatre lectures d’un même message tournent ensemble, chaque résultat suit SA carte', async () => {
+    /*
+     * ENSEMBLE DEPUIS conv-1388 (2026-10-31). Ce test gardait la file (conv-1372) tant que la trace
+     * rattachait chaque événement au PRÉCÉDENT. `run-pilot-chat.ts` rattache maintenant le `result`
+     * à SA `command`, `appelsDeLOutil` apparie par action, et `chat-mcp.ts` pose
+     * `lecturesSimultanees: true` : les quatre lectures sont en vol en même temps.
+     */
+    const b = busChronometre((args) => ({ ok: true, data: `note de ${String(args.path)}` }))
+    let reponses: ReponseRpc[] = []
+    const t = tourDeChat(
+      [
+        {
+          pendant: async (o) => {
+            reponses = await Promise.all(
+              NOTES.map((path) => posterAppel(o, 'brain_read', { path }))
+            )
+          },
+          texte: 'Lu.'
+        }
+      ],
+      b.exec
+    )
+    await t.jouer()
+
+    expect(b.pic()).toBe(4)
+    expect(reponses.map((r) => r.result?.content?.[0]?.text)).toEqual(
+      NOTES.map((n) => `note de ${n}`)
+    )
+
+    const paires = t.evenements.flatMap((e) =>
+      e.kind === 'command' || e.kind === 'result' ? [[e.kind, e.actionId]] : []
+    )
+    expect(paires).toHaveLength(8)
+    // Croisés, les appels ne se suivent plus deux à deux : chaque action a SA commande puis SON résultat.
+    for (const action of new Set(paires.map((p) => p[1]))) {
+      expect(paires.filter((p) => p[1] === action).map((p) => p[0])).toEqual(['command', 'result'])
+    }
+
+    // Ce que voit le fil : une carte par appel, chacune avec le résultat de SON argument.
+    let tour = createChatTurn('tour')
+    for (const e of t.evenements) {
+      const { actionId = '', name = '', args, ok = false, data } = e
+      if (e.kind === 'command') {
+        tour = reduceChatTurn(tour, { kind: 'command', actionId, name, args })
+      } else if (e.kind === 'result') {
+        tour = reduceChatTurn(tour, { kind: 'result', actionId, name, ok, data })
+      }
+    }
+    const cartes = tour.parts.flatMap((p) => (p.kind === 'action' ? [p] : []))
+    expect(new Set(cartes.map((c) => c.actionId)).size).toBe(4)
+    for (const carte of cartes) {
+      expect(carte.data).toBe(`note de ${String((carte.args as { path: string }).path)}`)
+    }
+  })
+
+  it('chat : une lecture en échec au milieu n’arrête pas les suivantes et reste au bilan', async () => {
+    const b = busChronometre((args) =>
+      args.path === 'b.md' ? { ok: false, error: 'note absente' } : { ok: true, data: 'lu' }
+    )
+    let reponses: ReponseRpc[] = []
+    const t = tourDeChat(
+      [
+        {
+          pendant: async (o) => {
+            reponses = await Promise.all(
+              NOTES.map((path) => posterAppel(o, 'brain_read', { path }))
+            )
+          },
+          texte: 'La note b.md manque.'
+        }
+      ],
+      b.exec
+    )
+    await t.jouer()
+    expect(reponses.map((r) => r.result?.isError)).toEqual([false, true, false, false])
+    const bilan = t.evenements.find((e) => e.kind === 'echecs-abandonnes') as
+      { data?: Array<{ actionId: string; cible: string }> } | undefined
+    expect(bilan?.data).toHaveLength(1)
+    expect(JSON.stringify(bilan?.data)).toContain('b.md')
+  })
+
+  it('chat : un <cmd> identique à une lecture simultanée n’est pas rejoué', async () => {
+    const b = busChronometre(() => ({ ok: true, data: 'lu' }))
+    const t = tourDeChat(
+      [
+        {
+          pendant: async (o) => {
+            await Promise.all(
+              NOTES.slice(0, 2).map((path) => posterAppel(o, 'brain_read', { path }))
+            )
+          },
+          texte: 'Lu.<cmd>{"name":"brain_read","args":{"path":"a.md"}}</cmd>'
+        },
+        { texte: 'Fait.' }
+      ],
+      b.exec
+    )
+    await t.jouer()
+    expect(t.appelsBus().filter((c) => c[0] === 'brain_read')).toHaveLength(2)
+  })
+
+  it('étape de workflow : les lectures tournent ENSEMBLE, et chacune garde sa note et sa trace', async () => {
+    // Ni carte ni trace causale ici : l'observateur reçoit des lignes qui portent déjà leur cible.
+    const b = busChronometre((args) => ({
+      ok: true,
+      data: { found: true, knowledge: `note de ${String(args.path)}` }
+    }))
+    const l = lanceurAnnote(b.exec)
+    const vus: AppelMcpObserve[] = []
+    const reponses = await Promise.all(
+      NOTES.map((path, i) =>
+        traiterMessageMcp(appelDe('brain_read', { path }, i), l, (a) => vus.push(a))
+      )
+    )
+    expect(b.pic()).toBe(4)
+    expect(reponses.map(texteDeLaReponse)).toEqual(NOTES.map((n) => `note de ${n}`))
+    // Fins croisées : le premier arrivé finit le dernier, sans perdre la note qu'il a ouverte.
+    expect(vus.map((a) => a.cible)).toEqual([...NOTES].reverse())
+  })
+
+  it('la file ne retient que les lectures : une écriture passe même si une lecture est bloquée', async () => {
+    let liberer = (): void => undefined
+    const l = lanceurAnnote(async (nom) => {
+      if (nom === 'brain_read') await new Promise<void>((resolve) => (liberer = resolve))
+      return { ok: true, data: nom }
+    })
+    const lecture = traiterMessageMcp(
+      appelDe('brain_read', { path: 'a.md' }),
+      l,
+      undefined,
+      PERIMETRE_CHAT
+    )
+    const ecriture = await traiterMessageMcp(
+      appelDe('remember', { type: 'lesson' }),
+      l,
+      undefined,
+      PERIMETRE_CHAT
+    )
+    expect(texteDeLaReponse(ecriture)).toBe('remember')
+    liberer()
+    await lecture
+  })
+
+  it('une lecture qui JETTE ne bloque pas celles qui attendent derrière elle', async () => {
+    const l = lanceurAnnote(async (_nom, args) => {
+      if (args.path === 'a.md') throw new Error('brain injoignable')
+      return { ok: true, data: 'lu' }
+    })
+    const [premiere, seconde] = await Promise.all([
+      traiterMessageMcp(appelDe('brain_read', { path: 'a.md' }), l, undefined, PERIMETRE_CHAT),
+      traiterMessageMcp(appelDe('brain_read', { path: 'b.md' }), l, undefined, PERIMETRE_CHAT)
+    ])
+    expect(texteDeLaReponse(premiere)).toContain('brain injoignable')
+    expect(texteDeLaReponse(seconde)).toBe('lu')
+  })
+
+  it('une file par envoi : une lecture bloquée dans un fil ne retient pas celles d’un autre', async () => {
+    let liberer = (): void => undefined
+    const bloque = lanceurAnnote(async () => {
+      await new Promise<void>((resolve) => (liberer = resolve))
+      return { ok: true, data: 'tard' }
+    })
+    const libre = lanceurAnnote(async () => ({ ok: true, data: 'lu' }))
+    const enAttente = traiterMessageMcp(
+      appelDe('brain_read', { path: 'a.md' }),
+      bloque,
+      undefined,
+      PERIMETRE_CHAT
+    )
+    const passee = await traiterMessageMcp(
+      appelDe('brain_read', { path: 'b.md' }),
+      libre,
+      undefined,
+      PERIMETRE_CHAT
+    )
+    expect(texteDeLaReponse(passee)).toBe('lu')
+    liberer()
+    await enAttente
   })
 })

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { matchIntentPhase, normalizeIntent } from './intent-phase-routing'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { classifyRegime, phasesForRegime, regimePhases } from './task-regime'
+import { courtCircuiteLeModele, routeSkillRequest } from './skill-routing'
 
 /**
  * ROUTER L'INTENTION VERS UNE PHASE.
@@ -226,7 +227,13 @@ describe('câblage — le code ne DEVINE plus qu’il faut orchestrer', () => {
   const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
 
   it('le court-circuit exige une demande EXPLICITE', () => {
-    expect(source).toContain("directRoute?.reason === 'explicit-skill'")
+    expect(source).toContain('courtCircuiteLeModele(directRoute)')
+    expect(courtCircuiteLeModele(routeSkillRequest('/scout trouve les failles'))).toBe(true)
+    // La déduction heuristique ne saute jamais le modèle, même sur une action claire.
+    const devinee = routeSkillRequest('corrige le bouton workflows dans la page chat')
+    expect(devinee?.reason).toBe('workspace-action')
+    expect(courtCircuiteLeModele(devinee)).toBe(false)
+    expect(courtCircuiteLeModele(undefined)).toBe(false)
   })
 
   it('l’ancienne condition fourre-tout a disparu', () => {

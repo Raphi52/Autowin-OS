@@ -261,6 +261,52 @@ describe('redémarrage demandé, mis en file', () => {
     expect(h.etat.relances[0]).toMatch(/^restart_app \(conv-304\) — redémarrage en file/)
   })
 
+  /*
+   * conv-1306, 2026-10-30 : conv-1306 met un redémarrage en file à 15:31, conv-1329 à 15:50. La
+   * seconde demande REMPLAÇAIT la première : une seule consigne reposée à la relance, et la
+   * vérification promise à conv-1306 (« rejouera la consigne dans cette conversation ») perdue.
+   */
+  it('deux fils en file : UNE relance, et la consigne de CHACUN reposée avant elle', async () => {
+    const h = harnais()
+    await vi.advanceTimersByTimeAsync(0)
+    const reposees: string[] = []
+    h.etat.repos = false
+    h.armee.mettreEnFile({
+      cause: 'restart_app (conv-1306)',
+      avantRelance: () => reposees.push('conv-1306')
+    })
+    h.armee.mettreEnFile({
+      cause: 'restart_app (conv-1329)',
+      avantRelance: () => reposees.push('conv-1329')
+    })
+    expect(h.armee.etat().demandeEnFile).toBe('restart_app (conv-1306) · restart_app (conv-1329)')
+    h.etat.repos = true
+    await vi.advanceTimersByTimeAsync(700)
+    expect(reposees).toEqual(['conv-1306', 'conv-1329'])
+    expect(h.etat.relances).toHaveLength(1)
+  })
+
+  it('une consigne qui ne se repose pas n’empêche pas celle de l’autre fil', async () => {
+    const h = harnais()
+    await vi.advanceTimersByTimeAsync(0)
+    const reposees: string[] = []
+    h.etat.repos = false
+    h.armee.mettreEnFile({
+      cause: 'restart_app (conv-1)',
+      avantRelance: () => {
+        throw new Error('disque plein')
+      }
+    })
+    h.armee.mettreEnFile({
+      cause: 'restart_app (conv-2)',
+      avantRelance: () => reposees.push('conv-2')
+    })
+    h.etat.repos = true
+    await vi.advanceTimersByTimeAsync(700)
+    expect(reposees).toEqual(['conv-2'])
+    expect(h.etat.relances).toHaveLength(1)
+  })
+
   it('une modification sans effet sur le code compilé ne retire PAS la demande', async () => {
     const h = harnais()
     await vi.advanceTimersByTimeAsync(0)
