@@ -55,7 +55,7 @@ class ProviderMuet implements ProviderAdapter {
 }
 
 class ProviderSansMcp implements ProviderAdapter {
-  readonly id = 'codex'
+  readonly id = 'gemini'
   readonly supportsExecution = true
   readonly calls: SendOptions[] = []
   // eslint-disable-next-line require-yield
@@ -157,7 +157,7 @@ describe('serveur d’outils d’un nœud skill — cycle de vie', () => {
     )
     // Ni serveur, ni promesse d'outils : la privation est NOMMÉE au lieu d'être silencieuse.
     expect(details.some((d) => d.startsWith('outils natifs servis'))).toBe(false)
-    expect(details.some((d) => d.includes('outils natifs indisponibles sur codex'))).toBe(true)
+    expect(details.some((d) => d.includes('outils natifs indisponibles sur gemini'))).toBe(true)
     expect(provider.calls[0]?.skillNodeTools).toBeUndefined()
   })
 })

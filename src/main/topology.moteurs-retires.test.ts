@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { migrateTopologyShape, type AgentTopology } from './topology'
 
 /**
- * Codex, Kimi et Gemini sont retirés du produit. Une topologie DÉJÀ ENREGISTRÉE peut encore
- * pointer dessus — c'est le cas réel mesuré le 2026-09-04 sur `agent-topology.json` :
- * `panels.terrain[0]` = `codex/gpt-5.6-sol`.
+ * Kimi et Gemini sont retirés du produit. Une topologie DÉJÀ ENREGISTRÉE peut encore pointer
+ * dessus. Cas réel mesuré le 2026-09-04 sur `agent-topology.json`, du temps où Codex l'était aussi :
+ * `panels.terrain[0]` = `codex/gpt-5.6-sol`. Codex est revenu le 2026-10-31 (conv-1414).
  *
  * Sans migration, la validation au chargement rejette la topologie et RÉINITIALISE toute la
  * configuration de l'utilisateur. La migration doit donc rebrancher le slot sur le moteur vivant
@@ -26,8 +26,8 @@ describe('topology — migration des moteurs retirés', () => {
       terrain: [
         {
           slotId: 'terrain-1',
-          provider: 'codex',
-          modelId: 'codex/gpt-5.6-sol',
+          provider: 'kimi',
+          modelId: 'kimi/k2',
           reasoningEffort: 'low'
         }
       ],
@@ -35,7 +35,7 @@ describe('topology — migration des moteurs retirés', () => {
     }
   }
 
-  it('rebranche sur Claude le slot Terrain resté sur Codex, sans perdre le slot', () => {
+  it('rebranche sur Claude le slot Terrain resté sur Kimi, sans perdre le slot', () => {
     const migrated = migrateTopologyShape(structuredClone(enregistree)) as AgentTopology
 
     expect(migrated.panels.terrain).toHaveLength(1)
@@ -98,6 +98,6 @@ describe('topology — migration des moteurs retirés', () => {
     const deux = migrateTopologyShape(structuredClone(une)) as AgentTopology
 
     expect(deux).toEqual(une)
-    expect(source.panels.terrain[0].provider).toBe('codex')
+    expect(source.panels.terrain[0].provider).toBe('kimi')
   })
 })

@@ -67,7 +67,12 @@ export type IssueEtendue =
 
 /**
  * Sans réponse (aucune fenêtre, fenêtre fermée), on ARRÊTE : relancer une réparation est
- * justement ce que l'utilisateur ne veut plus subir sans avoir tranché. Le run reste reprenable.
+ * justement ce que l'utilisateur ne veut plus subir sans avoir tranché.
+ *
+ * Cet arrêt est DÉFINITIF, et le motif le dit (conv-1342, 2026-10-30). Un run rouge perd son état à
+ * la clôture (`onRunSettled`, os.ts) : seule sa copie survit. Sur conv-1337, le motif promettait
+ * pourtant « Le run reste reprenable ». Garder l'état n'est pas la bonne correction : la reprise
+ * automatique du démarrage (index.ts) relancerait alors la réparation que personne n'a tranchée.
  */
 export function issueDeLaReponse(reponse: string | undefined): IssueEtendue {
   const texte = (reponse ?? '').trim()
@@ -82,7 +87,7 @@ export function issueDeLaReponse(reponse: string | undefined): IssueEtendue {
     return {
       kind: 'arreter',
       motif:
-        'Réparation arrêtée : le juge refuse encore pour l’étendue de la demande, et la question posée est restée sans réponse. Le run reste reprenable.'
+        'Réparation arrêtée : le juge refuse encore pour l’étendue de la demande, et la question posée est restée sans réponse. Le run est terminé et ne peut pas être repris : seuls les fichiers déjà modifiés restent dans sa copie, non publiés.'
     }
   return { kind: 'consigne', texte }
 }

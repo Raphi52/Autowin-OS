@@ -53,6 +53,24 @@ export function detectRawSleep(diff: string): HookViolation[] {
 }
 
 /**
+ * Le seuil du fix-gate, partagé avec le signal donné à l'agent PENDANT son travail
+ * (`providers/cause-en-cours.ts`, conv-1353, 2026-10-31) : deux copies du 3 finiraient par se
+ * contredire, et l'agent serait prévenu trop tard ou pour rien.
+ */
+export const SEUIL_FIX_GATE = 3
+
+/**
+ * La phrase du refus, avec son geste de sortie. Le signal en cours de travail dit la même, mot pour
+ * mot : il la recopie par `.toString()` dans le script de son hook (`scriptHookCauseEnCours`), qui
+ * tourne dans un autre process. Cette fonction ne doit donc rien nommer hors de son corps.
+ */
+export function detailRefusFixGate(count: number, file: string): string {
+  // Le refus doit porter son geste de sortie : conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb,
+  // la reparation l'a recu 2 fois sans deposer le jeton et la boucle s'est figee en rouge.
+  return `${count} édits de ${file} sans cause vérifiée (CausalHypothesis/fix-ok/check:) — pour lever ce refus, dépose dans ${file} un commentaire \`fix-ok: <cause mesurée>\``
+}
+
+/**
  * fix-gate : édits répétés (≥ seuil) du MÊME fichier sans jeton de cause vérifiée = boucle de
  * fix aveugle → block. Réplique `fix-gate.ps1`. `causeTokens` = jetons observés cette session
  * (CausalHypothesis / fix-ok / check:).
@@ -60,7 +78,7 @@ export function detectRawSleep(diff: string): HookViolation[] {
 export function detectBlindFixLoop(
   editsByFile: Record<string, number>,
   causeTokensByFile: Record<string, boolean> = {},
-  threshold = 3,
+  threshold = SEUIL_FIX_GATE,
   /*
    * SEULS LES FICHIERS D'UN DÉPÔT COMPTENT (conv-1149, 2026-10-25). Sur conv-1146, 3 des 17
    * réparations venaient de scripts jetables hors dépôt (« 3 édits de D:/tmp/langue-outils/
@@ -85,9 +103,7 @@ export function detectBlindFixLoop(
     .filter(([file, count]) => count >= threshold && !causes[file])
     .map(([file, count]) => ({
       hook: 'fix-gate' as const,
-      // Le refus doit porter son geste de sortie : conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb,
-      // la reparation l'a recu 2 fois sans deposer le jeton et la boucle s'est figee en rouge.
-      detail: `${count} édits de ${file} sans cause vérifiée (CausalHypothesis/fix-ok/check:) — pour lever ce refus, dépose dans ${file} un commentaire \`fix-ok: <cause mesurée>\``
+      detail: detailRefusFixGate(count, file)
     }))
 }
 
@@ -219,7 +235,12 @@ export function runHooks(input: {
   if (input.producedDiff) v.push(...detectRawSleep(input.producedDiff))
   if (input.editsByFile)
     v.push(
-      ...detectBlindFixLoop(input.editsByFile, input.causeTokensByFile, 3, input.estFichierDuDepot)
+      ...detectBlindFixLoop(
+        input.editsByFile,
+        input.causeTokensByFile,
+        SEUIL_FIX_GATE,
+        input.estFichierDuDepot
+      )
     )
   if (input.requireProof) v.push(...requireProofBeforeGreen(input.evidenceOkCount ?? 0))
   if (input.requireVisualProof && input.producedDiff)

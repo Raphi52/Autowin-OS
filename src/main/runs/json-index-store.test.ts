@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { attendreFichier } from '../ecriture-hors-fil'
 import { creerIndexStore } from './json-index-store'
 
 const estTexte = (v: unknown): v is string => typeof v === 'string' && !!v
@@ -10,7 +11,10 @@ const store = creerIndexStore<string>('essai-index.json', estTexte)
 let base = ''
 beforeEach(() => {
   base = mkdtempSync(join(tmpdir(), 'jis-'))
-  return () => rmSync(base, { recursive: true, force: true })
+  return async () => {
+    await attendreFichier()
+    rmSync(base, { recursive: true, force: true })
+  }
 })
 
 describe('le socle commun des index JSON sur disque', () => {
@@ -39,9 +43,11 @@ describe('le socle commun des index JSON sur disque', () => {
     expect(store.lire(base)).toEqual({})
   })
 
-  it('l’ecriture est atomique : aucun fichier temporaire ne survit', () => {
+  it('l’ecriture est atomique : aucun fichier temporaire ne survit', async () => {
     store.ecrire({ a: 'un' }, base)
-    expect(() => readFileSync(`${store.chemin(base)}.tmp`, 'utf8')).toThrow()
+    await attendreFichier()
+    expect(readdirSync(base)).toEqual(['essai-index.json'])
+    expect(JSON.parse(readFileSync(store.chemin(base), 'utf8'))).toEqual({ a: 'un' })
   })
 
   it('oublier une cle laisse les autres intactes', () => {
@@ -50,9 +56,11 @@ describe('le socle commun des index JSON sur disque', () => {
     expect(store.lire(base)).toEqual({ b: 'deux' })
   })
 
-  it('oublier la DERNIERE cle supprime le fichier', () => {
+  it('oublier la DERNIERE cle supprime le fichier', async () => {
     store.ecrire({ a: 'un' }, base)
+    await attendreFichier()
     store.oublier('a', base)
+    await attendreFichier()
     expect(() => readFileSync(store.chemin(base), 'utf8')).toThrow()
   })
 

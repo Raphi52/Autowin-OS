@@ -1,7 +1,8 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { attendreFichier } from '../ecriture-hors-fil'
 import {
   chatSessionStorePath,
   forgetChatSession,
@@ -74,9 +75,10 @@ describe('persistance des sessions de chat', () => {
     expect(loadChatSessions(root)['conv-1'].sessionId).toBe('sess-1')
   })
 
-  it('FAIL-OPEN : un fichier corrompu vaut « aucune session », pas une exception', () => {
+  it('FAIL-OPEN : un fichier corrompu vaut « aucune session », pas une exception', async () => {
     const root = racine()
     saveChatSession('conv-1', 'claude:opus', 'sess-1', root)
+    await attendreFichier(chatSessionStorePath(root))
     writeFileSync(chatSessionStorePath(root), '{ ceci n est pas du JSON', 'utf8')
     expect(loadChatSessions(root)).toEqual({})
     // Et on doit pouvoir repartir : le store se réécrit par-dessus la corruption.
@@ -100,9 +102,11 @@ describe('persistance des sessions de chat', () => {
     expect(loadChatSessions(root)).toEqual({})
   })
 
-  it('écrit de façon ATOMIQUE : aucun fichier temporaire ne subsiste', () => {
+  it('écrit de façon ATOMIQUE : aucun fichier temporaire ne subsiste', async () => {
     const root = racine()
     saveChatSession('conv-1', 'claude:opus', 'sess-1', root)
+    await attendreFichier(chatSessionStorePath(root))
+    expect(readdirSync(root)).toEqual(['chat-sessions.json'])
     const brut = readFileSync(chatSessionStorePath(root), 'utf8')
     expect(() => JSON.parse(brut)).not.toThrow()
     expect(brut).toContain('sess-1')

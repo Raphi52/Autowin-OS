@@ -156,6 +156,8 @@ function scenarioDiverge(): {
     stateStore: {
       list: () => [...etat.values()],
       get: (id: string) => etat.get(id),
+      dernierConnu: (id: string) => etat.get(id),
+      getAsync: async (id: string) => etat.get(id),
       save: (e: { runId: string }) => etat.set(e.runId, e),
       remove: (id: string) => etat.delete(id)
     } as never

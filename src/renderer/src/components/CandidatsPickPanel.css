@@ -117,6 +117,11 @@
   font-size: 12px;
   opacity: 0.8;
 }
+/* Un plan refusé se lit : il ne disparaît pas en silence (conv-1333). */
+.cpick-refus {
+  color: var(--err);
+  opacity: 1;
+}
 /* Les lots, dans l'ordre où ils partiront (conv-1080) : une ligne par lot, sans retrait profond. */
 .cpick-lots {
   margin: 4px 0 0;

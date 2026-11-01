@@ -116,7 +116,7 @@ const MOTS_OUTILS = new Set([
 const SLUG_MOTS_MAX = 6
 const SLUG_LONGUEUR_MAX = 40
 
-function slugify(task: string): string {
+export function slugify(task: string): string {
   // Le marqueur d'une relance (`reprend\n\nCIBLE CONTEXTUALISEE : <sujet>`, commands.ts) ne nomme
   // rien : il prenait deux des six mots du libellé (`go-cible-contextualisee-traite-trois`,
   // conv-517). Seul le marqueur EXACT est retiré, en majuscules : un sujet qui parle de la cible

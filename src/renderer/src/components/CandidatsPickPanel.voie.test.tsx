@@ -94,11 +94,11 @@ describe('CandidatsPickPanel — le workflow intelligent', () => {
     expect(envoye).not.toMatch(/^\/build/u)
   })
 
-  it('une sélection MIXTE : la correction part en direct, l’ajout en complet, l’un après l’autre', () => {
+  it('une sélection MIXTE sans plan possible : la correction part en direct, l’ajout en complet, à la suite', () => {
     const onPick = vi.fn()
     act(() => root.render(<CandidatsPickPanel candidats={[AJOUT, CORRECTION]} onPick={onPick} />))
 
-    expect(voie()).toContain('2 lots à la suite')
+    expect(voie()).toContain('2 lots en parallèle')
     const lots = Array.from(container.querySelectorAll<HTMLElement>('[data-testid="cpick-lot"]'))
     expect(lots.map((lot) => lot.dataset.voie)).toEqual(['directe', 'complete'])
     // Les numéros sont ceux des LIGNES du panneau : la correction est la ligne 2.
@@ -191,7 +191,93 @@ describe('CandidatsPickPanel — le workflow intelligent', () => {
     const [, suite] = onPick.mock.calls[0]! as [string, string[]]
     expect(suite[0]).toContain('PIPELINE complet')
     expect(container.querySelector('[data-testid="cpick-auto"]')?.textContent).toContain(
-      'en 2 lots à la suite'
+      'en 2 lots en parallèle'
     )
+  })
+
+  describe('dès deux lots, la sélection part en super conversation (conv-1333)', () => {
+    const accepte = (): ReturnType<typeof vi.fn> => vi.fn(async () => ({ ok: true as const }))
+    const rendre = (onPlan: ReturnType<typeof vi.fn>, onPick = vi.fn()): void => {
+      act(() =>
+        root.render(
+          <CandidatsPickPanel candidats={[AJOUT, CORRECTION]} onPick={onPick} onPlan={onPlan} />
+        )
+      )
+    }
+    const cliquer = async (): Promise<void> => {
+      await act(async () => {
+        lancer().click()
+        await Promise.resolve()
+      })
+    }
+
+    it('le clic dépose le plan des deux lots, et rien ne part dans le fil', async () => {
+      const onPlan = accepte()
+      const onPick = vi.fn()
+      rendre(onPlan, onPick)
+      await cliquer()
+      expect(onPick).not.toHaveBeenCalled()
+      expect(onPlan).toHaveBeenCalledOnce()
+      const selection = onPlan.mock.calls[0]![0] as { lots: { demande: string }[] }
+      expect(selection.lots).toHaveLength(2)
+      expect(selection.lots[0]!.demande.split('\n')[0]).toBe('/build')
+      expect(selection.lots[1]!.demande).toContain('Lot 2 sur 2 de la sélection')
+    })
+
+    it('le bouton dit que le plan est parti, et ne le relance pas', async () => {
+      const onPlan = accepte()
+      rendre(onPlan)
+      await cliquer()
+      expect(lancer().disabled).toBe(true)
+      expect(lancer().textContent).toContain('Plan lancé (2 lots)')
+    })
+
+    it('un seul lot reste dans le fil : pas de plan pour une seule piste', () => {
+      const onPlan = accepte()
+      const onPick = vi.fn()
+      act(() =>
+        root.render(<CandidatsPickPanel candidats={[CORRECTION]} onPick={onPick} onPlan={onPlan} />)
+      )
+      act(() => lancer().click())
+      expect(onPlan).not.toHaveBeenCalled()
+      expect(onPick).toHaveBeenCalledOnce()
+    })
+
+    it('un refus se lit dans le panneau, et le bouton reste cliquable', async () => {
+      const onPlan = vi.fn(async () => ({ ok: false as const, erreur: 'plan suspendu' }))
+      const onPick = vi.fn()
+      rendre(onPlan, onPick)
+      await cliquer()
+      expect(container.querySelector('[data-testid="cpick-refus"]')?.textContent).toContain(
+        'plan suspendu'
+      )
+      expect(onPick).not.toHaveBeenCalled()
+      expect(lancer().disabled).toBe(false)
+    })
+
+    it('dans le fil d’un lot, les lots s’enchaînent dans ce fil', async () => {
+      const onPlan = vi.fn(async () => ({ ok: false as const, erreur: 'non', repli: true }))
+      const onPick = vi.fn()
+      rendre(onPlan, onPick)
+      await cliquer()
+      expect(onPick).toHaveBeenCalledOnce()
+      expect((onPick.mock.calls[0]![1] as string[]).length).toBe(1)
+    })
+
+    it('mode auto : le clic automatique passe par le même plan', async () => {
+      const onPlan = accepte()
+      await act(async () => {
+        root.render(
+          <CandidatsPickPanel
+            candidats={[AJOUT, CORRECTION]}
+            texteScout="CIBLES: 1, 2"
+            autoLancer
+            onPlan={onPlan}
+          />
+        )
+        await Promise.resolve()
+      })
+      expect(onPlan).toHaveBeenCalledOnce()
+    })
   })
 })

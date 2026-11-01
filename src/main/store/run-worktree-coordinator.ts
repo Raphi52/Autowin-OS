@@ -76,6 +76,7 @@ export interface RunWorktreeCoordinatorDeps {
         WorktreeManager,
         | 'commitDejaReference'
         | 'commitsDejaReferences'
+        | 'commitsDejaReferencesAsync'
         | 'travauxNonPublies'
         | 'bureauPeutPorterDuTravail'
         | 'marquerTravailTrie'
@@ -178,6 +179,13 @@ export interface RunWorktreeCoordinatorDeps {
    * arrivait alors à 26 047 ms. Le blocage avait été déplacé, pas supprimé. Voir `startup-gate.ts`.
    */
   deferRecoveryUntil?: Promise<unknown>
+  /**
+   * Aucune récupération : instance de TEST isolée (`--isolated-test-instance`). Elle a son propre
+   * dossier de données mais partage le `.git` du vrai dépôt : sa récupération y adoptait les branches
+   * `autowin/recovery/*`, et le balayage rejouait `git worktree add` sur le VRAI dépôt, sans aucun
+   * clic. Vécu le 29/10 (`lot5nav`) et le 30/10 (`sonde-fondu-conv-1322`), conv-1048.
+   */
+  sansRecuperation?: boolean
   /**
    * Surveille les références git du dépôt et appelle `siChange` quand elles bougent ; rend la
    * fonction qui arrête la surveillance (`surveillance-references-git.ts`).
@@ -388,6 +396,8 @@ export class RunWorktreeCoordinator {
     this.onRecoveredPublication = deps.onRecoveredPublication
     this.stateStore = deps.stateStore
     this.arreterSurveillance = deps.surveillerReferences?.(() => this.referencesGitChangees())
+    // Le balayage ET le recensement partent d'ici : couper un seul laisserait l'autre agir.
+    if (deps.sansRecuperation) return
     /*
      * ARMER LE FILET DES LA CONSTRUCTION, et pas depuis un point de cablage lointain.
      *
@@ -400,7 +410,9 @@ export class RunWorktreeCoordinator {
     if (this.manager.operationsAreIsolated?.() && this.manager.recoveryInventoryAsync) {
       void this.manager
         .recoveryInventoryAsync()
-        .then((inventory) => this.reconcileExisting(inventory))
+        .then(async (inventory) =>
+          this.reconcileExisting(inventory, undefined, await this.referencesDesManifestes())
+        )
         .catch((error) => this.recordRecoveryFailure(error))
     } else {
       /**
@@ -2283,7 +2295,7 @@ export class RunWorktreeCoordinator {
      */
     tracked.derniereVieMs = this.now()
     if (!this.stateStore || !tracked.isMutation) return
-    const previous = this.stateStore.get(tracked.runId)
+    const previous = this.stateStore.dernierConnu(tracked.runId)
     const now = this.now()
     const record: WorktreeRunRecord = {
       version: 1,
@@ -2494,7 +2506,27 @@ export class RunWorktreeCoordinator {
     const residues = this.manager.reconcileResiduesAsync
       ? await this.manager.reconcileResiduesAsync()
       : this.manager.reconcileResidues?.()
-    this.reconcileExisting(undefined, residues)
+    this.reconcileExisting(undefined, residues, await this.referencesDesManifestes())
+  }
+
+  /**
+   * Interroge git AVANT `reconcileExisting`, qui reste synchrone : son `rev-list` a tenu la fenêtre
+   * 125,7 s (voir `commitsDejaReferencesAsync`). `undefined` = pas de voie asynchrone, l'appelant
+   * garde la voie synchrone. Une lecture ratée rend une table vide : sans réponse, aucun manifeste
+   * n'est retiré, comme pour un git qui échoue dans `commitsDejaReferences`.
+   */
+  private async referencesDesManifestes(): Promise<
+    ReadonlyMap<string, boolean | undefined> | undefined
+  > {
+    if (!this.manager.commitsDejaReferencesAsync) return undefined
+    const commits = (this.stateStore?.list() ?? [])
+      .map((record) => record.sourceSha ?? record.publishedSha)
+      .filter((commit): commit is string => Boolean(commit))
+    try {
+      return await this.manager.commitsDejaReferencesAsync(commits)
+    } catch {
+      return new Map()
+    }
   }
 
   /**
@@ -2608,7 +2640,8 @@ export class RunWorktreeCoordinator {
    */
   private oublierLesEtatsSansCopie(
     records: Map<string, WorktreeRunRecord>,
-    managerIds: readonly string[]
+    managerIds: readonly string[],
+    referencesPrecalculees?: ReadonlyMap<string, boolean | undefined>
   ): void {
     if (!this.stateStore) return
     /*
@@ -2622,7 +2655,8 @@ export class RunWorktreeCoordinator {
     const commitsAVerifier = [...records.values()]
       .map((record) => record.sourceSha ?? record.publishedSha)
       .filter((commit): commit is string => Boolean(commit))
-    const referencesDuLot = this.manager.commitsDejaReferences?.(commitsAVerifier)
+    const referencesDuLot =
+      referencesPrecalculees ?? this.manager.commitsDejaReferences?.(commitsAVerifier)
     for (const [runId, record] of [...records]) {
       /*
        * DEUX signaux independants, jamais un seul. Un `existsSync` transitoirement faux — disque
@@ -2658,7 +2692,8 @@ export class RunWorktreeCoordinator {
 
   private reconcileExisting(
     inventory?: WorktreeRecoveryInventory,
-    residuesPrecalcules?: ReturnType<WorktreeManager['reconcileResidues']>
+    residuesPrecalcules?: ReturnType<WorktreeManager['reconcileResidues']>,
+    referencesPrecalculees?: ReadonlyMap<string, boolean | undefined>
   ): void {
     // `??` et non `||` : des résidus déjà calculés mais VIDES ne doivent pas relancer le balayage.
     const residues =
@@ -2670,7 +2705,7 @@ export class RunWorktreeCoordinator {
     const observed = new Map(inventory?.agents.map((agent) => [agent.agentId, agent]) ?? [])
     const managerIds =
       inventory?.agents.map((agent) => agent.agentId) ?? this.manager.listAgentIds()
-    this.oublierLesEtatsSansCopie(records, managerIds)
+    this.oublierLesEtatsSansCopie(records, managerIds, referencesPrecalculees)
     const ids = [
       ...managerIds,
       ...[...records.keys()].filter((runId) => !managerIds.includes(runId))
@@ -3113,7 +3148,7 @@ export class RunWorktreeCoordinator {
   }
 
   private async finalizeRecoveredAsync(runId: string): Promise<void> {
-    const record = this.stateStore?.get(runId)
+    const record = await this.stateStore?.getAsync(runId)
     const recoveredWithoutRecord = this.runs.get(runId)
     if (!record && recoveredWithoutRecord?.recovered) {
       const tracked = recoveredWithoutRecord

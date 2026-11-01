@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
+import { deposerFichier, relireFichier } from '../ecriture-hors-fil'
 
 /**
  * LE MEME INDEX JSON SUR DISQUE, ecrit une seule fois.
@@ -23,7 +23,10 @@ export interface IndexStore<V> {
   chemin(base?: string): string
   /** Relit l'index. Toute anomalie rend `{}` — fichier absent, JSON invalide, une entree douteuse. */
   lire(base?: string): Record<string, V>
-  /** Ecriture ATOMIQUE (temporaire puis `rename`) : une interruption ne laisse jamais un index tronque. */
+  /**
+   * Ecriture ATOMIQUE (temporaire puis `rename`) : une interruption ne laisse jamais un index tronque.
+   * Elle part hors du fil principal (conv-1368) : `renameSync` ici a fige la fenetre 23,7 s en 7 jours.
+   */
   ecrire(index: Record<string, V>, base?: string): void
   /** Oublie une cle. Sans effet si elle est inconnue — oublier deux fois n'est pas une erreur. */
   oublier(cle: string, base?: string): void
@@ -36,11 +39,11 @@ export function creerIndexStore<V>(
   const chemin = (base = ensureAutowinAppData()): string => join(base, nomFichier)
 
   const lire = (base = ensureAutowinAppData()): Record<string, V> => {
-    const fichier = chemin(base)
-    if (!existsSync(fichier)) return {}
     let brut: unknown
     try {
-      brut = JSON.parse(readFileSync(fichier, 'utf8'))
+      const texte = relireFichier(chemin(base))
+      if (texte === undefined) return {}
+      brut = JSON.parse(texte)
     } catch {
       return {}
     }
@@ -51,11 +54,7 @@ export function creerIndexStore<V>(
   }
 
   const ecrire = (index: Record<string, V>, base = ensureAutowinAppData()): void => {
-    const fichier = chemin(base)
-    mkdirSync(base, { recursive: true })
-    const temporaire = `${fichier}.tmp`
-    writeFileSync(temporaire, `${JSON.stringify(index, null, 1)}\n`, 'utf8')
-    renameSync(temporaire, fichier)
+    deposerFichier(chemin(base), `${JSON.stringify(index, null, 1)}\n`)
   }
 
   const oublier = (cle: string, base = ensureAutowinAppData()): void => {
@@ -63,12 +62,7 @@ export function creerIndexStore<V>(
     if (!(cle in index)) return
     delete index[cle]
     if (Object.keys(index).length === 0) {
-      const fichier = chemin(base)
-      try {
-        if (existsSync(fichier)) unlinkSync(fichier)
-      } catch {
-        /* best-effort : un index vide laisse sur disque est inoffensif */
-      }
+      deposerFichier(chemin(base), null)
       return
     }
     ecrire(index, base)

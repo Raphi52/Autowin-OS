@@ -23,7 +23,7 @@ import type { RunClosureObservation } from '../../../shared/run-execution'
 import type { AgentGantt } from './observatory-agent-gantt'
 import { sensDuCodeDeBlocage } from '../../../shared/raison-de-blocage'
 import { lireReponseRemember, type LectureFaitRetenu } from './fait-retenu-detail'
-import { appelsDeLOutil } from './appels-outil-detail'
+import { appelsDeLOutil, chargesAvecLeurEvenement } from './appels-outil-detail'
 import { defautsDeTrace } from './defauts-de-trace'
 import './WorkflowExecutionGraph.css'
 import { Spinner } from './Spinner'
@@ -608,7 +608,7 @@ function ExecutionNodeContents({
         // Dédoublonnées comme dans la projection : le relais d'un sous-agent recopie la réponse
         // du modèle, qui s'afficherait sinon deux fois. Ce filtre ne garde que les genres d'un
         // échange : les charges d'un outil passent à côté, dans l'ordre, une par appel.
-        const lues = ids.flatMap((id) => parEvenement[id] ?? [])
+        const lues = chargesAvecLeurEvenement(ids, parEvenement)
         if (vivant)
           setLu({
             cle,

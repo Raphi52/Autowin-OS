@@ -47,6 +47,8 @@ describe('reprendre un travail que personne n’a jamais jugé', () => {
         }
       ],
       get: () => undefined,
+      dernierConnu: () => undefined,
+      getAsync: async () => undefined,
       save: () => {},
       remove: () => {}
     }

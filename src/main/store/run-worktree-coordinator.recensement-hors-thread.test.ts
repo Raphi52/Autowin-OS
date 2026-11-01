@@ -43,7 +43,7 @@ describe('recensement des travaux non publies — hors du thread main', () => {
         apercu: [{ agentId: 'run-fini', date: '2026-08-29', fichiers: ['a.txt'] }]
       })
     }
-    const stateStore = { list: () => [], get: () => undefined, save: () => {}, remove: () => {} }
+    const stateStore = { list: () => [], get: () => undefined, dernierConnu: () => undefined, getAsync: async () => undefined, save: () => {}, remove: () => {} }
     return new RunWorktreeCoordinator({
       manager: manager as never,
       stateStore: stateStore as never,
