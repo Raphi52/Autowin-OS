@@ -4362,6 +4362,12 @@ Le fil reprend ensuite normalement.`
     bindConversation: (taskId, conversationId) => {
       scheduledTasks.bindConversation(taskId, conversationId)
     },
+    alignerSurDossierGlobal: (conversationId) => {
+      const global = os.executionWorkspace
+      if (os.conversations.get(conversationId)?.projectPath === global) return
+      if (os.conversations.rangerDansDossier(conversationId, global))
+        broadcast({ type: 'refresh', scope: 'conversations' })
+    },
     isConversationBusy: (conversationId) => Boolean(activeChatTurns.get(conversationId)),
     interruptAndWait: (conversationId, reason) =>
       activeChatTurns.abortAndWait(conversationId, reason),
