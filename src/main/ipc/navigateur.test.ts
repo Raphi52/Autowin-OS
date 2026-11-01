@@ -274,7 +274,7 @@ describe('canaux navigateur:*', () => {
     ['navigateur:poser-cadre', [{ x: 0, y: 0, largeur: 1, hauteur: 1 }, Number.NaN]],
     ['navigateur:basculer-mode', ['detruire']],
     ['navigateur:basculer-mode', [undefined]],
-    ['navigateur:supprimer-annotation', [5]],
+    ['navigateur:prendre-elements-choisis', [5]],
     ['navigateur:repondre-accord', ['https://exemple.fr', 'peut-etre']],
     ['navigateur:repondre-accord', ['', 'une-fois']],
     ['navigateur:reglages-ecrire', [null]],
@@ -298,7 +298,9 @@ describe('canaux navigateur:*', () => {
       appeler('navigateur:poser-cadre', { x: -10, y: 0, largeur: 0, hauteur: 0 }, 0.25)
     ).resolves.toBeUndefined()
     await expect(appeler('navigateur:basculer-mode', null)).resolves.toBeUndefined()
-    await expect(appeler('navigateur:basculer-mode', 'annoter')).resolves.toBeUndefined()
+    await expect(appeler('navigateur:basculer-mode', 'choisir')).resolves.toBeUndefined()
+    // Annoter retiré (conv-1306, 2026-10-30) : son ancien nom est refusé comme n'importe quel inconnu.
+    await expect(appeler('navigateur:basculer-mode', 'annoter')).rejects.toThrow(/choisir/)
     await expect(
       appeler('navigateur:repondre-accord', 'https://exemple.fr', 'refuser')
     ).resolves.toBeUndefined()
@@ -363,11 +365,7 @@ describe('canaux navigateur:*', () => {
     await appeler('navigateur:fermer-onglet', second)
     expect(derniereFabrique().vues[1].fermee).toBe(true)
 
-    await expect(appeler('navigateur:annotations', 'conv-a')).resolves.toEqual([])
-    await expect(appeler('navigateur:vider-annotations', 'conv-a')).resolves.toBeUndefined()
-    await expect(
-      appeler('navigateur:supprimer-annotation', 'annotation-absente')
-    ).resolves.toBeUndefined()
+    await expect(appeler('navigateur:prendre-elements-choisis', 'conv-a')).resolves.toEqual([])
 
     await expect(appeler('navigateur:reglages-ecrire', { garderCookies: false })).resolves.toEqual({
       garderCookies: false,
@@ -399,7 +397,7 @@ describe('canaux navigateur:*', () => {
     expect(gestionnaireNavigateur()).toBe(gestionnaireNavigateur())
   })
 
-  it('pousse l’état à la fenêtre principale à chaque changement (onglet, titre, chargement, annotations)', async () => {
+  it('pousse l’état à la fenêtre principale à chaque changement (onglet, titre, chargement)', async () => {
     const envois = fenetreCourante!.envois
     await appeler('navigateur:ouvrir', 'conv-a', 'exemple.fr')
     const vue = derniereFabrique().vues[0]
@@ -415,11 +413,6 @@ describe('canaux navigateur:*', () => {
     vue.enChargement = true
     vue.ecouteurs.surChangement()
     expect(envois.at(-1)!.etat.onglets[0]).toMatchObject({ titre: 'Exemple', chargement: true })
-
-    const avant = envois.length
-    await appeler('navigateur:vider-annotations', 'conv-a')
-    expect(envois).toHaveLength(avant + 1)
-    expect(envois.at(-1)!.etat.nombreAnnotations).toBe(0)
 
     await appeler('navigateur:fermer-onglet', 'onglet-1')
     expect(envois.at(-1)!.etat).toMatchObject({ onglets: [], ongletActif: null })
@@ -497,10 +490,8 @@ describe('pont window.api.navigateur (preload)', () => {
     await pont.activerOnglet('onglet-1')
     await pont.fermerOnglet('onglet-1')
     await pont.poserCadre(rect, 1.25)
-    await pont.basculerMode('annoter')
-    await pont.annotations('conv-a')
-    await pont.supprimerAnnotation('annotation-1')
-    await pont.viderAnnotations('conv-a')
+    await pont.basculerMode('choisir')
+    await pont.prendreElementsChoisis('conv-a')
     await pont.repondreAccord('https://exemple.fr', 'une-fois')
     await pont.reglages.lire()
     await pont.reglages.ecrire({ garderCookies: false })
@@ -519,10 +510,8 @@ describe('pont window.api.navigateur (preload)', () => {
       [CANAUX_NAVIGATEUR.activerOnglet, 'onglet-1'],
       [CANAUX_NAVIGATEUR.fermerOnglet, 'onglet-1'],
       [CANAUX_NAVIGATEUR.poserCadre, rect, 1.25],
-      [CANAUX_NAVIGATEUR.basculerMode, 'annoter'],
-      [CANAUX_NAVIGATEUR.annotations, 'conv-a'],
-      [CANAUX_NAVIGATEUR.supprimerAnnotation, 'annotation-1'],
-      [CANAUX_NAVIGATEUR.viderAnnotations, 'conv-a'],
+      [CANAUX_NAVIGATEUR.basculerMode, 'choisir'],
+      [CANAUX_NAVIGATEUR.prendreElementsChoisis, 'conv-a'],
       [CANAUX_NAVIGATEUR.repondreAccord, 'https://exemple.fr', 'une-fois'],
       [CANAUX_NAVIGATEUR.reglagesLire],
       [CANAUX_NAVIGATEUR.reglagesEcrire, { garderCookies: false }],

@@ -45,8 +45,8 @@ import {
   normaliserUrlNavigateur,
   REGLAGES_NAVIGATEUR_PAR_DEFAUT,
   type ActionAgentNavigateur,
-  type AnnotationNavigateur,
   type DemandeAccordNavigateur,
+  type ElementChoisiNavigateur,
   type EtatNavigateur,
   type GesteNavigateur,
   type InstantanePage,
@@ -77,7 +77,23 @@ export const MAX_ONGLETS_PAR_FIL = 20
 export const TAILLE_ANNEAU = 200
 export const MAX_CARACTERES_LECTURE = 30_000
 export const MAX_ELEMENTS_INSTANTANE = 400
-export const MAX_ANNOTATIONS_PAR_FIL = 50
+
+/** Même rayon que `.navigateur-zone` (NavigateurIntegre.css). */
+const RAYON_PAGE_PX = 10
+
+/**
+ * Temps laissé à Chromium pour rendre une image (conv-1304) : une vue dessine en ~100 ms. Sans
+ * borne, une image qui ne vient jamais suspend le tour pour toujours (conv-1309, plus de 20 min).
+ */
+const DELAI_PEINTURE_MS = 5_000
+
+function sousDelai<T>(promesse: Promise<T>, ms: number, raison: string): Promise<T> {
+  let minuterie: ReturnType<typeof setTimeout> | undefined
+  const delai = new Promise<never>((_, rejeter) => {
+    minuterie = setTimeout(() => rejeter(new Error(raison)), ms)
+  })
+  return Promise.race([promesse, delai]).finally(() => clearTimeout(minuterie))
+}
 export const DELAI_SURBRILLANCE_MS = 800
 export const DELAI_ACCORD_MS = 120_000
 /** Gestes de l'agent gardés par fil, pour la frise du panneau. */
@@ -351,16 +367,11 @@ interface OngletInterne {
   toursDuCadre: number
 }
 
-interface AnnotationInterne {
-  annotation: AnnotationNavigateur
-  /** Identifiant de la pastille dans la page, pour la retirer quand l'annotation part. */
-  idPage: string
-}
-
 interface FilInterne {
   onglets: string[]
   actif: string | null
-  annotations: AnnotationInterne[]
+  /** Éléments choisis pas encore repris par le panneau (`prendreElementsChoisis`). */
+  elementsChoisis: ElementChoisiNavigateur[]
   /** Nombre d'actions de l'agent en cours : le bandeau reste levé tant qu'il en reste une. */
   pilotes: number
   demandeAccord?: DemandeAccordNavigateur
@@ -420,11 +431,10 @@ export interface OptionsGestionnaireNavigateur {
 /**
  * MÉTHODES PUBLIQUES (pour les lots suivants) :
  *  - interface : `etat`, `afficherFil`, `ouvrir`, `naviguer`, `reculer`, `avancer`, `recharger`,
- *    `arreter`, `activerOnglet`, `fermerOnglet`, `poserCadre`, `basculerMode`, `annotations`,
- *    `supprimerAnnotation`, `viderAnnotations`, `repondreAccord`, `lireReglages`,
- *    `ecrireReglages`, `effacerDonnees`, `ouvrirDansNavigateurParDefaut`, `piloter`, `surEtat` ;
+ *    `arreter`, `activerOnglet`, `fermerOnglet`, `poserCadre`, `basculerMode`,
+ *    `prendreElementsChoisis`, `repondreAccord`, `lireReglages`, `ecrireReglages`, `effacerDonnees`, `ouvrirDansNavigateurParDefaut`, `piloter`, `surEtat` ;
  *  - agent : `agentOuvrir`, `instantane`, `lire`, `capturer`, `agir`, `lignesConsole`,
- *    `requetesEchouees` (+ `annotations`) ;
+ *    `requetesEchouees` ;
  *  - cycle de vie : `oublierFil` (fil supprimé), `detruire` (fermeture de l'app).
  */
 export class GestionnaireNavigateur {
@@ -475,7 +485,7 @@ export class GestionnaireNavigateur {
       agentPilote: (fil?.pilotes ?? 0) > 0,
       ...(fil?.demandeAccord ? { demandeAccord: { ...fil.demandeAccord } } : {}),
       mode: modeIci,
-      nombreAnnotations: fil?.annotations.length ?? 0,
+      nombreElementsChoisis: fil?.elementsChoisis.length ?? 0,
       gestes: (fil?.gestes ?? []).map((g) => ({ ...g })),
       pilotage: fil?.pilotage ?? 'libre'
     }
@@ -607,7 +617,7 @@ export class GestionnaireNavigateur {
     this.appliquerVisibilite()
   }
 
-  /** Annoter, choisir, ou rien, sur l'onglet visible. Sans onglet visible, le mode reste éteint. */
+  /** Choisir, ou rien, sur l'onglet visible. Sans onglet visible, le mode reste éteint. */
   async basculerMode(mode: ModeNavigateur): Promise<void> {
     const cible = this.ongletVisible()
     await this.couperMode()
@@ -628,36 +638,16 @@ export class GestionnaireNavigateur {
     })
   }
 
-  // ── Annotations ───────────────────────────────────────────────────────────────────────────────
+  // ── Éléments choisis ──────────────────────────────────────────────────────────────────────────
 
-  annotations(conversationId: string): AnnotationNavigateur[] {
-    return (this.fils.get(conversationId)?.annotations ?? []).map((a) => ({ ...a.annotation }))
-  }
-
-  supprimerAnnotation(id: string): void {
-    for (const [conversationId, fil] of this.fils) {
-      const trouvee = fil.annotations.find((a) => a.annotation.id === id)
-      if (!trouvee) continue
-      fil.annotations = fil.annotations.filter((a) => a !== trouvee)
-      const onglet = this.onglets.get(trouvee.annotation.ongletId)
-      // Page déjà quittée : la pastille est partie avec elle, l'échec est sans objet.
-      if (onglet)
-        void this.jouer(onglet, 'retirerPastille', [trouvee.idPage]).catch(() => undefined)
-      this.emettre(conversationId)
-      return
-    }
-  }
-
-  viderAnnotations(conversationId: string): void {
+  /** Rend la file et la vide : deux états poussés de suite ne livrent pas deux fois le même élément. */
+  prendreElementsChoisis(conversationId: string): ElementChoisiNavigateur[] {
     const fil = this.fils.get(conversationId)
-    if (!fil) return
-    fil.annotations = []
-    for (const id of fil.onglets) {
-      const onglet = this.onglets.get(id)
-      // Une page déjà quittée n'a plus de pastilles : rien à retirer, l'échec est sans objet.
-      if (onglet) void this.jouer(onglet, 'viderPastilles', []).catch(() => undefined)
-    }
+    if (!fil || fil.elementsChoisis.length === 0) return []
+    const pris = fil.elementsChoisis
+    fil.elementsChoisis = []
     this.emettre(conversationId)
+    return pris
   }
 
   // ── Accord par site ───────────────────────────────────────────────────────────────────────────
@@ -1149,28 +1139,27 @@ export class GestionnaireNavigateur {
         const garde = await this.gardeSaisie(onglet, action, null)
         if (garde) return garde
       }
-      // fix-ok: cause mesurée (conv-1293, lot 5/5 de conv-1286) — en Annoter/Choisir, la page AVALE
+      // fix-ok: cause mesurée (conv-1293, lot 5/5 de conv-1286) — en mode Choisir, la page AVALE
       // clics et pointeurs (écoutes du mode, navigateur-page-script.ts) : le clic de l'agent partait,
       // l'outil disait « Clic sur … » et rien ne changeait (instance cachée, après « Envoyer au
       // chat »). On éteint donc le mode de CET onglet avant d'écrire ; le panneau le montre. Placé
       // AVANT la relecture du site, qui doit rester collée à l'envoi. Défiler ne passe pas ici.
       // fix-ok: run-adc12547df2d-1 (objection du juge) — le mode était coupé avant toute relecture :
-      // « Reprendre la main » pendant la surbrillance rendait un refus, 0 événement, et Annoter éteint.
+      // « Reprendre la main » pendant la surbrillance rendait un refus, 0 événement, et le mode éteint.
       // Un geste qui ne partira pas n'éteint pas le mode : on relit AVANT de couper, puis à nouveau
       // avant l'envoi, parce que la coupure elle-même prend un aller-retour avec la page.
-      let modeCoupe: ModeNavigateur = null
+      let modeCoupe = false
       const signalerMode = (resultat: ResultatActionNavigateur): ResultatActionNavigateur => {
         if (!modeCoupe) return resultat
-        const nomMode = modeCoupe === 'annoter' ? 'Annoter' : 'Choisir'
         return {
           ...resultat,
-          message: `${resultat.message} Mode ${nomMode} de l'utilisateur éteint pour agir.`
+          message: `${resultat.message} Mode Choisir de l'utilisateur éteint pour agir.`
         }
       }
       if (action.type !== 'defiler' && this.mode && this.ongletDuMode === onglet.id) {
         const avantCoupure = relire()
         if (avantCoupure) return avantCoupure
-        modeCoupe = this.mode
+        modeCoupe = true
         await this.couperMode()
       }
       // fix-ok: cause mesurée (conv-1293, réparation 1, objection du juge) — tant que la page n'a
@@ -1224,7 +1213,7 @@ export class GestionnaireNavigateur {
       fil = {
         onglets: [],
         actif: null,
-        annotations: [],
+        elementsChoisis: [],
         pilotes: 0,
         gestes: [],
         pilotage: 'libre',
@@ -1465,35 +1454,22 @@ export class GestionnaireNavigateur {
       if (message.type === 'mode-quitte') {
         if (this.ongletDuMode === onglet.id) await this.couperMode()
         this.emettre(onglet.conversationId)
-      } else if (message.type === 'annotation' || message.type === 'choisi') {
-        await this.recevoirAnnotation(onglet, message)
-        if (message.type === 'choisi' && this.ongletDuMode === onglet.id) await this.couperMode()
+      } else if (message.type === 'choisi') {
+        await this.recevoirElementChoisi(onglet, message)
+        if (this.ongletDuMode === onglet.id) await this.couperMode()
       }
     }
   }
 
-  private async recevoirAnnotation(
+  private async recevoirElementChoisi(
     onglet: OngletInterne,
-    message: Extract<MessagePage, { type: 'annotation' | 'choisi' }>
+    message: Extract<MessagePage, { type: 'choisi' }>
   ): Promise<void> {
     const fil = this.fil(onglet.conversationId)
-    const idPage = texteBorne(message.idPage, 40)
-    if (fil.annotations.length >= MAX_ANNOTATIONS_PAR_FIL) {
-      this.noterConsole(
-        onglet,
-        'warning',
-        `Annotation ignorée : ${MAX_ANNOTATIONS_PAR_FIL} au plus par fil — envoyez ou videz les précédentes.`
-      )
-      // Même raison que dans `supprimerAnnotation` : une page quittée n'a plus de pastille.
-      void this.jouer(onglet, 'retirerPastille', [idPage]).catch(() => undefined)
-      this.emettre(onglet.conversationId)
-      return
-    }
-    const styles = (message.styles ?? {}) as Partial<AnnotationNavigateur['styles']>
+    const styles = (message.styles ?? {}) as Partial<ElementChoisiNavigateur['styles']>
     const rect = rectValide(message.rect)
-    const annotation: AnnotationNavigateur = {
-      id: `annotation-${randomUUID()}`,
-      ongletId: onglet.id,
+    const element: ElementChoisiNavigateur = {
+      id: `element-${randomUUID()}`,
       url: onglet.vue.url(),
       selecteur: texteBorne(message.selecteur, 500),
       texteElement: texteBorne(message.texteElement, 500),
@@ -1503,13 +1479,11 @@ export class GestionnaireNavigateur {
         couleur: texteBorne(styles.couleur, 60),
         fond: texteBorne(styles.fond, 60),
         marges: texteBorne(styles.marges, 200)
-      },
-      rect,
-      commentaire: texteBorne(message.commentaire, 4_000)
+      }
     }
     if (rect.largeur > 0 && rect.hauteur > 0) {
       const marge = 8
-      // Le contrat rend la capture FACULTATIVE : une capture ratée laisse l'annotation sans image.
+      // Le contrat rend la capture FACULTATIVE : une capture ratée laisse l'élément sans image.
       const capture = await onglet.vue
         .capturer({
           x: Math.max(0, rect.x - marge),
@@ -1518,9 +1492,9 @@ export class GestionnaireNavigateur {
           hauteur: rect.hauteur + 2 * marge
         })
         .catch(() => null)
-      if (capture) annotation.captureDataUrl = capture
+      if (capture) element.captureDataUrl = capture
     }
-    fil.annotations.push({ annotation, idPage })
+    fil.elementsChoisis.push(element)
     this.emettre(onglet.conversationId)
   }
 
@@ -2053,11 +2027,20 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
           safeDialogs: true
         }
       })
+      // La page passe au-dessus du DOM : le CSS de `.navigateur-zone` ne peut pas l'arrondir (conv-1306).
+      vue.setBorderRadius(RAYON_PAGE_PX)
       const contenu = vue.webContents
       const idContenu = contenu.id
       preparerSession(contenu.session)
       ecouteursParContenu.set(idContenu, ecouteurs)
       vue.setVisible(false)
+      // Une taille dès la création (conv-1304) : panneau jamais ouvert, la vue restait en 0 × 0, sa
+      // page sans mise en page et ses éléments sans position à cliquer.
+      const { width, height } = fenetre.getContentBounds()
+      let cadreVoulu = { x: 0, y: 0, width, height }
+      let visibleVoulue = false
+      let enPeinture = false
+      vue.setBounds(cadreVoulu)
       fenetre.contentView.addChildView(vue)
 
       contenu.setWindowOpenHandler((details) => {
@@ -2138,8 +2121,16 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
         avancer: () => contenu.navigationHistory.goForward(),
         recharger: () => contenu.reload(),
         arreter: () => contenu.stop(),
-        poserCadre: (cadre) => vue.setBounds(cadre),
-        rendreVisible: (visible) => vue.setVisible(visible),
+        // Pendant un dessin forcé, la demande du panneau est RETENUE : `peindre` la pose en sortant.
+        // L'appliquer tout de suite, c'était la voir défaite ~100 ms plus tard.
+        poserCadre: (cadre) => {
+          cadreVoulu = cadre
+          if (!enPeinture) vue.setBounds(cadre)
+        },
+        rendreVisible: (visible) => {
+          visibleVoulue = visible
+          if (!enPeinture) vue.setVisible(visible)
+        },
         taille: () => {
           const b = vue.getBounds()
           return { largeur: b.width / zoom(), hauteur: b.height / zoom() }
@@ -2163,18 +2154,39 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
         },
         /*
          * Image forcée par le débogueur intégré (conv-1293, réparation 1) : `Page.captureScreenshot`
-         * fait dessiner la page même cachée et ATTEND l'image avant de la copier. `capturePage` ne
-         * convient pas : il copie tout de suite, et sur une page jamais dessinée il échoue
-         * (« UnknownVizError », run-r1-vert.txt) sans rien faire dessiner. Débogueur détaché après
-         * coup s'il ne l'était pas : aucun effet durable sur la page.
+         * ATTEND l'image avant de la copier. `capturePage` ne convient pas : il copie tout de suite,
+         * et sur une page jamais dessinée il échoue (« UnknownVizError », run-r1-vert.txt) sans rien
+         * faire dessiner. Débogueur détaché après coup s'il ne l'était pas.
+         *
+         * VUE CACHÉE DANS UNE FENÊTRE MONTRÉE (conv-1304, mesuré avec le vrai Electron, cause de
+         * conv-1309 suspendu 20 min) : l'image ne revient JAMAIS, `fromSurface:false` et l'émulation
+         * du focus n'y changent rien, et une vue placée toute entière hors de la fenêtre non plus. La
+         * vue passe donc visible avec UN pixel dans la fenêtre : 115 ms, le clic arrive à la page, la
+         * capture suivante marche. Elle n'est ni redimensionnée (la page ne se remet pas en page) ni
+         * montrée à l'utilisateur. Dans une vue 1 × 1, l'image vient mais le clic est perdu.
          */
         async peindre() {
           const debogueur = contenu.debugger
           const attacheIci = !debogueur.isAttached()
           if (attacheIci) debogueur.attach('1.3')
+          const cachee = !vue.getVisible()
+          enPeinture = cachee
           try {
-            await debogueur.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: 1 })
+            if (cachee) {
+              vue.setBounds({ ...cadreVoulu, y: fenetre.getContentBounds().height - 1 })
+              vue.setVisible(true)
+            }
+            await sousDelai(
+              debogueur.sendCommand('Page.captureScreenshot', { format: 'jpeg', quality: 1 }),
+              DELAI_PEINTURE_MS,
+              `dessin de la page impossible en ${DELAI_PEINTURE_MS / 1000} s : la fenêtre d'Autowin est peut-être réduite`
+            )
           } finally {
+            if (cachee) {
+              enPeinture = false
+              vue.setVisible(visibleVoulue)
+              vue.setBounds(cadreVoulu)
+            }
             if (attacheIci && debogueur.isAttached()) debogueur.detach()
           }
         },

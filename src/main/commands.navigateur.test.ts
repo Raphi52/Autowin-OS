@@ -14,7 +14,6 @@ import {
 import { decoderAppelPage } from './navigateur-page-script'
 import type {
   ActionAgentNavigateur,
-  AnnotationNavigateur,
   LigneConsole,
   RequeteEchouee,
   ResultatActionNavigateur
@@ -43,8 +42,7 @@ const NOMS = [
   'navigateur_lire',
   'navigateur_capture',
   'navigateur_agir',
-  'navigateur_console',
-  'navigateur_annotations'
+  'navigateur_console'
 ]
 
 const os = {
@@ -64,7 +62,6 @@ function moteurFactice(o: {
   capture?: string | null
   console?: LigneConsole[]
   requetes?: RequeteEchouee[]
-  annotations?: AnnotationNavigateur[]
   ouvrirRefuse?: string
 }): { nav: NavigateurDeLAgent; appels: Appel[] } {
   const fils = new Set(o.fils ?? ['conv-a', 'conv-b'])
@@ -76,7 +73,7 @@ function moteurFactice(o: {
       ongletActif: fils.has(fil) ? `onglet-${fil}` : null,
       agentPilote: false,
       mode: null,
-      nombreAnnotations: 0,
+      nombreElementsChoisis: 0,
       gestes: [],
       pilotage: 'libre'
     }),
@@ -104,10 +101,6 @@ function moteurFactice(o: {
     requetesEchouees: (fil) => {
       appels.push({ methode: 'requetesEchouees', fil })
       return o.requetes ?? []
-    },
-    annotations: (fil) => {
-      appels.push({ methode: 'annotations', fil })
-      return o.annotations ?? []
     }
   }
   return { nav, appels }
@@ -147,9 +140,8 @@ describe('navigateur_* — déclarés au catalogue et servis en outils directs',
         /« main-reprise » .*n’agis plus dans la page sans qu’il te le redemande/
       )
     }
-    // Jumeau : console et annotations ne sont pas des gestes dans la page, elles n'attendent pas.
-    for (const nom of ['navigateur_console', 'navigateur_annotations'])
-      expect(description(nom), nom).not.toMatch(/pause/)
+    // Jumeau : la console n'est pas un geste dans la page, elle n'attend pas.
+    expect(description('navigateur_console')).not.toMatch(/pause/)
   })
 
   it('un refus du pilotage pendant une lecture arrive à l’agent en phrase lisible', async () => {
@@ -171,15 +163,10 @@ describe('navigateur_* — déclarés au catalogue et servis en outils directs',
     }
   })
 
-  it('lecture seule pour lire, capture, console, annotations ; agir est déclaré destructif', () => {
+  it('lecture seule pour lire, capture, console ; agir est déclaré destructif', () => {
     const spec = (nom: string): (typeof CATALOG)[number] | undefined =>
       CATALOG.find((c) => c.name === nom)
-    for (const nom of [
-      'navigateur_lire',
-      'navigateur_capture',
-      'navigateur_console',
-      'navigateur_annotations'
-    ])
+    for (const nom of ['navigateur_lire', 'navigateur_capture', 'navigateur_console'])
       expect(spec(nom)?.annotations?.readOnlyHint, nom).toBe(true)
     expect(spec('navigateur_agir')?.annotations?.readOnlyHint).toBe(false)
     expect(spec('navigateur_agir')?.annotations?.destructiveHint).toBe(true)
@@ -201,7 +188,6 @@ describe('navigateur_* — le fil est celui de l’APPEL', () => {
     await bus.exec('navigateur_capture', autre, 'conv-a')
     await bus.exec('navigateur_agir', { action: 'clic', ref: 3, ...autre }, 'conv-a')
     await bus.exec('navigateur_console', autre, 'conv-a')
-    await bus.exec('navigateur_annotations', autre, 'conv-a')
     expect(moteur.appels.map((a) => a.methode)).toEqual([
       'agentOuvrir',
       'agentOuvrir',
@@ -209,8 +195,7 @@ describe('navigateur_* — le fil est celui de l’APPEL', () => {
       'capturer',
       'agir',
       'lignesConsole',
-      'requetesEchouees',
-      'annotations'
+      'requetesEchouees'
     ])
     expect(new Set(moteur.appels.map((a) => a.fil))).toEqual(new Set(['conv-a']))
     expect(moteur.appels.slice(0, 2).map((a) => a.detail)).toEqual([
@@ -426,7 +411,7 @@ describe('navigateur_ouvrir + nouvelOnglet — le vrai outil sur le vrai moteur'
   })
 })
 
-describe('navigateur_capture et navigateur_annotations — images jointes', () => {
+describe('navigateur_capture — image jointe', () => {
   it('la capture est jointe en PNG, comme bureau_cache_observer', async () => {
     const r = await busAvec(moteurFactice({})).exec('navigateur_capture', {}, 'conv-a')
     expect(r.ok).toBe(true)
@@ -451,29 +436,6 @@ describe('navigateur_capture et navigateur_annotations — images jointes', () =
     expect(data(r).ok).toBe(false)
     expect(String(data(r).detail)).toContain('Capture impossible')
     expect(r.attachments).toBeUndefined()
-  })
-
-  it('les annotations rendent le commentaire et joignent chaque capture présente', async () => {
-    const base = {
-      ongletId: 'onglet-conv-a',
-      url: 'http://localhost:5173/',
-      texteElement: 'Envoyer',
-      styles: { police: 'Inter', taille: '14px', couleur: '#000', fond: '#fff', marges: '' },
-      rect: { x: 0, y: 0, largeur: 10, hauteur: 10 }
-    }
-    const moteur = moteurFactice({
-      annotations: [
-        { ...base, id: 'a1', selecteur: '#envoyer', commentaire: 'plus gros', captureDataUrl: PNG },
-        { ...base, id: 'a2', selecteur: 'h1', commentaire: 'en bleu' }
-      ]
-    })
-    const r = await busAvec(moteur).exec('navigateur_annotations', {}, 'conv-a')
-    const liste = data(r).annotations as Array<Record<string, unknown>>
-    expect(liste.map((a) => a.commentaire)).toEqual(['plus gros', 'en bleu'])
-    expect(liste.map((a) => a.capture)).toEqual(['jointe (annotation-1.png)', 'absente'])
-    expect(r.attachments?.map((p) => [p.name, p.kind, p.mimeType])).toEqual([
-      ['annotation-1.png', 'image', 'image/png']
-    ])
   })
 })
 

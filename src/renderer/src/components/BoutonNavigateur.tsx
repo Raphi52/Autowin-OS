@@ -16,22 +16,24 @@ import { useEffect, useRef, useState } from 'react'
 import type { EtatNavigateur } from '../../../shared/navigateur'
 import { PanelIcon } from './chat-view-icons'
 import { apiNavigateur, siteDeLAdresse, texteNavigateur } from './navigateur-integre-outils'
+import { useTextesWorktreesEtBureaux } from '../textes-ecrans/worktrees-et-bureaux'
 import './BoutonCreux.css'
 
 /**
  * Largeur intérieure d'en-tête (sans ses marges de 24 px) sous laquelle le site ne s'affiche plus :
- * 280 px pour ce bouton au plus large et Détails, plus 160 px gardés au titre du fil. Sans ce seuil,
- * l'en-tête débordait de 37 px à 1280 px de large, panneau ouvert (mesuré, conv-1317). Mesuré en
+ * 280 px pour ce bouton au plus large et Détails, 42 px pour l'icône des bureaux cachés et son écart
+ * (conv-1378), plus 160 px gardés au titre du fil. Sans ce seuil, l'en-tête débordait de 37 px à
+ * 1280 px de large, panneau ouvert (mesuré, conv-1317). Mesuré en
  * JavaScript et pas par une requête CSS de conteneur : celle-ci aurait exigé `container-type` sur
  * `.chat` ou `.chat-head`, donc un nouveau contexte d'empilement pour les menus de tout le fil.
  */
-const ENTETE_MIN_POUR_LE_SITE = 440
+const ENTETE_MIN_POUR_LE_SITE = 482
 /**
- * Même chose pour le libellé de Détails : 144 px pour le globe, l'écart et Détails, plus 26 px de
- * marge. Sans ce seuil, le passage de 92 à 103 px faisait déborder l'en-tête à 1180 px de large,
+ * Même chose pour le libellé de Détails : 144 px pour le globe, l'écart et Détails, 41 px pour l'icône
+ * des bureaux cachés et son écart (conv-1378), plus 26 px de marge. Sans ce seuil, le passage de 92 à 103 px faisait déborder l'en-tête à 1180 px de large,
  * panneau ouvert (mesuré, conv-1317).
  */
-const ENTETE_MIN_POUR_DETAILS = 170
+const ENTETE_MIN_POUR_DETAILS = 211
 
 /** Le bouton à poser dans l'en-tête, et si celui-ci atteint `seuil`. Vrai tant que rien n'est mesuré. */
 function useEnteteAssezLarge(seuil: number): {
@@ -120,6 +122,53 @@ export function BoutonNavigateur({
           {site}
         </span>
       )}
+    </button>
+  )
+}
+
+export interface PropsBoutonBureauxCaches {
+  ouvert: boolean
+  onBasculer: () => void
+}
+
+/**
+ * L'ICÔNE DES BUREAUX CACHÉS (conv-1378, 2026-10-31) : « à côté de celui du navigateur ». Elle vaut
+ * sans fil ouvert, contrairement au globe : les bureaux n'appartiennent pas à un fil.
+ */
+export function BoutonBureauxCaches({
+  ouvert,
+  onBasculer
+}: PropsBoutonBureauxCaches): React.JSX.Element {
+  const { t } = useTextesWorktreesEtBureaux()
+  const action = t(ouvert ? 'hdesk.panneau.fermer' : 'hdesk.panneau.ouvrir')
+
+  return (
+    <button
+      type="button"
+      className="bouton-creux"
+      data-testid="chat-bureaux-toggle"
+      aria-pressed={ouvert}
+      aria-label={action}
+      title={action}
+      onClick={onBasculer}
+    >
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" aria-hidden="true">
+        <rect
+          x="3.5"
+          y="4.5"
+          width="17"
+          height="12"
+          rx="2"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        />
+        <path
+          d="M12 16.5v3.5M8 20h8"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      </svg>
     </button>
   )
 }

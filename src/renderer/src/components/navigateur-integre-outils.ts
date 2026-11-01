@@ -7,8 +7,8 @@
  */
 import {
   normaliserUrlNavigateur,
-  type AnnotationNavigateur,
   type ApiNavigateur,
+  type ElementChoisiNavigateur,
   type GesteNavigateur,
   type OrdrePilotageNavigateur,
   type PilotageNavigateur
@@ -67,10 +67,6 @@ const TEXTES_FR = {
   verbeSaisir: 'saisir',
   verbeTouche: 'touche',
   verbeDefiler: 'défiler',
-  annotations: 'Annotations ({n})',
-  supprimer: 'Supprimer l’annotation {n}',
-  sansCommentaire: '(sans commentaire)',
-  envoyer: 'Envoyer au chat',
   vide: 'Aucune page ouverte. Tapez une adresse.',
   pageMasquee: 'Page masquée le temps du menu.',
   redimensionner: 'Redimensionner le navigateur'
@@ -124,10 +120,6 @@ const TEXTES_EN: Record<CleNavigateur, string> = {
   verbeSaisir: 'type',
   verbeTouche: 'key',
   verbeDefiler: 'scroll',
-  annotations: 'Annotations ({n})',
-  supprimer: 'Delete annotation {n}',
-  sansCommentaire: '(no comment)',
-  envoyer: 'Send to chat',
   vide: 'No page open. Type an address.',
   pageMasquee: 'Page hidden while the menu is open.',
   redimensionner: 'Resize the browser'
@@ -237,40 +229,32 @@ export function fichierDeLaCapture(dataUrl: string, nom: string): File | null {
 }
 
 /**
- * Le bloc posé dans la saisie pour l'agent (n°, URL, sélecteur, extrait, styles, commentaire) et
- * les captures recadrées à joindre en images. Le bloc reste en français : c'est l'agent qui le lit,
- * comme la référence d'Alt+clic (conv-1038).
+ * Le bloc posé dans la saisie pour l'agent (URL, sélecteur, extrait, styles) et la capture recadrée
+ * à joindre en image. Le bloc reste en français : c'est l'agent qui le lit, comme la référence
+ * d'Alt+clic (conv-1038).
  */
-export function blocPourLeChat(
-  annotations: readonly AnnotationNavigateur[],
-  choisi: boolean
-): { texte: string; images: File[] } {
+export function blocPourLeChat(element: ElementChoisiNavigateur): {
+  texte: string
+  images: File[]
+} {
   const images: File[] = []
-  const entete = choisi
-    ? '[Navigateur intégré — élément choisi]'
-    : `[Navigateur intégré — ${annotations.length} annotation${annotations.length > 1 ? 's' : ''}]`
-  const lignes = [entete]
-  annotations.forEach((annotation, index) => {
-    const numero = index + 1
-    lignes.push(`${numero}. ${annotation.url}`)
-    lignes.push(`   Sélecteur : ${annotation.selecteur || '(aucun)'}`)
-    if (annotation.texteElement) lignes.push(`   Extrait : « ${annotation.texteElement} »`)
-    const s = annotation.styles
-    lignes.push(
-      `   Styles : police ${s.police} · taille ${s.taille} · couleur ${s.couleur} · fond ${s.fond} · ${s.marges}`
-    )
-    if (!choisi) lignes.push(`   Commentaire : ${annotation.commentaire || '(aucun)'}`)
-    if (annotation.captureDataUrl) {
-      // Nom UNIQUE par annotation : `addFiles` dédoublonne par nom, deux envois successifs de « n°1 »
-      // ne doivent pas se manger l'un l'autre.
-      const nom = `navigateur-${numero}-${annotation.id.slice(-8)}.png`
-      const fichier = fichierDeLaCapture(annotation.captureDataUrl, nom)
-      if (fichier) {
-        images.push(fichier)
-        lignes.push(`   Capture : ${nom} (jointe)`)
-      }
+  const lignes = ['[Navigateur intégré — élément choisi]', element.url]
+  lignes.push(`Sélecteur : ${element.selecteur || '(aucun)'}`)
+  if (element.texteElement) lignes.push(`Extrait : « ${element.texteElement} »`)
+  const s = element.styles
+  lignes.push(
+    `Styles : police ${s.police} · taille ${s.taille} · couleur ${s.couleur} · fond ${s.fond} · ${s.marges}`
+  )
+  if (element.captureDataUrl) {
+    // Nom UNIQUE par élément : `addFiles` dédoublonne par nom, deux choix successifs ne doivent pas
+    // se manger l'un l'autre.
+    const nom = `navigateur-${element.id.slice(-8)}.png`
+    const fichier = fichierDeLaCapture(element.captureDataUrl, nom)
+    if (fichier) {
+      images.push(fichier)
+      lignes.push(`Capture : ${nom} (jointe)`)
     }
-  })
+  }
   return { texte: lignes.join('\n'), images }
 }
 

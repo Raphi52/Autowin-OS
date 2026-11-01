@@ -47,7 +47,7 @@ export type NavigateurIpcDeps = {
 
 /** Le nom donné au contrôle d'expéditeur : c'est lui qu'un refus affiche. */
 const PORTEE = 'Navigateur intégré du chat'
-/** Un identifiant de fil, d'onglet ou d'annotation : court, jamais vide. */
+/** Un identifiant de fil ou d'onglet : court, jamais vide. */
 const MAX_IDENTIFIANT = 200
 /** Une origine (`https://exemple.fr`) : une adresse sans chemin. */
 const MAX_ORIGINE = 2_048
@@ -150,8 +150,8 @@ function guardZoom(valeur: unknown): number {
 }
 
 function guardMode(valeur: unknown): ModeNavigateur {
-  if (valeur === null || valeur === 'annoter' || valeur === 'choisir') return valeur
-  throw new Error('IPC navigateur.basculerMode: « annoter », « choisir » ou null attendu')
+  if (valeur === null || valeur === 'choisir') return valeur
+  throw new Error('IPC navigateur.basculerMode: « choisir » ou null attendu')
 }
 
 function guardReponseAccord(valeur: unknown): ReponseAccordNavigateur {
@@ -265,20 +265,10 @@ export function registerNavigateurIpc(deps: NavigateurIpcDeps): void {
     const voulu = guardMode(mode)
     await exiger().basculerMode(voulu)
   })
-  ipcMain.handle('navigateur:annotations', (event, conversationId: unknown) => {
+  ipcMain.handle('navigateur:prendre-elements-choisis', (event, conversationId: unknown) => {
     assertTrustedRendererSender(event, PORTEE)
-    const fil = guardIdentifiant(conversationId, 'navigateur.annotations')
-    return exiger().annotations(fil)
-  })
-  ipcMain.handle('navigateur:supprimer-annotation', (event, id: unknown) => {
-    assertTrustedRendererSender(event, PORTEE)
-    const annotation = guardIdentifiant(id, 'navigateur.supprimerAnnotation')
-    exiger().supprimerAnnotation(annotation)
-  })
-  ipcMain.handle('navigateur:vider-annotations', (event, conversationId: unknown) => {
-    assertTrustedRendererSender(event, PORTEE)
-    const fil = guardIdentifiant(conversationId, 'navigateur.viderAnnotations')
-    exiger().viderAnnotations(fil)
+    const fil = guardIdentifiant(conversationId, 'navigateur.prendreElementsChoisis')
+    return exiger().prendreElementsChoisis(fil)
   })
   ipcMain.handle('navigateur:repondre-accord', (event, origine: unknown, reponse: unknown) => {
     assertTrustedRendererSender(event, PORTEE)

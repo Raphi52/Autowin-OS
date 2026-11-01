@@ -6,7 +6,7 @@
  * s'exécute dans le processus principal.
  *
  * POURQUOI UN MONDE ISOLÉ : la page voit le même DOM, mais pas nos variables ni nos fonctions.
- * Elle ne peut donc ni lire la file des annotations, ni remplacer `querySelectorAll` pour tromper
+ * Elle ne peut donc ni lire la file des messages, ni remplacer `querySelectorAll` pour tromper
  * l'instantané, ni fausser la garde « champ de mot de passe ».
  *
  * POURQUOI UNE CHAÎNE ET PAS `fonction.toString()` : le compilateur peut réécrire une fonction
@@ -14,7 +14,7 @@
  * chaîne brute (`String.raw`) part telle quelle. Elle est testée en vrai DOM
  * (`navigateur-page-script.test.ts`, happy-dom).
  *
- * CANAL DE RETOUR VERS LE PRINCIPAL (annotations, élément choisi, sortie du mode) :
+ * CANAL DE RETOUR VERS LE PRINCIPAL (élément choisi, sortie du mode) :
  *   1. la page range chaque message dans `window.__awNav.file` (monde isolé, invisible de la page) ;
  *   2. elle émet `console.debug(PING_NAVIGATEUR)` — un simple signal, SANS donnée ;
  *   3. le principal voit ce signal par l'événement `console-message` et vide la file en jouant
@@ -32,10 +32,11 @@ export const PING_NAVIGATEUR = '__aw-nav:ping'
 
 /**
  * Version du noyau : un noyau plus ancien déjà posé dans la page est remplacé. 2 = aperçu du geste
- * suivant (`surligner` en pointillés, pas-à-pas de conv-1286, 2026-10-30). 3 = le cadre suit sa cible
- * (conv-1324).
+ * suivant (`surligner` en pointillés, pas-à-pas de conv-1286, 2026-10-30). 3 = fonction Annoter
+ * retirée (conv-1306, 2026-10-30). 4 = Choisir n'envoie plus le clic du choix à la page (conv-1306).
+ * 5 = le cadre suit sa cible (conv-1324).
  */
-const VERSION_NOYAU = 3
+const VERSION_NOYAU = 5
 
 /** Les points d'entrée du noyau joignables par `appelPage`. */
 export type MethodePage =
@@ -46,8 +47,6 @@ export type MethodePage =
   | 'retirerSurbrillance'
   | 'activerMode'
   | 'prendre'
-  | 'retirerPastille'
-  | 'viderPastilles'
 
 /** Ce que rend `localiser` : où cliquer, et ce qu'est l'élément visé. */
 export interface LocalisationPage {
@@ -80,13 +79,11 @@ export interface FocusPage {
 /** Message rangé par la page dans sa file, relu par le principal. */
 export type MessagePage =
   | {
-      type: 'annotation' | 'choisi'
-      idPage: string
+      type: 'choisi'
       selecteur: string
       texteElement: string
       styles: { police: string; taille: string; couleur: string; fond: string; marges: string }
       rect: { x: number; y: number; largeur: number; hauteur: number }
-      commentaire: string
     }
   | { type: 'mode-quitte' }
 
@@ -98,7 +95,7 @@ const NOYAU = String.raw`(function () {
   var V = __VERSION__;
   if (window.__awNav && window.__awNav.version === V) return;
   if (window.__awNav && window.__awNav.quitterMode) { try { window.__awNav.quitterMode(false); } catch (e) {} }
-  var nav = { version: V, file: [], mode: null, pastilles: [], compteur: 0, hote: null, calque: null, ecoutes: [] };
+  var nav = { version: V, file: [], mode: null, hote: null, calque: null, ecoutes: [] };
   window.__awNav = nav;
   var PING = '__PING__';
   var SELECTEUR_INTERACTIF = 'a[href],button,input:not([type="hidden"]),select,textarea,summary,' +
@@ -222,7 +219,7 @@ const NOYAU = String.raw`(function () {
     var r = el.getBoundingClientRect();
     return { x: r.left, y: r.top, largeur: r.width, hauteur: r.height };
   }
-  function decrire(el, zone) {
+  function decrire(el) {
     var cs = el ? getComputedStyle(el) : null;
     var texte = el ? (el.innerText || el.textContent || el.getAttribute('aria-label') || el.getAttribute('alt') || '') : '';
     return {
@@ -236,7 +233,7 @@ const NOYAU = String.raw`(function () {
         marges: cs ? 'marge ' + [cs.marginTop, cs.marginRight, cs.marginBottom, cs.marginLeft].join(' ') +
           ' · retrait ' + [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].join(' ') : ''
       },
-      rect: zone || (el ? rectDe(el) : { x: 0, y: 0, largeur: 0, hauteur: 0 })
+      rect: el ? rectDe(el) : { x: 0, y: 0, largeur: 0, hauteur: 0 }
     };
   }
   function assigner(cible, source) { for (var k in source) cible[k] = source[k]; return cible; }
@@ -253,14 +250,7 @@ const NOYAU = String.raw`(function () {
       '.surbrillance { position: fixed; border: 3px solid #f59e0b; border-radius: 4px; box-shadow: 0 0 0 4px rgba(245,158,11,.35); pointer-events: none; transition: all .15s; }',
       '.etiquette { position: absolute; left: -3px; top: -24px; background: #f59e0b; color: #111; font-size: 12px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; }',
       '.surbrillance.prochain { border-style: dashed; box-shadow: none; }',
-      '.survol { position: fixed; border: 2px solid #3b82f6; background: rgba(59,130,246,.12); pointer-events: none; }',
-      '.zone { position: fixed; border: 2px dashed #3b82f6; background: rgba(59,130,246,.10); pointer-events: none; }',
-      '.pastille { position: fixed; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.4); pointer-events: none; }',
-      '.bulle { position: fixed; width: 280px; background: #1f2937; color: #f9fafb; border-radius: 8px; padding: 8px; box-shadow: 0 6px 24px rgba(0,0,0,.35); pointer-events: auto; }',
-      '.bulle textarea { width: 100%; min-height: 64px; resize: vertical; border-radius: 6px; border: 1px solid #4b5563; background: #111827; color: #f9fafb; padding: 6px; font-size: 13px; }',
-      '.bulle .actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; }',
-      '.bulle button { border: 0; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }',
-      '.bulle .ajouter { background: #3b82f6; color: #fff; }'
+      '.survol { position: fixed; border: 2px solid #3b82f6; background: rgba(59,130,246,.12); pointer-events: none; }'
     ].join('\n');
     racine.appendChild(style);
     (document.documentElement || document.body).appendChild(hote);
@@ -399,154 +389,75 @@ const NOYAU = String.raw`(function () {
     return true;
   };
 
-  /* --- Pastilles numérotées des annotations, recalées au défilement. --- */
-  function renumeroter() {
-    for (var i = 0; i < nav.pastilles.length; i++) {
-      var p = nav.pastilles[i];
-      p.el.textContent = String(i + 1);
-      p.el.style.left = (p.pageX - window.scrollX) + 'px';
-      p.el.style.top = (p.pageY - window.scrollY) + 'px';
-    }
-  }
-  function ajouterPastille(idPage, rect) {
-    var el = document.createElement('div');
-    el.className = 'pastille';
-    calqueDe().appendChild(el);
-    nav.pastilles.push({ id: idPage, el: el, pageX: rect.x + window.scrollX, pageY: rect.y + window.scrollY });
-    renumeroter();
-  }
-  nav.retirerPastille = function (idPage) {
-    nav.pastilles = nav.pastilles.filter(function (p) { if (p.id === idPage) { retirer(p.el); return false; } return true; });
-    renumeroter();
-    return true;
-  };
-  nav.viderPastilles = function () {
-    nav.pastilles.forEach(function (p) { retirer(p.el); });
-    nav.pastilles = [];
-    return true;
-  };
-  window.addEventListener('scroll', renumeroter, true);
-
-  /* --- Modes Annoter et Choisir. --- */
+  /* --- Mode Choisir. --- */
   function ecouter(type, fn) { window.addEventListener(type, fn, true); nav.ecoutes.push([type, fn]); }
-  function dansCalque(e) { return !!nav.hote && typeof e.composedPath === 'function' && e.composedPath().indexOf(nav.hote) >= 0; }
   function bloquer(e) { e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
   function elementSous(x, y) {
     var el = document.elementFromPoint(x, y);
     return el && el !== nav.hote ? el : null;
   }
-  function fermerBulle() { retirer(nav.bulle); nav.bulle = null; }
-  function ouvrirBulle(el, zone) {
-    fermerBulle();
-    var d = decrire(el, zone);
-    var calque = calqueDe();
-    var bulle = document.createElement('div');
-    bulle.className = 'bulle';
-    var gauche = Math.max(8, Math.min(d.rect.x, window.innerWidth - 296));
-    var haut = d.rect.y + d.rect.hauteur + 8;
-    if (haut + 130 > window.innerHeight) haut = Math.max(8, d.rect.y - 138);
-    bulle.style.left = gauche + 'px';
-    bulle.style.top = haut + 'px';
-    var texte = document.createElement('textarea');
-    texte.setAttribute('placeholder', 'Votre commentaire…');
-    var actions = document.createElement('div');
-    actions.className = 'actions';
-    var annuler = document.createElement('button');
-    annuler.textContent = 'Annuler';
-    var ajouter = document.createElement('button');
-    ajouter.className = 'ajouter';
-    ajouter.textContent = 'Ajouter';
-    function valider() {
-      var c = texte.value.trim();
-      if (!c) { texte.focus(); return; }
-      var idPage = 'p' + (++nav.compteur);
-      ajouterPastille(idPage, d.rect);
-      signaler(assigner({ type: 'annotation', idPage: idPage, commentaire: borne(c, 4000) }, d));
-      fermerBulle();
-    }
-    ajouter.addEventListener('click', function (e) { e.stopPropagation(); valider(); });
-    annuler.addEventListener('click', function (e) { e.stopPropagation(); fermerBulle(); });
-    texte.addEventListener('keydown', function (e) {
-      e.stopPropagation();
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); valider(); }
-      else if (e.key === 'Escape') { e.preventDefault(); fermerBulle(); }
-    });
-    actions.appendChild(annuler);
-    actions.appendChild(ajouter);
-    bulle.appendChild(texte);
-    bulle.appendChild(actions);
-    calque.appendChild(bulle);
-    nav.bulle = bulle;
-    nav.bulleTexte = texte;
-    nav.valider = valider;
-    texte.focus();
-  }
   nav.quitterMode = function (signalerSortie) {
     nav.ecoutes.forEach(function (x) { window.removeEventListener(x[0], x[1], true); });
     nav.ecoutes = [];
     retirer(nav.survol); nav.survol = null;
-    retirer(nav.zone); nav.zone = null;
-    fermerBulle();
     var etait = nav.mode;
     nav.mode = null;
     if (signalerSortie && etait) signaler({ type: 'mode-quitte' });
     return true;
   };
   nav.activerMode = function (mode) {
-    // Rejoué après chaque chargement : un mode déjà en place garde sa bulle en cours de saisie.
+    // Rejoué après chaque chargement : un mode déjà en place reste tel quel.
     if (mode && nav.mode === mode) return true;
     nav.quitterMode(false);
-    if (mode !== 'annoter' && mode !== 'choisir') return true;
+    if (mode !== 'choisir') return true;
     nav.mode = mode;
     var calque = calqueDe();
     var depart = null;
-    var glisse = false;
     function survoler(e) {
-      if (dansCalque(e) || nav.bulle) return;
-      if (depart) {
-        if (!glisse && Math.abs(e.clientX - depart.x) + Math.abs(e.clientY - depart.y) > 6 && mode === 'annoter') glisse = true;
-        if (glisse) {
-          if (!nav.zone) { nav.zone = document.createElement('div'); nav.zone.className = 'zone'; calque.appendChild(nav.zone); }
-          placer(nav.zone, zoneEntre(depart, e));
-        }
-        return;
-      }
+      if (depart) return;
       var el = e.target && e.target.nodeType === 1 ? e.target : null;
       if (!el || el === nav.hote) return;
       if (!nav.survol) { nav.survol = document.createElement('div'); nav.survol.className = 'survol'; calque.appendChild(nav.survol); }
       placer(nav.survol, rectDe(el));
     }
-    function zoneEntre(a, e) {
-      return { x: Math.min(a.x, e.clientX), y: Math.min(a.y, e.clientY), largeur: Math.abs(e.clientX - a.x), hauteur: Math.abs(e.clientY - a.y) };
-    }
     function appuyer(e) {
-      if (dansCalque(e)) return;
       bloquer(e);
-      if (nav.bulle) { fermerBulle(); depart = null; return; }
       depart = { x: e.clientX, y: e.clientY };
-      glisse = false;
     }
     function relacher(e) {
-      if (dansCalque(e)) return;
       bloquer(e);
       if (!depart) return;
-      var zone = glisse ? zoneEntre(depart, e) : null;
-      var el = zone ? elementSous(zone.x + zone.largeur / 2, zone.y + zone.hauteur / 2) : (e.target && e.target.nodeType === 1 && e.target !== nav.hote ? e.target : elementSous(e.clientX, e.clientY));
+      var el = e.target && e.target.nodeType === 1 && e.target !== nav.hote ? e.target : elementSous(e.clientX, e.clientY);
       depart = null;
-      glisse = false;
-      retirer(nav.zone); nav.zone = null;
-      if (mode === 'choisir') {
-        signaler(assigner({ type: 'choisi', idPage: 'c' + (++nav.compteur), commentaire: '' }, decrire(el, null)));
-        nav.quitterMode(false);
-        return;
-      }
-      ouvrirBulle(el, zone);
+      signaler(assigner({ type: 'choisi' }, decrire(el)));
+      nav.quitterMode(false);
+      avalerFinDuGeste();
     }
-    function avaler(e) { if (!dansCalque(e)) bloquer(e); }
+    /*
+     * Le « click » (et, au bouton droit, « auxclick » et « contextmenu ») part APRÈS « pointerup »,
+     * dans la même séquence d'entrée : quitter le mode retirait nos écoutes avant lui, et la page le
+     * recevait — choisir « Payer » le déclenchait (mesuré à la vraie souris dans Electron, conv-1306,
+     * 2026-10-30, navigateur-page-script.choisir.reel.test.ts). Une dernière garde, hors du mode,
+     * avale donc ces clics de fin de geste. Elle part au geste SUIVANT (appui ou touche) : un vrai clic
+     * ou un clic au clavier (Entrée, Espace) commence toujours par l'un des deux, et passe donc. Les
+     * clics de la page elle-même (non « isTrusted ») passent aussi.
+     */
+    function avalerFinDuGeste() {
+      var types = ['click', 'auxclick', 'contextmenu'];
+      function avaler(e) { if (e.isTrusted) bloquer(e); }
+      function finir() {
+        types.forEach(function (t) { window.removeEventListener(t, avaler, true); });
+        window.removeEventListener('pointerdown', finir, true);
+        window.removeEventListener('keydown', finir, true);
+      }
+      types.forEach(function (t) { window.addEventListener(t, avaler, true); });
+      window.addEventListener('pointerdown', finir, true);
+      window.addEventListener('keydown', finir, true);
+    }
     function touche(e) {
-      if (e.key !== 'Escape' || dansCalque(e)) return;
+      if (e.key !== 'Escape') return;
       bloquer(e);
-      if (nav.bulle) fermerBulle(); else nav.quitterMode(true);
+      nav.quitterMode(true);
     }
     /*
      * Événements POINTEUR et non souris : annuler « pointerdown » supprime les « mousedown »/« mouseup »
@@ -556,12 +467,12 @@ const NOYAU = String.raw`(function () {
     ecouter('pointermove', survoler);
     ecouter('pointerdown', appuyer);
     ecouter('pointerup', relacher);
-    ecouter('mousedown', avaler);
-    ecouter('mouseup', avaler);
-    ecouter('click', avaler);
-    ecouter('dblclick', avaler);
-    ecouter('auxclick', avaler);
-    ecouter('contextmenu', avaler);
+    ecouter('mousedown', bloquer);
+    ecouter('mouseup', bloquer);
+    ecouter('click', bloquer);
+    ecouter('dblclick', bloquer);
+    ecouter('auxclick', bloquer);
+    ecouter('contextmenu', bloquer);
     ecouter('keydown', touche);
     return true;
   };
