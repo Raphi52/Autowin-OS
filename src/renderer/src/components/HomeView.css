@@ -47,6 +47,197 @@
   pointer-events: none;
 }
 
+/* LE QUARTIER (conv-1421) : le fond se clique. L'en-tête occupe toute la largeur du haut, au-dessus du
+   ciel, du Brain et des tours : seuls ses vrais contrôles gardent la souris. */
+.home-view[data-sur-cible='true'] {
+  cursor: pointer;
+}
+.home-view[data-fond='falaise'] .home-view__header {
+  pointer-events: none;
+}
+.home-view[data-fond='falaise'] .home-view__masthead,
+.home-view[data-fond='falaise'] .home-view__settings {
+  pointer-events: auto;
+}
+
+/* LES WIDGETS DU QUARTIER (conv-1421, « faut qu'ils s'adaptent a cet environnement »).
+   Une tuile devient une pièce de la maquette : une enseigne en bois clair, le cadre du même bois, et
+   un fond qui dépend du thème. Sombre : une planche de noyer. Clair : le papier d'un shoji.
+   POURQUOI DEUX FONDS : le contenu des widgets écrit en couleurs fixes, claires, et les thèmes clairs
+   les foncent à part. Le texte reste donc celui du thème ; c'est le fond qui lui répond.
+   Le bois vient de la peinture et ne suit aucun thème : d'où les couleurs fixes.
+   LES `!important` SONT VOULUS : un thème peint ses tuiles pour son propre décor (les tubes néon de
+   Nébuleuse sont relevés sur l'avenue Cyberpunk, conv-317). Sur le Quartier, le décor décide, et les
+   autres fonds gardent leurs tuiles telles quelles. */
+.home-view[data-fond='falaise'] .home-tile__label {
+  height: 32px;
+  margin: 0 -3px -3px;
+  padding: 0 4px 0 12px;
+  position: relative;
+  z-index: 3;
+  gap: 8px;
+  background: linear-gradient(180deg, #d9a769 0%, #c08a4c 52%, #a87338 100%); /* couleur-fixe: bois de la maquette */
+  border: 1px solid #7c5226; /* couleur-fixe: bois de la maquette */
+  border-radius: 7px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 200, 0.55), /* couleur-fixe: lumière sur le bois */
+    0 3px 7px rgba(52, 28, 8, 0.45); /* couleur-fixe: ombre sur la peinture */
+}
+.home-view[data-fond='falaise'] .home-tile .home-tile__label > h2 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #2f1a08 !important; /* couleur-fixe: encre brûlée dans le bois, sur tous les thèmes */
+  -webkit-text-fill-color: #2f1a08 !important; /* couleur-fixe: encre brûlée dans le bois, sur tous les thèmes */
+  background: none !important;
+  text-shadow: 0 1px 0 rgba(255, 228, 184, 0.45) !important; /* couleur-fixe: lumière sur le bois */
+  animation: none !important;
+}
+.home-view[data-fond='falaise'] .home-tile .home-tile__rule {
+  background: linear-gradient(90deg, rgba(47, 26, 8, 0.4), transparent) !important; /* couleur-fixe: veine du bois */
+  box-shadow: none !important;
+  opacity: 1;
+}
+.home-view[data-fond='falaise'] .home-tile .home-tile__action {
+  color: #2f1a08 !important; /* couleur-fixe: encre brûlée dans le bois, sur tous les thèmes */
+  background: rgba(255, 238, 208, 0.42) !important; /* couleur-fixe: étiquette claire sur le bois */
+  border-color: rgba(47, 26, 8, 0.45) !important; /* couleur-fixe: bord sur le bois */
+}
+/* La croix : un sceau rouge, au bout de l'enseigne. 26 px : elle se voit et elle s'attrape. */
+.home-tile__rentrer {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: #fff6e6; /* couleur-fixe: croix du sceau, sur tous les thèmes */
+  background: #b3261e; /* couleur-fixe: le rouge d'un sceau japonais */
+  border: 1.5px solid #6e120d; /* couleur-fixe: le rouge d'un sceau japonais */
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(52, 28, 8, 0.55); /* couleur-fixe: ombre sur le bois */
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+.home-tile__rentrer svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+.home-tile__rentrer:hover,
+.home-tile__rentrer:focus-visible {
+  background: #d4332a; /* couleur-fixe: le rouge d'un sceau japonais */
+  transform: scale(1.1);
+  outline: none;
+}
+.home-tile__rentrer:focus-visible {
+  box-shadow: 0 0 0 2px #fff6e6; /* couleur-fixe: repère clavier sur le bois */
+}
+.home-view[data-fond='falaise'] .home-tile .home-tile__panel {
+  padding: 12px 8px 9px 10px;
+  clip-path: none !important;
+  border: 5px solid transparent !important;
+  border-top-width: 3px !important;
+  border-radius: 0 0 8px 8px !important;
+  background:
+    repeating-linear-gradient(92deg, rgba(255, 214, 160, 0.03) 0 3px, transparent 3px 11px) padding-box, /* couleur-fixe: veine du noyer */
+    linear-gradient(180deg, #33221a, #291a13) padding-box, /* couleur-fixe: planche de noyer */
+    linear-gradient(180deg, #b98348, #93632f) border-box !important; /* couleur-fixe: bois de la maquette */
+  backdrop-filter: none !important;
+  box-shadow:
+    0 16px 34px rgba(52, 28, 8, 0.5), /* couleur-fixe: ombre sur la peinture */
+    inset 0 0 0 1px rgba(255, 220, 170, 0.1) !important; /* couleur-fixe: arête du noyer */
+}
+.home-view[data-fond='falaise'] .home-tile[data-held='true'] .home-tile__panel,
+.home-view[data-fond='falaise'] .home-tile:focus-visible .home-tile__panel {
+  box-shadow:
+    0 26px 52px rgba(52, 28, 8, 0.62), /* couleur-fixe: ombre sur la peinture */
+    inset 0 0 0 1px rgba(255, 220, 170, 0.22) !important; /* couleur-fixe: arête du noyer */
+}
+:root[data-base='clair'] .home-view[data-fond='falaise'] .home-tile .home-tile__panel {
+  background:
+    linear-gradient(90deg, rgba(120, 84, 44, 0.1) 1px, transparent 1px) 0 0 / 25% 100% padding-box, /* couleur-fixe: montants d'un shoji */
+    linear-gradient(180deg, rgba(120, 84, 44, 0.1) 1px, transparent 1px) 0 0 / 100% 33.4% padding-box, /* couleur-fixe: montants d'un shoji */
+    linear-gradient(180deg, #fbf4e6, #f3e8d3) padding-box, /* couleur-fixe: papier d'un shoji */
+    linear-gradient(180deg, #b98348, #93632f) border-box !important; /* couleur-fixe: bois de la maquette */
+}
+
+/* Le contenu suit la planche : pas de néon sur du bois, et une lecture nette sur le noyer comme sur
+   le papier. Heures en ambre, notes en brun, alertes en rouge de sceau. */
+.home-view[data-fond='falaise'] .home-tile {
+  --quartier-heure: #edc37a; /* couleur-fixe: ambre sur le noyer */
+  --quartier-note: #cbb498; /* couleur-fixe: brun clair sur le noyer */
+  --quartier-alerte: #ffab97; /* couleur-fixe: rouge lisible sur le noyer */
+}
+:root[data-base='clair'] .home-view[data-fond='falaise'] .home-tile {
+  --quartier-heure: #80500f; /* couleur-fixe: ambre foncé sur le papier */
+  --quartier-note: #6f5438; /* couleur-fixe: brun sur le papier */
+  --quartier-alerte: #a3261e; /* couleur-fixe: rouge de sceau sur le papier */
+}
+.home-view[data-fond='falaise'] .home-tile .home-list time {
+  color: var(--quartier-heure) !important;
+  text-shadow: none !important;
+}
+.home-view[data-fond='falaise'] .home-tile .home-list em,
+.home-view[data-fond='falaise'] .home-tile .home-hint {
+  color: var(--quartier-note) !important;
+}
+.home-view[data-fond='falaise'] .home-tile .home-error {
+  color: var(--quartier-alerte) !important;
+}
+/* Jarvis garde son anneau et ses boutons, mais quitte son écran noir : il se pose sur la planche. */
+.home-view[data-fond='falaise'] .home-tile .jarvis {
+  --jv-or: var(--quartier-heure);
+  border-color: transparent !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+.home-view[data-fond='falaise'] .home-tile .jarvis::before {
+  display: none;
+}
+.home-view[data-fond='falaise'] .home-tile .enregistrements:not([data-enregistre='true']) {
+  clip-path: none !important;
+  border-color: transparent !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+.home-view[data-fond='falaise'] .home-tile .enregistrements:not([data-enregistre='true'])::before,
+.home-view[data-fond='falaise'] .home-tile .enregistrements:not([data-enregistre='true'])::after {
+  display: none;
+}
+
+/* Le nom de ce que survole la souris. Sa position est écrite par `useQuartierAccueil` à chaque
+   mouvement, sans passer par React : un rendu par pixel de souris serait un coût pour rien. */
+.quartier-etiquette {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 220px;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--bg-0) 90%, transparent);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.quartier-etiquette[data-visible='true'] {
+  opacity: 1;
+}
+.quartier-etiquette span {
+  color: var(--text-dim);
+}
+
 /* L'en-tête : UNE rangée qui se replie, et non deux blocs posés en absolu chacun dans son coin.
    Mesuré le 2026-08-21 dans la fenêtre réelle (491 px) : les deux blocs se recouvraient et les
    boutons passaient par-dessus le titre. Une rangée qui se replie rend la collision impossible. */

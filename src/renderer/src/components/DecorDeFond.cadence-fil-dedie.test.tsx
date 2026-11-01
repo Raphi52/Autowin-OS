@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { CLE_FOND_ACCUEIL } from './fond-accueil'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -87,6 +88,7 @@ let rappels: FrameRequestCallback[] = []
 let monte: { root: Root; hote: HTMLElement } | null = null
 
 beforeEach(() => {
+  window.localStorage.setItem(CLE_FOND_ACCUEIL, 'avenue')
   rappels = []
   Object.assign(fil, {
     t: 0,

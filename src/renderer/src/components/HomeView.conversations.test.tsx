@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { autowinStorageKey } from '../storage-keys'
 import { HomeView } from './HomeView'
 import {
   marquerConversationEnAttente,
@@ -21,6 +22,8 @@ import {
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
 beforeEach(() => {
+  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
   ;(window as unknown as { innerWidth: number }).innerWidth = 1440
   ;(window as unknown as { innerHeight: number }).innerHeight = 900
   ;(window as unknown as { api: unknown }).api = {

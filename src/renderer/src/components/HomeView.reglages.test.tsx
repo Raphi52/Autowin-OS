@@ -13,6 +13,8 @@ const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivEl
 
 beforeEach(() => {
   window.localStorage.clear()
+  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
   // Equivalent d'un DEMARRAGE de l'application : la memoire d'ouverture du panneau vit dans le
   // module, elle survivrait donc d'un test a l'autre.
   oublierOuvertureReglages()
@@ -347,19 +349,21 @@ describe('le choix du fond de l accueil', () => {
    */
   // « Aucun » et non plus « Noir » (conv-1076, 2026-10-22 : « desfois c pas noir selon le theme ») :
   // en Holographique blanc, ce choix peint un aplat BLANC. La valeur enregistree reste `noir`.
-  it('propose exactement Aucun, Cyberpunk, Planetes et Nier Automata (radar), sur le fond affiche par defaut', async () => {
+  it('propose exactement Aucun, le Quartier, Cyberpunk, Planetes et Nier Automata (radar), sur le fond affiche par defaut', async () => {
+    window.localStorage.removeItem(autowinStorageKey('home.decor.v4'))
     const container = await mount()
     await ouvrirReglages(container)
     const menu = q<HTMLSelectElement>(container, '[data-testid="home-fond"]')!
     expect(menu).not.toBeNull()
     expect(Array.from(menu.options).map((o) => [o.value, o.textContent])).toEqual([
       ['noir', 'Aucun'],
+      ['falaise', 'Le Quartier'],
       ['avenue', 'Cyberpunk'],
       ['actuel', 'Planètes'],
       ['nier', 'Nier Automata (radar)']
     ])
-    // Rien d'enregistre : le menu montre le fond REELLEMENT affiche, l'avenue cyberpunk.
-    expect(menu.value).toBe('avenue')
+    // Rien d'enregistre : le menu montre le fond REELLEMENT affiche, le Quartier (conv-1421).
+    expect(menu.value).toBe('falaise')
   })
 
   it('choisir un fond l enregistre et previent le decor dans la meme fenetre', async () => {
@@ -373,7 +377,7 @@ describe('le choix du fond de l accueil', () => {
         menu.value = 'noir'
         menu.dispatchEvent(new Event('change', { bubbles: true }))
       })
-      expect(window.localStorage.getItem(autowinStorageKey('home.decor.v3'))).toBe('noir')
+      expect(window.localStorage.getItem(autowinStorageKey('home.decor.v4'))).toBe('noir')
       // L'ENTREE QUI CASSERAIT UN FAUX FIX : `storage` n'est emis que pour les AUTRES fenetres. Sans
       // cet evenement, le decor, monte a cote de l'Accueil, ne changerait qu'au redemarrage.
       expect(prevenu).toHaveBeenCalled()
@@ -382,7 +386,7 @@ describe('le choix du fond de l accueil', () => {
         menu.value = 'actuel'
         menu.dispatchEvent(new Event('change', { bubbles: true }))
       })
-      expect(window.localStorage.getItem(autowinStorageKey('home.decor.v3'))).toBe('actuel')
+      expect(window.localStorage.getItem(autowinStorageKey('home.decor.v4'))).toBe('actuel')
     } finally {
       window.removeEventListener('autowin:fond-accueil', prevenu)
     }

@@ -2,7 +2,7 @@
 // happy-dom, comme les 353 autres tests de l'interface : jsdom n'est pas une dépendance du dépôt, ce
 // fichier ne se chargeait pas (« Cannot find package jsdom », salvage conv-1096).
 import { afterEach, describe, expect, it } from 'vitest'
-import { CLE_FOND_ACCUEIL, DECOR_DEFAUT, FONDS_ACCUEIL, FOND_NIER, fondSansScene, lireFondAccueil } from './fond-accueil'
+import { CLE_FOND_ACCUEIL, FOND_DEFAUT, FONDS_ACCUEIL, FOND_NIER, fondSansScene, lireFondAccueil } from './fond-accueil'
 
 afterEach(() => {
   window.localStorage.clear()
@@ -16,7 +16,7 @@ describe('fond « Nier Automata (radar) » (conv-295)', () => {
     expect(fondSansScene('avenue')).toBe(false)
   })
   it('est le défaut sous le thème Nier Automata, pas ailleurs', () => {
-    expect(lireFondAccueil()).toBe(DECOR_DEFAUT)
+    expect(lireFondAccueil()).toBe(FOND_DEFAUT)
     document.documentElement.setAttribute('data-theme', 'nier-automata')
     expect(lireFondAccueil()).toBe(FOND_NIER)
   })

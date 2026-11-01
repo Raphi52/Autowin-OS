@@ -88,6 +88,8 @@ function outlookSnapshot() {
 }
 
 beforeEach(() => {
+  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(CLOCK)
   ;(window as unknown as { api: unknown }).api = {

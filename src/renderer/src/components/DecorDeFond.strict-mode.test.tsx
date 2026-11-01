@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -87,7 +87,11 @@ afterEach(() => {
   }
   creees.length = 0
   document.documentElement.removeAttribute('data-theme')
-  window.localStorage.removeItem(autowinStorageKey('home.decor.v3'))
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+})
+
+beforeEach(() => {
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
 })
 
 describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => {
@@ -108,7 +112,7 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
   })
 
   it('un VRAI changement de thème reconstruit une direction spatiale (teintes relues)', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.decor.v3'), 'actuel')
+    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'actuel')
     await monter()
     await act(async () => {
       document.documentElement.setAttribute('data-theme', 'holographique-clair')
@@ -210,7 +214,7 @@ describe('le fond suit le choix fait dans les réglages de l Accueil (conv-346)'
   /** Ce que fait le menu « Fond » des réglages : enregistrer, puis prévenir la fenêtre. */
   const choisir = async (fond: string): Promise<void> => {
     await act(async () => {
-      window.localStorage.setItem(autowinStorageKey('home.decor.v3'), fond)
+      window.localStorage.setItem(autowinStorageKey('home.decor.v4'), fond)
       window.dispatchEvent(new Event('autowin:fond-accueil'))
       await Promise.resolve()
     })
@@ -228,7 +232,7 @@ describe('le fond suit le choix fait dans les réglages de l Accueil (conv-346)'
   })
 
   it('Noir : aucune scène construite, l hôte peint le noir', async () => {
-    window.localStorage.setItem(autowinStorageKey('home.decor.v3'), 'noir')
+    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'noir')
     const hote = await monter()
     expect(creees).toHaveLength(0)
     const fond = hote.querySelector('.decor-de-fond') as HTMLElement
