@@ -58,7 +58,8 @@
  *   8 = SCENARIO ROUGE : une etape de `--scenario` n'a pas abouti (champ `scenario.echec` : l'etape,
  *       la raison, le texte vu et une capture) ;
  *   9 = JAUGE MORTE (conv-1382) : une jauge d'un carrousel /draft ne change aucune proposition, ou
- *       reste visible sur une proposition qu'elle ne change pas (champs `jauges`, `jaugesFausses`) ;
+ *       reste visible sur une proposition qu'elle ne change pas, ou, reglee sur l'une, change aussi une
+ *       autre (chaque proposition garde ses valeurs) (champs `jauges`, `jaugesFausses`) ;
  *   2 = usage ; 1 = erreur technique (Electron, construction de la page).
  *   Plusieurs defauts : le code est celui du premier dans l'ordre 3, 8, 9, 4, 5, 6, 7.
  * Champs par largeur : `demandes` — copies, liens, ancres et boutons de choix (`prompt` : le texte

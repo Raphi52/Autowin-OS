@@ -318,28 +318,45 @@ describe('la page : composer le message', () => {
     expect(remplirSaisie).not.toHaveBeenCalled()
   })
 
-  it('des réglages modifiés font partie du message, comme sur les autres boutons', () => {
-    const avecReglages = spec(2, {
+  // conv-1382 (2026-10-31) : chaque proposition garde ses valeurs ; le message porte celles des
+  // propositions mélangées, nommées par leur rang, et jamais celles d'une proposition hors mélange.
+  it('des réglages modifiés font partie du message, ceux des propositions mélangées seules', () => {
+    localStorage.clear()
+    const avecReglages = spec(3, {
       css: '.ex-b{width:var(--ex-l)}',
       reglages: [{ nom: 'Largeur', variable: '--ex-l', min: 1, max: 9, valeur: 3, unite: 'px' }]
     })
     document.body.innerHTML = carrouselDraft(avecReglages)
     new Function(SCRIPT_REGLAGES)()
     new Function(SCRIPT_AXES)()
+    // happy-dom ne décoche pas le reste du groupe : on le fait à la main (comme draft-reglages.test.mjs).
+    const regler = (rang, valeur) => {
+      for (const r of document.querySelectorAll('input[name=dkp]')) r.checked = false
+      const radio = document.getElementById(`dkp${rang}`)
+      radio.checked = true
+      radio.dispatchEvent(new Event('change', { bubbles: true }))
+      const curseur = document.querySelector('.dkc-rg input')
+      curseur.value = valeur
+      curseur.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    regler(1, '5')
+    regler(3, '7')
     cocher('visuel', 1)
     cocher('fonctionnement', 2)
     commenter('plus dense')
-    const curseur = document.querySelector('.dkc-rg input')
-    curseur.value = '5'
-    curseur.dispatchEvent(new Event('input', { bubbles: true }))
     expect(apercu()).toBe(
-      'Mixer : visuel de la 1 · fonctionnement de la 2 — Largeur 5 px — plus dense'
+      'Mixer : visuel de la 1 · fonctionnement de la 2 — la 1 : Largeur 5 px — plus dense'
+    )
+    regler(2, '9')
+    expect(apercu()).toBe(
+      'Mixer : visuel de la 1 · fonctionnement de la 2 — la 1 : Largeur 5 px ; la 2 : Largeur 9 px — plus dense'
     )
   })
 
   // « Valeurs d'origine » ne produit aucun événement `input` : sans l'écoute du clic sur `.dkc-w`,
   // l'aperçu gardait « Largeur 5 px » alors que le message remis à la saisie ne le portait plus.
   it('« Valeurs d’origine » : le réglage quitte le message affiché ET le message remis', () => {
+    localStorage.clear()
     const avecReglages = spec(2, {
       css: '.ex-b{width:var(--ex-l)}',
       reglages: [{ nom: 'Largeur', variable: '--ex-l', min: 1, max: 9, valeur: 3, unite: 'px' }]

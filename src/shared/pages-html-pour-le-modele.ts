@@ -15,18 +15,27 @@
  * Ce qui est coupe est DIT (« … », taille retiree) : une troncature muette ferait lire un extrait
  * comme s'il etait le tout (meme regle que `flattenChatPartsForModel`).
  *
- * Seules les VRAIES pages sont touchees — les fences `html-render` que l'affichage dessine. Un bloc
- * ```html (du code MONTRE comme code) et un `html-render` cite a l'interieur d'une fence plus longue
- * sont du contenu : ils restent mot pour mot. Une fence jamais refermee (reponse coupee) et une fence
- * collee en fin de phrase (defaut conv-8, `collage-blocs-texte.ts`) sont filtrees aussi : le code y
- * est le meme.
+ * Seules les VRAIES pages sont touchees — les fences que l'affichage dessine. Un bloc ```html (du
+ * code MONTRE comme code) et une page citee a l'interieur d'une fence plus longue sont du contenu :
+ * ils restent mot pour mot. Une fence jamais refermee (reponse coupee) et une fence collee en fin de
+ * phrase (defaut conv-8, `collage-blocs-texte.ts`) sont filtrees aussi : le code y est le meme.
+ *
+ * `html-interactif` AJOUTE LE 2026-10-30 (conv-1316) : ce bloc, apparu apres conv-1074, n'etait pas
+ * dans la liste. Une session neuve du fil du jeu a recu 154 008 caracteres de message, dont les 141 000
+ * de la page, alors que `montrer_bloc` promet qu'un bloc ne part pas au modele.
  */
+import { FORME_PAGE_INTERACTIVE } from './scene-3d'
 
 /** Plafond du texte visible garde par page. Au-dela, la fin est coupee — et c'est dit. */
 export const TEXTE_VISIBLE_PAGE_MAX = 3_000
 
+/** Les fences que l'affichage dessine en page. Une nouvelle sorte de page s'ajoute ICI. */
+const SORTES_DE_PAGE: readonly string[] = ['html-render', FORME_PAGE_INTERACTIVE]
+const MOTIF_DES_SORTES = SORTES_DE_PAGE.join('|')
+
 const OUVERTURE = /^[ \t]{0,3}(`{3,}|~{3,})[ \t]*([^\s`]*)[^`]*$/
-const OUVERTURE_COLLEE = /(`{3,}|~{3,})[ \t]*html-render[ \t]*$/i
+const OUVERTURE_COLLEE = new RegExp(`(\`{3,}|~{3,})[ \\t]*(${MOTIF_DES_SORTES})[ \\t]*$`, 'i')
+const NOMME_UNE_PAGE = new RegExp(MOTIF_DES_SORTES, 'i')
 
 /** Une ligne ferme-t-elle la fence ouverte par `marqueur` ? Meme caractere, au moins aussi long. */
 function fermeLaFence(ligne: string, marqueur: string): boolean {
@@ -122,24 +131,31 @@ function milliers(nombre: number): string {
   return String(nombre).replace(/\B(?=(\d{3})+$)/g, ' ')
 }
 
-function resumeDeLaPage(code: string): string {
+function resumeDeLaPage(code: string, langue: string): string {
+  const sorte = langue.toLowerCase()
   const visible = texteVisibleDUnePage(code)
   const garde =
     visible.length > TEXTE_VISIBLE_PAGE_MAX
       ? `${visible.slice(0, TEXTE_VISIBLE_PAGE_MAX).trimEnd()} … (+${milliers(visible.length - TEXTE_VISIBLE_PAGE_MAX)} caractères de texte coupés)`
       : visible
+  // Une page interactive ecrit l'essentiel de son contenu par ses scripts. « Texte visible » ferait
+  // prendre son texte de depart pour tout ce que l'utilisateur a lu (conv-1316).
+  const nature =
+    sorte === FORME_PAGE_INTERACTIVE
+      ? 'texte fixe, sans ce que ses scripts écrivent'
+      : 'texte visible'
   return (
-    `[page html-render affichée à l'utilisateur — ${milliers(code.length)} caractères de code retirés ` +
-    `par l'app ; texte visible : ${garde || 'aucun texte'}]`
+    `[page ${sorte} affichée à l'utilisateur — ${milliers(code.length)} caractères de code retirés ` +
+    `par l'app ; ${nature} : ${garde || 'aucun texte'}]`
   )
 }
 
 /**
- * Remplace chaque page `html-render` d'un texte par son texte visible. Rend le texte INCHANGE (meme
- * chaine) quand il ne porte aucune page.
+ * Remplace chaque page d'un texte par son texte visible. Rend le texte INCHANGE (meme chaine) quand
+ * il ne porte aucune page.
  */
 export function pagesHtmlEnTexte(texte: string): string {
-  if (!/html-render/i.test(texte)) return texte
+  if (!NOMME_UNE_PAGE.test(texte)) return texte
   const lignes = texte.split('\n')
   const sortie: string[] = []
   let change = false
@@ -150,11 +166,11 @@ export function pagesHtmlEnTexte(texte: string): string {
     if (ouverture) {
       const [, marqueur, langue] = ouverture
       const fin = rangDeFermeture(lignes, rang + 1, marqueur)
-      if (langue.toLowerCase() === 'html-render') {
-        sortie.push(resumeDeLaPage(lignes.slice(rang + 1, fin).join('\n')))
+      if (SORTES_DE_PAGE.includes(langue.toLowerCase())) {
+        sortie.push(resumeDeLaPage(lignes.slice(rang + 1, fin).join('\n'), langue))
         change = true
       } else {
-        // Une autre fence : son contenu est du CODE, un `html-render` cite dedans n'est pas une page.
+        // Une autre fence : son contenu est du CODE, une page citee dedans n'est pas une page.
         sortie.push(...lignes.slice(rang, Math.min(fin + 1, lignes.length)))
       }
       rang = fin + 1
@@ -162,7 +178,7 @@ export function pagesHtmlEnTexte(texte: string): string {
     }
     const collee = OUVERTURE_COLLEE.exec(ligne.replace(/\r$/, ''))
     // Collee en fin de phrase, la fence n'est reconnue que si une BALISE suit : une phrase qui
-    // parle de « ```html-render » sans en ouvrir ne doit pas avaler le reste de la reponse.
+    // parle d'une fence sans en ouvrir ne doit pas avaler le reste de la reponse.
     // La ligne suivante n'est cherchee QUE sur une fence collee : la chercher a chaque ligne recopiait
     // tout le reste du texte a chaque fois (cout quadratique sur une longue reponse).
     if (
@@ -174,7 +190,7 @@ export function pagesHtmlEnTexte(texte: string): string {
     ) {
       const fin = rangDeFermeture(lignes, rang + 1, collee[1])
       sortie.push(ligne.slice(0, collee.index))
-      sortie.push(resumeDeLaPage(lignes.slice(rang + 1, fin).join('\n')))
+      sortie.push(resumeDeLaPage(lignes.slice(rang + 1, fin).join('\n'), collee[2]))
       change = true
       rang = fin + 1
       continue

@@ -144,14 +144,22 @@ export function pageContient(textePage, cherche) {
 /**
  * Les jauges d'un carrousel /draft qui mentent (conv-1382) : aucun effet nulle part, visibles sur une
  * proposition qu'elles ne changent pas, ou cachees sur une proposition qu'elles changent. Chacune
- * dit ses rangs, pour corriger la bonne maquette.
+ * dit ses rangs, pour corriger la bonne maquette. Chaque proposition garde ses valeurs : une jauge
+ * reglee sur l'une qui change aussi une autre (`fuites`) y ecraserait le reglage qu'on avait fait.
  */
 export function jaugesFausses(jauges) {
-  return (jauges ?? []).flatMap(({ nom, visible, effet }) => {
+  return (jauges ?? []).flatMap(({ nom, visible, effet, fuites = [] }) => {
     const sansEffet = visible.filter((rang) => !effet.includes(rang))
     const cachee = effet.filter((rang) => !visible.includes(rang))
-    if (effet.length === 0) return [{ nom, raison: 'ne change aucune proposition' }]
+    const fuite = fuites
+      .filter(({ vers }) => vers.length)
+      .map(({ depuis, vers }) => ({
+        nom,
+        raison: `reglee sur la ${depuis}, change aussi la ${vers.join(', ')}`
+      }))
+    if (effet.length === 0) return [{ nom, raison: 'ne change aucune proposition' }, ...fuite]
     return [
+      ...fuite,
       ...(sansEffet.length
         ? [{ nom, raison: `visible sans effet sur la ${sansEffet.join(', ')}` }]
         : []),

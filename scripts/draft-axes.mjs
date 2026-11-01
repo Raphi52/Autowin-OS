@@ -104,7 +104,9 @@ export function styleAxes() {
  * Le script de la page. Le message n'existe qu'une fois : affiché, puis remis à la saisie tel quel.
  * Il faut au moins 2 propositions, comme pour le Mixer : une seule, même sur ses deux axes, n'est pas
  * un mélange. Les réglages sont relus à chaque changement dans le panneau voisin, y compris au clic
- * sur « Valeurs d'origine », qui ne produit aucun événement `input`.
+ * sur « Valeurs d'origine », qui ne produit aucun événement `input`. Chaque proposition garde ses
+ * valeurs (conv-1382) : le message porte celles des propositions mélangées, lues dans le
+ * `data-reglages` de leur diapositive (draft-reglages.mjs), jamais celles d'une proposition hors mélange.
  */
 export const SCRIPT_AXES = `;(() => {
   const zone = document.querySelector('.dkc-ax')
@@ -117,16 +119,18 @@ export const SCRIPT_AXES = `;(() => {
   const cochees = (axe) => cases.filter((c) => c.checked && c.dataset.axe === axe).map((c) => c.dataset.n)
   const axe = (nom, numeros) => (numeros.length ? [nom + ' de la ' + numeros.join(' + ')] : [])
   const reglages = () =>
-    Array.from(document.querySelectorAll('.dkc-rg input'))
-      .filter((c) => c.value !== c.defaultValue)
-      .map((c) => c.dataset.nom + ' ' + (c.dataset.unite ? c.value + ' ' + c.dataset.unite : c.value))
+    Array.from(new Set([...cochees('visuel'), ...cochees('fonctionnement')]))
+      .sort((a, b) => a - b)
+      .map((n) => [n, document.querySelector('.dkc-s' + n)?.dataset.reglages])
+      .filter(([, texte]) => texte)
+      .map(([n, texte]) => 'la ' + n + ' : ' + texte)
   const message = (verbe) => {
     const melange = [...axe('visuel', cochees('visuel')), ...axe('fonctionnement', cochees('fonctionnement'))]
     const valeurs = reglages()
     const mot = commentaire.value.replace(/\\s+/g, ' ').trim()
     return (
       verbe + ' : ' + melange.join(' · ') +
-      (valeurs.length ? ' — ' + valeurs.join(', ') : '') +
+      (valeurs.length ? ' — ' + valeurs.join(' ; ') : '') +
       (mot ? ' — ' + mot : '')
     )
   }

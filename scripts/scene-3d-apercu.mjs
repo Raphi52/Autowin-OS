@@ -36,8 +36,8 @@
  * `apresGlisser` (part qui change apres un glisser) — une scene qu'on peut faire pivoter montre un
  * `apresGlisser` nettement plus grand que `animee`.
  */
-import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { spawn, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -131,12 +131,47 @@ writeFileSync(cheminConfig, JSON.stringify(config))
 const electron = createRequire(import.meta.url)('electron')
 const env = { ...process.env }
 delete env.ELECTRON_RUN_AS_NODE
-const lancement = spawnSync(
-  electron,
-  [join(RACINE, 'scripts', 'scene-3d-apercu.electron.cjs'), cheminConfig],
-  { encoding: 'utf8', env, timeout: 30_000 + largeurs.length * (attente + 8_000) }
-)
 const cheminRapport = join(out, 'rapport.json')
+// Un rapport d'une mesure précédente ne doit jamais passer pour celui de celle-ci.
+rmSync(cheminRapport, { force: true })
+// Le délai couvre la MESURE, pas la fermeture d'Electron : une fois le rapport écrit, l'aperçu a
+// fini. Mesuré le 2026-10-31 (conv-1403, session à distance, deux cartes graphiques) : le processus
+// GPU mettait jusqu'à 50 s à se fermer APRÈS le rapport, et le délai tuait une mesure complète
+// (SIGTERM, code 1), même sur un simple cube. On attend la fin normale 3 s, puis on arrête CET
+// Electron-là, par son numéro de processus.
+const lancement = await new Promise((resolveLancement) => {
+  const enfant = spawn(electron, [join(RACINE, 'scripts', 'scene-3d-apercu.electron.cjs'), cheminConfig], { env })
+  let stderr = ''
+  enfant.stderr.on('data', (d) => (stderr += d))
+  enfant.stdout.on('data', () => {})
+  let fini = false
+  let rapportVuLe = 0
+  const arreter = () => {
+    if (enfant.exitCode !== null) return
+    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(enfant.pid), '/T', '/F'])
+    else enfant.kill('SIGKILL')
+  }
+  const terminer = (resultat) => {
+    if (fini) return
+    fini = true
+    clearInterval(veille)
+    clearTimeout(delai)
+    resolveLancement({ ...resultat, stderr })
+  }
+  enfant.on('exit', (status, signal) => terminer({ status, signal }))
+  const veille = setInterval(() => {
+    if (!existsSync(cheminRapport)) return
+    if (!rapportVuLe) rapportVuLe = Date.now()
+    else if (Date.now() - rapportVuLe > 3000) {
+      arreter()
+      terminer({ status: 0, signal: null })
+    }
+  }, 250)
+  const delai = setTimeout(() => {
+    arreter()
+    terminer({ status: null, signal: 'SIGTERM' })
+  }, 30_000 + largeurs.length * (attente + 8_000))
+})
 if (lancement.status !== 0 || !existsSync(cheminRapport)) {
   sortir(1, {
     defauts: ['technique'],
