@@ -1,16 +1,20 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { discoverImportedModels, loadCachedImportedModels } from './models'
 
+// Aucun de ces tests ne doit lancer le vrai CLI Codex du poste.
+vi.mock('./codex-model-source', () => ({ listCodexAppServerModels: async () => [] }))
+
 /**
- * Codex, Kimi et Gemini sont retirés du produit. Le catalogue ne doit plus JAMAIS en proposer —
- * ni depuis une source vivante, ni depuis le cache disque du dernier catalogue vu.
+ * Kimi et Gemini sont retirés du produit. Le catalogue ne doit plus JAMAIS en proposer — ni depuis
+ * une source vivante, ni depuis le cache disque du dernier catalogue vu.
  *
- * Le cache est le piège réel : il a été écrit AVANT le retrait, il contient donc des entrées Codex.
- * Sans filtre à la relecture, ces moteurs morts réapparaissent dans Agent Studio au prochain
- * démarrage, et l'utilisateur peut de nouveau y router un rôle.
+ * Le cache est le piège réel : il a pu être écrit AVANT le retrait, et contenir ces moteurs. Sans
+ * filtre à la relecture, ils réapparaissent dans Agent Studio au prochain démarrage, et
+ * l'utilisateur peut de nouveau y router un rôle. Codex, retiré avec eux, est revenu le 2026-10-31
+ * (conv-1414) : `models.chatgpt.test.ts`.
  */
 const tempDirs: string[] = []
 const cachePath = (): string => {
@@ -28,22 +32,8 @@ afterEach(() => {
 })
 
 describe('catalogue — moteurs retirés', () => {
-  /**
-   * CONTRÔLE NÉGATIF DU RETRAIT — le catalogue ne SONDE plus le listing de l'App Server Codex : il
-   * n'y a plus de source codex à injecter dans `discoverImportedModels`, et le module n'importe
-   * plus `codex-model-source`. Auparavant le listing était appelé puis son résultat filtré à la
-   * sortie : on payait un spawn du binaire codex à chaque démarrage pour rien.
-   *
-   * L'assertion porte sur la SOURCE parce que c'est là que vit le défaut : un `import` réintroduit
-   * suffit à faire revenir le spawn, sans qu'aucun modèle codex ne ressorte du catalogue — donc
-   * sans qu'aucune assertion de sortie ne le voie.
-   */
-  it('ne sonde plus AUCUNE source Codex (plus d’import, plus de spawn au démarrage)', () => {
+  it('garde le filtre de sortie : la seconde barrière contre un moteur retiré', () => {
     const source = readFileSync(join(__dirname, 'models.ts'), 'utf8')
-    expect(source).not.toContain('codex-model-source')
-    expect(source).not.toContain('listCodexAppServerModels')
-    expect(source).not.toContain('discoverCodexModels')
-    // Le filtre de sortie, lui, RESTE : c'est la seconde barrière.
     expect(source).toContain('ROUTED_PROVIDERS.includes')
   })
 
@@ -54,12 +44,12 @@ describe('catalogue — moteurs retirés', () => {
       JSON.stringify({
         version: 1,
         discoveredAt: Date.now(),
-        codex: [
+        kimi: [
           {
-            id: 'codex/gpt-5.6-sol',
-            provider: 'codex',
-            model: 'gpt-5.6-sol',
-            label: 'GPT-5.6-Sol · ChatGPT',
+            id: 'kimi/k2',
+            provider: 'kimi',
+            model: 'k2',
+            label: 'Kimi K2',
             reasoningEfforts: ['low'],
             defaultReasoningEffort: 'low'
           }
@@ -80,7 +70,6 @@ describe('catalogue — moteurs retirés', () => {
 
     const models = await discoverImportedModels(deadFetch as unknown as typeof fetch, path, cliIds)
 
-    expect(models.filter((model) => model.provider === 'codex')).toEqual([])
     expect(models.some((model) => model.provider === 'kimi')).toBe(false)
     expect(models.some((model) => model.provider === 'gemini')).toBe(false)
     // CONTRÔLE POSITIF : le cache Claude, lui, reste bien relu — le filtre ne casse pas le cache.
@@ -88,7 +77,7 @@ describe('catalogue — moteurs retirés', () => {
 
     // MÊME garantie sur le catalogue du DÉMARRAGE (avant toute découverte), qui lit le même cache.
     const auDemarrage = loadCachedImportedModels(path)
-    expect(auDemarrage.filter((model) => model.provider === 'codex')).toEqual([])
+    expect(auDemarrage.some((model) => model.provider === 'kimi')).toBe(false)
     expect(auDemarrage.some((model) => model.model === 'claude-opus-5')).toBe(true)
   })
 })

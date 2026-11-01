@@ -31,16 +31,17 @@ const codex = (
 })
 
 describe('alias de familles', () => {
-  it('dérive les alias des seules familles claude — aucun alias de moteur retiré', () => {
+  it('dérive les familles claude et le flagship ChatGPT — aucun alias de moteur retiré', () => {
     expect(KNOWN_ALIASES.map((a) => a.id).sort()).toEqual([
       'claude/fable-latest',
       'claude/haiku-latest',
       'claude/opus-latest',
-      'claude/sonnet-latest'
+      'claude/sonnet-latest',
+      'codex/flagship'
     ])
     expect(isKnownAlias('claude/opus-latest')).toBe(true)
     // Moteurs retirés : un alias n'aurait plus rien à résoudre, le catalogue ne les contient plus.
-    expect(isKnownAlias('codex/flagship')).toBe(false)
+    expect(isKnownAlias('codex/flagship')).toBe(true)
     expect(isKnownAlias('kimi/latest')).toBe(false)
     expect(isKnownAlias('gemini/latest')).toBe(false)
   })
@@ -116,15 +117,19 @@ describe('alias de familles', () => {
     expect(resolveAlias('claude/fable-latest', catalog)?.model).toBe('claude-fable-5')
   })
 
-  it('un alias de moteur retiré ne résout RIEN, même si le catalogue en garde des entrées', () => {
-    // Cas réel : un cache antérieur au retrait contient encore des modèles codex. L'alias ne doit
-    // plus les faire remonter — sinon un binding sauvegardé continuerait de router vers du mort.
+  it('`codex/flagship` suit le premier modèle listé et ignore les masqués', () => {
     const catalog = [
       codex('gpt-5.6-terra', { priority: 2, visibility: 'list' }),
-      codex('gpt-5.6-sol', { priority: 1, visibility: 'list' })
+      codex('gpt-reserve', { priority: 0, visibility: 'hide' }),
+      codex('gpt-6-luna', { priority: 1, visibility: 'list' })
     ]
-    expect(resolveAlias('codex/flagship', catalog)).toBeUndefined()
-    expect(resolveAlias('codex/flagship', [codex('gpt-5.6-terra')])).toBeUndefined()
+    expect(resolveAlias('codex/flagship', catalog)?.model).toBe('gpt-6-luna')
+    expect(resolveAlias('codex/flagship', [])).toBeUndefined()
+  })
+
+  it('un alias de moteur retiré ne résout RIEN', () => {
+    expect(resolveAlias('gemini/flagship', [codex('gpt-5.6-terra')])).toBeUndefined()
+    expect(resolveAlias('kimi/flagship', [codex('gpt-5.6-terra')])).toBeUndefined()
   })
 
   it("n'invente JAMAIS un modèle : alias non résoluble → undefined", () => {

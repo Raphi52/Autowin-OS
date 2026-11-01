@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { reglagesCliAutowin } from './claude'
 
 /**
  * TOUR DE CHAT PLEINEMENT OUTILLÉ — décision explicite de l'utilisateur (2026-08-26) :
@@ -39,9 +40,33 @@ const blocWatchdog = () => {
 describe('tour de chat — outils de mutation ouverts', () => {
   it('charge Bash, Write, Edit et MultiEdit', () => {
     // MultiEdit ajouté le 2026-08-27 par agence de la copie isolée run-f2f7fec8c587-1 (0734729).
-    expect(blocChat()).toMatch(
-      /'--tools',\s*'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,' \+ OUTILS_WEB/
+    // La liste vit dans `OUTILS_TOUR_DE_CHAT` (conv-1362) : la question à côté déclare la même.
+    expect(blocChat()).toMatch(/'--tools',\s*OUTILS_TOUR_DE_CHAT,/)
+    expect(source).toMatch(
+      /OUTILS_TOUR_DE_CHAT =\s*'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,WebFetch,WebSearch,'/
     )
+  })
+
+  it('charge ET autorise Monitor et TaskStop, écrits dans une seule constante (conv-1370, lot 5)', () => {
+    // L'aide de Bash renvoie vers Monitor (« Foreground sleep is blocked ») : chargé sans être
+    // autorisé, ou l'inverse, l'outil serait annoncé puis refusé.
+    expect(source).toMatch(/export const OUTILS_ARRIERE_PLAN = 'Monitor,TaskStop'/)
+    expect(source).toMatch(
+      /OUTILS_TOUR_DE_CHAT =\s*'[^']*' \+\s*OUTILS_ETAPES \+\s*',' \+\s*OUTILS_ARRIERE_PLAN/
+    )
+    expect(blocChat()).toMatch(/\.\.\.autorises\(OUTILS_ARRIERE_PLAN\)/)
+  })
+
+  it('Monitor lance une commande : mêmes gardes que Bash, en échec fermé', () => {
+    const [terminal, autres] = (
+      reglagesCliAutowin('G.mjs', 'N.mjs') as {
+        hooks: { PreToolUse: { matcher: string; hooks: Record<string, unknown>[] }[] }
+      }
+    ).hooks.PreToolUse
+    expect(terminal.matcher.split('|')).toContain('Monitor')
+    expect(terminal.hooks.every((h) => h.onFailure === 'block')).toBe(true)
+    // Matchers DISJOINTS : un appel qui passerait deux fois compterait double au détecteur de boucle.
+    expect(autres.matcher.split('|')).not.toContain('Monitor')
   })
 
   it('passe bypassPermissions — sans lui, les outils sont déclarés mais refusés', () => {
@@ -65,11 +90,14 @@ describe('tour de chat — outils de mutation ouverts', () => {
 
   it('DISCRIMINANT — le fond autonome (watchdog) reste sans écriture ni shell', () => {
     const bloc = blocWatchdog()
-    for (const interdit of ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit']) {
+    for (const interdit of ['Bash', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Monitor']) {
       expect(bloc, `${interdit} ne doit pas apparaître dans la branche watchdog`).not.toMatch(
         new RegExp(`'${interdit}'`)
       )
     }
+    // Monitor exécute une commande : ouvert ici, il rouvrirait le shell que cette branche ferme.
+    expect(bloc).not.toContain('OUTILS_ARRIERE_PLAN')
+    expect(bloc).not.toContain('OUTILS_TOUR_DE_CHAT')
   })
 
   it('la décision est TRACÉE dans le code, pour qu’on ne la « corrige » pas', () => {

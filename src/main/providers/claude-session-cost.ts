@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
+import { deposerFichier, relireFichier } from '../ecriture-hors-fil'
 import { ensureAutowinAppData } from '../app-data'
 import { loadChatSessions } from '../runs/chat-session-store'
 
@@ -114,8 +114,10 @@ function cheminMagasin(): string {
 
 function lireMagasin(chemin: string): Record<string, SessionCostState> {
   try {
-    if (!existsSync(chemin)) return {}
-    const brut: unknown = JSON.parse(readFileSync(chemin, 'utf-8'))
+    // Le dernier cumul déposé, même pas encore posé : relire l'ancien facturerait deux fois un tour.
+    const texte = relireFichier(chemin)
+    if (texte === undefined) return {}
+    const brut: unknown = JSON.parse(texte)
     if (!brut || typeof brut !== 'object' || Array.isArray(brut)) return {}
     const états: Record<string, SessionCostState> = {}
     for (const [id, valeur] of Object.entries(brut as Record<string, unknown>)) {
@@ -135,16 +137,11 @@ function lireMagasin(chemin: string): Record<string, SessionCostState> {
 }
 
 function écrireMagasin(chemin: string, états: Record<string, SessionCostState>): void {
-  try {
-    mkdirSync(dirname(chemin), { recursive: true })
-    // Écriture atomique : un tour interrompu ne laisse pas un JSON tronqué qui ferait perdre TOUS
-    // les cumuls des autres sessions au prochain démarrage.
-    const temporaire = `${chemin}.${process.pid}.tmp`
-    writeFileSync(temporaire, JSON.stringify(états), 'utf-8')
-    renameSync(temporaire, chemin)
-  } catch {
-    /* le coût du tour reste juste pour CE tour ; seul le suivant sur-comptera */
-  }
+  // Écriture atomique : un tour interrompu ne laisse pas un JSON tronqué qui ferait perdre TOUS les
+  // cumuls des autres sessions au prochain démarrage. Hors du fil principal (conv-1368) : `renameSync`
+  // ici a figé la fenêtre 6,6 s en 7 jours. Le coût du tour reste juste pour CE tour si elle échoue :
+  // seul le suivant sur-comptera.
+  deposerFichier(chemin, JSON.stringify(états))
 }
 
 /**
@@ -154,12 +151,7 @@ function écrireMagasin(chemin: string, états: Record<string, SessionCostState>
  * montant. Sans cette remise à zéro, un test à coût constant est vert une fois sur deux.
  */
 export function reinitialiserMagasinCoutsDeSession(): void {
-  try {
-    const chemin = cheminMagasin()
-    if (existsSync(chemin)) rmSync(chemin, { force: true })
-  } catch {
-    /* rien a vider */
-  }
+  deposerFichier(cheminMagasin(), null)
 }
 
 /**

@@ -43,6 +43,26 @@ describe('spawn CLI — regime de contexte', () => {
     expect(source).toContain("const autorises = (liste: string): string[] => liste.split(',')")
   })
 
+  it('Monitor et TaskStop se paient au tour de chat, pas aux tours de run (conv-1370, lot 5)', () => {
+    // Mesuré sur le CLI 2.1.314 le 2026-10-31 : +3 211 jetons par appel (13 827 → 17 038). Sur 35
+    // journaux de run en 3 jours : aucun `sleep` refusé, aucune tâche de fond restée ouverte. Le jour
+    // où un run en aura besoin, ce test rouge rappellera ce coût : on ne le charge pas par symétrie.
+    const execBlock = source.slice(
+      source.indexOf('if (execution) {'),
+      source.indexOf('} else if (materialized) {')
+    )
+    const outilsDuRun = execBlock.slice(execBlock.indexOf('const tools ='), execBlock.indexOf('args.push'))
+    expect(outilsDuRun).toContain("'Read,Grep,Glob,Bash'")
+    for (const absent of ['Monitor', 'TaskStop', 'OUTILS_ARRIERE_PLAN'])
+      expect(outilsDuRun).not.toContain(absent)
+    // Le chat les charge ET les autorise : un seul des deux serait un outil annoncé puis refusé.
+    const chatBranch = source.slice(source.indexOf('} else {'), source.indexOf('let settingsDir'))
+    expect(chatBranch).toMatch(/'--tools',\s*OUTILS_TOUR_DE_CHAT,/)
+    expect(chatBranch).toMatch(/\.\.\.autorises\(OUTILS_ARRIERE_PLAN\)/)
+    // Sans dossier de travail, le tour n'a pas de shell : ni l'un ni l'autre n'y a sa place.
+    expect(source).toMatch(/const outilsSansWorkspace = materialized \? 'Read,' \+ OUTILS_WEB : OUTILS_WEB/)
+  })
+
   it('desactive les slash-commands et skills du CLI (jamais utilisees ici)', () => {
     expect(source).toContain("'--disable-slash-commands'")
   })

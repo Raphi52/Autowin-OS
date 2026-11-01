@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { CODEX_PACKAGE_ENTRY, codexExecSpec } from './codex'
@@ -168,7 +169,16 @@ describe('sur CETTE machine, les CLI se résolvent en chemins réels', () => {
       )
       return
     }
-    const resolved = codexExecSpec('C:\\repo', 'gpt-5.6-terra', 'read-only')
+    // Le vrai %APPDATA% : la suite le redirige vers un dossier de test, et seul le préfixe du PATH
+    // resterait, qui dépasse la limite de chemin de Windows sur un poste au Node de winget.
+    const appData = join(homedir(), 'AppData', 'Roaming')
+    let resolved: ReturnType<typeof codexExecSpec>
+    try {
+      resolved = codexExecSpec('C:\\repo', 'gpt-5.6-terra', 'read-only', appData)
+    } catch (error) {
+      expect(String(error)).toMatch(/trop long pour Windows/)
+      return
+    }
     expect(resolved.executable.toLowerCase().endsWith('codex.exe')).toBe(true)
     expect(resolved.args[0]).toBe('exec')
   })

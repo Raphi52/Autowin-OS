@@ -211,6 +211,15 @@ export interface SendOptions {
   }
 }
 
+/** Le fil au nom duquel part un appel : celui du chat, sinon celui du run. Sans fil connu, rien. */
+export function filDeLAppel(opts: SendOptions): string | undefined {
+  return (
+    opts.conversationId?.trim() ||
+    opts.execution?.agentEnv?.AUTOWIN_CONVERSATION_ID?.trim() ||
+    undefined
+  )
+}
+
 /** Enveloppe observable réellement remise à l'adaptateur, avant transport provider. */
 /** F6 — un bloc nommé composant le `system` injecté (skill/discipline/style/capacités/contexte). */
 export interface SystemBlock {

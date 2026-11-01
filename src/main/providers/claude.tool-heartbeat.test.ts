@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Même harnais de spawn que claude.api-retry.test.ts : on rejoue une séquence stream-json arbitraire.
 const spawnCapture = vi.hoisted(() => ({
-  stdoutEvents: [] as Array<Record<string, unknown>>
+  stdoutEvents: [] as Array<Record<string, unknown>>,
+  args: [] as string[]
 }))
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:child_process')>()),
-  spawn: () => {
+  spawn: (_bin: string, args: string[]) => {
+    spawnCapture.args = args
     const child = new EventEmitter() as EventEmitter & Record<string, unknown>
     const stdout = new EventEmitter()
     child.stdout = stdout
@@ -351,19 +353,21 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
       relancerTachesDeFond: true,
       workspaceCwd: process.cwd()
     }
-  ): Promise<{ texte: string; res: import('./types').SendResult }> {
+  ): Promise<{ texte: string; res: import('./types').SendResult; statuts: string[] }> {
     const { ClaudeCliAdapter } = await import('./claude')
     const gen = new ClaudeCliAdapter({ bin: 'claude' }).send(
       [{ role: 'user', content: 'Salut' }],
       options
     )
     let texte = ''
+    const statuts: string[] = []
     let step = await gen.next()
     while (!step.done) {
       texte += step.value.delta ?? ''
+      if (step.value.status) statuts.push(step.value.status)
       step = await gen.next()
     }
-    return { texte, res: step.value }
+    return { texte, res: step.value, statuts }
   }
   // FORME REELLE (mesure du 2026-10-09) : l'appel `Bash` porte la commande, `task_started` porte une
   // PHRASE dans `description`, le lien `tool_use_id` et `is_backgrounded`.
@@ -548,6 +552,191 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
     const { texte, res } = await envoyer()
     expect(res.tachesDeFondARelancer).toBeUndefined()
     expect(texte).not.toMatch(/Tâche de fond/)
+  })
+
+  /*
+   * ARRÊTÉE PAR LE MODÈLE = FINIE (conv-1370, lot 5, 2026-10-31). Forme mesurée sur le CLI 2.1.314
+   * (sondes `claude -p --model haiku` avec les drapeaux du chat) : appel `TaskStop {task_id}`, puis
+   * `task_notification` `status: stopped` — le MÊME mot que la coupure de fin de tour —, puis le
+   * résultat de l'outil. Seul l'appel distingue les deux : sans lui, la commande repartait.
+   */
+  const appelArret = (idAppel: string, task_id: string): Record<string, unknown> => ({
+    type: 'assistant',
+    message: { content: [{ type: 'tool_use', id: idAppel, name: 'TaskStop', input: { task_id } }] }
+  })
+  const resultatOutil = (
+    idAppel: string,
+    content: string,
+    is_error?: boolean
+  ): Record<string, unknown> => ({
+    type: 'user',
+    message: {
+      content: [
+        { type: 'tool_result', tool_use_id: idAppel, content, ...(is_error ? { is_error } : {}) }
+      ]
+    }
+  })
+  const stoppee = (id: string): Record<string, unknown> => ({
+    type: 'system',
+    subtype: 'task_notification',
+    task_id: id,
+    tool_use_id: `toolu_${id}`,
+    status: 'stopped',
+    summary: `Run ${id} in background`
+  })
+
+  it('TaskStop réussi : la commande n’est ni relancée ni annoncée perdue', async () => {
+    spawnCapture.stdoutEvents = [
+      ...bash('b1', 'sleep 90; echo FINI'),
+      appelArret('toolu_stop', 'b1'),
+      stoppee('b1'),
+      resultatOutil('toolu_stop', '{"message":"Successfully stopped task: b1"}'),
+      succes
+    ]
+    const { texte, res, statuts } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).not.toMatch(/Tâche de fond|reviendra dans ce fil|relance la demande/)
+    // Un arrêt voulu n'est pas un échec : `stopped` se lit en rouge dans le bloc Actions.
+    expect(statuts).toContain('tache de fond terminee - Run b1 in background')
+  })
+
+  it('TaskStop réussi, notification arrivée APRÈS son résultat : même issue', async () => {
+    spawnCapture.stdoutEvents = [
+      ...bash('b2', 'sleep 90; echo FINI'),
+      appelArret('toolu_stop', 'b2'),
+      resultatOutil('toolu_stop', '{"message":"Successfully stopped task: b2"}'),
+      stoppee('b2'),
+      succes
+    ]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).not.toMatch(/Tâche de fond|relance la demande/)
+  })
+
+  it('TaskStop en échec : la commande tourne toujours, elle reste reprise par l’app', async () => {
+    // Mesuré : « No task found with ID: … » avec `is_error: true`, et aucune notification.
+    spawnCapture.stdoutEvents = [
+      ...bash('b3', 'node long.mjs'),
+      appelArret('toolu_stop', 'b-autre-id'),
+      resultatOutil('toolu_stop', 'No task found with ID: b-autre-id', true),
+      appelArret('toolu_stop2', 'b3'),
+      resultatOutil('toolu_stop2', 'Error: task busy', true),
+      stoppee('b3'),
+      succes
+    ]
+    const { res } = await envoyer()
+    expect(res.tachesDeFondARelancer?.map((t) => t.commande)).toEqual(['node long.mjs'])
+  })
+
+  /*
+   * UNE SURVEILLANCE `Monitor` N'EST PAS UNE COMMANDE À RELANCER. Mesuré sur le CLI 2.1.314 : elle
+   * arrive en `task_type: local_bash`, `is_backgrounded: true`, comme un Bash de fond ; seul le nom
+   * de l'outil appelé la distingue. Le CLI lui-même prévient le modèle quand elle finit, à échéance
+   * comprise (`status: stopped`) : rien n'est perdu, donc aucun avis.
+   */
+  const monitor = (id: string, command: string): Array<Record<string, unknown>> => [
+    {
+      type: 'assistant',
+      message: {
+        content: [
+          {
+            type: 'tool_use',
+            id: `toolu_${id}`,
+            name: 'Monitor',
+            input: { command, description: `Watch ${id}`, timeout_ms: 60_000 }
+          }
+        ]
+      }
+    },
+    {
+      type: 'system',
+      subtype: 'task_started',
+      task_id: id,
+      tool_use_id: `toolu_${id}`,
+      is_backgrounded: true,
+      task_type: 'local_bash',
+      description: `Watch ${id}`
+    }
+  ]
+
+  it('Monitor encore ouvert au result : ni relance ni avis de perte', async () => {
+    spawnCapture.stdoutEvents = [...monitor('s1', 'tail -f app.log'), succes]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).not.toMatch(/Tâche de fond|reviendra dans ce fil|relance la demande/)
+  })
+
+  it('Monitor arrivé à échéance : fin normale, pas un échec', async () => {
+    spawnCapture.stdoutEvents = [
+      ...monitor('s2', 'tail -f app.log'),
+      { ...stoppee('s2'), summary: 'Watch s2' },
+      succes
+    ]
+    const { texte, res, statuts } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).not.toMatch(/Tâche de fond/)
+    expect(statuts).toContain('tache de fond terminee - Watch s2')
+  })
+
+  it('Monitor arrêté par TaskStop : aucun avis', async () => {
+    spawnCapture.stdoutEvents = [
+      ...monitor('s3', 'while true; do sleep 20; done'),
+      appelArret('toolu_stop', 's3'),
+      stoppee('s3'),
+      resultatOutil('toolu_stop', '{"message":"Successfully stopped task: s3"}'),
+      succes
+    ]
+    const { texte, res } = await envoyer()
+    expect(res.tachesDeFondARelancer).toBeUndefined()
+    expect(texte).not.toMatch(/Tâche de fond/)
+  })
+
+  /*
+   * PLUSIEURS `result` DANS UN MÊME PROCESSUS. Mesuré : une surveillance de 3 lignes donne 5 `result`,
+   * un par événement. Chacun remplaçait le précédent : seul le dernier appel restait compté.
+   */
+  it('additionne le coût et les jetons de tous les result du processus', async () => {
+    const session = 'sess-plusieurs-resultats'
+    spawnCapture.stdoutEvents = [
+      {
+        ...succes,
+        session_id: session,
+        total_cost_usd: 1,
+        usage: { input_tokens: 10, output_tokens: 5, cache_read_input_tokens: 100 }
+      },
+      {
+        ...succes,
+        origin: { kind: 'task-notification' },
+        session_id: session,
+        total_cost_usd: 1.25,
+        usage: {
+          input_tokens: 4,
+          output_tokens: 1,
+          cache_read_input_tokens: 200,
+          cache_creation_input_tokens: 30
+        }
+      }
+    ]
+    const { res } = await envoyer()
+    expect(res.usage?.costUsd).toBeCloseTo(1.25)
+    expect(res.usage?.inputTokens).toBe(344)
+    expect(res.usage?.outputTokens).toBe(6)
+    expect(res.usage?.cacheReadTokens).toBe(300)
+    expect(res.usage?.cacheCreationTokens).toBe(30)
+  })
+
+  it('tour de chat : Monitor et TaskStop sont déclarés ET autorisés sur la ligne du CLI', async () => {
+    spawnCapture.stdoutEvents = [succes]
+    await envoyer()
+    const args = spawnCapture.args
+    const declares = args[args.indexOf('--tools') + 1].split(',')
+    const debut = args.indexOf('--allowedTools') + 1
+    const fin = args.findIndex((a, i) => i >= debut && a.startsWith('--'))
+    const autorises = args.slice(debut, fin < 0 ? undefined : fin)
+    for (const outil of ['Monitor', 'TaskStop']) {
+      expect(declares).toContain(outil)
+      expect(autorises).toContain(outil)
+    }
   })
 
   it('sans dossier du tour connu, rien ne part dans le dossier de l’app — avis historique garde', async () => {

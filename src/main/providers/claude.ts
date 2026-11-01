@@ -45,6 +45,7 @@ import { balayerTemporairesOrphelins } from './temporaires-orphelins'
 import { attacherEvidenceALErreur } from './evidence-portee-par-erreur'
 import { tacheRelanceeParAutowin } from './taches-de-fond-suivies'
 import { isShellMutation, isVerificationCommand } from './evidence-vocabulary'
+import { OUTILS_D_EDITION, scriptHookCauseEnCours } from './cause-en-cours'
 import {
   codeDeSortieDuResultatClaude,
   scriptHookTestsNonComptes,
@@ -56,6 +57,7 @@ import {
 } from './workspace-mutation-evidence'
 import { attestIsolatedVerificationEvidence } from './causal-verification-evidence'
 import {
+  filDeLAppel,
   ProviderCallError,
   type Attachment,
   type ExecutionEvidence,
@@ -71,7 +73,7 @@ import {
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
-import { withClaudeAccountEnv } from '../claude-accounts'
+import { claudeCompteDuFil, withClaudeAccountEnv } from '../claude-accounts'
 import { coutDuTourDepuisCumul } from './claude-session-cost'
 import { sonderContexte, type IssueSonde } from './claude-sonde-contexte'
 import {
@@ -81,6 +83,17 @@ import {
   estOutilDEtapes,
   etapesSurDisque
 } from './claude-etapes'
+import {
+  ENV_CHANTIER,
+  OUTIL_WORKFLOW,
+  SuiviDesChantiers,
+  avisDeChantierCoupe,
+  avisDeChantierPrecedent,
+  avisDeFinDeChantier,
+  cumulerUsage,
+  demandeUnChantier,
+  silenceMaxChantierMs
+} from './claude-workflow'
 import { abortFailure } from './abort-diagnostic'
 import { advisorAccepte } from './claude-advisor'
 import { cheminRegistreReservations } from '../reservation-fichiers-app'
@@ -618,7 +631,11 @@ export function nomDeFichierPourPieceJointe(nom: string, mimeType: string): stri
   return (propre || 'fichier') + ext
 }
 
-export function materializeClaudeAttachments(attachments: Attachment[]): MaterializedAttachments {
+export function materializeClaudeAttachments(
+  attachments: Attachment[],
+  /** La consigne de fin de liste : elle nomme l'outil de lecture, qui dépend du moteur. */
+  consigneDeLecture = 'Utilise Read uniquement pour consulter ces fichiers si nécessaire.'
+): MaterializedAttachments {
   const dir = mkdtempSync(join(tmpdir(), 'autowin-os-attachments-'))
   const paths = attachments.map((attachment, index) => {
     const safeName =
@@ -665,7 +682,7 @@ export function materializeClaudeAttachments(attachments: Attachment[]): Materia
     promptSuffix:
       blocCourant +
       blocAncien +
-      '\nUtilise Read uniquement pour consulter ces fichiers si nécessaire.',
+      `\n${consigneDeLecture}`,
     cleanup: () =>
       rmAsync(dir, { recursive: true, force: true }).catch(() => {
         /* hygiene best-effort : un temporaire deja parti ne doit pas casser la fin d'appel */
@@ -1035,6 +1052,30 @@ export function dossierModAutowin(
 export const FENETRE_COMPACTION_CLI = 300_000
 
 /**
+ * ATTENDRE ET ARRÊTER EN ARRIÈRE-PLAN (conv-1370, lot 5, 2026-10-31). L'aide de Bash dit « Foreground
+ * `sleep` is blocked; use Monitor », même quand Monitor n'est pas chargé, et TaskStop est le seul
+ * moyen propre d'arrêter une commande de fond. Sondé sur les CLI 2.1.314 et 2.1.316 avec les drapeaux
+ * du chat : les deux répondent en `-p`, et coûtent +3 211 jetons par appel (13 827 → 17 038).
+ *
+ * PAS DANS LES TOURS DE RUN : sur 35 journaux de run en 3 jours, aucun `sleep` refusé et aucune tâche
+ * de fond restée ouverte. Ce coût se paierait à chaque appel de chaque étape, pour rien de mesuré.
+ * Le suivi plus bas ne dépend pas du chemin : les y ajouter tiendrait en une ligne.
+ */
+export const OUTILS_ARRIERE_PLAN = 'Monitor,TaskStop'
+
+/**
+ * LES OUTILS NATIFS D'UN TOUR DE CHAT, écrits UNE fois (conv-1362, lot 1/3) : le `--tools` du tour et
+ * celui de la question à côté (`question-a-cote.ts`) doivent rester IDENTIQUES. Le cache de l'API
+ * commence par les outils : une liste qui diffère d'un seul nom fait réécrire tout le fil, soit dix
+ * fois le prix sur un fil de 148 000 jetons (mesure dans `question-a-cote.ts`).
+ */
+export const OUTILS_TOUR_DE_CHAT =
+  'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,WebFetch,WebSearch,' +
+  OUTILS_ETAPES +
+  ',' +
+  OUTILS_ARRIERE_PLAN
+
+/**
  * Ce que le hook des agents lit à côté de son script pour la RÉSERVATION DES FICHIERS (conv-1083) :
  * le fil qui écrit, et le registre unique partagé par tous les agents. Fil du chat
  * (`conversationId`), sinon celui du run (`AUTOWIN_CONVERSATION_ID`). Sans fil connu, rien : le hook
@@ -1044,8 +1085,7 @@ export function confReservationFichiers(
   opts: SendOptions,
   racineDonnees: string
 ): { fil: string; registre: string } | undefined {
-  const fil =
-    opts.conversationId?.trim() || opts.execution?.agentEnv?.AUTOWIN_CONVERSATION_ID?.trim()
+  const fil = filDeLAppel(opts)
   return fil ? { fil, registre: cheminRegistreReservations(racineDonnees) } : undefined
 }
 
@@ -1063,11 +1103,19 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
     // il prime sur les réglages de l'utilisateur. Le statut de la session n'en montre rien : la
     // preuve est le banc rejoué. Source : https://code.claude.com/docs/en/cross-session-messaging
     crossSessionInbound: 'refuse',
+    // GROS CHANTIERS (conv-1362, lot conv-1366) : le CLI conseille moins de 10 agents par défaut, et
+    // même moins de 5 sur une offre Pro. Posé ici, dans les réglages d'Autowin, jamais dans le
+    // settings.json de l'utilisateur. Ce n'est qu'un conseil au modèle : sans effet tant que l'outil
+    // n'est pas chargé (`demandeUnChantier`). https://code.claude.com/docs/en/workflows.md
+    workflowSizeGuideline: 'unrestricted',
     hooks: {
       PreToolUse: [
         {
           // Edit/Write/MultiEdit/NotebookEdit : les réglages de la protection de prod (conv-738, faille 2).
-          matcher: 'Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit',
+          // Monitor exécute une commande shell (conv-1370, lot 5) : mêmes gardes que Bash. Mesuré sur
+          // le CLI 2.1.316 : un appel Monitor déclenche les hooks sous `Monitor` PUIS sous `Bash`, et
+          // tant qu'il restait dans le second groupe, une garde en panne laissait passer la commande.
+          matcher: 'Bash|PowerShell|Monitor|Edit|Write|MultiEdit|NotebookEdit',
           hooks: [
             // ÉCHEC FERMÉ (CLI ≥ 2.1.295) : une garde qui plante, ne démarre pas ou dépasse son
             // délai REFUSE la commande. Sans lui, mesuré le 2026-10-13 sur le CLI 2.1.296 : un script
@@ -1084,7 +1132,7 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
         {
           // Les AUTRES outils, pour le seul détecteur de boucle (conv-58) : matchers DISJOINTS du
           // premier, sinon un appel shell passerait deux fois et compterait double.
-          matcher: 'Read|Grep|Glob|WebFetch|WebSearch|Task|Agent|Monitor|mcp__.*',
+          matcher: 'Read|Grep|Glob|WebFetch|WebSearch|Task|Agent|mcp__.*',
           hooks: [{ type: 'command', command: `node ${q(hookGarde)}` }]
         }
       ]
@@ -1093,27 +1141,78 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
 }
 
 /**
+ * Un hook de plus APRÈS un outil, À LA SUITE de ceux déjà posés : deux hooks de ce genre vivent dans
+ * les mêmes réglages (conv-1353), et réécrire la clé `PostToolUse` effacerait celui d'avant. Sans
+ * `onFailure` : un hook après outil en panne ne doit rien bloquer, l'outil a déjà tourné.
+ */
+function avecHookApresOutil(
+  reglages: Record<string, unknown>,
+  matcher: string,
+  script: string
+): Record<string, unknown> {
+  const groupe = {
+    matcher,
+    hooks: [{ type: 'command', command: `node "${script.split('\\').join('/')}"` }]
+  }
+  const hooks = reglages.hooks as Record<string, unknown[] | undefined>
+  return {
+    ...reglages,
+    hooks: {
+      ...hooks,
+      PostToolUse: [...(hooks.PostToolUse ?? []), groupe],
+      PostToolUseFailure: [...(hooks.PostToolUseFailure ?? []), groupe]
+    }
+  }
+}
+
+/**
  * AVERTISSEMENT DES TESTS NON COMPTÉS (conv-1221, 2026-10-28) : un hook APRÈS chaque commande Bash
  * dit à l'agent qu'un test qu'il vient de lancer ne comptera pas sur le Board (script :
  * `scriptHookTestsNonComptes`). PostToolUse ET PostToolUseFailure : une ligne qui rend un code non
- * nul passe par le second (`npx vitest … | grep FAIL` sans résultat). Sans `onFailure` : un hook en
- * panne ne doit rien bloquer, la commande a déjà tourné. Tours de CHAT seulement (`hookTests`
- * absent ailleurs) : le Board ne compte que leurs tests, un agent de run relancerait pour rien.
+ * nul passe par le second (`npx vitest … | grep FAIL` sans résultat). Tours de CHAT seulement
+ * (`hookTests` absent ailleurs) : le Board ne compte que leurs tests, un agent de run relancerait
+ * pour rien.
  */
 export function avecAvertissementDesTests(
   reglages: Record<string, unknown>,
   hookTests: string | undefined
 ): Record<string, unknown> {
-  if (!hookTests) return reglages
-  const commande = `node "${hookTests.split('\\').join('/')}"`
-  const groupe = [{ matcher: 'Bash', hooks: [{ type: 'command', command: commande }] }]
-  return {
-    ...reglages,
-    hooks: {
-      ...(reglages.hooks as Record<string, unknown>),
-      PostToolUse: groupe,
-      PostToolUseFailure: groupe
-    }
+  return hookTests ? avecHookApresOutil(reglages, 'Bash', hookTests) : reglages
+}
+
+/**
+ * SIGNAL DE CAUSE (conv-1353, 2026-10-31) : un hook APRÈS chaque outil d'édition prévient l'agent, à
+ * la 3e modification d'un fichier sans cause vérifiée, que le contrôle final le refusera (script :
+ * `scriptHookCauseEnCours`). PostToolUse ET PostToolUseFailure, car une édition en échec compte aussi
+ * au contrôle final. Agents de run seulement : c'est eux que ce contrôle juge.
+ */
+export function avecSignalDeCause(
+  reglages: Record<string, unknown>,
+  hookCause: string | undefined
+): Record<string, unknown> {
+  return hookCause ? avecHookApresOutil(reglages, OUTILS_D_EDITION, hookCause) : reglages
+}
+
+/**
+ * Le script du signal de cause pour UN lancement, dans son dossier de réglages (nettoyé avec lui).
+ * Seulement pour un agent qui peut écrire : `send` reconnaît un agent de run à `execution`, et les
+ * lancements en lecture seule n'ont aucune édition à compter. Pas de `opts.conversationId` ici :
+ * l'orchestrateur ne le passe pas (mesuré, conv-1353), et un run porte son fil dans `agentEnv`.
+ *
+ * Écriture impossible → `undefined`, sans lever : dans `send`, une exception retirerait TOUS les
+ * réglages du lancement, gardes comprises, pour un simple avertissement perdu.
+ */
+export async function signalDeCauseDuLancement(
+  dossierReglages: string,
+  execution: SendOptions['execution']
+): Promise<string | undefined> {
+  if (!execution || execution.sandbox === 'read-only') return undefined
+  const script = join(dossierReglages, 'cause-en-cours.mjs')
+  try {
+    await writeFileAsync(script, scriptHookCauseEnCours(execution.cwd), 'utf8')
+    return script
+  } catch {
+    return undefined
   }
 }
 
@@ -1190,7 +1289,7 @@ export function argumentsMcpNoeudSkill(opts: SendOptions): {
  * Rend `undefined` si l'ecriture echoue : l'appelant retombe alors sur la chaine inline (capacite
  * preservee, fuite signalee) plutot que de perdre l'outillage du noeud.
  */
-function ecrireConfigMcp(
+export function ecrireConfigMcp(
   config: string
 ): { chemin: string; nettoyer: () => Promise<void> } | undefined {
   try {
@@ -1258,6 +1357,16 @@ export function resultatDeNotification(o: Record<string, unknown>): boolean {
 export function delaiFinApresResultatMs(env: NodeJS.ProcessEnv = process.env): number {
   const brut = Number(env.AUTOWIN_CLAUDE_FIN_APRES_RESULTAT_MS)
   return Number.isFinite(brut) && brut > 0 ? brut : 30_000
+}
+
+/**
+ * Silence accepté d'un CLI qui garde une surveillance `Monitor` ouverte (conv-1370, lot 5). Le CLI la
+ * clôt lui-même au plus tard à 10 min (schéma de l'outil : « Deadlines above 600000ms are capped ») :
+ * passé cette minute de marge, c'est lui qui est figé, et le tour est rendu au lieu de rester ouvert.
+ */
+export function limiteSurveillanceMs(env: NodeJS.ProcessEnv = process.env): number {
+  const brut = Number(env.AUTOWIN_CLAUDE_LIMITE_SURVEILLANCE_MS)
+  return Number.isFinite(brut) && brut > 0 ? brut : 11 * 60_000
 }
 
 export class ClaudeCliAdapter implements ProviderAdapter {
@@ -1612,7 +1721,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             // ÉTAPES DU TOUR (conv-304, 2026-10-17) : la liste de tâches de claude.exe, relayée
             // dans le fil par `claude-etapes.ts`. Coût mesuré : +2 850 jetons de prompt par appel.
             '--tools',
-            'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,' + OUTILS_WEB + ',' + OUTILS_ETAPES,
+            OUTILS_TOUR_DE_CHAT,
             '--allowedTools',
             'Read',
             'Grep',
@@ -1627,8 +1736,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             'Edit',
             'MultiEdit',
             ...autorises(OUTILS_ETAPES),
+            ...autorises(OUTILS_ARRIERE_PLAN),
             ...outilsMcpAutorises
           )
+          // GROS CHANTIERS (conv-1362, lot conv-1366) : `Workflow` s'ajoute à la liste du tour
+          // quand l'utilisateur le demande, et seulement là : sa définition pèse 8 242 jetons par
+          // appel (`claude-workflow.ts`). `OUTILS_TOUR_DE_CHAT` reste sans lui, pour que les tours
+          // ordinaires et la question à côté gardent le même début de prompt, donc le même cache.
+          if (demandeUnChantier(lastUser)) {
+            args[args.lastIndexOf('--tools') + 1] += `,${OUTIL_WORKFLOW}`
+            args.push(OUTIL_WORKFLOW) // Suite de `--allowedTools`, le dernier drapeau posé.
+          }
         }
       } else {
         // Aucun workspace resolu : plus rien a LIRE sur le disque, mais ce n'est pas une raison de
@@ -1691,9 +1809,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       await writeFileAsync(
         settingsFile,
         JSON.stringify(
-          avecAvertissementDesTests(
-            reglagesCliAutowin(hookGarde, await gardeNpmDuLancement(settingsDir, modAutowin)),
-            hookTests
+          avecSignalDeCause(
+            avecAvertissementDesTests(
+              reglagesCliAutowin(hookGarde, await gardeNpmDuLancement(settingsDir, modAutowin)),
+              hookTests
+            ),
+            await signalDeCauseDuLancement(settingsDir, execution)
           )
         ),
         'utf8'
@@ -1809,13 +1930,16 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       await attendreMiseAJourClaudeCli()
       envDuTour = environnementAgent(
         {
-          ...withClaudeAccountEnv(process.env),
+          // Le compte choisi pour le fil prime sur le compte actif de l'application (conv-1416).
+          ...withClaudeAccountEnv(process.env, claudeCompteDuFil(filDeLAppel(opts))?.env),
           // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
           ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
           // Outil direct (chat ou nœud skill) : pas de coupure à 60 s (voir envDelaiOutilsMcp).
           ...envDelaiOutilsMcp(argsMcp.mcp.length > 0, process.env),
           // Aucun Electron lancé par l'agent n'ouvre sa boîte d'erreur chez l'utilisateur.
-          ...envFiletElectronAgent(modAutowin, process.env)
+          ...envFiletElectronAgent(modAutowin, process.env),
+          // Tour de chantier : le CLI ne le tue pas 10 min après son tour (voir `ENV_CHANTIER`).
+          ...(args.includes(OUTIL_WORKFLOW) ? ENV_CHANTIER : {})
         },
         execution?.agentEnv
       )
@@ -2037,6 +2161,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       queue.push({ delta: '', artifacts: streamed })
       wake()
     }
+    /** Gros chantiers de cet appel (outil `Workflow` du CLI) : voir `claude-workflow.ts`. */
+    const suiviChantiers = new SuiviDesChantiers()
     /** Taches de fond lancees et pas terminees (id -> commande lisible, vue arretee ?). Voir `task_started`. */
     const tachesDeFond = new Map<
       string,
@@ -2064,6 +2190,25 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const appelsShell = new Map<string, { commande: string; enFond: boolean }>()
     /** Commandes shell coupees que l'appelant relancera (voir `SendOptions.relancerTachesDeFond`). */
     const tachesDeFondARelancer: TacheDeFondARelancer[] = []
+    /**
+     * UNE SURVEILLANCE `Monitor` N'EST PAS UNE COMMANDE DE FOND (conv-1370, lot 5, 2026-10-31).
+     *
+     * Mesuré sur le CLI 2.1.314 : elle arrive en `task_type: local_bash`, `is_backgrounded: true`,
+     * comme un Bash de fond ; seul l'appel d'outil la distingue. Mais après son `result` le CLI reste
+     * en vie et rouvre un tour à CHAQUE ligne (une ligne 45 s plus tard a bien été lue). Elle tient
+     * donc le processus ouvert, n'est jamais relancée, et n'est jamais annoncée perdue : à sa fin,
+     * échéance comprise (`status: stopped`), le CLI prévient lui-même le modèle.
+     */
+    const appelsMonitor = new Set<string>()
+    const surveillances = new Set<string>()
+    /**
+     * ARRÊTÉE PAR LE MODÈLE = FINIE (conv-1370, lot 5). `TaskStop` donne une `task_notification`
+     * `stopped`, le MÊME mot que la coupure de fin de tour : seul l'appel distingue les deux, et sans
+     * lui la commande repartait au tour suivant par `tachesDeFondARelancer`. L'appel échoué (« No task
+     * found », `is_error`) n'arrête rien : la tâche reste suivie.
+     */
+    const appelsArret = new Map<string, string>()
+    const arretsDemandes = new Set<string>()
     const pendingTools = new Map<
       string,
       {
@@ -2098,10 +2243,17 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const forceSettle = (err: Error): void => {
       if (!errored) errored = err
       arreterGuetSortie?.()
+      arreterBattementDuChantier()
       done = true
       wake()
     }
+    /** Le tour s'arrête sans que le CLI ait pu fermer ses chantiers : la carte doit le dire. */
+    const fermerLesChantiers = (statut: 'echec' | 'arrete'): void => {
+      for (const ligne of suiviChantiers.clore(statut, Date.now()))
+        queue.push({ delta: '', status: ligne })
+    }
     execution?.registerTermination?.((reason) => {
+      fermerLesChantiers('arrete')
       killEscalate(child)
       forceSettle(new Error(reason))
     })
@@ -2110,11 +2262,60 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const watchdog = createStreamWatchdog({
       inactivityMs: SUBAGENT_INACTIVITY_MS,
       onTrip: () => {
+        fermerLesChantiers('echec')
         killEscalate(child)
         forceSettle(new Error('claude CLI figé (aucune sortie) — tué par le watchdog'))
       }
     })
+    /*
+     * LE SILENCE D'UN CHANTIER N'EST PAS UN CLI FIGÉ (conv-1362, lot conv-1366).
+     *
+     * Mesuré sur le CLI 2.1.314 : pendant qu'un agent attend un outil, le flux se tait entièrement
+     * (167 s sans une ligne sur un chantier de 176 s, aucun `tool_progress` ni `task_progress`). Deux
+     * gardes le prendraient pour un tour mort : le détecteur ci-dessus à 5 min, et le veilleur du
+     * tour à 20 min (`run-pilot-chat.ts`), qui ne voit que les événements du fil.
+     *
+     * Tant qu'un chantier est ouvert, on les réarme donc nous-mêmes, et le fil reçoit l'état courant.
+     * Pas sans fin : au-delà de `silenceMaxChantierMs`, plus de battement, et le détecteur ordinaire
+     * coupe un CLI réellement figé. Le CLI surveille lui-même ses agents figés, pas lui-même.
+     */
+    let dernierFluxMs = Date.now()
+    let battementDuChantier: ReturnType<typeof setInterval> | undefined
+    function arreterBattementDuChantier(): void {
+      if (battementDuChantier) clearInterval(battementDuChantier)
+      battementDuChantier = undefined
+    }
+    const tenirLeChantierEnVie = (): void => {
+      // Un chantier qui s'ouvre après un `result` annule la coupure programmée par ce `result`.
+      if (finApresResultat) clearTimeout(finApresResultat)
+      finApresResultat = undefined
+      if (battementDuChantier) return
+      battementDuChantier = setInterval(
+        () => {
+          if (!suiviChantiers.ouvert() && surveillances.size === 0)
+            return arreterBattementDuChantier()
+          const silenceMs = Date.now() - dernierFluxMs
+          // Même silence pour une surveillance qui attend sa ligne (conv-1370, lot 5), bornée plus
+          // court : le CLI la clôt seul à 10 min. Au-delà, il est figé et la réponse est rendue.
+          if (surveillances.size > 0 && silenceMs > limiteSurveillanceMs()) {
+            surveillances.clear()
+            queue.push({ delta: '', status: 'surveillance sans fin - arretee par Autowin' })
+            if (resultSeen && !suiviChantiers.attendUnResultat()) armerFinApresResultat()
+            wake()
+            return
+          }
+          if (silenceMs > silenceMaxChantierMs()) return
+          watchdog.beat()
+          for (const ligne of suiviChantiers.battement(Date.now()))
+            queue.push({ delta: '', status: ligne })
+          wake()
+        },
+        Math.min(60_000, SUBAGENT_INACTIVITY_MS / 3)
+      )
+      battementDuChantier.unref?.()
+    }
     const surStop = (): void => {
+      fermerLesChantiers('arrete')
       killEscalate(child)
       forceSettle(abortFailure('claude CLI', opts.signal))
     }
@@ -2163,15 +2364,30 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * neuve), sinon celle qu'on reprend.
      */
     let sessionDesEtapes = opts.resumeSessionId
-    const configDesEtapes = withClaudeAccountEnv(process.env)
+    const configDesEtapes = withClaudeAccountEnv(
+      process.env,
+      claudeCompteDuFil(filDeLAppel(opts))?.env
+    )
     const suiviEtapes = new SuiviDesEtapes(() =>
       sessionDesEtapes ? etapesSurDisque(dossierDesEtapes(sessionDesEtapes, configDesEtapes)) : []
     )
 
+    /** Vrai pendant le traitement du `result` qui clôt un chantier (voir plus bas). */
+    let resultatDeChantier = false
+    /** Un `result` vient de clore un tour du CLI : le texte suivant commence un autre message. */
+    let tourDuCliClos = false
+    const chantiersSignales = new Set<string>()
     const handleEvent = (o: Record<string, unknown>): void => {
       const t = o['type']
       if (t === 'system' && o['subtype'] === 'init' && typeof o['session_id'] === 'string')
         sessionDesEtapes = o['session_id'] as string
+      // GROS CHANTIER : relayé au fil par les mêmes lignes de statut que les étapes du tour. Sa tâche
+      // et celles de ses agents ne passent pas par le suivi des tâches de fond plus bas, qui les
+      // annoncerait perdues à la fin du tour.
+      const chantier = suiviChantiers.recevoir(o, Date.now())
+      for (const ligne of chantier.lignes) queue.push({ delta: '', status: ligne })
+      if (suiviChantiers.ouvert()) tenirLeChantierEnVie()
+      if (chantier.absorbe) return
       if (t === 'system' && o['subtype'] === 'api_retry') {
         // Surcharge API (529) : le CLI retente en backoff exponentiel jusqu'a 10 fois, soit 2-3 min
         // pendant lesquelles il n'emet RIEN d'autre. Sans ce relais, l'UI reste sur un spinner muet
@@ -2272,7 +2488,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           })
           return
         }
-        if (demarre) {
+        // `tool_use_id` est sur les DEUX événements (mesuré, CLI 2.1.314).
+        const surveillance = appelsMonitor.has(String(o['tool_use_id'] ?? ''))
+        if (surveillance) {
+          if (demarre) {
+            surveillances.add(idTache)
+            tenirLeChantierEnVie()
+          } else surveillances.delete(idTache)
+        } else if (demarre) {
           const toolUseId = String(o['tool_use_id'] ?? '')
           tachesDeFond.set(idTache, {
             // `description` sert a l'AFFICHAGE seulement : c'est une phrase, meme pour `local_bash`.
@@ -2287,7 +2510,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           })
         } else {
           const st = String(o['status'] ?? '').toLowerCase()
-          if (st === 'completed' || st === 'failed') tachesDeFond.delete(idTache)
+          if (st === 'completed' || st === 'failed' || arretsDemandes.has(idTache))
+            tachesDeFond.delete(idTache)
           else {
             const connue = tachesDeFond.get(idTache)
             tachesDeFond.set(idTache, {
@@ -2311,9 +2535,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
         const statut = String(o['status'] ?? '').toLowerCase()
         // On NOMME l'echec au lieu de rendre le meme libelle qu'une reussite : une tache de fond qui
-        // rate en silence est exactement ce que ce relais existe pour supprimer.
+        // rate en silence est exactement ce que ce relais existe pour supprimer. Un arrêt VOULU
+        // (`TaskStop`, échéance d'une surveillance) n'en est pas un : `stopped` s'y lirait en rouge.
+        const arretVoulu = statut === 'stopped' && (surveillance || arretsDemandes.has(idTache))
         const issue =
-          statut === 'completed'
+          statut === 'completed' || arretVoulu
             ? 'terminee'
             : statut === 'failed'
               ? 'en echec'
@@ -2424,7 +2650,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       }
       if (t === 'result') {
         resultSeen = true
-        armerFinApresResultat()
+        tourDuCliClos = true
+        resultatDeChantier = suiviChantiers.resultatRecu(o)
+        // Le premier `result` d'un chantier ne clôt rien. Mesuré : il arrive après la fin du chantier
+        // (182,8 s sur 182,8), parfois 2,9 s avant le second, et ce qui les sépare peut durer si
+        // le modèle travaille encore. La coupure ne s'arme donc qu'au dernier. Même règle pour une
+        // surveillance ouverte : la couper à 30 s perdrait toute ligne plus tardive (conv-1370, lot 5).
+        if (!suiviChantiers.attendUnResultat() && surveillances.size === 0) armerFinApresResultat()
       }
       if (t === 'assistant') {
         const msg = o['message'] as
@@ -2463,7 +2695,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * Le MÊME séparateur part dans `text` (le brut relu en aval) et dans le delta diffusé :
              * une divergence entre les deux rejouerait le collage sur l'un des deux chemins.
              */
-            const separation = separationEntreBlocsTexte(text, part.text)
+            // Une surveillance rouvre un tour à chaque événement : la règle étroite ci-dessus les
+            // soudait (mesuré, « ATTENTERECU TARD-LIGNE », conv-1370 lot 5).
+            const separation =
+              tourDuCliClos && text && !text.endsWith('\n')
+                ? '\n\n'
+                : separationEntreBlocsTexte(text, part.text)
+            tourDuCliClos = false
             if (msg?.model !== '<synthetic>') {
               const id = msg?.id ?? ''
               const dernier = textesMessages[textesMessages.length - 1]
@@ -2496,6 +2734,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
                 commande: part.input.command,
                 enFond: part.input.run_in_background === true
               })
+            if (part.name === 'Monitor') appelsMonitor.add(part.id)
+            if (part.name === 'TaskStop') {
+              // `shell_id` : ancien nom du champ, encore au schéma de l'outil (CLI 2.1.316).
+              const visee = String(part.input?.task_id ?? part.input?.shell_id ?? '')
+              appelsArret.set(part.id, visee)
+              arretsDemandes.add(visee)
+            }
             pendingTools.set(part.id, {
               name: part.name,
               command,
@@ -2521,7 +2766,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * nourrit `watchdog.beat()` a chaque ligne de stdout, celles-ci comprises — et s'en
              * servait pour le laisser tourner sans jamais le dire a l'utilisateur.
              */
-            const cibleEntiere = filePath || command
+            const cibleEntiere = filePath || command || (appelsArret.get(part.id) ?? '')
             const cible = cibleEntiere.slice(0, 120)
             // UNE SEULE LIGNE : ce libelle s'affiche dans l'en-tete du bloc « Reflexion » et dans son
             // corps deplie, ou chaque signe de vie occupe UNE ligne. Des retours a la ligne dans le
@@ -2557,6 +2802,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // `bcdda33b-….stdout.jsonl` l.1753) : le modele l'a lu, rien a signaler ni a relancer.
           for (const [id, tache] of tachesDeFond)
             if (!tache.enFond && tache.toolUseId === part.tool_use_id) tachesDeFond.delete(id)
+          const tacheVisee = appelsArret.get(part.tool_use_id)
+          if (tacheVisee !== undefined) {
+            appelsArret.delete(part.tool_use_id)
+            if (part.is_error === true) arretsDemandes.delete(tacheVisee)
+            else tachesDeFond.delete(tacheVisee)
+          }
           const lignesEtapes = suiviEtapes.resultat(
             part.tool_use_id,
             part.is_error === true,
@@ -2628,6 +2879,34 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
       } else if (t === 'result') {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
+        if (resultatDeChantier) {
+          /*
+           * LE DERNIER `result` EST LA RÉPONSE DU TOUR (conv-1362, lot conv-1366). Le texte accumulé
+           * commence par « c'est lancé en arrière-plan », qui ne dit plus rien une fois le chantier
+           * fini. La récupération d'un `<cmd>` s'appuie sur des positions dans ce texte : elles ne
+           * valent plus. Un chantier mal fini se dit ici, quoi que le modèle ait écrit.
+           */
+          if (typeof o['result'] === 'string' && o['result'].trim()) {
+            text = o['result'] as string
+            textesMessages.length = 0
+          }
+          for (const chantierFini of suiviChantiers.instantanes()) {
+            if (chantierFini.statut === 'en-cours' || chantiersSignales.has(chantierFini.id))
+              continue
+            chantiersSignales.add(chantierFini.id)
+            const avis = avisDeFinDeChantier(chantierFini)
+            if (!avis) continue
+            text += avis
+            queue.push({ delta: avis })
+          }
+        }
+        // Un chantier coupé à un tour précédent, et pas relancé ici : ses agents finis restent
+        // repris du cache, ce n'est pas une tâche de fond perdue.
+        for (const nom of suiviChantiers.chantiersCoupes()) {
+          const avis = avisDeChantierPrecedent(nom)
+          text += avis
+          queue.push({ delta: avis })
+        }
         if (tachesDeFond.size > 0) {
           /*
            * RELANCEE PAR L'APPELANT, PAS PERDUE. Quand le tour de chat sait relancer une commande
@@ -2707,7 +2986,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const normalizedUsage = normalizeClaudeUsage(o['usage'], coutDuTour, hasReportedCost)
         if (normalizedUsage)
           usage = {
-            ...normalizedUsage,
+            // Deux `result` dans un appel (chantier, tâche de fond) : le coût de chacun est déjà
+            // dé-cumulé, le tour vaut leur somme. Avant, le second effaçait le premier.
+            ...cumulerUsage(usage, normalizedUsage),
             // AUCUN REPLI SUR LE CUMUL. Le champ pretendait « dire d'ou il vient » — il ne le
             // disait pas : une occupation reellement mesuree et un majorant recopie du cumul
             // sortaient d'ici sous la MEME forme, donc plus rien en aval ne pouvait les separer.
@@ -2786,6 +3067,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           /* ligne non-JSON (bruit) — ignorée */
         }
       }
+      dernierFluxMs = Date.now()
       watchdog.beat() // activité observée → réarme le timer d'inactivité
       wake()
     }
@@ -2858,6 +3140,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (finApresResultat) clearTimeout(finApresResultat)
       retirerEcouteStop()
       arreterGuetSortie?.()
+      arreterBattementDuChantier()
       watchdog.dispose()
       if (!childPid) execution?.onSpawnIntent?.(spawnToken, false)
       /*
@@ -2894,6 +3177,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (finApresResultat) clearTimeout(finApresResultat)
       retirerEcouteStop()
       arreterGuetSortie?.()
+      arreterBattementDuChantier()
       const tailError = await tailSettled
       watchdog.dispose()
       if (childPid) execution?.onProcess?.(childPid, false)
@@ -2914,6 +3198,18 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       }
       if (tailError && !errored) {
         errored = tailError instanceof Error ? tailError : new Error(String(tailError))
+      }
+      // CLI sorti sans la réponse d'un chantier (mesuré : il sort en code 0 après en avoir tué un) :
+      // sans cet avis, « c'est lancé en arrière-plan » restait la réponse du tour, comme si le
+      // travail continuait quelque part.
+      const coupes = suiviChantiers.chantiersSansReponse()
+      if (coupes.length > 0) {
+        fermerLesChantiers('echec')
+        const avis = errored ? '' : coupes.map(avisDeChantierCoupe).join('')
+        if (avis) {
+          text += avis
+          queue.push({ delta: avis })
+        }
       }
       if (code !== 0 && !errored) {
         // Un NTSTATUS decimal brut (« exit 1073807364 ») ne dit rien : on nomme le statut systeme

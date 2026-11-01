@@ -39,6 +39,11 @@ export type ModelsIpcDeps = {
   synchroniserFabric: () => void
   /** Vrai dans une instance isolée de test : les quotas y sont une fixture, jamais un appel réel. */
   isolatedTestInstance: boolean
+  /**
+   * Le dossier du compte Claude dont un fil veut lire le quota (conv-1416), ou rien quand ce compte
+   * est déjà celui que le relevé général décrit, ou qu'il a été retiré.
+   */
+  compteClaudeDuReleve: (id: string) => { configDir: string | undefined } | undefined
 }
 
 export function registerModelsIpc({
@@ -47,7 +52,8 @@ export function registerModelsIpc({
   lireModeles,
   lireTopologie,
   synchroniserFabric,
-  isolatedTestInstance
+  isolatedTestInstance,
+  compteClaudeDuReleve
 }: ModelsIpcDeps): void {
   ipcMain.handle('os:models:list', async (event, force = false) => {
     assertTrustedRendererSender(event, 'Model catalog')
@@ -97,9 +103,12 @@ export function registerModelsIpc({
     if (result.result === 'reset') invalidateModelQuotaCache()
     return result
   })
-  ipcMain.handle('os:models:quotas', async (event, force = false) => {
+  ipcMain.handle('os:models:quotas', async (event, force = false, compteDuFil?: unknown) => {
     assertTrustedRendererSender(event, 'Model quotas')
     if (typeof force !== 'boolean') throw new Error('Option de rafraîchissement invalide')
+    if (compteDuFil !== undefined && typeof compteDuFil !== 'string') {
+      throw new Error('Compte de quota invalide')
+    }
     const models = modelCatalog.current()
     if (isolatedTestInstance) {
       const observedAt = new Date().toISOString()
@@ -150,6 +159,7 @@ export function registerModelsIpc({
         }
       })
     }
-    return getModelQuotaSnapshot(models, { force })
+    const compteClaude = compteDuFil ? compteClaudeDuReleve(compteDuFil) : undefined
+    return getModelQuotaSnapshot(models, { force, ...(compteClaude ? { compteClaude } : {}) })
   })
 }

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
 import { refusReglageProd } from '../prod-run-guard'
+import { resoudreBash } from '../chat/relance-taches-de-fond'
 import { findClaudeExecutable, gardeNpmDuDepot, gardeNpmDuLancement, reglagesCliAutowin } from './claude'
 
 /** Le garde npm RÉEL du dépôt Autowin (`scripts/garde-npm-modules.mjs`). */
@@ -81,7 +82,9 @@ async function tourAvecGarde(
    * Le garde npm : un CONTENU de script (écrit dans le dossier du banc), `{ chemin }` d'un script
    * existant, ou une fonction qui reçoit le dossier de réglages du lancement et rend le chemin.
    */
-  gardeNpm?: string | { chemin: string } | ((dossierReglages: string) => Promise<string | undefined>)
+  gardeNpm?: string | { chemin: string } | ((dossierReglages: string) => Promise<string | undefined>),
+  /** `Monitor` : le « modèle » lance la commande témoin par une surveillance (conv-1370, lot 5). */
+  outil?: 'Monitor'
 ): Promise<{ temoinCree: boolean; resultat?: ResultatOutil; sortie: string }> {
   // Le dossier du banc EST un dossier de réglages d'agent : il en porte le préfixe. Effet voulu : le
   // nettoyeur de fin de suite (`tests/temp-cleanup.ts`, `PREFIXES_VIVANTS_DE_LAPP`) l'épargne. Mesuré
@@ -121,14 +124,15 @@ async function tourAvecGarde(
           .find((c) => c.type === 'tool_result') as ResultatOutil | undefined
         const outils = (r.tools ?? []).map((t) => t.name)
         // Sur Windows l'outil shell du CLI s'appelle `PowerShell`, ailleurs `Bash` : on prend celui offert.
-        const shell = outils.find((n) => n === 'Bash' || n === 'PowerShell')
+        const shell = outil ?? outils.find((n) => n === 'Bash' || n === 'PowerShell')
         if (retour) resultat = retour
+        const offert = shell !== undefined && outils.includes(shell)
         const evenements =
-          retour || !shell || requetes > 4
+          retour || !offert || requetes > 4
             ? messageSse({ type: 'text', text: 'fin' })
             : // « npm » dans le texte : le vrai garde npm va jusqu'à l'analyse de la commande au lieu
               // de sortir dès son premier filtre (`/\bnpm/`). Elle reste anodine : `echo`, pas npm.
-              messageSse({ type: 'tool_use', name: shell, input: { command: `echo npm x > ${temoin}`, description: 'témoin du banc' } })
+              messageSse({ type: 'tool_use', name: shell, input: { command: `echo npm x > ${temoin}`, description: 'témoin du banc', ...(outil === 'Monitor' ? { timeout_ms: 20_000 } : {}) } })
         res.writeHead(200, { 'content-type': 'text/event-stream' })
         for (const e of evenements) res.write(`event: ${(e as { type: string }).type}\ndata: ${JSON.stringify(e)}\n\n`)
         res.end()
@@ -143,7 +147,9 @@ async function tourAvecGarde(
       ANTHROPIC_API_KEY: 'sk-ant-banc-local',
       CLAUDE_CONFIG_DIR: join(dir, 'config-cli'),
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
-      DISABLE_AUTOUPDATER: '1'
+      DISABLE_AUTOUPDATER: '1',
+      // Sous Windows, Monitor n'existe qu'avec Git Bash, et le CLI du banc ne le trouve pas seul.
+      ...(outil ? { CLAUDE_CODE_GIT_BASH_PATH: resoudreBash().split('\\').join('/') } : {})
     }
     delete env.CLAUDE_CODE_OAUTH_TOKEN
     delete env.ANTHROPIC_AUTH_TOKEN
@@ -153,7 +159,8 @@ async function tourAvecGarde(
     const sortie = await new Promise<string>((ok, ko) => {
       const p = spawn(
         CLI!,
-        ['-p', 'lance la commande', '--output-format', 'stream-json', '--verbose', '--setting-sources', '', '--settings', settings, '--permission-mode', 'bypassPermissions', '--model', 'claude-sonnet-4-5'],
+        // `--tools` pour Monitor : sans lui, le CLI du banc ne le met pas dans sa liste d'outils.
+        ['-p', 'lance la commande', '--output-format', 'stream-json', '--verbose', '--setting-sources', '', '--settings', settings, '--permission-mode', 'bypassPermissions', '--model', 'claude-sonnet-4-5', ...(outil ? ['--tools', `Bash,${outil}`] : [])],
         { env, cwd: dir }
       )
       let out = ''
@@ -224,6 +231,28 @@ describe.skipIf(!CLI_AVEC_ONFAILURE)(`vrai CLI ${VERSION?.[0] ?? '(introuvable o
     expect(t.temoinCree).toBe(false)
     expect(t.resultat!.is_error).toBe(true)
     expect(String(t.resultat!.content)).toMatch(/blocking because onFailure is "block"/)
+  }, 60_000)
+
+  it('MONITOR lance une commande : une garde qui plante la BLOQUE aussi (conv-1370, lot 5)', async () => {
+    const t = await tourAvecGarde("throw new Error('garde en panne')\n", undefined, 'Monitor')
+    expect(t.resultat, t.sortie.slice(-2000)).toBeDefined()
+    expect(t.temoinCree).toBe(false)
+    expect(t.resultat!.is_error).toBe(true)
+    expect(String(t.resultat!.content)).toMatch(/blocking because onFailure is "block"/)
+  }, 60_000)
+
+  it('MONITOR : un garde npm qui plante la bloque, comme pour Bash', async () => {
+    const t = await tourAvecGarde(scriptHookGardes(refusReglageProd), "throw new Error('garde npm en panne')\n", 'Monitor')
+    expect(t.resultat, t.sortie.slice(-2000)).toBeDefined()
+    expect(t.temoinCree).toBe(false)
+    expect(String(t.resultat!.content)).toMatch(/garde-npm-modules\.mjs/)
+  }, 60_000)
+
+  it('témoin Monitor : la VRAIE garde, saine, laisse passer la commande', async () => {
+    const t = await tourAvecGarde(scriptHookGardes(refusReglageProd), undefined, 'Monitor')
+    expect(t.resultat, t.sortie.slice(-2000)).toBeDefined()
+    expect(t.resultat!.is_error, String(t.resultat!.content)).not.toBe(true)
+    expect(t.temoinCree).toBe(true)
   }, 60_000)
 
   it('témoin : la VRAIE garde, saine, laisse passer une commande anodine', async () => {

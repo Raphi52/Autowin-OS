@@ -294,6 +294,18 @@ export function ModelQuotaIndicator({
   const popoverRef = useRef<HTMLElement>(null)
   const [ancrage, setAncrage] = useState<{ left: number; bottom: number; width: number }>()
   const requestSequenceRef = useRef(0)
+  /**
+   * LA BARRE PARLE DU MÊME COMPTE QUE LA PUCE (conv-1416) : celui choisi pour le fil ouvert, sinon
+   * le compte de l'application. Changer de fil ou de compte recrée cette lecture, donc relit aussitôt.
+   */
+  const compteDuFil = comptes?.selectedId
+  const lireQuotas = useCallback(
+    (force: boolean): Promise<ModelQuotaSnapshot> => {
+      if (compteDuFil) return window.api.modelQuotas(force, compteDuFil)
+      return force ? window.api.modelQuotas(true) : window.api.modelQuotas()
+    },
+    [compteDuFil]
+  )
 
   const refresh = useCallback(async (): Promise<void> => {
     if (typeof window.api?.modelQuotas !== 'function') {
@@ -311,7 +323,7 @@ export function ModelQuotaIndicator({
         .catch(() => setResets(undefined))
     }
     try {
-      const value = await window.api.modelQuotas(true)
+      const value = await lireQuotas(true)
       if (requestSequence === requestSequenceRef.current) setSnapshot(value)
     } catch (failure) {
       if (requestSequence === requestSequenceRef.current) {
@@ -320,15 +332,14 @@ export function ModelQuotaIndicator({
     } finally {
       if (requestSequence === requestSequenceRef.current) setLoading(false)
     }
-  }, [])
+  }, [lireQuotas])
 
   useEffect(() => {
     let active = true
     if (typeof window.api?.modelQuotas !== 'function') return
     const load = (): void => {
       const requestSequence = ++requestSequenceRef.current
-      void window.api
-        .modelQuotas()
+      void lireQuotas(false)
         .then((value) => {
           if (active && requestSequence === requestSequenceRef.current) {
             setSnapshot(value)
@@ -347,7 +358,7 @@ export function ModelQuotaIndicator({
       active = false
       window.clearInterval(timer)
     }
-  }, [])
+  }, [lireQuotas])
 
   // Un changement de compte (Agents > Routage) rend le quota affiche faux immediatement : on
   // recharge sur signal, sans attendre le clic de l'utilisateur ni le rafraichissement periodique.

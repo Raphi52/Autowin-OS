@@ -788,6 +788,64 @@ describe('quota d’un compte nommé', () => {
     )
   })
 
+  /*
+   * Le constat de conv-1403 (conv-1416) : la puce disait le compte pro, la barre montrait gmail. La barre
+   * d'un fil au compte choisi décrit CE compte, sans toucher au relevé du compte actif.
+   */
+  it('relevé vu d’un fil au compte choisi : CE compte, sans remplacer le relevé du compte actif', async () => {
+    const { home, dir } = dossierDeCompte('jeton-du-compte-choisi-assez-long')
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude', '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'jeton-du-compte-actif-assez-long' } })
+    )
+    const fetchFn = vi.fn(async (_url: string | URL | Request, init?: RequestInit) =>
+      new Headers(init?.headers).get('authorization')?.includes('choisi')
+        ? enTetes('0.0', '1.0')
+        : enTetes('0.2', '0.3')
+    )
+    const claudeDe = (snapshot: Awaited<ReturnType<typeof getModelQuotaSnapshot>>) =>
+      snapshot.models.find((model) => model.provider === 'claude')
+
+    const vu = await getModelQuotaSnapshot(models, {
+      home,
+      fetchFn,
+      force: true,
+      now: NOW,
+      compteClaude: { configDir: dir }
+    })
+    expect(claudeDe(vu)?.windows).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'seven-day', usedPercent: 100 })])
+    )
+
+    const actif = await getModelQuotaSnapshot(models, { home, fetchFn, now: NOW })
+    expect(claudeDe(actif)?.windows).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'seven-day', usedPercent: 30 })])
+    )
+  })
+
+  it('compte choisi illisible : la barre le dit, jamais les chiffres d’un autre compte', async () => {
+    const { home, dir } = dossierDeCompte(undefined)
+    mkdirSync(join(home, '.claude'), { recursive: true })
+    writeFileSync(
+      join(home, '.claude', '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { accessToken: 'jeton-du-compte-actif-assez-long' } })
+    )
+    const fetchFn = vi.fn(async () => enTetes('0.2', '0.3'))
+
+    const vu = await getModelQuotaSnapshot(models, {
+      home,
+      fetchFn,
+      force: true,
+      now: NOW,
+      compteClaude: { configDir: dir }
+    })
+
+    const claude = vu.models.find((model) => model.provider === 'claude')
+    expect(claude?.status).toBe('unavailable')
+    expect(claude?.windows).toEqual([])
+  })
+
   it('compte non connecté : aucune mesure, jamais l’historique Desktop partagé', async () => {
     const { home, dir } = dossierDeCompte(undefined)
     const fetchFn = vi.fn(async () => enTetes('0.1', '0.1'))

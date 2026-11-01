@@ -244,6 +244,11 @@ describe('catalogue indexé (provider, motif) — aucun tarif ajouté, seule la 
       inputPerMTok: 0.2,
       outputPerMTok: 1.2
     })
+    // Même famille « luna », moitié du prix : le motif générique ne doit pas l'attraper.
+    expect(modelRate('gpt-6-luna', 'codex')).toMatchObject({
+      inputPerMTok: 0.1,
+      outputPerMTok: 0.5
+    })
   })
 
   it('un modele dont AUCUN catalogue ne parle ne rend toujours rien', () => {
