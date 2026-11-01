@@ -27,14 +27,14 @@ export interface RangDuLot {
 
 /**
  * LES LOTS D'UNE SÉLECTION (conv-1080, 2026-10-22). Le panneau découpe une sélection en lots de quelques
- * pistes, lancés l'un après l'autre : sur 49 runs de sélection, 16 avaient été coupés par la limite de
- * session du modèle, avec 6 pistes en moyenne — un run coupé à la 5ᵉ piste ne livrait rien.
+ * pistes, chacun dans son fil depuis conv-1333 : sur 49 runs de sélection, 16 avaient été coupés par la
+ * limite de session du modèle, avec 6 pistes en moyenne — un run coupé à la 5ᵉ piste ne livrait rien.
  *
- * La ligne est ÉCRITE par le panneau et LUE par la mémoire du scout : le lot 2 ne doit pas défaire
- * les pistes prises par le lot 1 (`noterChoixScout`). Un seul endroit pour les deux, comme l'en-tête.
+ * La ligne est ÉCRITE par le panneau et LUE par la mémoire du scout : les lots ne doivent pas défaire
+ * les pistes prises l'un par l'autre (`noterChoixScout`). Un seul endroit pour les deux, comme l'en-tête.
  */
 export function ligneDuLot(lot: RangDuLot): string {
-  return `Lot ${lot.numero} sur ${lot.total} de la sélection : les autres pistes partent dans leurs propres lots, l’un après l’autre — ne les traite pas ici.`
+  return `Lot ${lot.numero} sur ${lot.total} de la sélection : les autres pistes partent dans leurs propres lots — ne les traite pas ici.`
 }
 
 const LIGNE_DU_LOT = /(?:^|\n)\s*Lot\s+(\d+)\s+sur\s+(\d+)\s+de\s+la\s+s[ée]lection\b/iu
