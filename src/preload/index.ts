@@ -117,7 +117,12 @@ import type {
   ResultatFermetureGeree,
   ResultatListeBureaux
 } from '../shared/hdesk-gestion'
-import { CANAUX_NAVIGATEUR, type ApiNavigateur, type EtatNavigateur } from '../shared/navigateur'
+import {
+  CANAUX_NAVIGATEUR,
+  type ApiNavigateur,
+  type EtatNavigateur,
+  type RectNavigateur
+} from '../shared/navigateur'
 
 /**
  * NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 2/5) : la forme est celle du contrat `ApiNavigateur`,
@@ -167,6 +172,9 @@ const navigateur: ApiNavigateur = {
 /** API exposée au renderer — chaque méthode a un handler main réel. */
 const api = {
   captureTestPage: (): Promise<string> => ipcRenderer.invoke('app:test:capture-page'),
+  /** L'image de l'élément désigné par Alt+clic, en adresse `data:` ; `null` si rien à capturer. */
+  capturerElement: (rect: RectNavigateur): Promise<string | null> =>
+    ipcRenderer.invoke('app:capturer-element', rect),
   seedArtifactPreviewsTest: (
     htmlOnly = false
   ): Promise<{ conversationId: string; turnId: string }> =>
@@ -365,10 +373,14 @@ const api = {
     etiquette?: string,
     detail?: { messages?: unknown[]; liste?: unknown }
   ) => ipcRenderer.invoke('perf:gelRenderer', dureeMs, etiquette, detail),
-  getAutoClose: (): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
+  getAutoClose: (): Promise<{ enabled: boolean; gitApresFil?: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:get'),
   setAutoClose: (enabled: boolean): Promise<{ enabled: boolean; last?: AutoCloseReport }> =>
     ipcRenderer.invoke('run:autoClose:set', enabled),
+  setGitApresFil: (
+    enabled: boolean
+  ): Promise<{ enabled: boolean; gitApresFil: boolean; last?: AutoCloseReport }> =>
+    ipcRenderer.invoke('run:gitApresFil:set', enabled),
   // Survie niveau 2 : tours restés inachevés (app fermée pendant l'exécution) + leur journal.
   unfinishedTurns: (): Promise<
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>

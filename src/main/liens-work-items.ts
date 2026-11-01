@@ -293,7 +293,8 @@ function sourcePour(
   if (!sources.length)
     return {
       ok: false,
-      raison: 'Aucune source de tickets configurée : ajoute-la dans la vue Tickets.'
+      // L'écran Tickets est devenu l'onglet « Tickets » du Board (conv-1397).
+      raison: 'Aucune source de tickets configurée : ajoute-la dans l’onglet Tickets du Board.'
     }
   if (typeof sourceId === 'string' && sourceId.trim()) {
     const source = sources.find((s) => s.id === sourceId.trim())

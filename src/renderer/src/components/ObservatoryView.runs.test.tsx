@@ -101,6 +101,37 @@ describe('Observatory — vue globale des RUN.md', () => {
     expect(abouti?.textContent).not.toContain('bloqué')
   })
 
+  it('dit qu’un run vert attend une décision au lieu de le dire bloqué (conv-1199)', async () => {
+    const summary = {
+      status: 'green',
+      dodTotal: 2,
+      dodChecked: 1,
+      journalEvents: 3,
+      defauts: 0,
+      decisionAttendue: true
+    }
+    const view = await mount(
+      api({
+        listRuns: vi.fn(async () => [{ ...run('epsilon', 'green'), summary }, run('zeta', 'green')])
+      })
+    )
+    const lignes = [...view.querySelectorAll('[data-testid="observatory-run"]')]
+    const decision = lignes.find((element) => element.textContent?.includes('epsilon'))
+    const sansDecision = lignes.find((element) => element.textContent?.includes('zeta'))
+    expect(decision?.textContent).toContain('en attente de votre décision')
+    expect(decision?.textContent).not.toContain('bloqué')
+    // Objection du contrôle final (conv-1337) : la ligne disait « décision » pendant que le compteur
+    // juste au-dessus disait « 1 bloqué(s) » et que le liseré rouge marquait un run sans issue.
+    expect(decision?.getAttribute('data-run-blocked')).toBe('false')
+    expect(sansDecision?.getAttribute('data-run-blocked')).toBe('true')
+    expect(sansDecision?.textContent).toContain('bloqué')
+    const titre = [...view.querySelectorAll('.observatory-panel-title')].find((element) =>
+      element.textContent?.includes('WORKFLOWS')
+    )
+    expect(titre?.textContent).toContain('1 bloqué(s)')
+    expect(titre?.textContent).toContain('1 en attente de votre décision')
+  })
+
   it('ouvre le RUN.md choisi, avec SON chemin', async () => {
     const openFolder = vi.fn(async () => undefined)
     const view = await mount(api({ listRuns: vi.fn(async () => runs), openFolder }))

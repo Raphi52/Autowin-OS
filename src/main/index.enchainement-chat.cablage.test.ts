@@ -31,4 +31,22 @@ describe('enchaînement auto du chat — câblage de fin de tour', () => {
     expect(apres).not.toMatch(/await os\s*\.publishChatTurn\(/)
     expect(apres).toContain('turnId: resultat.turnId')
   })
+
+  // conv-1339 : la condition elle-même est jouée dans git-apres-fil.test.ts ; ici, qu'elle reçoive
+  // le VRAI rapport de la publication, et qu'aucun tour ne parte hors de sa décision.
+  it('passe le rapport de publication à la décision /git, sans lancer de tour hors d elle', () => {
+    const apres = corps.slice(corps.indexOf('.publishChatTurn('))
+    expect(apres).toMatch(/\.then\(\(rapport\) => \{\s*const decision = decisionGitApresFil\(\{/)
+    expect(apres).toContain('accord: os.gitApresFilActif()')
+    expect(apres).toContain('rapport\n')
+    expect(apres).toMatch(
+      /if \(decision\.lancer\) suiviGitApresFil\.file\?\.ajouter\(conversationId, decision\.fichiers\)/
+    )
+  })
+
+  it('range la passe /git dans la file, qui en lance une seule à la fois', () => {
+    expect(source).toContain('suiviGitApresFil.file = new FileGitApresFil({')
+    expect(source.match(/new FileGitApresFil\(/g)).toHaveLength(1)
+    expect(source).not.toMatch(/runPrompt\([^)]*promptGitDuFil/)
+  })
 })

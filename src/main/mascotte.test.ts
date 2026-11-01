@@ -4,6 +4,7 @@ import {
   CANAL_GESTE_MASCOTTE,
   creerGlisserMascotte,
   creerSuiviMascotte,
+  cssDeLAccueil,
   cssDeLEtat,
   estLaFermeture,
   etatDeLaMascotte,
@@ -28,6 +29,55 @@ import { disposerPopups, htmlDePopup, type Rect } from './notification-popup'
 
 const VIDE = { toursEnCours: 0, runsActifs: 0, filsEnAttente: [], filsEnEchec: [] }
 const HALO = HALO_DANS_LA_FENETRE
+
+describe('mascotte sur l’accueil d’un fil vide (conv-1401)', () => {
+  const calme = { etat: 'calme', pastille: null, fil: null } as const
+
+  it('dormir, c’est son état calme du bureau, dans les deux styles', () => {
+    expect(cssDeLAccueil('sommeil', 0)).toBe(cssDeLEtat(calme))
+    expect(cssDeLAccueil('sommeil', 0, 'basique')).toBe(cssDeLEtat(calme, 'basique'))
+  })
+
+  it('dès qu’un agent tourne, elle travaille avec le vrai compte, même endormie', () => {
+    const travail = { etat: 'travail', pastille: '3', fil: null } as const
+    expect(cssDeLAccueil('sommeil', 3)).toBe(cssDeLEtat(travail))
+    expect(cssDeLAccueil('eveil', 3, 'basique')).toBe(cssDeLEtat(travail, 'basique'))
+    // Le compte s'arrête à 99 : la dizaine et l'unité affichées sont toutes deux un 9.
+    expect(cssDeLAccueil('eveil', 150)).toContain('body .vd9{display:inline}')
+    expect(cssDeLAccueil('eveil', 150)).toContain('body .vu9{display:inline}')
+  })
+
+  it('le coucou reprend ses bras levés, sans aucun chiffre', () => {
+    const feuille = cssDeLAccueil('coucou', 0)
+    expect(feuille).toContain('body .EA{display:inline}')
+    expect(feuille).not.toMatch(/body \.v[du]?\d/)
+  })
+
+  it('éveillée : yeux ouverts, bras au repos, ni sommeil ni halo', () => {
+    const feuille = cssDeLAccueil('eveil', 0)
+    expect(feuille).toContain('body .fA{display:inline}')
+    expect(feuille).toContain('body .ER{display:inline}')
+    expect(feuille).not.toContain('body .fR')
+    expect(feuille).not.toContain('body .z')
+    expect(feuille).not.toContain('body .h')
+  })
+
+  it('elle lit dans son vrai grimoire, sans lancer de sort', () => {
+    const feuille = cssDeLAccueil('lecture', 0)
+    expect(feuille).toContain('body .LG{display:inline}')
+    expect(feuille).not.toContain('body .ET{')
+    expect(feuille).not.toContain('body .GF')
+    // Le groupe du grimoire ouvert porte bien la classe que cette feuille allume.
+    expect(htmlDeMascotte()).toContain('class="ET LG"')
+  })
+
+  it('la bille basique reste entière, éveillée, et son halo tourne quand elle lit', () => {
+    expect(cssDeLAccueil('eveil', 0, 'basique')).toBe('')
+    expect(cssDeLAccueil('lecture', 0, 'basique')).toBe(
+      cssDeLEtat({ etat: 'travail', pastille: null, fil: null }, 'basique')
+    )
+  })
+})
 
 describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
   it('calme quand rien ne tourne ni n’attend : pas de pastille, le clic ouvre Autowin', () => {

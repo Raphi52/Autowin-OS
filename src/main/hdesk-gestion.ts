@@ -211,7 +211,9 @@ export async function choisirExecutable(
 /** Résultat du script de fermeture, dit pour un humain. */
 export function traduireFermeture(r: ResultatFermeture): ResultatFermetureGeree {
   // Code 2 = plus aucun bureau a ce nom (disparu entre la liste et le clic) : rien a fermer, pas un échec.
-  if (r.code === 2)
+  // Sauf `sansFiche: false` (conv-1374, 2026-10-31) : le script dit alors le bureau VIVANT et absent du
+  // registre, et le refus suit le chemin d'erreur commun pour ne pas annoncer fermé ce qui tourne encore.
+  if (r.code === 2 && r.sansFiche !== false)
     return {
       ok: true,
       code: 2,

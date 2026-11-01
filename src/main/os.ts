@@ -127,8 +127,10 @@ import { workflowSansScoutPourSelection } from './selection-sans-scout'
 import { ensureAutowinAppData } from './app-data'
 import {
   loadAutoClose,
+  loadGitApresFil,
   loadLastAutoCloseReport,
   saveAutoClose,
+  saveGitApresFil,
   saveLastAutoCloseReport
 } from './autoclose-store'
 import { AUTOWIN_WORKSPACE_ENV, AUTOWIN_WORKSPACE_ORIGIN_ENV } from '../shared/app-identity'
@@ -932,8 +934,27 @@ export class AutowinOS {
     }
     this.autoClose = enabled
   }
-  getAutoClose(): { enabled: boolean; last?: AutoCloseReport } {
-    return { enabled: this.autoClose, ...(this.lastAutoClose ? { last: this.lastAutoClose } : {}) }
+  getAutoClose(): { enabled: boolean; gitApresFil: boolean; last?: AutoCloseReport } {
+    return {
+      enabled: this.autoClose,
+      gitApresFil: this.gitApresFil,
+      ...(this.lastAutoClose ? { last: this.lastAutoClose } : {})
+    }
+  }
+
+  /** « Publier les fils finis » (conv-1339, voir git-apres-fil.ts) : éteint tant qu'on ne l'allume pas. */
+  private gitApresFil = loadGitApresFil()
+
+  setGitApresFil(enabled: boolean): void {
+    if (!saveGitApresFil(enabled)) {
+      throw new Error('Impossible de persister le réglage « Publier les fils finis ».')
+    }
+    this.gitApresFil = enabled
+  }
+
+  /** Relu à chaque fin de tour : l'éteindre pendant un tour suffit à ne rien lancer. */
+  gitApresFilActif(): boolean {
+    return this.gitApresFil
   }
 
   /** Lu au DÉPART d'un tour de chat : la photo de l'arbre n'est prise que si l'enchaînement est actif. */

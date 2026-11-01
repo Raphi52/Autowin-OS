@@ -11,6 +11,7 @@ import type { Conversation } from './store/conversations'
 import { lireSaisies, type SaisieJournalisee } from './store/journal-saisie'
 import { redactTrace } from './activity/trace-redact'
 import { dossiersDeSkills } from './skill-pipeline'
+import { sansPrecisionDeLecture } from './deux-lectures'
 
 const MESSAGE_LIMIT = 24
 const MESSAGE_CAP = 700
@@ -690,7 +691,7 @@ export function localiserMessageCite(
   cibleId: string,
   conversations: readonly ConversationCherchable[]
 ): CibleKaizen {
-  const citations = fragmentsCites(task)
+  const citations = fragmentsCites(sansPrecisionDeLecture(task))
   if (!citations.length) return { conversationId: cibleId }
   const contient = (conversation: ConversationCherchable): boolean =>
     conversation.messages.some(
@@ -855,7 +856,7 @@ const NUMERO_SEUL_EN_TETE =
   /^\/kaizen\s+(?:la\s+)?(\d{1,6})(?=[\s,:;]|$)(?!\s+(?:fois|x|%|min(?:utes?)?|h|heures?|s|sec(?:ondes?)?|jours?|tours?|messages?|lignes?|fichiers?|commits?|euros?)\b)/i
 
 export function kaizenNamedConversationId(task: string): string | undefined {
-  const tache = task.trim()
+  const tache = sansPrecisionDeLecture(task).trim()
   if (!/^\/kaizen(?=\s|$)/i.test(tache)) return undefined
   const numero =
     /\bconv(?:ersation)?[\s-]*(?:n°\s*|#\s*)?(\d+)\b/i.exec(tache)?.[1] ??
@@ -976,7 +977,7 @@ export function kaizenConversationParCommande(
   conversations: readonly ConversationDatee[],
   commandes?: readonly string[]
 ): CibleKaizen | undefined {
-  const tache = task.trim()
+  const tache = sansPrecisionDeLecture(task).trim()
   if (!/^\/kaizen(?=\s|$)/i.test(tache)) return undefined
   const suite = tache.slice('/kaizen'.length)
   const avecBarre = [...suite.matchAll(/(?:^|\s)\/([a-z][a-z0-9-]*)\b/gi)]

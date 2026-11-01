@@ -191,3 +191,28 @@ describe('contexte d’un run : les pages html-render y arrivent en texte visibl
     expect(context).not.toContain('#e3ba55')
   })
 })
+
+/**
+ * « Runs en cours/bloqués » disait « green, bloqué » d'un run validé qui attend une réponse de
+ * l'utilisateur (conv-1199, scout conv-1332). L'agent suivant le prenait pour un échec à réparer.
+ * L'entrée qui ferait échouer ce test si la correction était fausse : un run bloqué sans décision
+ * attendue, qui doit garder « bloqué ».
+ */
+describe('la décision attendue dans la liste des runs', () => {
+  it('nomme la décision attendue au lieu de « bloqué »', () => {
+    const context = collectOrchestrationContext({
+      task: 't',
+      runs: [{ subject: 'build-lave', status: 'green', blocked: true, decisionAttendue: true }]
+    })
+    expect(context).toContain('build-lave (green, en attente de la décision de l’utilisateur)')
+    expect(context).not.toContain('bloqué)')
+  })
+
+  it('garde « bloqué » pour un run qui n’attend aucune décision', () => {
+    const context = collectOrchestrationContext({
+      task: 't',
+      runs: [{ subject: 'build-rouge', status: 'red', blocked: true }]
+    })
+    expect(context).toContain('build-rouge (red, bloqué)')
+  })
+})

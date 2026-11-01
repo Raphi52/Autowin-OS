@@ -2203,7 +2203,8 @@ function construire(): Personnage {
       .join('')
   const corps =
     '<ellipse cx="26" cy="66" rx="16" ry="2.4" fill="url(#gSh)"/>' +
-    `<g class="ET">${travail.grimoire}</g>` +
+    // `LG` : le grimoire seul, sans le reste du travail, pour la mascotte qui lit (`reglesDeLAccueil`).
+    `<g class="ET LG">${travail.grimoire}</g>` +
     // Au calme, le grimoire est fermé (conv-1227) ; il s'ouvre quand le travail commence.
     `<g class="GF">${grimoireFerme(f)}</g>` +
     chapeau +
@@ -2297,6 +2298,18 @@ export function visageDeLaBille(): string {
     personnage().visage +
     '</svg>'
   )
+}
+
+/**
+ * L'ACCUEIL D'UN FIL VIDE (conv-1401, « prend exactement la meme mascotte qu'on a dans les settings ») :
+ * deux humeurs que le bureau n'a pas, faites de ses pièces, sans aucun dessin neuf. Éveillée : le
+ * visage heureux de « pour toi », bras au repos, grimoire fermé, car son repos à elle a les yeux
+ * fermés. Lectrice : le visage concentré du travail et son grimoire ouvert, sans sort ni halo.
+ */
+export function reglesDeLAccueil(humeur: 'eveil' | 'lecture'): Array<[string, string]> {
+  const repos: [string, string] = ['.ER', 'display:inline']
+  if (humeur === 'eveil') return [repos, ['.fA', 'display:inline'], ['.GF', 'display:inline']]
+  return [repos, ['.fT', 'display:inline'], ['.LG', 'display:inline'], ...personnage().ouverture]
 }
 
 /**

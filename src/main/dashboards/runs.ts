@@ -1,6 +1,8 @@
 // Parseur de RUN.md pour le dashboard des runs vivants (candidat ④/visu workflow).
 
 import { estArretParStop } from '../../shared/arret-par-stop'
+import { extraireBilan } from '../../shared/bilan-d-etape'
+import { questionDuBilan } from '../../shared/message-du-run'
 import { estMurDeQuota } from '../../shared/reprise-quota'
 import type { RunInterruption } from '../../shared/run-blocked'
 
@@ -25,7 +27,16 @@ export type RunSummary = {
   subject?: string
   /** Run rouge parce qu'il a été COUPÉ (Stop du chat, quota), pas parce que le travail a échoué. */
   interruption?: RunInterruption
+  /**
+   * Run VALIDÉ dont le dernier bilan pose une question à l'utilisateur : ce qui reste à faire lui
+   * appartient (publier, le plus souvent). Mêmes lecteurs que la carte du run : `extraireBilan` et
+   * `questionDuBilan`, donc une question mal formée ou « aucune » ne compte pas.
+   */
+  decisionAttendue?: true
 }
+
+/** Les statuts d'un run que le juge a validé (`succeeded` : fossile de succès, voir `isBlocked`). */
+const STATUTS_VALIDES: ReadonlySet<string> = new Set(['green', 'degraded-closed', 'succeeded'])
 
 const STATUSES = new Set([
   'pending',
@@ -145,6 +156,7 @@ export function parseRun(md: string, subject?: string): RunSummary {
   }).length
 
   const interruption = status === 'red' ? interruptionDeCloture(journalLines) : undefined
+  const bilan = STATUTS_VALIDES.has(status) ? extraireBilan(md)?.bilan : undefined
 
   return {
     status,
@@ -154,7 +166,8 @@ export function parseRun(md: string, subject?: string): RunSummary {
     journalEvents,
     defauts,
     subject,
-    ...(interruption ? { interruption } : {})
+    ...(interruption ? { interruption } : {}),
+    ...(bilan && questionDuBilan(bilan) ? { decisionAttendue: true as const } : {})
   }
 }
 

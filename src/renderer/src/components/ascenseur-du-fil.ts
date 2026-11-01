@@ -745,18 +745,8 @@ export function scrollTopDuMaintien(image: ImageDuMaintien): number | null {
   return Math.abs(cible - scrollTop) >= 0.5 ? cible : null
 }
 
-/**
- * Texte d'un de tes messages pour son aperçu, tel que tu l'as écrit. Un message qui lance une skill
- * s'affiche en bandeau (nom de la skill, puis le reste : ChatMessageRow.tsx) ; lu d'un bloc, il
- * donnait « draftune plus jolie popup » (mesuré dans l'app, conv-1114). On le recompose en
- * « /draft une plus jolie popup ».
- */
+/** Texte d'un de tes messages pour son aperçu, tel que tu l'as écrit. */
 function texteDuMessage(element: HTMLElement): string {
-  const skill = element.querySelector('.msg-skill-nom')?.textContent?.trim()
-  if (skill) {
-    const reste = element.querySelector('.msg-skill-texte')?.textContent ?? ''
-    return resumerTexte(`/${skill} ${reste}`)
-  }
   return resumerTexte(element.querySelector('.msg-body')?.textContent ?? '')
 }
 

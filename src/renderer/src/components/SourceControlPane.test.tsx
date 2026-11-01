@@ -239,6 +239,85 @@ describe('SourceControlPane (prompt-first)', () => {
     )
   })
 
+  describe('« Publier les fils finis » (conv-1339)', () => {
+    const bouton = (): HTMLButtonElement =>
+      container.querySelector('[data-testid="sc-git-apres-fil"]') as HTMLButtonElement
+    const cliquer = async (): Promise<void> => {
+      await act(async () => {
+        bouton().click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+    }
+
+    it('reste éteint par défaut, et s’allume par un clic de l’utilisateur', async () => {
+      mockApi(GIT)
+      const setGitApresFil = vi.fn(() => Promise.resolve({ enabled: true, gitApresFil: true }))
+      const api = (window as unknown as { api: Record<string, unknown> }).api
+      api.getAutoClose = () => Promise.resolve({ enabled: true, gitApresFil: false })
+      api.setGitApresFil = setGitApresFil
+      await render()
+      await openWorkspaceView()
+
+      expect(bouton().getAttribute('aria-pressed')).toBe('false')
+      expect(bouton().textContent).toContain('Publier les fils finis')
+      expect(bouton().textContent).toContain('OFF')
+      expect(bouton().title).toContain('tapes /git')
+
+      await cliquer()
+
+      expect(setGitApresFil).toHaveBeenCalledWith(true)
+      expect(bouton().getAttribute('aria-pressed')).toBe('true')
+      expect(bouton().textContent).toContain('ON')
+      // Le coût se dit avant d'allumer : c'est la raison d'être de cet interrupteur séparé.
+      expect(bouton().title).toContain('tour du modèle')
+    })
+
+    it('sans Enchaînement auto, il n’a rien à rattraper : il est désactivé et dit pourquoi', async () => {
+      mockApi(GIT)
+      const api = (window as unknown as { api: Record<string, unknown> }).api
+      api.getAutoClose = () => Promise.resolve({ enabled: false, gitApresFil: true })
+      await render()
+      await openWorkspaceView()
+
+      expect(bouton().disabled).toBe(true)
+      expect(bouton().title).toContain('Enchaînement auto')
+    })
+
+    it('rétablit et explique son état quand la persistance échoue', async () => {
+      mockApi(GIT)
+      const api = (window as unknown as { api: Record<string, unknown> }).api
+      api.getAutoClose = () => Promise.resolve({ enabled: true, gitApresFil: false })
+      api.setGitApresFil = vi.fn(() => Promise.reject(new Error('disque indisponible')))
+      await render()
+      await openWorkspaceView()
+
+      await cliquer()
+
+      expect(bouton().getAttribute('aria-pressed')).toBe('false')
+      expect(container.querySelector('[data-testid="sc-autoclose-error"]')?.textContent).toContain(
+        'Impossible de conserver ce réglage'
+      )
+    })
+
+    it('l’interrupteur voisin ne l’éteint pas en passant', async () => {
+      mockApi(GIT)
+      const api = (window as unknown as { api: Record<string, unknown> }).api
+      api.getAutoClose = () => Promise.resolve({ enabled: true, gitApresFil: true })
+      api.setAutoClose = vi.fn(() => new Promise(() => undefined))
+      await render()
+      await openWorkspaceView()
+
+      const voisin = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
+      await act(async () => {
+        voisin.click()
+        await Promise.resolve()
+      })
+
+      expect(bouton().getAttribute('aria-pressed')).toBe('true')
+    })
+  })
+
   it('affiche le dernier résultat réel de clôture au lieu de promettre un push absolu', async () => {
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api

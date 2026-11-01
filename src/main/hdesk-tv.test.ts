@@ -894,6 +894,11 @@ describe.skipIf(process.platform !== 'win32' || !process.env.AUTOWIN_HDESK_REEL)
         })
         const brut = await agirHdesk(racine, centre)
         expect(brut).toMatchObject({ ok: false, message: expect.stringMatching(/Aucune fenetre/) })
+        // conv-1374 (2026-10-31) : le refus dit OU sont les fenetres (titre + rectangle ecran),
+        // sans quoi l'agent retente a l'aveugle (6 echecs sur 16 en 10 jours).
+        expect(brut).toMatchObject({
+          message: expect.stringMatching(/Fenetres visibles .*"[^"]*" \(-?\d+,-?\d+\)-\(-?\d+,-?\d+\)/)
+        })
       } finally {
         c.detruire()
         process.kill(pid)

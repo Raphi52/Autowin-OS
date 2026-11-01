@@ -82,6 +82,24 @@ describe('carteDesProjetsPartages — ce qui part sur le partage', () => {
     expect(reduite.runsBloques).toBe(0)
   })
 
+  // La réduction refait les comptes depuis les projets gardés : un compte recopié de la carte
+  // entière annoncerait sur le Board le run d'un projet retiré (conv-1346).
+  it('le compte « en attente de votre décision » suit les projets gardés', () => {
+    const attente = { sujet: 'attend', statut: 'green', chemin: 'c', mtime: 1 }
+    const avecDecisions: CarteDesBesoins = {
+      ...CARTE,
+      projets: [
+        { ...projet('D:\\Factures', 3, {}), runsEnAttenteDeDecision: [attente] },
+        { ...projet('D:\\Perso', 2, {}), runsEnAttenteDeDecision: [attente, attente] }
+      ],
+      runsEnAttenteDeDecision: 3
+    }
+    expect(carteDesProjetsPartages(avecDecisions, ['D:\\Factures']).runsEnAttenteDeDecision).toBe(1)
+    expect(carteDesProjetsPartages(avecDecisions, []).runsEnAttenteDeDecision).toBe(0)
+    // Une carte sans ce compte (écrite avant lui) reste lisible : zéro, jamais `NaN`.
+    expect(carteDesProjetsPartages(CARTE, ['D:\\Perso']).runsEnAttenteDeDecision).toBe(0)
+  })
+
   it('aucun projet coché = un Board vide, pas tout le Board', () => {
     const vide = carteDesProjetsPartages(CARTE, [])
     expect(vide.projets).toEqual([])

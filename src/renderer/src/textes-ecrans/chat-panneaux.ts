@@ -136,6 +136,13 @@ export const TEXTES_FR = {
     'Activé — après chaque tâche d’agent réussie ET chaque tour de chat réussi qui a modifié des fichiers, tente de publier : commit de ces fichiers-là, puis push sur la branche courante. Si le dépôt le refuse (règle de branche, hook, retard), push sur une branche dédiée et ouverture d’une PR. Un fichier touché aussi par un autre fil reste en attente. Clic : désactiver.',
   'sc.auto.desactive.titre': 'Désactivé — rien n’est publié automatiquement. Clic : activer.',
   'sc.auto': 'Enchaînement auto',
+  'sc.gitApresFil': 'Publier les fils finis',
+  'sc.gitApresFil.active.titre':
+    'Activé — quand un fil d’Autowin se déclare fini et que l’enchaînement auto n’a pas pu tout publier (fichiers partagés avec un autre fil), /git part tout seul pour ce fil, un à la fois. Jamais si les tests ou le typage sont rouges, ni si ta demande interdit de publier. Chaque lancement est un tour du modèle et coûte comme tel. Le fil dit ce qui est parti, avec un bouton pour l’annuler. Clic : désactiver.',
+  'sc.gitApresFil.desactive.titre':
+    'Désactivé — ce que l’enchaînement auto laisse en attente attend que tu tapes /git. Clic : activer.',
+  'sc.gitApresFil.sansAuto.titre':
+    'Allume d’abord Enchaînement auto : ce réglage rattrape seulement ce qu’il laisse en attente.',
   'sc.etapes': 'Étapes',
   'sc.aJour': 'À jour : aucun changement, rien à envoyer ni à récupérer.',
 
@@ -575,6 +582,13 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     'On — after each successful agent task AND each successful chat turn that changed files, tries to publish: commit of those files, then push to the current branch. If the repository refuses (branch rule, hook, behind), push to a dedicated branch and open a PR. A file also touched by another thread stays on hold. Click: turn off.',
   'sc.auto.desactive.titre': 'Off — nothing is published automatically. Click: turn on.',
   'sc.auto': 'Auto chaining',
+  'sc.gitApresFil': 'Publish finished threads',
+  'sc.gitApresFil.active.titre':
+    'On — when an Autowin thread declares itself finished and auto chaining could not publish everything (files shared with another thread), /git starts on its own for that thread, one at a time. Never when tests or typing are red, or when your request forbids publishing. Each start is a model turn and costs like one. The thread says what went out, with a button to undo it. Click: turn off.',
+  'sc.gitApresFil.desactive.titre':
+    'Off — what auto chaining leaves on hold waits for you to type /git. Click: turn on.',
+  'sc.gitApresFil.sansAuto.titre':
+    'Turn on Auto chaining first: this setting only catches what it leaves on hold.',
   'sc.etapes': 'Steps',
   'sc.aJour': 'Up to date: no change, nothing to push or pull.',
 

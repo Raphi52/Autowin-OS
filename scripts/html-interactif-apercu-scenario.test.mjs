@@ -4,6 +4,7 @@ import {
   decrireEtape,
   dossierDeSortie,
   dureeMaxScenarioMs,
+  jaugesFausses,
   lireScenario,
   normaliserTexte,
   pageContient,
@@ -11,6 +12,33 @@ import {
 } from './html-interactif-apercu-scenario.mjs'
 
 const lire = (etapes) => lireScenario(JSON.stringify(etapes))
+
+describe('jaugesFausses : une jauge visible change ce qu’on regarde', () => {
+  const jauge = (visible, effet) => ({ nom: 'Rayon', variable: '--ex-r', visible, effet })
+
+  it('une jauge juste, ou aucune jauge : rien à redire', () => {
+    expect(jaugesFausses([jauge([1, 2], [1, 2])])).toEqual([])
+    expect(jaugesFausses(undefined)).toEqual([])
+  })
+
+  it('refuse une jauge qui ne change rien, même cachée partout', () => {
+    expect(jaugesFausses([jauge([], [])])).toEqual([
+      { nom: 'Rayon', raison: 'ne change aucune proposition' }
+    ])
+  })
+
+  it('nomme les propositions où elle reste visible sans effet', () => {
+    expect(jaugesFausses([jauge([1, 2, 3], [1])])).toEqual([
+      { nom: 'Rayon', raison: 'visible sans effet sur la 2, 3' }
+    ])
+  })
+
+  it('nomme les propositions où elle manque alors qu’elle agit', () => {
+    expect(jaugesFausses([jauge([1], [1, 2])])).toEqual([
+      { nom: 'Rayon', raison: "cachee alors qu'elle change la 2" }
+    ])
+  })
+})
 
 describe('lireScenario : ce qui part vers Electron', () => {
   it('accepte chaque verbe, avec ses options', () => {

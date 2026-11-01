@@ -1,4 +1,4 @@
-import { isBlocked, mentionDEtatDuRun } from '../../../shared/run-blocked'
+import { attendUneDecision, isBlocked, mentionDEtatDuRun } from '../../../shared/run-blocked'
 import { formaterDate, formaterNombre } from '../langue'
 import { useTextesObservatory } from '../textes-ecrans/observatory'
 import { lastUserMessagePreview } from './observatory-event-preview'
@@ -92,6 +92,11 @@ export function ObservatoryRail({
   onOpenSignal: (eventId: string) => void
 }): React.JSX.Element {
   const { t } = useTextesObservatory()
+  // Un run qui attend l'utilisateur n'est pas une panne : compté à part, sans liseré rouge. La ligne
+  // disait « décision » sous un titre « 1 bloqué(s) » (objection du contrôle final, conv-1337).
+  const decisions = runs.filter((r) => attendUneDecision(r.summary)).length
+  const enPanne = (r: ObservatoryRunEntry): boolean =>
+    isBlocked(r.summary) && !attendUneDecision(r.summary)
   return (
     <aside className="observatory-rail">
       {/* WORKFLOWS EN PREMIER — vue TRANSVERSALE des RUN.md du dépôt, notamment ceux restés `open`.
@@ -104,9 +109,8 @@ export function ObservatoryRail({
           {/* BLOQUÉ, pas « open » : un run `green` dont la DoD est incomplète, ou figé sur un
               statut fossile, est resté sans issue. Ne compter que `open` le rendait INVISIBLE.
               La règle est celle du dashboard (`isBlocked`), pas une seconde définition locale. */}
-          {runs.length > 0
-            ? t('rail.bloques', { n: runs.filter((r) => isBlocked(r.summary)).length })
-            : ''}
+          {runs.length > 0 ? t('rail.bloques', { n: runs.filter(enPanne).length }) : ''}
+          {decisions > 0 ? t('rail.enAttenteDecision', { n: decisions }) : ''}
           {/* NON INTÉGRÉ ≠ bloqué : un run vert, DoD complète, peut avoir son travail retenu ou
               bloqué à la publication. Le compte ci-dessus, fondé sur le RUN.md, ne le voit pas. */}
           {runs.some((r) => r.publication)
@@ -128,7 +132,7 @@ export function ObservatoryRail({
             <div key={run.path} className="observatory-run-line">
               <button
                 data-run-status={run.summary.status}
-                data-run-blocked={isBlocked(run.summary) ? 'true' : 'false'}
+                data-run-blocked={enPanne(run) ? 'true' : 'false'}
                 {...(run.publication ? { 'data-run-publication': run.publication } : {})}
                 data-testid="observatory-run"
                 onClick={() => onOpenRun(run.path)}

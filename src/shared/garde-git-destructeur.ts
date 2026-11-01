@@ -394,14 +394,17 @@ const refusCommitDeFichierReserve = (j, shell) => {
   } catch { return undefined; }
 };
 // MESSAGES D'AUTRES FILS, LIVRÉS EN PLEIN TOUR (conv-1139, shared/messages-entre-fils.ts). Le
-// journal vit à côté du registre des réservations. Un agent d'étape de run (son fil vient de
-// AUTOWIN_CONVERSATION_ID) n'en reçoit pas : sans les outils de l'app il ne pourrait pas répondre,
-// et le message, marqué livré, n'arriverait plus au fil. Banc réel du 2026-10-24 (CLI 2.1.309, -p) :
+// journal vit à côté du registre des réservations. Banc réel du 2026-10-24 (CLI 2.1.309, -p) :
 // l'agent recopie le code glissé par additionalContext. Toute panne = aucun message, jamais un refus.
-const messagesEnAttente = () => {
+// Un agent d'étape de run (son fil vient de AUTOWIN_CONVERSATION_ID) n'a pas les outils de l'app pour
+// répondre : il reçoit une COPIE, sans marque « livré », pour que le message reste dû au fil. Avant le
+// 2026-10-30 il ne recevait rien : conv-1333 a écrit « dis-le-moi avant d'écrire » à conv-1332 pendant
+// son kaizen (msg-0e75e0e8, 17:43), le kaizen a écrit 7 min plus tard dans le fichier en cause, qui est
+// resté refusé à conv-1333 jusqu'à 18:21. Ce qu'une étape a lu se note à côté du script, par session.
+const messagesEnAttente = (j) => {
   try {
     const conf = confReservation();
-    if (!conf || process.env.AUTOWIN_CONVERSATION_ID === conf.fil) return undefined;
+    if (!conf) return undefined;
     const fs = process.getBuiltinModule('node:fs');
     const path = process.getBuiltinModule('node:path');
     const io = {
@@ -409,6 +412,16 @@ const messagesEnAttente = () => {
       ajouter: (p, ligne) => fs.appendFileSync(p, ligne + '\\n', 'utf8')
     };
     const journal = path.join(path.dirname(conf.registre), ${JSON.stringify(NOM_JOURNAL_MESSAGES_FILS)});
+    if (process.env.AUTOWIN_CONVERSATION_ID === conf.fil) {
+      const sid = String(j.session_id || '').replace(/[^A-Za-z0-9_-]/g, '');
+      if (!sid) return undefined;
+      const p = path.join(path.dirname(process.argv[1]), 'messages-lus-' + sid + '.json');
+      let lus = [];
+      try { const v = JSON.parse(fs.readFileSync(p, 'utf8')); if (Array.isArray(v)) lus = v; } catch {}
+      const copie = livrerMessagesEnAttente(io, { fil: conf.fil, journal }, Date.now(), 'controle', lignesDuJournal, ${MESSAGES_PAR_LIVRAISON}, lus);
+      if (copie) fs.writeFileSync(p, JSON.stringify(lus.concat(copie.ids)));
+      return copie ? copie.texte : undefined;
+    }
     const r = livrerMessagesEnAttente(io, { fil: conf.fil, journal }, Date.now(), 'controle', lignesDuJournal, ${MESSAGES_PAR_LIVRAISON});
     return r ? r.texte : undefined;
   } catch { return undefined; }
@@ -473,7 +486,7 @@ process.stdin.on('end', () => {
   }
   // Pas de refus : les orientations de l'utilisateur PUIS les messages en attente partent avec cet
   // appel d'outil (un refus les laisse pour le suivant).
-  const recus = [orientationsEnAttente(), messagesEnAttente()].filter(Boolean).join('\\n\\n');
+  const recus = [orientationsEnAttente(), messagesEnAttente(j)].filter(Boolean).join('\\n\\n');
   if (recus) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: recus } }));
   process.exit(0);
 });

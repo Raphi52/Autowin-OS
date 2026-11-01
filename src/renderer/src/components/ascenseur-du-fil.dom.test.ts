@@ -4,8 +4,8 @@ import { lireReperes } from './ascenseur-du-fil'
 
 /*
  * Le texte des aperçus de l'ascenseur à crans (conv-1114), lu dans le vrai balisage des bulles
- * (ChatMessageRow.tsx). Mesuré dans l'app : un message qui lance une skill s'affichait
- * « draftune plus jolie popup… » — le nom de la skill et la suite étaient collés.
+ * (ChatMessageRow.tsx). Un message qui nomme une skill est une bulle comme les autres depuis
+ * conv-1334 : son aperçu reste le texte tapé, préfixe compris.
  */
 function filAvec(...bulles: string[]): HTMLElement {
   const fil = document.createElement('div')
@@ -21,9 +21,7 @@ function filAvec(...bulles: string[]): HTMLElement {
 
 describe('lireReperes — le texte de tes messages', () => {
   it('message qui lance une skill : « /draft une plus jolie popup… », comme tu l’as écrit', () => {
-    const fil = filAvec(
-      '<div class="msg-body msg-bulle avec-skill"><div class="msg-skill-entete"><span class="msg-skill-nom">draft</span></div><div class="msg-skill-texte">une plus jolie popup</div></div>'
-    )
+    const fil = filAvec('<div class="msg-body msg-bulle">/draft une plus jolie popup</div>')
     expect(lireReperes(fil)[0].texte).toBe('/draft une plus jolie popup')
   })
 
@@ -37,9 +35,7 @@ describe('lireReperes — le texte de tes messages', () => {
   })
 
   it('skill lancée sans texte : son nom seul', () => {
-    const fil = filAvec(
-      '<div class="msg-body msg-bulle avec-skill"><div class="msg-skill-entete"><span class="msg-skill-nom">kaizen</span></div></div>'
-    )
+    const fil = filAvec('<div class="msg-body msg-bulle">/kaizen</div>')
     expect(lireReperes(fil)[0].texte).toBe('/kaizen')
   })
 })

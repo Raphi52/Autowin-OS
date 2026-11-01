@@ -57,8 +57,10 @@
  *       totale » : la page se pose sur le fond du fil) ;
  *   8 = SCENARIO ROUGE : une etape de `--scenario` n'a pas abouti (champ `scenario.echec` : l'etape,
  *       la raison, le texte vu et une capture) ;
+ *   9 = JAUGE MORTE (conv-1382) : une jauge d'un carrousel /draft ne change aucune proposition, ou
+ *       reste visible sur une proposition qu'elle ne change pas (champs `jauges`, `jaugesFausses`) ;
  *   2 = usage ; 1 = erreur technique (Electron, construction de la page).
- *   Plusieurs defauts : le code est celui du premier dans l'ordre 3, 8, 4, 5, 6, 7.
+ *   Plusieurs defauts : le code est celui du premier dans l'ordre 3, 8, 9, 4, 5, 6, 7.
  * Champs par largeur : `demandes` — copies, liens, ancres et boutons de choix (`prompt` : le texte
  * qui irait dans la saisie, conv-1304) que la page a demandes au fil (relevés,
  * jamais executes : ni le presse-papiers ni le navigateur de l'utilisateur ne sont touches) ;
@@ -80,6 +82,7 @@ import {
 import {
   dossierDeSortie,
   dureeMaxScenarioMs,
+  jaugesFausses,
   lireScenario
 } from './html-interactif-apercu-scenario.mjs'
 
@@ -310,6 +313,8 @@ for (const r of resultats) {
     ajouter('hauteur-instable')
   if (r.fondOpaque.length > 0) ajouter('fond-opaque')
   if (r.scenario?.echec) ajouter('scenario-rouge')
+  r.jaugesFausses = jaugesFausses(r.jauges)
+  if (r.jaugesFausses.length > 0) ajouter('jauge-morte')
 }
 const CODES = [
   [
@@ -324,6 +329,7 @@ const CODES = [
     ]
   ],
   [8, ['scenario-rouge']],
+  [9, ['jauge-morte']],
   [4, ['page-vide']],
   [5, ['debordement']],
   [6, ['hauteur-instable']],

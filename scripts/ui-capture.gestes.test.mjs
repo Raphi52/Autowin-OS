@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { gesteDeLEtape, scriptDuGeste } from './ui-capture.mjs'
+import {
+  clicAltSouris,
+  gesteDeLEtape,
+  scriptDuGeste,
+  scriptDuPoint,
+  vueAttendueApresClics
+} from './ui-capture.mjs'
 
 /**
  * Pourquoi ce test existe (conv-1038, 2026-10-21) : la chaîne `--click` ne savait que
@@ -43,6 +49,113 @@ describe('ui-capture — gestes de la chaîne --click', () => {
     const selection = scriptDuGeste({ geste: 'selection', selecteur: '.a' })
     expect(selection).toContain('selectNodeContents')
     expect(selection).toContain("'mouseup'")
+  })
+})
+
+/**
+ * `alt-souris:` (conv-1338, 2026-10-30) : `alt:` n'envoie qu'un événement `click` simulé. Il arrive
+ * même sur un bouton grisé, où une vraie souris ne produit aucun `click` (sonde hors écran) : il
+ * prouvait donc un geste que l'utilisateur ne fait pas. Celui-ci passe par le vrai pilotage du
+ * navigateur (`Input.dispatchMouseEvent`), Alt tenu.
+ */
+describe('ui-capture — geste alt-souris:', () => {
+  it('alt-souris: → vrai clic, sélecteur intact, sans se confondre avec alt:', () => {
+    expect(gesteDeLEtape('alt-souris: .a button')).toEqual({
+      geste: 'alt-souris',
+      selecteur: '.a button'
+    })
+    expect(gesteDeLEtape('alt: .a').geste).toBe('alt-clic')
+  })
+
+  it('le point visé est le centre de la cible, et une cible absente rend null', () => {
+    const script = scriptDuPoint('.a')
+    expect(script).toContain('document.querySelector(".a")')
+    expect(script).toContain('return null')
+    expect(script).toContain('r.left + r.width / 2')
+  })
+
+  it('les trois ordres de souris tiennent Alt (modificateur 1) du survol au relâchement', () => {
+    const ordres = clicAltSouris({ x: 10, y: 20 })
+    expect(ordres.map((ordre) => ordre.type)).toEqual([
+      'mouseMoved',
+      'mousePressed',
+      'mouseReleased'
+    ])
+    for (const ordre of ordres) expect(ordre).toMatchObject({ x: 10, y: 20, modifiers: 1 })
+    expect(ordres[1]).toMatchObject({ button: 'left', buttons: 1, clickCount: 1 })
+    expect(ordres[2]).toMatchObject({ button: 'left', buttons: 0, clickCount: 1 })
+  })
+
+  // Le geste amène au chat : la vue à contrôler n'est plus celle de départ.
+  it('la vue attendue après un alt-souris: est le chat', () => {
+    expect(vueAttendueApresClics('settings', 'alt-souris: .a')).toBe('chat')
+  })
+
+  // Jumeau : le `alt:` simulé garde son comportement, il ne promet aucune bascule.
+  it('après un alt: simulé, la vue attendue ne change pas', () => {
+    expect(vueAttendueApresClics('settings', 'alt: .a')).toBe('settings')
+  })
+})
+
+/**
+ * `saisie:` (conv-1338, 2026-10-30) : le menu `/` de la saisie n'existe qu'après une frappe, et
+ * `--taper` joue APRÈS la chaîne de clics : aucune capture ne pouvait donc cliquer une de ses lignes,
+ * or c'est là que l'Alt+clic laissait partir l'action posée sur l'appui de la souris.
+ */
+describe('ui-capture — geste saisie:', () => {
+  class Evenement {
+    constructor(type, init) {
+      this.type = type
+      this.bubbles = init?.bubbles === true
+    }
+  }
+
+  function champ() {
+    const recus = []
+    return {
+      recus,
+      value: '',
+      focus: () => recus.push('focus'),
+      dispatchEvent: (evenement) => recus.push(`${evenement.type}:${evenement.bubbles}`)
+    }
+  }
+
+  const jouer = (texte, cible) => {
+    // Le setter natif est celui que React surveille : une simple affectation ne lui dirait rien.
+    const prototype = {}
+    Object.defineProperty(prototype, 'value', {
+      set(valeur) {
+        this.value_natif = valeur
+      }
+    })
+    return new Function(
+      'document',
+      'Event',
+      'HTMLTextAreaElement',
+      `return ${scriptDuGeste({ geste: 'saisie', selecteur: texte })}`
+    )({ querySelector: (selecteur) => (selecteur === 'textarea' ? cible : null) }, Evenement, {
+      prototype
+    })
+  }
+
+  it('saisie: → le texte tel quel, sans le lire comme un sélecteur', () => {
+    expect(gesteDeLEtape('saisie: /dra')).toEqual({ geste: 'saisie', selecteur: '/dra' })
+  })
+
+  it('le script pose le texte par le setter natif et prévient React', () => {
+    const cible = champ()
+    expect(jouer('/dra', cible)).toBe(true)
+    expect(cible.value_natif).toBe('/dra')
+    expect(cible.recus).toEqual(['focus', 'input:true'])
+  })
+
+  // Jumeau : pas de champ à l'écran, la chaîne échoue au lieu de photographier une vue sans le texte.
+  it('aucun champ : l’étape échoue', () => {
+    expect(jouer('/dra', null)).toBe(false)
+  })
+
+  it('une saisie ne change pas la vue attendue', () => {
+    expect(vueAttendueApresClics('chat', 'saisie: /dra')).toBe('chat')
   })
 })
 

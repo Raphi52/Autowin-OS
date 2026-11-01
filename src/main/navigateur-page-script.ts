@@ -32,9 +32,10 @@ export const PING_NAVIGATEUR = '__aw-nav:ping'
 
 /**
  * Version du noyau : un noyau plus ancien déjà posé dans la page est remplacé. 2 = aperçu du geste
- * suivant (`surligner` en pointillés, pas-à-pas de conv-1286, 2026-10-30).
+ * suivant (`surligner` en pointillés, pas-à-pas de conv-1286, 2026-10-30). 3 = le cadre suit sa cible
+ * (conv-1324).
  */
-const VERSION_NOYAU = 2
+const VERSION_NOYAU = 3
 
 /** Les points d'entrée du noyau joignables par `appelPage`. */
 export type MethodePage =
@@ -312,6 +313,7 @@ const NOYAU = String.raw`(function () {
   }
   nav.localiser = function (cible, options) {
     var el = trouver(cible);
+    nav.vise = el;
     if (!el) return { trouve: false };
     var parPoint = !!cible && typeof cible.x === 'number';
     if (!parPoint && typeof el.scrollIntoView === 'function') {
@@ -341,6 +343,7 @@ const NOYAU = String.raw`(function () {
   };
   nav.focus = function () {
     var a = trouver(null);
+    nav.vise = a;
     if (!a) return { aucun: true, secret: false, cadreIntegre: false, description: 'page', rect: { x: 0, y: 0, largeur: window.innerWidth, hauteur: window.innerHeight } };
     return { aucun: false, secret: estChampSecret(a), cadreIntegre: estCadre(a), description: roleDe(a) + ' « ' + nomDe(a) + ' »', rect: rectDe(a) };
   };
@@ -365,9 +368,36 @@ const NOYAU = String.raw`(function () {
     }
     calque.appendChild(div);
     nav.surbrillance = div;
+    suivreCible(div);
     return true;
   };
-  nav.retirerSurbrillance = function () { retirer(nav.surbrillance); nav.surbrillance = null; return true; };
+  /*
+   * Le cadre suit l'élément visé (conv-1324, mesuré en vraie app). Il est en position fixe : en pause,
+   * l'utilisateur fait défiler pour regarder la page, la cible part et le cadre désigne autre chose.
+   * Écoute en capture : le défilement d'un bloc intérieur ne remonte pas. Une cible retirée de la page
+   * ne se mesure plus (rectangle nul) : le cadre reste où il était.
+   * fix-ok: conv-1324 (mesuré en vraie app, D:/tmp/lot3/run8.txt) — cause : le cadre est en position
+   * fixe et n'était placé qu'une fois ; après un défilement de 200 px, il restait à y=125 alors que sa
+   * cible était passée à y=-75, et il désignait un autre élément.
+   */
+  function suivreCible(div) {
+    var el = nav.vise;
+    if (!el) return;
+    var suivre = function () { if (el.isConnected) placer(div, rectDe(el)); };
+    window.addEventListener('scroll', suivre, true);
+    window.addEventListener('resize', suivre);
+    nav.arreterSuivi = function () {
+      window.removeEventListener('scroll', suivre, true);
+      window.removeEventListener('resize', suivre);
+      nav.arreterSuivi = null;
+    };
+  }
+  nav.retirerSurbrillance = function () {
+    if (nav.arreterSuivi) nav.arreterSuivi();
+    retirer(nav.surbrillance);
+    nav.surbrillance = null;
+    return true;
+  };
 
   /* --- Pastilles numérotées des annotations, recalées au défilement. --- */
   function renumeroter() {

@@ -55,6 +55,8 @@ type AutoCloseViewResult =
 
 interface AutoCloseViewState {
   enabled: boolean
+  /** « Publier les fils finis » (conv-1339). */
+  gitApresFil?: boolean
   last?: {
     runId: string
     branch: string
@@ -493,12 +495,26 @@ export function SourceControlPane({
     const previous = autoClose?.enabled ?? false
     const next = !previous
     setAutoCloseError(undefined)
-    setAutoClose({ enabled: next })
+    setAutoClose({ ...autoClose, enabled: next })
     try {
       const applied = await window.api.setAutoClose(next)
       setAutoClose(applied as AutoCloseViewState)
     } catch {
-      setAutoClose({ enabled: previous })
+      setAutoClose({ ...autoClose, enabled: previous })
+      setAutoCloseError(tx('sc.erreur.reglageNonConserve'))
+    }
+  }
+
+  // Même contrat que l'interrupteur voisin : l'état optimiste est rétabli si le main refuse.
+  const toggleGitApresFil = async (): Promise<void> => {
+    if (!autoClose) return
+    const avant = autoClose
+    setAutoCloseError(undefined)
+    setAutoClose({ ...avant, gitApresFil: !avant.gitApresFil })
+    try {
+      setAutoClose((await window.api.setGitApresFil(!avant.gitApresFil)) as AutoCloseViewState)
+    } catch {
+      setAutoClose(avant)
       setAutoCloseError(tx('sc.erreur.reglageNonConserve'))
     }
   }
@@ -935,6 +951,27 @@ export function SourceControlPane({
                 {t('sc.auto')}
                 {/* « ON »/« OFF » : identiques dans les deux langues. */}
                 <b className="sc-toggle-state">{autoClose?.enabled ? 'ON' : 'OFF'}</b>
+              </button>
+            </div>
+            {/* conv-1339 : il rattrape ce que l'enchaînement laisse, donc il n'a de sens qu'avec lui. */}
+            <div className="sc-branch-row sc-git-apres-fil">
+              <button
+                className={`sc-btn sc-toggle sc-branch-toggle ${autoClose?.gitApresFil ? 'is-on' : 'is-off'}`}
+                data-testid="sc-git-apres-fil"
+                aria-pressed={autoClose?.gitApresFil ?? false}
+                disabled={!autoClose?.enabled}
+                title={
+                  !autoClose?.enabled
+                    ? t('sc.gitApresFil.sansAuto.titre')
+                    : autoClose.gitApresFil
+                      ? t('sc.gitApresFil.active.titre')
+                      : t('sc.gitApresFil.desactive.titre')
+                }
+                onClick={() => void toggleGitApresFil()}
+              >
+                <span className="sc-toggle-dot" aria-hidden="true" />
+                {t('sc.gitApresFil')}
+                <b className="sc-toggle-state">{autoClose?.gitApresFil ? 'ON' : 'OFF'}</b>
               </button>
             </div>
             <header className="sc-h">{t('sc.etapes')}</header>

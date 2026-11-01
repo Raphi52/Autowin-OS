@@ -134,6 +134,23 @@ describe('vue Bureaux cachés — Fermer passe le fil de la FICHE', () => {
     expect(r.message).toMatch(/n’existe plus/)
   })
 
+  // conv-1374 (2026-10-31) : hdesk-fermer.ps1 rend aussi 2 pour un bureau VIVANT absent du registre
+  // (fiche disparue entre la lecture et l'appel, `sansFiche: false`). Le traduire « n'existe plus »
+  // annoncerait fermé un bureau qui tourne encore.
+  it('bureau vivant absent du registre (code 2, sansFiche: false) : échec, le message du script remonte', async () => {
+    const d = registre([{ id: 'zox', conversationId: 'conv-1' }])
+    const erreur =
+      "Bureau 'zox' vivant (1 fenetre(s)) mais absent du registre : aucun fil n'en repond, seule la vue Bureaux caches le ferme. Rien n'a ete touche."
+    const r = await fermerBureauGere(RACINE, 'zox', d, async () => ({
+      ok: false,
+      code: 2,
+      ferme: false,
+      sansFiche: false,
+      erreur
+    }))
+    expect(r).toEqual({ ok: false, code: 2, message: erreur })
+  })
+
   it('identifiant invalide : refus avant toute lecture', async () => {
     const fermer = vi.fn()
     expect((await fermerBureauGere(RACINE, '../x', registre([]), fermer)).ok).toBe(false)

@@ -21,6 +21,31 @@ public sealed class AutowinHdeskAct {
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
   const uint WM_LBUTTONDOWN = 0x201, WM_LBUTTONUP = 0x202, WM_CHAR = 0x102, WM_KEYDOWN = 0x100, WM_KEYUP = 0x101;
   IntPtr hDesk;
+  // conv-1374 (2026-10-31) : « Aucune fenetre en (x,y) » (6 echecs sur 16 en 10 jours) ne disait pas
+  // ou etaient les fenetres. On les liste : titre (ou classe) et rectangle ecran (G,H)-(D,B), dans les
+  // memes pixels que la capture. Appele par le thread deja attache au bureau (hDesk). Borne a 12.
+  delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumDesktopWindows(IntPtr d, EnumProc p, IntPtr l);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowTextW(IntPtr h, System.Text.StringBuilder s, int n);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
+  string ListerFenetres() {
+    var liste = new System.Collections.Generic.List<string>(); int total = 0;
+    EnumProc cb = (w, l) => {
+      if (!IsWindowVisible(w)) return true;
+      RECT r; if (!GetWindowRect(w, out r) || r.R <= r.L || r.B <= r.T) return true;
+      var t = new System.Text.StringBuilder(128); GetWindowTextW(w, t, 128);
+      var c = new System.Text.StringBuilder(128); GetClassNameW(w, c, 128);
+      total++;
+      if (liste.Count < 12) liste.Add("\"" + (t.Length > 0 ? t.ToString().Replace("\"", "'") : c.ToString()) + "\" (" + r.L + "," + r.T + ")-(" + r.R + "," + r.B + ")");
+      return true;
+    };
+    try { EnumDesktopWindows(hDesk, cb, IntPtr.Zero); } catch { }
+    GC.KeepAlive(cb);
+    if (liste.Count == 0) return " Aucune fenetre visible dans ce bureau (l'application est-elle lancee ?).";
+    return " Fenetres visibles (" + total + ") : " + string.Join(" ; ", liste.ToArray()) + (total > liste.Count ? " ; ..." : "") + ".";
+  }
   // TOUCHES NOMMEES (conv-35) : touche -> (code virtuel, caractere WM_CHAR ou 0). Les combinaisons Ctrl
   // passent par leur caractere de controle (Ctrl+A=1, C=3, V=22, X=24, Z=26) : un message poste ne
   // change pas l'etat reel de Ctrl, donc un WM_KEYDOWN 'C' serait lu comme un simple « c ». Les champs
@@ -50,7 +75,7 @@ public sealed class AutowinHdeskAct {
     if (!SetThreadDesktop(hDesk)) { Error = "SetThreadDesktop a echoue (Win32 " + Marshal.GetLastWin32Error() + ")."; return; }
     var p = new POINT { X = x, Y = y };
     IntPtr h = WindowFromPoint(p);
-    if (h == IntPtr.Zero) { Error = "Aucune fenetre en (" + x + "," + y + ") dans ce bureau."; return; }
+    if (h == IntPtr.Zero) { Error = "Aucune fenetre en (" + x + "," + y + ") dans ce bureau." + ListerFenetres(); return; }
     var sb = new System.Text.StringBuilder(256); GetClassNameW(h, sb, 256); Cible = sb.ToString();
     var c = p; ScreenToClient(h, ref c);
     IntPtr lp = new IntPtr((c.Y << 16) | (c.X & 0xFFFF));

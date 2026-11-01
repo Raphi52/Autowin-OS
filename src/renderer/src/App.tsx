@@ -83,6 +83,7 @@ import { nomDeDestination, useTextes } from './textes'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
 import { deposerOuvertureConversation } from './components/pending-conversation-open'
 import { installerRelaisPrefill } from './components/relais-prefill'
+import { installerAltClic } from './components/alt-clic'
 import { lireBrouillons, memoriserBrouillon } from './components/brouillons-persistes'
 import { ajouterAuBrouillon } from './components/passage-selectionne'
 
@@ -421,6 +422,15 @@ export function MainApp(): React.JSX.Element {
       )
     },
     [activateTab, navigationOrigin]
+  )
+
+  // Alt+clic sur n'importe quel élément (conv-1338) : le chat s'ouvre une fois la capture prise.
+  useEffect(
+    () =>
+      installerAltClic(() => {
+        if (tabAffiche.current !== 'chat') navigate('chat')
+      }),
+    [navigate]
   )
 
   // #11 — raccourcis clavier : Ctrl/Cmd+1..N changent d'onglet, Ctrl/Cmd+K focalise la recherche de

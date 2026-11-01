@@ -220,6 +220,7 @@ export const TEXTES_FR = {
   // — Rail : workflows, conversations, appels observés, transcripts, signaux (ObservatoryRail) —
   'rail.workflowsTous': 'WORKFLOWS · TOUS',
   'rail.bloques': ' · {n} bloqué(s)',
+  'rail.enAttenteDecision': ' · {n} en attente de votre décision',
   'rail.nonIntegres': ' · {n} non intégré(s)',
   'rail.lectureRunMd': 'Lecture des RUN.md…',
   'rail.aucunRunMd': 'Aucun RUN.md.',
@@ -579,6 +580,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   // — Rail : workflows, conversations, appels observés, transcripts, signaux (ObservatoryRail) —
   'rail.workflowsTous': 'WORKFLOWS · ALL',
   'rail.bloques': ' · {n} blocked',
+  'rail.enAttenteDecision': ' · {n} awaiting your decision',
   'rail.nonIntegres': ' · {n} not merged',
   'rail.lectureRunMd': 'Reading RUN.md files…',
   'rail.aucunRunMd': 'No RUN.md.',
