@@ -6,7 +6,8 @@
  * fait observé (un run bloqué ou un brouillon repris) ; sans aucun fait, on retombe
  * sur le jeu statique historique — jamais d'écran vide.
  *
- * PUR (aucun React, aucun IPC) → testable directement. Rendu par le `SuggestionGrid` existant.
+ * PUR (aucun React, aucun IPC) → testable directement. Rendu par `AnimationAccueilChat`, qui écrit
+ * ces phrases une à une (conv-1401) ; le titre et le compte de chaque groupe ne s'affichent plus.
  */
 
 import { attendUneDecision, isBlocked } from '../../../shared/run-blocked'
@@ -32,6 +33,32 @@ const CLES_STATIQUES = [
   'accueil.suggestion.grapheBrain',
   'accueil.suggestion.etatWorkflows'
 ] as const
+
+/**
+ * Ce que le cercle du film d'accueil invoque (conv-1401, « les phrases ca doit des usages de draft
+ * scout judge kaizen etc... ») : de vraies skills, avec un usage concret. Le clic pose la phrase
+ * entière dans la saisie, où elle se lit comme une commande. Les plus parlantes d'abord.
+ */
+const USAGES = [
+  ['draft', 'accueil.usage.draft'],
+  ['scout', 'accueil.usage.scout'],
+  ['judge', 'accueil.usage.judge'],
+  ['kaizen', 'accueil.usage.kaizen'],
+  ['heal', 'accueil.usage.heal'],
+  ['arena', 'accueil.usage.arena'],
+  ['steal', 'accueil.usage.steal'],
+  ['grill', 'accueil.usage.grill'],
+  ['frame', 'accueil.usage.frame'],
+  ['remake', 'accueil.usage.remake'],
+  ['forge', 'accueil.usage.forge'],
+  ['look', 'accueil.usage.look']
+] as const
+
+export type UsageDeSkill = { nom: string; usage: string }
+
+export function usagesDesSkills(langue: Langue = 'fr'): UsageDeSkill[] {
+  return USAGES.map(([skill, cle]) => ({ nom: `/${skill}`, usage: traduireChatFil(cle, langue) }))
+}
 
 export interface HomeSuggestionState {
   /** Runs déjà chargés (panneau workflows), résumés par `parseRun` : statut ET compte de DoD. */

@@ -35,7 +35,7 @@ import {
   libelleRenoncement,
   libelleReprise
 } from '../../../shared/reprise-surcharge'
-import { SuggestionGrid } from './SuggestionGrid'
+import { AnimationAccueilChat } from './AnimationAccueilChat'
 import { pickTurnToResume, rejeuDejaEnregistre, type UnfinishedTurn } from './resume-unfinished'
 import { reclamerOuvertureConversation } from './pending-conversation-open'
 import { fermerEcouteurPrefill, ouvrirEcouteurPrefill } from './relais-prefill'
@@ -91,11 +91,10 @@ import {
   texteDuPrompt
 } from './chat-view-model'
 import { shortModelLabel } from './model-display-label'
-import { buildHomeSuggestions } from './chat-home-suggestions'
+import { buildHomeSuggestions, usagesDesSkills } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
 import { conversationsCoupeesParQuota } from '../../../shared/reprise-quota'
 import { lotsRetenusParLeQuota } from './lots-retenus-quota'
-import { HdeskTv } from './HdeskTv'
 import { BarrePassage, type PassageAffiche } from './BarrePassage'
 import {
   ajouterAuBrouillon,
@@ -108,7 +107,15 @@ import { SuppressionConversationsCarte } from './SuppressionConversationsCarte'
 import { departPourModifier } from './modifier-relancer'
 import { demandePourLaFacon, faconsDuMemeEssai, titreDeLaFacon } from './trois-facons'
 import { texteDeLaTache } from '../../../shared/lancer-en-fils'
-import type { PlanDansLaListe } from '../../../shared/plan-de-lots'
+import type { PlanDansLaListe, SelectionAPlanifier } from '../../../shared/plan-de-lots'
+import type { IssuePlanDeSelection } from './CandidatsPickPanel'
+import {
+  planDeLaSaisie,
+  redigerPromptsDuPlan,
+  selectionAPlanifier,
+  type LotDeLancement
+} from './veille-candidats-message'
+import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
 import {
   EVT_LANCER_EN_FILS,
   confirmerLancement,
@@ -126,6 +133,9 @@ import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 import { ProdAutorisationHote } from './ProdAutorisationHote'
 import { TableauDesLots } from './TableauDesLots'
 import { ongletDuFil } from './frise-des-lots'
+import { activiteDesLots, etatDuFil, lotsSousOnglets } from './lots-dans-la-liste'
+import { lireSigneSuperConv, signesDesSuperConvs } from './signe-super-conv'
+import { JaugeSuperConv } from './SigneSuperConv'
 import { usePlanDuChef } from './lots-mesures'
 import { SuperConvDuChat } from './SuperConvMosaique'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
@@ -154,7 +164,7 @@ import {
   DELAI_SONDAGE_FIL,
   DUREE_MAX_SONDAGE_FIL
 } from './chat-auto-mode'
-import { reprendreApresRedemarrage } from './chat-reprise'
+import { reprendreToutesApresRedemarrage } from './chat-reprise'
 import type {
   AsstMsg,
   ChatAttachment,
@@ -267,7 +277,7 @@ import { reutiliserConversationsInchangees } from './conversations-stables'
 import { declencheursDeListe, noterDeclencheursListe, noterLigneListe } from './rendu-long'
 import { useDebutProgressif } from './fil-progressif'
 import { AscenseurDuFil } from './AscenseurDuFil'
-import { flattenChatParts } from '../../../shared/chat-turn'
+import { flattenChatParts, rangsEffacesParLeReset } from '../../../shared/chat-turn'
 type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 /** Le modèle retenu pour un fil (voir `Conversation.modeleChoisi` côté main). */
 type ModeleDuFil = { provider: string; model?: string; reasoningEffort?: string }
@@ -318,14 +328,18 @@ import { lireArretsChaine, noterArretChaine, oublierArretChaine } from './arrets
 import { ecrireToursAuto, lireToursAuto } from './tours-auto-persistes'
 import { RunsEnDirect } from './runs-en-direct'
 import { RemplirSaisieDuFil } from './saisie-du-fil'
-import { BoutonDetails, BoutonNavigateur } from './BoutonNavigateur'
+import { BoutonBureauxCaches, BoutonDetails, BoutonNavigateur } from './BoutonNavigateur'
+import { HdeskGestionView } from './HdeskGestionView'
+import { filsDuPanneau, useGuetBureauxDuFil } from './guet-bureaux-du-fil'
 import { NavigateurIntegre } from './NavigateurIntegre'
+import { useRaccourciQuestionACote } from './question-a-cote-outils'
+import { BoutonQuestionACote, QuestionACote } from './QuestionACote'
 import {
   apiNavigateur,
   blocPourLeChat,
   lienAOuvrirDansLePanneau
 } from './navigateur-integre-outils'
-import type { AnnotationNavigateur, ReglagesNavigateur } from '../../../shared/navigateur'
+import type { ElementChoisiNavigateur, ReglagesNavigateur } from '../../../shared/navigateur'
 /**
  * Dossier de travail choisi POUR LE PROCHAIN fil, memorise entre les sessions JUSQU'A ce que ce
  * fil naisse : il est alors vide (`consommerDossierNouveauFil`), il ne sert qu'une fois.
@@ -509,11 +523,17 @@ const PastilleEnTete = memo(function PastilleEnTete({
  * 2026-10-26). Avec plusieurs plans, les fils « Lot N/M — … » se mêlaient aux autres et on ne
  * savait plus à quel chef ils répondaient. Un fil de lot ne porte aucun lien vers son chef : seul
  * le plan le sait (canal `os:plansDeLots`, `main/plans-de-lots-app.ts`).
+ *
+ * Depuis conv-1381, un lot qui a son onglet n'a plus de ligne (`lots-dans-la-liste.ts`) ; depuis
+ * conv-1394, un lot d'un ancien plan non plus (le bloc du chef y mène). Ce rangement ne sert plus
+ * qu'aux résultats de recherche.
  */
 interface LienDeLot {
   chef: string
   rang: number
   total: number
+  /** Le lot appartient au plan que montre son chef : il a son onglet dans la super conv. */
+  onglet: boolean
 }
 /**
  * Pur : fil de lot → son chef, son rang et le total, d'après la réponse du geste « tous »
@@ -526,7 +546,12 @@ function liensDesPlans(plans: readonly PlanDansLaListe[]): Map<string, LienDeLot
   for (const plan of plans)
     for (const lot of plan.lots)
       if (lot.fil !== plan.chef)
-        liens.set(lot.fil, { chef: plan.chef, rang: lot.rang, total: plan.total })
+        liens.set(lot.fil, {
+          chef: plan.chef,
+          rang: lot.rang,
+          total: plan.total,
+          onglet: plan.actuel
+        })
   return liens
 }
 
@@ -553,7 +578,8 @@ function memesLiens(a: ReadonlyMap<string, LienDeLot>, b: ReadonlyMap<string, Li
       !autre ||
       autre.chef !== lien.chef ||
       autre.rang !== lien.rang ||
-      autre.total !== lien.total
+      autre.total !== lien.total ||
+      autre.onglet !== lien.onglet
     )
       return false
   }
@@ -622,6 +648,8 @@ const LigneConversation = memo(function LigneConversation({
   actif,
   occupe,
   nonVue,
+  questionDUnLot,
+  superConv,
   selectionnee,
   mosaiqueOuverte,
   convQuery,
@@ -638,6 +666,13 @@ const LigneConversation = memo(function LigneConversation({
   actif: boolean
   occupe: boolean
   nonVue: boolean
+  /** Fil chef dont un lot attend ta réponse (conv-1381) : voir `etatDuFil`. */
+  questionDUnLot: boolean
+  /**
+   * Signe d'un fil chef (conv-1395, `signe-super-conv.ts`), encodé en chaîne pour garder `memo` ;
+   * absent pour un fil hors plan.
+   */
+  superConv?: string
   selectionnee: boolean
   mosaiqueOuverte: boolean
   convQuery: string
@@ -649,25 +684,12 @@ const LigneConversation = memo(function LigneConversation({
   // Le gel de la liste compte ses lignes redessinées (conv-1115, `rendu-long.ts`).
   noterLigneListe(c.id)
   const { t } = useTextesChatFil()
-  const conversationState = deriveConversationState({
-    busy: occupe,
-    messageCount: c.messageCount ?? c.messages?.length ?? 0,
-    lastMessageRole:
-      c.lastMessageRole ??
-      // Même règle que la projection du store : une consigne écrite pendant un
-      // tour (`orientation`) ne porte pas d'attente de réponse (conv-61).
-      [...(c.messages ?? [])].reverse().find((m) => m.orientation !== true)?.role,
-    lastAssistantStatus: c.lastAssistantStatus,
-    asksUser: c.lastAssistantAsksUser === true,
-    streamingTurn: c.hasStreamingTurn === true,
-    // La conversation OUVERTE est lue par definition : elle ne doit jamais
-    // s'afficher « non lue » sous les yeux de celui qui la regarde.
-    unseen: nonVue
-  })
+  const conversationState = etatDuFil(c, occupe, nonVue, questionDUnLot)
   const stateDescription = `${conversationState.label} — ${conversationState.detail}`
+  const signe = superConv === undefined ? null : lireSigneSuperConv(superConv)
   return (
     <div
-      className={`conv-item${actif ? ' active' : ''}${c.surlignee ? ' surlignee' : ''}`}
+      className={`conv-item${actif ? ' active' : ''}${c.surlignee ? ' surlignee' : ''}${signe ? ' conv-item--super' : ''}`}
       style={{ marginLeft: depth * 14 }}
       data-conversation-id={c.id}
       {...(lot ? { 'data-lot': lot } : {})}
@@ -724,9 +746,47 @@ const LigneConversation = memo(function LigneConversation({
           )}
         </span>
         <span className="conv-copy">
-          <span className="conv-label">
-            {convQuery ? <TexteSurligne texte={c.title} terme={convQuery} /> : c.title}
-          </span>
+          {signe && signe.total > 0 ? (
+            /* MÊME STRUCTURE QUE LA MAQUETTE CHOISIE (conv-1395, « ça ressemble pas du tout ») :
+               titre, « N ? » puis « M/T » sur la ligne du titre, jauge dessous sur TOUTE la largeur.
+               Les badges sont donc DANS le bouton de la ligne : le raccourci n'est pas un bouton
+               (pas de bouton dans un bouton), il arrête le clic ; au clavier, le lot s'ouvre par
+               son onglet dans la super conv. */
+            <>
+              <span className="conv-sc-tete">
+                <span className="conv-label">
+                  {convQuery ? <TexteSurligne texte={c.title} terme={convQuery} /> : c.title}
+                </span>
+                {signe.question && (
+                  <span
+                    className="conv-sc-question"
+                    title={t('liste.superConv.question', { rang: signe.question.rang })}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      window.dispatchEvent(
+                        new CustomEvent('autowin:open-conversation', {
+                          detail: signe.question?.fil
+                        })
+                      )
+                    }}
+                  >
+                    {signe.question.rang} ?
+                  </span>
+                )}
+                <span
+                  className={`conv-sc-compte tnum${signe.finis === signe.total ? ' is-fini' : ''}`}
+                  title={t('liste.superConv.compte', { finis: signe.finis, total: signe.total })}
+                >
+                  {signe.finis}/{signe.total}
+                </span>
+              </span>
+              <JaugeSuperConv segments={signe.segments} />
+            </>
+          ) : (
+            <span className="conv-label">
+              {convQuery ? <TexteSurligne texte={c.title} terme={convQuery} /> : c.title}
+            </span>
+          )}
           {convQuery && snippet && (
             <span className="conv-snippet">
               <TexteSurligne texte={snippet} terme={convQuery} />
@@ -783,6 +843,7 @@ const LigneConversation = memo(function LigneConversation({
       >
         ⋮
       </button>
+      {signe && <span className="conv-sc-pile" aria-hidden="true" />}
     </div>
   )
 })
@@ -900,6 +961,29 @@ type MessageStocke = Partial<StoredAssistantMessage> & {
  * bulle à cet endroit et la suite s'affiche sous la consigne. Tour encore en cours : rien ne bouge,
  * l'affichage en direct a sa propre coupure (`.directive-receipt`).
  */
+/**
+ * L'HEURE, QUAND LE NOMBRE NE VAUT PLUS (conv-1401, 2026-10-31). Un fil enregistré avant le
+ * recalage des coupures (`recalerLesCoupures`, conversations.ts) porte une coupure au-delà de la
+ * réponse, ou aucune pour la 2e consigne d'un tour : toute la réponse remontait au-dessus. On coupe
+ * alors avant la première part datée APRÈS la consigne ; une part sans heure prend celle de la
+ * précédente. `undefined` si rien n'est daté : le fil reste tel qu'il était.
+ */
+function coupureALHeure(
+  parts: readonly { kind: string }[],
+  debut: number,
+  ts: number | undefined
+): number | undefined {
+  if (ts === undefined) return undefined
+  let heure: number | undefined
+  for (let rang = 0; rang < parts.length; rang++) {
+    const part = parts[rang] as { at?: unknown; artifact?: { createdAt?: unknown } }
+    const propre = part.at ?? part.artifact?.createdAt
+    if (typeof propre === 'number') heure = propre
+    if (rang >= debut && heure !== undefined && heure > ts) return rang
+  }
+  return heure === undefined ? undefined : parts.length
+}
+
 function couperAuxConsignes(messages: readonly MessageStocke[]): MessageStocke[] {
   const out: MessageStocke[] = []
   for (let i = 0; i < messages.length; i++) {
@@ -910,20 +994,29 @@ function couperAuxConsignes(messages: readonly MessageStocke[]): MessageStocke[]
       continue
     }
     let debut = 0
+    let coupe = false
     let j = i + 1
     const morceaux: MessageStocke[] = []
     for (; j < messages.length; j++) {
       const consigne = messages[j]
       if (consigne.role !== 'user' || !consigne.orientation) break
-      const coupure = consigne.coupeLaReponse
-      if (typeof coupure === 'number' && coupure > debut && coupure < parts.length) {
-        const tranche = parts.slice(debut, coupure)
-        morceaux.push({ ...assistant, parts: tranche, content: flattenChatParts(tranche) })
-        debut = coupure
+      const notee = consigne.coupeLaReponse
+      const lue =
+        typeof notee === 'number' && notee >= 0 && notee <= parts.length
+          ? Math.max(notee, debut)
+          : coupureALHeure(parts, debut, consigne.ts)
+      // 0 est une vraie coupure : tout ce qui la précédait a été effacé, la réponse passe dessous.
+      if (lue !== undefined && lue < parts.length) {
+        if (lue > debut) {
+          const tranche = parts.slice(debut, lue)
+          morceaux.push({ ...assistant, parts: tranche, content: flattenChatParts(tranche) })
+        }
+        debut = lue
+        coupe = true
       }
       morceaux.push(consigne)
     }
-    if (debut === 0) {
+    if (!coupe) {
       out.push(assistant, ...messages.slice(i + 1, j))
     } else {
       const reste = parts.slice(debut)
@@ -959,10 +1052,13 @@ function cleNomTaille(fichier: { name: string; size: number }): string {
 
 export function ChatView({
   isActive = true,
-  onInspectTurn
+  onInspectTurn,
+  demandeBureaux = 0
 }: {
   isActive?: boolean
   onInspectTurn?: (target: InspectTurnTarget) => void
+  /** Compteur de « va sur les bureaux cachés » (App.tsx) : chaque hausse ouvre le panneau. */
+  demandeBureaux?: number
 }): React.JSX.Element {
   // La vue se redessine quand la langue change (`texteFil` lit la langue courante).
   const { langue } = useTextesChatFil()
@@ -1107,6 +1203,25 @@ export function ChatView({
   const [modeleNouveauFil, setModeleNouveauFil] = useState<ModeleDuFil | null>(null)
   const modeleNouveauFilRef = useRef<ModeleDuFil | null>(null)
   modeleNouveauFilRef.current = modeleNouveauFil
+  /**
+   * LE COMPTE ARMÉ POUR LE FIL QUI VA NAÎTRE (conv-1416), même chemin que le modèle ci-dessus : un clic
+   * sur une puce avant le premier message vaut pour ce fil, qui ne changera pas de compte tout seul.
+   */
+  const [compteNouveauFil, setCompteNouveauFil] = useState<string | null>(null)
+  const compteNouveauFilRef = useRef<string | null>(null)
+  compteNouveauFilRef.current = compteNouveauFil
+  /** Pose le compte armé sur le fil qui vient de naître, puis le vide. Un échec se dit, sans bloquer. */
+  async function poserCompteArme(conversationId: string): Promise<void> {
+    const arme = compteNouveauFilRef.current
+    if (!arme) return
+    compteNouveauFilRef.current = null
+    setCompteNouveauFil(null)
+    try {
+      await window.api.conversationSetClaudeAccount?.(conversationId, arme)
+    } catch (error) {
+      setCompteError(error instanceof Error ? error.message : String(error))
+    }
+  }
   /** Pose le modèle armé sur le fil qui vient de naître, puis le vide. Best-effort : jamais bloquant. */
   async function poserModeleArme(conversationId: string): Promise<void> {
     const arme = modeleNouveauFilRef.current
@@ -1748,8 +1863,8 @@ export function ChatView({
   const mentionSourcesRef = useRef(mentionSources)
   mentionSourcesRef.current = mentionSources
   /**
-   * Chips d'accueil dérivées de l'état RÉEL (runs bloqués, brouillon repris) ; repli
-   * statique si rien à dire. Rendues par le `SuggestionGrid` déjà existant.
+   * Suggestions d'accueil dérivées de l'état RÉEL (runs bloqués, brouillon repris) ; repli
+   * statique si rien à dire. `AnimationAccueilChat` les écrit une à une.
    */
   /**
    * FRICTION sur une série d'orchestrations sans livraison. Mesuré (conv-1302, 2026-08-18) : douze
@@ -1767,6 +1882,11 @@ export function ChatView({
     // la langue de l'interface (conv-1170) : la puce cliquée part telle qu'affichée.
     () => buildHomeSuggestions({ runs, resumedDraft: brouillonPresent ? 'brouillon' : '' }, langue),
     [runs, brouillonPresent, langue]
+  )
+  const usagesAccueil = useMemo(() => usagesDesSkills(langue), [langue])
+  const phrasesAccueil = useMemo(
+    () => homeSuggestions.flatMap((groupe) => groupe.items.map((item) => item.label)),
+    [homeSuggestions]
   )
   const [openRun, setOpenRun] = useState<OpenRunState | null>(null)
   // Chemin du run déplié à l'instant présent : une relecture en vol vérifie dessus que
@@ -1891,8 +2011,28 @@ export function ChatView({
    * de l'en-tête), et ouvert TOUT SEUL quand l'agent ouvre une page dans le fil actif. Les onglets
    * déjà vus par fil vivent dans une REF : un événement d'état (chargement, titre) ne re-rend pas la
    * vue chat, seule une ouverture de panneau le fait.
+   * UN SEUL PANNEAU À LA FOIS (conv-1378, 2026-10-31) : navigateur et Bureaux cachés se partagent cette
+   * valeur, parce qu'à 1280 px les deux ensemble ne laissent plus de place au fil. Une valeur unique
+   * rend « les deux ouverts » impossible à écrire, là où deux booléens auraient dû se fermer l'un l'autre.
    */
-  const [navigateurOuvert, setNavigateurOuvert] = useState(false)
+  const [panneauOutil, setPanneauOutil] = useState<'navigateur' | 'bureaux' | null>(null)
+  const navigateurOuvert = panneauOutil === 'navigateur'
+  const bureauxOuverts = panneauOutil === 'bureaux'
+  const basculerNavigateur = (): void =>
+    setPanneauOutil((ouvert) => (ouvert === 'navigateur' ? null : 'navigateur'))
+  // Une demande venue d'ailleurs (menu de commandes, agent) rouvre le panneau, même refermé ; une
+  // référence à zéro et pas à la prop : une demande faite avant le montage du chat compte aussi.
+  const demandeBureauxVueRef = useRef(0)
+  useEffect(() => {
+    if (demandeBureaux === demandeBureauxVueRef.current) return
+    demandeBureauxVueRef.current = demandeBureaux
+    setPanneauOutil('bureaux')
+  }, [demandeBureaux])
+  // Question à côté (conv-1362) : Ctrl+;, fil unique. Son état de saisie vit dans son composant.
+  const [questionACoteOuverte, setQuestionACoteOuverte] = useState(false)
+  useRaccourciQuestionACote(isActive && convViewMode !== 'mosaic' && Boolean(activeId), () =>
+    setQuestionACoteOuverte((ouverte) => !ouverte)
+  )
   const reglagesNavigateurRef = useRef<ReglagesNavigateur | null>(null)
   const ongletsConnusRef = useRef(new Map<string, Set<string>>())
   useEffect(() => {
@@ -1907,7 +2047,7 @@ export function ChatView({
       ongletsConnusRef.current.set(etat.conversationId, new Set(ids))
       // Fil pas encore relu : on apprend ses onglets sans ouvrir — ce n'est pas une ouverture vue.
       if (!connus || etat.conversationId !== activeRef.current) return
-      if (ids.some((id) => !connus.has(id))) setNavigateurOuvert(true)
+      if (ids.some((id) => !connus.has(id))) setPanneauOutil('navigateur')
     })
   }, [])
   useEffect(() => {
@@ -1927,7 +2067,7 @@ export function ChatView({
       // Sans fil ouvert, pas d'onglets à montrer : le raccourci ne bascule rien d'invisible.
       if (event.key.toLowerCase() !== 'b' || !activeRef.current) return
       event.preventDefault()
-      setNavigateurOuvert((ouvert) => !ouvert)
+      setPanneauOutil((ouvert) => (ouvert === 'navigateur' ? null : 'navigateur'))
     }
     document.addEventListener('keydown', surTouche)
     return () => document.removeEventListener('keydown', surTouche)
@@ -2064,13 +2204,12 @@ export function ChatView({
   }
 
   /**
-   * ANNOTATIONS ET ÉLÉMENT CHOISI → SAISIE (conv-1286, lot 3/5) : même chemin que la référence
-   * d'Alt+clic (texte ajouté au brouillon du fil, sans envoyer) et que l'instant de vidéo pointé
-   * (captures jointes par `addFiles`, dédoublonnées par NOM : chaque nom porte l'id de l'annotation).
+   * ÉLÉMENT CHOISI → SAISIE (conv-1286, lot 3/5) : même chemin que la référence d'Alt+clic (texte
+   * ajouté au brouillon du fil, sans envoyer) et que l'instant de vidéo pointé (capture jointe par
+   * `addFiles`, dédoublonnée par NOM : chaque nom porte l'id de l'élément).
    */
-  function insererDepuisLeNavigateur(annotations: AnnotationNavigateur[], choisi: boolean): void {
-    if (annotations.length === 0) return
-    const { texte, images } = blocPourLeChat(annotations, choisi)
+  function insererElementChoisi(element: ElementChoisiNavigateur): void {
+    const { texte, images } = blocPourLeChat(element)
     setDraftInput(composerDraftKeyRef.current, ajouterAuBrouillon(texteDuComposer(), texte))
     if (images.length > 0) void addFiles(images, undefined, (fichier) => fichier.name)
     requestAnimationFrame(() => composerRef.current?.focusAt(-1))
@@ -2102,7 +2241,7 @@ export function ChatView({
   async function ouvrirDansLeNavigateur(conversationId: string, adresse: string): Promise<void> {
     const api = apiNavigateur()
     if (!api) return
-    setNavigateurOuvert(true)
+    setPanneauOutil('navigateur')
     try {
       // Le même lien recliqué REPREND son onglet au lieu d'en empiler un de plus.
       const etat = await api.etat(conversationId)
@@ -2290,17 +2429,17 @@ export function ChatView({
    * LE COMPTE CLAUDE, A L'ECHELLE DE LA CONVERSATION.
    *
    * Le choix est memorise sur la conversation ouverte (`conversationSetClaudeAccount`) ET rendu
-   * actif tout de suite, pour que la barre de quota et le badge d'auth parlent du bon compte. Le
-   * main le re-applique de toute facon au depart de chaque tour : c'est lui qui tient la verite.
+   * actif tout de suite, pour que le badge d'auth parle du bon compte. Chaque appel du fil lit ensuite
+   * ce compte sur la conversation (`claudeCompteDuFil`, conv-1416) : c'est le main qui tient la verite.
    */
   const choisirCompteDeConversation = async (accountId: string): Promise<void> => {
     if (compteBusy) return
     setCompteBusy(true)
     setCompteError(null)
     try {
-      // Sans conversation ouverte, on bascule seulement le compte de l'application : il n'y a
-      // encore aucun fil sur lequel memoriser le choix.
+      // Sans conversation ouverte, le choix est ARME pour le fil qui va naitre (conv-1416).
       if (activeId) await window.api.conversationSetClaudeAccount?.(activeId, accountId)
+      else setCompteNouveauFil(accountId)
       const payload = await window.api.claudeAccountSwitch?.(accountId)
       if (payload) setComptesClaude(payload)
       if (activeId)
@@ -2380,18 +2519,18 @@ export function ChatView({
   /**
    * Le choix de compte Claude de la conversation ouverte, partagé par la pop-up de modèle ET la
    * pop-up des quotas (demande du 2026-09-23) : un seul chemin, celui qui mémorise le compte sur le
-   * fil — une bascule seulement globale serait défaite au tour suivant (index.ts ré-applique le
-   * compte de la conversation au départ de chaque tour).
-   * Sans conversation ouverte (fil neuf pas encore créé), le bloc reste AFFICHÉ et se replie sur le
-   * compte actif de l'application : le faire disparaître donnait l'impression que la fonctionnalité
-   * avait été retirée.
+   * fil — une bascule seulement globale ne vaudrait pas pour lui (chaque appel du fil lit son compte
+   * sur la conversation, conv-1416).
+   * Sans conversation ouverte (fil neuf pas encore créé), le bloc reste AFFICHÉ et montre le compte
+   * armé, sinon le compte actif de l'application : le faire disparaître donnait l'impression que la
+   * fonctionnalité avait été retirée.
    */
   const comptesDeConversation: OrchestratorAccounts | undefined = comptesClaude
     ? {
         accounts: comptesClaude.accounts,
         selectedId: activeId
           ? convs.find((conv) => conv.id === activeId)?.claudeAccountId
-          : undefined,
+          : (compteNouveauFil ?? undefined),
         activeId: comptesClaude.activeId,
         // Seule la bascule elle-même verrouille les puces, JAMAIS le tour en cours (2026-10-21) :
         // c'est pendant un tour qu'on bute sur un quota épuisé, et changer de compte ne touche pas
@@ -2518,7 +2657,10 @@ export function ChatView({
       return { ...current, [conversationId]: next }
     })
   }
-  function rebaseDirectiveReceiptsAfterStreamReset(conversationId: string, streamId: string): void {
+  function rebaseDirectiveReceiptsAfterStreamReset(
+    conversationId: string,
+    reset: { streamId: string; conclusionSeule?: true }
+  ): void {
     const liveMessages = liveMessagesRef.current.get(conversationId) ?? []
     setDirectiveReceipts((current) => {
       const receipts = current[conversationId]
@@ -2528,12 +2670,11 @@ export function ChatView({
         if (receipt.afterPartIndex < 0) return receipt
         const anchorMessage = liveMessages[receipt.afterMessageIndex]
         if (anchorMessage?.role !== 'assistant') return receipt
-        const partsBeforeAnchor = anchorMessage.parts.slice(0, receipt.afterPartIndex)
-        const removedBefore = partsBeforeAnchor.filter(
-          (part) => part.kind === 'text' && part.streamId === streamId
-        ).length
-        const anchorPart = anchorMessage.parts[receipt.afterPartIndex]
-        const anchorRemoved = anchorPart?.kind === 'text' && anchorPart.streamId === streamId
+        // Les MÊMES parts que retire le réducteur : une relance ne retire plus que la conclusion
+        // (conv-1401), compter tout le texte du flux décalerait le reçu à tort.
+        const effaces = rangsEffacesParLeReset(anchorMessage.parts, reset)
+        const removedBefore = effaces.filter((rang) => rang < receipt.afterPartIndex).length
+        const anchorRemoved = effaces.includes(receipt.afterPartIndex)
         if (removedBefore === 0 && !anchorRemoved) return receipt
         changed = true
         const nouvelIndex = receipt.afterPartIndex - removedBefore - (anchorRemoved ? 1 : 0)
@@ -3303,6 +3444,36 @@ export function ChatView({
         setLiveRuns((current) =>
           reduceScopedLiveRuns(current, { type: 'note', convId, runPath: e.runPath, note })
         )
+        /*
+         * UN RUN REPRIS N'A PAS DE TOUR DE CHAT (conv-1330, 2026-10-30). Un tour de chat pose cette
+         * note dans la bulle par son battement (`action-progress`) ; une orchestration reprise par le
+         * main après un redémarrage n'en envoie pas, et sa bulle restait muette 35 min (conv-1324,
+         * spinner allumé). Fil non occupé = aucun tour de chat ne pilote cette ligne : l'écran la
+         * pose lui-même sur l'orchestration encore ouverte. Fil occupé : le battement du tour suffit.
+         */
+        const fil = liveMessagesRef.current.get(convId) ?? []
+        if (
+          !busyConversationsRef.current.has(convId) &&
+          fil.some((m) => m.role === 'assistant' && porteUneOrchestrationOuverte(m as AsstMsg))
+        )
+          patchLast(
+            convId,
+            (message) => {
+              const ouverte = [...message.parts]
+                .reverse()
+                .find((part) => part.kind === 'action' && part.name === 'orchestrate')
+              if (ouverte?.kind !== 'action' || !ouverte.actionId) return
+              Object.assign(
+                message,
+                reduceAssistantPilotEvent(message, {
+                  kind: 'action-progress',
+                  actionId: ouverte.actionId,
+                  text: note
+                })
+              )
+            },
+            porteUneOrchestrationOuverte
+          )
       } else if (e.type === 'orchestrate-delta' && typeof e.delta === 'string' && e.convId) {
         deltaBatcher.enqueue({ convId: e.convId, runPath: e.runPath, delta: e.delta })
       } else if (e.type === 'orchestrate-step' && e.step && e.convId) {
@@ -3646,7 +3817,10 @@ export function ChatView({
         }
       }
       if (e.kind === 'stream-reset' && e.streamId)
-        rebaseDirectiveReceiptsAfterStreamReset(conversationId, e.streamId)
+        rebaseDirectiveReceiptsAfterStreamReset(conversationId, {
+          streamId: e.streamId,
+          ...(e.conclusionSeule ? { conclusionSeule: true as const } : {})
+        })
       if (e.kind === 'delta' || e.kind === 'reasoning' || e.kind === 'think') {
         pilotBatcher.enqueue({ conversationId, event: e })
         return
@@ -4076,8 +4250,9 @@ export function ChatView({
       await window.api.conversationsSetProject?.(creee.id, dossierArme)
       consommerDossierNouveauFil()
     }
-    // Le modèle armé, lui aussi, se pose AVANT le premier tour (le main le lit à son départ).
+    // Le modèle et le compte armés, eux aussi, se posent AVANT le premier tour (le main les lit alors).
     await poserModeleArme(creee.id)
+    await poserCompteArme(creee.id)
     setConvs((courant) =>
       courant.some((c) => c.id === creee.id)
         ? courant
@@ -5857,7 +6032,7 @@ export function ChatView({
   useEffect(() => {
     if (repriseTenteeRef.current || convs.length === 0) return
     repriseTenteeRef.current = true
-    void reprendreApresRedemarrage({
+    void reprendreToutesApresRedemarrage({
       lire: async () => (await window.api.repriseEnAttente?.()) ?? null,
       ouvrir: async (conversationId) => {
         const cible = convsRef.current.find((conversation) => conversation.id === conversationId)
@@ -5940,6 +6115,70 @@ export function ChatView({
     (prompt: string, suite?: readonly string[]) => pickRef.current(prompt, suite),
     []
   )
+  /**
+   * UNE SÉLECTION EN PLUSIEURS LOTS PART EN SUPER CONVERSATION (conv-1333, 2026-10-30). Depuis le
+   * 22/10, 4 sélections ont prévu 12 lots dans la file du fil (`pickRef`) : 4 sont partis, jamais un
+   * lot 2. Cette file vit dans la vue : Stop, un redémarrage ou un remontage l'effacent sans trace.
+   * Le plan, lui, est sur disque (`plans-de-lots-app.ts`), fait 3 lots à la fois et se reprend.
+   * `repli` : la file du fil reste la voie d'un fil qui ne peut pas mener de plan (le fil d'un lot).
+   */
+  const planSelectionRef = useRef<
+    (selection: SelectionAPlanifier) => Promise<IssuePlanDeSelection>
+  >(async () => ({ ok: false, erreur: '', repli: true }))
+  planSelectionRef.current = async (selection) => {
+    const id = activeRef.current
+    if (!id || typeof window.api?.plansDeLots !== 'function')
+      return { ok: false, erreur: '', repli: true }
+    // Comme un envoi à la main : ce tour est traité, le mode auto n'enchaîne pas par-dessus le plan.
+    const signature = signatureTour(liveMessagesRef.current.get(id) ?? [])
+    if (signature !== null) autoEtat(id).tour = signature
+    try {
+      const reponse = await window.api.plansDeLots(
+        'lancer-selection',
+        id,
+        undefined,
+        undefined,
+        selection
+      )
+      return reponse.ok ? { ok: true } : reponse
+    } catch (erreur) {
+      return { ok: false, erreur: erreur instanceof Error ? erreur.message : String(erreur) }
+    }
+  }
+  const planSelection = useCallback(
+    (selection: SelectionAPlanifier) => planSelectionRef.current(selection),
+    []
+  )
+  /**
+   * « 1 et 12 » TAPÉ SOUS LE PANNEAU VAUT LE CLIC (conv-1333). Un lot part en message, comme le
+   * bouton ; plusieurs lots partent en plan. Plan refusé : le texte reste dans la saisie, le refus se
+   * lit dans le bandeau, rien ne part en silence.
+   */
+  async function lancerPlanTape(plan: readonly LotDeLancement[], cleSaisie: string): Promise<void> {
+    const prompts = redigerPromptsDuPlan(plan)
+    const [premier, ...suite] = prompts
+    if (premier === undefined) return
+    if (suite.length === 0) {
+      await send(premier)
+      return
+    }
+    const issue = await planSelectionRef.current(selectionAPlanifier(plan))
+    if (issue.ok) {
+      setDraftInput(cleSaisie, '')
+      setAppNotice({
+        text: traduireChatDecisions('candidats.planLance', langueCourante(), { n: plan.length })
+      })
+      return
+    }
+    if (issue.repli) {
+      setDraftInput(cleSaisie, '')
+      pickRef.current(premier, suite)
+      return
+    }
+    setAppNotice({
+      text: traduireChatDecisions('candidats.planRefuse', langueCourante(), { erreur: issue.erreur })
+    })
+  }
   /**
    * LE CLIC AUTOMATIQUE SUR LES CANDIDATS — mode auto seulement, et UNE SEULE FOIS par message.
    *
@@ -6083,6 +6322,24 @@ export function ChatView({
       options?.piecesJointesImposees ?? (keepComposerDraft ? [] : outgoingDraft.attachments)
     const sendSelectionGeneration = composerSelectionGenerationRef.current
     const sendLockKey = sourceConversationId ?? NEW_DRAFT_KEY
+    // Seulement ce que l'utilisateur tape (`text` absent) : ni un clic, ni un envoi automatique.
+    if (
+      text === undefined &&
+      sourceConversationId &&
+      outgoingAttachments.length === 0 &&
+      !busyConversationsRef.current.has(sourceConversationId) &&
+      !sendLocksRef.current.has(sendLockKey)
+    ) {
+      const planTape = planDeLaSaisie(
+        value,
+        liveMessagesRef.current.get(sourceConversationId) ?? []
+      )
+      if (planTape) {
+        journaliserSaisie(sourceConversationId, value, 'message')
+        await lancerPlanTape(planTape, sendDraftKey)
+        return
+      }
+    }
     if (
       (!value && outgoingAttachments.length === 0) ||
       (sourceConversationId ? busyConversationsRef.current.has(sourceConversationId) : busy) ||
@@ -6257,8 +6514,9 @@ export function ChatView({
           await window.api.conversationsSetProject?.(c.id, dossierNouveauFilRef.current)
           consommerDossierNouveauFil()
         }
-        // Le modèle armé dans « Nouveau fil » se pose de même AVANT le premier tour.
+        // Le modèle et le compte armés dans « Nouveau fil » se posent de même AVANT le premier tour.
         await poserModeleArme(c.id)
+        await poserCompteArme(c.id)
         const shouldAdoptCreatedConversation =
           activeRef.current === null &&
           composerDraftKeyRef.current === sendDraftKey &&
@@ -7428,6 +7686,21 @@ export function ChatView({
   const ongletDuFilOuvert =
     planDuFilOuvert && activeId ? ongletDuFil(planDuFilOuvert, activeId) : null
   /*
+   * LES BUREAUX CACHÉS DU CHANTIER (conv-1378, 2026-10-31) : le panneau s'ouvre quand le fil lance un
+   * bureau, et il remplace le bloc qui s'affichait dans le fil. Toute la super conv compte : un lot
+   * ouvre son bureau dans son propre fil. Vide en mosaïque : plusieurs fils à l'écran, le panneau les
+   * montre tous et rien ne s'ouvre seul, faute de place à côté d'eux.
+   */
+  const filsDesBureaux = useMemo(
+    () => filsDuPanneau(convViewMode === 'mosaic' ? null : activeId, chefDuFilOuvert, liensDeLots),
+    [activeId, chefDuFilOuvert, convViewMode, liensDeLots]
+  )
+  useGuetBureauxDuFil({
+    actif: isActive,
+    fils: filsDesBureaux,
+    onBureauLance: () => setPanneauOutil('bureaux')
+  })
+  /*
    * Les titres des onglets de la super conv (conv-1286). La signature garde la MÊME Map tant
    * qu'aucun titre ne change : `convs` est refait à chaque rafraîchissement de la liste, et une Map
    * neuve redessinerait onglets et frise, que leur `memo` protège du flux.
@@ -7440,6 +7713,32 @@ export function ChatView({
     () => new Map(JSON.parse(signatureDesTitres) as [string, string][]),
     [signatureDesTitres]
   )
+  // Une recherche montre tout, lots compris : chercher, c'est vouloir voir (conv-1381).
+  const rechercheEnCours = convQuery.trim() !== ''
+  const lotsMasques = useMemo<ReadonlySet<string>>(
+    () => (rechercheEnCours ? new Set() : lotsSousOnglets(liensDeLots, titresDesFils)),
+    [rechercheEnCours, liensDeLots, titresDesFils]
+  )
+  const { chefsActifs, chefsEnQuestion, lotsEnQuestion } = useMemo(
+    () => activiteDesLots(convs, liensDeLots, busyConversations),
+    [convs, liensDeLots, busyConversations]
+  )
+  // Le signe de chaque fil chef dans la liste (conv-1395) : des chaînes, pour que la ligne mémorisée
+  // ne se redessine que si SON signe change.
+  const signesSuperConv = useMemo(
+    () => signesDesSuperConvs(convs, liensDeLots, busyConversations),
+    [convs, liensDeLots, busyConversations]
+  )
+  // Même garde que les titres : `convs` est refait à chaque rafraîchissement de la liste, et un Set
+  // neuf redessinerait les onglets que leur `memo` protège du flux.
+  const signatureDesQuestions = [...lotsEnQuestion].sort().join('\n')
+  const questionsDesLots = useMemo<ReadonlySet<string>>(
+    () => new Set(signatureDesQuestions ? signatureDesQuestions.split('\n') : []),
+    [signatureDesQuestions]
+  )
+  // Le lot ouvert n'a pas de ligne : c'est son chef qui dit où l'on est dans la liste.
+  const filSurligne =
+    activeId && lotsMasques.has(activeId) ? (liensDeLots.get(activeId)?.chef ?? activeId) : activeId
 
   /**
    * Les résultats de recherche, groupés. On transporte le HIT entier (`snippet` compris) plutôt que
@@ -7447,13 +7746,16 @@ export function ChatView({
    * rendait impossible de savoir, à la lecture, d'où venait chaque valeur.
    */
   const groupes = useMemo(() => {
-    const entrees = conversationHits.map((hit) => ({
-      id: hit.conversation.id,
-      projectPath: hit.conversation.projectPath,
-      categorie: hit.conversation.categorie,
-      autoKaizen: hit.conversation.autoKaizen,
-      hit
-    }))
+    // Retirés ICI, avant tout regroupement : « Récent » et les compteurs ne les voient pas non plus.
+    const entrees = conversationHits
+      .filter((hit) => !lotsMasques.has(hit.conversation.id))
+      .map((hit) => ({
+        id: hit.conversation.id,
+        projectPath: hit.conversation.projectPath,
+        categorie: hit.conversation.categorie,
+        autoKaizen: hit.conversation.autoKaizen,
+        hit
+      }))
     /**
      * « Récent » est un RACCOURCI, pas une catégorie : il duplique les fils déjà rangés ailleurs et
      * reste TOUJOURS en tête, hors du tri par date entre groupes (le trier n'aurait aucun sens : il
@@ -7485,7 +7787,15 @@ export function ChatView({
         conversationDateOrder
       )
     ]
-  }, [conversationHits, groupesReplies, conversationDateOrder, convQuery, dossierParDefaut, langue])
+  }, [
+    conversationHits,
+    lotsMasques,
+    groupesReplies,
+    conversationDateOrder,
+    convQuery,
+    dossierParDefaut,
+    langue
+  ])
 
   const openRunsCount = runs.filter((r) => r.summary.status === 'open').length
   /**
@@ -7576,6 +7886,7 @@ export function ChatView({
           <Fragment key={messageKey(message, index)}>
             <ChatMessageRow
               onPickSuggestion={pickSuggestion}
+              onPlanSelection={planSelection}
               autoLancerCandidats={
                 message.role === 'assistant' &&
                 doitAutoLancerCandidats(
@@ -7594,7 +7905,6 @@ export function ChatView({
                 message.role === 'assistant' ? askReponseDuFil(messages, index) : undefined
               }
               message={message}
-              skills={skillsInstallees}
               tourEnCours={
                 message.role === 'user' ? tourDuMessageEnCours(messages, index, busy) : undefined
               }
@@ -7632,6 +7942,7 @@ export function ChatView({
       activeId,
       activeDirectiveReceiptsByMessage,
       pickSuggestion,
+      planSelection,
       answerAsk,
       onInspectTurn,
       handleFork,
@@ -7742,9 +8053,11 @@ export function ChatView({
                       snippet={snippet}
                       depth={groupe.depth + niveau}
                       lot={lot}
-                      actif={c.id === activeId}
-                      occupe={busyConversations.has(c.id)}
+                      actif={c.id === filSurligne}
+                      occupe={busyConversations.has(c.id) || chefsActifs.has(c.id)}
                       nonVue={c.id !== activeId && estNonVue(c, conversationsVues)}
+                      questionDUnLot={chefsEnQuestion.has(c.id)}
+                      superConv={signesSuperConv.get(c.id)}
                       selectionnee={selectedConvIds.has(c.id)}
                       mosaiqueOuverte={mosaicIds.includes(c.id)}
                       convQuery={convQuery}
@@ -7767,7 +8080,11 @@ export function ChatView({
       groupesReplies,
       surviole,
       busyConversations,
+      chefsActifs,
+      chefsEnQuestion,
+      signesSuperConv,
       activeId,
+      filSurligne,
       conversationsVues,
       convSelectionMode,
       convViewMode,
@@ -8553,9 +8870,8 @@ export function ChatView({
           onAnswerAsk={repondreAskMosaiqueStable}
           onRemplirSaisie={remplirSaisieMosaique}
           signatureComposer={signatureComposerMosaique}
-          skills={skillsInstallees}
           liensDeLots={liensDeLots}
-          titresDesFils={titresDesFils}
+          questionsDesLots={questionsDesLots}
           onOuvrirFil={ouvrirFilMosaiqueStable}
         />
       ) : (
@@ -8594,7 +8910,7 @@ export function ChatView({
             />
           )}
           <header className="chat-head row">
-            <div className="row gap2" style={{ alignItems: 'center', minWidth: 0 }}>
+            <div className="row gap2 chat-head-titre" style={{ alignItems: 'center', minWidth: 0 }}>
               <div className="col" style={{ gap: 1, minWidth: 0 }}>
                 <span className="chat-head-kicker">
                   {active ? active.title : texteFil('entete.nouvelle')}
@@ -8749,7 +9065,13 @@ export function ChatView({
               <BoutonNavigateur
                 conversationId={activeId}
                 ouvert={navigateurOuvert}
-                onBasculer={() => setNavigateurOuvert((ouvert) => !ouvert)}
+                onBasculer={basculerNavigateur}
+              />
+              <BoutonBureauxCaches
+                ouvert={bureauxOuverts}
+                onBasculer={() =>
+                  setPanneauOutil((ouvert) => (ouvert === 'bureaux' ? null : 'bureaux'))
+                }
               />
               {/* DÉTAILS, LE MÊME BOUTON CREUX QUE LA MINI-ADRESSE (conv-1317, 2026-10-30 : « le bouton
                   détail met lui le meme look »). Il portait le balisage de ThinkingBlock (conv-178),
@@ -8794,16 +9116,6 @@ export function ChatView({
               })()}
             />
           </header>
-          {planDuFilOuvert && ongletDuFilOuvert !== null ? (
-            <BarriereErreur zone="chat-lots" cle={planDuFilOuvert.id}>
-              <SuperConvDuChat
-                key={planDuFilOuvert.id}
-                plan={planDuFilOuvert}
-                onglet={ongletDuFilOuvert}
-                titres={titresDesFils}
-              />
-            </BarriereErreur>
-          ) : null}
 
           {travailNonPublie && travailNonPublie !== messageNonPublieMasque && (
             <div
@@ -9136,18 +9448,23 @@ export function ChatView({
               </div>
             )}
 
+            {/* Sans cadre autour : le panneau de l'ancien bloc restait gris sur les thèmes clairs.
+                La phrase REMPLIT la saisie, elle ne l'envoie pas (draft conv-1401, « 3+5 »). */}
             {convLoad.status === 'idle' &&
               messages.length === 0 &&
               (!busy || activeId === null) && (
-                <div className="chat-welcome">
-                  <div className="empty">
-                    <h3>{texteFil('accueil.titre')}</h3>
-                    <div className="c-faint">{texteFil('accueil.detail')}</div>
-                  </div>
-                  <div className="chat-suggest">
-                    <SuggestionGrid groups={homeSuggestions} onPick={pickSuggestion} />
-                  </div>
-                </div>
+                <AnimationAccueilChat
+                  libelle={texteFil('accueil.titre')}
+                  detail={texteFil('accueil.detail')}
+                  phrases={phrasesAccueil}
+                  usages={usagesAccueil}
+                  agentsAuTravail={
+                    busyConversations.size + presenceDepuisRunsVivants(liveRuns).runsActifs
+                  }
+                  saisieRemplie={brouillonPresent}
+                  actif={isActive}
+                  onChoisir={remplirSaisie}
+                />
               )}
 
             {activeDirectiveReceipts
@@ -9168,10 +9485,6 @@ export function ChatView({
               </PointerMomentVideo.Provider>
             </VueMesuree>
 
-            {/* Petite TV du bureau cache (conv-528) : un BLOC DEDIE du fil, apres le dernier message
-                (demande du 2026-09-14 « la TV doit etre dans le fil dans un bloc dedie »). Rien
-                n'est rendu sans bureau cache vivant relie a ce fil ; `key` la remet a zero par fil. */}
-            <HdeskTv key={activeId ?? 'aucune'} conversationId={activeId} />
           </div>
 
           {/* Ascenseur à crans du fil (draft conv-1114, « 1 · Dépli en place ») : remplace l'ascenseur
@@ -9224,10 +9537,39 @@ export function ChatView({
           <ProdAutorisationHote conversationId={activeId} />
           {/* Les messages entre agents de fils du même dépôt vivent dans Détails > Runs
               (conv-1139, 2026-10-25 : « ranges ce bloc dans Détails > Runs »), plus ici. */}
+          {/*
+           * LA FRISE DE LA SUPER CONV, EN BAS (conv-1393, 2026-10-31 : « ce bloc mets-le plutôt en
+           * bas »). Sous l'en-tête, elle poussait le fil vers le bas et le lecteur la traversait à
+           * chaque arrivée sur le fil. Elle se pose ici, juste au-dessus du tableau du plan, qui
+           * complète sa ligne de chiffres. Les onglets ne bougent pas : `fixed`, dans la bande des
+           * boutons de fenêtre (SuperConvMosaique.css), quel que soit l'endroit du bloc.
+           */}
+          {planDuFilOuvert && ongletDuFilOuvert !== null ? (
+            <BarriereErreur zone="chat-lots" cle={planDuFilOuvert.id}>
+              <SuperConvDuChat
+                key={planDuFilOuvert.id}
+                plan={planDuFilOuvert}
+                onglet={ongletDuFilOuvert}
+                questions={questionsDesLots}
+              />
+            </BarriereErreur>
+          ) : null}
           {/* Plan de lots d'un fil chef (conv-1150) : avancement, et le seul clic qui le lance. */}
           <BarriereErreur zone="chat-lots" cle={activeId}>
             <TableauDesLots conversationId={activeId} aCoteDeLaFrise={ongletDuFilOuvert !== null} />
           </BarriereErreur>
+          {questionACoteOuverte && activeId && (
+            <BarriereErreur zone="chat-question-a-cote" cle={activeId}>
+              <QuestionACote
+                key={activeId}
+                conversationId={activeId}
+                onFermer={() => {
+                  setQuestionACoteOuverte(false)
+                  composerRef.current?.focus()
+                }}
+              />
+            </BarriereErreur>
+          )}
           <VueMesuree id="chat-saisie" bloc cle={activeId}>
             <ChatComposer
               ref={composerRef}
@@ -9362,6 +9704,12 @@ export function ChatView({
                       />
                     </svg>
                   </button>
+                  {activeId && (
+                    <BoutonQuestionACote
+                      ouvert={questionACoteOuverte}
+                      onBasculer={() => setQuestionACoteOuverte((ouverte) => !ouverte)}
+                    />
+                  )}
                   {/* « ESSAIE 3 FAÇONS » (conv-1038) : la demande tapée, en trois branches comparées. */}
                   <button
                     type="button"
@@ -9429,11 +9777,27 @@ export function ChatView({
             key={activeId}
             conversationId={activeId}
             visible={isActive && !openImage}
-            onFermer={() => setNavigateurOuvert(false)}
-            onEnvoyerAuChat={(annotations) => insererDepuisLeNavigateur(annotations, false)}
-            onElementChoisi={(annotation) => insererDepuisLeNavigateur([annotation], true)}
+            onFermer={() => setPanneauOutil(null)}
+            onElementChoisi={insererElementChoisi}
             onReglages={(reglages) => {
               reglagesNavigateurRef.current = reglages
+            }}
+          />
+        </BarriereErreur>
+      )}
+
+      {/* ---- Bureaux cachés (conv-1378) : à la place du navigateur. Aussi sans fil ouvert et en
+          mosaïque, contrairement à lui : une demande « va sur les bureaux cachés » ne doit pas rester
+          sans effet visible. */}
+      {bureauxOuverts && (
+        <BarriereErreur zone="chat-bureaux" cle="bureaux">
+          <HdeskGestionView
+            active={isActive}
+            fils={filsDesBureaux}
+            onFermer={() => setPanneauOutil(null)}
+            onOpenConversation={(cible) => {
+              // Le même chemin que le reste de l'app : il sait attendre un fil pas encore listé.
+              window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: cible }))
             }}
           />
         </BarriereErreur>

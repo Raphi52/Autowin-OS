@@ -25,12 +25,11 @@ import { BarriereErreur } from './BarriereErreur'
 import { ChatMessageRow } from './ChatMessageRow'
 import { lotsNonLus } from './frise-des-lots'
 import { usePlanDuChef } from './lots-mesures'
-import { BandeauSuperConv, OngletsSuperConv, type OngletSuperConv } from './SuperConvMosaique'
+import { BandeauSuperConv, type OngletSuperConv } from './SuperConvMosaique'
 import { RemplirSaisieDuFil } from './saisie-du-fil'
 import type { Msg } from './chat-view-types'
 import { colonnesPour } from './chat-mosaic-grille'
 import { askReponseDuFil, tourDuMessageEnCours } from './chat-message-keys'
-import type { SkillInstallee } from './useSkillsInventory'
 import './ChatMosaic.css'
 import {
   marquerConversationEnAttente,
@@ -81,20 +80,15 @@ export type ChatMosaicProps = {
    * c'est ce qui autorise une fenetre inchangee a ne pas se re-rendre pendant qu'une autre streame.
    */
   signatureComposer?: string
-  /** Skills installees : un message `/<skill>` porte le meme bandeau qu'en chat plein. */
-  skills?: readonly SkillInstallee[] | null
   /**
    * SUPER CONVS (conv-1305, /draft « implémente 5 et 6 ») : fil de lot → son chef, son rang et le
-   * total (`liensDesPlans`, ChatView). Un chef ouvert ici devient UNE case à onglets, et ses lots
-   * ouverts y entrent au lieu d'occuper chacun une case.
+   * total (`liensDesPlans`, ChatView). Un chef ouvert ici devient UNE case, et ses lots ouverts y
+   * entrent au lieu d'occuper chacun une case.
    */
   liensDeLots?: ReadonlyMap<string, LienDeLotMosaique>
-  /**
-   * Fil → titre de sa conv, pour les onglets d'une super conv (conv-1286) : un lot dont la fenêtre
-   * n'est pas ouverte ici a aussi un onglet. Même Map tant qu'aucun titre ne change.
-   */
-  titresDesFils?: ReadonlyMap<string, string>
-  /** Ouvre un fil de lot dans la mosaïque : clic sur l'onglet d'un lot pas encore peint. */
+  /** Les fils de lot qui attendent ta réponse (conv-1381). Même Set tant qu'aucun ne change. */
+  questionsDesLots?: ReadonlySet<string>
+  /** Ouvre un fil de lot dans la mosaïque : clic sur la ligne d'un lot pas encore peint. */
   onOuvrirFil?: (id: string) => void
 }
 
@@ -107,8 +101,6 @@ function FenetreChatBrut({
   rendreComposer,
   onAnswerAsk,
   onRemplirSaisie,
-  skills,
-  onglets,
   bandeau
 }: {
   fenetre: ChatMosaicWindow
@@ -117,11 +109,8 @@ function FenetreChatBrut({
   rendreComposer: (id: string) => React.ReactNode
   onAnswerAsk?: (prompt: string, cible: string) => void
   onRemplirSaisie?: (texte: string, cible: string) => void
-  skills?: readonly SkillInstallee[] | null
   /** Jamais lue ici : elle n'existe que pour le comparateur du memo ci-dessous. */
   signatureComposer?: string
-  /** Super conv (conv-1305) : les onglets prennent la place du titre dans l'en-tête. */
-  onglets?: React.ReactNode
   /** Super conv (conv-1305) : la frise, posée entre l'en-tête et le fil. */
   bandeau?: React.ReactNode
 }): React.JSX.Element {
@@ -211,7 +200,7 @@ function FenetreChatBrut({
    */
   return (
     <section
-      className={`lisere-dessus chat chat-mosaic-window${onglets ? ' chat-mosaic-super' : ''}`}
+      className="lisere-dessus chat chat-mosaic-window"
       data-conv-id={fenetre.id}
       data-etat={etat}
       ref={cadreRef}
@@ -223,11 +212,7 @@ function FenetreChatBrut({
           `::before` sont desormais le panneau et le cadre du chat, que l'anneau dore ecrasait. */}
       {etat && <span className="chat-mosaic-window-anneau" aria-hidden="true" />}
       <header className="chat-mosaic-window-head">
-        {onglets ?? (
-          <span className="chat-mosaic-window-title">
-            {fenetre.title || t('mosaique.sansTitre')}
-          </span>
-        )}
+        <span className="chat-mosaic-window-title">{fenetre.title || t('mosaique.sansTitre')}</span>
         {fenetre.busy && (
           <span className="chat-mosaic-window-busy" aria-label={t('mosaique.tourEnCours')}>
             •
@@ -271,7 +256,6 @@ function FenetreChatBrut({
                 key={`${fenetre.id}-${index}`}
                 message={message}
                 conversationId={fenetre.id}
-                skills={skills}
                 tourEnCours={
                   message.role === 'user'
                     ? tourDuMessageEnCours([...fenetre.messages], index, fenetre.busy)
@@ -328,8 +312,6 @@ const FenetreMemorisee = memo(FenetreChatBrut, (avant, apres) => {
     avant.onAnswerAsk === apres.onAnswerAsk &&
     avant.onRemplirSaisie === apres.onRemplirSaisie &&
     avant.signatureComposer === apres.signatureComposer &&
-    avant.skills === apres.skills &&
-    avant.onglets === apres.onglets &&
     avant.bandeau === apres.bandeau
   )
 })
@@ -349,11 +331,11 @@ const AUCUN_LOT: ReadonlyMap<string, ChatMosaicWindow> = new Map()
 
 /**
  * UNE CASE POUR TOUTE LA SUPER CONV (conv-1305, /draft : « implémente 5 et 6 »). Le chef et ses lots
- * ouverts ne font plus qu'une fenêtre : un onglet par fil dans l'en-tête, la frise pleine (chiffres
- * et pistes) sous l'onglet du chef, la seule piste du lot sous l'onglet d'un lot, puis le fil
- * et la saisie de l'onglet ouvert — le vrai fil, la vraie saisie, ceux de `FenetreChat`.
+ * ouverts ne font plus qu'une fenêtre : la frise pleine sur le chef, dont chaque ligne ouvre son lot
+ * dans la case ; sur un lot, sa seule piste et « ← Retour » (plus d'onglets depuis conv-1387). Puis
+ * le fil et la saisie de la vue ouverte — le vrai fil, la vraie saisie, ceux de `FenetreChat`.
  *
- * Les rappels et les nœuds passés à `FenetreChat` restent STABLES tant que le plan et l'onglet ne
+ * Les rappels et les nœuds passés à `FenetreChat` restent STABLES tant que le plan et la vue ne
  * changent pas : la mosaïque refabrique ses fenêtres à chaque image d'un flux, et un nœud neuf à
  * chaque image redessinerait la saisie de la case — le gel mesuré en conv-1581.
  */
@@ -366,9 +348,8 @@ function CaseSuperConv({
   onAnswerAsk,
   onRemplirSaisie,
   signatureComposer,
-  skills,
   onOuvrirFil,
-  titresDesFils
+  questionsDesLots
 }: {
   chef: ChatMosaicWindow
   /** Les fenêtres des lots de ce chef déjà ouvertes dans la mosaïque, par fil. */
@@ -379,13 +360,12 @@ function CaseSuperConv({
   onAnswerAsk?: (prompt: string, cible: string) => void
   onRemplirSaisie?: (texte: string, cible: string) => void
   signatureComposer?: string
-  skills?: readonly SkillInstallee[] | null
   onOuvrirFil?: (id: string) => void
-  titresDesFils?: ReadonlyMap<string, string>
+  questionsDesLots?: ReadonlySet<string>
 }): React.JSX.Element {
   const plan = usePlanDuChef(chef.id)
   const [onglet, setOnglet] = useState<OngletSuperConv>('chef')
-  // Un lot fini APRÈS l'ouverture de la case et pas encore regardé garde son onglet doré.
+  // Un lot fini APRÈS l'ouverture de la case et pas encore regardé garde sa ligne dorée.
   const [ouvertLe] = useState(() => Date.now())
   const [vusLe, setVusLe] = useState<Readonly<Record<number, number>>>({})
 
@@ -397,7 +377,7 @@ function CaseSuperConv({
 
   const lotActif =
     typeof onglet === 'number' ? plan?.lots.find((l) => l.rang === onglet) : undefined
-  // Un onglet de lot sans fil (plan relu entre-temps) retombe sur le chef.
+  // Un lot sans fil (plan relu entre-temps) retombe sur le chef.
   const ongletEffectif: OngletSuperConv = lotActif?.fil ? onglet : 'chef'
   const filActif = ongletEffectif === 'chef' ? undefined : lotActif?.fil
 
@@ -414,6 +394,7 @@ function CaseSuperConv({
     const fil = p?.lots.find((l) => l.rang === suivant)?.fil
     if (fil && !ouverts.has(fil)) ouvrir?.(fil)
   }, [])
+  const retourAuChef = useCallback(() => choisir('chef'), [choisir])
   /** Fermer la case ferme TOUTE la super conv : le chef et chacun de ses lots ouverts. */
   const fermerTout = useCallback(() => {
     const { chef: id, lots: ouverts, onClose: fermer } = derniers.current
@@ -421,19 +402,6 @@ function CaseSuperConv({
     for (const fil of ouverts.keys()) fermer(fil)
   }, [])
 
-  const onglets = useMemo(
-    () =>
-      plan ? (
-        <OngletsSuperConv
-          plan={plan}
-          actif={ongletEffectif}
-          nonLus={lotsNonLus(plan, vusLe, ouvertLe, ongletEffectif)}
-          titres={titresDesFils}
-          onChoisir={choisir}
-        />
-      ) : undefined,
-    [plan, ongletEffectif, vusLe, ouvertLe, titresDesFils, choisir]
-  )
   const bandeau = useMemo(
     () =>
       plan ? (
@@ -442,11 +410,14 @@ function CaseSuperConv({
             plan={plan}
             onglet={ongletEffectif}
             gestesDuPlan
+            questions={questionsDesLots}
+            nonLus={lotsNonLus(plan, vusLe, ouvertLe, ongletEffectif)}
             onOuvrirLot={choisir}
+            onRetour={retourAuChef}
           />
         </BarriereErreur>
       ) : undefined,
-    [plan, ongletEffectif, choisir]
+    [plan, ongletEffectif, vusLe, ouvertLe, questionsDesLots, choisir, retourAuChef]
   )
 
   const fenetre: ChatMosaicWindow = filActif
@@ -467,15 +438,13 @@ function CaseSuperConv({
       onAnswerAsk={onAnswerAsk}
       onRemplirSaisie={onRemplirSaisie}
       signatureComposer={signatureComposer}
-      skills={skills}
-      onglets={onglets}
       bandeau={bandeau}
     />
   )
 }
 
 /**
- * Pur : quelles fenêtres sont des CHEFS de super conv (leur case portera les onglets), et quelles
+ * Pur : quelles fenêtres sont des CHEFS de super conv (leur case portera la frise), et quelles
  * fenêtres de lots y entrent, par chef. Un lot dont le chef n'est pas ouvert garde sa propre case.
  */
 function regrouperSuperConvs(
@@ -507,9 +476,8 @@ export function ChatMosaic({
   onAnswerAsk,
   onRemplirSaisie,
   signatureComposer,
-  skills,
   liensDeLots,
-  titresDesFils,
+  questionsDesLots,
   onOuvrirFil
 }: ChatMosaicProps): React.JSX.Element {
   const { t } = useTextesChatFil()
@@ -558,9 +526,8 @@ export function ChatMosaic({
             onAnswerAsk={onAnswerAsk}
             onRemplirSaisie={onRemplirSaisie}
             signatureComposer={signatureComposer}
-            skills={skills}
             onOuvrirFil={onOuvrirFil}
-            titresDesFils={titresDesFils}
+            questionsDesLots={questionsDesLots}
           />
         ) : (
           <FenetreChat
@@ -572,7 +539,6 @@ export function ChatMosaic({
             onAnswerAsk={onAnswerAsk}
             onRemplirSaisie={onRemplirSaisie}
             signatureComposer={signatureComposer}
-            skills={skills}
           />
         )
       )}

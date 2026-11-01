@@ -1313,18 +1313,6 @@
   min-width: 0;
   max-width: 100%;
 }
-.chat-welcome {
-  margin: auto 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s4);
-}
-.chat-suggest {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  justify-content: center;
-}
 .composer {
   display: flex;
   gap: var(--s2);
@@ -2162,8 +2150,10 @@ ol.md-list li {
   max-width: 100%;
   height: auto;
   /* HAUTEUR PLAFONNEE ICI, pas par un cadre a derouler : un schema trop haut est mis a l'echelle,
-     ratio conserve, jusqu'a tenir sous les yeux. */
-  max-height: min(60vh, 420px);
+     ratio conserve. 1200 px, soit environ deux hauteurs de fil : en dessous, un schema garde sa taille
+     naturelle et son texte reste lisible. L'ancien plafond de 420 px ramenait celui de conv-1321
+     (1053 px de haut) a un texte de 4,6 px (conv-1322). Au-dela, le bouton Agrandir prend le relais. */
+  max-height: 1200px;
   min-height: 0;
 }
 
@@ -2579,6 +2569,22 @@ ol.md-list li {
   justify-content: flex-end;
   margin-left: auto;
 }
+/* UN PANNEAU OUVERT À 1280 PX NE LAISSE QUE 270 PX AU FIL (mesuré, conv-1378, 2026-10-31) : les boutons
+   gardaient leur largeur et le titre passait à un mot par ligne, jusqu'à prendre toute la hauteur du
+   fil. Les 200 px de base font passer les boutons à la ligne avant que le titre ne s'écrase ; le
+   titre s'arrête à deux lignes, comme en pleine largeur où il est déjà raccourci. */
+.chat-head {
+  flex-wrap: wrap;
+}
+.chat-head-titre {
+  flex: 1 1 200px;
+}
+.chat-head-kicker {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 
 /* Bouton Détails : le bouton creux de la Mini-adresse (BoutonCreux.css, conv-1317, 2026-10-30), qui
    remplace la capsule de conv-178. Ne reste ici que ce qu'il a en plus : il ne rétrécit pas, seul
@@ -2892,24 +2898,6 @@ ol.md-list li {
   border-color: rgba(234, 65, 164, 0.54);
   background: linear-gradient(135deg, rgba(147, 25, 94, 0.34), rgba(43, 9, 30, 0.55));
   color: var(--chat-corps-vous);
-}
-
-.cosmic-outline .chat-welcome {
-  width: min(100%, 760px);
-  margin: auto;
-  padding: 42px;
-  border: 1px solid rgba(125, 169, 196, 0.22);
-  border-radius: 12px;
-  background: radial-gradient(circle at 50% 0, rgba(40, 139, 184, 0.1), transparent 48%);
-  text-align: center;
-}
-
-.cosmic-outline .chat-welcome h3 {
-  margin: 0 0 10px;
-  color: var(--chat-accueil-titre);
-  font:
-    700 27px/1.15 Georgia,
-    serif;
 }
 
 .cosmic-outline .chat-suggest .btn {
@@ -4695,6 +4683,65 @@ button.chat-project-dot:disabled {
 /* Une GRILLE pour toute la liste (chaque <li> en `display: contents`) : le rail et les valeurs
    s'alignent en colonnes d'une étape à l'autre, quelle que soit la longueur du sujet. Le <li> garde
    son infobulle et ce qu'il transmet par héritage (gras de l'étape en cours). */
+/* CARTE D'UN GROS CHANTIER (conv-1362, lot conv-1366) : une ligne par phase, titre, jauge, comptes.
+   Aucune couleur en dur : les parts de la jauge prennent celles du thème. Le corps n'a pas de rail,
+   il s'aligne sur le texte de l'en-tête. */
+.thinking-block.cadre-anneau.thinking-block--chantier > .chantier-corps {
+  border-left: 0;
+  padding-left: 0;
+  margin: 0 0.85em 0 3.5em;
+  white-space: normal;
+}
+.chantier-alerte {
+  margin: 0 0 6px;
+  color: var(--warn);
+}
+.chantier-alerte.is-quota {
+  color: var(--err);
+}
+.chantier-phases {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(60px, 120px) auto;
+  align-items: center;
+  gap: 2px 10px;
+}
+.chantier-phase {
+  display: contents;
+}
+.chantier-phase-titre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chantier-jauge {
+  display: flex;
+  height: 5px;
+  gap: 1px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--line);
+}
+.chantier-jauge > span {
+  flex: 0 0 0;
+  min-width: 0;
+}
+.chantier-jauge > [data-part='finis'] {
+  background: var(--ok);
+}
+.chantier-jauge > [data-part='echecs'] {
+  background: var(--err);
+}
+.chantier-jauge > [data-part='encours'] {
+  background: var(--warn);
+}
+.chantier-phase-comptes {
+  color: var(--text-dim);
+  white-space: nowrap;
+}
 .thinking-block .etapes-liste {
   list-style: none;
   white-space: normal;

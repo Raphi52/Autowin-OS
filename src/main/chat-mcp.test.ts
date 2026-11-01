@@ -38,13 +38,15 @@ const CATALOGUE: CommandSpec[] = [
     name: 'read_file',
     description: 'lire',
     args: { path: 'chemin' },
-    horsCanalNatif: 'le modele a deja son propre outil de lecture'
+    horsCanalNatif: 'le modele a deja son propre outil de lecture',
+    fichierCouvertParLeModele: true
   },
   {
     name: 'edit_file',
     description: 'ecrire',
     args: { path: 'chemin' },
-    horsCanalNatif: 'le modele a deja son propre outil d ecriture'
+    horsCanalNatif: 'le modele a deja son propre outil d ecriture',
+    fichierCouvertParLeModele: true
   },
   {
     name: 'orchestrate',
@@ -549,14 +551,14 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
   })
 
   it('retour au texte : un modele sans canal natif ne recoit rien, le <cmd> reste seul', async () => {
-    const t = pilote('codex', [
+    const t = pilote('gemini', [
       { texte: 'je regarde <cmd>{"name":"get_state","args":{}}</cmd>' },
       { texte: 'Voici.' }
     ])
     await t.jouer()
     expect(t.vus[0]!.skillNodeTools).toBeUndefined()
     expect(t.appelsBus('get_state')).toBe(1)
-    expect(t.statuts().some((s) => s.includes('retour au texte') && s.includes('codex'))).toBe(true)
+    expect(t.statuts().some((s) => s.includes('retour au texte') && s.includes('gemini'))).toBe(true)
   })
 
   it('retour au texte : un serveur qui ne demarre pas ne casse pas le tour', async () => {
@@ -584,15 +586,16 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
    * redétaillée dans la consigne du chat ; sur un retour au texte, la liste complète repart, puisque
    * le `<cmd>` est alors le seul chemin du modèle.
    */
-  it('consigne : outils servis -> seules les commandes texte seul y sont detaillees', async () => {
+  it('consigne : outils servis -> seules ask et orchestrate y sont detaillees', async () => {
     const t = pilote('claude', [{ texte: 'Voici.' }])
     await t.jouer()
     const systeme = t.vus[0]!.system ?? ''
     expect(t.vus[0]!.skillNodeTools).toBeDefined()
-    for (const nom of ['ask', 'orchestrate', 'read_file', 'edit_file']) {
+    for (const nom of ['ask', 'orchestrate']) {
       expect(systeme).toContain(`\n- ${nom}(`)
     }
-    for (const nom of ['get_state', 'remember', 'desktop_observe']) {
+    // Le faux catalogue de ce fichier doit porter le meme marquage que le vrai (conv-1352).
+    for (const nom of ['get_state', 'remember', 'desktop_observe', 'read_file', 'edit_file']) {
       expect(systeme).not.toContain(`\n- ${nom}(`)
     }
     expect(systeme).toMatch(/Et en outils directs[^\n]*get_state, remember, desktop_observe\./u)
@@ -604,7 +607,7 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
   })
 
   it('consigne : modele sans canal natif -> liste complete des commandes', async () => {
-    const t = pilote('codex', [{ texte: 'Voici.' }])
+    const t = pilote('gemini', [{ texte: 'Voici.' }])
     await t.jouer()
     const systeme = t.vus[0]!.system ?? ''
     for (const nom of ['get_state', 'remember', 'desktop_observe', 'ask', 'orchestrate']) {

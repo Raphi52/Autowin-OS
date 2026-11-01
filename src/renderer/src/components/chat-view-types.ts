@@ -83,6 +83,8 @@ export interface PilotEvent {
   kind: PilotEventKind
   text?: string
   streamId?: string
+  /** `stream-reset` : seulement le dernier passage du flux (`rangsEffacesParLeReset`, conv-1401). */
+  conclusionSeule?: true
   actionId?: string
   iteration?: number
   name?: string

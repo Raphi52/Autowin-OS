@@ -27,45 +27,36 @@ describe('ChatView — la home propose l’état réel, plus quatre phrases fig�
     vi.restoreAllMocks()
   })
 
-  it('affiche une chip par run bloqué, avec la mention @run prête à l’emploi', async () => {
+  // La phrase est écrite lettre à lettre (conv-1401) : son texte complet se lit sur `aria-label`.
+  const phraseDuMoment = (conteneur: Element): string | null | undefined =>
+    conteneur.querySelector('.aa-phrase')?.getAttribute('aria-label')
+
+  it('écrit d’abord le run bloqué, avec la mention @run prête à l’emploi', async () => {
     h = await mountChat(
       chatApi({
         conversationRuns: vi.fn().mockResolvedValue([blockedRun('workflow-bench-regression')])
       })
     )
     await h.click('.conv-pick')
-    const chips = [...h.container.querySelectorAll('[data-testid="sg-chip"]')].map(
-      (c) => c.textContent
-    )
-    expect(chips).toContain('Débloque @run:workflow-bench-regression')
-  })
-
-  // conv-861 (2026-09-25) : 7 runs bloqués s'affichaient « 3 » — la liste était coupée avant d'être comptée.
-  it('affiche le VRAI nombre de runs bloqués, même avec 3 chips seulement', async () => {
-    const sept = Array.from({ length: 7 }, (_, i) => blockedRun(`bloque-${i}`))
-    h = await mountChat(chatApi({ conversationRuns: vi.fn().mockResolvedValue(sept) }))
-    await h.click('.conv-pick')
-    expect(h.container.querySelector('.sg-subtitle')?.textContent).toBe('7')
-    expect(h.container.querySelectorAll('[data-testid="sg-chip"]')).toHaveLength(3)
+    expect(phraseDuMoment(h.container)).toBe('Débloque @run:workflow-bench-regression')
   })
 
   it('retombe sur le jeu statique quand aucun run n’est bloqué', async () => {
     h = await mountChat(chatApi())
     await h.click('.conv-pick')
-    const chips = [...h.container.querySelectorAll('[data-testid="sg-chip"]')].map(
-      (c) => c.textContent
-    )
-    expect(chips).toEqual(STATIC_SUGGESTIONS)
+    expect(phraseDuMoment(h.container)).toBe(STATIC_SUGGESTIONS[0])
   })
 
-  it('un clic sur une chip ENVOIE son prompt', async () => {
+  it('un clic sur la phrase REMPLIT la saisie, n’envoie rien, et la mascotte se met à lire', async () => {
     const mockApi = chatApi()
     h = await mountChat(mockApi)
     await h.click('.conv-pick')
-    await h.click('[data-testid="sg-chip"]')
-    const payload = (mockApi.pilotChat as ReturnType<typeof vi.fn>).mock.calls[0][0] as Array<{
-      content: string
-    }>
-    expect(payload[payload.length - 1].content).toBe(STATIC_SUGGESTIONS[0])
+    await h.click('.aa-phrase')
+    const champ = h.container.querySelector('textarea') as HTMLTextAreaElement
+    expect(champ.value).toBe(STATIC_SUGGESTIONS[0])
+    expect(mockApi.pilotChat).not.toHaveBeenCalled()
+    // Le texte vit désormais dans la saisie : le répéter au-dessus le doublerait à l'écran.
+    expect(h.container.querySelector('.aa-phrase')).toBeNull()
+    expect(h.container.querySelector('.accueil-anim.est-lecture')).not.toBeNull()
   })
 })

@@ -4,7 +4,7 @@ import { tableDeTextes } from '../textes'
  * TEXTES — CHAT — DÉCISIONS ET BLOCS DU FIL (traduction anglaise, conv-1170, 2026-10-27).
  *
  * Écrans couverts : ThinkingBlock, CadrageHypotheses, AskDecision, ComparaisonDesFacons, LancementBarre,
- * WorkflowsPanel, CandidatsPickPanel, ProdPassphraseGate, HdeskTv.
+ * WorkflowsPanel, CandidatsPickPanel, ProdPassphraseGate.
  *
  * Une table par groupe d'écrans pour que les lots de traduction, menés en même temps, n'écrivent
  * jamais dans le même fichier. Règles communes, vérifiées par `tables.test.ts` : le FRANÇAIS fait
@@ -135,6 +135,21 @@ export const TEXTES_FR = {
   'pensee.ensuite': 'Ensuite : {sujet}',
   'pensee.etapeSuivante': 'étape #{id}',
   'pensee.toutesTerminees': 'Toutes les étapes sont terminées',
+  // Carte d'un gros chantier (outil Workflow du CLI, conv-1366)
+  'pensee.chantier': 'Chantier',
+  'pensee.chantier.enCours': '{n} en cours',
+  'pensee.chantier.enAttente': '{n} en attente',
+  'pensee.chantier.finis': '{n} finis',
+  'pensee.chantier.echecs': '{n} en échec',
+  'pensee.chantier.jetons': '{n} jetons',
+  'pensee.chantier.fini': 'terminé',
+  'pensee.chantier.echec': 'en échec',
+  'pensee.chantier.arrete': 'arrêté',
+  'pensee.chantier.sansPhase': 'Hors phase',
+  'pensee.chantier.gros':
+    'Très gros chantier : plus de 25 agents ou 1,5 million de jetons. Il consomme vite le quota.',
+  'pensee.chantier.quota':
+    'Quota atteint : ce chantier ne patiente pas jusqu’au retour du quota, ses agents échouent.',
   'pensee.valeur.terminee': 'terminée{duree}',
   'pensee.valeur.enCours': 'en cours{duree}',
   'pensee.valeur.aFaire': 'à faire',
@@ -222,14 +237,16 @@ export const TEXTES_FR = {
   'candidats.nonPrecise': 'Non précisé.',
   'candidats.jouera': 'Le workflow intelligent jouera :',
   'candidats.lancera': 'Le workflow intelligent lancera',
-  'candidats.lancera.lots': '{n} lots à la suite',
-  'candidats.lancera.suite': ', un par tour, {max} pistes au plus chacun :',
+  'candidats.lancera.lots': '{n} lots en parallèle',
+  'candidats.lancera.suite': ', {parallele} à la fois, chacun dans son fil, {max} pistes au plus :',
   'candidats.lot.piste': '— piste {positions}',
   'candidats.lot.pistes': '— pistes {positions}',
   'candidats.lancerTitre':
-    "Garde les candidats cochés et choisit la voie de chaque piste : correction directe (build → jugement) pour une correction déjà localisée par le scout, sinon le workflow complet (cadrage → build → nettoyage → jugement). Les pistes partent par lots de 3 au plus, l'un après l'autre, chacun jusqu'au commit publié",
+    "Garde les candidats cochés et choisit la voie de chaque piste : correction directe (build → jugement) pour une correction déjà localisée par le scout, sinon le workflow complet (cadrage → build → nettoyage → jugement). Dès deux lots, ils partent en super conversation : 3 à la fois, chacun dans son fil, 3 pistes au plus, jusqu'au commit publié",
   'candidats.lancer': 'Lancer le workflow intelligent',
   'candidats.lancerLots': 'Lancer le workflow intelligent ({n} lots)',
+  'candidats.planLance': 'Plan lancé ({n} lots) : suis-le au-dessus de la saisie',
+  'candidats.planRefuse': 'Plan non lancé : {erreur}',
   'candidats.motif.ajout': 'un ajout : il se cadre avant de s’écrire',
   'candidats.motif.natureNonDeclaree': 'nature non déclarée par le scout',
   'candidats.motif.effortFort': 'effort annoncé fort',
@@ -241,7 +258,7 @@ export const TEXTES_FR = {
   'candidats.plan.complet': 'en workflow complet',
   'candidats.plan.nDirects': '{n} en correction directe',
   'candidats.plan.nComplets': '{n} en workflow complet',
-  'candidats.plan.lots': 'en {n} lots à la suite ({detail})',
+  'candidats.plan.lots': 'en {n} lots en parallèle ({detail})',
   'candidats.voie.libelleDirecte': 'correction directe (build → jugement)',
   'candidats.voie.libelleComplete': 'workflow complet (cadrage → build → nettoyage → jugement)',
   'candidats.lot.directs': '{n} corrections déjà localisées par le scout',
@@ -264,28 +281,7 @@ export const TEXTES_FR = {
   'prod.enregistrer': 'Enregistrer',
   'prod.autoriser': 'Autoriser',
   'prod.noteAutorisation':
-    'L’autorisation ne vaut que pour ce geste, cinq minutes, une seule fois.',
-
-  // HdeskTv — l'aperçu en direct du bureau caché dans le fil
-  'tv.actionRefusee': 'Action refusée : {message}',
-  'tv.confirmerBascule':
-    'Ton écran va afficher le bureau caché.\nPour revenir : bouton « Revenir à mon bureau », Échap, ou automatiquement après 2 minutes.\nContinuer ?',
-  'tv.basculeRefusee': 'Bascule refusée : {message}',
-  'tv.aria': 'Aperçu en direct du bureau caché',
-  'tv.role': 'Bureau caché',
-  'tv.enDirect': '📺 en direct',
-  'tv.basculerAria': 'Basculer mon écran sur ce bureau',
-  'tv.basculerTitre': 'Basculer mon écran sur ce bureau (retour : bouton Revenir, Échap ou 2 min)',
-  'tv.reduire': 'Réduire',
-  'tv.agrandir': 'Agrandir',
-  'tv.fermer': "Fermer l'aperçu",
-  'tv.ferme': "Le bureau « {travail} » s'est fermé.",
-  'tv.uni': "Capture unie : rien d'observable (l'app dessine peut-être par la carte graphique).",
-  'tv.captureImpossible': 'Capture impossible : {message}',
-  'tv.imageAlt': 'Bureau caché — {travail}',
-  'tv.placeholderTaper': 'Texte à taper au point cliqué (Entrée = valider)',
-  'tv.placeholderViser': "Clique d'abord dans l'image pour viser un champ",
-  'tv.taper': 'Taper'
+    'L’autorisation ne vaut que pour ce geste, cinq minutes, une seule fois.'
 } as const
 
 export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
@@ -400,6 +396,21 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'pensee.ensuite': 'Next: {sujet}',
   'pensee.etapeSuivante': 'step #{id}',
   'pensee.toutesTerminees': 'All the steps are done',
+  // Carte d'un gros chantier (outil Workflow du CLI, conv-1366)
+  'pensee.chantier': 'Workflow',
+  'pensee.chantier.enCours': '{n} running',
+  'pensee.chantier.enAttente': '{n} queued',
+  'pensee.chantier.finis': '{n} done',
+  'pensee.chantier.echecs': '{n} failed',
+  'pensee.chantier.jetons': '{n} tokens',
+  'pensee.chantier.fini': 'done',
+  'pensee.chantier.echec': 'failed',
+  'pensee.chantier.arrete': 'stopped',
+  'pensee.chantier.sansPhase': 'No phase',
+  'pensee.chantier.gros':
+    'Very large workflow: over 25 agents or 1.5 million tokens. It uses up the quota quickly.',
+  'pensee.chantier.quota':
+    'Quota reached: this workflow does not wait for the quota to return, its agents fail.',
   'pensee.valeur.terminee': 'done{duree}',
   'pensee.valeur.enCours': 'in progress{duree}',
   'pensee.valeur.aFaire': 'to do',
@@ -484,14 +495,17 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'candidats.nonPrecise': 'Not specified.',
   'candidats.jouera': 'The smart workflow will run:',
   'candidats.lancera': 'The smart workflow will launch',
-  'candidats.lancera.lots': '{n} batches in a row',
-  'candidats.lancera.suite': ', one per turn, {max} leads at most each:',
+  'candidats.lancera.lots': '{n} parallel batches',
+  'candidats.lancera.suite':
+    ', {parallele} at a time, each in its own thread, {max} leads at most:',
   'candidats.lot.piste': '— lead {positions}',
   'candidats.lot.pistes': '— leads {positions}',
   'candidats.lancerTitre':
-    'Keeps the ticked candidates and picks the path of each lead: direct fix (build → judgement) for a fix the scout already located, otherwise the full workflow (framing → build → cleanup → judgement). Leads go out in batches of at most 3, one after the other, each up to the published commit',
+    'Keeps the ticked candidates and picks the path of each lead: direct fix (build → judgement) for a fix the scout already located, otherwise the full workflow (framing → build → cleanup → judgement). From two batches on, they go out as a super conversation: 3 at a time, each in its own thread, 3 leads at most, up to the published commit',
   'candidats.lancer': 'Launch the smart workflow',
   'candidats.lancerLots': 'Launch the smart workflow ({n} batches)',
+  'candidats.planLance': 'Plan launched ({n} batches): follow it above the input',
+  'candidats.planRefuse': 'Plan not launched: {erreur}',
   'candidats.motif.ajout': 'an addition: it gets framed before it gets written',
   'candidats.motif.natureNonDeclaree': 'kind not declared by the scout',
   'candidats.motif.effortFort': 'high announced effort',
@@ -525,29 +539,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'prod.enregistrer': 'Save',
   'prod.autoriser': 'Authorise',
   'prod.noteAutorisation':
-    'The authorisation is valid only for this action, for five minutes, once.',
-
-  'tv.actionRefusee': 'Action refused: {message}',
-  // « Revenir à mon bureau » est le libellé du bouton de la petite fenêtre de retour, dessinée par
-  // un script PowerShell du processus principal (hdesk-tv.ts) qui reste en français : on le cite tel quel.
-  'tv.confirmerBascule':
-    'Your screen will show the hidden desktop.\nTo come back: the “Revenir à mon bureau” button, Esc, or automatically after 2 minutes.\nContinue?',
-  'tv.basculeRefusee': 'Switch refused: {message}',
-  'tv.aria': 'Live preview of the hidden desktop',
-  'tv.role': 'Hidden desktop',
-  'tv.enDirect': '📺 live',
-  'tv.basculerAria': 'Switch my screen to this desktop',
-  'tv.basculerTitre': 'Switch my screen to this desktop (back: Revenir button, Esc or 2 min)',
-  'tv.reduire': 'Shrink',
-  'tv.agrandir': 'Enlarge',
-  'tv.fermer': 'Close the preview',
-  'tv.ferme': 'The desktop “{travail}” has closed.',
-  'tv.uni': 'Blank capture: nothing observable (the app may be drawing through the graphics card).',
-  'tv.captureImpossible': 'Capture impossible: {message}',
-  'tv.imageAlt': 'Hidden desktop — {travail}',
-  'tv.placeholderTaper': 'Text to type at the clicked point (Enter = confirm)',
-  'tv.placeholderViser': 'Click in the image first to aim at a field',
-  'tv.taper': 'Type'
+    'The authorisation is valid only for this action, for five minutes, once.'
 }
 
 /** Clé → raison pour laquelle son anglais reste identique au français. */

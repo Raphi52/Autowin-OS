@@ -1,5 +1,64 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject
+} from 'react'
 import { useTextesChatFil } from '../textes-ecrans/chat-fil'
+
+type Bords = { gauche: number; droite: number }
+
+/**
+ * MEME LARGEUR QUE LA JAUGE DES QUOTAS, EN BAS (conv-1399, 2026-10-31 : « la barre de contexte en
+ * haut faut la mettre de la meme largeur que celle d'en bas (donc moins large) »). Celle du bas
+ * suit la rangee du champ de saisie, dont les marges changent avec le theme et la largeur du chat :
+ * on MESURE ses bords au lieu de recopier les marges de chaque theme. Une ancre CSS ne peut pas la
+ * viser : elle n'est pas dans l'en-tete, qui sert de repere a cette jauge. Jauge du bas absente :
+ * `undefined`, la regle CSS garde la pleine largeur.
+ */
+function useBordsDeLaJaugeDuBas(
+  zoneRef: RefObject<HTMLDivElement | null>,
+  visible: boolean
+): Bords | undefined {
+  const [bords, setBords] = useState<Bords>()
+  useLayoutEffect(() => {
+    const zone = zoneRef.current
+    // Le repere de la jauge : `.chat-head { position: relative }` (ChatView.css).
+    const entete = zone?.closest('.chat-head')
+    const chat = zone?.closest('.chat')
+    if (!visible || !zone || !(entete instanceof HTMLElement) || !chat) return
+    const mesurer = (): void => {
+      const bas = chat.querySelector('.composer-input-row > .model-quota')
+      const b = bas?.getBoundingClientRect()
+      if (!b || b.width <= 0) {
+        setBords(undefined)
+        return
+      }
+      const e = entete.getBoundingClientRect()
+      // Le zoom du mode malvoyant multiplie `left`/`right` : on repasse en px CSS (meme correction
+      // que ContextGaugeIndicator).
+      const z = (entete as HTMLElement & { currentCSSZoom?: number }).currentCSSZoom || 1
+      const suivant = {
+        gauche: Math.round((b.left - e.left) / z),
+        droite: Math.round((e.right - b.right) / z)
+      }
+      setBords((avant) =>
+        avant?.gauche === suivant.gauche && avant.droite === suivant.droite ? avant : suivant
+      )
+    }
+    mesurer()
+    if (typeof ResizeObserver === 'undefined') return
+    const observateur = new ResizeObserver(mesurer)
+    observateur.observe(entete)
+    const rangee = chat.querySelector('.composer-input-row')
+    if (rangee) observateur.observe(rangee)
+    return () => observateur.disconnect()
+  }, [zoneRef, visible])
+  return bords
+}
 
 /**
  * LA JAUGE DE CONTEXTE, SEPARATEUR ENTRE L'EN-TETE DU CHAT ET LE FIL (conv-179, 2026-10-10 :
@@ -52,6 +111,7 @@ export function ChatContextRule({
       document.removeEventListener('keydown', echap)
     }
   }, [fige])
+  const bords = useBordsDeLaJaugeDuBas(zoneRef, ratio != null)
 
   if (ratio == null) return null
   const remplissage = `${Math.min(100, Math.max(0, ratio * 100))}%`
@@ -61,7 +121,12 @@ export function ChatContextRule({
       className="chat-context-rule"
       data-testid="chat-context-rule"
       data-context-level={level ?? 'ok'}
-      style={{ '--context-fill': remplissage } as CSSProperties}
+      style={
+        {
+          '--context-fill': remplissage,
+          ...(bords ? { left: bords.gauche, right: bords.droite } : {})
+        } as CSSProperties
+      }
       title={panelNode ? undefined : title}
       onPointerEnter={() => setSurvole(true)}
       onPointerLeave={() => setSurvole(false)}

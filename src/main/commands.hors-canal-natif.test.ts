@@ -33,6 +33,13 @@ describe('catalogue — commandes gardees hors du canal direct', () => {
     expect(exclues).toEqual(ATTENDUES)
   })
 
+  it('seules les sept commandes de fichiers sont marquees couvertes par le modele', () => {
+    const couvertes = CATALOG.filter((c) => c.fichierCouvertParLeModele)
+      .map((c) => c.name)
+      .sort()
+    expect(couvertes).toEqual(ATTENDUES.filter((nom) => nom !== 'ask' && nom !== 'orchestrate'))
+  })
+
   it('chaque motif est une phrase lisible (il est rendu au modele dans le refus)', () => {
     for (const c of CATALOG.filter((s) => s.horsCanalNatif !== undefined)) {
       expect(c.horsCanalNatif!.trim().length).toBeGreaterThan(10)

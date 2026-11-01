@@ -124,6 +124,10 @@ export async function ouvrirOutilsNatifsDuChat(
   }
   const perimetre: PerimetreOutils = {
     outils,
+    // Sûr depuis le 2026-10-31 (conv-1370, lot 8) : chaque résultat se rattache à SA commande dans la
+    // trace (`run-pilot-chat.ts`) et dans le détail de l'Observatoire (`appelsDeLOutil`). Les cartes,
+    // le compteur d'appels en vol et le bilan des échecs passaient déjà par `actionId`.
+    lecturesSimultanees: true,
     refus: (nom) => {
       const motif = o.catalogue.find((c) => c.name === nom)?.horsCanalNatif
       return motif

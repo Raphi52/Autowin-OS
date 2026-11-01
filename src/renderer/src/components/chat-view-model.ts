@@ -111,6 +111,12 @@ export type ChatRenderBlock =
 export interface HydratedAssistantMessage {
   role: 'assistant'
   turnId?: string
+  /**
+   * Récapitulatif « Reprise du fil » d'un chantier rattaché au redémarrage, posé SOUS la bulle du
+   * tour encore vivant. Ce n'est pas un tour : la recherche de la bulle vivante le traverse
+   * (`indexDeLaBulleQuiPorte`, conv-1330).
+   */
+  repriseDuChantier?: string
   /** Conversation qui possede le journal de ce tour (message copie par un fork). */
   turnConversationId?: string
   parts: ChatPart[]
@@ -176,6 +182,8 @@ export interface StoredAssistantMessage {
   testsDuTerminal?: TestDuTerminal[]
   /** Heure de debut du tour (ms epoch), posee par le main : le zero du rail (conv-338). */
   ts?: number
+  /** Chantier dont ce message est le récapitulatif « Reprise du fil » (`Msg.repriseDuChantier`). */
+  repriseDuChantier?: string
 }
 
 export type ConversationStateKey =
@@ -314,6 +322,8 @@ export interface AssistantPilotEvent {
    */
   kind: PilotEventKind
   streamId?: string
+  /** `stream-reset` : seulement le dernier passage du flux (`rangsEffacesParLeReset`, conv-1401). */
+  conclusionSeule?: true
   actionId?: string
   iteration?: number
   text?: string
@@ -581,6 +591,10 @@ export function indexDeLaBulleQuiPorte(
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role !== 'assistant') continue
     const message = messages[i] as HydratedAssistantMessage
+    // Le récapitulatif « Reprise du fil » est posé SOUS le tour encore vivant : ce n'est pas un
+    // tour clos, la recherche le traverse. S'y arrêter envoyait dans le récapitulatif, ou perdait,
+    // tout ce que le travail repris émet (conv-1324 : 35 min de fil figé, conv-1330).
+    if (message.repriseDuChantier) continue
     if (message.done) return -1
     if (porte(message)) return i
   }
@@ -886,7 +900,8 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
     // disait « Raisonnement terminé » sans compteur (R5, conv-162).
     ...(typeof message.reasoningMs === 'number' ? { reasoningMs: message.reasoningMs } : {}),
     ...(testsDuTerminal.length > 0 ? { testsDuTerminal } : {}),
-    ...(typeof message.ts === 'number' ? { debutDuTour: message.ts } : {})
+    ...(typeof message.ts === 'number' ? { debutDuTour: message.ts } : {}),
+    ...(message.repriseDuChantier ? { repriseDuChantier: message.repriseDuChantier } : {})
   }
 }
 
@@ -954,7 +969,11 @@ function reduireEvenementDuPilote(
   if (event.kind === 'delta' && event.text && event.streamId)
     turnEvent = { kind: 'delta', streamId: event.streamId, text: event.text, ...heure }
   else if (event.kind === 'stream-reset' && event.streamId)
-    turnEvent = { kind: 'stream-reset', streamId: event.streamId }
+    turnEvent = {
+      kind: 'stream-reset',
+      streamId: event.streamId,
+      ...(event.conclusionSeule ? { conclusionSeule: true as const } : {})
+    }
   else if (event.kind === 'think' && event.text)
     turnEvent = {
       kind: 'delta',

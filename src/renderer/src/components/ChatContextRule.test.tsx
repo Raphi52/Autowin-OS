@@ -119,6 +119,51 @@ describe('ChatContextRule — la jauge de contexte sous l en-tete', () => {
     expect(hote.querySelector('[data-testid="chat-context-rule"]')).toBeNull()
   })
 
+  it('prend la largeur de la jauge des quotas, en bas du chat', () => {
+    /*
+     conv-1399 (2026-10-31) : « la barre de contexte en haut faut la mettre de la meme largeur que
+     celle d'en bas (donc moins large) ». Les marges de la jauge du bas viennent du theme : la jauge
+     du haut MESURE ses bords. En-tete 1000 px a partir de 100 ; jauge du bas de 132 a 1068.
+    */
+    const rect = (left: number, right: number) => (): DOMRect =>
+      ({
+        left,
+        right,
+        width: right - left,
+        top: 0,
+        bottom: 10,
+        height: 10,
+        x: left,
+        y: 0
+      }) as DOMRect
+    const chat = document.createElement('section')
+    chat.className = 'chat'
+    const entete = document.createElement('header')
+    entete.className = 'chat-head'
+    entete.style.position = 'relative'
+    entete.getBoundingClientRect = rect(100, 1100)
+    const rangee = document.createElement('div')
+    rangee.className = 'composer-input-row'
+    const quota = document.createElement('div')
+    quota.className = 'model-quota'
+    quota.getBoundingClientRect = rect(132, 1068)
+    rangee.append(quota)
+    chat.append(entete, rangee)
+    document.body.append(chat)
+    act(() => createRoot(entete).render(<ChatContextRule ratio={0.5} level="ok" />))
+    const filet = jauge(entete)
+
+    expect(filet.style.left).toBe('32px')
+    expect(filet.style.right).toBe('32px')
+  })
+
+  it('garde la pleine largeur quand la jauge des quotas est absente', () => {
+    const filet = jauge(monter(<ChatContextRule ratio={0.5} level="ok" />))
+
+    expect(filet.style.left).toBe('')
+    expect(filet.style.right).toBe('')
+  })
+
   it('borne le remplissage a 100 % : un depassement ne peint pas au-dela du filet', () => {
     const filet = jauge(monter(<ChatContextRule ratio={1.4} level="critique" />))
 

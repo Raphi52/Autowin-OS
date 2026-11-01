@@ -41,12 +41,30 @@ describe('hauteur des schemas mermaid dans le fil', () => {
     expect(regle).not.toMatch(/max-height/)
   })
 
+  /*
+   * PLAFOND RELEVE DE 420 A 1200 PX (conv-1322, 2026-10-30, demande de l'utilisateur). A 420 px, le
+   * schema de conv-1321 (710 x 1053 naturels) sortait en 283 x 420 : texte de 11,5 px ramene a 4,6 px,
+   * illisible. L'exigence reste qu'un schema tres long ne mange pas tout le fil, mais le plafond ne
+   * doit plus reduire un schema d'une taille courante. Le bouton Agrandir couvre les plus grands.
+   */
   it('plafonne la hauteur sur le DESSIN, qui est mis a l echelle sans etre deforme', () => {
     const bloc = css.slice(css.indexOf('.md-mermaid svg'))
     const regle = bloc.slice(0, bloc.indexOf('}'))
     expect(regle).toMatch(/max-width:\s*100%/)
     expect(regle).toMatch(/height:\s*auto/)
-    expect(regle).toMatch(/max-height:\s*min\(60vh,\s*420px\)/)
+    expect(regle).toMatch(/max-height:\s*1200px/)
+  })
+
+  /*
+   * FINS DE MOTS COUPEES (conv-1322, 2026-10-30). Mermaid mesure ses textes hors de la page, puis les
+   * enferme dans des cadres a cette largeur exacte. Le fil leur transmettait son espacement entre
+   * lettres (0,0675 px) : 108,53 px de texte pour un cadre de 107,31, derniere lettre rognee. Sans cet
+   * espacement, le texte fait 107,31 px. Invisible a 420 px de haut, flagrant a taille reelle.
+   */
+  it('n herite pas de l espacement entre lettres du fil, que mermaid n a pas mesure', () => {
+    const feuille = readFileSync(new URL('./VisionneuseDiagramme.css', import.meta.url), 'utf8')
+    const bloc = feuille.slice(feuille.indexOf('.artifact-diagram__dessin {'))
+    expect(bloc.slice(0, bloc.indexOf('}'))).toMatch(/letter-spacing:\s*normal/)
   })
 
   it('neutralise la hauteur plancher heritee du panneau d artefacts', () => {
