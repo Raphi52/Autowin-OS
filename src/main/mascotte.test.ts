@@ -575,3 +575,33 @@ describe('mascotte du bureau — style basique (conv-1249)', () => {
     })
   })
 })
+
+describe('mascotte du bureau — style machine (conv-346)', () => {
+  it('la page embarque ses 4 planches, sans script, et ne rejoue que la planche du repos par défaut', () => {
+    const html = htmlDeMascotte('machine')
+    expect(html.match(/data:image\/webp;base64,/gu)).toHaveLength(4)
+    expect(html).toContain('img-src data:')
+    expect(html).not.toMatch(/<script/iu)
+    expect(html).toMatch(/\.bw\{[^}]*var\(--calme\)[^}]*steps\(16\)/u)
+  })
+
+  it('chaque état change de planche et allume ses effets', () => {
+    const css = (etat: 'calme' | 'travail' | 'attente' | 'probleme') =>
+      cssDeLEtat({ etat, pastille: etat === 'calme' ? null : '1', fil: null }, 'machine')
+    expect(css('calme')).toContain('body .z{display:block}')
+    expect(css('calme')).not.toContain('var(--')
+    expect(css('travail')).toContain('var(--travail)')
+    expect(css('travail')).toContain('body .et{display:block}')
+    expect(css('attente')).toContain('var(--attente)')
+    expect(css('attente')).toContain('content:"✓"')
+    expect(css('probleme')).toContain('var(--probleme)')
+    expect(css('probleme')).toContain('content:"!"')
+  })
+
+  it('le corps et la croix restent cliquables, le vide sous elle laisse passer', () => {
+    const g = geometrieMascotte('machine')
+    expect(pointSurLaBille({ x: g.centre.x, y: g.centre.y }, 'machine')).toBe(true)
+    expect(pointSurLaBille({ x: g.croix.x + 9, y: g.croix.y + 9 }, 'machine')).toBe(true)
+    expect(pointSurLaBille({ x: 2, y: 130 }, 'machine')).toBe(false)
+  })
+})

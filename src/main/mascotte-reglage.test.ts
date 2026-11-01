@@ -93,3 +93,13 @@ describe('réglage « mascotte du bureau » (conv-1145)', () => {
     expect(lireStyleMascotte(env)).toBe('magicien')
   })
 })
+
+describe('la machine suit le thème NieR (conv-346)', () => {
+  it('le thème NieR montre la machine, tout autre thème rend le style gardé', async () => {
+    const { styleAffiche } = await import('./mascotte-reglage')
+    expect(styleAffiche('magicien', 'nier-automata')).toBe('machine')
+    expect(styleAffiche('basique', 'nier-automata')).toBe('machine')
+    expect(styleAffiche('basique', 'nebuleuse-verre')).toBe('basique')
+    expect(styleAffiche('magicien', null)).toBe('magicien')
+  })
+})

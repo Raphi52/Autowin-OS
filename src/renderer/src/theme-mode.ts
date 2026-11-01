@@ -146,6 +146,22 @@ export function appliquerThemeMode(mode: ThemeId): void {
   accorderBoutonsDeFenetre(racine, base)
   accorderSchemaDeCouleurs(base)
   accorderCarteDeFinDeTour(racine)
+  accorderMascotte(mode)
+}
+
+/**
+ * LA MASCOTTE SUIT LE THÈME (conv-346) : le thème NieR la fait passer en machine, tout autre thème
+ * rend le style choisi dans les Réglages. Le moteur décide (`styleAffiche`) ; ici on ne fait que
+ * lui dire quel thème est appliqué. Silencieux hors d'Electron ou face à un moteur plus ancien.
+ */
+function accorderMascotte(mode: ThemeId): void {
+  const pont = (globalThis as { api?: { themeMascotte?: (t: string) => unknown } }).api
+  if (!pont?.themeMascotte) return
+  try {
+    void Promise.resolve(pont.themeMascotte(mode)).catch(() => {})
+  } catch {
+    // Pont indisponible : la mascotte garde le style des Réglages.
+  }
 }
 
 /**
