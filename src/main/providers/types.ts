@@ -54,8 +54,12 @@ export interface SendOptions {
   conversationId?: string
   /** Plafond dur transmis au provider quand son transport sait l'appliquer avant la depense. */
   maxBudgetUsd?: number
-  /** Surface d'outils imposee par le controleur pour les tours automatiques sensibles. */
-  toolProfile?: 'watchdog-read-only'
+  /**
+   * Surface d'outils imposee par le controleur pour les tours automatiques sensibles. `sans-outil` :
+   * le modele ne lit que ce qu'on lui envoie. Sans ce profil, un appel sans `execution` est un tour
+   * de chat, donc outille sur Claude (conv-1420).
+   */
+  toolProfile?: 'watchdog-read-only' | 'sans-outil'
   /**
    * Dossier de travail de CE tour, resolu depuis la conversation courante (`dossierDeTravailDuTour`).
    * Passe en argument et jamais lu dans `process.env` : la variable globale est figee au demarrage et

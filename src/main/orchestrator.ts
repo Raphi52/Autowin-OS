@@ -152,6 +152,19 @@ import {
 import { blocPistesDejaConnues, type FacteursChoix } from './scout-memoire'
 import { sortieFrameAvecCasLimites } from './frame-cas-limites'
 import {
+  consigneDeLaReponse,
+  consigneDeReprise,
+  DELAI_QUESTION_CADRAGE_MS,
+  issueDeRelecturePourLeCout,
+  ligneDePanneDeRelecture,
+  ligneDeRelecture,
+  lireRelecture,
+  promptDeRelecture,
+  questionDuCadrageRepris,
+  relectureAPasser,
+  type IssueDeRelecture
+} from './relecture-froide'
+import {
   briefArbitrage,
   createMidPhaseSupervision,
   readRouteVerdict,
@@ -405,7 +418,12 @@ function appelsRequisParWorkflow(
   }
   return total
 }
-import { consigneFusionScout, GARDE_TACHE, phaseBrief } from './phase-briefs'
+import {
+  CONSIGNE_RELECTURE_FROIDE,
+  consigneFusionScout,
+  GARDE_TACHE,
+  phaseBrief
+} from './phase-briefs'
 import { contratDeLaConversation, noteContratPourJuge } from './conversation-task-contract'
 import { hypothesesDuCadrage, noteHypothesesPourJuge } from '../shared/cadrage-confiance'
 import { convRunsRoot } from './runs/conv-runs'
@@ -911,8 +929,9 @@ export interface OrchestratorLifecycleDeps {
   /**
    * POSER UNE QUESTION À L'UTILISATEUR ET ATTENDRE SA RÉPONSE — le run est en pause pendant ce temps
    * (conv-1149, 2026-10-25). Branché par `index.ts` sur la fenêtre de question de l'app ; absent
-   * (app sans interface, tests) = personne ne peut répondre. Seul usage : l'objection d'étendue
-   * répétée en mode jusqu'au vert (`gates/etendue-repetee.ts`).
+   * (app sans interface, tests) = personne ne peut répondre. Deux usages : l'objection d'étendue
+   * répétée en mode jusqu'au vert (`gates/etendue-repetee.ts`) et la question d'un cadrage repris
+   * (`relecture-froide.ts`).
    */
   demanderALUtilisateur?: (
     question: ModelQuestion,
@@ -5088,7 +5107,9 @@ ${CONTRAT_OBJECTIONS}`
       // TOUJOURS explicitement, même en resume. Se fier à l'historique de session (opaque, variable
       // par provider, cassé par un fan-out) faisait perdre le besoin cadré exactement au moment où
       // la phase suivante en a le plus besoin → prompt de sous-agent dégradé.
-      const framed = phaseContext.find((entry) => entry.startsWith('[phase frame]')) ?? ''
+      // Le DERNIER : un cadrage refait remplace le précédent, qui peut être celui qui a été refusé.
+      // fix-ok: conv-1420 — le test du rappel en session rend « Cadrage incomplet » sur a41081d6 : find() rappelait la version refusée.
+      const framed = phaseContext.filter((entry) => entry.startsWith('[phase frame]')).at(-1) ?? ''
       /**
        * Les blocs poussés côté user sont composés EN MÊME TEMPS que le texte envoyé, y compris sur
        * la branche `resuming` qui n'emprunte pas `userContextForPhase`. Décrire cette branche-là
@@ -5767,7 +5788,143 @@ ${CONTRAT_OBJECTIONS}`
           (derive?.extrait ? `\nExtrait fautif : ${derive.extrait}` : '')
       )
     }
-    for (const phase of suitePhases()) await executePipelinePhase(phase)
+    /**
+     * LA RELECTURE À FROID DU CADRAGE (conv-1420, règles et mesure dans `relecture-froide.ts`).
+     *
+     * Branchée sur la boucle des phases, et non dans `recordPhase` qui est synchrone : tous les chemins
+     * d'un cadrage (séquentiel, groupe, solo) y repassent. La reprise joue `frame` directement au lieu
+     * d'écrire `SUITE: frame` : une liste plate ignore une seconde déviation, et c'est le cadrage
+     * repris, pas le refusé, qui doit garder la main sur la suite.
+     */
+    let relectureFaite = false
+    const dernierCadrage = (): string =>
+      phaseOutputs.filter((sortie) => sortie.phase === 'frame').at(-1)?.text ?? ''
+    const retirerDuContexte = (entree: string): void => {
+      const rang = phaseContext.indexOf(entree)
+      if (rang >= 0) phaseContext.splice(rang, 1)
+    }
+    const reprendreLeCadrage = async (ecarts: readonly string[]): Promise<void> => {
+      onDelta?.(
+        'exec',
+        `\n[relecture à froid] ${ecarts.length} écart(s) avec la demande : le cadrage repart une fois.\n`
+      )
+      const consigne = consigneDeReprise(ecarts)
+      const remplaces = phaseContext.filter((entree) => entree.startsWith('[phase frame]'))
+      pousserContexte('relectureFroide', consigne)
+      // Comme une réparation : une session reprise ne recevrait ni la consigne ni le contexte complet.
+      prevSessionId = undefined
+      try {
+        await executePipelinePhase('frame')
+      } catch (error) {
+        if (signal?.aborted) throw error
+        retirerDuContexte(consigne)
+        const motif = error instanceof Error ? error.message : String(error)
+        push({
+          step: 'gate',
+          role: 'gate',
+          detail: `Le cadrage repris est en panne, le run garde le premier : ${motif.slice(0, 300)}`
+        })
+        return
+      }
+      // Le build ne lit plus ni l'ordre de refaire le cadrage, ni la version remplacée.
+      retirerDuContexte(consigne)
+      remplaces.forEach(retirerDuContexte)
+      const question = questionDuCadrageRepris(dernierCadrage())
+      if (!question) return
+      // Le délai passe par le signal : c'est lui qui libère la file de questions et ferme la fenêtre
+      // (`askModelQuestion`, `index.ts`). Une fenêtre ignorée gardait sinon le run avant le code.
+      const delai = new AbortController()
+      const minuteur = setTimeout(
+        () => delai.abort('Question restée sans réponse'),
+        DELAI_QUESTION_CADRAGE_MS
+      )
+      const reponse = await this.deps
+        .demanderALUtilisateur?.(
+          question,
+          task,
+          signal ? AbortSignal.any([signal, delai.signal]) : delai.signal
+        )
+        ?.catch(() => undefined)
+      clearTimeout(minuteur)
+      if (signal?.aborted) return
+      const consigneUtilisateur = consigneDeLaReponse(reponse)
+      if (consigneUtilisateur) {
+        pousserContexte(
+          'directiveUtilisateur',
+          `DIRECTIVE UTILISATEUR ARRIVEE PENDANT LE RUN — PRIORITAIRE, elle CORRIGE le cadre : ${consigneUtilisateur}`
+        )
+        prevSessionId = undefined
+      }
+      push({
+        step: 'gate',
+        role: 'gate',
+        detail: consigneUtilisateur
+          ? `Question du cadrage repris : réponse transmise à la suite (« ${consigneUtilisateur.slice(0, 200)} »).`
+          : `Question du cadrage repris restée sans réponse, le run continue : « ${question.text} »`
+      })
+    }
+    const relireLeCadrage = async (cadrageJoue: boolean): Promise<void> => {
+      const cadrage = dernierCadrage()
+      const aPasser = relectureAPasser({
+        dejaFaite: relectureFaite,
+        buildPrevu: (grapheBrut?.nodes.map((node) => node.phase) ?? execPhases).includes('build'),
+        cadrageJoue,
+        arretDemande: souhaitModele?.kind === 'stop',
+        annule: signal?.aborted === true,
+        critique: this.difficulteDuRun(task) === 'critical',
+        cadrage
+      })
+      if (!aPasser) return
+      relectureFaite = true
+      let issue: IssueDeRelecture
+      try {
+        const relecteur = roles.bindingDesPetitesTaches()
+        const reponse = await this.sendWithRoleContext(
+          'relecture à froid du cadrage',
+          ROLE_PETITES_TACHES,
+          relecteur.provider,
+          relecteur.model,
+          () =>
+            registry.send(
+              relecteur.provider,
+              [{ role: 'user', content: promptDeRelecture(task, cadrage) }],
+              {
+                system: CONSIGNE_RELECTURE_FROIDE,
+                systemBlocks: [
+                  { name: 'relectureFroide', chars: CONSIGNE_RELECTURE_FROIDE.length }
+                ],
+                model: relecteur.model,
+                reasoningEffort: relecteur.reasoningEffort,
+                toolProfile: 'sans-outil',
+                ...(signal ? { signal } : {})
+              }
+            )
+        )
+        issue = lireRelecture(reponse.text)
+        noterAppelCourt(cost, {
+          appel: 'relectureFroide',
+          binding: relecteur,
+          res: reponse,
+          issue: issueDeRelecturePourLeCout(issue)
+        })
+        push({
+          step: 'gate',
+          role: 'gate',
+          detail: ligneDeRelecture(issue, reponse.usage?.costUsd)
+        })
+      } catch (error) {
+        if (signal?.aborted) return
+        signalerPanneAppelCourt('relectureFroide', error)
+        push({ step: 'gate', role: 'gate', detail: ligneDePanneDeRelecture(error) })
+        return
+      }
+      if (issue.kind === 'ecarts' && !signal?.aborted) await reprendreLeCadrage(issue.ecarts)
+    }
+    for (const phase of suitePhases()) {
+      const phasesDejaJouees = phasesJouees
+      await executePipelinePhase(phase)
+      if (phase === 'frame') await relireLeCadrage(phasesJouees > phasesDejaJouees)
+    }
     // J1 — le juge (et le résultat) reçoivent l'AGRÉGAT de toutes les phases, jamais la seule
     // dernière : sinon un livrable produit en frame/terrain devient invisible si clean dérive.
     // Recalculable : une phase de réparation (B5) ajoute à phaseOutputs, l'agrégat suit.
@@ -6038,7 +6195,7 @@ ${CONTRAT_OBJECTIONS}`
       // `phaseOutputs.length === 0`, donc aucun cadrage a lire et une note toujours vide — l'y
       // injecter aurait ete une ligne qui fait semblant d'agir.
       const noteHypotheses = noteHypothesesPourJuge(
-        hypothesesDuCadrage(phaseOutputs.find((sortie) => sortie.phase === 'frame')?.text, {
+        hypothesesDuCadrage(dernierCadrage(), {
           citationIntrouvable: (chemin, ligne) => citationIntrouvableSurDisque(workCwd, chemin, ligne)
         })
       )

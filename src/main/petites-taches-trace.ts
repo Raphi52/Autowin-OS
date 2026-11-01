@@ -15,6 +15,10 @@ import type { SendResult } from './providers/types'
  *
  * Chaque appel écrit donc UNE ligne dans `cost.jsonl` : son nom, le modèle RÉELLEMENT servi, son
  * coût, et son issue (ce que la réponse a donné). Une panne est nommée dans le journal du processus.
+ *
+ * La relecture à froid du cadrage (conv-1420) s'y ajoute, et elle seule passe `toolProfile:
+ * 'sans-outil'`. Sans ce profil, un appel sans `execution` prend sur Claude la branche du tour de
+ * chat, outillée : « sans outil » ci-dessus décrit l'intention, pas le lancement réel.
  */
 
 /** Rôle écrit dans `cost.jsonl` pour un appel du modèle des petites tâches. */
@@ -26,6 +30,7 @@ export type AppelCourt =
   | 'deuxLectures'
   | 'rangementPremierMessage'
   | 'arbitrageDerive'
+  | 'relectureFroide'
 
 /** Longueur gardée de l'issue : de quoi lire un format inattendu, pas de quoi recopier un texte. */
 const ISSUE_MAX = 160

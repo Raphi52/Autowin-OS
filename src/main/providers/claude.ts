@@ -1527,6 +1527,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         ...autorises(tools),
         ...outilsMcpAutorises
       )
+    } else if (opts.toolProfile === 'sans-outil') {
+      // fix-ok: conv-1420 — claude.sans-outil.test.ts rouge sur a41081d6 : un appel sans `execution` chargeait Bash, Write et Edit en bypassPermissions. Une relecture a froid ne doit voir que son prompt.
+      args.push('--tools', '')
     } else {
       /**
        * fix-ok: une piece jointe DESARMAIT le tour de chat (cause mesuree, conv-650 2026-09-17).
