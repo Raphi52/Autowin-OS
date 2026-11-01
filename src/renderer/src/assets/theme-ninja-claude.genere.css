@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   1029 regles, 1428 declarations. Voir genererNinjaClaude.
+   1027 regles, 1426 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -1673,14 +1673,6 @@
 }
 
 /* ---- src/renderer/src/components/HomeView.css ---- */
-:root[data-theme='ninja-claude'] .home-view[data-fond='falaise'] .home-tile .home-tile__rule {
-    background: linear-gradient(90deg, rgba(38, 38, 36, 0.4), transparent) !important
-}
-:root[data-theme='ninja-claude'] .home-view[data-fond='falaise'] .home-tile .home-tile__panel {
-    background: repeating-linear-gradient(92deg, rgba(255, 214, 160, 0.03) 0 3px, transparent 3px 11px) padding-box, 
-    linear-gradient(180deg, #33221a, rgb(38, 38, 36)) padding-box, 
-    linear-gradient(180deg, #b98348, #93632f) border-box !important
-}
 :root[data-theme='ninja-claude'] .home-view__masthead {
     background: var(--bg-1, rgba(31, 30, 29, 0.56))
 }

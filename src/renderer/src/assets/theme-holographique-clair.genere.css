@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   580 regles, 874 declarations. Voir genererCoucheClaire. */
+   577 regles, 871 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -936,17 +936,6 @@
 }
 
 /* ---- src/renderer/src/components/HomeView.css ---- */
-:root[data-theme='holographique-clair'] .home-view[data-fond='falaise'] .home-tile .home-tile__rule {
-    background: linear-gradient(90deg, rgba(20, 15, 40, 0.06), transparent) !important
-}
-:root[data-theme='holographique-clair'] .home-view[data-fond='falaise'] .home-tile .home-tile__action {
-    border-color: rgba(20, 15, 40, 0.3) !important
-}
-:root[data-theme='holographique-clair'] .home-view[data-fond='falaise'] .home-tile .home-tile__panel {
-    background: repeating-linear-gradient(92deg, rgba(255, 214, 160, 0.03) 0 3px, transparent 3px 11px) padding-box, 
-    linear-gradient(180deg, #fdfdff, #fdfdff) padding-box, 
-    linear-gradient(180deg, #b98348, #93632f) border-box !important
-}
 :root[data-theme='holographique-clair'] .home-view__masthead {
     background: var(--bg-1, rgba(253, 253, 255, 0.56));
     border: 1px solid var(--line, rgba(20, 15, 40, 0.16))

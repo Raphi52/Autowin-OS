@@ -217,6 +217,13 @@ function transposerValeur(valeur, enFond) {
   return change ? sortie : null
 }
 
+/**
+ * Les widgets du fond Falaise sont des pièces de la maquette : leur bois et leur papier viennent de
+ * la peinture et ne suivent aucun thème (HomeView.css). Sans ce filtre, la couche d'un thème repeint
+ * le papier en blanc bleuté (vu en capture, conv-1421).
+ */
+const estDuQuartier = (s) => s.includes("[data-fond='falaise']")
+
 function prefixer(selecteur) {
   return prefixerPour(selecteur, PREFIXE)
 }
@@ -228,6 +235,7 @@ function prefixer(selecteur) {
 /** Meme regle pour un autre theme. Separee de `prefixer` : `selectors.map(prefixer)` lui passe l'INDEX. */
 function prefixerPour(selecteur, prefixe) {
   const s = selecteur.trim()
+  if (estDuQuartier(s)) return null
   // Les regles d'un AUTRE theme ou du mode clair ne nous regardent pas.
   if (/:root\[|data-base|data-theme/.test(s)) return null
   if (/^(html|:root)\b/.test(s)) return s.replace(/^(html|:root)/, prefixe)
@@ -885,6 +893,7 @@ function transposerCoucheClaire(rgb, role, fondSombre) {
 
 function prefixerClair(selecteur) {
   const s = selecteur.trim()
+  if (estDuQuartier(s)) return null
   if (/:root\[|data-base|data-theme/.test(s)) return null
   if (/^(html|:root)\b/.test(s)) return s.replace(/^(html|:root)/, PREFIXE_CLAIR)
   return `${PREFIXE_CLAIR} ${s}`
@@ -1272,6 +1281,7 @@ const NIER_PREFIXE = `:root[data-theme='${NIER_ID}'][data-base='clair']`
 const NIER_TEINTE = 45
 
 function prefixerNier(selecteur) {
+  if (estDuQuartier(selecteur)) return null
   const s = selecteur.trim()
   if (!BASE_CLAIRE.test(s)) return null
   const reste = s.replace(BASE_CLAIRE, '')
