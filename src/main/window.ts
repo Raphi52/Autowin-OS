@@ -85,6 +85,8 @@ export type Fenetres = {
   estEnFermeture: () => boolean
   /** Les fenêtres de question ouvertes, par identifiant — un canal IPC de `index.ts` les ferme. */
   questionWindows: Map<string, BrowserWindow>
+  /** La question d'une page, ou `null` : une page ne lit jamais la question d'une autre fenêtre. */
+  questionDeLaPage: (pageId: number) => PendingModelQuestion | null
   /**
    * Jauge de barre des tâches + texte de l'icône de notification, d'après les runs vivants.
    * Ici parce que `tray` et la fenêtre principale sont tenus DANS cette fermeture : rien d'autre
@@ -110,6 +112,13 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
   } = deps
 
   const questionWindows = new Map<string, BrowserWindow>()
+  /**
+   * La question de chaque page, gardée jusqu'à la fermeture de sa fenêtre : c'est la page qui la
+   * demande quand elle est prête (conv-1342). Un envoi unique à la fin du chargement arrivait 6 à
+   * 8 ms après le branchement de l'écoute : manqué une fois, il laissait une fenêtre noire et un run
+   * en pause (conv-1337, 30/10), et il n'aurait pas non plus survécu à un rechargement de la page.
+   */
+  const questionsParPage = new Map<number, PendingModelQuestion>()
   /**
    * LA fenêtre principale vivante, ou null. Tenue ICI et pas déduite de
    * `BrowserWindow.getAllWindows()` : cette liste contient AUSSI les fenêtres de question, donc elle
@@ -197,7 +206,11 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
       }
     })
     questionWindows.set(question.id, win)
+    // Lu ici : `webContents` n'est plus accessible une fois la fenêtre fermée.
+    const pageId = win.webContents.id
+    questionsParPage.set(pageId, question)
     win.on('closed', () => {
+      questionsParPage.delete(pageId)
       // Une fenêtre enfant `alwaysOnTop` qui apparaît/disparaît peut laisser la fenêtre parente avec
       // des métriques périmées (contenu rogné). C'est un chemin déclenché PAR LE MODÈLE, pas par
       // l'utilisateur → on force le relayout du parent à sa fermeture.
@@ -212,7 +225,6 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     win.once('ready-to-show', () => {
       presentAutomationWindow(win, headlessTestInstance, { focus: true, flash: true })
     })
-    win.webContents.once('did-finish-load', () => win.webContents.send('model:question', question))
     if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
       win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#model-question`)
     } else {
@@ -641,6 +653,7 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
     rendererLocation,
     estEnFermeture: () => isQuitting,
     questionWindows,
+    questionDeLaPage: (pageId) => questionsParPage.get(pageId) ?? null,
     refleterRunsVivants,
     fenetrePrincipale: () => mainWindowVivante
   }

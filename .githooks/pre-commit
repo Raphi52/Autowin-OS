@@ -9,7 +9,13 @@
 case "$(git rev-parse --show-toplevel 2>/dev/null)" in
   */agent__* | */integration__* | */.quarantine/*) exit 0 ;;
 esac
-garde="$(dirname "$0")/../scripts/garde-commit-module-supprime.mjs"
-[ -f "$garde" ] || exit 0
 command -v node >/dev/null 2>&1 || exit 0
-exec node "$garde"
+garde="$(dirname "$0")/../scripts/garde-commit-module-supprime.mjs"
+if [ -f "$garde" ]; then
+  node "$garde" || exit 1
+fi
+# Second garde-fou : une interface nouvelle suit les thèmes (conv-1386, 2026-10-31). Pas d'intégration
+# continue ici et un agent ne joue que les tests de ses fichiers : sans le commit, rien ne le verrait.
+couleurs="$(dirname "$0")/../scripts/couleurs-en-dur.mjs"
+[ -f "$couleurs" ] || exit 0
+exec node "$couleurs" --commit

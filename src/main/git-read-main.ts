@@ -1,7 +1,6 @@
-import { execFile } from 'node:child_process'
 import { readFile, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { promisify } from 'node:util'
+import { execFileHorsFil } from './execution-hors-fil'
 import {
   parseGitStatus,
   parseGitLog,
@@ -22,7 +21,7 @@ function stdoutOf(error: unknown): string {
  * QUE `git diff` (aucune mutation). Le path vient du renderer → passé en argv (jamais un shell) + `--`.
  */
 export async function readGitDiff(cwd: string, path: string): Promise<GitDiffResult> {
-  const run = promisify(execFile)
+  const run = execFileHorsFil
   try {
     const r = await run('git', ['diff', '--no-color', 'HEAD', '--', path], {
       cwd,
@@ -46,7 +45,7 @@ export async function readGitDiff(cwd: string, path: string): Promise<GitDiffRes
  * octet le texte rendu (c'est exactement la branche que `readGitDiff` prendrait).
  */
 export async function readNoIndexGitDiff(cwd: string, path: string): Promise<string> {
-  const run = promisify(execFile)
+  const run = execFileHorsFil
   try {
     const u = await run('git', ['diff', '--no-color', '--no-index', '--', '/dev/null', path], {
       cwd,
@@ -73,7 +72,7 @@ export async function readGitDiffHeadBatch(
   cwd: string,
   paths: readonly string[]
 ): Promise<string[] | undefined> {
-  const run = promisify(execFile)
+  const run = execFileHorsFil
   const paquets: string[][] = []
   let courant: string[] = []
   let longueur = 0
@@ -115,7 +114,7 @@ export async function readGitDiffHeadBatch(
  */
 export async function readLastCommitFiles(cwd: string): Promise<string[]> {
   try {
-    const run = promisify(execFile)
+    const run = execFileHorsFil
     const r = await run('git', ['show', '--name-only', '--format=', '-z', 'HEAD'], {
       cwd,
       windowsHide: true
@@ -151,7 +150,7 @@ export async function readLastCommitFiles(cwd: string): Promise<string[]> {
 export async function readTestsCitant(cwd: string, motif: string): Promise<string[] | undefined> {
   if (!motif.trim()) return []
   try {
-    const run = promisify(execFile)
+    const run = execFileHorsFil
     const r = await run(
       'git',
       [
@@ -189,7 +188,7 @@ export async function readTestsCitant(cwd: string, motif: string): Promise<strin
  * Dégrade proprement (repo absent / git indispo) → { available:false } sans jamais throw vers l'IPC.
  */
 export async function readGitState(cwd: string, historyLimit = 20): Promise<GitReadResult> {
-  const run = promisify(execFile)
+  const run = execFileHorsFil
   try {
     const [statusResult, logResult] = await Promise.allSettled([
       run('git', ['status', '--porcelain=v2', '--branch'], { cwd, windowsHide: true }),
@@ -284,7 +283,7 @@ function brancheDeHead(head: string): string {
  * déjà produit des gels mesurés à plusieurs secondes).
  */
 export async function readGitBranches(cwd: string, limit = 200): Promise<string[]> {
-  const run = promisify(execFile)
+  const run = execFileHorsFil
   try {
     const r = await run(
       'git',

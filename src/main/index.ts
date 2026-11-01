@@ -27,6 +27,9 @@ import { creerDossierDuBoard } from './board-dossier'
 import { registerLangueIpc } from './ipc/langue'
 import { registerCaptureElementIpc } from './ipc/capture-element'
 import { creerIdentitesEnCache, creerJournalDesBesoins } from './journal-des-besoins'
+import { creerFichesDeDemande } from './fiches-de-demande'
+import { creerMesureDesEcarts } from './ecarts-des-fiches'
+import type { ConversationPourLaCarte } from './carte-des-besoins'
 import { lireDossiersProjetsClaude } from './dossiers-claude-cli'
 import { registerTranscriptsIpc } from './ipc/transcripts'
 import { registerPreflightIpc } from './ipc/preflight'
@@ -34,6 +37,13 @@ import { registerGitIpc } from './ipc/git'
 import { registerProjectFilesIpc } from './ipc/project-files'
 import { registerLancementIpc } from './ipc/lancement'
 import { gestionnaireNavigateur, registerNavigateurIpc } from './ipc/navigateur'
+import { registerQuestionACoteIpc } from './ipc/question-a-cote'
+import { registerTerminalIpc } from './ipc/terminal'
+import {
+  environnementDuTerminal,
+  fermerTerminauxAvantSortie,
+  gestionnaireTerminal
+} from './terminal-integre'
 import { registerTestsViewIpc } from './ipc/tests-view'
 import { registerPerfIpc } from './ipc/perf'
 import { registerBrainIpc } from './ipc/brain'
@@ -88,9 +98,11 @@ import { emitToLiveWindows } from './renderer-emit'
 import {
   ClaudeAccountsStore,
   configureClaudeAccountEnv,
+  configureClaudeCompteDuFil,
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation,
-  configureClaudePreventiveSwitch
+  configureClaudePreventiveSwitch,
+  withClaudeAccountEnv
 } from './claude-accounts'
 import { basculerAvantLancement, utilisationDuCompte } from './bascule-quota'
 import {
@@ -203,7 +215,7 @@ import {
   suivreLaFinDuTour,
   type ObservateurFinDeTour
 } from './chat/run-pilot-chat'
-import { plansPourLaListe, type IssueDuTour } from '../shared/plan-de-lots'
+import { anciensPlansDuChef, plansPourLaListe, type IssueDuTour } from '../shared/plan-de-lots'
 import { phrasesDesLots } from '../shared/phrase-du-fil'
 import { lancerSansAttendre } from './chat/lancer-sans-attendre'
 import { demarrerPointEntreeLocal, type PointEntreeLocal } from './point-entree-local'
@@ -415,6 +427,7 @@ import {
   surveillerSourcesDuMoteur,
   type RelanceMoteurArmee
 } from './relance-auto-moteur'
+import { creerSuiviDesPublications } from './publications-en-vol'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
 import { consommerReprise } from './redemarrage-reprise'
 import {
@@ -441,6 +454,14 @@ import {
 } from './notification-fin-de-tour'
 import { creerPopupsDeFinDeTour, definirPaletteDeCarte } from './notification-popup-fenetre'
 import { creerMascotteDuBureau } from './mascotte-fenetre'
+import {
+  cssDeLAccueil,
+  HAUTEUR_MASCOTTE,
+  HUMEURS_ACCUEIL,
+  htmlDeMascotte,
+  LARGEUR_MASCOTTE,
+  type HumeurAccueil
+} from './mascotte'
 import {
   ecrireMascotteAffichee,
   ecrireStyleMascotte,
@@ -511,6 +532,7 @@ import {
 } from './headless-instance'
 import { TaskStore } from './task-manager/task-store'
 import { persistTaskStore } from './task-manager/task-store-disk'
+import { viderFichiersEnAttente } from './ecriture-hors-fil'
 import { TaskScheduler } from './task-manager/task-scheduler'
 import { WatchdogEngine } from './task-manager/watchdog-engine'
 import { seedWatchdogTasks } from './task-manager/watchdog-seeds'
@@ -721,6 +743,8 @@ const journalDesBesoins = creerJournalDesBesoins({
   racine: app.getPath('userData'),
   identite: creerIdentitesEnCache()
 })
+// RUN.md léger (conv-1418) : une fiche par nouvelle demande, écrite par l'app à la fin du tour.
+const fichesDeDemande = creerFichesDeDemande({ racine: app.getPath('userData') })
 const brainWorkerPath = join(__dirname, 'brain-worker.js')
 const brainWorker = new BrainWorkerClient(brainWorkerPath)
 const brainSearchWorker = new BrainWorkerClient(brainWorkerPath)
@@ -1241,13 +1265,13 @@ os.setSkillCommandRunner({
    * au lieu d'etre ecrit de memoire. Mesure du 2026-08-20 sur le run `conv-1339` : ecrit de memoire,
    * il annoncait `brain_query {"query": ...}` la ou la commande attend `question`, et `remember`
    * sans `scope` ni `source` alors que les deux sont obligatoires. L'outil etait branche, teste,
-   * et strictement inutilisable.
+   * et strictement inutilisable. Les specs passent ENTIÈRES (conv-1370, 2026-10-31) : un `.map` ne
+   * gardait que le nom, la description et `args`, donc annotations et vrais types n'arrivaient pas.
    */
   catalogue: () =>
     bus
       .catalog()
       .filter((c) => OUTILS_NOEUD_SKILL.includes(c.name as (typeof OUTILS_NOEUD_SKILL)[number]))
-      .map((c) => ({ name: c.name, description: c.description, args: c.args }))
 })
 // Depuis le catalogue COMPLET, jamais `bus.catalog()` déjà filtré par l'interrupteur : un outil
 // coupé à l'écran y perdait sa ligne et se rallumait un démarrage sur deux (registre-outils.ts).
@@ -1394,6 +1418,7 @@ const {
   openViewWindow,
   rendererLocation,
   questionWindows,
+  questionDeLaPage,
   refleterRunsVivants
 } = fenetres
 /** Raccourci clavier global : posé au démarrage, libéré à la fermeture (sinon il reste capté). */
@@ -1438,6 +1463,13 @@ configureClaudeAccountEnv(() => claudeAccounts.env())
 // (un compte epuise ne doit pas condamner l'autre). Sans cette ligne, le mecanisme existerait sans
 // jamais etre alimente.
 configureClaudeActiveAccountId(() => claudeAccounts.active().id)
+// Le compte CHOISI pour un fil voyage avec ses appels (conv-1416) : il ne passe plus par le compte
+// actif, global, que n'importe quel autre fil pouvait changer sous lui. Compte retire entre-temps :
+// rien, le tour suit alors le compte de l'application au lieu de casser.
+configureClaudeCompteDuFil((conversationId) => {
+  const choisi = os.conversations.get(conversationId)?.claudeAccountId
+  return choisi ? claudeAccounts.compteDuFil(choisi) : undefined
+})
 // Rotation d'abonnement : quand le quota du compte actif est epuise, le registre demande une bascule
 // vers un compte encore vivant. Sans ce cablage, la rotation existerait sans jamais se declencher.
 configureClaudeAccountRotation((walled) => claudeAccounts.rotateAwayFrom(walled))
@@ -1861,6 +1893,9 @@ bus.onConversationRemoved = (id: string): void => {
   causalTrace.deleteConversation(id)
   deletePromptCalls(id)
   removeConversationTurnJournals(turnJournalRoot, id)
+  void fichesDeDemande
+    .retirerLeFil(id)
+    .catch((error) => console.warn('[fiches] fil non retiré :', error))
 }
 /**
  * REDEMARRAGE PILOTE PAR L'AGENT — meme chemin que la relance d'auto-update, donc meme lanceur dev
@@ -1871,7 +1906,13 @@ bus.onConversationRemoved = (id: string): void => {
 bus.redemarrerApp = (): void => restartApplication(app)
 // FILE DE REDÉMARRAGE (conv-304) : quand d'autres agents tournent, `restart_app` dépose sa demande
 // dans la relance au repos au lieu de les couper. Pas de file (version installée) -> `false`.
-bus.conversationsEnVol = (): string[] => activeChatTurns.inFlightConversations()
+// Un redémarrage attend aussi la publication d'un tour fini : elle part après la fin du tour, et il
+// la coupait une minute plus tard, laissant ses fichiers non commités (2026-11-01, conv-1048).
+const publicationsEnVol = creerSuiviDesPublications()
+const conversationsOccupees = (): string[] => [
+  ...new Set([...activeChatTurns.inFlightConversations(), ...publicationsEnVol.conversations()])
+]
+bus.conversationsEnVol = conversationsOccupees
 // `remove_conversation(s)` arrête le tour et le run du fil supprimé, comme le Stop (conv-1060).
 bus.toursDeChat = activeChatTurns
 bus.redemarrerAuRepos = (demande) => relanceMoteurHandle?.mettreEnFile(demande) ?? false
@@ -1890,6 +1931,8 @@ bus.ficheBureauCache = (id) => lireRegistre(registreParDefaut()).find((e) => e.i
 // Outils `navigateur_*` de l'agent (conv-1286, lot 4/5) : le gestionnaire est redemandé à chaque
 // appel — la fenêtre principale rouverte en porte un neuf ; fermée, il vaut `null`.
 bus.navigateur = () => gestionnaireNavigateur()
+// Outil `terminal_lire` de l'agent (conv-1362, lot 3/3) : `null` tant que l'IPC n'est pas branché.
+bus.terminal = () => gestionnaireTerminal()
 os.setCausalMemoryRetriever((conversationId) =>
   causalLearningContext(causalTrace.readConversation(conversationId))
 )
@@ -2174,6 +2217,24 @@ function registerChatIpc(): SuiviDuPlan {
     themeDeLaMascotte = theme
     mascotteDuBureau.changerStyle(styleAffiche(lireStyleMascotte(), themeDeLaMascotte))
     return true
+  })
+  // La même mascotte sur l'accueil d'un fil vide (conv-1401) : sa vraie page, puis son humeur.
+  ipcMain.handle('os:mascotte:page', (event) => {
+    assertTrustedRendererSender(event, 'Mascotte du bureau')
+    return {
+      html: htmlDeMascotte(lireStyleMascotte()),
+      largeur: LARGEUR_MASCOTTE,
+      hauteur: HAUTEUR_MASCOTTE
+    }
+  })
+  ipcMain.handle('os:mascotte:feuille-accueil', (event, humeur: unknown, agents: unknown) => {
+    assertTrustedRendererSender(event, 'Mascotte du bureau')
+    const connue = HUMEURS_ACCUEIL.includes(humeur as HumeurAccueil)
+    return cssDeLAccueil(
+      connue ? (humeur as HumeurAccueil) : 'eveil',
+      typeof agents === 'number' && Number.isFinite(agents) ? Math.floor(agents) : 0,
+      lireStyleMascotte()
+    )
   })
   ipcMain.handle('app:titlebar-symbol-color', (event, couleur: unknown) => {
     assertTrustedRendererSender(event, 'Couleur des boutons de fenêtre')
@@ -2460,7 +2521,6 @@ Le fil reprend ensuite normalement.`
     // #2 — run STOPPABLE : on enregistre un AbortController dans le registre du bus pour que
     // `os:orchestrate:cancel` → `abortOrchestration(conversationId, motif)` le coupe réellement
     // (sinon no-op), et le MOTIF traverse jusqu'au message que l'utilisateur lit.
-    appliquerCompteDeConversation(conversationId)
     const controller = bus.registerOrchestration(conversationId)
     const turnId = randomUUID()
     // FRONTIÈRE DE PERSISTANCE : le run direct n'écrivait que le ledger et `orchestrate:step` (canal
@@ -2946,7 +3006,12 @@ Le fil reprend ensuite normalement.`
     lireModeles: () => agentModels,
     lireTopologie,
     synchroniserFabric,
-    isolatedTestInstance
+    isolatedTestInstance,
+    // Le compte actif n'a rien à sonder de plus : c'est déjà lui que décrit le relevé général.
+    compteClaudeDuReleve: (id) => {
+      const compte = claudeAccounts.find(id)
+      return compte && id !== claudeAccounts.active().id ? { configDir: compte.dir } : undefined
+    }
   })
   registerFabricIpc({
     fabricControlPlane,
@@ -3318,6 +3383,13 @@ Le fil reprend ensuite normalement.`
     }
   )
 
+  // La page de question demande la sienne quand elle est prête (conv-1342) : rien à perdre si elle
+  // charge lentement, et un rechargement la retrouve. Une page ne lit que la question de sa fenêtre.
+  ipcMain.handle('model:question:pending', (event) => {
+    assertTrustedRendererSender(event, 'Model question')
+    return questionDeLaPage(event.sender.id)
+  })
+
   ipcMain.handle('model:question:answer', (event, id: string, answer: unknown) => {
     assertTrustedRendererSender(event, 'Model question')
     const safeId = guardString(id, 'modelQuestion.id')
@@ -3351,7 +3423,8 @@ Le fil reprend ensuite normalement.`
     },
     dossierDuFil: (id) => dossierDuTour(id),
     dossierDesRetours: () => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour'),
-    couperLeRun: (id, motif) => bus.abortOrchestration(id, motif)
+    couperLeRun: (id, motif) => bus.abortOrchestration(id, motif),
+    retirerLesFiches: fichesDeDemande.retirerLeFil
   })
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
@@ -3379,6 +3452,12 @@ Le fil reprend ensuite normalement.`
     choisirDossier: pickDirectory,
     // Où la copie de fin de tour garde les états posés à la main (conv-1210).
     racineDuPoste: app.getPath('userData')
+  })
+  // Les RUN.md légers comparés au Board (conv-1418) : le Board est lu, jamais changé.
+  const mesureDesEcarts = creerMesureDesEcarts({
+    racine: app.getPath('userData'),
+    lireLaCarte: boardDuPoste.lireLaCarte,
+    lireLignes: fichesDeDemande.lignes
   })
 
   // fix-ok: cause mesurée — aucun code du dépôt ne lisait `~/.claude.json` (grep « claude.json »
@@ -3587,7 +3666,14 @@ Le fil reprend ensuite normalement.`
   // la relance a aussi son bouton (conv-1151, lot 3), qui porte le numéro du lot.
   ipcMain.handle(
     'os:plansDeLots',
-    async (event, action: unknown, conversationId: unknown, planId?: unknown, lot?: unknown) => {
+    async (
+      event,
+      action: unknown,
+      conversationId: unknown,
+      planId?: unknown,
+      lot?: unknown,
+      selection?: unknown
+    ) => {
       assertTrustedRendererSender(event, 'Plans de lots')
       const geste = guardString(action, 'action')
       const coordinateur = suiviDesPlans.coordinateur
@@ -3597,6 +3683,10 @@ Le fil reprend ensuite normalement.`
       if (geste === 'tous') return { ok: true, plans: plansPourLaListe(coordinateur.plans()) }
       const fil = guardString(conversationId, 'conversationId')
       if (geste === 'voir') return { ok: true, vue: coordinateur.planDuFil(fil) ?? null }
+      // Les plans que le chef ne montre plus (conv-1394) : leurs lots n'ont plus de ligne dans la
+      // liste, le bloc du chef les liste à leur place.
+      if (geste === 'anciens')
+        return { ok: true, anciens: anciensPlansDuChef(coordinateur.plans(), fil) }
       // Ce que dit chaque lot (conv-1315) : lu ici, où TOUS les fils sont en mémoire, tour en cours
       // compris ; l'écran n'a que ceux qu'il a déjà peints, et une piste de lot jamais ouvert restait
       // vide. Seules les phrases traversent le canal, pas les messages.
@@ -3607,6 +3697,8 @@ Le fil reprend ensuite normalement.`
           : {}
         return { ok: true, phrases }
       }
+      // Le bouton du workflow intelligent (conv-1333) : le plan n'existe pas encore, il n'a pas d'id.
+      if (geste === 'lancer-selection') return coordinateur.lancerSelection(fil, selection)
       const id = guardString(planId, 'planId')
       if (geste === 'accepter') return coordinateur.accepter(fil, id)
       if (geste === 'refuser') return coordinateur.refuser(fil, id)
@@ -3690,23 +3782,6 @@ Le fil reprend ensuite normalement.`
    * utilisateur : un tour lance autrement (outil `chat_send`, tache planifiee, reprise) restait
    * muet alors que le dossier range ne pilotait rien. Mesure du 2026-09-08.
    */
-  /**
-   * LE COMPTE CLAUDE DE LA CONVERSATION, applique juste AVANT le lancement.
-   *
-   * Le fournisseur d'env est global et sans argument (`configureClaudeAccountEnv` plus haut) : tout
-   * spawn du CLI lit le compte ACTIF au moment de l'appel. Le choix par conversation se realise
-   * donc en rendant actif le compte memorise sur la conversation, a l'instant ou son tour part.
-   * Aucun choix memorise -> rien ne change (comportement d'avant).
-   */
-  const appliquerCompteDeConversation = (conversationId: string): void => {
-    const voulu = os.conversations.get(conversationId)?.claudeAccountId
-    if (!voulu) return
-    if (claudeAccounts.active().id === voulu) return
-    if (!claudeAccounts.find(voulu)) return // compte retire entre-temps : on ne casse pas le tour
-    claudeAccounts.switchTo(voulu)
-    // Le quota appartient a l'ABONNEMENT : changer de compte rend le snapshot memorise caduc.
-    invalidateModelQuotaCache()
-  }
 
   /**
    * BASCULE AUTOMATIQUE quand la demande NOMME un autre depot que celui du tour.
@@ -3941,7 +4016,6 @@ Le fil reprend ensuite normalement.`
       if (typeof conversationId !== 'string' || !conversationId.trim()) return lancerTour(...args)
       alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
-      appliquerCompteDeConversation(conversationId)
       /*
        * LE MODÈLE DU FIL (conv-239, 2026-10-11) : une conversation peut porter son propre modèle.
        * Un modèle imposé par l'appelant (reprise d'un tour coupé, qui rejoue SON modèle d'origine)
@@ -3997,6 +4071,19 @@ Le fil reprend ensuite normalement.`
             dossier: dossierDuTour(conversationId),
             texteReponse: resultat.text
           })
+          // RUN.md léger (conv-1418) : même garantie, un échec n'atteint jamais la réponse.
+          .then((evenement) =>
+            evenement
+              ? fichesDeDemande.noterTour({
+                  evenement,
+                  conversation: os.conversations.get(conversationId) as unknown as
+                    ConversationPourLaCarte | undefined
+                })
+              : null
+          )
+          .then((ligne) => {
+            if (ligne) mesureDesEcarts.planifier()
+          })
           .catch((error) => console.warn('[besoins] tour non noté :', error))
         notifierFinDeTour(conversationId, {
           ...resultat,
@@ -4010,6 +4097,7 @@ Le fil reprend ensuite normalement.`
         })
         if (debutPublication && resultat.ok && !resultat.cancelled) {
           const demande = [...args[1]].reverse().find((m) => m.role === 'user')?.content ?? ''
+          const finPublication = publicationsEnVol.debut(conversationId)
           void os
             .publishChatTurn({
               conversationId,
@@ -4050,6 +4138,7 @@ Le fil reprend ensuite normalement.`
               if (decision.lancer) suiviGitApresFil.file?.ajouter(conversationId, decision.fichiers)
             })
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
+            .finally(finPublication)
         }
         return resultat
       } finally {
@@ -4572,6 +4661,10 @@ Le fil reprend ensuite normalement.`
   bus.taskManager = {
     create: (input) => scheduledTasks.create(input),
     list: () => scheduledTasks.listTasks(),
+    // `task_update` / `task_delete` (conv-1370, 2026-10-31) : les boutons de l'écran, pas un second chemin.
+    get: (id) => scheduledTasks.getTask(id),
+    update: (id, input) => scheduledTasks.update(id, input),
+    remove: (id) => scheduledTasks.remove(id),
     refresh: () => schedulerPourAgent.refresh(),
     onChanged: () => broadcast({ type: 'refresh', scope: 'task-manager' })
   }
@@ -5522,6 +5615,17 @@ app.whenReady().then(async () => {
   registerHdeskTvIpc()
   // Navigateur intégré du chat (conv-1286) : ses pages vivent DANS la fenêtre principale.
   registerNavigateurIpc({ fenetrePrincipale: fenetres.fenetrePrincipale })
+  // Terminal intégré du chat (conv-1362, lot 3/3) : même dossier et même compte que les tours du fil.
+  registerTerminalIpc({
+    fenetrePrincipale: fenetres.fenetrePrincipale,
+    dossierDuFil: dossierDuTour,
+    environnement: () => environnementDuTerminal(withClaudeAccountEnv(process.env))
+  })
+  // Question à côté (conv-1362) : le catalogue du bus et les comptes, ceux du tour de chat.
+  registerQuestionACoteIpc({
+    catalogue: () => bus.catalog(),
+    comptes: () => claudeAccounts.current().accounts
+  })
   // Mods d'Autowin chargés par chaque run (conv-58) : hors archive, comme les scripts du bureau caché.
   definirDossierModsAutowin(join(racineScriptsHorsArchive(app.getAppPath()), 'mods', 'autowin'))
   registerProdPassphraseIpc(ipcMain, {
@@ -6251,8 +6355,7 @@ app.whenReady().then(async () => {
           console.warn(`[relance-moteur] ${ligne}`)
         ),
       compiler: () => compilerLeMoteur(racineDuDepot, process.execPath),
-      auRepos: () =>
-        activeChatTurns.inFlightConversations().length === 0 && bus.orchestrationsEnVol() === 0,
+      auRepos: () => conversationsOccupees().length === 0 && bus.orchestrationsEnVol() === 0,
       annoncer: (text) => broadcast({ type: 'toast', text }),
       relancer: (cause) => {
         annoncerFermeture(cause)
@@ -6278,6 +6381,12 @@ app.whenReady().then(async () => {
 // resté dans la fenêtre de debounce de 120 ms de la persistance.
 let otelQuitDrainStarted = false
 app.on('before-quit', (event) => {
+  // Nos terminaux, un par un, par leur processus (conv-1362, lot 3/3). S'il y en avait, on ressort
+  // au tour suivant : quitter dans le même tour fige Electron (voir `fermerTerminauxAvantSortie`).
+  if (fermerTerminauxAvantSortie(() => app.quit())) {
+    event.preventDefault()
+    return
+  }
   capteurHdesk?.detruire()
   void lancementIpc?.arreterTout()
   capteurHdesk = null
@@ -6289,6 +6398,9 @@ app.on('before-quit', (event) => {
   raccourciCapture = null
   flushConversations()
   flushScheduledTasks()
+  // Les petits magasins JSON s'ecrivent hors du fil principal depuis conv-1368 : ce qui reste en
+  // attente doit etre pose avant l'arret. `flushScheduledTasks` le fait deja, mais il peut disparaitre.
+  viderFichiersEnAttente()
   // Le journal de tour ecrit par LOTS : ce qui dort en tampon doit atteindre le disque avant
   // l'arret, sinon la reprise d'un tour en vol perdrait ses derniers deltas.
   flushAllTurnJournals()

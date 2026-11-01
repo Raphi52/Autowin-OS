@@ -110,3 +110,47 @@ describe('.githooks/pre-commit : module supprimé encore importé', () => {
     expect(r.status, String(r.stderr)).toBe(0)
   })
 })
+
+/**
+ * Règle du 2026-10-31 (conv-1386) : une interface nouvelle suit les thèmes. Le chemin choisi ici n'est
+ * dans aucun plancher : c'est un fichier nouveau, qui n'a droit à aucune couleur en dur.
+ */
+describe('.githooks/pre-commit : interface qui ne suivrait pas les thèmes', () => {
+  const NOUVEAU = 'src/renderer/src/components/ZoneNeuveDuTest.css'
+
+  it('REFUSE une feuille nouvelle qui écrit une couleur en dur', () => {
+    const { git, ecrire } = depot()
+    ecrire(NOUVEAU, '.zone { color: #fff; }\n')
+    git('add', NOUVEAU)
+    const r = git('commit', '-m', 'zone neuve')
+    expect(r.status).not.toBe(0)
+    expect(String(r.stderr)).toContain(`${NOUVEAU} : 1 couleur(s) en dur, 0 au plus`)
+    expect(String(git('rev-list', '--count', 'HEAD').stdout).trim()).toBe('1')
+  })
+
+  it('laisse passer la même feuille écrite avec les jetons du thème', () => {
+    const { git, ecrire } = depot()
+    ecrire(NOUVEAU, '.zone { color: var(--text); }\n')
+    git('add', NOUVEAU)
+    const r = git('commit', '-q', '-m', 'zone neuve')
+    expect(r.status, String(r.stderr)).toBe(0)
+  })
+
+  it("ne regarde que ce que le commit emporte, pas le travail d'à côté", () => {
+    const { git, ecrire } = depot()
+    // Une autre session a une feuille fautive dans l'arbre, non stagée ; ce commit ne la porte pas.
+    ecrire(NOUVEAU, '.zone { color: #fff; }\n')
+    ecrire('src/main/autre.ts', 'export const autre = 3\n')
+    git('add', 'src/main/autre.ts')
+    const r = git('commit', '-q', '-m', 'autre sujet')
+    expect(r.status, String(r.stderr)).toBe(0)
+  })
+
+  it("ne s'applique pas dans une copie de travail d'agent", () => {
+    const { git, ecrire } = depot('agent__run-x-1')
+    ecrire(NOUVEAU, '.zone { color: #fff; }\n')
+    git('add', NOUVEAU)
+    const r = git('commit', '-q', '-m', 'agent')
+    expect(r.status, String(r.stderr)).toBe(0)
+  })
+})

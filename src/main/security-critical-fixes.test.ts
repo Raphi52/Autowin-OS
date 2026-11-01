@@ -748,7 +748,40 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `run:gitApresFil:set` (e22e609b, conv-1339) — laisse hors compte par ce commit. Interrupteur
     //     de « publier apres un fil », relu ici et non ecrit a sa place.
     //   Aucune protection retiree. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(281)
+    // MISE A JOUR 2026-10-30 (conv-1342, fenetre de question noire) — litteral INCHANGE a 279, et il
+    //   faut dire pourquoi, MESURE par `creerLecteurSource` sur les deux arborescences. Ce test etait
+    //   deja rouge avant ce canal : 280 sur `main` (825ccd5a) et 278 dans la copie partagee, ou
+    //   conv-1321 a du travail non commite dans `ipc/navigateur.ts` (les 3 canaux d'annotations
+    //   retires, `navigateur:prendre-elements-choisis` ajoute, soit 2 de moins). Avec le canal
+    //   ci-dessous : 281 - 2 = 279, le total une fois les deux travaux publies. UN canal ajoute, garde
+    //   des sa PREMIERE ligne par `assertTrustedRendererSender(event, 'Model question')` :
+    //   `model:question:pending` — la page de question demande la sienne une fois prete. Lecture
+    //     seule, sans argument, et bornee a `event.sender.id` : une page n'atteint jamais la question
+    //     d'une autre fenetre. Il remplace l'envoi `model:question`, retire avec son pont preload.
+    //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-31 (conv-1364, mise a jour d'Autowin) — 281 + 1 - 2 = 280 : les 281 de
+    //   conv-1338 sur origin/main, plus `model:question:pending` (conv-1342), moins les 2 du travail
+    //   de conv-1321 dans `ipc/navigateur.ts`. Les deux blocs ci-dessus ont ete ecrits sans se voir.
+    //   Aucune protection retiree. `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-31 (plan de conv-1362) — 280 + 2 + 6 = 288, MESURE par ce test (rouge a 288).
+    //   DEUX canaux de la question a cote (`ipc/question-a-cote.ts`, lot 1/3), gardes des leur PREMIERE
+    //   ligne par `assertTrustedRendererSender(event, 'Question à côté')` : `question-a-cote:poser` et
+    //   `question-a-cote:annuler`. Identifiant de fil borne a 200, question non vide et bornee a
+    //   4 000 caracteres, tout le reste refuse avant le moteur. Le moteur lance le CLI sans aucun
+    //   outil utilisable, sur une copie jetable de la session : aucune ecriture de la vue n'atteint
+    //   le disque, et annuler n'arrete que le processus de cette question.
+    //   SIX canaux du terminal integre (`ipc/terminal.ts`, lot 3/3) : `terminal:etat`, `ouvrir`,
+    //   `ecrire`, `redimensionner`, `fermer`, `tampon`, gardes eux aussi. Leur raison est au lot 3.
+    //   `unguarded` reste VIDE.
+    // MISE A JOUR 2026-10-31 (conv-1401, la vraie mascotte sur l'accueil d'un fil vide) — 288 + 2 =
+    //   290, MESURE par ce test (rouge a 288). Gardes des leur PREMIERE ligne par
+    //   `assertTrustedRendererSender(event, 'Mascotte du bureau')` (`index.ts`) :
+    //   `os:mascotte:page` — LECTURE seule : rend le HTML fixe de la mascotte ; aucun argument.
+    //   `os:mascotte:feuille-accueil` — LECTURE seule : rend une feuille de style. L'humeur est
+    //     comparee a une liste fermee (`HUMEURS_ACCUEIL`), le nombre d'agents ramene a un entier ;
+    //     rien de recu n'entre tel quel dans le CSS rendu.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(290)
     expect(unguarded).toEqual([])
   })
 

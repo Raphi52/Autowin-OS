@@ -252,6 +252,35 @@ export async function fichiersCommitesHorsDeLaCopie(
   }
 }
 
+/**
+ * CE QUE LA COPIE GARDE DE LA VERIFICATION D'AVANT (conv-1376, 2026-10-31).
+ *
+ * La copie vit d'un `verify` a l'autre, et le depot ne nomme que ce qui y differe AUJOURD'HUI. Un
+ * fichier recopie hier, puis retabli ou supprime par un autre fil, n'est plus nomme par personne :
+ * il restait fige dans la copie. Mesure : 6 erreurs de typage et un test rouge sur un fichier disparu
+ * et un autre deja retabli, alors que le typage rendait 0 dans le vrai depot. La copie est un miroir,
+ * jamais du travail : ses propres ecarts s'ajoutent donc a la liste, et `gestesDeVerification` les
+ * ramene a l'etat du depot (copie du fichier, ou retrait s'il n'existe plus).
+ *
+ * `null` si git ne lit pas la copie : elle reste alors comme elle est, ce qui est l'ancien defaut,
+ * jamais une perte. `--no-renames` : une entree de renommage porte deux chemins.
+ */
+export async function fichiersRestesDansLaCopie(bureau: string): Promise<string[] | null> {
+  try {
+    const { stdout } = await executer(
+      'git',
+      ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--no-renames'],
+      { cwd: bureau, windowsHide: true, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8' }
+    )
+    return stdout
+      .split('\0')
+      .filter(Boolean)
+      .map((entree) => entree.slice(3))
+  } catch {
+    return null
+  }
+}
+
 /** Le dossier existe-t-il vraiment ? Une copie annoncee mais absente ne doit pas etre utilisee. */
 export function bureauUtilisable(chemin: string | undefined): chemin is string {
   return typeof chemin === 'string' && chemin.trim().length > 0 && existsSync(chemin)
