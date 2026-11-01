@@ -70,6 +70,31 @@ describe('TestsView — multi-projets', () => {
     expect(container.textContent).toContain('aucun harnais vitest/jest declare')
   })
 
+  // conv-1397, 2026-10-31 : « garde que la partie ticket de autowin OS, mets-la dans maintenance entre
+  // les skills et les tests ». ENTRÉE QUI DOIT FAIRE ÉCHOUER : la veille absente, ou rangée ailleurs
+  // qu'entre les boutons des skills et les onglets des tests.
+  it('range les tickets Autowin OS entre les skills et les tests', async () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        testProjects: vi.fn(async () => projets),
+        runProjectTests: vi.fn(async () => ({ totals: {}, report: { cases: [] } })),
+        veilleSnapshot: vi.fn(async () => ({ candidats: [], echecs: [] }))
+      }
+    })
+    const container = monter()
+    await rendre(container)
+    const skills = container.querySelector('[data-testid="maintenance-skills"]')!
+    const tickets = container.querySelector('[data-testid="maintenance-tickets"]')!
+    const tests = container.querySelector('[data-testid="tests-tab-suites"]')!
+    expect(tickets.textContent).toContain('Tickets Autowin OS')
+    expect(tickets.querySelector('[data-testid="veille-section"]')).not.toBeNull()
+    const apres = (a: Node, b: Node): boolean =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(apres(skills, tickets)).toBe(true)
+    expect(apres(tickets, tests)).toBe(true)
+  })
+
   it('lance la suite du projet SELECTIONNE et affiche les echecs', async () => {
     const runProjectTests = vi.fn(async (root: string) => ({
       root,

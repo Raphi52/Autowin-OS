@@ -42,6 +42,10 @@ export const TEXTES_FR = {
   'vue.chargement': 'Calcul de la carte…',
   'vue.sourceInjoignable': 'source de tickets injoignable : liens #1234 non vérifiés',
   'vue.tasksNonVerifiees': 'tasks non vérifiées : {erreur}',
+  // Les deux onglets du Board (conv-1397) : les post-it des demandes, les tickets externes.
+  'vue.sections': 'Sections du Board',
+  'vue.onglet.demandes': 'Demandes',
+  'vue.onglet.tickets': 'Tickets',
   // Le dossier où le Board est recopié (conv-1206)
   'vue.dossier': 'Dossier…',
   'vue.dossierAide':
@@ -63,6 +67,9 @@ export const TEXTES_FR = {
   'riviere.aujourdhui': 'revenir à aujourd’hui',
   'riviere.personnes': 'Filtrer par personne',
   'riviere.tous': 'Tous',
+  'riviere.projets': 'Filtrer par projet',
+  'riviere.tousLesProjets': 'Tous les projets',
+  'riviere.projets.autres': 'Autres dossiers',
   'riviere.postit.poseALaMain': ' · posé à la main',
   'riviere.postit.collegue': ' · fil de {nom}, en lecture seule',
   'riviere.postit.demandes': '{n} dem.',
@@ -162,6 +169,8 @@ export const TEXTES_FR = {
   'maint.canalAbsent': 'canal tests:projects indisponible (moteur non reconstruit ?)',
   'maint.onglet.suites': 'Tests unitaires',
   'maint.onglet.latence': 'Latence',
+  // La veille, venue de l'ancien écran Tickets (conv-1397).
+  'maint.tickets': 'Tickets Autowin OS',
   'maint.filtre': 'Filtrer (motif de fichier)',
   'maint.echecsSeuls': 'Échecs seuls',
   'maint.ajouter': '+ Projet',
@@ -293,6 +302,9 @@ export const TEXTES_EN: Record<CleBoardEtMaintenance, string> = {
   'vue.chargement': 'Computing the map…',
   'vue.sourceInjoignable': 'ticket source unreachable: #1234 links not checked',
   'vue.tasksNonVerifiees': 'tasks not checked: {erreur}',
+  'vue.sections': 'Board sections',
+  'vue.onglet.demandes': 'Requests',
+  'vue.onglet.tickets': 'Tickets',
   'vue.dossier': 'Folder…',
   'vue.dossierAide':
     'Choose a folder (a network share, for instance) where the Board is copied at each refresh, one sticky note per thread with its conversation id',
@@ -311,6 +323,9 @@ export const TEXTES_EN: Record<CleBoardEtMaintenance, string> = {
   'riviere.aujourdhui': 'back to today',
   'riviere.personnes': 'Filter by person',
   'riviere.tous': 'All',
+  'riviere.projets': 'Filter by project',
+  'riviere.tousLesProjets': 'All projects',
+  'riviere.projets.autres': 'Other folders',
   'riviere.postit.poseALaMain': ' · set by hand',
   'riviere.postit.collegue': ' · {nom}’s thread, read-only',
   'riviere.postit.demandes': '{n} req.',
@@ -402,6 +417,7 @@ export const TEXTES_EN: Record<CleBoardEtMaintenance, string> = {
   'maint.canalAbsent': 'tests:projects channel unavailable (engine not rebuilt?)',
   'maint.onglet.suites': 'Unit tests',
   'maint.onglet.latence': 'Latency',
+  'maint.tickets': 'Autowin OS tickets',
   'maint.filtre': 'Filter (file pattern)',
   'maint.echecsSeuls': 'Failures only',
   'maint.ajouter': '+ Project',
@@ -507,7 +523,9 @@ export const TEXTES_EN: Record<CleBoardEtMaintenance, string> = {
 }
 
 /** Clé → raison pour laquelle son anglais reste identique au français. */
-export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<CleBoardEtMaintenance, string>>> = {}
+export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<CleBoardEtMaintenance, string>>> = {
+  'vue.onglet.tickets': 'même mot en anglais'
+}
 
 export const { useTextes: useTextesBoardEtMaintenance, traduire: traduireBoardEtMaintenance } =
   tableDeTextes(TEXTES_FR, TEXTES_EN)

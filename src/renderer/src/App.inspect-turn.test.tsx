@@ -103,9 +103,8 @@ describe('App inspect-turn navigation', () => {
       'Observatory',
       'Task Manager',
       'Worktrees',
-      'Bureaux cachés',
-      'Tickets',
-      // Carte des besoins (conv-1089, 2026-10-22), placée entre Tickets et Maintenance dans navigation.ts.
+      // Tickets n'est plus un écran (conv-1397) : un onglet du Board, et sa veille un bloc de Maintenance.
+      // Carte des besoins (conv-1089, 2026-10-22), placée avant Maintenance dans navigation.ts.
       // Renommée « Carte du projet » (conv-1113), puis « Board » (conv-1126) : même identifiant `besoins`.
       'Board',
       // L'ancienne vue Tests, renommée Maintenance (conv-1101) : même identifiant `tests`.
@@ -122,8 +121,6 @@ describe('App inspect-turn navigation', () => {
       'observatory',
       'task-manager',
       'worktree',
-      'hdesk',
-      'tickets',
       'besoins',
       'tests',
       'settings'

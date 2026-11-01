@@ -297,6 +297,128 @@ describe('RiviereDuProjet', () => {
     expect(postit(el, 'conv-1').dataset.estompe).toBe('true')
   })
 
+  // conv-1329 : « filtre par projet dans le board en plus du filtre par personne ».
+  it('filtre par projet, en plus du filtre par personne', async () => {
+    const menu = (el: HTMLElement): HTMLSelectElement | null =>
+      el.querySelector('[data-testid="riviere-projet"]')
+    // Un seul projet : rien à filtrer, pas de menu.
+    expect(menu((await monter()).el)).toBeNull()
+
+    const donnees = carte()
+    const zox = {
+      ...donnees.projets[0],
+      cle: 'R',
+      libelle: 'ZOX-V3',
+      demandes: [
+        {
+          ...demande('conv-7', 1, 'sans-preuve', MAINTENANT - 3 * HEURE),
+          demandeur: { cle: 'lea@x', nom: 'Léa', origine: 'journal' as const }
+        }
+      ]
+    }
+    // Le même projet nommé autrement sur un autre poste, et une copie du dépôt faite pour un fil :
+    // ni l'un ni l'autre ne doit devenir une entrée du menu (« pk ya autowinos et autowin-os »).
+    const autreNom = {
+      ...zox,
+      cle: 'collegue:arthur:D:/SOurcees/Autowin-OS',
+      libelle: 'Autowin-OS',
+      demandes: [demande('conv-8', 1, 'prouve', MAINTENANT - 5 * HEURE)]
+    }
+    const copieDeFil = {
+      ...zox,
+      cle: 'D:/AutoWinOS-git-conv-1317',
+      libelle: 'AutoWinOS-git-conv-1317',
+      demandes: [demande('conv-9', 1, 'en-cours', MAINTENANT - 6 * HEURE)]
+    }
+    const { el } = await monter(vi.fn(), {
+      ...donnees,
+      projets: [...donnees.projets, zox, autreNom, copieDeFil]
+    })
+    const choisir = async (valeur: string): Promise<void> =>
+      act(async () => {
+        menu(el)!.value = valeur
+        menu(el)!.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    expect([...menu(el)!.options].map((o) => o.textContent)).toEqual([
+      'Tous les projets',
+      'AutoWinOS',
+      'ZOX-V3'
+    ])
+
+    const noms = (): string[] =>
+      [...el.querySelectorAll<HTMLElement>('[data-testid="riviere-personne"]')].map(
+        (b) => b.textContent ?? ''
+      )
+    expect(noms()).toEqual(['Raph', 'Léa'])
+
+    await choisir('zoxv3')
+    // Seule Léa a un post-it sur ZOX-V3 (conv-1329) : Raph quitte la liste des noms.
+    expect(noms()).toEqual(['Léa'])
+    expect(postit(el, 'conv-7').dataset.estompe).toBeUndefined()
+    expect(postit(el, 'conv-1').dataset.estompe).toBe('true')
+    expect(postit(el, 'conv-4').dataset.estompe).toBe('true')
+    expect(menu(el)!.dataset.actif).toBe('true')
+
+    // AutoWinOS montre aussi le fil d'Arthur sur « Autowin-OS » et celui de la copie du dépôt.
+    await choisir('autowinos')
+    expect(noms()).toEqual(['Raph', 'Léa'])
+    for (const id of ['conv-1', 'conv-8', 'conv-9'])
+      expect(postit(el, id).dataset.estompe).toBeUndefined()
+    expect(postit(el, 'conv-7').dataset.estompe).toBe('true')
+
+    // Les deux filtres se cumulent : Léa sur AutoWinOS = conv-4 seul.
+    const lea = [...el.querySelectorAll<HTMLElement>('[data-testid="riviere-personne"]')].find(
+      (b) => b.textContent === 'Léa'
+    )!
+    await act(async () => lea.click())
+    expect(postit(el, 'conv-4').dataset.estompe).toBeUndefined()
+    expect(postit(el, 'conv-7').dataset.estompe).toBe('true')
+    expect(postit(el, 'conv-1').dataset.estompe).toBe('true')
+
+    // Raph choisi puis ZOX-V3, où il n'a rien : son nom reste, pour pouvoir le décocher.
+    const raph = [...el.querySelectorAll<HTMLElement>('[data-testid="riviere-personne"]')].find(
+      (b) => b.textContent === 'Raph'
+    )!
+    await act(async () => raph.click())
+    await choisir('zoxv3')
+    expect(noms()).toEqual(['Raph', 'Léa'])
+    await act(async () => raph.click())
+    expect(noms()).toEqual(['Léa'])
+
+    await choisir('')
+    expect(postit(el, 'conv-7').dataset.estompe).toBeUndefined()
+    expect(menu(el)!.dataset.actif).toBeUndefined()
+  })
+
+  it('nomme « This computer » le dossier personnel dans le menu des projets (conv-1329)', async () => {
+    const donnees = carte()
+    const perso = {
+      ...donnees.projets[0],
+      cle: 'C:/Users/raph',
+      libelle: 'raph',
+      demandes: [demande('conv-10', 1, 'prouve', MAINTENANT - 2 * HEURE)]
+    }
+    const el = document.createElement('div')
+    document.body.append(el)
+    const root = createRoot(el)
+    montes.push({ root, el })
+    await act(async () =>
+      root.render(
+        createElement(RiviereDuProjet, {
+          carte: { ...donnees, projets: [...donnees.projets, perso] },
+          ouvrir: vi.fn(),
+          dossierPersonnel: 'C:/Users/raph'
+        })
+      )
+    )
+    const menu = el.querySelector('[data-testid="riviere-projet"]') as HTMLSelectElement
+    expect([...menu.options].map((o) => o.textContent)).toEqual([
+      'Tous les projets',
+      'AutoWinOS',
+      '💻 This computer'
+    ])
+  })
+
   const molette = async (el: HTMLElement, crans: number, deltaY = -100): Promise<void> =>
     act(async () => {
       for (let i = 0; i < crans; i += 1)

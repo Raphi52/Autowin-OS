@@ -7,6 +7,10 @@
   position: relative;
 }
 .artifact-diagram__dessin {
+  /* Mermaid mesure ses textes hors de la page et les enferme dans des cadres a cette largeur exacte.
+     Herite du fil, un espacement entre lettres qu'il n'a pas mesure coupe la derniere lettre de chaque
+     ligne (0,0675 px par lettre : 108,53 px de texte pour un cadre de 107,31, conv-1322). */
+  letter-spacing: normal;
   cursor: zoom-in;
 }
 .artifact-diagram__agrandir {

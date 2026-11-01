@@ -32,6 +32,27 @@ const JOURNAL = [
 ]
 
 describe('bloc Actions — une tâche nomme la commande qu’elle enveloppe', () => {
+  it('Monitor : une seule ligne, nommée par sa surveillance, ouverte tant qu’elle tourne (conv-1370, lot 5)', () => {
+    // Ordre mesuré sur le CLI 2.1.314 : l'outil rend la main en 0 s, la surveillance continue.
+    const debut = [
+      'Monitor · for i in 1 2 3; do echo LIGNE-$i; sleep 3; done',
+      'tache de fond en cours - sonde lignes',
+      'Monitor terminé - 0 s'
+    ]
+    const enCours = actionsDuTour(debut, undefined)
+    expect(enCours).toHaveLength(1)
+    expect(enCours[0]).toMatchObject({ outil: 'Monitor', famille: 'commande', etat: 'encours' })
+    expect(enCours[0]!.tache?.nom).toBe('sonde lignes')
+
+    const fini = actionsDuTour(
+      [...debut, 'tache de fond terminee - Monitor "sonde lignes" stream ended'],
+      undefined,
+      true
+    )
+    expect(fini).toHaveLength(1)
+    expect(fini[0]!.etat).toBe('ok')
+  })
+
   it('ne crée aucune ligne « tache de fond » : la commande prend le nom de sa tâche', () => {
     const actions = actionsDuTour(JOURNAL, undefined, true)
     expect(actions.map((a) => [a.texte, a.outil, a.etat, a.secondes])).toEqual([

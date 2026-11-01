@@ -8,6 +8,7 @@ import {
 import { ViewTopBar } from './ViewTopBar'
 import { PerfLagPanel } from './PerfLagPanel'
 import { MaintenanceSkillsPanel } from './MaintenanceSkillsPanel'
+import { VeilleCandidatsSection } from './VeilleCandidatsSection'
 import './ViewPage.css'
 import './TestsView.css'
 import { Spinner } from './Spinner'
@@ -15,7 +16,8 @@ import { largeursDeLaBarre } from './tests-barre'
 
 /**
  * Vue Maintenance (ex-« Tests », renommée le 2026-10-22, conv-1101) : en tête, les boutons qui
- * lancent les skills d'entretien d'Autowin (MaintenanceSkillsPanel) ; dessous, les suites de tests.
+ * lancent les skills d'entretien d'Autowin (MaintenanceSkillsPanel) ; puis les tickets d'Autowin OS
+ * (la veille, venue de l'ancien écran Tickets, conv-1397) ; dessous, les suites de tests.
  *
  * Les suites restent MULTI-PROJETS par construction.
  *
@@ -261,6 +263,19 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
       />
 
       <MaintenanceSkillsPanel />
+
+      {/* LES TICKETS D'AUTOWIN OS (conv-1397, 2026-10-31 : « garde que la partie ticket de autowin OS
+        met-la dans maintenance entre les skills et les tests ») : la veille, qui était l'onglet
+        « Autowin OS » de l'ancien écran Tickets. Hauteur bornée : ses colonnes défilent seules, les
+        tests gardent leur place dessous. */}
+      <section
+        className="maint-tickets"
+        data-testid="maintenance-tickets"
+        aria-label={t('maint.tickets')}
+      >
+        <span className="maint-tickets-titre">{t('maint.tickets')}</span>
+        <VeilleCandidatsSection />
+      </section>
 
       {/* Les commandes des SUITES vivent sur la rangée de leurs onglets, plus dans la barre du titre :
         elles y repoussaient « Maintenance » sous le champ de filtre (capture du 2026-10-22, conv-1101),

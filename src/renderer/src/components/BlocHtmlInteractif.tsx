@@ -62,12 +62,18 @@ const MARGE_VISIBILITE = '300px 0px'
 const MARGE_LIBERATION = '1500px 0px'
 
 /**
- * `scrollMargin` et non le seul `rootMargin` : le fil defile dans son propre conteneur, et
- * `rootMargin` n'agit que sur la fenetre. Le cadre etait donc monte et libere a ras de l'ecran.
- * L'option existe dans Chromium mais pas encore dans le type de TypeScript.
+ * Les distances se mesurent depuis le FIL. Depuis la fenetre, `rootMargin` n'agit que sur elle et
+ * `scrollMargin` n'elargit que les zones qui defilent : `.chat` et `.chat-layout` sont en
+ * `overflow: clip`, la marge s'arretait donc au bord du panneau. Mesure en vrai Chromium
+ * (conv-1395) : un carrousel a 686 px de la zone visible etait libere, au lieu de 1500 px.
+ * Hors d'un fil, on garde la fenetre. `scrollMargin` n'est pas encore dans le type de TypeScript.
  */
-const marges = (marge: string): IntersectionObserverInit =>
-  ({ rootMargin: marge, scrollMargin: marge }) as IntersectionObserverInit
+const marges = (hote: HTMLElement, marge: string): IntersectionObserverInit => {
+  const fil = hote.closest('.chat-scroll')
+  return fil
+    ? { root: fil, rootMargin: marge }
+    : ({ rootMargin: marge, scrollMargin: marge } as IntersectionObserverInit)
+}
 
 /**
  * Un lien de la page s'ouvre PAR LE FIL, comme un lien du Markdown : une ancre posee dans le bloc
@@ -132,17 +138,25 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
     if (!hote || typeof IntersectionObserver === 'undefined') return
     const visible = (entrees: IntersectionObserverEntry[]): boolean =>
       entrees.some((entree) => entree.isIntersecting)
-    const proche = new IntersectionObserver((entrees) => {
-      prochRef.current = visible(entrees)
-      if (prochRef.current) setMonte(true)
-      else if (avec3d) setMonte(false)
-    }, marges(MARGE_VISIBILITE))
+    const proche = new IntersectionObserver(
+      (entrees) => {
+        // Agrandie, la page quitte le fil pour la couche superieure du navigateur : l'observateur la
+        // dit absente alors qu'elle occupe tout l'ecran.
+        prochRef.current = visible(entrees) || agrandiRef.current
+        if (prochRef.current) setMonte(true)
+        else if (avec3d) setMonte(false)
+      },
+      marges(hote, MARGE_VISIBILITE)
+    )
     proche.observe(hote)
     const loin = avec3d
       ? null
-      : new IntersectionObserver((entrees) => {
-          if (!visible(entrees) && !toucheeRef.current && !agrandiRef.current) setMonte(false)
-        }, marges(MARGE_LIBERATION))
+      : new IntersectionObserver(
+          (entrees) => {
+            if (!visible(entrees) && !toucheeRef.current && !agrandiRef.current) setMonte(false)
+          },
+          marges(hote, MARGE_LIBERATION)
+        )
     loin?.observe(hote)
     return () => {
       proche.disconnect()
@@ -324,8 +338,16 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
       agrandiRef.current = ouvert
       setAgrandi(ouvert)
     }
+    // `toggle` arrive apres coup, parfois apres l'observateur : `beforetoggle` previent avant.
+    const annoncer = (event: Event): void => {
+      agrandiRef.current = (event as ToggleEvent).newState === 'open'
+    }
     hote.addEventListener('toggle', suivre)
-    return () => hote.removeEventListener('toggle', suivre)
+    hote.addEventListener('beforetoggle', annoncer)
+    return () => {
+      hote.removeEventListener('toggle', suivre)
+      hote.removeEventListener('beforetoggle', annoncer)
+    }
   }, [])
 
   const basculerAgrandi = (): void => {

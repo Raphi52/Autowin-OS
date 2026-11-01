@@ -10,6 +10,8 @@
  */
 import { porteUnSignalDeRisque } from '../../../shared/signaux-de-risque'
 import { ligneDuLot, type RangDuLot } from '../../../shared/selection-scout'
+import { DEMANDE_MAX, FICHIERS_MAX, type SelectionAPlanifier } from '../../../shared/plan-de-lots'
+import { parseScoutTable } from '../../../shared/scout-table'
 import { langueCourante } from '../langue'
 import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
 
@@ -145,6 +147,43 @@ function ancrageDansCellules(cellules: readonly string[]): string | undefined {
  * tableau. Ce pont réutilise le panneau existant au lieu de recoder des cases à cocher ailleurs.
  * L'ancrage est EXTRAIT des cellules quand il y est, jamais inventé quand il n'y est pas.
  */
+/**
+ * L'EFFORT ET LA PREUVE ÉCRITS DANS LE « COMMENT » (conv-1333, 2026-10-30). Le tableau actuel du scout
+ * n'a ni colonne Effort ni colonne Commande : sur les 64 pistes proposées depuis le 22/10, l'effort
+ * était vide 64 fois, alors que le texte disait « **Effort :** moyen ». La règle « effort fort = à
+ * cadrer » ne se déclenchait donc jamais. Lecture bornée à ces deux formes : rien n'est deviné.
+ */
+const MOTS_D_EFFORT: Readonly<Record<string, 'g' | 'y' | 'r'>> = {
+  faible: 'g',
+  petit: 'g',
+  leger: 'g',
+  low: 'g',
+  small: 'g',
+  moyen: 'y',
+  modere: 'y',
+  medium: 'y',
+  fort: 'r',
+  eleve: 'r',
+  gros: 'r',
+  grand: 'r',
+  lourd: 'r',
+  high: 'r',
+  large: 'r'
+}
+
+function effortDuComment(how: string): 'g' | 'y' | 'r' | undefined {
+  const mot = /\beffort\b[\s*_:]*([a-z]+)/u.exec(sansAccents(how))?.[1]
+  return mot ? MOTS_D_EFFORT[mot] : undefined
+}
+
+/** La commande de preuve citée : une vraie commande, qui vise un fichier (`npx vitest run src/a.test.ts`). */
+function preuveDuComment(how: string): string | undefined {
+  const commande = /\b(?:preuve|proof)\b[\s*_:]*`([^`\n]+)`/iu.exec(how)?.[1]?.trim()
+  if (!commande) return undefined
+  const lancee = /^(?:npx|npm|node|pnpm|yarn|pwsh|powershell|python|dotnet)\b/u.test(commande)
+  return lancee && /\s\S+[./]\S/u.test(commande) ? commande : undefined
+}
+
 export function candidatsDepuisScoutTable(
   rows: readonly {
     num: string
@@ -160,18 +199,20 @@ export function candidatsDepuisScoutTable(
 ): CandidatAffiche[] {
   return rows.map((row) => {
     const ancrage = ancrageDansCellules([row.how, row.what, row.why])
+    const effort = row.effort ?? effortDuComment(row.how)
+    const commande = row.commande?.trim() || preuveDuComment(row.how)
     return {
       titre: row.what.trim() || `Candidat #${row.num}`,
       ...(row.num.trim() ? { num: row.num.trim() } : {}),
       ...(row.score === undefined ? {} : { pertinence: row.score }),
       ...(row.impact ? { impact: row.impact } : {}),
-      ...(row.effort ? { effort: row.effort } : {}),
+      ...(effort ? { effort } : {}),
       ...(ancrage ? { url: ancrage } : {}),
       ...(row.type ? { type: row.type } : {}),
       ...(row.what.trim() ? { what: row.what.trim() } : {}),
       ...(row.why.trim() ? { why: row.why.trim() } : {}),
       ...(row.how.trim() ? { how: row.how.trim() } : {}),
-      ...(row.commande?.trim() ? { commande: row.commande.trim() } : {})
+      ...(commande ? { commande } : {})
     }
   })
 }
@@ -253,14 +294,31 @@ export interface VoieDeLaPiste {
   motif: string
 }
 
-/** Une PREUVE de localisation : un ancrage de code `chemin:ligne`, pas une URL de page web. */
-const ANCRAGE_DE_CODE = /(?:^|[\s(`])[\w./-]+\.[a-z]{1,6}:\d+/iu
+/**
+ * Une PREUVE de localisation : un ancrage `chemin:ligne`, ou un chemin avec son dossier
+ * (`src/main/a.ts`) — pas une URL de page web (`https://x.fr/a.html` : `:` et `//` l'excluent).
+ */
+const ANCRAGE_DE_CODE =
+  /(?:^|[\s(`])(?:[\w./-]+\.[a-z]{1,6}:\d+|[\w-]+(?:\/[\w.-]+)+\.[a-z]{1,6}\b(?!\/))/iu
 
+/** Le « Pourquoi » compte : c'est là que le scout cite la ligne qu'il a lue (conv-1332, `/draft`). */
 function estLocalisee(candidat: CandidatAffiche): boolean {
   if (candidat.commande) return true
-  return [candidat.url, candidat.how, candidat.what].some(
+  return [candidat.url, candidat.how, candidat.what, candidat.why].some(
     (champ) => champ !== undefined && ANCRAGE_DE_CODE.test(` ${champ}`)
   )
+}
+
+/**
+ * Un chemin n'est pas un signal de risque : `orchestrator.ts:12` nomme une ADRESSE, pas un chantier
+ * d'orchestration (conv-1097, deux corrections envoyées au cadrage pour ce seul mot). Le `/build` de
+ * la voie directe est une phase nommée, que `regimePhases` ne réélargit pas : le classement du run
+ * n'a pas à lire la même chose.
+ */
+function sansCheminsNiCode(texte: string): string {
+  return texte
+    .replace(/`[^`\n]*`/gu, ' ')
+    .replace(/[\w./\\-]+\.[a-z]{1,6}(?::\d+(?:-\d+)?)?/giu, ' ')
 }
 
 /**
@@ -295,7 +353,7 @@ export function voieDeLaPiste(candidat: CandidatAffiche): VoieDeLaPiste {
   const texte = [candidat.titre, candidat.what, candidat.why, candidat.how]
     .filter(Boolean)
     .join(' ')
-  if (porteUnSignalDeRisque(texte)) {
+  if (porteUnSignalDeRisque(sansCheminsNiCode(texte))) {
     return {
       voie: 'complete',
       motif: tx('candidats.motif.risque')
@@ -316,6 +374,8 @@ export function voieDeLaPiste(candidat: CandidatAffiche): VoieDeLaPiste {
  * Au plus 3 pistes par lot. Sur nos 49 runs de sélection (mesure du 2026-10-22, conv-1080), 16 ont
  * été coupés par la limite de session ou de quota du modèle, avec 6 pistes en moyenne : tout ce
  * qu'ils avaient fait était perdu. Un lot court finit, et chaque lot vert est livré.
+ *
+ * Pas une piste par lot : un lot coûte un run entier (11 $ pour une seule correction, conv-1199).
  */
 export const MAX_PISTES_PAR_LOT = 3
 
@@ -331,10 +391,9 @@ export interface LotDeLancement {
  * LE PLAN DU WORKFLOW INTELLIGENT : chaque piste reçoit sa voie, puis les pistes d'une même voie sont
  * groupées en lots de `MAX_PISTES_PAR_LOT` au plus, ÉQUILIBRÉS (4 pistes → 2 + 2, pas 3 + 1).
  *
- * Les corrections directes partent EN PREMIER : courtes, elles livrent vite, et le cadrage des lots
- * suivants part d'une base déjà corrigée. Dans chaque voie, l'ordre du scout est gardé. Les lots
- * s'enchaînent dans le fil, l'un après l'autre (file d'attente de `ChatView`) : jamais deux runs en
- * même temps sur le même dépôt.
+ * Les corrections directes sont rangées EN PREMIER : courtes, elles livrent vite. Dans chaque voie,
+ * l'ordre du scout est gardé. Deux lots ou plus partent en super conversation (`selectionAPlanifier`,
+ * conv-1333) : chacun dans son fil, 3 à la fois, ceux qui annoncent un même fichier l'un après l'autre.
  */
 export function planDeLancement(selection: readonly CandidatAffiche[]): LotDeLancement[] {
   const voies = selection.map(voieDeLaPiste)
@@ -372,6 +431,81 @@ export function redigerPromptSelon(
   return voie === 'directe'
     ? redigerPromptCorrectionDirecte(selection, lot)
     : redigerPromptWorkflowSelection(selection, lot)
+}
+
+/** Un chemin du dépôt, dossier compris : un nom seul (`os.ts`) ne dit pas assez pour réserver un fichier. */
+const CHEMIN_DU_DEPOT =
+  /(?:^|[\s(`"'«])((?:src|scripts|skills|tests|tools|docs)\/[\w./-]+\.[a-z0-9]{1,6})/giu
+
+/**
+ * Les fichiers qu'une piste annonce de toucher : son ancrage et son « Comment », pas son « Pourquoi »,
+ * qui cite ce que le scout a LU (deux pistes qui citent le même fichier ne le modifient pas forcément,
+ * et le plan fait passer l'un après l'autre deux lots aux fichiers communs).
+ */
+function fichiersDeLaPiste(candidat: CandidatAffiche): string[] {
+  return [candidat.url, candidat.how, candidat.what].flatMap((champ) =>
+    champ ? Array.from(` ${champ}`.matchAll(CHEMIN_DU_DEPOT), (trouve) => trouve[1]!) : []
+  )
+}
+
+const sansMiseEnForme = (texte: string): string => texte.replace(/\*\*|`/gu, '').trim()
+
+/** Le titre du fil du lot : sa voie, et ce qu'il traite. */
+function titreDuLot(lot: LotDeLancement): string {
+  const premier = sansMiseEnForme(lot.candidats[0]!.titre).slice(0, 56)
+  const autres = lot.candidats.length - 1
+  return `${lot.voie === 'directe' ? 'Direct' : 'À cadrer'} — ${premier}${autres > 0 ? ` (+${autres})` : ''}`
+}
+
+const NOTE_DE_COUPE = ' … (coupé : le détail est dans le tableau du scout, fil chef)'
+
+function couper(texte: string | undefined, plafond: number): string | undefined {
+  if (texte === undefined || texte.length <= plafond) return texte
+  return `${texte.slice(0, plafond).trimEnd()}${NOTE_DE_COUPE}`
+}
+
+/**
+ * LE MESSAGE D'UN LOT TIENT DANS LA BORNE DU PLAN. Un plan refuse une demande de plus de
+ * `DEMANDE_MAX` caractères, et un seul « Pourquoi » de scout en fait déjà 2 000 (conv-1332). Le
+ * « Pourquoi » et le « Comment » se raccourcissent ; le « Quoi » reste entier, c'est lui que la mémoire
+ * du scout relit pour reconnaître la piste prise. Le détail coupé reste lisible dans le fil chef.
+ */
+function demandeBornee(lot: LotDeLancement, rang: RangDuLot): string {
+  const complete = redigerPromptSelon(lot.voie, lot.candidats, rang)
+  if (complete.length <= DEMANDE_MAX) return complete
+  for (const plafond of [1_000, 600, 300, 120]) {
+    const courts = lot.candidats.map((candidat) => ({
+      ...candidat,
+      why: couper(candidat.why, plafond),
+      how: couper(candidat.how, plafond),
+      citation: couper(candidat.citation, plafond)
+    }))
+    const demande = redigerPromptSelon(lot.voie, courts, rang)
+    if (demande.length <= DEMANDE_MAX) return demande
+  }
+  return complete.slice(0, DEMANDE_MAX)
+}
+
+/**
+ * LA SÉLECTION CONFIÉE À LA SUPER CONVERSATION (conv-1333, 2026-10-30) — ce que le bouton dépose dès
+ * qu'elle compte au moins deux lots. Chaque lot garde le message exact d'un envoi dans le fil : l'en-tête
+ * et le `/build` restent lus par la mémoire du scout et par le choix des étapes du run.
+ */
+export function selectionAPlanifier(plan: readonly LotDeLancement[]): SelectionAPlanifier {
+  const pistes = plan.reduce((total, lot) => total + lot.candidats.length, 0)
+  return {
+    titre: `Sélection du scout : ${pistes} pistes`,
+    contexte:
+      "Ces pistes viennent du panneau des candidats d'un scout : l'utilisateur les a retenues, et le " +
+      'workflow intelligent a choisi la voie de chacune. Chaque lot ne traite que ses pistes, ' +
+      "jusqu'au commit publié et vérifié. Le tableau complet du scout, preuves comprises, est dans le " +
+      'fil chef : lis-le avec conversation_read si une piste manque de détail.',
+    lots: plan.map((lot, rang) => ({
+      titre: titreDuLot(lot),
+      demande: demandeBornee(lot, { numero: rang + 1, total: plan.length }),
+      fichiers: [...new Set(lot.candidats.flatMap(fichiersDeLaPiste))].slice(0, FICHIERS_MAX)
+    }))
+  }
 }
 
 /** Le plan en une phrase courte, pour le bandeau du choix du scout : « 2 lots (1 direct, 1 complet) ». */
@@ -501,14 +635,12 @@ export function selectionAutoDepuisScout(
   candidats: readonly CandidatAffiche[],
   texteScout: string | undefined
 ): ReadonlySet<number> | null {
-  const declaration = lireLignesCibles(texteScout ?? '')
-  if (declaration === null) return null
-  const nu = sansAccents(declaration)
+  const declarations = lireLignesCibles(texteScout ?? '')
+  if (declarations === null) return null
+  const nues = declarations.map(sansAccents)
   // « aucune » / « rien » = le scout dit explicitement de ne rien enchaîner : zéro case cochée.
-  if (/^(aucune?|rien)\b/u.test(nu.trim())) return new Set()
-  const numeros = new Set(
-    Array.from(nu.matchAll(/(?:^|[^\d])(\d{1,2})(?![\d])/gu), (trouve) => Number(trouve[1]))
-  )
+  if (/^(aucune?|rien)\b/u.test(nues[0]!.trim())) return new Set()
+  const numeros = new Set(nues.flatMap(numerosDesignes))
   // Le NUMÉRO de la ligne, pas sa position : l'app retrie le tableau en gardant ses numéros (conv-1074).
   const numerosLignes = numerosDesCandidats(candidats)
   const retenus = new Set<number>()
@@ -518,9 +650,37 @@ export function selectionAutoDepuisScout(
       return
     }
     const titre = sansAccents(candidat.titre).trim()
-    if (titre.length >= 4 && nu.includes(titre)) retenus.add(index)
+    if (titre.length >= 4 && nues.some((nu) => nu.includes(titre))) retenus.add(index)
   })
   return retenus.size > 0 ? retenus : null
+}
+
+/** « 2 », « 2, 5 et 7 », « 1 + 3 » : un numéro de ligne, et ceux qui le suivent. */
+const LISTE_DE_NUMEROS = String.raw`\d{1,3}(?:\s*(?:,|;|\/|\+|&|\bet\b|\band\b|\bpuis\b|\bthen\b)\s*\d{1,3})*`
+/** Un numéro DÉSIGNÉ : « ligne 2 », « Row 1 », « piste 3 », « n° 4 », « #5 ». */
+const NUMERO_DESIGNE = new RegExp(
+  String.raw`(?:\b(?:lignes?|lines?|rows?|pistes?|candidats?|n[o°])\s*|#\s*)(${LISTE_DE_NUMEROS})`,
+  'gu'
+)
+/** La déclaration OUVRE sur ses numéros : « 2 et 3 », « 2 — le plus court ». Jamais « 13 % des cas ». */
+const NUMEROS_EN_TETE = new RegExp(
+  String.raw`^[\s*_(#]*(${LISTE_DE_NUMEROS})(?=\s*(?:$|[—–:.,;)*_-]))`,
+  'u'
+)
+
+/**
+ * LES NUMÉROS QU'UNE CIBLE DÉSIGNE, PAS CEUX QU'ELLE CITE (conv-1333, 2026-10-30). Tout nombre de la
+ * déclaration valait un numéro de ligne : sur 5 cibles réelles depuis le 22/10, 4 cochaient des lignes
+ * jamais nommées (conv-1332 : « ligne 1 » et « ligne 2 » voulues, « 13 % » et « 05/09 » cochaient 5,
+ * 9, 10 et 13 — en mode auto, elles partaient sans personne). Témoin :
+ * `veille-candidats-message.cible-reelle.test.ts`.
+ */
+function numerosDesignes(declaration: string): number[] {
+  const listes = Array.from(declaration.matchAll(NUMERO_DESIGNE), (trouve) => trouve[1]!)
+  const enTete = NUMEROS_EN_TETE.exec(declaration)?.[1]
+  return [...listes, ...(enTete ? [enTete] : [])].flatMap((liste) =>
+    Array.from(liste.matchAll(/\d{1,3}/gu), (numero) => Number(numero[0]))
+  )
 }
 
 /** Minuscules sans diacritiques : comparer un titre a une declaration ne doit pas buter sur un accent. */
@@ -529,13 +689,16 @@ function sansAccents(texte: string): string {
 }
 
 /**
- * La déclaration de cible d'un scout, concaténée ; `null` s'il n'en pose aucune.
+ * Les déclarations de cible d'un scout ; `null` s'il n'en pose aucune.
  *
  * DEUX formes, les mêmes que `lireCibleScout` (src/main/scout-cible.ts) : une ligne `CIBLE:`/
  * `CIBLES:`, ou une section `## Cible` non vide. N'en reconnaître qu'une rendait le pont inerte sur
  * la forme la plus courante — le scout déclarait, le panneau restait « tout coché ».
+ *
+ * D'une section, seul le PREMIER paragraphe déclare : la suite commente (conv-1199 : « Piste 2 : la
+ * lumière est éteinte », une correction après relecture, pas un choix).
  */
-function lireLignesCibles(texteScout: string): string | null {
+function lireLignesCibles(texteScout: string): string[] | null {
   const lignes = texteScout.split(String.fromCharCode(10))
   const morceaux: string[] = []
   for (let i = 0; i < lignes.length; i++) {
@@ -561,12 +724,100 @@ function lireLignesCibles(texteScout: string): string | null {
       // fix-ok: le tableau qui suit la section n'est pas la declaration — ses chiffres (scores, l.3)
       // cochaient tout (conv-690, saisie ts 1789715005953 : 5/5 envoyes pour « la piste 1 »).
       if (/^\s{0,3}#{1,6}\s+/u.test(lignes[j]!) || /^\s*\|/u.test(lignes[j]!)) break
+      if (!lignes[j]!.trim()) {
+        if (corps.length > 0) break
+        continue
+      }
       corps.push(lignes[j]!)
     }
     const valeur = corps.join(' ').trim()
     if (valeur) morceaux.push(valeur)
   }
-  return morceaux.length > 0 ? morceaux.join(' ; ') : null
+  return morceaux.length > 0 ? morceaux : null
+}
+
+/**
+ * CE QUE L'UTILISATEUR TAPE SOUS UN PANNEAU (conv-1333, 2026-10-30). Sur 6 panneaux depuis le 22/10,
+ * 2 ont reçu une réponse tapée au lieu d'un clic : « 1 et 12 » (conv-1196) et « fais au mieux c trop
+ * complexe pour moi » (conv-1097). Ces réponses passaient à côté de tout : aucune voie choisie, aucun
+ * lot, et la mémoire du scout notait ces pistes « ignorées ».
+ *
+ * Reconnu : des numéros de lignes EXISTANTES, « toutes », ou une délégation (« fais au mieux », « go »,
+ * « choisis ») quand le scout a déclaré sa cible — sans cible, personne n'a choisi, et le message suit
+ * son chemin normal. « ok » et « oui » n'y sont pas : ils accusent réception, un plan coûte plusieurs
+ * runs. Rien d'autre n'est deviné : le moindre mot de plus laisse le message au modèle.
+ */
+const CHOIX_PAR_NUMEROS = new RegExp(
+  String.raw`^(?:(?:prends?|fais|lance|garde)\s+)?(?:(?:la|le|les)\s+)?(?:(?:lignes?|pistes?|candidats?|n[o°]|#)\s*)?(${LISTE_DE_NUMEROS})$`,
+  'u'
+)
+const CHOIX_DE_TOUT = /^(?:toutes?|tous|tout|all)(?:\s+(?:les\s+)?(?:pistes|lignes|candidats))?$/u
+const DELEGATION =
+  /^(?:fais au mieux\b.*|au mieux|choisis(?: pour moi)?|a toi de choisir|decide(?: pour moi)?|go|vas[ -]y|lance(?:[ -]le)?|fais[ -]le)$/u
+
+export function selectionTapee(
+  texte: string,
+  candidats: readonly CandidatAffiche[],
+  texteScout: string | undefined
+): ReadonlySet<number> | null {
+  const nu = sansAccents(texte)
+    .trim()
+    .replace(/[\s.!]+$/u, '')
+    .replace(/\s+(?:stp|svp|please|merci)$/u, '')
+  if (!nu || nu.length > 80) return null
+  const liste = CHOIX_PAR_NUMEROS.exec(nu)?.[1]
+  if (liste) {
+    const voulus = new Set(Array.from(liste.matchAll(/\d{1,3}/gu), (numero) => Number(numero[0])))
+    const lignes = numerosDesCandidats(candidats)
+    const retenus = new Set(lignes.flatMap((numero, rang) => (voulus.has(numero) ? [rang] : [])))
+    // Un numéro hors du tableau n'est pas un choix de ce tableau (« 2024 », une ligne qui n'existe pas).
+    return retenus.size === voulus.size ? retenus : null
+  }
+  if (CHOIX_DE_TOUT.test(nu)) return new Set(candidats.map((_, rang) => rang))
+  if (DELEGATION.test(nu)) {
+    const choix = selectionAutoDepuisScout(candidats, texteScout)
+    return choix && choix.size > 0 ? choix : null
+  }
+  return null
+}
+
+/** Ce que ces fonctions lisent d'un message du fil — un sous-ensemble de `Msg`. */
+export interface MessageLuParLePanneau {
+  role: string
+  done?: boolean
+  status?: string
+  parts?: readonly unknown[]
+}
+
+/** Le panneau du dernier tour, tel que le fil l'affiche ; `null` s'il n'y en a pas ou si le tour est refusé. */
+export function panneauDuDernierTour(
+  fil: readonly MessageLuParLePanneau[]
+): { candidats: CandidatAffiche[]; texteScout: string } | null {
+  const dernier = fil.at(-1)
+  if (dernier?.role !== 'assistant' || dernier.done !== true) return null
+  const textes = (dernier.parts ?? []).flatMap((part) => {
+    const lue = part as { kind?: unknown; text?: unknown } | null
+    return lue?.kind === 'text' && typeof lue.text === 'string' ? [lue.text] : []
+  })
+  if (tourRefusePourAutoLancer(dernier.status, textes)) return null
+  for (const texte of textes) {
+    const lignes = parseScoutTable(texte)
+    const candidats = lignes ? candidatsDepuisScoutTable(lignes) : extraireCandidatsAffiches(texte)
+    if (candidats) return { candidats, texteScout: texte }
+  }
+  return null
+}
+
+/** Le plan qu'un message tapé déclenche sous le panneau du dernier tour ; `null` sinon. */
+export function planDeLaSaisie(
+  texte: string,
+  fil: readonly MessageLuParLePanneau[]
+): LotDeLancement[] | null {
+  const panneau = panneauDuDernierTour(fil)
+  if (!panneau) return null
+  const choix = selectionTapee(texte, panneau.candidats, panneau.texteScout)
+  if (!choix || choix.size === 0) return null
+  return planDeLancement(panneau.candidats.filter((_, rang) => choix.has(rang)))
 }
 
 /**

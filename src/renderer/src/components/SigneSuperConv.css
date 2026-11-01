@@ -1,0 +1,110 @@
+/* LE SIGNE D'UNE SUPER CONV DANS LA LISTE DE GAUCHE (conv-1395, /draft « 6 · Raccourci ») : pile sous
+   la ligne, jauge fine sous le titre, compte des lots finis, raccourci « N ? » vers le lot qui attend
+   ta réponse. Couleurs = jetons d'état de la liste (`--chat-etat-*`), donc chaque thème les suit.
+   Aucune animation : le voyant de la ligne bouge déjà (spinner, question), et une animation
+   continue de plus fait recomposer la fenêtre (conv-1075). */
+
+/* La pile dépasse SOUS la ligne : la place est réservée, sinon elle mordrait la ligne suivante.
+   `overflow: visible` : la couche cosmique découpe chaque ligne (`.cosmic-outline .conv-item`,
+   ChatView.css, `overflow: hidden`), ce qui effaçait la pile entière — vu à la capture, conv-1395. */
+.conv-list .conv-item.conv-item--super {
+  margin-bottom: 6px;
+  overflow: visible;
+}
+/* Deux cartes qui dépassent, comme la maquette (`box-shadow: 0 3px 0 -1px, 0 6px 0 -2px`) : le calque
+   a la taille et l'arrondi de la ligne, et ses ombres ne se peignent que SOUS elle. Pas sur la ligne
+   elle-même : chaque thème repeint `box-shadow` de `.conv-item` (survol, ligne ouverte). Teintes =
+   bleu puis rose du thème, mêlés au fond (#263565 et #4a1a3c sur Nébuleuse verre). */
+.conv-sc-pile {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow:
+    0 3px 0 -1px color-mix(in srgb, var(--violet) 40%, var(--bg-0)),
+    0 6px 0 -2px color-mix(in srgb, var(--rose) 30%, var(--bg-0));
+}
+.conv-item--super.active .conv-sc-pile {
+  box-shadow:
+    0 3px 0 -1px color-mix(in srgb, var(--violet) 62%, var(--bg-0)),
+    0 6px 0 -2px color-mix(in srgb, var(--rose) 52%, var(--bg-0));
+}
+
+/* Ligne du titre : titre (coupé en « … »), puis « N ? », puis « M/T », comme la maquette. */
+.conv-sc-tete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.conv-sc-tete > .conv-label {
+  flex: 1;
+}
+
+/* Jauge : un segment par lot du plan que la super conv montre, sous TOUTE la ligne du titre. */
+.conv-sc-jauge {
+  display: flex;
+  gap: 2px;
+  height: 3px;
+  margin: 3px 0 1px;
+}
+.conv-sc-seg {
+  flex: 1;
+  min-width: 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--text) 14%, transparent);
+}
+.conv-sc-seg.is-fini {
+  background: var(--chat-etat-fini);
+}
+.conv-sc-seg.is-cours {
+  background: var(--rose);
+}
+.conv-sc-seg.is-question {
+  background: var(--chat-etat-question);
+}
+.conv-sc-seg.is-echec {
+  background: var(--chat-etat-echec);
+}
+.conv-sc-seg.is-arret {
+  background: var(--chat-etat-interrompu);
+}
+
+/* Compte des lots finis, à droite : rose sur un voile bleu → rose ; bleu quand tout est fini. */
+.conv-sc-compte {
+  flex: none;
+  padding: 3px 6px;
+  border-radius: 8px;
+  font: 600 10px/1 var(--mono);
+  color: color-mix(in srgb, var(--rose) 40%, var(--text));
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--violet) 22%, transparent),
+    color-mix(in srgb, var(--rose) 22%, transparent)
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, color-mix(in srgb, var(--violet) 55%, var(--rose)) 55%, transparent);
+}
+.conv-sc-compte.is-fini {
+  color: color-mix(in srgb, var(--chat-etat-fini) 50%, var(--text));
+  background: color-mix(in srgb, var(--chat-etat-fini) 25%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chat-etat-fini) 70%, transparent);
+}
+
+/* Le raccourci : pastille jaune PLEINE, texte sombre, AVANT le compte (maquette « 5 ? »). Le texte
+   se mêle au fond en thème sombre, au texte en thème clair : sombre dans les deux. */
+.conv-sc-question {
+  flex: none;
+  padding: 3px 5px;
+  border-radius: 6px;
+  font: 700 9.5px/1 var(--mono);
+  cursor: pointer;
+  color: color-mix(in srgb, var(--chat-etat-question) 15%, var(--bg-0));
+  background: var(--chat-etat-question);
+}
+:root[data-base='clair'] .conv-sc-question {
+  color: color-mix(in srgb, var(--chat-etat-question) 15%, var(--text));
+}
+.conv-sc-question:hover {
+  background: color-mix(in srgb, var(--chat-etat-question) 82%, var(--text));
+}

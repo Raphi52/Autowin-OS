@@ -365,6 +365,21 @@
 :root.vue-en-transition .nav-item.active {
   view-transition-name: nav-actif;
 }
+/* LES CLICS TRAVERSENT LE FONDU DE VUE (conv-1322, 2026-10-30) : un second clic rapide sur un onglet
+   etait PERDU. Le calque `::view-transition` couvre la fenetre et livre tout clic a <html> ; mesure,
+   copie cachee a 19-25 images/s : 8 seconds clics perdus sur 8 entre 0 et 400 ms d'ecart, et
+   `pointer-events: none` seul n'y changeait rien. La page n'a rien a animer ici (l'ancienne vue
+   disparait d'un coup, la nouvelle entre en cascade) : elle sort du fondu, seul le surlignage glisse.
+   Configuration du test de reference Chromium (WPT css-view-transitions/
+   input-targets-root-while-render-blocked). Reste ignore par le navigateur, NORME : un clic pendant
+   la preparation du fondu, avant que la nouvelle vue soit posee. Le cercle du THEME garde la page
+   nommee : qualifie par `vue-en-transition` seulement. */
+:root.vue-en-transition {
+  view-transition-name: none;
+}
+:root.vue-en-transition::view-transition {
+  pointer-events: none;
+}
 ::view-transition-group(root),
 ::view-transition-group(nav-actif) {
   animation-duration: 220ms;

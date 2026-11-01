@@ -5,12 +5,15 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_TICKET_SOURCE, type TicketItem, type TicketPage } from '../../../shared/tickets'
 import type { StockVeille } from '../../../main/veille/candidats-store'
 import { TicketsView } from './TicketsView'
+import { VeilleCandidatsSection } from './VeilleCandidatsSection'
 import { appliquerLangue } from '../langue'
 
 /**
- * L'ÉCRAN TICKETS SUIT LA LANGUE (traduction anglaise, conv-1170, lot « Tickets »). Entrée qui doit
+ * LES TICKETS SUIVENT LA LANGUE (traduction anglaise, conv-1170, lot « Tickets »). Entrée qui doit
  * faire échouer ce test : un libellé de TicketsView ou de la section des candidats de veille
  * (VeilleCandidatsSection) laissé en dur, ou un écran qui ne se redessine pas quand la langue change.
+ * Depuis conv-1397, TicketsView est l'onglet « Tickets » du Board et la veille un bloc de Maintenance :
+ * chacun est monté seul.
  */
 beforeAll(() => {
   ;(globalThis as never as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true
@@ -78,12 +81,16 @@ function api(): void {
 let root: Root | null = null
 let hote: HTMLDivElement | null = null
 
-async function monter(): Promise<HTMLDivElement> {
+async function monter(quoi: 'tickets' | 'veille' = 'tickets'): Promise<HTMLDivElement> {
   hote = document.createElement('div')
   document.body.appendChild(hote)
   root = createRoot(hote)
   await act(async () => {
-    root!.render(createElement(TicketsView, { active: true }))
+    root!.render(
+      quoi === 'tickets'
+        ? createElement(TicketsView, { active: true })
+        : createElement(VeilleCandidatsSection)
+    )
     await Promise.resolve()
     await Promise.resolve()
   })
@@ -103,28 +110,17 @@ afterEach(async () => {
 const parTestId = (zone: HTMLElement, id: string): HTMLElement | null =>
   zone.querySelector(`[data-testid="${id}"]`)
 
-async function ouvrirOnglet(zone: HTMLElement, libelle: string): Promise<void> {
-  const onglet = [...zone.querySelectorAll('button')].find((b) => b.textContent === libelle)
-  expect(onglet, `onglet « ${libelle} »`).toBeDefined()
-  await act(async () => {
-    onglet!.click()
-    await Promise.resolve()
-    await Promise.resolve()
-  })
-}
-
-describe('écran Tickets — langue', () => {
+describe('tickets — langue', () => {
   it('sources externes : bascule en anglais sans être remonté, puis revient au français', async () => {
     api()
     const zone = await monter()
     expect(parTestId(zone, 'tickets-refresh')?.textContent).toBe('Actualiser')
     expect(parTestId(zone, 'tickets-select-all')?.textContent).toBe('Tout sélectionner (2)')
 
+    // Plus de barre de titre ni d'onglets (conv-1397) : c'est le Board qui les porte.
+    expect(zone.querySelector('.view-topbar')).toBeNull()
+
     await act(async () => appliquerLangue('en'))
-    expect(zone.textContent).toContain(
-      'Syncs and drives the work coming from your external sources.'
-    )
-    expect(zone.textContent).toContain('External sources')
     expect(parTestId(zone, 'tickets-refresh')?.textContent).toBe('Refresh')
     expect(parTestId(zone, 'tickets-refresh')?.getAttribute('aria-label')).toBe(
       'Refresh the tickets'
@@ -150,11 +146,10 @@ describe('écran Tickets — langue', () => {
     expect(parTestId(zone, 'ticket-detail')?.textContent).toContain('Aucune description.')
   })
 
-  it('section Autowin OS : les candidats de veille passent en anglais, puis reviennent', async () => {
+  it('tickets Autowin OS : les candidats de veille passent en anglais, puis reviennent', async () => {
     api()
     appliquerLangue('en')
-    const zone = await monter()
-    await ouvrirOnglet(zone, 'Autowin OS')
+    const zone = await monter('veille')
     expect(parTestId(zone, 'veille-compte')?.textContent).toBe('1candidate')
     expect(parTestId(zone, 'veille-actualiser')?.textContent).toBe('Refresh')
     expect(parTestId(zone, 'veille-generer')?.textContent).toBe('Generate more')

@@ -6,9 +6,6 @@ import {
   type TicketProvider,
   type TicketSourceProfile
 } from '../../../shared/tickets'
-import type { TicketsSection } from '../../../shared/navigation'
-import { ViewTopBar } from './ViewTopBar'
-import { VeilleCandidatsSection } from './VeilleCandidatsSection'
 import {
   forgetTicketTreatmentRecord,
   formatTicketReferencePrompt,
@@ -39,7 +36,6 @@ import {
 } from './ticket-auto-mode'
 import { armerModeAutoConversation } from './chat-auto-convs'
 import { deposerOuvertureConversation } from './pending-conversation-open'
-import './ViewPage.css'
 import './TicketsView.css'
 import { Spinner } from './Spinner'
 import { BulleDuTicket } from './BulleDuTicket'
@@ -228,9 +224,6 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   const [treatmentRecords, setTreatmentRecords] = useState(() =>
     reconcileTicketTreatmentRecords(localStorage)
   )
-
-  /** Section affichée. « externes » par défaut : c'est l'usage historique de cette vue. */
-  const [sectionActive, setSectionActive] = useState<TicketsSection>('externes')
 
   const recordTreatment = useCallback(
     (item: Pick<TicketItem, 'sourceId' | 'id'>, record: TicketTreatmentRecord): void => {
@@ -998,736 +991,694 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   }
 
   return (
-    <section className="view-page tickets-view" data-testid="tickets-view" data-active={active}>
-      {/*
-        Deux sections, comme Task Manager : le travail synchronisé d'un serveur de tickets d'un côté,
-        ce qu'il vaut la peine de reprendre chez les concurrents de l'autre. La barre vient de
-        `ViewTopBar`, la même que les autres vues — la recopier ici l'aurait fait diverger.
-      */}
-      <ViewTopBar
-        eyebrow={t('vue.surtitre')}
-        title={t('vue.titre')}
-        description={t('vue.description')}
-        ariaLabel={t('vue.sections')}
-        active={sectionActive}
-        onSelect={setSectionActive}
-        tabs={[
-          { id: 'externes', label: t('vue.onglet.externes') },
-          // Nom du produit, identique dans les deux langues : reste en dur.
-          { id: 'autowin', label: 'Autowin OS' }
-        ]}
-      />
+    // L'ONGLET « TICKETS » DU BOARD (conv-1397, 2026-10-31) : ce n'est plus un écran. Sa barre de
+    // titre et sa section « Autowin OS » (la veille, partie dans Maintenance) sont retirées ; le
+    // Board porte le titre et l'onglet. Racine sans `view-page` : le cadre est celui du Board.
+    <div className="tickets-view" data-testid="tickets-view" data-active={active}>
+      <header className="tickets-head">
+        <div className="tickets-source-controls">
+          <label className="tickets-source-pill">
+            <span className="tickets-source-eyebrow">{t('source.surtitre')}</span>
+            <span className="tickets-source-provider" aria-hidden="true">
+              {selectedSource?.provider === 'github'
+                ? ''
+                : selectedSource?.provider === 'gitlab'
+                  ? '🦊'
+                  : '◆'}
+            </span>
+            <select
+              aria-label={t('source.choix')}
+              data-testid="tickets-source"
+              value={sourceId}
+              onChange={(event) => changeSource(event.target.value)}
+            >
+              {sources.map(({ profile }) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="tickets-source-add"
+            title={showSourceForm ? t('source.fermer') : t('source.ajouter')}
+            aria-label={showSourceForm ? t('source.fermer') : t('source.ajouter')}
+            aria-expanded={showSourceForm}
+            onClick={() => setShowSourceForm((visible) => !visible)}
+          >
+            {showSourceForm ? '✕' : t('source.ajouterCourt')}
+          </button>
+        </div>
+      </header>
 
-      {sectionActive === 'autowin' && <VeilleCandidatsSection />}
-
-      {/*
-        TOUT le contenu « sources externes » est monte SOUS condition, pas seulement son en-tete.
-        Premiere version : seul l'en-tete portait `hidden`, si bien que la liste de veille s'affichait
-        AU-DESSUS du selecteur de source, des filtres et du tableau de tickets — les deux sections
-        empilees. Vu a la capture, pas au typecheck.
-      */}
-      {sectionActive === 'externes' && (
-        <>
-          <header className="tickets-head">
-            <div className="tickets-source-controls">
-              <label className="tickets-source-pill">
-                <span className="tickets-source-eyebrow">{t('source.surtitre')}</span>
-                <span className="tickets-source-provider" aria-hidden="true">
-                  {selectedSource?.provider === 'github'
-                    ? ''
-                    : selectedSource?.provider === 'gitlab'
-                      ? '🦊'
-                      : '◆'}
-                </span>
-                <select
-                  aria-label={t('source.choix')}
-                  data-testid="tickets-source"
-                  value={sourceId}
-                  onChange={(event) => changeSource(event.target.value)}
-                >
-                  {sources.map(({ profile }) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button
-                type="button"
-                className="tickets-source-add"
-                title={showSourceForm ? t('source.fermer') : t('source.ajouter')}
-                aria-label={showSourceForm ? t('source.fermer') : t('source.ajouter')}
-                aria-expanded={showSourceForm}
-                onClick={() => setShowSourceForm((visible) => !visible)}
-              >
-                {showSourceForm ? '✕' : t('source.ajouterCourt')}
-              </button>
-            </div>
-          </header>
-
-          {showSourceForm && (
-            <div className="tickets-source-form">
-              <select
-                aria-label={t('source.fournisseur')}
-                value={draft.provider}
-                onChange={(event) =>
-                  setDraft({ ...EMPTY_DRAFT, provider: event.target.value as TicketProvider })
-                }
-              >
-                {/* Noms de produits, identiques dans les deux langues : restent en dur. */}
-                <option value="azure">Azure DevOps</option>
-                <option value="github">GitHub</option>
-                <option value="gitlab">GitLab</option>
-              </select>
-              {draft.provider === 'azure' && (
-                <>
-                  <input
-                    aria-label={t('source.organisationAzure')}
-                    placeholder={t('source.organisation')}
-                    value={draft.organization}
-                    onChange={(event) => setDraft({ ...draft, organization: event.target.value })}
-                  />
-                  <input
-                    aria-label={t('source.projetAzure')}
-                    placeholder={t('source.projet')}
-                    value={draft.project}
-                    onChange={(event) => setDraft({ ...draft, project: event.target.value })}
-                  />
-                </>
-              )}
-              {draft.provider === 'github' && (
-                <input
-                  aria-label={t('source.proprietaireGithub')}
-                  placeholder={t('source.organisationOuProprietaire')}
-                  value={draft.owner}
-                  onChange={(event) => setDraft({ ...draft, owner: event.target.value })}
-                />
-              )}
-              {draft.provider === 'gitlab' && (
-                <input
-                  aria-label={t('source.namespaceGitlab')}
-                  placeholder={t('source.groupe')}
-                  value={draft.namespace}
-                  onChange={(event) => setDraft({ ...draft, namespace: event.target.value })}
-                />
-              )}
+      {showSourceForm && (
+        <div className="tickets-source-form">
+          <select
+            aria-label={t('source.fournisseur')}
+            value={draft.provider}
+            onChange={(event) =>
+              setDraft({ ...EMPTY_DRAFT, provider: event.target.value as TicketProvider })
+            }
+          >
+            {/* Noms de produits, identiques dans les deux langues : restent en dur. */}
+            <option value="azure">Azure DevOps</option>
+            <option value="github">GitHub</option>
+            <option value="gitlab">GitLab</option>
+          </select>
+          {draft.provider === 'azure' && (
+            <>
               <input
-                aria-label={draft.provider === 'azure' ? t('source.depotAzure') : t('source.depot')}
-                placeholder={
-                  draft.provider === 'azure' ? t('source.depotContexte') : t('source.depot')
-                }
-                value={draft.repository}
-                onChange={(event) => setDraft({ ...draft, repository: event.target.value })}
+                aria-label={t('source.organisationAzure')}
+                placeholder={t('source.organisation')}
+                value={draft.organization}
+                onChange={(event) => setDraft({ ...draft, organization: event.target.value })}
               />
-              {draft.provider !== 'azure' && (
-                <>
-                  <input
-                    aria-label={t('source.url')}
-                    placeholder={t('source.urlOptionnelle')}
-                    value={draft.baseUrl}
-                    onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
-                  />
-                  <span className="tickets-auth-help" data-testid="tickets-auth-help">
-                    {draft.provider === 'github' ? t('source.aideGithub') : t('source.aideGitlab')}
-                  </span>
-                </>
-              )}
+              <input
+                aria-label={t('source.projetAzure')}
+                placeholder={t('source.projet')}
+                value={draft.project}
+                onChange={(event) => setDraft({ ...draft, project: event.target.value })}
+              />
+            </>
+          )}
+          {draft.provider === 'github' && (
+            <input
+              aria-label={t('source.proprietaireGithub')}
+              placeholder={t('source.organisationOuProprietaire')}
+              value={draft.owner}
+              onChange={(event) => setDraft({ ...draft, owner: event.target.value })}
+            />
+          )}
+          {draft.provider === 'gitlab' && (
+            <input
+              aria-label={t('source.namespaceGitlab')}
+              placeholder={t('source.groupe')}
+              value={draft.namespace}
+              onChange={(event) => setDraft({ ...draft, namespace: event.target.value })}
+            />
+          )}
+          <input
+            aria-label={draft.provider === 'azure' ? t('source.depotAzure') : t('source.depot')}
+            placeholder={draft.provider === 'azure' ? t('source.depotContexte') : t('source.depot')}
+            value={draft.repository}
+            onChange={(event) => setDraft({ ...draft, repository: event.target.value })}
+          />
+          {draft.provider !== 'azure' && (
+            <>
+              <input
+                aria-label={t('source.url')}
+                placeholder={t('source.urlOptionnelle')}
+                value={draft.baseUrl}
+                onChange={(event) => setDraft({ ...draft, baseUrl: event.target.value })}
+              />
+              <span className="tickets-auth-help" data-testid="tickets-auth-help">
+                {draft.provider === 'github' ? t('source.aideGithub') : t('source.aideGitlab')}
+              </span>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={() => void saveSource()}
+            aria-label={t('source.enregistrerTitre')}
+            title={t('source.enregistrerTitre')}
+          >
+            {t('source.enregistrer')}
+          </button>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <div className="tickets-stats" data-testid="tickets-stats">
+          {/* PÉRIMÈTRE ANNONCÉ : ces compteurs ne sont PAS des statistiques projet — ils portent
+          sur la page chargée uniquement (le fournisseur pagine à 50). */}
+          <span className="tickets-stats-total" title={t('stats.titre')}>
+            <strong>{items.length}</strong> {t('stats.charges')}{' '}
+            <strong>{visibleItems.length}</strong> {t('stats.affiches')}
+          </span>
+          <div className="tickets-stats-states" role="group" aria-label={t('stats.repartition')}>
+            {stateCounts.map(([state, count]) => (
               <button
+                key={state}
                 type="button"
-                onClick={() => void saveSource()}
-                aria-label={t('source.enregistrerTitre')}
-                title={t('source.enregistrerTitre')}
+                className={`tickets-state-chip${stateFilter === state ? ' is-active' : ''}`}
+                style={{ ['--chip-hue' as string]: hueOf(state) }}
+                title={t('stats.filtrerSur', { etat: state })}
+                onClick={() => setStateFilter((current) => (current === state ? '' : state))}
               >
-                {t('source.enregistrer')}
+                {state} <b>{count}</b>
               </button>
-            </div>
+            ))}
+          </div>
+          {checkedIds.size > 0 && (
+            <span className="tickets-stats-selection" data-testid="tickets-selection-count">
+              {t('stats.selection', { n: checkedVisibleItems.length })}
+            </span>
           )}
+        </div>
+      )}
 
-          {items.length > 0 && (
-            <div className="tickets-stats" data-testid="tickets-stats">
-              {/* PÉRIMÈTRE ANNONCÉ : ces compteurs ne sont PAS des statistiques projet — ils portent
-              sur la page chargée uniquement (le fournisseur pagine à 50). */}
-              <span className="tickets-stats-total" title={t('stats.titre')}>
-                <strong>{items.length}</strong> {t('stats.charges')}{' '}
-                <strong>{visibleItems.length}</strong> {t('stats.affiches')}
-              </span>
-              <div
-                className="tickets-stats-states"
-                role="group"
-                aria-label={t('stats.repartition')}
-              >
-                {stateCounts.map(([state, count]) => (
-                  <button
-                    key={state}
-                    type="button"
-                    className={`tickets-state-chip${stateFilter === state ? ' is-active' : ''}`}
-                    style={{ ['--chip-hue' as string]: hueOf(state) }}
-                    title={t('stats.filtrerSur', { etat: state })}
-                    onClick={() => setStateFilter((current) => (current === state ? '' : state))}
-                  >
-                    {state} <b>{count}</b>
-                  </button>
-                ))}
-              </div>
-              {checkedIds.size > 0 && (
-                <span className="tickets-stats-selection" data-testid="tickets-selection-count">
-                  {t('stats.selection', { n: checkedVisibleItems.length })}
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="tickets-toolbar">
-            <input
-              type="search"
-              aria-label={t('barre.rechercher')}
-              placeholder={t('barre.rechercherIndice')}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  runServerSearch(query)
-                }
+      <div className="tickets-toolbar">
+        <input
+          type="search"
+          aria-label={t('barre.rechercher')}
+          placeholder={t('barre.rechercherIndice')}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              runServerSearch(query)
+            }
+          }}
+        />
+        {/* La recherche SERVEUR interroge tout le projet ; le champ seul ne filtrait que les
+        50 items déjà chargés, et répondait « aucun résultat » sur une fiche existante. */}
+        <button
+          data-testid="tickets-search-server"
+          type="button"
+          title={t('barre.chercherTitre')}
+          disabled={!selectedSource || loading}
+          onClick={() => runServerSearch(query)}
+        >
+          {t('barre.chercher')}
+        </button>
+        {serverQuery && (
+          <span className="tickets-server-query" data-testid="tickets-server-query">
+            {t('barre.serveur', { requete: serverQuery })}
+            <button
+              type="button"
+              title={t('barre.effacerServeur')}
+              onClick={() => {
+                setQuery('')
+                runServerSearch('')
               }}
-            />
-            {/* La recherche SERVEUR interroge tout le projet ; le champ seul ne filtrait que les
-            50 items déjà chargés, et répondait « aucun résultat » sur une fiche existante. */}
-            <button
-              data-testid="tickets-search-server"
-              type="button"
-              title={t('barre.chercherTitre')}
-              disabled={!selectedSource || loading}
-              onClick={() => runServerSearch(query)}
             >
-              {t('barre.chercher')}
+              ×
             </button>
-            {serverQuery && (
-              <span className="tickets-server-query" data-testid="tickets-server-query">
-                {t('barre.serveur', { requete: serverQuery })}
-                <button
-                  type="button"
-                  title={t('barre.effacerServeur')}
-                  onClick={() => {
-                    setQuery('')
-                    runServerSearch('')
-                  }}
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            <select
-              aria-label={t('barre.filtrerType')}
-              title={t('barre.typesPresents')}
-              value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value)}
-            >
-              <option value="">{t('barre.tousTypes')}</option>
-              {types.map((type) => (
-                <option key={type}>{type}</option>
-              ))}
-            </select>
-            <select
-              aria-label={t('barre.filtrerEtat')}
-              title={t('barre.etatsPresents')}
-              value={stateFilter}
-              onChange={(event) => setStateFilter(event.target.value)}
-            >
-              <option value="">{t('barre.tousEtats')}</option>
-              {states.map((state) => (
-                <option key={state}>{state}</option>
-              ))}
-            </select>
-            <input
-              list="tickets-people-list"
-              aria-label={t('barre.filtrerAssigne')}
-              data-testid="tickets-assignee-filter"
-              placeholder={t('barre.assigneIndice')}
-              value={assigneeFilter}
-              onChange={(event) => setAssigneeFilter(event.target.value)}
-            />
-            <datalist id="tickets-people-list" data-testid="tickets-people-list">
-              {peopleOptions.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
-            <select
-              aria-label={t('barre.trier')}
-              data-testid="tickets-sort"
-              value={sortKey}
-              onChange={(event) => setSortKey(event.target.value as SortKey)}
-            >
-              <option value="recent">{t('barre.tri.recent')}</option>
-              <option value="priority">{t('barre.tri.priorite')}</option>
-              <option value="id-desc">{t('barre.tri.idDecroissant')}</option>
-              <option value="id">{t('barre.tri.idCroissant')}</option>
-              <option value="title">{t('barre.tri.titre')}</option>
-            </select>
-            {selectedSource && (
-              <span className="tickets-auth-mode">
-                {selectedSource.provider === 'azure'
-                  ? t('barre.acces.projet', {
-                      projet: selectedSource.project,
-                      acces: selectedSummary?.credentialConfigured
-                        ? t('barre.acces.coffre')
-                        : t('barre.acces.sessionAzure')
-                    })
-                  : selectedSummary?.credentialConfigured
+          </span>
+        )}
+        <select
+          aria-label={t('barre.filtrerType')}
+          title={t('barre.typesPresents')}
+          value={typeFilter}
+          onChange={(event) => setTypeFilter(event.target.value)}
+        >
+          <option value="">{t('barre.tousTypes')}</option>
+          {types.map((type) => (
+            <option key={type}>{type}</option>
+          ))}
+        </select>
+        <select
+          aria-label={t('barre.filtrerEtat')}
+          title={t('barre.etatsPresents')}
+          value={stateFilter}
+          onChange={(event) => setStateFilter(event.target.value)}
+        >
+          <option value="">{t('barre.tousEtats')}</option>
+          {states.map((state) => (
+            <option key={state}>{state}</option>
+          ))}
+        </select>
+        <input
+          list="tickets-people-list"
+          aria-label={t('barre.filtrerAssigne')}
+          data-testid="tickets-assignee-filter"
+          placeholder={t('barre.assigneIndice')}
+          value={assigneeFilter}
+          onChange={(event) => setAssigneeFilter(event.target.value)}
+        />
+        <datalist id="tickets-people-list" data-testid="tickets-people-list">
+          {peopleOptions.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        <select
+          aria-label={t('barre.trier')}
+          data-testid="tickets-sort"
+          value={sortKey}
+          onChange={(event) => setSortKey(event.target.value as SortKey)}
+        >
+          <option value="recent">{t('barre.tri.recent')}</option>
+          <option value="priority">{t('barre.tri.priorite')}</option>
+          <option value="id-desc">{t('barre.tri.idDecroissant')}</option>
+          <option value="id">{t('barre.tri.idCroissant')}</option>
+          <option value="title">{t('barre.tri.titre')}</option>
+        </select>
+        {selectedSource && (
+          <span className="tickets-auth-mode">
+            {selectedSource.provider === 'azure'
+              ? t('barre.acces.projet', {
+                  projet: selectedSource.project,
+                  acces: selectedSummary?.credentialConfigured
                     ? t('barre.acces.coffre')
-                    : t('barre.acces.public')}
-              </span>
-            )}
+                    : t('barre.acces.sessionAzure')
+                })
+              : selectedSummary?.credentialConfigured
+                ? t('barre.acces.coffre')
+                : t('barre.acces.public')}
+          </span>
+        )}
+        <button
+          data-testid="tickets-refresh"
+          type="button"
+          aria-label={t('barre.actualiserTitre')}
+          title={t('barre.actualiserTitre')}
+          disabled={!selectedSource || loading}
+          onClick={() => selectedSource && void load(selectedSource)}
+        >
+          {t('barre.actualiser')}
+        </button>
+      </div>
+
+      <div className="tickets-actions">
+        <button
+          data-testid="tickets-select-all"
+          type="button"
+          title={
+            allVisibleChecked
+              ? t('actions.toutDeselectionner')
+              : t('actions.toutSelectionner', { n: visibleItems.length })
+          }
+          disabled={visibleItems.length === 0}
+          onClick={toggleAllVisible}
+        >
+          {allVisibleChecked
+            ? t('actions.toutDeselectionner')
+            : t('actions.toutSelectionner', { n: visibleItems.length })}
+        </button>
+        <button
+          data-testid="tickets-treat-selection"
+          type="button"
+          className="tickets-treat-selection"
+          disabled={checkedVisibleItems.length === 0}
+          title={sendDirectly ? t('actions.envoyerTitre') : t('actions.preparerTitre')}
+          onClick={() => void openSelectionConversation()}
+        >
+          {sendDirectly
+            ? t('actions.traiter', { n: checkedVisibleItems.length })
+            : t('actions.preparer', { n: checkedVisibleItems.length })}
+        </button>
+        {/* Le geste par défaut PRÉPARE (prompt-first, comme le Source control) : c'est
+        l'utilisateur qui décide d'envoyer. Cocher cette case rend l'envoi immédiat. */}
+        <label className="tickets-mode" data-testid="tickets-mode-send">
+          <input
+            type="checkbox"
+            checked={sendDirectly}
+            onChange={(e) => setSendDirectly(e.target.checked)}
+          />
+          {t('actions.envoiImmediat')}
+        </label>
+        {/* Mode auto : la veille porte sur le FILTRE COURANT — ce que l'utilisateur voit est le
+        périmètre. L'existant est ignoré à l'activation ; seuls les entrants sont traités. */}
+        <label className="tickets-mode" data-testid="tickets-mode-auto">
+          <input
+            type="checkbox"
+            checked={autoMode}
+            onChange={(e) => setAutoModeChecked(e.target.checked)}
+          />
+          {t('auto.case')}
+        </label>
+        {/* GARDE-FOUS VISIBLES : le mode auto lance des runs PAYANTS. Le nombre simultané, le cap
+        par cycle et le plafond de session sont réglables ici, et le coût est annoncé. */}
+        <span className="tickets-auto-guards" data-testid="tickets-auto-guards">
+          <label>
+            {t('auto.parallele')}
+            <input
+              type="number"
+              aria-label={t('auto.paralleleAria')}
+              data-testid="tickets-auto-concurrency"
+              min={AUTO_MODE_LIMITS.concurrency.min}
+              max={AUTO_MODE_LIMITS.concurrency.max}
+              value={autoSettings.concurrency}
+              onChange={(e) => updateAutoSetting('concurrency', Number(e.target.value))}
+            />
+          </label>
+          <label>
+            {t('auto.parCycle')}
+            <input
+              type="number"
+              aria-label={t('auto.parCycleAria')}
+              data-testid="tickets-auto-cap"
+              min={AUTO_MODE_LIMITS.capPerCycle.min}
+              max={AUTO_MODE_LIMITS.capPerCycle.max}
+              value={autoSettings.capPerCycle}
+              onChange={(e) => updateAutoSetting('capPerCycle', Number(e.target.value))}
+            />
+          </label>
+          <label>
+            {t('auto.plafond')}
+            <input
+              type="number"
+              aria-label={t('auto.plafondAria')}
+              data-testid="tickets-auto-max-runs"
+              min={AUTO_MODE_LIMITS.maxRunsPerSession.min}
+              max={AUTO_MODE_LIMITS.maxRunsPerSession.max}
+              value={autoSettings.maxRunsPerSession}
+              onChange={(e) => updateAutoSetting('maxRunsPerSession', Number(e.target.value))}
+            />
+          </label>
+          <span data-testid="tickets-auto-cost">
+            {describeAutoModeCost(autoSettings, 0)} · {t('auto.lances', { n: launched })}
+          </span>
+          {/* KILL-SWITCH : arrêt global immédiat, indépendant du rendu React. */}
+          <button
+            type="button"
+            data-testid="tickets-auto-kill"
+            className="tickets-auto-kill"
+            title={t('auto.stopTitre')}
+            onClick={() => {
+              stopAutoModeNow()
+              autoBusyRef.current = false
+              setAutoModeChecked(false)
+              setAutoStatus(t('auto.arreteKill'))
+            }}
+          >
+            {t('auto.stop')}
+          </button>
+        </span>
+        {autoStatus && (
+          <span className="tickets-auto-status" data-testid="tickets-auto-status">
+            {autoStatus}
+          </span>
+        )}
+      </div>
+
+      <div className="tickets-content">
+        {sourceError ? (
+          <div className="tickets-error" role="alert">
+            <strong>{t('contenu.sourcesImpossible')}</strong>
+            <span>{sourceError}</span>
             <button
-              data-testid="tickets-refresh"
+              data-testid="tickets-retry"
               type="button"
-              aria-label={t('barre.actualiserTitre')}
-              title={t('barre.actualiserTitre')}
-              disabled={!selectedSource || loading}
-              onClick={() => selectedSource && void load(selectedSource)}
+              title={t('contenu.reessayerTitre')}
+              onClick={retry}
             >
-              {t('barre.actualiser')}
+              {t('contenu.reessayer')}
             </button>
           </div>
-
-          <div className="tickets-actions">
+        ) : (loading || initialLoading) && items.length === 0 ? (
+          <div className="tickets-loading" role="status" aria-label={t('contenu.chargementAria')}>
+            <Spinner lg />
+            <span>{t('contenu.synchronisation')}</span>
+          </div>
+        ) : error && items.length === 0 ? (
+          <div className="tickets-error" role="alert">
+            <strong>{t('contenu.chargementImpossible')}</strong>
+            <span>{error}</span>
             <button
-              data-testid="tickets-select-all"
+              data-testid="tickets-retry"
               type="button"
-              title={
-                allVisibleChecked
-                  ? t('actions.toutDeselectionner')
-                  : t('actions.toutSelectionner', { n: visibleItems.length })
-              }
-              disabled={visibleItems.length === 0}
-              onClick={toggleAllVisible}
+              title={t('contenu.reessayerTitre')}
+              onClick={retry}
             >
-              {allVisibleChecked
-                ? t('actions.toutDeselectionner')
-                : t('actions.toutSelectionner', { n: visibleItems.length })}
+              {t('contenu.reessayer')}
             </button>
-            <button
-              data-testid="tickets-treat-selection"
-              type="button"
-              className="tickets-treat-selection"
-              disabled={checkedVisibleItems.length === 0}
-              title={sendDirectly ? t('actions.envoyerTitre') : t('actions.preparerTitre')}
-              onClick={() => void openSelectionConversation()}
-            >
-              {sendDirectly
-                ? t('actions.traiter', { n: checkedVisibleItems.length })
-                : t('actions.preparer', { n: checkedVisibleItems.length })}
-            </button>
-            {/* Le geste par défaut PRÉPARE (prompt-first, comme le Source control) : c'est
-            l'utilisateur qui décide d'envoyer. Cocher cette case rend l'envoi immédiat. */}
-            <label className="tickets-mode" data-testid="tickets-mode-send">
-              <input
-                type="checkbox"
-                checked={sendDirectly}
-                onChange={(e) => setSendDirectly(e.target.checked)}
-              />
-              {t('actions.envoiImmediat')}
-            </label>
-            {/* Mode auto : la veille porte sur le FILTRE COURANT — ce que l'utilisateur voit est le
-            périmètre. L'existant est ignoré à l'activation ; seuls les entrants sont traités. */}
-            <label className="tickets-mode" data-testid="tickets-mode-auto">
-              <input
-                type="checkbox"
-                checked={autoMode}
-                onChange={(e) => setAutoModeChecked(e.target.checked)}
-              />
-              {t('auto.case')}
-            </label>
-            {/* GARDE-FOUS VISIBLES : le mode auto lance des runs PAYANTS. Le nombre simultané, le cap
-            par cycle et le plafond de session sont réglables ici, et le coût est annoncé. */}
-            <span className="tickets-auto-guards" data-testid="tickets-auto-guards">
-              <label>
-                {t('auto.parallele')}
-                <input
-                  type="number"
-                  aria-label={t('auto.paralleleAria')}
-                  data-testid="tickets-auto-concurrency"
-                  min={AUTO_MODE_LIMITS.concurrency.min}
-                  max={AUTO_MODE_LIMITS.concurrency.max}
-                  value={autoSettings.concurrency}
-                  onChange={(e) => updateAutoSetting('concurrency', Number(e.target.value))}
-                />
-              </label>
-              <label>
-                {t('auto.parCycle')}
-                <input
-                  type="number"
-                  aria-label={t('auto.parCycleAria')}
-                  data-testid="tickets-auto-cap"
-                  min={AUTO_MODE_LIMITS.capPerCycle.min}
-                  max={AUTO_MODE_LIMITS.capPerCycle.max}
-                  value={autoSettings.capPerCycle}
-                  onChange={(e) => updateAutoSetting('capPerCycle', Number(e.target.value))}
-                />
-              </label>
-              <label>
-                {t('auto.plafond')}
-                <input
-                  type="number"
-                  aria-label={t('auto.plafondAria')}
-                  data-testid="tickets-auto-max-runs"
-                  min={AUTO_MODE_LIMITS.maxRunsPerSession.min}
-                  max={AUTO_MODE_LIMITS.maxRunsPerSession.max}
-                  value={autoSettings.maxRunsPerSession}
-                  onChange={(e) => updateAutoSetting('maxRunsPerSession', Number(e.target.value))}
-                />
-              </label>
-              <span data-testid="tickets-auto-cost">
-                {describeAutoModeCost(autoSettings, 0)} · {t('auto.lances', { n: launched })}
-              </span>
-              {/* KILL-SWITCH : arrêt global immédiat, indépendant du rendu React. */}
+          </div>
+        ) : sourcesLoaded && sources.length === 0 ? (
+          <div className="tickets-empty">
+            <strong>{t('contenu.aucuneSource')}</strong>
+            <span>{t('contenu.ajouteSource')}</span>
+          </div>
+        ) : visibleItems.length === 0 ? (
+          /* Vide HONNÊTE : la cause (recherche serveur, filtres locaux) est nommée, une issue est
+         offerte, et « Charger la suite » reste accessible quand la page suivante existe —
+         avant, `!hasMore` supprimait tout message et l'écran restait muet. */
+          <div className="tickets-empty" data-testid="tickets-empty">
+            <strong>
+              {items.length === 0 ? t('contenu.aucunTicket') : t('contenu.aucunResultat')}
+            </strong>
+            <span>
+              {emptyCauses.length
+                ? t('contenu.perimetreRestreint', { causes: emptyCauses.join(' · ') })
+                : t('contenu.sourceVide')}
+            </span>
+            {emptyCauses.length > 0 && (
               <button
                 type="button"
-                data-testid="tickets-auto-kill"
-                className="tickets-auto-kill"
-                title={t('auto.stopTitre')}
+                data-testid="tickets-empty-clear"
+                title={t('contenu.effacerTitre')}
                 onClick={() => {
-                  stopAutoModeNow()
-                  autoBusyRef.current = false
-                  setAutoModeChecked(false)
-                  setAutoStatus(t('auto.arreteKill'))
+                  resetFilters()
+                  if (serverQuery) runServerSearch('')
                 }}
               >
-                {t('auto.stop')}
+                {t('contenu.effacer')}
               </button>
-            </span>
-            {autoStatus && (
-              <span className="tickets-auto-status" data-testid="tickets-auto-status">
-                {autoStatus}
-              </span>
+            )}
+            {hasMore && (
+              <button
+                className="tickets-load-more"
+                type="button"
+                disabled={loading}
+                onClick={() =>
+                  selectedSource && cursor
+                    ? void load(selectedSource, { cursor, append: true })
+                    : undefined
+                }
+              >
+                {loading ? (
+                  <>
+                    <Spinner /> {t('contenu.chargement')}
+                  </>
+                ) : (
+                  t('contenu.chargerSuite')
+                )}
+              </button>
             )}
           </div>
-
-          <div className="tickets-content">
-            {sourceError ? (
-              <div className="tickets-error" role="alert">
-                <strong>{t('contenu.sourcesImpossible')}</strong>
-                <span>{sourceError}</span>
-                <button
-                  data-testid="tickets-retry"
-                  type="button"
-                  title={t('contenu.reessayerTitre')}
-                  onClick={retry}
-                >
-                  {t('contenu.reessayer')}
-                </button>
-              </div>
-            ) : (loading || initialLoading) && items.length === 0 ? (
+        ) : (
+          <>
+            {loading && (
               <div
-                className="tickets-loading"
+                className="tickets-refreshing"
+                data-testid="tickets-refreshing"
                 role="status"
-                aria-label={t('contenu.chargementAria')}
+                aria-label={t('contenu.actualisationAria')}
               >
                 <Spinner lg />
-                <span>{t('contenu.synchronisation')}</span>
+                <span>{t('contenu.actualisation')}</span>
               </div>
-            ) : error && items.length === 0 ? (
-              <div className="tickets-error" role="alert">
-                <strong>{t('contenu.chargementImpossible')}</strong>
+            )}
+            {error && (
+              <div className="tickets-stale" data-testid="tickets-stale" role="status">
+                {/* Toute erreur survenue sur une liste DÉJÀ chargée est visible : avant, elle
+                dépendait de `stale`, donc une erreur de pagination passait inaperçue. */}
+                <strong>{stale ? t('contenu.perimees') : t('contenu.partielImpossible')}</strong>
                 <span>{error}</span>
-                <button
-                  data-testid="tickets-retry"
-                  type="button"
-                  title={t('contenu.reessayerTitre')}
-                  onClick={retry}
-                >
-                  {t('contenu.reessayer')}
-                </button>
               </div>
-            ) : sourcesLoaded && sources.length === 0 ? (
-              <div className="tickets-empty">
-                <strong>{t('contenu.aucuneSource')}</strong>
-                <span>{t('contenu.ajouteSource')}</span>
-              </div>
-            ) : visibleItems.length === 0 ? (
-              /* Vide HONNÊTE : la cause (recherche serveur, filtres locaux) est nommée, une issue est
-             offerte, et « Charger la suite » reste accessible quand la page suivante existe —
-             avant, `!hasMore` supprimait tout message et l'écran restait muet. */
-              <div className="tickets-empty" data-testid="tickets-empty">
-                <strong>
-                  {items.length === 0 ? t('contenu.aucunTicket') : t('contenu.aucunResultat')}
-                </strong>
-                <span>
-                  {emptyCauses.length
-                    ? t('contenu.perimetreRestreint', { causes: emptyCauses.join(' · ') })
-                    : t('contenu.sourceVide')}
-                </span>
-                {emptyCauses.length > 0 && (
-                  <button
-                    type="button"
-                    data-testid="tickets-empty-clear"
-                    title={t('contenu.effacerTitre')}
-                    onClick={() => {
-                      resetFilters()
-                      if (serverQuery) runServerSearch('')
-                    }}
-                  >
-                    {t('contenu.effacer')}
-                  </button>
-                )}
-                {hasMore && (
-                  <button
-                    className="tickets-load-more"
-                    type="button"
-                    disabled={loading}
-                    onClick={() =>
-                      selectedSource && cursor
-                        ? void load(selectedSource, { cursor, append: true })
-                        : undefined
-                    }
-                  >
-                    {loading ? (
-                      <>
-                        <Spinner /> {t('contenu.chargement')}
-                      </>
-                    ) : (
-                      t('contenu.chargerSuite')
-                    )}
-                  </button>
-                )}
-              </div>
-            ) : (
-              <>
-                {loading && (
-                  <div
-                    className="tickets-refreshing"
-                    data-testid="tickets-refreshing"
-                    role="status"
-                    aria-label={t('contenu.actualisationAria')}
-                  >
-                    <Spinner lg />
-                    <span>{t('contenu.actualisation')}</span>
-                  </div>
-                )}
-                {error && (
-                  <div className="tickets-stale" data-testid="tickets-stale" role="status">
-                    {/* Toute erreur survenue sur une liste DÉJÀ chargée est visible : avant, elle
-                    dépendait de `stale`, donc une erreur de pagination passait inaperçue. */}
-                    <strong>
-                      {stale ? t('contenu.perimees') : t('contenu.partielImpossible')}
-                    </strong>
-                    <span>{error}</span>
-                  </div>
-                )}
-                <div
-                  className="tickets-list"
-                  role="list"
-                  aria-label={t('vue.titre')}
-                  tabIndex={-1}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-                    event.preventDefault()
-                    moveSelection(event.key === 'ArrowDown' ? 1 : -1)
-                  }}
-                >
-                  {visibleItems.map((item) => {
-                    const identity = `${item.sourceId}::${item.id}`
-                    const treatment = treatmentRecords[identity]
-                    return (
-                      <div className="ticket-select-row" key={identity} role="listitem">
-                        <input
-                          type="checkbox"
-                          data-testid="ticket-process-checkbox"
-                          aria-label={t('liste.cocher', { id: item.id })}
-                          checked={checkedIds.has(identity)}
-                          onChange={() => toggleChecked(identity)}
-                        />
-                        <button
-                          type="button"
-                          data-testid="ticket-row"
-                          className={selectedItem === item ? 'is-selected' : ''}
-                          aria-selected={selectedItem === item}
-                          onClick={() => selectTicket(item)}
-                        >
-                          <span className="tickets-id">#{item.id}</span>
-                          <strong className="tickets-title">{item.title}</strong>
-                          <span className="tickets-updated" title={item.updatedAt}>
-                            {relativeDate(item.updatedAt)}
-                          </span>
-                          <span className="tickets-meta">
-                            <span className="tickets-badge tickets-type">{item.type}</span>
-                            <span
-                              className="tickets-badge tickets-state"
-                              style={{ ['--chip-hue' as string]: hueOf(item.state) }}
-                            >
-                              {item.state}
-                            </span>
-                            {priorityRank(item.priority) < 99 && (
-                              <span
-                                className={`tickets-badge tickets-priority is-p${priorityRank(item.priority)}`}
-                              >
-                                P{priorityRank(item.priority)}
-                              </span>
-                            )}
-                            <span className="tickets-assignee">
-                              {item.assignee ? (
-                                <>
-                                  <span className="tickets-avatar" aria-hidden="true">
-                                    {initialsOf(item.assignee)}
-                                  </span>
-                                  {item.assignee}
-                                </>
-                              ) : (
-                                <span className="tickets-unassigned">{t('liste.nonAssigne')}</span>
-                              )}
-                            </span>
-                          </span>
-                        </button>
-                        {/* UNE SEULE bulle par ticket (demande du 2026-09-17) : elle REJOINT la
-                        conversation déjà ouverte pour ce ticket s'il en existe une, sinon elle en
-                        crée une. L'ancien badge texte (« prêt », « en cours »…) est supprimé : son
-                        état survit dans la couleur de la bulle et dans l'infobulle. */}
-                        <BulleDuTicket
-                          statut={treatment?.status}
-                          data-testid="ticket-open-conversation"
-                          aria-label={
-                            treatment
-                              ? t('liste.rejoindreAria', { id: item.id })
-                              : t('liste.ouvrirAria', { id: item.id })
-                          }
-                          title={
-                            treatment
-                              ? t('liste.rejoindreTitre', {
-                                  id: item.id,
-                                  etat: treatmentLabel(treatment.status)
-                                })
-                              : sendDirectly
-                                ? t('liste.ouvrirEnvoyerTitre', { id: item.id })
-                                : t('liste.ouvrirPreparerTitre', { id: item.id })
-                          }
-                          onClick={() => void openTicketConversation(item, treatment)}
-                        >
-                          💬
-                        </BulleDuTicket>
-                      </div>
-                    )
-                  })}
-                  {hasMore ? (
+            )}
+            <div
+              className="tickets-list"
+              role="list"
+              aria-label={t('vue.titre')}
+              tabIndex={-1}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+                event.preventDefault()
+                moveSelection(event.key === 'ArrowDown' ? 1 : -1)
+              }}
+            >
+              {visibleItems.map((item) => {
+                const identity = `${item.sourceId}::${item.id}`
+                const treatment = treatmentRecords[identity]
+                return (
+                  <div className="ticket-select-row" key={identity} role="listitem">
+                    <input
+                      type="checkbox"
+                      data-testid="ticket-process-checkbox"
+                      aria-label={t('liste.cocher', { id: item.id })}
+                      checked={checkedIds.has(identity)}
+                      onChange={() => toggleChecked(identity)}
+                    />
                     <button
-                      className="tickets-load-more"
                       type="button"
-                      disabled={loading}
-                      onClick={() =>
-                        selectedSource && cursor
-                          ? void load(selectedSource, { cursor, append: true })
-                          : undefined
-                      }
+                      data-testid="ticket-row"
+                      className={selectedItem === item ? 'is-selected' : ''}
+                      aria-selected={selectedItem === item}
+                      onClick={() => selectTicket(item)}
                     >
-                      {loading ? (
-                        <>
-                          <Spinner /> {t('contenu.chargement')}
-                        </>
-                      ) : (
-                        t('contenu.chargerSuite')
-                      )}
-                    </button>
-                  ) : (
-                    <span data-testid="tickets-page-end" className="tickets-page-end">
-                      {t('liste.fin')}
-                    </span>
-                  )}
-                </div>
-                {selectedItem && (
-                  <article className="tickets-detail" data-testid="ticket-detail">
-                    <div className="tickets-detail-title">
-                      <span className="tickets-detail-eyebrow">
-                        <span className="tickets-badge tickets-type">{selectedItem.type}</span>
+                      <span className="tickets-id">#{item.id}</span>
+                      <strong className="tickets-title">{item.title}</strong>
+                      <span className="tickets-updated" title={item.updatedAt}>
+                        {relativeDate(item.updatedAt)}
+                      </span>
+                      <span className="tickets-meta">
+                        <span className="tickets-badge tickets-type">{item.type}</span>
                         <span
                           className="tickets-badge tickets-state"
-                          style={{ ['--chip-hue' as string]: hueOf(selectedItem.state) }}
+                          style={{ ['--chip-hue' as string]: hueOf(item.state) }}
                         >
-                          {selectedItem.state}
+                          {item.state}
                         </span>
-                        {priorityRank(selectedItem.priority) < 99 && (
+                        {priorityRank(item.priority) < 99 && (
                           <span
-                            className={`tickets-badge tickets-priority is-p${priorityRank(selectedItem.priority)}`}
+                            className={`tickets-badge tickets-priority is-p${priorityRank(item.priority)}`}
                           >
-                            P{priorityRank(selectedItem.priority)}
+                            P{priorityRank(item.priority)}
                           </span>
                         )}
-                        <span className="tickets-detail-id">#{selectedItem.id}</span>
+                        <span className="tickets-assignee">
+                          {item.assignee ? (
+                            <>
+                              <span className="tickets-avatar" aria-hidden="true">
+                                {initialsOf(item.assignee)}
+                              </span>
+                              {item.assignee}
+                            </>
+                          ) : (
+                            <span className="tickets-unassigned">{t('liste.nonAssigne')}</span>
+                          )}
+                        </span>
                       </span>
-                      <h2>{selectedItem.title}</h2>
-                    </div>
-                    {ticketTags(selectedItem).length > 0 && (
-                      <div className="tickets-tags" data-testid="ticket-tags">
-                        {ticketTags(selectedItem).map((tag) => (
-                          <span key={tag} className="tickets-tag">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
+                    </button>
+                    {/* UNE SEULE bulle par ticket (demande du 2026-09-17) : elle REJOINT la
+                    conversation déjà ouverte pour ce ticket s'il en existe une, sinon elle en
+                    crée une. L'ancien badge texte (« prêt », « en cours »…) est supprimé : son
+                    état survit dans la couleur de la bulle et dans l'infobulle. */}
+                    <BulleDuTicket
+                      statut={treatment?.status}
+                      data-testid="ticket-open-conversation"
+                      aria-label={
+                        treatment
+                          ? t('liste.rejoindreAria', { id: item.id })
+                          : t('liste.ouvrirAria', { id: item.id })
+                      }
+                      title={
+                        treatment
+                          ? t('liste.rejoindreTitre', {
+                              id: item.id,
+                              etat: treatmentLabel(treatment.status)
+                            })
+                          : sendDirectly
+                            ? t('liste.ouvrirEnvoyerTitre', { id: item.id })
+                            : t('liste.ouvrirPreparerTitre', { id: item.id })
+                      }
+                      onClick={() => void openTicketConversation(item, treatment)}
+                    >
+                      💬
+                    </BulleDuTicket>
+                  </div>
+                )
+              })}
+              {hasMore ? (
+                <button
+                  className="tickets-load-more"
+                  type="button"
+                  disabled={loading}
+                  onClick={() =>
+                    selectedSource && cursor
+                      ? void load(selectedSource, { cursor, append: true })
+                      : undefined
+                  }
+                >
+                  {loading ? (
+                    <>
+                      <Spinner /> {t('contenu.chargement')}
+                    </>
+                  ) : (
+                    t('contenu.chargerSuite')
+                  )}
+                </button>
+              ) : (
+                <span data-testid="tickets-page-end" className="tickets-page-end">
+                  {t('liste.fin')}
+                </span>
+              )}
+            </div>
+            {selectedItem && (
+              <article className="tickets-detail" data-testid="ticket-detail">
+                <div className="tickets-detail-title">
+                  <span className="tickets-detail-eyebrow">
+                    <span className="tickets-badge tickets-type">{selectedItem.type}</span>
+                    <span
+                      className="tickets-badge tickets-state"
+                      style={{ ['--chip-hue' as string]: hueOf(selectedItem.state) }}
+                    >
+                      {selectedItem.state}
+                    </span>
+                    {priorityRank(selectedItem.priority) < 99 && (
+                      <span
+                        className={`tickets-badge tickets-priority is-p${priorityRank(selectedItem.priority)}`}
+                      >
+                        P{priorityRank(selectedItem.priority)}
+                      </span>
                     )}
-                    <dl>
-                      <div>
-                        <dt>{t('detail.assigne')}</dt>
-                        <dd>{selectedItem.assignee || t('liste.nonAssigne')}</dd>
-                      </div>
-                      <div>
-                        <dt>{t('detail.cree')}</dt>
-                        <dd>{selectedItem.createdAt || '—'}</dd>
-                      </div>
-                      <div>
-                        <dt>{t('detail.misAJour')}</dt>
-                        <dd title={selectedItem.updatedAt}>
-                          {relativeDate(selectedItem.updatedAt)}
-                        </dd>
-                      </div>
-                    </dl>
-                    <section>
-                      <h3>{t('detail.description')}</h3>
-                      <p>{plainText(selectedItem.description) || t('detail.aucuneDescription')}</p>
-                    </section>
-                    <section>
-                      <h3>{t('detail.relations')}</h3>
-                      {selectedItem.relations?.length ? (
-                        <ul>
-                          {selectedItem.relations.map((relation, index) => (
-                            <li key={`${relation.kind}:${relation.target}:${index}`}>
-                              <span>{relation.kind}</span> <strong>#{relation.target}</strong>
-                              {relation.title ? <span> — {relation.title}</span> : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>{t('detail.aucuneRelation')}</p>
-                      )}
-                    </section>
-                    <section>
-                      <h3>{t('detail.discussion')}</h3>
-                      {selectedItem.comments?.length ? (
-                        <ul data-testid="ticket-comments">
-                          {selectedItem.comments.map((comment, index) => (
-                            <li key={comment.id ?? `${comment.createdAt ?? 'comment'}:${index}`}>
-                              <strong>{comment.author ?? t('detail.auteurInconnu')}</strong>
-                              {comment.createdAt ? (
-                                <time>{relativeDate(comment.createdAt)}</time>
-                              ) : null}
-                              <p>{plainText(comment.text)}</p>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>{t('detail.aucunCommentaire')}</p>
-                      )}
-                    </section>
-                    <a href={selectedItem.url} target="_blank" rel="noreferrer">
-                      {t('detail.ouvrirDans', {
-                        cible: selectedSource?.provider ?? t('detail.laSource')
-                      })}
-                    </a>
-                  </article>
+                    <span className="tickets-detail-id">#{selectedItem.id}</span>
+                  </span>
+                  <h2>{selectedItem.title}</h2>
+                </div>
+                {ticketTags(selectedItem).length > 0 && (
+                  <div className="tickets-tags" data-testid="ticket-tags">
+                    {ticketTags(selectedItem).map((tag) => (
+                      <span key={tag} className="tickets-tag">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 )}
-              </>
+                <dl>
+                  <div>
+                    <dt>{t('detail.assigne')}</dt>
+                    <dd>{selectedItem.assignee || t('liste.nonAssigne')}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('detail.cree')}</dt>
+                    <dd>{selectedItem.createdAt || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('detail.misAJour')}</dt>
+                    <dd title={selectedItem.updatedAt}>{relativeDate(selectedItem.updatedAt)}</dd>
+                  </div>
+                </dl>
+                <section>
+                  <h3>{t('detail.description')}</h3>
+                  <p>{plainText(selectedItem.description) || t('detail.aucuneDescription')}</p>
+                </section>
+                <section>
+                  <h3>{t('detail.relations')}</h3>
+                  {selectedItem.relations?.length ? (
+                    <ul>
+                      {selectedItem.relations.map((relation, index) => (
+                        <li key={`${relation.kind}:${relation.target}:${index}`}>
+                          <span>{relation.kind}</span> <strong>#{relation.target}</strong>
+                          {relation.title ? <span> — {relation.title}</span> : null}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>{t('detail.aucuneRelation')}</p>
+                  )}
+                </section>
+                <section>
+                  <h3>{t('detail.discussion')}</h3>
+                  {selectedItem.comments?.length ? (
+                    <ul data-testid="ticket-comments">
+                      {selectedItem.comments.map((comment, index) => (
+                        <li key={comment.id ?? `${comment.createdAt ?? 'comment'}:${index}`}>
+                          <strong>{comment.author ?? t('detail.auteurInconnu')}</strong>
+                          {comment.createdAt ? (
+                            <time>{relativeDate(comment.createdAt)}</time>
+                          ) : null}
+                          <p>{plainText(comment.text)}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>{t('detail.aucunCommentaire')}</p>
+                  )}
+                </section>
+                <a href={selectedItem.url} target="_blank" rel="noreferrer">
+                  {t('detail.ouvrirDans', {
+                    cible: selectedSource?.provider ?? t('detail.laSource')
+                  })}
+                </a>
+              </article>
             )}
-          </div>
-        </>
-      )}
-    </section>
+          </>
+        )}
+      </div>
+    </div>
   )
 }

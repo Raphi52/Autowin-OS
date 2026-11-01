@@ -211,7 +211,8 @@ describe('ce que dit le bloc en panne', () => {
       readFileSync(join(composants, 'ChatView.tsx'), 'utf8')
     ].join('\n')
     const zones = [...sources.matchAll(/<VueMesuree id="([^"]+)"/g)].map((m) => m[1])
-    expect(zones.length).toBeGreaterThanOrEqual(15)
+    // 14 depuis conv-1397 : l'écran Tickets est devenu un onglet du Board, sa zone est partie avec lui.
+    expect(zones.length).toBeGreaterThanOrEqual(14)
     for (const zone of zones) {
       expect(nomDeZone(zone, 'fr'), zone).not.toBe(zone)
       expect(nomDeZone(zone, 'en'), zone).not.toBe(zone)

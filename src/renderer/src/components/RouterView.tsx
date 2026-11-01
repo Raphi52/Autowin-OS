@@ -16,7 +16,7 @@ import { useTextesSettings, type CleSettings } from '../textes-ecrans/settings'
  * Page « Routeur » — voir les providers/modèles connectés + leur statut d'auth RÉEL, (ré)authentifier,
  * et choisir le modèle par défaut du chat.
  * Invariant : un badge ne ment jamais — « authentifié » n'apparaît que sur preuve réelle
- * (codex expiry au chargement ; claude/kimi via le bouton « Tester »).
+ * (claude et ChatGPT via le bouton « Tester »).
  */
 type AuthStatus = 'authenticated' | 'expired' | 'installed-untested' | 'absent' | 'unknown'
 type ProviderDisplayStatus = AuthStatus | 'standby'
@@ -39,7 +39,7 @@ const STATUS_LABEL: Record<ProviderDisplayStatus, CleSettings> = {
 }
 const PROVIDER_LABEL: Record<string, string> = {
   claude: 'Claude',
-  codex: 'Codex',
+  codex: 'ChatGPT',
   kimi: 'Kimi',
   gemini: 'Gemini'
 }

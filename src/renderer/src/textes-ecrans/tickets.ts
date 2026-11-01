@@ -18,16 +18,13 @@ import { tableDeTextes } from '../textes'
  * `contenu.` (chargement, erreurs, vide), `liste.`, `detail.` — tous dans TicketsView ; `veille.`
  * (VeilleCandidatsSection).
  *
- * Les noms de fournisseurs (Azure DevOps, GitHub, GitLab) et l'onglet « Autowin OS » restent en dur
- * dans TicketsView : noms propres, identiques dans les deux langues.
+ * Les noms de fournisseurs (Azure DevOps, GitHub, GitLab) restent en dur dans TicketsView : noms
+ * propres, identiques dans les deux langues. Depuis conv-1397, TicketsView est l'onglet « Tickets » du
+ * Board (sans barre de titre) et la veille un bloc de Maintenance.
  */
 export const TEXTES_FR = {
-  // — En-tête de la vue
-  'vue.surtitre': 'Travail synchronisé',
+  // — Nom de la liste (lecteur d'écran)
   'vue.titre': 'Tickets',
-  'vue.description': 'Synchronise et pilote le travail issu de tes sources externes.',
-  'vue.sections': 'Sections Tickets',
-  'vue.onglet.externes': 'Sources externes',
 
   // — Date relative courte de la liste et du détail
   'date.instant': 'à l’instant',
@@ -249,11 +246,7 @@ export const TEXTES_FR = {
 export type CleTickets = keyof typeof TEXTES_FR
 
 export const TEXTES_EN: Record<CleTickets, string> = {
-  'vue.surtitre': 'Synced work',
   'vue.titre': 'Tickets',
-  'vue.description': 'Syncs and drives the work coming from your external sources.',
-  'vue.sections': 'Tickets sections',
-  'vue.onglet.externes': 'External sources',
 
   'date.instant': 'just now',
   'date.minutes': '{n} min ago',
@@ -461,7 +454,7 @@ export const TEXTES_EN: Record<CleTickets, string> = {
 
 /** Clé → raison pour laquelle son anglais reste identique au français. */
 export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<CleTickets, string>>> = {
-  'vue.titre': 'nom de l’écran, même mot en anglais',
+  'vue.titre': 'nom de la liste, même mot en anglais',
   'auto.stop': 'même mot en anglais',
   'source.surtitre': 'même mot en anglais',
   'source.ajouterCourt': 'même mot en anglais, précédé du signe ＋',
