@@ -7,10 +7,10 @@
   n'automatise JAMAIS un secret ni un login interactif (token Brain, login Claude) — il les GUIDE.
 
   Ce qu'il fait :
-    - installe la CLI claude (@anthropic-ai/claude-code) si absente ;
+    - installe les CLI claude (@anthropic-ai/claude-code) et codex (@openai/codex) si absentes ;
     - crée/complète le venv Python du brain_server (uv venv + requirements) dans le tooling résolu ;
   Ce qu'il GUIDE (manuel, non automatisable) :
-    - login Claude (claude auth login) et token Brain (AUTOWIN_BRAIN_TOKEN, ou son ancien nom
+    - login Claude (claude auth login), login ChatGPT (codex login, facultatif) et token Brain (AUTOWIN_BRAIN_TOKEN, ou son ancien nom
       fourni par le profil d'entreprise entreprise/<nom>/identite.json).
 
 .PARAMETER HermesBrainRepo
@@ -84,16 +84,20 @@ if (Have 'git') {
 # --- CLI providers ---
 if (-not $SkipCli) {
   Step "CLI providers (npm global)"
-  # Claude est le seul moteur branche : Codex, Kimi et Gemini sont retires, on n'installe plus
-  # leur CLI au bootstrap.
+  # Claude et ChatGPT (CLI codex) sont les moteurs branches. Kimi et Gemini sont retires, on
+  # n'installe plus leur CLI au bootstrap.
   $clis = @(
-    @{ Bin = 'claude'; Pkg = '@anthropic-ai/claude-code' }
+    @{ Bin = 'claude'; Pkg = '@anthropic-ai/claude-code' },
+    # Emplacement standard impose : le prefixe npm du Node de winget depasse la limite de chemin de
+    # Windows, et le CLI s'y lance alors sans aucun de ses outils (mesure du 2026-10-31, conv-1414).
+    @{ Bin = 'codex'; Pkg = '@openai/codex'; Args = @('--prefix', "$env:APPDATA\npm") }
   )
   foreach ($c in $clis) {
     if (Have $c.Bin) { Ok "$($c.Bin) déjà présent" }
     else {
       Warn "$($c.Bin) absent → npm i -g $($c.Pkg)"
-      npm install -g $c.Pkg
+      $options = if ($c.Args) { $c.Args } else { @() }
+      npm install -g @options $c.Pkg
       if ($LASTEXITCODE -eq 0 -and (Have $c.Bin)) { Ok "$($c.Bin) installé" }
       else { Warn "échec install $($c.Bin) — installer manuellement : npm i -g $($c.Pkg)" }
     }
@@ -141,4 +145,5 @@ Step "Manuel (non automatisable)"
 if ($env:AUTOWIN_BRAIN_TOKEN -or [Environment]::GetEnvironmentVariable($nomJeton)) { Ok "jeton Brain défini" }
 else { Warn "$nomJeton absent → le définir (secret Brain) pour activer le RAG." }
 Warn "Login Claude : 'claude auth login' (ou le bouton « Se connecter » du wizard)."
+Warn "Login ChatGPT (facultatif) : 'codex login', pour proposer les modèles ChatGPT."
 Write-Host "`nEnsuite : lancer Autowin OS. Le wizard n'apparaît QUE s'il reste un rouge, tente de démarrer le brain, et guide le reste." -ForegroundColor White

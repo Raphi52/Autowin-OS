@@ -175,14 +175,17 @@ async function main() {
   }
 
   // 5. Ecriture (`remember`) : 404 = route absente, autre = route presente.
-  const ing = await fetch(`${base}/ingest`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
-    body: '{}'
-  }).catch(() => null)
-  if (ing?.status === 404)
-    note('fail', 'ecriture indisponible', '/ingest absent — remember ne deposerait rien')
-  else note('ok', 'ecriture disponible', `/ingest present (HTTP ${ing?.status})`)
+  // `--lecture-seule` (conv-1368) : `/doctor` promet de ne rien écrire, donc il saute cette étape.
+  if (!process.argv.includes('--lecture-seule')) {
+    const ing = await fetch(`${base}/ingest`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tok}`, 'Content-Type': 'application/json' },
+      body: '{}'
+    }).catch(() => null)
+    if (ing?.status === 404)
+      note('fail', 'ecriture indisponible', '/ingest absent — remember ne deposerait rien')
+    else note('ok', 'ecriture disponible', `/ingest present (HTTP ${ing?.status})`)
+  }
 
   const failures = findings.filter((f) => f.verdict === 'fail')
   console.log('')

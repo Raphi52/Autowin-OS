@@ -102,10 +102,10 @@ describe('runAppPreflight', () => {
     )
   })
 
-  it('CONTRÔLE NÉGATIF : ne lance JAMAIS un binaire de moteur retiré', async () => {
+  it('CONTRÔLE NÉGATIF : le démarrage ne sonde jamais un moteur facultatif', async () => {
     const { appPreflightProbes } = await import('./preflight-probes')
 
-    // @ts-expect-error — `codex` n'est plus un moteur routé : le typage l'interdit déjà.
+    // @ts-expect-error — `codex` est facultatif, pas un prérequis : le typage l'interdit déjà.
     expect(await appPreflightProbes().hasBin('codex')).toBe(false)
     expect(mocks.spawn).not.toHaveBeenCalledWith('codex', expect.anything(), expect.anything())
   })
