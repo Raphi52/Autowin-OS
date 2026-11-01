@@ -54,6 +54,8 @@ export function deciderDuPassage(entree: {
   /** conv-35 : memes reserves MINEUR sur un VALIDE, deux passages de suite. */
   // fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
   reservesMineuresFigees?: boolean
+  /** conv-1420 : le panel de juges est en panne, voir `arretDeLaReparation`. */
+  panneDesJuges?: string
 }): PassageDeReparation {
   const { attempt, reparationsAccordees, plafondDur, motifsCourants, etat } = entree
   const arret = arretDeLaReparation({
@@ -65,7 +67,8 @@ export function deciderDuPassage(entree: {
     refusIdentiquesConsecutifs: etat.refusIdentiquesConsecutifs,
     bundlePerime: entree.bundlePerime,
     jusquAuVert: entree.jusquAuVert,
-    reservesMineuresFigees: entree.reservesMineuresFigees
+    reservesMineuresFigees: entree.reservesMineuresFigees,
+    ...(entree.panneDesJuges ? { panneDesJuges: entree.panneDesJuges } : {})
   })
   const trace = traceDuPassage(attempt, plafondDur, entree.jusquAuVert)
   if (arret) return { ...(trace ? { trace } : {}), arret, etatSuivant: etat }

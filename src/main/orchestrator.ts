@@ -84,7 +84,7 @@ import { effortParDefautDeLEtape, resolvePhaseBinding } from './roles'
 import { advisorAccepte } from './providers/claude-advisor'
 import { effortsDeclaresDuModele } from './models'
 import { raisonDeBlocageIntegration } from '../shared/raison-de-blocage'
-import { defaultQuorumThreshold } from './quorum'
+import { issueDuPanel, motifPanneDesJuges, noteDesAbsents, verdictDuPanel } from './quorum'
 import { withCostContext, type CostAggregator, type CostSink } from './dashboards/cost'
 import type { TrustLedger } from './trust/ledger'
 import {
@@ -5833,6 +5833,11 @@ ${CONTRAT_OBJECTIONS}`
      */
     let defautsDeLaRelecture: string[] = []
     /**
+     * Le motif d'un panel de juges tombé en panne sans quorum (conv-1420, `quorum.ts`). Présent, le
+     * passage s'arrête : rejouer un build ne ferait pas répondre les juges. Vidé à chaque jugement.
+     */
+    let panneDesJuges: string | undefined
+    /**
      * Le texte RENDU à l'utilisateur : l'agrégat du DERNIER jugement SANS les versions remplacées
      * d'une étape rejouée (conv-339, `exec.rendu`). Figé avec `exec` : learn, joué après, n'y entre
      * pas. Le juge garde `exec.text`.
@@ -5874,6 +5879,7 @@ ${CONTRAT_OBJECTIONS}`
       // bloqué par pre-green clôture rouge, ou rejoint une reprise explicitement dessinée : le juge
       // ne peut rien apprendre qu'un oracle local vient déjà de réfuter.
       reservesDuJuge = []
+      panneDesJuges = undefined
       const evidenceOk = evidenceSatisfiesTask(task, exec.executionEvidence)
       const hookOutcome = await this.hooks.run('pre-green', {
         task,
@@ -6153,8 +6159,10 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       // de vote MÉCANIQUE (compter les VALIDE ; majorité = pass). Agréger ≠ re-décider : aucun juge
       // supplémentaire ne tranche, on compte les voix. <2 ou absent → un seul juge (rétrocompat).
       if (judgeMembers.length >= 2) {
-        const results = await Promise.all(
-          judgeMembers.map(async (member) => {
+        const interrogerLesJuges = (
+          membres: RoleBinding[]
+        ): Promise<{ ok: boolean; responded: boolean; text: string }>[] =>
+          membres.map(async (member) => {
             const execution = {
               phase: 'judge' as const,
               agentId: `judge:${member.model ?? member.provider}`,
@@ -6210,6 +6218,8 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
                   costUsd: r.usage.costUsd
                 })
               }
+              // Une réponse vide n'est pas un refus du juge : elle suit le chemin d'une panne (conv-1420).
+              if (!r.text.trim()) throw new Error('le juge a rendu une réponse vide')
               // Un membre qui valide EN LISTANT des écarts vote DEFAUT : ses objections rejoignent
               // alors le verdict agrégé, donc le feedback de la réparation.
               const votesValide = lireVerdictJuge(verdictAvecObjectionsPortees(r.text))
@@ -6241,26 +6251,33 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
                 durationMs: performance.now() - startedAt,
                 execution
               })
-              // Crashé : ne vote PAS et ne compte pas dans le dénominateur du quorum.
+              // Crashé : ne vote PAS. Il reste un juge prévu, donc un absent nommé (conv-1420).
               return { ok: false, responded: false, text: '' }
             }
           })
-        )
-        // Quorum sur les juges ayant RÉELLEMENT répondu (un juge crashé ne gonfle pas le dénominateur
-        // → sinon 2 crashes sur 3 feraient échouer un verdict que 100 % des répondants valident).
+        const premiersVotes = await Promise.all(interrogerLesJuges(judgeMembers))
+        // UNE relance du seul membre en panne, dans ce passage : `skills/judge/SKILL.md:62` (conv-1420).
+        const aRappeler = signal?.aborted
+          ? []
+          : judgeMembers.filter((_, rang) => !premiersVotes[rang]?.responded)
+        const results = [...premiersVotes, ...(await Promise.all(interrogerLesJuges(aRappeler)))]
+        // Le seuil se calcule sur les juges PRÉVUS (renversement voulu, voir `quorum.ts`).
+        // fix-ok: conv-1420 — seuil borné aux répondants : test M1 rejoué sur a41081d6, vert à 1 VALIDE sur 3 juges prévus, absents jamais nommés.
         const responders = results.filter((r) => r.responded)
-        const votingN = responders.length
         const valideVotes = responders.filter((r) => r.ok).length
-        // Le quorum composé prime, mais borné au nombre de votants RÉELS : un modèle crashé ne vote
-        // pas, et exiger 3 voix parmi 2 répondants rendrait le vert inatteignable sans le dire.
         const graphQuorum = this.workflowDuRun()?.graph
           ? quorumForPhase(this.workflowDuRun()!.graph!, 'judge')
           : undefined
-        const threshold = graphQuorum
-          ? Math.min(Math.max(1, graphQuorum), votingN)
-          : defaultQuorumThreshold(votingN)
-        const passes = votingN > 0 && valideVotes >= threshold
+        const issuePanel = issueDuPanel({
+          prevus: judgeMembers.length,
+          valides: valideVotes,
+          refus: responders.length - valideVotes,
+          ...(graphQuorum === undefined ? {} : { quorumDuGraphe: graphQuorum })
+        })
         const reasons = responders.filter((r) => !r.ok && r.text).map((r) => r.text)
+        panneDesJuges = motifPanneDesJuges(issuePanel)
+        const absentsNommes = noteDesAbsents(issuePanel)
+        if (absentsNommes) push({ step: 'gate', role: 'gate', detail: absentsNommes })
         // Verdict AGRÉGÉ synthétique consommé par le gate ci-dessous. usage=undefined → le coût,
         // déjà ajouté par juge ci-dessus, n'est pas re-compté.
         memoirePanel = verdictPanelPourMemoire(
@@ -6268,13 +6285,12 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
           ''
         )
         verdict = {
-          text: passes
-            ? // Quorum atteint : les objections des membres RESTENT dans le verdict (conv-539,
-              // tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e) au lieu d'etre reduites au mot VALIDE.
-              verdictPanelValide(responders.map((r) => ({ text: r.text, ok: r.ok })))
-            : votingN === 0
-              ? 'DEFAUT: aucun juge n’a répondu (tous en échec)'
-              : `DEFAUT: quorum non atteint (${valideVotes}/${votingN} VALIDE, seuil ${threshold})${reasons.length ? ` — ${reasons.join(' | ')}` : ''}`,
+          text: verdictDuPanel(issuePanel, {
+            // Quorum atteint : les objections des membres RESTENT dans le verdict (conv-539,
+            // tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e) au lieu d'etre reduites au mot VALIDE.
+            verdictValide: verdictPanelValide(responders.map((r) => ({ text: r.text, ok: r.ok }))),
+            raisons: reasons
+          }),
           provider: undefined,
           systemInjected: true,
           usage: undefined
@@ -6899,6 +6915,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
         // desormais au lieu de bruler un build et un panel de juge par passage.
         bundlePerime: mesureBundlePerime(process.cwd()),
         jusquAuVert,
+        ...(panneDesJuges ? { panneDesJuges } : {}),
         // fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
         reservesMineuresFigees: reservesMineuresFigees(
           attempt,

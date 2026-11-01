@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CostAggregator } from './dashboards/cost'
-import { Orchestrator, type OrchestrationPhase } from './orchestrator'
+import { lireVerdictJuge, Orchestrator, type OrchestrationPhase } from './orchestrator'
+import { objectionsDuJuge, verdictAvecObjectionsPortees } from './objections-juge'
 import { ProviderRegistry } from './providers/registry'
 import type {
   Message,
@@ -21,6 +22,10 @@ class RecordingProvider implements ProviderAdapter {
   readonly calls: SendOptions[] = []
   /** Les messages de chaque appel, au même rang que `calls`. */
   readonly messages: Message[][] = []
+  /** Les modèles `panne-une-fois` déjà tombés : ils répondent à partir du second appel. */
+  private readonly dejaTombes = new Set<string>()
+  /** Appelé juste avant la panne d'un modèle `crash` : sert à annuler le run à cet instant. */
+  avantUnePanne?: () => void
 
   constructor(readonly id = 'capture') {}
 
@@ -37,11 +42,19 @@ class RecordingProvider implements ProviderAdapter {
     this.messages.push(messages)
     const model = options.model ?? ''
     // Un modèle dont le nom contient "crash" LÈVE (simule une erreur réseau/provider) → ne répond pas.
-    if (/crash/i.test(model)) throw new Error(`modèle ${model} en échec (simulé)`)
+    if (/crash/i.test(model)) {
+      this.avantUnePanne?.()
+      throw new Error(`modèle ${model} en échec (simulé)`)
+    }
+    // Panne passagère : le même juge, rappelé, répond (conv-1420).
+    if (/panne-une-fois/i.test(model) && !this.dejaTombes.has(model)) {
+      this.dejaTombes.add(model)
+      throw new Error(`modèle ${model} en panne passagère (simulée)`)
+    }
     // Un modèle dont le nom contient "no" vote DEFAUT ; sinon VALIDE. Les sorties d'exec/synthèse
     // renvoient aussi VALIDE (sans importance pour ces tests d'agrégation).
     return {
-      text: /no/i.test(model) ? 'DEFAUT: raison' : 'VALIDE',
+      text: /muet/i.test(model) ? '' : /no/i.test(model) ? 'DEFAUT: raison' : 'VALIDE',
       provider: this.id,
       systemInjected: Boolean(options.system),
       usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.001 },
@@ -603,20 +616,132 @@ describe('Orchestrator — fan-out juge (quorum de vote)', () => {
     expect(result.valid).toBe(false)
   })
 
-  it('M1 : un juge crashé ne gonfle PAS le dénominateur du quorum', async () => {
+  /**
+   * M1 RENVERSÉ VOLONTAIREMENT (conv-1420, 2026-11-01). Ce test figeait l'inverse : « un juge crashé
+   * ne gonfle pas le dénominateur », pour qu'un panel ne refuse pas un travail que tous ses
+   * répondants valident. Sur 3 juges prévus, 2 pannes et 1 VALIDE fermaient donc le run en VERT,
+   * sans nommer les absents, alors que `skills/judge/SKILL.md:62` exige « 1 relance, sinon INVALIDE,
+   * jamais un 100 silencieux ». Une panne ne reste plus muette, et elle ne refuse pas le travail
+   * non plus : le run s'arrête en le disant.
+   *
+   * fix-ok: conv-1420 — cause lue et rejouée sur a41081d6 : le seuil était borné aux répondants
+   * (orchestrator.ts, votingN), ce test donnait valid === true avec 1 VALIDE sur 3 juges prévus.
+   */
+  it('M1 RENVERSÉ : 3 juges prévus, 2 en panne, 1 VALIDE → verdict incomplet, pas de vert', async () => {
     const provider = new RecordingProvider()
-    // 3 juges configurés, 2 crashent, 1 seul répond et vote VALIDE.
-    // Avant fix : votingN=3, seuil=2, valide=1 → DEFAUT (faux). Après : votingN=1 (répondants), seuil=1 → VALIDE.
     const result = await makeJudgePanel(provider, ['j-ok', 'crash1', 'crash2']).run(
       'cadre les pistes'
     )
+    expect(result.valid).toBe(false)
+    expect(result.judgeText).toContain('verdict incomplet')
+    expect(result.judgeText).toContain("2 juges sur 3 n'ont pas répondu")
+    expect(result.gateReasons.join(' ')).toContain('verdict incomplet')
+  })
+
+  it('jumeau accepté : 2 VALIDE et 1 juge absent passent, et l’absent reste nommé', async () => {
+    const provider = new RecordingProvider()
+    const result = await makeJudgePanel(provider, ['j-a', 'j-b', 'crash1']).run('cadre les pistes')
     expect(result.valid).toBe(true)
+    expect(result.gateBlocked).toBe(false)
+    const mention = "1 juge sur 3 n'a pas répondu"
+    expect(result.judgeText).toContain(mention)
+    const quorum = result.trace.find((step) => step.execution?.agentId === 'judge:quorum')
+    expect(quorum?.text).toContain(mention)
+    expect(
+      result.trace.some((step) => step.step === 'gate' && step.detail?.includes(mention))
+    ).toBe(true)
+    // La mention n'est ni un refus ni une objection : c'est le faux rouge à ne pas créer.
+    expect(lireVerdictJuge(verdictAvecObjectionsPortees(result.judgeText ?? ''))).toBe(true)
+    expect(objectionsDuJuge(result.judgeText ?? '')).toEqual([])
+  })
+
+  it('une réponse vide compte comme une panne : le juge est rappelé, puis absent', async () => {
+    const provider = new RecordingProvider()
+    const result = await makeJudgePanel(provider, ['j-a', 'j-b', 'muet']).run('cadre les pistes')
+    expect(provider.calls.filter((call) => call.model === 'muet')).toHaveLength(2)
+    expect(result.valid).toBe(true)
+    expect(result.judgeText).toContain("1 juge sur 3 n'a pas répondu")
+    const muets = result.trace.filter((step) => step.model === 'muet')
+    expect(muets.map((step) => step.status)).toEqual(['failed', 'failed'])
+  })
+
+  it('un juge en panne passagère est rappelé seul, et son vote compte', async () => {
+    const provider = new RecordingProvider()
+    const result = await makeJudgePanel(provider, ['j-a', 'j-no', 'panne-une-fois']).run(
+      'cadre les pistes'
+    )
+    const appels = (model: string): number =>
+      provider.calls.filter((call) => call.model === model).length
+    expect(appels('panne-une-fois')).toBe(2)
+    expect(appels('j-a')).toBe(1)
+    expect(appels('j-no')).toBe(1)
+    // 2 VALIDE (dont le rappelé) contre 1 refus : sans le rappel, il ne resterait qu'un VALIDE.
+    expect(result.valid).toBe(true)
+    expect(result.judgeText).not.toContain("n'a pas répondu")
+    const rappeles = result.trace.filter((step) => step.model === 'panne-une-fois')
+    expect(rappeles.map((step) => step.status)).toEqual(['failed', 'completed'])
+    expect(rappeles[0]?.execution?.attemptId).not.toBe(rappeles[1]?.execution?.attemptId)
+  })
+
+  it('un run annulé ne relance aucun juge', async () => {
+    const provider = new RecordingProvider()
+    const annulation = new AbortController()
+    provider.avantUnePanne = () => annulation.abort()
+    await makeJudgePanel(provider, ['j-ok', 'crash1', 'crash2'])
+      .run('cadre les pistes', undefined, undefined, undefined, annulation.signal)
+      .catch(() => undefined)
+    expect(provider.calls.filter((call) => call.model === 'crash1')).toHaveLength(1)
+    expect(provider.calls.filter((call) => call.model === 'crash2')).toHaveLength(1)
   })
 
   it('tous les juges crashent → défaut (aucun vote), pas de faux VALIDE', async () => {
     const provider = new RecordingProvider()
     const result = await makeJudgePanel(provider, ['crash1', 'crash2']).run('cadre les pistes')
     expect(result.valid).toBe(false)
+    expect(result.judgeText).toBe('DEFAUT: aucun juge n’a répondu (tous en échec)')
+  })
+
+  /**
+   * Une panne de juge n'est pas un refus du travail : rejouer un build ne ferait pas répondre les
+   * juges, et le mode jusqu'au vert (conv-844) n'aurait aucune autre raison de s'arrêter.
+   */
+  describe.each([
+    ['verdict incomplet', ['j-ok', 'crash1', 'crash2']],
+    ['aucun juge', ['crash1', 'crash2', 'crash3']]
+  ])('panne du panel (%s)', (motif, juges) => {
+    it.each([
+      ['réparation bornée', '1'],
+      ['jusqu’au vert', undefined]
+    ])('aucun build de réparation, motif dit au résultat et à la trace (%s)', async (_, borne) => {
+      const avant = process.env.AUTOWIN_REPARATION_BORNEE
+      if (borne) process.env.AUTOWIN_REPARATION_BORNEE = borne
+      else delete process.env.AUTOWIN_REPARATION_BORNEE
+      try {
+        const provider = new RecordingProvider()
+        const result = await makeJudgePanel(provider, juges).run('cadre les pistes')
+        // 1 exécution + 3 juges + le rappel de chaque absent, et rien d'autre.
+        const rappels = juges.filter((juge) => juge.startsWith('crash')).length
+        expect(provider.calls).toHaveLength(1 + 3 + rappels)
+        expect(result.gateBlocked).toBe(true)
+        expect(result.gateReasons.join(' ')).toContain(motif)
+        const trace = result.trace.filter((step) => step.step === 'gate').map((step) => step.detail)
+        expect(trace.some((detail) => detail?.includes(motif))).toBe(true)
+      } finally {
+        if (avant === undefined) delete process.env.AUTOWIN_REPARATION_BORNEE
+        else process.env.AUTOWIN_REPARATION_BORNEE = avant
+      }
+    })
+  })
+
+  it('jumeau : 1 VALIDE, 1 refus et 1 absent partent en réparation normale', async () => {
+    const provider = new RecordingProvider()
+    const result = await makeJudgePanel(provider, ['j-ok', 'j-no', 'crash1']).run(
+      'cadre les pistes'
+    )
+    expect(result.valid).toBe(false)
+    expect(result.judgeText).toContain("1 juge sur 3 n'a pas répondu")
+    // Un juge a nommé un défaut : c'est un refus du travail, le passage suivant rejoue le juge.
+    expect(provider.calls.filter((call) => call.model === 'j-no').length).toBeGreaterThan(1)
   })
 })
 
