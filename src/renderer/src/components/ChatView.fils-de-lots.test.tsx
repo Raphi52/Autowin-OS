@@ -20,12 +20,19 @@ type Harness = Awaited<ReturnType<typeof mountChat>>
  * « lot N/M ». Un fil hors plan ne bouge pas. Depuis conv-1158, elle lit TOUS les plans en un seul
  * appel `plansDeLots('tous')` — plus de repérage par le titre : un fil de lot renommé reste rangé,
  * et 1 000 fils coûtent un appel.
+ *
+ * Depuis conv-1381 (« les conv de lot ne les affiche pas dans cette liste, on y accède que par les
+ * onglets »), un lot qui a son onglet n'a plus de ligne. Depuis conv-1394 (« masque aussi les lots
+ * des anciens plans d'un même chef, et rends-les accessibles depuis le bloc de la conv chef »), un
+ * lot d'un ancien plan non plus : le bloc du chef les liste. Seul un lot dont le chef a disparu garde
+ * sa ligne. Le rangement sous le chef ne sert plus qu'aux résultats de recherche. Le spinner du chef
+ * répond de ses lots masqués.
  */
 
 const DOSSIER = 'D:/Projet'
 
 type Lot = { rang: number; fil?: string }
-type Plan = { id: string; chef: string; lots: Lot[] }
+type Plan = { id: string; chef: string; lots: Lot[]; statut?: string }
 
 /** Un fil du dossier, plus récent quand `recence` est grand. */
 const fil = (id: string, title: string, recence: number): Record<string, unknown> => ({
@@ -47,7 +54,7 @@ function apiDesPlans(plans: Plan[]): ReturnType<typeof vi.fn> {
         id: p.id,
         chef: p.chef,
         titre: p.id,
-        statut: 'termine',
+        statut: p.statut ?? 'termine',
         lots: p.lots.map((l) => ({
           ...l,
           titre: `lot ${l.rang}`,
@@ -112,24 +119,12 @@ describe('ChatView — fils d’un plan de lots rangés sous leur fil chef', () 
       .filter((f) => f !== ouvert)
   }
 
-  it('range les lots juste après leur chef, indentés et marqués « lot N/M » ; le reste ne bouge pas', async () => {
-    // Ordre par récence : X1, L2, X2, C1, L1, X3. Les lots L1 et L2 sont séparés de leur chef.
-    const convs = [
-      fil('X1', 'Ordinaire 1', 90),
-      fil('L2', 'Lot 2/3 — Deuxième', 80),
-      fil('X2', 'Ordinaire 2', 70),
-      fil('C1', 'Le fil chef', 60),
-      fil('L1', 'Lot 1/3 — Premier', 50),
-      fil('X3', 'Ordinaire 3', 40)
-    ]
-    const plansDeLots = apiDesPlans([
-      {
-        id: 'plan-a',
-        chef: 'C1',
-        // Le lot 3 n'est pas encore ouvert : il compte dans le total, sans fil à ranger.
-        lots: [{ rang: 1, fil: 'L1' }, { rang: 2, fil: 'L2' }, { rang: 3 }]
-      }
-    ])
+  /** Monte la liste sur ces fils et ces plans, plans lus. */
+  async function monter(
+    convs: Array<Record<string, unknown>>,
+    plans: Plan[]
+  ): Promise<ReturnType<typeof vi.fn>> {
+    const plansDeLots = apiDesPlans(plans)
     h = await mountChat(
       chatApi({
         conversations: vi.fn().mockResolvedValue(convs),
@@ -138,48 +133,178 @@ describe('ChatView — fils d’un plan de lots rangés sous leur fil chef', () 
       })
     )
     await laisserFiler()
+    return plansDeLots
+  }
+  const etatDe = (id: string): string | null | undefined =>
+    h!.container
+      .querySelector(`.conv-item[data-conversation-id="${id}"] [data-conversation-state]`)
+      ?.getAttribute('data-conversation-state')
+
+  it('un lot qui a son onglet n’a plus de ligne ; le reste ne bouge pas (conv-1381)', async () => {
+    // Ordre par récence : X1, L2, X2, C1, L1, X3. Le lot 3 n'est pas ouvert : rien à masquer.
+    const plansDeLots = await monter(
+      [
+        fil('X1', 'Ordinaire 1', 90),
+        fil('L2', 'Lot 2/3 — Deuxième', 80),
+        fil('X2', 'Ordinaire 2', 70),
+        fil('C1', 'Le fil chef', 60),
+        fil('L1', 'Lot 1/3 — Premier', 50),
+        fil('X3', 'Ordinaire 3', 40)
+      ],
+      [
+        {
+          id: 'plan-a',
+          chef: 'C1',
+          lots: [{ rang: 1, fil: 'L1' }, { rang: 2, fil: 'L2' }, { rang: 3 }]
+        }
+      ]
+    )
 
     const lignes = lignesDuDossier()
-    expect(ids(lignes)).toEqual(['X1', 'X2', 'C1', 'L1', 'L2', 'X3'])
-    const parId = new Map(lignes.map((l) => [l.getAttribute('data-conversation-id'), l]))
-    // Indentés d'un cran (14 px) sous le chef ; le chef et les fils hors plan restent au bord.
-    expect(parId.get('L1')!.style.marginLeft).toBe('14px')
-    expect(parId.get('L2')!.style.marginLeft).toBe('14px')
-    for (const id of ['X1', 'X2', 'C1', 'X3']) expect(parId.get(id)!.style.marginLeft).toBe('0px')
-    // Le repère vient du plan (rang et total, lot 3 non ouvert compris), pas du titre.
-    expect(parId.get('L1')!.getAttribute('data-lot')).toBe('lot 1/3')
-    expect(parId.get('L2')!.querySelector('.conv-lot')?.textContent).toBe('lot 2/3')
-    expect(parId.get('C1')!.getAttribute('data-lot')).toBeNull()
-    expect(parId.get('X1')!.querySelector('.conv-lot')).toBeNull()
+    expect(ids(lignes)).toEqual(['X1', 'X2', 'C1', 'X3'])
+    for (const ligne of lignes) expect(ligne.style.marginLeft).toBe('0px')
+    expect(h!.container.querySelector('.conv-lot')).toBeNull()
+    // Ni dans « Récent », ni dans le compteur du dossier : 4 lignes, 4 annoncées.
+    expect(h!.container.querySelector('.conv-list [data-conversation-id="L1"]')).toBeNull()
+    expect(h!.container.querySelector('.conv-list [data-conversation-id="L2"]')).toBeNull()
+    const compteurs = [...h!.container.querySelectorAll('.conv-list .conv-group-count')]
+    expect(compteurs[compteurs.length - 1]?.textContent).toBe('4')
     expect(lecturesGroupees(plansDeLots)).toBe(1)
     expect(voirDeLaListe(plansDeLots)).toEqual([])
   })
 
-  it('un fil de lot RENOMMÉ reste rangé sous son chef ; un faux « Lot » hors plan ne bouge pas', async () => {
-    const convs = [
-      fil('X1', 'Ordinaire 1', 90),
-      fil('F1', 'Lot 1/1 — Un titre choisi à la main', 80),
-      fil('R1', 'Titre changé par l’utilisateur', 70),
-      fil('C1', 'Le fil chef', 60)
-    ]
-    const plansDeLots = apiDesPlans([{ id: 'plan-a', chef: 'C1', lots: [{ rang: 1, fil: 'R1' }] }])
-    h = await mountChat(
-      chatApi({
-        conversations: vi.fn().mockResolvedValue(convs),
-        conversation: vi.fn(async (id: string) => convs.find((c) => c.id === id)),
-        plansDeLots
-      })
+  it('un fil de lot RENOMMÉ reste masqué ; un faux « Lot » hors plan garde sa ligne', async () => {
+    await monter(
+      [
+        fil('X1', 'Ordinaire 1', 90),
+        fil('F1', 'Lot 1/1 — Un titre choisi à la main', 80),
+        fil('R1', 'Titre changé par l’utilisateur', 70),
+        fil('C1', 'Le fil chef', 60)
+      ],
+      [{ id: 'plan-a', chef: 'C1', lots: [{ rang: 1, fil: 'R1' }] }]
     )
-    await laisserFiler()
 
     const lignes = lignesDuDossier()
-    expect(ids(lignes)).toEqual(['X1', 'F1', 'C1', 'R1'])
-    const parId = new Map(lignes.map((l) => [l.getAttribute('data-conversation-id'), l]))
-    expect(parId.get('R1')!.getAttribute('data-lot')).toBe('lot 1/1')
-    expect(parId.get('R1')!.style.marginLeft).toBe('14px')
-    expect(parId.get('F1')!.hasAttribute('data-lot')).toBe(false)
-    expect(parId.get('F1')!.style.marginLeft).toBe('0px')
-    expect(lecturesGroupees(plansDeLots)).toBe(1)
+    expect(ids(lignes)).toEqual(['X1', 'F1', 'C1'])
+    expect(lignes[1].hasAttribute('data-lot')).toBe(false)
+  })
+
+  it('un lot d’un ANCIEN plan n’a plus de ligne non plus : le bloc du chef y mène (conv-1394)', async () => {
+    await monter(
+      [
+        fil('C1', 'Le fil chef', 90),
+        fil('N1', 'Lot 1/1 — Plan récent', 80),
+        fil('A1', 'Lot 1/2 — Ancien plan', 70),
+        fil('X1', 'Ordinaire', 60),
+        fil('A2', 'Lot 2/2 — Ancien plan', 50)
+      ],
+      [
+        {
+          id: 'plan-ancien',
+          chef: 'C1',
+          lots: [
+            { rang: 1, fil: 'A1' },
+            { rang: 2, fil: 'A2' }
+          ]
+        },
+        { id: 'plan-recent', chef: 'C1', lots: [{ rang: 1, fil: 'N1' }] }
+      ]
+    )
+
+    expect(ids(lignesDuDossier())).toEqual(['C1', 'X1'])
+    const compteurs = [...h!.container.querySelectorAll('.conv-list .conv-group-count')]
+    expect(compteurs[compteurs.length - 1]?.textContent).toBe('2')
+  })
+
+  it('un lot masqué aussi quand son chef montre un plan neuf, encore sans fil ouvert', async () => {
+    await monter(
+      [fil('C1', 'Le fil chef', 90), fil('A1', 'Lot 1/1 — Plan précédent', 80)],
+      [
+        { id: 'plan-avant', chef: 'C1', lots: [{ rang: 1, fil: 'A1' }] },
+        { id: 'plan-neuf', chef: 'C1', statut: 'attente-accord', lots: [{ rang: 1 }] }
+      ]
+    )
+
+    expect(ids(lignesDuDossier())).toEqual(['C1'])
+  })
+
+  it('un lot dont le chef a disparu garde sa ligne : aucun onglet ne mènerait à lui', async () => {
+    await monter(
+      [fil('X1', 'Ordinaire', 90), fil('L1', 'Lot 1/1 — Orphelin', 80)],
+      [{ id: 'plan-a', chef: 'supprime', lots: [{ rang: 1, fil: 'L1' }] }]
+    )
+
+    expect(ids(lignesDuDossier())).toEqual(['X1', 'L1'])
+  })
+
+  it('une recherche retrouve un lot : chercher, c’est vouloir voir', async () => {
+    await monter(
+      [fil('C1', 'Le fil chef', 90), fil('L1', 'Lot 1/1 — Bouton Relancer', 80)],
+      [{ id: 'plan-a', chef: 'C1', lots: [{ rang: 1, fil: 'L1' }] }]
+    )
+    expect(ids(lignesDuDossier())).toEqual(['C1'])
+
+    const champ = h!.container.querySelector('.conv-search input') as HTMLInputElement
+    const poserValeur = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    await act(async () => {
+      poserValeur?.call(champ, 'Relancer')
+      champ.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await laisserFiler()
+
+    expect(
+      h!.container.querySelector('.conv-list [data-conversation-id="L1"]')?.getAttribute('data-lot')
+    ).toBe('lot 1/1')
+  })
+
+  it('le chef garde son spinner tant qu’un de ses lots masqués tourne', async () => {
+    const repos = { messages: [{ role: 'assistant', content: 'fini', ts: 1 }] }
+    await monter(
+      [
+        { ...fil('C1', 'Chef au repos, lot actif', 90), ...repos },
+        { ...fil('C2', 'Chef au repos, lots au repos', 80), ...repos },
+        { ...fil('L1', 'Lot 1/2', 70), ...repos },
+        { ...fil('L2', 'Lot 2/2', 60), ...repos, hasStreamingTurn: true },
+        { ...fil('M1', 'Lot 1/1', 50), ...repos }
+      ],
+      [
+        {
+          id: 'plan-a',
+          chef: 'C1',
+          lots: [
+            { rang: 1, fil: 'L1' },
+            { rang: 2, fil: 'L2' }
+          ]
+        },
+        { id: 'plan-b', chef: 'C2', lots: [{ rang: 1, fil: 'M1' }] }
+      ]
+    )
+
+    expect(etatDe('C1')).toBe('running')
+    expect(etatDe('C2')).not.toBe('running')
+  })
+
+  it('une question de lot met l’animation de question sur le chef, devant le spinner', async () => {
+    const repos = { messages: [{ role: 'assistant', content: 'fini', ts: 1 }] }
+    await monter(
+      [
+        { ...fil('C1', 'Chef au repos', 90), ...repos },
+        { ...fil('L1', 'Lot 1/2', 80), ...repos, lastAssistantAsksUser: true },
+        { ...fil('L2', 'Lot 2/2', 70), ...repos, hasStreamingTurn: true }
+      ],
+      [
+        {
+          id: 'plan-a',
+          chef: 'C1',
+          lots: [
+            { rang: 1, fil: 'L1' },
+            { rang: 2, fil: 'L2' }
+          ]
+        }
+      ]
+    )
+
+    expect(etatDe('C1')).toBe('asking')
   })
 
   it('mesure : 1 000 fils et deux plans → UN appel « tous » ; un événement de plan → un de plus', async () => {
@@ -224,9 +349,9 @@ describe('ChatView — fils d’un plan de lots rangés sous leur fil chef', () 
     expect(lecturesGroupees(plansDeLots)).toBe(2)
     expect(voirDeLaListe(plansDeLots)).toEqual([])
     const ordre = ids(lignesDuDossier())
-    const apres = (chef: string): string[] =>
-      ordre.slice(ordre.indexOf(chef) + 1, ordre.indexOf(chef) + 4)
-    expect(apres('N10')).toEqual(['A1', 'A2', 'A3'])
-    expect(apres('N20')).toEqual(['B1', 'B2', 'B3'])
+    expect(ordre).toHaveLength(994)
+    expect(ordre).toContain('N10')
+    expect(ordre).not.toContain('A1')
+    expect(ordre).not.toContain('B3')
   }, 60_000)
 })

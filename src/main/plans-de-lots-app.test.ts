@@ -832,3 +832,101 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
     ])
   })
 })
+
+/*
+ * LE BOUTON DU WORKFLOW INTELLIGENT PASSE PAR LE PLAN (conv-1333, 2026-10-30). Depuis le 22/10, 4
+ * sélections ont prévu 12 lots dans la file en mémoire de la vue : 4 sont partis, aucun lot 2 n'a
+ * jamais quitté cette file, sans une trace. Le clic dépose donc un plan : durable, en parallèle,
+ * repris après un redémarrage, et le lot coupé par le quota suspend les autres.
+ */
+describe('CoordinateurDesPlans — le bouton du workflow intelligent', () => {
+  const selection = (n = 4, nom = 'Piste'): unknown => ({
+    titre: 'Sélection du scout : 4 pistes',
+    contexte:
+      'Pistes cochées par l’utilisateur dans le panneau des candidats du scout. Chaque lot ne traite que ses pistes.',
+    lots: Array.from({ length: n }, (_, i) => ({
+      titre: `${nom} ${i + 1}`,
+      demande: `Traite ce candidat issu du scout interne d'Autowin :\n\n1. ${nom} ${i + 1}`,
+      fichiers: [`src/${nom.toLowerCase()}-${i + 1}.ts`]
+    }))
+  })
+
+  it('un clic lance le plan : 3 fils à la fois, le 4e part à la fin du premier', async () => {
+    const b = banc()
+    const r = await b.coord.lancerSelection('conv-1', selection())
+    expect(r.ok).toBe(true)
+    expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101', 'conv-102'])
+    await b.coord.surFinDeTour('conv-100', { ok: true, texte: 'fait' })
+    // Le fil chef conv-1 est réveillé après chaque lot : on ne compare ici que les fils de lots (conv-1333).
+    expect(b.lancements.filter((l) => l.fil !== 'conv-1').map((l) => l.fil)).toEqual([
+      'conv-100',
+      'conv-101',
+      'conv-102',
+      'conv-103'
+    ])
+  })
+
+  it('le lot garde sa demande EN TÊTE : un /build y reste reconnu', async () => {
+    const b = banc()
+    const plan = selection(2) as { lots: Array<{ demande: string }> }
+    plan.lots[0]!.demande = `/build\n${plan.lots[0]!.demande}`
+    await b.coord.lancerSelection('conv-1', plan)
+    expect(b.lancements[0]!.prompt.split('\n')[0]).toBe('/build')
+  })
+
+  it('un second clic sur la même sélection ne relance rien', async () => {
+    const b = banc()
+    await b.coord.lancerSelection('conv-1', selection())
+    const r = await b.coord.lancerSelection('conv-1', selection())
+    expect(r.ok && r.deja).toBe(true)
+    expect(b.lancements).toHaveLength(3)
+  })
+
+  it('une AUTRE sélection pendant le plan s’ajoute à lui, au lieu d’être refusée', async () => {
+    const b = banc()
+    await b.coord.lancerSelection('conv-1', selection())
+    const r = await b.coord.lancerSelection('conv-1', selection(2, 'Autre'))
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.plan.lots.map((l) => l.titre).slice(-2)).toEqual(['Autre 1', 'Autre 2'])
+  })
+
+  it('le plan survit au redémarrage : les lots restants sont sur disque, « Reprendre » les relance', async () => {
+    const b = banc()
+    await b.coord.lancerSelection('conv-1', selection())
+    const apres = new CoordinateurDesPlans(b.deps)
+    const vu = apres.planDuFil('conv-1')
+    expect(vu?.plan.statut).toBe('interrompu')
+    expect(vu?.plan.lots.map((l) => l.etat)).toEqual([
+      'interrompu',
+      'interrompu',
+      'interrompu',
+      'a-faire'
+    ])
+    const r = await apres.reprendre('conv-1', vu!.plan.id)
+    expect(r.ok).toBe(true)
+    expect(apres.planDuFil('conv-1')?.plan.lots.filter((l) => l.etat === 'en-cours')).toHaveLength(3)
+  })
+
+  it('dans le fil d’un lot, le plan est refusé et l’écran sait qu’il peut enchaîner dans ce fil', async () => {
+    const b = banc()
+    await b.coord.lancerSelection('conv-1', selection())
+    const r = await b.coord.lancerSelection('conv-100', selection(2, 'Sous'))
+    expect(r.ok).toBe(false)
+    if (!r.ok) expect(r.repli).toBe(true)
+  })
+
+  it('un plan suspendu par le quota refuse l’ajout : la sélection n’entre pas dans le mur', async () => {
+    const b = banc()
+    await b.coord.lancerSelection('conv-1', selection())
+    await b.coord.surFinDeTour('conv-100', {
+      ok: false,
+      erreur: "Claude a interrompu l'appel : You've hit your session limit · resets 11:30am"
+    })
+    const r = await b.coord.lancerSelection('conv-1', selection(2, 'Autre'))
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.repli).toBeUndefined()
+      expect(r.erreur).toContain('un plan est déjà en cours')
+    }
+  })
+})

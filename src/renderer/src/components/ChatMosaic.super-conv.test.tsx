@@ -7,8 +7,8 @@ import { ChatMosaic, type ChatMosaicWindow, type LienDeLotMosaique } from './Cha
 
 /*
  * conv-1305 (/draft, « implémente 5 et 6 ») : une super conv ouverte dans la mosaïque ne fait
- * qu'UNE case — onglets Chef · 1 · 2 …, frise pleine chiffrée sous l'onglet Chef, seule piste du
- * lot sous l'onglet d'un lot, puis le vrai fil et la vraie saisie de l'onglet ouvert.
+ * qu'UNE case. conv-1387 retire les onglets : la frise pleine du chef mène à chaque lot par sa
+ * ligne, et le lot ouvert (sa piste, son vrai fil, sa vraie saisie) ramène au chef par Retour.
  */
 const MIN = 60_000
 const T0 = Date.UTC(2026, 9, 30, 13, 0)
@@ -57,13 +57,6 @@ const LIENS: ReadonlyMap<string, LienDeLotMosaique> = new Map([
   ['conv-l2', { chef: 'conv-c', rang: 2, total: 3 }]
 ])
 
-/** Tous les titres de conv : conv-l2 n'a pas de fenêtre ouverte, son onglet doit l'écrire quand même. */
-const TITRES: ReadonlyMap<string, string> = new Map([
-  ['conv-c', 'Le fil chef'],
-  ['conv-l1', 'Lot 1/3 — Lecture'],
-  ['conv-l2', 'Lot 2/3 — Bouton']
-])
-
 let appels: unknown[][] = []
 let plan: PlanDeLots
 /** Ce que rend le geste « phrases » : la phrase de chaque lot, lue par le processus principal. */
@@ -71,9 +64,14 @@ let phrases: Record<number, string> = {}
 /** Pose un refus sur les gestes qui écrivent. */
 let refus: string | undefined
 let signaler: (e: { type: string; scope: string }) => void = () => {}
+const abonnes = new Set<(e: { type: string; scope: string }) => void>()
 
 beforeEach(() => {
   appels = []
+  abonnes.clear()
+  signaler = (e) => {
+    for (const ecouter of [...abonnes]) ecouter(e)
+  }
   plan = planDeTest()
   phrases = {}
   refus = undefined
@@ -90,9 +88,11 @@ beforeEach(() => {
               : { ok: true, detail: 'ok' }
       return Promise.resolve(reponse)
     },
+    // Plusieurs abonnés, comme le vrai canal : le bloc du chef écoute aussi pour ses anciens plans
+    // (conv-1394), et un seul écouteur gardé faisait taire la relecture du plan montré.
     onAppEvent: (ecouter: typeof signaler) => {
-      signaler = ecouter
-      return () => {}
+      abonnes.add(ecouter)
+      return () => abonnes.delete(ecouter)
     }
   }
 })
@@ -142,7 +142,6 @@ async function monter(
         rendreComposer={composerFactice}
         onNouvelleConversation={vi.fn()}
         liensDeLots={LIENS}
-        titresDesFils={TITRES}
         onOuvrirFil={rappels.onOuvrirFil}
       />
     )
@@ -160,7 +159,7 @@ const cliquer = async (el: Element | null): Promise<void> => {
 }
 
 describe('la super conv dans la mosaïque', () => {
-  it('le chef et ses lots ouverts ne font qu’UNE case à onglets ; les autres fils gardent la leur', async () => {
+  it('le chef et ses lots ouverts ne font qu’UNE case, sans onglets ; les autres fils gardent la leur', async () => {
     const hote = await monter([
       fenetre('conv-c', 'plan'),
       fenetre('conv-l1', 'Livré : un seul appel lit tous les plans.', 'assistant'),
@@ -168,23 +167,21 @@ describe('la super conv dans la mosaïque', () => {
     ])
     expect(hote.querySelectorAll('.chat-mosaic-window')).toHaveLength(2)
     expect(hote.querySelector('.chat-mosaic')?.getAttribute('data-count')).toBe('2')
-    const onglets = [...hote.querySelectorAll('.scm-onglet')].map((o) => o.textContent)
-    expect(onglets).toEqual([
-      'Le fil chef',
-      'Lot 1/3 — Lecture',
-      'Lot 2/3 — Bouton',
-      'Lot 3/3 — Rangement'
-    ])
-    // Un lot jamais lancé n'a pas de fil : son onglet ne s'ouvre pas.
-    expect(hote.querySelector<HTMLButtonElement>('[data-testid="scm-onglet-3"]')?.disabled).toBe(
-      true
-    )
-    expect(hote.querySelector('[data-testid="scm-onglet-2"]')?.getAttribute('data-etat')).toBe(
-      'echec'
-    )
+    expect(hote.querySelector('[role="tablist"]')).toBeNull()
+    // L'en-tête de la case reprend le titre de la conv, comme toutes les autres cases.
+    expect(
+      hote.querySelector('[data-conv-id="conv-c"] .chat-mosaic-window-title')?.textContent
+    ).toBe('Titre conv-c')
+    // Un lot jamais lancé n'a pas de fil : sa ligne ne s'ouvre pas.
+    expect(
+      hote.querySelector<HTMLButtonElement>('[data-testid="scm-piste-3"] .scm-nom')?.disabled
+    ).toBe(true)
+    expect(
+      hote.querySelector('[data-testid="scm-piste-2"]')?.classList.contains('scm-etat--echec')
+    ).toBe(true)
   })
 
-  it('l’onglet Chef montre la frise pleine : chiffres en tête, une piste par lot, sa phrase, Relancer', async () => {
+  it('le chef montre une ligne pleine largeur par lot : état, enchaînement, heures, durée, Relancer', async () => {
     phrases = { 1: 'Livré : un seul appel lit tous les plans.' }
     const hote = await monter([
       fenetre('conv-c', 'plan'),
@@ -193,16 +190,42 @@ describe('la super conv dans la mosaïque', () => {
     const frise = hote.querySelector('[data-testid="scm-frise"]')
     expect(frise).not.toBeNull()
     expect(hote.querySelector('[data-testid="scm-chiffre-faits"]')?.textContent).toContain('1/3')
-    expect(hote.querySelectorAll('.scm-piste')).toHaveLength(3)
-    // Les barres viennent des heures du plan : lot 1 = 4 min sur un axe de 9 min.
-    const barre1 = hote.querySelector<HTMLElement>('[data-testid="scm-piste-1"] .scm-barre')
-    expect(barre1?.style.left).toBe('0.00%')
-    expect(barre1?.style.width).toBe('44.44%')
-    expect(hote.querySelector('[data-testid="scm-piste-1"]')?.textContent).toContain(
+    // Plus d'axe des heures (conv-1396) : les trois lots, lancés ou non, sont des lignes de la même
+    // liste, dans l'ordre des numéros, sans position ni largeur calculée.
+    expect(hote.querySelector('.scm-axe, .scm-couloir')).toBeNull()
+    const lignes = [
+      ...hote.querySelectorAll<HTMLElement>('[data-testid="scm-lignes"] > .scm-piste')
+    ]
+    expect(lignes.map((l) => l.getAttribute('data-testid'))).toEqual([
+      'scm-piste-1',
+      'scm-piste-2',
+      'scm-piste-3'
+    ])
+    expect(lignes.every((l) => !l.style.left && !l.style.width)).toBe(true)
+    const cellules = (rang: number): string[] =>
+      [...hote.querySelectorAll(`[data-testid="scm-piste-${rang}"] > *`)].map(
+        (c) => c.textContent ?? ''
+      )
+    // Titre, état, enchaînement, heures, durée, coût (pas encore lu), phrase, geste.
+    const [titre1, etat1, enchainement1, heures1, duree1, , phrase1] = cellules(1)
+    expect([titre1, etat1, enchainement1, duree1, phrase1]).toEqual([
+      '1 · Lecture groupée',
+      'fait',
+      'sans attente',
+      '4 min',
       'Livré : un seul appel lit tous les plans.'
-    )
-    expect(hote.querySelector('[data-testid="scm-piste-2"]')?.textContent).toContain('test rouge')
-    expect(hote.querySelector('[data-testid="scm-piste-3"]')?.textContent).toContain('après 2')
+    ])
+    expect(heures1).toMatch(/^\d\d:\d\d → \d\d:\d\d$/)
+    // Le lot en échec dit pourquoi, et porte « Relancer le 2 » au bout de sa ligne.
+    expect(cellules(2).slice(1, 2).concat(cellules(2).slice(4))).toEqual([
+      'échec',
+      '9 min',
+      '',
+      'le fil se déclare bloqué : test rouge',
+      'Relancer le 2'
+    ])
+    // Le lot jamais lancé : son enchaînement, sans heures ni durée.
+    expect(cellules(3).slice(0, 5)).toEqual(['3 · Rangement', 'à faire', 'après 2', '', ''])
     // Le fil et la saisie restent ceux du chef.
     expect(
       hote.querySelector('[data-conv-id="conv-c"] [data-testid="composer-conv-c"]')
@@ -263,27 +286,27 @@ describe('la super conv dans la mosaïque', () => {
     expect(hote.querySelector('.scm-erreur')?.textContent).toBe(refus)
   })
 
-  it('l’onglet d’un lot montre SON fil, SA saisie et sa seule piste', async () => {
+  it('la ligne d’un lot montre SON fil, SA saisie et sa seule piste ; Retour ramène au chef', async () => {
     const hote = await monter([
       fenetre('conv-c', 'plan'),
       fenetre('conv-l1', 'Livré : un seul appel lit tous les plans.', 'assistant')
     ])
-    await cliquer(hote.querySelector('[data-testid="scm-onglet-1"]'))
+    await cliquer(hote.querySelector('[data-testid="scm-piste-1"] .scm-nom'))
     expect(hote.querySelector('.chat-mosaic-window')?.getAttribute('data-conv-id')).toBe('conv-l1')
     expect(hote.querySelector('[data-testid="composer-conv-l1"]')).not.toBeNull()
     expect(hote.querySelector('[data-testid="scm-frise"]')).toBeNull()
     expect(hote.querySelector('[data-testid="scm-piste-reduite"]')?.textContent).toContain(
       'Lecture groupée'
     )
-    // Retour au chef d'un clic.
-    await cliquer(hote.querySelector('[data-testid="scm-onglet-chef"]'))
+    await cliquer(hote.querySelector('[data-testid="scm-retour"]'))
     expect(hote.querySelector('.chat-mosaic-window')?.getAttribute('data-conv-id')).toBe('conv-c')
+    expect(hote.querySelector('[data-testid="scm-retour"]')).toBeNull()
   })
 
-  it('l’onglet d’un lot pas encore peint dans la mosaïque y ouvre son fil', async () => {
+  it('la ligne d’un lot pas encore peint dans la mosaïque y ouvre son fil', async () => {
     const onOuvrirFil = vi.fn()
     const hote = await monter([fenetre('conv-c', 'plan')], { onOuvrirFil })
-    await cliquer(hote.querySelector('[data-testid="scm-onglet-2"]'))
+    await cliquer(hote.querySelector('[data-testid="scm-piste-2"] .scm-nom'))
     expect(onOuvrirFil).toHaveBeenCalledWith('conv-l2')
     expect(hote.querySelector('.chat-mosaic-window')?.getAttribute('data-conv-id')).toBe('conv-l2')
   })
@@ -297,9 +320,9 @@ describe('la super conv dans la mosaïque', () => {
     expect(onClose.mock.calls.map((c) => c[0]).sort()).toEqual(['conv-c', 'conv-l1'])
   })
 
-  it('un lot dont le chef n’est pas ouvert garde sa propre fenêtre, sans onglets', async () => {
+  it('un lot dont le chef n’est pas ouvert garde sa propre fenêtre, sans bloc de plan', async () => {
     const hote = await monter([fenetre('conv-l1', 'ok', 'assistant'), fenetre('conv-x', 'autre')])
     expect(hote.querySelectorAll('.chat-mosaic-window')).toHaveLength(2)
-    expect(hote.querySelector('.scm-onglets')).toBeNull()
+    expect(hote.querySelector('.scm-bandeau')).toBeNull()
   })
 })

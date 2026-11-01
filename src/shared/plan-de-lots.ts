@@ -663,12 +663,15 @@ export function marquerLance(
   fil: string,
   maintenant: number
 ): PlanDeLots {
+  // Une relance garde l'heure du PREMIER départ (conv-1353 : plan-59c9ac57, lot 3 portait 12:19
+  // au lieu de 09:15). La durée compte donc l'attente entre deux passages.
+  const premierDebut = plan.lots.find((l) => l.rang === rang)?.debut
   const p = avecLot(plan, rang, {
     etat: 'en-cours',
     fil,
     tour: undefined,
     raison: undefined,
-    debut: maintenant,
+    debut: premierDebut ?? maintenant,
     fin: undefined
   })
   return { ...p, toursLances: plan.toursLances + 1 }
@@ -1225,7 +1228,18 @@ export interface VuePlanDeLots {
  * « phrases » (conv-1315) : ce que dit chaque lot, lecture seule, lots jamais ouverts compris.
  */
 export type GestePlanDeLots =
-  'voir' | 'phrases' | 'accepter' | 'refuser' | 'arreter' | 'reprendre' | 'relancer'
+  'voir' | 'anciens' | 'phrases' | 'accepter' | 'refuser' | 'arreter' | 'reprendre' | 'relancer'
+
+/**
+ * La sélection de candidats scout que le bouton du workflow intelligent confie au plan (geste
+ * « lancer-selection », conv-1333). Lue aussi strictement qu'un plan d'agent (`lirePlanDeLots`).
+ */
+export interface SelectionAPlanifier {
+  titre: string
+  contexte: string
+  lots: Array<{ titre: string; demande: string; fichiers: string[] }>
+}
+
 export type ReponsePlansDeLots =
   | {
       ok: true
@@ -1235,10 +1249,13 @@ export type ReponsePlansDeLots =
       deja?: boolean
       /** Réponse du geste « tous » (conv-1158). */
       plans?: PlanDansLaListe[]
+      /** Réponse du geste « anciens » (conv-1394) : voir `anciensPlansDuChef`. */
+      anciens?: PlanDeLots[]
       /** Réponse du geste « phrases » (conv-1315) : rang du lot → ce que dit son fil. */
       phrases?: Record<number, string>
     }
-  | { ok: false; erreur: string }
+  /** `repli` (conv-1333) : ce fil ne mène pas de plan, l'écran enchaîne les lots dans le fil. */
+  | { ok: false; erreur: string; repli?: boolean }
 
 /**
  * Un plan tel que la liste des conversations le range (geste « tous » du canal os:plansDeLots,
@@ -1251,20 +1268,48 @@ export interface PlanDansLaListe {
   chef: string
   /** Le « M » de « lot N/M » : tous les lots du plan, ouverts ou non. */
   total: number
+  /**
+   * Vrai si c'est le plan que montre son chef (`planDuFil`). Il décidait du masquage des lots dans
+   * la liste (conv-1381) ; depuis conv-1394, les lots de TOUS les plans d'un chef présent sont
+   * masqués, et ceux des autres plans se rejoignent par le bloc du chef (geste « anciens »).
+   */
+  actuel: boolean
   lots: Array<{ rang: number; fil: string }>
 }
 
 /**
  * Pur : tous les plans gardés, réduits à ce que la liste range, dans l'ordre du coordinateur (le
  * plus récent en dernier). Un plan sans aucun fil de lot ouvert (refusé, remplacé, pas encore
- * lancé) n'a rien à ranger et n'est pas rendu. Un plan fini l'est : ses fils restent dans la liste.
+ * lancé) n'a rien à ranger et n'est pas rendu. Un plan fini l'est : ses fils restent des onglets.
  */
+/**
+ * Pur : les plans d'un chef qu'il ne montre pas (même règle que `planDuFil` : le dernier plan non
+ * remplacé est le sien) et dont au moins un lot a un fil, le plus récent d'abord. Geste « anciens »
+ * du canal os:plansDeLots (conv-1394) : depuis que leurs lots n'ont plus de ligne dans la liste,
+ * le bloc de la conv chef est le seul chemin vers ces fils.
+ */
+export function anciensPlansDuChef(plans: readonly PlanDeLots[], chef: string): PlanDeLots[] {
+  const duChef = plans.filter((plan) => plan.chef === chef)
+  const montre = duChef.filter((plan) => plan.statut !== 'remplace').at(-1)
+  return duChef.filter((plan) => plan !== montre && plan.lots.some((lot) => lot.fil)).reverse()
+}
+
 export function plansPourLaListe(plans: readonly PlanDeLots[]): PlanDansLaListe[] {
+  // Calculé sur TOUS les plans, même règle que `planDuFil` : un plan neuf sans fil ouvert n'est pas
+  // rendu, mais c'est lui que montre le chef, et ses onglets ne disent rien des anciens lots.
+  const montre = new Map<string, PlanDeLots>()
+  for (const plan of plans) if (plan.statut !== 'remplace') montre.set(plan.chef, plan)
   const sortie: PlanDansLaListe[] = []
   for (const plan of plans) {
     const lots = plan.lots.flatMap((lot) => (lot.fil ? [{ rang: lot.rang, fil: lot.fil }] : []))
     if (lots.length > 0)
-      sortie.push({ id: plan.id, chef: plan.chef, total: plan.lots.length, lots })
+      sortie.push({
+        id: plan.id,
+        chef: plan.chef,
+        total: plan.lots.length,
+        actuel: montre.get(plan.chef) === plan,
+        lots
+      })
   }
   return sortie
 }

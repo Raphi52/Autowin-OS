@@ -318,3 +318,47 @@ export function usePlanDuChef(chef: string | null): PlanDeLots | null {
   }, [chef])
   return lu.fil === chef ? lu.plan : null
 }
+
+const AUCUN_ANCIEN: readonly PlanDeLots[] = []
+
+/**
+ * Les plans de `chef` qu'il ne montre plus et dont un lot a un fil (geste « anciens », conv-1394),
+ * le plus récent d'abord, relus aux mêmes signaux que `usePlanDuChef`. Liste vide sans chef, si le
+ * canal manque ou si l'app ne connaît pas encore ce geste (processus principal pas redémarré).
+ */
+export function useAnciensPlansDuChef(chef: string | null): readonly PlanDeLots[] {
+  const [lu, setLu] = useState<{ fil: string; plans: readonly PlanDeLots[]; signature: string }>({
+    fil: '',
+    plans: AUCUN_ANCIEN,
+    signature: ''
+  })
+  useEffect(() => {
+    if (!chef || typeof window.api?.plansDeLots !== 'function') return
+    let vivant = true
+    const poser = (plans: readonly PlanDeLots[]): void => {
+      if (!vivant) return
+      const signature = JSON.stringify(plans.map(signatureDuPlan).concat(plans.map((p) => p.titre)))
+      setLu((avant) =>
+        avant.fil === chef && avant.signature === signature
+          ? avant
+          : { fil: chef, plans, signature }
+      )
+    }
+    const relire = (): void => {
+      window.api.plansDeLots('anciens', chef).then(
+        (r) => poser(r.ok && r.anciens?.length ? r.anciens : AUCUN_ANCIEN),
+        () => poser(AUCUN_ANCIEN)
+      )
+    }
+    relire()
+    // Un ancien plan ne change que par un geste sur les plans : la liste qui se rafraîchit, non.
+    const off = window.api?.onAppEvent?.((e) => {
+      if (e.type === 'refresh' && e.scope === 'plans-de-lots') relire()
+    })
+    return () => {
+      vivant = false
+      off?.()
+    }
+  }, [chef])
+  return lu.fil === chef ? lu.plans : AUCUN_ANCIEN
+}
