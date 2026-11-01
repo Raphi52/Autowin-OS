@@ -304,8 +304,9 @@ interface ChatApi {
   mascotteAffichee: () => Promise<boolean>
   afficherMascotte: (affichee: boolean) => Promise<boolean>
   /** Le style de la mascotte du bureau : le magicien ou la bille basique (conv-1249). */
-  styleMascotte: () => Promise<'magicien' | 'basique'>
-  choisirStyleMascotte: (style: 'magicien' | 'basique') => Promise<'magicien' | 'basique'>
+  styleMascotte: () => Promise<'magicien' | 'basique' | 'machine'>
+  choisirStyleMascotte: (style: 'magicien' | 'basique' | 'machine') => Promise<'magicien' | 'basique' | 'machine'>
+  themeMascotte: (theme: string) => Promise<boolean>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   setColorScheme: (schema: 'dark' | 'light') => Promise<boolean>
   /** Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090). */

@@ -28,9 +28,10 @@ export const TEXTES_FR = {
   // Le choix « Magicien / Basique » (conv-1249).
   'mascotte.style.titre': 'Style de la mascotte',
   'mascotte.style.description':
-    'Le **magicien** porte un chapeau où brille le nombre, et lance des sorts quand un agent travaille. La **bille basique** reste une bille seule, le nombre au milieu. Le changement est immédiat ; la mascotte garde sa place.',
+    'Le **magicien** porte un chapeau où brille le nombre, et lance des sorts quand un agent travaille. La **bille basique** reste une bille seule, le nombre au milieu. La **machine** de NieR somnole au repos, visse au travail, salue quand c’est fini et fume en cas d’erreur ; c’est elle que montre le thème NieR. Le changement est immédiat ; la mascotte garde sa place.',
   'mascotte.style.magicien': 'Magicien',
   'mascotte.style.basique': 'Basique',
+  'mascotte.style.machine': 'Machine (NieR)',
 
   // Settings · Interface — « Ton nom sur le Board » (NomSurLeBoardReglage.tsx, conv-1230).
   'nomBoard.titre': 'Ton nom sur le Board',
@@ -70,9 +71,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'mascotte.erreurEnregistrement': 'The choice could not be saved: the mascot stays as it was.',
   'mascotte.style.titre': 'Mascot style',
   'mascotte.style.description':
-    'The **wizard** wears a hat where the number shines, and casts spells while an agent is working. The **basic marble** stays a plain marble, with the number in the middle. The change is immediate; the mascot keeps its place.',
+    'The **wizard** wears a hat where the number shines, and casts spells while an agent is working. The **basic marble** stays a plain marble, with the number in the middle. The NieR **machine** dozes at rest, tightens bolts while working, waves when done and smokes on errors; the NieR theme shows it. The change is immediate; the mascot keeps its place.',
   'mascotte.style.magicien': 'Wizard',
   'mascotte.style.basique': 'Basic',
+  'mascotte.style.machine': 'Machine (NieR)',
 
   'nomBoard.titre': 'Your name on the Board',
   'nomBoard.description':

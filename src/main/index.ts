@@ -583,7 +583,7 @@ guardBrokenProcessPipes(process.stdout, process.stderr)
 
 const scheduledTaskDispatch = process.argv.includes('--autowin-task-dispatch')
 const startupTaskOccurrence = taskOccurrenceFromArgs(process.argv)
-/** Le thème que la fenêtre a appliqué en dernier (conv-346) : le thème NieR montre la 2B. */
+/** Le thème que la fenêtre a appliqué en dernier (conv-346) : le thème NieR montre la machine. */
 let themeDeLaMascotte: string | null = null
 const resolvedAutomationInstanceMode = resolveAutomationInstanceMode(
   process.argv,
@@ -2166,7 +2166,7 @@ function registerChatIpc(): SuiviDuPlan {
     mascotteDuBureau.changerStyle(styleAffiche(lireStyleMascotte(), themeDeLaMascotte))
     return lireStyleMascotte()
   })
-  // Le thème appliqué par la fenêtre (conv-346) : le thème NieR montre la 2B, sans toucher au
+  // Le thème appliqué par la fenêtre (conv-346) : le thème NieR montre la machine, sans toucher au
   // style gardé. Seul un identifiant de thème court en lettres, chiffres et tirets est accepté.
   ipcMain.handle('os:mascotte:theme', (event, theme: unknown) => {
     assertTrustedRendererSender(event, 'Mascotte du bureau')
@@ -4361,12 +4361,6 @@ Le fil reprend ensuite normalement.`
     dossierPersonnel: () => canonicalProjectPath(homedir()) ?? homedir(),
     bindConversation: (taskId, conversationId) => {
       scheduledTasks.bindConversation(taskId, conversationId)
-    },
-    alignerSurDossierGlobal: (conversationId) => {
-      const global = os.executionWorkspace
-      if (os.conversations.get(conversationId)?.projectPath === global) return
-      if (os.conversations.rangerDansDossier(conversationId, global))
-        broadcast({ type: 'refresh', scope: 'conversations' })
     },
     isConversationBusy: (conversationId) => Boolean(activeChatTurns.get(conversationId)),
     interruptAndWait: (conversationId, reason) =>
