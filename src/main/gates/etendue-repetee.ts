@@ -60,7 +60,7 @@ export function questionDEtendue(objection: string): ModelQuestion {
 }
 
 /** Réponse rendue par la fenêtre de question quand on la ferme sans répondre (`window.ts`). */
-const FENETRE_FERMEE = 'attend pour l’instant'
+export const FENETRE_FERMEE = 'attend pour l’instant'
 
 export type IssueEtendue =
   { kind: 'continuer' } | { kind: 'consigne'; texte: string } | { kind: 'arreter'; motif: string }

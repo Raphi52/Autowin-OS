@@ -207,6 +207,17 @@ QUESTION — c'est la SEULE question du run que l'utilisateur verra, avec ses r�
 
 const PHASES_AVEC_BILAN: ReadonlySet<string> = new Set(['scout', 'frame', 'terrain', 'build', 'clean'])
 
+/**
+ * LA CONSIGNE DU RELECTEUR À FROID d'un cadrage (conv-1420). Ce n'est pas une étape du pipeline, mais
+ * elle vit ici comme `GARDE_TACHE` et `CONSIGNE_BILAN` : toutes les consignes se relisent au même
+ * endroit. Ses règles et sa mesure sont dans `relecture-froide.ts`.
+ */
+export const CONSIGNE_RELECTURE_FROIDE = `Tu relis À FROID un cadrage, juste avant que le constructeur s'en serve. Tu n'as ni la conversation, ni le code, ni l'auteur : seulement la DEMANDE d'origine et le CADRAGE.
+1. PARAPHRASE : en trois lignes, ce que le constructeur va livrer si on suit le cadrage seul.
+2. ÉCARTS : compare cette paraphrase à la DEMANDE. Un écart = ce que la demande exige et que le cadrage ne couvre pas, réduit, reporte ou remplace. Une ligne par écart, forme exacte \`ÉCART: <ce que la demande exige> → <ce que le cadrage livre>\`. Pas d'écart réel → écris exactement \`ÉCARTS: aucun\`.
+Un détail d'exécution, un goût ou une amélioration possible n'est PAS un écart. Une réduction ANNONCÉE au demandeur reste un écart tant que la demande ne l'accepte pas.
+Une demande qui renvoie à un contexte absent (« reprend », « ci-dessus ») ne permet aucune comparaison : écris \`ÉCARTS: aucun\`.`
+
 /** Consigne d'une phase (vide si inconnue — l'appelant retombe alors sur la discipline générique). */
 export function phaseBrief(phase: NodePhase): string {
   // Un noeud SKILL n'a pas de consigne native : son corps vient du kit, pas d'ici.

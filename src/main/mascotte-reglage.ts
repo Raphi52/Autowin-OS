@@ -70,8 +70,7 @@ type ReglageMascotte = {
  * magicien : c'est la mascotte que l'utilisateur vient de faire dessiner, le choix sert à revenir à
  * la bille.
  */
-/** `machine` (conv-346) : la petite machine de NieR, rendue en 3D ; c'est elle que montre le thème NieR. */
-export const STYLES_MASCOTTE = ['magicien', 'basique', 'machine'] as const
+export const STYLES_MASCOTTE = ['magicien', 'basique'] as const
 export type StyleMascotte = (typeof STYLES_MASCOTTE)[number]
 export const STYLE_MASCOTTE_PAR_DEFAUT: StyleMascotte = 'magicien'
 
@@ -157,24 +156,11 @@ export function ecrireStyleMascotte(
   env: NodeJS.ProcessEnv = process.env
 ): boolean {
   if (!estUnStyleMascotte(valeur))
-    throw new Error('Style de la mascotte invalide (magicien, basique ou machine attendu).')
+    throw new Error('Style de la mascotte invalide (magicien ou basique attendu).')
   const fichier = mascotteReglageFile(env)
   if (!fichier)
     throw new Error('Dossier de données introuvable (APPDATA) : style de la mascotte non gardé.')
   if (lireStyleMascotte(env) === valeur) return false
   ecrireReglage(fichier, { ...lireReglage(env), style: valeur })
   return true
-}
-
-/**
- * LA MACHINE SUIT LE THÈME NIER (conv-346, 2026-10-29 ; d’abord la 2B, puis « fais de cette machine la
- * mascotte ») — demande d’origine : « fais passer automatiquement la mascotte en 2B
- * quand je choisis le thème NieR, et revenir à mon style d'avant quand j'en change ») : le thème
- * n'ÉCRIT rien dans le réglage, il le recouvre. Le style gardé reste celui de l'utilisateur ; tant
- * que le thème `nier-automata` est appliqué, la mascotte affichée est la machine, et dès qu'il change,
- * le style gardé revient de lui-même — aucun « style d'avant » à mémoriser, donc rien à perdre.
- */
-export const THEME_DE_LA_MACHINE = 'nier-automata'
-export function styleAffiche(garde: StyleMascotte, theme: string | null): StyleMascotte {
-  return theme === THEME_DE_LA_MACHINE ? 'machine' : garde
 }

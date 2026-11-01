@@ -93,7 +93,7 @@ describe('Settings · Interface — style « Magicien / Basique » (conv-1249)',
     })
   }
 
-  it('montre le style gardé par le moteur, avec les trois choix (machine ajoutée par conv-346)', async () => {
+  it('montre le style gardé par le moteur, avec les deux choix', async () => {
     const c = await monter({
       mascotteAffichee: vi.fn(async () => true),
       afficherMascotte: vi.fn(),
@@ -102,7 +102,7 @@ describe('Settings · Interface — style « Magicien / Basique » (conv-1249)',
     })
     expect(liste(c).disabled).toBe(false)
     expect(liste(c).value).toBe('basique')
-    expect([...liste(c).options].map((o) => o.textContent)).toEqual(['Magicien', 'Basique', 'Machine (NieR)'])
+    expect([...liste(c).options].map((o) => o.textContent)).toEqual(['Magicien', 'Basique'])
   })
 
   it('choisir Basique le demande au moteur et affiche SA réponse', async () => {

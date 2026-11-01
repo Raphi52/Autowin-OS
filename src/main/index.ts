@@ -583,7 +583,7 @@ guardBrokenProcessPipes(process.stdout, process.stderr)
 
 const scheduledTaskDispatch = process.argv.includes('--autowin-task-dispatch')
 const startupTaskOccurrence = taskOccurrenceFromArgs(process.argv)
-/** Le thème que la fenêtre a appliqué en dernier (conv-346) : le thème NieR montre la machine. */
+/** Le thème que la fenêtre a appliqué en dernier (conv-346) : le thème NieR montre la 2B. */
 let themeDeLaMascotte: string | null = null
 const resolvedAutomationInstanceMode = resolveAutomationInstanceMode(
   process.argv,
@@ -2166,7 +2166,7 @@ function registerChatIpc(): SuiviDuPlan {
     mascotteDuBureau.changerStyle(styleAffiche(lireStyleMascotte(), themeDeLaMascotte))
     return lireStyleMascotte()
   })
-  // Le thème appliqué par la fenêtre (conv-346) : le thème NieR montre la machine, sans toucher au
+  // Le thème appliqué par la fenêtre (conv-346) : le thème NieR montre la 2B, sans toucher au
   // style gardé. Seul un identifiant de thème court en lettres, chiffres et tirets est accepté.
   ipcMain.handle('os:mascotte:theme', (event, theme: unknown) => {
     assertTrustedRendererSender(event, 'Mascotte du bureau')

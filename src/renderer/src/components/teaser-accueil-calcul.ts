@@ -8,7 +8,11 @@ export const IMAGE_TEASER = { largeur: 1280, hauteur: 720 } as const
 export const CERCLE_DANS_L_IMAGE = 0.823
 /** Doit rester la valeur `object-position` de `.at-video` : c'est le même recadrage. */
 export const CADRAGE_VERTICAL = 0.85
-/** Le bas du cercle, depuis son centre, en part de l'image : la phrase commence juste dessous. */
+/**
+ * Le bas du cercle, depuis son centre, en part de l'image : la phrase commence juste dessous.
+ * À LA PROCHAINE VERSION DU FILM (demande conv-1419, 2026-11-01) : les phrases doivent finir
+ * AU-DESSUS du cercle, plus en dessous. Le voile sombre de `film.mjs` ne les aidera plus à se lire.
+ */
 const BAS_DU_CERCLE = 0.06
 /** Place gardée sous le haut de la phrase : son nom et deux lignes, même dans une fenêtre basse. */
 const PLACE_DE_LA_PHRASE = 92

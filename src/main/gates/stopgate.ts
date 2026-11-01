@@ -301,6 +301,11 @@ export function arretDeLaReparation(entree: {
    */
   // fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
   reservesMineuresFigees?: boolean
+  /**
+   * conv-1420 : le motif d'un panel de juges en panne (`motifPanneDesJuges`, quorum.ts). Un build de
+   * plus ne ferait pas répondre les juges : constat de CODE, il mord même jusqu'au vert.
+   */
+  panneDesJuges?: string
 }): string | undefined {
   const b = entree.bundlePerime
   // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — comparer le bundle a la seule
@@ -314,6 +319,7 @@ export function arretDeLaReparation(entree: {
     return `Réparation interrompue : le code exécuté est périmé — ${b.bundle} est plus ancien que la source du contrôle. Recompiler et relancer l'application avant de rejouer.`
   }
   if (entree.reservesMineuresFigees) return MOTIF_RESERVES_MINEURES_FIGEES
+  if (entree.panneDesJuges) return entree.panneDesJuges
   // fix-ok: conv-44 — juge independant (MINEUR « refus sans fin ») : un fichier TEST: jamais restaure a l'octet pres relancait build + juge a l'infini en mode jusqu'au vert ; constat de CODE (empreinte), il mord meme jusqu'au vert.
   if (
     (entree.refusIdentiquesConsecutifs ?? 0) >= REFUS_FIGE_SEUIL &&

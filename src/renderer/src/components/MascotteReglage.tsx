@@ -7,8 +7,8 @@ import './MascotteReglage.css'
 type ErreurMascotte = 'mascotte.erreurLecture' | 'mascotte.erreurEnregistrement'
 
 /** Les deux styles (conv-1249) ; le moteur refuse tout autre texte. */
-type StyleMascotte = 'magicien' | 'basique' | 'machine'
-const STYLES: readonly StyleMascotte[] = ['magicien', 'basique', 'machine']
+type StyleMascotte = 'magicien' | 'basique'
+const STYLES: readonly StyleMascotte[] = ['magicien', 'basique']
 
 /**
  * Settings · Interface — « Mascotte du bureau » (conv-1145, 2026-10-25).
