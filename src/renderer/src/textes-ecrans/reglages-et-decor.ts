@@ -103,7 +103,9 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
 export type CleReglagesEtDecor = keyof typeof TEXTES_FR
 
 /** Clé → raison pour laquelle son anglais reste identique au français. */
-export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<keyof typeof TEXTES_FR, string>>> = {}
+export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<keyof typeof TEXTES_FR, string>>> = {
+  'mascotte.style.machine': 'même mot en anglais, suivi du nom propre du jeu'
+}
 
 export const { useTextes: useTextesReglagesEtDecor, traduire: traduireReglagesEtDecor } =
   tableDeTextes(TEXTES_FR, TEXTES_EN)

@@ -781,7 +781,11 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     comparee a une liste fermee (`HUMEURS_ACCUEIL`), le nombre d'agents ramene a un entier ;
     //     rien de recu n'entre tel quel dans le CSS rendu.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(290)
+    // MISE A JOUR 2026-11-01 (conv-346 et conv-1401 fusionnés, /git de conv-1421) — 290 + 1 = 291,
+    //   MESURE par ce test. `os:mascotte:theme` est gardé dès sa première ligne, et n'accepte qu'un
+    //   identifiant court en lettres, chiffres et tirets.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(291)
     expect(unguarded).toEqual([])
   })
 

@@ -111,7 +111,6 @@
   width: 26px;
   height: 26px;
   padding: 0;
-  color: #fff6e6; /* couleur-fixe: croix du sceau, sur tous les thèmes */
   background: #b3261e; /* couleur-fixe: le rouge d'un sceau japonais */
   border: 1.5px solid #6e120d; /* couleur-fixe: le rouge d'un sceau japonais */
   border-radius: 50%;
@@ -123,7 +122,7 @@
   width: 13px;
   height: 13px;
   fill: none;
-  stroke: currentColor;
+  stroke: #fff6e6; /* couleur-fixe: croix du sceau, sur tous les thèmes, posée ici car les thèmes clairs grisent `color` */
   stroke-width: 2.4;
   stroke-linecap: round;
 }
@@ -188,27 +187,6 @@
 .home-view[data-fond='falaise'] .home-tile .home-error {
   color: var(--quartier-alerte) !important;
 }
-/* Jarvis garde son anneau et ses boutons, mais quitte son écran noir : il se pose sur la planche. */
-.home-view[data-fond='falaise'] .home-tile .jarvis {
-  --jv-or: var(--quartier-heure);
-  border-color: transparent !important;
-  background: none !important;
-  box-shadow: none !important;
-}
-.home-view[data-fond='falaise'] .home-tile .jarvis::before {
-  display: none;
-}
-.home-view[data-fond='falaise'] .home-tile .enregistrements:not([data-enregistre='true']) {
-  clip-path: none !important;
-  border-color: transparent !important;
-  background: none !important;
-  box-shadow: none !important;
-}
-.home-view[data-fond='falaise'] .home-tile .enregistrements:not([data-enregistre='true'])::before,
-.home-view[data-fond='falaise'] .home-tile .enregistrements:not([data-enregistre='true'])::after {
-  display: none;
-}
-
 /* Le nom de ce que survole la souris. Sa position est écrite par `useQuartierAccueil` à chaque
    mouvement, sans passer par React : un rendu par pixel de souris serait un coût pour rien. */
 .quartier-etiquette {
@@ -2612,4 +2590,25 @@
 
 .home-threads__alerte input:focus-visible {
   outline: 1px solid var(--line-strong);
+}
+
+/* Jarvis garde son anneau et ses boutons, mais quitte son écran noir : il se pose sur la planche. */
+.home-view[data-fond='falaise'] .home-tile .jarvis {
+  --jv-or: var(--quartier-heure);
+  border-color: transparent !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+.home-view[data-fond='falaise'] .home-tile .jarvis::before {
+  display: none;
+}
+.home-view[data-fond='falaise'] .home-tile .enregistrements:not([data-enregistre='true']) {
+  clip-path: none !important;
+  border-color: transparent !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+.home-view[data-fond='falaise'] .home-tile .enregistrements:not([data-enregistre='true'])::before,
+.home-view[data-fond='falaise'] .home-tile .enregistrements:not([data-enregistre='true'])::after {
+  display: none;
 }

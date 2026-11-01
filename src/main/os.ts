@@ -592,8 +592,13 @@ export class AutowinOS {
           // il a bâti un besoin sur un ordonnancement inexistant, que le juge a réfuté en citant
           // exactement ces lignes (2026-08-19). Un commentaire trop affirmatif se paie en diagnostic.
           deferRecoveryUntil: interfaceVisible,
-          sansRecuperation: resolveAutomationInstanceMode(process.argv, process.env, app.isPackaged)
-            .isolated,
+          // `app?.` : hors d'Electron (bancs de test), `app` n'existe pas ; le `try` autour avalerait
+          // l'erreur et l'app partirait sans aucune copie isolée (e2e-chaine, conv-1421).
+          sansRecuperation: resolveAutomationInstanceMode(
+            process.argv,
+            process.env,
+            app?.isPackaged === true
+          ).isolated,
           manager,
           // La liste des travaux non publiés suit le dépôt, même touché en ligne de commande
           // (conv-360) : sans lire git, seulement les fichiers de références sous `.git`.

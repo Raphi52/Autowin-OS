@@ -344,7 +344,7 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     // La base reste `process.env` — eventuellement NORMALISEE par `withClaudeAccountEnv`, qui
     // pose ou RETIRE le seul CLAUDE_CONFIG_DIR (multi-comptes) et ne touche a rien d'autre.
     // Ce n'est pas un desserrage : tout autre point de depart que l'env herite reste refuse.
-    const base = /envDuTour = environnementAgent\(\s*\{\s*\.\.\.\s*(process\.env|withClaudeAccountEnv\(process\.env\))/.exec(
+    const base = /envDuTour = environnementAgent\(\s*\{\s*(?:\/\/[^\n]*\s*)*\.\.\.\s*(process\.env|withClaudeAccountEnv\(process\.env[,)])/.exec(
       envBlock
     )
     expect(base?.[1]).toBeDefined()
