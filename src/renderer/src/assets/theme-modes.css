@@ -739,6 +739,10 @@
 :root[data-theme='machine-a-ecrire'] .delete-confirm-card--fils {
   --suppr-plein-texte: var(--bg-0);
 }
+/* Même accent, même raison : le lot qui tourne et « Relancer » de la frise (conv-1376). */
+:root[data-theme='machine-a-ecrire'] .scm-bandeau {
+  --scm-sur-jauge: var(--bg-0);
+}
 :root[data-theme='machine-a-ecrire'] body {
   background: #000000;
 }
@@ -792,15 +796,6 @@
   .msg.user
   .msg-body.msg-bulle::before {
   display: none;
-}
-:root[data-theme='machine-a-ecrire']:not([data-base='clair']):not([data-theme^='malvoyant-'])
-  .cosmic-outline
-  .msg.user
-  .msg-body.msg-bulle.avec-skill {
-  border-top-color: #33ff33;
-}
-:root[data-theme='machine-a-ecrire'] .msg.user .msg-body.avec-skill .msg-skill-desc {
-  color: #22c922;
 }
 
 /* ÉTAGES D'ACTION — le nom de l'outil (« edit_file ») restait en #b9cbdd
@@ -965,6 +960,10 @@
    le blanc par défaut (--on-accent) y tomberait sous 1,5:1. */
 :root[data-theme='malvoyant-sombre'] .delete-confirm-card--fils {
   --suppr-plein-texte: var(--bg-0);
+}
+/* Même accent, même raison : le lot qui tourne et « Relancer » de la frise (conv-1376). */
+:root[data-theme='malvoyant-sombre'] .scm-bandeau {
+  --scm-sur-jauge: var(--bg-0);
 }
 :root[data-theme='malvoyant-sombre'] .shell,
 :root[data-theme='malvoyant-sombre'] .shell.theme-serious {
@@ -1153,11 +1152,17 @@
 }
 
 /* Police des themes malvoyants : Atkinson Hyperlegible (Braille Institute), concue pour distinguer
-   les lettres confondables (I/l/1, O/0, b/d). Essai demande le 2026-09-23. Le code garde sa police. */
+   les lettres confondables (I/l/1, O/0, b/d). Essai demande le 2026-09-23. Le code garde sa police.
+   Le JETON --font porte la police, et la regle forcee le relit : les schemas mermaid mesurent leurs
+   etiquettes hors de .shell avec --font (theme-mermaid.ts). Forcer Atkinson en dur ici en laissant
+   --font en Segoe UI coupait la fin de 8 etiquettes sur 25 (conv-1322, 2026-10-30). */
+:root[data-theme^='malvoyant-'] {
+  --font: 'Atkinson Hyperlegible', system-ui, sans-serif;
+}
 :root[data-theme^='malvoyant-'] body,
 :root[data-theme^='malvoyant-'] .shell,
 :root[data-theme^='malvoyant-'] .shell *:not(code):not(pre):not(pre *):not(kbd):not(samp) {
-  font-family: 'Atkinson Hyperlegible', system-ui, sans-serif !important;
+  font-family: var(--font) !important;
 }
 
 :root[data-theme^='malvoyant-'] :is(textarea, input, [contenteditable]):focus,

@@ -68,6 +68,11 @@
   --warn: #714709;
   --err: #a61712; /* rouge franc, pas rose : bouton Stop (conv-139) */
 
+  /* La jauge d'un travail en cours : le degrade de la jauge de contexte. Lue par la jauge DoD des
+     runs (WorkflowsPanel.tsx ; un run vert garde le vert du theme) et par la frise d'un plan de
+     lots (SuperConvMosaique.css, conv-1376). */
+  --run-jauge: linear-gradient(90deg, #3c6eeb, #d02b8c);
+
   --on-accent: #ffffff;
   --voile-rgb: 20, 15, 40;
   --ombre-rgb: 6, 4, 20;
@@ -2599,7 +2604,7 @@
    ce theme. Le bord transparent de 1 px de `.btn` est la place du cadre : rien ne bouge au survol.
    Gris tires de --text et --bg-0 : Holographique blanc, derive de ce fichier, les eclaircit seul.
    Le micro EN ECOUTE (rouge qui bat) et EN TRANSCRIPTION n'est pas une selection : il garde son habit. */
-:root[data-theme='holographique-clair'] .composer-input-row > :is(.composer-auto, .attachment-button, .composer-trois-facons, .composer-dictee) {
+:root[data-theme='holographique-clair'] .composer-input-row > :is(.composer-auto, .attachment-button, .composer-trois-facons, .composer-question-a-cote, .composer-dictee) {
   --nv-pastille-gris: color-mix(in srgb, var(--text) 14%, var(--bg-0));
   --nv-pastille-gris-clair: color-mix(in srgb, var(--text) 21%, var(--bg-0));
   --nv-pastille-nacre: linear-gradient(
@@ -2632,6 +2637,7 @@
     .composer-auto:not(.actif),
     .attachment-button,
     .composer-trois-facons,
+    .composer-question-a-cote:not(.actif),
     .composer-dictee:not(.is-recording):not(.is-transcribing)
   ) {
   border-color: transparent;
@@ -2644,6 +2650,7 @@
     .composer-auto:not(.actif),
     .attachment-button,
     .composer-trois-facons,
+    .composer-question-a-cote:not(.actif),
     .composer-dictee:not(.is-recording):not(.is-transcribing)
   ):hover:not(:disabled) {
   border-color: transparent;
@@ -2823,9 +2830,6 @@
   --nv-rp-filet-voie-argent: #2d293d;
   --nv-rp-filet-voie-gris: #51496e;
   --nv-rp-filet-voie-gris-fonce: #645b89;
-  /* Jauge DoD des runs (WorkflowsPanel.tsx) : la progression prend le degrade de la jauge de
-     contexte ; un run vert garde le vert du theme. */
-  --run-jauge: linear-gradient(90deg, #3c6eeb, #d02b8c);
 }
 
 /* -- Sous-onglets en lisere : Fil des sous-agents / RUN.md (Runs), Fichiers / Projet / Brain /
