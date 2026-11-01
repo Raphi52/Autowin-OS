@@ -40,7 +40,9 @@ import {
 } from './dossiers-du-chat'
 import { RiviereDuProjet } from './RiviereDuProjet'
 import type { SourceDeTache } from './TachesDeLaDemande'
+import { TicketsView } from './TicketsView'
 import { ViewTopBar } from './ViewTopBar'
+import type { BoardSection } from '../../../shared/navigation'
 import { deposerOuvertureConversation } from './pending-conversation-open'
 import { useVerificationDuBoard } from './verification-du-board'
 import { lireEtatsManuels } from './etats-manuels-carte'
@@ -60,12 +62,33 @@ function accord(n: number, singulier: string, plurielForme = `${singulier}s`): s
 
 export function CarteDesBesoinsView({
   active,
-  onOpenConversation
+  onOpenConversation,
+  section: sectionDemandee,
+  onSectionChange
 }: {
   active: boolean
   onOpenConversation: (target: { conversationId: string }) => void
+  /** L'onglet affiché (conv-1397) : piloté par App pour qu'un agent puisse naviguer vers « tickets ». */
+  section?: BoardSection
+  onSectionChange?: (section: BoardSection) => void
 }): React.JSX.Element {
   const { t, langue } = useTextesBoardEtMaintenance()
+  // LES DEUX ONGLETS DU BOARD (conv-1397, 2026-10-31) : les post-it des demandes, et les tickets des
+  // sources externes (l'ancien écran Tickets). Sans `section` fournie, la vue tient le sien.
+  const [sectionLocale, setSectionLocale] = useState<BoardSection>('demandes')
+  const section = sectionDemandee ?? sectionLocale
+  const choisirSection = useCallback(
+    (suivante: BoardSection) => {
+      setSectionLocale(suivante)
+      onSectionChange?.(suivante)
+    },
+    [onSectionChange]
+  )
+  // Les tickets se montent à la PREMIÈRE visite de leur onglet, puis restent montés (masqués) : leur
+  // sélection, leurs filtres et leur mode auto survivent à un aller-retour sur les demandes, comme
+  // quand ils avaient leur propre écran.
+  const [ticketsOuverts, setTicketsOuverts] = useState(section === 'tickets')
+  if (section === 'tickets' && !ticketsOuverts) setTicketsOuverts(true)
   const [carte, setCarte] = useState<CarteDesBesoins | null>(null)
   const [erreur, setErreur] = useState<string | null>(null)
   const [chargement, setChargement] = useState(false)
@@ -289,136 +312,167 @@ export function CarteDesBesoinsView({
       <ViewTopBar
         eyebrow={t('vue.surtitre')}
         title={nomDeDestination('besoins', langue)}
+        ariaLabel={t('vue.sections')}
+        active={section}
+        onSelect={choisirSection}
+        tabs={[
+          { id: 'demandes', label: t('vue.onglet.demandes') },
+          { id: 'tickets', label: t('vue.onglet.tickets') }
+        ]}
+        // Les compteurs, le dossier et le rouage parlent des post-it : ils ne suivent pas l'onglet
+        // Tickets, qui porte sa propre barre (source, filtres, actions).
         actions={
-          <span className="besoins-entete">
-            {carte && (
-              <span className="besoins-stats" data-testid="besoins-stats">
-                <span>
-                  <b>{carte.demandes}</b>{' '}
-                  {accord(carte.demandes, t('vue.demande'), t('vue.demandes'))}
-                </span>
-                <span>
-                  <b className="is-ok">{carte.comptes.prouve}</b>{' '}
-                  {accord(carte.comptes.prouve, t('vue.prouvee'), t('vue.prouvees'))}
-                </span>
-                <span>
-                  <b className="is-err">{carte.comptes.refuse}</b>{' '}
-                  {accord(carte.comptes.refuse, t('vue.refusee'), t('vue.refusees'))}
-                </span>
-                {carte.runsBloques > 0 && (
-                  <span className="is-alerte">
-                    <b>{carte.runsBloques}</b>{' '}
-                    {accord(carte.runsBloques, t('vue.runBloque'), t('vue.runsBloques'))}
+          section === 'demandes' && (
+            <span className="besoins-entete">
+              {carte && (
+                <span className="besoins-stats" data-testid="besoins-stats">
+                  <span>
+                    <b>{carte.demandes}</b>{' '}
+                    {accord(carte.demandes, t('vue.demande'), t('vue.demandes'))}
                   </span>
-                )}
-                {/* Pas `is-alerte` : ce run est validé, il attend une réponse, il n'est pas en panne. */}
-                {(carte.runsEnAttenteDeDecision ?? 0) > 0 && (
-                  <span data-testid="besoins-runs-en-attente">
-                    <b>{carte.runsEnAttenteDeDecision}</b> {t('vue.enAttenteDecision')}
+                  <span>
+                    <b className="is-ok">{carte.comptes.prouve}</b>{' '}
+                    {accord(carte.comptes.prouve, t('vue.prouvee'), t('vue.prouvees'))}
                   </span>
-                )}
-                {avisTaches && (
-                  <span className="is-alerte" data-testid="besoins-avis-taches">
-                    {avisTaches}
+                  <span>
+                    <b className="is-err">{carte.comptes.refuse}</b>{' '}
+                    {accord(carte.comptes.refuse, t('vue.refusee'), t('vue.refusees'))}
                   </span>
-                )}
-              </span>
-            )}
-            {/* Les boutons passent à la ligne ENSEMBLE, sous les compteurs, quand l'en-tête est
-                étroit : sans ce groupe, « Actualiser » restait seul sur une ligne (conv-1211). */}
-            <span className="besoins-boutons">
-              <span className="besoins-dossier" data-testid="besoins-dossier">
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  data-testid="besoins-dossier-choisir"
-                  title={
-                    (dossier?.erreur
-                      ? t('vue.dossierErreur', { erreur: dossier.erreur })
-                      : dossier?.dernier
-                        ? t('vue.dossierEnregistre', {
-                            cible: dossier.cible ?? '',
-                            heure: formaterDate(dossier.dernier.a, { timeStyle: 'short' }),
-                            n: dossier.dernier.postIts
-                          })
-                        : dossier?.cible
-                          ? t('vue.dossierAttente', { cible: dossier.cible })
-                          : t('vue.dossierAide')) + aideDesCollegues
-                  }
-                  onClick={() => void choisirDossier()}
-                >
-                  <span aria-hidden="true">📁</span>{' '}
-                  {dossier?.dossier ? nomCourtDuDossier(dossier.dossier) : t('vue.dossier')}
-                  {dossier?.erreur && (
-                    <span className="is-alerte" data-testid="besoins-dossier-erreur">
-                      {' '}
-                      ⚠
+                  {carte.runsBloques > 0 && (
+                    <span className="is-alerte">
+                      <b>{carte.runsBloques}</b>{' '}
+                      {accord(carte.runsBloques, t('vue.runBloque'), t('vue.runsBloques'))}
                     </span>
                   )}
-                </button>
-                {dossier?.dossier && (
+                  {/* Pas `is-alerte` : ce run est validé, il attend une réponse, il n'est pas en panne. */}
+                  {(carte.runsEnAttenteDeDecision ?? 0) > 0 && (
+                    <span data-testid="besoins-runs-en-attente">
+                      <b>{carte.runsEnAttenteDeDecision}</b> {t('vue.enAttenteDecision')}
+                    </span>
+                  )}
+                  {avisTaches && (
+                    <span className="is-alerte" data-testid="besoins-avis-taches">
+                      {avisTaches}
+                    </span>
+                  )}
+                </span>
+              )}
+              {/* Les boutons passent à la ligne ENSEMBLE, sous les compteurs, quand l'en-tête est
+                  étroit : sans ce groupe, « Actualiser » restait seul sur une ligne (conv-1211). */}
+              <span className="besoins-boutons">
+                <span className="besoins-dossier" data-testid="besoins-dossier">
                   <button
                     type="button"
-                    className="btn btn-sm besoins-dossier-oublier"
-                    data-testid="besoins-dossier-oublier"
-                    title={t('vue.dossierOublier')}
-                    aria-label={t('vue.dossierOublier')}
-                    onClick={() => void oublierDossier()}
+                    className="btn btn-sm"
+                    data-testid="besoins-dossier-choisir"
+                    title={
+                      (dossier?.erreur
+                        ? t('vue.dossierErreur', { erreur: dossier.erreur })
+                        : dossier?.dernier
+                          ? t('vue.dossierEnregistre', {
+                              cible: dossier.cible ?? '',
+                              heure: formaterDate(dossier.dernier.a, { timeStyle: 'short' }),
+                              n: dossier.dernier.postIts
+                            })
+                          : dossier?.cible
+                            ? t('vue.dossierAttente', { cible: dossier.cible })
+                            : t('vue.dossierAide')) + aideDesCollegues
+                    }
+                    onClick={() => void choisirDossier()}
                   >
-                    ×
+                    <span aria-hidden="true">📁</span>{' '}
+                    {dossier?.dossier ? nomCourtDuDossier(dossier.dossier) : t('vue.dossier')}
+                    {dossier?.erreur && (
+                      <span className="is-alerte" data-testid="besoins-dossier-erreur">
+                        {' '}
+                        ⚠
+                      </span>
+                    )}
                   </button>
-                )}
-                {/* Le rouage (conv-1230) : « Actualiser », le nom de ce poste sur le Board, puis
-                    la liste des projets — qui n'existe qu'une fois un dossier choisi. */}
-                <RouageDuBoard
-                  chargement={chargement}
-                  onActualiser={() => void charger()}
-                  onNomEnregistre={() => void charger()}
-                >
-                  {/* NOS projets seulement (`carte`, pas `carteAffichee`) : les post-it des
-                      collègues ne repartent pas d'ici (conv-1211, conv-1210). */}
-                  {dossier?.dossier && carte && (
-                    <ProjetsPartagesDuBoard
-                      projets={lignesDuMenuDesProjets(
-                        carte.projets.map((p) => ({
-                          cle: p.cle,
-                          libelle: p.libelle,
-                          demandes: p.demandes.length
-                        })),
-                        dossiersDuChat,
-                        dossierPersonnel
-                      )}
-                      choisis={dossier.projets ?? null}
-                      onChoisir={(p) => void choisirProjets(p)}
-                      onRetirer={(chemin) => void retirerDuChat(chemin)}
-                    />
+                  {dossier?.dossier && (
+                    <button
+                      type="button"
+                      className="btn btn-sm besoins-dossier-oublier"
+                      data-testid="besoins-dossier-oublier"
+                      title={t('vue.dossierOublier')}
+                      aria-label={t('vue.dossierOublier')}
+                      onClick={() => void oublierDossier()}
+                    >
+                      ×
+                    </button>
                   )}
-                </RouageDuBoard>
+                  {/* Le rouage (conv-1230) : « Actualiser », le nom de ce poste sur le Board, puis
+                      la liste des projets — qui n'existe qu'une fois un dossier choisi. */}
+                  <RouageDuBoard
+                    chargement={chargement}
+                    onActualiser={() => void charger()}
+                    onNomEnregistre={() => void charger()}
+                  >
+                    {/* NOS projets seulement (`carte`, pas `carteAffichee`) : les post-it des
+                        collègues ne repartent pas d'ici (conv-1211, conv-1210). */}
+                    {dossier?.dossier && carte && (
+                      <ProjetsPartagesDuBoard
+                        projets={lignesDuMenuDesProjets(
+                          carte.projets.map((p) => ({
+                            cle: p.cle,
+                            libelle: p.libelle,
+                            demandes: p.demandes.length
+                          })),
+                          dossiersDuChat,
+                          dossierPersonnel
+                        )}
+                        choisis={dossier.projets ?? null}
+                        onChoisir={(p) => void choisirProjets(p)}
+                        onRetirer={(chemin) => void retirerDuChat(chemin)}
+                      />
+                    )}
+                  </RouageDuBoard>
+                </span>
               </span>
             </span>
-          </span>
+          )
         }
       />
 
-      {erreur && (
-        <p className="besoins-erreur" role="alert" data-testid="besoins-erreur">
-          {t('vue.erreur', { erreur })}
-        </p>
-      )}
+      {/* Chaque onglet garde son contenu MONTÉ quand on le quitte (`hidden`) : la rivière ne perd ni
+          son défilement ni ses post-it dépliés. `display: contents` (CSS) laisse ses enfants être
+          ceux de la vue, donc la rivière prend toujours toute la hauteur restante. */}
+      <div
+        className="besoins-onglet"
+        data-testid="besoins-onglet-demandes"
+        hidden={section !== 'demandes'}
+      >
+        {erreur && (
+          <p className="besoins-erreur" role="alert" data-testid="besoins-erreur">
+            {t('vue.erreur', { erreur })}
+          </p>
+        )}
 
-      {!carte && !erreur && <p className="besoins-vide">{t('vue.chargement')}</p>}
+        {!carte && !erreur && <p className="besoins-vide">{t('vue.chargement')}</p>}
 
-      {/* LA RIVIÈRE (/draft conv-1113) : seule dans la vue ; elle prend toute la hauteur restante et
-          son tableau est le seul endroit qui défile. */}
-      {carteAffichee && (
-        <RiviereDuProjet
-          carte={carteAffichee}
-          ouvrir={ouvrir}
-          lierWorkItem={lierWorkItem}
-          delierWorkItem={delierWorkItem}
-          sourcesDesTaches={sourcesDesTaches}
-          verifier={verifier}
-        />
+        {/* LA RIVIÈRE (/draft conv-1113) : seule dans son onglet ; elle prend toute la hauteur
+            restante et son tableau est le seul endroit qui défile. */}
+        {carteAffichee && (
+          <RiviereDuProjet
+            carte={carteAffichee}
+            ouvrir={ouvrir}
+            lierWorkItem={lierWorkItem}
+            delierWorkItem={delierWorkItem}
+            sourcesDesTaches={sourcesDesTaches}
+            verifier={verifier}
+            dossierPersonnel={dossierPersonnel}
+          />
+        )}
+      </div>
+
+      {ticketsOuverts && (
+        <div
+          className="besoins-onglet"
+          data-testid="besoins-onglet-tickets"
+          hidden={section !== 'tickets'}
+        >
+          <TicketsView active={active && section === 'tickets'} />
+        </div>
       )}
     </section>
   )

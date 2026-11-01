@@ -14,10 +14,10 @@
  * le MÊME message ; la lecture fusionne (le premier demandeur relevé, la dernière ligne de besoin).
  * Tout est FAIL-OPEN : un journal illisible ou un git absent ne touchent jamais la réponse.
  */
-import { execFile } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { lireLigneBesoin, type LigneBesoin } from '../shared/ligne-besoin'
+import { execFileHorsFil } from './execution-hors-fil'
 
 export const FICHIER_JOURNAL_DES_BESOINS = 'besoins.jsonl'
 
@@ -56,15 +56,19 @@ export function cleDuJournal(conversationId: string, messageId: string): string 
 
 export type ExecGit = (args: readonly string[], dossier: string) => Promise<string>
 
-const execGitParDefaut: ExecGit = (args, dossier) =>
-  new Promise((resolve, reject) => {
-    execFile(
-      'git',
-      [...args],
-      { cwd: dossier, timeout: 3_000, windowsHide: true, encoding: 'utf8' },
-      (erreur, stdout) => (erreur ? reject(erreur) : resolve(String(stdout)))
-    )
-  })
+/**
+ * Hors du fil principal (`execution-hors-fil.ts`) : la CRÉATION de ce `git config` a tenu la fenêtre
+ * 19,3 s en 6 appels dans une seule session (`gels.jsonl`, 2026-10-31 — conv-1413).
+ */
+const execGitParDefaut: ExecGit = async (args, dossier) =>
+  (
+    await execFileHorsFil('git', args, {
+      cwd: dossier,
+      timeout: 3_000,
+      windowsHide: true,
+      encoding: 'utf8'
+    })
+  ).stdout
 
 /**
  * L'identité git d'un dossier, en UN seul appel. `git config` lit la config locale du dépôt puis la
