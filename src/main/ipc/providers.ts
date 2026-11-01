@@ -108,8 +108,8 @@ export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDep
     os.startProviderLogin(guardString(provider, 'provider'))
     return { ok: true }
   })
-  // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : claude = présence CLI seulement
-  // (JAMAIS « authenticated » sans probe réel). Borné.
+  // Page Routeur — statut d'auth au CHARGEMENT (cheap/local) : présence du CLI seulement, connecté
+  // pour ChatGPT (JAMAIS « authenticated » sans probe réel). Borné.
   ipcMain.handle('os:providerStatus', async (event) => {
     assertTrustedRendererSender(event, 'Provider status')
     const bounded = (p: Promise<boolean>): Promise<boolean> =>
@@ -128,13 +128,13 @@ export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDep
         }
       })
     }
-    // Un seul moteur routé : plus aucun spawn de sondage pour les moteurs retirés (Codex, Kimi,
-    // Gemini). Leur statut n'était de toute façon plus publié — on payait le spawn pour rien.
-    const claudeResponds = await responds('claude')
+    // Aucun spawn de sondage pour les moteurs retirés (Kimi, Gemini) : leur statut n'est plus publié.
+    const [claudeResponds, codexResponds] = await Promise.all([responds('claude'), responds('codex')])
     return buildProviderStatuses({
       claudeResponds,
+      codexResponds,
       now: Date.now(),
-      states: { claude: providerStateStore.get('claude') }
+      states: { claude: providerStateStore.get('claude'), codex: providerStateStore.get('codex') }
     })
   })
   ipcMain.handle('os:providerMode:set', (event, provider: unknown, mode: unknown) => {

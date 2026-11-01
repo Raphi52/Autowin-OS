@@ -6,9 +6,8 @@ import { ConversationStore } from './conversations'
 /**
  * LE COMPTE CLAUDE APPARTIENT A LA CONVERSATION.
  *
- * Deux exigences distinctes : le store le MEMORISE (et l'oublie proprement), et le lancement d'un
- * tour l'APPLIQUE — sans ce second point, le choix serait un decor : le fournisseur d'env du CLI
- * est global, il lit le compte actif au moment du spawn.
+ * Deux exigences distinctes : le store le MEMORISE (et l'oublie proprement), et chaque appel du fil
+ * le LIT — sans ce second point, le choix serait un decor : le CLI partirait sur le compte actif.
  */
 describe('ConversationStore — compte Claude par conversation', () => {
   const clock = (): (() => number) => {
@@ -31,16 +30,21 @@ describe('ConversationStore — compte Claude par conversation', () => {
     expect(store.choisirCompteClaude('conv-inconnue', 'compte-2')).toBeUndefined()
   })
 
-  it('le lancement d’un tour applique le compte de la conversation', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    // Le point d'application : la fonction existe et est appelee la ou TOUS les tours passent.
-    expect(source).toContain('const appliquerCompteDeConversation = (conversationId: string)')
-    const runPilotChat = source.slice(
-      source.indexOf('const tourCompteDesReception: typeof lancerTour')
+  /*
+   * conv-1416 : le choix ne passe plus par le compte actif, global, que tout autre fil pouvait
+   * changer. Il voyage avec chaque appel. Le comportement est prouvé dans
+   * `registry.compte-du-fil.test.ts`, `agent-pilot.compte-du-fil.test.ts` et
+   * `claude.lancement.test.ts` ; ici, le branchement que ces tests remplacent par un double.
+   */
+  it('chaque appel lit le compte sur SA conversation, sans toucher au compte actif', () => {
+    const index = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const branchement = index.slice(index.indexOf('configureClaudeCompteDuFil((conversationId)'))
+    expect(branchement.slice(0, 300)).toContain(
+      'os.conversations.get(conversationId)?.claudeAccountId'
     )
-    expect(runPilotChat.slice(0, 600)).toContain('appliquerCompteDeConversation(conversationId)')
-    // Et le run pipeline (`os:orchestrate`), qui ne passe pas par runPilotChat.
-    const orchestrate = source.slice(source.indexOf("ipcMain.handle('os:orchestrate'"))
-    expect(orchestrate.slice(0, 2000)).toContain('appliquerCompteDeConversation(conversationId)')
+    expect(index).not.toContain('appliquerCompteDeConversation')
+
+    const os = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
+    expect(os).toContain("(providerId === 'claude' ? claudeCompteDuFil(fil) : undefined)")
   })
 })

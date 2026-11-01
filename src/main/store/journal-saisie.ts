@@ -1,4 +1,5 @@
 import { appendFileSync, closeSync, existsSync, fstatSync, openSync, readSync } from 'node:fs'
+import { appendFile, open, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
 
@@ -147,7 +148,33 @@ function lireOctets(fd: number, debut: number, longueur: number): Buffer {
   return tampon.subarray(0, lus)
 }
 
-/** Lignes de CETTE conversation, dans l'ordre du fichier. Lève sur une erreur disque. */
+/** Range des octets neufs dans l'index. Aucune lecture ici : les deux chemins la partagent. */
+function integrer(index: IndexJournal, neuf: Buffer): void {
+  const fin = neuf.lastIndexOf(0x0a)
+  if (fin < 0) return
+  for (const ligne of neuf.subarray(0, fin).toString('utf8').split(SEPARATEUR_LIGNE)) {
+    if (!ligne.trim()) continue
+    try {
+      const entree = JSON.parse(ligne) as EntreeJournal
+      if (typeof entree?.conversationId !== 'string') continue
+      const liste = index.parConversation.get(entree.conversationId)
+      if (liste) liste.push(entree)
+      else index.parConversation.set(entree.conversationId, [entree])
+    } catch {
+      /* ligne illisible : ignoree, comme partout dans ce journal */
+    }
+  }
+  if (index.octets === 0)
+    index.entete = neuf.subarray(0, Math.min(TAILLE_ENTETE, fin + 1)).toString('latin1')
+  index.octets += fin + 1
+}
+
+/**
+ * Lignes de CETTE conversation, dans l'ordre du fichier. Lève sur une erreur disque.
+ *
+ * Chemin BLOQUANT, gardé pour le seul dossier /kaizen, qui se construit d'un bloc et à la demande.
+ * Tout ce qui sert l'interface passe par `entreesDuJournalAsync`.
+ */
 function entreesDuJournal(conversationId: string, racine?: string): readonly EntreeJournal[] {
   const chemin = journalSaisiePath(racine)
   if (!existsSync(chemin)) {
@@ -168,32 +195,81 @@ function entreesDuJournal(conversationId: string, racine?: string): readonly Ent
       index = { octets: 0, entete: '', parConversation: new Map() }
       indexParChemin.set(chemin, index)
     }
-    if (taille > index.octets) {
-      const neuf = lireOctets(fd, index.octets, taille - index.octets)
-      const fin = neuf.lastIndexOf(0x0a)
-      if (fin >= 0) {
-        for (const ligne of neuf.subarray(0, fin).toString('utf8').split(SEPARATEUR_LIGNE)) {
-          if (!ligne.trim()) continue
-          try {
-            const entree = JSON.parse(ligne) as EntreeJournal
-            if (typeof entree?.conversationId !== 'string') continue
-            const liste = index.parConversation.get(entree.conversationId)
-            if (liste) liste.push(entree)
-            else index.parConversation.set(entree.conversationId, [entree])
-          } catch {
-            /* ligne illisible : ignoree, comme partout dans ce journal */
-          }
-        }
-        index.octets += fin + 1
-        if (!index.entete)
-          index.entete = lireOctets(fd, 0, Math.min(TAILLE_ENTETE, index.octets)).toString('latin1')
-      }
-    }
+    if (taille > index.octets) integrer(index, lireOctets(fd, index.octets, taille - index.octets))
     return index.parConversation.get(conversationId) ?? []
   } finally {
     closeSync(fd)
   }
 }
+
+async function lireOctetsAsync(
+  fichier: FileHandle,
+  debut: number,
+  longueur: number
+): Promise<Buffer> {
+  const tampon = Buffer.alloc(longueur)
+  let lus = 0
+  while (lus < longueur) {
+    const { bytesRead } = await fichier.read(tampon, lus, longueur - lus, debut + lus)
+    if (bytesRead === 0) break
+    lus += bytesRead
+  }
+  return tampon.subarray(0, lus)
+}
+
+/**
+ * LE MÊME INDEX, SANS TENIR LE FIL PRINCIPAL (conv-1368, 2026-10-31). La lecture incrémentale de
+ * conv-1077 avait réduit le VOLUME, pas le risque : `openSync` seul a encore figé la fenêtre 45,6 s
+ * en 7 jours (`gels.jsonl`), dont 9,9 s d'un coup sur 3 Mo, parce que l'appel attendait au-dessus du
+ * disque (SSD à 420 ms au pire sur 675 relevés Windows). Seule la sortie du fil protège la fenêtre.
+ *
+ * Des lectures peuvent désormais se croiser : l'intégration, elle, reste d'un seul tenant (aucun
+ * `await` dedans). Celle qui arrive après une autre ne relit que ce qu'il reste, sinon ses lignes
+ * seraient comptées deux fois.
+ */
+async function entreesDuJournalAsync(
+  conversationId: string,
+  racine?: string
+): Promise<readonly EntreeJournal[]> {
+  const chemin = journalSaisiePath(racine)
+  let fichier: FileHandle
+  try {
+    fichier = await open(chemin, 'r')
+  } catch (erreur) {
+    if ((erreur as NodeJS.ErrnoException).code !== 'ENOENT') throw erreur
+    indexParChemin.delete(chemin)
+    return []
+  }
+  try {
+    const taille = (await fichier.stat()).size
+    let index = indexParChemin.get(chemin)
+    if (
+      index &&
+      (taille < index.octets ||
+        (await lireOctetsAsync(fichier, 0, index.entete.length)).toString('latin1') !== index.entete)
+    )
+      index = undefined
+    if (!index) {
+      index = { octets: 0, entete: '', parConversation: new Map() }
+      indexParChemin.set(chemin, index)
+    }
+    let debut = index.octets
+    while (taille > debut) {
+      const neuf = await lireOctetsAsync(fichier, debut, taille - debut)
+      if (index.octets === debut) {
+        integrer(index, neuf)
+        break
+      }
+      debut = index.octets
+    }
+    return index.parConversation.get(conversationId) ?? []
+  } finally {
+    await fichier.close()
+  }
+}
+
+const estSaisie = (entree: EntreeJournal): entree is SaisieJournalisee =>
+  entree.schema === 'autowin.saisie/v1'
 
 export function lireSaisies(
   conversationId: string,
@@ -205,10 +281,7 @@ export function lireSaisies(
     // jamais emporter le texte tapé dans une autre conversation.
     // Filtre STRICT sur le schéma : les lignes de RATTACHEMENT partagent le fichier et la
     // conversation, mais ne portent aucun texte — les rendre ici polluerait tout lecteur.
-    const saisies = entreesDuJournal(conversationId, racine).filter(
-      (entree): entree is SaisieJournalisee => entree.schema === 'autowin.saisie/v1'
-    )
-    return saisies.slice(-limite)
+    return entreesDuJournal(conversationId, racine).filter(estSaisie).slice(-limite)
   } catch {
     return []
   }
@@ -220,16 +293,18 @@ export function lireSaisies(
  *
  * Best-effort comme le reste du journal : jamais d'exception vers le chemin d'un tour.
  */
-export function rattacherSaisieAuTour(
+export async function rattacherSaisieAuTour(
   conversationId: string,
   turnId: string,
   texte: string,
   racine?: string
-): boolean {
+): Promise<boolean> {
   try {
     const attendu = texte.trim()
     if (!attendu) return false
-    const candidates = lireSaisies(conversationId, racine, 200)
+    const candidates = (await entreesDuJournalAsync(conversationId, racine))
+      .filter(estSaisie)
+      .slice(-200)
     let cible: SaisieJournalisee | undefined
     for (let i = candidates.length - 1; i >= 0; i--) {
       if (candidates[i]?.texte.trim() === attendu) {
@@ -245,12 +320,7 @@ export function rattacherSaisieAuTour(
       turnId,
       saisieTs: cible.ts
     }
-    appendFileSync(
-      journalSaisiePath(racine),
-      `${JSON.stringify(lien)}
-`,
-      'utf8'
-    )
+    await appendFile(journalSaisiePath(racine), `${JSON.stringify(lien)}\n`, 'utf8')
     return true
   } catch {
     return false
@@ -298,17 +368,17 @@ export interface OrientationRattachee {
  * Rend une liste vide sur toute defaillance : ce journal est une trace de dernier recours, le lire
  * ne doit jamais faire echouer l'appelant.
  */
-export function lireOrientationsRattachees(
+export async function lireOrientationsRattachees(
   conversationId: string,
   racine?: string,
   limite = 50
-): OrientationRattachee[] {
+): Promise<OrientationRattachee[]> {
   try {
     const orientations: OrientationRattachee[] = []
     // Le rattachement est ecrit APRES la saisie, dans une ligne SUPPLEMENTAIRE : on collecte donc
     // les deux formes en un seul passage, puis on joint par `saisieTs`.
     const tourParSaisie = new Map<number, string>()
-    for (const entree of entreesDuJournal(conversationId, racine)) {
+    for (const entree of await entreesDuJournalAsync(conversationId, racine)) {
       if (entree.schema === 'autowin.saisie-tour/v1')
         tourParSaisie.set(entree.saisieTs, entree.turnId)
       else if (entree.schema === 'autowin.saisie/v1' && entree.voie === 'orientation')

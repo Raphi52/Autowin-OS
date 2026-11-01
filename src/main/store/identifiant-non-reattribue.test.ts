@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { ConversationStore } from './conversations'
 import {
+  attendreEcrituresConversations,
   persistConversations,
   readConversationIdFloor,
   writeConversationIdFloor
@@ -30,12 +31,13 @@ let n = 0
 const chemin = (): string => join(dir, `c${(n += 1)}`, 'conversations.json')
 
 describe('un identifiant de conversation n’est jamais réattribué', () => {
-  it('ne redonne PAS l’identifiant de la conversation supprimée, même après redémarrage', () => {
+  it('ne redonne PAS l’identifiant de la conversation supprimée, même après redémarrage', async () => {
     const p = chemin()
     const matin = new ConversationStore(() => 1000)
     persistConversations(matin, p)
     const jetable = matin.create({ title: 'test du matin', provider: 'codex' })
     matin.remove(jetable.id)
+    await attendreEcrituresConversations()
 
     // « Redémarrage » : un store neuf branché sur le même fichier.
     const apresMidi = new ConversationStore(() => 2000)
@@ -45,13 +47,14 @@ describe('un identifiant de conversation n’est jamais réattribué', () => {
     expect(neuve.id).not.toBe(jetable.id)
   })
 
-  it('ne réattribue pas non plus quand PLUSIEURS conversations hautes sont supprimées', () => {
+  it('ne réattribue pas non plus quand PLUSIEURS conversations hautes sont supprimées', async () => {
     // Le cas réel : trois conversations de test créées puis retirées d'un coup.
     const p = chemin()
     const matin = new ConversationStore(() => 1000)
     persistConversations(matin, p)
     const jetables = ['a', 'b', 'c'].map((t) => matin.create({ title: t, provider: 'codex' }))
     for (const j of jetables) matin.remove(j.id)
+    await attendreEcrituresConversations()
 
     const apresMidi = new ConversationStore(() => 2000)
     persistConversations(apresMidi, p)

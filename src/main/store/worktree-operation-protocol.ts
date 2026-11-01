@@ -55,6 +55,7 @@ export type WorktreeOperationRequest =
    * cote appelant.
    */
   | { operation: 'verdictsRetention' }
+  | { operation: 'commitsDejaReferences'; shas: string[] }
   | { operation: 'describe'; agentId: string }
   | { operation: 'hasActiveProcesses'; agentId: string }
   | { operation: 'discard'; agentId: string }

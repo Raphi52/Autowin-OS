@@ -88,14 +88,14 @@ describe('journal des saisies utilisateur', () => {
  * se faisait donc au rapprochement d'horodatages, approximatif par construction.
  */
 describe('journal des saisies — rattachement au tour', () => {
-  it('ecrit une ligne portant turnId et la relie a la saisie exacte', () => {
+  it('ecrit une ligne portant turnId et la relie a la saisie exacte', async () => {
     const racine = mkdtempSync(join(tmpdir(), 'saisie-tour-'))
     try {
       journaliserSaisie(
         { conversationId: 'c1', texte: 'repare les journaux', voie: 'message' },
         racine
       )
-      expect(rattacherSaisieAuTour('c1', 'tour-1', 'repare les journaux', racine)).toBe(true)
+      expect(await rattacherSaisieAuTour('c1', 'tour-1', 'repare les journaux', racine)).toBe(true)
 
       const lignes = readFileSync(join(racine, 'saisies-utilisateur.jsonl'), 'utf8')
         .trim()
@@ -111,22 +111,22 @@ describe('journal des saisies — rattachement au tour', () => {
     }
   })
 
-  it('ne rattache RIEN quand aucune saisie ne correspond (pas d alibi)', () => {
+  it('ne rattache RIEN quand aucune saisie ne correspond (pas d alibi)', async () => {
     const racine = mkdtempSync(join(tmpdir(), 'saisie-tour-'))
     try {
       journaliserSaisie({ conversationId: 'c1', texte: 'autre chose', voie: 'message' }, racine)
-      expect(rattacherSaisieAuTour('c1', 'tour-1', 'repare les journaux', racine)).toBe(false)
+      expect(await rattacherSaisieAuTour('c1', 'tour-1', 'repare les journaux', racine)).toBe(false)
       expect(saisieDuTour('c1', 'tour-1', racine)).toBeUndefined()
     } finally {
       rmSync(racine, { recursive: true, force: true })
     }
   })
 
-  it('la ligne de rattachement ne pollue PAS la relecture des saisies', () => {
+  it('la ligne de rattachement ne pollue PAS la relecture des saisies', async () => {
     const racine = mkdtempSync(join(tmpdir(), 'saisie-tour-'))
     try {
       journaliserSaisie({ conversationId: 'c1', texte: 'bonjour', voie: 'message' }, racine)
-      rattacherSaisieAuTour('c1', 'tour-1', 'bonjour', racine)
+      await rattacherSaisieAuTour('c1', 'tour-1', 'bonjour', racine)
       const saisies = lireSaisies('c1', racine)
       expect(saisies).toHaveLength(1)
       expect(saisies[0]?.texte).toBe('bonjour')

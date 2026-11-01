@@ -722,7 +722,7 @@ export const RELANCE_CHIFFRE_NON_VERIFIE =
   'SYSTÈME: la demande de l’utilisateur réclame un compte (combien, nombre, liste, total…) et ' +
   'tu n’as appelé AUCUNE commande de lecture dans ce tour. Sans lecture, ta réponse ne peut être ' +
   'qu’une supposition : un chiffre deviné, une vérification annoncée mais pas faite, ou un « je ne ' +
-  'peux pas le savoir ». Appelle MAINTENANT `list_files` (ou `find_in_files`, `read_file`) sur ce ' +
+  'peux pas le savoir ». Appelle MAINTENANT `Glob` (ou `Grep`, `Read`) sur ce ' +
   'que la demande vise, puis réponds avec ce que tu as RÉELLEMENT observé. Ta nouvelle réponse ' +
   'REMPLACE la précédente à l’écran : redonne-la EN ENTIER ; si la précédente contenait déjà un ' +
   'nombre, dis s’il diffère de celui observé.'
@@ -1283,7 +1283,9 @@ function lecturePure(commande: string): boolean {
  * Pure, et non plus « le 1er mot lit » (conv-861) : depuis que `statusEstUneLecture` reconnait une
  * lecture n'importe ou dans la commande, `date; rm -rf x; cat y` CONTIENT une lecture -- mais il agit.
  */
-const ECRIVAINS_NATIFS = /^(Write|Edit|MultiEdit|NotebookEdit)\b/
+// `Workflow` (conv-1366) : lancer un chantier est une action, sinon le tour qui en lance un passerait
+// pour une annonce sans geste, et finirait sans bloc de clôture.
+const ECRIVAINS_NATIFS = /^(Write|Edit|MultiEdit|NotebookEdit|Workflow)\b/
 
 export function statusEstUneAction(status: string | undefined): boolean {
   const texte = (status ?? '').trim()
@@ -1322,7 +1324,7 @@ export const RELANCE_QUESTION_SANS_LECTURE =
   'SYSTÈME: tu viens de poser une question à l’utilisateur SANS avoir lu un seul fichier. ' +
   'Une partie de ce que tu demandes est peut-être déjà dans le code — mesuré : ' +
   'une fois, une des options proposées était déjà implémentée et committée. Appelle ' +
-  'MAINTENANT `list_files` / `read_file` / `find_in_files` sur la zone concernée, puis : si la ' +
+  'MAINTENANT `Glob` / `Read` / `Grep` sur la zone concernée, puis : si la ' +
   'lecture répond, avance sur une hypothèse énoncée (« je suppose X — corrige-moi ») au lieu de ' +
   'demander ; si un vrai choix subsiste (goût, arbitrage que seul l’utilisateur possède), repose ' +
   'la question en citant ce que tu as lu.'

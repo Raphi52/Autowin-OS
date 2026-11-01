@@ -27,6 +27,22 @@ vi.mock('node:fs', async (importOriginal) => {
   return { ...reel, default: { ...reel, readFileSync, readSync }, readFileSync, readSync }
 })
 
+// conv-1368 : rattacher et orientations lisent hors du fil principal ; leurs octets comptent pareil.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('node:fs/promises')>()
+  const open = (async (...args: Parameters<typeof reel.open>) => {
+    const fichier = await reel.open(...args)
+    const lire = fichier.read.bind(fichier) as (...a: unknown[]) => Promise<{ bytesRead: number }>
+    fichier.read = (async (...a: unknown[]) => {
+      const resultat = await lire(...a)
+      compteur.octets += resultat.bytesRead
+      return resultat
+    }) as typeof fichier.read
+    return fichier
+  }) as typeof reel.open
+  return { ...reel, default: { ...reel, open }, open }
+})
+
 import {
   journalSaisiePath,
   journaliserSaisie,
@@ -71,13 +87,13 @@ describe('journal des saisies — lecture incrémentale (conv-1077)', () => {
     expect(compteur.octets).toBeLessThanOrEqual(ajout + 256)
   })
 
-  it('les trois lecteurs partagent la même lecture : rattacher, tour, orientations', () => {
+  it('les trois lecteurs partagent la même lecture : rattacher, tour, orientations', async () => {
     lireSaisies('conv-cible', racine)
     appendFileSync(chemin, saisie(9001, 'conv-cible', 'corrige le bouton', 'orientation'))
     compteur.octets = 0
-    expect(rattacherSaisieAuTour('conv-cible', 'tour-1', 'corrige le bouton', racine)).toBe(true)
+    expect(await rattacherSaisieAuTour('conv-cible', 'tour-1', 'corrige le bouton', racine)).toBe(true)
     expect(saisieDuTour('conv-cible', 'tour-1', racine)?.texte).toBe('corrige le bouton')
-    expect(lireOrientationsRattachees('conv-cible', racine)).toEqual([
+    expect(await lireOrientationsRattachees('conv-cible', racine)).toEqual([
       { ts: 9001, texte: 'corrige le bouton', turnId: 'tour-1' }
     ])
     expect(compteur.octets).toBeLessThan(4096)

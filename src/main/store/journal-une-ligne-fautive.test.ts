@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { ConversationStore } from './conversations'
-import { conversationJournalPath, loadConversations, persistConversations } from './conversations-disk'
+import {
+  attendreEcrituresConversations,
+  conversationJournalPath,
+  loadConversations,
+  persistConversations
+} from './conversations-disk'
 
 /**
  * LE DÉFAUT, vécu le 2026-08-24 sur les données réelles de l'utilisateur.
@@ -33,11 +38,12 @@ const ligneFautive = (id: string): string =>
   })
 
 describe('une seule ligne de journal fautive', () => {
-  it('ne fait PAS perdre les conversations saines', () => {
+  it('ne fait PAS perdre les conversations saines', async () => {
     const p = join(dir, 'a', 'conversations.json')
     const store = new ConversationStore(() => 1000)
     persistConversations(store, p)
     const saine = store.create({ title: 'Celle qu’il ne faut pas perdre', provider: 'codex' })
+    await attendreEcrituresConversations()
     appendFileSync(conversationJournalPath(p), ligneFautive('conv-fautive') + '\n', 'utf8')
 
     const relues = loadConversations(p)
@@ -65,13 +71,14 @@ describe('une seule ligne de journal fautive', () => {
     expect(loadConversations(p).map((c) => c.id)).not.toContain('conv-fautive')
   })
 
-  it('survit aux DELTAS orphelins que la ligne écartée laisse derrière elle', () => {
+  it('survit aux DELTAS orphelins que la ligne écartée laisse derrière elle', async () => {
     // C'est ce qui s'est réellement passé : 3 lignes fautives et 24 deltas qui les référençaient.
     // Écarter l'upsert sans tolérer ses deltas déplacerait simplement l'échec d'une ligne.
     const p = join(dir, 'd', 'conversations.json')
     const store = new ConversationStore(() => 1000)
     persistConversations(store, p)
     const saine = store.create({ title: 'Saine', provider: 'codex' })
+    await attendreEcrituresConversations()
     const j = conversationJournalPath(p)
     appendFileSync(j, ligneFautive('conv-fautive') + '\n', 'utf8')
     appendFileSync(

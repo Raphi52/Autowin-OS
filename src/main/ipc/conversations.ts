@@ -62,6 +62,8 @@ export type ConversationsIpcDeps = {
    * comme le bouton Stop, au lieu d'attendre sa fin (conv-1060, `arret-avant-suppression.ts`).
    */
   couperLeRun: (conversationId: string, motif: string) => boolean
+  /** Les RUN.md légers du fil (conv-1418) partent avec lui, comme ses autres fichiers. */
+  retirerLesFiches: (conversationId: string) => Promise<void>
 }
 
 export function registerConversationsIpc({
@@ -75,8 +77,12 @@ export function registerConversationsIpc({
   compterLectureIsolee,
   dossierDuFil,
   dossierDesRetours,
-  couperLeRun
+  couperLeRun,
+  retirerLesFiches
 }: ConversationsIpcDeps): void {
+  const oublierLesFiches = (id: string): void => {
+    void retirerLesFiches(id).catch((erreur) => console.warn('[fiches] fil non retiré :', erreur))
+  }
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', (event) => {
     assertTrustedRendererSender(event, 'Conversations')
@@ -418,6 +424,7 @@ export function registerConversationsIpc({
       deletePromptCalls(id)
       removeConversationTurnJournals(turnJournalRoot, id)
       removeConvActivity(id)
+      oublierLesFiches(id)
       broadcast({ type: 'refresh', scope: 'conversations' })
     }
     return removed
@@ -442,6 +449,7 @@ export function registerConversationsIpc({
       deletePromptCalls(id)
       removeConversationTurnJournals(turnJournalRoot, id)
       removeConvActivity(id)
+      oublierLesFiches(id)
     }
     if (removed.length > 0) broadcast({ type: 'refresh', scope: 'conversations' })
     return removed

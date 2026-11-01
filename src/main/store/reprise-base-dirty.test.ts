@@ -49,6 +49,8 @@ describe('reprendre un travail refusé parce que la BASE était sale', () => {
         }
       ],
       get: () => undefined,
+      dernierConnu: () => undefined,
+      getAsync: async () => undefined,
       save: () => {},
       remove: () => {}
     }

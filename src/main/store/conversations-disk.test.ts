@@ -23,13 +23,14 @@ afterAll(() => rmSync(dir, { recursive: true, force: true }))
 afterEach(() => vi.useRealTimers())
 
 describe('conversations-disk — persistance à chaque mutation', () => {
-  it('roundtrip complet : mutations → disque → rechargement dans un store neuf', () => {
+  it('roundtrip complet : mutations → disque → rechargement dans un store neuf', async () => {
     const p = join(dir, 'conversations.json')
     const a = new ConversationStore(() => 1000)
     persistConversations(a, p)
     const c = a.create({ title: 'Persistée', provider: 'codex' })
     a.append(c.id, { role: 'user', content: 'salut' })
     a.append(c.id, { role: 'assistant', content: 'bonjour' })
+    await attendreEcrituresConversations()
     expect(existsSync(p)).toBe(true)
 
     // un « restart » : store neuf branché sur le même fichier
@@ -42,7 +43,7 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     expect(b.create({ title: 'x', provider: 'claude' }).id).not.toBe(c.id)
   })
 
-  it('remove/rename persistent aussi', () => {
+  it('remove/rename persistent aussi', async () => {
     const p = join(dir, 'c2.json')
     const a = new ConversationStore()
     persistConversations(a, p)
@@ -50,24 +51,26 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     const c2 = a.create({ title: 'deux', provider: 'claude' })
     a.rename(c1.id, 'un-bis')
     a.remove(c2.id)
+    await attendreEcrituresConversations()
     const back = loadConversations(p)
     expect(back).toHaveLength(1)
     expect(back[0].title).toBe('un-bis')
   })
 
-  it('attachRun persiste les runPaths (idempotent) et survit au rechargement', () => {
+  it('attachRun persiste les runPaths (idempotent) et survit au rechargement', async () => {
     const p = join(dir, 'c3.json')
     const a = new ConversationStore()
     persistConversations(a, p)
     const c = a.create({ title: 'avec runs', provider: 'claude' })
     a.attachRun(c.id, 'C:\\x\\RUN.md')
     a.attachRun(c.id, 'C:\\x\\RUN.md') // doublon ignoré
+    await attendreEcrituresConversations()
     const b = new ConversationStore()
     persistConversations(b, p)
     expect(b.get(c.id)?.runPaths).toEqual(['C:\\x\\RUN.md'])
   })
 
-  it('detachRun retire uniquement la pièce jointe visée et persiste le changement', () => {
+  it('detachRun retire uniquement la pièce jointe visée et persiste le changement', async () => {
     const p = join(dir, 'c4.json')
     const store = new ConversationStore()
     persistConversations(store, p)
@@ -76,6 +79,7 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     store.attachRun(c.id, 'C:\\y\\RUN.md')
 
     store.detachRun(c.id, 'C:\\x\\RUN.md')
+    await attendreEcrituresConversations()
 
     const reloaded = new ConversationStore()
     persistConversations(reloaded, p)
@@ -117,14 +121,16 @@ describe('conversations-disk — persistance à chaque mutation', () => {
 })
 
 describe('conversations-disk structured restart', () => {
-  it('conserve le delta en attente apres une erreur disque transitoire', () => {
+  it('conserve le delta en attente apres une erreur disque transitoire', async () => {
     const p = join(dir, 'retry-after-disk-error.json')
     const store = new ConversationStore(() => 1000)
     const flush = persistConversations(store, p)
     const journal = `${p}.journal.jsonl`
     mkdirSync(journal)
 
-    expect(() => store.create({ title: 'Retenue', provider: 'codex' })).toThrow()
+    // Hors du fil principal (conv-1368) : l'échec ne remonte plus, le lot revient en attente.
+    expect(() => store.create({ title: 'Retenue', provider: 'codex' })).not.toThrow()
+    await attendreEcrituresConversations()
     rmSync(journal, { recursive: true, force: true })
     expect(() => flush()).not.toThrow()
 
@@ -153,6 +159,7 @@ describe('conversations-disk structured restart', () => {
     const store = new ConversationStore(() => 2000)
     persistConversations(store, p)
     store.beginTurn(target.id, { content: 'Go' }, { turnId: 'turn-incremental' })
+    await attendreEcrituresConversations()
     const journal = `${p}.journal.jsonl`
     expect(existsSync(journal)).toBe(true)
     const beforeDelta = statSync(journal).size
@@ -184,6 +191,7 @@ describe('conversations-disk structured restart', () => {
     const store = new ConversationStore(() => 2000)
     persistConversations(store, p)
     store.beginTurn(target.id, { content: 'Go' }, { turnId: 'turn-large' })
+    await attendreEcrituresConversations()
     const journal = `${p}.journal.jsonl`
     const before = statSync(journal).size
 
@@ -212,6 +220,7 @@ describe('conversations-disk structured restart', () => {
     persistConversations(store, p)
     const c = store.create({ title: 'Debounce', provider: 'codex' })
     store.beginTurn(c.id, { content: 'Go' }, { turnId: 'turn-debounce' })
+    await attendreEcrituresConversations()
     const beforeDelta = readFileSync(p, 'utf8')
 
     store.applyTurnEvent(c.id, 'turn-debounce', {
@@ -224,8 +233,9 @@ describe('conversations-disk structured restart', () => {
     vi.advanceTimersByTime(150)
     await attendreEcrituresConversations()
     expect(loadConversations(p)[0].messages.at(-1)?.content).toBe('partiel')
-    // Le terminal, lui, reste ECRIT SUR PLACE : aucune attente avant de le constater.
+    // Le terminal part sans le délai de regroupement, mais hors du fil principal (conv-1368).
     store.applyTurnEvent(c.id, 'turn-debounce', { kind: 'done' })
+    await attendreEcrituresConversations()
     expect(loadConversations(p)[0].messages.at(-1)?.status).toBe('completed')
   })
 
@@ -249,6 +259,7 @@ describe('conversations-disk structured restart', () => {
     persistConversations(first, p)
     const conversation = first.create({ title: 'Compact', provider: 'codex' })
     first.append(conversation.id, { role: 'user', content: 'persisted once' })
+    await attendreEcrituresConversations()
     const journal = `${p}.journal.jsonl`
     expect(existsSync(journal)).toBe(true)
 
@@ -296,7 +307,7 @@ describe('conversations-disk structured restart', () => {
     ])
   })
 
-  it('restores ordered parts, results and status after restart', () => {
+  it('restores ordered parts, results and status after restart', async () => {
     const p = join(dir, 'structured.json')
     const a = new ConversationStore(() => 1000)
     persistConversations(a, p)
@@ -321,6 +332,7 @@ describe('conversations-disk structured restart', () => {
       data: { source: 'disk' }
     })
     a.applyTurnEvent(c.id, 'turn-structured', { kind: 'done' })
+    await attendreEcrituresConversations()
 
     const b = new ConversationStore(() => 2000)
     persistConversations(b, p)

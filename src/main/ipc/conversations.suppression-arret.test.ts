@@ -36,6 +36,8 @@ const tours = new ActiveChatTurns()
 /** Les runs en vol, par fil : ce que tient `AppCommandBus.activeOrchestrations`. */
 const runs = new Map<string, AbortController>()
 const coupes: Array<{ id: string; motif: string }> = []
+/** Les fils dont les RUN.md légers ont été retirés (conv-1418). */
+const fichesRetirees: string[] = []
 
 beforeAll(() => {
   registerConversationsIpc({
@@ -49,6 +51,9 @@ beforeAll(() => {
       const run = runs.get(id)
       run?.abort(motif)
       return Boolean(run)
+    },
+    retirerLesFiches: async (id: string) => {
+      fichesRetirees.push(id)
     }
   } as never)
 })
@@ -58,6 +63,7 @@ afterEach(() => {
   for (const run of runs.values()) run.abort('fin du test')
   runs.clear()
   coupes.length = 0
+  fichesRetirees.length = 0
 })
 
 const appeler = (canal: string, ...args: unknown[]): Promise<unknown> => {
@@ -101,6 +107,7 @@ describe('supprimer un fil arrête son run, comme le bouton Stop', () => {
     expect(store.get(id)).toBeUndefined()
     // Un arrêt voulu : la fin rouge du run coupé ne doit pas devenir un incident.
     expect(tours.wasDeliberatelyStopped(id)).toBe(true)
+    expect(fichesRetirees).toEqual([id])
   })
 
   it('os:conversations:removeMany coupe le run de CHAQUE fil du lot, et seulement eux', async () => {
@@ -118,6 +125,7 @@ describe('supprimer un fil arrête son run, comme le bouton Stop', () => {
     expect(temoin.run.signal.aborted).toBe(false)
     expect(temoin.tour.signal.aborted).toBe(false)
     expect(store.get(temoin.id)).toBeDefined()
+    expect(fichesRetirees).toEqual([a.id, b.id])
   })
 
   it('un lot trop grand est refusé AVANT de couper quoi que ce soit', async () => {

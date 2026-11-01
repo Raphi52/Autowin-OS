@@ -10,7 +10,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
-import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   flattenChatParts,
@@ -21,7 +21,8 @@ import {
   applyTurnEventToMessages,
   ConversationStore,
   deterministicMessageId,
-  pointDeCoupure
+  pointDeCoupure,
+  reponseAuDessusDesConsignes
 } from './conversations'
 import type { Conversation, ConversationChange, Msg } from './conversations'
 import { ensureAutowinAppData } from '../app-data'
@@ -645,7 +646,7 @@ function applyConversationJournal(
         // arrivée dans la réponse en cours. On le retrouve ici, en mémoire, sans réécrire le disque.
         for (const message of record.messages) {
           if (message.orientation && message.coupeLaReponse === undefined) {
-            const coupure = pointDeCoupure(conversation.messages.at(-1))
+            const coupure = pointDeCoupure(reponseAuDessusDesConsignes(conversation.messages))
             if (coupure !== undefined) message.coupeLaReponse = coupure
           }
           conversation.messages.push(restaurerContenuDuMessage(message))
@@ -848,28 +849,14 @@ function journalRecords(changes: readonly ConversationChange[]): ConversationJou
   })
 }
 
-/** Corps commun aux deux écritures du journal : les octets à poser, ou la rotation à faire. */
-function prepareJournalWrite(
-  changes: readonly ConversationChange[],
-  path: string
-): { journal: string; payload: string; rotation: boolean } {
-  const journal = conversationJournalPath(path)
-  const payload = `${journalRecords(changes)
+/** Corps commun aux deux écritures du journal : les octets à poser. */
+function octetsDuJournal(changes: readonly ConversationChange[]): string {
+  return `${journalRecords(changes)
     .map((record) => JSON.stringify(record))
     .join('\n')}\n`
-  const projected = (existsSync(journal) ? statSync(journal).size : 0) + Buffer.byteLength(payload)
-  return { journal, payload, rotation: projected > JOURNAL_MAX_BYTES }
 }
 
-/** La prochaine écriture du journal déclencherait-elle une rotation (= réécriture du snapshot) ? */
-function rotationRequise(changes: readonly ConversationChange[], path: string): boolean {
-  try {
-    return prepareJournalWrite(changes, path).rotation
-  } catch {
-    return false // illisible : on laisse le chemin normal lever l'erreur réelle
-  }
-}
-
+/** Repli de la FERMETURE seule : le snapshot a été refusé et plus personne n'attend l'interface. */
 function appendConversationChanges(
   changes: readonly ConversationChange[],
   all: readonly Conversation[],
@@ -878,8 +865,10 @@ function appendConversationChanges(
   if (!changes.length) return
   try {
     mkdirSync(dirname(path), { recursive: true })
-    const { journal, payload, rotation } = prepareJournalWrite(changes, path)
-    if (rotation) saveConversations([...all], path)
+    const journal = conversationJournalPath(path)
+    const payload = octetsDuJournal(changes)
+    const projete = (existsSync(journal) ? statSync(journal).size : 0) + Buffer.byteLength(payload)
+    if (projete > JOURNAL_MAX_BYTES) saveConversations([...all], path)
     else appendFileSync(journal, payload, 'utf8')
   } catch (error) {
     throw new ConversationPersistenceError(
@@ -894,27 +883,26 @@ function appendConversationChanges(
  * HORS DU FIL PRINCIPAL — pourquoi l'écriture des deltas est ASYNCHRONE.
  *
  * Mesure du 2026-09-09 (`gels.jsonl`, 15:38:48) : un `writeFileSync` + un `appendFileSync` sur
- * `conversations.json.journal.jsonl` ont bloqué 10 004 ms sur quelques Ko. Le disque a calé, et
- * comme l'écriture vivait sur le fil qui dessine l'interface, l'app est restée figée. Les deltas de
- * streaming (`urgency: 'checkpoint'`, un par token) partent donc sur le pool d'I/O de Node.
+ * `conversations.json.journal.jsonl` ont bloqué 10 004 ms sur quelques Ko. Ce n'était pas le disque :
+ * les relevés Windows du 31/10 (conv-1368) donnent 420 ms au pire sur 675 heures pour le SSD, l'appel
+ * attendait au-dessus de lui, sans doute dans ESET (scripts/trace-blocage-disque.ps1). Comme l'écriture vivait sur le
+ * fil qui dessine l'interface, l'app est restée figée. Tout part donc sur le pool d'I/O de Node.
  *
- * Ce qui reste SYNCHRONE : `urgency: 'immediate'` — la clôture d'un tour, une création, une
- * suppression — et le vidage forcé de `before-quit`, qui est synchrone par nature.
+ * Y COMPRIS `urgency: 'immediate'` (conv-1368, 2026-10-31) : la clôture d'un tour, une création et
+ * une suppression écrivaient encore ici en bloquant, et `appendFileSync` a figé la fenêtre 36,6 s en
+ * 7 jours pour quelques octets. Seul le vidage de `before-quit` reste synchrone, par nature.
  *
- * ORDRE AVANT SYNCHRONICITÉ : le journal se REJOUE au démarrage, donc deux enregistrements inversés
- * changeraient l'état reconstruit. Les écritures d'un MÊME fichier passent donc par une file et,
- * si une écriture y est déjà en vol quand un flush synchrone est demandé, ce lot est mis en QUEUE
- * plutôt qu'écrit tout de suite : perdre la synchronicité sur une fenêtre de quelques ms est sans
- * conséquence, écrire dans le désordre ne l'est pas.
+ * ORDRE D'ABORD : le journal se REJOUE au démarrage, donc deux enregistrements inversés changeraient
+ * l'état reconstruit. Les écritures d'un MÊME fichier passent par une seule file, dans l'ordre.
  *
  * PAR FICHIER, jamais global : une file unique ferait attendre un store derrière un autre, et un
  * disque bloqué sur un chemin gèlerait les écritures de tous les autres — exactement le défaut
  * qu'on corrige. (Constaté en test : un état partagé faisait aussi fuiter le mode « en vol » d'un
  * fichier sur le suivant, qui basculait alors en asynchrone sans raison.)
  *
- * Le prix assumé : une mort BRUTALE du process pendant un vol peut perdre les derniers deltas du
- * tour en cours. Le journal de TOUR, lui, garde sa clôture synchrone — la fin d'un tour reste donc
- * toujours reconstituable.
+ * Le prix assumé : une mort BRUTALE du process pendant un vol peut perdre les dernières écritures,
+ * y compris une création ou une suppression toute fraîche. Quelques ms d'habitude, 10 s au pire. Le
+ * journal de TOUR, lui, garde sa clôture synchrone : la fin d'un tour reste toujours reconstituable.
  */
 const chainesJournal = new Map<string, Promise<void>>()
 const volsJournal = new Map<string, number>()
@@ -925,17 +913,23 @@ function journalEnVol(path: string): boolean {
 }
 
 async function appendConversationChangesAsync(
-  changes: readonly ConversationChange[],
+  payload: string,
   all: readonly Conversation[],
   path: string
 ): Promise<void> {
-  if (!changes.length) return
-  mkdirSync(dirname(path), { recursive: true })
-  const { journal, payload, rotation } = prepareJournalWrite(changes, path)
+  await mkdir(dirname(path), { recursive: true })
+  const journal = conversationJournalPath(path)
+  const taille = await stat(journal).then(
+    (infos) => infos.size,
+    (erreur: NodeJS.ErrnoException) => {
+      if (erreur.code === 'ENOENT') return 0
+      throw erreur
+    }
+  )
   // La rotation réécrit le snapshot ENTIER (35 Mo mesurés) : c'est la plus lourde écriture de
-  // l'app, donc surtout pas celle qu'on laisse sur le fil principal. Elle passe désormais par le
-  // pendant asynchrone — c'était la dernière ligne synchrone de ce chemin.
-  if (rotation) await saveConversationsAsync([...all], path)
+  // l'app, donc surtout pas celle qu'on laisse sur le fil principal.
+  if (taille + Buffer.byteLength(payload) > JOURNAL_MAX_BYTES)
+    await saveConversationsAsync([...all], path)
   else await appendFile(journal, payload, 'utf8')
 }
 
@@ -1027,10 +1021,17 @@ export function persistConversations(
 
   /** Met le lot en QUEUE derrière ce qui est déjà en vol — l'ordre du journal est intouchable. */
   const enfiler = (changes: ConversationChange[]): void => {
+    if (!changes.length) return
+    /*
+      LES OCTETS SE FIGENT AU DÉPÔT, jamais à l'écriture. Une création porte le fil VIVANT : écrite
+      plus tard, elle emporterait les messages ajoutés entre-temps, et leurs lignes du journal les
+      rejoueraient par-dessus au démarrage (message doublé, test « compactionApres », conv-1368).
+    */
+    const octets = octetsDuJournal(changes)
     const reecrituresAuDepot = depotsDeReecriture
     volsJournal.set(path, (volsJournal.get(path) ?? 0) + 1)
     const suite: Promise<void> = (chainesJournal.get(path) ?? Promise.resolve())
-      .then(() => appendConversationChangesAsync(changes, actives(), path))
+      .then(() => appendConversationChangesAsync(octets, actives(), path))
       .then(
         async () => {
           // Une creation a pu faire monter le plancher : on le fige tout de suite, sinon un arret
@@ -1062,7 +1063,7 @@ export function persistConversations(
     chainesJournal.set(path, suite)
   }
 
-  /** Vidage COURANT (deltas de streaming) : ne bloque jamais le fil principal. */
+  /** Vidage COURANT, toutes urgences confondues : ne bloque jamais le fil principal. */
   const flushAsync = (): void => {
     if (timer) clearTimeout(timer)
     timer = undefined
@@ -1070,14 +1071,10 @@ export function persistConversations(
     enfiler(pending.splice(0, pending.length))
   }
 
-  /**
-   * Vidage FORCÉ (clôture de tour, création, `before-quit`) : synchrone, sauf si une écriture est
-   * déjà en vol — auquel cas on enfile, car doubler ou devancer cette écriture casserait l'ordre.
-   */
-  const flush = (options?: { differable?: boolean }): void => {
+  /** Vidage de `before-quit` : le seul synchrone, et il ne laisse rien en attente. */
+  const viderALaFermeture = (): void => {
     if (timer) clearTimeout(timer)
     timer = undefined
-    const differable = options?.differable !== false
     /*
       FERMETURE AVEC UNE ÉCRITURE EN VOL. On ne peut ni l'attendre (on est synchrone) ni la
       devancer (l'ordre du journal serait cassé). On pose donc un SNAPSHOT COMPLET de l'état
@@ -1086,7 +1083,7 @@ export function persistConversations(
       process. Coût assumé : une écriture lourde, mais à la fermeture, plus personne n'attend
       l'interface.
     */
-    if (!differable && (journalEnVol(path) || pending.length > 0)) {
+    if (journalEnVol(path) || pending.length > 0) {
       const lot = pending.splice(0, pending.length)
       try {
         saveConversations(actives(), path)
@@ -1118,31 +1115,6 @@ export function persistConversations(
         pending.unshift(...lot)
         console.error(`[conversations] fermeture : ÉCHEC d'écriture du snapshot (${cause}).`)
       }
-      return
-    }
-    if (!pending.length) return
-    const changes = pending.splice(0, pending.length)
-    /*
-      LA ROTATION NE PASSE PLUS PAR ICI. Mesure du 2026-09-12 : une suppression de conversation a
-      figé l'app 2,1 s — un `urgency: 'immediate'` tombé pile sur une rotation, donc une réécriture
-      synchrone des 35 Mo du fichier. L'ajout au journal (quelques octets) reste synchrone, parce
-      que c'est lui qui rend la création/suppression immédiatement reconstituable ; la réécriture
-      complète, elle, part dans la file. L'ordre est préservé : la file est la MÊME.
-
-      Le vidage de `before-quit` passe `differable: false` — là, l'app se ferme et plus personne
-      n'attend l'interface : perdre le lot serait pire que bloquer 2 s.
-    */
-    if (journalEnVol(path) || rotationRequise(changes, path)) {
-      enfiler(changes)
-      return
-    }
-    try {
-      appendConversationChanges(changes, actives(), path)
-      writeConversationIdFloor(store.idFloor(), path)
-    } catch (error) {
-      // Effacement APRES succes uniquement : une erreur disque transitoire reste rejouable.
-      pending.unshift(...changes)
-      throw error
     }
   }
 
@@ -1164,7 +1136,7 @@ export function persistConversations(
     }
     pending.push(change)
     if (change.urgency === 'immediate') {
-      flush()
+      flushAsync()
       return
     }
     armerDelai()
@@ -1267,7 +1239,9 @@ export function persistConversations(
             await rm(tmp, { force: true }).catch(() => undefined)
             return
           }
-          // Renommage SYNCHRONE : entre ce contrôle et lui, aucun autre code ne peut écrire.
+          // Renommage SYNCHRONE : entre ce contrôle et lui, aucun autre code ne peut écrire. Il reste
+          // sur le fil principal par choix (conv-1368, 1,0 s en 7 jours) : en vol, il recouvrirait le
+          // snapshot de fermeture avec un état plus ancien alors que le journal est déjà effacé.
           renameSync(tmp, path)
         } catch (erreur) {
           await rm(tmp, { force: true }).catch(() => undefined)
@@ -1445,7 +1419,7 @@ export function persistConversations(
   // Exposé pour un flush forcé (ex. before-quit) : évite de perdre le dernier
   // fragment de streaming resté dans la fenêtre de debounce de 120 ms. `differable: false` :
   // à la fermeture, une rotation doit s'écrire ICI, tout de suite — aucune file ne sera drainée.
-  return Object.assign(() => flush({ differable: false }), { archiver, archivesChargees })
+  return Object.assign(viderALaFermeture, { archiver, archivesChargees })
 }
 
 /**

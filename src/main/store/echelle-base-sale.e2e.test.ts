@@ -67,6 +67,8 @@ describe('e2e isole — une base sale n aboutit plus jamais a un echec', () => {
     const stateStore = {
       list: () => [...etat.values()],
       get: (id: string) => etat.get(id),
+      dernierConnu: (id: string) => etat.get(id),
+      getAsync: async (id: string) => etat.get(id),
       save: (enregistrement: { runId: string }) => etat.set(enregistrement.runId, enregistrement),
       remove: (id: string) => etat.delete(id)
     }
