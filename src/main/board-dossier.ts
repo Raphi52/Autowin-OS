@@ -324,6 +324,22 @@ export function lireReglageDuBoard(racine: string): {
   }
 }
 
+/**
+ * Le partage de la présence du poste dans le village commun (D6, conv-1429) : actif par défaut (D-9),
+ * coupé seulement par un `partagerPresence: false` écrit dans le réglage. Rangé à part de
+ * `lireReglageDuBoard` pour ne pas changer la forme que lisent ses appelants.
+ */
+export function lirePartageDeLaPresence(racine: string): boolean {
+  try {
+    const lu = JSON.parse(readFileSync(join(racine, FICHIER_DU_REGLAGE), 'utf8')) as {
+      partagerPresence?: unknown
+    }
+    return lu.partagerPresence !== false
+  } catch {
+    return true
+  }
+}
+
 /** Le dossier enregistré, ou `null`. Illisible = aucun dossier : le Board marche sans. */
 export function lireDossierDuBoard(racine: string): string | null {
   return lireReglageDuBoard(racine).dossier
@@ -367,6 +383,11 @@ export interface DossierDuBoard {
   choisirProjets: (projets: readonly string[] | null) => Promise<EtatDuDossierDuBoard>
   /** Retient le nom affiché sur le Board (`null` = le compte Windows, conv-1230). */
   choisirNom: (nom: string | null) => Promise<EtatDuDossierDuBoard>
+  /**
+   * Coupe (`false`) ou rétablit le partage de la présence dans le village commun (D6, conv-1429).
+   * Le réglage seul : c'est `quartier-presence.ts` qui écrit `presence.json`.
+   */
+  choisirPartagePresence: (actif: boolean) => Promise<EtatDuDossierDuBoard>
   /** Le compte Windows du poste et le nom écrit sur ses post-it (le choisi, sinon le compte). */
   nomDuPoste: () => { compte: string; nom: string }
   /** Envoie le Board vers le dossier, sans attendre ; ne fait rien sans dossier choisi. */
@@ -403,6 +424,7 @@ export function creerDossierDuBoard(deps: {
   let dossier = reglage.dossier
   let projets = reglage.projets
   let nomChoisi = reglage.nom
+  let partagerPresence = lirePartageDeLaPresence(deps.racine)
   const nomDuPoste = (): { compte: string; nom: string } => ({ compte, nom: nomChoisi ?? compte })
   let dernier: EtatDuDossierDuBoard['dernier']
   let erreur: string | undefined
@@ -427,7 +449,9 @@ export function creerDossierDuBoard(deps: {
     enCours: Boolean(ecriture || minuteur || enAttente),
     nom: nomDuPoste().nom,
     compte,
-    ...(nomChoisi ? { nomChoisi } : {})
+    ...(nomChoisi ? { nomChoisi } : {}),
+    // Absent = actif, le défaut (D-9) : seul un partage coupé se dit (conv-1429).
+    ...(partagerPresence ? {} : { partagerPresence: false })
   })
 
   async function ecrire(travail: NonNullable<typeof enAttente>): Promise<void> {
@@ -480,13 +504,14 @@ export function creerDossierDuBoard(deps: {
   }
 
   /**
-   * Le dossier, le choix des projets et le nom : changer l'un ne doit jamais effacer les autres
-   * (conv-1211, conv-1230).
+   * Le dossier, le choix des projets, le nom et le partage de la présence : changer l'un ne doit
+   * jamais effacer les autres (conv-1211, conv-1230, conv-1429).
    */
   async function ecrireLeReglage(
     nouveauDossier: string | null,
     nouveauxProjets: readonly string[] | null,
-    nouveauNom: string | null = nomChoisi
+    nouveauNom: string | null = nomChoisi,
+    nouveauPartage: boolean = partagerPresence
   ): Promise<void> {
     await mkdir(deps.racine, { recursive: true })
     await writeFile(
@@ -495,7 +520,8 @@ export function creerDossierDuBoard(deps: {
         {
           dossier: nouveauDossier,
           ...(nouveauxProjets ? { projets: nouveauxProjets } : {}),
-          ...(nouveauNom ? { nom: nouveauNom } : {})
+          ...(nouveauNom ? { nom: nouveauNom } : {}),
+          ...(nouveauPartage ? {} : { partagerPresence: false })
         },
         null,
         2
@@ -512,6 +538,11 @@ export function creerDossierDuBoard(deps: {
       nomChoisi = nom
       // Le nom est écrit dans board.json : la prochaine copie part même si le Board n'a pas bougé.
       empreinte = null
+      return etat()
+    },
+    async choisirPartagePresence(actif) {
+      await ecrireLeReglage(dossier, projets, nomChoisi, actif)
+      partagerPresence = actif
       return etat()
     },
     async choisirProjets(choix) {
@@ -540,8 +571,9 @@ export function creerDossierDuBoard(deps: {
     },
     async effacer() {
       // Le choix des projets survit à l'oubli du dossier (conv-1211) : en rechoisir un ne doit pas
-      // repartager d'un coup ce qu'on avait décoché. Le nom choisi survit aussi (conv-1230).
-      if (projets || nomChoisi) await ecrireLeReglage(null, projets)
+      // repartager d'un coup ce qu'on avait décoché. Le nom choisi survit aussi (conv-1230), et un
+      // partage de présence coupé reste coupé (conv-1429).
+      if (projets || nomChoisi || !partagerPresence) await ecrireLeReglage(null, projets)
       else await rm(join(deps.racine, FICHIER_DU_REGLAGE), { force: true })
       dossier = null
       enAttente = null

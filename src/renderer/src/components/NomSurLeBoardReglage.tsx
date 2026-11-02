@@ -145,13 +145,91 @@ export function NomSurLeBoardReglage(): React.JSX.Element | null {
   if (!nom.disponible) return null
 
   return (
-    <div className="interface-row" data-testid="interface-nom-board">
-      <div className="interface-row-text">
-        <strong>{t('nomBoard.titre')}</strong>
-        <p>{riche(t('nomBoard.description', { compte: nom.compte || '…' }))}</p>
-        {nom.erreur && <p className="nom-board-erreur">{t(nom.erreur)}</p>}
+    <>
+      <div className="interface-row" data-testid="interface-nom-board">
+        <div className="interface-row-text">
+          <strong>{t('nomBoard.titre')}</strong>
+          <p>{riche(t('nomBoard.description', { compte: nom.compte || '…' }))}</p>
+          {nom.erreur && <p className="nom-board-erreur">{t(nom.erreur)}</p>}
+        </div>
+        <ChampDuNom nom={nom} prefixe="interface-nom-board" />
       </div>
-      <ChampDuNom nom={nom} prefixe="interface-nom-board" />
+      <PartageDeLaPresence />
+    </>
+  )
+}
+
+/**
+ * Settings · Interface — « Tes agents dans le village de l'équipe » (D6, plan « Village commun »,
+ * conv-1429). Le partage est actif par défaut (D-9) ; coupé, le poste écrit `{ coupe: true }` à la
+ * place de ses agents. Rangé dans le réglage du Board (`board-dossier.json`), comme le nom juste
+ * au-dessus : l'interrupteur montre ce que le moteur a GARDÉ, jamais ce qu'il a demandé.
+ */
+function PartageDeLaPresence(): React.JSX.Element | null {
+  const { t } = useTextesReglagesEtDecor()
+  // `null` tant que le moteur n'a pas répondu : l'interrupteur reste inerte.
+  const [partage, setPartage] = useState<boolean | null>(null)
+  const [occupe, setOccupe] = useState(false)
+  const [erreur, setErreur] = useState(false)
+  const pont = window.api as Partial<typeof window.api> | undefined
+  const disponible =
+    typeof pont?.boardDossier === 'function' && typeof pont?.quartierPresencePartager === 'function'
+
+  useEffect(() => {
+    if (!disponible) return
+    let vivant = true
+    void window.api
+      .boardDossier()
+      .then((lu) => {
+        if (vivant) setPartage(lu.partagerPresence !== false)
+      })
+      .catch(() => {
+        if (vivant) setErreur(true)
+      })
+    return () => {
+      vivant = false
+    }
+  }, [disponible])
+
+  if (!disponible) return null
+
+  const basculer = async (): Promise<void> => {
+    if (partage === null || occupe || !window.api.quartierPresencePartager) return
+    setOccupe(true)
+    setErreur(false)
+    try {
+      const suivant = await window.api.quartierPresencePartager(!partage)
+      setPartage(suivant.partagerPresence !== false)
+    } catch {
+      setErreur(true)
+    } finally {
+      setOccupe(false)
+    }
+  }
+
+  return (
+    <div className="interface-row" data-testid="interface-presence-village">
+      <div className="interface-row-text">
+        <strong>{t('presence.titre')}</strong>
+        <p>{riche(t('presence.description'))}</p>
+        {erreur && <p className="nom-board-erreur">{t('presence.erreurEnregistrement')}</p>}
+      </div>
+      {/* Le même interrupteur que la mascotte, juste au-dessus dans Settings · Interface. */}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={partage === true}
+        aria-label={t('presence.interrupteur')}
+        className={`mascotte-switch${partage ? ' is-on' : ''}`}
+        disabled={partage === null || occupe}
+        data-testid="interface-presence-village-switch"
+        onClick={() => void basculer()}
+      >
+        <i />
+        <span>
+          {partage === null ? '…' : partage ? t('presence.partage') : t('presence.coupe')}
+        </span>
+      </button>
     </div>
   )
 }

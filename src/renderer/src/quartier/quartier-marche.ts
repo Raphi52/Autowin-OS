@@ -14,11 +14,37 @@
  *
  * D15 de la fiche : au moins 20 s à un poste, une action plus courte ne le fait pas bouger. Sans cette
  * règle, un agent qui change d'outil toutes les 3 s courrait dans les escaliers sans jamais rien faire.
+ *
+ * LA PAUSE (conv-1428, « mes personnages passent leur temps à méditer, c'est pas assez varié »). Mesuré sur
+ * 400 tours : plus de la moitié des attentes entre deux outils dépassent 6 s, et 42 % du temps d'un tour
+ * se passe à réfléchir. Réfléchir n'est donc plus un seul lieu : c'est une famille de postes (`me: 'pause'`)
+ * — méditer au dojo, boire le thé, s'asseoir au bord, ratisser le sable, arroser, s'entraîner au sabre,
+ * le penseur — et le tanuki prend celle qui est libre, près de lui, différente de la précédente ; s'il n'y en
+ * a pas, il fait les cent pas. Il en change au bout d'une minute environ.
  */
 import type { Metier } from './quartier-metiers'
 
-export type Pose = '' | 'as' | 'at' | 'pl' | 'ba' | 'me'
-export type MetierPoste = Metier | 'bain' | 'meditation'
+export type Pose = '' | 'as' | 'at' | 'pl' | 'ba'
+export type MetierPoste = Metier | 'bain' | 'pause'
+
+/**
+ * Une animation de l'atlas : rangée, durée, nombre d'images. `e` : l'entrée jouée une fois en arrivant
+ * (s'asseoir), à l'envers en repartant (se relever) ; `ya` : l'angle du corps dans ses images, vers lequel
+ * il se tourne avant de s'asseoir.
+ */
+export interface Geste {
+  r: number
+  d: number
+  n: number
+  e?: { r: number; d: number; n: number }
+  ya?: number
+  /** Décalage de l'image dans sa case, quand un objet tenu (sabre, râteau) dépasse d'un côté. */
+  dx?: number
+  /** Deux images voisines se fondent : une respiration lente sans saccade. */
+  fondu?: number
+  /** Le corps quitte le sol (méditation longue). */
+  levite?: number
+}
 
 /** Ce que l'agent demande à son tanuki. `metier: null` = rester où il est. */
 export interface Consigne {
@@ -67,6 +93,7 @@ export interface DonneesMarche {
   esc: EscalierQuartier[]
   g: { x0: number; y0: number; pas: number; w: number; h: number; l: number; b: string }
   postes: PosteQuartier[]
+  gestes?: Record<string, Geste>
 }
 
 type Point = number[] & { e?: number; sens?: number }
@@ -91,7 +118,8 @@ export interface Tanuki {
   cible: MetierPoste | null
   metierIci: MetierPoste | null
   th: number
-  etat: 'attend' | 'va' | 'poste' | 'etat' | 'parti'
+  /** `tourne` : arrivé, il se tourne vers où il va s'asseoir ; `leve` : il se relève avant de partir. */
+  etat: 'attend' | 'va' | 'poste' | 'etat' | 'parti' | 'tourne' | 'leve'
   nom: Pose
   face: Place | null
   mir: number
@@ -111,6 +139,17 @@ export interface Tanuki {
   sortant: boolean
   alpha: number
   consigne: Consigne
+  /** En pause : combien de temps il reste à cette activité avant d'en changer. */
+  duree: number
+  /** Le geste de sa dernière pause : il en prend une autre la fois suivante. */
+  dernier: string
+  /** Ce qu'il fera une fois relevé. */
+  apres: (() => void) | null
+  /**
+   * L'agent d'un collègue (D9, conv-1429) : la couleur de son foulard. Elle vit sur le tanuki et non
+   * sur l'agent, car il la garde en repartant, quand son agent a déjà quitté la liste. Absent = le mien.
+   */
+  foulard?: string
 }
 
 /** Au moins ce temps à un poste : une action plus courte ne le fait pas bouger (D15). */
@@ -120,6 +159,18 @@ export const ENTREE: readonly [number, number] = [640, 748]
 
 /** L'écart au sol entre deux tanukis qui attendent : un corps et demi, sinon ils forment un tas. */
 const ECART_FILE = 52
+/** Le temps passé à une activité de pause, avant d'en prendre une autre. */
+export const PAUSE_MIN_S = 45
+export const PAUSE_MAX_S = 110
+/** Les cent pas : une étape courte, puis la suivante. */
+const FLANE_MIN_S = 3
+const FLANE_MAX_S = 8
+/** Une fois sur six, il fait les cent pas même si une activité est libre : réfléchir en marchant. */
+const PART_FLANE = 1 / 6
+/** Au-delà de ce temps assis en méditation, il quitte doucement le sol. */
+export const LEVITE_APRES_S = 25
+/** Il se tourne à cette vitesse avant de s'asseoir, en degrés par seconde. */
+const TOUR_DEG_S = 360
 
 const V = (2 * 0.098) / (0.62 * 0.6)
 const FOULEE = V * 0.6
@@ -142,7 +193,7 @@ export type EscalierEnMarche = EscalierQuartier & { i: number; dx: number; dy: n
 export interface MarcheQuartier {
   T: Tanuki[]
   avance(dt: number): void
-  ajouter(id: string, consigne: Consigne): Tanuki
+  ajouter(id: string, consigne: Consigne, foulard?: string): Tanuki
   libre(px: number, py: number): boolean
   taille(px: number, py: number): number
   chemin(a: number[], b: number[], moi: Tanuki | null, sansGene?: boolean): Point[]
@@ -237,8 +288,11 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
   }
 
   const T: Tanuki[] = []
-  const immobile = (o: Tanuki): boolean =>
-    o.etat === 'poste' || o.etat === 'etat' || o.etat === 'attend'
+  const immobile = (o: Tanuki): boolean => o.etat !== 'va' && o.etat !== 'parti'
+  const GESTES = D.gestes ?? {}
+  /** Le geste joué à l'endroit où il se tient, s'il en a un. */
+  const gesteIci = (w: Tanuki): Geste | undefined =>
+    w.poste !== null && w.face?.g ? GESTES[w.face.g] : undefined
 
   const gene = (i: number, j: number, moi: Tanuki | null): boolean => {
     const px = i * G.pas + G.x0
@@ -487,6 +541,10 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
   }
 
   function aller(w: Tanuki, metier: MetierPoste): void {
+    if (metier === 'pause') {
+      allerEnPause(w)
+      return
+    }
     const pris = new Set(T.filter((o) => o !== w).map((o) => o.poste))
     let best = -1
     let bd = 1e9
@@ -504,36 +562,114 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
       partirVers(w, D.postes[best])
       return
     }
+    // Les baquets sont pris : celui qui a fini prend une pause plutôt que d'attendre assis par terre.
+    if (metier === 'bain') {
+      allerEnPause(w)
+      return
+    }
     // Poste plein : il attend à côté, debout (D16).
     const modele = D.postes.find((p) => p.me === metier)
     w.poste = null
     partirVers(w, modele ? placePres(modele.x, modele.y, w) : placePres(ENTREE[0], ENTREE[1], w))
   }
 
+  /**
+   * Une activité de pause : libre, pas trop loin, peu prise par les autres, et pas celle qu'il vient de
+   * faire. Un peu de hasard, sinon tous les tanukis d'un même étage iraient au même endroit.
+   */
+  function allerEnPause(w: Tanuki): void {
+    w.cible = 'pause'
+    w.duree = PAUSE_MIN_S + alea() * (PAUSE_MAX_S - PAUSE_MIN_S)
+    const pris = new Set(T.filter((o) => o !== w).map((o) => o.poste))
+    const occupe = new Map<string, number>()
+    for (const o of T)
+      if (o !== w && o.poste !== null) {
+        const g = D.postes[o.poste].g
+        occupe.set(g, (occupe.get(g) ?? 0) + 1)
+      }
+    let best = -1
+    let bs = 1e9
+    D.postes.forEach((p, i) => {
+      if (p.me !== 'pause' || pris.has(i) || i === w.poste) return
+      const d = Math.hypot(p.x - w.x, (p.y - w.y) / SP)
+      const s =
+        d / 260 + (occupe.get(p.g) ?? 0) * 0.9 + (p.g === w.dernier ? 2.5 : 0) + alea() * 1.6
+      if (s < bs) {
+        bs = s
+        best = i
+      }
+    })
+    if (best < 0 || alea() < PART_FLANE) {
+      flaner(w)
+      return
+    }
+    w.poste = best
+    w.dernier = D.postes[best].g
+    partirVers(w, D.postes[best])
+  }
+
+  /** Les cent pas : quelques mètres sur le même sol, un arrêt, puis encore. */
+  function flaner(w: Tanuki): void {
+    w.cible = 'pause'
+    w.poste = null
+    w.dernier = ''
+    w.duree = FLANE_MIN_S + alea() * (FLANE_MAX_S - FLANE_MIN_S)
+    const dx = (alea() - 0.5) * 2 * (60 + alea() * 120)
+    const dy = (alea() - 0.5) * 50
+    partirVers(w, placePres(w.x + dx, w.y + dy, w))
+  }
+
+  /** Assis à un poste qui a une entrée : il se relève avant toute autre chose. */
+  function quitter(w: Tanuki, suite: () => void): void {
+    const g = gesteIci(w)
+    if (w.etat === 'poste' && g?.e && w.th > 0) {
+      w.etat = 'leve'
+      w.th = 0
+      w.apres = suite
+      return
+    }
+    suite()
+  }
+
+  /** Il est là où son agent le veut : au poste demandé, ou en pause quand les baquets étaient pris. */
+  const bienPlace = (voulu: MetierPoste, ici: MetierPoste | null): boolean =>
+    voulu === ici || (voulu === 'bain' && ici === 'pause')
+
   /** Le tanuki ne marche pas : il regarde ce que son agent lui demande. */
   function decider(w: Tanuki): void {
     const c = w.consigne
     if (c.partir) {
-      if (!w.sortant) {
-        w.sortant = true
-        w.poste = null
-        w.cible = null
-        partirVers(w, { x: ENTREE[0], y: ENTREE[1], g: '', m: 0 })
-      }
+      if (!w.sortant)
+        quitter(w, () => {
+          w.sortant = true
+          w.poste = null
+          w.cible = null
+          partirVers(w, { x: ENTREE[0], y: ENTREE[1], g: '', m: 0 })
+        })
       return
     }
-    if (c.metier && c.metier !== w.metierIci) {
+    if (c.metier && !bienPlace(c.metier, w.metierIci)) {
       const delai = c.metier === 'bain' || w.metierIci === null ? 0 : SEJOUR_MIN_S
       if (w.th >= delai) {
-        aller(w, c.metier)
+        const metier = c.metier
+        quitter(w, () => aller(w, metier))
         return
       }
     }
-    // On ne s'assied en tailleur qu'arrivé : celui qui finit son séjour à un poste y reste debout.
-    const enRoute = c.pose === 'me' && c.metier !== w.metierIci
-    const pose = enRoute ? '' : c.pose === 'ba' && !w.face?.bain ? 'as' : c.pose
+    // En pause, il change d'activité de temps en temps : c'est ce qui rend la scène vivante.
+    if (c.metier && w.metierIci === 'pause' && w.th >= w.duree) {
+      quitter(w, () => allerEnPause(w))
+      return
+    }
+    // Fini sans baquet libre : sa pause tient lieu de bain ; sans poste, il s'assied là où il est.
+    const pose = c.pose === 'ba' && !w.face?.bain ? (w.poste !== null ? '' : 'as') : c.pose
     if (pose) {
       if (w.etat !== 'etat' || w.nom !== pose) {
+        // Une question ou un échec le relève d'abord, s'il était assis.
+        if (w.etat === 'poste' && gesteIci(w)?.e) {
+          quitter(w, () => undefined)
+          return
+        }
         w.etat = 'etat'
         w.nom = pose
         w.mir = w.face?.m ?? 0
@@ -541,6 +677,7 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
     } else if (w.etat === 'etat') {
       w.nom = ''
       w.etat = w.poste !== null ? 'poste' : 'attend'
+      w.th = 0
     }
   }
 
@@ -558,6 +695,33 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
       w.sortant = false
     }
     w.etat = w.poste !== null ? 'poste' : 'attend'
+    // Avant de s'asseoir, il se tourne vers l'endroit où il va s'asseoir.
+    if (gesteIci(w)?.e) w.etat = 'tourne'
+  }
+
+  /** Arrivé à sa place, il pivote sur lui-même jusqu'à l'angle de ses images assises. */
+  function tourner(w: Tanuki, dt: number): void {
+    const g = gesteIci(w)
+    const voulu = (((g?.ya ?? 0) * (w.face?.m ? -1 : 1)) + 360) % 360
+    const ec = ((voulu - w.ang + 540) % 360) - 180
+    w.ang += Math.sign(ec) * Math.min(Math.abs(ec), TOUR_DEG_S * dt)
+    w.cap = w.ang
+    if (Math.abs(ec) < 0.5) {
+      w.etat = 'poste'
+      w.th = 0
+    }
+  }
+
+  /** La méditation longue : il quitte le sol de quelques pixels et y flotte, au rythme de son souffle. */
+  function leviter(w: Tanuki, dt: number): void {
+    const g = gesteIci(w)
+    let voulu = 0
+    if (w.etat === 'poste' && g?.levite) {
+      const t = w.th - (g.e?.d ?? 0) - LEVITE_APRES_S
+      const k = Math.max(0, Math.min(1, t / 6))
+      voulu = k * k * (3 - 2 * k) * (g.levite + 0.18 * g.levite * Math.sin(w.th * 1.05)) * (w.u / 60)
+    }
+    w.lev += (voulu - w.lev) * Math.min(1, dt * (voulu ? 1.2 : 6))
   }
 
   function avance(dt: number): void {
@@ -572,8 +736,28 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
       // Entre deux niveaux, la taille glisse : un sol mesuré à la main ne tombe jamais pile.
       const tu = taille(w.x, w.y) / 0.866
       if (tu) w.u += (tu - w.u) * Math.min(1, dt * 6)
+      if (w.etat === 'tourne') {
+        tourner(w, dt)
+        continue
+      }
+      if (w.etat === 'leve') {
+        w.th += dt
+        leviter(w, dt)
+        if (w.th >= (gesteIci(w)?.e?.d ?? 0)) {
+          const suite = w.apres
+          w.apres = null
+          w.etat = w.poste !== null ? 'poste' : 'attend'
+          w.lev = 0
+          // Relevé : il reste debout tant qu'il n'a pas d'autre ordre, sans se rasseoir aussitôt.
+          w.th = Math.max(w.th, 1e-3)
+          if (suite) suite()
+          if (w.etat === 'poste' && gesteIci(w)?.e) w.etat = 'attend'
+        }
+        continue
+      }
       if (w.etat !== 'va') {
         w.th += dt
+        leviter(w, dt)
         decider(w)
         continue
       }
@@ -720,8 +904,11 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
     }
   }
 
-  /** Un nouvel agent entre par le sable, et attend là sa première action (D14). */
-  function ajouter(id: string, consigne: Consigne): Tanuki {
+  /**
+   * Un nouvel agent entre par le sable, et attend là sa première action (D14). Celui d'un collègue entre
+   * par le même chemin et suit les mêmes règles : seul son foulard le distingue (D-8, D9).
+   */
+  function ajouter(id: string, consigne: Consigne, foulard?: string): Tanuki {
     const p = placePres(ENTREE[0], ENTREE[1], null)
     const [i, j] = proche(p.x, p.y)
     const X = i * G.pas + G.x0
@@ -761,7 +948,11 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
       pas: 0,
       sortant: false,
       alpha: 0,
-      consigne
+      consigne,
+      duree: 0,
+      dernier: '',
+      apres: null,
+      ...(foulard ? { foulard } : {})
     }
     T.push(w)
     return w

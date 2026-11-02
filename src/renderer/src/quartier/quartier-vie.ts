@@ -57,6 +57,42 @@ const rondFlou = (r: number, g: number, b: number): HTMLCanvasElement => {
   return k
 }
 
+/**
+ * La matière de la vapeur : trois filets souples, qui se raccordent en haut et en bas pour défiler sans
+ * fin. Teinte fixe : c'est de la vapeur dans une maquette.
+ */
+const matiereVapeur = (): HTMLCanvasElement => {
+  const L = 48
+  const marge = 8
+  const k = toile(L, MATIERE_H + marge)
+  const c2 = contexte(k)
+  const d = c2.createImageData(L, MATIERE_H + marge)
+  const tour = (Math.PI * 2) / MATIERE_H
+  const filets = [
+    { c: -0.1, a: 0.17, f: 2, ph: 0.4, b: 0.07, g: 5, s: 0.1, f2: 3, ph2: 1 },
+    { c: 0.12, a: 0.15, f: 3, ph: 2.6, b: 0.09, g: 4, s: 0.075, f2: 2, ph2: 3.4 },
+    { c: 0, a: 0.21, f: 1, ph: 4.4, b: 0.06, g: 7, s: 0.055, f2: 5, ph2: 5.2 }
+  ]
+  for (let j = 0; j < MATIERE_H + marge; j++)
+    for (let i = 0; i < L; i++) {
+      const u = i / (L - 1) - 0.5
+      let a = 0
+      for (const f of filets) {
+        const c =
+          f.c + f.a * Math.sin(j * tour * f.f + f.ph) + f.b * Math.sin(j * tour * f.g + f.ph)
+        const r = (u - c) / f.s
+        a += Math.exp(-r * r) * (0.6 + 0.4 * Math.sin(j * tour * f.f2 + f.ph2))
+      }
+      const o = (j * L + i) * 4
+      d.data[o] = 255
+      d.data[o + 1] = 252
+      d.data[o + 2] = 246
+      d.data[o + 3] = Math.round(Math.min(1, a) * 255 * Math.min(1, (0.5 - Math.abs(u)) * 9))
+    }
+  c2.putImageData(d, 0, 0)
+  return k
+}
+
 /** Le ton sombre d'une teinte de papillon : le bord de ses ailes. */
 const assombrir = (c: string): string =>
   `#${[1, 3, 5]
@@ -78,6 +114,31 @@ export function glissementEau(yPeinture: number, temps: number, k: number): numb
     Math.sin(yPeinture * 0.22 + temps * 1.1) * (0.16 + k * 0.42) +
     Math.sin(yPeinture * 0.09 - temps * 0.6) * (0.12 + k * 0.36)
   )
+}
+
+/**
+ * La forme d'un filet de vapeur à la hauteur `u` (0 au ras de l'eau, 1 en haut) : son écart à la verticale
+ * et sa largeur. Un seul ruban continu : empiler des ronds blancs faisait un paquet de coton (conv-1424).
+ */
+export function formeVolute(
+  u: number,
+  temps: number,
+  ph: number,
+  large: number
+): { dx: number; l: number } {
+  const monte = u * u
+  return {
+    dx:
+      Math.sin(u * 3.4 - temps * 0.8 + ph) * (0.6 + monte * large * 0.34) +
+      Math.sin(u * 7.3 - temps * 1.3 + ph * 2) * monte * large * 0.1 +
+      monte * large * 0.45,
+    l: large * (0.32 + u * 0.9)
+  }
+}
+
+/** L'opacité d'un filet à la hauteur `u` : il naît sans bord au ras de l'eau et se dissout en montant. */
+export function fonduVapeur(u: number): number {
+  return Math.min(1, u / 0.12) ** 1.2 * (1 - Math.max(0, (u - 0.28) / 0.72)) ** 1.6
 }
 
 /** Un bateau suit sa voie : il ralentit au bout, vire en montrant sa largeur, et repart. */
@@ -109,12 +170,18 @@ export function placeDuTram(t: number): number {
 
 /** L'instant où le maillet touche le gong, après le début du geste. */
 const IMPACT_S = 0.34
+/** Hauteur d'une ligne de filet, en pixels de la peinture : entière, pour qu'aucune couture ne se voie. */
+const LIGNE_VAPEUR = 2
+const VAPEUR_L = 56
+const VAPEUR_H = 90
+/** La matière de la vapeur boucle sur cette hauteur : elle défile sans couture. */
+const MATIERE_H = 192
 const RECUL = 0.5
 /** Un tanuki au poste du gong ne frappe pas sans arrêt. */
 const PAUSE_FRAPPE_S = 8
 
 export interface VieDecor {
-  /** `actifs(...postes)` : un tanuki y travaille-t-il ? La machine et le gong réagissent. */
+  /** `actifs(...postes)` : un tanuki y travaille-t-il ? Le gong et les mannequins réagissent. */
   avancer(
     dt: number,
     actifs: (...postes: number[]) => boolean,
@@ -125,6 +192,8 @@ export interface VieDecor {
   pieces(x: Ctx): void
   feuillages(x: Ctx, devant: boolean): void
   airs(x: Ctx): void
+  /** La roue de Settings, seule : son survol la redessine éclairée. */
+  roue(x: Ctx): void
   /** Le maillet du gong : au-dessus de tout, et redessiné quand le survol repeint la zone. */
   maillet(x: Ctx): void
   frapper(sonner: () => void): void
@@ -173,6 +242,7 @@ export async function creerVie(
     })
   )
   for (const o of OB) if (o.n && CAL[o.n]) o.cal = CAL[o.n]
+  const DOJO = ['dojo', ...Object.keys(CAL).filter((n) => n.startsWith('coussin')), 'encens']
   const e = VI.eau
   const EAUm = await image(e.m)
   // À la taille de la peinture : à moitié moins, toute l'eau du fond sortait floue (conv-1424).
@@ -199,32 +269,36 @@ export async function creerVie(
 
   let temps = 0
   let gust = 1
-  let angleVolant = 0
-  let dtVolant = 0
-  let machineActive = false
   let frappeDebut = -99
   let impactFait = true
   let sonner: (() => void) | null = null
   const GONG = VI.gong
-  // Beaucoup de petites bouffées légères : quelques grosses se voyaient une par une.
-  const SRC = [
-    { x: 305, y: 706, r: 10, dt: 0.2, v: 15, a: 0.2, t: 0, mach: false },
-    { x: 460, y: 652, r: 7, dt: 0.34, v: 11, a: 0.16, t: 0.2, mach: false },
-    { x: 535, y: 666, r: 9, dt: 0.22, v: 14, a: 0.2, t: 0.4, mach: false },
-    { x: 885, y: 180, r: 3, dt: 0.26, v: 10, a: 0.24, t: 0.1, mach: false },
-    { x: 483, y: 590, r: 4, dt: 0.6, v: 16, a: 0.2, t: 0.3, mach: true }
-  ]
-  const FUM: {
-    x: number
-    y: number
-    vx: number
-    vy: number
-    r: number
-    a: number
-    age: number
-    vie: number
-    g: number
-  }[] = []
+  // Des filets fins qui montent de l'eau et s'effacent. Chaque bain en a plusieurs, de tailles différentes.
+  const VOLUTES = [
+    // L'onsen, qui a remplacé les trois baquets puis la machine et le tabouret (conv-1434) : la vapeur
+    // monte de toute l'eau, jusqu'au bras de droite.
+    { x: 445, y: 672, h: 40, l: 16, a: 0.24, v: 15 },
+    { x: 472, y: 660, h: 58, l: 20, a: 0.28, v: 13 },
+    { x: 500, y: 670, h: 46, l: 18, a: 0.26, v: 16 },
+    { x: 528, y: 656, h: 66, l: 24, a: 0.32, v: 12 },
+    { x: 556, y: 668, h: 52, l: 20, a: 0.28, v: 14 },
+    { x: 600, y: 702, h: 40, l: 16, a: 0.22, v: 15 },
+    { x: 885, y: 180, h: 44, l: 13, a: 0.34, v: 13 },
+    // L'encens du dojo, devant les marches (conv-1428).
+    { x: 1076, y: 677, h: 40, l: 11, a: 0.26, v: 9 }
+  ].map((o, i) => ({ ...o, ph: i * 2.1, o: i * 47 }))
+  const MATIERE = matiereVapeur()
+  const VAPEUR = toile(VAPEUR_L, VAPEUR_H)
+  const VAPEURg = contexte(VAPEUR)
+  // Le filet naît sans bord au ras de l'eau et se dissout en montant.
+  const FONDU = toile(1, VAPEUR_H)
+  {
+    const c2 = contexte(FONDU)
+    const d = c2.createImageData(1, VAPEUR_H)
+    for (let j = 0; j < VAPEUR_H; j++)
+      d.data[j * 4 + 3] = Math.round(fonduVapeur(1 - j / (VAPEUR_H - 1)) * 255)
+    c2.putImageData(d, 0, 0)
+  }
   const POU: { x: number; y: number; r: number; age: number; vie: number }[] = []
   const ONDES: { age: number }[] = []
   const NIDS = [
@@ -309,12 +383,21 @@ export async function creerVie(
     voulu: Math.random() < 0.3 ? 1 : 0,
     a: 0
   }))
+  // Ils restent sur les plantes : au-dessus d'un bain, ils se perdaient dans la vapeur (conv-1424).
+  const FLEURS = [
+    [640, 656],
+    [912, 664],
+    [106, 684],
+    [770, 716],
+    [662, 690],
+    [120, 660]
+  ]
   const PAP = Array.from({ length: 6 }, (_, i) => {
     const c = ['#f2a23a', '#f0cf4e', '#e86a92', '#7fb7e8'][i % 4] // couleur-fixe: papillons de la maquette
     return {
-      cx: rnd(260, 880),
-      cy: rnd(640, 700),
-      r: rnd(14, 34),
+      cx: FLEURS[i][0],
+      cy: FLEURS[i][1],
+      r: rnd(9, 20),
       p: rnd(0, 6),
       v: rnd(0.28, 0.6),
       c,
@@ -324,14 +407,19 @@ export async function creerVie(
   const BAL = { x: 690, y: 92, v: -3.4 }
   const TRAM = {
     t: 0.2,
+    // Relevé sur le pont repeint : le milieu de la chaussée, derrière le parapet.
     ps: [
-      [556, 342],
-      [600, 339],
-      [640, 342],
-      [680, 352],
-      [712, 365]
+      [564, 333],
+      [580, 332],
+      [600, 332.2],
+      [625, 335.4],
+      [650, 339.6],
+      [675, 346.4],
+      [700, 357.9]
     ]
   }
+  /** Le tram passe derrière eux : ils ne sont que dans la peinture, il roulait par-dessus la loupe. */
+  const DEVANT_TRAM = OB.filter((o) => o.n === 'loupe' || o.n === 'grandlivre')
 
   type Bateau = (typeof BAT)[number]
   /** Le bateau vu de biais quand il vire : jamais aplati à rien. */
@@ -359,6 +447,50 @@ export async function creerVie(
     x.rotate(Math.sin(temps * 0.9 + b.y) * 0.022)
     x.drawImage(b.i, -l / 2, -b.h * 0.94, l, b.h)
     x.restore()
+  }
+
+  /** Le ruban d'un filet, ligne par ligne, puis son fondu : à plat sur `VAPEUR`, une seule fois par filet. */
+  const filet = (s: (typeof VOLUTES)[number]): void => {
+    const g = VAPEURg
+    g.globalCompositeOperation = 'source-over'
+    g.clearRect(0, 0, VAPEUR_L, VAPEUR_H)
+    const n = Math.ceil(VAPEUR_H / LIGNE_VAPEUR)
+    for (let j = 0; j < n; j++) {
+      const f = formeVolute(j / n, temps, s.ph, s.l)
+      const ligne = (((j * LIGNE_VAPEUR * 1.1 - s.o) % MATIERE_H) + MATIERE_H) % MATIERE_H
+      g.drawImage(
+        MATIERE,
+        0,
+        ligne,
+        48,
+        LIGNE_VAPEUR,
+        VAPEUR_L / 2 + f.dx - f.l / 2,
+        VAPEUR_H - (j + 1) * LIGNE_VAPEUR,
+        f.l,
+        LIGNE_VAPEUR
+      )
+    }
+    g.globalCompositeOperation = 'destination-in'
+    g.drawImage(FONDU, 0, 0, VAPEUR_L, VAPEUR_H)
+  }
+
+  /** Le tram sur le pont : il s'arrête aux deux bouts, et ne roule jamais à reculons. */
+  const dessinerTram = (x: Ctx): void => {
+    const n = TRAM.ps.length - 1
+    const u = placeDuTram(TRAM.t) * n
+    const i = Math.min(n - 1, Math.floor(u))
+    const a = TRAM.ps[i]
+    const b = TRAM.ps[i + 1]
+    const sp = SPR.tram
+    const lt = 19
+    const ht = (lt * sp.h) / sp.w
+    x.save()
+    x.translate(a[0] + (b[0] - a[0]) * (u - i), a[1] + (b[1] - a[1]) * (u - i))
+    x.rotate(Math.atan2(b[1] - a[1], b[0] - a[0]))
+    x.scale(TRAM.t % 2 < 1 ? 1 : -1, 1)
+    x.drawImage(sp.i, -lt / 2, -ht, lt, ht)
+    x.restore()
+    for (const o of DEVANT_TRAM) x.drawImage(o.k, o.x, o.y, o.w, o.h)
   }
 
   const ballon = (x: Ctx): void => {
@@ -416,6 +548,16 @@ export async function creerVie(
     x.restore()
   }
 
+  /** Une peinture seule, sans ciel ni mât dedans : découpée dans la toile, elle les emportait avec elle. */
+  const dessinerRoue = (x: Ctx): void => {
+    const R0 = CAL.roue
+    x.save()
+    x.translate(R0.px ?? 0, R0.py ?? 0)
+    x.rotate(temps * 0.32)
+    x.drawImage(R0.i, R0.x - (R0.px ?? 0), R0.y - (R0.py ?? 0), R0.w, R0.h)
+    x.restore()
+  }
+
   const dessinerMaillet = (x: Ctx): void => {
     // Le maillet recule, retombe sur le disque, puis se balance encore un peu.
     const t = temps - frappeDebut
@@ -426,6 +568,8 @@ export async function creerVie(
       bal = -0.12 * Math.exp(-(t - IMPACT_S) * 1.6) * Math.abs(Math.sin((t - IMPACT_S) * 5.2))
     const Ma = CAL.maillet
     x.save()
+    // `airs` le dessine après la boucle VOLUTES dont la transparence restait posée (conv-1439).
+    x.globalAlpha = 1
     x.translate(Ma.px ?? 0, Ma.py ?? 0)
     x.rotate(bal + Math.sin(temps * 0.9) * 0.008)
     x.drawImage(Ma.i, Ma.x - (Ma.px ?? 0), Ma.y - (Ma.py ?? 0), Ma.w, Ma.h)
@@ -445,37 +589,8 @@ export async function creerVie(
     },
     avancer(dt, actifs, tanukis) {
       temps += dt
-      dtVolant = dt
-      machineActive = actifs(0, 1, 2, 3)
       gust = 0.65 + 0.35 * Math.sin(temps * 0.23) * Math.sin(temps * 0.071 + 1)
-      for (const s of SRC) {
-        s.t -= dt * (s.mach && actifs(0, 1, 2, 3) ? 3.2 : 1)
-        if (s.t <= 0) {
-          s.t = s.dt * rnd(0.7, 1.3)
-          FUM.push({
-            x: s.x + rnd(-s.r, s.r) * 0.6,
-            y: s.y,
-            vx: rnd(1, 5),
-            vy: -rnd(s.v * 0.7, s.v),
-            r: s.r * rnd(0.8, 1.2),
-            a: s.a,
-            age: 0,
-            vie: rnd(2.2, 3.8),
-            g: s.r * 1.1
-          })
-        }
-      }
-      for (let i = FUM.length - 1; i >= 0; i--) {
-        const p = FUM[i]
-        p.age += dt
-        if (p.age > p.vie) {
-          FUM.splice(i, 1)
-          continue
-        }
-        p.x += (p.vx + Math.sin(p.age * 1.9 + p.vie * 4) * 5) * dt
-        p.y += p.vy * dt
-        p.r += p.g * dt
-      }
+      for (const s of VOLUTES) s.o += dt * s.v
       for (const w of tanukis)
         if (w.etat === 'va' && w.sur < 0 && w.y > 672) {
           const q = Math.floor(w.ph * 2)
@@ -530,7 +645,8 @@ export async function creerVie(
       for (const o of OB)
         if (o.n === 'gong')
           o.rot = choc * Math.sin(apres * 3.4) * 0.05 + Math.sin(temps * 0.9) * 0.003
-        else if (o.cal) {
+        else if (o.n === 'mannequin1' || o.n === 'mannequin2') {
+          // Seuls les mannequins bougent : le devant du dojo et la longue-vue sont aussi des calques.
           const poste = o.n === 'mannequin1' ? 20 : 21
           o.rot = actifs(poste)
             ? Math.sin(temps * 13) * 0.075 * Math.max(0, Math.sin(temps * 6))
@@ -580,6 +696,8 @@ export async function creerVie(
       g.drawImage(EAUm, 0, 0, l, e.h * S)
       x.drawImage(EAUc, e.x, e.y, e.w, e.h)
       for (const b of BAT) dessinerBateau(x, b)
+      // Après l'eau : elle passe juste derrière le pont, et aurait recouvert le haut du tram.
+      dessinerTram(x)
     },
     ciel(x) {
       ballon(x)
@@ -647,39 +765,15 @@ export async function creerVie(
         x.fillRect(f.x, f.y, f.w, f.h)
       }
       x.globalAlpha = 1
-      // Le tram sur le pont : il s'arrête aux deux bouts, et ne roule jamais à reculons.
-      const n = TRAM.ps.length - 1
-      const u = placeDuTram(TRAM.t) * n
-      const i = Math.min(n - 1, Math.floor(u))
-      const a = TRAM.ps[i]
-      const b = TRAM.ps[i + 1]
-      const sp = SPR.tram
-      const lt = 19
-      const ht = (lt * sp.h) / sp.w
-      x.save()
-      x.translate(a[0] + (b[0] - a[0]) * (u - i), a[1] + (b[1] - a[1]) * (u - i))
-      x.rotate(Math.atan2(b[1] - a[1], b[0] - a[0]))
-      x.scale(TRAM.t % 2 < 1 ? 1 : -1, 1)
-      x.drawImage(sp.i, -lt / 2, -ht, lt, ht)
-      x.restore()
     },
     pieces(x) {
-      // La salle de méditation : posée sur la peinture, les tanukis passent devant.
-      const Ze = CAL.zendo
-      x.drawImage(Ze.i, Ze.x, Ze.y, Ze.w, Ze.h)
-      const R0 = CAL.roue
-      const Vo = CAL.volant
-      x.save()
-      x.translate(R0.px ?? 0, R0.py ?? 0)
-      x.rotate(temps * 0.32)
-      x.drawImage(R0.i, R0.x - (R0.px ?? 0), R0.y - (R0.py ?? 0), R0.w, R0.h)
-      x.restore()
-      x.save()
-      x.translate(Vo.px ?? 0, Vo.py ?? 0)
-      angleVolant += (machineActive ? 7.5 : 1.1) * dtVolant
-      x.rotate(angleVolant)
-      x.drawImage(Vo.i, Vo.x - (Vo.px ?? 0), Vo.y - (Vo.py ?? 0), Vo.w, Vo.h)
-      x.restore()
+      // Le dojo (conv-1428), ses coussins et son brûle-encens, posés sur la peinture : les tanukis passent
+      // devant, et son toit et ses piliers repassent devant ceux qui sont dedans (l'objet `dojoDevant`).
+      for (const n of DOJO) {
+        const c = CAL[n]
+        if (c) x.drawImage(c.i, c.x, c.y, c.w, c.h)
+      }
+      dessinerRoue(x)
       // L'ombre du gong reste sur le mur, le disque se balance devant (voir `avancer`).
       const Oo = CAL.gongOmbre
       x.drawImage(Oo.i, Oo.x, Oo.y, Oo.w, Oo.h)
@@ -694,6 +788,7 @@ export async function creerVie(
         x.restore()
       }
     },
+    roue: dessinerRoue,
     maillet: dessinerMaillet,
     feuillages(x, devant) {
       for (const f of FE) {
@@ -716,9 +811,10 @@ export async function creerVie(
         x.globalAlpha = 0.34 * (1 - p.age / p.vie)
         x.drawImage(rondS, p.x - p.r, p.y - p.r * 0.6, p.r * 2, p.r * 1.2)
       }
-      for (const p of FUM) {
-        x.globalAlpha = p.a * (1 - p.age / p.vie) * Math.min(1, p.age * 2.5)
-        x.drawImage(rond, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2)
+      for (const s of VOLUTES) {
+        filet(s)
+        x.globalAlpha = s.a * 0.82
+        x.drawImage(VAPEUR, s.x - VAPEUR_L / 2, s.y - s.h, VAPEUR_L, s.h)
       }
       const t = temps - frappeDebut
       dessinerMaillet(x)

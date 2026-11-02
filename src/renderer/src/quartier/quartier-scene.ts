@@ -14,6 +14,7 @@
  */
 import urlFalaise from '../assets/quartier/falaise.avif'
 import urlAtlas from '../assets/quartier/atlas.avif'
+import urlBords from '../assets/quartier/bords.avif'
 import type { DecorScene } from '../components/home-decor-scene'
 import { HOME_WIDGET_IDS, type HomeWidgetId } from '../components/home-layout'
 import {
@@ -24,8 +25,15 @@ import {
   type AgentQuartier
 } from './agents-quartier'
 import {
+  abonnerAgentsCollegues,
+  consigneDuCollegue,
+  lireAgentsCollegues,
+  type AgentCollegue
+} from './agents-collegues'
+import {
   creerMarche,
   type DonneesMarche,
+  type Geste,
   type MarcheQuartier,
   type Tanuki
 } from './quartier-marche'
@@ -38,6 +46,7 @@ import {
 import { jouerGong } from './quartier-son'
 import { lireTuilesSorties, TOUR_DU_WIDGET, widgetDeLaTour } from './quartier-tuiles'
 import { contexte, creerVie, image, toile, type VieDecor } from './quartier-vie'
+import { bornerVue, MARGE_BORD, rapprocherZoom, zoomSur } from './quartier-zoom'
 
 const LARGEUR = 1344
 const HAUTEUR = 768
@@ -72,6 +81,8 @@ export interface ObjetDonnee {
   w: number
   h: number
   m: string
+  /** Ce que la souris touche, quand ce n'est pas ce qui est découpé : la roue tourne à part de son mât. */
+  mh?: string
   b?: number[]
 }
 
@@ -110,7 +121,7 @@ interface CalqueDonnee {
 }
 
 export interface DonneesQuartier extends DonneesMarche {
-  gestes: Record<string, { r: number; d: number; n: number }>
+  gestes: Record<string, Geste>
   an: { cw: number; ch: number; ax: number; ay: number; pu: number }
   obj: ObjetDonnee[]
   feuilles: ObjetDonnee[]
@@ -131,6 +142,8 @@ export interface DonneesQuartier extends DonneesMarche {
 interface Monde {
   D: DonneesQuartier
   F: HTMLImageElement
+  /** La peinture prolongée à gauche puis à droite, `MARGE_BORD` de large chacune (conv-1424). */
+  B: HTMLImageElement
   S: number
   A: HTMLCanvasElement
   AO: HTMLCanvasElement
@@ -152,7 +165,7 @@ async function coupe(F: HTMLImageElement, S: number, o: ObjetDonnee): Promise<Ob
     // À la taille de la peinture, pas de l'image agrandie : la souris n'a pas besoin de plus.
     const c = toile(o.w, o.h)
     const gh = c.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D
-    gh.drawImage(i, 0, 0, o.w, o.h)
+    gh.drawImage(o.mh ? await image(o.mh) : i, 0, 0, o.w, o.h)
     hit = gh.getImageData(0, 0, c.width, c.height)
   }
   g.globalCompositeOperation = 'source-in'
@@ -181,7 +194,7 @@ function lueurDe(o: ObjetCoupe): HTMLCanvasElement {
 async function charger(): Promise<Monde> {
   const module = await import('../assets/quartier/donnees.json')
   const D = (module.default ?? module) as unknown as DonneesQuartier
-  const [F, atlas] = await Promise.all([image(urlFalaise), image(urlAtlas)])
+  const [F, atlas, B] = await Promise.all([image(urlFalaise), image(urlAtlas), image(urlBords)])
   const S = F.naturalWidth / LARGEUR
   // Les filtres de toile coûtent cher à chaque image : on les applique UNE fois, à l'atlas entier.
   const A = toile(atlas.naturalWidth, atlas.naturalHeight)
@@ -213,7 +226,7 @@ async function charger(): Promise<Monde> {
     P.closePath()
     return { n, P }
   })
-  return { D, F, S, A, AO, OB, FE, m: creerMarche(D), vie, contact, sols }
+  return { D, F, B, S, A, AO, OB, FE, m: creerMarche(D), vie, contact, sols }
 }
 
 const pied = (o: ObjetCoupe, px: number): number => {
@@ -227,6 +240,61 @@ const pied = (o: ObjetCoupe, px: number): number => {
 
 const couvre = (o: ObjetCoupe, w: Tanuki): boolean =>
   w.x + w.u * 0.4 > o.x && w.x - w.u * 0.4 < o.x + o.w && w.y + 4 > o.y && w.y - w.u < o.y + o.h
+
+/** La part de la hauteur du corps où tombe le cou : mesurée sur le foulard peint des cases de face (0,52 à 0,59). */
+const COU = 0.56
+
+/**
+ * Le cou de chaque case de l'atlas (conv-1429) : `[x, y, demi-largeur]` en pixels de la case, `NaN` pour
+ * une case vide. Le foulard peint n'est visible que de face — aucun pixel de dos, en méditation ni au
+ * sabre, mesuré sur l'atlas : on le place donc d'après la silhouette, à `COU` de sa hauteur, au milieu de
+ * la plus longue bande opaque (la queue, vue de profil, en est séparée).
+ */
+export function cousDeLAtlas(
+  rgba: Uint8ClampedArray,
+  largeur: number,
+  cw: number,
+  ch: number,
+  colonnes: number,
+  rangees: number
+): Float32Array {
+  const cous = new Float32Array(colonnes * rangees * 3).fill(NaN)
+  const opaque = (px: number, py: number): boolean => rgba[(py * largeur + px) * 4 + 3] > 128
+  const ligneOpaque = (x0: number, py: number): boolean => {
+    for (let u = 0; u < cw; u++) if (opaque(x0 + u, py)) return true
+    return false
+  }
+  for (let r = 0; r < rangees; r++)
+    for (let c = 0; c < colonnes; c++) {
+      const x0 = c * cw
+      const y0 = r * ch
+      let haut = 0
+      while (haut < ch && !ligneOpaque(x0, y0 + haut)) haut++
+      if (haut >= ch) continue
+      let bas = ch - 1
+      while (bas > haut && !ligneOpaque(x0, y0 + bas)) bas--
+      const y = Math.round(haut + (bas - haut) * COU)
+      let meilleur = 0
+      let debut = 0
+      let suite = 0
+      for (let u = 0; u <= cw; u++) {
+        if (u < cw && opaque(x0 + u, y0 + y)) suite++
+        else {
+          if (suite > meilleur) {
+            meilleur = suite
+            debut = u - suite
+          }
+          suite = 0
+        }
+      }
+      if (!meilleur) continue
+      const i = (r * colonnes + c) * 3
+      cous[i] = debut + meilleur / 2
+      cous[i + 1] = y
+      cous[i + 2] = meilleur / 2
+    }
+  return cous
+}
 
 /** D19 : les premiers mots du fil ; pour un lot, ce qui suit « Lot 8/8 — ». */
 export function etiquetteDuFil(titre: string): string {
@@ -266,6 +334,15 @@ export function creerSceneQuartier(): DecorScene | null {
   const desabonner = abonnerAgentsQuartier(() => {
     agents = lireAgentsQuartier()
   })
+  // Les agents des collègues vivent dans le même quartier (D-10, conv-1429) ; le bouton « Mes agents »
+  // vide cette liste, et leurs tanukis repartent comme ceux dont le fil s'est fermé.
+  let collegues: readonly AgentCollegue[] = lireAgentsCollegues()
+  const desabonnerCollegues = abonnerAgentsCollegues(() => {
+    collegues = lireAgentsCollegues()
+  })
+  /** Le cou de chaque case de l'atlas, mesuré une fois, au premier foulard à poser. */
+  let cous: Float32Array | null = null
+  const etoffe = toile(1, 1)
 
   /** Le cadrage au repos : calé sur la largeur de l'Accueil, posé en bas. */
   const cadrer = (): void => {
@@ -338,7 +415,7 @@ export function creerSceneQuartier(): DecorScene | null {
       const [px, py] = versPeinture(cx, cy)
       const w = tanukiSous(px, py)
       if (w) {
-        const a = agents.find((q) => q.id === w.id)
+        const a = agents.find((q) => q.id === w.id) ?? collegues.find((q) => q.id === w.id)
         return {
           type: 'agent',
           id: w.id,
@@ -359,7 +436,8 @@ export function creerSceneQuartier(): DecorScene | null {
     },
     zoomerSur(c) {
       cible = c.rect
-      z = Math.min(3, 760 / Math.max(c.rect.w, c.rect.h * 1.75))
+      // La vue au repos, en pixels de scène : l'élément la remplit presque (conv-1424).
+      z = zoomSur(c.rect, Math.max(1, W - ax) / e0, H / e0)
       sous = null
       return new Promise((r) => setTimeout(r, ZOOM_MS))
     },
@@ -388,25 +466,51 @@ export function creerSceneQuartier(): DecorScene | null {
       if (w) w.consigne = consigne
       else m.ajouter(a.id, consigne)
     }
+    // Ceux des collègues : mêmes lieux selon le métier et la phase (D-8), un foulard à leur couleur (D9).
+    for (const a of collegues) {
+      const consigne = consigneDuCollegue(a, maintenant)
+      const w = m.T.find((q) => q.id === a.id)
+      if (w) w.consigne = consigne
+      else m.ajouter(a.id, consigne, a.collegue.couleur)
+    }
     for (const w of m.T)
-      if (!agents.some((a) => a.id === w.id)) w.consigne = { metier: null, pose: '', partir: true }
+      if (!agents.some((a) => a.id === w.id) && !collegues.some((a) => a.id === w.id))
+        w.consigne = { metier: null, pose: '', partir: true }
   }
 
-  const cellule = (M: Monde, w: Tanuki): { c: number; r: number; m: number } => {
+  /** La case de l'atlas à dessiner ; `f` fond l'image suivante par-dessus, `dx` recale une case décalée. */
+  const cellule = (
+    M: Monde,
+    w: Tanuki
+  ): { c: number; r: number; m: number; f?: number; n?: number; dx?: number } => {
     if (w.etat === 'etat') {
       const g = M.D.gestes[w.nom]
       return { c: Math.floor((w.th * g.n) / g.d) % g.n, r: g.r, m: w.mir }
     }
-    if (w.etat === 'poste' && w.face?.g) {
+    if ((w.etat === 'poste' || w.etat === 'leve') && w.face?.g) {
       const g = M.D.gestes[w.face.g]
-      return { c: Math.floor((w.th * g.n) / g.d) % g.n, r: g.r, m: w.face.m || 0 }
+      const m = w.face.m || 0
+      const e = g.e
+      // S'asseoir en arrivant, se relever en partant : les mêmes images, dans un sens puis dans l'autre.
+      if (e && w.etat === 'leve') {
+        const k = Math.max(0, 1 - w.th / e.d)
+        return { c: Math.min(e.n - 1, Math.round(k * (e.n - 1))), r: e.r, m }
+      }
+      if (e && w.th < e.d) return { c: Math.min(e.n - 1, Math.floor((w.th * e.n) / e.d)), r: e.r, m }
+      const q = ((w.th - (e?.d ?? 0)) * g.n) / g.d
+      const c = Math.floor(q) % g.n
+      return { c, r: g.r, m, f: g.fondu ? q - Math.floor(q) : 0, n: g.n, dx: g.dx ?? 0 }
     }
     const a = ((w.ang % 360) + 360) % 360
     const s = Math.round(a / 45) % 8
     const m = s > 4 ? 1 : 0
     const r = m ? 8 - s : s
     return {
-      c: w.etat === 'attend' || w.pause ? 8 : Math.floor((((w.ph % 1) + 1) % 1) * 8),
+      // Debout : à l'arrêt, et quand il se tourne vers sa place avant de s'asseoir.
+      c:
+        w.etat === 'attend' || w.etat === 'tourne' || w.pause
+          ? 8
+          : Math.floor((((w.ph % 1) + 1) % 1) * 8),
       r,
       m
     }
@@ -426,8 +530,69 @@ export function creerSceneQuartier(): DecorScene | null {
     x.translate(w.x, w.y - (ombre ? 0 : w.lev))
     if (ombre) x.transform(1, 0, 0.46, -0.2, 0, 0)
     x.scale(cl.m ? -k : k, k)
-    x.drawImage(atlas, cl.c * an.cw, cl.r * an.ch, an.cw, an.ch, -an.ax, -an.ay, an.cw, an.ch)
+    const ox = -an.ax + (cl.dx ?? 0)
+    x.drawImage(atlas, cl.c * an.cw, cl.r * an.ch, an.cw, an.ch, ox, -an.ay, an.cw, an.ch)
+    if (!ombre && w.foulard) poserFoulard(M, w.foulard, cl.c, cl.r, ox)
+    // Une respiration de douze images en six secondes : l'image suivante se fond par-dessus, sans à-coup.
+    if (!ombre && cl.f && cl.n) {
+      const a = x.globalAlpha
+      x.globalAlpha = a * cl.f
+      const c2 = ((cl.c + 1) % cl.n) * an.cw
+      x.drawImage(atlas, c2, cl.r * an.ch, an.cw, an.ch, ox, -an.ay, an.cw, an.ch)
+      x.globalAlpha = a
+    }
     x.restore()
+  }
+
+  let colonnesAtlas = 0
+  /**
+   * Le foulard d'un collègue (D9, conv-1429) : une écharpe à sa couleur, découpée sur la silhouette de
+   * l'image en cours, à hauteur du cou. Posé dans le repère du personnage, il suit le miroir, le pas et
+   * la marche sans calcul de plus. Trois gestes sur une petite toile : 15 collègues au plus, c'est peu.
+   */
+  function poserFoulard(M: Monde, couleur: string, c: number, r: number, ox: number): void {
+    const { an } = M.D
+    if (!cous) {
+      colonnesAtlas = Math.floor(M.A.width / an.cw)
+      const rangees = Math.floor(M.A.height / an.ch)
+      const rgba = contexte(M.A).getImageData(0, 0, M.A.width, M.A.height).data
+      cous = cousDeLAtlas(rgba, M.A.width, an.cw, an.ch, colonnesAtlas, rangees)
+    }
+    const i = (r * colonnesAtlas + c) * 3
+    const cx = cous[i]
+    if (!Number.isFinite(cx)) return
+    const cy = cous[i + 1]
+    const rx = Math.max(9, Math.min(20, cous[i + 2] * 0.8))
+    const ry = 7.5
+    if (etoffe.width !== an.cw || etoffe.height !== an.ch) {
+      etoffe.width = an.cw
+      etoffe.height = an.ch
+    }
+    const g = contexte(etoffe)
+    g.globalCompositeOperation = 'source-over'
+    g.clearRect(0, 0, an.cw, an.ch)
+    g.fillStyle = couleur
+    g.beginPath()
+    g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
+    g.fill()
+    // La pointe, sous le menton : c'est elle qui le fait lire comme un foulard, et non comme un col.
+    g.beginPath()
+    g.moveTo(cx - rx * 0.45, cy + ry * 0.4)
+    g.lineTo(cx + rx * 0.45, cy + ry * 0.4)
+    g.lineTo(cx, cy + ry * 2.1)
+    g.closePath()
+    g.fill()
+    // Un reflet en haut, un pli d'ombre en bas : un aplat de couleur se lirait comme un autocollant.
+    const d = g.createLinearGradient(0, cy - ry, 0, cy + ry * 2.1)
+    d.addColorStop(0, 'rgba(255,255,255,.2)') // couleur-fixe: reflet du foulard peint sur le décor
+    d.addColorStop(0.45, 'rgba(0,0,0,0)') // couleur-fixe: milieu du foulard peint sur le décor
+    d.addColorStop(1, 'rgba(0,0,0,.34)') // couleur-fixe: pli d'ombre du foulard peint sur le décor
+    g.globalCompositeOperation = 'source-atop'
+    g.fillStyle = d
+    g.fillRect(0, cy - ry, an.cw, ry * 3.2)
+    g.globalCompositeOperation = 'destination-in'
+    g.drawImage(M.A, c * an.cw, r * an.ch, an.cw, an.ch, 0, 0, an.cw, an.ch)
+    x.drawImage(etoffe, ox, -an.ay, an.cw, an.ch)
   }
 
   function dessinerOmbre(M: Monde, w: Tanuki): void {
@@ -438,8 +603,9 @@ export function creerSceneQuartier(): DecorScene | null {
     if (sol && !sol.n.e) x.clip(sol.P)
     x.globalAlpha = 0.55 * w.alpha
     x.drawImage(M.contact, w.x - r, w.y - r * 0.46, r * 2, r * 0.92)
-    // Sur une marche, l'ombre portée tomberait dans le vide : on ne garde que le contact.
-    if (w.sur < 0) {
+    // Sur une marche, ou assis au bord les jambes dans le vide, l'ombre portée tomberait dans le vide :
+    // on ne garde que le contact.
+    if (w.sur < 0 && !(w.face?.g === 'bo' && w.etat !== 'va')) {
       x.globalAlpha = 0.27 * w.alpha
       sprite(M, w, M.AO, true)
     }
@@ -478,7 +644,8 @@ export function creerSceneQuartier(): DecorScene | null {
     const t = M.vie.temps()
     x.globalCompositeOperation = 'lighter'
     for (const w of M.m.T) {
-      if (w.nom !== 'at' && w.nom !== 'pl') continue
+      // L'agent d'un collègue n'attend pas après moi : ni or ni rouge (D9, conv-1429).
+      if ((w.nom !== 'at' && w.nom !== 'pl') || w.foulard) continue
       const v = 0.5 + 0.5 * Math.sin(t * 3 + w.x)
       const r = w.u * (0.34 + v * 0.06)
       if (w.nom === 'at') {
@@ -508,6 +675,8 @@ export function creerSceneQuartier(): DecorScene | null {
     const posees: { g: number; d: number; y: number }[] = []
     for (const w of [...T].sort((a, b) => b.y - a.y)) {
       if (foule && w.nom !== 'at' && w.nom !== 'pl') continue
+      // Un collègue n'a pas d'étiquette au-dessus de la tête : son prénom et son titre vont au survol (D9).
+      if (w.foulard) continue
       const a = agents.find((q) => q.id === w.id)
       const t = a ? etiquetteDuFil(a.titre) : ''
       if (!t) continue
@@ -560,12 +729,16 @@ export function creerSceneQuartier(): DecorScene | null {
     }
   }
 
-  function halo(o: ObjetCoupe): void {
+  function halo(M: Monde, o: ObjetCoupe): void {
     x.save()
     x.shadowColor = 'rgba(255,214,110,.95)' // couleur-fixe: contour d'un objet survolé sur la peinture
     x.shadowBlur = 11 * esc
+    // La roue n'est pas dans la peinture : sa lueur passe sous le mât, sinon elle le délave, et elle
+    // revient nette par-dessus.
+    if (o.cle === 'settings') M.vie.roue(x)
     for (let i = 0; i < 2; i++) x.drawImage(o.k, o.x, o.y, o.w, o.h)
     x.restore()
+    if (o.cle === 'settings') M.vie.roue(x)
   }
 
   function dessin(M: Monde, dt: number): void {
@@ -583,7 +756,9 @@ export function creerSceneQuartier(): DecorScene | null {
     const pas = 1 - Math.exp(-dt * 7)
     vx += (cx0 + (tx - cx0) * m - vx) * pas
     vy += (cy0 + (ty - cy0) * m - vy) * pas
-    sx = Math.max(Math.min(0, sx0), Math.min(LARGEUR - vw, vx - vw / 2))
+    // Zoomée, la vue peut sortir de la peinture par ses bords prolongés : la roue de Settings et la clé du
+    // hangar, collées au bord, se centrent comme le reste (conv-1424). Au repos, la marge vaut 0.
+    sx = bornerVue(vx, vw, Math.min(0, sx0), LARGEUR, MARGE_BORD * m)
     sy = Math.max(Math.min(0, sy0), Math.min(HAUTEUR - vh, vy - vh / 2))
     esc = e0 * zv
     const { F, S } = M
@@ -601,7 +776,7 @@ export function creerSceneQuartier(): DecorScene | null {
         3 * S,
         gaucheMonde,
         haut - 2,
-        LARGEUR - gaucheMonde,
+        Math.max(LARGEUR, sx + vw) - gaucheMonde,
         3 - haut + 2
       )
     }
@@ -611,6 +786,17 @@ export function creerSceneQuartier(): DecorScene | null {
       x.drawImage(F, 0, 0, -gaucheMonde * S, HAUTEUR * S, 0, 0, -gaucheMonde, HAUTEUR)
       x.restore()
     }
+    // Les bords prolongés : à gauche, ils remplacent peu à peu le reflet à mesure que le zoom s'approche.
+    const { B } = M
+    const mb = MARGE_BORD
+    if (gaucheMonde < 0 && m > 0) {
+      x.globalAlpha = m
+      x.drawImage(B, 0, 0, mb * S, HAUTEUR * S, -mb, 0, mb, HAUTEUR)
+      x.globalAlpha = 1
+    }
+    // 16 px de tampon séparent les deux bords dans l'image : le lissage y lit sans prendre un filet de l'autre.
+    if (sx + vw > LARGEUR)
+      x.drawImage(B, mb * S + 16, 0, mb * S, HAUTEUR * S, LARGEUR, 0, mb, HAUTEUR)
     x.drawImage(F, 0, 0, LARGEUR, HAUTEUR)
     M.vie.ciel(x)
     tours(M, dt)
@@ -623,8 +809,8 @@ export function creerSceneQuartier(): DecorScene | null {
     signaux(M)
     M.vie.airs(x)
     if (sous) {
-      halo(sous)
-      if (sous.cle === 'settings' || sous.cle === 'task') M.vie.pieces(x)
+      halo(M, sous)
+      if (sous.cle === 'task') M.vie.pieces(x)
       // Le halo repeint la zone d'après la peinture, où le gong n'est pas : il repasse devant.
       if (sous.cle === 'task') {
         for (const o of M.OB) if (o.n === 'gong') peint(o)
@@ -670,7 +856,7 @@ export function creerSceneQuartier(): DecorScene | null {
         (...p) => m.T.some((w) => w.etat === 'poste' && p.includes(w.poste as number)),
         m.T
       )
-      zv += (z - zv) * Math.min(1, dt * 4.2)
+      zv = rapprocherZoom(zv, z, dt)
       dessin(M, dt)
     },
     resize(w, h) {
@@ -687,6 +873,7 @@ export function creerSceneQuartier(): DecorScene | null {
     dispose() {
       libere = true
       desabonner()
+      desabonnerCollegues()
       debrancherQuartier(pilote)
     }
   }

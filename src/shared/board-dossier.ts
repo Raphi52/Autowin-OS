@@ -46,6 +46,11 @@ export interface EtatDuDossierDuBoard {
   compte?: string
   /** Le nom choisi dans Settings · Interface ; absent = le compte Windows. */
   nomChoisi?: string
+  /**
+   * Le partage de la présence dans le village commun (D6, conv-1429) : `false` = coupé sur ce poste.
+   * Absent = actif, le défaut (D-9).
+   */
+  partagerPresence?: false
 }
 
 /** Rend `null` quand la valeur n'est pas un état manuel lisible : la vue n'est pas une source sûre. */

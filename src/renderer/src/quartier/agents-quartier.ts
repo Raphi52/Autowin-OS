@@ -13,14 +13,15 @@
  *  - D-4 : un agent qui a fini sans rien demander reste 15 min au repos, puis part ;
  *  - D7 : une question reste en or et un échec en rouge jusqu'à l'ouverture du fil ;
  *  - D9 : si le fil repart, le même personnage retourne au travail ; ouvrir le fil le libère ;
- *  - D14 : réfléchir n'est pas un lieu, il reste à son dernier poste ; avant sa première action, il
- *    attend à l'entrée.
+ *  - D14 (revue le 2026-11-02, conv-1428) : une réflexion courte le laisse à son dernier poste ; une
+ *    longue l'envoie en pause, une activité parmi plusieurs (voir `quartier-marche.ts`).
  *
  * Le module ne dépend ni de React ni de la scène : la partie décisive est faite de fonctions pures,
  * et la scène lit la liste à chaque image.
  */
 import { metierDeLOutil, type Metier } from './quartier-metiers'
 import type { Consigne } from './quartier-marche'
+import type { AgentAPublier } from '../../../shared/quartier-presence'
 
 export type PhaseAgent = 'travail' | 'reflexion' | 'attente' | 'plante' | 'fini'
 
@@ -35,6 +36,8 @@ export interface AgentQuartier {
   depuis: number
   /** Son dernier événement : une lecture des résumés partie avant le début du tour ne le chasse pas. */
   vuLe?: number
+  /** Fil marqué privé (D6, conv-1429) : son tanuki part dans le village commun sans titre. */
+  prive?: boolean
 }
 
 /** La part d'un résumé de fil qui décide de la présence d'un agent. */
@@ -47,6 +50,8 @@ export interface ResumeFil {
   lastAssistantStatus?: string
   /** Fil mis de côté par l'utilisateur : il n'a plus de personnage (voir `setInactive`). */
   inactive?: boolean
+  /** Fil marqué privé (voir `setPrive`, D6, conv-1429) : son tanuki part au village sans titre. */
+  prive?: boolean
 }
 
 export interface EvenementPilote {
@@ -60,8 +65,11 @@ export interface EvenementPilote {
 export const REPOS_MS = 15 * 60_000
 /** Au-delà, une question ou un échec restés sans suite ne sont plus de l'actualité : ils encombreraient. */
 export const SIGNAL_MAX_MS = 12 * 60 * 60_000
-/** Un agent ne s'assied qu'après ce temps sans action : il réfléchit souvent quelques secondes à peine. */
-export const MEDITE_APRES_MS = 6_000
+/**
+ * Un agent ne part en pause qu'après ce temps sans action. Mesuré sur 400 tours (conv-1428) : la moitié des
+ * attentes entre deux outils dure moins de 9 s ; en dessous, il reste à son poste et continue son geste.
+ */
+export const PAUSE_APRES_MS = 10_000
 /** Le pic mesuré sur ce poste : 15 personnages en même temps (`grill/agent-hq-japon-town.md`). */
 export const AGENTS_MAX = 15
 /** Le temps qu'un résumé peut avoir de retard sur le pilote : une lecture lancée juste avant le tour. */
@@ -83,6 +91,18 @@ const auTravail = (a: AgentQuartier | undefined): boolean =>
   a?.phase === 'travail' || a?.phase === 'reflexion'
 
 /**
+ * La marque « privé » suit le RÉSUMÉ, à chaque lecture : démarquer le fil doit la retirer, pas
+ * seulement la poser (D6, conv-1429). Le titre ne vient que des résumés, qui portent la marque en
+ * même temps : un agent né d'un événement du pilote n'a pas encore de titre à divulguer.
+ */
+function selonLaMarque(a: AgentQuartier, r: ResumeFil): AgentQuartier {
+  const suite = { ...a }
+  if (r.prive) suite.prive = true
+  else delete suite.prive
+  return suite
+}
+
+/**
  * Recale la carte des agents sur les résumés. Les fils sans tour en cours se décident ici : c'est la
  * seule source qui sait qu'une question est restée ouverte.
  *
@@ -100,9 +120,11 @@ export function appliquerResumes(
     if (r.inactive) continue
     const a = carte.get(r.id)
     const titre = r.title ?? a?.titre ?? ''
+    const poser = (agent: AgentQuartier): void => {
+      suivante.set(r.id, selonLaMarque(agent, r))
+    }
     if (r.hasStreamingTurn) {
-      suivante.set(
-        r.id,
+      poser(
         a && auTravail(a)
           ? { ...a, titre }
           : { ...nouveau(r.id, titre, 'reflexion', maintenant), metier: a?.metier ?? null }
@@ -110,7 +132,7 @@ export function appliquerResumes(
       continue
     }
     if (a && auTravail(a) && maintenant - (a.vuLe ?? 0) < RETARD_RESUMES_MS) {
-      suivante.set(r.id, { ...a, titre })
+      poser({ ...a, titre })
       continue
     }
     const ecrit = r.updatedAt ?? 0
@@ -118,8 +140,7 @@ export function appliquerResumes(
     const age = maintenant - ecrit
     const phase = phaseSansTour(r, age)
     if (!phase) continue
-    suivante.set(
-      r.id,
+    poser(
       a?.phase === phase
         ? { ...a, titre, actions: [] }
         : { ...nouveau(r.id, titre, phase, maintenant), metier: a?.metier ?? null }
@@ -203,10 +224,11 @@ export function consigneDe(a: AgentQuartier, maintenant: number): Consigne {
     case 'travail':
       return { metier: a.metier, pose: '', partir: false }
     case 'reflexion':
-      // Réfléchir est un lieu : dès que ça dure, il part méditer en tailleur (demande du 2026-11-01,
-      // qui remplace D14). Une pensée de quelques secondes ne le fait pas traverser la scène.
-      return maintenant - a.depuis > MEDITE_APRES_MS
-        ? { metier: 'meditation', pose: 'me', partir: false }
+      // Réfléchir longtemps, c'est une pause : méditer au dojo, boire le thé, ratisser… La marche choisit
+      // laquelle (conv-1428, qui remplace la seule salle de méditation du 2026-11-01). Une pensée de
+      // quelques secondes ne le fait pas traverser la scène.
+      return maintenant - a.depuis > PAUSE_APRES_MS
+        ? { metier: 'pause', pose: '', partir: false }
         : { metier: a.metier, pose: '', partir: false }
     case 'attente':
       return { metier: null, pose: 'at', partir: false }
@@ -249,6 +271,7 @@ function publier(carte: ReadonlyMap<string, AgentQuartier>): void {
   agents = carte
   instantane = agentsEnScene(carte)
   for (const abonne of abonnes) abonne()
+  envoyerPresenceBientot()
 }
 
 const api = (): ApiAgents | undefined => (window as unknown as { api?: ApiAgents }).api
@@ -306,6 +329,52 @@ export function demarrerAgentsQuartier(): void {
     if (!document.hidden) void relire()
   }, RELECTURE_MS)
   void relire()
+}
+
+/* ---------------------------------------------------------------- *
+ * La présence du poste dans le village commun (conv-1429).
+ * ---------------------------------------------------------------- */
+
+/** Les changements de 2 s sont regroupés : un tour envoie des dizaines d'événements par seconde. */
+export const ENVOI_PRESENCE_MS = 2_000
+
+/** Ce qui part au processus principal : brut, il le filtre avant toute écriture sur le partage. */
+export function agentAPublier(a: AgentQuartier): AgentAPublier {
+  return {
+    id: a.id,
+    titre: a.titre,
+    phase: a.phase,
+    metier: a.metier,
+    depuis: a.depuis,
+    ...(a.prive ? { prive: true } : {})
+  }
+}
+
+let envoiPresencePrevu: ReturnType<typeof setTimeout> | null = null
+let dernierEnvoiPresence = ''
+
+/**
+ * Envoie l'instantané de la scène au processus principal, au plus une fois par `ENVOI_PRESENCE_MS`,
+ * et seulement s'il a changé : un morceau de texte ne change ni la phase ni le poste d'un tanuki.
+ */
+function envoyerPresenceBientot(): void {
+  if (envoiPresencePrevu !== null) return
+  envoiPresencePrevu = setTimeout(() => {
+    envoiPresencePrevu = null
+    if (typeof window === 'undefined') return
+    const envoyer = (
+      window as unknown as { api?: { quartierPresence?: (a: AgentAPublier[]) => Promise<void> } }
+    ).api?.quartierPresence
+    if (!envoyer) return
+    const liste = instantane.map(agentAPublier)
+    const corps = JSON.stringify(liste)
+    if (corps === dernierEnvoiPresence) return
+    dernierEnvoiPresence = corps
+    envoyer(liste).catch(() => {
+      // Le prochain changement renverra : la présence ne doit jamais gêner la scène.
+      dernierEnvoiPresence = ''
+    })
+  }, ENVOI_PRESENCE_MS)
 }
 
 export function lireAgentsQuartier(): readonly AgentQuartier[] {

@@ -65,6 +65,7 @@ import { autowinStorageKey } from '../storage-keys'
 import { formaterDate, langueCourante } from '../langue'
 import { traduireAccueil, useTextesAccueil, type CleAccueil } from '../textes-ecrans/accueil'
 import type { PhaseAgent } from '../quartier/agents-quartier'
+import type { AgentCollegue } from '../quartier/agents-collegues'
 import type { Metier } from '../quartier/quartier-metiers'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
@@ -134,6 +135,19 @@ const VUE_DE_L_OBJET: Readonly<Record<string, string>> = {
 function cleDeLActivite(phase: PhaseAgent, metier: Metier | null): CleAccueil {
   if (phase === 'travail' && metier) return `quartier.metier.${metier}`
   return `quartier.phase.${phase}`
+}
+
+/**
+ * L'activité de l'agent d'un collègue : la même que celle des miens, sauf l'attente — « T'attend » serait
+ * faux, il attend son humain, pas moi (D9, conv-1429).
+ */
+function activiteDuCollegue(
+  a: AgentCollegue,
+  t: (cle: CleAccueil, valeurs?: Record<string, string>) => string
+): string {
+  return a.phase === 'attente'
+    ? t('quartier.collegue.attente', { prenom: a.collegue.prenom })
+    : t(cleDeLActivite(a.phase, a.metier))
 }
 
 interface TaskSnapshotLike {
@@ -1054,7 +1068,7 @@ export function HomeView({
               </span>
             </>
           ) : null}
-          {scene.survol?.type === 'agent' ? (
+          {scene.survol?.type === 'agent' && !scene.collegueSurvole ? (
             <>
               <b>{scene.survol.titre}</b>
               <span>
@@ -1064,6 +1078,55 @@ export function HomeView({
               </span>
             </>
           ) : null}
+          {/* L'agent d'un collègue : son prénom, le titre de son fil s'il est publié, son activité (D9).
+              Tout ce texte vient d'un autre poste : React l'écrit comme du texte, jamais comme du HTML. */}
+          {scene.collegueSurvole ? (
+            <>
+              <b>{scene.collegueSurvole.collegue.prenom}</b>
+              {scene.collegueSurvole.titre ? (
+                <span className="quartier-etiquette__titre">{scene.collegueSurvole.titre}</span>
+              ) : null}
+              <span>{activiteDuCollegue(scene.collegueSurvole, t)}</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      {quartier && scene.carte ? (
+        <div
+          className="quartier-carte"
+          role="dialog"
+          aria-label={t('quartier.carte.aria', { prenom: scene.carte.agent.collegue.prenom })}
+          data-testid="quartier-carte"
+          style={{ transform: `translate(${scene.carte.x}px, ${scene.carte.y}px)` }}
+        >
+          <div className="quartier-carte__tete">
+            {/* La pastille reprend la couleur du foulard : c'est elle qui relie la carte au tanuki. */}
+            <i
+              className="quartier-carte__pastille"
+              style={{ background: scene.carte.agent.collegue.couleur }}
+              aria-hidden="true"
+            />
+            <b>{scene.carte.agent.collegue.prenom}</b>
+            <button
+              type="button"
+              className="quartier-carte__fermer"
+              onClick={scene.fermerCarte}
+              aria-label={t('quartier.carte.fermer')}
+              title={t('quartier.carte.fermer')}
+              data-testid="quartier-carte-fermer"
+            >
+              ×
+            </button>
+          </div>
+          <p className="quartier-carte__titre">
+            {scene.carte.agent.titre || t('quartier.collegue.prive')}
+          </p>
+          <p>{activiteDuCollegue(scene.carte.agent, t)}</p>
+          <p className="quartier-carte__depuis">
+            {t('quartier.carte.depuis', {
+              heure: formaterDate(scene.carte.agent.depuis, { hour: '2-digit', minute: '2-digit' })
+            })}
+          </p>
         </div>
       ) : null}
       {/* UNE seule rangée, qui se replie. Deux blocs positionnés en absolu se recouvraient dès que la
@@ -1095,6 +1158,28 @@ export function HomeView({
               </svg>
             </button>
           </div>
+          {/* D8 (conv-1429) : masquer les agents des collègues quand il y a foule. Visible dès
+              l'en-tête, pas caché dans les réglages : c'est un geste de tous les jours. */}
+          {quartier ? (
+            <div
+              className="home-view__village"
+              role="group"
+              aria-label={t('quartier.village.aria')}
+              data-testid="home-village"
+            >
+              {(['moi', 'equipe'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={scene.modeVillage === mode}
+                  data-testid={`home-village-${mode}`}
+                  onClick={() => scene.choisirModeVillage(mode)}
+                >
+                  {t(mode === 'moi' ? 'quartier.village.moi' : 'quartier.village.equipe')}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {/* Sur le Quartier, il n'y a pas de tuile à poser : elles sont dans leurs tours. */}
           {noticeVisible && !quartier ? <p>{t('aide.tuiles')}</p> : null}
           {erreurOuverture !== null ? (

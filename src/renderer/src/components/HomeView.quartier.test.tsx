@@ -16,6 +16,14 @@ import {
   type PiloteQuartier
 } from '../quartier/quartier-pont'
 import { CLE_TUILES_SORTIES, oublierTuilesSorties } from '../quartier/quartier-tuiles'
+import {
+  agentsDesCollegues,
+  CLE_MODE_VILLAGE,
+  idCollegue,
+  lireAgentsCollegues,
+  oublierAgentsCollegues,
+  poserAgentsCollegues
+} from '../quartier/agents-collegues'
 import { HomeView } from './HomeView'
 
 const rect = { x: 100, y: 100, w: 40, h: 120 }
@@ -41,6 +49,7 @@ const cliquerFond = async (vue: HTMLElement): Promise<void> => {
 beforeEach(() => {
   window.localStorage.clear()
   oublierTuilesSorties()
+  oublierAgentsCollegues()
   sous = null
   pilote = {
     cibleSous: () => sous,
@@ -153,5 +162,170 @@ describe('les gestes sur le décor', () => {
     })
     expect(vue.getAttribute('data-sur-cible')).toBe('true')
     expect(vue.querySelector('[data-testid="quartier-etiquette"]')?.textContent).toContain('Maison de thé')
+  })
+})
+
+/*
+ * LES AGENTS DES COLLÈGUES (plan « Village commun », conv-1429, D8 à D10) : prénom au survol, carte au
+ * clic sans jamais ouvrir de fil, bouton « Mes agents / Toute l'équipe ». Le registre est posé à la main :
+ * la relecture du partage passe par le processus principal, absent ici.
+ */
+const ID_CLAIRE = idCollegue('claire.d', 'conv-3')
+
+function poserClaire(titre: string | undefined, phase: 'travail' | 'attente' = 'travail'): void {
+  poserAgentsCollegues(
+    agentsDesCollegues(
+      {
+        collegues: [
+          {
+            poste: 'claire.d',
+            nom: 'Claire Dupont',
+            prenom: 'Claire',
+            agents: [
+              {
+                id: 'conv-3',
+                ...(titre === undefined ? {} : { titre }),
+                phase,
+                metier: 'lire',
+                depuis: new Date(Date.now() - 120_000).toISOString()
+              }
+            ]
+          }
+        ]
+      },
+      Date.now()
+    )
+  )
+}
+
+const survoler = async (vue: HTMLElement): Promise<void> => {
+  await act(async () => {
+    vue.dispatchEvent(
+      new PointerEvent('pointermove', { bubbles: true, clientX: 120, clientY: 150 })
+    )
+  })
+}
+
+describe('les agents des collègues', () => {
+  it('nomme au survol le prénom, le titre publié et l’activité', async () => {
+    poserClaire('Revue du budget')
+    const { vue } = await monter()
+    sous = { type: 'agent', id: ID_CLAIRE, titre: 'Revue du budget', rect }
+    await survoler(vue)
+    const etiquette = vue.querySelector('[data-testid="quartier-etiquette"]')?.textContent ?? ''
+    expect(etiquette).toContain('Claire')
+    expect(etiquette).toContain('Revue du budget')
+    expect(etiquette).toContain('Lit un fichier')
+  })
+
+  it('ne dit jamais « T’attend » d’un agent qui attend son humain', async () => {
+    poserClaire('Revue du budget', 'attente')
+    const { vue } = await monter()
+    sous = { type: 'agent', id: ID_CLAIRE, titre: 'Revue du budget', rect }
+    await survoler(vue)
+    const etiquette = vue.querySelector('[data-testid="quartier-etiquette"]')?.textContent ?? ''
+    expect(etiquette).toContain('Attend une réponse de Claire')
+    expect(etiquette).not.toContain('T’attend')
+  })
+
+  it('montre sa carte au clic, sans zoom ni fil ouvert (D10)', async () => {
+    poserClaire('Revue du budget')
+    const { vue, onNavigate } = await monter()
+    const ouvert = vi.fn()
+    window.addEventListener('autowin:open-conversation', ouvert)
+    sous = { type: 'agent', id: ID_CLAIRE, titre: 'Revue du budget', rect }
+    await cliquerFond(vue)
+    window.removeEventListener('autowin:open-conversation', ouvert)
+    const carte = vue.querySelector('[data-testid="quartier-carte"]')
+    expect(carte?.textContent).toContain('Claire')
+    expect(carte?.textContent).toContain('Revue du budget')
+    expect(carte?.textContent).toContain('Lit un fichier')
+    expect(carte?.textContent).toContain('Depuis')
+    expect(ouvert).not.toHaveBeenCalled()
+    expect(onNavigate).not.toHaveBeenCalled()
+    expect(pilote.zoomerSur).not.toHaveBeenCalled()
+  })
+
+  it('dit « Fil privé » quand le titre n’est pas publié', async () => {
+    poserClaire(undefined)
+    const { vue } = await monter()
+    sous = { type: 'agent', id: ID_CLAIRE, titre: '', rect }
+    await cliquerFond(vue)
+    expect(vue.querySelector('[data-testid="quartier-carte"]')?.textContent).toContain('Fil privé')
+  })
+
+  it('écrit le titre d’un collègue comme du texte, jamais comme du HTML', async () => {
+    const piege = '<img src=x onerror="window.__pirate=1">'
+    poserClaire(piege)
+    const { vue } = await monter()
+    sous = { type: 'agent', id: ID_CLAIRE, titre: piege, rect }
+    await survoler(vue)
+    await cliquerFond(vue)
+    expect(vue.querySelector('img')).toBeNull()
+    expect(vue.querySelector('[data-testid="quartier-carte"]')?.textContent).toContain('<img src=x')
+  })
+
+  it('referme la carte par son bouton, par Échap ou par un clic sur le décor', async () => {
+    poserClaire('Revue du budget')
+    const { vue } = await monter()
+    const carte = (): Element | null => vue.querySelector('[data-testid="quartier-carte"]')
+    sous = { type: 'agent', id: ID_CLAIRE, titre: 'Revue du budget', rect }
+    await cliquerFond(vue)
+    await act(async () => {
+      vue.querySelector<HTMLElement>('[data-testid="quartier-carte-fermer"]')?.click()
+    })
+    expect(carte()).toBeNull()
+    await cliquerFond(vue)
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    expect(carte()).toBeNull()
+    await cliquerFond(vue)
+    sous = null
+    await cliquerFond(vue)
+    expect(carte()).toBeNull()
+  })
+
+  it('ouvre toujours le fil de MON tanuki au clic', async () => {
+    poserClaire('Revue du budget')
+    const { vue, onNavigate } = await monter()
+    sous = { type: 'agent', id: 'conv-3', titre: 'Mon fil', rect }
+    await cliquerFond(vue)
+    expect(onNavigate).toHaveBeenCalledWith('chat')
+    expect(vue.querySelector('[data-testid="quartier-carte"]')).toBeNull()
+  })
+})
+
+describe('le bouton « Mes agents / Toute l’équipe » (D8)', () => {
+  it('vaut « Toute l’équipe » par défaut', async () => {
+    const { vue } = await monter()
+    const presse = (mode: string): string | null | undefined =>
+      vue.querySelector(`[data-testid="home-village-${mode}"]`)?.getAttribute('aria-pressed')
+    expect(presse('equipe')).toBe('true')
+    expect(presse('moi')).toBe('false')
+  })
+
+  it('masque les agents des collègues, et retient le choix', async () => {
+    poserClaire('Revue du budget')
+    const { vue } = await monter()
+    expect(lireAgentsCollegues()).toHaveLength(1)
+    await act(async () => {
+      vue.querySelector<HTMLElement>('[data-testid="home-village-moi"]')?.click()
+    })
+    expect(window.localStorage.getItem(CLE_MODE_VILLAGE)).toBe('moi')
+    expect(lireAgentsCollegues()).toHaveLength(0)
+    expect(
+      vue.querySelector('[data-testid="home-village-moi"]')?.getAttribute('aria-pressed')
+    ).toBe('true')
+    await act(async () => {
+      vue.querySelector<HTMLElement>('[data-testid="home-village-equipe"]')?.click()
+    })
+    expect(lireAgentsCollegues()).toHaveLength(1)
+  })
+
+  it('n’apparaît pas sous un autre fond', async () => {
+    window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
+    const { vue } = await monter()
+    expect(vue.querySelector('[data-testid="home-village"]')).toBeNull()
   })
 })

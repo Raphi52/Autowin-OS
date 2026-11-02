@@ -4,7 +4,7 @@ import {
   AGENTS_MAX,
   appliquerEvenement,
   appliquerResumes,
-  MEDITE_APRES_MS,
+  PAUSE_APRES_MS,
   consigneDe,
   REPOS_MS,
   RETARD_RESUMES_MS,
@@ -194,21 +194,21 @@ describe('consigneDe', () => {
     })
   })
 
-  it('ne l’envoie méditer qu’après quelques secondes de réflexion', () => {
+  it('ne l’envoie en pause qu’après quelques secondes de réflexion', () => {
     expect(consigneDe(agent('reflexion', 'lire'), T0 + 1000)).toEqual({
       metier: 'lire',
       pose: '',
       partir: false
     })
-    expect(consigneDe(agent('reflexion', 'lire'), T0 + MEDITE_APRES_MS + 1)).toEqual({
-      metier: 'meditation',
-      pose: 'me',
+    expect(consigneDe(agent('reflexion', 'lire'), T0 + PAUSE_APRES_MS + 1)).toEqual({
+      metier: 'pause',
+      pose: '',
       partir: false
     })
   })
 
   it('y envoie aussi celui qui n’a encore rien fait', () => {
-    expect(consigneDe(agent('reflexion', null), T0 + MEDITE_APRES_MS + 1).metier).toBe('meditation')
+    expect(consigneDe(agent('reflexion', null), T0 + PAUSE_APRES_MS + 1).metier).toBe('pause')
   })
 })
 

@@ -13,6 +13,7 @@ import { installerCopiePropre } from './copie-propre'
 import { installerAnimationsParCrans } from './animations-par-crans'
 import { installerModaliteSaisie } from './modalite-saisie'
 import { installerMesuresReactSansRetenue } from './mesures-react'
+import { demarrerAgentsQuartier } from './quartier/agents-quartier'
 
 /*
  * En développement, React 19.2.7 empile une mesure par composant redessiné, jamais retirée : 1,5 Go
@@ -79,6 +80,13 @@ surveillerGelsRenderer((dureeMs) => {
   if (detail) api?.signalerGelRenderer?.(dureeMs, vue, detail)
   else api?.signalerGelRenderer?.(dureeMs, vue)
 })
+
+/*
+ * Les tanukis du poste écoutent les tours dès le démarrage, et non à la première ouverture du Quartier :
+ * sinon, sous un autre décor ou tant que l'Accueil n'a pas été ouvert, le poste ne publiait rien au
+ * village commun (conv-1429, décision du lot 1). Sans pont (navigateur ordinaire), l'appel ne fait rien.
+ */
+demarrerAgentsQuartier()
 
 /*
  * Ouverte dans un navigateur ordinaire (`localhost:5173` hors d'Electron), l'interface n'a pas le pont

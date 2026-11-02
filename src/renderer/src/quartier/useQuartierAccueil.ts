@@ -5,7 +5,11 @@
  *  - un objet du décor : la caméra zoome dessus pendant que sa vue s'ouvre (D-11) ;
  *  - une tour : son widget en sort, et elle reste allumée tant qu'il est dehors ; un second clic l'y
  *    fait rentrer (demande de l'utilisateur du 2026-11-01, 20:25) ;
- *  - un tanuki : son fil s'ouvre (D-3).
+ *  - un tanuki : son fil s'ouvre (D-3) ; celui d'un collègue montre sa carte, sans rien ouvrir, car son
+ *    fil vit sur un autre poste (D10 de `grill/agent-hq-japon-town.md`, conv-1429).
+ *
+ * Tant que l'Accueil est affiché sur le Quartier, le partage des collègues se relit toutes les 5 s
+ * (`agents-collegues.ts`) ; ailleurs, personne ne le relit.
  *
  * Seul un clic sur le fond compte : `event.target` doit être l'Accueil lui-même. Une tuile posée sur la
  * scène garde donc tous ses gestes, et le décor ne vole jamais un clic.
@@ -24,6 +28,18 @@ import {
 } from 'react'
 import type { HomeWidgetId } from '../components/home-layout'
 import { lireAgentsQuartier, type AgentQuartier } from './agents-quartier'
+import {
+  abonnerAgentsCollegues,
+  abonnerModeVillage,
+  agentCollegue,
+  choisirModeVillage,
+  estIdCollegue,
+  lireAgentsCollegues,
+  lireModeVillage,
+  suivreAgentsCollegues,
+  type AgentCollegue,
+  type ModeVillage
+} from './agents-collegues'
 import { piloteQuartier, type CibleQuartier, type RectQuartier } from './quartier-pont'
 import {
   abonnerTuilesSorties,
@@ -35,6 +51,11 @@ import {
 const DUREE_SORTIE_MS = 560
 const DUREE_RETOUR_MS = 340
 const VIDE: ReadonlySet<HomeWidgetId> = new Set()
+const AUCUN_COLLEGUE: readonly AgentCollegue[] = []
+const EQUIPE = (): ModeVillage => 'equipe'
+/** La carte d'un collègue : sa place, en pixels de l'Accueil, pour qu'elle ne sorte pas de l'écran. */
+const CARTE_LARGEUR = 260
+const CARTE_HAUTEUR = 150
 
 /** Le départ d'un widget : tout petit, au sommet de sa tour. */
 function transformDepuisTour(tuile: DOMRect, surface: DOMRect, tour: RectQuartier): string {
@@ -54,11 +75,25 @@ interface Options {
   ouvrirConversation: (id: string) => void
 }
 
+/** La carte ouverte par un clic sur l'agent d'un collègue (D10). */
+export interface CarteCollegue {
+  agent: AgentCollegue
+  x: number
+  y: number
+}
+
 export interface SceneAccueil {
   sorties: ReadonlySet<HomeWidgetId>
   visibilite: ReturnType<typeof visibiliteDesSorties>
   survol: CibleQuartier | null
   agentSurvole: AgentQuartier | null
+  /** L'agent d'un collègue sous la souris : son prénom, son titre, son activité (D9). */
+  collegueSurvole: AgentCollegue | null
+  carte: CarteCollegue | null
+  fermerCarte(): void
+  /** Le bouton « Mes agents / Toute l'équipe » (D8). */
+  modeVillage: ModeVillage
+  choisirModeVillage(mode: ModeVillage): void
   basculerTuile(id: HomeWidgetId): void
   auSurvol(event: PointeurReact<HTMLDivElement>): void
   auClic(event: SourisReact<HTMLDivElement>): void
@@ -74,7 +109,14 @@ export function useQuartierAccueil({
 }: Options): SceneAccueil {
   const sorties = useSyncExternalStore(abonnerTuilesSorties, lireTuilesSorties, () => VIDE)
   const [survol, setSurvol] = useState<CibleQuartier | null>(null)
+  const [carteOuverte, setCarteOuverte] = useState<CarteCollegue | null>(null)
   const [etaitActif, setEtaitActif] = useState(actif)
+  const collegues = useSyncExternalStore(
+    abonnerAgentsCollegues,
+    lireAgentsCollegues,
+    () => AUCUN_COLLEGUE
+  )
+  const modeVillage = useSyncExternalStore(abonnerModeVillage, lireModeVillage, EQUIPE)
   const precedentes = useRef(sorties)
   const cleSurvol = useRef('')
 
@@ -163,13 +205,33 @@ export function useQuartierAccueil({
     piloteQuartier()?.survoler(null)
   }, [])
 
+  const fermerCarte = useCallback((): void => setCarteOuverte(null), [])
+
   const auClic = useCallback(
     (event: SourisReact<HTMLDivElement>): void => {
       if (!actif || event.target !== event.currentTarget) return
+      // Un clic sur le décor referme la carte ouverte, puis fait ce qu'il aurait fait sans elle.
+      setCarteOuverte(null)
       const pilote = piloteQuartier()
       const c = pilote?.cibleSous(event.clientX, event.clientY)
       if (!pilote || !c) return
       horsChamp()
+      // L'agent d'un collègue : sa carte, sans zoom ni fil ouvert — ce fil vit sur un autre poste (D10).
+      if (c.type === 'agent' && estIdCollegue(c.id)) {
+        const agent = agentCollegue(c.id)
+        if (!agent) return
+        const surface = event.currentTarget.getBoundingClientRect()
+        const x = Math.max(
+          8,
+          Math.min(event.clientX - surface.left + 12, surface.width - CARTE_LARGEUR)
+        )
+        const y = Math.max(
+          8,
+          Math.min(event.clientY - surface.top - 24, surface.height - CARTE_HAUTEUR)
+        )
+        setCarteOuverte({ agent, x, y })
+        return
+      }
       if (c.type === 'tour') {
         basculerTuile(c.widget)
         return
@@ -187,7 +249,10 @@ export function useQuartierAccueil({
   // pendant le rendu, le décor et le souvenir de la cible juste après.
   if (actif !== etaitActif) {
     setEtaitActif(actif)
-    if (!actif) setSurvol(null)
+    if (!actif) {
+      setSurvol(null)
+      setCarteOuverte(null)
+    }
   }
   useEffect(() => {
     if (actif) return
@@ -195,15 +260,44 @@ export function useQuartierAccueil({
     piloteQuartier()?.survoler(null)
   }, [actif])
 
+  // Le partage des collègues se relit tant que l'Accueil est affiché sur le Quartier, et pas au-delà ;
+  // « Mes agents » les masque tous : rien à relire.
+  const suivre = actif && modeVillage === 'equipe'
+  useEffect(() => (suivre ? suivreAgentsCollegues() : undefined), [suivre])
+
+  // Échap referme la carte, comme toute fenêtre posée par-dessus.
+  useEffect(() => {
+    if (!carteOuverte) return
+    const touche = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setCarteOuverte(null)
+    }
+    window.addEventListener('keydown', touche)
+    return () => window.removeEventListener('keydown', touche)
+  }, [carteOuverte])
+
   const visibilite = useMemo(() => visibiliteDesSorties(sorties), [sorties])
   const agentSurvole: AgentQuartier | null =
     survol?.type === 'agent' ? (lireAgentsQuartier().find((a) => a.id === survol.id) ?? null) : null
+  const collegueSurvole: AgentCollegue | null =
+    survol?.type === 'agent' ? (collegues.find((a) => a.id === survol.id) ?? null) : null
+  // La carte suit l'agent tant qu'il est là (phase, titre) ; parti, elle garde ce qu'elle montrait.
+  const carte: CarteCollegue | null = carteOuverte
+    ? {
+        ...carteOuverte,
+        agent: collegues.find((a) => a.id === carteOuverte.agent.id) ?? carteOuverte.agent
+      }
+    : null
 
   return {
     sorties,
     visibilite,
     survol,
     agentSurvole,
+    collegueSurvole,
+    carte,
+    fermerCarte,
+    modeVillage,
+    choisirModeVillage,
     basculerTuile,
     auSurvol,
     auClic,

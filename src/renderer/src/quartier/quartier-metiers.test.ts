@@ -24,7 +24,7 @@ describe('metierDeLOutil', () => {
     expect(metierDeLOutil('run', { commande: 'git status --porcelain' })).toBe('publier')
   })
 
-  it('envoie un outil inconnu à la Machine (D17)', () => {
+  it('envoie un outil inconnu aux commandes (D17)', () => {
     expect(metierDeLOutil('outil_du_futur')).toBe('commandes')
   })
 
@@ -44,7 +44,7 @@ describe('metierDeLaCommande', () => {
     expect(metierDeLaCommande('node scripts/ui-capture.mjs --code-dev')).toBe('ecran')
   })
 
-  it('garde la Machine pour tout le reste', () => {
+  it('garde les commandes pour tout le reste', () => {
     expect(metierDeLaCommande('python gros-calcul.py')).toBe('commandes')
   })
 })

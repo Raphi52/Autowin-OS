@@ -60,6 +60,11 @@ import type {
 } from '../shared/carte-des-besoins'
 import type { EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-dossier'
 import type { BoardsDesCollegues } from '../shared/board-collegues'
+import type {
+  AgentAPublier,
+  EtatDeLaPresence,
+  PresencesDesCollegues
+} from '../shared/quartier-presence'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatDiarisation } from '../main/diarisation'
@@ -835,6 +840,18 @@ const api = {
     ipcRenderer.invoke('os:board-dossier:nom', nom),
   /** Les Boards des collègues relus dans le dossier du Board (conv-1210), en lecture seule. */
   boardCollegues: (): Promise<BoardsDesCollegues> => ipcRenderer.invoke('os:board-collegues'),
+  /** L'instantané des tanukis de ce poste, publié filtré dans le village commun (conv-1429). */
+  quartierPresence: (agents: AgentAPublier[]): Promise<void> =>
+    ipcRenderer.invoke('os:quartier-presence:agents', agents),
+  /** Coupe (`false`) ou rétablit le partage de la présence du poste (D6, conv-1429). */
+  quartierPresencePartager: (actif: boolean): Promise<EtatDuDossierDuBoard> =>
+    ipcRenderer.invoke('os:quartier-presence:partager', actif),
+  /** Où et quand `presence.json` a été écrit, et le dernier échec (conv-1429). */
+  quartierPresenceEtat: (): Promise<EtatDeLaPresence> =>
+    ipcRenderer.invoke('os:quartier-presence:etat'),
+  /** Les tanukis des AUTRES postes, relus sur le partage et validés (conv-1429, lot 2). */
+  presenceDesCollegues: (): Promise<PresencesDesCollegues> =>
+    ipcRenderer.invoke('os:quartier-presence:collegues'),
   /** Lier une demande de la carte à un work item, lu à la source avant d'être posé (conv-1127). */
   carteLierWorkItem: (cible: {
     conversationId: string
@@ -898,6 +915,9 @@ const api = {
   /** Marque (`true`) ou retire (`false`) le statut inactive d'une conversation. */
   conversationsSetInactive: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setInactive', id, on),
+  /** Fil privé pour le village commun (D6, conv-1429) : son tanuki part sans titre. */
+  conversationsSetPrive: (id: string, on: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('os:conversations:setPrive', id, on),
   /** `dossier` : la copie séparée où la branche travaille dès sa création (conv-1038). */
   conversationsFork: (
     id: string,

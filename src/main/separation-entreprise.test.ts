@@ -255,4 +255,18 @@ describe('termes interdits : lecture des profils', () => {
     expect(texteDuFichier(image)).toBeUndefined()
     expect(termeTrouve(texteDuFichier(Buffer.from('aucun')), termes)).toBeUndefined()
   })
+
+  it('une image intégrée en base64 n est pas lue ; le texte autour l est (conv-1429)', () => {
+    // Mesure du 2026-11-02 : `src/renderer/src/assets/quartier/donnees.json` porte des images WebP en
+    // `data:…;base64,` et quatre lettres d'un terme y sont tombées par hasard. Une image n'est pas lue
+    // (test ci-dessus) : intégrée dans un JSON, elle ne l'est pas davantage.
+    const { termes } = termesDesProfils(
+      depot({ acme: { termesInterdits: [{ motif: 'zorglub' }] } })
+    )
+    const json = JSON.stringify({ m: 'data:image/webp;base64,UklGRzorglubAAAA+/==', titre: 'propre' })
+    expect(termeTrouve(texteDuFichier(Buffer.from(json)), termes)).toBeUndefined()
+    const autour = JSON.stringify({ m: 'data:image/png;base64,iVBORw0K', titre: 'zorglub' })
+    expect(termeTrouve(texteDuFichier(Buffer.from(autour)), termes)?.rang).toBe(0)
+    expect(termeTrouve(texteDuFichier(Buffer.from('lien data:zorglub')), termes)?.rang).toBe(0)
+  })
 })

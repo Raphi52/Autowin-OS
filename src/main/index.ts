@@ -23,7 +23,9 @@ import { registerActivityIpc } from './ipc/activity'
 import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './ipc/worktree'
 import { registerConversationsIpc } from './ipc/conversations'
 import { registerCarteDesBesoinsIpc } from './ipc/carte-des-besoins'
-import { creerDossierDuBoard } from './board-dossier'
+import { creerDossierDuBoard, sousDossierDuPoste } from './board-dossier'
+import { creerPublicationDeLaPresence } from './quartier-presence'
+import { registerQuartierPresenceIpc } from './ipc/quartier-presence'
 import { registerLangueIpc } from './ipc/langue'
 import { registerCaptureElementIpc } from './ipc/capture-element'
 import { creerIdentitesEnCache, creerJournalDesBesoins } from './journal-des-besoins'
@@ -3424,6 +3426,28 @@ Le fil reprend ensuite normalement.`
   // La carte des besoins (conv-1089) : lecture seule, calculée ici où vivent tous les fils.
   // Work items (conv-1127) : les liens prompt → task dans `liens-work-items.jsonl`, et la seule
   // LECTURE des fiches — aucune écriture chez le fournisseur n'est transmise.
+  // Le dossier où le Board est recopié (conv-1206) : réglé sur ce poste, rangé sous userData. Partagé
+  // avec la présence du village commun (conv-1429), qui écrit à côté de `board.json`.
+  const dossierDuBoard = creerDossierDuBoard({
+    racine: app.getPath('userData'),
+    utilisateur: nomUtilisateurCourant()
+  })
+  // La présence de ce poste dans le village commun (conv-1429) : les tanukis de la vue, filtrés, dans
+  // `<dossier du Board>\<compte>\presence.json`. Le réglage est relu à chaque écriture.
+  registerQuartierPresenceIpc({
+    dossierDuBoard,
+    publication: creerPublicationDeLaPresence({
+      poste: sousDossierDuPoste(nomUtilisateurCourant()),
+      reglage: () => {
+        const etat = dossierDuBoard.etat()
+        return {
+          dossier: etat.dossier,
+          nom: dossierDuBoard.nomDuPoste().nom,
+          partager: etat.partagerPresence !== false
+        }
+      }
+    })
+  })
   // Rend la copie du Board de fin de tour (conv-1210), appelée par l'observateur de fin de tour.
   const boardDuPoste = registerCarteDesBesoinsIpc({
     os,
@@ -3433,11 +3457,7 @@ Le fil reprend ensuite normalement.`
       listSources: () => ticketSources.list(),
       get: (request) => tickets.get(request)
     },
-    // Le dossier où le Board est recopié (conv-1206) : réglé sur ce poste, rangé sous userData.
-    dossierDuBoard: creerDossierDuBoard({
-      racine: app.getPath('userData'),
-      utilisateur: nomUtilisateurCourant()
-    }),
+    dossierDuBoard,
     choisirDossier: pickDirectory,
     // Où la copie de fin de tour garde les états posés à la main (conv-1210).
     racineDuPoste: app.getPath('userData')

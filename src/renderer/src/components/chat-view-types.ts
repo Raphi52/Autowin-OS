@@ -145,6 +145,8 @@ export type Conv = {
   surlignee?: boolean
   /** Statut manuel : `true` = marquée inactive (voir `Conversation.inactive`). */
   inactive?: boolean
+  /** Fil privé pour le village commun : tanuki sans titre (voir `Conversation.prive`, conv-1429). */
+  prive?: boolean
   /** Compte Claude retenu pour CETTE conversation (voir `Conversation.claudeAccountId`). */
   claudeAccountId?: string
   /** Modele retenu pour CETTE conversation (voir `Conversation.modeleChoisi`). Absent = defaut. */

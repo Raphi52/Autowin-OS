@@ -42,6 +42,15 @@ export const TEXTES_FR = {
   'nomBoard.parDefaut': 'Revenir au compte Windows',
   'nomBoard.erreurLecture': 'Le nom du Board n’a pas pu être lu.',
   'nomBoard.erreurEnregistrement': 'Le nom n’a pas pu être enregistré : il reste comme avant.',
+  // Settings · Interface — partage de la présence dans le village commun (D6, conv-1429).
+  'presence.titre': 'Tes agents dans le village de l’équipe',
+  'presence.description':
+    'Tes **tanukis** apparaissent dans l’Accueil des **collègues** qui partagent le même dossier du Board. Seul le **titre du fil** part, sans chemin, adresse, long numéro ni identifiant ; un fil **privé** part sans titre. Coupé, **plus rien** n’est partagé.',
+  'presence.interrupteur': 'Partager mes agents avec l’équipe',
+  'presence.partage': 'Partagés',
+  'presence.coupe': 'Coupés',
+  'presence.erreurEnregistrement':
+    'Le choix n’a pas pu être enregistré : le partage reste comme avant.',
 
   // Boutons « réparer » du diagnostic (preflight-repair-affordance.ts). Le français est AUSSI celui
   // du plan du moteur (`src/main/preflight-repair.ts`), que le test de contrat compare.
@@ -84,6 +93,13 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'nomBoard.parDefaut': 'Back to the Windows account',
   'nomBoard.erreurLecture': 'The Board name could not be read.',
   'nomBoard.erreurEnregistrement': 'The name could not be saved: it stays as it was.',
+  'presence.titre': 'Your agents in the team village',
+  'presence.description':
+    'Your **tanukis** appear on the Home screen of **colleagues** who share the same Board folder. Only the **thread title** is sent, without paths, addresses, long numbers or identifiers; a **private** thread is sent without a title. Turned off, **nothing** is shared anymore.',
+  'presence.interrupteur': 'Share my agents with the team',
+  'presence.partage': 'Shared',
+  'presence.coupe': 'Off',
+  'presence.erreurEnregistrement': 'The choice could not be saved: sharing stays as it was.',
 
   'reparation.claudeSession.libelle': 'Sign in',
   'reparation.claudeSession.note':

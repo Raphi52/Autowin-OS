@@ -48,6 +48,11 @@ import type {
 } from '../shared/carte-des-besoins'
 import type { EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-dossier'
 import type { BoardsDesCollegues } from '../shared/board-collegues'
+import type {
+  AgentAPublier,
+  EtatDeLaPresence,
+  PresencesDesCollegues
+} from '../shared/quartier-presence'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
 import type { EtatPiper } from '../main/piper-local'
@@ -572,6 +577,16 @@ interface ChatApi {
   boardDossierNom?: (nom: string | null) => Promise<EtatDuDossierDuBoard>
   /** Les Boards des collègues relus dans le dossier du Board (conv-1210), en lecture seule. */
   boardCollegues: () => Promise<BoardsDesCollegues>
+  /** L'instantané des tanukis de ce poste, publié filtré dans le village commun (conv-1429) ; absent
+   *  = preload d'avant redémarrage. */
+  quartierPresence?: (agents: AgentAPublier[]) => Promise<void>
+  /** Coupe (`false`) ou rétablit le partage de la présence du poste (D6, conv-1429). */
+  quartierPresencePartager?: (actif: boolean) => Promise<EtatDuDossierDuBoard>
+  /** Où et quand `presence.json` a été écrit, et le dernier échec (conv-1429). */
+  quartierPresenceEtat?: () => Promise<EtatDeLaPresence>
+  /** Les tanukis des AUTRES postes, relus sur le partage et validés (conv-1429, lot 2) ; absent =
+   *  preload d'avant redémarrage. */
+  presenceDesCollegues?: () => Promise<PresencesDesCollegues>
   /** Lier une demande de la carte à un work item, lu à la source avant d'être posé (conv-1127). */
   carteLierWorkItem: (cible: {
     conversationId: string
@@ -624,6 +639,11 @@ interface ChatApi {
   /** Le dossier personnel (cible de « This computer ») ; absent d'un preload d'avant redémarrage. */
   dossierPersonnel?: () => Promise<string>
   conversationsSetInactive: (id: string, on: boolean) => Promise<boolean>
+  /**
+   * Marque (`true`) ou démarque (`false`) un fil privé pour le village commun (D6, conv-1429) : son
+   * tanuki reste chez les collègues, sans titre. Absent d'un preload d'avant redémarrage.
+   */
+  conversationsSetPrive?: (id: string, on: boolean) => Promise<boolean>
   /** `dossier` : la copie séparée où la branche travaille dès sa création (conv-1038). */
   conversationsFork: (
     id: string,
