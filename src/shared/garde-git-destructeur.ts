@@ -4,6 +4,7 @@ import { refusEcriturePythonCrlf } from './garde-python-crlf'
 import { decouperHeredocs, sansHeredocsDeDonnees } from './heredocs'
 import { refusArretHote, refusBoucle } from './garde-hote-et-boucle'
 import { refusTacheWindows } from './garde-tache-windows'
+import { refusEcritureModAutowin } from './garde-mod-autowin'
 import { refusCommitReserve, reserverOuRefuser } from './reservation-fichiers'
 import {
   MESSAGES_PAR_LIVRAISON,
@@ -277,6 +278,12 @@ export const GARDES_DU_HOOK: readonly { fn: string; label: string; description: 
     description: "Refuse toute écriture des fichiers de la protection de prod, par le terminal comme par les outils d'édition."
   },
   {
+    fn: 'refusEcritureModAutowin',
+    label: 'Mod Autowin du dépôt principal',
+    description:
+      "Refuse à un agent de run toute écriture dans le mods/autowin chargé par tous les runs, par les outils d'édition comme par le terminal : il travaille dans le mods/autowin de sa copie (plan-387b99e7)."
+  },
+  {
     fn: 'refusSqlAgent',
     label: 'Client SQL vers la prod',
     description: 'Refuse un client SQL lancé par un agent, sauf vers une base déclarée non-prod.'
@@ -316,7 +323,10 @@ export function scriptHookGardes(
   // Garde SQL des agents (`refusSqlAgent`, même module) et bases déclarées non-prod : sans elles,
   // aucun client SQL n'est bloqué (compatibilité des appelants qui ne portent pas la prod).
   refusSqlAgent?: (texte: string, basesNonProd: readonly string[]) => string | undefined,
-  basesNonProd: readonly string[] = []
+  basesNonProd: readonly string[] = [],
+  // Dossier du mod Autowin CHARGÉ par les runs (`dossierModsAutowin`, providers/claude.ts) : un agent
+  // de run n'y écrit pas (garde-mod-autowin.ts). Absent → garde muette.
+  dossierModProtege?: string
 ): string {
   // Le découpage des heredocs est PASSÉ aux fonctions qui en ont besoin, jamais appelé par nom :
   // vitest et les bundlers réécrivent un appel importé (voir src/shared/heredocs.ts).
@@ -330,6 +340,9 @@ const refusTacheWindows = ${refusTacheWindows.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
 const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
 const basesNonProd = ${JSON.stringify(basesNonProd)};
+// fix-ok: 4 édits = construction du branchement (import, paramètre, sérialisation, appel) ; rouge mesuré avant : garde-mod-autowin.hook.test.ts 4/5 en échec, le script ne refusait aucune écriture sous mods/autowin.
+const refusEcritureModAutowin = ${refusEcritureModAutowin.toString()};
+const dossierModProtege = ${JSON.stringify(dossierModProtege ?? '')};
 const reserverOuRefuser = ${reserverOuRefuser.toString()};
 const refusCommitReserve = ${refusCommitReserve.toString()};
 const lignesDuJournal = ${lignesDuJournal.toString()};
@@ -478,7 +491,7 @@ process.stdin.on('end', () => {
       fs.writeFileSync(p, JSON.stringify(h.concat([cle]).slice(-20)));
     }
   } catch {}
-  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusTacheWindows(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusSqlAgent(shell, basesNonProd) || refusFichierReserve(j, chemin) || refusCommitDeFichierReserve(j, shell);
+  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusTacheWindows(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusEcritureModAutowin({ outil: String(j.tool_name || ''), chemin, shell, cwd: String(j.cwd || process.cwd()), estUnRun: !!process.env.AUTOWIN_HDESK_ID }, dossierModProtege) || refusSqlAgent(shell, basesNonProd) || refusFichierReserve(j, chemin) || refusCommitDeFichierReserve(j, shell);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));
