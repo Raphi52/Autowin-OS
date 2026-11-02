@@ -439,6 +439,7 @@ import {
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from './rangement-premier-message'
 import { noterAppelCourt, signalerPanneAppelCourt } from './petites-taches-trace'
+import { lecteurDeDeuxLectures } from './deux-lectures-appel'
 import { photographierDebutDeTour } from './chat-turn-publication'
 import {
   commitsPublies,
@@ -1360,29 +1361,8 @@ const pilot = new AgentPilot(
   true,
   // Deux lectures plausibles → une question avant de payer (deux-lectures.ts, conv-1092). Le modèle
   // des petites tâches (réglage du Routeur) ; une panne rend une erreur, et le travail part comme avant.
-  async (systeme, charge) => {
-    const binding = os.roles.bindingDesPetitesTaches()
-    const reponse = await os.registry
-      .send(binding.provider, [{ role: 'user', content: charge }], {
-        system: systeme,
-        systemBlocks: [{ name: 'deuxLectures', chars: systeme.length }],
-        model: binding.model,
-        reasoningEffort: binding.reasoningEffort,
-        requestId: randomUUID()
-      })
-      .catch((error: unknown) => {
-        signalerPanneAppelCourt('deuxLectures', error)
-        throw error
-      })
-    // Modèle réel, coût et réponse brute dans `cost.jsonl` (conv-1097, `petites-taches-trace.ts`).
-    noterAppelCourt(os.cost, {
-      appel: 'deuxLectures',
-      binding,
-      res: reponse,
-      issue: reponse.text ?? ''
-    })
-    return reponse.text ?? ''
-  }
+  // Sa ligne de coût porte le fil du tour et la décision du contrôle (deux-lectures-appel.ts, conv-1431).
+  lecteurDeDeuxLectures(os)
 )
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()

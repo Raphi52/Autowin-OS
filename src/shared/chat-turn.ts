@@ -663,9 +663,13 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
       ...state,
       status: 'failed',
       error: event.error,
-      parts: state.parts.map((part) =>
-        part.kind === 'action' && part.ok === undefined ? { ...part, ok: false } : part
-      )
+      parts: state.parts
+        // Le mot du Stop n'est pas une réponse : un échec qui suit l'annulation (coupure du veilleur
+        // d'inactivité) le retire, sa cause s'affiche dans le bloc d'erreur (kaizen conv-1432).
+        .filter((part) => !(part.kind === 'text' && part.text === MOT_ANNULE))
+        .map((part) =>
+          part.kind === 'action' && part.ok === undefined ? { ...part, ok: false } : part
+        )
     }
   if (event.kind === 'cancelled')
     return { ...state, status: 'cancelled', parts: avecMotSiVide(state.parts, MOT_ANNULE) }

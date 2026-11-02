@@ -8,7 +8,8 @@ import {
   AVIS_DEUX_LECTURES,
   CONSIGNE_DEUX_LECTURES,
   annonceDeLaLectureRetenue,
-  consigneDeLectureRetenue
+  consigneDeLectureRetenue,
+  type TraceDesLectures
 } from './deux-lectures'
 import { composerPromptDeReprise } from './chat/relance-taches-de-fond'
 import { promptDOrdre } from './messages-entre-fils-app'
@@ -75,9 +76,10 @@ function banc(
           : { ok: true, data: { ok: true } }
     )
   }
-  const lecteur = vi.fn(async (systeme: string, charge: string) => {
+  const lecteur = vi.fn(async (systeme: string, charge: string, trace?: TraceDesLectures) => {
     void systeme
     void charge
+    void trace
     if (reponseDuLecteur instanceof Error) throw reponseDuLecteur
     if (typeof reponseDuLecteur === 'function') return reponseDuLecteur()
     return reponseDuLecteur ?? '{"lectures":[]}'
@@ -192,6 +194,79 @@ describe('rejeu de conv-767 : le /scout ambigu ne part pas, une question le remp
     // Relue pour la ligne (conv-1240), jamais réinterrogée : la quasi-égalité ne repose rien.
     expect(b.lecteur).toHaveBeenCalledTimes(1)
     expect(b.executees()).toEqual(['orchestrate'])
+  })
+})
+
+/**
+ * LE COÛT DU CONTRÔLE APPARTIENT AU FIL, ET SA TRACE DIT CE QU'IL A DÉCIDÉ (conv-1431, 2026-11-02).
+ *
+ * Mesuré sur `cost.jsonl` depuis le 20/10 : 716 lignes `deuxLectures`, aucune ne portait de fil, et
+ * 527 étaient la réponse brute coupée avant la deuxième lecture. Le pilote seul sait à quel fil le
+ * tour appartient et ce qu'il a tiré de la réponse : il le transmet au lecteur. Entrée qui ferait
+ * échouer une correction fausse : `LECTURES_767` (50/50, plus de 160 caractères) sur `DEMANDE_767`.
+ */
+describe('le lecteur reçoit le fil du tour et l’issue lue (conv-1431)', () => {
+  /** L'étiquette écrite dans `cost.jsonl` pour la réponse que le lecteur a rendue à ce tour. */
+  const etiquette = async (b: ReturnType<typeof banc>, texte: string) => {
+    expect(b.lecteur).toHaveBeenCalledTimes(1)
+    return b.lecteur.mock.calls[0][2]?.issue(texte)
+  }
+
+  it('fil du tour, et « question posée » quand le /scout ambigu est remplacé par la question', async () => {
+    const b = banc(LECTURES_767)
+    await b.jouer([{ role: 'user', content: DEMANDE_767 }])
+    expect(b.lecteur.mock.calls[0][2]?.conversationId).toBe(CONV)
+    expect(b.executees()).toEqual(['ask'])
+    expect(await etiquette(b, LECTURES_767)).toBe('2 lectures : question posée')
+  })
+
+  it('« question posée » aussi devant un changement d’affichage à égalité', async () => {
+    const lectures = reponse(
+      ['écarter le contenu de la barre de scroll dans les widgets, sans la retirer', 50],
+      ['retirer la barre de scroll des widgets, qui masque le contenu', 50]
+    )
+    const b = banc(lectures)
+    await b.jouer([
+      { role: 'user', content: 'la barre de scroll dans les widgets elle masque un peu le contenu' }
+    ])
+    expect(b.executees()).toEqual(['ask'])
+    expect(await etiquette(b, lectures)).toBe('2 lectures : question posée')
+  })
+
+  /*
+   * L'OBJECTION DU CONTRÔLE FINAL : un tour ordinaire à égalité n'attend pas la lecture, il annonce
+   * la plus probable et ne pose AUCUNE question. Entrée qui ferait échouer une correction fausse :
+   * « comment rendre mon graph beaucoup plus clair ? » à 52/48 — l'étiquette d'avant y écrivait
+   * « 2 lectures : question » alors que `ask` n'est jamais exécuté.
+   */
+  it('un tour ordinaire à égalité, sans run : aucune question, et la trace ne dit pas « posée »', async () => {
+    const lectures = reponse(
+      ['comment rendre mon graph beaucoup plus clair à lire', 52],
+      ['comment rendre mon graph beaucoup plus clair de couleurs', 48]
+    )
+    const b = banc(lectures)
+    await b.jouer([{ role: 'user', content: 'comment rendre mon graph beaucoup plus clair ?' }])
+    expect(b.executees()).not.toContain('ask')
+    expect(await etiquette(b, lectures)).toBe(
+      '2 lectures : à égalité, question seulement si un run suit'
+    )
+  })
+
+  it('le jumeau : la réponse à la question, même égalité, est tracée « annoncée »', async () => {
+    const b = banc(LECTURES_767)
+    // Une question déjà posée sur cette demande : jamais une seconde (`suitUneQuestionDesLectures`).
+    await b.jouer([
+      { role: 'user', content: DEMANDE_767 },
+      { role: 'assistant', content: AVIS_DEUX_LECTURES },
+      {
+        role: 'user',
+        content:
+          '/scout une task (toujours la meme) facile à évaluer, pour lancer des /arena dessus et comparer les workflows'
+      }
+    ])
+    expect(b.lecteur.mock.calls[0][2]?.conversationId).toBe(CONV)
+    expect(b.executees()).not.toContain('ask')
+    expect(await etiquette(b, LECTURES_767)).toBe('2 lectures : annoncée (question non permise)')
   })
 })
 

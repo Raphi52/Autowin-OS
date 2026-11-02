@@ -249,3 +249,82 @@ export function pilotJournalEvents(event: PilotJournalEventLike, at: number): Tu
   out.at = at
   return [out]
 }
+
+/** Au-delà, une pensée encore en cours part quand même au disque : un plantage n'en perd pas plus. */
+const DELAI_RAFALE_MS = 1000
+
+export type JournalDuPilote = {
+  /** Chaque événement du pilote, AVANT son écriture durable : un geste clôt la rafale en cours. */
+  recevoir(event: PilotJournalEventLike, at: number): void
+  /** Écrit la rafale en attente (clôture, échec, coupure du tour). Sans effet si rien n'attend. */
+  vider(): void
+}
+
+/**
+ * LA PENSÉE S'ÉCRIT PAR RAFALE, PAS MOT PAR MOT (conv-1431, 2026-11-02).
+ *
+ * `pilotJournalEvents` écrivait un `reasoning-step` par paquet reçu du modèle (« The », « con »…).
+ * Mesuré sur les journaux conv-14* : 355 683 lignes, 28 Mo sur 51 (55 %), alors que la clôture
+ * écrit déjà le texte entier sous `reasoning`. Deux lecteurs recollaient ces miettes à chaque
+ * relecture (`fusionnerFragmentsDeFlux`, `model-activity-log.ts`).
+ *
+ * Les fragments CONSÉCUTIFS d'un même flux (même `streamId`, sinon même itération) deviennent UNE
+ * ligne : texte concaténé, heure du premier, `fragments` = combien ont été réunis — le format que
+ * `fusionnerFragmentsDeFlux` produisait déjà à la lecture. La rafale part au disque dès que le
+ * pilote émet AUTRE chose (y compris un événement écrit ailleurs, comme une commande : d'où l'appel
+ * AVANT l'écriture durable), à la clôture, ou après `DELAI_RAFALE_MS`.
+ *
+ * Les `provider-status` ne sont PAS regroupés : chacun est une étape distincte (« Bash · ls »,
+ * « Bash terminé - 1 s »), affichée sur sa propre ligne — mesuré sur les mêmes journaux, aucun
+ * n'est un morceau de texte.
+ */
+export function journalDuPiloteRegroupe(
+  ecrire: (event: TurnJournalEvent) => void,
+  delaiMs: number = DELAI_RAFALE_MS
+): JournalDuPilote {
+  let rafale: { event: TurnJournalEvent; cle: string; fragments: number } | undefined
+  let minuteur: ReturnType<typeof setTimeout> | undefined
+  const ecrireSansCasser = (event: TurnJournalEvent): void => {
+    try {
+      ecrire(event)
+    } catch {
+      /* journal best-effort : ne jamais casser un tour pour une écriture d'observabilité */
+    }
+  }
+  const vider = (): void => {
+    if (minuteur) clearTimeout(minuteur)
+    minuteur = undefined
+    const enAttente = rafale
+    rafale = undefined
+    if (!enAttente) return
+    if (enAttente.fragments > 1) enAttente.event.fragments = enAttente.fragments
+    ecrireSansCasser(enAttente.event)
+  }
+  return {
+    recevoir(event, at) {
+      const sortie = pilotJournalEvents(event, at)
+      const fragment =
+        sortie.length === 1 &&
+        sortie[0].kind === 'reasoning-step' &&
+        typeof sortie[0].text === 'string'
+          ? sortie[0]
+          : undefined
+      if (!fragment) {
+        vider()
+        for (const ligne of sortie) ecrireSansCasser(ligne)
+        return
+      }
+      const cle = String(fragment.streamId ?? fragment.iteration ?? '')
+      if (rafale && rafale.cle === cle) {
+        rafale.event.text = String(rafale.event.text) + String(fragment.text)
+        rafale.fragments += 1
+        return
+      }
+      vider()
+      rafale = { event: fragment, cle, fragments: 1 }
+      minuteur = setTimeout(vider, delaiMs)
+      minuteur.unref?.()
+    },
+    vider
+  }
+}

@@ -7,7 +7,8 @@
  *
  * Trois règles viennent de la fiche `grill/fond-accueil-atelier-des-agents.md` :
  *  - D12 : une commande se classe d'après son CONTENU, pas d'après l'outil « Bash » ;
- *  - D17 : un outil nouveau ou inconnu va à la Machine ;
+ *  - D17 : un outil nouveau ou inconnu va aux commandes (la Machine jusqu'au 2026-11-02 ; l'onsen l'a
+ *    remplacée, et les postes des commandes sont devant le coffre gris à gauche de l'escalier A, conv-1434) ;
  *  - la liste de tâches de l'agent n'est pas un travail : elle ne le fait pas bouger (`null`).
  */
 export type Metier =

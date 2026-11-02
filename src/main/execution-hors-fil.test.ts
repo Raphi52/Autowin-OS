@@ -69,6 +69,43 @@ describe('execFileHorsFil', () => {
     ).rejects.toMatchObject({ killed: true })
   })
 
+  /*
+   * UN PROCESSUS FINI EST FINI, MÊME SI SON TUYAU RESTE OUVERT AILLEURS (kaizen conv-1432, 2026-11-02).
+   *
+   * Vécu : un `git status` lancé par ce fil à 08:02:41 UTC, à l'instant où le fil principal lançait le
+   * CLI Claude de conv-1433. Sous Windows, CreateProcess hérite de TOUTES les poignées héritables du
+   * processus : le CLI a reçu une copie de l'extrémité d'écriture du tuyau de git. git a fini, mais
+   * `execFile` attend la FIN DE FICHIER du tuyau — elle n'est venue qu'à la sortie du CLI, 52 min
+   * plus tard. Toutes les photos git du dossier attendaient derrière : 4 tours coupés par le veilleur
+   * (conv-1429, conv-1432) sans que le modèle ait jamais démarré.
+   *
+   * Reproduction fidèle du mécanisme : le petit-fils détaché garde l'extrémité d'écriture du tuyau
+   * après la sortie de l'enfant, exactement comme le CLI gardait celle de git.
+   */
+  it('rend la main dès la sortie du processus, même si un autre garde son tuyau ouvert', async () => {
+    const debut = Date.now()
+    const { stdout } = await execFileHorsFil(process.execPath, [
+      '-e',
+      [
+        "const { spawn } = require('node:child_process')",
+        "spawn(process.execPath, ['-e', 'setTimeout(() => {}, 8000)'], { stdio: 'inherit', detached: true }).unref()",
+        "process.stdout.write('fini', () => process.exit(0))"
+      ].join(';')
+    ])
+    expect(stdout).toBe('fini')
+    expect(Date.now() - debut).toBeLessThan(5000)
+  }, 15_000)
+
+  it('ne coupe pas une sortie qui arrive encore juste après la fin du processus', async () => {
+    const gros = 'x'.repeat(2 * 1024 * 1024)
+    const { stdout } = await execFileHorsFil(
+      process.execPath,
+      ['-e', `process.stdout.write('x'.repeat(${gros.length}), () => process.exit(0))`],
+      { maxBuffer: 8 * 1024 * 1024 }
+    )
+    expect(stdout.length).toBe(gros.length)
+  })
+
   it('se recrée après un arrêt du fil', async () => {
     await arreterFilDExecution()
     const { stdout } = await execFileHorsFil(process.execPath, ['-e', 'process.stdout.write("re")'])
