@@ -25,7 +25,7 @@ import {
   claudeRotateAccount,
   claudeAccountEnv
 } from './claude-accounts'
-import { ClaudeCliAdapter } from './providers/claude'
+import { ClaudeCliAdapter, dossierModAutowin } from './providers/claude'
 import { CodexAdapter } from './providers/codex'
 import type { Message } from './providers/types'
 import { CONSTITUTION } from './constitution'
@@ -44,6 +44,7 @@ import { noterAppelCourt, signalerPanneAppelCourt } from './petites-taches-trace
 import { loadRoleBindings, saveRoleBindings } from './role-store'
 // fix-ok: refonte qualité (demande user « refais comme en fable ») — purge du mort, pas un blind-fix.
 import { CostAggregator } from './dashboards/cost'
+import { lecteurVersionMod } from './mods/empreinte-mod'
 import { isBlocked } from './dashboards/runs'
 import { recurrentPatterns, parseJsonl } from './dashboards/kaizen'
 import { loadBrainGraph, scanBrainGraphs, type BrainGraphRef } from './viz/fs-brains'
@@ -296,7 +297,9 @@ export class AutowinOS {
    */
   readonly cost = new CostAggregator(
     () => DEFAULT_ORCHESTRATION_BUDGET.maxUsd,
-    join(ensureAutowinAppData(), 'cost.jsonl')
+    join(ensureAutowinAppData(), 'cost.jsonl'),
+    // Version du harnais sur chaque ligne de coût : coût d'une demande avant/après une modif du mod.
+    lecteurVersionMod(() => dossierModAutowin([__dirname, process.cwd()]))
   )
   readonly conversations = new ConversationStore()
   readonly trust = new TrustLedger(join(ensureAutowinAppData(), 'trust.jsonl'))

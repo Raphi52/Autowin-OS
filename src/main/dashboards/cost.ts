@@ -40,6 +40,12 @@ export interface TurnCost extends TokenUsage {
    */
   appel?: string
   issue?: string
+  /**
+   * Empreinte du harnais (`mods/autowin`) au moment du tour (`mods/empreinte-mod.ts`) : permet de
+   * comparer le coût d'une demande avant et après une modification du mod. Absente des lignes
+   * antérieures au 2026-11-02.
+   */
+  modVersion?: string
 }
 
 /** Ce dont un appelant de cout a besoin : enregistrer un tour. */
@@ -117,7 +123,9 @@ export class CostAggregator {
    */
   constructor(
     private readonly budgetUsd?: number | (() => number | null),
-    private readonly persistPath?: string
+    private readonly persistPath?: string,
+    /** Version du mod à poser sur chaque tour qui n'en porte pas (voir `TurnCost.modVersion`). */
+    private readonly versionMod?: () => string | undefined
   ) {
     if (persistPath && existsSync(persistPath)) {
       for (const line of readFileSync(persistPath, 'utf8').split(/\r?\n/)) {
@@ -149,7 +157,12 @@ export class CostAggregator {
    * fermeture — `flushPersistSync()` solde ce qui reste (voir plus bas).
    */
   add(turn: TurnCost): void {
-    const t: TurnCost = { ...turn, ts: turn.ts ?? new Date().toISOString() }
+    const modVersion = turn.modVersion ?? this.versionMod?.()
+    const t: TurnCost = {
+      ...turn,
+      ts: turn.ts ?? new Date().toISOString(),
+      ...(modVersion ? { modVersion } : {})
+    }
     this.turns.push(t)
     if (!this.persistPath) return
     this.enAttente.push(`${JSON.stringify(t)}\n`)
