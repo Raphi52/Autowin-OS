@@ -107,3 +107,26 @@ if ECHECS:
         print(" -", echec)
     raise SystemExit(1)
 print("OK — l'app survit au depart de son lanceur")
+
+
+# PATH (conv-131) : l'enfant recoit le PATH ENREGISTRE, pas un PATH herite gonfle par les relances.
+def test_path_herite_gonfle_non_transmis(tmp_path=None):
+    import tempfile
+    dossier = Path(tempfile.mkdtemp())
+    enfant = dossier / "enfant.py"
+    enfant.write_text("import os\nprint(len(os.environ['PATH']))\n", encoding="utf-8")
+    sortie = dossier / "sortie.log"
+    avant = os.environ.get("PATH", "")
+    os.environ["PATH"] = r"D:\gonfle\node_modules\.bin;" * 300 + avant
+    try:
+        demarrer_dev([sys.executable, str(enfant)], dossier, sortie).wait(30)
+    finally:
+        os.environ["PATH"] = avant
+    texte = sortie.read_text(encoding="utf-8", errors="replace")
+    assert "gonfle" not in texte
+    assert int(texte.strip().splitlines()[-1]) < 8191, texte
+
+
+if __name__ == "__main__":
+    test_path_herite_gonfle_non_transmis()
+    print("PASS path enregistre")

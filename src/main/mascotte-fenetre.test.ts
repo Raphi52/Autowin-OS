@@ -16,6 +16,7 @@ type Ecouteur = (...args: unknown[]) => void
 const etat = vi.hoisted(() => ({
   fenetres: [] as Array<{
     detruite: boolean
+    visible: boolean
     fichier?: string
   }>,
   alimentation: new Map<string, Array<(...args: unknown[]) => void>>()
@@ -27,8 +28,13 @@ vi.mock('electron', () => {
     visible = false
     fichier?: string
     private ecouteurs = new Map<string, Ecouteur[]>()
+    contenu = new Map<string, Ecouteur[]>()
     webContents = {
-      on: () => {},
+      on: (evenement: string, ecouteur: Ecouteur) => {
+        this.contenu.set(evenement, [...(this.contenu.get(evenement) ?? []), ecouteur])
+      },
+      insertCSS: () => Promise.resolve('cle'),
+      removeInsertedCSS: () => Promise.resolve(),
       setWindowOpenHandler: () => {},
       isDestroyed: () => this.detruite
     }
@@ -78,6 +84,10 @@ vi.mock('electron', () => {
     }
     loadFile(fichier: string): Promise<void> {
       this.fichier = fichier
+      // Comme Electron : la page finit de charger plus tard, si la fenêtre vit encore.
+      setTimeout(() => {
+        if (!this.detruite) for (const e of this.contenu.get('did-finish-load') ?? []) e()
+      }, 0)
       return Promise.resolve()
     }
   }
@@ -165,6 +175,36 @@ describe('la vraie fenêtre de la mascotte — reconnexion du Bureau à distance
 
     expect(etat.fenetres).toHaveLength(3)
     expect(etat.fenetres.filter((f) => !f.detruite)).toHaveLength(1)
+  })
+
+  // conv-346, 2026-11-01 : le journal montre DEUX « session déverrouillée » à la suite ; la
+  // fenêtre restait ensuite masquée hors d'Autowin.
+  it('deux déverrouillages à la suite : la fenêtre vivante finit visible', async () => {
+    const mascotte = creerMascotteDuBureau()
+    mascotte.demarrer(DEPS, true)
+    await laisserPasser()
+    await laisserPasser()
+    expect(etat.fenetres[0].visible).toBe(true)
+    deverrouiller()
+    await Promise.resolve()
+    await Promise.resolve()
+    deverrouiller()
+    for (let i = 0; i < 5; i++) await laisserPasser()
+    const vivantes = etat.fenetres.filter((f) => !f.detruite)
+    expect(vivantes).toHaveLength(1)
+    expect(vivantes[0].visible).toBe(true)
+  })
+
+  it('cachée pendant qu’on regarde Autowin, elle revient seule quand on n’y est plus, sans événement de focus', async () => {
+    let regardee = true
+    const mascotte = creerMascotteDuBureau()
+    mascotte.demarrer({ ...DEPS, autowinRegardee: () => regardee }, true)
+    await laisserPasser()
+    await laisserPasser()
+    expect(etat.fenetres[0].visible).toBe(false)
+    regardee = false
+    await new Promise((fin) => setTimeout(fin, 1700))
+    expect(etat.fenetres[0].visible).toBe(true)
   })
 
   it('masquée dans les réglages, le déverrouillage ne fait renaître aucune fenêtre', async () => {

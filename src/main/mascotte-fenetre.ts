@@ -487,7 +487,13 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
         screen.on('display-added', placer)
         screen.on('display-removed', placer)
         powerMonitor.on('unlock-screen', () => recreerFenetre('session déverrouillée'))
-        setInterval(rafraichir, RYTHME_MS).unref?.()
+        // conv-346 (2026-11-01, « même hors d'Autowin je ne vois pas la mascotte ») : la visibilité
+        // ne se relisait qu'au `browser-window-blur` ; un focus perdu sans cet événement (fenêtre
+        // cachée ou détruite qui le portait) la laissait masquée pour toujours. Relue à chaque battement.
+        setInterval(() => {
+          rafraichir()
+          ajusterVisibilite()
+        }, RYTHME_MS).unref?.()
       })
     },
     afficher,

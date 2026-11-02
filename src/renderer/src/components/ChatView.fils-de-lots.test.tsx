@@ -112,6 +112,32 @@ describe('ChatView — fils d’un plan de lots rangés sous leur fil chef', () 
       .filter((f) => f !== ouvert)
   }
 
+  it('replie et déplie les lots sous leur super conv, et garde le choix', async () => {
+    const convs = [fil('C1', 'Le fil chef', 60), fil('L1', 'Lot 1/2', 50), fil('L2', 'Lot 2/2', 40)]
+    const plansDeLots = apiDesPlans([
+      { id: 'plan-a', chef: 'C1', lots: [{ rang: 1, fil: 'L1' }, { rang: 2, fil: 'L2' }] }
+    ])
+    h = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue(convs),
+        conversation: vi.fn(async (id: string) => convs.find((c) => c.id === id)),
+        plansDeLots
+      })
+    )
+    await laisserFiler()
+    expect(ids(lignesDuDossier())).toEqual(['C1', 'L1', 'L2'])
+    const bouton = (): HTMLButtonElement =>
+      h!.container.querySelector<HTMLButtonElement>('[data-testid="conv-lots-toggle-C1"]')!
+    expect(bouton().getAttribute('aria-expanded')).toBe('true')
+    await act(async () => bouton().click())
+    expect(ids(lignesDuDossier())).toEqual(['C1'])
+    expect(bouton().getAttribute('aria-expanded')).toBe('false')
+    expect(bouton().textContent).toContain('2')
+    expect(window.localStorage.getItem('autowin.conv-lots.collapsed')).toBe('["C1"]')
+    await act(async () => bouton().click())
+    expect(ids(lignesDuDossier())).toEqual(['C1', 'L1', 'L2'])
+  })
+
   it('range les lots juste après leur chef, indentés et marqués « lot N/M » ; le reste ne bouge pas', async () => {
     // Ordre par récence : X1, L2, X2, C1, L1, X3. Les lots L1 et L2 sont séparés de leur chef.
     const convs = [

@@ -154,6 +154,28 @@ def _acquerir_verrou() -> tuple[bool, int | None]:
     return erreur != 183, handle  # 183 = ERROR_ALREADY_EXISTS
 
 
+def path_enregistre() -> str:
+    """PATH tel que Windows le donnerait a une session neuve : Machine puis User, variables
+    developpees. Chaine vide hors Windows ou si le registre est illisible (on garde alors l'herite)."""
+    try:
+        import winreg
+    except ImportError:
+        return ""
+    morceaux: list[str] = []
+    for racine, cle in (
+        (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
+        (winreg.HKEY_CURRENT_USER, r"Environment"),
+    ):
+        try:
+            with winreg.OpenKey(racine, cle) as k:
+                valeur, _ = winreg.QueryValueEx(k, "Path")
+        except OSError:
+            continue
+        if valeur:
+            morceaux.append(os.path.expandvars(str(valeur)))
+    return ";".join(morceaux)
+
+
 def demarrer_dev(
     commande: list[str], cwd: Path, sortie: Path, env: dict[str, str] | None = None
 ) -> subprocess.Popen[bytes]:
@@ -175,6 +197,15 @@ def demarrer_dev(
     # ELECTRON_EXEC_PATH (l'exe de dev, conv-266) : celui de `env`, JAMAIS une valeur heritee. Un
     # redemarrage lance depuis l'app en porte une, qui viserait un exe disparu (spawn ENOENT).
     environnement = {k: v for k, v in os.environ.items() if k != "ELECTRON_EXEC_PATH"}
+    # PATH : celui ENREGISTRE (Machine + User), jamais l'herite. Un redemarrage lance depuis l'app
+    # heritait du PATH ou chaque `npm run dev` avait ajoute ses 4 dossiers `node_modules\.bin` : il
+    # grossissait a chaque relance (7 912 car. le 2026-10-24, conv-131) jusqu'a depasser la limite de
+    # cmd.exe (8 191), et `verify` rendait « 'npm' n'est pas reconnu ».
+    enregistre = path_enregistre()
+    if enregistre:
+        for cle in [k for k in environnement if k.upper() == "PATH"]:
+            del environnement[cle]
+        environnement["Path"] = enregistre
     environnement.update(env or {})
     sortie.parent.mkdir(parents=True, exist_ok=True)
     fichier = sortie.open("ab")

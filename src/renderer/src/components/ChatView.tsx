@@ -570,8 +570,9 @@ function rangerSousLeurChef<T extends { hit: { conversation: { id: string } } }>
   entrees: readonly T[],
   liens: ReadonlyMap<string, LienDeLot>,
   langue: Langue
-): Array<{ entree: T; niveau: number; lot?: string }> {
-  if (liens.size === 0) return entrees.map((entree) => ({ entree, niveau: 0 }))
+): Array<{ entree: T; niveau: number; lot?: string; ancetres: string[]; nbLots: number }> {
+  if (liens.size === 0)
+    return entrees.map((entree) => ({ entree, niveau: 0, ancetres: [], nbLots: 0 }))
   const presents = new Set(entrees.map((e) => e.hit.conversation.id))
   const chefPresent = (id: string): string | undefined => {
     const chef = liens.get(id)?.chef
@@ -585,8 +586,14 @@ function rangerSousLeurChef<T extends { hit: { conversation: { id: string } } }>
   const rangDe = (e: T): number => liens.get(e.hit.conversation.id)?.rang ?? 0
   for (const liste of enfants.values()) liste.sort((a, b) => rangDe(a) - rangDe(b))
   const poses = new Set<string>()
-  const sortie: Array<{ entree: T; niveau: number; lot?: string }> = []
-  const poser = (entree: T, niveau: number): void => {
+  const sortie: Array<{
+    entree: T
+    niveau: number
+    lot?: string
+    ancetres: string[]
+    nbLots: number
+  }> = []
+  const poser = (entree: T, niveau: number, ancetres: string[] = []): void => {
     const id = entree.hit.conversation.id
     if (poses.has(id)) return
     poses.add(id)
@@ -594,8 +601,9 @@ function rangerSousLeurChef<T extends { hit: { conversation: { id: string } } }>
     const lot = lien
       ? traduireChatFil('liste.lot', langue, { rang: lien.rang, total: lien.total })
       : undefined
-    sortie.push({ entree, niveau, ...(lot ? { lot } : {}) })
-    for (const enfant of enfants.get(id) ?? []) poser(enfant, niveau + 1)
+    const sesLots = enfants.get(id) ?? []
+    sortie.push({ entree, niveau, ...(lot ? { lot } : {}), ancetres, nbLots: sesLots.length })
+    for (const enfant of sesLots) poser(enfant, niveau + 1, [...ancetres, id])
   }
   for (const e of entrees) if (!chefPresent(e.hit.conversation.id)) poser(e, 0)
   for (const e of entrees) poser(e, 0)
@@ -613,12 +621,14 @@ type ActionsLigneConversation = {
   loadConv: (c: Conv) => Promise<void>
   basculerDansMosaique: (id: string) => Promise<void>
   toggleConvSelection: (id: string) => void
+  basculerLots: (id: string) => void
 }
 const LigneConversation = memo(function LigneConversation({
   c,
   snippet,
   depth,
   lot,
+  lots,
   actif,
   occupe,
   nonVue,
@@ -635,6 +645,8 @@ const LigneConversation = memo(function LigneConversation({
   depth: number
   /** « lot N/M » quand le fil est un lot d'un plan (conv-1151) : une chaîne, pour garder `memo`. */
   lot?: string
+  /** Fil chef d'un plan (super conv) : nombre de lots rangés dessous et leur état replié. */
+  lots?: { nombre: number; replies: boolean }
   actif: boolean
   occupe: boolean
   nonVue: boolean
@@ -680,6 +692,22 @@ const LigneConversation = memo(function LigneConversation({
         e.dataTransfer.effectAllowed = 'move'
       }}
     >
+      {lots && (
+        <button
+          type="button"
+          className="conv-lots-toggle"
+          data-testid={`conv-lots-toggle-${c.id}`}
+          aria-expanded={!lots.replies}
+          title={lots.replies ? `Déplier les ${lots.nombre} lots` : `Replier les ${lots.nombre} lots`}
+          onClick={(e) => {
+            e.stopPropagation()
+            actionsRef.current.basculerLots(c.id)
+          }}
+        >
+          {lots.replies ? '▸' : '▾'}
+          {lots.replies && <span className="conv-lots-count tnum">{lots.nombre}</span>}
+        </button>
+      )}
       {convSelectionMode && convViewMode !== 'mosaic' && (
         <input
           type="checkbox"
@@ -7044,6 +7072,27 @@ export function ChatView({
       return {}
     }
   })
+  /** Super convs dont les lots sont repliés (préférence locale, comme les groupes). */
+  const [chefsReplies, setChefsReplies] = useState<ReadonlySet<string>>(() => {
+    try {
+      const brut: unknown = JSON.parse(localStorage.getItem('autowin.conv-lots.collapsed') ?? '[]')
+      return new Set(Array.isArray(brut) ? brut.filter((x): x is string => typeof x === 'string') : [])
+    } catch {
+      return new Set()
+    }
+  })
+  const basculerLots = useCallback((id: string): void => {
+    setChefsReplies((courant) => {
+      const suivant = new Set(courant)
+      if (!suivant.delete(id)) suivant.add(id)
+      try {
+        localStorage.setItem('autowin.conv-lots.collapsed', JSON.stringify([...suivant]))
+      } catch {
+        /* préférence d'affichage : perdue au pire */
+      }
+      return suivant
+    })
+  }, [])
   const basculerGroupe = useCallback((key: string, replieActuel: boolean): void => {
     setGroupesReplies((courant) => {
       const suivant = { ...courant, [key]: !replieActuel }
@@ -7680,9 +7729,16 @@ export function ChatView({
     loadConv,
     basculerDansMosaique,
     toggleConvSelection,
-    rangerDans
+    rangerDans,
+    basculerLots
   })
-  actionsListeRef.current = { loadConv, basculerDansMosaique, toggleConvSelection, rangerDans }
+  actionsListeRef.current = {
+    loadConv,
+    basculerDansMosaique,
+    toggleConvSelection,
+    rangerDans,
+    basculerLots
+  }
   const lignesListe = useMemo(
     () =>
       groupes.map((groupe) => {
@@ -7733,8 +7789,11 @@ export function ChatView({
             </div>
             {!replie &&
               rangerSousLeurChef(groupe.items, liensDeLots, langue).map(
-                ({ entree, niveau, lot }) => {
+                ({ entree, niveau, lot, ancetres, nbLots }) => {
                   const { conversation: c, snippet } = entree.hit
+                  // Une recherche déplie tout, comme pour les groupes.
+                  const rechercheActive = convQuery.trim() !== ''
+                  if (!rechercheActive && ancetres.some((a) => chefsReplies.has(a))) return null
                   return (
                     <LigneConversation
                       key={c.id}
@@ -7742,6 +7801,11 @@ export function ChatView({
                       snippet={snippet}
                       depth={groupe.depth + niveau}
                       lot={lot}
+                      lots={
+                        nbLots > 0
+                          ? { nombre: nbLots, replies: !rechercheActive && chefsReplies.has(c.id) }
+                          : undefined
+                      }
                       actif={c.id === activeId}
                       occupe={busyConversations.has(c.id)}
                       nonVue={c.id !== activeId && estNonVue(c, conversationsVues)}
@@ -7765,6 +7829,7 @@ export function ChatView({
       langue,
       convQuery,
       groupesReplies,
+      chefsReplies,
       surviole,
       busyConversations,
       activeId,

@@ -84,6 +84,8 @@ import {
 import { abortFailure } from './abort-diagnostic'
 import { advisorAccepte } from './claude-advisor'
 import { cheminRegistreReservations } from '../reservation-fichiers-app'
+import { gardeEveil } from '../garder-eveille'
+import { creerCoupeBoucle } from '../coupe-boucle'
 import { avancementDepuisCommande } from './arene-avancement'
 import {
   describeExitCode,
@@ -1956,6 +1958,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (intentPose) execution?.onSpawnIntent?.(spawnToken, false)
       throw error
     }
+    const rendreEveil = gardeEveil.prendre()
     const child = spawn(invocation.bin, invocation.args, {
       shell: false,
       windowsHide: true,
@@ -2101,6 +2104,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const appelsShell = new Map<string, { commande: string; enFond: boolean }>()
     /** Commandes shell coupees que l'appelant relancera (voir `SendOptions.relancerTachesDeFond`). */
     const tachesDeFondARelancer: TacheDeFondARelancer[] = []
+    const coupeBoucle = creerCoupeBoucle()
+    const entreesOutils = new Map<string, unknown>()
     const pendingTools = new Map<
       string,
       {
@@ -2525,6 +2530,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               continue
             }
             // B — mémorise l'appel outil ; la preuve (ok/échec) arrive dans le tool_result associé.
+            entreesOutils.set(part.id, part.input)
             const filePath = String(part.input?.file_path ?? '')
             const command = String(part.input?.command ?? filePath)
             const recherche = /^(Grep|Glob)$/i.test(part.name)
@@ -2626,6 +2632,19 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             ? ligneDErreurDAction(call.name, String(redactTrace(outputEntier)))
             : undefined
           if (ligneErreur) queue.push({ delta: '', status: ligneErreur })
+          // COUPE-CIRCUIT (coupe-boucle.ts) : même appel / même résultat en série, ou échecs d'affilée.
+          const motifBoucle = coupeBoucle.observer(
+            call.name,
+            entreesOutils.get(part.tool_use_id),
+            part.is_error === true,
+            outputEntier
+          )
+          entreesOutils.delete(part.tool_use_id)
+          if (motifBoucle) {
+            queue.push({ delta: '', status: motifBoucle })
+            killEscalate(child)
+            forceSettle(new Error(motifBoucle))
+          }
           // TESTS DU TERMINAL (conv-1059) : la commande et son issue sont tenues ICI et nulle part
           // ailleurs — le fil n'en recevait que les deux lignes de texte ci-dessus. Une commande en
           // FOND rend la main avant la fin : son « succès » n'est pas celui du test, on l'écarte.
@@ -2892,6 +2911,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       await nettoyer()
     }
     child.on('error', async (e) => {
+      rendreEveil()
       if (finApresResultat) clearTimeout(finApresResultat)
       retirerEcouteStop()
       arreterGuetSortie?.()
@@ -2928,6 +2948,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     })
     child.once('close', async (code) => {
       childClosed = true
+      rendreEveil()
       if (finApresResultat) clearTimeout(finApresResultat)
       retirerEcouteStop()
       arreterGuetSortie?.()

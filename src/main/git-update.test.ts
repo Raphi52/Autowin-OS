@@ -271,6 +271,50 @@ describe('applyUpdate', () => {
     expect(r.error).toMatch(/committe|mets-le de côté/i)
   })
 
+  // conv-350 (2026-10-30) : cliquer « Mettre à jour » ne faisait RIEN de visible. Un `git merge` qui
+  // échoue sur un arbre sale met les fichiers modifiés de côté puis les RÉÉCRIT : leur date change, le
+  // serveur de dev recharge la page, et le refus arrive dans une page disparue. On refuse donc AVANT
+  // git dès qu'un fichier modifié est aussi touché par les commits entrants.
+  it('fichier modifié AUSSI touché par origin/main → refus AVANT git, aucun fichier réécrit', async () => {
+    for (const strategy of ['merge', 'fast-forward'] as const) {
+      const calls: string[][] = []
+      const run: GitRunner = async (args) => {
+        calls.push(args)
+        const key = args.join(' ')
+        if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
+        if (key === 'rev-list --count origin/main..HEAD')
+          return { stdout: strategy === 'merge' ? '3' : '0' }
+        if (key === 'status --porcelain')
+          return { stdout: ' M src/preload/index.ts\n?? src/neuf.ts\n M src/autre.ts' }
+        if (key === 'diff --name-only HEAD...origin/main')
+          return { stdout: 'src/preload/index.ts\nsrc/neuf.ts\nsrc/libre.ts\n' }
+        return { stdout: '' }
+      }
+      const r = await applyUpdate('/r', { strategy }, run, async () => {})
+      expect(r).toMatchObject({ ok: false, strategy })
+      expect(calls.some((args) => args[0] === 'merge' || args[0] === 'stash')).toBe(false)
+      expect(r.error).toMatch(/intact/i)
+      expect(r.error).toContain('src/preload/index.ts')
+      expect(r.error).toContain('src/neuf.ts')
+      expect(r.error).not.toContain('src/autre.ts')
+    }
+  })
+
+  it('fichier modifié que origin/main ne touche PAS → la mise à jour est tentée', async () => {
+    const calls: string[][] = []
+    const run: GitRunner = async (args) => {
+      calls.push(args)
+      const key = args.join(' ')
+      if (key === 'rev-parse --abbrev-ref HEAD') return { stdout: 'main' }
+      if (key === 'status --porcelain') return { stdout: ' M src/autre.ts' }
+      if (key === 'diff --name-only HEAD...origin/main') return { stdout: 'src/libre.ts\n' }
+      return { stdout: '' }
+    }
+    const r = await applyUpdate('/r', {}, run, async () => {})
+    expect(r.ok).toBe(true)
+    expect(calls).toContainEqual(['merge', '--ff-only', 'origin/main'])
+  })
+
   it('sur main : fast-forward par defaut, relaunch, npm install seulement si package a change', async () => {
     const run: GitRunner = async (args) =>
       args.join(' ') === 'rev-parse --abbrev-ref HEAD' ? { stdout: 'main' } : { stdout: '' }

@@ -281,6 +281,26 @@
 .conv-item:hover {
   background: var(--bg-2);
 }
+/* Repli des lots d'une super conv : chevron à gauche de la ligne du fil chef. */
+.conv-lots-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 18px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+.conv-lots-toggle:hover {
+  color: var(--text);
+}
+.conv-lots-count {
+  font-size: 10px;
+}
 .conv-item.active {
   background: var(--accent-soft);
   box-shadow: inset 2px 0 0 var(--accent);

@@ -3913,6 +3913,9 @@ Le fil reprend ensuite normalement.`
         const fenetre = BrowserWindow.getFocusedWindow()
         return (
           fenetre !== null &&
+          // Une fenêtre cachée ou réduite ne se regarde pas, même si Electron la croit active (conv-346).
+          fenetre.isVisible() &&
+          !fenetre.isMinimized() &&
           !popupsDeFinDeTour.estUneCarte(fenetre) &&
           !mascotteDuBureau.estLaMascotte(fenetre)
         )

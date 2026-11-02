@@ -10,6 +10,14 @@ $manifest = Join-Path $ProjectRoot 'package.json'
 if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw "Projet Autowin OS introuvable : $ProjectRoot" }
 
 $env:AUTOWIN_OS_DEV = '1'
+# Le PATH repart de celui ENREGISTRÉ (Machine + User), pas de celui hérité : relancé par l'app,
+# ce script héritait d'un PATH où chaque `npm run dev` précédent avait ajouté ses 4 dossiers
+# `node_modules\.bin`. Mesuré le 2026-10-24 (conv-131) : 33 copies, 7 912 caractères, et un
+# `npm run` imbriqué dépassait la limite de cmd.exe (8 191) — « 'tsc' n'est pas reconnu ».
+$env:Path = @(
+  [Environment]::GetEnvironmentVariable('Path', 'Machine'),
+  [Environment]::GetEnvironmentVariable('Path', 'User')
+) -join ';'
 $devMarker = 'title Autowin OS Dev && npm run dev'
 function Get-DevTerminal {
   Get-CimInstance Win32_Process -Filter "Name = 'cmd.exe'" |

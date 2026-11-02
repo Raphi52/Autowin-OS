@@ -312,6 +312,30 @@ function packageSignature(cwd: string): string {
  *
  * `npm install` n'est relancé que si `package.json`/lock a changé. Un relaunch est signalé à l'appelant.
  */
+/**
+ * Fichiers modifiés ou non suivis localement que les commits entrants touchent aussi : exactement ceux
+ * sur lesquels git refuserait la mise à jour. `HEAD...origin/main` = ce qu'origin/main a changé depuis
+ * la base commune, donc sans les commits locaux. Illisible → liste vide : git reste le dernier rempart.
+ */
+async function fichiersLocauxTouchesParLaMaj(run: GitRunner, cwd: string): Promise<string[]> {
+  try {
+    const locaux = (await run(['status', '--porcelain'], cwd)).stdout
+      .split(/\r?\n/)
+      .filter((ligne) => ligne.length > 3)
+      .flatMap((ligne) => ligne.slice(3).split(' -> '))
+      .map((chemin) => chemin.trim().replace(/^"|"$/g, ''))
+    const entrants = new Set(
+      (await run(['diff', '--name-only', `HEAD...${TEAM_REFERENCE}`], cwd)).stdout
+        .split(/\r?\n/)
+        .map((chemin) => chemin.trim())
+        .filter(Boolean)
+    )
+    return [...new Set(locaux.filter((chemin) => entrants.has(chemin)))]
+  } catch {
+    return []
+  }
+}
+
 export async function applyUpdate(
   cwd: string,
   options: ApplyOptions = {},
@@ -380,6 +404,24 @@ export async function applyUpdate(
     // pouvant contenir du non-committé jamais remis. On tente désormais la mise à jour TELLE QUELLE ;
     // git refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier
     // modifié localement. Le travail non committé reste EN PLACE, visible, jamais rangé ailleurs.
+
+    // REFUS AVANT GIT (conv-350, 2026-10-30) : cliquer « Mettre à jour » ne faisait RIEN de visible.
+    // Un `git merge` qui échoue sur un arbre sale met les fichiers modifiés de côté puis les RÉÉCRIT
+    // (mesuré : 15 fichiers datés de la seconde du clic, contenu identique). Le serveur de dev voit des
+    // fichiers d'interface changer et recharge la page : le refus revient dans une page disparue, et le
+    // bandeau repart de zéro, sans erreur ni « Faire réparer ». On compare donc AVANT git les fichiers
+    // modifiés localement à ceux que touchent les commits entrants, et on refuse sans rien lancer.
+    if (dirty && (strategy === 'fast-forward' || strategy === 'merge')) {
+      await run(['fetch', '--quiet'], cwd)
+      const enCommun = await fichiersLocauxTouchesParLaMaj(run, cwd)
+      if (enCommun.length > 0) {
+        return {
+          ok: false,
+          strategy,
+          error: `La mise à jour toucherait des fichiers que tu as modifiés sans les committer — ils restent INTACTS, rien n'a été lancé. Committe-les ou mets-les de côté, puis relance. Fichiers en cause : ${enCommun.join(', ')}`
+        }
+      }
+    }
 
     let switchedToMain = false
     try {
