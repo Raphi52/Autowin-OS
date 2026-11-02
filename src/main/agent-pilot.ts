@@ -99,7 +99,7 @@ import {
   CONSIGNE_DEUX_LECTURES,
   annonceDeLaLectureRetenue,
   chargeDeuxLectures,
-  commandesCitees,
+  commandesNommees,
   consigneDeLectureRetenue,
   demandeDeChangementDeRendu,
   dernierMessageAgent,
@@ -1520,7 +1520,7 @@ export class AgentPilot {
       if (!lectureDuTourArmee || !demande || !demander) return Promise.resolve(undefined)
       // Ce que font les commandes citées (`/scout`, `/arena`) : sans elles, le petit modèle a lu
       // conv-767 comme nette — rejeu sur le vrai modèle du 2026-10-22, 0 question sur 3 cas visés.
-      const descriptions = descriptionsDesCommandes(commandesCitees(demande))
+      const descriptions = descriptionsDesCommandes(commandesNommees(demande))
       lecturesMemorisees ??= demander(
         CONSIGNE_DEUX_LECTURES,
         chargeDeuxLectures(demande, dernierMessageAgent(history), descriptions),

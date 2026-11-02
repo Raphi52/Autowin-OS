@@ -401,3 +401,17 @@ describe('issueDesLecturesPourLaTrace — une ligne lisible dans cost.jsonl', ()
     expect(issueDesLecturesPourLaTrace('  ', DEMANDE_767, AVANT_D_AGIR)).toBe('')
   })
 })
+
+describe('chargeDeuxLectures — skill nommée sans barre oblique (conv-412)', () => {
+  const descriptions = { kaizen: 'APPLIQUE ses éditions, un commit chacune' }
+  it('remet la description quand le message commence par le nom de la skill', () => {
+    expect(chargeDeuxLectures('kaizen', undefined, descriptions)).toContain(
+      '/kaizen : APPLIQUE ses éditions'
+    )
+  })
+  it('ne remet rien pour un premier mot qui n est pas une skill', () => {
+    expect(chargeDeuxLectures('kaizenons ce module', undefined, descriptions)).not.toContain(
+      'commandes citées'
+    )
+  })
+})

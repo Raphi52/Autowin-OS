@@ -99,6 +99,19 @@ export function commandesCitees(demande: string): string[] {
   return noms
 }
 
+/**
+ * Les commandes citées, plus le PREMIER MOT quand il n'a pas de barre oblique : une skill nommée
+ * ainsi (« kaizen », « heal … ») est aussi une invocation (chat-pilotage-prompt, « SKILL NOMMÉE =
+ * SKILL INVOQUÉE »). Sans sa description, le petit modèle a lu « kaizen » comme « proposer sans les
+ * appliquer » — l'inverse de la skill (conv-412). Un premier mot qui n'est pas une commande connue
+ * est écarté plus loin, faute de description.
+ */
+export function commandesNommees(demande: string): string[] {
+  const premierMot = /^\s*([a-z][\w-]{1,63})(?=[\s.,;:!?]|$)/iu.exec(demande)?.[1]?.toLowerCase()
+  const nommees = premierMot && !demande.trimStart().startsWith('/') ? [premierMot] : []
+  return [...new Set([...nommees, ...commandesCitees(demande)])]
+}
+
 /** Plafond d'une description de commande remise au petit modèle. */
 const PLAFOND_DESCRIPTION = 400
 
@@ -128,7 +141,7 @@ export function chargeDeuxLectures(
   descriptionsDesCommandes: Readonly<Record<string, string>> = {}
 ): string {
   const contexte = (dernierMessageAgent ?? '').replace(/\s+/gu, ' ').trim()
-  const commandes = commandesCitees(demande)
+  const commandes = commandesNommees(demande)
     .filter((nom) => descriptionsDesCommandes[nom])
     .map(
       (nom) =>
