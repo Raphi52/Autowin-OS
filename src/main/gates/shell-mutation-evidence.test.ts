@@ -446,3 +446,35 @@ describe('un test lancé par l’interpréteur Python est une VÉRIFICATION', ()
     expect(claudeToolEvidenceKind('Bash', commande)).not.toBe('verification')
   })
 })
+
+/**
+ * BOUCLE MESURÉE le 2026-11-02 (conv-415, `run-28ab6e5034bd-1`) — même pathologie, troisième
+ * langage. Le lot « clics du bureau caché » prouvait son correctif par
+ * `powershell -NoProfile -File scripts/hdesk-act.wpf.test.ps1` (code 0, et code 1 sans le
+ * correctif). Le contrôle final a pourtant refusé TROIS fois « Promis mais pas fait : "Tests
+ * demandes executes avec un code de sortie 0" ».
+ *
+ * CAUSE : `VERIFYING` ne connaissait aucun lanceur PowerShell. Le verbe `powershell` n'y figurant
+ * pas, un script `*.test.ps1` — la convention des tests de `scripts/` — ressortait en `inspection`.
+ */
+describe('un test PowerShell lancé par fichier est une VÉRIFICATION', () => {
+  it.each([
+    'powershell -NoProfile -File scripts/hdesk-act.wpf.test.ps1',
+    'powershell -NoProfile -ExecutionPolicy Bypass -File scripts/hdesk-act.echelle.test.ps1 > /tmp/t.log 2>&1; echo "EXIT=$?"',
+    'pwsh -File scripts\\hdesk-act.wpf.test.ps1 -Dossier D:\\Temp\\reinj',
+    'powershell.exe -File "D:/Sources/AutoWinOS/scripts/hdesk-act.wpf.test.ps1"',
+    'pwsh -NoLogo scripts/a.Tests.ps1'
+  ])('reconnaît le test : %s', (commande) => {
+    expect(claudeToolEvidenceKind('Bash', commande)).toBe('verification')
+  })
+
+  /** LA FRONTIÈRE : un script PowerShell quelconque n'est pas un oracle de test. */
+  it.each([
+    'powershell -NoProfile -File scripts/hdesk-lancer.ps1 -Id x',
+    'powershell -NoProfile -File scripts/hdesk-act.ps1 -Travail test',
+    'pwsh -File scripts/latest.ps1',
+    'powershell -NoProfile -File scripts/test-data.ps1.bak'
+  ])('ne prend pas pour un test : %s', (commande) => {
+    expect(claudeToolEvidenceKind('Bash', commande)).not.toBe('verification')
+  })
+})

@@ -167,6 +167,46 @@ function isPythonTest(args: string[]): boolean {
   return false
 }
 
+/** Options de `powershell`/`pwsh` qui consomment l'argument suivant. */
+const POWERSHELL_OPTION_A_VALEUR = new Set([
+  '-executionpolicy',
+  '-ep',
+  '-windowstyle',
+  '-version',
+  '-inputformat',
+  '-outputformat',
+  '-configurationname',
+  '-workingdirectory',
+  '-wd'
+])
+
+/**
+ * Un script PowerShell lancé par fichier n'est un TEST que si son nom le dit : `*.test.ps1` (la
+ * convention de `scripts/`) ou `*.Tests.ps1` (Pester). Sans cette règle, un oracle comme
+ * `powershell -File scripts/hdesk-act.wpf.test.ps1` ne pouvait jamais cocher la case « tests » du
+ * contrôle final (conv-415, 3 refus). Un script quelconque (`hdesk-lancer.ps1`) reste hors de la
+ * table : il peut écrire sans rien prouver.
+ */
+function isPowerShellTest(args: string[]): boolean {
+  for (let i = 0; i < args.length; i += 1) {
+    const option = args[i].toLowerCase()
+    if (option === '-file' || option === '-f') return estScriptDeTestPs1(args[i + 1] ?? '')
+    if (['-command', '-c', '-encodedcommand', '-e', '-ec'].includes(option)) return false
+    if (POWERSHELL_OPTION_A_VALEUR.has(option)) {
+      i += 1
+      continue
+    }
+    if (option.startsWith('-')) continue
+    return estScriptDeTestPs1(args[i])
+  }
+  return false
+}
+
+function estScriptDeTestPs1(chemin: string): boolean {
+  const nom = chemin.replace(/^.*[\\/]/, '').toLowerCase()
+  return /(?:^|[._-])tests?(?:[._-][^\\/]*)?\.ps1$/.test(nom)
+}
+
 /** Verbes qui CHANGENT un état. `true` = toujours ; sinon un prédicat sur les arguments. */
 const MUTATING: Record<string, Rule> = {
   git: isMutatingGit,
@@ -251,7 +291,11 @@ const VERIFYING: Record<string, Rule> = {
   python: isPythonTest,
   python3: isPythonTest,
   'python.exe': isPythonTest,
-  py: isPythonTest
+  py: isPythonTest,
+  powershell: isPowerShellTest,
+  'powershell.exe': isPowerShellTest,
+  pwsh: isPowerShellTest,
+  'pwsh.exe': isPowerShellTest
 }
 
 /**
