@@ -14,6 +14,7 @@ import { ensureAutowinAppData } from '../app-data'
 import type { Message, Usage } from '../providers/types'
 import type { PipelinePhase } from '../skill-pipeline'
 import type { TokenUsage } from '../../shared/token-usage'
+import { remplacerContenuJoint } from './pieces-jointes-journal'
 
 export interface PromptCallRecord {
   id: string
@@ -325,7 +326,7 @@ export function appendPromptCall(
   const aEcrire: PromptCallRecord = empreinteSysteme
     ? { ...record, system: undefined, systemRef: empreinteSysteme }
     : record
-  ecrireAsync(fileFor(call.conversationId, root), root, `${JSON.stringify(aEcrire)}\n`)
+  ecrireAsync(fileFor(call.conversationId, root), root, `${JSON.stringify(aEcrire, remplacerContenuJoint)}\n`)
   return record
 }
 

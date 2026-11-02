@@ -18,6 +18,7 @@ import { mkdir as mkdirAsync, stat as statAsync, unlink as unlinkAsync } from 'n
 import { join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { assertTraceEvent, type TraceEventV1 } from './trace-event'
+import { remplacerContenuJoint } from './pieces-jointes-journal'
 
 type TraceEventSink = (event: TraceEventV1) => void
 
@@ -409,7 +410,8 @@ export class TraceStore {
     if (event.parentId && !seen.has(event.parentId))
       throw new Error(`parent causal introuvable: ${event.parentId}`)
     const descriptor = this.descripteurOuvert(event.conversationId)
-    const ligne = `${JSON.stringify(event)}\n`
+    // Jamais le base64 d'une piece jointe : 20 Mo par ligne ont fait planter l'ouverture de conv-331.
+    const ligne = `${JSON.stringify(event, remplacerContenuJoint)}\n`
     const ecrits = writeSync(descriptor, ligne, undefined, 'utf8')
     // fix-ok: conv-1069 — `append` n'avançait pas le curseur de `nextSequence` : chaque événement
     // rouvrait le journal pour relire sa propre ligne (test borne-warmup rouge sur ef5762bf).
