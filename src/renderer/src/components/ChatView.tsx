@@ -93,7 +93,12 @@ import {
 import { shortModelLabel } from './model-display-label'
 import { buildHomeSuggestions, usagesDesSkills } from './chat-home-suggestions'
 import { buildRefineDraft, type TerminalStatus } from './chat-resume-refine'
-import { conversationsCoupeesParQuota } from '../../../shared/reprise-quota'
+import {
+  conversationsCoupeesParQuota,
+  situationsDeReprise,
+  type RaisonDeRepriseManuelle,
+  type SituationDeReprise
+} from '../../../shared/reprise-quota'
 import { lotsRetenusParLeQuota } from './lots-retenus-quota'
 import { BarrePassage, type PassageAffiche } from './BarrePassage'
 import {
@@ -308,6 +313,51 @@ const CONTEXTES_MEMORISES_MAX = 40
 function texteFil(cle: Parameters<typeof traduireChatFil>[0], valeurs?: ValeursDeTexte): string {
   return traduireChatFil(cle, langueCourante(), valeurs)
 }
+
+/**
+ * fix-ok: sans ligne d'état, « en attente » et « bloqué » étaient identiques à l'écran ; puis
+ * « repart seule à 02:02 » taisait le jour d'une attente de 44 h (conv-1403), et `conv-879` et les
+ * branches sortaient de la reprise sans raison lisible : `ChatView.reprise-quota.test.tsx`.
+ */
+const TEXTE_DE_LA_RAISON = {
+  'aucune-heure': 'quota.raison.aucuneHeure',
+  'coupure-ancienne': 'quota.raison.coupureAncienne',
+  run: 'quota.raison.run',
+  'plan-de-lots': 'quota.raison.planDeLots',
+  inactive: 'quota.raison.inactive',
+  'hors-du-chat': 'quota.raison.horsDuChat',
+  branche: 'quota.raison.branche'
+} as const satisfies Record<RaisonDeRepriseManuelle, Parameters<typeof traduireChatFil>[0]>
+
+/**
+ * Sous 24 h, une heure ne désigne qu'un seul instant. Au-delà, elle en désigne plusieurs : une coupure
+ * annoncée pour le surlendemain affichait « 02:02 », 44 h à l'avance (conv-1403, 1 coupure sur 21).
+ */
+const ATTENTE_LISIBLE_SANS_JOUR_MS = 24 * 60 * 60 * 1000
+
+function texteDeLaSituation(situation: SituationDeReprise): string {
+  const { n } = situation
+  if (situation.etat === 'essai-rate') return texteFil('quota.etat.essaiRate', { n })
+  if (situation.etat === 'manuelle')
+    return texteFil('quota.etat.manuelle', {
+      n,
+      raison: texteFil(TEXTE_DE_LA_RAISON[situation.raison])
+    })
+  const { reprendA } = situation
+  // L'heure est passée : le départ attend sa place, ou a été écarté et part au prochain passage.
+  if (reprendA <= Date.now())
+    return texteFil(n > 1 ? 'quota.etat.imminentePlusieurs' : 'quota.etat.imminenteUne', { n })
+  const heure = formaterDate(reprendA, { hour: '2-digit', minute: '2-digit' })
+  if (reprendA - Date.now() < ATTENTE_LISIBLE_SANS_JOUR_MS)
+    return texteFil(n > 1 ? 'quota.etat.attentePlusieurs' : 'quota.etat.attenteUne', { n, heure })
+  const jour = formaterDate(reprendA, { weekday: 'long', day: 'numeric', month: 'long' })
+  return texteFil(n > 1 ? 'quota.etat.attentePlusieursJour' : 'quota.etat.attenteUneJour', {
+    n,
+    jour,
+    heure
+  })
+}
+
 /** Libellé affiché (infobulle, lecteur d'écran) de chaque valeur du filtre de statut du pied de liste. */
 const LIBELLE_FILTRE_STATUT = {
   toutes: 'liste.filtre.toutes',
@@ -6742,11 +6792,17 @@ export function ChatView({
    * un. Ce bouton les reprend tous — et SEULEMENT ceux-là : une pastille rouge tombée sur une
    * vraie erreur se relancerait dans le vide (tri dans `conversationsCoupeesParQuota`).
    *
-   * Rien d'automatique : reprendre COÛTE du quota, donc c'est un clic, jamais une devinette.
+   * Depuis conv-1423, un fil repart aussi seul, une fois, à l'heure annoncée
+   * (`src/main/chat/reprise-fil-apres-quota.ts`). Le bouton reste : il rend la main avant l'heure,
+   * et après un essai raté. La ligne d'état dit lequel des deux cas attend l'utilisateur.
    */
   const convsCoupeesParQuota = useMemo(
     () => conversationsCoupeesParQuota(convs, busyConversations),
     [convs, busyConversations]
+  )
+  const situationsDeLaReprise = useMemo(
+    () => situationsDeReprise(convsCoupeesParQuota),
+    [convsCoupeesParQuota]
   )
   const [repriseQuotaEnCours, setRepriseQuotaEnCours] = useState(false)
   /**
@@ -6759,8 +6815,9 @@ export function ChatView({
      clic. Le bloc revient de lui-meme si un nouveau fil est coupe — masquer pour toujours ferait
      rater une coupure suivante. */
   const [repriseQuotaMasqueePour, setRepriseQuotaMasqueePour] = useState<string | null>(null)
+  // L'état compte dans la clé : un fil masqué qui passe de « repart seul » à « à la main » revient.
   const cleRepriseQuota = convsCoupeesParQuota
-    .map((c) => c.id)
+    .map((c) => `${c.id}:${c.repriseQuota?.etat ?? ''}`)
     .sort()
     .join('|')
   // Le compte-rendu de reprise est une information de l'INSTANT : lu, il n'a plus de raison
@@ -8295,6 +8352,15 @@ export function ChatView({
                     )}
                   </button>
                 ) : null}
+                {situationsDeLaReprise.map((situation) => (
+                  <span
+                    key={`${situation.etat}:${situation.etat === 'manuelle' ? situation.raison : ''}`}
+                    className="conv-auto-notice"
+                    data-testid="conv-reprise-quota-etat"
+                  >
+                    {texteDeLaSituation(situation)}
+                  </span>
+                ))}
                 {repriseQuotaNotice ? (
                   <span className="conv-auto-notice" data-testid="conv-reprise-quota-notice">
                     {repriseQuotaNotice}

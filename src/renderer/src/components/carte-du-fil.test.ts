@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
 import { carteDuFil, quaisDe, type EtapeCarte } from './carte-du-fil'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
+import { MARQUE_REPRISE_APRES_QUOTA } from '../../../shared/reprise-quota'
 
 /**
  * CARTE DU FIL (conv-1059, 2026-10-22) — le calcul PUR de la ligne de métro qui remplace le carnet.
@@ -570,6 +571,20 @@ describe('carteDuFil — les tests lancés dans le terminal de l’agent', () =>
     expect(etapes[0].statut).toBe('refuse')
     expect(etapes[0].constat.length).toBeLessThanOrEqual(320)
     expect(etapes[0].constat).toMatch(/… → exit 1$/u)
+  })
+
+  it('la reprise automatique après quota se lit comme une suite, pas comme une demande', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige a.ts', 1),
+        asst(2, [texte('Je travaille')], { status: 'failed', error: 'session limit · resets 2am' }),
+        user(`${MARQUE_REPRISE_APRES_QUOTA}\nReprends exactement.`, 3),
+        asst(4, [texte('fini')], { testsDuTerminal: [terminal('npm test', 0, 5)] })
+      ]
+    })
+    expect(etapes.map((etape) => etape.statut)).toEqual(['refuse', 'prouve'])
+    expect(etapes[1].titre).not.toContain('Reprise automatique')
+    expect(etapes[1].titre).toMatch(/^Suite/u)
   })
 
   it('l’ordre réel compte : le constat est la DERNIÈRE preuve, d’où qu’elle vienne', () => {

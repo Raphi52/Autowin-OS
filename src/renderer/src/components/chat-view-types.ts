@@ -7,6 +7,7 @@ import type { ChatPart, HydratedAssistantMessage } from './chat-view-model'
 import type { TurnRuntimeIdentity } from './subagent-thread-from-trace'
 import type { ChatArtifact } from '../../../shared/artifacts'
 import type { PilotEventKind } from '../../../shared/pilot-events'
+import type { EtatDeRepriseDuFil } from '../../../shared/reprise-quota'
 
 export type Part = ChatPart
 
@@ -154,6 +155,8 @@ export type Conv = {
    * quelles (`estMurDeQuota`, src/shared/reprise-quota.ts).
    */
   lastAssistantError?: string
+  /** Où en est un fil coupé par le quota : la ligne d'état de la liste (`os:conversations`). */
+  repriseQuota?: EtatDeRepriseDuFil
   /** Le dossier de travail de la conversation — le répertoire où l'agent travaille. */
   projectPath?: string
   /**

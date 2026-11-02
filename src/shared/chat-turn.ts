@@ -139,6 +139,13 @@ export interface ChatTurnRuntime {
   model?: string
   reasoningEffort?: string
   sessionId?: string
+  /**
+   * Ce tour a été ouvert depuis une fenêtre, donc par une personne. Absent : une règle, une tâche
+   * planifiée, le scout, un autre fil, ou un tour écrit avant ce champ. Seule cette marque autorise
+   * la reprise automatique après quota (`etatDeRepriseDuFil`, conv-1423) : un tour de règle a des
+   * bornes (`chat-dispatch.ts`) que cette reprise n'a pas.
+   */
+  ouvertDepuisLeChat?: true
 }
 
 export interface ChatTurnState {

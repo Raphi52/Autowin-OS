@@ -7,7 +7,8 @@
  * pas : un tour tombé sur une erreur de code se relancerait dans le vide. Seul le mur de QUOTA se
  * reprend — le travail était bon, c'est l'abonnement qui a dit non.
  *
- * Ce module ne fait QUE trier. Il ne relance rien : la vue applique sa décision.
+ * Ce module ne fait QUE trier. Il ne relance rien : la vue applique sa décision, et le processus
+ * principal repart seul à l'heure annoncée (`src/main/chat/reprise-fil-apres-quota.ts`, conv-1423).
  *
  * Le discriminant reprend celui de `quotaWallReason` (src/main/providers/registry.ts) — même
  * vocabulaire, même exclusion du rate-limit passager. Il est recopié ici parce que `registry.ts`
@@ -45,6 +46,45 @@ export function estMurDeQuota(texte: string | undefined | null): boolean {
   )
 }
 
+/**
+ * LA MARQUE DE L'ESSAI AUTOMATIQUE. Elle s'écrit dans le fil, ce qui la fait survivre au redémarrage :
+ * c'est la borne « un seul essai ». L'en-tête seul ne suffit pas : la reprise d'une tâche de fond
+ * porte le même (`relance-taches-de-fond.ts`), et elle a le droit d'être coupée par le quota. Copie de
+ * `ENTETE_REPRISE_AUTOMATIQUE`, épinglée par le test : l'interface et le Board lisent aussi ce texte.
+ */
+export const MARQUE_REPRISE_APRES_QUOTA =
+  '[Reprise automatique] Ton tour précédent a été coupé par la limite du compte.'
+
+/** Ce message est-il l'essai automatique, et non une phrase de l'utilisateur qui en parle ? */
+export function estUneRepriseApresQuota(message: string | undefined | null): boolean {
+  return (message ?? '').trimStart().startsWith(MARQUE_REPRISE_APRES_QUOTA)
+}
+
+/**
+ * Pourquoi un fil coupé ne repartira pas seul.
+ *
+ * fix-ok: `hors-du-chat` vient de `conv-879`, règle mail relancée sans ses bornes, essai du contrôle
+ * final ; `branche` vient de `partis ["conv-1","conv-2"]`, une coupure recopiée par `fork` et relancée
+ * deux fois. Chaque exclusion a sa raison ici, sinon l'écran ne saurait pas dire pourquoi le fil attend.
+ */
+export type RaisonDeRepriseManuelle =
+  | 'aucune-heure'
+  | 'coupure-ancienne'
+  | 'run'
+  | 'plan-de-lots'
+  | 'inactive'
+  | 'hors-du-chat'
+  | 'branche'
+
+/**
+ * Où en est un fil coupé par le quota. `reprendA` : l'instant du départ, marge comprise. Décidé côté
+ * principal (`etatDeRepriseDuFil`), lu tel quel par la liste : l'écran dit ce qui partira.
+ */
+export type EtatDeRepriseDuFil =
+  | { etat: 'attente'; reprendA: number }
+  | { etat: 'manuelle'; raison: RaisonDeRepriseManuelle }
+  | { etat: 'essai-rate' }
+
 /** Ce que la liste des conversations sait d'un fil, et qui suffit à trancher. */
 export interface ConversationCandidateQuota {
   id: string
@@ -72,6 +112,36 @@ export function conversationsCoupeesParQuota<T extends ConversationCandidateQuot
       !enCours.has(c.id) &&
       estMurDeQuota(c.lastAssistantError)
   )
+}
+
+/** Une ligne de la liste : les fils dans la même situation sont comptés ensemble. */
+export type SituationDeReprise =
+  | { etat: 'attente'; n: number; reprendA: number }
+  | { etat: 'essai-rate'; n: number }
+  | { etat: 'manuelle'; n: number; raison: RaisonDeRepriseManuelle }
+
+/**
+ * Une ligne par situation, pas une par fil : dix fils coupés ensemble ne doivent pas noyer la liste.
+ * L'ordre va de ce qui se passe seul à ce qui attend l'utilisateur. Pour l'attente, l'heure gardée
+ * est celle du PREMIER départ : les autres suivent, un fil à la fois.
+ */
+export function situationsDeReprise(
+  conversations: readonly { repriseQuota?: EtatDeRepriseDuFil }[]
+): SituationDeReprise[] {
+  const situations: SituationDeReprise[] = []
+  const attentes = conversations.flatMap((c) =>
+    c.repriseQuota?.etat === 'attente' ? [c.repriseQuota.reprendA] : []
+  )
+  if (attentes.length > 0)
+    situations.push({ etat: 'attente', n: attentes.length, reprendA: Math.min(...attentes) })
+  const essais = conversations.filter((c) => c.repriseQuota?.etat === 'essai-rate').length
+  if (essais > 0) situations.push({ etat: 'essai-rate', n: essais })
+  const parRaison = new Map<RaisonDeRepriseManuelle, number>()
+  for (const { repriseQuota } of conversations)
+    if (repriseQuota?.etat === 'manuelle')
+      parRaison.set(repriseQuota.raison, (parRaison.get(repriseQuota.raison) ?? 0) + 1)
+  for (const [raison, n] of parRaison) situations.push({ etat: 'manuelle', n, raison })
+  return situations
 }
 
 /** Les mois tels que Claude les abrège dans « resets Sep 29, 2am ». */

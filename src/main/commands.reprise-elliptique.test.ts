@@ -1,6 +1,8 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { composerMessageDeReprise } from './chat/reprise-fil-apres-quota'
+import { ENTETE_REPRISE_AUTOMATIQUE } from './chat/relance-taches-de-fond'
 import { AppCommandBus } from './commands'
 import { convRunsRoot } from './runs/conv-runs'
 
@@ -56,6 +58,29 @@ async function lancer(rootTask: string, convId = 'conv-reprise'): Promise<string
   )
   return calls.lastTask
 }
+
+// fix-ok: `rootNeedsContext` ne reconnaissait qu'une relance : un message composé par Autowin devenait
+// la tâche du run, ce que ces tests rendaient rouge avant `estUneRepriseAutomatique` (conv-1423).
+describe('reprise automatique — le run garde la cible donnée par le modèle (conv-1423)', () => {
+  it('le message de reprise après quota ne devient pas la tâche du run', async () => {
+    const message = composerMessageDeReprise()
+    const envoye = await lancer(message)
+
+    expect(envoye).toContain(CIBLE)
+    expect(envoye).not.toBe(message)
+  })
+
+  it('la reprise d’une tâche de fond non plus : Autowin l’a composée, pas l’utilisateur', async () => {
+    const envoye = await lancer(`${ENTETE_REPRISE_AUTOMATIQUE} Ton tour précédent s’est terminé.`)
+
+    expect(envoye).toContain(CIBLE)
+  })
+
+  it('jumeau : une vraie demande qui cite ces mots reste la tâche, sans cible ajoutée', async () => {
+    const demande = 'explique pourquoi « [Reprise automatique] » apparaît dans le fil conv-12'
+    expect(await lancer(demande)).toBe(demande)
+  })
+})
 
 describe('reprise elliptique — la cible contextualisée survit', () => {
   for (const vague of [

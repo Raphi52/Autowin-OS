@@ -685,6 +685,14 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         }
         broadcast({ type: 'refresh', scope: 'workflows' })
       }
+      const runtimeDuTour = {
+        provider: turnRuntimeBinding.provider,
+        model: turnRuntimeBinding.model,
+        reasoningEffort: turnRuntimeBinding.reasoningEffort,
+        // La fenêtre est le seul fait qui dit qu'une personne a ouvert ce tour : règles, tâches et
+        // scout passent `undefined` (`index.ts`). Un tour repris (`recovery`) garde sa marque.
+        ...(sender ? { ouvertDepuisLeChat: true as const } : {})
+      }
       if (conversationId && recovery && os.conversations.get(conversationId)) {
         os.conversations.applyTurnEvent(conversationId, turnId, { kind: 'resumed' })
         appendTurnEvent(turnJournalRoot, conversationId, turnId, {
@@ -692,14 +700,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           at: Date.now()
         })
       } else if (conversationId && continuation && os.conversations.get(conversationId)) {
-        os.conversations.beginContinuationTurn(conversationId, {
-          turnId,
-          runtime: {
-            provider: turnRuntimeBinding.provider,
-            model: turnRuntimeBinding.model,
-            reasoningEffort: turnRuntimeBinding.reasoningEffort
-          }
-        })
+        os.conversations.beginContinuationTurn(conversationId, { turnId, runtime: runtimeDuTour })
       } else if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
         os.conversations.beginTurn(
           conversationId,
@@ -710,14 +711,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
               ? metasDurablesDesPieces(last.attachments, conversationId, turnId)
               : undefined
           },
-          {
-            turnId,
-            runtime: {
-              provider: turnRuntimeBinding.provider,
-              model: turnRuntimeBinding.model,
-              reasoningEffort: turnRuntimeBinding.reasoningEffort
-            }
-          }
+          { turnId, runtime: runtimeDuTour }
         )
         // Le MESSAGE ENVOYÉ doit être visible DÈS l'envoi, pas au premier événement de réponse
         // (« je devrais directement voir notre message partir », 14/08) : le tour vient d'être

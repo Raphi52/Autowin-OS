@@ -357,6 +357,7 @@ import {
 import { ligneDeJournalDeRelecture } from './objections-juge'
 import { PIPELINE_PHASES } from '../shared/pipeline-phases'
 import { estRelanceSansObjet, MARQUEUR_CIBLE_CONTEXTUALISEE } from '../shared/relance-sans-objet'
+import { estUneRepriseAutomatique } from './chat/relance-taches-de-fond'
 import { ensureAutowinAppData } from './app-data'
 import { poserReprise } from './redemarrage-reprise'
 import { annoncerFermeture } from './journal-arrets'
@@ -4179,8 +4180,11 @@ export class AppCommandBus {
         // conversationnel : ils peuvent aider a deleguer, jamais reduire le contrat racine. Une
         // reprise sans objet nomme (« reprend », « go », « lancer terrain. ») transporte aussi la
         // cible contextualisee par le pilote — voir shared/relance-sans-objet.ts pour la mesure.
+        // Un message de reprise composé par Autowin non plus : il ne nomme aucun objet, et le
+        // prendre tel quel lancerait un run sans vraie cible (conv-1423).
         const rootNeedsContext =
-          suppliedRootTask !== undefined && estRelanceSansObjet(suppliedRootTask)
+          suppliedRootTask !== undefined &&
+          (estRelanceSansObjet(suppliedRootTask) || estUneRepriseAutomatique(suppliedRootTask))
         const authoritativeTask = rootNeedsContext
           ? `${suppliedRootTask}\n\n${MARQUEUR_CIBLE_CONTEXTUALISEE} ${delegatedTask}`
           : (suppliedRootTask ?? delegatedTask)

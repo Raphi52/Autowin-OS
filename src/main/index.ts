@@ -255,6 +255,7 @@ import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persis
 import { StartupResumeQueue } from './runs/startup-resume-queue'
 import { creerReprendreTout } from './runs/resume-all-interrupted-runs'
 import { creerReveilApresQuota } from './runs/reveil-apres-quota'
+import { creerRepriseDesFils } from './chat/reprise-fil-apres-quota'
 import { publishedWorktreeProofForResume } from './runs/startup-resume-publication'
 import { classifierRefusDeReprise } from './runs/resume-refusal'
 import {
@@ -619,6 +620,8 @@ const automationInstanceMode = {
 const isolatedTestInstance = automationInstanceMode.isolated
 let isolatedConversationReadCount = 0
 const headlessTestInstance = automationInstanceMode.headless
+/** Une instance de test ne dépense pas de quota toute seule sur les fils de sa copie de données. */
+const repriseDesFilsActive = !isolatedTestInstance && !headlessTestInstance
 const explicitUserDataPath = resolveExplicitUserDataDir(process.argv)
 // STOCKAGE PORTABLE : l'app écrit dans SON dossier, plus dans `%APPDATA%`. Mesuré le 2026-08-07,
 // supprimer le dossier du projet laissait 1,8 Go derrière lui. `dirname(app.getPath('exe'))` et non
@@ -3409,6 +3412,8 @@ Le fil reprend ensuite normalement.`
     return aggregateToolUsage()
   })
 
+  /** Assigné plus bas, une fois le coordinateur des plans construit : la reprise le consulte. */
+  const suiviDesFilsCoupes: { reprise?: ReturnType<typeof creerRepriseDesFils> } = {}
   // Les canaux des conversations vivent dans src/main/ipc/conversations.ts.
   registerConversationsIpc({
     os,
@@ -3420,6 +3425,10 @@ Le fil reprend ensuite normalement.`
     pickDirectory,
     compterLectureIsolee: () => {
       isolatedConversationReadCount += 1
+    },
+    etatDeReprise: (fil) => suiviDesFilsCoupes.reprise?.etatDuFil(fil),
+    relireLesFilsCoupes: () => {
+      if (repriseDesFilsActive) suiviDesFilsCoupes.reprise?.replanifier()
     },
     dossierDuFil: (id) => dossierDuTour(id),
     dossierDesRetours: () => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour'),
@@ -4155,6 +4164,9 @@ Le fil reprend ensuite normalement.`
    */
   const observateurDesPlans: ObservateurFinDeTour = (conversationId, issue) => {
     suiviDesPlans.coordinateur?.surFinDeTour(conversationId, issue)
+    // Ici et pas sur `os.onMurDeQuota` : ce crochet n'a qu'un écouteur, celui du réveil des runs. Un
+    // tour en échec relit tout : seul un mur y trouve une heure, et rien n'est prévu sinon.
+    if (!issue.ok && repriseDesFilsActive) suiviDesFilsCoupes.reprise?.replanifier()
     // LE BOARD RECOPIÉ À CHAQUE FIN DE TOUR (conv-1210 : « que la copie du Board vers la GED se
     // mette à jour même quand le Board n'est pas affiché ») : sans attendre, ni calcul sans dossier
     // choisi ; une rafale de fins de tour ne calcule qu'une fois par délai (`board-dossier.ts`).
@@ -4628,6 +4640,25 @@ Le fil reprend ensuite normalement.`
   void relanceurTachesDeFond
     .reprendreAuDemarrage()
     .catch((erreur) => console.warn('[taches de fond] reprise au demarrage impossible :', erreur))
+  /*
+   * LES FILS COUPÉS PAR LE QUOTA (conv-1423) : une reprise automatique, à l'heure annoncée. File à
+   * elle : elle attend la fin de chaque tour, et un long tour ne doit pas retenir le réveil d'un run.
+   * Historique complet : sans session à reprendre, `runPrompt` ne laisserait à l'agent qu'une phrase.
+   * fix-ok: mesuré sur 30 jours : 21 tours coupés, 16 suivis d'un « reprend » tapé à la main.
+   */
+  const fileDesFilsCoupes = new StartupResumeQueue()
+  suiviDesFilsCoupes.reprise = creerRepriseDesFils({
+    lireFils: () => os.conversations.list(),
+    filOccupe: (id) => activeChatTurns.isInFlight(id),
+    filDansUnPlan: (id) => Boolean(suiviDesPlans.coordinateur?.planDuFil(id)),
+    filsAvecRunAReprendre: () =>
+      new Set(os.resumableOrchestrations().flatMap((run) => run.conversationId ?? [])),
+    mettreEnFile: (tache) => fileDesFilsCoupes.enqueue(tache),
+    lancerTour: (id, messages) =>
+      os.executionSupervisor.runOutsideCurrent(() => runPilotChat(undefined, messages, id)),
+    journal: (message) => console.warn('[reprise apres quota]', message)
+  })
+  if (repriseDesFilsActive) suiviDesFilsCoupes.reprise.replanifier()
   const taskDispatcher = new ScheduledChatDispatcher(scheduledChatRuntime)
   const relay = new PowerShellWindowsRelay({
     scriptPath: relayScriptPath,
