@@ -16,7 +16,8 @@ import {
   prefixeDeCommande,
   questionDesDeuxLectures,
   reprendSesMots,
-  suitUneQuestionDesLectures
+  suitUneQuestionDesLectures,
+  issueDesLecturesPourLaTrace
 } from './deux-lectures'
 
 /** La demande RÉELLE de conv-767 (premier message, 2026-09-22) — 2,47 $ sur une mauvaise lecture. */
@@ -337,5 +338,66 @@ describe('les filtres déterministes, avant tout appel de modèle', () => {
     expect(CONSIGNE_DEUX_LECTURES).toContain('Autowin OS')
     expect(CONSIGNE_DEUX_LECTURES).toMatch(/« super conv ».*« plan de lots »/u)
     expect(CONSIGNE_DEUX_LECTURES).toMatch(/« conv ».*conversation de travail/su)
+  })
+})
+
+/**
+ * LA TRACE DIT CE QUE LE CONTRÔLE A DÉCIDÉ, PAS LA RÉPONSE BRUTE COUPÉE (conv-1431, 2026-11-02).
+ *
+ * Mesuré sur `cost.jsonl` : 527 lignes `deuxLectures` sur 696 coupées à 160 caractères AVANT la
+ * deuxième lecture, donc impossibles à classer. Entrée qui ferait échouer une correction fausse :
+ * `LECTURES_767` (deux lectures à 50/50, plus de 160 caractères) — la réponse brute recopiée rend
+ * un JSON tronqué, jamais « 2 lectures : question ».
+ */
+describe('issueDesLecturesPourLaTrace — une ligne lisible dans cost.jsonl', () => {
+  const AVANT_D_AGIR = { questionPermise: true, moment: 'avant-d-agir' } as const
+  const EN_PARALLELE = { questionPermise: true, moment: 'en-parallele' } as const
+
+  it('à égalité, quand le tour attend la lecture pour agir : la question est posée', () => {
+    expect(LECTURES_767.length).toBeGreaterThan(160)
+    expect(issueDesLecturesPourLaTrace(LECTURES_767, DEMANDE_767, AVANT_D_AGIR)).toBe(
+      '2 lectures : question posée'
+    )
+  })
+
+  /*
+   * L'OBJECTION DU CONTRÔLE FINAL (conv-1431) : sur un tour ordinaire, la lecture court EN PARALLÈLE
+   * du modèle et le tour ANNONCE la plus probable ; la question n'est posée que si un run suit.
+   * Entrée qui ferait échouer une correction fausse : `LECTURES_767` lue `en-parallele` — l'ancienne
+   * étiquette y écrivait « question » sans qu'aucune question ne parte.
+   */
+  it('à égalité, lue en parallèle d’un tour ordinaire : jamais « question posée »', () => {
+    expect(issueDesLecturesPourLaTrace(LECTURES_767, DEMANDE_767, EN_PARALLELE)).toBe(
+      '2 lectures : à égalité, question seulement si un run suit'
+    )
+  })
+
+  it('à égalité sans question permise : annoncée, quel que soit le moment', () => {
+    for (const moment of ['avant-d-agir', 'en-parallele'] as const)
+      expect(
+        issueDesLecturesPourLaTrace(LECTURES_767, DEMANDE_767, { questionPermise: false, moment })
+      ).toBe('2 lectures : annoncée (question non permise)')
+  })
+
+  it('une lecture domine : annoncée ; une seule lecture : nette', () => {
+    const dominante = reponse([LECTURE_ARENA_767, 80], [LECTURE_CODE_767, 20])
+    expect(issueDesLecturesPourLaTrace(dominante, DEMANDE_767, AVANT_D_AGIR)).toBe(
+      '2 lectures : annoncée'
+    )
+    expect(
+      issueDesLecturesPourLaTrace(reponse([LECTURE_ARENA_767, 100]), DEMANDE_767, EN_PARALLELE)
+    ).toBe('nette')
+  })
+
+  it('illisible : nommé, avec le début de la réponse pour lire le format inattendu', () => {
+    const prose = 'Je pense que la demande est claire.'
+    expect(issueDesLecturesPourLaTrace(prose, DEMANDE_767, AVANT_D_AGIR)).toBe(
+      `illisible : ${prose}`
+    )
+    expect(issueDesLecturesPourLaTrace('{"lectures":[]}', DEMANDE_767, EN_PARALLELE)).toBe(
+      'illisible : {"lectures":[]}'
+    )
+    // Une réponse vide reste « vide » : `resumerIssue` l'écrit « (réponse vide) ».
+    expect(issueDesLecturesPourLaTrace('  ', DEMANDE_767, AVANT_D_AGIR)).toBe('')
   })
 })

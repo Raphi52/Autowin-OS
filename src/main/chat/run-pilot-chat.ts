@@ -54,7 +54,7 @@ import { evenementResultatDurable } from './durable-result-event'
 import { ouvrirTourDeChat } from '../gel-main'
 import {
   closingJournalEvents,
-  pilotJournalEvents,
+  journalDuPiloteRegroupe,
   promptCallJournalEvents,
   type PromptJournalMemory
 } from '../runs/turn-journal-enrich'
@@ -337,6 +337,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           kind: 'reasoning',
           text: portion
         })
+    })
+    /**
+     * Le reste du pilote vers le JOURNAL fichier, la pensée regroupée par rafale (conv-1431 :
+     * 355 683 lignes d'un ou deux mots sur les journaux conv-14*, 55 % de leur poids).
+     */
+    const journalDuPilote = journalDuPiloteRegroupe((journalEvent) => {
+      if (conversationId) appendTurnEvent(turnJournalRoot, conversationId, turnId, journalEvent)
     })
     /**
      * JOURNAL DES ACTIONS du tour — mêmes lignes que le bloc « Actions » du fil, accumulées ici pour
@@ -1139,22 +1146,24 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             persistSupervisedChatUsage(settledUsage)
           }
         }
-        applyDurableEvent(pilotEvent)
         /**
          * TOUT LE RESTE DU PILOTE DANS LE JOURNAL. `applyDurableEvent` ne retient que 8 `kind` sur
          * les 14 emis ; `error`, `retry`, `provider-status`, `action-progress` et le `reasoning`
          * par iteration n'atteignaient donc AUCUN fichier — produits, puis jetes a la frontiere
          * d'ecriture. Aucun affichage ne peut montrer ce qui n'est pas ecrit : c'est ici la cause
          * du journal ou « on ne voit rien ». Un `kind` inconnu est ecrit tel quel, jamais perdu.
+         * AVANT `applyDurableEvent` (conv-1431) : la rafale de pensée en attente part au disque
+         * avant la commande, le texte ou la fin que celui-ci écrit — la pensée reste à sa place.
+         * Les deux écritures ne portent jamais le même `kind` : l'ordre d'un même événement tient.
          */
         if (conversationId) {
           try {
-            for (const journalEvent of pilotJournalEvents(pilotEvent, Date.now()))
-              appendTurnEvent(turnJournalRoot, conversationId, turnId, journalEvent)
+            journalDuPilote.recevoir(pilotEvent, Date.now())
           } catch {
             /* journal best-effort : ne jamais casser un tour pour une ecriture d'observabilite */
           }
         }
+        applyDurableEvent(pilotEvent)
         if (conversationId && pilotEvent.kind === 'prompt-call' && pilotEvent.prompt) {
           // L'APPEL PROVIDER dans le journal : prompt systeme, options, usage/cout, modele resolu,
           // duree, statut/erreur. Jusqu'ici seul le trace-store le savait — le journal ne portait
@@ -1736,6 +1745,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const coupureMotivee = terminal.kind === 'failed' && controller.signal.aborted
       // Un tour qui echoue ou est coupe en pleine pensee garde la rafale en cours (conv-1110).
       raisonnementDuTour.vider()
+      // ... dans le journal fichier aussi, AVANT son état terminal (conv-1431).
+      journalDuPilote.vider()
       if (conversationId && os.conversations.get(conversationId)) {
         os.conversations.applyTurnEvent(conversationId, turnId, terminal)
       }
@@ -1802,6 +1813,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       }
     } finally {
       tourClos = true
+      // Aucun minuteur de rafale ne survit au tour (conv-1431).
+      journalDuPilote.vider()
       // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.
       if (veilleur) clearInterval(veilleur)
       fermerTourPourGels()

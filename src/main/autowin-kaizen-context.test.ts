@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   buildAutowinKaizenTask,
   collectAutowinKaizenEvidence,
+  fusionnerFragmentsDeFlux,
   PLAFONDS_AMPLES
 } from './autowin-kaizen-context'
 import { isMutationTask } from './orchestrator'
@@ -705,6 +706,19 @@ describe('dossier de preuve /kaizen — les fragments de flux ne chassent plus l
     } finally {
       rmSync(appData, { recursive: true, force: true })
     }
+  })
+
+  // conv-1431 : le journal arrive déjà regroupé à l'écriture. Entrée qui ferait échouer un lecteur
+  // qui compte une ligne pour un fragment : 30 + 40 + 1 fragments comptés « 32 ».
+  it('additionne les fragments de lignes déjà regroupées à l’écriture', () => {
+    const fusion = fusionnerFragmentsDeFlux([
+      { kind: 'reasoning-step', iteration: 0, text: 'a', at: 1, fragments: 30 },
+      { kind: 'reasoning-step', iteration: 0, text: 'b', at: 2, fragments: 40 },
+      { kind: 'reasoning-step', iteration: 0, text: 'c', at: 3 }
+    ])
+    expect(fusion).toEqual([
+      { kind: 'reasoning-step', iteration: 0, text: 'abc', at: 1, fragments: 71 }
+    ])
   })
 
   it('ne fusionne pas deux flux distincts ni à travers une action', () => {

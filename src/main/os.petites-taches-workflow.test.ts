@@ -12,6 +12,11 @@ vi.mock('./workflow-profiles', async (original) => ({
   ...(await original<typeof import('./workflow-profiles')>()),
   loadWorkflowProfiles: () => ({ profiles: [] })
 }))
+// Aucun choix posé à la main : le choix automatique tourne (conv-1431, test du fil ci-dessous).
+vi.mock('./workflow-selection', async (original) => ({
+  ...(await original<typeof import('./workflow-selection')>()),
+  loadWorkflowSelections: () => ({ byConversation: {} })
+}))
 
 const { AutowinOS } = await import('./os')
 const { RoleModelConfig } = await import('./roles')
@@ -128,6 +133,44 @@ describe('choix automatique du workflow — modèle des petites tâches', () => 
       costUsd: 0.0006,
       issue: 'aucun'
     })
+  })
+
+  /*
+   * LE COÛT DU CHOIX APPARTIENT AU FIL DU RUN (conv-1431, 2026-11-02). Mesuré sur `cost.jsonl`
+   * depuis le 20/10 : 53 lignes `choixWorkflow`, aucune avec un `conversationId`. Le test part du
+   * VRAI point d'entrée du run (`poseConversationWorkflow`) : une correction qui ajouterait le fil à
+   * l'appel sans le faire descendre depuis la conversation laisserait la ligne orpheline. Entrée qui
+   * la ferait échouer : `conv-42`, puis le cas « nouveau » qui relance la composition.
+   */
+  it('les lignes du choix ET de la composition portent le fil du run', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({ text: 'WORKFLOW: nouveau', provider: 'claude' })
+      .mockResolvedValueOnce({ text: 'WORKFLOW: aucun', provider: 'claude' })
+    const lignes: Array<Record<string, unknown>> = []
+    const proto = AutowinOS.prototype as unknown as {
+      poseWorkflowDynamique: unknown
+      poseConversationWorkflow: (conversationId?: string, task?: string) => Promise<unknown>
+    }
+    const fake = {
+      roles: new RoleModelConfig({ orchestrator: CHAT }),
+      registry: { send },
+      cost: { add: (l: Record<string, unknown>) => lignes.push(l) },
+      poseWorkflowDynamique: proto.poseWorkflowDynamique
+    }
+    await proto.poseConversationWorkflow.call(fake, 'conv-42', TACHE)
+    expect(lignes.map((l) => [l.appel, l.conversationId])).toEqual([
+      ['choixWorkflow', 'conv-42'],
+      ['compositionWorkflow', 'conv-42']
+    ])
+  })
+
+  it('le jumeau : un run sans fil garde des lignes sans fil', async () => {
+    const { lignes } = await poser(new RoleModelConfig({ orchestrator: CHAT }), [
+      { text: 'WORKFLOW: aucun', provider: 'claude' }
+    ])
+    expect(lignes).toHaveLength(1)
+    expect(lignes[0]).not.toHaveProperty('conversationId')
   })
 
   it('une panne du modèle n’empêche pas le run de partir, et elle est NOMMÉE', async () => {

@@ -504,6 +504,36 @@ describe('le raisonnement diffusé en fragments tient en UNE ligne par passage',
     expect(pensees[0].fields).toMatchObject({ fragments: 4, iteration: 0 })
   })
 
+  // conv-1431 : le main regroupe désormais la pensée à l'écriture (`journalDuPiloteRegroupe`) ; une
+  // pensée de plus d'1 s y fait deux lignes déjà regroupées. Entrée qui ferait échouer un lecteur qui
+  // compte une ligne pour un fragment : 3 + 2 fragments affichés « 2 ».
+  it('une rafale faite de lignes déjà regroupées additionne leurs fragments', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [])],
+      journalByTurn: {
+        'turn-1': [
+          { ...fragment('je lis le fichier', 10), fragments: 3 },
+          { ...fragment(' puis je conclus', 1011), fragments: 2 }
+        ]
+      }
+    })
+    const pensees = entries.filter((entry) => entry.kind === 'reasoning')
+    expect(pensees).toHaveLength(1)
+    expect(pensees[0]).toMatchObject({ source: 'journal', at: 10 })
+    expect(pensees[0].detail).toBe('je lis le fichier puis je conclus')
+    expect(pensees[0].fields).toMatchObject({ fragments: 5, iteration: 0 })
+  })
+
+  it('le jumeau : une seule ligne déjà regroupée garde son compteur', () => {
+    const entries = buildModelActivityLog({
+      messages: [assistant('turn-1', [])],
+      journalByTurn: { 'turn-1': [{ ...fragment('je lis', 10), fragments: 3 }] }
+    })
+    expect(entries.find((entry) => entry.kind === 'reasoning')?.fields).toMatchObject({
+      fragments: 3
+    })
+  })
+
   it('garde une ligne par passage ENTRE deux gestes, dans l’ordre réel', () => {
     const entries = buildModelActivityLog({
       messages: [assistant('turn-1', [])],

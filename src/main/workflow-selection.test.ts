@@ -69,7 +69,7 @@ describe('le choix atteint réellement le run du chat', () => {
    */
   it('faute de choix manuel, le mode dynamique est sollicité', () => {
     expect(os).toMatch(
-      /if \(!profileId\) \{\s*const proposition = task \? await this\.poseWorkflowDynamique\(task\)/
+      /if \(!profileId\) \{\s*const proposition = task\s*\?\s*await this\.poseWorkflowDynamique\(task, conversationId\)/
     )
     // Et il retombe sur « aucun workflow » plutôt que d'empêcher le run de partir.
     expect(os).toMatch(/if \(!meriteUneDecision\(task\)\) return undefined/)

@@ -269,6 +269,51 @@ export function lireDeuxLectures(reponse: unknown, demande: string): [string, st
 }
 
 /**
+ * Ce que le pilote transmet au lecteur pour la ligne de coût de l'appel (conv-1431, 2026-11-02).
+ * Mesuré sur `cost.jsonl` depuis le 20/10 : 716 lignes `deuxLectures` sans fil, et 527 dont
+ * l'issue était la réponse brute coupée avant la deuxième lecture. Seul le pilote sait à quel fil
+ * le tour appartient et ce qu'il tire de la réponse ; le lecteur, lui, tient le journal des coûts.
+ */
+export type TraceDesLectures = {
+  conversationId?: string
+  /** La décision du contrôle sur cette réponse, en une ligne (`issueDesLecturesPourLaTrace`). */
+  issue: (reponse: string) => string
+}
+
+/**
+ * Où le tour en est quand il lit la demande (conv-1431). `avant-d-agir` : il ATTEND la lecture avant
+ * un run payant ou un changement d'affichage, et pose la question à égalité. `en-parallele` : un tour
+ * ordinaire, qui ANNONCE la plus probable sans l'attendre ; la question n'y part que si un run suit.
+ */
+export type MomentDeLaLecture = 'avant-d-agir' | 'en-parallele'
+
+/**
+ * La décision du contrôle, en une ligne lisible dans `cost.jsonl` — comme `issueDeDecision` pour le
+ * choix du workflow. « question posée » n'est écrite que là où le tour attend la lecture pour agir :
+ * l'égalité y ferme le tour sur la question (`agent-pilot.ts`). Lue en parallèle d'un tour ordinaire,
+ * l'égalité ne pose RIEN tant que le modèle ne lance pas de run — objection du contrôle final sur
+ * conv-1431 : l'étiquette d'avant écrivait « question » sur des tours où aucune ne partait. Limite :
+ * la ligne est écrite à la réponse du petit modèle, avant de savoir si un run suivra ; le décompte
+ * exact des questions posées reste la commande `ask` « Laquelle des deux lectures veux-tu ? » du
+ * journal du tour. Une réponse illisible garde son début : de quoi lire un format inattendu. Vide →
+ * `''`, que `resumerIssue` écrit « (réponse vide) ».
+ */
+export function issueDesLecturesPourLaTrace(
+  reponse: string,
+  demande: string,
+  tour: { questionPermise: boolean; moment: MomentDeLaLecture }
+): string {
+  if (!reponse.trim()) return ''
+  const issue = lireLesLectures(reponse, demande)
+  if (!issue) return `illisible : ${reponse}`
+  if (issue.kind === 'retenue') return issue.ecartee ? '2 lectures : annoncée' : 'nette'
+  if (!tour.questionPermise) return '2 lectures : annoncée (question non permise)'
+  return tour.moment === 'avant-d-agir'
+    ? '2 lectures : question posée'
+    : '2 lectures : à égalité, question seulement si un run suit'
+}
+
+/**
  * La ligne affichée dans le fil quand une lecture domine (conv-1123) : ce que l'agent a compris,
  * et rien d'autre. L'autre lecture n'y figure plus (conv-1280, 2026-10-29 : « le bloc compréhension
  * met tout le temps : si tu voulais plutôt, c'est nul, mets juste ce qu'il a compris, point ») ;

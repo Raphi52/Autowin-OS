@@ -246,13 +246,17 @@ export function selectPhaseFanOut(fanOut: FanOutTopology, phase: NodePhase): Fan
  * UN appel de la décision de workflow, tracé dans `cost.jsonl` (conv-1097). `choisir` part sur le
  * modèle des petites tâches, `composer` sur celui du chat. Best-effort : une panne rend « aucun »,
  * comme avant, mais elle est désormais NOMMÉE au lieu d'être avalée.
+ *
+ * `conversationId` : le fil du run. Sans lui, mesuré le 2026-11-02 (conv-1431), les 53 lignes
+ * `choixWorkflow` de `cost.jsonl` étaient orphelines et le coût affiché par fil les oubliait.
  */
 async function demanderDecisionWorkflow(
   os: Pick<AutowinOS, 'registry' | 'cost'>,
   task: string,
   profiles: WorkflowProfile[],
   mode: ModeDecision,
-  binding: RoleBinding
+  binding: RoleBinding,
+  conversationId?: string
 ): Promise<WorkflowDecision> {
   const appel = mode === 'choisir' ? 'choixWorkflow' : 'compositionWorkflow'
   if (!binding.provider) return { kind: 'none', reason: 'aucun modèle réglé' }
@@ -273,7 +277,8 @@ async function demanderDecisionWorkflow(
     ...(mode === 'composer' ? { role: 'orchestrator' } : {}),
     binding,
     res,
-    issue: issueDeDecision(decision)
+    issue: issueDeDecision(decision),
+    conversationId
   })
   return decision
 }
@@ -401,7 +406,7 @@ export class AutowinOS {
     // Il a le droit de répondre « aucun ». Le workflow actif de la vue n'est alors que le REPLI : il
     // ne passe plus avant ce choix (conv-1070, 2026-10-22).
     if (!profileId) {
-      const proposition = task ? await this.poseWorkflowDynamique(task) : undefined
+      const proposition = task ? await this.poseWorkflowDynamique(task, conversationId) : undefined
       if (proposition) return proposition
       // Le REPLI subit la même garde que le choix du modèle (conv-1070, 2026-10-22) : un workflow
       // actif de réparation (« Correctif » : think, build, clean, judge) sur un symptôme dont la
@@ -434,7 +439,10 @@ export class AutowinOS {
    * invalide ou trop coûteux font TOUS retomber sur « aucun workflow », c'est-à-dire le comportement
    * d'avant ce mode. Un choix automatique ne doit jamais pouvoir empêcher un run de partir.
    */
-  private async poseWorkflowDynamique(task: string): Promise<WorkflowRunOverride | undefined> {
+  private async poseWorkflowDynamique(
+    task: string,
+    conversationId?: string
+  ): Promise<WorkflowRunOverride | undefined> {
     // Ne pas payer un appel de modèle pour apprendre qu'une demande de trois mots ne mérite rien.
     if (!meriteUneDecision(task)) return undefined
     const profiles = loadWorkflowProfiles().profiles
@@ -446,7 +454,8 @@ export class AutowinOS {
       task,
       profiles,
       'choisir',
-      this.roles.bindingDesPetitesTaches()
+      this.roles.bindingDesPetitesTaches(),
+      conversationId
     )
     if (decision.kind === 'a-composer') {
       decision = await demanderDecisionWorkflow(
@@ -454,7 +463,8 @@ export class AutowinOS {
         task,
         profiles,
         'composer',
-        this.roles.getBinding('orchestrator')
+        this.roles.getBinding('orchestrator'),
+        conversationId
       )
     }
     if (decision.kind === 'none' || decision.kind === 'a-composer') return undefined

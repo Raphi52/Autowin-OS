@@ -345,7 +345,10 @@ export function fusionnerFragmentsDeFlux(events: readonly TurnJournalEvent[]): T
     const precedent = sortie[sortie.length - 1]
     if (cle !== undefined && cle === clePrecedente && precedent) {
       precedent.text = String(precedent.text) + String(event.text)
-      precedent.fragments = (typeof precedent.fragments === 'number' ? precedent.fragments : 1) + 1
+      // Une ligne déjà regroupée à l'écriture apporte son propre compte (conv-1431).
+      const compte = (e: TurnJournalEvent): number =>
+        typeof e.fragments === 'number' ? e.fragments : 1
+      precedent.fragments = compte(precedent) + compte(event)
       continue
     }
     // Copie : le journal lu n'est jamais modifie en place.

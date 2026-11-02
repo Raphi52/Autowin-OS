@@ -103,13 +103,16 @@ import {
   consigneDeLectureRetenue,
   demandeDeChangementDeRendu,
   dernierMessageAgent,
+  issueDesLecturesPourLaTrace,
   lectureAAnnoncer,
   lireLesLectures,
   meriteUneLecture,
   questionDesDeuxLectures,
   suitUneQuestionDesLectures,
   tacheAvecLectureRetenue,
-  type IssueDesLectures
+  type IssueDesLectures,
+  type MomentDeLaLecture,
+  type TraceDesLectures
 } from './deux-lectures'
 import { estUneRepriseAutomatique } from './chat/relance-taches-de-fond'
 import { cheminsRelatifsCites, relanceCheminsComplets } from './chemins-complets'
@@ -1051,8 +1054,13 @@ export class AgentPilot {
      * Le petit modèle qui lit la demande AVANT un run payant ou un changement d'affichage, et dit
      * si elle a deux lectures plausibles (`deux-lectures.ts`, conv-1092). Absent = aucun contrôle :
      * seul `index.ts` le branche, les fixtures et les tests existants gardent leurs appels exacts.
+     * `trace` : le fil du tour et la décision tirée de la réponse, pour la ligne de coût (conv-1431).
      */
-    private readonly demanderDeuxLectures?: (systeme: string, charge: string) => Promise<string>
+    private readonly demanderDeuxLectures?: (
+      systeme: string,
+      charge: string,
+      trace: TraceDesLectures
+    ) => Promise<string>
   ) {}
 
   /**
@@ -1503,7 +1511,10 @@ export class AgentPilot {
     const questionPermise =
       meriteUneLecture(latestUserMessage) && !suitUneQuestionDesLectures(history)
     let lecturesMemorisees: Promise<IssueDesLectures | undefined> | undefined
-    const deuxLecturesDuTour = (): Promise<IssueDesLectures | undefined> => {
+    // `moment` : celui du PREMIER appel, le seul qui interroge le petit modèle (promesse mémorisée).
+    const deuxLecturesDuTour = (
+      moment: MomentDeLaLecture
+    ): Promise<IssueDesLectures | undefined> => {
       const demande = latestUserMessage?.trim() ? latestUserMessage : undefined
       const demander = this.demanderDeuxLectures
       if (!lectureDuTourArmee || !demande || !demander) return Promise.resolve(undefined)
@@ -1512,7 +1523,13 @@ export class AgentPilot {
       const descriptions = descriptionsDesCommandes(commandesCitees(demande))
       lecturesMemorisees ??= demander(
         CONSIGNE_DEUX_LECTURES,
-        chargeDeuxLectures(demande, dernierMessageAgent(history), descriptions)
+        chargeDeuxLectures(demande, dernierMessageAgent(history), descriptions),
+        // Le coût de l'appel appartient au fil, et sa trace dit ce que le contrôle a DÉCIDÉ, pas la
+        // réponse brute coupée à 160 caractères (conv-1431 : 527 lignes sur 696 inclassables).
+        {
+          ...(conversationId ? { conversationId } : {}),
+          issue: (texte) => issueDesLecturesPourLaTrace(texte, demande, { questionPermise, moment })
+        }
       )
         .then((reponse) => {
           const issue = lireLesLectures(reponse, demande)
@@ -1570,7 +1587,7 @@ export class AgentPilot {
     }
     let tacheDeLaRoute = directRoute?.task ?? ''
     if (routeSansModele) {
-      const issueDeLaRoute = await deuxLecturesDuTour()
+      const issueDeLaRoute = await deuxLecturesDuTour('avant-d-agir')
       if (issueDeLaRoute?.kind === 'question') {
         await fermerSurLaQuestionDesLectures('lectures:0', issueDeLaRoute.lectures)
         return
@@ -1651,7 +1668,7 @@ export class AgentPilot {
     }
     // Lancée AVANT la recherche Brain et attendue après : son délai se cache derrière elle.
     const lecturesAvantRendu = demandeDeChangementDeRendu(latestUserMessage)
-      ? deuxLecturesDuTour()
+      ? deuxLecturesDuTour('avant-d-agir')
       : undefined
     /*
      * TOUS LES AUTRES TOURS (conv-1240) : la lecture court EN PARALLÈLE du modèle, sans l'attendre.
@@ -1662,7 +1679,7 @@ export class AgentPilot {
      * ensuite un run, la même lecture mémorisée le garde (question à quasi-égalité, tâche précisée).
      */
     if (!lecturesAvantRendu)
-      void deuxLecturesDuTour().then((issue) => {
+      void deuxLecturesDuTour('en-parallele').then((issue) => {
         if (issue && !tourClos) annoncerLaLectureRetenue(lectureAAnnoncer(issue))
       })
     const retrievedContext =
@@ -4062,7 +4079,7 @@ export class AgentPilot {
           !questionPoseeCeTour
         ) {
           // Le run n'est PAS lancé : la question remplace l'orchestration (deux-lectures.ts).
-          const issueAvantRun = await deuxLecturesDuTour()
+          const issueAvantRun = await deuxLecturesDuTour('avant-d-agir')
           // Une lecture domine : le run part, mais sur ELLE (`rootTask` ci-dessous), et le fil la
           // nomme (conv-1123).
           if (issueAvantRun?.kind === 'retenue') annoncerLaLectureRetenue(issueAvantRun)

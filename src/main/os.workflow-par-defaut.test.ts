@@ -98,7 +98,7 @@ describe('workflow actif = valeur par défaut, le choix automatique passe avant'
   it('le choix du modèle pilote le run même quand un workflow est actif', async () => {
     const { pose, poseWorkflowDynamique } = os(ACTIF, CHOIX_DU_MODELE)
     await expect(pose()).resolves.toBe(CHOIX_DU_MODELE)
-    expect(poseWorkflowDynamique).toHaveBeenCalledWith(TACHE)
+    expect(poseWorkflowDynamique).toHaveBeenCalledWith(TACHE, CONV)
   })
 
   it('le workflow actif reprend la main quand le modèle ne propose rien', async () => {

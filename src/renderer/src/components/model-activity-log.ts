@@ -354,9 +354,11 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       // (conv-257 : 143 lignes pour un seul tour). Les fragments CONSÉCUTIFS d'une même itération
       // forment donc UNE ligne, à l'heure du premier ; tout autre événement (outil, signe de vie,
       // réponse) clôt la rafale, ce qui garde la pensée à sa place entre les gestes.
+      // Une ligne déjà regroupée à l'écriture porte son compte (`fragments`, conv-1431).
+      const compte = typeof event.fragments === 'number' ? event.fragments : 1
       if (rafale && rafale.premier.iteration === event.iteration) {
         rafale.texte += String(event.text ?? '')
-        rafale.fragments += 1
+        rafale.fragments += compte
         return
       }
       const ligne: Brute = {
@@ -366,7 +368,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
         label: tx('activite.raisonnementEtape', { n: String(event.iteration ?? '?') }),
         ...stamp(event)
       }
-      rafale = { ligne, texte: String(event.text ?? ''), premier: event, fragments: 1 }
+      rafale = { ligne, texte: String(event.text ?? ''), premier: event, fragments: compte }
       rafales.push(rafale)
       out.push(ligne)
       return
@@ -562,7 +564,8 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       vides.add(r.ligne)
       continue
     }
-    const detail = joinDetail(short(r.texte), rest(r.premier, 'text', 'iteration'))
+    // Le compte d'une ligne regroupée à l'écriture est un champ, pas de la pensée (conv-1431).
+    const detail = joinDetail(short(r.texte), rest(r.premier, 'text', 'iteration', 'fragments'))
     Object.assign(
       r.ligne,
       allFields({ ...r.premier, text: r.texte, ...(r.fragments > 1 ? { fragments: r.fragments } : {}) }),
