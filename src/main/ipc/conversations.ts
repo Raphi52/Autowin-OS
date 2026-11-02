@@ -243,6 +243,18 @@ export function registerConversationsIpc({
     return updated?.inactive === true
   })
   /**
+   * Fil privé pour le village commun (D6, conv-1429) : son tanuki part chez les collègues SANS titre.
+   * Rend l'état retenu (`true` = privé). Le rafraîchissement relit les résumés, et le registre des
+   * tanukis renvoie l'instantané au processus principal, qui réécrit `presence.json`.
+   */
+  ipcMain.handle('os:conversations:setPrive', (event, rawId: string, rawOn: unknown) => {
+    assertTrustedRendererSender(event, 'Conversations')
+    const id = guardString(rawId, 'id')
+    const updated = os.conversations.marquerPrive(id, rawOn === true)
+    if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
+    return updated?.prive === true
+  })
+  /**
    * Choisir le compte Claude d'UNE conversation. Rend l'id retenu, ou null si aucun choix propre
    * (id inconnu, ou retour au compte de l'application) : le renderer n'a pas a distinguer les deux.
    */

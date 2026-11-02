@@ -215,6 +215,78 @@
 .quartier-etiquette span {
   color: var(--text-dim);
 }
+/* Le titre du fil d'un collègue, entre son prénom et son activité (D9, conv-1429). */
+.quartier-etiquette .quartier-etiquette__titre {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+/* La carte de l'agent d'un collègue (D10, conv-1429) : posée à côté du clic, elle n'ouvre aucun fil.
+   Sa position est écrite en `transform`, comme l'étiquette. */
+.quartier-carte {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 4;
+  width: 248px;
+  padding: 8px 10px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--bg-0) 92%, transparent);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+  backdrop-filter: blur(10px);
+}
+.quartier-carte p {
+  margin: 2px 0 0;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.quartier-carte .quartier-carte__titre {
+  color: var(--text);
+}
+.quartier-carte__tete {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.quartier-carte__tete b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quartier-carte__pastille {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.quartier-carte__fermer {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.quartier-carte__fermer:hover,
+.quartier-carte__fermer:focus-visible {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  outline: none;
+}
+.quartier-carte__depuis {
+  font-size: 11px;
+}
 
 /* L'en-tête : UNE rangée qui se replie, et non deux blocs posés en absolu chacun dans son coin.
    Mesuré le 2026-08-21 dans la fenêtre réelle (491 px) : les deux blocs se recouvraient et les
@@ -250,6 +322,41 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* « Mes agents / Toute l'équipe » (D8, conv-1429) : deux boutons accolés sous le titre. Comme le rouage,
+   ils sont seuls à prendre les clics dans l'en-tête inerte. */
+.home-view__village {
+  display: inline-flex;
+  margin-top: 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  pointer-events: auto;
+}
+.home-view__village button {
+  padding: 3px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.home-view__village button + button {
+  border-left: 1px solid var(--line);
+}
+.home-view__village button:hover,
+.home-view__village button:focus-visible {
+  color: var(--text);
+  outline: none;
+}
+.home-view__village button[aria-pressed='true'] {
+  color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 14%, transparent);
 }
 
 /* Seul le bouton prend les clics : la plaque, elle, laisse passer (l'en-tete est inerte). */

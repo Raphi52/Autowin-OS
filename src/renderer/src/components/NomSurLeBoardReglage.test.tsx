@@ -105,3 +105,54 @@ describe('Settings · Interface — « Ton nom sur le Board » (conv-1230)', () 
     expect(c.querySelector('[data-testid="interface-nom-board"]')).toBeNull()
   })
 })
+
+describe('Settings · Interface — « Tes agents dans le village de l’équipe » (D6, conv-1429)', () => {
+  const interrupteur = (c: HTMLElement): HTMLButtonElement =>
+    c.querySelector('[data-testid="interface-presence-village-switch"]') as HTMLButtonElement
+
+  it('actif par défaut ; coupé, il montre ce que le moteur a gardé', async () => {
+    let coupe = false
+    const quartierPresencePartager = vi.fn(async (actif: boolean) => {
+      coupe = !actif
+      return etat(coupe ? { partagerPresence: false } : {})
+    })
+    const c = await monter({
+      boardDossier: vi.fn(async () => etat()),
+      boardDossierNom: vi.fn(),
+      quartierPresencePartager
+    })
+    expect(interrupteur(c).getAttribute('aria-checked')).toBe('true')
+    expect(interrupteur(c).textContent).toBe('Partagés')
+    await act(async () => interrupteur(c).click())
+    expect(quartierPresencePartager).toHaveBeenCalledWith(false)
+    expect(interrupteur(c).getAttribute('aria-checked')).toBe('false')
+    expect(interrupteur(c).textContent).toBe('Coupés')
+  })
+
+  it('lit un partage déjà coupé sur le poste', async () => {
+    const c = await monter({
+      boardDossier: vi.fn(async () => etat({ partagerPresence: false })),
+      boardDossierNom: vi.fn(),
+      quartierPresencePartager: vi.fn()
+    })
+    expect(interrupteur(c).getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('un échec d’enregistrement le dit et laisse l’interrupteur comme avant', async () => {
+    const c = await monter({
+      boardDossier: vi.fn(async () => etat()),
+      boardDossierNom: vi.fn(),
+      quartierPresencePartager: vi.fn(async () => {
+        throw new Error('panne')
+      })
+    })
+    await act(async () => interrupteur(c).click())
+    expect(c.textContent).toContain('le partage reste comme avant')
+    expect(interrupteur(c).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('sans pont vers le moteur, la ligne n’est pas montrée', async () => {
+    const c = await monter({ boardDossier: vi.fn(async () => etat()), boardDossierNom: vi.fn() })
+    expect(c.querySelector('[data-testid="interface-presence-village"]')).toBeNull()
+  })
+})

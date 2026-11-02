@@ -853,6 +853,17 @@ const LigneConversation = memo(function LigneConversation({
                 {lot}
               </span>
             )}
+            {/* Fil privé (D6, conv-1429) : discret, à la couleur de la ligne de détail — ni or ni
+                rouge, ce n'est pas un signal qui appelle l'utilisateur. */}
+            {c.prive && (
+              <span
+                className="conv-prive"
+                data-testid={`conv-prive-${c.id}`}
+                title={t('liste.prive.titre')}
+              >
+                {t('liste.prive')}
+              </span>
+            )}
             {!convQuery && <span>{c.messageCount ?? c.messages?.length ?? 0} messages</span>}
           </span>
         </span>
@@ -7501,6 +7512,34 @@ export function ChatView({
     [refreshConvs]
   )
 
+  /**
+   * Fil privé du village commun (D6, conv-1429) : le tanuki reste chez les collègues, sans titre.
+   * Même contrat que `marquerInactive` : un pont absent (preload d'avant redémarrage) se dit.
+   */
+  const marquerPrive = useCallback(
+    async (conversationId: string, on: boolean): Promise<void> => {
+      const poser = window.api.conversationsSetPrive
+      if (!poser) {
+        setAppNotice((current) => newestNotice(current, { text: texteFil('prive.indisponible') }))
+        return
+      }
+      try {
+        await poser(conversationId, on)
+      } catch (erreur) {
+        setAppNotice((current) =>
+          newestNotice(current, {
+            text: texteFil('statut.nonEnregistre', {
+              raison: erreur instanceof Error ? erreur.message : String(erreur)
+            })
+          })
+        )
+        return
+      }
+      await refreshConvs()
+    },
+    [refreshConvs]
+  )
+
   const surligner = useCallback(
     async (conversationId: string, on: boolean): Promise<void> => {
       const poser = window.api.conversationsSetHighlight
@@ -8570,6 +8609,24 @@ export function ChatView({
                 {convMenu.conv.inactive
                   ? texteFil('liste.desarchiver')
                   : texteFil('liste.archiver')}
+              </button>
+              {/* Fil privé du village commun (D6, conv-1429) : une bascule, comme le surlignage. */}
+              <button
+                role="menuitem"
+                data-testid="conv-menu-prive"
+                title={texteFil('menu.prive.titre')}
+                onClick={() => {
+                  const conv = convMenu.conv
+                  setConvMenu(null)
+                  void marquerPrive(conv.id, conv.prive !== true)
+                }}
+              >
+                <span className="conv-menu-ic" aria-hidden="true">
+                  {convMenu.conv.prive ? '◉' : '◌'}
+                </span>
+                {convMenu.conv.prive
+                  ? texteFil('menu.retirerPrive')
+                  : texteFil('menu.marquerPrive')}
               </button>
               {/*
                 Le mode selection entre PAR ICI : garder un bouton permanent en haut du panneau

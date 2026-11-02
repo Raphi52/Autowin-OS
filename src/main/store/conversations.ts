@@ -229,6 +229,12 @@ export interface Conversation {
    */
   inactive?: boolean
   /**
+   * Fil marqué privé (menu « Masquer le titre au village », décision D6 de
+   * `grill/agent-hq-japon-town.md`, conv-1429) : son tanuki reste visible chez les collègues, mais
+   * SANS titre. Absent = titre partagé (filtré). Retirer la marque EFFACE le champ, comme `inactive`.
+   */
+  prive?: boolean
+  /**
    * Le compte Claude que CETTE conversation doit utiliser (id du store de comptes).
    *
    * OPTIONNEL, et il le reste : un `conversations.json` ecrit par une version anterieure doit
@@ -2214,6 +2220,19 @@ export class ConversationStore {
     if (!conversation) return undefined
     if (inactive) conversation.inactive = true
     else delete conversation.inactive
+    this.changed(id)
+    return conversation
+  }
+
+  /**
+   * Marque le fil privé pour le village commun (D6, conv-1429). Ne touche pas `updatedAt` : masquer
+   * un titre n'est pas travailler, le fil ne doit pas remonter en tête de liste.
+   */
+  marquerPrive(id: string, prive: boolean): Conversation | undefined {
+    const conversation = this.conversations.get(id)
+    if (!conversation) return undefined
+    if (prive) conversation.prive = true
+    else delete conversation.prive
     this.changed(id)
     return conversation
   }
