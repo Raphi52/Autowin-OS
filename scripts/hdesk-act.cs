@@ -46,6 +46,35 @@ public sealed class AutowinHdeskAct {
     if (liste.Count == 0) return " Aucune fenetre visible dans ce bureau (l'application est-elle lancee ?).";
     return " Fenetres visibles (" + total + ") : " + string.Join(" ; ", liste.ToArray()) + (total > liste.Count ? " ; ..." : "") + ".";
   }
+  // ETAT DU BOUTON (conv-415, 2026-11-02) : WPF ignore le WM_LBUTTONDOWN poste et relit l'etat reel par
+  // GetKeyState(VK_LBUTTON) (Win32MouseDevice.GetButtonStateFromSystem) ; un message poste ne le change
+  // pas, donc une tuile RIG restait « relachee ». On partage la file d'entree de la cible le temps du clic
+  // (AttachThreadInput) et on y pose VK_LBUTTON enfonce pour le DOWN, relache pour le UP.
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool f);
+  [DllImport("user32.dll")] static extern bool GetKeyboardState(byte[] s);
+  [DllImport("user32.dll")] static extern bool SetKeyboardState(byte[] s);
+  [DllImport("user32.dll")] static extern bool PeekMessageW(out MSG m, IntPtr h, uint a, uint b, uint r);
+  [DllImport("user32.dll")] static extern IntPtr SendMessageTimeoutW(IntPtr h, uint m, IntPtr w, IntPtr l, uint f, uint t, out IntPtr r);
+  [StructLayout(LayoutKind.Sequential)] public struct MSG { public IntPtr H; public uint M; public IntPtr W, L; public uint T; public POINT P; }
+  static void BoutonGauche(bool enfonce) { var k = new byte[256]; if (GetKeyboardState(k)) { k[0x01] = (byte)(enfonce ? 0x80 : 0); SetKeyboardState(k); } }
+  // Attend que la cible ait traite ce qui est poste avant : deux allers-retours WM_NULL (SMTO_ABORTIFHUNG, 2 s).
+  static void Synchro(IntPtr h) { IntPtr r; for (int i = 0; i < 2; i++) { SendMessageTimeoutW(h, 0, IntPtr.Zero, IntPtr.Zero, 2, 2000, out r); Thread.Sleep(30); } }
+  void Cliquer(IntPtr h, IntPtr lp) {
+    MSG m; PeekMessageW(out m, IntPtr.Zero, 0, 0, 0); // cree la file de messages de ce thread, requise par AttachThreadInput
+    uint pid, moi = GetCurrentThreadId(), cible = GetWindowThreadProcessId(h, out pid);
+    bool lie = cible != 0 && cible != moi && AttachThreadInput(moi, cible, true);
+    try {
+      if (lie) BoutonGauche(true);
+      PostMessageW(h, WM_LBUTTONDOWN, new IntPtr(1), lp); Synchro(h);
+      if (lie) BoutonGauche(false);
+      PostMessageW(h, WM_LBUTTONUP, IntPtr.Zero, lp); Synchro(h);
+    } finally {
+      if (lie) { BoutonGauche(false); AttachThreadInput(moi, cible, false); }
+    }
+    Envoyes += 2;
+  }
   // TOUCHES NOMMEES (conv-35) : touche -> (code virtuel, caractere WM_CHAR ou 0). Les combinaisons Ctrl
   // passent par leur caractere de controle (Ctrl+A=1, C=3, V=22, X=24, Z=26) : un message poste ne
   // change pas l'etat reel de Ctrl, donc un WM_KEYDOWN 'C' serait lu comme un simple « c ». Les champs
@@ -86,7 +115,7 @@ public sealed class AutowinHdeskAct {
       return;
     }
     if (!sansClic) {
-      PostMessageW(h, WM_LBUTTONDOWN, new IntPtr(1), lp); PostMessageW(h, WM_LBUTTONUP, IntPtr.Zero, lp); Envoyes += 2;
+      Cliquer(h, lp);
       Thread.Sleep(150);
     }
     foreach (var morceau in (touches ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)) {
