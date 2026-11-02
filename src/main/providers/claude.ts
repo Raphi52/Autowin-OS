@@ -1031,7 +1031,8 @@ function basesNonProdDeclarees(): string[] {
  * chez les agents déjà lancés (`rafraichirGardesDesAgents`, conv-770 du 2026-10-01) : une seule source.
  */
 export function scriptDesGardesCourant(): string {
-  return scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees())
+  // Le mod chargé par les runs est protégé de leurs écritures (garde-mod-autowin.ts, plan-387b99e7).
+  return scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees(), dossierModsAutowin)
 }
 
 /**
