@@ -49,6 +49,7 @@ import {
 } from './dernier-run-entier'
 import type { AttachmentMeta } from '../store/conversations'
 import { closingTurnDelivery } from '../runs/turn-closing'
+import { ligneDePropositionGrow } from './proposition-grow'
 import { appendTurnEvent } from '../runs/turn-journal'
 import { evenementResultatDurable } from './durable-result-event'
 import { ouvrirTourDeChat } from '../gel-main'
@@ -816,6 +817,34 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
               appendTurnEvent(turnJournalRoot, conversationId, turnId, {
                 kind: 'delta',
                 text: livraison.durable.text,
+                at: Date.now()
+              })
+            } catch {
+              /* journal best-effort */
+            }
+          }
+          // GROW PROPOSEE PAR LE CODE (conv-417) : une demande d'action LIVREE finit sur un bouton
+          // `/grow`, decide ici sur l'issue structuree du run, jamais sur les mots du modele.
+          // Proposee seulement : la ligne est un bouton du champ de saisie, rien n'est lance.
+          const ligneGrow = ligneDePropositionGrow(
+            pilotEvent.outcome,
+            [...messages].reverse().find((m) => m.role === 'user')?.content
+          )
+          if (ligneGrow) {
+            const propositionGrow = {
+              kind: 'delta' as const,
+              streamId: `${turnId}:grow`,
+              text: ligneGrow
+            }
+            os.conversations.applyTurnEvent(conversationId, turnId, propositionGrow)
+            emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
+              ...propositionGrow,
+              conversationId,
+              turnId
+            })
+            try {
+              appendTurnEvent(turnJournalRoot, conversationId, turnId, {
+                ...propositionGrow,
                 at: Date.now()
               })
             } catch {

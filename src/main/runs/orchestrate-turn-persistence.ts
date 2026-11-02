@@ -3,6 +3,7 @@ import type { Conversation } from '../store/conversations'
 import type { OrchestrationStep } from '../orchestrator'
 import type { ChatArtifact } from '../../shared/artifacts'
 import { classifierRefusDeReprise, refusDeRepriseRaconteDuTravail } from './resume-refusal'
+import { ligneDePropositionGrowDuResultat } from '../chat/proposition-grow'
 
 /**
  * PERSISTANCE DU TOUR pour le chemin DIRECT `os:orchestrate` (bouton « Reprendre », pilotage
@@ -72,6 +73,10 @@ export interface OrchestrateTurnPersistence {
     valid?: boolean
     gateBlocked?: boolean
     gateReasons?: unknown
+    /** Phases jouées : décident si le run a livré une ACTION (bouton `/grow`). */
+    phaseOutputs?: unknown
+    /** Copie verte conservée, non publiée : rien n'est arrivé chez l'utilisateur. */
+    retainedWorkspace?: unknown
   }): void
   /** Clôture d'ÉCHEC/ANNULATION : une erreur devient VISIBLE au lieu d'être jetée par le `void`. */
   fail(error: string, aborted: boolean): void
@@ -245,6 +250,10 @@ export function createOrchestrateTurnPersistence(
           error: reasons.join(' ; ') || closing || 'Livraison refusée par le gate Autowin.'
         })
       } else {
+        // GROW PROPOSÉE (conv-417) : même déclencheur que la clôture du tour de chat
+        // (`run-pilot-chat.ts`), pour les runs lancés depuis les tickets ou repris au redémarrage.
+        const ligneGrow = ligneDePropositionGrowDuResultat(result, openedTask)
+        if (ligneGrow) emit({ kind: 'delta', streamId: `${turnId}:grow`, text: ligneGrow })
         emit({ kind: 'done' })
       }
       onClosed?.()
