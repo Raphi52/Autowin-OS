@@ -746,6 +746,26 @@ export function cibleDeVerification(
     : { ok: true, chemin, parPortee: true }
 }
 
+/** Le libellé d'un `verify` joué sur un fichier : c'est lui que le Board relit (`preuve-du-tour.ts`). */
+export const libelleDuVerifyCible = (commande: string, chemin: string): string =>
+  `${commande} -- ${chemin}`
+
+/**
+ * CE QUE `verify` ÉCRIRAIT POUR CE FICHIER, sans rien lancer (conv-1423, 2026-11-01). `null` s'il le
+ * refuse, ou s'il ne le jouerait pas directement : une source part en `vitest related`, qu'aucune
+ * règle ne sait lire. Mêmes étapes que `runVerifyAt`, pour que la relance de preuve ne puisse pas
+ * promettre un `verify` différent de celui qui partira.
+ * fix-ok: une copie de ces refus, côté relance, s'écartait de `cibleDeVerification` : 3 écarts sur 28
+ * formes (`.git/`, `src/.git/`, `.Test.`), 0 sur 84 une fois la question posée ici (sonde du 01/11).
+ */
+export function libelleDuVerifySur(fichier: string, dossier: string): string | null {
+  const decision = decideVerifyCommand(dossier)
+  if (!decision.allowed) return null
+  const verdict = cibleDeVerification(fichier, decision.cwd)
+  if (!verdict.ok || verdict.parPortee) return null
+  return libelleDuVerifyCible(decision.command, verdict.chemin)
+}
+
 /**
  * L'ARTEFACT STRUCTURE DE VITEST, lu comme un ENSEMBLE D'ECHECS IDENTIFIES.
  *

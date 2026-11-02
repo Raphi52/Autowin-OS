@@ -287,7 +287,7 @@ export interface StreamChunk {
    * TESTS JOUÉS PAR L'AGENT DANS SON TERMINAL et leur code de sortie, lus au résultat d'un `Bash`
    * (`tests-du-terminal.ts`). Fragment SANS texte : le pilote le relaie au tour, jamais au fil lu.
    */
-  testsDuTerminal?: Array<{ commande: string; codeDeSortie: number }>
+  testsDuTerminal?: Array<{ commande: string; codeDeSortie: number; changementDeDossier?: string }>
   /**
    * RÉPONSE COUPÉE PAR LE FILTRE DE SÉCURITÉ DU FOURNISSEUR, en DONNÉE (conv-1161). L'avis lisible
    * part dans `delta` ; ce champ porte la catégorie et l'explication du fournisseur pour que le
@@ -398,6 +398,23 @@ export interface ExecutionEvidence {
   searchPath?: string
   /** Motif d'une recherche (Grep/Glob). */
   pattern?: string
+  /**
+   * Tests joués par cette commande shell et LEUR code de sortie (`tests-du-terminal.ts`), le fait que
+   * lit la garde de preuve de fin de tour. Porté par la trace plutôt que par un fragment du flux :
+   * après un redémarrage, le flux a disparu avec le processus, la trace se relit dans le journal.
+   * `at` : heure d'arrivée, absente d'une trace relue (le journal n'en garde aucune).
+   *
+   * fix-ok: `changementDeDossier` voyage à côté du libellé : sans lui, `cd ../autre && npm test` se
+   * lisait `npm test` et effaçait un rouge du projet courant (reproduit par le contrôle final, conv-1423).
+   */
+  testsLus?: Array<{
+    commande: string
+    codeDeSortie: number
+    changementDeDossier?: string
+    at?: number
+  }>
+  /** Tests lancés qui ne comptent pas : code de sortie illisible, ou lancés en arrière-plan. */
+  testsNonComptes?: string[]
   /** Diff / changements d'un file_change, prêt à afficher. */
   diff?: string
   /** Chemin(s) du fichier touché (file_change). */

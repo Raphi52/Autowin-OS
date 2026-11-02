@@ -78,6 +78,7 @@ import {
   cibleDeVerification,
   decideVerifyCommand,
   decideVerifyScript,
+  libelleDuVerifyCible,
   TYPES_DE_VERIFICATION,
   porteeDuVert,
   VERIFY_RELATED_ANGLE_MORT,
@@ -7544,7 +7545,7 @@ export class AppCommandBus {
         if (parPortee.allowed) return parPortee
       } else {
         argv = [...argv, '--', verdict.chemin]
-        etiquette = `${decision.command} -- ${verdict.chemin}`
+        etiquette = libelleDuVerifyCible(decision.command, verdict.chemin)
       }
     }
     /*

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { cibleDeVerification } from './verify-command'
+import { cibleDeVerification, libelleDuVerifySur } from './verify-command'
 
 /**
  * LE DÉFAUT, vécu le 2026-08-25. Un agent de chat devait prouver UN fichier de test. Il ne pouvait
@@ -160,6 +160,60 @@ describe('le chat peut réellement nommer une cible', () => {
 
   it('l’argv est construit ICI, argument par argument — jamais une chaîne interpolée', () => {
     expect(source).toContain("argv = [...argv, '--', verdict.chemin]")
+  })
+})
+
+/**
+ * CE QUE `verify` FERAIT D'UN FICHIER, sans le lancer (conv-1423, 2026-11-01). La relance de preuve
+ * le demande avant de proposer `verify`.
+ * fix-ok: une copie de ces refus, côté relance, avait divergé : 3 écarts sur 28 formes.
+ */
+describe('libelleDuVerifySur — le libellé d’un `verify` sur ce fichier', () => {
+  const projet = (scripts: Record<string, string>): string => {
+    const racine = bac()
+    writeFileSync(join(racine, 'package.json'), JSON.stringify({ scripts }), 'utf8')
+    return racine
+  }
+
+  it('rend le libellé que `verify` écrira, avec le script choisi pour ce projet', () => {
+    const fichier = 'src/main/chose.test.ts'
+    expect(libelleDuVerifySur(fichier, projet({ 'test:unit': 'vitest run' }))).toBe(
+      `npm run test:unit -- ${fichier}`
+    )
+    expect(libelleDuVerifySur(fichier, projet({ test: 'vitest run' }))).toBe(
+      `npm test -- ${fichier}`
+    )
+  })
+
+  it('nettoie le chemin comme `verify`', () => {
+    expect(libelleDuVerifySur('src//main\\chose.test.ts', projet({ test: 'vitest' }))).toBe(
+      'npm test -- src/main/chose.test.ts'
+    )
+  })
+
+  it.each([
+    ['sous `.git`', '.git/config.test.ts'],
+    ['absent', 'src/main/jamais-ecrit.test.ts'],
+    ['qui remonte', '../voisin/secret.test.ts'],
+    ['un joker', 'src/**/*.test.ts'],
+    ['absolu', 'C:/Windows/x.test.ts'],
+    ['vide', '']
+  ])('rien pour un fichier %s : `verify` le refuse', (_cas, fichier) => {
+    expect(libelleDuVerifySur(fichier, projet({ test: 'vitest' }))).toBeNull()
+  })
+
+  it('rien pour une source : `verify` la joue en `vitest related`, un autre libellé', () => {
+    expect(libelleDuVerifySur('src/main/chose.ts', projet({ test: 'vitest' }))).toBeNull()
+  })
+
+  it('rien dans un dossier sans script de test, ni sans dossier', () => {
+    expect(libelleDuVerifySur('src/main/chose.test.ts', bac())).toBeNull()
+    expect(libelleDuVerifySur('src/main/chose.test.ts', '')).toBeNull()
+  })
+
+  it('`verify` écrit son libellé par cette même fonction', () => {
+    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    expect(source).toContain('etiquette = libelleDuVerifyCible(decision.command, verdict.chemin)')
   })
 })
 

@@ -11,6 +11,7 @@ import {
   claudeToolResultText,
   claudeWrittenLineFingerprints
 } from '../providers/claude'
+import { codeDeSortieDuResultatClaude, testsDeLAppelShell } from '../providers/tests-du-terminal'
 import type { ExecutionEvidence } from '../providers/types'
 import { normalizeClaudeUsage } from '../providers/claude'
 import { coutDuTourDepuisCumul } from '../providers/claude-session-cost'
@@ -804,11 +805,23 @@ function detachedClaudeEvidence(lines: string[]): ExecutionEvidence[] {
   const evidence: ExecutionEvidence[] = []
   const pendingTools = new Map<
     string,
-    { name: string; command: string; filePath: string; writtenLineFingerprints: string[] }
+    {
+      name: string
+      command: string
+      filePath: string
+      enFond: boolean
+      writtenLineFingerprints: string[]
+    }
   >()
+  // fix-ok: après un redémarrage, le flux des outils a disparu : sans `run_in_background` ni les tests
+  // lus ici, la garde de preuve voyait un tour sans test. `run-reattach.test.ts` rejoue un vrai journal.
+  // Le dossier de l'appel n'est plus en mémoire non plus : le CLI l'écrit dans son `init`.
+  let dossierDuTour: string | undefined
   for (const line of lines) {
     const event = jsonRecord(line)
     if (!event) continue
+    if (event.type === 'system' && event.subtype === 'init' && typeof event.cwd === 'string')
+      dossierDuTour = event.cwd
     const message =
       event.message && typeof event.message === 'object' && !Array.isArray(event.message)
         ? (event.message as Record<string, unknown>)
@@ -834,6 +847,7 @@ function detachedClaudeEvidence(lines: string[]): ExecutionEvidence[] {
           name: part.name,
           command: String(input?.command ?? filePath),
           filePath,
+          enFond: input?.run_in_background === true,
           writtenLineFingerprints: claudeWrittenLineFingerprints(input)
         })
       }
@@ -847,8 +861,19 @@ function detachedClaudeEvidence(lines: string[]): ExecutionEvidence[] {
       const call = pendingTools.get(part.tool_use_id)
       if (!call) continue
       pendingTools.delete(part.tool_use_id)
-      const output = claudeToolResultText(part.content).slice(-20_000)
+      const outputEntier = claudeToolResultText(part.content)
+      const output = outputEntier.slice(-20_000)
       evidence.push({
+        ...(call.name === 'Bash'
+          ? testsDeLAppelShell(
+              call.command,
+              {
+                codeDeSortie: codeDeSortieDuResultatClaude(part.is_error === true, outputEntier),
+                sortie: outputEntier
+              },
+              { enFond: call.enFond, ...(dossierDuTour === undefined ? {} : { dossierDuTour }) }
+            )
+          : {}),
         type: call.name,
         kind: claudeToolEvidenceKind(call.name, call.command),
         status: part.is_error === true ? 'failed' : 'completed',

@@ -20,6 +20,7 @@ import type { RoleBinding, RoleModelConfig } from './roles'
 import type { AppCommandBus, CommandResult } from './commands'
 import {
   ProviderCallError,
+  type ExecutionEvidence,
   type Message,
   type PromptEnvelope,
   type SendOptions,
@@ -73,7 +74,11 @@ import {
   exigeUneConclusion,
   compactionsAbouties,
   motsUtilisateur,
-  baliserRelanceAutomatique
+  baliserRelanceAutomatique,
+  COMMANDES_DE_CAPTURE,
+  issueDuVerify,
+  preuveManquanteDuTour,
+  relanceDePreuveManquante
 } from './chat-turn-messages'
 import {
   invokedSkillId,
@@ -315,7 +320,7 @@ export type PilotEventVariant =
   | {
       kind: 'tests-du-terminal'
       iteration: number
-      data: Array<{ commande: string; codeDeSortie: number }>
+      data: Array<{ commande: string; codeDeSortie: number; changementDeDossier?: string }>
     }
   /** Réponse coupée par le filtre de sécurité du fournisseur, une par coupure (conv-1161). */
   | {
@@ -2176,6 +2181,7 @@ export class AgentPilot {
       | 'commande-illisible'
       | 'preuve-promise'
       | 'geste-rendu'
+      | 'preuve-absente'
       | 'bloc-visuel-non-ferme'
       | 'chemin-incomplet'
     > = []
@@ -2194,6 +2200,7 @@ export class AgentPilot {
         | 'commande-illisible'
         | 'preuve-promise'
         | 'geste-rendu'
+        | 'preuve-absente'
         | 'bloc-visuel-non-ferme'
         | 'chemin-incomplet'
     ): void => {
@@ -2363,6 +2370,17 @@ export class AgentPilot {
     let gesteRenduRecoveryAvailable = true
     let bureauUtilise = false
     /**
+     * LES FAITS DE LA RELANCE DE PREUVE (conv-1423) : ils ne viennent ni du texte ni des battements
+     * d'outils, perdus au redémarrage, mais des traces de chaque appel, que le journal relu rend à
+     * l'identique. Un tour repris à une itération > 0 a perdu les précédentes (`tourEntierVu`).
+     */
+    const tracesDuTour: ExecutionEvidence[] = []
+    const verificationsDuTour: { commande: string; ok: boolean; at: number }[] = []
+    let orchestrationLanceeCeTour = false
+    let verifyRefuseCeTour = false
+    let captureRegardeeCeTour = false
+    let preuveAbsenteRecoveryAvailable = true
+    /**
      * LA COMPTABILITE D'UNE COMMANDE EXECUTEE — commune au texte `<cmd>` et aux outils directs.
      *
      * Extraite telle quelle du chemin `<cmd>` pour que l'appel direct (`chat-mcp.ts`) soit COMPTE
@@ -2381,6 +2399,13 @@ export class AgentPilot {
       // Ici et pas dans un seul des deux chemins : `<cmd>` et outil direct passent tous deux par
       // cette comptabilite, et une commande en echec (code de sortie non nul) a pu observer.
       if (commandeAObserveLeReel(nom, r)) sortieDeCommandeObservee = true
+      if (nom === 'orchestrate') orchestrationLanceeCeTour = true
+      if (COMMANDES_DE_CAPTURE.has(nom)) captureRegardeeCeTour = true
+      if (nom === 'verify') {
+        const issue = issueDuVerify(r.data)
+        if (issue) verificationsDuTour.push({ ...issue, at: Date.now() })
+        else verifyRefuseCeTour = true
+      }
       if (nom === 'remember') {
         // Sur `stored`, PAS sur la reussite du transport : voir motifDepotMemoireNonAbouti.
         // Assignation INCONDITIONNELLE : un depot REJOUE avec succes doit EFFACER le refus
@@ -3266,6 +3291,7 @@ export class AgentPilot {
           this.forgetPersistedChatSession(conversationId)
         }
       }
+      tracesDuTour.push(...(res.executionEvidence ?? []))
       /*
        * JOURNAL DES FICHIERS : ce que l'appel a écrit, outils d'édition et commandes shell. Le commit
        * automatique du chat en dépend (voir chat-turn-publication.ts) ; l'écriture du journal ne fait
@@ -3758,6 +3784,39 @@ export class AgentPilot {
           relanceDeFormeUtilisee = true
           grantRecoveryIteration('geste-rendu')
           convo.push(RELANCE_FAIRE_LE_GESTE)
+          continue
+        }
+        /*
+         * DU CODE ÉCRIT SANS PREUVE RETENUE (conv-1423). Une seule fois, et jamais bloquant : si
+         * l'agent ne fait rien de la relance, le tour finit normalement et le Board dit vrai. Un tour
+         * de fond n'a personne devant lui pour le coût d'un appel de plus.
+         * fix-ok: rouge resté en place sans aucune relance, mesuré du 29/10 au 01/11 sur 139 demandes
+         * qui ont écrit du code par leurs Edit/Write : 92 finies sur un test rouge, 7 sans aucun test.
+         * Faits lus dans `executionEvidence`, seul canal relu à l'identique après un redémarrage.
+         */
+        const preuveManquante =
+          exigerExperienceSoignee &&
+          !relanceDeFormeUtilisee &&
+          preuveAbsenteRecoveryAvailable &&
+          !sendLimits?.tourDeFond
+            ? preuveManquanteDuTour({
+                dossier: workspaceDuTour,
+                traces: tracesDuTour,
+                verifications: verificationsDuTour,
+                orchestrationLancee: orchestrationLanceeCeTour,
+                verifyRefuse: verifyRefuseCeTour,
+                captureRegardee: captureRegardeeCeTour,
+                tourEntierVu: (recoveredProviderCall?.iteration ?? 0) === 0
+              })
+            : undefined
+        if (preuveManquante) {
+          preuveAbsenteRecoveryAvailable = false
+          relanceDeFormeUtilisee = true
+          grantRecoveryIteration('preuve-absente')
+          // La réponse relancée REMPLACE celle-ci, comme ses sœurs : une clôture « Fait » resterait
+          // sinon affichée au-dessus du rouge que la relance vient de nommer.
+          effacerReponseRelancee()
+          convo.push(relanceDePreuveManquante(preuveManquante, workspaceDuTour))
           continue
         }
         /*

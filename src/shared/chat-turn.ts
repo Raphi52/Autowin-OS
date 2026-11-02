@@ -187,13 +187,40 @@ export interface TestDuTerminal {
   /** La commande de test, sans ses redirections ni son `timeout` : « npm run typecheck ». */
   commande: string
   codeDeSortie: number
+  /**
+   * Les changements de dossier qui l'ont précédé dans sa ligne, tels que lancés : « cd ../autre ».
+   * Un `cd` vers le dossier du tour n'en est pas un. Absent : aucun, ou tour antérieur à conv-1423.
+   */
+  changementDeDossier?: string
   /** Heure d'arrivée du résultat (ms epoch) : range la preuve parmi les `verify` du même tour. */
   at?: number
 }
 
+/**
+ * La commande réellement jouée : c'est elle que lisent le Board et la relance, jamais `commande`
+ * seule. `cd ../autre && npm test` est une chaîne, donc inconnue pour la règle de couverture
+ * (`preuve-du-tour.ts`) : elle ne rachète rien, rien ne la rachète, et deux dossiers gardent deux
+ * clés (conv-1423, objection du contrôle final : `npm test` lu sans son `cd` donnait « Fait » à tort).
+ *
+ * fix-ok: `testDuMaillon` perdait le `cd`, et le réducteur plus bas recopiait les champs un par un.
+ */
+export function commandeJouee(
+  test: Pick<TestDuTerminal, 'commande' | 'changementDeDossier'>
+): string {
+  return test.changementDeDossier
+    ? `${test.changementDeDossier} && ${test.commande}`
+    : test.commande
+}
+
 /** Plafond des tests gardés par tour : un tour qui boucle sur ses tests ne gonfle pas le fil. */
 export const TESTS_DU_TERMINAL_MAX = 100
-const COMMANDE_DE_TEST_MAX = 300
+/**
+ * Longueur gardée d'une commande de test, assez grande pour la lire ENTIÈRE : 300 coupait 117
+ * commandes sur les demandes refusées du 29/10 au 01/11 (conv-1423), et une commande coupée ne peut
+ * ni couvrir un rouge ni être couverte (`preuve-du-tour.ts`). Le même plafond est écrit en dur dans
+ * `LIBELLE_MAX` (`tests-du-terminal.ts`), dont le code part dans un script de hook sans import.
+ */
+export const COMMANDE_DE_TEST_MAX = 4000
 
 function estUnTestDuTerminal(valeur: unknown): valeur is TestDuTerminal {
   if (!valeur || typeof valeur !== 'object') return false
@@ -202,6 +229,7 @@ function estUnTestDuTerminal(valeur: unknown): valeur is TestDuTerminal {
     typeof test.commande === 'string' &&
     test.commande.trim() !== '' &&
     Number.isInteger(test.codeDeSortie) &&
+    (test.changementDeDossier === undefined || typeof test.changementDeDossier === 'string') &&
     (test.at === undefined || (typeof test.at === 'number' && Number.isFinite(test.at)))
   )
 }
@@ -217,11 +245,15 @@ export function sontDesTestsDuTerminal(valeur: unknown): valeur is TestDuTermina
  */
 export function lireTestsDuTerminal(valeur: unknown): TestDuTerminal[] {
   if (!Array.isArray(valeur)) return []
-  return valeur.filter(estUnTestDuTerminal).map((test) => ({
-    commande: test.commande.trim().slice(0, COMMANDE_DE_TEST_MAX),
-    codeDeSortie: test.codeDeSortie,
-    ...(test.at === undefined ? {} : { at: test.at })
-  }))
+  return valeur.filter(estUnTestDuTerminal).map((test) => {
+    const changementDeDossier = test.changementDeDossier?.trim().slice(0, COMMANDE_DE_TEST_MAX)
+    return {
+      commande: test.commande.trim().slice(0, COMMANDE_DE_TEST_MAX),
+      codeDeSortie: test.codeDeSortie,
+      ...(changementDeDossier ? { changementDeDossier } : {}),
+      ...(test.at === undefined ? {} : { at: test.at })
+    }
+  })
 }
 
 /**
@@ -501,13 +533,9 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
 
   if (event.kind === 'tests-du-terminal') {
     // Statut INCHANGÉ : un test joué n'est ni une réponse ni une clôture.
-    const recus = lireTestsDuTerminal(event.tests).map((test) => {
-      const at = event.at ?? test.at
-      return {
-        commande: test.commande,
-        codeDeSortie: test.codeDeSortie,
-        ...(at === undefined ? {} : { at })
-      }
+    const recus = lireTestsDuTerminal(event.tests).map(({ at: atDuTest, ...test }) => {
+      const at = event.at ?? atDuTest
+      return { ...test, ...(at === undefined ? {} : { at }) }
     })
     if (recus.length === 0) return state
     return {

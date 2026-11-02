@@ -49,6 +49,7 @@ import { OUTILS_D_EDITION, scriptHookCauseEnCours } from './cause-en-cours'
 import {
   codeDeSortieDuResultatClaude,
   scriptHookTestsNonComptes,
+  testsDeLAppelShell,
   testsDuTerminal
 } from './tests-du-terminal'
 import {
@@ -2844,11 +2845,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // ailleurs — le fil n'en recevait que les deux lignes de texte ci-dessus. Une commande en
           // FOND rend la main avant la fin : son « succès » n'est pas celui du test, on l'écarte.
           const appelShell = appelsShell.get(part.tool_use_id)
+          const issueDuShell = {
+            codeDeSortie: codeDeSortieDuResultatClaude(part.is_error === true, outputEntier),
+            sortie: outputEntier
+          }
+          const dossierDuTour = execution?.cwd ?? readOnlyCwd
           if (call.name === 'Bash' && appelShell && !appelShell.enFond) {
-            const tests = testsDuTerminal(appelShell.commande, {
-              codeDeSortie: codeDeSortieDuResultatClaude(part.is_error === true, outputEntier),
-              sortie: outputEntier
-            })
+            const tests = testsDuTerminal(appelShell.commande, issueDuShell, dossierDuTour)
             if (tests.length > 0) queue.push({ delta: '', testsDuTerminal: tests })
           }
           const output = outputEntier.slice(-20_000)
@@ -2874,7 +2877,14 @@ export class ClaudeCliAdapter implements ProviderAdapter {
                 : {}),
             ...(output ? { stdout: output, outputChars: outputEntier.length } : {}),
             ...(call.searchPath ? { searchPath: call.searchPath } : {}),
-            ...(call.pattern ? { pattern: call.pattern } : {})
+            ...(call.pattern ? { pattern: call.pattern } : {}),
+            ...(call.name === 'Bash' && appelShell
+              ? testsDeLAppelShell(appelShell.commande, issueDuShell, {
+                  enFond: appelShell.enFond,
+                  at: Date.now(),
+                  ...(dossierDuTour === undefined ? {} : { dossierDuTour })
+                })
+              : {})
           })
         }
       } else if (t === 'result') {

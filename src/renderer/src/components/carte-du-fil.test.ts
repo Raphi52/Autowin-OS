@@ -355,6 +355,9 @@ describe('carteDuFil — compactage et fichiers', () => {
  * (`testsDuTerminal`) ; la carte les lit avec la MÊME règle que les `verify` : une commande = une
  * clé, la dernière issue compte, deux commandes différentes ne se rachètent pas (conv-76) — y
  * compris d'une source à l'autre.
+ *
+ * fix-ok: mesuré le 01/11 sur les vraies conversations : 96 demandes de code refusées par un test,
+ * 17 rachetées par un vert plus récent qui les couvre. Le reste garde son rouge.
  */
 describe('carteDuFil — les tests lancés dans le terminal de l’agent', () => {
   const terminal = (commande: string, codeDeSortie: number, at: number): unknown => ({
@@ -403,6 +406,170 @@ describe('carteDuFil — les tests lancés dans le terminal de l’agent', () =>
       ]
     })
     expect(etapes[0].statut).toBe('prouve')
+  })
+
+  it('un rouge rejoué vert dans une commande plus large : prouvé (conv-1423)', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [texte('fini')], {
+          testsDuTerminal: [
+            terminal('npx vitest run a.test.ts', 1, 3),
+            terminal('npx vitest run a.test.ts b.test.ts', 0, 4)
+          ]
+        })
+      ]
+    })
+    expect(etapes[0].statut).toBe('prouve')
+    expect(etapes[0].constat).toBe('npx vitest run a.test.ts b.test.ts → exit 0')
+  })
+
+  it('jumeau : un vert sur une partie seulement laisse le rouge', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [texte('fini')], {
+          testsDuTerminal: [
+            terminal('npx vitest run a.test.ts b.test.ts', 1, 3),
+            terminal('npx vitest run a.test.ts', 0, 4)
+          ]
+        })
+      ]
+    })
+    expect(etapes[0].statut).toBe('refuse')
+  })
+
+  it('un vert complet joué par `verify` rachète un rouge du terminal, d’une réponse à l’autre', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [texte('j’y retourne')], {
+          testsDuTerminal: [terminal('npx vitest run a.test.ts', 1, 3)]
+        }),
+        asst(5, [verify('npx vitest run', 0)])
+      ]
+    })
+    expect(etapes[0].statut).toBe('prouve')
+  })
+
+  /* Objection du contrôle final (conv-1423) : la voie proposée par la relance laissait « Bloqué ». */
+  it('un `verify` sur le fichier de test rachète le rouge du terminal, avec son vrai libellé', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [texte('j’y retourne')], {
+          testsDuTerminal: [terminal('npx vitest run src/a.test.ts', 1, 3)]
+        }),
+        asst(5, [verify('npm run test:unit -- src/a.test.ts', 0)])
+      ]
+    })
+    expect(etapes[0].statut).toBe('prouve')
+  })
+
+  it('un `verify` sur un autre fichier de test ne rachète rien', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [texte('j’y retourne')], {
+          testsDuTerminal: [terminal('npx vitest run src/a.test.ts', 1, 3)]
+        }),
+        asst(5, [verify('npm run test:unit -- src/b.test.ts', 0)])
+      ]
+    })
+    expect(etapes[0].statut).toBe('refuse')
+  })
+
+  /* Objection du contrôle final (conv-1423) : un `cd` perdu donnait « Fait » à tort sur le Board. */
+  describe('un test lancé après un changement de dossier', () => {
+    const ailleurs = (commande: string, codeDeSortie: number, at: number, cd: string): unknown => ({
+      commande,
+      codeDeSortie,
+      at,
+      changementDeDossier: cd
+    })
+    const statut = (...tests: unknown[]): { statut: string; constat: string } => {
+      const { etapes } = carteDuFil({
+        fil: [user('corrige', 1), asst(2, [texte('fini')], { testsDuTerminal: tests })]
+      })
+      return etapes[0]
+    }
+
+    it('ne rachète pas un rouge du dossier courant', () => {
+      const etape = statut(
+        terminal('npx vitest run src/main/a.test.ts', 1, 3),
+        ailleurs('npm test', 0, 4, 'cd ../autre-projet')
+      )
+      expect(etape.statut).toBe('refuse')
+      expect(etape.constat).toBe('npx vitest run src/main/a.test.ts → exit 1')
+    })
+
+    it('le Board dit où un rouge a tourné', () => {
+      expect(statut(ailleurs('npm test', 1, 3, 'cd ../autre')).constat).toBe(
+        'cd ../autre && npm test → exit 1'
+      )
+    })
+
+    it('même commande, autre dossier : le rouge reste', () => {
+      expect(
+        statut(terminal('npm test', 1, 3), ailleurs('npm test', 0, 4, 'cd ../autre')).statut
+      ).toBe('refuse')
+    })
+
+    it('rouge ailleurs : un vert du dossier courant ne le rachète pas', () => {
+      expect(
+        statut(
+          ailleurs('npx vitest run a.test.ts', 1, 3, 'cd ../autre'),
+          terminal('npm test', 0, 4)
+        ).statut
+      ).toBe('refuse')
+    })
+
+    it('jumeau : la même ligne rejouée dans le même dossier passe', () => {
+      expect(
+        statut(ailleurs('npm test', 1, 3, 'cd ../autre'), ailleurs('npm test', 0, 4, 'cd ../autre'))
+          .statut
+      ).toBe('prouve')
+    })
+
+    it('jumeau : un test seul après un `cd` prouve son étape, comme avant', () => {
+      expect(statut(ailleurs('npm test', 0, 3, 'cd /d/Projet')).statut).toBe('prouve')
+    })
+
+    it('jumeau : sans `cd`, le vert plus large rachète toujours le rouge', () => {
+      expect(
+        statut(terminal('npx vitest run src/main/a.test.ts', 1, 3), terminal('npm test', 0, 4))
+          .statut
+      ).toBe('prouve')
+    })
+  })
+
+  it('un vert ANTÉRIEUR au rouge ne rachète rien, même plus large', () => {
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [texte('fini')], {
+          testsDuTerminal: [
+            terminal('npx vitest run', 0, 3),
+            terminal('npx vitest run a.test.ts', 1, 4)
+          ]
+        })
+      ]
+    })
+    expect(etapes[0].statut).toBe('refuse')
+  })
+
+  it('le constat d’une commande très longue reste borné et garde son code de sortie', () => {
+    const longue = `npx vitest run ${'src/fichier.test.ts '.repeat(50).trim()}`
+    expect(longue.length).toBeGreaterThan(900)
+    const { etapes } = carteDuFil({
+      fil: [
+        user('corrige', 1),
+        asst(2, [texte('fini')], { testsDuTerminal: [terminal(longue, 1, 3)] })
+      ]
+    })
+    expect(etapes[0].statut).toBe('refuse')
+    expect(etapes[0].constat.length).toBeLessThanOrEqual(320)
+    expect(etapes[0].constat).toMatch(/… → exit 1$/u)
   })
 
   it('l’ordre réel compte : le constat est la DERNIÈRE preuve, d’où qu’elle vienne', () => {
