@@ -41,6 +41,10 @@ export default defineConfig(
       // suivis sous .autowin-tmp/ sont des PNG/HTML/JSON/CSS, qu'eslint ne lit pas.
       '.autowin-tmp/**',
       'artifacts/**',
+      // Copie de la config qu'electron-vite écrit à chaque chargement puis efface, sauf chargement
+      // interrompu (déjà ignorée par .gitignore:106). Deux restes du 2026-10-31 rendaient le lint
+      // rouge le 2026-11-02 (10 erreurs, aucune dans src/ ; conv-1430).
+      'electron.vite.config.*.mjs',
       'tests/fixtures/arena-conv-126/**',
       // Archives d'une entreprise (`entreprise/<nom>/archives/`) : copies FIGEES de bancs et d'audits
       // passes, gardees telles quelles. Meme raison que la fixture ci-dessus : ne pas les reformater.
