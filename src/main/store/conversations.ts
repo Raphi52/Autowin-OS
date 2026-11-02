@@ -27,6 +27,7 @@ import { parseAskDecision } from '../../renderer/src/components/ask-choices'
 import { memeFamille } from './synonymes'
 import { construireVoisinage, type IndexVoisinage } from './voisinage'
 import { creerIndexInverse, type IndexInverse } from './index-inverse'
+import type { EtatDeRepriseDuFil } from '../../shared/reprise-quota'
 
 // Store en mémoire des conversations : un PROVIDER qui répond, un DOSSIER qui range.
 // Interface pensée pour être remplacée plus tard par un backend sqlite sans changer l'appelant.
@@ -257,6 +258,11 @@ export interface Conversation {
 
 export type ConversationSummary = Omit<Conversation, 'messages'> & {
   messageCount: number
+  /**
+   * Où en est un fil coupé par le quota. Ajouté par `os:conversations`, pas par `listSummaries` :
+   * il dépend des plans de lots et des runs, que ce magasin ne connaît pas.
+   */
+  repriseQuota?: EtatDeRepriseDuFil
   lastMessageRole?: Msg['role']
   lastAssistantStatus?: ChatTurnStatus
   /**

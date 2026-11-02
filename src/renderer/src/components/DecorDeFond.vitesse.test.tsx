@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { CLE_FOND_ACCUEIL } from './fond-accueil'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -81,6 +82,7 @@ describe('le fond d accueil défile à vitesse normale, même quand Windows coup
     document.body.appendChild(hote)
     const root = createRoot(hote)
     monte = { root, hote }
+    window.localStorage.setItem(CLE_FOND_ACCUEIL, 'avenue')
     await act(async () => root.render(createElement(DecorDeFond, { actif: true })))
     await act(async () => {
       await new Promise((r) => setTimeout(r, 500))

@@ -23,6 +23,11 @@
 /** La durée d'un cran, en ms (10 images/s au plus pour tous les indicateurs réunis). */
 export const CRAN_MS = 100
 
+/** Attente jusqu'au prochain cran de la grille commune, pour changer d'image avec les autres. */
+export function attenteDuCran(): number {
+  return CRAN_MS - (performance.now() % CRAN_MS)
+}
+
 /** Les animations CSS qui avancent par crans et qu'on cale sur l'horloge commune. */
 export const ANIMATIONS_PAR_CRANS: ReadonlySet<string> = new Set([
   'aw-atom-spin', // orbites de l'atome <Spinner/> (theme.css)
@@ -37,7 +42,14 @@ export const ANIMATIONS_PAR_CRANS: ReadonlySet<string> = new Set([
   // Lampe à lave d'Holographique (theme-nebuleuse-verre.css) : boutons, bulles, cadres et l'onglet
   // ouvert du menu, qui la porte toute la journée — conv-1199. Calée ici, elle change d'image sur
   // les mêmes crans que les autres indicateurs au lieu d'ajouter sa propre grille.
-  'nv-lave'
+  'nv-lave',
+  // Reflet du lot qui tourne dans les couloirs de la super conv (SuperConvMosaique.css) — conv-1376.
+  'scm-reflet',
+  // Accueil d'un fil vide (AnimationAccueilChat.css) — conv-1401 : la barre de la phrase qui s'écrit,
+  // et le sol magique, dont la couronne tourne au travail et d'où part une onde.
+  'aa-barre',
+  'as-tourne',
+  'as-onde'
 ])
 
 /** Ce qu'on lit et écrit d'une animation : son nom CSS et son départ sur l'horloge du document. */

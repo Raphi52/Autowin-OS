@@ -169,7 +169,7 @@ describe('le carrousel avec des réglages', () => {
     expect(styleReglages([DUREE])).toMatch(/\.dkc-rg\{order:-1/)
     expect(html.indexOf('class="dkc-rg"')).toBeLessThan(html.indexOf('class="dkc-film"'))
     expect(html).toContain('curseurs')
-    expect(html).toContain('qui les utilisent')
+    expect(html).toContain('la proposition affichée')
     expect(html).toContain('remplissent ta saisie')
   })
 
@@ -266,32 +266,38 @@ describe('une jauge n’existe que pour les propositions qu’elle change', () =
     expect(document.querySelector('.dkc-rg').hidden).toBe(false)
   })
 
-  it('« Tout voir » montre les jauges de toutes les propositions', () => {
+  // conv-1382 (2026-10-31) : chaque proposition garde SES valeurs. En « Tout voir », le panneau règle
+  // la carte choisie, comme hors grille : une jauge qu'elle ne lit pas n'y changerait rien.
+  it('« Tout voir » : le panneau règle la carte choisie', () => {
     monter()
     aller(3)
-    expect(visibles()).toEqual([])
     cocher(document.getElementById('dkall'), true)
+    expect(visibles()).toEqual([])
+    aller(1)
     expect(visibles()).toEqual(['Rayon', 'Marge'])
   })
 
-  it('un bouton ne porte que les valeurs qui changent SA proposition', () => {
+  it('un bouton ne porte que les valeurs de SA proposition', () => {
     monter()
     bouger(1, '20')
     bouger(2, '30')
     expect(boutons(1)[0]).toBe('Affiner la 1 · Tout — Rayon 20 px, Marge 30 px')
-    expect(boutons(2)[0]).toBe('Affiner la 2 · Rayon — Rayon 20 px')
+    expect(boutons(2)[0]).toBe('Affiner la 2 · Rayon')
     expect(boutons(3)[0]).toBe('Affiner la 3 · Rien')
   })
 
-  it('un mélange porte les valeurs de chacune des propositions mélangées', () => {
+  it('un mélange porte les valeurs de chaque proposition, nommées par leur rang', () => {
     monter()
     bouger(2, '30')
+    aller(2)
+    bouger(1, '20')
     const melange = (texte) =>
       Array.from(document.querySelectorAll('.dkc-mxa a')).find((a) =>
         a.textContent.startsWith(texte)
       ).textContent
-    expect(melange('Mixer 1 + 3')).toBe('Mixer 1 + 3 — Marge 30 px')
-    expect(melange('Mixer 2 + 3')).toBe('Mixer 2 + 3')
+    expect(melange('Mixer 1 + 3')).toBe('Mixer 1 + 3 — la 1 : Marge 30 px')
+    expect(melange('Mixer 2 + 3')).toBe('Mixer 2 + 3 — la 2 : Rayon 20 px')
+    expect(melange('Mixer 1 + 2')).toBe('Mixer 1 + 2 — la 1 : Marge 30 px ; la 2 : Rayon 20 px')
   })
 
   it('lit les règles sous @media et les styles en ligne', () => {
@@ -306,5 +312,70 @@ describe('une jauge n’existe que pour les propositions qu’elle change', () =
     expect(visibles()).toEqual(['Marge'])
     aller(2)
     expect(visibles()).toEqual(['Rayon'])
+  })
+
+  const champ = (rang) => document.getElementById(`dkr${rang}`)
+  const lu = (rang) => champ(rang).closest('.dkc-rgl').querySelector('output').textContent
+  const variable = (selecteur) => document.querySelector(selecteur).style.getPropertyValue('--ex-r')
+
+  it('chaque proposition garde ses propres valeurs', () => {
+    monter()
+    bouger(1, '20')
+    aller(2)
+    expect(champ(1).value).toBe('8')
+    expect(lu(1)).toBe('8 px')
+    bouger(1, '30')
+    aller(1)
+    expect(champ(1).value).toBe('20')
+    expect(lu(1)).toBe('20 px')
+  })
+
+  it('la diapositive et la vignette d’une proposition portent SES valeurs, pas le carrousel entier', () => {
+    monter()
+    bouger(1, '20')
+    aller(2)
+    bouger(1, '30')
+    expect([variable('.dkc-s1'), variable('.dkc-t1')]).toEqual(['20px', '20px'])
+    expect([variable('.dkc-s2'), variable('.dkc-t2')]).toEqual(['30px', '30px'])
+    expect([variable('.dkc-s3'), variable('.dkc-w')]).toEqual(['', ''])
+  })
+
+  it('le panneau dit quelle proposition il règle', () => {
+    monter()
+    const titre = () => document.querySelector('.dkc-rgt').textContent
+    expect(titre()).toBe('Réglages de la 1')
+    aller(2)
+    expect(titre()).toBe('Réglages de la 2')
+  })
+
+  it('« Valeurs d’origine » ne remet que la proposition affichée', () => {
+    monter()
+    bouger(1, '20')
+    aller(2)
+    bouger(1, '30')
+    document.querySelector('.dkc-rgz').click()
+    expect(champ(1).value).toBe('8')
+    expect(variable('.dkc-s2')).toBe('')
+    expect(boutons(2)[0]).toBe('Affiner la 2 · Rayon')
+    expect(boutons(1)[0]).toBe('Affiner la 1 · Tout — Rayon 20 px')
+  })
+
+  it('une page rouverte retrouve les valeurs de chaque proposition', () => {
+    monter()
+    bouger(1, '20')
+    aller(2)
+    bouger(1, '30')
+    monter()
+    expect(champ(1).value).toBe('20')
+    expect(boutons(2)[0]).toBe('Affiner la 2 · Rayon — Rayon 30 px')
+    aller(2)
+    expect(champ(1).value).toBe('30')
+  })
+
+  it('une mémoire à l’ancien format (une valeur pour toutes) est ignorée sans erreur', () => {
+    localStorage.setItem('dkc-reglages', JSON.stringify({ dkr1: '20' }))
+    monter()
+    expect(champ(1).value).toBe('8')
+    expect(boutons(1)[0]).toBe('Affiner la 1 · Tout')
   })
 })

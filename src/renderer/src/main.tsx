@@ -12,6 +12,13 @@ import { appliquerLangue, lireLangue, transmettreLangueAuMoteur } from './langue
 import { installerCopiePropre } from './copie-propre'
 import { installerAnimationsParCrans } from './animations-par-crans'
 import { installerModaliteSaisie } from './modalite-saisie'
+import { installerMesuresReactSansRetenue } from './mesures-react'
+
+/*
+ * En développement, React 19.2.7 empile une mesure par composant redessiné, jamais retirée : 1,5 Go
+ * de mémoire pour 140 000 mesures, puis des gels de 12 à 19 s (conv-1413). Rien de tel en production.
+ */
+if (import.meta.env.DEV) installerMesuresReactSansRetenue()
 
 /*
  * Le mode d'affichage est posé AVANT le premier rendu : appliqué après, l'application

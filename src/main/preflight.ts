@@ -50,7 +50,8 @@ export interface PreflightProbes {
   /** brain_server joignable (POST/GET /health ou /query). */
   pingBrain: () => Promise<boolean>
   /** Un exécutable CLI est résolvable dans le PATH / la config. */
-  hasBin: (which: RoutedProvider) => Promise<boolean>
+  /** Claude seul : ChatGPT (`codex`) est facultatif, son absence ne doit jamais bloquer le démarrage. */
+  hasBin: (which: 'claude') => Promise<boolean>
   /**
    * État de la session du CLI claude. Tri-état volontaire : `unknown` (sonde ratée) ne doit ni
    * passer pour un vert, ni pour une session prouvée absente.
@@ -107,7 +108,7 @@ export async function runPreflight(
     }
   }
   const standby = new Set(options.standbyProviders ?? [])
-  const providerProbe = (provider: RoutedProvider): Promise<boolean> =>
+  const providerProbe = (provider: 'claude'): Promise<boolean> =>
     standby.has(provider) ? Promise.resolve(true) : safe(() => probes.hasBin(provider))
   const [brain, claude] = await Promise.all([safe(probes.pingBrain), providerProbe('claude')])
   let token = false
@@ -132,7 +133,7 @@ export async function runPreflight(
     }
   }
   const cliCheck = (
-    id: RoutedProvider,
+    id: 'claude',
     label: string,
     ok: boolean,
     missing: string

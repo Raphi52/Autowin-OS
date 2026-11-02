@@ -78,4 +78,21 @@ describe('questionDEtendue et issueDeLaReponse', () => {
     expect(issueDeLaReponse('attend pour l’instant').kind).toBe('arreter')
     expect(issueDeLaReponse('   ').kind).toBe('arreter')
   })
+
+  /*
+   * LA FAUSSE PROMESSE DE conv-1337 (conv-1342, 2026-10-30) : le motif disait « Le run reste
+   * reprenable », et conv-1342 l'a répété à l'utilisateur. Or un arrêt sans réponse efface l'état du
+   * run : seule la copie survit. Le parcours complet est rejoué dans
+   * `orchestrator.etendue-repetee.test.ts`.
+   */
+  it.each([undefined, 'attend pour l’instant', '   '])(
+    'sans réponse (%j), le motif ne promet aucune reprise et dit ce qui reste',
+    (reponse) => {
+      const issue = issueDeLaReponse(reponse)
+      if (issue.kind !== 'arreter') throw new Error('arrêt attendu')
+      expect(issue.motif).not.toMatch(/reprenable/i)
+      expect(issue.motif).toContain('ne peut pas être repris')
+      expect(issue.motif).toContain('restent dans sa copie, non publiés')
+    }
+  )
 })

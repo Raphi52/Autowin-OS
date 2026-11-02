@@ -41,6 +41,7 @@ async function sessionAvecFilsSeulementDansLeJournal(p: string): Promise<{
   const amorce = new ConversationStore(() => 1000)
   persistConversations(amorce, p)
   const ancien = amorce.create({ title: 'Fil du 02/10', provider: 'claude' }).id
+  await attendreEcrituresConversations()
 
   // Démarrage n°2 (le processus resté vivant du 02/10 au 05/10) : snapshot réécrit, journal vide.
   let horloge = 2000
@@ -59,6 +60,7 @@ async function sessionAvecFilsSeulementDansLeJournal(p: string): Promise<{
     store.applyTurnEvent(c.id, turnId, { kind: 'done' })
     return c.id
   })
+  await attendreEcrituresConversations()
   return { store, quitter, ids, ancien }
 }
 

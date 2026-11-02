@@ -523,13 +523,16 @@ export async function captureCloseBaseline(
   return { project, brain, projectHead, brainHead }
 }
 
+/**
+ * Les `git` partent du fil d'exécution dédié (`execution-hors-fil.ts`) : leur CRÉATION tenait la
+ * fenêtre à chaque fin de tour (`gels.jsonl`, 2026-10-31 : `git rev-parse`/`git status` de
+ * `chat-turn-publication.ts` et `photo-du-code.ts`, 65 s en une session, pire 19,9 s — conv-1413).
+ */
 export async function defaultGitRunner(): Promise<GitRunner> {
-  const { execFile } = await import('node:child_process')
-  const { promisify } = await import('node:util')
-  const exec = promisify(execFile)
+  const { execFileHorsFil } = await import('./execution-hors-fil')
   return async (args, cwd, options) =>
     (
-      await exec('git', args, {
+      await execFileHorsFil('git', args, {
         cwd,
         windowsHide: true,
         // Le diff entier est lu pour y chercher un secret : le plafond par défaut d'execFile (1 Mo)

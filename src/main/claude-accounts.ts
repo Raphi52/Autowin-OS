@@ -279,6 +279,40 @@ export async function claudePreventiveSwitch(activeAccountId: string): Promise<s
 }
 
 /**
+ * LE COMPTE CHOISI POUR UN FIL (conv-1416, 2026-11-01), injecte comme les accesseurs ci-dessus.
+ *
+ * Ce choix voyage avec l'appel au lieu de passer par le compte ACTIF, global a l'application. Avant,
+ * il etait rendu actif au depart du tour : n'importe quel fil pouvait le defaire aussitot, et le
+ * premier compte vide le remplacait sans un mot (conv-1403 : puce sur le compte pro, tour sur gmail).
+ * Un fil au compte choisi ne change donc JAMAIS de compte tout seul : voir `ProviderRegistry`.
+ * Par defaut il ne rend RIEN : un module non configure garde le comportement d'avant.
+ */
+export interface CompteDuFil {
+  id: string
+  /** Le nom que porte la puce, pour que le message d'arret parle du compte que l'utilisateur voit. */
+  nom: string
+  /** Ce qu'il faut poser au lancement du CLI : `{}` pour le compte par defaut. */
+  env: Record<string, string>
+}
+
+let compteDuFilProvider: (conversationId: string) => CompteDuFil | undefined = () => undefined
+
+export function configureClaudeCompteDuFil(
+  provider: (conversationId: string) => CompteDuFil | undefined
+): void {
+  compteDuFilProvider = provider
+}
+
+export function claudeCompteDuFil(conversationId: string | undefined): CompteDuFil | undefined {
+  if (!conversationId) return undefined
+  try {
+    return compteDuFilProvider(conversationId)
+  } catch {
+    return undefined // jamais casser un appel Claude a cause du store de comptes
+  }
+}
+
+/**
  * Env d'un processus fils Claude, EXPLICITE : `CLAUDE_CONFIG_DIR` y est POSE (compte dedie) ou
  * RETIRE (compte par defaut), jamais laisse a ce que le processus parent trainait.
  *
@@ -375,9 +409,9 @@ export class ClaudeAccountsStore {
 
   /**
    * Prévenu à CHAQUE changement du compte actif, quel que soit le chemin : bascule demandée par
-   * l'interface, compte de la conversation ré-appliqué au départ d'un tour, rotation sur quota
-   * épuisé, retrait du compte actif. Sans ce signal, seule la bascule faite depuis l'interface
-   * rafraîchissait la barre de quota : les autres laissaient afficher le quota de l'ANCIEN compte.
+   * l'interface, bascule avant lancement, rotation sur quota épuisé, retrait du compte actif. Sans
+   * ce signal, seule la bascule faite depuis l'interface rafraîchissait la barre de quota : les
+   * autres laissaient afficher le quota de l'ANCIEN compte.
    */
   private activeChangeListener: ((activeId: string) => void) | undefined
   private lastNotifiedActiveId: string | undefined
@@ -527,5 +561,15 @@ export class ClaudeAccountsStore {
   /** Le compte visé, ou `undefined`. Utile au principal pour retrouver son dossier avant sonde. */
   find(id: string): ClaudeAccount | undefined {
     return this.state.accounts.find((account) => account.id === id)
+  }
+
+  /** Le compte choisi pour un fil, ou `undefined` s'il a été retiré entre-temps. */
+  compteDuFil(id: string): CompteDuFil | undefined {
+    const compte = this.find(id)
+    if (!compte) return undefined
+    const decrit = describeAccounts(this.state.accounts, this.state.activeId).find(
+      (account) => account.id === id
+    )
+    return { id, nom: decrit?.displayName ?? accountDisplayName(compte), env: accountEnv(compte) }
   }
 }

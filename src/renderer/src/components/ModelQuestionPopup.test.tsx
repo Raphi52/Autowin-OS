@@ -6,24 +6,24 @@ import { ModelQuestionPopup } from './ModelQuestionPopup'
 
 let container: HTMLDivElement
 let root: Root
-let emit: ((question: unknown) => void) | undefined
+const QUESTION = { id: 'q1', source: 'chat', text: 'Continuer ?', options: [] }
+
+function poserLePont(pendingModelQuestion: unknown): void {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      pendingModelQuestion,
+      answerModelQuestion: vi.fn().mockResolvedValue({ ok: true })
+    }
+  })
+}
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
 })
 
 beforeEach(() => {
-  emit = undefined
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      onModelQuestion: (cb: (q: unknown) => void) => {
-        emit = cb
-        return () => undefined
-      },
-      answerModelQuestion: vi.fn().mockResolvedValue({ ok: true })
-    }
-  })
+  poserLePont(vi.fn().mockResolvedValue(QUESTION))
   Object.defineProperty(window, 'requestAnimationFrame', {
     configurable: true,
     value: (cb: FrameRequestCallback) => window.setTimeout(() => cb(0), 0)
@@ -39,19 +39,47 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function mount(): void {
-  act(() => root.render(createElement(ModelQuestionPopup)))
-}
-function ask(): void {
-  act(() => emit?.({ id: 'q1', source: 'chat', text: 'Continuer ?', options: [] }))
+async function mount(): Promise<void> {
+  await act(async () => root.render(createElement(ModelQuestionPopup)))
 }
 
-describe('ModelQuestionPopup — échappatoire', () => {
-  it('ferme la fenêtre sur Escape', () => {
+describe('ModelQuestionPopup — la page récupère sa question', () => {
+  it('affiche la question sans attendre aucun envoi du processus principal', async () => {
+    await mount()
+    expect(container.querySelector('.model-question-popup p')?.textContent).toBe('Continuer ?')
+  })
+
+  it('la retrouve après un rechargement de la page', async () => {
+    await mount()
+    act(() => root.unmount())
+    root = createRoot(container)
+    await mount()
+    expect(container.querySelector('.model-question-popup p')?.textContent).toBe('Continuer ?')
+  })
+
+  it.each([
+    ['le processus principal n’a plus de question', vi.fn().mockResolvedValue(null)],
+    ['la demande échoue', vi.fn().mockRejectedValue(new Error('canal absent'))],
+    ['le pont ne connaît pas encore la demande', undefined]
+  ])('jamais de fenêtre vide : %s', async (_cas, demande) => {
     const close = vi.fn()
     Object.defineProperty(window, 'close', { configurable: true, value: close })
-    mount()
-    ask()
+    poserLePont(demande)
+    await mount()
+    expect(container.textContent).toMatch(/n’a pas pu s’afficher/)
+    const passer = [...container.querySelectorAll('button')].find((b) =>
+      /passer/i.test(b.textContent ?? '')
+    )
+    act(() => (passer as HTMLButtonElement).click())
+    expect(close).toHaveBeenCalled()
+  })
+})
+
+describe('ModelQuestionPopup — échappatoire', () => {
+  it('ferme la fenêtre sur Escape', async () => {
+    const close = vi.fn()
+    Object.defineProperty(window, 'close', { configurable: true, value: close })
+    await mount()
     expect(container.querySelector('.model-question-popup')).not.toBeNull()
     act(() =>
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
@@ -59,11 +87,10 @@ describe('ModelQuestionPopup — échappatoire', () => {
     expect(close).toHaveBeenCalled()
   })
 
-  it('offre un bouton « Passer » qui ferme la fenêtre', () => {
+  it('offre un bouton « Passer » qui ferme la fenêtre', async () => {
     const close = vi.fn()
     Object.defineProperty(window, 'close', { configurable: true, value: close })
-    mount()
-    ask()
+    await mount()
     const skip = [...container.querySelectorAll('button')].find((b) =>
       /passer/i.test(b.textContent ?? '')
     )

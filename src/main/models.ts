@@ -10,10 +10,11 @@
 // (un poste tiers voyait `opus-4-6` annoncé comme le meilleur opus, alors qu'Opus 5 existait).
 //   claude → les alias du CLI (`opus`, `sonnet`…, résolus côté serveur) + les modèles NOMMÉS lus dans
 //            le binaire du CLI installé + les versions d'un service local s'il y en a un.
-// Claude est la SEULE voie sondée depuis le 2026-09-04 : Codex, Kimi et Gemini sont retirés, on ne
-// paie plus le listing d'un moteur dont le résultat était de toute façon filtré à la sortie.
-// Le CLI est présent par construction : l'app le spawne pour tout appel Claude. C'est donc la source
-// à la fois portable et exacte — aucun service tiers, aucun appel payé, jamais périmée.
+//   codex  → le listing `model/list` du CLI Codex connecté, sinon le dernier catalogue vu en cache,
+//            sinon rien. Facultatif : un poste sans ce CLI ne voit simplement aucun modèle ChatGPT.
+// Kimi et Gemini sont retirés depuis le 2026-09-04 ; Codex est revenu le 2026-10-31 (conv-1414).
+// Le CLI Claude est présent par construction : l'app le spawne pour tout appel Claude. C'est donc la
+// source à la fois portable et exacte — aucun service tiers, aucun appel payé, jamais périmée.
 
 import { readFileSync, writeFileSync, mkdirSync, renameSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -26,8 +27,10 @@ import {
   resolveAlias
 } from './model-aliases'
 import { claudeCliModelIds } from './claude-cli-catalog'
+import { listCodexAppServerModels, type CodexAppServerModel } from './codex-model-source'
 import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import { resolveClaudeBin } from './providers/claude'
+import { CodexCliIntrouvable } from './providers/codex'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -56,7 +59,7 @@ export interface ImportedModel {
 /**
  * Déclarations de capacité des adaptateurs SANS source dynamique. Ce n'est PAS un repli.
  *
- * VIDE depuis le retrait des moteurs abandonnés (2026-09-04). Cette liste ne portait que `kimi` et
+ * VIDE depuis le retrait de Kimi et Gemini (2026-09-04). Cette liste ne portait que `kimi` et
  * `gemini`, les deux seules voies sans listing distant. Elles sont retirées du produit : plus
  * proposées au premier lancement, plus sondées, plus listées au catalogue.
  *
@@ -82,6 +85,64 @@ interface DiscoveryResult {
    * d'etre memorise pour survivre a son absence. Absent = `models` fait office.
    */
   cacheable?: ImportedModel[]
+  /**
+   * Le CLI de cette voie n'est PAS installé. Distinct d'un listing en panne : une panne passagère
+   * retombe sur le dernier catalogue vu, un CLI absent ne propose RIEN — sinon un vieux cache
+   * afficherait des modèles qu'aucun appel ne pourra servir sur ce poste.
+   */
+  cliAbsent?: boolean
+}
+
+/**
+ * Catalogue ChatGPT : ce que le CLI connecté déclare pour CE compte, rien d'autre.
+ *
+ * Les modèles MASQUÉS sont écartés ici (`gpt-reserve`, `codex-auto-review`, mesuré le 2026-10-31) :
+ * ce sont des modèles internes du CLI, et aucun écran ne lit `visibility`, ils seraient proposés
+ * dans toutes les listes de choix.
+ *
+ * Les efforts sont ceux que le listing annonce pour ce modèle, sans filtre global : le filtre
+ * `CODEX_VALID_EFFORTS` ne vaut que pour l'appel HTTP direct. Mesuré le 2026-10-31 avec le CLI
+ * 0.166 : `gpt-5.6-terra` + `ultra` répond (code 0), alors que le filtre l'aurait retiré.
+ */
+async function discoverCodexModels(
+  listModelsFn: () => Promise<CodexAppServerModel[]>
+): Promise<DiscoveryResult> {
+  try {
+    const payload = await listModelsFn()
+    const discovered = payload.flatMap<ImportedModel>((entry, priority) => {
+      if (entry.hidden) return []
+      if (typeof entry.model !== 'string' || !/^[a-z0-9][a-z0-9.-]*$/.test(entry.model)) return []
+      const efforts = (entry.supportedReasoningEfforts ?? [])
+        .map((level) => level.reasoningEffort)
+        .filter(
+          (effort): effort is ReasoningEffort =>
+            typeof effort === 'string' && isReasoningEffort(effort)
+        )
+      if (efforts.length === 0) return []
+      const requestedDefault = entry.defaultReasoningEffort
+      const defaultReasoningEffort =
+        typeof requestedDefault === 'string' &&
+        efforts.includes(requestedDefault as ReasoningEffort)
+          ? (requestedDefault as ReasoningEffort)
+          : efforts[0]
+      return [
+        {
+          id: `codex/${entry.model}`,
+          provider: 'codex',
+          model: entry.model,
+          label: entry.displayName || entry.model,
+          reasoningEfforts: efforts,
+          defaultReasoningEffort,
+          priority,
+          visibility: 'list',
+          dynamicallyLoaded: true
+        }
+      ]
+    })
+    return { models: discovered, live: discovered.length > 0 }
+  } catch (error) {
+    return { models: [], live: false, cliAbsent: error instanceof CodexCliIntrouvable }
+  }
 }
 
 /**
@@ -348,17 +409,20 @@ function writeCatalogCache(
  * devient faux dès qu'un modèle est publié, et il l'affirme sans le moindre signal (constaté le
  * 2026-07-30 : `opus-4-6` presenté comme le meilleur opus alors que le service en expose `opus-5`).
  *
- * `codex`, `kimi` et `gemini` ont été RETIRÉS : plus aucune entrée déclarée en dur ne subsiste pour
- * eux, leur section de cache n'est plus relue, et le filtre de sortie ci-dessous écarte ce qu'un
- * cache antérieur au retrait contiendrait encore.
+ * `kimi` et `gemini` ont été RETIRÉS : plus aucune entrée déclarée en dur ne subsiste pour eux, et
+ * le filtre de sortie ci-dessous écarte ce qu'un cache antérieur au retrait contiendrait encore.
  */
 export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
   const claude = readCatalogCache(cachePath, 'claude') ?? []
+  // Les entrées masquées ne viennent que d'un cache écrit avant le 2026-10-31 : le listing ne les
+  // écrit plus, et aucun écran ne doit les proposer au démarrage.
+  const codex = (readCatalogCache(cachePath, 'codex') ?? []).filter(
+    (model) => model.visibility !== 'hide'
+  )
   // FILTRE DE SORTIE, comme dans `discoverImportedModels` : le cache disque a été écrit AVANT le
-  // retrait des moteurs et contient encore des entrées Codex. On ne LIT plus sa section codex, et
-  // le filtre reste comme seconde barrière. Le fichier n'est PAS réécrit : les données anciennes
-  // restent lisibles pour l'historique.
-  return [...claude, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
+  // retrait des moteurs et peut contenir des entrées Kimi ou Gemini. Le fichier n'est PAS réécrit :
+  // les données anciennes restent lisibles pour l'historique.
+  return [...claude, ...codex, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
     ROUTED_PROVIDERS.includes(model.provider as RoutedProvider)
   )
 }
@@ -371,16 +435,26 @@ export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
 export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
   cachePath?: string,
-  cliModelIds: ClaudeCliModelIdsFn = realClaudeCliModelIds
+  cliModelIds: ClaudeCliModelIdsFn = realClaudeCliModelIds,
+  listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels
 ): Promise<ImportedModel[]> {
-  const claude = await discoverClaudeModels(fetchFn, cliModelIds)
+  const [claude, codex] = await Promise.all([
+    discoverClaudeModels(fetchFn, cliModelIds),
+    discoverCodexModels(listCodexModelsFn)
+  ])
   const cacheUpdates: Partial<ModelCatalogCache> = {}
+  if (codex.live) cacheUpdates.codex = codex.models
   // On ne met en cache que les VERSIONS reellement decouvertes, jamais les alias du CLI : ceux-ci sont
   // disponibles en permanence (contrat du CLI), les cacher n'apporte rien et polluerait le cache d'ids
   // qui ne sont pas des modeles mais des pointeurs vers « le dernier ».
   const claudeToCache = claude.cacheable ?? claude.models
   if (claude.live && claudeToCache.length > 0) cacheUpdates.claude = claudeToCache
   writeCatalogCache(cachePath, cacheUpdates)
+  const codexModels = codex.live
+    ? codex.models
+    : codex.cliAbsent
+      ? []
+      : (readCatalogCache(cachePath, 'codex') ?? []).filter((m) => m.visibility !== 'hide')
   // Claude se compose en DEUX couches, et il fallait les separer : les alias du CLI (socle permanent,
   // jamais caches) et les versions EXACTES (live si un service repond, sinon le dernier catalogue vu).
   // Sans cette separation, `claude.live` etant desormais toujours vrai, le cache n'aurait plus jamais
@@ -395,10 +469,13 @@ export async function discoverImportedModels(
   // FILTRE DE SORTIE — le catalogue ne propose que des moteurs RÉELLEMENT routés. Gardé même si
   // plus aucune voie retirée n'est sondée : `DEFAULT_IMPORTED_MODELS` ou un futur ajout pourraient
   // réintroduire un moteur mort, et c'est ce filtre qui l'arrête.
+  // Claude d'abord, ChatGPT ensuite : l'ordre voulu par l'utilisateur pour les listes de choix.
   return uniqueLabels(
-    dropRedundantClaudeAliases([...resolvedClaudeModels, ...DEFAULT_IMPORTED_MODELS]).filter((model) =>
-      ROUTED_PROVIDERS.includes(model.provider as RoutedProvider)
-    )
+    dropRedundantClaudeAliases([
+      ...resolvedClaudeModels,
+      ...codexModels,
+      ...DEFAULT_IMPORTED_MODELS
+    ]).filter((model) => ROUTED_PROVIDERS.includes(model.provider as RoutedProvider))
   )
 }
 

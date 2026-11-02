@@ -73,7 +73,7 @@ describe('reprise apres redemarrage', () => {
     const demarreA = Date.now() - 60_000
     poserReprise(racine, { conversationId: 'conv-1', consigne: 'verifie apres redemarrage' })
     expect(consommerReprise(racine, Date.now(), demarreA)).toBeNull()
-    expect(existsSync(cheminReprise(racine))).toBe(true)
+    expect(existsSync(cheminReprise(racine, 'conv-1'))).toBe(true)
   })
 
   it('la rend au processus suivant, demarre apres la pose', () => {
@@ -82,6 +82,81 @@ describe('reprise apres redemarrage', () => {
     expect(consommerReprise(racine, Date.now(), Date.now() + 1)).toMatchObject({
       consigne: 'verifie apres redemarrage'
     })
+    expect(existsSync(cheminReprise(racine, 'conv-1'))).toBe(false)
+  })
+
+  /*
+   * conv-1306, 2026-10-30 : un seul fichier pour toutes les conversations. conv-1329 a posé sa
+   * consigne à 15:50:32 PAR-DESSUS celle de conv-1306 (15:31) ; après le redémarrage, seule
+   * conv-1329 aurait repris, alors que les deux avaient reçu « la consigne sera rejouée ».
+   */
+  it('deux conversations : chacune retrouve SA consigne, la plus ancienne d abord', () => {
+    poserReprise(racine, {
+      conversationId: 'conv-1306',
+      consigne: 'verifie Choisir',
+      poseeA: Date.now() - 2_000
+    })
+    poserReprise(racine, { conversationId: 'conv-1329', consigne: 'verifie le port 5173' })
+    const demarreA = Date.now() + 1
+    expect(consommerReprise(racine, Date.now(), demarreA)).toMatchObject({
+      conversationId: 'conv-1306',
+      consigne: 'verifie Choisir'
+    })
+    expect(consommerReprise(racine, Date.now(), demarreA)).toMatchObject({
+      conversationId: 'conv-1329',
+      consigne: 'verifie le port 5173'
+    })
+    expect(consommerReprise(racine, Date.now(), demarreA)).toBeNull()
+  })
+
+  it('une seconde pose du MEME fil remplace sa consigne, pas celle des autres', () => {
+    poserReprise(racine, { conversationId: 'conv-1', consigne: 'ancienne', poseeA: Date.now() - 5 })
+    poserReprise(racine, {
+      conversationId: 'conv-2',
+      consigne: 'autre fil',
+      poseeA: Date.now() - 4
+    })
+    poserReprise(racine, { conversationId: 'conv-1', consigne: 'nouvelle' })
+    const demarreA = Date.now() + 1
+    const rendues = [
+      consommerReprise(racine, Date.now(), demarreA),
+      consommerReprise(racine, Date.now(), demarreA),
+      consommerReprise(racine, Date.now(), demarreA)
+    ]
+    expect(rendues.map((r) => r && `${r.conversationId}:${r.consigne}`)).toEqual([
+      'conv-2:autre fil',
+      'conv-1:nouvelle',
+      null
+    ])
+  })
+
+  it('lit encore l ancien fichier unique, posé par un processus d avant ce correctif', () => {
+    mkdirSync(join(racine, 'redemarrage'), { recursive: true })
+    writeFileSync(
+      cheminReprise(racine),
+      JSON.stringify({
+        conversationId: 'conv-1329',
+        consigne: 'ancienne forme',
+        poseeA: Date.now()
+      }),
+      'utf8'
+    )
+    poserReprise(racine, { conversationId: 'conv-1306', consigne: 'nouvelle forme' })
+    const demarreA = Date.now() + 1
+    const ids = [
+      consommerReprise(racine, Date.now(), demarreA)?.conversationId,
+      consommerReprise(racine, Date.now(), demarreA)?.conversationId
+    ].sort()
+    expect(ids).toEqual(['conv-1306', 'conv-1329'])
+    expect(consommerReprise(racine, Date.now(), demarreA)).toBeNull()
     expect(existsSync(cheminReprise(racine))).toBe(false)
+  })
+
+  it('un identifiant de conversation ne sort jamais du dossier des reprises', () => {
+    poserReprise(racine, { conversationId: '../../evil', consigne: 'x' })
+    expect(existsSync(join(racine, 'evil.json'))).toBe(false)
+    expect(consommerReprise(racine, Date.now(), Date.now() + 1)).toMatchObject({
+      conversationId: '../../evil'
+    })
   })
 })

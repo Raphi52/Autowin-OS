@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs ninja-claude -- ne pas modifier a la main.
    Theme « Ninja Claude » : couleurs ecrites en dur, transposees vers la palette de Claude
    (or et rose -> terracotta, cyan, violets et gris bleutes -> gris chauds, noirs de fond -> #1f1e1d / #262624).
-   1035 regles, 1436 declarations. Voir genererNinjaClaude.
+   1027 regles, 1426 declarations. Voir genererNinjaClaude.
    fix-ok: jamais edite a la main -- chaque reecriture vient d'une regeneration apres un changement mesure
    de genererNinjaClaude (AskDecision.css sorti de l'exclusion pour passer en terracotta ; palette recalee
    sur les captures --code-dev). Regeneration repetee = sortie identique (cmp = 0). */
@@ -379,6 +379,11 @@
 }
 :root[data-theme='ninja-claude'] .bilan-cloture__ouvrir:hover {
     border-color: rgb(218, 124, 94)
+}
+
+/* ---- src/renderer/src/components/BlocHtmlInteractif.css ---- */
+:root[data-theme='ninja-claude'] .bloc-html-interactif::backdrop {
+    background: color-mix(in srgb, var(--bg-0, rgb(31, 30, 29)) 70%, transparent)
 }
 
 /* ---- src/renderer/src/components/BrainMarkdown.css ---- */
@@ -772,10 +777,6 @@
 :root[data-theme='ninja-claude'] .cosmic-outline .msg.user .msg-body {
     border-color: rgba(216, 116, 83, 0.54);
     background: linear-gradient(135deg, rgba(140, 58, 32, 0.34), rgba(38, 38, 36, 0.55))
-}
-:root[data-theme='ninja-claude'] .cosmic-outline .chat-welcome {
-    border: 1px solid rgba(166, 164, 155, 0.22);
-    background: radial-gradient(circle at 50% 0, rgba(119, 116, 105, 0.1), transparent 48%)
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .chat-suggest .btn {
     border-color: rgba(159, 156, 146, 0.24)
@@ -2566,6 +2567,9 @@
 :root[data-theme='ninja-claude'] .riviere-puce.is-actif {
     color: rgb(24, 24, 22)
 }
+:root[data-theme='ninja-claude'] .riviere-projets[data-actif='true'] {
+    color: rgb(24, 24, 22)
+}
 :root[data-theme='ninja-claude'] .riviere-jour[data-repere='mois'] {
     border-left-color: rgba(52, 51, 47, 0.5)
 }
@@ -3010,33 +3014,6 @@
 :root[data-theme='ninja-claude'] .sg-chip:hover {
     border-color: var(--accent, rgb(170, 168, 160));
     background: var(--surface, rgb(38, 38, 36))
-}
-
-/* ---- src/renderer/src/components/SuperConvMosaique.css ---- */
-:root[data-theme='ninja-claude'] .scm-onglet--chef {
-    --scm-c: var(--gold, rgb(215, 110, 76))
-}
-:root[data-theme='ninja-claude'] .scm-onglet.is-non-lu {
-    border-color: var(--gold, rgb(215, 110, 76));
-    color: var(--gold-bright, var(--gold, rgb(215, 110, 76)))
-}
-:root[data-theme='ninja-claude'] .scm-bandeau {
-    border-bottom: 1px solid color-mix(in srgb, var(--gold, rgb(215, 110, 76)) 35%, transparent)
-}
-:root[data-theme='ninja-claude'] .scm-kicker {
-    color: var(--gold, rgb(215, 110, 76))
-}
-:root[data-theme='ninja-claude'] .scm-chiffre b {
-    color: var(--gold, rgb(215, 110, 76))
-}
-:root[data-theme='ninja-claude'] .scm-maintenant {
-    color: var(--gold, rgb(215, 110, 76))
-}
-:root[data-theme='ninja-claude'] button.scm-nom:not(:disabled):hover {
-    color: var(--gold-bright, var(--gold, rgb(215, 110, 76)))
-}
-:root[data-theme='ninja-claude'] .scm-maintenant-ligne {
-    background: var(--gold, rgb(215, 110, 76))
 }
 
 /* ---- src/renderer/src/components/TachesDeLaDemande.css ---- */
@@ -3498,9 +3475,6 @@
 :root[data-theme='ninja-claude'] .cosmic-outline .msg.user .msg-body {
     border-color: rgba(219, 126, 96, 0.58);
     background: rgba(125, 52, 28, 0.48)
-}
-:root[data-theme='ninja-claude'] .cosmic-outline .chat-welcome {
-    background: rgba(31, 30, 29, 0.26)
 }
 :root[data-theme='ninja-claude'] .cosmic-outline .composer {
     background: rgba(31, 30, 29, 0.42)

@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { autowinStorageKey } from '../storage-keys'
 import { HomeView } from './HomeView'
 import { HOME_WIDGET_TITLES } from './home-layout'
 import { appliquerLangue } from '../langue'
@@ -25,6 +26,8 @@ let root: Root | null = null
 let hote: HTMLDivElement | null = null
 
 beforeEach(() => {
+  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(HORLOGE)
   // Sans `outlookSnapshot` : les widgets Interlocuteurs et Agenda disent la panne (texte traduit).

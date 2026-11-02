@@ -82,7 +82,12 @@ const FICHIER_DE: Record<string, string> = {
   'conv-asking-wiggle': 'components/ChatView.css',
   // Lampe à lave d'Holographique (conv-1199) : l'onglet ouvert du menu la porte en permanence.
   // Le thème clair est dérivé de ce fichier (theme-holographique-clair.test.ts le tient à jour).
-  'nv-lave': 'assets/theme-nebuleuse-verre.css'
+  'nv-lave': 'assets/theme-nebuleuse-verre.css',
+  'scm-reflet': 'components/SuperConvMosaique.css',
+  // Accueil d'un fil vide (conv-1401) : la barre de la phrase qui s'écrit, puis le sol magique.
+  'aa-barre': 'components/AnimationAccueilChat.css',
+  'as-tourne': 'components/AnimationAccueilChat.css',
+  'as-onde': 'components/AnimationAccueilChat.css'
 }
 
 const sansCommentaires = (css: string): string => css.replace(/\/\*[\s\S]*?\*\//g, '')

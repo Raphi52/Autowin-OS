@@ -186,7 +186,7 @@ export const TEXTES_FR = {
   'routeur.reauth.claude':
     'CLI Claude introuvable ou non authentifié — installer/authentifier Claude, puis relance « Tester ».',
   'routeur.reauth.codex':
-    'CLI Codex ou session OAuth indisponible — installe/reconnecte Codex, puis rouvre la page.',
+    'CLI Codex absent ou non connecté — installe-le (npm i -g --prefix "%APPDATA%\\npm" @openai/codex), connecte-toi à ChatGPT, puis rouvre la page.',
   'routeur.reauth.kimi':
     'CLI Kimi introuvable — installer/authentifier Kimi, puis relance « Tester ».',
   'routeur.reauth.gemini':
@@ -468,7 +468,7 @@ export const TEXTES_EN: Record<CleSettings, string> = {
   'routeur.reauth.claude':
     'Claude CLI not found or not authenticated — install/authenticate Claude, then run “Test” again.',
   'routeur.reauth.codex':
-    'Codex CLI or OAuth session unavailable — install/reconnect Codex, then reopen the page.',
+    'Codex CLI missing or signed out — install it (npm i -g --prefix "%APPDATA%\\npm" @openai/codex), sign in to ChatGPT, then reopen the page.',
   'routeur.reauth.kimi': 'Kimi CLI not found — install/authenticate Kimi, then run “Test” again.',
   'routeur.reauth.gemini':
     'Gemini session missing — reconnect the Google account, then run “Test” again.',

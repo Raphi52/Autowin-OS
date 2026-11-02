@@ -54,10 +54,11 @@ describe('écriture différée de conversations.json', () => {
     expect(readFileSync(p, 'utf8')).toBe(apresFermeture)
   })
 
-  it('fichier verrouillé à la fermeture : la fermeture ne plante pas et le changement survit', () => {
+  it('fichier verrouillé à la fermeture : la fermeture ne plante pas et le changement survit', async () => {
     vi.useFakeTimers()
     const p = join(dir, 'verrouille.json')
     const { store, flush, id } = tourEnCours(p)
+    await attendreEcrituresConversations()
     store.applyTurnEvent(id, 't', { kind: 'delta', streamId: '0:0', text: 'sauve-malgre-tout' })
     // Un dossier à la place du fichier temporaire : l'écriture complète est refusée, comme un
     // fichier tenu par un autre processus (renommage refusé).

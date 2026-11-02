@@ -3,7 +3,7 @@
  * l'interface (conv-1286, lot 1/5, 2026-10-29).
  *
  * Pourquoi un fichier à part : quatre lots s'appuient dessus en parallèle (IPC, panneau, commandes de
- * l'agent, annotations envoyées au chat). Tout ce qu'ils échangent est décrit ICI, une seule fois ;
+ * l'agent, élément choisi envoyé au chat). Tout ce qu'ils échangent est décrit ICI, une seule fois ;
  * le moteur vit dans `src/main/navigateur-integre.ts`, les scripts de page dans
  * `src/main/navigateur-page-script.ts`.
  *
@@ -21,8 +21,8 @@ export interface OngletNavigateur {
   peutAvancer: boolean
 }
 
-/** Mode de la page active : annoter (élément ou zone + commentaire), choisir (un clic), ou aucun. */
-export type ModeNavigateur = 'annoter' | 'choisir' | null
+/** Mode de la page active : choisir un élément (un clic), ou aucun. */
+export type ModeNavigateur = 'choisir' | null
 
 /** Une action d'écriture de l'agent attend l'accord de l'utilisateur pour ce site. */
 export interface DemandeAccordNavigateur {
@@ -78,8 +78,8 @@ export interface EtatNavigateur {
   demandeAccord?: DemandeAccordNavigateur
   /** Mode de la page active, si ce fil est celui affiché ; `null` sinon. */
   mode: ModeNavigateur
-  /** Nombre d'annotations en attente d'envoi au chat pour ce fil. */
-  nombreAnnotations: number
+  /** Éléments choisis dans la page que le panneau n'a pas encore repris : il les prend, la file se vide. */
+  nombreElementsChoisis: number
   /** Les 20 derniers gestes de l'agent dans ce fil, tous onglets, du plus ancien au plus récent. */
   gestes: GesteNavigateur[]
   pilotage: PilotageNavigateur
@@ -93,7 +93,7 @@ export interface RectNavigateur {
   hauteur: number
 }
 
-/** Styles calculés de l'élément annoté, ce dont on a besoin pour demander un changement visuel. */
+/** Styles calculés de l'élément choisi, ce dont on a besoin pour demander un changement visuel. */
 export interface StylesElementNavigateur {
   police: string
   taille: string
@@ -104,17 +104,14 @@ export interface StylesElementNavigateur {
   marges: string
 }
 
-/** Une annotation (mode Annoter) ou un élément choisi (mode Choisir, commentaire vide). */
-export interface AnnotationNavigateur {
+/** Un élément cliqué en mode Choisir, à insérer dans la saisie du chat. */
+export interface ElementChoisiNavigateur {
   id: string
-  ongletId: string
   url: string
   selecteur: string
   texteElement: string
   styles: StylesElementNavigateur
-  rect: RectNavigateur
-  commentaire: string
-  /** Capture PNG de la zone, en `data:image/png;base64,…` ; absente si la capture a échoué. */
+  /** Capture PNG de l'élément, en `data:image/png;base64,…` ; absente si la capture a échoué. */
   captureDataUrl?: string
 }
 
@@ -226,9 +223,7 @@ export const CANAUX_NAVIGATEUR = {
   fermerOnglet: 'navigateur:fermer-onglet',
   poserCadre: 'navigateur:poser-cadre',
   basculerMode: 'navigateur:basculer-mode',
-  annotations: 'navigateur:annotations',
-  supprimerAnnotation: 'navigateur:supprimer-annotation',
-  viderAnnotations: 'navigateur:vider-annotations',
+  prendreElementsChoisis: 'navigateur:prendre-elements-choisis',
   repondreAccord: 'navigateur:repondre-accord',
   reglagesLire: 'navigateur:reglages-lire',
   reglagesEcrire: 'navigateur:reglages-ecrire',
@@ -263,9 +258,8 @@ export interface ApiNavigateur {
   /** Cadre du panneau en pixels CSS du rendu, et le zoom de la fenêtre ; `null` cache la page. */
   poserCadre(rect: RectNavigateur | null, zoom: number): Promise<void>
   basculerMode(mode: ModeNavigateur): Promise<void>
-  annotations(conversationId: string): Promise<AnnotationNavigateur[]>
-  supprimerAnnotation(id: string): Promise<void>
-  viderAnnotations(conversationId: string): Promise<void>
+  /** Rend les éléments choisis du fil et vide la file : un élément n'est livré qu'une fois. */
+  prendreElementsChoisis(conversationId: string): Promise<ElementChoisiNavigateur[]>
   repondreAccord(origine: string, reponse: ReponseAccordNavigateur): Promise<void>
   reglages: {
     lire(): Promise<ReglagesNavigateur>

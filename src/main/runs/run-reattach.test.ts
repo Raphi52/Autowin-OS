@@ -6,6 +6,7 @@ import {
   agentVerdict,
   settleCompletedDetachedPhase,
   preparePersistedRunForRelaunch,
+  recoverDetachedProviderResult,
   resumeActionFor,
   runJournalProgressMark,
   runLiveness,
@@ -2839,5 +2840,111 @@ describe('câblage — le chargement des conversations connaît les runs reprena
     expect(source).not.toContain('listRecoverableChatProviderCalls(')
     expect(source).toContain('appelChatReprenable,')
     expect(source).toContain('listRecoverableChatProviderCallsAsync(turnJournalRoot)')
+  })
+})
+
+describe('après un redémarrage, le journal rend les tests joués (conv-1423)', () => {
+  let dossier = ''
+
+  afterEach(() => {
+    if (dossier) rmSync(dossier, { recursive: true, force: true })
+  })
+
+  // fix-ok: 30 `cd` sur 33 mesurés visent le dossier du tour ; sans lui, un tour récupéré marquerait
+  // ces tests « ailleurs ». Le journal le donne : événement `init`, champ `cwd` (conv-1423).
+  const recuperer = (
+    command: string,
+    entree: Record<string, unknown>,
+    resultat: { is_error: boolean; content: string },
+    cwd?: string
+  ): ReturnType<typeof recoverDetachedProviderResult> => {
+    dossier = mkdtempSync(join(tmpdir(), 'reattach-tests-'))
+    const journal = join(dossier, 'agent.stdout.jsonl')
+    writeFileSync(
+      journal,
+      [
+        ...(cwd ? [{ type: 'system', subtype: 'init', cwd }] : []),
+        {
+          type: 'assistant',
+          message: {
+            content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command, ...entree } }]
+          }
+        },
+        {
+          type: 'user',
+          message: { content: [{ type: 'tool_result', tool_use_id: 't1', ...resultat }] }
+        },
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          result: 'fini',
+          total_cost_usd: 0.1,
+          usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0 }
+        }
+      ]
+        .map((ligne) => JSON.stringify(ligne))
+        .join('\n') + '\n'
+    )
+    writeSurvivableExit(journal, 0)
+    return recoverDetachedProviderResult('claude', journal)
+  }
+
+  it('un test rouge garde son code de sortie', () => {
+    const trace = recuperer(
+      'npx vitest run src/a.test.ts',
+      {},
+      { is_error: true, content: 'Exit code 1\n Tests  1 failed (1)' }
+    )?.executionEvidence?.[0]
+    expect(trace?.testsLus).toEqual([{ commande: 'npx vitest run src/a.test.ts', codeDeSortie: 1 }])
+  })
+
+  it('jumeau : un test vert aussi', () => {
+    const trace = recuperer('npm test', {}, { is_error: false, content: '4921 passed' })
+      ?.executionEvidence?.[0]
+    expect(trace?.testsLus).toEqual([{ commande: 'npm test', codeDeSortie: 0 }])
+  })
+
+  it('un test lancé après un `cd` garde son dossier après récupération', () => {
+    const trace = recuperer('cd ../autre && npm test', {}, { is_error: false, content: 'ok' })
+      ?.executionEvidence?.[0]
+    expect(trace?.testsLus).toEqual([
+      { commande: 'npm test', codeDeSortie: 0, changementDeDossier: 'cd ../autre' }
+    ])
+  })
+
+  it('jumeau : un `cd` vers le dossier du tour, lu dans le journal, n’en est pas un changement', () => {
+    const trace = recuperer(
+      'cd D:/Projet && npm test',
+      {},
+      { is_error: false, content: 'ok' },
+      'D:\\Projet'
+    )?.executionEvidence?.[0]
+    expect(trace?.testsLus).toEqual([{ commande: 'npm test', codeDeSortie: 0 }])
+  })
+
+  it('un test lancé en arrière-plan ne compte pas comme vert', () => {
+    const trace = recuperer(
+      'npx vitest run',
+      { run_in_background: true },
+      { is_error: false, content: 'Command running in background with ID: b1' }
+    )?.executionEvidence?.[0]
+    expect(trace?.testsLus).toBeUndefined()
+    expect(trace?.testsNonComptes).toEqual(['npx vitest run'])
+  })
+
+  it('un test au code illisible est nommé, sans compter', () => {
+    const trace = recuperer('npm test | tail -5', {}, { is_error: false, content: 'fin' })
+      ?.executionEvidence?.[0]
+    expect(trace?.testsLus).toBeUndefined()
+    expect(trace?.testsNonComptes).toEqual(['npm test'])
+  })
+
+  it('une commande qui n’est pas un test ne porte rien', () => {
+    const trace = recuperer('git status', {}, { is_error: false, content: 'rien' })
+      ?.executionEvidence?.[0]
+    expect(trace).toBeDefined()
+    expect(trace?.testsLus).toBeUndefined()
+    expect(trace?.testsNonComptes).toBeUndefined()
   })
 })

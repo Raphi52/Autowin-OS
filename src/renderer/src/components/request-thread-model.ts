@@ -110,6 +110,8 @@ const FAMILY_BY_TOOL: Record<string, ActionFamily> = {
   ticket_create: 'modifier',
   ticket_update: 'modifier',
   task_create: 'modifier',
+  task_update: 'modifier',
+  task_delete: 'modifier',
   marquer_travail_trie: 'modifier',
   marquer_travaux_tries: 'modifier',
   confirmer_verdict_juge: 'modifier',
@@ -131,6 +133,8 @@ const FAMILY_BY_TOOL: Record<string, ActionFamily> = {
   ecrire_a_un_fil: 'modifier',
   plan_de_lots: 'lancer',
   Bash: 'lancer',
+  Monitor: 'lancer',
+  TaskStop: 'lancer',
   Task: 'lancer',
   Agent: 'lancer',
   ask: 'demander'

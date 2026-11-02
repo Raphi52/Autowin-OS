@@ -98,6 +98,102 @@ describe('pagesHtmlEnTexte — une page html-render devient son texte visible', 
   })
 })
 
+/**
+ * conv-1316 (2026-10-30) : une page ```html-interactif repartait en CODE, elle aussi. Mesure sur le
+ * fil du jeu : 154 008 caractères de message pour une session neuve, contre 7 432 au tour d'avant,
+ * parce que l'historique portait les 141 000 caractères de la page. `montrer_bloc` promettait
+ * pourtant qu'un bloc ne part jamais au modèle.
+ *
+ * ENTREE QUI FERAIT ECHOUER UNE MAUVAISE CORRECTION : un texte qui ne porte QUE cette page. Élargir
+ * le seul test de langue laisserait la sortie rapide du début renvoyer le texte tel quel.
+ */
+const blocInteractif = (html: string): string => '```html-interactif\n' + html + '\n```'
+
+describe('pagesHtmlEnTexte — une page html-interactif se résume aussi', () => {
+  it('une page de 30 000 caractères ressort sans son code, avec le texte autour', () => {
+    const sortie = pagesHtmlEnTexte(`Le jeu :\n\n${blocInteractif(PAGE_LOURDE)}\n\nÀ toi.`)
+    expect(sortie).not.toMatch(/<\/?[a-z!]/i)
+    expect(sortie).not.toContain('CODE-DU-SCRIPT')
+    expect(sortie).not.toContain('#d4a94f')
+    expect(sortie).not.toContain('html-interactif\n')
+    expect(sortie).toContain('Titre de la page')
+    expect(sortie).toContain('Le jeu :')
+    expect(sortie).toContain('À toi.')
+    expect(sortie.length).toBeLessThan(TEXTE_VISIBLE_PAGE_MAX + 600)
+  })
+
+  it('le code d’un moteur en une ligne disparaît, attributs onclick compris', () => {
+    const sortie = pagesHtmlEnTexte(
+      blocInteractif(
+        '<button onclick="lancer()">Jouer</button><script>if(a<b&&c>d){MOTEUR_3D()}</script>'
+      )
+    )
+    expect(sortie).toContain('Jouer')
+    expect(sortie).not.toContain('MOTEUR_3D')
+    expect(sortie).not.toContain('lancer()')
+  })
+
+  it('le résumé nomme la bonne sorte de page', () => {
+    const sortie = pagesHtmlEnTexte(blocInteractif('<p>Bonjour</p>'))
+    expect(sortie).toMatch(/page html-interactif/)
+    expect(sortie).not.toMatch(/page html-render/)
+    expect(sortie).toMatch(/\d[\d ]* caractères de code retirés/)
+  })
+
+  it('il ne promet pas le texte que seuls les scripts écrivent', () => {
+    // Le modèle prendrait sinon la page vide de départ pour tout ce que l'utilisateur a vu.
+    const sortie = pagesHtmlEnTexte(
+      blocInteractif('<div id="r"></div><script>r.textContent="x"</script>')
+    )
+    expect(sortie).not.toMatch(/texte visible/)
+    expect(sortie).toMatch(/scripts/)
+  })
+
+  it('une page sans texte fixe le dit', () => {
+    expect(pagesHtmlEnTexte(blocInteractif('<canvas id="c"></canvas>'))).toMatch(/aucun texte/)
+  })
+
+  it('une fence jamais refermée est filtrée jusqu’à la fin', () => {
+    const sortie = pagesHtmlEnTexte('Début.\n```html-interactif\n<script>MOTEUR_3D()')
+    expect(sortie).toContain('Début.')
+    expect(sortie).not.toContain('MOTEUR_3D')
+  })
+
+  it('une fence collée en fin de phrase est filtrée aussi', () => {
+    const sortie = pagesHtmlEnTexte(
+      'C’est bien branché.```html-interactif\n<script>MOTEUR_3D()</script><p>Page collée</p>\n```\nSuite.'
+    )
+    expect(sortie).toContain('C’est bien branché.')
+    expect(sortie).toContain('Page collée')
+    expect(sortie).toContain('Suite.')
+    expect(sortie).not.toContain('MOTEUR_3D')
+  })
+
+  it('une page de chaque sorte dans la même réponse : les deux sont filtrées', () => {
+    const sortie = pagesHtmlEnTexte(
+      `${bloc('<b>UNE</b>')}\nentre\n${blocInteractif('<i>DEUX</i>')}`
+    )
+    expect(sortie).toContain('UNE')
+    expect(sortie).toContain('DEUX')
+    expect(sortie).not.toMatch(/<\/?[a-z]/i)
+  })
+
+  it('le filtre est idempotent : repasser sur sa propre sortie ne change rien', () => {
+    const une = pagesHtmlEnTexte(blocInteractif(PAGE_LOURDE))
+    expect(pagesHtmlEnTexte(une)).toBe(une)
+  })
+
+  it('un html-interactif cité DANS une fence plus longue est du contenu, pas une page', () => {
+    const texte = '````markdown\n```html-interactif\n<p>exemple cité</p>\n```\n````'
+    expect(pagesHtmlEnTexte(texte)).toBe(texte)
+  })
+
+  it('une phrase qui PARLE de html-interactif, suivie de prose, laisse la réponse intacte', () => {
+    const texte = 'Pour une page, ouvre une fence ```html-interactif\nPuis écris le contenu.\nFin.'
+    expect(pagesHtmlEnTexte(texte)).toBe(texte)
+  })
+})
+
 describe('pagesHtmlEnTexte — jumeaux acceptés : ce qui n’est pas une page reste intact', () => {
   it('un texte sans page ressort identique', () => {
     const texte = 'Réponse simple, avec `<div>` en code en ligne et a < b.'

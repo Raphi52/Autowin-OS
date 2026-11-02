@@ -1,5 +1,8 @@
 import { existsSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { estUneRepriseAutomatique } from './chat/relance-taches-de-fond'
+import { estUnPromptDOrdre } from './messages-entre-fils-app'
+import { estUneConsigneDeRedemarrage } from './redemarrage-reprise'
 
 /**
  * LE DEPOT CITE PAR LA DEMANDE — pour aligner le dossier de travail sur ce dont l'utilisateur PARLE.
@@ -16,6 +19,13 @@ import { dirname, join, resolve } from 'node:path'
  * (conv-770) : une consigne de reprise citait `git -C D:/AutoWinOS/.autowin-data/essai-garde stash`,
  * un depot jetable ; la conversation est partie travailler DEDANS, puis a rebascule au tour suivant.
  * Meme risque pour une copie de travail d'agent (`.autowin-data/autowin-os/worktrees/…`, `.git` fichier).
+ *
+ * Un message ECRIT PAR UN AGENT ne fait pas basculer (conv-1306, 2026-10-30) : un ordre de conv-1306
+ * a conv-1329 citait D:/ContosoApp-arena/depart dans la liste des dossiers a RETIRER du Board, et
+ * conv-1329 est partie travailler dedans. Un ordre d'un autre fil et une reprise automatique arrivent
+ * pourtant avec le role `user` ; on les reconnait a leur en-tete, comme le controle des deux lectures
+ * (agent-pilot.ts). La consigne de `restart_app`, envoyee telle quelle sans en-tete, se reconnait a
+ * l'egalite avec une consigne que ce processus a rendue (`estUneConsigneDeRedemarrage`).
  *
  * Aucun redemarrage n'est requis : le dossier est resolu A CHAQUE tour depuis la conversation.
  */
@@ -62,6 +72,13 @@ export function depotCiteDansLeMessage(
   existe: (chemin: string) => boolean = existsSync
 ): string | null {
   if (!message.trim()) return null
+  // Seul l'utilisateur choisit le dossier : un texte d'agent cite des chemins comme DONNEES.
+  if (
+    estUnPromptDOrdre(message) ||
+    estUneRepriseAutomatique(message) ||
+    estUneConsigneDeRedemarrage(message)
+  )
+    return null
   const depotActif = dossierActif.trim() ? racineDepot(dossierActif, existe) : undefined
   for (const brut of message.match(CHEMIN_ABSOLU) ?? []) {
     // La ponctuation de fin de phrase colle au chemin : « travaille dans D:\Foo. » -> `D:\Foo.`

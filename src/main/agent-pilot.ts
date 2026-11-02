@@ -20,6 +20,7 @@ import type { RoleBinding, RoleModelConfig } from './roles'
 import type { AppCommandBus, CommandResult } from './commands'
 import {
   ProviderCallError,
+  type ExecutionEvidence,
   type Message,
   type PromptEnvelope,
   type SendOptions,
@@ -37,7 +38,7 @@ import {
 import { coupesParPoids } from './chat-session-poids'
 import { loadConvActivity } from './activity/conv-activity'
 import {
-  appendShellWriteTraces,
+  appendCallMutationTraces,
   appendWorkspaceMutationTrace,
   captureMutationTraceBase
 } from './activity/trace-workspace-mutation'
@@ -73,7 +74,11 @@ import {
   exigeUneConclusion,
   compactionsAbouties,
   motsUtilisateur,
-  baliserRelanceAutomatique
+  baliserRelanceAutomatique,
+  COMMANDES_DE_CAPTURE,
+  issueDuVerify,
+  preuveManquanteDuTour,
+  relanceDePreuveManquante
 } from './chat-turn-messages'
 import {
   invokedSkillId,
@@ -87,7 +92,7 @@ import { FLUX_LECTURE_RETENUE } from '../shared/lecture-retenue'
 import { randomUUID } from 'node:crypto'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 import { CONSTITUTION } from './constitution'
-import { routeSkillRequest } from './skill-routing'
+import { courtCircuiteLeModele, routeSkillRequest } from './skill-routing'
 import { nativeSkills } from './native-registry'
 import {
   AVIS_DEUX_LECTURES,
@@ -107,6 +112,7 @@ import {
   type IssueDesLectures
 } from './deux-lectures'
 import { estUneRepriseAutomatique } from './chat/relance-taches-de-fond'
+import { cheminsRelatifsCites, relanceCheminsComplets } from './chemins-complets'
 import { estUnPromptDOrdre } from './messages-entre-fils-app'
 import { estUnMessageDuPlan } from '../shared/plan-de-lots'
 import { blocsSystemeEcran, buildChatPilotagePrompt } from './chat-pilotage-prompt'
@@ -118,7 +124,7 @@ import {
 } from '../shared/outil-pretendu-absent'
 import { startTurnTimer } from './turn-timing'
 import { avecAvisEnTete, avisOrientationsTardives } from './orientations-tardives'
-import { claudeActiveAccountId } from './claude-accounts'
+import { claudeActiveAccountId, claudeCompteDuFil } from './claude-accounts'
 import { AUTOWIN_WORKSPACE_ENV } from '../shared/app-identity'
 import {
   formatOrchestrationOutcome,
@@ -240,7 +246,7 @@ export function resolveLatestUserMessage(
  */
 export type PilotEventVariant =
   | { kind: 'delta'; streamId: string; text: string; iteration: number }
-  | { kind: 'stream-reset'; streamId: string; iteration: number }
+  | { kind: 'stream-reset'; streamId: string; iteration: number; conclusionSeule?: true }
   /** `iteration` : le fil en fait le flux `fallback:<iteration>` (effaçable par une relance, D2). */
   | { kind: 'think'; text: string; iteration?: number }
   /** Raisonnement LIVE du modèle pendant qu'il réfléchit — affiché, jamais persisté dans le message. */
@@ -314,7 +320,7 @@ export type PilotEventVariant =
   | {
       kind: 'tests-du-terminal'
       iteration: number
-      data: Array<{ commande: string; codeDeSortie: number }>
+      data: Array<{ commande: string; codeDeSortie: number; changementDeDossier?: string }>
     }
   /** Réponse coupée par le filtre de sécurité du fournisseur, une par coupure (conv-1161). */
   | {
@@ -377,6 +383,8 @@ export interface PilotEvent {
   callDurationMs?: number
   sessionId?: string
   streamId?: string
+  /** `stream-reset` : ne retirer que le dernier passage du flux (`rangsEffacesParLeReset`). */
+  conclusionSeule?: true
   actionId?: string
   /** Heure de l'evenement (ms), posee a sa reception par le chat : rail du tour (conv-338). */
   at?: number
@@ -1411,6 +1419,8 @@ export class AgentPilot {
     let depotMemoireCeTour = false
     /** Le raccourci `remember` a AVALE la garde de cloture : une relance est due (voir plus bas). */
     let consigneClotureApresRemember = false
+    /** Texte + `remember` avec un chemin relatif : la réponse est refaite (conv-1335). */
+    let consigneCheminsApresRemember: string | undefined
     /**
      * UN DEPOT REFUSE SE CORRIGE, il ne se CONSTATE pas. Bornee a une reprise.
      *
@@ -1461,7 +1471,9 @@ export class AgentPilot {
     // Seule une PHASE nommee (`/scout`, `/build`...) court-circuite vers l'orchestration. Une skill
     // hors pipeline (`/look`, `/think`, `/remake`...) est reconnue comme commande — elle garde le fil
     // courant — mais reste jouee par le MODELE avec le corps de sa skill injecte : la router vers un
-    // run payant serait une orchestration que l'utilisateur n'a jamais demandee.
+    // run payant serait une orchestration que l'utilisateur n'a jamais demandee. `/kaizen` suit
+    // cette seconde voie depuis conv-1334 (`courtCircuiteLeModele`).
+    const routeSansModele = courtCircuiteLeModele(directRoute)
     /*
      * DEUX LECTURES PLAUSIBLES → UNE QUESTION, AVANT DE PAYER (deux-lectures.ts, conv-1092).
      *
@@ -1557,7 +1569,7 @@ export class AgentPilot {
       })
     }
     let tacheDeLaRoute = directRoute?.task ?? ''
-    if (directRoute?.reason === 'explicit-skill' && directRoute.explicitPhase) {
+    if (routeSansModele) {
       const issueDeLaRoute = await deuxLecturesDuTour()
       if (issueDeLaRoute?.kind === 'question') {
         await fermerSurLaQuestionDesLectures('lectures:0', issueDeLaRoute.lectures)
@@ -1572,7 +1584,7 @@ export class AgentPilot {
         )
       }
     }
-    if (directRoute?.reason === 'explicit-skill' && directRoute.explicitPhase) {
+    if (routeSansModele) {
       const actionId = 'route:0'
       const args = { task: tacheDeLaRoute }
       emit({ kind: 'command', actionId, name: 'orchestrate', args })
@@ -1889,7 +1901,11 @@ export class AgentPilot {
     // nouvelle session sous le compte qui l'a RÉELLEMENT ouverte, pas sous celui du départ.
     const cleDeSession = (compte: string | undefined): string =>
       `${provider}:${binding.model ?? ''}:${compte ?? ''}:${workspaceDeSession}:c${compactions}:w${coupesPoids}`
-    const compteAuDepart = claudeActiveAccountId()
+    // Le compte choisi pour le fil prime sur celui de l'application (conv-1416) : le compte actif peut
+    // bouger sous ce fil sans que sa session cesse d'être la bonne.
+    const compteDuTour = (): string | undefined =>
+      claudeCompteDuFil(conversationId)?.id ?? claudeActiveAccountId()
+    const compteAuDepart = compteDuTour()
     const sessionKey = cleDeSession(compteAuDepart)
     // Hydrate depuis le disque au premier tour du process : c'est ce qui fait survivre la reprise a
     // un redemarrage de l'app. Idempotent, et sans effet si le cache memoire est deja chaud.
@@ -2165,7 +2181,9 @@ export class AgentPilot {
       | 'commande-illisible'
       | 'preuve-promise'
       | 'geste-rendu'
+      | 'preuve-absente'
       | 'bloc-visuel-non-ferme'
+      | 'chemin-incomplet'
     > = []
     const grantRecoveryIteration = (
       reason:
@@ -2182,7 +2200,9 @@ export class AgentPilot {
         | 'commande-illisible'
         | 'preuve-promise'
         | 'geste-rendu'
+        | 'preuve-absente'
         | 'bloc-visuel-non-ferme'
+        | 'chemin-incomplet'
     ): void => {
       recoveryReasons.push(reason)
       iterationLimit += 1
@@ -2350,6 +2370,17 @@ export class AgentPilot {
     let gesteRenduRecoveryAvailable = true
     let bureauUtilise = false
     /**
+     * LES FAITS DE LA RELANCE DE PREUVE (conv-1423) : ils ne viennent ni du texte ni des battements
+     * d'outils, perdus au redémarrage, mais des traces de chaque appel, que le journal relu rend à
+     * l'identique. Un tour repris à une itération > 0 a perdu les précédentes (`tourEntierVu`).
+     */
+    const tracesDuTour: ExecutionEvidence[] = []
+    const verificationsDuTour: { commande: string; ok: boolean; at: number }[] = []
+    let orchestrationLanceeCeTour = false
+    let verifyRefuseCeTour = false
+    let captureRegardeeCeTour = false
+    let preuveAbsenteRecoveryAvailable = true
+    /**
      * LA COMPTABILITE D'UNE COMMANDE EXECUTEE — commune au texte `<cmd>` et aux outils directs.
      *
      * Extraite telle quelle du chemin `<cmd>` pour que l'appel direct (`chat-mcp.ts`) soit COMPTE
@@ -2368,6 +2399,13 @@ export class AgentPilot {
       // Ici et pas dans un seul des deux chemins : `<cmd>` et outil direct passent tous deux par
       // cette comptabilite, et une commande en echec (code de sortie non nul) a pu observer.
       if (commandeAObserveLeReel(nom, r)) sortieDeCommandeObservee = true
+      if (nom === 'orchestrate') orchestrationLanceeCeTour = true
+      if (COMMANDES_DE_CAPTURE.has(nom)) captureRegardeeCeTour = true
+      if (nom === 'verify') {
+        const issue = issueDuVerify(r.data)
+        if (issue) verificationsDuTour.push({ ...issue, at: Date.now() })
+        else verifyRefuseCeTour = true
+      }
       if (nom === 'remember') {
         // Sur `stored`, PAS sur la reussite du transport : voir motifDepotMemoireNonAbouti.
         // Assignation INCONDITIONNELLE : un depot REJOUE avec succes doit EFFACER le refus
@@ -2436,6 +2474,17 @@ export class AgentPilot {
     let rejeuNatifCetteIteration = false
     let iterationNatif = 0
     let appelNatifIndex = 0
+    /*
+     * L'APPEL EN COURS A-T-IL ÉCRIT DEPUIS SON DERNIER GESTE (outil direct, image) ? Une relance qui
+     * refait la conclusion n'efface que ce dernier passage ; s'il est vide, elle n'efface rien — le
+     * texte d'avant est le récit du travail, pas la conclusion (conv-1401, 2026-10-31).
+     */
+    let gesteDansLAppel = false
+    let texteApresLeDernierGeste = false
+    const noterUnGeste = (): void => {
+      gesteDansLAppel = true
+      texteApresLeDernierGeste = false
+    }
     const replisNatifsDits = new Set<string>()
     /**
      * UN APPEL DIRECT S'AFFICHE ET COMPTE EXACTEMENT COMME UN `<cmd>` : carte, progression, resultat,
@@ -2458,6 +2507,7 @@ export class AgentPilot {
         anyReadExecuted = true
       }
       emit({ kind: 'command', actionId, name: nom, args })
+      noterUnGeste()
       const r = await execCommandTolerante(nom, args, (text) =>
         emit({ kind: 'action-progress', actionId, text })
       )
@@ -2516,6 +2566,8 @@ export class AgentPilot {
     }
     /** Une fence ```html-render laissée ouverte : relance UNE fois, jamais plus. */
     let blocVisuelRecoveryAvailable = true
+    /** Un chemin relatif cité à l'utilisateur : relance UNE fois, jamais plus (conv-1335). */
+    let cheminsCompletsRecoveryAvailable = true
     /**
      * BLOC `<cmd>` INEXPLOITABLE ET AUCUNE COMMANDE VALIDE — le TOUR PARASITE.
      *
@@ -2743,10 +2795,26 @@ export class AgentPilot {
        */
       const fluxAffichesCetteIteration = new Set<string>()
       if (successfulStreamedPrefix) fluxAffichesCetteIteration.add(`${i}:${successfulAttempt}`)
-      /** Retire du fil la reponse de CETTE iteration : la reponse relancee la remplacera. */
+      gesteDansLAppel = false
+      texteApresLeDernierGeste = false
+      /**
+       * Retire du fil la reponse de CETTE iteration : la reponse relancee la remplacera.
+       *
+       * Le direct d'un appel qui a AGI (outil direct, image) porte le RECIT du travail, entrecoupe
+       * de ses gestes : seul son dernier passage — la conclusion que la relance fait refaire — part.
+       * Avant (conv-1401, tour 79a873fa, 2026-10-31) : le flux ENTIER partait, 3 h de recit et
+       * 8 384 caracteres, pour une conclusion de quelques lignes.
+       */
       const effacerReponseRelancee = (): void => {
-        for (const streamId of fluxAffichesCetteIteration)
+        const direct = `${i}:${successfulAttempt}`
+        for (const streamId of fluxAffichesCetteIteration) {
+          if (streamId === direct && gesteDansLAppel) {
+            if (texteApresLeDernierGeste)
+              emit({ kind: 'stream-reset', streamId, iteration: i, conclusionSeule: true })
+            continue
+          }
           emit({ kind: 'stream-reset', streamId, iteration: i })
+        }
         fluxAffichesCetteIteration.clear()
         successfulStreamedPrefix = ''
       }
@@ -2812,16 +2880,18 @@ export class AgentPilot {
         options.contextBlocks = contextBlocks
       }
       /** Compte actif au départ de l'envoi : c'est lui qui ouvre la session qu'il rendra. */
-      let compteDeCetEnvoi = claudeActiveAccountId()
+      let compteDeCetEnvoi = compteDuTour()
       while (!res) {
         const streamId = `${i}:${attempt}`
-        compteDeCetEnvoi = claudeActiveAccountId()
+        compteDeCetEnvoi = compteDuTour()
         // Le compte a changé depuis l'ouverture de la session (conv-1063) : elle est inouvrable
         // depuis le nouveau dossier, on la lâche et le fil ENTIER part sur le compte actif.
         if (sessionEnCours && compteDeCetEnvoi !== compteDeSession) repartirSansSession()
         const visibleFilter = new VisibleStreamFilter()
         let attemptStreamedPrefix = ''
         let commandBoundarySeen = false
+        gesteDansLAppel = false
+        texteApresLeDernierGeste = false
         const emitVisiblePrefix = (
           segments: ReturnType<VisibleStreamFilter['pushSegments']>
         ): void => {
@@ -2833,6 +2903,7 @@ export class AgentPilot {
             if (commandBoundarySeen || !segment.text) continue
             attemptStreamedPrefix += segment.text
             fluxAffichesCetteIteration.add(streamId)
+            texteApresLeDernierGeste = true
             emit({ kind: 'delta', streamId, text: segment.text, iteration: i })
           }
         }
@@ -2902,6 +2973,7 @@ export class AgentPilot {
                 if (artefactsDejaEmis.has(artifact.id)) continue
                 artefactsDejaEmis.add(artifact.id)
                 emit({ kind: 'artifact', artifact, iteration: i })
+                noterUnGeste()
               }
               if (!chunk.delta) return
             }
@@ -3219,38 +3291,20 @@ export class AgentPilot {
           this.forgetPersistedChatSession(conversationId)
         }
       }
+      tracesDuTour.push(...(res.executionEvidence ?? []))
       /*
-       * JOURNAL DES FICHIERS : les Edit/Write natifs du modèle du chat n'y étaient jamais écrits,
-       * donc l'onglet Fichiers restait vide pour un tour de chat direct. Une édition échouée
-       * (`ok: false`) n'est pas tracée ; l'écriture du journal ne fait jamais échouer le tour.
+       * JOURNAL DES FICHIERS : ce que l'appel a écrit, outils d'édition et commandes shell. Le commit
+       * automatique du chat en dépend (voir chat-turn-publication.ts) ; l'écriture du journal ne fait
+       * jamais échouer le tour, et une seule photo du dépôt couvre tout l'appel : le spinner attend ce
+       * passage (conv-1379).
        */
       if (conversationId && workspaceDuTour) {
-        // Commandes shell qui NOMMENT un fichier écrit : seule preuve d'auteur d'une écriture hors
-        // outil d'édition (le commit automatique du chat en dépend, voir chat-turn-publication.ts).
-        await appendShellWriteTraces({
+        const dejaTraces = await appendCallMutationTraces({
           conversationId,
           ...(turnId ? { turnId } : {}),
           workspaceRoot: workspaceDuTour,
           evidence: res.executionEvidence ?? []
         })
-        const dejaTraces = new Set<string>()
-        for (const item of res.executionEvidence ?? []) {
-          if (!item.ok || item.kind !== 'mutation') continue
-          const paths = item.path ? [item.path] : (item.paths ?? [])
-          if (paths.length === 0) continue
-          const lines = item.writtenLineFingerprints
-          for (const p of paths) dejaTraces.add(p.replaceAll('\\', '/').toLowerCase())
-          await appendWorkspaceMutationTrace({
-            conversationId,
-            ...(turnId ? { turnId } : {}),
-            workspaceRoot: item.workspaceRoot ?? workspaceDuTour,
-            source: 'chat_tool',
-            paths,
-            ...(lines?.length && paths.length === 1
-              ? { pathLineFingerprints: { [paths[0]]: lines } }
-              : {})
-          })
-        }
         if (etatAvantEnvoi) {
           const etatApres = await captureSaufAnnulation(workspaceDuTour, signal)
           const changes = [...(etatApres ?? [])]
@@ -3264,7 +3318,9 @@ export class AgentPilot {
               workspaceRoot: workspaceDuTour,
               source: 'chat_tool',
               paths: changes,
-              before: etatAvantEnvoi
+              before: etatAvantEnvoi,
+              // `changes` sort de cette photo : la reprendre ne relirait que le même état.
+              ...(etatApres ? { after: etatApres } : {})
             })
         }
       }
@@ -3731,6 +3787,39 @@ export class AgentPilot {
           continue
         }
         /*
+         * DU CODE ÉCRIT SANS PREUVE RETENUE (conv-1423). Une seule fois, et jamais bloquant : si
+         * l'agent ne fait rien de la relance, le tour finit normalement et le Board dit vrai. Un tour
+         * de fond n'a personne devant lui pour le coût d'un appel de plus.
+         * fix-ok: rouge resté en place sans aucune relance, mesuré du 29/10 au 01/11 sur 139 demandes
+         * qui ont écrit du code par leurs Edit/Write : 92 finies sur un test rouge, 7 sans aucun test.
+         * Faits lus dans `executionEvidence`, seul canal relu à l'identique après un redémarrage.
+         */
+        const preuveManquante =
+          exigerExperienceSoignee &&
+          !relanceDeFormeUtilisee &&
+          preuveAbsenteRecoveryAvailable &&
+          !sendLimits?.tourDeFond
+            ? preuveManquanteDuTour({
+                dossier: workspaceDuTour,
+                traces: tracesDuTour,
+                verifications: verificationsDuTour,
+                orchestrationLancee: orchestrationLanceeCeTour,
+                verifyRefuse: verifyRefuseCeTour,
+                captureRegardee: captureRegardeeCeTour,
+                tourEntierVu: (recoveredProviderCall?.iteration ?? 0) === 0
+              })
+            : undefined
+        if (preuveManquante) {
+          preuveAbsenteRecoveryAvailable = false
+          relanceDeFormeUtilisee = true
+          grantRecoveryIteration('preuve-absente')
+          // La réponse relancée REMPLACE celle-ci, comme ses sœurs : une clôture « Fait » resterait
+          // sinon affichée au-dessus du rouge que la relance vient de nommer.
+          effacerReponseRelancee()
+          convo.push(relanceDePreuveManquante(preuveManquante, workspaceDuTour))
+          continue
+        }
+        /*
          * LA PROMESSE DE COMPTE-RENDU — passe AVANT le bloc visuel, et c'est deliberé : elle porte
          * un TRAVAIL potentiellement perdu (run non recolté), l'autre ne porte qu'un rendu cassé.
          */
@@ -3774,6 +3863,21 @@ export class AgentPilot {
           // D2 : la reponse reformulee REMPLACE celle-ci dans le fil (voir fluxAffichesCetteIteration).
           effacerReponseRelancee()
           convo.push(RELANCE_CONCLUSION_ABSENTE)
+          continue
+        }
+        // Passe APRÈS la conclusion : c'est la réponse finale qu'on corrige, et une seule fois.
+        if (
+          exigerExperienceSoignee &&
+          !relanceDeFormeUtilisee &&
+          cheminsCompletsRecoveryAvailable &&
+          cheminsRelatifsCites(visibleTextThisTurn).length
+        ) {
+          cheminsCompletsRecoveryAvailable = false
+          relanceDeFormeUtilisee = true
+          grantRecoveryIteration('chemin-incomplet')
+          // D2 : la réponse aux chemins complets REMPLACE celle-ci dans le fil.
+          effacerReponseRelancee()
+          convo.push(relanceCheminsComplets(cheminsRelatifsCites(visibleTextThisTurn)))
           continue
         }
         if (
@@ -4280,6 +4384,19 @@ export class AgentPilot {
           'réparable, dis-le explicitement dans ta clôture au lieu de le taire. REPRENDS aussi ta ' +
           'conclusion EN ENTIER dans ce nouveau message : lui seul sera affiché à l’utilisateur, le ' +
           'texte précédent ne sera pas conservé.'
+      } else if (
+        // Même raccourci, même risque que la clôture ci-dessus : un tour qui finit par retenir une
+        // leçon échapperait sinon au contrôle des chemins (conv-1335).
+        onlyAuxiliaryRemember &&
+        exigerExperienceSoignee &&
+        !relanceDeFormeUtilisee &&
+        cheminsCompletsRecoveryAvailable &&
+        cheminsRelatifsCites(spoken).length
+      ) {
+        cheminsCompletsRecoveryAvailable = false
+        relanceDeFormeUtilisee = true
+        grantRecoveryIteration('chemin-incomplet')
+        consigneCheminsApresRemember = relanceCheminsComplets(cheminsRelatifsCites(spoken))
       } else if (onlyAuxiliaryRemember) {
         // Le modele a livre sa reponse ET sauve une memoire. On emettait VIDE — donc on JETAIT son
         // texte reel, laissant une bulle vide (conv-1141). `spoken` est garanti non vide ici.
@@ -4362,6 +4479,11 @@ export class AgentPilot {
         // D2 : meme relance, meme remplacement — la carte `remember` reste, seul le texte part.
         effacerReponseRelancee()
         convo.push(RELANCE_CONCLUSION_ABSENTE)
+      }
+      if (consigneCheminsApresRemember) {
+        effacerReponseRelancee()
+        convo.push(consigneCheminsApresRemember)
+        consigneCheminsApresRemember = undefined
       }
       if (consigneRepriseRemember) {
         convo.push(consigneRepriseRemember)

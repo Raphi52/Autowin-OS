@@ -255,7 +255,7 @@ export function migrateTopologyShape(raw: unknown): unknown {
 }
 
 /**
- * Rebranche un slot resté sur un moteur RETIRÉ (Codex, Kimi, Gemini) vers le moteur de
+ * Rebranche un slot resté sur un moteur RETIRÉ (Kimi, Gemini) vers le moteur de
  * l'orchestrateur, qui lui est vivant. On garde le `slotId` — donc le rôle configuré par
  * l'utilisateur survit ; seul le moteur mort est remplacé.
  *
@@ -277,8 +277,8 @@ function rebindSlotIfRetired(slot: unknown, orchestrator: unknown): unknown {
 /**
  * Topologie par défaut RAISONNABLE, bornée au catalogue fourni : tous les rôles
  * sur Claude, chacun sur le premier modèle importé de son provider (jamais
- * inventé). Le scout était sur Codex jusqu'au retrait des moteurs abandonnés
- * (Codex/Kimi/Gemini) : il bascule sur Claude comme les autres rôles.
+ * inventé). Le scout était sur Codex jusqu'au 2026-09-04 : ChatGPT revenu, il reste sur Claude,
+ * parce que ChatGPT est facultatif et se choisit.
  */
 export function createDefaultTopology(models: ImportedModel[]): AgentTopology {
   if (models.length === 0) throw new Error('Impossible de créer une topologie sans modèle importé')

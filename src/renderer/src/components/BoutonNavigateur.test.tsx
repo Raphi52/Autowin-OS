@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EtatNavigateur, OngletNavigateur } from '../../../shared/navigateur'
 import {
+  BoutonBureauxCaches,
   BoutonDetails,
   BoutonNavigateur,
   type PropsBoutonDetails,
@@ -39,7 +40,7 @@ function etatDe(conversationId: string, partiel: Partial<EtatNavigateur> = {}): 
     ongletActif: null,
     agentPilote: false,
     mode: null,
-    nombreAnnotations: 0,
+    nombreElementsChoisis: 0,
     gestes: [],
     pilotage: 'libre',
     ...partiel
@@ -88,6 +89,48 @@ describe('siteDeLAdresse', () => {
     ]) {
       expect(siteDeLAdresse(adresse)).toBeNull()
     }
+  })
+})
+
+// conv-1378 : les Bureaux cachés sont un icône à côté de celui du navigateur.
+describe('BoutonBureauxCaches', () => {
+  let conteneur: HTMLDivElement
+  let racine: Root | null = null
+
+  beforeAll(() => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  })
+
+  afterEach(async () => {
+    await act(async () => racine?.unmount())
+    racine = null
+    conteneur.remove()
+  })
+
+  async function monter(ouvert: boolean, onBasculer = vi.fn()): Promise<HTMLButtonElement> {
+    conteneur = document.createElement('div')
+    document.body.appendChild(conteneur)
+    racine = createRoot(conteneur)
+    await act(async () => racine?.render(createElement(BoutonBureauxCaches, { ouvert, onBasculer })))
+    return conteneur.querySelector('[data-testid="chat-bureaux-toggle"]') as HTMLButtonElement
+  }
+
+  it('est le même bouton creux que son voisin, réduit à son icône', async () => {
+    const bouton = await monter(false)
+    expect(bouton.classList.contains('bouton-creux')).toBe(true)
+    expect(bouton.querySelector('svg')).not.toBeNull()
+    expect(bouton.textContent).toBe('')
+    expect(bouton.getAttribute('aria-pressed')).toBe('false')
+    expect(bouton.getAttribute('aria-label')).toBe('Ouvrir les bureaux cachés')
+  })
+
+  it('panneau ouvert : il le dit, et le clic le bascule', async () => {
+    const onBasculer = vi.fn()
+    const bouton = await monter(true, onBasculer)
+    expect(bouton.getAttribute('aria-pressed')).toBe('true')
+    expect(bouton.getAttribute('aria-label')).toBe('Fermer les bureaux cachés')
+    await act(async () => bouton.click())
+    expect(onBasculer).toHaveBeenCalledOnce()
   })
 })
 
@@ -299,7 +342,7 @@ describe('BoutonNavigateur', () => {
 
     it('trop étroit : retour au globe, l’adresse reste dans l’infobulle et pour le lecteur d’écran', async () => {
       await monterAvecSite()
-      await mesurer(439)
+      await mesurer(481)
       expect(site()).toBeNull()
       expect(bouton().title).toContain('https://exemple.fr/page')
       expect(bouton().getAttribute('aria-label')).toContain('exemple.fr')
@@ -308,7 +351,7 @@ describe('BoutonNavigateur', () => {
     it('le site revient dès que la place revient, seuil compris', async () => {
       await monterAvecSite()
       await mesurer(300)
-      await mesurer(440)
+      await mesurer(482)
       expect(site()).toBe('exemple.fr')
     })
 
@@ -357,11 +400,11 @@ describe('BoutonNavigateur', () => {
       // nouveau à 1180 px de large, panneau ouvert.
       it('cède son libellé quand l’en-tête est trop étroit, et le reprend avec la place', async () => {
         await monterDetails({ runsOuverts: 2 })
-        await mesurer(169)
+        await mesurer(210)
         expect(libelle()).toBeNull()
         expect(details().getAttribute('aria-label')).toBe('Détails, 2 open')
         expect(details().textContent).toContain('2 open')
-        await mesurer(170)
+        await mesurer(211)
         expect(libelle()).toBe('Détails')
       })
 

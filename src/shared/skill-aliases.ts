@@ -9,8 +9,11 @@
  * dossier, donc la garde anti-traversée de `skillInstruction` s'applique inchangée APRÈS résolution.
  */
 export const SKILL_ALIASES: Readonly<Record<string, string>> = {
-  // Aucun alias actif. `/design` a été retiré sur demande de l'utilisateur (03/09/2026) :
-  // `draft` s'invoque par son seul nom de dossier.
+  // `/design` a été retiré sur demande de l'utilisateur (03/09/2026) : `draft` s'invoque par son
+  // seul nom de dossier.
+  // Même alias que Claude Code, qui documente `/checkup` pour `/doctor` (conv-1368) :
+  // https://code.claude.com/docs/en/commands
+  checkup: 'doctor'
 }
 
 /** Résout un alias vers l'id réel ; rend l'entrée telle quelle si ce n'en est pas un. */

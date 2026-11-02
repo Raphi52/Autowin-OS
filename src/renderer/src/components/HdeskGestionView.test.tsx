@@ -65,7 +65,12 @@ afterEach(async () => {
 
 async function monter(
   api: HdeskGestionApi,
-  props: { onOpenConversation?: (t: { conversationId: string }) => void } = {}
+  props: {
+    onOpenConversation?: (t: { conversationId: string }) => void
+    fils?: readonly string[]
+    onFermer?: () => void
+    active?: boolean
+  } = {}
 ): Promise<HTMLElement> {
   hote = document.createElement('div')
   document.body.appendChild(hote)
@@ -76,7 +81,7 @@ async function monter(
         active: true,
         api,
         intervalleMs: 60_000,
-        intervallePiloteMs: 60_000,
+        intervalleImageMs: 60_000,
         ...props
       })
     )
@@ -105,48 +110,99 @@ async function saisir(h: HTMLElement, cle: string, valeur: string): Promise<void
   })
 }
 
-// conv-1025 : disposition « Console » — la liste à gauche (une ligne par bureau, le choisi au cadre du
-// thème), le bureau choisi à droite (Regarder / Piloter, aperçu, pied technique).
-describe('HdeskGestionView — la console', () => {
-  it('le premier bureau est choisi : aperçu, gestes et pied ; chaque bureau a sa ligne', async () => {
-    const h = await monter(faux([ZOX, ORPHELIN]))
-    const antenne = $(h, 'hdesk-antenne')!
-    expect(antenne.getAttribute('data-bureau')).toBe('zox')
-    expect(antenne.getAttribute('aria-label')).toBe('Bureau « ZOX Rapture »')
-    expect($(h, 'hdesk-pied')?.textContent).toContain('zox')
-    expect($(h, 'hdesk-pied')?.textContent).toContain('Fil conv-951')
-    expect($(h, 'hdesk-antenne-image')?.getAttribute('src')).toBe('data:image/png;base64,AA')
+// conv-1378 : « la tv doit prendre toute la largeur, il doit pouvoir y avoir plusieurs hdesk en même
+// temps pour les super convs et la liste elle sert à rien enlève la ». Entrées qui doivent faire échouer
+// ce bloc : une liste de retour, un seul bureau à l'image, un écran qui ne prend pas toute la largeur.
+describe('HdeskGestionView — un écran par bureau', () => {
+  it('plus de liste : chaque bureau a son écran, tous à l’image en même temps', async () => {
+    const api = faux([ZOX, ORPHELIN])
+    const h = await monter(api)
+    expect($(h, 'hdesk-liste')).toBeNull()
+    expect(h.querySelector('.hdesk-ligne')).toBeNull()
+    expect(h.querySelector('nav')).toBeNull()
+    const ecrans = [...h.querySelectorAll('[data-testid="hdesk-antenne"]')]
+    expect(ecrans.map((e) => e.getAttribute('data-bureau'))).toEqual(['zox', 'orphelin'])
+    expect(h.querySelectorAll('[data-testid="hdesk-antenne-image"]')).toHaveLength(2)
+    expect(api.hdeskTvImage).toHaveBeenCalledWith('zox')
+    expect(api.hdeskTvImage).toHaveBeenCalledWith('orphelin')
+    const zox = ecrans[0] as HTMLElement
+    expect(zox.getAttribute('aria-label')).toBe('Bureau « ZOX Rapture »')
+    expect(zox.textContent).toContain('ZOX Rapture')
+    expect($(zox, 'hdesk-pied')?.textContent).toContain('zox')
+    expect($(zox, 'hdesk-pied')?.textContent).toContain('Fil conv-951')
+    expect($(ecrans[1] as HTMLElement, 'hdesk-pied')?.textContent).toContain('Sans fil')
     expect($(h, 'hdesk-fermer-zox')).not.toBeNull()
+    expect($(h, 'hdesk-fermer-orphelin')).not.toBeNull()
     expect($(h, 'hdesk-basculer-zox')?.textContent).toBe('Afficher sur mon écran')
-    // La ligne dit le travail, l'application et le fil ; un bureau sans fiche le dit aussi.
-    const ligne = $(h, 'hdesk-moniteur-zox')!
-    expect(ligne.textContent).toContain('ZOX Rapture')
-    expect(ligne.textContent).toContain('ZoxClientAccueil.exe · conv-951')
-    expect($(h, 'hdesk-moniteur-orphelin')?.textContent).toContain('sans fil')
-    expect(ligne.getAttribute('aria-pressed')).toBe('true')
-    expect($(h, 'hdesk-moniteur-orphelin')?.getAttribute('aria-pressed')).toBe('false')
     expect($(h, 'hdesk-direct')?.textContent).toContain('2 ouverts')
     expect($(h, 'hdesk-direct')?.textContent).toContain('1 sans fil')
-  })
-
-  it('un seul bureau porte le cadre du choix ; plus d’étiquette « À l’antenne »', async () => {
-    const h = await monter(faux([ZOX, ORPHELIN]))
-    expect(
-      [...h.querySelectorAll('.hdesk-ligne.is-choisi')].map((e) => e.getAttribute('data-testid'))
-    ).toEqual(['hdesk-moniteur-zox'])
     expect(h.textContent).not.toContain('antenne')
-    await cliquer($(h, 'hdesk-moniteur-orphelin'))
-    expect(
-      [...h.querySelectorAll('.hdesk-ligne.is-choisi')].map((e) => e.getAttribute('data-testid'))
-    ).toEqual(['hdesk-moniteur-orphelin'])
   })
 
-  it('un clic sur une ligne choisit ce bureau', async () => {
-    const h = await monter(faux([ZOX, ORPHELIN]))
-    await cliquer($(h, 'hdesk-moniteur-orphelin'))
-    expect($(h, 'hdesk-antenne')?.getAttribute('data-bureau')).toBe('orphelin')
-    expect($(h, 'hdesk-pied')?.textContent).toContain('Sans fil')
-    expect($(h, 'hdesk-fermer-orphelin')).not.toBeNull()
+  it('un écran de plus au lancement suivant, sans toucher aux autres', async () => {
+    let bureaux = [ZOX]
+    const api = faux([], {
+      hdeskGestionBureaux: vi.fn(async () => ({ ok: true as const, bureaux }))
+    })
+    vi.useFakeTimers()
+    try {
+      const h = await monter(api)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(h.querySelectorAll('[data-testid="hdesk-antenne"]')).toHaveLength(1)
+      bureaux = [ZOX, ORPHELIN]
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(60_000)
+      })
+      expect(h.querySelectorAll('[data-testid="hdesk-antenne"]')).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('chaque bureau à l’écran se rafraîchit à la cadence des images, la liste à la sienne', async () => {
+    vi.useFakeTimers()
+    try {
+      const capture = vi.fn(async (id: string) => ({
+        statut: 'ok' as const,
+        id,
+        dataUrl: 'data:image/png;base64,AA',
+        width: 1,
+        height: 1
+      }))
+      const api = faux([ZOX, ORPHELIN], { hdeskTvImage: capture })
+      hote = document.createElement('div')
+      document.body.appendChild(hote)
+      racine = createRoot(hote)
+      await act(async () => {
+        racine!.render(
+          createElement(HdeskGestionView, {
+            active: true,
+            api,
+            intervalleMs: 4_000,
+            intervalleImageMs: 500
+          })
+        )
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      const images = (id: string): number => capture.mock.calls.filter(([i]) => i === id).length
+      expect(images('zox')).toBe(1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000)
+      })
+      expect(images('zox')).toBe(5)
+      expect(images('orphelin')).toBe(5)
+      expect(api.hdeskGestionBureaux).toHaveBeenCalledTimes(1)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000)
+      })
+      expect(api.hdeskGestionBureaux).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('aucun bureau : état vide avec un bouton pour en créer un, jamais une page blanche', async () => {
@@ -163,6 +219,100 @@ describe('HdeskGestionView — la console', () => {
     )
     expect($(h, 'hdesk-erreur')?.textContent).toContain('capture morte')
     expect($(h, 'hdesk-vide')).toBeNull()
+  })
+})
+
+// conv-1378 : « ça devient un icône à côté de celui du navigateur et ça ouvre un right panel comme le
+// navigateur ». Entrées qui doivent faire échouer ce bloc : un panneau qui capture alors que le chat
+// n'est pas à l'écran, le bureau d'un autre fil montré d'abord, une largeur perdue à la fermeture.
+describe('HdeskGestionView — le panneau à droite du fil', () => {
+  const AUTRE: BureauGere = {
+    id: 'autre',
+    travail: 'Autre travail',
+    relie: true,
+    conversationId: 'conv-1378'
+  }
+  afterEach(() => window.localStorage.clear())
+
+  it('ne montre que les bureaux des fils demandés, même répartis dans une super conv', async () => {
+    const h = await monter(faux([ZOX, AUTRE, ORPHELIN]), { fils: ['conv-1378', 'conv-951'] })
+    const ecrans = [...h.querySelectorAll('[data-testid="hdesk-antenne"]')]
+    expect(ecrans.map((e) => e.getAttribute('data-bureau'))).toEqual(['zox', 'autre'])
+    expect($(h, 'hdesk-direct')?.textContent).toContain('2 ouverts')
+    expect($(h, 'hdesk-direct')?.textContent).not.toContain('sans fil')
+  })
+
+  it('un bureau hors du fil n’est plus capturé', async () => {
+    const api = faux([ZOX, AUTRE])
+    await monter(api, { fils: ['conv-1378'] })
+    expect(api.hdeskTvImage).toHaveBeenCalledWith('autre')
+    expect(api.hdeskTvImage).not.toHaveBeenCalledWith('zox')
+  })
+
+  it('fil sans bureau : il le dit, et « Tous les bureaux » garde l’accès aux autres', async () => {
+    const h = await monter(faux([ZOX, AUTRE]), { fils: ['conv-1'] })
+    expect($(h, 'hdesk-vide')?.textContent).toContain('Aucun bureau caché dans ce fil')
+    expect($(h, 'hdesk-antenne')).toBeNull()
+    expect($(h, 'hdesk-tous')?.textContent).toBe('Tous les bureaux (2)')
+    await cliquer($(h, 'hdesk-tous'))
+    expect(h.querySelectorAll('[data-testid="hdesk-antenne"]')).toHaveLength(2)
+    expect($(h, 'hdesk-tous')?.textContent).toBe('Ce fil seulement')
+    await cliquer($(h, 'hdesk-tous'))
+    expect($(h, 'hdesk-antenne')).toBeNull()
+  })
+
+  it('jumeau : tout est déjà à l’écran, pas de bouton « Tous les bureaux »', async () => {
+    const h = await monter(faux([AUTRE]), { fils: ['conv-1378'] })
+    expect($(h, 'hdesk-tous')).toBeNull()
+    await monter(faux([ZOX]))
+    expect($(hote!, 'hdesk-tous')).toBeNull()
+  })
+
+  it('la croix ferme le panneau, comme celle du navigateur', async () => {
+    const onFermer = vi.fn()
+    const h = await monter(faux([ZOX]), { onFermer })
+    await cliquer($(h, 'hdesk-panneau-fermer'))
+    expect(onFermer).toHaveBeenCalledOnce()
+  })
+
+  it('plein cadre : il prend la place du fil, sa poignée disparaît, puis retour côte à côte', async () => {
+    const h = await monter(faux([ZOX]))
+    expect($(h, 'hdesk-view')?.tagName).toBe('ASIDE')
+    expect(h.querySelector('[role="separator"]')).not.toBeNull()
+    await cliquer($(h, 'hdesk-panneau-plein-cadre'))
+    expect($(h, 'hdesk-view')?.classList.contains('is-plein-cadre')).toBe(true)
+    expect(h.querySelector('[role="separator"]')).toBeNull()
+    expect(($(h, 'hdesk-view') as HTMLElement).style.width).toBe('')
+    await cliquer($(h, 'hdesk-panneau-plein-cadre'))
+    expect($(h, 'hdesk-view')?.classList.contains('is-plein-cadre')).toBe(false)
+    expect(($(h, 'hdesk-view') as HTMLElement).style.width).toBe('520px')
+  })
+
+  it('la poignée change la largeur, bornée, et la garde pour la prochaine ouverture', async () => {
+    const h = await monter(faux([ZOX]))
+    const poignee = h.querySelector('[role="separator"]')!
+    await act(async () => {
+      poignee.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 500 }))
+    })
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 400 }))
+    })
+    expect(($(h, 'hdesk-view') as HTMLElement).style.width).toBe('620px')
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointermove', { clientX: 5000 }))
+    })
+    await act(async () => {
+      window.dispatchEvent(new MouseEvent('pointerup'))
+    })
+    expect(($(h, 'hdesk-view') as HTMLElement).style.width).toBe('320px')
+    expect(window.localStorage.getItem('autowin.chat.bureauxLargeur')).toBe('320')
+  })
+
+  it('chat pas à l’écran : aucune liste, aucune capture', async () => {
+    const api = faux([ZOX])
+    await monter(api, { active: false })
+    expect(api.hdeskGestionBureaux).not.toHaveBeenCalled()
+    expect(api.hdeskTvImage).not.toHaveBeenCalled()
   })
 })
 
@@ -209,33 +359,27 @@ describe('HdeskGestionView — Fermer', () => {
     expect(api.hdeskGestionFermer).not.toHaveBeenCalled()
   })
 
-  it('la croix d’un moniteur ferme CE bureau, après confirmation, sans le passer à l’antenne', async () => {
-    const confirmer = vi.spyOn(window, 'confirm').mockReturnValue(true)
+  it('Fermer sur un écran ferme CE bureau ; une fois parti, le retour reste dit au-dessus', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    let bureaux = [ZOX, ORPHELIN]
     let finir: (r: ResultatFermetureGeree) => void = () => undefined
     const fermer = vi.fn(() => new Promise<ResultatFermetureGeree>((r) => (finir = r)))
-    const h = await monter(faux([ZOX, ORPHELIN], { hdeskGestionFermer: fermer }))
-    const croix = $(h, 'hdesk-fermer-moniteur-orphelin') as HTMLButtonElement
-    expect(croix.getAttribute('aria-label')).toBe('Fermer le bureau « travail non relié »')
-    await cliquer(croix)
-    expect(confirmer).toHaveBeenCalledTimes(1)
+    const h = await monter(
+      faux([], {
+        hdeskGestionBureaux: vi.fn(async () => ({ ok: true as const, bureaux })),
+        hdeskGestionFermer: fermer
+      })
+    )
+    await cliquer($(h, 'hdesk-fermer-orphelin'))
     expect(fermer).toHaveBeenCalledWith('orphelin')
-    expect($(h, 'hdesk-antenne')?.getAttribute('data-bureau')).toBe('zox')
-    // Pendant la fermeture : croix désactivée, un second clic ne relance rien.
-    expect(croix.disabled).toBe(true)
-    await cliquer(croix)
-    expect(fermer).toHaveBeenCalledTimes(1)
+    bureaux = [ZOX]
     await act(async () => finir({ ok: true, code: 0, message: 'Application fermée.' }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect($(h, 'hdesk-fermer-orphelin')).toBeNull()
     expect($(h, 'hdesk-retour-orphelin')?.textContent).toBe('orphelin : Application fermée.')
-  })
-
-  it('chaque moniteur a sa croix ; confirmation refusée = rien n’est fermé', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false)
-    const api = faux([ZOX, ORPHELIN])
-    const h = await monter(api)
-    expect($(h, 'hdesk-fermer-moniteur-zox')).not.toBeNull()
-    expect($(h, 'hdesk-fermer-moniteur-orphelin')).not.toBeNull()
-    await cliquer($(h, 'hdesk-fermer-moniteur-zox'))
-    expect(api.hdeskGestionFermer).not.toHaveBeenCalled()
+    expect($(h, 'hdesk-fermer-zox')).not.toBeNull()
   })
 })
 
@@ -278,10 +422,16 @@ describe('HdeskGestionView — la feuille de style (conv-1025)', () => {
 
   it('le bureau choisi prend le cadre du choix du thème, jamais la couleur d’erreur', () => {
     expect(regles).toMatch(/--hdesk-choisi-cadre:\s*var\(\s*--nv-choisi-cadre\s*,/)
-    expect(regles).toMatch(/--hdesk-choisi-fond:\s*var\(--nv-choisi-fond\s*,/)
-    const choisi = regles.match(/\.hdesk-ligne\.is-choisi::before\s*\{([^}]*)\}/)?.[1] ?? ''
-    expect(choisi).toMatch(/background:\s*var\(--hdesk-choisi-cadre\)/)
-    expect(regles).not.toMatch(/is-choisi[^{]*\{[^}]*--err/)
+    const enMain = regles.match(/\.hdesk-ecran\.is-pilote::before\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(enMain).toMatch(/background:\s*var\(--hdesk-choisi-cadre\)/)
+    expect(regles).not.toMatch(/is-pilote[^{]*\{[^}]*--err/)
+  })
+
+  it('l’image prend toute la largeur de son écran, sans marges qui fausseraient un clic', () => {
+    const image = regles.match(/\.hdesk-ecran img\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(image).toMatch(/width:\s*100%/)
+    expect(image).not.toMatch(/max-width|object-fit/)
+    expect(regles.match(/\.hdesk-ecran\s*\{([^}]*)\}/)?.[1]).not.toMatch(/max-height/)
   })
 })
 
@@ -357,14 +507,57 @@ describe('HdeskGestionView — Regarder / Piloter', () => {
     expect(($(h, 'hdesk-piloter') as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('le bouton Regarder rend la main ; changer d’antenne aussi', async () => {
+  it('le bouton Regarder rend la main', async () => {
     const h = await monter(avecCapture({ hdeskTvAct: gestes() }))
     await cliquer($(h, 'hdesk-piloter'))
     await cliquer($(h, 'hdesk-regarder'))
-    expect($(h, 'hdesk-piloter')).not.toBeNull()
+    expect($(h, 'hdesk-saisie')).toBeNull()
+    expect(h.querySelector('.hdesk-ecran.is-pilote')).toBeNull()
+  })
+
+  it('un seul bureau en main : piloter le second rend le premier', async () => {
+    const h = await monter(avecCapture({ hdeskTvAct: gestes() }))
+    const boutons = (): HTMLElement[] => [
+      ...h.querySelectorAll<HTMLElement>('[data-testid="hdesk-piloter"]')
+    ]
+    await cliquer(boutons()[0])
+    await cliquer(boutons()[1])
+    expect(boutons().map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'true'])
+    expect(h.querySelectorAll('.hdesk-ecran.is-pilote')).toHaveLength(1)
+    expect(h.querySelectorAll('[data-testid="hdesk-saisie"]')).toHaveLength(1)
+  })
+
+  it('en pilotant un bureau, un clic sur l’écran d’un autre n’envoie rien', async () => {
+    const act$ = gestes()
+    const h = await monter(avecCapture({ hdeskTvAct: act$ }))
     await cliquer($(h, 'hdesk-piloter'))
-    await cliquer($(h, 'hdesk-moniteur-orphelin'))
-    expect($(h, 'hdesk-piloter')).not.toBeNull()
+    const images = h.querySelectorAll<HTMLImageElement>('[data-testid="hdesk-antenne-image"]')
+    images[1].getBoundingClientRect = () =>
+      ({ left: 10, top: 20, width: 200, height: 100, right: 210, bottom: 120 }) as DOMRect
+    await act(async () => {
+      images[1].dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 110, clientY: 70 }))
+    })
+    expect(act$).not.toHaveBeenCalled()
+  })
+
+  it('le bureau en main quitte l’écran : le pilotage s’arrête', async () => {
+    const h = await monter(avecCapture({ hdeskTvAct: gestes() }), { fils: ['conv-951'] })
+    await cliquer($(h, 'hdesk-piloter'))
+    expect($(h, 'hdesk-saisie')).not.toBeNull()
+    await act(async () => {
+      racine!.render(
+        createElement(HdeskGestionView, {
+          active: true,
+          api: avecCapture({ hdeskTvAct: gestes() }),
+          intervalleMs: 60_000,
+          intervalleImageMs: 60_000,
+          fils: ['conv-1']
+        })
+      )
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
     expect($(h, 'hdesk-saisie')).toBeNull()
   })
 
@@ -381,7 +574,7 @@ describe('HdeskGestionView — Regarder / Piloter', () => {
             active: true,
             api: avecCapture({ hdeskTvAct: act$ }),
             intervalleMs: 600_000,
-            intervallePiloteMs: 600_000,
+            intervalleImageMs: 600_000,
             delaiPilotageMs: 10_000
           })
         )
@@ -552,55 +745,53 @@ describe('HdeskGestionView — choisir sans taper (conv-344)', () => {
     expect($(h, 'hdesk-parcourir')).toBeNull()
   })
 
-  const RECENT = {
-    id: 'roblox',
-    executable: 'C:\\Roblox\\RobloxStudioBeta.exe',
-    arguments: '-mode test',
-    travail: 'Essai du jeu',
-    conversationId: 'conv-526',
-    lanceLe: '2026-10-19T08:00:00+02:00'
-  }
-
-  it('« Récents » sans aucun bureau ouvert : un bureau fermé se relance avec exactement ses champs', async () => {
-    const api = faux([], {
-      hdeskGestionBureaux: vi.fn(async () => ({
-        ok: true as const,
-        bureaux: [],
-        recents: [RECENT]
-      }))
-    })
-    const h = await monter(api)
-    expect($(h, 'hdesk-vide')).not.toBeNull()
-    const ligne = $(h, 'hdesk-recent-roblox')!
-    expect(ligne.textContent).toContain('Essai du jeu')
-    expect(ligne.textContent).toContain('RobloxStudioBeta.exe')
-    await cliquer($(h, 'hdesk-relancer-roblox'))
-    expect(api.hdeskGestionCreer).toHaveBeenCalledWith({
+  // conv-1378 : « Retire aussi Récents du panneau ». Le moteur rend encore cette liste : ce test tient
+  // le panneau à l'écart de ce qu'il reçoit, avec ou sans bureau ouvert.
+  describe('« Récents » retiré du panneau', () => {
+    const RECENT = {
       id: 'roblox',
       executable: 'C:\\Roblox\\RobloxStudioBeta.exe',
       arguments: '-mode test',
       travail: 'Essai du jeu',
-      conversationId: 'conv-526'
-    })
-    expect($(h, 'hdesk-retour-creation')?.textContent).toBe('Bureau « x » prêt.')
-  })
+      conversationId: 'conv-526',
+      lanceLe: '2026-10-19T08:00:00+02:00'
+    }
 
-  it('« Récents » à côté de l’antenne : la liste reste visible sous les bureaux ouverts', async () => {
-    const api = faux([ZOX], {
-      hdeskGestionBureaux: vi.fn(async () => ({
-        ok: true as const,
-        bureaux: [ZOX],
-        recents: [RECENT]
-      }))
-    })
-    const h = await monter(api)
-    expect($(h, 'hdesk-antenne')).not.toBeNull()
-    expect($(h, 'hdesk-relancer-roblox')).not.toBeNull()
-  })
+    const sansTrace = (h: HTMLElement): void => {
+      expect(h.querySelector('[data-testid^="hdesk-recent"]')).toBeNull()
+      expect(h.querySelector('[data-testid^="hdesk-relancer"]')).toBeNull()
+      expect(h.querySelector('details')).toBeNull()
+      expect(h.textContent).not.toContain('Récents')
+      expect(h.textContent).not.toContain('Essai du jeu')
+    }
 
-  it('aucun récent : pas de section', async () => {
-    const h = await monter(faux([ZOX]))
-    expect($(h, 'hdesk-recents')).toBeNull()
+    it('aucun bureau ouvert : l’état vide, sans bureau fermé', async () => {
+      const h = await monter(
+        faux([], {
+          hdeskGestionBureaux: vi.fn(async () => ({
+            ok: true as const,
+            bureaux: [],
+            recents: [RECENT]
+          }))
+        })
+      )
+      expect($(h, 'hdesk-vide')).not.toBeNull()
+      sansTrace(h)
+    })
+
+    it('un bureau ouvert : son écran seul', async () => {
+      const h = await monter(
+        faux([ZOX], {
+          hdeskGestionBureaux: vi.fn(async () => ({
+            ok: true as const,
+            bureaux: [ZOX],
+            recents: [RECENT]
+          }))
+        })
+      )
+      expect($(h, 'hdesk-antenne')).not.toBeNull()
+      sansTrace(h)
+    })
   })
 })
 
@@ -638,11 +829,9 @@ describe('HdeskGestionView — le fil par son titre, cliquable (conv-344)', () =
       onOpenConversation: vi.fn()
     })
     expect($(h, 'hdesk-fil-zox')).toBeNull()
-    expect($(h, 'hdesk-pied')!.textContent).toContain('Fil manuel')
-    // L'orphelin est choisi : son pied dit « Sans fil », sans lien.
-    await cliquer($(h, 'hdesk-moniteur-orphelin'))
-    expect($(h, 'hdesk-antenne')!.getAttribute('data-bureau')).toBe('orphelin')
-    expect($(h, 'hdesk-pied')!.textContent).toContain('Sans fil')
+    const pieds = h.querySelectorAll('[data-testid="hdesk-pied"]')
+    expect(pieds[0].textContent).toContain('Fil manuel')
+    expect(pieds[1].textContent).toContain('Sans fil')
     expect($(h, 'hdesk-fil-orphelin')).toBeNull()
   })
 

@@ -335,14 +335,20 @@ describe('CodexAdapter — inférence + injection (mocké, hors-ligne)', () => {
     expect(captured.instructions).toBeUndefined()
   })
 
-  it('non authentifié → auth() false et send jette', async () => {
-    const adapter = new CodexAdapter({
-      fetchFn: (async () => jsonRes(200, {})) as unknown as typeof fetch,
-      loadTokensFn: () => null
+  it('auth() suit le jeton Autowin, sinon la session du CLI', async () => {
+    const fetchFn = (async () => jsonRes(200, {})) as unknown as typeof fetch
+    const sansRien = new CodexAdapter({
+      fetchFn,
+      loadTokensFn: () => null,
+      cliConnecteFn: async () => false
     })
-    expect(await adapter.auth()).toBe(false)
-    const gen = adapter.send(conv, { system: 'x' })
-    await expect(gen.next()).rejects.toThrow(/non authentifié/)
+    expect(await sansRien.auth()).toBe(false)
+    const parLeCli = new CodexAdapter({
+      fetchFn,
+      loadTokensFn: () => null,
+      cliConnecteFn: async () => true
+    })
+    expect(await parLeCli.auth()).toBe(true)
   })
 })
 

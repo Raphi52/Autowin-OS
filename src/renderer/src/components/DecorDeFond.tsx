@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { creerCadence, estAuRepos } from './decor-cadence'
 import { doitRedimensionner } from './decor-redimension'
-import { abonnerFondAccueil, DECOR_DEFAUT, fondSansScene, lireFondAccueil } from './fond-accueil'
+import {
+  abonnerFondAccueil,
+  FOND_DEFAUT,
+  FOND_FALAISE,
+  fondSansScene,
+  lireFondAccueil
+} from './fond-accueil'
 import { createDecorScene, type DecorScene, type DecorVariant } from './home-decor-scene'
+import { creerSceneQuartier } from '../quartier/quartier-scene'
 import { signalerSceneSousLaBarre } from '../theme-mode'
 
 /**
@@ -32,7 +39,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
    * changer libère la scène et monte la nouvelle, sans redémarrer. La clé, son historique et
    * l'événement vivent dans `fond-accueil.ts`, la même source que le menu.
    */
-  const variante = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => DECOR_DEFAUT)
+  const variante = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => FOND_DEFAUT)
 
   /**
    * LE THEME APPLIQUE, mis en DEPENDANCE de la scene ci-dessous.
@@ -69,9 +76,11 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
    * changement de thème recompilait la scène pour rien (2 à 3,7 s sans rue). Seules les directions
    * « spatiales », qui relisent les teintes à leur création, suivent encore le thème.
    */
-  // Le noir non plus : il ne monte aucune scène.
+  // Le noir non plus : il ne monte aucune scène. Le Quartier non plus : c'est une peinture.
   const cleTheme =
-    variante === 'avenue' || fondSansScene(variante) ? 'palette-propre' : themeApplique
+    variante === 'avenue' || variante === FOND_FALAISE || fondSansScene(variante)
+      ? 'palette-propre'
+      : themeApplique
 
   useEffect(() => {
     actifRef.current = actif
@@ -143,10 +152,11 @@ interface DecorMonte {
  */
 function monterDecor(
   host: HTMLDivElement,
-  choisie: DecorVariant,
+  choisie: DecorVariant | typeof FOND_FALAISE,
   estActif: () => boolean
 ): DecorMonte | null {
-  const scene: DecorScene | null = createDecorScene(choisie)
+  const scene: DecorScene | null =
+    choisie === FOND_FALAISE ? creerSceneQuartier() : createDecorScene(choisie)
   // Pas de WebGL (happy-dom en test, pilote absent) : l'app s'affiche sans decor, ce qui est le
   // comportement voulu — un decor n'est pas une dependance de la fonction.
   if (!scene) return null

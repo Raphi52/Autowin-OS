@@ -17,7 +17,7 @@ import { Bloc3D } from './Bloc3D'
 import { BlocHtmlInteractif } from './BlocHtmlInteractif'
 import { BlocDonnees } from './BlocDonnees'
 import { PropositionDeFils } from './PropositionDeFils'
-import { splitFinalSummary } from './markdown-cloture'
+import { splitFinalSummary, type FinalSummaryParts } from './markdown-cloture'
 import { formaterNombre, langueCourante } from '../langue'
 import {
   traduireArtefactsEtBandeaux,
@@ -60,7 +60,7 @@ export const Markdown = memo(function Markdown({
   const source = retirerLignePromptSuivant(brut)
   return (
     <div className="md">
-      {highlightFinalSummary ? renderAvecClotures(source, 0) : renderMarkdownBlocks(source, 'body')}
+      {highlightFinalSummary ? renderAvecClotures(source) : renderMarkdownBlocks(source, 'body')}
     </div>
   )
 })
@@ -70,21 +70,32 @@ export const Markdown = memo(function Markdown({
  * Signale par l'utilisateur : un tour qui recoit une consigne en cours de route ecrit DEUX blocs
  * dans le meme texte, et seul le second etait entoure. `splitFinalSummary` isole le DERNIER bloc
  * complet ; on recommence donc sur ce qui le precede.
+ *
+ * LES CLES SE COMPTENT DEPUIS LE DEBUT DU TEXTE (conv-1395, 2026-10-31) : numerotees depuis la fin,
+ * elles changeaient pour tout ce qui precede des qu'une cloture arrivait, donc React jetait les blocs
+ * vivants. Le carrousel de /draft, pose par `montrer_bloc` avant le texte final, redevenait une bande
+ * vide de 48 px au-dessus de la zone visible, et ne revenait qu'a un defilement ou au message suivant.
+ * Un texte ne fait que grandir par la fin : compter depuis le debut garde chaque bloc a sa place.
  */
-function renderAvecClotures(source: string, rang: number): React.ReactNode[] {
-  const finalSummary = splitFinalSummary(source)
-  if (!finalSummary) return renderMarkdownBlocks(source, rang === 0 ? 'body' : `body-${rang}`)
-  const suffixe = rang === 0 ? '' : `-${rang}`
+function renderAvecClotures(source: string): React.ReactNode[] {
+  const decoupes: FinalSummaryParts[] = []
+  let corps = source
+  for (let partie = splitFinalSummary(corps); partie; partie = splitFinalSummary(corps)) {
+    decoupes.unshift(partie)
+    corps = partie.before
+  }
   return [
-    ...(finalSummary.before ? renderAvecClotures(finalSummary.before, rang + 1) : []),
-    <section
-      key={`final-summary${suffixe}`}
-      className="md-final-summary"
-      aria-label={texte('markdown.resumeFinal')}
-    >
-      {renderMarkdownBlocks(finalSummary.summary, `summary${suffixe}`)}
-    </section>,
-    ...(finalSummary.after ? renderMarkdownBlocks(finalSummary.after, `after${suffixe}`) : [])
+    ...(corps || decoupes.length === 0 ? renderMarkdownBlocks(corps, 'body') : []),
+    ...decoupes.flatMap(({ summary, after }, rang) => [
+      <section
+        key={`final-summary-${rang}`}
+        className="md-final-summary"
+        aria-label={texte('markdown.resumeFinal')}
+      >
+        {renderMarkdownBlocks(summary, `summary-${rang}`)}
+      </section>,
+      ...(after ? renderMarkdownBlocks(after, `after-${rang}`) : [])
+    ])
   ]
 }
 

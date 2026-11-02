@@ -68,7 +68,11 @@ export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   { match: 'haiku', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'fable', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
   { match: 'mythos', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
-  // OpenAI / Codex — la famille GPT-5 sert 400 k de contexte d'entree. Les noms internes
+  // OpenAI / Codex — `gpt-6` AVANT `luna`, dont le motif le prendrait sinon pour un GPT-5. 272 k est
+  // la fenetre que le CLI 0.166 declare pour ce modele (`context_window`, mesure le 2026-10-31,
+  // conv-1414) ; c'est aussi le seuil du tarif normal sur la grille OpenAI.
+  { match: 'gpt-6', provider: 'codex', tokens: 272_000, source: 'CLI Codex 0.166 — context_window du catalogue du compte' },
+  // La famille GPT-5 sert 400 k de contexte d'entree. Les noms internes
   // (`sol`, `terra`, `luna`, cf. MODEL_RATES) sont declares en plus du motif generique, car le
   // catalogue live rend aussi des ids sans `gpt-5` en prefixe.
   { match: 'sol', provider: 'codex', tokens: 400_000, source: 'OpenAI — famille GPT-5, contexte 400k' },

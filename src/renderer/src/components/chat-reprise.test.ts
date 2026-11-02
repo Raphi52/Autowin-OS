@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { reprendreApresRedemarrage } from './chat-reprise'
+import { reprendreApresRedemarrage, reprendreToutesApresRedemarrage } from './chat-reprise'
 
 const reprise = { conversationId: 'conv-9', consigne: 'reprends la tâche', poseeA: 1 }
 
@@ -77,5 +77,54 @@ describe('reprendreApresRedemarrage', () => {
       })
     ).toEqual({ repris: false, motif: 'conversation-absente' })
     expect(envoyer).not.toHaveBeenCalled()
+  })
+})
+
+/*
+ * conv-1306, 2026-10-30 : deux fils avaient demandé un redémarrage ; l'interface ne lisait qu'UNE
+ * consigne au démarrage. Le main en rend désormais une par appel : on lit jusqu'à épuisement.
+ */
+describe('reprendreToutesApresRedemarrage', () => {
+  const deps = (consignes: Array<{ conversationId: string; consigne: string }>) => {
+    const file = consignes.map((c, i) => ({ ...c, poseeA: i }))
+    return {
+      lire: vi.fn(async () => file.shift() ?? null),
+      ouvrir: vi.fn(async (id: string) => id !== 'conv-supprimee'),
+      tourEnCours: vi.fn().mockResolvedValue(false),
+      mettreEnFile: vi.fn(),
+      envoyer: vi.fn().mockResolvedValue(undefined)
+    }
+  }
+
+  it('rejoue la consigne de CHAQUE fil, dans l ordre rendu par le main', async () => {
+    const d = deps([
+      { conversationId: 'conv-1306', consigne: 'verifie Choisir' },
+      { conversationId: 'conv-1329', consigne: 'verifie le port' }
+    ])
+    const resultats = await reprendreToutesApresRedemarrage(d)
+    expect(d.envoyer.mock.calls).toEqual([
+      ['verifie Choisir', 'conv-1306'],
+      ['verifie le port', 'conv-1329']
+    ])
+    expect(resultats).toEqual([
+      { repris: true, conversationId: 'conv-1306' },
+      { repris: true, conversationId: 'conv-1329' }
+    ])
+  })
+
+  it('une conversation disparue n arrête pas les suivantes', async () => {
+    const d = deps([
+      { conversationId: 'conv-supprimee', consigne: 'orpheline' },
+      { conversationId: 'conv-2', consigne: 'reprends' }
+    ])
+    await reprendreToutesApresRedemarrage(d)
+    expect(d.envoyer.mock.calls).toEqual([['reprends', 'conv-2']])
+  })
+
+  it('aucune consigne : rien n est envoyé, une seule lecture', async () => {
+    const d = deps([])
+    expect(await reprendreToutesApresRedemarrage(d)).toEqual([])
+    expect(d.lire).toHaveBeenCalledTimes(1)
+    expect(d.envoyer).not.toHaveBeenCalled()
   })
 })

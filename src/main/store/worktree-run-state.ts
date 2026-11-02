@@ -7,6 +7,7 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeFileChange } from '../../shared/worktree-activity-model'
@@ -243,6 +244,8 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
 export class WorktreeRunStateStore {
   private readonly stateRoot: string
   private readonly worktreeRoot: string
+  /** Le dernier état vu par CE processus, seul à écrire ces fichiers. Voir `dernierConnu`. */
+  private readonly derniers = new Map<string, WorktreeRunRecord>()
 
   constructor(
     root: string,
@@ -262,11 +265,46 @@ export class WorktreeRunStateStore {
     const backup = `${path}.bak`
     if (!existsSync(path) && !existsSync(backup)) return undefined
     try {
-      const source = existsSync(path) ? path : backup
-      const parsed = this.rebaserCheminHerite(
-        JSON.parse(readFileSync(source, 'utf8')) as unknown,
-        runId
-      )
+      return this.interpreter(readFileSync(existsSync(path) ? path : backup, 'utf8'), runId)
+    } catch {
+      return this.blocked(runId)
+    }
+  }
+
+  /**
+   * LA MÊME LECTURE, HORS DU FIL PRINCIPAL (conv-1368, 2026-10-31). `readFileSync` ci-dessus a figé
+   * la fenêtre 23 s en 7 jours (`gels.jsonl`), dont deux fois 10 s de suite sur le même petit
+   * fichier : `finalizeRecoveredAsync` le lisait, puis `persist` le relisait aussitôt.
+   */
+  async getAsync(runId: string): Promise<WorktreeRunRecord | undefined> {
+    const path = this.pathFor(runId)
+    for (const source of [path, `${path}.bak`]) {
+      let texte: string
+      try {
+        texte = await readFile(source, 'utf8')
+      } catch (erreur) {
+        if ((erreur as NodeJS.ErrnoException).code === 'ENOENT') continue
+        return this.blocked(runId)
+      }
+      const record = this.interpreter(texte, runId)
+      if (record.attentionReason !== 'state-unreadable') this.derniers.set(runId, record)
+      return record
+    }
+    return undefined
+  }
+
+  /**
+   * Pour `persist` : la base de la prochaine écriture, sans relire ce que ce processus sait déjà.
+   * `get` reste la vérité du disque, c'est lui qui signale un manifeste abîmé.
+   */
+  dernierConnu(runId: string): WorktreeRunRecord | undefined {
+    return this.derniers.get(runId) ?? this.get(runId)
+  }
+
+  /** Lève sur un JSON illisible ; un contenu valide mais étranger rend l'état bloqué. */
+  private interpreter(texte: string, runId: string): WorktreeRunRecord {
+    try {
+      const parsed = this.rebaserCheminHerite(JSON.parse(texte) as unknown, runId)
       if (
         !isRecord(parsed, this.worktreeRoot) ||
         parsed.repoId !== this.repoId ||
@@ -308,10 +346,12 @@ export class WorktreeRunStateStore {
       if (!existsSync(path) && existsSync(backup)) renameSync(backup, path)
       throw error
     }
+    this.derniers.set(record.runId, localRecord)
   }
 
   remove(runId: string): void {
     const path = this.pathFor(runId)
+    this.derniers.delete(runId)
     rmSync(path, { force: true })
     rmSync(`${path}.bak`, { force: true })
   }

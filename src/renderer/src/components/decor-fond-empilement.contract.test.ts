@@ -56,6 +56,8 @@ describe('empilement du decor de fond', () => {
     // `useDecorEnVeille` ne le monte pas avant la premiere visite (decor-veille.test.tsx).
     const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
     expect(app).toMatch(/const decorMonte = useDecorEnVeille\(tab === 'accueil'\)/)
-    expect(app).toMatch(/\{decorMonte && <DecorDeFond actif=\{tab === 'accueil'\} \/>\}/)
+    expect(app).toMatch(
+      /\{decorMonte && \(\s*<BarriereErreur zone="decor">\s*<DecorDeFond actif=\{tab === 'accueil'\} \/>/
+    )
   })
 })

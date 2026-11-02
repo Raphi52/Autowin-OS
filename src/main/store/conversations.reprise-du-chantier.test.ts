@@ -59,6 +59,7 @@ describe('ConversationStore — reprise du fil d’un chantier', () => {
     persistConversations(avant, p)
     const c = avant.create({ title: 'persisté', provider: 'claude' })
     avant.noterRepriseDuChantier(c.id, RUN, () => 'reprise 1')
+    await attendreEcrituresConversations()
 
     // Le redémarrage suivant : store neuf, relu depuis le même fichier.
     const apres = new ConversationStore(() => 2000)

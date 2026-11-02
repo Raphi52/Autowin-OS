@@ -25,6 +25,10 @@ process.on('unhandledRejection', echouer)
 app.commandLine.appendSwitch('disable-features', 'IsolateSandboxedIframes')
 
 const config = JSON.parse(readFileSync(process.argv[process.argv.length - 1], 'utf8'))
+// Un profil à soi, dans le dossier de sortie : le profil Electron par défaut est partagé avec
+// tout autre outil Electron sans nom d'application (mesuré le 2026-10-31, conv-1403 : cache
+// refusé et fermeture bloquée 50 s jusqu'au SIGTERM, comme dans scene-3d-apercu).
+app.setPath('userData', join(config.out, 'profil-electron'))
 // La page isolee choisie comme le fil la choisirait (`pageIsoleePour`, conv-1304).
 const urlScene = pathToFileURL(join(config.pages, config.page)).href
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -242,7 +246,8 @@ function sondeCible(selecteur, fractionX, fractionY) {
 
 /**
  * Joue DANS la page : les jauges d'un carrousel /draft (conv-1382). Chaque jauge va d'une borne a
- * l'autre, et on releve les propositions ou elle est VISIBLE et celles qu'elle CHANGE. Les gestes
+ * l'autre sur chaque proposition, et on releve celles ou elle est VISIBLE, celles qu'elle CHANGE et
+ * celles qu'elle change sans etre la proposition reglee (champ fuites). Les gestes
  * automatiques la cliquaient deja, mais rien n'exigeait un effet : une jauge morte sortait en code 0.
  * Le style calcule voit aussi ce qu'une capture ne montre pas (une duree) et les propositions cachees.
  * Transitions achevees et animations figees avant chaque lecture : une valeur en cours de transition
@@ -291,17 +296,39 @@ function sondeJauges() {
     aller(radio)
     for (const c of champs) if (!c.closest('.dkc-rgl').hidden) visibles.get(c).push(i + 1)
   })
-  if (depart) aller(depart)
+  // Chaque proposition garde ses valeurs (conv-1382, 2026-10-31) : la jauge est bougee sur CHAQUE
+  // proposition, et son effet lu sur la carte de celle-ci. Sur une seule (la premiere ou elle est
+  // visible), on lit aussi toutes les autres cartes : une fuite tient au branchement, pas au rang.
+  const bornes = (c) => (c.type === 'color' ? ['#000000', '#ffffff'] : [c.min, c.max])
   const rapport = champs.map((c) => {
-    const avant = c.value
-    const [bas, haut] = c.type === 'color' ? ['#000000', '#ffffff'] : [c.min, c.max]
-    poser(c, bas)
-    const empreintes = cartes.map(empreinte)
-    poser(c, haut)
-    const effet = cartes.flatMap((carte, i) => (empreinte(carte) === empreintes[i] ? [] : [i + 1]))
-    poser(c, avant)
-    return { nom: c.dataset.nom, variable: c.dataset.variable, visible: visibles.get(c), effet }
+    const effet = []
+    const fuites = []
+    const temoin = visibles.get(c)[0] ?? 1
+    radios.forEach((radio, i) => {
+      const n = i + 1
+      aller(radio)
+      const avant = c.value
+      const lues = n === temoin ? cartes : [cartes[i]]
+      poser(c, bornes(c)[0])
+      const empreintes = lues.map(empreinte)
+      poser(c, bornes(c)[1])
+      const changees = lues.flatMap((carte, j) =>
+        empreinte(carte) === empreintes[j] ? [] : [cartes.indexOf(carte) + 1]
+      )
+      poser(c, avant)
+      if (changees.includes(n)) effet.push(n)
+      const vers = changees.filter((k) => k !== n)
+      if (vers.length) fuites.push({ depuis: n, vers })
+    })
+    return {
+      nom: c.dataset.nom,
+      variable: c.dataset.variable,
+      visible: visibles.get(c),
+      effet,
+      fuites
+    }
   })
+  if (depart) aller(depart)
   figer()
   for (const a of document.getAnimations()) a.play()
   document.documentElement.style.overflow = defilement

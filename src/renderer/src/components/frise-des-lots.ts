@@ -17,6 +17,14 @@ import type { EtatDuLot, LotDuPlan, PlanDeLots } from '../../../shared/plan-de-l
 export const DUREE_MIN_AXE_MS = 5 * 60_000
 /** Une barre trop fine (lot de quelques secondes) disparaîtrait : elle garde ce minimum, en %. */
 export const LARGEUR_MIN_BARRE = 0.8
+/**
+ * Un bloc de couloir porte son titre : plus étroit, il n'écrirait plus rien. Un lot très court
+ * dépasse donc sa durée réelle quand la place est libre, et celui qui vient de partir recule depuis
+ * le bout de l'axe. Ce minimum cède devant le lot suivant du couloir (`blocsDuCouloir`).
+ */
+export const LARGEUR_MIN_BLOC = 7
+/** Deux lots collés ne doivent pas se séparer pour un arrondi de pourcentage. */
+const TOLERANCE_COULOIR = 1e-6
 /** Nombre de graduations de l'axe, bornes comprises (14:00 · 14:10 · 14:20 · 14:30). */
 export const GRADUATIONS = 4
 
@@ -53,6 +61,21 @@ function finDuLot(lot: LotDuPlan, maintenant: number): number | undefined {
 }
 
 /**
+ * LE DERNIER LOT PARTI GARDE LA PLACE DE SON BLOC (conv-1393, 2026-10-31 — capture : « des blocs
+ * compacts à droite avec le texte écrasé »). Sur un plan de 12 h 49, les trois lots partis à la
+ * dernière minute n'avaient plus que 0,3 à 1,4 % de l'axe : le bloc qui recule pour rester entier
+ * (`blocsDuCouloir`) butait sur le lot fini juste avant lui dans son couloir. Seul sur sa ligne
+ * (conv-1387, « un lot par ligne »), il reculait avant sa vraie heure. L'axe va donc assez loin pour
+ * que le dernier départ laisse LARGEUR_MIN_BLOC devant lui : chaque bloc part à sa vraie heure, et
+ * la ligne « maintenant » s'arrête avant le bout de l'axe.
+ */
+function finPourLeDernierParti(lances: LotDuPlan[], debut: number): number {
+  const dernierDepart = Math.max(...lances.map((l) => l.debut as number))
+  const part = LARGEUR_MIN_BLOC / 100
+  return (dernierDepart - part * debut) / (1 - part)
+}
+
+/**
  * La frise du plan à l'instant `maintenant`, ou `null` si aucun lot n'est encore parti (rien à
  * placer sur un axe). Pur : même plan et même instant, même frise.
  */
@@ -63,7 +86,7 @@ export function calculerFrise(plan: PlanDeLots, maintenant: number): FriseDuPlan
   const tourne = plan.lots.some((l) => l.etat === 'en-cours')
   const derniereFin = Math.max(...lances.map((l) => finDuLot(l, maintenant) ?? debut))
   const finReelle = tourne ? Math.max(derniereFin, maintenant) : derniereFin
-  const fin = Math.max(finReelle, debut + DUREE_MIN_AXE_MS)
+  const fin = Math.max(finReelle, debut + DUREE_MIN_AXE_MS, finPourLeDernierParti(lances, debut))
   const duree = fin - debut
   const enPourcent = (ms: number): number => borne(((ms - debut) / duree) * 100)
 
@@ -92,6 +115,48 @@ export function calculerFrise(plan: PlanDeLots, maintenant: number): FriseDuPlan
     barres,
     ecoule: Math.max(0, finReelle - debut)
   }
+}
+
+/**
+ * LES COULOIRS DU PLAN (conv-1376, 2026-10-31 — /draft, « Implémenter la 1 · Couloirs »). Sept lots
+ * lancés trois par trois tenaient sept lignes, presque vides. Un lot prend ici la place du premier
+ * couloir libéré : autant de lignes que de lots tournant ensemble, et chaque ligne se lit comme le
+ * fil de travail qui a enchaîné ces lots.
+ *
+ * Le couloir se choisit sur les HEURES, pas sur le bloc dessiné : réserver la largeur minimale d'un
+ * lot court poussait ses suivants sur de nouvelles lignes, 5 pour 3 lots simultanés sur un plan de
+ * 1 h 27 (constaté en capture). Rend les blocs tels qu'ils se dessinent, premier parti d'abord.
+ */
+export function repartirEnCouloirs(barres: Iterable<BarreDeLot>): BarreDeLot[][] {
+  const couloirs: BarreDeLot[][] = []
+  for (const barre of [...barres].sort((a, b) => a.gauche - b.gauche || a.rang - b.rang)) {
+    const libre = couloirs.find((couloir) => {
+      const dernier = couloir[couloir.length - 1]
+      return dernier.gauche + dernier.largeur <= barre.gauche + TOLERANCE_COULOIR
+    })
+    if (libre) libre.push(barre)
+    else couloirs.push([barre])
+  }
+  return couloirs.map(blocsDuCouloir)
+}
+
+/**
+ * Les blocs d'un couloir, tels qu'ils se dessinent : la largeur minimale s'il y a la place, jamais
+ * par-dessus le lot suivant, dont la position dit une vraie heure. Seul le dernier peut reculer pour
+ * rester entier sur l'axe, et pas plus loin que la fin du précédent.
+ */
+function blocsDuCouloir(couloir: BarreDeLot[]): BarreDeLot[] {
+  let finPrecedente = 0
+  return couloir.map((barre, i) => {
+    const suivant = couloir[i + 1]
+    const voulue = Math.max(barre.largeur, LARGEUR_MIN_BLOC)
+    const gauche = suivant
+      ? barre.gauche
+      : Math.max(finPrecedente, Math.min(barre.gauche, 100 - voulue))
+    const largeur = Math.min(voulue, (suivant?.gauche ?? 100) - gauche)
+    finPrecedente = gauche + largeur
+    return { ...barre, gauche, largeur }
+  })
 }
 
 /** Vrai si au moins un lot tourne : la frise doit alors avancer avec l'horloge. */

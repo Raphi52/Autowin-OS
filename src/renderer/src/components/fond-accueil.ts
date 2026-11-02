@@ -23,11 +23,20 @@ import type { DecorVariant } from './home-decor-scene'
  */
 export const DECOR_DEFAUT: DecorVariant = 'avenue'
 
-/** Un fond d'Accueil : une direction du décor 3D, ou le noir, qui n'en monte aucune. */
-export type FondAccueil = DecorVariant | 'noir' | 'nier'
+/**
+ * Un fond d'Accueil : une direction du décor 3D, le noir qui n'en monte aucune, ou le Quartier, une
+ * scène peinte qui n'est pas de la 3D (`quartier-scene.ts`).
+ */
+export type FondAccueil = DecorVariant | 'noir' | 'nier' | 'falaise'
 
 /** Le noir : aucune scène 3D, l'hôte du décor peint un aplat noir (theme.css). */
 export const FOND_NOIR = 'noir' satisfies FondAccueil
+
+/**
+ * Le Quartier (conv-1421) : la Falaise peinte, où vivent les vrais agents, et dont les objets ouvrent
+ * les vues. C'est le fond par défaut depuis le 2026-11-01 (« Branche la Falaise sur l'Accueil »).
+ */
+export const FOND_FALAISE = 'falaise' satisfies FondAccueil
 
 /**
  * Le radar du Pod du thème Nier Automata (2026-10-22, conv-295) : aucune scène 3D, l'hôte du décor
@@ -35,6 +44,9 @@ export const FOND_NOIR = 'noir' satisfies FondAccueil
  * défaut sous ce thème tant que rien n'a été choisi dans le menu.
  */
 export const FOND_NIER = 'nier' satisfies FondAccueil
+
+/** Le fond affiché tant que personne n'en a choisi un autre. */
+export const FOND_DEFAUT: FondAccueil = FOND_FALAISE
 
 /**
  * Les fonds qui ne montent aucune scène 3D : l'hôte du décor les peint en CSS.
@@ -59,8 +71,25 @@ export function fondSansScene(
  * `v2` le 2026-08-25, pour que le nouveau défaut `actuel` atteigne les machines qui gardaient
  * `poussiere` ; `v3` le 2026-10-17 (conv-301), pour que l'avenue atteigne celles qui gardaient
  * `actuel`. Le choix du menu s'écrit sous la même clé : c'est celle que le décor lit.
+ *
+ * `v4` le 2026-11-01 (conv-1421), pour que le Quartier atteigne les postes qui gardaient l'avenue.
+ * Cette fois, un choix délibéré est repris tel quel : voir `reprendreFondPrecedent`.
  */
-export const CLE_FOND_ACCUEIL = autowinStorageKey('home.decor.v3')
+export const CLE_FOND_ACCUEIL = autowinStorageKey('home.decor.v4')
+
+/** La clé d'avant : relue une fois, pour ne pas écraser un fond sans décor choisi exprès. */
+export const CLE_FOND_V3 = autowinStorageKey('home.decor.v3')
+
+/**
+ * « Aucun » et le radar sont des choix : personne ne les a par défaut, sauf le radar sous son thème, qui
+ * n'est jamais enregistré. L'avenue et les planètes, eux, ont été des défauts successifs : rien ne
+ * distingue un poste qui les a choisis d'un poste qui les a reçus. Ceux-là passent au Quartier, et le
+ * menu les rend en un clic.
+ */
+function reprendreFondPrecedent(): FondAccueil | null {
+  const ancien = window.localStorage.getItem(CLE_FOND_V3)
+  return ancien === FOND_NOIR || ancien === FOND_NIER ? ancien : null
+}
 
 /**
  * L'événement émis quand le fond CHANGE, dans la même fenêtre.
@@ -86,6 +115,12 @@ export const FONDS_ACCUEIL: readonly { id: FondAccueil; nom: string }[] = [
       return traduireAccueil('fond.aucun', langueCourante())
     }
   },
+  {
+    id: FOND_FALAISE,
+    get nom() {
+      return traduireAccueil('fond.quartier', langueCourante())
+    }
+  },
   { id: 'avenue', nom: 'Cyberpunk' },
   {
     id: 'actuel',
@@ -103,13 +138,15 @@ export const FONDS_ACCUEIL: readonly { id: FondAccueil; nom: string }[] = [
  * `orbites`…) reste affichée, et une valeur inconnue est ramenée au défaut par `createDecorScene`.
  */
 export function lireFondAccueil(): FondAccueil {
-  if (typeof window === 'undefined') return DECOR_DEFAUT
+  if (typeof window === 'undefined') return FOND_DEFAUT
   const enregistre = window.localStorage.getItem(CLE_FOND_ACCUEIL)
   if (enregistre) return enregistre as FondAccueil
+  const repris = reprendreFondPrecedent()
+  if (repris) return repris
   // Rien de choisi : le thème Nier Automata prend son radar, les autres le défaut.
   return document.documentElement.getAttribute('data-theme') === 'nier-automata'
     ? FOND_NIER
-    : DECOR_DEFAUT
+    : FOND_DEFAUT
 }
 
 /** Enregistre le fond choisi et prévient la fenêtre : le décor change sans redémarrer. */

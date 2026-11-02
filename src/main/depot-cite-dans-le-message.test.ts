@@ -1,5 +1,11 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { ENTETE_REPRISE_AUTOMATIQUE } from './chat/relance-taches-de-fond'
 import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
+import { promptDOrdre } from './messages-entre-fils-app'
+import { consommerReprise, poserReprise } from './redemarrage-reprise'
 
 const ACTIF = 'D:\\AutoWinOS'
 
@@ -106,5 +112,48 @@ describe('depotCiteDansLeMessage', () => {
     expect(depotCiteDansLeMessage('va dans \\\\nas1\\partage\\Brain', ACTIF, existe)).toBe(
       '\\\\nas1\\partage\\Brain'
     )
+  })
+
+  /*
+   * MESSAGE ÉCRIT PAR UN AGENT (conv-1306, 2026-10-30). Un ordre de conv-1306 à conv-1329 citait
+   * D:/ContosoApp-arena/depart dans la LISTE DES DOSSIERS À RETIRER du Board : le fil a basculé
+   * dans ce dossier, celui-là même que l'utilisateur voulait voir disparaître.
+   */
+  it('ne bascule pas sur un ordre d un autre fil, meme s il cite un autre depot', () => {
+    const existe = disque('D:\\Projets\\Contoso', 'D:\\Projets\\Contoso\\.git')
+    const ordre = promptDOrdre({
+      id: 'msg-1',
+      de: 'conv-1306',
+      texte: `retire du Board : node retraits.mjs '["D:\\Projets\\Contoso"]'`
+    })
+    expect(depotCiteDansLeMessage(ordre, ACTIF, existe)).toBeNull()
+  })
+
+  /*
+   * La consigne de restart_app arrive telle quelle, sans en-tete (ChatView l'envoie comme une frappe).
+   * Celle de conv-1329 (2026-10-30) citait la meme liste de dossiers a retirer : rejouee, elle aurait
+   * fait la meme bascule que l'ordre.
+   */
+  it('ne bascule pas sur la consigne rejouee apres un redemarrage', () => {
+    const existe = disque('D:\\Projets\\Contoso', 'D:\\Projets\\Contoso\\.git')
+    const racine = mkdtempSync(join(tmpdir(), 'reprise-bascule-'))
+    try {
+      const consigne = `Reprise apres redemarrage : retire D:\\Projets\\Contoso du Board.`
+      poserReprise(racine, { conversationId: 'conv-1', consigne, poseeA: 1_000 })
+      expect(consommerReprise(racine, 2_000, 1_500)?.consigne).toBe(consigne)
+      expect(depotCiteDansLeMessage(consigne, ACTIF, existe)).toBeNull()
+      // Le meme chemin ECRIT par l'utilisateur fait toujours basculer.
+      expect(depotCiteDansLeMessage('va dans D:\\Projets\\Contoso', ACTIF, existe)).toBe(
+        'D:\\Projets\\Contoso'
+      )
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+  })
+
+  it('ne bascule pas sur une reprise automatique ecrite par Autowin', () => {
+    const existe = disque('D:\\Projets\\Contoso', 'D:\\Projets\\Contoso\\.git')
+    const reprise = `${ENTETE_REPRISE_AUTOMATIQUE} Ton tour précédent s’est terminé.\nDossier : D:\\Projets\\Contoso`
+    expect(depotCiteDansLeMessage(reprise, ACTIF, existe)).toBeNull()
   })
 })

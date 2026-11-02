@@ -42,6 +42,15 @@ export interface DependancesDuReveil<Etat extends RunSuspenduParQuota> {
   relancer: (etat: Etat) => Promise<void>
   maintenant?: () => number
   journal?: (message: string) => void
+  /**
+   * Sans elle, pour les runs : un mur se tente une fois, à son heure. Avec elle, pour les fils : tant
+   * qu'elle rend vrai, un passage reste prévu, et un départ écarté à l'heure redevient possible.
+   *
+   * fix-ok: rien ne repassait entre deux échéances, et un départ écarté gardait sa clé : un fil
+   * réactivé s'affichait « repart seule » avec 0 minuterie et 0 départ (essai du contrôle final sur le
+   * vrai `creerRepriseDesFils`, conv-1423). Option plutôt que changement : le contrat des runs tient.
+   */
+  surveillerEncore?: () => boolean
 }
 
 const cle = (etat: RunSuspenduParQuota): string =>
@@ -64,6 +73,7 @@ export function creerReveilApresQuota<Etat extends RunSuspenduParQuota>(
 
   const reveiller = (etat: Etat): void => {
     reveilles.add(cle(etat))
+    let tente = false
     deps
       .mettreEnFile(async () => {
         // Relu DANS la file : la tâche d'avant a pu relancer ce run, le finir ou le recouper.
@@ -71,12 +81,17 @@ export function creerReveilApresQuota<Etat extends RunSuspenduParQuota>(
         if (!actuel || cle(actuel) !== cle(etat)) return
         if (deps.publicationDejaProuvee(actuel)) return
         if (deps.actionDeReprise(actuel) !== 'relancer') return
+        tente = true
         deps.journal?.(`${actuel.runId} -> reprise automatique : l'heure du quota est passée`)
         await deps.relancer(actuel)
       })
       .catch((erreur: unknown) =>
         deps.journal?.(`${etat.runId} -> reprise après quota en échec : ${String(erreur)}`)
       )
+      // Un départ tenté garde sa clé même en échec : il a pu coûter. Écarté, il n'a rien coûté.
+      .finally(() => {
+        if (!tente && deps.surveillerEncore) reveilles.delete(cle(etat))
+      })
   }
 
   const replanifier = (): void => {
@@ -90,8 +105,11 @@ export function creerReveilApresQuota<Etat extends RunSuspenduParQuota>(
       if (quand <= instant) reveiller(etat)
       else prochaine = prochaine === undefined ? quand : Math.min(prochaine, quand)
     }
-    if (prochaine === undefined) return
-    minuterie = setTimeout(replanifier, Math.min(prochaine - instant, PLAFOND_ATTENTE_MS))
+    if (prochaine === undefined && deps.surveillerEncore?.() !== true) return
+    minuterie = setTimeout(
+      replanifier,
+      Math.min((prochaine ?? Infinity) - instant, PLAFOND_ATTENTE_MS)
+    )
   }
 
   return {

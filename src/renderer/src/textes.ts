@@ -293,8 +293,6 @@ export const DESTINATIONS_EN: Record<AppDestination, string> = {
   observatory: 'Observatory',
   'task-manager': 'Task Manager',
   worktree: 'Worktrees',
-  hdesk: 'Hidden desktops',
-  tickets: 'Tickets',
   besoins: 'Board',
   tests: 'Maintenance',
   settings: 'Settings'

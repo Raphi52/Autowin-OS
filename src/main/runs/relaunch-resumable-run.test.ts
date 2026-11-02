@@ -302,6 +302,112 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
     expect(b.observe.diffusions.slice(avant)).toEqual([{ type: 'refresh', scope: 'conversations' }])
   })
 
+  /**
+   * conv-1330 (2026-10-30) : le lot 3 de conv-1324, repris après un redémarrage, a passé 35 min dans
+   * une nouvelle construction sans qu'un mot n'arrive dans son fil, spinner allumé. Le lancement
+   * normal (`commands.ts`) diffuse le texte, la note d'activité et le raisonnement de l'agent par
+   * `orchestrate-delta` ; la relance passait `undefined` à `runTask` à la place de ce rappel.
+   * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : un 4e argument absent, ou qui ne diffuse pas vers le
+   * fil du run repris.
+   */
+  it('diffuse au fil le texte, la note et le raisonnement de l agent repris, comme un run direct', async () => {
+    const b = banc({
+      sabotage: (d) => ({
+        ...d,
+        os: {
+          ...d.os,
+          runTask: (async (...args: unknown[]) => {
+            const onPhase = args[2] as ((p: { step: 'exec'; phase?: string }) => void) | undefined
+            const onDelta = args[3] as
+              | ((step: 'exec', delta: string, note?: string, raisonnement?: string) => void)
+              | undefined
+            onPhase?.({ step: 'exec', phase: 'build' })
+            onDelta?.('exec', 'Je relis le moteur.')
+            onDelta?.('exec', '', 'Bash en cours — 2 min')
+            onDelta?.('exec', '', undefined, 'je compare les deux chemins')
+            return (d.os.runTask as (...a: unknown[]) => Promise<unknown>)(...args)
+          }) as never
+        }
+      })
+    })
+    await b.relance()
+    const deltas = b.observe.diffusions.filter((e) => e.type === 'orchestrate-delta')
+    expect(deltas).toEqual([
+      {
+        type: 'orchestrate-delta',
+        convId: 'conv-1',
+        deltaStep: 'exec',
+        delta: 'Je relis le moteur.'
+      },
+      {
+        type: 'orchestrate-delta',
+        convId: 'conv-1',
+        deltaStep: 'exec',
+        delta: '',
+        note: 'Bash en cours — 2 min'
+      },
+      {
+        type: 'orchestrate-delta',
+        convId: 'conv-1',
+        deltaStep: 'exec',
+        delta: '',
+        reasoning: 'je compare les deux chemins',
+        reasoningPhase: 'build'
+      }
+    ])
+  })
+
+  /**
+   * La note d'activité ne part PAS en battement pilote (`pilot:event`, `action-progress`) : l'écran
+   * marquerait le fil comme un tour de chat en cours, que sa sonde `os:pilotChat:active` déclare mort
+   * 8 s plus tard (pas de tour de chat ici) — Stop qui clignote et saisie partie en orientation
+   * refusée, à chaque note. L'écran pose lui-même la note dans la bulle (conv-1330).
+   */
+  it('n envoie aucun battement pilote pour une note d activite', async () => {
+    const battements: unknown[] = []
+    const b = banc({
+      tourEnregistre: liaison('codex', 'gpt-5.6-sol'),
+      sabotage: (d) => {
+        const tour = {
+          role: 'assistant',
+          turnId: 'turn-origine',
+          runtime: liaison('codex', 'gpt-5.6-sol'),
+          parts: [
+            { kind: 'action', actionId: 'route:0', name: 'orchestrate' },
+            { kind: 'action', actionId: '0:gate', name: 'gate', ok: true }
+          ]
+        }
+        return {
+          ...d,
+          os: {
+            ...d.os,
+            conversations: new Map([['conv-1', { messages: [tour] }]]) as never,
+            runTask: (async (...args: unknown[]) => {
+              const onDelta = args[3] as
+                ((step: 'exec', delta: string, note?: string) => void) | undefined
+              onDelta?.('exec', '', 'Bash en cours — 2 min')
+              onDelta?.('exec', 'du texte, pas une note')
+              return (d.os.runTask as (...a: unknown[]) => Promise<unknown>)(...args)
+            }) as never
+          },
+          emitToLiveWindows: ((_fenetres: unknown, canal: string, charge: unknown) => {
+            if (canal === 'pilot:event') battements.push(charge)
+          }) as never
+        }
+      }
+    })
+    await b.relance()
+    expect(battements).toEqual([])
+    // … mais la note part bien vers l'écran, par l'événement d'orchestration.
+    expect(b.observe.diffusions).toContainEqual({
+      type: 'orchestrate-delta',
+      convId: 'conv-1',
+      deltaStep: 'exec',
+      delta: '',
+      note: 'Bash en cours — 2 min'
+    })
+  })
+
   /** REMPLACE : `expect(indexSource).toContain('resumableRun.bindingOverride')`. */
   it('transmet a runTask le modele fige persiste avec le checkpoint', async () => {
     const b = banc({ etat: { bindingOverride: liaison('codex', 'gpt-5.6-sol') as never } })

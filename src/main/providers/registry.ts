@@ -1,4 +1,5 @@
 import {
+  filDeLAppel,
   ProviderCallError,
   type Message,
   type PromptEnvelope,
@@ -73,6 +74,31 @@ interface MurDeQuota {
 function murDepuisRefus(raison: string, maintenant: Date = new Date()): MurDeQuota {
   const retourA = instantDeRetourAnnonce(raison, maintenant)
   return retourA === undefined ? { raison } : { raison, retourA }
+}
+
+/**
+ * LE MESSAGE D'UN TOUR ARRÊTÉ PARCE QUE LE COMPTE CHOISI EST VIDE (conv-1416, 2026-11-01).
+ *
+ * Il cite le refus d'origine en entier : c'est lui que relisent la reprise automatique
+ * (`instantDeRetourAnnonce`) et le tri des fils coupés par le quota (`estMurDeQuota`).
+ */
+function messageCompteChoisiVide(nomDuCompte: string, refus: string): string {
+  const retourA = instantDeRetourAnnonce(refus)
+  const retour =
+    retourA === undefined
+      ? ''
+      : ` jusqu'au ${new Date(retourA).toLocaleString('fr-FR', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          hour: '2-digit',
+          minute: '2-digit'
+        })}`
+  return (
+    `Le compte « ${nomDuCompte} » choisi pour ce fil a son quota épuisé${retour}. ` +
+    `Le tour s'arrête sans changer de compte : pour continuer, choisis un autre compte dans ce fil. ` +
+    `Refus du fournisseur : ${refus.slice(0, 300)}`
+  )
 }
 
 /**
@@ -191,7 +217,17 @@ export class ProviderRegistry {
     private readonly switchBeforeLaunch?: (
       providerId: string,
       activeAccountId: string
-    ) => Promise<string | undefined>
+    ) => Promise<string | undefined>,
+    /**
+     * LE COMPTE CHOISI POUR LE FIL DE L'APPEL (conv-1416, 2026-11-01). Présent, il prime sur le
+     * compte actif et coupe les deux changements automatiques ci-dessus : l'utilisateur a nommé son
+     * compte, s'il est vide le tour s'arrête et le dit (`messageCompteChoisiVide`). Absent, rien ne
+     * change : la bascule et la rotation restent la règle des fils sans compte choisi.
+     */
+    private readonly compteChoisiDuFil?: (
+      providerId: string,
+      fil: string | undefined
+    ) => { id: string; nom: string } | undefined
   ) {}
 
   /**
@@ -297,7 +333,7 @@ export class ProviderRegistry {
       if (requested.supportsExecution === true) return { id, opts }
 
       // Un rôle NON-exécuteur demandant une exécution est délégué à un runner outillé local : le
-      // 1er exécuteur déclaré. La préférence explicite pour `codex` a été retirée avec ce moteur —
+      // 1er exécuteur déclaré. La préférence explicite pour `codex` a été retirée le 2026-09-04 —
       // son adaptateur n'étant plus enregistré, elle ne pouvait plus élire personne.
       const executors = [...this.adapters.values()].filter((a) => a.supportsExecution === true)
       const localExecutor = executors[0]
@@ -373,15 +409,16 @@ export class ProviderRegistry {
     // L'appelant a construit ses callbacks avant que le registre ne choisisse un fallback local.
     // Publier la route AVANT tout spawn garantit que pid/journal portent l'exécuteur causal réel.
     route.opts.execution?.onExecutorResolved?.(route.id)
+    const compteChoisi = this.compteChoisiDuFil?.(route.id, filDeLAppel(route.opts))
     // Bascule préventive : une seule fois par envoi (les relances de la rotation partent d'un compte
     // déjà choisi), et jamais bloquante — une sonde en panne laisse partir l'appel comme avant.
-    if (mayRotate && visitedWalls.size === 0 && this.switchBeforeLaunch) {
+    if (!compteChoisi && mayRotate && visitedWalls.size === 0 && this.switchBeforeLaunch) {
       const actif = this.activeAccountOf?.(route.id)
       if (actif) await this.switchBeforeLaunch(route.id, actif).catch(() => undefined)
     }
     // Figer le compte au départ : une autre requête peut faire tourner le pool pendant que celle-ci
     // attend sa réponse. Le mur et la rotation doivent viser le compte qui a réellement été appelé.
-    const accountAtStart = this.activeAccountOf?.(route.id)
+    const accountAtStart = compteChoisi?.id ?? this.activeAccountOf?.(route.id)
     const wallKeyAtStart = this.quotaWallKey(route.id, accountAtStart)
     if (route.opts.execution && adapter.supportsExecution !== true) {
       throw new Error(`Provider ${route.id} sans exécuteur local outillé`)
@@ -399,6 +436,7 @@ export class ProviderRegistry {
     // cause, dont 285 APRÈS le correctif qui se contentait de la NOMMER sans fermer la porte.
     const mur = this.murEncoreDebout(wallKeyAtStart)
     if (mur) {
+      if (compteChoisi) throw new Error(messageCompteChoisiVide(compteChoisi.nom, mur))
       if (
         mayRotate &&
         accountAtStart &&
@@ -585,6 +623,12 @@ export class ProviderRegistry {
       // delta déjà livré (sinon duplication à l'écran), et aucun retour vers un compte déjà visité.
       const raison = quotaWallReason(error)
       const compteMure = accountAtStart
+      // Compte choisi par l'utilisateur : aucune rotation. L'erreur garde sa classe et son coût, seul
+      // son message change. Le mur vient d'être posé par le handler ci-dessus, sur le refus d'origine.
+      if (compteChoisi && raison && error instanceof Error) {
+        error.message = messageCompteChoisiVide(compteChoisi.nom, raison)
+        throw error
+      }
       // Texte déjà affiché : pas de rejeu ici (il serait doublé), mais le pool bascule et l'erreur
       // le dit (`basculeApresQuota`) — l'appelant qui sait effacer et renvoyer le fil rejoue.
       if (mayRotate && raison && compteMure && chunksLivres > 0) {

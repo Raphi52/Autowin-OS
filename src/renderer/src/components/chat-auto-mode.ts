@@ -25,6 +25,7 @@ import type { Msg, AsstMsg } from './chat-view-types'
 import { langueCourante } from '../langue'
 import { traduireChatFil } from '../textes-ecrans/chat-fil'
 import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
+import { estUneRepriseApresQuota } from '../../../shared/reprise-quota'
 import type { ChatPart } from './chat-view-model'
 import {
   extrairePropositionsSuite,
@@ -412,6 +413,8 @@ export function lectureDeLaDemande(
       texte: borner(nu.slice(0, nu.search(/\(Mode auto — /u)).trim(), max)
     }
   if (estUneReleve(nu)) return { genre: 'auto', texte: borner(nu, max) }
+  // Écrite par Autowin, pas par l'utilisateur : une suite du travail coupé, jamais une demande.
+  if (estUneRepriseApresQuota(nu)) return { genre: 'accord' }
   if (ACCORD_NU.test(replierAccord(nu))) return { genre: 'accord' }
   if (CHOIX_PAR_NUMEROS.test(nu)) {
     const resolu = optionsChoisies(fil, rang, nu)

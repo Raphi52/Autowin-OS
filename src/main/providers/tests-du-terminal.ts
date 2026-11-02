@@ -22,7 +22,7 @@
  */
 import type { TestDuTerminal } from '../../shared/chat-turn'
 
-export type TestLu = Pick<TestDuTerminal, 'commande' | 'codeDeSortie'>
+export type TestLu = Pick<TestDuTerminal, 'commande' | 'codeDeSortie' | 'changementDeDossier'>
 
 /** Ce que la ligne a rendu : son code de sortie (`null` s'il est inconnu) et ce qu'elle a imprimé. */
 export interface IssueDuTerminal {
@@ -31,7 +31,7 @@ export interface IssueDuTerminal {
 }
 
 export interface LecteurDeTests {
-  testsDuTerminal(ligne: string, issue: IssueDuTerminal): TestLu[]
+  testsDuTerminal(ligne: string, issue: IssueDuTerminal, dossierDuTour?: string): TestLu[]
   testsNonComptes(ligne: string, issue: IssueDuTerminal): string[]
   avertissement(ligne: string, issue: IssueDuTerminal, enFond: boolean): string | undefined
   codeDeSortie(enErreur: boolean, texte: string): number | null
@@ -189,7 +189,13 @@ export function lecteurDeTests(): LecteurDeTests {
       else if (['sudo', 'command', 'time', 'nice', 'exec'].includes(verbe)) reste = reste.slice(1)
       else if (verbe === 'env') {
         reste = reste.slice(1)
-        while (reste[0] && (/^-/u.test(reste[0]) || /^[A-Za-z_]\w*=/u.test(reste[0])))
+        // `env --chdir=x` lance le test ailleurs depuis son propre maillon (conv-1423) : l'option
+        // reste en tête, le verbe n'est plus reconnu, et rien ne compte. Dans le doute, rien n'est rendu.
+        while (
+          reste[0] &&
+          !/^(?:-C|--chdir)/u.test(reste[0]) &&
+          (/^-/u.test(reste[0]) || /^[A-Za-z_]\w*=/u.test(reste[0]))
+        )
           reste = reste.slice(1)
       } else if (verbe === 'timeout') {
         reste = reste.slice(1)
@@ -245,7 +251,8 @@ export function lecteurDeTests(): LecteurDeTests {
     return nu(mots.slice(1).find((mot) => !mot.startsWith('-'))) === 'vitest'
   }
 
-  const LIBELLE_MAX = 300
+  /** Égal à `COMMANDE_DE_TEST_MAX` (chat-turn.ts) : ce code part dans un hook, sans import. */
+  const LIBELLE_MAX = 4000
 
   const motsDuMaillon = (maillon: string | undefined): string[] =>
     sansLanceurs(sansRedirections(motsDe(maillon ?? '')))
@@ -255,6 +262,170 @@ export function lecteurDeTests(): LecteurDeTests {
     const mots = motsDuMaillon(maillon)
     if (!lanceUnTest(mots)) return null
     return mots.join(' ').slice(0, LIBELLE_MAX)
+  }
+
+  /**
+   * Liste FERMÉE, comme les lanceurs : `sl` et les `*-location` sont les mots de PowerShell. `eval`,
+   * `source`, `.` et `iex` jouent un texte qu'on ne lit pas, et un alias donne au `cd` un autre nom :
+   * inconnu = ne couvre pas (0 sur 1 293 commandes réelles, 01/11, donc aucun faux « Bloqué »).
+   */
+  const VERBES_DE_DOSSIER = new Set([
+    'cd',
+    'cd..',
+    'chdir',
+    'pushd',
+    'popd',
+    'sl',
+    'set-location',
+    'push-location',
+    'pop-location',
+    'eval',
+    'source',
+    '.',
+    'invoke-expression',
+    'iex',
+    'alias',
+    'set-alias',
+    'new-alias',
+    'sal',
+    'nal'
+  ])
+
+  /**
+   * Un mot qui n'est QU'une expansion : le verbe se décide à l'exécution, c'est peut-être un `cd`.
+   * `$x=1` et `$env:CI` n'y entrent pas, ni un chemin comme `$HOME/bin/outil`, qui lance un programme.
+   */
+  const VERBE_CALCULE = /^["']?(?:\$\{?\w+\}?|\$\{[^}]*\}|\$\(.*\)|`.*`)["']?$/su
+
+  /** `$x = 1` et `$x += 1` de PowerShell : le mot suivant dit que ce n'est pas un verbe. */
+  const AFFECTATION = /^[-+*/%]?=/u
+
+  /** `X=1`, `X+=1`, `a[0]=1` : ce que le shell accepte devant une commande sans en être une. */
+  const AFFECTATION_EN_TETE = /^[A-Za-z_]\w*(?:\[[^\]]*\])?\+?=/u
+
+  /**
+   * Ce que la grammaire du shell laisse devant une commande dans un même maillon : mots réservés,
+   * et tout ce qui finit par `)` ou `){` (`a)` d'un `case`, `f()`, `f(){`). Lu ici
+   * SEULEMENT : `! npm test` inverse le code du test, retirer `!` dans `sansLanceurs` ferait d'un
+   * rouge un vert.
+   *
+   * fix-ok: à lire sur le mot ÉCRIT, guillemets compris. Sans eux, `grep -E '^(a|b)' "$P"` et
+   * `node -e "f()" "$F"` passaient pour un `a)` de `case`, et leur argument pour un verbe : 13 formes
+   * sur 2 012 commandes réelles (01/11, un test ajouté après chaque ligne). `$(pwd)` ne ferme rien non
+   * plus.
+   */
+  const DEVANT_UNE_COMMANDE = /^(?:\{|!|if|elif|then|else|do|while|until|(?!\$\().*\)\{?)$/u
+
+  /** Ce qui lance le mot suivant. Lu sans ses guillemets : `"builtin" cd` joue le même `cd`. */
+  const LANCEUR_INTERNE = /^(?:builtin|command|time)$/u
+
+  /** Les seules options de ces lanceurs qui lancent quand même : `command -v cd` interroge sans jouer. */
+  const OPTION_DE_LANCEUR = /^(?:--|-p+)$/u
+
+  /**
+   * Un mot tel que le shell le joue : `c'd'`, `c\d` et `$'cd'` se jouent `cd`, `"-p"` se joue `-p`.
+   *
+   * fix-ok: l'option était lue brute et le verbe par `nu`, qui ne retire que les guillemets du bord et
+   * lit `c\d` comme un chemin : `command "-p" cd ../x && npm test` et `c'd' ../x && npm test` effaçaient
+   * un rouge (essai du contrôle final sur `rougesRestants`, conv-1423). Ne remplace pas `nu` : sans ses
+   * barres, `D:\outils\cd` ne serait plus un `cd`.
+   */
+  const sansCitations = (mot: string): string => mot.replace(/\$(?=["'])|["'\\]/gu, '')
+
+  /**
+   * Le mot `k` est-il en position de commande ?
+   *
+   * fix-ok: seul le mot juste avant décidait, et une affectation s'y glisse sans changer la position :
+   * `{ X=1 cd ../x; }; npm test` et `if X=1 cd ../x; then true; fi; npm test` effaçaient un rouge
+   * (essai exécuté sur `rougesRestants`). On remonte donc au-delà des affectations ; c'est le mot
+   * d'avant elles qui décide, sinon `echo X=1 cd` ferait d'un argument un verbe.
+   *
+   * fix-ok: un lanceur se franchissait comme un mot réservé, sans ses options et écrit nu seulement :
+   * `command -p cd ../x && npm test`, `builtin -- cd ../x` et `"builtin" cd ../x` effaçaient un rouge
+   * (sonde du nettoyage sur `rougesRestants`, 02/11). On le remonte, et lui-même doit être en position
+   * de commande, sinon `echo command cd` ferait d'un argument un verbe. Boucle et non appel récursif :
+   * ce code tourne dans un hook, et une ligne n'a pas de longueur bornée.
+   */
+  function enPositionDeCommande(mots: string[], k: number): boolean {
+    let avant = k - 1
+    while (avant >= 0) {
+      while (avant >= 0 && AFFECTATION_EN_TETE.test(mots[avant])) avant -= 1
+      while (avant >= 0 && OPTION_DE_LANCEUR.test(sansCitations(mots[avant]))) avant -= 1
+      if (avant < 0) return true
+      if (!LANCEUR_INTERNE.test(nu(sansCitations(mots[avant]))))
+        return DEVANT_UNE_COMMANDE.test(mots[avant])
+      avant -= 1
+    }
+    return true
+  }
+
+  /**
+   * Le changement de dossier d'un maillon, à partir de son verbe ; vide s'il n'en fait pas. Les
+   * accolades retirées du verbe sont celles de PowerShell, qui les accepte collées : `{cd ../x}`.
+   */
+  function changementDuMaillon(maillon: string): string[] {
+    const mots = motsDuMaillon(maillon)
+    const nomDeDossier = (mot: string): boolean =>
+      VERBES_DE_DOSSIER.has(nu(mot)) || VERBES_DE_DOSSIER.has(nu(sansCitations(mot)))
+    const verbe = mots.findIndex(
+      (mot, k) =>
+        (nomDeDossier(mot.replace(/^\{|\}$/gu, '')) ||
+          (VERBE_CALCULE.test(mot) && !AFFECTATION.test(mots[k + 1] ?? ''))) &&
+        enPositionDeCommande(mots, k)
+    )
+    return verbe < 0 ? [] : mots.slice(verbe)
+  }
+
+  /**
+   * Les changements de dossier qui précèdent une chaîne, tels que lancés (conv-1423).
+   *
+   * fix-ok: le libellé d'un test ne garde que SON maillon, donc `cd ../autre && npm test` se lisait
+   * `npm test` et effaçait un rouge du projet courant (reproduit par le contrôle final sur
+   * `constatsRetenus`). Le libellé ne change pas : le Board et le hook s'en servent. Le `cd` voyage à
+   * côté, et un `popd` compte aussi : on ne suit pas la pile, inconnu = ne couvre pas.
+   *
+   * fix-ok: le verbe n'était cherché qu'en tête du maillon : `builtin cd ../x && npm test` et
+   * `{ cd ../x; npx vitest run; }` effaçaient encore un rouge (essai exécuté sur `rougesRestants`).
+   * `changementDuMaillon` le cherche en position de commande. `(cd ../x)` n'est pas vu, et c'est juste :
+   * un sous-shell ne change rien pour la suite de la ligne, et c'est le seul `cd` hors tête relevé dans
+   * les commandes réelles (18 sur 731).
+   *
+   * fix-ok: un `cd` nommé autrement passait pour rien : `alias c=cd; c ../x; npm test` et
+   * `c=cd; $c ../x; npm test` se lisaient `npm test` et effaçaient un rouge (sonde du contrôle final sur
+   * le vrai lecteur et la vraie règle). `alias` et le verbe calculé comptent donc comme `eval`.
+   *
+   * Limites connues : ce lecteur lit une ligne, il n'exécute rien. Une fonction ou un alias défini dans
+   * un appel PRÉCÉDENT reste invisible, comme un `cd` qui survivrait à son appel. Dans la ligne même,
+   * un verbe qui dépend d'une variable (`c$d`) passe encore pour rien : sa valeur n'est pas dans la
+   * ligne, et il ne figure dans aucune des 2 045 commandes réelles comptées le 01/11. `trap "cd ../x"
+   * DEBUG` non plus : compter `trap` marquerait aussi le `trap 'rm -f x' EXIT` ordinaire.
+   *
+   * `cd <dossier du tour>` n'en change pas : 30 des 33 `cd` mesurés avant un test (161 sorties réelles,
+   * 01/11) sont celui-là. Seule cette forme exacte est retirée : un `cd` relatif ne se résout pas ici.
+   */
+  function dossierAvant(
+    chaines: Chaine[],
+    rang: number,
+    dossierDuTour: string | undefined
+  ): string | undefined {
+    const depart = dossierDuTour === undefined ? undefined : cheminComparable(dossierDuTour)
+    const changements = chaines
+      .slice(0, rang)
+      .flatMap((chaine) => chaine.maillons.map(changementDuMaillon))
+      .filter((mots) => mots.length > 0)
+      .filter((mots) => !(nu(mots[0]) === 'cd' && cheminComparable(mots[1] ?? '') === depart))
+      .map((mots) => mots.join(' '))
+    return changements.length > 0 ? changements.join(' && ').slice(0, LIBELLE_MAX) : undefined
+  }
+
+  /** Un chemin comparable d'une écriture à l'autre : `"D:\x"`, `d:/x/`, et `/d/x` du shell. */
+  function cheminComparable(chemin: string): string {
+    return chemin
+      .replace(/^["']|["']$/gu, '')
+      .replace(/\\/gu, '/')
+      .replace(/^\/([a-z])(?=\/|$)/iu, '$1:')
+      .replace(/\/+$/u, '')
+      .toLowerCase()
   }
 
   /**
@@ -405,11 +576,17 @@ export function lecteurDeTests(): LecteurDeTests {
     return { chaines, lus: lus.sort((a, b) => a.rang - b.rang || a.maillon - b.maillon) }
   }
 
-  function testsDuTerminal(ligne: string, issue: IssueDuTerminal): TestLu[] {
-    return (lire(ligne, issue)?.lus ?? []).map(({ commande, codeDeSortie }) => ({
-      commande,
-      codeDeSortie
-    }))
+  function testsDuTerminal(
+    ligne: string,
+    issue: IssueDuTerminal,
+    dossierDuTour?: string
+  ): TestLu[] {
+    const lu = lire(ligne, issue)
+    if (!lu) return []
+    return lu.lus.map(({ rang, commande, codeDeSortie }) => {
+      const changementDeDossier = dossierAvant(lu.chaines, rang, dossierDuTour)
+      return { commande, codeDeSortie, ...(changementDeDossier ? { changementDeDossier } : {}) }
+    })
   }
 
   /**
@@ -474,14 +651,40 @@ const LECTEUR = lecteurDeTests()
  * Les tests joués par `ligne` et leur code de sortie.
  *
  * `codeDeSortie` est celui que l'outil a rendu pour la ligne ENTIÈRE (`null` s'il est inconnu) ;
- * `sortie` est ce que la ligne a imprimé.
+ * `sortie` est ce que la ligne a imprimé ; `dossierDuTour` : le dossier où la ligne a démarré, s'il
+ * est connu (sans lui, tout `cd` compte comme un changement de dossier).
  */
-export const testsDuTerminal = (ligne: string, issue: IssueDuTerminal): TestLu[] =>
-  LECTEUR.testsDuTerminal(ligne, issue)
+export const testsDuTerminal = (
+  ligne: string,
+  issue: IssueDuTerminal,
+  dossierDuTour?: string
+): TestLu[] => LECTEUR.testsDuTerminal(ligne, issue, dossierDuTour)
 
 /** Les tests lancés par `ligne` dont le code reste illisible : ils ne compteront pas. */
 export const testsNonComptes = (ligne: string, issue: IssueDuTerminal): string[] =>
   LECTEUR.testsNonComptes(ligne, issue)
+
+/**
+ * Les champs de trace d'une commande shell, pour le fournisseur en direct et pour le journal relu
+ * après un redémarrage : deux copies de cette règle laisseraient l'une compter un test en arrière-plan
+ * (son « succès » dit seulement qu'il a démarré), l'autre non.
+ */
+export function testsDeLAppelShell(
+  ligne: string,
+  issue: IssueDuTerminal,
+  { enFond, at, dossierDuTour }: { enFond: boolean; at?: number; dossierDuTour?: string }
+): { testsLus?: Array<TestLu & { at?: number }>; testsNonComptes?: string[] } {
+  const lus = testsDuTerminal(ligne, issue, dossierDuTour)
+  const nonComptes = testsNonComptes(ligne, issue)
+  const illisibles = enFond ? [...lus.map((test) => test.commande), ...nonComptes] : nonComptes
+  const comptes = enFond ? [] : lus
+  return {
+    ...(comptes.length > 0
+      ? { testsLus: comptes.map((test) => (at === undefined ? test : { ...test, at })) }
+      : {}),
+    ...(illisibles.length > 0 ? { testsNonComptes: illisibles } : {})
+  }
+}
 
 /** L'avertissement donné à l'agent quand un test qu'il vient de lancer ne comptera pas. */
 export const avertissementTestsNonComptes = (

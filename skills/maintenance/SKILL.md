@@ -6,8 +6,8 @@ description: >-
   avec les sondes existantes — bugs, lenteurs/coûts, retard sur les concurrents, travail inachevé —,
   déduplique contre la passe précédente, corrige AU PLUS UN défaut borné preuve rouge→vert à l'appui,
   et rend un bulletin court et classé. Ne publie rien (ni commit, ni push, ni fiche). Ne pas utiliser
-  pour un défaut déjà nommé ni un chantier de plusieurs correctifs (→ `build` / `heal`), ni pour
-  trier ou publier du travail non publié (→ `git`).
+  pour le bilan du poste et de ses réglages (→ `doctor`), un défaut déjà nommé ni un chantier de
+  plusieurs correctifs (→ `build` / `heal`), ni pour trier ou publier du travail non publié (→ `git`).
 ---
 
 # maintenance — la passe quotidienne de santé d'Autowin OS

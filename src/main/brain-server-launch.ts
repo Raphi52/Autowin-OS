@@ -9,7 +9,6 @@
  * Chemin du tooling : config de l'installation locale, avec `AUTOWIN_BRAIN_TOOLING` comme override.
  * Le partage GED n'est utilisé que comme racine de données.
  */
-import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
@@ -22,6 +21,7 @@ import {
   racineBrainChoisie
 } from './brain-paths'
 import { identiteBrain, recopierNomsHistoriques } from './identite-entreprise'
+import { lancerDetacheHorsFil, type OptionsDeLancementDetache } from './lancement-hors-fil'
 
 // Le chemin du tooling vient de la SOURCE UNIQUE `brain-paths.ts` et reste distinct du corpus partagé.
 
@@ -244,14 +244,21 @@ export function resetBrainLaunchAttempt(env?: NodeJS.ProcessEnv): void {
   else tentatives.clear()
 }
 
+/** Crée le processus détaché. Par défaut hors du fil principal : voir `lancement-hors-fil.ts`. */
+export type LanceurDetache = (
+  bin: string,
+  args: string[],
+  options: OptionsDeLancementDetache
+) => unknown
+
 /**
  * S'assure que le brain_server tourne : si `isUp()` répond, no-op ; sinon tente un spawn détaché.
- * `spawnFn` injectable pour test (défaut: child_process.spawn). Ne throw jamais.
+ * `lancer` injectable pour test. Ne throw jamais.
  */
 export async function ensureBrainServerStarted(
   isUp: () => Promise<boolean>,
   env: NodeJS.ProcessEnv = process.env,
-  spawnFn: typeof spawn = spawn,
+  lancer: LanceurDetache = lancerDetacheHorsFil,
   now: () => number = Date.now
 ): Promise<BrainLaunchResult> {
   try {
@@ -341,14 +348,21 @@ export async function ensureBrainServerStarted(
   }
   const essai = attempts + 1
   tentatives.set(cle, { attempts: essai, lastAttemptAt: now() })
-  const child = spawnFn(command.bin, command.args, {
-    cwd: command.cwd,
-    env: childEnv,
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true
-  })
-  child.unref?.()
+  try {
+    const child = (await lancer(command.bin, command.args, {
+      cwd: command.cwd,
+      env: childEnv,
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    })) as { unref?: () => void } | undefined
+    child?.unref?.()
+  } catch (erreur) {
+    return {
+      status: 'unavailable',
+      detail: `lancement du brain_server impossible (essai ${essai}/${MAX_BRAIN_LAUNCH_ATTEMPTS}) : ${erreur instanceof Error ? erreur.message : String(erreur)}`
+    }
+  }
   return {
     status: 'starting',
     detail: `brain_server lancé (essai ${essai}/${MAX_BRAIN_LAUNCH_ATTEMPTS}) — warm-up fastembed ~30-40 s (le preflight re-sonde avec backoff)`

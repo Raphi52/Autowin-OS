@@ -74,7 +74,7 @@ describe('ChatView — le rechargement ne vide pas le fil', () => {
       await new Promise((r) => setTimeout(r, 20))
     })
 
-    expect(h.container.querySelector('.chat-welcome')).toBeNull()
+    expect(h.container.querySelector('.accueil-anim')).toBeNull()
     expect(h.container.textContent).toContain('ma question')
     expect(h.container.textContent).toContain('ma réponse')
   })

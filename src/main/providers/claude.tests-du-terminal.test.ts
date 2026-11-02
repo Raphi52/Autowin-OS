@@ -1,7 +1,12 @@
 import { EventEmitter } from 'node:events'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StreamChunk } from './types'
+import type { ExecutionEvidence, StreamChunk } from './types'
 
+// fix-ok: le lecteur perdait le `cd` d'un test, et 30 `cd` sur 33 mesurés visent le dossier du tour :
+// le dossier de l'appel doit donc atteindre le lecteur depuis l'adaptateur (conv-1423).
 // Même harnais de spawn que claude.cible-entiere.test.ts : on rejoue une séquence stream-json.
 const spawnCapture = vi.hoisted(() => ({
   stdoutEvents: [] as Array<Record<string, unknown>>
@@ -103,6 +108,99 @@ describe('ClaudeCliAdapter — les tests du terminal et leur code de sortie', ()
       succes
     ]
     expect(await testsEmis()).toEqual([])
+  })
+
+  it('le test émis et sa trace disent dans quel dossier il a tourné (conv-1423)', async () => {
+    spawnCapture.stdoutEvents = [
+      bash('cd ../autre && npm test'),
+      resultat(false, ' Tests  3 passed (3)'),
+      succes
+    ]
+    expect(await testsEmis()).toEqual([
+      { commande: 'npm test', codeDeSortie: 0, changementDeDossier: 'cd ../autre' }
+    ])
+
+    spawnCapture.stdoutEvents = [
+      bash('cd ../autre && npm test'),
+      resultat(false, ' Tests  3 passed (3)'),
+      succes
+    ]
+    const { ClaudeCliAdapter } = await import('./claude')
+    const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
+    let step = await gen.next()
+    while (!step.done) step = await gen.next()
+    expect(step.value.executionEvidence?.[0]?.testsLus).toEqual([
+      {
+        commande: 'npm test',
+        codeDeSortie: 0,
+        changementDeDossier: 'cd ../autre',
+        at: expect.any(Number)
+      }
+    ])
+  })
+
+  it('un `cd` vers le dossier du tour n’en est pas un changement (conv-1423)', async () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'claude-tests-cd-'))
+    try {
+      spawnCapture.stdoutEvents = [
+        bash(`cd "${dossier}" && npm test`),
+        resultat(false, ' Tests  3 passed (3)'),
+        succes
+      ]
+      const { ClaudeCliAdapter } = await import('./claude')
+      const gen = new ClaudeCliAdapter({ bin: 'claude' }).send(
+        [{ role: 'user', content: 'Salut' }],
+        { execution: { cwd: dossier, sandbox: 'read-only' } }
+      )
+      const tests: NonNullable<StreamChunk['testsDuTerminal']> = []
+      let step = await gen.next()
+      while (!step.done) {
+        if (step.value.testsDuTerminal) tests.push(...step.value.testsDuTerminal)
+        step = await gen.next()
+      }
+      expect(tests).toEqual([{ commande: 'npm test', codeDeSortie: 0 }])
+      expect(step.value.executionEvidence?.[0]?.testsLus).toEqual([
+        { commande: 'npm test', codeDeSortie: 0, at: expect.any(Number) }
+      ])
+    } finally {
+      rmSync(dossier, { recursive: true, force: true })
+    }
+  })
+
+  it('la trace de l’appel porte les tests lus et ceux qui ne comptent pas (conv-1423)', async () => {
+    const trace = async (): Promise<ExecutionEvidence | undefined> => {
+      const { ClaudeCliAdapter } = await import('./claude')
+      const gen = new ClaudeCliAdapter({ bin: 'claude' }).send([{ role: 'user', content: 'Salut' }])
+      let step = await gen.next()
+      while (!step.done) step = await gen.next()
+      return step.value.executionEvidence?.[0]
+    }
+    spawnCapture.stdoutEvents = [
+      bash('npx vitest run src/a.test.ts'),
+      resultat(true, 'Exit code 1\n Tests  1 failed (1)'),
+      succes
+    ]
+    expect((await trace())?.testsLus).toEqual([
+      { commande: 'npx vitest run src/a.test.ts', codeDeSortie: 1, at: expect.any(Number) }
+    ])
+
+    spawnCapture.stdoutEvents = [
+      bash('npx vitest run', { run_in_background: true }),
+      resultat(false, 'Command running in background with ID: b1'),
+      succes
+    ]
+    const enFond = await trace()
+    expect(enFond?.testsLus).toBeUndefined()
+    expect(enFond?.testsNonComptes).toEqual(['npx vitest run'])
+
+    spawnCapture.stdoutEvents = [
+      bash('npm test | tail -5'),
+      resultat(false, 'fin de sortie'),
+      succes
+    ]
+    const tube = await trace()
+    expect(tube?.testsLus).toBeUndefined()
+    expect(tube?.testsNonComptes).toEqual(['npm test'])
   })
 
   it('un test passé à `| tail` ne prouve rien (le code est celui de `tail`)', async () => {

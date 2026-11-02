@@ -34,7 +34,7 @@ afterEach(() => {
   nettoyerRacines()
 })
 
-const stateStore = { list: () => [], get: () => undefined, save: () => {}, remove: () => {} }
+const stateStore = { list: () => [], get: () => undefined, dernierConnu: () => undefined, getAsync: async () => undefined, save: () => {}, remove: () => {} }
 
 function monter(repo: string): RunWorktreeCoordinator {
   const c = new RunWorktreeCoordinator({

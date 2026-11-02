@@ -79,6 +79,9 @@ port.on('message', (request: WorktreeOperationRequest) => {
       case 'verdictsRetention':
         value = manager.verdictsRetention()
         break
+      case 'commitsDejaReferences':
+        value = manager.commitsDejaReferences(request.shas)
+        break
       case 'recoveryInventory':
         value = manager.recoveryInventory()
         break

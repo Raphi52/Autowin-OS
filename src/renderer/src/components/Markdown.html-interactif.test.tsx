@@ -44,12 +44,14 @@ let aLEcran = true
 // Deux distances : `aLEcran` pour l'observateur proche, `pasTropLoin` pour celui de la liberation.
 let pasTropLoin = true
 const observateurs: Array<{ rappeler: () => void }> = []
+const racines: Array<Element | Document | null | undefined> = []
 class FauxObservateur {
   private readonly rappel: IntersectionObserverCallback
   private readonly lointain: boolean
   constructor(rappel: IntersectionObserverCallback, options?: IntersectionObserverInit) {
     this.rappel = rappel
     this.lointain = options?.rootMargin?.startsWith('1500') === true
+    racines.push(options?.root)
   }
   observe(cible: Element): void {
     const rappeler = (): void =>
@@ -81,6 +83,7 @@ beforeEach(() => {
   aLEcran = true
   pasTropLoin = true
   observateurs.length = 0
+  racines.length = 0
   vi.stubGlobal('IntersectionObserver', FauxObservateur)
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -138,6 +141,54 @@ describe('Markdown — pages interactives', () => {
     expect(kinds(bloc('   '))).toEqual(['code'])
     expect(kinds(bloc('x'.repeat(MAX_PAGE_INTERACTIVE_CHARS + 1)))).toEqual(['code'])
     expect(kinds('```html\n' + PAGE + '\n```')).toEqual(['code'])
+  })
+
+  /*
+   * conv-1395 : « le carrousel n'est apparu qu'au moment où j'ai envoyé le message d'après ». Le bloc
+   * de cloture arrive APRES la page (`montrer_bloc`, puis le texte final) : sa cle changeait alors de
+   * `body-…` a `body-1-…`, React jetait le cadre et posait a sa place une bande vide de 48 px,
+   * au-dessus de la zone visible.
+   */
+  const CLOTURE = [
+    '✅ Fait',
+    '1. Page posée.',
+    '',
+    '📍 Maintenant',
+    'La page est dans le fil.',
+    '',
+    '⏳ Reste à faire',
+    'Ton choix.',
+    '',
+    '👉 Recommandé',
+    'Choisis une proposition.'
+  ].join('\n')
+  const rendreLaReponse = (text: string): void => {
+    act(() => root.render(createElement(Markdown, { text, highlightFinalSummary: true })))
+  }
+
+  it('garde le meme cadre quand le bloc de cloture arrive apres la page', () => {
+    const avant = `Je pose la page.\n${bloc(PAGE)}\n\nVoici les propositions.`
+    rendreLaReponse(avant)
+    const cadre = cadreDuFil()
+    expect(cadre).not.toBeNull()
+
+    rendreLaReponse(`${avant}\n\n${CLOTURE}`)
+
+    expect(container.querySelector('.md-final-summary')).not.toBeNull()
+    expect(cadreDuFil()).toBe(cadre)
+  })
+
+  it('garde le meme cadre quand un second bloc de cloture suit une page deja posee', () => {
+    // Un tour relance en cours de route ecrit DEUX clotures dans le meme texte (markdown-cloture).
+    const avant = `${CLOTURE}\n\n${bloc(PAGE)}\n\nVoici la suite.`
+    rendreLaReponse(avant)
+    const cadre = cadreDuFil()
+    expect(cadre).not.toBeNull()
+
+    rendreLaReponse(`${avant}\n\n${CLOTURE}`)
+
+    expect(container.querySelectorAll('.md-final-summary')).toHaveLength(2)
+    expect(cadreDuFil()).toBe(cadre)
   })
 
   it('isole le cadre : la page des scenes, scripts et formulaires, jamais la meme origine', () => {
@@ -203,6 +254,39 @@ describe('Markdown — pages interactives', () => {
     aLEcran = true
     act(() => observateurs.forEach((observateur) => observateur.rappeler()))
     expect(cadreDuFil()).not.toBeNull()
+  })
+
+  /*
+   * conv-1395 : `.chat` et `.chat-layout` sont en `overflow: clip`, que `scrollMargin` n'elargit pas.
+   * Mesure en vrai Chromium : un bloc a 686 px de la zone visible etait « hors de 1500 px », et le
+   * carrousel se liberait au moindre defilement.
+   */
+  it('mesure ses distances depuis le fil, pas depuis la fenetre', () => {
+    container.classList.add('chat-scroll')
+    render(bloc(PAGE))
+    expect(racines).toEqual([container, container])
+  })
+
+  it('hors d un fil, garde la fenetre comme reference', () => {
+    render(bloc(PAGE))
+    expect(racines).toEqual([undefined, undefined])
+  })
+
+  it('ne demonte pas une page 3D agrandie, que le navigateur sort du fil', () => {
+    container.classList.add('chat-scroll')
+    render(bloc('<script>const r = new THREE.WebGLRenderer()</script>'))
+    const section = container.querySelector(
+      '[data-testid="chat-inline-html-interactif"]'
+    ) as HTMLElement
+    const cadre = cadreDuFil()
+    // Le navigateur previent AVANT de l'ouvrir : `toggle`, lui, peut arriver apres l'observateur.
+    act(() => {
+      section.dispatchEvent(Object.assign(new Event('beforetoggle'), { newState: 'open' }))
+    })
+    aLEcran = false
+    pasTropLoin = false
+    act(() => observateurs.forEach((observateur) => observateur.rappeler()))
+    expect(cadreDuFil()).toBe(cadre)
   })
 
   it('envoie la page a SON cadre apres son « pret », avec la feuille de base et le theme', () => {

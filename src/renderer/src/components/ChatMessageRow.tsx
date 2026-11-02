@@ -16,7 +16,7 @@ import { promptDuClic } from './bouton-prompt-html'
 import { Markdown } from './Markdown'
 import { MessageDuFil, identiteDeLaReponse } from './message-du-fil'
 import { SuggestionGrid } from './SuggestionGrid'
-import { CandidatsPickPanel } from './CandidatsPickPanel'
+import { CandidatsPickPanel, type IssuePlanDeSelection } from './CandidatsPickPanel'
 import { AskDecisionBlock } from './AskDecision'
 import { JugesPanel, JugesPanelEnDirect } from './JugesPanel'
 import { ArtifactPreview } from './ArtifactPreview'
@@ -46,10 +46,9 @@ import type { TerminalStatus } from './chat-resume-refine'
 import type { AttachmentMeta, DirectiveReceipt, Msg } from './chat-view-types'
 import type { InspectTurnTarget } from '../observatory-focus'
 import type { ChatArtifact } from '../../../shared/artifacts'
+import type { SelectionAPlanifier } from '../../../shared/plan-de-lots'
 import { ceQuiAEteCompris } from '../../../shared/lecture-retenue'
 import { Spinner } from './Spinner'
-import { decouperSkill } from './skill-entete'
-import type { SkillInstallee } from './useSkillsInventory'
 import { ThinkingBlock } from './ThinkingBlock'
 
 /** Le texte de la ligne « compréhension » : ce que l'agent a compris, en clair et en gras, seul. */
@@ -432,6 +431,7 @@ const LigneDuFil = memo(
     onRevenir,
     onOpenImage,
     onPickSuggestion,
+    onPlanSelection,
     onOpenLiveAction,
     directiveReceipts,
     retryPrompt,
@@ -441,7 +441,6 @@ const LigneDuFil = memo(
     askReponse,
     autoLancerCandidats,
     onAnswerAsk,
-    skills,
     tourEnCours
   }: {
     message: Msg
@@ -451,8 +450,6 @@ const LigneDuFil = memo(
      * tour (conv-178) ; tour fini, elle pâlit avec elles.
      */
     tourEnCours?: boolean
-    /** Skills installees : un message `/<skill>` affiche son bandeau (draft G1). */
-    skills?: readonly SkillInstallee[] | null
     conversationId: string | null
     /** Prompt utilisateur à l'origine de ce tour — ce qu'on renvoie ou reprend. */
     retryPrompt?: string
@@ -476,6 +473,8 @@ const LigneDuFil = memo(
     onOpenImage?: (image: { src: string; name: string }) => void
     /** `suite` : les lots suivants d'une sélection de candidats scout, envoyés un par tour (conv-1080). */
     onPickSuggestion?: (prompt: string, suite?: readonly string[]) => void
+    /** Une sélection de candidats en plusieurs lots part en super conversation (conv-1333). */
+    onPlanSelection?: (selection: SelectionAPlanifier) => Promise<IssuePlanDeSelection>
     /** Mode auto : le panneau de candidats appuie lui-meme sur son bouton avec le choix du scout. */
     autoLancerCandidats?: boolean
     onOpenLiveAction?: (mode: 'live' | 'history') => void
@@ -538,24 +537,14 @@ const LigneDuFil = memo(
               </span>
             </div>
           ) : null}
-          {message.content &&
-            (() => {
-              const entete = decouperSkill(message.content, skills)
-              if (!entete)
-                return (
-                  <div className="msg-body msg-bulle" dir="auto">
-                    {message.content}
-                  </div>
-                )
-              return (
-                <div className="msg-body msg-bulle avec-skill" dir="auto">
-                  <div className="msg-skill-entete">
-                    <span className="msg-skill-nom">{entete.skill}</span>
-                  </div>
-                  {entete.reste ? <div className="msg-skill-texte">{entete.reste}</div> : null}
-                </div>
-              )
-            })()}
+          {/* Une skill nommée ne change plus la bulle (conv-1334) : le texte reste celui que
+              l'utilisateur a tapé. Le bandeau « KAIZEN » cachait le préfixe et laissait croire
+              à un mode à part, alors que le message ouvre un tour comme les autres. */}
+          {message.content && (
+            <div className="msg-body msg-bulle" dir="auto">
+              {message.content}
+            </div>
+          )}
           {message.attachments && message.attachments.length > 0 && (
             <div
               className={`attachment-list sent${
@@ -778,6 +767,7 @@ const LigneDuFil = memo(
             )
           }
           onPick={(prompt, suite) => onPickSuggestion?.(prompt, suite)}
+          {...(onPlanSelection ? { onPlan: onPlanSelection } : {})}
         />
       ) : part.kind === 'error' ? (
         <ChatErrorBlock

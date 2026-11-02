@@ -138,7 +138,7 @@ describe('planDeLancement', () => {
     expect(resumeDuPlan(planDeLancement([correction()]))).toBe('en correction directe')
     expect(
       resumeDuPlan(planDeLancement([correction(), ajout('A'), ajout('B'), ajout('C'), ajout('D')]))
-    ).toBe('en 3 lots à la suite (1 en correction directe, 2 en workflow complet)')
+    ).toBe('en 3 lots en parallèle (1 en correction directe, 2 en workflow complet)')
   })
 })
 

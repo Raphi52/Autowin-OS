@@ -20,7 +20,7 @@ import {
   readRecentConversationFileTraces,
   type ConversationFileTrace
 } from './activity/conversation-file-trace-spool'
-import { appendShellWriteTraces } from './activity/trace-workspace-mutation'
+import { appendCallMutationTraces } from './activity/trace-workspace-mutation'
 import { photographierDebutDeTour, publierTourDeChat } from './chat-turn-publication'
 import { exactLineFingerprint } from './exact-line-fingerprint'
 import { claudeToolEvidenceKind } from './providers/claude'
@@ -907,7 +907,7 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
  * <<'EOF'` et `sed -i`), donc sans preuve par lignes, et un AUTRE fil l'avait seulement VU changer
  * pendant son propre tour (sa comparaison avant/après, sans lignes) : « touche-par-un-autre-fil ».
  * Les commandes rejouées sont les vraies, recopiées des sessions du CLI ; les traces passent par le
- * même chemin qu'en fin d'appel (`appendShellWriteTraces`, puis relecture du journal).
+ * même chemin qu'en fin d'appel (`appendCallMutationTraces`, puis relecture du journal).
  */
 describe('enchaînement auto du chat — fichier nommé par une commande shell du tour', () => {
   const TOUR_932 = '861aad09-5446-4a34-9e32-94eb3da2fbae'
@@ -938,7 +938,7 @@ describe('enchaînement auto du chat — fichier nommé par une commande shell d
   ): Promise<ConversationFileTrace[]> {
     const journal = mkdtempSync(join(tmpdir(), 'autowin-chat-pub-journal-'))
     dirs.push(journal)
-    await appendShellWriteTraces(
+    await appendCallMutationTraces(
       { conversationId, turnId, workspaceRoot: repo, evidence: commandes.map(appelBash) },
       journal
     )

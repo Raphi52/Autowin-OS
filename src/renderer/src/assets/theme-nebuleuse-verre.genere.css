@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs -- ne pas modifier a la main.
    Theme « Nebuleuse de verre » : couleurs ecrites en dur, transposees (or -> rose,
    cyan -> violet, rose -> rose du theme, noirs de fond -> encre violette, verts -> #00ff55).
-   591 regles, 812 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
+   582 regles, 802 declarations. Regenerer : node scripts/theme-nebuleuse-verre.mjs */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='nebuleuse-verre'] .topology-state {
@@ -140,6 +140,11 @@
 }
 :root[data-theme='nebuleuse-verre'] .bilan-cloture__ouvrir:hover {
     border-color: rgb(255, 108, 182)
+}
+
+/* ---- src/renderer/src/components/BlocHtmlInteractif.css ---- */
+:root[data-theme='nebuleuse-verre'] .bloc-html-interactif::backdrop {
+    background: color-mix(in srgb, var(--bg-0, rgb(10, 10, 10)) 70%, transparent)
 }
 
 /* ---- src/renderer/src/components/BrainMarkdown.css ---- */
@@ -393,9 +398,6 @@
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .msg.user .msg-body {
     border-color: rgba(255, 44, 150, 0.54);
     background: linear-gradient(135deg, rgba(172, 0, 86, 0.34), rgba(43, 9, 30, 0.55))
-}
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat-welcome {
-    background: radial-gradient(circle at 50% 0, rgba(70, 44, 201, 0.1), transparent 48%)
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer {
     background: linear-gradient(180deg, rgba(10, 10, 10, 0.74), var(--chat-saisie-fond) 30%)
@@ -1765,33 +1767,6 @@
     border-color: var(--accent, rgb(122, 95, 255))
 }
 
-/* ---- src/renderer/src/components/SuperConvMosaique.css ---- */
-:root[data-theme='nebuleuse-verre'] .scm-onglet--chef {
-    --scm-c: var(--gold, rgb(251, 91, 171))
-}
-:root[data-theme='nebuleuse-verre'] .scm-onglet.is-non-lu {
-    border-color: var(--gold, rgb(251, 91, 171));
-    color: var(--gold-bright, var(--gold, rgb(251, 91, 171)))
-}
-:root[data-theme='nebuleuse-verre'] .scm-bandeau {
-    border-bottom: 1px solid color-mix(in srgb, var(--gold, rgb(251, 91, 171)) 35%, transparent)
-}
-:root[data-theme='nebuleuse-verre'] .scm-kicker {
-    color: var(--gold, rgb(251, 91, 171))
-}
-:root[data-theme='nebuleuse-verre'] .scm-chiffre b {
-    color: var(--gold, rgb(251, 91, 171))
-}
-:root[data-theme='nebuleuse-verre'] .scm-maintenant {
-    color: var(--gold, rgb(251, 91, 171))
-}
-:root[data-theme='nebuleuse-verre'] button.scm-nom:not(:disabled):hover {
-    color: var(--gold-bright, var(--gold, rgb(251, 91, 171)))
-}
-:root[data-theme='nebuleuse-verre'] .scm-maintenant-ligne {
-    background: var(--gold, rgb(251, 91, 171))
-}
-
 /* ---- src/renderer/src/components/TaskManagerView.css ---- */
 :root[data-theme='nebuleuse-verre'] .task-manager-health.is-ok {
     color: rgb(0, 255, 85)
@@ -2020,9 +1995,6 @@
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .msg.user .msg-body {
     border-color: rgba(255, 60, 158, 0.58);
     background: rgba(107, 0, 54, 0.48)
-}
-:root[data-theme='nebuleuse-verre'] .cosmic-outline .chat-welcome {
-    background: rgba(10, 10, 10, 0.26)
 }
 :root[data-theme='nebuleuse-verre'] .cosmic-outline .composer {
     background: rgba(10, 10, 10, 0.42)

@@ -111,9 +111,14 @@ async function lancer(
   resultat: Awaited<ReturnType<Orchestrator['run']>>
   provider: JugeEtendueProvider
   questions: ModelQuestion[]
+  onRunSettled: ReturnType<typeof vi.fn>
+  finsDeCopie: Array<Record<string, unknown> | undefined>
 }> {
   const provider = new JugeEtendueProvider(valideAuJuge)
   const questions: ModelQuestion[] = []
+  const onRunSettled = vi.fn()
+  const finsDeCopie: Array<Record<string, unknown> | undefined> = []
+  const copies = makeTestWorktrees('C:\\base')
   const orch = new Orchestrator({
     registry: new ProviderRegistry().register(provider),
     roles: new RoleModelConfig({
@@ -123,7 +128,14 @@ async function lancer(
     cost: new CostAggregator(),
     trust: new TrustLedger(),
     executionWorkspace: 'C:\\base',
-    worktrees: makeTestWorktrees('C:\\base'),
+    worktrees: {
+      ...copies,
+      end: (runId, options) => {
+        finsDeCopie.push(options as Record<string, unknown> | undefined)
+        return copies.end(runId, options)
+      }
+    },
+    onRunSettled,
     execPhases: ['build'],
     currentWorkflow: () => ({ graph: GRAPHE }),
     // `null` = aucune fenêtre branchée (l'app sans interface) : la dépendance est absente.
@@ -145,7 +157,7 @@ async function lancer(
     undefined,
     []
   )
-  return { resultat, provider, questions }
+  return { resultat, provider, questions, onRunSettled, finsDeCopie }
 }
 
 describe('objection d’étendue répétée en mode jusqu’au vert : pause et question', () => {
@@ -182,5 +194,27 @@ describe('objection d’étendue répétée en mode jusqu’au vert : pause et q
     const { resultat, provider } = await lancer(null)
     expect(provider.promptsBuild).toHaveLength(2)
     expect(resultat.gateReasons.join(' | ')).toMatch(/restée sans réponse/)
+  })
+
+  /*
+   * LE MOTIF DIT CE QUI ARRIVE VRAIMENT (conv-1342, 2026-10-30). Sur conv-1337, la fenêtre s'est
+   * fermée sans réponse : `onRunSettled` a effacé l'état du run (`os.ts`) alors que le motif
+   * promettait « Le run reste reprenable ». Garder cet état ne corrigerait rien : le run repartirait
+   * seul au démarrage suivant (`index.ts`), c'est-à-dire une réparation que personne n'a tranchée.
+   */
+  it('sans réponse, le run est clos et le motif le dit : seule sa copie reste', async () => {
+    const { resultat, provider, onRunSettled, finsDeCopie } = await lancer(undefined)
+
+    expect(provider.promptsBuild).toHaveLength(2)
+    // Les faits que le motif doit décrire : état effacé, copie ni fusionnée ni mise en suspens.
+    expect(onRunSettled).toHaveBeenCalledTimes(1)
+    expect(finsDeCopie).toHaveLength(1)
+    expect(finsDeCopie[0]).toMatchObject({ merge: false })
+    expect(finsDeCopie[0]).not.toHaveProperty('suspendu')
+
+    const motifs = resultat.gateReasons.join(' | ')
+    expect(motifs).not.toMatch(/reprenable/i)
+    expect(motifs).toContain('ne peut pas être repris')
+    expect(motifs).toContain('restent dans sa copie, non publiés')
   })
 })

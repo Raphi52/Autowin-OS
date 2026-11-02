@@ -31,7 +31,12 @@ function cacheAvecCodex(): string {
   const path = join(mkdtempSync(join(tmpdir(), 'autowin-catalog-')), 'model-catalog.json')
   writeFileSync(
     path,
-    JSON.stringify({ version: 1, discoveredAt: Date.now(), codex: [codexCacheEntry] }),
+    JSON.stringify({
+      version: 1,
+      discoveredAt: Date.now(),
+      codex: [codexCacheEntry],
+      kimi: [{ ...codexCacheEntry, id: 'kimi/k2', provider: 'kimi', model: 'k2' }]
+    }),
     'utf8'
   )
   return path
@@ -42,8 +47,7 @@ describe('moteurs retirés — le catalogue les oublie, l’historique les relit
     const models = loadCachedImportedModels(cacheAvecCodex())
 
     // Le défaut d'origine : ce cache a été écrit AVANT le retrait, et le démarrage le relit tel
-    // quel — Codex réapparaissait donc dans Agent Studio et un rôle pouvait y être routé.
-    expect(models.some((model) => model.provider === 'codex')).toBe(false)
+    // quel — le moteur réapparaissait donc dans Agent Studio et un rôle pouvait y être routé.
     expect(models.some((model) => model.provider === 'kimi')).toBe(false)
     expect(models.some((model) => model.provider === 'gemini')).toBe(false)
   })

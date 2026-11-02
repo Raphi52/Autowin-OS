@@ -38,6 +38,15 @@ describe('jaugesFausses : une jauge visible change ce qu’on regarde', () => {
       { nom: 'Rayon', raison: "cachee alors qu'elle change la 2" }
     ])
   })
+
+  // conv-1382 (2026-10-31) : chaque proposition garde ses valeurs. Réglée sur la 1, une jauge qui
+  // change aussi la 2 écrase le réglage qu'on y avait fait.
+  it('refuse une jauge qui change d’autres propositions que celle qu’on règle', () => {
+    expect(
+      jaugesFausses([{ ...jauge([1, 2], [1, 2]), fuites: [{ depuis: 1, vers: [2, 3] }] }])
+    ).toEqual([{ nom: 'Rayon', raison: 'reglee sur la 1, change aussi la 2, 3' }])
+    expect(jaugesFausses([{ ...jauge([1, 2], [1, 2]), fuites: [] }])).toEqual([])
+  })
 })
 
 describe('lireScenario : ce qui part vers Electron', () => {

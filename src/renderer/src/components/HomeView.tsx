@@ -47,11 +47,14 @@ import { memoriserOuvertureReglages, reglagesSontOuverts } from './home-reglages
 import {
   abonnerFondAccueil,
   choisirFondAccueil,
-  DECOR_DEFAUT,
+  FOND_DEFAUT,
+  FOND_FALAISE,
   FONDS_ACCUEIL,
   lireFondAccueil,
   type FondAccueil
 } from './fond-accueil'
+import { piloteQuartier } from '../quartier/quartier-pont'
+import { useQuartierAccueil } from '../quartier/useQuartierAccueil'
 import {
   instantaneConversationsEnAttente,
   retirerConversationEnAttente,
@@ -61,6 +64,8 @@ import {
 import { autowinStorageKey } from '../storage-keys'
 import { formaterDate, langueCourante } from '../langue'
 import { traduireAccueil, useTextesAccueil, type CleAccueil } from '../textes-ecrans/accueil'
+import type { PhaseAgent } from '../quartier/agents-quartier'
+import type { Metier } from '../quartier/quartier-metiers'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
 import { InterlocuteursWidget } from './InterlocuteursWidget'
@@ -111,6 +116,25 @@ const OUTLOOK_REFRESH_MS = 60_000
  * Sans lui, alterner entre Autowin et une autre application lancerait un appel COM par aller-retour.
  */
 const OUTLOOK_ECART_MIN_MS = 15_000
+
+/** Le nom de la vue qu'ouvre chaque objet du décor : ce sont les noms du menu de gauche. */
+const VUE_DE_L_OBJET: Readonly<Record<string, string>> = {
+  chat: 'Chat',
+  agent: 'Agent Studio',
+  knowledge: 'Knowledge',
+  observatory: 'Observatory',
+  task: 'Task Manager',
+  worktree: 'Worktrees',
+  besoins: 'Board',
+  tests: 'Maintenance',
+  settings: 'Settings'
+}
+
+/** Ce qu'on lit au survol d'un tanuki : son état s'il en a un, sinon ce qu'il est en train de faire. */
+function cleDeLActivite(phase: PhaseAgent, metier: Metier | null): CleAccueil {
+  if (phase === 'travail' && metier) return `quartier.metier.${metier}`
+  return `quartier.phase.${phase}`
+}
 
 interface TaskSnapshotLike {
   tasks: {
@@ -263,7 +287,7 @@ export function HomeView({
       return !ouvert
     })
   }, [])
-  const [visibilite, setVisibilite] = useState<HomeWidgetsVisibility>(() =>
+  const [visibiliteTuiles, setVisibiliteTuiles] = useState<HomeWidgetsVisibility>(() =>
     lireVisibilite(window.localStorage)
   )
   /**
@@ -271,7 +295,9 @@ export function HomeView({
    * planetes »). Lu à la même source que le décor (`fond-accueil.ts`) : le menu montre le fond
    * réellement affiché, et le choisir change le décor sans redémarrer.
    */
-  const fond = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => DECOR_DEFAUT)
+  const fond = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => FOND_DEFAUT)
+  /** Sur le Quartier, les tuiles vivent dans leurs tours : elles ne s'affichent que sorties. */
+  const quartier = fond === FOND_FALAISE
   /**
    * LE NOM DE L'ASSISTANT, RELU EN DIRECT.
    *
@@ -292,8 +318,8 @@ export function HomeView({
     }
   }, [])
 
-  const basculerVisibilite = useCallback((id: HomeWidgetId): void => {
-    setVisibilite((courante) => {
+  const basculerVisibiliteTuile = useCallback((id: HomeWidgetId): void => {
+    setVisibiliteTuiles((courante) => {
       const suivante = basculerWidget(courante, id)
       ecrireVisibilite(window.localStorage, suivante)
       return suivante
@@ -315,6 +341,26 @@ export function HomeView({
 
   const surfaceRef = useRef<HTMLDivElement | null>(null)
   const headerRef = useRef<HTMLDivElement | null>(null)
+  const ouvrirConversation = useCallback(
+    (id: string): void => {
+      // Ouvrir, c'est y revenir : la conversation quitte la liste au moment ou on la demande.
+      retirerConversationEnAttente(id)
+      window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: id }))
+      onNavigate?.('chat')
+    },
+    [onNavigate]
+  )
+  const etiquetteRef = useRef<HTMLDivElement | null>(null)
+  const scene = useQuartierAccueil({
+    etiquetteRef,
+    actif: quartier && active,
+    surfaceRef,
+    onNavigate,
+    ouvrirConversation
+  })
+  // Une seule façon de lire les tuiles : le Quartier répond à la même question que les autres fonds.
+  const visibilite = quartier ? scene.visibilite : visibiliteTuiles
+  const basculerVisibilite = quartier ? scene.basculerTuile : basculerVisibiliteTuile
   const holdRef = useRef<HoldState | null>(null)
   /**
    * Compteur du dernier plan attribue. Reste une REF : il n'est ni lu ni affiche par le rendu, il
@@ -455,6 +501,13 @@ export function HomeView({
    * La cle de reglage du decor est partie avec lui : elle vit maintenant dans `DecorDeFond`, seul
    * proprietaire de la scene.
    * ---------------------------------------------------------------- */
+
+  // Le menu de gauche cache le bord de la fenêtre : le Quartier se cale sur ce qui reste, et suit le
+  // menu quand on le replie.
+  useEffect(() => {
+    const rect = surfaceRef.current?.getBoundingClientRect()
+    if (quartier && active && rect && rect.width > 0) piloteQuartier()?.poserCadre(rect.left)
+  }, [quartier, active, surface])
 
   /* ---------------------------------------------------------------- *
    * Les données. Lues seulement quand la vue est affichée.
@@ -611,15 +664,6 @@ export function HomeView({
   const enAttente = useSyncExternalStore(
     souscrireConversationsEnAttente,
     instantaneConversationsEnAttente
-  )
-  const ouvrirConversation = useCallback(
-    (id: string): void => {
-      // Ouvrir, c'est y revenir : la conversation quitte la liste au moment ou on la demande.
-      retirerConversationEnAttente(id)
-      window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: id }))
-      onNavigate?.('chat')
-    },
-    [onNavigate]
   )
   /**
    * Le compteur de la tuile Mails ne compte QUE les personnes.
@@ -978,7 +1022,50 @@ export function HomeView({
   }, [])
 
   return (
-    <div className="home-view" ref={surfaceRef} data-testid="home-view">
+    <div
+      className="home-view"
+      ref={surfaceRef}
+      data-testid="home-view"
+      data-fond={quartier ? FOND_FALAISE : undefined}
+      data-sur-cible={scene.survol ? 'true' : undefined}
+      onPointerMove={quartier ? scene.auSurvol : undefined}
+      onPointerLeave={quartier ? scene.horsChamp : undefined}
+      onClick={quartier ? scene.auClic : undefined}
+    >
+      {quartier ? (
+        <div
+          className="quartier-etiquette"
+          ref={etiquetteRef}
+          data-testid="quartier-etiquette"
+          data-visible={scene.survol ? 'true' : undefined}
+          aria-hidden="true"
+        >
+          {scene.survol?.type === 'vue' ? (
+            <>
+              <b>{t(`quartier.objet.${scene.survol.cle}` as CleAccueil)}</b>
+              <span>{t('quartier.ouvre', { vue: VUE_DE_L_OBJET[scene.survol.cle] ?? '' })}</span>
+            </>
+          ) : null}
+          {scene.survol?.type === 'tour' ? (
+            <>
+              <b>{titreWidget(scene.survol.widget)}</b>
+              <span>
+                {t(scene.sorties.has(scene.survol.widget) ? 'quartier.rentrer' : 'quartier.sortir')}
+              </span>
+            </>
+          ) : null}
+          {scene.survol?.type === 'agent' ? (
+            <>
+              <b>{scene.survol.titre}</b>
+              <span>
+                {scene.agentSurvole
+                  ? t(cleDeLActivite(scene.agentSurvole.phase, scene.agentSurvole.metier))
+                  : null}
+              </span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       {/* UNE seule rangée, qui se replie. Deux blocs positionnés en absolu se recouvraient dès que la
           fenêtre devenait étroite : le titre passait sous les boutons. Une rangée qui se replie rend
           ce chevauchement impossible, quelle que soit la largeur. */}
@@ -1008,7 +1095,8 @@ export function HomeView({
               </svg>
             </button>
           </div>
-          {noticeVisible ? <p>{t('aide.tuiles')}</p> : null}
+          {/* Sur le Quartier, il n'y a pas de tuile à poser : elles sont dans leurs tours. */}
+          {noticeVisible && !quartier ? <p>{t('aide.tuiles')}</p> : null}
           {erreurOuverture !== null ? (
             <p className="home-view__alerte" role="status">
               {erreurOuverture}
@@ -1186,6 +1274,26 @@ export function HomeView({
                 >
                   {compteurs.personnes}
                 </span>
+              ) : null}
+              {/* Au bout de l'enseigne, après tout le reste : c'est là que la main va chercher une
+                  croix. Un sceau rouge sur le bois, et une vraie cible de 26 px. */}
+              {quartier ? (
+                <button
+                  type="button"
+                  className="home-tile__rentrer"
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    scene.basculerTuile(box.id)
+                  }}
+                  data-testid={`home-rentrer-${box.id}`}
+                  title={t('quartier.rentrer')}
+                  aria-label={t('quartier.rentrer')}
+                >
+                  <svg viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+                    <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+                  </svg>
+                </button>
               ) : null}
             </div>
             <div className="home-tile__panel">

@@ -34,9 +34,7 @@ import { ObservatoryView } from './components/ObservatoryView'
 import { WorktreeView } from './components/WorktreeView'
 import { UpdateBanner } from './components/UpdateBanner'
 import { pickTurnToResume } from './components/resume-unfinished'
-import { TicketsView } from './components/TicketsView'
 import { CarteDesBesoinsView } from './components/CarteDesBesoinsView'
-import { HdeskGestionView } from './components/HdeskGestionView'
 import { TestsView } from './components/TestsView'
 import { TaskManagerView } from './components/TaskManagerView'
 import { AgentStudioView } from './components/AgentStudioView'
@@ -47,6 +45,7 @@ import {
   APP_DESTINATIONS,
   resolveAppLocation,
   type AgentStudioSection,
+  type BoardSection,
   type SettingsSection,
   type Tab,
   type TaskManagerSection
@@ -187,6 +186,12 @@ export function MainApp(): React.JSX.Element {
    */
   const [moteurPerime, setMoteurPerime] = useState<string | null>(null)
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['accueil']))
+  /**
+   * « Va sur les bureaux cachés » : un panneau du chat (conv-1378). Un compteur et pas un booléen :
+   * redemander rouvre un panneau refermé. Une prop et pas un événement de fenêtre : chat jamais monté,
+   * l'événement n'aurait aucun auditeur.
+   */
+  const [demandeBureaux, setDemandeBureaux] = useState(0)
   /** Lu par l'écouteur d'événements (monté une fois) : le chat est-il déjà monté ? */
   const chatMonteRef = useRef(false)
   useEffect(() => {
@@ -223,6 +228,8 @@ export function MainApp(): React.JSX.Element {
   // Planification par défaut : c'est le contenu historique de Task Manager. Le Watchdog est le second
   // écran, atteignable par le sélecteur ou par un deep-link d'agent (« va sur le watchdog »).
   const [taskManagerSection, setTaskManagerSection] = useState<TaskManagerSection>('planification')
+  // Onglet du Board (conv-1397) : « tickets » y mène depuis que l'écran Tickets en est un onglet.
+  const [boardSection, setBoardSection] = useState<BoardSection>('demandes')
   const [navigationOrigin] = useState(() => `renderer-${globalThis.crypto.randomUUID()}`)
   const navigationGeneration = useRef(0)
 
@@ -359,6 +366,10 @@ export function MainApp(): React.JSX.Element {
       if (location.destination === 'task-manager' && location.section) {
         setTaskManagerSection(location.section as TaskManagerSection)
       }
+      if (location.destination === 'besoins' && location.section) {
+        setBoardSection(location.section as BoardSection)
+      }
+      if (location.panneau === 'bureaux-caches') setDemandeBureaux((n) => n + 1)
       activateTab(location.destination)
     },
     [activateTab]
@@ -705,7 +716,11 @@ export function MainApp(): React.JSX.Element {
         {visitedTabs.has('chat') && (
           <div className={`view-slot${tab === 'chat' ? ' is-active' : ''}`}>
             <VueMesuree id="chat">
-              <ChatView isActive={tab === 'chat'} onInspectTurn={inspectTurn} />
+              <ChatView
+                isActive={tab === 'chat'}
+                onInspectTurn={inspectTurn}
+                demandeBureaux={demandeBureaux}
+              />
             </VueMesuree>
           </div>
         )}
@@ -764,29 +779,14 @@ export function MainApp(): React.JSX.Element {
             </VueMesuree>
           </div>
         )}
-        {visitedTabs.has('hdesk') && (
-          <div className={`view-slot${tab === 'hdesk' ? ' is-active' : ''}`}>
-            <VueMesuree id="hdesk">
-              <HdeskGestionView
-                active={tab === 'hdesk'}
-                onOpenConversation={openTaskConversation}
-              />
-            </VueMesuree>
-          </div>
-        )}
-        {visitedTabs.has('tickets') && (
-          <div className={`view-slot${tab === 'tickets' ? ' is-active' : ''}`}>
-            <VueMesuree id="tickets">
-              <TicketsView active={tab === 'tickets'} />
-            </VueMesuree>
-          </div>
-        )}
         {visitedTabs.has('besoins') && (
           <div className={`view-slot${tab === 'besoins' ? ' is-active' : ''}`}>
             <VueMesuree id="besoins">
               <CarteDesBesoinsView
                 active={tab === 'besoins'}
                 onOpenConversation={openTaskConversation}
+                section={boardSection}
+                onSectionChange={setBoardSection}
               />
             </VueMesuree>
           </div>

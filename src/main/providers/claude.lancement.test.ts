@@ -25,10 +25,15 @@ const cap = vi.hoisted(() => ({
 vi.mock('../claude-accounts', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../claude-accounts')>()),
   // Même contrat que le vrai : la variable héritée part toujours, celle du compte actif est posée.
-  withClaudeAccountEnv: (base: Record<string, string | undefined>) => {
+  // Un compte passé par l'appelant (fil au compte choisi) prime, comme dans le vrai.
+  withClaudeAccountEnv: (
+    base: Record<string, string | undefined>,
+    compte?: Record<string, string>
+  ) => {
     const env = { ...base }
     delete env.CLAUDE_CONFIG_DIR
-    if (cap.compteActif) env.CLAUDE_CONFIG_DIR = cap.compteActif
+    const dossier = compte ? compte.CLAUDE_CONFIG_DIR : cap.compteActif
+    if (dossier) env.CLAUDE_CONFIG_DIR = dossier
     return env
   }
 }))
@@ -158,6 +163,46 @@ describe('environnement du relais Windows', () => {
     await drainer((await adaptateur()).send([{ role: 'user', content: 'x' }])).catch(
       () => undefined
     )
+    expect(cap.appels).toHaveLength(1)
+    expect(cap.appels[0]!.env.CLAUDE_CONFIG_DIR).toBeUndefined()
+  })
+
+  /*
+   * Cas réel de conv-1403 (conv-1416) : le compte actif de l'application et le compte choisi pour le
+   * fil diffèrent. Le CLI lisait le premier, quel que soit le clic de l'utilisateur.
+   */
+  it('fil au compte choisi : le CLI part dans le dossier de CE compte, pas dans celui du compte actif', async () => {
+    process.env.AUTOWIN_RUN_JOURNAL_ROOT = racineJournal
+    cap.compteActif = 'C:/compte-actif'
+    const { configureClaudeCompteDuFil } = await import('../claude-accounts')
+    configureClaudeCompteDuFil((fil) =>
+      fil === 'conv-A'
+        ? { id: 'compte-2', nom: 'Deux', env: { CLAUDE_CONFIG_DIR: 'C:/compte-du-fil' } }
+        : undefined
+    )
+    try {
+      await drainer(
+        (await adaptateur()).send([{ role: 'user', content: 'x' }], { conversationId: 'conv-A' })
+      ).catch(() => undefined)
+    } finally {
+      configureClaudeCompteDuFil(() => undefined)
+    }
+    expect(cap.appels).toHaveLength(1)
+    expect(cap.appels[0]!.env.CLAUDE_CONFIG_DIR).toBe('C:/compte-du-fil')
+  })
+
+  it('fil choisi sur le compte par défaut : aucune variable, même si un autre compte est actif', async () => {
+    process.env.AUTOWIN_RUN_JOURNAL_ROOT = racineJournal
+    cap.compteActif = 'C:/compte-actif'
+    const { configureClaudeCompteDuFil } = await import('../claude-accounts')
+    configureClaudeCompteDuFil(() => ({ id: 'default', nom: 'Défaut', env: {} }))
+    try {
+      await drainer(
+        (await adaptateur()).send([{ role: 'user', content: 'x' }], { conversationId: 'conv-A' })
+      ).catch(() => undefined)
+    } finally {
+      configureClaudeCompteDuFil(() => undefined)
+    }
     expect(cap.appels).toHaveLength(1)
     expect(cap.appels[0]!.env.CLAUDE_CONFIG_DIR).toBeUndefined()
   })

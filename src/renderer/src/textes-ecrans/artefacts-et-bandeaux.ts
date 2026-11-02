@@ -223,7 +223,9 @@ export const TEXTES_FR = {
 
   // ModelQuestionPopup (« Loop Builder » et « Chat », noms de vues, restent en dur)
   'question.echecEnvoi': "La réponse n'a pas pu être envoyée : {erreur}. Réessaie.",
-  'question.enAttente': '{nombre} questions en attente',
+  'question.introuvable': 'Cette question n’a pas pu s’afficher.',
+  'question.introuvableAide':
+    'Passer revient à ne pas répondre : le travail qui attendait s’arrête.',
   'question.titre': 'Le modèle a besoin de toi',
   'question.reponseLibre': 'Réponse libre',
   'question.placeholder': 'Répondre au modèle…',
@@ -415,7 +417,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'maj.faireReparer': 'Get it repaired',
 
   'question.echecEnvoi': 'The answer could not be sent: {erreur}. Try again.',
-  'question.enAttente': '{nombre} questions waiting',
+  'question.introuvable': 'This question could not be displayed.',
+  'question.introuvableAide': 'Skipping counts as no answer: the work that was waiting stops.',
   'question.titre': 'The model needs you',
   'question.reponseLibre': 'Free answer',
   'question.placeholder': 'Answer the model…',

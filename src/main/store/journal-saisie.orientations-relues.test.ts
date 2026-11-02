@@ -15,7 +15,7 @@ import {
  * relecture ET la jointure vers le tour infléchi, qui est l'ancre d'affichage dans le fil.
  */
 describe('relecture des consignes données pendant un tour', () => {
-  it('rend les orientations avec le tour qu’elles ont infléchi, et rien d’autre', () => {
+  it('rend les orientations avec le tour qu’elles ont infléchi, et rien d’autre', async () => {
     const racine = mkdtempSync(join(tmpdir(), 'journal-orientations-'))
     journaliserSaisie(
       { conversationId: 'conv-1', texte: 'demande initiale', voie: 'message' },
@@ -31,27 +31,27 @@ describe('relecture des consignes données pendant un tour', () => {
       (saisie) => saisie.voie === 'orientation'
     )
     expect(orientation).toBeDefined()
-    expect(rattacherSaisieAuTour('conv-1', 'turn-7', 'non, garde le bouton', racine)).toBe(true)
+    expect(await rattacherSaisieAuTour('conv-1', 'turn-7', 'non, garde le bouton', racine)).toBe(true)
 
-    const relues = lireOrientationsRattachees('conv-1', racine)
+    const relues = await lireOrientationsRattachees('conv-1', racine)
     expect(relues).toHaveLength(1)
     expect(relues[0]?.texte).toBe('non, garde le bouton')
     expect(relues[0]?.turnId).toBe('turn-7')
     // Filtre STRICT sur la conversation : le texte d'un autre fil ne doit jamais fuiter ici.
-    expect(lireOrientationsRattachees('conv-2', racine).map((item) => item.texte)).toEqual([
+    expect((await lireOrientationsRattachees('conv-2', racine)).map((item) => item.texte)).toEqual([
       'autre fil'
     ])
   })
 
-  it('rend une orientation sans tour quand aucun lien n’a été posé', () => {
+  it('rend une orientation sans tour quand aucun lien n’a été posé', async () => {
     const racine = mkdtempSync(join(tmpdir(), 'journal-orientations-orphelines-'))
     journaliserSaisie({ conversationId: 'conv-9', texte: 'attends', voie: 'orientation' }, racine)
-    const relues = lireOrientationsRattachees('conv-9', racine)
+    const relues = await lireOrientationsRattachees('conv-9', racine)
     expect(relues).toHaveLength(1)
     expect(relues[0]?.turnId).toBeUndefined()
   })
 
-  it('rend une liste vide quand le journal n’existe pas', () => {
-    expect(lireOrientationsRattachees('conv-1', mkdtempSync(join(tmpdir(), 'vide-')))).toEqual([])
+  it('rend une liste vide quand le journal n’existe pas', async () => {
+    expect(await lireOrientationsRattachees('conv-1', mkdtempSync(join(tmpdir(), 'vide-')))).toEqual([])
   })
 })

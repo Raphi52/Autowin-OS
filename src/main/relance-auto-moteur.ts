@@ -1,10 +1,10 @@
-import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, rmSync, type FSWatcher } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import type { FSWatcher } from 'node:fs'
+import { mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
+import { execFileHorsFil, type ErreurHorsFil } from './execution-hors-fil'
 import { surveillerDossier } from './surveiller-dossier'
 
 /**
@@ -162,6 +162,30 @@ export interface RelanceMoteurArmee {
     relanceEnAttente: boolean
     preavisEnCours: boolean
     demandeEnFile: string | null
+  }
+}
+
+/**
+ * Deux demandes en une : les deux consignes sont reposées, chacune isolément — une pose qui échoue
+ * n'empêche pas celle de l'autre fil ; la première erreur remonte ensuite au journal de la relance.
+ */
+function cumulerDemandes(
+  premiere: DemandeDeRedemarrage,
+  seconde: DemandeDeRedemarrage
+): DemandeDeRedemarrage {
+  return {
+    cause: `${premiere.cause} · ${seconde.cause}`,
+    avantRelance: () => {
+      let erreur: unknown = null
+      for (const poser of [premiere.avantRelance, seconde.avantRelance]) {
+        try {
+          poser?.()
+        } catch (e) {
+          erreur ??= e
+        }
+      }
+      if (erreur !== null) throw erreur
+    }
   }
 }
 
@@ -364,8 +388,10 @@ export function armerRelanceAutoMoteur(
     arreter: arreterTout,
     mettreEnFile: (nouvelle) => {
       if (arrete || relancee) return false
-      // Une seconde demande remplace la première : une seule relance, avec la consigne la plus récente.
-      demande = nouvelle
+      // Une seconde demande S'AJOUTE à la première : une seule relance, et la consigne de CHAQUE fil
+      // reposée avant elle. La remplacer perdait la reprise du premier fil (conv-1306, 2026-10-30 :
+      // conv-1329 en file à 15:50 effaçait la demande de conv-1306 de 15:31).
+      demande = demande ? cumulerDemandes(demande, nouvelle) : nouvelle
       journal(`redémarrage mis en file : ${nouvelle.cause}`)
       // Un moteur qui ne compile pas garde la relance bloquée (`annulerRelance`) : la demande reste
       // mémorisée et repart à la prochaine compilation réussie, jamais vers un code cassé.
@@ -454,24 +480,27 @@ const SORTIE_MAX = 4_000
  * temporaire supprimé ensuite. Lancé avec l'exécutable de l'app en mode Node
  * (`ELECTRON_RUN_AS_NODE`) : aucune dépendance à un `node` présent sur le PATH.
  */
-export function compilerLeMoteur(racine: string, executable: string): Promise<ResultatCompilation> {
-  return new Promise((resolve) => {
-    let sortie = ''
-    let dossier = ''
-    try {
-      dossier = mkdtempSync(join(tmpdir(), 'autowin-moteur-'))
-    } catch (e) {
-      resolve({ ok: false, erreur: `dossier temporaire impossible : ${e}` })
-      return
-    }
-    const nettoyer = (): void => {
-      try {
-        rmSync(dossier, { recursive: true, force: true })
-      } catch {
-        /* dossier temporaire : le système le videra */
-      }
-    }
-    const enfant = spawn(
+export async function compilerLeMoteur(
+  racine: string,
+  executable: string
+): Promise<ResultatCompilation> {
+  let dossier = ''
+  try {
+    dossier = await mkdtemp(join(tmpdir(), 'autowin-moteur-'))
+  } catch (e) {
+    return { ok: false, erreur: `dossier temporaire impossible : ${e}` }
+  }
+  // Suppression ASYNCHRONE : `rmSync` récursif a tenu la fenêtre 9,6 s (`gels.jsonl`, 2026-10-31 —
+  // conv-1413).
+  const nettoyer = (): Promise<void> =>
+    rm(dossier, { recursive: true, force: true }).catch(() => {
+      /* dossier temporaire : le système le videra */
+    })
+  // Hors du fil principal : la CRÉATION de ce processus a tenu la fenêtre 68,8 s d'un seul coup
+  // (`gels.jsonl`, 2026-10-31, 94,5 s cumulées — conv-1413). La compilation se relance dès qu'un fil
+  // modifie le moteur.
+  try {
+    await execFileHorsFil(
       executable,
       [
         join(racine, 'node_modules', 'electron-vite', 'bin', 'electron-vite.js'),
@@ -488,43 +517,32 @@ export function compilerLeMoteur(racine: string, executable: string): Promise<Re
         // NO_COLOR : picocolors colore sous Windows même vers un tube ; la sortie finit dans un bandeau.
         env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NO_COLOR: '1' },
         windowsHide: true,
-        stdio: ['ignore', 'pipe', 'pipe']
+        timeout: COMPILATION_MAX_MS,
+        maxBuffer: 64 * 1024 * 1024
       }
     )
-    const garder = (morceau: Buffer): void => {
-      sortie = (sortie + morceau.toString()).slice(-SORTIE_MAX)
+  } catch (erreur) {
+    await nettoyer()
+    const e = erreur as ErreurHorsFil
+    // Un code TEXTE (ENOENT, EACCES…) = le processus n'a jamais démarré.
+    if (typeof e.code === 'string' && e.code !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+      return { ok: false, erreur: `compilation impossible à lancer : ${e.message}` }
     }
-    enfant.stdout?.on('data', garder)
-    enfant.stderr?.on('data', garder)
-    const delai = setTimeout(() => enfant.kill(), COMPILATION_MAX_MS)
-    delai.unref?.()
-    enfant.on('error', (e) => {
-      clearTimeout(delai)
-      nettoyer()
-      resolve({ ok: false, erreur: `compilation impossible à lancer : ${e.message}` })
-    })
-    enfant.on('close', (code, signal) => {
-      clearTimeout(delai)
-      if (code !== 0) {
-        nettoyer()
-        resolve({
-          ok: false,
-          erreur:
-            sortie.trim() ||
-            `compilation arrêtée (code ${code ?? '?'}, signal ${signal ?? 'aucun'})`
-        })
-        return
-      }
-      // Le dossier temporaire part APRÈS la lecture : l'empreinte est asynchrone (conv-1077), un
-      // `finally` synchrone l'effacerait pendant qu'elle le lit encore.
-      empreinteDuCodeCompile(dossier)
-        .then(
-          (empreinte) => resolve({ ok: true, empreinte }),
-          (e) => resolve({ ok: false, erreur: `empreinte illisible : ${e}` })
-        )
-        .finally(nettoyer)
-    })
-  })
+    const sortie = `${e.stdout ?? ''}${e.stderr ?? ''}`.slice(-SORTIE_MAX).trim()
+    const code = typeof e.code === 'number' ? e.code : '?'
+    return {
+      ok: false,
+      erreur: sortie || `compilation arrêtée (code ${code}, signal ${e.signal ?? 'aucun'})`
+    }
+  }
+  // Le dossier temporaire part APRÈS la lecture : l'empreinte est asynchrone (conv-1077).
+  try {
+    return { ok: true, empreinte: await empreinteDuCodeCompile(dossier) }
+  } catch (e) {
+    return { ok: false, erreur: `empreinte illisible : ${e}` }
+  } finally {
+    await nettoyer()
+  }
 }
 
 /**

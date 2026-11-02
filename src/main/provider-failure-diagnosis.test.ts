@@ -93,7 +93,7 @@ describe('describeFanoutFailure — le message qui manquait', () => {
     expect(message).toContain('codex')
     expect(message).toContain('gpt-5.6-terra')
     expect(message).toContain('non authentifié')
-    expect(message).toContain('Se connecter')
+    expect(message).toContain('Se reconnecter')
   })
 
   it('des causes de types DIFFÉRENTS → aucun geste commun (il serait trompeur)', () => {
@@ -140,7 +140,7 @@ describe('explainRoleFailure — hors fan-out, le binding est nommé', () => {
     expect(message).toContain('codex (gpt-5.6-terra)')
     // Le message d'origine reste LISIBLE tel quel.
     expect(message).toContain('lance npm run codex:login')
-    expect(message).toContain('Se connecter')
+    expect(message).toContain('Se reconnecter')
   })
 
   it('le libellé n’est PAS re-préfixé : « Phase sous-tâche X » se lisait mal', () => {

@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
-  AnnotationNavigateur,
+  ElementChoisiNavigateur,
   EtatNavigateur,
   GesteNavigateur,
   OngletNavigateur,
@@ -29,7 +29,7 @@ import {
  *
  * Entrées qui doivent faire échouer ce fichier : la page native laissée posée alors que le panneau
  * est caché (autre écran, menu ⋮, aperçu, démontage) — elle flotterait au-dessus du DOM ; un
- * raccourci qui ne fait rien ; la carte d'accord absente ou muette ; des annotations qui n'arrivent
+ * raccourci qui ne fait rien ; la carte d'accord absente ou muette ; un élément choisi qui n'arrive
  * pas dans la saisie ; un lien localhost qui part dans le navigateur du système.
  */
 
@@ -63,10 +63,9 @@ function onglet(id: string, url = 'http://localhost:5173/'): OngletNavigateur {
   }
 }
 
-function annotation(id: string, commentaire: string): AnnotationNavigateur {
+function element(id: string): ElementChoisiNavigateur {
   return {
-    id: `annotation-${id}0000000`,
-    ongletId: 'onglet-1',
+    id: `element-${id}0000000`,
     url: 'http://localhost:5173/',
     selecteur: 'main > button.primaire',
     texteElement: 'Envoyer',
@@ -77,8 +76,6 @@ function annotation(id: string, commentaire: string): AnnotationNavigateur {
       fond: 'rgb(255, 255, 255)',
       marges: 'marge 0px · retrait 8px'
     },
-    rect: { x: 10, y: 20, largeur: 100, hauteur: 30 },
-    commentaire,
     captureDataUrl: CAPTURE
   }
 }
@@ -105,12 +102,12 @@ function simulerNavigateur(initial: Partial<EtatNavigateur> = {}) {
     ongletActif: null,
     agentPilote: false,
     mode: null,
-    nombreAnnotations: 0,
+    nombreElementsChoisis: 0,
     gestes: [],
     pilotage: 'libre',
     ...initial
   }
-  let annotations: AnnotationNavigateur[] = []
+  let elementsChoisis: ElementChoisiNavigateur[] = []
   let reglages: ReglagesNavigateur = { garderCookies: true, ouvrirLiensDuChatIci: false }
   const api = {
     etat: vi.fn(async (conversationId: string) => ({ ...etat, conversationId })),
@@ -125,9 +122,11 @@ function simulerNavigateur(initial: Partial<EtatNavigateur> = {}) {
     fermerOnglet: vi.fn(async () => undefined),
     poserCadre: vi.fn(async () => undefined),
     basculerMode: vi.fn(async () => undefined),
-    annotations: vi.fn(async () => annotations.map((a) => ({ ...a }))),
-    supprimerAnnotation: vi.fn(async () => undefined),
-    viderAnnotations: vi.fn(async () => undefined),
+    prendreElementsChoisis: vi.fn(async () => {
+      const pris = elementsChoisis
+      elementsChoisis = []
+      return pris
+    }),
     repondreAccord: vi.fn(async () => undefined),
     reglages: {
       lire: vi.fn(async () => ({ ...reglages })),
@@ -155,8 +154,8 @@ function simulerNavigateur(initial: Partial<EtatNavigateur> = {}) {
         await vider()
       })
     },
-    poserAnnotations(liste: AnnotationNavigateur[]): void {
-      annotations = liste
+    poserElementsChoisis(liste: ElementChoisiNavigateur[]): void {
+      elementsChoisis = liste
     },
     poserReglages(partiel: Partial<ReglagesNavigateur>): void {
       reglages = { ...reglages, ...partiel }
@@ -267,28 +266,27 @@ describe('decouperAdresse — ce que la capsule montre au repos', () => {
 })
 
 describe('blocPourLeChat — ce que reçoit la saisie', () => {
-  it('annotations : n°, URL, sélecteur, extrait, styles, commentaire, et la capture en image', () => {
-    const { texte, images } = blocPourLeChat(
-      [annotation('a', 'plus gros'), annotation('b', '')],
-      false
-    )
-    expect(texte).toContain('[Navigateur intégré — 2 annotations]')
-    expect(texte).toContain('1. http://localhost:5173/')
+  it('élément choisi : URL, sélecteur, extrait, styles, et la capture en image', () => {
+    const { texte, images } = blocPourLeChat(element('a'))
+    expect(texte.startsWith('[Navigateur intégré — élément choisi]')).toBe(true)
+    expect(texte).toContain('http://localhost:5173/')
     expect(texte).toContain('Sélecteur : main > button.primaire')
     expect(texte).toContain('Extrait : « Envoyer »')
     expect(texte).toContain('Styles : police Inter · taille 14px · couleur rgb(0, 0, 0)')
-    expect(texte).toContain('Commentaire : plus gros')
-    expect(texte).toContain('2. http://localhost:5173/')
-    expect(images.map((f) => f.type)).toEqual(['image/png', 'image/png'])
-    // Noms DISTINCTS : `addFiles` dédoublonne par nom.
-    expect(new Set(images.map((f) => f.name)).size).toBe(2)
+    expect(images.map((f) => f.type)).toEqual(['image/png'])
     expect(texte).toContain(`Capture : ${images[0].name} (jointe)`)
     expect(images[0].size).toBe(8)
   })
-  it('élément choisi : pas de ligne Commentaire', () => {
-    const { texte } = blocPourLeChat([annotation('a', '')], true)
-    expect(texte.startsWith('[Navigateur intégré — élément choisi]')).toBe(true)
-    expect(texte).not.toContain('Commentaire')
+  it('deux choix de suite : noms DISTINCTS, `addFiles` dédoublonne par nom', () => {
+    const noms = [blocPourLeChat(element('a')), blocPourLeChat(element('b'))].map(
+      ({ images }) => images[0].name
+    )
+    expect(new Set(noms).size).toBe(2)
+  })
+  it('jumeau : sans capture, ni image ni ligne Capture', () => {
+    const { texte, images } = blocPourLeChat({ ...element('a'), captureDataUrl: undefined })
+    expect(images).toEqual([])
+    expect(texte).not.toContain('Capture')
   })
 })
 
@@ -321,7 +319,6 @@ describe('NavigateurIntegre — le panneau', () => {
       conversationId: 'A',
       visible: true,
       onFermer: vi.fn(),
-      onEnvoyerAuChat: vi.fn(),
       onElementChoisi: vi.fn()
     }
   })
@@ -564,7 +561,7 @@ describe('NavigateurIntegre — le panneau', () => {
       conteneur!.querySelector('[data-testid="navigateur-pilotage"]')
     expect(bandeau()).toBeNull()
     await nav.pousser({ agentPilote: true })
-    expect(bandeau()?.querySelector('.navigateur-pilotage-texte')?.textContent).toBe(
+    expect(conteneur!.querySelector('.navigateur-cadre-tete')?.textContent).toBe(
       'L’agent pilote cet onglet'
     )
     // Doublon lu sur la capture du lot 2 (conv-1286) : la tête du cadre répétait le bandeau.
@@ -573,19 +570,54 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(bandeau()).toBeNull()
   })
 
+  // « retire le titre en double » (conv-1306, 2026-10-30) : la bande reste, elle ne répète plus l'onglet.
+  it('bande : vide au repos, elle ne répète jamais le titre de l’onglet', async () => {
+    await monter()
+    await nav.pousser({ onglets: [onglet('onglet-1')], ongletActif: 'onglet-1' })
+    const tete = (): Element => conteneur!.querySelector('.navigateur-cadre-tete')!
+    expect(tete().textContent).toBe('')
+    expect(conteneur!.textContent?.split('Page de dev')).toHaveLength(2)
+    await nav.pousser({ agentPilote: true })
+    expect(tete().textContent).toBe('L’agent pilote cet onglet')
+    await nav.pousser({ agentPilote: false })
+    expect(tete().textContent).toBe('')
+  })
+
+  // Mesuré avant ce test (conv-1306, 520 px) : bandeau et frise AU-DESSUS du cadre, la page descendait
+  // de 115 px à l'arrivée de l'agent et remontait de 44 px quand le bandeau partait.
+  it('tout ce qui arrive avec l’agent se pose SOUS la page : son haut ne bouge pas', async () => {
+    await monter()
+    await nav.pousser({
+      onglets: [onglet('onglet-1')],
+      ongletActif: 'onglet-1',
+      agentPilote: true,
+      gestes: [geste('g1')],
+      demandeAccord: { origine: 'https://exemple.fr', action: 'cliquer' }
+    })
+    const barreOnglets = conteneur!.querySelector('.navigateur-onglets')!
+    const cadre = conteneur!.querySelector('.navigateur-cadre')!
+    expect(barreOnglets.nextElementSibling).toBe(cadre)
+    const apres = (a: Element, b: Element): boolean =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+    expect(apres(cadre, conteneur!.querySelector('[data-testid="navigateur-pilotage"]')!)).toBe(
+      true
+    )
+    expect(apres(cadre, conteneur!.querySelector('[data-testid="navigateur-frise"]')!)).toBe(true)
+    expect(cadre.lastElementChild?.classList.contains('navigateur-accord')).toBe(true)
+  })
+
   it('cadre de page : allumé avec l’agent, éteint sans lui, bande toujours là (la page ne saute pas)', async () => {
     await monter()
     const cadre = conteneur!.querySelector('.navigateur-cadre')!
     const tete = (): string => conteneur!.querySelector('.navigateur-cadre-tete')?.textContent ?? ''
     expect(cadre.classList.contains('is-agent')).toBe(false)
-    expect(tete()).toBe('Page de dev')
+    expect(tete()).toBe('')
     await nav.pousser({ agentPilote: true })
     expect(cadre.classList.contains('is-agent')).toBe(true)
-    // La phrase vit dans le bandeau du pas-à-pas : la bande garde le titre de la page.
-    expect(tete()).toBe('Page de dev')
+    expect(tete()).toBe('L’agent pilote cet onglet')
     await nav.pousser({ agentPilote: false })
     expect(cadre.classList.contains('is-agent')).toBe(false)
-    expect(tete()).toBe('Page de dev')
+    expect(tete()).toBe('')
     // Le cadre reste le même nœud : il ne se remonte pas, donc la zone mesurée non plus.
     expect(conteneur!.querySelector('.navigateur-cadre')).toBe(cadre)
   })
@@ -624,53 +656,37 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(nav.api.repondreAccord).toHaveBeenLastCalledWith('https://exemple.fr', 'refuser')
   })
 
-  it('annotations : listées (n°, extrait, commentaire), supprimables, envoyées en lot puis vidées', async () => {
+  // « enleve le bouton annoter » puis « supprime complètement Annoter » (conv-1306, 2026-10-30).
+  it('plus d’Annoter : Choisir reste seul et bascule le mode, aucune liste sous la page', async () => {
     await monter()
-    const lot = [annotation('a', 'plus gros'), annotation('b', '')]
-    nav.poserAnnotations(lot)
-    await nav.pousser({ mode: 'annoter', nombreAnnotations: 2 })
-    const liste = conteneur!.querySelector('[data-testid="navigateur-annotations"]')!
-    expect(liste.textContent).toContain('Annotations (2)')
-    expect(liste.textContent).toContain('plus gros')
-    expect(liste.textContent).toContain('(sans commentaire)')
-    // Puces : le commentaire se lit au survol.
-    expect(liste.querySelector('li')?.getAttribute('title')).toBe('plus gros')
-    await act(async () => bouton(conteneur!, 'Supprimer l’annotation 2').click())
-    expect(nav.api.supprimerAnnotation).toHaveBeenCalledWith(lot[1].id)
-    await act(async () => bouton(conteneur!, 'Envoyer au chat').click())
-    expect(props.onEnvoyerAuChat).toHaveBeenCalledWith(lot)
-    expect(nav.api.viderAnnotations).toHaveBeenCalledWith('A')
-    expect(conteneur!.querySelector('[data-testid="navigateur-annotations"]')).toBeNull()
-    // Une annotation du mode Annoter n'est PAS un élément choisi.
-    expect(props.onElementChoisi).not.toHaveBeenCalled()
-  })
-
-  // « enleve le bouton annoter » (conv-1306, 2026-10-30).
-  it('plus de bouton Annoter ni de badge : Choisir reste seul et bascule le mode', async () => {
-    await monter()
-    nav.poserAnnotations([annotation('a', 'déjà posée')])
-    await nav.pousser({ nombreAnnotations: 1 })
     const noms = [...conteneur!.querySelectorAll('button')].map(
       (b) => b.getAttribute('aria-label') ?? ''
     )
     expect(noms).not.toContain('Annoter')
     expect(conteneur!.querySelectorAll('.navigateur-mode')).toHaveLength(1)
     expect(conteneur!.querySelector('[data-testid="navigateur-badge"]')).toBeNull()
-    // Celles déjà posées restent lisibles et envoyables.
-    expect(conteneur!.querySelector('[data-testid="navigateur-annotations"]')).toBeTruthy()
+    expect(conteneur!.querySelector('[data-testid="navigateur-annotations"]')).toBeNull()
     await act(async () => bouton(conteneur!, 'Choisir').click())
     expect(nav.api.basculerMode).toHaveBeenLastCalledWith('choisir')
   })
 
-  it('Choisir un élément : l’élément cliqué part tout de suite au chat et quitte la liste', async () => {
+  it('Choisir un élément : l’élément cliqué part tout de suite au chat, une seule fois', async () => {
     await monter()
     await nav.pousser({ mode: 'choisir' })
-    const choisie = annotation('c', '')
-    nav.poserAnnotations([choisie])
-    await nav.pousser({ mode: 'choisir', nombreAnnotations: 1 })
-    expect(props.onElementChoisi).toHaveBeenCalledWith(choisie)
-    expect(nav.api.supprimerAnnotation).toHaveBeenCalledWith(choisie.id)
-    expect(conteneur!.querySelector('[data-testid="navigateur-annotations"]')).toBeNull()
+    const choisi = element('c')
+    nav.poserElementsChoisis([choisi])
+    await nav.pousser({ mode: null, nombreElementsChoisis: 1 })
+    expect(props.onElementChoisi).toHaveBeenCalledTimes(1)
+    expect(props.onElementChoisi).toHaveBeenCalledWith(choisi)
+    // La file est prise : un nouvel état du principal ne le livre pas une deuxième fois.
+    await nav.pousser({ nombreElementsChoisis: 1 })
+    expect(props.onElementChoisi).toHaveBeenCalledTimes(1)
+  })
+
+  it('jumeau : sans élément choisi, le panneau ne prend rien', async () => {
+    await monter()
+    await nav.pousser({ mode: 'choisir' })
+    expect(nav.api.prendreElementsChoisis).not.toHaveBeenCalled()
   })
 
   // ── Pas-à-pas : frise et bandeau de pilotage (conv-1286, maquette « 1 · Jalons ») ─────────────
@@ -680,17 +696,17 @@ describe('NavigateurIntegre — le panneau', () => {
   const frise = (): Element | null => conteneur!.querySelector('[data-testid="navigateur-frise"]')
   const boutonsDuBandeau = (): string[] =>
     [...bandeau()!.querySelectorAll('button')].map((b) => b.textContent ?? '')
+  // La phrase de l'état vit dans la bande au-dessus de la page, les boutons sous la page.
   const texteDuBandeau = (): string =>
-    bandeau()!.querySelector('[role="status"]')?.textContent ?? ''
+    conteneur!.querySelector('.navigateur-cadre-tete [role="status"]')?.textContent ?? ''
 
-  it('frise : absente sans geste, puis entre la barre d’adresse et la page', async () => {
+  it('frise : absente sans geste, puis sous la page', async () => {
     await monter()
     expect(frise()).toBeNull()
     await nav.pousser({ gestes: [geste('g1')] })
     const suit = (a: Element, b: Element): boolean =>
       Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
-    expect(suit(conteneur!.querySelector('.navigateur-barre')!, frise()!)).toBe(true)
-    expect(suit(frise()!, conteneur!.querySelector('.navigateur-zone')!)).toBe(true)
+    expect(suit(conteneur!.querySelector('.navigateur-zone')!, frise()!)).toBe(true)
   })
 
   it('frise : elle suit l’onglet actif', async () => {
@@ -948,34 +964,17 @@ describe('ChatView — navigateur intégré', () => {
     expect(panneau()).toBeNull()
   })
 
-  it('« Envoyer au chat » : le bloc structuré arrive dans la saisie et la capture est jointe', async () => {
-    await touche('B', { shiftKey: true })
-    const lot = [annotation('a', 'plus gros')]
-    nav.poserAnnotations(lot)
-    await nav.pousser({
-      onglets: [onglet('onglet-1')],
-      ongletActif: 'onglet-1',
-      nombreAnnotations: 1
-    })
-    await act(async () => bouton(h!.container, 'Envoyer au chat').click())
-    await act(async () => vider())
-    const saisie = h!.textarea().value
-    expect(saisie).toContain('[Navigateur intégré — 1 annotation]')
-    expect(saisie).toContain('Sélecteur : main > button.primaire')
-    expect(saisie).toContain('Commentaire : plus gros')
-    const nom = blocPourLeChat(lot, false).images[0].name
-    expect(h!.container.querySelector('.attachment-list.pending')?.textContent).toContain(nom)
-    expect(nav.api.viderAnnotations).toHaveBeenCalledWith('A')
-    expect(chatApiAppelee('pilotChat')).toBe(false)
-  })
-
   it('« Choisir un élément » : l’élément cliqué arrive dans la saisie, sans envoyer', async () => {
     await touche('B', { shiftKey: true })
     await nav.pousser({ onglets: [onglet('onglet-1')], ongletActif: 'onglet-1', mode: 'choisir' })
-    nav.poserAnnotations([annotation('c', '')])
-    await nav.pousser({ mode: 'choisir', nombreAnnotations: 1 })
+    const choisi = element('c')
+    nav.poserElementsChoisis([choisi])
+    await nav.pousser({ mode: null, nombreElementsChoisis: 1 })
     await act(async () => vider())
     expect(h!.textarea().value).toContain('[Navigateur intégré — élément choisi]')
+    expect(h!.textarea().value).toContain('Sélecteur : main > button.primaire')
+    const nom = blocPourLeChat(choisi).images[0].name
+    expect(h!.container.querySelector('.attachment-list.pending')?.textContent).toContain(nom)
     expect(chatApiAppelee('pilotChat')).toBe(false)
   })
 

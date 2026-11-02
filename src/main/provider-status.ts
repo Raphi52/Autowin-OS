@@ -2,13 +2,13 @@
  * Statut d'authentification par provider pour la page Routeur.
  *
  * INVARIANT ANTI-MENSONGE : un provider n'est JAMAIS marqué `authenticated` sans preuve réelle.
- *  - claude : l'OAuth est privé au CLI → `--version` ne prouve QUE la présence (`installed-untested`).
- *    La vraie validité vient d'un PROBE réel à la demande (bouton « Tester ») ; un probe qui timeout/jette
- *    → `unknown` (jamais `authenticated` par défaut).
+ *  - claude, codex : la session est privée au CLI → sa présence ne prouve PAS la validité
+ *    (`installed-untested`). La vraie validité vient d'un PROBE réel à la demande (bouton « Tester ») ;
+ *    un probe qui timeout/jette → `unknown` (jamais `authenticated` par défaut).
  *
- * Claude est le SEUL moteur dont un statut est publié. Codex, Kimi et Gemini sont retirés : plus de
- * lecture de jeton, plus de sondage, plus d'entrée dans la signature. Un état ENCORE enregistré sur
- * disque pour l'un d'eux est ignoré, jamais republié (contrôle négatif dans le banc).
+ * Claude et ChatGPT (`codex`) sont les seuls moteurs dont un statut est publié. Kimi et Gemini sont
+ * retirés : plus de sondage, plus d'entrée dans la signature. Un état ENCORE enregistré sur disque
+ * pour l'un d'eux est ignoré, jamais republié (contrôle négatif dans le banc).
  *
  * Module PUR (aucune I/O directe) : les entrées (présence CLI, résultat de probe) sont injectées,
  * donc entièrement testable hors réseau. Le câblage réel (adapter.auth(), appel minimal) vit dans
@@ -69,9 +69,38 @@ function isTestable(status: AuthStatus): boolean {
   return status === 'installed-untested' || status === 'unknown'
 }
 
+/** Le statut d'UN moteur : veille, puis dernier test réel, puis simple présence du CLI. */
+function statutDuProvider(
+  provider: string,
+  cliResponds: boolean,
+  state: ProviderStateSnapshot | undefined
+): ProviderStatus {
+  if (state?.mode === 'standby') {
+    return {
+      provider,
+      status: 'standby',
+      testable: false,
+      detail: 'En standby — aucun probe ni reconnexion automatique.'
+    }
+  }
+  if (state?.lastProbe) {
+    return {
+      provider,
+      status: state.lastProbe.status,
+      // Un probe persisté est une preuve datée, jamais un oracle courant : toujours retestable.
+      testable: true,
+      lastCheckedAt: state.lastProbe.checkedAt
+    }
+  }
+  const fallback = presenceStatus(cliResponds)
+  return { provider, status: fallback, testable: isTestable(fallback) }
+}
+
 /** Assemble la liste de statuts au chargement depuis des entrées déjà résolues (injectées). */
 export function buildProviderStatuses(inputs: {
   claudeResponds: boolean
+  /** Absent : ChatGPT n'est pas sondé sur ce chemin, il sort « absent » plutôt qu'un statut inventé. */
+  codexResponds?: boolean
   now: number
   /**
    * États persistés, indexés par identifiant de provider. Volontairement ouvert (`string`) : le
@@ -80,28 +109,8 @@ export function buildProviderStatuses(inputs: {
    */
   states?: Partial<Record<string, ProviderStateSnapshot>>
 }): ProviderStatus[] {
-  const state = inputs.states?.claude
-  if (state?.mode === 'standby') {
-    return [
-      {
-        provider: 'claude',
-        status: 'standby',
-        testable: false,
-        detail: 'En standby — aucun probe ni reconnexion automatique.'
-      }
-    ]
-  }
-  if (state?.lastProbe) {
-    return [
-      {
-        provider: 'claude',
-        status: state.lastProbe.status,
-        // Un probe persisté est une preuve datée, jamais un oracle courant : toujours retestable.
-        testable: true,
-        lastCheckedAt: state.lastProbe.checkedAt
-      }
-    ]
-  }
-  const fallback = presenceStatus(inputs.claudeResponds)
-  return [{ provider: 'claude', status: fallback, testable: isTestable(fallback) }]
+  return [
+    statutDuProvider('claude', inputs.claudeResponds, inputs.states?.claude),
+    statutDuProvider('codex', inputs.codexResponds === true, inputs.states?.codex)
+  ]
 }

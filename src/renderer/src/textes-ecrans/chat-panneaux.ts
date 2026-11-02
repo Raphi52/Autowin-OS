@@ -289,7 +289,7 @@ export const TEXTES_FR = {
   'selecteur.defaut.aide':
     'Ce choix ne vaut que pour cette conversation. Le modèle par défaut se règle dans Routage.',
   'selecteur.compte.aide':
-    'Ce compte est retenu pour cette conversation : chacun de ses tours repart dessus.',
+    'Ce compte est retenu pour cette conversation : chacun de ses tours part dessus. S’il est vide, le tour s’arrête au lieu de changer de compte.',
   'selecteur.aide.verrouilleCompte':
     'Modèle verrouillé pendant le tour en cours ; le compte reste modifiable.',
   'selecteur.aide.verrouille':
@@ -734,7 +734,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'selecteur.defaut.aide':
     'This choice only applies to this conversation. The default model is set in Routing.',
   'selecteur.compte.aide':
-    'This account is kept for this conversation: each of its turns starts on it again.',
+    'This account is kept for this conversation: each of its turns runs on it. If it is empty, the turn stops instead of changing account.',
   'selecteur.aide.verrouilleCompte':
     'Model locked during the running turn; the account can still be changed.',
   'selecteur.aide.verrouille': 'Selector locked during this conversation’s running turn.',

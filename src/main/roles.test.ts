@@ -55,11 +55,11 @@ describe('RoleModelConfig', () => {
   it('permet un override via setBinding, de facon chainable', () => {
     const cfg = new RoleModelConfig()
     const result = cfg
-      .setBinding('judge', { provider: 'codex', model: 'gpt-5' })
+      .setBinding('judge', { provider: 'gemini', model: 'gemini-x' })
       .setBinding('scout', { provider: 'claude' })
     expect(result).toBe(cfg) // chainable : retourne this
     // Moteur retiré : le binding n'est plus complété (aucun effort par défaut inventé pour lui).
-    expect(cfg.getBinding('judge')).toEqual({ provider: 'codex', model: 'gpt-5' })
+    expect(cfg.getBinding('judge')).toEqual({ provider: 'gemini', model: 'gemini-x' })
     expect(cfg.getBinding('scout')).toEqual({
       provider: 'claude',
       model: 'claude-fable-5',
@@ -102,8 +102,8 @@ describe('RoleModelConfig', () => {
   })
 
   it('un provider retiré n’est PAS normalisé vers un modèle mort', () => {
-    const cfg = new RoleModelConfig({ orchestrator: { provider: 'codex' } })
-    expect(cfg.getBinding('orchestrator')).toEqual({ provider: 'codex' })
+    const cfg = new RoleModelConfig({ orchestrator: { provider: 'gemini' } })
+    expect(cfg.getBinding('orchestrator')).toEqual({ provider: 'gemini' })
   })
 
   it('controle negatif : getBinding leve sur un role invalide (garde runtime)', () => {
@@ -141,9 +141,14 @@ describe('défauts de rôle par alias de famille (catalogue découvert)', () => 
   it('un provider RETIRÉ n’a plus de défaut : son binding ressort inchangé, jamais complété', () => {
     // Garde du retrait : compléter ce binding le ferait pointer vers un modèle mort et donnerait
     // l'illusion d'un moteur encore utilisable.
+    const cfg = new RoleModelConfig({ scout: { provider: 'gemini' } }, [])
+    expect(cfg.getBinding('scout').model).toBeUndefined()
+  })
+
+  it('ChatGPT suit le premier modèle du catalogue du compte, jamais un id figé', () => {
     const catalog = [codex('gpt-5.6-terra', 2), codex('gpt-5.7-sol', 1)]
     const cfg = new RoleModelConfig({ scout: { provider: 'codex' } }, catalog)
-    expect(cfg.getBinding('scout').model).toBeUndefined()
+    expect(cfg.getBinding('scout')).toMatchObject({ provider: 'codex', model: 'gpt-5.7-sol' })
   })
 
   it('sans catalogue → fallback figé historique (0 régression)', () => {

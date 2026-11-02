@@ -21,7 +21,10 @@ const HEURE_DE_RETOUR = Date.parse('2026-10-22T09:30:00Z')
 
 type Etat = RunSuspenduParQuota & { publie?: boolean; action?: 'relancer' | 'rattacher' }
 
-function monter(etats: Etat[]): {
+function monter(
+  etats: Etat[],
+  surveillerEncore?: () => boolean
+): {
   relances: string[]
   etats: Etat[]
   reveil: ReturnType<typeof creerReveilApresQuota<Etat>>
@@ -35,7 +38,8 @@ function monter(etats: Etat[]): {
     mettreEnFile: (tache) => tache(),
     relancer: async (etat) => {
       relances.push(etat.runId)
-    }
+    },
+    ...(surveillerEncore ? { surveillerEncore } : {})
   })
   return { relances, etats, reveil }
 }
@@ -147,6 +151,80 @@ describe('réveil après le mur de quota', () => {
     await vi.advanceTimersByTimeAsync(plusTard - HEURE_DE_RETOUR)
     expect(relances).toEqual(['tot', 'tard'])
     reveil.arreter()
+  })
+
+  /*
+   * Objection du contrôle final (conv-1423) : un fil annoncé « repart seule » pouvait n'avoir aucun
+   * réveil prévu. Le réveil ne s'armait qu'aux échéances lues au dernier passage, et un départ écarté
+   * à l'heure gardait sa clé dans `reveilles`, même une fois le fil redevenu éligible.
+   *
+   * fix-ok: mesuré sur le vrai `creerRepriseDesFils` : fil réactivé, 0 minuterie et 0 départ.
+   */
+  describe('surveillerEncore — un fil reste suivi, un run garde son contrat', () => {
+    it('un départ écarté à l’heure repart au passage suivant', async () => {
+      const etat: Etat = { ...suspendu('fil', HEURE_DE_RETOUR), action: 'rattacher' }
+      const { relances, reveil } = monter([etat], () => true)
+      reveil.replanifier()
+      await vi.advanceTimersByTimeAsync(HEURE_DE_RETOUR - Date.now() + MARGE_APRES_RETOUR_MS)
+      expect(relances).toEqual([])
+      delete etat.action
+      await vi.advanceTimersByTimeAsync(PLAFOND_ATTENTE_MS)
+      expect(relances).toEqual(['fil'])
+      reveil.arreter()
+    })
+
+    it('JUMEAU : sans l’option, un run écarté à l’heure n’est pas retenté', async () => {
+      const etat: Etat = { ...suspendu('run-a', HEURE_DE_RETOUR), action: 'rattacher' }
+      const { relances, reveil } = monter([etat])
+      reveil.replanifier()
+      await vi.advanceTimersByTimeAsync(HEURE_DE_RETOUR - Date.now() + MARGE_APRES_RETOUR_MS)
+      delete etat.action
+      reveil.replanifier()
+      await vi.advanceTimersByTimeAsync(PLAFOND_ATTENTE_MS)
+      expect(relances).toEqual([])
+    })
+
+    it('un départ réellement tenté ne se retente pas, même s’il échoue', async () => {
+      const etats = [suspendu('fil', HEURE_DE_RETOUR)]
+      let essais = 0
+      const reveil = creerReveilApresQuota<Etat>({
+        demarrageMs: DEMARRAGE,
+        listerRunsReprenables: () => etats,
+        publicationDejaProuvee: () => false,
+        actionDeReprise: () => 'relancer',
+        mettreEnFile: (tache) => tache(),
+        relancer: async () => {
+          essais += 1
+          throw new Error('refus du modèle')
+        },
+        surveillerEncore: () => true
+      })
+      reveil.replanifier()
+      await vi.advanceTimersByTimeAsync(HEURE_DE_RETOUR - Date.now() + 3 * PLAFOND_ATTENTE_MS)
+      expect(essais).toBe(1)
+      reveil.arreter()
+    })
+
+    it('rien à venir, mais encore à surveiller : le passage suivant reste prévu', async () => {
+      const etats: Etat[] = []
+      const { relances, reveil } = monter(etats, () => true)
+      reveil.replanifier()
+      expect(vi.getTimerCount()).toBe(1)
+      // Après le démarrage, sinon ce mur serait celui de la reprise de démarrage (JUMEAU plus haut).
+      etats.push(suspendu('fil', Date.now() + 1000))
+      await vi.advanceTimersByTimeAsync(PLAFOND_ATTENTE_MS)
+      expect(relances).toEqual(['fil'])
+      reveil.arreter()
+    })
+
+    it('JUMEAU : plus rien à surveiller, plus aucun minuteur', async () => {
+      let encore = true
+      const { reveil } = monter([], () => encore)
+      reveil.replanifier()
+      encore = false
+      await vi.advanceTimersByTimeAsync(PLAFOND_ATTENTE_MS)
+      expect(vi.getTimerCount()).toBe(0)
+    })
   })
 
   it('arreter() annule l’attente en cours', async () => {

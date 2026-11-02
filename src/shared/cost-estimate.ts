@@ -74,8 +74,10 @@ const MODEL_RATES: readonly ModelRate[] = [
   // plutot qu'approximee.
   //
   // `sol` et `terra` AVANT le motif generique `gpt-5`, sinon le premier motif gagnant les ecraserait.
+  // `gpt-6-luna` AVANT `luna` : meme nom, moitie du prix (meme page relue le 2026-10-31, conv-1414).
   { provider: 'codex', match: 'sol', inputPerMTok: 5, outputPerMTok: 30 },
   { provider: 'codex', match: 'terra', inputPerMTok: 2, outputPerMTok: 12 },
+  { provider: 'codex', match: 'gpt-6-luna', inputPerMTok: 0.1, outputPerMTok: 0.5 },
   { provider: 'codex', match: 'luna', inputPerMTok: 0.2, outputPerMTok: 1.2 }
 ]
 

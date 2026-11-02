@@ -133,7 +133,7 @@ describe('noms des écrans et des thèmes', () => {
       expect(DESTINATIONS_EN[d.id]?.trim(), d.id).toBeTruthy()
     }
     expect(nomDeDestination('accueil', 'en')).toBe('Home')
-    expect(nomDeDestination('hdesk', 'en')).toBe('Hidden desktops')
+    expect(nomDeDestination('worktree', 'en')).toBe('Worktrees')
   })
 
   it('un thème sans nom anglais garde son nom français ; le français ne change jamais', () => {

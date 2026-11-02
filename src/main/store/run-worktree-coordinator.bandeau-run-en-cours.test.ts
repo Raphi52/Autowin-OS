@@ -29,7 +29,7 @@ describe('bandeau — un run qui TOURNE n’est pas un travail oublie', () => {
         { agentId: 'run-fini', date: '2026-08-28', fichiers: ['b.txt'] }
       ]
     }
-    const stateStore = { list: () => [], get: () => undefined, save: () => {}, remove: () => {} }
+    const stateStore = { list: () => [], get: () => undefined, dernierConnu: () => undefined, getAsync: async () => undefined, save: () => {}, remove: () => {} }
     return new RunWorktreeCoordinator({
       manager: manager as never,
       stateStore: stateStore as never

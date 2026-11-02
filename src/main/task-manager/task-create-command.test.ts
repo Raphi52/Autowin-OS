@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTaskFromCommand, type TaskCreateDeps } from './task-create-command'
+import {
+  createTaskFromCommand,
+  deleteTaskFromCommand,
+  updateTaskFromCommand,
+  type TaskCreateDeps
+} from './task-create-command'
 import { TaskStore } from './task-store'
 
 const valide = {
@@ -29,9 +34,81 @@ function banc(): {
     store,
     refresh,
     onChanged,
-    deps: { create: (i) => store.create(i), list: () => store.listTasks(), refresh, onChanged }
+    deps: {
+      create: (i) => store.create(i),
+      list: () => store.listTasks(),
+      get: (id) => store.getTask(id),
+      update: (id, i) => store.update(id, i),
+      remove: (id) => store.remove(id),
+      refresh,
+      onChanged
+    }
   }
 }
+
+describe('task_update / task_delete — mêmes gestes que les boutons de l’écran', () => {
+  it('modifie partiellement (patch en objet ou en texte JSON), réarme, rend la tâche relue', async () => {
+    const { store, deps, refresh, onChanged } = banc()
+    const created = store.create(valide as never)
+    const r = await updateTaskFromCommand({ id: created.id, patch: { title: 'Nouveau' } }, deps)
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.task.title).toBe('Nouveau')
+    expect(r.task.prompt).toBe(valide.prompt)
+    const r2 = await updateTaskFromCommand({ id: created.id, patch: '{"enabled": false}' }, deps)
+    expect(r2.ok && r2.task.enabled).toBe(false)
+    expect(store.getTask(created.id)?.nextRunAt).toBeNull()
+    expect(refresh).toHaveBeenCalledTimes(2)
+    expect(onChanged).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    ['champ inconnu', { patch: { titre: 'x' } }],
+    ['patch vide', { patch: {} }],
+    ['patch illisible', { patch: '{pas json' }],
+    ['valeur invalide', { patch: { mode: 'toujours' } }]
+  ])('task_update refuse (%s) sans rien écrire', async (_cas, extra) => {
+    const { store, deps, refresh } = banc()
+    const created = store.create(valide as never)
+    const r = await updateTaskFromCommand({ id: created.id, ...extra }, deps)
+    expect(r.ok).toBe(false)
+    expect(store.getTask(created.id)?.title).toBe('Rapport')
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('identifiant inconnu : échec franc qui cite les identifiants proches', async () => {
+    const { store, deps } = banc()
+    const created = store.create(valide as never)
+    const mauvais = created.id.slice(0, -1) + 'Z'
+    for (const r of [
+      await updateTaskFromCommand({ id: mauvais, patch: { title: 'x' } }, deps),
+      await deleteTaskFromCommand({ id: mauvais }, deps)
+    ]) {
+      expect(r.ok).toBe(false)
+      if (!r.ok) expect(r.reason).toContain(created.id)
+    }
+    expect(store.listTasks()).toHaveLength(1)
+  })
+
+  it('task_delete supprime, réarme, et un doublon de nom reste intact', async () => {
+    const { store, deps, refresh, onChanged } = banc()
+    const a = store.create(valide as never)
+    const b = store.create(valide as never)
+    const r = await deleteTaskFromCommand({ id: a.id }, deps)
+    expect(r.ok).toBe(true)
+    expect(store.listTasks().map((t) => t.id)).toEqual([b.id])
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(onChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it('sans Task Manager (ou sans les gestes câblés) : refus nommé', async () => {
+    expect((await updateTaskFromCommand({ id: 'x', patch: {} }, undefined)).ok).toBe(false)
+    const { deps } = banc()
+    const sansEdition = { ...deps, get: undefined, remove: undefined, update: undefined }
+    const r = await deleteTaskFromCommand({ id: 'x' }, sansEdition)
+    expect(r).toEqual({ ok: false, reason: expect.stringMatching(/indisponible/) })
+  })
+})
 
 describe('task_create — rien que l’utilisateur ne puisse supprimer dans le Task Manager', () => {
   it('crée dans le stockage de l’écran, réarme le minuteur, et la suppression manuelle marche', async () => {

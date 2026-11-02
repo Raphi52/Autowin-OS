@@ -293,7 +293,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
      */
     if (conversationId && !recovery) {
       const derniere = [...messages].reverse().find((m) => m.role === 'user')
-      if (derniere?.content) rattacherSaisieAuTour(conversationId, turnId, derniere.content)
+      if (derniere?.content) void rattacherSaisieAuTour(conversationId, turnId, derniere.content)
     }
     // Correlation durable AVANT le spawn : apres un crash, le reglement peut retrouver l'occurrence.
     onLateTaskUsageSettlement?.({ conversationId, turnId })
@@ -566,6 +566,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         }
       })
       let traceParentId: string | undefined
+      /**
+       * `actionId` -> identifiant de SA `command` dans la trace (conv-1370, lot 8, 2026-10-31). Les
+       * lectures d'un même message se chevauchent : command, command, result, result. Rattaché à
+       * l'événement précédent, le second `result` tombait sous un autre appel, et l'Observatoire
+       * montrait une lecture sans résultat et la suivante avec deux notes.
+       */
+      const commandeDeLAction = new Map<string, string>()
       // Le journal s'ouvre EN AVANCE et sans bloquer : le premier `append` du tour n'arrive qu'apres
       // une reponse du modele. Ouvert la, en synchrone, il a fige la fenetre 9,9 s + 4,4 s
       // (gels.jsonl 2026-10-11 20:30). Voir `TraceStore.preparerEcriture`.
@@ -678,6 +685,14 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         }
         broadcast({ type: 'refresh', scope: 'workflows' })
       }
+      const runtimeDuTour = {
+        provider: turnRuntimeBinding.provider,
+        model: turnRuntimeBinding.model,
+        reasoningEffort: turnRuntimeBinding.reasoningEffort,
+        // La fenêtre est le seul fait qui dit qu'une personne a ouvert ce tour : règles, tâches et
+        // scout passent `undefined` (`index.ts`). Un tour repris (`recovery`) garde sa marque.
+        ...(sender ? { ouvertDepuisLeChat: true as const } : {})
+      }
       if (conversationId && recovery && os.conversations.get(conversationId)) {
         os.conversations.applyTurnEvent(conversationId, turnId, { kind: 'resumed' })
         appendTurnEvent(turnJournalRoot, conversationId, turnId, {
@@ -685,14 +700,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           at: Date.now()
         })
       } else if (conversationId && continuation && os.conversations.get(conversationId)) {
-        os.conversations.beginContinuationTurn(conversationId, {
-          turnId,
-          runtime: {
-            provider: turnRuntimeBinding.provider,
-            model: turnRuntimeBinding.model,
-            reasoningEffort: turnRuntimeBinding.reasoningEffort
-          }
-        })
+        os.conversations.beginContinuationTurn(conversationId, { turnId, runtime: runtimeDuTour })
       } else if (conversationId && last?.role === 'user' && os.conversations.get(conversationId)) {
         os.conversations.beginTurn(
           conversationId,
@@ -703,14 +711,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
               ? metasDurablesDesPieces(last.attachments, conversationId, turnId)
               : undefined
           },
-          {
-            turnId,
-            runtime: {
-              provider: turnRuntimeBinding.provider,
-              model: turnRuntimeBinding.model,
-              reasoningEffort: turnRuntimeBinding.reasoningEffort
-            }
-          }
+          { turnId, runtime: runtimeDuTour }
         )
         // Le MESSAGE ENVOYÉ doit être visible DÈS l'envoi, pas au premier événement de réponse
         // (« je devrais directement voir notre message partir », 14/08) : le tour vient d'être
@@ -734,7 +735,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             ...heure
           }
         else if (pilotEvent.kind === 'stream-reset' && pilotEvent.streamId)
-          durableEvent = { kind: 'stream-reset', streamId: pilotEvent.streamId }
+          durableEvent = {
+            kind: 'stream-reset',
+            streamId: pilotEvent.streamId,
+            // conv-1401 : une relance ne retire que la conclusion — le fil enregistré aussi.
+            ...(pilotEvent.conclusionSeule ? { conclusionSeule: true as const } : {})
+          }
         else if (pilotEvent.kind === 'think' && pilotEvent.text)
           durableEvent = {
             kind: 'delta',
@@ -1225,7 +1231,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             }),
             conversationId,
             turnId,
-            parentId: traceParentId,
+            // Seul le `result` change de parent : sa command, celle de SON action. Le reste suit
+            // toujours l'événement précédent, et une command inconnue (tour repris) n'y change rien.
+            parentId:
+              (pilotEvent.kind === 'result' && pilotEvent.actionId
+                ? commandeDeLAction.get(pilotEvent.actionId)
+                : undefined) ?? traceParentId,
             timestamp: new Date().toISOString(),
             sequence: traceSequence++,
             kind: pilotEvent.kind,
@@ -1238,6 +1249,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           })
           causalTrace.append(action)
           traceParentId = action.id
+          if (pilotEvent.kind === 'command' && pilotEvent.actionId)
+            commandeDeLAction.set(pilotEvent.actionId, action.id)
           /*
            * LE RECU D'AUTORITE, EMIS AU MEME ENDROIT QUE L'APPEL.
            *

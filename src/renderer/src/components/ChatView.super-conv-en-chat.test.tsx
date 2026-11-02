@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { plansPourLaListe, type PlanDeLots } from '../../../shared/plan-de-lots'
+import { anciensPlansDuChef, plansPourLaListe, type PlanDeLots } from '../../../shared/plan-de-lots'
 
 vi.mock('./Markdown', () => ({
   Markdown: ({ text }: { text: string }) => createElement('span', null, text),
@@ -63,6 +63,7 @@ function planLance(surcharge: Partial<PlanDeLots> = {}): PlanDeLots {
 function apiDesPlans(plans: PlanDeLots[]): ReturnType<typeof vi.fn> {
   return vi.fn(async (geste: string, fil?: string) => {
     if (geste === 'tous') return { ok: true, plans: plansPourLaListe(plans) }
+    if (geste === 'anciens') return { ok: true, anciens: anciensPlansDuChef(plans, fil ?? '') }
     if (geste !== 'voir') return { ok: true, detail: 'ok' }
     const mene = [...plans].reverse().find((p) => p.chef === fil)
     if (mene) return { ok: true, vue: { plan: mene, role: 'chef' } }
@@ -117,21 +118,15 @@ describe('ChatView — une conv chef en vue chat s’affiche comme dans la mosa�
     h!.container.querySelector<HTMLElement>(selecteur)
   const filOuvert = (): string | null | undefined =>
     trouver('[data-testid="chat-runtime-conv"]')?.textContent
-  const ongletActif = (): string | null | undefined =>
-    trouver('.scm-onglet[aria-selected="true"]')?.textContent
 
-  it('le chef montre onglets et frise pleine, dans le vrai panneau de chat', async () => {
+  it('le chef montre la frise pleine, sans aucun onglet, dans le vrai panneau de chat', async () => {
     await monter([planLance()], 'C')
 
-    // Comme un onglet de navigateur : le titre de la conv, pas un numéro (conv-1286). Le lot 3 n'a
-    // pas encore de fil : son onglet annonce le titre que le fil recevra.
-    expect([...h!.container.querySelectorAll('.scm-onglet')].map((o) => o.textContent)).toEqual([
-      'Le fil chef',
-      'Lot 1/3 — Lecture',
-      'Lot 2/3 — Bouton',
-      'Lot 3/3 — Rangement'
-    ])
-    expect(ongletActif()).toBe('Le fil chef')
+    // conv-1387 : le bloc mène aux conv de lot, plus rien en haut de la fenêtre.
+    expect(trouver('.scm-chat [role="tablist"]')).toBeNull()
+    expect(trouver('.scm-chat [role="tab"]')).toBeNull()
+    // Le chef est le point de départ : il n'a nulle part où revenir.
+    expect(trouver('[data-testid="scm-retour"]')).toBeNull()
     expect(trouver('[data-testid="scm-frise"]')).not.toBeNull()
     expect(h!.container.querySelectorAll('.scm-piste')).toHaveLength(3)
     expect(trouver('[data-testid="scm-chiffre-faits"]')?.textContent).toContain('1/3')
@@ -150,50 +145,73 @@ describe('ChatView — une conv chef en vue chat s’affiche comme dans la mosa�
     expect(tableau?.textContent).toContain('Arrêter')
   })
 
-  it('l’onglet d’un lot ouvre SON fil, avec sa seule piste ; Chef ramène d’un clic', async () => {
+  it('la ligne d’un lot ouvre SA conv, avec sa seule piste ; Retour ramène au chef', async () => {
     await monter([planLance()], 'C')
 
-    await h!.click('[data-testid="scm-onglet-1"]')
+    await h!.click('[data-testid="scm-piste-1"] .scm-nom')
     await laisserFiler()
     expect(filOuvert()).toBe('L1')
-    expect(ongletActif()).toBe('Lot 1/3 — Lecture')
     expect(trouver('[data-testid="scm-frise"]')).toBeNull()
     expect(trouver('[data-testid="scm-piste-reduite"]')?.textContent).toContain('Lecture groupée')
     expect(trouver('.chat-scroll')?.textContent).toContain('message du lot un')
-    // L'onglet et la piste disent déjà quel lot on regarde : pas de ligne « Lot 1/3 du plan ».
+    // La piste dit déjà quel lot on regarde : pas de ligne « Lot 1/3 du plan ».
     expect(trouver('[data-testid="tableau-des-lots"]')).toBeNull()
 
-    await h!.click('[data-testid="scm-onglet-chef"]')
+    await h!.click('[data-testid="scm-retour"]')
     await laisserFiler()
     expect(filOuvert()).toBe('C')
-    expect(ongletActif()).toBe('Le fil chef')
+    expect(trouver('[data-testid="scm-retour"]')).toBeNull()
     expect(trouver('[data-testid="scm-frise"]')).not.toBeNull()
   })
 
-  it('cliquer le nom d’une piste ouvre l’onglet du lot, comme dans la mosaïque', async () => {
-    await monter([planLance()], 'C')
-
-    await h!.click('[data-testid="scm-piste-2"] .scm-nom')
+  it('un lot ouvert par un lien porte Retour, et la liste surligne son chef', async () => {
+    await monter([planLance()], 'X')
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('autowin:open-conversation', { detail: { conversationId: 'L2' } })
+      )
+    })
     await laisserFiler()
+
     expect(filOuvert()).toBe('L2')
-    expect(ongletActif()).toBe('Lot 2/3 — Bouton')
+    expect(trouver('[data-testid="scm-retour"]')).not.toBeNull()
+    expect(trouver('[data-testid="scm-piste-reduite"]')?.textContent).toContain('Bouton Relancer')
+    // Le lot n'a pas de ligne (conv-1381) : c'est son chef qui dit où l'on est. Dédoublonné : un
+    // fil récent a aussi sa ligne dans « Récent ».
+    const surlignes = [...h!.container.querySelectorAll('.conv-list .conv-item.active')].map((l) =>
+      l.getAttribute('data-conversation-id')
+    )
+    expect([...new Set(surlignes)]).toEqual(['C'])
   })
 
-  it('un lot ouvert depuis la liste porte les mêmes onglets', async () => {
-    await monter([planLance()], 'L2')
+  it('un lot qui pose une question le montre sur sa ligne (conv-1381)', async () => {
+    // Une question ouverte a l'assistant en dernier : une réponse de l'utilisateur la refermerait.
+    const avecQuestion = CONVS.map((c) =>
+      c.id === 'L1' ? { ...c, lastMessageRole: 'assistant', lastAssistantAsksUser: true } : c
+    )
+    h = await mountChat(
+      chatApi({
+        conversations: vi.fn().mockResolvedValue(avecQuestion),
+        conversation: vi.fn(async (id: string) => avecQuestion.find((c) => c.id === id)),
+        plansDeLots: apiDesPlans([planLance()])
+      })
+    )
+    await laisserFiler()
+    await h.click('.conv-item[data-conversation-id="C"] .conv-pick')
+    await laisserFiler()
 
-    expect(ongletActif()).toBe('Lot 2/3 — Bouton')
-    expect(trouver('[data-testid="scm-piste-reduite"]')?.textContent).toContain('Bouton Relancer')
+    expect(trouver('[data-testid="scm-piste-1"] .conversation-state.is-asking')).not.toBeNull()
+    expect(trouver('[data-testid="scm-piste-2"] .conversation-state.is-asking')).toBeNull()
   })
 
   it('un fil hors plan garde le chat ordinaire', async () => {
     await monter([planLance()], 'X')
 
-    expect(trouver('.scm-onglets')).toBeNull()
+    expect(trouver('.scm-chat')).toBeNull()
     expect(trouver('[data-testid="scm-frise"]')).toBeNull()
   })
 
-  it('un chef dont aucun lot n’est parti garde son tableau complet, sans onglets', async () => {
+  it('un chef dont aucun lot n’est parti garde son tableau complet, sans frise', async () => {
     const pasLance = planLance({
       statut: 'attente-accord',
       toursLances: 0,
@@ -207,29 +225,32 @@ describe('ChatView — une conv chef en vue chat s’affiche comme dans la mosa�
     })
     await monter([pasLance], 'C')
 
-    expect(trouver('.scm-onglets')).toBeNull()
+    expect(trouver('.scm-chat')).toBeNull()
     expect(h!.container.querySelectorAll('.tdl-lot')).toHaveLength(3)
     expect(trouver('[data-testid="tableau-des-lots"]')?.textContent).toContain('Lancer le plan')
   })
 
-  it('un lot d’un ANCIEN plan du chef garde sa ligne, sans les onglets du plan récent', async () => {
+  it('un lot d’un ANCIEN plan n’a plus de ligne : le bloc du chef l’ouvre, sans le bloc du plan récent (conv-1394)', async () => {
     const ancien = planLance({
       id: 'plan-ancien',
       statut: 'termine',
       lots: [{ ...planLance().lots[0], fil: 'X' }]
     })
-    await monter([ancien, planLance()], 'X')
+    await monter([ancien, planLance()], 'C')
 
-    expect(trouver('.scm-onglets')).toBeNull()
+    expect(trouver('.conv-list [data-conversation-id="X"]')).toBeNull()
+    await h!.click('[data-testid="scm-ancien-plan-ancien-1"] button')
+    await laisserFiler()
+    expect(filOuvert()).toBe('X')
+    expect(trouver('.scm-chat')).toBeNull()
     expect(trouver('.tdl--enfant .tdl-fil')?.textContent).toBe('C')
   })
 
-  it('Réduire replie la frise sans toucher au fil ni aux onglets', async () => {
+  it('Réduire replie la frise sans toucher au fil', async () => {
     await monter([planLance()], 'C')
 
     await h!.click('[data-testid="scm-reduire"]')
     expect(h!.container.querySelectorAll('.scm-piste')).toHaveLength(0)
-    expect(trouver('.scm-onglets')).not.toBeNull()
     expect(trouver('.chat-scroll')?.textContent).toContain('message du chef')
   })
 

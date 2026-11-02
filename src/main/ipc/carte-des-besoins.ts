@@ -137,6 +137,11 @@ export function registerCarteDesBesoinsIpc({
 }): {
   /** Recopie le Board vers le dossier sans la vue (conv-1210) : appelée à chaque fin de tour. */
   recopierLeBoard: () => void
+  /**
+   * La carte complète, avant tout filtre d'affichage : la mesure des écarts avec les RUN.md légers
+   * (conv-1418) la lit, en partageant le calcul et la mémoire du Board.
+   */
+  lireLaCarte: () => Promise<CarteDesBesoins>
 } {
   // Valeur expirée servie pendant sa relecture (conv-1248) : l'ouverture n'attend plus les `git`.
   const identiteDuDossier = creerIdentitesEnCache(undefined, undefined, undefined, true)
@@ -368,6 +373,7 @@ export function registerCarteDesBesoinsIpc({
 
   return {
     // Le calcul n'est lancé qu'au moment d'écrire, et jamais sans dossier choisi (conv-1210).
-    recopierLeBoard: () => copieDeFinDeTour?.recopier()
+    recopierLeBoard: () => copieDeFinDeTour?.recopier(),
+    lireLaCarte: () => calculateur.calculer()
   }
 }

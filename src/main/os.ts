@@ -7,6 +7,7 @@
 import { Notification, app } from 'electron'
 import { traduireCoeur } from './textes-coeur'
 import { fermerBureauCacheSiOuvert, racineScriptsHorsArchive } from './hdesk-tv'
+import { resolveAutomationInstanceMode } from './headless-instance'
 import { interfaceVisible } from './startup-gate'
 import { cheminDuLivrableEntier, ecrireLivrableEntier } from './runs/livrable-entier'
 import { ProviderRegistry } from './providers/registry'
@@ -19,11 +20,13 @@ import {
 } from './fixture-orchestration'
 import {
   claudeActiveAccountId,
+  claudeCompteDuFil,
   claudePreventiveSwitch,
   claudeRotateAccount,
   claudeAccountEnv
 } from './claude-accounts'
 import { ClaudeCliAdapter } from './providers/claude'
+import { CodexAdapter } from './providers/codex'
 import type { Message } from './providers/types'
 import { CONSTITUTION } from './constitution'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
@@ -541,12 +544,15 @@ export class AutowinOS {
       // 5e argument : la BASCULE AVANT LANCEMENT (conv-1069). Quitter un compte presque epuise avant
       // l'appel plutot qu'apres son refus ; seul `claude` a plusieurs comptes.
       (providerId, actif) =>
-        providerId === 'claude' ? claudePreventiveSwitch(actif) : Promise.resolve(undefined)
+        providerId === 'claude' ? claudePreventiveSwitch(actif) : Promise.resolve(undefined),
+      // 6e argument : le compte CHOISI pour le fil de l'appel (conv-1416), jamais remplacé tout seul.
+      (providerId, fil) => (providerId === 'claude' ? claudeCompteDuFil(fil) : undefined)
     )
-      // Claude est le SEUL moteur enregistré. Codex, Kimi et Gemini sont des projets abandonnés :
-      // leurs adaptateurs restent dans l'arbre (relecture de l'historique, types) mais ne sont plus
-      // branchés — donc jamais lancés, jamais sondés, jamais routés. Voir `routed-providers.ts`.
+      // Claude d'abord : il reste l'exécuteur par défaut (`executors[0]` du registre). ChatGPT se
+      // choisit, il n'est jamais élu seul. Kimi et Gemini sont retirés : leurs adaptateurs n'existent
+      // plus, donc jamais lancés, jamais sondés, jamais routés. Voir `routed-providers.ts`.
       .register(new ClaudeCliAdapter())
+      .register(new CodexAdapter())
     const executionWorkspace = resolveExecutionWorkspace()
     this.executionWorkspace = executionWorkspace
     // Le workspace resolu est republie dans l'environnement pour que le TRANSPORT y ait acces sans
@@ -586,6 +592,13 @@ export class AutowinOS {
           // il a bâti un besoin sur un ordonnancement inexistant, que le juge a réfuté en citant
           // exactement ces lignes (2026-08-19). Un commentaire trop affirmatif se paie en diagnostic.
           deferRecoveryUntil: interfaceVisible,
+          // `app?.` : hors d'Electron (bancs de test), `app` n'existe pas ; le `try` autour avalerait
+          // l'erreur et l'app partirait sans aucune copie isolée (e2e-chaine, conv-1421).
+          sansRecuperation: resolveAutomationInstanceMode(
+            process.argv,
+            process.env,
+            app?.isPackaged === true
+          ).isolated,
           manager,
           // La liste des travaux non publiés suit le dépôt, même touché en ligne de commande
           // (conv-360) : sans lire git, seulement les fichiers de références sous `.git`.
@@ -1325,8 +1338,8 @@ export class AutowinOS {
 
   /**
    * Lance le login OFFICIEL d'un provider (bouton « Se reconnecter » de la page Routeur).
-   * Les adapters qui exposent `startLogin` gèrent leur connexion ; claude passe par un terminal.
-   * Seul Claude est connectable : les moteurs retirés n'ont plus de plan de login (throw).
+   * Les adapters qui exposent `startLogin` gèrent leur connexion ; claude et codex passent par un
+   * terminal. Les moteurs retirés n'ont plus de plan de login (throw).
    */
   startProviderLogin(provider: string, configDir?: string): void {
     const adapter = this.registry.get(provider)

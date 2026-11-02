@@ -116,3 +116,102 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* BARRE DE PROMPT COMPACTE (conv-1377, 2026-10-31 : « compacte la barre de prompt en hauteur »).
+   Trois étages (texte, jauge, boutons) deviennent deux : la jauge des quotas rejoint la rangée des
+   boutons et prend la place qui reste. La réserve de deux lignes de texte ne bouge pas (demande du
+   2026-09-18, `ChatView.composer-hauteur.test.ts`) : la hauteur vient de l'étage en moins et des
+   marges. `order` et non un déplacement du JSX, comme pour le texte et l'envoi (conv-167).
+
+   POSITIONS (même demande : « question à côté en première position et le micro en 2ème »).
+   La jauge reste en repli à la ligne dans une tuile de mosaïque étroite : base de 120 px.
+   La jauge à 100 % forçait le retour à la ligne : sans elle, les boutons remontaient à côté du
+   texte et l'écrasaient (capture du jour). Le texte réserve donc la ligne entière, moins l'envoi
+   (34 px + l'écart de 6 px). */
+.composer-input-row > textarea {
+  flex: 1 1 calc(100% - 40px);
+}
+.composer-input-row > .composer-auto,
+.composer-input-row > .attachment-button,
+.composer-input-row > .composer-trois-facons {
+  order: 1;
+}
+/* JAUGE SUR LE BORD DU CADRE (conv-1399, 2026-10-31 : « la barre de quota on peut la mettre au
+   niveau du bord du container, on gagnerait grave de la place en hauteur pour le chat »). Elle
+   avait une ligne à elle sous les icônes (conv-1392) : 20 px, plus 3 px d'écart. Sortie du flux,
+   elle se pose au pied de la rangée, qui touche le bas du cadre (marges du bas à 0, plus bas). Même
+   largeur qu'avant : celle de la rangée, de bord à bord, sous les icônes et Stop. */
+.composer-input-row > .model-quota {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  margin-top: 0;
+}
+.composer-input-row > .composer-meta,
+.composer-input-row > .composer-stop {
+  order: 3;
+}
+.composer-input-row {
+  row-gap: 3px;
+}
+.cosmic-outline .composer {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.cosmic-outline .composer-field {
+  gap: 3px;
+  padding: 2px 2px 0;
+}
+/* MOINS DE VIDE EN HAUT ET EN BAS (conv-1392, 2026-10-31 : « ya bcp d'espace vide en haut et en
+   bas de cette barre de prompt, réduis tous les padding »). Les deux règles ci-dessus (2 niveaux)
+   perdaient contre celles des thèmes (`:root[data-theme=…] .cosmic-outline .composer-field`,
+   4 niveaux) : sur Nébuleuse, 14 px au-dessus du texte et 12 + 10 px sous la jauge, relevés au
+   rendu par contours de sonde. Ces sélecteurs les dépassent (`div.` et `> .composer-field` font le
+   niveau de plus) et ne fixent que le VERTICAL : les marges latérales restent celles du thème. */
+:root .cosmic-outline div.composer[data-origine='saisie'] {
+  padding-top: 2px;
+  padding-bottom: 4px;
+}
+:root .cosmic-outline .composer[data-origine='saisie'] > .composer-field {
+  padding-top: 6px;
+  padding-bottom: 4px;
+}
+/* LE TRAIT AU PIED DE LA RANGÉE, LE ROND CENTRÉ DESSUS (conv-1399, 2026-10-31 : « le chiffre du
+   quota il est trop haut, il est plus centré sur la barre », puis « t'as remonté la barre au lieu de
+   baisser le chiffre »). Le trait ne bouge pas : c'est le rond qui descend, et il passe sous le cadre.
+   `top` vise le milieu du trait de 3 px, le `translateY(-50%)` de ModelQuotaIndicator.css fait le
+   reste. 14 px : la hauteur libre sous les icônes, pour que la zone cliquable de la jauge ne mange
+   pas le bas de leurs boutons. */
+.composer-input-row > .model-quota .model-quota-trigger {
+  align-items: flex-end;
+  min-height: 14px;
+  padding: 0;
+}
+.composer-input-row > .model-quota .model-quota-bar-value {
+  top: calc(100% - 1.5px);
+}
+/* LE ROND DÉPASSE DU CADRE D'ENVIRON 6 PX (conv-1399) : `overflow: hidden` sur ces deux conteneurs le
+   coupait net (`.chat` dans cosmic-outline.css, `.chat-layout` dans ChatView.css). `clip` coupe au
+   même endroit à la marge près, et 8 px suffisent au rond. Sans risque pour la hauteur : `.chat-layout`
+   fixe `min-height: 0` et `.chat` `min-width: 0`, que `clip` ne donne pas seul. */
+:root .cosmic-outline .chat-layout,
+:root .cosmic-outline .chat {
+  overflow: clip;
+  overflow-clip-margin: 8px;
+}
+/* LA PLACE DE LA JAUGE SOUS LES ICÔNES (conv-1399). Plus de marge sous le champ ni sous le cadre :
+   la rangée descend jusqu'au bord, et c'est elle qui garde 14 px sous ses boutons. Le haut du rond
+   y tient sans toucher un bouton. `:has` : une saisie sans jauge garde ses marges. */
+.composer-input-row:has(> .model-quota) {
+  padding-bottom: 14px;
+}
+:root .cosmic-outline div.composer[data-origine='saisie']:has(.composer-input-row > .model-quota) {
+  padding-bottom: 0;
+}
+:root
+  .cosmic-outline
+  .composer[data-origine='saisie']
+  > .composer-field:has(> .composer-input-row > .model-quota) {
+  padding-bottom: 0;
+}

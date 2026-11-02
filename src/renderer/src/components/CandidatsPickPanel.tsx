@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { type CandidatAffiche, numerosDesCandidats } from './veille-candidats-message'
+import {
+  type CandidatAffiche,
+  type LotDeLancement,
+  numerosDesCandidats
+} from './veille-candidats-message'
 import {
   emojiType,
   libelleVoie,
@@ -8,11 +12,16 @@ import {
   planDeLancement,
   redigerPromptsDuPlan,
   resumeDuPlan,
+  selectionAPlanifier,
   selectionAutoDepuisScout,
   voieDeLaPiste
 } from './veille-candidats-message'
 import './CandidatsPickPanel.css'
 import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
+import { PARALLELE_MAX, type SelectionAPlanifier } from '../../../shared/plan-de-lots'
+
+/** L'issue du dépôt du plan. `repli` : ce fil ne mène pas de plan, les lots s'enchaînent ici. */
+export type IssuePlanDeSelection = { ok: true } | { ok: false; erreur: string; repli?: boolean }
 
 /**
  * Une pastille muette ne dit rien : chaque couleur porte son libelle en infobulle et en aria.
@@ -39,7 +48,8 @@ export function CandidatsPickPanel({
   candidats,
   texteScout,
   autoLancer,
-  onPick
+  onPick,
+  onPlan
 }: {
   candidats: CandidatAffiche[]
   /** Le texte du scout : s'il déclare `CIBLE:`/`CIBLES:`, ce choix pré-coche les cases. */
@@ -51,11 +61,15 @@ export function CandidatsPickPanel({
    */
   autoLancer?: boolean
   /**
-   * Le lancement : le message du PREMIER lot, et ceux des lots suivants quand la sélection en compte
-   * plusieurs — à envoyer l'un après l'autre, un par tour (conv-1080). Une sélection d'un seul lot
-   * n'a pas de `suite`.
+   * Le lancement dans le fil : le message du PREMIER lot, et ceux des lots suivants quand aucun plan
+   * ne peut les porter (conv-1080). Une sélection d'un seul lot n'a pas de `suite`.
    */
   onPick?: (prompt: string, suite?: readonly string[]) => void
+  /**
+   * Le lancement en super conversation (conv-1333) : dès deux lots, la sélection devient un plan,
+   * chaque lot dans son fil. Absent : les lots s'enchaînent dans le fil.
+   */
+  onPlan?: (selection: SelectionAPlanifier) => Promise<IssuePlanDeSelection>
 }): React.JSX.Element {
   const { t } = useTextesChatDecisions()
   /*
@@ -96,8 +110,8 @@ export function CandidatsPickPanel({
    * UN SEUL BOUTON, LE WORKFLOW INTELLIGENT (conv-1080) : « ça doit retenir les candidats puis lancer
    * le workflow intelligent ». Le choix se fait PISTE PAR PISTE (« fais le truc parfait », même fil) :
    * chaque ligne porte sa voie et sa raison, les pistes d'une même voie partent ensemble par lots de
-   * `MAX_PISTES_PAR_LOT`, lancés l'un après l'autre. Le bloc au-dessus du bouton dit le plan en
-   * direct — un choix fait à la place de l'utilisateur ne doit jamais être invisible.
+   * `MAX_PISTES_PAR_LOT`, en super conversation dès deux lots (conv-1333). Le bloc au-dessus du bouton
+   * dit le plan en direct — un choix fait à la place de l'utilisateur ne doit jamais être invisible.
    */
   const voies = candidats.map(voieDeLaPiste)
   const plan = planDeLancement(selection)
@@ -107,6 +121,30 @@ export function CandidatsPickPanel({
     if (suite.length > 0) onPick?.(premier, suite)
     else onPick?.(premier)
   }
+  /*
+   * LE PLAN D'ABORD (conv-1333, 2026-10-30). Dès deux lots, la sélection part en super conversation :
+   * dans la file du fil, en mémoire de la vue, 8 lots sur 12 n'ont jamais quitté l'écran. L'issue reste
+   * visible ici : un plan refusé ne s'avale pas, et le bouton ne relance pas un plan parti.
+   */
+  const [lancement, setLancement] = useState<
+    'envoi' | { lots: number } | { erreur: string } | null
+  >(null)
+  const demarrer = (lots: readonly LotDeLancement[]): void => {
+    const prompts = redigerPromptsDuPlan(lots)
+    if (lots.length < 2 || !onPlan) {
+      lancer(prompts)
+      return
+    }
+    setLancement('envoi')
+    void onPlan(selectionAPlanifier(lots)).then((issue) => {
+      if (issue.ok) setLancement({ lots: lots.length })
+      else if (issue.repli) {
+        setLancement(null)
+        lancer(prompts)
+      } else setLancement({ erreur: issue.erreur })
+    })
+  }
+  const planParti = lancement !== null && typeof lancement === 'object' && 'lots' in lancement
   /*
    * L'AGENT APPUIE SUR LE BOUTON. Une seule fois par panneau (`lanceRef`) : un re-rendu ne renvoie
    * rien. Condition stricte — le mode auto est allume ET le scout a ecrit son choix ET ce choix
@@ -120,7 +158,9 @@ export function CandidatsPickPanel({
     if (!autoLancer || lanceRef.current) return
     if (choixAuto.length === 0) return
     lanceRef.current = true
-    lancer(redigerPromptsDuPlan(planAuto))
+    // Le plan pose son état « envoi » : hors de l'effet, un rendu en cascade ne sert à rien.
+    if (planAuto.length > 1 && onPlan) queueMicrotask(() => demarrer(planAuto))
+    else lancer(redigerPromptsDuPlan(planAuto))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoLancer])
   return (
@@ -264,7 +304,7 @@ export function CandidatsPickPanel({
       {plan.length > 1 && (
         <div className="cpick-voie" data-testid="cpick-voie">
           {t('candidats.lancera')} <b>{t('candidats.lancera.lots', { n: plan.length })}</b>
-          {t('candidats.lancera.suite', { max: MAX_PISTES_PAR_LOT })}
+          {t('candidats.lancera.suite', { parallele: PARALLELE_MAX, max: MAX_PISTES_PAR_LOT })}
           <ol className="cpick-lots">
             {plan.map((lot, rang) => (
               <li key={rang} data-testid="cpick-lot" data-voie={lot.voie}>
@@ -275,6 +315,11 @@ export function CandidatsPickPanel({
               </li>
             ))}
           </ol>
+        </div>
+      )}
+      {lancement !== null && typeof lancement === 'object' && 'erreur' in lancement && (
+        <div className="cpick-voie cpick-refus" data-testid="cpick-refus" role="alert">
+          {t('candidats.planRefuse', { erreur: lancement.erreur })}
         </div>
       )}
       <div className="cpick-actions">
@@ -288,11 +333,15 @@ export function CandidatsPickPanel({
               : 'mixte'
           }
           data-lots={plan.length}
-          disabled={selection.length === 0}
-          onClick={() => lancer(redigerPromptsDuPlan(plan))}
+          disabled={selection.length === 0 || lancement === 'envoi' || planParti}
+          onClick={() => demarrer(plan)}
           title={t('candidats.lancerTitre')}
         >
-          {plan.length > 1 ? t('candidats.lancerLots', { n: plan.length }) : t('candidats.lancer')}
+          {planParti
+            ? t('candidats.planLance', { n: lancement.lots })
+            : plan.length > 1
+              ? t('candidats.lancerLots', { n: plan.length })
+              : t('candidats.lancer')}
         </button>
       </div>
     </div>

@@ -28,19 +28,23 @@ export const COMMANDE_DE_VERIFICATION = '/check'
 
 /**
  * Les post-its que « Tout vérifier » vise : ceux de la ligne « À vérifier » (l'étage AFFICHÉ, état
- * manuel compris), et seulement ceux de la personne choisie quand un filtre est posé — les autres
- * sont estompés à l'écran, l'utilisateur ne les vise pas. Jamais un post-it de collègue
- * (conv-1210) : son fil vit sur SON poste, un `/check` envoyé d'ici n'y arriverait pas.
+ * manuel compris), et seulement ceux de la personne et du projet choisis quand un filtre est posé
+ * (projet : conv-1329) — les autres sont estompés à l'écran, l'utilisateur ne les vise pas. Jamais
+ * un post-it de collègue (conv-1210) : son fil vit sur SON poste, un `/check` envoyé d'ici n'y
+ * arriverait pas.
  */
 export function postitsAVerifier(
   postits: readonly PostItDeLaRiviere[],
-  personne: string | null
+  personne: string | null,
+  /** Le filtre de projet : il regroupe des libellés (`board-projets-du-filtre.ts`), d'où un test. */
+  dansLeProjet: (p: PostItDeLaRiviere) => boolean = () => true
 ): PostItDeLaRiviere[] {
   return postits.filter(
     (p) =>
       p.etage === 'sans-preuve' &&
       !p.collegue &&
-      (personne === null || p.demandeur?.cle === personne)
+      (personne === null || p.demandeur?.cle === personne) &&
+      dansLeProjet(p)
   )
 }
 

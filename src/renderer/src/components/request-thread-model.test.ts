@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Msg } from './chat-view-types'
+import { toolTitle } from './execution-step-titles'
 import { buildHarnessTimelineFromTrace, type HarnessTraceEvent } from './harness-timeline-model'
 import {
   buildRequestThread,
@@ -252,6 +253,16 @@ describe('gestes propres de l’agent, lus dans le journal de la demande', () =>
     expect(families[2].actions[0]).toMatchObject({ title: 'Commande', status: 'failed' })
     expect(familyOf('mcp__autowin__ask')).toBe('demander')
     expect(familyOf('outil-inconnu')).toBe('autre')
+    // Attendre et arrêter en arrière-plan (conv-1370, lot 5).
+    expect(familyOf('Monitor')).toBe('lancer')
+    expect(familyOf('TaskStop')).toBe('lancer')
+    expect(toolTitle('Monitor')).toBe('Surveillance lancée')
+    expect(toolTitle('TaskStop', 2)).toBe('Tâches arrêtées')
+    // Modifier et supprimer une tâche programmée (conv-1370, lot 6).
+    expect(familyOf('task_update')).toBe('modifier')
+    expect(familyOf('task_delete')).toBe('modifier')
+    expect(toolTitle('task_update')).toBe('Tâche modifiée')
+    expect(toolTitle('task_delete', 2)).toBe('Tâches supprimées')
   })
 })
 

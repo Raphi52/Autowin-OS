@@ -115,8 +115,61 @@ describe('CarteDesBesoinsView', () => {
     ])
       expect(el.querySelector(`[data-testid="${parti}"]`)).toBeNull()
     expect(vue.textContent).not.toContain('Toutes les demandes')
-    // Sous la rivière, plus rien : elle est le dernier enfant de la vue.
-    expect(vue.lastElementChild?.getAttribute('data-testid')).toBe('riviere')
+    // Sous la rivière, plus rien : elle est le dernier enfant de son onglet (conv-1397), et cet
+    // onglet le dernier de la vue tant que les tickets n'ont pas été ouverts.
+    const onglet = vue.querySelector('[data-testid="besoins-onglet-demandes"]')!
+    expect(onglet.lastElementChild?.getAttribute('data-testid')).toBe('riviere')
+    expect(vue.lastElementChild).toBe(onglet)
+  })
+
+  // L'ancien écran Tickets, devenu onglet du Board (conv-1397, 2026-10-31 : « la partie ticket azure
+  // faut trouver comment la mettre dans board de manière élégante »). ENTRÉES QUI DOIVENT FAIRE
+  // ÉCHOUER : des tickets rendus sous la rivière, une rivière démontée en allant sur les tickets, ou
+  // les compteurs des post-it laissés au-dessus des tickets.
+  it('l’onglet Tickets montre les tickets externes à la place de la rivière, sans la démonter', async () => {
+    const { el } = await monter(async () => carte([projet('P1', [demande('a', 0, 'prouve')])]))
+    const onglets = [...el.querySelectorAll('.view-topbar .domain-tabs button')]
+    expect(onglets.map((b) => b.textContent)).toEqual(['Demandes', 'Tickets'])
+    expect(el.querySelector('[data-testid="tickets-view"]')).toBeNull()
+
+    await act(async () => (onglets[1] as HTMLButtonElement).click())
+    const demandes = el.querySelector<HTMLElement>('[data-testid="besoins-onglet-demandes"]')!
+    const tickets = el.querySelector<HTMLElement>('[data-testid="besoins-onglet-tickets"]')!
+    expect(tickets.hidden).toBe(false)
+    expect(tickets.querySelector('[data-testid="tickets-view"]')).not.toBeNull()
+    expect(demandes.hidden).toBe(true)
+    expect(demandes.querySelector('[data-testid="riviere"]')).not.toBeNull()
+    expect(el.querySelector('[data-testid="besoins-stats"]')).toBeNull()
+
+    await act(async () => (onglets[0] as HTMLButtonElement).click())
+    expect(demandes.hidden).toBe(false)
+    expect(el.querySelector('[data-testid="besoins-stats"]')).not.toBeNull()
+    // Les tickets restent montés, masqués : leurs filtres et leur mode auto survivent.
+    expect(tickets.hidden).toBe(true)
+    expect(tickets.querySelector('[data-testid="tickets-view"]')).not.toBeNull()
+  })
+
+  it('arrive directement sur les tickets quand l’app y navigue (« va sur les tickets »)', async () => {
+    ;(window as unknown as { api: unknown }).api = {
+      carteDesBesoins: vi.fn(async () => carte([projet('P1', [demande('a', 0, 'prouve')])]))
+    }
+    const el = document.createElement('div')
+    document.body.append(el)
+    const root = createRoot(el)
+    montes.push({ root, el })
+    await act(async () =>
+      root.render(
+        createElement(CarteDesBesoinsView, {
+          active: true,
+          onOpenConversation: vi.fn(),
+          section: 'tickets'
+        })
+      )
+    )
+    expect(el.querySelector('[data-testid="tickets-view"]')).not.toBeNull()
+    expect(el.querySelector<HTMLElement>('[data-testid="besoins-onglet-demandes"]')!.hidden).toBe(
+      true
+    )
   })
 
   it('ouvre le fil depuis la fiche de la rivière, même si le chat n’est pas encore monté', async () => {

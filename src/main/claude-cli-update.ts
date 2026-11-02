@@ -11,9 +11,9 @@
 // binaire est memoise sur sa TAILLE et sa DATE (`claude-cli-catalog.ts`), qui changent toutes deux a
 // la mise a jour — le rafraichisseur de catalogue (60 s) reprend donc les nouveaux ids tout seul.
 
-import { execFile, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname } from 'node:path'
+import { execFileHorsFil, type ErreurHorsFil } from './execution-hors-fil'
 import { resolveClaudeBin, signalerMiseAJourClaudeCli } from './providers/claude'
 
 /** Fenetre entre deux tentatives : assez courte pour suivre les publications, assez large pour ne pas payer un spawn a chaque demarrage. */
@@ -121,36 +121,36 @@ export function imageEnCours(sortieTasklist: string, image: string): boolean {
 export function claudeExeEnCours(bin: string): Promise<boolean> {
   if (process.platform !== 'win32') return Promise.resolve(false)
   const image = /\.exe$/i.test(basename(bin)) ? basename(bin) : 'claude.exe'
-  return new Promise((resolve) => {
-    execFile(
-      'tasklist',
-      ['/FO', 'CSV', '/NH', '/FI', `IMAGENAME eq ${image}`],
-      { windowsHide: true, timeout: 10_000 },
-      (erreur, sortie) => resolve(!erreur && imageEnCours(String(sortie), image))
-    )
-  })
+  // Hors du fil principal : retenté toutes les 15 min tant que le CLI tourne, ce `tasklist` a tenu la
+  // fenêtre 20,8 s d'un seul appel (`gels.jsonl`, 2026-10-31 — conv-1413).
+  return execFileHorsFil('tasklist', ['/FO', 'CSV', '/NH', '/FI', `IMAGENAME eq ${image}`], {
+    windowsHide: true,
+    timeout: 10_000
+  }).then(
+    ({ stdout }) => imageEnCours(stdout, image),
+    () => false
+  )
 }
 
-function runClaudeUpdate(bin: string): Promise<{ code: number | null; output: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(bin, ['update'], { windowsHide: true, shell: process.platform === 'win32' })
-    let output = ''
-    const collect = (chunk: Buffer): void => {
-      output += chunk.toString('utf8')
-    }
-    child.stdout?.on('data', collect)
-    child.stderr?.on('data', collect)
-    const timer = setTimeout(() => {
-      child.kill()
-      reject(new Error(`\`claude update\` depasse ${UPDATE_TIMEOUT_MS} ms`))
-    }, UPDATE_TIMEOUT_MS)
-    child.on('error', (erreur) => {
-      clearTimeout(timer)
-      reject(erreur)
+/**
+ * Hors du fil principal, comme `tasklist` : le `cmd.exe` de `claude update` a tenu la fenêtre 16,2 s
+ * (`gels.jsonl`, 2026-10-31 — conv-1413). La sortie rend stdout puis stderr : l'erreur éventuelle
+ * reste la dernière ligne, celle que `detail` retient.
+ */
+async function runClaudeUpdate(bin: string): Promise<{ code: number | null; output: string }> {
+  try {
+    const { stdout, stderr } = await execFileHorsFil(bin, ['update'], {
+      windowsHide: true,
+      shell: process.platform === 'win32',
+      timeout: UPDATE_TIMEOUT_MS,
+      maxBuffer: 16 * 1024 * 1024
     })
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      resolve({ code, output })
-    })
-  })
+    return { code: 0, output: stdout + stderr }
+  } catch (erreur) {
+    const e = erreur as ErreurHorsFil
+    if (e.killed) throw new Error(`\`claude update\` depasse ${UPDATE_TIMEOUT_MS} ms`)
+    if (typeof e.code === 'number')
+      return { code: e.code, output: (e.stdout ?? '') + (e.stderr ?? '') }
+    throw erreur
+  }
 }

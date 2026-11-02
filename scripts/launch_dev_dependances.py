@@ -17,6 +17,7 @@ coute une reinstallation (~1 min) a CHAQUE lancement.
 from __future__ import annotations
 
 import json
+import socket
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -93,6 +94,57 @@ def attendre_electron_libre(
     """
     limite = horloge() + delai_s
     while electron_verrouille(racine):
+        if horloge() >= limite:
+            return False
+        if signe_de_vie is not None:
+            signe_de_vie()
+        dormir(pause_s)
+    return True
+
+
+# Le port du serveur de l'interface en dev : celui de Vite par defaut (electron.vite.config.ts n'en
+# fixe aucun). L'ORIGINE de la vue en depend (`http://localhost:5173`), donc toute sa memoire locale.
+PORT_INTERFACE_DEV = 5173
+
+
+def port_occupe(port: int, delai_s: float = 0.3) -> bool:
+    """Vrai si un serveur ecoute deja sur `port` en local, en IPv4 ou en IPv6 (Vite ecoute sur
+    « localhost », qui peut etre l'un ou l'autre). Une simple connexion, refermee aussitot."""
+    for hote in ("127.0.0.1", "::1"):
+        famille = socket.AF_INET6 if ":" in hote else socket.AF_INET
+        try:
+            with socket.socket(famille, socket.SOCK_STREAM) as s:
+                s.settimeout(delai_s)
+                if s.connect_ex((hote, port)) == 0:
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def attendre_port_libre(
+    port: int = PORT_INTERFACE_DEV,
+    delai_s: float = 20.0,
+    pause_s: float = 0.5,
+    *,
+    occupe: Callable[[int], bool] = port_occupe,
+    dormir: Callable[[float], None] = time.sleep,
+    horloge: Callable[[], float] = time.monotonic,
+    signe_de_vie: Callable[[], None] | None = None,
+) -> bool:
+    """Vrai des que `port` est libre ; Faux s'il est encore pris apres `delai_s`.
+
+    LA MEME COURSE DU REDEMARRAGE que `attendre_electron_libre`, sur le port de l'interface (mesure
+    du 2026-10-30, conv-1329) : `restart_app` lance le lanceur PUIS quitte l'app, dont le serveur
+    Vite tient encore 5173. Le nouveau Vite ecrit « Port 5173 is in use, trying another one » et
+    prend 5174 (launch-dev.log) : la vue change d'ORIGINE, donc de memoire locale. L'app repart
+    alors sans les dossiers retires du Chat, sans la langue, le zoom ni les etats poses a la main
+    sur le Board — tout est reste sous l'autre origine. On attend donc que l'ancienne app lache le
+    port. Un serveur qui le garde VRAIMENT ne le lache pas : au bout du delai, Faux, et Vite
+    prendra le suivant comme avant (l'appelant le journalise).
+    """
+    limite = horloge() + delai_s
+    while occupe(port):
         if horloge() >= limite:
             return False
         if signe_de_vie is not None:

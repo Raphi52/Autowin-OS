@@ -361,12 +361,6 @@
   box-shadow: none;
 }
 
-.cosmic-outline .chat-welcome {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.26);
-  box-shadow: none;
-}
-
 .cosmic-outline .composer {
   border-color: rgba(255, 255, 255, 0.14);
   background: rgba(0, 0, 0, 0.42);
@@ -678,12 +672,6 @@
   font: 700 9px/1 var(--font);
   letter-spacing: 0.04em;
   cursor: pointer;
-}
-
-.cosmic-outline .chat-welcome {
-  padding: 36px;
-  border: 0;
-  background: transparent;
 }
 
 .cosmic-outline .composer {

@@ -38,6 +38,8 @@ describe('demarrage — l avertissement de collision probable atteint le run', (
     const stateStore = {
       list: () => [],
       get: () => undefined,
+      dernierConnu: () => undefined,
+      getAsync: async () => undefined,
       save: (enregistrement: { detail?: string }) => persistes.push(enregistrement),
       remove: () => {}
     }

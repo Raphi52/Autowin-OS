@@ -164,9 +164,6 @@ export const VUES_CONNUES = [
   'observatory',
   'task-manager',
   'worktree',
-  // Vue Bureaux cachés (conv-951).
-  'hdesk',
-  'tickets',
   // Carte des besoins (conv-1089) — `ui-capture.vues.test.mjs` garde cette liste égale au catalogue.
   'besoins',
   'settings'

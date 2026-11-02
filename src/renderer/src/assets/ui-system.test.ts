@@ -48,7 +48,8 @@ describe('Autowin UI contract', () => {
     ['SettingsView.tsx', 'domain-shell'],
     ['ObservatoryView.tsx', 'observatory-view'],
     ['TaskManagerView.tsx', 'task-manager-view'],
-    ['TicketsView.tsx', 'tickets-view'],
+    // TicketsView n'est plus une page (conv-1397) : l'onglet « Tickets » du Board, posé DANS le cadre
+    // de page du Board (CarteDesBesoinsView, `view-page besoins-view`).
     ['WorktreeView.tsx', 'worktree-tab']
   ] as const
 

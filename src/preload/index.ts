@@ -1,7 +1,11 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
 import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/messages-entre-fils-app'
-import type { GestePlanDeLots, ReponsePlansDeLots } from '../shared/plan-de-lots'
+import type {
+  GestePlanDeLots,
+  ReponsePlansDeLots,
+  SelectionAPlanifier
+} from '../shared/plan-de-lots'
 import type {
   EtatPhraseProd,
   ReponseAutorisation as ReponseAutorisationProd,
@@ -123,6 +127,13 @@ import {
   type EtatNavigateur,
   type RectNavigateur
 } from '../shared/navigateur'
+import { CANAUX_QUESTION_A_COTE, type ApiQuestionACote } from '../shared/question-a-cote'
+import {
+  CANAUX_TERMINAL,
+  type ApiTerminal,
+  type DonneesTerminal,
+  type EtatTerminal
+} from '../shared/terminal'
 
 /**
  * NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 2/5) : la forme est celle du contrat `ApiNavigateur`,
@@ -143,11 +154,8 @@ const navigateur: ApiNavigateur = {
   fermerOnglet: (ongletId) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.fermerOnglet, ongletId),
   poserCadre: (rect, zoom) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.poserCadre, rect, zoom),
   basculerMode: (mode) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.basculerMode, mode),
-  annotations: (conversationId) =>
-    ipcRenderer.invoke(CANAUX_NAVIGATEUR.annotations, conversationId),
-  supprimerAnnotation: (id) => ipcRenderer.invoke(CANAUX_NAVIGATEUR.supprimerAnnotation, id),
-  viderAnnotations: (conversationId) =>
-    ipcRenderer.invoke(CANAUX_NAVIGATEUR.viderAnnotations, conversationId),
+  prendreElementsChoisis: (conversationId) =>
+    ipcRenderer.invoke(CANAUX_NAVIGATEUR.prendreElementsChoisis, conversationId),
   repondreAccord: (origine, reponse) =>
     ipcRenderer.invoke(CANAUX_NAVIGATEUR.repondreAccord, origine, reponse),
   reglages: {
@@ -165,6 +173,43 @@ const navigateur: ApiNavigateur = {
     ipcRenderer.on(CANAUX_NAVIGATEUR.evenementEtat, ecouteur)
     return () => {
       ipcRenderer.removeListener(CANAUX_NAVIGATEUR.evenementEtat, ecouteur)
+    }
+  }
+}
+
+/** QUESTION À CÔTÉ (conv-1362) : les noms de canaux viennent de `CANAUX_QUESTION_A_COTE`. */
+const questionACote: ApiQuestionACote = {
+  poser: (conversationId, question) =>
+    ipcRenderer.invoke(CANAUX_QUESTION_A_COTE.poser, conversationId, question),
+  annuler: (conversationId) => ipcRenderer.invoke(CANAUX_QUESTION_A_COTE.annuler, conversationId)
+}
+
+/**
+ * TERMINAL INTÉGRÉ DU CHAT (conv-1362, lot 3/3) : la forme est celle du contrat `ApiTerminal`, les
+ * noms de canaux viennent de `CANAUX_TERMINAL`. Un écouteur par abonnement, retiré par la fonction
+ * rendue : un panneau démonté n'écoute plus.
+ */
+const terminal: ApiTerminal = {
+  etat: (conversationId) => ipcRenderer.invoke(CANAUX_TERMINAL.etat, conversationId),
+  ouvrir: (conversationId, taille) =>
+    ipcRenderer.invoke(CANAUX_TERMINAL.ouvrir, conversationId, taille),
+  ecrire: (terminalId, donnees) => ipcRenderer.invoke(CANAUX_TERMINAL.ecrire, terminalId, donnees),
+  redimensionner: (terminalId, taille) =>
+    ipcRenderer.invoke(CANAUX_TERMINAL.redimensionner, terminalId, taille),
+  fermer: (terminalId) => ipcRenderer.invoke(CANAUX_TERMINAL.fermer, terminalId),
+  tampon: (terminalId) => ipcRenderer.invoke(CANAUX_TERMINAL.tampon, terminalId),
+  surDonnees: (rappel) => {
+    const ecouteur = (_e: unknown, morceau: DonneesTerminal): void => rappel(morceau)
+    ipcRenderer.on(CANAUX_TERMINAL.evenementDonnees, ecouteur)
+    return () => {
+      ipcRenderer.removeListener(CANAUX_TERMINAL.evenementDonnees, ecouteur)
+    }
+  },
+  surEtat: (rappel) => {
+    const ecouteur = (_e: unknown, etat: EtatTerminal): void => rappel(etat)
+    ipcRenderer.on(CANAUX_TERMINAL.evenementEtat, ecouteur)
+    return () => {
+      ipcRenderer.removeListener(CANAUX_TERMINAL.evenementEtat, ecouteur)
     }
   }
 }
@@ -204,6 +249,9 @@ const api = {
     ipcRenderer.invoke('hdesk:gestion:choisirExe'),
   // Navigateur intégré du chat (conv-1286) : `window.api.navigateur`, typé par `ApiNavigateur`.
   navigateur,
+  questionACote,
+  // Terminal intégré du chat (conv-1362) : `window.api.terminal`, typé par `ApiTerminal`.
+  terminal,
   // Phrase de passe de production. Elle part de l'ecran vers le processus principal et n'en revient
   // JAMAIS : aucune de ces trois fonctions ne rend la phrase, seulement un etat, un refus ou un
   // jeton opaque borne a une cible, une operation et cinq minutes.
@@ -426,6 +474,12 @@ const api = {
     ipcRenderer.invoke('os:mascotte:choisir-style', style),
   /** Le thème appliqué, pour que la mascotte passe en machine sous le thème NieR (conv-346). */
   themeMascotte: (theme: string): Promise<boolean> => ipcRenderer.invoke('os:mascotte:theme', theme),
+  /** La vraie page de la mascotte, pour l'accueil d'un fil vide (conv-1401). */
+  mascottePage: (): Promise<{ html: string; largeur: number; hauteur: number }> =>
+    ipcRenderer.invoke('os:mascotte:page'),
+  /** La feuille d'humeur à poser sur cette page. */
+  mascotteFeuilleAccueil: (humeur: string, agents: number): Promise<string> =>
+    ipcRenderer.invoke('os:mascotte:feuille-accueil', humeur, agents),
   setTitlebarSymbolColor: (couleur: string): Promise<boolean> =>
     ipcRenderer.invoke('app:titlebar-symbol-color', couleur),
   // Ce que repond `prefers-color-scheme` dans l'app : la base du theme Autowin, pas celle de Windows.
@@ -595,8 +649,9 @@ const api = {
     phase: string,
     champion: { provider: string; model: string }
   ): Promise<ShadowRouteResult> => ipcRenderer.invoke('os:shadowRoute:recommend', phase, champion),
-  modelQuotas: (force = false): Promise<ModelQuotaSnapshot> =>
-    ipcRenderer.invoke('os:models:quotas', force),
+  /** `compteDuFil` : le compte Claude choisi pour le fil ouvert, dont la barre doit parler. */
+  modelQuotas: (force = false, compteDuFil?: string): Promise<ModelQuotaSnapshot> =>
+    ipcRenderer.invoke('os:models:quotas', force, compteDuFil),
   claudeResets: (): Promise<ClaudeResetsStatus> => ipcRenderer.invoke('os:claude:resets'),
   /** CONSOMME le reset : appelé seulement après confirmation explicite de l'utilisateur. */
   claudeResetClaim: (grantId: string): Promise<ClaudeResetClaimResult> =>
@@ -718,12 +773,8 @@ const api = {
   enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }): Promise<BrainPersoState> =>
     ipcRenderer.invoke('os:brain-perso:enregistrer', entree),
   resetBrainPerso: (): Promise<BrainPersoState> => ipcRenderer.invoke('os:brain-perso:reset'),
-  onModelQuestion: (cb: (question: PendingModelQuestion) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, question: PendingModelQuestion): void =>
-      cb(question)
-    ipcRenderer.on('model:question', handler)
-    return () => ipcRenderer.removeListener('model:question', handler)
-  },
+  pendingModelQuestion: (): Promise<PendingModelQuestion | null> =>
+    ipcRenderer.invoke('model:question:pending'),
   answerModelQuestion: (id: string, answer: string): Promise<{ ok: true }> =>
     ipcRenderer.invoke('model:question:answer', id, answer),
   toolUsage: (): Promise<
@@ -1019,12 +1070,13 @@ const api = {
    * les plans en un appel, sans fil, pour ranger la liste des conversations.
    */
   plansDeLots: (
-    geste: GestePlanDeLots | 'tous',
+    geste: GestePlanDeLots | 'tous' | 'lancer-selection',
     conversationId?: string,
     planId?: string,
-    lot?: number
+    lot?: number,
+    selection?: SelectionAPlanifier
   ): Promise<ReponsePlansDeLots> =>
-    ipcRenderer.invoke('os:plansDeLots', geste, conversationId, planId, lot),
+    ipcRenderer.invoke('os:plansDeLots', geste, conversationId, planId, lot, selection),
   pilotChat: (
     messages: Array<{
       role: 'user' | 'assistant'

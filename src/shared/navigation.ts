@@ -6,11 +6,12 @@ export const APP_DESTINATIONS = [
   { id: 'observatory', label: 'Observatory', icon: '🔭' },
   { id: 'task-manager', label: 'Task Manager', icon: '◷' },
   { id: 'worktree', label: 'Worktrees', icon: '🌳' },
-  // Bureaux cachés (conv-951, 2026-10-16) : « une view dédiée pour gérer tous mes Hdesk ».
-  { id: 'hdesk', label: 'Bureaux cachés', icon: '🖥️' },
-  { id: 'tickets', label: 'Tickets', icon: '🎫' },
-  // Carte des besoins (conv-1089, 2026-10-22) : les demandes de tous les fils, par projet. Placée
-  // APRÈS Tickets pour ne décaler aucun raccourci Ctrl+1…9.
+  // Les Bureaux cachés ne sont plus un écran (conv-1378, 2026-10-31) : un panneau du chat, ouvert par
+  // l'icône à côté du navigateur. Leurs noms restent des adresses : voir `BUREAUX_CACHES`.
+  // Tickets n'est plus un écran (conv-1397, 2026-10-31) : les tickets des sources externes (Azure,
+  // GitHub, GitLab) sont un onglet du Board, la veille « Autowin OS » un bloc de Maintenance. Le nom
+  // reste une adresse : voir `LEGACY_LOCATIONS`.
+  // Carte des besoins (conv-1089, 2026-10-22) : les demandes de tous les fils, par projet.
   // Renommée « Carte du projet » (conv-1113, 2026-10-23) ; l'identifiant reste `besoins`, comme
   // `tests` pour Maintenance, pour qu'un agent qui navigue vers « besoins » y aboutisse toujours.
   // Renommée « Board » (conv-1126, 2026-10-23, proposition 5 : « le mot que tu emploies, ce
@@ -69,16 +70,18 @@ export type TaskManagerSection = 'watchdog' | 'planification'
  */
 export type WorktreeSection = 'carte' | 'activite' | 'sante'
 /**
- * Deux MÉTIERS dans Tickets, comme Task Manager en a deux : traiter le travail synchronisé d'un
- * serveur de tickets n'est pas décider quoi reprendre chez les concurrents. Le sélecteur de Source
- * existant ne pouvait pas porter la veille — une source y désigne un profil AVEC authentification et
- * requêtes serveur, et y glisser un stock local aurait détourné ce modèle.
+ * Deux onglets dans le Board (conv-1397, 2026-10-31 : « la partie ticket azure faut trouver comment
+ * la mettre dans board de manière élégante ») : les post-it des demandes, et les tickets des sources
+ * externes que ces demandes rattachent (« + task », `#1234`). Le kanban reste seul dans son onglet.
  */
-export type TicketsSection = 'externes' | 'autowin'
+export type BoardSection = 'demandes' | 'tickets'
 
 export interface AppLocation {
   destination: AppDestination
-  section?: AgentStudioSection | SettingsSection | TaskManagerSection | WorktreeSection
+  section?:
+    AgentStudioSection | SettingsSection | TaskManagerSection | WorktreeSection | BoardSection
+  /** Panneau à ouvrir en arrivant : les Bureaux cachés vivent dans le chat (conv-1378). */
+  panneau?: 'bureaux-caches'
   /**
    * FAUX quand la valeur demandee n'a ete comprise par AUCUNE regle et qu'on a repli sur `chat`.
    *
@@ -128,14 +131,6 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   planning: 'task-manager',
   planification: 'task-manager',
   watchdog: 'task-manager',
-  // Bureaux cachés : l'utilisateur dit « Hdesk », le libellé dit « Bureaux cachés », un agent dit
-  // aussi le singulier ou sans accent (conv-951).
-  hdesks: 'hdesk',
-  'bureau caché': 'hdesk',
-  'bureau cache': 'hdesk',
-  'bureaux caches': 'hdesk',
-  'bureau-cache': 'hdesk',
-  'bureaux-caches': 'hdesk',
   // La carte des besoins : l'utilisateur l'a nommée « map des besoins », un agent dit aussi « demandes ».
   besoin: 'besoins',
   'carte des besoins': 'besoins',
@@ -147,6 +142,11 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   needs: 'besoins',
   demandes: 'besoins',
   backlog: 'besoins',
+  // L'ancien écran Tickets (conv-1397) : ses tickets externes vivent dans le Board, sa veille
+  // « Autowin OS » dans Maintenance. Le Board précis (onglet Tickets) passe par `LEGACY_LOCATIONS`.
+  tickets: 'besoins',
+  ticket: 'besoins',
+  veille: 'tests',
   // La vue Tests est multi-projets : un agent l'adresse aussi par « suite » ou « vitest ».
   test: 'tests',
   suite: 'tests',
@@ -155,7 +155,28 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   jest: 'tests'
 }
 
+/**
+ * LES BUREAUX CACHÉS, UN PANNEAU DU CHAT (conv-1378). L'utilisateur dit « Hdesk », l'interface dit
+ * « Bureaux cachés », un agent dit aussi le singulier ou sans accent (conv-951) : sans ces entrées, ces
+ * noms retomberaient en silence sur le chat, panneau fermé.
+ */
+const BUREAUX_CACHES: AppLocation = { destination: 'chat', panneau: 'bureaux-caches' }
+
 const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
+  hdesk: BUREAUX_CACHES,
+  hdesks: BUREAUX_CACHES,
+  'bureau caché': BUREAUX_CACHES,
+  'bureau cache': BUREAUX_CACHES,
+  'bureaux cachés': BUREAUX_CACHES,
+  'bureaux caches': BUREAUX_CACHES,
+  'bureau-cache': BUREAUX_CACHES,
+  'bureaux-caches': BUREAUX_CACHES,
+  // Les tickets externes, un onglet du Board (conv-1397) : « va sur les tickets » ouvre CET onglet,
+  // pas le kanban des demandes.
+  tickets: { destination: 'besoins', section: 'tickets' },
+  ticket: { destination: 'besoins', section: 'tickets' },
+  'work items': { destination: 'besoins', section: 'tickets' },
+  'work-items': { destination: 'besoins', section: 'tickets' },
   agents: { destination: 'agent-studio', section: 'topology' },
   roles: { destination: 'agent-studio', section: 'topology' },
   models: { destination: 'agent-studio', section: 'topology' },

@@ -24,6 +24,8 @@ import {
 } from './action-outcome-summary'
 import { compactageDuFil, questionOuverte } from './carnet-du-fil'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
+import { commandeJouee } from '../../../shared/chat-turn'
+import { constatsRetenus } from '../../../shared/preuve-du-tour'
 
 export type StatutEtape = 'prouve' | 'refuse' | 'en-cours' | 'sans-preuve' | 'a-venir'
 
@@ -155,8 +157,19 @@ function recommandeAvant(fil: readonly Msg[], rang: number, max = MAX_TITRE): st
 interface Constat {
   cle: string
   issue: OutcomeSummary
+  /** État de l'issue, sous le nom que lit `constatsRetenus`. */
+  etat: string
+  /** La commande jouée, entière : c'est elle qui dit ce qu'un vert couvre (`preuve-du-tour.ts`). */
+  commande?: string
   at?: number
 }
+
+/** Longueur de commande montrée dans un constat : la commande entière reste gardée par le tour. */
+const MAX_COMMANDE_AFFICHEE = 300
+
+/** Le code de sortie reste lisible : c'est la commande qu'on coupe, pas la fin du constat. */
+const libelleDUnTest = (commande: string, codeDeSortie: number): string =>
+  `${commande.length > MAX_COMMANDE_AFFICHEE ? `${commande.slice(0, MAX_COMMANDE_AFFICHEE - 1)}…` : commande} → exit ${codeDeSortie}`
 
 /**
  * Les vérifications d'UNE réponse, dans l'ordre où elles ont eu lieu : ses actions `verify` et
@@ -173,17 +186,30 @@ function constatsDeLaReponse(reponse: AsstMsg): Constat[] {
     if (!issue || issue.state === 'refused') continue
     const commande = (part.data as { command?: unknown } | undefined)?.command
     const cle = part.name === 'verify' ? `commande:${String(commande ?? '')}` : part.name
-    constats.push({ cle, issue, ...(part.at === undefined ? {} : { at: part.at }) })
-  }
-  for (const test of reponse.testsDuTerminal ?? [])
     constats.push({
-      cle: `commande:${test.commande}`,
+      cle,
+      issue,
+      etat: issue.state,
+      ...(part.name === 'verify' && typeof commande === 'string' ? { commande } : {}),
+      ...(part.at === undefined ? {} : { at: part.at })
+    })
+  }
+  for (const test of reponse.testsDuTerminal ?? []) {
+    // Le dossier fait partie de la commande : `npm test` ici et `cd ../autre && npm test` sont deux
+    // vérifications, et le Board dit où chacune a tourné (conv-1423).
+    // fix-ok: la clé et la règle lisaient `test.commande`, qui a perdu son `cd` dans le lecteur.
+    const commande = commandeJouee(test)
+    constats.push({
+      cle: `commande:${commande}`,
       issue: {
-        label: `${test.commande} → exit ${test.codeDeSortie}`,
+        label: libelleDUnTest(commande, test.codeDeSortie),
         state: test.codeDeSortie === 0 ? 'ok' : 'failed'
       },
+      etat: test.codeDeSortie === 0 ? 'ok' : 'failed',
+      commande,
       ...(test.at === undefined ? {} : { at: test.at })
     })
+  }
   // Tri STABLE : sans heure (tours anciens), l'ordre d'écriture est gardé.
   return constats.sort(
     (a, b) => (a.at ?? Number.NEGATIVE_INFINITY) - (b.at ?? Number.NEGATIVE_INFINITY)
@@ -192,18 +218,13 @@ function constatsDeLaReponse(reponse: AsstMsg): Constat[] {
 
 /**
  * La DERNIÈRE issue de chaque vérification DISTINCTE (une commande = une clé, toutes les
- * orchestrations = une clé). Une même commande rouge puis verte est la boucle normale : verte. Deux
- * commandes différentes ne se rachètent pas l'une l'autre (conv-76 : `typecheck exit 1` puis
- * `npm test exit 0` ne prouvent PAS l'étape).
+ * orchestrations = une clé). Une même commande rouge puis verte est la boucle normale : verte. Un
+ * rouge rejoué vert dans une commande plus large aussi (conv-1423). Deux commandes qui ne se couvrent
+ * pas ne se rachètent pas (conv-76 : `typecheck exit 1` puis `npm test exit 0` ne prouvent PAS
+ * l'étape) : la règle est `vertCouvreRouge`, la même que celle de la relance de fin de tour.
  */
 function issuesDuSegment(reponses: readonly AsstMsg[]): OutcomeSummary[] {
-  const issues = new Map<string, OutcomeSummary>()
-  for (const reponse of reponses)
-    for (const { cle, issue } of constatsDeLaReponse(reponse)) {
-      issues.delete(cle)
-      issues.set(cle, issue)
-    }
-  return [...issues.values()]
+  return constatsRetenus(reponses.flatMap(constatsDeLaReponse)).map(({ issue }) => issue)
 }
 
 const BLOCAGE_DECLARE = /^.*(?:⛔\s*Bloqué|⚠️\s*Non résolu).*$/mu

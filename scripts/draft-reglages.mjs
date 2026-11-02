@@ -11,8 +11,9 @@
  *     { "nom": "Accent", "variable": "--ex-accent", "couleur": "#e63ca0" }
  *   ]
  *
- * Les maquettes lisent `var(--ex-duree)` dans leur `css` ou leur `html`. Les variables sont posées
- * sur `.dkc-w` : la proposition affichée ET les vignettes suivent, puisque ce sont des copies.
+ * Les maquettes lisent `var(--ex-duree)` dans leur `css` ou leur `html`. Les valeurs d'origine sont
+ * posées sur `.dkc-w` ; celles qu'on règle, sur la diapositive ET la vignette de la proposition
+ * affichée seulement : chaque proposition garde les siennes (conv-1382, voir `SCRIPT_REGLAGES`).
  *
  * UN CURSEUR EXIGE DU CODE : le carrousel passe en page ```html-interactif, comme avec une scène 3D.
  * Ses boutons REMPLISSENT alors la saisie au lieu d'envoyer (amorce.js) ; l'utilisateur relit donc
@@ -23,7 +24,8 @@
  * bouton intact ne dit rien de plus qu'avant.
  *
  * UNE JAUGE VISIBLE FAIT BOUGER CE QU'ON REGARDE (conv-1382, 2026-10-31). Une jauge ne s'affiche que
- * sur les propositions qui la lisent, et le bouton d'une proposition ne porte que SES valeurs. Le
+ * sur les propositions qui la lisent, et le bouton d'une proposition ne porte que SES valeurs ; un
+ * mélange porte celles de chaque proposition mélangée, nommées par leur rang (« la 2 : Rayon 20 px »). Le
  * panneau est au-dessus de la proposition : une jauge qui agrandit la maquette ne part pas sous la
  * souris. `html-interactif-apercu.mjs` le prouve en bougeant chaque jauge (code 9 sinon).
  */
@@ -121,7 +123,8 @@ export function panneauReglages(reglages) {
     const lu = r.couleur ? r.couleur.toLowerCase() : `${r.valeur}${r.unite ? ` ${r.unite}` : ''}`
     return `<label for="${id}" class="dkc-rgl"><span class="dkc-rgn">${echapper(r.nom)}</span>${champ}<output class="dkc-rgv" for="${id}">${lu}</output></label>`
   })
-  return `<div class="dkc-rg">${champs.join('')}<button type="button" class="dkc-rgz">Valeurs d’origine</button></div>`
+  // Le titre dit la proposition réglée : chacune garde ses valeurs (le script le tient à jour).
+  return `<div class="dkc-rg"><span class="dkc-rgt">Réglages de la 1</span>${champs.join('')}<button type="button" class="dkc-rgz">Valeurs d’origine</button></div>`
 }
 
 /**
@@ -139,6 +142,7 @@ export function styleReglages(reglages) {
 .dkc-nav,.dkc-gtx{order:-2}
 .dkc-rg{order:-1;flex:0 0 100%;min-width:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-bottom:10px;padding:8px 10px;box-sizing:border-box;border-radius:10px;background-image:linear-gradient(var(--dk-gris),var(--dk-gris))}
 .dkc-rg[hidden],.dkc-rgl[hidden]{display:none}
+.dkc-rgt{flex:0 0 auto;color:var(--dk-pale);font:600 10.5px/1.2 ${mono};letter-spacing:.06em;text-transform:uppercase}
 .dkc-rgl{flex:1 1 170px;min-width:0;display:flex;flex-wrap:nowrap;align-items:center;gap:8px;color:var(--dk-dim);font-size:12px}
 .dkc-rgn{flex:0 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .dkc-rgl input[type=range]{flex:1 1 60px;min-width:40px;margin:0;accent-color:var(--dk-rose);cursor:pointer}
@@ -150,9 +154,14 @@ export function styleReglages(reglages) {
 }
 
 /**
- * Le script de la page. Les valeurs sont retenues dans le localStorage de la page (gardé par le fil) :
- * une page quittée puis rouverte revient sur les curseurs qu'on avait réglés, comme le rang affiché
- * d'une scène 3D (`SCRIPT_PLACE_SCENE`).
+ * Le script de la page. CHAQUE PROPOSITION GARDE SES VALEURS (conv-1382, 2026-10-31) : le panneau
+ * règle la proposition affichée (la carte choisie en « Tout voir »), et ses valeurs sont posées sur
+ * SA diapositive et SA vignette ; les autres gardent les leurs. Avant, une seule valeur posée sur tout
+ * le carrousel : « Rayon 20 » pour la 1 l'imposait aussi à la 2, qu'on avait peut-être réglée à 30.
+ * Les valeurs sont retenues par rang dans le localStorage de la page (gardé par le fil) : une page
+ * quittée puis rouverte revient sur ce qu'on avait réglé, comme le rang affiché d'une scène 3D
+ * (`SCRIPT_PLACE_SCENE`). Chaque diapositive expose aussi ses valeurs dans `data-reglages`, pour le
+ * message du Mixer par axe (draft-axes.mjs).
  *
  * Qui lit quoi se relève dans la page : le navigateur a déjà rangé les règles et sait à quels
  * éléments elles s'appliquent, là où `css` mêle toutes les maquettes. Un état (`:hover`) ou un
@@ -160,15 +169,15 @@ export function styleReglages(reglages) {
  * de `@keyframes`, un sélecteur illisible) : le contrôle de l'aperçu tranche ensuite par l'effet réel.
  */
 export const SCRIPT_REGLAGES = `;(() => {
-  const racine = document.querySelector('.dkc-w')
   const panneau = document.querySelector('.dkc-rg')
-  if (!racine || !panneau) return
+  if (!document.querySelector('.dkc-w') || !panneau) return
   const CLE = 'dkc-reglages'
   const champs = Array.from(panneau.querySelectorAll('input'))
+  const titre = panneau.querySelector('.dkc-rgt')
   const rangsDe = (a) => (a.closest('.dkc-ac, .dkc-mxa span')?.className.match(/\\d+/g) ?? []).map(Number)
   const liens = Array.from(document.querySelectorAll('.dkc-ac a, .dkc-mxa a')).map((a) => [a, a.textContent, rangsDe(a)])
   const unite = (c) => c.dataset.unite || ''
-  const lu = (c) => (unite(c) ? c.value + ' ' + unite(c) : c.value)
+  const lu = (c, valeur) => (unite(c) ? valeur + ' ' + unite(c) : valeur)
   const aPlat = (regles) => Array.from(regles ?? []).flatMap((r) => [r, ...aPlat(r.cssRules)])
   const regles = Array.from(document.styleSheets).flatMap((f) => aPlat(f.cssRules))
   const vise = (carte, selecteur) => {
@@ -186,44 +195,97 @@ export const SCRIPT_REGLAGES = `;(() => {
     )
   }
   const cartes = Array.from(document.querySelectorAll('.dkc-sl .dkc-mq'))
+  const rangs = cartes.map((_, i) => i + 1)
   const lectrices = new Map(
     champs.map((c) => [c, cartes.flatMap((carte, i) => (lit(carte, c.dataset.variable) ? [i + 1] : []))])
   )
-  const afficher = () => {
-    const toutes = document.getElementById('dkall')?.checked
-    const rang = Number(document.querySelector('input[name=dkp]:checked')?.id.slice(3))
-    const utile = (c) => (toutes ? lectrices.get(c).length > 0 : lectrices.get(c).includes(rang))
-    for (const c of champs) c.closest('.dkc-rgl').hidden = !utile(c)
-    panneau.hidden = !champs.some(utile)
+  // Seules les valeurs qui diffèrent de l'origine, par rang : { 2: { dkr1: '30' } }.
+  const valeurs = {}
+  const rang = () => Number(document.querySelector('input[name=dkp]:checked')?.id.slice(3)) || 1
+  const retenir = (n, c, valeur) => {
+    const siennes = valeurs[n] || (valeurs[n] = {})
+    if (valeur === c.defaultValue) delete siennes[c.id]
+    else siennes[c.id] = valeur
+    if (!Object.keys(siennes).length) delete valeurs[n]
   }
-  const appliquer = () => {
-    const changes = []
+  const siennes = (n) =>
+    champs
+      .filter((c) => valeurs[n]?.[c.id] !== undefined && lectrices.get(c).includes(n))
+      .map((c) => c.dataset.nom + ' ' + lu(c, valeurs[n][c.id]))
+  const poser = (n) => {
+    const porteuses = document.querySelectorAll('.dkc-s' + n + ', .dkc-t' + n)
+    for (const c of champs)
+      for (const e of porteuses)
+        if (valeurs[n]?.[c.id] === undefined) e.style.removeProperty(c.dataset.variable)
+        else e.style.setProperty(c.dataset.variable, valeurs[n][c.id] + unite(c))
+  }
+  const libeller = () => {
+    for (const n of rangs) {
+      const diapo = document.querySelector('.dkc-s' + n)
+      if (diapo) diapo.dataset.reglages = siennes(n).join(', ')
+    }
+    for (const [a, base, sesRangs] of liens) {
+      const suite = sesRangs
+        .map((n) => [n, siennes(n).join(', ')])
+        .filter(([, texte]) => texte)
+        .map(([n, texte]) => (sesRangs.length > 1 ? 'la ' + n + ' : ' + texte : texte))
+      a.textContent = base + (suite.length ? ' — ' + suite.join(' ; ') : '')
+    }
+  }
+  const montrer = () => {
+    const n = rang()
     for (const c of champs) {
-      racine.style.setProperty(c.dataset.variable, c.value + unite(c))
-      c.nextElementSibling.textContent = lu(c)
-      if (c.value !== c.defaultValue) changes.push(c)
+      c.value = valeurs[n]?.[c.id] ?? c.defaultValue
+      c.nextElementSibling.textContent = lu(c, c.value)
+      c.closest('.dkc-rgl').hidden = !lectrices.get(c).includes(n)
     }
-    for (const [a, base, rangs] of liens) {
-      const siennes = changes.filter((c) => rangs.some((n) => lectrices.get(c).includes(n)))
-      a.textContent = base + (siennes.length ? ' — ' + siennes.map((c) => c.dataset.nom + ' ' + lu(c)).join(', ') : '')
-    }
+    panneau.hidden = !champs.some((c) => lectrices.get(c).includes(n))
+    if (titre) titre.textContent = 'Réglages de la ' + n
+  }
+  const garder = () => {
+    if (Object.keys(valeurs).length) localStorage.setItem(CLE, JSON.stringify(valeurs))
+    else localStorage.removeItem(CLE)
+  }
+  // Le champ ramène une valeur retenue dans ses bornes et sur un cran : ce qui est posé est ce qu'il montre.
+  const normale = (c, valeur) => {
+    const avant = c.value
+    c.value = valeur
+    const lue = c.value
+    c.value = avant
+    return lue
   }
   try {
     const retenu = JSON.parse(localStorage.getItem(CLE) || '{}')
-    for (const c of champs) if (typeof retenu[c.id] === 'string') c.value = retenu[c.id]
+    for (const n of rangs) {
+      const lot = retenu?.[n]
+      if (!lot || typeof lot !== 'object') continue
+      for (const c of champs) if (typeof lot[c.id] === 'string') retenir(n, c, normale(c, lot[c.id]))
+    }
   } catch {
     localStorage.removeItem(CLE)
   }
   panneau.addEventListener('input', () => {
-    appliquer()
-    localStorage.setItem(CLE, JSON.stringify(Object.fromEntries(champs.map((c) => [c.id, c.value]))))
+    const n = rang()
+    for (const c of champs) {
+      retenir(n, c, c.value)
+      c.nextElementSibling.textContent = lu(c, c.value)
+    }
+    poser(n)
+    libeller()
+    garder()
   })
   panneau.querySelector('.dkc-rgz').addEventListener('click', () => {
-    for (const c of champs) c.value = c.defaultValue
-    localStorage.removeItem(CLE)
-    appliquer()
+    const n = rang()
+    delete valeurs[n]
+    poser(n)
+    montrer()
+    libeller()
+    garder()
   })
-  document.querySelector('.dkc-car')?.addEventListener('change', afficher)
-  appliquer()
-  afficher()
+  document.querySelector('.dkc-car')?.addEventListener('change', (e) => {
+    if (!panneau.contains(e.target)) montrer()
+  })
+  for (const n of rangs) poser(n)
+  montrer()
+  libeller()
 })()`

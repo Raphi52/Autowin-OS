@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { APP_DESTINATIONS, normalizeDestination, resolveAppLocation } from './navigation'
 
 describe('registre canonique des destinations Autowin', () => {
-  it('expose les douze domaines produit, Accueil en tete', () => {
+  it('expose les dix domaines produit, Accueil en tete', () => {
     expect(APP_DESTINATIONS.map(({ id }) => id)).toEqual([
       'accueil',
       'chat',
@@ -11,12 +11,22 @@ describe('registre canonique des destinations Autowin', () => {
       'observatory',
       'task-manager',
       'worktree',
-      'hdesk',
-      'tickets',
       'besoins',
       'tests',
       'settings'
     ])
+  })
+
+  // L'ancien écran Tickets (conv-1397) : ses tickets externes sont l'onglet « Tickets » du Board, sa
+  // veille « Autowin OS » un bloc de Maintenance. Ses noms mènent là, pas en silence sur le chat.
+  it.each([
+    ['tickets', { destination: 'besoins', section: 'tickets' }],
+    ['Tickets', { destination: 'besoins', section: 'tickets' }],
+    ['ticket', { destination: 'besoins', section: 'tickets' }],
+    ['work items', { destination: 'besoins', section: 'tickets' }],
+    ['veille', { destination: 'tests' }]
+  ])('« %s » mène à la nouvelle place des tickets', (nom, attendu) => {
+    expect(resolveAppLocation(nom)).toEqual(attendu)
   })
 
   it.each([
@@ -41,9 +51,6 @@ describe('registre canonique des destinations Autowin', () => {
     ['prompt-load', 'observatory'],
     ['tasks', 'task-manager'],
     ['scheduler', 'task-manager'],
-    ['hdesk', 'hdesk'],
-    ['bureau caché', 'hdesk'],
-    ['bureaux caches', 'hdesk'],
     // Les anciens libellés de la vue Board (conv-1113 puis conv-1126).
     ['Carte du projet', 'besoins'],
     ['carte-du-projet', 'besoins']

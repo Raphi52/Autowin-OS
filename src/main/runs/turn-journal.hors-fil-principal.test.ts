@@ -3,8 +3,9 @@
  *
  * Incident du 2026-09-09 (`gels.jsonl`, 15:38:48 → 15:39:14) : TROIS `appendFileSync` de journal de
  * tour ont bloqué 10 003, 10 007 et 10 004 ms d'affilée sur des fichiers de quelques Ko. Le volume
- * n'y était pour rien — le disque a calé. Comme l'écriture vivait sur le fil qui dessine
- * l'interface, l'app est restée figée ~26 s et l'utilisateur a dû la fermer de force.
+ * n'y était pour rien, le SSD non plus (420 ms au pire sur 675 relevés, conv-1368) : l'appel attendait au-dessus du disque.
+ * Comme l'écriture vivait sur le fil qui dessine l'interface, l'app est restée figée ~26 s et
+ * l'utilisateur a dû la fermer de force.
  *
  * Ce que ces tests exigent, et l'entrée qui les ferait échouer si la correction était défaite :
  *  (a) l'écriture COURANTE (lot plein, délai écoulé) ne passe JAMAIS par un appel bloquant — un

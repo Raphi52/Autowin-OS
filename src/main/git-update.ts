@@ -1,12 +1,12 @@
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import {
   strategiesFor,
   type IncomingCommit,
   type UpdateStrategy
 } from '../shared/update-contract'
+import { execFileHorsFil } from './execution-hors-fil'
 
 export { strategiesFor, type IncomingCommit, type UpdateStrategy }
 
@@ -23,9 +23,12 @@ export { strategiesFor, type IncomingCommit, type UpdateStrategy }
  */
 export type GitRunner = (args: string[], cwd: string) => Promise<{ stdout: string }>
 
-const execRun = promisify(execFile)
+/**
+ * Les `git` partent du fil d'exécution dédié, pas du fil principal : leur CRÉATION tenait la fenêtre
+ * (`gels.jsonl`, 2026-10-31 : `git diff` 67 s sur 8 appels, `git fetch` 19,6 s — conv-1413).
+ */
 const defaultRunner: GitRunner = async (args, cwd) => {
-  const { stdout } = await execRun('git', args, { cwd, windowsHide: true, timeout: 30_000 })
+  const { stdout } = await execFileHorsFil('git', args, { cwd, windowsHide: true, timeout: 30_000 })
   return { stdout }
 }
 

@@ -134,28 +134,19 @@ function persistEcho(): void {
       evictedByWorkspace: echo.evictedByWorkspace
     }))
   }
-  const temp = `${persistencePath}.${process.pid}.${Date.now()}.tmp`
-  try {
-    mkdirSync(dirname(persistencePath), { recursive: true })
-    writeFileSync(temp, JSON.stringify(data), { encoding: 'utf8', mode: 0o600 })
-    renameSync(temp, persistencePath)
-  } catch {
-    try {
-      unlinkSync(temp)
-    } catch {
-      // Une panne de persistance ne doit jamais casser le run courant.
-    }
-  }
+  // Hors du fil principal (conv-1368) : `renameSync` ici a figé la fenêtre 2,3 s en 7 jours.
+  deposerFichier(persistencePath, JSON.stringify(data), { mode: 0o600 })
 }
 
 /** Active le store durable local, ou le desactive sans effacer le fichier quand path est absent. */
 export function configureSessionMemoryEcho(path?: string): void {
   persistencePath = path?.trim() || undefined
   byConversation.clear()
-  if (!persistencePath || !existsSync(persistencePath)) return
+  if (!persistencePath) return
   try {
-    if (statSync(persistencePath).size > MAX_STORE_BYTES) return
-    const parsed = JSON.parse(readFileSync(persistencePath, 'utf8')) as Partial<StoredEchoFile>
+    const texte = relireFichier(persistencePath)
+    if (texte === undefined || Buffer.byteLength(texte) > MAX_STORE_BYTES) return
+    const parsed = JSON.parse(texte) as Partial<StoredEchoFile>
     if ((parsed.version !== 1 && parsed.version !== 2) || !Array.isArray(parsed.conversations))
       return
     for (const item of parsed.conversations.slice(-MAX_CONVERSATIONS)) {
@@ -357,13 +348,5 @@ export function sessionMemoryBlock(
   }
   return `${header}\n${lines.reverse().join('\n')}${pied}`
 }
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { resolve } from 'node:path'
+import { deposerFichier, relireFichier } from './ecriture-hors-fil'

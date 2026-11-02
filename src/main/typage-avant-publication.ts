@@ -1,7 +1,8 @@
-import { execFile, spawn } from 'node:child_process'
+import { execFile } from 'node:child_process'
 import { existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { execFileHorsFil, type ErreurHorsFil } from './execution-hors-fil'
 import { appliquerLeTour, ouvrirCopieDeBase, type CopieDeBase } from './comparaison-a-la-base'
 
 /**
@@ -125,44 +126,51 @@ const SORTIE_MAX = 1_000_000
  * `erreursDeTypage`.
  */
 export function typeurTsc(executable: string): Typeur {
-  return (racine, projet) =>
-    new Promise((resolve) => {
-      const tsc = join(racine, 'node_modules', 'typescript', 'lib', 'tsc.js')
-      if (!existsSync(tsc)) {
-        resolve({ lancee: false, exitCode: null, sortie: '', raison: `tsc introuvable : ${tsc}` })
-        return
-      }
-      let sortie = ''
-      const enfant = spawn(
+  return async (racine, projet) => {
+    const tsc = join(racine, 'node_modules', 'typescript', 'lib', 'tsc.js')
+    if (!existsSync(tsc)) {
+      return { lancee: false, exitCode: null, sortie: '', raison: `tsc introuvable : ${tsc}` }
+    }
+    // Hors du fil principal : la CRÉATION de ce processus a tenu la fenêtre 16 s (`gels.jsonl`,
+    // 2026-10-31 — conv-1413). Le plafond de sortie suit `SORTIE_MAX`, gardée au début : les
+    // premières erreurs de typage sont celles qu'on lit.
+    try {
+      const { stdout, stderr } = await execFileHorsFil(
         executable,
-        [tsc, '--noEmit', '-p', join(racine, CONFIG_DU_PROJET[projet]), '--composite', 'false', '--pretty', 'false'],
+        [
+          tsc,
+          '--noEmit',
+          '-p',
+          join(racine, CONFIG_DU_PROJET[projet]),
+          '--composite',
+          'false',
+          '--pretty',
+          'false'
+        ],
         {
           cwd: racine,
           env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NO_COLOR: '1' },
           windowsHide: true,
-          stdio: ['ignore', 'pipe', 'pipe']
+          timeout: PLAFOND_TYPAGE_MS,
+          maxBuffer: 64 * 1024 * 1024
         }
       )
-      const garder = (morceau: Buffer): void => {
-        if (sortie.length < SORTIE_MAX) sortie += morceau.toString()
+      return { lancee: true, exitCode: 0, sortie: `${stdout}${stderr}`.slice(0, SORTIE_MAX) }
+    } catch (erreur) {
+      const e = erreur as ErreurHorsFil
+      const sortie = `${e.stdout ?? ''}${e.stderr ?? ''}`.slice(0, SORTIE_MAX)
+      // Un code TEXTE (ENOENT, EACCES…) = le processus n'a jamais démarré.
+      if (typeof e.code === 'string' && e.code !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+        return {
+          lancee: false,
+          exitCode: null,
+          sortie,
+          raison: `tsc impossible à lancer : ${e.message}`
+        }
       }
-      enfant.stdout?.on('data', garder)
-      enfant.stderr?.on('data', garder)
-      let coupe = false
-      const delai = setTimeout(() => {
-        coupe = true
-        enfant.kill()
-      }, PLAFOND_TYPAGE_MS)
-      delai.unref?.()
-      enfant.on('error', (erreur) => {
-        clearTimeout(delai)
-        resolve({ lancee: false, exitCode: null, sortie, raison: `tsc impossible à lancer : ${erreur.message}` })
-      })
-      enfant.on('close', (code) => {
-        clearTimeout(delai)
-        resolve({ lancee: true, exitCode: coupe ? null : (code ?? 1), sortie })
-      })
-    })
+      return { lancee: true, exitCode: e.killed ? null : Number(e.code ?? 1) || 1, sortie }
+    }
+  }
 }
 
 const executer = promisify(execFile)

@@ -24,6 +24,9 @@ import {
 } from './watchdog'
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { findNpmGlobalFile } from './npm-global-resolve'
+import { materializeClaudeAttachments } from './claude'
+import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -340,18 +343,36 @@ export function codexExecSpec(
   // Souveraineté contexte : Autowin plie LUI-MÊME le fichier projet (AGENTS.md…) dans le system.
   // On coupe donc l'auto-load AGENTS.md du CLI Codex (`project_doc_max_bytes=0`) → source UNIQUE,
   // pas de double-chargement. Switch explicite (défaut ON) ; le repasser à false rendrait la main au CLI.
-  suppressProjectDoc = true
+  suppressProjectDoc = true,
+  /** Options de ce seul appel : images jointes, outils Autowin servis (`optionsMcpCodex`). */
+  extras: { images?: readonly string[]; config?: readonly string[] } = {}
 ): CodexExecSpec {
   const commonArgs = [
     'exec',
     '--json',
     '--ephemeral',
+    // Un fil de chat peut travailler dans un dossier hors git, que `codex exec` refuse sinon.
+    '--skip-git-repo-check',
+    /*
+     * L'ÉQUIVALENT DE `--strict-mcp-config` CHEZ CLAUDE. Sans lui, l'agent charge les plugins du poste.
+     * Mesuré le 2026-10-31 (conv-1414) : pour écrire un simple fichier, `gpt-6-luna` a ouvert
+     * `cua_repl`, le Computer Use de l'application Codex, qui pilote le VRAI écran de l'utilisateur.
+     * La session du CLI, elle, reste lue : cette option n'écarte que `config.toml`.
+     */
+    '--ignore-user-config',
+    // Sans `config.toml`, plus aucune commande ne passe sous Windows, même une lecture (mesuré le
+    // 2026-10-31) : ce réglage vivait dans la configuration du poste.
+    '-c',
+    'windows.sandbox="unelevated"',
     '--sandbox',
     sandbox,
     '--cd',
     cwd,
     '--model',
     model,
+    // Une par `--image` : l'option accepte plusieurs valeurs et avalerait sinon le `-` final.
+    ...(extras.images ?? []).flatMap((image) => ['--image', image]),
+    ...(extras.config ?? []),
     ...(suppressProjectDoc ? ['-c', 'project_doc_max_bytes=0'] : []),
     /*
      * RECHERCHE WEB VIVE — la consigne injectee dans CHAQUE phase promet WebFetch/WebSearch « sur
@@ -368,10 +389,46 @@ export function codexExecSpec(
     ...(reasoningEffort ? ['-c', `model_reasoning_effort="${reasoningEffort}"`] : []),
     '-'
   ]
+  const launcher = codexLauncher(appData, entrypointExists)
+  return { executable: launcher.executable, cwd, args: [...launcher.prefixArgs, ...commonArgs] }
+}
+
+/** Le CLI n'est pas installé : cas NORMAL sur un poste sans ChatGPT, distinct d'un CLI en panne. */
+export class CodexCliIntrouvable extends Error {}
+
+/** Au-delà, Windows refuse de lancer un programme sans le préfixe long (`CreateProcess`). */
+const LONGUEUR_MAX_CHEMIN_WINDOWS = 259
+
+/**
+ * Le compagnon de `codex.exe`, par lequel passent TOUS les outils du modèle.
+ *
+ * Mesuré le 2026-10-31 (conv-1414) avec le Node de winget : `codex.exe` à 248 caractères se lance,
+ * `codex-code-mode-host.exe` à 264 rend ENOENT. Le modèle répondait, mais sans aucun outil, et une
+ * jonction vers un chemin court n'y change rien : le CLI la résout. Mieux vaut refuser ce poste en
+ * donnant le geste que proposer un agent qui ne peut rien faire.
+ */
+function assertCompagnonLancable(binaire: string, platform: NodeJS.Platform): void {
+  const compagnon = join(dirname(binaire), 'codex-code-mode-host.exe')
+  if (platform !== 'win32' || compagnon.length <= LONGUEUR_MAX_CHEMIN_WINDOWS) return
+  throw new CodexCliIntrouvable(
+    `Codex CLI installé dans un dossier trop long pour Windows (${compagnon.length} caractères, ${LONGUEUR_MAX_CHEMIN_WINDOWS} au plus) : ses outils ne démarreraient pas. Installe-le à l'emplacement standard : npm i -g --prefix "%APPDATA%\\npm" @openai/codex`
+  )
+}
+
+/**
+ * OÙ EST LE CLI CODEX ? — résolution UNIQUE, partagée par `codex exec` (ci-dessus) et par le listing
+ * des modèles (`codex-model-source.ts`). Avant le 2026-10-31 (conv-1414), le listing avait sa propre
+ * copie qui ne cherchait que sous `%APPDATA%\npm` : sur ce poste le CLI vit dans le préfixe npm du
+ * Node de winget, donc `codex exec` le trouvait et le catalogue, lui, restait vide.
+ */
+export function codexLauncher(
+  appData = process.env.APPDATA,
+  entrypointExists: (path: string) => boolean = existsSync,
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch
+): { executable: string; prefixArgs: string[] } {
   const explicitBinary = process.env.CODEX_BIN
-  if (explicitBinary) {
-    return { executable: explicitBinary, cwd, args: commonArgs }
-  }
+  if (explicitBinary) return { executable: explicitBinary, prefixArgs: [] }
   // Le prefixe npm n'est PAS toujours celui de %APPDATA% (npm prefix configure, pnpm, volta, install
   // machine) : chercher aussi dans le PATH. Un chemin en dur unique faisait echouer le fan-out scout
   // avec « Codex CLI introuvable » (observe le 2026-07-29) alors que le CLI etait bien installe.
@@ -380,18 +437,88 @@ export function codexExecSpec(
   else delete env.APPDATA
   const entrypoint = findNpmGlobalFile(CODEX_PACKAGE_ENTRY, { env, exists: entrypointExists })
   if (!entrypoint) {
-    throw new Error(
+    throw new CodexCliIntrouvable(
       `Codex CLI introuvable : ni sous le dossier npm de %APPDATA%, ni dans le PATH (${CODEX_PACKAGE_ENTRY}). Definis CODEX_BIN pour le designer explicitement.`
     )
   }
-  const nativeBinary = codexNativeBinaryFromEntrypoint(
-    entrypoint,
-    process.platform,
-    process.arch,
-    entrypointExists
-  )
-  if (nativeBinary) return { executable: nativeBinary, cwd, args: commonArgs }
-  return { executable: 'node', cwd, args: [entrypoint, ...commonArgs] }
+  const nativeBinary = codexNativeBinaryFromEntrypoint(entrypoint, platform, arch, entrypointExists)
+  if (nativeBinary) {
+    assertCompagnonLancable(nativeBinary, platform)
+    return { executable: nativeBinary, prefixArgs: [] }
+  }
+  return { executable: 'node', prefixArgs: [entrypoint] }
+}
+
+/**
+ * LE CLI A-T-IL UNE SESSION ? La réponse vient de lui (`codex login status` : code 0 et « Logged in
+ * using ChatGPT », mesuré le 2026-10-31), jamais d'une lecture de son fichier de jetons.
+ */
+export function codexCliConnecte(spawnFn: typeof spawn = spawn): Promise<boolean> {
+  let lanceur: ReturnType<typeof codexLauncher>
+  try {
+    lanceur = codexLauncher()
+  } catch {
+    return Promise.resolve(false)
+  }
+  return new Promise((resolve) => {
+    const child = spawnFn(lanceur.executable, [...lanceur.prefixArgs, 'login', 'status'], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
+    child.once('error', () => resolve(false))
+    child.once('close', (code) => resolve(code === 0))
+  })
+}
+
+/**
+ * LES OUTILS AUTOWIN SUR LE CANAL DU CLI CODEX — l'équivalent de `--mcp-config` chez Claude.
+ *
+ * `skillNodeTools.mcpConfig` est écrit au format de Claude ; il est traduit ici en options `-c`. Le
+ * jeton du serveur ne passe JAMAIS sur la ligne de commande, lisible par tout processus du poste :
+ * il part dans l'environnement de cet appel, et le CLI l'y relit par `env_http_headers`.
+ * `default_tools_approval_mode` : sans lui, `codex exec` n'a personne à qui demander l'accord et
+ * chaque appel d'outil serait annulé (mesuré le 2026-10-31, conv-1414).
+ */
+export function optionsMcpCodex(outils: NonNullable<SendOptions['skillNodeTools']>): {
+  config: string[]
+  env: Record<string, string>
+} {
+  const { mcpServers } = JSON.parse(outils.mcpConfig) as {
+    mcpServers: Record<string, { url: string; headers?: Record<string, string> }>
+  }
+  const config: string[] = []
+  const env: Record<string, string> = {}
+  for (const [nom, serveur] of Object.entries(mcpServers)) {
+    config.push('-c', `mcp_servers.${nom}.url=${JSON.stringify(serveur.url)}`)
+    config.push('-c', `mcp_servers.${nom}.default_tools_approval_mode="approve"`)
+    const enTetes = Object.entries(serveur.headers ?? {}).map(([enTete, valeur], rang) => {
+      const variable = `AUTOWIN_MCP_${nom.toUpperCase()}_${rang}`
+      env[variable] = valeur
+      return `${JSON.stringify(enTete)}=${JSON.stringify(variable)}`
+    })
+    if (enTetes.length > 0) {
+      config.push('-c', `mcp_servers.${nom}.env_http_headers={${enTetes.join(',')}}`)
+    }
+  }
+  return { config, env }
+}
+
+/**
+ * LE CONTRAT D'EXÉCUTION D'UN APPEL SANS RUN : un tour de chat, ou un test de connexion.
+ *
+ * Un tour de chat travaille dans le dossier de son fil, avec les mêmes droits que Claude dans le chat
+ * et qu'une phase de run qui modifie du code (`orchestrator.ts`). `workspace-write` n'est pas une
+ * option sous Windows : mesuré le 2026-10-31, il refuse TOUTE commande (« cannot enforce split
+ * writable root sets »). Tout appel sans fil (le bouton « Tester »), comme un tour de surveillance,
+ * reste en lecture seule : il n'a rien à écrire.
+ */
+export function contratHorsRun(opts: SendOptions): NonNullable<SendOptions['execution']> {
+  const fil = opts.conversationId?.trim()
+  return {
+    cwd: opts.workspaceCwd?.trim() || process.env[AUTOWIN_WORKSPACE_ENV]?.trim() || process.cwd(),
+    sandbox: fil && opts.toolProfile !== 'watchdog-read-only' ? 'danger-full-access' : 'read-only',
+    ...(fil ? { agentEnv: { AUTOWIN_CONVERSATION_ID: fil } } : {})
+  }
 }
 
 /**
@@ -418,7 +545,45 @@ async function runCodexExec(
   opts.signal?.throwIfAborted()
   const execution = opts.execution
   if (!execution) throw new Error('Contrat d’exécution Codex absent')
-  const spec = codexExecSpec(execution.cwd, model, execution.sandbox, opts.reasoningEffort)
+  // Les pièces jointes du dernier message, comme chez Claude : les images partent par `--image`, le
+  // reste se lit depuis son chemin. Sans ça, un chat par le CLI les perdait sans le dire.
+  const dernierMessage = [...messages].reverse().find((message) => message.role === 'user')
+  const pieces = dernierMessage?.attachments?.length
+    ? materializeClaudeAttachments(
+        dernierMessage.attachments,
+        'Les images sont jointes à ce message ; ouvre les autres fichiers depuis ces chemins si nécessaire.'
+      )
+    : undefined
+  const images = pieces?.paths.filter(
+    (_chemin, rang) => dernierMessage?.attachments?.[rang]?.kind === 'image'
+  )
+  try {
+    return await executerCodex(messages, opts, execution, model, pieces, images, onProgress)
+  } finally {
+    await pieces?.cleanup()
+  }
+}
+
+async function executerCodex(
+  messages: Message[],
+  opts: SendOptions,
+  execution: NonNullable<SendOptions['execution']>,
+  model: string,
+  pieces: ReturnType<typeof materializeClaudeAttachments> | undefined,
+  images: readonly string[] | undefined,
+  onProgress?: (chunk: StreamChunk) => void
+): Promise<SendResult> {
+  const mcp = opts.skillNodeTools ? optionsMcpCodex(opts.skillNodeTools) : undefined
+  const spec = codexExecSpec(
+    execution.cwd,
+    model,
+    execution.sandbox,
+    opts.reasoningEffort,
+    undefined,
+    undefined,
+    undefined,
+    { images, config: mcp?.config }
+  )
   const mutationBefore =
     execution.causallyIsolated && execution.sandbox !== 'read-only'
       ? await captureWorkspaceMutationSnapshot(spec.cwd, execution.causalWatchPaths)
@@ -426,7 +591,8 @@ async function runCodexExec(
   opts.signal?.throwIfAborted()
   const prompt = [
     opts.system,
-    ...messages.filter((message) => message.role !== 'system').map((m) => m.content)
+    ...messages.filter((message) => message.role !== 'system').map((m) => m.content),
+    pieces?.promptSuffix.trim()
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -457,7 +623,7 @@ async function runCodexExec(
       runId: spawnToken,
       stdin: prompt,
       // Le fil du run (AUTOWIN_CONVERSATION_ID) : hdesk-lancer.ps1 le lit pour la petite TV.
-      env: environnementCodex(process.env, execution.agentEnv),
+      env: environnementCodex(process.env, { ...execution.agentEnv, ...mcp?.env }),
       onJournalPrepared:
         (execution.onJournal ?? opts.onJournal)
           ? (journalPath) => (execution.onJournal ?? opts.onJournal)?.(spawnToken, journalPath)
@@ -548,9 +714,12 @@ async function runCodexExec(
                 }
               | undefined
             // Le message final part par `delta` a la fin du generateur : le relayer ici aussi
-            // l'afficherait DEUX fois.
-            if (item?.type === 'agent_message' && item.text) finalText = item.text
-            else if (item?.type === 'reasoning') {
+            // l'afficherait DEUX fois. Un message SUIVI d'un autre n'etait pas le final : il part en
+            // progression, sinon tout ce que le modele dit entre deux outils se perd.
+            if (item?.type === 'agent_message' && item.text) {
+              if (finalText) onProgress?.({ delta: '', reasoning: finalText })
+              finalText = item.text
+            } else if (item?.type === 'reasoning') {
               // Raisonnement CONSERVÉ (plus jeté) : accumulé pour l'observation post-mortem, ET
               // relayé en direct — c'est la seule chose qui se passe pendant l'attente.
               if (item.text) {
@@ -759,6 +928,8 @@ export interface CodexAdapterOptions {
   fetchFn?: FetchLike
   /** Fournit/rafraîchit les tokens ; défaut = store Autowin OS. */
   loadTokensFn?: () => Tokens | null
+  /** La session du CLI ; défaut = `codex login status`. */
+  cliConnecteFn?: () => Promise<boolean>
   model?: string
 }
 
@@ -767,25 +938,29 @@ export class CodexAdapter implements ProviderAdapter {
   readonly supportsExecution = true
   private readonly fetchFn: FetchLike
   private readonly loadTokensFn: () => Tokens | null
+  private readonly cliConnecteFn: () => Promise<boolean>
   private readonly model: string
 
   constructor(opts: CodexAdapterOptions = {}) {
     this.fetchFn = opts.fetchFn ?? fetch
     this.loadTokensFn = opts.loadTokensFn ?? (() => loadTokens())
+    this.cliConnecteFn = opts.cliConnecteFn ?? (() => codexCliConnecte())
     // gpt-5.6-terra : modèle réel accepté par Codex/compte ChatGPT (vérifié live ;
     // gpt-5-codex renvoie « model not supported »). Suffixe -terra = vrai variant.
     this.model = opts.model ?? 'gpt-5.6-terra'
   }
 
   async auth(): Promise<boolean> {
-    return this.loadTokensFn() !== null
+    return this.loadTokensFn() !== null || this.cliConnecteFn()
   }
 
   describePrompt(messages: Message[], opts: SendOptions, model?: string): PromptEnvelope {
     return {
       provider: this.id,
       model: model ?? opts.model ?? this.model,
-      transport: 'Codex Responses API · instructions + input',
+      transport: this.loadTokensFn()
+        ? 'Codex Responses API · instructions + input'
+        : 'Codex CLI exec · système + fil',
       system: opts.system,
       systemBlocks: opts.systemBlocks,
       contextBlocks: opts.contextBlocks,
@@ -798,7 +973,7 @@ export class CodexAdapter implements ProviderAdapter {
 
   private async accessToken(): Promise<string> {
     let tok = this.loadTokensFn()
-    if (!tok) throw new Error('codex non authentifié — lance npm run codex:login')
+    if (!tok) throw new Error('codex non authentifié — lance `codex login`')
     // rafraîchit si proche de l'expiration (marge 5 min)
     if (tok.expiresInSec && Date.now() - tok.obtainedAt > (tok.expiresInSec - 300) * 1000) {
       tok = await refreshTokens(tok, this.fetchFn)
@@ -811,7 +986,18 @@ export class CodexAdapter implements ProviderAdapter {
     messages: Message[],
     opts: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
-    if (opts.execution) {
+    /*
+     * LE CHAT PASSE PAR LE CLI CONNECTÉ DÈS QU'AUTOWIN N'A PAS SON PROPRE JETON (2026-10-31, conv-1414).
+     *
+     * Le jeton d'Autowin venait de `npm run codex:login`, supprimé le 2026-09-04 : sur un poste neuf,
+     * tout tour de chat ChatGPT mourait sur « non authentifié » alors que `codex login status` répondait
+     * « Logged in using ChatGPT ». L'appel HTTP direct ne porte d'ailleurs aucun outil : ni lecture,
+     * ni écriture, ni commande. `codex exec` les a tous, et gère sa session lui-même.
+     * Un jeton déjà présent garde son chemin d'origine.
+     */
+    const parLeCli = !opts.execution && this.loadTokensFn() === null
+    const optsExec = parLeCli ? { ...opts, execution: contratHorsRun(opts) } : opts
+    if (optsExec.execution) {
       // Pompe : le grain fin du CLI sort AU FIL DE L'EAU, le texte final ferme le flux. Même forme
       // que l'adaptateur Claude ; avant, un unique `yield` après l'attente rendait le sous-agent
       // muet du début à la fin.
@@ -824,8 +1010,8 @@ export class CodexAdapter implements ProviderAdapter {
       }
       const running = runCodexExec(
         messages,
-        opts,
-        opts.model ?? this.model,
+        optsExec,
+        optsExec.model ?? this.model,
         (chunk) => {
           queue.push(chunk)
           reveiller()
@@ -850,7 +1036,9 @@ export class CodexAdapter implements ProviderAdapter {
       }
       const result = await running
       yield { delta: result.text }
-      return result
+      // `--ephemeral` : ce fil n'existe plus côté CLI. Rendre son identifiant ferait croire au pilote
+      // que l'historique y vit, et le tour suivant partirait sans lui.
+      return parLeCli ? { ...result, sessionId: undefined } : result
     }
     const system = opts.system
     const systemInjected = typeof system === 'string' && system.length > 0

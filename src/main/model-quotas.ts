@@ -31,7 +31,15 @@ const MAX_CODEX_TAIL_BYTES = 2_000_000
 const CACHE_MS = 60_000
 const CODEX_STALE_MS = 15 * 60_000
 
-let cached: { expiresAt: number; collectionSequence: number; value: ModelQuotaSnapshot } | undefined
+let cached:
+  | {
+      expiresAt: number
+      collectionSequence: number
+      value: ModelQuotaSnapshot
+      /** Gardé à part : le relevé vu d'un fil au compte choisi ne change que la partie Claude. */
+      codex: ProviderQuota
+    }
+  | undefined
 let collectionSequence = 0
 
 /**
@@ -704,13 +712,14 @@ export async function quotaClaudeDuCompte(
     fetchFn?: typeof fetch
     home?: string
     now?: number
+    force?: boolean
     renouvelerSession?: RenouvellementSessionClaude
   } = {}
 ): Promise<ModelQuotaWindow[] | undefined> {
   const now = options.now ?? Date.now()
   const cle = cleDeCompte(configDir)
   const memorise = quotasParCompte.get(cle)
-  if (memorise && memorise.expiresAt > now) return memorise.fenetres
+  if (!options.force && memorise && memorise.expiresAt > now) return memorise.fenetres
   const enVol = sondesParCompteEnVol.get(cle)
   if (enVol) return enVol
   const sonde = sonderEnTetesClaude(
@@ -736,6 +745,38 @@ export function resetQuotasParCompteForTests(): void {
   sondesParCompteEnVol.clear()
 }
 
+/**
+ * LE RELEVÉ VU D'UN FIL AU COMPTE CHOISI (conv-1416, 2026-11-01).
+ *
+ * Constat de conv-1403 : la puce du fil disait le compte pro, la barre montrait gmail, le compte actif de
+ * l'application. Ce relevé remplace la seule partie Claude par les chiffres du compte choisi. Sans
+ * mesure, la barre le dit : les replis du compte actif parleraient d'un AUTRE abonnement.
+ */
+async function releveDuCompteChoisi(
+  models: readonly ImportedModel[],
+  configDir: string | undefined,
+  codex: ProviderQuota,
+  options: {
+    fetchFn?: typeof fetch
+    home?: string
+    now: number
+    force?: boolean
+    renouvelerSession?: RenouvellementSessionClaude
+  }
+): Promise<ModelQuotaSnapshot> {
+  const observedAt = new Date(options.now).toISOString()
+  const fenetres = await quotaClaudeDuCompte(configDir, options)
+  const claude: ProviderQuota = fenetres
+    ? { status: 'available', source: 'Quota Claude (en-têtes API)', observedAt, windows: fenetres }
+    : {
+        status: 'unavailable',
+        source: 'Quota Claude',
+        windows: [],
+        error: 'Quota du compte choisi indisponible'
+      }
+  return buildModelQuotaSnapshot(models, { claude, codex }, observedAt)
+}
+
 export async function getModelQuotaSnapshot(
   models: readonly ImportedModel[],
   options: {
@@ -744,10 +785,22 @@ export async function getModelQuotaSnapshot(
     now?: number
     force?: boolean
     renouvelerSession?: RenouvellementSessionClaude
+    /** Le compte choisi pour le fil ouvert, quand ce n'est pas le compte actif. */
+    compteClaude?: { configDir: string | undefined }
   } = {}
 ): Promise<ModelQuotaSnapshot> {
   const now = options.now ?? Date.now()
-  if (!options.force && cached && cached.expiresAt > now) return cached.value
+  if (!options.force && cached && cached.expiresAt > now && !options.compteClaude) {
+    return cached.value
+  }
+  if (options.compteClaude) {
+    const { compteClaude, ...reste } = options
+    const codex =
+      cached && cached.expiresAt > now
+        ? cached.codex
+        : await codexQuota(options.home ?? homedir(), now)
+    return releveDuCompteChoisi(models, compteClaude.configDir, codex, { ...reste, now })
+  }
   const currentCollectionSequence = ++collectionSequence
   const home = options.home ?? homedir()
   const [claude, codex] = await Promise.all([
@@ -764,7 +817,8 @@ export async function getModelQuotaSnapshot(
     cached = {
       expiresAt: now + CACHE_MS,
       collectionSequence: currentCollectionSequence,
-      value
+      value,
+      codex
     }
   }
   return value

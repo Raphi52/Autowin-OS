@@ -100,9 +100,10 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>()
  *
  * Mesure du 2026-09-09 (`gels.jsonl`, 15:38:48 → 15:39:14) : TROIS `appendFileSync` de journal ont
  * bloqué 10 003, 10 007 et 10 004 ms d'affilée sur des fichiers de quelques Ko. Le volume n'y était
- * pour rien — le disque a calé, et comme l'écriture vivait sur le fil qui dessine l'interface,
- * l'app est restée figée ~26 s, jusqu'à la fermeture forcée. Un ralentissement disque ne doit pas
- * pouvoir geler l'interface : l'écriture courante part donc sur le pool d'I/O de Node.
+ * pour rien, le SSD non plus (420 ms au pire sur 675 relevés, conv-1368) : l'appel attendait au-dessus du disque, et comme
+ * l'écriture vivait sur le fil qui dessine l'interface, l'app est restée figée ~26 s, jusqu'à la
+ * fermeture forcée. Une telle attente ne doit pas pouvoir geler l'interface : l'écriture courante
+ * part donc sur le pool d'I/O de Node.
  *
  * Ce qui reste SYNCHRONE, et pourquoi — la garantie « jamais la clôture » ne se négocie pas :
  *  - un événement TERMINAL (`done`/`error`/`cancelled`/`failed`) : un par tour, écrit quand le tour

@@ -81,6 +81,9 @@ import {
 import { lireEtatsManuels, poserEtatManuel } from './etats-manuels-carte'
 import { GestesDeVerification, ToutVerifier, type Verifier } from './VerificationDuBoard'
 import { postitsAVerifier, useSurvolDesGestes } from './verification-du-board'
+import { regrouperLesProjets, type ProjetDuFiltre } from './board-projets-du-filtre'
+import { NOM_DU_DOSSIER_PERSONNEL } from './dossiers-du-chat'
+import { cleDeDossier } from '../../../shared/board-dossiers-du-chat'
 import './RiviereDuProjet.css'
 import './RiviereDuProjet.noms-crayon.css'
 import './RiviereDuProjet.collegues.css'
@@ -218,12 +221,18 @@ export function RiviereDuProjet({
   lierWorkItem,
   delierWorkItem,
   sourcesDesTaches,
-  verifier
+  verifier,
+  dossierPersonnel = null
 }: {
   carte: CarteDesBesoins
   ouvrir: (conversationId: string) => void
   /** Envoie `/check` dans des fils (conv-1136) ; absent = seul « Vérifié à la main » reste. */
   verifier?: Verifier
+  /**
+   * Le dossier personnel : le menu des projets le nomme « 💻 This computer », comme le Chat et le
+   * rouage du Board (conv-1329 : « prenom.nom » s'y lisait comme un projet à supprimer).
+   */
+  dossierPersonnel?: string | null
 } & GestesDesTaches): React.JSX.Element {
   const { t, langue } = useTextesBoardEtMaintenance()
   const [manuels, setManuels] = useState(() => {
@@ -242,6 +251,11 @@ export function RiviereDuProjet({
   // La place offerte au tableau, mesurée : il s'y tient en entier (0 = pas encore mesurée).
   const [taille, setTaille] = useState({ l: 0, h: 0 })
   const [personne, setPersonne] = useState<string | null>(null)
+  // Le filtre par projet (conv-1329, « filtre par projet dans le board en plus du filtre par
+  // personne ») : la clé d'un GROUPE de libellés (`board-projets-du-filtre.ts`), jamais la clé du
+  // dossier — un projet de collègue porte une clé à lui (`collegue:<poste>:…`) et parfois un autre
+  // nom (« Autowin-OS »), et choisir AutoWinOS doit montrer les fils de tout le monde dessus.
+  const [projet, setProjet] = useState<string | null>(null)
   const [choisi, setChoisiAffiche] = useState<string | null>(null)
   // Le glisser vit dans une référence (les gestionnaires la lisent sans attendre un rendu) ; l'état
   // n'en garde qu'une copie pour dessiner le post-it sous le pointeur.
@@ -389,10 +403,61 @@ export function RiviereDuProjet({
     () => new Map(carte.demandeurs.map((d, i) => [d.cle, couleurDePersonne(i)])),
     [carte.demandeurs]
   )
+  // Les groupes sont calculés sur TOUS les projets de la carte, pas sur la frise : une copie de fil
+  // rejoint son projet même quand ce projet n'a aucun post-it dans les 14 jours affichés.
+  const groupesDesProjets = useMemo(() => {
+    const groupes = regrouperLesProjets(
+      carte.projets.map((p) => ({ libelle: p.libelle, demandes: p.demandes.length })),
+      traduireBoardEtMaintenance('riviere.projets.autres', langue)
+    )
+    const clePersonnelle = cleDeDossier(dossierPersonnel)
+    const personnel = clePersonnelle
+      ? carte.projets.find((p) => cleDeDossier(p.cle) === clePersonnelle)
+      : undefined
+    const groupe = personnel && groupes.get(personnel.libelle)
+    if (groupe)
+      for (const [libelle, g] of groupes)
+        if (g.cle === groupe.cle) groupes.set(libelle, { ...g, nom: NOM_DU_DOSSIER_PERSONNEL })
+    return groupes
+  }, [carte.projets, langue, dossierPersonnel])
+  const groupeDuPostit = useCallback(
+    (p: PostItDeLaRiviere): ProjetDuFiltre =>
+      groupesDesProjets.get(p.projet) ?? { cle: p.projet, nom: p.projet },
+    [groupesDesProjets]
+  )
+  // Les projets des post-its affichés, le plus récemment actif d'abord (l'ordre de `carte.projets`).
+  // Le projet choisi reste dans la liste quand la frise glisse hors de ses jours : sinon le menu
+  // montrerait « Tous les projets » alors que le filtre estompe encore tout.
+  const projetsPresents = useMemo(() => {
+    const parCle = new Map<string, ProjetDuFiltre>()
+    for (const p of riviere.postits) {
+      const g = groupeDuPostit(p)
+      if (!parCle.has(g.cle)) parCle.set(g.cle, g)
+    }
+    if (projet !== null && !parCle.has(projet)) {
+      const choisi = [...groupesDesProjets.values()].find((g) => g.cle === projet)
+      parCle.set(projet, choisi ?? { cle: projet, nom: projet })
+    }
+    return [...parCle.values()]
+  }, [riviere.postits, projet, groupeDuPostit, groupesDesProjets])
+  const dansLeProjet = useCallback(
+    (p: PostItDeLaRiviere): boolean => projet === null || groupeDuPostit(p).cle === projet,
+    [projet, groupeDuPostit]
+  )
+  // Les noms : ceux qui ont un post-it affiché DANS LE PROJET CHOISI (conv-1329 : « n'affiche dans
+  // la liste des personnes que celles qui ont des post-its dans le projet choisi »). La personne
+  // choisie reste, comme le projet choisi : sans son nom, plus rien ne dirait pourquoi tout est
+  // estompé, ni ne permettrait de la décocher.
   const presents = useMemo(() => {
-    const cles = new Set(riviere.postits.map((p) => p.demandeur?.cle).filter(Boolean))
+    const cles = new Set(
+      riviere.postits
+        .filter(dansLeProjet)
+        .map((p) => p.demandeur?.cle)
+        .filter(Boolean)
+    )
+    if (personne !== null) cles.add(personne)
     return carte.demandeurs.filter((d) => cles.has(d.cle))
-  }, [carte.demandeurs, riviere.postits])
+  }, [carte.demandeurs, riviere.postits, dansLeProjet, personne])
 
   const position = useCallback(
     (p: PostItDeLaRiviere) => {
@@ -425,10 +490,11 @@ export function RiviereDuProjet({
   }
 
   const fiche = choisi ? riviere.postits.find((p) => p.conversationId === choisi) : undefined
-  // Les boutons « vérifier » (conv-1136) : la ligne « À vérifier » affichée, filtre de personne compris.
+  // Les boutons « vérifier » (conv-1136) : la ligne « À vérifier » affichée, filtres de personne et
+  // de projet compris.
   const aVerifier = useMemo(
-    () => postitsAVerifier(riviere.postits, personne),
-    [riviere.postits, personne]
+    () => postitsAVerifier(riviere.postits, personne, dansLeProjet),
+    [riviere.postits, personne, dansLeProjet]
   )
   const survol = useSurvolDesGestes()
   /** « Vérifié à la main » : le même état manuel que le glisser vers « Fait », jamais une preuve. */
@@ -485,6 +551,27 @@ export function RiviereDuProjet({
               </button>
             ))}
           </span>
+        )}
+        {/* Un menu et non des puces comme les noms : les projets sont plus nombreux, et la
+            barre doit tenir sur une ligne (« tout doit rentrer dans l'écran en hauteur »). Seul
+            un projet ne se filtre pas : le menu n'apparaît qu'à partir de deux. */}
+        {projetsPresents.length > 1 && (
+          <select
+            className="riviere-puce riviere-projets"
+            data-testid="riviere-projet"
+            aria-label={t('riviere.projets')}
+            title={t('riviere.projets')}
+            data-actif={projet !== null || undefined}
+            value={projet ?? ''}
+            onChange={(e) => setProjet(e.target.value === '' ? null : e.target.value)}
+          >
+            <option value="">{t('riviere.tousLesProjets')}</option>
+            {projetsPresents.map((g) => (
+              <option key={g.cle} value={g.cle}>
+                {g.nom}
+              </option>
+            ))}
+          </select>
         )}
         {verifier && <ToutVerifier aVerifier={aVerifier} verifier={verifier} />}
         {/* Plus de ligne de compte ni d'aide à la molette en tête : l'utilisateur l'a fait retirer
@@ -586,7 +673,8 @@ export function RiviereDuProjet({
               const { x, y, k, kx, largeur } = position(p)
               const px = enMain ? enMain.x0 + enMain.dx : x
               const py = enMain ? enMain.y0 + enMain.dy : y
-              const estompe = personne !== null && p.demandeur?.cle !== personne
+              const estompe =
+                (personne !== null && p.demandeur?.cle !== personne) || !dansLeProjet(p)
               // Le texte garde sa taille à l'écran ; ce sont ses lignes qui cèdent (conv-1242). Son
               // bloc est contre-échelonné même en pastille : il reste continu quand elle s'écrit.
               const texte = texteDuPostit(k, largeur)

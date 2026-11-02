@@ -46,12 +46,41 @@ describe('probeResultStatus (test réel à la demande)', () => {
 })
 
 describe('buildProviderStatuses (chargement)', () => {
-  it('ne publie que Claude, en présence, avec testable correct', () => {
+  it('publie Claude et ChatGPT, en présence, avec testable correct', () => {
     const out = buildProviderStatuses({
       claudeResponds: true,
+      codexResponds: true,
       now: NOW
     })
-    expect(out).toEqual([{ provider: 'claude', status: 'installed-untested', testable: true }])
+    expect(out).toEqual([
+      { provider: 'claude', status: 'installed-untested', testable: true },
+      { provider: 'codex', status: 'installed-untested', testable: true }
+    ])
+  })
+
+  it('ChatGPT non sondé ou absent sort « absent », jamais un statut inventé', () => {
+    const out = buildProviderStatuses({ claudeResponds: true, now: NOW })
+    expect(out.find((item) => item.provider === 'codex')).toEqual({
+      provider: 'codex',
+      status: 'absent',
+      testable: false
+    })
+  })
+
+  it('le dernier test réel et la veille de ChatGPT sont les siens, pas ceux de Claude', () => {
+    const out = buildProviderStatuses({
+      claudeResponds: true,
+      codexResponds: true,
+      now: NOW,
+      states: {
+        claude: { mode: 'standby' },
+        codex: { mode: 'active', lastProbe: { status: 'authenticated', checkedAt: NOW - 1 } }
+      }
+    })
+    expect(out.map((item) => [item.provider, item.status])).toEqual([
+      ['claude', 'standby'],
+      ['codex', 'authenticated']
+    ])
   })
 
   it('restaure le dernier probe réel de Claude', () => {
@@ -78,9 +107,9 @@ describe('buildProviderStatuses (chargement)', () => {
       states: { claude: { mode: 'standby' } }
     })
 
-    expect(statuses).toEqual([
+    expect(statuses[0]).toEqual(
       expect.objectContaining({ provider: 'claude', status: 'standby', testable: false })
-    ])
+    )
   })
 
   it('CONTRÔLE NÉGATIF : aucun moteur retiré ne ressort, même avec un état enregistré', () => {
@@ -88,12 +117,11 @@ describe('buildProviderStatuses (chargement)', () => {
       claudeResponds: false,
       now: NOW,
       states: {
-        codex: { mode: 'active', lastProbe: { status: 'authenticated', checkedAt: NOW - 500 } },
         kimi: { mode: 'active', lastProbe: { status: 'authenticated', checkedAt: NOW - 500 } },
         gemini: { mode: 'standby' }
       }
     })
 
-    expect(statuses.map((item) => item.provider)).toEqual(['claude'])
+    expect(statuses.map((item) => item.provider)).toEqual(['claude', 'codex'])
   })
 })

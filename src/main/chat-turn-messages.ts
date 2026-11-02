@@ -16,6 +16,10 @@ import { BALISE_MESSAGE_UTILISATEUR } from '../shared/balise-message-utilisateur
 import { pagesHtmlEnTexte } from '../shared/pages-html-pour-le-modele'
 import { type EtatPrompt, blocEtatSuivant } from './etat-diff'
 import { noteRepriseApresArret } from './reprise-apres-arret'
+import { commandeJouee } from '../shared/chat-turn'
+import { rougesRestants, verifyPeutLeverCeRouge } from '../shared/preuve-du-tour'
+import type { ExecutionEvidence } from './providers/types'
+import { libelleDuVerifySur } from './verify-command'
 
 export interface TurnMessageParts {
   /** État courant de l'app, sérialisé. */
@@ -722,7 +726,7 @@ export const RELANCE_CHIFFRE_NON_VERIFIE =
   'SYSTÈME: la demande de l’utilisateur réclame un compte (combien, nombre, liste, total…) et ' +
   'tu n’as appelé AUCUNE commande de lecture dans ce tour. Sans lecture, ta réponse ne peut être ' +
   'qu’une supposition : un chiffre deviné, une vérification annoncée mais pas faite, ou un « je ne ' +
-  'peux pas le savoir ». Appelle MAINTENANT `list_files` (ou `find_in_files`, `read_file`) sur ce ' +
+  'peux pas le savoir ». Appelle MAINTENANT `Glob` (ou `Grep`, `Read`) sur ce ' +
   'que la demande vise, puis réponds avec ce que tu as RÉELLEMENT observé. Ta nouvelle réponse ' +
   'REMPLACE la précédente à l’écran : redonne-la EN ENTIER ; si la précédente contenait déjà un ' +
   'nombre, dis s’il diffère de celui observé.'
@@ -1283,7 +1287,9 @@ function lecturePure(commande: string): boolean {
  * Pure, et non plus « le 1er mot lit » (conv-861) : depuis que `statusEstUneLecture` reconnait une
  * lecture n'importe ou dans la commande, `date; rm -rf x; cat y` CONTIENT une lecture -- mais il agit.
  */
-const ECRIVAINS_NATIFS = /^(Write|Edit|MultiEdit|NotebookEdit)\b/
+// `Workflow` (conv-1366) : lancer un chantier est une action, sinon le tour qui en lance un passerait
+// pour une annonce sans geste, et finirait sans bloc de clôture.
+const ECRIVAINS_NATIFS = /^(Write|Edit|MultiEdit|NotebookEdit|Workflow)\b/
 
 export function statusEstUneAction(status: string | undefined): boolean {
   const texte = (status ?? '').trim()
@@ -1322,7 +1328,7 @@ export const RELANCE_QUESTION_SANS_LECTURE =
   'SYSTÈME: tu viens de poser une question à l’utilisateur SANS avoir lu un seul fichier. ' +
   'Une partie de ce que tu demandes est peut-être déjà dans le code — mesuré : ' +
   'une fois, une des options proposées était déjà implémentée et committée. Appelle ' +
-  'MAINTENANT `list_files` / `read_file` / `find_in_files` sur la zone concernée, puis : si la ' +
+  'MAINTENANT `Glob` / `Read` / `Grep` sur la zone concernée, puis : si la ' +
   'lecture répond, avance sur une hypothèse énoncée (« je suppose X — corrige-moi ») au lieu de ' +
   'demander ; si un vrai choix subsiste (goût, arbitrage que seul l’utilisateur possède), repose ' +
   'la question en citant ce que tu as lu.'
@@ -1476,3 +1482,151 @@ export const RELANCE_FAIRE_LE_GESTE =
   'que tu as piloté le bureau dans CE tour. Fais le geste ' +
   'MAINTENANT avec desktop_act puis vérifie par desktop_observe. Ne le rends que s’il exige un ' +
   'secret que tu n’as pas (mot de passe, MFA) : nomme alors CE geste précis et pourquoi.'
+
+/** Ce qui compte comme du code : une note, un style ou une image ne demande pas de test. */
+const EXTENSION_DE_CODE = /\.(?:ts|tsx|mts|cts|mjs|cjs|js|jsx|cs|vb|py|ps1|sql|xaml|go|rs|java)$/u
+/** Sous le dossier du tour, mais sans lien avec le projet : scripts jetables et données de l'app. */
+const DOSSIERS_JETABLES: ReadonlySet<string> = new Set(['.autowin-tmp', '.autowin-data'])
+/** Regarder le rendu est une preuve pour un changement visuel. Même chose que ces outils directs. */
+const CAPTURE_EN_LIGNE_DE_COMMANDE =
+  /\b(?:ui-capture|html-render-apercu|html-interactif-apercu|scene-3d-apercu)\b/u
+export const COMMANDES_DE_CAPTURE: ReadonlySet<string> = new Set([
+  'desktop_observe',
+  'bureau_cache_observer',
+  'navigateur_capture'
+])
+
+const MAX_COMMANDE_DANS_LA_RELANCE = 300
+
+export type PreuveManquante =
+  { cas: 'rouge'; commande: string } | { cas: 'sans-preuve'; testNonCompte?: string }
+
+/** Les faits du tour que lit la garde. Le texte de la réponse n'en fait pas partie, à dessein. */
+export interface FaitsDePreuveDuTour {
+  /** Le dossier de travail du tour : une écriture ailleurs (script jetable) n'y compte pas. */
+  dossier: string
+  /** Traces du fournisseur, cumulées sur toutes les itérations. */
+  traces: readonly ExecutionEvidence[]
+  /** Les `verify` joués dans le tour, à leur heure. */
+  verifications: readonly { commande: string; ok: boolean; at?: number }[]
+  orchestrationLancee: boolean
+  /** Un `verify` n'a rien pu lancer : la garde a déjà sa réponse, la vérification est impossible. */
+  verifyRefuse: boolean
+  /** Une capture regardée par un outil direct. Celles en ligne de commande se lisent dans `traces`. */
+  captureRegardee: boolean
+  /** Faux si un redémarrage a fait perdre les premières itérations : leurs tests sont inconnus. */
+  tourEntierVu: boolean
+}
+
+function cheminDeCodeDuTour(chemin: string, dossier: string): boolean {
+  const nu = (valeur: string): string =>
+    valeur.trim().replaceAll('\\', '/').toLowerCase().replace(/\/+$/u, '')
+  const racine = nu(dossier)
+  const cible = nu(chemin)
+  if (!racine || !cible) return false
+  let relatif = cible.replace(/^(?:\.\/)+/u, '')
+  if (/^(?:[a-z]:\/|\/)/u.test(cible)) {
+    if (!cible.startsWith(`${racine}/`)) return false
+    relatif = cible.slice(racine.length + 1)
+  }
+  // Calculé APRÈS avoir retiré la racine : le dossier du tour vit parfois lui-même sous
+  // `.autowin-data` (copie de travail d'un run), et ses fichiers sont bien du code.
+  const dossiers = relatif.split('/')
+  if (dossiers.includes('..') || dossiers.some((nom) => DOSSIERS_JETABLES.has(nom))) return false
+  return EXTENSION_DE_CODE.test(relatif)
+}
+
+function aEcritDuCode(trace: ExecutionEvidence, dossier: string): boolean {
+  if (!trace.ok || trace.kind !== 'mutation' || !ECRIVAINS_NATIFS.test(trace.type)) return false
+  const chemins = trace.path ? [trace.path] : (trace.paths ?? [])
+  return chemins.some((chemin) => cheminDeCodeDuTour(chemin, dossier))
+}
+
+/**
+ * LE TOUR A ÉCRIT DU CODE SANS PREUVE RETENUE (conv-1423, 2026-11-01, repris de Paperclip).
+ *
+ * Mesuré du 29/10 au 01/11 sur 139 demandes qui ont vraiment écrit du code par leurs Edit/Write : 66 %
+ * finissent sur un test rouge, 5 % sans aucun test. Rien ne relançait l'agent sur ce point : le fil
+ * se clôturait, et le rouge restait pour l'utilisateur.
+ *
+ * Lit des FAITS, jamais le texte : une clôture rédigée comme un succès ne fait pas taire la garde, et
+ * un mot n'a pas à la réveiller. Aucun blocage : si l'agent ne fait rien, le tour finit et le Board
+ * dit vrai. La couverture d'un rouge est `preuve-du-tour.ts`, la règle du Board : la relance ne peut
+ * pas réclamer ce que le Board a déjà accepté.
+ *
+ * Muette avec Codex, Gemini et Kimi sans avoir à les nommer : ses écrivains sont ceux de Claude, et
+ * 0 tour sur 790 en 30 jours n'a utilisé un autre modèle. Sans fait lisible, rien ne part.
+ */
+export function preuveManquanteDuTour(faits: FaitsDePreuveDuTour): PreuveManquante | undefined {
+  if (faits.orchestrationLancee || faits.verifyRefuse) return undefined
+  if (!faits.traces.some((trace) => aEcritDuCode(trace, faits.dossier))) return undefined
+  const constats = [
+    ...faits.traces.flatMap((trace) =>
+      // fix-ok: la relance lisait `test.commande`, sans son `cd` : un vert lancé ailleurs taisait le
+      // rouge du tour. La forme jouée se rejoue aussi « telle quelle », comme le demande la relance.
+      (trace.testsLus ?? []).map((test) => ({
+        commande: commandeJouee(test),
+        ok: test.codeDeSortie === 0,
+        at: test.at
+      }))
+    ),
+    ...faits.verifications
+  ].sort((a, b) => (a.at ?? Number.NEGATIVE_INFINITY) - (b.at ?? Number.NEGATIVE_INFINITY))
+  const rouge = rougesRestants(
+    constats.map((constat) => ({
+      cle: constat.commande,
+      commande: constat.commande,
+      etat: constat.ok ? 'ok' : 'failed'
+    }))
+  ).at(-1)
+  if (rouge) return { cas: 'rouge', commande: rouge }
+  if (constats.length > 0 || !faits.tourEntierVu || faits.captureRegardee) return undefined
+  if (faits.traces.some((t) => t.ok && CAPTURE_EN_LIGNE_DE_COMMANDE.test(t.command ?? '')))
+    return undefined
+  const testNonCompte = faits.traces.flatMap((trace) => trace.testsNonComptes ?? []).at(-1)
+  return { cas: 'sans-preuve', ...(testNonCompte ? { testNonCompte } : {}) }
+}
+
+/**
+ * La relance : elle dit quoi rejouer, et laisse une sortie honnête quand ce n'est pas possible.
+ * fix-ok: `verify` y était proposé sans lui demander : sous `.git` il refuse, et un nom en `.Test.`
+ * part en `vitest related`, deux verts sans effet sur le rouge. `dossier` est celui du tour : c'est là
+ * que `verify` lira le fichier et le script de test (3 écarts sur 28 formes avant, sonde du 01/11).
+ */
+export function relanceDePreuveManquante(manque: PreuveManquante, dossier: string): string {
+  const borner = (commande: string): string =>
+    commande.length > MAX_COMMANDE_DANS_LA_RELANCE
+      ? `${commande.slice(0, MAX_COMMANDE_DANS_LA_RELANCE - 1)}…`
+      : commande
+  const fin =
+    ' puis rends compte de ce que tu as réellement obtenu. Si c’est impossible, ou si ce résultat ' +
+    'n’a aucun lien avec ton travail, écris « ⚠️ Non résolu » ou « non vérifié » avec la raison. ' +
+    'Ta nouvelle réponse REMPLACE la précédente à l’écran : écris-la en entier.'
+  if (manque.cas === 'rouge') {
+    const rejeu = verifyPeutLeverCeRouge(manque.commande, (fichier) =>
+      libelleDuVerifySur(fichier, dossier)
+    )
+      ? 'Rejoue-le tel quel (ou lance `verify` avec ce fichier pour cible),'
+      : 'Rejoue-le tel quel,'
+    return (
+      'SYSTÈME: tu as modifié du code dans ce tour, et ce test est resté rouge sans qu’aucun vert ' +
+      `plus récent ne le couvre : \`${borner(manque.commande)}\`. ${rejeu}${fin}`
+    )
+  }
+  const cause = manque.testNonCompte
+    ? `le test \`${borner(manque.testNonCompte)}\` ne compte pas : son code de sortie est illisible ` +
+      '(tube, ou lancé en arrière-plan). Rejoue-le seul, au premier plan, ou lance'
+    : 'aucun test n’a été joué. Lance une commande de test qui couvre ton changement, ou'
+  return (
+    `SYSTÈME: tu as modifié du code dans ce tour sans aucune preuve retenue : ${cause} ` +
+    `\`verify\` avec une cible,${fin}`
+  )
+}
+
+/** Un `verify` rend sa commande et son issue ; sans elles, il n'a rien vérifié (refus, plantage). */
+export function issueDuVerify(data: unknown): { commande: string; ok: boolean } | undefined {
+  if (!data || typeof data !== 'object') return undefined
+  const { allowed, command, ok } = data as { allowed?: unknown; command?: unknown; ok?: unknown }
+  if (allowed === false || typeof command !== 'string' || !command) return undefined
+  return { commande: command, ok: ok === true }
+}

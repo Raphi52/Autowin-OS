@@ -21,7 +21,6 @@ import type { InstantanePage } from '../shared/navigateur'
 
 interface NoyauDeTest {
   calque: ShadowRoot | null
-  bulleTexte?: HTMLTextAreaElement
   mode: string | null
   file: MessagePage[]
 }
@@ -313,117 +312,47 @@ describe('surbrillance : le cadre suit sa cible', () => {
   })
 })
 
-describe('mode annoter', () => {
-  it('un clic ouvre la bulle sans déclencher la page ; Entrée range l’annotation et pose la pastille 1', () => {
-    document.body.innerHTML = '<h1 id="titre" style="color: rgb(255, 0, 0)">Bonjour</h1>'
-    const clicPage = vi.fn()
-    document.addEventListener('click', clicPage)
-    const ping = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
-    jouer('activerMode', ['annoter'])
-    const h1 = document.getElementById('titre') as HTMLElement
-    pointeur('pointerdown', h1, 50, 30)
-    pointeur('pointerup', h1, 50, 30)
-    h1.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
-    expect(clicPage).not.toHaveBeenCalled()
-
-    const texte = noyau().bulleTexte as HTMLTextAreaElement
-    texte.value = 'Plus gros, en bleu'
-    texte.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
-    )
-
-    expect(ping).toHaveBeenCalledWith(PING_NAVIGATEUR)
-    const [message] = jouer<MessagePage[]>('prendre')
-    expect(message).toMatchObject({
-      type: 'annotation',
-      selecteur: '#titre',
-      texteElement: 'Bonjour',
-      commentaire: 'Plus gros, en bleu',
-      rect: { x: 10, y: 20, largeur: 100, hauteur: 30 }
-    })
-    if (message.type !== 'annotation') throw new Error('type inattendu')
-    expect(message.styles.couleur).toBe('rgb(255, 0, 0)')
-    expect(message.styles.marges).toMatch(/^marge .* · retrait /)
-    expect(jouer<MessagePage[]>('prendre')).toEqual([])
-    const pastilles = (noyau().calque as ShadowRoot).querySelectorAll('.pastille')
-    expect([...pastilles].map((p) => p.textContent)).toEqual(['1'])
-  })
-
-  it('un glisser trace une zone : l’annotation porte le rectangle de la zone', () => {
-    document.body.innerHTML = '<div id="carte">Carte</div>'
-    vi.spyOn(console, 'debug').mockImplementation(() => undefined)
-    const carte = document.getElementById('carte') as HTMLElement
-    document.elementFromPoint = (): Element => carte
-    jouer('activerMode', ['annoter'])
-    pointeur('pointerdown', carte, 10, 10)
-    pointeur('pointermove', carte, 110, 60)
-    pointeur('pointerup', carte, 110, 60)
-    const texte = noyau().bulleTexte as HTMLTextAreaElement
-    texte.value = 'Cette zone'
-    texte.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    expect(jouer<MessagePage[]>('prendre')[0]).toMatchObject({
-      selecteur: '#carte',
-      rect: { x: 10, y: 10, largeur: 100, hauteur: 50 }
-    })
-  })
-
-  it('un commentaire vide n’ajoute rien ; Échap ferme la bulle puis quitte le mode', () => {
-    document.body.innerHTML = '<p id="p">Texte</p>'
-    vi.spyOn(console, 'debug').mockImplementation(() => undefined)
-    jouer('activerMode', ['annoter'])
-    const p = document.getElementById('p') as HTMLElement
-    pointeur('pointerdown', p, 5, 5)
-    pointeur('pointerup', p, 5, 5)
-    const texte = noyau().bulleTexte as HTMLTextAreaElement
-    texte.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    expect(jouer<MessagePage[]>('prendre')).toEqual([])
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
-    expect((noyau().calque as ShadowRoot).querySelector('.bulle')).toBeNull()
-    expect(noyau().mode).toBe('annoter')
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
-    expect(noyau().mode).toBeNull()
-    expect(jouer<MessagePage[]>('prendre')).toEqual([{ type: 'mode-quitte' }])
-  })
-
-  it('retirer une pastille renumérote les autres ; vider les retire toutes', () => {
-    document.body.innerHTML = '<p id="a">A</p><p id="b">B</p>'
-    vi.spyOn(console, 'debug').mockImplementation(() => undefined)
-    jouer('activerMode', ['annoter'])
-    for (const id of ['a', 'b']) {
-      const el = document.getElementById(id) as HTMLElement
-      pointeur('pointerdown', el, 5, 5)
-      pointeur('pointerup', el, 5, 5)
-      const texte = noyau().bulleTexte as HTMLTextAreaElement
-      texte.value = `note ${id}`
-      texte.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    }
-    const [premiere] = jouer<Array<{ idPage: string }>>('prendre')
-    jouer('retirerPastille', [premiere.idPage])
-    const calque = noyau().calque as ShadowRoot
-    expect([...calque.querySelectorAll('.pastille')].map((p) => p.textContent)).toEqual(['1'])
-    jouer('viderPastilles')
-    expect(calque.querySelectorAll('.pastille')).toHaveLength(0)
-  })
-})
-
 describe('mode choisir', () => {
-  it('un seul clic : l’élément est rangé sans commentaire et le mode s’éteint', () => {
+  it('un seul clic : l’élément est rangé et le mode s’éteint', () => {
     document.body.innerHTML = '<button id="b" style="font-size: 18px">Payer</button>'
-    vi.spyOn(console, 'debug').mockImplementation(() => undefined)
+    const ping = vi.spyOn(console, 'debug').mockImplementation(() => undefined)
     jouer('activerMode', ['choisir'])
     const b = document.getElementById('b') as HTMLElement
     pointeur('pointerdown', b, 50, 30)
     pointeur('pointerup', b, 50, 30)
+    expect(ping).toHaveBeenCalledWith(PING_NAVIGATEUR)
     const [message] = jouer<MessagePage[]>('prendre')
     expect(message).toMatchObject({
       type: 'choisi',
       selecteur: '#b',
       texteElement: 'Payer',
-      commentaire: ''
+      rect: { x: 10, y: 20, largeur: 100, hauteur: 30 }
     })
     if (message.type !== 'choisi') throw new Error('type inattendu')
     expect(message.styles.taille).toBe('18px')
+    expect(message.styles.marges).toMatch(/^marge .* · retrait /)
     expect(noyau().mode).toBeNull()
-    expect((noyau().calque as ShadowRoot).querySelector('.bulle')).toBeNull()
+    expect(jouer<MessagePage[]>('prendre')).toEqual([])
+  })
+
+  it('Échap quitte le mode sans rien choisir', () => {
+    document.body.innerHTML = '<p id="p">Texte</p>'
+    vi.spyOn(console, 'debug').mockImplementation(() => undefined)
+    jouer('activerMode', ['choisir'])
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }))
+    expect(noyau().mode).toBeNull()
+    expect(jouer<MessagePage[]>('prendre')).toEqual([{ type: 'mode-quitte' }])
+  })
+
+  // Annoter retiré (conv-1306, 2026-10-30) : l'ancien nom du mode n'allume plus rien dans la page.
+  it('Annoter n’existe plus : son ancien nom n’active aucun mode et ne pose aucun écouteur', () => {
+    document.body.innerHTML = '<p id="p">Texte</p>'
+    const clicPage = vi.fn()
+    document.addEventListener('click', clicPage)
+    jouer('activerMode', ['annoter'])
+    expect(noyau().mode).toBeNull()
+    document.getElementById('p')!.click()
+    expect(clicPage).toHaveBeenCalledTimes(1)
+    document.removeEventListener('click', clicPage)
   })
 })

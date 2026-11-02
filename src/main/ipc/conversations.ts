@@ -22,7 +22,12 @@
  */
 import { ipcMain } from 'electron'
 import { readSessionForImport, resolveListedSessionAsync } from '../activity/transcripts'
-import { LOT_SUPPRESSION_MAX } from '../store/conversations'
+import {
+  LOT_SUPPRESSION_MAX,
+  type Conversation,
+  type ConversationSummary
+} from '../store/conversations'
+import { estMurDeQuota, type EtatDeRepriseDuFil } from '../../shared/reprise-quota'
 import { removeConversationTurnJournals } from '../runs/turn-journal'
 import { removeConvActivity } from '../activity/conv-activity'
 import { deletePromptCalls } from '../activity/prompt-observability'
@@ -58,10 +63,45 @@ export type ConversationsIpcDeps = {
   /** Ou s'ouvrent les copies « revenir a ce tour » : hors du dossier partage, jamais dedans. */
   dossierDesRetours: () => string
   /**
+   * Où en est un fil coupé par le quota. Même règle que le réveil : l'écran dit ce qui partira.
+   *
+   * fix-ok: posé après `couperLeRun`, ce champ touchait l'ajout voisin d'`origin/main` : 1 conflit
+   * compté par `git merge-tree`, 0 une fois placé ici (conv-1423).
+   */
+  etatDeReprise: (fil: Conversation) => EtatDeRepriseDuFil | undefined
+  /**
+   * Réveille la reprise des fils coupés : réactiver un fil le fait passer à « repart seule », et une
+   * personne regarde ce changement. Il n'attend pas la relecture du quart d'heure.
+   *
+   * fix-ok: ce canal changeait la situation d'un fil sans rien replanifier : fil réactivé, `attente` à
+   * l'écran, 0 minuterie et 0 départ (essai du contrôle final sur le vrai réveil, conv-1423).
+   */
+  relireLesFilsCoupes: () => void
+  /**
    * Coupe le run de developpement d'un fil (`bus.abortOrchestration`) : supprimer un fil l'arrete
    * comme le bouton Stop, au lieu d'attendre sa fin (conv-1060, `arret-avant-suppression.ts`).
    */
   couperLeRun: (conversationId: string, motif: string) => boolean
+  /** Les RUN.md légers du fil (conv-1418) partent avec lui, comme ses autres fichiers. */
+  retirerLesFiches: (conversationId: string) => Promise<void>
+}
+
+/**
+ * La liste, plus l'état de reprise des SEULS fils coupés par le quota. Le filtre passe avant toute
+ * lecture : cette liste se relit à chaque tour, et l'état coûte une lecture des runs.
+ */
+export function resumesAvecReprise(
+  resumes: ConversationSummary[],
+  lireFil: (id: string) => Conversation | undefined,
+  etatDeReprise: ConversationsIpcDeps['etatDeReprise']
+): ConversationSummary[] {
+  return resumes.map((resume) => {
+    if (resume.lastAssistantStatus !== 'failed' || !estMurDeQuota(resume.lastAssistantError))
+      return resume
+    const fil = lireFil(resume.id)
+    const repriseQuota = fil ? etatDeReprise(fil) : undefined
+    return repriseQuota ? { ...resume, repriseQuota } : resume
+  })
 }
 
 export function registerConversationsIpc({
@@ -73,14 +113,24 @@ export function registerConversationsIpc({
   broadcast,
   pickDirectory,
   compterLectureIsolee,
+  etatDeReprise,
+  relireLesFilsCoupes,
   dossierDuFil,
   dossierDesRetours,
-  couperLeRun
+  couperLeRun,
+  retirerLesFiches
 }: ConversationsIpcDeps): void {
+  const oublierLesFiches = (id: string): void => {
+    void retirerLesFiches(id).catch((erreur) => console.warn('[fiches] fil non retiré :', erreur))
+  }
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', (event) => {
     assertTrustedRendererSender(event, 'Conversations')
-    return os.conversations.listSummaries()
+    return resumesAvecReprise(
+      os.conversations.listSummaries(),
+      (id) => os.conversations.get(id),
+      etatDeReprise
+    )
   })
   // Recherche par CONTENU pour la barre laterale : la liste envoyee au renderer n'a pas les
   // messages, seul le processus principal peut dire quelles conversations portent le terme.
@@ -186,7 +236,10 @@ export function registerConversationsIpc({
     assertTrustedRendererSender(event, 'Conversations')
     const id = guardString(rawId, 'id')
     const updated = os.conversations.marquerInactive(id, rawOn === true)
-    if (updated) broadcast({ type: 'refresh', scope: 'conversations' })
+    if (updated) {
+      relireLesFilsCoupes()
+      broadcast({ type: 'refresh', scope: 'conversations' })
+    }
     return updated?.inactive === true
   })
   /**
@@ -418,6 +471,7 @@ export function registerConversationsIpc({
       deletePromptCalls(id)
       removeConversationTurnJournals(turnJournalRoot, id)
       removeConvActivity(id)
+      oublierLesFiches(id)
       broadcast({ type: 'refresh', scope: 'conversations' })
     }
     return removed
@@ -442,6 +496,7 @@ export function registerConversationsIpc({
       deletePromptCalls(id)
       removeConversationTurnJournals(turnJournalRoot, id)
       removeConvActivity(id)
+      oublierLesFiches(id)
     }
     if (removed.length > 0) broadcast({ type: 'refresh', scope: 'conversations' })
     return removed

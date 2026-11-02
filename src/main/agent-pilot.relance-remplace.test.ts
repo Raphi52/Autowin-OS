@@ -181,7 +181,7 @@ describe('relance de forme — la nouvelle réponse REMPLACE l’ancienne dans l
     expect(envoye).toMatch(/réclame un compte/)
     expect(envoye).toMatch(/AUCUNE commande de lecture/)
     // L'ordre reste le même : lire, puis redonner la réponse entière.
-    expect(envoye).toMatch(/list_files/)
+    expect(envoye).toContain('`Glob`')
     expect(envoye).toMatch(/EN ENTIER/)
     // Plus jamais l'accusation d'un nombre qu'il n'a pas écrit.
     expect(envoye).not.toMatch(/avancer un nombre|avancé un nombre/)

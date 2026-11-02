@@ -25,6 +25,11 @@ process.on('unhandledRejection', echouer)
 app.commandLine.appendSwitch('disable-features', 'IsolateSandboxedIframes')
 
 const config = JSON.parse(readFileSync(process.argv[process.argv.length - 1], 'utf8'))
+// Un profil à soi, dans le dossier de sortie. Sans lui, l'aperçu partage le profil par défaut
+// (`AppData\Roaming\Electron`) avec tout autre outil Electron lancé sans nom d'application — le
+// rendu du teaser de conv-1401 par exemple. Mesuré le 2026-10-31 (conv-1403) : cache refusé
+// (« Accès refusé ») et une fermeture qui attendait 50 s, même sur un simple cube, jusqu'au SIGTERM.
+app.setPath('userData', join(config.out, 'profil-electron'))
 const urlScene = pathToFileURL(join(config.pages, 'scene-3d.html')).href
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 

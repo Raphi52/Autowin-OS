@@ -172,6 +172,7 @@ describe.skipIf(process.platform !== 'win32')(
     const Y = `${base}y`
     const T = `${base}t`
     const S = `${base}s`
+    const V = `${base}v`
 
     const lancer = (id: string, conversation: string, fixture: string): Sortie =>
       lancerPs('hdesk-lancer.ps1', [
@@ -216,7 +217,7 @@ describe.skipIf(process.platform !== 'win32')(
 
     afterAll(() => {
       // Filet : rien ne doit survivre au test, meme en echec.
-      for (const id of [X, Y, T, S])
+      for (const id of [X, Y, T, S, V])
         spawnSync(
           'powershell',
           [
@@ -322,17 +323,51 @@ describe.skipIf(process.platform !== 'win32')(
       expect(existsSync(join(registre, `${id}.json`))).toBe(false)
     }, 60_000)
 
-    it('refuse un identifiant inconnu (exit 2) sans rien fermer', () => {
+    // conv-1374 (2026-10-31) : 8 fermetures sur 36 echouaient en 10 jours, toutes « Aucun bureau
+    // cache a ce nom » = deja ferme. Un bureau absent du registre est un succes explicite.
+    it('un identifiant absent du registre est un succes « deja ferme » (exit 0)', () => {
       const r = fermer(`${base}inconnu`, 'conv-a')
-      expect(r.code).toBe(2)
-      expect(r.ferme).toBe(false)
-      expect(String(r.erreur)).toMatch(/aucun bureau/i)
+      expect(r.code).toBe(0)
+      expect(r.ferme).toBe(true)
+      expect(r.dejaFerme).toBe(true)
+      expect(r.erreur).toBeUndefined()
     }, 60_000)
 
-    it('la chaine de l outil (fermerHdesk) lance le vrai script et lit son refus', async () => {
+    // conv-1374 (2026-10-31, retour de conv-1370) : un bureau peut vivre SANS fiche (ui-capture-*,
+    // autowin-headless.ps1). L'absence de fiche ne prouve donc pas qu'il est ferme. Mesure : charmap
+    // pid 36012 toujours vivant apres code 0 et ferme:true. Le registre vide simule ce bureau.
+    it('un bureau VIVANT absent du registre est refuse (exit 2) et n est pas touche', () => {
+      const v = lancer(V, 'conv-a', docile)
+      expect(v.code, String(v.stderr)).toBe(0)
+      const vide = mkdtempSync(join(tmpdir(), 'hdesk-fermer-vide-'))
+      try {
+        const r = lancerPs('hdesk-fermer.ps1', [
+          '-Id',
+          V,
+          '-Conversation',
+          'conv-a',
+          '-Registre',
+          vide
+        ])
+        expect(r.code, JSON.stringify(r)).toBe(2)
+        expect(r.ferme).toBe(false)
+        expect(r.dejaFerme).toBeUndefined()
+        expect(String(r.erreur)).toMatch(/vivant/)
+        // traduireFermeture (hdesk-gestion.ts) distingue ce refus par ce champ : sans lui, le code 2
+        // redevient « ce bureau n'existe plus » (conv-1374, 2026-10-31).
+        expect(r.sansFiche).toBe(false)
+        expect(vivant(v.pid)).toBe(true)
+      } finally {
+        rmSync(vide, { recursive: true, force: true })
+      }
+      const normale = fermer(V, 'conv-a')
+      expect(normale.code, JSON.stringify(normale)).toBe(0)
+      expect(vivant(v.pid)).toBe(false)
+    }, 120_000)
+
+    it('la chaine de l outil (fermerHdesk) lance le vrai script et lit « deja ferme »', async () => {
       const r = await fermerHdesk(process.cwd(), { id: `${base}chaine`, conversationId: 'conv-a' })
-      expect(r).toMatchObject({ ok: false, code: 2, ferme: false })
-      expect(String(r.erreur)).toMatch(/aucun bureau/i)
+      expect(r).toMatchObject({ ok: true, code: 0, ferme: true, dejaFerme: true })
     }, 60_000)
 
     // conv-344 (scout n°1) : -SansFiche n'avait AUCUN test depuis son ajout (41359673). Un bureau

@@ -10,10 +10,16 @@ describe('planProviderLogin', () => {
       command: 'Remove-Item Env:CLAUDE_CONFIG_DIR -ErrorAction SilentlyContinue; claude auth login'
     })
   })
-  it('MOTEURS RETIRÉS : Codex, Kimi et Gemini n’ont plus AUCUN plan de connexion', () => {
+  it('ChatGPT se connecte par le login officiel du CLI, dans un terminal', () => {
+    expect(planProviderLogin('codex')).toEqual({ kind: 'terminal', command: 'codex login' })
+    expect(planProviderLogin('codex', 'C:\\outils\\codex.exe')).toEqual({
+      kind: 'terminal',
+      command: '& "C:\\outils\\codex.exe" login'
+    })
+  })
+  it('MOTEURS RETIRÉS : Kimi et Gemini n’ont plus AUCUN plan de connexion', () => {
     // Contrôle négatif du retrait : réinjecter l'un de ces moteurs doit lever ici, plutôt
     // qu'ouvrir une console sur un moteur qui n'est plus branché (cf. routed-providers.ts).
-    expect(() => planProviderLogin('codex')).toThrow(/Aucun login connu/)
     expect(() => planProviderLogin('kimi')).toThrow(/Aucun login connu/)
     expect(() => planProviderLogin('gemini')).toThrow(/Aucun login connu/)
   })

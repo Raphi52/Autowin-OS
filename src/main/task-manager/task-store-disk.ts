@@ -1,6 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { ensureAutowinAppData } from '../app-data'
+import {
+  attendreFichier,
+  deposerFichier,
+  relireFichier,
+  viderFichiersEnAttente
+} from '../ecriture-hors-fil'
 import type { TaskStoreSnapshot } from './types'
 import type { TaskStore } from './task-store'
 
@@ -13,8 +18,9 @@ function emptyTaskStoreSnapshot(): TaskStoreSnapshot {
 }
 
 function loadTaskStore(path = taskStorePath()): TaskStoreSnapshot {
-  if (!existsSync(path)) return emptyTaskStoreSnapshot()
-  const value: unknown = JSON.parse(readFileSync(path, 'utf8'))
+  const texte = relireFichier(path)
+  if (texte === undefined) return emptyTaskStoreSnapshot()
+  const value: unknown = JSON.parse(texte)
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`Store Task Manager corrompu: ${path}`)
   }
@@ -30,15 +36,21 @@ function loadTaskStore(path = taskStorePath()): TaskStoreSnapshot {
   return snapshot as TaskStoreSnapshot
 }
 
+/**
+ * Hors du fil principal (conv-1368) : `renameSync` ici a figé la fenêtre 23,4 s en 7 jours, 16 s d'un
+ * coup. La revendication d'une occurrence n'en reste pas moins durable avant son exécution :
+ * `attendrePersistance` la fait attendre par le planificateur.
+ */
 function saveTaskStore(snapshot: TaskStoreSnapshot, path = taskStorePath()): void {
-  mkdirSync(dirname(path), { recursive: true })
-  const temporary = `${path}.tmp`
-  writeFileSync(temporary, JSON.stringify(snapshot, null, 2), 'utf8')
-  renameSync(temporary, path)
+  deposerFichier(path, JSON.stringify(snapshot, null, 2))
 }
 
 export function persistTaskStore(store: TaskStore, path = taskStorePath()): () => void {
   store.hydrate(loadTaskStore(path))
   store.onChange = (snapshot) => saveTaskStore(snapshot, path)
-  return () => saveTaskStore(store.snapshot(), path)
+  store.attendrePersistance = () => attendreFichier(path)
+  return () => {
+    saveTaskStore(store.snapshot(), path)
+    viderFichiersEnAttente()
+  }
 }

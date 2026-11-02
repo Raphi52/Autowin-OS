@@ -12,6 +12,9 @@ const electronSimule = vi.hoisted(() => {
   const vues: Array<{
     options: unknown
     visible: boolean | undefined
+    rayon: number | undefined
+    cadre: { x: number; y: number; width: number; height: number }
+    gestes: string[]
     webContents: {
       id: number
       session: unknown
@@ -44,6 +47,9 @@ vi.mock('electron', () => {
   class WebContentsView {
     options: unknown
     visible: boolean | undefined
+    rayon: number | undefined
+    cadre = { x: 0, y: 0, width: 0, height: 0 }
+    gestes: string[] = []
     webContents: {
       id: number
       session: unknown
@@ -77,6 +83,20 @@ vi.mock('electron', () => {
     }
     setVisible(v: boolean): void {
       this.visible = v
+      this.gestes.push(`visible ${v}`)
+    }
+    getVisible(): boolean {
+      return this.visible === true
+    }
+    setBounds(cadre: { x: number; y: number; width: number; height: number }): void {
+      this.cadre = cadre
+      this.gestes.push(`cadre y=${cadre.y} ${cadre.width}x${cadre.height}`)
+    }
+    getBounds(): { x: number; y: number; width: number; height: number } {
+      return this.cadre
+    }
+    setBorderRadius(rayon: number): void {
+      this.rayon = rayon
     }
   }
   return {
@@ -750,14 +770,13 @@ describe('bornes : lecture, console, requêtes', () => {
   })
 })
 
-describe('annotations : le canal de retour de la page', () => {
-  it('le signal console n’est pas gardé et déclenche la relève ; l’annotation porte sa capture', async () => {
+describe('élément choisi : le canal de retour de la page', () => {
+  it('le signal console n’est pas gardé et déclenche la relève ; l’élément porte sa capture', async () => {
     nav.ouvrir('conv-a', 'https://exemple.fr/page')
     const vue = fabrique.vues[0]
     let file: unknown[] = [
       {
-        type: 'annotation',
-        idPage: 'p1',
+        type: 'choisi',
         selecteur: '#titre',
         texteElement: 'Bonjour',
         styles: {
@@ -767,8 +786,7 @@ describe('annotations : le canal de retour de la page', () => {
           fond: 'white',
           marges: 'marge 0'
         },
-        rect: { x: 10, y: 20, largeur: 100, hauteur: 30 },
-        commentaire: 'Plus gros'
+        rect: { x: 10, y: 20, largeur: 100, hauteur: 30 }
       }
     ]
     vue.reponses.prendre = () => {
@@ -779,19 +797,19 @@ describe('annotations : le canal de retour de la page', () => {
     vue.ecouteurs.surConsole({ niveau: 'debug', message: PING_NAVIGATEUR, source: '', ligne: 0 })
     await laisserFiler()
     expect(nav.lignesConsole('conv-a')).toEqual([])
-    const [annotation] = nav.annotations('conv-a')
-    expect(annotation).toMatchObject({
-      ongletId: nav.etat('conv-a').ongletActif,
-      url: 'https://exemple.fr/page',
-      selecteur: '#titre',
-      commentaire: 'Plus gros',
-      captureDataUrl: 'data:image/png;base64,AAAA'
-    })
-    expect(nav.etat('conv-a').nombreAnnotations).toBe(1)
-
-    nav.supprimerAnnotation(annotation.id)
-    expect(nav.annotations('conv-a')).toEqual([])
-    expect(vue.appels.find((a) => a.methode === 'retirerPastille')?.args).toEqual(['p1'])
+    expect(nav.etat('conv-a').nombreElementsChoisis).toBe(1)
+    const pris = nav.prendreElementsChoisis('conv-a')
+    expect(pris).toMatchObject([
+      {
+        url: 'https://exemple.fr/page',
+        selecteur: '#titre',
+        captureDataUrl: 'data:image/png;base64,AAAA'
+      }
+    ])
+    // Prendre vide la file : l'élément n'est livré qu'une fois.
+    expect(nav.etat('conv-a').nombreElementsChoisis).toBe(0)
+    expect(nav.prendreElementsChoisis('conv-a')).toEqual([])
+    expect(nav.prendreElementsChoisis('conv-inconnue')).toEqual([])
   })
 
   it('le mode suit l’onglet visible ; un élément choisi éteint le mode', async () => {
@@ -805,36 +823,35 @@ describe('annotations : le canal de retour de la page', () => {
     vue.reponses.prendre = () => [
       {
         type: 'choisi',
-        idPage: 'c1',
         selecteur: 'button',
         texteElement: 'Payer',
         styles: {},
-        rect: { x: 0, y: 0, largeur: 0, hauteur: 0 },
-        commentaire: ''
+        rect: { x: 0, y: 0, largeur: 0, hauteur: 0 }
       }
     ]
     vue.ecouteurs.surConsole({ niveau: 'debug', message: PING_NAVIGATEUR, source: '', ligne: 0 })
     await laisserFiler()
-    expect(nav.annotations('conv-a')).toMatchObject([{ selecteur: 'button', commentaire: '' }])
-    expect(nav.annotations('conv-a')[0].captureDataUrl).toBeUndefined()
+    const [choisi] = nav.prendreElementsChoisis('conv-a')
+    expect(choisi).toMatchObject({ selecteur: 'button' })
+    expect(choisi.captureDataUrl).toBeUndefined()
     expect(nav.etat('conv-a').mode).toBeNull()
 
-    await nav.basculerMode('annoter')
+    await nav.basculerMode('choisir')
     nav.afficherFil('conv-b')
     expect(nav.etat('conv-a').mode).toBeNull()
   })
 
   it('sans onglet visible, le mode reste éteint', async () => {
     nav.ouvrir('conv-a', 'https://exemple.fr')
-    await nav.basculerMode('annoter')
+    await nav.basculerMode('choisir')
     expect(nav.etat('conv-a').mode).toBeNull()
   })
 
   /*
    * Mesuré le 2026-10-29 (conv-1293, lot 5/5 de conv-1286) dans l'instance cachée : après « Envoyer
-   * au chat », le mode Annoter reste allumé ; le clic de l'agent part, la page l'AVALE (écoutes
+   * au chat », le mode reste allumé ; le clic de l'agent part, la page l'AVALE (écoutes
    * click/pointerdown du mode) et l'outil répond « Clic sur … » sans que rien ne change. L'entrée
-   * qui ferait échouer ce test si la correction était fausse : un mode encore « annoter » au moment
+   * qui ferait échouer ce test si la correction était fausse : un mode encore allumé au moment
    * du mouseDown de l'agent.
    */
   function modeAuPremierEvenement(vue: FausseVue): Array<unknown> {
@@ -848,34 +865,34 @@ describe('annotations : le canal de retour de la page', () => {
     return vus
   }
 
-  it('un clic de l’agent sur l’onglet en mode Annoter éteint d’abord le mode : la page ne l’avale pas', async () => {
+  it('un clic de l’agent sur l’onglet en mode Choisir éteint d’abord le mode : la page ne l’avale pas', async () => {
     nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
     nav.afficherFil('conv-a')
     nav.poserCadre({ x: 0, y: 0, largeur: 800, hauteur: 600 }, 1)
     const vue = fabrique.vues[0]
     vue.reponses.localiser = cibleTrouvee()
-    await nav.basculerMode('annoter')
-    expect(nav.etat('conv-a').mode).toBe('annoter')
+    await nav.basculerMode('choisir')
+    expect(nav.etat('conv-a').mode).toBe('choisir')
     const modeVu = modeAuPremierEvenement(vue)
     const resultat = await nav.agir('conv-a', { type: 'clic', cible: { ref: 1 } })
     expect(resultat).toMatchObject({ ok: true })
-    expect(resultat.message).toContain('Annoter')
+    expect(resultat.message).toContain('Choisir')
     expect(modeVu).toEqual([null])
     expect(nav.etat('conv-a').mode).toBeNull()
   })
 
-  it('jumeau : défiler ne fait que lire, le mode Annoter de l’utilisateur reste allumé', async () => {
+  it('jumeau : défiler ne fait que lire, le mode Choisir de l’utilisateur reste allumé', async () => {
     nav.ouvrir('conv-a', 'http://127.0.0.1:8080')
     nav.afficherFil('conv-a')
     nav.poserCadre({ x: 0, y: 0, largeur: 800, hauteur: 600 }, 1)
     const vue = fabrique.vues[0]
-    await nav.basculerMode('annoter')
+    await nav.basculerMode('choisir')
     const resultat = await nav.agir('conv-a', { type: 'defiler', dy: 300 })
     expect(resultat).toMatchObject({ ok: true })
     expect(vue.appels.filter((a) => a.methode === 'activerMode').map((a) => a.args[0])).toEqual([
-      'annoter'
+      'choisir'
     ])
-    expect(nav.etat('conv-a').mode).toBe('annoter')
+    expect(nav.etat('conv-a').mode).toBe('choisir')
   })
 
   it('jumeau : une action refusée (cible introuvable) laisse le mode allumé', async () => {
@@ -884,10 +901,10 @@ describe('annotations : le canal de retour de la page', () => {
     nav.poserCadre({ x: 0, y: 0, largeur: 800, hauteur: 600 }, 1)
     const vue = fabrique.vues[0]
     vue.reponses.localiser = () => ({ trouve: false })
-    await nav.basculerMode('annoter')
+    await nav.basculerMode('choisir')
     const resultat = await nav.agir('conv-a', { type: 'clic', cible: { ref: 9 } })
     expect(resultat).toMatchObject({ ok: false, refus: 'cible-introuvable' })
-    expect(nav.etat('conv-a').mode).toBe('annoter')
+    expect(nav.etat('conv-a').mode).toBe('choisir')
   })
 })
 
@@ -1860,7 +1877,7 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
   })
 
   // Objection du juge (run-adc12547df2d-1, réparation 4) : le mode était coupé AVANT la relecture du
-  // Stop et de la main reprise. Refus rendu, 0 événement, mais Annoter éteint : à l'instant où
+  // Stop et de la main reprise. Refus rendu, 0 événement, mais le mode éteint : à l'instant où
   // l'utilisateur voit le geste arriver et veut l'arrêter, il perdait son propre mode.
   describe('geste refusé pendant la surbrillance : le mode de l’utilisateur reste allumé', () => {
     const CLIC = { type: 'clic', cible: { ref: 1 } } as const
@@ -1871,19 +1888,19 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       nav.poserCadre({ x: 0, y: 0, largeur: 800, hauteur: 600 }, 1)
       const vue = fabrique.vues[0]
       vue.reponses.localiser = cibleTrouvee()
-      await nav.basculerMode('annoter')
+      await nav.basculerMode('choisir')
       return vue
     }
 
     function attendreModeIntact(vue: FausseVue): void {
-      expect(nav.etat('conv-a').mode).toBe('annoter')
+      expect(nav.etat('conv-a').mode).toBe('choisir')
       expect(vue.appels.filter((a) => a.methode === 'activerMode').map((a) => a.args[0])).toEqual([
-        'annoter'
+        'choisir'
       ])
       expect(vue.evenements).toEqual([])
     }
 
-    it('« Reprendre la main » : refus, et Annoter reste allumé', async () => {
+    it('« Reprendre la main » : refus, et Choisir reste allumé', async () => {
       const vue = await preparer()
       vue.reponses.surligner = (): boolean => {
         nav.piloter('conv-a', 'reprendre-la-main')
@@ -1893,7 +1910,7 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       attendreModeIntact(vue)
     })
 
-    it('Stop : refus, et Annoter reste allumé', async () => {
+    it('Stop : refus, et Choisir reste allumé', async () => {
       const vue = await preparer()
       const arret = new AbortController()
       vue.reponses.surligner = (): boolean => {
@@ -1908,7 +1925,7 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     })
 
     // Même cause, autre refus : la relecture du site venait elle aussi après la coupure.
-    it('la page change de site : refus, et Annoter reste allumé', async () => {
+    it('la page change de site : refus, et Choisir reste allumé', async () => {
       const vue = await preparer()
       vue.reponses.surligner = (): boolean => {
         vue.adresse = 'https://site-b.fr/'
@@ -1929,7 +1946,7 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       }
       const r = await nav.agir('conv-a', CLIC, arret.signal)
       expect(r).toMatchObject({ ok: false, message: expect.stringMatching(/arrêté/) })
-      expect(r.message).toContain('Annoter')
+      expect(r.message).toContain('Choisir')
       expect(nav.etat('conv-a').mode).toBeNull()
       expect(vue.evenements).toEqual([])
     })
@@ -2681,6 +2698,7 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
     const ajoutees: unknown[] = []
     const fenetre = {
       contentView: { addChildView: (v: unknown) => ajoutees.push(v), removeChildView: vi.fn() },
+      getContentBounds: () => ({ x: 0, y: 0, width: 900, height: 700 }),
       isDestroyed: () => false
     }
     const vraie = creerFabriqueElectron(fenetre as never)
@@ -2703,6 +2721,7 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
       })
     })
     expect(vue.visible).toBe(false)
+    expect(vue.rayon).toBe(10)
     expect(ajoutees).toEqual([vue])
 
     expect(
@@ -2793,6 +2812,7 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
   } {
     const fenetre = {
       contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
+      getContentBounds: () => ({ x: 0, y: 0, width: 900, height: 700 }),
       isDestroyed: () => false,
       webContents: { focus: vi.fn(), sendInputEvent: vi.fn() }
     }
@@ -2848,6 +2868,7 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
     async ({ dejaAttache, journal }) => {
       const fenetre = {
         contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
+        getContentBounds: () => ({ x: 0, y: 0, width: 900, height: 700 }),
         isDestroyed: () => false,
         webContents: { focus: vi.fn(), sendInputEvent: vi.fn() }
       }
@@ -2883,6 +2904,122 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
       expect(attache).toBe(dejaAttache)
     }
   )
+
+  /*
+   * FIL QUE L'UTILISATEUR NE REGARDE PAS (conv-1304, 2026-10-30) : conv-1309 est reste suspendu plus
+   * de 20 minutes sur `navigateur_agir`. Mesure dans une fenetre MONTREE : `Page.captureScreenshot`
+   * ne revient JAMAIS sur une vue cachee (fromSurface et emulation du focus n'y changent rien), et
+   * sans image, le clic est perdu. Une vue visible sur UN pixel de la fenetre dessine en 115 ms et
+   * recoit le clic : ni redimensionnee, ni montree a l'utilisateur.
+   */
+  describe('peindre : vue cachée', () => {
+    const preparer = (
+      sendCommand: (methode: string) => Promise<unknown>
+    ): {
+      vue: ReturnType<ReturnType<typeof creerFabriqueElectron>['creerVue']>
+      simulee: { visible?: boolean; cadre: { y: number }; gestes: string[] }
+      debogueur: { attache: boolean }
+    } => {
+      const fenetre = {
+        contentView: { addChildView: vi.fn(), removeChildView: vi.fn() },
+        getContentBounds: () => ({ x: 0, y: 0, width: 900, height: 700 }),
+        isDestroyed: () => false,
+        webContents: { focus: vi.fn(), sendInputEvent: vi.fn() }
+      }
+      const vue = creerFabriqueElectron(fenetre as never).creerVue({
+        partition: PARTITION_PERSISTANTE,
+        ecouteurs: {
+          surChangement: vi.fn(),
+          surNouvelleFenetre: vi.fn(),
+          surConsole: vi.fn(),
+          surRequeteEchouee: vi.fn(),
+          surTelechargement: vi.fn()
+        }
+      })
+      const simulee = electronSimule.vues.at(-1) as never as {
+        visible?: boolean
+        cadre: { y: number }
+        gestes: string[]
+        webContents: Record<string, unknown>
+      }
+      const debogueur = { attache: false }
+      simulee.webContents.debugger = {
+        isAttached: () => debogueur.attache,
+        attach: () => {
+          debogueur.attache = true
+        },
+        detach: () => {
+          debogueur.attache = false
+        },
+        sendCommand: (methode: string) => {
+          simulee.gestes.push(methode)
+          return sendCommand(methode)
+        }
+      }
+      simulee.gestes.length = 0
+      return { vue, simulee, debogueur }
+    }
+
+    it('une vue jamais affichée a tout de suite une taille : sa page se met en page', () => {
+      const { simulee } = preparer(() => Promise.resolve({}))
+      expect(simulee.cadre).toEqual({ x: 0, y: 0, width: 900, height: 700 })
+      expect(simulee.visible).toBe(false)
+    })
+
+    it('la montre sur le dernier pixel de la fenêtre, le temps de l’image, puis la remet', async () => {
+      const { vue, simulee } = preparer(() => Promise.resolve({}))
+      await vue.peindre()
+      expect(simulee.gestes).toEqual([
+        'cadre y=699 900x700',
+        'visible true',
+        'Page.captureScreenshot',
+        'visible false',
+        'cadre y=0 900x700'
+      ])
+    })
+
+    it('une vue déjà visible ne bouge pas', async () => {
+      const { vue, simulee } = preparer(() => Promise.resolve({}))
+      vue.rendreVisible(true)
+      simulee.gestes.length = 0
+      await vue.peindre()
+      expect(simulee.gestes).toEqual(['Page.captureScreenshot'])
+    })
+
+    it('image jamais rendue : échoue en nommant la cause, sans laisser la vue en place', async () => {
+      vi.useFakeTimers()
+      try {
+        const { vue, simulee, debogueur } = preparer(() => new Promise(() => undefined))
+        const issue = expect(vue.peindre()).rejects.toThrow(/dessin/u)
+        await vi.advanceTimersByTimeAsync(6_000)
+        await issue
+        expect(simulee.visible).toBe(false)
+        expect(simulee.cadre.y).toBe(0)
+        expect(debogueur.attache).toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('le panneau s’ouvre pendant le dessin : sa demande gagne, rien ne la défait', async () => {
+      let rendre: (v: unknown) => void = () => undefined
+      const { vue, simulee } = preparer(
+        () =>
+          new Promise((fin) => {
+            rendre = fin
+          })
+      )
+      const dessin = vue.peindre()
+      vue.poserCadre({ x: 10, y: 20, width: 500, height: 400 })
+      vue.rendreVisible(true)
+      expect(simulee.visible).toBe(true)
+      expect(simulee.cadre.y).toBe(699)
+      rendre({})
+      await dessin
+      expect(simulee.visible).toBe(true)
+      expect(simulee.cadre).toEqual({ x: 10, y: 20, width: 500, height: 400 })
+    })
+  })
 
   it.each([
     { key: 'B', shift: true, keyCode: 'B', modifiers: ['control', 'shift'] },

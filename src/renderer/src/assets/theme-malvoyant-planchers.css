@@ -146,6 +146,11 @@
   font-size: 13px;
 }
 
+/* components/BlocHtmlInteractif.css — tailles */
+:root[data-theme^='malvoyant-'] .bloc-html-interactif__barre button {
+  font-size: 13px;
+}
+
 /* components/BrainMarkdown.css — tailles */
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dt,
 :root[data-theme^='malvoyant-'] .brain-markdown__meta dd,
@@ -403,7 +408,6 @@
 }
 
 /* components/FriseGestesNavigateur.css — tailles */
-:root[data-theme^='malvoyant-'] .navigateur-pilotage-pause,
 :root[data-theme^='malvoyant-'] .navigateur-pilotage-bouton,
 :root[data-theme^='malvoyant-'] .navigateur-jalon-verbe,
 :root[data-theme^='malvoyant-'] .navigateur-jalon-temps,
@@ -604,8 +608,6 @@
 }
 
 /* components/HdeskGestionView.css — tailles */
-:root[data-theme^='malvoyant-'] .hdesk-ligne-sous,
-:root[data-theme^='malvoyant-'] .hdesk-recents h3,
 :root[data-theme^='malvoyant-'] .hdesk-vise,
 :root[data-theme^='malvoyant-'] .hdesk-pied {
   font-size: 13px;
@@ -819,10 +821,7 @@
 :root[data-theme^='malvoyant-'] .navigateur-mode,
 :root[data-theme^='malvoyant-'] .navigateur-cadre-tete,
 :root[data-theme^='malvoyant-'] .navigateur-accord-texte span,
-:root[data-theme^='malvoyant-'] .navigateur-pilule,
-:root[data-theme^='malvoyant-'] .navigateur-annotations-titre,
-:root[data-theme^='malvoyant-'] .navigateur-annotation,
-:root[data-theme^='malvoyant-'] .navigateur-annotation-numero {
+:root[data-theme^='malvoyant-'] .navigateur-pilule {
   font-size: 13px;
 }
 
@@ -953,6 +952,11 @@
   font-size: 13px;
 }
 
+/* components/QuestionACote.css — tailles */
+:root[data-theme^='malvoyant-'] .question-a-cote-note {
+  font-size: 13px;
+}
+
 /* components/RequestThread.css — tailles */
 :root[data-theme^='malvoyant-'] .request-story-chapter dt {
   font-size: 13px;
@@ -1060,11 +1064,16 @@
 :root[data-theme^='malvoyant-'] .scm-bandeau,
 :root[data-theme^='malvoyant-'] .scm-reduire,
 :root[data-theme^='malvoyant-'] .scm-geste,
+:root[data-theme^='malvoyant-'] .scm-retour,
 :root[data-theme^='malvoyant-'] .scm-vide,
+:root[data-theme^='malvoyant-'] .scm-enchainement,
+:root[data-theme^='malvoyant-'] .scm-heures,
+:root[data-theme^='malvoyant-'] .scm-bloc > .scm-cout,
 :root[data-theme^='malvoyant-'] .scm-nom,
+:root[data-theme^='malvoyant-'] .scm-pastille,
+:root[data-theme^='malvoyant-'] .scm-duree,
 :root[data-theme^='malvoyant-'] .scm-relancer,
-:root[data-theme^='malvoyant-'] .scm-erreur,
-:root[data-theme^='malvoyant-'] .scm-chat .scm-onglet {
+:root[data-theme^='malvoyant-'] .scm-erreur {
   font-size: 13px;
 }
 
@@ -1148,6 +1157,7 @@
 }
 
 /* components/TestsView.css — tailles */
+:root[data-theme^='malvoyant-'] .maint-tickets-titre,
 :root[data-theme^='malvoyant-'] .tests-project-runner,
 :root[data-theme^='malvoyant-'] .tests-project-totals,
 :root[data-theme^='malvoyant-'] .tests-project-reason,
@@ -1341,8 +1351,7 @@
 
 /* assets/cosmic-outline.css — tailles */
 :root[data-theme^='malvoyant-'] .cosmic-outline .chat-runtime,
-:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-go,
-:root[data-theme^='malvoyant-'] .msg.user .msg-body.avec-skill .msg-skill-entete {
+:root[data-theme^='malvoyant-'] .cosmic-outline .activity-group-go {
   font-size: 13px;
 }
 

@@ -3,13 +3,16 @@
  *
  * Un navigateur posé à côté du fil : la barre d'adresse, les onglets toujours visibles juste dessous,
  * Choisir un élément (un clic, inséré tout de suite dans la saisie), barre d'accord par site quand
- * l'agent veut écrire dans une page. Le bouton Annoter est retiré (conv-1306, 2026-10-30) : le
- * principal garde ce mode, plus rien ne l'allume ici ; celles déjà posées restent listées et envoyables.
+ * l'agent veut écrire dans une page.
  *
  * LE CADRE DE PAGE (/draft de conv-1306, « Cadre de page ») : la page prend un cadre ambre quand
  * l'agent pilote OU attend un accord, avec sa bande en haut et la barre d'accord au pied. La bande
- * est TOUJOURS là (titre de l'onglet au repos, en entier : l'onglet, lui, le coupe) : une bande qui
- * apparaît ferait sauter la page à chaque action de l'agent, juste après qu'il a repéré sa cible.
+ * est RÉSERVÉE en permanence et vide au repos : elle ne dit que l'état de l'agent, le titre se lit déjà
+ * sur l'onglet (conv-1306, 2026-10-30).
+ *
+ * LE HAUT DE LA PAGE NE BOUGE JAMAIS : tout ce qui apparaît avec l'agent (accord, boutons du
+ * pas-à-pas, frise) vit SOUS la page. Mesuré au-dessus (conv-1306, 2026-10-30, 520 px) : la page
+ * descendait de 115 px à l'arrivée de l'agent et remontait de 44 px quand le bandeau partait.
  *
  * LA PAGE N'EST PAS DANS LE DOM : c'est une vue Electron posée PAR-DESSUS la fenêtre, au cadre que
  * ce panneau mesure (`poserCadre`). Tout ce qui doit passer au-dessus d'elle — menu ⋮, aperçu
@@ -20,7 +23,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
-  AnnotationNavigateur,
+  ElementChoisiNavigateur,
   EtatNavigateur,
   ModeNavigateur,
   RectNavigateur,
@@ -107,10 +110,8 @@ export interface PropsNavigateurIntegre {
    */
   visible: boolean
   onFermer: () => void
-  /** « Envoyer au chat » : les annotations du fil, dans l'ordre. */
-  onEnvoyerAuChat: (annotations: AnnotationNavigateur[]) => void
   /** « Choisir un élément » : l'élément cliqué, à insérer tout de suite. */
-  onElementChoisi: (annotation: AnnotationNavigateur) => void
+  onElementChoisi: (element: ElementChoisiNavigateur) => void
   /** Les réglages lus ou changés ici (la vue chat en a besoin pour ses liens). */
   onReglages?: (reglages: ReglagesNavigateur) => void
 }
@@ -119,14 +120,12 @@ export function NavigateurIntegre({
   conversationId,
   visible,
   onFermer,
-  onEnvoyerAuChat,
   onElementChoisi,
   onReglages
 }: PropsNavigateurIntegre): React.JSX.Element {
   useLangue()
   const t = texteNavigateur
   const [etat, setEtat] = useState<EtatNavigateur | null>(null)
-  const [annotations, setAnnotations] = useState<AnnotationNavigateur[]>([])
   const [reglages, setReglages] = useState<ReglagesNavigateur | null>(null)
   const [saisie, setSaisie] = useState('')
   const [menuOuvert, setMenuOuvert] = useState(false)
@@ -143,19 +142,18 @@ export function NavigateurIntegre({
   const adresseRef = useRef<HTMLInputElement | null>(null)
   const listeOngletsRef = useRef<HTMLDivElement | null>(null)
   const etatRef = useRef<EtatNavigateur | null>(null)
-  const annotationsRef = useRef<AnnotationNavigateur[]>([])
   const dernierCadreRef = useRef<string | null>(null)
   // Les rappels du parent changent à chaque rendu de la vue chat : lus par ref, ils ne relancent
   // pas l'abonnement à l'état. Mis à jour après le rendu (une ref ne s'écrit pas pendant).
-  const rappelsRef = useRef({ onEnvoyerAuChat, onElementChoisi, onReglages })
+  const rappelsRef = useRef({ onElementChoisi, onReglages })
   useLayoutEffect(() => {
-    rappelsRef.current = { onEnvoyerAuChat, onElementChoisi, onReglages }
+    rappelsRef.current = { onElementChoisi, onReglages }
   })
 
   const ongletActif = etat?.onglets.find((onglet) => onglet.id === etat.ongletActif) ?? null
   const cadreVisible = visible && !menuOuvert && !redimensionnement
   // Tout ce qui, en s'ouvrant, peut DÉPLACER la page sans changer sa taille : voir le cadre plus bas.
-  const disposition = [Boolean(erreur), Boolean(etat?.demandeAccord), annotations.length > 0].join()
+  const disposition = [Boolean(erreur), Boolean(etat?.demandeAccord)].join()
 
   function agir(promesse: Promise<unknown> | undefined): void {
     setErreur(null)
@@ -164,27 +162,13 @@ export function NavigateurIntegre({
     })
   }
 
-  // Annotations relues quand leur nombre bouge ; celles nées d'un « Choisir » partent dans la saisie.
-  async function relireAnnotations(livrerChoix: boolean): Promise<void> {
-    const api = apiNavigateur()
-    if (!api) return
-    const connues = new Set(annotationsRef.current.map((a) => a.id))
-    let liste = await api.annotations(conversationId)
-    if (livrerChoix) {
-      const choisies = liste.filter((a) => !connues.has(a.id) && !a.commentaire)
-      for (const choisie of choisies) {
-        rappelsRef.current.onElementChoisi(choisie)
-        void api.supprimerAnnotation(choisie.id)
-      }
-      if (choisies.length > 0) {
-        // Le composer est caché en plein cadre : on revient côte à côte pour montrer l'insertion.
-        setPleinCadre(false)
-        const parties = new Set(choisies.map((a) => a.id))
-        liste = liste.filter((a) => !parties.has(a.id))
-      }
-    }
-    annotationsRef.current = liste
-    setAnnotations(liste)
+  // Un élément choisi part tout de suite dans la saisie.
+  async function livrerElementsChoisis(): Promise<void> {
+    const elements = (await apiNavigateur()?.prendreElementsChoisis(conversationId)) ?? []
+    if (elements.length === 0) return
+    for (const element of elements) rappelsRef.current.onElementChoisi(element)
+    // Le composer est caché en plein cadre : on revient côte à côte pour montrer l'insertion.
+    setPleinCadre(false)
   }
 
   // État du fil : relu à l'ouverture, puis poussé par le processus principal à chaque changement.
@@ -195,15 +179,10 @@ export function NavigateurIntegre({
     let vivant = true
     const recevoir = (suivant: EtatNavigateur): void => {
       if (!vivant || suivant.conversationId !== conversationId) return
-      const precedent = etatRef.current
       etatRef.current = suivant
       setEtat(suivant)
       setMaintenant(Date.now())
-      const avant = precedent ? precedent.nombreAnnotations : annotationsRef.current.length
-      if (suivant.nombreAnnotations !== avant || !precedent) {
-        const enChoix = suivant.mode === 'choisir' || precedent?.mode === 'choisir'
-        void relireAnnotations(enChoix && suivant.nombreAnnotations > avant)
-      }
+      if (suivant.nombreElementsChoisis > 0) void livrerElementsChoisis()
     }
     const desabonner = api.surEtat(recevoir)
     void api.etat(conversationId).then(recevoir)
@@ -211,7 +190,7 @@ export function NavigateurIntegre({
       vivant = false
       desabonner()
     }
-    // `relireAnnotations` ne lit que des refs et `conversationId`.
+    // `livrerElementsChoisis` ne lit que des refs et `conversationId`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId])
 
@@ -404,17 +383,6 @@ export function NavigateurIntegre({
       )
   }
 
-  function envoyerAuChat(): void {
-    const api = apiNavigateur()
-    const lot = annotationsRef.current
-    if (!api || lot.length === 0) return
-    rappelsRef.current.onEnvoyerAuChat(lot)
-    annotationsRef.current = []
-    setAnnotations([])
-    setPleinCadre(false)
-    agir(api.viderAnnotations(conversationId))
-  }
-
   function commencerRedimensionnement(event: React.PointerEvent<HTMLDivElement>): void {
     event.preventDefault()
     const departX = event.clientX
@@ -453,11 +421,15 @@ export function NavigateurIntegre({
   const demande = etat?.demandeAccord
   const adresseLue = decouperAdresse(saisie)
   const chiffre = decouperAdresse(urlActive)?.chiffre ?? false
-  const titreActif = ongletActif
-    ? ongletActif.titre && ongletActif.titre !== 'about:blank'
-      ? ongletActif.titre
-      : t('sansTitre')
-    : ''
+  const pause = pilotage === 'pause' ? ` ${rang ? t('enPauseGeste', rang) : t('enPause')}` : ''
+  // Une seule phrase pour l'état de l'agent, ici : au repos, la bande reste vide.
+  const statut = demande
+    ? t('agentAttend')
+    : pilotage === 'main'
+      ? t('tuAsLaMain')
+      : bandeauVisible
+        ? `${t('agentPilote')}${pause}`
+        : ''
 
   return (
     <>
@@ -701,38 +673,6 @@ export function NavigateurIntegre({
             <Icone nom="plus" />
           </button>
         </div>
-        {bandeauVisible && (
-          <div
-            className={`navigateur-pilotage${pilotage === 'main' ? ' is-main' : ''}`}
-            data-testid="navigateur-pilotage"
-          >
-            <span className="navigateur-pilotage-texte" role="status">
-              {pilotage === 'main' ? t('tuAsLaMain') : t('agentPilote')}
-              {pilotage === 'pause' && (
-                <span className="navigateur-pilotage-pause">
-                  {` ${rang ? t('enPauseGeste', rang) : t('enPause')}`}
-                </span>
-              )}
-            </span>
-            <span className="navigateur-pilotage-boutons">
-              {ORDRES_DU_PILOTAGE[pilotage].map((ordre) => (
-                <button
-                  key={ordre}
-                  type="button"
-                  className="navigateur-pilotage-bouton"
-                  onClick={() => agir(apiNavigateur()?.piloter(conversationId, ordre))}
-                >
-                  {t(LIBELLE_ORDRE[ordre])}
-                </button>
-              ))}
-            </span>
-          </div>
-        )}
-        <FriseGestesNavigateur
-          gestes={etat?.gestes ?? []}
-          ongletActif={etat?.ongletActif ?? null}
-        />
-
         {erreur && (
           <div className="navigateur-erreur" role="alert">
             {erreur}
@@ -740,13 +680,7 @@ export function NavigateurIntegre({
         )}
         <div className={`navigateur-cadre${etat?.agentPilote || demande ? ' is-agent' : ''}`}>
           <div className="navigateur-cadre-tete">
-            {/* « L'agent pilote » vit dans le bandeau du pas-à-pas, toujours visible tant qu'il pilote :
-                le répéter ici l'affichait deux fois (conv-1286). */}
-            {demande ? (
-              <span role="status">{t('agentAttend')}</span>
-            ) : (
-              <span title={ongletActif?.url}>{titreActif}</span>
-            )}
+            <span role="status">{statut}</span>
           </div>
           <div ref={zoneRef} className="navigateur-zone" data-testid="navigateur-zone">
             {onglets.length === 0 ? (
@@ -792,44 +726,27 @@ export function NavigateurIntegre({
           )}
         </div>
 
-        {annotations.length > 0 && (
-          <div className="navigateur-annotations" data-testid="navigateur-annotations">
-            <span className="navigateur-annotations-titre">
-              {t('annotations', { n: annotations.length })}
-            </span>
-            <ol className="navigateur-annotations-liste">
-              {annotations.map((annotation, index) => {
-                const commentaire = annotation.commentaire || t('sansCommentaire')
-                return (
-                  <li key={annotation.id} className="navigateur-annotation" title={commentaire}>
-                    <span className="navigateur-annotation-numero">{index + 1}</span>
-                    <span className="navigateur-annotation-extrait">
-                      {annotation.texteElement || annotation.selecteur}
-                    </span>
-                    {/* Le commentaire se lit au survol ; caché à l'œil, pas aux lecteurs d'écran. */}
-                    <span className="navigateur-annotation-commentaire">{commentaire}</span>
-                    <button
-                      type="button"
-                      className="navigateur-petit-fermer"
-                      aria-label={t('supprimer', { n: index + 1 })}
-                      title={t('supprimer', { n: index + 1 })}
-                      onClick={() => agir(apiNavigateur()?.supprimerAnnotation(annotation.id))}
-                    >
-                      <Icone nom="fermer" />
-                    </button>
-                  </li>
-                )
-              })}
-            </ol>
-            <button
-              type="button"
-              className="navigateur-pilule navigateur-pilule-gel navigateur-envoyer"
-              onClick={envoyerAuChat}
-            >
-              {t('envoyer')}
-            </button>
+        {bandeauVisible && (
+          <div
+            className={`navigateur-pilotage${pilotage === 'main' ? ' is-main' : ''}`}
+            data-testid="navigateur-pilotage"
+          >
+            {ORDRES_DU_PILOTAGE[pilotage].map((ordre) => (
+              <button
+                key={ordre}
+                type="button"
+                className="navigateur-pilotage-bouton"
+                onClick={() => agir(apiNavigateur()?.piloter(conversationId, ordre))}
+              >
+                {t(LIBELLE_ORDRE[ordre])}
+              </button>
+            ))}
           </div>
         )}
+        <FriseGestesNavigateur
+          gestes={etat?.gestes ?? []}
+          ongletActif={etat?.ongletActif ?? null}
+        />
       </aside>
     </>
   )

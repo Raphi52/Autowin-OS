@@ -1,6 +1,10 @@
 import type { InventaireDisque } from '../main/store/inventaire-disque'
 import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/messages-entre-fils-app'
-import type { GestePlanDeLots, ReponsePlansDeLots } from '../shared/plan-de-lots'
+import type {
+  GestePlanDeLots,
+  ReponsePlansDeLots,
+  SelectionAPlanifier
+} from '../shared/plan-de-lots'
 import type {
   EtatPhraseProd,
   ReponseAutorisation as ReponseAutorisationProd,
@@ -14,6 +18,7 @@ import type {
 } from '../shared/prod-protection'
 import type { RapportRetention } from '../shared/rapport-retention'
 import type { ApiNavigateur, RectNavigateur } from '../shared/navigateur'
+import type { ApiTerminal } from '../shared/terminal'
 import type { GestesDesTours } from '../shared/gestes-agent'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
@@ -130,6 +135,8 @@ interface ChatApi {
   hdeskGestionChoisirExe: () => Promise<ResultatChoixExe>
   /** Navigateur intégré du chat (conv-1286) : la forme est celle du contrat partagé. */
   navigateur: ApiNavigateur
+  /** Terminal intégré du chat (conv-1362) : la forme est celle du contrat partagé. */
+  terminal: ApiTerminal
   prodPassphraseEtat: () => Promise<EtatPhraseProd>
   prodPassphraseDefinir: (
     phrase: string,
@@ -307,6 +314,10 @@ interface ChatApi {
   styleMascotte: () => Promise<'magicien' | 'basique' | 'machine'>
   choisirStyleMascotte: (style: 'magicien' | 'basique' | 'machine') => Promise<'magicien' | 'basique' | 'machine'>
   themeMascotte: (theme: string) => Promise<boolean>
+  /** La vraie page de la mascotte, pour l'accueil d'un fil vide (conv-1401). */
+  mascottePage: () => Promise<{ html: string; largeur: number; hauteur: number }>
+  /** La feuille d'humeur à poser sur cette page. */
+  mascotteFeuilleAccueil: (humeur: string, agents: number) => Promise<string>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   setColorScheme: (schema: 'dark' | 'light') => Promise<boolean>
   /** Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090). */
@@ -430,7 +441,7 @@ interface ChatApi {
     phase: string,
     champion: { provider: string; model: string }
   ) => Promise<ShadowRouteResult>
-  modelQuotas: (force?: boolean) => Promise<ModelQuotaSnapshot>
+  modelQuotas: (force?: boolean, compteDuFil?: string) => Promise<ModelQuotaSnapshot>
   claudeResets: () => Promise<ClaudeResetsStatus>
   claudeResetClaim: (grantId: string) => Promise<ClaudeResetClaimResult>
   profiles: () => Promise<AutowinProfile[]>
@@ -522,7 +533,7 @@ interface ChatApi {
   brainPerso: () => Promise<BrainPersoState>
   enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }) => Promise<BrainPersoState>
   resetBrainPerso: () => Promise<BrainPersoState>
-  onModelQuestion: (cb: (question: PendingModelQuestion) => void) => () => void
+  pendingModelQuestion: () => Promise<PendingModelQuestion | null>
   answerModelQuestion: (id: string, answer: string) => Promise<{ ok: true }>
   toolUsage: () => Promise<
     Array<{ id: string; label: string; description: string; enabled: boolean; mutable: boolean }>
@@ -745,6 +756,14 @@ interface ChatApi {
       conversationId: string,
       planId?: string,
       lot?: number
+    ): Promise<ReponsePlansDeLots>
+    /** Le bouton du workflow intelligent (conv-1333) : la sélection devient un plan, et part. */
+    (
+      geste: 'lancer-selection',
+      conversationId: string,
+      planId: undefined,
+      lot: undefined,
+      selection: SelectionAPlanifier
     ): Promise<ReponsePlansDeLots>
   }
   pilotChat: (

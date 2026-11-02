@@ -23,6 +23,7 @@ import {
   marquerEchec,
   marquerLance,
   noterFinDeTour,
+  anciensPlansDuChef,
   plansPourLaListe,
   promptDeReveil,
   promptDuLot,
@@ -655,6 +656,24 @@ describe('redémarrage : lot dont l’agent a survécu', () => {
     expect(lotsAPartir(relance.plan, occupe([]))).toEqual([1])
   })
 
+  it('une relance garde l’heure du premier départ et vide la fin (conv-1353)', () => {
+    let p = marquerLance(
+      planAccepte({ contexte: CONTEXTE, parallele: 1, lots: [lot(1), lot(2)] }),
+      1,
+      'conv-110',
+      1000
+    )
+    expect(p.lots[0].debut).toBe(1000)
+    p = noterFinDeTour(p, 'conv-110', { ok: false, erreur: 'rouge' }, 2000).plan
+    expect(p.lots[0].fin).toBe(2000)
+    const relance = relancerLot(p, 1)
+    expect(relance.ok).toBe(true)
+    if (!relance.ok) return
+    const relance2 = marquerLance(relance.plan, 1, 'conv-111', 5000)
+    expect(relance2.lots[0].debut).toBe(1000)
+    expect(relance2.lots[0].fin).toBeUndefined()
+  })
+
   it('un lot qui attend son fil occupé n’arrête pas le plan sur un faux « plafond atteint »', () => {
     let p = lancerCeQuiPart(planAccepte({ parallele: 1, lots: [lot(1), lot(2)] }))
     p = noterFinDeTour(p, 'conv-110', { ok: false, erreur: 'rouge' }, 3000).plan
@@ -924,6 +943,7 @@ describe('plansPourLaListe — le geste « tous » du canal os:plansDeLots (conv
         id: 'plan-1',
         chef: 'conv-1',
         total: 3,
+        actuel: true,
         lots: [
           { rang: 1, fil: 'conv-110' },
           { rang: 2, fil: 'conv-120' }
@@ -932,10 +952,68 @@ describe('plansPourLaListe — le geste « tous » du canal os:plansDeLots (conv
     ])
   })
 
+  it('« actuel » suit `planDuFil` : le dernier plan non remplacé du chef, même sans fil ouvert', () => {
+    const ancien = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
+    const recent = { ...ancien, id: 'plan-2' }
+    expect(plansPourLaListe([ancien, recent]).map((p) => [p.id, p.actuel])).toEqual([
+      ['plan-1', false],
+      ['plan-2', true]
+    ])
+    // Un plan neuf sans fil n'est pas rendu, mais c'est lui que montre le chef (conv-1381).
+    const neuf = { ...planAccepte({ lots: [lot(1), lot(2)] }), id: 'plan-3' }
+    expect(plansPourLaListe([ancien, neuf]).map((p) => [p.id, p.actuel])).toEqual([
+      ['plan-1', false]
+    ])
+    // Un plan remplacé n'est plus montré : celui d'avant le redevient.
+    const remplace = { ...neuf, statut: 'remplace' as const }
+    expect(plansPourLaListe([ancien, remplace]).map((p) => [p.id, p.actuel])).toEqual([
+      ['plan-1', true]
+    ])
+  })
+
   it('ne transporte ni demande ni titre : seulement de quoi ranger la liste', () => {
     const [plan] = plansPourLaListe([lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))])
-    expect(Object.keys(plan).sort()).toEqual(['chef', 'id', 'lots', 'total'])
+    expect(Object.keys(plan).sort()).toEqual(['actuel', 'chef', 'id', 'lots', 'total'])
     expect(Object.keys(plan.lots[0]).sort()).toEqual(['fil', 'rang'])
+  })
+})
+
+/*
+ * conv-1394 (2026-10-31) — « masque aussi les lots des anciens plans d'un même chef, et rends-les
+ * accessibles depuis le bloc de la conv chef » : le geste « anciens » rend au bloc du chef les plans
+ * qu'il ne montre pas et dont un lot a un fil, seul chemin vers ces fils depuis qu'ils n'ont plus de
+ * ligne dans la liste.
+ */
+describe('anciensPlansDuChef — le geste « anciens » du canal os:plansDeLots (conv-1394)', () => {
+  const avecFils = (id: string, chef = 'conv-1'): PlanDeLots => ({
+    ...lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] })),
+    id,
+    chef
+  })
+
+  it('rend les plans du chef qu’il ne montre pas, le plus récent d’abord', () => {
+    const plans = [avecFils('plan-a'), avecFils('plan-b'), avecFils('plan-c')]
+    expect(anciensPlansDuChef(plans, 'conv-1').map((p) => p.id)).toEqual(['plan-b', 'plan-a'])
+  })
+
+  it('un plan neuf sans fil est celui que montre le chef : l’ancien, avec ses fils, est rendu', () => {
+    const neuf = { ...planAccepte({ lots: [lot(1), lot(2)] }), id: 'plan-neuf' }
+    expect(anciensPlansDuChef([avecFils('plan-a'), neuf], 'conv-1').map((p) => p.id)).toEqual([
+      'plan-a'
+    ])
+  })
+
+  it('un plan remplacé n’est pas montré : ses lots ouverts passent dans les anciens', () => {
+    const remplace = { ...avecFils('plan-r'), statut: 'remplace' as const }
+    expect(anciensPlansDuChef([avecFils('plan-a'), remplace], 'conv-1').map((p) => p.id)).toEqual([
+      'plan-r'
+    ])
+  })
+
+  it('omet un plan sans aucun fil ouvert, et les plans d’un autre chef', () => {
+    const sansFil = { ...planAccepte({ lots: [lot(1), lot(2)] }), id: 'plan-vide' }
+    const plans = [sansFil, avecFils('plan-autre', 'conv-2'), avecFils('plan-a')]
+    expect(anciensPlansDuChef(plans, 'conv-1')).toEqual([])
   })
 })
 

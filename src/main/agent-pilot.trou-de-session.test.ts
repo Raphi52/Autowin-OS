@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from './agent-pilot'
+import { configureAutowinAppDataBase } from './app-data'
 import type { Message, SendOptions, SendResult } from './providers/types'
 
 /**
@@ -62,6 +66,24 @@ function pilote(): { pilot: AgentPilot; envoyes: string[]; exec: ReturnType<type
 }
 
 const CONV = 'conv-trou-1'
+
+/*
+ * UNE RACINE À LUI (conv-1423, 2026-11-01). La note se relit sur disque quand la mémoire est vide, et
+ * `comptes-rendus-non-vus.json` se relit puis se réécrit EN ENTIER : un fichier de test voisin sur la
+ * racine commune remettait la note oubliée. Rouge en suite complète à la dernière assertion, vert seul.
+ *
+ * fix-ok: mesuré avec un voisin qui écrit par le vrai magasin : 5 rouges sur 12, 0 sur 12 sans lui, et
+ * 0 sur 12 avec ce voisin une fois le test sur sa propre racine.
+ */
+let racine = ''
+beforeEach(() => {
+  racine = mkdtempSync(join(tmpdir(), 'trou-de-session-'))
+  configureAutowinAppDataBase(racine)
+})
+afterEach(() => {
+  configureAutowinAppDataBase(undefined)
+  rmSync(racine, { recursive: true, force: true })
+})
 
 describe('un tour exécuté sans le modèle est réinjecté au tour suivant', () => {
   it('le tour suivant REÇOIT le compte-rendu du tour que le modèle n’a jamais vu', async () => {

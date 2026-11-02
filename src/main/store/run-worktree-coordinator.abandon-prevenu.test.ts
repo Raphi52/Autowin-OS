@@ -39,7 +39,7 @@ describe('un travail abandonné le fait savoir', () => {
       },
       changedFiles: () => []
     }
-    const stateStore = { list: () => [record], get: () => undefined, save: () => {}, remove: () => {} }
+    const stateStore = { list: () => [record], get: () => undefined, dernierConnu: () => undefined, getAsync: async () => undefined, save: () => {}, remove: () => {} }
     return new RunWorktreeCoordinator({
       manager: manager as never,
       stateStore: stateStore as never,
@@ -95,6 +95,8 @@ describe('un travail abandonné le fait savoir', () => {
       stateStore: {
         list: () => [dejaAbandonne],
         get: () => undefined,
+        dernierConnu: () => undefined,
+        getAsync: async () => undefined,
         save: () => {},
         remove: () => {}
       } as never,

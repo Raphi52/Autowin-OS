@@ -58,6 +58,21 @@ describe('postitsAVerifier', () => {
   it('suit le filtre de personne : les post-its estompés ne sont pas visés', () => {
     expect(postitsAVerifier(postits, 'alex@x').map((p) => p.conversationId)).toEqual(['conv-3'])
   })
+
+  it('suit le filtre de projet, seul ou avec celui de personne (conv-1329)', () => {
+    const avecProjets = [
+      { ...postit('conv-1', 'sans-preuve'), projet: 'ZOX-V3' },
+      { ...postit('conv-3', 'sans-preuve', 'alex@x'), projet: 'AutoWinOS' },
+      { ...postit('conv-5', 'sans-preuve', 'alex@x'), projet: 'ZOX-V3' }
+    ]
+    const ids = (personne: string | null, projet: string | null): string[] =>
+      postitsAVerifier(avecProjets, personne, (p) => projet === null || p.projet === projet).map(
+        (p) => p.conversationId
+      )
+    expect(ids(null, 'ZOX-V3')).toEqual(['conv-1', 'conv-5'])
+    expect(ids('alex@x', 'ZOX-V3')).toEqual(['conv-5'])
+    expect(ids(null, 'Perso')).toEqual([])
+  })
 })
 
 describe('lancerLesVerifications', () => {

@@ -2867,6 +2867,22 @@ export class WorktreeManager {
     return reponse
   }
 
+  /**
+   * LA MÊME QUESTION, DANS LE WORKER DÈS QU'IL EXISTE (heal « les lags », conv-1413, 2026-10-31).
+   * Le `rev-list` ci-dessus répond d'habitude en 50 ms, mais `gels.jsonl` le montre tenant la fenêtre
+   * 125,7 s le 2026-10-31 à 19:27 UTC, le pire gel unitaire de la période : la commande bloque le fil
+   * qui l'attend, et ce fil était celui qui dessine.
+   */
+  async commitsDejaReferencesAsync(
+    shas: readonly string[]
+  ): Promise<Map<string, boolean | undefined>> {
+    if (!this.operationClient) return this.commitsDejaReferences(shas)
+    return this.operationClient.run<Map<string, boolean | undefined>>({
+      operation: 'commitsDejaReferences',
+      shas: [...shas]
+    })
+  }
+
   commitDejaReference(sha: string): boolean | undefined {
     if (!/^[0-9a-f]{40,64}$/i.test(sha)) return undefined
     const containing = this.tryGitFn(this.baseRepo, [

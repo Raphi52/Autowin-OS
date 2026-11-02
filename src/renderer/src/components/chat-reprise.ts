@@ -58,3 +58,27 @@ export async function reprendreApresRedemarrage(
   await deps.envoyer(reprise.consigne, reprise.conversationId)
   return { repris: true, conversationId: reprise.conversationId }
 }
+
+/**
+ * Plafond de lectures : le main efface chaque consigne rendue, la boucle s'arrête donc d'elle-même ;
+ * le plafond ne sert qu'à ne jamais tourner sans fin si une lecture rendait toujours la même.
+ */
+const LECTURES_MAX = 50
+
+/**
+ * TOUTES les consignes en attente, une par fil (conv-1306, 2026-10-30) : deux fils avaient demandé
+ * un redémarrage dans la même file, et l'interface n'en lisait qu'une — l'autre fil ne reprenait
+ * jamais. Le main en rend une par appel, la plus ancienne d'abord ; on lit jusqu'à épuisement. Une
+ * conversation disparue n'arrête pas les suivantes.
+ */
+export async function reprendreToutesApresRedemarrage(
+  deps: DependancesReprise
+): Promise<Array<Exclude<ResultatReprise, { motif: 'aucune' }>>> {
+  const resultats: Array<Exclude<ResultatReprise, { motif: 'aucune' }>> = []
+  for (let i = 0; i < LECTURES_MAX; i += 1) {
+    const resultat = await reprendreApresRedemarrage(deps)
+    if (!resultat.repris && resultat.motif === 'aucune') break
+    resultats.push(resultat as Exclude<ResultatReprise, { motif: 'aucune' }>)
+  }
+  return resultats
+}

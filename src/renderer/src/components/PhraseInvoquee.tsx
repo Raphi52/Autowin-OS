@@ -1,11 +1,13 @@
 import React, { useLayoutEffect, useRef } from 'react'
+import type { UsageDeSkill } from './chat-home-suggestions'
 
 /**
  * Une phrase sur le film d'accueil (conv-1401, 2026-10-31) : « les phrases doivent etre des lettres
  * invoquées du cercle qui s'assemblent ». Chaque lettre part du centre du cercle de runes, monte dans
  * la colonne de lumière, puis vient se poser à sa place ; à la fin, elles se dispersent.
  *
- * Les lettres sont dans le fil, pas dans la vidéo : les phrases viennent des vraies suggestions.
+ * Chaque phrase est un sort : le nom de la skill en or, son usage dessous. Les lettres sont dans le
+ * fil, pas dans la vidéo : le clic pose la vraie commande dans la saisie.
  */
 
 /** L'écart entre deux lettres qui partent, en ms. Plafonné : une longue phrase ne traîne pas. */
@@ -29,14 +31,42 @@ function enMots(phrase: string): { mot: string[]; depart: number }[] {
   })
 }
 
+/** Les lettres d'un texte, mot par mot. `rang` : la première lettre, pour la cadence. */
+function Lettres({ texte, rang }: { texte: string; rang: number }): React.JSX.Element {
+  return (
+    <>
+      {enMots(texte).map(({ mot, depart }, i) => (
+        <React.Fragment key={depart}>
+          {i > 0 && ' '}
+          <span className="at-mot">
+            {mot.map((lettre, k) => {
+              const ici = rang + depart + k
+              const style = {
+                '--retard': `${Math.min(ici * CADENCE_MS, RETARD_MAX_MS)}ms`,
+                '--ecart': `${Math.round((tirage(ici) - 0.5) * 380)}px`,
+                '--tour': `${Math.round((tirage(ici + 50) - 0.5) * 300)}deg`
+              } as React.CSSProperties
+              return (
+                <span key={k} className="at-lettre" style={style}>
+                  {lettre}
+                </span>
+              )
+            })}
+          </span>
+        </React.Fragment>
+      ))}
+    </>
+  )
+}
+
 export function PhraseInvoquee({
-  phrase,
+  usage,
   sortante,
   ecartAuCercle,
   onChoisir,
   onTenir
 }: {
-  phrase: string
+  usage: UsageDeSkill
   sortante: boolean
   /** Du haut de la phrase au centre du cercle de runes, en px. */
   ecartAuCercle: number
@@ -45,6 +75,7 @@ export function PhraseInvoquee({
   onTenir: (tenue: boolean) => void
 }): React.JSX.Element {
   const bouton = useRef<HTMLButtonElement>(null)
+  const phrase = `${usage.nom} ${usage.usage}`
 
   // Avant la première peinture : chaque lettre connaît le chemin depuis le cercle, retour à la ligne
   // compris. `offsetLeft` et non `getBoundingClientRect` : l'animation a déjà déplacé la lettre.
@@ -75,26 +106,12 @@ export function PhraseInvoquee({
       onBlur={() => onTenir(false)}
     >
       <span aria-hidden="true">
-        {enMots(phrase).map(({ mot, depart }, i) => (
-          <React.Fragment key={depart}>
-            {i > 0 && ' '}
-            <span className="at-mot">
-              {mot.map((lettre, k) => {
-                const rang = depart + k
-                const style = {
-                  '--retard': `${Math.min(rang * CADENCE_MS, RETARD_MAX_MS)}ms`,
-                  '--ecart': `${Math.round((tirage(rang) - 0.5) * 380)}px`,
-                  '--tour': `${Math.round((tirage(rang + 50) - 0.5) * 300)}deg`
-                } as React.CSSProperties
-                return (
-                  <span key={k} className="at-lettre" style={style}>
-                    {lettre}
-                  </span>
-                )
-              })}
-            </span>
-          </React.Fragment>
-        ))}
+        <span className="at-nom">
+          <Lettres texte={usage.nom} rang={0} />
+        </span>
+        <span className="at-usage">
+          <Lettres texte={usage.usage} rang={Array.from(usage.nom).length} />
+        </span>
       </span>
     </button>
   )

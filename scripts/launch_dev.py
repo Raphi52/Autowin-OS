@@ -43,7 +43,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from launch_dev_phases import decider_mise_a_jour, libelle_mise_a_jour
-from launch_dev_dependances import attendre_electron_libre, dependances_manquantes, electron_verrouille
+from launch_dev_dependances import (
+    PORT_INTERFACE_DEV,
+    attendre_electron_libre,
+    attendre_port_libre,
+    dependances_manquantes,
+    electron_verrouille,
+    port_occupe,
+)
 from launch_dev_splash import Splash  # noqa: E402 - le chemin doit etre pose avant l'import
 import electron_dev  # noqa: E402 - l'exe de dev, voir `preparer_exe_dev`
 
@@ -675,6 +682,25 @@ def main() -> int:
             return {}
         return {"ELECTRON_EXEC_PATH": str(exe)}
 
+    def liberer_port_interface() -> None:
+        """Attend que l'ancienne app lache le port de l'interface (conv-1329, voir
+        `attendre_port_libre`) : sinon Vite en prend un autre et la vue repart sans sa memoire."""
+        if not port_occupe(PORT_INTERFACE_DEV):
+            return
+        journaliser(f"port {PORT_INTERFACE_DEV} tenu — attente de la fermeture de l'ancienne app")
+        splash.pousser(f"[demarrage] port {PORT_INTERFACE_DEV} encore tenu : attente de la fermeture de l'ancienne app\n")
+        if attendre_port_libre(signe_de_vie=lambda: parole.__setitem__("dernier", time.monotonic())):
+            journaliser(f"port {PORT_INTERFACE_DEV} libre")
+            return
+        journaliser(
+            f"port {PORT_INTERFACE_DEV} toujours tenu apres l'attente : Vite prendra le suivant, "
+            "et la vue y repartira sans sa memoire locale"
+        )
+        splash.pousser(
+            f"[demarrage] port {PORT_INTERFACE_DEV} toujours tenu : l'interface démarre sur un autre port, "
+            "sans ses réglages locaux — ferme ce qui le tient et relance\n"
+        )
+
     def travailler() -> None:
         try:
             mettre_a_jour()
@@ -683,6 +709,8 @@ def main() -> int:
             # APRES la reparation (une reinstallation d'Electron change les fichiers a lier) et
             # AVANT `npm run dev`, qui le recoit par ELECTRON_EXEC_PATH.
             env_dev = preparer_exe_dev()
+            # Juste avant `npm run dev` : c'est lui qui choisit le port, donc l'origine de la vue.
+            liberer_port_interface()
             JOURNAL.parent.mkdir(parents=True, exist_ok=True)
             with JOURNAL.open("a", encoding="utf-8") as sortie:
                 # L'app ecrit dans SON fichier, pas dans un tube qui mourrait avec nous : c'est la

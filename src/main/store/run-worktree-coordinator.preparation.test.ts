@@ -40,6 +40,8 @@ describe('coordinateur — préparation des copies d’agent', () => {
     const stateStore = {
       list: () => [],
       get: () => undefined,
+      dernierConnu: () => undefined,
+      getAsync: async () => undefined,
       save: (e: { detail?: string }) => persistes.push(e),
       remove: () => {}
     }

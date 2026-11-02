@@ -3,17 +3,18 @@
  *
  * Incident du 2026-09-09 (`gels.jsonl`, 15:38:48) : un `writeFileSync` + un `appendFileSync` sur
  * `conversations.json.journal.jsonl` ont bloqué 10 004 ms sur quelques Ko, dans le même gel de ~26 s
- * que le journal de tour. Le volume n'y était pour rien : le disque a calé, et l'écriture vivait sur
- * le fil qui dessine l'interface.
+ * que le journal de tour. Le volume n'y était pour rien, le SSD non plus (420 ms au pire, conv-1368) :
+ * l'appel attendait au-dessus du disque, et l'écriture vivait sur le fil qui dessine l'interface.
  *
  * Ce que ces tests exigent, et l'entrée qui les ferait échouer si la correction était défaite :
  *  (a) un delta de streaming (`urgency: 'checkpoint'`) ne passe JAMAIS par un appel bloquant — un
  *      retour à `appendFileSync` sur ce chemin rallume le gel et échoue ici ;
  *  (b) un disque LENT (10 s, la durée réellement mesurée) ne retarde pas l'émission des deltas ;
- *  (c) la CLÔTURE d'un tour (`urgency: 'immediate'`) reste écrite SUR PLACE, en bloquant ;
- *  (d) l'ORDRE du journal est préservé même quand un vidage forcé tombe pendant une écriture en
- *      vol — le journal se REJOUE au démarrage, deux enregistrements inversés reconstruiraient un
- *      autre état. C'est la raison pour laquelle un flush synchrone s'enfile au lieu de devancer.
+ *  (c) la CLÔTURE d'un tour, une création et une suppression (`urgency: 'immediate'`) ne bloquent
+ *      pas non plus (conv-1368) ; seule la FERMETURE de l'app écrit sur place ;
+ *  (d) l'ORDRE du journal est préservé même quand une écriture `immediate` tombe pendant une écriture
+ *      en vol — le journal se REJOUE au démarrage, deux enregistrements inversés reconstruiraient un
+ *      autre état.
  */
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -22,7 +23,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('node:fs', async (importOriginal) => {
   const real = await importOriginal<typeof import('node:fs')>()
-  return { ...real, default: real, appendFileSync: vi.fn(real.appendFileSync) }
+  return {
+    ...real,
+    default: real,
+    appendFileSync: vi.fn(real.appendFileSync),
+    existsSync: vi.fn(real.existsSync),
+    statSync: vi.fn(real.statSync),
+    mkdirSync: vi.fn(real.mkdirSync),
+    writeFileSync: vi.fn(real.writeFileSync),
+    /*
+     * Remplacer un fichier tout neuf peut tenir 20 s sur ce poste, hors de l'app aussi (`cmd move /y`,
+     * conv-1368) : assez pour faire tomber le test de fermeture sur un mur étranger à ce qu'il
+     * vérifie. Ce double retire d'abord la cible : l'écriture reste synchrone, et c'est elle qu'on juge.
+     */
+    renameSync: vi.fn((de: string, vers: string) => {
+      real.rmSync(vers, { force: true })
+      real.renameSync(de, vers)
+    })
+  }
 })
 
 /** Le disque est pilotable : `retardMs` simule le stall réellement observé. */
@@ -124,17 +142,68 @@ describe('journal des conversations — écriture hors du fil principal', () => 
     }
   })
 
-  it('écrit la CLÔTURE du tour SUR PLACE, en bloquant', () => {
+  /*
+   * conv-1368 (2026-10-31) : `conversations-disk.ts:883` a figé la fenêtre 36,6 s en 7 jours, sur
+   * quelques octets : la clôture d'un tour, une création et une suppression écrivaient encore sur le
+   * fil principal. Le SSD n'y était pour rien, donc seule la sortie du fil protège la fenêtre.
+   */
+  it('écrit la CLÔTURE du tour hors du fil principal, sans un seul appel disque bloquant', async () => {
     const { p, store, id } = storeEnTour('terminal.json')
     store.applyTurnEvent(id, 't', { kind: 'delta', streamId: '0:0', text: 'partiel' })
-    vi.mocked(fs.appendFileSync).mockClear()
+    await attendreEcrituresConversations()
+    const bloquants = [
+      fs.appendFileSync,
+      fs.existsSync,
+      fs.statSync,
+      fs.mkdirSync,
+      fs.writeFileSync
+    ] as unknown as Array<ReturnType<typeof vi.fn>>
+    for (const appel of bloquants) appel.mockClear()
 
     store.applyTurnEvent(id, 't', { kind: 'done' })
+    await attendreEcrituresConversations()
 
-    // Sans attendre quoi que ce soit, la clôture est déjà lisible sur le disque.
-    expect(vi.mocked(fs.appendFileSync)).toHaveBeenCalled()
+    for (const appel of bloquants) expect(appel).not.toHaveBeenCalled()
     expect(loadConversations(p)[0].messages.at(-1)?.status).toBe('completed')
     expect(loadConversations(p)[0].messages.at(-1)?.content).toBe('partiel')
+  })
+
+  it('ne bloque pas non plus sur une création ou une suppression, même disque figé 10 s', async () => {
+    vi.useFakeTimers()
+    try {
+      retardMs = 10_000
+      const { p, store, id } = storeEnTour('creation.json')
+      vi.mocked(fs.appendFileSync).mockClear()
+
+      const debut = performance.now()
+      const seconde = store.create({ title: 'Seconde', provider: 'codex' })
+      store.remove(id)
+      const bloquageMs = performance.now() - debut
+
+      expect(bloquageMs).toBeLessThan(1_000)
+      expect(vi.mocked(fs.appendFileSync)).not.toHaveBeenCalled()
+
+      retardMs = 0
+      await vi.advanceTimersByTimeAsync(40_000)
+      await attendreEcrituresConversations()
+      // Rejoué dans l'ordre : la suppression et la création atteignent bien le fichier.
+      expect(loadConversations(p).map((c) => c.id)).toEqual([seconde.id])
+    } finally {
+      retardMs = 0
+      vi.useRealTimers()
+    }
+  })
+
+  it('garde la FERMETURE de l’app synchrone : rien ne meurt avec le processus', () => {
+    const { p, store, id, flush } = storeEnTour('fermeture.json')
+    store.applyTurnEvent(id, 't', { kind: 'delta', streamId: '0:0', text: 'dernier mot' })
+    store.applyTurnEvent(id, 't', { kind: 'done' })
+
+    flush()
+
+    // Sans attendre : à la sortie de `before-quit`, le disque porte déjà tout.
+    expect(loadConversations(p)[0].messages.at(-1)?.status).toBe('completed')
+    expect(loadConversations(p)[0].messages.at(-1)?.content).toBe('dernier mot')
   })
 
   it("préserve l'ORDRE du journal quand un vidage forcé tombe pendant une écriture en vol", async () => {

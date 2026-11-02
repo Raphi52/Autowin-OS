@@ -50,7 +50,7 @@ export const REPO_MARKER_SCRIPT = 'bootstrap:deps'
  * échouer.
  *
  * Le script exigé est `bootstrap:deps` — celui que le bouton lance vraiment. Il était `codex:login`
- * tant que la connexion Codex existait ; ce moteur est retiré, et garder sa clé aurait cassé le
+ * tant que la connexion Codex passait par ce script ; il a disparu, et garder sa clé aurait cassé le
  * bouton « Installer » le jour où le script disparaît du manifeste.
  *
  * SÉCURITÉ — pourquoi « déclare le script » ne suffit PAS : la remontée finit par atteindre `C:\`,

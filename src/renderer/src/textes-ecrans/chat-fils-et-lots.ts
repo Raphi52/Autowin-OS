@@ -91,22 +91,29 @@ export const TEXTES_FR = {
 
   // — La super conv dans la mosaïque (SuperConvMosaique, /draft conv-1305) : une case à onglets,
   // la frise pleine dans l'onglet Chef, la piste du lot dans son onglet.
-  'superConv.onglets.aria': 'Onglets de la super conv',
-  'superConv.onglet.chef': 'Chef',
-  'superConv.onglet.chef.titre': '{titre} — le fil chef et la frise de tout le plan',
-  'superConv.onglet.lot': 'Lot {rang}/{total} — {titre}',
-  'superConv.onglet.lot.titre': '{titre} — {etat}',
-  'superConv.onglet.nonLu': ' — fini, pas encore lu',
-  'superConv.onglet.pasLance': '{titre} — pas encore lancé',
+  'superConv.retour': 'Retour',
+  'superConv.retour.titre': 'Revenir à la super conv « {titre} »',
+  'superConv.ligne.nonLu': 'Fini, pas encore lu',
+  'superConv.ligne.question': 'Ta réponse attendue',
+  'superConv.question.detail': 'Un lot de cette conversation pose une question restée ouverte',
   'superConv.frise.aria': 'Frise du plan de lots',
   'superConv.chiffre.faits': 'faits',
   'superConv.chiffre.tours': 'tours',
   'superConv.chiffre.cout': 'coût',
   'superConv.chiffre.ecoule': 'écoulé',
-  'superConv.maintenant': 'maintenant {heure}',
-  'superConv.pasEncore': 'Aucun lot n’est encore parti.',
+  'superConv.relancerLot': 'Relancer le {rang}',
   'superConv.apres': 'après {rangs}',
-  'superConv.piste.titre': 'Ouvrir l’onglet du lot {rang}',
+  'superConv.apres.titre': 'Part quand les lots {rangs} sont faits',
+  'superConv.relais': 'à la fin du {rang}',
+  'superConv.relais.titre': 'Sans dépendance : parti quand le lot {rang} a fini',
+  'superConv.libre': 'sans attente',
+  'superConv.libre.titre': 'Sans dépendance : parti sans attendre la fin d’un autre lot',
+  'superConv.enFile': 'en file',
+  'superConv.enFile.titre':
+    'Sans dépendance : part dès qu’une place se libère ({n} lots à la fois)',
+  'superConv.piste.titre': 'Ouvrir le lot {rang}',
+  'superConv.anciens': 'Plan précédent · {titre}',
+  'superConv.anciens.ouvrir': 'Ouvrir le lot {rang} de « {titre} »',
   'superConv.ouverture': 'Ouverture du fil du lot…',
 
   // — Carte « Lancer en N fils » (PropositionDeFils, proposition-fils-evenements).
@@ -336,22 +343,29 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'lots.agrandir': 'Expand',
   'lots.agrandir.titre': 'Show the batches, the summary and the plan buttons',
 
-  'superConv.onglets.aria': 'Super conversation tabs',
-  'superConv.onglet.chef': 'Lead',
-  'superConv.onglet.chef.titre': '{titre} — the lead thread and the timeline of the whole plan',
-  'superConv.onglet.lot': 'Batch {rang}/{total} — {titre}',
-  'superConv.onglet.lot.titre': '{titre} — {etat}',
-  'superConv.onglet.nonLu': ' — finished, not read yet',
-  'superConv.onglet.pasLance': '{titre} — not started yet',
+  'superConv.retour': 'Back',
+  'superConv.retour.titre': 'Go back to the super conversation “{titre}”',
+  'superConv.ligne.nonLu': 'Finished, not read yet',
+  'superConv.ligne.question': 'Your answer expected',
+  'superConv.question.detail': 'A batch of this conversation asks a question that is still open',
   'superConv.frise.aria': 'Batch plan timeline',
   'superConv.chiffre.faits': 'done',
   'superConv.chiffre.tours': 'turns',
   'superConv.chiffre.cout': 'cost',
   'superConv.chiffre.ecoule': 'elapsed',
-  'superConv.maintenant': 'now {heure}',
-  'superConv.pasEncore': 'No batch has started yet.',
+  'superConv.relancerLot': 'Relaunch {rang}',
   'superConv.apres': 'after {rangs}',
-  'superConv.piste.titre': 'Open the tab of batch {rang}',
+  'superConv.apres.titre': 'Starts once batches {rangs} are done',
+  'superConv.relais': 'when {rang} ended',
+  'superConv.relais.titre': 'No dependency: started when batch {rang} finished',
+  'superConv.libre': 'no wait',
+  'superConv.libre.titre': 'No dependency: started without waiting for another batch',
+  'superConv.enFile': 'queued',
+  'superConv.enFile.titre':
+    'No dependency: starts as soon as a slot frees up ({n} batches at a time)',
+  'superConv.piste.titre': 'Open batch {rang}',
+  'superConv.anciens': 'Earlier plan · {titre}',
+  'superConv.anciens.ouvrir': 'Open batch {rang} of “{titre}”',
   'superConv.ouverture': 'Opening the batch thread…',
 
   'fils.titre.plusieurs': '{n} tasks in your message',
@@ -507,8 +521,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
 /** Clé → raison pour laquelle son anglais reste identique au français. */
 export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<keyof typeof TEXTES_FR, string>>> = {
   'messages.nature.question': 'même mot en anglais : « question »',
-  'messages.nature.info': 'même mot en anglais : « information »',
-  'superConv.onglet.lot.titre': 'deux valeurs et un tiret, aucun mot à traduire'
+  'messages.nature.info': 'même mot en anglais : « information »'
 }
 
 export const { useTextes: useTextesChatFilsEtLots, traduire: traduireChatFilsEtLots } =

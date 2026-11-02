@@ -321,6 +321,8 @@ export function creerRelanceDeRunReprenable(
     const resumedArtifactIds = new Set<string>()
     const pendingResumedExecutionEvidence: ExecutionEvidence[] = []
     let resumedCurrentRunId: string | undefined
+    /** Phase que joue l'agent repris : le fil range son raisonnement dessous (cf. `commands.ts`). */
+    let resumedPhaseCourante: string | undefined
     let resumedPublishedSha: string | undefined
     let resumedTerminalLifecycle: Extract<RunLifecycleEvent, { stage: 'closure' }> | undefined
     let resumedCheckpointReleased = false
@@ -387,6 +389,7 @@ export function creerRelanceDeRunReprenable(
             for (const w of fenetresVivantes()) w.webContents.send('orchestrate:step', step)
           },
           (phase) => {
+            if (phase.phase) resumedPhaseCourante = phase.phase
             broadcast({ type: 'orchestrate-phase', convId: conversationId, phase })
             if (!resumedCurrentRunId) return
             persistOrchestrationPhaseStart(
@@ -400,7 +403,34 @@ export function creerRelanceDeRunReprenable(
               causalTrace
             )
           },
-          undefined,
+          /*
+           * LE TEXTE DE L'AGENT REPRIS ARRIVE DANS SON FIL (conv-1330, 2026-10-30).
+           *
+           * Ce rappel valait `undefined` : le lot 3 de conv-1324, repris après un redémarrage, a
+           * passé 35 min dans une nouvelle construction sans un mot dans son fil, spinner allumé —
+           * l'utilisateur le croyait figé. Même diffusion que le run direct (`commands.ts`,
+           * `orchestrate-delta`) : le texte, la note d'activité (« Bash en cours — 2 min ») et le
+           * raisonnement, rangé sous sa phase.
+           *
+           * La note ne part PAS en battement pilote (`pilot:event`) : l'écran prendrait ce fil pour un
+           * tour de chat, que la sonde `os:pilotChat:active` déclare mort au bout de 8 s. C'est l'écran
+           * qui la pose dans la bulle quand aucun tour de chat ne la pilote (`ChatView.tsx`).
+           */
+          (step, delta, note, raisonnement) => {
+            broadcast({
+              type: 'orchestrate-delta',
+              convId: conversationId,
+              deltaStep: step,
+              delta,
+              ...(note ? { note } : {}),
+              ...(raisonnement
+                ? {
+                    reasoning: raisonnement,
+                    ...(resumedPhaseCourante ? { reasoningPhase: resumedPhaseCourante } : {})
+                  }
+                : {})
+            })
+          },
           undefined,
           undefined,
           resumableRun.phaseOutputs,

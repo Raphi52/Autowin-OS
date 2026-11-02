@@ -1,4 +1,5 @@
 // fix-ok: chemins, variables et marqueur propres à un employeur écrits en dur (mesuré par grep) ; neutralisés, anciens noms lus en secours (tests rouge→vert).
+import { attendreFichier } from './ecriture-hors-fil'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -327,6 +328,7 @@ describe('idempotence atomique de remember', () => {
 
       expect(outcome.stored).toBe(true)
       expect(fetchFn).toHaveBeenCalledOnce()
+      await attendreFichier(store)
       expect(JSON.parse(readFileSync(store, 'utf8')).version).toBe(2)
     } finally {
       configureRememberDepositStore()

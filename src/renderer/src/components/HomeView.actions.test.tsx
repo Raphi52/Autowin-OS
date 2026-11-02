@@ -83,6 +83,8 @@ function poserApi(over: Record<string, unknown> = {}): void {
 }
 
 beforeEach(() => {
+  // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
+  window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
   ;(window as unknown as { innerWidth: number }).innerWidth = 1440
   ;(window as unknown as { innerHeight: number }).innerHeight = 900
   poserApi()

@@ -37,11 +37,14 @@ describe('resolveAppLocation — le nom AFFICHÉ est une adresse valide', () => 
     })
   })
 
-  // Vue Bureaux cachés (conv-951) : l'utilisateur dit « Hdesk », la barre affiche « Bureaux cachés ».
-  it('atteint les Bureaux cachés par leur libellé, par « hdesk » et sans accent', () => {
+  // Les Bureaux cachés sont un panneau du chat (conv-1378) : l'utilisateur dit toujours « Hdesk ». Sans
+  // ces noms, « va sur les bureaux cachés » retomberait en silence sur le chat, panneau fermé.
+  it('atteint le panneau des Bureaux cachés par son nom, par « hdesk » et sans accent', () => {
     for (const nom of ['Bureaux cachés', 'bureaux caches', 'bureau caché', 'hdesk', 'Hdesk']) {
-      expect(resolveAppLocation(nom), nom).toMatchObject({ destination: 'hdesk' })
-      expect(resolveAppLocation(nom).reconnu, nom).not.toBe(false)
+      expect(resolveAppLocation(nom), nom).toEqual({
+        destination: 'chat',
+        panneau: 'bureaux-caches'
+      })
     }
   })
 

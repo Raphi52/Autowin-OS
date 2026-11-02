@@ -32,6 +32,16 @@ export async function captureMutationTraceBase(
   }
 }
 
+function cheminsDeTrace(paths: readonly string[], workspaceRoot: string): string[] {
+  return [
+    ...new Set(
+      paths
+        .map((path) => normalizeWorkspaceTracePath(path, workspaceRoot))
+        .filter((path): path is string => Boolean(path))
+    )
+  ]
+}
+
 export async function appendWorkspaceMutationTrace(
   input: {
     conversationId?: string
@@ -40,6 +50,8 @@ export async function appendWorkspaceMutationTrace(
     source: ConversationFileTrace['source']
     paths: readonly string[]
     before?: WorkspaceSnapshot
+    /** Photo déjà prise APRÈS la mutation et couvrant `paths` : rien n'est relu. */
+    after?: WorkspaceSnapshot
     pathLineFingerprints?: Record<string, string[]>
     /** Chemins nommés par une commande shell d'écriture du fil (voir `ConversationFileTrace`). */
     nommeParCommande?: boolean
@@ -49,15 +61,10 @@ export async function appendWorkspaceMutationTrace(
 ): Promise<'appended' | 'duplicate' | 'ignored' | 'failed'> {
   if (!input.conversationId || !input.workspaceRoot.trim()) return 'ignored'
   try {
-    const paths = [
-      ...new Set(
-        input.paths
-          .map((path) => normalizeWorkspaceTracePath(path, input.workspaceRoot))
-          .filter((path): path is string => Boolean(path))
-      )
-    ]
+    const paths = cheminsDeTrace(input.paths, input.workspaceRoot)
     if (paths.length === 0) return 'ignored'
-    const after = await captureWorkspaceMutationSnapshot(input.workspaceRoot, paths)
+    const after =
+      input.after ?? (await captureWorkspaceMutationSnapshot(input.workspaceRoot, paths))
     // Même clé que `paths` : le CLI Claude rend ces empreintes sous le chemin ABSOLU (mesuré en
     // instance réelle le 2026-09-23), clé qu'aucun lecteur du journal ne retrouvait.
     const pathLineFingerprints = input.pathLineFingerprints
@@ -114,14 +121,85 @@ export async function appendWorkspaceMutationTrace(
   }
 }
 
+type EcritureDeLAppel = {
+  workspaceRoot: string
+  paths: readonly string[]
+  pathLineFingerprints?: Record<string, string[]>
+  nommeParCommande?: boolean
+}
+
 /**
  * ÉCRITURES EN LIGNE DE COMMANDE DU FIL. Une commande shell réussie qui NOMME un fichier en écriture
  * (`prettier --write x`, `cat >> x <<EOF`, `sed -i … x`) est tracée au nom du fil avec
  * `nommeParCommande` : sans cela, le journal ne connaissait ce fichier que par la comparaison
  * avant/après, que TOUS les fils en cours écrivent aussi, et le commit automatique ne savait plus
  * qui l'avait écrit (d7af3730 et dd0c3d6a, 2026-10-13). Une commande en échec n'est pas tracée.
+ *
+ * ÉDITIONS DU MODÈLE. Les Edit/Write natifs n'étaient jamais écrits au journal, donc l'onglet
+ * Fichiers restait vide pour un tour de chat direct. Une édition échouée (`ok: false`) n'est pas
+ * tracée.
  */
-export async function appendShellWriteTraces(
+function ecrituresDeLAppel(
+  evidence: readonly ExecutionEvidence[],
+  workspaceRoot: string
+): EcritureDeLAppel[] {
+  const ecritures: EcritureDeLAppel[] = []
+  for (const item of evidence) {
+    if (!item.ok || !item.command?.trim()) continue
+    const dossier = item.workspaceRoot ?? workspaceRoot
+    const paths = cheminsEcritsParCommande(item.command, dossier)
+    if (paths.length > 0) ecritures.push({ workspaceRoot: dossier, paths, nommeParCommande: true })
+  }
+  for (const item of evidence) {
+    if (!item.ok || item.kind !== 'mutation') continue
+    const paths = item.path ? [item.path] : (item.paths ?? [])
+    if (paths.length === 0) continue
+    const lignes = item.writtenLineFingerprints
+    ecritures.push({
+      workspaceRoot: item.workspaceRoot ?? workspaceRoot,
+      paths,
+      ...(lignes?.length && paths.length === 1
+        ? { pathLineFingerprints: { [paths[0] as string]: lignes } }
+        : {})
+    })
+  }
+  return ecritures
+}
+
+/**
+ * Une photo par dossier de travail, couvrant tous les chemins écrits de ce dossier. Un dossier dont
+ * aucun chemin n'est traçable n'en reçoit pas : `appendWorkspaceMutationTrace` l'ignorera.
+ */
+async function photosDesEcritures(
+  ecritures: readonly EcritureDeLAppel[]
+): Promise<Map<string, WorkspaceSnapshot | undefined>> {
+  const cheminsParDossier = new Map<string, string[]>()
+  for (const { workspaceRoot, paths } of ecritures) {
+    const chemins = cheminsParDossier.get(workspaceRoot) ?? []
+    chemins.push(...paths)
+    cheminsParDossier.set(workspaceRoot, chemins)
+  }
+  const photos = await Promise.all(
+    [...cheminsParDossier].map(async ([dossier, paths]) => {
+      const chemins = cheminsDeTrace(paths, dossier)
+      if (chemins.length === 0) return [dossier, undefined] as const
+      return [dossier, await captureMutationTraceBase(dossier, chemins)] as const
+    })
+  )
+  return new Map(photos)
+}
+
+/**
+ * LE SPINNER D'UN LOT TOURNAIT ENCORE APRÈS SA RÉPONSE (conv-1379, 2026-10-31).
+ *
+ * Trace tout ce qu'un appel au modèle vient d'écrire, et rend les chemins des éditions du modèle.
+ * Le tour ne s'arrête qu'une fois ces traces écrites (le commit automatique les relit), et chaque
+ * écriture reprenait sa propre photo du dépôt : 887 ms sur D:/AutoWinOS et ses 206 fichiers modifiés,
+ * soit 70 s pour les 76 écritures de Lot 1/3 et 81 s pour les 164 de Lot 3/3, spinner allumé. Or
+ * toutes arrivent ici APRÈS la fin de l'appel et photographiaient donc le même état : une seule
+ * photo par dossier suffit, sans changer une trace.
+ */
+export async function appendCallMutationTraces(
   input: {
     conversationId?: string
     turnId?: string
@@ -129,12 +207,17 @@ export async function appendShellWriteTraces(
     evidence: readonly ExecutionEvidence[]
   },
   base = ensureAutowinAppData()
-): Promise<void> {
-  for (const item of input.evidence) {
-    if (!item.ok || !item.command?.trim()) continue
-    const workspaceRoot = item.workspaceRoot ?? input.workspaceRoot
-    const paths = cheminsEcritsParCommande(item.command, workspaceRoot)
-    if (paths.length === 0) continue
+): Promise<Set<string>> {
+  const ecritures = ecrituresDeLAppel(input.evidence, input.workspaceRoot)
+  const editionsTracees = new Set<string>()
+  const photos = input.conversationId
+    ? await photosDesEcritures(ecritures)
+    : new Map<string, WorkspaceSnapshot | undefined>()
+  for (const { workspaceRoot, paths, pathLineFingerprints, nommeParCommande } of ecritures) {
+    if (!nommeParCommande) {
+      for (const path of paths) editionsTracees.add(path.replaceAll('\\', '/').toLowerCase())
+    }
+    const after = photos.get(workspaceRoot)
     await appendWorkspaceMutationTrace(
       {
         ...(input.conversationId ? { conversationId: input.conversationId } : {}),
@@ -142,9 +225,12 @@ export async function appendShellWriteTraces(
         workspaceRoot,
         source: 'chat_tool',
         paths,
-        nommeParCommande: true
+        ...(after ? { after } : {}),
+        ...(pathLineFingerprints ? { pathLineFingerprints } : {}),
+        ...(nommeParCommande ? { nommeParCommande } : {})
       },
       base
     )
   }
+  return editionsTracees
 }

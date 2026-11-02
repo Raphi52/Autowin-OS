@@ -379,9 +379,9 @@
 }
 
 /* ── Le cadre de la page ──
-   Bord transparent et bande réservés AU REPOS aussi : le cadre qui s'allume ne déplace pas la page,
-   l'agent garde les coordonnées de la cible qu'il vient de repérer. La bande occupe donc la même
-   hauteur quel que soit son texte. */
+   Bord transparent et bande réservés AU REPOS aussi, bande vide : le cadre qui s'allume ne déplace
+   pas la page, l'agent garde les coordonnées de la cible qu'il vient de repérer. La bande occupe
+   donc la même hauteur quel que soit son texte. */
 .navigateur-cadre {
   flex: 1;
   display: flex;
@@ -402,8 +402,9 @@
   min-height: 20px;
   padding: 0 10px;
   overflow: hidden;
-  color: var(--text-faint);
+  color: var(--text);
   font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 .navigateur-cadre-tete > span {
@@ -414,7 +415,6 @@
   background: var(--nav-ambre);
   /* `--bg-0` et non une encre fixe : `--warn` est foncé en thème clair, l'encre doit s'inverser. */
   color: var(--bg-0);
-  font-weight: 600;
 }
 .navigateur-zone {
   flex: 1;
@@ -507,66 +507,4 @@
 .navigateur-accord-refuser {
   box-shadow: none;
   color: var(--err);
-}
-
-/* ── Annotations en attente : des puces sous le cadre ── */
-.navigateur-annotations {
-  flex: none;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  max-height: 34%;
-  min-height: 0;
-  overflow-y: auto;
-}
-.navigateur-annotations-titre {
-  color: var(--text-dim);
-  font-size: 10.5px;
-}
-/* `contents` : les puces coulent dans la même ligne que le titre et le bouton d'envoi. */
-.navigateur-annotations-liste {
-  display: contents;
-  list-style: none;
-}
-.navigateur-annotation {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: 180px;
-  height: 24px;
-  padding: 0 4px;
-  border-radius: 99px;
-  background: var(--bg-3);
-  font-size: 11px;
-}
-.navigateur-annotation-numero {
-  flex: none;
-  min-width: 16px;
-  height: 16px;
-  border-radius: 99px;
-  background: var(--rose);
-  color: var(--on-accent);
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 16px;
-  text-align: center;
-}
-.navigateur-annotation-extrait {
-  overflow: hidden;
-  color: var(--text);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.navigateur-annotation-commentaire {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-.navigateur-envoyer {
-  margin-left: auto;
 }

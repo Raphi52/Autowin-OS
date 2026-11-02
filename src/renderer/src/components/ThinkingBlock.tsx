@@ -28,9 +28,12 @@
 // fix-ok: le bloc Actions ne recevait que statusLog (texte) sans statut ; mesure claude.ts:1687 (is_error) jamais transmis -> lignes de fin parsees dans thinking-block-corps.ts, frise C3 ; edits 3-4 = echappement de retour a la ligne casse par le shell, corrige.
 import React, {
   Fragment,
+  memo,
+  useCallback,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState
 } from 'react'
@@ -39,6 +42,8 @@ import {
   actionsDuTour,
   avancementDesEtapes,
   avancerChronosDesEtapes,
+  chantierAffiche,
+  comptesDuChantier,
   bilanDesActions,
   chronoDepuisLeDebutDuTour,
   chronoMemorise,
@@ -52,6 +57,7 @@ import {
   paragraphesDeLaPensee,
   piedDesEtapes,
   resumeDesEtapes,
+  resumeDuChantier,
   secondesDesActions,
   secondesDesEtapes,
   secondesDuChrono,
@@ -62,6 +68,7 @@ import {
   type Chrono
 } from './thinking-block-corps'
 import { etapesDuJournal, type Etape } from '../../../shared/etapes-du-tour'
+import { chantiersDuJournal, type Chantier } from '../../../shared/chantier-du-tour'
 import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 
 /** Étincelle : la pensée. Dessinée en SVG — l'ancien glyphe « ✻ » dépendait de la police. */
@@ -120,6 +127,10 @@ function BlocRepliable({
   const [manuel, setManuel] = useState<boolean | null>(null)
   const ouvert = manuel ?? ouvertParDefaut
   const ref = useRef<HTMLElement | null>(null)
+  // Stable : une fonction neuve à chaque rendu défaisait le `memo` de la frise (conv-1413).
+  const poserCorps = useCallback((el: HTMLElement | null) => {
+    ref.current = el
+  }, [])
   // Le flux s'écrit vers le BAS : sans cela, le contenu défile hors du cadre et on regarde le début.
   useEffect(() => {
     const el = ref.current
@@ -167,19 +178,11 @@ function BlocRepliable({
       {contenu ? (
         contenu
       ) : frise ? (
-        <FriseDesActions
-          actions={frise}
-          testid={`${testid}-body`}
-          refCorps={(el) => {
-            ref.current = el
-          }}
-        />
+        <FriseDesActions actions={frise} testid={`${testid}-body`} refCorps={poserCorps} />
       ) : (
         <pre
           className="thinking-body"
-          ref={(el) => {
-            ref.current = el
-          }}
+          ref={poserCorps}
           data-testid={`${testid}-body`}
         >
           {corps}
@@ -206,7 +209,7 @@ function BlocRepliable({
  */
 function FilDePensee({ texte }: { texte: string }): React.JSX.Element {
   const { t } = useTextesChatDecisions()
-  const paragraphes = paragraphesDeLaPensee(texte)
+  const paragraphes = useMemo(() => paragraphesDeLaPensee(texte), [texte])
   const ref = useRef<HTMLDivElement | null>(null)
   const [entier, setEntier] = useState(false)
   const [deborde, setDeborde] = useState(false)
@@ -298,6 +301,97 @@ const CLE_DU_STATUT = {
   in_progress: 'pensee.statut.in_progress',
   completed: 'pensee.statut.completed'
 } as const satisfies Record<Etape['statut'], string>
+
+const ICONE_CHANTIER = (
+  <svg viewBox="0 0 16 16" focusable="false">
+    <path
+      d="M8 2.5 V6 M8 6 L3.5 10 M8 6 V10 M8 6 L12.5 10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="3.5" cy="12" r="1.7" fill="currentColor" />
+    <circle cx="8" cy="12" r="1.7" fill="currentColor" />
+    <circle cx="12.5" cy="12" r="1.7" fill="currentColor" />
+  </svg>
+)
+
+/**
+ * CARTE D'UN GROS CHANTIER (outil Workflow du CLI, conv-1362, lot conv-1366) : les phases et, pour
+ * chacune, une jauge de ses agents. Vivante tant que le chantier tourne, repliée ensuite comme le
+ * bloc Étapes. Les alertes restent à relire après coup : un quota atteint explique un résultat
+ * partiel.
+ */
+function CarteDuChantier({
+  chantier,
+  done
+}: {
+  chantier: Chantier
+  done: boolean
+}): React.JSX.Element {
+  const { t } = useTextesChatDecisions()
+  const c = chantierAffiche(chantier, done)
+  const enCours = c.statut === 'en-cours'
+  const total = c.enAttente + c.enCours + c.finis + c.echecs
+  const issue = c.statut === 'en-cours' ? '' : `${t(`pensee.chantier.${c.statut}`)} · `
+  return (
+    <BlocRepliable
+      testid="chantier-block"
+      classe="thinking-block--chantier"
+      rond={
+        <RondDIcone
+          etats={[c.quota || c.statut === 'echec' ? 'ko' : c.statut === 'fini' ? 'ok' : 'encours']}
+          testid="chantier-block-rond"
+        >
+          {ICONE_CHANTIER}
+        </RondDIcone>
+      }
+      libelle={`${t('pensee.chantier')} · ${c.nom}`}
+      live={enCours}
+      compteurs={
+        <span className="thinking-duree" data-testid="chantier-block-compte">
+          {c.finis + c.echecs}/{total}
+        </span>
+      }
+      entete={`${issue}${resumeDuChantier(c)}`}
+      corps=""
+      contenu={
+        <div className="thinking-body chantier-corps" data-testid="chantier-block-body">
+          {c.quota && (
+            <p className="chantier-alerte is-quota" data-testid="chantier-quota">
+              {t('pensee.chantier.quota')}
+            </p>
+          )}
+          {c.gros && (
+            <p className="chantier-alerte" data-testid="chantier-gros">
+              {t('pensee.chantier.gros')}
+            </p>
+          )}
+          <ol className="chantier-phases">
+            {c.phases.map((p, i) => (
+              <li key={i} className="chantier-phase" data-testid="chantier-phase">
+                <span className="chantier-phase-titre" title={p.titre}>
+                  {p.titre || t('pensee.chantier.sansPhase')}
+                </span>
+                <span className="chantier-jauge" aria-hidden="true">
+                  <span data-part="finis" style={{ flexGrow: p.finis }} />
+                  <span data-part="echecs" style={{ flexGrow: p.echecs }} />
+                  <span data-part="encours" style={{ flexGrow: p.enCours }} />
+                  <span data-part="attente" style={{ flexGrow: p.enAttente }} />
+                </span>
+                <span className="chantier-phase-comptes">{comptesDuChantier(p).join(' · ')}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      }
+      ouvertParDefaut={enCours}
+      dependances={[c.statut, c.finis, c.echecs, c.enCours]}
+    />
+  )
+}
 
 /**
  * RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (conv-326, 2026-10-18, /draft « des meilleures barres
@@ -394,7 +488,7 @@ const ICONE_ETAPES = (
  * action. Icones et pastilles sont en CSS (`::before`) : le texte du corps reste exactement les
  * lignes d'action separees par des retours a la ligne, comme l'ancien `<pre>`.
  */
-function FriseDesActions({
+const FriseDesActions = memo(function FriseDesActions({
   actions,
   testid,
   refCorps
@@ -434,7 +528,7 @@ function FriseDesActions({
       </div>
     </div>
   )
-}
+})
 
 /**
  * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE, sous sa ligne (conv-341, 2026-10-19 : « c'est possible
@@ -634,19 +728,30 @@ export function ThinkingBlock({
 }): React.JSX.Element {
   const { t } = useTextesChatDecisions()
   const pensee = corpsDuBloc(text)
-  const frise = actionsDuTour(statusLog, status, done)
-  const actions = frise.map((a) => a.texte).join('\n')
+  // MÉMORISÉ (conv-1413, 2026-10-31) : le chrono bat chaque seconde et redessine ce composant. Tout
+  // recalculer depuis le journal à chaque battement faisait de ce bloc la première source d'allocations
+  // de l'interface (2 Go en 90 s pendant un tour, dont environ 1 Go ici).
+  const frise = useMemo(() => actionsDuTour(statusLog, status, done), [statusLog, status, done])
+  const actions = useMemo(() => frise.map((a) => a.texte).join('\n'), [frise])
   // Plie, le bloc doit quand meme dire OU en est la pensee : sa derniere ligne, en gris, comme le
   // bloc Actions montre l'action courante (demande de l'utilisateur, 2026-09-12). DEUX LIGNES
   // (conv-904) : tour fini, la seconde ligne garde la DERNIERE ligne de la pensee — sa conclusion.
   // Une pensee chiffree par le modele (corps vide) n'invente rien : le bloc reste sur une ligne.
-  const dernierePensee = derniereLigneDuRaisonnement(pensee)
+  const dernierePensee = useMemo(() => derniereLigneDuRaisonnement(pensee), [pensee])
   const secondesPensee = useChronoDuRaisonnement(turnId, done, reasoningMs, debutDuTour)
   const secondesActions = secondesDesActions(frise)
-  const etapes = etapesDuJournal(statusLog?.length ? statusLog : status ? [status] : [])
+  const journal = useMemo(
+    () => (statusLog?.length ? statusLog : status ? [status] : []),
+    [statusLog, status]
+  )
+  const etapes = useMemo(() => etapesDuJournal(journal), [journal])
   const etapesFaites = etapes.filter((e) => e.statut === 'completed').length
+  const chantiers = useMemo(() => chantiersDuJournal(journal), [journal])
   const statutAction = dernierStatutDAction(statusLog, status)
-  const avancement = avancementDesEtapes(statusLog, status, frise)
+  const avancement = useMemo(
+    () => avancementDesEtapes(statusLog, status, frise),
+    [statusLog, status, frise]
+  )
   const secondesEtapes = useSecondesDesEtapes(turnId, etapes, avancement, done)
   // DISPOSITION « A · Côte à côte » (conv-303, 2026-10-17 : « centrer actions et raisonnement et en
   // dessous un bloc qui montre comment la tâche est décomposée », puis « les 2 du haut font la même
@@ -731,6 +836,9 @@ export function ThinkingBlock({
           dependances={[etapes.map((e) => e.statut).join()]}
         />
       )}
+      {chantiers.map((chantier) => (
+        <CarteDuChantier key={chantier.id} chantier={chantier} done={done} />
+      ))}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 /* FICHIER GENERE par scripts/theme-nebuleuse-verre.mjs holographique-clair -- ne pas modifier a la main.
    Theme « Holographique blanc » : couleurs ecrites en dur dans les composants, passees au clair
    (fonds d'encre -> nacre et leur texte -> encre, verts/or/cyan/rose -> teintes du theme).
-   584 regles, 879 declarations. Voir genererCoucheClaire. */
+   577 regles, 871 declarations. Voir genererCoucheClaire. */
 
 /* ---- src/renderer/src/components/AgentsTopologyView.css ---- */
 :root[data-theme='holographique-clair'] .topology-state {
@@ -163,6 +163,11 @@
 }
 :root[data-theme='holographique-clair'] .bilan-cloture__ouvrir:hover {
     border-color: #aa0e5f
+}
+
+/* ---- src/renderer/src/components/BlocHtmlInteractif.css ---- */
+:root[data-theme='holographique-clair'] .bloc-html-interactif::backdrop {
+    background: color-mix(in srgb, var(--bg-0, #fdfdff) 70%, transparent)
 }
 
 /* ---- src/renderer/src/components/BrainMarkdown.css ---- */
@@ -421,9 +426,6 @@
 :root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body {
     border-color: rgba(170, 14, 95, 0.54);
     background: linear-gradient(135deg, rgba(208, 43, 140, 0.34), rgba(253, 253, 255, 0.55))
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .chat-welcome {
-    background: radial-gradient(circle at 50% 0, rgba(60, 110, 235, 0.1), transparent 48%)
 }
 :root[data-theme='holographique-clair'] .cosmic-outline .composer {
     background: linear-gradient(180deg, rgba(253, 253, 255, 0.74), var(--chat-saisie-fond) 30%)
@@ -1788,27 +1790,6 @@
     background: var(--surface, #fdfdff)
 }
 
-/* ---- src/renderer/src/components/SuperConvMosaique.css ---- */
-:root[data-theme='holographique-clair'] .scm-onglet.is-non-lu {
-    border-color: var(--gold, #aa0e5f);
-    color: var(--gold-bright, var(--gold, #aa0e5f))
-}
-:root[data-theme='holographique-clair'] .scm-bandeau {
-    border-bottom: 1px solid color-mix(in srgb, var(--gold, #aa0e5f) 35%, transparent)
-}
-:root[data-theme='holographique-clair'] .scm-kicker {
-    color: var(--gold, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] .scm-chiffre b {
-    color: var(--gold, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] .scm-maintenant {
-    color: var(--gold, #aa0e5f)
-}
-:root[data-theme='holographique-clair'] button.scm-nom:not(:disabled):hover {
-    color: var(--gold-bright, var(--gold, #aa0e5f))
-}
-
 /* ---- src/renderer/src/components/TachesDeLaDemande.css ---- */
 :root[data-theme='holographique-clair'] .tache {
     border: 1px solid rgba(20, 15, 40, 0.28)
@@ -2074,9 +2055,6 @@
 :root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body {
     border-color: rgba(170, 14, 95, 0.58);
     background: rgba(208, 43, 140, 0.48)
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .chat-welcome {
-    background: rgba(20, 15, 40, 0.039)
 }
 :root[data-theme='holographique-clair'] .cosmic-outline .composer {
     background: rgba(20, 15, 40, 0.063)

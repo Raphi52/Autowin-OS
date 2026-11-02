@@ -25,6 +25,7 @@ export const TEXTES_FR = {
   'barriere.zone.message': 'Message du fil',
   'barriere.zone.lots': 'Tableau des lots',
   'barriere.zone.navigateur': 'Navigateur intégré',
+  'barriere.zone.bureaux': 'Bureaux cachés',
   'barriere.zone.miseAJour': 'Mise à jour',
   'barriere.zone.decor': 'Fond de l’Accueil'
 } as const
@@ -45,6 +46,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'barriere.zone.message': 'Thread message',
   'barriere.zone.lots': 'Batch board',
   'barriere.zone.navigateur': 'Built-in browser',
+  'barriere.zone.bureaux': 'Hidden desktops',
   'barriere.zone.miseAJour': 'Update',
   'barriere.zone.decor': 'Home background'
 }
@@ -64,6 +66,7 @@ const CLES_DE_ZONE: Readonly<Record<string, keyof typeof TEXTES_FR>> = {
   'chat-message': 'barriere.zone.message',
   'chat-lots': 'barriere.zone.lots',
   'chat-navigateur': 'barriere.zone.navigateur',
+  'chat-bureaux': 'barriere.zone.bureaux',
   'mise-a-jour': 'barriere.zone.miseAJour',
   decor: 'barriere.zone.decor'
 }

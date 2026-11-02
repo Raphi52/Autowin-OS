@@ -10,8 +10,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from launch_dev_dependances import (  # noqa: E402
     attendre_electron_libre,
+    attendre_port_libre,
     dependances_manquantes,
     electron_verrouille,
+    port_occupe,
 )
 
 ECHECS: list[str] = []
@@ -140,6 +142,44 @@ with tempfile.TemporaryDirectory() as tmp:
 
     verifie(attendre_electron_libre(r, 20.0, dormir=lambda _p: None) is True,
             "rien de tenu : aucune attente, la reparation part tout de suite")
+
+# LE PORT DE L'INTERFACE (conv-1329) : l'ancienne app le lache une seconde apres le lancement du
+# nouveau Vite, qui partait alors sur 5174 — une autre origine, donc une memoire locale vide.
+import socket  # noqa: E402
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as serveur:
+    serveur.bind(("127.0.0.1", 0))
+    serveur.listen(1)
+    port_pris = serveur.getsockname()[1]
+    verifie(port_occupe(port_pris) is True, "un serveur ecoute : port vu occupe (sonde reelle)")
+verifie(port_occupe(port_pris) is False, "serveur ferme : port vu libre (sonde reelle)")
+
+instant = [0.0]
+TENU_JUSQUA = 1.0  # l'ancienne app lache le port au bout d'une seconde
+
+
+def avancer(pause: float) -> None:
+    instant[0] += pause
+
+
+verifie(
+    attendre_port_libre(5173, 20.0, occupe=lambda _p: instant[0] < TENU_JUSQUA, dormir=avancer,
+                        horloge=lambda: instant[0]) is True,
+    "port lache apres une seconde : on l'attend au lieu de partir sur le suivant",
+)
+verifie(instant[0] >= TENU_JUSQUA, "le lancement n'a pas eu lieu avant que le port soit lache")
+instant[0] = 0.0
+verifie(
+    attendre_port_libre(5173, 20.0, occupe=lambda _p: True, dormir=avancer, horloge=lambda: instant[0])
+    is False,
+    "port garde pour de bon : l'attente est bornee et rend Faux",
+)
+verifie(instant[0] <= 20.5, "l'attente ne depasse pas son delai")
+appels: list[float] = []
+verifie(
+    attendre_port_libre(5173, 20.0, occupe=lambda _p: False, dormir=appels.append) is True and not appels,
+    "port libre : aucune attente",
+)
 
 # Le vrai depot, si l'app tourne : electron.exe DOIT etre vu verrouille (sonde reelle, pas un faux).
 depot = Path(__file__).resolve().parent.parent

@@ -1,7 +1,20 @@
-/* LA SUPER CONV DANS LA MOSAÏQUE (conv-1305, SuperConvMosaique.tsx) : onglets dans l'en-tête de la
-   case, frise pleine dans l'onglet Chef, piste réduite dans l'onglet d'un lot. Couleurs d'état =
+/* LA SUPER CONV DANS LA MOSAÏQUE (conv-1305, SuperConvMosaique.tsx) : une ligne par lot sur le chef ;
+   « ← Retour » et la ligne du lot seule sur un lot (conv-1387, conv-1396). Couleurs d'état =
    celles du tableau des lots (TableauDesLots.css) : accent = en cours, ok = fait, err = échec,
-   warn = interrompu / attend le chef ; l'or marque les repères (chef, maintenant, non lu). */
+   warn = interrompu / attend le chef ; l'or marque les repères (titre, maintenant, non lu).
+
+   LA FRISE PARLE LA LANGUE DU THÈME (conv-1376, 2026-10-31 : « adapte ça aux thèmes, c'est super
+   moche »). Elle posait son propre style sur tous les thèmes : chasse fixe en dur, chiffres en or,
+   longues barres pleines dans la couleur d'état. Ces couleurs sont réglées pour de petits voyants :
+   le #00ff55 d'Holographique, tiré sur 800 px, criait. Elle prend désormais ce que chaque thème
+   définit : sa police (héritée), ses arrondis (--r1 à --r3, à 0 dans NieR), sa plaque
+   (--surface-panel), ses voiles (--voile-rgb) et sa jauge (--run-jauge). La couleur d'état pleine
+   reste aux mots.
+
+   LES COULOIRS (conv-1376, même jour — /draft, « Implémenter la 1 · Couloirs ») : un lot est un bloc
+   posé sur l'axe, titre et état dedans, et non plus une barre reliée à son nom par l'œil. Un lot fini
+   s'efface en bloc neutre, celui qui tourne prend la jauge du thème, un échec ou une attente se
+   teinte de sa couleur d'état. */
 
 .scm-etat--en-cours {
   --scm-c: var(--accent);
@@ -20,109 +33,38 @@
   --scm-c: var(--text-faint, currentColor);
 }
 
-/* — Onglets de navigateur (conv-1286) : posés sur un filet, chacun avec son fond et son titre. Ils se
-   partagent la ligne et rétrécissent ensemble, comme dans un navigateur. L'onglet ouvert prend le
-   fond du panneau (--surface-panel est translucide, d'où --bg-0 dessous) : il masque le filet et
-   s'ouvre sur son contenu ; les autres, teintés, le laissent passer et se lisent comme à cliquer. */
-.scm-onglets {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, currentColor 24%, transparent);
-}
-.scm-onglet {
+/* Le repère d'un lot, devant son titre : le spinner de l'app, ou l'animation de question. */
+.scm-repere {
   display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  flex: 0 1 280px;
-  min-width: 96px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, currentColor 26%, transparent);
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
-  background: color-mix(in srgb, currentColor 10%, transparent);
-  color: var(--text-dim, inherit);
-  font: inherit;
-  font-size: 12.5px;
-  line-height: 1.2;
-  cursor: pointer;
-}
-.scm-onglet-titre {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.scm-onglet:hover:not(:disabled):not(.is-actif) {
-  background: color-mix(in srgb, currentColor 20%, transparent);
-  color: var(--text, inherit);
-}
-.scm-onglet:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-/* Un lot pas encore lancé n'a pas de fil à ouvrir : pointillés sans fond, pour ne pas passer pour
-   un onglet cliquable. */
-.scm-onglet:disabled {
-  border-style: dashed;
-  background: transparent;
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-.scm-onglet.is-actif {
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  background: linear-gradient(var(--surface-panel), var(--surface-panel)), var(--bg-0);
-  color: var(--text, inherit);
-  font-weight: 650;
-  box-shadow: inset 0 2px 0 var(--accent);
-}
-.scm-onglet--chef {
-  --scm-c: var(--gold, #d4a94f);
-}
-/* Un lot fini depuis le dernier passage sur son onglet : doré tant qu'on ne l'a pas ouvert. */
-.scm-onglet.is-non-lu {
-  opacity: 1;
-  border-color: var(--gold, #d4a94f);
-  color: var(--gold-bright, var(--gold, #d4a94f));
-}
-.scm-point {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--scm-c, currentColor);
-}
-.scm-onglet.scm-etat--en-cours .scm-point {
-  animation: scm-pouls 1.6s ease-in-out infinite;
-}
-@keyframes scm-pouls {
-  50% {
-    opacity: 0.35;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .scm-onglet.scm-etat--en-cours .scm-point {
-    animation: none;
-  }
+  margin-right: 5px;
+  vertical-align: -3px;
 }
 
 /* — Le bandeau, entre l'en-tête et le fil. Il défile seul s'il dépasse : le fil garde sa place. */
 .scm-bandeau {
+  /* Ce qui tourne : la jauge du thème, sinon son accent qui monte depuis l'ombre. Le voile garde le
+     texte lisible : le rose d'Holographique ou l'orange de Ninja, nus, restent sous 4:1 avec du blanc.
+     Jamais --accent-dim : très pâle dans Vanilla et NieR, il effacerait ce texte (conv-1376). */
+  --scm-jauge:
+    linear-gradient(rgba(var(--ombre-rgb), 0.14), rgba(var(--ombre-rgb), 0.14)),
+    var(
+      --run-jauge,
+      linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--accent) 62%, rgb(var(--ombre-rgb))),
+        color-mix(in srgb, var(--accent) 92%, rgb(var(--ombre-rgb)))
+      )
+    );
+  /* Le texte posé sur cette jauge ; theme-modes.css le passe en noir sur un accent très clair. */
+  --scm-sur-jauge: var(--on-accent);
   flex: none;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   max-height: min(340px, 48%);
   overflow-y: auto;
-  padding: 6px 10px 8px 18px;
-  border-bottom: 1px solid color-mix(in srgb, var(--gold, #d4a94f) 35%, transparent);
+  padding: 8px 10px 10px 18px;
+  border-bottom: 1px solid var(--container-border);
   font-size: 11px;
 }
 .scm-bandeau--chef.is-reduit {
@@ -135,33 +77,18 @@
   gap: 2px 14px;
 }
 .scm-kicker {
-  font:
-    600 10px/1.4 ui-monospace,
-    monospace;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--gold, #d4a94f);
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
 }
 .scm-chiffre {
-  font:
-    10px/1.3 ui-monospace,
-    monospace;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-faint, currentColor);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
 }
 .scm-chiffre b {
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--gold, #d4a94f);
-}
-.scm-maintenant {
-  font:
-    10px/1.3 ui-monospace,
-    monospace;
-  color: var(--gold, #d4a94f);
+  font-weight: 600;
+  color: var(--text);
 }
 /* Les gestes de la ligne des chiffres, calés à droite : Reprendre et Arrêter (case de mosaïque,
    conv-1315), Réduire partout. */
@@ -173,14 +100,15 @@
   gap: 6px;
 }
 .scm-reduire,
-.scm-geste {
-  padding: 1px 8px;
+.scm-geste,
+.scm-retour {
+  padding: 1px 9px;
   border: 1px solid var(--container-border, currentColor);
-  border-radius: 5px;
+  border-radius: var(--r1);
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 10.5px;
+  font-size: 11.5px;
   cursor: pointer;
 }
 .scm-reduire {
@@ -189,8 +117,13 @@
 .scm-reduire:hover {
   opacity: 1;
 }
-.scm-geste:hover:not(:disabled) {
+.scm-geste:hover:not(:disabled),
+.scm-retour:hover {
   border-color: currentColor;
+}
+.scm-retour {
+  flex: none;
+  white-space: nowrap;
 }
 .scm-geste:disabled {
   opacity: 0.5;
@@ -203,25 +136,152 @@
 .scm-pistes {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 .scm-vide {
   font-size: 11px;
   opacity: 0.6;
 }
 
-/* — Une piste : nom · voie · coût, puis état · durée · phrase · Relancer. */
-.scm-piste {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding-left: 5px;
-  box-shadow: inset 2px 0 0 var(--scm-c, transparent);
+/* — LA LISTE DES LOTS (conv-1396, 2026-10-31 : « enlève le côté timeline, prends toute la longueur,
+   mais écris la durée et quelle étape se lance après laquelle »). Une grille pour toute la liste, une
+   sous-grille par ligne : titre, état, enchaînement, heures, durée, coût, phrase et geste s'alignent
+   d'un lot à l'autre. La liste est son propre conteneur : dans une case étroite, elle ne garde que
+   ce qui tient sur une ligne (fin de cette feuille).
+
+   LE TITRE EN ENTIER (conv-1387, 2026-10-31 : « écris le titre en entier »). Sa colonne prend ce
+   qu'il lui faut, et c'est la phrase qui cède : elle est dans l'infobulle, pas le nom du lot. */
+.scm-pistes {
+  container: scm-lignes / inline-size;
 }
-.scm-piste-ligne {
+.scm-lignes {
+  display: grid;
+  grid-template-columns:
+    minmax(0, max-content) max-content max-content max-content max-content max-content
+    minmax(0, 1fr);
+  column-gap: 12px;
+  /* Lignes serrées (conv-1396, « voir plus de lots sans faire défiler ») : 2 px d'écart au lieu de 3.
+     Encore resserrées pour que 8 lots tiennent sans ascenseur (conv-1387) : marge de 1,5 px et
+     interligne de 1,3, soit 21 px par lot au lieu de 24 ; le texte garde sa taille. */
+  row-gap: 2px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+/* La colonne du geste n'existe que si un lot est relançable : vide, elle ajouterait son écart. */
+.scm-lignes--relance {
+  grid-template-columns:
+    minmax(0, max-content) max-content max-content max-content max-content max-content
+    minmax(0, 1fr) max-content;
+}
+.scm-lignes:not(.scm-lignes--relance) .scm-ligne-geste {
+  display: none;
+}
+.scm-bloc {
+  position: relative;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-width: 0;
+  padding: 1.5px 8px;
+  border-radius: var(--r1);
+  /* Écrit plus petit que le reste : --text-faint seul reste sous 4,5:1 sur ce fond (Holographique,
+     Clair). Tiré vers --text, il gagne du contraste sur un thème sombre comme sur un thème clair. */
+  color: color-mix(in srgb, var(--text-faint) 72%, var(--text));
+}
+.scm-bloc > * {
+  min-width: 0;
+}
+/* La pastille garde la largeur de son mot : étirée, « fait » prenait celle d'« interrompu ». */
+.scm-bloc > .scm-pastille {
+  justify-self: start;
+}
+.scm-enchainement,
+.scm-heures {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint, currentColor);
+  white-space: nowrap;
+}
+.scm-bloc > .scm-cout {
+  font-size: 11.5px;
+  color: var(--text-dim, currentColor);
+}
+/* « Relancer » passe au-dessus du titre étiré sur la ligne : sinon le clic ouvrirait le lot. */
+.scm-ligne-geste {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+/* Le remplissage d'un lot. Par défaut neutre : un lot fini s'efface derrière celui qui travaille. */
+.scm-bloc {
+  background: rgba(var(--voile-rgb), 0.05);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+/* Le reflet avance par crans de 100 ms, sur l'horloge commune : en continu, il ferait recomposer
+   toute la fenêtre 60 fois par seconde (animations-par-crans.ts, conv-1075). */
+.scm-bloc.scm-etat--en-cours {
+  background:
+    linear-gradient(
+      105deg,
+      transparent 30%,
+      color-mix(in srgb, var(--on-accent) 20%, transparent) 50%,
+      transparent 70%
+    ),
+    var(--scm-jauge);
+  background-repeat: no-repeat;
+  background-size:
+    40% 100%,
+    100% 100%,
+    100% 100%;
+  box-shadow: none;
+  animation: scm-reflet 3.4s steps(34) infinite;
+}
+.scm-bloc.scm-etat--echec {
+  background: color-mix(in srgb, var(--scm-c) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--scm-c) 55%, transparent);
+}
+.scm-bloc.scm-etat--attend-chef,
+.scm-bloc.scm-etat--interrompu {
+  background: color-mix(in srgb, var(--scm-c) 11%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--scm-c) 45%, transparent);
+}
+.scm-bloc.scm-etat--en-cours {
+  color: var(--scm-sur-jauge);
+}
+/* La couleur d'état, tirée vers --text : pure, sur sa propre teinte, elle tombait à 2,76:1 en Clair et
+   3,16:1 en NieR (mesuré au pixel, conv-1376). */
+.scm-bloc.scm-etat--echec,
+.scm-bloc.scm-etat--attend-chef,
+.scm-bloc.scm-etat--interrompu {
+  color: color-mix(in srgb, var(--scm-c) 46%, var(--text));
+}
+@keyframes scm-reflet {
+  from {
+    background-position:
+      -60% 0,
+      0 0,
+      0 0;
+  }
+  to {
+    background-position:
+      160% 0,
+      0 0,
+      0 0;
+  }
+}
+
+/* La vue d'un lot : « ← Retour », puis la ligne du lot, alignée comme dans la liste du chef. */
+.scm-lot-tete {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+.scm-lot-tete > .scm-pistes {
+  flex: 1 1 auto;
   min-width: 0;
 }
 .scm-nom {
@@ -242,127 +302,68 @@
 button.scm-nom:not(:disabled) {
   cursor: pointer;
 }
-button.scm-nom:not(:disabled):hover {
-  color: var(--gold-bright, var(--gold, #d4a94f));
+/* Le titre, étiré sur toute la ligne : c'est la ligne entière qu'on clique. S'il ne tient vraiment
+   pas, il passe à la ligne : jamais de points de suspension sur le nom d'un lot (conv-1387). */
+.scm-bloc .scm-nom {
+  flex: none;
+  width: 100%;
+  overflow: visible;
+  color: var(--text);
+  font-size: inherit;
+  line-height: inherit;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
-.scm-nom--lot {
-  flex-basis: clamp(90px, 38%, 240px);
-}
-.scm-voie {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 60px;
-  height: 13px;
-}
-.scm-voie--axe {
-  height: 12px;
-}
-.scm-graduation {
+.scm-bloc .scm-nom::after {
+  content: '';
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: color-mix(in srgb, currentColor 14%, transparent);
+  inset: 0;
+  border-radius: inherit;
 }
-.scm-maintenant-ligne {
-  position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 1px;
-  background: var(--gold, #d4a94f);
+.scm-bloc .scm-nom:focus-visible {
+  outline: none;
 }
-.scm-barre {
-  position: absolute;
-  top: 2px;
-  height: 9px;
-  border-radius: 2px;
-  background: var(--scm-c, currentColor);
+.scm-bloc .scm-nom:focus-visible::after {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
 }
-.scm-barre.scm-etat--en-cours {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--accent) 35%, transparent),
-    var(--accent)
-  );
+.scm-bloc.scm-etat--fait .scm-nom {
+  color: var(--text-dim);
+  font-weight: 500;
 }
-.scm-barre.scm-etat--echec {
-  background: repeating-linear-gradient(
-    135deg,
-    var(--err) 0 3px,
-    color-mix(in srgb, var(--err) 22%, transparent) 3px 6px
-  );
+.scm-bloc.scm-etat--en-cours .scm-nom {
+  color: inherit;
 }
-.scm-barre.scm-etat--attend-chef,
-.scm-barre.scm-etat--interrompu {
-  background: repeating-linear-gradient(
-    135deg,
-    var(--warn) 0 3px,
-    color-mix(in srgb, var(--warn) 22%, transparent) 3px 6px
-  );
+.scm-bloc:has(> button.scm-nom:not(:disabled):hover) {
+  box-shadow: inset 0 0 0 1px var(--line-strong);
 }
-.scm-barre--attente {
-  top: 5px;
-  height: 2px;
-  background: repeating-linear-gradient(
-    90deg,
-    var(--text-faint, currentColor) 0 4px,
-    transparent 4px 7px
-  );
+/* Un lot fini depuis ton dernier passage : doré tant que tu ne l'as pas ouvert (conv-1286). */
+.scm-bloc.is-non-lu {
+  box-shadow: inset 0 0 0 1px var(--gold);
 }
-.scm-heure {
-  position: absolute;
-  top: 0;
-  translate: -50% 0;
-  font:
-    9px/12px ui-monospace,
-    monospace;
-  color: var(--text-faint, currentColor);
-  white-space: nowrap;
+.scm-piste.is-non-lu .scm-nom {
+  color: var(--gold-bright);
 }
-.scm-heure--debut {
-  translate: 0 0;
-}
-.scm-heure--fin {
-  translate: -100% 0;
-}
+
 .scm-cout {
-  flex: 0 0 52px;
-  font:
-    10px/1.3 ui-monospace,
-    monospace;
-  text-align: right;
-  color: var(--text-dim, currentColor);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.scm-cout--inconnu {
-  opacity: 0.6;
-}
-.scm-piste-detail {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding-left: calc(clamp(90px, 32%, 190px) + 8px);
-}
-.scm-bandeau--lot .scm-piste-detail {
-  padding-left: 0;
-}
+/* Même pastille que le statut du plan, juste en dessous (.tdl-statut). */
 .scm-pastille {
   flex: none;
-  padding: 0 6px;
-  border: 1px solid var(--scm-c, currentColor);
-  border-radius: 9px;
+  padding: 0 7px;
+  border: 1px solid color-mix(in srgb, var(--scm-c, currentColor) 30%, transparent);
+  border-radius: var(--r3);
   color: var(--scm-c, currentColor);
-  font:
-    600 9px/1.5 ui-monospace,
-    monospace;
+  font-size: 10.5px;
+  line-height: 1.25;
   white-space: nowrap;
 }
 .scm-duree {
   flex: none;
-  font:
-    10px/1.3 ui-monospace,
-    monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   color: var(--text-faint, currentColor);
   white-space: nowrap;
 }
@@ -377,15 +378,61 @@ button.scm-nom:not(:disabled):hover {
 .scm-etat--echec .scm-phrase {
   color: var(--err);
 }
+/* Sur la jauge d'un lot qui tourne, tout s'écrit dans la couleur posée sur la jauge. */
+.scm-bloc.scm-etat--en-cours
+  > :is(.scm-pastille, .scm-enchainement, .scm-heures, .scm-duree, .scm-cout, .scm-phrase) {
+  color: inherit;
+}
+.scm-bloc.scm-etat--en-cours > .scm-pastille {
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+/* — Les plans précédents du chef (conv-1394), une ligne par plan. Les lots pas encore lancés sont
+   dans la liste depuis conv-1396, « Relancer le 5 » au bout de leur ligne. */
+.scm-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-width: 0;
+  margin-top: 4px;
+  font-size: 12px;
+}
+.scm-file-titre {
+  color: var(--text-faint);
+}
+.scm-file-lot {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+.scm-file-lot .scm-nom {
+  flex: 0 1 auto;
+  color: var(--text-dim);
+  font-size: inherit;
+  font-weight: 500;
+}
+.scm-file-lot button.scm-nom:not(:disabled):hover {
+  color: var(--text);
+}
+.scm-file-lot .scm-phrase {
+  flex: 0 1 auto;
+  color: var(--text-faint);
+}
+/* Sans marge verticale : il ne hausse pas sa ligne, 8 lots tiennent aussi avec lui (conv-1387). */
 .scm-relancer {
   flex: none;
-  padding: 0 8px;
-  border: 1px solid var(--err);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--err);
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r3);
+  background: var(--scm-jauge);
+  color: var(--scm-sur-jauge);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 .scm-relancer:disabled {
@@ -396,78 +443,103 @@ button.scm-nom:not(:disabled):hover {
   color: var(--err);
   font-size: 11px;
 }
-/* — La même super conv dans le panneau de chat (conv-1315) : sous l'en-tête, au-dessus du fil. Le
-   bandeau y a pour parent ce bloc, de hauteur libre : sa borne en % n'y vaut plus rien, d'où `vh`,
-   assez bas pour laisser le fil lisible à côté de la saisie dans une petite fenêtre. */
+/* — La même super conv dans le panneau de chat (conv-1315) : au-dessus du tableau du plan et de
+   la saisie depuis conv-1393 (« ce bloc, mets-le plutôt en bas »). Le
+   bandeau y a pour parent ce bloc, de hauteur libre : sa borne en % n'y vaut plus rien, d'où `vh`.
+
+   PLUS DE LOTS SANS DÉFILER (conv-1396, 2026-10-31 : « agrandis le bloc du plan de lots dans le chat
+   pour voir plus de lots sans faire défiler, sans écraser le fil »). La borne de 30vh ne montrait que
+   9 lots sur 19 (capture du plan de conv-1335, fenêtre de 1000 px) ; 13 depuis, à 1040 px. Le bloc
+   monte jusqu'à 50vh ; ce qui protège le fil n'est plus cette borne mais son propre minimum, une part
+   de la colonne (plus bas) : le bloc ne prend que ce que le fil lui laisse. */
 .scm-chat {
   flex: 0 1 auto;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  /* La ligne des chiffres. Le haut dégage le mot « contexte », qui descend de 7 px sous l'en-tête ;
-     les côtés reprennent ceux de l'en-tête. */
+  /* La ligne des chiffres ; les côtés reprennent ceux de l'en-tête. */
   min-height: 44px;
-  padding: 8px 24px 0;
+  padding: 6px 24px;
 }
-/* LES ONGLETS DANS LA BANDE DES BOUTONS DE FENÊTRE, comme un navigateur (conv-1315, 2026-10-30 : « la
-   barre d'onglets doit être tout en haut au niveau de réduire fermer »). `.chat` coupe ce qui dépasse
-   (cosmic-outline.css), d'où `fixed`, qui en sort tant qu'aucun thème ne lui pose de filtre ou de
-   transformation. Le bloc garde la largeur du panneau, même colonne redimensionnée ou Détails ouvert,
-   et s'arrête avant les boutons de Windows (`titlebar-area`, en pixels de page quel que soit le zoom ;
-   138 px en repli, comme `.shell::before`). Cette bande déplace la fenêtre : les onglets s'y excluent
-   un à un, et le vide autour d'eux continue de la déplacer. */
-.chat:has(> .scm-chat) {
-  anchor-name: --scm-panneau;
-}
-.scm-chat .scm-onglets {
-  position: fixed;
-  top: 0;
-  left: calc(anchor(--scm-panneau left) + 18px);
-  right: max(
-    anchor(--scm-panneau right),
-    calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px)))
-  );
-  height: var(--marge-haut-vue);
-  box-shadow: none;
-}
-.scm-chat .scm-onglet {
-  height: 100%;
-  padding: 0 10px;
-  font-size: 11.5px;
-  -webkit-app-region: no-drag;
-}
+/* Dans le chat, la frise est une plaque du thème, comme ses cartes (--surface-panel, --r2). */
 .scm-chat .scm-bandeau {
   flex: 0 1 auto;
   min-height: 0;
-  max-height: min(340px, 30vh);
-  padding-left: 0;
-  padding-right: 0;
+  max-height: 50vh;
+  padding: 6px 14px 7px;
+  border: 1px solid var(--container-border);
+  border-radius: var(--r2);
+  background: var(--surface-panel);
 }
-/* Dans la case de mosaïque, les onglets se posent sur le filet de l'en-tête, qui passe de bordure à
-   ombre : une bordure resterait sous l'onglet ouvert, qui ne peindrait pas par-dessus. */
-.chat-mosaic-super > .chat-mosaic-window-head {
-  align-items: flex-end;
-  padding-top: 6px;
-  padding-bottom: 0;
-  border-bottom-color: transparent;
-  box-shadow: inset 0 -1px 0 var(--container-border);
+/* LA VUE D'UN LOT NE CÈDE PAS (conv-1348, 2026-10-30 : « c dégueu que ça soit scrollable comme
+   ça ») : la ligne du lot a une hauteur connue, rien à faire défiler. Seule la liste du chef, dont la
+   hauteur suit le nombre de lots, défile et rétrécit ; ici, 15 px d'ascenseur coupaient le bas de
+   la vue. Le fil garde son minimum, plus bas dans cette feuille. */
+.scm-bandeau.scm-bandeau--lot {
+  flex: none;
+  max-height: none;
+  overflow: visible;
 }
-.chat-mosaic-super > .chat-mosaic-window-head > :not(.scm-onglets) {
-  align-self: center;
+.scm-chat:has(> .scm-bandeau--lot) {
+  flex: none;
 }
 /* Hauteur serrée : c'est la frise qui cède (elle défile), pas l'en-tête. Il a une hauteur minimale
-   fixe, donc rien ne l'empêchait de s'écraser sous son contenu, qui passait alors sur les onglets.
-   Le fil garde de quoi se lire : sans minimum, sa base nulle le laissait à zéro. */
+   fixe, donc rien ne l'empêchait de s'écraser sous son contenu, qui passait alors sur la frise.
+   Le fil garde de quoi se lire : sans minimum, sa base nulle le laissait à zéro. Depuis conv-1396,
+   ce minimum est une part de la colonne, 30 % : c'est lui, et non la borne du bloc, qui empêche un
+   grand plan d'écraser le fil ; 120 px restent le plancher d'une fenêtre très basse. */
 .chat:has(> .scm-chat) > .chat-head {
   flex: none;
 }
 .chat:has(> .scm-chat) > .chat-scroll {
-  min-height: 120px;
+  min-height: max(120px, 30%);
 }
-/* Case étroite (4 colonnes et plus) : la phrase passe sous l'état, le nom rétrécit. */
-@container (max-width: 360px) {
-  .scm-piste-detail {
-    padding-left: 0;
+/* LISTE ÉTROITE (chat dans une fenêtre de 1200 px, case de mosaïque) : UNE LIGNE PAR LOT QUAND MÊME
+   (conv-1387, 2026-10-31 : « 8 lots sans ascenseur »). Chaque lot y prenait trois lignes, 57 px : à
+   1200 × 720, un seul lot restait visible. Le titre, l'état et la durée restent toujours ;
+   l'enchaînement tant qu'il tient ; les heures, le coût et la phrase passent dans l'infobulle. */
+@container scm-lignes (max-width: 720px) {
+  .scm-bandeau--chef .scm-lignes {
+    grid-template-columns: minmax(0, 1fr) max-content max-content max-content;
+    column-gap: 10px;
+  }
+  .scm-bandeau--chef .scm-lignes--relance {
+    grid-template-columns: minmax(0, 1fr) max-content max-content max-content max-content;
+  }
+  .scm-bandeau--chef .scm-bloc > :is(.scm-heures, .scm-cout, .scm-phrase) {
+    display: none;
+  }
+}
+@container scm-lignes (max-width: 480px) {
+  .scm-bandeau--chef .scm-lignes {
+    grid-template-columns: minmax(0, 1fr) max-content max-content;
+  }
+  .scm-bandeau--chef .scm-lignes--relance {
+    grid-template-columns: minmax(0, 1fr) max-content max-content max-content;
+  }
+  .scm-bandeau--chef .scm-enchainement {
+    display: none;
+  }
+}
+/* La vue d'un lot n'a qu'une ligne à loger, rien à cacher : plus de colonnes, le titre sur sa ligne,
+   l'état, l'enchaînement et les chiffres dessous, puis ce que dit le fil. Une cellule vide n'y laisse
+   pas d'écart : en grille, elle tenait sa colonne. */
+@container scm-lignes (max-width: 620px) {
+  .scm-bandeau--lot .scm-lignes {
+    display: flex;
+    flex-direction: column;
+  }
+  .scm-bandeau--lot .scm-bloc {
+    display: flex;
     flex-wrap: wrap;
+    align-items: baseline;
+    gap: 1px 10px;
+  }
+  .scm-bandeau--lot .scm-bloc > .scm-nom,
+  .scm-bandeau--lot .scm-bloc > .scm-phrase {
+    flex: 1 1 100%;
+  }
+  .scm-bandeau--lot .scm-bloc > :empty {
+    display: none;
   }
 }

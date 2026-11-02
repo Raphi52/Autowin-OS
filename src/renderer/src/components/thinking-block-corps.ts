@@ -4,6 +4,7 @@
  * (regle react-refresh/only-export-components). Le calcul est pur, il n'a pas besoin du composant.
  */
 import { estLigneDEtape, lireLigneDEtape, type Etape } from '../../../shared/etapes-du-tour'
+import { estLigneDeChantier, type Chantier } from '../../../shared/chantier-du-tour'
 import { langueCourante } from '../langue'
 import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
 import { lireLigneDErreur } from '../../../shared/erreur-d-action'
@@ -136,45 +137,43 @@ const CIBLE_MAX = 120
  * coule dans une autre. Un here-doc (`<<`) garde ses lignes : ce sont des donnees, pas des actions.
  */
 export function sousCommandes(commande: string): string[] {
+  // Par INDEX, sans recoller la commande caractère par caractère : depuis conv-1228 le journal porte
+  // la commande entière, et ce parcours était la première source d'allocations de l'interface (419 Mo
+  // en 90 s sur le tas échantillonné, conv-1413). Le morceau gardé est exactement la même sous-chaîne.
   const sortie: string[] = []
   const coupeLigne = !commande.includes('<<')
-  let courante = ''
+  let debut = 0
   let guillemet: string | null = null
-  const pousser = (): void => {
-    const propre = courante.trim()
+  const pousser = (fin: number): void => {
+    const propre = commande.slice(debut, fin).trim()
     if (propre) sortie.push(propre)
-    courante = ''
   }
   for (let i = 0; i < commande.length; i += 1) {
     const c = commande[i]!
     if (c === '\\' && guillemet !== "'" && i + 1 < commande.length) {
-      courante += c + commande[i + 1]!
       i += 1
       continue
     }
     if (guillemet) {
-      courante += c
       if (c === guillemet) guillemet = null
       continue
     }
     if (c === '"' || c === "'") {
       guillemet = c
-      courante += c
       continue
     }
-    const deux = commande.slice(i, i + 2)
-    if (deux === '&&' || deux === '||') {
-      pousser()
+    if ((c === '&' || c === '|') && commande[i + 1] === c) {
+      pousser(i)
       i += 1
+      debut = i + 1
       continue
     }
     if (c === ';' || (c === '\n' && coupeLigne)) {
-      pousser()
-      continue
+      pousser(i)
+      debut = i + 1
     }
-    courante += c
   }
-  pousser()
+  pousser(commande.length)
   return sortie
 }
 
@@ -215,7 +214,8 @@ function familleDe(outil: string): ActionFrise['famille'] {
   if (/^(Read|NotebookRead)$/i.test(outil)) return 'lire'
   if (/^(Grep|Glob|WebSearch|WebFetch|LS)$/i.test(outil)) return 'chercher'
   if (/^(Edit|Write|MultiEdit|NotebookEdit)$/i.test(outil)) return 'modifier'
-  if (/^(Bash|PowerShell|Commande)$/i.test(outil)) return 'commande'
+  // Monitor lance une commande : sa tâche de fond la nomme, comme celle d'un Bash (conv-1370, lot 5).
+  if (/^(Bash|PowerShell|Monitor|Commande)$/i.test(outil)) return 'commande'
   return 'autre'
 }
 
@@ -241,9 +241,9 @@ export function actionsDuTour(
   done = false
 ): ActionFrise[] {
   // Les lignes d'ÉTAPES (TaskCreate / TaskUpdate du CLI) ne sont pas des actions : elles nourrissent
-  // le bloc Étapes (shared/etapes-du-tour.ts).
+  // le bloc Étapes (shared/etapes-du-tour.ts). Celles d'un CHANTIER nourrissent sa carte.
   const lignes = (statusLog?.length ? statusLog : status ? [status] : []).flatMap((ligne, i) =>
-    ligne && !estLigneDEtape(ligne) ? [{ ligne, i }] : []
+    ligne && !estLigneDEtape(ligne) && !estLigneDeChantier(ligne) ? [{ ligne, i }] : []
   )
   const sortie: ActionFrise[] = []
   // ORIGINE de chaque action : l'index, dans le journal ENTIER (étapes comprises), de la ligne qui
@@ -392,7 +392,8 @@ export function dernierStatutDAction(
 ): string | undefined {
   // Le message d'erreur d'une action (conv-341) se lit sous sa ligne, déplié : sous la capsule,
   // c'est « Glob échoué - 25 s » qui reste, pas 280 caractères de sortie d'outil.
-  const parle = (ligne: string): boolean => !estLigneDEtape(ligne) && !lireLigneDErreur(ligne)
+  const parle = (ligne: string): boolean =>
+    !estLigneDEtape(ligne) && !estLigneDeChantier(ligne) && !lireLigneDErreur(ligne)
   if (status && parle(status)) return status
   for (let i = (statusLog?.length ?? 0) - 1; i >= 0; i -= 1) {
     const ligne = statusLog![i]!
@@ -414,6 +415,51 @@ export function resumeDesEtapes(etapes: readonly Etape[]): string {
       sujet: suivante.sujet || tx('pensee.etapeSuivante', { id: suivante.id })
     })
   return etapes.length > 0 ? tx('pensee.toutesTerminees') : ''
+}
+
+/** Un volume de jetons d'un coup d'œil : « 1,2 M », « 36 k ». */
+function jetonsLisibles(jetons: number): string {
+  const virgule = (n: number): string => n.toFixed(1).replace('.0', '').replace('.', ',')
+  if (jetons >= 1_000_000) return `${virgule(jetons / 1_000_000)} M`
+  return jetons >= 1_000 ? `${Math.round(jetons / 1_000)} k` : String(jetons)
+}
+
+/**
+ * Où en sont les agents d'un chantier ou de l'une de ses phases. Ce qui vaut zéro se tait : « 0 en
+ * échec » ne dit rien, et la ligne pliée n'a qu'une place limitée.
+ */
+export function comptesDuChantier(
+  c: Pick<Chantier, 'enCours' | 'enAttente' | 'finis' | 'echecs'>
+): string[] {
+  return [
+    c.enCours > 0 ? tx('pensee.chantier.enCours', { n: c.enCours }) : '',
+    c.enAttente > 0 ? tx('pensee.chantier.enAttente', { n: c.enAttente }) : '',
+    c.finis > 0 ? tx('pensee.chantier.finis', { n: c.finis }) : '',
+    c.echecs > 0 ? tx('pensee.chantier.echecs', { n: c.echecs }) : ''
+  ].filter(Boolean)
+}
+
+/** La seconde ligne de la carte pliée : les agents, puis les jetons. */
+export function resumeDuChantier(chantier: Chantier): string {
+  return [
+    ...comptesDuChantier(chantier),
+    tx('pensee.chantier.jetons', { n: jetonsLisibles(chantier.jetons) })
+  ].join(' · ')
+}
+
+/**
+ * Un tour fini n'a plus de chantier en cours, quoi que dise sa dernière ligne (tour coupé avant
+ * d'avoir pu écrire la fin) : la carte ne doit pas promettre un travail qui ne tourne plus.
+ */
+export function chantierAffiche(chantier: Chantier, tourFini: boolean): Chantier {
+  if (!tourFini || chantier.statut !== 'en-cours') return chantier
+  return {
+    ...chantier,
+    statut: 'arrete',
+    enCours: 0,
+    enAttente: 0,
+    phases: chantier.phases.map((p) => ({ ...p, enCours: 0, enAttente: 0 }))
+  }
 }
 
 /**

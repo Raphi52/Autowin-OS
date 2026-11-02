@@ -1033,4 +1033,26 @@ describe('buildTurnMessages — une page html-render de l’agent revient en tex
     })
     expect(entries.join('\n')).toContain('<div class="c">TEXTE-VU</div>')
   })
+
+  // conv-1316 : une session neuve relisait les 141 000 caractères du jeu posé par `montrer_bloc`.
+  it('une page html-interactif de l’agent ne repart pas en code non plus', () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [
+        { role: 'user', content: 'montre' },
+        {
+          role: 'assistant',
+          content:
+            'Le jeu est là.\n\n```html-interactif\n<h1>TEXTE-VU</h1><script>MOTEUR_3D()</script>\n```\n'
+        }
+      ]
+    })
+    const toi = entries.find((entry) => entry.startsWith('TOI: ')) ?? ''
+    expect(toi).toContain('Le jeu est là.')
+    expect(toi).toContain('TEXTE-VU')
+    expect(toi).not.toContain('MOTEUR_3D')
+    expect(toi).not.toMatch(/<\/?[a-z]/i)
+  })
 })

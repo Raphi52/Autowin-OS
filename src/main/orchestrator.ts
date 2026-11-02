@@ -415,6 +415,29 @@ export function phasesApresBuildDeReparation(graph: WorkflowGraph): NodePhase[] 
   return []
 }
 
+/** Phases jouées SEULEMENT après un juge qui valide (`noeudsApresJuge`) : elles ne changent pas le texte jugé. */
+const PHASES_APRES_VERDICT: ReadonlySet<string> = new Set(['learn', 'git'])
+
+/**
+ * Le dernier juge des étapes reprises a-t-il lu leur texte FINAL ? Oui seulement si aucune étape qui
+ * change ce texte ne vient après lui.
+ *
+ * Un juge joué en direct n'entre jamais dans les étapes enregistrées ; seul y entre celui qui a fini
+ * pendant un redémarrage (`settleCompletedDetachedPhase`, run-reattach.ts). Un verdict enregistré
+ * peut donc se trouver au MILIEU des builds, sur un texte dépassé. Mesuré sur run-7b7d533c318e-1
+ * (conv-1324, 2026-10-30) : un refus à 84 entre deux builds, relu à chaque reprise comme verdict du
+ * texte final, d'où trois boucles de réparation payées pour rien.
+ */
+export function dernierJugeLitLeTexteFinal(acquis: ReadonlyArray<{ phase: NodePhase }>): boolean {
+  let dernierJuge = -1
+  let derniereEtapeDuTexte = -1
+  acquis.forEach((etape, rang) => {
+    if (etape.phase === 'judge') dernierJuge = rang
+    else if (!PHASES_APRES_VERDICT.has(etape.phase)) derniereEtapeDuTexte = rang
+  })
+  return dernierJuge > derniereEtapeDuTexte
+}
+
 /** Nombre d'appels réellement promis par le graphe, panels et synthèses compris. */
 function appelsRequisParWorkflow(
   graph: WorkflowGraph,
@@ -4168,6 +4191,21 @@ ${CONTRAT_OBJECTIONS}`
     }
     /** `true` = occurrence déjà payée, donc aucun appel provider à rejouer. */
     const dejaPayee = (phase: NodePhase): boolean => takePaidPhase(phase) !== undefined
+    const jugeReprisLitLeTexteFinal = dernierJugeLitLeTexteFinal(usableResume)
+    /**
+     * Le verdict repris du contrôle final : celui du DERNIER juge enregistré, et seulement s'il a lu le
+     * texte final (`dernierJugeLitLeTexteFinal`). Les juges restants sont tous consommés : un verdict
+     * intermédiaire ne doit être rejoué ni maintenant ni après la prochaine réparation (conv-1324).
+     */
+    const verdictReprisDuTexteFinal = (): string | undefined => {
+      const repris: string[] = []
+      let texte = takePaidPhase('judge')
+      while (texte !== undefined) {
+        repris.push(texte)
+        texte = takePaidPhase('judge')
+      }
+      return jugeReprisLitLeTexteFinal ? repris.at(-1) : undefined
+    }
     /**
      * Combien de phases ce run a RÉELLEMENT jouées (hors occurrences reprises via `dejaPayee`). La
      * boucle de réparation le relit : un passage qui n'a rien joué n'a rien changé à juger.
@@ -5247,8 +5285,7 @@ ${CONTRAT_OBJECTIONS}`
       /**
        * On n'ouvre un serveur que pour un provider qui le CONSOMME reellement.
        *
-       * `codex` fait un POST direct (aucun CLI, donc aucun `--mcp-config`), `gemini` et `kimi`
-       * spawnent un CLI sans drapeau MCP. Ouvrir un port pour eux annoncait « outils natifs servis »
+       * `gemini` et `kimi` spawnaient un CLI sans drapeau MCP. Ouvrir un port pour eux annoncait « outils natifs servis »
        * sur un appel qui ne les recevrait jamais — le meme mensonge de trace que ce chantier a
        * corrige pour `describePrompt`, reproduit pour trois providers sur quatre. On dit desormais
        * la PRIVATION, et le repli texte reste en place.
@@ -6105,8 +6142,9 @@ ${CONTRAT_OBJECTIONS}`
 
       // Un juge terminal peut avoir fini dans son CLI détaché après la mort d'Electron. Le
       // rattachement l'ajoute alors aux acquis APRÈS les éventuels juges intermédiaires du graphe.
-      // Consommer ici l'occurrence restante évite de payer/rejouer exactement le même verdict.
-      const resumedJudgeText = takePaidPhase('judge')
+      // Consommer ici l'occurrence restante évite de payer/rejouer exactement le même verdict — mais
+      // seulement si elle a jugé le texte final, pas un texte dépassé (conv-1324).
+      const resumedJudgeText = verdictReprisDuTexteFinal()
       if (resumedJudgeText !== undefined) {
         const verdictDuJuge = lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
         // conv-976 : sur un `/scout` nommé, des MINEUR seuls sont des réserves, pas un refus.

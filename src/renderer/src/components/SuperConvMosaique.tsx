@@ -1,14 +1,9 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import type { LotDuPlan, PlanDeLots } from '../../../shared/plan-de-lots'
 import { useTextesChatFilsEtLots } from '../textes-ecrans/chat-fils-et-lots'
 import { formatDuration, summarizeConversationCost } from './conversation-cost'
-import {
-  calculerFrise,
-  lotsNonLus,
-  planEnMouvement,
-  type BarreDeLot,
-  type FriseDuPlan
-} from './frise-des-lots'
+import { enchainementDuLot, rangsLisibles } from './enchainement-des-lots'
+import { calculerFrise, lotsNonLus, planEnMouvement } from './frise-des-lots'
 import {
   CLE_ETAT,
   INCONNU,
@@ -22,10 +17,12 @@ import {
   planReprenable,
   relanceAuClic,
   retenirReduits,
+  useAnciensPlansDuChef,
   useCoutsDesLots,
   usePhrasesDesLots,
   type CoutsParFil
 } from './lots-mesures'
+import { Spinner } from './Spinner'
 import './SuperConvMosaique.css'
 
 /*
@@ -42,6 +39,29 @@ import './SuperConvMosaique.css'
  *    le fil, et « Relancer » sur un lot en échec.
  * Les mesures (coût d'un fil, durée, droit de relancer, plan relu) sont celles du tableau des lots,
  * partagées par `lots-mesures.ts` : une seconde façon de les calculer serait une seconde vérité.
+ *
+ * LES COULOIRS (conv-1376, 2026-10-31 — /draft, « Implémenter la 1 · Couloirs ») remplacent les
+ * pistes de la frise pleine. Une piste par lot donnait sept lignes presque vides et une barre sans
+ * rien dessus : c'était laid, et l'œil devait relier chaque barre à son nom, à gauche. Le lot est
+ * maintenant un bloc posé sur l'axe, titre et état dedans ; ceux qui n'ont pas démarré passent dans
+ * la file, dessous. La vue d'un lot garde sa piste réduite, avec le même remplissage que les blocs.
+ * Depuis conv-1387 (« faut un lot par ligne »), chaque lot lancé a sa ligne.
+ *
+ * PLUS D'AXE DES HEURES (conv-1396, 2026-10-31 : « pour ce bloc la disposition est pourrie, enlève le
+ * côté timeline, prends toute la longueur, mais écris la durée et quelle étape se lance après laquelle
+ * et tout ce qu'on avait »). Posé sur l'axe d'un plan de 13 h, un lot de 40 min devenait un bloc de
+ * 70 px au titre coupé. Chaque lot, lancé ou non, a maintenant toute la largeur, en colonnes alignées
+ * d'une ligne à l'autre (`LigneDeLot`) : ce que l'axe disait par la position s'écrit — heures, durée,
+ * et le lot après lequel il part (`enchainement-des-lots.ts`).
+ * La vue d'un lot a perdu sa voie à son tour (conv-1396, même jour : « remplace aussi la petite barre
+ * de temps par la même ligne que dans la liste du chef ») : « ← Retour », puis la ligne du lot telle
+ * que le chef la montre, titre compris mais sans lien, puisque le lot est déjà ouvert.
+ *
+ * PLUS D'ONGLETS (conv-1387, 2026-10-31 : « je veux pas d'onglets, je veux que cliquer sur une ligne
+ * m'emmène vers la conv en question, et qu'après il y ait un bouton retour »). La frise est le seul
+ * chemin vers les lots : une ligne ouvre un lot, « ← Retour » ramène au chef. Ce que disaient les
+ * onglets (question, spinner, fini pas lu) est passé sur ces lignes. `OngletSuperConv` garde son nom :
+ * il dit quelle vue est ouverte, le chef ou un lot.
  */
 
 export type OngletSuperConv = 'chef' | number
@@ -74,250 +94,257 @@ function useMaintenant(enMouvement: boolean): number {
   return maintenant
 }
 
-const enPourcent = (n: number): string => `${n.toFixed(2)}%`
-
-/** La voie d'un lot : graduations, ligne « maintenant », sa barre ou son attente. */
-function Voie({
-  frise,
-  barre,
-  attend
+/**
+ * Le repère d'une ligne de lot, devant son titre. Un lot qui travaille porte LE spinner de l'app,
+ * comme sa ligne dans la liste des fils (conv-1330). Une question attendue passe devant : c'est ce qui
+ * réclame l'utilisateur (conv-1381). Un autre état se lit déjà sur la ligne : rien à ajouter.
+ */
+function RepereDeLot({
+  lot,
+  question
 }: {
-  frise: FriseDuPlan | null
-  barre: BarreDeLot | undefined
-  attend: boolean
-}): React.JSX.Element {
+  lot: LotDuPlan
+  question: boolean
+}): React.JSX.Element | null {
+  if (!question && lot.etat !== 'en-cours') return null
   return (
-    <span className="scm-voie" aria-hidden="true">
-      {frise?.graduations.slice(1, -1).map((g) => (
-        <i key={g.position} className="scm-graduation" style={{ left: enPourcent(g.position) }} />
-      ))}
-      {frise?.maintenant !== undefined ? (
-        <i className="scm-maintenant-ligne" style={{ left: enPourcent(frise.maintenant) }} />
-      ) : null}
-      {barre ? (
-        <span
-          className={`scm-barre scm-etat--${barre.etat}`}
-          style={{ left: enPourcent(barre.gauche), width: enPourcent(barre.largeur) }}
-        />
-      ) : attend && frise ? (
-        // Un lot qui attend : un pointillé posé sur « maintenant » (ou en bout d'axe), sans durée.
-        <span
-          className="scm-barre scm-barre--attente"
-          style={{ left: enPourcent(Math.min(frise.maintenant ?? 94, 94)), width: '6%' }}
-        />
-      ) : null}
+    <span className="scm-repere">
+      {question ? (
+        <span className="conversation-state is-asking" aria-hidden="true" />
+      ) : (
+        <Spinner size={13} />
+      )}
     </span>
   )
 }
 
-/**
- * LES ONGLETS DE LA SUPER CONV, comme ceux d'un navigateur (conv-1286, 2026-10-30 : « ça doit écrire
- * le titre de la conv et ils doivent être plus visibles, là on voit même pas que c'est cliquable »).
- * Avant : « Chef · 1 · 2 », du texte nu sans fond. Chaque onglet écrit maintenant le titre de sa
- * conv, la pastille d'état reste devant. Ces titres arrivent à part, par la vue : le plan ne connaît
- * que le titre du lot, or une conv se renomme, et un lot n'a pas de conv avant son départ.
- */
-export function OngletsSuperConv({
-  plan,
-  actif,
-  nonLus,
-  titres,
-  onChoisir
-}: {
-  plan: PlanDeLots
-  actif: OngletSuperConv
-  nonLus: ReadonlySet<number>
-  /** Fil → titre de sa conv. STABLE tant qu'aucun titre ne change : voir `SuperConvDuChat`. */
-  titres?: ReadonlyMap<string, string>
-  onChoisir: (onglet: OngletSuperConv) => void
-}): React.JSX.Element {
-  const { t } = useTextesChatFilsEtLots()
-  const bandeRef = useRef<HTMLDivElement>(null)
-  // Des onglets larges débordent vite, et la barre de défilement est masquée : l'onglet ouvert doit
-  // rester visible, même ouvert depuis la liste des fils. Seule la bande défile, jamais la page.
-  useEffect(() => {
-    const bande = bandeRef.current
-    const onglet = bande?.querySelector('[aria-selected="true"]')
-    if (!bande || !onglet) return
-    const cadre = bande.getBoundingClientRect()
-    const place = onglet.getBoundingClientRect()
-    if (place.left < cadre.left) bande.scrollLeft -= cadre.left - place.left
-    else if (place.right > cadre.right) bande.scrollLeft += place.right - cadre.right
-  }, [actif])
-  const titreDuChef = titres?.get(plan.chef)?.trim() || t('superConv.onglet.chef')
-  return (
-    <div
-      className="scm-onglets"
-      role="tablist"
-      aria-label={t('superConv.onglets.aria')}
-      ref={bandeRef}
-      onWheel={(e) => {
-        e.currentTarget.scrollLeft += e.deltaY
-      }}
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={actif === 'chef'}
-        className={`scm-onglet scm-onglet--chef${actif === 'chef' ? ' is-actif' : ''}`}
-        data-testid="scm-onglet-chef"
-        title={t('superConv.onglet.chef.titre', { titre: titreDuChef })}
-        onClick={() => onChoisir('chef')}
-      >
-        <span className="scm-point" aria-hidden="true" />
-        <span className="scm-onglet-titre">{titreDuChef}</span>
-      </button>
-      {plan.lots.map((lot) => {
-        const nonLu = nonLus.has(lot.rang)
-        // Un lot sans conv annonce le titre que son fil recevra (`plans-de-lots-app.ts`).
-        const libelle =
-          (lot.fil && titres?.get(lot.fil)?.trim()) ||
-          t('superConv.onglet.lot', {
-            rang: lot.rang,
-            total: plan.lots.length,
-            titre: lot.titre
-          })
-        const titre = lot.fil
-          ? t('superConv.onglet.lot.titre', {
-              titre: libelle,
-              etat: t(CLE_ETAT[lot.etat])
-            }) + (nonLu ? t('superConv.onglet.nonLu') : '')
-          : t('superConv.onglet.pasLance', { titre: libelle })
-        return (
-          <button
-            key={lot.rang}
-            type="button"
-            role="tab"
-            aria-selected={actif === lot.rang}
-            disabled={!lot.fil}
-            className={`scm-onglet scm-etat--${lot.etat}${actif === lot.rang ? ' is-actif' : ''}${nonLu ? ' is-non-lu' : ''}`}
-            data-testid={`scm-onglet-${lot.rang}`}
-            data-etat={lot.etat}
-            title={titre}
-            onClick={() => onChoisir(lot.rang)}
-          >
-            <span className="scm-point" aria-hidden="true" />
-            <span className="scm-onglet-titre">{libelle}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
+/** Ce que dit la colonne « enchaînement » d'un lot, et son infobulle. */
+function texteDEnchainement(
+  plan: PlanDeLots,
+  lot: LotDuPlan,
+  t: ReturnType<typeof useTextesChatFilsEtLots>['t']
+): { texte: string; titre: string } {
+  const e = enchainementDuLot(plan, lot)
+  if (e.genre === 'apres')
+    return {
+      texte: t('superConv.apres', { rangs: rangsLisibles(e.rangs) }),
+      titre: t('superConv.apres.titre', { rangs: e.rangs.join(', ') })
+    }
+  if (e.genre === 'relais')
+    return {
+      texte: t('superConv.relais', { rang: e.rang }),
+      titre: t('superConv.relais.titre', { rang: e.rang })
+    }
+  if (e.genre === 'libre') return { texte: t('superConv.libre'), titre: t('superConv.libre.titre') }
+  return { texte: t('superConv.enFile'), titre: t('superConv.enFile.titre', { n: plan.parallele }) }
 }
 
-/** Une piste haute de la frise pleine : barre, coût, puis état, durée, phrase et « Relancer ». */
-function PistePleine({
+/**
+ * Un lot, lancé ou non, sur toute la largeur (conv-1396). Ses colonnes s'alignent sur celles des
+ * autres lignes (sous-grille, SuperConvMosaique.css) : titre, état, enchaînement, heures, durée,
+ * coût, ce que dit le fil, et « Relancer » s'il y a lieu. Le titre est un bouton étiré sur toute la
+ * ligne : c'est la ligne entière qu'on clique, et son infobulle redonne ce que la largeur a coupé.
+ * Un lot qui tourne compte sa durée sur l'horloge du bandeau (`useMaintenant`), relevée toutes les
+ * RELEVE_MS : la durée n'est donc jamais figée.
+ * Sans `onOuvrir` (la vue du lot lui-même), le titre n'est plus un bouton : il n'y a rien à ouvrir.
+ */
+function LigneDeLot({
   plan,
   lot,
-  frise,
+  maintenant,
   couts,
   phrase,
+  question,
+  nonLu,
   occupe,
   onOuvrir,
   onRelancer
 }: {
   plan: PlanDeLots
   lot: LotDuPlan
-  frise: FriseDuPlan | null
+  maintenant: number
   couts: CoutsParFil
   phrase?: string
+  question: boolean
+  nonLu: boolean
   occupe: boolean
-  onOuvrir: (rang: number) => void
+  onOuvrir?: (rang: number) => void
   onRelancer: (rang: number) => void
 }): React.JSX.Element {
   const { langue, t } = useTextesChatFilsEtLots()
   const cout = coutDuFil(couts, lot.fil)
-  const duree = dureeDuLot(lot, langue)
-  const relance = relanceAuClic(plan, lot, langue)
-  const attend = lot.etat === 'a-faire'
-  const apres =
-    attend && lot.apres?.length ? t('superConv.apres', { rangs: lot.apres.join(', ') }) : ''
-  const dit = lot.raison ?? phrase ?? apres
+  const libelleCout = cout ? summarizeConversationCost(cout).label : ''
+  const mot = t(CLE_ETAT[lot.etat])
+  const dit = lot.raison ?? phrase ?? ''
+  const enchainement = texteDEnchainement(plan, lot, t)
+  const enCours = lot.etat === 'en-cours'
+  const heures = lot.debut
+    ? `${heure(lot.debut)} → ${lot.fin ? heure(lot.fin) : enCours ? '…' : INCONNU}`
+    : ''
+  const fin = lot.fin ?? (enCours ? maintenant : undefined)
+  const duree = lot.debut && fin ? (formatDuration(fin - lot.debut) ?? INCONNU) : INCONNU
+  const titreDuLot = `${lot.rang} · ${lot.titre}`
+  const infobulle = [
+    titreDuLot,
+    [mot, enchainement.texte, heures, lot.debut ? duree : '', libelleCout]
+      .filter(Boolean)
+      .join(' · '),
+    question ? t('superConv.ligne.question') : nonLu ? t('superConv.ligne.nonLu') : '',
+    dit,
+    onOuvrir && lot.fil ? t('superConv.piste.titre', { rang: lot.rang }) : ''
+  ]
+    .filter(Boolean)
+    .join('\n')
   return (
-    <div className={`scm-piste scm-etat--${lot.etat}`} data-testid={`scm-piste-${lot.rang}`}>
-      <div className="scm-piste-ligne">
+    <div
+      role="listitem"
+      className={`scm-piste scm-bloc scm-etat--${lot.etat}${nonLu ? ' is-non-lu' : ''}`}
+      data-testid={`scm-piste-${lot.rang}`}
+    >
+      {onOuvrir ? (
         <button
           type="button"
           className="scm-nom"
           disabled={!lot.fil}
-          title={lot.fil ? t('superConv.piste.titre', { rang: lot.rang }) : undefined}
+          title={infobulle}
           onClick={() => onOuvrir(lot.rang)}
         >
-          {lot.rang} · {lot.titre}
+          <RepereDeLot lot={lot} question={question} />
+          {titreDuLot}
         </button>
-        <Voie frise={frise} barre={frise?.barres.get(lot.rang)} attend={attend} />
-        <span
-          className={`scm-cout${cout ? '' : ' scm-cout--inconnu'}`}
-          data-testid={`scm-piste-${lot.rang}-cout`}
-          title={cout ? t('lots.cout.duFil', { fil: lot.fil ?? '' }) : t('lots.cout.nonMesure')}
-        >
-          {cout ? summarizeConversationCost(cout).label : INCONNU}
+      ) : (
+        <span className="scm-nom" title={infobulle}>
+          <RepereDeLot lot={lot} question={question} />
+          {titreDuLot}
         </span>
-      </div>
-      <div className="scm-piste-detail">
-        <span className="scm-pastille">{t(CLE_ETAT[lot.etat])}</span>
-        <span className="scm-duree" title={duree.titre}>
-          {duree.texte}
-        </span>
-        <span className="scm-phrase" title={dit || undefined}>
-          {dit}
-        </span>
-        {relance ? (
-          <button
-            type="button"
-            className="scm-relancer"
-            data-testid={`scm-piste-${lot.rang}-relancer`}
-            disabled={occupe || !relance.possible}
-            title={
-              relance.possible
-                ? t('lots.relance.titre', {
-                    rang: lot.rang,
-                    fil: lot.fil ?? t('lots.relance.nouveauFil'),
-                    lances: plan.toursLances,
-                    plafond: plan.plafondTours
-                  })
-                : relance.raison
-            }
-            onClick={() => onRelancer(lot.rang)}
-          >
-            {t('lots.relance.bouton')}
-          </button>
-        ) : null}
-      </div>
-    </div>
-  )
-}
-
-/** L'axe des heures, aligné sur les voies (même colonne de nom et de coût que les pistes). */
-function Axe({ frise }: { frise: FriseDuPlan }): React.JSX.Element {
-  return (
-    <div className="scm-piste-ligne scm-axe" aria-hidden="true">
-      <span className="scm-nom" />
-      <span className="scm-voie scm-voie--axe">
-        {frise.graduations.map((g, i) => (
-          <span
-            key={g.position}
-            className={`scm-heure${i === 0 ? ' scm-heure--debut' : i === frise.graduations.length - 1 ? ' scm-heure--fin' : ''}`}
-            style={{ left: enPourcent(g.position) }}
-          >
-            {heure(g.ms)}
-          </span>
-        ))}
+      )}
+      <span className="scm-pastille">{mot}</span>
+      <span className="scm-enchainement" data-testid={`scm-piste-${lot.rang}-enchainement`}>
+        {enchainement.texte}
       </span>
-      <span className="scm-cout" />
+      <span className="scm-heures">{heures}</span>
+      <span
+        className="scm-duree"
+        data-testid={`scm-piste-${lot.rang}-duree`}
+        title={dureeDuLot(lot, langue).titre}
+      >
+        {lot.debut ? duree : ''}
+      </span>
+      <span className="scm-cout" data-testid={`scm-piste-${lot.rang}-cout`}>
+        {libelleCout}
+      </span>
+      <span className="scm-phrase">{dit}</span>
+      <span className="scm-ligne-geste">
+        <BoutonRelance plan={plan} lot={lot} occupe={occupe} onRelancer={onRelancer} />
+      </span>
     </div>
   )
 }
 
 /**
- * LE BANDEAU DE LA CASE, entre les onglets et le fil : la frise pleine dans l'onglet Chef, la piste
- * du lot dans l'onglet d'un lot. Il porte l'horloge, les coûts et le geste « Relancer ».
+ * « Relancer le 5 », au bout de la ligne de son lot (conv-1396 ; avant, dans la file, qu'un bloc
+ * étroit ne pouvait pas porter). Un bouton par lot relançable, un échec comme un lot interrompu ou qui
+ * attend le chef (`relanceAuClic`, conv-1284).
+ */
+function BoutonRelance({
+  plan,
+  lot,
+  occupe,
+  onRelancer
+}: {
+  plan: PlanDeLots
+  lot: LotDuPlan
+  occupe: boolean
+  onRelancer: (rang: number) => void
+}): React.JSX.Element | null {
+  const { langue, t } = useTextesChatFilsEtLots()
+  const relance = relanceAuClic(plan, lot, langue)
+  if (!relance) return null
+  return (
+    <button
+      type="button"
+      className="scm-relancer"
+      data-testid={`scm-piste-${lot.rang}-relancer`}
+      disabled={occupe || !relance.possible}
+      title={
+        relance.possible
+          ? t('lots.relance.titre', {
+              rang: lot.rang,
+              fil: lot.fil ?? t('lots.relance.nouveauFil'),
+              lances: plan.toursLances,
+              plafond: plan.plafondTours
+            })
+          : relance.raison
+      }
+      onClick={() => onRelancer(lot.rang)}
+    >
+      {t('superConv.relancerLot', { rang: lot.rang })}
+    </button>
+  )
+}
+
+/**
+ * LES PLANS PRÉCÉDENTS DU CHEF (conv-1394, 2026-10-31 : « masque aussi les lots des anciens plans d'un
+ * même chef dans la liste de gauche, et rends-les accessibles depuis le bloc de la conv chef »). Leurs
+ * lots n'ont plus de ligne dans la liste : ce bloc est leur seul chemin. Une ligne par ancien plan, le
+ * plus récent d'abord, un bouton par lot qui a un fil. Mêmes classes que la file : un ancien lot se lit
+ * comme un lot en attente, avec son état et l'animation d'une question.
+ */
+function PlansPrecedents({
+  chef,
+  questions
+}: {
+  chef: string
+  questions?: ReadonlySet<string>
+}): React.JSX.Element | null {
+  const { t } = useTextesChatFilsEtLots()
+  const anciens = useAnciensPlansDuChef(chef)
+  if (anciens.length === 0) return null
+  return (
+    <>
+      {anciens.map((ancien) => (
+        <div key={ancien.id} className="scm-file" data-testid={`scm-ancien-${ancien.id}`}>
+          <span className="scm-file-titre">{t('superConv.anciens', { titre: ancien.titre })}</span>
+          {ancien.lots.map((lot) => {
+            const fil = lot.fil
+            if (!fil) return null
+            return (
+              <span
+                key={lot.rang}
+                className={`scm-piste scm-file-lot scm-etat--${lot.etat}`}
+                data-testid={`scm-ancien-${ancien.id}-${lot.rang}`}
+              >
+                <button
+                  type="button"
+                  className="scm-nom"
+                  title={t('superConv.anciens.ouvrir', { rang: lot.rang, titre: ancien.titre })}
+                  onClick={() => ouvrirFil(fil)}
+                >
+                  <RepereDeLot lot={lot} question={Boolean(questions?.has(fil))} />
+                  {lot.rang} · {lot.titre}
+                </button>
+                <span className="scm-pastille">{t(CLE_ETAT[lot.etat])}</span>
+              </span>
+            )
+          })}
+        </div>
+      ))}
+    </>
+  )
+}
+
+/**
+ * LE BANDEAU DE LA CASE, au-dessus du fil : sur le chef, la frise pleine, une ligne cliquable par lot ;
+ * sur un lot, sa piste et « ← Retour ». Il porte l'horloge, les coûts et le geste « Relancer ».
  */
 export function BandeauSuperConv({
   plan,
   onglet,
   gestesDuPlan = false,
-  onOuvrirLot
+  questions,
+  nonLus,
+  onOuvrirLot,
+  onRetour
 }: {
   plan: PlanDeLots
   onglet: OngletSuperConv
@@ -327,10 +354,17 @@ export function BandeauSuperConv({
    * même geste à l'écran, c'est lequel croire.
    */
   gestesDuPlan?: boolean
+  /** Les fils de lot qui attendent ta réponse (conv-1381). STABLE d'un rendu à l'autre. */
+  questions?: ReadonlySet<string>
+  /** Les lots finis depuis ton dernier passage (conv-1286), par rang. */
+  nonLus?: ReadonlySet<number>
   onOuvrirLot: (rang: number) => void
+  /** « ← Retour », sur un lot : revient au chef. */
+  onRetour: () => void
 }): React.JSX.Element {
   const { langue, t } = useTextesChatFilsEtLots()
   const maintenant = useMaintenant(planEnMouvement(plan))
+  const attendTaReponse = (lot: LotDuPlan): boolean => Boolean(lot.fil && questions?.has(lot.fil))
   const couts = useCoutsDesLots(plan)
   const phrases = usePhrasesDesLots(plan, maintenant)
   const frise = calculerFrise(plan, maintenant)
@@ -359,40 +393,52 @@ export function BandeauSuperConv({
   if (onglet !== 'chef') {
     const lot = plan.lots.find((l) => l.rang === onglet)
     if (!lot) return <></>
-    const cout = coutDuFil(couts, lot.fil)
-    const duree = dureeDuLot(lot, langue)
     return (
       <section
-        className={`scm-bandeau scm-bandeau--lot scm-etat--${lot.etat}`}
+        className="scm-bandeau scm-bandeau--lot"
         aria-label={t('superConv.frise.aria')}
         data-testid="scm-piste-reduite"
       >
-        <div className="scm-piste-ligne">
-          <span className="scm-nom scm-nom--lot">
-            {lot.rang} · {lot.titre}
-          </span>
-          <Voie frise={frise} barre={frise?.barres.get(lot.rang)} attend={lot.etat === 'a-faire'} />
+        <div className="scm-lot-tete">
+          <button
+            type="button"
+            className="scm-retour"
+            data-testid="scm-retour"
+            title={t('superConv.retour.titre', { titre: plan.titre })}
+            onClick={onRetour}
+          >
+            <span aria-hidden="true">←</span> {t('superConv.retour')}
+          </button>
+          <div className="scm-pistes">
+            <div
+              role="list"
+              className={`scm-lignes${relanceAuClic(plan, lot, langue) ? ' scm-lignes--relance' : ''}`}
+            >
+              <LigneDeLot
+                plan={plan}
+                lot={lot}
+                maintenant={maintenant}
+                couts={couts}
+                phrase={phrases[lot.rang]}
+                question={attendTaReponse(lot)}
+                nonLu={false}
+                occupe={geste.enCours}
+                onRelancer={(rang) => agir('relancer', rang)}
+              />
+            </div>
+          </div>
         </div>
-        <div className="scm-piste-detail">
-          <span className="scm-pastille">{t(CLE_ETAT[lot.etat])}</span>
-          <span className="scm-duree" title={duree.titre}>
-            {duree.texte}
-          </span>
-          {lot.apres?.length ? (
-            <span className="scm-duree">
-              {t('superConv.apres', { rangs: lot.apres.join(', ') })}
-            </span>
-          ) : null}
-          <span className="scm-duree">
-            {cout ? summarizeConversationCost(cout).label : INCONNU}
-          </span>
-          {lot.raison ? <span className="scm-phrase">{lot.raison}</span> : null}
-        </div>
+        {geste.erreur ? (
+          <div className="scm-erreur" role="alert">
+            {geste.erreur}
+          </div>
+        ) : null}
       </section>
     )
   }
 
   const faits = plan.lots.filter((l) => l.etat === 'fait').length
+  const relancables = plan.lots.some((l) => relanceAuClic(plan, l, langue))
   return (
     <section
       className={`scm-bandeau scm-bandeau--chef${reduit ? ' is-reduit' : ''}`}
@@ -421,11 +467,6 @@ export function BandeauSuperConv({
           <b>{frise ? (formatDuration(frise.ecoule) ?? INCONNU) : INCONNU}</b>{' '}
           {t('superConv.chiffre.ecoule')}
         </span>
-        {frise?.maintenant !== undefined ? (
-          <span className="scm-maintenant">
-            {t('superConv.maintenant', { heure: heure(maintenant) })}
-          </span>
-        ) : null}
         <span className="scm-actions">
           {gestesDuPlan && planReprenable(plan) ? (
             <button
@@ -463,24 +504,30 @@ export function BandeauSuperConv({
       </div>
       {reduit ? null : (
         <div className="scm-pistes">
-          {frise ? (
-            <Axe frise={frise} />
-          ) : (
-            <div className="scm-vide">{t('superConv.pasEncore')}</div>
-          )}
-          {plan.lots.map((lot) => (
-            <PistePleine
-              key={lot.rang}
-              plan={plan}
-              lot={lot}
-              frise={frise}
-              couts={couts}
-              phrase={phrases[lot.rang]}
-              occupe={geste.enCours}
-              onOuvrir={onOuvrirLot}
-              onRelancer={(rang) => agir('relancer', rang)}
-            />
-          ))}
+          <div
+            role="list"
+            className={`scm-lignes${relancables ? ' scm-lignes--relance' : ''}`}
+            data-testid="scm-lignes"
+          >
+            {[...plan.lots]
+              .sort((a, b) => a.rang - b.rang)
+              .map((lot) => (
+                <LigneDeLot
+                  key={lot.rang}
+                  plan={plan}
+                  lot={lot}
+                  maintenant={maintenant}
+                  couts={couts}
+                  phrase={phrases[lot.rang]}
+                  question={attendTaReponse(lot)}
+                  nonLu={Boolean(nonLus?.has(lot.rang))}
+                  occupe={geste.enCours}
+                  onOuvrir={onOuvrirLot}
+                  onRelancer={(rang) => agir('relancer', rang)}
+                />
+              ))}
+          </div>
+          <PlansPrecedents chef={plan.chef} questions={questions} />
         </div>
       )}
       {geste.erreur ? (
@@ -494,28 +541,27 @@ export function BandeauSuperConv({
 
 /**
  * LA MÊME SUPER CONV DANS LE PANNEAU DE CHAT (conv-1315, 2026-10-30 : « quand je suis sur une conv
- * chef ça doit l'afficher comme la vue mosaïque dans la vue chat »). Mêmes onglets et même frise que
- * la case de mosaïque : la frise sous l'en-tête du chat, les onglets dans la bande des boutons de
- * fenêtre (SuperConvMosaique.css) ; le fil et la saisie restent ceux du panneau.
+ * chef ça doit l'afficher comme la vue mosaïque dans la vue chat »). Même frise que la case de
+ * mosaïque, sous l'en-tête du chat ; le fil et la saisie restent ceux du panneau.
  * Monter une vraie fenêtre de mosaïque à sa place aurait retiré au chef ce qui n'existe que dans le
  * panneau : l'autorisation de production, Ctrl+F, Reprendre, le dépôt de fichiers, « Arrêter ».
  *
- * L'onglet ouvert est le fil actif du chat : ouvrir un lot, c'est ouvrir son fil. `memo` : ChatView
+ * La vue ouverte est le fil actif du chat : ouvrir un lot, c'est ouvrir son fil. `memo` : ChatView
  * se redessine à chaque mot d'un flux, et rien ici ne dépend du texte en cours (voir RELEVE_MS). Les
- * `titres` restent donc la même Map tant qu'aucun titre ne change : une Map neuve à chaque rendu
+ * `questions` restent donc le même Set tant qu'aucune ne change : un Set neuf à chaque rendu
  * annulerait le `memo`.
  */
 export const SuperConvDuChat = memo(function SuperConvDuChat({
   plan,
   onglet,
-  titres
+  questions
 }: {
   plan: PlanDeLots
   onglet: OngletSuperConv
-  /** Voir `OngletsSuperConv` : fil → titre de sa conv. */
-  titres?: ReadonlyMap<string, string>
+  /** Voir `BandeauSuperConv` : les fils de lot qui attendent ta réponse. */
+  questions?: ReadonlySet<string>
 }): React.JSX.Element {
-  // Un lot fini APRÈS l'arrivée sur la super conv et pas encore regardé garde son onglet doré.
+  // Un lot fini APRÈS l'arrivée sur la super conv et pas encore regardé garde sa ligne dorée.
   const [ouvertLe] = useState(() => Date.now())
   const [vusLe, setVusLe] = useState<Readonly<Record<number, number>>>({})
   const choisir = (suivant: OngletSuperConv): void => {
@@ -530,14 +576,14 @@ export const SuperConvDuChat = memo(function SuperConvDuChat({
   }
   return (
     <div className="scm-chat" data-testid="scm-chat">
-      <OngletsSuperConv
+      <BandeauSuperConv
         plan={plan}
-        actif={onglet}
+        onglet={onglet}
+        questions={questions}
         nonLus={lotsNonLus(plan, vusLe, ouvertLe, onglet)}
-        titres={titres}
-        onChoisir={choisir}
+        onOuvrirLot={choisir}
+        onRetour={() => choisir('chef')}
       />
-      <BandeauSuperConv plan={plan} onglet={onglet} onOuvrirLot={choisir} />
     </div>
   )
 })

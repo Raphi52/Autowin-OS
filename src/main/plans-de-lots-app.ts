@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
+import { deposerFichier, relireFichier } from './ecriture-hors-fil'
 import { autowinAppDataRoot } from './app-data'
 import {
   LIBELLE_STATUT,
@@ -81,29 +81,20 @@ export interface DepsPlans {
 }
 
 export type ResultatPlan =
-  { ok: true; plan: PlanDeLots; detail: string; deja?: boolean } | { ok: false; erreur: string }
+  | { ok: true; plan: PlanDeLots; detail: string; deja?: boolean }
+  /** `repli` : ce fil ne peut pas mener de plan, l'écran garde l'enchaînement dans le fil. */
+  | { ok: false; erreur: string; repli?: boolean }
 
 export function cheminFichierPlans(racine = autowinAppDataRoot()): string {
   return join(racine, NOM_FICHIER_PLANS)
 }
 
-function stockageFichier(chemin = cheminFichierPlans()): NonNullable<DepsPlans['stockage']> {
+export function stockageFichier(chemin = cheminFichierPlans()): NonNullable<DepsPlans['stockage']> {
   return {
-    lire: () => {
-      try {
-        return readFileSync(chemin, 'utf8')
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') return ''
-        throw e
-      }
-    },
-    // Écriture par fichier temporaire puis renommage : un arrêt brutal ne laisse pas un JSON coupé.
-    ecrire: (contenu) => {
-      mkdirSync(dirname(chemin), { recursive: true })
-      const tmp = `${chemin}.tmp`
-      writeFileSync(tmp, contenu, 'utf8')
-      renameSync(tmp, chemin)
-    }
+    lire: () => relireFichier(chemin) ?? '',
+    // Par fichier temporaire : un arrêt brutal ne laisse pas un JSON coupé. Hors du fil principal
+    // (conv-1368) : `renameSync` ici a figé la fenêtre 1,2 s en 7 jours.
+    ecrire: (contenu) => deposerFichier(chemin, contenu)
   }
 }
 
@@ -323,6 +314,52 @@ export class CoordinateurDesPlans {
     if (!plan || plan.chef !== chef)
       return { erreur: `plan ${planId} inconnu pour le fil ${chef}.` }
     return plan
+  }
+
+  /**
+   * LE BOUTON DU WORKFLOW INTELLIGENT (conv-1333, 2026-10-30). Une sélection de candidats en plusieurs
+   * lots vivait dans la file en mémoire de la vue : depuis le 22/10, sur 4 sélections et 12 lots
+   * prévus, 4 sont partis et aucun lot 2 n'a jamais quitté cette file (Stop, redémarrage, ou verrou
+   * d'envoi avant conv-1080), sans une trace. Puis, conv-1332 : « tu aurais dû tout paralléliser avec
+   * une super conv ». Le clic dépose donc un plan et le lance : durable, 3 fils à la fois, repris
+   * après un redémarrage, suspendu par le quota, et les lots aux fichiers communs passent l'un après
+   * l'autre.
+   *
+   * Le clic EST le geste de l'utilisateur. Même sélection recliquée : rien ne repart. Autre sélection
+   * pendant un plan qui tourne : ses lots rejoignent ce plan, un chef n'en mène qu'un. Plan suspendu
+   * ou interrompu : refus lisible, l'utilisateur le reprend d'abord. Fil d'un lot : `repli`, l'écran
+   * enchaîne dans ce fil (claude.exe refuse qu'une session lancée par une autre en démarre une).
+   */
+  async lancerSelection(chef: string, brut: unknown): Promise<ResultatPlan> {
+    const vu = this.planDuFil(chef)
+    if (vu?.role === 'enfant' && PLAN_VIVANT.has(vu.plan.statut)) {
+      const refus = this.deposer(chef, brut)
+      return refus.ok ? refus : { ...refus, repli: true }
+    }
+    if (vu?.role === 'chef' && vu.plan.statut === 'en-cours') {
+      const lecture = lirePlanDeLots(brut)
+      if (!lecture.ok) return { ok: false, erreur: lecture.erreur }
+      if (empreintePlan(lecture.plan) === vu.plan.cle)
+        return { ok: true, plan: vu.plan, deja: true, detail: 'cette sélection est déjà lancée.' }
+      const ajout = ajouterLots(vu.plan, lecture.plan.lots)
+      if (!ajout.ok) return { ok: false, erreur: ajout.erreur }
+      this.#poser(ajout.plan)
+      await this.#lancerLesSuivants(ajout.plan.id)
+      const apres = this.#plan(ajout.plan.id) ?? ajout.plan
+      return { ok: true, plan: apres, detail: bilanDuPlan(apres).texte }
+    }
+    // Déjà menée à son terme : le panneau a pu remonter sans son état, recliquer ne repaie pas ces runs.
+    const lue = lirePlanDeLots(brut)
+    const finie = lue.ok
+      ? this.#plans.find(
+          (p) => p.chef === chef && p.statut === 'termine' && p.cle === empreintePlan(lue.plan)
+        )
+      : undefined
+    if (finie)
+      return { ok: true, plan: finie, deja: true, detail: 'cette sélection est déjà traitée.' }
+    const depot = this.deposer(chef, brut)
+    if (!depot.ok || depot.plan.statut !== 'attente-accord') return depot
+    return this.accepter(chef, depot.plan.id)
   }
 
   /** LE clic de l'utilisateur. Un second clic sur un plan déjà lancé ne relance rien. */
