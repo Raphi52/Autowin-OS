@@ -16,11 +16,52 @@ import { Worker } from 'node:worker_threads'
  * principal n'échange que des messages. Le code du fil tient dans une chaîne, comme
  * `lancement-hors-fil.ts` : aucun fichier de plus à construire ni à empaqueter.
  */
+/*
+ * UN PROCESSUS SORTI EST FINI, MÊME SI SON TUYAU RESTE OUVERT AILLEURS (kaizen conv-1432, 2026-11-02).
+ *
+ * `execFile` ne rend la main qu'à la FIN DE FICHIER de stdout/stderr. Or ce fil crée ses processus
+ * en même temps que le fil principal crée les siens, et sous Windows CreateProcess hérite de TOUTES
+ * les poignées héritables du processus : un enfant lancé au même instant par l'autre fil reçoit une
+ * copie de l'extrémité d'écriture de notre tuyau, et la fin de fichier n'arrive qu'à SA sortie.
+ * Mesuré : un `git status` du 2026-11-02 08:02:41 UTC tenu 52 min par le CLI Claude de conv-1433,
+ * lancé à la même seconde ; derrière lui, toutes les photos git du dossier, et quatre tours coupés
+ * par le veilleur d'inactivité sans que le modèle ait démarré (conv-1429, conv-1432).
+ *
+ * La sortie du processus est le vrai signal de fin. Après elle, on laisse le tuyau se vider tant que
+ * des octets arrivent ; au bout de FIN_SANS_EOF_MS sans un octet, on ferme nos extrémités, ce qui
+ * déclenche le rappel d'execFile avec tout ce qui a été lu. Le contrôle passe par setImmediate :
+ * après un fil figé, le minuteur expire AVANT la lecture des octets en attente ; l'immédiat, lui,
+ * vient après cette lecture, donc on ne coupe jamais une sortie déjà écrite.
+ */
+const FIN_SANS_EOF_MS = 1500
+
 const CODE_DU_FIL = `const { execFile } = require('node:child_process')
 const { parentPort } = require('node:worker_threads')
+const FIN_SANS_EOF_MS = ${FIN_SANS_EOF_MS}
+function finirApresSortie(enfant) {
+  let dernierOctet = Date.now()
+  const noter = () => { dernierOctet = Date.now() }
+  if (enfant.stdout) enfant.stdout.on('data', noter)
+  if (enfant.stderr) enfant.stderr.on('data', noter)
+  enfant.once('exit', () => {
+    let minuteur
+    const fermer = () => {
+      if (enfant.stdout) enfant.stdout.destroy()
+      if (enfant.stderr) enfant.stderr.destroy()
+    }
+    const verifier = () => setImmediate(() => {
+      const calme = Date.now() - dernierOctet
+      if (calme >= FIN_SANS_EOF_MS) fermer()
+      else minuteur = setTimeout(verifier, FIN_SANS_EOF_MS - calme)
+    })
+    noter()
+    minuteur = setTimeout(verifier, FIN_SANS_EOF_MS)
+    enfant.once('close', () => clearTimeout(minuteur))
+  })
+}
 parentPort.on('message', ({ id, fichier, args, options }) => {
   try {
-    execFile(fichier, args, options, (erreur, stdout, stderr) => {
+    const enfant = execFile(fichier, args, options, (erreur, stdout, stderr) => {
       parentPort.postMessage({
         id,
         stdout,
@@ -30,6 +71,7 @@ parentPort.on('message', ({ id, fichier, args, options }) => {
           : undefined
       })
     })
+    finirApresSortie(enfant)
   } catch (erreur) {
     parentPort.postMessage({ id, stdout: '', stderr: '', erreur: { message: String(erreur && erreur.message || erreur) } })
   }
