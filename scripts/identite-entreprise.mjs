@@ -204,13 +204,24 @@ export function termesDesProfils(racine = RACINE_DEPOT) {
 }
 
 /**
+ * Une image intégrée (`data:<type>;base64,<octets>`) est un binaire écrit en lettres : elle n'est pas
+ * lue, comme une image en fichier ne l'est pas. Mesure du 2026-11-02 (conv-1429) : les images WebP de
+ * `src/renderer/src/assets/quartier/donnees.json` portaient par hasard les quatre lettres d'un terme.
+ * Seule la charge base64 disparaît : le texte autour, et un `data:` sans `;base64,`, restent lus.
+ */
+const IMAGE_INTEGREE = /(data:[\w.+-]+\/[\w.+-]+;base64,)[A-Za-z0-9+/=]+/g
+function sansImagesIntegrees(texte) {
+  return texte.replace(IMAGE_INTEGREE, '$1')
+}
+
+/**
  * Le texte d'un fichier, ou `undefined` s'il est binaire. Un octet nul signale un binaire, sauf en
  * UTF-16LE (scripts PowerShell : marque FF FE, ou un octet nul sur deux) — une image peut porter
  * trois lettres par hasard (mesure : `docs/screenshots/chat.png`), un script UTF-16 non.
  */
 export function texteDuFichier(octets) {
   const debut = octets.subarray(0, 8192)
-  if (!debut.includes(0)) return octets.toString('utf8')
+  if (!debut.includes(0)) return sansImagesIntegrees(octets.toString('utf8'))
   if (debut[0] === 0xff && debut[1] === 0xfe) return octets.toString('utf16le')
   let nulsImpairs = 0
   let nulsPairs = 0
