@@ -201,3 +201,22 @@ describe('spawn CLI — regime de contexte', () => {
     expect(source).not.toContain("'--bare'")
   })
 })
+
+describe('mod propre au run (conv-419)', () => {
+  it('ajoute <copie>/.autowin/mod-run seulement pour une copie isolée qui porte plugin.json', async () => {
+    const { argumentsModDuRun } = await import('./claude')
+    const { join } = await import('node:path')
+    const oui = () => true
+    const dossier = join('D:/copie', '.autowin', 'mod-run')
+    expect(argumentsModDuRun({ cwd: 'D:/copie', causallyIsolated: true }, oui)).toEqual(['--plugin-dir', dossier])
+    expect(argumentsModDuRun({ cwd: 'D:/copie', causallyIsolated: false }, oui)).toEqual([])
+    expect(argumentsModDuRun({ cwd: 'D:/copie', causallyIsolated: true }, () => false)).toEqual([])
+    expect(argumentsModDuRun(undefined, oui)).toEqual([])
+  })
+
+  it('est branché dans les arguments du CLI', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(new URL('./claude.ts', import.meta.url), 'utf8')
+    expect(source).toMatch(/args\.push\(\.\.\.argumentsModDuRun\(execution\)\)/)
+  })
+})

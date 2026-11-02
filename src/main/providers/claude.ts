@@ -972,6 +972,27 @@ export function argumentsModsAutowin(
 }
 
 /**
+ * MOD PROPRE AU RUN (conv-419, 2026-11-02) — `<copie du run>/.autowin/mod-run`.
+ *
+ * `mods/autowin` est cherché depuis `__dirname`, donc toujours dans le dépôt PRINCIPAL : un mod
+ * écrit par un run dans sa copie de travail n'était jamais relu. Ce second dossier l'est, aux
+ * étapes SUIVANTES du même run (le CLI relit `--plugin-dir` à chaque appel). Seulement quand le
+ * dossier appartient au run seul (`causallyIsolated`) : un mod a tous les droits du CLI, il ne doit
+ * jamais fuir vers un autre fil. Sa promotion vers `mods/autowin` passe par le contrôle
+ * `creerPromotionModHandler` (hooks/default-gate-hooks.ts).
+ */
+export const DOSSIER_MOD_RUN = join('.autowin', 'mod-run')
+
+export function argumentsModDuRun(
+  execution: { cwd: string; causallyIsolated?: boolean } | undefined,
+  existe: (chemin: string) => boolean = existsSync
+): string[] {
+  if (!execution?.causallyIsolated) return []
+  const dossier = join(execution.cwd, DOSSIER_MOD_RUN)
+  return existe(join(dossier, '.claude-plugin', 'plugin.json')) ? ['--plugin-dir', dossier] : []
+}
+
+/**
  * Les arguments MCP d'un appel — la SEULE decision de ce fichier sur les outils d'un noeud skill.
  *
  * Extraite en fonction PURE parce que la garantie qu'elle porte est une ABSENCE : « une phase du
@@ -1573,6 +1594,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       process.cwd()
     ])
     if (modAutowin) args.push('--plugin-dir', modAutowin)
+    // Mod écrit par le run lui-même, relu par ses étapes suivantes (voir `argumentsModDuRun`).
+    args.push(...argumentsModDuRun(execution))
     let mcpConfigDir: { chemin: string; nettoyer: () => Promise<void> } | undefined
     if (argsMcp.mcp.length > 0) {
       /**

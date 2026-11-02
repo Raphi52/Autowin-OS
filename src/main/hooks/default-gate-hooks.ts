@@ -486,6 +486,44 @@ export function creerPreuveMouvementHandler(
   }
 }
 
+/**
+ * PROMOTION D'UN MOD (conv-419, 2026-11-02). Un run qui modifie `mods/autowin/**` promeut une
+ * modification du harnais partagé : chaque agent la chargera. Pratique reprise d'arXiv 2608.10178 —
+ * la modif annonce ce qu'elle corrige et ce qu'elle risque de casser, et n'est retenue que sans
+ * régression. Refus tant que (a) `.autowin/mod-run/PROMOTION.md` ne porte pas les lignes
+ * `Corrige:` et `Risque:`, et (b) aucune preuve verte ne rejoue `mod-autowin.test`. Le commit
+ * reste à l'humain : ce contrôle ne publie rien.
+ */
+export function creerPromotionModHandler(
+  lire: (chemin: string) => string | undefined = (c) => {
+    try {
+      return readFileSync(c, 'utf8')
+    } catch {
+      return undefined
+    }
+  }
+): HookHandler {
+  return (ctx: HookContext): HookResult => {
+    const mutes = Object.keys(ctx.editsByFile ?? fichiersEditesParLeRun(ctx.evidence))
+    const promus = mutes.filter((f) => /(^|\/)mods\/autowin\//.test(f.replace(/\\/g, '/')))
+    if (!promus.length || !ctx.cwd) return { block: false }
+    const manque: string[] = []
+    const annonce = lire(resolve(ctx.cwd, '.autowin', 'mod-run', 'PROMOTION.md')) ?? ''
+    if (!/^\s*Corrige\s*:\s*\S/im.test(annonce) || !/^\s*Risque\s*:\s*\S/im.test(annonce)) {
+      manque.push('.autowin/mod-run/PROMOTION.md avec les lignes « Corrige: » et « Risque: »')
+    }
+    if (!(ctx.evidence ?? []).some((e) => e.ok && /mod-autowin\.test/.test(e.command ?? ''))) {
+      manque.push('une preuve verte de `npx vitest run src/shared/mod-autowin.test.ts`')
+    }
+    return manque.length
+      ? {
+          block: true,
+          reason: `hook promotion-mod: ${promus.join(', ')} modifie le mod partagé sans ${manque.join(' ni ')}`
+        }
+      : { block: false }
+  }
+}
+
 /** Cap du re-jeu de vérification (comme le stop-gate CC) : au-delà → kill → bloque. */
 const VERIFY_TIMEOUT_MS = 120_000
 
@@ -520,5 +558,6 @@ export function createDefaultHookBus(verifyRunner: VerifyRunner = defaultVerifyR
     .register('pre-green', appuiSourcesNeuvesHandler)
     .register('pre-green', creerPreuveVisuelleHandler())
     .register('pre-green', creerPreuveMouvementHandler())
+    .register('pre-green', creerPromotionModHandler())
     .register('pre-green', createVerifyReplayHook(verifyRunner))
 }

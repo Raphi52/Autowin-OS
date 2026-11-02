@@ -34,6 +34,7 @@ un jour.
 Choisis la forme la moins chère qui satisfasse le contrat, dans cet ordre :
 - une commande existante avec d'autres arguments (aucun nouvel outil du tout),
 - un script dans le dépôt, appelé par le lanceur autorisé,
+- un hook de mod du CLI (`tool.call`, `prompt.attachment`, `tool.describe`), quand le manque se comble au moment où le modèle appelle ou lit un outil : écris-le d'abord dans `<copie du run>/.autowin/mod-run/` (relu par les étapes suivantes du même run), puis promeus-le vers `mods/autowin/` avec `.autowin/mod-run/PROMOTION.md` (`Corrige:` / `Risque:`) et `src/shared/mod-autowin.test.ts` vert — le contrôle final refuse sinon,
 - une vraie capacité câblée dans le bus de commandes de l'app.
 
 ### 2. CONSTRUIRE — rouge avant vert
