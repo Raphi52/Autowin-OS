@@ -91,6 +91,12 @@ export interface ObjetCoupe extends ObjetDonnee {
   lueur?: HTMLCanvasElement
 }
 
+interface Sprite {
+  m: string
+  w: number
+  h: number
+}
+
 interface CalqueDonnee {
   x: number
   y: number
@@ -115,6 +121,10 @@ export interface DonneesQuartier extends DonneesMarche {
     gong: { disque: [number, number, number] }
     etoiles: [number, number, number][]
     nuages: { x: number; y: number; w: number; h: number; m: string }[]
+    /** Les fenêtres des tours, relevées sur la peinture : x, y, largeur, hauteur. */
+    fenetres: [number, number, number, number][]
+    /** Les petits objets qui bougent, peints comme le reste de la maquette. */
+    sprites: Record<'ballon' | 'bateau1' | 'bateau2' | 'bateau3' | 'tram', Sprite>
   }
 }
 

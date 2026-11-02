@@ -4,6 +4,11 @@
  *
  * Rien n'est repeint : ce sont des morceaux de la peinture qui glissent, ou de petites touches
  * dessinées par-dessus. Les teintes sont fixes : ce décor est une maquette, il ne suit pas le thème.
+ *
+ * LA RÈGLE DE CE FICHIER (conv-1424, « les animations de décor sont éclatées »). La scène est une photo
+ * de maquette : une forme plate posée dessus se voit tout de suite. Ce qui avait une matière (ballon,
+ * bateaux, tram) est donc une petite peinture dans `vie.sprites`, et ce qui est de la lumière (phare,
+ * anneau, reflets, fenêtres) se fond : ni bord dur, ni allumage d'un coup.
  */
 import type { DonneesQuartier, ObjetCoupe } from './quartier-scene'
 
@@ -52,6 +57,56 @@ const rondFlou = (r: number, g: number, b: number): HTMLCanvasElement => {
   return k
 }
 
+/** Le ton sombre d'une teinte de papillon : le bord de ses ailes. */
+const assombrir = (c: string): string =>
+  `#${[1, 3, 5]
+    .map((i) =>
+      Math.round(parseInt(c.slice(i, i + 2), 16) * 0.55)
+        .toString(16)
+        .padStart(2, '0')
+    )
+    .join('')}`
+
+/**
+ * De combien glisse une ligne d'eau, en pixels de la peinture.
+ *
+ * Deux houles longues, jamais une vague par ligne : un écart franc d'une ligne à la suivante découpe
+ * le reflet en peigne et dentelle les berges (conv-1424). `k` va de 0 au fond à 1 sur la rive proche.
+ */
+export function glissementEau(yPeinture: number, temps: number, k: number): number {
+  return (
+    Math.sin(yPeinture * 0.22 + temps * 1.1) * (0.16 + k * 0.42) +
+    Math.sin(yPeinture * 0.09 - temps * 0.6) * (0.12 + k * 0.36)
+  )
+}
+
+/** Un bateau suit sa voie : il ralentit au bout, vire en montrant sa largeur, et repart. */
+export interface VoieBateau {
+  x: number
+  /** -1 ou 1 : le sens voulu. */
+  sens: number
+  /** De -1 à 1 : le sens réel. À 0, on voit le bateau par l'étrave. */
+  cap: number
+  v: number
+  min: number
+  max: number
+}
+
+export function avancerBateau(b: VoieBateau, dt: number): void {
+  if (b.x >= b.max) b.sens = -1
+  if (b.x <= b.min) b.sens = 1
+  b.cap += Math.max(-dt * 0.5, Math.min(dt * 0.5, b.sens - b.cap))
+  b.x += b.v * b.cap * dt
+}
+
+/** Le tram s'arrête à chaque bout du pont : il repart en douceur. Rend sa place, de 0 à 1. */
+export function placeDuTram(t: number): number {
+  const u = t % 2
+  const aller = u < 1 ? u : 2 - u
+  const pause = 0.08
+  return lisse(Math.max(0, Math.min(1, (aller - pause) / (1 - 2 * pause))))
+}
+
 /** L'instant où le maillet touche le gong, après le début du geste. */
 const IMPACT_S = 0.34
 const RECUL = 0.5
@@ -90,19 +145,26 @@ export async function creerVie(
   const rondS = rondFlou(214, 186, 140)
   const rondO = rondFlou(255, 196, 70)
   const rondR = rondFlou(235, 62, 48)
-  const faisceau = toile(256, 64)
+  const rondT = rondFlou(84, 214, 222)
+  const ombreP = rondFlou(46, 24, 10)
+  // Le faisceau du phare : une lumière qui s'étale et s'éteint, jamais un triangle à bords nets.
+  const faisceau = toile(256, 96)
   {
     const c2 = contexte(faisceau)
-    const d = c2.createLinearGradient(0, 0, 256, 0)
-    d.addColorStop(0, 'rgba(255,244,190,.9)') // couleur-fixe: faisceau du phare, peint dans la maquette
-    d.addColorStop(1, 'rgba(255,244,190,0)') // couleur-fixe: faisceau du phare, peint dans la maquette
-    c2.fillStyle = d
-    c2.beginPath()
-    c2.moveTo(0, 32)
-    c2.lineTo(256, 0)
-    c2.lineTo(256, 64)
-    c2.closePath()
-    c2.fill()
+    const d = c2.createImageData(256, 96)
+    for (let j = 0; j < 96; j++)
+      for (let i = 0; i < 256; i++) {
+        const u = i / 255
+        const v = (j - 47.5) / 48
+        const large = 0.1 + u * 0.8
+        const a = (1 - u) ** 1.7 * Math.exp(-((v / large) ** 2) * 2.4) * Math.min(1, u * 14)
+        const o = (j * 256 + i) * 4
+        d.data[o] = 255
+        d.data[o + 1] = 244
+        d.data[o + 2] = 196
+        d.data[o + 3] = Math.round(a * 255)
+      }
+    c2.putImageData(d, 0, 0)
   }
   const CAL: Record<string, Calque> = {}
   await Promise.all(
@@ -113,10 +175,11 @@ export async function creerVie(
   for (const o of OB) if (o.n && CAL[o.n]) o.cal = CAL[o.n]
   const e = VI.eau
   const EAUm = await image(e.m)
-  const EAUc = toile(e.w, e.h)
+  // À la taille de la peinture : à moitié moins, toute l'eau du fond sortait floue (conv-1424).
+  const EAUc = toile(e.w * S, e.h * S)
   const EAUg = contexte(EAUc)
-  const EAUs = toile(e.w + 6, e.h)
-  contexte(EAUs).drawImage(F, 0, e.y * S, (e.w + 6) * S, e.h * S, 0, 0, e.w + 6, e.h)
+  const EAUs = toile(e.w * S, e.h * S)
+  contexte(EAUs).drawImage(F, -e.x * S, -e.y * S)
   const NUA = await Promise.all(
     VI.nuages.map(async (o, i) => ({
       ...o,
@@ -125,6 +188,11 @@ export async function creerVie(
       dx: [420, -120, 760][i],
       y: [34, 118, 8][i]
     }))
+  )
+  const SPR = Object.fromEntries(
+    await Promise.all(
+      Object.entries(VI.sprites).map(async ([n, o]) => [n, { ...o, i: await image(o.m) }] as const)
+    )
   )
   const bonsai = OB.filter((o) => o.cle === 'worktree').map((o) => ({ ...o, A: 1.4, f: 1.1, p: 2 }))
   FE.push(...bonsai)
@@ -138,12 +206,13 @@ export async function creerVie(
   let impactFait = true
   let sonner: (() => void) | null = null
   const GONG = VI.gong
+  // Beaucoup de petites bouffées légères : quelques grosses se voyaient une par une.
   const SRC = [
-    { x: 305, y: 706, r: 11, dt: 0.32, v: 15, a: 0.36, t: 0, mach: false },
-    { x: 460, y: 652, r: 8, dt: 0.55, v: 11, a: 0.26, t: 0.2, mach: false },
-    { x: 535, y: 666, r: 10, dt: 0.36, v: 14, a: 0.36, t: 0.4, mach: false },
-    { x: 885, y: 180, r: 3, dt: 0.4, v: 10, a: 0.4, t: 0.1, mach: false },
-    { x: 483, y: 590, r: 4, dt: 0.9, v: 16, a: 0.32, t: 0.3, mach: true }
+    { x: 305, y: 706, r: 10, dt: 0.2, v: 15, a: 0.2, t: 0, mach: false },
+    { x: 460, y: 652, r: 7, dt: 0.34, v: 11, a: 0.16, t: 0.2, mach: false },
+    { x: 535, y: 666, r: 9, dt: 0.22, v: 14, a: 0.2, t: 0.4, mach: false },
+    { x: 885, y: 180, r: 3, dt: 0.26, v: 10, a: 0.24, t: 0.1, mach: false },
+    { x: 483, y: 590, r: 4, dt: 0.6, v: 16, a: 0.2, t: 0.3, mach: true }
   ]
   const FUM: {
     x: number
@@ -158,13 +227,6 @@ export async function creerVie(
   }[] = []
   const POU: { x: number; y: number; r: number; age: number; vie: number }[] = []
   const ONDES: { age: number }[] = []
-  const PET = Array.from({ length: 44 }, () => ({
-    x: rnd(0, 900),
-    y: rnd(320, 720),
-    v: rnd(10, 22),
-    c: rnd(0, 6),
-    s: rnd(1.6, 2.6)
-  }))
   const NIDS = [
     [55, 355],
     [120, 350],
@@ -175,6 +237,39 @@ export async function creerVie(
     [530, 335],
     [20, 505]
   ]
+  /**
+   * Un pétale naît et se fane : il ne traverse plus toute l'image à la même taille. Ceux des cerisiers
+   * lointains tombent vers l'eau, tout petits ; une poignée, plus proches, passe devant le décor.
+   */
+  const semer = (p: { x: number; y: number; loin: boolean; age: number; vie: number }): void => {
+    if (p.loin) {
+      const n = NIDS[Math.floor(rnd(0, NIDS.length))]
+      p.x = n[0] + rnd(-16, 16)
+      p.y = n[1] + rnd(-12, 6)
+      p.vie = rnd(5, 11)
+    } else {
+      p.x = rnd(-30, 420)
+      p.y = rnd(460, 640)
+      p.vie = rnd(11, 20)
+    }
+    p.age = 0
+  }
+  const PET = Array.from({ length: 34 }, (_, i) => {
+    const loin = i < 24
+    const p = {
+      x: 0,
+      y: 0,
+      v: rnd(10, 22) * (loin ? 0.35 : 1),
+      c: rnd(0, 6),
+      s: loin ? rnd(0.8, 1.2) : rnd(1.7, 2.4),
+      loin,
+      age: 0,
+      vie: 1
+    }
+    semer(p)
+    p.age = rnd(0, p.vie)
+    return p
+  })
   const OIS = Array.from({ length: 11 }, (_, i) => {
     const g = i < 5 ? 0 : i < 8 ? 1 : 2
     return {
@@ -185,44 +280,50 @@ export async function creerVie(
       s: rnd(3.2, 4.6)
     }
   })
+  // Chaque voie reste dans l'eau libre : hors de là, la voile passerait devant le hangar ou la bibliothèque.
   const BAT = [
-    { x: 120, y: 386, v: 6, c: '#c8553d' }, // couleur-fixe: bateau de la maquette
-    { x: 470, y: 372, v: -4.2, c: '#e8b23e' }, // couleur-fixe: bateau de la maquette
-    { x: 300, y: 442, v: 7.5, c: '#3f6fb5' } // couleur-fixe: bateau de la maquette
-  ]
-  const ECL = Array.from({ length: 70 }, () => ({
+    { x: 420, y: 372, v: 3.6, min: 300, max: 630, l: 14, s: 'bateau2' },
+    { x: 240, y: 388, v: 5, min: 175, max: 465, l: 18, s: 'bateau1' },
+    { x: 380, y: 444, v: 3, min: 352, max: 428, l: 26, s: 'bateau3' }
+  ].map((b) => ({
+    ...b,
+    sens: 1,
+    cap: 1,
+    i: SPR[b.s].i,
+    h: (b.l * SPR[b.s].h) / SPR[b.s].w
+  }))
+  const ECL = Array.from({ length: 46 }, () => ({
     x: rnd(0, e.w),
     y: rnd(0, e.h),
-    f: rnd(0.8, 2.4),
-    p: rnd(0, 6)
+    f: rnd(0.35, 1.1),
+    p: rnd(0, 6),
+    l: rnd(4, 11)
   }))
-  const FEN = Array.from({ length: 34 }, () => {
-    const b = [
-      [56, 225, 44, 120],
-      [147, 230, 38, 110],
-      [232, 232, 42, 112],
-      [316, 225, 38, 90],
-      [472, 250, 40, 84]
-    ][Math.floor(rnd(0, 5))]
+  // De vraies fenêtres, relevées sur la peinture : allumées au hasard, elles tombaient à côté.
+  const FEN = VI.fenetres.map(([x, y, w, h]) => ({
+    x,
+    y,
+    w,
+    h,
+    t: rnd(0, 9),
+    voulu: Math.random() < 0.3 ? 1 : 0,
+    a: 0
+  }))
+  const PAP = Array.from({ length: 6 }, (_, i) => {
+    const c = ['#f2a23a', '#f0cf4e', '#e86a92', '#7fb7e8'][i % 4] // couleur-fixe: papillons de la maquette
     return {
-      x: b[0] + Math.floor(rnd(0, b[2] / 5)) * 5,
-      y: b[1] + Math.floor(rnd(0, b[3] / 7)) * 7,
-      t: rnd(0, 6),
-      on: Math.random() < 0.5
+      cx: rnd(260, 880),
+      cy: rnd(640, 700),
+      r: rnd(14, 34),
+      p: rnd(0, 6),
+      v: rnd(0.28, 0.6),
+      c,
+      bord: assombrir(c)
     }
   })
-  const PAP = Array.from({ length: 7 }, (_, i) => ({
-    cx: rnd(260, 880),
-    cy: rnd(640, 700),
-    r: rnd(12, 34),
-    p: rnd(0, 6),
-    v: rnd(0.5, 1.1),
-    c: ['#f2a23a', '#f6f1e4', '#e86a92', '#7fb7e8'][i % 4] // couleur-fixe: papillons de la maquette
-  }))
   const BAL = { x: 690, y: 92, v: -3.4 }
   const TRAM = {
     t: 0.2,
-    s: 1,
     ps: [
       [556, 342],
       [600, 339],
@@ -232,58 +333,87 @@ export async function creerVie(
     ]
   }
 
-  const dessinerBateau = (g: Ctx, b: (typeof BAT)[number]): void => {
-    const k = (b.y - 340) / 60 + 0.7
+  type Bateau = (typeof BAT)[number]
+  /** Le bateau vu de biais quand il vire : jamais aplati à rien. */
+  const largeur = (b: Bateau): number => b.l * (b.cap < 0 ? -1 : 1) * Math.max(0.3, Math.abs(b.cap))
+
+  /** Dans l'eau : le sillage et le reflet, que le masque coupe aux berges. */
+  const dessinerSillage = (g: Ctx, b: Bateau): void => {
+    const l = largeur(b)
     g.save()
-    g.translate(b.x, b.y - e.y + Math.sin(temps * 1.4 + b.x * 0.1) * 0.5)
-    g.scale(k * Math.sign(b.v), k)
-    g.fillStyle = 'rgba(255,255,255,.35)' // couleur-fixe: sillage sur l'eau
-    g.fillRect(-16, 1.6, 9, 0.9)
-    g.fillStyle = b.c
-    g.beginPath()
-    g.moveTo(-7, -1)
-    g.lineTo(7.5, -1)
-    g.lineTo(5, 2)
-    g.lineTo(-5, 2)
-    g.closePath()
-    g.fill()
-    g.fillStyle = '#fbf3e1' // couleur-fixe: voile
-    g.beginPath()
-    g.moveTo(0, -10)
-    g.lineTo(0, -1.6)
-    g.lineTo(6, -1.6)
-    g.closePath()
-    g.fill()
+    g.scale(S, S)
+    g.translate(b.x - e.x, b.y - e.y)
+    g.globalAlpha = 0.3 * Math.abs(b.cap)
+    g.drawImage(rond, -l * 1.6, -0.6, l * 1.5, 2.4)
+    g.globalAlpha = 0.3
+    g.scale(1, -0.62)
+    g.drawImage(b.i, -l / 2, -b.h, l, b.h)
     g.restore()
   }
 
-  const ballon = (x: Ctx): void => {
-    const bx = BAL.x
-    const by = BAL.y + Math.sin(temps * 0.4) * 5
-    const ba = ['#e4572e', '#f3c340', '#2f7ec2'] // couleur-fixe: montgolfière de la maquette
+  /** Sur l'eau : le bateau lui-même, qui dépasse la surface sans être coupé par le masque. */
+  const dessinerBateau = (x: Ctx, b: Bateau): void => {
+    const l = largeur(b)
     x.save()
-    x.translate(bx, by)
-    x.beginPath()
-    x.moveTo(-3, 11)
-    x.bezierCurveTo(-17, -2, -12, -18, 0, -18)
-    x.bezierCurveTo(12, -18, 17, -2, 3, 11)
-    x.closePath()
-    x.clip()
-    for (let k = 0; k < 5; k++) {
-      x.fillStyle = ba[k % 3]
-      x.fillRect(-16 + k * 6.4, -20, 6.4, 34)
-    }
+    x.translate(b.x, b.y + Math.sin(temps * 1.2 + b.y) * 0.25)
+    x.rotate(Math.sin(temps * 0.9 + b.y) * 0.022)
+    x.drawImage(b.i, -l / 2, -b.h * 0.94, l, b.h)
     x.restore()
-    x.strokeStyle = 'rgba(60,44,30,.8)' // couleur-fixe: cordes de la nacelle
-    x.lineWidth = 0.7
+  }
+
+  const ballon = (x: Ctx): void => {
+    const sp = SPR.ballon
+    const h = 44
+    const l = (h * sp.w) / sp.h
+    x.save()
+    x.translate(BAL.x, BAL.y + Math.sin(temps * 0.4) * 5)
+    x.rotate(Math.sin(temps * 0.27) * 0.02)
+    x.drawImage(sp.i, -l / 2, -h / 2, l, h)
+    x.restore()
+  }
+
+  const papillon = (x: Ctx, b: (typeof PAP)[number]): void => {
+    const t0 = temps * b.v + b.p
+    const px = b.cx + Math.sin(t0) * b.r + Math.sin(t0 * 2.7) * 5
+    const py = b.cy + Math.cos(t0 * 1.3) * b.r * 0.35 + Math.sin(t0 * 3.1) * 3
+    // Il plane par moments : les ailes restent ouvertes au lieu de battre sans arrêt.
+    const plane = Math.max(0, Math.sin(t0 * 2.1))
+    const bat = Math.abs(Math.sin(temps * 9 + b.p))
+    const ouvert = 0.3 + 0.7 * (plane > 0.6 ? 0.9 : bat)
+    x.globalAlpha = 0.2
+    x.drawImage(ombreP, px - 4, py + 8, 8, 2.6)
+    x.globalAlpha = 1
+    x.save()
+    x.translate(px, py)
+    x.rotate(Math.sin(t0 * 1.1) * 0.45)
+    for (const cote of [-1, 1]) {
+      x.save()
+      x.scale(cote * ouvert, 1)
+      x.fillStyle = b.bord
+      x.beginPath()
+      x.moveTo(0, -0.4)
+      x.bezierCurveTo(1.1, -4, 5.4, -4.2, 4.8, -0.9)
+      x.bezierCurveTo(4.4, 0.5, 1.6, 0.4, 0, 0.2)
+      x.moveTo(0, 0)
+      x.bezierCurveTo(1.6, 0.3, 3.8, 0.5, 3.2, 2.6)
+      x.bezierCurveTo(2.6, 3.8, 0.8, 2.6, 0, 1)
+      x.fill()
+      x.fillStyle = b.c
+      x.beginPath()
+      x.moveTo(0.5, -0.5)
+      x.bezierCurveTo(1.4, -3.2, 4.7, -3.4, 4.2, -1)
+      x.bezierCurveTo(3.8, 0, 1.6, 0, 0.5, -0.1)
+      x.moveTo(0.5, 0.3)
+      x.bezierCurveTo(1.6, 0.5, 3.2, 0.6, 2.7, 2.2)
+      x.bezierCurveTo(2.2, 3.1, 0.9, 2.2, 0.5, 1)
+      x.fill()
+      x.restore()
+    }
+    x.fillStyle = '#3a2a1e' // couleur-fixe: corps d'un papillon
     x.beginPath()
-    x.moveTo(bx - 3, by + 11)
-    x.lineTo(bx - 2, by + 16)
-    x.moveTo(bx + 3, by + 11)
-    x.lineTo(bx + 2, by + 16)
-    x.stroke()
-    x.fillStyle = '#7a5230' // couleur-fixe: nacelle
-    x.fillRect(bx - 2.5, by + 16, 5, 3.6)
+    x.ellipse(0, 0.4, 0.42, 1.9, 0, 0, 6.3)
+    x.fill()
+    x.restore()
   }
 
   const dessinerMaillet = (x: Ctx): void => {
@@ -364,41 +494,30 @@ export async function creerVie(
         }
       }
       for (const p of PET) {
-        p.x += (p.v * gust + 4) * dt
-        p.y += (9 + Math.sin(temps * 1.3 + p.c) * 9) * dt
+        p.age += dt
+        if (p.age > p.vie) semer(p)
+        p.x += (p.v * gust + (p.loin ? 1.5 : 4)) * dt
+        p.y += p.loin
+          ? (4 + Math.sin(temps * 1.3 + p.c) * 3) * dt
+          : (8 + Math.sin(temps * 1.3 + p.c) * 8) * dt
         p.c += dt
-        if (p.x > 1000 || p.y > 760) {
-          const n = NIDS[Math.floor(rnd(0, NIDS.length))]
-          p.x = n[0] + rnd(-14, 14)
-          p.y = n[1] + rnd(-8, 8)
-        }
       }
       for (const b of OIS) {
         b.x += b.v * dt
         if (b.x > 1400) b.x = -60
         if (b.x < -60) b.x = 1400
       }
-      for (const b of BAT) {
-        b.x += b.v * dt
-        if (b.x > 760) b.v = -Math.abs(b.v)
-        if (b.x < 20) b.v = Math.abs(b.v)
-      }
+      for (const b of BAT) avancerBateau(b, dt)
       for (const f of FEN) {
         f.t -= dt
         if (f.t <= 0) {
-          f.t = rnd(2, 9)
-          f.on = !f.on
+          f.t = rnd(4, 14)
+          f.voulu = Math.random() < 0.3 ? 1 : 0
         }
+        // Une lampe monte et descend : un allumage d'un coup se lisait comme un pixel qui clignote.
+        f.a += (f.voulu - f.a) * Math.min(1, dt * 1.2)
       }
-      TRAM.t += TRAM.s * dt * 0.035
-      if (TRAM.t > 1) {
-        TRAM.t = 1
-        TRAM.s = -1
-      }
-      if (TRAM.t < 0) {
-        TRAM.t = 0
-        TRAM.s = 1
-      }
+      TRAM.t = (TRAM.t + dt * 0.03) % 2
       BAL.x += BAL.v * dt
       if (BAL.x < -40) BAL.x = 1380
       for (const n of NUA) {
@@ -436,31 +555,31 @@ export async function creerVie(
     },
     eau(x) {
       const g = EAUg
+      const l = e.w * S
       g.globalCompositeOperation = 'source-over'
       g.globalAlpha = 1
-      g.clearRect(0, 0, e.w, e.h)
-      // L'eau bouge pour de vrai : chaque ligne glisse un peu, davantage quand elle est proche.
+      g.clearRect(0, 0, l, e.h * S)
+      // Le fond d'abord : une ligne qui glisse ne laisse ainsi aucun trou au bord de l'eau.
+      g.drawImage(EAUs, 0, 0)
       for (let j = 0; j < e.h; j++) {
-        const Yv = e.y + j
-        const k = j / e.h
-        const dx =
-          Math.sin(Yv * 0.46 + temps * 1.8) * (0.5 + k * 1.6) +
-          Math.sin(Yv * 0.15 - temps * 0.9) * (0.4 + k * 1.2)
-        g.drawImage(EAUs, 0, j, e.w + 6, 1, dx - 3, j, e.w + 6, 1.15)
+        const dx = glissementEau(e.y + j, temps, j / e.h) * S
+        g.drawImage(EAUs, 0, j * S, l, S, dx, j * S, l, S + 0.5)
       }
-      for (const b of BAT) dessinerBateau(g, b)
-      g.fillStyle = '#ffffff' // couleur-fixe: scintillement de l'eau
+      for (const b of BAT) dessinerSillage(g, b)
+      // Le soleil sur l'eau : des traits longs qui montent et s'éteignent, sans bord.
+      g.globalCompositeOperation = 'lighter'
       for (const p of ECL) {
-        const a = Math.abs(Math.sin(temps * p.f + p.p)) ** 12
-        if (a < 0.05) continue
-        g.globalAlpha = a * 0.85
-        g.fillRect(p.x - 1.5, p.y, 3, 0.8)
-        g.fillRect(p.x, p.y - 0.8, 0.8, 2.4)
+        const a = Math.abs(Math.sin(temps * p.f + p.p)) ** 6
+        if (a < 0.03) continue
+        const k = 0.45 + (p.y / e.h) * 0.75
+        g.globalAlpha = a * 0.5
+        g.drawImage(rond, (p.x - (p.l * k) / 2) * S, p.y * S, p.l * k * S, 1.5 * k * S)
       }
       g.globalAlpha = 1
       g.globalCompositeOperation = 'destination-in'
-      g.drawImage(EAUm, 0, 0, e.w, e.h)
-      x.drawImage(EAUc, e.x, e.y)
+      g.drawImage(EAUm, 0, 0, l, e.h * S)
+      x.drawImage(EAUc, e.x, e.y, e.w, e.h)
+      for (const b of BAT) dessinerBateau(x, b)
     },
     ciel(x) {
       ballon(x)
@@ -469,6 +588,27 @@ export async function creerVie(
         x.drawImage(n.i, n.dx, n.y, n.w, n.h)
         x.globalAlpha = 1
       }
+      // L'anneau de Jarvis respire derrière son cerclage, et le phare balaie la ville en passant
+      // derrière les tours. Peints avant elles : posés dessus, ils brûlaient l'anneau en disque blanc.
+      const v = 0.55 + 0.45 * Math.sin(temps * 1.5)
+      const halo = 46 + v * 7
+      x.globalCompositeOperation = 'lighter'
+      x.globalAlpha = 0.16 + 0.2 * v
+      x.drawImage(rondT, 493 - halo, 226 - halo, halo * 2, halo * 2)
+      const th = temps * 0.42
+      for (const sens of [0, Math.PI]) {
+        const dx = Math.cos(th + sens)
+        const dy = Math.sin(th + sens) * 0.16
+        x.globalAlpha = 0.06 + 0.3 * Math.abs(dx)
+        x.save()
+        x.translate(413, 204)
+        x.rotate(Math.atan2(dy, dx))
+        x.scale(Math.hypot(dx, dy) * 1.05, 0.5)
+        x.drawImage(faisceau, 0, -48)
+        x.restore()
+      }
+      x.globalAlpha = 1
+      x.globalCompositeOperation = 'source-over'
       // Les nuages passent derrière ce qui est grand : le Brain, les tours et l'observatoire restent devant.
       for (const o of OB) if (o.fixe === 'ciel') x.drawImage(o.k, o.x, o.y, o.w, o.h)
       x.strokeStyle = 'rgba(38,46,66,.72)' // couleur-fixe: oiseaux dans le ciel peint
@@ -484,46 +624,43 @@ export async function creerVie(
       x.stroke()
       x.globalCompositeOperation = 'lighter'
       for (const [a, b, s] of VI.etoiles) {
-        const v = 0.5 + 0.5 * Math.sin(temps * (1 + (a % 7) * 0.23) + b)
-        x.globalAlpha = 0.1 + 0.6 * v * v
-        const r = s * (1.1 + v * 0.7)
+        const w = 0.5 + 0.5 * Math.sin(temps * (1 + (a % 7) * 0.23) + b)
+        x.globalAlpha = 0.1 + 0.6 * w * w
+        const r = s * (1.1 + w * 0.7)
         x.drawImage(rond, a - r, b - r, r * 2, r * 2)
       }
-      // L'anneau de Jarvis respire, le phare balaie la ville.
-      const v = 0.55 + 0.45 * Math.sin(temps * 1.5)
-      const r = 25 + v * 7
-      x.globalAlpha = 0.22 + 0.3 * v
-      x.drawImage(rond, 493 - r, 222 - r, r * 2, r * 2)
-      const th = temps * 0.62
-      const dx = Math.cos(th)
-      const dy = Math.sin(th) * 0.16
-      x.globalAlpha = 0.1 + 0.22 * Math.abs(dx)
-      x.save()
-      x.translate(413, 204)
-      x.rotate(Math.atan2(dy, dx))
-      x.scale(Math.hypot(dx, dy) * 0.86, 0.34)
-      x.drawImage(faisceau, 0, -32)
-      x.restore()
-      x.globalAlpha = 0.35 + 0.5 * (0.5 + 0.5 * Math.sin(temps * 3.3))
+      // La lumière dans le disque reste discrète : le cerclage et son blanc se voient toujours.
+      x.globalAlpha = 0.05 + 0.08 * v
+      x.drawImage(rond, 493 - 20, 226 - 20, 40, 40)
+      x.globalAlpha = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(temps * 3.3))
       x.drawImage(rond, 402, 194, 22, 22)
-      x.globalAlpha = 0.9
+      for (const f of FEN) {
+        if (f.a < 0.02) continue
+        x.globalAlpha = f.a * 0.3
+        x.drawImage(rondO, f.x + f.w / 2 - 6, f.y + f.h / 2 - 6, 12, 12)
+      }
       x.globalCompositeOperation = 'source-over'
-      x.fillStyle = '#ffe9a8' // couleur-fixe: fenêtres allumées
-      for (const f of FEN) if (f.on) x.fillRect(f.x, f.y, 2.6, 3.2)
+      x.fillStyle = '#ffe3a0' // couleur-fixe: fenêtres allumées
+      for (const f of FEN) {
+        if (f.a < 0.02) continue
+        x.globalAlpha = f.a * 0.82
+        x.fillRect(f.x, f.y, f.w, f.h)
+      }
       x.globalAlpha = 1
-      // Le tram sur le pont.
+      // Le tram sur le pont : il s'arrête aux deux bouts, et ne roule jamais à reculons.
       const n = TRAM.ps.length - 1
-      const u = TRAM.t * n
+      const u = placeDuTram(TRAM.t) * n
       const i = Math.min(n - 1, Math.floor(u))
       const a = TRAM.ps[i]
       const b = TRAM.ps[i + 1]
+      const sp = SPR.tram
+      const lt = 19
+      const ht = (lt * sp.h) / sp.w
       x.save()
       x.translate(a[0] + (b[0] - a[0]) * (u - i), a[1] + (b[1] - a[1]) * (u - i))
       x.rotate(Math.atan2(b[1] - a[1], b[0] - a[0]))
-      x.fillStyle = '#d4483a' // couleur-fixe: tram de la maquette
-      x.fillRect(-7, -5, 14, 5)
-      x.fillStyle = '#fbe6b0' // couleur-fixe: vitres du tram
-      for (let k = -6; k < 6; k += 3) x.fillRect(k, -4, 1.6, 2)
+      x.scale(TRAM.t % 2 < 1 ? 1 : -1, 1)
+      x.drawImage(sp.i, -lt / 2, -ht, lt, ht)
       x.restore()
     },
     pieces(x) {
@@ -606,6 +743,7 @@ export async function creerVie(
       x.globalAlpha = 1
       x.fillStyle = '#f8c4d6' // couleur-fixe: pétales de cerisier
       for (const p of PET) {
+        x.globalAlpha = Math.min(1, p.age * 1.2) * Math.min(1, (p.vie - p.age) * 0.9)
         x.save()
         x.translate(p.x, p.y)
         x.rotate(p.c)
@@ -615,17 +753,8 @@ export async function creerVie(
         x.fill()
         x.restore()
       }
-      for (const b of PAP) {
-        const t0 = temps * b.v + b.p
-        const px = b.cx + Math.sin(t0) * b.r + Math.sin(t0 * 2.7) * 5
-        const py = b.cy + Math.cos(t0 * 1.3) * b.r * 0.35 + Math.sin(t0 * 3.1) * 3
-        const f = Math.abs(Math.sin(temps * 16 + b.p)) * 0.9 + 0.15
-        x.fillStyle = b.c
-        x.beginPath()
-        x.ellipse(px - 2.1 * f, py - 0.5, 2.4 * f, 2.2, -0.4, 0, 6.3)
-        x.ellipse(px + 2.1 * f, py - 0.5, 2.4 * f, 2.2, 0.4, 0, 6.3)
-        x.fill()
-      }
+      x.globalAlpha = 1
+      for (const b of PAP) papillon(x, b)
     }
   }
 }
