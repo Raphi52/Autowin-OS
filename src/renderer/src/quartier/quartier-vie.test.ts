@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import donnees from '../assets/quartier/donnees.json'
-import { avancerBateau, glissementEau, placeDuTram, type VoieBateau } from './quartier-vie'
+import {
+  avancerBateau,
+  fonduVapeur,
+  formeVolute,
+  glissementEau,
+  placeDuTram,
+  type VoieBateau
+} from './quartier-vie'
 
 describe('les animations du décor (conv-1424, « les animations de décor sont éclatées »)', () => {
   it("l'eau ondule sans se découper en peigne : deux lignes voisines glissent presque pareil", () => {
@@ -61,6 +68,73 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
     }
   })
 
+  it('la vapeur est un ruban continu : deux hauteurs voisines ne se décalent presque pas', () => {
+    for (let temps = 0; temps < 20; temps += 0.37)
+      for (let u = 0; u < 0.98; u += 0.02) {
+        const a = formeVolute(u, temps, 1.3, 26)
+        const b = formeVolute(u + 0.02, temps, 1.3, 26)
+        expect(Math.abs(a.dx - b.dx)).toBeLessThan(1.5)
+        expect(Math.abs(a.l - b.l)).toBeLessThan(1)
+      }
+  })
+
+  it('un filet de vapeur naît sans bord, reste fin, et se dissout tout à fait', () => {
+    expect(fonduVapeur(0)).toBe(0)
+    expect(fonduVapeur(1)).toBeCloseTo(0)
+    expect(fonduVapeur(0.2)).toBe(1)
+    let avant = 1
+    for (let u = 0.28; u <= 1; u += 0.02) {
+      expect(fonduVapeur(u)).toBeLessThanOrEqual(avant)
+      avant = fonduVapeur(u)
+    }
+    // Au ras de l'eau, il est plus étroit qu'en haut : un panache, pas une colonne.
+    expect(formeVolute(0, 0, 0, 20).l).toBeLessThan(formeVolute(1, 0, 0, 20).l)
+  })
+
+  it('la roue de Settings tourne autour de son centre, et son mât reste fixe', () => {
+    const d = donnees as unknown as {
+      vie: {
+        calques: Record<
+          string,
+          { x: number; y: number; w: number; h: number; px: number; py: number }
+        >
+      }
+      obj: { cle?: string; m: string; mh?: string }[]
+    }
+    const r = d.vie.calques.roue
+    expect(r.w).toBe(r.h)
+    expect(r.x + r.w / 2).toBe(r.px)
+    expect(r.y + r.h / 2).toBe(r.py)
+    // La roue reste cliquable alors que seul le mât est découpé dans la peinture.
+    const o = d.obj.find((q) => q.cle === 'settings')
+    expect(o?.mh).toMatch(/^data:image\/webp;base64,/)
+    expect(o?.mh).not.toBe(o?.m)
+  })
+
+  it("l'onsen a pris la place de la machine, du tabouret et des baquets : aucune découpe ne les redessine (conv-1434)", () => {
+    const d = donnees as unknown as {
+      vie: { calques: Record<string, unknown> }
+      obj: { n?: string }[]
+    }
+    // Une découpe restée dans les données repasse devant le tanuki qui marche derrière elle : une machine
+    // fantôme au milieu de l'eau.
+    const noms = d.obj.map((o) => o.n)
+    for (const n of ['machine', 'bois', 'bain1_paroi', 'bain2_paroi', 'bain3_paroi'])
+      expect(noms).not.toContain(n)
+    expect(d.vie.calques.volant).toBeUndefined()
+    expect(d.vie.calques.volantFixe).toBeUndefined()
+  })
+
+  it("l'eau animée couvre toute la surface, jusqu'au pied de la ville derrière le pont", () => {
+    const { eau } = (
+      donnees as unknown as { vie: { eau: { x: number; y: number; w: number; h: number } } }
+    ).vie
+    expect(eau.x).toBe(0)
+    expect(eau.y).toBeLessThanOrEqual(332)
+    expect(eau.x + eau.w).toBeGreaterThanOrEqual(790)
+    expect(eau.y + eau.h).toBeGreaterThanOrEqual(480)
+  })
+
   it('les objets qui bougent sont des peintures, et les fenêtres sont relevées sur la toile', () => {
     const { sprites, fenetres } = (
       donnees as unknown as {
@@ -78,7 +152,8 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
     for (const [x, y, w, h] of fenetres) {
       expect(x).toBeGreaterThanOrEqual(0)
       expect(y).toBeGreaterThan(150)
-      expect(y + h).toBeLessThan(345)
+      // Plus bas, la rangée de maisons passe devant les tours : une lumière y tomberait sur un toit.
+      expect(y + h).toBeLessThanOrEqual(294)
       // Une fenêtre reste une fenêtre : une grande plaque jaune se verrait comme un défaut.
       expect(w * h).toBeLessThan(30)
     }

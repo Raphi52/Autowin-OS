@@ -3,6 +3,7 @@ import donnees from '../assets/quartier/donnees.json'
 import {
   creerMarche,
   ENTREE,
+  LEVITE_APRES_S,
   SEJOUR_MIN_S,
   type Consigne,
   type DonneesMarche,
@@ -60,9 +61,16 @@ describe('la carte de la Falaise', () => {
       'taches',
       'sql',
       'bain',
-      'meditation'
+      'pause'
     ])
       expect(metiers.has(me), me).toBe(true)
+  })
+
+  it('offre plusieurs activités de pause, chacune avec son animation', () => {
+    const pauses = D.postes.filter((p) => p.me === 'pause')
+    const gestes = new Set(pauses.map((p) => p.g))
+    expect(gestes.size).toBeGreaterThanOrEqual(6)
+    for (const g of gestes) expect(D.gestes?.[g], g).toBeDefined()
   })
 
   it('emprunte la passerelle entre le hangar et la bibliothèque', () => {
@@ -114,61 +122,191 @@ describe('un tanuki suit son agent', () => {
     expect(w).toMatchObject({ etat: 'poste', nom: '' })
   })
 
-  it('descend au bain quand il a fini, et s’assied à côté si les baquets sont pris', () => {
+  const fini: Consigne = { metier: 'bain', pose: 'ba', partir: false }
+  const pause: Consigne = { metier: 'pause', pose: '', partir: false }
+  /** Il est arrivé quelque part et s'y tient : à une activité, à une place libre, ou dans une pose. */
+  const pose = (w: { etat: string }): boolean =>
+    w.etat === 'poste' || w.etat === 'etat' || w.etat === 'attend'
+
+  /**
+   * Les places de bain : celles du grand onsen, qui a remplacé les trois baquets, puis la machine et le
+   * tabouret (conv-1434).
+   */
+  const BAINS = D.postes.filter((p) => p.me === 'bain')
+  /** L'eau du grand onsen, relevée sur la peinture entre l'escalier A et B1, un peu en retrait du bord. */
+  const ONSEN: [number, number][] = [
+    [420, 662],
+    [432, 650],
+    [452, 645],
+    [497, 641],
+    [527, 643],
+    [552, 647],
+    [567, 651],
+    [577, 664],
+    [588, 689],
+    [612, 690],
+    [625, 698],
+    [625, 706],
+    [607, 714],
+    [577, 718],
+    [527, 714],
+    [497, 712],
+    [470, 704],
+    [440, 696],
+    [428, 682]
+  ]
+
+  it("descend au bain quand il a fini, et prend une pause si l'onsen est plein", () => {
     const m = creerMarche(D, graine(5))
-    const fini: Consigne = { metier: 'bain', pose: 'ba', partir: false }
-    const liste = [0, 1, 2, 3].map((i) => m.ajouter(`a${i}`, fini))
-    for (let i = 0; i < 30 * 200 && liste.some((w) => w.etat !== 'etat'); i++) m.avance(IMAGE)
-    const poses = liste.map((w) => w.nom).sort()
-    expect(poses).toEqual(['as', 'ba', 'ba', 'ba'])
+    const liste = Array.from({ length: BAINS.length + 1 }, (_, i) => m.ajouter(`a${i}`, fini))
+    for (let i = 0; i < 30 * 200 && liste.some((w) => w.metierIci === null || w.etat === 'va'); i++)
+      m.avance(IMAGE)
+    for (let i = 0; i < 30; i++) m.avance(IMAGE)
+    expect(liste.filter((w) => w.nom === 'ba')).toHaveLength(BAINS.length)
+    const autre = liste.find((w) => w.nom !== 'ba')
+    expect(autre?.metierIci).toBe('pause')
   })
 
-  it('fait attendre côte à côte ceux qui n’ont pas de baquet, jamais en tas', () => {
+  it('le grand onsen offre dix places, toutes dans son eau (conv-1434)', () => {
+    expect(BAINS).toHaveLength(10)
+    const m = creerMarche(D, graine(7))
+    for (const p of BAINS) {
+      // Le corps s'enfonce dans l'eau jusqu'aux épaules : tout ce qui passe sous le rebord (cl) est caché,
+      // et ce rebord tombe dans le bassin.
+      expect(p.y - (p.cl as number)).toBeGreaterThanOrEqual(20)
+      expect(m.dans(ONSEN, p.x, p.cl as number), `${p.x},${p.cl}`).toBe(true)
+    }
+    // Plus de baquet à gauche de l'escalier A : toutes les places sont dans l'onsen, entre les deux escaliers.
+    expect(BAINS.every((p) => p.x >= 425 && p.x <= 610 && p.y >= 690)).toBe(true)
+    const liste = Array.from({ length: 10 }, (_, i) => m.ajouter(`a${i}`, fini))
+    for (let i = 0; i < 30 * 300 && liste.some((w) => w.metierIci === null || w.etat === 'va'); i++)
+      m.avance(IMAGE)
+    for (let i = 0; i < 30; i++) m.avance(IMAGE)
+    expect(liste.filter((w) => w.nom === 'ba')).toHaveLength(10)
+  })
+
+  it("aucun poste de travail ni de pause n'est dans l'eau de l'onsen (conv-1434)", () => {
+    const m = creerMarche(D, graine(7))
+    for (const p of D.postes.filter((q) => q.me !== 'bain'))
+      expect(m.dans(ONSEN, p.x, p.y), `${p.me} ${p.x},${p.y}`).toBe(false)
+  })
+
+  it("personne ne traverse l'onsen pour aller d'un escalier à l'autre (conv-1434)", () => {
     const m = creerMarche(D, graine(5))
-    const fini: Consigne = { metier: 'bain', pose: 'ba', partir: false }
+    const pied = (nom: string): number[] => D.esc.find((e) => e.nom === nom)?.a as number[]
+    for (const [a, b] of [
+      [pied('A'), pied('B1')],
+      [pied('B1'), pied('A')],
+      [pied('A'), [640, 740]]
+    ]) {
+      const c = m.chemin(a, b, null)
+      expect(c.length).toBeGreaterThan(1)
+      for (let k = 1; k < c.length; k++)
+        for (let t = 0; t <= 1; t += 0.05) {
+          const X = c[k - 1][0] + (c[k][0] - c[k - 1][0]) * t
+          const Y = c[k - 1][1] + (c[k][1] - c[k - 1][1]) * t
+          expect(m.dans(ONSEN, X, Y), `${X.toFixed(0)},${Y.toFixed(0)}`).toBe(false)
+        }
+    }
+  })
+
+  it("ne laisse personne en tas quand l'onsen est plein", () => {
+    const m = creerMarche(D, graine(5))
     const liste = Array.from({ length: 12 }, (_, i) => m.ajouter(`a${i}`, fini))
-    for (let i = 0; i < 30 * 300 && liste.some((w) => w.etat !== 'etat'); i++) m.avance(IMAGE)
-    const dehors = liste.filter((w) => w.nom === 'as')
-    expect(dehors).toHaveLength(9)
-    for (const w of dehors)
-      for (const o of dehors)
+    for (let i = 0; i < 30 * 300 && liste.some((w) => w.metierIci === null || w.etat === 'va'); i++)
+      m.avance(IMAGE)
+    const arretes = liste.filter((w) => w.etat !== 'va')
+    for (const w of arretes)
+      for (const o of arretes)
         if (o !== w)
-          expect(Math.hypot(o.x - w.x, (o.y - w.y) / D.sp), `${w.id} ${o.id}`).toBeGreaterThan(30)
+          expect(Math.hypot(o.x - w.x, (o.y - w.y) / D.sp), `${w.id} ${o.id}`).toBeGreaterThan(8)
   })
 
-  const medite: Consigne = { metier: 'meditation', pose: 'me', partir: false }
-
-  it('part méditer en tailleur dans la salle quand il réfléchit', () => {
+  it('part en pause quand il réfléchit, à une activité de la famille pause', () => {
     const m = creerMarche(D, graine(5))
-    const w = m.ajouter('a', medite)
-    for (let i = 0; i < 30 * 120 && w.etat !== 'etat'; i++) m.avance(IMAGE)
-    expect(w).toMatchObject({ etat: 'etat', nom: 'me', metierIci: 'meditation' })
-    expect(D.postes[w.poste as number].me).toBe('meditation')
+    const w = m.ajouter('a', pause)
+    for (let i = 0; i < 30 * 120 && !(pose(w) && w.metierIci === 'pause'); i++) m.avance(IMAGE)
+    expect(w.metierIci).toBe('pause')
+    if (w.poste !== null) expect(D.postes[w.poste].me).toBe('pause')
   })
 
-  it('ne s’assied pas en tailleur à son poste en attendant de partir (D15)', () => {
+  it('répartit huit tanukis en pause sur au moins cinq activités différentes', () => {
+    const m = creerMarche(D, graine(11))
+    const liste = Array.from({ length: 8 }, (_, i) => m.ajouter(`a${i}`, pause))
+    const vus = new Set<string>()
+    for (let i = 0; i < 30 * 240; i++) {
+      m.avance(IMAGE)
+      for (const w of liste)
+        if (w.etat === 'poste' && w.poste !== null) vus.add(D.postes[w.poste].g)
+    }
+    expect(vus.size).toBeGreaterThanOrEqual(5)
+  }, 60_000)
+
+  it('change d’activité au bout d’un moment, sans revenir à la même', () => {
+    const m = creerMarche(D, graine(3))
+    const w = m.ajouter('a', pause)
+    const suite: string[] = []
+    for (let i = 0; i < 30 * 600; i++) {
+      m.avance(IMAGE)
+      const g = w.etat === 'poste' && w.poste !== null ? D.postes[w.poste].g : ''
+      if (g && suite[suite.length - 1] !== g) suite.push(g)
+    }
+    expect(suite.length).toBeGreaterThanOrEqual(3)
+    for (let k = 1; k < suite.length; k++) expect(suite[k]).not.toBe(suite[k - 1])
+  }, 60_000)
+
+  it('s’assied à la méditation : il se tourne, s’assied, puis se relève avant de partir', () => {
+    const m = creerMarche(D, graine(5))
+    const w = m.ajouter('a', pause)
+    const siege = D.postes.findIndex((p) => p.me === 'pause' && p.g === 'me')
+    // Toutes les autres places sont prises : il ne reste que ce coussin.
+    D.postes.forEach((p, i) => {
+      if (p.me === 'pause' && i !== siege) m.ajouter(`x${i}`, { metier: null, pose: '', partir: false }).poste = i
+    })
+    const etats = new Set<string>()
+    for (let i = 0; i < 30 * 200 && !(w.etat === 'poste' && w.th > 3); i++) {
+      m.avance(IMAGE)
+      etats.add(w.etat)
+    }
+    expect(w.poste).toBe(siege)
+    expect(etats.has('tourne')).toBe(true)
+    w.consigne = travail('lire')
+    for (let i = 0; i < 30 * (SEJOUR_MIN_S + 1) && w.etat !== 'leve'; i++) m.avance(IMAGE)
+    expect(w.etat).toBe('leve')
+    for (let i = 0; i < 30 * 3; i++) m.avance(IMAGE)
+    expect(w.etat).toBe('va')
+  })
+
+  it('lévite un peu quand la méditation dure, et retombe en se relevant', () => {
+    const m = creerMarche(D, graine(5))
+    const w = m.ajouter('a', pause)
+    const siege = D.postes.findIndex((p) => p.me === 'pause' && p.g === 'me')
+    D.postes.forEach((p, i) => {
+      if (p.me === 'pause' && i !== siege) m.ajouter(`x${i}`, { metier: null, pose: '', partir: false }).poste = i
+    })
+    for (let i = 0; i < 30 * 200 && !(w.etat === 'poste' && w.poste === siege); i++) m.avance(IMAGE)
+    for (let i = 0; i < 30 * (LEVITE_APRES_S + 10); i++) m.avance(IMAGE)
+    expect(w.lev).toBeGreaterThan(1)
+    w.consigne = travail('lire')
+    for (let i = 0; i < 30 * (SEJOUR_MIN_S + 3) && w.etat !== 'va'; i++) m.avance(IMAGE)
+    expect(w.lev).toBe(0)
+  })
+
+  it('ne quitte pas son poste de travail pour une courte pause (D15)', () => {
     const m = creerMarche(D, graine(5))
     const w = m.ajouter('a', travail('commandes'))
     for (let i = 0; i < 30 * 120 && w.etat !== 'poste'; i++) m.avance(IMAGE)
-    w.consigne = medite
+    w.consigne = pause
     for (let i = 0; i < 30 * 2; i++) m.avance(IMAGE)
     expect(w).toMatchObject({ etat: 'poste', nom: '', metierIci: 'commandes' })
     for (let i = 0; i < 30 * (SEJOUR_MIN_S + 2); i++) m.avance(IMAGE)
     expect(w.etat).toBe('va')
   })
 
-  it('médite juste devant la salle quand les cinq places sont prises', () => {
-    const m = creerMarche(D, graine(5))
-    const liste = Array.from({ length: 7 }, (_, i) => m.ajouter(`a${i}`, medite))
-    for (let i = 0; i < 30 * 300 && liste.some((w) => w.etat !== 'etat'); i++) m.avance(IMAGE)
-    expect(liste.every((w) => w.nom === 'me')).toBe(true)
-    expect(liste.filter((w) => w.poste !== null)).toHaveLength(5)
-  })
-
   it('reprend le travail dès que son agent repart', () => {
     const m = creerMarche(D, graine(5))
-    const w = m.ajouter('a', medite)
-    for (let i = 0; i < 30 * 120 && w.etat !== 'etat'; i++) m.avance(IMAGE)
+    const w = m.ajouter('a', pause)
+    for (let i = 0; i < 30 * 120 && !(pose(w) && w.metierIci === 'pause'); i++) m.avance(IMAGE)
     w.consigne = travail('lire')
     for (let i = 0; i < 30 * 200 && w.metierIci !== 'lire'; i++) m.avance(IMAGE)
     expect(w).toMatchObject({ metierIci: 'lire', nom: '' })
@@ -201,7 +339,11 @@ describe('dix minutes avec huit agents réalistes', () => {
       'web',
       'brain',
       'publier',
-      'messages'
+      'messages',
+      // Réfléchir longtemps : 42 % du temps d'un tour (conv-1428).
+      'pause',
+      'pause',
+      'pause'
     ]
     const liste = Array.from({ length: 8 }, (_, i) => m.ajouter(`a${i}`, travail('lire')))
     let dehors = 0
