@@ -168,7 +168,7 @@ export function placeDuTram(t: number): number {
   return lisse(Math.max(0, Math.min(1, (aller - pause) / (1 - 2 * pause))))
 }
 
-/** L'instant où le maillet touche le gong, après le début du geste. */
+/** L'instant où la cloche sonne, après le début du geste. */
 const IMPACT_S = 0.34
 /** Hauteur d'une ligne de filet, en pixels de la peinture : entière, pour qu'aucune couture ne se voie. */
 const LIGNE_VAPEUR = 2
@@ -176,12 +176,42 @@ const VAPEUR_L = 56
 const VAPEUR_H = 90
 /** La matière de la vapeur boucle sur cette hauteur : elle défile sans couture. */
 const MATIERE_H = 192
-const RECUL = 0.5
 /** Un tanuki au poste du gong ne frappe pas sans arrêt. */
 const PAUSE_FRAPPE_S = 8
 
+/** Un filet de vapeur : son pied (x, y) sur la peinture, sa hauteur, sa largeur, sa transparence, sa vitesse. */
+export interface Vapeur {
+  x: number
+  y: number
+  h: number
+  l: number
+  a: number
+  v: number
+}
+/**
+ * La vapeur de l'onsen de la Falaise o-1916 (conv-1459) : elle monte du milieu de l'eau, devant les baigneurs
+ * adossés aux galets, là où la peinture la montre déjà.
+ */
+export const VAPEURS_ONSEN: readonly Vapeur[] = [
+  { x: 250, y: 738, h: 40, l: 16, a: 0.24, v: 15 },
+  { x: 292, y: 730, h: 58, l: 20, a: 0.28, v: 13 },
+  { x: 335, y: 745, h: 46, l: 18, a: 0.26, v: 16 },
+  { x: 378, y: 734, h: 66, l: 24, a: 0.32, v: 12 },
+  { x: 420, y: 748, h: 52, l: 20, a: 0.28, v: 14 },
+  { x: 462, y: 756, h: 40, l: 16, a: 0.22, v: 15 }
+]
+/** La théière du toit du Chat : la vapeur part de son couvercle, sous le Brain (conv-1459). */
+const VAPEUR_THEIERE: Vapeur = { x: 783, y: 224, h: 44, l: 13, a: 0.34, v: 13 }
+// fix-ok: positions relevées sur l'ancienne peinture — sur la capture du lot 3 (conv-1444), la roue orange, le
+// maillet rouge, les étoiles, la lueur de l'anneau et le faisceau du phare tombaient à côté des objets de la
+// Falaise o-1916. Tout ce qui suit est relevé sur elle.
+/** Le centre de l'anneau de Jarvis, sur la tour verte de la Falaise o-1916 (conv-1444). */
+export const ANNEAU: readonly [number, number] = [368, 197]
+/** La lanterne du phare, sous la flèche de la tour violette (conv-1444) : le faisceau en part. */
+export const PHARE: readonly [number, number] = [433, 195]
+
 export interface VieDecor {
-  /** `actifs(...postes)` : un tanuki y travaille-t-il ? Le gong et les mannequins réagissent. */
+  /** `actifs(...postes)` : un tanuki y travaille-t-il ? Le gong réagit. */
   avancer(
     dt: number,
     actifs: (...postes: number[]) => boolean,
@@ -194,8 +224,6 @@ export interface VieDecor {
   airs(x: Ctx): void
   /** La roue de Settings, seule : son survol la redessine éclairée. */
   roue(x: Ctx): void
-  /** Le maillet du gong : au-dessus de tout, et redessiné quand le survol repeint la zone. */
-  maillet(x: Ctx): void
   frapper(sonner: () => void): void
   temps(): number
 }
@@ -242,7 +270,6 @@ export async function creerVie(
     })
   )
   for (const o of OB) if (o.n && CAL[o.n]) o.cal = CAL[o.n]
-  const DOJO = ['dojo', ...Object.keys(CAL).filter((n) => n.startsWith('coussin')), 'encens']
   const e = VI.eau
   const EAUm = await image(e.m)
   // À la taille de la peinture : à moitié moins, toute l'eau du fond sortait floue (conv-1424).
@@ -273,22 +300,13 @@ export async function creerVie(
   let impactFait = true
   let sonner: (() => void) | null = null
   const GONG = VI.gong
-  // Des filets fins qui montent de l'eau et s'effacent. Chaque bain en a plusieurs, de tailles différentes.
-  const VOLUTES = [
-    // L'onsen, qui a remplacé les trois baquets puis la machine et le tabouret (conv-1434) : la vapeur
-    // monte de toute l'eau, jusqu'au bras de droite.
-    { x: 445, y: 672, h: 40, l: 16, a: 0.24, v: 15 },
-    { x: 472, y: 660, h: 58, l: 20, a: 0.28, v: 13 },
-    { x: 500, y: 670, h: 46, l: 18, a: 0.26, v: 16 },
-    { x: 528, y: 656, h: 66, l: 24, a: 0.32, v: 12 },
-    { x: 556, y: 668, h: 52, l: 20, a: 0.28, v: 14 },
-    { x: 600, y: 702, h: 40, l: 16, a: 0.22, v: 15 },
-    { x: 885, y: 180, h: 44, l: 13, a: 0.34, v: 13 },
-    // L'encens du dojo (conv-1428), à droite de la marche depuis que le dojo est vu de face comme les autres
-    // bâtiments, agrandi et posé devant l'escalier (conv-1444) : la fumée part 22 unités au-dessus de son
-    // pied, posé en (1145, 714).
-    { x: 1145, y: 692, h: 40, l: 11, a: 0.26, v: 9 }
-  ].map((o, i) => ({ ...o, ph: i * 2.1, o: i * 47 }))
+  // Des filets fins qui montent de l'eau et s'effacent, de tailles différentes. L'encens du dojo collé n'a plus
+  // de fumée : la Falaise o-1916 peint son dojo, sans brûle-encens (conv-1459).
+  const VOLUTES = [...VAPEURS_ONSEN, VAPEUR_THEIERE].map((o, i) => ({
+    ...o,
+    ph: i * 2.1,
+    o: i * 47
+  }))
   const MATIERE = matiereVapeur()
   const VAPEUR = toile(VAPEUR_L, VAPEUR_H)
   const VAPEURg = contexte(VAPEUR)
@@ -303,15 +321,14 @@ export async function creerVie(
   }
   const POU: { x: number; y: number; r: number; age: number; vie: number }[] = []
   const ONDES: { age: number }[] = []
+  // Les cerisiers du quai de la Falaise o-1916 (conv-1444) : le grand à gauche, les deux près du torii.
   const NIDS = [
-    [55, 355],
-    [120, 350],
-    [170, 352],
-    [278, 345],
-    [357, 340],
-    [450, 335],
-    [530, 335],
-    [20, 505]
+    [14, 335],
+    [32, 340],
+    [388, 330],
+    [404, 334],
+    [452, 330],
+    [468, 334]
   ]
   /**
    * Un pétale naît et se fane : il ne traverse plus toute l'image à la même taille. Ceux des cerisiers
@@ -357,10 +374,11 @@ export async function creerVie(
     }
   })
   // Chaque voie reste dans l'eau libre : hors de là, la voile passerait devant le hangar ou la bibliothèque.
+  // Sur la Falaise o-1916, l'eau libre est entre le robot du hangar et la bibliothèque (conv-1444).
   const BAT = [
-    { x: 420, y: 372, v: 3.6, min: 300, max: 630, l: 14, s: 'bateau2' },
-    { x: 240, y: 388, v: 5, min: 175, max: 465, l: 18, s: 'bateau1' },
-    { x: 380, y: 444, v: 3, min: 352, max: 428, l: 26, s: 'bateau3' }
+    { x: 250, y: 411, v: 3.6, min: 180, max: 324, l: 12, s: 'bateau2' },
+    { x: 210, y: 416, v: 5, min: 183, max: 322, l: 16, s: 'bateau1' },
+    { x: 290, y: 426, v: 3, min: 258, max: 316, l: 22, s: 'bateau3' }
   ].map((b) => ({
     ...b,
     sens: 1,
@@ -385,14 +403,16 @@ export async function creerVie(
     voulu: Math.random() < 0.3 ? 1 : 0,
     a: 0
   }))
-  // Ils restent sur les plantes : au-dessus d'un bain, ils se perdaient dans la vapeur (conv-1424).
+  // Ils restent sur les plantes : au-dessus d'un bain, ils se perdaient dans la vapeur (conv-1424). Celles de
+  // la Falaise o-1916 (conv-1444) : le palmier nain et la mousse au bord de l'onsen, le pot du chemin,
+  // l'herbe sous la caméra et la grosse plante grasse à gauche.
   const FLEURS = [
-    [640, 656],
-    [912, 664],
-    [106, 684],
-    [770, 716],
-    [662, 690],
-    [120, 660]
+    [336, 648],
+    [500, 668],
+    [560, 640],
+    [614, 625],
+    [836, 728],
+    [80, 640]
   ]
   const PAP = Array.from({ length: 6 }, (_, i) => {
     const c = ['#f2a23a', '#f0cf4e', '#e86a92', '#7fb7e8'][i % 4] // couleur-fixe: papillons de la maquette
@@ -409,19 +429,19 @@ export async function creerVie(
   const BAL = { x: 690, y: 92, v: -3.4 }
   const TRAM = {
     t: 0.2,
-    // Relevé sur le pont repeint : le milieu de la chaussée, derrière le parapet.
+    // Relevé sur le pont de pierre de la Falaise o-1916 (conv-1444) : le haut de la chaussée, de la ville jusqu'au
+    // toit de la bibliothèque, qui cache la fin du pont. Rien n'est devant lui.
     ps: [
-      [564, 333],
-      [580, 332],
-      [600, 332.2],
-      [625, 335.4],
-      [650, 339.6],
-      [675, 346.4],
-      [700, 357.9]
+      [254, 367],
+      [266, 363],
+      [280, 361],
+      [300, 360],
+      [320, 362.5],
+      [335, 366],
+      [350, 372],
+      [364, 379]
     ]
   }
-  /** Le tram passe derrière eux : ils ne sont que dans la peinture, il roulait par-dessus la loupe. */
-  const DEVANT_TRAM = OB.filter((o) => o.n === 'loupe' || o.n === 'grandlivre')
 
   type Bateau = (typeof BAT)[number]
   /** Le bateau vu de biais quand il vire : jamais aplati à rien. */
@@ -492,7 +512,6 @@ export async function creerVie(
     x.scale(TRAM.t % 2 < 1 ? 1 : -1, 1)
     x.drawImage(sp.i, -lt / 2, -ht, lt, ht)
     x.restore()
-    for (const o of DEVANT_TRAM) x.drawImage(o.k, o.x, o.y, o.w, o.h)
   }
 
   const ballon = (x: Ctx): void => {
@@ -550,32 +569,28 @@ export async function creerVie(
     x.restore()
   }
 
-  /** Une peinture seule, sans ciel ni mât dedans : découpée dans la toile, elle les emportait avec elle. */
+  /** Un calque fixe, sans l'ombre dorée du survol : elle dessinerait un disque autour du fond de la roue. */
+  const poserFixe = (x: Ctx, c: Calque): void => {
+    x.save()
+    x.shadowColor = 'transparent'
+    x.drawImage(c.i, c.x, c.y, c.w, c.h)
+    x.restore()
+  }
+
+  /**
+   * La roue de la Falaise o-1916 est peinte, vue un peu de biais (conv-1444) : sous elle, son ciel et son mât
+   * refaits cachent les rayons peints ; la jante tourne autour de son centre ; le moyeu, rond et décalé vers
+   * nous, reste fixe par-dessus. Tournée d'un bloc, la roue valsait autour de son moyeu.
+   */
   const dessinerRoue = (x: Ctx): void => {
     const R0 = CAL.roue
+    poserFixe(x, CAL.roueFond)
     x.save()
     x.translate(R0.px ?? 0, R0.py ?? 0)
     x.rotate(temps * 0.32)
     x.drawImage(R0.i, R0.x - (R0.px ?? 0), R0.y - (R0.py ?? 0), R0.w, R0.h)
     x.restore()
-  }
-
-  const dessinerMaillet = (x: Ctx): void => {
-    // Le maillet recule, retombe sur le disque, puis se balance encore un peu.
-    const t = temps - frappeDebut
-    let bal = 0
-    if (t < 0.2) bal = -lisse(t / 0.2) * RECUL
-    else if (t < IMPACT_S) bal = -(1 - ((t - 0.2) / (IMPACT_S - 0.2)) ** 2) * RECUL
-    else if (t < 4)
-      bal = -0.12 * Math.exp(-(t - IMPACT_S) * 1.6) * Math.abs(Math.sin((t - IMPACT_S) * 5.2))
-    const Ma = CAL.maillet
-    x.save()
-    // `airs` le dessine après la boucle VOLUTES dont la transparence restait posée (conv-1439).
-    x.globalAlpha = 1
-    x.translate(Ma.px ?? 0, Ma.py ?? 0)
-    x.rotate(bal + Math.sin(temps * 0.9) * 0.008)
-    x.drawImage(Ma.i, Ma.x - (Ma.px ?? 0), Ma.y - (Ma.py ?? 0), Ma.w, Ma.h)
-    x.restore()
+    poserFixe(x, CAL.roueMoyeu)
   }
 
   return {
@@ -641,19 +656,8 @@ export async function creerVie(
         n.dx += n.v * dt
         if (n.dx > 1500) n.dx = -n.w - 60
       }
-      // Le disque se balance longtemps après le coup, et ne reste jamais tout à fait immobile.
-      const apres = temps - frappeDebut - IMPACT_S
-      const choc = impactFait && apres >= 0 ? Math.exp(-apres * 0.9) : 0
-      for (const o of OB)
-        if (o.n === 'gong')
-          o.rot = choc * Math.sin(apres * 3.4) * 0.05 + Math.sin(temps * 0.9) * 0.003
-        else if (o.n === 'mannequin1' || o.n === 'mannequin2') {
-          // Seuls les mannequins bougent : le devant du dojo et la longue-vue sont aussi des calques.
-          const poste = o.n === 'mannequin1' ? 20 : 21
-          o.rot = actifs(poste)
-            ? Math.sin(temps * 13) * 0.075 * Math.max(0, Math.sin(temps * 6))
-            : Math.sin(temps * 0.8 + poste) * 0.006
-        }
+      // La cloche de la Falaise o-1916 est peinte, sans maillet ni disque découpé (conv-1444) : rien ne s'y
+      // balance, le coup se voit à la lueur et aux ondes (voir `airs`).
       // Un tanuki au poste du gong le frappe de temps en temps : sans son (voir quartier-son.ts).
       if (actifs(26) && temps - frappeDebut > PAUSE_FRAPPE_S) {
         frappeDebut = temps
@@ -710,18 +714,20 @@ export async function creerVie(
       }
       // L'anneau de Jarvis respire derrière son cerclage, et le phare balaie la ville en passant
       // derrière les tours. Peints avant elles : posés dessus, ils brûlaient l'anneau en disque blanc.
+      // Sur la Falaise o-1916 (conv-1444) : l'anneau coiffe la tour verte, la lanterne du phare est sous la
+      // flèche de la tour violette.
       const v = 0.55 + 0.45 * Math.sin(temps * 1.5)
       const halo = 46 + v * 7
       x.globalCompositeOperation = 'lighter'
       x.globalAlpha = 0.16 + 0.2 * v
-      x.drawImage(rondT, 493 - halo, 226 - halo, halo * 2, halo * 2)
+      x.drawImage(rondT, ANNEAU[0] - halo, ANNEAU[1] - halo, halo * 2, halo * 2)
       const th = temps * 0.42
       for (const sens of [0, Math.PI]) {
         const dx = Math.cos(th + sens)
         const dy = Math.sin(th + sens) * 0.16
         x.globalAlpha = 0.06 + 0.3 * Math.abs(dx)
         x.save()
-        x.translate(413, 204)
+        x.translate(PHARE[0], PHARE[1])
         x.rotate(Math.atan2(dy, dx))
         x.scale(Math.hypot(dx, dy) * 1.05, 0.5)
         x.drawImage(faisceau, 0, -48)
@@ -751,9 +757,9 @@ export async function creerVie(
       }
       // La lumière dans le disque reste discrète : le cerclage et son blanc se voient toujours.
       x.globalAlpha = 0.05 + 0.08 * v
-      x.drawImage(rond, 493 - 20, 226 - 20, 40, 40)
+      x.drawImage(rond, ANNEAU[0] - 20, ANNEAU[1] - 20, 40, 40)
       x.globalAlpha = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(temps * 3.3))
-      x.drawImage(rond, 402, 194, 22, 22)
+      x.drawImage(rond, PHARE[0] - 11, PHARE[1] - 11, 22, 22)
       for (const f of FEN) {
         if (f.a < 0.02) continue
         x.globalAlpha = f.a * 0.3
@@ -769,29 +775,20 @@ export async function creerVie(
       x.globalAlpha = 1
     },
     pieces(x) {
-      // Le dojo (conv-1428), ses coussins et son brûle-encens, posés sur la peinture : les tanukis passent
-      // devant, et son toit et ses piliers repassent devant ceux qui sont dedans (l'objet `dojoDevant`).
-      for (const n of DOJO) {
-        const c = CAL[n]
-        if (c) x.drawImage(c.i, c.x, c.y, c.w, c.h)
-      }
+      // Plus de dojo collé ni de coussins : la Falaise o-1916 les peint (conv-1459).
       dessinerRoue(x)
-      // L'ombre du gong reste sur le mur, le disque se balance devant (voir `avancer`).
-      const Oo = CAL.gongOmbre
-      x.drawImage(Oo.i, Oo.x, Oo.y, Oo.w, Oo.h)
-      // La longue-vue de l'observatoire cherche quelque chose, très lentement.
+      // La longue-vue de l'observatoire cherche quelque chose, très lentement, autour de la tête de son pied.
       const lv = OB.find((o) => o.cle === 'observatory')
       if (lv) {
         x.save()
-        x.translate(1165, 128)
+        x.translate(1153, 112)
         x.rotate(Math.sin(temps * 0.31) * 0.012)
-        x.translate(-1165, -128)
+        x.translate(-1153, -112)
         x.drawImage(lv.k, lv.x, lv.y, lv.w, lv.h)
         x.restore()
       }
     },
     roue: dessinerRoue,
-    maillet: dessinerMaillet,
     feuillages(x, devant) {
       for (const f of FE) {
         if (Boolean(f.dv) !== devant) continue
@@ -819,8 +816,7 @@ export async function creerVie(
         x.drawImage(VAPEUR, s.x - VAPEUR_L / 2, s.y - s.h, VAPEUR_L, s.h)
       }
       const t = temps - frappeDebut
-      dessinerMaillet(x)
-      // Le bronze s'éclaire au coup, et le son se voit : des ondes dorées qui partent du disque.
+      // Le bronze s'éclaire au coup, et le son se voit : des ondes dorées qui partent de la cloche.
       const [cx, cy, rayon] = GONG.disque
       x.globalCompositeOperation = 'lighter'
       if (t >= IMPACT_S && t < 3) {

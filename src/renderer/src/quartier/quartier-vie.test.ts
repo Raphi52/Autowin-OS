@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import donnees from '../assets/quartier/donnees.json'
 import {
+  ANNEAU,
   avancerBateau,
   fonduVapeur,
   formeVolute,
   glissementEau,
+  PHARE,
   placeDuTram,
+  VAPEURS_ONSEN,
   type VoieBateau
 } from './quartier-vie'
 
@@ -105,6 +108,12 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
     expect(r.w).toBe(r.h)
     expect(r.x + r.w / 2).toBe(r.px)
     expect(r.y + r.h / 2).toBe(r.py)
+    // La roue est peinte dans la Falaise o-1916 (conv-1444) : un fond fixe cache ses rayons peints, et le
+    // moyeu, fixe lui aussi, reste sur l'axe de la jante qui tourne.
+    const fond = d.vie.calques.roueFond
+    expect([fond.x, fond.y, fond.w, fond.h]).toEqual([r.x, r.y, r.w, r.h])
+    const moyeu = d.vie.calques.roueMoyeu
+    expect(Math.hypot(moyeu.x + moyeu.w / 2 - r.px, moyeu.y + moyeu.h / 2 - r.py)).toBeLessThan(4)
     // La roue reste cliquable alors que seul le mât est découpé dans la peinture.
     const o = d.obj.find((q) => q.cle === 'settings')
     expect(o?.mh).toMatch(/^data:image\/webp;base64,/)
@@ -125,14 +134,96 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
     expect(d.vie.calques.volantFixe).toBeUndefined()
   })
 
-  it("l'eau animée couvre toute la surface, jusqu'au pied de la ville derrière le pont", () => {
+  it('le dojo est peint dans la Falaise : ni lui, ni ses coussins, son encens ou ses mannequins ne sont recollés (conv-1459)', () => {
+    const d = donnees as unknown as {
+      vie: { calques: Record<string, unknown> }
+      obj: { n?: string }[]
+    }
+    // Une découpe de l'ancienne peinture restée dans les données se redessine par-dessus la nouvelle : un second
+    // dojo, et des mannequins plantés dans le rocher sous la véranda.
+    const colles = ['dojo', 'dojoDevant', 'dojoEscalier', 'encens', 'mannequin1', 'mannequin2']
+    for (let i = 1; i <= 6; i++) colles.push(`coussin${i}`)
+    const noms = d.obj.map((o) => o.n)
+    for (const n of colles) {
+      expect(d.vie.calques[n], n).toBeUndefined()
+      expect(noms).not.toContain(n)
+    }
+  })
+
+  it("la vapeur de l'onsen monte de son eau, entre ses baigneurs (conv-1459)", () => {
+    const bains = (
+      donnees as unknown as { postes: { me: string; x: number; cl?: number }[] }
+    ).postes.filter((p) => p.me === 'bain')
+    const gauche = Math.min(...bains.map((p) => p.x))
+    const droite = Math.max(...bains.map((p) => p.x))
+    // La ligne d'eau la plus haute : celle des baigneurs adossés aux galets du fond.
+    const eau = Math.min(...bains.map((p) => p.cl as number))
+    expect(VAPEURS_ONSEN.length).toBeGreaterThanOrEqual(5)
+    for (const v of VAPEURS_ONSEN) {
+      expect(v.x, `${v.x},${v.y}`).toBeGreaterThan(gauche)
+      expect(v.x, `${v.x},${v.y}`).toBeLessThan(droite)
+      // Le filet naît dans l'eau, sous les galets du fond, pas sur eux ni sur le sable.
+      expect(v.y - eau, `${v.x},${v.y}`).toBeGreaterThan(15)
+    }
+  })
+
+  it("l'eau animée couvre toute la rivière, du quai de la ville jusqu'au pied du hangar", () => {
     const { eau } = (
       donnees as unknown as { vie: { eau: { x: number; y: number; w: number; h: number } } }
     ).vie
+    // L'eau de la Falaise o-1916, relevée sur la peinture (conv-1444) : du bord gauche jusque derrière
+    // l'atelier (x 688), du quai au fond (y 340) jusqu'au plancher du hangar (y 528).
+    // fix-ok: les bornes d'avant (y ≤ 332, x + w ≥ 790) étaient la mer de l'ancienne peinture ; sur la
+    // Falaise o-1916 l'eau mesurée va de x 1 à 687,5 et de y 340 à 528,5 (lot 4, eau2.py).
     expect(eau.x).toBe(0)
-    expect(eau.y).toBeLessThanOrEqual(332)
-    expect(eau.x + eau.w).toBeGreaterThanOrEqual(790)
-    expect(eau.y + eau.h).toBeGreaterThanOrEqual(480)
+    expect(eau.y).toBeLessThanOrEqual(340)
+    expect(eau.x + eau.w).toBeGreaterThanOrEqual(688)
+    expect(eau.y + eau.h).toBeGreaterThanOrEqual(528)
+  })
+
+  it("la cloche remplace le gong : rien de l'ancienne peinture n'est redessiné par-dessus (conv-1444)", () => {
+    const d = donnees as unknown as {
+      vie: { calques: Record<string, unknown>; gong: { disque: [number, number, number] } }
+      obj: { n?: string; cle?: string; x: number; y: number; w: number; h: number }[]
+    }
+    // Restés dans les données, le maillet et l'ombre du gong se peignaient sur le rocher de la Falaise o-1916.
+    for (const n of ['maillet', 'gongOmbre', 'gong', 'longuevue'])
+      expect(d.vie.calques[n], n).toBeUndefined()
+    expect(d.obj.map((o) => o.n)).not.toContain('gong')
+    // La lueur et les ondes du coup partent de la cloche, dans la zone qui ouvre Task Manager.
+    const [cx, cy, r] = d.vie.gong.disque
+    const cloche = d.obj.find((o) => o.cle === 'task')!
+    expect(cx - r).toBeGreaterThanOrEqual(cloche.x)
+    expect(cx + r).toBeLessThanOrEqual(cloche.x + cloche.w)
+    expect(cy - r).toBeGreaterThanOrEqual(cloche.y)
+    expect(cy + r).toBeLessThanOrEqual(cloche.y + cloche.h)
+  })
+
+  it('les lueurs du ciel tombent sur leurs objets : étoiles dans le Brain, anneau et phare sur leur tour', () => {
+    const d = donnees as unknown as {
+      vie: { etoiles: [number, number, number][] }
+      obj: { cle?: string; x: number; y: number; w: number; h: number }[]
+    }
+    const boite = (cle: string): { x: number; y: number; w: number; h: number } =>
+      d.obj.find((o) => o.cle === cle)!
+    const brain = boite('knowledge')
+    expect(d.vie.etoiles.length).toBeGreaterThanOrEqual(8)
+    for (const [x, y] of d.vie.etoiles) {
+      expect(x, `${x},${y}`).toBeGreaterThan(brain.x)
+      expect(x, `${x},${y}`).toBeLessThan(brain.x + brain.w)
+      expect(y, `${x},${y}`).toBeGreaterThan(brain.y)
+      expect(y, `${x},${y}`).toBeLessThan(brain.y + brain.h)
+    }
+    // Au milieu de leur tour, pas seulement dans sa boîte : la lueur d'à côté se voyait sur le ciel.
+    for (const [cle, [x, y]] of [
+      ['t_anneau', ANNEAU],
+      ['t_phare', PHARE]
+    ] as const) {
+      const t = boite(cle)
+      expect(Math.abs(x - (t.x + t.w / 2)), cle).toBeLessThan(t.w / 4)
+      expect(y, cle).toBeGreaterThan(t.y)
+      expect(y, cle).toBeLessThan(t.y + t.h / 3)
+    }
   })
 
   it('les objets qui bougent sont des peintures, et les fenêtres sont relevées sur la toile', () => {
@@ -157,5 +248,31 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
       // Une fenêtre reste une fenêtre : une grande plaque jaune se verrait comme un défaut.
       expect(w * h).toBeLessThan(30)
     }
+  })
+
+  it('les fenêtres qui s’allument sont celles des cinq tours de la Falaise o-1916 (conv-1444)', () => {
+    const d = donnees as unknown as {
+      vie: { fenetres: [number, number, number, number][] }
+      obj: { cle?: string; x: number; y: number; w: number; h: number }[]
+    }
+    // Les fenêtres relevées sur l'ancienne peinture passaient le test d'au-dessus : 29 sur 72 tombaient hors
+    // des tours de la nouvelle, et s'allumaient là où elle ne peint aucune fenêtre (lot 4, conv-1461).
+    const tours = ['t_bulle', 't_enveloppe', 't_horloge', 't_anneau', 't_phare'].map((cle) => {
+      const t = d.obj.find((o) => o.cle === cle)
+      expect(t, cle).toBeDefined()
+      return { cle, ...t! }
+    })
+    const tourDe = (x: number, y: number, w: number, h: number): string | undefined =>
+      tours.find(
+        (t) => x + w / 2 > t.x && x + w / 2 < t.x + t.w && y + h / 2 > t.y && y + h / 2 < t.y + t.h
+      )?.cle
+    const allumees = new Set<string>()
+    for (const [x, y, w, h] of d.vie.fenetres) {
+      const cle = tourDe(x, y, w, h)
+      expect(cle, `fenêtre ${x},${y} hors des tours`).toBeDefined()
+      allumees.add(cle!)
+    }
+    // Chaque tour a les siennes : une liste décalée d'un bloc finirait toute sur une ou deux tours.
+    expect([...allumees].sort()).toEqual(tours.map((t) => t.cle).sort())
   })
 })

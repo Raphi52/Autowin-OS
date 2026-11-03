@@ -73,10 +73,17 @@ describe('la carte de la Falaise', () => {
     for (const g of gestes) expect(D.gestes?.[g], g).toBeDefined()
   })
 
-  it('emprunte la passerelle entre le hangar et la bibliothèque', () => {
+  // fix-ok: ces deux tests cherchaient les escaliers P et B1, absents de D.esc (A à E) depuis le lot 1 (conv-1458).
+  /**
+   * La Falaise o-1916 n'a plus de passerelle entre le hangar et la bibliothèque : on descend du hangar
+   * au sable par l'escalier A, puis on remonte par B. Un trou dans la grille le long du rocher ferait
+   * monter le tanuki droit dans la falaise, sans escalier (conv-1459).
+   */
+  it('va du hangar à la bibliothèque par le sable : escalier A, puis escalier B', () => {
     const P = D.postes
     const c = m.chemin([P[5].x, P[5].y], [P[8].x, P[8].y], null, true)
-    expect(c.some((q) => q.e === D.esc.findIndex((e) => e.nom === 'P'))).toBe(true)
+    const pris = c.flatMap((q) => (q.e !== undefined && q.e >= 0 ? [D.esc[q.e].nom] : []))
+    expect([...new Set(pris)]).toEqual(['A', 'B'])
   })
 })
 
@@ -133,27 +140,32 @@ describe('un tanuki suit son agent', () => {
    * tabouret (conv-1434).
    */
   const BAINS = D.postes.filter((p) => p.me === 'bain')
-  /** L'eau du grand onsen, relevée sur la peinture entre l'escalier A et B1, un peu en retrait du bord. */
+  /**
+   * L'eau de l'onsen de la Falaise o-1916 (conv-1459), relevée sur la peinture un peu en retrait de ses pierres :
+   * le fond sous les galets, la gauche contre le rocher et la barrière, la droite contre le tas de galets.
+   */
   const ONSEN: [number, number][] = [
-    [420, 662],
-    [432, 650],
-    [452, 645],
-    [497, 641],
-    [527, 643],
-    [552, 647],
-    [567, 651],
-    [577, 664],
-    [588, 689],
-    [612, 690],
-    [625, 698],
-    [625, 706],
-    [607, 714],
-    [577, 718],
-    [527, 714],
-    [497, 712],
-    [470, 704],
-    [440, 696],
-    [428, 682]
+    [204, 706],
+    [216, 700],
+    [232, 699],
+    [262, 696],
+    [300, 694],
+    [345, 692],
+    [400, 692],
+    [405, 703],
+    [430, 705],
+    [468, 707],
+    [480, 714],
+    [498, 722],
+    [502, 738],
+    [506, 748],
+    [496, 758],
+    [494, 768],
+    [300, 768],
+    [246, 754],
+    [222, 748],
+    [203, 740],
+    [199, 726]
   ]
 
   it("descend au bain quand il a fini, et prend une pause si l'onsen est plein", () => {
@@ -176,8 +188,8 @@ describe('un tanuki suit son agent', () => {
       expect(p.y - (p.cl as number)).toBeGreaterThanOrEqual(20)
       expect(m.dans(ONSEN, p.x, p.cl as number), `${p.x},${p.cl}`).toBe(true)
     }
-    // Plus de baquet à gauche de l'escalier A : toutes les places sont dans l'onsen, entre les deux escaliers.
-    expect(BAINS.every((p) => p.x >= 425 && p.x <= 625)).toBe(true)
+    // Toutes les places sont dans l'onsen, entre son rocher de gauche et ses galets de droite.
+    expect(BAINS.every((p) => p.x >= 199 && p.x <= 506)).toBe(true)
     const liste = Array.from({ length: 10 }, (_, i) => m.ajouter(`a${i}`, fini))
     for (let i = 0; i < 30 * 300 && liste.some((w) => w.metierIci === null || w.etat === 'va'); i++)
       m.avance(IMAGE)
@@ -201,11 +213,12 @@ describe('un tanuki suit son agent', () => {
     // La ligne d'eau de chaque baigneur (là où son corps sort de l'eau) longe la berge.
     for (const p of BAINS) expect(bord(p.x, p.cl as number), `${p.x},${p.cl}`).toBeLessThan(12)
     // Personne au milieu du bassin.
-    expect(BAINS.filter((p) => p.x > 470 && p.x < 570 && (p.cl as number) > 660)).toEqual([])
-    // Ils font le tour : le fond, la gauche et la droite ont chacun leurs baigneurs.
-    const fond = BAINS.filter((p) => (p.cl as number) < 660)
-    const gauche = BAINS.filter((p) => p.x < 460 && (p.cl as number) > 665)
-    const droite = BAINS.filter((p) => p.x > 570 && (p.cl as number) > 665)
+    expect(BAINS.filter((p) => p.x > 250 && p.x < 460 && (p.cl as number) > 713)).toEqual([])
+    // Ils font le tour : le fond, la gauche et la droite ont chacun leurs baigneurs. La barrière de devant coupe
+    // le bord gauche de l'eau à mi-hauteur (conv-1459) : la gauche compte aussi le coin du fond.
+    const fond = BAINS.filter((p) => p.x >= 235 && p.x <= 455 && (p.cl as number) < 713)
+    const gauche = BAINS.filter((p) => p.x < 235)
+    const droite = BAINS.filter((p) => p.x > 455)
     expect(fond.length).toBeGreaterThanOrEqual(4)
     expect(gauche.length).toBeGreaterThanOrEqual(2)
     expect(droite.length).toBeGreaterThanOrEqual(2)
@@ -217,14 +230,18 @@ describe('un tanuki suit son agent', () => {
       expect(m.dans(ONSEN, p.x, p.y), `${p.me} ${p.x},${p.y}`).toBe(false)
   })
 
-  it("personne ne traverse l'onsen pour aller d'un escalier à l'autre (conv-1434)", () => {
+  /**
+   * Sur la Falaise o-1916, l'onsen s'étend au pied du tunnel des commandes : c'est le trajet vers les
+   * commandes, depuis un escalier ou l'entrée, qui couperait par l'eau. Mesuré en rendant marchables le
+   * bain et ses pierres : 15 trajets y passaient, et aucun entre deux escaliers (conv-1434, conv-1459).
+   */
+  it("personne ne traverse l'onsen pour aller d'un escalier ou de l'entrée aux commandes", () => {
     const m = creerMarche(D, graine(5))
-    const pied = (nom: string): number[] => D.esc.find((e) => e.nom === nom)?.a as number[]
-    for (const [a, b] of [
-      [pied('A'), pied('B1')],
-      [pied('B1'), pied('A')],
-      [pied('A'), [640, 740]]
-    ]) {
+    const departs = [...D.esc.map((e) => e.a as number[]), [ENTREE[0], ENTREE[1]]]
+    const commandes = D.postes.filter((p) => p.me === 'commandes').map((p) => [p.x, p.y])
+    expect(commandes.length).toBeGreaterThan(0)
+    const trajets = departs.flatMap((d) => commandes.map((q) => [d, q]))
+    for (const [a, b] of [...trajets, ...trajets.map(([d, q]) => [q, d])]) {
       const c = m.chemin(a, b, null)
       expect(c.length).toBeGreaterThan(1)
       for (let k = 1; k < c.length; k++)
