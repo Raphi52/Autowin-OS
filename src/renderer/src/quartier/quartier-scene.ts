@@ -14,6 +14,7 @@
  */
 import urlFalaise from '../assets/quartier/falaise.avif'
 import urlAtlas from '../assets/quartier/atlas.avif'
+import urlAtlasRenard from '../assets/quartier/atlas-renard.avif'
 import urlBords from '../assets/quartier/bords.avif'
 import type { DecorScene } from '../components/home-decor-scene'
 import { HOME_WIDGET_IDS, type HomeWidgetId } from '../components/home-layout'
@@ -26,9 +27,11 @@ import {
 } from './agents-quartier'
 import {
   abonnerAgentsCollegues,
+  animalDeLAgent,
   consigneDuCollegue,
   lireAgentsCollegues,
-  type AgentCollegue
+  type AgentCollegue,
+  type AnimalCollegue
 } from './agents-collegues'
 import {
   creerMarche,
@@ -139,14 +142,27 @@ export interface DonneesQuartier extends DonneesMarche {
   }
 }
 
+/**
+ * Un atlas prêt à dessiner : l'image filtrée, sa silhouette d'ombre, et le cou de chaque case, mesuré une
+ * fois au premier foulard. Le cou dépend de la silhouette : celui du renard n'est pas celui du tanuki.
+ */
+interface AtlasPeint {
+  A: HTMLCanvasElement
+  AO: HTMLCanvasElement
+  cous: Float32Array | null
+  colonnes: number
+}
+
 interface Monde {
   D: DonneesQuartier
   F: HTMLImageElement
   /** La peinture prolongée à gauche puis à droite, `MARGE_BORD` de large chacune (conv-1424). */
   B: HTMLImageElement
   S: number
-  A: HTMLCanvasElement
-  AO: HTMLCanvasElement
+  /** Mes agents : le tanuki au kimono orange. */
+  tanuki: AtlasPeint
+  /** Ceux des collègues, un atlas par animal, de même grille que celui du tanuki (conv-1446). */
+  animaux: Record<AnimalCollegue, AtlasPeint>
   OB: ObjetCoupe[]
   FE: ObjetCoupe[]
   m: MarcheQuartier
@@ -191,12 +207,8 @@ function lueurDe(o: ObjetCoupe): HTMLCanvasElement {
   return b
 }
 
-async function charger(): Promise<Monde> {
-  const module = await import('../assets/quartier/donnees.json')
-  const D = (module.default ?? module) as unknown as DonneesQuartier
-  const [F, atlas, B] = await Promise.all([image(urlFalaise), image(urlAtlas), image(urlBords)])
-  const S = F.naturalWidth / LARGEUR
-  // Les filtres de toile coûtent cher à chaque image : on les applique UNE fois, à l'atlas entier.
+/** Les filtres de toile coûtent cher à chaque image : on les applique UNE fois, à l'atlas entier. */
+function peindreAtlas(atlas: HTMLImageElement): AtlasPeint {
   const A = toile(atlas.naturalWidth, atlas.naturalHeight)
   const gA = contexte(A)
   gA.filter = 'saturate(1.06)'
@@ -205,6 +217,21 @@ async function charger(): Promise<Monde> {
   const gO = contexte(AO)
   gO.filter = 'brightness(0) blur(2px)'
   gO.drawImage(atlas, 0, 0)
+  return { A, AO, cous: null, colonnes: 0 }
+}
+
+async function charger(): Promise<Monde> {
+  const module = await import('../assets/quartier/donnees.json')
+  const D = (module.default ?? module) as unknown as DonneesQuartier
+  const [F, atlas, renard, B] = await Promise.all([
+    image(urlFalaise),
+    image(urlAtlas),
+    image(urlAtlasRenard),
+    image(urlBords)
+  ])
+  const S = F.naturalWidth / LARGEUR
+  const tanuki = peindreAtlas(atlas)
+  const animaux: Record<AnimalCollegue, AtlasPeint> = { renard: peindreAtlas(renard) }
   const OB = await Promise.all(D.obj.map((o) => coupe(F, S, o)))
   const FE = await Promise.all(D.feuilles.map((o) => coupe(F, S, o)))
   for (const id of HOME_WIDGET_IDS) {
@@ -226,7 +253,7 @@ async function charger(): Promise<Monde> {
     P.closePath()
     return { n, P }
   })
-  return { D, F, B, S, A, AO, OB, FE, m: creerMarche(D), vie, contact, sols }
+  return { D, F, B, S, tanuki, animaux, OB, FE, m: creerMarche(D), vie, contact, sols }
 }
 
 const pied = (o: ObjetCoupe, px: number): number => {
@@ -340,8 +367,15 @@ export function creerSceneQuartier(): DecorScene | null {
   const desabonnerCollegues = abonnerAgentsCollegues(() => {
     collegues = lireAgentsCollegues()
   })
-  /** Le cou de chaque case de l'atlas, mesuré une fois, au premier foulard à poser. */
-  let cous: Float32Array | null = null
+  /**
+   * L'animal d'un tanuki de collègue (conv-1446). Comme son foulard, il reste sur le tanuki et non sur
+   * l'agent : en repartant, son agent a déjà quitté la liste, et il ne doit pas redevenir tanuki en route.
+   */
+  const animalDuTanuki = new WeakMap<Tanuki, AnimalCollegue>()
+  const atlasDe = (M: Monde, w: Tanuki): AtlasPeint => {
+    const animal = animalDuTanuki.get(w)
+    return animal ? M.animaux[animal] : M.tanuki
+  }
   const etoffe = toile(1, 1)
 
   /** Le cadrage au repos : calé sur la largeur de l'Accueil, posé en bas. */
@@ -466,12 +500,17 @@ export function creerSceneQuartier(): DecorScene | null {
       if (w) w.consigne = consigne
       else m.ajouter(a.id, consigne)
     }
-    // Ceux des collègues : mêmes lieux selon le métier et la phase (D-8), un foulard à leur couleur (D9).
+    // Ceux des collègues : mêmes lieux selon le métier et la phase (D-8), un foulard à leur couleur (D9),
+    // dessinés avec l'atlas de leur animal (conv-1446).
     for (const a of collegues) {
       const consigne = consigneDuCollegue(a, maintenant)
       const w = m.T.find((q) => q.id === a.id)
       if (w) w.consigne = consigne
-      else m.ajouter(a.id, consigne, a.collegue.couleur)
+      else {
+        const nouveau = m.ajouter(a.id, consigne, a.collegue.couleur)
+        const animal = animalDeLAgent(a)
+        if (animal) animalDuTanuki.set(nouveau, animal)
+      }
     }
     for (const w of m.T)
       if (!agents.some((a) => a.id === w.id) && !collegues.some((a) => a.id === w.id))
@@ -516,10 +555,12 @@ export function creerSceneQuartier(): DecorScene | null {
     }
   }
 
-  function sprite(M: Monde, w: Tanuki, atlas: HTMLCanvasElement, ombre: boolean): void {
+  function sprite(M: Monde, w: Tanuki, ombre: boolean): void {
     const { an } = M.D
     const k = w.u / an.pu
     const cl = cellule(M, w)
+    const planche = atlasDe(M, w)
+    const atlas = ombre ? planche.AO : planche.A
     x.save()
     // Au bain, tout ce qui passe sous le bord du baquet est dans l'eau.
     if (w.nom === 'ba' && w.face?.cl) {
@@ -532,7 +573,7 @@ export function creerSceneQuartier(): DecorScene | null {
     x.scale(cl.m ? -k : k, k)
     const ox = -an.ax + (cl.dx ?? 0)
     x.drawImage(atlas, cl.c * an.cw, cl.r * an.ch, an.cw, an.ch, ox, -an.ay, an.cw, an.ch)
-    if (!ombre && w.foulard) poserFoulard(M, w.foulard, cl.c, cl.r, ox)
+    if (!ombre && w.foulard) poserFoulard(M, planche, w.foulard, cl.c, cl.r, ox)
     // Une respiration de douze images en six secondes : l'image suivante se fond par-dessus, sans à-coup.
     if (!ombre && cl.f && cl.n) {
       const a = x.globalAlpha
@@ -544,21 +585,29 @@ export function creerSceneQuartier(): DecorScene | null {
     x.restore()
   }
 
-  let colonnesAtlas = 0
   /**
    * Le foulard d'un collègue (D9, conv-1429) : une écharpe à sa couleur, découpée sur la silhouette de
    * l'image en cours, à hauteur du cou. Posé dans le repère du personnage, il suit le miroir, le pas et
    * la marche sans calcul de plus. Trois gestes sur une petite toile : 15 collègues au plus, c'est peu.
+   * Le cou et la découpe viennent de l'atlas de SON animal (conv-1446).
    */
-  function poserFoulard(M: Monde, couleur: string, c: number, r: number, ox: number): void {
+  function poserFoulard(
+    M: Monde,
+    P: AtlasPeint,
+    couleur: string,
+    c: number,
+    r: number,
+    ox: number
+  ): void {
     const { an } = M.D
-    if (!cous) {
-      colonnesAtlas = Math.floor(M.A.width / an.cw)
-      const rangees = Math.floor(M.A.height / an.ch)
-      const rgba = contexte(M.A).getImageData(0, 0, M.A.width, M.A.height).data
-      cous = cousDeLAtlas(rgba, M.A.width, an.cw, an.ch, colonnesAtlas, rangees)
+    if (!P.cous) {
+      P.colonnes = Math.floor(P.A.width / an.cw)
+      const rangees = Math.floor(P.A.height / an.ch)
+      const rgba = contexte(P.A).getImageData(0, 0, P.A.width, P.A.height).data
+      P.cous = cousDeLAtlas(rgba, P.A.width, an.cw, an.ch, P.colonnes, rangees)
     }
-    const i = (r * colonnesAtlas + c) * 3
+    const cous = P.cous
+    const i = (r * P.colonnes + c) * 3
     const cx = cous[i]
     if (!Number.isFinite(cx)) return
     const cy = cous[i + 1]
@@ -591,7 +640,7 @@ export function creerSceneQuartier(): DecorScene | null {
     g.fillStyle = d
     g.fillRect(0, cy - ry, an.cw, ry * 3.2)
     g.globalCompositeOperation = 'destination-in'
-    g.drawImage(M.A, c * an.cw, r * an.ch, an.cw, an.ch, 0, 0, an.cw, an.ch)
+    g.drawImage(P.A, c * an.cw, r * an.ch, an.cw, an.ch, 0, 0, an.cw, an.ch)
     x.drawImage(etoffe, ox, -an.ay, an.cw, an.ch)
   }
 
@@ -607,7 +656,7 @@ export function creerSceneQuartier(): DecorScene | null {
     // on ne garde que le contact.
     if (w.sur < 0 && !(w.face?.g === 'bo' && w.etat !== 'va')) {
       x.globalAlpha = 0.27 * w.alpha
-      sprite(M, w, M.AO, true)
+      sprite(M, w, true)
     }
     x.restore()
   }
@@ -631,7 +680,7 @@ export function creerSceneQuartier(): DecorScene | null {
     for (const w of [...M.m.T].sort((a, b) => a.y - b.y)) {
       dessinerOmbre(M, w)
       x.globalAlpha = w.alpha
-      sprite(M, w, M.A, false)
+      sprite(M, w, false)
       x.globalAlpha = 1
       // Tout objet dont le pied est plus près que le sien passe devant lui, entier.
       for (const o of M.OB)

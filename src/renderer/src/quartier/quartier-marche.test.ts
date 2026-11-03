@@ -177,12 +177,38 @@ describe('un tanuki suit son agent', () => {
       expect(m.dans(ONSEN, p.x, p.cl as number), `${p.x},${p.cl}`).toBe(true)
     }
     // Plus de baquet à gauche de l'escalier A : toutes les places sont dans l'onsen, entre les deux escaliers.
-    expect(BAINS.every((p) => p.x >= 425 && p.x <= 610 && p.y >= 690)).toBe(true)
+    expect(BAINS.every((p) => p.x >= 425 && p.x <= 625)).toBe(true)
     const liste = Array.from({ length: 10 }, (_, i) => m.ajouter(`a${i}`, fini))
     for (let i = 0; i < 30 * 300 && liste.some((w) => w.metierIci === null || w.etat === 'va'); i++)
       m.avance(IMAGE)
     for (let i = 0; i < 30; i++) m.avance(IMAGE)
     expect(liste.filter((w) => w.nom === 'ba')).toHaveLength(10)
+  })
+
+  it("les baigneurs s'adossent aux bords de l'onsen, le milieu reste libre (conv-1447)", () => {
+    // Demande : « les tanukis doivent se mettre sur les bords du onsen, pas alignés en plein milieu ».
+    const bord = (x: number, y: number): number => {
+      let d = 1e9
+      for (let i = 0, j = ONSEN.length - 1; i < ONSEN.length; j = i++) {
+        const [ax, ay] = ONSEN[j]
+        const [bx, by] = ONSEN[i]
+        const l2 = (bx - ax) ** 2 + (by - ay) ** 2
+        const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / l2))
+        d = Math.min(d, Math.hypot(x - ax - t * (bx - ax), y - ay - t * (by - ay)))
+      }
+      return d
+    }
+    // La ligne d'eau de chaque baigneur (là où son corps sort de l'eau) longe la berge.
+    for (const p of BAINS) expect(bord(p.x, p.cl as number), `${p.x},${p.cl}`).toBeLessThan(12)
+    // Personne au milieu du bassin.
+    expect(BAINS.filter((p) => p.x > 470 && p.x < 570 && (p.cl as number) > 660)).toEqual([])
+    // Ils font le tour : le fond, la gauche et la droite ont chacun leurs baigneurs.
+    const fond = BAINS.filter((p) => (p.cl as number) < 660)
+    const gauche = BAINS.filter((p) => p.x < 460 && (p.cl as number) > 665)
+    const droite = BAINS.filter((p) => p.x > 570 && (p.cl as number) > 665)
+    expect(fond.length).toBeGreaterThanOrEqual(4)
+    expect(gauche.length).toBeGreaterThanOrEqual(2)
+    expect(droite.length).toBeGreaterThanOrEqual(2)
   })
 
   it("aucun poste de travail ni de pause n'est dans l'eau de l'onsen (conv-1434)", () => {
