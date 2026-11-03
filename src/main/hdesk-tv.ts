@@ -140,7 +140,8 @@ export function origineCapture(reponse: Record<string, unknown>): OrigineCapture
  * passent telles quelles : c'est argumentsAct qui les refuse, avec son message.
  */
 export function pointEcran(g: GesteTv, origine: OrigineCapture | undefined): GesteTv {
-  if (!origine || !Number.isFinite(g?.x) || !Number.isFinite(g?.y)) return g
+  // Négatif = invalide aussi (conv-1457) : -1 + origine 7 donnait 6, un clic valide à un point jamais visé.
+  if (!origine || !Number.isFinite(g?.x) || !Number.isFinite(g?.y) || g.x < 0 || g.y < 0) return g
   return { ...g, x: g.x + origine.x, y: g.y + origine.y }
 }
 
@@ -323,6 +324,11 @@ export class CapteurHdesk {
    */
   versEcran(g: GesteTv): GesteTv {
     return pointEcran(g, typeof g?.id === 'string' ? this.origines.get(g.id) : undefined)
+  }
+
+  /** Origine de la dernière image rendue de ce bureau ; inconnue = jamais capturé, ou fermé. */
+  origine(id: string): OrigineCapture | undefined {
+    return this.origines.get(id)
   }
 
   arreter(): void {
@@ -544,6 +550,9 @@ export type ActionHdesk = {
   y?: number
   cible?: string
   messages?: unknown
+  /** Appui par nom (conv-1457) : l'élément visé et le moyen employé (`clic` ou `accessibilite:…`). */
+  element?: unknown
+  appui?: string
 }
 export type ResultatGeste = { ok: true; action?: ActionHdesk } | { ok: false; message: string }
 
@@ -564,10 +573,65 @@ export function resultatAct(out: string): ResultatGeste {
   return { ok: true }
 }
 
-export function agirHdesk(racine: string, g: GesteTv, registre?: string): Promise<ResultatGeste> {
+/**
+ * APPUI PAR NOM (conv-1457) : `element` = identifiant, nom ou libellé d'un élément de l'arbre
+ * d'accessibilité du bureau (scripts/hdesk-arbre.cs). `origine` : celle de l'image que l'agent regarde,
+ * pour que les positions citées dans un refus soient en pixels de SON image.
+ */
+export interface GesteElement {
+  id: string
+  element: string
+  origine?: OrigineCapture
+}
+
+/** Longueur maximale d'un `element` : au-delà, ce n'est plus un nom d'élément. */
+export const ELEMENT_MAX = 200
+
+export function estGesteElement(g: GesteTv | GesteElement): g is GesteElement {
+  return typeof (g as GesteElement)?.element === 'string'
+}
+
+/** Arguments PowerShell d'un appui par nom ; lève si l'identifiant ou l'élément est invalide. */
+export function argumentsElement(racine: string, g: GesteElement, registre?: string): string[] {
+  if (typeof g?.id !== 'string' || !ID_BUREAU.test(g.id))
+    throw new Error('Identifiant de bureau invalide.')
+  const element = typeof g.element === 'string' ? g.element.trim() : ''
+  if (!element) throw new Error('Élément vide.')
+  if (element.length > ELEMENT_MAX)
+    throw new Error(`Élément trop long (${ELEMENT_MAX} caractères au plus).`)
+  const args = [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    join(racine, 'scripts', 'hdesk-act.ps1'),
+    '-InstanceId',
+    g.id,
+    '-Element',
+    element
+  ]
+  const o = g.origine
+  if (o && Number.isInteger(o.x) && Number.isInteger(o.y) && o.x >= 0 && o.y >= 0)
+    args.push(
+      '-OrigineX',
+      String(Math.min(o.x, COORDONNEE_MAX)),
+      '-OrigineY',
+      String(Math.min(o.y, COORDONNEE_MAX))
+    )
+  if (typeof registre === 'string' && registre) args.push('-Registre', registre)
+  return args
+}
+
+export function agirHdesk(
+  racine: string,
+  g: GesteTv | GesteElement,
+  registre?: string
+): Promise<ResultatGeste> {
   let args: string[]
   try {
-    args = argumentsAct(racine, g, registre)
+    args = estGesteElement(g)
+      ? argumentsElement(racine, g, registre)
+      : argumentsAct(racine, g, registre)
   } catch (e) {
     return Promise.resolve({ ok: false, message: (e as Error).message })
   }

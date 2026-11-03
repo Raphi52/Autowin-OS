@@ -371,11 +371,13 @@ import type { DesktopController } from './desktop-control'
 import type {
   DemandeFermeture,
   EntreeRegistre,
+  GesteElement,
   GesteTv,
   ImageTv,
   ResultatFermeture,
   ResultatGeste
 } from './hdesk-tv'
+import { ELEMENT_MAX } from './hdesk-tv'
 import type { DemandeCreationBureau, ResultatCreationBureau } from '../shared/hdesk-gestion'
 import { identifiantBureauCacheChat } from './consigne-bureau-cache'
 // Import de TYPE seulement : le moteur charge Electron, le bus ne doit pas (tests sans Electron).
@@ -2257,7 +2259,7 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'bureau_cache_observer',
     description:
-      'Capturer TON bureau Windows caché : l’image est jointe à ta prochaine lecture (PNG, pixels réels — ce sont les coordonnées de bureau_cache_agir). Une page web ou un rendu GPU peut sortir uni (`statut: uni`) : lis alors le titre de la fenêtre ou pilote le navigateur par son port de débogage. Seulement les bureaux de cette conversation',
+      'Capturer TON bureau Windows caché : l’image est jointe à ta prochaine lecture (PNG, pixels réels — ce sont les coordonnées de bureau_cache_agir). Le résultat porte aussi `arbre` : les éléments de la fenêtre (type, nom, id, état, valeur, position = centre en pixels de cette image), lus par l’accessibilité de Windows ; vise-les par `element` dans bureau_cache_agir. Arbre vide (page web, rendu GPU) : vise x/y sur l’image. Une page web ou un rendu GPU peut sortir uni (`statut: uni`) : lis alors le titre de la fenêtre ou pilote le navigateur par son port de débogage. Seulement les bureaux de cette conversation',
     args: {
       id: 'facultatif — identifiant du bureau. Absent = `chat-<id du fil>`'
     },
@@ -2271,10 +2273,12 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'bureau_cache_agir',
     description:
-      'Cliquer, taper, appuyer une touche ou faire défiler dans TON bureau Windows caché (messages fenêtre : jamais la vraie souris ni le vrai clavier de l’utilisateur). Toujours un clic au point (x, y), sauf `sansClic`, puis la frappe éventuelle. Re-observe ensuite pour vérifier. Seulement les bureaux de cette conversation',
+      'Cliquer, taper, appuyer une touche ou faire défiler dans TON bureau Windows caché (messages fenêtre : jamais la vraie souris ni le vrai clavier de l’utilisateur). Soit `element` : appuyer sur un élément de l’`arbre` de bureau_cache_observer, par son id, son nom ou son libellé (WPF : par l’accessibilité, autre : clic à son centre) — plus sûr qu’un point, et il marche sur une fenêtre WPF où un clic posté reste sans effet. Soit un clic au point (x, y), sauf `sansClic`, puis la frappe éventuelle. `element` = un seul appui, sans frappe ni touche. Appuyer deux fois rebascule une case. Re-observe ensuite pour vérifier. Seulement les bureaux de cette conversation',
     args: {
-      x: 'entier — pixels de la capture de bureau_cache_observer (0 à 32767)',
-      y: 'entier — pixels de la capture de bureau_cache_observer (0 à 32767)',
+      element:
+        'facultatif — id, nom ou libellé d’un élément de l’arbre (200 caractères au plus), à la place de x/y. Plusieurs éléments ou aucun : le refus liste les candidats ou les plus proches',
+      x: 'facultatif — entier, pixels de la capture de bureau_cache_observer (0 à 32767), avec y ; sans `element`',
+      y: 'facultatif — entier, pixels de la capture de bureau_cache_observer (0 à 32767), avec x ; sans `element`',
       texte: 'facultatif — texte à taper après le clic (1000 caractères au plus)',
       entree: 'facultatif — booléen, appuyer sur Entrée après la frappe',
       touche:
@@ -2284,6 +2288,7 @@ export const CATALOG: CommandSpec[] = [
       id: 'facultatif — identifiant du bureau. Absent = `chat-<id du fil>`'
     },
     argsTypes: {
+      element: { type: 'string', maxLength: 200 },
       x: { type: 'integer', minimum: 0, maximum: 32767 },
       y: { type: 'integer', minimum: 0, maximum: 32767 },
       texte: { type: 'string', maxLength: 1000 },
@@ -3061,8 +3066,9 @@ export class AppCommandBus {
    * annonce l'indisponibilité.
    */
   lancerBureauCache?: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
-  observerBureauCache?: (id: string) => Promise<ImageTv>
-  agirBureauCache?: (geste: GesteTv) => Promise<ResultatGeste>
+  /** L'image, et l'arbre d'accessibilité en texte quand il a pu être lu (conv-1457, hdesk-arbre.ts). */
+  observerBureauCache?: (id: string) => Promise<ImageTv & { arbre?: string }>
+  agirBureauCache?: (geste: GesteTv | GesteElement) => Promise<ResultatGeste>
   ficheBureauCache?: (id: string) => EntreeRegistre | undefined
 
   /**
@@ -3726,6 +3732,7 @@ export class AppCommandBus {
             id,
             statut: img.statut,
             ...(img.statut === 'ok' ? { width: img.width, height: img.height } : {}),
+            ...(typeof img.arbre === 'string' ? { arbre: img.arbre } : {}),
             detail:
               img.statut === 'uni'
                 ? `Image unie (page web ou rendu GPU) : lis le titre de la fenêtre, ou pilote le navigateur par son port de débogage.`
@@ -3752,6 +3759,52 @@ export class AppCommandBus {
     const nombre = (k: string): number | undefined =>
       a[k] === undefined || a[k] === null || a[k] === '' ? undefined : Number(a[k])
     const vrai = (k: string): boolean => booleenEnvoye(a[k], k)
+    // APPUI PAR NOM (conv-1457) : `element` OU x/y. Un nombre vaut texte (les identifiants Win32 sont
+    // des nombres : « Sélectionner » = 103, mesuré) ; un objet, une liste ou un booléen ne sont pas des
+    // noms — `s()` en aurait fait « [object Object] ».
+    const brutElement = a.element
+    if (
+      !argumentAbsent(brutElement) &&
+      typeof brutElement !== 'string' &&
+      typeof brutElement !== 'number'
+    )
+      return refus(
+        'Refusé : `element` doit être un texte (id, nom ou libellé d’un élément de l’arbre).'
+      )
+    const element = argumentAbsent(brutElement) ? '' : String(brutElement).trim()
+    const avecX = !argumentAbsent(a.x)
+    const avecY = !argumentAbsent(a.y)
+    if (element) {
+      if (avecX || avecY) return refus('Refusé : passe `element` OU `x` et `y`, pas les deux.')
+      if (element.length > ELEMENT_MAX)
+        return refus(`Refusé : \`element\` trop long (${ELEMENT_MAX} caractères au plus).`)
+      if (
+        s('texte') ||
+        vrai('entree') ||
+        s('touche') ||
+        nombre('molette') !== undefined ||
+        vrai('sansClic')
+      )
+        return refus(
+          'Refusé : `element` = un seul appui, sans frappe, touche ni molette. Appuie d’abord sur l’élément, puis tape avec `sansClic: true` (le curseur reste posé) ou en visant x/y.'
+        )
+      const r = await this.agirBureauCache!({ id, element })
+      return {
+        data: r.ok
+          ? {
+              ok: true,
+              id,
+              ...(r.action ? { action: r.action } : {}),
+              detail: 'Élément appuyé : re-observe (bureau_cache_observer) pour vérifier son effet.'
+            }
+          : { ok: false, id, detail: `Geste refusé : ${r.message}` }
+      }
+    }
+    if (!avecX && !avecY)
+      return refus(
+        'Refusé : passe `element` (un élément de l’arbre de bureau_cache_observer), ou `x` et `y`.'
+      )
+    if (avecX !== avecY) return refus('Refusé : `x` et `y` vont ensemble.')
     const geste: GesteTv = { id, x: Number(a.x), y: Number(a.y) }
     if (s('texte')) geste.texte = s('texte')
     if (vrai('entree')) geste.entree = true

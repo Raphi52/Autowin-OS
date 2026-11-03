@@ -20,8 +20,17 @@
 #>
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
-  [Parameter(Mandatory = $true)][int]$X,
-  [Parameter(Mandatory = $true)][int]$Y,
+  # X/Y OU -Element (conv-1457) : l'un des deux est exige plus bas, avec un message clair.
+  [int]$X = -1,
+  [int]$Y = -1,
+  # conv-1457 : appuyer sur un ELEMENT de l'arbre d'accessibilite (identifiant, nom ou libelle, voir
+  # hdesk-arbre.cs) au lieu d'un point. Element WPF : motif d'accessibilite ; sinon clic au centre.
+  # Un seul appui : ni frappe, ni touche, ni molette avec lui (v1).
+  [string]$Element = '',
+  # Origine de la capture recadree que l'agent regarde : les positions citees dans les refus sont
+  # alors en pixels de SON image.
+  [ValidateRange(0, 32767)][int]$OrigineX = 0,
+  [ValidateRange(0, 32767)][int]$OrigineY = 0,
   [string]$Texte = '',
   [switch]$Entree,
   # conv-35 : touche nommee (Tab, Echap, Retour, Suppr, Haut, Bas, Gauche, Droite, Debut, Fin, PageHaut,
@@ -50,6 +59,7 @@ function NoterGeste([bool]$ok, [string]$erreur) {
     New-Item -ItemType Directory -Path $dossier -Force | Out-Null
     $journal = Join-Path $dossier "$InstanceId.gestes.jsonl"
     $champs = [ordered]@{ quand = (Get-Date).ToString('o'); ok = $ok; x = $X; y = $Y; clic = (-not $SansClic) }
+    if ($Element) { $champs.element = $Element }
     if ($Texte) { $champs.caracteres = $Texte.Length }
     if ($Entree) { $champs.entree = $true }
     if ($Touche) { $champs.touche = $Touche }
@@ -64,9 +74,48 @@ function NoterGeste([bool]$ok, [string]$erreur) {
   } catch { }
 }
 trap { NoterGeste $false $_.Exception.Message; [Console]::Error.WriteLine($_.Exception.Message); exit 1 }
+# fix-ok: fonctionnalité neuve (conv-1457) mesurée avant : case WPF non agrandie restée « Off » après 2 clics postés au centre, « On » par TogglePattern ; 3 édits = paramètres, journal, appui.
+$Element = $Element.Trim()
+$avecPoint = $PSBoundParameters.ContainsKey('X') -or $PSBoundParameters.ContainsKey('Y')
+if ($Element) {
+  if ($avecPoint) { throw 'Passe -Element OU -X/-Y, pas les deux.' }
+  if ($Element.Length -gt 200) { throw 'Element trop long (200 caracteres au plus).' }
+  if ($Texte -or $Entree -or $Touche -or $Molette -or $Touches -or $SansClic) {
+    throw 'Avec -Element, un seul appui : ni frappe, ni touche, ni molette, ni -SansClic. Appuie sur l''element, puis tape avec -SansClic (le curseur reste pose) ou vise -X/-Y.'
+  }
+} elseif (-not ($PSBoundParameters.ContainsKey('X') -and $PSBoundParameters.ContainsKey('Y'))) {
+  if ($avecPoint) { throw '-X et -Y vont ensemble.' }
+  throw 'Passe -Element, ou -X et -Y.'
+}
+$appui = $null
+$vise = $null
+if ($Element) {
+  # Meme code que hdesk-arbre.ps1 pour trouver l'element : une seule facon de le resoudre.
+  Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase
+  $refs = @(
+    [System.Windows.Automation.AutomationElement].Assembly.Location,
+    [System.Windows.Automation.ControlType].Assembly.Location,
+    [System.Windows.Rect].Assembly.Location
+  )
+  Add-Type -ReferencedAssemblies $refs -TypeDefinition (Get-Content -Raw -Encoding UTF8 -LiteralPath (Join-Path $PSScriptRoot 'hdesk-arbre.cs'))
+  $res = [AutowinHdeskArbre]::Appuyer("AutowinTest_$InstanceId", $Element, $OrigineX, $OrigineY)
+  if ($res.Erreur) { throw $res.Erreur }
+  $vise = $res.Json | ConvertFrom-Json
+  $appui = $res.Appui
+  if ($appui -ne 'clic') {
+    NoterGeste $true ''
+    [pscustomobject]@{ instanceId = $InstanceId; element = $vise; appui = $appui } | ConvertTo-Json -Compress -Depth 4
+    exit 0
+  }
+  # Element sans motif utilisable (Win32...) : clic au centre, par le chemin habituel ci-dessous.
+  $X = $res.X
+  $Y = $res.Y
+}
 Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'hdesk-act.cs'))
 $r = [AutowinHdeskAct]::Run("AutowinTest_$InstanceId", $X, $Y, $Texte, [bool]$Entree, $Touche, $Molette, $Touches, [bool]$SansClic)
 if ($r.Error) { throw $r.Error }
 NoterGeste $true ''
-[pscustomobject]@{ instanceId = $InstanceId; x = $X; y = $Y; cible = $r.Cible; messages = $r.Envoyes } | ConvertTo-Json -Compress
+$sortie = [ordered]@{ instanceId = $InstanceId; x = $X; y = $Y; cible = $r.Cible; messages = $r.Envoyes }
+if ($appui) { $sortie.element = $vise; $sortie.appui = $appui }
+[pscustomobject]$sortie | ConvertTo-Json -Compress -Depth 4
 exit 0

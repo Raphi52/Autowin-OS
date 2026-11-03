@@ -820,11 +820,15 @@ describe.skipIf(process.platform !== 'win32')('TV interactive — origine de la 
         x: 1109,
         y: 601
       })
+      // conv-1457 : la même origine est lue par les outils du chat (hdesk-arbre.ts).
+      expect(capteur.origine('dialogue')).toEqual({ x: 747, y: 457 })
       // Un autre bureau jamais capturé : aucun décalage inventé.
       expect(capteur.versEcran({ id: 'autre', x: 362, y: 144 })).toMatchObject({ x: 362, y: 144 })
+      expect(capteur.origine('autre')).toBeUndefined()
       // Bureau fermé : son origine est oubliée.
       expect((await capteur.image('parti')).statut).toBe('ferme')
       expect(capteur.versEcran({ id: 'parti', x: 1, y: 2 })).toMatchObject({ x: 1, y: 2 })
+      expect(capteur.origine('parti')).toBeUndefined()
     } finally {
       capteur.detruire()
       rmSync(racine, { recursive: true, force: true })

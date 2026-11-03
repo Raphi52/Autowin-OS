@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
-import type { DemandeFermeture, GesteTv, ImageTv, ResultatFermeture } from './hdesk-tv'
+import type {
+  DemandeFermeture,
+  GesteElement,
+  GesteTv,
+  ImageTv,
+  ResultatFermeture
+} from './hdesk-tv'
 import type { DemandeCreationBureau } from '../shared/hdesk-gestion'
 
 /*
@@ -113,7 +119,7 @@ describe('bureau_cache_lancer / observer / agir', () => {
     const bus = new AppCommandBus(os, () => undefined)
     const lancements: DemandeCreationBureau[] = []
     const observes: string[] = []
-    const gestes: GesteTv[] = []
+    const gestes: Array<GesteTv | GesteElement> = []
     bus.lancerBureauCache = async (d) => (
       lancements.push(d),
       { ok: true, id: d.id, pid: 42, message: `Bureau « ${d.id} » prêt.` }
@@ -205,6 +211,71 @@ describe('bureau_cache_lancer / observer / agir', () => {
     await bus.exec('bureau_cache_agir', { x: 1, y: 1, texte: 'secret123' }, 'conv-222')
     expect(JSON.stringify(traces)).not.toContain('secret123')
     expect(traces[0]).toMatchObject({ texte: '[9 caractères]' })
+  })
+
+  /*
+   * conv-1457 : arbre d'accessibilité joint à l'observation, appui par nom (`element`) dans agir.
+   * Cas limites du cadrage P2-1 à P2-7 : chaque refus est une phrase, et RIEN n'est envoyé au script.
+   */
+  it('observer : l’arbre part avec l’image quand il a été lu', async () => {
+    const { bus } = busOutils()
+    bus.observerBureauCache = async (id) => ({
+      ...IMAGE,
+      id,
+      arbre: 'Button « Aide » id=100 (450,60)'
+    })
+    const r = await bus.exec('bureau_cache_observer', {}, 'conv-222')
+    expect(r.data).toMatchObject({ ok: true, arbre: 'Button « Aide » id=100 (450,60)' })
+    expect(r.attachments).toHaveLength(1)
+  })
+
+  it('agir : `element` seul part tel quel, sans x/y ; un nombre vaut texte', async () => {
+    const { bus, gestes } = busOutils()
+    const r = await bus.exec('bureau_cache_agir', { element: '  Valider la saisie ' }, 'conv-222')
+    expect(r.data).toMatchObject({ ok: true })
+    expect(String((r.data as { detail?: string }).detail)).toMatch(/re-observe/)
+    await bus.exec('bureau_cache_agir', { element: 103 }, 'conv-222')
+    expect(gestes).toEqual([
+      { id: 'chat-conv-222', element: 'Valider la saisie' },
+      { id: 'chat-conv-222', element: '103' }
+    ])
+  })
+
+  it.each([
+    ['P2-1 ni element ni x/y', {}, /passe `element`.*ou `x` et `y`/],
+    ['P2-2 element blanc sans x/y', { element: '   ' }, /passe `element`/],
+    ['P2-3 element et x/y', { element: 'Aide', x: 1, y: 2 }, /pas les deux/],
+    ['P2-4 x sans y', { x: 10 }, /vont ensemble/],
+    ['P2-5 element objet', { element: { nom: 'Aide' } }, /doit être un texte/],
+    ['P2-5 element liste', { element: ['Aide'] }, /doit être un texte/],
+    ['P2-5 element booléen', { element: true }, /doit être un texte/],
+    ['P2-6 element trop long', { element: 'x'.repeat(201) }, /trop long \(200/],
+    ['P2-7 element et texte', { element: 'Champ', texte: 'abc' }, /un seul appui/],
+    ['P2-7 element et touche', { element: 'Champ', touche: 'Tab' }, /un seul appui/],
+    ['P2-7 element et molette', { element: 'Liste', molette: 2 }, /un seul appui/]
+  ])('agir : %s → refus nommé, rien n’est envoyé', async (_cas, args, motif) => {
+    const { bus, gestes } = busOutils()
+    const r = await bus.exec('bureau_cache_agir', args, 'conv-222')
+    expect(r.data).toMatchObject({ ok: false })
+    expect(String((r.data as { detail?: string }).detail)).toMatch(motif)
+    expect(gestes).toEqual([])
+  })
+
+  it('agir : le refus du script (ambigu, introuvable) est rendu tel quel', async () => {
+    const { bus } = busOutils()
+    const message =
+      "Plusieurs elements 'Doublon' (2) : precise par l'identifiant (id) d'un d'eux, ou vise x/y sur l'image.\n- Button 'Doublon' centre (210,96)"
+    bus.agirBureauCache = async () => ({ ok: false, message })
+    const r = await bus.exec('bureau_cache_agir', { element: 'Doublon' }, 'conv-222')
+    expect(r.data).toMatchObject({ ok: false, detail: `Geste refusé : ${message}` })
+  })
+
+  it('agir : x/y deviennent facultatifs au catalogue, element est déclaré', () => {
+    const spec = new AppCommandBus(os, () => undefined)
+      .catalog()
+      .find((c) => c.name === 'bureau_cache_agir')
+    for (const k of ['x', 'y', 'element']) expect(spec?.args?.[k], k).toMatch(/^facultatif/)
+    expect(spec?.description).toMatch(/`element`/)
   })
 
   it.each(['bureau_cache_observer', 'bureau_cache_agir'])(

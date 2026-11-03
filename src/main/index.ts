@@ -177,6 +177,7 @@ import {
   lireRegistre,
   type GesteTv
 } from './hdesk-tv'
+import { lireArbreHdesk, outilsBureauCacheDuChat } from './hdesk-arbre'
 import {
   bureauxGeres,
   choisirExecutable,
@@ -1916,9 +1917,16 @@ bus.fermerBureauCache = (demande) =>
 // cachés » — lanceur détaché (l'app survit au tour), processus de capture déjà ouvert, hdesk-act.
 bus.lancerBureauCache = (demande) =>
   creerBureau(racineScriptsHorsArchive(app.getAppPath()), demande)
-bus.observerBureauCache = (id) =>
-  (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath()))).image(id)
-bus.agirBureauCache = (geste) => agirHdesk(racineScriptsHorsArchive(app.getAppPath()), geste)
+// conv-1457 (hdesk-arbre.ts) : l'observation joint l'arbre d'accessibilité, et le geste x/y suit
+// l'image RECADRÉE comme la petite TV — avant, il partait tel quel et tombait à côté (origine (7,57)
+// mesurée sur la Table des caractères) ; `element` appuie par nom.
+const outilsHdeskDuChat = outilsBureauCacheDuChat({
+  capteur: () => (capteurHdesk ??= new CapteurHdesk(racineScriptsHorsArchive(app.getAppPath()))),
+  lireArbre: (id) => lireArbreHdesk(racineScriptsHorsArchive(app.getAppPath()), id),
+  agir: (geste) => agirHdesk(racineScriptsHorsArchive(app.getAppPath()), geste)
+})
+bus.observerBureauCache = outilsHdeskDuChat.observer
+bus.agirBureauCache = outilsHdeskDuChat.agir
 bus.ficheBureauCache = (id) => lireRegistre(registreParDefaut()).find((e) => e.id === id)
 // Outils `navigateur_*` de l'agent (conv-1286, lot 4/5) : le gestionnaire est redemandé à chaque
 // appel — la fenêtre principale rouverte en porte un neuf ; fermée, il vaut `null`.
