@@ -61,6 +61,12 @@ export interface TurnMessageParts {
    * le cache. Conséquence voulue : le coût d'une skill n'est payé que quand elle est demandée.
    */
   skillBody?: string
+  /**
+   * Procédure `grow` chargée par l'app au début d'une demande d'action (`chat/grow-au-debut.ts`,
+   * conv-1445) : entière à la première demande d'action d'une session, un rappel d'une ligne
+   * ensuite. Vide pour une question, un avis ou une analyse.
+   */
+  growAuDebut?: string
   /** Le fil complet, utilisé quand aucune session CLI n'est reprise. */
   history: ReadonlyArray<{
     role: string
@@ -486,6 +492,7 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
         { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
         { name: 'messagesDesFils', text: parts.messagesDesFils ?? '' },
         { name: 'skillBody', text: parts.skillBody ?? '' },
+        { name: 'growAuDebut', text: parts.growAuDebut ?? '' },
         {
           name: nonVu ? 'repriseSessionAvecTourManquant' : 'repriseSession',
           text: nonVu
@@ -507,6 +514,7 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
         { name: 'rappelConversations', text: parts.rappelConversations ?? '' },
         { name: 'messagesDesFils', text: parts.messagesDesFils ?? '' },
         { name: 'skillBody', text: parts.skillBody ?? '' },
+        { name: 'growAuDebut', text: parts.growAuDebut ?? '' },
         // Une page `html-render` de l'agent y revient en texte VISIBLE, pas en code : sinon ses
         // balises et son `<style>` repartaient a chaque tour (conv-1074). Les mots de l'utilisateur,
         // eux, restent intacts.

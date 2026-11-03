@@ -86,6 +86,7 @@ import {
   skillInstruction,
   skillNommeeSansBarre
 } from './skill-pipeline'
+import { blocGrowDuTour } from './chat/grow-au-debut'
 import { VisibleStreamFilter } from '../shared/stream-markup-filter'
 import { suivreBlocsDeCode } from '../shared/bloc-de-code'
 import { FLUX_LECTURE_RETENUE } from '../shared/lecture-retenue'
@@ -1142,6 +1143,13 @@ export class AgentPilot {
   private readonly rappelDejaEnvoye = new Map<string, Set<string>>()
 
   /**
+   * Conversations dont la session COURANTE du modele a deja recu la procedure grow entiere
+   * (`chat/grow-au-debut.ts`, conv-1445). Session neuve = historique renvoye sans ce bloc : il
+   * repart en entier.
+   */
+  private readonly growDejaEnvoye = new Set<string>()
+
+  /**
    * L'index memoire ci-dessus est HYDRATE une fois depuis le disque, puis maintenu en miroir.
    *
    * Sans cela, le gain de la reprise de session s'evaporait a CHAQUE redemarrage de l'app : la `Map`
@@ -2011,6 +2019,21 @@ export class AgentPilot {
      * `/design` SIX fois apres son retrait du kit. On injecte donc la note a la place du corps vide.
      */
     const skillBody = invoked ? skillInstruction(invoked) || (noteSkillInconnue(invoked) ?? '') : ''
+    /*
+     * GROW AU DEBUT DE CHAQUE DEMANDE D'ACTION (conv-1445) : decide par le CODE sur les mots de
+     * l'utilisateur, pas laisse au choix du modele (`skill_charger`). Entiere une fois par session,
+     * un rappel d'une ligne ensuite. Voir `chat/grow-au-debut.ts`.
+     */
+    const cleGrow = conversationId ?? ''
+    if (!resumeSessionId) this.growDejaEnvoye.delete(cleGrow)
+    const grow = blocGrowDuTour({
+      demande: lastUserMessage?.content,
+      skillInvoquee: invoked,
+      dejaDansLaSession: this.growDejaEnvoye.has(cleGrow),
+      procedure: () => skillInstruction('grow'),
+      active: () => nativeSkills().find((s) => s.id === 'grow')?.enabled !== false
+    })
+    if (grow.complet) this.growDejaEnvoye.add(cleGrow)
     /**
      * Le compte-rendu d'un tour execute sans le modele est CONSOMME ici — une seule fois.
      *
@@ -2078,6 +2101,7 @@ export class AgentPilot {
       rappelConversations,
       messagesDesFils,
       skillBody,
+      growAuDebut: grow.texte,
       history,
       resumeSessionId,
       lastUserMessage: lastUserMessage?.content,
