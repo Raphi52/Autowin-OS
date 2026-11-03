@@ -1099,11 +1099,21 @@ export const OUTILS_ARRIERE_PLAN = 'Monitor,TaskStop'
  * commence par les outils : une liste qui diffère d'un seul nom fait réécrire tout le fil, soit dix
  * fois le prix sur un fil de 148 000 jetons (mesure dans `question-a-cote.ts`).
  */
+/**
+ * RECHERCHE D'OUTILS (conv-1465, 2026-11-03) : sans `ToolSearch` dans `--tools`, le CLI charge TOUTES
+ * les définitions MCP d'avance (doc « Configure tool search »). Avec lui, seuls leurs noms partent et
+ * chaque définition se charge à la demande. Mesuré sur le CLI 2.1.317 avec 40 outils MCP : 15 236
+ * jetons écrits sans lui, 6 015 avec ; l'outil différé reste appelable.
+ */
+export const OUTIL_RECHERCHE_OUTILS = 'ToolSearch'
+
 export const OUTILS_TOUR_DE_CHAT =
   'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,WebFetch,WebSearch,' +
   OUTILS_ETAPES +
   ',' +
-  OUTILS_ARRIERE_PLAN
+  OUTILS_ARRIERE_PLAN +
+  ',' +
+  OUTIL_RECHERCHE_OUTILS
 
 /**
  * Ce que le hook des agents lit à côté de son script pour la RÉSERVATION DES FICHIERS (conv-1083) :
@@ -1803,6 +1813,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             'MultiEdit',
             ...autorises(OUTILS_ETAPES),
             ...autorises(OUTILS_ARRIERE_PLAN),
+            ...autorises(OUTIL_RECHERCHE_OUTILS),
             ...outilsMcpAutorises
           )
           // GROS CHANTIERS (conv-1362, lot conv-1366) : `Workflow` s'ajoute à la liste du tour

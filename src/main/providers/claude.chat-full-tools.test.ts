@@ -104,3 +104,22 @@ describe('tour de chat — outils de mutation ouverts', () => {
     expect(source).toMatch(/2026-08-26/)
   })
 })
+
+/**
+ * RECHERCHE D'OUTILS (conv-1465, lot 1/3 de conv-1463, 2026-11-03). La doc du CLI : « If you deny
+ * `ToolSearch` or leave it out of `--tools`, MCP tools load upfront instead ». Le tour de chat
+ * listait ses outils natifs SANS lui : les 55 outils du serveur Autowin partaient en entier à chaque
+ * appel. Mesuré sur le CLI 2.1.317, 40 outils MCP de test : 15 236 jetons écrits sans `ToolSearch`,
+ * 6 015 (3 810 écrits + 2 205 relus) avec ; l'outil différé reste appelable (ToolSearch puis appel).
+ * Entrée qui fait échouer ce test : retirer `OUTIL_RECHERCHE_OUTILS` de `OUTILS_TOUR_DE_CHAT`, ou
+ * le charger sans l'autoriser (chargé, il serait refusé au premier appel).
+ */
+describe('tour de chat — définitions des outils MCP chargées à la demande', () => {
+  it('charge ET autorise ToolSearch, dans la liste partagée avec la question à côté', () => {
+    expect(source).toMatch(/export const OUTIL_RECHERCHE_OUTILS = 'ToolSearch'/)
+    expect(source).toMatch(
+      /OUTILS_TOUR_DE_CHAT =[^;]*?OUTILS_ARRIERE_PLAN \+\s*',' \+\s*OUTIL_RECHERCHE_OUTILS/
+    )
+    expect(blocChat()).toMatch(/\.\.\.autorises\(OUTIL_RECHERCHE_OUTILS\)/)
+  })
+})
