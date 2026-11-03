@@ -284,10 +284,10 @@ export async function creerVie(
     { x: 556, y: 668, h: 52, l: 20, a: 0.28, v: 14 },
     { x: 600, y: 702, h: 40, l: 16, a: 0.22, v: 15 },
     { x: 885, y: 180, h: 44, l: 13, a: 0.34, v: 13 },
-    // L'encens du dojo (conv-1428), à droite de la marche depuis que le dojo est tourné comme les autres
+    // L'encens du dojo (conv-1428), à droite de la marche depuis que le dojo est vu de face comme les autres
     // bâtiments, agrandi et posé devant l'escalier (conv-1444) : la fumée part 22 unités au-dessus de son
-    // pied, posé en (1060, 702).
-    { x: 1060, y: 680, h: 40, l: 11, a: 0.26, v: 9 }
+    // pied, posé en (1145, 714).
+    { x: 1145, y: 692, h: 40, l: 11, a: 0.26, v: 9 }
   ].map((o, i) => ({ ...o, ph: i * 2.1, o: i * 47 }))
   const MATIERE = matiereVapeur()
   const VAPEUR = toile(VAPEUR_L, VAPEUR_H)
