@@ -1,6 +1,11 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { isBlocked, parseRun } from './runs'
 import { mentionDEtatDuRun } from '../../shared/run-blocked'
+import type { RunClosureObservation } from '../../shared/run-execution'
+import { closeConvRun, ligneDeClotureDuMoteur, statutDuRunMd } from '../runs/conv-runs'
 
 const OPEN_RUN = `status: open
 regime: standard
@@ -310,5 +315,86 @@ describe('la décision attendue d’un run', () => {
   it('seul le DERNIER bilan parle : une question dépassée ne ressort pas', () => {
     const depassee = `${ouverte}\n\n${bilanAvec('aucune')}`
     expect(mentionDEtatDuRun(parseRun(run('green', depassee)))).toBe('bloqué')
+  })
+})
+
+/**
+ * UN RUN VALIDÉ, REFUSÉ PAR UNE BASE OCCUPÉE, N'EST PAS BLOQUÉ : IL ATTEND SA PUBLICATION
+ * (conv-1455, 2026-11-03, sur le cas conv-1431 `mvz01n0m`).
+ *
+ * Bout à bout, avec les fonctions que la clôture du chat appelle VRAIMENT (`statutDuRunMd`,
+ * `ligneDeClotureDuMoteur`, `closeConvRun`) : un texte de journal recopié à la main dans le test
+ * laisserait le lecteur dériver de l'écrivain sans faire rougir la suite.
+ *
+ * L'ENTRÉE QUI FERAIT ÉCHOUER CES TESTS SI LA CORRECTION ÉTAIT FAUSSE : une clôture `red` SANS cause
+ * (un vrai échec, ou un conflit `merge-failed`) relue « en attente » ; ou un run coupé par le quota
+ * relu « en attente de publication » au lieu de « relançable ».
+ */
+describe('run validé puis refusé par une base occupée (conv-1431)', () => {
+  // L'en-tête et la DoD de conv-1431 tels qu'ils étaient avant la clôture : 3 cases sur 4.
+  const OUVERT_CONV_1431 = `status: open
+session: conv-1431
+regime: standard
+
+## Besoin
+/build Traite ENSEMBLE ces 3 candidats issus du scout interne d'Autowin
+- [x] Analyse demandee presente dans le livrable
+- [x] Mutation demandee produite avec une preuve executable
+- [x] Tests demandes executes avec un code de sortie 0
+- [ ] Commit demande publie avec une identite Git verifiable
+
+## Journal
+[2026-11-02] Gate BLOQUÉ: intégration locale non terminée; blocage d’intégration: base-dirty — cause: des fichiers non committés de la base bloquent la publication — fichiers en cause: src/main/index.ts; Commit demande sans identite Git publiee verifiable
+[2026-11-02] Orchestration lancée depuis la conversation conv-1431.
+
+## Défauts
+`
+
+  function clore(
+    closure: Pick<RunClosureObservation, 'status' | 'interruption' | 'totalDurationMs'>
+  ) {
+    const dossier = mkdtempSync(join(tmpdir(), 'run-attente-publication-'))
+    const chemin = join(dossier, 'RUN.md')
+    try {
+      writeFileSync(chemin, OUVERT_CONV_1431, 'utf8')
+      closeConvRun(chemin, statutDuRunMd(closure), ligneDeClotureDuMoteur(closure))
+      return readFileSync(chemin, 'utf8')
+    } finally {
+      rmSync(dossier, { recursive: true, force: true })
+    }
+  }
+
+  it('clôture red « publication » → RUN.md interrupted, relu « en attente de publication », hors des bloqués', () => {
+    const md = clore({ status: 'red', interruption: 'publication', totalDurationMs: 3270055 })
+    expect(md).toMatch(/^status: interrupted$/m)
+    const resume = parseRun(md)
+    expect(resume.status).toBe('interrupted')
+    expect(resume.interruption).toBe('publication')
+    expect(isBlocked(resume)).toBe(false)
+    expect(mentionDEtatDuRun(resume)).toBe('en attente de publication')
+  })
+
+  it('JUMEAU : la même clôture red SANS cause (conv-1431 avant la correction) reste bloquée', () => {
+    const resume = parseRun(clore({ status: 'red', totalDurationMs: 3270055 }))
+    expect(resume.status).toBe('red')
+    expect(resume.interruption).toBeUndefined()
+    expect(isBlocked(resume)).toBe(true)
+    expect(mentionDEtatDuRun(resume)).toBe('bloqué')
+  })
+
+  it('JUMEAU : un run coupé par le quota reste « interrompu, relançable », pas « en attente »', () => {
+    const resume = parseRun(clore({ status: 'red', interruption: 'quota', totalDurationMs: 10 }))
+    expect(resume.status).toBe('interrupted')
+    expect(resume.interruption).toBeUndefined()
+    expect(mentionDEtatDuRun(resume)).toBe('interrompu, relançable')
+  })
+
+  it('la ligne de clôture des autres causes ne change pas de texte', () => {
+    expect(
+      ligneDeClotureDuMoteur({ status: 'red', interruption: 'quota', totalDurationMs: 10 })
+    ).toBe('Cycle de vie terminal: red (interrompu : quota) (10 ms).')
+    expect(ligneDeClotureDuMoteur({ status: 'green', totalDurationMs: 5 })).toBe(
+      'Cycle de vie terminal: green (5 ms).'
+    )
   })
 })

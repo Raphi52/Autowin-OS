@@ -18,6 +18,7 @@ import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { supprimerArbre } from './fs-supprimer'
+import { statutDuRunMd } from './runs/conv-runs'
 
 class CapturingProvider implements ProviderAdapter {
   readonly id = 'capture'
@@ -1793,5 +1794,105 @@ describe('Orchestrator — la garde « intégration vide » lit la mesure réell
       'intégration vide non vérifiable : la copie isolée n’a pas pu être mesurée avant la finalisation, rien publié'
     )
     expect(close).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * UN RUN REFUSÉ SEULEMENT PARCE QUE LA BASE ÉTAIT OCCUPÉE N'A PAS ÉCHOUÉ (conv-1455, 2026-11-03).
+ *
+ * Cas vécu : conv-1431, run-9160c58139cd-1 (`mvz01n0m`). Juge VALIDE, 19 fichiers prêts, fusion
+ * refusée `base-dirty` parce que `src/main/index.ts` portait le travail non commité d'un autre fil.
+ * La garde « commit demandé » a alors posé `green = false`, et la clôture est partie `red` SANS
+ * cause : le RUN.md disait « échec » et le run restait dans la liste des bloqués, alors que la
+ * reprise automatique du coordinateur (verdict `green`, `blocked / base-dirty`) attendait seulement
+ * que la base se libère. Le travail a été publié une heure plus tard (b0c4cad9, conv-1438).
+ *
+ * L'ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION EST FAUSSE : un refus `merge-failed`
+ * (un conflit de contenu) marqué « en attente de publication ». Un conflit demande l'arbitrage de
+ * l'utilisateur ; il reste un échec, sans cause d'attente.
+ */
+describe('Orchestrator — refus de fusion par une base occupée : en attente de publication (conv-1431)', () => {
+  function orchestrateurRefuse(reason: 'base-dirty' | 'base-in-progress' | 'merge-failed') {
+    const provider = new CapturingProvider()
+    const close = vi.fn().mockResolvedValue(undefined)
+    let runId = ''
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'worker' },
+        judge: { provider: provider.id, model: 'judge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\base',
+      worktrees: {
+        begin: (id) => {
+          runId = id
+          return 'C:\\wt\\run-9160'
+        },
+        activity: () => [
+          { agentId: runId, agentName: 'Agent', state: 'ready' as const, files: [], startedAtMs: 0 }
+        ],
+        fichiersChangesDeLaCopie: async () => ['src/main/index.ts', 'src/main/os.ts'],
+        end: () => ({
+          outcome: 'blocked' as const,
+          agentId: runId,
+          files: ['src/main/index.ts'],
+          reason
+        })
+      },
+      closeGreenRun: { begin: vi.fn(), close }
+    })
+    return { orch, close }
+  }
+
+  async function cloture(
+    reason: 'base-dirty' | 'base-in-progress' | 'merge-failed',
+    tache: string
+  ) {
+    const { orch, close } = orchestrateurRefuse(reason)
+    const lifecycle: RunLifecycleEvent[] = []
+    const result = await runWithLifecycle(orch, tache, (event) => lifecycle.push(event))
+    const fin = lifecycle.filter((event) => event.stage === 'closure').at(-1)
+    if (fin?.stage !== 'closure') throw new Error('aucune clôture émise')
+    return { result, closure: fin.closure, close }
+  }
+
+  it('commit demandé + base-dirty (conv-1431) → clôture red « en attente de publication », RUN.md interrupted', async () => {
+    const { result, closure, close } = await cloture(
+      'base-dirty',
+      'modifie le projet et publie un commit'
+    )
+    // Les raisons restent dites : rien n'est publié, et le rapport le nomme.
+    expect(result.gateBlocked).toBe(true)
+    expect(result.gateReasons).toContain('Commit demande sans identite Git publiee verifiable')
+    expect(result.gateReasons.some((raison) => raison.includes('base-dirty'))).toBe(true)
+    expect(close).not.toHaveBeenCalled()
+    // Mais le run n'a pas échoué : il attend sa publication.
+    expect(closure.status).toBe('red')
+    expect(closure.interruption).toBe('publication')
+    expect(statutDuRunMd(closure)).toBe('interrupted')
+  })
+
+  it('base-in-progress (une opération git en cours) → même attente de publication', async () => {
+    const { closure } = await cloture('base-in-progress', 'modifie le projet et publie un commit')
+    expect(closure.interruption).toBe('publication')
+  })
+
+  it('base-dirty SANS commit demandé → même attente : la garde du commit n’était pas la seule en cause', async () => {
+    const { result, closure } = await cloture('base-dirty', 'modifie le projet')
+    expect(result.gateReasons).toContain('intégration locale non terminée')
+    expect(closure.interruption).toBe('publication')
+  })
+
+  it('JUMEAU refusé : un conflit de contenu (merge-failed) reste un échec, sans attente', async () => {
+    const { result, closure } = await cloture(
+      'merge-failed',
+      'modifie le projet et publie un commit'
+    )
+    expect(result.gateBlocked).toBe(true)
+    expect(closure.status).toBe('red')
+    expect(closure.interruption).toBeUndefined()
+    expect(statutDuRunMd(closure)).toBe('red')
   })
 })

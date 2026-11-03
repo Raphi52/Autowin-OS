@@ -7,6 +7,7 @@ import type { OrchestrationStep } from '../orchestrator'
 import { ensureAutowinAppData } from '../app-data'
 import type { RunClosureObservation, RunFileStatus } from '../../shared/run-execution'
 import { MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared/relance-sans-objet'
+import { ATTENTE_DE_PUBLICATION } from '../../shared/run-blocked'
 import { rootDodLabels, rootRequirementChecks } from '../root-execution-contract'
 import type { ExecutionEvidence } from '../providers/types'
 
@@ -455,6 +456,26 @@ export function statutDuRunMd(
   closure: Pick<RunClosureObservation, 'status' | 'interruption'>
 ): RunFileStatus {
   return closure.status === 'red' && closure.interruption ? 'interrupted' : closure.status
+}
+
+/**
+ * LA LIGNE DE JOURNAL D'UNE CLÔTURE DU MOTEUR — écrite par `commands.ts`, relue par `parseRun`.
+ *
+ * Elle vivait en ligne dans `commands.ts`. Un run validé qui attend sa publication (conv-1455) y
+ * aurait lu « interrompu : publication » ; il dit ce qu'il attend, et `parseRun` relit ce texte-là
+ * (`ATTENTE_DE_PUBLICATION`) pour le montrer « en attente de publication » plutôt que « relançable ».
+ * Les autres causes gardent leur texte mot pour mot.
+ */
+export function ligneDeClotureDuMoteur(
+  closure: Pick<RunClosureObservation, 'status' | 'interruption' | 'totalDurationMs'>
+): string {
+  const cause =
+    closure.interruption === 'publication'
+      ? ` (${ATTENTE_DE_PUBLICATION})`
+      : closure.interruption
+        ? ` (interrompu : ${closure.interruption})`
+        : ''
+  return `Cycle de vie terminal: ${closure.status}${cause} (${closure.totalDurationMs} ms).`
 }
 
 export function closeConvRun(path: string, status: RunFileStatus, journalLine: string): void {

@@ -4,7 +4,7 @@ import { estArretParStop } from '../../shared/arret-par-stop'
 import { extraireBilan } from '../../shared/bilan-d-etape'
 import { questionDuBilan } from '../../shared/message-du-run'
 import { estMurDeQuota } from '../../shared/reprise-quota'
-import type { RunInterruption } from '../../shared/run-blocked'
+import { ATTENTE_DE_PUBLICATION, type RunInterruption } from '../../shared/run-blocked'
 
 /** Résumé normalisé d'un RUN.md pour affichage dashboard. */
 export type RunSummary = {
@@ -25,7 +25,10 @@ export type RunSummary = {
   journalEvents: number
   defauts: number
   subject?: string
-  /** Run rouge parce qu'il a été COUPÉ (Stop du chat, quota), pas parce que le travail a échoué. */
+  /**
+   * Run rouge parce qu'il a été COUPÉ (Stop du chat, quota), pas parce que le travail a échoué ; ou
+   * run `interrupted` validé qui attend sa publication (`publication`, conv-1455).
+   */
   interruption?: RunInterruption
   /**
    * Run VALIDÉ dont le dernier bilan pose une question à l'utilisateur : ce qui reste à faire lui
@@ -100,6 +103,25 @@ function interruptionDeCloture(journal: string[]): RunInterruption | undefined {
   return undefined
 }
 
+/** La ligne qu'écrit la clôture du moteur (`ligneDeClotureDuMoteur`, `conv-runs.ts`). */
+const CLOTURE_DU_MOTEUR =
+  /^\[\d{4}-\d{2}-\d{2}\] Cycle de vie terminal: \S+(?: \((.+?)\))? \(\d+ ms\)\.$/
+
+/**
+ * UN RUN `interrupted` QUI ATTEND SA PUBLICATION (conv-1455) : validé, fusion refusée par une base
+ * occupée. Seule la PLUS RÉCENTE ligne de clôture du moteur compte — `closeConvRun` l'insère en
+ * tête —, et seulement si elle nomme cette attente mot pour mot (`ATTENTE_DE_PUBLICATION`).
+ * fix-ok: conv-1455 — cause mesurée : `parseRun` ne lisait aucune cause sur un RUN.md `interrupted`, donc `mentionDEtatDuRun` disait « interrompu, relançable » d'un travail validé qui n'attend que sa publication (test « clôture red publication → … en attente de publication » de runs.test.ts rouge avant, vert après).
+ */
+function attenteDePublicationDeCloture(journal: string[]): RunInterruption | undefined {
+  for (const ligne of journal) {
+    const cloture = CLOTURE_DU_MOTEUR.exec(ligne.trim())
+    if (!cloture) continue
+    return cloture[1] === ATTENTE_DE_PUBLICATION ? 'publication' : undefined
+  }
+  return undefined
+}
+
 /**
  * Parse un RUN.md (format kit Autowin) en RunSummary.
  * - status/regime lus depuis les lignes `status: X` / `regime: X`.
@@ -155,7 +177,12 @@ export function parseRun(md: string, subject?: string): RunSummary {
     return trimmed.length > 0 && !trimmed.startsWith('<!--') && !trimmed.startsWith('//')
   }).length
 
-  const interruption = status === 'red' ? interruptionDeCloture(journalLines) : undefined
+  const interruption =
+    status === 'red'
+      ? interruptionDeCloture(journalLines)
+      : status === 'interrupted'
+        ? attenteDePublicationDeCloture(journalLines)
+        : undefined
   const bilan = STATUTS_VALIDES.has(status) ? extraireBilan(md)?.bilan : undefined
 
   return {

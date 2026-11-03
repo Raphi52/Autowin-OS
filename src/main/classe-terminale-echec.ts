@@ -62,6 +62,32 @@ export function classeTerminaleDEchec(erreur: unknown, annule: boolean): 'extern
 }
 
 /**
+ * CE RUN VALIDÉ ATTEND-IL SEULEMENT SA PUBLICATION ? (conv-1455, 2026-11-03)
+ *
+ * Vrai quand la finalisation a refusé la fusion parce que la BASE était occupée — le travail non
+ * commité d'un autre fil (`base-dirty`) ou une opération git en cours (`base-in-progress`). Ces deux
+ * causes disparaissent d'elles-mêmes, et le coordinateur garde ce travail `green / blocked` pour sa
+ * reprise automatique (`CAUSES_REESSAYABLES`, `repechage-automatique.ts`).
+ *
+ * Le défaut corrigé : l'orchestrateur clôturait ce run `red` sans cause, et la garde « commit
+ * demandé » ajoutait un échec par-dessus le refus dont elle n'est que la conséquence. Mesuré par le
+ * scout de conv-1455 : 99 runs sur 994 en échec portaient cette seule cause, dont conv-1431
+ * (`mvz01n0m`), juge VALIDE, publié une heure plus tard à la main (b0c4cad9) et toujours « bloqué ».
+ *
+ * Même vocabulaire que `classeTerminaleDuControle` (`INTEGRATION_BLOQUEE_PAR_LA_BASE`) : un conflit
+ * de contenu (`merge-failed`) reste un échec — l'arbitrer revient à l'utilisateur.
+ */
+export function attendSaPublication(finalisation: unknown): boolean {
+  if (typeof finalisation !== 'object' || finalisation === null) return false
+  const { outcome, reason } = finalisation as { outcome?: unknown; reason?: unknown }
+  return (
+    outcome === 'blocked' &&
+    typeof reason === 'string' &&
+    INTEGRATION_BLOQUEE_PAR_LA_BASE.test(reason)
+  )
+}
+
+/**
  * POURQUOI CE RUN S'EST-IL ARRÊTÉ, QUAND CE N'EST PAS LA FAUTE DU TRAVAIL (piste 4, conv-1070).
  *
  * `classeTerminaleDEchec` ne servait qu'à la mémoire d'apprentissage : le RUN.md, lui, recevait

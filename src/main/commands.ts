@@ -246,6 +246,7 @@ import { tachesDeFondEnCours } from './providers/taches-de-fond-suivies'
 import type { Role, RoleBinding } from './roles'
 import {
   closeConvRun,
+  ligneDeClotureDuMoteur,
   statutDuRunMd,
   convRunsRoot,
   reuseOrCreateConvRun,
@@ -4732,7 +4733,7 @@ export class AppCommandBus {
                     runPath,
                     // Coupé par Stop, quota ou panne : `interrupted`, pas `red` (piste 4, conv-1070).
                     statutDuRunMd(lifecycle.closure),
-                    `Cycle de vie terminal: ${lifecycle.closure.status}${lifecycle.closure.interruption ? ` (interrompu : ${lifecycle.closure.interruption})` : ''} (${lifecycle.closure.totalDurationMs} ms).`
+                    ligneDeClotureDuMoteur(lifecycle.closure)
                   )
                   this.broadcast({ type: 'refresh', scope: 'workflows' })
                 }

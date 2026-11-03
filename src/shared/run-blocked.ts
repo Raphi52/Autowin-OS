@@ -7,8 +7,19 @@
  * locale — sans que l'interface aille lire du code du processus principal.
  */
 
-/** Un run rouge COUPÉ — par le bouton Stop du chat, ou par le quota de l'abonnement — et non raté. */
-export type RunInterruption = 'stop' | 'quota'
+/**
+ * Un run rouge COUPÉ — par le bouton Stop du chat, ou par le quota de l'abonnement — et non raté.
+ * `publication` : validé, mais sa fusion a été refusée par une base occupée ; il attend la reprise
+ * automatique de sa publication (conv-1455, cas conv-1431).
+ */
+export type RunInterruption = 'stop' | 'quota' | 'publication'
+
+/**
+ * Ce que dit un run qui attend sa publication — écrit dans la ligne de clôture du RUN.md
+ * (`ligneDeClotureDuMoteur`), relu par `parseRun`, affiché par `mentionDEtatDuRun` : une seule
+ * source pour les trois, sinon le lecteur dérive de l'écrivain sans que rien ne rougisse.
+ */
+export const ATTENTE_DE_PUBLICATION = 'en attente de publication'
 
 /**
  * True si le run est BLOQUÉ, c'est-à-dire ni clos ni concluant.
@@ -76,6 +87,8 @@ export function mentionDEtatDuRun(s: {
   interruption?: RunInterruption
   decisionAttendue?: boolean
 }): string {
+  // Avant « relançable » : relancer referait un travail déjà validé, qui n'attend que sa publication.
+  if (s.status === 'interrupted' && s.interruption === 'publication') return ATTENTE_DE_PUBLICATION
   if (s.status === 'interrupted' || (s.status === 'red' && s.interruption))
     return 'interrompu, relançable'
   if (attendUneDecision(s)) return 'en attente de votre décision'

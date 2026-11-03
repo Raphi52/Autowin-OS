@@ -574,7 +574,7 @@ import {
 } from './skill-node-mcp'
 import { sharedBrainRoot } from './brain-paths'
 import { protegerRappel } from './observabilite-non-bloquante'
-import { causeDInterruption } from './classe-terminale-echec'
+import { attendSaPublication, causeDInterruption } from './classe-terminale-echec'
 
 function canonicalCausalPath(root: string, path: string): string {
   const normalized = resolve(root, path).replaceAll('\\', '/')
@@ -2828,6 +2828,11 @@ export class Orchestrator {
           produced.gateReasons.push(finalizeDiagnosis)
         }
       }
+      // Lu ICI, avant la garde « commit demandé » plus bas : elle pose `green = false` sur ce même
+      // refus, dont l'absence de commit n'est que la conséquence (conv-1431, conv-1455).
+      // fix-ok: conv-1455 — cause mesurée : la clôture d'un run validé puis refusé `base-dirty` partait `red` sans `interruption` (RUN.md conv-1431 mvz01n0m « status: red » ; test « commit demandé + base-dirty (conv-1431) » : expected undefined to be 'publication' avant, vert après).
+      const enAttenteDePublication =
+        green && !integrated && !retained && attendSaPublication(finalized)
       // Le rapport a ete redige DANS la copie isolee ; la ligne ci-dessus vient de la fusionner puis de
       // la supprimer. Sans cet alignement, chaque chemin cite est mort — constate le 2026-07-29, dit
       // par l'agent lui-meme : « le rapport pointe vers un worktree qui n'existe plus ».
@@ -2953,6 +2958,10 @@ ${annonceCommit}`
           // La cause d'un arrêt étranger au travail : elle ne change pas ce statut — le run n'a rien
           // livré —, elle dit au RUN.md qu'il est interrompu, pas en échec (piste 4, conv-1070).
           ...(() => {
+            // Validé mais refusé par une base occupée : il attend sa reprise automatique, il n'a
+            // pas échoué. Sans cette cause, le RUN.md disait `red` et le run restait « bloqué »
+            // même une fois publié (conv-1431 : publié en b0c4cad9, toujours bloqué).
+            if (enAttenteDePublication) return { interruption: 'publication' as const }
             if (green) return {}
             const interruption = causeDInterruption(erreurDuRun, signal?.aborted === true)
             return interruption ? { interruption } : {}

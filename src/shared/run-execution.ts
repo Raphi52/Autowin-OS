@@ -10,8 +10,13 @@ export type RunClosureStatus = 'open' | 'green' | 'degraded-closed' | 'red'
  */
 export type RunFileStatus = RunClosureStatus | 'interrupted'
 
-/** Cause d'un arrêt étrangère au travail (`causeDInterruption`, `classe-terminale-echec.ts`). */
-export type RunInterruption = 'arret' | 'quota' | 'externe'
+/**
+ * Cause d'un arrêt étrangère au travail (`causeDInterruption`, `classe-terminale-echec.ts`).
+ * `publication` : le travail est allé au bout et validé, mais sa fusion a été refusée parce que la
+ * base était occupée (`base-dirty` / `base-in-progress`) — il attend la reprise automatique du
+ * coordinateur, il n'a pas échoué (`attendSaPublication`, conv-1455 sur le cas conv-1431).
+ */
+export type RunInterruption = 'arret' | 'quota' | 'externe' | 'publication'
 
 /**
  * D'où vient le workflow qui pilote le run. Le NOM seul ne suffit pas : un workflow que
@@ -87,7 +92,8 @@ export interface RunClosureObservation {
   gateReasons?: string[]
   /**
    * PRÉSENT seulement sur une clôture `red` dont la cause est hors du travail : `arret` (Stop,
-   * fermeture de l'app), `quota` (limite de session), `externe` (panne en face, session expirée).
+   * fermeture de l'app), `quota` (limite de session), `externe` (panne en face, session expirée),
+   * `publication` (travail validé, fusion refusée par une base occupée : en attente de publication).
    * ABSENT = un vrai échec, ou une trace écrite avant ce champ (piste 4, conv-1070).
    */
   interruption?: RunInterruption
