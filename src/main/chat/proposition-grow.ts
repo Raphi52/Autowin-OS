@@ -1,12 +1,13 @@
 /**
- * GROW PROPOSÉE PAR LE CODE DE FIN DE TOUR (conv-417, 2026-11-02).
+ * GROW PROPOSÉE PAR LE CODE DE FIN DE TOUR (conv-417, 2026-11-02 ; rôle revu conv-1445, 2026-11-03).
  *
- * La skill `grow` (skills/grow/SKILL.md) se déclenche « à la fin de toute demande d'action livrée ».
- * Mais une skill ne part que si le modèle choisit de la charger (`skill_charger`) ou si l'utilisateur
- * tape son nom : rien ne garantissait qu'elle soit proposée. Une phrase de plus dans un prompt
- * n'aurait été qu'un vœu. Le déclencheur vit donc ici, lu par la clôture du tour
- * (`run-pilot-chat.ts`, branche `done`), sur l'issue STRUCTURÉE du run — jamais sur les mots du
- * modèle.
+ * Depuis conv-1445, la skill `grow` (skills/grow/SKILL.md) agit PENDANT le traitement d'une demande,
+ * et son corps est chargé par le code au DÉBUT de chaque demande d'action (`grow-au-debut.ts`, lu par
+ * `agent-pilot.ts`). Ce fichier-ci reste la porte d'APRÈS coup : quand un run orchestré a livré une
+ * modification, le bouton « /grow sur la demande que tu viens de terminer » relance grow sur cette
+ * demande — il crée l'ajout qui aurait manqué, puis rend à nouveau le résultat amélioré par lui.
+ * Décidé sur l'issue STRUCTURÉE du run (`run-pilot-chat.ts`, branche `done`), jamais sur les mots
+ * du modèle.
  *
  * PROPOSÉE, PAS EXÉCUTÉE : la clôture ajoute une ligne `AUTOWIN_PROMPT_V1`, le canal déjà lu par le
  * champ de saisie (bouton + texte grisé) et retiré de l'affichage (`prompt-suivant.ts`). Rien ne
