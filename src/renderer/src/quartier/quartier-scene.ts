@@ -12,6 +12,12 @@
  * LES OBJETS sont des morceaux de la peinture, repeints par-dessus un tanuki quand ils sont devant lui.
  * Chacun a sa ligne de pied : c'est elle, et pas la profondeur, qui décide qui passe devant.
  */
+import {
+  creerRobotDeLAtelier,
+  dessinerEtabli,
+  dessinerOutil,
+  type PoseAtelier
+} from './quartier-atelier'
 import urlFalaise from '../assets/quartier/falaise.avif'
 import urlAtlas from '../assets/quartier/atlas.avif'
 import urlAtlasRenard from '../assets/quartier/atlas-renard.avif'
@@ -357,6 +363,9 @@ export function creerSceneQuartier(): DecorScene | null {
   let sous: ObjetCoupe | null = null
   let dernier = -1
   const lumieres = new Map<string, number>()
+  /** Le grand robot du hangar, nourri par les coups des agents au poste des runs (conv-1453). */
+  const robot = creerRobotDeLAtelier()
+  let forgent: PoseAtelier[] = []
   let agents: readonly AgentQuartier[] = lireAgentsQuartier()
   const desabonner = abonnerAgentsQuartier(() => {
     agents = lireAgentsQuartier()
@@ -676,12 +685,40 @@ export function creerSceneQuartier(): DecorScene | null {
     x.restore()
   }
 
+  /** La pose d'atelier d'un tanuki assis au poste des runs, ou rien s'il n'y est pas. */
+  const poseAtelier = (M: Monde, w: Tanuki): PoseAtelier | null => {
+    if (w.etat !== 'poste' || w.poste === null || !w.face?.g) return null
+    if (M.D.postes[w.poste]?.me !== 'runs') return null
+    const g = M.D.gestes[w.face.g]
+    const entree = g.e?.d ?? 0
+    if (w.th < entree) return null
+    return {
+      id: w.id,
+      x: w.x,
+      y: w.y,
+      u: w.u,
+      th: w.th - entree,
+      sens: w.face.m ? -1 : 1,
+      cycle: g.d,
+      images: g.n,
+      alpha: w.alpha
+    }
+  }
+
   function tanukis(M: Monde): void {
+    forgent = []
     for (const w of [...M.m.T].sort((a, b) => a.y - b.y)) {
       dessinerOmbre(M, w)
+      // Au poste des runs, il forge au lieu de taper dans le vide (conv-1453).
+      const atelier = poseAtelier(M, w)
+      if (atelier) {
+        forgent.push(atelier)
+        dessinerEtabli(x, atelier)
+      }
       x.globalAlpha = w.alpha
       sprite(M, w, false)
       x.globalAlpha = 1
+      if (atelier) dessinerOutil(x, atelier)
       // Tout objet dont le pied est plus près que le sien passe devant lui, entier.
       for (const o of M.OB)
         if (o.fixe !== 'ciel' && o.b && couvre(o, w) && w.y < pied(o, w.x) - 1) peint(o)
@@ -853,18 +890,18 @@ export function creerSceneQuartier(): DecorScene | null {
     M.vie.pieces(x)
     M.vie.feuillages(x, false)
     for (const o of M.OB) if (o.cal) peint(o)
+    // Le robot s'allume derrière les agents ; il compte leurs coups une fois qu'ils sont dessinés.
+    robot.dessiner(x)
     tanukis(M)
+    robot.avancer(dt, forgent)
     M.vie.feuillages(x, true)
     signaux(M)
     M.vie.airs(x)
     if (sous) {
       halo(M, sous)
       if (sous.cle === 'task') M.vie.pieces(x)
-      // Le halo repeint la zone d'après la peinture, où le gong n'est pas : il repasse devant.
-      if (sous.cle === 'task') {
-        for (const o of M.OB) if (o.n === 'gong') peint(o)
-        M.vie.maillet(x)
-      }
+      // La cloche de la Falaise o-1916 est dans la peinture (conv-1444) : le halo la repeint lui-même, sans
+      // gong découpé ni maillet à repasser devant.
     }
     etiquettes(M)
     x.setTransform(1, 0, 0, 1, 0, 0)
