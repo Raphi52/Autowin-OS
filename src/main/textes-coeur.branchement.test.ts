@@ -151,3 +151,15 @@ describe('textes du cœur — anglais quand il est réglé, français sinon', ()
     }
   })
 })
+
+describe('bulle groupée des abandons (conv-1444)', () => {
+  it('cinq abandons simultanés donnent UNE bulle qui les compte', async () => {
+    const { contenuDeNotificationDAbandons } = await import('./os')
+    const infos = [1, 2, 3, 4, 5].map((i) => ({ runId: `run-${i}`, tache: `Lot ${i}` }))
+    const bulle = contenuDeNotificationDAbandons(infos)
+    expect(bulle.title).toMatch(/5/)
+    expect(bulle.body).toContain('Lot 1')
+    expect(bulle.body).toContain('Lot 5')
+    expect(contenuDeNotificationDAbandons([infos[0]]).body).toContain('Lot 1')
+  })
+})

@@ -225,6 +225,25 @@ export function contenuDeNotificationDAbandon(info: { runId: string; tache?: str
   }
 }
 
+const abandonsEnAttente: { runId: string; tache?: string }[] = []
+
+/**
+ * UNE bulle pour plusieurs abandons (conv-1444, 2026-11-03) : une même réconciliation en abandonne
+ * souvent plusieurs d'un coup — 5 runs à la même seconde (15:47:47) ont sonné 5 bulles, vécu comme
+ * du spam. Un seul abandon garde le texte d'origine.
+ */
+export function contenuDeNotificationDAbandons(infos: { runId: string; tache?: string }[]): {
+  title: string
+  body: string
+} {
+  if (infos.length === 1) return contenuDeNotificationDAbandon(infos[0])
+  const noms = infos.map((i) => (i.tache ?? i.runId).slice(0, 40))
+  return {
+    title: traduireCoeur('abandon.titrePlusieurs', { n: String(infos.length) }),
+    body: traduireCoeur('abandon.corpsPlusieurs', { taches: noms.join(' · ').slice(0, 200) })
+  }
+}
+
 /** Un modèle membre d'un bloc de fan-out (topology → orchestrateur). */
 export interface FanMember {
   provider: string
@@ -636,12 +655,18 @@ export class AutowinOS {
               )
             )?.resume,
           onAbandon: ({ tache, runId }) => {
-            try {
-              if (!Notification.isSupported()) return
-              new Notification(contenuDeNotificationDAbandon({ tache, runId })).show()
-            } catch {
-              // Une notification qui echoue ne doit jamais faire tomber la reconciliation.
-            }
+            // Regroupés sur 2 s : une réconciliation abandonne ses runs dans la même boucle.
+            abandonsEnAttente.push({ tache, runId })
+            if (abandonsEnAttente.length > 1) return
+            setTimeout(() => {
+              const lot = abandonsEnAttente.splice(0)
+              try {
+                if (!Notification.isSupported()) return
+                new Notification(contenuDeNotificationDAbandons(lot)).show()
+              } catch {
+                // Une notification qui echoue ne doit jamais faire tomber la reconciliation.
+              }
+            }, 2000)
           },
           onRecoveredPublication: async (publication) => {
             if (this.autoClose) {

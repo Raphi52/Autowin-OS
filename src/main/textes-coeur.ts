@@ -76,7 +76,10 @@ export const TEXTES_COEUR_FR = {
   'abandon.titre': 'Autowin — un travail a ete abandonne',
   'abandon.corps':
     "« {tache} » n'a pas pu etre integre. Son travail reste sur sa branche de secours.",
-  'abandon.corpsRun': "{run} n'a pas pu etre integre. Son travail reste sur sa branche de secours."
+  'abandon.corpsRun': "{run} n'a pas pu etre integre. Son travail reste sur sa branche de secours.",
+  'abandon.titrePlusieurs': 'Autowin — {n} travaux ont ete abandonnes',
+  'abandon.corpsPlusieurs':
+    "{taches} : non integres. Leur travail reste sur leurs branches de secours."
 } as const
 
 export type CleCoeur = keyof typeof TEXTES_COEUR_FR
@@ -131,7 +134,9 @@ export const TEXTES_COEUR_EN: Record<CleCoeur, string> = {
   'reparation.impossible': 'Repair failed: {erreur}',
   'abandon.titre': 'Autowin — a job was abandoned',
   'abandon.corps': '“{tache}” could not be integrated. Its work stays on its backup branch.',
-  'abandon.corpsRun': '{run} could not be integrated. Its work stays on its backup branch.'
+  'abandon.corpsRun': '{run} could not be integrated. Its work stays on its backup branch.',
+  'abandon.titrePlusieurs': 'Autowin — {n} jobs were abandoned',
+  'abandon.corpsPlusieurs': '{taches}: not integrated. Their work stays on their backup branches.'
 }
 
 export type ValeursCoeur = Readonly<Record<string, string | number>>
