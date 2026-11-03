@@ -36,6 +36,7 @@ import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
+import { NOM_FICHIER_RAPPELS } from '../../shared/rappels-outils'
 import { refusReglageProd, refusSqlAgent } from '../prod-run-guard'
 import { chargerAutoriteProd } from '../store/prod-autorite-store'
 import { autowinAppDataRoot } from '../app-data'
@@ -1032,7 +1033,11 @@ function basesNonProdDeclarees(): string[] {
  */
 export function scriptDesGardesCourant(): string {
   // Le mod chargé par les runs est protégé de leurs écritures (garde-mod-autowin.ts, plan-387b99e7).
-  return scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees(), dossierModsAutowin)
+  // Ses rappels au bon moment (conv-1457, shared/rappels-outils.ts) sont relus à chaque appel
+  // d'outil : un run ne peut pas les faire taire, puisqu'il n'écrit pas dans ce dossier.
+  // fix-ok: branchement neuf (conv-1457), mesuré rouge puis vert : claude.rappels-outils.test.ts sans cette ligne → aucun rappel (sortie vide) ; 3 édits = import, appel, remise sur une ligne (3 tests lisent cet appel dans le source).
+  const rappels = dossierModsAutowin ? join(dossierModsAutowin, NOM_FICHIER_RAPPELS) : undefined
+  return scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees(), dossierModsAutowin, rappels)
 }
 
 /**

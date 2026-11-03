@@ -1,0 +1,60 @@
+[
+  {
+    "id": "conversations-json-direct",
+    "source": "AGENTS.md « Lire l'état de l'app » ; 16 lectures directes mesurées le 2026-11-03 (conv-1457)",
+    "outils": "Bash|PowerShell|Monitor|Read|Grep|Glob",
+    "motif": "conversations\\.json(?!\\.journal|\\.archive)",
+    "sauf": "conversations-sur-disque",
+    "texte": "Si tu lis `conversations.json` pour connaître un fil : ce fichier n'est qu'un instantané des fils ACTIFS. Un fil inactif depuis 14 jours est dans `conversations.json.archive/`, l'état le plus récent est dans `conversations.json.journal.jsonl`, et le texte des réponses y est souvent vide (dérivé de leurs parties). Lis plutôt par l'outil `conversation_read`, ou par le module `scripts/conversations-sur-disque.mjs`.",
+    "exemples": {
+      "oui": [
+        { "outil": "Bash", "texte": "node -e \"const c=require('D:/AutoWinOS/.autowin-data/autowin-os/conversations.json')\"" },
+        { "outil": "Read", "texte": "D:\\AutoWinOS\\.autowin-data\\autowin-os\\Conversations.JSON" },
+        { "outil": "PowerShell", "texte": "Get-Content .autowin-data/autowin-os/conversations.json | Select-String conv-1457" }
+      ],
+      "non": [
+        { "outil": "Bash", "texte": "tail -n 5 .autowin-data/autowin-os/conversations.json.journal.jsonl" },
+        { "outil": "Bash", "texte": "ls .autowin-data/autowin-os/conversations.json.archive/" },
+        { "outil": "Bash", "texte": "node -e \"import('./scripts/conversations-sur-disque.mjs')\" conversations.json" },
+        { "outil": "Edit", "texte": "D:/AutoWinOS/.autowin-data/autowin-os/conversations.json" }
+      ]
+    }
+  },
+  {
+    "id": "tsc-p-a-la-main",
+    "source": "AGENTS.md « Vérifier » : jamais `tsc -p` à la main (faux TS6307)",
+    "outils": "Bash|PowerShell|Monitor",
+    "motif": "\\btsc\\b[^|;&\\n]*\\s(-p|--project)(\\s|=|$)",
+    "texte": "Vérifie le typage par `npm run typecheck`, jamais par `tsc -p` lancé à la main : seul sur un tsconfig de ce dépôt, il sort de fausses erreurs TS6307.",
+    "exemples": {
+      "oui": [
+        { "outil": "Bash", "texte": "npx tsc -p tsconfig.node.json --noEmit" },
+        { "outil": "PowerShell", "texte": "node node_modules/typescript/bin/tsc --project tsconfig.web.json" }
+      ],
+      "non": [
+        { "outil": "Bash", "texte": "npm run typecheck" },
+        { "outil": "Bash", "texte": "npm run typecheck:node 2>&1 | tail -20" },
+        { "outil": "Read", "texte": "D:/AutoWinOS/node_modules/typescript/bin/tsc -p" }
+      ]
+    }
+  },
+  {
+    "id": "formatage-de-tout-le-depot",
+    "source": "AGENTS.md « Règles du dépôt » : pas de `npm run format` (`prettier --write .`)",
+    "outils": "Bash|PowerShell|Monitor",
+    "motif": "\\bprettier\\b[^|;&\\n]*\\s(--write|-w)\\s+[\"']?\\.[\"']?(?=\\s|$|[;&|])|\\bnpm\\s+run\\s+format(?![\\w:-])",
+    "texte": "Ne reformate pas tout le dépôt (`npm run format`, `prettier --write .`) : plusieurs fils travaillent dans ce même dossier, et cela réécrirait leurs fichiers. Passe à prettier tes seuls fichiers : `npx prettier --write <tes chemins>`.",
+    "exemples": {
+      "oui": [
+        { "outil": "Bash", "texte": "npx prettier --write ." },
+        { "outil": "PowerShell", "texte": "npm run format" },
+        { "outil": "Bash", "texte": "npx prettier --log-level warn -w \".\" && git status" }
+      ],
+      "non": [
+        { "outil": "Bash", "texte": "npx prettier --write src/main/commands.ts" },
+        { "outil": "Bash", "texte": "npx prettier --check ." },
+        { "outil": "Bash", "texte": "npx prettier --write ./src/x.ts" }
+      ]
+    }
+  }
+]

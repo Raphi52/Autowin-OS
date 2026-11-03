@@ -13,6 +13,7 @@ import {
   livrerMessagesEnAttente
 } from './messages-entre-fils'
 import { NOM_JOURNAL_ORIENTATIONS, livrerOrientationsEnAttente } from './orientations-en-cours'
+import { BORNES_RAPPELS, rappelsDeLAppel } from './rappels-outils'
 
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
@@ -326,7 +327,11 @@ export function scriptHookGardes(
   basesNonProd: readonly string[] = [],
   // Dossier du mod Autowin CHARGÉ par les runs (`dossierModsAutowin`, providers/claude.ts) : un agent
   // de run n'y écrit pas (garde-mod-autowin.ts). Absent → garde muette.
-  dossierModProtege?: string
+  dossierModProtege?: string,
+  // fix-ok: fonctionnalité neuve (conv-1457), pas un correctif : 4 édits = import, paramètre, sérialisation, appel ; banc rappels-outils.test.ts rouge avant (module absent).
+  // RAPPELS AU BON MOMENT (conv-1457, shared/rappels-outils.ts) : chemin complet de
+  // `mods/autowin/rappels-outils.json`, relu à chaque appel d'outil. Absent → aucun rappel.
+  fichierRappels?: string
 ): string {
   // Le découpage des heredocs est PASSÉ aux fonctions qui en ont besoin, jamais appelé par nom :
   // vitest et les bundlers réécrivent un appel importé (voir src/shared/heredocs.ts).
@@ -343,6 +348,9 @@ const basesNonProd = ${JSON.stringify(basesNonProd)};
 // fix-ok: 4 édits = construction du branchement (import, paramètre, sérialisation, appel) ; rouge mesuré avant : garde-mod-autowin.hook.test.ts 4/5 en échec, le script ne refusait aucune écriture sous mods/autowin.
 const refusEcritureModAutowin = ${refusEcritureModAutowin.toString()};
 const dossierModProtege = ${JSON.stringify(dossierModProtege ?? '')};
+const rappelsDeLAppel = ${rappelsDeLAppel.toString()};
+const fichierRappels = ${JSON.stringify(fichierRappels ?? '')};
+const bornesRappels = ${JSON.stringify(BORNES_RAPPELS)};
 const reserverOuRefuser = ${reserverOuRefuser.toString()};
 const refusCommitReserve = ${refusCommitReserve.toString()};
 const lignesDuJournal = ${lignesDuJournal.toString()};
@@ -460,6 +468,28 @@ const orientationsEnAttente = () => {
     return r ? r.texte : undefined;
   } catch { return undefined; }
 };
+// RAPPELS AU BON MOMENT (conv-1457, shared/rappels-outils.ts) : le texte d'une règle d'AGENTS.md
+// que rien ne bloque part avec l'appel qui l'enfreint. Les règles déjà données pendant CET appel du
+// CLI sont notées à côté du script (son dossier de réglages, un par appel). État illisible ou
+// impossible à écrire : le rappel part quand même — mieux vaut une répétition qu'un silence.
+// Toute panne = aucun rappel, jamais un refus ni une exception.
+const rappelsAuBonMoment = (j, shell) => {
+  try {
+    if (!fichierRappels) return undefined;
+    const fs = process.getBuiltinModule('node:fs');
+    const path = process.getBuiltinModule('node:path');
+    let brut;
+    try { brut = fs.readFileSync(fichierRappels, 'utf8'); } catch { return undefined; }
+    const etat = path.join(path.dirname(process.argv[1]), 'rappels-donnes.json');
+    let deja = [];
+    try { const v = JSON.parse(fs.readFileSync(etat, 'utf8')); if (Array.isArray(v)) deja = v.filter((x) => typeof x === 'string'); } catch {}
+    const t = j && j.tool_input && typeof j.tool_input === 'object' ? j.tool_input : {};
+    const r = rappelsDeLAppel(brut, String((j && j.tool_name) || ''), [shell, t.file_path, t.notebook_path, t.path, t.pattern, t.url], deja, bornesRappels);
+    if (!r) return undefined;
+    try { fs.writeFileSync(etat, JSON.stringify(deja.concat(r.ids))); } catch {}
+    return r.texte;
+  } catch { return undefined; }
+};
 let d = '';
 process.stdin.on('data', (b) => (d += b));
 process.stdin.on('end', () => {
@@ -498,8 +528,8 @@ process.stdin.on('end', () => {
     process.exit(0);
   }
   // Pas de refus : les orientations de l'utilisateur PUIS les messages en attente partent avec cet
-  // appel d'outil (un refus les laisse pour le suivant).
-  const recus = [orientationsEnAttente(), messagesEnAttente(j)].filter(Boolean).join('\\n\\n');
+  // appel d'outil (un refus les laisse pour le suivant), et les rappels à la suite (conv-1457).
+  const recus = [orientationsEnAttente(), messagesEnAttente(j), rappelsAuBonMoment(j, shell)].filter(Boolean).join('\\n\\n');
   if (recus) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', additionalContext: recus } }));
   process.exit(0);
 });
