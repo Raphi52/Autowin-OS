@@ -1124,7 +1124,7 @@ const EVENEMENTS_TOUR_PROJET = ['UserPromptSubmit', 'Stop'] as const
 
 /**
  * Les hooks de début et de fin de tour du `.claude/settings.json` du projet. Le CLI part sans les
- * réglages du projet : ces hooks ne jouaient jamais (RIG-V3 : temps Claude jamais compté). Le reste
+ * réglages du projet : ces hooks ne jouaient jamais (dans un dépôt client : temps Claude jamais compté). Le reste
  * du fichier reste ignoré ; absent ou illisible → `{}`.
  */
 export function hooksTourDuProjet(cwd: string | undefined): Record<string, unknown[]> {

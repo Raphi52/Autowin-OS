@@ -6,7 +6,7 @@ import { avecHooksTourDuProjet, hooksTourDuProjet, reglagesCliAutowin } from './
 
 /**
  * Le CLI tourne avec `--setting-sources ""` : les hooks du `.claude/settings.json` du projet ne
- * jouaient jamais (RIG-V3 : temps Claude jamais compté sous Autowin). On reprend les SEULS hooks de
+ * jouaient jamais (dans un dépôt client : temps Claude jamais compté sous Autowin). On reprend les SEULS hooks de
  * début et de fin de tour du projet ; tout le reste de ses réglages reste ignoré.
  */
 function projet(reglages: unknown): string {

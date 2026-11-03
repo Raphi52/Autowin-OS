@@ -1,7 +1,7 @@
 <#
   BANC LIVE de scripts/hdesk-act.ps1 sur une fenetre WPF : un clic poste doit DECLENCHER un bouton WPF.
 
-  Pourquoi (conv-415, 2026-11-02) : dans le bureau cache, RIG (WPF) recevait le clavier mais aucun clic
+  Pourquoi (conv-415, 2026-11-02) : dans le bureau cache, une application metier WPF recevait le clavier mais aucun clic
   n'ouvrait une tuile. Cause : WPF relit l'etat reel du bouton par GetKeyState(VK_LBUTTON)
   (Win32MouseDevice.GetButtonStateFromSystem) ; un WM_LBUTTONDOWN poste ne le change pas, donc WPF voyait
   le bouton relache. Correctif : hdesk-act.cs/Cliquer pose VK_LBUTTON dans la file d'entree de la cible

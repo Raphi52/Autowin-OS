@@ -48,7 +48,7 @@ public sealed class AutowinHdeskAct {
   }
   // ETAT DU BOUTON (conv-415, 2026-11-02) : WPF ignore le WM_LBUTTONDOWN poste et relit l'etat reel par
   // GetKeyState(VK_LBUTTON) (Win32MouseDevice.GetButtonStateFromSystem) ; un message poste ne le change
-  // pas, donc une tuile RIG restait « relachee ». On partage la file d'entree de la cible le temps du clic
+  // pas, donc une tuile de l'application metier restait « relachee ». On partage la file d'entree de la cible le temps du clic
   // (AttachThreadInput) et on y pose VK_LBUTTON enfonce pour le DOWN, relache pour le UP.
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
