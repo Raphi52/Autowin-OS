@@ -785,7 +785,32 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   MESURE par ce test. `os:mascotte:theme` est gardé dès sa première ligne, et n'accepte qu'un
     //   identifiant court en lettres, chiffres et tirets.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(291)
+    // MISE A JOUR 2026-11-03 (conv-1451) — 291 -> 298, MESURE par ce test (rouge a 298 sur
+    //   origin/main de1b6a0c, avant tout changement). ATTRIBUTION MESUREE : noms de canaux de
+    //   b49f020b (qui a pose 291) contre l'arbre courant, 7 ajoutes, aucun retire — comparatif
+    //   rejouable : `node scripts/canaux-ipc.mjs <commit du compte precedent>`. Tous gardes des
+    //   leur PREMIERE ligne par `assertTrustedRendererSender`. Aucune protection retiree.
+    //   CINQ du village commun (a1a91e43, conv-1429 a conv-1436) :
+    //   `os:conversations:setPrive` (`ipc/conversations.ts`, garde 'Conversations') — marque UN fil
+    //     prive ou non. Id passe par `guardString`, drapeau vrai seulement si `=== true` ; n'ecrit
+    //     que ce drapeau dans l'etat des conversations.
+    //   QUATRE dans `ipc/quartier-presence.ts`, garde 'Présence du quartier' :
+    //   `os:quartier-presence:collegues` — LECTURE seule de la presence des AUTRES postes sur le
+    //     partage du Board ; aucun argument, dossier et poste viennent du reglage, jamais de la vue.
+    //   `os:quartier-presence:agents` — l'instantane des tanukis du poste ; un tableau sinon vide,
+    //     relu champ par champ (`agentsAPublierLisibles`, titres bornes et filtres) avant d'etre
+    //     ecrit dans le seul `presence.json` du dossier du Board deja regle.
+    //   `os:quartier-presence:partager` — l'interrupteur du poste ; tout ce qui n'est pas un booleen
+    //     ne fait que relire l'etat. Ecrit seulement `board-dossier.json` (userData).
+    //   `os:quartier-presence:etat` — LECTURE seule : ou et quand le fichier a ete ecrit.
+    //   DEUX des fiches RUN.md legeres (9d898055, conv-1441, `index.ts`) :
+    //   `os:fichesDuFil` (garde 'Fiches du fil') — LECTURE des fiches d'UN fil. Id passe par
+    //     `guardString` puis `^[\w-]+$` ; seules les fiches nommees par l'index de l'app
+    //     (`demandes/index.jsonl`) sont lues, aucun chemin recu de la vue.
+    //   `os:fichesDesDemandes` (garde 'Fiches des demandes') — LECTURE seule, aucun argument : le
+    //     chemin de la fiche de chaque demande rangee, tire du meme index.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(298)
     expect(unguarded).toEqual([])
   })
 
