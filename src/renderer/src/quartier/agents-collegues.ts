@@ -51,13 +51,23 @@ export const PALETTE_COLLEGUES = [
   '#a6cc3a' // couleur-fixe: foulard d'un collègue peint sur le décor (anis)
 ] as const
 
+/**
+ * L'animal d'une personne (plan « Renard des collègues », conv-1446) : mes agents restent des tanukis,
+ * ceux d'un collègue sont dessinés avec l'atlas de SON animal. Un seul pour l'instant ; la liste en
+ * recevra d'autres, chacun avec un atlas de même grille et de même ordre de rangées que `atlas.avif`.
+ */
+export const ANIMAUX_COLLEGUES = ['renard'] as const
+export type AnimalCollegue = (typeof ANIMAUX_COLLEGUES)[number]
+
 /** Ce qu'un agent de collègue porte en plus des miens. */
 export interface InfosCollegue {
-  /** Le sous-dossier du poste (compte Windows) : il fixe la couleur. */
+  /** Le sous-dossier du poste (compte Windows) : il fixe la couleur et l'animal. */
   poste: string
   /** Le premier mot du nom choisi, affiché au survol (D9). */
   prenom: string
   couleur: string
+  /** L'atlas dont la scène le dessine ; le foulard à sa couleur le distingue d'un autre du même animal. */
+  animal: AnimalCollegue
   /** L'identifiant du fil sur SON poste : il ne s'ouvre jamais ici (D10). */
   idFil: string
 }
@@ -79,6 +89,21 @@ function empreinte(texte: string): number {
 /** La couleur stable d'un poste. La casse ne compte pas : Windows ne la distingue pas non plus. */
 export function couleurDuPoste(poste: string): string {
   return PALETTE_COLLEGUES[empreinte(poste.trim().toLowerCase()) % PALETTE_COLLEGUES.length]
+}
+
+/**
+ * L'animal stable d'un poste : la même empreinte que la couleur, mais ses chiffres au-delà de ceux de la
+ * couleur. Pris sur les mêmes chiffres, avec huit teintes et deux animaux, la teinte fixerait l'animal :
+ * deux renards ne pourraient porter que la moitié des foulards.
+ */
+export function animalDuPoste(poste: string): AnimalCollegue {
+  const h = empreinte(poste.trim().toLowerCase())
+  return ANIMAUX_COLLEGUES[Math.floor(h / PALETTE_COLLEGUES.length) % ANIMAUX_COLLEGUES.length]
+}
+
+/** L'animal dont la scène dessine un agent : `null` pour les miens, qui restent des tanukis. */
+export function animalDeLAgent(a: AgentQuartier | AgentCollegue): AnimalCollegue | null {
+  return 'collegue' in a ? a.collegue.animal : null
 }
 
 const PREFIXE = 'collegue:'
@@ -138,6 +163,7 @@ export function agentsDesCollegues(
     vus.add(`poste:${poste.toLowerCase()}`)
     const prenom = texte(c.prenom, PRENOM_MAX) ?? texte(c.nom, PRENOM_MAX) ?? poste
     const couleur = couleurDuPoste(poste)
+    const animal = animalDuPoste(poste)
     const siens: AgentCollegue[] = []
     for (const a of Array.isArray(c.agents) ? c.agents : []) {
       const idFil = identifiant(a?.id)
@@ -161,7 +187,7 @@ export function agentsDesCollegues(
         metier,
         actions: [],
         depuis,
-        collegue: { poste, prenom, couleur, idFil }
+        collegue: { poste, prenom, couleur, animal, idFil }
       })
     }
     siens.sort((x, y) => ORDRE[x.phase] - ORDRE[y.phase] || x.depuis - y.depuis)

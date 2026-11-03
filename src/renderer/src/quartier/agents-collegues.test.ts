@@ -8,6 +8,9 @@ import type { PresencesDesCollegues } from '../../../shared/quartier-presence'
 import {
   agentCollegue,
   agentsDesCollegues,
+  animalDeLAgent,
+  animalDuPoste,
+  ANIMAUX_COLLEGUES,
   choisirModeVillage,
   CLE_MODE_VILLAGE,
   COLLEGUES_AGENTS_MAX,
@@ -23,7 +26,7 @@ import {
   poserAgentsCollegues,
   selonLeMode
 } from './agents-collegues'
-import { consigneDe } from './agents-quartier'
+import { consigneDe, type AgentQuartier } from './agents-quartier'
 
 const MAINTENANT = Date.parse('2026-11-02T10:00:00.000Z')
 const IL_Y_A_2_MIN = '2026-11-02T09:58:00.000Z'
@@ -75,6 +78,47 @@ describe('la couleur d’une personne', () => {
   it('suit l’agent jusque dans la scène', () => {
     const [a] = agentsDesCollegues(presences({ poste: 'claire.d', agents: 1 }), MAINTENANT)
     expect(a.collegue.couleur).toBe(couleurDuPoste('claire.d'))
+  })
+})
+
+describe('l’animal d’une personne (conv-1446)', () => {
+  it('est le renard, le seul animal de la liste pour l’instant', () => {
+    expect(ANIMAUX_COLLEGUES).toEqual(['renard'])
+    for (const poste of ['a', 'claire.d', 'poste-123', 'é', ''])
+      expect(animalDuPoste(poste)).toBe('renard')
+  })
+
+  it('est le même à chaque lecture, quelle que soit la casse du poste', () => {
+    expect(animalDuPoste('Arthur.L')).toBe(animalDuPoste('arthur.l'))
+    const lire = (): string[] =>
+      agentsDesCollegues(
+        presences({ poste: 'claire.d', agents: 2 }, { poste: 'Bob', agents: 1 }),
+        MAINTENANT
+      ).map((a) => a.collegue.animal)
+    expect(lire()).toEqual(['renard', 'renard', 'renard'])
+    expect(lire()).toEqual(lire())
+  })
+
+  it('suit l’agent du collègue jusque dans la scène, à côté de son foulard', () => {
+    const [a] = agentsDesCollegues(presences({ poste: 'claire.d', agents: 1 }), MAINTENANT)
+    expect(a.collegue).toMatchObject({
+      animal: animalDuPoste('claire.d'),
+      couleur: couleurDuPoste('claire.d')
+    })
+    expect(animalDeLAgent(a)).toBe('renard')
+  })
+
+  it('n’existe pas pour mes agents, qui restent des tanukis', () => {
+    const mien: AgentQuartier = {
+      id: 'conv-1',
+      titre: 'Mon fil',
+      phase: 'travail',
+      metier: 'lire',
+      actions: [],
+      depuis: MAINTENANT
+    }
+    expect('collegue' in mien).toBe(false)
+    expect(animalDeLAgent(mien)).toBeNull()
   })
 })
 
