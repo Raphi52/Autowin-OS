@@ -499,10 +499,10 @@ export function RiviereDuProjet({
     const s = stockage()
     if (!s) return
     // Ramené à l'étage de ses preuves, le post-it perd son état manuel au lieu d'en garder un copié.
-    setManuels(poserEtatManuel(s, p.conversationId, cible.cle === p.etatPreuve ? null : cible.cle))
+    setManuels(poserEtatManuel(s, p.cle, cible.cle === p.etatPreuve ? null : cible.cle))
   }
 
-  const fiche = choisi ? riviere.postits.find((p) => p.conversationId === choisi) : undefined
+  const fiche = choisi ? riviere.postits.find((p) => p.cle === choisi) : undefined
   // Les boutons « vérifier » (conv-1136) : la ligne « À vérifier » affichée, filtres de personne et
   // de projet compris.
   const aVerifier = useMemo(
@@ -511,9 +511,9 @@ export function RiviereDuProjet({
   )
   const survol = useSurvolDesGestes()
   /** « Vérifié à la main » : le même état manuel que le glisser vers « Fait », jamais une preuve. */
-  const verifieALaMain = (conversationId: string): void => {
+  const verifieALaMain = (cle: string): void => {
     const s = stockage()
-    if (s) setManuels(poserEtatManuel(s, conversationId, 'prouve'))
+    if (s) setManuels(poserEtatManuel(s, cle, 'prouve'))
   }
   // Dans le passé, la frise dit ses dates : « les 14 derniers jours » y serait faux.
   const fenetre =
@@ -682,7 +682,7 @@ export function RiviereDuProjet({
               </div>
             ))}
             {riviere.postits.map((p) => {
-              const enMain = glisse?.id === p.conversationId && glisse.bouge ? glisse : null
+              const enMain = glisse?.id === p.cle && glisse.bouge ? glisse : null
               const { x, y, k, kx, largeur } = position(p)
               const px = enMain ? enMain.x0 + enMain.dx : x
               const py = enMain ? enMain.y0 + enMain.dy : y
@@ -694,11 +694,12 @@ export function RiviereDuProjet({
               const cadreTexte = texte ?? cadreDuTexte(k, largeur)
               return (
                 <button
-                  key={p.conversationId}
+                  key={p.cle}
                   type="button"
                   className="riviere-postit"
                   data-testid="riviere-postit"
                   data-conversation={p.conversationId}
+                  data-fiche={p.fiche}
                   data-jour={Math.floor(p.t)}
                   data-etage={p.etage}
                   data-manuel={p.manuel ? '1' : undefined}
@@ -707,7 +708,7 @@ export function RiviereDuProjet({
                   data-meta={texte && !texte.avecMeta ? 'sans' : undefined}
                   data-estompe={estompe || undefined}
                   data-glisse={enMain ? '1' : undefined}
-                  data-choisi={choisi === p.conversationId || undefined}
+                  data-choisi={choisi === p.cle || undefined}
                   style={{
                     width: largeur,
                     height: POSTIT_H,
@@ -718,7 +719,7 @@ export function RiviereDuProjet({
                   // jamais sur un post-it de collègue (conv-1210) : son fil vit sur son poste.
                   {...(p.etage === 'sans-preuve' && !p.collegue
                     ? {
-                        onPointerEnter: () => survol.entrer(p.conversationId),
+                        onPointerEnter: () => survol.entrer(p.cle),
                         onPointerLeave: survol.sortir
                       }
                     : {})}
@@ -729,7 +730,7 @@ export function RiviereDuProjet({
                     const [sx, sy] = pointDuTableau(e)
                     e.currentTarget.setPointerCapture?.(e.pointerId)
                     setGlisse({
-                      id: p.conversationId,
+                      id: p.cle,
                       sx,
                       sy,
                       x0: x,
@@ -741,7 +742,7 @@ export function RiviereDuProjet({
                   }}
                   onPointerMove={(e) => {
                     const g = glisseCourant.current
-                    if (!g || g.id !== p.conversationId) return
+                    if (!g || g.id !== p.cle) return
                     e.stopPropagation()
                     const [mx, my] = pointDuTableau(e)
                     const dx = mx - g.sx
@@ -751,7 +752,7 @@ export function RiviereDuProjet({
                   }}
                   onPointerUp={(e) => {
                     const g = glisseCourant.current
-                    if (!g || g.id !== p.conversationId) return
+                    if (!g || g.id !== p.cle) return
                     if (g.bouge) {
                       clicAvale.current = true
                       deposer(p, pointDuTableau(e)[1])
@@ -764,7 +765,7 @@ export function RiviereDuProjet({
                       clicAvale.current = false
                       return
                     }
-                    setChoisi(choisiCourant.current === p.conversationId ? null : p.conversationId)
+                    setChoisi(choisiCourant.current === p.cle ? null : p.cle)
                   }}
                 >
                   {/* La punaise (conv-1204, « les aimants disparaissent au profit d'une punaise au
@@ -812,21 +813,22 @@ export function RiviereDuProjet({
                 doivent apparaître en dessous du post-it et être bien centrés »). Rendus à part : un
                 bouton n'entre pas dans un bouton. */}
             {riviere.postits.map((p) => {
-              if (p.etage !== 'sans-preuve' || p.collegue || glisse?.id === p.conversationId)
-                return null
+              if (p.etage !== 'sans-preuve' || p.collegue || glisse?.id === p.cle) return null
               const { x, y, k } = position(p)
               // À l'échelle de leur post-it, comme son texte, pour tenir dans la place gardée dessous
               // (conv-1214) ; une pastille sans texte garde des boutons lisibles, comme avant.
               const kg = k >= ECHELLE_TEXTE ? k : 1
               return (
                 <GestesDeVerification
-                  key={`verif-${p.conversationId}`}
+                  key={`verif-${p.cle}`}
                   postit={p}
                   variante="postit"
-                  {...(verifier ? { verifier } : {})}
-                  aLaMain={() => verifieALaMain(p.conversationId)}
-                  visible={survol.id === p.conversationId || choisi === p.conversationId}
-                  onEntrer={() => survol.entrer(p.conversationId)}
+                  // Un `/check` vise la dernière demande du FIL : pour une tâche que son fil a
+                  // laissée derrière lui, il vérifierait une autre tâche (conv-1456).
+                  {...(verifier && p.derniereDuFil ? { verifier } : {})}
+                  aLaMain={() => verifieALaMain(p.cle)}
+                  visible={survol.id === p.cle || choisi === p.cle}
+                  onEntrer={() => survol.entrer(p.cle)}
                   onSortir={survol.sortir}
                   style={
                     {
@@ -850,12 +852,12 @@ export function RiviereDuProjet({
                 {...(lierWorkItem ? { lierWorkItem } : {})}
                 {...(delierWorkItem ? { delierWorkItem } : {})}
                 {...(sourcesDesTaches ? { sourcesDesTaches } : {})}
-                {...(verifier ? { verifier } : {})}
-                aLaMain={() => verifieALaMain(fiche.conversationId)}
+                {...(verifier && fiche.derniereDuFil ? { verifier } : {})}
+                aLaMain={() => verifieALaMain(fiche.cle)}
                 fermer={() => setChoisi(null)}
                 revenir={() => {
                   const s = stockage()
-                  if (s) setManuels(poserEtatManuel(s, fiche.conversationId, null))
+                  if (s) setManuels(poserEtatManuel(s, fiche.cle, null))
                 }}
               />
             )}
@@ -957,7 +959,7 @@ function FicheDeLaRiviere({
         )}
         {demandes.map((d) => (
           <li
-            key={d.rang}
+            key={`${d.conversationId}:${d.rang}`}
             title={texteDeLaCarte(d.constat, langue)}
             data-testid="riviere-fiche-demande"
           >
@@ -970,6 +972,19 @@ function FicheDeLaRiviere({
             <span className="riviere-fiche-texte" data-testid="riviere-fiche-texte">
               {texteDeLaCarte(d.texte ?? d.titre, langue)}
             </span>
+            {/* Une tâche peut courir sur plusieurs fils (un chantier et ses lots, une « façon N/3 »,
+                conv-1456) : la demande venue d'un autre fil dit lequel, et l'ouvre. */}
+            {!d.collegue && d.conversationId !== p.conversationId && (
+              <button
+                type="button"
+                className="riviere-fiche-lien"
+                data-testid="riviere-fiche-autre-fil"
+                title={t('fiche.ouvrir')}
+                onClick={() => ouvrir(d.conversationId)}
+              >
+                {d.conversationId}
+              </button>
+            )}
             {(() => {
               const chemin =
                 !d.collegue && d.messageId ? fiches?.[d.conversationId]?.[d.messageId] : undefined

@@ -24,9 +24,11 @@
  * 3, 4 et 5 de front ; `disposerEtages` garde le choix qui laisse ses plus petits post-it les plus
  * grands. Un jour peu chargé reste donc à 3 : là, c'est la largeur qui borne, pas la hauteur.
  *
- * Un post-it = un FIL (une conversation), posé au moment de sa dernière demande, à l'étage de l'état
- * de cette dernière demande. Un état posé à la main (glisser) passe devant tant que le fil n'a pas
- * bougé depuis ; il ne compte jamais comme une preuve.
+ * Un post-it = une TÂCHE, c'est-à-dire un RUN.md léger et ses suites (conv-1456, avant : un FIL),
+ * posé au moment de sa dernière demande, à l'étage de l'état de cette dernière demande. Le
+ * regroupement est `tachesDuBoard` (src/shared/taches-du-board.ts), le même que la copie du Board.
+ * Un état posé à la main (glisser) passe devant tant que la tâche n'a pas bougé depuis ; il ne compte
+ * jamais comme une preuve.
  *
  * Hors du fichier de composant : un module de composants qui exporte aussi des fonctions casse le
  * rafraîchissement à chaud (même raison que `carte-des-besoins-branches.ts`).
@@ -44,7 +46,7 @@ import {
   traduireBoardEtMaintenance,
   type CleBoardEtMaintenance
 } from '../textes-ecrans/board-et-maintenance'
-import { filsDuProjet } from './carte-des-besoins-branches'
+import { tachesDuBoard } from '../../../shared/taches-du-board'
 
 export type EtageDeLaRiviere = 'a-faire' | StatutDemande
 
@@ -115,7 +117,17 @@ export interface EtatManuel {
 }
 
 export interface PostItDeLaRiviere {
+  /**
+   * Son identité (conv-1456) : celle de son RUN.md léger, sinon l'id de son fil. C'est sous elle que
+   * l'état posé à la main est rangé ; un post-it de fil garde donc ceux d'avant le changement.
+   */
+  cle: string
+  /** Le RUN.md léger de la tâche, relatif au dossier `demandes/` ; absent = un fil sans fiche. */
+  fiche?: string
+  /** Le fil de sa dernière demande : celui qui s'ouvre et que « vérifier » vise. */
   conversationId: string
+  /** Sa dernière demande est la dernière de son fil : sinon un `/check` y viserait une autre tâche. */
+  derniereDuFil: boolean
   titre: string
   projet: string
   demandeur?: DemandeurDeLaCarte
@@ -128,7 +140,7 @@ export interface PostItDeLaRiviere {
   instant: number
   /** Position dans la fenêtre, en jours fractionnaires : 0 = minuit du premier jour, n = demain. */
   t: number
-  /** Ses demandes dans l'ordre du fil. */
+  /** Ses demandes de la plus ancienne à la plus récente, d'un ou de plusieurs fils. */
   demandes: DemandeDeLaCarte[]
   /** Le collègue dont vient ce post-it (conv-1210) : lecture seule, à l'étage de SON Board. */
   collegue?: CollegueDeLaDemande
@@ -265,45 +277,44 @@ export function riviereDe(
   let plusRecents = 0
   let sansDate = 0
   let plusAncien = Infinity
-  for (const projet of carte.projets) {
-    for (const fil of filsDuProjet(projet.demandes)) {
-      const instant = fil.derniereActivite
-      if (instant === undefined) {
-        sansDate += 1
-        continue
-      }
-      plusAncien = Math.min(plusAncien, instant)
-      if (instant < bornes[0]) {
-        horsFenetre += 1
-        continue
-      }
-      if (instant >= bornes[n]) {
-        plusRecents += 1
-        continue
-      }
-      const etatPreuve = fil.derniere.statut
-      // Un post-it de collègue (conv-1210) est posé à l'étage de SON Board : nos états posés à la
-      // main ne le touchent pas (il ne se glisse pas d'ici).
-      const collegue = fil.derniere.collegue
-      const manuel = collegue
-        ? undefined
-        : manuelValable(manuels[fil.conversationId], instant, etatPreuve)
-      const demandeur = fil.derniere.demandeur ?? fil.demandes.find((d) => d.demandeur)?.demandeur
-      postits.push({
-        conversationId: fil.conversationId,
-        titre: fil.titre,
-        projet: projet.libelle,
-        ...(demandeur ? { demandeur } : {}),
-        etage: collegue?.etage ?? manuel?.etage ?? etatPreuve,
-        etatPreuve,
-        ...(manuel ? { manuel } : {}),
-        ...(collegue ? { collegue } : {}),
-        instant,
-        t: jourFractionnaire(instant, bornes),
-        demandes: fil.demandes,
-        rang: 0
-      })
+  for (const tache of tachesDuBoard(carte.projets)) {
+    const instant = tache.derniereActivite
+    if (instant === undefined) {
+      sansDate += 1
+      continue
     }
+    plusAncien = Math.min(plusAncien, instant)
+    if (instant < bornes[0]) {
+      horsFenetre += 1
+      continue
+    }
+    if (instant >= bornes[n]) {
+      plusRecents += 1
+      continue
+    }
+    const etatPreuve = tache.derniere.statut
+    // Un post-it de collègue (conv-1210) est posé à l'étage de SON Board : nos états posés à la
+    // main ne le touchent pas (il ne se glisse pas d'ici).
+    const collegue = tache.derniere.collegue
+    const manuel = collegue ? undefined : manuelValable(manuels[tache.cle], instant, etatPreuve)
+    const demandeur = tache.derniere.demandeur ?? tache.demandes.find((d) => d.demandeur)?.demandeur
+    postits.push({
+      cle: tache.cle,
+      ...(tache.fiche ? { fiche: tache.fiche } : {}),
+      conversationId: tache.conversationId,
+      derniereDuFil: tache.derniereDuFil,
+      titre: tache.titre,
+      projet: tache.projet.libelle,
+      ...(demandeur ? { demandeur } : {}),
+      etage: collegue?.etage ?? manuel?.etage ?? etatPreuve,
+      etatPreuve,
+      ...(manuel ? { manuel } : {}),
+      ...(collegue ? { collegue } : {}),
+      instant,
+      t: jourFractionnaire(instant, bornes),
+      demandes: tache.demandes,
+      rang: 0
+    })
   }
   const etages = ETAGES.map((e) => {
     const dEtage = postits.filter((p) => p.etage === e.cle).sort((a, b) => a.t - b.t)

@@ -15,6 +15,7 @@ import {
   type TourPourLaFiche
 } from './fiches-de-demande'
 import type { LigneBesoin } from '../shared/ligne-besoin'
+import { cleDuJournal } from './journal-des-besoins'
 
 const dossiers: string[] = []
 afterEach(() => {
@@ -431,6 +432,27 @@ describe('lecture des fiches pour l’interface', () => {
     const ligne = await fiches.noterTour(tour(conversation, 'conv-1', 'm1', { nature: 'nouveau' }))
 
     expect(await fiches.fichesDesDemandes()).toEqual({ 'conv-1': { m1: cheminDe(racine, ligne) } })
+  })
+
+  it('donne au calcul du Board la fiche de chaque demande, sous la clé du journal (conv-1456)', async () => {
+    const racine = racineTemporaire()
+    const fiches = creerFichesDeDemande({ racine })
+    const conversation = fil('conv-1', [
+      utilisateur('m1', 'Ajoute un tri'),
+      reponse('m2'),
+      utilisateur('m3', 'Et le filtre aussi'),
+      reponse('m4')
+    ])
+    const besoin = await fiches.noterTour(tour(conversation, 'conv-1', 'm1', { nature: 'nouveau' }))
+    await fiches.noterTour(tour(conversation, 'conv-1', 'm3', { nature: 'suite' }))
+
+    // La suite pointe sur la même fiche : c'est ce qui la range sur le même post-it.
+    expect(await fiches.fichesParDemande()).toEqual(
+      new Map([
+        [cleDuJournal('conv-1', 'm1'), besoin?.fiche],
+        [cleDuJournal('conv-1', 'm3'), besoin?.fiche]
+      ])
+    )
   })
 
   it('une fiche effacée à la main disparaît du panneau sans erreur', async () => {

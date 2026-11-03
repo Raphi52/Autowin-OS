@@ -11,6 +11,10 @@
  *
  * Lot 2 : QUI A PROMPTÉ vient de `besoins.jsonl` (identité git relevée au tour) ; une demande plus
  * ancienne que le journal reçoit l'identité git ACTUELLE du dossier de son fil, marquée déduite.
+ *
+ * RUN.md légers (conv-1456) : chaque demande porte la FICHE qui la range (`demandes/index.jsonl`),
+ * relue à chaque calcul — elle s'écrit en fin de tour, souvent sans que le fil bouge ensuite. C'est
+ * elle qui fait le post-it (`src/shared/taches-du-board.ts`) ; l'état, lui, reste celui du fil.
  */
 import { carteDuFil } from '../renderer/src/components/carte-du-fil'
 import {
@@ -207,6 +211,8 @@ export function assemblerLaCarte(entree: {
   identitesParDossier?: ReadonlyMap<string, IdentiteGit | null>
   /** `liens-work-items.jsonl` relu (conv-1127) ; absent = seuls les liens écrits par la vue Tickets. */
   liens?: EtatDesLiens
+  /** La fiche de chaque demande rangée (`cleDuJournal` → RUN.md relatif), conv-1456. */
+  fiches?: ReadonlyMap<string, string>
   calculeeA: number
   dureeMs: number
 }): CarteDesBesoins {
@@ -256,10 +262,12 @@ export function assemblerLaCarte(entree: {
     const dossierGit = dossierGitDuFil(conversation, entree.dossierParDefaut)
     const identiteDeduite = dossierGit ? entree.identitesParDossier?.get(dossierGit) : undefined
     const enrichies = demandes.map((brute) => {
-      const journalisee = brute.messageId
-        ? entree.journal?.get(cleDuJournal(conversation.id, brute.messageId))
-        : undefined
-      return enrichirDemande(brute, journalisee, identiteDeduite)
+      const cle = brute.messageId ? cleDuJournal(conversation.id, brute.messageId) : undefined
+      const journalisee = cle ? entree.journal?.get(cle) : undefined
+      const enrichie = enrichirDemande(brute, journalisee, identiteDeduite)
+      const fiche = cle ? entree.fiches?.get(cle) : undefined
+      // Copie : la demande brute vit dans la mémoire du calculateur, la fiche change sans le fil.
+      return fiche ? { ...enrichie, fiche } : enrichie
     })
     // Les work items APRÈS la ligne de besoin : une demande `suite` hérite du lien de la précédente.
     for (const demande of lierLesDemandesDuFil(conversation.id, enrichies, liens)) {
@@ -362,6 +370,11 @@ export function creerCalculateurDeCarte(deps: {
    * de la carte ne fait aucun appel réseau.
    */
   lireLiens?: () => EtatDesLiens
+  /**
+   * La fiche de chaque demande rangée (conv-1456), lue dans `demandes/index.jsonl`. Son échec ne
+   * prive le Board que de ses fiches : chaque demande retombe alors sur le post-it de son fil.
+   */
+  lireFiches?: () => Promise<ReadonlyMap<string, string>>
   calculerDemandes?: (conversation: ConversationPourLaCarte) => DemandeDeLaCarte[]
   ceder?: () => Promise<void>
   maintenant?: () => number
@@ -411,6 +424,13 @@ export function creerCalculateurDeCarte(deps: {
         return { erreur }
       }
     })()
+    // Les fiches aussi, pendant que les fils se relisent : un fichier, jamais le texte des RUN.md.
+    const fichesEnCours = deps.lireFiches
+      ? deps.lireFiches().catch((erreur: unknown) => {
+          console.warn('[besoins] index des fiches illisible :', erreur)
+          return undefined
+        })
+      : Promise.resolve(undefined)
     const conversations = deps.lireConversations()
     const vivantes = new Set<string>()
     const demandesParConversation = new Map<string, DemandeDeLaCarte[]>()
@@ -443,7 +463,11 @@ export function creerCalculateurDeCarte(deps: {
       demandesParConversation,
       dossierParDefaut
     ).then((identites) => ({ identites, ms: maintenant() - avantIdentites }))
-    const [lus, identitesLues] = await Promise.all([runsEnCours, identitesEnCours])
+    const [lus, identitesLues, fiches] = await Promise.all([
+      runsEnCours,
+      identitesEnCours,
+      fichesEnCours
+    ])
     if ('erreur' in lus) throw lus.erreur
     const { runs } = lus
     const avantAssemblage = maintenant()
@@ -455,6 +479,7 @@ export function creerCalculateurDeCarte(deps: {
       ...(dossierParDefaut ? { dossierParDefaut } : {}),
       ...(journal ? { journal } : {}),
       ...(liens ? { liens } : {}),
+      ...(fiches ? { fiches } : {}),
       identitesParDossier: identitesLues.identites,
       calculeeA: avantAssemblage,
       dureeMs: 0

@@ -106,6 +106,23 @@ describe('postItsDuBoard — ce que le Board affiche', () => {
     expect(postIts[0].demandes[0].texte).toBe('ligne une\nligne deux')
     expect(postIts[0].demandes[1]).not.toHaveProperty('texte')
   })
+
+  it('un post-it par RUN.md léger : deux tâches d’un même fil font deux post-it, chacun son état manuel (conv-1456)', () => {
+    const A = 'conv-1/premiere-a/RUN.md'
+    const B = 'conv-1/seconde-b/RUN.md'
+    const deuxTaches = carte([
+      demande({ conversationId: 'conv-1', rang: 0, debut: 10 * H, statut: 'prouve', fiche: A }),
+      demande({ conversationId: 'conv-1', rang: 2, debut: 12 * H, statut: 'sans-preuve', fiche: B })
+    ])
+    const { postIts } = postItsDuBoard(deuxTaches, {
+      'conv-1.premiere-a': { etage: 'a-faire', a: 11 * H }
+    })
+    expect(postIts.map((p) => [p.fiche, p.titre, p.etage])).toEqual([
+      [B, 'demande 2', 'sans-preuve'],
+      [A, 'demande 0', 'a-faire']
+    ])
+    expect(postIts.every((p) => p.conversationId === 'conv-1')).toBe(true)
+  })
 })
 
 describe('sousDossierDuPoste', () => {

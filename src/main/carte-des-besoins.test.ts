@@ -294,6 +294,44 @@ describe('assemblerLaCarte — rangée par projet comme la barre latérale', () 
     expect(appels).toBe(2)
   })
 
+  it('pose sur chaque demande le RUN.md léger qui la range, lu à chaque calcul (conv-1456)', async () => {
+    const fil = {
+      ...conv('a', [user('une', 1_000), asst(1_100, []), user('deux', 2_000), asst(2_100, [])]),
+      updatedAt: 1
+    }
+    let fiches = new Map([['a\u0000u1000', 'a/une-x/RUN.md']])
+    const { calculer } = creerCalculateurDeCarte({
+      lireConversations: () => [fil],
+      lireRuns: async () => [],
+      lireFiches: async () => fiches,
+      ceder: async () => {},
+      maintenant: () => 42
+    })
+    const avant = (await calculer()).projets[0].demandes
+    expect(avant.find((d) => d.messageId === 'u1000')?.fiche).toBe('a/une-x/RUN.md')
+    // La fiche de « deux » s'écrit en fin de tour : le fil n'a pas bougé, la carte la voit quand même.
+    expect(avant.find((d) => d.messageId === 'u2000')?.fiche).toBeUndefined()
+    fiches = new Map([...fiches, ['a\u0000u2000', 'a/deux-y/RUN.md']])
+    const apres = (await calculer()).projets[0].demandes
+    expect(apres.find((d) => d.messageId === 'u2000')?.fiche).toBe('a/deux-y/RUN.md')
+  })
+
+  it('un index des fiches illisible prive les post-it de leur fiche, pas le Board de ses demandes', async () => {
+    const { calculer } = creerCalculateurDeCarte({
+      lireConversations: () => [
+        { ...conv('a', [user('une', 1_000), asst(1_100, [])]), updatedAt: 1 }
+      ],
+      lireRuns: async () => [],
+      lireFiches: async () => {
+        throw new Error('EBUSY')
+      },
+      ceder: async () => {}
+    })
+    const carte = await calculer()
+    expect(carte.demandes).toBe(1)
+    expect(carte.projets[0].demandes[0].fiche).toBeUndefined()
+  })
+
   it('dit quand la liste des runs est partielle', () => {
     const resultat = assemblerLaCarte({
       conversations: [],

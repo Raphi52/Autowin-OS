@@ -55,6 +55,12 @@ export interface DemandeDeLaCarte {
   /** Les work items (tasks) liés à cette demande ; absent = « sans task » (conv-1127). */
   workItems?: WorkItemDeLaDemande[]
   /**
+   * Le RUN.md léger qui range cette demande, relatif au dossier `demandes/`
+   * (`conv-1441/slug-xyz/RUN.md`) : c'est lui qui fait le post-it du Board (conv-1456). Absent =
+   * question, tour pas encore fini, ou demande plus ancienne que les fiches (01/11).
+   */
+  fiche?: string
+  /**
    * Le collègue dont vient cette demande (conv-1210, 2026-10-28) : posé par la VUE seulement, depuis
    * le Board qu'un autre poste a recopié dans le dossier du Board — jamais par le calcul de la
    * carte. Une telle demande se lit, elle ne se touche pas : ni glisser, ni vérifier, ni ouvrir.

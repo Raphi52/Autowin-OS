@@ -28,7 +28,9 @@ const postit = (
   etage: PostItDeLaRiviere['etage'],
   cle = 'raph@x'
 ): PostItDeLaRiviere => ({
+  cle: conversationId,
   conversationId,
+  derniereDuFil: true,
   titre: conversationId,
   projet: 'P',
   demandeur: { cle, nom: cle, origine: 'journal' },
@@ -72,6 +74,17 @@ describe('postitsAVerifier', () => {
     expect(ids(null, 'ZOX-V3')).toEqual(['conv-1', 'conv-5'])
     expect(ids('alex@x', 'ZOX-V3')).toEqual(['conv-5'])
     expect(ids(null, 'Perso')).toEqual([])
+  })
+
+  it('laisse de côté une tâche que son fil a dépassée : /check y viserait une autre tâche (conv-1456)', () => {
+    const depassee = {
+      ...postit('conv-1', 'sans-preuve'),
+      cle: 'conv-1.ancienne-x',
+      derniereDuFil: false
+    }
+    expect(
+      postitsAVerifier([depassee, postit('conv-3', 'sans-preuve')], null).map((p) => p.cle)
+    ).toEqual(['conv-3'])
   })
 })
 

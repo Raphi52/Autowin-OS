@@ -30,10 +30,15 @@ export interface DemandeDuFichier {
   workItems?: { sourceId: string; id: string; titre?: string }[]
 }
 
-/** Un post-it de `board.json` : un fil, à l'étage affiché sur le Board du poste qui l'a écrit. */
+/**
+ * Un post-it de `board.json` : une tâche (son RUN.md léger, conv-1456 ; avant, un fil), à l'étage
+ * affiché sur le Board du poste qui l'a écrit.
+ */
 export interface PostItDuFichier {
   /** Le pont vers le fil : l'identifiant de la conversation dans l'Autowin de ce poste. */
   conversationId: string
+  /** Son RUN.md léger, relatif au dossier `demandes/` de ce poste ; absent = un fil sans fiche. */
+  fiche?: string
   titre: string
   projet: { cle: string; libelle: string }
   /** L'étage affiché sur le Board : l'état posé à la main s'il tient encore, sinon `etatPreuve`. */

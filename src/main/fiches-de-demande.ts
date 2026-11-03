@@ -270,6 +270,11 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
   fichesDuFil: (conversationId: string) => Promise<FicheDeDemande[]>
   /** La fiche de chaque demande rangée : le lien des post-it du Board (conv-1441). */
   fichesDesDemandes: () => Promise<FichesDesDemandes>
+  /**
+   * La même chose pour le calcul du Board (conv-1456), sous la clé du journal (`cleDuJournal`) et
+   * relative à `demandes/` : c'est elle qui fait le post-it. Aucun RUN.md n'est ouvert.
+   */
+  fichesParDemande: () => Promise<Map<string, string>>
   /** Un fil supprimé emporte ses fiches, comme ses autres fichiers. */
   retirerLeFil: (conversationId: string) => Promise<void>
 } {
@@ -499,6 +504,14 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
           duFil[ligne.messageId] = join(dossier, ligne.fiche)
         }
         return carte
+      })
+    },
+    fichesParDemande() {
+      return enFile(async () => {
+        const parDemande = new Map<string, string>()
+        for (const [cle, ligne] of (await chargerIndex()).parMessage)
+          parDemande.set(cle, ligne.fiche)
+        return parDemande
       })
     },
     retirerLeFil(conversationId) {

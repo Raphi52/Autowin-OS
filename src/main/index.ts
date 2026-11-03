@@ -3476,7 +3476,9 @@ Le fil reprend ensuite normalement.`
     dossierDuBoard,
     choisirDossier: pickDirectory,
     // Où la copie de fin de tour garde les états posés à la main (conv-1210).
-    racineDuPoste: app.getPath('userData')
+    racineDuPoste: app.getPath('userData'),
+    // Un post-it par RUN.md léger (conv-1456) : la fiche de chaque demande rangée.
+    lireFiches: fichesDeDemande.fichesParDemande
   })
   // Les RUN.md légers comparés au Board (conv-1418) : le Board est lu, jamais changé.
   const mesureDesEcarts = creerMesureDesEcarts({

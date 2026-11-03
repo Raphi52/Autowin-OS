@@ -80,6 +80,31 @@ function carte(demandes: DemandeDeLaCarte[]): CarteDesBesoins {
 }
 
 describe('riviereDe', () => {
+  it('pose un post-it par RUN.md léger, sous la clé de sa fiche (conv-1456)', () => {
+    const avecFiche = (d: DemandeDeLaCarte, fiche: string): DemandeDeLaCarte => ({ ...d, fiche })
+    const A = 'a/premiere-x/RUN.md'
+    const B = 'a/seconde-y/RUN.md'
+    const r = riviereDe(
+      carte([
+        avecFiche(demande('a', 0, 'prouve', MAINTENANT - 3 * HEURE), A),
+        avecFiche(demande('a', 2, 'sans-preuve', MAINTENANT - 2 * HEURE), B),
+        // Le lot d'un chantier rangé dans la fiche A : il rejoint son post-it.
+        avecFiche(demande('lot', 0, 'prouve', MAINTENANT - HEURE), A)
+      ]),
+      MAINTENANT,
+      { 'a.seconde-y': { etage: 'prouve', a: MAINTENANT } }
+    )
+    const parCle = new Map(r.postits.map((p) => [p.cle, p]))
+    expect([...parCle.keys()].sort()).toEqual(['a.premiere-x', 'a.seconde-y'])
+    expect(parCle.get('a.seconde-y')).toMatchObject({
+      etage: 'prouve',
+      etatPreuve: 'sans-preuve',
+      fiche: B
+    })
+    expect(parCle.get('a.premiere-x')?.demandes.map((d) => d.conversationId)).toEqual(['a', 'lot'])
+    expect(parCle.get('a.premiere-x')?.conversationId).toBe('lot')
+  })
+
   it('pose chaque fil à sa DERNIÈRE demande, avec l’état de cette demande', () => {
     const r = riviereDe(
       carte([

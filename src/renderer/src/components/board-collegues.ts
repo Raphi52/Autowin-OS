@@ -90,6 +90,9 @@ export function carteAvecCollegues(
           statut: d.statut,
           constat: d.constat,
           ...(debut !== undefined && Number.isFinite(debut) ? { debut } : {}),
+          // Sa tâche (conv-1456) : deux post-it d'un même fil du collègue restent deux, et le
+          // préfixe de son poste les tient à part des nôtres.
+          ...(p.fiche ? { fiche: `${board.poste}/${p.fiche}` } : {}),
           demandeur,
           collegue
         }

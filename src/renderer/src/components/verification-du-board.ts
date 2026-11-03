@@ -43,6 +43,9 @@ export function postitsAVerifier(
     (p) =>
       p.etage === 'sans-preuve' &&
       !p.collegue &&
+      // Un `/check` vise la dernière demande du fil : une tâche que son fil a laissée derrière lui
+      // ne se vérifie qu'à la main (conv-1456).
+      p.derniereDuFil &&
       (personne === null || p.demandeur?.cle === personne) &&
       dansLeProjet(p)
   )

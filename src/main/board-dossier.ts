@@ -8,7 +8,8 @@
  * Ce module :
  *  - retient le dossier choisi SUR CE POSTE (`board-dossier.json` dans le dossier de données de
  *    l'app, à côté de `liens-work-items.jsonl`) — jamais un chemin écrit dans le code ;
- *  - à chaque calcul du Board, y écrit ce que le Board affiche : un post-it par fil, à l'étage
+ *  - à chaque calcul du Board, y écrit ce que le Board affiche : un post-it par tâche (son RUN.md
+ *    léger, conv-1456 ; un fil plus ancien que les fiches garde le sien), à l'étage
  *    affiché (état posé à la main compris), avec ses demandes, et l'identifiant de sa conversation —
  *    le pont vers le fil (`board.json` pour les outils, `board.md` pour les yeux) ;
  *  - écrit dans un sous-dossier PAR COMPTE WINDOWS : sur un partage d'équipe, deux postes qui
@@ -32,6 +33,7 @@ import type {
 import type { EtageDuBoard, EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-dossier'
 import { carteDesProjetsPartages, projetsPartagesLisibles } from '../shared/board-projets-partages'
 import { nomDuPosteLisible } from '../shared/board-nom-du-poste'
+import { tachesDuBoard } from '../shared/taches-du-board'
 
 export const FICHIER_DU_REGLAGE = 'board-dossier.json'
 export const FORMAT_DU_BOARD = 'autowin-board/1'
@@ -55,6 +57,11 @@ export interface DemandeEnregistree {
 export interface PostItEnregistre {
   /** Le pont vers le fil : l'identifiant de la conversation dans Autowin (`conv-1206`). */
   conversationId: string
+  /**
+   * Le RUN.md léger de la tâche, relatif au dossier `demandes/` du poste (conv-1456) : deux post-it
+   * d'un même fil se distinguent par lui. Absent = le post-it d'un fil plus ancien que les fiches.
+   */
+  fiche?: string
   titre: string
   projet: { cle: string; libelle: string }
   /** L'étage affiché sur le Board : l'état posé à la main s'il tient encore, sinon `etatPreuve`. */
@@ -145,57 +152,43 @@ function demandeEnregistree(d: DemandeDeLaCarte): DemandeEnregistree {
 }
 
 /**
- * Les post-it du Board : un par fil, posé au moment de sa dernière demande, à l'étage de l'état de
- * cette dernière demande — ou de l'état posé à la main s'il tient encore. Même regroupement que
- * `filsDuProjet` et `riviereDe` côté vue (qu'on ne peut pas importer d'ici : la vue tire ses textes
- * de l'interface).
+ * Les post-it du Board : un par tâche — son RUN.md léger et ses suites (conv-1456) —, posé au moment
+ * de sa dernière demande, à l'étage de l'état de cette dernière demande, ou de l'état posé à la main
+ * s'il tient encore. Le regroupement est celui de la vue (`tachesDuBoard`, src/shared) : ce qui part
+ * est ce que l'écran montre.
  */
 export function postItsDuBoard(
   carte: CarteDesBesoins,
   manuels: Readonly<Record<string, EtatManuelDuBoard>> = {}
 ): { postIts: PostItEnregistre[]; filsSansDate: number } {
-  const avecInstant: { instant: number; postIt: PostItEnregistre }[] = []
+  const postIts: PostItEnregistre[] = []
   let filsSansDate = 0
-  for (const projet of carte.projets) {
-    const parFil = new Map<string, DemandeDeLaCarte[]>()
-    for (const d of projet.demandes) {
-      const liste = parFil.get(d.conversationId)
-      if (liste) liste.push(d)
-      else parFil.set(d.conversationId, [d])
+  // Déjà rangées de la plus récente à la plus ancienne.
+  for (const tache of tachesDuBoard(carte.projets)) {
+    const instant = tache.derniereActivite
+    if (instant === undefined) {
+      filsSansDate += 1
+      continue
     }
-    for (const [conversationId, liste] of parFil) {
-      const ordonnees = [...liste].sort((a, b) => a.rang - b.rang)
-      const derniere = ordonnees[ordonnees.length - 1]
-      let instant: number | undefined
-      for (const d of ordonnees)
-        if (d.debut !== undefined && (instant === undefined || d.debut > instant)) instant = d.debut
-      if (instant === undefined) {
-        filsSansDate += 1
-        continue
-      }
-      const etatPreuve = derniere.statut
-      const manuel = manuelValable(manuels[conversationId], instant, etatPreuve)
-      const demandeur = personne(
-        derniere.demandeur ?? ordonnees.find((d) => d.demandeur)?.demandeur
-      )
-      avecInstant.push({
-        instant,
-        postIt: {
-          conversationId,
-          titre: derniere.conversationTitre || conversationId,
-          projet: { cle: projet.cle, libelle: projet.libelle },
-          etage: manuel?.etage ?? etatPreuve,
-          etatPreuve,
-          ...(manuel ? { manuel: { etage: manuel.etage, a: iso(manuel.a) } } : {}),
-          derniereDemande: iso(instant),
-          ...(demandeur ? { demandeur } : {}),
-          demandes: ordonnees.map(demandeEnregistree)
-        }
-      })
-    }
+    const etatPreuve = tache.derniere.statut
+    const manuel = manuelValable(manuels[tache.cle], instant, etatPreuve)
+    const demandeur = personne(
+      tache.derniere.demandeur ?? tache.demandes.find((d) => d.demandeur)?.demandeur
+    )
+    postIts.push({
+      conversationId: tache.conversationId,
+      ...(tache.fiche ? { fiche: tache.fiche } : {}),
+      titre: tache.titre,
+      projet: { cle: tache.projet.cle, libelle: tache.projet.libelle },
+      etage: manuel?.etage ?? etatPreuve,
+      etatPreuve,
+      ...(manuel ? { manuel: { etage: manuel.etage, a: iso(manuel.a) } } : {}),
+      derniereDemande: iso(instant),
+      ...(demandeur ? { demandeur } : {}),
+      demandes: tache.demandes.map(demandeEnregistree)
+    })
   }
-  avecInstant.sort((a, b) => b.instant - a.instant)
-  return { postIts: avecInstant.map((p) => p.postIt), filsSansDate }
+  return { postIts, filsSansDate }
 }
 
 export function boardAEnregistrer(
@@ -239,14 +232,14 @@ function ligne(texte: string): string {
   return texte.replace(/\s+/g, ' ').trim()
 }
 
-/** La version à lire de `board.json` : un titre par projet, un post-it par fil, ses demandes dessous. */
+/** La version à lire de `board.json` : un titre par projet, un post-it par tâche, ses demandes dessous. */
 export function boardEnMarkdown(board: BoardEnregistre): string {
   const sortie: string[] = [
     `# Board — ${ligne(board.nom ?? board.poste)}`,
     '',
     `Enregistré le ${board.enregistreA ? dateLisible(board.enregistreA) : '—'} · ${board.postIts.length} post-it · ${board.demandes} demandes · ${board.comptes.prouve} prouvées · ${board.comptes.refuse} refusées`,
     '',
-    'Chaque post-it est un fil d’Autowin : son identifiant (`conv-…`) est celui à rouvrir dans l’app.',
+    'Chaque post-it est une tâche (son RUN.md léger) : son identifiant (`conv-…`) est le fil à rouvrir dans l’app.',
     ''
   ]
   const parProjet = new Map<string, PostItEnregistre[]>()

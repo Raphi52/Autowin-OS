@@ -117,7 +117,8 @@ export function registerCarteDesBesoinsIpc({
   dossierDuBoard,
   choisirDossier,
   racineDuPoste,
-  prechauffageApres
+  prechauffageApres,
+  lireFiches
 }: {
   os: Pick<AutowinOS, 'conversations' | 'runsWithGate' | 'executionWorkspace'>
   journal?: { lire: () => ReadonlyMap<string, EntreeDuJournal> }
@@ -134,6 +135,8 @@ export function registerCarteDesBesoinsIpc({
   /** Quand lancer le calcul à froid sans la vue (conv-1248) ; défaut : fenêtre affichée ET
    *  archives dans le store. */
   prechauffageApres?: Promise<unknown>
+  /** La fiche de chaque demande (`fiches-de-demande.ts`, conv-1456) : un post-it par RUN.md léger. */
+  lireFiches?: () => Promise<ReadonlyMap<string, string>>
 }): {
   /** Recopie le Board vers le dossier sans la vue (conv-1210) : appelée à chaque fin de tour. */
   recopierLeBoard: () => void
@@ -178,6 +181,7 @@ export function registerCarteDesBesoinsIpc({
         }
       : {}),
     lireLiens,
+    ...(lireFiches ? { lireFiches } : {}),
     identiteDuDossier
   })
   // Le Board ne montre que les dossiers du Chat (conv-1212), plus ceux que le Chat propose toujours

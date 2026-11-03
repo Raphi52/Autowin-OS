@@ -109,6 +109,9 @@ function demandeLue(v: unknown): DemandeDuFichier | null {
   }
 }
 
+/** `conv-1441/slug-xyz/RUN.md` : un fil, un dossier, le RUN.md — ni `..`, ni chemin absolu. */
+const FICHE_LISIBLE = /^[\w-]+\/[\w-]+\/RUN\.md$/u
+
 function postItLu(v: unknown): PostItDuFichier | null {
   const o = objet(v)
   if (!o) return null
@@ -134,8 +137,11 @@ function postItLu(v: unknown): PostItDuFichier | null {
   const manuelEtage = manuelBrut && etage(manuelBrut.etage)
   const manuelA = manuelBrut && date(manuelBrut.a)
   const demandeur = personne(o.demandeur)
+  // Le RUN.md de la tâche (conv-1456), tel que `fiches-de-demande.ts` le nomme : rien d'autre.
+  const fiche = texte(o.fiche, 200)
   return {
     conversationId,
+    ...(fiche && FICHE_LISIBLE.test(fiche) ? { fiche } : {}),
     titre,
     projet: { cle, libelle },
     etage: e,
