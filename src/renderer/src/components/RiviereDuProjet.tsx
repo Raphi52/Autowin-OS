@@ -943,6 +943,29 @@ function FicheDeLaRiviere({
         {p.demandeur?.nom ?? t('fiche.demandeurInconnu')} · {p.projet} · {date} ·{' '}
         {nomDEtage(p.etage)}
       </span>
+      {/* Le post-it EST un RUN.md léger (conv-1456) : « je devrais pouvoir voir le run.md depuis le
+          board ». Un bouton en tête, plutôt qu'un petit lien répété sur chaque demande. */}
+      {(() => {
+        if (!p.fiche || p.collegue || !ouvrirFiche) return null
+        const porteuse = [...p.demandes]
+          .reverse()
+          .find((d) => !d.collegue && d.messageId && fiches?.[d.conversationId]?.[d.messageId])
+        const chemin = porteuse?.messageId
+          ? fiches?.[porteuse.conversationId]?.[porteuse.messageId]
+          : undefined
+        if (!porteuse || !chemin) return null
+        return (
+          <button
+            type="button"
+            className="riviere-fiche-lien riviere-fiche-runmd"
+            data-testid="riviere-fiche-runmd-tache"
+            title={t('fiche.runMdTitre')}
+            onClick={() => ouvrirFiche(porteuse.conversationId, chemin)}
+          >
+            RUN.md
+          </button>
+        )
+      })()}
       {p.manuel && (
         <span className="riviere-fiche-manuel" data-testid="riviere-fiche-manuel">
           {t('fiche.manuel', { etat: t(CLES_STATUT[p.etatPreuve]) })}

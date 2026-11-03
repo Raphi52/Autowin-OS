@@ -117,4 +117,55 @@ describe('RiviereDuProjet — le lien vers la fiche RUN.md de chaque demande', (
     )
     expect(el.querySelector('[data-testid="riviere-fiche-runmd"]')).toBeNull()
   })
+
+  it("le post-it d'une fiche montre en tête un bouton RUN.md qui ouvre SA fiche (conv-1456)", async () => {
+    const el = document.createElement('div')
+    document.body.append(el)
+    const root = createRoot(el)
+    montes.push({ root, el })
+    const ouvrirFiche = vi.fn()
+    const demandes = [
+      demande(0, { messageId: 'm0', titre: 'avec fiche', fiche: 'conv-343/avec-fiche/RUN.md' })
+    ]
+    const fiches = { 'conv-343': { m0: 'D:/d/demandes/conv-343/avec-fiche/RUN.md' } }
+    await act(async () =>
+      root.render(
+        createElement(RiviereDuProjet, {
+          carte: carte(demandes),
+          ouvrir: vi.fn(),
+          fiches,
+          ouvrirFiche
+        })
+      )
+    )
+    await act(async () =>
+      (el.querySelector('[data-fiche="conv-343/avec-fiche/RUN.md"]') as HTMLElement).click()
+    )
+    const bouton = el.querySelector<HTMLButtonElement>('[data-testid="riviere-fiche-runmd-tache"]')
+    expect(bouton).not.toBeNull()
+    expect(bouton?.closest('li')).toBeNull()
+    await act(async () => bouton?.click())
+    expect(ouvrirFiche).toHaveBeenCalledWith('conv-343', 'D:/d/demandes/conv-343/avec-fiche/RUN.md')
+  })
+
+  it("le post-it d'un fil sans fiche n'a pas ce bouton", async () => {
+    const el = document.createElement('div')
+    document.body.append(el)
+    const root = createRoot(el)
+    montes.push({ root, el })
+    await act(async () =>
+      root.render(
+        createElement(RiviereDuProjet, {
+          carte: carte([demande(0, { messageId: 'm0' })]),
+          ouvrir: vi.fn(),
+          fiches: { 'conv-343': { m0: 'D:/x/RUN.md' } },
+          ouvrirFiche: vi.fn()
+        })
+      )
+    )
+    await act(async () =>
+      (el.querySelector('[data-conversation="conv-343"]') as HTMLElement).click()
+    )
+    expect(el.querySelector('[data-testid="riviere-fiche-runmd-tache"]')).toBeNull()
+  })
 })
