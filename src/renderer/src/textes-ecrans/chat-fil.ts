@@ -163,6 +163,8 @@ export const TEXTES_FR = {
     '⏸ Attend la fin du tour — le tour se terminait, il partira juste après',
   'message.attente.defaut':
     '⏸ Attend la fin du tour — il ne pouvait pas s’ajouter au tour en cours, il partira juste après',
+  'message.attente.annuler': '✕ Annuler',
+  'message.attente.annuler.titre': 'Retirer ce message de la file : il ne partira pas',
   'message.recu.reponseEnvoi': 'Réponse…',
   'message.recu.orientationEnvoi': 'Orientation…',
   'message.recu.repondu': '✓ Répondu',
@@ -735,6 +737,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     '⏸ Waiting for the end of the turn — the turn was ending, it will go right after',
   'message.attente.defaut':
     '⏸ Waiting for the end of the turn — it could not join the running turn, it will go right after',
+  'message.attente.annuler': '✕ Cancel',
+  'message.attente.annuler.titre': 'Remove this message from the queue: it will not be sent',
   'message.recu.reponseEnvoi': 'Answer…',
   'message.recu.orientationEnvoi': 'Steering…',
   'message.recu.repondu': '✓ Answered',

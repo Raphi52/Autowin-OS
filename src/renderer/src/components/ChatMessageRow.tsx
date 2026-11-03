@@ -117,8 +117,19 @@ function libelleAttente(receipt: DirectiveReceipt): string {
   return traduireChatFil('message.attente.defaut', langue)
 }
 
-export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }): React.JSX.Element {
+export function DirectiveReceiptRow({
+  receipt,
+  onAnnuler
+}: {
+  receipt: DirectiveReceipt
+  /**
+   * Retire de la file un texte qui attend la fin du tour (conv-1452, 2026-11-03) : sans lui, seul
+   * Stop l'en sortait, en coupant aussi le tour en cours. Offert aux deux statuts qui sont EN FILE.
+   */
+  onAnnuler?: (receipt: DirectiveReceipt) => void
+}): React.JSX.Element {
   const { t } = useTextesChatFil()
+  const enFile = receipt.status === 'attente' || receipt.status === 'failed'
   return (
     <div className={`msg user directive-receipt is-${receipt.status}`}>
       {/* Plus de libelle « Toi » (conv-227, 2026-10-11) ; l'etat de l'envoi, lui, reste. */}
@@ -147,6 +158,17 @@ export function DirectiveReceiptRow({ receipt }: { receipt: DirectiveReceipt }):
             t('message.recu.erreur')
           )}
         </span>
+        {enFile && onAnnuler && (
+          <button
+            type="button"
+            className="directive-receipt-annuler"
+            data-testid="annuler-envoi-en-attente"
+            title={t('message.attente.annuler.titre')}
+            onClick={() => onAnnuler(receipt)}
+          >
+            {t('message.attente.annuler')}
+          </button>
+        )}
       </div>
       <div className="msg-body" dir="auto">
         {receipt.text}
@@ -434,6 +456,7 @@ const LigneDuFil = memo(
     onPlanSelection,
     onOpenLiveAction,
     directiveReceipts,
+    onAnnulerEnvoi,
     retryPrompt,
     onResend,
     onRefineResume,
@@ -479,6 +502,8 @@ const LigneDuFil = memo(
     autoLancerCandidats?: boolean
     onOpenLiveAction?: (mode: 'live' | 'history') => void
     directiveReceipts?: DirectiveReceipt[]
+    /** Retire de la file un texte qui attend la fin du tour (conv-1452). Callback stable. */
+    onAnnulerEnvoi?: (receipt: DirectiveReceipt) => void
     /**
      * Le texte du message du fil qui REPOND a une question de ce tour (`askReponseDuFil`),
      * `undefined` tant qu'elle est ouverte. Il ferme le bloc ET dit quelle reponse mettre en evidence.
@@ -869,7 +894,7 @@ const LigneDuFil = memo(
                 `receipt-${timelineItem.receipt.id}`,
                 'autre',
                 undefined,
-                <DirectiveReceiptRow receipt={timelineItem.receipt} />
+                <DirectiveReceiptRow receipt={timelineItem.receipt} onAnnuler={onAnnulerEnvoi} />
               )
             ) : (
               <Fragment key={`parts-${timelineIndex}`}>

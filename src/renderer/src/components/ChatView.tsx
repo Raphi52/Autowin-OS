@@ -2724,6 +2724,19 @@ export function ChatView({
       return { ...current, [conversationId]: next }
     })
   }
+  /**
+   * ANNULER UN ENVOI EN ATTENTE (conv-1452, 2026-11-03) : « /git » tapé pendant un tour attendait sa
+   * fin, et seul Stop pouvait l'en sortir — en coupant aussi le tour. Le reçu et la file ne partagent
+   * pas d'identifiant (`submitBtw`), seulement le TEXTE : on retire la PREMIÈRE entrée de ce texte,
+   * pas toutes (deux envois identiques restent deux envois), puis ce reçu-là par son id.
+   */
+  function annulerEnvoiEnAttente(conversationId: string, receipt: DirectiveReceipt): void {
+    const file = queueRef.current.get(conversationId) ?? []
+    const rang = file.findIndex((entree) => entree.text === receipt.text)
+    if (rang >= 0)
+      setConversationQueue(conversationId, [...file.slice(0, rang), ...file.slice(rang + 1)])
+    retirerDirectiveReceipt(conversationId, receipt.id)
+  }
   function rebaseDirectiveReceiptsAfterStreamReset(
     conversationId: string,
     reset: { streamId: string; conclusionSeule?: true }
@@ -6215,6 +6228,14 @@ export function ChatView({
     (prompt: string, suite?: readonly string[]) => pickRef.current(prompt, suite),
     []
   )
+  // Valeur STABLE, comme `pickSuggestion` : la ligne mémoïsée ignore ses callbacks (comparateur
+  // data-only de `ChatMessageRow`). Seul le fil actif montre ses reçus (`activeDirectiveReceipts`).
+  const annulerEnvoiRef = useRef(annulerEnvoiEnAttente)
+  annulerEnvoiRef.current = annulerEnvoiEnAttente
+  const annulerEnvoi = useCallback((receipt: DirectiveReceipt) => {
+    const id = activeRef.current
+    if (id) annulerEnvoiRef.current(id, receipt)
+  }, [])
   /**
    * UNE SÉLECTION EN PLUSIEURS LOTS PART EN SUPER CONVERSATION (conv-1333, 2026-10-30). Depuis le
    * 22/10, 4 sélections ont prévu 12 lots dans la file du fil (`pickRef`) : 4 sont partis, jamais un
@@ -8061,10 +8082,15 @@ export function ChatView({
                   ? activeDirectiveReceiptsByMessage.get(index)
                   : undefined
               }
+              onAnnulerEnvoi={annulerEnvoi}
             />
             {message.role === 'user' &&
               (activeDirectiveReceiptsByMessage.get(index) ?? []).map((receipt) => (
-                <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
+                <DirectiveReceiptRow
+                  key={`directive-receipt-${receipt.id}`}
+                  receipt={receipt}
+                  onAnnuler={annulerEnvoi}
+                />
               ))}
           </Fragment>
         )
@@ -9632,7 +9658,11 @@ export function ChatView({
             {activeDirectiveReceipts
               .filter((receipt) => receipt.afterMessageIndex < 0)
               .map((receipt) => (
-                <DirectiveReceiptRow key={`directive-receipt-${receipt.id}`} receipt={receipt} />
+                <DirectiveReceiptRow
+                  key={`directive-receipt-${receipt.id}`}
+                  receipt={receipt}
+                  onAnnuler={annulerEnvoi}
+                />
               ))}
 
             <VueMesuree id="chat-fil" bloc cle={activeId}>

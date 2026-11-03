@@ -1281,6 +1281,22 @@
 .directive-receipt.is-failed .msg-body {
   border-color: color-mix(in srgb, var(--err) 55%, transparent);
 }
+/* « Annuler » un envoi en attente (conv-1452) : discret au repos, il ne doit pas voler l'œil au reçu. */
+.directive-receipt-annuler {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text-dim);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.directive-receipt-annuler:hover,
+.directive-receipt-annuler:focus-visible {
+  border-color: color-mix(in srgb, var(--err) 62%, transparent);
+  color: var(--err);
+}
 .md-final-summary {
   margin-top: 12px;
   padding: 13px 15px;

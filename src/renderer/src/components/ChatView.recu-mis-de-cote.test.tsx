@@ -93,6 +93,36 @@ describe('ChatView — le reçu d’un message mis de côté dit qu’il attend,
     expect(recu()).toContain('fin du tour')
   })
 
+  /*
+   * ANNULER UN ENVOI EN ATTENTE (conv-1452, 2026-11-03) : « /git » tapé pendant un tour attendait sa
+   * fin sans aucun moyen de le retirer — il fallait Stop, qui coupe aussi le tour en cours.
+   */
+  it('« Annuler » retire le message de la file : il ne part pas à la fin du tour', async () => {
+    const injecte = vi.fn().mockResolvedValue({ ok: false, motif: 'commande', commande: 'git' })
+    const { pilote, pilotChat } = await monter(injecte)
+    await soumettrePendantUnTour(pilote, '/git')
+    const annuler = harness!.container.querySelector<HTMLButtonElement>(
+      '[data-testid="annuler-envoi-en-attente"]'
+    )
+    expect(annuler, 'un message en attente offre « Annuler »').not.toBeNull()
+
+    await act(async () => annuler!.click())
+    expect(harness!.container.querySelector('.directive-receipt')).toBeNull()
+
+    await act(async () => pilote({ conversationId: 'A', kind: 'done' }))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const envoyes = pilotChat.mock.calls.map((c) => JSON.stringify(c)).join('\n')
+    expect(envoyes).not.toContain('/git')
+  })
+
+  it('un reçu qui n’attend pas (orientation reçue) n’offre pas « Annuler »', async () => {
+    const { pilote } = await monter(vi.fn().mockResolvedValue({ ok: true }))
+    await soumettrePendantUnTour(pilote, 'décale les icônes de 4 px')
+    expect(harness!.container.querySelector('[data-testid="annuler-envoi-en-attente"]')).toBeNull()
+  })
+
   it('une fois parti, le message mis de côté n’a plus de reçu (sinon doublon)', async () => {
     const injecte = vi.fn().mockResolvedValue({ ok: false, motif: 'commande', commande: 'scout' })
     const { pilote, pilotChat } = await monter(injecte)
