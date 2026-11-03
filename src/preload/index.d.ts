@@ -18,6 +18,7 @@ import type {
 } from '../shared/prod-protection'
 import type { RapportRetention } from '../shared/rapport-retention'
 import type { FicheDeDemande, FichesDesDemandes } from '../shared/fiche-de-demande'
+import type { AffichageSession } from '../shared/affichage-session'
 import type { ApiNavigateur, RectNavigateur } from '../shared/navigateur'
 import type { ApiTerminal } from '../shared/terminal'
 import type { GestesDesTours } from '../shared/gestes-agent'
@@ -313,6 +314,9 @@ interface ChatApi {
     etapesFaites: number
     etapesTotales: number
   }) => Promise<boolean>
+  /** Connecté à distance ? Sur un écran de téléphone ? (conv-1442) */
+  affichageSession: () => Promise<AffichageSession>
+  onAffichageSession: (cb: (etat: AffichageSession) => void) => () => void
   /** La mascotte du bureau (conv-1145) : affichée ou masquée, choix gardé par le moteur. */
   mascotteAffichee: () => Promise<boolean>
   afficherMascotte: (affichee: boolean) => Promise<boolean>

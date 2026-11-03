@@ -85,6 +85,7 @@ import { installerRelaisPrefill } from './components/relais-prefill'
 import { installerAltClic } from './components/alt-clic'
 import { lireBrouillons, memoriserBrouillon } from './components/brouillons-persistes'
 import { ajouterAuBrouillon } from './components/passage-selectionne'
+import { useAffichageSession } from './affichage-session'
 
 const NAV = APP_DESTINATIONS
 
@@ -171,6 +172,11 @@ export function MainApp(): React.JSX.Element {
   // Le fond 3D reste en veille (caché, sans dessiner) quelques minutes hors de l'Accueil : un retour
   // ne le reconstruit plus (decor-veille.ts, conv-337).
   const decorMonte = useDecorEnVeille(tab === 'accueil')
+  // Connecté par Windows App : version allégée, sans animations HORS de l'Accueil ; sur un écran
+  // de téléphone, menu replié d'office et gros boutons (conv-1442, affichage-session.css). L'Accueil
+  // et son décor 3D restent entiers à distance : « je veux pas que ça me cache mon accueil »
+  // (conv-1442, 2026-11-03).
+  const affichage = useAffichageSession()
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   // #11 — l'état replié/déplié de la rail est PERSISTÉ (comme le zoom), pour ne pas re-replier à
   // chaque lancement.
@@ -629,7 +635,10 @@ export function MainApp(): React.JSX.Element {
        * fil de la conv ». Le voile plein écran qu'il posait rendait le fil et la question illisibles
        * l'un à travers l'autre.
        */}
-      <aside ref={rail} className={`rail${railCollapsed ? ' is-collapsed' : ''}`}>
+      <aside
+        ref={rail}
+        className={`rail${railCollapsed || affichage.telephone ? ' is-collapsed' : ''}`}
+      >
         <div className="brand">
           {/* LE LOGO, plus le spinner (2026-10-11, conv-228) : « je garde mon spinner je veux juste
               changer le logo ici ». L'atome reste l'indicateur de chargement partout ailleurs. */}
@@ -707,7 +716,7 @@ export function MainApp(): React.JSX.Element {
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
         {visitedTabs.has('accueil') && (
-          <div className={`view-slot${tab === 'accueil' ? ' is-active' : ''}`}>
+          <div className={`view-slot vue-accueil${tab === 'accueil' ? ' is-active' : ''}`}>
             <VueMesuree id="accueil">
               <HomeView active={tab === 'accueil'} onNavigate={applyLocation} />
             </VueMesuree>

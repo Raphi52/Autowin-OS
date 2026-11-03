@@ -1,0 +1,102 @@
+/* L'AFFICHAGE SELON LA CONNEXION (conv-1442, 2026-11-02). Les attributs sont posés sur <html> par
+   `affichage-session.ts`, d'après ce que Windows rapporte au moteur.
+   - `data-session="distante"` : connecté par Windows App. Version ALLÉGÉE : rien ne s'anime, chaque
+     image traversant le réseau — SAUF l'Accueil (`.vue-accueil`, App.tsx), laissé entier avec son
+     décor 3D : « je veux pas que ça me cache mon accueil » (conv-1442, 2026-11-03).
+   - `data-ecran="telephone"` : l'écran de la session est petit (le téléphone). Mise en page ÉTROITE
+     à gros boutons. */
+
+/* ---- Version allégée ------------------------------------------------------------------------- */
+
+/* LES ANIMATIONS S'ACHÈVENT AUSSITÔT, au lieu d'être retirées : plusieurs composants attendent la fin
+   d'une animation (`animationend` : entree-cascade.ts, anneau-activite.tsx, BulleDuTicket.tsx,
+   TestsView.tsx). Avec `animation: none`, cet évènement ne viendrait jamais. Une animation en boucle
+   joue un seul tour d'1 ms puis s'arrête.
+   Exceptions : le SPINNER, indicateur d'état et non décor (theme.css) — figé, il dirait faussement
+   que rien ne tourne ; et l'ACCUEIL, qui garde ses animations à distance (voir l'en-tête). */
+:root[data-session='distante'] *:not(.spinner, .spinner *, .vue-accueil, .vue-accueil *),
+:root[data-session='distante'] *:not(.spinner, .spinner *, .vue-accueil, .vue-accueil *)::before,
+:root[data-session='distante'] *:not(.spinner, .spinner *, .vue-accueil, .vue-accueil *)::after {
+  animation-duration: 1ms !important;
+  animation-delay: 0s !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+  scroll-behavior: auto !important;
+}
+/* Le passage d'une vue à l'autre et le changement de thème (transition-de-vue.ts) : immédiats. */
+:root[data-session='distante']::view-transition-group(*),
+:root[data-session='distante']::view-transition-old(*),
+:root[data-session='distante']::view-transition-new(*) {
+  animation-duration: 1ms !important;
+  animation-delay: 0s !important;
+}
+
+/* ---- Version téléphone ----------------------------------------------------------------------- */
+
+/* LE MENU RESTE EN ICÔNES (App.tsx le replie d'office) et grossit pour le doigt : 44 px, la taille
+   tactile minimale courante. Le bouton de repli disparaît : il n'aurait aucun effet. */
+:root[data-ecran='telephone'] .rail.is-collapsed {
+  width: 64px;
+}
+:root[data-ecran='telephone'] .shell:has(.rail.is-collapsed)::before {
+  left: 64px;
+}
+:root[data-ecran='telephone'] .rail.is-collapsed .nav-item {
+  width: 44px;
+  margin-block: 2px;
+}
+:root[data-ecran='telephone'] .rail.is-collapsed .space-toy-icon {
+  width: 22px;
+  height: 22px;
+  font-size: 21px;
+}
+:root[data-ecran='telephone'] .rail-toggle {
+  display: none;
+}
+/* LE LOGO REPREND SA PLACE : le menu replié le masque (app-shell.css) parce que le bouton de repli
+   occupe la case ; sans ce bouton, la case restait vide (capture du 2026-11-03, conv-1442). */
+:root[data-ecran='telephone'] .rail.is-collapsed .brand-logo {
+  display: block;
+  width: 36px;
+  height: 36px;
+  margin-left: 0;
+}
+
+/* Moins de marge autour des vues : chaque pixel de largeur compte. Le haut garde
+   `--marge-haut-vue` (les boutons de fenêtre de Windows). */
+:root[data-ecran='telephone'] .main {
+  padding: var(--marge-haut-vue) var(--s2) var(--s2);
+}
+
+/* GROS BOUTONS : les boutons de l'app (`.btn`) et les lignes de la liste des conversations. */
+:root[data-ecran='telephone'] .btn {
+  min-height: 40px;
+  padding-inline: 14px;
+}
+:root[data-ecran='telephone'] .conv-pick {
+  min-height: 40px;
+}
+
+/* LA LISTE DES CONVERSATIONS SE RESSERRE : sa largeur réglée à la souris (style en ligne) cède à une
+   largeur de téléphone, qui déclenche sa version dense déjà prévue pour ce cas (ChatView.css,
+   `@container convpane (max-width: 170px)`). La poignée de largeur, inutile au doigt, disparaît. */
+:root[data-ecran='telephone'] .conv-pane {
+  width: clamp(120px, 26vw, 170px) !important;
+}
+:root[data-ecran='telephone'] .conv-pane-resizer {
+  display: none;
+}
+
+/* LA SAISIE : texte à 16 px, lisible sans zoomer ; boutons de la rangée à 40 px. */
+:root[data-ecran='telephone'] .composer-input-row > textarea {
+  font-size: 16px;
+}
+:root[data-ecran='telephone'] .composer-input-row > button,
+:root[data-ecran='telephone'] .composer-input-row > .attachment-button,
+:root[data-ecran='telephone'] .composer-input-row > .composer-auto,
+:root[data-ecran='telephone'] .composer-input-row > .composer-trois-facons,
+:root[data-ecran='telephone'] .composer-input-row > .composer-stop {
+  min-width: 40px;
+  min-height: 40px;
+}

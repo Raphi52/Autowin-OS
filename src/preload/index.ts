@@ -38,6 +38,11 @@ import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../shared/claude-resets'
 import type { RapportRetention } from '../shared/rapport-retention'
 import type { FicheDeDemande, FichesDesDemandes } from '../shared/fiche-de-demande'
+import {
+  CANAL_AFFICHAGE_SESSION,
+  CANAL_AFFICHAGE_SESSION_MAJ,
+  type AffichageSession
+} from '../shared/affichage-session'
 import type { IncomingCommit, UpdateStrategy } from '../shared/update-contract'
 import type { GitBranchResult, GitReadResult, GitDiffResult } from '../shared/git-read'
 import type {
@@ -468,6 +473,14 @@ const api = {
     etapesFaites: number
     etapesTotales: number
   }): Promise<boolean> => ipcRenderer.invoke('os:presence', etat),
+  /** Connecté à distance ? Sur un écran de téléphone ? (conv-1442, `affichage-session.ts`) */
+  affichageSession: (): Promise<AffichageSession> =>
+    ipcRenderer.invoke(CANAL_AFFICHAGE_SESSION),
+  onAffichageSession: (cb: (etat: AffichageSession) => void): (() => void) => {
+    const h = (_e: unknown, etat: AffichageSession): void => cb(etat)
+    ipcRenderer.on(CANAL_AFFICHAGE_SESSION_MAJ, h)
+    return () => ipcRenderer.removeListener(CANAL_AFFICHAGE_SESSION_MAJ, h)
+  },
   /** La mascotte du bureau est-elle affichée ? Le moteur garde le choix (conv-1145). */
   mascotteAffichee: (): Promise<boolean> => ipcRenderer.invoke('os:mascotte'),
   /** L'interrupteur de Settings · Interface : rend le choix tel que le moteur l'a enregistré. */

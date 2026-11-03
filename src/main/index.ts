@@ -458,6 +458,7 @@ import {
 } from './notification-fin-de-tour'
 import { creerPopupsDeFinDeTour, definirPaletteDeCarte } from './notification-popup-fenetre'
 import { creerMascotteDuBureau } from './mascotte-fenetre'
+import { brancherAffichageSession } from './affichage-session'
 import {
   cssDeLAccueil,
   HAUTEUR_MASCOTTE,
@@ -5783,6 +5784,8 @@ app.whenReady().then(async () => {
     return guichetProd.enAttente()
   })
   registerIdentiteIpc()
+  // Version allégée à distance, version téléphone sur petit écran (conv-1442).
+  brancherAffichageSession()
   const suiviDuPlan = registerChatIpc()
   registerTicketsIpc({
     ipc: ipcMain,
