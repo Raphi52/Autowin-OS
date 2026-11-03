@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync
@@ -13,6 +14,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   nomsDesProfils,
+  racineDesProfils,
   termeTrouve,
   termesDesProfils,
   texteDuFichier
@@ -35,16 +37,23 @@ import {
  * Noms et termes viennent des PROFILS eux-memes, lus par `scripts/identite-entreprise.mjs` — la MEME
  * fonction que l'export public : ecrits en clair ici, ce test serait lui-meme une mention, et une
  * nouvelle entreprise est couverte sans le modifier. Le dossier est lu directement : la variable
- * publiee par l'app vaut `{}` pendant les tests. Sans dossier `entreprise/` (version publique), il
- * n'y a rien a proteger.
+ * publiee par l'app vaut `{}` pendant les tests.
  * Perimetre : fichiers suivis ET fichiers nouveaux non ignores (`git ls-files --others
  * --exclude-standard`) — un fichier pas encore ajoute serait publie au prochain commit.
+ *
+ * conv-1457 (2026-11-03) : dans une copie liee (runs, `verify`), `entreprise/` est absent et la garde
+ * passait au vert avec 0 terme — un terme est parti sur la version publique. Les profils se lisent
+ * donc dans le dossier principal du depot (`racineDesProfils`). Sans profil nulle part (version
+ * publique), les tests qui en dependent se declarent IGNORES avec leur raison, jamais verts a vide.
  */
 const ROOT = process.cwd()
 const DOSSIER_ENTREPRISE = 'entreprise/'
 
-const NOMS_INTERDITS: string[] = nomsDesProfils(ROOT)
-const TERMES = termesDesProfils(ROOT)
+const PROFILS = racineDesProfils(ROOT)
+const SANS_PROFIL =
+  'aucun dossier entreprise/ ici ni dans le dossier principal du depot : aucun terme a chercher'
+const NOMS_INTERDITS: string[] = PROFILS ? nomsDesProfils(PROFILS) : []
+const TERMES = PROFILS ? termesDesProfils(PROFILS) : { termes: [], erreurs: [] }
 
 function fichiersDuDepot(): string[] {
   const sortie = execFileSync(
@@ -83,20 +92,22 @@ function lire(chemin: string): Buffer | undefined {
 describe('separation entreprise / produit', () => {
   const fichiers = fichiersDuDepot().filter(horsEntreprise)
 
-  it('chaque profil d entreprise fournit un nom assez long pour etre garde', () => {
-    if (!existsSync(join(ROOT, 'entreprise'))) return
+  it('chaque profil d entreprise fournit un nom assez long pour etre garde', ({ skip }) => {
+    if (!PROFILS) skip(SANS_PROFIL)
     expect(NOMS_INTERDITS.length).toBeGreaterThan(0)
     expect(NOMS_INTERDITS.filter((nom) => nom.length < 4)).toEqual([])
   })
 
-  it('aucun chemin hors de entreprise/ ne porte un nom d entreprise', () => {
+  it('aucun chemin hors de entreprise/ ne porte un nom d entreprise', ({ skip }) => {
+    if (!PROFILS) skip(SANS_PROFIL)
     const fautifs = fichiers.filter((chemin) =>
       NOMS_INTERDITS.some((nom) => chemin.toLowerCase().includes(nom))
     )
     expect(fautifs).toEqual([])
   })
 
-  it('aucun fichier hors de entreprise/ ne contient un nom d entreprise', () => {
+  it('aucun fichier hors de entreprise/ ne contient un nom d entreprise', ({ skip }) => {
+    if (!PROFILS) skip(SANS_PROFIL)
     const fautifs: string[] = []
     for (const chemin of fichiers) {
       const octets = lire(chemin)
@@ -105,16 +116,21 @@ describe('separation entreprise / produit', () => {
     expect(fautifs).toEqual([])
   })
 
-  it('les termes interdits des profils sont lisibles : une faute ne desarme pas la garde', () => {
+  it('les termes interdits des profils sont lisibles : une faute ne desarme pas la garde', ({
+    skip
+  }) => {
+    if (!PROFILS) skip(SANS_PROFIL)
     expect(TERMES.erreurs).toEqual([])
   })
 
-  it('aucun chemin hors de entreprise/ ne porte un terme interdit', () => {
+  it('aucun chemin hors de entreprise/ ne porte un terme interdit', ({ skip }) => {
+    if (!PROFILS) skip(SANS_PROFIL)
     const fautifs = fichiers.filter((chemin) => termeTrouve(chemin, TERMES.termes))
     expect(fautifs).toEqual([])
   })
 
-  it('aucun fichier hors de entreprise/ ne contient un terme interdit', () => {
+  it('aucun fichier hors de entreprise/ ne contient un terme interdit', ({ skip }) => {
+    if (!PROFILS) skip(SANS_PROFIL)
     const fautifs: string[] = []
     for (const chemin of fichiers) {
       const octets = lire(chemin)
@@ -160,6 +176,39 @@ describe('termes interdits : lecture des profils', () => {
     }
     return racine
   }
+
+  it('les profils d une copie liee se lisent dans le dossier principal ; un clone n en a pas (conv-1457)', () => {
+    // Mesure du 2026-11-03 : dans une copie de run ou de `verify` (git worktree), la garde chargeait
+    // 0 terme et passait au vert. Jumeaux : la copie liee trouve les profils du dossier principal,
+    // un clone (version publique) n'en trouve aucun et la garde se declare ignoree.
+    const principal = depot({ acme: { nom: 'Acme' } })
+    const git = (cwd: string, ...args: string[]): void => {
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    }
+    writeFileSync(join(principal, '.gitignore'), 'entreprise/\n')
+    writeFileSync(join(principal, 'a.txt'), 'a\n')
+    git(principal, 'init', '-q')
+    git(principal, 'add', '.')
+    git(principal, 'commit', '-q', '--no-verify', '-m', 'init')
+    const copie = join(principal, 'copie-liee')
+    git(principal, 'worktree', 'add', '-q', '--detach', copie)
+    const clone = mkdtempSync(join(tmpdir(), 'autowin-clone-'))
+    racines.push(clone)
+    git(clone, 'clone', '-q', principal, '.')
+    const vrai = (chemin: string | undefined): string | undefined =>
+      chemin === undefined ? undefined : realpathSync.native(chemin)
+
+    expect(existsSync(join(copie, 'entreprise'))).toBe(false)
+    expect(vrai(racineDesProfils(principal))).toBe(vrai(principal))
+    expect(vrai(racineDesProfils(copie))).toBe(vrai(principal))
+    expect(nomsDesProfils(racineDesProfils(copie))).toEqual(['acme'])
+    expect(racineDesProfils(clone)).toBeUndefined()
+    expect(racineDesProfils(depot({}))).toBeUndefined() // ni profil ni depot git
+  })
 
   it('sans dossier entreprise/ (version publique) : aucun terme, aucune erreur', () => {
     expect(termesDesProfils(depot({}))).toEqual({ termes: [], erreurs: [] })

@@ -6,7 +6,8 @@
  * version publique) fournit les noms deja poses sur ses postes. Ordre : la variable
  * `AUTOWIN_IDENTITE_ENTREPRISE` publiee par l'app (`{}` = neutre), puis le fichier du depot.
  */
-import { readdirSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -77,6 +78,33 @@ export function identiteBrain(env = process.env, racine = RACINE_DEPOT) {
     racinePartagee: typeof brain.racinePartagee === 'string' ? brain.racinePartagee : '',
     variables
   }
+}
+
+/**
+ * Dossier qui porte les profils `entreprise/` pour `racine` : `racine` elle-meme si elle les a, sinon
+ * le dossier principal du depot quand `racine` est une copie liee (`git worktree add`), sinon
+ * `undefined` (version publique : aucun profil nulle part).
+ *
+ * Pourquoi (conv-1457, 2026-11-03) : les copies des runs et de `verify` sont des copies liees, et
+ * `entreprise/`, ignore par git, n'y est pas. La garde `separation-entreprise.test.ts` y chargeait
+ * 0 nom et 0 terme et passait au vert sans rien chercher ; ce vert a laisse partir un terme sur la
+ * version publique. Le dossier principal est le parent du depot git partage (`--git-common-dir`).
+ */
+export function racineDesProfils(racine = RACINE_DEPOT) {
+  if (existsSync(join(racine, 'entreprise'))) return racine
+  let commun
+  try {
+    commun = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
+      cwd: racine,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true
+    }).trim()
+  } catch {
+    return undefined // pas un depot git : aucun dossier principal a consulter
+  }
+  const principal = dirname(commun)
+  return existsSync(join(principal, 'entreprise')) ? principal : undefined
 }
 
 /**
