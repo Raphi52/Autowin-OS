@@ -163,6 +163,113 @@ describe('.githooks/pre-push — rien de entreprise/ vers GitHub', () => {
 })
 
 /**
+ * `.githooks/pre-push` — REFUS de tout push vers GitHub qui envoie un nom ou un terme d'entreprise.
+ *
+ * Pourquoi (2026-11-03, conv-1457) : la garde `separation-entreprise.test.ts` ne jouait qu'avec
+ * `npm test`, et quatre commentaires portant un terme métier sont partis sur le dépôt public. Le hook
+ * applique maintenant les MÊMES règles (`scripts/identite-entreprise.mjs`) à ce que le push ENVOIE :
+ * chaque fichier de chaque commit envoyé — même retiré au commit suivant, il part dans l'historique —
+ * et chaque message de commit. Profil FICTIF, sur le disque et jamais commité, comme le vrai.
+ */
+describe('.githooks/pre-push — aucun nom ni terme d entreprise vers GitHub', () => {
+  function avecProfil(
+    local: string,
+    profil: unknown = { termesInterdits: [{ motif: 'zorglub' }] }
+  ): void {
+    mkdirSync(join(local, DOSSIER_ENTREPRISE, 'acme'), { recursive: true })
+    writeFileSync(
+      join(local, DOSSIER_ENTREPRISE, 'acme', 'identite.json'),
+      typeof profil === 'string' ? profil : JSON.stringify(profil)
+    )
+  }
+
+  it('refuse un fichier qui contient un terme interdit, et nomme le fichier', () => {
+    const { local, publicNu } = depots()
+    avecProfil(local)
+    commit(local, { 'docs/note.md': 'voir le serveur zorglub\n' }, 'note')
+
+    const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
+
+    expect(r.status).not.toBe(0)
+    expect(r.stderr).toContain('docs/note.md')
+    expect(refDistante(publicNu, 'travail')).toBeNull()
+  })
+
+  it('laisse passer le même push sans le terme', () => {
+    const { local, publicNu } = depots()
+    avecProfil(local)
+    const sha = commit(local, { 'docs/note.md': 'voir le serveur\n' }, 'note')
+
+    const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
+
+    expect(r.status, r.stderr).toBe(0)
+    expect(refDistante(publicNu, 'travail')).toBe(sha)
+  })
+
+  it('refuse un terme ajouté puis retiré dans les commits envoyés : il part dans l historique', () => {
+    const { local, publicNu } = depots()
+    avecProfil(local)
+    commit(local, { 'a.txt': 'a\n' }, 'base')
+    gitOk(local, ['push', '-q', 'github', 'HEAD:refs/heads/travail'])
+    const publie = refDistante(publicNu, 'travail')
+    commit(local, { 'a.txt': 'zorglub\n' }, 'ajout')
+    commit(local, { 'a.txt': 'a\n' }, 'retrait')
+
+    const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
+
+    expect(r.status).not.toBe(0)
+    expect(refDistante(publicNu, 'travail')).toBe(publie)
+  })
+
+  it('refuse un message de commit qui porte le nom de l entreprise', () => {
+    const { local, publicNu } = depots()
+    avecProfil(local)
+    commit(local, { 'a.txt': 'a\n' }, 'correctif pour ACME')
+
+    const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
+
+    expect(r.status).not.toBe(0)
+    expect(r.stderr).toContain('message')
+    expect(refDistante(publicNu, 'travail')).toBeNull()
+  })
+
+  it('refuse un chemin qui porte le nom de l entreprise', () => {
+    const { local, publicNu } = depots()
+    avecProfil(local)
+    commit(local, { 'docs/acme-notes.md': 'notes\n' }, 'notes')
+
+    const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
+
+    expect(r.status).not.toBe(0)
+    expect(r.stderr).toContain('docs/acme-notes.md')
+    expect(refDistante(publicNu, 'travail')).toBeNull()
+  })
+
+  it('laisse passer le terme vers le dépôt interne : seul GitHub est public', () => {
+    const { local, interneNu } = depots()
+    avecProfil(local)
+    const sha = commit(local, { 'docs/note.md': 'zorglub\n' }, 'note')
+
+    const r = git(local, ['push', 'origin', 'HEAD:refs/heads/travail'])
+
+    expect(r.status, r.stderr).toBe(0)
+    expect(refDistante(interneNu, 'travail')).toBe(sha)
+  })
+
+  it('refuse quand un profil est illisible : la garde ne se désarme pas en silence', () => {
+    const { local, publicNu } = depots()
+    avecProfil(local, { termesInterdits: 'zorglub' })
+    commit(local, { 'docs/note.md': 'propre\n' }, 'note')
+
+    const r = git(local, ['push', 'github', 'HEAD:refs/heads/travail'])
+
+    expect(r.status).not.toBe(0)
+    expect(r.stderr).toContain('termesInterdits')
+    expect(refDistante(publicNu, 'travail')).toBeNull()
+  })
+})
+
+/**
  * Garde « agent » : le message de refus doit donner la marche à suivre DU DÉPÔT.
  *
  * Pourquoi (2026-10-22, conv-1074) : sur ce dépôt on pousse directement sur `main` avec

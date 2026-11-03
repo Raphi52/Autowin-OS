@@ -264,6 +264,21 @@ export function texteDuFichier(octets) {
     : undefined
 }
 
+/**
+ * Premier nom d'entreprise (`nomsDesProfils`) present dans `octets`, ou `undefined` : en UTF-8/ASCII
+ * (casse ignoree) et en UTF-16LE, l'encodage des scripts PowerShell. Meme regle pour la garde
+ * `separation-entreprise.test.ts` et le hook `.githooks/pre-push` (conv-1457).
+ */
+export function nomTrouve(octets, noms) {
+  const minuscule = octets.toString('latin1').toLowerCase()
+  for (const nom of noms) {
+    if (minuscule.includes(nom)) return nom
+    const utf16 = Buffer.from(nom, 'utf16le').toString('latin1')
+    if (minuscule.includes(utf16)) return nom
+  }
+  return undefined
+}
+
 /** Premier terme interdit trouve dans `texte` (contenu ou chemin), ou `undefined`. */
 export function termeTrouve(texte, termes) {
   if (texte === undefined) return undefined

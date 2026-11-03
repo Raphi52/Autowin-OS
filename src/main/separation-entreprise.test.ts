@@ -14,6 +14,7 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
   nomsDesProfils,
+  nomTrouve,
   racineDesProfils,
   termeTrouve,
   termesDesProfils,
@@ -64,17 +65,6 @@ function fichiersDuDepot(): string[] {
   return [...new Set(sortie.split('\0').filter(Boolean))]
 }
 
-/** Le nom en UTF-8/ASCII (casse ignoree) et en UTF-16LE, l'encodage des scripts PowerShell. */
-function contientUnNom(octets: Buffer): string | undefined {
-  const minuscule = octets.toString('latin1').toLowerCase()
-  for (const nom of NOMS_INTERDITS) {
-    if (minuscule.includes(nom)) return nom
-    const utf16 = Buffer.from(nom, 'utf16le').toString('latin1')
-    if (minuscule.includes(utf16)) return nom
-  }
-  return undefined
-}
-
 function horsEntreprise(chemin: string): boolean {
   return !chemin.startsWith(DOSSIER_ENTREPRISE)
 }
@@ -111,7 +101,7 @@ describe('separation entreprise / produit', () => {
     const fautifs: string[] = []
     for (const chemin of fichiers) {
       const octets = lire(chemin)
-      if (octets && contientUnNom(octets)) fautifs.push(chemin)
+      if (octets && nomTrouve(octets, NOMS_INTERDITS)) fautifs.push(chemin)
     }
     expect(fautifs).toEqual([])
   })
