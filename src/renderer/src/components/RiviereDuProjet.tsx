@@ -48,6 +48,7 @@ import type {
   ResultatDuRattachement,
   WorkItemDeLaDemande
 } from '../../../shared/carte-des-besoins'
+import type { FichesDesDemandes } from '../../../shared/fiche-de-demande'
 import { formaterDate } from '../langue'
 import type { Langue } from '../../../shared/langue'
 import {
@@ -203,6 +204,15 @@ interface Glisse {
   bouge: boolean
 }
 
+/**
+ * Le lien « RUN.md » de chaque demande d'un post-it (conv-1441) : la fiche que l'app écrit pour elle,
+ * ouverte dans son fil. Absent = pas de lien (Board sans fiches, demande d'un collègue).
+ */
+interface FichesDuBoard {
+  fiches?: FichesDesDemandes
+  ouvrirFiche?: (conversationId: string, chemin: string) => void
+}
+
 /** Lier / détacher un work item d'une demande (conv-1127) ; absents = la fiche ne fait que montrer. */
 interface GestesDesTaches {
   lierWorkItem?: (
@@ -222,7 +232,9 @@ export function RiviereDuProjet({
   delierWorkItem,
   sourcesDesTaches,
   verifier,
-  dossierPersonnel = null
+  dossierPersonnel = null,
+  fiches,
+  ouvrirFiche
 }: {
   carte: CarteDesBesoins
   ouvrir: (conversationId: string) => void
@@ -233,7 +245,8 @@ export function RiviereDuProjet({
    * rouage du Board (conv-1329 : « prenom.nom » s'y lisait comme un projet à supprimer).
    */
   dossierPersonnel?: string | null
-} & GestesDesTaches): React.JSX.Element {
+} & GestesDesTaches &
+  FichesDuBoard): React.JSX.Element {
   const { t, langue } = useTextesBoardEtMaintenance()
   const [manuels, setManuels] = useState(() => {
     const s = stockage()
@@ -832,6 +845,8 @@ export function RiviereDuProjet({
                 largeur={total}
                 hauteur={hauteur}
                 ouvrir={ouvrir}
+                {...(fiches ? { fiches } : {})}
+                {...(ouvrirFiche ? { ouvrirFiche } : {})}
                 {...(lierWorkItem ? { lierWorkItem } : {})}
                 {...(delierWorkItem ? { delierWorkItem } : {})}
                 {...(sourcesDesTaches ? { sourcesDesTaches } : {})}
@@ -863,7 +878,9 @@ function FicheDeLaRiviere({
   delierWorkItem,
   sourcesDesTaches,
   verifier,
-  aLaMain
+  aLaMain,
+  fiches,
+  ouvrirFiche
 }: {
   postit: PostItDeLaRiviere
   position: { x: number; y: number; kx: number; largeur: number }
@@ -874,7 +891,8 @@ function FicheDeLaRiviere({
   revenir: () => void
   verifier?: Verifier
   aLaMain: () => void
-} & GestesDesTaches): React.JSX.Element {
+} & GestesDesTaches &
+  FichesDuBoard): React.JSX.Element {
   const { t, langue } = useTextesBoardEtMaintenance()
   const L = 300
   // La demi-largeur du post-it À L'ÉCRAN : il s'étire quand sa case a de la place (conv-1204).
@@ -952,6 +970,22 @@ function FicheDeLaRiviere({
             <span className="riviere-fiche-texte" data-testid="riviere-fiche-texte">
               {texteDeLaCarte(d.texte ?? d.titre, langue)}
             </span>
+            {(() => {
+              const chemin =
+                !d.collegue && d.messageId ? fiches?.[d.conversationId]?.[d.messageId] : undefined
+              if (!chemin || !ouvrirFiche) return null
+              return (
+                <button
+                  type="button"
+                  className="riviere-fiche-lien riviere-fiche-runmd"
+                  data-testid="riviere-fiche-runmd"
+                  title={t('fiche.runMdTitre')}
+                  onClick={() => ouvrirFiche(d.conversationId, chemin)}
+                >
+                  RUN.md
+                </button>
+              )
+            })()}
             {/* La task de la demande (conv-1127) : liée, héritée, ou « sans task » + rattachement.
                 Chez un collègue (conv-1210), ses tasks telles que son Board les lie, sans geste. */}
             {d.collegue ? (

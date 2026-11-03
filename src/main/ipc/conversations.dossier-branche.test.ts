@@ -23,13 +23,15 @@ vi.mock('../ipc-senders', () => ({ assertTrustedRendererSender: () => undefined 
 import { registerConversationsIpc } from './conversations'
 
 const store = new ConversationStore(() => 1)
+const rattacherLesFiches = vi.fn(async () => 1)
 
 beforeAll(() => {
   registerConversationsIpc({
     os: { conversations: store } as never,
     broadcast: () => undefined,
     dossierDuFil: () => 'D:\\AutoWinOS',
-    dossierDesRetours: () => 'D:\\donnees\\retours-de-tour'
+    dossierDesRetours: () => 'D:\\donnees\\retours-de-tour',
+    rattacherLesFiches
   } as never)
 })
 
@@ -87,6 +89,30 @@ describe('os:conversations:fork — branche née dans sa copie', () => {
     const { id, ancre } = source()
     const branche = appeler('os:conversations:fork', id, ancre) as { projectPath?: string }
     expect(branche.projectPath).toBe('D:\\GIT\\Contoso')
+  })
+
+  it('les demandes recopiées sont rattachées aux fiches de la source (conv-1441)', async () => {
+    const { id, ancre } = source()
+    rattacherLesFiches.mockClear()
+    const branche = appeler('os:conversations:fork', id, ancre) as { id: string }
+    await vi.waitFor(() => expect(rattacherLesFiches).toHaveBeenCalledTimes(1))
+    const [brancheVue, sourceVue] = rattacherLesFiches.mock.calls[0] as unknown as [
+      { id: string; forkedFrom?: { conversationId: string } },
+      { id: string }
+    ]
+    expect(brancheVue.id).toBe(branche.id)
+    expect(brancheVue.forkedFrom?.conversationId).toBe(id)
+    expect(sourceVue.id).toBe(id)
+  })
+
+  it('un rattachement en échec ne touche pas la branche', async () => {
+    const { id, ancre } = source()
+    rattacherLesFiches.mockRejectedValueOnce(new Error('disque plein'))
+    const avertir = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const branche = appeler('os:conversations:fork', id, ancre) as { id: string }
+    expect(store.get(branche.id)).toBeDefined()
+    await vi.waitFor(() => expect(avertir).toHaveBeenCalled())
+    avertir.mockRestore()
   })
 
   it.each([{ dossier: 'Factures' }, { dossier: 42 }])(

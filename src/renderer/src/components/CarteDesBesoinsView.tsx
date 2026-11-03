@@ -44,6 +44,8 @@ import { TicketsView } from './TicketsView'
 import { ViewTopBar } from './ViewTopBar'
 import type { BoardSection } from '../../../shared/navigation'
 import { deposerOuvertureConversation } from './pending-conversation-open'
+import { demanderFicheAOuvrir } from './fiches-du-fil'
+import type { FichesDesDemandes } from '../../../shared/fiche-de-demande'
 import { useVerificationDuBoard } from './verification-du-board'
 import { lireEtatsManuels } from './etats-manuels-carte'
 import './ViewPage.css'
@@ -90,6 +92,8 @@ export function CarteDesBesoinsView({
   const [ticketsOuverts, setTicketsOuverts] = useState(section === 'tickets')
   if (section === 'tickets' && !ticketsOuverts) setTicketsOuverts(true)
   const [carte, setCarte] = useState<CarteDesBesoins | null>(null)
+  // La fiche RUN.md de chaque demande (conv-1441) : le lien « RUN.md » des post-it.
+  const [fiches, setFiches] = useState<FichesDesDemandes>({})
   const [erreur, setErreur] = useState<string | null>(null)
   const [chargement, setChargement] = useState(false)
   // Les dossiers de travail du Chat (conv-1212) : les seuls projets du Board. Relus à chaque calcul,
@@ -118,6 +122,12 @@ export function CarteDesBesoinsView({
       })
       setCarte(carteDuBoardAffichee(calculee, dossiers, toujours, retires, personnel))
       setErreur(null)
+      // Après la carte, et sans la bloquer : sans fiches, le Board reste entier, sans lien RUN.md.
+      try {
+        setFiches(await window.api.fichesDesDemandes())
+      } catch (e) {
+        console.warn('[board] fiches des demandes non lues', e)
+      }
     } catch (e) {
       setErreur(e instanceof Error ? e.message : String(e))
     } finally {
@@ -306,6 +316,15 @@ export function CarteDesBesoinsView({
     },
     [onOpenConversation]
   )
+  // Le lien « RUN.md » d'une demande (conv-1441) : le fil s'ouvre, puis son panneau RUN.md se déplie
+  // sur cette fiche dès qu'il a lu les siennes (`refreshFiches`, ChatView).
+  const ouvrirFiche = useCallback(
+    (conversationId: string, chemin: string) => {
+      demanderFicheAOuvrir(conversationId, chemin)
+      ouvrir(conversationId)
+    },
+    [ouvrir]
+  )
 
   return (
     <section className="view-page besoins-view" data-testid="besoins-view" data-active={active}>
@@ -456,6 +475,8 @@ export function CarteDesBesoinsView({
           <RiviereDuProjet
             carte={carteAffichee}
             ouvrir={ouvrir}
+            fiches={fiches}
+            ouvrirFiche={ouvrirFiche}
             lierWorkItem={lierWorkItem}
             delierWorkItem={delierWorkItem}
             sourcesDesTaches={sourcesDesTaches}

@@ -84,6 +84,11 @@ export type ConversationsIpcDeps = {
   couperLeRun: (conversationId: string, motif: string) => boolean
   /** Les RUN.md légers du fil (conv-1418) partent avec lui, comme ses autres fichiers. */
   retirerLesFiches: (conversationId: string) => Promise<void>
+  /**
+   * Une branche (« façon 1/3 », « revenir à ce tour ») : ses demandes recopiées pointent sur la fiche
+   * de leur original (conv-1441). Rend le nombre de demandes rattachées.
+   */
+  rattacherLesFiches: (branche: Conversation, source: Conversation) => Promise<number>
 }
 
 /**
@@ -118,10 +123,20 @@ export function registerConversationsIpc({
   dossierDuFil,
   dossierDesRetours,
   couperLeRun,
-  retirerLesFiches
+  retirerLesFiches,
+  rattacherLesFiches
 }: ConversationsIpcDeps): void {
   const oublierLesFiches = (id: string): void => {
     void retirerLesFiches(id).catch((erreur) => console.warn('[fiches] fil non retiré :', erreur))
+  }
+  // Jamais attendu : la branche s'ouvre tout de suite, un échec ne la touche pas.
+  const rattacherALaSource = (branche: Conversation): Conversation => {
+    const source = branche.forkedFrom && os.conversations.get(branche.forkedFrom.conversationId)
+    if (source)
+      void Promise.resolve()
+        .then(() => rattacherLesFiches(branche, source))
+        .catch((erreur) => console.warn('[fiches] branche non rattachée :', erreur))
+    return branche
   }
   // --- Conversations catégorisées ---
   ipcMain.handle('os:conversations', (event) => {
@@ -310,10 +325,12 @@ export function registerConversationsIpc({
       // `dossier` : la copie séparée où la branche travaille DÈS sa création (conv-1038) — le store
       // refuse un non-chemin avant de créer quoi que ce soit.
       const dossier = (rawOptions as { dossier?: unknown } | undefined)?.dossier
-      return os.conversations.fork(
-        guardString(rawId, 'id'),
-        guardString(rawMessageId, 'messageId'),
-        dossier === undefined ? {} : { dossier: guardString(dossier, 'dossier') }
+      return rattacherALaSource(
+        os.conversations.fork(
+          guardString(rawId, 'id'),
+          guardString(rawMessageId, 'messageId'),
+          dossier === undefined ? {} : { dossier: guardString(dossier, 'dossier') }
+        )
       )
     }
   )

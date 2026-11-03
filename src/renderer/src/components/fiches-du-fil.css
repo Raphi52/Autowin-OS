@@ -1,0 +1,19 @@
+/* Les fiches de demande dans le panneau RUN.md du fil (conv-1441). Jetons du thème seulement. */
+.fiches-du-fil {
+  gap: var(--s1);
+  margin-bottom: var(--s2);
+}
+.fiches-du-fil-titre {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: var(--s1) var(--s1) 0;
+}
+.fiche-du-fil-meta {
+  margin-top: 6px;
+  gap: var(--s2);
+  font-size: 10px;
+  flex-wrap: wrap;
+}

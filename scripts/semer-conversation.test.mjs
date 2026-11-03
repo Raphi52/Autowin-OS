@@ -307,3 +307,40 @@ describe('--conversation — refusée hors de l’instance cachée', () => {
     expect(demandeDeConversation(['--conversation', '../x'])?.echec).toMatch(/invalide/)
   })
 })
+
+// conv-1441 : le panneau RUN.md d'un fil copié montre ses fiches de demande.
+describe('semerConversation — fiches de demande', () => {
+  it('copie les fiches du fil, celle du chef qu’il a nourrie, et rien d’un autre fil', () => {
+    const source = racineSource()
+    const fiche = (conversationId, messageId, chemin) =>
+      JSON.stringify({ v: 1, ts: 1, conversationId, messageId, fiche: chemin, role: 'besoin' })
+    ecrire(
+      join(source, 'demandes', 'index.jsonl'),
+      [
+        fiche('conv-955', 'm1', 'conv-955/tri-a/RUN.md'),
+        fiche('conv-955', 'm2', 'conv-7/chantier-b/RUN.md'),
+        fiche('conv-1', 'm3', 'conv-1/autre-c/RUN.md'),
+        JSON.stringify({ v: 1, ts: 2, retraitDuFil: 'conv-955' }),
+        fiche('conv-955', 'm4', '../../hors/RUN.md')
+      ].join('\n')
+    )
+    for (const chemin of ['conv-955/tri-a', 'conv-7/chantier-b', 'conv-1/autre-c'])
+      ecrire(join(source, 'demandes', chemin, 'RUN.md'), `fiche ${chemin}`)
+
+    const destination = join(temporaire(), 'instance')
+    const rapport = semerConversation({ source, destination, id: 'conv-955' })
+
+    expect(rapport.ok).toBe(true)
+    const index = readFileSync(join(destination, 'demandes', 'index.jsonl'), 'utf8')
+    expect(index).toContain('"m1"')
+    expect(index).toContain('"m2"')
+    expect(index).not.toContain('"m3"')
+    expect(index).not.toContain('retraitDuFil')
+    expect(existsSync(join(destination, 'demandes', 'conv-955', 'tri-a', 'RUN.md'))).toBe(true)
+    expect(existsSync(join(destination, 'demandes', 'conv-7', 'chantier-b', 'RUN.md'))).toBe(true)
+    expect(existsSync(join(destination, 'demandes', 'conv-1'))).toBe(false)
+
+    retirerSemence(destination, rapport)
+    expect(existsSync(join(destination, 'demandes'))).toBe(false)
+  })
+})

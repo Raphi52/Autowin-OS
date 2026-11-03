@@ -10,6 +10,7 @@ import {
   ficheMiseAJour,
   lireIndexDesFiches,
   placerLaDemande,
+  resumeDeLaFiche,
   type LigneDeFiche,
   type TourPourLaFiche
 } from './fiches-de-demande'
@@ -379,5 +380,206 @@ describe('creerFichesDeDemande', () => {
     ).toBeNull()
     await fiches.retirerLeFil('..')
     expect(existsSync(racine)).toBe(true)
+  })
+})
+
+// conv-1441 : les fiches s'écrivaient, mais aucun écran ne les lisait.
+describe('resumeDeLaFiche', () => {
+  it('lit l’état de l’en-tête seul et la première ligne du besoin', () => {
+    const texte =
+      'status: refuse\nsession: conv-1\n\n## Besoin\n\nRefais   le Board\nstatus: prouve\n'
+    expect(resumeDeLaFiche(texte)).toEqual({ statut: 'refuse', titre: 'Refais le Board' })
+  })
+
+  it('un état inconnu n’est pas recopié', () => {
+    expect(resumeDeLaFiche('status: green\n\n## Besoin\nX\n')).toEqual({ titre: 'X' })
+  })
+})
+
+describe('lecture des fiches pour l’interface', () => {
+  it('le panneau d’un fil voit sa fiche ET celle du chantier où il a rangé une suite', async () => {
+    const racine = racineTemporaire()
+    let maintenant = 1_000_000
+    const fiches = creerFichesDeDemande({ racine, maintenant: () => (maintenant += 60_000) })
+    const chantier = fil('conv-1', [utilisateur('m1', 'Construis le village'), reponse('m2')])
+    const premiere = await fiches.noterTour(tour(chantier, 'conv-1', 'm1', { nature: 'nouveau' }))
+    const lot = fil('conv-2', [utilisateur('l1', 'Lot 1/2 — la présence'), reponse('l2')])
+    await fiches.noterTour(tour(lot, 'conv-2', 'l1', { nature: 'suite', de: 'conv-1' }))
+    const autre = fil('conv-3', [utilisateur('a1', 'Autre chose'), reponse('a2', [verify(0)])])
+    await fiches.noterTour(tour(autre, 'conv-3', 'a1', { nature: 'nouveau' }))
+
+    const duLot = await fiches.fichesDuFil('conv-2')
+    expect(duLot).toHaveLength(1)
+    expect(duLot[0]).toMatchObject({
+      chemin: cheminDe(racine, premiere),
+      conversationId: 'conv-1',
+      titre: 'Construis le village',
+      statut: 'sans-preuve',
+      demandes: 2
+    })
+    expect((await fiches.fichesDuFil('conv-1')).map((f) => f.chemin)).toEqual([
+      cheminDe(racine, premiere)
+    ])
+    expect(await fiches.fichesDuFil('conv-9')).toEqual([])
+    expect(await fiches.fichesDuFil('../conv-1')).toEqual([])
+  })
+
+  it('le Board reçoit le chemin de la fiche de chaque demande', async () => {
+    const racine = racineTemporaire()
+    const fiches = creerFichesDeDemande({ racine })
+    const conversation = fil('conv-1', [utilisateur('m1', 'Ajoute un tri'), reponse('m2')])
+    const ligne = await fiches.noterTour(tour(conversation, 'conv-1', 'm1', { nature: 'nouveau' }))
+
+    expect(await fiches.fichesDesDemandes()).toEqual({ 'conv-1': { m1: cheminDe(racine, ligne) } })
+  })
+
+  it('une fiche effacée à la main disparaît du panneau sans erreur', async () => {
+    const racine = racineTemporaire()
+    const fiches = creerFichesDeDemande({ racine })
+    const conversation = fil('conv-1', [utilisateur('m1', 'Ajoute un tri'), reponse('m2')])
+    const ligne = await fiches.noterTour(tour(conversation, 'conv-1', 'm1', { nature: 'nouveau' }))
+    rmSync(cheminDe(racine, ligne))
+
+    expect(await fiches.fichesDuFil('conv-1')).toEqual([])
+  })
+})
+
+/*
+ * LES VERSIONS PARALLÈLES (« façon 1/3 »…) ET TOUTE BRANCHE D'UN FIL (conv-1441, 2026-11-03).
+ * Mesuré dans `ecarts.json` : les 3 seules demandes sans fiche étaient la demande d'origine RECOPIÉE
+ * dans conv-1425, 1426 et 1427 (branches de conv-1424). La copie change l'identifiant du message et
+ * aucun tour ne finit dessus dans la branche : ni journal, ni fiche. Elle rejoint celle de l'origine.
+ */
+describe('demandes recopiées dans une branche', () => {
+  const source = (): ConversationPourLaCarte =>
+    fil('conv-1', [
+      utilisateur('m1', 'Rends le fond net', 1_000),
+      reponse('m2', [verify(0)], { ts: 1_000, turnId: 't1' }),
+      utilisateur('m3', 'Et les animations', 2_000),
+      reponse('m4', [verify(0)], { ts: 2_000, turnId: 't2' })
+    ])
+  /** Ce que `fork()` du store rend : mêmes messages, identifiants neufs, origine notée. */
+  const branche = (
+    depuis: ConversationPourLaCarte,
+    jusquA: number,
+    id = 'conv-2'
+  ): ConversationPourLaCarte & { forkedFrom: { conversationId: string; messageId: string } } => ({
+    id,
+    title: `${depuis.title} — façon 1/3`,
+    messages: depuis.messages
+      .slice(0, jusquA + 1)
+      .map((message, rang) => ({ ...message, messageId: `${id}-copie-${rang}` })),
+    forkedFrom: {
+      conversationId: depuis.id,
+      messageId: depuis.messages[jusquA]?.messageId ?? ''
+    }
+  })
+
+  it('la demande recopiée pointe sur la fiche d’origine, sans rien écrire dans son RUN.md', async () => {
+    const racine = racineTemporaire()
+    const fiches = creerFichesDeDemande({ racine })
+    const origine = source()
+    const premiere = await fiches.noterTour(tour(origine, 'conv-1', 'm1', { nature: 'nouveau' }))
+    const avant = readFileSync(cheminDe(racine, premiere), 'utf8')
+
+    const copie = branche(origine, 1)
+    expect(await fiches.rattacherLaBranche({ branche: copie, source: origine })).toBe(1)
+
+    expect((await fiches.fichesDesDemandes())['conv-2']).toEqual({
+      'conv-2-copie-0': cheminDe(racine, premiere)
+    })
+    expect(await fiches.fichesDuFil('conv-2')).toMatchObject([
+      { chemin: cheminDe(racine, premiere), conversationId: 'conv-1', demandes: 1 }
+    ])
+    expect(readFileSync(cheminDe(racine, premiere), 'utf8')).toBe(avant)
+    // Rejouée (redémarrage, second appel) : rien de neuf.
+    expect(await fiches.rattacherLaBranche({ branche: copie, source: origine })).toBe(0)
+    const lignes = await fiches.lignes()
+    expect(lignes.filter((l) => l.conversationId === 'conv-2')).toMatchObject([
+      { role: 'copie', etat: 'prouve', fiche: premiere?.fiche }
+    ])
+  })
+
+  it('chaque demande recopiée retrouve SA fiche, et la suite de la branche rejoint la dernière', async () => {
+    const racine = racineTemporaire()
+    let maintenant = 1_000_000
+    const fiches = creerFichesDeDemande({ racine, maintenant: () => (maintenant += 60_000) })
+    const origine = source()
+    const premiere = await fiches.noterTour(tour(origine, 'conv-1', 'm1', { nature: 'nouveau' }))
+    const seconde = await fiches.noterTour(tour(origine, 'conv-1', 'm3', { nature: 'nouveau' }))
+    const copie = branche(origine, 3)
+    expect(await fiches.rattacherLaBranche({ branche: copie, source: origine })).toBe(2)
+    expect((await fiches.fichesDesDemandes())['conv-2']).toEqual({
+      'conv-2-copie-0': cheminDe(racine, premiere),
+      'conv-2-copie-2': cheminDe(racine, seconde)
+    })
+
+    // La branche continue : sa suite rejoint la fiche de la dernière demande qu'elle a reçue.
+    const suite = {
+      ...copie,
+      messages: [...copie.messages, utilisateur('b1', 'Repeins la ville', 3_000), reponse('b2')]
+    }
+    const ligne = await fiches.noterTour(tour(suite, 'conv-2', 'b1', { nature: 'suite' }))
+    expect(ligne).toMatchObject({ fiche: seconde?.fiche, role: 'suite', classement: 'declare' })
+  })
+
+  it('une branche qui a déjà sa propre fiche la garde quand ses copies sont rattachées après', async () => {
+    const racine = racineTemporaire()
+    let maintenant = 1_000_000
+    const fiches = creerFichesDeDemande({ racine, maintenant: () => (maintenant += 60_000) })
+    const origine = source()
+    await fiches.noterTour(tour(origine, 'conv-1', 'm1', { nature: 'nouveau' }))
+    const copie = branche(origine, 1)
+    const suite = {
+      ...copie,
+      messages: [...copie.messages, utilisateur('b1', 'Repeins la ville', 3_000), reponse('b2')]
+    }
+    const propre = await fiches.noterTour(tour(suite, 'conv-2', 'b1', { nature: 'nouveau' }))
+
+    expect(await fiches.rattacherLaBranche({ branche: suite, source: origine })).toBe(1)
+    const ligne = await fiches.noterTour(
+      tour(
+        { ...suite, messages: [...suite.messages, utilisateur('b3', 'Plus net'), reponse('b4')] },
+        'conv-2',
+        'b3',
+        { nature: 'suite' }
+      )
+    )
+    expect(ligne?.fiche).toBe(propre?.fiche)
+    // Même résultat pour une instance neuve, qui relit l'index sur le disque.
+    const relue = creerFichesDeDemande({ racine, maintenant: () => (maintenant += 60_000) })
+    const apres = await relue.noterTour(
+      tour(
+        {
+          ...suite,
+          messages: [...suite.messages, utilisateur('b5', 'Encore'), reponse('b6')]
+        },
+        'conv-2',
+        'b5',
+        { nature: 'suite' }
+      )
+    )
+    expect(apres?.fiche).toBe(propre?.fiche)
+  })
+
+  it('une branche dont l’histoire ne colle plus à sa source n’est rattachée à rien', async () => {
+    const racine = racineTemporaire()
+    const fiches = creerFichesDeDemande({ racine })
+    const origine = source()
+    await fiches.noterTour(tour(origine, 'conv-1', 'm1', { nature: 'nouveau' }))
+    const copie = branche(origine, 1)
+    const reecrite = {
+      ...copie,
+      messages: [utilisateur('conv-2-copie-0', 'Autre chose', 1_000), ...copie.messages.slice(1)]
+    }
+
+    expect(await fiches.rattacherLaBranche({ branche: reecrite, source: origine })).toBe(0)
+    expect(
+      await fiches.rattacherLaBranche({
+        branche: { ...copie, forkedFrom: undefined },
+        source: origine
+      })
+    ).toBe(0)
+    expect((await fiches.fichesDesDemandes())['conv-2']).toBeUndefined()
   })
 })

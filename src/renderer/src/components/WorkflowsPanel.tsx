@@ -10,6 +10,8 @@ import { libelleRun } from './run-label'
 import { RunInspector } from './RunInspector'
 import { Markdown } from './Markdown'
 import { runOuvertARelire } from './run-ouvert-a-jour'
+import { PASTILLE_DE_FICHE, corpsDeLaFiche, runDeLaFiche } from './fiches-du-fil'
+import type { FicheDeDemande } from '../../../shared/fiche-de-demande'
 import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
 import { jouerEntreeCadre } from '../entree-cascade'
 import { arreterGlissement, glisserPanneau } from '../glissement-panneau'
@@ -59,7 +61,24 @@ import type { InspectTurnTarget } from '../observatory-focus'
 // `.lisere-dessus` vit dans cette feuille (voir ViewPage.css) : import explicite, pas d'heritage
 // implicite d'une autre vue.
 import './ViewPage.css'
+import './fiches-du-fil.css'
 import { Spinner } from './Spinner'
+
+const CLE_STATUT_DE_FICHE = {
+  prouve: 'workflows.fiches.statut.prouve',
+  refuse: 'workflows.fiches.statut.refuse',
+  'en-cours': 'workflows.fiches.statut.en-cours',
+  'sans-preuve': 'workflows.fiches.statut.sans-preuve'
+} as const
+
+/** Jour et heure de la dernière écriture d'une fiche, dans la langue du poste. */
+const dateDeFiche = (ms: number): string =>
+  new Date(ms).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 
 const RUN_DOT: Record<string, string> = {
   green: 'st-ok',
@@ -116,6 +135,11 @@ export type WorkflowsPanelProps = {
   liveGraphActive: boolean
   visibleLiveRuns: [string, ScopedLiveRun<OrchStep>][]
   runs: RunEntry[]
+  /**
+   * Les RUN.md LÉGERS du fil, une fiche par demande (conv-1441) : listés au-dessus des runs, ils se
+   * déplient comme eux, sans bouton de suppression (un fil supprimé emporte ses fiches).
+   */
+  fiches?: readonly FicheDeDemande[]
   openRun: OpenRunState | null
   viewRun: (r: RunEntry) => void
   /**
@@ -169,6 +193,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
     liveGraphActive,
     visibleLiveRuns,
     runs,
+    fiches = [],
     openRun,
     viewRun,
     relireRunOuvert,
@@ -572,8 +597,71 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               </details>
             </div>
           ))}
+          {/* FICHES DE DEMANDE (conv-1441) : le RUN.md léger que l'app écrit pour chaque demande. */}
+          {fiches.length > 0 && (
+            <div className="col fiches-du-fil" data-testid="fiches-du-fil">
+              <span className="fiches-du-fil-titre">{t('workflows.fiches.titre')}</span>
+              {fiches.map((f) => {
+                const isOpen = openRun?.path === f.chemin
+                return (
+                  <div key={f.chemin} className="col" style={{ gap: 0 }}>
+                    <button
+                      type="button"
+                      className="card run-row"
+                      aria-expanded={isOpen}
+                      data-statut={f.statut}
+                      data-testid="fiche-du-fil"
+                      onClick={() => {
+                        if (isOpen) {
+                          setOpenRun(null)
+                          setOpenTrace(null)
+                        } else {
+                          viewRun(runDeLaFiche(f))
+                        }
+                      }}
+                    >
+                      <div className="row" style={{ justifyContent: 'space-between' }}>
+                        <div className="row gap2" style={{ minWidth: 0 }}>
+                          <span className={`status-dot ${PASTILLE_DE_FICHE[f.statut]}`} />
+                          <span className="run-subject" title={f.titre}>
+                            {f.titre || t('workflows.fiches.sansTitre')}
+                          </span>
+                        </div>
+                        <span className="badge">{t(CLE_STATUT_DE_FICHE[f.statut])}</span>
+                      </div>
+                      <div className="row c-faint fiche-du-fil-meta">
+                        <span className="tnum">{t('workflows.fiches.demandes', { n: f.demandes })}</span>
+                        {f.conversationId !== activeId && (
+                          <span>{t('workflows.fiches.autreFil', { conv: f.conversationId })}</span>
+                        )}
+                        <span className="tnum">{dateDeFiche(f.maj)}</span>
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="run-detail-box fade-in" data-testid="fiche-detail">
+                        {openRun?.error ? (
+                          <div className="run-detail-error" data-testid="run-detail-error">
+                            {t('workflows.lectureImpossible', { erreur: openRun.error })}
+                          </div>
+                        ) : openRun?.pending ? (
+                          <div className="c-faint" data-testid="run-detail-loading">
+                            {t('workflows.ouverture')}
+                          </div>
+                        ) : (
+                          openRun && <Markdown text={corpsDeLaFiche(openRun.content)} />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+              {runs.length > 0 && (
+                <span className="fiches-du-fil-titre">{t('workflows.runs.titre')}</span>
+              )}
+            </div>
+          )}
           {/* SECTION RUN : les RUN.md eux-mêmes (statut, DoD, journal, défauts). */}
-          {runs.length === 0 && (
+          {runs.length === 0 && fiches.length === 0 && (
             <div className="c-faint" style={{ fontSize: 12, padding: 'var(--s2)' }}>
               {activeId ? t('workflows.aucunRunMd') : t('workflows.selectionneRunMd')}
             </div>

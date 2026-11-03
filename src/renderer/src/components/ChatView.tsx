@@ -38,6 +38,8 @@ import {
 import { AnimationAccueilChat } from './AnimationAccueilChat'
 import { pickTurnToResume, rejeuDejaEnregistre, type UnfinishedTurn } from './resume-unfinished'
 import { reclamerOuvertureConversation } from './pending-conversation-open'
+import { reclamerFicheAOuvrir, runDeLaFiche } from './fiches-du-fil'
+import type { FicheDeDemande } from '../../../shared/fiche-de-demande'
 import { fermerEcouteurPrefill, ouvrirEcouteurPrefill } from './relais-prefill'
 import { refreshesActiveConversation } from './chat-event-routing'
 import { pickRunForTrace } from './run-trace-target'
@@ -1902,6 +1904,10 @@ export function ChatView({
   // Quatre sections : Sous-agents · Run · Graphe · Source control. Défaut = Sous-agents, la section qu'on regarde
   // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
   const [runs, setRuns] = useState<RunEntry[]>([])
+  // Les fiches de demande du fil actif (conv-1441), tenues À PART des runs : une fiche n'entre dans
+  // aucun calcul sur les runs (trace à ouvrir, run en cours, suppression).
+  const [fiches, setFiches] = useState<FicheDeDemande[]>([])
+  const fichesRequestRef = useRef(0)
   /** Miroir stable : `revealLiveAction` lit la liste courante sans se recreer a chaque chargement. */
   const runsRef = useRef<RunEntry[]>([])
   runsRef.current = runs
@@ -3122,8 +3128,34 @@ export function ChatView({
     }
     if (isRunRequestCurrent(request, currentRequest)) setRuns(nextRuns)
   }
+  /**
+   * Relit les fiches de demande du fil actif (conv-1441). Un échec de lecture vide la liste au lieu
+   * de garder celle d'un autre fil, et ne touche pas aux runs. Une ouverture demandée depuis un
+   * post-it du Board (`demanderFicheAOuvrir`) est honorée ici, une fois les fiches de CE fil lues.
+   */
+  async function refreshFiches(): Promise<void> {
+    const convId = activeRef.current
+    const demande = ++fichesRequestRef.current
+    let lues: FicheDeDemande[] = []
+    if (convId) {
+      try {
+        lues = await window.api.fichesDuFil(convId)
+      } catch (error) {
+        traceSilentFailure('fiches-du-fil', error)
+      }
+    }
+    if (demande !== fichesRequestRef.current || convId !== activeRef.current) return
+    setFiches(lues)
+    const chemin = convId ? reclamerFicheAOuvrir(convId) : null
+    const fiche = chemin ? lues.find((f) => f.chemin === chemin) : undefined
+    if (!fiche) return
+    setShowRuns(true)
+    setOngletPanneau((precedent) => ({ tab: 'runs', jeton: (precedent?.jeton ?? 0) + 1 }))
+    void viewRun(runDeLaFiche(fiche))
+  }
   useEffect(() => {
     void Promise.resolve().then(refreshRuns)
+    void Promise.resolve().then(refreshFiches)
   }, [activeId])
   // Tient le bus au courant de la conversation active → les orchestrations s'y rattachent.
   useEffect(() => {
@@ -3389,7 +3421,11 @@ export function ChatView({
         // Un plan a changé (lot ouvert, fini, relancé) : la liste relit tous les plans en UN appel
         // (conv-1158), sans re-rendre la vue tant qu'aucun lien chef → lot ne change.
         if (e.scope === 'plans-de-lots') relirePlansRef.current()
-        if (e.scope === 'workflows') refreshRuns()
+        if (e.scope === 'workflows') {
+          refreshRuns()
+          // Écrite en fin de tour, une fiche neuve se montre sans rouvrir le fil (conv-1441).
+          void refreshFiches()
+        }
         if (e.scope === 'roles') refreshRuntimeIdentity()
         // Le compte Claude actif a change COTE MAIN (depart d'un tour, rotation sur quota epuise) :
         // la puce « compte actif » et la barre de quota parlaient encore de l'ancien.
@@ -4561,6 +4597,9 @@ export function ChatView({
         if (!convsRef.current.some((conversation) => conversation.id === id)) await refreshConvs()
         const target = convsRef.current.find((conversation) => conversation.id === id)
         if (target) await loadConv(target)
+        // Fil déjà ouvert : `activeId` ne change pas, l'effet ne relirait pas ses fiches, et la fiche
+        // demandée depuis le Board ne se déplierait pas (conv-1441).
+        if (target) await refreshFiches()
       })()
       // REJEU du journal : l'app était fermée pendant le tour → le store n'a pas reçu ces événements,
       // seul le journal fichier les contient. On reconstruit le texte produit et on l'affiche.
@@ -9949,6 +9988,7 @@ export function ChatView({
             }
             visibleLiveRuns={visibleLiveRuns}
             runs={runs}
+            fiches={fiches}
             openRun={openRun}
             viewRun={viewRun}
             relireRunOuvert={(r) => void relireRunOuvert(r)}

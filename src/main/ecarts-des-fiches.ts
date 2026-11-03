@@ -157,7 +157,10 @@ export function mesurerLesEcarts(entree: {
     lignesSansDemande: parMessage.size - retrouvees.size,
     fiches: new Set(lignes.map((ligne) => ligne.fiche)).size,
     suites: lignes.filter((ligne) => ligne.role === 'suite').length,
-    classementsDeduits: lignes.filter((ligne) => ligne.classement === 'deduit').length,
+    // Une copie dans une branche reprend le classement de son original : ne pas le compter deux fois.
+    classementsDeduits: lignes.filter(
+      (ligne) => ligne.classement === 'deduit' && ligne.role !== 'copie'
+    ).length,
     filsAPlusieursFiches: plusDeUne(
       compterParValeursDistinctes(lignes.map((l) => [l.conversationId, l.fiche]))
     ),

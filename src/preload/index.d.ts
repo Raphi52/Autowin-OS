@@ -17,6 +17,7 @@ import type {
   PropositionAutoriteProd
 } from '../shared/prod-protection'
 import type { RapportRetention } from '../shared/rapport-retention'
+import type { FicheDeDemande, FichesDesDemandes } from '../shared/fiche-de-demande'
 import type { ApiNavigateur, RectNavigateur } from '../shared/navigateur'
 import type { ApiTerminal } from '../shared/terminal'
 import type { GestesDesTours } from '../shared/gestes-agent'
@@ -885,6 +886,10 @@ interface ChatApi {
   emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }) => Promise<boolean>
   isolatedTestConversationReadCount: (reset?: boolean) => Promise<number>
   conversationRuns: (convId: string) => Promise<RunEntry[]>
+  /** Les RUN.md légers qu'un fil a nourris (conv-1441). */
+  fichesDuFil: (convId: string) => Promise<FicheDeDemande[]>
+  /** La fiche de chaque demande, par fil puis par message (conv-1441). */
+  fichesDesDemandes: () => Promise<FichesDesDemandes>
   deleteConversationRun: (
     convId: string,
     path: string

@@ -1317,6 +1317,10 @@ function allowedReadRoots(): string[] {
     join(home, '.claude', 'runs'), // RUN.md du pipeline (vue Workflow)
     join(appData, 'autowin-os', 'runs'), // RUN.md créés par les conversations Autowin
     ...(effectiveAppDataRoot ? [join(effectiveAppDataRoot, 'runs')] : []),
+    // Les RUN.md LÉGERS, une fiche par demande (`fiches-de-demande.ts`) : le panneau RUN.md du fil
+    // et le lien du post-it du Board les ouvrent (conv-1441). Seul ce dossier, jamais la racine.
+    join(appData, 'autowin-os', 'demandes'),
+    ...(effectiveAppDataRoot ? [join(effectiveAppDataRoot, 'demandes')] : []),
     ...(executionWorkspace ? [executionWorkspace] : []),
     ...teamWorkspaces()
   ]

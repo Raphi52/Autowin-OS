@@ -37,6 +37,7 @@ import type {
 import type { ModelQuotaSnapshot } from '../shared/model-quotas'
 import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../shared/claude-resets'
 import type { RapportRetention } from '../shared/rapport-retention'
+import type { FicheDeDemande, FichesDesDemandes } from '../shared/fiche-de-demande'
 import type { IncomingCommit, UpdateStrategy } from '../shared/update-contract'
 import type { GitBranchResult, GitReadResult, GitDiffResult } from '../shared/git-read'
 import type {
@@ -1226,6 +1227,10 @@ const api = {
   // Workflows de la conversation active (créés in-app + attachés)
   conversationRuns: (convId: string): Promise<RunEntry[]> =>
     ipcRenderer.invoke('os:conversationRuns', convId),
+  // Les RUN.md légers, une fiche par demande (conv-1441) : panneau du fil et post-it du Board.
+  fichesDuFil: (convId: string): Promise<FicheDeDemande[]> =>
+    ipcRenderer.invoke('os:fichesDuFil', convId),
+  fichesDesDemandes: (): Promise<FichesDesDemandes> => ipcRenderer.invoke('os:fichesDesDemandes'),
   deleteConversationRun: (
     convId: string,
     path: string

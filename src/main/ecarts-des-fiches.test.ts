@@ -167,6 +167,19 @@ describe('mesurerLesEcarts', () => {
     })
   })
 
+  it('une demande recopiée dans une branche est en accord, sans compter comme suite ni déduite', () => {
+    const bilan = mesurer(
+      [demande('c1', 'prouve', 100, { conversationId: 'conv-2' })],
+      [
+        ligne('m1', 'prouve', { classement: 'deduit' }),
+        ligne('c1', 'prouve', { conversationId: 'conv-2', role: 'copie', classement: 'deduit' })
+      ]
+    )
+
+    expect(bilan).toMatchObject({ enAccord: 1, sansFiche: { total: 0 } })
+    expect(bilan).toMatchObject({ fiches: 1, suites: 0, classementsDeduits: 1 })
+  })
+
   it('coupe le détail, jamais les totaux', () => {
     const nombre = DETAIL_MAX + 7
     const bilan = mesurer(

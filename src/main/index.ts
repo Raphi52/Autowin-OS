@@ -29,7 +29,7 @@ import { registerQuartierPresenceIpc } from './ipc/quartier-presence'
 import { registerLangueIpc } from './ipc/langue'
 import { registerCaptureElementIpc } from './ipc/capture-element'
 import { creerIdentitesEnCache, creerJournalDesBesoins } from './journal-des-besoins'
-import { creerFichesDeDemande } from './fiches-de-demande'
+import { creerFichesDeDemande, type BranchePourLaFiche } from './fiches-de-demande'
 import { creerMesureDesEcarts } from './ecarts-des-fiches'
 import type { ConversationPourLaCarte } from './carte-des-besoins'
 import { lireDossiersProjetsClaude } from './dossiers-claude-cli'
@@ -751,6 +751,12 @@ const journalDesBesoins = creerJournalDesBesoins({
 })
 // RUN.md léger (conv-1418) : une fiche par nouvelle demande, écrite par l'app à la fin du tour.
 const fichesDeDemande = creerFichesDeDemande({ racine: app.getPath('userData') })
+// Une branche du fil (« façon 1/3 », « revenir à ce tour ») pointe sur les fiches de sa source (conv-1441).
+const rattacherLaBrancheAuxFiches = (branche: object, source: object): Promise<number> =>
+  fichesDeDemande.rattacherLaBranche({
+    branche: branche as BranchePourLaFiche,
+    source: source as ConversationPourLaCarte
+  })
 const brainWorkerPath = join(__dirname, 'brain-worker.js')
 const brainWorker = new BrainWorkerClient(brainWorkerPath)
 const brainSearchWorker = new BrainWorkerClient(brainWorkerPath)
@@ -3415,7 +3421,8 @@ Le fil reprend ensuite normalement.`
     dossierDuFil: (id) => dossierDuTour(id),
     dossierDesRetours: () => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour'),
     couperLeRun: (id, motif) => bus.abortOrchestration(id, motif),
-    retirerLesFiches: fichesDeDemande.retirerLeFil
+    retirerLesFiches: fichesDeDemande.retirerLeFil,
+    rattacherLesFiches: rattacherLaBrancheAuxFiches
   })
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
@@ -3468,6 +3475,21 @@ Le fil reprend ensuite normalement.`
     lireLaCarte: boardDuPoste.lireLaCarte,
     lireLignes: fichesDeDemande.lignes
   })
+  /*
+   * Les branches nées avant le rattachement (conv-1441 : les « façon 1/3 » de conv-1424, seules
+   * demandes sans fiche de `ecarts.json`) : leurs demandes recopiées rejoignent la fiche d'origine,
+   * une fois, quand tous les fils sont chargés. Rejoué au démarrage suivant, cela n'ajoute rien.
+   */
+  void os.conversations.archivesChargees
+    .then(async () => {
+      let rattachees = 0
+      for (const branche of os.conversations.list()) {
+        const source = branche.forkedFrom && os.conversations.get(branche.forkedFrom.conversationId)
+        if (source) rattachees += await rattacherLaBrancheAuxFiches(branche, source)
+      }
+      if (rattachees > 0) mesureDesEcarts.planifier()
+    })
+    .catch((error) => console.warn('[fiches] branches non rattachées :', error))
 
   // fix-ok: cause mesurée — aucun code du dépôt ne lisait `~/.claude.json` (grep « claude.json »
   // vide dans src/ avant ce travail) : la liste des dossiers du Chat ne pouvait donc pas
@@ -4094,7 +4116,11 @@ Le fil reprend ensuite normalement.`
               : null
           )
           .then((ligne) => {
-            if (ligne) mesureDesEcarts.planifier()
+            if (!ligne) return
+            mesureDesEcarts.planifier()
+            // Le panneau RUN.md du fil relit ses fiches : la nouvelle s'y montre sans rouvrir le fil
+            // (conv-1441).
+            broadcast({ type: 'refresh', scope: 'workflows' })
           })
           .catch((error) => console.warn('[besoins] tour non noté :', error))
         notifierFinDeTour(conversationId, {
@@ -5357,6 +5383,16 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Conversation runs')
     const c = os.conversations.get(guardString(convId, 'convId'))
     return listConvRuns(convId, c?.runPaths ?? [])
+  })
+  // Les RUN.md LÉGERS (une fiche par demande) : le panneau RUN.md du fil et les post-it du Board les
+  // montrent. Ils s'écrivaient depuis conv-1418 sans qu'aucun écran les lise (conv-1441).
+  ipcMain.handle('os:fichesDuFil', (event, convId: string) => {
+    assertTrustedRendererSender(event, 'Fiches du fil')
+    return fichesDeDemande.fichesDuFil(guardString(convId, 'convId'))
+  })
+  ipcMain.handle('os:fichesDesDemandes', (event) => {
+    assertTrustedRendererSender(event, 'Fiches des demandes')
+    return fichesDeDemande.fichesDesDemandes()
   })
   ipcMain.handle(
     'os:conversationRuns:delete',

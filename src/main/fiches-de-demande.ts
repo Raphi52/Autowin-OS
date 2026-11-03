@@ -19,11 +19,17 @@
  *
  * Tout passe par une seule file : deux fins de tour simultanées peuvent viser la même fiche
  * (`suite conv-NNN`). FAIL-OPEN : un échec ne touche jamais la réponse (appelant, `index.ts`).
+ *
+ * UNE BRANCHE DU FIL (« façon 1/3 », « revenir à ce tour ») recopie ses demandes sous des identifiants
+ * neufs, et aucun tour ne finit dessus dans la branche : sans `rattacherLaBranche`, elles restaient
+ * sans fiche (les 3 seuls « sans fiche » de `ecarts.json`, conv-1425 à 1427 — conv-1441). Une ligne
+ * `copie` les fait pointer sur la fiche d'origine, sans rien écrire dans son RUN.md.
  */
-import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { LIBELLES_STATUT } from '../renderer/src/components/carte-du-fil'
-import type { StatutDemande } from '../shared/carte-des-besoins'
+import { STATUTS_DEMANDE, type StatutDemande } from '../shared/carte-des-besoins'
+import type { FicheDeDemande, FichesDesDemandes } from '../shared/fiche-de-demande'
 import type { LigneBesoin } from '../shared/ligne-besoin'
 import { demandesDuFil, type ConversationPourLaCarte } from './carte-des-besoins'
 import { supprimerArbre } from './fs-supprimer'
@@ -45,7 +51,8 @@ export interface LigneDeFiche {
   messageId: string
   /** Heure du message de l'utilisateur : le Board n'est comparé qu'à partir de la première. */
   demandeLe?: number
-  role: 'besoin' | 'suite'
+  /** `copie` : la demande recopiée dans une branche du fil, qui pointe sur la fiche d'origine. */
+  role: 'besoin' | 'suite' | 'copie'
   classement: ClassementDeLaFiche
   etat: StatutDemande
   constat: string
@@ -86,6 +93,13 @@ function appliquer(index: IndexDesFiches, ligne: LigneDeFiche | RetraitDuFil): v
     return
   }
   index.parMessage.set(cleDuJournal(ligne.conversationId, ligne.messageId), ligne)
+  // Une copie rattachée APRÈS coup (branche née avant conv-1441) ne détourne pas la suite d'une
+  // branche qui a déjà sa propre fiche ; tant qu'elle n'en a pas, la dernière copie l'emporte.
+  if (ligne.role === 'copie') {
+    const fil = ligne.conversationId
+    for (const autre of index.parMessage.values())
+      if (autre.conversationId === fil && autre.role !== 'copie') return
+  }
   index.ficheDuFil.set(ligne.conversationId, ligne.fiche)
 }
 
@@ -132,6 +146,44 @@ export function placerLaDemande(
   if (!fiche) return { classement: 'deduit' }
   const annoncee = besoin?.nature === 'suite' && (!besoin.de || visee !== undefined)
   return { fiche, classement: annoncee ? 'declare' : 'deduit' }
+}
+
+/** Ce que `fork()` du store note sur une branche : le fil et le message d'où elle part. */
+export type BranchePourLaFiche = ConversationPourLaCarte & {
+  forkedFrom?: { conversationId: string; messageId: string }
+}
+
+/**
+ * Les messages qu'une branche a recopiés de sa source : identifiant dans la branche → dans la source.
+ * `fork()` recopie dans l'ordre jusqu'au message d'origine inclus et ne change que les identifiants :
+ * chaque paire a donc le même rôle, la même heure et le même texte. Au moindre écart (fil réécrit
+ * depuis), rien n'est apparié : une demande sans fiche vaut mieux qu'une fiche fausse.
+ */
+export function messagesRecopies(
+  branche: BranchePourLaFiche,
+  source: ConversationPourLaCarte
+): Map<string, string> {
+  const aucun = new Map<string, string>()
+  const origine = branche.forkedFrom
+  if (!origine || origine.conversationId !== source.id) return aucun
+  const coupe = source.messages.findIndex((message) => message.messageId === origine.messageId)
+  if (coupe < 0 || branche.messages.length <= coupe) return aucun
+  const paires = new Map<string, string>()
+  for (let rang = 0; rang <= coupe; rang += 1) {
+    const dansLaSource = source.messages[rang]
+    const dansLaBranche = branche.messages[rang]
+    if (
+      !dansLaSource ||
+      !dansLaBranche ||
+      dansLaSource.role !== dansLaBranche.role ||
+      dansLaSource.ts !== dansLaBranche.ts ||
+      (dansLaSource.content ?? '') !== (dansLaBranche.content ?? '')
+    )
+      return aucun
+    if (dansLaSource.messageId && dansLaBranche.messageId)
+      paires.set(dansLaBranche.messageId, dansLaSource.messageId)
+  }
+  return paires
 }
 
 const horodatage = (ms: number): string =>
@@ -181,11 +233,43 @@ export function ficheMiseAJour(texte: string, etat: StatutDemande, quand: number
   return `${entete}${texte.slice(fin)}`
 }
 
+/**
+ * L'état et le titre d'une fiche, lus sur son RUN.md (conv-1441) : l'état de l'EN-TÊTE seul — un
+ * texte d'utilisateur qui écrit « status: » plus bas ne compte pas —, le titre = la première ligne
+ * non vide sous `## Besoin`.
+ */
+export function resumeDeLaFiche(texte: string): { statut?: StatutDemande; titre: string } {
+  const fin = texte.indexOf('\n\n')
+  const entete = fin < 0 ? texte : texte.slice(0, fin)
+  const lu = /^status: (.+)$/mu.exec(entete)?.[1]?.trim()
+  const statut = STATUTS_DEMANDE.find((s) => s === lu)
+  const titreDuBesoin = '\n## Besoin\n'
+  const debut = texte.indexOf(titreDuBesoin)
+  const besoin = debut < 0 ? '' : texte.slice(debut + titreDuBesoin.length)
+  const titre = uneLigne(besoin.split('\n').find((ligne) => ligne.trim()) ?? '').slice(0, 120)
+  return { ...(statut ? { statut } : {}), titre }
+}
+
 export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => number }): {
   /** Range le tour qui vient de finir ; `null` = rien à ranger (question, tour sans demande). */
   noterTour: (tour: TourPourLaFiche) => Promise<LigneDeFiche | null>
+  /**
+   * Fait pointer les demandes recopiées dans une branche sur la fiche de leur original. Rend le
+   * nombre de lignes ajoutées ; rejouée, elle n'ajoute rien.
+   */
+  rattacherLaBranche: (entree: {
+    branche: BranchePourLaFiche
+    source: ConversationPourLaCarte
+  }) => Promise<number>
   /** Une ligne par demande rangée, pour la mesure. */
   lignes: () => Promise<LigneDeFiche[]>
+  /**
+   * Les fiches qu'un fil a nourries, la plus récente d'abord : les siennes, et celle d'un autre fil
+   * quand il y a rangé une suite (un lot de chantier). Le panneau RUN.md du fil les liste (conv-1441).
+   */
+  fichesDuFil: (conversationId: string) => Promise<FicheDeDemande[]>
+  /** La fiche de chaque demande rangée : le lien des post-it du Board (conv-1441). */
+  fichesDesDemandes: () => Promise<FichesDesDemandes>
   /** Un fil supprimé emporte ses fiches, comme ses autres fichiers. */
   retirerLeFil: (conversationId: string) => Promise<void>
 } {
@@ -322,7 +406,101 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
         return ligne
       })
     },
+    async rattacherLaBranche({ branche, source }) {
+      if (!FIL_LISIBLE.test(branche.id)) return 0
+      const paires = messagesRecopies(branche, source)
+      if (paires.size === 0) return 0
+      return enFile(async () => {
+        const index = await chargerIndex()
+        // Le calcul du Board seulement s'il y a quelque chose à pointer : au démarrage, toutes les
+        // branches passent ici, et presque toutes viennent de fils sans fiche.
+        const aPointer = [...paires].some(
+          ([dansLaBranche, dansLaSource]) =>
+            index.parMessage.has(cleDuJournal(source.id, dansLaSource)) &&
+            !index.parMessage.has(cleDuJournal(branche.id, dansLaBranche))
+        )
+        if (!aPointer) return 0
+        const recopiees = demandesDuFil(branche).filter(
+          (demande) => demande.messageId !== undefined && paires.has(demande.messageId)
+        )
+        let ajoutees = 0
+        for (const demande of recopiees) {
+          const messageId = demande.messageId as string
+          if (index.parMessage.has(cleDuJournal(branche.id, messageId))) continue
+          const original = index.parMessage.get(
+            cleDuJournal(source.id, paires.get(messageId) as string)
+          )
+          // L'original n'a pas de fiche (plus ancien que ce module, ou une question) : rien à pointer.
+          if (!original) continue
+          const demandeLe = demande.debut ?? original.demandeLe
+          await enregistrer(index, {
+            v: 1,
+            ts: maintenant(),
+            fiche: original.fiche,
+            conversationId: branche.id,
+            messageId,
+            ...(demandeLe === undefined ? {} : { demandeLe }),
+            role: 'copie',
+            classement: original.classement,
+            etat: demande.statut,
+            constat: demande.constat
+          })
+          ajoutees += 1
+        }
+        return ajoutees
+      })
+    },
     lignes: () => enFile(async () => [...(await chargerIndex()).parMessage.values()]),
+    fichesDuFil(conversationId) {
+      return enFile(async () => {
+        if (!FIL_LISIBLE.test(conversationId)) return []
+        const parFiche = new Map<string, LigneDeFiche[]>()
+        for (const ligne of (await chargerIndex()).parMessage.values()) {
+          const deja = parFiche.get(ligne.fiche)
+          if (deja) deja.push(ligne)
+          else parFiche.set(ligne.fiche, [ligne])
+        }
+        const fiches: FicheDeDemande[] = []
+        for (const [fiche, lignes] of parFiche) {
+          if (!lignes.some((ligne) => ligne.conversationId === conversationId)) continue
+          const chemin = join(dossier, fiche)
+          let texte: string
+          let maj: number
+          try {
+            ;[texte, maj] = await Promise.all([
+              readFile(chemin, 'utf8'),
+              stat(chemin).then((s) => s.mtimeMs)
+            ])
+          } catch (erreur) {
+            // Effacée à la main : l'index la nomme encore, le panneau ne la montre plus.
+            if ((erreur as NodeJS.ErrnoException).code === 'ENOENT') continue
+            throw erreur
+          }
+          const resume = resumeDeLaFiche(texte)
+          const derniere = lignes.reduce((a, b) => (b.ts > a.ts ? b : a))
+          fiches.push({
+            chemin,
+            conversationId: fiche.split('/')[0] ?? conversationId,
+            titre: resume.titre,
+            statut: resume.statut ?? derniere.etat,
+            maj,
+            // Une copie dans une branche n'est pas une demande de plus : c'est la même, ailleurs.
+            demandes: lignes.filter((ligne) => ligne.role !== 'copie').length
+          })
+        }
+        return fiches.sort((a, b) => b.maj - a.maj)
+      })
+    },
+    fichesDesDemandes() {
+      return enFile(async () => {
+        const carte: FichesDesDemandes = {}
+        for (const ligne of (await chargerIndex()).parMessage.values()) {
+          const duFil = (carte[ligne.conversationId] ??= {})
+          duFil[ligne.messageId] = join(dossier, ligne.fiche)
+        }
+        return carte
+      })
+    },
     retirerLeFil(conversationId) {
       return enFile(async () => {
         if (!FIL_LISIBLE.test(conversationId)) return

@@ -462,6 +462,13 @@
   cursor: pointer;
 }
 
+/* Le lien vers la fiche RUN.md de la demande (conv-1441) : la couleur de `.riviere-fiche-lien`. */
+.riviere-fiche-runmd {
+  flex: none;
+  padding: 0;
+  font-size: 11px;
+}
+
 .riviere-fiche-demandes {
   display: flex;
   flex-direction: column;

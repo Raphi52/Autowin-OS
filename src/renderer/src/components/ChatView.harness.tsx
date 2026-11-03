@@ -20,6 +20,7 @@ export function chatApi(overrides: Record<string, unknown> = {}): Record<string,
     // les 14 fichiers de test de la vue tombaient tous sur « capabilityControls is not a function ».
     capabilityControls: vi.fn().mockResolvedValue([]),
     conversationRuns: vi.fn().mockResolvedValue([]),
+    fichesDuFil: vi.fn().mockResolvedValue([]),
     listRuns: vi.fn().mockResolvedValue([]),
     deleteConversationRun: vi.fn().mockResolvedValue({ ok: true, kind: 'deleted' }),
     deleteRun: vi.fn().mockResolvedValue({ ok: true }),

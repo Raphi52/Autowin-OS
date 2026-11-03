@@ -69,6 +69,20 @@ export const fichiersDeCoutDesLots = (plans, id) =>
     join('prompt-observability', `${fil}.jsonl`)
   ])
 
+/**
+ * Les lignes de l'index des fiches de demande qui concernent CE fil (conv-1441) : celles de ses
+ * demandes, pas les retraits de fil. Les fiches qu'elles nomment sont copiées avec elles. Pure.
+ */
+export const lignesDeFichesDe = (texte, id) =>
+  texte.split('\n').filter((ligne) => {
+    try {
+      const valeur = JSON.parse(ligne)
+      return valeur?.v === 1 && valeur.conversationId === id && typeof valeur.fiche === 'string'
+    } catch {
+      return false
+    }
+  })
+
 /** Dossiers propres à une conversation. `turn-journals/<id>` en est EXCLU à dessein (voir en-tête). */
 export const dossiersDeConversation = (id) => [join('runs', id)]
 
@@ -248,6 +262,29 @@ export function semerConversation({ source, destination, id }) {
     cpSync(join(source, relatif), join(destination, relatif), { recursive: true })
     ecrits.push(relatif)
   }
+  // Fiches de demande (conv-1441) : sans elles, le panneau RUN.md du fil copié n'a pas sa section
+  // « Fiches de demande ». Un lot nourrit la fiche du fil chef : elle est copiée aussi.
+  const indexDesFiches = join(source, 'demandes', 'index.jsonl')
+  if (existsSync(indexDesFiches)) {
+    const lignesFiches = lignesDeFichesDe(readFileSync(indexDesFiches, 'utf8'), id)
+    for (const fiche of new Set(lignesFiches.map((ligne) => JSON.parse(ligne).fiche))) {
+      const dossier = dirname(join('demandes', fiche))
+      // Un nom de fiche abîmé ne fait rien copier hors de `demandes/`.
+      if (!/^demandes[\\/][A-Za-z0-9_-]+[\\/][^\\/]+$/.test(dossier)) continue
+      if (!existsSync(join(source, dossier))) continue
+      cpSync(join(source, dossier), join(destination, dossier), { recursive: true })
+      ecrits.push(dossier)
+    }
+    if (lignesFiches.length > 0) {
+      mkdirSync(join(destination, 'demandes'), { recursive: true })
+      writeFileSync(
+        join(destination, 'demandes', 'index.jsonl'),
+        `${lignesFiches.join('\n')}\n`,
+        'utf8'
+      )
+      ecrits.push(join('demandes', 'index.jsonl'))
+    }
+  }
   return {
     ok: true,
     conversation: id,
@@ -280,7 +317,9 @@ export const emplacementsDeConversation = (id) => [
   NOM_PLANS_DE_LOTS,
   ...fichiersDeConversation(id),
   ...dossiersDeConversation(id),
-  join('turn-journals', id)
+  join('turn-journals', id),
+  // conv-1441 : l'instance démarre vide, ses fiches de demande ne viennent que de la copie.
+  'demandes'
 ]
 
 /**
