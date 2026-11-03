@@ -68,6 +68,13 @@ AGENTS.md
 # famille que `.autowin-preuve/` : ils servent pendant un tour, pas dans l historique partage.
 # Les 9 fichiers deja suivis le restent (un ignore ne retire rien de l index).
 /.autowin-tmp/
+# Mod propre a UN run, ajoute le 2026-11-03 (conv-1457) : `.autowin/mod-run/` vit dans la copie
+# de travail du run (claude.ts, DOSSIER_MOD_RUN) et porte son PROMOTION.md, exige par le controle
+# promotion-mod. La cloture d un run committe sa copie par `add -A` (worktree-manager.ts,
+# commitCopyIfDirty) : sans cette ligne, l annonce d un run atterrissait sur main, et toute copie
+# suivante naissait avec une annonce perimee qui satisfaisait le controle a sa place — et un mod
+# d essai, qui ne doit jamais fuir vers un autre fil, y serait charge.
+/.autowin/mod-run/
 
 # Sorties de compilation TypeScript ECRITES A COTE DES SOURCES, ajoutees le 2026-09-15.
 # Constate sur conv-540 (tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f, objection du juge sur la
