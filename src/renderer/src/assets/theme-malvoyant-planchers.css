@@ -273,6 +273,7 @@
 :root[data-theme^='malvoyant-'] .msg-meta,
 :root[data-theme^='malvoyant-'] .msg-time:hover::after,
 :root[data-theme^='malvoyant-'] .directive-receipt-status,
+:root[data-theme^='malvoyant-'] .directive-receipt-annuler,
 :root[data-theme^='malvoyant-'] .composer-input-row > .composer-send,
 :root[data-theme^='malvoyant-'] .attachment-chip,
 :root[data-theme^='malvoyant-'] .attachment-chip small,
@@ -614,6 +615,8 @@
 }
 
 /* components/HomeView.css — tailles */
+:root[data-theme^='malvoyant-'] .quartier-carte__depuis,
+:root[data-theme^='malvoyant-'] .home-view__village button,
 :root[data-theme^='malvoyant-'] .home-tile__label h2,
 :root[data-theme^='malvoyant-'] .home-tile__count,
 :root[data-theme^='malvoyant-'] .home-list time,
@@ -970,7 +973,8 @@
 
 /* components/RiviereDuProjet.css — tailles */
 :root[data-theme^='malvoyant-'] .riviere-fiche-meta,
-:root[data-theme^='malvoyant-'] .riviere-fiche-manuel {
+:root[data-theme^='malvoyant-'] .riviere-fiche-manuel,
+:root[data-theme^='malvoyant-'] .riviere-fiche-runmd {
   font-size: 13px;
 }
 
@@ -1340,6 +1344,12 @@
 :root[data-theme^='malvoyant-'] .wt-st-ref,
 :root[data-theme^='malvoyant-'] .wt-st-elision,
 :root[data-theme^='malvoyant-'] .wt-geste code {
+  font-size: 13px;
+}
+
+/* components/fiches-du-fil.css — tailles */
+:root[data-theme^='malvoyant-'] .fiches-du-fil-titre,
+:root[data-theme^='malvoyant-'] .fiche-du-fil-meta {
   font-size: 13px;
 }
 
