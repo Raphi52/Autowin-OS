@@ -1,3 +1,4 @@
+import { condenserLecture, type Condenseur } from './brain-condenseur'
 import {
   applyEdit,
   decideEdit,
@@ -1783,9 +1784,11 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'brain_read',
     description:
-      'Ouvrir EN ENTIER, sans coupe, une note curée du Brain nommée par brain_query ou brain_graph — pour en lire le contenu, décider soi-même si elle est à jour, et la remplacer via remember (supersedes) si elle ne l’est plus',
+      'Ouvrir une note curée du Brain nommée par brain_query ou brain_graph. Une note longue revient CONDENSÉE par le modèle des petites tâches sur ton besoin (conv-1469) ; entier: true rend la note brute, nécessaire pour la remplacer via remember (supersedes)',
     args: {
-      path: 'chemin de la note, knowledge/…/nom.md — garde le préfixe perso: d’une note du Brain perso'
+      path: 'chemin de la note, knowledge/…/nom.md — garde le préfixe perso: d’une note du Brain perso',
+      besoin: 'ce que tu cherches dans cette note, en une phrase — sert au condensé',
+      entier: 'facultatif — true pour la note brute, sans condensé'
     },
     annotations: {
       readOnlyHint: true,
@@ -3118,6 +3121,12 @@ export class AppCommandBus {
    * index.ts : le minuteur n'existe qu'après la construction du bus. Absent -> `task_create` refuse.
    */
   taskManager?: TaskCreateDeps
+
+  /**
+   * Condensé des notes lues par `brain_read` (conv-1469, `brain-condenseur.ts`), câblé depuis
+   * index.ts. Absent -> la note part entière, comme avant.
+   */
+  condenseurBrain?: Condenseur
 
   constructor(
     private readonly os: AutowinOS,
@@ -5704,7 +5713,9 @@ export class AppCommandBus {
             turnId,
             durationMs: Math.round(performance.now() - debutPerso)
           })
-          return luPerso
+          return name === 'brain_read'
+            ? await condenserLecture(luPerso, a, this.condenseurBrain, conversationId)
+            : luPerso
         }
         const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
         if (corpus?.length === 0) {
@@ -5725,7 +5736,9 @@ export class AppCommandBus {
           turnId,
           durationMs: Math.round(performance.now() - debut)
         })
-        return lu
+        return name === 'brain_read'
+          ? await condenserLecture(lu, a, this.condenseurBrain, conversationId)
+          : lu
       }
       case 'skill_charger':
         return chargerSkillPourLeModele(a)

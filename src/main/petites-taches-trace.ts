@@ -31,6 +31,7 @@ export type AppelCourt =
   | 'rangementPremierMessage'
   | 'arbitrageDerive'
   | 'relectureFroide'
+  | 'condenseBrain'
 
 /** Longueur gardée de l'issue : de quoi lire un format inattendu, pas de quoi recopier un texte. */
 const ISSUE_MAX = 160

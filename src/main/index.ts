@@ -443,6 +443,7 @@ import { depotCiteDansLeMessage } from './depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from './rangement-premier-message'
 import { noterAppelCourt, signalerPanneAppelCourt } from './petites-taches-trace'
 import { lecteurDeDeuxLectures } from './deux-lectures-appel'
+import { condenseurDuBrain } from './brain-condenseur'
 import { photographierDebutDeTour } from './chat-turn-publication'
 import {
   commitsPublies,
@@ -4735,6 +4736,8 @@ Le fil reprend ensuite normalement.`
   scheduledTaskScheduler = new TaskScheduler(scheduledTasks, dispatcherVeille, relay)
   // `task_create` de l'agent : MÊME chemin que le bouton « Créer » du Task Manager (conv-114).
   const schedulerPourAgent = scheduledTaskScheduler
+  // Les notes lues par brain_read passent par le petit modèle avant le fil (conv-1469).
+  bus.condenseurBrain = condenseurDuBrain(os)
   bus.taskManager = {
     create: (input) => scheduledTasks.create(input),
     list: () => scheduledTasks.listTasks(),
