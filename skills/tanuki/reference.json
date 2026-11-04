@@ -1,0 +1,147 @@
+{
+  "source": {
+    "image": "src/renderer/src/assets/quartier/atlas.avif",
+    "sha256": "d5bd2868aaa27f6f4a1f7e21086b3b880c6ac627310bd535824e2c29ded80564",
+    "taille": [
+      1512,
+      4420
+    ],
+    "caseEnPixels": [
+      126,
+      170
+    ],
+    "script": "scripts/tanuki-mesurer.mjs"
+  },
+  "cases": {
+    "face": 9,
+    "profil": 9,
+    "palette": 4
+  },
+  "proportions": {
+    "teteSurHauteur": 0.398,
+    "largeurTeteSurCorps": 0.721,
+    "hauteurSurLargeurCorps": 1.512,
+    "hauteurEnPixelsDeCase": 129
+  },
+  "oreilles": {
+    "nombre": 2,
+    "hauteurSurTete": 0.288,
+    "ecartSurTete": 0.274,
+    "largeurBaseSurTete": 0.224
+  },
+  "masque": {
+    "clair": {
+      "partDeLaTete": 0.261,
+      "couleur": "#f0e5c7",
+      "boiteDansLaTete": [
+        0.302,
+        0,
+        0.722,
+        1
+      ]
+    },
+    "sombre": {
+      "partDeLaTete": 0.016,
+      "couleur": "#40392e",
+      "boiteDansLaTete": [
+        0.405,
+        0.78,
+        0.738,
+        0.981
+      ]
+    }
+  },
+  "queue": {
+    "longueurSurHauteur": 0.306,
+    "anneauxSombres": 3,
+    "couleurSombre": "#6f6c62",
+    "couleurClaire": "#cdc3b3"
+  },
+  "palette": {
+    "ensemble": [
+      {
+        "hex": "#a39786",
+        "part": 0.234
+      },
+      {
+        "hex": "#ea844d",
+        "part": 0.172
+      },
+      {
+        "hex": "#cbbda8",
+        "part": 0.124
+      },
+      {
+        "hex": "#eee2c9",
+        "part": 0.105
+      },
+      {
+        "hex": "#7e7468",
+        "part": 0.104
+      },
+      {
+        "hex": "#b9714e",
+        "part": 0.097
+      },
+      {
+        "hex": "#5b4b3e",
+        "part": 0.082
+      },
+      {
+        "hex": "#dc9572",
+        "part": 0.081
+      }
+    ],
+    "tete": [
+      {
+        "hex": "#a09584",
+        "part": 0.445
+      },
+      {
+        "hex": "#efe2c5",
+        "part": 0.28
+      },
+      {
+        "hex": "#cbbea8",
+        "part": 0.245
+      },
+      {
+        "hex": "#4e473d",
+        "part": 0.03
+      }
+    ],
+    "corps": [
+      {
+        "hex": "#e58553",
+        "part": 0.383
+      },
+      {
+        "hex": "#b8724f",
+        "part": 0.176
+      },
+      {
+        "hex": "#ceb097",
+        "part": 0.115
+      },
+      {
+        "hex": "#7b7873",
+        "part": 0.112
+      },
+      {
+        "hex": "#eee1ca",
+        "part": 0.109
+      },
+      {
+        "hex": "#684f3e",
+        "part": 0.105
+      }
+    ]
+  },
+  "style": {
+    "partDeBordAdouci": 0.27,
+    "sculpture": {
+      "origine": "D:/AutoWinOS/.autowin-tmp/conv-1421/gen/d3/tanuki.py:1",
+      "texte": "Sculpture du tanuki en feutrine, en vrai volume (conv-1421). Un personnage en laine feutrée, c'est de la matière modelée"
+    }
+  }
+}
