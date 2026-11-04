@@ -124,7 +124,7 @@ describe('câblage — l’alignement a lieu APRÈS le verdict de fusion', () =>
   const fs = require('node:fs') as typeof import('node:fs')
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const path = require('node:path') as typeof import('node:path')
-  const source = fs.readFileSync(path.join(__dirname, 'orchestrator.ts'), 'utf8')
+  const source = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => fs.readFileSync(path.join(__dirname, f), 'utf8')).join(String.fromCharCode(10))
 
   it('l’orchestrateur appelle bien l’alignement', () => {
     expect(source).toContain('alignReportWithDisk(')

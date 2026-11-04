@@ -22,7 +22,7 @@ describe('motif de non-jeu de la chaine apres-juge', () => {
   })
 
   it("est POUSSE dans la trace par l'orchestrateur, sur les deux sorties", () => {
-    const orchestrateur = readFileSync('src/main/orchestrator.ts', 'utf8')
+    const orchestrateur = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync('src/main/' + f, 'utf8')).join(String.fromCharCode(10))
     expect(orchestrateur).toContain('motifChaineApresJugeNonJouee({')
     expect(orchestrateur).toContain('gateBloque: true')
     expect(orchestrateur).toContain('gateBloque: false')

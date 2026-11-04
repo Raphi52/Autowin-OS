@@ -72,7 +72,7 @@ describe('les deux côtés appellent bien cette définition', () => {
   it('l’attestation ne calcule plus la portée depuis le dossier de travail', () => {
     // L'entrée EXACTE qui a causé le défaut. La réintroduire re-viderait toutes les attestations,
     // sans qu'aucun test de comportement ne le voie.
-    const orchestrateur = lire('orchestrator.ts')
+    const orchestrateur = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map(lire).join(String.fromCharCode(10))
     expect(orchestrateur).not.toMatch(/scope:.*workspaceSlug\(workspace\)/)
     expect(orchestrateur).toContain('porteeDeLecon(')
   })

@@ -27,7 +27,7 @@ describe('champ facultatif TEST: du contrat des objections (piste 2 /build)', ()
   })
 
   it('le message de réparation de l’orchestrateur porte la consigne', () => {
-    const src = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    const src = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join(String.fromCharCode(10))
     expect(src).toMatch(/\[RÉPARATION \$\{attempt\}\][^`]*\$\{consigneTestsDuJuge\(lastJudgeText\)\}/)
   })
 })

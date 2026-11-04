@@ -45,10 +45,7 @@ describe('mesureBundlePerime', () => {
  * la boucle de reparation redevient aveugle au code perime.
  */
 describe('branchement au site d appel (orchestrator)', () => {
-  const source = readFileSync(
-    join(__dirname, '..', 'orchestrator.ts'),
-    'utf8'
-  )
+  const source = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, '..', f), 'utf8')).join(String.fromCharCode(10))
 
   it('passe la mesure a arretDeLaReparation', () => {
     const debut = source.indexOf('deciderDuPassage({')

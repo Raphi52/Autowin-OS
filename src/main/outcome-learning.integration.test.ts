@@ -161,7 +161,7 @@ describe('outcome learning — contrat visible par les modèles', () => {
 
   it('sépare l’auteur de la leçon de son attestation par le judge', () => {
     const commands = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
-    const orchestrator = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    const orchestrator = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join(String.fromCharCode(10))
 
     expect(commands).toContain('verifyIndependentLearningAttestation(')
     expect(commands).toContain("input.role !== 'judge'")

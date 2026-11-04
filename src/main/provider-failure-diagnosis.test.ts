@@ -167,7 +167,7 @@ describe('explainRoleFailure — hors fan-out, le binding est nommé', () => {
  * causes qu'il avait déjà. Ces tests échouent si elles redeviennent perdues.
  */
 describe('câblage — l’orchestrateur remonte les causes au lieu de les jeter', () => {
-  const source = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+  const source = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join(String.fromCharCode(10))
 
   it('chaque membre en échec conserve sa cause', () => {
     expect(source).toContain('cause: error instanceof Error ? error.message : String(error)')
@@ -260,7 +260,7 @@ describe('un repli ne doit pas se faire passer pour un réglage', () => {
   it('le site de phase ne code plus le rôle EN DUR : un juge n’est plus dit « subagent »', () => {
     // `roleDeLaPhase` vaut `'judge'` sur une phase de juge dédié ; le site passait le littéral
     // `'subagent'`, donc un échec de juge s'affichait sous le mauvais rôle.
-    const orchestrateur = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    const orchestrateur = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join(String.fromCharCode(10))
     // ANCRE sur le marqueur du site de PHASE, pas sur le premier `explainRoleFailure` du fichier :
     // celui-là est le site des sous-tâches, et ma première version l'attrapait — un test qui vise à
     // côté échoue pour la mauvaise raison, ou passe pour la mauvaise raison.

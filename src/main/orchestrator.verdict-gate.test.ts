@@ -167,7 +167,10 @@ describe('faux vert du juge qui se corrige — un seul lecteur, sur TOUS les che
   })
 
   it("le lecteur faible n'existe plus dans l'orchestrateur : un seul lecteur pour tous les chemins", () => {
-    const source = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    // Le corps des parcours vit dans des modules voisins depuis le découpage (conv-1508) : on lit l'ensemble.
+    const source = ['orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts']
+      .map((f) => readFileSync(join(__dirname, f), 'utf8'))
+      .join(String.fromCharCode(10))
     // Le TEXTE exact du lecteur faible, tel qu'il etait ecrit aux trois sites fautifs.
     // On vise l'USAGE, pas la mention : un commentaire qui cite le motif fautif reste utile.
     const LECTEUR_FAIBLE = String.raw`/^\s*valide/i.test(`
