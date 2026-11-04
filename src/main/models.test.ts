@@ -19,6 +19,7 @@ import {
   loadCachedImportedModels
 } from './models'
 import { appendClaudeSelectionArgs } from './providers/claude'
+import { createDefaultTopology } from './topology'
 
 // Clés réelles du poste (setx MISTRAL_API_KEY…) : le catalogue les lit dans process.env et ajouterait
 // les modèles des services directs. Les tests restent hermétiques (conv-1499).
@@ -279,6 +280,14 @@ describe('cache disque du dernier catalogue vu', () => {
     expect(offline.find((m) => m.model === 'claude-opus-4-8')?.label).toBe('Claude Opus 4.8')
     expect(loadCachedImportedModels(cachePath).map((m) => m.label)).toEqual(['Claude Opus 4.8'])
     expect(offline.some((m) => /\bCLI\b/.test(m.label))).toBe(false)
+  })
+
+  it('profil vierge : sans cache, le catalogue de démarrage rend les alias du CLI et la topologie se crée', () => {
+    const cachePath = makeCachePath() // jamais écrit : c'est l'état d'une installation neuve
+    const models = loadCachedImportedModels(cachePath)
+    expect(models.map((m) => m.id)).toEqual(['claude/opus', 'claude/sonnet', 'claude/haiku', 'claude/fable'])
+    expect(() => createDefaultTopology(models)).not.toThrow()
+    expect(createDefaultTopology(models).orchestrator.modelId).toBe('claude/opus')
   })
 
   it('étiquette l’alias avec la meilleure version du catalogue final, cache inclus', async () => {

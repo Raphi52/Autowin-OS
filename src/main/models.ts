@@ -430,9 +430,16 @@ export function loadCachedImportedModels(cachePath: string): ImportedModel[] {
   // FILTRE DE SORTIE, comme dans `discoverImportedModels` : le cache disque a été écrit AVANT le
   // retrait des moteurs et peut contenir des entrées Kimi ou Gemini. Le fichier n'est PAS réécrit :
   // les données anciennes restent lisibles pour l'historique.
-  return [...claude, ...codex, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
+  const relus = [...claude, ...codex, ...DEFAULT_IMPORTED_MODELS].filter((model) =>
     ROUTED_PROVIDERS.includes(model.provider as RoutedProvider)
   )
+  // PROFIL VIERGE (mesuré le 2026-11-04 sur `dist/win-unpacked`, données portables neuves) : sans
+  // cache, ce catalogue était VIDE, `createDefaultTopology([])` levait et l'app sortait (code 78)
+  // avant toute fenêtre. Or le cache ne s'écrit qu'APRÈS le démarrage : une installation neuve ne
+  // pouvait donc JAMAIS démarrer. On rend alors les seuls alias du CLI Claude — le contrat permanent
+  // du CLI (voir `claudeAliasModels`), pas une version inventée — et la découverte live qui suit le
+  // démarrage remplace ce filet. Un cache non vide garde la règle d'avant : rien d'ajouté.
+  return relus.length > 0 ? relus : claudeAliasModels([])
 }
 
 /**
