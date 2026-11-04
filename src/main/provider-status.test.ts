@@ -3,7 +3,8 @@ import {
   buildProviderStatuses,
   presenceStatus,
   probePresenceUnlessStandby,
-  probeResultStatus
+  probeResultStatus,
+  statutsServicesHttp
 } from './provider-status'
 
 const NOW = 1_000_000_000_000
@@ -123,5 +124,35 @@ describe('buildProviderStatuses (chargement)', () => {
     })
 
     expect(statuses.map((item) => item.provider)).toEqual(['claude', 'codex'])
+  })
+})
+
+describe('statutsServicesHttp (moteur direct, conv-1503)', () => {
+  const services = [
+    { id: 'api-x', libelle: 'X', baseUrl: 'https://x', apiKeyEnv: 'X_API_KEY', modeles: ['m'] },
+    { id: 'api-l', libelle: 'L', baseUrl: 'http://l', activeEnv: 'AUTOWIN_L', modeles: ['m'] }
+  ]
+  it('sans clé : absent, avec la variable nommée, jamais testable', () => {
+    expect(statutsServicesHttp(services, {})).toEqual([
+      { provider: 'api-x', status: 'absent', testable: false, detail: 'Clé manquante (X_API_KEY)' },
+      {
+        provider: 'api-l',
+        status: 'absent',
+        testable: false,
+        detail: 'Service local non activé (AUTOWIN_L)'
+      }
+    ])
+  })
+  it('clé posée : prêt, jamais authenticated', () => {
+    const [x, l] = statutsServicesHttp(services, { X_API_KEY: 'k', AUTOWIN_L: '1' })
+    expect(x).toEqual({ provider: 'api-x', status: 'ready', testable: false })
+    expect(l.status).toBe('ready')
+  })
+  it('une clé faite d’espaces compte comme absente', () => {
+    expect(statutsServicesHttp(services, { X_API_KEY: '  ' })[0].status).toBe('absent')
+  })
+  it('la veille prime sur la clé', () => {
+    const [x] = statutsServicesHttp(services, { X_API_KEY: 'k' }, { 'api-x': { mode: 'standby' } })
+    expect(x.status).toBe('standby')
   })
 })

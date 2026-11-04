@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+const noterQuota = vi.hoisted(() => vi.fn())
+vi.mock('../model-quotas', () => ({ noterQuotaServiceHttp: noterQuota }))
 import { OpenAICompatAdapter, type OutilAgent } from './openai-compat'
 import type { SendResult, StreamChunk } from './types'
 
@@ -99,5 +102,18 @@ describe('OpenAICompatAdapter — moteur HTTP sans CLI', () => {
       fetchImpl: (async () => sse([{ choices: [{ delta: { tool_calls: [{ index: 0, id: 'x', function: { name: 't', arguments: '{}' } }] } }] }]))
     })
     await expect(vider(boucle.send([{ role: 'user', content: 'x' }]))).rejects.toThrow(/2 étapes/)
+  })
+
+  it('note le quota du service après chaque réponse HTTP, refus 429 compris', async () => {
+    noterQuota.mockClear()
+    const ok = new OpenAICompatAdapter({ id: 'api-groq', baseUrl: 'http://l', defaultModel: 'm', fetchImpl: (async () => sse([{ choices: [{ delta: { content: 'x' } }] }])) })
+    await vider(ok.send([{ role: 'user', content: 'q' }]))
+    expect(noterQuota).toHaveBeenCalledTimes(1)
+    expect(noterQuota.mock.calls[0][0]).toBe('api-groq')
+    const ko = new OpenAICompatAdapter({ id: 'api-gemini', baseUrl: 'http://l', defaultModel: 'm', fetchImpl: (async () => new Response('quota', { status: 429, headers: { 'x-ratelimit-remaining-requests': '0' } })) })
+    await expect(vider(ko.send([{ role: 'user', content: 'q' }]))).rejects.toThrow(/429/)
+    expect(noterQuota).toHaveBeenCalledTimes(2)
+    expect(noterQuota.mock.calls[1][0]).toBe('api-gemini')
+    expect(noterQuota.mock.calls[1][1].get('x-ratelimit-remaining-requests')).toBe('0')
   })
 })

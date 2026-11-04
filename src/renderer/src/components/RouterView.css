@@ -80,6 +80,15 @@
   border-color: rgba(126, 177, 219, 0.38);
   background: rgba(91, 139, 181, 0.12);
 }
+.router-badge.is-ready {
+  /* Service du moteur direct dont la clé est posée (conv-1503) : jetons de thème seulement. */
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+}
+.router-provider-detail {
+  color: var(--warn);
+}
 .router-badge.is-absent,
 .router-badge.is-unknown {
   opacity: 0.7;

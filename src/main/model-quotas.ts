@@ -38,6 +38,8 @@ let cached:
       value: ModelQuotaSnapshot
       /** Gardé à part : le relevé vu d'un fil au compte choisi ne change que la partie Claude. */
       codex: ProviderQuota
+      /** Gardé à part : le relevé Claude reste celui du dernier sondage (60 s), pendant que les services directs se mettent à jour à chaque réponse. */
+      claude: ProviderQuota
     }
   | undefined
 let collectionSequence = 0
@@ -170,6 +172,76 @@ export function parseLatestCodexRateLimitSample(jsonl: string): {
     }
   }
   return { windows: [] }
+}
+
+/**
+ * QUOTA DES SERVICES DU MOTEUR DIRECT (conv-1503, lot 3 du plan conv-1499).
+ *
+ * Seul ce qu'un service PUBLIE est montré : les en-têtes `x-ratelimit-*` (format OpenAI, que Groq,
+ * Cerebras et d'autres reprennent) d'une vraie réponse. Un service qui n'en envoie pas reste
+ * « Quota non exposé » (`buildModelQuotaSnapshot`) : aucune fenêtre n'est inventée.
+ */
+const quotasServicesHttp = new Map<string, ProviderQuota>()
+
+/** « 1m30.5s », « 6ms », « 2h » (OpenAI/Groq) ou un nombre de secondes nu → millisecondes. */
+export function dureeRateLimitMs(raw: string | null | undefined): number | undefined {
+  const texte = raw?.trim()
+  if (!texte) return undefined
+  if (/^\d+(\.\d+)?$/.test(texte)) return Number(texte) * 1_000
+  const morceaux = [...texte.matchAll(/(\d+(?:\.\d+)?)(ms|h|m|s)/g)]
+  if (morceaux.length === 0 || morceaux.map((m) => m[0]).join('') !== texte) return undefined
+  const unite: Record<string, number> = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 }
+  return morceaux.reduce((total, m) => total + Number(m[1]) * unite[m[2]], 0)
+}
+
+/** Fenêtres lues dans les en-têtes `x-ratelimit-{limit,remaining,reset}-{requests,tokens}`. */
+export function parseRateLimitHeadersHttp(
+  headers: { get(name: string): string | null },
+  now = Date.now()
+): ModelQuotaWindow[] {
+  const fenetres: ModelQuotaWindow[] = []
+  for (const [genre, label] of [
+    ['requests', 'Requêtes'],
+    ['tokens', 'Tokens']
+  ] as const) {
+    const limite = Number(headers.get(`x-ratelimit-limit-${genre}`))
+    const reste = Number(headers.get(`x-ratelimit-remaining-${genre}`))
+    if (!Number.isFinite(limite) || limite <= 0 || !Number.isFinite(reste)) continue
+    if (headers.get(`x-ratelimit-remaining-${genre}`) === null) continue
+    const remainingPercent = Math.min(100, Math.max(0, (reste / limite) * 100))
+    const delai = dureeRateLimitMs(headers.get(`x-ratelimit-reset-${genre}`))
+    fenetres.push({
+      id: genre,
+      label,
+      usedPercent: 100 - remainingPercent,
+      remainingPercent,
+      ...(delai !== undefined ? { resetsAt: new Date(now + delai).toISOString() } : {})
+    })
+  }
+  return fenetres
+}
+
+/**
+ * Relève les en-têtes d'une réponse d'un service direct. Une réponse sans en-tête de quota ne
+ * remplace pas une mesure déjà tenue : elle ne prouve pas que le quota a disparu.
+ */
+export function noterQuotaServiceHttp(
+  provider: string,
+  headers: { get(name: string): string | null },
+  now = Date.now()
+): void {
+  const windows = parseRateLimitHeadersHttp(headers, now)
+  if (windows.length === 0) return
+  quotasServicesHttp.set(provider, {
+    status: 'available',
+    source: 'En-têtes x-ratelimit du service',
+    observedAt: new Date(now).toISOString(),
+    windows
+  })
+}
+
+export function resetQuotasServicesHttpForTests(): void {
+  quotasServicesHttp.clear()
 }
 
 function windowsForModel(model: ImportedModel, quota: ProviderQuota): ModelQuotaWindow[] {
@@ -774,7 +846,11 @@ async function releveDuCompteChoisi(
         windows: [],
         error: 'Quota du compte choisi indisponible'
       }
-  return buildModelQuotaSnapshot(models, { claude, codex }, observedAt)
+  return buildModelQuotaSnapshot(
+    models,
+    { ...Object.fromEntries(quotasServicesHttp), claude, codex },
+    observedAt
+  )
 }
 
 export async function getModelQuotaSnapshot(
@@ -791,7 +867,12 @@ export async function getModelQuotaSnapshot(
 ): Promise<ModelQuotaSnapshot> {
   const now = options.now ?? Date.now()
   if (!options.force && cached && cached.expiresAt > now && !options.compteClaude) {
-    return cached.value
+    if (quotasServicesHttp.size === 0) return cached.value
+    return buildModelQuotaSnapshot(
+      models,
+      { ...Object.fromEntries(quotasServicesHttp), claude: cached.claude, codex: cached.codex },
+      cached.value.observedAt
+    )
   }
   if (options.compteClaude) {
     const { compteClaude, ...reste } = options
@@ -812,13 +893,18 @@ export async function getModelQuotaSnapshot(
     ),
     codexQuota(home, now)
   ])
-  const value = buildModelQuotaSnapshot(models, { claude, codex }, new Date(now).toISOString())
+  const value = buildModelQuotaSnapshot(
+    models,
+    { ...Object.fromEntries(quotasServicesHttp), claude, codex },
+    new Date(now).toISOString()
+  )
   if (!cached || currentCollectionSequence >= cached.collectionSequence) {
     cached = {
       expiresAt: now + CACHE_MS,
       collectionSequence: currentCollectionSequence,
       value,
-      codex
+      codex,
+      claude
     }
   }
   return value
