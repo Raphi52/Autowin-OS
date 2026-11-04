@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
+// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+const source = lireSourceDuChatView()
 // La ligne de message a été EXTRAITE dans son propre module (découpe de ChatView.tsx). L'invariant
 // vérifié ici — mémoïsation data-only — n'a pas changé, seul son fichier a changé.
 const rowSource = readFileSync(new URL('./ChatMessageRow.tsx', import.meta.url), 'utf8')

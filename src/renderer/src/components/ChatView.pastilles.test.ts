@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs'
+// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { describe, expect, it } from 'vitest'
 
 import { deriveConversationState } from './chat-view-model'
@@ -81,7 +83,7 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
     // (.aw-atom), le MEME atome que partout ailleurs dans l'app. La pastille etait le dernier
     // endroit a recopier un atome CSS a bordures, d'ou un indicateur qui ne ressemblait a aucun
     // autre. On verrouille donc la SOURCE UNIQUE, pas la copie.
-    const tsx = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    const tsx = lireSourceDuChatView()
     expect(tsx).toMatch(/conversationState\.key === 'running' \? \(\s*<Spinner/s)
     expect(theme).toMatch(/\.aw-atom__rot\s*\{[^}]*animation:\s*aw-atom-spin/s)
     for (const key of ['completed', 'failed', 'interrupted', 'cancelled', 'waiting']) {
@@ -97,7 +99,7 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
     // Defaut vecu (conv-46) : `title` n'existait que sur la pastille statique. L'etat EN COURS
     // rend un <Spinner/>, qui ne recevait qu'un `label` — lu par les lecteurs d'ecran, invisible
     // a la souris. Une couleur muette oblige a venir demander ce qu'elle veut dire.
-    const tsx = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    const tsx = lireSourceDuChatView()
     // Le texte de l'info-bulle : libelle + explication, la meme chaine pour les deux branches.
     expect(tsx).toMatch(/const stateDescription = `\$\{conversationState\.label\} — \$\{conversationState\.detail\}`/)
     const spinner = tsx.match(/<Spinner\b[^>]*className="conversation-state is-running"[\s\S]*?\/>/)
@@ -124,7 +126,7 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
     // spinner 18px, la pastille 11px — donc le titre ne demarrait pas au meme x, et le spinner,
     // cale a gauche, avait son centre ~3,5px a droite de celui des pastilles.
     // ENTREE QUI DOIT FAIRE ECHOUER : retirer la case, ou changer `size` du spinner sans elle.
-    const tsx = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    const tsx = lireSourceDuChatView()
     const taille = /<Spinner\s+size=\{(\d+)\}\s+className="conversation-state is-running"/.exec(tsx)?.[1]
     expect(taille, 'taille du spinner « en cours » introuvable').toBeDefined()
     // Les DEUX branches (spinner et pastille) vivent dans la case.

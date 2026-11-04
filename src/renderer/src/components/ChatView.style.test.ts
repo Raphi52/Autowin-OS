@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs'
+// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { describe, expect, it } from 'vitest'
 
 describe('chat wallpaper', () => {
@@ -87,7 +89,7 @@ describe('workflow header toggle', () => {
   it('dessine Détails et la Mini-adresse avec la même classe, sans capsule', () => {
     const lireCss = (chemin: string): string =>
       readFileSync(new URL(chemin, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-    const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    const source = lireSourceDuChatView()
     const boutons = readFileSync(new URL('./BoutonNavigateur.tsx', import.meta.url), 'utf8')
 
     expect(source).toContain('<BoutonDetails')
@@ -160,7 +162,7 @@ describe('minimal conversation status lights', () => {
     // (.aw-atom), le MEME atome que partout ailleurs dans l'app. La pastille etait le dernier
     // endroit a recopier un atome CSS a bordures, d'ou un indicateur qui ne ressemblait a aucun
     // autre. On verrouille donc la SOURCE UNIQUE, pas la copie.
-    const tsx = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+    const tsx = lireSourceDuChatView()
     expect(tsx).toMatch(/conversationState\.key === 'running' \? \(\s*<Spinner/s)
     expect(theme).toMatch(/\.aw-atom__rot\s*\{[^}]*animation:\s*aw-atom-spin/s)
     expect(css).toMatch(/\.conversation-state\.is-failed\s*{[^}]*color:\s*var\(--chat-etat-echec\)/s)

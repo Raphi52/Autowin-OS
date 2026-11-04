@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs'
 import { act } from 'react'
+// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
@@ -127,7 +128,7 @@ describe('ChatView — refus visible du workflow actif', () => {
 describe('ChatView — les bandeaux glissent à l’entrée', () => {
   it('chacun des bandeaux du chat porte la classe d’apparition', () => {
     // Chemin depuis la racine du depot, comme les autres tests de source de ce dossier.
-    const source = readFileSync('src/renderer/src/components/ChatView.tsx', 'utf8')
+    const source = lireSourceDuChatView()
     const classes = [...source.matchAll(/className="(chat-workflow-notice[^"]*)"/g)].map(
       (m) => m[1]
     )

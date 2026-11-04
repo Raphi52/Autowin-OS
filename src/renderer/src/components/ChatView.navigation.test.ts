@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
+// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./ChatView.tsx', import.meta.url), 'utf8')
+const source = lireSourceDuChatView()
 const modelsSource = readFileSync(new URL('./AgentsTopologyView.tsx', import.meta.url), 'utf8')
 // Le composer est un composant a part depuis conv-1466 : l invariant de Stop se lit sur les deux.
 const composerSource = readFileSync(new URL('./ChatComposer.tsx', import.meta.url), 'utf8')
