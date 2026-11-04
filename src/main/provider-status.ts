@@ -130,6 +130,9 @@ export function buildProviderStatuses(inputs: {
   claudeResponds: boolean
   /** Absent : ChatGPT n'est pas sondé sur ce chemin, il sort « absent » plutôt qu'un statut inventé. */
   codexResponds?: boolean
+  /** Gemini par l'abonnement Google (CLI `agy`) et Grok par le CLI d'xAI : publiés depuis conv-1553. */
+  agyResponds?: boolean
+  grokResponds?: boolean
   now: number
   /**
    * États persistés, indexés par identifiant de provider. Volontairement ouvert (`string`) : le
@@ -140,6 +143,10 @@ export function buildProviderStatuses(inputs: {
 }): ProviderStatus[] {
   return [
     statutDuProvider('claude', inputs.claudeResponds, inputs.states?.claude),
-    statutDuProvider('codex', inputs.codexResponds === true, inputs.states?.codex)
+    statutDuProvider('codex', inputs.codexResponds === true, inputs.states?.codex),
+    // conv-1553 : agy et grok sont routés (routed-providers.ts) mais n'avaient aucun statut,
+    // donc la page Routage ne les montrait pas.
+    statutDuProvider('agy', inputs.agyResponds === true, inputs.states?.agy),
+    statutDuProvider('grok', inputs.grokResponds === true, inputs.states?.grok)
   ]
 }

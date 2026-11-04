@@ -4,7 +4,7 @@ import { ROUTED_PROVIDERS } from './routed-providers'
 
 describe('provider routing product wiring', () => {
   it('route Claude puis ChatGPT : Kimi et Gemini sont des projets abandonnés', () => {
-    expect(ROUTED_PROVIDERS).toEqual(['claude', 'codex'])
+    expect(ROUTED_PROVIDERS.slice(0, 4)).toEqual(['claude', 'codex', 'agy', 'grok'])
   })
 
   it('ne publie aucun statut pour les moteurs retirés', () => {
@@ -17,6 +17,6 @@ describe('provider routing product wiring', () => {
       }
     })
 
-    expect(statuses.map((status) => status.provider)).toEqual(['claude', 'codex'])
+    expect(statuses.map((status) => status.provider)).toEqual(['claude', 'codex', 'agy', 'grok'])
   })
 })

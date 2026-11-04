@@ -131,13 +131,25 @@ export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDep
       })
     }
     // Aucun spawn de sondage pour les moteurs retirés (Kimi, Gemini) : leur statut n'est plus publié.
-    const [claudeResponds, codexResponds] = await Promise.all([responds('claude'), responds('codex')])
+    const [claudeResponds, codexResponds, agyResponds, grokResponds] = await Promise.all([
+      responds('claude'),
+      responds('codex'),
+      responds('agy'),
+      responds('grok')
+    ])
     return [
       ...buildProviderStatuses({
         claudeResponds,
         codexResponds,
+        agyResponds,
+        grokResponds,
         now: Date.now(),
-        states: { claude: providerStateStore.get('claude'), codex: providerStateStore.get('codex') }
+        states: {
+          claude: providerStateStore.get('claude'),
+          codex: providerStateStore.get('codex'),
+          agy: providerStateStore.get('agy'),
+          grok: providerStateStore.get('grok')
+        }
       }),
       // Moteur direct (conv-1503) : présence de la clé dans l'environnement, aucun appel réseau.
       ...statutsServicesHttp(

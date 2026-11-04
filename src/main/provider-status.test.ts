@@ -55,7 +55,9 @@ describe('buildProviderStatuses (chargement)', () => {
     })
     expect(out).toEqual([
       { provider: 'claude', status: 'installed-untested', testable: true },
-      { provider: 'codex', status: 'installed-untested', testable: true }
+      { provider: 'codex', status: 'installed-untested', testable: true },
+      { provider: 'agy', status: 'absent', testable: false },
+      { provider: 'grok', status: 'absent', testable: false }
     ])
   })
 
@@ -80,7 +82,9 @@ describe('buildProviderStatuses (chargement)', () => {
     })
     expect(out.map((item) => [item.provider, item.status])).toEqual([
       ['claude', 'standby'],
-      ['codex', 'authenticated']
+      ['codex', 'authenticated'],
+      ['agy', 'absent'],
+      ['grok', 'absent']
     ])
   })
 
@@ -123,7 +127,7 @@ describe('buildProviderStatuses (chargement)', () => {
       }
     })
 
-    expect(statuses.map((item) => item.provider)).toEqual(['claude', 'codex'])
+    expect(statuses.map((item) => item.provider)).toEqual(['claude', 'codex', 'agy', 'grok'])
   })
 })
 
