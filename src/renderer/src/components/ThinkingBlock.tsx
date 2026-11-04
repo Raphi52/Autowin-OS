@@ -619,12 +619,19 @@ function TacheDeLaFrise({ action }: { action: ActionFrise }): React.JSX.Element 
  * LE DÉBUT, C'EST CELUI DU TOUR (conv-1084, 2026-10-22) : quand le message porte `debutDuTour`, le
  * compteur part de là et non du montage du bloc — sinon un tour lancé pendant qu'on regardait un
  * autre fil ne comptait qu'à partir du retour sur la conversation.
+ *
+ * UNE PENSÉE RELAYÉE S'ARRÊTE (conv-1547, 2026-11-04 : « le premier bloc de raisonnement a un timer
+ * qui continue de grimper alors que plus rien ne s'écrit dans le bloc »). Après une orientation, la
+ * suite du tour pense dans une bulle neuve ; celle du dessus reste en cours, mais sa pensée a fini à
+ * `finDuRaisonnement`. Le compteur s'y fige sans toucher à la mémoire du tour : elle est PARTAGÉE
+ * par `turnId` avec la bulle de relève, qui doit continuer de compter.
  */
 function useChronoDuRaisonnement(
   turnId: string | undefined,
   done: boolean,
   conserveMs: number | undefined,
-  debutDuTour: number | undefined
+  debutDuTour: number | undefined,
+  finDuRaisonnement: number | undefined
 ): number | null {
   const [chronoVu, setChrono] = useState<Chrono | null>(() => {
     const memorise = chronoMemorise(turnId)
@@ -635,8 +642,9 @@ function useChronoDuRaisonnement(
   const chrono = chronoDepuisLeDebutDuTour(chronoVu, debutDuTour)
   const debut = chrono?.debut
   const fin = chrono?.fin
+  const relaye = !done && finDuRaisonnement !== undefined
   useEffect(() => {
-    if (done) return
+    if (done || relaye) return
     // Chaque battement retire aussi la `fin` d'une clôture démentie — tour rallumé SOUS LES YEUX,
     // bloc monté clos — ou démarre le chrono d'un bloc monté clos sans mémoire. Le premier part tout
     // de suite : un tour rallumé ne garde pas une seconde de plus son chiffre figé.
@@ -651,13 +659,14 @@ function useChronoDuRaisonnement(
       window.clearTimeout(premier)
       window.clearInterval(id)
     }
-  }, [done])
+  }, [done, relaye])
   // Memorise le debut (et, tour fini, la fin) pour qu'un remontage ne reparte pas de zero.
   useEffect(() => {
     if (!turnId || debut === undefined) return
     memoriserChrono(turnId, done ? { debut, fin: fin ?? maintenant } : { debut })
   }, [turnId, debut, fin, done, maintenant])
   if (!chrono) return done && conserveMs !== undefined ? Math.floor(conserveMs / 1000) : null
+  if (relaye) return secondesDuChrono({ debut: chrono.debut, fin: finDuRaisonnement }, maintenant)
   return secondesDuChrono(
     done ? { ...chrono, fin: chrono.fin ?? maintenant } : { debut: chrono.debut },
     maintenant
@@ -711,7 +720,8 @@ export function ThinkingBlock({
   statusLog,
   turnId,
   reasoningMs,
-  debutDuTour
+  debutDuTour,
+  finDuRaisonnement
 }: {
   text: string
   done: boolean
@@ -725,6 +735,11 @@ export function ThinkingBlock({
   reasoningMs?: number
   /** Heure de DÉBUT du tour (ms epoch), posée par le main : le zéro du chrono (conv-1084). */
   debutDuTour?: number
+  /**
+   * Heure où cette pensée est passée à une bulle suivante du même tour (orientation, conv-1547) :
+   * le raisonnement est clos ici, même si le tour — et ses actions — continuent.
+   */
+  finDuRaisonnement?: number
 }): React.JSX.Element {
   const { t } = useTextesChatDecisions()
   const pensee = corpsDuBloc(text)
@@ -738,7 +753,14 @@ export function ThinkingBlock({
   // (conv-904) : tour fini, la seconde ligne garde la DERNIERE ligne de la pensee — sa conclusion.
   // Une pensee chiffree par le modele (corps vide) n'invente rien : le bloc reste sur une ligne.
   const dernierePensee = useMemo(() => derniereLigneDuRaisonnement(pensee), [pensee])
-  const secondesPensee = useChronoDuRaisonnement(turnId, done, reasoningMs, debutDuTour)
+  const secondesPensee = useChronoDuRaisonnement(
+    turnId,
+    done,
+    reasoningMs,
+    debutDuTour,
+    finDuRaisonnement
+  )
+  const penseeClose = done || finDuRaisonnement !== undefined
   const secondesActions = secondesDesActions(frise)
   const journal = useMemo(
     () => (statusLog?.length ? statusLog : status ? [status] : []),
@@ -764,8 +786,8 @@ export function ThinkingBlock({
           testid="thinking-block"
           classe="thinking-block--raisonnement"
           rond={<RondDIcone>{ICONE_RAISONNEMENT}</RondDIcone>}
-          libelle={done ? t('pensee.raisonnementTermine') : t('pensee.raisonnement')}
-          live={!done}
+          libelle={penseeClose ? t('pensee.raisonnementTermine') : t('pensee.raisonnement')}
+          live={!penseeClose}
           compteurs={
             secondesPensee !== null && (
               <span className="thinking-secondes" data-testid="thinking-block-secondes">

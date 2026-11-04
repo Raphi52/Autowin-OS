@@ -25,6 +25,31 @@ export function tourDuMessageEnCours(messages: Msg[], index: number, occupe: boo
   return suivant.role === 'assistant' && suivant.done !== true
 }
 
+/**
+ * L'heure où la pensée de la bulle `index` est passée à une bulle SUIVANTE du même tour — `undefined`
+ * si personne ne l'a relayée (conv-1547, 2026-11-04).
+ *
+ * Une orientation écrite pendant le tour se pose sous la bulle du tour, et la suite s'écrit dans une
+ * bulle neuve du même `turnId`, sous elle (`patchLast`). La première reste « en cours » exprès — les
+ * battements d'une orchestration ouverte la visent encore (conv-955) —, donc son chrono du
+ * raisonnement, réglé sur `done` seul, grimpait jusqu'à la fin du tour sans qu'un mot s'y écrive :
+ * « le premier bloc de raisonnement a un timer qui continue de grimper alors que plus rien ne
+ * s'écrit dans le bloc ». La relève date son début au premier évènement reçu (`debutDuTour`, posé
+ * par le main) : c'est l'heure où cette pensée s'est arrêtée.
+ *
+ * Balayage seulement pour une bulle en cours : une bulle close n'a plus de chrono qui bat.
+ */
+export function finDuRaisonnementRelaye(messages: Msg[], index: number): number | undefined {
+  const bulle = messages[index]
+  if (bulle?.role !== 'assistant' || bulle.done === true || !bulle.turnId) return undefined
+  for (let i = index + 1; i < messages.length; i += 1) {
+    const suivante = messages[i]
+    if (suivante.role === 'assistant' && suivante.turnId === bulle.turnId)
+      return suivante.debutDuTour
+  }
+  return undefined
+}
+
 export function lastUserPromptBefore(messages: Msg[], index: number): string | undefined {
   for (let i = index - 1; i >= 0; i -= 1) {
     const candidate = messages[i]
