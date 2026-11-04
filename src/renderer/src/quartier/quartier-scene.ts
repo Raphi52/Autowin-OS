@@ -533,7 +533,9 @@ export function creerSceneQuartier(): DecorScene | null {
   ): { c: number; r: number; m: number; f?: number; n?: number; dx?: number } => {
     if (w.etat === 'etat') {
       const g = M.D.gestes[w.nom]
-      return { c: Math.floor((w.th * g.n) / g.d) % g.n, r: g.r, m: w.mir }
+      // Six images sur deux à six secondes, soit une par seconde : sans fondu, le geste saute (conv-1495).
+      const q = (w.th * g.n) / g.d
+      return { c: Math.floor(q) % g.n, r: g.r, m: w.mir, f: q - Math.floor(q), n: g.n }
     }
     if ((w.etat === 'poste' || w.etat === 'leve') && w.face?.g) {
       const g = M.D.gestes[w.face.g]
@@ -547,21 +549,17 @@ export function creerSceneQuartier(): DecorScene | null {
       if (e && w.th < e.d) return { c: Math.min(e.n - 1, Math.floor((w.th * e.n) / e.d)), r: e.r, m }
       const q = ((w.th - (e?.d ?? 0)) * g.n) / g.d
       const c = Math.floor(q) % g.n
-      return { c, r: g.r, m, f: g.fondu ? q - Math.floor(q) : 0, n: g.n, dx: g.dx ?? 0 }
+      return { c, r: g.r, m, f: q - Math.floor(q), n: g.n, dx: g.dx ?? 0 }
     }
     const a = ((w.ang % 360) + 360) % 360
     const s = Math.round(a / 45) % 8
     const m = s > 4 ? 1 : 0
     const r = m ? 8 - s : s
-    return {
-      // Debout : à l'arrêt, et quand il se tourne vers sa place avant de s'asseoir.
-      c:
-        w.etat === 'attend' || w.etat === 'tourne' || w.pause
-          ? 8
-          : Math.floor((((w.ph % 1) + 1) % 1) * 8),
-      r,
-      m
-    }
+    // Debout : à l'arrêt, et quand il se tourne vers sa place avant de s'asseoir.
+    if (w.etat === 'attend' || w.etat === 'tourne' || w.pause) return { c: 8, r, m }
+    // Huit images par foulée : l'image suivante se fond par-dessus entre deux pas (conv-1495).
+    const q = (((w.ph % 1) + 1) % 1) * 8
+    return { c: Math.floor(q), r, m, f: q - Math.floor(q), n: 8 }
   }
 
   function sprite(M: Monde, w: Tanuki, ombre: boolean): void {
@@ -583,7 +581,7 @@ export function creerSceneQuartier(): DecorScene | null {
     const ox = -an.ax + (cl.dx ?? 0)
     x.drawImage(atlas, cl.c * an.cw, cl.r * an.ch, an.cw, an.ch, ox, -an.ay, an.cw, an.ch)
     if (!ombre && w.foulard) poserFoulard(M, planche, w.foulard, cl.c, cl.r, ox)
-    // Une respiration de douze images en six secondes : l'image suivante se fond par-dessus, sans à-coup.
+    // Toute animation (respiration, gestes, marche) : l'image suivante se fond par-dessus, sans à-coup.
     if (!ombre && cl.f && cl.n) {
       const a = x.globalAlpha
       x.globalAlpha = a * cl.f
