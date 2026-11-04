@@ -1,8 +1,8 @@
 /**
  * L'AFFICHAGE SELON LA CONNEXION (conv-1442, 2026-11-02) : connecté par Windows App (le Bureau à
- * distance), Autowin passe en version ALLÉGÉE — ni décor 3D ni animations : chaque image
- * traverse le réseau. Si en plus l'écran est petit (le téléphone), il passe en mise en page ÉTROITE à
- * gros boutons.
+ * distance) sur un petit écran (le téléphone), Autowin passe en mise en page ÉTROITE à gros boutons.
+ * Sur un écran de PC, la session distante ne change rien : la « version allégée » sans animations a
+ * été retirée à la demande de l'utilisateur (conv-1538, 2026-11-04).
  *
  * Windows ne dit pas DEPUIS QUEL APPAREIL on se connecte : c'est la taille de l'écran de la session
  * qui sépare le PC du téléphone (choix de l'utilisateur, conv-1442 : « la taille d'écran c'est un bon
