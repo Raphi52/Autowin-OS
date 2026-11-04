@@ -469,6 +469,23 @@
   font-size: 11px;
 }
 
+/* Le RUN.md d'un collègue, déplié dans la carte (conv-1456) : la carte défile, pas la page. */
+.riviere-fiche-runmd-collegue {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.riviere-fiche-runmd-texte {
+  max-height: 220px;
+  margin: 0;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .riviere-fiche-demandes {
   display: flex;
   flex-direction: column;

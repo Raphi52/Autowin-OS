@@ -582,6 +582,7 @@ interface ChatApi {
   boardDossierNom?: (nom: string | null) => Promise<EtatDuDossierDuBoard>
   /** Les Boards des collègues relus dans le dossier du Board (conv-1210), en lecture seule. */
   boardCollegues: () => Promise<BoardsDesCollegues>
+  boardFicheCollegue: (poste: string, fiche: string) => Promise<string | null>
   /** L'instantané des tanukis de ce poste, publié filtré dans le village commun (conv-1429) ; absent
    *  = preload d'avant redémarrage. */
   quartierPresence?: (agents: AgentAPublier[]) => Promise<void>

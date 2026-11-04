@@ -38,7 +38,7 @@ import {
 import type { BilanDesMentions, ResultatDuRattachement } from '../../shared/carte-des-besoins'
 import { etatManuelLisible, type EtatManuelDuBoard } from '../../shared/board-dossier'
 import type { DossierDuBoard } from '../board-dossier'
-import { creerLecteurDesCollegues } from '../board-collegues'
+import { creerLecteurDesCollegues, lireFicheDUnCollegue } from '../board-collegues'
 import { creerCopieDeFinDeTour } from '../board-copie-fin-de-tour'
 import { projetsPartagesLisibles } from '../../shared/board-projets-partages'
 import {
@@ -308,6 +308,16 @@ export function registerCarteDesBesoinsIpc({
     assertTrustedRendererSender(event, 'Dossier du Board')
     return collegues ? collegues.lire() : Promise.resolve({ collegues: [] })
   })
+
+  // Le RUN.md d'un post-it de collègue (conv-1456), lu dans le dossier réglé sur CE poste.
+  ipcMain.handle(
+    'os:board-fiche-collegue',
+    (event, poste: unknown, fiche: unknown): Promise<string | null> => {
+      assertTrustedRendererSender(event, 'Dossier du Board')
+      const dossier = dossierDuBoard?.etat().dossier
+      return dossier ? lireFicheDUnCollegue(dossier, poste, fiche) : Promise.resolve(null)
+    }
+  )
 
   ipcMain.handle(
     'os:carte:lierWorkItem',

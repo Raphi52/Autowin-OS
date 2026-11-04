@@ -854,6 +854,9 @@ const api = {
     ipcRenderer.invoke('os:board-dossier:nom', nom),
   /** Les Boards des collègues relus dans le dossier du Board (conv-1210), en lecture seule. */
   boardCollegues: (): Promise<BoardsDesCollegues> => ipcRenderer.invoke('os:board-collegues'),
+  /** Le RUN.md d'un post-it de collègue, recopié par son Board (conv-1456) ; `null` = pas recopié. */
+  boardFicheCollegue: (poste: string, fiche: string): Promise<string | null> =>
+    ipcRenderer.invoke('os:board-fiche-collegue', poste, fiche),
   /** L'instantané des tanukis de ce poste, publié filtré dans le village commun (conv-1429). */
   quartierPresence: (agents: AgentAPublier[]): Promise<void> =>
     ipcRenderer.invoke('os:quartier-presence:agents', agents),

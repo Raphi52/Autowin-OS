@@ -49,6 +49,7 @@ import type {
   WorkItemDeLaDemande
 } from '../../../shared/carte-des-besoins'
 import type { FichesDesDemandes } from '../../../shared/fiche-de-demande'
+import { corpsDeLaFiche } from './fiches-du-fil'
 import { formaterDate } from '../langue'
 import type { Langue } from '../../../shared/langue'
 import {
@@ -966,6 +967,9 @@ function FicheDeLaRiviere({
           </button>
         )
       })()}
+      {/* Le RUN.md d'un collègue (conv-1456) : son fil vit dans SON Autowin, sa fiche se lit ici,
+          recopiée par son Board dans le dossier partagé. */}
+      {p.collegue && p.fiche && <RunMdDuCollegue poste={p.collegue.poste} fiche={p.fiche} />}
       {p.manuel && (
         <span className="riviere-fiche-manuel" data-testid="riviere-fiche-manuel">
           {t('fiche.manuel', { etat: t(CLES_STATUT[p.etatPreuve]) })}
@@ -1066,6 +1070,61 @@ function FicheDeLaRiviere({
           {t('fiche.ouvrir')}
         </button>
       )}
+    </div>
+  )
+}
+
+/**
+ * Le RUN.md d'un post-it de collègue, déplié dans sa carte (conv-1456). `fiche` porte le préfixe du
+ * poste (`board-collegues.ts`) : il est retiré avant la lecture.
+ */
+export function RunMdDuCollegue({
+  poste,
+  fiche,
+  lire = (po, f) => window.api.boardFicheCollegue(po, f)
+}: {
+  poste: string
+  fiche: string
+  lire?: (poste: string, fiche: string) => Promise<string | null>
+}): React.JSX.Element {
+  const { t } = useTextesBoardEtMaintenance()
+  const [ouvert, setOuvert] = useState(false)
+  const [contenu, setContenu] = useState<string | null | undefined>(undefined)
+  const relative = fiche.startsWith(`${poste}/`) ? fiche.slice(poste.length + 1) : fiche
+  const basculer = async (): Promise<void> => {
+    if (ouvert) return setOuvert(false)
+    setOuvert(true)
+    if (contenu === undefined) {
+      try {
+        setContenu(await lire(poste, relative))
+      } catch {
+        setContenu(null)
+      }
+    }
+  }
+  return (
+    <div className="riviere-fiche-runmd-collegue" data-testid="riviere-fiche-runmd-collegue">
+      <button
+        type="button"
+        className="riviere-fiche-lien riviere-fiche-runmd"
+        aria-expanded={ouvert}
+        title={t('fiche.runMdTitre')}
+        onClick={() => void basculer()}
+      >
+        RUN.md
+      </button>
+      {ouvert &&
+        (contenu === undefined ? (
+          <span className="riviere-fiche-plus">…</span>
+        ) : contenu === null ? (
+          <span className="riviere-fiche-plus" data-testid="riviere-fiche-runmd-absent">
+            {t('fiche.runMdAbsent')}
+          </span>
+        ) : (
+          <pre className="riviere-fiche-runmd-texte" data-testid="riviere-fiche-runmd-texte">
+            {corpsDeLaFiche(contenu)}
+          </pre>
+        ))}
     </div>
   )
 }
