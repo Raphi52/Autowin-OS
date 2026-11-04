@@ -86,11 +86,24 @@ describe('indicateur de quotas modèles', () => {
     expect(popover?.textContent).not.toContain('Claude Opus')
     expect(popover?.textContent).not.toContain('GPT Terra')
     expect(popover?.textContent).toContain('Quota partagé')
-    expect(popover?.textContent).toContain('Non exposé')
+    // Onglet Claude ouvert : seules ses barres (conv-1496) ; « Non exposé » est une ligne ChatGPT.
+    expect(popover?.textContent).not.toContain('Non exposé')
     expect(popover?.textContent).toContain('72 % utilisé')
     expect(popover?.textContent).toContain('28 % restant')
     expect(popover?.textContent).toContain('Mesure ancienne')
     expect(popover?.textContent).toContain('reset non exposé')
+    await act(async () =>
+      (
+        document.body.querySelector('[data-testid="model-quota-provider-codex"]') as HTMLElement
+      ).click()
+    )
+    expect(popover?.textContent).toContain('Non exposé')
+    expect(popover?.textContent).not.toContain('72 % utilisé')
+    await act(async () =>
+      (
+        document.body.querySelector('[data-testid="model-quota-provider-claude"]') as HTMLElement
+      )?.click()
+    )
     expect(
       popover
         ?.querySelector('button[aria-label="Actualiser les quotas"]')
@@ -233,15 +246,23 @@ describe('indicateur de quotas modèles', () => {
     })
 
     await act(async () => {
-      ;(document.body.querySelector('[data-testid="model-quota-trigger"]') as HTMLButtonElement).click()
+      ;(
+        document.body.querySelector('[data-testid="model-quota-trigger"]') as HTMLButtonElement
+      ).click()
     })
 
+    await act(async () =>
+      (
+        document.body.querySelector('[data-testid="model-quota-provider-codex"]') as HTMLElement
+      ).click()
+    )
     const popover = document.body.querySelector('[data-testid="model-quota-popover"]')
     expect(popover?.querySelectorAll('.model-quota-row')).toHaveLength(1)
     expect(popover?.querySelectorAll('.model-quota-window')).toHaveLength(2)
     expect(popover?.textContent).toContain('ChatGPT')
     expect(popover?.textContent).not.toContain('GPT Terra')
     expect(popover?.textContent).not.toContain('GPT Sol')
+    window.localStorage.removeItem('autowin:quota-provider')
     expect(consoleError.mock.calls.flat().join(' ')).not.toContain(
       'Encountered two children with the same key'
     )
@@ -273,9 +294,9 @@ describe('indicateur de quotas modèles', () => {
       await Promise.resolve()
     })
     expect(modelQuotas).toHaveBeenCalledTimes(2)
-    expect(document.body.querySelector('[data-testid="model-quota-trigger"]')?.textContent).toContain(
-      '0'
-    )
+    expect(
+      document.body.querySelector('[data-testid="model-quota-trigger"]')?.textContent
+    ).toContain('0')
     await act(async () => root.unmount())
     vi.useRealTimers()
   })
@@ -511,10 +532,7 @@ describe('indicateur de quotas modèles', () => {
         }
       ]
     })
-    const modelQuotas = vi
-      .fn()
-      .mockResolvedValueOnce(snapshot(12))
-      .mockResolvedValue(snapshot(88))
+    const modelQuotas = vi.fn().mockResolvedValueOnce(snapshot(12)).mockResolvedValue(snapshot(88))
     Object.defineProperty(window, 'api', { configurable: true, value: { modelQuotas } })
     const container = document.createElement('div')
     document.body.append(container)

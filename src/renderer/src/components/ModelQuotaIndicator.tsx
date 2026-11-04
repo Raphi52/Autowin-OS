@@ -418,7 +418,9 @@ export function ModelQuotaIndicator({
       // Mode malvoyant : la coque porte `zoom`, qui multiplie AUSSI left/bottom d'un element fixe.
       // Les mesures (fenetre, rectangle) sont en pixels ecran : on les divise par ce zoom, sinon
       // la popup part hors ecran et le clic semble ne rien faire (constat 2026-09-23).
-      const z = (triggerRef.current as (HTMLElement & { currentCSSZoom?: number }) | null)?.currentCSSZoom || 1
+      const z =
+        (triggerRef.current as (HTMLElement & { currentCSSZoom?: number }) | null)
+          ?.currentCSSZoom || 1
       const vw = window.innerWidth / z
       const vh = window.innerHeight / z
       const width = Math.min(430, vw - 16)
@@ -555,246 +557,251 @@ export function ModelQuotaIndicator({
          `.composer-field`. Un ancetre filtre devient le repere des `position: fixed` : la popup,
          placee en coordonnees FENETRE, partait hors du panneau et etait decoupee. Rendue dans
          <body>, aucun ancetre ne peut plus la capturer, quel que soit le theme. */}
-      {open && createPortal(
-        <section
-          ref={popoverRef}
-          className="model-quota-popover is-flottant"
-          data-testid="model-quota-popover"
-          aria-label={t('quota.popover')}
-          style={
-            ancrage
-              ? {
-                  position: 'fixed',
-                  left: `${ancrage.left}px`,
-                  bottom: `${ancrage.bottom}px`,
-                  right: 'auto',
-                  width: `${ancrage.width}px`
-                }
-              : undefined
-          }
-        >
-          <header>
-            <div>
-              <strong>{t('quota.titre')}</strong>
-              <small>
-                {error
-                  ? t('quota.indisponible')
-                  : snapshot
-                    ? t('quota.actualise', {
-                        heure: formaterDate(snapshot.observedAt, {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                      })
-                    : t('quota.lectureEnCours')}
-              </small>
-            </div>
-            <button
-              type="button"
-              aria-label={t('quota.actualiser')}
-              aria-busy={loading}
-              onClick={() => void refresh()}
-              disabled={loading}
-            >
-              {loading ? '…' : '↻'}
-            </button>
-          </header>
-          <div
-            className="model-quota-providers"
-            role="group"
-            aria-label={t('quota.fournisseurAffiche')}
+      {open &&
+        createPortal(
+          <section
+            ref={popoverRef}
+            className="model-quota-popover is-flottant"
+            data-testid="model-quota-popover"
+            aria-label={t('quota.popover')}
+            style={
+              ancrage
+                ? {
+                    position: 'fixed',
+                    left: `${ancrage.left}px`,
+                    bottom: `${ancrage.bottom}px`,
+                    right: 'auto',
+                    width: `${ancrage.width}px`
+                  }
+                : undefined
+            }
           >
-            {[
-              ...(providerQuotas.length > 0
-                ? providerQuotas.map((model) => model.provider)
-                : [DEFAULT_QUOTA_PROVIDER]),
-              ...(modelesOR.length > 0 ? [FOURNISSEUR_OPENROUTER] : [])
-            ].map((nom) => (
-              <button
-                key={nom}
-                type="button"
-                className={`model-quota-provider-chip${nom === affiche ? ' is-active' : ''}`}
-                data-testid={`model-quota-provider-${nom}`}
-                aria-pressed={nom === affiche}
-                title={t('quota.fournisseur.titre', { fournisseur: providerLabels[nom] ?? nom })}
-                onClick={() => choisirFournisseur(nom)}
-              >
-                {providerLabels[nom] ?? nom}
-              </button>
-            ))}
-          </div>
-          {error && <p className="model-quota-error">{error}</p>}
-          {affiche === FOURNISSEUR_OPENROUTER && openRouter && (
-            <div className="router-accounts" data-testid="model-quota-openrouter">
-              <span className="router-accounts-title">OpenRouter</span>
-              <div className="router-accounts-list">
-                {modelesOR.map((m) => {
-                  const actif = m.model === openRouter.modeleActif
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      className={`router-account-chip${actif ? ' is-active' : ''}`}
-                      data-testid={`model-quota-openrouter-${m.model}`}
-                      aria-pressed={actif}
-                      disabled={openRouter.pending}
-                      title={m.model}
-                      onClick={() =>
-                        openRouter.onSelect({
-                          provider: m.provider,
-                          model: m.model,
-                          label: m.label ?? m.model,
-                          reasoningEfforts: m.reasoningEfforts ?? [],
-                          defaultReasoningEffort: m.defaultReasoningEffort
+            <header>
+              <div>
+                <strong>{t('quota.titre')}</strong>
+                <small>
+                  {error
+                    ? t('quota.indisponible')
+                    : snapshot
+                      ? t('quota.actualise', {
+                          heure: formaterDate(snapshot.observedAt, {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })
                         })
-                      }
-                    >
-                      {(m.label ?? m.model).replace(/ \(OpenRouter\)$/, '')}
-                    </button>
-                  )
-                })}
+                      : t('quota.lectureEnCours')}
+                </small>
               </div>
+              <button
+                type="button"
+                aria-label={t('quota.actualiser')}
+                aria-busy={loading}
+                onClick={() => void refresh()}
+                disabled={loading}
+              >
+                {loading ? '…' : '↻'}
+              </button>
+            </header>
+            <div
+              className="model-quota-providers"
+              role="group"
+              aria-label={t('quota.fournisseurAffiche')}
+            >
+              {[
+                ...(providerQuotas.length > 0
+                  ? providerQuotas.map((model) => model.provider)
+                  : [DEFAULT_QUOTA_PROVIDER]),
+                ...(modelesOR.length > 0 ? [FOURNISSEUR_OPENROUTER] : [])
+              ].map((nom) => (
+                <button
+                  key={nom}
+                  type="button"
+                  className={`model-quota-provider-chip${nom === affiche ? ' is-active' : ''}`}
+                  data-testid={`model-quota-provider-${nom}`}
+                  aria-pressed={nom === affiche}
+                  title={t('quota.fournisseur.titre', { fournisseur: providerLabels[nom] ?? nom })}
+                  onClick={() => choisirFournisseur(nom)}
+                >
+                  {providerLabels[nom] ?? nom}
+                </button>
+              ))}
             </div>
-          )}
-          <div className="model-quota-list">
-            {providerQuotas.map((model) => (
-              <article key={model.modelId} className="model-quota-row">
-                <div className="model-quota-name">
-                  <span>
-                    <strong>{model.label}</strong>
-                    <small>
-                      {model.source}
-                      {model.observedAt
-                        ? ` · ${observedLabel(model.observedAt, model.status === 'stale')}`
-                        : ''}
-                    </small>
-                  </span>
+            {error && <p className="model-quota-error">{error}</p>}
+            {affiche === FOURNISSEUR_OPENROUTER && openRouter && (
+              <div className="router-accounts" data-testid="model-quota-openrouter">
+                <span className="router-accounts-title">OpenRouter</span>
+                <div className="router-accounts-list">
+                  {modelesOR.map((m) => {
+                    const actif = m.model === openRouter.modeleActif
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className={`router-account-chip${actif ? ' is-active' : ''}`}
+                        data-testid={`model-quota-openrouter-${m.model}`}
+                        aria-pressed={actif}
+                        disabled={openRouter.pending}
+                        title={m.model}
+                        onClick={() =>
+                          openRouter.onSelect({
+                            provider: m.provider,
+                            model: m.model,
+                            label: m.label ?? m.model,
+                            reasoningEfforts: m.reasoningEfforts ?? [],
+                            defaultReasoningEffort: m.defaultReasoningEffort
+                          })
+                        }
+                      >
+                        {(m.label ?? m.model).replace(/ \(OpenRouter\)$/, '')}
+                      </button>
+                    )
+                  })}
                 </div>
-                {model.windows.length === 0 ? (
-                  <div className="model-quota-unavailable">
-                    {t('quota.nonExpose')}
-                    {model.error && <small>{model.error}</small>}
-                  </div>
-                ) : (
-                  model.windows.map((window) => (
-                    <div className="model-quota-window" key={windowKey(window)}>
+              </div>
+            )}
+            <div className="model-quota-list">
+              {/* Seules les barres de l'onglet ouvert (2026-11-04, conv-1496) : la liste montrait les
+                quotas Claude quel que soit l'onglet choisi. */}
+              {providerQuotas
+                .filter((model) => model.provider === affiche)
+                .map((model) => (
+                  <article key={model.modelId} className="model-quota-row">
+                    <div className="model-quota-name">
                       <span>
-                        <b>
-                          {window.label}
-                          <em className="model-quota-scope">
-                            {window.modelFamily
-                              ? t('quota.specifique', { famille: window.modelFamily })
-                              : t('quota.partage')}
-                          </em>
-                        </b>
-                        <small>{resetLabel(window)}</small>
+                        <strong>{model.label}</strong>
+                        <small>
+                          {model.source}
+                          {model.observedAt
+                            ? ` · ${observedLabel(model.observedAt, model.status === 'stale')}`
+                            : ''}
+                        </small>
                       </span>
-                      {window.limitKnown === false ? (
-                        // Aucun plafond officiel exposé (mesure locale) : afficher les tokens
-                        // CONSOMMÉS, jamais une jauge de « restant » qui serait inventée.
-                        <strong className="model-quota-values">
-                          <span>
-                            {t('quota.tokensConsommes', {
-                              n: formaterNombre(window.usedTokens ?? 0)
-                            })}
-                          </span>
-                          <small>{t('quota.plafondNonExpose')}</small>
-                        </strong>
-                      ) : (
-                        <>
-                          <div className="model-quota-meter" aria-hidden="true">
-                            <i style={{ width: `${window.remainingPercent}%` }} />
-                          </div>
-                          <strong className="model-quota-values">
-                            <span>
-                              {t('quota.restant', { n: Math.round(window.remainingPercent) })}
-                            </span>
-                            <small>
-                              {t('quota.utilise', { n: Math.round(window.usedPercent) })}
-                            </small>
-                          </strong>
-                        </>
-                      )}
                     </div>
-                  ))
-                )}
-              </article>
-            ))}
-          </div>
-          {affiche === 'claude' && resetsVisibles.length > 0 && (
-            <div className="model-quota-resets" data-testid="model-quota-resets">
-              <strong>{t('quota.resetsOfferts')}</strong>
-              {resetsVisibles.map((grant) => {
-                const bloque = !grant.usableNow || grant.paused
-                return (
-                  <div className="model-quota-reset" key={grant.id}>
-                    <span>
-                      <b>{grant.label}</b>
-                      <small>
-                        {t('quota.resetsRestants', {
-                          reste: grant.resetsLeft,
-                          total: grant.resetsTotal
-                        })}
-                        {expiresLabel(grant.endsAt)}
-                        {grant.useRequiresLimit ? t('quota.utilisableALimite') : ''}
-                      </small>
-                    </span>
-                    <button
-                      type="button"
-                      data-testid={`model-quota-reset-${grant.id}`}
-                      disabled={claimBusy || bloque}
-                      title={bloque ? t('quota.pasUtilisable') : t('quota.consomme')}
-                      onClick={() => void utiliserReset(grant.id, grant.label)}
-                    >
-                      {claimBusy ? '…' : t('quota.utiliser')}
-                    </button>
-                  </div>
-                )
-              })}
-              {claimMessage && (
-                <p className="model-quota-reset-message" role="status">
-                  {claimMessage}
-                </p>
-              )}
+                    {model.windows.length === 0 ? (
+                      <div className="model-quota-unavailable">
+                        {t('quota.nonExpose')}
+                        {model.error && <small>{model.error}</small>}
+                      </div>
+                    ) : (
+                      model.windows.map((window) => (
+                        <div className="model-quota-window" key={windowKey(window)}>
+                          <span>
+                            <b>
+                              {window.label}
+                              <em className="model-quota-scope">
+                                {window.modelFamily
+                                  ? t('quota.specifique', { famille: window.modelFamily })
+                                  : t('quota.partage')}
+                              </em>
+                            </b>
+                            <small>{resetLabel(window)}</small>
+                          </span>
+                          {window.limitKnown === false ? (
+                            // Aucun plafond officiel exposé (mesure locale) : afficher les tokens
+                            // CONSOMMÉS, jamais une jauge de « restant » qui serait inventée.
+                            <strong className="model-quota-values">
+                              <span>
+                                {t('quota.tokensConsommes', {
+                                  n: formaterNombre(window.usedTokens ?? 0)
+                                })}
+                              </span>
+                              <small>{t('quota.plafondNonExpose')}</small>
+                            </strong>
+                          ) : (
+                            <>
+                              <div className="model-quota-meter" aria-hidden="true">
+                                <i style={{ width: `${window.remainingPercent}%` }} />
+                              </div>
+                              <strong className="model-quota-values">
+                                <span>
+                                  {t('quota.restant', { n: Math.round(window.remainingPercent) })}
+                                </span>
+                                <small>
+                                  {t('quota.utilise', { n: Math.round(window.usedPercent) })}
+                                </small>
+                              </strong>
+                            </>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </article>
+                ))}
             </div>
-          )}
-          {affiche === 'claude' && comptes && comptes.accounts.length > 0 && (
-            <div className="router-accounts" data-testid="model-quota-accounts">
-              <span className="router-accounts-title">{t('quota.compte')}</span>
-              <div className="router-accounts-list">
-                {comptes.accounts.map((account) => {
-                  const choisi =
-                    comptes.selectedId === undefined
-                      ? account.id === comptes.activeId
-                      : comptes.selectedId === account.id
+            {affiche === 'claude' && resetsVisibles.length > 0 && (
+              <div className="model-quota-resets" data-testid="model-quota-resets">
+                <strong>{t('quota.resetsOfferts')}</strong>
+                {resetsVisibles.map((grant) => {
+                  const bloque = !grant.usableNow || grant.paused
                   return (
-                    <button
-                      key={account.id}
-                      type="button"
-                      className={`router-account-chip${choisi ? ' is-active' : ''}`}
-                      data-testid={`model-quota-account-${account.id}`}
-                      aria-pressed={choisi}
-                      disabled={comptes.busy}
-                      title={account.email ?? account.displayName}
-                      onClick={() => comptes.onSelect(account.id)}
-                    >
-                      {account.displayName}
-                      {account.tier && <em className="router-account-tier">{account.tier}</em>}
-                    </button>
+                    <div className="model-quota-reset" key={grant.id}>
+                      <span>
+                        <b>{grant.label}</b>
+                        <small>
+                          {t('quota.resetsRestants', {
+                            reste: grant.resetsLeft,
+                            total: grant.resetsTotal
+                          })}
+                          {expiresLabel(grant.endsAt)}
+                          {grant.useRequiresLimit ? t('quota.utilisableALimite') : ''}
+                        </small>
+                      </span>
+                      <button
+                        type="button"
+                        data-testid={`model-quota-reset-${grant.id}`}
+                        disabled={claimBusy || bloque}
+                        title={bloque ? t('quota.pasUtilisable') : t('quota.consomme')}
+                        onClick={() => void utiliserReset(grant.id, grant.label)}
+                      >
+                        {claimBusy ? '…' : t('quota.utiliser')}
+                      </button>
+                    </div>
                   )
                 })}
+                {claimMessage && (
+                  <p className="model-quota-reset-message" role="status">
+                    {claimMessage}
+                  </p>
+                )}
               </div>
-              {comptes.error && (
-                <p className="router-account-error" role="alert">
-                  {t('quota.actionImpossible', { erreur: comptes.error })}
-                </p>
-              )}
-            </div>
-          )}
-          <footer>{t('quota.pied')}</footer>
-        </section>,
-        document.body
-      )}
+            )}
+            {affiche === 'claude' && comptes && comptes.accounts.length > 0 && (
+              <div className="router-accounts" data-testid="model-quota-accounts">
+                <span className="router-accounts-title">{t('quota.compte')}</span>
+                <div className="router-accounts-list">
+                  {comptes.accounts.map((account) => {
+                    const choisi =
+                      comptes.selectedId === undefined
+                        ? account.id === comptes.activeId
+                        : comptes.selectedId === account.id
+                    return (
+                      <button
+                        key={account.id}
+                        type="button"
+                        className={`router-account-chip${choisi ? ' is-active' : ''}`}
+                        data-testid={`model-quota-account-${account.id}`}
+                        aria-pressed={choisi}
+                        disabled={comptes.busy}
+                        title={account.email ?? account.displayName}
+                        onClick={() => comptes.onSelect(account.id)}
+                      >
+                        {account.displayName}
+                        {account.tier && <em className="router-account-tier">{account.tier}</em>}
+                      </button>
+                    )
+                  })}
+                </div>
+                {comptes.error && (
+                  <p className="router-account-error" role="alert">
+                    {t('quota.actionImpossible', { erreur: comptes.error })}
+                  </p>
+                )}
+              </div>
+            )}
+            <footer>{t('quota.pied')}</footer>
+          </section>,
+          document.body
+        )}
     </div>
   )
 }
