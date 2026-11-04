@@ -4143,7 +4143,14 @@ export class AgentPilot {
             ok: false,
             data: refusal
           })
-          results.push(`${token.name} → ERREUR ${refusal}`)
+          // conv-1499 (2026-11-04) : « Termine avec son resultat » faisait RÉÉCRIRE la clôture déjà
+          // affichée — trois blocs « ✅ Fait » empilés dans une seule bulle. Le texte du refus reste
+          // tel quel (le fil le reconnaît à l'égalité, chat-view-model.ts) ; la consigne s'y ajoute.
+          results.push(
+            `${token.name} → ERREUR ${refusal} Ta clôture déjà écrite reste affichée : ne la ` +
+              `réécris pas et ne répète pas l’état. N’ajoute qu’une ligne sur ce refus, ou ce que ` +
+              `change un autre geste réellement fait ensuite.`
+          )
           tokenIndex += 1
           continue
         }
