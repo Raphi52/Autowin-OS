@@ -55,7 +55,7 @@ type AutoCloseViewResult =
 
 interface AutoCloseViewState {
   enabled: boolean
-  /** « Publier les fils finis » (conv-1339). */
+  /** Second accord de « Publication auto » : /git sur ce que l'enchaînement laisse (conv-1339). */
   gitApresFil?: boolean
   last?: {
     runId: string
@@ -194,7 +194,9 @@ const normRacine = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, 
 /** Chemins (relatifs à la racine affichée) modifiés par la conversation, pour l'arbre Projet. */
 function cheminsModifies(changes: GitChange[], racine?: string): string[] {
   return changes
-    .filter((c) => !racine || !c.workspaceRoot || normRacine(c.workspaceRoot) === normRacine(racine))
+    .filter(
+      (c) => !racine || !c.workspaceRoot || normRacine(c.workspaceRoot) === normRacine(racine)
+    )
     .map((c) => c.path.replace(/\\/g, '/'))
 }
 
@@ -490,31 +492,26 @@ export function SourceControlPane({
     }
   }, [refreshTick])
 
-  const toggleAutoClose = async (): Promise<void> => {
-    // fix-ok: l'état optimiste est rétabli et expliqué si le main process ne peut pas le persister.
-    const previous = autoClose?.enabled ?? false
-    const next = !previous
-    setAutoCloseError(undefined)
-    setAutoClose({ ...autoClose, enabled: next })
-    try {
-      const applied = await window.api.setAutoClose(next)
-      setAutoClose(applied as AutoCloseViewState)
-    } catch {
-      setAutoClose({ ...autoClose, enabled: previous })
-      setAutoCloseError(tx('sc.erreur.reglageNonConserve'))
-    }
-  }
-
-  // Même contrat que l'interrupteur voisin : l'état optimiste est rétabli si le main refuse.
-  const toggleGitApresFil = async (): Promise<void> => {
-    if (!autoClose) return
+  /*
+   * UN SEUL INTERRUPTEUR (conv-1544, 2026-11-04) — demande de l'utilisateur : « je veux un seul
+   * bouton, et quand il est allumé je n'ai jamais besoin de faire /git ». Il porte les deux accords :
+   * publier ce que l'enchaînement prouve (conv-267), et lancer /git sur le reste (conv-1339). Un seul
+   * des deux allumé (réglage d'avant) se lit éteint, et le clic allume tout.
+   * fix-ok: l'état optimiste est remplacé par l'état RÉEL relu si le main ne peut pas persister.
+   */
+  const publicationAuto = Boolean(autoClose?.enabled && autoClose.gitApresFil)
+  const togglePublicationAuto = async (): Promise<void> => {
     const avant = autoClose
+    const next = !publicationAuto
     setAutoCloseError(undefined)
-    setAutoClose({ ...avant, gitApresFil: !avant.gitApresFil })
+    setAutoClose({ ...avant, enabled: next, gitApresFil: next })
     try {
-      setAutoClose((await window.api.setGitApresFil(!avant.gitApresFil)) as AutoCloseViewState)
+      await window.api.setAutoClose(next)
+      setAutoClose((await window.api.setGitApresFil(next)) as AutoCloseViewState)
     } catch {
-      setAutoClose(avant)
+      // Le premier accord a pu passer et pas le second : on montre ce qui est vraiment enregistré.
+      const reel = await window.api.getAutoClose?.().catch(() => undefined)
+      setAutoClose((reel as AutoCloseViewState | undefined) ?? avant)
       setAutoCloseError(tx('sc.erreur.reglageNonConserve'))
     }
   }
@@ -939,39 +936,20 @@ export function SourceControlPane({
                 </span>
               )}
               <button
-                className={`sc-btn sc-toggle sc-branch-toggle ${autoClose?.enabled ? 'is-on' : 'is-off'}`}
+                className={`sc-btn sc-toggle sc-branch-toggle ${publicationAuto ? 'is-on' : 'is-off'}`}
                 data-testid="sc-autoclose"
-                aria-pressed={autoClose?.enabled ?? false}
+                aria-pressed={publicationAuto}
                 title={
-                  autoClose?.enabled ? t('sc.auto.active.titre') : t('sc.auto.desactive.titre')
+                  publicationAuto
+                    ? t('sc.publicationAuto.active.titre')
+                    : t('sc.publicationAuto.desactive.titre')
                 }
-                onClick={() => void toggleAutoClose()}
+                onClick={() => void togglePublicationAuto()}
               >
                 <span className="sc-toggle-dot" aria-hidden="true" />
-                {t('sc.auto')}
+                {t('sc.publicationAuto')}
                 {/* « ON »/« OFF » : identiques dans les deux langues. */}
-                <b className="sc-toggle-state">{autoClose?.enabled ? 'ON' : 'OFF'}</b>
-              </button>
-            </div>
-            {/* conv-1339 : il rattrape ce que l'enchaînement laisse, donc il n'a de sens qu'avec lui. */}
-            <div className="sc-branch-row sc-git-apres-fil">
-              <button
-                className={`sc-btn sc-toggle sc-branch-toggle ${autoClose?.gitApresFil ? 'is-on' : 'is-off'}`}
-                data-testid="sc-git-apres-fil"
-                aria-pressed={autoClose?.gitApresFil ?? false}
-                disabled={!autoClose?.enabled}
-                title={
-                  !autoClose?.enabled
-                    ? t('sc.gitApresFil.sansAuto.titre')
-                    : autoClose.gitApresFil
-                      ? t('sc.gitApresFil.active.titre')
-                      : t('sc.gitApresFil.desactive.titre')
-                }
-                onClick={() => void toggleGitApresFil()}
-              >
-                <span className="sc-toggle-dot" aria-hidden="true" />
-                {t('sc.gitApresFil')}
-                <b className="sc-toggle-state">{autoClose?.gitApresFil ? 'ON' : 'OFF'}</b>
+                <b className="sc-toggle-state">{publicationAuto ? 'ON' : 'OFF'}</b>
               </button>
             </div>
             <header className="sc-h">{t('sc.etapes')}</header>
@@ -1021,7 +999,9 @@ export function SourceControlPane({
                   <span>{autoCloseResultLabel('Brain', autoClose.last.brain)}</span>
                 )}
                 {autoClose.last.typage ? (
-                  <span data-testid="sc-autoclose-typage">{libelleTypage(autoClose.last.typage)}</span>
+                  <span data-testid="sc-autoclose-typage">
+                    {libelleTypage(autoClose.last.typage)}
+                  </span>
                 ) : null}
                 {autoClose.last.verification ? (
                   <span data-testid="sc-autoclose-verification">

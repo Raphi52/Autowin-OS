@@ -78,7 +78,10 @@ function mockApi(
     onAppEvent: () => () => {},
     retryWorktreeRecovery: () => Promise.resolve(undefined),
     listProjectDir: () =>
-      Promise.resolve({ ok: true, entries: [{ name: 'README.md', path: 'README.md', dir: false }] }),
+      Promise.resolve({
+        ok: true,
+        entries: [{ name: 'README.md', path: 'README.md', dir: false }]
+      }),
     readProjectFile: () => Promise.resolve({ ok: true, content: '# titre' }),
     writeProjectFile: () => Promise.resolve({ ok: true })
   }
@@ -215,106 +218,106 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(container.querySelectorAll('[data-testid="sc-file"]')).toHaveLength(0)
   })
 
-  it('rétablit et explique l’état Auto-close quand sa persistance échoue', async () => {
-    mockApi(GIT)
-    const setAutoClose = vi.fn(() => Promise.reject(new Error('disque indisponible')))
-    const api = (window as unknown as { api: Record<string, unknown> }).api
-    api.getAutoClose = () => Promise.resolve({ enabled: false })
-    api.setAutoClose = setAutoClose
-    await render()
-    await openWorkspaceView()
-
-    const toggle = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
-    await act(async () => {
-      toggle.click()
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(setAutoClose).toHaveBeenCalledWith(true)
-    expect(toggle.getAttribute('aria-pressed')).toBe('false')
-    expect(toggle.textContent).toContain('OFF')
-    expect(container.querySelector('[data-testid="sc-autoclose-error"]')?.textContent).toContain(
-      'Impossible de conserver ce réglage'
-    )
-  })
-
-  describe('« Publier les fils finis » (conv-1339)', () => {
+  describe('« Publication auto » : un seul interrupteur (conv-1544)', () => {
     const bouton = (): HTMLButtonElement =>
-      container.querySelector('[data-testid="sc-git-apres-fil"]') as HTMLButtonElement
+      container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
     const cliquer = async (): Promise<void> => {
       await act(async () => {
         bouton().click()
         await Promise.resolve()
         await Promise.resolve()
+        await Promise.resolve()
       })
     }
+    const api = (): Record<string, unknown> =>
+      (window as unknown as { api: Record<string, unknown> }).api
 
-    it('reste éteint par défaut, et s’allume par un clic de l’utilisateur', async () => {
+    it('un seul bouton : l’ancien « Publier les fils finis » a disparu', async () => {
       mockApi(GIT)
-      const setGitApresFil = vi.fn(() => Promise.resolve({ enabled: true, gitApresFil: true }))
-      const api = (window as unknown as { api: Record<string, unknown> }).api
-      api.getAutoClose = () => Promise.resolve({ enabled: true, gitApresFil: false })
-      api.setGitApresFil = setGitApresFil
+      api().getAutoClose = () => Promise.resolve({ enabled: true, gitApresFil: true })
       await render()
       await openWorkspaceView()
 
+      expect(container.querySelectorAll('.sc-toggle')).toHaveLength(1)
+      expect(container.querySelector('[data-testid="sc-git-apres-fil"]')).toBeNull()
+      expect(bouton().textContent).toContain('Publication auto')
+      expect(bouton().textContent).toContain('ON')
+      expect(bouton().title).toContain('plus à taper /git')
+    })
+
+    it('allumé, il porte les deux accords à la fois', async () => {
+      mockApi(GIT)
+      const setAutoClose = vi.fn(() => Promise.resolve({ enabled: true }))
+      const setGitApresFil = vi.fn(() => Promise.resolve({ enabled: true, gitApresFil: true }))
+      api().getAutoClose = () => Promise.resolve({ enabled: false, gitApresFil: false })
+      api().setAutoClose = setAutoClose
+      api().setGitApresFil = setGitApresFil
+      await render()
+      await openWorkspaceView()
       expect(bouton().getAttribute('aria-pressed')).toBe('false')
-      expect(bouton().textContent).toContain('Publier les fils finis')
+      expect(bouton().title).toContain('taper /git')
+
+      await cliquer()
+
+      expect(setAutoClose).toHaveBeenCalledWith(true)
+      expect(setGitApresFil).toHaveBeenCalledWith(true)
+      expect(bouton().getAttribute('aria-pressed')).toBe('true')
+      expect(bouton().textContent).toContain('ON')
+    })
+
+    it('un seul des deux accords (réglage d’avant) se lit éteint, et le clic allume tout', async () => {
+      mockApi(GIT)
+      const setGitApresFil = vi.fn(() => Promise.resolve({ enabled: true, gitApresFil: true }))
+      api().getAutoClose = () => Promise.resolve({ enabled: true, gitApresFil: false })
+      api().setAutoClose = vi.fn(() => Promise.resolve({ enabled: true }))
+      api().setGitApresFil = setGitApresFil
+      await render()
+      await openWorkspaceView()
       expect(bouton().textContent).toContain('OFF')
-      expect(bouton().title).toContain('tapes /git')
 
       await cliquer()
 
       expect(setGitApresFil).toHaveBeenCalledWith(true)
-      expect(bouton().getAttribute('aria-pressed')).toBe('true')
       expect(bouton().textContent).toContain('ON')
-      // Le coût se dit avant d'allumer : c'est la raison d'être de cet interrupteur séparé.
-      expect(bouton().title).toContain('tour du modèle')
     })
 
-    it('sans Enchaînement auto, il n’a rien à rattraper : il est désactivé et dit pourquoi', async () => {
+    it('éteint, il retire les deux accords', async () => {
       mockApi(GIT)
-      const api = (window as unknown as { api: Record<string, unknown> }).api
-      api.getAutoClose = () => Promise.resolve({ enabled: false, gitApresFil: true })
+      const setAutoClose = vi.fn(() => Promise.resolve({ enabled: false }))
+      const setGitApresFil = vi.fn(() => Promise.resolve({ enabled: false, gitApresFil: false }))
+      api().getAutoClose = () => Promise.resolve({ enabled: true, gitApresFil: true })
+      api().setAutoClose = setAutoClose
+      api().setGitApresFil = setGitApresFil
       await render()
       await openWorkspaceView()
 
-      expect(bouton().disabled).toBe(true)
-      expect(bouton().title).toContain('Enchaînement auto')
+      await cliquer()
+
+      expect(setAutoClose).toHaveBeenCalledWith(false)
+      expect(setGitApresFil).toHaveBeenCalledWith(false)
+      expect(bouton().getAttribute('aria-pressed')).toBe('false')
     })
 
-    it('rétablit et explique son état quand la persistance échoue', async () => {
+    it('persistance en échec : il montre l’état réellement enregistré et l’explique', async () => {
       mockApi(GIT)
-      const api = (window as unknown as { api: Record<string, unknown> }).api
-      api.getAutoClose = () => Promise.resolve({ enabled: true, gitApresFil: false })
-      api.setGitApresFil = vi.fn(() => Promise.reject(new Error('disque indisponible')))
+      // Le premier accord passe, le second échoue : l'état réel est « à moitié », donc éteint.
+      let enregistre = { enabled: false, gitApresFil: false }
+      api().getAutoClose = () => Promise.resolve(enregistre)
+      api().setAutoClose = vi.fn((enabled: boolean) => {
+        enregistre = { ...enregistre, enabled }
+        return Promise.resolve(enregistre)
+      })
+      api().setGitApresFil = vi.fn(() => Promise.reject(new Error('disque indisponible')))
       await render()
       await openWorkspaceView()
 
       await cliquer()
 
       expect(bouton().getAttribute('aria-pressed')).toBe('false')
+      expect(bouton().textContent).toContain('OFF')
       expect(container.querySelector('[data-testid="sc-autoclose-error"]')?.textContent).toContain(
         'Impossible de conserver ce réglage'
       )
-    })
-
-    it('l’interrupteur voisin ne l’éteint pas en passant', async () => {
-      mockApi(GIT)
-      const api = (window as unknown as { api: Record<string, unknown> }).api
-      api.getAutoClose = () => Promise.resolve({ enabled: true, gitApresFil: true })
-      api.setAutoClose = vi.fn(() => new Promise(() => undefined))
-      await render()
-      await openWorkspaceView()
-
-      const voisin = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
-      await act(async () => {
-        voisin.click()
-        await Promise.resolve()
-      })
-
-      expect(bouton().getAttribute('aria-pressed')).toBe('true')
     })
   })
 
@@ -324,6 +327,7 @@ describe('SourceControlPane (prompt-first)', () => {
     api.getAutoClose = () =>
       Promise.resolve({
         enabled: true,
+        gitApresFil: true,
         last: {
           runId: 'run-42',
           branch: 'auto/run-42',
@@ -336,7 +340,7 @@ describe('SourceControlPane (prompt-first)', () => {
     await openWorkspaceView()
 
     const toggle = container.querySelector('[data-testid="sc-autoclose"]') as HTMLButtonElement
-    expect(toggle.title).toContain('tente de publier')
+    expect(toggle.title).toContain('commit de ces fichiers')
     expect(container.querySelector('[data-testid="sc-autoclose-last"]')?.textContent).toContain(
       'Projet · non publié · aucun distant'
     )
@@ -348,6 +352,7 @@ describe('SourceControlPane (prompt-first)', () => {
     api.getAutoClose = () =>
       Promise.resolve({
         enabled: true,
+        gitApresFil: true,
         last: {
           runId: 'conv-871 · tour a87271b1',
           branch: 'auto/conv-871-a87271b1',
@@ -429,7 +434,8 @@ describe('SourceControlPane (prompt-first)', () => {
     // compilation de main. Le typage de ce qui part est joué avant les tests ; le panneau dit pourquoi.
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api
-    const erreur = "src/main/index.ts: TS2345: Argument of type '{ shell: ShellRaccourci; }' is not assignable"
+    const erreur =
+      "src/main/index.ts: TS2345: Argument of type '{ shell: ShellRaccourci; }' is not assignable"
     api.getAutoClose = () =>
       Promise.resolve({
         enabled: true,
@@ -438,9 +444,17 @@ describe('SourceControlPane (prompt-first)', () => {
           branch: 'auto/conv-954-9d6bb850',
           at: '2026-10-15T09:42:44.000Z',
           source: 'chat',
-          project: { status: 'skipped', reason: 'typage-rouge', detail: '1 erreur de typage nouvelle' },
+          project: {
+            status: 'skipped',
+            reason: 'typage-rouge',
+            detail: '1 erreur de typage nouvelle'
+          },
           exclus: [
-            { path: 'src/main/raccourci-demarrer-dev.ts', motif: 'typage-rouge', erreursDeTypage: [erreur] }
+            {
+              path: 'src/main/raccourci-demarrer-dev.ts',
+              motif: 'typage-rouge',
+              erreursDeTypage: [erreur]
+            }
           ],
           typage: {
             statut: 'echec',
@@ -467,7 +481,11 @@ describe('SourceControlPane (prompt-first)', () => {
   it('un typage vert ou non joué se DIT aussi, à côté des tests', async () => {
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api
-    let typage: Record<string, unknown> = { statut: 'vert', projets: ['node', 'web'], dejaRouges: 2 }
+    let typage: Record<string, unknown> = {
+      statut: 'vert',
+      projets: ['node', 'web'],
+      dejaRouges: 2
+    }
     api.getAutoClose = () =>
       Promise.resolve({
         enabled: true,
@@ -492,7 +510,10 @@ describe('SourceControlPane (prompt-first)', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
-    typage = { statut: 'non-verifie', raison: 'copie propre du dernier commit impossible : disque plein' }
+    typage = {
+      statut: 'non-verifie',
+      raison: 'copie propre du dernier commit impossible : disque plein'
+    }
     await render()
     await openWorkspaceView()
     expect(container.querySelector('[data-testid="sc-autoclose-typage"]')?.textContent).toBe(
@@ -1043,10 +1064,19 @@ describe('SourceControlPane (prompt-first)', () => {
     const onSendPrompt = vi.fn()
     await render(onSendPrompt)
     await openWorkspaceView()
-    const actions = [...(container.querySelector('[data-testid="sc-git-actions"]')?.querySelectorAll('button') ?? [])]
-    expect(actions.map((b) => b.textContent)).toEqual(['Nouvelle branche', 'Changer de branche', 'Mettre de côté'])
+    const actions = [
+      ...(container.querySelector('[data-testid="sc-git-actions"]')?.querySelectorAll('button') ??
+        [])
+    ]
+    expect(actions.map((b) => b.textContent)).toEqual([
+      'Nouvelle branche',
+      'Changer de branche',
+      'Mettre de côté'
+    ])
     act(() => (actions[2] as HTMLButtonElement).click())
-    expect(onSendPrompt).toHaveBeenCalledWith('mets de côté mes changements en cours (stash nommé) sans rien perdre')
+    expect(onSendPrompt).toHaveBeenCalledWith(
+      'mets de côté mes changements en cours (stash nommé) sans rien perdre'
+    )
   })
 
   it('onglet Git : les étapes suivent l’état réel du dépôt', async () => {
@@ -1068,10 +1098,9 @@ describe('SourceControlPane (prompt-first)', () => {
 describe('etapesGit', () => {
   it('main en retard et en avance : récupérer puis push, jamais de PR', async () => {
     const { etapesGit } = await import('./etapes-git')
-    expect(etapesGit({ branch: 'main', ahead: 5, behind: 2, changes: [] }).map((e) => e.label)).toEqual([
-      'Récupérer',
-      'Push'
-    ])
+    expect(
+      etapesGit({ branch: 'main', ahead: 5, behind: 2, changes: [] }).map((e) => e.label)
+    ).toEqual(['Récupérer', 'Push'])
   })
   it('main propre et synchronisé : aucune étape', async () => {
     const { etapesGit } = await import('./etapes-git')

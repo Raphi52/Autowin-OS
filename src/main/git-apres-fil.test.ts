@@ -8,6 +8,7 @@ import {
   commitsPublies,
   decisionGitApresFil,
   estDepotAutowin,
+  CALME_AVANT_PUBLICATION_MS,
   FileGitApresFil,
   lireAmont,
   promptGitDuFil,
@@ -72,10 +73,11 @@ describe('decisionGitApresFil — quand /git part tout seul', () => {
     })
   })
 
-  it('un fil qui ne se dit pas fini ne publie pas : la suite peut encore changer ses fichiers', () => {
-    expect(decisionGitApresFil(tourPublie({ compteRendu: 'Il reste à corriger X.' }))).toEqual({
-      lancer: false,
-      raison: 'fil-pas-fini'
+  it('un fil sans AUTOWIN_FIN_V1 publie aussi : 32 des 35 /git tapés en 7 jours suivaient un tel tour (conv-1544)', () => {
+    const compteRendu = ['Corrigé.', 'AUTOWIN_PROMPT_V1: [80] Ajoute un test.'].join('\n')
+    expect(decisionGitApresFil(tourPublie({ compteRendu }))).toEqual({
+      lancer: true,
+      fichiers: ['src/a.ts']
     })
   })
 
@@ -268,22 +270,34 @@ describe('bandeauPublie', () => {
 })
 
 describe('FileGitApresFil — une passe à la fois', () => {
-  function banc(sur: { commits?: Array<{ sha: string; sujet: string }>; occupe?: boolean } = {}) {
+  function banc(
+    sur: {
+      commits?: Array<{ sha: string; sujet: string }>
+      occupe?: boolean
+      calmeMs?: number
+    } = {}
+  ) {
     const fins: Array<() => void> = []
     const lances: string[] = []
+    const prompts: string[] = []
     const annonces: Array<[string, string]> = []
-    const file = new FileGitApresFil({
-      lancerTour: (fil) => {
-        lances.push(fil)
-        return new Promise((resolve) => fins.push(() => resolve({ ok: true })))
+    const etat = { occupe: sur.occupe === true }
+    const file = new FileGitApresFil(
+      {
+        lancerTour: (fil, prompt) => {
+          lances.push(fil)
+          prompts.push(prompt)
+          return new Promise((resolve) => fins.push(() => resolve({ ok: true })))
+        },
+        filOccupe: () => etat.occupe,
+        lireAmont: async () => 'avant',
+        commitsDepuis: async () => sur.commits ?? [],
+        annoncer: (fil, contenu) => annonces.push([fil, contenu]),
+        journal: () => undefined
       },
-      filOccupe: () => sur.occupe === true,
-      lireAmont: async () => 'avant',
-      commitsDepuis: async () => sur.commits ?? [],
-      annoncer: (fil, contenu) => annonces.push([fil, contenu]),
-      journal: () => undefined
-    })
-    return { file, fins, lances, annonces }
+      { calmeMs: sur.calmeMs ?? 0 }
+    )
+    return { file, fins, lances, prompts, annonces, etat }
   }
   const attendre = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5))
 
@@ -303,17 +317,20 @@ describe('FileGitApresFil — une passe à la fois', () => {
   it('un fil présenté deux fois en attente ne part qu’une fois, avec tous ses fichiers', async () => {
     const prompts: string[] = []
     const fins: Array<() => void> = []
-    const file = new FileGitApresFil({
-      lancerTour: (_fil, prompt) => {
-        prompts.push(prompt)
-        return new Promise((resolve) => fins.push(() => resolve({ ok: true })))
+    const file = new FileGitApresFil(
+      {
+        lancerTour: (_fil, prompt) => {
+          prompts.push(prompt)
+          return new Promise((resolve) => fins.push(() => resolve({ ok: true })))
+        },
+        filOccupe: () => false,
+        lireAmont: async () => 'avant',
+        commitsDepuis: async () => [],
+        annoncer: () => undefined,
+        journal: () => undefined
       },
-      filOccupe: () => false,
-      lireAmont: async () => 'avant',
-      commitsDepuis: async () => [],
-      annoncer: () => undefined,
-      journal: () => undefined
-    })
+      { calmeMs: 0 }
+    )
     file.ajouter('conv-1', ['a.ts'])
     file.ajouter('conv-2', ['b.ts'])
     file.ajouter('conv-2', ['c.ts'])
@@ -327,11 +344,47 @@ describe('FileGitApresFil — une passe à la fois', () => {
     await attendre()
   })
 
-  it('un fil repris entre-temps par l’utilisateur n’est pas interrompu : il est sauté', async () => {
-    const { file, lances } = banc({ occupe: true })
-    file.ajouter('conv-1', ['a.ts'])
-    await attendre()
-    expect(lances).toEqual([])
+  describe('le calme qui vaut « fini » (conv-1544)', () => {
+    afterEach(() => vi.useRealTimers())
+    const MINUTE = 60_000
+
+    it('attend le calme du fil, puis part une seule fois', async () => {
+      vi.useFakeTimers()
+      const { file, lances, fins } = banc({ calmeMs: CALME_AVANT_PUBLICATION_MS })
+      file.ajouter('conv-1', ['a.ts'])
+      await vi.advanceTimersByTimeAsync(CALME_AVANT_PUBLICATION_MS - 1)
+      expect(lances).toEqual([])
+      await vi.advanceTimersByTimeAsync(1)
+      expect(lances).toEqual(['conv-1'])
+      fins[0]!()
+      await vi.advanceTimersByTimeAsync(10 * MINUTE)
+      expect(lances).toEqual(['conv-1'])
+    })
+
+    it('un nouveau tour repousse la passe : une seule passe par pause, avec tous les fichiers', async () => {
+      vi.useFakeTimers()
+      const { file, lances, prompts } = banc({ calmeMs: 3 * MINUTE })
+      file.ajouter('conv-1', ['a.ts'])
+      await vi.advanceTimersByTimeAsync(2 * MINUTE)
+      file.ajouter('conv-1', ['b.ts'])
+      await vi.advanceTimersByTimeAsync(2 * MINUTE)
+      expect(lances).toEqual([])
+      await vi.advanceTimersByTimeAsync(1 * MINUTE)
+      expect(lances).toEqual(['conv-1'])
+      expect(prompts[0]).toContain('a.ts')
+      expect(prompts[0]).toContain('b.ts')
+    })
+
+    it('un fil occupé quand le calme sonne est attendu, pas sauté', async () => {
+      vi.useFakeTimers()
+      const { file, lances, etat } = banc({ occupe: true, calmeMs: 3 * MINUTE })
+      file.ajouter('conv-1', ['a.ts'])
+      await vi.advanceTimersByTimeAsync(10 * MINUTE)
+      expect(lances).toEqual([])
+      etat.occupe = false
+      await vi.advanceTimersByTimeAsync(3 * MINUTE)
+      expect(lances).toEqual(['conv-1'])
+    })
   })
 
   it('annonce le bandeau seulement si des commits du fil sont arrivés en amont', async () => {
@@ -355,18 +408,21 @@ describe('FileGitApresFil — une passe à la fois', () => {
     const journal = vi.fn()
     const lances: string[] = []
     const annoncer = vi.fn()
-    const file = new FileGitApresFil({
-      lancerTour: async (fil) => {
-        lances.push(fil)
-        if (fil === 'conv-1') throw new Error('modèle indisponible')
-        return { ok: false, error: 'refusé' }
+    const file = new FileGitApresFil(
+      {
+        lancerTour: async (fil) => {
+          lances.push(fil)
+          if (fil === 'conv-1') throw new Error('modèle indisponible')
+          return { ok: false, error: 'refusé' }
+        },
+        filOccupe: () => false,
+        lireAmont: async () => 'avant',
+        commitsDepuis: async () => [{ sha: '1a2b3c4d', sujet: 'fix' }],
+        annoncer,
+        journal
       },
-      filOccupe: () => false,
-      lireAmont: async () => 'avant',
-      commitsDepuis: async () => [{ sha: '1a2b3c4d', sujet: 'fix' }],
-      annoncer,
-      journal
-    })
+      { calmeMs: 0 }
+    )
     file.ajouter('conv-1', ['a.ts'])
     file.ajouter('conv-2', ['b.ts'])
     await attendre()

@@ -119,7 +119,7 @@ describe('panneaux du chat — langue', () => {
     await clic(onglet('sc-view-workspace'))
     expect(zone.textContent).toContain('Branch')
     expect(zone.textContent).toContain('Steps')
-    expect(zone.textContent).toContain('Auto chaining')
+    expect(zone.textContent).toContain('Auto-publish')
     const flux = onglet('sc-git-flux')?.textContent ?? ''
     expect(flux).toContain('Pull')
     expect(flux).toContain('2 commits from the remote to merge')
@@ -128,7 +128,7 @@ describe('panneaux du chat — langue', () => {
 
     await act(async () => appliquerLangue('fr'))
     expect(zone.textContent).toContain('Branche')
-    expect(zone.textContent).toContain('Enchaînement auto')
+    expect(zone.textContent).toContain('Publication auto')
     expect(onglet('sc-git-flux')?.textContent).toContain('2 commits du distant à intégrer')
     expect(onglet('sc-git-flux')?.textContent).toContain('2 fichiers modifiés — résumé puis commit')
   })

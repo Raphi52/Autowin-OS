@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { signalFinExplicite } from '../shared/prompt-suivant'
 import type { AutoCloseReport, GitRunner } from './run-autoclose'
 
 /**
@@ -17,8 +16,14 @@ import type { AutoCloseReport, GitRunner } from './run-autoclose'
  * CET INTERRUPTEUR-CI EST À PART ET ÉTEINT PAR DÉFAUT : chaque lancement est un tour de modèle, donc
  * un coût que l'accord de conv-267 ne couvrait pas. C'est l'utilisateur qui l'allume, jamais le code.
  *
- * « FINI » et « VALIDÉ » ne se devinent pas, ils se lisent :
- *   - fini = le fil a écrit `AUTOWIN_FIN_V1`, la ligne qui éteint déjà le mode auto ;
+ * « FINI » NE SE LIT PLUS DANS `AUTOWIN_FIN_V1` (conv-1544, 2026-11-04). Mesuré sur 7 jours :
+ * 35 `/git` tapés à la main, dont 3 seulement après un tour qui avait écrit cette ligne, et UNE
+ * seule publication par cet interrupteur. Presque aucun fil ne l'écrit : la consigne la réserve au
+ * fil sans aucune suite, et chaque tour propose ses suites. Fini = le fil est resté CALME
+ * `CALME_AVANT_PUBLICATION_MS` après la fin de son tour (`FileGitApresFil`) : un mode auto qui
+ * enchaîne ses tours repousse la passe, et un seul `/git` part par pause au lieu d'un par tour.
+ *
+ * « VALIDÉ » ne se devine pas, il se lit :
  *   - validé = l'enchaînement n'a rien refusé pour une raison de QUALITÉ (tests, typage, secret).
  *     Il ne reste que le manque de preuve d'appartenance, le seul refus que `/git` sait lever. Ce
  *     n'est pas une preuve de vert : la consigne de `/git` exige donc de rejouer typage et tests.
@@ -54,7 +59,8 @@ export interface TourFini {
   demande: string
   /** Tous ses messages du fil : un « ne publie rien » du début vaut encore à la fin du fil. */
   demandesDuFil: readonly string[]
-  compteRendu: string
+  /** Plus lu depuis conv-1544 (voir l'en-tête) ; encore passé par `ipc/chat.ts`. */
+  compteRendu?: string
   /** Rapport de l'enchaînement auto ; absent = interrupteur éteint, ou rien à publier. */
   rapport: AutoCloseReport | undefined
 }
@@ -70,7 +76,6 @@ export type DecisionGitApresFil =
         | 'fil-de-plan'
         | 'deja-une-publication'
         | 'publication-interdite'
-        | 'fil-pas-fini'
         | 'rien-a-rattraper'
         | 'pas-valide'
     }
@@ -110,7 +115,6 @@ export function decisionGitApresFil(tour: TourFini): DecisionGitApresFil {
     return { lancer: false, raison: 'deja-une-publication' }
   if ([tour.demande, ...tour.demandesDuFil].some((texte) => PUBLICATION_INTERDITE.test(texte)))
     return { lancer: false, raison: 'publication-interdite' }
-  if (!signalFinExplicite(tour.compteRendu)) return { lancer: false, raison: 'fil-pas-fini' }
   const fichiers = tour.rapport?.exclus?.map((exclu) => exclu.path) ?? []
   if (!tour.rapport || fichiers.length === 0) return { lancer: false, raison: 'rien-a-rattraper' }
   if (refusDeQualite(tour.rapport)) return { lancer: false, raison: 'pas-valide' }
@@ -230,30 +234,67 @@ export interface DepsGitApresFil {
 }
 
 /**
+ * Le calme qui vaut « fini » (conv-1544). Un mode auto enchaîne ses tours en quelques secondes ; un
+ * humain qui lit la réponse puis répond reste souvent sous trois minutes. Au-delà, le fil est posé.
+ */
+export const CALME_AVANT_PUBLICATION_MS = 3 * 60_000
+
+/**
  * UNE PASSE À LA FOIS, tous fils confondus : deux `/git` simultanés dans le même dossier se marchent
  * dessus (index, push, réalignement de l'arbre). La file vit en mémoire : un redémarrage la vide sans
  * rien perdre, le travail attend dans l'arbre comme avant, et le tour suivant du fil le reproposera.
+ *
+ * CHAQUE FIL ATTEND SON CALME (conv-1544) : chaque fin de tour relance son minuteur, et un fil occupé
+ * quand le minuteur sonne est ATTENDU, pas sauté — avant, ses fichiers sortaient de la file, et seul
+ * un `/git` tapé à la main les rattrapait.
  */
 export class FileGitApresFil {
   readonly #deps: DepsGitApresFil
+  readonly #calmeMs: number
   readonly #attente = new Map<string, string[]>()
+  readonly #minuteurs = new Map<string, ReturnType<typeof setTimeout>>()
+  readonly #prets: string[] = []
   #occupee = false
 
-  constructor(deps: DepsGitApresFil) {
+  constructor(deps: DepsGitApresFil, options: { calmeMs?: number } = {}) {
     this.#deps = deps
+    this.#calmeMs = options.calmeMs ?? CALME_AVANT_PUBLICATION_MS
   }
 
   ajouter(conversationId: string, fichiers: readonly string[]): void {
     const deja = this.#attente.get(conversationId) ?? []
     this.#attente.set(conversationId, [...new Set([...deja, ...fichiers])])
+    this.#armer(conversationId)
+  }
+
+  /** Relance l'attente du calme : le fil vient de bouger, sa passe repart de zéro. */
+  #armer(fil: string): void {
+    clearTimeout(this.#minuteurs.get(fil))
+    const minuteur = setTimeout(() => this.#calme(fil), this.#calmeMs)
+    // Une attente de publication ne doit pas retenir la fermeture du processus.
+    minuteur.unref?.()
+    this.#minuteurs.set(fil, minuteur)
+  }
+
+  #calme(fil: string): void {
+    this.#minuteurs.delete(fil)
+    if (this.#deps.filOccupe(fil)) {
+      this.#armer(fil)
+      return
+    }
+    if (!this.#prets.includes(fil)) this.#prets.push(fil)
     void this.#suivant()
   }
 
   async #suivant(): Promise<void> {
     if (this.#occupee) return
-    const prochain = this.#attente.entries().next().value
-    if (!prochain) return
-    const [fil, fichiers] = prochain
+    const fil = this.#prets.shift()
+    if (!fil) return
+    const fichiers = this.#attente.get(fil)
+    if (!fichiers) {
+      await this.#suivant()
+      return
+    }
     this.#attente.delete(fil)
     this.#occupee = true
     try {
@@ -268,9 +309,10 @@ export class FileGitApresFil {
   }
 
   async #publier(fil: string, fichiers: readonly string[]): Promise<void> {
-    // Le fil a repris depuis sa fin (la publication prend du temps) : il n'est plus fini.
+    // Le fil a repris pendant la passe d'un autre : il n'est plus calme, sa passe attend son calme.
     if (this.#deps.filOccupe(fil)) {
-      this.#deps.journal?.(`${fil} a repris : passe sautée`)
+      this.#deps.journal?.(`${fil} a repris : passe remise à son prochain calme`)
+      this.ajouter(fil, fichiers)
       return
     }
     const avant = await this.#deps.lireAmont(fil)
