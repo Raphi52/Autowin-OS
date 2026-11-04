@@ -48,6 +48,13 @@ describe('envFiletElectronAgent', () => {
     expect(envFiletElectronAgent(undefined, {})).toEqual({})
     expect(envFiletElectronAgent('D:/nulle-part', {}, () => false)).toEqual({})
   })
+  it('app empaquetee : vise app.asar.unpacked, jamais app.asar (illisible par un node ordinaire)', () => {
+    const asar = 'C:/App/resources/app.asar/mods/autowin'
+    const r = envFiletElectronAgent(asar, {}, () => true).NODE_OPTIONS!
+    expect(r).toContain('/resources/app.asar.unpacked/mods/autowin/runtime/')
+    expect(r).not.toContain('app.asar/')
+    expect(envFiletElectronAgent(asar, {}, (c) => !c.includes('.asar.unpacked'))).toEqual({})
+  })
 })
 
 describe('filet Electron — comportement réel', () => {

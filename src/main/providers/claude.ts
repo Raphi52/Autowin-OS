@@ -385,9 +385,17 @@ export function envFiletElectronAgent(
   existe: (chemin: string) => boolean = existsSync
 ): Record<string, string> {
   if (!modAutowin) return {}
+  // APP EMPAQUETÉE (conv-1, 2026-11-04) : le mod vit dans `resources/app.asar/…`. Electron lit dans
+  // l'archive, donc `existsSync` répond oui, mais NODE_OPTIONS est hérité par des `node` ORDINAIRES
+  // (les hooks de Claude Code) qui ne savent pas lire un asar : chaque hook plantait
+  // (MODULE_NOT_FOUND) et, réglé pour bloquer, interdisait Bash/Edit/Write à l'agent. On vise la
+  // copie sur disque, `app.asar.unpacked` (asarUnpack : resources/**) ; absente, aucun filet.
   const fichier = join(modAutowin, FILET_ELECTRON_AGENT)
+    .split('\\')
+    .join('/')
+    .replace(/\/app\.asar\//, '/app.asar.unpacked/')
   if (!existe(fichier)) return {}
-  const chemin = fichier.split('\\').join('/')
+  const chemin = fichier
   const actuel = (env.NODE_OPTIONS ?? '').trim()
   if (actuel.includes(chemin)) return {}
   return { NODE_OPTIONS: `${actuel} --require "${chemin}"`.trim() }
