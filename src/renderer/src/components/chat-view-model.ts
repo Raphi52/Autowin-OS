@@ -1579,18 +1579,13 @@ export function buildOrchestratorModelGroups(
     string,
     { label: string; rank: number; options: OrchestratorModelOption[] }
   >()
-  // Doublon Groq masqué (2026-11-04, conv-1517, « je veux pas ce bloc ») : le même modèle Groq
-  // arrivait deux fois, par la voie gratuite servie par Codex (`codex/groq/<id>`) ET par le
-  // service direct `api-groq`. Quand la voie gratuite existe, la ligne directe est retirée.
-  const groqGratuits = new Set(
-    models
-      .filter((m) => m.provider === 'codex' && m.model.startsWith('groq/'))
-      .map((m) => m.model.slice('groq/'.length))
-  )
   for (const item of models) {
     // Bruit masqué : les variantes « Sans raisonnement » (no-think/*) n'encombrent plus le menu.
     if (/(^|\/)no-think\//i.test(item.model)) continue
-    if (item.provider === 'api-groq' && groqGratuits.has(item.model)) continue
+    // Groq : le service direct `api-groq` revient dans le menu, en onglet « Groq » (2026-11-04,
+    // conv-1519, « ajoute groq et ses models »). La voie gratuite servie par Codex (`groq/…`) reste
+    // masquée, comme décidé en conv-1517 : un seul accès à Groq, celui qui a sa clé.
+    if (item.provider !== 'api-groq' && /^groq\//i.test(item.model)) continue
     const option = {
       provider: item.provider,
       model: item.model,
