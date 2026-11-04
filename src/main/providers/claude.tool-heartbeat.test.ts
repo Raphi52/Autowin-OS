@@ -349,8 +349,8 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
 describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', () => {
   async function envoyer(
     // Un tour de chat a toujours un dossier de travail (`dossierDeTravailDuTour`).
-    options: { relancerTachesDeFond?: boolean; workspaceCwd?: string } = {
-      relancerTachesDeFond: true,
+    options: { claude?: { relancerTachesDeFond?: boolean }; workspaceCwd?: string } = {
+      claude: { relancerTachesDeFond: true },
       workspaceCwd: process.cwd()
     }
   ): Promise<{ texte: string; res: import('./types').SendResult; statuts: string[] }> {
@@ -748,7 +748,7 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
       succes
     ]
     try {
-      const { texte, res } = await envoyer({ relancerTachesDeFond: true, workspaceCwd: undefined })
+      const { texte, res } = await envoyer({ claude: { relancerTachesDeFond: true }, workspaceCwd: undefined })
       expect(res.tachesDeFondARelancer).toBeUndefined()
       expect(texte).toMatch(/relance la demande/)
     } finally {

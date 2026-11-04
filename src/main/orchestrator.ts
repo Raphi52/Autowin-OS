@@ -3463,7 +3463,9 @@ ${CONTRAT_OBJECTIONS}`
                 systemBlocks,
                 model: phaseBinding.model,
                 reasoningEffort: phaseBinding.reasoningEffort,
-                ...(phaseBinding.advisorModel ? { advisorModel: phaseBinding.advisorModel } : {}),
+                ...(phaseBinding.advisorModel
+                  ? { claude: { advisorModel: phaseBinding.advisorModel } }
+                  : {}),
                 execution: this.executionOptions(
                   workCwd,
                   sandbox,
@@ -5377,7 +5379,7 @@ ${CONTRAT_OBJECTIONS}`
         contextBlocks: userBlocks,
         model: phaseBinding.model,
         reasoningEffort: phaseBinding.reasoningEffort,
-        ...(phaseBinding.advisorModel ? { advisorModel: phaseBinding.advisorModel } : {}),
+        ...(phaseBinding.advisorModel ? { claude: { advisorModel: phaseBinding.advisorModel } } : {}),
         // Pas la session de l'exécution pour un juge dédié : elle n'existe pas chez son provider, et
         // la lui passer l'enverrait reprendre un fil inconnu. `resuming` est déjà faux — cohérence.
         resumeSessionId: jugeDedie ? undefined : prevSessionId,

@@ -888,8 +888,9 @@ export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): vo
   // sans advisor (advisor classé sous le principal) ou s'arrête au lancement (Haiku 4.5 comme
   // advisor, entre autres) — un cas de chaque mesuré sur 2.1.308, `claude-advisor.ts`. Ici il ne
   // part pas, et l'orchestrateur dit pourquoi dans le run.
-  if (opts.advisorModel && advisorAccepte(opts.model, opts.advisorModel).accepte) {
-    args.push('--advisor', opts.advisorModel)
+  const advisorModel = opts.claude?.advisorModel
+  if (advisorModel && advisorAccepte(opts.model, advisorModel).accepte) {
+    args.push('--advisor', advisorModel)
   }
   if (Number.isFinite(opts.maxBudgetUsd) && (opts.maxBudgetUsd as number) > 0) {
     args.push('--max-budget-usd', String(opts.maxBudgetUsd))
@@ -2157,7 +2158,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * d'outils du chat ferme a la fin de l'appel, et la sonde (~1,1 s) a fini bien avant le tour.
      * Les temporaires qu'elle lit (prompt systeme, config MCP) ne partent qu'apres elle.
      */
-    const sondeContexte: Promise<IssueSonde> | undefined = opts.mesurerContexte
+    const sondeContexte: Promise<IssueSonde> | undefined = opts.claude?.mesurerContexte
       ? binaireClaudeLancable(this.bin, {
           designe: Boolean(this.explicitBin || process.env.CLAUDE_BIN)
         }).then(
@@ -2274,7 +2275,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * appel. Relancer `description` executait `bash -c "Run app settings test…"`.
      */
     const appelsShell = new Map<string, { commande: string; enFond: boolean }>()
-    /** Commandes shell coupees que l'appelant relancera (voir `SendOptions.relancerTachesDeFond`). */
+    /** Commandes shell coupees que l'appelant relancera (voir `SendOptions.claude.relancerTachesDeFond`). */
     const tachesDeFondARelancer: TacheDeFondARelancer[] = []
     const coupeBoucle = creerCoupeBoucle()
     const entreesOutils = new Map<string, unknown>()
@@ -3031,7 +3032,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           const cwdDuTour = execution?.cwd ?? readOnlyCwd
           for (const [id, tache] of tachesDeFond) {
             const appel = appelsShell.get(tache.toolUseId)
-            if (!opts.relancerTachesDeFond || !cwdDuTour) continue
+            if (!opts.claude?.relancerTachesDeFond || !cwdDuTour) continue
             if (tache.type !== 'local_bash' || !tache.enFond || !appel?.commande.trim()) continue
             tachesDeFondARelancer.push({ id, commande: appel.commande, cwd: cwdDuTour })
             tachesDeFond.delete(id)

@@ -2784,12 +2784,19 @@ export class AgentPilot {
         ...(sessionEnCours ? { resumeSessionId: sessionEnCours } : {}),
         // Un tour de CHAT sait rouvrir un tour de reprise dans sa conversation : le provider peut
         // donc confier ses commandes de fond coupees au lieu de dire « relance la demande ».
-        ...(conversationId ? { relancerTachesDeFond: true } : {}),
+        // Le panneau « Contexte » du chat, detaille par categorie : seul un tour de chat a un ecran.
+        // Options lues par le seul moteur Claude (`SendOptions.claude`, conv-1504).
+        ...(conversationId
+          ? {
+              claude: {
+                relancerTachesDeFond: true,
+                ...(!watchdogReadOnly ? { mesurerContexte: true } : {})
+              }
+            }
+          : {}),
         // Le fil qui écrit : le hook des agents réserve en son nom les fichiers édités, et refuse
         // ceux qu'un autre fil tient encore (conv-1083, shared/reservation-fichiers.ts).
         ...(conversationId ? { conversationId } : {}),
-        // Le panneau « Contexte » du chat, detaille par categorie : seul un tour de chat a un ecran.
-        ...(conversationId && !watchdogReadOnly ? { mesurerContexte: true } : {}),
         observePrompt: (observed) => {
           observed.systemBlocks = blocsSystemeDeCetEnvoi
           observed.contextBlocks = contextBlocks

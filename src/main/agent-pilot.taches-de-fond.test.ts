@@ -57,7 +57,7 @@ describe('pilote — commandes de fond coupées en fin de tour', () => {
   it('un tour de conversation annonce qu’il sait relancer, et émet les commandes coupées', async () => {
     const { p, events, options, onEvent } = pilot({ tachesDeFondARelancer: [coupee] })
     await p.chat(historique, onEvent, undefined, 4, 'conv-7')
-    expect(options[0].relancerTachesDeFond).toBe(true)
+    expect(options[0].claude?.relancerTachesDeFond).toBe(true)
     const emis = events.filter((e) => e.kind === 'taches-de-fond')
     expect(emis).toHaveLength(1)
     expect(emis[0].data).toEqual([coupee])
@@ -66,7 +66,7 @@ describe('pilote — commandes de fond coupées en fin de tour', () => {
   it('jumeau — sans conversation, rien n’est promis ni émis', async () => {
     const { p, events, options, onEvent } = pilot({ tachesDeFondARelancer: [coupee] })
     await p.chat(historique, onEvent, undefined, 4)
-    expect(options[0].relancerTachesDeFond).toBeUndefined()
+    expect(options[0].claude?.relancerTachesDeFond).toBeUndefined()
     expect(events.some((e) => e.kind === 'taches-de-fond')).toBe(false)
   })
 
