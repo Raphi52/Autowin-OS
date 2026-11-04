@@ -502,6 +502,44 @@ describe('HdeskGestionView — Regarder / Piloter', () => {
     })
   })
 
+  // conv-1528 : un code de connexion collé par Ctrl+V dans le champ VIDE partait au bureau caché en ^V
+  // brut (une console n'y collait rien). Il reste dans le champ, puis Entrée le tape.
+  it('Piloter : Ctrl+V dans le champ vide colle dans le champ, et Entrée tape le texte collé', async () => {
+    const act$ = gestes()
+    const h = await monter(avecCapture({ hdeskTvAct: act$ }))
+    await cliquer($(h, 'hdesk-piloter'))
+    await cliquerImage(h, 110, 70)
+    act$.mockClear()
+    const champ = $(h, 'hdesk-texte') as HTMLInputElement
+    const coller = new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true })
+    await act(async () => {
+      champ.dispatchEvent(coller)
+    })
+    // Le collage natif du champ doit pouvoir se faire : rien d'empêché, rien d'envoyé.
+    expect(coller.defaultPrevented).toBe(false)
+    expect(act$).not.toHaveBeenCalled()
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setter.call(champ, '4/0AbCdEf')
+      champ.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      ;($(h, 'hdesk-saisie') as HTMLFormElement).requestSubmit()
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(act$).toHaveBeenCalledTimes(1)
+    expect(act$).toHaveBeenLastCalledWith({
+      id: 'zox',
+      x: 500,
+      y: 250,
+      texte: '4/0AbCdEf',
+      entree: true,
+      sansClic: true
+    })
+  })
+
   it('Piloter est désactivé quand le pont des gestes manque', async () => {
     const h = await monter(avecCapture())
     expect(($(h, 'hdesk-piloter') as HTMLButtonElement).disabled).toBe(true)

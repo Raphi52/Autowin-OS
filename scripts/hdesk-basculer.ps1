@@ -18,11 +18,20 @@
   ne voit donc ni sa sortie ni son code. Le script lui ecrit son verdict dans ce fichier, des qu'il le
   connait : {"etat":"bascule"} juste apres SwitchDesktop, ou {"etat":"erreur","message":...} si la
   bascule echoue. Sans ce fichier, un echec redevient muet pour l'utilisateur.
+
+  FENETRE « REVENIR » INVISIBLE (conv-1528, 2026-11-04) : « Afficher sur mon ecran » basculait bien, mais
+  ni souris ni clavier ne faisaient rien. Lance comme l'app le lance (WMI, ShowWindow=0), le premier
+  ShowWindow du processus est force en SW_HIDE : mesure IsWindowVisible=False (True lance a la main).
+  Plus de bouton « Revenir », et cette fenetre cachee gardait le clavier. Elle se remontre donc
+  elle-meme, SANS prendre le clavier (sinon Entree, tapee pour l'app du bureau, ramenerait l'utilisateur).
+  -Essai : construit la sortie comme d'habitude, ecrit {"etat":"essai","visible":...} et s'arrete SANS
+  basculer — l'ecran n'est jamais touche (banc scripts/hdesk-basculer.test.ps1).
 #>
 param(
   [Parameter(Mandatory = $true)][ValidatePattern('^[a-zA-Z0-9_-]+$')][string]$InstanceId,
   [ValidateRange(5, 600)][int]$MaxSecondes = 120,
-  [string]$Statut = ''
+  [string]$Statut = '',
+  [switch]$Essai
 )
 $ErrorActionPreference = 'Stop'
 function Ecrire-Statut([hashtable]$Etat) {
@@ -53,8 +62,11 @@ public static class AutowinHdeskBascule {
   [DllImport("user32.dll", SetLastError = true)] static extern bool SwitchDesktop(IntPtr h);
   [DllImport("user32.dll", SetLastError = true)] static extern bool SetThreadDesktop(IntPtr h);
   [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr w, int id, uint mod, uint vk);
+  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
   const uint GENERIC_ALL = 0x10000000;
   const uint MOD_NONE = 0, VK_ESCAPE = 0x1B;
+  const int SW_SHOWNOACTIVATE = 4;
 
   class Garde : Form {
     public string Motif = "minuterie";
@@ -72,13 +84,22 @@ public static class AutowinHdeskBascule {
       base.OnHandleCreated(e);
       RegisterHotKey(Handle, 1, MOD_NONE, VK_ESCAPE);
     }
+    // Ne prend jamais le clavier : il reste a l'app du bureau cache (voir l'en-tete, conv-1528).
+    protected override bool ShowWithoutActivation { get { return true; } }
+    // Le PREMIER ShowWindow a ete force en SW_HIDE par le lancement WMI : le second est obei. Avant
+    // base.OnShown, qui leve Shown, donc avant que la bascule ne parte.
+    protected override void OnShown(EventArgs e) {
+      ShowWindow(Handle, SW_SHOWNOACTIVATE);
+      base.OnShown(e);
+    }
+    public bool VraimentVisible() { return IsWindowVisible(Handle); }
     protected override void WndProc(ref Message m) {
       if (m.Msg == 0x0312) { Motif = "raccourci"; Close(); return; }
       base.WndProc(ref m);
     }
   }
 
-  public static string Basculer(string nom, int max, string statut) {
+  public static string Basculer(string nom, int max, string statut, bool essai) {
     IntPtr cache = OpenDesktopW(nom, 0, false, GENERIC_ALL);
     if (cache == IntPtr.Zero) throw new Exception("Bureau cache introuvable : " + nom + " (Win32 " + Marshal.GetLastWin32Error() + ").");
     IntPtr defaut = OpenDesktopW("Default", 0, false, GENERIC_ALL);
@@ -86,10 +107,12 @@ public static class AutowinHdeskBascule {
     string motif = "erreur";
     var pret = new ManualResetEvent(false);
     Exception echec = null;
+    Garde garde = null;
     var th = new Thread(() => {
       try {
         if (!SetThreadDesktop(cache)) throw new Exception("SetThreadDesktop a echoue (Win32 " + Marshal.GetLastWin32Error() + ").");
         var g = new Garde(max);
+        garde = g;
         g.Shown += (s, e) => pret.Set();
         Application.Run(g);
         motif = g.Motif;
@@ -102,6 +125,18 @@ public static class AutowinHdeskBascule {
     if (!pret.WaitOne(15000) || echec != null) {
       CloseDesktop(cache); CloseDesktop(defaut);
       throw new Exception("Sortie du bureau cache non prete : bascule annulee. " + (echec != null ? echec.Message : ""));
+    }
+    if (essai) {
+      // Banc : la sortie est-elle VRAIMENT a l'ecran ? Puis on la ferme, sans jamais basculer.
+      bool visible = (bool)garde.Invoke((Func<bool>)(() => garde.VraimentVisible()));
+      if (!string.IsNullOrEmpty(statut)) {
+        try { System.IO.File.WriteAllText(statut, "{\"etat\":\"essai\",\"visible\":" + (visible ? "true" : "false") + "}"); }
+        catch (Exception e) { Console.Error.WriteLine("Fichier d'etat non ecrit : " + e.Message); }
+      }
+      garde.Invoke((Action)(() => { garde.Motif = "essai"; garde.Close(); }));
+      th.Join(5000);
+      CloseDesktop(cache); CloseDesktop(defaut);
+      return "essai:visible=" + (visible ? "oui" : "non");
     }
     try {
       if (!SwitchDesktop(cache)) throw new Exception("SwitchDesktop a echoue (Win32 " + Marshal.GetLastWin32Error() + ").");
@@ -120,5 +155,5 @@ public static class AutowinHdeskBascule {
   }
 }
 '@
-$motif = [AutowinHdeskBascule]::Basculer("AutowinTest_$InstanceId", $MaxSecondes, $Statut)
-[pscustomobject]@{ instanceId = $InstanceId; bascule = $true; retour = $true; motif = $motif } | ConvertTo-Json -Compress
+$motif = [AutowinHdeskBascule]::Basculer("AutowinTest_$InstanceId", $MaxSecondes, $Statut, [bool]$Essai)
+[pscustomobject]@{ instanceId = $InstanceId; bascule = (-not $Essai); retour = $true; motif = $motif } | ConvertTo-Json -Compress

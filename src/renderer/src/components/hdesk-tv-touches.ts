@@ -5,8 +5,11 @@
 
 /**
  * Touche du champ de frappe -> touche nommée de hdesk-act. Entrée reste le « valider » du formulaire.
- * Ctrl+A/C/V/X/Z ne partent au bureau caché que si le champ est VIDE : sinon ils agissent sur
+ * Ctrl+A/C/X/Z ne partent au bureau caché que si le champ est VIDE : sinon ils agissent sur
  * le champ lui-même (corriger sa frappe avant l'envoi).
+ * Ctrl+V ne part JAMAIS (conv-1528, 2026-11-04) : hdesk-act le poste en caractère 22 sans l'état de
+ * Ctrl, et une console l'affichait « ^V » sans rien coller (mesure : « echo [^V »). Il colle donc dans
+ * le champ, et Entrée tape le texte collé lettre par lettre, ce que la console reçoit bien.
  */
 export function toucheTv(e: { key: string; ctrlKey?: boolean; currentTarget?: unknown; target?: unknown }, champVide = true): string | null {
   const directes: Record<string, string> = {
@@ -15,7 +18,7 @@ export function toucheTv(e: { key: string; ctrlKey?: boolean; currentTarget?: un
   }
   if (e.ctrlKey) {
     const k = e.key.toLowerCase()
-    return champVide && ['a', 'c', 'v', 'x', 'z'].includes(k) ? `Ctrl${k.toUpperCase()}` : null
+    return champVide && ['a', 'c', 'x', 'z'].includes(k) ? `Ctrl${k.toUpperCase()}` : null
   }
   if (e.key === 'Backspace') return champVide ? 'Retour' : null
   const d = directes[e.key]

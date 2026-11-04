@@ -13,7 +13,17 @@ describe('toucheTv', () => {
     expect(toucheTv({ key: 'Backspace' }, false)).toBeNull()
     expect(toucheTv({ key: 'ArrowLeft' }, false)).toBeNull()
     expect(toucheTv({ key: 'ArrowDown' }, false)).toBe('Bas')
-    expect(toucheTv({ key: 'v', ctrlKey: true })).toBe('CtrlV')
+    expect(toucheTv({ key: 'c', ctrlKey: true })).toBe('CtrlC')
+    expect(toucheTv({ key: 'c', ctrlKey: true }, false)).toBeNull()
+    expect(toucheTv({ key: 'q' })).toBeNull()
+    expect(toucheTv({ key: 'Enter' })).toBeNull()
+  })
+
+  // conv-1528 : envoyé au bureau caché, Ctrl+V arrivait en caractère ^V brut (mesuré dans une console :
+  // « echo [^V », rien de collé). Le collage reste donc TOUJOURS dans le champ, puis Entrée le tape.
+  it('Ctrl+V colle dans le champ, même vide : il ne part jamais au bureau caché', () => {
+    expect(toucheTv({ key: 'v', ctrlKey: true })).toBeNull()
+    expect(toucheTv({ key: 'V', ctrlKey: true })).toBeNull()
     expect(toucheTv({ key: 'v', ctrlKey: true }, false)).toBeNull()
     expect(toucheTv({ key: 'q' })).toBeNull()
     expect(toucheTv({ key: 'Enter' })).toBeNull()
