@@ -116,16 +116,26 @@ describe('ModelEffortMatrix', () => {
       })
     )
 
-    const groupes = [...view.querySelectorAll('.effort-matrix-group')]
-    expect(groupes.map((g) => (g as HTMLElement).dataset.provider)).toEqual(['claude', 'openai'])
+    // Onglets par fournisseur (conv-1496) : l'onglet du modèle actif s'ouvre, l'autre se clique.
+    const onglets = [...view.querySelectorAll('[role="tab"]')].map((n) => n.textContent)
+    expect(onglets).toEqual(['Claude', 'openai'])
+    expect(
+      [...view.querySelectorAll('.effort-matrix-group')].map(
+        (g) => (g as HTMLElement).dataset.provider
+      )
+    ).toEqual(['openai'])
+    const groupeOpenai = view.querySelector('.effort-matrix-group') as Element
+    const o5 = view.querySelector('[data-row="openai:o5"]') as HTMLElement
+    expect(o5.querySelectorAll('.effort-cran')).toHaveLength(3)
+    expect(o5.querySelectorAll('.effort-cran.is-absent')).toHaveLength(0)
+    await act(async () =>
+      (view.querySelector('[data-testid="effort-matrix-onglet-claude"]') as HTMLElement).click()
+    )
+    const groupes = [view.querySelector('.effort-matrix-group') as Element, groupeOpenai]
     const echelle = (g: Element): (string | null)[] =>
       [...g.querySelectorAll('.effort-matrix-columns span')].map((n) => n.textContent)
     expect(echelle(groupes[0])).toEqual(['', 'low', 'medium', 'high', 'max'])
     expect(echelle(groupes[1])).toEqual(['', 'minimal', 'medium', 'xhigh'])
-    // L'échelle d'un fournisseur ne trahit plus les crans d'un autre.
-    const o5 = view.querySelector('[data-row="openai:o5"]') as HTMLElement
-    expect(o5.querySelectorAll('.effort-cran')).toHaveLength(3)
-    expect(o5.querySelectorAll('.effort-cran.is-absent')).toHaveLength(0)
     expect(groupes[0].querySelector('[data-row="claude:opus"]')).not.toBeNull()
   })
 
@@ -262,6 +272,30 @@ describe('ModelEffortMatrix — pastille verte « recommandé »', () => {
     efforts
   })
 
+  it('range les modèles openrouter/ dans leur propre onglet, pas sous Claude (conv-1496)', async () => {
+    const view = await render(
+      createElement(ModelEffortMatrix, {
+        rows: [
+          ligne('claude', 'claude-opus-5', ['low', 'high']),
+          ligne('claude', 'openrouter/google/gemma-4', ['low', 'high'])
+        ],
+        activeKey: null,
+        onSelect: vi.fn(),
+        onClose: vi.fn()
+      })
+    )
+    expect([...view.querySelectorAll('[role="tab"]')].map((n) => n.textContent)).toEqual([
+      'Claude',
+      'OpenRouter'
+    ])
+    expect(view.querySelector('[data-row="claude:openrouter/google/gemma-4"]')).toBeNull()
+    await act(async () =>
+      (view.querySelector('[data-testid="effort-matrix-onglet-openrouter"]') as HTMLElement).click()
+    )
+    expect(view.querySelector('[data-row="claude:openrouter/google/gemma-4"]')).not.toBeNull()
+    expect(view.querySelector('[data-row="claude:claude-opus-5"]')).toBeNull()
+  })
+
   it('marque le cran recommandé, et LUI SEUL', async () => {
     // Entrée qui ferait échouer ce test si la reco débordait :
     // `claude-opus-4-5` (voisin de famille) ne doit porter AUCUNE pastille.
@@ -278,10 +312,16 @@ describe('ModelEffortMatrix — pastille verte « recommandé »', () => {
         onClose: vi.fn()
       })
     )
-    const marques = [...view.querySelectorAll('.effort-cran.is-recommended')].map((n) => ({
-      row: (n.closest('.effort-matrix-row') as HTMLElement).dataset.row,
-      effort: (n as HTMLElement).dataset.effort
-    }))
+    const lire = (): { row?: string; effort?: string }[] =>
+      [...view.querySelectorAll('.effort-cran.is-recommended')].map((n) => ({
+        row: (n.closest('.effort-matrix-row') as HTMLElement).dataset.row,
+        effort: (n as HTMLElement).dataset.effort
+      }))
+    const marques = lire()
+    await act(async () =>
+      (view.querySelector('[data-testid="effort-matrix-onglet-codex"]') as HTMLElement).click()
+    )
+    marques.push(...lire())
     expect(marques).toEqual([
       { row: 'claude:claude-opus-5', effort: 'low' },
       { row: 'codex:gpt-5.6-sol', effort: 'xhigh' }

@@ -6,6 +6,23 @@ import { recommendedEffort } from './model-effort-recommendations'
 import { shortModelLabel } from './model-display-label'
 
 /**
+ * ONGLETS PAR FOURNISSEUR (2026-11-04, conv-1496) : les modèles OpenRouter sont servis sous
+ * `claude` (préfixe `openrouter/`, src/main/models.ts) et se mêlaient aux modèles Claude. On les
+ * sépare par ce préfixe, et chaque fournisseur devient un onglet, comme la barre de quotas.
+ */
+const LIBELLES_FOURNISSEUR: Record<string, string> = {
+  claude: 'Claude',
+  codex: 'ChatGPT',
+  gemini: 'Gemini',
+  kimi: 'Kimi',
+  openrouter: 'OpenRouter'
+}
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec la matrice
+export function fournisseurDeLigne(row: { model: string; option: { provider: string } }): string {
+  return row.model.startsWith('openrouter/') ? 'openrouter' : row.option.provider
+}
+
+/**
  * Une ligne de la matrice : un modèle du catalogue et les crans d'effort qu'il expose.
  * `blocked` = provider injoignable (expiré / absent / standby) : la ligne reste visible,
  * mais aucun cran n'est cliquable — le refus se voit AU MOMENT du choix.
@@ -58,7 +75,7 @@ export function ModelEffortMatrix({
   const groups = useMemo(() => {
     const byProvider = new Map<string, ModelEffortRow[]>()
     for (const row of rows) {
-      const provider = row.option.provider
+      const provider = fournisseurDeLigne(row)
       const bucket = byProvider.get(provider)
       if (bucket) bucket.push(row)
       else byProvider.set(provider, [row])
@@ -69,6 +86,14 @@ export function ModelEffortMatrix({
       columns: sortEfforts([...new Set(groupRows.flatMap((row) => row.efforts))])
     }))
   }, [rows])
+  const groupeActif =
+    groups.find((group) => group.rows.some((row) => row.key === activeKey))?.provider ??
+    groups[0]?.provider
+  const [onglet, setOnglet] = useState<string | undefined>(undefined)
+  const ongletAffiche =
+    onglet && groups.some((group) => group.provider === onglet) ? onglet : groupeActif
+  const groupesAffiches =
+    groups.length > 1 ? groups.filter((group) => group.provider === ongletAffiche) : groups
   /** Cran mémorisé par ligne : le cran actif pour la ligne active, sinon le défaut du catalogue. */
   const memorized = useMemo(() => {
     const table: Record<string, string> = {}
@@ -113,14 +138,31 @@ export function ModelEffortMatrix({
           </button>
         </header>
       )}
-      {groups.map((group) => (
+      {groups.length > 1 && (
+        <div className="model-quota-providers" role="tablist" data-testid="effort-matrix-onglets">
+          {groups.map((group) => (
+            <button
+              key={group.provider}
+              type="button"
+              role="tab"
+              aria-selected={group.provider === ongletAffiche}
+              className={`model-quota-provider-chip${group.provider === ongletAffiche ? ' is-active' : ''}`}
+              data-testid={`effort-matrix-onglet-${group.provider}`}
+              onClick={() => setOnglet(group.provider)}
+            >
+              {LIBELLES_FOURNISSEUR[group.provider] ?? group.provider}
+            </button>
+          ))}
+        </div>
+      )}
+      {groupesAffiches.map((group) => (
         <section
           key={group.provider}
           className="effort-matrix-group"
           data-provider={group.provider}
           aria-label={t('matrice.echelle', { fournisseur: group.provider })}
         >
-          <h4 className="effort-matrix-group-title">{group.provider}</h4>
+          {groups.length === 1 && <h4 className="effort-matrix-group-title">{group.provider}</h4>}
           <div className="effort-matrix-columns" aria-hidden="true">
             <span />
             {group.columns.map((effort) => (
