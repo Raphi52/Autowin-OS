@@ -41,7 +41,7 @@ export const TEXTES_FR = {
   'settings.description':
     'Capacités accordées aux agents, comportement, apparence, providers et routage, règles d’Autowin OS et prérequis machine.',
   'settings.nav': 'Sections Settings',
-  'settings.section.routing': 'Routage',
+  'settings.section.routing': 'Providers',
   'settings.section.preflight': 'Diagnostic',
   'settings.routing.anomalie': 'Provider(s) à reconnecter : {liste}',
   'settings.providers.eyebrow': 'Fournisseurs',
@@ -119,7 +119,7 @@ export const TEXTES_FR = {
   'interface.langue.description':
     'La langue de l’application et des réponses de l’agent. **Français** reste le réglage par défaut. Le choix est mémorisé sur ce poste et s’applique aussitôt, sans redémarrage ; une étape de travail déjà en cours se termine dans l’ancienne langue.',
   'interface.langue.couverture':
-    '**Les écrans sont traduits.** La barre de navigation et chaque écran : Accueil, Chat, Agent Studio, Knowledge, Observatory, Task Manager, Worktrees, Bureaux cachés, Tickets, Board, Maintenance et Settings (toutes ses pages, Routage compris) ; la plupart des dates ; les notifications de fin de tour et les contrôles du Diagnostic. **Restent en français :** les messages que le cœur de l’application renvoie tels quels (erreurs, refus, raisons et avertissements du plan de lots, motif invalide d’une règle de réveil) ; ce qui s’adresse à l’agent (demandes des boutons, consignes des skills de Maintenance, descriptions des skills de Settings) ; ce que dit Jarvis ; l’heure des messages du chat et l’axe du temps de l’Observatory ; un message court enregistré, qui garde la langue du moment ; vos propres données (titres, noms de tâches, notes).',
+    '**Les écrans sont traduits.** La barre de navigation et chaque écran : Accueil, Chat, Agent Studio, Knowledge, Observatory, Task Manager, Worktrees, Bureaux cachés, Tickets, Board, Maintenance et Settings (toutes ses pages, Providers compris) ; la plupart des dates ; les notifications de fin de tour et les contrôles du Diagnostic. **Restent en français :** les messages que le cœur de l’application renvoie tels quels (erreurs, refus, raisons et avertissements du plan de lots, motif invalide d’une règle de réveil) ; ce qui s’adresse à l’agent (demandes des boutons, consignes des skills de Maintenance, descriptions des skills de Settings) ; ce que dit Jarvis ; l’heure des messages du chat et l’axe du temps de l’Observatory ; un message court enregistré, qui garde la langue du moment ; vos propres données (titres, noms de tâches, notes).',
   'interface.langue.echec':
     '**L’agent n’a pas reçu ce choix.** L’écran suit la langue choisie, mais l’agent répond encore dans l’ancienne. Détail :',
   'interface.langue.reessayer': 'Réessayer',
@@ -167,7 +167,7 @@ export const TEXTES_EN: Record<CleDeTexte, string> = {
   'settings.description':
     'Capabilities granted to agents, behaviour, appearance, providers and routing, Autowin OS rules and machine prerequisites.',
   'settings.nav': 'Settings sections',
-  'settings.section.routing': 'Routing',
+  'settings.section.routing': 'Providers',
   'settings.section.preflight': 'Diagnostics',
   'settings.routing.anomalie': 'Provider(s) to reconnect: {liste}',
   'settings.providers.eyebrow': 'Providers',
@@ -244,7 +244,7 @@ export const TEXTES_EN: Record<CleDeTexte, string> = {
   'interface.langue.description':
     'The language of the application and of the agent’s replies. **Français** remains the default setting. The choice is saved on this computer and applies immediately, without restarting; a work step already running finishes in the previous language.',
   'interface.langue.couverture':
-    '**The screens are translated.** The navigation bar and every screen: Home, Chat, Agent Studio, Knowledge, Observatory, Task Manager, Worktrees, Hidden desktops, Tickets, Board, Maintenance and Settings (all its pages, Routing included); most dates; end-of-turn notifications and the Diagnostics checks. **Still in French:** messages the application core passes on as they are (errors, refusals, the lot plan’s reasons and warnings, an invalid wake-up rule pattern); what is addressed to the agent (requests sent by buttons, the Maintenance skills’ instructions, the skill descriptions in Settings); what Jarvis says; the time of chat messages and the Observatory’s time axis; a short message recorded earlier, which keeps the language of that moment; your own data (titles, task names, notes).',
+    '**The screens are translated.** The navigation bar and every screen: Home, Chat, Agent Studio, Knowledge, Observatory, Task Manager, Worktrees, Hidden desktops, Tickets, Board, Maintenance and Settings (all its pages, Providers included); most dates; end-of-turn notifications and the Diagnostics checks. **Still in French:** messages the application core passes on as they are (errors, refusals, the lot plan’s reasons and warnings, an invalid wake-up rule pattern); what is addressed to the agent (requests sent by buttons, the Maintenance skills’ instructions, the skill descriptions in Settings); what Jarvis says; the time of chat messages and the Observatory’s time axis; a short message recorded earlier, which keeps the language of that moment; your own data (titles, task names, notes).',
   'interface.langue.echec':
     '**The agent did not receive this choice.** The screen follows the chosen language, but the agent still answers in the previous one. Details:',
   'interface.langue.reessayer': 'Retry',

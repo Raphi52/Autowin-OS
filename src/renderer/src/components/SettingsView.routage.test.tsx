@@ -80,7 +80,7 @@ describe('Settings — l’onglet Routage', () => {
     stub()
     const onSectionChange = vi.fn()
     await render('behaviour', { onSectionChange })
-    const onglet = onglets().find((b) => b.textContent?.trim().startsWith('Routage'))
+    const onglet = onglets().find((b) => b.textContent?.trim().startsWith('Providers'))
     expect(onglet).toBeTruthy()
     await act(async () => onglet!.click())
     expect(onSectionChange).toHaveBeenCalledWith('routing')

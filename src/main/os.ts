@@ -546,6 +546,7 @@ export class AutowinOS {
   private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
   /** Prévenu quand un run vient d'être SUSPENDU par le quota (`reveil-apres-quota.ts`, conv-1069). */
   private murDeQuotaListener?: () => void
+  private finDeRunListener?: (runId: string) => void
   private refusIntegrationListener?: (refus: {
     cause: string
     agentId: string
@@ -879,6 +880,8 @@ export class AutowinOS {
       onRunSettled: (runId) => {
         this.orchestrationStartedAt.delete(runId)
         clearOrchestrationState(this.orchestrationStateRoot, runId)
+        // « Publication auto » relit les travaux d'agents restés hors de la branche (conv-1544).
+        this.finDeRunListener?.(runId)
       },
       // Mur de quota : l'état reprenable est GARDÉ et marqué, jamais effacé (`orchestrator.ts`).
       onRunQuotaWalled: (runId, mur, regle) => {
@@ -1246,6 +1249,14 @@ export class AutowinOS {
    */
   onMurDeQuota(listener: () => void): void {
     this.murDeQuotaListener = listener
+  }
+
+  /**
+   * Abonne « Publication auto » à la fin de chaque run d'agents (conv-1544) : un travail fini resté
+   * dans sa copie de travail part alors par un /git, sans bouton « Traiter » à cliquer. Idempotent.
+   */
+  onFinDeRun(listener: (runId: string) => void): void {
+    this.finDeRunListener = listener
   }
 
   /** Abonne l'IPC aux changements d'activité worktree (push live vers le cockpit). Idempotent. */

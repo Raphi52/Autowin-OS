@@ -4,10 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * Vecu le 2026-09-03 : l'icone « branche » (26 px, collee sous chaque message, a 6 px de la loupe)
- * transportait l'utilisateur dans la copie MEME pendant qu'un tour travaillait — il quittait le fil
- * en cours de run sans l'avoir voulu. Le geste volontaire hors tour garde son comportement (test
- * « forker OUVRE la conversation créée »), mais un tour en cours retient sur place.
+ * conv-1543 (2026-11-04) : cliquer la branche OUVRE la copie, même pendant qu'un tour travaille.
+ * La retenue sur place avec un bandeau « la branche t'attend dans la liste » (2026-09-03) a été
+ * refusée par l'utilisateur : « juste mets-moi sur une fork de la conv comme ça a toujours été ».
  */
 describe('fork pendant un tour en cours', () => {
   let harness: ChatHarness | null = null
@@ -46,7 +45,7 @@ describe('fork pendant un tour en cours', () => {
     harness = null
   })
 
-  it('crée la branche mais NE quitte PAS le fil qui travaille', async () => {
+  it('crée la branche et l’OUVRE, sans bandeau, même si le fil travaille', async () => {
     let resoudreTour: (value: { ok: boolean }) => void = () => {}
     const tour = new Promise<{ ok: boolean }>((resolve) => {
       resoudreTour = resolve
@@ -58,7 +57,7 @@ describe('fork pendant un tour en cours', () => {
           .fn()
           .mockResolvedValueOnce([source()])
           .mockResolvedValue([source(), copie]),
-        conversation: vi.fn().mockResolvedValue(source()),
+        conversation: vi.fn((id: string) => Promise.resolve(id === 'A-fork' ? copie : source())),
         conversationsFork: fork,
         pilotChat: vi.fn(() => tour)
       })
@@ -68,9 +67,11 @@ describe('fork pendant un tour en cours', () => {
     // Un tour part : la conversation A devient occupee.
     await harness.type('travaille')
     await act(async () => {
-      harness!.textarea().dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
-      )
+      harness!
+        .textarea()
+        .dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+        )
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -88,9 +89,14 @@ describe('fork pendant un tour en cours', () => {
 
     // La branche EST creee...
     expect(fork).toHaveBeenCalledWith('A', expect.any(String))
-    // ...et un avis dit ou elle est partie, au lieu d'un deplacement silencieux.
+    // ...et c'est elle qui s'affiche : la copie (u1 seul), plus l'original (u2, « travaille »).
+    const body = harness.container.querySelector('.chat-scroll')?.textContent ?? ''
+    expect(body).toContain('u1')
+    expect(body).not.toContain('u2')
+    expect(body).not.toContain('travaille')
+    // Aucun bandeau « la branche t'attend dans la liste ».
     const avis = harness.container.querySelector('[data-testid="chat-workflow-notice"]')
-    expect(avis?.textContent ?? '').toContain('A (fork)')
+    expect(avis?.textContent ?? '').not.toContain('A (fork)')
 
     await act(async () => {
       resoudreTour({ ok: true })

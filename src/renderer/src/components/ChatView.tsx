@@ -3584,28 +3584,16 @@ export function ChatView({
   async function forkFromMessage(messageId: string): Promise<void> {
     if (!activeId) return
     /*
-     * TOUR EN COURS : la branche se cree, mais on NE BOUGE PAS. Vecu le 2026-09-03 (« quand tu as
-     * commence a travailler ca m'a switch de conversation des fois ») : l'icone de branche fait
-     * 26 px, elle est collee sous chaque message a 6 px de la loupe, et le fil glissait alors sous
-     * le curseur pendant la frappe -- un clic involontaire arrachait donc l'utilisateur au fil qui
-     * TRAVAILLE, run compris. Le geste VOLONTAIRE garde son comportement d'origine (ouvrir la
-     * copie) : seul le cas ou un tour tourne est retenu sur place, avec un avis qui dit ou aller.
+     * Ouvre la branche MÊME pendant un tour (conv-1543, 2026-11-04) : la retenue sur place avec un
+     * bandeau « la branche vous attend dans la liste » (2026-09-03) a été refusée par l'utilisateur —
+     * cliquer la branche doit toujours l'y emmener. Le tour du fil d'origine continue en fond.
      */
-    const tourEnCours = busyConversationsRef.current.has(activeId)
     const forked = (await window.api.conversationsFork(activeId, messageId)) as Conv | undefined
     const fresh = (await window.api.conversations()) as Conv[]
     setConvs(fresh)
     const target = (forked?.id && fresh.find((c) => c.id === forked.id)) || undefined
     if (!target) {
       await reloadActiveFromStore(activeId) // fork refusé : on reste où on est
-      return
-    }
-    if (tourEnCours) {
-      setAppNotice((current) =>
-        newestNotice(current, {
-          text: texteFil('branche.creee', { titre: target.title })
-        })
-      )
       return
     }
     void loadConv(target)

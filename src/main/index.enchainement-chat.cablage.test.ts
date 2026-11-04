@@ -38,9 +38,18 @@ describe('enchaînement auto du chat — câblage de fin de tour', () => {
     expect(apres).toMatch(/\.then\(\(rapport\) => \{\s*const decision = decisionGitApresFil\(\{/)
     expect(apres).toContain('accord: os.gitApresFilActif()')
     expect(apres).toContain('rapport\n')
+    // conv-1544 : un lot de plan est rendu au chef (`filDeLaPasse`), le fil d'origine suit.
     expect(apres).toMatch(
-      /if \(decision\.lancer\) suiviGitApresFil\.file\?\.ajouter\(conversationId, decision\.fichiers\)/
+      /if \(decision\.lancer\)\s*suiviGitApresFil\.file\?\.ajouter\(\s*filDeLaPasse\(\s*conversationId,[^;]*decision\.fichiers,\s*conversationId\s*\)/
     )
+  })
+
+  it('relit les travaux d’agents à chaque fin de run, sous le même accord (conv-1544)', () => {
+    expect(source).toContain('os.onFinDeRun(balayerSansBruit)')
+    const balayage = source.slice(source.indexOf('const balayerLesTravauxDAgents'))
+    expect(balayage).toContain('if (!os.autoCloseEnabled() || !os.gitApresFilActif()) return')
+    expect(balayage).toContain('dejaTentes: travauxTentes.lire()')
+    expect(balayage).toMatch(/suiviGitApresFil\.file\?\.ajouterTravaux\(/)
   })
 
   it('range la passe /git dans la file, qui en lance une seule à la fois', () => {

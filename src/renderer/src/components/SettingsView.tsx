@@ -17,15 +17,8 @@ import { OngletMarques, ViewTopBar, type ViewTopBarTab } from './ViewTopBar'
 import './ViewPage.css'
 import './DomainShell.css'
 import './SettingsView.css'
-import { Spinner } from './Spinner'
 
 type PreflightResult = Awaited<ReturnType<typeof window.api.recheckPreflight>>
-
-interface ProviderRow {
-  provider: string
-  status: string
-  detail?: string
-}
 
 /** Le registre de capacités qu'ouvre chaque section qui en montre un (conv-1109). */
 const REGISTRE_DE_SECTION: Partial<Record<SettingsSection, CapabilityKind>> = {
@@ -56,11 +49,6 @@ export function SettingsView({
   const [repairing, setRepairing] = useState<string | null>(null)
   const [repairDone, setRepairDone] = useState<string | null>(null)
 
-  const [providers, setProviders] = useState<ProviderRow[] | null>(null)
-  const [providersError, setProvidersError] = useState<string | null>(null)
-  /** Incrémenté par « Réessayer » : relance la lecture sans changer de section. */
-  const [providersReload, setProvidersReload] = useState(0)
-  const providersLoading = providers === null && providersError === null
 
   /**
    * `keepError` : le recheck déclenché par un échec de réparation ne doit PAS effacer le message
@@ -101,36 +89,6 @@ export function SettingsView({
       off?.()
     }
   }, [])
-
-  /** Providers : lecture seule via l'IPC existant `providerStatus` (aucun IPC inventé). */
-  useEffect(() => {
-    if (section !== 'providers') return
-    let alive = true
-    queueMicrotask(() => {
-      if (!alive) return
-      setProviders(null)
-      setProvidersError(null)
-    })
-    void (async () => {
-      const load = window.api?.providerStatus
-      if (typeof load !== 'function') {
-        if (alive) setProvidersError(traduire('settings.providers.nonExpose', langueCourante()))
-        return
-      }
-      try {
-        const rows = await load()
-        if (alive) {
-          setProviders(rows as ProviderRow[])
-          setProvidersError(null)
-        }
-      } catch {
-        if (alive) setProvidersError(traduire('settings.providers.echec', langueCourante()))
-      }
-    })()
-    return () => {
-      alive = false
-    }
-  }, [section, providersReload])
 
   const repair = useCallback(
     async (checkId: string) => {
@@ -182,7 +140,6 @@ export function SettingsView({
     { id: 'tools', label: 'Tools' },
     { id: 'behaviour', label: 'Behaviour' },
     { id: 'interface', label: 'Interface' },
-    { id: 'providers', label: 'Providers' },
     {
       id: 'routing',
       label: t('settings.section.routing'),
@@ -222,8 +179,8 @@ export function SettingsView({
             <button
               key={tab.id}
               type="button"
-              className={`settings-nav-item${tab.id === section ? ' is-active' : ''}`}
-              aria-current={tab.id === section ? 'page' : undefined}
+              className={`settings-nav-item${tab.id === (section === 'providers' ? 'routing' : section) ? ' is-active' : ''}`}
+              aria-current={tab.id === (section === 'providers' ? 'routing' : section) ? 'page' : undefined}
               onClick={() => onSectionChange(tab.id)}
             >
               <span className="settings-nav-label">{tab.label}</span>
@@ -246,62 +203,8 @@ export function SettingsView({
             </>
           )}
           {section === 'interface' && <InterfaceView />}
-          {section === 'providers' && (
-            <section className="settings-providers surface-panel" aria-label="Providers">
-              <header>
-                <div>
-                  <span className="domain-eyebrow">{t('settings.providers.eyebrow')}</span>
-                  <h2>Providers</h2>
-                </div>
-              </header>
-              {providersError && (
-                <div className="domain-warning">
-                  <p role="alert">{providersError}</p>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => setProvidersReload((token) => token + 1)}
-                  >
-                    {t('settings.providers.reessayer')}
-                  </button>
-                </div>
-              )}
-              {providersLoading && (
-                <p role="status">
-                  <Spinner /> {t('settings.providers.chargement')}
-                </p>
-              )}
-              {!providersLoading &&
-                !providersError &&
-                (providers && providers.length > 0 ? (
-                  <ul className="settings-providers-list">
-                    {providers.map((entry) => (
-                      <li key={entry.provider} data-testid={`settings-provider-${entry.provider}`}>
-                        <strong>{entry.provider}</strong>
-                        <span>{entry.status}</span>
-                        {entry.detail && <span>{entry.detail}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p>{t('settings.providers.aucun')}</p>
-                ))}
-              <p className="domain-hint">
-                {t('settings.providers.aide.avant')}{' '}
-                <button
-                  type="button"
-                  className="domain-link"
-                  data-testid="settings-open-router"
-                  onClick={() => onSectionChange('routing')}
-                >
-                  {t('settings.section.routing')}
-                </button>
-                {t('settings.providers.aide.apres')}
-              </p>
-            </section>
-          )}
           {/* Routage vit ici depuis conv-963 (2026-10-15) : il était une section d'Agent Studio. */}
-          {section === 'routing' && (
+          {(section === 'routing' || section === 'providers') && (
             <>
               <RouterView active={active} />
               <ShadowRoutingPilotSettings />
