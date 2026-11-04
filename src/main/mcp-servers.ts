@@ -26,7 +26,22 @@ const MOTIF_ID = /^[a-z0-9][a-z0-9_-]{0,47}$/
 
 /** Pré-rempli et DÉSACTIVÉ : il faut l'add-on Blender ouvert pour qu'il serve (ahujasid/blender-mcp). */
 export const SERVEURS_PAR_DEFAUT: readonly ServeurMcpUtilisateur[] = [
-  { id: 'blender', nom: 'Blender', commande: 'uvx', args: ['blender-mcp'], env: {}, actif: false }
+  { id: 'blender', nom: 'Blender', commande: 'uvx', args: ['blender-mcp'], env: {}, actif: false },
+  /**
+   * Génération d'images (conv-1565, lot 5 du plan tanukis). Source : serveur open source MIT
+   * `image-generation-mcp` (https://github.com/pvliesdonk/image-generation-mcp, paquet PyPI du même
+   * nom) — OpenAI, Google Gemini, Stable Diffusion WebUI ; transport stdio par `serve`.
+   * DÉSACTIVÉ, et les clés sont nommées mais VIDES : l'utilisateur les saisit dans les réglages,
+   * jamais écrites dans un fichier du dépôt.
+   */
+  {
+    id: 'images',
+    nom: 'Génération d’images',
+    commande: 'uvx',
+    args: ['--from', 'image-generation-mcp[all]', 'image-generation-mcp', 'serve'],
+    env: { IMAGE_GENERATION_MCP_OPENAI_API_KEY: '', IMAGE_GENERATION_MCP_GOOGLE_API_KEY: '' },
+    actif: false
+  }
 ]
 
 export function cheminServeursMcp(racine = autowinAppDataRoot()): string {
