@@ -90,14 +90,39 @@ describe('ChatView — « Essaie 3 façons »', () => {
       'button[aria-label="Essaie 3 façons"]'
     )
     expect(bouton).not.toBeNull()
+    // ×3 est une BASCULE (conv-1479) : le clic arme, l'envoi part en 3 façons.
     await act(async () => {
       bouton!.click()
+    })
+    expect(bouton!.getAttribute('aria-pressed')).toBe('true')
+    expect(api.conversationEssaisEnParallele).not.toHaveBeenCalled()
+    const envoyer = h!.container.querySelector<HTMLButtonElement>('[data-testid="composer-send"]')
+    expect(envoyer).not.toBeNull()
+    await act(async () => {
+      envoyer!.click()
       for (let i = 0; i < 12; i += 1) await Promise.resolve()
     })
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
     })
   }
+
+  it('×3 cliqué deux fois : éteint, aucun essai ne part (conv-1479)', async () => {
+    await monter()
+    await h!.type('refais le carnet du fil')
+    const bouton = h!.container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Essaie 3 façons"]'
+    )
+    await act(async () => {
+      bouton!.click()
+    })
+    await act(async () => {
+      bouton!.click()
+    })
+    expect(bouton!.getAttribute('aria-pressed')).toBe('false')
+    expect(api.conversationEssaisEnParallele).not.toHaveBeenCalled()
+    expect(api.conversationsFork).not.toHaveBeenCalled()
+  })
 
   it('trois branches, chacune dans SA copie, chacune avec SA façon, ouvertes en mosaïque', async () => {
     await monter()
@@ -149,13 +174,11 @@ describe('ChatView — « Essaie 3 façons »', () => {
     )
   })
 
-  it('sans demande tapée : rien ne part, aucune copie ne s’ouvre, la raison est dite', async () => {
+  it('sans demande tapée : rien ne part, aucune copie ne s’ouvre', async () => {
     await monter()
     await cliquerTroisFacons()
     expect(api.conversationEssaisEnParallele).not.toHaveBeenCalled()
     expect(api.pilotChat).not.toHaveBeenCalled()
-    expect(h!.container.querySelector('[data-testid="chat-workflow-notice"]')?.textContent).toMatch(
-      /demande/i
-    )
+    // Bascule (conv-1479) : sans texte, l'envoi est grisé — ×3 armé n'a rien à faire partir.
   })
 })

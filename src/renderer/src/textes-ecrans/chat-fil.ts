@@ -358,6 +358,7 @@ export const TEXTES_FR = {
   'revenir.fait':
     "Code remis à son état du début de ce tour, dans une copie séparée : {chemin}. Ce fil y travaille ; le dossier partagé n'a pas bougé. Les dépendances (node_modules) n'y sont pas reliées : installe-les avant d'y lancer les tests.",
   'essai.ecrisDabord': 'Écris d’abord la demande à essayer de 3 façons.',
+  'essai.pendantTour': '×3 éteint : le fil travaille encore. Rien n’est parti — renvoie quand il a fini.',
   'essai.ouvreDabord': 'Ouvre d’abord le fil où essayer cette demande de 3 façons.',
   'essai.titre': 'Essai',
   'essai.refusee': 'façon {rang} ({raison})',
@@ -580,7 +581,7 @@ export const TEXTES_FR = {
   'question.motif.echec': 'La question a échoué : {detail}',
   'saisie.troisFacons': 'Essaie 3 façons',
   'saisie.troisFacons.titre':
-    'Essaie 3 façons : la demande tapée part dans 3 branches du fil, chacune dans sa copie séparée du code, ouvertes en mosaïque. Coûte 3 tours.',
+    'Bascule Essaie 3 façons : une fois activée, la prochaine demande envoyée part dans 3 branches du fil, chacune dans sa copie séparée du code, ouvertes en mosaïque. Coûte 3 tours.',
   'saisie.arreterReponse': 'Arrêter la réponse',
   'saisie.arreterReponse.titre': 'Arrêter la réponse en cours (indépendant de ce qui est tapé)',
   'saisie.arret': 'Arrêt…',
@@ -930,6 +931,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'revenir.fait':
     'Code restored to its state at the start of this turn, in a separate copy: {chemin}. This thread works there; the shared folder has not moved. Dependencies (node_modules) are not linked there: install them before running the tests there.',
   'essai.ecrisDabord': 'First write the request to try in 3 ways.',
+  'essai.pendantTour': '×3 turned off: this thread is still working. Nothing was sent — send again when it is done.',
   'essai.ouvreDabord': 'First open the thread where this request should be tried in 3 ways.',
   'essai.titre': 'Try',
   'essai.refusee': 'way {rang} ({raison})',
@@ -1150,7 +1152,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'question.motif.echec': 'The question failed: {detail}',
   'saisie.troisFacons': 'Try 3 ways',
   'saisie.troisFacons.titre':
-    'Try 3 ways: the typed request goes into 3 branches of the thread, each in its own separate copy of the code, opened in the mosaic. Costs 3 turns.',
+    'Try 3 ways toggle: once on, the next request you send goes into 3 branches of the thread, each in its own separate copy of the code, opened in the mosaic. Costs 3 turns.',
   'saisie.arreterReponse': 'Stop the answer',
   'saisie.arreterReponse.titre': 'Stop the current answer (whatever is typed)',
   'saisie.arret': 'Stopping…',

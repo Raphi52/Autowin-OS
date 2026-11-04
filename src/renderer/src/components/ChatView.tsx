@@ -4865,6 +4865,14 @@ export function ChatView({
    * n'est fusionné dans le dossier partagé : garder une façon reste un geste de l'utilisateur. Chaque
    * branche est un tour payé — trois fois le coût d'un tour, et l'avis le dit.
    */
+  // Armé POUR UN FIL (conv-1491) : un booléen global restait allumé en changeant de fil, et
+  // l'envoi suivant partait en 3 branches dans un AUTRE fil que celui où ×3 avait été cliqué.
+  const [troisFaconsFil, setTroisFaconsFil] = useState<string | null>(null)
+  const troisFaconsArme = troisFaconsFil !== null && troisFaconsFil === activeId
+  const setTroisFaconsArme = (arme: boolean | ((courant: boolean) => boolean)): void => {
+    const suivant = typeof arme === 'function' ? arme(troisFaconsArme) : arme
+    setTroisFaconsFil(suivant && activeId ? activeId : null)
+  }
   async function essayerTroisFacons(): Promise<void> {
     const source = activeRef.current
     const demande = texteDuComposer().trim()
@@ -9777,8 +9785,28 @@ export function ChatView({
               onDraftInput={(value) => setDraftInput(composerDraftKeyRef.current, value)}
               onDraftPresence={setBrouillonPresent}
               onBtw={handleBtw}
-              onSend={() => send()}
-              onQueue={queueCurrentMessage}
+              onSend={() => {
+                // Bascule ×3 (conv-1479) : un clic ARME le mode, l'envoi suivant part en 3 façons
+                // puis le mode retombe. Avant, chaque clic lançait 3 tours payés : spam.
+                if (troisFaconsArme) {
+                  setTroisFaconsArme(false)
+                  void essayerTroisFacons()
+                  return
+                }
+                void send()
+              }}
+              onQueue={() => {
+                // ×3 pendant un tour (conv-1491) : la file l'ignorait en silence et ×3 restait
+                // allumé pour un envoi plus tard. On refuse en clair et on éteint.
+                if (troisFaconsArme) {
+                  setTroisFaconsArme(false)
+                  setAppNotice((current) =>
+                    newestNotice(current, { text: texteFil('essai.pendantTour') })
+                  )
+                  return
+                }
+                queueCurrentMessage()
+              }}
               onResume={() => void resumePilotTurn()}
               onPaste={(files) => void addFiles(files)}
               attachmentsNode={rendrePiecesJointesEnAttente(attachments, (fileIndex) =>
@@ -9829,6 +9857,12 @@ export function ChatView({
                   <ModelQuotaIndicator
                     provider={bindingEffectif?.provider}
                     comptes={comptesDeConversation}
+                    openRouter={{
+                      models: modelCatalog,
+                      modeleActif: bindingEffectif?.model,
+                      pending: modelChangePending,
+                      onSelect: (option) => void changerModeleDuFil(option)
+                    }}
                   />
                   {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
                   <button
@@ -9905,8 +9939,9 @@ export function ChatView({
                   {/* « ESSAIE 3 FAÇONS » (conv-1038) : la demande tapée, en trois branches comparées. */}
                   <button
                     type="button"
-                    className="btn composer-trois-facons"
-                    onClick={() => void essayerTroisFacons()}
+                    className={`btn composer-trois-facons${troisFaconsArme ? ' actif' : ''}`}
+                    aria-pressed={troisFaconsArme}
+                    onClick={() => setTroisFaconsArme((arme) => !arme)}
                     aria-label={texteFil('saisie.troisFacons')}
                     title={texteFil('saisie.troisFacons.titre')}
                   >

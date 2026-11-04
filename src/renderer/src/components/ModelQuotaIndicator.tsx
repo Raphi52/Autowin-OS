@@ -8,6 +8,7 @@ import type {
 import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../../../shared/claude-resets'
 import { quotaGradientColor } from './quota-gradient'
 import type { OrchestratorAccounts } from './OrchestratorModelSelector'
+import type { OrchestratorModelOption, RuntimeModel } from './chat-view-model'
 import { createPortal } from 'react-dom'
 import { formaterDate, formaterNombre, langueCourante } from '../langue'
 import type { ValeursDeTexte } from '../textes'
@@ -26,7 +27,27 @@ const providerLabels: Record<string, string> = {
   claude: 'Claude',
   codex: 'ChatGPT',
   gemini: 'Gemini',
-  kimi: 'Kimi'
+  kimi: 'Kimi',
+  openrouter: 'OpenRouter'
+}
+
+/**
+ * OPENROUTER DANS LA POPUP (2026-11-04, conv-1490) : ses modèles gratuits sont rangés sous `claude`
+ * (servis par le CLI Claude, préfixe `openrouter/`, voir src/main/models.ts). La popup les isole par
+ * ce préfixe et les choisit par le MÊME chemin que la pop-up de modèle (changerModeleDuFil).
+ */
+const FOURNISSEUR_OPENROUTER = 'openrouter'
+// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec cet indicateur
+export function modelesOpenRouter(models: readonly RuntimeModel[]): RuntimeModel[] {
+  return models.filter((m) => m.model.startsWith('openrouter/'))
+}
+
+export interface ChoixOpenRouter {
+  models: RuntimeModel[]
+  /** Modèle du fil courant (binding.model), pour marquer la puce active. */
+  modeleActif?: string
+  pending?: boolean
+  onSelect: (option: OrchestratorModelOption) => void
 }
 
 /**
@@ -274,9 +295,12 @@ function expiresLabel(iso: string | undefined): string {
 
 export function ModelQuotaIndicator({
   provider,
-  comptes
+  comptes,
+  openRouter
 }: {
   provider?: string
+  /** Modèles OpenRouter choisissables depuis la popup. Absent ou vide = puce masquée. */
+  openRouter?: ChoixOpenRouter
   /** Choix du compte Claude (même chemin que la pop-up de modèle). Absent = bloc masqué. */
   comptes?: OrchestratorAccounts
 }): React.JSX.Element {
@@ -439,6 +463,7 @@ export function ModelQuotaIndicator({
     ? t('quota.alerte', { fenetre: summary.statusWindowLabel })
     : ''
   const providerQuotas = quotasByProvider(snapshot?.models ?? [])
+  const modelesOR = modelesOpenRouter(openRouter?.models ?? [])
   /**
    * CONSOMME le reset. Irréversible : une confirmation explicite est exigée avant l'appel, pour
    * qu'un clic égaré ne brûle pas le reset offert.
@@ -579,10 +604,12 @@ export function ModelQuotaIndicator({
             role="group"
             aria-label={t('quota.fournisseurAffiche')}
           >
-            {(providerQuotas.length > 0
-              ? providerQuotas.map((model) => model.provider)
-              : [DEFAULT_QUOTA_PROVIDER]
-            ).map((nom) => (
+            {[
+              ...(providerQuotas.length > 0
+                ? providerQuotas.map((model) => model.provider)
+                : [DEFAULT_QUOTA_PROVIDER]),
+              ...(modelesOR.length > 0 ? [FOURNISSEUR_OPENROUTER] : [])
+            ].map((nom) => (
               <button
                 key={nom}
                 type="button"
@@ -597,6 +624,38 @@ export function ModelQuotaIndicator({
             ))}
           </div>
           {error && <p className="model-quota-error">{error}</p>}
+          {affiche === FOURNISSEUR_OPENROUTER && openRouter && (
+            <div className="router-accounts" data-testid="model-quota-openrouter">
+              <span className="router-accounts-title">OpenRouter</span>
+              <div className="router-accounts-list">
+                {modelesOR.map((m) => {
+                  const actif = m.model === openRouter.modeleActif
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`router-account-chip${actif ? ' is-active' : ''}`}
+                      data-testid={`model-quota-openrouter-${m.model}`}
+                      aria-pressed={actif}
+                      disabled={openRouter.pending}
+                      title={m.model}
+                      onClick={() =>
+                        openRouter.onSelect({
+                          provider: m.provider,
+                          model: m.model,
+                          label: m.label ?? m.model,
+                          reasoningEfforts: m.reasoningEfforts ?? [],
+                          defaultReasoningEffort: m.defaultReasoningEffort
+                        })
+                      }
+                    >
+                      {(m.label ?? m.model).replace(/ \(OpenRouter\)$/, '')}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           <div className="model-quota-list">
             {providerQuotas.map((model) => (
               <article key={model.modelId} className="model-quota-row">

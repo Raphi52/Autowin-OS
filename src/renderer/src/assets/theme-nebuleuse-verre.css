@@ -2619,6 +2619,8 @@
   );
 }
 :root[data-theme='nebuleuse-verre'] .composer-input-row > .composer-auto.actif,
+:root[data-theme='nebuleuse-verre'] .composer-input-row > .composer-trois-facons.actif,
+:root[data-theme='nebuleuse-verre'] .composer-input-row > .composer-trois-facons.actif:hover:not(:disabled),
 :root[data-theme='nebuleuse-verre'] .composer-input-row > .composer-auto.actif:hover:not(:disabled) {
   border-color: transparent;
   background:
@@ -2638,7 +2640,7 @@
   > :is(
     .composer-auto:not(.actif),
     .attachment-button,
-    .composer-trois-facons,
+    .composer-trois-facons:not(.actif),
     .composer-question-a-cote:not(.actif),
     .composer-dictee:not(.is-recording):not(.is-transcribing)
   ) {
@@ -2651,7 +2653,7 @@
   > :is(
     .composer-auto:not(.actif),
     .attachment-button,
-    .composer-trois-facons,
+    .composer-trois-facons:not(.actif),
     .composer-question-a-cote:not(.actif),
     .composer-dictee:not(.is-recording):not(.is-transcribing)
   ):hover:not(:disabled) {
