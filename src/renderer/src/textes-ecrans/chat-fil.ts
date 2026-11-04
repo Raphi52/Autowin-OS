@@ -334,6 +334,8 @@ export const TEXTES_FR = {
   'modele.nonEnregistreNouveauFil': 'Modèle non enregistré sur le nouveau fil : {raison}',
   'modele.redemarrer': 'redémarre Autowin pour activer le modèle par conversation',
   'modele.changementNonEnregistre': 'Changement non enregistré : {raison}',
+  'modele.studioNonMisAJour':
+    'Modèle retenu pour ce fil, mais l’orchestrateur d’Agents Studio n’a pas changé : {raison}',
   'pj.maximum': 'Maximum {max} fichiers par message.',
   'pj.tropGros': '{nom} dépasse la limite de 10 Mo.',
   'pj.imageVide':
@@ -907,6 +909,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'modele.nonEnregistreNouveauFil': 'Model not saved on the new thread: {raison}',
   'modele.redemarrer': 'restart Autowin to enable the per-conversation model',
   'modele.changementNonEnregistre': 'Change not saved: {raison}',
+  'modele.studioNonMisAJour':
+    'Model kept for this thread, but the Agents Studio orchestrator did not change: {raison}',
   'pj.maximum': 'Maximum {max} files per message.',
   'pj.tropGros': '{nom} exceeds the 10 MB limit.',
   'pj.imageVide':

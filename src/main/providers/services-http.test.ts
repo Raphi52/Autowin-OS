@@ -14,16 +14,10 @@ describe('services HTTP servis sans CLI (conv-1499)', () => {
     expect(ROUTED_PROVIDERS.slice(0, 2)).toEqual(['claude', 'codex'])
   })
 
-  it('catalogue : un service avec clé apparaît, sous son propre moteur', () => {
-    const m = modelesServicesHttp({ GROQ_API_KEY: 'k' })
-    expect(m.length).toBeGreaterThan(0)
-    expect(m.every((x) => x.provider === 'api-groq' && x.id === `api-groq/${x.model}`)).toBe(true)
-  })
-
-  it('catalogue : sans clé, rien ; Ollama seulement sur activation explicite', () => {
-    expect(modelesServicesHttp({})).toEqual([])
-    expect(modelesServicesHttp({ AUTOWIN_OLLAMA: '1' }).map((x) => x.provider)).toContain(
-      'api-ollama'
-    )
+  it('aucun service par clé d’API : abonnements seulement (conv-1522)', () => {
+    expect(SERVICES_HTTP).toEqual([])
+    const cles = { GEMINI_API_KEY: 'k', XAI_API_KEY: 'k', MISTRAL_API_KEY: 'k', NVIDIA_API_KEY: 'k' }
+    expect(modelesServicesHttp(cles)).toEqual([])
+    expect(ROUTED_PROVIDERS.some((p) => p.startsWith('api-'))).toBe(false)
   })
 })

@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildModelQuotaSnapshot,
   getModelQuotaSnapshot,
@@ -57,6 +57,20 @@ const models = [
     defaultReasoningEffort: 'none' as const
   }
 ]
+
+// La sonde de quota des services directs (conv-1499) lirait la vraie clé du poste : on la coupe ici.
+beforeEach(() => {
+  for (const cle of [
+    'GEMINI_API_KEY',
+    'MISTRAL_API_KEY',
+    'MISTRAL_API_KEY',
+    'CEREBRAS_API_KEY',
+    'GITHUB_MODELS_TOKEN',
+    'NVIDIA_API_KEY'
+  ])
+    vi.stubEnv(cle, '')
+})
+afterEach(() => vi.unstubAllEnvs())
 
 describe('quotas modèles', () => {
   it('prend le dernier événement Codex non nul et classe ses fenêtres', async () => {
@@ -866,3 +880,4 @@ describe('quota d’un compte nommé', () => {
     expect(fetchFn).toHaveBeenCalledTimes(2)
   })
 })
+

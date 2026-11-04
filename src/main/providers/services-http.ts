@@ -6,8 +6,7 @@
  * ajouter une ligne, sans toucher au registre, au catalogue ni à la liste des moteurs routés.
  *
  * Identifiants préfixés `api-` : `gemini` est un ancien moteur retiré, toléré en lecture des données
- * anciennes (`model-aliases`) ; un identifiant neuf évite toute confusion avec lui ou avec la voie
- * Groq déjà servie par Codex (`codex/groq/…`).
+ * anciennes (`model-aliases`) ; un identifiant neuf évite toute confusion avec lui.
  */
 import { OpenAICompatAdapter } from './openai-compat'
 
@@ -20,47 +19,15 @@ export interface ServiceHttp {
   /** Pour un service sans clé : variable qui l'active explicitement (un Ollama n'est pas présumé). */
   activeEnv?: string
   modeles: readonly string[]
+  /** Montré dans le menu même sans clé (onglet visible ; l'appel refuse tant que la clé manque). */
+  toujoursVisible?: boolean
 }
 
-export const SERVICES_HTTP = [
-  {
-    id: 'api-gemini',
-    libelle: 'Gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
-    apiKeyEnv: 'GEMINI_API_KEY',
-    modeles: ['gemini-2.5-flash', 'gemini-2.5-pro']
-  },
-  {
-    id: 'api-groq',
-    libelle: 'Groq',
-    baseUrl: 'https://api.groq.com/openai/v1',
-    apiKeyEnv: 'GROQ_API_KEY',
-    modeles: ['moonshotai/kimi-k2-instruct', 'qwen/qwen3-32b', 'openai/gpt-oss-120b']
-  },
-  {
-    id: 'api-mistral',
-    libelle: 'Mistral',
-    baseUrl: 'https://api.mistral.ai/v1',
-    apiKeyEnv: 'MISTRAL_API_KEY',
-    modeles: ['devstral-medium-latest', 'mistral-medium-latest']
-  },
-  {
-    id: 'api-cerebras',
-    libelle: 'Cerebras',
-    baseUrl: 'https://api.cerebras.ai/v1',
-    apiKeyEnv: 'CEREBRAS_API_KEY',
-    modeles: ['qwen-3-coder-480b', 'gpt-oss-120b']
-  },
-  {
-    id: 'api-ollama',
-    libelle: 'Ollama (local)',
-    baseUrl: 'http://localhost:11434/v1',
-    activeEnv: 'AUTOWIN_OLLAMA',
-    modeles: ['qwen3-coder', 'llama3.3']
-  }
-] as const satisfies readonly ServiceHttp[]
+// Liste vidée le 2026-11-04 (conv-1522) : l'utilisateur ne veut AUCUN modèle par clé d'API, seulement
+// ses abonnements (Claude, ChatGPT/Codex, Gemini par agy, Grok par son CLI).
+export const SERVICES_HTTP: readonly ServiceHttp[] = []
 
-export type ServiceHttpId = (typeof SERVICES_HTTP)[number]['id']
+export type ServiceHttpId = string
 
 /** Un service est actif quand sa clé est posée, ou, pour un service local, quand il est activé. */
 export function serviceHttpActif(s: ServiceHttp, env: NodeJS.ProcessEnv = process.env): boolean {
@@ -95,12 +62,14 @@ export function modelesServicesHttp(env: NodeJS.ProcessEnv = process.env): Array
   defaultReasoningEffort: 'none'
   dynamicallyLoaded: boolean
 }> {
-  return servicesHttpActifs(env).flatMap((s) =>
+  return SERVICES_HTTP.filter(
+    (s: ServiceHttp) => serviceHttpActif(s, env) || s.toujoursVisible
+  ).flatMap((s: ServiceHttp) =>
     s.modeles.map((m) => ({
       id: `${s.id}/${m}`,
       provider: s.id,
       model: m,
-      label: `${m} (${s.libelle}, direct)`,
+      label: `${m} (${s.libelle})`,
       reasoningEfforts: ['none' as const],
       defaultReasoningEffort: 'none' as const,
       dynamicallyLoaded: true

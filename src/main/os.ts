@@ -4,6 +4,8 @@
  * Principe : rien d'exposé ici n'est mort — chaque méthode a un appelant réel
  * (chat, orchestration, dashboards, graphe 3D).
  */
+import { AgyAdapter } from './providers/agy'
+import { GrokAdapter } from './providers/grok'
 import { adaptateursServicesHttp } from './providers/services-http'
 import { Notification, app } from 'electron'
 import { traduireCoeur } from './textes-coeur'
@@ -586,6 +588,10 @@ export class AutowinOS {
       // plus, donc jamais lancés, jamais sondés, jamais routés. Voir `routed-providers.ts`.
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
+      // Gemini par l'abonnement Google (conv-1499) : choisi à la main, jamais exécuteur par défaut.
+      .register(new AgyAdapter())
+      // Grok par l'abonnement SuperGrok, via le CLI officiel d'xAI (conv-1499).
+      .register(new GrokAdapter())
     // Services HTTP sans CLI (conv-1499) : après les deux CLI, donc jamais élus exécuteur par défaut.
     for (const adaptateur of adaptateursServicesHttp()) this.registry.register(adaptateur)
     const executionWorkspace = resolveExecutionWorkspace()

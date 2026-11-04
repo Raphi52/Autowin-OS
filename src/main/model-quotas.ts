@@ -11,6 +11,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { claudeAccountEnv } from './claude-accounts'
 import type { ImportedModel } from './models'
+import { SERVICES_HTTP, serviceHttpActif } from './providers/services-http'
 import type {
   ModelQuotaAvailability,
   ModelQuotaSnapshot,
@@ -177,13 +178,13 @@ export function parseLatestCodexRateLimitSample(jsonl: string): {
 /**
  * QUOTA DES SERVICES DU MOTEUR DIRECT (conv-1503, lot 3 du plan conv-1499).
  *
- * Seul ce qu'un service PUBLIE est montré : les en-têtes `x-ratelimit-*` (format OpenAI, que Groq,
+ * Seul ce qu'un service PUBLIE est montré : les en-têtes `x-ratelimit-*` (format OpenAI,
  * Cerebras et d'autres reprennent) d'une vraie réponse. Un service qui n'en envoie pas reste
  * « Quota non exposé » (`buildModelQuotaSnapshot`) : aucune fenêtre n'est inventée.
  */
 const quotasServicesHttp = new Map<string, ProviderQuota>()
 
-/** « 1m30.5s », « 6ms », « 2h » (OpenAI/Groq) ou un nombre de secondes nu → millisecondes. */
+/** « 1m30.5s », « 6ms », « 2h » (OpenAI) ou un nombre de secondes nu → millisecondes. */
 export function dureeRateLimitMs(raw: string | null | undefined): number | undefined {
   const texte = raw?.trim()
   if (!texte) return undefined
@@ -240,8 +241,54 @@ export function noterQuotaServiceHttp(
   })
 }
 
+/**
+ * Sonde de quota d'un service direct (conv-1499, 2026-11-04) : la mémoire ci-dessus est vide après
+ * chaque redémarrage, et `/models` d’un service n'envoie aucun en-tête x-ratelimit (vérifié par curl).
+ * Seule une vraie complétion les porte : un appel d'UN jeton par service actif sans mesure, au plus
+ * une fois toutes les 30 min, remplit la barre sans attendre la première tâche.
+ */
+const SONDE_QUOTA_MS = 30 * 60_000
+const derniereSonde = new Map<string, number>()
+
+export async function sonderQuotasServicesHttp(
+  fetchFn: typeof fetch,
+  now: number,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<void> {
+  await Promise.all(
+    SERVICES_HTTP.filter(
+      (s) =>
+        s.apiKeyEnv &&
+        serviceHttpActif(s, env) &&
+        !quotasServicesHttp.has(s.id) &&
+        now - (derniereSonde.get(s.id) ?? -Infinity) >= SONDE_QUOTA_MS
+    ).map(async (s) => {
+      derniereSonde.set(s.id, now)
+      try {
+        const rep = await fetchFn(`${s.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${env[s.apiKeyEnv as string]}`
+          },
+          body: JSON.stringify({
+            model: s.modeles[0],
+            messages: [{ role: 'user', content: 'ok' }],
+            max_tokens: 1
+          }),
+          signal: AbortSignal.timeout(10_000)
+        })
+        noterQuotaServiceHttp(s.id, rep.headers, now)
+      } catch {
+        // Réseau absent : la barre reste « Quota non exposé », la prochaine sonde réessaiera.
+      }
+    })
+  )
+}
+
 export function resetQuotasServicesHttpForTests(): void {
   quotasServicesHttp.clear()
+  derniereSonde.clear()
 }
 
 function windowsForModel(model: ImportedModel, quota: ProviderQuota): ModelQuotaWindow[] {
@@ -891,7 +938,8 @@ export async function getModelQuotaSnapshot(
       now,
       options.renouvelerSession ?? renouvellementSession
     ),
-    codexQuota(home, now)
+    codexQuota(home, now),
+    sonderQuotasServicesHttp(options.fetchFn ?? fetch, now)
   ])
   const value = buildModelQuotaSnapshot(
     models,

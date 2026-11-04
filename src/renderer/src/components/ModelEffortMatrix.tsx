@@ -4,22 +4,16 @@ import type { OrchestratorModelOption } from './chat-view-model'
 import { effortLabel, sortEfforts } from './model-effort-labels'
 import { recommendedEffort } from './model-effort-recommendations'
 import { shortModelLabel } from './model-display-label'
+import { LIBELLES_FOURNISSEURS } from './provider-labels'
 
 /**
- * ONGLETS PAR FOURNISSEUR (2026-11-04, conv-1496) : les modèles OpenRouter sont servis sous
- * `claude` (préfixe `openrouter/`, src/main/models.ts) et se mêlaient aux modèles Claude. On les
- * sépare par ce préfixe, et chaque fournisseur devient un onglet, comme la barre de quotas.
+ * ONGLETS PAR FOURNISSEUR (2026-11-04, conv-1496) : chaque fournisseur devient un onglet, comme la
+ * barre de quotas (OpenRouter retiré, conv-1520).
  */
-const LIBELLES_FOURNISSEUR: Record<string, string> = {
-  claude: 'Claude',
-  codex: 'ChatGPT',
-  gemini: 'Gemini',
-  kimi: 'Kimi',
-  openrouter: 'OpenRouter'
-}
+const LIBELLES_FOURNISSEUR = LIBELLES_FOURNISSEURS
 // eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec la matrice
 export function fournisseurDeLigne(row: { model: string; option: { provider: string } }): string {
-  return row.model.startsWith('openrouter/') ? 'openrouter' : row.option.provider
+  return row.option.provider
 }
 
 /**

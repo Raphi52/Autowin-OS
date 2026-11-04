@@ -272,12 +272,12 @@ describe('ModelEffortMatrix — pastille verte « recommandé »', () => {
     efforts
   })
 
-  it('range les modèles openrouter/ dans leur propre onglet, pas sous Claude (conv-1496)', async () => {
+  it('range chaque fournisseur dans son onglet (conv-1496)', async () => {
     const view = await render(
       createElement(ModelEffortMatrix, {
         rows: [
           ligne('claude', 'claude-opus-5', ['low', 'high']),
-          ligne('claude', 'openrouter/google/gemma-4', ['low', 'high'])
+          ligne('codex', 'gpt-5', ['low', 'high'])
         ],
         activeKey: null,
         onSelect: vi.fn(),
@@ -286,13 +286,13 @@ describe('ModelEffortMatrix — pastille verte « recommandé »', () => {
     )
     expect([...view.querySelectorAll('[role="tab"]')].map((n) => n.textContent)).toEqual([
       'Claude',
-      'OpenRouter'
+      'ChatGPT'
     ])
-    expect(view.querySelector('[data-row="claude:openrouter/google/gemma-4"]')).toBeNull()
+    expect(view.querySelector('[data-row="codex:gpt-5"]')).toBeNull()
     await act(async () =>
-      (view.querySelector('[data-testid="effort-matrix-onglet-openrouter"]') as HTMLElement).click()
+      (view.querySelector('[data-testid="effort-matrix-onglet-codex"]') as HTMLElement).click()
     )
-    expect(view.querySelector('[data-row="claude:openrouter/google/gemma-4"]')).not.toBeNull()
+    expect(view.querySelector('[data-row="codex:gpt-5"]')).not.toBeNull()
     expect(view.querySelector('[data-row="claude:claude-opus-5"]')).toBeNull()
   })
 

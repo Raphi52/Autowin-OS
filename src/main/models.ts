@@ -31,13 +31,14 @@ import { listCodexAppServerModels, type CodexAppServerModel } from './codex-mode
 import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import { resolveClaudeBin } from './providers/claude'
 import { CodexCliIntrouvable } from './providers/codex'
-import {
-  chargerModelesGratuits,
-  PREFIXE_OPENROUTER,
-  type OpenRouterModel
-} from './openrouter-free-models'
-import { modelesServicesHttp } from './providers/services-http'
-import { chargerModelesGroq, PREFIXE_GROQ, type GroqModel } from './groq-free-models'
+import { modelesServicesHttp, SERVICES_HTTP } from './providers/services-http'
+import { catalogueAgy } from './providers/agy-modeles'
+import { catalogueGrok } from './providers/grok-modeles'
+
+/** Clés lues par le catalogue ; index.ts les reprend de l'OS avant chaque relevé (conv-1499). */
+export const CLES_FOURNISSEURS: readonly string[] = [
+  ...new Set(SERVICES_HTTP.flatMap((s) => (s.apiKeyEnv ? [s.apiKeyEnv] : [])))
+]
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -443,15 +444,14 @@ export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
   cachePath?: string,
   cliModelIds: ClaudeCliModelIdsFn = realClaudeCliModelIds,
-  listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels,
-  listOpenRouterFn: () => Promise<OpenRouterModel[]> = () => chargerModelesGratuits(fetchFn),
-  listGroqFn: () => Promise<GroqModel[]> = () => chargerModelesGroq(fetchFn)
+  listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels
 ): Promise<ImportedModel[]> {
-  const [claude, codex, openRouter, groq] = await Promise.all([
+  // agy : `agy models` liste les modèles Gemini du compte, en parallèle des deux autres (conv-1530).
+  const [claude, codex, agy, grok] = await Promise.all([
     discoverClaudeModels(fetchFn, cliModelIds),
     discoverCodexModels(listCodexModelsFn),
-    discoverOpenRouterModels(listOpenRouterFn),
-    discoverGroqModels(listGroqFn)
+    catalogueAgy(),
+    catalogueGrok()
   ])
   const cacheUpdates: Partial<ModelCatalogCache> = {}
   if (codex.live) cacheUpdates.codex = codex.models
@@ -485,59 +485,15 @@ export async function discoverImportedModels(
     dropRedundantClaudeAliases([
       ...resolvedClaudeModels,
       ...codexModels,
-      ...openRouter,
-      ...groq,
       ...modelesServicesHttp(),
+      ...agy,
+      ...grok,
       ...DEFAULT_IMPORTED_MODELS
     ]).filter((model) => ROUTED_PROVIDERS.includes(model.provider as RoutedProvider))
   )
 }
 
-/**
- * MODÈLES GRATUITS D'OPENROUTER (2026-11-04, conv-1471) : rangés sous `claude`, car c'est le CLI
- * Claude qui les sert (ANTHROPIC_BASE_URL, voir `openrouter-free-models.ts`) — pas de nouveau moteur
- * routé. Liste live uniquement, jamais en cache : un réseau muet n'en montre aucun.
- */
-async function discoverOpenRouterModels(
-  listFn: () => Promise<OpenRouterModel[]>
-): Promise<ImportedModel[]> {
-  try {
-    return (await listFn()).map<ImportedModel>((m) => ({
-      id: `claude/${PREFIXE_OPENROUTER}${m.id}`,
-      provider: 'claude',
-      model: `${PREFIXE_OPENROUTER}${m.id}`,
-      label: `${m.name ?? m.id} (OpenRouter)`,
-      reasoningEfforts: [...CLAUDE_EFFORTS],
-      defaultReasoningEffort: 'medium',
-      dynamicallyLoaded: true
-    }))
-  } catch {
-    // Catalogue OpenRouter injoignable : la voie se tait, les autres restent (même règle que codex).
-    return []
-  }
-}
-
-/**
- * MODÈLES GRATUITS DE GROQ (2026-11-04, conv-1499) : rangés sous `codex`, car c'est le CLI Codex qui
- * les sert (`-c model_providers.groq.*`, voir `groq-free-models.ts`). Live seulement ; sans clé ou
- * réseau muet, aucun.
- */
-async function discoverGroqModels(listFn: () => Promise<GroqModel[]>): Promise<ImportedModel[]> {
-  try {
-    return (await listFn()).map<ImportedModel>((m) => ({
-      id: `codex/${PREFIXE_GROQ}${m.id}`,
-      provider: 'codex',
-      model: `${PREFIXE_GROQ}${m.id}`,
-      label: `${m.id} (Groq, gratuit)`,
-      // Effort non transmis à Groq (Kimi/Llama refusent `reasoning`) : seul `none` est proposé.
-      reasoningEfforts: ['none'],
-      defaultReasoningEffort: 'none',
-      dynamicallyLoaded: true
-    }))
-  } catch {
-    return []
-  }
-}
+// OpenRouter retiré du catalogue (2026-11-04, conv-1520) : jugé inutilisable par l'utilisateur.
 
 /**
  * Retire les ALIAS de famille (`claude/opus`, `claude/fable`…) des qu'une VERSION NOMMEE de la meme

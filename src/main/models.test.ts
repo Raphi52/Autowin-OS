@@ -1,10 +1,16 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Ces tests portent sur la voie Claude : aucun ne doit lancer le vrai CLI Codex du poste.
 vi.mock('./codex-model-source', () => ({ listCodexAppServerModels: async () => [] }))
+// agy est installé ou non selon le poste (conv-1499) : le catalogue testé n'en dépend pas.
+vi.mock('./providers/agy', () => ({ modelesAgy: () => [] }))
+vi.mock('./providers/agy-modeles', () => ({ catalogueAgy: async () => [] }))
+// Même chose pour grok (CLI d'xAI, conv-1499).
+vi.mock('./providers/grok', () => ({ modelesGrok: () => [] }))
+vi.mock('./providers/grok-modeles', () => ({ catalogueGrok: async () => [] }))
 
 import {
   DEFAULT_IMPORTED_MODELS,
@@ -13,6 +19,16 @@ import {
   loadCachedImportedModels
 } from './models'
 import { appendClaudeSelectionArgs } from './providers/claude'
+
+// Clés réelles du poste (setx MISTRAL_API_KEY…) : le catalogue les lit dans process.env et ajouterait
+// les modèles des services directs. Les tests restent hermétiques (conv-1499).
+const CLES_DU_POSTE = ['GEMINI_API_KEY', 'MISTRAL_API_KEY', 'CEREBRAS_API_KEY', 'GITHUB_MODELS_TOKEN', 'NVIDIA_API_KEY']
+beforeEach(() => {
+  for (const cle of CLES_DU_POSTE) vi.stubEnv(cle, '')
+})
+afterEach(() => {
+  vi.unstubAllEnvs()
+})
 
 /**
  * Le catalogue Claude lit desormais les ids du BINAIRE du CLI installe. Sans stub, ces tests
@@ -36,11 +52,10 @@ describe('catalogue Agents dynamique', () => {
       })
     )
 
-    const models = await discoverImportedModels(
-      fetchFn as unknown as typeof fetch,
-      undefined,
-      cliIds
-    )
+    // Grok (xAI) reste visible sans clé (onglet voulu, conv-1517) : hors du sujet de ces tests.
+    const models = (
+      await discoverImportedModels(fetchFn as unknown as typeof fetch, undefined, cliIds)
+    ).filter((m) => m.provider !== 'api-xai')
 
     // Un ALIAS de famille dont la version NOMMEE est connue ne figure plus dans la liste : elle ne
     // propose que des modeles precis (demande du 2026-09-09, « enleve ceux avec ecrit (dernier) »).
@@ -92,11 +107,10 @@ describe('catalogue Agents dynamique', () => {
       throw new Error('service local absent')
     })
 
-    const models = await discoverImportedModels(
-      fetchFn as unknown as typeof fetch,
-      undefined,
-      cliIds
-    )
+    // Grok (xAI) reste visible sans clé (onglet voulu, conv-1517) : hors du sujet de ces tests.
+    const models = (
+      await discoverImportedModels(fetchFn as unknown as typeof fetch, undefined, cliIds)
+    ).filter((m) => m.provider !== 'api-xai')
 
     const claude = models.filter((model) => model.provider === 'claude').map((model) => model.model)
     // LE point : Opus 5 est la, NOMME, sans aucun service tiers — lu dans le binaire du CLI.
@@ -111,11 +125,10 @@ describe('catalogue Agents dynamique', () => {
   it('n’importe AUCUN modèle du compte ChatGPT : Codex est retiré du produit', async () => {
     const fetchFn = vi.fn(async () => Response.json({ data: [{ id: 'claude-fable-5' }] }))
 
-    const models = await discoverImportedModels(
-      fetchFn as unknown as typeof fetch,
-      undefined,
-      cliIds
-    )
+    // Grok (xAI) reste visible sans clé (onglet voulu, conv-1517) : hors du sujet de ces tests.
+    const models = (
+      await discoverImportedModels(fetchFn as unknown as typeof fetch, undefined, cliIds)
+    ).filter((m) => m.provider !== 'api-xai')
 
     // Codex est RETIRÉ : son listing n'est même plus sondé (la fonction n'a plus de source codex à
     // injecter — cf. le banc `models.moteurs-retires`). Il ne reste que Claude.
@@ -373,62 +386,13 @@ describe('sélection Claude depuis Agents', () => {
     expect(args).toEqual(['--model', 'claude-haiku-4-5-20251001', '--autocompact', '170000'])
   })
 
-  it('ajoute les modèles gratuits OpenRouter du listing live, après Claude (conv-1471)', async () => {
+  it('aucun modèle OpenRouter au catalogue (conv-1520)', async () => {
     const models = await discoverImportedModels(
       (async () => new Response('', { status: 500 })) as unknown as typeof fetch,
       undefined,
       cliIds,
-      async () => [],
-      async () => [
-        { id: 'nvidia/nemotron:free', name: 'Nemotron', supported_parameters: ['tools'] }
-      ]
-    )
-    const entree = models.find((m) => m.id === 'claude/openrouter/nvidia/nemotron:free')
-    expect(entree).toMatchObject({ provider: 'claude', model: 'openrouter/nvidia/nemotron:free' })
-    expect(entree?.label).toBe('Nemotron (OpenRouter)')
-    expect(models.findIndex((m) => m === entree)).toBe(models.length - 1)
-  })
-
-  it('ajoute les modèles gratuits Groq sous codex, après OpenRouter (conv-1499)', async () => {
-    const models = await discoverImportedModels(
-      (async () => new Response('', { status: 500 })) as unknown as typeof fetch,
-      undefined,
-      cliIds,
-      async () => [],
-      async () => [],
-      async () => [{ id: 'moonshotai/kimi-k2-instruct' }]
-    )
-    const entree = models.find((m) => m.id === 'codex/groq/moonshotai/kimi-k2-instruct')
-    expect(entree).toMatchObject({ provider: 'codex', model: 'groq/moonshotai/kimi-k2-instruct' })
-    expect(entree?.label).toBe('moonshotai/kimi-k2-instruct (Groq, gratuit)')
-  })
-
-  it('catalogue Groq en échec : aucune entrée Groq, le reste intact', async () => {
-    const models = await discoverImportedModels(
-      (async () => new Response('', { status: 500 })) as unknown as typeof fetch,
-      undefined,
-      cliIds,
-      async () => [],
-      async () => [],
-      async () => {
-        throw new Error('HTTP 401')
-      }
-    )
-    expect(models.some((m) => m.id.includes('/groq/'))).toBe(false)
-    expect(models.length).toBeGreaterThan(0)
-  })
-
-  it('catalogue OpenRouter injoignable : aucune entrée OpenRouter, le reste intact', async () => {
-    const models = await discoverImportedModels(
-      (async () => new Response('', { status: 500 })) as unknown as typeof fetch,
-      undefined,
-      cliIds,
-      async () => [],
-      async () => {
-        throw new Error('réseau')
-      }
+      async () => []
     )
     expect(models.some((m) => m.model.startsWith('openrouter/'))).toBe(false)
-    expect(models.length).toBeGreaterThan(0)
   })
 })

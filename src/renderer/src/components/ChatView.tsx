@@ -1623,7 +1623,31 @@ export function ChatView({
    * main relit au départ de chacun de ses tours. Sans conversation ouverte, il est ARMÉ pour le
    * fil qui va naître. Le défaut de l'application se règle toujours dans Routage.
    * `option === null` : revenir au modèle par défaut.
+   *
+   * ET L'ORCHESTRATEUR D'AGENTS STUDIO SUIT (conv-1529, 2026-11-04 : « quand je change de model et
+   * d'effort depuis un chat ca doit changer l'orchestrator de agents studio »). Le fil garde son
+   * choix propre (conv-239) : un fil qui a choisi son modèle ne bouge pas quand un autre change ;
+   * seuls les fils sans choix propre suivent le nouveau défaut. Revenir au défaut ne touche pas
+   * Agents Studio.
    */
+  async function poserOrchestrateurDuStudio(option: OrchestratorModelOption): Promise<void> {
+    try {
+      // `setRole` réécrit la topologie puis prévient les écrans (`scope: 'roles'`) : Agents Studio
+      // et l'en-tête de ce fil se relisent seuls.
+      await window.api.setRole(
+        'orchestrator',
+        option.provider,
+        option.model,
+        option.reasoningEffort
+      )
+    } catch (error) {
+      setModelChangeError(
+        texteFil('modele.studioNonMisAJour', {
+          raison: error instanceof Error ? error.message : String(error)
+        })
+      )
+    }
+  }
   async function changerModeleDuFil(option: OrchestratorModelOption | null): Promise<void> {
     if (busy || modelChangePending) return
     setModelChangeError(null)
@@ -1637,6 +1661,7 @@ export function ChatView({
             }
           : null
       )
+      if (option) await poserOrchestrateurDuStudio(option)
       return
     }
     const cible = activeId
@@ -1660,6 +1685,7 @@ export function ChatView({
           return reste
         })
       )
+      if (option) await poserOrchestrateurDuStudio(option)
     } catch (error) {
       setModelChangeError(
         texteFil('modele.changementNonEnregistre', {
@@ -5546,12 +5572,6 @@ export function ChatView({
                   <ModelQuotaIndicator
                     provider={bindingEffectif?.provider}
                     comptes={comptesDeConversation}
-                    openRouter={{
-                      models: modelCatalog,
-                      modeleActif: bindingEffectif?.model,
-                      pending: modelChangePending,
-                      onSelect: (option) => void changerModeleDuFil(option)
-                    }}
                   />
                   {/* MODE AUTO DE CE FIL — distinct du bouton global de la liste des conversations. */}
                   <button

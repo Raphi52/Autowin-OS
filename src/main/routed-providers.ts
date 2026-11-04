@@ -13,9 +13,13 @@ import { SERVICES_HTTP, type ServiceHttpId } from './providers/services-http'
  * Ouverte le 2026-11-04 (conv-1499) : aux deux CLI s'ajoutent les services HTTP déclarés dans
  * `providers/services-http.ts`, servis sans CLI. Un service nouveau s'y déclare, jamais ici.
  */
-export const ROUTED_PROVIDERS: readonly ('claude' | 'codex' | ServiceHttpId)[] = [
+// `agy` (2026-11-04, conv-1499) : Gemini par l'abonnement Google, via Antigravity CLI.
+export const ROUTED_PROVIDERS: readonly ('claude' | 'codex' | 'agy' | 'grok' | ServiceHttpId)[] = [
   'claude',
   'codex',
+  'agy',
+  // `grok` (conv-1499) : Grok par l'abonnement SuperGrok, via le CLI officiel d'xAI.
+  'grok',
   ...SERVICES_HTTP.map((s) => s.id)
 ]
 

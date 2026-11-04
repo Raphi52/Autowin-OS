@@ -72,6 +72,15 @@ const STATUT_LABEL: Record<string, Parameters<typeof traduireChatPanneaux>[0]> =
 /** Les états sous lesquels un prompt ne partirait pas : le choix est refusé, pas juste décoré. */
 const STATUTS_BLOQUANTS = new Set(['expired', 'absent', 'standby'])
 
+/**
+ * Services directs (`api-xai`, `api-mistral`…) : sans niveau de réflexion, ils prennent un onglet de la
+ * matrice avec un cran unique « Standard », au lieu d'une liste sous elle (conv-1517, onglet Grok).
+ */
+// agy (Gemini par abonnement) a son onglet comme les services directs, à l'image de la barre de
+// quota (conv-1499) : il tombait sinon dans « Autres ».
+const enOngletSansCran = (provider: string): boolean =>
+  provider.startsWith('api-') || provider === 'agy' || provider === 'grok'
+
 export function OrchestratorModelSelector({
   busy,
   catalogLoaded,
@@ -210,7 +219,13 @@ export function OrchestratorModelSelector({
           label: option.label,
           model: option.model,
           option,
-          efforts: option.reasoningEfforts.filter((effort) => effort !== 'none'),
+          // Un service direct sans niveau de réflexion (Grok…) garde un cran unique
+          // « none » : sans lui, la ligne était filtrée et son onglet n'existait pas (conv-1517).
+          efforts: option.reasoningEfforts.some((effort) => effort !== 'none')
+            ? option.reasoningEfforts.filter((effort) => effort !== 'none')
+            : enOngletSansCran(option.provider)
+              ? ['none']
+              : [],
           blocked: injoignable || busy,
           blockedReason: injoignable
             ? t('selecteur.injoignable', {
@@ -356,11 +371,16 @@ export function OrchestratorModelSelector({
               const sansEffort = group.options.filter(
                 (option) => option.reasoningEfforts.filter((effort) => effort !== 'none').length === 0
               )
-              if (sansEffort.length === 0) return null
+              // Les services directs ont leur onglet dans la matrice (conv-1517) : ils sortent de
+              // cette liste, qui les doublait.
+              const restants = sansEffort.filter(
+                (option) => !(matrixRows.length > 0 && enOngletSansCran(option.provider))
+              )
+              if (restants.length === 0) return null
               return (
                 <section key={group.key} className="model-select-group">
                   <span>{group.label}</span>
-                  {sansEffort.map((option) => {
+                  {restants.map((option) => {
                     const optionKey = `${option.provider}:${option.model}`
                     const selectableEfforts = option.reasoningEfforts.filter(
                       (effort) => effort !== 'none'

@@ -488,27 +488,3 @@ describe('codes de terminaison/déconnexion — transport, pas erreur métier', 
     expect(describeProviderExit({ provider: 'kimi', code: 1 })).not.toContain('modèle')
   })
 })
-
-// Modèles gratuits OpenRouter (conv-1471, 2026-11-04) : leur 429 est une limite de gratuité, pas
-// une panne. Libellé « Rate limit exceeded: free-models-per-day » relevé dans l'aide Janitor AI
-// (https://help.janitorai.com/en/article/openrouter-errors-10ear52) ; corps 429 « Rate limit
-// exceeded » documenté par https://openrouter.ai/docs/api/reference/limits.
-describe('diagnoseProviderFailure — limite gratuite OpenRouter', () => {
-  const echec = (message: string, model = 'openrouter/nvidia/nemotron-3.5-lightning:free') =>
-    diagnoseProviderFailure({ provider: 'claude', model, message })
-
-  it('reconnaît le 429 d’un modèle OpenRouter et donne le geste en français', () => {
-    const d = echec('API Error: 429 {"error":{"message":"Rate limit exceeded: free-models-per-day","code":429}}')
-    expect(d.kind).toBe('free-limit')
-    expect(d.hint).toMatch(/limite gratuite OpenRouter atteinte/i)
-    expect(d.hint).toContain('autre modèle gratuit')
-  })
-
-  it('ne touche pas un 429 d’un modèle Claude ordinaire', () => {
-    expect(echec('API Error: 429 rate limit', 'claude-opus-5').kind).not.toBe('free-limit')
-  })
-
-  it('ne classe pas en limite une autre panne OpenRouter', () => {
-    expect(echec('claude CLI exit 1').kind).not.toBe('free-limit')
-  })
-})

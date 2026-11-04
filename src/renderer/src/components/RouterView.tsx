@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { LIBELLES_FOURNISSEURS } from './provider-labels'
 import './RouterView.css'
 import { ModuleHeader } from './ModuleHeader'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
@@ -38,18 +39,7 @@ const STATUS_LABEL: Record<ProviderDisplayStatus, CleSettings> = {
   standby: 'routeur.statut.standby',
   ready: 'routeur.statut.ready'
 }
-const PROVIDER_LABEL: Record<string, string> = {
-  claude: 'Claude',
-  codex: 'ChatGPT',
-  kimi: 'Kimi',
-  gemini: 'Gemini',
-  // Moteur direct (services-http.ts, conv-1503) : « direct » les distingue des voies servies par un CLI.
-  'api-gemini': 'Gemini (direct)',
-  'api-groq': 'Groq (direct)',
-  'api-mistral': 'Mistral (direct)',
-  'api-cerebras': 'Cerebras (direct)',
-  'api-ollama': 'Ollama (local)'
-}
+const PROVIDER_LABEL = LIBELLES_FOURNISSEURS
 const RE_AUTH_HINT: Record<string, CleSettings> = {
   claude: 'routeur.reauth.claude',
   codex: 'routeur.reauth.codex',

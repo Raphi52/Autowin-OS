@@ -12,7 +12,8 @@ export const LIBELLES_FOURNISSEURS: Readonly<Record<string, string>> = {
   // agy = Gemini par l'abonnement Google ; api-gemini = Gemini par clé.
   agy: 'Gemini',
   'api-gemini': 'Gemini',
-  'api-xai': 'Grok',
+  // grok = Grok par l'abonnement SuperGrok (CLI d'xAI) ; plus de Grok par clé (conv-1499).
+  grok: 'Grok',
   'api-groq': 'Groq',
   'api-mistral': 'Mistral',
   'api-cerebras': 'Cerebras',

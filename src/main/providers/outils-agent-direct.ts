@@ -9,7 +9,7 @@ import type { OutilAgent } from './openai-compat'
  * OUTILS D'AGENT DU MOTEUR DIRECT (conv-1502, lot 2 du plan-23013d9f).
  *
  * Le moteur HTTP `openai-compat.ts` mène lui-même la boucle d'agent : sans outils, un modèle Gemini,
- * Groq ou Ollama ne pouvait que parler. Ici : lire, écrire, éditer, commande shell, grep, glob —
+ * Mistral ou Ollama ne pouvait que parler. Ici : lire, écrire, éditer, commande shell, grep, glob —
  * exécutés dans le dossier de travail DU RUN (`execution.cwd`), jamais dans celui de l'app.
  *
  * PROTECTION : AUCUNE garde neuve. Chaque appel passe par le MÊME script que le hook PreToolUse du

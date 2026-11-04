@@ -122,3 +122,29 @@ export function rechargerEnv(
     detail: `${demande} : ${avant ?? '(absente)'} → ${apres}, appliqué à chaud dans le processus principal.`
   }
 }
+
+/**
+ * CLÉS DES FOURNISSEURS RELUES DEPUIS L'OS (2026-11-04, conv-1499) : `setx MISTRAL_API_KEY` puis
+ * `restart_app` laissait le service absent du sélecteur. Cause prouvée : le redémarrage repasse par le
+ * lanceur (`npm run dev` lancé à 13:37:16 par un cmd.exe déjà là), qui transmet son ANCIEN
+ * environnement — même défaut que `AUTOWIN_SQLCMD_BIN` (conv-152). Le catalogue appelle donc ceci
+ * avant de lire les clés : une clé ABSENTE du processus est reprise de `HKCU\Environment`.
+ * Jamais d'écrasement d'une valeur déjà là, jamais de valeur venue du modèle, aucun journal.
+ */
+export function hydraterClesFournisseurs(
+  noms: readonly string[],
+  options: { lecteur?: LecteurEnvSysteme; env?: NodeJS.ProcessEnv } = {}
+): string[] {
+  const env = options.env ?? process.env
+  const lecteur = options.lecteur ?? lecteurWindows
+  const repris: string[] = []
+  for (const nom of noms) {
+    if (env[nom]?.trim()) continue
+    const valeur = lecteur(nom)
+    if (valeur) {
+      env[nom] = valeur
+      repris.push(nom)
+    }
+  }
+  return repris
+}

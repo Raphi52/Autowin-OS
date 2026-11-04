@@ -115,7 +115,7 @@ describe('selecteur orchestrateur Chat', () => {
     const bloc = document.body.querySelector('[data-testid="conv-model-defaut"]')
     expect(bloc?.textContent).toContain('Revenir au modèle par défaut')
     expect(bloc?.textContent).toContain('Opus 5.5')
-    expect(bloc?.textContent).toContain('Ce choix ne vaut que pour cette conversation')
+    expect(bloc?.textContent).toContain('devient l’orchestrateur d’Agents Studio')
     await act(async () => {
       bloc?.querySelector('button')?.click()
     })
@@ -417,13 +417,14 @@ describe('selecteur orchestrateur Chat', () => {
     expect(anthropic?.options[0].label).toBe('Opus 4.8')
   })
 
-  it('change le modèle de LA conversation sans toucher le rôle partagé', () => {
-    // conv-239 (2026-10-11) : « rends le modèle propre à chaque conversation ». Le sélecteur ne
-    // réécrit plus le rôle orchestrateur global (celui de TOUS les fils) ; il pose le modèle de la
-    // conversation ouverte, que le main relit au départ de chacun de ses tours.
-    expect(source).not.toMatch(/window\.api\.setRole\(\s*'orchestrator'/)
+  it('change le modèle de LA conversation et l’orchestrateur d’Agents Studio', () => {
+    // conv-239 (2026-10-11) : « rends le modèle propre à chaque conversation » — le fil garde son
+    // choix, que le main relit au départ de chacun de ses tours. conv-1529 (2026-11-04) : ce choix
+    // pose AUSSI l'orchestrateur d'Agents Studio, jamais sur « revenir au défaut » (comportement
+    // prouvé par ChatView.modele-studio.test.tsx).
     const choix = source.slice(source.indexOf('async function changerModeleDuFil('))
     const corps = choix.slice(0, choix.indexOf('\n  }\n'))
+    expect(corps.match(/if \(option\) await poserOrchestrateurDuStudio\(option\)/g)).toHaveLength(2)
     expect(corps).toContain('window.api.conversationSetModel(')
     expect(corps).toContain('option ? option.provider : null')
     expect(corps).toContain('option?.model')

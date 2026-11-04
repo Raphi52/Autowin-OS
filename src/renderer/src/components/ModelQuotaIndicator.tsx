@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { LIBELLES_FOURNISSEURS } from './provider-labels'
 import type {
   ModelQuota,
   ModelQuotaLevel,
@@ -8,7 +9,6 @@ import type {
 import type { ClaudeResetClaimResult, ClaudeResetsStatus } from '../../../shared/claude-resets'
 import { quotaGradientColor } from './quota-gradient'
 import type { OrchestratorAccounts } from './OrchestratorModelSelector'
-import type { OrchestratorModelOption, RuntimeModel } from './chat-view-model'
 import { createPortal } from 'react-dom'
 import { formaterDate, formaterNombre, langueCourante } from '../langue'
 import type { ValeursDeTexte } from '../textes'
@@ -23,38 +23,7 @@ type CleDuPanneau = Parameters<typeof traduireChatPanneaux>[0]
 const tx = (cle: CleDuPanneau, valeurs?: ValeursDeTexte): string =>
   traduireChatPanneaux(cle, langueCourante(), valeurs)
 
-const providerLabels: Record<string, string> = {
-  claude: 'Claude',
-  codex: 'ChatGPT',
-  gemini: 'Gemini',
-  kimi: 'Kimi',
-  openrouter: 'OpenRouter',
-  // Moteur direct (conv-1503) : quota montré seulement si le service publie ses en-têtes.
-  'api-gemini': 'Gemini (direct)',
-  'api-groq': 'Groq (direct)',
-  'api-mistral': 'Mistral (direct)',
-  'api-cerebras': 'Cerebras (direct)',
-  'api-ollama': 'Ollama (local)'
-}
-
-/**
- * OPENROUTER DANS LA POPUP (2026-11-04, conv-1490) : ses modèles gratuits sont rangés sous `claude`
- * (servis par le CLI Claude, préfixe `openrouter/`, voir src/main/models.ts). La popup les isole par
- * ce préfixe et les choisit par le MÊME chemin que la pop-up de modèle (changerModeleDuFil).
- */
-const FOURNISSEUR_OPENROUTER = 'openrouter'
-// eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec cet indicateur
-export function modelesOpenRouter(models: readonly RuntimeModel[]): RuntimeModel[] {
-  return models.filter((m) => m.model.startsWith('openrouter/'))
-}
-
-export interface ChoixOpenRouter {
-  models: RuntimeModel[]
-  /** Modèle du fil courant (binding.model), pour marquer la puce active. */
-  modeleActif?: string
-  pending?: boolean
-  onSelect: (option: OrchestratorModelOption) => void
-}
+const providerLabels = LIBELLES_FOURNISSEURS
 
 /**
  * FOURNISSEUR AFFICHE PAR LA BARRE — choisi par l'utilisateur, pas deduit du tour courant.
@@ -134,6 +103,7 @@ export function windowIdLabel(windowId: string | undefined): string {
   if (windowId === 'seven-day') return tx('quota.fenetre.7j')
   // « 5 h » : identique dans les deux langues.
   if (windowId === 'five-hour') return '5 h'
+  if (windowId === 'one-day') return '24 h'
   return windowId ?? tx('quota.fenetre.inconnue')
 }
 
@@ -301,12 +271,9 @@ function expiresLabel(iso: string | undefined): string {
 
 export function ModelQuotaIndicator({
   provider,
-  comptes,
-  openRouter
+  comptes
 }: {
   provider?: string
-  /** Modèles OpenRouter choisissables depuis la popup. Absent ou vide = puce masquée. */
-  openRouter?: ChoixOpenRouter
   /** Choix du compte Claude (même chemin que la pop-up de modèle). Absent = bloc masqué. */
   comptes?: OrchestratorAccounts
 }): React.JSX.Element {
@@ -471,7 +438,6 @@ export function ModelQuotaIndicator({
     ? t('quota.alerte', { fenetre: summary.statusWindowLabel })
     : ''
   const providerQuotas = quotasByProvider(snapshot?.models ?? [])
-  const modelesOR = modelesOpenRouter(openRouter?.models ?? [])
   /**
    * CONSOMME le reset. Irréversible : une confirmation explicite est exigée avant l'appel, pour
    * qu'un clic égaré ne brûle pas le reset offert.
@@ -614,10 +580,11 @@ export function ModelQuotaIndicator({
               aria-label={t('quota.fournisseurAffiche')}
             >
               {[
-                ...(providerQuotas.length > 0
-                  ? providerQuotas.map((model) => model.provider)
-                  : [DEFAULT_QUOTA_PROVIDER]),
-                ...(modelesOR.length > 0 ? [FOURNISSEUR_OPENROUTER] : [])
+                ...new Set(
+                  providerQuotas.length > 0
+                    ? providerQuotas.map((model) => model.provider)
+                    : [DEFAULT_QUOTA_PROVIDER]
+                )
               ].map((nom) => (
                 <button
                   key={nom}
@@ -633,38 +600,6 @@ export function ModelQuotaIndicator({
               ))}
             </div>
             {error && <p className="model-quota-error">{error}</p>}
-            {affiche === FOURNISSEUR_OPENROUTER && openRouter && (
-              <div className="router-accounts" data-testid="model-quota-openrouter">
-                <span className="router-accounts-title">OpenRouter</span>
-                <div className="router-accounts-list">
-                  {modelesOR.map((m) => {
-                    const actif = m.model === openRouter.modeleActif
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        className={`router-account-chip${actif ? ' is-active' : ''}`}
-                        data-testid={`model-quota-openrouter-${m.model}`}
-                        aria-pressed={actif}
-                        disabled={openRouter.pending}
-                        title={m.model}
-                        onClick={() =>
-                          openRouter.onSelect({
-                            provider: m.provider,
-                            model: m.model,
-                            label: m.label ?? m.model,
-                            reasoningEfforts: m.reasoningEfforts ?? [],
-                            defaultReasoningEffort: m.defaultReasoningEffort
-                          })
-                        }
-                      >
-                        {(m.label ?? m.model).replace(/ \(OpenRouter\)$/, '')}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
             <div className="model-quota-list">
               {/* Seules les barres de l'onglet ouvert (2026-11-04, conv-1496) : la liste montrait les
                 quotas Claude quel que soit l'onglet choisi. */}

@@ -232,7 +232,9 @@ import {
 import { createWindowing } from './window'
 import { ModelQuestionHub, type ModelQuestion } from './model-questions'
 import { claudeExeEnCours, maybeUpdateClaudeCli } from './claude-cli-update'
+import { hydraterClesFournisseurs } from './env-reload'
 import {
+  CLES_FOURNISSEURS,
   discoverImportedModels,
   findModel,
   loadCachedImportedModels,
@@ -1350,7 +1352,12 @@ try {
 }
 const modelCatalog = new ModelCatalogRefresher(
   agentModels,
-  () => discoverImportedModels(fetch, modelCatalogCachePath),
+  () => {
+    // Une clé posée par `setx` n'atteint pas le processus : le redémarrage hérite de l'ancien
+    // environnement du lanceur. On la reprend de l'OS avant chaque relevé (env-reload.ts, conv-1499).
+    hydraterClesFournisseurs(CLES_FOURNISSEURS)
+    return discoverImportedModels(fetch, modelCatalogCachePath)
+  },
   {
     freshnessMs: 60_000,
     reconcile: (current, models) => {

@@ -35,7 +35,7 @@ describe('RouterView — services du moteur direct', () => {
             testable: false,
             detail: 'Clé manquante (MISTRAL_API_KEY)'
           },
-          { provider: 'api-groq', status: 'ready', testable: false }
+          { provider: 'api-cerebras', status: 'ready', testable: false }
         ],
         roles: async () => ({}),
         providerTest: vi.fn(),
@@ -53,15 +53,16 @@ describe('RouterView — services du moteur direct', () => {
     })
 
     const mistral = container.querySelector<HTMLElement>('[data-provider="api-mistral"]')!
-    expect(mistral.textContent).toContain('Mistral (direct)')
+    expect(mistral.textContent).toContain('Mistral')
+    expect(mistral.textContent).not.toContain('(direct)')
     expect(
       container.querySelector('[data-testid="router-provider-detail-api-mistral"]')?.textContent
     ).toBe('Clé manquante (MISTRAL_API_KEY)')
     expect(mistral.querySelector('.router-reconnect')).toBeNull()
 
-    const groq = container.querySelector<HTMLElement>('[data-provider="api-groq"]')!
-    expect(groq.dataset.status).toBe('ready')
-    expect(groq.querySelector('.router-badge.is-ready')?.textContent).toMatch(/Prêt|Ready/)
-    expect(groq.querySelector('.router-reconnect')).toBeNull()
+    const cerebras = container.querySelector<HTMLElement>('[data-provider="api-cerebras"]')!
+    expect(cerebras.dataset.status).toBe('ready')
+    expect(cerebras.querySelector('.router-badge.is-ready')?.textContent).toMatch(/Prêt|Ready/)
+    expect(cerebras.querySelector('.router-reconnect')).toBeNull()
   })
 })

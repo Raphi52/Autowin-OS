@@ -51,6 +51,14 @@ export function planProviderLogin(provider: string, bin?: string, configDir?: st
       // La session vit dans le dossier du CLI (`~/.codex`), commun à toutes ses installations : ni
       // préfixe de compte, ni stockage côté Autowin. L'app ne voit jamais le jeton.
       return { kind: 'terminal', command: bin ? `& "${bin}" login` : 'codex login' }
+    case 'agy':
+      // agy lancé SANS argument ouvre sa connexion Google (mesuré, conv-1499) ; sa session vit
+      // dans son propre dossier, l'app ne voit jamais le jeton.
+      return { kind: 'terminal', command: bin ? `& "${bin}"` : 'agy' }
+    case 'grok':
+      // `grok login` ouvre la connexion SuperGrok dans le navigateur ; la session vit dans
+      // ~/.grok/auth.json, l'app ne voit jamais le jeton (conv-1499).
+      return { kind: 'terminal', command: bin ? `& "${bin}" login` : 'grok login' }
     default:
       throw new Error(`Aucun login connu pour le provider: ${provider}`)
   }

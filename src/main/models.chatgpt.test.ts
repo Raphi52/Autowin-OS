@@ -1,8 +1,11 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CodexAppServerModel } from './codex-model-source'
+
+// Le catalogue lance `agy models` quand agy est installé (conv-1530) : jamais dans ces tests.
+vi.mock('./providers/agy-modeles', () => ({ catalogueAgy: async () => [] }))
 import { discoverImportedModels, loadCachedImportedModels } from './models'
 import { CodexCliIntrouvable } from './providers/codex'
 

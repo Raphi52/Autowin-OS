@@ -21,7 +21,7 @@ afterEach(() => {
 const NOW = Date.parse('2026-11-04T10:00:00Z')
 
 describe('dureeRateLimitMs', () => {
-  it('lit les formats OpenAI/Groq et les secondes nues', () => {
+  it('lit les formats OpenAI et les secondes nues', () => {
     expect(dureeRateLimitMs('1m30.5s')).toBe(90_500)
     expect(dureeRateLimitMs('6ms')).toBe(6)
     expect(dureeRateLimitMs('2')).toBe(2_000)
@@ -63,7 +63,7 @@ describe('parseRateLimitHeadersHttp', () => {
 
 describe('snapshot avec un service direct', () => {
   const models = [
-    { id: 'api-groq/qwen', provider: 'api-groq', model: 'qwen', label: 'qwen' },
+    { id: 'api-gemini/qwen', provider: 'api-gemini', model: 'qwen', label: 'qwen' },
     { id: 'api-mistral/m', provider: 'api-mistral', model: 'm', label: 'm' }
   ] as unknown as ImportedModel[]
   const options = {
@@ -74,14 +74,14 @@ describe('snapshot avec un service direct', () => {
 
   it('montre le quota publié, et « non exposé » pour le service muet', async () => {
     noterQuotaServiceHttp(
-      'api-groq',
+      'api-gemini',
       new Headers({ 'x-ratelimit-limit-tokens': '200', 'x-ratelimit-remaining-tokens': '50' }),
       NOW
     )
     const snap = await getModelQuotaSnapshot(models, { ...options, force: true })
-    const groq = snap.models.find((m) => m.provider === 'api-groq')!
-    expect(groq.status).toBe('available')
-    expect(groq.windows[0]).toMatchObject({ id: 'tokens', remainingPercent: 25 })
+    const gemini = snap.models.find((m) => m.provider === 'api-gemini')!
+    expect(gemini.status).toBe('available')
+    expect(gemini.windows[0]).toMatchObject({ id: 'tokens', remainingPercent: 25 })
     const mistral = snap.models.find((m) => m.provider === 'api-mistral')!
     expect(mistral).toMatchObject({
       status: 'unavailable',
@@ -93,23 +93,23 @@ describe('snapshot avec un service direct', () => {
   it('une mesure notée après le relevé apparaît sans attendre la fin du cache', async () => {
     await getModelQuotaSnapshot(models, { ...options, force: true })
     noterQuotaServiceHttp(
-      'api-groq',
+      'api-mistral',
       new Headers({ 'x-ratelimit-limit-requests': '10', 'x-ratelimit-remaining-requests': '9' }),
       NOW
     )
     const snap = await getModelQuotaSnapshot(models, options)
-    expect(snap.models.find((m) => m.provider === 'api-groq')?.status).toBe('available')
+    expect(snap.models.find((m) => m.provider === 'api-mistral')?.status).toBe('available')
   })
 
   it('une réponse sans en-tête ne remplace pas une mesure tenue', async () => {
     noterQuotaServiceHttp(
-      'api-groq',
+      'api-mistral',
       new Headers({ 'x-ratelimit-limit-requests': '10', 'x-ratelimit-remaining-requests': '9' }),
       NOW
     )
-    noterQuotaServiceHttp('api-groq', new Headers(), NOW)
+    noterQuotaServiceHttp('api-mistral', new Headers(), NOW)
     const snap = await getModelQuotaSnapshot(models, { ...options, force: true })
-    expect(snap.models.find((m) => m.provider === 'api-groq')?.windows[0]).toMatchObject({
+    expect(snap.models.find((m) => m.provider === 'api-mistral')?.windows[0]).toMatchObject({
       id: 'requests',
       remainingPercent: 90
     })

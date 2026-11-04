@@ -132,3 +132,20 @@ describe('reload_env — recharger une variable a chaud', () => {
     expect(result.error).toMatch(/non rechargeable/i)
   })
 })
+
+describe('hydraterClesFournisseurs (conv-1499)', () => {
+  it('reprend une clé absente du processus, sans écraser une clé présente', async () => {
+    const { hydraterClesFournisseurs } = await import('./env-reload')
+    const env: NodeJS.ProcessEnv = { MISTRAL_API_KEY: 'deja' }
+    const lecteur = (n: string): string | undefined =>
+      n === 'NVIDIA_API_KEY' ? 'cle-os' : n === 'MISTRAL_API_KEY' ? 'autre' : undefined
+    const repris = hydraterClesFournisseurs(['MISTRAL_API_KEY', 'NVIDIA_API_KEY', 'CEREBRAS_API_KEY'], {
+      env,
+      lecteur
+    })
+    expect(repris).toEqual(['NVIDIA_API_KEY'])
+    expect(env.NVIDIA_API_KEY).toBe('cle-os')
+    expect(env.MISTRAL_API_KEY).toBe('deja')
+    expect(env.CEREBRAS_API_KEY).toBeUndefined()
+  })
+})

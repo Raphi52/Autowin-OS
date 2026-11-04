@@ -15,7 +15,7 @@ import { noterQuotaServiceHttp } from '../model-quotas'
  *
  * Pourquoi (conv-1499) : les deux moteurs existants délèguent la boucle d'agent à un outil en ligne
  * de commande (Claude, Codex). Codex 0.166 refuse `wire_api="chat"` et Gemini AI Studio rend 404 sur
- * `/responses` : tout service qui ne parle QUE le format « chat completions » (Gemini, Groq, Mistral,
+ * `/responses` : tout service qui ne parle QUE le format « chat completions » (Gemini, Mistral,
  * Cerebras, Ollama, LM Studio…) n'avait donc aucune voie. Ici, c'est Autowin qui mène la boucle :
  * appeler le modèle, exécuter les outils qu'il demande, lui renvoyer les résultats, recommencer.
  *
@@ -32,9 +32,9 @@ export interface OutilAgent {
 }
 
 export interface OpenAICompatConfig {
-  /** Identifiant du moteur au registre, ex. `gemini`, `groq`, `ollama`. */
+  /** Identifiant du moteur au registre, ex. `gemini`, `mistral`. */
   id: string
-  /** Base de l'API, SANS `/chat/completions`, ex. `https://api.groq.com/openai/v1`. */
+  /** Base de l'API, SANS `/chat/completions`, ex. `https://api.mistral.ai/v1`. */
   baseUrl: string
   /** Variable d'environnement qui porte la clé. Absente = service local sans clé (Ollama). */
   apiKeyEnv?: string

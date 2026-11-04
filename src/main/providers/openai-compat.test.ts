@@ -38,10 +38,10 @@ describe('OpenAICompatAdapter — moteur HTTP sans CLI', () => {
         { choices: [], usage: { prompt_tokens: 12, completion_tokens: 3 } }
       ])
     })
-    const a = new OpenAICompatAdapter({ id: 'groq', baseUrl: 'https://x/v1/', apiKeyEnv: 'K', defaultModel: 'm', fetchImpl, env: { K: 'secret' } })
+    const a = new OpenAICompatAdapter({ id: 'mistral', baseUrl: 'https://x/v1/', apiKeyEnv: 'K', defaultModel: 'm', fetchImpl, env: { K: 'secret' } })
     const { chunks, result } = await vider(a.send([{ role: 'user', content: 'salut' }], { system: 'SOUL' }))
     expect(chunks.map((c) => c.delta).join('')).toBe('Bonjour')
-    expect(result).toMatchObject({ text: 'Bonjour', provider: 'groq', systemInjected: true, model: 'llama-3.3', usage: { inputTokens: 12, outputTokens: 3 } })
+    expect(result).toMatchObject({ text: 'Bonjour', provider: 'mistral', systemInjected: true, model: 'llama-3.3', usage: { inputTokens: 12, outputTokens: 3 } })
     expect(corps[0].messages[0]).toEqual({ role: 'system', content: 'SOUL' })
     expect(corps[0].tools).toBeUndefined()
     expect(entetes[0].authorization).toBe('Bearer secret')
@@ -106,10 +106,10 @@ describe('OpenAICompatAdapter — moteur HTTP sans CLI', () => {
 
   it('note le quota du service après chaque réponse HTTP, refus 429 compris', async () => {
     noterQuota.mockClear()
-    const ok = new OpenAICompatAdapter({ id: 'api-groq', baseUrl: 'http://l', defaultModel: 'm', fetchImpl: (async () => sse([{ choices: [{ delta: { content: 'x' } }] }])) })
+    const ok = new OpenAICompatAdapter({ id: 'api-mistral', baseUrl: 'http://l', defaultModel: 'm', fetchImpl: (async () => sse([{ choices: [{ delta: { content: 'x' } }] }])) })
     await vider(ok.send([{ role: 'user', content: 'q' }]))
     expect(noterQuota).toHaveBeenCalledTimes(1)
-    expect(noterQuota.mock.calls[0][0]).toBe('api-groq')
+    expect(noterQuota.mock.calls[0][0]).toBe('api-mistral')
     const ko = new OpenAICompatAdapter({ id: 'api-gemini', baseUrl: 'http://l', defaultModel: 'm', fetchImpl: (async () => new Response('quota', { status: 429, headers: { 'x-ratelimit-remaining-requests': '0' } })) })
     await expect(vider(ko.send([{ role: 'user', content: 'q' }]))).rejects.toThrow(/429/)
     expect(noterQuota).toHaveBeenCalledTimes(2)

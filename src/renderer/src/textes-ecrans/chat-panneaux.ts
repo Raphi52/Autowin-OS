@@ -287,7 +287,7 @@ export const TEXTES_FR = {
   'selecteur.defaut.suit': 'Suit le modèle par défaut · {modele}',
   'selecteur.defaut.revenir': 'Revenir au modèle par défaut · {modele}',
   'selecteur.defaut.aide':
-    'Ce choix ne vaut que pour cette conversation. Le modèle par défaut se règle dans Routage.',
+    'Ce choix vaut pour cette conversation et devient l’orchestrateur d’Agents Studio, suivi par les fils sans modèle propre.',
   'selecteur.compte.aide':
     'Ce compte est retenu pour cette conversation : chacun de ses tours part dessus. S’il est vide, le tour s’arrête au lieu de changer de compte.',
   'selecteur.aide.verrouilleCompte':
@@ -295,7 +295,7 @@ export const TEXTES_FR = {
   'selecteur.aide.verrouille':
     'Sélecteur verrouillé pendant le tour en cours de cette conversation.',
   'selecteur.aide.conversation':
-    'Le changement s’appliquera au prochain tour de cette conversation seulement. Son historique est conservé.',
+    'Le changement s’appliquera au prochain tour de cette conversation et à l’orchestrateur d’Agents Studio. Son historique est conservé.',
   'selecteur.aide.application':
     'Le changement s’appliquera au prochain tour. La conversation Autowin et son historique sont conservés.',
   'selecteur.catalogueVide': 'Catalogue de modèles vide.',
@@ -732,14 +732,14 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'selecteur.defaut.suit': 'Follows the default model · {modele}',
   'selecteur.defaut.revenir': 'Back to the default model · {modele}',
   'selecteur.defaut.aide':
-    'This choice only applies to this conversation. The default model is set in Routing.',
+    'This choice applies to this conversation and becomes the Agents Studio orchestrator, followed by threads without their own model.',
   'selecteur.compte.aide':
     'This account is kept for this conversation: each of its turns runs on it. If it is empty, the turn stops instead of changing account.',
   'selecteur.aide.verrouilleCompte':
     'Model locked during the running turn; the account can still be changed.',
   'selecteur.aide.verrouille': 'Selector locked during this conversation’s running turn.',
   'selecteur.aide.conversation':
-    'The change will apply from the next turn of this conversation only. Its history is kept.',
+    'The change will apply from the next turn of this conversation and to the Agents Studio orchestrator. Its history is kept.',
   'selecteur.aide.application':
     'The change will apply from the next turn. The Autowin conversation and its history are kept.',
   'selecteur.catalogueVide': 'Model catalog is empty.',

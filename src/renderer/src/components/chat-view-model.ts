@@ -1582,10 +1582,6 @@ export function buildOrchestratorModelGroups(
   for (const item of models) {
     // Bruit masqué : les variantes « Sans raisonnement » (no-think/*) n'encombrent plus le menu.
     if (/(^|\/)no-think\//i.test(item.model)) continue
-    // Groq : le service direct `api-groq` revient dans le menu, en onglet « Groq » (2026-11-04,
-    // conv-1519, « ajoute groq et ses models »). La voie gratuite servie par Codex (`groq/…`) reste
-    // masquée, comme décidé en conv-1517 : un seul accès à Groq, celui qui a sa clé.
-    if (item.provider !== 'api-groq' && /^groq\//i.test(item.model)) continue
     const option = {
       provider: item.provider,
       model: item.model,
