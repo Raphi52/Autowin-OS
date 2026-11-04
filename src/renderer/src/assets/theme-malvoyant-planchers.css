@@ -798,7 +798,6 @@
 :root[data-theme^='malvoyant-'] .quota-context-gauge .quota-context-compact,
 :root[data-theme^='malvoyant-'] .model-quota-tip,
 :root[data-theme^='malvoyant-'] .model-quota-tip-hint,
-:root[data-theme^='malvoyant-'] .model-quota-provider-chip,
 :root[data-theme^='malvoyant-'] .model-quota-resets,
 :root[data-theme^='malvoyant-'] .model-quota-reset button {
   font-size: 13px;
@@ -960,11 +959,6 @@
   font-size: 13px;
 }
 
-/* components/RequestThread.css — tailles */
-:root[data-theme^='malvoyant-'] .request-story-chapter dt {
-  font-size: 13px;
-}
-
 /* components/RiviereDuProjet.collegues.css — tailles */
 :root[data-theme^='malvoyant-'] .riviere-fiche-collegue,
 :root[data-theme^='malvoyant-'] .riviere-fiche-taches-collegue {
@@ -974,7 +968,8 @@
 /* components/RiviereDuProjet.css — tailles */
 :root[data-theme^='malvoyant-'] .riviere-fiche-meta,
 :root[data-theme^='malvoyant-'] .riviere-fiche-manuel,
-:root[data-theme^='malvoyant-'] .riviere-fiche-runmd {
+:root[data-theme^='malvoyant-'] .riviere-fiche-runmd,
+:root[data-theme^='malvoyant-'] .riviere-fiche-runmd-texte {
   font-size: 13px;
 }
 
