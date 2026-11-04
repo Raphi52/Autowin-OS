@@ -9,7 +9,7 @@ import {
   ENDORMISSEMENT_MS,
   PAUSE_PHRASE_MS
 } from './AnimationAccueilChat'
-import { teaserVu, VITESSE_AU_TRAVAIL } from './teaser-accueil-calcul'
+import { retardsDeFrappe, teaserVu, VITESSE_AU_TRAVAIL } from './teaser-accueil-calcul'
 
 ;(
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -214,55 +214,69 @@ describe('AnimationAccueilChat — le teaser', () => {
       )
     })
 
-    it('une phrase sort du cercle à chaque temps du film, puis se dissipe', () => {
+    // conv-1535 : des scènes de 5 s (« 2 secondes c trop rapide »), une skill puis une vue. Sous une
+    // skill, SA phrase, prise par son nom : sous /scout, l'usage de /scout, quel que soit son rang.
+    it('sous chaque scène de skill, sa phrase s’écrit, puis se dissipe', () => {
       const { container } = monter()
       expect(racine(container).classList.contains('avec-decor')).toBe(true)
       expect(invoquee(container)).toBeNull()
 
-      allerA(1.2)
+      allerA(0.8)
       expect(invoquee(container)?.textContent).toBe(texteDe(USAGES[0]))
-      allerA(5.5)
+      allerA(4.55)
       expect(invoquee(container)?.classList.contains('at-sort')).toBe(true)
       allerA(6)
       expect(invoquee(container)).toBeNull()
 
-      allerA(11.2)
+      allerA(10.8)
       expect(invoquee(container)?.textContent).toBe(texteDe(USAGES[1]))
     })
 
-    it('chaque lettre vient du cercle, sans couper ni mot ni emoji', () => {
-      const { container } = monter({ usages: [{ nom: '/look', usage: 'ça 😀' }] })
-      allerA(1.5)
+    it('une skill du film sans usage connu ne montre rien plutôt qu’une autre phrase', () => {
+      const { container } = monter()
+      allerA(20.8)
+      expect(invoquee(container)).toBeNull()
+    })
+
+    // conv-1535 : « fais-les s'écrire comme un humain qui tape au clavier, lettre par lettre ». Le
+    // curseur suit la dernière lettre tapée : chacune le porte de son arrivée à celle de la suivante.
+    it('chaque lettre se tape à son tour, curseur compris, sans couper ni mot ni emoji', () => {
+      const { container } = monter({ usages: [{ nom: '/draft', usage: 'ça 😀' }] })
+      allerA(0.8)
       const lettres = [...container.querySelectorAll<HTMLElement>('.at-lettre')]
-      expect(lettres.map((l) => l.textContent)).toEqual([...'/lookça', '😀'])
-      expect(container.querySelector('.at-nom')?.textContent).toBe('/look')
+      expect(lettres.map((l) => l.textContent)).toEqual([...'/draftça', '😀'])
+      expect(container.querySelector('.at-nom')?.textContent).toBe('/draft')
       expect(container.querySelector('.at-usage')?.textContent).toBe('ça 😀')
-      expect(invoquee(container)?.getAttribute('aria-label')).toBe('/look ça 😀')
-      // Mesurées au montage : la zone fait 790 px, et happy-dom pose tout en 0.
-      expect(lettres[0].style.getPropertyValue('--de-x')).toBe('395px')
-      expect(lettres[0].style.getPropertyValue('--de-y')).toMatch(/^-\d+px$/)
-      // De plus en plus tard : elles sortent l'une après l'autre.
-      expect(lettres[1].style.getPropertyValue('--retard')).toBe('24ms')
-      expect(container.querySelector('.aa-barre')).toBeNull()
+      expect(invoquee(container)?.getAttribute('aria-label')).toBe('/draft ça 😀')
+      const attendus = retardsDeFrappe('/draft', 'ça 😀')
+      const retards = lettres.map((l) => l.style.getPropertyValue('--retard'))
+      expect(retards).toEqual([...attendus.nom, ...attendus.usage].map((r) => `${r}ms`))
+      lettres.slice(0, -1).forEach((lettre, i) => {
+        expect(lettre.style.getPropertyValue('--suivante')).toBe(retards[i + 1])
+      })
+      expect(lettres[0].classList.contains('at-premiere')).toBe(true)
+      expect(lettres.at(-1)?.classList.contains('at-derniere')).toBe(true)
+      // Plus de vol depuis le sol du film : le sorcier n'y est plus.
+      expect(lettres[0].style.getPropertyValue('--de-x')).toBe('')
     })
 
     it('un clic donne la phrase entière', () => {
       const onChoisir = vi.fn()
       const { container } = monter({ onChoisir })
-      allerA(1.5)
+      allerA(0.8)
       act(() => invoquee(container)?.click())
       expect(onChoisir).toHaveBeenCalledWith('/draft six versions')
     })
 
     it('sous le pointeur, elle reste, même quand le film passe à la suivante', () => {
       const { container } = monter()
-      allerA(1.5)
+      allerA(0.8)
       act(() => {
         invoquee(container)?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }))
       })
       allerA(6)
       expect(invoquee(container)?.textContent).toBe(texteDe(USAGES[0]))
-      allerA(11.5)
+      allerA(10.8)
       expect(invoquee(container)?.textContent).toBe(texteDe(USAGES[0]))
       expect(invoquee(container)?.classList.contains('at-sort')).toBe(false)
     })
@@ -270,12 +284,12 @@ describe('AnimationAccueilChat — le teaser', () => {
     it('rien pendant l’intro, et aucune phrase quand un brouillon est en cours', () => {
       teaserVu.intro = false
       const { container } = monter()
-      allerA(1.5)
+      allerA(0.8)
       expect(invoquee(container)).toBeNull()
 
       // `phrases` vide : un brouillon est en cours, le film se tait.
       const brouillon = monter({ phrases: [] })
-      allerA(1.5)
+      allerA(0.8)
       expect(invoquee(brouillon.container)).toBeNull()
     })
   })

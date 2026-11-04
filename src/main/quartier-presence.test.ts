@@ -26,7 +26,12 @@ import {
   presenceAEcrire,
   type ReglageDeLaPresence
 } from './quartier-presence'
-import { creerDossierDuBoard, FICHIER_DU_REGLAGE, lirePartageDeLaPresence } from './board-dossier'
+import {
+  creerDossierDuBoard,
+  FICHIER_DU_REGLAGE,
+  lireAnimalDuPoste,
+  lirePartageDeLaPresence
+} from './board-dossier'
 
 /** Horloge et minuteurs à la main : `avancer` déclenche ce qui est dû, dans l'ordre. */
 function horloge(debut = 1_800_000_000_000): {
@@ -343,5 +348,60 @@ describe('le réglage partagerPresence, rangé dans le réglage du Board', () =>
   it('un réglage illisible laisse le partage actif (D-9)', () => {
     writeFileSync(join(racine, FICHIER_DU_REGLAGE), '{ pas du json', 'utf8')
     expect(lirePartageDeLaPresence(racine)).toBe(true)
+  })
+})
+
+describe("l'animal des agents du poste (conv-1537)", () => {
+  it('écrit dans presence.json l’animal du réglage, que les collègues dessinent', async () => {
+    const { publication, lire, r, h } = montage({ animal: 'renard' })
+    publication.recevoir([agent(1)])
+    await publication.attendre()
+    expect(lire().animal).toBe('renard')
+    // Un changement de choix repart à la prochaine écriture permise, même sans agent qui bouge.
+    r.animal = 'tanuki'
+    publication.reglageChange()
+    h.avancer(5_000)
+    await publication.attendre()
+    expect(lire().animal).toBe('tanuki')
+  })
+
+  it('n’écrit pas d’animal quand le partage est coupé : personne ne doit le voir', () => {
+    expect(
+      presenceAEcrire([agent(1)], { nom: 'Alice', partager: false, animal: 'renard' }, 'alice')
+    ).not.toHaveProperty('animal')
+  })
+
+  it.each(['panda', 'panda-roux'] as const)('publie %s (conv-1546)', async (animal) => {
+    const { publication, lire } = montage({ animal })
+    publication.recevoir([agent(1)])
+    await publication.attendre()
+    expect(lire().animal).toBe(animal)
+    expect(
+      presenceAEcrire([agent(1)], { nom: 'Alice', partager: true, animal }, 'alice').animal
+    ).toBe(animal)
+  })
+
+  it('retenu sur le poste, relu au démarrage, et préservé par les autres réglages', async () => {
+    expect(lireAnimalDuPoste(racine)).toBeNull()
+    const board = creerDossierDuBoard({ racine, utilisateur: 'alice' })
+    expect(board.etat().animal).toBeUndefined()
+    expect((await board.choisirAnimal('renard')).animal).toBe('renard')
+    expect(lireAnimalDuPoste(racine)).toBe('renard')
+    // Le nom, le partage coupé ou l'oubli du dossier ne font pas perdre l'animal.
+    await board.choisirNom('Alice M.')
+    await board.choisirPartagePresence(false)
+    await board.effacer()
+    expect(lireAnimalDuPoste(racine)).toBe('renard')
+    expect(creerDossierDuBoard({ racine, utilisateur: 'alice' }).etat().animal).toBe('renard')
+    // Revenir au défaut retire la clé du fichier.
+    expect((await board.choisirAnimal(null)).animal).toBeUndefined()
+    expect(JSON.parse(readFileSync(join(racine, FICHIER_DU_REGLAGE), 'utf8'))).not.toHaveProperty(
+      'animal'
+    )
+  })
+
+  it('un animal inconnu dans le réglage se lit comme aucun choix', () => {
+    writeFileSync(join(racine, FICHIER_DU_REGLAGE), JSON.stringify({ animal: 'dragon' }), 'utf8')
+    expect(lireAnimalDuPoste(racine)).toBeNull()
   })
 })

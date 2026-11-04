@@ -51,6 +51,7 @@ import type { EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-do
 import type { BoardsDesCollegues } from '../shared/board-collegues'
 import type {
   AgentAPublier,
+  AnimalAgent,
   EtatDeLaPresence,
   PresencesDesCollegues
 } from '../shared/quartier-presence'
@@ -585,6 +586,9 @@ interface ChatApi {
   quartierPresence?: (agents: AgentAPublier[]) => Promise<void>
   /** Coupe (`false`) ou rétablit le partage de la présence du poste (D6, conv-1429). */
   quartierPresencePartager?: (actif: boolean) => Promise<EtatDuDossierDuBoard>
+  /** L'animal des agents du poste, vu aussi par les collègues (`null` = le défaut, conv-1537) ;
+   *  absent = preload d'avant redémarrage. */
+  quartierPresenceAnimal?: (animal: AnimalAgent | null) => Promise<EtatDuDossierDuBoard>
   /** Où et quand `presence.json` a été écrit, et le dernier échec (conv-1429). */
   quartierPresenceEtat?: () => Promise<EtatDeLaPresence>
   /** Les tanukis des AUTRES postes, relus sur le partage et validés (conv-1429, lot 2) ; absent =

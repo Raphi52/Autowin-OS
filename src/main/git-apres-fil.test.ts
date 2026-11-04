@@ -5,12 +5,17 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   bandeauPublie,
+  lignesGitDuJournal,
   commitsPublies,
   decisionGitApresFil,
   estDepotAutowin,
   CALME_AVANT_PUBLICATION_MS,
   FileGitApresFil,
+  filDeLaPasse,
   lireAmont,
+  planTourneEncore,
+  travauxParFil,
+  travauxTentesSurDisque,
   promptGitDuFil,
   type TourFini
 } from './git-apres-fil'
@@ -19,6 +24,7 @@ import {
   promptsDesBoutons
 } from '../renderer/src/components/bouton-prompt-html'
 import type { AutoCloseReport } from './run-autoclose'
+import { viderFichiersEnAttente } from './ecriture-hors-fil'
 
 /** Un tour qui REMPLIT toutes les conditions : chaque test n'en casse qu'une. */
 function tourPublie(partiel: Partial<TourFini> = {}): TourFini {
@@ -26,7 +32,6 @@ function tourPublie(partiel: Partial<TourFini> = {}): TourFini {
     accord: true,
     dossierAutowin: true,
     deFond: false,
-    filDePlan: false,
     demande: 'Corrige le bouton du chat',
     demandesDuFil: ['Regarde le bouton du chat', 'Corrige le bouton du chat'],
     compteRendu: 'C’est corrigé.\nAUTOWIN_FIN_V1',
@@ -127,9 +132,8 @@ describe('decisionGitApresFil — quand /git part tout seul', () => {
     })
   })
 
-  it('un tour de fond ou un fil de plan ne déclenche pas : leur fin a son propre suivi', () => {
+  it('un tour de fond ne déclenche pas : sa fin a son propre suivi', () => {
     expect(decisionGitApresFil(tourPublie({ deFond: true })).lancer).toBe(false)
-    expect(decisionGitApresFil(tourPublie({ filDePlan: true })).lancer).toBe(false)
   })
 
   it.each(['/git', '/git : publie le travail de conv-9', '/salvage all origin main'])(
@@ -256,6 +260,32 @@ describe('bandeauPublie', () => {
     expect(prompt!.length).toBeLessThanOrEqual(LONGUEUR_MAX_PROMPT)
   })
 
+  // conv-1553 : « Publié sans /git » ne disait ni l'action ni la commande ; l'utilisateur veut
+  // « GIT : N commit », le nom du commit, l'action et la ligne exacte envoyée au shell.
+  it('titre « GIT : N commits », nomme l’action et cite les lignes git exactes du tour', () => {
+    const ligne = 'cd /d/X && git commit -q -m "a <b>" && ALLOW_MAIN_PUSH=1 git push -q origin HEAD:main'
+    const bandeau = bandeauPublie(commits, [ligne])
+    expect(bandeau).toContain('<div class="aw-kicker">GIT : 2 commits</div>')
+    expect(bandeau).not.toContain('Publié sans /git')
+    expect(bandeau).toContain('Commit et push')
+    expect(bandeau).toContain('git push -q origin HEAD:main')
+    expect(bandeau).toContain('&quot;a &lt;b&gt;&quot;'.replace(/&quot;/g, '"'))
+  })
+
+  it('sans ligne lue, le dit au lieu d’inventer une commande', () => {
+    expect(bandeauPublie(commits)).toContain('Commande du shell non retrouvée')
+  })
+
+  it('lignesGitDuJournal ne garde que les commandes Bash qui commitent ou poussent', () => {
+    const jsonl = [
+      JSON.stringify({ kind: 'provider-status', data: { target: 'git status --short' } }),
+      JSON.stringify({ kind: 'provider-status', data: { target: 'git commit -m x && git push origin HEAD:main' } }),
+      JSON.stringify({ kind: 'provider-status', data: { target: 'git commit -m x && git push origin HEAD:main' } }),
+      'pas du json'
+    ].join('\n')
+    expect(lignesGitDuJournal(jsonl)).toEqual(['git commit -m x && git push origin HEAD:main'])
+  })
+
   it('échappe les sujets de commit : ils ne fixent pas le HTML du fil', () => {
     expect(bandeauPublie(commits)).toContain('le bouton &lt;revient&gt;')
   })
@@ -266,6 +296,86 @@ describe('bandeauPublie', () => {
     expect(bandeau).not.toContain('#autowin-prompt')
     expect(bandeau).toContain('40 commits')
     expect(bandeau).toContain('trop nombreux')
+  })
+})
+
+describe('les fils de plan (conv-1544) : une passe dans le chef, à la fin du plan', () => {
+  const lot = { role: 'enfant' as const, plan: { chef: 'conv-1', statut: 'en-cours' as const } }
+  const chef = (statut: 'en-cours' | 'termine' | 'suspendu-quota' | 'bloque' | 'arrete') => ({
+    role: 'chef' as const,
+    plan: { chef: 'conv-1', statut }
+  })
+
+  it('un lot publie dans le chef ; un fil hors plan, dans lui-même', () => {
+    expect(filDeLaPasse('conv-2', lot)).toBe('conv-1')
+    expect(filDeLaPasse('conv-1', chef('en-cours'))).toBe('conv-1')
+    expect(filDeLaPasse('conv-7', undefined)).toBe('conv-7')
+  })
+
+  it('le chef attend tant que des lots peuvent encore écrire', () => {
+    expect(planTourneEncore(chef('en-cours'))).toBe(true)
+    expect(planTourneEncore(chef('suspendu-quota'))).toBe(true)
+    for (const fin of ['termine', 'bloque', 'arrete'] as const)
+      expect(planTourneEncore(chef(fin))).toBe(false)
+    // Un lot ne porte aucune passe : c'est le chef qui la porte.
+    expect(planTourneEncore(lot)).toBe(false)
+    expect(planTourneEncore(undefined)).toBe(false)
+  })
+
+  it('le prompt du chef nomme les lots et demande l’identifiant du lot dans chaque commit', () => {
+    const prompt = promptGitDuFil('conv-1', ['src/a.ts'], { fils: ['conv-1', 'conv-2', 'conv-3'] })
+    expect(prompt.startsWith('/git')).toBe(true)
+    expect(prompt).toContain('plan mené par ce fil (conv-1)')
+    expect(prompt).toContain('conv-2, conv-3')
+    expect(prompt).toContain('du fil qui a écrit')
+  })
+})
+
+describe('les travaux d’agents restés hors de la branche (conv-1544)', () => {
+  const travaux = [
+    { agentId: 'run-a-1', fichiers: ['src/a.ts'], conversationId: 'conv-5' },
+    { agentId: 'run-b-1', fichiers: ['src/b.ts'], conversationId: 'conv-5' },
+    { agentId: 'run-c-1', fichiers: ['src/c.ts'], conversationId: 'conv-6' },
+    { agentId: 'run-d-1', fichiers: ['src/d.ts'] },
+    { agentId: 'run-e-1', fichiers: ['src/e.ts'], conversationId: 'conv-7' }
+  ]
+
+  it('les range par fil du run, sans les déjà tentés, les orphelins ni les fils interdits', () => {
+    const parFil = travauxParFil({
+      travaux,
+      dejaTentes: new Set(['run-c-1']),
+      publiable: (fil) => fil !== 'conv-7'
+    })
+    expect([...parFil.keys()]).toEqual(['conv-5'])
+    expect(parFil.get('conv-5')!.map((t) => t.agentId)).toEqual(['run-a-1', 'run-b-1'])
+    expect(parFil.get('conv-5')![0]).not.toHaveProperty('conversationId')
+  })
+
+  it('le prompt donne l’adresse de chaque travail et exige le diagnostic avant de republier', () => {
+    const prompt = promptGitDuFil('conv-5', [], {
+      travaux: [{ agentId: 'run-a-1', fichiers: ['src/a.ts'], date: '04/11' }]
+    })
+    expect(prompt.startsWith('/git')).toBe(true)
+    expect(prompt).not.toContain('Fichiers laissés en attente')
+    expect(prompt).toContain('run-a-1 — 04/11 (piste : autowin/recovery/run-a-1) : src/a.ts')
+    expect(prompt).toContain('merge-base --is-ancestor')
+    expect(prompt).toContain('marquer_travail_trie')
+  })
+
+  it('la liste des tentés survit au redémarrage, et une lecture abîmée vaut liste vide', async () => {
+    const dossier = mkdtempSync(join(tmpdir(), 'autowin-tentes-'))
+    try {
+      const chemin = join(dossier, 'tentes.json')
+      travauxTentesSurDisque(chemin).noter(['run-a-1', 'run-b-1'])
+      travauxTentesSurDisque(chemin).noter(['run-b-1', 'run-c-1'])
+      await viderFichiersEnAttente()
+      expect([...travauxTentesSurDisque(chemin).lire()]).toEqual(['run-a-1', 'run-b-1', 'run-c-1'])
+      const abime = join(dossier, 'abime.json')
+      writeFileSync(abime, '{pas du json')
+      expect(travauxTentesSurDisque(abime).lire().size).toBe(0)
+    } finally {
+      rmSync(dossier, { recursive: true, force: true })
+    }
   })
 })
 
@@ -282,6 +392,8 @@ describe('FileGitApresFil — une passe à la fois', () => {
     const prompts: string[] = []
     const annonces: Array<[string, string]> = []
     const etat = { occupe: sur.occupe === true }
+    const tentes: string[] = []
+    const filsLus: string[][] = []
     const file = new FileGitApresFil(
       {
         lancerTour: (fil, prompt) => {
@@ -291,13 +403,17 @@ describe('FileGitApresFil — une passe à la fois', () => {
         },
         filOccupe: () => etat.occupe,
         lireAmont: async () => 'avant',
-        commitsDepuis: async () => sur.commits ?? [],
+        commitsDepuis: async (_fil, _depuis, fils) => {
+          filsLus.push([...fils])
+          return sur.commits ?? []
+        },
         annoncer: (fil, contenu) => annonces.push([fil, contenu]),
+        noterTravauxTentes: (ids) => tentes.push(...ids),
         journal: () => undefined
       },
       { calmeMs: sur.calmeMs ?? 0 }
     )
-    return { file, fins, lances, prompts, annonces, etat }
+    return { file, fins, lances, prompts, annonces, etat, tentes, filsLus }
   }
   const attendre = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5))
 
@@ -373,6 +489,36 @@ describe('FileGitApresFil — une passe à la fois', () => {
       expect(lances).toEqual(['conv-1'])
       expect(prompts[0]).toContain('a.ts')
       expect(prompts[0]).toContain('b.ts')
+    })
+
+    it('les lots d’un plan et les travaux d’agents partent en UNE passe dans le chef', async () => {
+      vi.useFakeTimers()
+      const { file, lances, prompts, fins, tentes, filsLus } = banc({
+        calmeMs: 3 * MINUTE,
+        commits: [{ sha: '1a2b3c4d', sujet: 'fix (conv-2)' }]
+      })
+      file.ajouter('conv-1', ['src/a.ts'], 'conv-2')
+      file.ajouter('conv-1', ['src/b.ts'], 'conv-3')
+      file.ajouterTravaux('conv-1', [{ agentId: 'run-x-1', fichiers: ['src/x.ts'] }], 'conv-2')
+      await vi.advanceTimersByTimeAsync(3 * MINUTE)
+      expect(lances).toEqual(['conv-1'])
+      expect(prompts[0]).toContain('conv-1, conv-2, conv-3')
+      expect(prompts[0]).toContain('src/b.ts')
+      expect(prompts[0]).toContain('run-x-1')
+      // Noté AVANT la passe : une passe qui plante ne le reproposera pas à chaque fin de run.
+      expect(tentes).toEqual(['run-x-1'])
+      fins[0]!()
+      await vi.advanceTimersByTimeAsync(0)
+      // Le bandeau cherche les commits de tous les fils du plan, pas du seul chef.
+      expect(filsLus).toEqual([['conv-1', 'conv-2', 'conv-3']])
+    })
+
+    it('une liste de travaux vide n’arme rien', async () => {
+      vi.useFakeTimers()
+      const { file, lances } = banc({ calmeMs: 3 * MINUTE })
+      file.ajouterTravaux('conv-1', [])
+      await vi.advanceTimersByTimeAsync(10 * MINUTE)
+      expect(lances).toEqual([])
     })
 
     it('un fil occupé quand le calme sonne est attendu, pas sauté', async () => {
@@ -472,6 +618,17 @@ describe('commitsPublies — lu sur un vrai dépôt et son distant', () => {
     const commits = await commitsPublies(runGit, local, avant!, 'conv-9')
     expect(commits.map((c) => c.sujet)).toEqual(['test: deux (conv-9)', 'fix: un (conv-9)'])
     expect(commits[0]!.sha).toMatch(/^[0-9a-f]{8}$/)
+  })
+
+  it('plusieurs fils (les lots d’un plan) : les commits de chacun, et d’aucun autre', async () => {
+    const { local } = depot()
+    const avant = await lireAmont(runGit, local)
+    commit(local, 'fix: lot un (conv-2)')
+    commit(local, 'fix: hors plan (conv-8)')
+    commit(local, 'fix: lot deux (conv-3)')
+    git(local, 'push', 'origin', 'main')
+    const commits = await commitsPublies(runGit, local, avant!, ['conv-2', 'conv-3'])
+    expect(commits.map((c) => c.sujet)).toEqual(['fix: lot deux (conv-3)', 'fix: lot un (conv-2)'])
   })
 
   it('un commit resté local n’est pas « publié » : le bandeau mentirait', async () => {

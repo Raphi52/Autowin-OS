@@ -8,6 +8,7 @@
  *
  * Types seuls : partagés par le processus principal (`src/main/board-dossier.ts`), le pont et la vue.
  */
+import type { AnimalAgent } from './quartier-presence'
 
 /** Les étages du Board : « à faire » (posé à la main seulement) et les états prouvés d'une demande. */
 export const ETAGES_DU_BOARD = ['a-faire', 'refuse', 'en-cours', 'sans-preuve', 'prouve'] as const
@@ -51,6 +52,11 @@ export interface EtatDuDossierDuBoard {
    * Absent = actif, le défaut (D-9).
    */
   partagerPresence?: false
+  /**
+   * L'animal choisi dans les réglages de l'Accueil pour représenter les agents du poste, celui que
+   * les collègues voient aussi (conv-1537). Absent = aucun choix : le tanuki (`ANIMAL_PAR_DEFAUT`).
+   */
+  animal?: AnimalAgent
 }
 
 /** Rend `null` quand la valeur n'est pas un état manuel lisible : la vue n'est pas une source sûre. */

@@ -61,6 +61,25 @@ export const PRESENCE_COLLEGUES_MAX = 20
 /** Deux relectures du partage sont espacées d'au moins 4 s, quel que soit le nombre d'appels. */
 export const PRESENCE_DELAI_RELECTURE_MS = 4_000
 
+/**
+ * L'animal qui représente les agents d'un poste (demande utilisateur du 2026-11-04, conv-1537) :
+ * « choisir dans les settings de l'accueil quel animal on veut pour représenter nos agents ; notre
+ * setting doit affecter ce que les autres voient ». Choisi dans les réglages de l'Accueil, rangé dans
+ * le réglage du Board du poste, écrit dans `presence.json` : chaque collègue dessine ce même animal.
+ * Un par atlas de la scène (`src/renderer/src/assets/quartier/atlas*.avif`), de même grille.
+ */
+export const ANIMAUX_AGENTS = ['tanuki', 'renard', 'panda', 'panda-roux'] as const
+export type AnimalAgent = (typeof ANIMAUX_AGENTS)[number]
+/** Sans choix, les agents restent des tanukis : ce que l'Accueil dessinait avant le réglage. */
+export const ANIMAL_PAR_DEFAUT: AnimalAgent = 'tanuki'
+
+/** Un animal connu, ou `null` : la valeur vient d'un fichier ou de la vue, jamais d'une source sûre. */
+export function animalLisible(v: unknown): AnimalAgent | null {
+  return typeof v === 'string' && (ANIMAUX_AGENTS as readonly string[]).includes(v)
+    ? (v as AnimalAgent)
+    : null
+}
+
 /** Un agent tel qu'il est écrit sur le partage. */
 export interface AgentPublie {
   /** L'identifiant du fil sur son poste (`conv-1430`) : il ne s'ouvre pas ailleurs (D10). */
@@ -85,6 +104,11 @@ export interface PresenceDuPoste {
   enregistreA: string
   /** Partage coupé sur ce poste (D6) : `agents` est alors vide. Jamais de suppression sur le partage. */
   coupe?: true
+  /**
+   * L'animal choisi sur ce poste (conv-1537). Absent dans un fichier écrit par une version d'avant
+   * le réglage : le lecteur garde alors l'animal tiré du nom du poste (`animalDuPoste`).
+   */
+  animal?: AnimalAgent
   agents: AgentPublie[]
 }
 
@@ -95,6 +119,8 @@ export interface PresenceDUnCollegue {
   nom: string
   /** Le premier mot de `nom`, affiché au survol (D9). */
   prenom: string
+  /** L'animal qu'il a choisi (conv-1537) ; absent = fichier d'une version d'avant le réglage. */
+  animal?: AnimalAgent
   agents: AgentPublie[]
 }
 

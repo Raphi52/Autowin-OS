@@ -10,8 +10,9 @@ declare const __BUILD_NUMBER__: string
 declare const __BUILD_SHA__: string
 const buildNumber = typeof __BUILD_NUMBER__ === 'string' ? __BUILD_NUMBER__ : 'dev'
 const buildSha = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'local'
-// Le logo anneau de l'en-tete, genere par `scripts/logo_anneau.py` (source unique du logo).
-import logoAnneau from './assets/autowin-logo-anneau.png'
+// Le logo anneau de l'en-tete, EN RELIEF comme dans le film de l'ecran « nouveau fil » (conv-1535) :
+// image animee generee par `scripts/logo_anneau_relief.py`, couleurs de `scripts/logo_anneau.py`.
+import logoAnneau from './assets/autowin-logo-anneau-relief.webp'
 import { ChatView } from './components/ChatView'
 import { VueMesuree } from './components/VueMesuree'
 import { HomeView } from './components/HomeView'
@@ -172,10 +173,9 @@ export function MainApp(): React.JSX.Element {
   // Le fond 3D reste en veille (caché, sans dessiner) quelques minutes hors de l'Accueil : un retour
   // ne le reconstruit plus (decor-veille.ts, conv-337).
   const decorMonte = useDecorEnVeille(tab === 'accueil')
-  // Connecté par Windows App : version allégée, sans animations HORS de l'Accueil ; sur un écran
-  // de téléphone, menu replié d'office et gros boutons (conv-1442, affichage-session.css). L'Accueil
-  // et son décor 3D restent entiers à distance : « je veux pas que ça me cache mon accueil »
-  // (conv-1442, 2026-11-03).
+  // Sur un écran de téléphone, menu replié d'office et gros boutons (conv-1442,
+  // affichage-session.css). Connecté par Windows App sur un écran de PC, l'interface reste ENTIÈRE,
+  // animations comprises : la version allégée a été retirée (conv-1538, 2026-11-04).
   const affichage = useAffichageSession()
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   // #11 — l'état replié/déplié de la rail est PERSISTÉ (comme le zoom), pour ne pas re-replier à
@@ -716,7 +716,7 @@ export function MainApp(): React.JSX.Element {
       </aside>
       <main className={`main${driven ? ' driven' : ''}`} data-driven={driven}>
         {visitedTabs.has('accueil') && (
-          <div className={`view-slot vue-accueil${tab === 'accueil' ? ' is-active' : ''}`}>
+          <div className={`view-slot${tab === 'accueil' ? ' is-active' : ''}`}>
             <VueMesuree id="accueil">
               <HomeView active={tab === 'accueil'} onNavigate={applyLocation} />
             </VueMesuree>

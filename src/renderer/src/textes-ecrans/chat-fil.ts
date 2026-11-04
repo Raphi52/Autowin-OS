@@ -350,8 +350,6 @@ export const TEXTES_FR = {
   'fil.tache': 'tâche',
   'fil.introuvableStore': 'conversation introuvable dans le store',
   'run.conversationIntrouvable': 'Conversation introuvable pour ce RUN',
-  'branche.creee':
-    "Branche « {titre} » créée. Le tour en cours continue ici — la branche t'attend dans la liste.",
   'copie.creee':
     "Copie « {titre} » créée avec ton message à modifier. Le tour en cours continue ici — elle t'attend dans la liste.",
   'revenir.titre': 'Retour au premier tour',
@@ -925,8 +923,6 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'fil.tache': 'task',
   'fil.introuvableStore': 'conversation not found in the store',
   'run.conversationIntrouvable': 'Conversation not found for this RUN',
-  'branche.creee':
-    'Branch “{titre}” created. The running turn continues here — the branch is waiting for you in the list.',
   'copie.creee':
     'Copy “{titre}” created with your message to edit. The running turn continues here — it is waiting for you in the list.',
   'revenir.titre': 'Back to the first turn',

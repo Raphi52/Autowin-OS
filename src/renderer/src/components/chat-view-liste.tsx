@@ -42,6 +42,7 @@ import {
   messageKey,
   askReponseDuFil,
   tourDuMessageEnCours,
+  finDuRaisonnementRelaye,
   lastUserPromptBefore
 } from './chat-message-keys'
 import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
@@ -718,6 +719,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
               tourEnCours={
                 message.role === 'user' ? tourDuMessageEnCours(messages, index, busy) : undefined
               }
+              finDuRaisonnement={finDuRaisonnementRelaye(messages, index)}
               conversationId={activeId}
               onInspectTurn={onInspectTurn}
               onFork={handleFork}

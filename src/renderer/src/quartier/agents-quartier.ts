@@ -20,7 +20,7 @@
  * et la scène lit la liste à chaque image.
  */
 import { metierDeLOutil, type Metier } from './quartier-metiers'
-import type { Consigne } from './quartier-marche'
+import { POSES_PLANTE, type Consigne, type Pose } from './quartier-marche'
 import type { AgentAPublier } from '../../../shared/quartier-presence'
 
 export type PhaseAgent = 'travail' | 'reflexion' | 'attente' | 'plante' | 'fini'
@@ -219,6 +219,25 @@ export function appliquerEvenement(
 }
 
 /** Ce que la marche doit faire de ce tanuki à cet instant. */
+/** FNV-1a sur 32 bits, comme agents-collegues.ts : le même identifiant donne toujours le même nombre. */
+function empreinteId(texte: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < texte.length; i++) {
+    h ^= texte.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h >>> 0
+}
+
+/**
+ * Un agent planté pleure, fume ou boit (conv-1554, demande de l’utilisateur) : la pose est tirée de son
+ * identifiant, donc il garde la même tant qu'il est planté, et plusieurs plantés varient.
+ */
+// fix-ok: 'pl' était figée dans consigneDe (grep : seul site de production) ; la pose dérive maintenant de l'id.
+export function poseDePlantage(id: string): Pose {
+  return POSES_PLANTE[empreinteId(id) % POSES_PLANTE.length]
+}
+
 export function consigneDe(a: AgentQuartier, maintenant: number): Consigne {
   switch (a.phase) {
     case 'travail':
@@ -233,7 +252,7 @@ export function consigneDe(a: AgentQuartier, maintenant: number): Consigne {
     case 'attente':
       return { metier: null, pose: 'at', partir: false }
     case 'plante':
-      return { metier: null, pose: 'pl', partir: false }
+      return { metier: null, pose: poseDePlantage(a.id), partir: false }
     case 'fini':
       return { metier: 'bain', pose: 'ba', partir: false }
   }

@@ -55,6 +55,8 @@ import {
 } from './fond-accueil'
 import { piloteQuartier } from '../quartier/quartier-pont'
 import { useQuartierAccueil } from '../quartier/useQuartierAccueil'
+import { choisirMonAnimal, choixDeLAnimalDisponible, useMonAnimal } from '../quartier/mon-animal'
+import { ANIMAUX_AGENTS, animalLisible } from '../../../shared/quartier-presence'
 import {
   instantaneConversationsEnAttente,
   retirerConversationEnAttente,
@@ -88,6 +90,14 @@ import { Spinner } from './Spinner'
  *  - la taille suit le curseur SÈCHEMENT : le moindre ressort sur la largeur se lit comme un
  *    gonflement, et c'est ce qui a fait rejeter une première version.
  */
+
+/** Le libellé de chaque animal du réglage (conv-1546) : une correspondance, pas un ternaire à deux branches. */
+const CLE_TEXTE_ANIMAL: Readonly<Record<(typeof ANIMAUX_AGENTS)[number], CleAccueil>> = {
+  tanuki: 'animal.tanuki',
+  renard: 'animal.renard',
+  panda: 'animal.panda',
+  'panda-roux': 'animal.pandaRoux'
+}
 
 const LAYOUT_STORAGE_KEY = autowinStorageKey('home.layout.v1')
 /**
@@ -175,8 +185,12 @@ interface TaskSnapshotLike {
  * et les deux ont diverge des que `luLe` a ete ajoute. Un type porte a deux endroits est un type qui
  * finira faux a l'un des deux.
  */
+/** Cle locale : Outlook a ete connecte par un clic de l'utilisateur (conv-1555). */
+const CLE_OUTLOOK_CONNECTE = 'autowin.outlook.connecte'
+
 export type OutlookState =
   | { etat: 'chargement' }
+  | { etat: 'deconnecte' }
   | { etat: 'ok'; fils: Interlocuteur[]; agenda: Agenda; luLe: number }
   | { etat: 'panne'; cause: string }
 
@@ -252,7 +266,16 @@ export function HomeView({
   const [snapshot, setSnapshot] = useState<TaskSnapshotLike | null>(null)
   const [snapshotError, setSnapshotError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
-  const [outlook, setOutlook] = useState<OutlookState>({ etat: 'chargement' })
+  // Outlook ne se lit plus de lui-meme : sans Outlook installe, chaque essai relancait une tentative
+  // invasive (conv-1555). La lecture n'a lieu qu'apres un clic sur « Connecter Outlook », memorise.
+  const [outlookConnecte, setOutlookConnecte] = useState<boolean>(
+    () => window.localStorage?.getItem(CLE_OUTLOOK_CONNECTE) === '1'
+  )
+  const [outlook, setOutlook] = useState<OutlookState>(() =>
+    window.localStorage?.getItem(CLE_OUTLOOK_CONNECTE) === '1'
+      ? { etat: 'chargement' }
+      : { etat: 'deconnecte' }
+  )
   const [held, setHeld] = useState<HomeWidgetId | null>(null)
   const [outlookEnCours, setOutlookEnCours] = useState(false)
   const [histoire, setHistoire] = useState<ArrangementHistory>(() => emptyHistory())
@@ -312,6 +335,12 @@ export function HomeView({
   const fond = useSyncExternalStore(abonnerFondAccueil, lireFondAccueil, () => FOND_DEFAUT)
   /** Sur le Quartier, les tuiles vivent dans leurs tours : elles ne s'affichent que sorties. */
   const quartier = fond === FOND_FALAISE
+  /**
+   * L'ANIMAL DE MES AGENTS (conv-1537) : rangé dans le réglage du Board du poste et écrit dans
+   * `presence.json`, il est aussi celui que les collègues voient. Un choix non enregistré le dit.
+   */
+  const monAnimal = useMonAnimal()
+  const [animalNonEnregistre, setAnimalNonEnregistre] = useState(false)
   /**
    * LE NOM DE L'ASSISTANT, RELU EN DIRECT.
    *
@@ -621,7 +650,13 @@ export function HomeView({
    * Outlook -- l'utilisateur ne voyait plus rien et payait quand meme la lenteur (demande du
    * 2026-09-22 : « quand je desactive le widget ca arrete le polling »).
    */
-  const outlookRequis = estVisible(visibilite, 'mails') || estVisible(visibilite, 'agenda')
+  const outlookRequis =
+    outlookConnecte && (estVisible(visibilite, 'mails') || estVisible(visibilite, 'agenda'))
+  const connecterOutlook = useCallback((): void => {
+    window.localStorage?.setItem(CLE_OUTLOOK_CONNECTE, '1')
+    setOutlookConnecte(true)
+    setOutlook({ etat: 'chargement' })
+  }, [])
   useEffect(() => {
     if (!active || !outlookRequis) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -1218,6 +1253,37 @@ export function HomeView({
               </label>
             </section>
             <section className="home-settings__bloc">
+              <h3>{t('reglages.animal')}</h3>
+              <label className="home-settings__champ">
+                <select
+                  value={monAnimal}
+                  aria-label={t('reglages.ariaAnimal')}
+                  data-testid="home-animal"
+                  disabled={!choixDeLAnimalDisponible()}
+                  onChange={(event) => {
+                    const choix = animalLisible(event.target.value)
+                    if (!choix) return
+                    void choisirMonAnimal(choix).then((ok) => setAnimalNonEnregistre(!ok))
+                  }}
+                >
+                  {ANIMAUX_AGENTS.map((animal) => (
+                    <option key={animal} value={animal}>
+                      {t(CLE_TEXTE_ANIMAL[animal])}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="home-settings__note" role={animalNonEnregistre ? 'status' : undefined}>
+                {t(
+                  !choixDeLAnimalDisponible()
+                    ? 'reglages.animalIndisponible'
+                    : animalNonEnregistre
+                      ? 'reglages.animalErreur'
+                      : 'reglages.animalAide'
+                )}
+              </p>
+            </section>
+            <section className="home-settings__bloc">
               <h3>{t('reglages.widgets')}</h3>
               <ul>
                 {HOME_WIDGET_IDS.map((id) => (
@@ -1404,6 +1470,7 @@ export function HomeView({
                   onMarquerLu={marquerLuDansOutlook}
                   onOuvrirPiece={ouvrirPieceOutlook}
                   onAcquitter={acquitter}
+                  onConnecterOutlook={connecterOutlook}
                   ouvertureEnCours={ouvertureEnCours}
                 />
               </div>
@@ -1440,8 +1507,10 @@ function WidgetBody({
   onMarquerLu,
   onOuvrirPiece,
   onAcquitter,
+  onConnecterOutlook,
   ouvertureEnCours
 }: {
+  onConnecterOutlook: () => void
   id: HomeWidgetId
   departures: RoutineDeparture[]
   notices: AgentNotice[]
@@ -1498,17 +1567,25 @@ function WidgetBody({
   }
 
   if (id === 'mails' || id === 'agenda') {
+    if (outlook.etat === 'deconnecte' || outlook.etat === 'panne')
+      return (
+        <div className="home-hint">
+          <p className={outlook.etat === 'panne' ? 'home-error' : undefined}>
+            {outlook.etat === 'panne'
+              ? t('outlook.injoignable', { cause: outlook.cause })
+              : t('outlook.nonConnecte')}
+          </p>
+          <button type="button" onClick={onConnecterOutlook} data-testid="home-connecter-outlook">
+            {t('outlook.connecter')}
+          </button>
+        </div>
+      )
     if (outlook.etat === 'chargement')
       return (
         <p className="home-hint">
           <Spinner /> {t('outlook.chargement')}
         </p>
       )
-    if (outlook.etat === 'panne') {
-      // La cause est AFFICHÉE. Une liste vide se lirait « vous n'avez pas de mail » alors qu'elle
-      // veut dire « la lecture a échoué » — et l'utilisateur ne saurait pas quoi faire.
-      return <p className="home-error">{t('outlook.injoignable', { cause: outlook.cause })}</p>
-    }
     return id === 'mails' ? (
       <InterlocuteursWidget
         fils={outlook.fils}

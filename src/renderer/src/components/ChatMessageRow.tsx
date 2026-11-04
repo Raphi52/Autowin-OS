@@ -464,9 +464,15 @@ const LigneDuFil = memo(
     askReponse,
     autoLancerCandidats,
     onAnswerAsk,
-    tourEnCours
+    tourEnCours,
+    finDuRaisonnement
   }: {
     message: Msg
+    /**
+     * Heure où la pensée de cette bulle est passée à une bulle suivante du même tour, sous une
+     * orientation (`finDuRaisonnementRelaye`, conv-1547) : son chrono du raisonnement s'y arrête.
+     */
+    finDuRaisonnement?: number
     /**
      * Message utilisateur dont le tour court encore (`tourDuMessageEnCours`) : sa capsule
      * « Image envoyée » est alors allumée, comme l'image lue et Raisonnement / Actions du même
@@ -885,6 +891,7 @@ const LigneDuFil = memo(
               {...(message.turnId ? { turnId: message.turnId } : {})}
               {...(message.reasoningMs !== undefined ? { reasoningMs: message.reasoningMs } : {})}
               {...(message.debutDuTour !== undefined ? { debutDuTour: message.debutDuTour } : {})}
+              {...(finDuRaisonnement !== undefined ? { finDuRaisonnement } : {})}
             />
           )}
         <div className="msg-turn">
@@ -1027,7 +1034,10 @@ const LigneDuFil = memo(
     prev.retryPrompt === next.retryPrompt &&
     prev.askReponse === next.askReponse &&
     prev.directiveReceipts === next.directiveReceipts &&
-    prev.tourEnCours === next.tourEnCours
+    prev.tourEnCours === next.tourEnCours &&
+    // La relève arrive sans changer CE message : sans cette ligne, la bulle du dessus ne l'apprend
+    // jamais et son chrono continue de battre (conv-1547).
+    prev.finDuRaisonnement === next.finDuRaisonnement
 )
 
 /**

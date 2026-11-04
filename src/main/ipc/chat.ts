@@ -12,6 +12,7 @@ import { registerConversationsIpc } from './conversations'
 import { registerCarteDesBesoinsIpc } from './carte-des-besoins'
 import { creerDossierDuBoard, sousDossierDuPoste } from '../board-dossier'
 import { creerPublicationDeLaPresence } from '../quartier-presence'
+import { ANIMAL_PAR_DEFAUT } from '../../shared/quartier-presence'
 import { registerQuartierPresenceIpc } from './quartier-presence'
 import { registerLangueIpc } from './langue'
 import { registerCaptureElementIpc } from './capture-element'
@@ -52,6 +53,7 @@ import {
 } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { promises as fsp } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
 import type { ExecutionEvidence, Message, ProviderAdapter } from '../providers/types'
 import {
@@ -126,6 +128,7 @@ import {
   streamedPrefixForProviderCall,
   waitForRecoverableChatProviderExit
 } from '../runs/chat-provider-recovery'
+import { relayerAppelChatRepris } from '../runs/relais-appel-repris'
 import { loadConvActivity } from '../activity/conv-activity'
 import { reconcileLateRunLifecycle } from '../activity/late-run-usage-settlement'
 import {
@@ -157,7 +160,7 @@ import { saveShadowRoutingPilotSetting } from '../model-routing-shadow-setting'
 import { rebuildSemanticTemporalProjection } from '../knowledge/semantic-temporal-store'
 import { saveAgentTopology } from '../topology-disk'
 import type { AgentTopology } from '../topology'
-import { ensureAutowinAppData } from '../app-data'
+import { autowinAppDataRoot, ensureAutowinAppData } from '../app-data'
 import { typerCeQuiPart, typeurTsc } from '../typage-avant-publication'
 import { materializeClaudeAttachments } from '../providers/claude'
 import { homedir } from 'node:os'
@@ -184,7 +187,13 @@ import {
   decisionGitApresFil,
   estDepotAutowin,
   FileGitApresFil,
-  lireAmont
+  filDeLaPasse,
+  lignesGitDuJournal,
+  lireAmont,
+  planTourneEncore,
+  publicationInterditeDans,
+  travauxParFil,
+  travauxTentesSurDisque
 } from '../git-apres-fil'
 import { defaultGitRunner } from '../run-autoclose'
 import {
@@ -1711,7 +1720,10 @@ Le fil reprend ensuite normalement.`
         return {
           dossier: etat.dossier,
           nom: dossierDuBoard.nomDuPoste().nom,
-          partager: etat.partagerPresence !== false
+          partager: etat.partagerPresence !== false,
+          // Toujours écrit, même sans choix (conv-1537) : le réglage de l'Accueil montre l'animal que
+          // les collègues voient, pas celui d'un tirage sur le nom du poste.
+          animal: etat.animal ?? ANIMAL_PAR_DEFAUT
         }
       }
     })
@@ -2435,7 +2447,6 @@ Le fil reprend ensuite normalement.`
                 accord: os.gitApresFilActif(),
                 dossierAutowin: estDepotAutowin(dossierDuTour(conversationId)),
                 deFond: args[5]?.background === true,
-                filDePlan: Boolean(suiviDesPlans.coordinateur?.planDuFil(conversationId)),
                 demande,
                 demandesDuFil: (os.conversations.get(conversationId)?.messages ?? [])
                   .filter((message) => message.role === 'user')
@@ -2443,7 +2454,16 @@ Le fil reprend ensuite normalement.`
                 compteRendu: resultat.text ?? '',
                 rapport
               })
-              if (decision.lancer) suiviGitApresFil.file?.ajouter(conversationId, decision.fichiers)
+              // Un lot de plan : sa passe tourne dans le CHEF, à la fin du plan (conv-1544).
+              if (decision.lancer)
+                suiviGitApresFil.file?.ajouter(
+                  filDeLaPasse(
+                    conversationId,
+                    suiviDesPlans.coordinateur?.planDuFil(conversationId)
+                  ),
+                  decision.fichiers,
+                  conversationId
+                )
             })
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
             .finally(finPublication)
@@ -2498,10 +2518,33 @@ Le fil reprend ensuite normalement.`
         // L'issue, annoncée aux plans de lots APRÈS le relâchement de la réservation (conv-1150).
         let issueDeReprise: IssueDuTour | undefined
         try {
+          // Pendant l'attente, le fil voit ce que fait le CLI : actions et étapes (conv-1551 — conv-1535
+          // est resté 20 min sans une ligne après le redémarrage de 20:01). Arrêté avant la suite.
+          const relais = relayerAppelChatRepris(call, {
+            racineJournaux: turnJournalRoot,
+            actionsEnregistrees: () =>
+              [...(os.conversations.get(call.conversationId)?.messages ?? [])]
+                .reverse()
+                .find((message) => message.role === 'assistant' && message.turnId === call.turnId)
+                ?.actionsLog,
+            enregistrer: (lines) => {
+              if (os.conversations.get(call.conversationId))
+                os.conversations.applyTurnEvent(call.conversationId, call.turnId, {
+                  kind: 'actions-log',
+                  lines
+                })
+            },
+            versLeFil: (event) =>
+              emitToLiveWindows(BrowserWindow.getAllWindows(), 'pilot:event', {
+                ...event,
+                conversationId: call.conversationId,
+                turnId: call.turnId
+              })
+          })
           const terminal = await waitForRecoverableChatProviderExit(call.journalPath, {
             signal: recoveryController.signal,
             fallbackActivityAt: call.updatedAt
-          })
+          }).finally(() => relais.arreter())
 
           const closeWithoutRecovery = (event: ChatTurnEvent): void => {
             issueDeReprise = issueDeCloture(event)
@@ -2928,20 +2971,82 @@ Le fil reprend ensuite normalement.`
    * « PUBLIER LES FILS FINIS » (conv-1339) : une passe `/git` à la fois, ouverte comme les tours de
    * reprise ci-dessus, hors du devis du tour qui vient de finir. Le tour est visible dans son fil.
    */
+  const travauxTentes = travauxTentesSurDisque(
+    join(autowinAppDataRoot(), 'git-apres-fil-travaux-tentes.json')
+  )
   suiviGitApresFil.file = new FileGitApresFil({
     lancerTour: (fil, prompt) =>
       os.executionSupervisor.runOutsideCurrent(() => scheduledChatRuntime.runPrompt(fil, prompt)),
-    filOccupe: (fil) => activeChatTurns.isInFlight(fil),
+    // Le chef d'un plan qui tourne encore attend : ses lots écrivent toujours (conv-1544).
+    filOccupe: (fil) =>
+      activeChatTurns.isInFlight(fil) ||
+      planTourneEncore(suiviDesPlans.coordinateur?.planDuFil(fil)),
     lireAmont: async (fil) => lireAmont(await defaultGitRunner(), dossierDuTour(fil)),
-    commitsDepuis: async (fil, depuis) =>
-      commitsPublies(await defaultGitRunner(), dossierDuTour(fil), depuis, fil),
+    commitsDepuis: async (fil, depuis, fils) =>
+      commitsPublies(await defaultGitRunner(), dossierDuTour(fil), depuis, fils),
+    // Le journal le plus récent du fil = le tour /git qui vient de finir (conv-1553).
+    lignesShellDuTour: async (fil) => {
+      const dossier = join(autowinAppDataRoot(), 'turn-journals', fil)
+      const fichiers = await fsp.readdir(dossier).catch(() => [] as string[])
+      const dates = await Promise.all(
+        fichiers
+          .filter((f) => f.endsWith('.jsonl'))
+          .map(async (f) => ({ f, t: (await fsp.stat(join(dossier, f))).mtimeMs }))
+      )
+      const dernier = dates.sort((a, b) => b.t - a.t)[0]
+      if (!dernier) return []
+      return lignesGitDuJournal(await fsp.readFile(join(dossier, dernier.f), 'utf8'))
+    },
     annoncer: (fil, contenu) => {
       os.conversations.append(fil, { role: 'assistant', content: contenu })
       broadcast({ type: 'refresh', scope: 'chat', convId: fil })
       broadcast({ type: 'refresh', scope: 'conversations' })
     },
+    noterTravauxTentes: (agentIds) => travauxTentes.noter(agentIds),
     journal: (message, detail) => console.warn('[git apres fil]', message, detail ?? '')
   })
+  /*
+   * LES TRAVAUX D'AGENTS RESTÉS HORS DE LA BRANCHE (conv-1544) — le bandeau « 1 travail terminé n'a
+   * jamais été publié ». Relus à chaque fin de run et une fois après le démarrage, rangés par fil qui
+   * a lancé le run, puis confiés à la même file : un /git par fil, après son calme. Même accord que
+   * le reste de « Publication auto », mêmes refus (autre dépôt, publication interdite dans le fil).
+   */
+  const balayerLesTravauxDAgents = async (): Promise<void> => {
+    if (!os.autoCloseEnabled() || !os.gitApresFilActif()) return
+    const travaux = await os.travauxNonPubliesAsync()
+    if (!travaux.length) return
+    const filDuRun = new Map(
+      os.getWorktreeActivity().map((agent) => [agent.agentId, agent.conversationId])
+    )
+    const parFil = travauxParFil({
+      travaux: travaux.map((travail) => ({
+        ...travail,
+        conversationId: filDuRun.get(travail.agentId)
+      })),
+      dejaTentes: travauxTentes.lire(),
+      publiable: (fil) =>
+        Boolean(os.conversations.get(fil)) &&
+        estDepotAutowin(dossierDuTour(fil)) &&
+        !publicationInterditeDans(
+          (os.conversations.get(fil)?.messages ?? [])
+            .filter((message) => message.role === 'user')
+            .map((message) => String(message.content))
+        )
+    })
+    for (const [fil, liste] of parFil)
+      suiviGitApresFil.file?.ajouterTravaux(
+        filDeLaPasse(fil, suiviDesPlans.coordinateur?.planDuFil(fil)),
+        liste,
+        fil
+      )
+  }
+  const balayerSansBruit = (): void =>
+    void balayerLesTravauxDAgents().catch((erreur) =>
+      console.warn('[git apres fil] travaux d’agents illisibles :', erreur)
+    )
+  os.onFinDeRun(balayerSansBruit)
+  // Une minute après le démarrage : le recensement git ne s'ajoute pas au coût du lancement.
+  setTimeout(balayerSansBruit, 60_000).unref?.()
   void relanceurTachesDeFond
     .reprendreAuDemarrage()
     .catch((erreur) => console.warn('[taches de fond] reprise au demarrage impossible :', erreur))

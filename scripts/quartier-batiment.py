@@ -18,8 +18,13 @@ Usage :
               sur le même pied que l'ancienne (centre du bas au même endroit)
   --pieds     `recalculer` (défaut si la place ou la taille change) ou `garder` la ligne de pied relevée
 
-Limites : la roue de Settings a des pièces animées à part (vie.calques de donnees.json), non touchées ici ;
-un bâtiment qui a une zone de clic à part (`mh`) la garde. Là où l'ancien bâtiment ne sera plus recouvert,
+Pièces animées : `roue`, `roueFond`, `roueMoyeu` (la roue de Settings, dans vie.calques de donnees.json) se
+remplacent de la même façon, `<nom>` = le nom de la pièce. Elles gardent leur place et leur taille (la roue
+tourne autour du centre de son image) : l'image est mise à leur taille si ses proportions sont les mêmes.
+Le mât, sous le disque de la roue, est le bâtiment `settings` ; `roueFond` n'est que le bout de mât derrière
+la roue (transparent ailleurs : le ballon passe derrière la roue et se voit entre ses rayons).
+
+Limites : un bâtiment qui a une zone de clic à part (`mh`) la garde. Là où l'ancien bâtiment ne sera plus recouvert,
 on voit `falaise-derriere.webp` : le script dit quelle part de l'ancienne empreinte se découvre.
 Dépendances : Pillow (avec WebP), numpy.
 """
@@ -96,6 +101,38 @@ def ligne_de_pied(alpha, x, y, w):
     return [v if v is not None else valeurs[min(connues, key=lambda k: abs(k - i))] for i, v in enumerate(valeurs)]
 
 
+def poser_piece(D, a):
+    """Remplace une pièce animée de vie.calques (la roue de Settings) à sa place et à sa taille (conv-1534).
+
+    La pièce n'a ni pied ni forme de clic : seule son image change. Sa place ne bouge pas, car la roue tourne
+    autour du centre de son image (px, py) et le moyeu doit rester sur cet axe (quartier-vie.test.ts).
+    """
+    if a.x is not None or a.y is not None or a.pieds:
+        sys.exit("une pièce animée garde sa place : --x, --y et --pieds ne s'appliquent pas")
+    c = D['vie']['calques'][a.nom]
+    im = Image.open(a.image)
+    if 'A' not in im.getbands():
+        sys.exit("l'image n'a pas de transparence : la pièce doit être détourée (fond transparent)")
+    im = im.convert('RGBA')
+    if a.echelle != 1.0:
+        im = im.resize((max(1, round(im.width * a.echelle)), max(1, round(im.height * a.echelle))), Image.LANCZOS)
+    attendu = (round(c['w'] * S), round(c['h'] * S))
+    if im.size != attendu:
+        if abs(im.width / im.height - attendu[0] / attendu[1]) > 0.02:
+            sys.exit(f"{a.nom} : proportions différentes ({im.width}×{im.height} pour {attendu[0]}×{attendu[1]})")
+        im = im.resize(attendu, Image.LANCZOS)
+    actuelle = Image.open(io.BytesIO(base64.b64decode(c['m'].split(',')[1]))).convert('RGBA')
+    if np.array_equal(np.asarray(actuelle), np.asarray(im)):
+        print(f"{a.nom} : même image que l'actuelle, rien à changer")
+        return
+    tampon = io.BytesIO()
+    im.save(tampon, 'WEBP', lossless=True, quality=100, method=6, exact=True)
+    c['m'] = 'data:image/webp;base64,' + base64.b64encode(tampon.getvalue()).decode('ascii')
+    ecrire_donnees(D)
+    print(f"{a.nom} posé : x={c['x']} y={c['y']} {c['w']}×{c['h']} (place et taille inchangées)")
+    print("à vérifier : npx vitest run src/renderer/src/quartier/ ; puis regarder l'Accueil")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('nom', nargs='?')
@@ -111,9 +148,14 @@ def main():
     if a.liste:
         for o in D['obj']:
             print(f"{nom_de(o):18} {o.get('nom', ''):24} x={o['x']} y={o['y']} {o['w']}×{o['h']}")
+        for n, c in D['vie']['calques'].items():
+            print(f"{n:18} {'pièce animée':24} x={c['x']} y={c['y']} {c['w']}×{c['h']}")
         return
     if not a.nom or not a.image:
         p.error('il faut <nom> et <image> (ou --liste)')
+    if a.nom in D['vie']['calques']:
+        poser_piece(D, a)
+        return
 
     o = next((q for q in D['obj'] if nom_de(q) == a.nom), None)
     if o is None:
@@ -182,7 +224,7 @@ def main():
     if o.get('mh'):
         print("attention : ce bâtiment a une zone de clic à part (mh), gardée telle quelle")
     if a.nom == 'settings':
-        print("attention : la roue animée de Settings est dans vie.calques, non touchée")
+        print("attention : la roue qui tourne a ses propres pièces (roue, roueFond, roueMoyeu), non touchées ici")
     print("à vérifier : npx vitest run src/renderer/src/quartier/ ; puis regarder l'Accueil")
 
 

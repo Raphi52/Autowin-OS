@@ -29,7 +29,7 @@ import { BandeauSuperConv, type OngletSuperConv } from './SuperConvMosaique'
 import { RemplirSaisieDuFil } from './saisie-du-fil'
 import type { Msg } from './chat-view-types'
 import { colonnesPour } from './chat-mosaic-grille'
-import { askReponseDuFil, tourDuMessageEnCours } from './chat-message-keys'
+import { askReponseDuFil, finDuRaisonnementRelaye, tourDuMessageEnCours } from './chat-message-keys'
 import './ChatMosaic.css'
 import {
   marquerConversationEnAttente,
@@ -266,6 +266,7 @@ function FenetreChatBrut({
                     ? askReponseDuFil([...fenetre.messages], index)
                     : undefined
                 }
+                finDuRaisonnement={finDuRaisonnementRelaye([...fenetre.messages], index)}
                 onAnswerAsk={onAnswerAsk ? (prompt) => onAnswerAsk(prompt, fenetre.id) : undefined}
               />
             ))}

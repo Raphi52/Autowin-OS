@@ -135,7 +135,7 @@ export const TEXTES_FR = {
   // conv-1544 : un seul interrupteur, qui porte les deux accords (publier, puis /git sur le reste).
   'sc.publicationAuto': 'Publication auto',
   'sc.publicationAuto.active.titre':
-    'Activé — tu n’as plus à taper /git. Après chaque tour de chat ou tâche d’agent réussi qui a modifié des fichiers : commit de ces fichiers, puis push sur la branche courante (si le dépôt refuse : branche dédiée et PR). Ce qui touche aussi un fichier d’un autre fil part par un /git lancé tout seul, 3 minutes après le dernier tour du fil, typage et tests rejoués avant de pousser. Jamais si ta demande interdit de publier. Chaque /git lancé coûte un tour du modèle. Clic : désactiver.',
+    'Activé — tu n’as plus à taper /git. Après chaque tour de chat ou tâche d’agent réussi qui a modifié des fichiers : commit de ces fichiers, puis push sur la branche courante (si le dépôt refuse : branche dédiée et PR). Ce qui touche aussi un fichier d’un autre fil part par un /git lancé tout seul, 3 minutes après le dernier tour du fil, typage et tests rejoués avant de pousser. Un plan de lots part en une passe dans son fil chef, quand il ne tourne plus. Le travail fini d’un run d’agents resté dans sa copie de travail part par un /git dans le fil qui l’a lancé, une seule tentative par travail. Jamais si ta demande interdit de publier. Chaque /git lancé coûte un tour du modèle. Clic : désactiver.',
   'sc.publicationAuto.desactive.titre':
     'Désactivé — rien n’est publié automatiquement : il faut taper /git. Clic : activer.',
   'sc.etapes': 'Étapes',
@@ -575,7 +575,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'sc.branche': 'Branch',
   'sc.publicationAuto': 'Auto-publish',
   'sc.publicationAuto.active.titre':
-    'On — you no longer need to type /git. After each successful chat turn or agent task that changed files: commit of those files, then push to the current branch (if the repository refuses: dedicated branch and PR). Whatever also touches a file of another thread goes out through a /git started on its own, 3 minutes after the thread’s last turn, with typing and tests replayed before pushing. Never when your request forbids publishing. Each /git started costs one model turn. Click: turn off.',
+    'On — you no longer need to type /git. After each successful chat turn or agent task that changed files: commit of those files, then push to the current branch (if the repository refuses: dedicated branch and PR). Whatever also touches a file of another thread goes out through a /git started on its own, 3 minutes after the thread’s last turn, with typing and tests replayed before pushing. A batch plan goes out in one pass in its lead thread, once it stops running. Finished agent-run work left in its working copy goes out through a /git in the thread that started it, one attempt per work. Never when your request forbids publishing. Each /git started costs one model turn. Click: turn off.',
   'sc.publicationAuto.desactive.titre':
     'Off — nothing is published automatically: you have to type /git. Click: turn on.',
   'sc.etapes': 'Steps',

@@ -27,6 +27,7 @@ import {
   PRESENCE_TAILLE_MAX,
   type AgentAPublier,
   type AgentPublie,
+  type AnimalAgent,
   type EtatDeLaPresence,
   type PhasePresence,
   type PresenceDuPoste
@@ -41,6 +42,11 @@ export interface ReglageDeLaPresence {
   nom: string
   /** `false` = partage coupé sur ce poste (D6). */
   partager: boolean
+  /**
+   * L'animal des agents du poste (conv-1537), écrit dans `presence.json` pour que les collègues
+   * dessinent le même. Absent = non écrit : le lecteur garde l'animal tiré du nom du poste.
+   */
+  animal?: AnimalAgent
 }
 
 // ———————————————————————————————————————————————————————————————— ce qui arrive de la vue
@@ -99,7 +105,7 @@ export function agentPublie(a: AgentAPublier): AgentPublie {
  */
 export function presenceAEcrire(
   agents: readonly AgentAPublier[],
-  reglage: Pick<ReglageDeLaPresence, 'nom' | 'partager'>,
+  reglage: Pick<ReglageDeLaPresence, 'nom' | 'partager' | 'animal'>,
   poste: string
 ): Omit<PresenceDuPoste, 'enregistreA'> {
   if (!reglage.partager)
@@ -109,6 +115,7 @@ export function presenceAEcrire(
     format: FORMAT_PRESENCE,
     poste,
     nom: reglage.nom,
+    ...(reglage.animal ? { animal: reglage.animal } : {}),
     agents: publies
   }
   // La date ajoutée ensuite tient en 60 octets : la marge est gardée ici.
