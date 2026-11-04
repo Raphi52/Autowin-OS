@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { refusEcriturePythonCrlf } from './garde-python-crlf'
+import { sourceDuBus } from '../main/commands/source-du-bus.test-helpers'
 
 /**
  * Mesuré le 2026-10-01 : 48 fichiers de D:\AutoWinOS étaient LF dans git et CRLF sur le disque ; 47
@@ -146,7 +147,7 @@ describe('refusEcriturePythonCrlf', () => {
     expect(src('./garde-git-destructeur.ts')).toMatch(
       /refusEcriturePythonCrlf\(cmd, decouperHeredocs\)/
     )
-    expect(src('../main/commands.ts')).toMatch(/refusEcriturePythonCrlf\(ligne\)/)
+    expect(sourceDuBus()).toMatch(/refusEcriturePythonCrlf\(ligne\)/)
   })
 })
 

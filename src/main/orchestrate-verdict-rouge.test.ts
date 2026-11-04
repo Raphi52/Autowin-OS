@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * UN RUN BLOQUÉ OU REFUSÉ NE PEUT PAS SORTIR VERT.
@@ -20,7 +19,7 @@ import { join } from 'node:path'
  *
  * Récupéré du bureau `autowin/recovery/command-edit-21663348-…` (2026-08-15), jamais publié.
  */
-const SOURCE = readFileSync(join(__dirname, 'commands.ts'), 'utf8').replace(/\s+/g, ' ')
+const SOURCE = sourceDuBus().replace(/\s+/g, ' ')
 
 describe('verdict d’orchestration — le rouge prime', () => {
   it('le gate et le refus du juge sont évalués AVANT le cycle de vie', () => {

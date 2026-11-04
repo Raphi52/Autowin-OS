@@ -19,6 +19,7 @@ import {
   truncateFact
 } from './brain-remember'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * SE SOUVENIR — la seule régression mécanique face à claude.exe.
@@ -575,10 +576,8 @@ describe('rememberFact — ce qui est DÉPOSÉ, jamais « mémorisé »', () => 
  * demande, l'argument `phase` sans mode d'emploi).
  */
 describe('câblage — la commande existe et le prompt enseigne quand l’employer', () => {
-  const read = (rel: string): string => readFileSync(join(__dirname, rel), 'utf8')
-
   it('la commande `remember` est au catalogue et dispatchée', () => {
-    const source = read('commands.ts')
+    const source = sourceDuBus()
     expect(source).toContain("name: 'remember'")
     expect(source).toContain("case 'remember':")
     expect(source).toContain('rememberFact(a, {')
@@ -607,7 +606,7 @@ describe('câblage — la commande existe et le prompt enseigne quand l’employ
   it('la LECTURE reste couverte par `brain_query` — pas de régression', () => {
     const prompt = buildChatPilotagePrompt([])
     expect(prompt).toContain('brain_query')
-    expect(read('commands.ts')).toContain("name: 'brain_query'")
+    expect(sourceDuBus()).toContain("name: 'brain_query'")
   })
 })
 
@@ -720,7 +719,7 @@ describe('sourceLocatorProblem — le refus ENSEIGNE la forme attendue', () => {
 
 describe('câblage — la description dit les FORMES au modèle', () => {
   it('le catalogue montre git:<chemin>@<sha>, pas un simple préfixe', () => {
-    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    const source = sourceDuBus()
     expect(source).toContain('git:<chemin>@<sha>')
     expect(source).toContain('ticket:ABC-123')
   })

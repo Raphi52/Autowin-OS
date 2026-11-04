@@ -7,6 +7,7 @@ import {
   motifInactivite,
   terminalDuTour
 } from './chat-turn-arret'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * MESURE conv-136, 2026-09-02 — le défaut que ces tests interdisent.
@@ -98,10 +99,10 @@ describe('câblage du tour de chat', () => {
  */
 describe('l’orchestration bat un signe de vie vers le tour', () => {
   it('chaque phase appelle `onProgress` depuis le rappel de `runTask`', () => {
-    const src = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    const src = sourceDuBus()
     const debutCas = src.indexOf("case 'orchestrate': {")
     expect(debutCas).toBeGreaterThan(0)
-    const rappel = src.indexOf('const r = await this.os.runTask(', debutCas)
+    const rappel = src.indexOf('const r = await bus.os.runTask(', debutCas)
     expect(rappel).toBeGreaterThan(debutCas)
     // La fenêtre couvre le rappel de phase, pas tout le fichier : un `onProgress` d'un autre
     // `case` (run, verify) ne doit pas suffire à faire passer ce test.

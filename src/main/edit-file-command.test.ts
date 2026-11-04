@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyEdit, decideEdit, editDiff } from './edit-file-command'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * TESTS DE REFUS D'ABORD — ce module est le seul de la journee qui donne le droit d'ECRIRE.
@@ -235,15 +236,11 @@ describe('applyEdit / editDiff', () => {
  */
 describe('cablage de edit_file', () => {
   const commands = (): string => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('node:fs') as typeof import('node:fs')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require('node:path') as typeof import('node:path')
     // FINS DE LIGNE NORMALISEES. Ces tests reperent des ancres qui contiennent des sauts de ligne
     // ; sur une copie Windows (CRLF), `indexOf` ne trouvait rien, `slice(0, -1)` rendait tout le
     // fichier et les assertions echouaient sur du code sain. Le defaut etait dans la LECTURE,
     // pas dans `commands.ts` : on lit donc toujours en LF, comme le depot les stocke.
-    return fs.readFileSync(path.join(__dirname, 'commands.ts'), 'utf8').replace(/\r\n/g, '\n')
+    return sourceDuBus().replace(/\r\n/g, '\n')
   }
 
   it('est declaree DESTRUCTIVE (l’UI et l’agent doivent le savoir)', () => {

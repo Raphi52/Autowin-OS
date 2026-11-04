@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { failedActionRunId, pickRunForTrace, runIdFromActionData } from './run-trace-target'
+import { sourceDuBus } from '../../../main/commands/source-du-bus.test-helpers'
 
 const run = (path: string, mtime: number) => ({ path, mtime })
 
@@ -142,7 +143,7 @@ describe('contrat reel orchestrate — la reference EST un chemin', () => {
 
 describe('contrat cote main — orchestrate expose bien le chemin du run', () => {
   it('retourne runPath (et runId aligne dessus)', () => {
-    const commands = readFileSync(join(__dirname, '..', '..', '..', 'main', 'commands.ts'), 'utf8')
+    const commands = sourceDuBus()
     // Si ce contrat disparait, le clic perd sa cible exacte et retombe silencieusement sur
     // « le plus recent » — d'ou cette assertion.
     expect(commands).toContain('runPath')

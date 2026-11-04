@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { kaizenConversationParCommande } from './autowin-kaizen-context'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * /kaizen SANS CONVERSATION NOMMÉE : le dossier visait la conversation du /kaizen elle-même, vide.
@@ -67,7 +66,7 @@ describe('/kaizen sans conversation nommée : la commande citée désigne le dos
   })
 
   it('est BRANCHÉE sur le choix du dossier (commands.ts), après la conversation nommée', () => {
-    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    const source = sourceDuBus()
     expect(source).toMatch(/kaizenConversationParCommande\(/)
     expect(source).toMatch(/kaizenParCommande\?\.avis/)
   })
