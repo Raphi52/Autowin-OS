@@ -8,6 +8,7 @@ import {
   loadShadowRoutingPilotSetting,
   saveShadowRoutingPilotSetting
 } from './model-routing-shadow-setting'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 function observationsPath(label: string): string {
   return join(
@@ -124,7 +125,7 @@ describe('reglage persistant du pilote shadow', () => {
 })
 
 describe('cablage du pilote shadow dans le process principal', () => {
-  const main = readFileSync(new URL('./index.ts', import.meta.url), 'utf8')
+  const main = sourceProcessPrincipal()
 
   it('alimente le runtime avec le reglage persistant, reassignable pour le sink de trace', () => {
     expect(main).toMatch(/let shadowRoutingRuntime = createShadowRoutingRuntime\(/)

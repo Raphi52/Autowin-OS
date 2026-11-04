@@ -1,6 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import {
   abortUpdateConflict,
   checkForUpdate,
@@ -9,6 +7,7 @@ import {
   parseIncomingCommits,
   type GitRunner
 } from './git-update'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /** Clé exacte de la commande qui lit les commits entrants (cf. `readIncoming`). */
 const LOG_INCOMING =
@@ -503,7 +502,7 @@ describe('applyUpdate — jamais de mutation silencieuse dune branche', () => {
  * déclenchaient aucun bouton chez les collègues.
  */
 describe('le check de mise à jour vise le DÉPÔT, pas le dossier de lancement', () => {
-  const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+  const source = sourceProcessPrincipal()
   const handlers = source.slice(
     source.indexOf("ipcMain.handle('update:check'"),
     source.indexOf("ipcMain.handle('update:apply'") + 900

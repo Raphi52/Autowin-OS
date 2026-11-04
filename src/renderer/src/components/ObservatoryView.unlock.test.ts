@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from '../../../main/source-process-principal.test-helpers'
 
 describe('Observatory Native diagnostics default access', () => {
   it('loads global diagnostics automatically without a popup or unlock button', () => {
@@ -13,7 +14,7 @@ describe('Observatory Native diagnostics default access', () => {
      */
     const sources = readFileSync(new URL('./useObservatorySources.ts', import.meta.url), 'utf8')
     const renderer = `${view}\n${sources}`
-    const main = readFileSync(new URL('../../../main/index.ts', import.meta.url), 'utf8')
+    const main = sourceProcessPrincipal()
 
     expect(view).not.toContain('Déverrouiller Native')
     expect(renderer).toMatch(/window\.api\s*\.authorizeDiagnostics\(\)/)

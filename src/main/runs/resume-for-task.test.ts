@@ -8,6 +8,7 @@ import {
 } from './orchestration-state'
 import { MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared/relance-sans-objet'
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 
 /**
  * REPRENDRE SANS REPAYER.
@@ -246,7 +247,7 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
  * — la recherche d'acquis n'existait que côté chat, donc reprendre repayait tout.
  */
 describe('câblage — le chemin DIRECT reprend lui aussi', () => {
-  const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  const source = sourceProcessPrincipal()
   const handler = source.slice(source.indexOf("ipcMain.handle('os:orchestrate',"))
 
   it('il cherche un acquis pour cette tâche et cette conversation', () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { emitToLiveWindows, type EmitTarget } from './renderer-emit'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * LE ROUGE D'ABORD — ce que faisait `event.sender.send` sur une fenêtre fermée.
@@ -97,11 +98,7 @@ describe('emitToLiveWindows — diffusion', () => {
  */
 describe('cablage — plus aucune emission vers un WebContents capture', () => {
   const main = (): string => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('node:fs') as typeof import('node:fs')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require('node:path') as typeof import('node:path')
-    return fs.readFileSync(path.join(__dirname, 'index.ts'), 'utf8')
+    return sourceProcessPrincipal()
   }
 
   it('aucun `event.sender.send` ne subsiste', () => {

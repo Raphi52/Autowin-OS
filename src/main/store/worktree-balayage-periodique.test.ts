@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 
 /**
  * LE BALAYAGE NE TOURNAIT QU'AU DÉMARRAGE.
@@ -67,7 +66,7 @@ describe('balayage périodique des copies abandonnées', () => {
       d'événements et l'application ne se ferme plus proprement — le motif déjà employé par le
       minuteur kaizen juste à côté.
     */
-    const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+    const source = sourceProcessPrincipal()
     expect(source).toContain('balayerLesCopiesAbandonnees()')
     expect(source).toContain('balayagePeriodiqueTimer.unref()')
   })

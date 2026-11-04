@@ -21,7 +21,6 @@ import type { FicheDeDemande, FichesDesDemandes } from '../shared/fiche-de-deman
 import type { AffichageSession } from '../shared/affichage-session'
 import type { ApiNavigateur, RectNavigateur } from '../shared/navigateur'
 import type { ApiTerminal } from '../shared/terminal'
-import type { GestesDesTours } from '../shared/gestes-agent'
 import type { StockVeille } from '../main/veille/candidats-store'
 import type {
   WorktreeAgentActivity,
@@ -299,8 +298,6 @@ interface ChatApi {
     Array<{ conversationId: string; turnId: string; events: number; updatedAt: number }>
   >
   turnJournal: (conversationId: string, turnId: string) => Promise<Array<Record<string, unknown>>>
-  /** Gestes propres de l'agent (lectures, commandes, éditions) de chaque demande, par demande. */
-  turnJournalGestes: (conversationId: string) => Promise<GestesDesTours>
   /** Consigne à rejouer après un redémarrage demandé par l'agent, rendue une seule fois. */
   repriseEnAttente: () => Promise<{
     conversationId: string

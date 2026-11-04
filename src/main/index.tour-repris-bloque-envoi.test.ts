@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /*
  * UN SEUL AGENT PAR FIL APRÈS UN REDÉMARRAGE (conv-260, 2026-10-11).
@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
  * les trois points du site d'appel réel. Le comportement de la réservation elle-même est prouvé par
  * `active-chat-turns.tour-repris.test.ts`, celui de l'écran par `ChatView.tour-repris-adopte.test.tsx`.
  */
-const source = readFileSync(join(process.cwd(), 'src', 'main', 'index.ts'), 'utf8')
+const source = sourceProcessPrincipal()
 
 function bloc(debut: string, longueur: number): string {
   const i = source.indexOf(debut)

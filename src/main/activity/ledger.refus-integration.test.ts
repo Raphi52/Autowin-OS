@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { TraceLedger, REFUS_INTEGRATION, evenementRefusIntegration } from './ledger'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 
 /**
  * COMPTER LES REFUS D'INTEGRATION — parce que RIEN ne les compte aujourd'hui.
@@ -141,6 +142,6 @@ describe('le compteur de refus est branché de bout en bout', () => {
   })
 
   it('le point d’entrée BRANCHE l’abonné sur le ledger', () => {
-    expect(lire('index.ts')).toContain('os.onRefusIntegration((refus) => ledger.append(')
+    expect(sourceProcessPrincipal()).toContain('os.onRefusIntegration((refus) => ledger.append(')
   })
 })

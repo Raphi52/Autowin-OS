@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ActiveChatTurns } from './active-chat-turns'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * FAUX « Réponse interrompue avant la fin » (conv-809 le 2026-09-23, puis conv-862 le 2026-09-26 :
@@ -115,7 +114,7 @@ describe('une demande reçue compte comme en cours pendant sa préparation', () 
 
 /** Câblage : le seul point que l'exécution ci-dessus n'atteint pas, `runPilotChat` étant une closure de index.ts. */
 describe('câblage dans index.ts', () => {
-  const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+  const source = sourceProcessPrincipal()
 
   it('runPilotChat enveloppe le rangement ET le lancement du tour', () => {
     const pilote = source.slice(source.indexOf('const tourCompteDesReception: typeof lancerTour'))

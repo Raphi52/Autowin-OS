@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * CÂBLAGE de l'enchaînement auto du CHAT dans `runPilotChat` (closure locale de index.ts, que
@@ -10,7 +9,7 @@ import { describe, expect, it } from 'vitest'
  * Avant conv-871 (2026-09-26), l'interrupteur « Enchaînement auto » ne publiait QUE les tâches
  * d'agent : 1 commit sur 64 poussé tout seul en deux jours, tout le travail du chat attendait un clic.
  */
-const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+const source = sourceProcessPrincipal()
 const pilote = source.slice(source.indexOf('const tourCompteDesReception: typeof lancerTour'))
 const corps = pilote.slice(0, pilote.indexOf('startupRecoverableChatCalls'))
 

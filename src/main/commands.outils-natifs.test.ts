@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { AppCommandBus, CATALOG } from './commands'
 import { parseDesktopActions } from './desktop-control'
@@ -8,6 +7,7 @@ import { parseTaskInput } from './task-manager/task-manager-ipc'
 import { TaskStore } from './task-manager/task-store'
 import { lirePlanDeLots } from '../shared/plan-de-lots'
 import { APP_DESTINATIONS } from '../shared/navigation'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /*
  * LES OUTILS DU CHAT RATTRAPENT LES OUTILS NATIFS DE CLAUDE (conv-1370, lot 6, 2026-10-31).
@@ -187,7 +187,7 @@ describe('(b) task_update et task_delete : l’agent peut modifier et supprimer'
   })
 
   it('index.ts branche les trois gestes de l’écran sur bus.taskManager', () => {
-    const source = readFileSync('src/main/index.ts', 'utf8')
+    const source = sourceProcessPrincipal()
     const debut = source.indexOf('bus.taskManager = {')
     const zone = source.slice(debut, source.indexOf('}', debut))
     expect(zone).toContain('get: (id) => scheduledTasks.getTask(id)')
@@ -197,7 +197,7 @@ describe('(b) task_update et task_delete : l’agent peut modifier et supprimer'
 
   // conv-1372 : le `.map` retirait annotations et types pour les étapes de workflow.
   it('le catalogue d’un nœud de workflow garde annotations et types', () => {
-    const source = readFileSync('src/main/index.ts', 'utf8')
+    const source = sourceProcessPrincipal()
     const debut = source.indexOf('catalogue: () =>')
     const zone = source.slice(debut, source.indexOf('amorcerRegistreOutils()', debut))
     expect(zone).toContain('OUTILS_NOEUD_SKILL')

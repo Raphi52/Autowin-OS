@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { configureAutowinAppDataBase } from './app-data'
 import { AgentPilot, type PilotEvent } from './agent-pilot'
 import type { Message, SendOptions, SendResult } from './providers/types'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * LE TOUR DE CHAT RECOIT LES COMMANDES DE FOND COUPEES, POUR LES RELANCER.
@@ -79,7 +80,7 @@ describe('pilote — commandes de fond coupées en fin de tour', () => {
 
 describe('câblage — le tour de chat relance, index.ts ouvre le tour de reprise', () => {
   const chat = readFileSync(join(__dirname, 'chat', 'run-pilot-chat.ts'), 'utf8')
-  const index = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+  const index = sourceProcessPrincipal()
 
   it('run-pilot-chat transmet `taches-de-fond` à la relance', () => {
     expect(chat).toMatch(

@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
 import { enregistrerDirectiveDansLeFil } from './directive-dans-le-fil'
 import { ConversationStore } from './store/conversations'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * DÉFAUT VÉCU (conv-38, 2026-09-01) : « j'ai répondu à un ask, ça a écrit le message, puis ça a
@@ -174,7 +174,7 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
   })
 
   it('le canal d’injection APPELLE cette écriture, après avoir accepté la directive', () => {
-    const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+    const source = sourceProcessPrincipal()
     const debut = source.indexOf("'os:pilotChat:inject'")
     const handler = source.slice(debut, source.indexOf('ipcMain.handle', debut + 10))
     const accepte = handler.indexOf('pendingDirectives.set(conversationId, queued)')

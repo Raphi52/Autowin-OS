@@ -17,6 +17,7 @@ import { loadOrchestrationStates, saveOrchestrationState } from './orchestration
 import { compileExecutionQuote } from '../execution-quote'
 import { ExecutionSupervisor } from '../execution-supervisor'
 import { writeSurvivableExit } from './stdout-journal'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 
 describe('fin réussie pendant le rattachement', () => {
   let root = ''
@@ -2528,7 +2529,7 @@ describe('réconciliation persistée avant relance', () => {
  * précisément le défaut : la reprise relançait sans jamais poser la question.
  */
 describe('câblage — le démarrage consulte la garde avant de relancer', () => {
-  const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  const source = sourceProcessPrincipal()
 
   it('parcourt TOUS les runs reprenables plutôt qu’un seul', () => {
     expect(source).toContain('const resumableRuns = os.resumableOrchestrations()')
@@ -2591,7 +2592,7 @@ describe('câblage — le démarrage consulte la garde avant de relancer', () =>
  * travail produit pendant l'absence reste invisible — donc réputé perdu, donc relancé à la main.
  */
 describe('câblage — le démarrage rejoue le journal et mémorise où il s’est arrêté', () => {
-  const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  const source = sourceProcessPrincipal()
   const bloc = source.slice(
     source.indexOf("if ((reprise === 'rattacher' || reprise === 'bloquer')")
   )
@@ -2781,7 +2782,7 @@ describe('runJournalProgressMark — le témoin de production suivi pendant le r
 
 describe('câblage : les deux attentes de rattachement suivent le journal', () => {
   it('chaque appel de waitUntilRunCanResume dans index.ts passe runJournalProgressMark', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const source = sourceProcessPrincipal()
     const appels = source.split('waitUntilRunCanResume(').slice(1)
     // Le run élu ET son doublon : les deux étaient lâchés au bout de 10 min le 2026-10-09.
     expect(appels.length).toBeGreaterThanOrEqual(2)
@@ -2828,7 +2829,7 @@ describe('câblage — l’empreinte du processus est réellement capturée au l
  * annoncé interrompu, ou — le défaut mesuré — aucun tour ne serait annoncé du tout.
  */
 describe('câblage — le chargement des conversations connaît les runs reprenables', () => {
-  const source = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  const source = sourceProcessPrincipal()
 
   it('persistConversations reçoit les tours des checkpoints encore sur disque', () => {
     expect(source).toContain('resumableTurnIds')

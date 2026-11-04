@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * LE SEUL POINT que l'execution ne peut pas atteindre : l'ORDRE d'appel dans `runPilotChat`, une
@@ -12,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * message), et ce trou affichait un faux « Reponse interrompue avant la fin » (conv-809, conv-862).
  * Si quelqu'un remet un `await` devant le rangement, l'attente revient : ce test doit tomber.
  */
-const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+const source = sourceProcessPrincipal()
 const pilote = source.slice(source.indexOf('const tourCompteDesReception: typeof lancerTour'))
 const corps = pilote.slice(0, pilote.indexOf('startupRecoverableChatCalls'))
 

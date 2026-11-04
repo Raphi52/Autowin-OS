@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { observerLeMoteur } from './observer-les-sources'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * L'OBSERVATION RÉELLE, et le CÂBLAGE — la décision pure est testée à part
@@ -75,7 +76,7 @@ describe('le câblage jusqu’au pied de page', () => {
   const lire = (relatif: string): string => readFileSync(join(__dirname, '..', relatif), 'utf8')
 
   it('le moteur expose son état', () => {
-    const main = lire(join('main', 'index.ts'))
+    const main = sourceProcessPrincipal()
     expect(main).toContain("ipcMain.handle('os:moteur:etat'")
     expect(main).toMatch(/observerLeMoteur\(app\.getAppPath\(\),\s*demarrageDuMoteurMs/)
   })

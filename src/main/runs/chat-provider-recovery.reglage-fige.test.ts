@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { appendTurnEvent, type TurnJournalEvent } from './turn-journal'
 import { listRecoverableChatProviderCallsAsync, reglagesDeReprise } from './chat-provider-recovery'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 
 /**
  * UN TOUR REPRIS NE FIGE PAS LES RUNS QU'IL LANCE (conv-955, 2026-10-15).
@@ -111,7 +112,7 @@ describe('reprise d’un tour de chat : réglage du chat ≠ réglage imposé au
 })
 
 describe('câblage : la reprise et le tour passent chaque réglage à sa place', () => {
-  const index = readFileSync(join(__dirname, '..', 'index.ts'), 'utf8')
+  const index = sourceProcessPrincipal()
   const tour = readFileSync(join(__dirname, '..', 'chat', 'run-pilot-chat.ts'), 'utf8')
 
   it('index.ts confie le choix à reglagesDeReprise et passe le modèle du chat dans la reprise', () => {

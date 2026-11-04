@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { abortFailure, abortReasonText } from './providers/abort-diagnostic'
 import { MOTIF_STOP_DU_CHAT } from '../shared/arret-par-stop'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * UNE ANNULATION DIT POURQUOI — jusqu'au message que l'utilisateur lit.
@@ -55,7 +56,7 @@ describe('une annulation d orchestration dit pourquoi', () => {
   })
 
   it('les deux chemins d annulation de l interface nomment leur motif', () => {
-    const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+    const source = sourceProcessPrincipal()
     for (const canal of ['os:pilotChat:cancel', 'os:orchestrate:cancel']) {
       // Ancré sur l'ENREGISTREMENT du canal, pas sur la première mention : la première occurrence de
       // `os:orchestrate:cancel` est un commentaire, et mon oracle l'avait attrapé — un test qui lit un

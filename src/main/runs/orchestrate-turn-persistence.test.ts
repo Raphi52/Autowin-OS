@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs'
+
 import { describe, expect, it } from 'vitest'
 import { ConversationStore } from '../store/conversations'
 import { createOrchestrateTurnPersistence } from './orchestrate-turn-persistence'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 
 function storeWithConversation(): { store: ConversationStore; id: string } {
   const store = new ConversationStore(() => 1)
@@ -335,7 +336,7 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
   })
 
   it('chaque tour ouvert par index.ts recharge la liste à sa fermeture', () => {
-    const source = readFileSync(new URL('../index.ts', import.meta.url), 'utf8')
+    const source = sourceProcessPrincipal()
     const appels = source.split('createOrchestrateTurnPersistence({').slice(1)
     // Les trois endroits connus le 2026-10-13 : run direct, publication déjà acquise, rattachement.
     expect(appels.length).toBeGreaterThanOrEqual(3)
@@ -391,7 +392,7 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
   })
 
   it('le handler os:orchestrate câble bien cette persistance (ouverture, étapes, terminal)', () => {
-    const source = readFileSync(new URL('../index.ts', import.meta.url), 'utf8')
+    const source = sourceProcessPrincipal()
     const start = source.indexOf("ipcMain.handle('os:orchestrate'")
     expect(start, 'handler os:orchestrate introuvable').toBeGreaterThan(-1)
     // Borne = le PROCHAIN handler, quel qu'il soit. Ancrer sur un voisin NOMME

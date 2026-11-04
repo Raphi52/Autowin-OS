@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { creerCompteDesRuns } from './mascotte-runs'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * Le compte des runs de la mascotte (conv-1196, ligne 1 du scout). Entrée qui doit faire échouer ce
@@ -50,7 +49,7 @@ describe('compte des runs de la mascotte, tenu par le moteur (conv-1196)', () =>
 
 /** Câblage : `broadcast` et le gestionnaire `os:presence` sont des fonctions internes de index.ts. */
 describe('câblage dans index.ts', () => {
-  const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+  const source = sourceProcessPrincipal()
   const corps = (debut: string, fin: string): string => {
     const i = source.indexOf(debut)
     expect(i).toBeGreaterThanOrEqual(0)

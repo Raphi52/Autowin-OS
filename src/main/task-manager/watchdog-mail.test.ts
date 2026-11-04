@@ -1,5 +1,3 @@
-// fix-ok: 3e édition = typage du runtime simulé (erreur tsc mesurée, typecheck:node exit 0 après) + reconversion CRLF->LF
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { ScheduledChatDispatcher, type ScheduledChatRuntime } from './chat-dispatch'
 import { TaskStore } from './task-store'
@@ -14,6 +12,7 @@ import {
   seedMailWatchdogTask
 } from './watchdog-mail'
 import type { ScheduledTask, TaskOccurrence } from './types'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 
 const mail = (id: string, nonLu = true) => ({ id, nonLu, sujet: 's', corps: 'c' })
 const snap = (...mails: unknown[]) => ({ ok: true, mails })
@@ -167,7 +166,7 @@ describe('Watchdog mail — une instance de test isolée ne pose pas la règle p
   })
 
   it('index.ts pose la règle par cette porte, avec le drapeau de l’instance isolée', () => {
-    const index = readFileSync(new URL('../index.ts', import.meta.url), 'utf8')
+    const index = sourceProcessPrincipal()
     expect(index).toMatch(
       /reglesMailsPersoAutorisees\(\{\s*instanceIsolee:\s*isolatedTestInstance,\s*reglagePose:\s*mailsPerso\s*\}\)\s*&&\s*seedMailWatchdogTask\(/
     )

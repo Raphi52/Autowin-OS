@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /*
  * LE TOUR DE CHAT NE REDEMARRE PLUS L'APP POUR CHANGER DE DOSSIER.
@@ -10,7 +9,7 @@ import { describe, expect, it } from 'vitest'
  * lancer le tour — court-circuitait cette resolution : dans l'app reelle, le nouveau code n'etait
  * jamais atteint. Ce test epingle le site d'appel reel du chat (`os:pilotChat`).
  */
-const source = readFileSync(join(process.cwd(), 'src', 'main', 'index.ts'), 'utf8')
+const source = sourceProcessPrincipal()
 
 const handler = (() => {
   const debut = source.indexOf("ipcMain.handle('os:pilotChat'")

@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * CÂBLAGE de `chat_send` vers une AUTRE conversation (closure locale de index.ts, que l'exécution ne
@@ -13,7 +12,7 @@ import { describe, expect, it } from 'vitest'
  * héritait du devis du tour APPELANT, dont l'appel était déjà actif. L'utilisateur a dû renvoyer la
  * demande à la main 34 min plus tard.
  */
-const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+const source = sourceProcessPrincipal()
 const debut = source.indexOf('bus.lancerDansConversation = ')
 const bloc = source.slice(debut, source.indexOf('const taskDispatcher', debut))
 

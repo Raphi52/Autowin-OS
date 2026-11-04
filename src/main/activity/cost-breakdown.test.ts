@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 import {
   costSamplesFrom,
   summarizeCostSamples,
@@ -42,7 +43,7 @@ describe('os:costBreakdown — chaine IPC complete', () => {
   const read = (p: string): string => readFileSync(join(__dirname, '..', '..', p), 'utf8')
 
   it('le main enregistre le handler et borne la dimension recue', () => {
-    const main = read('main/index.ts')
+    const main = sourceProcessPrincipal()
     expect(main).toMatch(/ipcMain\.handle\(\s*'os:costBreakdown'/)
     expect(main).toContain('summarizeCostSamples')
     // Exigence RENFORCEE : le handler doit reconcilier les DEUX journaux, sinon il sous-estime

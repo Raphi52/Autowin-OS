@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { ImportedModel } from '../models'
 import { ConversationStore } from '../store/conversations'
 import { modeleDuTour, validerModeleDeConversation } from './modele-de-conversation'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 
 /**
  * LE MODÈLE APPARTIENT À LA CONVERSATION (conv-239, 2026-10-11).
@@ -102,7 +103,7 @@ describe('modeleDuTour', () => {
 })
 
 describe('câblage', () => {
-  const index = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+  const index = sourceProcessPrincipal()
   const roles = readFileSync(join(process.cwd(), 'src/main/ipc/roles.ts'), 'utf8')
 
   it('le lancement d’un tour applique le modèle de la conversation', () => {

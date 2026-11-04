@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { creerSuiviDesPublications, PLAFOND_PUBLICATION_MS } from './publications-en-vol'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * LE REDÉMARRAGE ATTEND LA PUBLICATION D'UN TOUR FINI (maintenance du 2026-11-01, conv-1048).
@@ -43,7 +42,7 @@ describe('publications en vol', () => {
 })
 
 describe('câblage dans le processus principal', () => {
-  const source = readFileSync(join(__dirname, 'index.ts'), 'utf8').replace(/\r\n/g, '\n')
+  const source = sourceProcessPrincipal().replace(/\r\n/g, '\n')
 
   it('la relance au repos attend les publications', () => {
     const auRepos = source.slice(

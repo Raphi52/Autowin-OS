@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ActiveChatTurns } from './active-chat-turns'
 import {
@@ -10,6 +8,7 @@ import {
 } from './chat/run-pilot-chat'
 import { CoordinateurDesPlans } from './plans-de-lots-app'
 import type { IssueDuTour } from '../shared/plan-de-lots'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /*
  * CHEF OCCUPÉ, AVEC LE VRAI REGISTRE DES TOURS (conv-1150, 2026-10-26, objection du juge).
@@ -432,7 +431,7 @@ describe('plans de lots — le plan suit l’agent qui a survécu au redémarrag
  * mais le chef de l'app réelle n'est plus réveillé : c'est ce que cette garde refuse.
  */
 describe('plans de lots — branchement de la fin de tour dans index.ts', () => {
-  const index = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+  const index = sourceProcessPrincipal()
 
   it('la fin de tour est annoncée autour du tour compté dès sa réception', () => {
     expect(index).toMatch(
@@ -505,7 +504,8 @@ describe('plans de lots — branchement de la fin de tour dans index.ts', () => 
     expect(suivi).toContain('suiviDesPlans.coordinateur?.agentRepris(')
     expect(suivi).toContain('annoncerLaFinDuTour(observateurDesPlans,')
     // Le démarrage et l'enregistrement des canaux n'ont pas la même portée : le suivi passe par ici.
-    expect(index).toContain('const suiviDuPlan = registerChatIpc()')
+    // (conv-1508) l’enregistrement reçoit désormais l’état du démarrage : registerChatIpc(contexteIpcChat()).
+    expect(index).toContain('const suiviDuPlan = registerChatIpc(')
   })
 
   it('la fabrique du tour ne reçoit plus l’observateur de fin (il annoncerait trop tôt)', () => {

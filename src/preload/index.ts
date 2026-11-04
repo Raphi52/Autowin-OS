@@ -18,7 +18,6 @@ import type {
 } from '../shared/prod-protection'
 import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
 import type { GitGraphSnapshot } from '../shared/git-graph'
-import type { GestesDesTours } from '../shared/gestes-agent'
 import type {
   ChatAttachment,
   AgentTopology,
@@ -446,8 +445,6 @@ const api = {
   > => ipcRenderer.invoke('runs:unfinishedTurns'),
   turnJournal: (conversationId: string, turnId: string): Promise<Array<Record<string, unknown>>> =>
     ipcRenderer.invoke('runs:turnJournal', conversationId, turnId),
-  turnJournalGestes: (conversationId: string): Promise<GestesDesTours> =>
-    ipcRenderer.invoke('runs:turnJournalGestes', conversationId),
   /**
    * La consigne laissée avant un redémarrage demandé par l'agent (`restart_app`).
    * Rendue UNE SEULE FOIS : le main l'efface en la lisant.

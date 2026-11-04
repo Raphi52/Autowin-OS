@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * LE BRANCHEMENT DE LA REPRISE D'UN FIL (conv-1423). `index.ts` ne se charge pas dans un test : il
@@ -10,7 +9,7 @@ import { describe, expect, it } from 'vitest'
  * fix-ok: une composition fausse ne se voit dans aucun test unitaire : la lecture de la relecture à la
  * réactivation était rouge tant qu'`index.ts` ne la branchait pas (02/11).
  */
-const source = readFileSync(join(__dirname, 'index.ts'), 'utf8')
+const source = sourceProcessPrincipal()
 
 describe('index.ts — la reprise des fils coupés par le quota', () => {
   it('le tour part sans modèle imposé : il garde celui du fil', () => {

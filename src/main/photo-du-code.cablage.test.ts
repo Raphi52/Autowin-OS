@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 
 /**
  * CÂBLAGE DE LA PHOTO DU CODE (conv-1038, 2026-10-21). Le module est testé sur un vrai dépôt
@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
  *  - AVANT que le modèle écrive (`await lancerTour`) — après, elle montrerait la fin du tour ;
  *  - jamais pour un tour REPRIS après un redémarrage (`args[4]`, la reprise) : il a commencé avant.
  */
-const index = readFileSync(new URL('./index.ts', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const index = sourceProcessPrincipal().replace(/\r\n/g, '\n')
 
 function corpsDuRunner(): string {
   const debut = index.indexOf('const tourCompteDesReception: typeof lancerTour = (...args) =>')

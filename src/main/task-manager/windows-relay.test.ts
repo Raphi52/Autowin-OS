@@ -8,6 +8,7 @@ import {
   taskOccurrenceFromAdditionalData,
   windowsRelayTaskName
 } from './windows-relay'
+import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
 
 function probeLegacyDisarm(
   legacyArguments: string,
@@ -28,7 +29,7 @@ function probeLegacyDisarm(
 
 describe('Task Manager — relais Windows unique', () => {
   it('branche un nom de tache Windows propre a la racine canonique', () => {
-    const indexSource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const indexSource = sourceProcessPrincipal()
     const e2eSource = readFileSync(join(process.cwd(), 'scripts/cdp-task-manager-e2e.mjs'), 'utf8')
     const relayAt = indexSource.indexOf('const relay = new PowerShellWindowsRelay({')
     const relayBranch = indexSource.slice(relayAt, relayAt + 600)
