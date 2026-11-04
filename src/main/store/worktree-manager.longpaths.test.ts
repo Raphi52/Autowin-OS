@@ -9,7 +9,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -75,7 +75,12 @@ describe('worktree add porte core.longpaths', () => {
    * `this.git(this.baseRepo, ['worktree', 'add', ...])` — c'est exactement la forme d'avant-fix.
    */
   it('aucun site de worktree add dans la source ne démarre par la sous-commande', () => {
-    const source = readFileSync(join(__dirname, 'worktree-manager.ts'), 'utf8')
+    // La classe est découpée en modules voisins worktree-manager-*.ts (conv-1508, lot 3) : on lit
+    // tout le moteur, pas seulement le fichier principal.
+    const source = readdirSync(__dirname)
+      .filter((nom) => /^worktree-manager(-[a-z]+)?\.ts$/.test(nom))
+      .map((nom) => readFileSync(join(__dirname, nom), 'utf8'))
+      .join('\n')
     const sitesNus = source.match(/\[\s*'worktree',\s*\n?\s*'add'/g) ?? []
     expect(sitesNus).toEqual([])
     const sitesPrefixes =
