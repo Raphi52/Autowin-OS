@@ -295,6 +295,15 @@
   line-height: 1;
   filter: saturate(1.15);
 }
+/* La punaise du Board en JAUNE (conv-1536, 2026-11-04 : « tu peux mettre l'icone de pin en
+   jaune? »). L'icône est l'émoji 📌, rouge : `color` ne le teinte pas, le filtre tourne sa teinte
+   (rouge → jaune), l'aiguille reste claire. Réglé à l'œil sur six variantes rendues par Edge :
+   50° donne de l'orange, 84° tire au vert, `sepia()` jaunit aussi l'aiguille. Sélecteur à DEUX
+   crans exprès : les thèmes monochromes (Ninja, Nier et Vanilla clairs,
+   `:root[data-theme] .space-toy-icon`, trois crans) gardent leur icône grise. */
+[data-testid='nav-besoins'] > .space-toy-icon {
+  filter: hue-rotate(80deg) saturate(1.8) brightness(2);
+}
 /* Seul le LIBELLE s'etire. Le badge d'alerte (« ! » de Settings) est un cercle de 17px
    (.domain-badge-alert) : pris dans ce flex: 1, il s'etirait sur toute la moitie droite de
    l'item et son border-radius: 50% en faisait une longue ellipse rouge. */
