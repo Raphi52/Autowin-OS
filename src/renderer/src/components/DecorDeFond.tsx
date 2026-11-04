@@ -259,6 +259,11 @@ function monterDecor(
     const coutDansSonFil = scene.coutDerniereImage?.() ?? null
     if (coutDansSonFil !== null) cadence.noterCout(coutDansSonFil, 'dedie')
     else cadence.noterCout(performance.now() - debut)
+    // Repère lisible par CDP (conv-1512) : le coût réel de chaque image, mesuré sur le poste par
+    // scripts/sonde-cout-image-accueil.mjs. Tampon borné à 300 entrées, vidé au-delà.
+    performance.measure('decor:image', { start: debut })
+    if (performance.getEntriesByName('decor:image').length > 300)
+      performance.clearMeasures('decor:image')
   }
   const reprendre = (): void => {
     if (enBoucle) return
