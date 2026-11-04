@@ -36,6 +36,7 @@ import {
   PREFIXE_OPENROUTER,
   type OpenRouterModel
 } from './openrouter-free-models'
+import { chargerModelesGroq, PREFIXE_GROQ, type GroqModel } from './groq-free-models'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -442,12 +443,14 @@ export async function discoverImportedModels(
   cachePath?: string,
   cliModelIds: ClaudeCliModelIdsFn = realClaudeCliModelIds,
   listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels,
-  listOpenRouterFn: () => Promise<OpenRouterModel[]> = () => chargerModelesGratuits(fetchFn)
+  listOpenRouterFn: () => Promise<OpenRouterModel[]> = () => chargerModelesGratuits(fetchFn),
+  listGroqFn: () => Promise<GroqModel[]> = () => chargerModelesGroq(fetchFn)
 ): Promise<ImportedModel[]> {
-  const [claude, codex, openRouter] = await Promise.all([
+  const [claude, codex, openRouter, groq] = await Promise.all([
     discoverClaudeModels(fetchFn, cliModelIds),
     discoverCodexModels(listCodexModelsFn),
-    discoverOpenRouterModels(listOpenRouterFn)
+    discoverOpenRouterModels(listOpenRouterFn),
+    discoverGroqModels(listGroqFn)
   ])
   const cacheUpdates: Partial<ModelCatalogCache> = {}
   if (codex.live) cacheUpdates.codex = codex.models
@@ -482,6 +485,7 @@ export async function discoverImportedModels(
       ...resolvedClaudeModels,
       ...codexModels,
       ...openRouter,
+      ...groq,
       ...DEFAULT_IMPORTED_MODELS
     ]).filter((model) => ROUTED_PROVIDERS.includes(model.provider as RoutedProvider))
   )
@@ -507,6 +511,28 @@ async function discoverOpenRouterModels(
     }))
   } catch {
     // Catalogue OpenRouter injoignable : la voie se tait, les autres restent (même règle que codex).
+    return []
+  }
+}
+
+/**
+ * MODÈLES GRATUITS DE GROQ (2026-11-04, conv-1499) : rangés sous `codex`, car c'est le CLI Codex qui
+ * les sert (`-c model_providers.groq.*`, voir `groq-free-models.ts`). Live seulement ; sans clé ou
+ * réseau muet, aucun.
+ */
+async function discoverGroqModels(listFn: () => Promise<GroqModel[]>): Promise<ImportedModel[]> {
+  try {
+    return (await listFn()).map<ImportedModel>((m) => ({
+      id: `codex/${PREFIXE_GROQ}${m.id}`,
+      provider: 'codex',
+      model: `${PREFIXE_GROQ}${m.id}`,
+      label: `${m.id} (Groq, gratuit)`,
+      // Effort non transmis à Groq (Kimi/Llama refusent `reasoning`) : seul `none` est proposé.
+      reasoningEfforts: ['none'],
+      defaultReasoningEffort: 'none',
+      dynamicallyLoaded: true
+    }))
+  } catch {
     return []
   }
 }

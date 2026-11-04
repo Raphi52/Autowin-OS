@@ -389,6 +389,35 @@ describe('sélection Claude depuis Agents', () => {
     expect(models.findIndex((m) => m === entree)).toBe(models.length - 1)
   })
 
+  it('ajoute les modèles gratuits Groq sous codex, après OpenRouter (conv-1499)', async () => {
+    const models = await discoverImportedModels(
+      (async () => new Response('', { status: 500 })) as unknown as typeof fetch,
+      undefined,
+      cliIds,
+      async () => [],
+      async () => [],
+      async () => [{ id: 'moonshotai/kimi-k2-instruct' }]
+    )
+    const entree = models.find((m) => m.id === 'codex/groq/moonshotai/kimi-k2-instruct')
+    expect(entree).toMatchObject({ provider: 'codex', model: 'groq/moonshotai/kimi-k2-instruct' })
+    expect(entree?.label).toBe('moonshotai/kimi-k2-instruct (Groq, gratuit)')
+  })
+
+  it('catalogue Groq en échec : aucune entrée Groq, le reste intact', async () => {
+    const models = await discoverImportedModels(
+      (async () => new Response('', { status: 500 })) as unknown as typeof fetch,
+      undefined,
+      cliIds,
+      async () => [],
+      async () => [],
+      async () => {
+        throw new Error('HTTP 401')
+      }
+    )
+    expect(models.some((m) => m.id.includes('/groq/'))).toBe(false)
+    expect(models.length).toBeGreaterThan(0)
+  })
+
   it('catalogue OpenRouter injoignable : aucune entrée OpenRouter, le reste intact', async () => {
     const models = await discoverImportedModels(
       (async () => new Response('', { status: 500 })) as unknown as typeof fetch,

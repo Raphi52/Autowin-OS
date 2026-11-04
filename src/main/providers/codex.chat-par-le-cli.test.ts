@@ -248,3 +248,27 @@ describe('un CLI dans un dossier trop long pour Windows', () => {
     )
   })
 })
+
+describe('modèle gratuit Groq servi par le CLI (conv-1499)', () => {
+  const precedenteCle = process.env.GROQ_API_KEY
+  afterEach(() => {
+    if (precedenteCle === undefined) delete process.env.GROQ_API_KEY
+    else process.env.GROQ_API_KEY = precedenteCle
+  })
+
+  it('passe l’id nu à --model et branche Groq par -c, sans copier la clé', async () => {
+    process.env.GROQ_API_KEY = 'gsk-secret'
+    await tour({ conversationId: 'conv-9', model: 'groq/qwen/qwen3-32b', reasoningEffort: 'high' })
+    const { args } = flux.lancements[0]!
+    expect(args[args.indexOf('--model') + 1]).toBe('qwen/qwen3-32b')
+    expect(args).toContain('model_provider="groq"')
+    expect(args).toContain('model_providers.groq.env_key="GROQ_API_KEY"')
+    expect(args.join(' ')).not.toContain('gsk-secret')
+    expect(args.join(' ')).not.toContain('model_reasoning_effort')
+  })
+
+  it('modèle ChatGPT ordinaire : aucun réglage Groq (jumeau)', async () => {
+    await tour({ conversationId: 'conv-9', model: 'gpt-6-luna' })
+    expect(flux.lancements[0]!.args.join(' ')).not.toContain('groq')
+  })
+})

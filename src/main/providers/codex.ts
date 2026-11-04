@@ -1,4 +1,5 @@
 import { abortFailure } from './abort-diagnostic'
+import { lancementGroq } from '../groq-free-models'
 import type {
   Message,
   PromptEnvelope,
@@ -574,15 +575,18 @@ async function executerCodex(
   onProgress?: (chunk: StreamChunk) => void
 ): Promise<SendResult> {
   const mcp = opts.skillNodeTools ? optionsMcpCodex(opts.skillNodeTools) : undefined
+  // Modèle gratuit Groq (conv-1499) : id nu pour `--model`, connexion Groq par `-c`. Sans clé, lève.
+  const groq = lancementGroq(model)
   const spec = codexExecSpec(
     execution.cwd,
-    model,
+    groq?.model ?? model,
     execution.sandbox,
-    opts.reasoningEffort,
+    // Groq : aucun effort transmis, Kimi et Llama refusent le paramètre `reasoning`.
+    groq ? undefined : opts.reasoningEffort,
     undefined,
     undefined,
     undefined,
-    { images, config: mcp?.config }
+    { images, config: [...(groq?.config ?? []), ...(mcp?.config ?? [])] }
   )
   const mutationBefore =
     execution.causallyIsolated && execution.sandbox !== 'read-only'
