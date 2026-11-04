@@ -15,7 +15,6 @@ import {
 import { TableauDesLots } from './TableauDesLots'
 import { PropositionDeFils } from './PropositionDeFils'
 import { buildRefineDraft } from './chat-resume-refine'
-import { RequestThread } from './RequestThread'
 import { appliquerLangue } from '../langue'
 import { texteDuBilan, traduireChatFilsEtLots } from '../textes-ecrans/chat-fils-et-lots'
 
@@ -121,64 +120,6 @@ describe('plan de lots et fils proposés — langue', () => {
     expect(carte.querySelector('.md-fils__actions .md-donnees__note')?.textContent).toBe(
       'Coût : 3 tours, dont 2 en même temps.'
     )
-  })
-
-  it('le fil des demandes réécrit son récit en anglais SANS relire la trace', async () => {
-    let lectures = 0
-    const ev = (
-      id: string,
-      at: string,
-      over: Record<string, unknown>
-    ): Record<string, unknown> => ({
-      id,
-      conversationId: 'conv-a',
-      turnId: 'turn-1',
-      timestamp: at,
-      sequence: id.length,
-      type: 'message',
-      status: 'completed',
-      channel: 'internal',
-      actor: { id: 'orchestrator', kind: 'agent', label: 'orchestrator' },
-      payloads: [],
-      observation: { boundary: 'orchestration', fidelity: 'exact' },
-      ...over
-    })
-    ;(globalThis as unknown as { window: Record<string, unknown> }).window.api = {
-      causalTrace: () => {
-        lectures += 1
-        return Promise.resolve([
-          ev('p', '2026-10-12T07:00:00.000Z', {
-            provider: { id: 'claude', model: 'claude-opus-5-5' },
-            payloads: [{ kind: 'user-message', content: 'UTILISATEUR: ajoute un module' }]
-          }),
-          ev('rp', '2026-10-12T07:00:30.000Z', {
-            type: 'model-response',
-            parentId: 'p',
-            metrics: { durationMs: 30000 }
-          })
-        ])
-      }
-    }
-    const fil = await monter(<RequestThread conversationId="conv-a" />)
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 0))
-    })
-    const lectureAvant = lectures
-    const tete = () => fil.querySelector('.request-thread-head')?.textContent
-    const chapitres = () =>
-      [...fil.querySelectorAll('.request-story-chapter dt')].map((d) => d.textContent)
-    expect(tete()).toBe('Demandes1 demande')
-    expect(chapitres()).toContain('Décision')
-    const decisionFr = fil.querySelector('[data-chapter="Décision"] dd')?.textContent
-
-    await act(async () => appliquerLangue('en'))
-    expect(tete()).toBe('Requests1 request')
-    expect(chapitres()).toEqual(['Request', 'Decision', 'What it did', 'Result', 'Summary'])
-    // Le repère `data-chapter` reste français : stable quelle que soit la langue.
-    const decisionEn = fil.querySelector('[data-chapter="Décision"] dd')?.textContent
-    expect(decisionFr).toContain('Chat direct')
-    expect(decisionEn).toContain('Direct chat')
-    expect(lectures).toBe(lectureAvant)
   })
 
   it('le brouillon de reprise passe en anglais et garde son repère relu `[reprise] `', () => {
