@@ -372,4 +372,34 @@ describe('sélection Claude depuis Agents', () => {
 
     expect(args).toEqual(['--model', 'claude-haiku-4-5-20251001', '--autocompact', '170000'])
   })
+
+  it('ajoute les modèles gratuits OpenRouter du listing live, après Claude (conv-1471)', async () => {
+    const models = await discoverImportedModels(
+      (async () => new Response('', { status: 500 })) as unknown as typeof fetch,
+      undefined,
+      cliIds,
+      async () => [],
+      async () => [
+        { id: 'nvidia/nemotron:free', name: 'Nemotron', supported_parameters: ['tools'] }
+      ]
+    )
+    const entree = models.find((m) => m.id === 'claude/openrouter/nvidia/nemotron:free')
+    expect(entree).toMatchObject({ provider: 'claude', model: 'openrouter/nvidia/nemotron:free' })
+    expect(entree?.label).toBe('Nemotron (OpenRouter)')
+    expect(models.findIndex((m) => m === entree)).toBe(models.length - 1)
+  })
+
+  it('catalogue OpenRouter injoignable : aucune entrée OpenRouter, le reste intact', async () => {
+    const models = await discoverImportedModels(
+      (async () => new Response('', { status: 500 })) as unknown as typeof fetch,
+      undefined,
+      cliIds,
+      async () => [],
+      async () => {
+        throw new Error('réseau')
+      }
+    )
+    expect(models.some((m) => m.model.startsWith('openrouter/'))).toBe(false)
+    expect(models.length).toBeGreaterThan(0)
+  })
 })

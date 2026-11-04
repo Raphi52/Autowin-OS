@@ -1,4 +1,5 @@
 // fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
+import { lancementOpenRouter } from '../openrouter-free-models'
 import { joinThinking } from './thinking'
 import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 import { ligneDErreurDAction } from '../../shared/erreur-d-action'
@@ -880,7 +881,9 @@ const EFFORTS_CLI_CLAUDE = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 
 /** Ajoute au spawn les choix Agents réellement supportés par le CLI installé. */
 export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): void {
-  if (opts.model) args.push('--model', opts.model)
+  // Modèle OpenRouter (conv-1471) : le CLI reçoit l'id OpenRouter nu, pas le préfixe du catalogue.
+  // Sans clé, `lancementOpenRouter` lève le message « clé manquante » avant tout lancement.
+  if (opts.model) args.push('--model', lancementOpenRouter(opts.model)?.model ?? opts.model)
   // ADVISOR (conv-1083) : seulement sur un accord de la table de la doc. Hors table, le CLI tourne
   // sans advisor (advisor classé sous le principal) ou s'arrête au lancement (Haiku 4.5 comme
   // advisor, entre autres) — un cas de chaque mesuré sur 2.1.308, `claude-advisor.ts`. Ici il ne
@@ -2019,7 +2022,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // Aucun Electron lancé par l'agent n'ouvre sa boîte d'erreur chez l'utilisateur.
           ...envFiletElectronAgent(modAutowin, process.env),
           // Tour de chantier : le CLI ne le tue pas 10 min après son tour (voir `ENV_CHANTIER`).
-          ...(args.includes(OUTIL_WORKFLOW) ? ENV_CHANTIER : {})
+          ...(args.includes(OUTIL_WORKFLOW) ? ENV_CHANTIER : {}),
+          // Modèle gratuit OpenRouter : le CLI pointe sur OpenRouter avec OPENROUTER_API_KEY (conv-1471).
+          ...(lancementOpenRouter(opts.model)?.env ?? {})
         },
         execution?.agentEnv
       )
