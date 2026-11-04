@@ -110,6 +110,27 @@ describe('photographierLeCode — au début du tour, sans toucher au dossier par
     await expect(git(repo, 'show', `${photo!.sha}:ignore/cache.bin`)).rejects.toThrow()
   })
 
+  it('réutilise la même photo quand le code n’a pas changé depuis le tour précédent', async () => {
+    const repo = await depot()
+
+    const premiere = await photographierLeCode({
+      dossier: repo,
+      conversationId: 'conv-1',
+      quand: 1_000
+    })
+    const seconde = await photographierLeCode({
+      dossier: repo,
+      conversationId: 'conv-1',
+      quand: 2_000
+    })
+
+    expect(seconde?.sha).toBe(premiere?.sha)
+    expect(seconde?.ref).toBe(premiere?.ref)
+    expect(await git(repo, 'for-each-ref', '--format=%(refname)', 'refs/autowin/tour/conv-1/')).toBe(
+      'refs/autowin/tour/conv-1/1000\n'
+    )
+  })
+
   it('un fichier nouveau trop gros reste hors de la photo', async () => {
     const repo = await depot()
     writeFileSync(join(repo, 'gros.bin'), 'x'.repeat(500))
@@ -145,8 +166,7 @@ describe('photographierLeCode — au début du tour, sans toucher au dossier par
       .split('\n')
       .sort()
     expect(refs).toEqual([
-      'refs/autowin/tour/conv-1/2000',
-      'refs/autowin/tour/conv-1/3000',
+      'refs/autowin/tour/conv-1/1000',
       'refs/autowin/tour/conv-2/900'
     ])
   })
@@ -184,15 +204,16 @@ describe('photoDuTour — la photo prise au début du tour d’un message', () =
       await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand })
     expect(
       (await photoDuTour({ dossier: repo, conversationId: 'conv-1', jusqua: 2_500 }))?.quand
-    ).toBe(2_000)
+    ).toBe(1_000)
     // Bornes : l'heure du message est incluse, celle du message précédent exclue.
     expect(
       (await photoDuTour({ dossier: repo, conversationId: 'conv-1', jusqua: 2_000, apres: 1_000 }))
         ?.quand
-    ).toBe(2_000)
+    ).toBe(1_000)
     expect(
-      await photoDuTour({ dossier: repo, conversationId: 'conv-1', jusqua: 2_500, apres: 2_000 })
-    ).toBeNull()
+      (await photoDuTour({ dossier: repo, conversationId: 'conv-1', jusqua: 2_500, apres: 2_000 }))
+        ?.quand
+    ).toBe(1_000)
     expect(await photoDuTour({ dossier: repo, conversationId: 'conv-9', jusqua: 9_999 })).toBeNull()
   })
 })

@@ -120,22 +120,50 @@ async function photographier(
     )
     const arbre = (await git(['write-tree'], repo, { env })).trim()
     const parent = (await git(['rev-parse', '--verify', '-q', 'HEAD'], repo).catch(() => '')).trim()
-    const sha = (
+    const refsExistantes = (
       await git(
-        [
-          'commit-tree',
-          arbre,
-          ...(parent ? ['-p', parent] : []),
-          '-m',
-          `Autowin — photo du code au début d'un tour (${entree.conversationId})`
-        ],
-        repo,
-        { env }
+        ['for-each-ref', '--sort=-refname', '--format=%(refname) %(objectname)', `${PREFIXE_PHOTOS}${entree.conversationId}/`],
+        repo
       )
-    ).trim()
-    await git(['update-ref', ref, sha], repo)
+    )
+      .split(/\r?\n/u)
+      .map((ligne) => ligne.trim().split(' '))
+      .filter(([ref, sha]) => Boolean(ref && sha))
+    const dernierePhoto = refsExistantes[0]
+    const dejaPhoto = dernierePhoto?.[1]
+    let sha = ''
+    for (const candidat of [dejaPhoto, parent].filter((valeur): valeur is string => Boolean(valeur))) {
+      const arbreCandidat = (await git(['rev-parse', `${candidat}^{tree}`], repo).catch(() => '')).trim()
+      if (arbreCandidat === arbre) {
+        sha = candidat
+        break
+      }
+    }
+    if (!sha) {
+      sha = (
+        await git(
+          [
+            'commit-tree',
+            arbre,
+            ...(parent ? ['-p', parent] : []),
+            '-m',
+            `Autowin — photo du code au début d'un tour (${entree.conversationId})`
+          ],
+          repo,
+          { env }
+        )
+      ).trim()
+    }
+    // Une référence par tour gonfle le graphe même si le code n'a pas bougé. Le dernier état
+    // suffit : `photoDuTour` le réutilise pour les tours suivants tant qu'aucun changement n'arrive.
+    const quandDernierePhoto = dernierePhoto ? Number(dernierePhoto[0].split('/').at(-1)) : NaN
+    const refEncoreFraiche =
+      Number.isSafeInteger(quandDernierePhoto) &&
+      entree.quand - quandDernierePhoto <= entree.conserver.ageMaxMs
+    const refUtilisee = dejaPhoto === sha && dernierePhoto && refEncoreFraiche ? dernierePhoto[0] : ref
+    if (refUtilisee === ref) await git(['update-ref', ref, sha], repo)
     await elaguer(repo, entree.conversationId, entree.quand, entree.conserver, git)
-    return { ref, sha }
+    return { ref: refUtilisee, sha }
   } finally {
     rmSync(temporaire, { recursive: true, force: true })
   }
@@ -241,8 +269,7 @@ export async function photoDuTour(entree: {
       (photo): photo is NonNullable<typeof photo> =>
         photo !== null &&
         photo.fil === entree.conversationId &&
-        photo.quand <= entree.jusqua &&
-        (entree.apres === undefined || photo.quand > entree.apres)
+        photo.quand <= entree.jusqua
     )
     .sort((a, b) => b.quand - a.quand)
   const derniere = candidates[0]
