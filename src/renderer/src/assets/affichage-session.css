@@ -12,11 +12,11 @@
    d'une animation (`animationend` : entree-cascade.ts, anneau-activite.tsx, BulleDuTicket.tsx,
    TestsView.tsx). Avec `animation: none`, cet évènement ne viendrait jamais. Une animation en boucle
    joue un seul tour d'1 ms puis s'arrête.
-   Exceptions : le SPINNER, indicateur d'état et non décor (theme.css) — figé, il dirait faussement
+   Exceptions : le SPINNER (`.aw-atom` du composant <Spinner/>, et l'ancien `.spinner`), indicateur d'état et non décor (theme.css ; `.aw-atom` oublié jusqu'au 2026-11-04, conv-1521) — figé, il dirait faussement
    que rien ne tourne ; et l'ACCUEIL, qui garde ses animations à distance (voir l'en-tête). */
-:root[data-session='distante'] *:not(.spinner, .spinner *, .vue-accueil, .vue-accueil *),
-:root[data-session='distante'] *:not(.spinner, .spinner *, .vue-accueil, .vue-accueil *)::before,
-:root[data-session='distante'] *:not(.spinner, .spinner *, .vue-accueil, .vue-accueil *)::after {
+:root[data-session='distante'] *:not(.spinner, .spinner *, .aw-atom, .aw-atom *, .vue-accueil, .vue-accueil *),
+:root[data-session='distante'] *:not(.spinner, .spinner *, .aw-atom, .aw-atom *, .vue-accueil, .vue-accueil *)::before,
+:root[data-session='distante'] *:not(.spinner, .spinner *, .aw-atom, .aw-atom *, .vue-accueil, .vue-accueil *)::after {
   animation-duration: 1ms !important;
   animation-delay: 0s !important;
   animation-iteration-count: 1 !important;
