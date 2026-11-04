@@ -9,6 +9,7 @@ import {
   TYPES_DE_VERIFICATION,
   VERIFY_OUTPUT_CAP
 } from './verify-command'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * TESTS DE REFUS D'ABORD — ecrits AVANT le cablage, volontairement.
@@ -117,11 +118,7 @@ describe('capVerifyOutput — la sortie n’inonde pas le tour', () => {
  */
 describe('cablage de la commande verify', () => {
   const commands = (): string => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('node:fs') as typeof import('node:fs')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require('node:path') as typeof import('node:path')
-    return fs.readFileSync(path.join(__dirname, 'commands.ts'), 'utf8')
+    return sourceDuBus()
   }
 
   it('le modele ne choisit JAMAIS la commande — son seul argument est une CIBLE, validee', () => {

@@ -13,6 +13,7 @@ import {
   timeSharePercent,
   type CostRow
 } from './conversation-cost'
+import { sourceDuBus } from '../../../main/commands/source-du-bus.test-helpers'
 
 /**
  * COMBIEN COÛTE CETTE CONVERSATION.
@@ -294,7 +295,7 @@ describe('câblage — la durée est écrite ET affichée', () => {
   const read2 = (rel: string): string => readFileSync(join(__dirname, rel), 'utf8')
 
   it('le journal d’activité porte la durée de l’étape d’orchestration', () => {
-    expect(read2('../../../main/commands.ts')).toContain('durationMs: step.durationMs')
+    expect(sourceDuBus()).toContain('durationMs: step.durationMs')
   })
 
   it('le tour de chat est mesuré de bout en bout', () => {

@@ -16,6 +16,7 @@ import {
 } from './session-memory-echo'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { buildTurnMessages } from './chat-turn-messages'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * ÉCHO DE MÉMOIRE — la moitié manquante de la mécanique de claude.exe.
@@ -307,7 +308,7 @@ describe('audit cycle 4 — les pertes silencieuses de l’écho', () => {
 
 describe('câblage — l’écho est réellement alimenté et réellement relu', () => {
   it('la commande remember alimente l’écho depuis le fait VALIDÉ, pas les args bruts', () => {
-    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    const source = sourceDuBus()
     expect(source).toContain('noteRemembered')
     // La garde a CHANGÉ au cycle 4 : `outcome.stored` perdait le fait quand le Brain ne répondait pas.
     // La bonne condition est « le fait est RECEVABLE », l'état du dépôt voyageant avec lui.

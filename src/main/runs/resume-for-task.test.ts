@@ -7,6 +7,7 @@ import {
   type OrchestrationRunState
 } from './orchestration-state'
 import { MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared/relance-sans-objet'
+import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
 
 /**
  * REPRENDRE SANS REPAYER.
@@ -196,7 +197,7 @@ describe('pickResumeForTask — « reprend » compare aussi la tâche délégué
  * `runTask` en s'arrêtant à 6 arguments : `resumeOutputs` ET `conversationId` étaient omis.
  */
 describe('câblage — la commande du chat reprend et rattache la conversation', () => {
-  const source = readFileSync(join(__dirname, '..', 'commands.ts'), 'utf8')
+  const source = sourceDuBus()
   const osSource = readFileSync(join(__dirname, '..', 'os.ts'), 'utf8')
 
   it('elle cherche un acquis pour CETTE tâche et CETTE conversation', () => {
@@ -216,16 +217,18 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
   it('elle passe enfin `conversationId` — il manquait aussi', () => {
     // Délimite l'appel par sa PARENTHÈSE fermante, pas par un budget de caractères : un budget cassait
     // dès qu'une ligne était ajoutée dans le corps de l'appel (arrivé en ajoutant `durationMs`).
-    const start = source.indexOf('const r = await this.os.runTask(')
+    // Le cas `orchestrate` vit dans commands/orchestration.ts, sorti du bus : `bus.` et un cran de
+    // retrait de moins (conv-1508, lot 2).
+    const start = source.indexOf('const r = await bus.os.runTask(')
     expect(start).toBeGreaterThan(0)
-    const call = source.slice(start, source.indexOf('\n          )', start))
+    const call = source.slice(start, source.indexOf('\n        )', start))
     expect(call).toContain('convId')
     expect(call).toContain('resumeOutputs')
     expect(call).toContain('runtimeSnapshot')
   })
 
   it('elle OUBLIE l’acquis repris (sinon il serait rejoué à chaque relance)', () => {
-    expect(source).toContain('this.os.forgetResumableOrchestration(resumable.runId)')
+    expect(source).toContain('bus.os.forgetResumableOrchestration(resumable.runId)')
   })
 
   it('elle ne supprime pas le checkpoint réécrit sous la même identité de run', () => {

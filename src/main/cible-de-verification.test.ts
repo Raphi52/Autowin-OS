@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { cibleDeVerification, libelleDuVerifySur } from './verify-command'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * LE DÉFAUT, vécu le 2026-08-25. Un agent de chat devait prouver UN fichier de test. Il ne pouvait
@@ -140,7 +141,7 @@ describe('la cible d’une vérification ciblée', () => {
  * exit 0 en **258 ms**, contre une suite entière qui dépassait le plafond de 600 s.
  */
 describe('le chat peut réellement nommer une cible', () => {
-  const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+  const source = sourceDuBus()
 
   it('la commande `verify` DÉCLARE l’argument, sinon le modèle ne peut pas le passer', () => {
     // Un argument non déclaré n'atteint jamais le gestionnaire : la capacité serait invisible.
@@ -212,7 +213,7 @@ describe('libelleDuVerifySur — le libellé d’un `verify` sur ce fichier', ()
   })
 
   it('`verify` écrit son libellé par cette même fonction', () => {
-    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    const source = sourceDuBus()
     expect(source).toContain('etiquette = libelleDuVerifyCible(decision.command, verdict.chemin)')
   })
 })
@@ -264,7 +265,7 @@ describe('une cible source est routée, pas refusée', () => {
 })
 
 describe('le routage est réellement branché', () => {
-  const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+  const source = sourceDuBus()
 
   it('une cible marquée `parPortee` passe par la vérification de portée', () => {
     // L'appel porte desormais le `signal` d'arret (bouton Stop) en dernier argument : on exige la

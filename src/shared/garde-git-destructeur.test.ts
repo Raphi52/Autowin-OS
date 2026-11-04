@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { refusGitDestructeur } from './garde-git-destructeur'
+import { sourceDuBus } from '../main/commands/source-du-bus.test-helpers'
 
 /**
  * Preuve du defaut d'origine : conv-587, saisie ts=1789550244094. Un `git reset --hard` de nettoyage
@@ -79,8 +80,8 @@ describe('refusGitDestructeur', () => {
     const src = (p: string) => readFileSync(join(__dirname, p), 'utf8')
     expect(src('./garde-git-destructeur.ts')).toMatch(/scriptHookGardes/)
     // La commande run lit la ligne SANS le texte de ses heredocs (rejeu du 2026-10-01, heredocs.ts).
-    expect(src('../main/commands.ts')).toMatch(/const shell = sansHeredocsDeDonnees\(ligne\)/)
-    expect(src('../main/commands.ts')).toMatch(/refusGitDestructeur\(shell\)/)
+    expect(sourceDuBus()).toMatch(/const shell = sansHeredocsDeDonnees\(ligne\)/)
+    expect(sourceDuBus()).toMatch(/refusGitDestructeur\(shell\)/)
   })
 })
 

@@ -6,6 +6,7 @@ import {
   capBrainResult,
   decideBrainQuery
 } from './brain-query-command'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 describe('decideBrainQuery — bornage de la question', () => {
   it('accepte et normalise une question utilisable', () => {
@@ -141,11 +142,7 @@ describe('buildBrainOutcome status', () => {
 /** Contrat de CABLAGE : une commande declaree mais jamais atteignable resterait du theatre. */
 describe('cablage de brain_query', () => {
   const commands = (): string => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('node:fs') as typeof import('node:fs')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require('node:path') as typeof import('node:path')
-    return fs.readFileSync(path.join(__dirname, 'commands.ts'), 'utf8')
+    return sourceDuBus()
   }
 
   it('est declaree au catalogue avec sa question, et annoncee en LECTURE SEULE', () => {
@@ -168,7 +165,7 @@ describe('cablage de brain_query', () => {
 
   it('un refus n’appelle PAS le Brain', () => {
     const source = commands()
-    const impl = source.slice(source.indexOf('private async runBrainQuery'))
+    const impl = source.slice(source.indexOf('async runBrainQuery('))
     const refusal = impl.slice(0, impl.indexOf('this.retrieveBrain('))
     expect(refusal).toContain('if (!decision.allowed)')
     expect(refusal).not.toContain('await this.retrieveBrain')

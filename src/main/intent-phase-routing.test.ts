@@ -5,6 +5,7 @@ import { matchIntentPhase, normalizeIntent } from './intent-phase-routing'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { classifyRegime, phasesForRegime, regimePhases } from './task-regime'
 import { courtCircuiteLeModele, routeSkillRequest } from './skill-routing'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * ROUTER L'INTENTION VERS UNE PHASE.
@@ -247,7 +248,7 @@ describe('câblage — le code ne DEVINE plus qu’il faut orchestrer', () => {
  * ne pouvait pas nommer la phase : il devait espérer que l'heuristique devine.
  */
 describe('câblage — le modèle peut NOMMER la phase', () => {
-  const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+  const source = sourceDuBus()
 
   it('la commande orchestrate expose un argument `phase`', () => {
     expect(source).toMatch(/args: \{\s*task: 'la tâche',/)
@@ -625,11 +626,7 @@ describe('le prompt enseigne le choix de phase, sans pousser vers l’orchestrat
  * explicite), inacceptable venant du modèle.
  */
 describe('câblage — le modèle ne peut pas réduire une tâche critique', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const fs = require('node:fs') as typeof import('node:fs')
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const path = require('node:path') as typeof import('node:path')
-  const source = fs.readFileSync(path.join(__dirname, 'commands.ts'), 'utf8')
+  const source = sourceDuBus()
 
   it('la phase du modèle est refusée sur un régime critique', () => {
     expect(source).toContain('!suppliedRootTask')

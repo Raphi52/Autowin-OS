@@ -110,15 +110,15 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     emission: 'spool',
     sites: [
       // Brain PERSO (conv-1233) : chemin `perso:`, ouvert sur son propre serveur.
-      { file: 'src/main/commands.ts', anchor: '? await runBrainGraph(argsPerso, depsPerso)' },
-      { file: 'src/main/commands.ts', anchor: ': await runBrainRead(argsPerso, depsPerso)' },
+      { file: 'src/main/commands/outils-metier.ts', anchor: '? await runBrainGraph(argsPerso, depsPerso)' },
+      { file: 'src/main/commands/outils-metier.ts', anchor: ': await runBrainRead(argsPerso, depsPerso)' },
       {
-        file: 'src/main/commands.ts',
+        file: 'src/main/commands/outils-metier.ts',
         anchor:
           "name === 'brain_graph' ? await runBrainGraph(a, deps) : await runBrainRead(a, deps)"
       }
     ],
-    trace: { file: 'src/main/commands.ts', anchor: 'tracerLectureBrain(' },
+    trace: { file: 'src/main/commands/outils-metier.ts', anchor: 'tracerLectureBrain(' },
     pourquoi:
       "Note ENTIÈRE ouverte par le modèle (souvent depuis les notes proches), ou liens suivis dans le graphe. Absent du registre jusqu'au 2026-10-30 (conv-1303) : 148 notes, 347 000 caractères injectés du 22 au 30/10 sans trace — le plus gros flux Brain du chat."
   },
@@ -183,8 +183,8 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     kind: 'write',
     injecte: false,
     emission: 'spool',
-    sites: [{ file: 'src/main/commands.ts', anchor: 'outcome = await rememberFact(a, {' }],
-    trace: { file: 'src/main/commands.ts', anchor: "kind: 'depot'" },
+    sites: [{ file: 'src/main/commands/memoire.ts', anchor: 'outcome = await rememberFact(a, {' }],
+    trace: { file: 'src/main/commands/memoire.ts', anchor: "kind: 'depot'" },
     pourquoi: 'Écriture vers le Brain demandée par le modèle : un appel Brain, dans l’autre sens.'
   },
   {

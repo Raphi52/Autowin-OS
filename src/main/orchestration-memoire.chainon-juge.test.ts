@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { memoireDesRunsPrecedents, phasesAvecJuge } from './orchestration-memoire'
 import { populateConvRunSections } from './runs/conv-runs'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * LE CHAÎNON MANQUANT (mesuré sur conv-1405, 2026-08-25).
@@ -92,7 +93,7 @@ describe('chaînon juge → RUN.md → mémoire inter-runs', () => {
   })
 
   it('le câblage réel passe le verdict à populateConvRunSections (pas seulement le helper)', () => {
-    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    const source = sourceDuBus()
     expect(source).toMatch(/populateConvRunSections\(\s*runPath,\s*phasesAvecJuge\(/)
   })
 })

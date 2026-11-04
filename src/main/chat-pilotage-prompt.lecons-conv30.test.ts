@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * KAIZEN DE conv-30 (2026-09-01) — trois pertes MESUREES dans la trace causale de ce fil, dont
@@ -45,7 +45,7 @@ describe('chat-pilotage-prompt — lecons mesurees de conv-30', () => {
 
   it('dit dans la description de desktop_observe que les ecrans commencent a 1', () => {
     // Le catalogue n'est pas exporte : on lit la source, comme chat-ipc-contract.test.ts.
-    const source = readFileSync(new URL('./commands.ts', import.meta.url), 'utf8')
+    const source = sourceDuBus()
     const debut = source.indexOf("name: 'desktop_observe'")
     expect(debut, 'la commande desktop_observe doit exister').toBeGreaterThan(-1)
     const specification = source.slice(debut, source.indexOf("name: 'desktop_act'"))
