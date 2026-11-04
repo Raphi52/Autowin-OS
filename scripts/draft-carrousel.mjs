@@ -75,6 +75,8 @@
  *   - « visuel » et « fonctionnement » (conv-1338) : les deux axes d'une proposition, sur TOUTES ou
  *     sur aucune. Ils s'affichent sur la fiche et ouvrent le mélange par axe (draft-axes.mjs), qui
  *     remplace le Mixer et ses boutons précalculés : page ```html-interactif là aussi.
+ *   - `data-calque="Nom"` dans le `html` et « etats » par proposition (conv-1470) : le panneau de la
+ *     proposition affichée liste ses calques et bascule ses états (draft-calques.mjs) ; page aussi.
  *   Sortie : le fichier .md avec la clôture ```html-render — ou ```html-interactif avec une scène,
  *   des réglages ou des axes —, à contrôler par scripts/html-render-apercu.mjs (code 0) — html-interactif-apercu.mjs
  *   pour une page, plus scene-3d-apercu.mjs pour une scène — puis à poser dans le fil par `montrer_bloc`
@@ -99,6 +101,13 @@ import {
   styleReglages,
   verifierReglages
 } from './draft-reglages.mjs'
+import {
+  panneauCalques,
+  propositionsAvecCalques,
+  SCRIPT_CALQUES,
+  styleCalques,
+  verifierEtats
+} from './draft-calques.mjs'
 
 /** La transition C « Pile de cartes », réglée pendant le /draft (tour 3, conv-302). */
 export const TRANSITION = { duree: 0.45, courbe: 'cubic-bezier(.2,.8,.2,1)' }
@@ -174,6 +183,7 @@ export function verifierPropositions(spec) {
       erreurs.push(`${rang} : le préfixe de classe « dkc- » est réservé au carrousel`)
   })
   erreurs.push(...verifierAxes(propositions))
+  erreurs.push(...verifierEtats(propositions))
   if (spec.reglages !== undefined)
     erreurs.push(
       ...verifierReglages(
@@ -186,7 +196,12 @@ export function verifierPropositions(spec) {
 
 /** Un curseur, une scène ou un mélange par axe exigent du code : page ```html-interactif. */
 export const carrouselEnPage = (spec) =>
-  Boolean(spec.scene3d || spec.reglages || carrouselAvecAxes(spec))
+  Boolean(
+    spec.scene3d ||
+    spec.reglages ||
+    carrouselAvecAxes(spec) ||
+    propositionsAvecCalques(spec.propositions)
+  )
 
 /** La copie d'une maquette pour sa vignette : ses `id` renommés, pour ne pas exister en double. */
 function copieVignette(html) {
@@ -335,6 +350,7 @@ export function carrouselDraft(spec) {
   const cssPropositions = [
     spec.reglages && styleReglages(spec.reglages),
     propositionsAvecAxes(spec.propositions) && styleAxes(),
+    propositionsAvecCalques(spec.propositions) && styleCalques(n),
     spec.css,
     ...P.map((p) => p.css)
   ]
@@ -450,7 +466,7 @@ ${spec.intro ? `<div class="dkc-intro">${spec.intro}</div>\n` : ''}<div class="d
 ${navigation}
 ${scene}
 ${spec.reglages ? `${panneauReglages(spec.reglages)}\n` : ''}${vignettes}
-<div class="dkc-ibar"><span class="dkc-ind"></span></div>
+${propositionsAvecCalques(spec.propositions) ? `${panneauCalques(P)}\n` : ''}<div class="dkc-ibar"><span class="dkc-ind"></span></div>
 ${casesMixer}${avecAxes ? `${panneauAxes(P)}\n` : ''}${actions}
 ${interrupteur}
 </div>
@@ -507,6 +523,7 @@ export function pageDuCarrousel(spec) {
     carrouselDraft(spec) +
     (spec.reglages ? `\n<script>\n${SCRIPT_REGLAGES}\n</script>` : '') +
     (carrouselAvecAxes(spec) ? `\n<script>\n${SCRIPT_AXES}\n</script>` : '') +
+    (propositionsAvecCalques(spec.propositions) ? `\n<script>\n${SCRIPT_CALQUES}\n</script>` : '') +
     (spec.scene3d
       ? `\n<script>\n${SCRIPT_PLACE_SCENE}\n</script>\n<script ${ATTRIBUT_SCRIPT_SCENE}>\n` +
         spec.scene3d.trim() +
