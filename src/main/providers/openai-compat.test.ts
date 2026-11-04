@@ -42,7 +42,9 @@ describe('OpenAICompatAdapter — moteur HTTP sans CLI', () => {
     expect(corps[0].messages[0]).toEqual({ role: 'system', content: 'SOUL' })
     expect(corps[0].tools).toBeUndefined()
     expect(entetes[0].authorization).toBe('Bearer secret')
-    expect(a.supportsExecution).toBe(false)
+    // Depuis conv-1502, le moteur porte ses outils du dossier du run : il exécute ; `false` le rend chat pur.
+    expect(a.supportsExecution).toBe(true)
+    expect(new OpenAICompatAdapter({ id: 'g', baseUrl: 'https://x/v1', defaultModel: 'm', outilsDuDossier: false }).supportsExecution).toBe(false)
   })
 
   it('mène la boucle d’agent : appel d’outil fragmenté, exécution, réponse finale', async () => {

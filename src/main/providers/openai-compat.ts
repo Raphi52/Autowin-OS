@@ -7,6 +7,7 @@ import type {
   StreamChunk,
   Usage
 } from './types'
+import { creerOutilsAgentDirect } from './outils-agent-direct'
 
 /**
  * Moteur NATIF « compatible OpenAI » : parle HTTP directement à `/chat/completions`, SANS aucun CLI.
@@ -38,6 +39,12 @@ export interface OpenAICompatConfig {
   apiKeyEnv?: string
   defaultModel: string
   outils?: OutilAgent[]
+  /**
+   * Outils d'agent du DOSSIER DU RUN (lire, écrire, éditer, commande, grep, glob — conv-1502), créés
+   * à chaque envoi qui porte `execution.cwd`, gardés par le script PreToolUse du moteur Claude.
+   * Défaut : actifs. `false` = moteur de chat pur même en exécution.
+   */
+  outilsDuDossier?: boolean | ((execution: NonNullable<SendOptions['execution']>) => OutilAgent[])
   /** Garde-fou contre une boucle d'outils sans fin. */
   maxEtapes?: number
   /** Transport injectable (tests) ; seul le sous-ensemble utilisé est exigé. */
@@ -69,7 +76,19 @@ export class OpenAICompatAdapter implements ProviderAdapter {
   }
 
   get supportsExecution(): boolean {
-    return (this.cfg.outils?.length ?? 0) > 0
+    return (this.cfg.outils?.length ?? 0) > 0 || this.cfg.outilsDuDossier !== false
+  }
+
+  private outilsDe(opts: SendOptions): OutilAgent[] {
+    const propres = this.cfg.outils ?? []
+    const ex = opts.execution
+    const fabrique = this.cfg.outilsDuDossier
+    if (!ex?.cwd || fabrique === false) return propres
+    const duDossier =
+      typeof fabrique === 'function'
+        ? fabrique(ex)
+        : creerOutilsAgentDirect({ cwd: ex.cwd, sandbox: ex.sandbox, agentEnv: ex.agentEnv })
+    return [...propres, ...duDossier]
   }
 
   private cle(): string | undefined {
@@ -91,7 +110,7 @@ export class OpenAICompatAdapter implements ProviderAdapter {
       systemBlocks: opts.systemBlocks,
       contextBlocks: opts.contextBlocks,
       messages,
-      options: { outils: (this.cfg.outils ?? []).map((o) => o.nom) },
+      options: { outils: this.outilsDe(opts).map((o) => o.nom) },
       limitation: 'pièces jointes binaires non transmises ; pas de reprise de session'
     }
   }
@@ -106,7 +125,7 @@ export class OpenAICompatAdapter implements ProviderAdapter {
     if (opts.system) fil.push({ role: 'system', content: opts.system })
     for (const m of messages) fil.push({ role: m.role, content: contenuTexte(m) })
 
-    const outils = this.cfg.outils ?? []
+    const outils = this.outilsDe(opts)
     const maxEtapes = this.cfg.maxEtapes ?? 25
     let texte = ''
     let raisonnement = ''
