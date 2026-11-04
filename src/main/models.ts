@@ -31,6 +31,11 @@ import { listCodexAppServerModels, type CodexAppServerModel } from './codex-mode
 import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
 import { resolveClaudeBin } from './providers/claude'
 import { CodexCliIntrouvable } from './providers/codex'
+import {
+  chargerModelesGratuits,
+  PREFIXE_OPENROUTER,
+  type OpenRouterModel
+} from './openrouter-free-models'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
 export interface ImportedModel {
@@ -436,11 +441,13 @@ export async function discoverImportedModels(
   fetchFn: typeof fetch = fetch,
   cachePath?: string,
   cliModelIds: ClaudeCliModelIdsFn = realClaudeCliModelIds,
-  listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels
+  listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels,
+  listOpenRouterFn: () => Promise<OpenRouterModel[]> = () => chargerModelesGratuits(fetchFn)
 ): Promise<ImportedModel[]> {
-  const [claude, codex] = await Promise.all([
+  const [claude, codex, openRouter] = await Promise.all([
     discoverClaudeModels(fetchFn, cliModelIds),
-    discoverCodexModels(listCodexModelsFn)
+    discoverCodexModels(listCodexModelsFn),
+    discoverOpenRouterModels(listOpenRouterFn)
   ])
   const cacheUpdates: Partial<ModelCatalogCache> = {}
   if (codex.live) cacheUpdates.codex = codex.models
@@ -474,9 +481,34 @@ export async function discoverImportedModels(
     dropRedundantClaudeAliases([
       ...resolvedClaudeModels,
       ...codexModels,
+      ...openRouter,
       ...DEFAULT_IMPORTED_MODELS
     ]).filter((model) => ROUTED_PROVIDERS.includes(model.provider as RoutedProvider))
   )
+}
+
+/**
+ * MODÈLES GRATUITS D'OPENROUTER (2026-11-04, conv-1471) : rangés sous `claude`, car c'est le CLI
+ * Claude qui les sert (ANTHROPIC_BASE_URL, voir `openrouter-free-models.ts`) — pas de nouveau moteur
+ * routé. Liste live uniquement, jamais en cache : un réseau muet n'en montre aucun.
+ */
+async function discoverOpenRouterModels(
+  listFn: () => Promise<OpenRouterModel[]>
+): Promise<ImportedModel[]> {
+  try {
+    return (await listFn()).map<ImportedModel>((m) => ({
+      id: `claude/${PREFIXE_OPENROUTER}${m.id}`,
+      provider: 'claude',
+      model: `${PREFIXE_OPENROUTER}${m.id}`,
+      label: `${m.name ?? m.id} (OpenRouter)`,
+      reasoningEfforts: [...CLAUDE_EFFORTS],
+      defaultReasoningEffort: 'medium',
+      dynamicallyLoaded: true
+    }))
+  } catch {
+    // Catalogue OpenRouter injoignable : la voie se tait, les autres restent (même règle que codex).
+    return []
+  }
 }
 
 /**
