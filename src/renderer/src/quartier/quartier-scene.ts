@@ -52,6 +52,12 @@ import {
   type PiloteQuartier,
   type RectQuartier
 } from './quartier-pont'
+import {
+  echelleMin,
+  niveauPourEchelle,
+  niveauxDePlanche,
+  type NiveauPlanche
+} from './quartier-planche'
 import { jouerGong } from './quartier-son'
 import { lireTuilesSorties, TOUR_DU_WIDGET, widgetDeLaTour } from './quartier-tuiles'
 import { contexte, creerVie, image, toile, type VieDecor } from './quartier-vie'
@@ -155,6 +161,9 @@ export interface DonneesQuartier extends DonneesMarche {
 interface AtlasPeint {
   A: HTMLCanvasElement
   AO: HTMLCanvasElement
+  /** L'original puis sa moitié, son quart, son huitième : de quoi dessiner sans réduction à refaire (conv-1526). */
+  niveaux: NiveauPlanche[]
+  parts: number[]
   cous: Float32Array | null
   colonnes: number
 }
@@ -214,7 +223,7 @@ function lueurDe(o: ObjetCoupe): HTMLCanvasElement {
 }
 
 /** Les filtres de toile coûtent cher à chaque image : on les applique UNE fois, à l'atlas entier. */
-function peindreAtlas(atlas: HTMLImageElement): AtlasPeint {
+function peindreAtlas(atlas: HTMLImageElement, an: { cw: number; ch: number }): AtlasPeint {
   const A = toile(atlas.naturalWidth, atlas.naturalHeight)
   const gA = contexte(A)
   gA.filter = 'saturate(1.06)'
@@ -223,7 +232,8 @@ function peindreAtlas(atlas: HTMLImageElement): AtlasPeint {
   const gO = contexte(AO)
   gO.filter = 'brightness(0) blur(2px)'
   gO.drawImage(atlas, 0, 0)
-  return { A, AO, cous: null, colonnes: 0 }
+  const niveaux = niveauxDePlanche(A, AO, an.cw, an.ch)
+  return { A, AO, niveaux, parts: niveaux.map((n) => n.cw / an.cw), cous: null, colonnes: 0 }
 }
 
 async function charger(): Promise<Monde> {
@@ -236,8 +246,8 @@ async function charger(): Promise<Monde> {
     image(urlBords)
   ])
   const S = F.naturalWidth / LARGEUR
-  const tanuki = peindreAtlas(atlas)
-  const animaux: Record<AnimalCollegue, AtlasPeint> = { renard: peindreAtlas(renard) }
+  const tanuki = peindreAtlas(atlas, D.an)
+  const animaux: Record<AnimalCollegue, AtlasPeint> = { renard: peindreAtlas(renard, D.an) }
   const OB = await Promise.all(D.obj.map((o) => coupe(F, S, o)))
   const FE = await Promise.all(D.feuilles.map((o) => coupe(F, S, o)))
   for (const id of HOME_WIDGET_IDS) {
@@ -544,7 +554,8 @@ export function creerSceneQuartier(): DecorScene | null {
         const k = Math.max(0, 1 - w.th / e.d)
         return { c: Math.min(e.n - 1, Math.round(k * (e.n - 1))), r: e.r, m }
       }
-      if (e && w.th < e.d) return { c: Math.min(e.n - 1, Math.floor((w.th * e.n) / e.d)), r: e.r, m }
+      if (e && w.th < e.d)
+        return { c: Math.min(e.n - 1, Math.floor((w.th * e.n) / e.d)), r: e.r, m }
       const q = ((w.th - (e?.d ?? 0)) * g.n) / g.d
       const c = Math.floor(q) % g.n
       return { c, r: g.r, m, f: g.fondu ? q - Math.floor(q) : 0, n: g.n, dx: g.dx ?? 0 }
@@ -569,7 +580,6 @@ export function creerSceneQuartier(): DecorScene | null {
     const k = w.u / an.pu
     const cl = cellule(M, w)
     const planche = atlasDe(M, w)
-    const atlas = ombre ? planche.AO : planche.A
     x.save()
     // Au bain, tout ce qui passe sous le bord du baquet est dans l'eau.
     if (w.nom === 'ba' && w.face?.cl) {
@@ -581,14 +591,26 @@ export function creerSceneQuartier(): DecorScene | null {
     if (ombre) x.transform(1, 0, 0.46, -0.2, 0, 0)
     x.scale(cl.m ? -k : k, k)
     const ox = -an.ax + (cl.dx ?? 0)
-    x.drawImage(atlas, cl.c * an.cw, cl.r * an.ch, an.cw, an.ch, ox, -an.ay, an.cw, an.ch)
+    // Rétréci, il est lu dans la réduction de sa taille, en « low » : en « high », la carte graphique
+    // refaisait les réductions de toute la planche à chaque dessin — 3,4 images/s au lieu de 32 (conv-1526).
+    // Agrandi (zoom), l'original garde le lissage de la scène.
+    const e = echelleMin(x.getTransform())
+    const n = planche.niveaux[niveauPourEchelle(e, planche.parts)]
+    const atlas = ombre ? n.AO : n.A
+    const qualite = x.imageSmoothingQuality
+    const lire = (c: number): void => {
+      if (e < 1) x.imageSmoothingQuality = 'low'
+      x.drawImage(atlas, c * n.cw, cl.r * n.ch, n.cw, n.ch, ox, -an.ay, an.cw, an.ch)
+      x.imageSmoothingQuality = qualite
+    }
+    lire(cl.c)
+    // Le foulard reste peint sur la case d'origine : sa petite toile ne coûte rien (mesuré, conv-1526).
     if (!ombre && w.foulard) poserFoulard(M, planche, w.foulard, cl.c, cl.r, ox)
     // Une respiration de douze images en six secondes : l'image suivante se fond par-dessus, sans à-coup.
     if (!ombre && cl.f && cl.n) {
       const a = x.globalAlpha
       x.globalAlpha = a * cl.f
-      const c2 = ((cl.c + 1) % cl.n) * an.cw
-      x.drawImage(atlas, c2, cl.r * an.ch, an.cw, an.ch, ox, -an.ay, an.cw, an.ch)
+      lire((cl.c + 1) % cl.n)
       x.globalAlpha = a
     }
     x.restore()
