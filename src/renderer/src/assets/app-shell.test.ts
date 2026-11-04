@@ -53,22 +53,42 @@ describe('collapsed navigation rail', () => {
     )
   })
 
-  // conv-929 (2026-10-13) : « fais en sorte que le logo rond tourne ». La machine de l'utilisateur
-  // a `prefers-reduced-motion: reduce` ACTIF (voir theme.css) : une rotation coupée dans ce cas ne
-  // tournerait jamais chez lui. Entrée qui doit faire échouer : aucune animation sur .brand-logo,
-  // une rotation incomplète (< 360deg) ou une neutralisation sous prefers-reduced-motion.
-  it('fait tourner le logo rond en continu, même avec les animations réduites', () => {
+  // conv-929 (2026-10-13) : « fais en sorte que le logo rond tourne », un tour en 3 s (8 s « trop
+  // lent »). La machine de l'utilisateur a `prefers-reduced-motion: reduce` ACTIF (voir theme.css) :
+  // une rotation coupée dans ce cas ne tournerait jamais chez lui.
+  // conv-1535 (2026-11-04) : le logo prend le RELIEF de l'anneau du film (« dans la video tu lui as
+  // donne du relief »). C'est l'image animée qui fait tourner le dégradé sous une lumière fixe
+  // (scripts/logo_anneau_relief.py) ; une rotation CSS ferait tourner la lumière avec l'anneau.
+  // Entrée qui doit faire échouer : l'ancien PNG plat, une image qui ne boucle pas ou tourne en plus
+  // de 4 s, une rotation CSS remise sur .brand-logo, une neutralisation sous prefers-reduced-motion.
+  it('fait tourner le logo en relief en continu, lumière fixe, même avec les animations réduites', () => {
+    const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
-    const logo = css.match(/(?:^|\n)\.brand-logo\s*{([^}]*)}/s)?.[1] ?? ''
-    const name = logo.match(
-      /animation:\s*([\w-]+)\s+\d+(?:\.\d+)?s[^;]*\blinear\b[^;]*\binfinite\b/
+    const source = app.match(
+      /import (\w+) from '\.\/assets\/autowin-logo-anneau-relief\.webp'/
     )?.[1]
-    expect(name).toBeTruthy()
-    // conv-929 : 8 s par tour jugé « trop lent » par l'utilisateur.
-    const duree = Number(logo.match(/animation:\s*[\w-]+\s+(\d+(?:\.\d+)?)s/)?.[1])
-    expect(duree).toBeLessThanOrEqual(4)
-    const frames = css.match(new RegExp(`@keyframes ${name}\\s*{([\\s\\S]*?)\\n}`))?.[1] ?? ''
-    expect(frames).toMatch(/to\s*{\s*transform:\s*rotate\(360deg\)/)
+    expect(source).toBeTruthy()
+    expect(app).toMatch(new RegExp(`<img className="brand-logo" src=\\{${source}\\}`))
+
+    const webp = readFileSync(new URL('./autowin-logo-anneau-relief.webp', import.meta.url))
+    expect(webp.subarray(0, 4).toString('latin1')).toBe('RIFF')
+    expect(webp.subarray(8, 12).toString('latin1')).toBe('WEBP')
+    const durees: number[] = []
+    let boucles = -1
+    for (let i = 12; i + 8 <= webp.length;) {
+      const bloc = webp.subarray(i, i + 4).toString('latin1')
+      const taille = webp.readUInt32LE(i + 4)
+      if (bloc === 'ANIM') boucles = webp.readUInt16LE(i + 8 + 4)
+      if (bloc === 'ANMF') durees.push(webp.readUIntLE(i + 8 + 12, 3))
+      i += 8 + taille + (taille & 1)
+    }
+    expect(boucles).toBe(0) // 0 = sans fin
+    expect(durees.length).toBeGreaterThan(30)
+    expect(durees.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(4000)
+
+    const logo = css.match(/(?:^|\n)\.brand-logo\s*{([^}]*)}/s)?.[1] ?? ''
+    expect(logo).not.toMatch(/animation\s*:/)
+    expect(css).not.toMatch(/@keyframes aw-brand-logo-tourne/)
     expect(css).not.toMatch(/prefers-reduced-motion[^@]*\.brand-logo/s)
   })
 

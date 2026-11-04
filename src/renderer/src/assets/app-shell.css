@@ -77,17 +77,12 @@
   flex: none;
   object-fit: contain;
   filter: none;
-  /* LE LOGO TOURNE (2026-10-13, conv-929 : « fais en sorte que le logo rond tourne »). Régulier :
-     un tour en 3 s (8 s jugé « trop lent » par l'utilisateur). L'anneau est centré dans son
-     image (zone visible 4→148 px sur 152), il tourne donc sur place sans tanguer. Exception VOULUE à prefers-reduced-motion : la machine
-     de l'utilisateur l'a actif (voir theme.css, spinner) — neutralisée, la rotation demandée ne
-     se verrait jamais chez lui. */
-  animation: aw-brand-logo-tourne 3s linear infinite;
-}
-@keyframes aw-brand-logo-tourne {
-  to {
-    transform: rotate(360deg);
-  }
+  /* LE LOGO TOURNE (2026-10-13, conv-929 : « fais en sorte que le logo rond tourne »), un tour en
+     3 s (8 s « trop lent »). Depuis conv-1535 (2026-11-04), le logo a le RELIEF de l'anneau du film
+     (« dans la video tu lui as donne du relief ») : c'est l'IMAGE ANIMÉE qui fait tourner le dégradé
+     sous une lumière fixe (scripts/logo_anneau_relief.py). Plus de rotation CSS ici : elle ferait
+     tourner la lumière avec l'anneau, et il redeviendrait plat. Une image animée tourne aussi quand
+     Windows réduit les animations, ce qu'exigeait conv-929 (la machine de l'utilisateur l'a actif). */
 }
 .brand-name {
   min-width: 0;
