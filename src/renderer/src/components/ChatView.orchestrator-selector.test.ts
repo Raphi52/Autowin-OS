@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs'
+// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { resolve } from 'node:path'
 // @vitest-environment happy-dom
 import { act, createElement, useState, type ComponentProps } from 'react'
@@ -8,10 +10,7 @@ import { buildOrchestratorModelGroups } from './chat-view-model'
 import { OrchestratorModelSelector } from './OrchestratorModelSelector'
 import { TEXTES_FR as TEXTES_PANNEAUX_FR } from '../textes-ecrans/chat-panneaux'
 
-const source = readFileSync(
-  resolve(process.cwd(), 'src/renderer/src/components/ChatView.tsx'),
-  'utf8'
-)
+const source = lireSourceDuChatView()
 const selectorSource = readFileSync(
   resolve(process.cwd(), 'src/renderer/src/components/OrchestratorModelSelector.tsx'),
   'utf8'

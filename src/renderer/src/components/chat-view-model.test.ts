@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { formatOrchestrationOutcome } from '../../../shared/orchestration-outcome'
 import {
   CHAT_PANE_LIMITS,
@@ -1853,7 +1853,7 @@ describe('chat scrolling and layout rules', () => {
   })
 
   it('câble le filet de secours dans ChatView (exposé sans appelant = théâtre)', () => {
-    const vue = readFileSync(join(__dirname, 'ChatView.tsx'), 'utf8')
+    const vue = lireSourceDuChatView()
     expect(vue).toMatch(/scrollChatToBottom\(\s*scroll,\s*requestAnimationFrame,\s*40,/u)
     expect(vue).toMatch(/if \(!landed\) setHasNewActivity\(true\)/u)
   })

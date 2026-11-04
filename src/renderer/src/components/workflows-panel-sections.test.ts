@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import { visibleScopedRuns } from './workflows-panel-sections'
 import type { ScopedLiveRun } from './chat-view-model'
 
@@ -64,7 +66,7 @@ describe('sélection des fils de sous-agents', () => {
 describe('câblage du panneau', () => {
   // Le panneau lui-même vit dans WorkflowsPanel.tsx (extrait de ChatView) ; ChatView ne fait
   // plus que lui passer les props et consomme toujours le modèle de sélection des fils.
-  const chatView = (): string => readFileSync(join(__dirname, 'ChatView.tsx'), 'utf8')
+  const chatView = (): string => lireSourceDuChatView()
   const workflowsPanel = (): string => readFileSync(join(__dirname, 'WorkflowsPanel.tsx'), 'utf8')
 
   it('le panneau est piloté par le graphe, et ChatView garde la sélection des fils', () => {

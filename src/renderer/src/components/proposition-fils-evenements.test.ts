@@ -1,5 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+import { lireSourceDuChatView } from './ChatView.source-complete'
 import {
   EVT_FILS_LANCES,
   confirmerLancement,
@@ -75,9 +77,7 @@ describe('lancerAvecFilet', () => {
  */
 describe('lancerAvecFilet — branché dans ChatView', () => {
   it('l’écouteur passe par le filet, qui voit les fils créés et la réponse donnée', async () => {
-    const { readFileSync } = await import('node:fs')
-    const { join } = await import('node:path')
-    const source = readFileSync(join(__dirname, 'ChatView.tsx'), 'utf8')
+    const source = lireSourceDuChatView()
     expect(source).toMatch(
       /void lancerAvecFilet\(\s*\(aLancer, suivi\) => lancerEnFilsRef\.current\(aLancer, suivi\)/u
     )
