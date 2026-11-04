@@ -45,6 +45,12 @@ export type ProviderFailureKind =
    * relancer a l'identique echoue pareil — classe `other`, aucun conseil n'etait donne.
    */
   | 'refused'
+  /**
+   * Un modèle GRATUIT d'OpenRouter a répondu 429 : la limite de gratuité (par minute ou par jour) est
+   * atteinte. Ce n'est pas une panne — conv-1471, 2026-11-04. Reconnu sur le MODÈLE, pas sur le
+   * texte seul : un 429 d'un modèle Claude payant reste une surcharge ordinaire.
+   */
+  | 'free-limit'
   /** Autre chose (timeout, watchdog, refus du modèle…) : on ne devine pas. */
   | 'other'
 
@@ -223,6 +229,12 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
       'Relance la demande ; si ça se répète, change de modèle pour ce rôle (Agent Studio).'
     )
   }
+  if (kind === 'free-limit') {
+    return (
+      'Limite gratuite OpenRouter atteinte : réessaie plus tard (la limite par jour repart à minuit UTC) ' +
+      'ou choisis un autre modèle gratuit (Agent Studio).'
+    )
+  }
   if (kind === 'budget') {
     return (
       'Relève les plafonds du run (Settings › Budget) ou réduis le périmètre : ' +
@@ -232,8 +244,19 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
   return undefined
 }
 
+/**
+ * 429 d'un modèle OpenRouter (`openrouter/…`, voir PREFIXE_OPENROUTER). Corps documenté :
+ * « Rate limit exceeded » (https://openrouter.ai/docs/api/reference/limits).
+ */
+function estLimiteGratuiteOpenRouter(failure: ProviderFailure): boolean {
+  if (!failure.model?.includes('openrouter/')) return false
+  return /\b429\b|rate limit exceeded|rate_limit_exceeded|free-models-per/i.test(failure.message)
+}
+
 export function diagnoseProviderFailure(failure: ProviderFailure): DiagnosedFailure {
-  const kind = classifyProviderFailure(failure.message)
+  const kind = estLimiteGratuiteOpenRouter(failure)
+    ? 'free-limit'
+    : classifyProviderFailure(failure.message)
   const hint = repairHint(failure.provider, kind)
   return { ...failure, kind, ...(hint ? { hint } : {}) }
 }
