@@ -14,6 +14,8 @@
  * donc entièrement testable hors réseau. Le câblage réel (adapter.auth(), appel minimal) vit dans
  * l'IPC main.
  */
+import { serviceHttpActif, type ServiceHttp } from './providers/services-http'
+
 export type AuthStatus =
   | 'authenticated' // preuve réelle de validité
   | 'expired' // preuve réelle d'expiration
@@ -21,7 +23,12 @@ export type AuthStatus =
   | 'absent' // ni token ni CLI
   | 'unknown' // le check lui-même a échoué (timeout/erreur) — surtout PAS « authenticated »
 
-export type ProviderDisplayStatus = AuthStatus | 'standby'
+/**
+ * `ready` : service du moteur direct (services-http.ts) dont la clé est posée dans l'environnement.
+ * Ce n'est PAS « authenticated » : la clé n'a pas été essayée, seule sa présence est constatée
+ * (conv-1503, lot 3 du plan conv-1499).
+ */
+export type ProviderDisplayStatus = AuthStatus | 'standby' | 'ready'
 
 export interface ProviderStatus {
   provider: string
@@ -94,6 +101,28 @@ function statutDuProvider(
   }
   const fallback = presenceStatus(cliResponds)
   return { provider, status: fallback, testable: isTestable(fallback) }
+}
+
+/**
+ * Statut des services du moteur direct (conv-1503) : lu dans l'environnement seulement, jamais de
+ * réseau. Sans clé, le détail NOMME la variable à poser ; la clé n'est lue que pour sa présence.
+ */
+export function statutsServicesHttp(
+  services: readonly ServiceHttp[],
+  env: NodeJS.ProcessEnv,
+  states?: Partial<Record<string, ProviderStateSnapshot>>
+): ProviderStatus[] {
+  return services.map((s) => {
+    if (states?.[s.id]?.mode === 'standby') return statutDuProvider(s.id, false, states[s.id])
+    if (serviceHttpActif(s, env)) return { provider: s.id, status: 'ready', testable: false }
+    const variable = s.apiKeyEnv ?? s.activeEnv ?? '?'
+    return {
+      provider: s.id,
+      status: 'absent',
+      testable: false,
+      detail: s.apiKeyEnv ? `Clé manquante (${variable})` : `Service local non activé (${variable})`
+    }
+  })
 }
 
 /** Assemble la liste de statuts au chargement depuis des entrées déjà résolues (injectées). */

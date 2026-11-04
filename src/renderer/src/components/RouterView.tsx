@@ -19,7 +19,7 @@ import { useTextesSettings, type CleSettings } from '../textes-ecrans/settings'
  * (claude et ChatGPT via le bouton « Tester »).
  */
 type AuthStatus = 'authenticated' | 'expired' | 'installed-untested' | 'absent' | 'unknown'
-type ProviderDisplayStatus = AuthStatus | 'standby'
+type ProviderDisplayStatus = AuthStatus | 'standby' | 'ready'
 interface ProviderStatus {
   provider: string
   status: ProviderDisplayStatus
@@ -35,13 +35,20 @@ const STATUS_LABEL: Record<ProviderDisplayStatus, CleSettings> = {
   'installed-untested': 'routeur.statut.installedUntested',
   absent: 'routeur.statut.absent',
   unknown: 'routeur.statut.unknown',
-  standby: 'routeur.statut.standby'
+  standby: 'routeur.statut.standby',
+  ready: 'routeur.statut.ready'
 }
 const PROVIDER_LABEL: Record<string, string> = {
   claude: 'Claude',
   codex: 'ChatGPT',
   kimi: 'Kimi',
-  gemini: 'Gemini'
+  gemini: 'Gemini',
+  // Moteur direct (services-http.ts, conv-1503) : « direct » les distingue des voies servies par un CLI.
+  'api-gemini': 'Gemini (direct)',
+  'api-groq': 'Groq (direct)',
+  'api-mistral': 'Mistral (direct)',
+  'api-cerebras': 'Cerebras (direct)',
+  'api-ollama': 'Ollama (local)'
 }
 const RE_AUTH_HINT: Record<string, CleSettings> = {
   claude: 'routeur.reauth.claude',
@@ -362,15 +369,18 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                       {testing[provider] ? t('routeur.test') : t('routeur.tester')}
                     </button>
                   )}
-                  {st.status !== 'authenticated' && st.status !== 'standby' && (
-                    <button
-                      type="button"
-                      className="router-reconnect"
-                      onClick={() => void reconnect(provider)}
-                    >
-                      {t('routeur.reconnecter')}
-                    </button>
-                  )}
+                  {st.status !== 'authenticated' &&
+                    st.status !== 'standby' &&
+                    // Un service direct se « connecte » par sa variable d'environnement, pas par un login.
+                    !provider.startsWith('api-') && (
+                      <button
+                        type="button"
+                        className="router-reconnect"
+                        onClick={() => void reconnect(provider)}
+                      >
+                        {t('routeur.reconnecter')}
+                      </button>
+                    )}
                   <button
                     type="button"
                     className="router-standby"
@@ -455,6 +465,14 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
                   )}
                   <p className="router-hint">{t('routeur.comptes.aide')}</p>
                 </div>
+              )}
+              {st.detail && st.status !== 'standby' && (
+                <p
+                  className="router-hint router-provider-detail"
+                  data-testid={`router-provider-detail-${provider}`}
+                >
+                  {st.detail}
+                </p>
               )}
               {st.status === 'standby' ? (
                 <p className="router-hint">{t('routeur.standby.aide')}</p>

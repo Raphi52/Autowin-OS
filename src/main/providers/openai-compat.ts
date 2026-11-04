@@ -8,6 +8,7 @@ import type {
   Usage
 } from './types'
 import { creerOutilsAgentDirect } from './outils-agent-direct'
+import { noterQuotaServiceHttp } from '../model-quotas'
 
 /**
  * Moteur NATIF « compatible OpenAI » : parle HTTP directement à `/chat/completions`, SANS aucun CLI.
@@ -207,6 +208,9 @@ export class OpenAICompatAdapter implements ProviderAdapter {
       body: JSON.stringify(corps),
       signal
     })
+    // Quota lu sur CHAQUE réponse, refus compris : un 429 porte justement les en-têtes
+    // x-ratelimit que l'écran du Routeur doit montrer (conv-1507, lot 5 du plan conv-1499).
+    noterQuotaServiceHttp(this.id, rep.headers)
     if (!rep.ok) {
       const detail = (await rep.text().catch(() => '')).slice(0, 500)
       throw new Error(`${this.id} : HTTP ${rep.status} ${detail}`.trim())

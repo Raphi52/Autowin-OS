@@ -20,8 +20,10 @@ import { ROUTED_PROVIDERS, type RoutedProvider } from '../routed-providers'
 import {
   buildProviderStatuses,
   probePresenceUnlessStandby,
-  probeResultStatus
+  probeResultStatus,
+  statutsServicesHttp
 } from '../provider-status'
+import { SERVICES_HTTP } from '../providers/services-http'
 import { compileExecutionQuote } from '../execution-quote'
 import type { AutowinOS } from '../os'
 import type { ProviderStateStore, ProviderMode } from '../provider-state-store'
@@ -130,12 +132,20 @@ export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDep
     }
     // Aucun spawn de sondage pour les moteurs retirés (Kimi, Gemini) : leur statut n'est plus publié.
     const [claudeResponds, codexResponds] = await Promise.all([responds('claude'), responds('codex')])
-    return buildProviderStatuses({
-      claudeResponds,
-      codexResponds,
-      now: Date.now(),
-      states: { claude: providerStateStore.get('claude'), codex: providerStateStore.get('codex') }
-    })
+    return [
+      ...buildProviderStatuses({
+        claudeResponds,
+        codexResponds,
+        now: Date.now(),
+        states: { claude: providerStateStore.get('claude'), codex: providerStateStore.get('codex') }
+      }),
+      // Moteur direct (conv-1503) : présence de la clé dans l'environnement, aucun appel réseau.
+      ...statutsServicesHttp(
+        SERVICES_HTTP,
+        process.env,
+        Object.fromEntries(SERVICES_HTTP.map((s) => [s.id, providerStateStore.get(s.id)]))
+      )
+    ]
   })
   ipcMain.handle('os:providerMode:set', (event, provider: unknown, mode: unknown) => {
     assertTrustedRendererSender(event, 'Provider mode')

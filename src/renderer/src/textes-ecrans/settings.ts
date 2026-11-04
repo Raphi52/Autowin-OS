@@ -183,6 +183,7 @@ export const TEXTES_FR = {
   'routeur.statut.absent': 'Non connecté',
   'routeur.statut.unknown': 'Indéterminé',
   'routeur.statut.standby': 'En standby',
+  'routeur.statut.ready': 'Prêt · clé présente',
   'routeur.reauth.claude':
     'CLI Claude introuvable ou non authentifié — installer/authentifier Claude, puis relance « Tester ».',
   'routeur.reauth.codex':
@@ -465,6 +466,7 @@ export const TEXTES_EN: Record<CleSettings, string> = {
   'routeur.statut.absent': 'Not connected',
   'routeur.statut.unknown': 'Undetermined',
   'routeur.statut.standby': 'On standby',
+  'routeur.statut.ready': 'Ready · key present',
   'routeur.reauth.claude':
     'Claude CLI not found or not authenticated — install/authenticate Claude, then run “Test” again.',
   'routeur.reauth.codex':

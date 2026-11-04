@@ -28,7 +28,13 @@ const providerLabels: Record<string, string> = {
   codex: 'ChatGPT',
   gemini: 'Gemini',
   kimi: 'Kimi',
-  openrouter: 'OpenRouter'
+  openrouter: 'OpenRouter',
+  // Moteur direct (conv-1503) : quota montré seulement si le service publie ses en-têtes.
+  'api-gemini': 'Gemini (direct)',
+  'api-groq': 'Groq (direct)',
+  'api-mistral': 'Mistral (direct)',
+  'api-cerebras': 'Cerebras (direct)',
+  'api-ollama': 'Ollama (local)'
 }
 
 /**
