@@ -4,7 +4,8 @@ import {
   environnementClaudeOpenRouter,
   filtrerModelesGratuits,
   lancementOpenRouter,
-  MESSAGE_CLE_OPENROUTER_MANQUANTE
+  MESSAGE_CLE_OPENROUTER_MANQUANTE,
+  quotaJournalierOpenRouter
 } from './openrouter-free-models'
 
 const outils = ['tools', 'temperature']
@@ -39,9 +40,11 @@ describe('modèles gratuits OpenRouter (conv-1471)', () => {
     await expect(chargerModelesGratuits(ko)).rejects.toThrow('503')
   })
 
-  it("pointe Claude Code sur OpenRouter seulement avec une clé", () => {
+  it('pointe Claude Code sur OpenRouter seulement avec une clé', () => {
     expect(environnementClaudeOpenRouter('qwen/qwen3-coder:free', {})).toBeNull()
-    const env = environnementClaudeOpenRouter('qwen/qwen3-coder:free', { OPENROUTER_API_KEY: ' k ' })
+    const env = environnementClaudeOpenRouter('qwen/qwen3-coder:free', {
+      OPENROUTER_API_KEY: ' k '
+    })
     expect(env).toMatchObject({
       ANTHROPIC_BASE_URL: 'https://openrouter.ai/api',
       ANTHROPIC_AUTH_TOKEN: 'k',
@@ -69,5 +72,33 @@ describe('lancementOpenRouter (conv-1471)', () => {
   it('ignore un modèle hors OpenRouter, même sans clé', () => {
     expect(lancementOpenRouter('opus', {})).toBeNull()
     expect(lancementOpenRouter(undefined, {})).toBeNull()
+  })
+})
+
+// conv-1496 : modèles qui refusent, et quota journalier partagé des modèles gratuits.
+describe('OpenRouter — exclusions et quota journalier', () => {
+  it('retire du catalogue les modèles exclus par la sonde', async () => {
+    const fetchFn = (async () =>
+      new Response(JSON.stringify({ data: brut }))) as unknown as typeof fetch
+    const ids = (
+      await chargerModelesGratuits(fetchFn, new Set(['deepseek/deepseek-chat:free']))
+    ).map((m) => m.id)
+    expect(ids).not.toContain('deepseek/deepseek-chat:free')
+    expect(ids.length).toBeGreaterThan(0)
+  })
+
+  it('lit free_model_daily_requests et date la remise à zéro à minuit UTC', async () => {
+    const fetchFn = (async () =>
+      new Response(
+        JSON.stringify({ data: { free_model_daily_requests: { used: 17, limit: 50 } } })
+      )) as unknown as typeof fetch
+    const jour = await quotaJournalierOpenRouter(fetchFn, 'cle', Date.parse('2026-11-04T09:00:00Z'))
+    expect(jour).toEqual({ used: 17, limit: 50, resetsAt: '2026-11-05T00:00:00.000Z' })
+  })
+
+  it('sans clé ni plafond exposé : une erreur, jamais une fausse barre', async () => {
+    expect(await quotaJournalierOpenRouter(fetch, '')).toHaveProperty('erreur')
+    const vide = (async () => new Response('{"data":{}}')) as unknown as typeof fetch
+    expect(await quotaJournalierOpenRouter(vide, 'cle')).toHaveProperty('erreur')
   })
 })
