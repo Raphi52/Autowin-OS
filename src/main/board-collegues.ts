@@ -280,3 +280,32 @@ export function creerLecteurDesCollegues(deps: {
     }
   }
 }
+
+/** Un RUN.md de collègue au-delà de cette taille n'est pas montré : c'est une fiche, pas un journal. */
+export const TAILLE_MAX_D_UNE_FICHE = 512 * 1024
+
+/**
+ * Le RUN.md léger d'un post-it de collègue (conv-1456) : « je dois pouvoir consulter les run.md de
+ * mes collègues dans le board ». Son Board le recopie dans `<dossier>/<poste>/fiches/<fiche>`
+ * (`board-dossier.ts`). Le poste et la fiche viennent de la vue : chacun est validé sur sa forme
+ * pour qu'aucun `..` ni chemin absolu ne fasse lire autre chose que ce sous-dossier.
+ * `null` = pas (encore) recopié : son Autowin n'a pas réécrit son Board depuis cette version.
+ */
+export async function lireFicheDUnCollegue(
+  dossier: string,
+  poste: unknown,
+  fiche: unknown
+): Promise<string | null> {
+  // Un compte Windows : lettres, chiffres, point, tiret, espace ; jamais de séparateur de chemin.
+  if (typeof poste !== 'string' || !/^[\p{L}\p{N}_. @-]{1,100}$/u.test(poste)) return null
+  if (poste === '.' || poste === '..') return null
+  if (typeof fiche !== 'string' || !FICHE_LISIBLE.test(fiche)) return null
+  const chemin = join(dossier, poste, 'fiches', fiche)
+  try {
+    const s = await stat(chemin)
+    if (!s.isFile() || s.size > TAILLE_MAX_D_UNE_FICHE) return null
+    return await readFile(chemin, 'utf8')
+  } catch {
+    return null
+  }
+}

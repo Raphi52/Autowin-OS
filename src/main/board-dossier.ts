@@ -21,8 +21,8 @@
  * quelques secondes (`verification-du-board.ts`), soit ~2,5 Mo réécrits à chaque fois sans ce délai.
  */
 import { readFileSync } from 'node:fs'
-import { mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
-import { isAbsolute, join, resolve } from 'node:path'
+import { copyFile, mkdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type {
   CarteDesBesoins,
   DemandeDeLaCarte,
@@ -34,10 +34,52 @@ import type { EtageDuBoard, EtatDuDossierDuBoard, EtatManuelDuBoard } from '../s
 import { carteDesProjetsPartages, projetsPartagesLisibles } from '../shared/board-projets-partages'
 import { nomDuPosteLisible } from '../shared/board-nom-du-poste'
 import { tachesDuBoard } from '../shared/taches-du-board'
+import { DOSSIER_DES_FICHES } from './fiches-de-demande'
 
 export const FICHIER_DU_REGLAGE = 'board-dossier.json'
 export const FORMAT_DU_BOARD = 'autowin-board/1'
 export const DELAI_ENTRE_ECRITURES_MS = 30_000
+/**
+ * Le sous-dossier du poste où ses RUN.md légers sont recopiés (conv-1456) : « je dois pouvoir
+ * consulter les run.md de mes collègues dans le board ». Ils vivent sous le dossier de données de
+ * CHAQUE poste ; sans copie sur le partage, aucun collègue ne peut les lire.
+ */
+export const DOSSIER_DES_FICHES_PARTAGEES = 'fiches'
+/** Même forme que `fiches-de-demande.ts` les nomme : rien qui puisse sortir du dossier. */
+export const FICHE_PARTAGEABLE = /^[\w-]+\/[\w-]+\/RUN\.md$/u
+
+/**
+ * Recopie les RUN.md des post-it partagés vers `<cible>/fiches/`. Seul un RUN.md qui a bougé
+ * depuis la dernière copie repart : le partage est lent, et le Board se réécrit souvent.
+ * Rend le nombre de fiches recopiées ; une fiche absente ou illisible est sautée, jamais bloquante.
+ */
+export async function copierLesFiches(
+  fiches: readonly string[],
+  source: string,
+  cible: string,
+  copiees: Map<string, number>
+): Promise<number> {
+  let n = 0
+  for (const fiche of new Set(fiches)) {
+    if (!FICHE_PARTAGEABLE.test(fiche)) continue
+    const depuis = join(source, fiche)
+    try {
+      const { mtimeMs } = await stat(depuis)
+      const vers = join(cible, DOSSIER_DES_FICHES_PARTAGEES, fiche)
+      if (copiees.get(vers) === mtimeMs) continue
+      await mkdir(dirname(vers), { recursive: true })
+      await copyFile(depuis, `${vers}.${process.pid}.tmp`)
+      await rename(`${vers}.${process.pid}.tmp`, vers)
+      copiees.set(vers, mtimeMs)
+      n++
+    } catch (e) {
+      // Une fiche absente (fil effacé) se tait : le Board se réécrit toutes les 30 s.
+      if ((e as NodeJS.ErrnoException)?.code !== 'ENOENT')
+        console.warn('[board] RUN.md non recopié :', fiche, e instanceof Error ? e.message : e)
+    }
+  }
+  return n
+}
 
 // ———————————————————————————————————————————————————————————————— ce qui est écrit
 
@@ -430,6 +472,8 @@ export function creerDossierDuBoard(deps: {
   let derniereEcriture = Number.NEGATIVE_INFINITY
   /** Ce qui a été écrit en dernier, et où : un Board inchangé ne se réécrit pas. */
   let empreinte: { cible: string; corps: string } | null = null
+  /** Les RUN.md déjà recopiés, et la date de la version recopiée (conv-1456). */
+  const fichesCopiees = new Map<string, number>()
 
   const cible = (): string | null => (dossier ? join(dossier, poste) : null)
 
@@ -459,6 +503,14 @@ export function creerDossierDuBoard(deps: {
       nomDuPoste().nom
     )
     const corps = JSON.stringify(board)
+    // Avant l'empreinte : un RUN.md change (une preuve s'y ajoute) sans que le post-it bouge.
+    if (await estUnDossier(dossier as string))
+      await copierLesFiches(
+        board.postIts.flatMap((p) => (p.fiche ? [p.fiche] : [])),
+        join(deps.racine, DOSSIER_DES_FICHES),
+        ici,
+        fichesCopiees
+      )
     if (empreinte && empreinte.cible === ici && empreinte.corps === corps) return
     derniereEcriture = maintenant()
     try {
