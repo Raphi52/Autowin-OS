@@ -83,7 +83,22 @@
      Éclairci le 2026-10-28 (conv-1207, « éclaircis un peu le liège du board ») : fond #bf8d5b →
      #d2a679, grains sombres (filtre `s`) moins foncés et moins couvrants. */
   border: 7px solid #7b4f2c;
+  /* L'ombre dégradée (conv-1536, 2026-11-04, « met une ombre dégradé dans le board comme dans ce
+     screenshot ») : une lumière tombe du haut, le liège fonce vers le bas et les coins. Première
+     couche, donc peinte AU-DESSUS du grain qu'elle fonce avec lui, et SOUS le papier des jours et
+     les post-it, qui restent clairs. Elle vit dans la MÊME déclaration que le grain : une valeur qui
+     porte un `url(` n'est recopiée par aucune couche de thème générée (scripts/theme-nebuleuse-
+     verre.mjs) ; seule sur `.riviere-plateau`, la couche claire changeait son brun en blanc et Ninja
+     en gris (sondé le 2026-11-04). */
   background:
+    radial-gradient(
+        ellipse 80% 115% at 55% -10%,
+        rgba(255, 238, 205, 0.28) 0%, /* couleur-fixe: lumière sur le liège, tous thèmes */
+        rgba(255, 238, 205, 0) 34%, /* couleur-fixe: lumière sur le liège, tous thèmes */
+        rgba(70, 36, 10, 0.26) 62%, /* couleur-fixe: ombre du liège, tous thèmes */
+        rgba(48, 24, 6, 0.62) 100% /* couleur-fixe: ombre du liège, tous thèmes */
+      )
+      0 0 / 100% 100% no-repeat,
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.38 0 0 0 0 0.23 0 0 0 0 0.1 1.6 0 0 0 -0.7'/%3E%3C/filter%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.9 0 0 0 0 0.72 0 1.7 0 0 -0.92'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E")
       0 0 / 240px 240px,
     #d2a679;

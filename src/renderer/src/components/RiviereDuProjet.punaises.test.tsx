@@ -152,8 +152,13 @@ describe('RiviereDuProjet — liège et punaises (conv-1204)', () => {
     // Le liège est une IMAGE : les couches de thème générées ne recopient pas un `url(`, il reste
     // donc le même dans tous les thèmes.
     expect(regle('.riviere-cadre')).toMatch(
-      /background:\s*url\("data:image\/svg\+xml[^]*feTurbulence/u
+      /background:[^;]*url\("data:image\/svg\+xml[^]*feTurbulence/u
     )
+    // L'ombre dégradée (conv-1536) est une couche de CETTE déclaration, posée avant le grain (donc
+    // peinte au-dessus) : portée par le même `url(`, aucune couche générée ne la recopie. Peinte
+    // seule sur `.riviere-plateau`, la couche claire changeait son brun en blanc et Ninja en gris.
+    expect(regle('.riviere-cadre')).toMatch(/background:\s*radial-gradient\([^;]*url\("data:image/u)
+    expect(regle('.riviere-plateau')).not.toMatch(/background/u)
   })
 
   it('les gestes « vérifier » sont centrés SOUS leur post-it, pas sur son papier', async () => {
