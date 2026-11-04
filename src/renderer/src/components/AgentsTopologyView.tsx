@@ -114,27 +114,39 @@ export function AgentsTopologyView({
         setState('error')
       })
   }, [reloadKey])
+  /**
+   * LA VUE RESTE MONTÉE QUAND ON LA QUITTE (App.tsx, `visitedTabs`) et n'écoute les changements de
+   * rôles que visible. Un orchestrateur changé ailleurs pendant ce temps — depuis l'en-tête d'un
+   * chat, conv-1529 — était donc manqué : en revenant, l'utilisateur voyait l'ANCIEN modèle (vécu le
+   * 2026-11-04 : « high » posé à 16:11:08, Agents Studio affichait encore « xhigh »). Chaque RETOUR
+   * à l'écran relit donc la topologie ; le premier montage la lit déjà par l'effet ci-dessus.
+   */
+  const etaitVisibleRef = useRef(active)
   useEffect(() => {
+    const revient = active && !etaitVisibleRef.current
+    etaitVisibleRef.current = active
     if (!active) return
+    const relire = (): void => {
+      // `.catch` obligatoire : un rejet ici (topologie invalide/illisible) restait un
+      // unhandledRejection muet, la vue gardait l'ANCIENNE topologie sans le dire.
+      void window.api
+        .topology()
+        .then(replaceTopology)
+        .catch((reason: unknown) => {
+          // `setError` SEUL ne s'affichait pas : le badge ne rend le message que si
+          // `state === 'error'`. L'échec de rafraîchissement était donc totalement muet.
+          // Hors `t` : l'effet ne suit que `active`, la langue est lue au moment de l'échec.
+          setError(
+            traduireAgentStudio('topo.erreur.rafraichissement', langueCourante(), {
+              raison: reason instanceof Error ? reason.message : String(reason)
+            })
+          )
+          setState('error')
+        })
+    }
+    if (revient) relire()
     const off = window.api.onAppEvent((event) => {
-      if (event.type === 'refresh' && event.scope === 'roles') {
-        // `.catch` obligatoire : un rejet ici (topologie invalide/illisible) restait un
-        // unhandledRejection muet, la vue gardait l'ANCIENNE topologie sans le dire.
-        void window.api
-          .topology()
-          .then(replaceTopology)
-          .catch((reason: unknown) => {
-            // `setError` SEUL ne s'affichait pas : le badge ne rend le message que si
-            // `state === 'error'`. L'échec de rafraîchissement était donc totalement muet.
-            // Hors `t` : l'effet ne suit que `active`, la langue est lue au moment de l'échec.
-            setError(
-              traduireAgentStudio('topo.erreur.rafraichissement', langueCourante(), {
-                raison: reason instanceof Error ? reason.message : String(reason)
-              })
-            )
-            setState('error')
-          })
-      }
+      if (event.type === 'refresh' && event.scope === 'roles') relire()
     })
     return off
   }, [active])
