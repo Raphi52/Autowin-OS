@@ -12,7 +12,9 @@ if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $projectRoot
 try {
-  $entries = @(& npx asar list $packagePath 2>&1)
+  # npx.cmd, pas npx : sous Windows PowerShell 5.1, npx.ps1 relit mal la ligne quand on redirige
+  # 2>&1 et lance « npm exec px asar » (paquet px introuvable -> « could not determine executable »).
+  $entries = @(& npx.cmd asar list $packagePath 2>&1)
   if ($LASTEXITCODE -ne 0) { throw "Lecture app.asar impossible (exit $LASTEXITCODE): $entries" }
 } finally {
   Pop-Location

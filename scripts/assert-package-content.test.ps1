@@ -10,7 +10,7 @@ try {
   Set-Content -LiteralPath (Join-Path $contentRoot '.autowin-data\secret.json') -Value '{}' -Encoding utf8
   Push-Location $projectRoot
   try {
-    & npx asar pack $contentRoot $asarPath
+    & npx.cmd asar pack $contentRoot $asarPath
     if ($LASTEXITCODE -ne 0) { throw 'Impossible de construire le fixture app.asar.' }
   } finally {
     Pop-Location
@@ -36,7 +36,7 @@ try {
   Remove-Item -LiteralPath $asarPath -Force
   Push-Location $projectRoot
   try {
-    & npx asar pack $contentRoot $asarPath
+    & npx.cmd asar pack $contentRoot $asarPath
     if ($LASTEXITCODE -ne 0) { throw 'Impossible de reconstruire le fixture propre.' }
   } finally {
     Pop-Location
@@ -50,7 +50,7 @@ try {
   Remove-Item -LiteralPath $asarPath -Force
   Push-Location $projectRoot
   try {
-    & npx asar pack $contentRoot $asarPath
+    & npx.cmd asar pack $contentRoot $asarPath
     if ($LASTEXITCODE -ne 0) { throw 'Impossible de reconstruire le fixture incomplet.' }
   } finally {
     Pop-Location
