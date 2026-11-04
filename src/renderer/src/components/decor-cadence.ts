@@ -18,7 +18,7 @@
  */
 
 /** La cadence visée, en images par seconde. */
-export const IMAGES_PAR_SECONDE_DECOR = 30
+export const IMAGES_PAR_SECONDE_DECOR = 60 // plafond 30 levé le 2026-11-04 (conv-1512, « ca pas smooth »)
 
 /**
  * LA CADENCE AU REPOS (conv-337, 2026-10-19) : fenêtre sans le focus, ou aucun geste depuis
@@ -26,7 +26,7 @@ export const IMAGES_PAR_SECONDE_DECOR = 30
  * le fil du décor — à 30 images/s, les trois quarts d'un cœur, pour un Accueil qui reste ouvert des
  * heures sans qu'on y touche. Au repos, la moitié. Le premier geste ramène la cadence visée.
  */
-export const IMAGES_PAR_SECONDE_REPOS = 15
+export const IMAGES_PAR_SECONDE_REPOS = 60 // repos à 15 levé (conv-1512) ; fenêtre cachée = aucune image (rAF)
 
 /** Sans geste (souris, clavier, molette) depuis ce délai, en ms, le décor passe au repos. */
 export const REPOS_APRES_MS = 90_000

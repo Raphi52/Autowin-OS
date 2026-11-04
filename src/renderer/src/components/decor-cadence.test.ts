@@ -10,7 +10,7 @@ function battements(hz: number, secondes: number): number[] {
 }
 
 const imagesParSeconde = (hz: number, cout = 0): number => {
-  const c = creerCadence()
+  const c = creerCadence(30)
   const t = battements(hz, 10)
   let n = 0
   for (const b of t)
@@ -44,7 +44,7 @@ describe('la cadence du décor de fond', () => {
   })
 
   it('après une absence (fenêtre cachée), repart de maintenant sans rattraper les images perdues', () => {
-    const c = creerCadence()
+    const c = creerCadence(30)
     expect(c.doitDessiner(0)).toBe(true)
     expect(c.doitDessiner(33.4)).toBe(true)
     expect(c.doitDessiner(10_000)).toBe(true)
@@ -56,7 +56,7 @@ describe('la cadence du décor de fond', () => {
 describe('la cadence d un décor dessiné dans son propre fil (conv-347)', () => {
   const BATTEMENT = 1000 / 60
   const palierApres = (couts: number[]): number => {
-    const c = creerCadence()
+    const c = creerCadence(30)
     for (const ms of couts) c.noterCout(ms, 'dedie')
     return c.intervalle()
   }
@@ -78,7 +78,7 @@ describe('la cadence d un décor dessiné dans son propre fil (conv-347)', () =>
   })
 
   it('hystérésis : le palier ne redescend que si le coût passe nettement dessous', () => {
-    const c = creerCadence()
+    const c = creerCadence(30)
     for (let i = 0; i < 20; i++) c.noterCout(40, 'dedie') // 50 ms → 3 battements
     expect(c.intervalle()).toBeCloseTo(3 * BATTEMENT, 5)
     for (let i = 0; i < 20; i++) c.noterCout(26, 'dedie') // 32,5 ms : tout juste sous 33 → reste
@@ -88,7 +88,7 @@ describe('la cadence d un décor dessiné dans son propre fil (conv-347)', () =>
   })
 
   it('le coût d un fil dédié ne réclame pas la moitié de l interface : 30 ms ne divise pas la cadence par deux', () => {
-    const c = creerCadence()
+    const c = creerCadence(30)
     for (let i = 0; i < 20; i++) c.noterCout(24, 'dedie')
     // règle du fil principal : 24 / 0,5 = 48 ms ; fil dédié : 24 / 0,8 = 30 → 2 battements
     expect(c.intervalle()).toBeCloseTo(2 * BATTEMENT, 5)
@@ -96,25 +96,19 @@ describe('la cadence d un décor dessiné dans son propre fil (conv-347)', () =>
 })
 
 describe('la cadence au repos (conv-337)', () => {
-  const compter = (hz: number, secondes: number, auRepos: (t: number) => boolean): number => {
+  it('plus de cadence réduite au repos (conv-1512) : 60 images/s, au repos comme hors repos', () => {
     const c = creerCadence()
     let n = 0
-    for (const b of battements(hz, secondes)) {
-      c.repos(auRepos(b))
+    for (const b of battements(60, 10)) {
+      c.repos(true)
       if (c.doitDessiner(b)) n++
     }
-    return n
-  }
-
-  it('au repos, 15 images/s sur tous les écrans ; hors repos, 30', () => {
-    for (const hz of [60, 120, 144]) {
-      expect(Math.abs(compter(hz, 10, () => true) / 10 - IMAGES_PAR_SECONDE_REPOS)).toBeLessThan(1)
-      expect(Math.abs(compter(hz, 10, () => false) / 10 - 30)).toBeLessThan(1)
-    }
+    expect(IMAGES_PAR_SECONDE_REPOS).toBe(60)
+    expect(Math.abs(n / 10 - 60)).toBeLessThan(1)
   })
 
   it('le premier geste ramène la cadence visée tout de suite, sans finir un intervalle de repos', () => {
-    const c = creerCadence()
+    const c = creerCadence(30)
     c.repos(true)
     expect(c.doitDessiner(0)).toBe(true)
     c.repos(false)

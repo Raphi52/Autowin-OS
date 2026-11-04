@@ -188,10 +188,10 @@ describe('le fond dessiné dans un Worker garde des images régulièrement espac
     expect(fil.coutTotal / 6000).toBeLessThanOrEqual(0.8)
   })
 
-  it('un Worker rapide (12 ms) reste à 30 images/s, une image tous les deux battements', async () => {
+  it('un Worker rapide (12 ms) suit l écran : une image à chaque battement (plafond 30 levé, conv-1512)', async () => {
     const vues = await jouer([{ ecran: 12, reflet: 0 }], 4)
     const { mode, part } = regularite(ecarts(vues))
-    expect(mode).toBe(Math.round(2 * BATTEMENT))
+    expect(mode).toBe(Math.round(BATTEMENT))
     expect(part).toBeGreaterThanOrEqual(0.95)
   })
 

@@ -29,27 +29,12 @@ export function attenteDuCran(): number {
 }
 
 /** Les animations CSS qui avancent par crans et qu'on cale sur l'horloge commune. */
+// Plafond de 10 images/s levé le 2026-11-04 (conv-1512) : seules restent les animations qui clignotent
+// par nature (`steps(1)` / `steps(2)`), calées ensemble pour changer d'image au même instant.
 export const ANIMATIONS_PAR_CRANS: ReadonlySet<string> = new Set([
-  'aw-atom-spin', // orbites de l'atome <Spinner/> (theme.css)
-  'aw-atom-tw', // étoile de l'atome (theme.css)
-  // Étape en cours d'une réponse : rail, pastille, jauge du pied (ChatView.css) — conv-1075.
-  'etape-flux',
-  'etape-pouls',
-  'etape-reflet',
-  // Pastille « question en attente » de la liste des fils : colonne de points et « ? » (::before).
   'conv-asking-list',
   'conv-asking-wiggle',
-  // Lampe à lave d'Holographique (theme-nebuleuse-verre.css) : boutons, bulles, cadres et l'onglet
-  // ouvert du menu, qui la porte toute la journée — conv-1199. Calée ici, elle change d'image sur
-  // les mêmes crans que les autres indicateurs au lieu d'ajouter sa propre grille.
-  'nv-lave',
-  // Reflet du lot qui tourne dans les couloirs de la super conv (SuperConvMosaique.css) — conv-1376.
-  'scm-reflet',
-  // Accueil d'un fil vide (AnimationAccueilChat.css) — conv-1401 : la barre de la phrase qui s'écrit,
-  // et le sol magique, dont la couronne tourne au travail et d'où part une onde.
-  'aa-barre',
-  'as-tourne',
-  'as-onde'
+  'aa-barre'
 ])
 
 /** Ce qu'on lit et écrit d'une animation : son nom CSS et son départ sur l'horloge du document. */

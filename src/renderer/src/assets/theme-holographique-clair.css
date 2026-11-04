@@ -4337,7 +4337,7 @@
     ),
     linear-gradient(135deg, #3c6eeb, #d02b8c);
   /* 3 segments de 3 s (images cles 0 / 33,3333 / 66,6667 / 100 %), 30 crans de 100 ms chacun. */
-  animation: nv-lave 9s steps(30) infinite alternate;
+  animation: nv-lave 9s ease-in-out infinite alternate;
 }
 /* Les boutons, puis les bulles : la lave EST leur fond. L'onglet ouvert du menu de gauche aussi
    (meme fil, capture du rond « Chat » sous l'avatar : « a mettre aussi sur ces boutons ») : sa
@@ -4366,7 +4366,7 @@
 :root[data-theme='holographique-clair'] .nav-item.active {
   animation-duration: 18s;
   /* Deux fois plus de crans pour une duree double : chaque cran reste de 100 ms (conv-1199). */
-  animation-timing-function: steps(60);
+  animation-timing-function: ease-in-out;
 }
 /* Deux boutons voisins ne coulent pas au meme rythme : chaque famille part d'un autre moment. */
 :root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row,
@@ -4573,7 +4573,7 @@
   --thinking-capsule-lave-chaud: #d02b8c;
   --thinking-capsule-lave-froid: #3c6eeb;
   --thinking-capsule-lave-milieu: #9150dc;
-  --thinking-capsule-lave-animation: nv-lave 9s steps(30) infinite alternate;
+  --thinking-capsule-lave-animation: nv-lave 9s ease-in-out infinite alternate;
 }
 /* LES TOURS PRECEDENTS NE COULENT PLUS (meme fil : « Limite la lampe a lave des capsules
    Raisonnement / Actions au dernier tour du fil, pour alleger la carte graphique »). Une reponse

@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { glypheDuHalo, TAILLE_GLYPHE } from '../../../shared/glyphe-du-halo'
-import { attenteDuCran, CRAN_MS } from '../animations-par-crans'
+import { attenteDuCran } from '../animations-par-crans'
 import { avancerLesPistes, prendreLaMain, type Piste } from './accueil-cadence'
 import type { UsageDeSkill } from './chat-home-suggestions'
 import { PhraseInvoquee } from './PhraseInvoquee'
@@ -50,8 +50,6 @@ export const COUCOU_MS = 2_400
 export const PAUSE_PHRASE_MS = 2_400
 /** La mascotte est dessinée pour 128 px : on la montre en grand. */
 const ZOOM = 2
-/** Endormie, elle respire à peine : deux images par seconde suffisent, et ne coûtent presque rien. */
-const PAS_ENDORMIE_MS = 5 * CRAN_MS
 /** Quand un agent démarre, l'onde dure autant que celle du coucou. */
 const ONDE_MS = COUCOU_MS
 /** Le cercle vient du code, calculé une seule fois : rien de saisi ni de reçu n'y entre. */
@@ -251,18 +249,21 @@ function Mascotte({
     // `html` : un changement de style en Settings recharge la page, et la feuille avec elle.
   }, [document, html, humeur, agents])
 
-  const pas = humeur === 'sommeil' && agents === 0 ? PAS_ENDORMIE_MS : CRAN_MS
+  // Fluide, à chaque image (conv-1512 : « remove the 10 fps cap everywhere »). `requestAnimationFrame`
+  // s'arrête tout seul quand la fenêtre est cachée ou réduite : hors de la vue, la boucle ne coûte rien.
   useEffect(() => {
     if (!document || !actif) return
     pistes.current = prendreLaMain(document)
-    let minuteur: ReturnType<typeof setTimeout>
-    const cran = (): void => {
-      avancerLesPistes(pistes.current, Math.round(performance.now() / CRAN_MS) * CRAN_MS, pas)
-      minuteur = setTimeout(cran, pas - CRAN_MS + attenteDuCran())
+    let image = 0
+    let avant = performance.now()
+    const avancer = (maintenant: number): void => {
+      avancerLesPistes(pistes.current, maintenant, Math.max(0, maintenant - avant))
+      avant = maintenant
+      image = requestAnimationFrame(avancer)
     }
-    minuteur = setTimeout(cran, attenteDuCran())
-    return () => clearTimeout(minuteur)
-  }, [document, actif, pas])
+    image = requestAnimationFrame(avancer)
+    return () => cancelAnimationFrame(image)
+  }, [document, actif])
 
   // Le sol arrive avec elle : sans sa page, il se poserait à vide, là où elle n'est pas encore.
   if (!page) return null
