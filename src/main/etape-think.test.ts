@@ -18,7 +18,7 @@ import { describe, expect, it } from 'vitest'
  */
 
 const RACINE = join(__dirname, '..', '..')
-const orchestrateur = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+const orchestrateur = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join(String.fromCharCode(10))
 
 describe('l’étape de chargement de contexte s’appelle `think`', () => {
   it('aucune étape affichée ne s’appelle `load`', () => {

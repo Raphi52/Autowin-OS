@@ -145,7 +145,7 @@ describe('ce qui ne doit PAS changer', () => {
      * qui a l'air d'avoir travaillé. C'est exactement le défaut que `skill-node-tools.ts` corrige une
      * couche plus bas, et il ne doit pas revenir une couche plus haut.
      */
-    const orchestrateur = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    const orchestrateur = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join(String.fromCharCode(10))
     expect(orchestrateur).toContain('noeudsApresJuge(graphePilote)')
     // La boucle d'apres-gate parcourt des PHASES depuis le 2026-09-13 : sans graphe (run mono-phase),
     // la chaine vient de `phasesApresJugeHorsGraphe`, qui ne peut pas rendre d'identifiant de noeud.

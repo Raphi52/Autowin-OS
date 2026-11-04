@@ -85,7 +85,7 @@ describe('le bloc « où tu travailles »', () => {
 
 describe('le bloc est réellement CÂBLÉ dans les prompts', () => {
   // Un bloc parfait mais jamais injecté est du théâtre : on vérifie les points de montage.
-  const source = readFileSync(join(__dirname, '..', 'orchestrator.ts'), 'utf8')
+  const source = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, '..', f), 'utf8')).join(String.fromCharCode(10))
 
   it('est monté partout où un cwd de travail isolé est connu', () => {
     const mounts = [...source.matchAll(/name: 'workspaceIsolation'/g)]

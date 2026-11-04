@@ -27,7 +27,9 @@ import { describe, expect, it } from 'vitest'
 const RACINE = join(__dirname, '..')
 
 function lire(chemin: string): string[] {
-  return readFileSync(join(RACINE, chemin), 'utf8').split(/\r?\n/)
+  // orchestrator.ts découpé en modules voisins (conv-1508) : la source lue est leur ensemble, dans l'ordre d'origine.
+  const parties = chemin === 'orchestrator.ts' ? ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'] : [chemin]
+  return parties.map((f) => readFileSync(join(RACINE, f), 'utf8')).join(String.fromCharCode(10)).split(/\r?\n/)
 }
 
 /**

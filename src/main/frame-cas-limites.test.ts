@@ -108,7 +108,7 @@ describe('frame-cas-limites — la garde de handoff', () => {
   })
 
   it('reste ACCROCHE dans le trajet de phase de l orchestrateur (frame seulement)', () => {
-    const src = readFileSync(join(__dirname, 'orchestrator.ts'), 'utf8')
+    const src = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join(String.fromCharCode(10))
     expect(src).toMatch(/sortieFrameAvecCasLimites/)
     expect(src).toMatch(/phase === 'frame'/)
   })
