@@ -76,6 +76,30 @@ describe('OrchestratorModelSelector — matrice par provider dans la popup', () 
     host = null
   })
 
+  /*
+   * ONGLETS PAR FOURNISSEUR (conv-1496, 8fb688c1, 2026-11-04) : la matrice ne montre plus qu'UN
+   * groupe à la fois, celui de l'onglet ouvert (par défaut, le fournisseur du modèle actif). Les
+   * tests ci-dessous ouvrent donc l'onglet codex avant de le lire, au lieu d'attendre tous les
+   * groupes côte à côte.
+   */
+  const ouvrirOnglet = async (view: HTMLElement, provider: string): Promise<void> => {
+    const onglet = view.querySelector(
+      `[data-testid="effort-matrix-onglet-${provider}"]`
+    ) as HTMLElement
+    expect(onglet).not.toBeNull()
+    await act(async () => onglet.click())
+  }
+
+  const echellesAffichees = (view: HTMLElement): Record<string, (string | null)[]> =>
+    Object.fromEntries(
+      [
+        ...view.querySelectorAll<HTMLElement>('[data-testid="effort-matrix"] .effort-matrix-group')
+      ].map((g) => [
+        g.dataset.provider,
+        [...g.querySelectorAll('.effort-matrix-columns span')].map((n) => n.textContent)
+      ])
+    )
+
   it('rend la matrice EN LIGNE dans le menu, une échelle par provider, sans modale ni sous-menu', async () => {
     const view = await monter({
       binding: { provider: 'claude', model: 'opus', reasoningEffort: 'high' },
@@ -90,18 +114,17 @@ describe('OrchestratorModelSelector — matrice par provider dans la popup', () 
     expect(view.querySelector('.model-select-matrix-open')).toBeNull()
     expect(view.querySelector('.model-effort-menu')).toBeNull()
 
-    const groupes = [...matrice.querySelectorAll('.effort-matrix-group')] as HTMLElement[]
+    // un onglet PAR provider (l'ordre suit les groupes du catalogue, hors de ce test), celui du
+    // modèle actif ouvert d'office
+    expect([...matrice.querySelectorAll('[role="tab"]')].map((n) => n.textContent).sort()).toEqual([
+      'ChatGPT',
+      'Claude'
+    ])
+    expect(matrice.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Claude')
     // une échelle PAR provider : `max` ne doit jamais apparaître chez codex, ni `xhigh` chez claude
-    const echelles = Object.fromEntries(
-      groupes.map((g) => [
-        g.dataset.provider,
-        [...g.querySelectorAll('.effort-matrix-columns span')].map((n) => n.textContent)
-      ])
-    )
-    expect(echelles).toEqual({
-      claude: ['', 'medium', 'high', 'max'],
-      codex: ['', 'medium', 'high', 'xhigh']
-    })
+    expect(echellesAffichees(view)).toEqual({ claude: ['', 'medium', 'high', 'max'] })
+    await ouvrirOnglet(view, 'codex')
+    expect(echellesAffichees(view)).toEqual({ codex: ['', 'medium', 'high', 'xhigh'] })
   })
 
   it('un clic sur un cran sélectionne le couple (modèle, effort) et referme la popup', async () => {
@@ -112,6 +135,9 @@ describe('OrchestratorModelSelector — matrice par provider dans la popup', () 
     })
     const details = view.querySelector('details') as HTMLDetailsElement
     details.open = true
+    await ouvrirOnglet(view, 'codex')
+    // changer d'onglet ne referme pas la popup : la fermeture vérifiée plus bas vient bien du cran
+    expect(details.open).toBe(true)
 
     const groupeCodex = view.querySelector(
       '.effort-matrix-group[data-provider="codex"]'
@@ -135,6 +161,7 @@ describe('OrchestratorModelSelector — matrice par provider dans la popup', () 
       binding: { provider: 'claude', model: 'opus', reasoningEffort: 'high' },
       onSelect
     })
+    await ouvrirOnglet(view, 'codex')
 
     const ligne = view.querySelector('.effort-matrix-row[data-row="codex:gpt"]') as HTMLElement
     expect(ligne).not.toBeNull()
