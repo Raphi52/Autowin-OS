@@ -7,6 +7,16 @@
  * après son retrait du 2026-09-04. Il reste FACULTATIF : Claude garde la première place, et un poste
  * sans CLI Codex ne voit simplement aucun modèle ChatGPT.
  */
-export const ROUTED_PROVIDERS = ['claude', 'codex'] as const
+import { SERVICES_HTTP, type ServiceHttpId } from './providers/services-http'
+
+/**
+ * Ouverte le 2026-11-04 (conv-1499) : aux deux CLI s'ajoutent les services HTTP déclarés dans
+ * `providers/services-http.ts`, servis sans CLI. Un service nouveau s'y déclare, jamais ici.
+ */
+export const ROUTED_PROVIDERS: readonly ('claude' | 'codex' | ServiceHttpId)[] = [
+  'claude',
+  'codex',
+  ...SERVICES_HTTP.map((s) => s.id)
+]
 
 export type RoutedProvider = (typeof ROUTED_PROVIDERS)[number]

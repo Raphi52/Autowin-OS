@@ -4,6 +4,7 @@
  * Principe : rien d'exposé ici n'est mort — chaque méthode a un appelant réel
  * (chat, orchestration, dashboards, graphe 3D).
  */
+import { adaptateursServicesHttp } from './providers/services-http'
 import { Notification, app } from 'electron'
 import { traduireCoeur } from './textes-coeur'
 import { fermerBureauCacheSiOuvert, racineScriptsHorsArchive } from './hdesk-tv'
@@ -585,6 +586,8 @@ export class AutowinOS {
       // plus, donc jamais lancés, jamais sondés, jamais routés. Voir `routed-providers.ts`.
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
+    // Services HTTP sans CLI (conv-1499) : après les deux CLI, donc jamais élus exécuteur par défaut.
+    for (const adaptateur of adaptateursServicesHttp()) this.registry.register(adaptateur)
     const executionWorkspace = resolveExecutionWorkspace()
     this.executionWorkspace = executionWorkspace
     // Le workspace resolu est republie dans l'environnement pour que le TRANSPORT y ait acces sans

@@ -36,6 +36,7 @@ import {
   PREFIXE_OPENROUTER,
   type OpenRouterModel
 } from './openrouter-free-models'
+import { modelesServicesHttp } from './providers/services-http'
 import { chargerModelesGroq, PREFIXE_GROQ, type GroqModel } from './groq-free-models'
 
 /** Un modèle importé, atomique et adressable par son `id` canonique. */
@@ -486,6 +487,7 @@ export async function discoverImportedModels(
       ...codexModels,
       ...openRouter,
       ...groq,
+      ...modelesServicesHttp(),
       ...DEFAULT_IMPORTED_MODELS
     ]).filter((model) => ROUTED_PROVIDERS.includes(model.provider as RoutedProvider))
   )
