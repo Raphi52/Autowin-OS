@@ -6,6 +6,7 @@ import { BehaviourView } from './BehaviourView'
 import { CapabilitiesView, type CapabilityKind } from './CapabilitiesView'
 import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
 import { BrainSettings } from './BrainSettings'
+import { McpServersSettings } from './McpServersSettings'
 import { BrainPersoSettings } from './BrainPersoSettings'
 import { RulesView } from './RulesView'
 import { InterfaceView } from './InterfaceView'
@@ -214,6 +215,8 @@ export function SettingsView({
           {section === 'preflight' && <ExecutionWorkspaceSettings />}
           {section === 'preflight' && <BrainSettings />}
           {section === 'preflight' && <BrainPersoSettings />}
+          {/* Serveurs MCP de l'utilisateur (conv-1558, lot 2). */}
+          {section === 'preflight' && <McpServersSettings />}
           {section === 'preflight' && (
             <section
               className="settings-preflight surface-panel"

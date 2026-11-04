@@ -13,6 +13,7 @@ vi.mock('./CapabilitiesView', () => ({ CapabilitiesView: () => null }))
 vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
 vi.mock('./ExecutionWorkspaceSettings', () => ({ ExecutionWorkspaceSettings: () => null }))
 vi.mock('./BrainSettings', () => ({ BrainSettings: () => null }))
+vi.mock('./McpServersSettings', () => ({ McpServersSettings: () => null }))
 // La vue Routage a ses propres tests : ici, seul compte qu'elle soit MONTÉE par la bonne section.
 vi.mock('./RouterView', async () => {
   const { createElement } = await import('react')
