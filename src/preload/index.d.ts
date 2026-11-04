@@ -1,3 +1,4 @@
+import type { ReponseServeursMcp, ServeurMcpUtilisateur } from '../main/mcp-servers'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
 import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/messages-entre-fils-app'
 import type {
@@ -539,6 +540,11 @@ interface ChatApi {
   resetBrainReglage: () => Promise<BrainReglageState>
   /** Le Brain PERSO, privé, à côté de celui de l'équipe (conv-1233, `src/main/brain-perso.ts`). */
   brainPerso: () => Promise<BrainPersoState>
+  // Serveurs MCP de l'utilisateur (conv-1558) : le preload les exposait sans type (lot 1).
+  mcpServersList: () => Promise<ReponseServeursMcp>
+  mcpServersSave: (serveur: ServeurMcpUtilisateur) => Promise<ReponseServeursMcp>
+  mcpServersDelete: (id: string) => Promise<ReponseServeursMcp>
+  mcpServersToggle: (id: string, actif: boolean) => Promise<ReponseServeursMcp>
   enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }) => Promise<BrainPersoState>
   resetBrainPerso: () => Promise<BrainPersoState>
   pendingModelQuestion: () => Promise<PendingModelQuestion | null>

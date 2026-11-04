@@ -9,6 +9,7 @@ vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
 // portent bien sur le panneau Diagnostic et non sur le voisin.
 vi.mock('./ExecutionWorkspaceSettings', () => ({ ExecutionWorkspaceSettings: () => null }))
 vi.mock('./BrainSettings', () => ({ BrainSettings: () => null }))
+vi.mock('./McpServersSettings', () => ({ McpServersSettings: () => null }))
 // Même isolement pour le panneau du Brain perso (conv-1233), couvert par BrainPersoSettings.test.tsx :
 // sans lui, son alerte « réglage illisible » passait devant celle de la réparation.
 vi.mock('./BrainPersoSettings', () => ({ BrainPersoSettings: () => null }))

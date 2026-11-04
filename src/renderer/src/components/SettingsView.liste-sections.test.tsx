@@ -20,6 +20,7 @@ vi.mock('./CapabilitiesView', async () => {
 vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
 vi.mock('./ExecutionWorkspaceSettings', () => ({ ExecutionWorkspaceSettings: () => null }))
 vi.mock('./BrainSettings', () => ({ BrainSettings: () => null }))
+vi.mock('./McpServersSettings', () => ({ McpServersSettings: () => null }))
 vi.mock('./RouterView', () => ({ RouterView: () => null }))
 
 import { SettingsView } from './SettingsView'
