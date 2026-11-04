@@ -1,36 +1,11 @@
 /* L'AFFICHAGE SELON LA CONNEXION (conv-1442, 2026-11-02). Les attributs sont posés sur <html> par
    `affichage-session.ts`, d'après ce que Windows rapporte au moteur.
-   - `data-session="distante"` : connecté par Windows App. Version ALLÉGÉE : rien ne s'anime, chaque
-     image traversant le réseau — SAUF l'Accueil (`.vue-accueil`, App.tsx), laissé entier avec son
-     décor 3D : « je veux pas que ça me cache mon accueil » (conv-1442, 2026-11-03).
    - `data-ecran="telephone"` : l'écran de la session est petit (le téléphone). Mise en page ÉTROITE
-     à gros boutons. */
-
-/* ---- Version allégée ------------------------------------------------------------------------- */
-
-/* LES ANIMATIONS S'ACHÈVENT AUSSITÔT, au lieu d'être retirées : plusieurs composants attendent la fin
-   d'une animation (`animationend` : entree-cascade.ts, anneau-activite.tsx, BulleDuTicket.tsx,
-   TestsView.tsx). Avec `animation: none`, cet évènement ne viendrait jamais. Une animation en boucle
-   joue un seul tour d'1 ms puis s'arrête.
-   Exceptions : le SPINNER (`.aw-atom` du composant <Spinner/>, et l'ancien `.spinner`), indicateur d'état et non décor (theme.css ; `.aw-atom` oublié jusqu'au 2026-11-04, conv-1521) — figé, il dirait faussement
-   que rien ne tourne ; et l'ACCUEIL, qui garde ses animations à distance (voir l'en-tête). */
-:root[data-session='distante'] *:not(.spinner, .spinner *, .aw-atom, .aw-atom *, .vue-accueil, .vue-accueil *),
-:root[data-session='distante'] *:not(.spinner, .spinner *, .aw-atom, .aw-atom *, .vue-accueil, .vue-accueil *)::before,
-:root[data-session='distante'] *:not(.spinner, .spinner *, .aw-atom, .aw-atom *, .vue-accueil, .vue-accueil *)::after {
-  animation-duration: 1ms !important;
-  animation-delay: 0s !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0s !important;
-  transition-delay: 0s !important;
-  scroll-behavior: auto !important;
-}
-/* Le passage d'une vue à l'autre et le changement de thème (transition-de-vue.ts) : immédiats. */
-:root[data-session='distante']::view-transition-group(*),
-:root[data-session='distante']::view-transition-old(*),
-:root[data-session='distante']::view-transition-new(*) {
-  animation-duration: 1ms !important;
-  animation-delay: 0s !important;
-}
+     à gros boutons.
+   - `data-session="distante"` (Windows App, Bureau à distance) ne change RIEN à l'affichage : la
+     « version allégée » qui figeait toutes les animations hors de l'Accueil a été retirée à la
+     demande de l'utilisateur (conv-1538, 2026-11-04) : « sur rdp ça m'a enlevé toutes mes
+     animations […] remet tout ». Ne pas la réintroduire sans sa demande explicite. */
 
 /* ---- Version téléphone ----------------------------------------------------------------------- */
 

@@ -24,7 +24,10 @@
  */
 import type { Metier } from './quartier-metiers'
 
-export type Pose = '' | 'as' | 'at' | 'pl' | 'ba'
+/** Un agent planté pleure ('pr'), fume ('fu') ou boit ('bi') : une seule des trois, choisie d'après son identifiant (conv-1554). */
+export const POSES_PLANTE = ['pr', 'fu', 'bi'] as const
+export type Pose = '' | 'as' | 'at' | 'ba' | (typeof POSES_PLANTE)[number]
+export const estPlante = (nom: string): boolean => (POSES_PLANTE as readonly string[]).includes(nom)
 export type MetierPoste = Metier | 'bain' | 'pause'
 
 /**

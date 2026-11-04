@@ -3,10 +3,10 @@ import { glypheDuHalo, TAILLE_GLYPHE } from '../../../shared/glyphe-du-halo'
 import { attenteDuCran } from '../animations-par-crans'
 import { avancerLesPistes, prendreLaMain, type Piste } from './accueil-cadence'
 import type { UsageDeSkill } from './chat-home-suggestions'
-import { PhraseInvoquee } from './PhraseInvoquee'
+import { PhraseTapee } from './PhraseTapee'
 import { TeaserAccueil } from './TeaserAccueil'
 import { placeDeLaPhrase, teaserVu } from './teaser-accueil-calcul'
-import type { EtatDePhrase } from './teaser-accueil-calcul'
+import type { EtatDePhrase, MomentDuFilm } from './teaser-accueil-calcul'
 import './AnimationAccueilChat.css'
 
 /**
@@ -32,9 +32,9 @@ import './AnimationAccueilChat.css'
  * phrase se pose sous le cercle (`placeDeLaPhrase`). La mascotte et son sol en CSS ne reviennent que
  * si la vidéo ne se lit pas.
  *
- * « que ce soit le cercle au sol qui les invoque » : sur le film, les phrases ne s'écrivent plus.
- * Leurs lettres sortent du cercle quand le mage le frappe de son bâton (`TeaserAccueil`), et
- * s'assemblent (`PhraseInvoquee`).
+ * « que ce soit le cercle au sol qui les invoque » : sur le film du magicien, les lettres sortaient
+ * du cercle de runes. Depuis conv-1535, le film montre les fonctionnalités d'Autowin à la place du
+ * magicien (`TeaserAccueil`), et la phrase se tape lettre à lettre, curseur compris (`PhraseTapee`).
  *
  * Aucune garde `prefers-reduced-motion` : ce poste a le réglage actif, l'animation ne se verrait
  * jamais (même choix que le bloc Étapes et la cascade des candidats).
@@ -332,19 +332,24 @@ function AnimationAccueilChatBrute({
   const surTaille = useCallback((largeur: number, hauteur: number) => {
     setTaille({ largeur, hauteur })
   }, [])
-  // Chaque entrée de phrase est une nouvelle invocation : le rang choisit le texte et relance son
-  // animation d'apparition.
-  const [invocation, setInvocation] = useState<{ rang: number; etat: EtatDePhrase }>({
-    rang: 0,
-    etat: 'absente'
-  })
-  const surPhrase = useCallback((etat: EtatDePhrase) => {
+  // Chaque entrée de phrase est une nouvelle invocation : le rang relance son animation
+  // d'apparition, la skill de la scène choisit le texte (conv-1535 : sous /draft, l'usage de /draft).
+  const [invocation, setInvocation] = useState<{
+    rang: number
+    etat: EtatDePhrase
+    skill: string | null
+  }>({ rang: 0, etat: 'absente', skill: null })
+  const surPhrase = useCallback(({ etat, skill }: MomentDuFilm) => {
     setInvocation((avant) =>
-      avant.etat === etat
+      avant.etat === etat && avant.skill === skill
         ? avant
         : {
             etat,
-            rang: avant.etat === 'absente' && etat !== 'absente' ? avant.rang + 1 : avant.rang
+            skill,
+            rang:
+              (avant.etat === 'absente' && etat !== 'absente') || avant.skill !== skill
+                ? avant.rang + 1
+                : avant.rang
           }
     )
   }, [])
@@ -357,11 +362,9 @@ function AnimationAccueilChatBrute({
   // Sur le film, c'est lui qui fait défiler : rien ne s'écrit.
   const fige = survolee || humeur === 'sommeil' || !actif || enIntro || surLeFilm
   const { phrase, ecrit } = usePhraseEcrite(phrases, fige)
-  // Le rang vaut 1 à la première invocation : la première phrase ouvre le bal.
+  // La phrase de la skill à l'écran, prise par son nom ; une skill sans usage ne montre rien.
   const invoquee =
-    phrases.length > 0 && usages.length > 0
-      ? usages[Math.max(invocation.rang - 1, 0) % usages.length]
-      : undefined
+    phrases.length > 0 ? usages.find((usage) => usage.nom === invocation.skill) : undefined
   // Sous le pointeur, la phrase reste celle qu'il vise, même si le film passe à la suivante.
   const [tenue, setTenue] = useState<{ usage: UsageDeSkill; rang: number } | undefined>(undefined)
   const surFilm = tenue?.usage ?? (invocation.etat === 'absente' ? undefined : invoquee)
@@ -403,11 +406,10 @@ function AnimationAccueilChatBrute({
         )}
         <div className="aa-phrase-zone">
           {place && surFilm !== undefined && (
-            <PhraseInvoquee
+            <PhraseTapee
               key={tenue?.rang ?? invocation.rang}
               usage={surFilm}
               sortante={invocation.etat === 'sortante' && !tenue}
-              ecartAuCercle={place.ecart}
               onChoisir={onChoisir}
               onTenir={(oui) =>
                 setTenue(oui ? { usage: surFilm, rang: invocation.rang } : undefined)

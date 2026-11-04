@@ -199,6 +199,23 @@ describe('présence des collègues — relecture du partage', () => {
   })
 })
 
+describe("présence des collègues — l'animal choisi (conv-1537)", () => {
+  it('rend l’animal écrit par le collègue', async () => {
+    ecrire('collegue.a', presence({ animal: 'tanuki' }))
+    const { collegues } = await lecteur().lire()
+    expect(collegues[0].animal).toBe('tanuki')
+  })
+
+  it('un fichier sans animal, ou avec un animal inconnu, garde le collègue, sans animal', async () => {
+    ecrire('collegue.a', presence())
+    ecrire('collegue.b', presence({ animal: '<img src=x>' }))
+    const { collegues, erreur } = await lecteur().lire()
+    expect(erreur).toBeUndefined()
+    expect(collegues.map((c) => c.poste)).toEqual(['collegue.a', 'collegue.b'])
+    expect(collegues.every((c) => !('animal' in c))).toBe(true)
+  })
+})
+
 describe('prénom', () => {
   it('rend le premier mot du nom', () => {
     expect(prenomDe('Alice Martin')).toBe('Alice')

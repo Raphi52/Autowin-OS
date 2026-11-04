@@ -810,7 +810,14 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:fichesDesDemandes` (garde 'Fiches des demandes') — LECTURE seule, aucun argument : le
     //     chemin de la fiche de chaque demande rangee, tire du meme index.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(298)
+    // MISE A JOUR 2026-11-04 (conv-1537) — 298 -> 299, MESURE par ce test (rouge a 299, signale par
+    //   conv-1544). UN canal dans `ipc/quartier-presence.ts`, garde 'Présence du quartier' des sa
+    //   PREMIERE ligne : `os:quartier-presence:animal` — l'animal des agents du poste, choisi dans les
+    //   reglages de l'Accueil. `null` revient au defaut ; toute autre valeur passe par `animalLisible`
+    //   (liste fermee `ANIMAUX_AGENTS`) et une valeur inconnue ne fait que relire l'etat. Ecrit
+    //   seulement `board-dossier.json` (userData), puis `presence.json` au rythme deja borne.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(299)
     expect(unguarded).toEqual([])
   })
 

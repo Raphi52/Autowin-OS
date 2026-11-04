@@ -6,6 +6,7 @@ import {
   appliquerResumes,
   PAUSE_APRES_MS,
   consigneDe,
+  poseDePlantage,
   REPOS_MS,
   RETARD_RESUMES_MS,
   SIGNAL_MAX_MS,
@@ -179,6 +180,22 @@ describe('consigneDe', () => {
     depuis: T0
   })
 
+  it('un agent planté garde la même pose, et les trois sortent sur un échantillon', () => {
+    const ids = Array.from({ length: 30 }, (_, i) => `fil-${i}`)
+    const poses = ids.map((id) => poseDePlantage(id))
+    expect(ids.map((id) => poseDePlantage(id))).toEqual(poses)
+    expect(new Set(poses)).toEqual(new Set(['pr', 'fu', 'bi']))
+    const a = { ...agent('plante', null), id: 'fil-7' }
+    expect(consigneDe(a, T0).pose).toBe(consigneDe(a, T0 + 60_000).pose)
+    expect(consigneDe(a, T0).pose).toBe(poseDePlantage('fil-7'))
+  })
+
+  it("aucune autre phase n'emprunte une pose de plantage", () => {
+    for (const phase of ['travail', 'reflexion', 'attente', 'fini'] as const) {
+      expect(['pr', 'fu', 'bi']).not.toContain(consigneDe(agent(phase, 'lire'), T0).pose)
+    }
+  })
+
   it('traduit chaque phase en pose', () => {
     expect(consigneDe(agent('travail', 'lire'), T0)).toEqual({
       metier: 'lire',
@@ -186,7 +203,7 @@ describe('consigneDe', () => {
       partir: false
     })
     expect(consigneDe(agent('attente', 'lire'), T0).pose).toBe('at')
-    expect(consigneDe(agent('plante', null), T0).pose).toBe('pl')
+    expect(['pr', 'fu', 'bi']).toContain(consigneDe(agent('plante', null), T0).pose)
     expect(consigneDe(agent('fini', 'lire'), T0)).toEqual({
       metier: 'bain',
       pose: 'ba',

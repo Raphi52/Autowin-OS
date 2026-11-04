@@ -9,7 +9,8 @@
  * l'écran, où marchent les tanukis ; ce qui manque se prolonge par le haut du ciel, et par un reflet de
  * la peinture sous le menu, dont le verre dépoli le rend invisible.
  *
- * LES OBJETS sont des morceaux de la peinture, repeints par-dessus un tanuki quand ils sont devant lui.
+ * LES OBJETS ont chacun leur image, posée sur la peinture au chargement (`quartier-calques.ts`, conv-1534),
+ * et repeinte par-dessus un tanuki quand ils sont devant lui.
  * Chacun a sa ligne de pied : c'est elle, et pas la profondeur, qui décide qui passe devant.
  */
 import {
@@ -19,8 +20,11 @@ import {
   type PoseAtelier
 } from './quartier-atelier'
 import urlFalaise from '../assets/quartier/falaise.avif'
+import urlDerriere from '../assets/quartier/falaise-derriere.webp'
 import urlAtlas from '../assets/quartier/atlas.avif'
 import urlAtlasRenard from '../assets/quartier/atlas-renard.avif'
+import urlAtlasPanda from '../assets/quartier/atlas-panda.avif'
+import urlAtlasPandaRoux from '../assets/quartier/atlas-panda-roux.avif'
 import urlBords from '../assets/quartier/bords.avif'
 import type { DecorScene } from '../components/home-decor-scene'
 import { HOME_WIDGET_IDS, type HomeWidgetId } from '../components/home-layout'
@@ -36,11 +40,13 @@ import {
   animalDeLAgent,
   consigneDuCollegue,
   lireAgentsCollegues,
-  type AgentCollegue,
-  type AnimalCollegue
+  type AgentCollegue
 } from './agents-collegues'
+import { abonnerMonAnimal, lireMonAnimal } from './mon-animal'
+import type { AnimalAgent } from '../../../shared/quartier-presence'
 import {
   creerMarche,
+  estPlante,
   type DonneesMarche,
   type Geste,
   type MarcheQuartier,
@@ -58,6 +64,7 @@ import {
   niveauxDePlanche,
   type NiveauPlanche
 } from './quartier-planche'
+import { adresseBatiment, composerFalaise, nomDuBatiment } from './quartier-calques'
 import { jouerGong } from './quartier-son'
 import { lireTuilesSorties, TOUR_DU_WIDGET, widgetDeLaTour } from './quartier-tuiles'
 import { contexte, creerVie, image, toile, type VieDecor } from './quartier-vie'
@@ -170,14 +177,16 @@ interface AtlasPeint {
 
 interface Monde {
   D: DonneesQuartier
-  F: HTMLImageElement
+  /** La Falaise composée de ses calques : peinture, fond derrière les bâtiments, bâtiments (conv-1534). */
+  F: HTMLCanvasElement
   /** La peinture prolongée à gauche puis à droite, `MARGE_BORD` de large chacune (conv-1424). */
   B: HTMLImageElement
   S: number
-  /** Mes agents : le tanuki au kimono orange. */
-  tanuki: AtlasPeint
-  /** Ceux des collègues, un atlas par animal, de même grille que celui du tanuki (conv-1446). */
-  animaux: Record<AnimalCollegue, AtlasPeint>
+  /**
+   * Un atlas par animal, de même grille que celui du tanuki (conv-1446) : mes agents prennent celui
+   * choisi dans les réglages de l'Accueil, ceux d'un collègue celui qu'il a choisi (conv-1537).
+   */
+  animaux: Record<AnimalAgent, AtlasPeint>
   OB: ObjetCoupe[]
   FE: ObjetCoupe[]
   m: MarcheQuartier
@@ -186,7 +195,7 @@ interface Monde {
   sols: { n: DonneesMarche['niv'][number]; P: Path2D }[]
 }
 
-async function coupe(F: HTMLImageElement, S: number, o: ObjetDonnee): Promise<ObjetCoupe> {
+async function coupe(F: HTMLCanvasElement, S: number, o: ObjetDonnee): Promise<ObjetCoupe> {
   const i = await image(o.m)
   const k = toile(o.w * S, o.h * S)
   const g = contexte(k)
@@ -239,15 +248,24 @@ function peindreAtlas(atlas: HTMLImageElement, an: { cw: number; ch: number }): 
 async function charger(): Promise<Monde> {
   const module = await import('../assets/quartier/donnees.json')
   const D = (module.default ?? module) as unknown as DonneesQuartier
-  const [F, atlas, renard, B] = await Promise.all([
+  const [peinture, derriere, batiments, atlas, renard, panda, pandaRoux, B] = await Promise.all([
     image(urlFalaise),
+    image(urlDerriere),
+    Promise.all(D.obj.map((o) => image(adresseBatiment(nomDuBatiment(o))))),
     image(urlAtlas),
     image(urlAtlasRenard),
+    image(urlAtlasPanda),
+    image(urlAtlasPandaRoux),
     image(urlBords)
   ])
-  const S = F.naturalWidth / LARGEUR
-  const tanuki = peindreAtlas(atlas, D.an)
-  const animaux: Record<AnimalCollegue, AtlasPeint> = { renard: peindreAtlas(renard, D.an) }
+  const S = peinture.naturalWidth / LARGEUR
+  const F = composerFalaise(peinture, derriere, D.obj, batiments, S)
+  const animaux: Record<AnimalAgent, AtlasPeint> = {
+    tanuki: peindreAtlas(atlas, D.an),
+    renard: peindreAtlas(renard, D.an),
+    panda: peindreAtlas(panda, D.an),
+    'panda-roux': peindreAtlas(pandaRoux, D.an)
+  }
   const OB = await Promise.all(D.obj.map((o) => coupe(F, S, o)))
   const FE = await Promise.all(D.feuilles.map((o) => coupe(F, S, o)))
   for (const id of HOME_WIDGET_IDS) {
@@ -269,7 +287,7 @@ async function charger(): Promise<Monde> {
     P.closePath()
     return { n, P }
   })
-  return { D, F, B, S, tanuki, animaux, OB, FE, m: creerMarche(D), vie, contact, sols }
+  return { D, F, B, S, animaux, OB, FE, m: creerMarche(D), vie, contact, sols }
 }
 
 const pied = (o: ObjetCoupe, px: number): number => {
@@ -386,15 +404,17 @@ export function creerSceneQuartier(): DecorScene | null {
   const desabonnerCollegues = abonnerAgentsCollegues(() => {
     collegues = lireAgentsCollegues()
   })
+  // L'animal de MES agents (conv-1537), lu à chaque image : un nouveau choix les redessine aussitôt.
+  let monAnimal: AnimalAgent = lireMonAnimal()
+  const desabonnerMonAnimal = abonnerMonAnimal(() => {
+    monAnimal = lireMonAnimal()
+  })
   /**
    * L'animal d'un tanuki de collègue (conv-1446). Comme son foulard, il reste sur le tanuki et non sur
    * l'agent : en repartant, son agent a déjà quitté la liste, et il ne doit pas redevenir tanuki en route.
    */
-  const animalDuTanuki = new WeakMap<Tanuki, AnimalCollegue>()
-  const atlasDe = (M: Monde, w: Tanuki): AtlasPeint => {
-    const animal = animalDuTanuki.get(w)
-    return animal ? M.animaux[animal] : M.tanuki
-  }
+  const animalDuTanuki = new WeakMap<Tanuki, AnimalAgent>()
+  const atlasDe = (M: Monde, w: Tanuki): AtlasPeint => M.animaux[animalDuTanuki.get(w) ?? monAnimal]
   const etoffe = toile(1, 1)
 
   /** Le cadrage au repos : calé sur la largeur de l'Accueil, posé en bas. */
@@ -752,8 +772,9 @@ export function creerSceneQuartier(): DecorScene | null {
     const t = M.vie.temps()
     x.globalCompositeOperation = 'lighter'
     for (const w of M.m.T) {
+      // fix-ok: la lueur rouge testait la pose 'pl' (grep : 3 sites, signaux/étiquettes) ; planté = pr, fu ou bi (conv-1554).
       // L'agent d'un collègue n'attend pas après moi : ni or ni rouge (D9, conv-1429).
-      if ((w.nom !== 'at' && w.nom !== 'pl') || w.foulard) continue
+      if ((w.nom !== 'at' && !estPlante(w.nom)) || w.foulard) continue
       const v = 0.5 + 0.5 * Math.sin(t * 3 + w.x)
       const r = w.u * (0.34 + v * 0.06)
       if (w.nom === 'at') {
@@ -782,7 +803,7 @@ export function creerSceneQuartier(): DecorScene | null {
     // Deux tanukis côte à côte : la seconde étiquette monte d'un cran au lieu de couvrir la première.
     const posees: { g: number; d: number; y: number }[] = []
     for (const w of [...T].sort((a, b) => b.y - a.y)) {
-      if (foule && w.nom !== 'at' && w.nom !== 'pl') continue
+      if (foule && w.nom !== 'at' && !estPlante(w.nom)) continue
       // Un collègue n'a pas d'étiquette au-dessus de la tête : son prénom et son titre vont au survol (D9).
       if (w.foulard) continue
       const a = agents.find((q) => q.id === w.id)
@@ -802,7 +823,7 @@ export function creerSceneQuartier(): DecorScene | null {
       x.fillStyle =
         w.nom === 'at'
           ? '#8a5d0a' // couleur-fixe: l'or de la mascotte, « t'attend »
-          : w.nom === 'pl'
+          : estPlante(w.nom)
             ? '#8e241c' // couleur-fixe: le rouge de la mascotte, « planté »
             : 'rgba(24,18,12,.8)' // couleur-fixe: étiquette posée sur la peinture
       x.beginPath()
@@ -880,7 +901,7 @@ export function creerSceneQuartier(): DecorScene | null {
         F,
         0,
         0,
-        F.naturalWidth,
+        F.width,
         3 * S,
         gaucheMonde,
         haut - 2,
@@ -982,6 +1003,7 @@ export function creerSceneQuartier(): DecorScene | null {
       libere = true
       desabonner()
       desabonnerCollegues()
+      desabonnerMonAnimal()
       debrancherQuartier(pilote)
     }
   }

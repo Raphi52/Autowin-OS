@@ -108,7 +108,27 @@ describe('l’animal d’une personne (conv-1446)', () => {
     expect(animalDeLAgent(a)).toBe('renard')
   })
 
-  it('n’existe pas pour mes agents, qui restent des tanukis', () => {
+  it('prend l’animal que le collègue a choisi, et le tirage seulement sans choix lisible (conv-1537)', () => {
+    const lu = agentsDesCollegues(
+      {
+        collegues: [
+          { ...presences({ poste: 'claire.d', agents: 1 }).collegues[0], animal: 'tanuki' },
+          {
+            ...presences({ poste: 'bob', agents: 1 }).collegues[0],
+            animal: 'dragon' as unknown as 'tanuki'
+          }
+        ]
+      },
+      MAINTENANT
+    )
+    expect(lu.map((a) => [a.collegue.poste, a.collegue.animal])).toEqual([
+      ['claire.d', 'tanuki'],
+      ['bob', animalDuPoste('bob')]
+    ])
+    expect(animalDeLAgent(lu[0])).toBe('tanuki')
+  })
+
+  it('n’existe pas pour mes agents, dessinés avec l’animal de MES réglages', () => {
     const mien: AgentQuartier = {
       id: 'conv-1',
       titre: 'Mon fil',

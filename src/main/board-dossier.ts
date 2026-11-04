@@ -33,6 +33,7 @@ import type {
 import type { EtageDuBoard, EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-dossier'
 import { carteDesProjetsPartages, projetsPartagesLisibles } from '../shared/board-projets-partages'
 import { nomDuPosteLisible } from '../shared/board-nom-du-poste'
+import { animalLisible, type AnimalAgent } from '../shared/quartier-presence'
 import { tachesDuBoard } from '../shared/taches-du-board'
 import { DOSSIER_DES_FICHES } from './fiches-de-demande'
 
@@ -375,6 +376,22 @@ export function lirePartageDeLaPresence(racine: string): boolean {
   }
 }
 
+/**
+ * L'animal des agents du poste (conv-1537), choisi dans les réglages de l'Accueil ; `null` = aucun
+ * choix, ou une valeur inconnue (fichier modifié à la main). Rangé à part pour la même raison que
+ * `lirePartageDeLaPresence`.
+ */
+export function lireAnimalDuPoste(racine: string): AnimalAgent | null {
+  try {
+    const lu = JSON.parse(readFileSync(join(racine, FICHIER_DU_REGLAGE), 'utf8')) as {
+      animal?: unknown
+    }
+    return animalLisible(lu.animal)
+  } catch {
+    return null
+  }
+}
+
 /** Le dossier enregistré, ou `null`. Illisible = aucun dossier : le Board marche sans. */
 export function lireDossierDuBoard(racine: string): string | null {
   return lireReglageDuBoard(racine).dossier
@@ -423,6 +440,11 @@ export interface DossierDuBoard {
    * Le réglage seul : c'est `quartier-presence.ts` qui écrit `presence.json`.
    */
   choisirPartagePresence: (actif: boolean) => Promise<EtatDuDossierDuBoard>
+  /**
+   * Retient l'animal des agents du poste (`null` = aucun choix, le tanuki), conv-1537. Le réglage
+   * seul : `quartier-presence.ts` l'écrit dans `presence.json`, que les collègues relisent.
+   */
+  choisirAnimal: (animal: AnimalAgent | null) => Promise<EtatDuDossierDuBoard>
   /** Le compte Windows du poste et le nom écrit sur ses post-it (le choisi, sinon le compte). */
   nomDuPoste: () => { compte: string; nom: string }
   /** Envoie le Board vers le dossier, sans attendre ; ne fait rien sans dossier choisi. */
@@ -460,6 +482,7 @@ export function creerDossierDuBoard(deps: {
   let projets = reglage.projets
   let nomChoisi = reglage.nom
   let partagerPresence = lirePartageDeLaPresence(deps.racine)
+  let animal = lireAnimalDuPoste(deps.racine)
   const nomDuPoste = (): { compte: string; nom: string } => ({ compte, nom: nomChoisi ?? compte })
   let dernier: EtatDuDossierDuBoard['dernier']
   let erreur: string | undefined
@@ -488,7 +511,8 @@ export function creerDossierDuBoard(deps: {
     compte,
     ...(nomChoisi ? { nomChoisi } : {}),
     // Absent = actif, le défaut (D-9) : seul un partage coupé se dit (conv-1429).
-    ...(partagerPresence ? {} : { partagerPresence: false })
+    ...(partagerPresence ? {} : { partagerPresence: false }),
+    ...(animal ? { animal } : {})
   })
 
   async function ecrire(travail: NonNullable<typeof enAttente>): Promise<void> {
@@ -549,14 +573,15 @@ export function creerDossierDuBoard(deps: {
   }
 
   /**
-   * Le dossier, le choix des projets, le nom et le partage de la présence : changer l'un ne doit
-   * jamais effacer les autres (conv-1211, conv-1230, conv-1429).
+   * Le dossier, le choix des projets, le nom, le partage de la présence et l'animal : changer l'un ne
+   * doit jamais effacer les autres (conv-1211, conv-1230, conv-1429, conv-1537).
    */
   async function ecrireLeReglage(
     nouveauDossier: string | null,
     nouveauxProjets: readonly string[] | null,
     nouveauNom: string | null = nomChoisi,
-    nouveauPartage: boolean = partagerPresence
+    nouveauPartage: boolean = partagerPresence,
+    nouvelAnimal: AnimalAgent | null = animal
   ): Promise<void> {
     await mkdir(deps.racine, { recursive: true })
     await writeFile(
@@ -566,7 +591,8 @@ export function creerDossierDuBoard(deps: {
           dossier: nouveauDossier,
           ...(nouveauxProjets ? { projets: nouveauxProjets } : {}),
           ...(nouveauNom ? { nom: nouveauNom } : {}),
-          ...(nouveauPartage ? {} : { partagerPresence: false })
+          ...(nouveauPartage ? {} : { partagerPresence: false }),
+          ...(nouvelAnimal ? { animal: nouvelAnimal } : {})
         },
         null,
         2
@@ -588,6 +614,12 @@ export function creerDossierDuBoard(deps: {
     async choisirPartagePresence(actif) {
       await ecrireLeReglage(dossier, projets, nomChoisi, actif)
       partagerPresence = actif
+      return etat()
+    },
+    async choisirAnimal(choix) {
+      const retenu = animalLisible(choix)
+      await ecrireLeReglage(dossier, projets, nomChoisi, partagerPresence, retenu)
+      animal = retenu
       return etat()
     },
     async choisirProjets(choix) {
@@ -617,8 +649,8 @@ export function creerDossierDuBoard(deps: {
     async effacer() {
       // Le choix des projets survit à l'oubli du dossier (conv-1211) : en rechoisir un ne doit pas
       // repartager d'un coup ce qu'on avait décoché. Le nom choisi survit aussi (conv-1230), et un
-      // partage de présence coupé reste coupé (conv-1429).
-      if (projets || nomChoisi || !partagerPresence) await ecrireLeReglage(null, projets)
+      // partage de présence coupé reste coupé (conv-1429), et l'animal choisi reste (conv-1537).
+      if (projets || nomChoisi || !partagerPresence || animal) await ecrireLeReglage(null, projets)
       else await rm(join(deps.racine, FICHIER_DU_REGLAGE), { force: true })
       dossier = null
       enAttente = null

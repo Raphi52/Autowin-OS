@@ -230,7 +230,7 @@ export interface VieDecor {
 
 export async function creerVie(
   D: DonneesQuartier,
-  F: HTMLImageElement,
+  F: HTMLCanvasElement,
   S: number,
   OB: ObjetCoupe[],
   FE: ObjetCoupe[]
@@ -578,9 +578,11 @@ export async function creerVie(
   }
 
   /**
-   * La roue de la Falaise o-1916 est peinte, vue un peu de biais (conv-1444) : sous elle, son ciel et son mât
-   * refaits cachent les rayons peints ; la jante tourne autour de son centre ; le moyeu, rond et décalé vers
-   * nous, reste fixe par-dessus. Tournée d'un bloc, la roue valsait autour de son moyeu.
+   * La roue de Settings, vue un peu de biais (conv-1444) : `roueFond` n'est plus que le bout de mât derrière
+   * elle — la roue peinte est sortie du mât et un vrai ciel la remplace dans `falaise-derriere.webp`
+   * (conv-1534 : le disque de ciel opaque, peint pour une Falaise d'avant, pâlissait et cachait le ballon) ;
+   * la jante tourne autour de son centre ; le moyeu, rond et décalé vers nous, reste fixe par-dessus. Tournée
+   * d'un bloc, la roue valsait autour de son moyeu.
    */
   const dessinerRoue = (x: Ctx): void => {
     const R0 = CAL.roue

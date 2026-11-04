@@ -1889,10 +1889,14 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background: var(--bg-1, rgba(0, 0, 0, 0.72));
-  border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
+  /* OPAQUE, dans le fond du thème (conv-1533, 2026-11-04 : « cette popup faut la mettre couleur du
+     theme pas transparent »). --bg-1 est un voile translucide dans la plupart des thèmes (5 % de blanc
+     sur Nébuleuse) : le décor de l'accueil passait à travers, flouté, et noyait les réglages.
+     --bg-0 est le fond plein de chaque thème, clair comme sombre. Sans valeur de secours : elle
+     serait recopiée en dur par les couches générées et l'emporterait sur le thème. */
+  background: var(--bg-0);
+  border: 1px solid var(--line);
   border-radius: 12px;
-  backdrop-filter: blur(16px);
   pointer-events: auto;
 }
 

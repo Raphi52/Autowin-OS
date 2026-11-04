@@ -3,23 +3,33 @@ import afficheUrl from '../assets/teaser/affiche.jpg'
 import boucleUrl from '../assets/teaser/boucle.mp4'
 import introUrl from '../assets/teaser/intro.mp4'
 import { attenteDuCran } from '../animations-par-crans'
-import { etatDeLaPhrase, teaserVu, VITESSE_AU_TRAVAIL } from './teaser-accueil-calcul'
-import type { EtatDePhrase } from './teaser-accueil-calcul'
+import { momentDuFilm, teaserVu, VITESSE_AU_TRAVAIL } from './teaser-accueil-calcul'
+import type { MomentDuFilm } from './teaser-accueil-calcul'
 
 /**
  * Le décor d'un fil vide (conv-1401, 2026-10-31) : « une video ca serait moin gourmand et plus
- * efficace, faudrait comme un teaser de jeu video magicien du temps obscur ». Il remplace la salle
- * en 3D, jugée « vraiment cheap ». Le film est précalculé : un temple du temps, un magicien géant
- * au chapeau recourbé devant une horloge, et le cercle de runes sous lequel se pose la phrase.
+ * efficace ». Le film est précalculé, muet, et la phrase cliquable se pose dessus.
  *
- * DEUX FICHIERS : l'intro (14 s, jouée une fois par lancement de l'app) finit, sur un éclair, là où
- * la boucle commence. La boucle attend sous l'intro, déjà chargée. Muettes toutes les deux. Le film
- * se refait avec `scripts/teaser-accueil/`.
+ * LES FONCTIONNALITÉS À LA PLACE DU MAGICIEN (conv-1535, 2026-11-04) : « une video comme ca [le film
+ * de présentation en motion design] pour l'écran nouveau fil, qui montre des features de autowin a
+ * la place du magicien », puis « présenter les skills avec des représentations de leur bloc associé
+ * dans le chat, agent studio, workflows, task planner, knowledge et board [...] 2 secondes par
+ * scene », puis « 2 secondes c trop rapide [...] fais des anim de 5 secondes et met plus d'effort
+ * pour que les vues soient reconnaissables ». Dix scènes de 5 s, une skill puis une vue, les vues
+ * redessinées sur leurs captures : /draft, Agent Studio, /scout, Workflows,
+ * /grill, Board, /judge, Task Manager, /arena, Knowledge. Chacune est une carte de verre qui porte
+ * son nom en or et joue son animation (le carrousel de /draft, les candidats de /scout…). Sous
+ * chaque skill, la phrase cliquable donne son exemple (`momentDuFilm`) et s'y tape lettre à
+ * lettre (`PhraseTapee`). Le bas de l'image reste sombre pour elle.
  *
- * « faut que ca soit tout le temps waouh » : la boucle (40 s) monte en quatre temps, de la frappe au
- * tunnel du temps, en passant par l'astrolabe et l'éclipse. Chaque temps ouvre sur le plan large où
- * le cercle invoque un sort. Les phrases sont calées sur le temps réel du film, pas sur une
- * minuterie : quand il accélère, elles le suivent.
+ * DEUX FICHIERS : l'intro (3,5 s, jouée une fois par lancement de l'app) finit exactement sur la
+ * première image de la boucle (50 s). La boucle attend sous l'intro, déjà
+ * chargée. Le film se refait depuis le projet du film de présentation :
+ * `%LOCALAPPDATA%/autowin-video/film/teaser-fil/` (scène et rendu, voir son
+ * `scene.js`). L'ancien film du magicien se refait toujours avec `scripts/teaser-accueil/`.
+ *
+ * Les phrases sont calées sur le temps réel du film, pas sur une minuterie : quand il accélère,
+ * elles le suivent.
  */
 
 function lire(video: HTMLVideoElement): void {
@@ -58,10 +68,10 @@ function TeaserAccueilBrut({
   lecture: boolean
   acceleree: boolean
   enIntro: boolean
-  /** La taille du fil, en px : la phrase en déduit sa place sur le cercle de runes. */
+  /** La taille du fil, en px : la phrase en déduit sa place dans le bas du film. */
   onTaille: (largeur: number, hauteur: number) => void
-  /** Où en est la phrase dans le film, relu à chaque cran. */
-  onPhrase: (etat: EtatDePhrase) => void
+  /** Où en est la phrase dans le film, et quelle skill est à l'écran, relu à chaque cran. */
+  onPhrase: (moment: MomentDuFilm) => void
   onFinIntro: () => void
   /** La vidéo ne se lit pas : l'accueil revient à sa mise en page sans décor. */
   onAbsente: () => void
@@ -99,7 +109,7 @@ function TeaserAccueilBrut({
     if (enIntro || !joue) return
     let minuteur: ReturnType<typeof setTimeout>
     const relire = (): void => {
-      if (boucle.current) onPhrase(etatDeLaPhrase(boucle.current.currentTime))
+      if (boucle.current) onPhrase(momentDuFilm(boucle.current.currentTime))
       minuteur = setTimeout(relire, attenteDuCran())
     }
     relire()

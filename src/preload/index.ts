@@ -67,6 +67,7 @@ import type { EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-do
 import type { BoardsDesCollegues } from '../shared/board-collegues'
 import type {
   AgentAPublier,
+  AnimalAgent,
   EtatDeLaPresence,
   PresencesDesCollegues
 } from '../shared/quartier-presence'
@@ -860,6 +861,9 @@ const api = {
   /** Coupe (`false`) ou rétablit le partage de la présence du poste (D6, conv-1429). */
   quartierPresencePartager: (actif: boolean): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:quartier-presence:partager', actif),
+  /** L'animal des agents du poste, vu aussi par les collègues (`null` = le défaut, conv-1537). */
+  quartierPresenceAnimal: (animal: AnimalAgent | null): Promise<EtatDuDossierDuBoard> =>
+    ipcRenderer.invoke('os:quartier-presence:animal', animal),
   /** Où et quand `presence.json` a été écrit, et le dernier échec (conv-1429). */
   quartierPresenceEtat: (): Promise<EtatDeLaPresence> =>
     ipcRenderer.invoke('os:quartier-presence:etat'),

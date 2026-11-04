@@ -88,6 +88,8 @@ function outlookSnapshot() {
 }
 
 beforeEach(() => {
+  // Outlook ne se lit qu'apres « Connecter Outlook » (conv-1555) : ces tests partent connectes.
+  window.localStorage.setItem('autowin.outlook.connecte', '1')
   // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
   window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -447,6 +449,19 @@ describe('widgets Outlook', () => {
     await mount(false)
     const api = (window as unknown as { api: { outlookSnapshot: ReturnType<typeof vi.fn> } }).api
     expect(api.outlookSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('ne touche PAS Outlook avant un clic sur « Connecter Outlook » (conv-1555)', async () => {
+    window.localStorage.removeItem('autowin.outlook.connecte')
+    const container = await mount()
+    const api = (window as unknown as { api: { outlookSnapshot: ReturnType<typeof vi.fn> } }).api
+    expect(api.outlookSnapshot).not.toHaveBeenCalled()
+    const bouton = container.querySelector<HTMLButtonElement>('[data-testid="home-connecter-outlook"]')
+    expect(bouton).not.toBeNull()
+    await act(async () => {
+      bouton!.click()
+    })
+    expect(api.outlookSnapshot).toHaveBeenCalled()
   })
 
   it('RELIT Outlook quand on revient dans la fenetre', async () => {

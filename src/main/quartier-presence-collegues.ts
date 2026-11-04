@@ -29,7 +29,9 @@ import {
   PRESENCE_PERIMEE_MS,
   PRESENCE_TAILLE_MAX,
   PRESENCE_TITRE_MAX,
+  animalLisible,
   type AgentPublie,
+  type AnimalAgent,
   type PhasePresence,
   type PresenceDUnCollegue,
   type PresencesDesCollegues
@@ -42,7 +44,15 @@ const ID_MAX = 80
 
 /** Ce qu'un fichier lu devient, avant le contrôle de fraîcheur (refait à chaque relecture). */
 type FichierLu =
-  | { kind: 'presence'; nom: string; enregistreA: number; coupe: boolean; agents: AgentPublie[] }
+  | {
+      kind: 'presence'
+      nom: string
+      enregistreA: number
+      coupe: boolean
+      /** L'animal choisi par le collègue (conv-1537) ; `null` = absent ou inconnu. */
+      animal: AnimalAgent | null
+      agents: AgentPublie[]
+    }
   | { kind: 'illisible'; motif: string }
 
 const objet = (v: unknown): Record<string, unknown> | null =>
@@ -125,7 +135,16 @@ export function presenceLue(contenu: string): FichierLu {
     .slice(0, PRESENCE_AGENTS_MAX)
     .map(agentLu)
     .filter((a): a is AgentPublie => a !== null)
-  return { kind: 'presence', nom, enregistreA, coupe: o.coupe === true, agents }
+  // Un animal inconnu (version plus récente, fichier modifié) n'écarte pas le collègue : il garde
+  // l'animal tiré de son poste, comme un fichier d'avant le réglage.
+  return {
+    kind: 'presence',
+    nom,
+    enregistreA,
+    coupe: o.coupe === true,
+    animal: animalLisible(o.animal),
+    agents
+  }
 }
 
 /** Le premier mot du nom, affiché au survol (D9). */
@@ -198,6 +217,7 @@ export function creerLecteurDePresence(deps: {
         collegues.push({
           poste: posteDuCollegue,
           nom: lu.nom,
+          ...(lu.animal ? { animal: lu.animal } : {}),
           prenom: prenomDe(lu.nom),
           agents: lu.agents
         })

@@ -8,6 +8,7 @@ import { CLE_NOM_JARVIS } from './jarvis-nom'
 import { oublierOuvertureReglages } from './home-reglages-ouverture'
 import { CLE_VOIX_JARVIS, lireReglageVoix } from './jarvis-voix-reglage'
 import { autowinStorageKey } from '../storage-keys'
+import { reinitialiserMonAnimal } from '../quartier/mon-animal'
 
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 
@@ -390,5 +391,35 @@ describe('le choix du fond de l accueil', () => {
     } finally {
       window.removeEventListener('autowin:fond-accueil', prevenu)
     }
+  })
+})
+
+// L'animal des agents (conv-1537) : la liste offre les quatre animaux dont la scène a un atlas, sous
+// leur nom, et un choix part au processus principal, qui le publie aux collègues.
+describe('l animal de mes agents dans les reglages', () => {
+  afterEach(() => reinitialiserMonAnimal())
+
+  it('propose tanuki, renard, panda et panda roux, et transmet le choix', async () => {
+    const choisir = vi.fn(async (animal: unknown) => ({ animal }))
+    Object.assign((window as unknown as { api: Record<string, unknown> }).api, {
+      boardDossier: vi.fn(async () => ({})),
+      quartierPresenceAnimal: choisir
+    })
+    const container = await mount()
+    await ouvrirReglages(container)
+    const menu = q<HTMLSelectElement>(container, '[data-testid="home-animal"]')!
+    expect(menu.disabled).toBe(false)
+    expect(Array.from(menu.options, (o) => [o.value, o.textContent])).toEqual([
+      ['tanuki', 'Tanuki'],
+      ['renard', 'Renard'],
+      ['panda', 'Panda'],
+      ['panda-roux', 'Panda roux']
+    ])
+    await act(async () => {
+      menu.value = 'panda-roux'
+      menu.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(choisir).toHaveBeenCalledWith('panda-roux')
+    expect(menu.value).toBe('panda-roux')
   })
 })

@@ -18,9 +18,11 @@
  */
 import { autowinStorageKey } from '../storage-keys'
 import {
+  animalLisible,
   METIERS_PRESENCE,
   PHASES_PRESENCE,
   PRESENCE_TITRE_MAX,
+  type AnimalAgent,
   type PresencesDesCollegues
 } from '../../../shared/quartier-presence'
 import { consigneDe, type AgentQuartier, type PhaseAgent } from './agents-quartier'
@@ -52,22 +54,25 @@ export const PALETTE_COLLEGUES = [
 ] as const
 
 /**
- * L'animal d'une personne (plan « Renard des collègues », conv-1446) : mes agents restent des tanukis,
- * ceux d'un collègue sont dessinés avec l'atlas de SON animal. Un seul pour l'instant ; la liste en
- * recevra d'autres, chacun avec un atlas de même grille et de même ordre de rangées que `atlas.avif`.
+ * L'animal d'un collègue qui n'en a pas choisi (plan « Renard des collègues », conv-1446) : son poste
+ * le tire dans cette liste. Depuis conv-1537, chacun choisit le sien dans les réglages de l'Accueil
+ * (`ANIMAUX_AGENTS`) ; ce tirage ne sert plus qu'aux fichiers des versions d'avant le réglage.
  */
 export const ANIMAUX_COLLEGUES = ['renard'] as const
 export type AnimalCollegue = (typeof ANIMAUX_COLLEGUES)[number]
 
 /** Ce qu'un agent de collègue porte en plus des miens. */
 export interface InfosCollegue {
-  /** Le sous-dossier du poste (compte Windows) : il fixe la couleur et l'animal. */
+  /** Le sous-dossier du poste (compte Windows) : il fixe la couleur, et l'animal faute de choix. */
   poste: string
   /** Le premier mot du nom choisi, affiché au survol (D9). */
   prenom: string
   couleur: string
-  /** L'atlas dont la scène le dessine ; le foulard à sa couleur le distingue d'un autre du même animal. */
-  animal: AnimalCollegue
+  /**
+   * L'atlas dont la scène le dessine : celui que le collègue a choisi (conv-1537), sinon celui tiré de
+   * son poste. Le foulard à sa couleur le distingue d'un autre du même animal.
+   */
+  animal: AnimalAgent
   /** L'identifiant du fil sur SON poste : il ne s'ouvre jamais ici (D10). */
   idFil: string
 }
@@ -101,8 +106,11 @@ export function animalDuPoste(poste: string): AnimalCollegue {
   return ANIMAUX_COLLEGUES[Math.floor(h / PALETTE_COLLEGUES.length) % ANIMAUX_COLLEGUES.length]
 }
 
-/** L'animal dont la scène dessine un agent : `null` pour les miens, qui restent des tanukis. */
-export function animalDeLAgent(a: AgentQuartier | AgentCollegue): AnimalCollegue | null {
+/**
+ * L'animal dont la scène dessine un agent de collègue ; `null` pour les miens, dessinés avec l'animal
+ * choisi dans MES réglages (`mon-animal.ts`), lu à chaque image.
+ */
+export function animalDeLAgent(a: AgentQuartier | AgentCollegue): AnimalAgent | null {
   return 'collegue' in a ? a.collegue.animal : null
 }
 
@@ -163,7 +171,8 @@ export function agentsDesCollegues(
     vus.add(`poste:${poste.toLowerCase()}`)
     const prenom = texte(c.prenom, PRENOM_MAX) ?? texte(c.nom, PRENOM_MAX) ?? poste
     const couleur = couleurDuPoste(poste)
-    const animal = animalDuPoste(poste)
+    // Son choix d'abord (conv-1537) ; un fichier d'une version d'avant le réglage n'en porte pas.
+    const animal = animalLisible(c.animal) ?? animalDuPoste(poste)
     const siens: AgentCollegue[] = []
     for (const a of Array.isArray(c.agents) ? c.agents : []) {
       const idFil = identifiant(a?.id)
