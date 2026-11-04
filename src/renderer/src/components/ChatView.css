@@ -6470,3 +6470,13 @@ button.chat-project-dot:disabled {
   color: var(--text);
   font-weight: 600;
 }
+/* ×3 ARMÉ (conv-1491) : la bascule de conv-1479 posait `.actif` sans aucune règle — le clic ne
+   changeait rien à l'écran, « marche pas ». Doré comme ∞ allumé ; sélecteur plus fort que les
+   règles de rangée des thèmes (:root[data-theme] .composer-input-row > :is(...)). */
+:root .composer-input-row > .composer-trois-facons.actif[aria-pressed='true'],
+:root .composer-input-row > .composer-trois-facons.actif[aria-pressed='true']:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--gold-clair);
+  border-color: color-mix(in srgb, var(--gold) 75%, transparent);
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+}
