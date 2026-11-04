@@ -392,6 +392,21 @@ export const scriptDuGeste = ({ geste, selecteur }) => {
       })()`
 }
 
+/**
+ * La chaîne de clics, TOUTES occurrences de `--click` comprises, jointes par ` >> `. Pure.
+ * Avant (conv-1530, 2026-11-04), seule la première était lue et la suivante ignorée sans erreur :
+ * `--click <menu> --click <onglet>` capturait le menu sur son onglet par défaut, en vert.
+ */
+export const chaineDeClics = (argv) => {
+  const etapes = argv.flatMap((mot, i) => {
+    const valeur = argv[i + 1]
+    return mot === '--click' && typeof valeur === 'string' && valeur && !valeur.startsWith('--')
+      ? [valeur]
+      : []
+  })
+  return etapes.length > 0 ? etapes.join(' >> ') : undefined
+}
+
 export const saisieDemandee = (argv) => {
   const i = argv.indexOf('--taper')
   const texte = i >= 0 ? argv[i + 1] : undefined
@@ -1479,7 +1494,7 @@ const main = async () => {
     mesuresDom = await mesurerDom()
   }
 
-  const declencheur = argument('--click')
+  const declencheur = chaineDeClics(process.argv)
   const vueAttendue = vueAttendueApresClics(vue, declencheur)
   let declencheurTrouve
   let elementsAvantClic
