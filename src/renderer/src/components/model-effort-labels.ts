@@ -18,6 +18,8 @@ const EFFORT_CLES: Record<string, Parameters<typeof traduireChatPanneaux>[0]> = 
   xhigh: 'effort.tresEleve'
 }
 const EFFORT_IDENTIQUES: Record<string, string> = {
+  // Cran unique des modèles sans niveau de réflexion (Grok…, conv-1517).
+  none: 'Standard',
   minimal: 'Minimal',
   max: 'Max',
   ultra: 'Ultra'
