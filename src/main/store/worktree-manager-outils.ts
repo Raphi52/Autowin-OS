@@ -1,0 +1,441 @@
+// Outils de module de worktree-manager.ts, déplacés tels quels (conv-1508, lot 3) : partagés par la
+// classe et ses modules voisins ; ré-exportés par worktree-manager.ts pour les appelants.
+import { execFile, execFileSync } from 'node:child_process'
+import type { EntreeBalayage } from './balayage-retention'
+import { realpathSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import type { WorktreeOperationWorkerLike } from './worktree-operation-client'
+import { LIGNES } from './worktree-manager-empreintes'
+import { WorktreeManager } from './worktree-manager'
+
+export const SAFE_ID = /^[A-Za-z0-9_-]+$/
+
+/** Un SHA git tel que `rev-parse` le rend : c'est ce qu'on accepte comme adresse de travail. */
+export const HEX_SHA = /^[0-9a-f]{7,40}$/i
+export const GIT_COMMAND_TIMEOUT_MS = Number(process.env.AUTOWIN_GIT_TIMEOUT_MS ?? 180_000)
+
+/**
+ * Budget de l'inventaire de récupération, distinct de celui d'une commande git.
+ *
+ * MESURÉ sur ce dépôt : cet inventaire balaie 52 copies, chacune avec plusieurs sous-processus git —
+ * le seul balayage des copies abandonnées pesait 19,7 s, et la réconciliation complète ~23 s. Avec le
+ * budget d'une commande unique (32 s), il était interrompu à mi-course et la récupération repartait en
+ * échec. Rien n'attend ce résultat : il alimente une vue, pas un chemin bloquant. Cinq minutes est
+ * donc large sans être infini — un worker vraiment pendu reste tué.
+ */
+export const INVENTAIRE_RECUPERATION_TIMEOUT_MS = 300_000
+
+/**
+ * Budget de la passe de retention confiee au worker : une commande `git cherry` PAR ref, en serie.
+ * Mesure du 2026-10-16 sur ce depot : 77 refs, 12 s a vide (148 ms par `git cherry` en mediane).
+ * Rien n'attend ce rapport (il alimente une vue, une fois par heure) : le budget de l'inventaire
+ * de recuperation convient, et un worker vraiment pendu reste tue.
+ */
+export const PASSE_RETENTION_TIMEOUT_MS = INVENTAIRE_RECUPERATION_TIMEOUT_MS
+/**
+ * `finalize` n'est pas UNE commande git, c'est une SEQUENCE : commit dans la copie, fusion dans la
+ * base, crochets du depot, puis suppression du dossier de travail. Lui donner le budget d'une seule
+ * commande (32 s) est la meme erreur de CATEGORIE que celle deja corrigee pour l'inventaire de
+ * recuperation. Mesure du 2026-08-27 (conv-1423) : la fusion a bien atterri dans `main`
+ * (`acfe64dd`, 09:09:50) et le client a coupe pendant le rangement, a 09:10:21 — le run est reparti
+ * en `merge-failed` alors que le travail etait publie.
+ */
+export const FINALIZE_TIMEOUT_MS = 300_000
+/**
+ * Message du commit qui transporte le travail d'une copie isolée vers la branche de l'utilisateur.
+ *
+ * Le préfixe `agent <id>` est CONSERVÉ : des tests et la reprise repèrent ces commits par lui. On lui
+ * ajoute le résumé de la tâche (première ligne non vide, sans caractère de contrôle, ≤ 72
+ * caractères) pour que l'historique dise CE QUI a changé — `agent run-xxx-1` seul ne disait rien
+ * (conv-710).
+ * fix-ok: cause mesurée — les deux commits (finalize, commitCopyIfDirty) codaient en dur `agent ${agentId}` ; test rouge (3 échecs) sans ce helper, vert avec.
+ */
+export function messageCommitAgent(agentId: string, task?: string): string {
+  const premiere = (task ?? '')
+    .split(/\r?\n/)
+    .map((ligne) =>
+      Array.from(ligne, (c) => (c.charCodeAt(0) < 0x20 || c.charCodeAt(0) === 0x7f ? ' ' : c))
+        .join('')
+        .replace(/\s+/g, ' ')
+        .trim()
+    )
+    .find((ligne) => ligne.length > 0)
+  if (!premiere) return `agent ${agentId}`
+  const resume = premiere.length > 72 ? `${premiere.slice(0, 71).trimEnd()}…` : premiere
+  return `agent ${agentId}: ${resume}`
+}
+
+export function assertSafeId(value: string, label: string): void {
+  if (!SAFE_ID.test(value))
+    throw new Error(`${label} invalide (caractères non autorisés): ${value}`)
+}
+
+/**
+ * Forme COMPARABLE d'un chemin : résolue (jonctions/symlinks Windows, `C:\Users` vs `C:\USERS`,
+ * chemins UNC), séparateurs unifiés, casse neutralisée, slash final retiré. Sans cette
+ * normalisation, deux écritures du MÊME `.git` (une jonction, une casse différente) se comparent
+ * comme différentes → la garde « copie étrangère » bloquerait une copie parfaitement légitime.
+ * Si le chemin n'existe pas (encore), on retombe sur la forme brute normalisée.
+ */
+export function canonicalPath(path: string): string {
+  let resolved = path
+  try {
+    resolved = realpathSync.native ? realpathSync.native(path) : realpathSync(path)
+  } catch {
+    resolved = path
+  }
+  return resolve(resolved).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+}
+
+export function shellPath(path: string): string {
+  return path.replace(/\\/g, '/')
+}
+
+export function shellQuote(value: string): string {
+  return "'" + value.replace(/'/g, "'\\''") + "'"
+}
+
+/** Exécuteur git injectable (tests) : renvoie stdout ; jette avec {status, stdout, stderr} si échec. */
+export interface GitRunner {
+  (repo: string, args: string[]): string
+}
+
+export const defaultGit: GitRunner = (repo, args) => {
+  const stdout = execFileSync('git', args, {
+    cwd: repo,
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: GIT_COMMAND_TIMEOUT_MS,
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
+  return args.includes('-z') ? stdout : stdout.trim()
+}
+
+export function parseNullSeparatedPaths(stdout: string): string[] {
+  return stdout.split('\0').filter((path) => path.length > 0)
+}
+
+/** Comme defaultGit mais ne jette PAS : renvoie code + sorties (pour détecter un conflit de merge). */
+export function tryGit(
+  repo: string,
+  args: string[]
+): { code: number; stdout: string; stderr: string } {
+  try {
+    const stdout = execFileSync('git', args, {
+      cwd: repo,
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: GIT_COMMAND_TIMEOUT_MS,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    return { code: 0, stdout, stderr: '' }
+  } catch (err) {
+    const e = err as { status?: number; stdout?: Buffer | string; stderr?: Buffer | string }
+    return {
+      code: e.status ?? 1,
+      stdout: e.stdout?.toString() ?? '',
+      stderr: e.stderr?.toString() ?? ''
+    }
+  }
+}
+
+/**
+ * MEME CONTRAT QUE `tryGit`, MAIS SANS TENIR LA BOUCLE D'EVENEMENTS.
+ *
+ * Mesure du 2026-09-08 (`gels.jsonl`, ligne 10:23:55) : le premier passage du balayage de retention
+ * lance UN `git cherry` par ref de secours -- 97 appels ce jour-la -- en `execFileSync`. Total :
+ * 11 720 ms de fenetre figee, pendant la construction de la fenetre, donc en plein demarrage. Le
+ * travail lui-meme est legitime ; c'est sa forme SYNCHRONE sur le thread principal qui gele l'app.
+ *
+ * Rien d'autre ne change : memes arguments, meme repertoire, meme timeout, meme forme de reponse.
+ */
+export function tryGitAsync(
+  repo: string,
+  args: string[]
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    execFile(
+      'git',
+      args,
+      { cwd: repo, encoding: 'utf8', windowsHide: true, timeout: GIT_COMMAND_TIMEOUT_MS },
+      (erreur, stdout, stderr) => {
+        const statut = (erreur as { code?: number } | null)?.code
+        resolve({
+          code: erreur ? (typeof statut === 'number' ? statut : 1) : 0,
+          stdout: String(stdout ?? ''),
+          stderr: String(stderr ?? '')
+        })
+      }
+    )
+  })
+}
+
+/** `git status` de la base — une seule source, partagée par la lecture sync et async (conv-1055). */
+export const ARGS_STATUT_DE_LA_BASE = [
+  'status',
+  '--porcelain=v1',
+  '-z',
+  '--untracked-files=all'
+] as const
+
+/** `git worktree remove` d'une copie — une seule source, partagee par le retrait sync et async. */
+export function argsDeRetraitDeCopie(path: string, force: boolean): string[] {
+  return ['worktree', 'remove', ...(force ? ['--force'] : []), path]
+}
+
+/** Les refs que le balayage de retention examine — une seule source, partagee sync/async. */
+export const ARGS_REFS_RETENTION = [
+  'for-each-ref',
+  '--format=%(refname) %(objectname) %(committerdate:unix)',
+  'refs/heads/autowin/',
+  /*
+   * LES BRANCHES DE SECOURS VIVENT SUR LE SERVEUR, pas en local : ZERO `refs/heads/autowin/` sur ce
+   * depot le 2026-09-08, et 62 sous `refs/remotes/origin/autowin/`. Sans cette ligne le balayage
+   * ignorait exactement le stock qui a motive ce chantier. Un motif a etoile ne filtre PAS avec
+   * `for-each-ref` (verifie : rend 0) -- on prend tout `refs/remotes/` et le filtre de famille
+   * ecarte le reste.
+   */
+  'refs/remotes/',
+  'refs/autowin/'
+]
+
+export type CandidatRetention = { nom: string; sha: string; famille: string; ageMs?: number }
+
+/** Ce que git sait d'une ref de retention — la forme qui traverse le worker (aucune fonction). */
+export type VerdictRetention = { candidat: CandidatRetention; apporteQuelqueChose: boolean }
+
+/** Lit la sortie de `for-each-ref` et rend les refs retenues, avec leur famille et leur age. */
+export function refsDeRetention(stdout: string, maintenant: number): CandidatRetention[] {
+  const candidats: CandidatRetention[] = []
+  for (const ligne of stdout.split(LIGNES)) {
+    const [refname, sha, ts] = ligne.trim().split(' ')
+    if (!refname || !sha) continue
+    const estBranche =
+      refname.startsWith('refs/heads/autowin/') ||
+      /^refs[/]remotes[/][^/]+[/]autowin[/]/.test(refname)
+    const famille = estBranche ? 'branche' : (WorktreeManager.familleDeRefAutowin(refname) ?? '')
+    if (!famille) continue
+    const secondes = Number(ts)
+    candidats.push({
+      nom: refname,
+      sha,
+      famille,
+      ...(Number.isFinite(secondes) ? { ageMs: maintenant - secondes * 1_000 } : {})
+    })
+  }
+  return candidats
+}
+
+/** Compose l'entree de balayage — meme forme quelle que soit la voie qui a pose la question a git. */
+export function entreeDeRetention(
+  candidat: CandidatRetention,
+  apporteQuelqueChose: boolean,
+  consigne: (sha: string) => boolean
+): EntreeBalayage {
+  return {
+    nom: candidat.nom,
+    famille: candidat.famille,
+    apporteQuelqueChose,
+    shaConsigne: consigne(candidat.sha),
+    ...(candidat.ageMs === undefined ? {} : { ageMs: candidat.ageMs })
+  }
+}
+
+/**
+ * Rend une exception de finalisation LISIBLE par celui qui devra reparer le run.
+ *
+ * Mesure le 2026-08-27 (conv-1427) : un `catch` sans parametre remplacait l'erreur reelle par une
+ * phrase constante. Le run - vert, juge VALIDE, 2,47 $ - s'est clos en `red` sur « La finalisation
+ * Git a echoue de facon inattendue. », et plus personne, ni l'utilisateur ni la trace, ne pouvait
+ * savoir ce qui avait echoue. La categorie (`merge-failed`) survivait ; la cause etait jetee.
+ *
+ * On garde la phrase - elle nomme la categorie - et on lui rend son complement : le message, puis
+ * le premier cadre de pile, qui suffit a situer le point de rupture. Borne a 600 caracteres : ce
+ * `detail` traverse le ledger et l'UI, une pile entiere y serait illisible.
+ */
+export function detailFinalisationJetee(erreur: unknown): string {
+  const prefixe = 'La finalisation Git a échoué de façon inattendue'
+  const message =
+    erreur instanceof Error
+      ? erreur.message
+      : typeof erreur === 'string'
+        ? erreur
+        : (() => {
+            try {
+              return JSON.stringify(erreur) ?? String(erreur)
+            } catch {
+              return String(erreur)
+            }
+          })()
+  const cadre =
+    erreur instanceof Error && erreur.stack
+      ? (erreur.stack
+          .split(/\r?\n/)
+          .map((ligne) => ligne.trim())
+          .find((ligne) => ligne.startsWith('at ')) ?? '')
+      : ''
+  const corps = [message, cadre].filter((part) => part.length > 0).join(' — ')
+  if (!corps) return prefixe + '.'
+  const texte = prefixe + ' : ' + corps
+  return texte.length > 600 ? texte.slice(0, 597) + '...' : texte
+}
+
+export interface WorktreeManagerOptions {
+  baseRepo: string
+  worktreeRoot: string
+  /** Branche de base sur laquelle fusionner (défaut : la branche courante du repo). */
+  baseBranch?: string
+  /** En production, refuse un job de mutation si origin/main|master ne peut pas être vérifié. */
+  requireCanonicalRemote?: boolean
+  git?: GitRunner
+  /** tryGit injectable (tests) ; défaut = wrapper execFileSync non-jetant. */
+  tryGitFn?: typeof tryGit
+  /**
+   * Pendant ASYNCHRONE de `tryGitFn`, pour les gestes qui ne doivent pas tenir la boucle (retrait
+   * d'une copie par le balayage horaire). Défaut : `tryGitAsync` — sauf si un `tryGitFn` a été
+   * injecté seul, auquel cas c'est LUI qui répond : un test qui simule git le simule partout.
+   */
+  tryGitAsyncFn?: typeof tryGitAsync
+  /** Suppression disque injectable pour simuler les verrous Windows dans les tests. */
+  removeDirFn?: (path: string) => void
+  /**
+   * Pendant ASYNCHRONE de `removeDirFn`, pour le retrait disque du balayage horaire (heal conv-1115 :
+   * 153,8 s de fenêtre figée sur une copie supprimée en synchrone). Défaut : `supprimerArbreAsync` —
+   * sauf si un `removeDirFn` a été injecté seul, auquel cas c'est LUI qui répond : un test qui
+   * simule le disque le simule partout (même règle que `tryGitAsyncFn`).
+   */
+  removeDirAsyncFn?: (path: string) => Promise<void>
+  /** Publication atomique du verrou index, injectable pour les tests de crash. */
+  linkFileFn?: (existingPath: string, newPath: string) => void
+  /** Suppression du verrou index, injectable pour les tests de contention Windows. */
+  removeIndexLockFn?: (path: string) => void
+  /** Identité stable du processus (démarrage + exécutable), injectable pour les tests. */
+  processIdentityFn?: (pid: number) => string | null | undefined
+  nowFn?: () => number
+  /** Désactive le client worker à l'intérieur du worker lui-même. */
+  disableAsyncOperations?: boolean
+  /**
+   * Fabrique du worker d'opérations, injectable (tests) : fournie, elle crée le client même sans
+   * fichier worker compilé et même avec un git simulé — c'est le test qui décide ce que répond le
+   * worker.
+   */
+  operationWorkerFactory?: () => WorktreeOperationWorkerLike
+  operationTimeoutMs?: number
+}
+
+export const SPAWN_INTENT_MAX_AGE_MS = 2 * 60 * 1_000
+export const COMPENSATION_INDEX_ACQUIRE_MAX_AGE_MS = 5 * 60 * 1_000
+export const COMPENSATION_INDEX_MARKER_SWEEP_LIMIT = 256
+
+/**
+ * Âge minimal avant qu'une copie agent SANS aucun travail récupérable soit considérée abandonnée.
+ * Marge délibérément large : un run vivant qui n'a pas encore posé son lease (fenêtre acquire →
+ * markSpawnIntent) reste hors de portée du balayage.
+ */
+export const ABANDONED_AGENT_MIN_AGE_MS = 24 * 60 * 60 * 1_000
+
+/**
+ * Age minimal pour une copie qui ne retient RIEN : aucun fichier non publie, et un HEAD deja
+ * contenu par une reference du depot. La supprimer ne peut donc rien perdre.
+ *
+ * POURQUOI CE SECOND SEUIL EXISTE. Mesure du 20/08 sur l'installation de l'utilisateur : 25 copies
+ * pour 670 Mo, dont 14 propres et entierement contenues dans `main` — donc sans le moindre enjeu.
+ * Aucune n'etait ramassable : creees entre 07:57 et 19:01, toutes avaient moins de 24 h. Une journee
+ * de travail produit une copie par `edit_file` (~33 Mo) et le seul mecanisme capable de les rendre
+ * refusait de les regarder avant le lendemain. L'utilisateur l'a nomme : « une usine a worktrees
+ * abandonnes ».
+ *
+ * POURQUOI 3 H ET NON 30 MIN. Le delai de 24 h ne protege pas seulement la fenetre
+ * `acquire → markSpawnIntent` : il couvre aussi un run VIVANT mais momentanement inactif, dont la
+ * mtime cesse d'avancer. Une copie propre et deja publiee est indiscernable d'un residu SAUF par le
+ * bail PID (`hasActiveProcesses`). Descendre a quelques minutes ferait donc reposer la securite sur
+ * la seule fraicheur de ce bail — et un bail perime apres un crash supprimerait le bureau d'un agent
+ * au travail, ce qui serait bien pire que du disque perdu. Trois heures laissent une marge large
+ * au-dessus de toute verification longue, tout en vidant l'usine dans la journee.
+ */
+export const RESIDU_SANS_ENJEU_MIN_AGE_MS = 3 * 60 * 60 * 1_000
+
+/**
+ * L'isolation des opérations Git dans un worker : ACTIVE, et il a fallu deux correctifs pour ça.
+ *
+ * Elle était éteinte depuis un moment, par ACCIDENT : le chemin du worker était calculé depuis
+ * `__dirname`, qui vaut `out/main/chunks` pour ce module (le bundler l'émet dans son propre morceau)
+ * alors que le worker vit dans `out/main`. `existsSync` échouait donc toujours, et comme cette présence
+ * est la condition de l'isolation, tout le travail Git repassait sur le fil principal sans un mot.
+ *
+ * Une fois la résolution corrigée, l'activer CASSAIT la récupération : un run restauré au lieu de 215.
+ * Deux causes, mesurées et corrigées séparément :
+ *  - une seule copie au lien Git mort faisait échouer l'inventaire ENTIER — `recoveryInventory` ne
+ *    tolérait pas la panne copie par copie, contrairement au chemin synchrone ;
+ *  - l'inventaire recevait le budget d'UNE commande git (32 s) alors qu'il balaie 52 copies. Il était
+ *    interrompu à mi-course, avec le message exact « interrompu après 32000 ms » : la mesure disait
+ *    vrai, c'est la limite qui était de la mauvaise catégorie.
+ *
+ * PREUVE d'équivalence, faite AVANT d'activer : les deux chemins restaurent exactement les mêmes 215
+ * runs, identifiant par identifiant — 0 manquant, 0 en plus, comparé par différence d'ensembles et non
+ * par un compte. Et la latence IPC retombe au plancher : médiane 2 ms, max 1,3 s, contre 3,9 s avec le
+ * travail sur le fil principal et 23,9 s avant tout report.
+ *
+ * Le drapeau qui figeait l'isolation a été RETIRÉ plutôt que passé à `true` : une constante que rien ne
+ * bascule est un faux réglage. La vraie porte de sortie existe déjà et sert aux tests —
+ * `disableAsyncOperations`.
+ */
+
+/**
+ * Où trouver `worktree-operation-worker.js` depuis le module qui le lance.
+ *
+ * Ce n'est pas de la défense excessive, c'est un défaut CONSTATÉ. `WorktreeManager` est assez gros pour
+ * que le bundler l'émette dans son propre morceau, `out/main/chunks/worktree-manager-*.js`, tandis que
+ * le worker reste à `out/main/worktree-operation-worker.js`. Le chemin calculé depuis `__dirname`
+ * désignait donc `out/main/chunks/worktree-operation-worker.js`, qui n'existe pas — et comme la
+ * présence du worker est justement la CONDITION de l'isolation, celle-ci était silencieusement
+ * éteinte. Aucune erreur, aucun avertissement : tout le travail git repassait sur le fil principal.
+ *
+ * MESURÉ, c'était l'origine des ~23 s de blocage au démarrage : avec l'isolation réellement active,
+ * l'inventaire de récupération est calculé dans le worker et la réconciliation n'exécute plus un seul
+ * `git` sur le fil principal.
+ *
+ * On remonte d'un cran, pas plus : `out/main/chunks` → `out/main` couvre la mise en morceaux sans
+ * transformer une résolution en recherche à l'aveugle.
+ */
+export function resoudreCheminWorker(
+  dossierModule: string,
+  existe: (chemin: string) => boolean
+): string {
+  const candidats = [
+    join(dossierModule, 'worktree-operation-worker.js'),
+    join(dossierModule, '..', 'worktree-operation-worker.js')
+  ]
+  return candidats.find((candidat) => existe(candidat)) ?? candidats[0]
+}
+
+/**
+ * Le CHEMIN d'une ligne `git status --porcelain`, sans son statut.
+ *
+ * Couper trois caracteres en dur ne marche pas : la sortie est trimee globalement, donc la PREMIERE
+ * ligne perd son espace de tete et se retrouve decalee d'un cran. Defaut introduit puis mesure le
+ * 2026-08-26 — l'apercu rendait « rc/renderer/... » au lieu de « src/renderer/... », soit un chemin
+ * qui n'existe nulle part. Un renommage (`R  ancien -> nouveau`) rend le NOUVEAU nom, seul utile.
+ */
+export function cheminDeStatutPorcelain(ligne: string): string {
+  const sansStatut = ligne.replace(/^[ADMRCU?! ]{1,2}[ ]+/, '')
+  const fleche = sansStatut.lastIndexOf(' -> ')
+  return (fleche >= 0 ? sansStatut.slice(fleche + 4) : sansStatut).trim()
+}
+
+/**
+ * Rattache des fonctions `function f(this: WorktreeManager, ...)` au prototype comme le ferait une
+ * méthode de classe (non énumérable, modifiable), pour découper la classe sans changer ses appels
+ * (conv-1508, lot 3).
+ */
+export function attacherMethodes(proto: object, methodes: Record<string, unknown>): void {
+  for (const [nom, fn] of Object.entries(methodes)) {
+    if (typeof fn !== 'function') continue
+    Object.defineProperty(proto, nom, {
+      value: fn,
+      writable: true,
+      enumerable: false,
+      configurable: true
+    })
+  }
+}

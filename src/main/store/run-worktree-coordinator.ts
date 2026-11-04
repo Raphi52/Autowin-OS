@@ -262,6 +262,75 @@ function stateFromFinalize(res: FinalizeResult): WorktreeState {
 }
 
 /**
+ * L'etat suivi d'un run RECUPERE apres redemarrage, rebati depuis son manifeste. Une seule
+ * definition pour `finalizeRecovered` et `finalizeRecoveredAsync`, qui la recopiaient champ par champ
+ * (conv-1508) ; `files` est calcule par l'appelant, a la demande, comme avant.
+ */
+function trackedRecupere(
+  runId: string,
+  record: WorktreeRunRecord | undefined,
+  timestamp: number,
+  files: Tracked['files']
+): Tracked {
+  return {
+    runId,
+    agentName: record?.agentName ?? 'Agent récupéré',
+    isMutation: true,
+    startedAtMs: record?.createdAtMs ?? timestamp,
+    state: 'working',
+    files,
+    task: record?.task,
+    role: record?.role,
+    conversationId: record?.conversationId,
+    turnId: record?.turnId,
+    causalWatchPaths: record?.causalWatchPaths,
+    worktreePath: record?.worktreePath,
+    worktreeAvailable: record?.worktreeAvailable,
+    baseBranch: record?.baseBranch,
+    baseSha: record?.baseSha,
+    sourceSha: record?.sourceSha,
+    canonicalBaseRef: record?.canonicalBaseRef,
+    excludedDirtyFiles: record?.excludedDirtyFiles,
+    excludedDirtyFileCount: record?.excludedDirtyFileCount,
+    excludedDirtyFilesTruncated: record?.excludedDirtyFilesTruncated,
+    conflictBaseSha: record?.conflictBaseSha,
+    conflictAgentSha: record?.conflictAgentSha,
+    publishedSha: record?.publishedSha,
+    publicationAgentSha: record?.publicationAgentSha,
+    publicationBaseSha: record?.publicationBaseSha,
+    causalPublicationDeliveredAtMs: record?.causalPublicationDeliveredAtMs,
+    attentionReason: record?.attentionReason as Tracked['attentionReason'],
+    verdict: record?.verdict,
+    publication: record?.publication,
+    recovered: true,
+    detail: record?.detail
+  }
+}
+
+/**
+ * Le contexte que la reprise soumet a `validateRecoveryContext(Async)`, tire du manifeste. Une seule
+ * definition pour les deux variantes de `finalizeRecovered`, qui le recopiaient (conv-1508).
+ */
+function contexteDeValidationRecuperee(
+  record: WorktreeRunRecord
+): Parameters<WorktreeManager['validateRecoveryContext']>[1] {
+  const recoveryPublication = record.publication === 'complete' ? 'published' : record.publication
+  const recoveryPublishedSha =
+    record.publishedSha ?? (record.publication === 'complete' ? record.baseSha : undefined)
+  return {
+    worktreePath: record.worktreePath,
+    baseBranch: record.baseBranch,
+    baseSha: record.baseSha,
+    sourceSha: record.sourceSha,
+    canonicalBaseRef: record.canonicalBaseRef,
+    excludedDirtyFiles: record.excludedDirtyFiles,
+    publication: recoveryPublication as 'pending' | 'integrating' | 'published' | 'cleanup-pending',
+    ...(recoveryPublishedSha ? { publishedSha: recoveryPublishedSha } : {}),
+    ...(record.publicationAgentSha ? { agentSha: record.publicationAgentSha } : {})
+  }
+}
+
+/**
  * Le nombre d'essais n'est plus un chiffre isole : il DECOULE du bareme d'attentes
  * (`delai-de-reprise.ts`). Deux verites separees auraient diverge au premier reglage -- l'une
  * disant « six essais », l'autre en proposant sept delais.
@@ -3002,59 +3071,16 @@ export class RunWorktreeCoordinator {
     if (this.stateStore && record?.verdict !== 'green') return
     const timestamp = this.now()
     const existing = this.runs.get(runId)
-    const tracked: Tracked = existing ?? {
-      runId,
-      agentName: record?.agentName ?? 'Agent récupéré',
-      isMutation: true,
-      startedAtMs: record?.createdAtMs ?? timestamp,
-      state: 'working',
-      files: this.changedFiles(runId),
-      task: record?.task,
-      role: record?.role,
-      conversationId: record?.conversationId,
-      turnId: record?.turnId,
-      causalWatchPaths: record?.causalWatchPaths,
-      worktreePath: record?.worktreePath,
-      worktreeAvailable: record?.worktreeAvailable,
-      baseBranch: record?.baseBranch,
-      baseSha: record?.baseSha,
-      sourceSha: record?.sourceSha,
-      canonicalBaseRef: record?.canonicalBaseRef,
-      excludedDirtyFiles: record?.excludedDirtyFiles,
-      excludedDirtyFileCount: record?.excludedDirtyFileCount,
-      excludedDirtyFilesTruncated: record?.excludedDirtyFilesTruncated,
-      conflictBaseSha: record?.conflictBaseSha,
-      conflictAgentSha: record?.conflictAgentSha,
-      publishedSha: record?.publishedSha,
-      publicationAgentSha: record?.publicationAgentSha,
-      publicationBaseSha: record?.publicationBaseSha,
-      causalPublicationDeliveredAtMs: record?.causalPublicationDeliveredAtMs,
-      attentionReason: record?.attentionReason as Tracked['attentionReason'],
-      verdict: record?.verdict,
-      publication: record?.publication,
-      recovered: true,
-      detail: record?.detail
-    }
+    const tracked: Tracked =
+      existing ?? trackedRecupere(runId, record, timestamp, this.changedFiles(runId))
     tracked.endedAtMs = timestamp
     this.runs.set(runId, tracked)
     let recoveryDecision: 'resume-publication' | 'cleanup-only' | undefined
     if (record) {
-      const recoveryPublication =
-        record.publication === 'complete' ? 'published' : record.publication
-      const recoveryPublishedSha =
-        record.publishedSha ?? (record.publication === 'complete' ? record.baseSha : undefined)
-      const validation = this.manager.validateRecoveryContext(runId, {
-        worktreePath: record.worktreePath,
-        baseBranch: record.baseBranch,
-        baseSha: record.baseSha,
-        sourceSha: record.sourceSha,
-        canonicalBaseRef: record.canonicalBaseRef,
-        excludedDirtyFiles: record.excludedDirtyFiles,
-        publication: recoveryPublication as
-          'pending' | 'integrating' | 'published' | 'cleanup-pending',
-        ...(recoveryPublishedSha ? { publishedSha: recoveryPublishedSha } : {}),
-        ...(record.publicationAgentSha ? { agentSha: record.publicationAgentSha } : {})
-      })
+      const validation = this.manager.validateRecoveryContext(
+        runId,
+        contexteDeValidationRecuperee(record)
+      )
       if (!validation.ok) {
         tracked.state = 'blocked'
         tracked.attentionReason = 'merge-failed'
@@ -3194,59 +3220,13 @@ export class RunWorktreeCoordinator {
     if (this.stateStore && record?.verdict !== 'green') return
     const timestamp = this.now()
     const existing = this.runs.get(runId)
-    const tracked: Tracked = existing ?? {
-      runId,
-      agentName: record?.agentName ?? 'Agent récupéré',
-      isMutation: true,
-      startedAtMs: record?.createdAtMs ?? timestamp,
-      state: 'working',
-      files: await this.changedFilesAsync(runId),
-      task: record?.task,
-      role: record?.role,
-      conversationId: record?.conversationId,
-      turnId: record?.turnId,
-      causalWatchPaths: record?.causalWatchPaths,
-      worktreePath: record?.worktreePath,
-      worktreeAvailable: record?.worktreeAvailable,
-      baseBranch: record?.baseBranch,
-      baseSha: record?.baseSha,
-      sourceSha: record?.sourceSha,
-      canonicalBaseRef: record?.canonicalBaseRef,
-      excludedDirtyFiles: record?.excludedDirtyFiles,
-      excludedDirtyFileCount: record?.excludedDirtyFileCount,
-      excludedDirtyFilesTruncated: record?.excludedDirtyFilesTruncated,
-      conflictBaseSha: record?.conflictBaseSha,
-      conflictAgentSha: record?.conflictAgentSha,
-      publishedSha: record?.publishedSha,
-      publicationAgentSha: record?.publicationAgentSha,
-      publicationBaseSha: record?.publicationBaseSha,
-      causalPublicationDeliveredAtMs: record?.causalPublicationDeliveredAtMs,
-      attentionReason: record?.attentionReason as Tracked['attentionReason'],
-      verdict: record?.verdict,
-      publication: record?.publication,
-      recovered: true,
-      detail: record?.detail
-    }
+    const tracked: Tracked =
+      existing ?? trackedRecupere(runId, record, timestamp, await this.changedFilesAsync(runId))
     tracked.endedAtMs = timestamp
     this.runs.set(runId, tracked)
     let recoveryDecision: 'resume-publication' | 'cleanup-only' | undefined
     if (record) {
-      const recoveryPublication =
-        record.publication === 'complete' ? 'published' : record.publication
-      const recoveryPublishedSha =
-        record.publishedSha ?? (record.publication === 'complete' ? record.baseSha : undefined)
-      const context = {
-        worktreePath: record.worktreePath,
-        baseBranch: record.baseBranch,
-        baseSha: record.baseSha,
-        sourceSha: record.sourceSha,
-        canonicalBaseRef: record.canonicalBaseRef,
-        excludedDirtyFiles: record.excludedDirtyFiles,
-        publication: recoveryPublication as
-          'pending' | 'integrating' | 'published' | 'cleanup-pending',
-        ...(recoveryPublishedSha ? { publishedSha: recoveryPublishedSha } : {}),
-        ...(record.publicationAgentSha ? { agentSha: record.publicationAgentSha } : {})
-      }
+      const context = contexteDeValidationRecuperee(record)
       const validation = this.manager.validateRecoveryContextAsync
         ? await this.manager.validateRecoveryContextAsync(runId, context)
         : this.manager.validateRecoveryContext(runId, context)
