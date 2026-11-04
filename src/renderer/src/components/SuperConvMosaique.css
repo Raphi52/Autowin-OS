@@ -237,7 +237,7 @@
     100% 100%,
     100% 100%;
   box-shadow: none;
-  animation: scm-reflet 3.4s steps(34) infinite;
+  animation: scm-reflet 3.4s linear infinite;
 }
 .scm-bloc.scm-etat--echec {
   background: color-mix(in srgb, var(--scm-c) 14%, transparent);

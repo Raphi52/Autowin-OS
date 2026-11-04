@@ -4812,7 +4812,7 @@ button.chat-project-dot:disabled {
   /* Les trois indicateurs d'une étape en cours (flux du rail, pouls de la pastille, reflet de la
      jauge) avancent PAR CRANS DE 100 MS, calés sur l'horloge commune (animations-par-crans.ts) :
      en continu, chacun faisait recomposer toute la fenêtre 60 fois par seconde (conv-1075). */
-  animation: etape-flux 1.2s steps(12) infinite;
+  animation: etape-flux 1.2s linear infinite;
 }
 /* La PASTILLE : opaque, elle cache le rail qui passe dessous. */
 .etape-pastille {
@@ -4848,7 +4848,7 @@ button.chat-project-dot:disabled {
   background: linear-gradient(135deg, var(--capsule-froid), var(--capsule-chaud));
   box-shadow: none;
   /* Par crans de 100 ms : 0,7 s par demi-battement = 7 crans (voir le rail, ci-dessus). */
-  animation: etape-pouls 1.4s steps(7) infinite;
+  animation: etape-pouls 1.4s linear infinite;
 }
 .etape-valeur {
   padding: 1px 0 3px 8px;
@@ -4920,7 +4920,7 @@ button.chat-project-dot:disabled {
     40% 100%,
     100% 100%;
   /* Par crans de 100 ms : 18 crans sur 1,8 s (voir le rail des étapes). */
-  animation: etape-reflet 1.8s steps(18) infinite;
+  animation: etape-reflet 1.8s linear infinite;
 }
 .etapes-pied-segment[data-statut='pending'] .etapes-pied-barre {
   background: repeating-linear-gradient(
