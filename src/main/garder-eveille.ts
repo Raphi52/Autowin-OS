@@ -11,7 +11,11 @@ export interface BloqueurDeVeille {
   stop(id: number): void
 }
 
-export function creerGardeEveil(bloqueur: () => BloqueurDeVeille | undefined) {
+export function creerGardeEveil(bloqueur: () => BloqueurDeVeille | undefined): {
+  prendre(): () => void
+  actif: () => boolean
+  jetons: () => number
+} {
   let tenus = 0
   let idBloqueur: number | undefined
   return {

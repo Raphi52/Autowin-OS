@@ -10,7 +10,7 @@ export const ECHECS_D_AFFILEE_MAX = 8
 
 export function creerCoupeBoucle(
   limites = { memeAppel: MEME_APPEL_MAX, echecs: ECHECS_D_AFFILEE_MAX }
-) {
+): { observer(outil: string, entree: unknown, echec: boolean, sortie: string): string | undefined } {
   const vus = new Map<string, number>()
   let echecs = 0
   return {

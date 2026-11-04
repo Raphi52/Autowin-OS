@@ -60,7 +60,10 @@ describe('advisorAccepte — table de la documentation Claude Code', () => {
 describe('appendClaudeSelectionArgs — drapeau --advisor', () => {
   it('accord accepté → `--advisor <modèle>` part', () => {
     const args: string[] = []
-    appendClaudeSelectionArgs(args, { model: 'claude-sonnet-5-5', advisorModel: 'claude-opus-5-5' })
+    appendClaudeSelectionArgs(args, {
+      model: 'claude-sonnet-5-5',
+      claude: { advisorModel: 'claude-opus-5-5' }
+    })
     expect(args.slice(0, 4)).toEqual([
       '--model',
       'claude-sonnet-5-5',
@@ -71,7 +74,10 @@ describe('appendClaudeSelectionArgs — drapeau --advisor', () => {
 
   it('accord refusé (Opus 5.5 + Sonnet 5.5) → aucun `--advisor` envoyé', () => {
     const args: string[] = []
-    appendClaudeSelectionArgs(args, { model: 'claude-opus-5-5', advisorModel: 'claude-sonnet-5-5' })
+    appendClaudeSelectionArgs(args, {
+      model: 'claude-opus-5-5',
+      claude: { advisorModel: 'claude-sonnet-5-5' }
+    })
     expect(args).not.toContain('--advisor')
   })
 
@@ -79,7 +85,7 @@ describe('appendClaudeSelectionArgs — drapeau --advisor', () => {
     const args: string[] = []
     appendClaudeSelectionArgs(args, {
       model: 'claude-sonnet-5-5',
-      advisorModel: 'claude-haiku-4-5'
+      claude: { advisorModel: 'claude-haiku-4-5' }
     })
     // Le reste de l'argv (`--autocompact` pour Sonnet 5.5) ne dépend pas de l'advisor.
     expect(args.slice(0, 2)).toEqual(['--model', 'claude-sonnet-5-5'])

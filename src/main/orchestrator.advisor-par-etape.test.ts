@@ -35,7 +35,7 @@ class AdvisorProvider implements ProviderAdapter {
     const noms = (options.systemBlocks ?? []).map((bloc) => bloc.name)
     this.demandes.push({
       bloc: noms.find((nom) => nom.startsWith('consigne:')) ?? '—',
-      advisor: options.advisorModel
+      advisor: options.claude?.advisorModel
     })
     const estJuge = options.model === 'juge'
     return {

@@ -40,13 +40,6 @@ export interface SendOptions {
   /** Modèle exact choisi dans Agents. */
   model?: string
   /**
-   * Modèle ADVISOR (Claude Code `--advisor`) : un modèle plus fort que l'agent consulte aux moments
-   * qui décident. Posé par l'étape (`phaseModel[étape].advisorModel`). Ne part que si l'accord avec
-   * `model` est dans la table de la doc (`claude-advisor.ts`) : hors table, le CLI tournerait sans
-   * advisor ou s'arrêterait au lancement, selon le cas.
-   */
-  advisorModel?: string
-  /**
    * Le fil (conversation) au nom duquel cet appel ÉDITE des fichiers. Le hook des agents s'en sert
    * pour réserver les fichiers édités et refuser ceux qu'un autre fil tient (conv-1083,
    * `shared/reservation-fichiers.ts`). Un run le porte déjà dans `execution.agentEnv`.
@@ -131,20 +124,34 @@ export interface SendOptions {
    */
   onJournal?: (token: string, journalPath: string) => void
   /**
-   * L'APPELANT sait relancer une commande shell que le CLI a coupée en fin de tour.
-   *
-   * Le CLI `-p` arrête les tâches de fond à la fin du tour (conv-528, conv-42) : leur résultat était
-   * perdu et l'utilisateur devait relancer lui-même. Seul le tour de CHAT sait rouvrir un tour de
-   * reprise dans la même conversation ; ce drapeau le dit. Absent, le provider garde l'avertissement
-   * « relance la demande » : il ne promet jamais une reprise que personne ne fera.
+   * Options que seul le CLI Claude comprend, lues par le seul `providers/claude.ts` (conv-1504,
+   * plan « Autowin héberge n'importe quel modèle ») : un autre moteur n'a pas à les connaître.
+   * `skillNodeTools` reste commun : Codex le lit aussi (`codex.ts`, `optionsMcpCodex`).
    */
-  relancerTachesDeFond?: boolean
-  /**
-   * Mesurer le contexte PAR CATEGORIE pendant l'appel (panneau « Contexte » du chat, conv-1000).
-   * Seul le tour de chat le demande : une phase de pipeline n'a pas d'ecran a renseigner. Un provider
-   * qui ne sait pas mesurer ignore le drapeau — le panneau garde alors la jauge simple.
-   */
-  mesurerContexte?: boolean
+  claude?: {
+    /**
+     * Modèle ADVISOR (Claude Code `--advisor`) : un modèle plus fort que l'agent consulte aux moments
+     * qui décident. Posé par l'étape (`phaseModel[étape].advisorModel`). Ne part que si l'accord avec
+     * `model` est dans la table de la doc (`claude-advisor.ts`) : hors table, le CLI tournerait sans
+     * advisor ou s'arrêterait au lancement, selon le cas.
+     */
+    advisorModel?: string
+    /**
+     * L'APPELANT sait relancer une commande shell que le CLI a coupée en fin de tour.
+     *
+     * Le CLI `-p` arrête les tâches de fond à la fin du tour (conv-528, conv-42) : leur résultat était
+     * perdu et l'utilisateur devait relancer lui-même. Seul le tour de CHAT sait rouvrir un tour de
+     * reprise dans la même conversation ; ce drapeau le dit. Absent, le provider garde l'avertissement
+     * « relance la demande » : il ne promet jamais une reprise que personne ne fera.
+     */
+    relancerTachesDeFond?: boolean
+    /**
+     * Mesurer le contexte PAR CATEGORIE pendant l'appel (panneau « Contexte » du chat, conv-1000).
+     * Seul le tour de chat le demande : une phase de pipeline n'a pas d'ecran a renseigner. Un provider
+     * qui ne sait pas mesurer ignore le drapeau — le panneau garde alors la jauge simple.
+     */
+    mesurerContexte?: boolean
+  }
   /** Mode agentique local, réservé à l'étape d'exécution d'une orchestration. */
   execution?: {
     cwd: string
