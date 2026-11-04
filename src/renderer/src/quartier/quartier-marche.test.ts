@@ -253,6 +253,96 @@ describe('un tanuki suit son agent', () => {
     }
   })
 
+  /**
+   * Demande (conv-1550) : « les personnages marchent sur l'eau, ils doivent marcher au bord du bassin pour
+   * aller se mettre dans leur spot dans l'eau ». Mesuré avant correction : la grille gardait une bande d'eau
+   * marchable le long des pierres, et les baigneurs y faisaient le tour du bassin.
+   */
+  describe("l'eau de l'onsen n'est pas un chemin (conv-1550)", () => {
+    const EAU = D.bassin ?? []
+    /** Dans l'eau, et pas seulement en frôlant son bord entre deux cases du rebord. */
+    const mouille = (m: ReturnType<typeof creerMarche>, X: number, Y: number): boolean => {
+      if (!m.dans(EAU, X, Y)) return false
+      for (let i = 0, j = EAU.length - 1; i < EAU.length; j = i++) {
+        const [ax, ay] = EAU[j]
+        const [bx, by] = EAU[i]
+        const l2 = (bx - ax) ** 2 + (by - ay) ** 2
+        const t = Math.max(0, Math.min(1, ((X - ax) * (bx - ax) + (Y - ay) * (by - ay)) / l2))
+        if (Math.hypot(X - ax - t * (bx - ax), Y - ay - t * (by - ay)) < 3) return false
+      }
+      return true
+    }
+
+    it("a l'eau relevée, et chaque baigneur y a sa ligne d'eau", () => {
+      expect(EAU.length).toBeGreaterThan(8)
+      const m = creerMarche(D, graine(5))
+      for (const p of BAINS) expect(m.dans(EAU, p.x, p.cl as number), `${p.x},${p.cl}`).toBe(true)
+    })
+
+    it("aucun trajet ne passe par l'eau, sauf le dernier pas qui entre à sa place", () => {
+      const m = creerMarche(D, graine(5))
+      const departs = [
+        [ENTREE[0], ENTREE[1]],
+        ...D.esc.map((e) => e.a as number[]),
+        ...D.postes.map((p) => [p.x, p.y])
+      ]
+      for (const b of BAINS)
+        for (const a of departs) {
+          if (a[0] === b.x && a[1] === b.y) continue
+          const c = m.chemin(a, [b.x, b.y], null, true)
+          // Le pas qui entre dans l'eau n'existe que si la place est dans l'eau.
+          const fin = m.dans(EAU, b.x, b.y) ? c.length - 1 : c.length
+          for (let k = 1; k < fin; k++)
+            for (let t = 0; t <= 1; t += 0.05) {
+              const X = c[k - 1][0] + (c[k][0] - c[k - 1][0]) * t
+              const Y = c[k - 1][1] + (c[k][1] - c[k - 1][1]) * t
+              expect(
+                mouille(m, X, Y),
+                `${a} vers ${b.x},${b.y} : ${X.toFixed(0)},${Y.toFixed(0)}`
+              ).toBe(false)
+            }
+          const f = c[c.length - 1]
+          expect(Math.hypot(f[0] - b.x, f[1] - b.y), `${a} vers ${b.x},${b.y}`).toBeLessThan(10)
+        }
+    }, 30_000)
+
+    it('le baigneur longe le bord, entre dans l’eau à sa place et en ressort par le bord le plus proche', () => {
+      const m = creerMarche(D, graine(5))
+      const liste = Array.from({ length: BAINS.length }, (_, i) => m.ajouter(`a${i}`, fini))
+      const nage = new Map(liste.map((w) => [w, 0]))
+      const avance = (): void => {
+        const avant = liste.map((w) => [w.x, w.y])
+        m.avance(IMAGE)
+        liste.forEach((w, k) => {
+          if (mouille(m, w.x, w.y) || mouille(m, avant[k][0], avant[k][1]))
+            nage.set(w, (nage.get(w) as number) + Math.hypot(w.x - avant[k][0], w.y - avant[k][1]))
+        })
+      }
+      for (
+        let i = 0;
+        i < 30 * 300 && liste.some((w) => w.metierIci === null || w.etat === 'va');
+        i++
+      )
+        avance()
+      // Le dernier arrivé s'assied à l'image suivante.
+      for (let i = 0; i < 30; i++) avance()
+      expect(liste.filter((w) => w.nom === 'ba')).toHaveLength(BAINS.length)
+      // Du rebord à la place la plus loin de la berge : un seul pas d'une cinquantaine de pixels.
+      for (const w of liste) expect(nage.get(w), `${w.id} pour entrer`).toBeLessThan(60)
+      for (const w of liste) {
+        nage.set(w, 0)
+        w.consigne = travail('lire')
+      }
+      // Au bain depuis plus de SEJOUR_MIN_S : chacun se lève et sort de l'eau.
+      for (let i = 0; i < 30 * (SEJOUR_MIN_S + 20); i++) avance()
+      for (const w of liste) {
+        expect(w.nom, `${w.id} est resté au bain`).not.toBe('ba')
+        expect(mouille(m, w.x, w.y), `${w.id} est resté dans l'eau`).toBe(false)
+        expect(nage.get(w), `${w.id} pour sortir`).toBeLessThan(60)
+      }
+    }, 60_000)
+  })
+
   it("ne laisse personne en tas quand l'onsen est plein", () => {
     const m = creerMarche(D, graine(5))
     const liste = Array.from({ length: 12 }, (_, i) => m.ajouter(`a${i}`, fini))
