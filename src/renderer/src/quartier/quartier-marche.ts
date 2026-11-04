@@ -94,6 +94,11 @@ export interface DonneesMarche {
   g: { x0: number; y0: number; pas: number; w: number; h: number; l: number; b: string }
   postes: PosteQuartier[]
   gestes?: Record<string, Geste>
+  /**
+   * L'eau de l'onsen, relevée sur la peinture au ras de ses pierres : on n'y marche pas (conv-1550). Le
+   * baigneur longe le bord jusqu'au rebord le plus proche de sa place, puis y entre en un pas.
+   */
+  bassin?: [number, number][]
 }
 
 type Point = number[] & { e?: number; sens?: number }
@@ -214,6 +219,14 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
         if (q < G.w) bits[j * G.w + q] = (v >> (3 - k)) & 1
       }
     }
+  // L'eau de l'onsen n'est pas un sol (conv-1550, « les personnages marchent sur l'eau ») : la grille gardait
+  // une bande d'eau le long des pierres, et les baigneurs y faisaient le tour du bassin. Ses cases en sortent ;
+  // seuls le pas qui entre à une place de bain et celui qui en sort s'y posent (`pied`).
+  const BASSIN = D.bassin ?? []
+  const dansBassin = (px: number, py: number): boolean => BASSIN.length > 2 && dans(BASSIN, px, py)
+  for (let j = 0; j < G.h; j++)
+    for (let i = 0; i < G.w; i++)
+      if (bits[j * G.w + i] && dansBassin(i * G.pas + G.x0, j * G.pas + G.y0)) bits[j * G.w + i] = 0
   const libreC = (i: number, j: number): boolean =>
     i >= 0 && j >= 0 && i < G.w && j < G.h && bits[j * G.w + i] === 1
   const libre = (px: number, py: number): boolean =>
@@ -425,6 +438,8 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
       i = k + 1
     }
     vide()
+    // Une place dans l'eau : le trajet s'arrête au rebord le plus proche, puis un seul pas y entre.
+    if (dansBassin(b[0], b[1])) o.push([b[0], b[1]])
     return o
   }
 
@@ -765,6 +780,18 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
     }
   }
 
+  /**
+   * Où il pose le pied : le sol, plus l'eau du bassin quand il y entre (dernier pas, vers une place dans
+   * l'eau) ou qu'il en sort (il y est encore). Personne d'autre n'y met un pied (conv-1550).
+   */
+  function pied(w: Tanuki, px: number, py: number): boolean {
+    if (libre(px, py)) return true
+    if (!dansBassin(px, py)) return false
+    const c = w.ch[w.i]
+    if (dansBassin(w.x, w.y)) return true
+    return c !== undefined && w.i === w.ch.length - 1 && dansBassin(c[0], c[1])
+  }
+
   function replanifier(w: Tanuki): void {
     if (!w.place) return
     w.ch = chemin([w.x, w.y], [w.place.x, w.place.y], w)
@@ -865,24 +892,24 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
     const v = w.vit * dt
     let X = w.x + nx * v
     let Y = w.y + ny * SP * v
-    if (!libre(X, Y)) {
+    if (!pied(w, X, Y)) {
       X = w.x + gx * v
       Y = w.y + gy * SP * v
       nx = gx
       ny = gy
     }
-    if (!libre(X, Y)) {
+    if (!pied(w, X, Y)) {
       const sx = w.x + gx * v
       const sy = w.y + gy * SP * v
-      if (Math.abs(gx) > 0.2 && libre(sx, w.y)) {
+      if (Math.abs(gx) > 0.2 && pied(w, sx, w.y)) {
         X = sx
         Y = w.y
-      } else if (Math.abs(gy) > 0.2 && libre(w.x, sy)) {
+      } else if (Math.abs(gy) > 0.2 && pied(w, w.x, sy)) {
         X = w.x
         Y = sy
       }
     }
-    if (libre(X, Y)) {
+    if (pied(w, X, Y)) {
       const dd = Math.hypot(X - w.x, (Y - w.y) / SP)
       w.x = X
       w.y = Y
@@ -893,7 +920,7 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
       // Coincé contre un coin : il se recentre sur sa case, d'où les droites du trajet sont sûres.
       const cx = Math.round((w.x - G.x0) / G.pas) * G.pas + G.x0
       const cy = Math.round((w.y - G.y0) / G.pas) * G.pas + G.y0
-      if (libre(cx, cy)) {
+      if (pied(w, cx, cy)) {
         w.x += (cx - w.x) * Math.min(1, dt * 8)
         w.y += (cy - w.y) * Math.min(1, dt * 8)
       }
