@@ -38,6 +38,9 @@ const TEXTES = {
       'Installez l’add-on blender-mcp dans Blender (Edit › Preferences › Add-ons › Install addon.py), puis cliquez « Connect » dans son panneau (onglet BlenderMCP), et activez ce serveur.',
     blenderAjouter: 'Ajouter Blender',
     blenderPresent: 'Déjà dans la liste',
+    imagesAide:
+      'Génère des images (OpenAI, Google Gemini ou Stable Diffusion). Ajouté inactif : saisissez votre clé dans la variable IMAGE_GENERATION_MCP_OPENAI_API_KEY ou IMAGE_GENERATION_MCP_GOOGLE_API_KEY de la ligne du serveur, puis activez-le. Source : github.com/pvliesdonk/image-generation-mcp.',
+    imagesAjouter: 'Ajouter la génération d’images',
     erreurLecture: 'Impossible de lire la liste des serveurs MCP.',
     erreurVariable: 'Variable mal formée (attendu NOM=valeur) : '
   },
@@ -63,6 +66,9 @@ const TEXTES = {
       'Install the blender-mcp add-on in Blender (Edit › Preferences › Add-ons › Install addon.py), click “Connect” in its panel (BlenderMCP tab), then enable this server.',
     blenderAjouter: 'Add Blender',
     blenderPresent: 'Already in the list',
+    imagesAide:
+      'Generates images (OpenAI, Google Gemini or Stable Diffusion). Added disabled: enter your key in the IMAGE_GENERATION_MCP_OPENAI_API_KEY or IMAGE_GENERATION_MCP_GOOGLE_API_KEY variable of the server row, then enable it. Source: github.com/pvliesdonk/image-generation-mcp.',
+    imagesAjouter: 'Add image generation',
     erreurLecture: 'Could not read the MCP server list.',
     erreurVariable: 'Malformed variable (expected NAME=value): '
   }
@@ -74,6 +80,16 @@ const SERVEUR_BLENDER: Serveur = {
   commande: 'uvx',
   args: ['blender-mcp'],
   env: {},
+  actif: false
+}
+
+/** Clés nommées et VIDES : l'utilisateur les remplit ici, rien n'est écrit dans le dépôt. */
+const SERVEUR_IMAGES: Serveur = {
+  id: 'images',
+  nom: 'Génération d’images',
+  commande: 'uvx',
+  args: ['--from', 'image-generation-mcp[all]', 'image-generation-mcp', 'serve'],
+  env: { IMAGE_GENERATION_MCP_OPENAI_API_KEY: '', IMAGE_GENERATION_MCP_GOOGLE_API_KEY: '' },
   actif: false
 }
 
@@ -157,6 +173,7 @@ export function McpServersSettings(): React.JSX.Element {
   }
 
   const blenderPresent = serveurs?.some((s) => s.id === SERVEUR_BLENDER.id) ?? false
+  const imagesPresent = serveurs?.some((s) => s.id === SERVEUR_IMAGES.id) ?? false
 
   return (
     <section
@@ -198,6 +215,30 @@ export function McpServersSettings(): React.JSX.Element {
           onClick={() => void run(() => window.api.mcpServersSave({ ...SERVEUR_BLENDER }))}
         >
           {blenderPresent ? tx.blenderPresent : tx.blenderAjouter}
+        </button>
+      </div>
+
+      <div
+        data-testid="mcp-carte-images"
+        style={{
+          border: '1px solid var(--line)',
+          borderRadius: 8,
+          padding: 10,
+          background: 'var(--bg-2)'
+        }}
+      >
+        <strong>{SERVEUR_IMAGES.nom}</strong> <code>uvx image-generation-mcp serve</code>
+        <p data-testid="mcp-images-aide" style={{ color: 'var(--text-dim)', margin: '6px 0' }}>
+          {tx.imagesAide}
+        </p>
+        <button
+          type="button"
+          className="btn btn-sm"
+          data-testid="mcp-images-ajouter"
+          disabled={busy || serveurs === null || imagesPresent}
+          onClick={() => void run(() => window.api.mcpServersSave({ ...SERVEUR_IMAGES }))}
+        >
+          {imagesPresent ? tx.blenderPresent : tx.imagesAjouter}
         </button>
       </div>
 

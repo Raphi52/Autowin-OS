@@ -29,7 +29,24 @@ const interne = JSON.stringify({
 
 describe('registre des serveurs MCP (conv-1558)', () => {
   it('fichier absent : blender pré-rempli et désactivé', () => {
-    expect(lireServeursMcp(fichier())).toEqual([{ ...blender, actif: false }])
+    const l = lireServeursMcp(fichier())
+    expect(l.map((s) => s.id)).toEqual(['blender', 'images'])
+    expect(l[0]).toEqual({ ...blender, actif: false })
+  })
+
+  it('images : désactivé par défaut, clés nommées et VIDES, valide et fusion sans clé écrite', () => {
+    const images = lireServeursMcp(fichier()).find((s) => s.id === 'images')!
+    expect(images.actif).toBe(false)
+    expect(Object.keys(images.env).sort()).toEqual([
+      'IMAGE_GENERATION_MCP_GOOGLE_API_KEY',
+      'IMAGE_GENERATION_MCP_OPENAI_API_KEY'
+    ])
+    expect(Object.values(images.env).every((v) => v === '')).toBe(true)
+    expect(validerServeurMcp(images)).toEqual(images)
+    expect(fusionnerServeursMcp(interne, [images]).autorises).toEqual([])
+    expect(fusionnerServeursMcp(interne, [{ ...images, actif: true }]).autorises).toEqual([
+      'mcp__images__*'
+    ])
   })
 
   it('valide : refuse un id réservé, un id invalide, une commande vide ; accepte le jumeau correct', () => {
@@ -47,17 +64,18 @@ describe('registre des serveurs MCP (conv-1558)', () => {
     const disque = JSON.parse(readFileSync(f, 'utf8')) as ServeurMcpUtilisateur[]
     expect(disque.map((s) => [s.id, s.actif])).toEqual([
       ['blender', true],
+      ['images', false],
       ['x', true]
     ])
     expect(supprimerServeurMcp('x', f).ok).toBe(true)
     expect(supprimerServeurMcp('x', f).ok).toBe(false)
-    expect(lireServeursMcp(f).map((s) => s.id)).toEqual(['blender'])
+    expect(lireServeursMcp(f).map((s) => s.id)).toEqual(['blender', 'images'])
   })
 
   it('fichier corrompu : retombe sur la liste par défaut', () => {
     const f = fichier()
     writeFileSync(f, '{pas du json')
-    expect(lireServeursMcp(f).map((s) => s.id)).toEqual(['blender'])
+    expect(lireServeursMcp(f).map((s) => s.id)).toEqual(['blender', 'images'])
   })
 
   it('fusion : un actif est ajouté et autorisé, un inactif non, le serveur interne reste', () => {
@@ -104,7 +122,11 @@ describe('registre des serveurs MCP (conv-1558)', () => {
     ).toMatchObject({ ok: false })
     expect(await h.get('os:mcpServers:list')!(null)).toMatchObject({
       ok: true,
-      serveurs: [{ id: 'blender', actif: true }]
+      // fix-ok: la liste par défaut compte désormais 2 serveurs (blender, images), mesuré par le rouge à cette ligne
+      serveurs: [
+        { id: 'blender', actif: true },
+        { id: 'images', actif: false }
+      ]
     })
   })
 })

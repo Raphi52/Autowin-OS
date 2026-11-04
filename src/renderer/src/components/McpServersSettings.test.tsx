@@ -138,6 +138,24 @@ describe('McpServersSettings', () => {
     expect((q(el, 'mcp-blender-ajouter') as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('carte images : aide avec les variables, ajout inactif et clés vides, grisée ensuite', async () => {
+    const mcpServersSave = vi.fn().mockImplementation(async (s) => ({ ok: true, serveurs: [s] }))
+    const el = await monter({
+      mcpServersList: vi.fn().mockResolvedValue({ ok: true, serveurs: [] }),
+      mcpServersSave
+    })
+    expect(q(el, 'mcp-images-aide').textContent).toMatch(/IMAGE_GENERATION_MCP_OPENAI_API_KEY/)
+    await cliquer(q(el, 'mcp-images-ajouter'))
+    expect(mcpServersSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'images',
+        actif: false,
+        env: { IMAGE_GENERATION_MCP_OPENAI_API_KEY: '', IMAGE_GENERATION_MCP_GOOGLE_API_KEY: '' }
+      })
+    )
+    expect((q(el, 'mcp-images-ajouter') as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('IPC absente ou en échec : message, pas de plantage', async () => {
     const el = await monter({})
     expect(q(el, 'mcp-erreur')).not.toBeNull()
