@@ -40,6 +40,7 @@ import { NOM_FICHIER_RAPPELS } from '../../shared/rappels-outils'
 import { refusReglageProd, refusSqlAgent } from '../prod-run-guard'
 import { chargerAutoriteProd } from '../store/prod-autorite-store'
 import { autowinAppDataRoot } from '../app-data'
+import { fusionnerServeursMcp, serveursMcpActifs, type ServeurMcpUtilisateur } from '../mcp-servers'
 import { isAbsolute, join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
@@ -1339,7 +1340,12 @@ export async function gardeNpmDuLancement(
   }
 }
 
-export function argumentsMcpNoeudSkill(opts: SendOptions): {
+export function argumentsMcpNoeudSkill(
+  opts: SendOptions,
+  // Serveurs MCP déclarés par l'utilisateur dans Autowin (conv-1558) : fusionnés ici, seul point
+  // commun au chat et aux noeuds skill. `--strict-mcp-config` reste : rien n'est hérité du poste.
+  serveursUtilisateur: readonly ServeurMcpUtilisateur[] = serveursMcpActifs()
+): {
   /** `--strict-mcp-config`, ou rien s'il est retire pour cet appel. */
   strict: string[]
   /** `--mcp-config <config>`, ou rien. */
@@ -1353,7 +1359,12 @@ export function argumentsMcpNoeudSkill(opts: SendOptions): {
   // sans `--mcp-config`, le CLI rend « outil absent »).
   const strict = noeud?.inheritMachineMcp === true ? [] : ['--strict-mcp-config']
   if (!noeud) return { strict, mcp: [], autorises: [] }
-  return { strict, mcp: ['--mcp-config', noeud.mcpConfig], autorises: [...noeud.allowedTools] }
+  const fusion = fusionnerServeursMcp(noeud.mcpConfig, serveursUtilisateur)
+  return {
+    strict,
+    mcp: ['--mcp-config', fusion.config],
+    autorises: [...noeud.allowedTools, ...fusion.autorises]
+  }
 }
 
 /**

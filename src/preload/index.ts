@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
+import type { ReponseServeursMcp, ServeurMcpUtilisateur } from '../main/mcp-servers'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
 import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/messages-entre-fils-app'
 import type {
@@ -714,6 +715,14 @@ const api = {
     conversationId?: string
   ): Promise<CostBreakdownRow[]> =>
     ipcRenderer.invoke('os:costBreakdown', dimension, conversationId),
+  // Serveurs MCP de l'utilisateur (conv-1558).
+  mcpServersList: (): Promise<ReponseServeursMcp> => ipcRenderer.invoke('os:mcpServers:list'),
+  mcpServersSave: (serveur: ServeurMcpUtilisateur): Promise<ReponseServeursMcp> =>
+    ipcRenderer.invoke('os:mcpServers:save', serveur),
+  mcpServersDelete: (id: string): Promise<ReponseServeursMcp> =>
+    ipcRenderer.invoke('os:mcpServers:delete', id),
+  mcpServersToggle: (id: string, actif: boolean): Promise<ReponseServeursMcp> =>
+    ipcRenderer.invoke('os:mcpServers:toggle', id, actif),
   brainTraces: (conversationId: string): Promise<BrainTrace[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
   conversationFileTraces: (conversationId: string): Promise<ConversationFileTrace[]> =>

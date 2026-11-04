@@ -1,4 +1,5 @@
 
+import { enregistrerIpcServeursMcp } from './mcp-servers'
 import { registerProdPassphraseIpc } from './prod-passphrase-ipc'
 import { PorteProd } from './prod-gate'
 import { GuichetProd } from './prod-guichet'
@@ -2286,6 +2287,8 @@ app.whenReady().then(async () => {
   registerIdentiteIpc()
   // Version allégée à distance, version téléphone sur petit écran (conv-1442).
   brancherAffichageSession()
+  // Serveurs MCP déclarés par l'utilisateur (conv-1558).
+  enregistrerIpcServeursMcp(ipcMain)
   const suiviDuPlan = registerChatIpc(contexteIpcChat())
   registerTicketsIpc({
     ipc: ipcMain,
