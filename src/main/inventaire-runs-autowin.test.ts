@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { GARDES_DU_HOOK, scriptHookGardes } from '../shared/garde-git-destructeur'
 import { descriptionDuFrontMatter } from './native-registry'
@@ -36,12 +38,41 @@ describe('vue Hooks — gardes réellement injectées dans les runs', () => {
 })
 
 describe('vue Plugins — le mod Autowin', () => {
+  // Supprimés même quand une assertion échoue (piège des dossiers temporaires laissés en test).
+  const temporaires: string[] = []
+  afterEach(() => {
+    for (const d of temporaires.splice(0)) rmSync(d, { recursive: true, force: true })
+  })
   it('trouvé : description du manifeste et événements lus dans son code', async () => {
     const p = await listCapabilities('plugins')
     const mod = p.find((x) => x.id === 'autowin-mod')!
     expect(mod.enabled).toBe(true)
     expect(mod.description).toContain('bureau caché')
-    expect(mod.description).toContain('tool.describe, tool.call')
+    // Les trois événements du module que nomme hooks.json (register.js), dont le retrait du compte
+    // à rebours de tokens (conv-1602, piste 12 du scout).
+    expect(mod.description).toContain('Événements : tool.call, prompt.attachment, tool.describe.')
+  })
+  // fix-ok: 3 édits pour poser un seul cas (imports, afterEach, cas) ; cause mesurée avant correctif : modsAutowin lisait hooks/register.mjs en dur et rendait « leurre.mort » (conv-1602)
+  it('lit le module nommé par hooks.json, pas un nom écrit en dur', () => {
+    // Leurre : un register.mjs que hooks.json ne nomme pas. Lu en dur, il donnerait « leurre.mort ».
+    const racine = mkdtempSync(join(tmpdir(), 'aos-inventaire-mod-'))
+    temporaires.push(racine)
+    const mod = join(racine, 'mods', 'autowin')
+    mkdirSync(join(mod, '.claude-plugin'), { recursive: true })
+    mkdirSync(join(mod, 'hooks'))
+    writeFileSync(join(mod, '.claude-plugin', 'plugin.json'), '{"description":"Mod d’essai."}')
+    writeFileSync(join(mod, 'hooks', 'hooks.json'), '{"modules":["./charge.js"]}')
+    writeFileSync(
+      join(mod, 'hooks', 'charge.js'),
+      "export function register(on) { on('vrai.evenement', () => {}) }"
+    )
+    writeFileSync(
+      join(mod, 'hooks', 'register.mjs'),
+      "export function register(on) { on('leurre.mort', () => {}) }"
+    )
+    const [lu] = modsAutowin([racine])
+    expect(lu.description).toContain('Événements : vrai.evenement.')
+    expect(lu.description).not.toContain('leurre.mort')
   })
   it('introuvable : dit que les runs partent sans lui', () => {
     const [mod] = modsAutowin([join('Z:', 'nulle-part')])

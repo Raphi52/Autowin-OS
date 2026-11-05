@@ -7,7 +7,8 @@
  *  2. le compte à rebours `<total_tokens>… tokens left</total_tokens>` que Claude Code glisse à
  *     chaque requête est retiré : il contredit la règle de l'utilisateur « pas de budget, on récupère
  *     le nécessaire » (src/main/orchestrator.ts, src/main/brain-protocol.ts) ;
- *  3. la règle du bureau caché est écrite DANS la description de l'outil shell, là où elle sert.
+ *  3. la règle du bureau caché est écrite DANS la description de l'outil shell, là où elle sert ;
+ *     la même description y perd sa promesse fausse sur les tâches de fond (conv-1602).
  *
  * Pourquoi rediriger et pas refuser : le refus déterministe a été RETIRÉ le 2026-09-17 à la demande
  * de l'utilisateur (conv-631, src/shared/garde-git-destructeur.ts) parce qu'il ne laissait aucune
@@ -233,9 +234,33 @@ export const REGLE_BUREAU_CACHE =
   'Dans un run, un lancement direct (Start-Process, notepad, chrome…) est réécrit vers ce bureau automatiquement. ' +
   `Ouverture demandée nommément sur l'écran de l'utilisateur : ajoute ${MARQUE_ECRAN_UTILISATEUR} en fin de commande.`
 
+/**
+ * PROMESSE FAUSSE DE CLAUDE CODE SUR LES TÂCHES DE FOND (conv-1602, piste 4 du scout du 05/11).
+ * Texte du CLI 2.1.318, copié de son binaire le 2026-11-05 : « runs the command detached: it keeps
+ * running across turns and re-invokes you when it exits. » puis « at that limit it is stopped and you
+ * are re-invoked ». Dans Autowin, chaque tour est une session `-p` distincte : le CLI arrête la tâche
+ * à la fin du tour. Ensuite, deux chemins : un tour de CHAT relance la commande depuis le début, hors du
+ * tour, et rouvre un tour de reprise avec son résultat (src/main/chat/relance-taches-de-fond.ts,
+ * `relancerTachesDeFond` posé par src/main/agent-pilot.ts) ; une étape de RUN ne relance rien, le
+ * résultat est perdu (avis « Son résultat ne reviendra pas tout seul », src/main/providers/claude.ts).
+ * L'ancien hooks/logique.mjs, que hooks.json ne chargeait pas, disait « never comes back » partout.
+ * Appliquée AVANT le test « déjà complétée », pour qu'un second passage rende le même texte.
+ * fix-ok: 3e édit de regles.js — le texte porté de logique.mjs (« its result never comes back ») est faux en chat depuis relance-taches-de-fond.ts, mesuré par lecture de agent-pilot.ts:2806 et claude.ts:3070 (conv-1602)
+ */
+const PROMESSES_TACHE_DE_FOND = [
+  [
+    ': it keeps running across turns and re-invokes you when it exits.',
+    ': in Autowin OS it is STOPPED when the current turn ends (each turn is a separate session). ' +
+      'In a chat turn, Autowin then re-runs the shell command from the start outside the turn and brings its result back in an automatic follow-up turn; ' +
+      'in a run step, its result is lost. For work longer than the turn, wait for it in the foreground.'
+  ],
+  ['at that limit it is stopped and you are re-invoked.', 'at that limit it is stopped.']
+]
+
 /** Description complétée UNE fois : un second passage rend le même texte (cache stable). */
 export function descriptionAvecRegle(description) {
-  const d = typeof description === 'string' ? description : ''
+  let d = typeof description === 'string' ? description : ''
+  for (const [fausse, juste] of PROMESSES_TACHE_DE_FOND) d = d.split(fausse).join(juste)
   if (d.includes(REGLE_BUREAU_CACHE.trim())) return d
   return d + REGLE_BUREAU_CACHE
 }

@@ -61,7 +61,17 @@ export function modsAutowin(
     /* manifeste illisible : la vue le dira par une description vide */
   }
   try {
-    const code = readFileSync(join(dossier, 'hooks', 'register.mjs'), 'utf8')
+    // Les modules que le CLI charge vraiment : ceux que nomme hooks.json. Un nom écrit en dur
+    // (`register.mjs`) lisait un fichier mort et taisait `prompt.attachment` (conv-1602, piste 12).
+    // fix-ok: 3e édit = mise en forme prettier de cette ligne ; cause mesurée du défaut : register.mjs lu en dur, « leurre.mort » rendu par le test (conv-1602)
+    const hooks = join(dossier, 'hooks')
+    const { modules } = JSON.parse(readFileSync(join(hooks, 'hooks.json'), 'utf8')) as {
+      modules?: unknown
+    }
+    const code = (Array.isArray(modules) ? modules : [])
+      .filter((m): m is string => typeof m === 'string')
+      .map((m) => readFileSync(join(hooks, m), 'utf8'))
+      .join('\n')
     evenements = [...new Set([...code.matchAll(/\bon\(\s*'([\w.]+)'/g)].map((m) => m[1]))]
   } catch {
     /* module illisible */
@@ -112,6 +122,16 @@ export const GATES_DU_RUN: readonly { id: string; label: string; description: st
     id: 'gate-preuve-mouvement',
     label: 'Preuve de mouvement',
     description: 'Un changement d’animation exige une mesure de mouvement (ui-capture --motion).',
+    source: 'src/main/hooks/default-gate-hooks.ts',
+    bus: true
+  },
+  {
+    // Branché sur le bus en conv-419 sans être inscrit ici : le test du nombre était rouge (5 contre 6)
+    // dans le dépôt le 2026-11-05 (conv-1602).
+    id: 'gate-promotion-mod',
+    label: 'Promotion du mod',
+    description:
+      'Un run qui modifie mods/autowin doit annoncer ce qu’il corrige et ce qu’il risque (.autowin/mod-run/PROMOTION.md) et rejouer le test du mod.',
     source: 'src/main/hooks/default-gate-hooks.ts',
     bus: true
   },
