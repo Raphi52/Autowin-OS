@@ -34,7 +34,7 @@ export async function executerOutilsMetier(
         typeof a.type === 'string' ? a.type : undefined
       )
     case 'brain_query':
-      return await bus.runBrainQuery(a.question, conversationId, turnId)
+      return await bus.runBrainQuery(a.question, conversationId, turnId, a.entier)
     case 'profil_ajouter':
       // Un refus (profil plein, identité inconnue, préférence vide) LÈVE : rien n'est écrit (conv-1098).
       return profilAjouter(a.preference)

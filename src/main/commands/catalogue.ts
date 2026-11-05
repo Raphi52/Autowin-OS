@@ -955,8 +955,11 @@ export const CATALOG: CommandSpec[] = [
   {
     name: 'brain_query',
     description:
-      'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis. Rend la LISTE des notes candidates classées par pertinence (titre, chemin, taille), sans leur contenu : ouvre ensuite EN ENTIER avec brain_read celles qui servent ta tâche, autant qu’il en faut',
-    args: { question: 'la question, en langage naturel' },
+      'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis. Rend la LISTE des notes candidates (titre, chemin, taille), sans contenu ; une longue liste arrive réduite par le modèle des petites tâches aux 3 à 8 notes utiles à ta question (entier: true = liste complète). Ouvre ensuite avec brain_read celles qui servent ta tâche',
+    args: {
+      question: 'la question, en langage naturel',
+      entier: 'facultatif — true pour la liste complète, sans le filtre du petit modèle'
+    },
     annotations: {
       readOnlyHint: true,
       destructiveHint: false,

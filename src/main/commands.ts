@@ -1,4 +1,4 @@
-import { type Condenseur } from './brain-condenseur'
+import { filtrerListeBrain, type Condenseur } from './brain-condenseur'
 import {
   applyEdit,
   decideEdit,
@@ -3547,7 +3547,9 @@ export class AppCommandBus {
   /** @internal (conv-1508) */ async runBrainQuery(
     question: unknown,
     conversationId?: string,
-    turnId?: string
+    turnId?: string,
+    /** `true` : la liste complète, sans le filtre du petit modèle (conv-1571). */
+    entier?: unknown
   ): Promise<BrainQueryOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideBrainQuery(question)
     if (!decision.allowed) {
@@ -3602,6 +3604,9 @@ export class AppCommandBus {
     if (persoTrouve && scoped.status !== 'found' && scoped.status !== 'empty') {
       outcome.note = `Brain d’équipe indisponible (${scoped.unavailableReason ?? scoped.status}) — seules les notes perso sont listées`
     }
+    // Filtre du petit modèle AVANT la trace (conv-1571) : `injectedChars` mesure ce qui est
+    // réellement servi au modèle principal, donc l'économie se relit dans le spool Brain.
+    const servi = await filtrerListeBrain(outcome, { entier }, this.condenseurBrain, conversationId)
     if (conversationId) {
       appendBrainTrace({
         timestamp: new Date().toISOString(),
@@ -3609,13 +3614,13 @@ export class AppCommandBus {
         ...(turnId ? { turnId } : {}),
         kind: 'query',
         query: decision.query,
-        found: outcome.found,
+        found: servi.found,
         status: scoped.status,
-        injectedChars: outcome.knowledge.length,
+        injectedChars: servi.knowledge.length,
         navigation: scoped.navigation
       })
     }
-    return { allowed: true, ...outcome }
+    return { allowed: true, ...servi }
   }
 
   /**
