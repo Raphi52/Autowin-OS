@@ -2288,7 +2288,7 @@ app.whenReady().then(async () => {
   // Version allégée à distance, version téléphone sur petit écran (conv-1442).
   brancherAffichageSession()
   // Serveurs MCP déclarés par l'utilisateur (conv-1558).
-  enregistrerIpcServeursMcp(ipcMain)
+  enregistrerIpcServeursMcp({ ipc: ipcMain, assertTrusted: assertTrustedRendererSender })
   const suiviDuPlan = registerChatIpc(contexteIpcChat())
   registerTicketsIpc({
     ipc: ipcMain,

@@ -106,21 +106,68 @@ describe('registre des serveurs MCP (conv-1558)', () => {
     expect(argumentsMcpNoeudSkill(opts, []).mcp[1]).toBe(interne)
   })
 
+  /*
+   * Garde d'expéditeur (conv-1575) : les 4 canaux étaient enregistrés SANS garde, mesuré par
+   * `security-critical-fixes.test.ts` (« ne laisse AUCUN canal hors d'index.ts échapper au
+   * garde », rouge sur ces 4 noms). Or `save` déclare une COMMANDE que le CLI lancera, et `list`
+   * rend les clés d'API saisies dans `env`. Le garde est INJECTÉ, comme pour tickets et veille :
+   * le module reste testable sans Electron. Ce faux garde accepte la seule fenêtre `fiable`.
+   */
+  const fiable = { expediteur: 'fenetre-autowin' }
+  const hostile = { expediteur: 'page-etrangere' }
+  const brancher = (f: string, vus: unknown[] = []) => {
+    const h = new Map<string, (e: unknown, ...a: unknown[]) => unknown>()
+    enregistrerIpcServeursMcp({
+      ipc: { handle: (c, fn) => h.set(c, fn) },
+      assertTrusted: (event, portee) => {
+        vus.push(event)
+        if (event !== fiable) throw new Error(`expéditeur refusé (${portee})`)
+      },
+      chemin: () => f
+    })
+    return h
+  }
+
+  it('IPC : un expéditeur non fiable est refusé AVANT toute lecture ou écriture', () => {
+    const f = fichier()
+    const vus: unknown[] = []
+    const h = brancher(f, vus)
+    // État de départ ÉCRIT par la fenêtre fiable : blender désactivé, images présent.
+    h.get('os:mcpServers:toggle')!(fiable, 'blender', false)
+    const avant = readFileSync(f, 'utf8')
+    // Chaque appel CHANGERAIT le fichier (ou lirait les clés) sans garde : un appel inoffensif
+    // passerait même avec un garde placé après l'action, et ce test ne prouverait rien.
+    const appels: [string, unknown[]][] = [
+      ['os:mcpServers:list', []],
+      ['os:mcpServers:save', [{ id: 'piege', commande: 'calc.exe', actif: true }]],
+      ['os:mcpServers:delete', ['images']],
+      ['os:mcpServers:toggle', ['blender', true]]
+    ]
+    for (const [canal, args] of appels) {
+      // Le refus doit REMONTER (invoke rejeté), pas être avalé en `{ ok: false }` par `proteger`.
+      expect(() => h.get(canal)!(hostile, ...args), canal).toThrow(/expéditeur refusé/)
+    }
+    expect(readFileSync(f, 'utf8')).toBe(avant)
+    // Le garde a vu l'événement REÇU, une fois par canal : pas un événement fabriqué.
+    expect(vus.filter((e) => e === hostile)).toHaveLength(4)
+  })
+
   it('IPC : list/save/toggle/delete branchés', async () => {
     const f = fichier()
-    const h = new Map<string, (e: unknown, ...a: unknown[]) => unknown>()
-    enregistrerIpcServeursMcp({ handle: (c, fn) => h.set(c, fn) }, () => f)
+    const h = brancher(f)
     expect([...h.keys()].sort()).toEqual([
       'os:mcpServers:delete',
       'os:mcpServers:list',
       'os:mcpServers:save',
       'os:mcpServers:toggle'
     ])
-    expect(await h.get('os:mcpServers:toggle')!(null, 'blender', true)).toMatchObject({ ok: true })
+    expect(await h.get('os:mcpServers:toggle')!(fiable, 'blender', true)).toMatchObject({
+      ok: true
+    })
     expect(
-      await h.get('os:mcpServers:save')!(null, { id: 'autowin', commande: 'x' })
+      await h.get('os:mcpServers:save')!(fiable, { id: 'autowin', commande: 'x' })
     ).toMatchObject({ ok: false })
-    expect(await h.get('os:mcpServers:list')!(null)).toMatchObject({
+    expect(await h.get('os:mcpServers:list')!(fiable)).toMatchObject({
       ok: true,
       // fix-ok: la liste par défaut compte désormais 2 serveurs (blender, images), mesuré par le rouge à cette ligne
       serveurs: [

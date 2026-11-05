@@ -186,8 +186,25 @@ interface IpcMainMinimal {
   handle(canal: string, f: (event: unknown, ...args: unknown[]) => unknown): void
 }
 
+export interface OptionsIpcServeursMcp {
+  ipc: IpcMainMinimal
+  /**
+   * Garde d'expéditeur, INJECTÉ (`assertTrustedRendererSender` depuis `index.ts`) comme pour
+   * tickets et veille : ce module reste testable sans Electron. Il manquait aux 4 canaux
+   * (conv-1575, rouge de `security-critical-fixes.test.ts`) alors que `save` déclare une commande
+   * que le CLI lancera et que `list` rend les clés d'API saisies dans `env`.
+   */
+  assertTrusted(event: unknown, portee: string): void
+  /** Injecté pour les tests : sinon on écrirait dans la racine de données réelle. */
+  chemin?: () => string
+}
+
 /** IPC `os:mcpServers:*` — branché depuis `index.ts`, exposé par le preload. */
-export function enregistrerIpcServeursMcp(ipc: IpcMainMinimal, chemin?: () => string): void {
+export function enregistrerIpcServeursMcp({
+  ipc,
+  assertTrusted,
+  chemin
+}: OptionsIpcServeursMcp): void {
   const c = (): string => (chemin ? chemin() : cheminServeursMcp())
   const proteger = (f: () => ReponseServeursMcp): ReponseServeursMcp => {
     try {
@@ -196,12 +213,22 @@ export function enregistrerIpcServeursMcp(ipc: IpcMainMinimal, chemin?: () => st
       return { ok: false, erreur: e instanceof Error ? e.message : String(e) }
     }
   }
-  ipc.handle('os:mcpServers:list', () =>
-    proteger(() => ({ ok: true, serveurs: lireServeursMcp(c()) }))
-  )
-  ipc.handle('os:mcpServers:save', (_e, s) => proteger(() => enregistrerServeurMcp(s, c())))
-  ipc.handle('os:mcpServers:delete', (_e, id) => proteger(() => supprimerServeurMcp(id, c())))
-  ipc.handle('os:mcpServers:toggle', (_e, id, actif) =>
-    proteger(() => basculerServeurMcp(id, actif, c()))
-  )
+  // Le garde vient AVANT `proteger` : un refus doit rejeter l'appel, pas devenir un `{ ok: false }`.
+  const portee = 'Serveurs MCP'
+  ipc.handle('os:mcpServers:list', (event) => {
+    assertTrusted(event, portee)
+    return proteger(() => ({ ok: true, serveurs: lireServeursMcp(c()) }))
+  })
+  ipc.handle('os:mcpServers:save', (event, s) => {
+    assertTrusted(event, portee)
+    return proteger(() => enregistrerServeurMcp(s, c()))
+  })
+  ipc.handle('os:mcpServers:delete', (event, id) => {
+    assertTrusted(event, portee)
+    return proteger(() => supprimerServeurMcp(id, c()))
+  })
+  ipc.handle('os:mcpServers:toggle', (event, id, actif) => {
+    assertTrusted(event, portee)
+    return proteger(() => basculerServeurMcp(id, actif, c()))
+  })
 }
