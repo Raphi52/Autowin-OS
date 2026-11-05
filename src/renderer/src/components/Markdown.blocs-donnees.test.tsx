@@ -62,6 +62,54 @@ describe('Markdown — blocs de données', () => {
     expect(fil.textContent).toContain('Après.')
   })
 
+  /*
+   * VÉCU LE 2026-11-05 (conv-1578, capture de l'utilisateur) : la cellule « **English mode is
+   * fragile** » et le chemin `D:\AutoWinOS\…` s'affichaient avec leurs astérisques et leurs
+   * accents graves. La consigne du chat exige le gras porteur dans chaque ligne ; le modèle l'écrit
+   * donc aussi dans les blocs de données, qui le montraient brut.
+   */
+  it('gras et code dans les textes d’un bloc : rendus, jamais leurs symboles bruts', () => {
+    const fil = rendre(
+      fence('aw-tableau', {
+        colonnes: ['Défaut', 'Constat'],
+        lignes: [
+          ['**English mode is fragile**', 'Voir `D:\\AutoWinOS\\x.ts` puis **36** tests'],
+          [{ texte: '**rouge**', ton: 'ko' }, 'deux * étoiles * seules restent']
+        ],
+        note: 'Note **importante**.'
+      })
+    )
+    const cellules = [...fil.querySelectorAll('td')]
+    expect(cellules[0].querySelector('b')?.textContent).toBe('English mode is fragile')
+    expect(cellules[1].querySelector('code')?.textContent).toBe('D:\\AutoWinOS\\x.ts')
+    expect([...cellules[1].querySelectorAll('b')].map((b) => b.textContent)).toEqual(['36'])
+    expect(cellules[2].querySelector('b')?.textContent).toBe('rouge')
+    expect(cellules[2].className).toContain('md-donnees__ton--ko')
+    expect(cellules[3].textContent).toBe('deux * étoiles * seules restent')
+    expect(fil.querySelector('.md-donnees__note b')?.textContent).toBe('importante')
+    const bloc = fil.querySelector('[data-testid="chat-bloc-donnees"]')
+    expect(bloc?.textContent).not.toContain('**')
+    expect(bloc?.textContent).not.toContain('`')
+
+    const options = rendre(
+      fence('aw-comparaison', {
+        options: [
+          { nom: '**A**', points: ['coût **bas**'], verdict: '`ok`' },
+          { nom: 'B', points: [] }
+        ]
+      })
+    )
+    expect(options.querySelector('.md-donnees__nom b')?.textContent).toBe('A')
+    expect(options.querySelector('.md-donnees__points b')?.textContent).toBe('bas')
+    expect(options.querySelector('.md-donnees__verdict code')?.textContent).toBe('ok')
+
+    const etapes = rendre(
+      fence('aw-etapes', { etapes: [{ titre: 'Lire **x**', detail: 'dans `y.ts`' }] })
+    )
+    expect(etapes.querySelector('.md-donnees__etape-titre b')?.textContent).toBe('x')
+    expect(etapes.querySelector('.md-donnees__detail code')?.textContent).toBe('y.ts')
+  })
+
   it('aw-comparaison : une carte par option, la recommandée marquée et annoncée', () => {
     const fil = rendre(
       fence('aw-comparaison', {

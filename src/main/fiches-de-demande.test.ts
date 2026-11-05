@@ -368,6 +368,46 @@ describe('creerFichesDeDemande', () => {
     expect(await creerFichesDeDemande({ racine }).lignes()).toEqual([])
   })
 
+  /*
+   * conv-1578, mesuré dans `ecarts.json` : 21 des 35 demandes « sans fiche » en avaient une. Supprimer
+   * conv-1471 avait effacé la fiche où conv-1484 (sa branche, toujours ouverte) rangeait ses demandes,
+   * et leurs 18 lignes ; supprimer conv-1518 avait effacé de même les 3 suites de conv-1519.
+   */
+  it('un fil supprimé laisse en place la fiche qu’un autre fil a nourrie, avec ses lignes', async () => {
+    const racine = racineTemporaire()
+    let maintenant = 1_000_000
+    const fiches = creerFichesDeDemande({ racine, maintenant: () => (maintenant += 60_000) })
+    const chantier = fil('conv-1', [
+      utilisateur('m1', 'Construis le village'),
+      reponse('m2'),
+      utilisateur('m3', 'Autre sujet'),
+      reponse('m4')
+    ])
+    const partagee = await fiches.noterTour(tour(chantier, 'conv-1', 'm1', { nature: 'nouveau' }))
+    const lot = fil('conv-2', [utilisateur('l1', 'Lot 1/2'), reponse('l2')])
+    await fiches.noterTour(tour(lot, 'conv-2', 'l1', { nature: 'suite', de: 'conv-1' }))
+    const seule = await fiches.noterTour(tour(chantier, 'conv-1', 'm3', { nature: 'nouveau' }))
+
+    await fiches.retirerLeFil('conv-1')
+
+    expect(existsSync(cheminDe(racine, partagee))).toBe(true)
+    expect(existsSync(cheminDe(racine, seule))).toBe(false)
+    for (const instance of [fiches, creerFichesDeDemande({ racine })])
+      expect(
+        (await instance.lignes()).map((l) => [l.conversationId, l.messageId, l.fiche])
+      ).toEqual([['conv-2', 'l1', partagee?.fiche]])
+    // La suite suivante du lot rejoint toujours la même fiche.
+    const suite = await fiches.noterTour(
+      tour(
+        { ...lot, messages: [...lot.messages, utilisateur('l3', 'Lot 2/2'), reponse('l4')] },
+        'conv-2',
+        'l3',
+        { nature: 'suite' }
+      )
+    )
+    expect(suite?.fiche).toBe(partagee?.fiche)
+  })
+
   it('un identifiant de fil qui sortirait du dossier est refusé', async () => {
     const racine = racineTemporaire()
     const fiches = creerFichesDeDemande({ racine })
@@ -582,6 +622,31 @@ describe('demandes recopiées dans une branche', () => {
       )
     )
     expect(apres?.fiche).toBe(propre?.fiche)
+  })
+
+  /*
+   * conv-1578 : conv-1492, 1493 et 1494 sont nées pendant que conv-1491 écrivait encore sa réponse.
+   * La copie a gardé la réponse coupée (109 caractères de parties, 4 211 dans la source) : comparée
+   * mot pour mot, plus rien n'était apparié, ni à la création ni à aucun démarrage.
+   */
+  it('une branche née pendant que la source répondait encore est rattachée quand même', async () => {
+    const racine = racineTemporaire()
+    const fiches = creerFichesDeDemande({ racine })
+    const origine = source()
+    const premiere = await fiches.noterTour(tour(origine, 'conv-1', 'm1', { nature: 'nouveau' }))
+    const entiere = branche(origine, 1)
+    const coupee = {
+      ...entiere.messages[1],
+      content: 'fi',
+      parts: [{ kind: 'text', text: 'fi' }],
+      status: 'interrupted'
+    } as unknown as MessageStockePourLaCarte
+    const copie = { ...entiere, messages: [entiere.messages[0], coupee] }
+
+    expect(await fiches.rattacherLaBranche({ branche: copie, source: origine })).toBe(1)
+    expect((await fiches.fichesDesDemandes())['conv-2']).toEqual({
+      'conv-2-copie-0': cheminDe(racine, premiere)
+    })
   })
 
   it('une branche dont l’histoire ne colle plus à sa source n’est rattachée à rien', async () => {

@@ -25,6 +25,33 @@ import './BlocDonnees.css'
 const classeDuTon = (cellule: CelluleDonnee): string | undefined =>
   cellule.ton ? `md-donnees__ton--${cellule.ton}` : undefined
 
+/** `**gras**` ou `` `code` `` sur une seule ligne ; une étoile seule reste du texte. */
+const MARQUE_EN_LIGNE = /(\*\*[^*\n]+?\*\*|`[^`\n]+`)/
+
+/**
+ * GRAS ET CODE DANS LES TEXTES DU BLOC (conv-1578, 2026-11-05). La consigne du chat exige un mot en
+ * gras par ligne ; le modèle l'écrit donc aussi dans ses cellules, qui montraient « **…** » et les
+ * accents graves bruts (capture de l'utilisateur). Seules ces deux marques sont lues : le reste
+ * reste du texte, échappé par React comme avant.
+ */
+function EnLigne({ texte }: { texte: string }): React.JSX.Element {
+  return (
+    <>
+      {texte
+        .split(MARQUE_EN_LIGNE)
+        .map((morceau, rang) =>
+          rang % 2 === 0 ? (
+            morceau
+          ) : morceau.startsWith('**') ? (
+            <b key={rang}>{morceau.slice(2, -2)}</b>
+          ) : (
+            <code key={rang}>{morceau.slice(1, -1)}</code>
+          )
+        )}
+    </>
+  )
+}
+
 // Le libellé est une clé de la table de textes, traduite au rendu (conv-1170).
 const STATUTS: Record<StatutEtape, { glyphe: string; libelle: CleArtefactsEtBandeaux }> = {
   fait: { glyphe: '✓', libelle: 'donnees.statut.fait' },
@@ -59,7 +86,7 @@ function Tableau({
               <tr key={rang}>
                 {ligne.map((cellule, col) => (
                   <td key={col} className={classeDuTon(cellule)}>
-                    {cellule.texte}
+                    <EnLigne texte={cellule.texte} />
                   </td>
                 ))}
               </tr>
@@ -67,7 +94,11 @@ function Tableau({
           </tbody>
         </table>
       </div>
-      {donnees.note ? <div className="md-donnees__note">{donnees.note}</div> : null}
+      {donnees.note ? (
+        <div className="md-donnees__note">
+          <EnLigne texte={donnees.note} />
+        </div>
+      ) : null}
     </>
   )
 }
@@ -90,11 +121,15 @@ function Comparaison({
           {option.recommande ? (
             <div className="md-donnees__recommande">{t('donnees.recommande')}</div>
           ) : null}
-          <div className="md-donnees__nom">{option.nom}</div>
+          <div className="md-donnees__nom">
+            <EnLigne texte={option.nom} />
+          </div>
           {option.points.length ? (
             <ul className="md-donnees__points">
               {option.points.map((point, n) => (
-                <li key={n}>{point}</li>
+                <li key={n}>
+                  <EnLigne texte={point} />
+                </li>
               ))}
             </ul>
           ) : null}
@@ -104,7 +139,7 @@ function Comparaison({
                 .filter(Boolean)
                 .join(' ')}
             >
-              {option.verdict.texte}
+              <EnLigne texte={option.verdict.texte} />
             </div>
           ) : null}
         </section>
@@ -136,8 +171,14 @@ function Etapes({
             </span>
             <span className="md-donnees__rang">{rang + 1}.</span>
             <span className="md-donnees__etape">
-              <span className="md-donnees__etape-titre">{etape.titre}</span>
-              {etape.detail ? <span className="md-donnees__detail">{etape.detail}</span> : null}
+              <span className="md-donnees__etape-titre">
+                <EnLigne texte={etape.titre} />
+              </span>
+              {etape.detail ? (
+                <span className="md-donnees__detail">
+                  <EnLigne texte={etape.detail} />
+                </span>
+              ) : null}
             </span>
           </li>
         )

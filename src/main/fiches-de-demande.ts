@@ -25,7 +25,7 @@
  * sans fiche (les 3 seuls « sans fiche » de `ecarts.json`, conv-1425 à 1427 — conv-1441). Une ligne
  * `copie` les fait pointer sur la fiche d'origine, sans rien écrire dans son RUN.md.
  */
-import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { LIBELLES_STATUT } from '../renderer/src/components/carte-du-fil'
 import { STATUTS_DEMANDE, type StatutDemande } from '../shared/carte-des-besoins'
@@ -62,6 +62,12 @@ interface RetraitDuFil {
   v: 1
   ts: number
   retraitDuFil: string
+  /**
+   * Les fiches du fil retiré qu'un AUTRE fil a nourries (une suite, une copie de branche) : elles
+   * restent sur le disque, avec les lignes de cet autre fil (conv-1578). Absent sur les retraits
+   * écrits avant : leurs fiches sont parties du disque, leurs lignes partent donc aussi.
+   */
+  fichesGardees?: string[]
 }
 
 export interface IndexDesFiches {
@@ -84,12 +90,13 @@ const FIL_LISIBLE = /^[\w-]+$/u
 function appliquer(index: IndexDesFiches, ligne: LigneDeFiche | RetraitDuFil): void {
   if ('retraitDuFil' in ligne) {
     const fil = ligne.retraitDuFil
-    const partie = (l: LigneDeFiche): boolean =>
-      l.conversationId === fil || l.fiche.startsWith(`${fil}/`)
+    const gardees = new Set(ligne.fichesGardees ?? [])
+    const effacee = (fiche: string): boolean => fiche.startsWith(`${fil}/`) && !gardees.has(fiche)
+    const partie = (l: LigneDeFiche): boolean => l.conversationId === fil || effacee(l.fiche)
     for (const [cle, l] of index.parMessage) if (partie(l)) index.parMessage.delete(cle)
     index.ficheDuFil.delete(fil)
     for (const [autre, fiche] of index.ficheDuFil)
-      if (fiche.startsWith(`${fil}/`)) index.ficheDuFil.delete(autre)
+      if (effacee(fiche)) index.ficheDuFil.delete(autre)
     return
   }
   index.parMessage.set(cleDuJournal(ligne.conversationId, ligne.messageId), ligne)
@@ -156,8 +163,12 @@ export type BranchePourLaFiche = ConversationPourLaCarte & {
 /**
  * Les messages qu'une branche a recopiés de sa source : identifiant dans la branche → dans la source.
  * `fork()` recopie dans l'ordre jusqu'au message d'origine inclus et ne change que les identifiants :
- * chaque paire a donc le même rôle, la même heure et le même texte. Au moindre écart (fil réécrit
- * depuis), rien n'est apparié : une demande sans fiche vaut mieux qu'une fiche fausse.
+ * chaque paire a donc le même rôle et la même heure, et chaque DEMANDE le même texte. Au moindre écart
+ * (fil réécrit depuis), rien n'est apparié : une demande sans fiche vaut mieux qu'une fiche fausse.
+ *
+ * Le texte d'une RÉPONSE n'est pas comparé (conv-1578) : une branche née pendant que la source
+ * répondait encore garde la réponse coupée, que la source finit ensuite (conv-1492 à 1494 : 109
+ * caractères de parties contre 4 211). Le rôle et l'heure suffisent à la reconnaître.
  */
 export function messagesRecopies(
   branche: BranchePourLaFiche,
@@ -177,7 +188,8 @@ export function messagesRecopies(
       !dansLaBranche ||
       dansLaSource.role !== dansLaBranche.role ||
       dansLaSource.ts !== dansLaBranche.ts ||
-      (dansLaSource.content ?? '') !== (dansLaBranche.content ?? '')
+      (dansLaSource.role === 'user' &&
+        (dansLaSource.content ?? '') !== (dansLaBranche.content ?? ''))
     )
       return aucun
     if (dansLaSource.messageId && dansLaBranche.messageId)
@@ -518,8 +530,40 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
       return enFile(async () => {
         if (!FIL_LISIBLE.test(conversationId)) return
         const index = await chargerIndex()
-        supprimerArbre(join(dossier, conversationId))
-        await enregistrer(index, { v: 1, ts: maintenant(), retraitDuFil: conversationId })
+        /*
+         * Une fiche que d'autres fils ont nourrie porte AUSSI leur histoire : elle reste (conv-1578,
+         * 21 demandes de conv-1484 et conv-1519 perdues avec conv-1471 et conv-1518). Seul ce que
+         * le fil retiré était le seul à nourrir part avec lui.
+         */
+        const gardees = [
+          ...new Set(
+            [...index.parMessage.values()]
+              .filter(
+                (l) =>
+                  l.conversationId !== conversationId && l.fiche.startsWith(`${conversationId}/`)
+              )
+              .map((l) => l.fiche)
+          )
+        ]
+        const racineDuFil = join(dossier, conversationId)
+        if (gardees.length === 0) supprimerArbre(racineDuFil)
+        else {
+          const dossiersGardes = new Set(gardees.map((fiche) => fiche.split('/')[1]))
+          let entrees: string[] = []
+          try {
+            entrees = await readdir(racineDuFil)
+          } catch (erreur) {
+            if ((erreur as NodeJS.ErrnoException).code !== 'ENOENT') throw erreur
+          }
+          for (const entree of entrees)
+            if (!dossiersGardes.has(entree)) supprimerArbre(join(racineDuFil, entree))
+        }
+        await enregistrer(index, {
+          v: 1,
+          ts: maintenant(),
+          retraitDuFil: conversationId,
+          ...(gardees.length ? { fichesGardees: gardees } : {})
+        })
       })
     }
   }
