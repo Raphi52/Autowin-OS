@@ -3,6 +3,7 @@ import {
   ATTENTE_MAX_MS,
   decrireEtape,
   dossierDeSortie,
+  dureeMaxJaugesMs,
   dureeMaxScenarioMs,
   jaugesFausses,
   lireScenario,
@@ -131,6 +132,18 @@ describe('décrire et borner', () => {
   it('rend la durée maximale, attentes comprises', () => {
     expect(dureeMaxScenarioMs(undefined)).toBe(0)
     expect(dureeMaxScenarioMs([{ attendre: 1000 }, { voir: 'x' }])).toBeGreaterThanOrEqual(3000)
+  })
+
+  // conv-1586 (2026-11-05) : 3 jauges x 6 propositions = 100,6 s de sonde mesurés, pour 73 s
+  // accordés à toute la vérification. Electron était tué (SIGTERM) avant d'avoir rendu un verdict.
+  it('rend la durée maximale de la sonde des jauges, selon jauges et propositions', () => {
+    const jauge = '<label for="dkr1" class="dkc-rgl">'
+    const radio = '<input type="radio" name="dkp" id="dkp1">'
+    expect(dureeMaxJaugesMs('<p>sans carrousel</p>')).toBe(0)
+    expect(dureeMaxJaugesMs(radio.repeat(6))).toBe(0)
+    const sonde = dureeMaxJaugesMs(jauge.repeat(3) + radio.repeat(6))
+    expect(sonde).toBeGreaterThan(100_600)
+    expect(sonde).toBe(3 * 6 * 8_000)
   })
 
   it('nomme une étape comme le rapport la montrera', () => {
