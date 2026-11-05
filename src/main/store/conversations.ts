@@ -301,6 +301,16 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
 }
 
 /**
+ * AVIS DE L'APP (conv-1571, 2026-11-05) : message assistant écrit par `append` — carte de
+ * publication auto, bascule de dossier, modèle indisponible —, donc sans `status` ni `turnId`.
+ * La réponse d'un tour porte les deux dès `beginTurn`. Un avis ne répond à rien : il ne doit pas
+ * décider de l'état du fil, sinon la pastille tombe dans son cas par défaut « Sans réponse ».
+ */
+function estAvisDeLApp(message: Msg): boolean {
+  return message.role === 'assistant' && message.status === undefined && !message.turnId
+}
+
+/**
  * Vrai quand le DERNIER message est un tour assistant portant une question à choix encore
  * ouverte. Un message utilisateur postérieur ferme la question : elle a été répondue. La
  * reconnaissance d'une vraie question est déléguée à `parseAskDecision` — même règle que le
@@ -308,7 +318,8 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
  * une question que la vue n'affiche pas comme telle.
  */
 function attendUneDecision(messages: readonly Msg[]): boolean {
-  const dernier = messages.at(-1)
+  // Une carte de l'app posée après la question (publication auto) ne l'a pas répondue (conv-1571).
+  const dernier = [...messages].reverse().find((m) => !estAvisDeLApp(m))
   if (!dernier || dernier.role !== 'assistant') return false
   const parts = (dernier as { parts?: PersistedChatPart[] }).parts
   if (!Array.isArray(parts)) return false
@@ -2096,9 +2107,11 @@ export class ConversationStore {
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */
   listSummaries(): ConversationSummary[] {
     return this.list().map(({ messages, ...summary }) => {
-      const dernierAssistant = [...messages]
-        .reverse()
-        .find((message) => message.role === 'assistant')
+      // Le dernier TOUR, pas la dernière carte de l'app posée après lui (conv-1571). Sans tour du
+      // tout, on retombe sur le dernier message assistant, comme avant.
+      const assistantsRecents = [...messages].reverse().filter((m) => m.role === 'assistant')
+      const dernierAssistant =
+        assistantsRecents.find((message) => !estAvisDeLApp(message)) ?? assistantsRecents[0]
       return {
         ...summary,
         messageCount: messages.length,

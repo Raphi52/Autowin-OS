@@ -567,6 +567,31 @@ describe('réconciliation au chargement des tours interrompus', () => {
     expect(resumes.find((s) => s.id === repondue)!.lastAssistantAsksUser).toBe(undefined)
     expect(resumes.find((s) => s.id === uneSeule)!.lastAssistantAsksUser).toBe(undefined)
   })
+
+  /**
+   * Défaut vécu (conv-1571, 2026-11-05) : « pk cette conv m'affiche 3 points violets ». Après un
+   * tour terminé, la publication auto (`git-apres-fil`) ajoute sa carte « GIT : 1 commit » en fin
+   * de fil, écrite par `append` : rôle assistant, SANS statut ni `turnId`. Le résumé lisait le
+   * statut du DERNIER message assistant, n'en trouvait aucun, et la pastille tombait dans son cas
+   * par défaut « Sans réponse » (trois points). Une carte de l'app ne répond pas : l'état est celui
+   * du dernier TOUR.
+   */
+  it("une carte de l'app en fin de fil ne masque pas l'état du dernier tour", () => {
+    const store = new ConversationStore(makeClock())
+    const fini = store.create({ title: 'A', provider: 'claude' }).id
+    store.beginTurn(fini, { content: '/git' }, { turnId: 'turn-git' })
+    store.applyTurnEvent(fini, 'turn-git', { kind: 'done' })
+    store.append(fini, { role: 'assistant', content: '```html-render\nGIT : 1 commit\n```' })
+
+    const question = store.create({ title: 'B', provider: 'claude' }).id
+    poserUneQuestion(store, question, ['A', 'B'])
+    store.append(question, { role: 'assistant', content: '```html-render\nGIT : 1 commit\n```' })
+
+    const resumes = store.listSummaries()
+    expect(resumes.find((s) => s.id === fini)!.lastAssistantStatus).toBe('completed')
+    expect(resumes.find((s) => s.id === question)!.lastAssistantStatus).toBe('completed')
+    expect(resumes.find((s) => s.id === question)!.lastAssistantAsksUser).toBe(true)
+  })
 })
 
 describe('résumé IPC — motif de l’échec du dernier tour', () => {
