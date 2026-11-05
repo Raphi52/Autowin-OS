@@ -47,6 +47,8 @@ export interface FilProprietaire {
   toi: boolean
   /** Vrai si le diff actuel est encore exactement celui que ce fil a laissé. */
   diffInchange: boolean
+  /** Ce fil l'a seulement VU changer à sa fin de tour, sans l'écrire avec un outil (conv-1587). */
+  vuSeulement?: true
 }
 
 export interface ProprietaireDeFichier {
@@ -151,7 +153,8 @@ async function filsDuChemin(
         ...(owner.turnId ? { tour: owner.turnId } : {}),
         le: owner.timestamp,
         toi: owner.conversationId === conversationId,
-        diffInchange
+        diffInchange,
+        ...(owner.vuSeulement ? { vuSeulement: true as const } : {})
       }
     })
   )

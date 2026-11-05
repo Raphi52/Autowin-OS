@@ -55,7 +55,14 @@ interface FichierRendu {
   chemin: string
   refus?: string
   nonCommite?: boolean
-  fils: { conversation: string; tour?: string; le: string; toi: boolean; diffInchange: boolean }[]
+  fils: {
+    conversation: string
+    tour?: string
+    le: string
+    toi: boolean
+    diffInchange: boolean
+    vuSeulement?: true
+  }[]
   copiesDeRun: { run: string; etat: string }[]
   amont: { branche?: string; commits: string[] }
   resume: string
@@ -373,6 +380,41 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
 
     expect(fichier.fils.map((f) => f.conversation).sort()).toEqual(['conv-a', 'conv-b'])
     expect(fichier.resume).toContain('conv-b')
+    // conv-a l'a écrit avec un outil, conv-b seulement vu changer : la publication auto le distingue.
+    expect(fichier.fils.find((f) => f.conversation === 'conv-a')?.vuSeulement).toBeUndefined()
+    expect(fichier.fils.find((f) => f.conversation === 'conv-b')?.vuSeulement).toBe(true)
+  })
+
+  it('marque « vu seulement » chaque fil qui n’a fait que voir un script écrire (conv-1587)', async () => {
+    // Vrai cas du 05/11/2026 : 18 fichiers écrits par un script à 08:13:00, sans outil d'écriture,
+    // vus par les comparaisons de fin de tour de conv-1575, conv-1577 et conv-1587.
+    donnees()
+    const ws = depot()
+    const avantLeTourDe1575 = await captureMutationTraceBase(ws, [])
+    const avantLeTourDe1587 = await captureMutationTraceBase(ws, [])
+    writeFileSync(join(ws, 'src/partage.ts'), 'export const decoupe = 1 // écrit par un script\n')
+    await comparaisonDeFinDeTour(ws, 'conv-1575', avantLeTourDe1575)
+    await comparaisonDeFinDeTour(ws, 'conv-1587', avantLeTourDe1587)
+
+    const [fichier] = await demander(bus(ws), ['src/partage.ts'], 'conv-1587')
+
+    expect(fichier.fils.map((f) => [f.conversation, f.vuSeulement]).sort()).toEqual([
+      ['conv-1575', true],
+      ['conv-1587', true]
+    ])
+  })
+
+  it('un fil qui a écrit avec un outil n’est jamais « vu seulement », même revu à sa fin de tour', async () => {
+    donnees()
+    const ws = depot()
+    const avantLeTourDeA = await captureMutationTraceBase(ws, [])
+    await ecritAvecUnOutil(ws, 'conv-a', 'export const a = 1\n')
+    await comparaisonDeFinDeTour(ws, 'conv-a', avantLeTourDeA)
+
+    const [fichier] = await demander(bus(ws), ['src/partage.ts'], 'conv-a')
+
+    expect(fichier.fils).toEqual([expect.objectContaining({ conversation: 'conv-a' })])
+    expect(fichier.fils[0]!.vuSeulement).toBeUndefined()
   })
 
   it('se déclare en lecture seule, servie au chat comme outil direct', () => {

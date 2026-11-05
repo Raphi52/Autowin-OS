@@ -478,6 +478,12 @@ interface ConversationPathOwnership {
 export interface CurrentPathOwner extends ConversationPathOwnership {
   turnId?: string
   timestamp: string
+  /**
+   * Ce fil n'a fait que VOIR ce chemin changer (`vueParComparaison`), sans l'écrire avec un outil
+   * dans cette génération. Lu par la publication auto (conv-1587, 05/11/2026) : 18 fichiers écrits
+   * par un script, vus par trois fils, renvoyaient une note `/git` à chacun.
+   */
+  vuSeulement?: true
 }
 
 interface PathGeneration {
@@ -538,6 +544,11 @@ function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
       const key = pathGenerationKey(workspaceRoot, normalized)
       const generation: PathGeneration = generations.get(key) ?? { owners: new Map() }
       const vue = vueParComparaison(trace, normalized)
+      // Un fil qui a écrit avec un outil dans cette génération le reste, même revu ensuite.
+      const vuSeulement = (): { vuSeulement?: true } => {
+        const deja = generation.owners.get(trace.conversationId)
+        return vue && (!deja || deja.vuSeulement) ? { vuSeulement: true } : {}
+      }
       /*
        * fix-ok: conv-1142 (25/10/2026) — `src/main/reprise-apres-arret.ts`, écrit par conv-1142
        * (trace de son Write à 13:36:07 UTC), était rendu à conv-1143 : la comparaison de fin de tour
@@ -564,7 +575,8 @@ function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
             fingerprint,
             generationMarker,
             ...(trace.turnId ? { turnId: trace.turnId } : {}),
-            timestamp: trace.timestamp
+            timestamp: trace.timestamp,
+            ...vuSeulement()
           })
         }
         continue
@@ -587,7 +599,8 @@ function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
         ...(fingerprint ? { fingerprint } : {}),
         ...(generationMarker ? { generationMarker } : {}),
         ...(trace.turnId ? { turnId: trace.turnId } : {}),
-        timestamp: trace.timestamp
+        timestamp: trace.timestamp,
+        ...vuSeulement()
       })
       generations.set(key, generation)
     }
@@ -617,6 +630,7 @@ export function readCurrentConversationPathOwnership(
         const {
           turnId: _turnId,
           timestamp: _timestamp,
+          vuSeulement: _vuSeulement,
           ...ownership
         } = ownerOfGeneration(generation, owner)
         return ownership
