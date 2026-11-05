@@ -406,7 +406,8 @@
 :root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .msg.user .msg-body a:not(.btn) {
   color: inherit;
 }
-/* La saisie : un cadre blanc ; au focus, l'anneau de 2 px a la couleur de la zone. */
+/* La saisie : un cadre blanc gris neutre ; au focus il reste identique (jamais coloré : la couleur
+   de la zone ne va pas sur la bordure de la zone d'écriture, demande de l'utilisateur). */
 :root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .composer-field {
   border: 1px solid rgba(27, 42, 60, 0.12);
   border-radius: 14px;
@@ -414,8 +415,8 @@
   box-shadow: 0 1px 0 rgba(27, 42, 60, 0.08);
 }
 :root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .composer-field:focus-within {
-  border-color: var(--sb-signe);
-  box-shadow: 0 0 0 2px var(--sb-signe);
+  border-color: rgba(27, 42, 60, 0.12);
+  box-shadow: 0 1px 0 rgba(27, 42, 60, 0.08);
 }
 :root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .composer-field textarea {
   background: transparent;
