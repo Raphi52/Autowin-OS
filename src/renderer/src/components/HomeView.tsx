@@ -69,6 +69,7 @@ import { traduireAccueil, useTextesAccueil, type CleAccueil } from '../textes-ec
 import type { PhaseAgent } from '../quartier/agents-quartier'
 import type { AgentCollegue } from '../quartier/agents-collegues'
 import type { Metier } from '../quartier/quartier-metiers'
+import { HomePersonnesReglages } from './HomePersonnesReglages'
 import { JarvisWidget } from './JarvisWidget'
 import { EnregistrementsWidget } from './EnregistrementsWidget'
 import { InterlocuteursWidget } from './InterlocuteursWidget'
@@ -1283,6 +1284,8 @@ export function HomeView({
                 )}
               </p>
             </section>
+            {/* Qui je vois, et qui me voit, dans le village commun (conv-1599). */}
+            <HomePersonnesReglages />
             <section className="home-settings__bloc">
               <h3>{t('reglages.widgets')}</h3>
               <ul>
