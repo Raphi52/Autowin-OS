@@ -104,6 +104,15 @@ export function classifierRefusDeReprise(message: string): RefusDeReprise | unde
   ) {
     return 'copie-durable-absente'
   }
+  // Même verdict, TROISIÈME phrase : `worktree-manager.ts:459` (`copieSansRacinePropre`) refuse un
+  // dossier qui a perdu son `.git` — git remonte sur le dépôt principal. Le dossier existe encore,
+  // mais ce n'est plus une copie : aucun redémarrage ne la refera. Mesuré le 2026-11-05 (conv-1579)
+  // sur conv-1461 : non classé, ce refus a rejoué la reprise à chacun des 33 démarrages, 33 runs
+  // rouges identiques. La variante « Impossible de prouver la racine » reste NON classée : elle
+  // naît d'un git qui a échoué, possiblement un instant.
+  if (/La copie .+ n[’']est pas une racine de travail : git remonte sur /.test(message)) {
+    return 'copie-durable-absente'
+  }
   const normalise = normaliserApostrophes(message)
   for (const detail of DETAILS_DEFINITIFS) {
     if (normalise.includes(normaliserApostrophes(detail))) {

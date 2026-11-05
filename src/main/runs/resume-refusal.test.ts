@@ -20,6 +20,24 @@ describe('refus définitifs de reprise', () => {
     )
   })
 
+  // Message copié du journal réel de conv-1461 (turn-journals, 2026-11-03 → 05) : la copie a perdu
+  // son `.git`, git remonte sur le dépôt principal. Non classé, ce refus a rejoué la reprise à
+  // CHAQUE démarrage : 33 démarrages, 33 runs rouges identiques sur le Board.
+  it('reconnaît la copie qui n’est plus une racine de travail (worktree-manager.ts:459)', () => {
+    const reel =
+      'Reprise du worktree refusée : La copie D:\\AutoWinOS\\.autowin-data\\autowin-os\\worktrees\\5a94588848d48682\\agent__run-49e50da90997-1 n’est pas une racine de travail : git remonte sur d:/autowinos (arbre partagé) — aucune écriture n’y est faite.'
+    expect(classifierRefusDeReprise(reel)).toBe('copie-durable-absente')
+    expect(classifierRefusDeReprise(reel.replace(/’/g, "'"))).toBe('copie-durable-absente')
+  })
+
+  it('laisse rejouable la racine impossible à PROUVER : git a pu échouer un instant', () => {
+    expect(
+      classifierRefusDeReprise(
+        'Reprise du worktree refusée : Impossible de prouver la racine de travail de la copie D:\\x : aucune écriture n’y est faite.'
+      )
+    ).toBeUndefined()
+  })
+
   it('reconnaît la copie durable absente ou incomplète (coordinator:272)', () => {
     expect(
       classifierRefusDeReprise(
