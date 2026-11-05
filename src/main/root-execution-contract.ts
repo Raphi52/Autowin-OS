@@ -286,6 +286,66 @@ const CIBLE_ANCREE = new RegExp(
   `((?:[\\w.@~-]+[/\\\\])+[\\w.@-]+\\.(?:${EXTENSIONS_CIBLE}))\\s*:\\s*(\\d{1,6})(?!\\d)`,
   'gu'
 )
+/**
+ * Un chemin cité comme MODÈLE ou comme POINT DE COMPARAISON n'est pas une cible.
+ *
+ * Défaut vécu conv-1618 (2026-11-05, correctif conv-1626) : la demande citait deux fichiers au format
+ * `chemin:ligne` comme références (« utilise le TimeProvider déjà employé dans X:77 », « alors que le
+ * verrou V2 prend celle du serveur de base (Y:31) »). Le contrôle final a exigé leur modification et
+ * refusé 202 fois de suite un travail juste et publié (364 $).
+ *
+ * Le marqueur doit être PROCHE du chemin : 5 mots au plus, sans « et / puis / ou » entre les deux.
+ * « Utilise X déjà employé dans le service et corrige src/x.ts:12 » garde donc sa cible. Lu sur le
+ * texte sans accents (voir `ciblesNommees`).
+ */
+const MENTION_DE_REFERENCE = new RegExp(
+  String.raw`\b(?:deja\s+(?:employ|utilis|present|en\s+place|appliqu|fait)\w*|(?:alors|tandis)\s+qu\w*|(?:celle|celui|celles|ceux)\s+d\w*|comme\s+(?:dans|chez)|a\s+l['’]image\s+d\w*|sur\s+le\s+modele\s+d\w*|already\s+(?:used|done|present)\w*|as\s+(?:in|done\s+in))\b` +
+    String.raw`(?:\s+(?!(?:et|puis|ou|and|then|or)\b)[\w'’.\x60-]+){0,5}[\s(\x60"'«]*$`,
+  'i'
+)
+
+/**
+ * La proposition qui PRÉCÈDE un chemin, lettre de lecteur comprise.
+ *
+ * `CIBLE_ANCREE` commence APRÈS `D:` (le deux-points n'est pas un caractère de chemin), et `:` est
+ * une frontière de proposition (`CLAUSE_BOUNDARY`) : sans ce recul, la proposition d'un chemin
+ * `D:\…` se réduisait à `\`, et rien de ce qui le précède n'était lu (conv-1618).
+ */
+function clauseAvantChemin(texte: string, index: number): string {
+  const lecteur = /(?<![A-Za-z])[A-Za-z]:[\\/]?$/.exec(texte.slice(Math.max(0, index - 3), index))
+  return clauseBefore(texte, lecteur ? index - lecteur[0].length : index)
+}
+
+/**
+ * Un chemin cité ENTRE PARENTHÈSES pour illustrer une question de LECTURE désigne un endroit à
+ * observer, pas un fichier à modifier.
+ *
+ * Défaut vécu conv-1613 (2026-11-05, correctif conv-1625) : « Mesure d'abord qui lit encore ces
+ * SKILL.md (skill_charger, appel par le nom sans barre dans X:107, …) ». Le contrôle final a exigé la
+ * modification de X et refusé 220 fois un lot juste (402 $). La question doit porter un verbe de
+ * MESURE suivi de « qui / où … lit, appelle, utilise… » : « Corrige le module qui lit la config
+ * (x.ts:12) » garde sa cible. Même garde de conjonction que `MENTION_DE_REFERENCE`.
+ */
+const QUESTION_DE_LECTURE = new RegExp(
+  String.raw`\b(?:mesur|verifi|regard|cherch|list|compt|trouv|identifi|recens|measur|check|find)\w*\s+(?:d['’]abord\s+|first\s+)?(?:qui|ou|who|where)\s+(?:\w+\s+){0,2}?(?:lit|lisent|appel\w*|utilis\w*|charg\w*|import\w*|depend\w*|reads?|calls?|uses?|loads?|imports?)\b` +
+    String.raw`(?:\s+(?!(?:et|puis|ou|and|then|or)\b)[^\s()]*[^\s().;!?,]){0,8}\s*$`,
+  'i'
+)
+
+/** Le texte qui précède la parenthèse encore ouverte où tombe ce chemin ; absent hors parenthèse. */
+function avantParentheseOuverte(texte: string, index: number): string | undefined {
+  const debut = Math.max(0, index - 200)
+  let fermees = 0
+  for (let i = index - 1; i >= debut; i--) {
+    if (texte[i] === ')') fermees++
+    else if (texte[i] === '(') {
+      if (fermees === 0) return texte.slice(Math.max(0, i - 160), i)
+      fermees--
+    }
+  }
+  return undefined
+}
+
 /** Une clause « hors perimetre » decrit ce qu'il ne faut PAS toucher : jamais une obligation. */
 const HORS_PERIMETRE =
   /\b(?:perimetre\s+out|out\s+of\s+scope|hors\s+perimetre|reste\s+intacts?|touche\w*\s+pas|sans\s+toucher|pas\s+toucher|ne\s+pas\s+modifier|exclu\w*)\b/i
@@ -311,6 +371,9 @@ export function ciblesNommees(task: string): string[] {
     const large = texte.slice(Math.max(0, index - 120), index)
     if (HORS_PERIMETRE.test(large)) continue
     if (NEGATED_MENTION_PREFIX.test(clauseBefore(texte, index))) continue
+    if (MENTION_DE_REFERENCE.test(clauseAvantChemin(texte, index))) continue
+    const avantParenthese = avantParentheseOuverte(texte, index)
+    if (avantParenthese !== undefined && QUESTION_DE_LECTURE.test(avantParenthese)) continue
     const chemin = normalized(match[1])
     if (!cibles.includes(chemin)) cibles.push(chemin)
   }
