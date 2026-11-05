@@ -159,6 +159,7 @@ import { collectStdoutJournals, journauxReferencesParUneReservation } from './ru
 import { collectCausalTraces } from './activity/causal-trace-gc'
 import { loadOrchestrationStates } from './runs/orchestration-state'
 import { collectRunWorkspaces } from './runs/workspace-gc'
+import { balayerCopiesDeBaseOrphelines } from './comparaison-a-la-base'
 import { interfaceVisible } from './startup-gate'
 import {
   closeConvRun,
@@ -1623,6 +1624,17 @@ async function menagesApresAffichage(): Promise<void> {
     }
   } catch (error) {
     console.warn('[runs] GC des workspaces de runs impossible', error)
+  }
+  // COPIES DE BASE ABANDONNÉES (conv-1583, 2026-11-05) : une publication coupée par la mort de l'app
+  // laissait sa `%TEMP%\aw-base-*` sur le disque, inscrite dans `git worktree list`, sa jonction vers
+  // `node_modules` encore posée. Seules celles de plus de 6 h partent ; voir `comparaison-a-la-base.ts`.
+  const copiesDeBase = await balayerCopiesDeBaseOrphelines()
+  if (copiesDeBase.supprimees.length || copiesDeBase.echecs.length) {
+    console.log(
+      `[comparaison a la base] ${copiesDeBase.supprimees.length} copie(s) abandonnée(s) retirée(s), ${copiesDeBase.echecs.length} restée(s)`
+    )
+    for (const echec of copiesDeBase.echecs)
+      console.warn('[comparaison a la base] copie non retirée', echec.chemin, echec.raison)
   }
 }
 const ledger = new TraceLedger(join(app.getPath('userData'), 'trace'))
