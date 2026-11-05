@@ -1366,9 +1366,16 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome, faits: string[] =
     ...liste(`Le résultat demandé a été produit et validé${surSujet}.`),
     '📍 Maintenant : la tâche demandée est terminée et son résultat est disponible.',
     '⏳ Reste à faire : rien.',
-    '👉 Recommandé : passer à la prochaine demande.'
+    `👉 Recommandé : ${RECOMMANDATION_FIN_DE_CHAINE}.`
   ]
 }
+
+/**
+ * La recommandation qu'Autowin écrit après le DERNIER maillon d'un run fini. Le mode auto la lit
+ * comme un arrêt (`chat-auto-mode.ts`) : une seule source, sinon un mot changé ici rallumerait la
+ * relève en silence (conv-1575).
+ */
+export const RECOMMANDATION_FIN_DE_CHAINE = 'passer à la prochaine demande'
 
 /** Reconnaît le footer synthétisé par Autowin, sans confondre un bloc libre produit par le worker. */
 function authoritativeDeliveredClosingBlockSpan(

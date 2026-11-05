@@ -36,6 +36,7 @@ import {
 } from '../../../shared/prompt-suivant'
 import { extractRecommendation } from './markdown-recommandation'
 import { parseAskDecision, promptDeLOption, promptDesOptions } from './ask-choices'
+import { RECOMMANDATION_FIN_DE_CHAINE } from '../../../shared/orchestration-outcome'
 import {
   estCibleDestructrice,
   lireDecisionScout,
@@ -101,6 +102,32 @@ export function recommandationDitRien(recommandation: string | null): boolean {
   if (!recommandation) return false
   const lignes = recommandation.split(SAUT_ANCRAGE)
   return ligneNueDitRien(lignes) || lignes.some(estUneFinRedigee)
+}
+
+/** Forme repliée (accents, casse, apostrophes, ponctuation finale) pour comparer deux lignes. */
+const replierLigne = (ligne: string): string =>
+  ligne
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[’ʼ]/gu, "'")
+    .replace(/^[\s>*•\-–—]+/u, '')
+    .replace(/[\s.;:!*`]+$/u, '')
+    .trim()
+
+/**
+ * « passer à la prochaine demande » — LA FIN QU'AUTOWIN ÉCRIT LUI-MÊME après un run fini.
+ *
+ * Demande de l'utilisateur (conv-1575, 2026-11-05) : « quand ya écris ça, ça doit arrêter le mode
+ * auto aussi ». Sur le fil affiché, cette fin envoyait la relève (`PROMPT_NOUVELLE_CIBLE`) : un tour
+ * payé pour proposer des cibles, puis la réponse automatique à son `ask`. Seule la ligne ENTIÈRE
+ * compte : « passer à la prochaine demande du lot, lance /build » reste une vraie suite.
+ */
+export function recommandationFinDeChaine(recommandation: string | null): boolean {
+  return (
+    recommandation !== null &&
+    replierLigne(recommandation) === replierLigne(RECOMMANDATION_FIN_DE_CHAINE)
+  )
 }
 
 /**
@@ -1313,18 +1340,21 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * faire : rien », le texte qu'Autowin ecrit lui-meme apres le dernier maillon.
    */
   // Le signal EXPLICITE passe devant : les portes « rien » ne restent que pour les fils ecrits avant lui.
+  // La fin ecrite par Autowin (conv-1575) vient en DERNIER : elle ne deplace aucune raison existante.
+  const finEcriteParAutowin = recommandationFinDeChaine(extractRecommendation(texteReponse))
   const finDeChaine: RaisonArret | null = signalFinExplicite(texteReponse)
     ? 'fin-explicite'
     : recommandationDitRien(extractRecommendation(texteReponse))
     ? 'recommandation-rien'
     : blocFaitDitRien(texteReponse)
       ? 'fait-rien'
-      : resteAFaireDitRien(texteReponse)
+      : resteAFaireDitRien(texteReponse) || finEcriteParAutowin
         ? 'reste-rien'
         : null
   if (finDeChaine) {
     // Fil d'arriere-plan : on cesse de le suivre, sans depenser un tour sur ce qu'on ne regarde pas.
-    if (!entree.proposerNouvelleCible)
+    // « passer a la prochaine demande » : la chaine est finie AUSSI pour le fil affiche, pas de releve.
+    if (!entree.proposerNouvelleCible || finEcriteParAutowin)
       return { action: 'arreter', raison: finDeChaine, message: MESSAGES_ARRET[finDeChaine] }
     /*
      * Deja demandee DANS CETTE SERIE : on PATIENTE, l'interrupteur reste allume. Le compte vient du
