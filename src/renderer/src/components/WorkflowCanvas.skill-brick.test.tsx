@@ -68,10 +68,79 @@ describe('briques de skills', () => {
     expect(noeud.className).not.toContain('wf-ph-think')
   })
 
+  it('les skills ont leur propre bloc, sous les phases', () => {
+    render({ skills: ['think', 'learn'] })
+    const ids = (testId: string): string[] =>
+      [...container.querySelectorAll(`[data-testid="${testId}"] [data-testid^="wf-add-"]`)].map(
+        (el) => el.getAttribute('data-testid')!.replace('wf-add-', '')
+      )
+    expect(ids('wf-palette')).toEqual([...PIPELINE_PHASES])
+    expect(ids('wf-palette-skills')).toEqual(['think', 'learn'])
+  })
+
   it('cliquer une brique de skill l’ajoute réellement au graphe', () => {
     render({ skills: ['think'] })
     act(() => container.querySelector<HTMLElement>('[data-testid="wf-add-think"]')!.click())
     const graphe = onChange.mock.calls.at(-1)![0] as CanvasGraph
     expect(graphe.nodes.map((n) => n.phase)).toContain('think')
+  })
+})
+
+/**
+ * conv-1628 : une brique sans agent réglé n'affichait AUCUN sélecteur de modèle — on ne pouvait
+ * choisir le modèle de `think` qu'en passant le nombre d'agents à 2 puis à 1.
+ */
+describe('modèle de chaque brique', () => {
+  const modeles = [
+    { provider: 'claude', id: 'claude-haiku' },
+    { provider: 'codex', id: 'gpt-5' }
+  ]
+  const ouvrir = (id: string): void =>
+    act(() => container.querySelector<HTMLElement>(`[data-testid="wf-open-${id}"]`)!.click())
+  const choisir = (testId: string, valeur: string): void => {
+    const liste = container.querySelector<HTMLSelectElement>(`[data-testid="${testId}"]`)!
+    act(() => {
+      liste.value = valeur
+      liste.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
+  it('une brique skill sans agent réglé propose le choix du modèle, sans angle vide', () => {
+    render({
+      graph: { entry: 'think-1', nodes: [{ id: 'think-1', phase: 'think' }], edges: [] },
+      skills: ['think'],
+      models: modeles
+    })
+    ouvrir('think-1')
+    expect(container.querySelector('[data-testid="wf-agent-model-think-1-0"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="wf-agent-effort-think-1-0"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="wf-agent-persona-think-1-0"]')).toBeNull()
+
+    choisir('wf-agent-model-think-1-0', 'gpt-5')
+    const graphe = onChange.mock.calls.at(-1)![0] as CanvasGraph
+    expect(graphe.nodes[0].agents).toEqual([{ provider: 'codex', model: 'gpt-5' }])
+  })
+
+  it('une phase sans agent réglé garde son choix d’angle et de modèle', () => {
+    render({ models: modeles })
+    ouvrir('frame-1')
+    expect(container.querySelector('[data-testid="wf-agent-model-frame-1-0"]')).not.toBeNull()
+    expect(container.querySelector('[data-testid="wf-agent-persona-frame-1-0"]')).not.toBeNull()
+  })
+
+  it('revenir au modèle par défaut retire l’agent vide du profil', () => {
+    render({
+      graph: {
+        entry: 'think-1',
+        nodes: [{ id: 'think-1', phase: 'think', agents: [{ provider: 'codex', model: 'gpt-5' }] }],
+        edges: []
+      },
+      skills: ['think'],
+      models: modeles
+    })
+    ouvrir('think-1')
+    choisir('wf-agent-model-think-1-0', '')
+    const graphe = onChange.mock.calls.at(-1)![0] as CanvasGraph
+    expect(graphe.nodes[0].agents).toBeUndefined()
   })
 })

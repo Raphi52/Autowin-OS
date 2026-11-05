@@ -163,6 +163,45 @@ describe('serveur d’outils d’un nœud skill — cycle de vie', () => {
 })
 
 /**
+ * conv-1628 : le canevas d'Agent Studio permet de choisir le modèle de CHAQUE brique, skills
+ * comprises. Un seul agent réglé envoyait la brique sur le chemin « panel », qui ne sert pas les
+ * outils du nœud skill : choisir un modèle sur `think` lui retirait brain_query et remember.
+ */
+describe('brique skill réglée sur un modèle', () => {
+  const avecModele = (provider: ProviderAdapter): Orchestrator =>
+    new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'modele-du-role' },
+        judge: { provider: provider.id }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\\workspace',
+      worktrees: makeTestWorktrees('C:\\workspace'),
+      skillCommands: () => lanceur,
+      currentWorkflow: () => ({
+        explicit: true,
+        graph: {
+          entry: 'think-1',
+          nodes: [{ id: 'think-1', phase: 'think', agents: [{ model: 'modele-choisi' }] }],
+          edges: []
+        }
+      })
+    } as never)
+
+  it('part sur le modèle choisi ET garde ses outils natifs', async () => {
+    const provider = new ProviderMuet()
+    await avecModele(provider).run('consulte le Brain')
+    const appel = provider.calls[0]
+    expect(appel?.model).toBe('modele-choisi')
+    expect(appel?.skillNodeTools).toBeDefined()
+    // Une session ouverte ailleurs n'est pas reprise : son fournisseur peut être un autre.
+    expect(appel?.resumeSessionId).toBeUndefined()
+  })
+})
+
+/**
  * conv-339, CHEMIN NATIF : l'étape learn de Claude appelle `remember` par le serveur d'outils
  * (`mcp__autowin__remember`), pas par un `<cmd>` dans son texte. Ce faux provider fait ce que fait
  * le CLI : il lit `mcpConfig` et appelle l'outil en HTTP, avec le jeton.

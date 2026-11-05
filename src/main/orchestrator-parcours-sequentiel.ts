@@ -859,9 +859,18 @@ export async function runInner(
     // Panel scout/frame/terrain : ≥1 modèle déposé dans le bloc topology → la phase s'exécute sur
     // CHAQUE membre. Avec un seul membre, sa sortie est réutilisée directement sans synthèse ;
     // avec plusieurs, l'orchestrateur synthétise. Aucun membre → binding subagent rétrocompatible.
-    const fanMembers = bindingOverride
+    const membresDeLaPhase = bindingOverride
       ? []
       : this.resolvePhaseFanOut(phase, task, runtimeSnapshot)
+    /**
+     * Une brique SKILL réglée sur UN agent — le modèle choisi dans le canevas d'Agent Studio — n'est
+     * pas un panel. Le chemin panel ne sert ni les outils natifs ni la boucle d'outils d'un nœud
+     * skill : choisir un modèle sur `think` lui retirait donc brain_query et remember sans un mot
+     * (conv-1628). Elle joue le chemin simple, sur le binding de son agent.
+     */
+    const agentPropreDuNoeudSkill =
+      !isPipelinePhase(phase) && membresDeLaPhase.length === 1 ? membresDeLaPhase[0] : undefined
+    const fanMembers = agentPropreDuNoeudSkill ? [] : membresDeLaPhase
     if (fanMembers.length >= 1) {
       // Le fan-out casse la chaîne de session (N sessions //). Chaque membre part du contexte complet.
       const fanContextBlocks = contextBlocksForPhase(phase)
@@ -1326,7 +1335,10 @@ export async function runInner(
     // Et il ne REPREND PAS la session de l'exécution : son provider peut différer, où cette session
     // n'existe pas. Reprendre y aurait remplacé tout le contexte par « acquis déjà connus, ne les
     // redemande pas » — le juge aurait jugé à l'aveugle. Il reçoit donc le contexte complet.
-    const resuming = Boolean(prevSessionId) && !jugeDedie
+    // Même règle pour une brique skill sur son propre agent (conv-1628) : son fournisseur peut
+    // différer de celui qui a ouvert la session.
+    const sansSessionReprise = jugeDedie || Boolean(agentPropreDuNoeudSkill)
+    const resuming = Boolean(prevSessionId) && !sansSessionReprise
     // Le CADRAGE (phase frame) est le socle du prompt remis aux sous-agents : on le ré-injecte
     // TOUJOURS explicitement, même en resume. Se fier à l'historique de session (opaque, variable
     // par provider, cassé par un fan-out) faisait perdre le besoin cadré exactement au moment où
@@ -1376,17 +1388,18 @@ export async function runInner(
           roles.getBinding(roleDeLaPhase),
           registry.ids()
         )
-      : { binding: subBinding }
+      : { binding: agentPropreDuNoeudSkill ?? subBinding }
     const bindingDeLaPhase = choix.binding
     const providerDeLaPhase = bindingDeLaPhase.provider
     if (choix.note) onDelta?.('exec', `[binding] Phase ${phase} — ${choix.note}\n`)
     // L'effort suit l'effort par défaut de l'étape quand il hérite du rôle (roles.ts,
-    // effortParDefautDeLEtape) ; un binding figé pour le run ou un juge dédié part tel quel.
+    // effortParDefautDeLEtape) ; un binding figé pour le run ou un juge dédié part tel quel. L'agent
+    // propre d'une brique skill aussi : `resolvePhaseFanOut` lui a déjà donné son effort.
     const phaseBinding = this.resolveEtape(
       bindingDeLaPhase,
       phase,
       task,
-      jugeDedie || Boolean(bindingOverride)
+      jugeDedie || Boolean(bindingOverride) || Boolean(agentPropreDuNoeudSkill)
     )
     // Un advisor réglé mais refusé par la table du CLI ne part pas (claude.ts) : on dit pourquoi,
     // sinon le réglage disparaîtrait sans un mot (conv-1083).
@@ -1539,7 +1552,7 @@ export async function runInner(
       ...(phaseBinding.advisorModel ? { claude: { advisorModel: phaseBinding.advisorModel } } : {}),
       // Pas la session de l'exécution pour un juge dédié : elle n'existe pas chez son provider, et
       // la lui passer l'enverrait reprendre un fil inconnu. `resuming` est déjà faux — cohérence.
-      resumeSessionId: jugeDedie ? undefined : prevSessionId,
+      resumeSessionId: sansSessionReprise ? undefined : prevSessionId,
       execution: this.executionOptions(
         workCwd,
         // B3 — une tâche NON-mutation (cadrage/analyse) n'a aucune raison d'écrire : sandbox
@@ -1755,11 +1768,15 @@ export async function runInner(
     // session n'est pas la continuation du travail. On préserve la chaîne de l'exécution telle
     // quelle — sinon la phase suivante reprendrait la session du juge au lieu de la sienne.
     supervision.dispose()
+    // La brique skill sur son propre agent COUPE la chaîne, comme un panel : sa session est peut-être
+    // chez un autre fournisseur, et la phase suivante reçoit alors le contexte complet (conv-1628).
     prevSessionId = jugeDedie
       ? prevSessionId
-      : registry.honoursSessionResume(providerDeLaPhase)
-        ? (phaseRes.sessionId ?? prevSessionId)
-        : undefined
+      : agentPropreDuNoeudSkill
+        ? undefined
+        : registry.honoursSessionResume(providerDeLaPhase)
+          ? (phaseRes.sessionId ?? prevSessionId)
+          : undefined
     prevSessionSandbox = prevSessionId ? phaseSandbox : undefined
     if (
       phase === 'build' &&

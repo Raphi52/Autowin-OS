@@ -85,13 +85,10 @@ export interface WorkflowCanvasProps {
 }
 
 /**
- * Briques proposables = EXACTEMENT ce que le moteur sait jouer. Déduit, jamais recopié : une phase
- * ajoutée à `PIPELINE_PHASES` apparaît ici seule.
- *
- * Une SKILL quelconque du disque n'y entre pas, et ce n'est pas un oubli : le moteur de graphe est
- * typé sur `PipelinePhase` de bout en bout (binding d'agents, quorum, sémantique du verdict judge).
- * Y afficher une skill libre composerait une brique injouable — exactement le mensonge d'interface
- * qu'on corrige ailleurs. Les skills hors pipeline s'invoquent par la palette `/` du chat.
+ * Les briques de PHASE = exactement ce que le moteur joue avec sa sémantique propre (verdict du
+ * juge, quorum, droits de build). Déduit, jamais recopié : une phase ajoutée à `PIPELINE_PHASES`
+ * apparaît ici seule. Les skills du disque ont leur propre bloc de briques, juste dessous : le
+ * moteur joue tout nœud skill (`isSkillNode`), en lecture seule avec ses outils.
  */
 const PALETTE_PHASES: readonly PipelinePhase[] = PIPELINE_PHASES
 
@@ -144,12 +141,13 @@ export function WorkflowCanvas({
   skills = []
 }: WorkflowCanvasProps): React.JSX.Element {
   const { t } = useTextesAgentStudio()
-  /** Huit phases d'abord, puis les skills du disque qui n'en sont pas déjà une. */
-  const palette = useMemo<readonly Phase[]>(
-    () => [
-      ...PALETTE_PHASES,
-      ...skills.filter((id) => !PIPELINE_PHASES.includes(id as PipelinePhase))
-    ],
+  /**
+   * Les skills du disque qui ne sont pas déjà une phase, dans leur PROPRE bloc. Elles étaient
+   * rangées sous le titre « Phases », à la suite des huit : rien ne disait qu'une brique par skill
+   * existait (conv-1628).
+   */
+  const briquesSkills = useMemo<readonly Phase[]>(
+    () => [...new Set(skills)].filter((id) => !PIPELINE_PHASES.includes(id as PipelinePhase)),
     [skills]
   )
   const [drag, setDrag] = useState<number>()
@@ -189,11 +187,22 @@ export function WorkflowCanvas({
   const majNoeud = (id: string, patch: Partial<CanvasNode>): void =>
     onChange({ ...graph, nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)) })
 
+  /**
+   * Les membres AFFICHÉS d'une brique : au moins un. Une brique sans agent réglé n'en montrait
+   * aucun, donc aucun sélecteur de modèle — on ne pouvait choisir le modèle de `think` qu'en
+   * passant par « Agents : 2 » puis 1 (conv-1628).
+   */
+  const membresDe = (node: CanvasNode): CanvasAgent[] => (node.agents?.length ? node.agents : [{}])
+
   /** Modifie UN membre du fan-out sans toucher aux autres réglages déjà posés. */
-  const majAgent = (node: CanvasNode, rang: number, patch: Partial<CanvasAgent>): void =>
-    majNoeud(node.id, {
-      agents: (node.agents ?? []).map((a, i) => (i === rang ? { ...a, ...patch } : a))
-    })
+  const majAgent = (node: CanvasNode, rang: number, patch: Partial<CanvasAgent>): void => {
+    const agents = membresDe(node).map((a, i) => (i === rang ? { ...a, ...patch } : a))
+    // Un agent unique revenu tout entier « par défaut » n'est plus un réglage : la brique reprend
+    // le modèle de son rôle, et le profil enregistré ne garde pas un agent vide.
+    const seulEtVide =
+      agents.length === 1 && Object.values(agents[0]).every((valeur) => valeur === undefined)
+    majNoeud(node.id, { agents: seulEtVide ? undefined : agents })
+  }
 
   /**
    * Un retour vers une carte donnée existe, ou n'existe pas — il ne s'EMPILE pas. Chaque clic ajoutait une arête de
@@ -284,10 +293,11 @@ export function WorkflowCanvas({
     <section className="wf-canvas" data-testid="workflow-canvas">
       <div className="wf-editor">
         <aside className="wf-palette-pane">
-          {/* « Phases », « Agents », « Agent N », « Angle », « Effort », « Quorum » : les mêmes mots en anglais. */}
+          {/* « Phases », « Skills », « Agents », « Agent N », « Angle », « Effort », « Quorum » :
+              les mêmes mots en anglais. */}
           <p className="wf-kicker">Phases</p>
           <ul className="wf-palette" data-testid="wf-palette">
-            {palette.map((phase) => (
+            {PALETTE_PHASES.map((phase) => (
               <li key={phase}>
                 <button
                   type="button"
@@ -301,6 +311,26 @@ export function WorkflowCanvas({
               </li>
             ))}
           </ul>
+          {briquesSkills.length > 0 && (
+            <>
+              <p className="wf-kicker wf-kicker-sub">Skills</p>
+              <ul className="wf-palette" data-testid="wf-palette-skills">
+                {briquesSkills.map((skill) => (
+                  <li key={skill}>
+                    <button
+                      type="button"
+                      className={`wf-pal-item ${classePhase(skill)}`}
+                      data-testid={`wf-add-${skill}`}
+                      onClick={() => ajouter(skill)}
+                    >
+                      <span className="wf-dot" />
+                      {skill}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <p className="wf-hint">{t('canevas.aide')}</p>
         </aside>
 
@@ -506,26 +536,30 @@ export function WorkflowCanvas({
                   {/* Trois réglages par membre — modèle, effort, ANGLE. Sans l'angle, un panel de
                       trois juges est trois fois le même juge : il coûte trois fois plus et
                       n'apprend rien de plus. L'angle est injecté dans le prompt du membre. */}
-                  {(node.agents ?? []).map((agent, r) => (
+                  {membresDe(node).map((agent, r) => (
                     <div className="wf-agent-card" key={r}>
                       <p className="wf-agent-rang">Agent {r + 1}</p>
-                      <label>
-                        Angle
-                        <select
-                          data-testid={`wf-agent-persona-${node.id}-${r}`}
-                          value={agent.persona ?? ''}
-                          onChange={(e) =>
-                            majAgent(node, r, { persona: e.target.value || undefined })
-                          }
-                        >
-                          <option value="">{t('canevas.aucunAngle')}</option>
-                          {personasFor(node.phase).map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                      {/* Une skill n'a pas d'angles pré-écrits (`personasFor`) : la liste n'offrait
+                          que « aucun angle ». Elle ne s'affiche que si elle propose quelque chose. */}
+                      {(personasFor(node.phase).length > 0 || agent.persona) && (
+                        <label>
+                          Angle
+                          <select
+                            data-testid={`wf-agent-persona-${node.id}-${r}`}
+                            value={agent.persona ?? ''}
+                            onChange={(e) =>
+                              majAgent(node, r, { persona: e.target.value || undefined })
+                            }
+                          >
+                            <option value="">{t('canevas.aucunAngle')}</option>
+                            {personasFor(node.phase).map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
                       <label>
                         {t('canevas.modele')}
                         <select
