@@ -216,3 +216,61 @@ describe('la décision attendue dans la liste des runs', () => {
     expect(context).toContain('build-rouge (red, bloqué)')
   })
 })
+
+/**
+ * Les 8 places de « Runs en cours/bloqués » prenaient les 8 PREMIERS runs : le 2026-11-05, les huit
+ * étaient des essais de conv-1461 (`build-nouvelle-falaise-o-1916-deja-<horodatage>`), et l'agent ne
+ * voyait plus aucun autre run (scout conv-1576, lot conv-1589). Le sujet se lit sans son horodatage
+ * en base 36 (`runs/conv-runs.ts`) ; l'entrée qui ferait échouer ce test : 33 essais d'un même sujet
+ * devant deux autres runs.
+ */
+describe('la liste des runs regroupe les essais d’un même sujet', () => {
+  const essais = Array.from({ length: 33 }, (_, i) => ({
+    subject: `build-nouvelle-falaise-o-1916-deja-${(Date.UTC(2026, 10, 5) + i * 60_000).toString(36)}`,
+    status: 'red',
+    blocked: true
+  }))
+
+  it('compte les essais au lieu de les répéter, et laisse leur place aux autres runs', () => {
+    const context = collectOrchestrationContext({
+      task: 't',
+      runs: [
+        ...essais,
+        { subject: 'build-split-part-2-mw38cm5s', status: 'open', blocked: false },
+        { subject: 'build-traite-ensemble-mw373r3g', status: 'open', blocked: false }
+      ]
+    })
+    const ligne = context.split('\n').find((l) => l.startsWith('Runs en cours/bloqués:')) ?? ''
+    expect(ligne).toContain(`${essais[0].subject} (red, bloqué) ×33 essais du même sujet`)
+    expect(ligne.match(/build-nouvelle-falaise/g)).toHaveLength(1)
+    expect(ligne).toContain('build-split-part-2-mw38cm5s (open)')
+    expect(ligne).toContain('build-traite-ensemble-mw373r3g (open)')
+  })
+
+  it('dit la répartition des états quand les essais ne finissent pas pareil', () => {
+    const context = collectOrchestrationContext({
+      task: 't',
+      runs: [
+        { subject: 'build-falaise-mw34ajhv', status: 'open', blocked: false },
+        { subject: 'build-falaise-mw2qz5o0', status: 'red', blocked: true },
+        { subject: 'build-falaise-mw2pqaoj', status: 'red', blocked: true }
+      ]
+    })
+    expect(context).toContain(
+      'build-falaise-mw34ajhv (open) ×3 essais du même sujet (1 open, 2 red)'
+    )
+  })
+
+  it('borne la liste à 8 SUJETS', () => {
+    const context = collectOrchestrationContext({
+      task: 't',
+      runs: Array.from({ length: 10 }, (_, i) => ({
+        subject: `build-sujet-${i}-mw34ajhv`,
+        status: 'open',
+        blocked: false
+      }))
+    })
+    expect(context).toContain('build-sujet-7-mw34ajhv')
+    expect(context).not.toContain('build-sujet-8-mw34ajhv')
+  })
+})
