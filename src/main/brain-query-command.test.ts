@@ -147,10 +147,10 @@ describe('cablage de brain_query', () => {
 
   it('est declaree au catalogue avec sa question, et annoncee en LECTURE SEULE', () => {
     const source = commands()
-    const spec = source.slice(
-      source.indexOf("name: 'brain_query'"),
-      source.indexOf("name: 'brain_query'") + 600
-    )
+    // L'entrée entière, jusqu'à la suivante — pas une fenêtre de 600 caractères qu'une description
+    // plus longue fait déborder (conv-1571).
+    const debut = source.indexOf("name: 'brain_query'")
+    const spec = source.slice(debut, source.indexOf("name: '", debut + 1))
     expect(spec).toContain('question')
     expect(spec).toContain('readOnlyHint: true')
   })
