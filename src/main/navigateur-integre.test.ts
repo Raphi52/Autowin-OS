@@ -40,6 +40,8 @@ vi.mock('electron', () => {
   const sessionPartagee = {
     webRequest,
     setPermissionRequestHandler: vi.fn(),
+    getUserAgent: () => 'Mozilla/5.0 Chrome/140.0.0.0 Electron/44.5.1 Safari/537.36',
+    setUserAgent: vi.fn(),
     on: vi.fn()
   }
   electronSimule.sessionsParId.set('unique', sessionPartagee)
@@ -66,6 +68,8 @@ vi.mock('electron', () => {
       const contenu = {
         id: prochainId++,
         session: sessionPartagee,
+        getUserAgent: () => 'Mozilla/5.0 Chrome/140.0.0.0 Electron/44.5.1 Safari/537.36',
+        setUserAgent: vi.fn(),
         ecoutes,
         ouvertureFenetre: undefined as
           undefined | ((d: { url: string; disposition: string }) => { action: string }),
@@ -3056,3 +3060,14 @@ function readFileSafe(chemin: string): string | null {
     return null
   }
 }
+
+describe('agentChrome (conv-1569)', () => {
+  it('retire Electron et la marque de l’app de l’agent', async () => {
+    const { agentChrome } = await import('./navigateur-integre')
+    const brut =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) autowin-os/0.1.0 Chrome/140.0.0.0 Electron/44.5.1 Safari/537.36'
+    expect(agentChrome(brut)).toBe(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+    )
+  })
+})

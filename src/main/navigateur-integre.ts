@@ -29,6 +29,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
+import { spawn } from 'node:child_process'
 import { dirname, extname, basename, join } from 'node:path'
 import { app, session, shell, WebContentsView, type BrowserWindow, type Session } from 'electron'
 import { autowinAppDataRoot } from './app-data'
@@ -1982,6 +1983,9 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
   function preparerSession(ses: Session): void {
     if (sessionsPretes.has(ses)) return
     sessionsPretes.add(ses)
+    // Le navigateur intégré se présente comme Chrome, pas comme Electron (demande de l'utilisateur,
+    // conv-1569) : certains sites refusent ou dégradent un agent « Electron/x ».
+    ses.setUserAgent(agentChrome(ses.getUserAgent()))
     ses.setPermissionRequestHandler((_contenu, permission, rappel) => {
       rappel(PERMISSIONS_ACCORDEES.has(permission))
     })
@@ -2032,6 +2036,8 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
       const contenu = vue.webContents
       const idContenu = contenu.id
       preparerSession(contenu.session)
+      // L'agent de la page passe devant celui de la session : sans ceci, « Electron/x » restait (conv-1569).
+      contenu.setUserAgent(agentChrome(contenu.getUserAgent()))
       ecouteursParContenu.set(idContenu, ecouteurs)
       vue.setVisible(false)
       // Une taille dès la création (conv-1304) : panneau jamais ouvert, la vue restait en 0 × 0, sa
@@ -2223,6 +2229,25 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
         await ses.clearCache()
       }
     },
-    ouvrirExterne: (url) => shell.openExternal(url)
+    ouvrirExterne: (url) => ouvrirDansChrome(url)
   }
+}
+
+/** Retire les marques Electron et Autowin de l'agent, pour qu'il reste celui de Chrome (conv-1569). */
+export function agentChrome(agent: string): string {
+  return agent
+    .split(' ')
+    .filter((morceau) => !/^(Electron|autowin[\w-]*)\//i.test(morceau))
+    .join(' ')
+}
+
+/** Chrome, jamais Edge ni le navigateur par défaut du poste (préférence de l'utilisateur, conv-1569). */
+export const CHEMIN_CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+
+async function ouvrirDansChrome(url: string): Promise<void> {
+  if (!existsSync(CHEMIN_CHROME)) {
+    await shell.openExternal(url)
+    return
+  }
+  spawn(CHEMIN_CHROME, [url], { detached: true, stdio: 'ignore' }).unref()
 }
