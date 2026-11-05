@@ -1,11 +1,13 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   bandeauPublie,
+  blocDuTour,
   lignesGitDuJournal,
+  lignesGitDuTour,
   commitsPublies,
   decisionGitApresFil,
   estDepotAutowin,
@@ -263,15 +265,51 @@ describe('bandeauPublie', () => {
   // conv-1553 : « Publié sans /git » ne disait ni l'action ni la commande ; l'utilisateur veut
   // « GIT : N commit », le nom du commit, l'action et la ligne exacte envoyée au shell.
   it('titre de statut, nomme l’action et cite les lignes git exactes du tour', () => {
-    const ligne = 'cd /d/X && git commit -q -m "a <b>" && ALLOW_MAIN_PUSH=1 git push -q origin HEAD:main'
+    const ligne =
+      'cd /d/X && git commit -q -m "a <b>" && ALLOW_MAIN_PUSH=1 git push -q origin HEAD:main'
     const bandeau = bandeauPublie(commits, [ligne])
     // conv-1573 : le titre est un statut, « N commits et push <distant> <branche> réussi ».
     expect(bandeau).toContain('<div class="aw-kicker">2 commits et push origin main réussi</div>')
     expect(bandeau).not.toContain('GIT : 2 commits')
     expect(bandeau).not.toContain('Publié sans /git')
-    expect(bandeau).toContain('Commit et push')
     expect(bandeau).toContain('git push -q origin HEAD:main')
     expect(bandeau).toContain('&quot;a &lt;b&gt;&quot;'.replace(/&quot;/g, '"'))
+  })
+
+  // conv-1574 (/draft « 1 · Compact rail ») : un rail, une ligne par étape, qui se déplie sur sa
+  // commande ; trait de 3 px et points de 10 px, les réglages choisis par l'utilisateur.
+  it('rail compact : Commit, Push puis Annuler, chaque commande sous son étape', () => {
+    const commit = "cd /d/X; git add -- a.ts\ngit commit -q -F - <<'EOF'\nfeat: a (conv-9)\nEOF"
+    const push = 'cd /d/X; ALLOW_MAIN_PUSH=1 git push origin HEAD:main 2>&1 | tail -8'
+    const bandeau = bandeauPublie(commits, [commit, push])
+    const position = (texte: string): number => bandeau.indexOf(texte)
+    expect(bandeau).toContain('<div class="awp-rail">')
+    expect(position('<b>Commit</b>')).toBeGreaterThan(-1)
+    // La commande de commit est pliée sous Commit, celle du push sous Push, le bouton en dernier.
+    expect(position('<b>Commit</b>')).toBeLessThan(position('git commit -q'))
+    expect(position('git commit -q')).toBeLessThan(position('<b>Push</b>'))
+    expect(position('<b>Push</b>')).toBeLessThan(position('git push origin HEAD:main'))
+    expect(position('git push origin HEAD:main')).toBeLessThan(position('awp-annuler" href'))
+    expect(bandeau).toContain('vers origin/main')
+    // L'ancienne phrase redisait ce que les étapes nomment déjà.
+    expect(bandeau).not.toContain('de ce fil <b>en ligne</b>')
+  })
+
+  it('rail compact : un seul commit montre son sha et son sujet sur la ligne Commit', () => {
+    const bandeau = bandeauPublie([commits[0]!])
+    expect(bandeau).toMatch(
+      /<summary><b>Commit<\/b><span class="aw-chip awp-sha">1a2b3c4d<\/span><span class="aw-discret awp-coupe">fix\(chat\): le bouton &lt;revient&gt;/
+    )
+    // Sans ligne de push lue, « en ligne » (lu sur l'amont) et aucune destination inventée.
+    expect(bandeau).toMatch(/<b>Push<\/b><span class="aw-discret awp-coupe">en ligne<\/span>/)
+  })
+
+  it('rail compact : trait de 3 px, points de 10 px, peints en image (le thème clair force le fond)', () => {
+    const style = bandeauPublie(commits).match(/<style>(.*?)<\/style>/)?.[1] ?? ''
+    expect(style).toMatch(/\.awp-pt\{[^}]*width:10px;height:10px/)
+    expect(style).toMatch(/\.awp-trait\{[^}]*width:3px/)
+    expect(style).not.toMatch(/background-color/)
+    expect(style).not.toMatch(/background:/)
   })
 
   it('sans ligne lue, le dit au lieu d’inventer une commande', () => {
@@ -281,8 +319,14 @@ describe('bandeauPublie', () => {
   it('lignesGitDuJournal ne garde que les commandes Bash qui commitent ou poussent', () => {
     const jsonl = [
       JSON.stringify({ kind: 'provider-status', data: { target: 'git status --short' } }),
-      JSON.stringify({ kind: 'provider-status', data: { target: 'git commit -m x && git push origin HEAD:main' } }),
-      JSON.stringify({ kind: 'provider-status', data: { target: 'git commit -m x && git push origin HEAD:main' } }),
+      JSON.stringify({
+        kind: 'provider-status',
+        data: { target: 'git commit -m x && git push origin HEAD:main' }
+      }),
+      JSON.stringify({
+        kind: 'provider-status',
+        data: { target: 'git commit -m x && git push origin HEAD:main' }
+      }),
       'pas du json'
     ].join('\n')
     expect(lignesGitDuJournal(jsonl)).toEqual(['git commit -m x && git push origin HEAD:main'])
@@ -298,6 +342,102 @@ describe('bandeauPublie', () => {
     expect(bandeau).not.toContain('#autowin-prompt')
     expect(bandeau).toContain('40 commits')
     expect(bandeau).toContain('trop nombreux')
+  })
+})
+
+/*
+ * conv-1574 : « le style du bloc qu'on a drafté s'applique jamais ». Mesuré le 05/11 : 136 commits sur
+ * main depuis la veille, une douzaine de blocs git. Les publications passaient par le fil lui-même
+ * (`publier-isole.ps1`, `git push` dans son tour) ou par l'enchaînement auto, qui n'en posaient aucun.
+ */
+describe('blocDuTour — le rail aussi quand le fil ou l’enchaînement auto publie (conv-1574)', () => {
+  const commit = { sha: 'abc12345', sujet: 'fix(x): le rail partout (conv-9)' }
+  const pousseParLeFil = [
+    'Bash · git status --short',
+    "Bash · cd /d/AutoWinOS; git add -- src/a.ts; git commit -q -m 'fix(x): le rail partout (conv-9)'",
+    'Bash terminé - 2 s',
+    'Bash · ALLOW_MAIN_PUSH=1 git push origin HEAD:main 2>&1 | tail -3',
+    'Bash · git log -1 --format=%s; git show --stat HEAD'
+  ]
+  const rapportPousse = (branche = 'main'): AutoCloseReport => ({
+    runId: 'chat-conv-9',
+    branch: 'autowin/chat-conv-9',
+    at: '2026-11-05T11:20:00Z',
+    source: 'chat',
+    project: { status: 'pushed', branch: branche, files: 2, mode: 'direct' }
+  })
+
+  it('un fil qui pousse lui-même reçoit le rail, avec ses vraies commandes', () => {
+    const bloc = blocDuTour({
+      commits: [commit],
+      actionsLog: pousseParLeFil,
+      rapport: undefined,
+      contenusDuFil: []
+    })
+    expect(bloc).toContain('awp-rail')
+    expect(bloc).toContain('awp-sha">abc12345</span>')
+    const commitEnPremier = bloc!.indexOf('git commit -q')
+    const push = bloc!.indexOf('ALLOW_MAIN_PUSH=1 git push origin HEAD:main')
+    expect(commitEnPremier).toBeGreaterThan(-1)
+    expect(push).toBeGreaterThan(commitEnPremier)
+  })
+
+  it('les commandes git qui ne font que lire ne sont pas citées', () => {
+    expect(lignesGitDuTour(pousseParLeFil)).toEqual([
+      "cd /d/AutoWinOS; git add -- src/a.ts; git commit -q -m 'fix(x): le rail partout (conv-9)'",
+      'ALLOW_MAIN_PUSH=1 git push origin HEAD:main 2>&1 | tail -3'
+    ])
+  })
+
+  it('publier-isole.ps1 compte quand il est LANCÉ, pas quand une lecture le nomme (vu dans conv-1590)', () => {
+    const lance =
+      "Bash · powershell -NoProfile -File scripts/publier-isole.ps1 -Message 'fix (conv-9)'"
+    const lu =
+      'Bash · git fetch -q origin; for f in scripts/publier-isole.ps1; do [ "$(git rev-parse origin/main:$f)" = "$(git hash-object $f)" ] && echo identique; done'
+    expect(lignesGitDuTour([lance, lu])).toEqual([lance.slice('Bash · '.length)])
+  })
+
+  it('l’enchaînement auto cite la ligne qu’il envoie (run-autoclose.ts), pas une ligne inventée', () => {
+    const bloc = blocDuTour({
+      commits: [commit],
+      actionsLog: [],
+      rapport: rapportPousse(),
+      contenusDuFil: []
+    })
+    expect(bloc).toContain('ALLOW_MAIN_PUSH=1 git push origin abc12345:refs/heads/main')
+    expect(bloc).not.toContain('non retrouvée')
+    expect(bloc).toContain('push origin main réussi')
+  })
+
+  it('un commit déjà montré dans un bloc du fil ne revient pas ; le citer dans une réponse ne compte pas', () => {
+    const dejaMontre = bandeauPublie([commit])
+    expect(
+      blocDuTour({
+        commits: [commit],
+        actionsLog: [],
+        rapport: undefined,
+        contenusDuFil: [dejaMontre]
+      })
+    ).toBeUndefined()
+    expect(
+      blocDuTour({
+        commits: [commit],
+        actionsLog: [],
+        rapport: undefined,
+        contenusDuFil: ['Publié : abc12345 sur origin/main.']
+      })
+    ).toContain('awp-rail')
+  })
+
+  it('aucun commit du fil arrivé en amont : aucun bloc', () => {
+    expect(
+      blocDuTour({
+        commits: [],
+        actionsLog: pousseParLeFil,
+        rapport: rapportPousse(),
+        contenusDuFil: []
+      })
+    ).toBeUndefined()
   })
 })
 
@@ -638,6 +778,38 @@ describe('commitsPublies — lu sur un vrai dépôt et son distant', () => {
     const avant = await lireAmont(runGit, local)
     commit(local, 'fix: pas poussé (conv-9)')
     expect(await commitsPublies(runGit, local, avant!, 'conv-9')).toEqual([])
+  })
+
+  // conv-1574 : le fil pousse depuis une copie à part, comme `scripts/publier-isole.ps1` ; le
+  // dossier du fil doit le voir sans fetch, sinon le bloc du tour ne part jamais.
+  it('un push fait depuis une copie à part (publier-isole.ps1) donne le rail au dossier du fil', async () => {
+    const { local } = depot()
+    const avant = await lireAmont(runGit, local)
+    const copie = join(dirname(local), 'copie')
+    git(local, 'worktree', 'add', '--quiet', '--detach', copie, 'origin/main')
+    git(copie, 'config', 'user.email', 'test@example.invalid')
+    commit(copie, 'fix: poussé à part (conv-9)')
+    git(copie, 'push', 'origin', 'HEAD:main')
+    const commits = await commitsPublies(runGit, local, avant!, 'conv-9')
+    expect(commits.map((c) => c.sujet)).toEqual(['fix: poussé à part (conv-9)'])
+    const bloc = blocDuTour({
+      commits,
+      actionsLog: [`Bash · powershell -File scripts/publier-isole.ps1 -Message 'fix (conv-9)'`],
+      rapport: undefined,
+      contenusDuFil: []
+    })
+    expect(bloc).toContain(`awp-sha">${commits[0]!.sha}</span>`)
+    expect(bloc).toContain('publier-isole.ps1')
+  })
+
+  it('le push de l’enchaînement auto (sha:refs/heads/main) arrive aussi en amont', async () => {
+    const { local } = depot()
+    const avant = await lireAmont(runGit, local)
+    commit(local, 'feat: enchaînement (conv-9)')
+    const sha = git(local, 'rev-parse', 'HEAD').trim()
+    git(local, 'push', 'origin', `${sha}:refs/heads/main`)
+    const commits = await commitsPublies(runGit, local, avant!, 'conv-9')
+    expect(commits.map((c) => c.sujet)).toEqual(['feat: enchaînement (conv-9)'])
   })
 
   it('une branche sans amont ne fait pas tomber la passe', async () => {

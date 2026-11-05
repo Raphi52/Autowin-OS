@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { deposerFichier, relireFichier } from './ecriture-hors-fil'
 import type { StatutDuPlan } from '../shared/plan-de-lots'
 import type { AutoCloseReport, GitRunner } from './run-autoclose'
-import { titreDuBandeau } from './titre-bandeau-git'
+import { destinationDuPush, titreDuBandeau } from './titre-bandeau-git'
 
 /**
  * « PUBLIER SANS TAPER /git » (conv-1339, 2026-10-30, piste du scout conv-1332).
@@ -254,6 +254,46 @@ const echapper = (texte: string): string =>
   texte.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 /**
+ * RAIL COMPACT (conv-1574, /draft « 1 · Compact rail ») : un trait vertical, une LIGNE par étape —
+ * Commit, Push, Annuler —, et la ligne elle-même se déplie sur le sujet complet et sa commande.
+ * Trait de 3 px et points de 10 px : les réglages choisis par l'utilisateur dans le /draft.
+ * Points et trait sont des `background-image` : le thème clair force `background-color` sur toute
+ * page du fil (theme-modes.css), pas l'image.
+ */
+const STYLE_DU_RAIL = [
+  '.awp-rail{display:flex;flex-direction:column;margin-top:4px}',
+  '.awp-et{display:flex;gap:10px;min-width:0}',
+  '.awp-col{display:flex;flex-direction:column;align-items:center;flex:none;width:14px;padding-top:5px}',
+  '.awp-pt{flex:none;width:10px;height:10px;border-radius:50%;background-image:linear-gradient(var(--ok),var(--ok))}',
+  '.awp-vide{background-image:none;box-shadow:inset 0 0 0 1.5px var(--text-dim)}',
+  '.awp-trait{flex:1;width:3px;margin-top:3px;border-radius:2px;background-image:linear-gradient(color-mix(in srgb,var(--gold-doux) 70%,transparent),color-mix(in srgb,var(--gold-doux) 70%,transparent))}',
+  '.awp-corps{flex:1;min-width:0;padding-bottom:6px}',
+  '.awp-corps>summary,.awp-ligne{display:flex;align-items:baseline;gap:8px;min-width:0}',
+  '.awp-corps>summary{list-style:none;cursor:pointer}',
+  '.awp-coupe{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+  '.awp-sha{flex:none;white-space:nowrap}',
+  '.awp-fl{flex:none;font-family:var(--mono);font-size:11px}',
+  '.awp-corps[open]>summary .awp-fl{color:var(--gold-clair)}',
+  '.awp-plie{display:flex;flex-direction:column;gap:4px;margin-top:4px}',
+  '.awp-shell{margin:0;font-family:var(--mono);font-size:11.5px;line-height:1.45;white-space:pre-wrap;word-break:break-all;color:var(--text-dim)}',
+  // Sans `color:inherit`, le lien sort dans le bleu par défaut du navigateur, illisible sur fond sombre.
+  '.awp-annuler{display:inline-block;color:inherit;font-weight:600;text-decoration:none;cursor:pointer;border-style:dashed}'
+].join('')
+
+const OK = '<span class="aw-ok">ok</span>'
+const DETAILS = '<span class="aw-discret awp-fl">détails ▸</span>'
+const shaPuce = (sha: string): string => `<span class="aw-chip awp-sha">${echapper(sha)}</span>`
+
+/** Une étape du rail : le point (plein, ou creux pour l'annulation) et la ligne, pliée ou non. */
+function etapeDuRail(entete: string, plie: readonly string[], fin = false): string {
+  const colonne = `<div class="awp-col"><span class="awp-pt${fin ? ' awp-vide' : ''}"></span>${fin ? '' : '<span class="awp-trait"></span>'}</div>`
+  const corps = plie.length
+    ? `<details class="awp-corps"><summary>${entete}${DETAILS}</summary><div class="awp-plie">${plie.join('')}</div></details>`
+    : `<div class="awp-corps"><div class="awp-ligne">${entete}</div></div>`
+  return `<div class="awp-et">${colonne}${corps}</div>`
+}
+
+/**
  * La note « publié » posée dans le fil, avec son bouton d'annulation. Le fil envoie le LIBELLÉ du
  * lien (`bouton-prompt-html.ts`) : ce qui sera annulé est écrit sur le bouton, et l'annulation est
  * un tour ordinaire, demandé par un clic. Un `git revert` direct depuis l'app buterait sur un arbre
@@ -280,43 +320,90 @@ export function lignesGitDuJournal(jsonl: string): string[] {
   return lignes
 }
 
-/** L'action lue dans les lignes : ce que l'utilisateur doit savoir sans relire la commande. */
-function actionDesLignes(lignes: readonly string[]): string {
-  const tout = lignes.join('\n')
-  const commit = /\bgit\s+commit\b/.test(tout)
-  const push = /\bgit\s+push\b/.test(tout)
-  return commit && push ? 'Commit et push' : push ? 'Push' : commit ? 'Commit' : 'Publication'
-}
-
 export function bandeauPublie(
   commits: readonly CommitPublie[],
   lignesShell: readonly string[] = []
 ): string {
   const n = commits.length
-  const lignes = commits
-    .slice(0, COMMITS_DANS_LE_BOUTON)
-    .map(
-      (commit) =>
-        `<div><span class="aw-chip">${echapper(commit.sha)}</span> ${echapper(commit.sujet)}</div>`
-    )
+  const cites = commits.slice(0, COMMITS_DANS_LE_BOUTON)
+  // Une ligne qui pousse va sous Push ; tout le reste (lint, add, commit) sous Commit.
+  const pousse = (ligne: string): boolean => /\bgit\s+push\b/.test(ligne)
+  const shell = (ligne: string): string => `<pre class="awp-shell">${echapper(ligne)}</pre>`
+  const destination = destinationDuPush(lignesShell)
+
+  const enteteCommit =
+    n === 1
+      ? `<b>Commit</b>${shaPuce(cites[0]!.sha)}<span class="aw-discret awp-coupe">${echapper(cites[0]!.sujet)}</span>${OK}`
+      : `<b>Commit</b><b class="aw-chiffre">${n} commits</b><span class="aw-discret awp-coupe">${echapper(cites.map((c) => c.sujet).join(' · '))}</span>${OK}`
+  const plieCommit = [
+    ...cites.map((c) => `<div>${shaPuce(c.sha)} ${echapper(c.sujet)}</div>`),
+    ...(lignesShell.length
+      ? lignesShell.filter((ligne) => !pousse(ligne)).map(shell)
+      : ['<div class="aw-discret">Commande du shell non retrouvée dans le journal du tour.</div>'])
+  ]
+  // Sans ligne de push lue, les commits sont « en ligne » (lus sur l'amont), sans destination inventée.
+  const entetePush = `<b>Push</b><span class="aw-discret awp-coupe">${destination ? `vers ${echapper(destination.replace(' ', '/'))}` : 'en ligne'}</span>${OK}`
   const annuler =
     n <= COMMITS_DANS_LE_BOUTON
       ? `<a class="aw-chip awp-annuler" href="#autowin-prompt">Annuler la publication (git revert ${commits.map((c) => c.sha).join(' ')}, puis push)</a>`
       : `<div class="aw-discret">Commits trop nombreux pour un bouton : demande leur annulation dans le fil.</div>`
   return [
     '```html-render',
-    // Sans cette règle, le lien sort dans le bleu par défaut du navigateur, illisible sur fond sombre.
-    '<style>.awp-annuler{display:inline-block;margin-top:6px;color:inherit;font-weight:600;text-decoration:none;cursor:pointer}.awp-shell{white-space:pre-wrap;word-break:break-all;margin:4px 0}</style>',
+    `<style>${STYLE_DU_RAIL}</style>`,
     // Titre = statut, « 1 commit et push origin main réussi » (conv-1573).
     `<div class="aw-kicker">${echapper(titreDuBandeau(n, lignesShell))}</div>`,
-    `<div><b>${actionDesLignes(lignesShell)}</b> : <b class="aw-chiffre">${n} commit${n > 1 ? 's' : ''}</b> de ce fil <b>en ligne</b>.</div>`,
-    ...lignes,
-    ...(lignesShell.length
-      ? lignesShell.map((ligne) => `<pre class="aw-chip awp-shell">${echapper(ligne)}</pre>`)
-      : ['<div class="aw-discret">Commande du shell non retrouvée dans le journal du tour.</div>']),
-    annuler,
+    `<div class="awp-rail">${[
+      etapeDuRail(enteteCommit, plieCommit),
+      etapeDuRail(entetePush, lignesShell.filter(pousse).map(shell)),
+      etapeDuRail(annuler, [], true)
+    ].join('')}</div>`,
     '```'
   ].join('\n')
+}
+
+/**
+ * Une commande qui commite ou pousse, pas une qui lit (`git log`, `git show`, `git status`).
+ * `publier-isole.ps1` compte LANCÉ par PowerShell : une lecture qui le nomme (conv-1590,
+ * `git hash-object scripts/publier-isole.ps1`) n'a rien publié.
+ */
+const ECRIT_DANS_GIT =
+  /\bgit\s+(?:-C\s+\S+\s+)?(?:commit|push)\b|\b(?:powershell|pwsh)(?:\.exe)?\b[^;|&\n]*publier-isole\.ps1/i
+
+/** Les commandes du tour qui commitent ou poussent, lues dans son journal d'actions (`Bash · …`). */
+export function lignesGitDuTour(actionsLog: readonly string[]): string[] {
+  return actionsLog.flatMap((ligne) => {
+    const commande = /^Bash\s*·\s*(.+)$/s.exec(ligne)?.[1]?.trim()
+    return commande && ECRIT_DANS_GIT.test(commande) ? [commande] : []
+  })
+}
+
+/**
+ * LE RAIL À CHAQUE PUBLICATION D'UN TOUR (conv-1574, « le style du bloc qu'on a drafté s'applique
+ * jamais »). Seules la passe `/git` sans tour et la clôture d'un run posaient le bloc. Mesuré le
+ * 05/11 : 136 commits sur main depuis la veille pour une douzaine de blocs, tous à l'ancien affichage.
+ * Les autres partaient du fil lui-même (`publier-isole.ps1`, `git push` dans son tour) ou de
+ * l'enchaînement auto du chat, sans un mot dans le fil.
+ *
+ * `commits` : ceux du fil arrivés en amont pendant le tour, enchaînement compris (`commitsPublies`).
+ * Un commit déjà montré par un bloc (sa puce sha) ne revient pas ; le citer en prose ne compte pas.
+ * La ligne de l'enchaînement auto est celle qu'envoie `run-autoclose.ts` (push direct de son commit,
+ * le plus récent du fil puisqu'il part après le tour), comme dans `annonce-commit-local.ts`.
+ */
+export function blocDuTour(entree: {
+  commits: readonly CommitPublie[]
+  actionsLog: readonly string[]
+  rapport: AutoCloseReport | undefined
+  contenusDuFil: readonly string[]
+}): string | undefined {
+  const montre = (sha: string): boolean =>
+    entree.contenusDuFil.some((contenu) => contenu.includes(`awp-sha">${echapper(sha)}</span>`))
+  const nouveaux = entree.commits.filter((commit) => !montre(commit.sha))
+  if (!nouveaux.length) return undefined
+  const lignes = lignesGitDuTour(entree.actionsLog)
+  const projet = entree.rapport?.project
+  if (projet?.status === 'pushed' && projet.mode === 'direct')
+    lignes.push(`ALLOW_MAIN_PUSH=1 git push origin ${nouveaux[0]!.sha}:refs/heads/${projet.branch}`)
+  return bandeauPublie(nouveaux, lignes)
 }
 
 /** Le SHA de l'amont de la branche courante ; `undefined` sans amont : la passe ne tombe pas. */

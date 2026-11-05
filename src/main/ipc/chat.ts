@@ -183,6 +183,7 @@ import { noterAppelCourt, signalerPanneAppelCourt } from '../petites-taches-trac
 import { condenseurDuBrain } from '../brain-condenseur'
 import { photographierDebutDeTour } from '../chat-turn-publication'
 import {
+  blocDuTour,
   commitsPublies,
   decisionGitApresFil,
   estDepotAutowin,
@@ -195,7 +196,7 @@ import {
   travauxParFil,
   travauxTentesSurDisque
 } from '../git-apres-fil'
-import { defaultGitRunner } from '../run-autoclose'
+import { defaultGitRunner, type AutoCloseReport } from '../run-autoclose'
 import {
   creerNotifieurDeFinDeTour,
   libelleDeBouton,
@@ -2365,6 +2366,11 @@ Le fil reprend ensuite normalement.`
        * Photo de l'arbre AVANT le tour (~65 ms), publication APRES un tour reussi, sans faire
        * attendre la reponse. Un tour arrete ou en echec ne publie rien.
        */
+      // L'amont AVANT le tour : ses commits publiés (par lui ou par l'enchaînement) ont leur bloc à
+      // la fin (conv-1574). Jamais attendu ici : une lecture lente ne retient pas la réponse.
+      const amontAuDebut = defaultGitRunner()
+        .then((git) => lireAmont(git, dossierDuTour(conversationId)))
+        .catch(() => undefined)
       const debutPublication = os.autoCloseEnabled()
         ? await photographierDebutDeTour(dossierDuTour(conversationId))
         : undefined
@@ -2415,31 +2421,33 @@ Le fil reprend ensuite normalement.`
           ...resultat,
           tourDeFond: args[5]?.background === true
         })
+        let publicationDuTour: Promise<AutoCloseReport | undefined> = Promise.resolve(undefined)
         if (debutPublication && resultat.ok && !resultat.cancelled) {
           const demande = [...args[1]].reverse().find((m) => m.role === 'user')?.content ?? ''
           const finPublication = publicationsEnVol.debut(conversationId)
-          void os
-            .publishChatTurn({
-              conversationId,
-              turnId: resultat.turnId,
-              request: demande,
-              compteRendu: resultat.text,
-              debut: debutPublication,
-              // Un autre fil encore en cours n'a peut-être rien écrit au journal des fichiers.
-              autresToursEnCours: () =>
-                activeChatTurns
-                  .inFlightConversations()
-                  .filter((id) => id !== conversationId)
-                  .map((id) => dossierDuTour(id)),
-              // Les tests des fichiers du tour sont rejoués AVANT de pousser : `b6d2a3fc` (conv-892)
-              // a été poussé sans test et a laissé main rouge 20 h (mesuré le 2026-10-01).
-              verifierAvantPublication: (repo, fichiers) =>
-                bus.verifierAvantPublication(repo, fichiers),
-              // Le TYPAGE de ce qui part, avant les tests : `9d6bb850` (conv-954) a publié un fichier
-              // sans son appelant, et main ne compilait plus alors que les tests de l'arbre étaient verts.
-              typerAvantPublication: (repo, fichiers) =>
-                typerCeQuiPart({ repo, fichiers, typer: typeurTsc(process.execPath) })
-            })
+          const rapportDuTour = os.publishChatTurn({
+            conversationId,
+            turnId: resultat.turnId,
+            request: demande,
+            compteRendu: resultat.text,
+            debut: debutPublication,
+            // Un autre fil encore en cours n'a peut-être rien écrit au journal des fichiers.
+            autresToursEnCours: () =>
+              activeChatTurns
+                .inFlightConversations()
+                .filter((id) => id !== conversationId)
+                .map((id) => dossierDuTour(id)),
+            // Les tests des fichiers du tour sont rejoués AVANT de pousser : `b6d2a3fc` (conv-892)
+            // a été poussé sans test et a laissé main rouge 20 h (mesuré le 2026-10-01).
+            verifierAvantPublication: (repo, fichiers) =>
+              bus.verifierAvantPublication(repo, fichiers),
+            // Le TYPAGE de ce qui part, avant les tests : `9d6bb850` (conv-954) a publié un fichier
+            // sans son appelant, et main ne compilait plus alors que les tests de l'arbre étaient verts.
+            typerAvantPublication: (repo, fichiers) =>
+              typerCeQuiPart({ repo, fichiers, typer: typeurTsc(process.execPath) })
+          })
+          publicationDuTour = rapportDuTour.catch(() => undefined)
+          void rapportDuTour
             // Ce que l'enchaînement n'a pas pu rendre à son fil : `/git` s'en charge, si
             // l'utilisateur l'a accordé (conv-1339, voir git-apres-fil.ts).
             .then((rapport) => {
@@ -2468,6 +2476,29 @@ Le fil reprend ensuite normalement.`
             .catch((error) => console.warn('[enchainement chat] publication impossible :', error))
             .finally(finPublication)
         }
+        // Le bloc git des commits que CE tour a publiés, par lui-même ou par l'enchaînement auto,
+        // une fois l'enchaînement fini (conv-1574 : ces publications ne posaient aucun bloc).
+        void Promise.all([amontAuDebut, publicationDuTour])
+          .then(async ([depuis, rapport]) => {
+            if (!depuis) return
+            const dossier = dossierDuTour(conversationId)
+            const commits = await commitsPublies(await defaultGitRunner(), dossier, depuis, [
+              conversationId
+            ])
+            const messages = os.conversations.get(conversationId)?.messages ?? []
+            const bloc = blocDuTour({
+              commits,
+              actionsLog:
+                [...messages].reverse().find((m) => m.turnId === resultat.turnId)?.actionsLog ?? [],
+              rapport,
+              contenusDuFil: messages.map((m) => String(m.content ?? ''))
+            })
+            if (!bloc) return
+            os.conversations.append(conversationId, { role: 'assistant', content: bloc })
+            broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+            broadcast({ type: 'refresh', scope: 'conversations' })
+          })
+          .catch((error) => console.warn('[bloc git du tour] non posé :', error))
         return resultat
       } finally {
         finirTour()
