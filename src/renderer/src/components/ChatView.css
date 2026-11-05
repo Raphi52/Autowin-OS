@@ -348,9 +348,7 @@
   border-radius: 50%;
   background: currentColor;
   color: var(--chat-etat-defaut);
-  box-shadow:
-    0 0 3px currentColor,
-    0 0 7px currentColor;
+  box-shadow: var(--chat-etat-halo);
 }
 /* ZONE DE SURVOL ELARGIE, invisible. Le point ne fait que 7px : viser 7px a la souris est un
    exercice, et l'info-bulle `title` ne se declenche donc jamais en pratique — une couleur qui

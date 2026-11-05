@@ -801,8 +801,7 @@
   filter: saturate(1.5) brightness(1.1);
   box-shadow:
     var(--nv-orbe-reflet),
-    0 0 4px currentColor,
-    0 0 10px currentColor;
+    var(--chat-etat-halo);
 }
 @keyframes nv-pouls {
   0%,

@@ -107,6 +107,7 @@
   --chat-wf-onglet-survol:          var(--text);   /* onglet du volet au survol */
   --chat-etat-defaut:               var(--info);   /* pastille d etat, teinte par defaut */
   --chat-etat-fini:                 var(--ok);   /* pastille d etat : tour termine */
+  --chat-etat-halo:                 none;   /* pas de halo sur fond clair : il salit le rond */
   --chat-etat-echec:                var(--err);   /* pastille d etat : tour en echec */
   --chat-etat-interrompu:           var(--warn);   /* pastille d etat : tour interrompu */
   --chat-etat-attente:              var(--violet);   /* pastille d etat : en attente */

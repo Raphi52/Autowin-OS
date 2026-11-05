@@ -173,6 +173,7 @@
   --chat-wf-onglet-survol:          #c3cbda;   /* onglet du volet au survol */
   --chat-etat-defaut:               #38bdf8;   /* pastille d etat, teinte par defaut */
   --chat-etat-fini:                 #2fd47a;   /* pastille d etat : tour termine */
+  --chat-etat-halo:                 0 0 3px currentColor, 0 0 7px currentColor;   /* halo de la pastille d etat : lumineux en nuit, nul sur fond clair (sinon il salit le rond) */
   --chat-etat-echec:                #ff4057;   /* pastille d etat : tour en echec */
   --chat-etat-interrompu:           #ffb020;   /* pastille d etat : tour interrompu */
   --chat-etat-attente:              #a78bfa;   /* pastille d etat : en attente */
