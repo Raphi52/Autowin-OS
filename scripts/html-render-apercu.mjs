@@ -17,9 +17,12 @@
  *
  * Usage : node scripts/html-render-apercu.mjs <fichier.html|fichier.md> [--bloc 1]
  *           [--largeurs 560,860] [--fenetre 1600] [--out .autowin-tmp/html-render-apercu]
- *           [--seuil-onglets 0.02] [--clair] [--theme <id>]
+ *           [--seuil-onglets 0.02] [--clair] [--theme <id>] [--deplie]
  *   `--clair` : rend le bloc comme en THEME CLAIR (fond du fil clair + regles forcees de
  *   theme-modes.css). Un thème clair actif chez l'utilisateur = contrôle les DEUX.
+ *   `--deplie` : ouvre chaque `<details>` APRES le filtre — capture et mesure du debordement portent
+ *   alors sur l'etat deplie, celui ou une longue commande pliee peut deborder (conv-1574 : le rail
+ *   du bloc git ne se voyait que plie, il fallait patcher une copie du bloc a la main).
  *   Un fichier .md (ou tout fichier contenant une cloture ```html-render) : le n-ieme bloc est pris.
  *   Sinon le fichier entier est le contenu du bloc.
  *
@@ -167,6 +170,7 @@ async function main() {
 
   const filtre = await compilerFiltre()
   const clair = process.argv.includes('--clair')
+  const deplie = process.argv.includes('--deplie')
   const theme = argument('--theme', undefined)
   const jetons = theme ? jetonsDuTheme(theme) : ''
   if (jetons === null)
@@ -196,6 +200,8 @@ async function main() {
           `<div id="colonne" class="msg-body" style="width:${largeur}px;margin:0 auto;padding:0;border:0;border-radius:0;background:none"><div id="bloc" class="md-html"></div></div></body></html>`
       )
       await page.addScriptTag({ content: filtre })
+      // Drapeau de page plutot qu'un argument : la mesure garde sa signature `(src)`.
+      if (deplie) await page.evaluate(() => (window.deplierApresFiltre = true))
       const mesure = await page.evaluate((src) => {
         const compter = (racine) => {
           const n = {}
@@ -207,6 +213,8 @@ async function main() {
         const bloc = document.getElementById('bloc')
         bloc.setAttribute('data-html-scope', prepare.scopeId)
         bloc.innerHTML = prepare.html
+        if (window.deplierApresFiltre)
+          for (const details of bloc.querySelectorAll('details')) details.open = true
         const apres = compter(bloc)
         const retirees = Object.entries(avant)
           .filter(([tag, n]) => (apres[tag] ?? 0) < n)
