@@ -2,6 +2,10 @@
 /**
  * Génère (ou repeint) une image par OpenRouter (conv-446 : Falaise de l'Accueil floue à repeindre nette).
  *
+ * PAYANT à l'image : PAS la première voie. Une image 2D passe d'abord par le compte ChatGPT,
+ * `node scripts/image-chatgpt.mjs` (règle de l'utilisateur, conv-1603). Ce script-ci ne sert que si
+ * l'utilisateur le demande nommément ; sa clé a été retirée pour ne rien dépenser.
+ *
  * Usage : node scripts/generer-image.mjs --prompt "<texte>" --sortie <fichier.png>
  *           [--reference <image>]... [--modele google/gemini-3-pro-image] [--ratio 16:9] [--taille 4K]
  *         node scripts/generer-image.mjs --images --modele openai/gpt-image-2 --prompt "<texte>" --sortie <f.png>
@@ -49,7 +53,10 @@ function cle() {
 }
 const k = cle()
 if (!k) {
-  console.error('OPENROUTER_API_KEY absente (ni processus, ni variable utilisateur Windows)')
+  console.error(
+    'OPENROUTER_API_KEY absente (ni processus, ni variable utilisateur Windows). Voie à prendre : ' +
+      'node scripts/image-chatgpt.mjs (compte ChatGPT, mêmes --prompt --sortie --reference --fond --ratio --n)'
+  )
   process.exit(3)
 }
 
