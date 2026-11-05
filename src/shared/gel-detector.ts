@@ -112,6 +112,12 @@ export interface Gel {
    * 12,9 s) qui disaient seulement « N ms » : le diagnostic /gel n'a pas pu nommer la cause.
    */
   liste?: ListeDeGel
+  /**
+   * La fenetre avait-elle le focus quand le battement l'a trouvee muette (conv-1604, 2026-11-05) ?
+   * 37 rechargements ce jour-la sans pouvoir dire si l'utilisateur la regardait. Absent sur les
+   * autres lignes. `false` = silence journalise SANS rechargement (`gel-battement-fenetre.ts`).
+   */
+  fenetreRegardee?: boolean
 }
 
 /**

@@ -195,6 +195,113 @@ describe('fenetre en plein chargement', () => {
   })
 })
 
+describe('fenetre que personne ne regarde', () => {
+  /*
+   * REGRESSION du 2026-11-05 (conv-1604, « chaque fois que je change de fenetre je me mange un
+   * chargement de l'interface »). Ce jour-la, 37 rechargements par le battement dans gels.jsonl, tous
+   * de 17 s a 25 min apres le dernier message tape : la fenetre etait laissee de cote. Sur ce poste,
+   * chaque ouverture de fichier coutait 150 a 380 ms (filtre antivirus) et la page restait muette
+   * 15 a 20 s avant de repartir seule. Recharger une fenetre que personne ne regarde ne sauve
+   * personne : l'utilisateur revenait sur un rechargement et perdait ce qu'il voyait.
+   */
+  const fenetreMuette = (regardee: () => boolean, repond: () => boolean = () => false) => {
+    const compte = { recharges: 0, tues: 0 }
+    const fenetre = {
+      isFocused: regardee,
+      webContents: {
+        mainFrame: {
+          executeJavaScript: () => (repond() ? Promise.resolve(1) : new Promise<unknown>(() => {}))
+        },
+        reloadIgnoringCache: () => {
+          compte.recharges += 1
+        },
+        forcefullyCrashRenderer: () => {
+          compte.tues += 1
+        }
+      }
+    }
+    return { fenetre, compte }
+  }
+
+  const battre = async (
+    fenetre: Parameters<typeof surveillerParBattement>[0],
+    tours: number,
+    avantChaqueTour: (tour: number) => void = () => {}
+  ) => {
+    const journal: Array<{ operation: string; regardee?: boolean }> = []
+    let action: (() => void) | undefined
+    surveillerParBattement(
+      fenetre,
+      (operation, _silenceMs, contexte) =>
+        journal.push({ operation, regardee: contexte?.fenetreRegardee }),
+      {
+        intervalleMs: 5,
+        silenceAvantGelMs: 10,
+        silenceAvantEscaladeMs: 10,
+        planifier: (a) => {
+          action = a
+          return 1
+        }
+      }
+    )
+    for (let tour = 0; tour < tours; tour++) {
+      avantChaqueTour(tour)
+      action?.()
+      await new Promise((res) => setTimeout(res, 20))
+    }
+    return journal
+  }
+
+  it('journalise le silence mais ne recharge ni ne tue une fenetre en arriere-plan', async () => {
+    const { fenetre, compte } = fenetreMuette(() => false)
+
+    const journal = await battre(fenetre, 6)
+
+    expect(journal).toEqual([{ operation: 'renderer:silence-au-battement', regardee: false }])
+    expect(compte).toEqual({ recharges: 0, tues: 0 })
+  })
+
+  it('ne recharge pas au retour une fenetre qui a repris seule', async () => {
+    let regardee = false
+    let repond = false
+    const { fenetre, compte } = fenetreMuette(
+      () => regardee,
+      () => repond
+    )
+
+    await battre(fenetre, 7, (tour) => {
+      if (tour === 4) repond = true
+      if (tour === 5) regardee = true
+    })
+
+    expect(compte).toEqual({ recharges: 0, tues: 0 })
+  })
+
+  it('recharge des que l utilisateur revient sur une fenetre toujours muette', async () => {
+    let regardee = false
+    const { fenetre, compte } = fenetreMuette(() => regardee)
+
+    const journal = await battre(fenetre, 5, (tour) => {
+      if (tour === 4) regardee = true
+    })
+
+    expect(compte).toEqual({ recharges: 1, tues: 0 })
+    expect(journal).toEqual([
+      { operation: 'renderer:silence-au-battement', regardee: false },
+      { operation: 'renderer:silence-au-retour', regardee: true }
+    ])
+  })
+
+  it('recharge tout de suite une fenetre muette sous les yeux de l utilisateur', async () => {
+    const { fenetre, compte } = fenetreMuette(() => true)
+
+    const journal = await battre(fenetre, 3)
+
+    expect(compte.recharges).toBe(1)
+    expect(journal).toEqual([{ operation: 'renderer:silence-au-battement', regardee: true }])
+  })
+})
+
 describe('escalade quand le rechargement reste sans effet', () => {
   it('tue le processus d affichage si le silence persiste apres le rechargement', async () => {
     const journal: string[] = []

@@ -38,6 +38,11 @@ export function fenetreSilencieuse(
 /** Le minimum vital d'une fenetre pour ce battement — pas besoin d'un vrai Electron en test. */
 export interface FenetreBattante {
   /**
+   * L'utilisateur a-t-il la fenetre sous les yeux (focus) ? Absent = on la suppose regardee, comme
+   * avant conv-1604. Voir `OPERATION_SILENCE_AU_RETOUR` pour la raison de ce critere.
+   */
+  isFocused?(): boolean
+  /**
    * Fenetre DETRUITE. Seul membre encore interrogeable apres destruction : sur un BrowserWindow
    * detruit, le simple ACCES a `webContents` leve `TypeError: Object has been destroyed` — un throw
    * SYNCHRONE, que ni `?.` ni un `.catch()` n'attrapent.
@@ -71,6 +76,24 @@ export const OPERATION_ESCALADE = 'renderer:affichage-force-a-repartir'
 export const SILENCE_AVANT_ESCALADE_MS = 30_000
 
 /**
+ * Motif journalise quand la fenetre, muette pendant que personne ne la regardait, l'est ENCORE au
+ * retour de l'utilisateur : c'est a ce moment-la, et seulement la, qu'on la recharge.
+ *
+ * Mesure du 2026-11-05 (conv-1604, « chaque fois que je change de fenetre je me mange un
+ * chargement ») : 37 rechargements par le battement dans gels.jsonl, tous de 17 s a 25 min apres le
+ * dernier message tape. Chaque ouverture de fichier coutait 150 a 380 ms sur ce poste (filtre
+ * antivirus `eamonm`), et la page restait muette 15 a 20 s avant de repartir seule. Recharger une
+ * fenetre que personne ne regarde ne sauve personne ; l'utilisateur revenait sur un rechargement.
+ * Le silence reste journalise, avec `fenetreRegardee`, pour garder la mesure.
+ */
+export const OPERATION_SILENCE_AU_RETOUR = 'renderer:silence-au-retour'
+
+/** Ce que le battement sait de la fenetre au moment ou il journalise. */
+export interface ContexteDuSilence {
+  fenetreRegardee: boolean
+}
+
+/**
  * Branche le battement et rend la fonction qui l'arrete.
  *
  * A chaque intervalle, on demande un echo. S'il tarde plus que l'intervalle, il compte pour
@@ -79,7 +102,7 @@ export const SILENCE_AVANT_ESCALADE_MS = 30_000
  */
 export function surveillerParBattement(
   fenetre: FenetreBattante,
-  journaliser: (operation: string, silenceMs: number) => void,
+  journaliser: (operation: string, silenceMs: number, contexte?: ContexteDuSilence) => void,
   options: {
     intervalleMs?: number
     silenceAvantGelMs?: number
@@ -116,6 +139,15 @@ export function surveillerParBattement(
     }
   }
 
+  // Dans le doute (question absente ou qui echoue), on la suppose regardee : le geste d'avant.
+  const fenetreRegardee = (): boolean => {
+    try {
+      return fenetre.isFocused?.() ?? true
+    } catch {
+      return true
+    }
+  }
+
   const jeton: unknown = planifier(() => {
     if (fenetreMorte()) {
       annuler(jeton)
@@ -134,40 +166,53 @@ export function surveillerParBattement(
       })
       .catch(() => {})
     // L'echo est juge au tour SUIVANT : s'il n'est pas revenu d'ici la, il est manque.
-    setTimeout(() => {
-      if (repondu) return
-      // La fenetre peut mourir ENTRE la demande d'echo et son verdict : sans cette garde, le
-      // rechargement plus bas toucherait un objet detruit et relancerait le meme crash.
-      if (fenetreMorte()) {
-        annuler(jeton)
-        return
-      }
-      echosManques += 1
-      const silenceMs = echosManques * intervalleMs
-      if (!fenetreSilencieuse({ echosManques, intervalleMs }, silenceAvantGelMs)) return
-      if (!dejaSignale) {
-        dejaSignale = true
-        dejaEscalade = false
-        silenceAuRechargement = silenceMs
-        journaliser(OPERATION_GEL_PAR_BATTEMENT, silenceMs)
-        fenetre.webContents?.reloadIgnoringCache?.()
-        return
-      }
-      /*
-       * ESCALADE — mesure du 2026-09-08 17:52 : le rechargement a bien ete demande (ligne
-       * `silence-au-battement`, 15 000 ms) et la fenetre est restee MORTE deux minutes de plus.
-       * C'est attendu : `reloadIgnoringCache` est un message que le processus d'affichage doit
-       * TRAITER — un blocage total ne le traite jamais. Le seul geste qui aboutit alors est de tuer
-       * ce processus : Electron en repart un neuf, et l'application, elle, survit.
-       */
-      if (silenceAuRechargement === undefined || dejaEscalade) return
-      if (silenceMs - silenceAuRechargement < silenceAvantEscaladeMs) return
-      // Une seule fois par episode : si tuer l'affichage n'a pas suffi, recommencer n'aiderait pas
-      // et transformerait la reparation en boucle de crashs.
-      dejaEscalade = true
-      journaliser(OPERATION_ESCALADE, silenceMs)
-      fenetre.webContents?.forcefullyCrashRenderer?.()
-    }, Math.max(1, intervalleMs - 100))
+    setTimeout(
+      () => {
+        if (repondu) return
+        // La fenetre peut mourir ENTRE la demande d'echo et son verdict : sans cette garde, le
+        // rechargement plus bas toucherait un objet detruit et relancerait le meme crash.
+        if (fenetreMorte()) {
+          annuler(jeton)
+          return
+        }
+        echosManques += 1
+        const silenceMs = echosManques * intervalleMs
+        if (!fenetreSilencieuse({ echosManques, intervalleMs }, silenceAvantGelMs)) return
+        const regardee = fenetreRegardee()
+        if (!dejaSignale) {
+          dejaSignale = true
+          dejaEscalade = false
+          journaliser(OPERATION_GEL_PAR_BATTEMENT, silenceMs, { fenetreRegardee: regardee })
+          // Personne ne regarde : on attend son retour (voir OPERATION_SILENCE_AU_RETOUR).
+          if (!regardee) return
+          silenceAuRechargement = silenceMs
+          fenetre.webContents?.reloadIgnoringCache?.()
+          return
+        }
+        if (silenceAuRechargement === undefined) {
+          if (!regardee) return
+          silenceAuRechargement = silenceMs
+          journaliser(OPERATION_SILENCE_AU_RETOUR, silenceMs, { fenetreRegardee: true })
+          fenetre.webContents?.reloadIgnoringCache?.()
+          return
+        }
+        /*
+         * ESCALADE — mesure du 2026-09-08 17:52 : le rechargement a bien ete demande (ligne
+         * `silence-au-battement`, 15 000 ms) et la fenetre est restee MORTE deux minutes de plus.
+         * C'est attendu : `reloadIgnoringCache` est un message que le processus d'affichage doit
+         * TRAITER — un blocage total ne le traite jamais. Le seul geste qui aboutit alors est de tuer
+         * ce processus : Electron en repart un neuf, et l'application, elle, survit.
+         */
+        if (dejaEscalade || !regardee) return
+        if (silenceMs - silenceAuRechargement < silenceAvantEscaladeMs) return
+        // Une seule fois par episode : si tuer l'affichage n'a pas suffi, recommencer n'aiderait pas
+        // et transformerait la reparation en boucle de crashs.
+        dejaEscalade = true
+        journaliser(OPERATION_ESCALADE, silenceMs, { fenetreRegardee: true })
+        fenetre.webContents?.forcefullyCrashRenderer?.()
+      },
+      Math.max(1, intervalleMs - 100)
+    )
   }, intervalleMs)
 
   return () => annuler(jeton)

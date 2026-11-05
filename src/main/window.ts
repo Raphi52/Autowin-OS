@@ -513,12 +513,13 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
      * ne repond plus aux EVENEMENTS D'ENTREE. Sans souris ni clavier, le gel etait invisible. Le
      * battement, lui, ne depend de personne.
      */
-    surveillerParBattement(mainWindow, (operation, silenceMs) =>
+    surveillerParBattement(mainWindow, (operation, silenceMs, contexte) =>
       journaliserGel({
         ts: new Date().toISOString(),
         blocageMs: silenceMs,
         operation,
-        cause: 'boucle-tenue'
+        cause: 'boucle-tenue',
+        ...(contexte ? { fenetreRegardee: contexte.fenetreRegardee } : {})
       })
     )
 
