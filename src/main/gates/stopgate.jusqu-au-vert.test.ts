@@ -5,8 +5,36 @@ import { PREFIXE_TEST_MODIFIE } from '../objections-juge'
 // conv-844 (2026-09-24) : « que ça s'arrête que quand y a plus de défauts ».
 describe('reparation jusqu au vert', () => {
   const base = { reparationsAccordees: 2, plafondDur: 4, motifsCourants: ['x'], motifsPrecedents: ['x'] }
-  it('ni le plafond dur ni un refus repete n arretent la reparation', () => {
-    expect(arretDeLaReparation({ ...base, tentative: 50, refusIdentiquesConsecutifs: 9, jusquAuVert: true })).toBeUndefined()
+  it('le plafond dur n arrete pas un refus qui change', () => {
+    expect(
+      arretDeLaReparation({ ...base, motifsPrecedents: ['y'], tentative: 50, refusIdentiquesConsecutifs: 0, jusquAuVert: true })
+    ).toBeUndefined()
+  })
+  // conv-1613 (05/11/2026) : 220 refus du contrôle final identiques mot pour mot (une cible citée
+  // pour mesurer, prise pour une cible à modifier), ~215 passages de build, ~389 $ ; le frein
+  // « même refus répété » existait mais le mode jusqu'au vert sortait avant lui.
+  const refusConv1613 = [
+    "Échec déjà déclaré : ce travail s'est lui-même terminé en échec, ce contrôle ne fait que le relayer.",
+    'Promis mais pas fait : « Cible nommee dans la demande reellement modifiee : autowinos/src/main/agent-pilot/message-du-tour.ts »'
+  ]
+  it('le meme refus repete arrete la reparation, meme jusqu au vert', () => {
+    expect(
+      arretDeLaReparation({
+        ...base,
+        motifsCourants: refusConv1613,
+        motifsPrecedents: refusConv1613,
+        tentative: 50,
+        refusIdentiquesConsecutifs: 9,
+        jusquAuVert: true
+      })
+    ).toMatch(/même refus est revenu 11 fois .*jusqu'au vert/)
+  })
+  // Choix utilisateur conv-1626 : la 3e apparition d'affilée arrête. Le compteur transmis par la
+  // boucle ne compte pas encore le refus courant (0 au 2e refus identique, 1 au 3e).
+  it('jusqu au vert : le 2e refus identique continue, le 3e arrete', () => {
+    const entree = { ...base, motifsCourants: refusConv1613, motifsPrecedents: refusConv1613, tentative: 3, jusquAuVert: true }
+    expect(arretDeLaReparation({ ...entree, refusIdentiquesConsecutifs: 0 })).toBeUndefined()
+    expect(arretDeLaReparation({ ...entree, refusIdentiquesConsecutifs: 1 })).toMatch(/revenu 3 fois de suite/)
   })
   it('sans le mode, le plafond dur mord toujours', () => {
     expect(arretDeLaReparation({ ...base, tentative: 4 })).toMatch(/plafond dur/)
@@ -37,8 +65,8 @@ describe('reparation jusqu au vert', () => {
       arretDeLaReparation({ ...base, motifsCourants: m, motifsPrecedents: [], tentative: 1, refusIdentiquesConsecutifs: 1, jusquAuVert: true })
     ).toBeUndefined()
   })
-  it('jumeau : un autre refus repete continue jusqu au vert', () => {
-    expect(arretDeLaReparation({ ...base, tentative: 3, refusIdentiquesConsecutifs: 2, jusquAuVert: true })).toBeUndefined()
+  it('jumeau : un autre refus qui revient pour la 2e fois continue jusqu au vert', () => {
+    expect(arretDeLaReparation({ ...base, tentative: 3, refusIdentiquesConsecutifs: 0, jusquAuVert: true })).toBeUndefined()
   })
   it('le code perime reste prioritaire', () => {
     const bundlePerime = { bundleMs: 1, sourceMs: 2, bundle: 'out/main/index.js' }

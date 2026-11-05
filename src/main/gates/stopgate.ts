@@ -162,6 +162,12 @@ export function plafondDurReparations(reparationsAccordees: number): number {
 const REFUS_FIGE_SEUIL = 2
 
 /**
+ * En mode jusqu'au vert, à quelle APPARITION d'un même refus d'affilée s'arrête-t-on ?
+ * Choix utilisateur du 05/11/2026 (conv-1626, après conv-1613 et conv-1618) : la troisième.
+ */
+const REFUS_FIGE_JUSQU_AU_VERT = 3
+
+/**
  * Ce refus est-il le MEME que le precedent, mot pour mot ?
  *
  * Exportee parce que la boucle de reparation en a besoin pour compter les repetitions : recopier la
@@ -327,7 +333,22 @@ export function arretDeLaReparation(entree: {
   ) {
     return `Réparation interrompue : le fichier de test désigné par le juge reste modifié depuis ${entree.refusIdentiquesConsecutifs} passages — rejouer ne le restaure pas. Rétablir son contenu d'origine (ou faire réécrire le test par le juge) avant de relancer.`
   }
-  if (entree.jusquAuVert) return undefined
+  if (entree.jusquAuVert) {
+    // fix-ok: conv-1613 et conv-1618 (05/11/2026) — 220 et 208 refus du contrôle final identiques
+    // mot pour mot, ~390 $ chacun : ce mode sortait AVANT le frein du refus répété, et rien d'autre
+    // ne l'arrêtait (le budget ne bloque pas par défaut). conv-844 voulait « s'arrêter seulement
+    // quand il n'y a plus de défaut » : un refus qui CHANGE reste un progrès et continue sans
+    // plafond. Choix utilisateur (conv-1626) : « le même refus revenu 3 fois de suite arrête la
+    // boucle, même en mode jusqu'au vert ». Le compteur transmis par la boucle est compté AVANT le
+    // refus courant (`deciderDuPassage`) : on ajoute donc ici le refus courant et le premier.
+    const apparitions = memeRefus(entree.motifsCourants, entree.motifsPrecedents)
+      ? (entree.refusIdentiquesConsecutifs ?? 0) + 2
+      : 1
+    if (apparitions >= REFUS_FIGE_JUSQU_AU_VERT) {
+      return `Réparation interrompue : le même refus est revenu ${apparitions} fois de suite, même en mode jusqu'au vert — rejouer ne le fait plus bouger. Lis le refus avant de relancer : il vient peut-être du contrôle lui-même.`
+    }
+    return undefined
+  }
   if (entree.tentative >= entree.plafondDur) {
     return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
   }

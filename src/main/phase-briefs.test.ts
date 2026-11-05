@@ -65,46 +65,6 @@ describe('phase-briefs (consignes courtes in-app)', () => {
   })
 
   /*
-   * LA PREUVE AVANT LA LISTE, DANS LES DEUX SENS — un seul bloc, quatre exigences.
-   *
-   * Mesure des 20 et 21/08 : sur 8 hypotheses de scout, SIX sont mortes du meme defaut — un FAIT vrai
-   * (un grep rend une absence reelle) suivi d'une CONSEQUENCE jamais verifiee. Les 2 survivantes
-   * portaient une affirmation POSITIVE et directement observable. Et le SCORE classait a l'envers :
-   * 84 et 82 aux deux candidats FAUX, 66 a un vrai.
-   *
-   * Le bloc a ete UNIFIE plutot qu'empile : le cas « defaut absent » et le cas « defaut deja corrige »
-   * sont la MEME regle dans les deux sens, donc les dire ensemble couvre plus en ecrivant moins — les
-   * deux sources ont RETRECI (brief 1528 -> 1252, kit 1772 -> 1422) en gagnant une exigence.
-   *
-   * Aucune des quatre n'est inventee : (1) vivait deja dans le brief sans etre dans le kit, (2) est le
-   * reflexe 8 de la constitution raccorde au Why, (4) elargit le plafonnement que le kit appliquait
-   * deja au seul candidat web. Ce test garde le RACCORD dans les deux sources, jamais l'obeissance.
-   */
-  it('la preuve avant la liste existe DANS LES DEUX sources, dans les deux sens', () => {
-    const brief = PHASE_BRIEFS.scout
-    const kit = readFileSync('skills/scout/SKILL.md', 'utf8')
-
-    for (const source of [brief, kit]) {
-      // Le fait : rouvrir l'ancrage, et le piege du commentaire qui raconte une cause passee.
-      expect(source).toMatch(/ANCRAGE ROUVERT|ANCHOR REOPENED/u)
-      expect(source).toMatch(/COMMENTAIRE|COMMENT/u)
-      // La deduction : les mots du reflexe 8, et les TROIS couches.
-      expect(source).toMatch(/ENUMERE|ENUMERATE/u)
-      expect(source).toMatch(/BALAYE|SWEEP/u)
-      expect(source).toMatch(/chemins FERMES|CLOSED paths/u)
-      expect(source).toMatch(/TROIS|THREE/u)
-      expect(source).toMatch(/non epuises|not exhausted/u)
-      // Le SENS INVERSE : ecarter est une conclusion, donc une preuve.
-      expect(source).toMatch(/SENS INVERSE|REVERSE DIRECTION/u)
-      expect(source).toMatch(/ECARTER|DISCARD/iu)
-      // Le classement : un Why deductif est plafonne, et la valeur est dite.
-      expect(source).toMatch(/PLAFOND DE PREUVE|PROOF CEILING/u)
-      expect(source).toMatch(/DEDUCTIF|DEDUCTIVE/iu)
-      expect(source).toMatch(/50/u)
-    }
-  })
-
-  /*
    * La consigne scout est bornee a 3000 caracteres par le premier test de ce fichier. L'unification a
    * ramene la marge de 103 a ~380 caracteres : ce test la rend VISIBLE avec son chiffre exact, au lieu
    * de laisser la limite se decouvrir par un rouge opaque sur le fichier le plus edite de la journee.
@@ -375,15 +335,48 @@ describe('fusion : la regle « tache donnee » vit dans la constitution, la cons
   })
 })
 
-describe('contrat FRAME — la skill et la consigne exigent les mêmes sections', () => {
-  // Deux rédactions séparées (skills/frame/SKILL.md et PHASE_BRIEFS.frame) : ce test casse dès
-  // qu'une section exigée disparaît d'un côté seulement.
-  const SECTIONS = ['## Besoin', '## Contraintes', '## Confiance', '## Options']
-  it.each(SECTIONS)('%s figure dans les deux sources', (section) => {
-    const kit = readFileSync('skills/frame/SKILL.md', 'utf8')
-    // Le titre exact : « ## Confiances » ou « ## ConfianceX » ne comptent pas.
-    const exact = new RegExp(`${section}(?!\\p{L})`, 'u')
-    expect(kit).toMatch(exact)
-    expect(PHASE_BRIEFS.frame).toMatch(exact)
+/*
+ * SCOUT : LA SKILL LONGUE SUIT LA CONSIGNE LÀ OÙ ELLES SE RECOUPENT (conv-1602, piste 6 du scout du
+ * 05/11). Les deux textes restent : un run lit la consigne (`orchestrator.ts`, `corpsSkill` vaut ''
+ * pour une étape), mais le fil charge encore `skills/scout/SKILL.md` — nom sans barre suivi d'une
+ * question, outil `skill_charger`. Mesure du 05/11 sur ce poste : `skill_charger` a chargé `judge`
+ * et `clean`, et 9 saisies commençaient par « frame », « build » ou « clean » sans barre.
+ *
+ * L'ancien test cherchait des mots-clés en deux langues (« ANCRAGE ROUVERT|ANCHOR REOPENED ») : il
+ * restait vert pendant que la skill écrivait `Quoi | Pourquoi | Comment` et la consigne
+ * `What | Why | How`. Ces deux contrôles lisent leur attendu DANS la consigne, sans liste écrite à
+ * la main : changer une colonne ou ajouter une règle d'un seul côté les fait tomber.
+ * (Les sections du cadrage sont comparées par `phase-briefs.contrat-frame.test.ts`.)
+ * fix-ok: cause mesurée — rouge sur la skill d'avant (Quoi/Pourquoi/Comment, CLOTURE NEGATIVE et
+ * REFUTE absents), vert après alignement de skills/scout/SKILL.md.
+ */
+describe('scout — la skill et la consigne de l’app ne divergent pas', () => {
+  const skill = readFileSync('skills/scout/SKILL.md', 'utf8').replace(/\r\n/g, '\n')
+  const cellules = (ligne: string): string[] =>
+    ligne
+      .trim()
+      .replace(/^\||\|$/gu, '')
+      .split('|')
+      .map((c) => c.trim())
+
+  it('le tableau a les MÊMES colonnes dans la skill et dans la consigne', () => {
+    const attendu = /`(# \| Score \|[^`]*)`/u.exec(PHASE_BRIEFS.scout)?.[1]
+    expect(attendu, 'la consigne scout ne déclare plus son en-tête de tableau').toBeTruthy()
+    // Chaque en-tête de tableau de la skill qui porte une colonne Score, c.-à-d. le tableau classé.
+    const lignes = skill.split('\n')
+    const entetes = lignes.filter(
+      (l, i) => /^\|.*\bScore\b/u.test(l) && /^\|[\s|:-]+\|$/u.test(lignes[i + 1] ?? '')
+    )
+    expect(entetes.length, 'aucun tableau classé trouvé dans la skill').toBeGreaterThan(0)
+    for (const entete of entetes) expect(cellules(entete)).toEqual(cellules(attendu!))
+  })
+
+  it('chaque règle de « la preuve avant la liste » de la consigne figure dans la skill', () => {
+    // Les titres en capitales de la liste numérotée de la consigne : « 1. ANCRAGE ROUVERT : … ».
+    const regles = [...PHASE_BRIEFS.scout.matchAll(/^\d+\. ([A-Z][A-Z ]*[A-Z])\b/gmu)].map(
+      (m) => m[1]
+    )
+    expect(regles.length, 'liste de règles introuvable dans la consigne').toBeGreaterThanOrEqual(4)
+    expect(regles.filter((r) => !skill.includes(r))).toEqual([])
   })
 })

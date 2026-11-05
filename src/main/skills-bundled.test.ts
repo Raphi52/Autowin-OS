@@ -3,7 +3,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { bundledSkillsRoot, nativeSkills, skillRoots } from './native-registry'
-import { phaseInstructionFromRoots, PIPELINE_PHASES } from './skill-pipeline'
+// `skillInstruction` et non plus `phaseInstructionFromRoots`, retirée sans appelant (conv-1602) :
+// c'est elle qui charge le corps d'une skill demandée dans le fil, depuis les mêmes racines.
+// fix-ok: cause mesurée — l'import visait une fonction retirée de skill-pipeline.ts (typage rouge).
+import { skillInstruction, PIPELINE_PHASES } from './skill-pipeline'
 
 /**
  * SKILLS EMBARQUÉES DANS LE DÉPÔT — le comportement de l'app ne doit plus dépendre d'un arbre externe.
@@ -69,7 +72,7 @@ describe('skills embarquées dans la code base', () => {
     const bundled = rootWithSentinel('build', 'CORPS-VENU-DU-DEPOT')
     const externe = rootWithSentinel('build', 'CORPS-VENU-DU-KIT-EXTERNE')
     const roots = skillRoots(undefined, bundled)
-    const rendered = phaseInstructionFromRoots('build', [bundled, externe])
+    const rendered = skillInstruction('build', [bundled, externe])
     expect(rendered).toContain('CORPS-VENU-DU-DEPOT')
     expect(rendered).not.toContain('CORPS-VENU-DU-KIT-EXTERNE')
     expect(roots[0]).toBe(bundled)
@@ -120,7 +123,7 @@ describe('skills embarquées dans la code base', () => {
 
   it("racine Autowin du poste ABSENTE → l'instruction reste NON VIDE (avant : chaîne vide, en silence)", () => {
     const roots = skillRoots(join(tmpdir(), 'localappdata-inexistant-' + Math.random()))
-    const rendered = phaseInstructionFromRoots('build', roots)
+    const rendered = skillInstruction('build', roots)
     expect(rendered.length).toBeGreaterThan(0)
     expect(rendered).toContain('SKILL BUILD')
   })

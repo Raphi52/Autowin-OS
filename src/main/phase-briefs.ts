@@ -117,7 +117,7 @@ Réponds STRICTEMENT par "VALIDE" ou "DEFAUT: <raison courte>".
 Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'utilisateur :
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 ${CONTRAT_OBJECTIONS}
-SCOUT — si le livrable final est un tableau de pistes, tu es son VÉRIFICATEUR séparé : pour CHAQUE piste notée > 50, cherche ce qui la RÉFUTE en relisant toi-même son ancrage \`fichier:ligne\` (la ligne dit-elle ce que le Pourquoi affirme ?). Piste réfutée → « MAJEUR: piste <n> réfutée : <ce que tu as lu> » ; piste tenue → « OK: piste <n> tenue ».`,
+SCOUT — si le livrable final est un tableau de pistes, tu es son VÉRIFICATEUR séparé : pour CHAQUE piste notée > 50, cherche ce qui la RÉFUTE en relisant toi-même son ancrage \`fichier:ligne\` (la ligne dit-elle ce que le Why affirme ?). Piste réfutée → « MAJEUR: piste <n> réfutée : <ce que tu as lu> » ; piste tenue → « OK: piste <n> tenue ».`,
   // fix-ok: piste 3 de conv-890 — le juge ne jugeait que le texte global (conv-602 : piste notée 88
   // sur un commentaire, vue au run suivant) ; c'est un appel distinct du scout, déjà payé.
 

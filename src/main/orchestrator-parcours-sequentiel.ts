@@ -3274,6 +3274,11 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
             'directiveUtilisateur',
             `DIRECTIVE UTILISATEUR ARRIVEE PENDANT LE RUN — PRIORITAIRE, elle CORRIGE le cadre : ${issue.texte}`
           )
+        // conv-1625 (05/11/2026) : l'utilisateur vient de trancher CE refus. Le frein du refus
+        // répété, qui mord désormais jusqu'au vert (conv-1613), repart de zéro : sinon il couperait
+        // au passage suivant la suite qu'il vient de choisir.
+        motifsPrecedents = []
+        refusIdentiquesConsecutifs = 0
         push({
           step: 'gate',
           role: 'gate',
