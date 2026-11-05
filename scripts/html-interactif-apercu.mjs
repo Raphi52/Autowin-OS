@@ -82,6 +82,7 @@ import {
 } from '../src/renderer/scene-3d/page-scene-3d.mjs'
 import {
   dossierDeSortie,
+  dureeMaxJaugesMs,
   dureeMaxScenarioMs,
   jaugesFausses,
   lireScenario
@@ -273,7 +274,11 @@ const lancement = spawnSync(
   {
     encoding: 'utf8',
     env,
-    timeout: 30_000 + largeurs.length * (attente + 20_000 + dureeMaxScenarioMs(scenario))
+    // La sonde des jauges ne joue qu'a la premiere largeur (electron.cjs) : comptee une fois.
+    timeout:
+      30_000 +
+      dureeMaxJaugesMs(html) +
+      largeurs.length * (attente + 20_000 + dureeMaxScenarioMs(scenario))
   }
 )
 const cheminRapport = join(out, 'rapport.json')
