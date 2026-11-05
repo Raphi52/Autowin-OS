@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
 import { refusArretHote } from '../shared/garde-hote-et-boucle'
@@ -26,7 +26,8 @@ import { PROJECT_CONTEXT_MAX_BYTES } from './context-files'
  * `.autowin-data/`, le nom du sous-dossier de données.
  */
 
-const RACINE = process.cwd()
+// La racine se lit depuis CE fichier, pas depuis le dossier où vitest a été lancé (revue 2026-11-05).
+const RACINE = fileURLToPath(new URL('../..', import.meta.url))
 const AGENTS = readFileSync(join(RACINE, 'AGENTS.md'), 'utf8')
 const lire = (chemin: string): string => readFileSync(join(RACINE, chemin), 'utf8')
 const SCRIPTS_NPM: Record<string, string> = JSON.parse(lire('package.json')).scripts
@@ -67,7 +68,11 @@ interface Paire {
 const PAIRES: Paire[] = [
   {
     fait: 'Plafond : 32 Ko PARTAGÉS',
+    // Le PARTAGE avec les dossiers parents, l'ordre et la coupe signalée sont un comportement :
+    // `context-files.test.ts` (« le plafond est PARTAGÉ et coupe d’abord le plus éloigné ») le prouve.
+    // Ici, la valeur du plafond et le fait qu'AGENTS.md y tienne.
     verifier: () => {
+      expect(lire('src/main/context-files.test.ts')).toContain('le plafond est PARTAGÉ')
       expect(PROJECT_CONTEXT_MAX_BYTES).toBe(32 * 1024)
       // AGENTS.md lui-même doit tenir sous le plafond, sinon les agents n'en reçoivent qu'une partie.
       expect(Buffer.byteLength(AGENTS, 'utf8')).toBeLessThanOrEqual(PROJECT_CONTEXT_MAX_BYTES)
@@ -121,9 +126,16 @@ const PAIRES: Paire[] = [
   },
   {
     fait: 'Jeton neuf : sa valeur dans `assets/theme.css` ET dans le bloc clair de `assets/theme-modes.css`.',
-    verifier: () => {
-      expect(existsSync(join(RACINE, ASSETS, 'theme.css'))).toBe(true)
-      expect(existsSync(join(RACINE, ASSETS, 'theme-modes.css'))).toBe(true)
+    // La règle elle-même, rejouée avec le contrôle de la suite : tout jeton littéral de theme.css a
+    // sa valeur dans le bloc clair (revue 2026-11-05 : la seule existence des deux fichiers ne
+    // prouvait rien).
+    verifier: async () => {
+      const { jetonsSansValeurClaire } = await import(
+        pathToFileURL(join(RACINE, 'scripts/couleurs-en-dur.mjs')).href
+      )
+      const modes = lire(`${ASSETS}/theme-modes.css`)
+      expect(modes).toContain(":root[data-base='clair'] {")
+      expect(jetonsSansValeurClaire(lire(`${ASSETS}/theme.css`), modes)).toEqual([])
     }
   },
   {
@@ -132,11 +144,18 @@ const PAIRES: Paire[] = [
   },
   {
     fait: '`.githooks/pre-push` refuse trois cas',
+    // Lu sur les lignes de CODE seulement : une chaîne restée en commentaire ne refuse rien (revue
+    // 2026-11-05).
     verifier: () => {
-      const hook = lire('.githooks/pre-push')
-      expect(hook).toContain('ALLOW_MAIN_PUSH')
-      expect(hook).toContain('entreprise')
-      expect(hook).toContain('separation-avant-push.mjs')
+      const code = lire('.githooks/pre-push')
+        .split('\n')
+        .filter((ligne) => !/^\s*#/.test(ligne))
+        .join('\n')
+      expect(code).toMatch(/"\$ALLOW_MAIN_PUSH" != "1"/)
+      expect(code).toContain('DOSSIER_PRIVE="entreprise"')
+      expect(code).toMatch(/node "\$garde_separation"[^\n]*\|\| exit 1/)
+      expect(code).toContain('separation-avant-push.mjs')
+      expect(code.match(/^\s*exit 1\s*$/gm)?.length ?? 0).toBeGreaterThanOrEqual(2)
     }
   },
   {
@@ -164,6 +183,7 @@ const PAIRES: Paire[] = [
     fait: "Arrêt d'Electron/node PAR NOM, `git stash`, `reset --hard`, `checkout`/`restore` de tout l'arbre,",
     verifier: () => {
       expect(refusArretHote('taskkill /IM electron.exe /F')).toBeTruthy()
+      expect(refusArretHote('taskkill /F /IM node.exe')).toBeTruthy()
       // « Non vu par le hook : arrêter ou relancer Electron par PID » — le PID reste libre.
       expect(refusArretHote('taskkill /PID 4242 /F')).toBeUndefined()
       for (const commande of [
