@@ -70,7 +70,7 @@ describe('jauge de contexte', () => {
     expect(contextGauge({ inputTokens: 10, model: 'claude-opus-5', provider: 'claude' })?.limit).toBe(1_000_000)
     expect(contextGauge({ inputTokens: 10, model: 'claude-haiku-4-5', provider: 'claude' })?.limit).toBe(200_000)
     expect(contextGauge({ inputTokens: 10, model: 'claude-sonnet-5', provider: 'claude' })?.limit).toBe(1_000_000)
-    expect(contextGauge({ inputTokens: 10, model: 'claude-mythos-1', provider: 'claude' })?.limit).toBe(200_000)
+    expect(contextGauge({ inputTokens: 10, model: 'claude-mythos-5-1', provider: 'claude' })?.limit).toBe(1_000_000)
     expect(contextGauge({ inputTokens: 10, model: 'gpt-5.6-sol', provider: 'codex' })?.limit).toBe(400_000)
     expect(contextGauge({ inputTokens: 10, model: 'gpt-5.4-mini', provider: 'codex' })?.limit).toBe(400_000)
     expect(
@@ -79,6 +79,28 @@ describe('jauge de contexte', () => {
     expect(
       contextGauge({ inputTokens: 10, model: 'kimi-code/kimi-for-coding', provider: 'kimi' })?.limit
     ).toBe(256_000)
+  })
+
+  /**
+   * Haiku 5.5, Fable 5 / 5.1 et Mythos 5 / 5.1 portent 1 M (fiches modèles Anthropic, lues le
+   * 2026-11-05) ; le CLI le confirme : `contextWindow: 1000000` pour `claude-haiku-5-5` dans 318
+   * sorties de run récentes. La table leur donnait 200 k : le CLI compactait vers 170 k, six fois
+   * trop tôt (conv-1581). ENTRÉE QUI DOIT FAIRE ÉCHOUER UN MAUVAIS CORRECTIF :
+   * `claude-haiku-4-5-20251001` — seul Haiku encore à 200 k ; un « haiku = 1 M » sans entrée
+   * plus précise avant lui le passerait à tort à 1 M.
+   */
+  it('donne 1 M a la gamme Claude courante, et garde 200 k au seul Haiku 4.5', () => {
+    const limite = (model: string): number | undefined =>
+      contextGauge({ inputTokens: 10, model, provider: 'claude' })?.limit
+    expect(limite('haiku')).toBe(1_000_000)
+    expect(limite('claude-haiku-5-5')).toBe(1_000_000)
+    expect(limite('fable')).toBe(1_000_000)
+    expect(limite('claude-fable-5')).toBe(1_000_000)
+    expect(limite('claude-fable-5-1')).toBe(1_000_000)
+    expect(limite('claude-mythos-5')).toBe(1_000_000)
+    expect(limite('claude-mythos-5-1')).toBe(1_000_000)
+    expect(limite('claude-haiku-4-5')).toBe(200_000)
+    expect(limite('claude-haiku-4-5-20251001')).toBe(200_000)
   })
 
   it('ne prete pas la fenetre d un provider a un autre', () => {
@@ -95,7 +117,8 @@ describe('jauge de contexte', () => {
 })
 
 describe('doitCompacterAutomatiquement', () => {
-  const jauge = (ratio: number, model = 'haiku'): ReturnType<typeof contextGauge> =>
+  // Haiku 4.5 : seul modele Claude encore a 200 k (le `haiku` nu sert Haiku 5.5, a 1 M).
+  const jauge = (ratio: number, model = 'claude-haiku-4-5'): ReturnType<typeof contextGauge> =>
     contextGauge({ inputTokens: Math.round(200_000 * ratio), model, provider: 'claude' })
 
   it('declenche au palier critique', () => {
@@ -120,7 +143,7 @@ describe('doitCompacterAutomatiquement', () => {
 
 describe('jaugeVide', () => {
   it('rend une jauge a 0 % sur la fenetre du modele servi (fil neuf)', () => {
-    expect(jaugeVide('claude-haiku-4', 'claude')).toEqual({
+    expect(jaugeVide('claude-haiku-4-5', 'claude')).toEqual({
       used: 0,
       limit: 200_000,
       ratio: 0,

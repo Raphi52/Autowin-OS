@@ -382,9 +382,10 @@ describe('sélection Claude depuis Agents', () => {
       reasoningEffort: 'xhigh'
     })
 
-    // `--autocompact` suit la fenetre declaree, a 85 % : fable porte 200 k dans
-    // CONTEXT_WINDOWS, donc le seuil vaut 170 000 et non le `auto` du CLI.
-    expect(args).toEqual(['--model', 'claude-fable-5', '--effort', 'xhigh', '--autocompact', '170000'])
+    // `--autocompact` suit la fenetre declaree, a 85 % : fable porte 1 M dans CONTEXT_WINDOWS
+    // (fiche Anthropic fable-5, lue le 2026-11-05, conv-1581), donc le seuil vaut 850 000 et non
+    // le `auto` du CLI.
+    expect(args).toEqual(['--model', 'claude-fable-5', '--effort', 'xhigh', '--autocompact', '850000'])
   })
 
   it('n’invente pas de flag effort pour none', () => {
