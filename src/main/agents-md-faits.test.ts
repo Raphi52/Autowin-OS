@@ -1,20 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  realpathSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
 import { refusArretHote } from '../shared/garde-hote-et-boucle'
+import { cheminsCites, existeAvecMotif, scriptsNpmCites } from './chemins-cites'
 import { PROJECT_CONTEXT_MAX_BYTES } from './context-files'
 
 /**
@@ -76,30 +68,11 @@ const lire = (chemin: string): string => readFileSync(join(RACINE, chemin), 'utf
 const SCRIPTS_NPM: Record<string, string> = JSON.parse(lire('package.json')).scripts
 const ASSETS = 'src/renderer/src/assets'
 
-/** Mots des spans entre accents graves (un span peut être une commande : `node scripts/x.mjs --y`). */
-function motsCites(texte: string): string[] {
-  return [...texte.matchAll(/`([^`\n]+)`/g)].flatMap((m) => m[1].split(/\s+/)).filter(Boolean)
-}
-
-const PREFIXES_DU_DEPOT = /^(src|scripts|skills|\.githooks)\//
-
-/** Les chemins du dépôt cités, placeholders compris (`skills/<nom>/SKILL.md`, `skills/*\/SKILL.md`). */
-function cheminsCites(texte: string): string[] {
-  const mots = motsCites(texte).filter((m) => PREFIXES_DU_DEPOT.test(m) || m === '.gitignore')
-  return [...new Set(mots)]
-}
-
-/** Un segment `<nom>` ou `*` vaut n'importe quelle entrée du dossier. */
-function existeAvecMotif(segments: string[], base: string): boolean {
-  if (segments.length === 0) return existsSync(base)
-  const [tete, ...reste] = segments
-  if (tete === '') return existeAvecMotif(reste, base)
-  if (/[<*]/.test(tete)) {
-    if (!existsSync(base) || !statSync(base).isDirectory()) return false
-    return readdirSync(base).some((entree) => existeAvecMotif(reste, join(base, entree)))
-  }
-  return existeAvecMotif(reste, join(base, tete))
-}
+// L'extraction des chemins cités vit dans `chemins-cites.ts` depuis le 05/11 : la même règle passe
+// aussi sur la constitution, la consigne du chat, les consignes d'étape et les SKILL.md
+// (`chemins-cites.test.ts`, conv-1602).
+// fix-ok: cheminsCites et existeAvecMotif étaient privés à ce test, donc aucun autre texte des agents
+// n'était vérifié ; ce test reste vert (77/77 avec chemins-cites.test.ts, 05/11) après le déplacement.
 
 interface Paire {
   /** Citation exacte d'AGENTS.md. */
@@ -273,7 +246,7 @@ describe('AGENTS.md — ses faits tiennent encore', () => {
 
   it('chaque `npm run X` cité est un script de package.json', ({ skip }) => {
     if (!CHEMIN_AGENTS) skip(SANS_AGENTS)
-    const cites = [...AGENTS.matchAll(/`npm run ([\w:-]+)`/g)].map((m) => m[1])
+    const cites = scriptsNpmCites(AGENTS)
     expect(cites.length).toBeGreaterThan(0)
     expect(cites.filter((nom) => !(nom in SCRIPTS_NPM))).toEqual([])
   })
@@ -324,17 +297,4 @@ describe('AGENTS.md à vérifier : copie liée et clone', () => {
     // Six processus git : 42,8 s mesurées le 05/11 sur un poste chargé (conv-1583), au-delà des 20 s
     // par défaut de vitest.config.ts ; même convention qu'edit-file-copie-desynchronisee.test.ts.
   }, 120_000)
-})
-
-describe('extraction des chemins cités', () => {
-  it('prend les chemins des commandes et ignore les données du poste', () => {
-    const texte =
-      '`node scripts/ui-capture.mjs --code-dev` · `src/main/` · `turn-journals/<conv>/x.jsonl` · `x.ts` · `.gitignore`'
-    expect(cheminsCites(texte)).toEqual(['scripts/ui-capture.mjs', 'src/main/', '.gitignore'])
-  })
-
-  it('un placeholder vaut n’importe quelle entrée, mais une entrée doit exister', () => {
-    expect(existeAvecMotif('skills/<nom>/SKILL.md'.split('/'), RACINE)).toBe(true)
-    expect(existeAvecMotif('skills/*/SKILL-absent.md'.split('/'), RACINE)).toBe(false)
-  })
 })
