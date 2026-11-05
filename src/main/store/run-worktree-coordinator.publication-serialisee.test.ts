@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { attendreFichier } from '../ecriture-hors-fil'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -95,6 +96,8 @@ describe('RunWorktreeCoordinator — un verrou tenu, et une seule publication à
         'base-in-progress'
       )
     } finally {
+      // Un manifeste encore en vol recréerait des fichiers pendant l'effacement (conv-1598).
+      await attendreFichier()
       rmSync(root, { recursive: true, force: true })
     }
   })
@@ -115,6 +118,8 @@ describe('RunWorktreeCoordinator — un verrou tenu, et une seule publication à
       // Requalifier trop large remplacerait un motif faux par un autre.
       expect((res as { reason?: string }).reason).toBe('merge-failed')
     } finally {
+      // Un manifeste encore en vol recréerait des fichiers pendant l'effacement (conv-1598).
+      await attendreFichier()
       rmSync(root, { recursive: true, force: true })
     }
   })
@@ -150,6 +155,8 @@ describe('RunWorktreeCoordinator — un verrou tenu, et une seule publication à
       expect(finalizeAsync).toHaveBeenCalledTimes(3)
       expect(res.map((r) => r?.outcome)).toEqual(['merged', 'merged', 'merged'])
     } finally {
+      // Un manifeste encore en vol recréerait des fichiers pendant l'effacement (conv-1598).
+      await attendreFichier()
       rmSync(root, { recursive: true, force: true })
     }
   })
@@ -178,6 +185,8 @@ describe('RunWorktreeCoordinator — un verrou tenu, et une seule publication à
       // Sans cette garantie, un seul refus bloquerait toutes les publications de la session.
       expect(y?.outcome).toBe('merged')
     } finally {
+      // Un manifeste encore en vol recréerait des fichiers pendant l'effacement (conv-1598).
+      await attendreFichier()
       rmSync(root, { recursive: true, force: true })
     }
   })

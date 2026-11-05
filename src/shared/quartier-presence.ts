@@ -80,6 +80,38 @@ export function animalLisible(v: unknown): AnimalAgent | null {
     : null
 }
 
+/**
+ * « Afficher mes agents à » (demande utilisateur du 2026-11-05, conv-1599) : les postes à qui CE poste
+ * masque ses agents, écrits dans `presence.json`. L'Autowin d'un poste nommé n'affiche alors pas ces
+ * agents. C'est un réglage d'AFFICHAGE, pas une protection : le fichier reste lisible sur le partage.
+ * 50 postes au plus : la liste ne doit pas manger la place des agents sous `PRESENCE_TAILLE_MAX`.
+ */
+export const PRESENCE_MASQUES_MAX = 50
+/** Un nom de poste (sous-dossier, compte Windows) plus long n'en est pas un. */
+export const PRESENCE_POSTE_MAX = 64
+
+const HORS_NOM_DE_POSTE =
+  // eslint-disable-next-line no-control-regex
+  /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff<>:"/\\|?*]/
+
+/**
+ * Une liste de postes lisible : chaînes non vides, sans caractère interdit dans un nom de dossier,
+ * en minuscules (Windows ne distingue pas la casse), sans doublon, `PRESENCE_MASQUES_MAX` au plus.
+ * Tout le reste est écarté : la valeur vient d'un fichier ou de la vue, jamais d'une source sûre.
+ */
+export function postesLisibles(v: unknown): string[] {
+  if (!Array.isArray(v)) return []
+  const sortie: string[] = []
+  for (const brut of v) {
+    if (sortie.length >= PRESENCE_MASQUES_MAX) break
+    if (typeof brut !== 'string') continue
+    const poste = brut.trim().toLowerCase()
+    if (!poste || poste.length > PRESENCE_POSTE_MAX || HORS_NOM_DE_POSTE.test(poste)) continue
+    if (!sortie.includes(poste)) sortie.push(poste)
+  }
+  return sortie
+}
+
 /** Un agent tel qu'il est écrit sur le partage. */
 export interface AgentPublie {
   /** L'identifiant du fil sur son poste (`conv-1430`) : il ne s'ouvre pas ailleurs (D10). */
@@ -109,7 +141,25 @@ export interface PresenceDuPoste {
    * le réglage : le lecteur garde alors l'animal tiré du nom du poste (`animalDuPoste`).
    */
   animal?: AnimalAgent
+  /**
+   * Les postes (en minuscules) à qui ce poste masque ses agents (conv-1599). Absent = visibles pour
+   * tous ; un lecteur nommé ici ne les affiche pas.
+   */
+  masquesPour?: string[]
   agents: AgentPublie[]
+}
+
+/**
+ * Une personne trouvée sur le partage (conv-1599) : tout `presence.json` lisible, en ligne ou non,
+ * pour que les réglages de l'Accueil puissent la nommer dans « afficher les agents de » et
+ * « afficher mes agents à ».
+ */
+export interface PersonneDuPartage {
+  /** Le nom de son sous-dossier (compte Windows), jamais la valeur écrite dans le fichier. */
+  poste: string
+  prenom: string
+  /** Ses agents peuvent apparaître ici maintenant : fichier récent, partage ouvert, pas masqué pour moi. */
+  enLigne: boolean
 }
 
 /** Un collègue vu dans le village : relu de SON `presence.json`, validé champ par champ. */
@@ -127,6 +177,11 @@ export interface PresenceDUnCollegue {
 /** Ce que le canal `os:quartier-presence:collegues` rend à la vue. */
 export interface PresencesDesCollegues {
   collegues: PresenceDUnCollegue[]
+  /**
+   * Toutes les personnes du partage, en ligne ou non (conv-1599) ; absent = processus principal d'avant
+   * le réglage : la vue retombe sur `collegues`.
+   */
+  personnes?: PersonneDuPartage[]
   /** Partage injoignable, ou fichiers écartés (trop gros, illisibles) ; absent = tout va bien. */
   erreur?: string
 }
