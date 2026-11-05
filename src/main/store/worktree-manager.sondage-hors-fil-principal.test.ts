@@ -19,6 +19,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  */
 const appelsSync: string[] = []
 const appelsAsync: string[] = []
+/**
+ * La voie asynchrone passe par `execFileHorsFil` depuis conv-1574 (2026-11-05) : un `execFile` du
+ * fil principal CRÉAIT encore le processus sur ce fil (31,9 s d'un coup, gels.jsonl 09:51:40 UTC).
+ * `appelsAsync` (l'`execFile` du fil principal) doit donc rester vide, et le sondage se voir ici.
+ */
+const appelsHorsFil: string[] = []
+
+vi.mock('../execution-hors-fil', () => ({
+  execFileHorsFil: (fichier: string) => {
+    appelsHorsFil.push(fichier)
+    return Promise.resolve({ stdout: '', stderr: '' })
+  }
+}))
 
 vi.mock('node:child_process', async (original) => {
   const vrai = await original<typeof import('node:child_process')>()
@@ -51,6 +64,7 @@ describe('sondage d’empreinte — hors du fil principal', () => {
     oublierEmpreintesProcessus()
     appelsSync.length = 0
     appelsAsync.length = 0
+    appelsHorsFil.length = 0
   })
 
   it('memoire FROIDE sur le fil principal : aucun processus externe SYNCHRONE', () => {
@@ -61,7 +75,8 @@ describe('sondage d’empreinte — hors du fil principal', () => {
   it('le sondage a bien lieu, mais par la voie asynchrone', async () => {
     prechargerEmpreintesProcessus([process.pid])
     await new Promise((r) => setTimeout(r, 10))
-    expect(appelsAsync.length).toBeGreaterThan(0)
+    expect(appelsHorsFil.length).toBeGreaterThan(0)
+    expect(appelsAsync).toEqual([])
     expect(appelsSync).toEqual([])
   })
 
@@ -87,7 +102,8 @@ describe('sondage d’empreinte — hors du fil principal', () => {
   it('… et elle fait tout de meme lire l’empreinte, par la voie asynchrone', async () => {
     defaultProcessIdentity(process.pid)
     await new Promise((r) => setTimeout(r, 10))
-    expect(appelsAsync.length).toBeGreaterThan(0)
+    expect(appelsHorsFil.length).toBeGreaterThan(0)
+    expect(appelsAsync).toEqual([])
     expect(appelsSync).toEqual([])
   })
 

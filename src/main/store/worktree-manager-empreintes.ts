@@ -1,6 +1,7 @@
-import { execFile, execFileSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { readFileSync, readlinkSync } from 'node:fs'
 import { platform } from 'node:os'
+import { execFileHorsFil, type ErreurHorsFil, type OptionsHorsFil } from '../execution-hors-fil'
 
 /**
  * Empreintes de processus (pid recyclé ou non) et leur sondage système, synchrone ou en lot.
@@ -168,21 +169,39 @@ function planifierSondageAsynchrone(pids: number[], maintenant: () => number): v
     }
     finir(empreintes)
   }
+  /*
+   * LA CRÉATION DU PROCESSUS AUSSI PART HORS DU FIL (conv-1574, 2026-11-05). `execFile` n'est
+   * asynchrone que pour la suite : créer `powershell.exe` tenait le fil principal, jusqu'à 31,9 s
+   * d'un coup sur ce poste (gels.jsonl, 09:51:40 UTC), 82,8 s en 13 appels sur une session.
+   * `execFileHorsFil` crée le processus dans un fil dédié ; la sortie arrive comme avant, erreur
+   * comprise (elle porte `stdout`). Garde : worktree-manager-empreintes.sans-gel.test.ts.
+   */
+  const lancer = (
+    fichier: string,
+    args: string[],
+    options: OptionsHorsFil,
+    lire: (erreur: Error | null, sortie: string) => void
+  ): void => {
+    execFileHorsFil(fichier, args, options).then(
+      ({ stdout }) => lire(null, stdout),
+      (erreur: ErreurHorsFil) => lire(erreur, erreur?.stdout ?? '')
+    )
+  }
   try {
     if (platform() === 'win32') {
       const command =
         `Get-Process -Id ${aLire.join(',')} -ErrorAction SilentlyContinue | ForEach-Object { ` +
         `$path = ''; try { $path = $_.Path } catch {}; ` +
         `Write-Output ($_.Id.ToString() + '|' + $_.StartTime.ToUniversalTime().Ticks.ToString() + '|' + $path) }`
-      execFile(
+      lancer(
         'powershell.exe',
         ['-NoProfile', '-NonInteractive', '-Command', command],
         { encoding: 'utf8', timeout: 5_000, windowsHide: true },
-        (erreur, sortie) => surSortie(erreur, String(sortie))
+        surSortie
       )
       return
     }
-    execFile(
+    lancer(
       'ps',
       ['-o', 'pid=,lstart=,comm=', '-p', aLire.join(',')],
       { encoding: 'utf8', timeout: 5_000 },
