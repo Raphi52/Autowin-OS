@@ -88,8 +88,12 @@ import {
  * légitimement réclamer — ni plus, ni moins.
  */
 export const JUDGE_TOOLSET_CONTRACT =
-  `OUTILLAGE DU PRODUCTEUR : in-app, il dispose de Read/Grep/Glob, et en phase de mutation de ` +
-  `Bash/Edit/Write bornés au dossier de travail. Pas d'accès web, pas de sous-agents. Pour une ` +
+  // conv-1582 (2026-11-05) : disait Bash/Edit/Write « en phase de mutation » seulement et « pas
+  // d'accès web », contre `sandboxForPhase` et les outils web chargés par providers/claude.ts.
+  `OUTILLAGE DU PRODUCTEUR : in-app, chaque phase dispose de Read/Grep/Glob/Bash et d'Edit/Write ` +
+  `bornés au dossier de travail (seule une sous-tâche parallèle d'un build qui ne modifie rien est ` +
+  `privée d'Edit/Write), et du web (WebFetch/WebSearch) ; seules BUILD et CLEAN modifient des ` +
+  `fichiers. Pas de sous-agents. Pour une ` +
   `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui, par défaut, ` +
   `ouvre une instance CACHÉE (écran de l'utilisateur intact), navigue par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
   `Une capture citée avec son exit-code 0 et son chemin EST une preuve recevable. ` +

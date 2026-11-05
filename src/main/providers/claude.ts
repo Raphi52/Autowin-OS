@@ -1719,9 +1719,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        *
        * Write, Edit, MultiEdit suivent `execution.sandbox` : depuis le 2026-09-04, `sandboxForPhase`
        * rend `danger-full-access` a TOUTES les phases (demande de l'utilisateur). La lecture seule de
-       * scout, frame, terrain et juge n'est qu'un contrat de consigne (phase-briefs.ts), aucun outil
-       * ne l'impose (conv-1582). Le fond autonome (`watchdog-read-only`) garde sa frontiere fermee :
-       * son contexte d'evenement n'est pas fiable.
+       * scout, frame, terrain et d'une etape `judge` de la chaine n'est qu'un contrat de consigne
+       * (phase-briefs.ts), aucun outil ne l'impose (conv-1582). Le juge du controle final, lui, part
+       * en `read-only` (orchestrator-parcours-sequentiel.ts et -glouton.ts), comme une sous-tache
+       * parallele d'un build qui ne modifie rien : sans Write/Edit. Le fond autonome
+       * (`watchdog-read-only`) garde sa frontiere fermee : son contexte d'evenement n'est pas fiable.
+       * fix-ok: conv-1582 — ce commentaire disait le juge sans outil de lecture seule ; mesure : les
+       * appels du juge final passent `'read-only'` (orchestrator.execution.test.ts le verrouille).
        */
       const tools =
         (write ? 'Read,Grep,Glob,Bash,Edit,Write,MultiEdit' : 'Read,Grep,Glob,Bash') +

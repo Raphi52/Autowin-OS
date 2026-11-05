@@ -296,7 +296,7 @@ export function buildBehaviourComposition(
       label: 'portage phase→phase',
       // conv-1582 : affichait « tronquée à 2000 caractères » ; plus aucune coupe depuis le 2026-09-27.
       value: 'La sortie de chaque phase est portée entière à la suivante, sans coupe.',
-      source: 'src/main/orchestrator-contrats.ts:1136'
+      source: 'src/main/orchestrator-contrats.ts:1140'
     },
     {
       label: 'session-resume chaîné',
