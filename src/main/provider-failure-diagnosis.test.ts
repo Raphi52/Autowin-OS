@@ -331,6 +331,24 @@ describe('une annulation ne doit pas se faire passer pour une panne du provider'
     )
   })
 
+  /*
+   * Le conseil renvoyait à « Settings › Budget » pour relever les plafonds du run. Cette section a
+   * été retirée le 2026-10-23 (conv-1119) et les plafonds viennent du devis, fixé au départ selon la
+   * taille de la tâche, sans réglage nulle part (orchestration-budget.ts) : on ne conseille plus un
+   * geste impossible (conv-1602).
+   */
+  it('plafond atteint : le conseil nomme le devis et un geste possible, jamais un écran disparu', () => {
+    const { kind, hint } = diagnoseProviderFailure({
+      provider: 'claude',
+      message: "Budget d'agents atteint (100)"
+    })
+    expect(kind).toBe('budget')
+    expect(hint).not.toContain('Settings')
+    expect(hint).not.toMatch(/relève les plafonds/i)
+    expect(hint).toMatch(/devis/)
+    expect(hint).toMatch(/découpe/i)
+  })
+
   it('le diagnostic du provider joint a l abort atteint l ECRAN', () => {
     // Le tampon de codex portait « usage limit » : c'est precisement ce que l'agent n'a pas eu, et
     // ce qui l'a pousse a l'inventer depuis les traces d'autres appels.

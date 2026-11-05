@@ -224,9 +224,13 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
     )
   }
   if (kind === 'budget') {
+    // Plus de « relève les plafonds (Settings › Budget) » : la section a été retirée le 2026-10-23
+    // (conv-1119) et les plafonds du devis ne se règlent plus nulle part (orchestration-budget.ts,
+    // execution-quote.ts PRESETS). Le seul geste réel est de demander moins par run (conv-1602).
     return (
-      'Relève les plafonds du run (Settings › Budget) ou réduis le périmètre : ' +
-      'le plafond a été atteint avant cet appel.'
+      'Le run a atteint un plafond de son devis (appels, agents, durée ou tokens), ' +
+      'fixé au départ selon la taille de la tâche ; aucun réglage ne le relève. ' +
+      'Découpe la demande en tâches plus petites et relance-les une à une.'
     )
   }
   return undefined

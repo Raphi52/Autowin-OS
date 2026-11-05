@@ -120,9 +120,9 @@ export const TEXTES_FR = {
 
   // chat-auto-mode.ts
   'autoArret.quotaHebdo':
-    'Mode auto arrêté : le quota hebdomadaire Claude est à {quota} % (seuil réglé : {seuil} %). ∞ est éteint sur ce fil : rallume ∞ quand le quota sera repassé sous le seuil, ou relève ce seuil dans Settings › Budget puis rallume ∞.',
+    'Mode auto arrêté : le quota hebdomadaire Claude est à {quota} % (seuil réglé : {seuil} %). ∞ est éteint sur ce fil : rallume ∞ quand le quota sera repassé sous le seuil, ou relève ce seuil dans Settings › Behaviour puis rallume ∞.',
   'autoArret.toursAutoMax':
-    "Mode auto arrêté : {tours} tours automatiques d'affilée sans message de ta part (seuil réglé : {seuil}). ∞ est éteint sur ce fil : écris un message (le compte repart de zéro) puis rallume ∞, ou relève ce seuil dans Settings › Budget puis rallume ∞.",
+    "Mode auto arrêté : {tours} tours automatiques d'affilée sans message de ta part (seuil réglé : {seuil}). ∞ est éteint sur ce fil : écris un message (le compte repart de zéro) puis rallume ∞, ou relève ce seuil dans Settings › Behaviour puis rallume ∞.",
   'autoArret.finExplicite':
     "Mode auto terminé : l'agent a signalé explicitement que le travail est fini.",
   'autoArret.recommandationRien': 'Mode auto terminé : plus rien de recommandé.',
@@ -527,6 +527,9 @@ export const TEXTES_FR = {
   'nonPublie.fermer': 'Fermer cet avertissement',
   'nonPublie.masquer': 'Masquer jusqu’au prochain changement',
   'auto.fermerArret': 'Fermer l’avertissement du mode auto',
+  // Bouton du bandeau d'arrêt : le chemin écrit en toutes lettres avait vieilli sans bruit (conv-1602).
+  'auto.ouvrirSeuils': 'Ouvrir Settings › Behaviour',
+  'auto.ouvrirSeuils.titre': 'Les seuils qui arrêtent le mode auto se règlent dans Behaviour',
   'auto.quotaInconnu':
     "Mode auto : le quota hebdomadaire Claude n'a pas pu être lu. Seul le seuil de {tours} tours automatiques d'affilée peut arrêter la chaîne.",
   'renommer.surtitre': 'RENOMMER',
@@ -696,9 +699,9 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
 
   // chat-auto-mode.ts
   'autoArret.quotaHebdo':
-    'Auto mode stopped: the weekly Claude quota is at {quota}% (threshold set: {seuil}%). ∞ is off for this thread: turn ∞ back on once the quota is below the threshold again, or raise this threshold in Settings › Budget and turn ∞ back on.',
+    'Auto mode stopped: the weekly Claude quota is at {quota}% (threshold set: {seuil}%). ∞ is off for this thread: turn ∞ back on once the quota is below the threshold again, or raise this threshold in Settings › Behaviour and turn ∞ back on.',
   'autoArret.toursAutoMax':
-    'Auto mode stopped: {tours} automatic turns in a row without a message from you (threshold set: {seuil}). ∞ is off for this thread: write a message (the count starts again from zero) and turn ∞ back on, or raise this threshold in Settings › Budget and turn ∞ back on.',
+    'Auto mode stopped: {tours} automatic turns in a row without a message from you (threshold set: {seuil}). ∞ is off for this thread: write a message (the count starts again from zero) and turn ∞ back on, or raise this threshold in Settings › Behaviour and turn ∞ back on.',
   'autoArret.finExplicite':
     'Auto mode finished: the agent explicitly reported that the work is done.',
   'autoArret.recommandationRien': 'Auto mode finished: nothing more is recommended.',
@@ -1098,6 +1101,8 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'nonPublie.fermer': 'Close this warning',
   'nonPublie.masquer': 'Hide until the next change',
   'auto.fermerArret': 'Close the auto mode warning',
+  'auto.ouvrirSeuils': 'Open Settings › Behaviour',
+  'auto.ouvrirSeuils.titre': 'The thresholds that stop auto mode are set in Behaviour',
   'auto.quotaInconnu':
     'Auto mode: the weekly Claude quota could not be read. Only the threshold of {tours} automatic turns in a row can stop the chain.',
   'renommer.surtitre': 'RENAME',

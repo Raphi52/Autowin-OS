@@ -81,6 +81,37 @@ describe('ChatView — la chaîne ∞ s’arrête au seuil du quota hebdomadaire
     ).toBe('false')
   })
 
+  // Le seuil se relève dans Settings › Behaviour : le bandeau l'ouvre d'un clic au lieu de donner
+  // un chemin à recopier — le chemin écrit « Settings › Budget » avait vieilli sans bruit (conv-1602).
+  it('le bandeau d’arrêt ouvre Settings › Behaviour d’un clic', async () => {
+    const appCommand = vi.fn().mockResolvedValue({ ok: true })
+    const pilotChat = vi.fn().mockResolvedValue({ ok: true })
+    h = await mountChat(
+      chatApi({
+        pilotChat,
+        appCommand,
+        modelQuotas: vi.fn(async () => quotas(85)),
+        conversations: vi.fn().mockResolvedValue([conversation('A', fil)]),
+        conversation: vi.fn(async (id: string) => conversation(id, fil))
+      })
+    )
+    await act(async () => (document.querySelector('.conv-item .conv-pick') as HTMLElement).click())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    await h.click('[data-testid="composer-auto-toggle"]')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const bouton = document.querySelector('[data-testid="chat-auto-arret-reglages"]')
+    expect(bouton?.textContent).toBe('Ouvrir Settings › Behaviour')
+    appCommand.mockClear()
+    await h.click('[data-testid="chat-auto-arret-reglages"]')
+    expect(appCommand).toHaveBeenCalledWith('navigate', { tab: 'behaviour' })
+    // L'arrêt reste affiché : l'ouverture des réglages ne vaut pas lecture du message.
+    expect(document.querySelector('[data-testid="chat-auto-arret"]')).not.toBeNull()
+  })
+
   it('l’arrêt survit au redémarrage de l’app : il est relu dans le fil, sans nouveau déclenchement', async () => {
     await allumer(85)
     await h?.unmount()

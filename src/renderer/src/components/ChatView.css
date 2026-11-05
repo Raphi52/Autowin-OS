@@ -3464,6 +3464,21 @@ button.chat-project-dot:disabled {
   line-height: 1;
 }
 
+/* Bouton d'action du bandeau d'arrêt du mode auto (« Ouvrir Settings › Behaviour », conv-1602) : la
+   règle `button` ci-dessus est taillée pour la croix (17 px) et rendait l'action plus grosse que le
+   texte. Une action écrite garde la taille du texte et prend un cadre, comme « Traiter » du bandeau
+   des travaux non publiés ; la couleur suit celle du bandeau dans chaque thème. */
+.chat-workflow-notice .chat-workflow-notice__action {
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  border-radius: 3px;
+  padding: 1px 10px;
+  font: inherit;
+  white-space: nowrap;
+}
+.chat-workflow-notice .chat-workflow-notice__action:hover {
+  border-color: currentColor;
+}
+
 /* ── Matrice MODEL × EFFORT ─────────────────────────────────────────────
    Overlay sombre : une ligne par modèle, un slider discret de crans d'effort.
    Complète le sous-menu `.model-effort-menu` (qui reste le chemin rapide). */
