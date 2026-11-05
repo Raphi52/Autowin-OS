@@ -11,6 +11,7 @@ import { appliquerThemeMode, lireThemeMode } from './theme-mode'
 import { appliquerLangue, lireLangue, transmettreLangueAuMoteur } from './langue'
 import { installerCopiePropre } from './copie-propre'
 import { installerAnimationsParCrans } from './animations-par-crans'
+import { installerPauseHorsChamp } from './animations-hors-champ'
 import { installerModaliteSaisie } from './modalite-saisie'
 import { installerMesuresReactSansRetenue } from './mesures-react'
 import { demarrerAgentsQuartier } from './quartier/agents-quartier'
@@ -48,6 +49,12 @@ installerCopiePropre()
  * par seconde, 20 à 33 % de la carte graphique de l'utilisateur (conv-1075).
  */
 installerAnimationsParCrans()
+
+/*
+ * Ce qui sort du champ (bulle remontée, fil masqué par le défilement) ne s'anime plus : les
+ * animations fluides tournaient aussi hors de vue, 101 % d'un cœur pour la fenêtre (conv-1610).
+ */
+installerPauseHorsChamp()
 
 /*
  * Le contour de focus d'un bouton ne s'allume qu'en naviguant au clavier (conv-1222) : Chromium
