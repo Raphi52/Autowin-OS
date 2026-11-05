@@ -1,7 +1,18 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { refusGitDestructeur } from '../shared/garde-git-destructeur'
 import { refusArretHote } from '../shared/garde-hote-et-boucle'
 import { PROJECT_CONTEXT_MAX_BYTES } from './context-files'
@@ -26,9 +37,41 @@ import { PROJECT_CONTEXT_MAX_BYTES } from './context-files'
  * `.autowin-data/`, le nom du sous-dossier de données.
  */
 
+/**
+ * L'AGENTS.md à vérifier pour `racine` : le sien ; sinon, si `racine` est une copie liée
+ * (`git worktree add`), celui du dossier principal du dépôt ; sinon `undefined`.
+ *
+ * POURQUOI (conv-1590, 2026-11-05) : AGENTS.md est ignoré par git (`.gitignore`, consignes locales du
+ * poste). Les copies des runs et de `verify` ne l'ont pas, et ce test y plantait (ENOENT) : suite rouge
+ * dans chaque copie d'agent. Ces agents lisent l'AGENTS.md du dossier principal ; on le vérifie donc
+ * contre le code de la copie. Un clone (version publique) n'en a aucun : les faits s'y déclarent
+ * IGNORÉS avec leur raison. Écrit dans la copie du run de conv-1590, perdu à sa publication (d06f79a5),
+ * reporté par /git (conv-1583) après un ENOENT reproduit dans une copie posée sur origin/main.
+ */
+function agentsMdDe(racine: string): string | undefined {
+  const local = join(racine, 'AGENTS.md')
+  if (existsSync(local)) return local
+  let commun: string
+  try {
+    commun = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-common-dir'], {
+      cwd: racine,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true
+    }).trim()
+  } catch {
+    return undefined // pas un dépôt git : aucun dossier principal à consulter
+  }
+  const principal = join(dirname(commun), 'AGENTS.md')
+  return existsSync(principal) ? principal : undefined
+}
+
 // La racine se lit depuis CE fichier, pas depuis le dossier où vitest a été lancé (revue 2026-11-05).
 const RACINE = fileURLToPath(new URL('../..', import.meta.url))
-const AGENTS = readFileSync(join(RACINE, 'AGENTS.md'), 'utf8')
+const CHEMIN_AGENTS = agentsMdDe(RACINE)
+const SANS_AGENTS =
+  'aucun AGENTS.md ici ni dans le dossier principal du dépôt (clone public) : aucun fait à vérifier'
+const AGENTS = CHEMIN_AGENTS ? readFileSync(CHEMIN_AGENTS, 'utf8') : ''
 const lire = (chemin: string): string => readFileSync(join(RACINE, chemin), 'utf8')
 const SCRIPTS_NPM: Record<string, string> = JSON.parse(lire('package.json')).scripts
 const ASSETS = 'src/renderer/src/assets'
@@ -219,7 +262,8 @@ const PAIRES: Paire[] = [
 ]
 
 describe('AGENTS.md — ses faits tiennent encore', () => {
-  it('chaque chemin du dépôt cité existe', () => {
+  it('chaque chemin du dépôt cité existe', ({ skip }) => {
+    if (!CHEMIN_AGENTS) skip(SANS_AGENTS)
     const chemins = cheminsCites(AGENTS)
     // Garde du test lui-même : si l'extraction ne trouve plus rien, elle est cassée, pas le fichier.
     expect(chemins.length).toBeGreaterThan(10)
@@ -227,16 +271,59 @@ describe('AGENTS.md — ses faits tiennent encore', () => {
     expect(absents).toEqual([])
   })
 
-  it('chaque `npm run X` cité est un script de package.json', () => {
+  it('chaque `npm run X` cité est un script de package.json', ({ skip }) => {
+    if (!CHEMIN_AGENTS) skip(SANS_AGENTS)
     const cites = [...AGENTS.matchAll(/`npm run ([\w:-]+)`/g)].map((m) => m[1])
     expect(cites.length).toBeGreaterThan(0)
     expect(cites.filter((nom) => !(nom in SCRIPTS_NPM))).toEqual([])
   })
 
-  it.each(PAIRES.map((p) => [p.fait, p] as const))('fait : %s', async (fait, paire) => {
+  it.for(PAIRES.map((p) => [p.fait, p] as const))('fait : %s', async ([fait, paire], { skip }) => {
+    if (!CHEMIN_AGENTS) skip(SANS_AGENTS)
     expect(AGENTS, 'citation disparue d’AGENTS.md : retire ou mets à jour sa paire').toContain(fait)
     await paire.verifier()
   })
+})
+
+describe('AGENTS.md à vérifier : copie liée et clone', () => {
+  const racines: string[] = []
+  afterAll(() => {
+    for (const racine of racines) rmSync(racine, { recursive: true, force: true })
+  })
+
+  it('une copie liée lit celui du dossier principal ; un clone n’en a aucun (conv-1590)', () => {
+    // Mesure du 2026-11-05 : dans une copie de run (git worktree), sans AGENTS.md à sa racine, ce test
+    // plantait en ENOENT. Jumeaux : la copie liée trouve celui du dossier principal, le clone aucun.
+    const git = (cwd: string, ...args: string[]): void => {
+      execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
+        cwd,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    }
+    const principal = mkdtempSync(join(tmpdir(), 'autowin-agents-md-'))
+    racines.push(principal)
+    writeFileSync(join(principal, '.gitignore'), 'AGENTS.md\n')
+    writeFileSync(join(principal, 'AGENTS.md'), '# faits\n')
+    writeFileSync(join(principal, 'a.txt'), 'a\n')
+    git(principal, 'init', '-q')
+    git(principal, 'add', '.')
+    git(principal, 'commit', '-q', '--no-verify', '-m', 'init')
+    const copie = join(principal, 'copie-liee')
+    git(principal, 'worktree', 'add', '-q', '--detach', copie)
+    const clone = mkdtempSync(join(tmpdir(), 'autowin-agents-md-clone-'))
+    racines.push(clone)
+    git(clone, 'clone', '-q', principal, '.')
+    const vrai = (chemin: string | undefined): string | undefined =>
+      chemin === undefined ? undefined : realpathSync.native(chemin)
+
+    expect(existsSync(join(copie, 'AGENTS.md'))).toBe(false)
+    expect(vrai(agentsMdDe(principal))).toBe(vrai(join(principal, 'AGENTS.md')))
+    expect(vrai(agentsMdDe(copie))).toBe(vrai(join(principal, 'AGENTS.md')))
+    expect(agentsMdDe(clone)).toBeUndefined()
+    // Six processus git : 42,8 s mesurées le 05/11 sur un poste chargé (conv-1583), au-delà des 20 s
+    // par défaut de vitest.config.ts ; même convention qu'edit-file-copie-desynchronisee.test.ts.
+  }, 120_000)
 })
 
 describe('extraction des chemins cités', () => {
