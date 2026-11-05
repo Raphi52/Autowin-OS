@@ -162,9 +162,17 @@ export const REGLES_VISUELLES: string =
  * appels (prompt-observability/conv-835.jsonl, 03:38:55 et 03:39:16). Le chat a lance
  * `Start-Process "msteams:/l/chat/..."` sur l'ecran reel ; l'utilisateur a annule le tour.
  *
- * Le refus deterministe des lancements graphiques a ete RETIRE a sa demande (conv-631, voir
- * src/shared/garde-git-destructeur.ts) : cette prose est le SEUL porteur de la regle, elle doit donc
- * arriver a CHAQUE tour. Elle se place avant le bloc visuel : prefixe stable, relu depuis le cache.
+ * Le REFUS deterministe des lancements graphiques a ete RETIRE a sa demande (conv-631, voir
+ * src/shared/garde-git-destructeur.ts). Ce qui porte la regle depend du chemin (verifie le
+ * 2026-11-05, conv-1602) :
+ *  - DANS UN RUN, le mod Autowin REECRIT un lancement graphique direct vers le bureau cache du run
+ *    (`redirigerLancementGraphique`, mods/autowin/hooks/regles.js), parce que l'orchestrateur pose
+ *    `AUTOWIN_HDESK_ID` (src/main/orchestrator.ts, seul fichier a le poser) ;
+ *  - DANS LE CHAT, cette variable n'est pas posee : le mod laisse passer le lancement. La regle n'y
+ *    tient que par du texte — ce bloc, et la phrase `REGLE_BUREAU_CACHE` que le mod ajoute a la
+ *    description de l'outil shell. Ce bloc doit donc arriver a CHAQUE tour.
+ * `chat-pilotage-prompt.ecran-porteurs.test.ts` lie ce paragraphe a ces faits. Le bloc se place
+ * avant le bloc visuel : prefixe stable, relu depuis le cache.
  */
 export const REGLES_ECRAN_UTILISATEUR: string =
   // NON INVASIF PAR DEFAUT (kaizen conv-526, tour c14c2d28-f864-4ca5-ba3f-3dfe24e41d47,

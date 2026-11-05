@@ -38,6 +38,7 @@ import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
 import { ensureAutowinAppData } from './app-data'
 import { accountEnv, withClaudeAccountEnv, type ClaudeAccount } from './claude-accounts'
 import { ouvrirOutilsNatifsDuChat, type OutilsNatifsDuChat } from './chat-mcp'
@@ -456,13 +457,21 @@ export class QuestionsACote {
       }
       const sansReponse = (motif: MotifSansReponse, detail?: string): void =>
         finir({ ok: false, motif, ...(detail ? { detail } : {}) })
-      enfant.stdout?.on('data', (morceau: Buffer) => (sortie += morceau.toString('utf8')))
-      enfant.stderr?.on('data', (morceau: Buffer) => (erreur += morceau.toString('utf8')))
+      // Un caractère multi-octets peut être COUPÉ entre deux morceaux du pipe : décodé morceau par
+      // morceau, « é » devenait deux U+FFFD. Le décodeur en flux garde la fin incomplète pour le
+      // morceau suivant, comme `runs/survivable-spawn.ts` (scout du 05/11, piste 15, conv-1602).
+      // fix-ok: cause mesurée — `morceau.toString('utf8')` par morceau ; un JSON coupé entre C3 et A9 rendait « Cr��é. » (question-a-cote.test.ts, rouge avant ce décodeur, vert après).
+      const decodeurSortie = new StringDecoder('utf8')
+      const decodeurErreur = new StringDecoder('utf8')
+      enfant.stdout?.on('data', (morceau: Buffer) => (sortie += decodeurSortie.write(morceau)))
+      enfant.stderr?.on('data', (morceau: Buffer) => (erreur += decodeurErreur.write(morceau)))
       // Un CLI mort avant d'avoir lu son message fait lever `EPIPE` ici : sa sortie en échec le dit.
       enfant.stdin?.on('error', () => undefined)
       enfant.stdin?.end(message)
       enfant.once('error', (e) => sansReponse('echec', e.message))
       enfant.once('close', (code) => {
+        sortie += decodeurSortie.end()
+        erreur += decodeurErreur.end()
         if (estAnnulee()) return sansReponse('annulee')
         if (delaiEcoule) return sansReponse('delai')
         finir(lireSortie(sortie, erreur, code))

@@ -263,6 +263,36 @@ describe('poser une question', () => {
     expect(enfant.recu().startsWith(CONSIGNE_QUESTION)).toBe(true)
   })
 
+  /**
+   * Piste 15 du scout du 05/11 (conv-1602) : chaque morceau du pipe était décodé seul
+   * (`morceau.toString('utf8')`). Un « é » (C3 A9) coupé entre deux morceaux devenait deux U+FFFD,
+   * le défaut que `runs/survivable-spawn.ts` corrige déjà par un décodeur en flux.
+   * Entrée qui rend ces tests rouges : `toString('utf8')` remis à la place du décodeur.
+   */
+  it('recolle un « é » coupé entre deux morceaux de la sortie du CLI', async () => {
+    const { service, enfants } = monter()
+    const issue = service.poser('conv-1', 'Quel fichier ?')
+    const enfant = await jusquAuLancement(enfants)
+    const octets = Buffer.from(JSON_OK('Créé.'), 'utf8')
+    const coupe = octets.indexOf(0xc3) + 1
+    enfant.processus.stdout!.emit('data', octets.subarray(0, coupe))
+    enfant.processus.stdout!.emit('data', octets.subarray(coupe))
+    enfant.processus.emit('close', 0)
+    expect(await issue).toEqual({ ok: true, reponse: 'Créé.', outilRefuse: false })
+  })
+
+  it('recolle aussi un accent coupé dans la sortie d’erreur', async () => {
+    const { service, enfants } = monter()
+    const issue = service.poser('conv-1', 'Quel fichier ?')
+    const enfant = await jusquAuLancement(enfants)
+    const octets = Buffer.from('Échec réseau', 'utf8')
+    const coupe = octets.indexOf(0xc3, 2) + 1
+    enfant.processus.stderr!.emit('data', octets.subarray(0, coupe))
+    enfant.processus.stderr!.emit('data', octets.subarray(coupe))
+    enfant.processus.emit('close', 1)
+    expect(await issue).toEqual({ ok: false, motif: 'echec', detail: 'Échec réseau' })
+  })
+
   it('compte par défaut : retire le dossier de configuration hérité du processus', async () => {
     vi.stubEnv('CLAUDE_CONFIG_DIR', 'D:/un/autre/compte')
     const { service, enfants, appels } = monter(

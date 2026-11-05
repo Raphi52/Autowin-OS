@@ -18,6 +18,7 @@ import { registerLangueIpc } from './langue'
 import { registerCaptureElementIpc } from './capture-element'
 import { creerMesureDesEcarts } from '../ecarts-des-fiches'
 import type { ConversationPourLaCarte } from '../carte-des-besoins'
+import { messagesRecopies, type BranchePourLaFiche } from '../fiches-de-demande'
 import { lireDossiersProjetsClaude } from '../dossiers-claude-cli'
 import { registerTranscriptsIpc } from './transcripts'
 import { registerPreflightIpc } from './preflight'
@@ -53,7 +54,6 @@ import {
 } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { promises as fsp } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
 import type { ExecutionEvidence, Message, ProviderAdapter } from '../providers/types'
 import {
@@ -181,7 +181,9 @@ import { depotCiteDansLeMessage } from '../depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from '../rangement-premier-message'
 import { noterAppelCourt, signalerPanneAppelCourt } from '../petites-taches-trace'
 import { condenseurDuBrain } from '../brain-condenseur'
-import { photographierDebutDeTour } from '../chat-turn-publication'
+import { photographierDebutDeTour, verifierCeQuiPart } from '../chat-turn-publication'
+import { publierSansTour, redacteurDeCommit } from '../git-apres-fil-sans-tour'
+import { lireProprietairesDeFichiers } from '../proprietaire-fichier'
 import {
   blocDuTour,
   commitsPublies,
@@ -189,14 +191,18 @@ import {
   estDepotAutowin,
   FileGitApresFil,
   filDeLaPasse,
-  lignesGitDuJournal,
   lireAmont,
   planTourneEncore,
   publicationInterditeDans,
   travauxParFil,
   travauxTentesSurDisque
 } from '../git-apres-fil'
-import { defaultGitRunner, type AutoCloseReport } from '../run-autoclose'
+import {
+  autoCloseBranch,
+  autoCloseRun,
+  defaultGitRunner,
+  type AutoCloseReport
+} from '../run-autoclose'
 import {
   creerNotifieurDeFinDeTour,
   libelleDeBouton,
@@ -1673,6 +1679,26 @@ Le fil reprend ensuite normalement.`
 
   /** Assigné plus bas, une fois le coordinateur des plans construit : la reprise le consulte. */
   const suiviDesFilsCoupes: { reprise?: ReturnType<typeof creerRepriseDesFils> } = {}
+  /*
+   * UNE BRANCHE REPREND LE JOURNAL ET LES FICHES DE SA SOURCE (conv-1578). Le journal d'abord : une
+   * question recopiée y redevient une question, au lieu d'une demande sans fiche. Fail-open, comme
+   * le journal : un échec ici ne retient jamais le rattachement des fiches.
+   */
+  const rattacherLaBranche = (
+    branche: Parameters<typeof rattacherLaBrancheAuxFiches>[0],
+    source: Parameters<typeof rattacherLaBrancheAuxFiches>[1]
+  ): Promise<number> => {
+    try {
+      journalDesBesoins.recopierLaBranche({
+        branche: (branche as BranchePourLaFiche).id,
+        source: (source as ConversationPourLaCarte).id,
+        paires: messagesRecopies(branche as BranchePourLaFiche, source as ConversationPourLaCarte)
+      })
+    } catch (error) {
+      console.warn('[besoins] branche non recopiée au journal :', error)
+    }
+    return rattacherLaBrancheAuxFiches(branche, source)
+  }
   // Les canaux des conversations vivent dans src/main/ipc/conversations.ts.
   registerConversationsIpc({
     os,
@@ -1693,7 +1719,7 @@ Le fil reprend ensuite normalement.`
     dossierDesRetours: () => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour'),
     couperLeRun: (id, motif) => bus.abortOrchestration(id, motif),
     retirerLesFiches: fichesDeDemande.retirerLeFil,
-    rattacherLesFiches: rattacherLaBrancheAuxFiches
+    rattacherLesFiches: rattacherLaBranche
   })
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
@@ -1724,7 +1750,9 @@ Le fil reprend ensuite normalement.`
           partager: etat.partagerPresence !== false,
           // Toujours écrit, même sans choix (conv-1537) : le réglage de l'Accueil montre l'animal que
           // les collègues voient, pas celui d'un tirage sur le nom du poste.
-          animal: etat.animal ?? ANIMAL_PAR_DEFAUT
+          animal: etat.animal ?? ANIMAL_PAR_DEFAUT,
+          // « Afficher mes agents à » des réglages de l'Accueil (conv-1599).
+          masquesPour: etat.masquerPresencePour ?? []
         }
       }
     })
@@ -1761,7 +1789,7 @@ Le fil reprend ensuite normalement.`
       let rattachees = 0
       for (const branche of os.conversations.list()) {
         const source = branche.forkedFrom && os.conversations.get(branche.forkedFrom.conversationId)
-        if (source) rattachees += await rattacherLaBrancheAuxFiches(branche, source)
+        if (source) rattachees += await rattacherLaBranche(branche, source)
       }
       if (rattachees > 0) mesureDesEcarts.planifier()
     })
@@ -2403,8 +2431,18 @@ Le fil reprend ensuite normalement.`
                 })
               : null
           )
-          .then((ligne) => {
+          .then(async (ligne) => {
             if (!ligne) return
+            /*
+             * Une branche née PENDANT ce tour (conv-1492 à 1494, depuis conv-1491) n'a rien trouvé à
+             * rattacher : la fiche de cette demande n'existait pas encore. Elle la rejoint maintenant,
+             * sans attendre le prochain démarrage (conv-1578).
+             */
+            const source = os.conversations.get(conversationId)
+            if (source)
+              for (const branche of os.conversations.list())
+                if (branche.forkedFrom?.conversationId === conversationId)
+                  await rattacherLaBranche(branche, source)
             mesureDesEcarts.planifier()
             // Le panneau RUN.md du fil relit ses fiches : la nouvelle s'y montre sans rouvrir le fil
             // (conv-1441).
@@ -2999,15 +3037,44 @@ Le fil reprend ensuite normalement.`
   })
   relanceTachesDeFond.relanceur = relanceurTachesDeFond
   /*
-   * « PUBLIER LES FILS FINIS » (conv-1339) : une passe `/git` à la fois, ouverte comme les tours de
-   * reprise ci-dessus, hors du devis du tour qui vient de finir. Le tour est visible dans son fil.
+   * « PUBLIER LES FILS FINIS » (conv-1339) : une passe à la fois. Depuis conv-1569, AUCUN tour ni
+   * message dans le fil : l'app vérifie, commite et pousse elle-même, et seul le titre du commit part
+   * au petit modèle d'Agent Studio. Le fil ne reçoit que le bloc git (ou la note de ce qui reste à trier).
    */
+  const redigerUnCommit = redacteurDeCommit(os)
   const travauxTentes = travauxTentesSurDisque(
     join(autowinAppDataRoot(), 'git-apres-fil-travaux-tentes.json')
   )
   suiviGitApresFil.file = new FileGitApresFil({
-    lancerTour: (fil, prompt) =>
-      os.executionSupervisor.runOutsideCurrent(() => scheduledChatRuntime.runPrompt(fil, prompt)),
+    publier: async (fil, passe) => {
+      const repo = dossierDuTour(fil)
+      const runGit = await defaultGitRunner()
+      return publierSansTour(
+        {
+          repo,
+          runGit,
+          proprietaires: (chemins) =>
+            lireProprietairesDeFichiers({ workspace: repo, chemins, conversationId: fil }),
+          typer: (fichiers) =>
+            typerCeQuiPart({ repo, fichiers, typer: typeurTsc(process.execPath) }),
+          verifier: (fichiers) =>
+            verifierCeQuiPart(repo, fichiers, (racine, liste) =>
+              bus.verifierAvantPublication(racine, liste)
+            ),
+          rediger: (charge) => redigerUnCommit(charge, fil),
+          commiter: (message, fichiers, runGitTrace) =>
+            autoCloseRun({
+              repo,
+              branch: autoCloseBranch(`${fil}-git`),
+              message,
+              paths: fichiers,
+              runGit: runGitTrace,
+              direct: true
+            })
+        },
+        { fil, fichiers: passe.fichiers, fils: passe.fils, travaux: passe.travaux.length }
+      )
+    },
     // Le chef d'un plan qui tourne encore attend : ses lots écrivent toujours (conv-1544).
     filOccupe: (fil) =>
       activeChatTurns.isInFlight(fil) ||
@@ -3015,19 +3082,6 @@ Le fil reprend ensuite normalement.`
     lireAmont: async (fil) => lireAmont(await defaultGitRunner(), dossierDuTour(fil)),
     commitsDepuis: async (fil, depuis, fils) =>
       commitsPublies(await defaultGitRunner(), dossierDuTour(fil), depuis, fils),
-    // Le journal le plus récent du fil = le tour /git qui vient de finir (conv-1553).
-    lignesShellDuTour: async (fil) => {
-      const dossier = join(autowinAppDataRoot(), 'turn-journals', fil)
-      const fichiers = await fsp.readdir(dossier).catch(() => [] as string[])
-      const dates = await Promise.all(
-        fichiers
-          .filter((f) => f.endsWith('.jsonl'))
-          .map(async (f) => ({ f, t: (await fsp.stat(join(dossier, f))).mtimeMs }))
-      )
-      const dernier = dates.sort((a, b) => b.t - a.t)[0]
-      if (!dernier) return []
-      return lignesGitDuJournal(await fsp.readFile(join(dossier, dernier.f), 'utf8'))
-    },
     annoncer: (fil, contenu) => {
       os.conversations.append(fil, { role: 'assistant', content: contenu })
       broadcast({ type: 'refresh', scope: 'chat', convId: fil })

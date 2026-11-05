@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { deposerFichier, relireFichier } from './ecriture-hors-fil'
 import type { StatutDuPlan } from '../shared/plan-de-lots'
+import type { IssueDePasse } from './git-apres-fil-sans-tour'
 import type { AutoCloseReport, GitRunner } from './run-autoclose'
 import { destinationDuPush, titreDuBandeau } from './titre-bandeau-git'
 
@@ -184,61 +185,30 @@ export function travauxParFil(entree: {
   return parFil
 }
 
-const FICHIERS_CITES = 20
-const TRAVAUX_CITES = 12
+const echapper = (texte: string): string =>
+  texte.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-/** Ce qu'une passe doit savoir en plus des fichiers de l'arbre partagé. */
-export interface SuiteDuPrompt {
-  /** Les fils dont vient le travail : les lots d'un plan, quand la passe tourne dans son chef. */
-  fils?: readonly string[]
-  travaux?: readonly TravailDAgent[]
-}
+/** Au-delà, la note renvoie au journal au lieu de tout recopier. */
+const MOTIFS_CITES = 12
 
-/** Le message du tour : `/git` en tête (seule forme reconnue), puis ce que la skill ne devine pas. */
-export function promptGitDuFil(
-  conversationId: string,
-  fichiers: readonly string[],
-  suite: SuiteDuPrompt = {}
-): string {
-  const fils = suite.fils?.length ? [...new Set(suite.fils)] : [conversationId]
-  const travaux = suite.travaux ?? []
-  const plan = fils.some((fil) => fil !== conversationId)
-  const reste = fichiers.length - FICHIERS_CITES
-  const liste = fichiers.slice(0, FICHIERS_CITES).join(', ')
-  const lignesTravaux = travaux.slice(0, TRAVAUX_CITES).map((travail) => {
-    const quoi = travail.fichiers.length ? travail.fichiers.join(', ') : '(fichiers inconnus)'
-    const date = travail.date ? ` — ${travail.date}` : ''
-    return `- ${travail.agentId}${date} (piste : autowin/recovery/${travail.agentId}) : ${quoi}`
-  })
+/**
+ * LA NOTE QUAND RIEN NE PEUT PARTIR SEUL (conv-1569) : ce qui reste à trier, et un bouton `/git` que
+ * l'utilisateur clique LUI-MÊME. Avant, la passe envoyait ce `/git` dans le fil à sa place ; il l'a
+ * refusé (« je veux pas que ça envoie un message à ma place »).
+ */
+export function noteATrier(conversationId: string, motifs: readonly string[]): string {
+  const lignes = motifs.slice(0, MOTIFS_CITES).map((motif) => `<div>· ${echapper(motif)}</div>`)
   return [
-    plan
-      ? `/git : publie le travail terminé du plan mené par ce fil (${conversationId}), et lui seul — fils ${fils.join(', ')}. Le plan ne tourne plus, et l'enchaînement auto n'a pas pu tout publier.`
-      : `/git : publie le travail terminé de ce fil (${conversationId}), et lui seul — il est resté calme 3 minutes après son dernier tour, et l'enchaînement auto n'a pas pu tout publier.`,
-    ...(fichiers.length
-      ? [`Fichiers laissés en attente : ${liste}${reste > 0 ? ` et ${reste} autres` : ''}.`]
+    '```html-render',
+    '<style>.awp-git{display:inline-block;margin-top:6px;color:inherit;font-weight:600;text-decoration:none;cursor:pointer}</style>',
+    '<div class="aw-kicker">GIT : rien publié</div>',
+    `<div><b>Publication auto arrêtée</b> : ce travail demande un <b>tri par contenu</b>.</div>`,
+    ...lignes,
+    ...(motifs.length > MOTIFS_CITES
+      ? [`<div class="aw-discret">… et ${motifs.length - MOTIFS_CITES} autres.</div>`]
       : []),
-    ...(travaux.length
-      ? [
-          "Travaux d'agents restés hors de la branche (copies de travail isolées, branches de secours) :",
-          ...lignesTravaux,
-          ...(travaux.length > TRAVAUX_CITES
-            ? [`- … et ${travaux.length - TRAVAUX_CITES} autres.`]
-            : []),
-          // Repris du bouton « Traiter » (travail-non-publie.ts) : mesuré, l'adresse annoncée
-          // n'existait pas, et quatorze copies ne descendaient pas de leur SHA de départ.
-          "L'adresse est une PISTE : vérifie-la (`git rev-parse --verify`) ; absente, cherche les autres cachettes et dis-le.",
-          "Diagnostique l'ascendance avant de republier (`git merge-base --is-ancestor <baseSha> <tête>`) : une copie qui n'en descend pas ne se reprend pas telle quelle, dis pourquoi.",
-          'Ne supprime aucune branche `autowin/recovery/*` sans avoir noté son SHA. Un travail repris ou abandonné se marque trié (`marquer_travail_trie`).'
-        ]
-      : []),
-    plan
-      ? 'Chaque commit porte « (conv-NNN) » du fil qui a écrit ce qu’il contient.'
-      : `Chaque commit porte « (${conversationId}) » dans son message.`,
-    // `unattributed` sort AVANT le typage et les tests (chat-turn-publication.ts) : quand tout est
-    // laissé en attente, rien n'a été vérifié, et « validé » ne veut dire que « rien n'a été refusé ».
-    'Avant de pousser : typage et tests de ce qui part, joués sur une copie propre. Rouge = ne publie rien, et dis pourquoi.',
-    "Interdit : le travail d'un fil dont le tour tourne encore, push --force, stash, reset --hard, checkout -- sur un fichier d'un autre fil.",
-    `Si rien à faire : « Rien à publier pour ${conversationId} ».`
+    `<a class="aw-chip awp-git" href="#autowin-prompt">/git : publie le travail terminé de ce fil (${conversationId}), et lui seul</a>`,
+    '```'
   ].join('\n')
 }
 
@@ -249,9 +219,6 @@ export interface CommitPublie {
 
 /** Au-delà, le libellé dépasserait `LONGUEUR_MAX_PROMPT` (300) et le fil ignorerait le bouton. */
 const COMMITS_DANS_LE_BOUTON = 25
-
-const echapper = (texte: string): string =>
-  texte.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 /**
  * RAIL COMPACT (conv-1574, /draft « 1 · Compact rail ») : un trait vertical, une LIGNE par étape —
@@ -299,30 +266,10 @@ function etapeDuRail(entete: string, plie: readonly string[], fin = false): stri
  * un tour ordinaire, demandé par un clic. Un `git revert` direct depuis l'app buterait sur un arbre
  * partagé plein du travail des autres fils.
  */
-/**
- * Les commandes Bash du tour qui ont commité ou poussé, telles qu'envoyées au shell : lues dans le
- * journal du tour (`turn-journals/<fil>/<tour>.jsonl`, événement `provider-status`, `data.target`).
- * conv-1553 : l'utilisateur veut voir LA ligne exacte, pas une commande reconstituée.
- */
-export function lignesGitDuJournal(jsonl: string): string[] {
-  const lignes: string[] = []
-  for (const brut of jsonl.split('\n')) {
-    let evenement: { kind?: unknown; data?: { target?: unknown } }
-    try {
-      evenement = JSON.parse(brut)
-    } catch {
-      continue
-    }
-    const cible = evenement?.kind === 'provider-status' ? evenement.data?.target : undefined
-    if (typeof cible !== 'string' || !/\bgit\s+(commit|push)\b/.test(cible)) continue
-    if (!lignes.includes(cible)) lignes.push(cible)
-  }
-  return lignes
-}
-
 export function bandeauPublie(
   commits: readonly CommitPublie[],
-  lignesShell: readonly string[] = []
+  lignesShell: readonly string[] = [],
+  notes: readonly string[] = []
 ): string {
   const n = commits.length
   const cites = commits.slice(0, COMMITS_DANS_LE_BOUTON)
@@ -352,6 +299,8 @@ export function bandeauPublie(
     `<style>${STYLE_DU_RAIL}</style>`,
     // Titre = statut, « 1 commit et push origin main réussi » (conv-1573).
     `<div class="aw-kicker">${echapper(titreDuBandeau(n, lignesShell))}</div>`,
+    // Ce que la passe sans tour n'a pas pu prouver (tests non joués, message de secours) : dit, pas tu.
+    ...notes.map((note) => `<div class="aw-attention">${echapper(note)}</div>`),
     `<div class="awp-rail">${[
       etapeDuRail(enteteCommit, plieCommit),
       etapeDuRail(entetePush, lignesShell.filter(pousse).map(shell)),
@@ -442,11 +391,20 @@ export async function commitsPublies(
     })
 }
 
+/** Ce que la passe confie à l'app (`git-apres-fil-sans-tour.ts`). */
+export interface PasseGit {
+  fichiers: string[]
+  /** Le fil de la passe, plus les lots du plan quand il en est le chef. */
+  fils: string[]
+  travaux: TravailDAgent[]
+}
+
 export interface DepsGitApresFil {
-  lancerTour(
-    conversationId: string,
-    prompt: string
-  ): Promise<{ ok: boolean; cancelled?: boolean; error?: string }>
+  /**
+   * Publie SANS tour de modèle ni message dans le fil (conv-1569) : seul le message de commit part
+   * au petit modèle d'Agent Studio.
+   */
+  publier(conversationId: string, passe: PasseGit): Promise<IssueDePasse>
   filOccupe(conversationId: string): boolean
   lireAmont(conversationId: string): Promise<string | undefined>
   /** `fils` : le fil de la passe, plus les lots du plan quand il en est le chef. */
@@ -456,8 +414,6 @@ export interface DepsGitApresFil {
     fils: readonly string[]
   ): Promise<CommitPublie[]>
   annoncer(conversationId: string, contenu: string): void
-  /** Les lignes git exactes envoyées au shell par le dernier tour du fil (conv-1553). */
-  lignesShellDuTour?(conversationId: string): Promise<string[]>
   /** Juste avant la passe : ces travaux d'agents ne seront plus reproposés (voir `travauxParFil`). */
   noterTravauxTentes?(agentIds: readonly string[]): void
   journal?(message: string, detail?: unknown): void
@@ -587,19 +543,19 @@ export class FileGitApresFil {
     const travaux = [...entree.travaux.values()]
     const avant = await this.#deps.lireAmont(fil)
     if (travaux.length) this.#deps.noterTravauxTentes?.(travaux.map((travail) => travail.agentId))
-    const resultat = await this.#deps.lancerTour(
-      fil,
-      promptGitDuFil(fil, [...entree.fichiers], { fils, travaux })
-    )
-    if (!resultat.ok || resultat.cancelled) {
-      this.#deps.journal?.(`passe sans publication pour ${fil}`, resultat.error)
-      return
+    const issue = await this.#deps.publier(fil, {
+      fichiers: [...entree.fichiers],
+      fils,
+      travaux
+    })
+    // Le seul message de la passe dans le fil : le bloc git, ou la note de ce qui reste à trier.
+    const commits = issue.publie && avant ? await this.#deps.commitsDepuis(fil, avant, fils) : []
+    if (commits.length)
+      this.#deps.annoncer(fil, bandeauPublie(commits, issue.lignesShell, issue.notes))
+    if (issue.aTrier.length) {
+      this.#deps.journal?.(`passe sans publication complète pour ${fil}`, issue.aTrier)
+      this.#deps.annoncer(fil, noteATrier(fil, issue.aTrier))
     }
-    if (!avant) return
-    const commits = await this.#deps.commitsDepuis(fil, avant, fils)
-    if (!commits.length) return
-    const lignesShell = (await this.#deps.lignesShellDuTour?.(fil).catch(() => [])) ?? []
-    this.#deps.annoncer(fil, bandeauPublie(commits, lignesShell))
   }
 }
 

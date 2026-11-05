@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   bandeauPublie,
   blocDuTour,
-  lignesGitDuJournal,
   lignesGitDuTour,
+  noteATrier,
   commitsPublies,
   decisionGitApresFil,
   estDepotAutowin,
@@ -18,7 +18,7 @@ import {
   planTourneEncore,
   travauxParFil,
   travauxTentesSurDisque,
-  promptGitDuFil,
+  type PasseGit,
   type TourFini
 } from './git-apres-fil'
 import {
@@ -27,6 +27,7 @@ import {
 } from '../renderer/src/components/bouton-prompt-html'
 import type { AutoCloseReport } from './run-autoclose'
 import { annonceCommitLocal } from './annonce-commit-local'
+import type { IssueDePasse } from './git-apres-fil-sans-tour'
 import { viderFichiersEnAttente } from './ecriture-hors-fil'
 
 /** Un tour qui REMPLIT toutes les conditions : chaque test n'en casse qu'une. */
@@ -205,30 +206,6 @@ describe('estDepotAutowin', () => {
   })
 })
 
-describe('promptGitDuFil', () => {
-  it('commence par /git (seule forme reconnue) et borne la passe à ce fil', () => {
-    const prompt = promptGitDuFil('conv-9', ['src/a.ts'])
-    expect(prompt.startsWith('/git')).toBe(true)
-    expect(prompt).toContain('conv-9')
-    expect(prompt).toContain('src/a.ts')
-    expect(prompt).toContain('(conv-9)')
-    expect(prompt).toContain('tour tourne encore')
-    expect(prompt).toContain('Rien à publier pour conv-9')
-  })
-
-  it('exige de rejouer typage et tests : quand tout est exclu, aucun des deux n’a tourné', () => {
-    expect(promptGitDuFil('conv-9', ['src/a.ts'])).toContain('typage et tests')
-  })
-
-  it('ne recopie pas une liste sans fin', () => {
-    const fichiers = Array.from({ length: 50 }, (_, i) => `src/f${i}.ts`)
-    const prompt = promptGitDuFil('conv-9', fichiers)
-    expect(prompt).toContain('src/f19.ts')
-    expect(prompt).not.toContain('src/f20.ts')
-    expect(prompt).toContain('30 autres')
-  })
-})
-
 describe('bandeauPublie', () => {
   const commits = [
     { sha: '1a2b3c4d', sujet: 'fix(chat): le bouton <revient> (conv-9)' },
@@ -317,20 +294,21 @@ describe('bandeauPublie', () => {
     expect(bandeauPublie(commits)).toContain('Commande du shell non retrouvée')
   })
 
-  it('lignesGitDuJournal ne garde que les commandes Bash qui commitent ou poussent', () => {
-    const jsonl = [
-      JSON.stringify({ kind: 'provider-status', data: { target: 'git status --short' } }),
-      JSON.stringify({
-        kind: 'provider-status',
-        data: { target: 'git commit -m x && git push origin HEAD:main' }
-      }),
-      JSON.stringify({
-        kind: 'provider-status',
-        data: { target: 'git commit -m x && git push origin HEAD:main' }
-      }),
-      'pas du json'
-    ].join('\n')
-    expect(lignesGitDuJournal(jsonl)).toEqual(['git commit -m x && git push origin HEAD:main'])
+  it('dit ce que la passe n’a pas pu prouver, au lieu de le taire', () => {
+    expect(bandeauPublie(commits, [], ['tests non joués : aucun test'])).toContain(
+      '<div class="aw-attention">tests non joués : aucun test</div>'
+    )
+  })
+
+  it('la note « à trier » borne sa liste et tient le bouton sous la limite', () => {
+    const note = noteATrier(
+      'conv-9',
+      Array.from({ length: 20 }, (_, i) => `f${i}.ts : <x>`)
+    )
+    expect(note).toContain('f11.ts : &lt;x&gt;')
+    expect(note).not.toContain('f12.ts')
+    expect(note).toContain('8 autres')
+    expect(promptsDesBoutons(note)[0]!.length).toBeLessThanOrEqual(LONGUEUR_MAX_PROMPT)
   })
 
   it('échappe les sujets de commit : ils ne fixent pas le HTML du fil', () => {
@@ -391,8 +369,7 @@ describe('blocDuTour — le rail aussi quand le fil ou l’enchaînement auto pu
   })
 
   it('publier-isole.ps1 compte quand il est LANCÉ, pas quand une lecture le nomme (vu dans conv-1590)', () => {
-    const lance =
-      "Bash · powershell -NoProfile -File scripts/publier-isole.ps1 -Message 'fix (conv-9)'"
+    const lance = "Bash · powershell -NoProfile -File scripts/publier-isole.ps1 -Message 'fix (conv-9)'"
     const lu =
       'Bash · git fetch -q origin; for f in scripts/publier-isole.ps1; do [ "$(git rev-parse origin/main:$f)" = "$(git hash-object $f)" ] && echo identique; done'
     expect(lignesGitDuTour([lance, lu])).toEqual([lance.slice('Bash · '.length)])
@@ -482,14 +459,6 @@ describe('les fils de plan (conv-1544) : une passe dans le chef, à la fin du pl
     expect(planTourneEncore(lot)).toBe(false)
     expect(planTourneEncore(undefined)).toBe(false)
   })
-
-  it('le prompt du chef nomme les lots et demande l’identifiant du lot dans chaque commit', () => {
-    const prompt = promptGitDuFil('conv-1', ['src/a.ts'], { fils: ['conv-1', 'conv-2', 'conv-3'] })
-    expect(prompt.startsWith('/git')).toBe(true)
-    expect(prompt).toContain('plan mené par ce fil (conv-1)')
-    expect(prompt).toContain('conv-2, conv-3')
-    expect(prompt).toContain('du fil qui a écrit')
-  })
 })
 
 describe('les travaux d’agents restés hors de la branche (conv-1544)', () => {
@@ -512,17 +481,6 @@ describe('les travaux d’agents restés hors de la branche (conv-1544)', () => 
     expect(parFil.get('conv-5')![0]).not.toHaveProperty('conversationId')
   })
 
-  it('le prompt donne l’adresse de chaque travail et exige le diagnostic avant de republier', () => {
-    const prompt = promptGitDuFil('conv-5', [], {
-      travaux: [{ agentId: 'run-a-1', fichiers: ['src/a.ts'], date: '04/11' }]
-    })
-    expect(prompt.startsWith('/git')).toBe(true)
-    expect(prompt).not.toContain('Fichiers laissés en attente')
-    expect(prompt).toContain('run-a-1 — 04/11 (piste : autowin/recovery/run-a-1) : src/a.ts')
-    expect(prompt).toContain('merge-base --is-ancestor')
-    expect(prompt).toContain('marquer_travail_trie')
-  })
-
   it('la liste des tentés survit au redémarrage, et une lecture abîmée vaut liste vide', async () => {
     const dossier = mkdtempSync(join(tmpdir(), 'autowin-tentes-'))
     try {
@@ -540,27 +498,35 @@ describe('les travaux d’agents restés hors de la branche (conv-1544)', () => 
   })
 })
 
+const publiee: IssueDePasse = {
+  publie: true,
+  lignesShell: ['git commit --only -m "fix(chat): x (conv-1)" -- a.ts'],
+  notes: [],
+  aTrier: []
+}
+
 describe('FileGitApresFil — une passe à la fois', () => {
   function banc(
     sur: {
       commits?: Array<{ sha: string; sujet: string }>
       occupe?: boolean
       calmeMs?: number
+      issue?: IssueDePasse
     } = {}
   ) {
     const fins: Array<() => void> = []
     const lances: string[] = []
-    const prompts: string[] = []
+    const passes: PasseGit[] = []
     const annonces: Array<[string, string]> = []
     const etat = { occupe: sur.occupe === true }
     const tentes: string[] = []
     const filsLus: string[][] = []
     const file = new FileGitApresFil(
       {
-        lancerTour: (fil, prompt) => {
+        publier: (fil, passe) => {
           lances.push(fil)
-          prompts.push(prompt)
-          return new Promise((resolve) => fins.push(() => resolve({ ok: true })))
+          passes.push(passe)
+          return new Promise((resolve) => fins.push(() => resolve(sur.issue ?? publiee)))
         },
         filOccupe: () => etat.occupe,
         lireAmont: async () => 'avant',
@@ -574,7 +540,7 @@ describe('FileGitApresFil — une passe à la fois', () => {
       },
       { calmeMs: sur.calmeMs ?? 0 }
     )
-    return { file, fins, lances, prompts, annonces, etat, tentes, filsLus }
+    return { file, fins, lances, passes, annonces, etat, tentes, filsLus }
   }
   const attendre = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 5))
 
@@ -592,13 +558,13 @@ describe('FileGitApresFil — une passe à la fois', () => {
   })
 
   it('un fil présenté deux fois en attente ne part qu’une fois, avec tous ses fichiers', async () => {
-    const prompts: string[] = []
+    const passes: PasseGit[] = []
     const fins: Array<() => void> = []
     const file = new FileGitApresFil(
       {
-        lancerTour: (_fil, prompt) => {
-          prompts.push(prompt)
-          return new Promise((resolve) => fins.push(() => resolve({ ok: true })))
+        publier: (_fil, passe) => {
+          passes.push(passe)
+          return new Promise((resolve) => fins.push(() => resolve(publiee)))
         },
         filOccupe: () => false,
         lireAmont: async () => 'avant',
@@ -614,9 +580,8 @@ describe('FileGitApresFil — une passe à la fois', () => {
     await attendre()
     fins[0]!()
     await attendre()
-    expect(prompts).toHaveLength(2)
-    expect(prompts[1]).toContain('b.ts')
-    expect(prompts[1]).toContain('c.ts')
+    expect(passes).toHaveLength(2)
+    expect(passes[1]!.fichiers).toEqual(['b.ts', 'c.ts'])
     fins[1]!()
     await attendre()
   })
@@ -640,7 +605,7 @@ describe('FileGitApresFil — une passe à la fois', () => {
 
     it('un nouveau tour repousse la passe : une seule passe par pause, avec tous les fichiers', async () => {
       vi.useFakeTimers()
-      const { file, lances, prompts } = banc({ calmeMs: 3 * MINUTE })
+      const { file, lances, passes } = banc({ calmeMs: 3 * MINUTE })
       file.ajouter('conv-1', ['a.ts'])
       await vi.advanceTimersByTimeAsync(2 * MINUTE)
       file.ajouter('conv-1', ['b.ts'])
@@ -648,13 +613,12 @@ describe('FileGitApresFil — une passe à la fois', () => {
       expect(lances).toEqual([])
       await vi.advanceTimersByTimeAsync(1 * MINUTE)
       expect(lances).toEqual(['conv-1'])
-      expect(prompts[0]).toContain('a.ts')
-      expect(prompts[0]).toContain('b.ts')
+      expect(passes[0]!.fichiers).toEqual(['a.ts', 'b.ts'])
     })
 
     it('les lots d’un plan et les travaux d’agents partent en UNE passe dans le chef', async () => {
       vi.useFakeTimers()
-      const { file, lances, prompts, fins, tentes, filsLus } = banc({
+      const { file, lances, passes, fins, tentes, filsLus } = banc({
         calmeMs: 3 * MINUTE,
         commits: [{ sha: '1a2b3c4d', sujet: 'fix (conv-2)' }]
       })
@@ -663,9 +627,9 @@ describe('FileGitApresFil — une passe à la fois', () => {
       file.ajouterTravaux('conv-1', [{ agentId: 'run-x-1', fichiers: ['src/x.ts'] }], 'conv-2')
       await vi.advanceTimersByTimeAsync(3 * MINUTE)
       expect(lances).toEqual(['conv-1'])
-      expect(prompts[0]).toContain('conv-1, conv-2, conv-3')
-      expect(prompts[0]).toContain('src/b.ts')
-      expect(prompts[0]).toContain('run-x-1')
+      expect(passes[0]!.fils).toEqual(['conv-1', 'conv-2', 'conv-3'])
+      expect(passes[0]!.fichiers).toContain('src/b.ts')
+      expect(passes[0]!.travaux.map((t) => t.agentId)).toEqual(['run-x-1'])
       // Noté AVANT la passe : une passe qui plante ne le reproposera pas à chaque fin de run.
       expect(tentes).toEqual(['run-x-1'])
       fins[0]!()
@@ -711,16 +675,49 @@ describe('FileGitApresFil — une passe à la fois', () => {
     expect(sans.annonces).toEqual([])
   })
 
+  // conv-1569 : « je veux pas que ça envoie un message à ma place » — la passe n'ouvre plus de tour.
+  it('publié : le fil ne reçoit QUE le bloc git, avec les lignes git vraiment lancées', async () => {
+    const { file, fins, annonces } = banc({ commits: [{ sha: '1a2b3c4d', sujet: 'fix (conv-1)' }] })
+    file.ajouter('conv-1', ['a.ts'])
+    await attendre()
+    fins[0]!()
+    await attendre()
+    expect(annonces).toHaveLength(1)
+    // Le banc ne lance que `git commit` : aucun push vu, donc « en ligne », jamais « réussi ».
+    expect(annonces[0]![1]).toContain('<div class="aw-kicker">1 commit en ligne</div>')
+    expect(annonces[0]![1]).toContain('git commit --only -m')
+  })
+
+  it('à trier : une note et un bouton /git que l’utilisateur clique lui-même', async () => {
+    const { file, fins, annonces } = banc({
+      issue: {
+        publie: false,
+        lignesShell: [],
+        notes: [],
+        aTrier: ['a.ts : aussi touché par conv-8']
+      }
+    })
+    file.ajouter('conv-1', ['a.ts'])
+    await attendre()
+    fins[0]!()
+    await attendre()
+    expect(annonces).toHaveLength(1)
+    expect(annonces[0]![1]).toContain('aussi touché par conv-8')
+    expect(promptsDesBoutons(annonces[0]![1])).toEqual([
+      '/git : publie le travail terminé de ce fil (conv-1), et lui seul'
+    ])
+  })
+
   it('une passe en échec n’annonce rien et ne bloque pas la suivante', async () => {
     const journal = vi.fn()
     const lances: string[] = []
     const annoncer = vi.fn()
     const file = new FileGitApresFil(
       {
-        lancerTour: async (fil) => {
+        publier: async (fil) => {
           lances.push(fil)
-          if (fil === 'conv-1') throw new Error('modèle indisponible')
-          return { ok: false, error: 'refusé' }
+          if (fil === 'conv-1') throw new Error('git indisponible')
+          return { publie: false, lignesShell: [], notes: [], aTrier: [] }
         },
         filOccupe: () => false,
         lireAmont: async () => 'avant',

@@ -6,6 +6,7 @@ import { VUES_CONNUES } from '../../scripts/ui-capture.mjs'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { JUDGE_PHASE_CAP, porterVersPhaseSuivante, sandboxForPhase } from './orchestrator'
 import { AGGREGATE_MAX_CHARS } from './evidence-digest'
+import { PHASE_BRIEFS } from './phase-briefs'
 
 describe('discipline de pipeline canonique', () => {
   it('annonce la preuve UI dans une instance cachée par défaut (conv-526)', () => {
@@ -336,5 +337,28 @@ describe('la consigne et le code disent la même chose (conv-1582)', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(
       /SI TA PHASE DISPOSE DES OUTILS DE MUTATION/u
     )
+  })
+})
+
+/**
+ * Piste 14 du scout du 05/11 (conv-1602) : la ligne RÉSULTAT annonçait « frame = ## Besoin /
+ * ## Contraintes / ## Options », alors que la consigne de frame (`PHASE_BRIEFS.frame`, ligne
+ * « Livrable (sections Markdown) ») exige aussi `## Confiance`, que le code lit
+ * (`src/shared/cadrage-confiance.ts`). Deux listes écrites à la main dérivent : on les compare.
+ *
+ * Entrée qui rend ce test rouge : une section ajoutée, retirée ou déplacée d'un seul côté — par
+ * exemple `## Confiance` retiré de la ligne RÉSULTAT de `pipeline-discipline.ts`.
+ */
+describe('les sections du résultat de frame sont celles de sa consigne (conv-1602)', () => {
+  const titres = (texte: string): string[] => [...texte.matchAll(/## (\p{L}+)/gu)].map((m) => m[1]!)
+
+  it('la ligne RÉSULTAT nomme les sections de la ligne « Livrable » de PHASE_BRIEFS.frame, dans le même ordre', () => {
+    const consigne =
+      PHASE_BRIEFS.frame.match(/^Livrable \(sections Markdown\) : ([^\n]+)/mu)?.[1] ?? ''
+    const annonce = PIPELINE_DISCIPLINE_INSTRUCTION.match(/frame = ([^;]+);/u)?.[1] ?? ''
+    expect(consigne, 'ligne « Livrable (sections Markdown) » de la consigne de frame').not.toBe('')
+    expect(annonce, 'segment « frame = … ; » de la ligne RÉSULTAT').not.toBe('')
+    expect(titres(consigne)).toContain('Confiance')
+    expect(titres(annonce)).toEqual(titres(consigne))
   })
 })
