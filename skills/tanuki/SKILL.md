@@ -10,13 +10,21 @@ Créée le 2026-11-05 (conv-1562, lot 1 du plan conv-1558).
 ## La référence
 - Image source : `D:\AutoWinOS\src\renderer\src\assets\quartier\atlas.avif` — c'est elle qu'affiche
   l'accueil (`HomeView.tsx` → `quartier/useQuartierAccueil` → `quartier/quartier-scene.ts`, import `urlAtlas`).
-  Cases de 126 × 170 px (`assets/quartier/donnees.json`, clé `an`). Rangée 0 = face, 1 = trois-quarts,
-  2 = profil (queue visible), 3 = trois-quarts dos.
+  Grille de 126 × 170 px (`assets/quartier/donnees.json`, clé `an`). Rangée 0 = face, 1 = trois-quarts,
+  2 = profil (queue visible), 3 = trois-quarts dos. Depuis conv-1558, la planche du tanuki est en ×2
+  (3024 × 8840, cases de 252 × 340) : la scène en lit la finesse sur sa largeur (`finesseDePlanche`),
+  le mesureur la ramène à la grille (`decoderAtlas`). Les autres animaux restent en ×1.
 - Fiche : `D:\AutoWinOS\skills\tanuki\reference.json`, produite par
   `node scripts/tanuki-mesurer.mjs --sortie skills/tanuki/reference.json`. Elle porte le `sha256` de
   l'atlas : si l'atlas change, relance le script, ne retouche jamais la fiche à la main.
-- Sculpture d'origine (feutrine, rendu Cycles déterministe) : `D:\AutoWinOS\.autowin-tmp\conv-1421\gen\d3\tanuki.py`
+- Sculpture du tanuki affiché (v3, conv-1558 : fourrure, tissu à fleurs de prunier, masque, joues) :
+  `D:\AutoWinOS\.autowin-tmp\conv-1558\hd\tanuki-v3.py` ; ses cases d'atlas : `D:\AutoWinOS\.autowin-tmp\conv-1558\atlas\`
+  (`tout-v3.sh` rend les 279 images, `atlas-v3.py` les assemble). Sculpture précédente (feutrine) :
+  `D:\AutoWinOS\.autowin-tmp\conv-1421\gen\d3\tanuki.py`
   — note Brain `knowledge/domain/quartier-fabriquer-l-atlas-d-un-nouvel-animal-sur-le-squelette-du-tanuki.md`.
+  Piège du modèle v3 : son canal G est la MATIÈRE (fourrure < 0,11, feutre 0,12, tissu 0,25, mat 0,5,
+  perle 1) ; un script de pose qui cherche les yeux par `G > 0.5` prend aussi le « mat » (128/255) —
+  seuil 0,75 dans les copies de `conv-1558\atlas\`.
   Pour un nouvel animal : même squelette, mêmes poids, même semelle (pied à y = 0).
 
 ## Ce que dit la fiche (médianes sur les 9 cases de face, 9 de profil)

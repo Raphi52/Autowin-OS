@@ -25,10 +25,28 @@ export interface NiveauPlanche {
 /** Les réductions préparées, en part de la taille d'origine. */
 const REDUCTIONS = [0.5, 0.25, 0.125] as const
 
+/** Les colonnes de toute planche de personnages (`COLS` des scripts d'atlas, conv-1428). */
+export const COLONNES_PLANCHE = 12
+
 /**
- * L'indice du niveau à lire pour une échelle `e` (pixels d'écran par pixel de la planche d'origine) :
- * le plus petit niveau dont la part reste ≥ `e`. `parts[0]` vaut 1 (l'original). Sous la plus petite
- * part, on garde la plus petite.
+ * La finesse d'une planche par rapport à la grille de `donnees.json` (cases de `cw` px) : 1 pour les
+ * atlas d'origine, 2 pour le tanuki v3 rendu en ×2 (conv-1558), net quand le zoom approche d'une tour.
+ * Lue sur sa largeur, puisqu'elle a toujours 12 colonnes. Une largeur qui n'en est pas un multiple
+ * entier découperait des cases à cheval : on le dit plutôt que de dessiner des morceaux.
+ */
+export function finesseDePlanche(largeur: number, cw: number): number {
+  const f = largeur / (COLONNES_PLANCHE * cw)
+  if (!Number.isInteger(f) || f < 1)
+    throw new Error(
+      `planche de ${largeur} px de large : attendu un multiple entier de ${COLONNES_PLANCHE * cw}`
+    )
+  return f
+}
+
+/**
+ * L'indice du niveau à lire pour une échelle `e` (pixels d'écran par pixel de la grille de
+ * `donnees.json`) : le plus petit niveau dont la part reste ≥ `e`. `parts[0]` est la finesse de la
+ * planche (1, ou 2 pour une planche ×2). Sous la plus petite part, on garde la plus petite.
  */
 export function niveauPourEchelle(e: number, parts: readonly number[]): number {
   let i = 0

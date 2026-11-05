@@ -101,17 +101,21 @@ try {
       etoffe.height = an.ch
       for (const [n, nom] of noms.entries()) {
         const A = await charger(atlas[nom])
+        // Le tanuki v3 est livré en ×2 (conv-1558) : comme la scène (niveau `base`), on mesure et on
+        // découpe le foulard sur la planche ramenée à la grille, par moitiés en lissage « low ».
         const t = document.createElement('canvas')
-        t.width = A.width
-        t.height = A.height
+        t.width = 12 * an.cw
+        t.height = Math.round((A.height * t.width) / A.width)
         const tc = t.getContext('2d')
-        tc.drawImage(A, 0, 0)
-        const colonnes = Math.floor(A.width / an.cw),
-          nbRangees = Math.floor(A.height / an.ch)
+        tc.imageSmoothingEnabled = true
+        tc.imageSmoothingQuality = 'low'
+        tc.drawImage(A, 0, 0, t.width, t.height)
+        const colonnes = Math.floor(t.width / an.cw),
+          nbRangees = Math.floor(t.height / an.ch)
         infos[nom] = { largeur: A.width, hauteur: A.height, rangees: nbRangees }
         const cous = cousDeLAtlas(
-          tc.getImageData(0, 0, A.width, A.height).data,
-          A.width,
+          tc.getImageData(0, 0, t.width, t.height).data,
+          t.width,
           an.cw,
           an.ch,
           colonnes,

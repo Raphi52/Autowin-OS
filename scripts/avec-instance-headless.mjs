@@ -518,7 +518,7 @@ export function dossiersApurger({ dossiers, vivant = pidVivant, ageMin = AGE_PUR
 /** Purge sur disque les dossiers designes par `dossiersApurger`. Rend les noms effaces. */
 export function purgerDossiersInstance(
   racineInstances,
-  { vivant = pidVivant, maintenant = Date.now() } = {}
+  { vivant = pidVivant, maintenant = Date.now(), effacer = rmSync } = {}
 ) {
   if (!existsSync(racineInstances)) return []
   const dossiers = []
@@ -539,8 +539,21 @@ export function purgerDossiersInstance(
     })
   }
   const aPurger = dossiersApurger({ dossiers, vivant })
-  for (const nom of aPurger) rmSync(join(racineInstances, nom), { recursive: true, force: true })
-  return aPurger
+  // Deux captures de deux fils purgent parfois le meme dossier : la seconde recoit EPERM (effacement
+  // deja en cours sous Windows) et toute la capture tombait (conv-1558). Le dossier disparu compte
+  // comme purge ; un dossier encore verrouille reste pour la prochaine purge, sans arreter la capture.
+  return aPurger.filter((nom) => {
+    const chemin = join(racineInstances, nom)
+    try {
+      effacer(chemin, { recursive: true, force: true })
+    } catch (e) {
+      if (existsSync(chemin)) {
+        console.error(`[instance-headless] dossier ${nom} non purge : ${e?.code ?? e}`)
+        return false
+      }
+    }
+    return true
+  })
 }
 
 /**

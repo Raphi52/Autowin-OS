@@ -1,5 +1,12 @@
+import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { echelleMin, niveauPourEchelle } from './quartier-planche'
+import {
+  COLONNES_PLANCHE,
+  echelleMin,
+  finesseDePlanche,
+  niveauPourEchelle
+} from './quartier-planche'
 
 // Les parts réelles de la planche 126 × 170 : 1, 63/126, 32/126, 16/126 (conv-1526).
 const PARTS = [1, 0.5, 32 / 126, 16 / 126]
@@ -40,5 +47,45 @@ describe('echelleMin', () => {
     expect(echelleMin({ a: k, b: 0, c: 0.46 * k, d: -0.2 * k })).toBeCloseTo(
       Math.hypot(0.46, 0.2) * k
     )
+  })
+})
+
+// Le tanuki v3 est rendu en ×2 (conv-1558) : sa planche fait 3024 × 8840, les autres animaux restent en 1512 × 4420.
+describe('finesseDePlanche', () => {
+  it('lit 1 sur une planche à la grille de donnees.json, 2 sur une planche ×2', () => {
+    expect(finesseDePlanche(1512, 126)).toBe(1)
+    expect(finesseDePlanche(3024, 126)).toBe(2)
+  })
+
+  it("refuse une largeur qui n'est pas un multiple entier de la grille", () => {
+    expect(() => finesseDePlanche(2268, 126)).toThrow(/1512/)
+    expect(() => finesseDePlanche(1000, 126)).toThrow()
+  })
+
+  it('sur une planche ×2, le repos (~0,45) lit la case de 63 px, le zoom (~1,8) la case de 252 px', () => {
+    const parts = [2, 1, 0.5, 0.25]
+    expect(parts[niveauPourEchelle(0.45, parts)]).toBe(0.5)
+    expect(parts[niveauPourEchelle(1.8, parts)]).toBe(2)
+  })
+})
+
+// La largeur et la hauteur d'un AVIF sont dans sa boîte « ispe » : pas besoin de décoder l'image.
+function tailleAvif(chemin: string): [number, number] {
+  const b = readFileSync(chemin)
+  const i = b.indexOf('ispe')
+  if (i < 0) throw new Error(`pas de boîte ispe dans ${chemin}`)
+  return [b.readUInt32BE(i + 8), b.readUInt32BE(i + 12)]
+}
+
+describe('les planches livrées', () => {
+  const dossier = join(__dirname, '../assets/quartier')
+  const { an } = JSON.parse(readFileSync(join(dossier, 'donnees.json'), 'utf8'))
+  const planches = readdirSync(dossier).filter((f) => /^atlas.*\.avif$/.test(f))
+
+  it.each(planches)('%s : 12 colonnes et 26 rangées de la grille, à une finesse entière', (f) => {
+    const [w, h] = tailleAvif(join(dossier, f))
+    const k = finesseDePlanche(w, an.cw)
+    expect(w).toBe(COLONNES_PLANCHE * an.cw * k)
+    expect(h).toBe(26 * an.ch * k)
   })
 })

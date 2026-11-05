@@ -60,6 +60,7 @@ import {
 } from './quartier-pont'
 import {
   echelleMin,
+  finesseDePlanche,
   niveauPourEchelle,
   niveauxDePlanche,
   type NiveauPlanche
@@ -171,6 +172,8 @@ interface AtlasPeint {
   /** L'original puis sa moitié, son quart, son huitième : de quoi dessiner sans réduction à refaire (conv-1526). */
   niveaux: NiveauPlanche[]
   parts: number[]
+  /** Le niveau aux cases de `donnees.json` (126 × 170) : le foulard s'y mesure et s'y découpe (conv-1558). */
+  base: NiveauPlanche
   cous: Float32Array | null
   colonnes: number
 }
@@ -233,16 +236,20 @@ function lueurDe(o: ObjetCoupe): HTMLCanvasElement {
 
 /** Les filtres de toile coûtent cher à chaque image : on les applique UNE fois, à l'atlas entier. */
 function peindreAtlas(atlas: HTMLImageElement, an: { cw: number; ch: number }): AtlasPeint {
+  // Le tanuki v3 est rendu en ×2 (conv-1558) : ses niveaux partent de ses cases de 252 × 340, et le
+  // flou de l'ombre double avec lui pour rester le même une fois réduit.
+  const f = finesseDePlanche(atlas.naturalWidth, an.cw)
   const A = toile(atlas.naturalWidth, atlas.naturalHeight)
   const gA = contexte(A)
   gA.filter = 'saturate(1.06)'
   gA.drawImage(atlas, 0, 0)
   const AO = toile(atlas.naturalWidth, atlas.naturalHeight)
   const gO = contexte(AO)
-  gO.filter = 'brightness(0) blur(2px)'
+  gO.filter = `brightness(0) blur(${2 * f}px)`
   gO.drawImage(atlas, 0, 0)
-  const niveaux = niveauxDePlanche(A, AO, an.cw, an.ch)
-  return { A, AO, niveaux, parts: niveaux.map((n) => n.cw / an.cw), cous: null, colonnes: 0 }
+  const niveaux = niveauxDePlanche(A, AO, an.cw * f, an.ch * f)
+  const base = niveaux.find((n) => n.cw === an.cw && n.ch === an.ch) ?? niveaux[0]
+  return { A, AO, niveaux, parts: niveaux.map((n) => n.cw / an.cw), base, cous: null, colonnes: 0 }
 }
 
 async function charger(): Promise<Monde> {
@@ -651,11 +658,12 @@ export function creerSceneQuartier(): DecorScene | null {
     ox: number
   ): void {
     const { an } = M.D
+    const B = P.base.A
     if (!P.cous) {
-      P.colonnes = Math.floor(P.A.width / an.cw)
-      const rangees = Math.floor(P.A.height / an.ch)
-      const rgba = contexte(P.A).getImageData(0, 0, P.A.width, P.A.height).data
-      P.cous = cousDeLAtlas(rgba, P.A.width, an.cw, an.ch, P.colonnes, rangees)
+      P.colonnes = Math.floor(B.width / an.cw)
+      const rangees = Math.floor(B.height / an.ch)
+      const rgba = contexte(B).getImageData(0, 0, B.width, B.height).data
+      P.cous = cousDeLAtlas(rgba, B.width, an.cw, an.ch, P.colonnes, rangees)
     }
     const cous = P.cous
     const i = (r * P.colonnes + c) * 3
@@ -691,7 +699,7 @@ export function creerSceneQuartier(): DecorScene | null {
     g.fillStyle = d
     g.fillRect(0, cy - ry, an.cw, ry * 3.2)
     g.globalCompositeOperation = 'destination-in'
-    g.drawImage(P.A, c * an.cw, r * an.ch, an.cw, an.ch, 0, 0, an.cw, an.ch)
+    g.drawImage(B, c * an.cw, r * an.ch, an.cw, an.ch, 0, 0, an.cw, an.ch)
     x.drawImage(etoffe, ox, -an.ay, an.cw, an.ch)
   }
 

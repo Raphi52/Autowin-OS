@@ -248,4 +248,34 @@ describe('purge des dossiers d instance', () => {
       rmSync(racine, { recursive: true, force: true })
     }
   })
+
+  /*
+   * Deux captures de deux fils purgent le meme vieux dossier en meme temps : la seconde recoit EPERM
+   * (effacement deja en cours sous Windows) et la capture entiere tombait avant de demarrer
+   * (conv-1558, 2026-11-05, ui-capture-32272). Le menage ne doit jamais faire echouer une capture.
+   */
+  it('un dossier efface en meme temps par une autre capture (EPERM) ne fait pas echouer la purge', async () => {
+    const { purgerDossiersInstance } = await import('./avec-instance-headless.mjs')
+    const { existsSync, utimesSync } = await import('node:fs')
+    const racine = mkdtempSync(join(tmpdir(), 'aw-purge-'))
+    try {
+      const vieux = (Date.now() - 30 * H) / 1000
+      for (const nom of ['ui-capture-200', 'ui-capture-201']) {
+        mkdirSync(join(racine, nom, 'appdata'), { recursive: true })
+        utimesSync(join(racine, nom), vieux, vieux)
+      }
+      const eperm = () => Object.assign(new Error('EPERM, Permission denied'), { code: 'EPERM' })
+      // 200 : l'autre capture l'efface pendant notre tentative. 201 : verrouille, il reste.
+      const effacer = (chemin, options) => {
+        if (chemin.endsWith('ui-capture-200')) rmSync(chemin, options)
+        throw eperm()
+      }
+      let purges
+      expect(() => (purges = purgerDossiersInstance(racine, { vivant, effacer }))).not.toThrow()
+      expect(purges).toEqual(['ui-capture-200'])
+      expect(existsSync(join(racine, 'ui-capture-201'))).toBe(true)
+    } finally {
+      rmSync(racine, { recursive: true, force: true })
+    }
+  })
 })

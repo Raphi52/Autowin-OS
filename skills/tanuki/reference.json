@@ -1,11 +1,12 @@
 {
   "source": {
     "image": "src/renderer/src/assets/quartier/atlas.avif",
-    "sha256": "d5bd2868aaa27f6f4a1f7e21086b3b880c6ac627310bd535824e2c29ded80564",
+    "sha256": "07114e6681034a97462c8d5b8cbdac425aa308a2b80ef35dde303f717a26914a",
     "taille": [
-      1512,
-      4420
+      3024,
+      8840
     ],
+    "finesse": 2,
     "caseEnPixels": [
       126,
       170
@@ -18,130 +19,130 @@
     "palette": 4
   },
   "proportions": {
-    "teteSurHauteur": 0.398,
-    "largeurTeteSurCorps": 0.721,
-    "hauteurSurLargeurCorps": 1.512,
-    "hauteurEnPixelsDeCase": 129
+    "teteSurHauteur": 0.402,
+    "largeurTeteSurCorps": 0.924,
+    "hauteurSurLargeurCorps": 1.526,
+    "hauteurEnPixelsDeCase": 120
   },
   "oreilles": {
     "nombre": 2,
-    "hauteurSurTete": 0.288,
-    "ecartSurTete": 0.274,
-    "largeurBaseSurTete": 0.224
+    "hauteurSurTete": 0.08,
+    "ecartSurTete": 0.288,
+    "largeurBaseSurTete": 0.322
   },
   "masque": {
     "clair": {
-      "partDeLaTete": 0.261,
-      "couleur": "#f0e5c7",
+      "partDeLaTete": 0.2,
+      "couleur": "#ccbfa9",
       "boiteDansLaTete": [
-        0.302,
+        0.23,
         0,
-        0.722,
+        0.786,
         1
       ]
     },
     "sombre": {
-      "partDeLaTete": 0.016,
-      "couleur": "#40392e",
+      "partDeLaTete": 0.024,
+      "couleur": "#383631",
       "boiteDansLaTete": [
-        0.405,
-        0.78,
-        0.738,
-        0.981
+        0.246,
+        0.551,
+        0.659,
+        0.98
       ]
     }
   },
   "queue": {
-    "longueurSurHauteur": 0.306,
+    "longueurSurHauteur": 0.287,
     "anneauxSombres": 3,
-    "couleurSombre": "#6f6c62",
-    "couleurClaire": "#cdc3b3"
+    "couleurSombre": "#4b4740",
+    "couleurClaire": "#848077"
   },
   "palette": {
     "ensemble": [
       {
-        "hex": "#a39786",
-        "part": 0.234
+        "hex": "#887d6e",
+        "part": 0.181
       },
       {
-        "hex": "#ea844d",
-        "part": 0.172
+        "hex": "#635b50",
+        "part": 0.169
       },
       {
-        "hex": "#cbbda8",
-        "part": 0.124
+        "hex": "#ada392",
+        "part": 0.167
       },
       {
-        "hex": "#eee2c9",
-        "part": 0.105
+        "hex": "#332b25",
+        "part": 0.15
       },
       {
-        "hex": "#7e7468",
-        "part": 0.104
+        "hex": "#c7612d",
+        "part": 0.131
       },
       {
-        "hex": "#b9714e",
-        "part": 0.097
+        "hex": "#7d4028",
+        "part": 0.101
       },
       {
-        "hex": "#5b4b3e",
-        "part": 0.082
+        "hex": "#ded2bd",
+        "part": 0.073
       },
       {
-        "hex": "#dc9572",
-        "part": 0.081
+        "hex": "#e09161",
+        "part": 0.027
       }
     ],
     "tete": [
       {
-        "hex": "#a09584",
-        "part": 0.445
+        "hex": "#807464",
+        "part": 0.322
       },
       {
-        "hex": "#efe2c5",
-        "part": 0.28
+        "hex": "#a49887",
+        "part": 0.319
       },
       {
-        "hex": "#cbbea8",
-        "part": 0.245
+        "hex": "#c6b9a3",
+        "part": 0.264
       },
       {
-        "hex": "#4e473d",
-        "part": 0.03
+        "hex": "#504b42",
+        "part": 0.094
       }
     ],
     "corps": [
       {
-        "hex": "#e58553",
-        "part": 0.383
+        "hex": "#80422a",
+        "part": 0.283
       },
       {
-        "hex": "#b8724f",
-        "part": 0.176
+        "hex": "#c86330",
+        "part": 0.268
       },
       {
-        "hex": "#ceb097",
-        "part": 0.115
+        "hex": "#3a2e27",
+        "part": 0.143
       },
       {
-        "hex": "#7b7873",
-        "part": 0.112
+        "hex": "#b79f89",
+        "part": 0.106
       },
       {
-        "hex": "#eee1ca",
-        "part": 0.109
+        "hex": "#676562",
+        "part": 0.103
       },
       {
-        "hex": "#684f3e",
-        "part": 0.105
+        "hex": "#e5dcc9",
+        "part": 0.096
       }
     ]
   },
   "style": {
-    "partDeBordAdouci": 0.27,
+    "partDeBordAdouci": 0.206,
     "sculpture": {
-      "origine": "D:/AutoWinOS/.autowin-tmp/conv-1421/gen/d3/tanuki.py:1",
-      "texte": "Sculpture du tanuki en feutrine, en vrai volume (conv-1421). Un personnage en laine feutrée, c'est de la matière modelée"
+      "origine": "D:/AutoWinOS/.autowin-tmp/conv-1558/hd/tanuki-v3.py:1",
+      "texte": "Tanuki v3 (conv-1558, 2026-11-05) — « améliore tout » : forme, oreille de profil, fourrure, tissu et coupe du kimono,"
     }
   }
 }

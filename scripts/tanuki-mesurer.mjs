@@ -101,17 +101,38 @@ export function mesurerCase(im, x0, y0, cw, ch) {
 
   // Les oreilles : du haut jusqu'à la DERNIÈRE rangée coupée en deux dans le haut de la tête. Une
   // oreille peut commencer plus haut que l'autre (atlas : 2 rangées d'écart), d'où « dernière ».
+  // Tanuki v3 (conv-1558) : oreilles courtes, et une touffe de fourrure du crâne qui dépasse d'UNE
+  // rangée à hauteur de leur base. On suit chaque plage vers le haut (recouvrement en x) : une saillie
+  // qui ne tient que sur une rangée de la zone des oreilles est une touffe, pas une oreille.
+  let finZone = haut - 1
+  for (let v = haut; v < haut + teteH / 2; v++) if (rangees[v].length >= 2) finZone = v
+  const ids = []
+  const hauteurs = []
+  for (let v = haut; v <= finZone; v++)
+    ids.push(
+      rangees[v].map(([a, b]) => {
+        const dessus = v > haut ? rangees[v - 1] : []
+        const k = dessus.findIndex(([c, d]) => c <= b && d >= a)
+        const id = k >= 0 ? ids[v - 1 - haut][k] : hauteurs.push(0) - 1
+        hauteurs[id]++
+        return id
+      })
+    )
+  const oreillesDe = (v) =>
+    v <= finZone ? rangees[v].filter((_, k) => hauteurs[ids[v - haut][k]] >= 2) : rangees[v]
   const ecarts = []
   const nombres = []
   let finOreilles = haut - 1
-  for (let v = haut; v < haut + teteH / 2; v++)
-    if (rangees[v].length >= 2) {
+  for (let v = haut; v <= finZone; v++) {
+    const r = oreillesDe(v)
+    if (r.length >= 2) {
       finOreilles = v
-      nombres.push(rangees[v].length)
-      ecarts.push(rangees[v][1][0] - rangees[v][0][1] - 1)
+      nombres.push(r.length)
+      ecarts.push(r[1][0] - r[0][1] - 1)
     }
+  }
   const hauteurOreilles = finOreilles - haut + 1
-  const base = rangees[finOreilles] ?? []
+  const base = finOreilles >= haut ? oreillesDe(finOreilles) : []
   const largeurOreille = base.length ? compte(base) / base.length : 0
 
   // Le masque : la face nettement plus claire que la teinte médiane de la tête, et les yeux + la
@@ -270,6 +291,32 @@ export function decoder(chemin) {
   return { w, h, d: new Uint8ClampedArray(brut.subarray(nl + 1)) }
 }
 
+/**
+ * Décode une planche de personnages à la grille de donnees.json (12 colonnes de `cw` px). Le tanuki v3
+ * est livré en ×2 (conv-1558) : il est réduit par Pillow (alpha prémultiplié, LANCZOS), pour que la fiche
+ * garde ses pixels de case 126 × 170. Une largeur qui n'est pas un multiple entier de la grille est refusée.
+ */
+export function decoderAtlas(chemin, cw) {
+  const brut = execFileSync(
+    'python',
+    [
+      '-I',
+      '-c',
+      "import sys;from PIL import Image;im=Image.open(sys.argv[1]).convert('RGBA');L=int(sys.argv[2])\n" +
+        "if im.width%L or im.height%(im.width//L): sys.exit('planche de %d px : pas un multiple entier de %d'%(im.width,L))\n" +
+        'k=im.width//L\n' +
+        'if k>1: im=im.resize((L,im.height//k),Image.LANCZOS)\n' +
+        "sys.stdout.buffer.write(b'%d %d %d\\n'%(*im.size,k));sys.stdout.buffer.write(im.tobytes())",
+      chemin,
+      String(12 * cw)
+    ],
+    { maxBuffer: 1 << 28 }
+  )
+  const nl = brut.indexOf(10)
+  const [w, h, finesse] = brut.subarray(0, nl).toString().split(' ').map(Number)
+  return { w, h, finesse, d: new Uint8ClampedArray(brut.subarray(nl + 1)) }
+}
+
 function caseVide(im, x0, y0, cw, ch) {
   for (let v = 0; v < ch; v += 2)
     for (let u = 0; u < cw; u += 2) if (px(im, x0 + u, y0 + v)[3] >= OPAQUE) return false
@@ -360,13 +407,14 @@ function principal() {
     readFileSync(join(RACINE, 'src/renderer/src/assets/quartier/donnees.json'), 'utf8')
   )
   const { cw, ch } = donnees.an
-  const im = decoder(atlas)
+  const im = decoderAtlas(atlas, cw)
   const mesures = mesurerAtlas(im, { cw, ch })
   const res = {
     source: {
       image: relative(RACINE, atlas).replaceAll('\\', '/'),
       sha256: createHash('sha256').update(readFileSync(atlas)).digest('hex'),
-      taille: [im.w, im.h],
+      taille: [im.w * im.finesse, im.h * im.finesse],
+      finesse: im.finesse,
       caseEnPixels: [cw, ch],
       script: 'scripts/tanuki-mesurer.mjs'
     },
@@ -374,7 +422,8 @@ function principal() {
   }
   // Le style mesurable (bord adouci) vient de l'image ; la matière, elle, ne se lit pas sur des pixels :
   // on recopie la première ligne de la sculpture d'origine (Brain, conv-1446), avec son chemin.
-  const sculpture = 'D:/AutoWinOS/.autowin-tmp/conv-1421/gen/d3/tanuki.py'
+  // Depuis conv-1558, l'accueil montre le tanuki v3 : sa sculpture remplace celle de conv-1421.
+  const sculpture = 'D:/AutoWinOS/.autowin-tmp/conv-1558/hd/tanuki-v3.py'
   try {
     const ligne = readFileSync(sculpture, 'utf8').split('\n')[0].replace(/^#\s*/, '')
     res.style.sculpture = { origine: sculpture + ':1', texte: ligne }

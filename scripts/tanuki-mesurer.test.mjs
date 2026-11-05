@@ -56,6 +56,16 @@ describe('mesurerCase', () => {
   it('refuse une case vide au lieu de rendre des mesures inventées', () => {
     expect(() => mesurerCase(image(), 0, 0, W, H)).toThrow(/vide/)
   })
+
+  // Tanuki v3 (conv-1558) : oreilles courtes, et une touffe de fourrure sur le crâne qui dépasse d'UNE
+  // rangée à hauteur de leur base. Entrée qui ferait échouer ce test : la touffe comptée comme 3e oreille.
+  it('une touffe d’une seule rangée entre les oreilles n’est pas une oreille', () => {
+    const sans = mesurerCase(tanukiSynthetique(), 0, 0, W, H)
+    const im = tanukiSynthetique()
+    peindre(im, 26, 9, 32, 10, [128, 128, 128]) // touffe du crâne, rangée 9 seulement
+    const avec = mesurerCase(im, 0, 0, W, H)
+    expect(avec.oreilles).toEqual(sans.oreilles)
+  })
 })
 
 describe('mesurerQueue', () => {
@@ -89,5 +99,35 @@ describe('paletteKMoyennes', () => {
   })
   it('écrit un hexadécimal sur deux chiffres', () => {
     expect(hex([0, 15, 255])).toBe('#000fff')
+  })
+})
+
+// Une planche ×2 (tanuki v3, conv-1558) se mesure à la grille de donnees.json : decoderAtlas la ramène
+// à 12 colonnes de `cw`. Entrée qui ferait échouer ce test : une planche décodée telle quelle (24 cases de large).
+describe('decoderAtlas', () => {
+  it('ramène une planche ×2 à la grille, et garde une planche à la grille telle quelle', async () => {
+    const { execFileSync } = await import('node:child_process')
+    const { mkdtempSync, rmSync } = await import('node:fs')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+    const { decoderAtlas } = await import('./tanuki-mesurer.mjs')
+    const d = mkdtempSync(join(tmpdir(), 'decoder-atlas-'))
+    try {
+      execFileSync('python', [
+        '-I',
+        '-c',
+        "import sys;from PIL import Image;Image.new('RGBA',(48,20),(200,90,30,255)).save(sys.argv[1]+'/x2.png');" +
+          "Image.new('RGBA',(24,10),(200,90,30,255)).save(sys.argv[1]+'/x1.png')",
+        d
+      ])
+      const x2 = decoderAtlas(join(d, 'x2.png'), 2)
+      expect([x2.w, x2.h]).toEqual([24, 10])
+      expect([...x2.d.subarray(0, 4)]).toEqual([200, 90, 30, 255])
+      const x1 = decoderAtlas(join(d, 'x1.png'), 2)
+      expect([x1.w, x1.h]).toEqual([24, 10])
+      expect(() => decoderAtlas(join(d, 'x1.png'), 5)).toThrow()
+    } finally {
+      rmSync(d, { recursive: true, force: true })
+    }
   })
 })

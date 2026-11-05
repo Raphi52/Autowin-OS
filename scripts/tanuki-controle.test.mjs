@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { decoder } from './tanuki-mesurer.mjs'
+import { decoderAtlas } from './tanuki-mesurer.mjs'
 import { controler } from './tanuki-controle.mjs'
 
 const RACINE = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -18,11 +18,14 @@ const SCRIPT = join(RACINE, 'scripts/tanuki-controle.mjs')
 const REF = JSON.parse(readFileSync(join(RACINE, 'skills/tanuki/reference.json'), 'utf8'))
 
 // Fabrique les PNG de test avec Pillow (déjà requis par decoder) : case 0 de l'atlas, 126 × 170.
+// Le tanuki v3 est livré en ×2 (conv-1558) : la planche est d'abord ramenée à la grille, comme decoderAtlas.
 const FABRIQUE = `
 import sys
 from PIL import Image
 d = sys.argv[1]
 im = Image.open(sys.argv[2]).convert('RGBA')
+k = im.width // 1512
+if k > 1: im = im.resize((1512, im.height // k), Image.LANCZOS)
 c = im.crop((0, 0, 126, 170))
 up = c.resize((378, 510), Image.NEAREST)
 up.save(d + '/conforme.png')
@@ -58,8 +61,8 @@ const criteresKO = (r) => r.mesures.filter((m) => !m.ok).map((m) => m.critere)
 
 describe('tanuki-controle', () => {
   it('chaque tanuki de face de l’atlas est conforme à la fiche tirée de lui', () => {
-    const im = decoder(ATLAS)
     const [w, h] = REF.source.caseEnPixels
+    const im = decoderAtlas(ATLAS, w)
     let vus = 0
     for (let c = 0; c < Math.floor(im.w / w); c++) {
       const d = new Uint8ClampedArray(w * h * 4)
@@ -97,7 +100,7 @@ describe('tanuki-controle', () => {
     const r = JSON.parse(p.stdout)
     expect(criteresKO(r)).toContain('proportion.hauteurSurLargeurCorps')
     expect(r.ecarts.find((e) => e.critere === 'proportion.hauteurSurLargeurCorps').message).toMatch(
-      /au lieu de 1\.512/
+      new RegExp(`au lieu de ${String(REF.proportions.hauteurSurLargeurCorps).replace('.', '\\.')}`)
     )
   })
 
