@@ -47,6 +47,9 @@ export type SettingsSection =
   | 'behaviour'
   | 'providers'
   | 'preflight'
+  // Serveurs MCP : section à part (conv-1558, 2026-11-05 : « dans settings je vois pas le menu mcp »,
+  // le panneau était enfoui sous trois autres dans Diagnostic).
+  | 'mcp'
   // Rules : les regles d'Autowin OS. La protection de production (ce qu'Autowin demande avant un
   // geste sur une base reelle) en est UNE — elle avait son propre onglet « Production » jusqu'a
   // la demande conv-242. Distincte de « capabilities » : accorder un outil n'est pas autoriser un
@@ -218,6 +221,7 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   // seule section qui porte une alerte n'était atteignable qu'à la souris (constat du 2026-09-10).
   diagnostic: { destination: 'settings', section: 'preflight' },
   preflight: { destination: 'settings', section: 'preflight' },
+  mcp: { destination: 'settings', section: 'mcp' },
   prerequis: { destination: 'settings', section: 'preflight' },
   prérequis: { destination: 'settings', section: 'preflight' },
   // Un agent pilote l'app par des NOMS : sans ces entrées, la séparation Watchdog/Planification ne

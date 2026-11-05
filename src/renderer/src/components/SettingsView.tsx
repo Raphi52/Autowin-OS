@@ -151,6 +151,7 @@ export function SettingsView({
       }
     },
     { id: 'rules', label: 'Rules' },
+    { id: 'mcp', label: 'MCP' },
     {
       id: 'preflight',
       label: t('settings.section.preflight'),
@@ -215,8 +216,8 @@ export function SettingsView({
           {section === 'preflight' && <ExecutionWorkspaceSettings />}
           {section === 'preflight' && <BrainSettings />}
           {section === 'preflight' && <BrainPersoSettings />}
-          {/* Serveurs MCP de l'utilisateur (conv-1558, lot 2). */}
-          {section === 'preflight' && <McpServersSettings />}
+          {/* Serveurs MCP : section à part depuis le 2026-11-05 (conv-1558) — enfouis dans Diagnostic, introuvables. */}
+          {section === 'mcp' && <McpServersSettings />}
           {section === 'preflight' && (
             <section
               className="settings-preflight surface-panel"

@@ -89,8 +89,8 @@ describe('Settings — les sections en liste à gauche', () => {
       'Behaviour',
       'Interface',
       'Providers',
-      'Routage',
       'Rules',
+      'MCP',
       'Diagnostic'
     ])
   })
