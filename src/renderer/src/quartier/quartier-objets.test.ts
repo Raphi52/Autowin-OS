@@ -74,3 +74,49 @@ describe('les objets découpés dans la Falaise o-1916 (conv-1460)', () => {
     }
   })
 })
+
+// conv-1633 (« les décors passent devant les mascottes : la barrière, le socle de la tablette, et sous
+// l'escalier une barre comme le _ dans /_ ») : la forme de `cloture_onsen` tenait en une image la rangée du
+// fond, le retour du coin au premier plan, et quatre éclats du décor voisin (pied de l'escalier, bas du socle
+// de la tablette, herbe, galets). Une seule ligne de pied par colonne ne peut pas servir deux profondeurs :
+// dans le coin elle valait celle du retour (767), et la rangée du fond recouvrait les tanukis sur les galets.
+// Depuis : la rangée du fond seule, le retour en objet `cloture_onsen_coin`, les éclats dans le dessous.
+describe('la barrière de l’onsen (conv-1633)', () => {
+  /** Taille d'un tanuki sur ce sol : `taille` de quartier-marche.ts (55 px) ÷ 0,866. */
+  const U = 64
+  /** La règle de `tanukis()` dans quartier-scene.ts : l'objet est repeint, entier, devant le tanuki. */
+  const repeintDevant = (o: Objet, X: number, Y: number): boolean =>
+    X + U * 0.4 > o.x &&
+    X - U * 0.4 < o.x + o.w &&
+    Y + 4 > o.y &&
+    Y - U < o.y + o.h &&
+    Y < pied(o, X) - 1
+  const places = (x0: number, x1: number, y0: number, y1: number): [number, number][] => {
+    const G = D.g
+    const r: [number, number][] = []
+    for (let X = G.x0; X < G.x0 + G.w * G.pas; X += G.pas)
+      for (let Y = G.y0; Y < G.y0 + G.h * G.pas; Y += G.pas)
+        if (X >= x0 && X <= x1 && Y >= y0 && Y <= y1 && marche.libre(X, Y)) r.push([X, Y])
+    return r
+  }
+  const fond = D.obj.find((o) => o.n === 'cloture_onsen') as Objet
+  const coin = D.obj.find((o) => o.n === 'cloture_onsen_coin') as Objet
+
+  it('la rangée du fond ne recouvre pas un tanuki posé devant elle, sur les galets du coin', () => {
+    const galets = places(524, 600, 736, 767)
+    expect(galets.length).toBeGreaterThan(10)
+    for (const [X, Y] of galets) expect(repeintDevant(fond, X, Y), `${X},${Y}`).toBe(false)
+  })
+
+  it('le pied de l’escalier n’est plus repeint devant un tanuki qui passe devant lui', () => {
+    const devantLEscalier = places(370, 425, 625, 634)
+    expect(devantLEscalier.length).toBeGreaterThan(5)
+    for (const [X, Y] of devantLEscalier) expect(repeintDevant(fond, X, Y), `${X},${Y}`).toBe(false)
+  })
+
+  it('le retour du coin est un objet à lui, au premier plan', () => {
+    expect(coin).toBeTruthy()
+    expect(Math.min(...(coin.b ?? []))).toBeGreaterThanOrEqual(750)
+    expect(placesDerriere(coin)).toBeGreaterThan(0)
+  })
+})
