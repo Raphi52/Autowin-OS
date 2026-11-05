@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseOrderedPilotTokens } from './agent-pilot'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 
 /**
  * COMMANDE MALFORMÉE — plus jamais de perte silencieuse.
@@ -63,20 +64,16 @@ describe('parseOrderedPilotTokens — un bloc inexploitable est SIGNALÉ, jamais
  * chemins, le token « invalid » ne servirait à rien et le faux « c'est fait » resterait possible.
  */
 describe('câblage — l’échec est visible ET corrigible', () => {
-  const source = (): string => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const fs = require('node:fs') as typeof import('node:fs')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const path = require('node:path') as typeof import('node:path')
-    return fs.readFileSync(path.join(__dirname, 'agent-pilot.ts'), 'utf8')
-  }
+  // L'exécution des `<cmd>` vit dans agent-pilot/execution-des-commandes.ts depuis conv-1580
+  // (lot 4) : on lit la famille du pilote.
+  const source = (): string => sourceDuPilote()
 
   it('le parseur ne contient plus de catch VIDE', () => {
-    const code = source()
-    const parser = code.slice(
-      code.indexOf('export function parseOrderedPilotTokens'),
-      code.indexOf('function waitForAnswer')
-    )
+    // Le parseur vit dans agent-pilot/jetons-de-commande.ts depuis conv-1580 (lot 1) : on lit la
+    // famille, et la tranche s'arrête à la fin de la fonction, plus sur sa voisine d'avant.
+    const code = sourceDuPilote()
+    const debut = code.indexOf('export function parseOrderedPilotTokens')
+    const parser = code.slice(debut, code.indexOf('\n}\n', debut) + 2)
     // Un catch qui ne fait rien = la perte silencieuse d'origine.
     expect(parser).not.toMatch(/catch\s*\{\s*\/\*[^*]*\*\/\s*\}/)
     expect(parser).toContain("kind: 'invalid'")

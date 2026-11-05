@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { porteeDuVert } from './verify-command'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
  * UN VERT D'ARBRE SALE N'ATTESTE PAS L'ETAT COMMITE.
@@ -60,7 +59,8 @@ describe('verify — le vert nomme sa portée', () => {
  * le CÂBLAGE, pas l'effet. La mesure sur l'app reste l'autorité.
  */
 describe('la note de portée est réellement branchée sur `verify`', () => {
-  const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+  // runVerifyAt vit dans commands/verification.ts (conv-1580, lot 6) : on lit la famille du bus.
+  const source = sourceDuBus()
 
   it('`runVerifyAt` appelle porteeDuVert', () => {
     /*
@@ -73,14 +73,14 @@ describe('la note de portée est réellement branchée sur `verify`', () => {
      *
      * On borne desormais a la methode SUIVANTE. La fenetre suit la methode au lieu de la contraindre.
      */
-    const debut = source.indexOf('private async runVerifyAt')
+    const debut = source.indexOf('export async function runVerifyAt(')
     expect(debut).toBeGreaterThan(-1)
-    const suite = source.indexOf(`${String.fromCharCode(10)}  private `, debut + 1)
+    const suite = source.indexOf(`${String.fromCharCode(10)}export `, debut + 1)
     const bloc = source.slice(debut, suite > debut ? suite : undefined)
     expect(bloc).toContain('porteeDuVert(')
   })
 
   it('la liste des fichiers vient du lecteur git EXISTANT, pas d’un doublon', () => {
-    expect(source).toContain("import { readGitState } from './git-read-main'")
+    expect(source).toContain("import { readGitState } from '../git-read-main'")
   })
 })

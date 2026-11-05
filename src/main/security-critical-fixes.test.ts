@@ -817,7 +817,15 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   (liste fermee `ANIMAUX_AGENTS`) et une valeur inconnue ne fait que relire l'etat. Ecrit
     //   seulement `board-dossier.json` (userData), puis `presence.json` au rythme deja borne.
     //   `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(299)
+    // MISE A JOUR 2026-11-05 (conv-1580) — 299 -> 300, MESURE par ce test (rouge a 299) et NOMME par
+    //   `node scripts/canaux-ipc.mjs 957bad83e HEAD` : un seul ajout, venu de dbaf751d9 (conv-1599).
+    //   UN canal dans `ipc/quartier-presence.ts`, garde 'Présence du quartier' des sa PREMIERE ligne :
+    //   `os:quartier-presence:masques` — les postes a qui ce poste masque ses agents, choisis dans les
+    //   reglages de l'Accueil. Pas une liste : ne fait que relire l'etat. Sinon `postesLisibles` ne
+    //   garde que des chaines, 50 au plus, 64 caracteres au plus, sans caractere de controle ou
+    //   invisible ni `<>:"/\|?*`, sans doublon. Ecrit seulement `board-dossier.json` (userData), puis
+    //   `presence.json` au rythme deja borne. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(300)
     expect(unguarded).toEqual([])
   })
 

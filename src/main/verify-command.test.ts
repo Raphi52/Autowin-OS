@@ -161,7 +161,7 @@ describe('cablage de la commande verify', () => {
   it('sous Windows, passe par cmd.exe /c avec des ARGV SEPARES (spawn EINVAL sinon)', () => {
     // Constate en essai reel : Node refuse de spawner un `.cmd` sans shell depuis CVE-2024-27980.
     // L'agent recevait « spawn EINVAL » alors que sa correction etait bonne.
-    const impl = commands().slice(commands().indexOf('private async runVerify'))
+    const impl = commands().slice(commands().indexOf('export async function runVerifyAt('))
     expect(impl).toContain("'cmd.exe'")
     expect(impl).toContain("'/c'")
     // Toujours pas de shell : les arguments restent separes, aucune chaine interpolee.
@@ -170,7 +170,7 @@ describe('cablage de la commande verify', () => {
 
   it('execute SANS shell (aucune interpolation, donc aucune injection)', () => {
     const source = commands()
-    const impl = source.slice(source.indexOf('private async runVerify'))
+    const impl = source.slice(source.indexOf('export async function runVerifyAt('))
     expect(impl).toContain('shell: false')
     expect(impl).toContain('windowsHide: true')
     // La sortie est bornee : une suite de tests entiere n'inonde pas le tour.
@@ -179,7 +179,7 @@ describe('cablage de la commande verify', () => {
 
   it('un refus ne lance RIEN et remonte sa raison', () => {
     const source = commands()
-    const impl = source.slice(source.indexOf('private async runVerify'))
+    const impl = source.slice(source.indexOf('export async function runVerifyAt('))
     const refusal = impl.slice(0, impl.indexOf('const [file'))
     expect(refusal).toContain('if (!decision.allowed)')
     expect(refusal).toContain('reason')

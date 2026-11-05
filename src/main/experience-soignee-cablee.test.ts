@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 
 /**
  * LE DRAPEAU D'EXPÉRIENCE DOIT ÊTRE RÉELLEMENT PASSÉ — sinon les gardes sont inertes.
@@ -21,7 +20,8 @@ import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
 // La ZONE du process principal, pas un chemin : ce cablage a quitte `index.ts` pour
 // `src/main/chat/`. Un demenagement de code n'est pas une regression (mesure du 2026-09-02).
 const main = sourceProcessPrincipal()
-const pilot = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
+// Les gardes vivent dans agent-pilot/relances-du-tour.ts depuis conv-1580 (lot 4) : on lit la famille.
+const pilot = sourceDuPilote()
 
 describe('câblage de l’expérience soignée', () => {
   it('le pilote OFFRE le drapeau', () => {

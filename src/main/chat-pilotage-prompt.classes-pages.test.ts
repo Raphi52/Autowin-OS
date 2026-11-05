@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CLASSES_PAGES_HTML } from '../shared/classes-pages-html'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { construirePromptScoutInterne } from './veille/scout-interne'
 
@@ -31,7 +30,8 @@ describe('prompts des pages html-render : des classes, pas des couleurs', () => 
   // Le prompt du chat en LECTURE SEULE est ecrit en ligne dans `agent-pilot.ts` : seule la source
   // le montre sans monter tout un tour.
   it('le chat en lecture seule aussi (source d’agent-pilot.ts)', () => {
-    const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
+    // agent-pilot.ts et ses modules agent-pilot/*.ts : le prompt systeme vit dans systeme-du-tour.ts (conv-1580).
+    const source = sourceDuPilote()
     expect(source).toContain('CONSIGNE_CLASSES_PAGES_HTML')
     for (const couleur of RECETTE_EN_DUR) expect(source).not.toContain(couleur)
   })

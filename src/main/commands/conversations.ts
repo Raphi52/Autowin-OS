@@ -1,6 +1,8 @@
 // Groupe de commandes « fils de conversation et tri des travaux », sorti de AppCommandBus.run (conv-1508, lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import { type AppCommandBus, entierEnvoye, TRANCHE_MESSAGE_LU, listeEnvoyee, booleenEnvoye } from '../commands'
+import type { AppCommandBus } from '../commands'
+import { entierEnvoye, listeEnvoyee, booleenEnvoye } from './arguments'
+import { TRANCHE_MESSAGE_LU } from './catalogue'
 import { titreDeConversationDemandee, conversationRecenteEquivalente } from '../conversation-demandee'
 import { collectAutowinKaizenEvidence, PLAFONDS_AMPLES } from '../autowin-kaizen-context'
 import { paginerDossier, dedupliquerDossier, resumerAppelsOutils } from '../retrospective-compacte'

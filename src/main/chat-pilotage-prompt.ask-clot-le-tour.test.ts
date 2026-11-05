@@ -39,7 +39,7 @@ describe('`ask` clôt le tour : tout ce qu’il faut voir va dans le même messa
   it('le pilote clôt réellement le tour quand une question est posée', () => {
     const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
     expect(source).toMatch(
-      /if \(questionPoseeCeTour\) \{[\s\S]{0,1200}emit\(\{\s*kind: 'done'[\s\S]{0,500}?return\s*\}/u
+      /if \(etat\.questionPoseeCeTour\) \{[\s\S]{0,1200}emit\(\{\s*kind: 'done'[\s\S]{0,500}?return\s*\}/u
     )
   })
 })

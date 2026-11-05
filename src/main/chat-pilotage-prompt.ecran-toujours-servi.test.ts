@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from './agent-pilot'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 import { blocsSystemeEcran, tourTouchantAuVisuel } from './chat-pilotage-prompt'
 import type { Message, SendOptions, SendResult } from './providers/types'
 
@@ -107,7 +107,8 @@ describe("regles de l'ecran de l'utilisateur servies a chaque tour (conv-835)", 
   })
 
   it("est bien la fonction qu'agent-pilot.ts appelle pour construire le prompt systeme", () => {
-    const source = readFileSync('src/main/agent-pilot.ts', 'utf8')
+    // agent-pilot.ts et ses modules agent-pilot/*.ts : le prompt systeme vit dans systeme-du-tour.ts (conv-1580).
+    const source = sourceDuPilote()
     expect(source).toContain('...blocsSystemeEcran(')
     // Plus aucun chemin parallele qui re-servirait les regles visuelles sous condition a part.
     expect(source).not.toContain('REGLES_VISUELLES')

@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 
 /**
  * CE TEST VERROUILLE UN CÂBLAGE, ET RIEN D'AUTRE. Il faut le dire, parce que j'ai essayé mieux.
@@ -24,15 +23,18 @@ import { describe, expect, it } from 'vitest'
  * reste non couverte, et je préfère l'écrire ici que la laisser croire couverte.
  */
 
-const source = readFileSync(join(process.cwd(), 'src/main/agent-pilot.ts'), 'utf8')
+// La boucle du tour vit dans agent-pilot/*.ts depuis conv-1580 (lot 4) : on lit la famille.
+const source = sourceDuPilote()
 
 describe('la comptabilité d’échec lit le prédicat d’ÉCHEC, pas celui d’affichage', () => {
   it('arme anyActionFailed depuis `orchestrationEnEchec`', () => {
-    expect(source).toMatch(/if \(orchestrationEnEchec\([^)]*\)\) \{\s*\n\s*anyActionFailed = true/u)
+    expect(source).toMatch(
+      /if \(orchestrationEnEchec\([^)]*\)\) \{\s*\n\s*etat\.anyActionFailed = true/u
+    )
   })
 
   it('n’arme plus rien depuis `deliveryClosed`, qui reste réservé à l’affichage', () => {
-    expect(source).not.toMatch(/if \(!deliveryClosed\) \{\s*\n\s*anyActionFailed = true/u)
+    expect(source).not.toMatch(/if \(!deliveryClosed\) \{\s*\n\s*etat\.anyActionFailed = true/u)
     // `deliveryClosed` garde son rôle : choisir la phrase de clôture montrée à l'utilisateur.
     expect(source).toContain('const closureNotice = deliveryClosed')
   })

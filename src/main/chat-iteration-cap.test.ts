@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { CAP_ITERATIONS_TOUR } from './agent-pilot'
 import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 
 /**
  * LE CAP D'ITÉRATIONS RELEVÉ N'ATTEIGNAIT JAMAIS L'APPLICATION.
@@ -60,8 +61,9 @@ describe('cap d’itérations — une seule valeur par défaut, celle qui est do
  */
 describe('message de cap — il rapporte le cap EFFECTIF', () => {
   it('l’erreur cite `iterationLimit`, pas le cap initial', () => {
-    const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
-    expect(source).toContain("Cap d'itérations (${iterationLimit})")
+    // La fin sur le cap vit dans agent-pilot/texte-de-cloture.ts depuis conv-1580 : on lit la famille.
+    const source = sourceDuPilote()
+    expect(source).toContain("Cap d'itérations (${etat.iterationLimit})")
     expect(source).not.toContain("Cap d'itérations (${maxIter})")
   })
 })
@@ -76,14 +78,17 @@ describe('message de cap — il rapporte le cap EFFECTIF', () => {
  * donne le reste ET le levier qui change quelque chose.
  */
 describe('budget du tour — annoncé à mi-parcours, pas seulement au dernier appel', () => {
-  const pilote = (): string => readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
+  // Le budget vit dans agent-pilot/relances-du-tour.ts depuis conv-1580 (lot 4) : on lit la famille.
+  const pilote = (): string => sourceDuPilote()
 
   it('une annonce de budget existe, distincte de la consigne de clôture', () => {
     expect(pilote()).toContain('SYSTÈME — BUDGET DU TOUR')
   })
 
   it('elle tombe à mi-parcours et jamais sur la dernière itération', () => {
-    expect(pilote()).toContain('i < iterationLimit - 1 && i === Math.floor(iterationLimit / 2)')
+    expect(pilote()).toContain(
+      'i < etat.iterationLimit - 1 && i === Math.floor(etat.iterationLimit / 2)'
+    )
   })
 
   it('elle nomme le levier concret plutôt que de réclamer de la prudence', () => {

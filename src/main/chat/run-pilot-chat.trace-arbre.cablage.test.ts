@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
 
 /**
  * CÂBLAGE — le tour de chat écrit dans la trace ce que l'arbre du panneau Détails doit montrer
@@ -48,7 +49,8 @@ describe('run-pilot-chat écrit la demande reçue et les gestes de l’agent', (
   })
 
   it('le pilote relaie le détail que l’adaptateur joint à la ligne de fin', () => {
-    const pilote = readFileSync(join(__dirname, '..', 'agent-pilot.ts'), 'utf8')
+    // Le flux du modèle vit dans agent-pilot/envoi-du-tour.ts depuis conv-1580 (lot 4).
+    const pilote = sourceDuPilote()
     expect(pilote).toContain('...(chunk.statusDetail ? { detail: chunk.statusDetail } : {})')
   })
 

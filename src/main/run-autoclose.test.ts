@@ -17,6 +17,7 @@ import {
   type GitRunner
 } from './run-autoclose'
 import { supprimerArbre } from './fs-supprimer'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /** Vrais dépôts git en tmp : sous charge parallèle, le budget vitest par défaut (5 s) est trop court. */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
@@ -727,7 +728,8 @@ describe('provenance d’une note Brain de run', () => {
   })
 
   it('le dépôt des leçons d’un run écrit bien cette ligne (sinon plus aucune note de run ne partirait)', () => {
-    const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    // Le dépôt des leçons vit dans commands/apprentissage.ts (conv-1580, lot 6) : on lit la famille du bus.
+    const source = sourceDuBus()
     expect(source).toContain('Provenance Autowin (v1):\\n- run: ${input.runId}\\n')
   })
 })

@@ -6,6 +6,8 @@ import {
 } from '../source-process-principal.test-helpers'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
+import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
 
 /**
  * GARDE D'EXHAUSTIVITÉ DE L'OBSERVATORY — deux invariants, tenus sur le CODE et non sur une
@@ -29,6 +31,10 @@ const RACINE = join(__dirname, '..')
 function lire(chemin: string): string[] {
   // orchestrator.ts découpé en modules voisins (conv-1508) : la source lue est leur ensemble, dans l'ordre d'origine.
   const parties = chemin === 'orchestrator.ts' ? ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'] : [chemin]
+  // commands.ts découpé de même (conv-1508, conv-1580) : la source lue est la famille du bus.
+  if (chemin === 'commands.ts') return sourceDuBus().split(/\r?\n/)
+  // agent-pilot.ts découpé de même (conv-1580) : la source lue est la famille du pilote.
+  if (chemin === 'agent-pilot.ts') return sourceDuPilote().split(/\r?\n/)
   return parties.map((f) => readFileSync(join(RACINE, f), 'utf8')).join(String.fromCharCode(10)).split(/\r?\n/)
 }
 

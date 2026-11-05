@@ -264,8 +264,8 @@ describe('cablage de edit_file', () => {
    */
   it('AUCUNE ecriture avant la decision (un refus ne touche pas le disque)', () => {
     const source = commands()
-    const impl = source.slice(source.indexOf('private runEditFile'))
-    const body = impl.slice(0, impl.indexOf('return {\n      allowed: true'))
+    const impl = source.slice(source.indexOf('export function runEditFile('))
+    const body = impl.slice(0, impl.indexOf('return {\n    allowed: true'))
     const write = body.indexOf('writeFileSync(')
     expect(write, 'runEditFile doit bien écrire quelque part').toBeGreaterThan(-1)
     expect(body.slice(0, write)).toContain('if (!decision.allowed) return')
@@ -280,8 +280,8 @@ describe('cablage de edit_file', () => {
    * ENTIER par `EF BF BD`. Ce test empêche le retour d'un encodage figé.
    */
   it('ne fige AUCUN encodage : il préserve celui du fichier', () => {
-    const impl = commands().slice(commands().indexOf('private runEditFile'))
-    const body = impl.slice(0, impl.indexOf('return {\n      allowed: true'))
+    const impl = commands().slice(commands().indexOf('export function runEditFile('))
+    const body = impl.slice(0, impl.indexOf('return {\n    allowed: true'))
     expect(body).toContain('readFileText(')
     expect(body).toContain('encodeFile(')
     expect(body).toContain('unrepresentableCharacters(')
@@ -299,7 +299,7 @@ describe('cablage de edit_file', () => {
   })
 
   it('rend un DIFF (le changement est visible, pas silencieux)', () => {
-    const impl = commands().slice(commands().indexOf('private runEditFile'))
+    const impl = commands().slice(commands().indexOf('export function runEditFile('))
     expect(impl).toContain('diff:')
   })
 })

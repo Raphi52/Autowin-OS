@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 import {
   questionPoseeSansAvoirLu,
   statusEstUneLecture,
@@ -61,16 +60,24 @@ describe('une question posée sans avoir rien lu est relancée', () => {
  * ci-dessus passerait à l'identique si le garde n'était branché nulle part.
  */
 describe('le garde est réellement branché dans la boucle de tour', () => {
-  const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
+  // Relances, envoi et commandes vivent dans agent-pilot/*.ts depuis conv-1580 (lot 4).
+  const source = sourceDuPilote()
 
   it('lève le drapeau quand l’action `ask` s’exécute', () => {
     // Sans cette ligne, `questionPoseeCeTour` reste faux et le garde ne peut jamais mordre.
-    expect(source).toMatch(/token\.name === 'ask'\)\s*questionPoseeCeTour = true/)
+    expect(source).toMatch(/token\.name === 'ask'\)\s*etat\.questionPoseeCeTour = true/)
   })
 
   it('appelle le garde et renvoie la relance à l’agent', () => {
-    expect(source).toMatch(/questionPoseeSansAvoirLu\(questionPoseeCeTour,\s*anyReadExecuted\)/)
-    expect(source).toContain('convo.push(RELANCE_QUESTION_SANS_LECTURE)')
+    expect(source).toMatch(
+      /questionPoseeSansAvoirLu\(etat\.questionPoseeCeTour,\s*etat\.anyReadExecuted\)/
+    )
+    // La relance rendue par le contrôle (agent-pilot/relances-du-tour.ts) ET son envoi par chat()
+    // (conv-1580, lot 4) : avant, une seule ligne `convo.push(RELANCE_QUESTION_SANS_LECTURE)`.
+    expect(source).toMatch(
+      /motif: 'question-sans-lecture',\s*consignes: \[RELANCE_QUESTION_SANS_LECTURE\]/
+    )
+    expect(source).toContain('convo.push(...relance.consignes)')
   })
 
   /*
@@ -82,7 +89,7 @@ describe('le garde est réellement branché dans la boucle de tour', () => {
   it('compte AUSSI les lectures natives, qui arrivent par le battement d’outil', () => {
     // La commande ENTIERE (statusTarget) est jugée, pas le libellé coupé à 120 caractères (conv-861).
     expect(source).toMatch(/statutEntier = statutComplet\(chunk\.status, chunk\.statusTarget\)/)
-    expect(source).toMatch(/statusEstUneLecture\(statutEntier\)\)\s*anyReadExecuted = true/)
+    expect(source).toMatch(/statusEstUneLecture\(statutEntier\)\)\s*etat\.anyReadExecuted = true/)
   })
 
   it('ne relance QU’UNE FOIS — sinon un tour peut boucler en payant à chaque passage', () => {
@@ -128,10 +135,9 @@ describe('lecture Bash precedee de cd (conv-844, turn 852bb2fd-25e4-40dd-a959-57
 
 describe('une seule question affichee par tour (conv-844, turn 852bb2fd-25e4-40dd-a959-57d9337b084c)', () => {
   it('agent-pilot ne remet pas une deuxieme carte ask dans le meme tour', async () => {
-    const { readFileSync } = await import('node:fs')
-    const src = readFileSync(new URL('./agent-pilot.ts', import.meta.url), 'utf8')
+    const src = sourceDuPilote()
     expect(src).toMatch(
-      /token\.name === 'ask' && questionPoseeCeTour\)[\s\S]{0,400}tokenIndex \+= 1\s*continue/
+      /token\.name === 'ask' && etat\.questionPoseeCeTour\)[\s\S]{0,400}tokenIndex \+= 1\s*continue/
     )
   })
 })

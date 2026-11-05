@@ -12,6 +12,7 @@ import { OutcomeLearningLedger } from './activity/outcome-learning-ledger'
 import { readBrainTraces } from './activity/brain-trace-spool'
 import { forgetSessionDeposits, rememberFact } from './brain-remember'
 import { AppCommandBus } from './commands'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 import { OutcomeLearningSupervisor } from './outcome-learning-supervisor'
 import {
   createIndependentLearningAttestation,
@@ -160,7 +161,8 @@ describe('outcome learning — contrat visible par les modèles', () => {
   })
 
   it('sépare l’auteur de la leçon de son attestation par le judge', () => {
-    const commands = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
+    // observeOutcomeLearning vit dans commands/apprentissage.ts (conv-1580, lot 6) : famille du bus.
+    const commands = sourceDuBus()
     const orchestrator = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, f), 'utf8')).join(String.fromCharCode(10))
 
     expect(commands).toContain('verifyIndependentLearningAttestation(')

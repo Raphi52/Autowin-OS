@@ -1,11 +1,25 @@
 // Groupe de commandes « lecture et édition de fichiers », sorti de AppCommandBus.run (conv-1508, lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
+// En fin de fichier, les commandes de fichiers tracées (créer, déplacer, supprimer, état d'une copie) :
+// méthodes de AppCommandBus sorties telles quelles (conv-1580, lot 6).
 import type { AppCommandBus } from '../commands'
 import { decideRead, executeRead, enumererFichiersLisibles, enumererFichiersLisiblesDetail, rechercherDansFichiers } from '../read-file-command'
 import { decoderUtf8, refusRacineSysteme } from '../edit-file-command'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve, join, sep, isAbsolute } from 'node:path'
 import { lireProprietairesDeFichiers } from '../proprietaire-fichier'
+import {
+  decideCreateFile,
+  decideDeleteFile,
+  decideMoveFile,
+  identifiantDeBureauValide
+} from '../file-ops-command'
+import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
+import {
+  appendWorkspaceMutationTrace,
+  captureMutationTraceBase
+} from '../activity/trace-workspace-mutation'
 
 /** Cas de `AppCommandBus.run` : lecture et édition de fichiers. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
 export async function executerFichiers(
@@ -223,4 +237,105 @@ export async function executerFichiers(
     default:
       throw new Error(`commande inconnue: ${name}`)
   }
+}
+
+/**
+ * CREER / DEPLACER / SUPPRIMER — ecriture DIRECTE dans l'espace de travail, bornes de `edit_file`.
+ *
+ * Pas de bureau isole ici, et c'est un CHOIX assume, pas un oubli : la machinerie
+ * `withIsolatedMutation` existe pour publier une edition SEULEMENT si la suite reste verte, or
+ * elle raisonne sur la portee d'un fichier EDITE (`porteeDUneEdition`) — un fichier qui n'existe
+ * pas encore, ou qui vient de disparaitre, n'a pas de portee derivable. Le garde-fou reste donc
+ * celui qui compte : les bornes pures de `file-ops-command.ts`, plus `verify` que l'agent doit
+ * lancer ensuite (la description de chaque commande le dit).
+ */
+/**
+ * JOURNAL DES FICHIERS pour create/move/delete_file : seule `edit_file` y écrivait, donc ces
+ * mutations restaient invisibles dans l'onglet Fichiers. Une commande refusée n'écrit rien.
+ */
+export async function runTracedFileCommand<R extends { allowed: boolean }>(
+  bus: AppCommandBus,
+  rawPaths: unknown[],
+  run: () => R,
+  conversationId?: string,
+  turnId?: string
+): Promise<R> {
+  const workspaceRoot = bus.workspaceDuTour
+  const paths = rawPaths.filter((path): path is string => typeof path === 'string')
+  const before = conversationId
+    ? await captureMutationTraceBase(workspaceRoot, paths)
+    : undefined
+  const outcome = run()
+  if (outcome.allowed && conversationId) {
+    await appendWorkspaceMutationTrace({
+      conversationId,
+      ...(turnId ? { turnId } : {}),
+      workspaceRoot,
+      source: 'file_command',
+      paths,
+      before
+    })
+  }
+  return outcome
+}
+
+export function runCreateFile(bus: AppCommandBus, input: { path: unknown; content: unknown }): {
+  allowed: boolean
+  reason?: string
+  path?: string
+  octets?: number
+} {
+  const decision = decideCreateFile(input, bus.workspaceDuTour, existsSync)
+  if (!decision.allowed) return { allowed: false, reason: decision.reason }
+  mkdirSync(dirname(decision.absolutePath), { recursive: true })
+  writeFileSync(decision.absolutePath, decision.content, 'utf8')
+  return {
+    allowed: true,
+    path: decision.relativePath,
+    octets: Buffer.byteLength(decision.content, 'utf8')
+  }
+}
+
+export function runMoveFile(bus: AppCommandBus, input: { from: unknown; to: unknown }): {
+  allowed: boolean
+  reason?: string
+  from?: string
+  to?: string
+} {
+  const decision = decideMoveFile(input, bus.workspaceDuTour, existsSync)
+  if (!decision.allowed) return { allowed: false, reason: decision.reason }
+  mkdirSync(dirname(decision.cibleAbsolue), { recursive: true })
+  renameSync(decision.sourceAbsolue, decision.cibleAbsolue)
+  return { allowed: true, from: decision.sourceRelative, to: decision.cibleRelative }
+}
+
+export function runDeleteFile(bus: AppCommandBus, input: { path: unknown }): {
+  allowed: boolean
+  reason?: string
+  path?: string
+} {
+  const decision = decideDeleteFile(input, bus.workspaceDuTour, existsSync)
+  if (!decision.allowed) return { allowed: false, reason: decision.reason }
+  // `recursive: false` : cette commande supprime UN fichier, jamais une arborescence.
+  rmSync(decision.absolutePath, { recursive: false })
+  return { allowed: true, path: decision.relativePath }
+}
+
+/**
+ * ETAT DES COPIES DE TRAVAIL, en lecture. La validation d'identifiant est REPRISE ici parce que le
+ * bus ne passe pas par `assertTrustedRendererSender` : c'est elle, et non le canal, qui empeche un
+ * identifiant fabrique d'atteindre le disque.
+ */
+export async function runWorktreeStatus(
+  bus: AppCommandBus,
+  agentId: unknown
+): Promise<{ allowed: boolean; reason?: string; status?: unknown; conflit?: unknown }> {
+  const status = bus.os.getWorktreeRuntimeStatus()
+  if (agentId === undefined || agentId === null || agentId === '') {
+    return { allowed: true, status }
+  }
+  if (!identifiantDeBureauValide(agentId)) {
+    return { allowed: false, reason: 'Identifiant de bureau invalide' }
+  }
+  return { allowed: true, status, conflit: await bus.os.getWorktreeConflictDiff(agentId) }
 }

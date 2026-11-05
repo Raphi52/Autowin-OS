@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -16,6 +16,7 @@ import {
 } from './session-memory-echo'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { buildTurnMessages } from './chat-turn-messages'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 
 /**
@@ -364,7 +365,8 @@ describe('câblage — l’écho est réellement alimenté et réellement relu',
   })
 
   it('l’écho n’entre PAS dans le prompt système — le préfixe doit rester cachable', () => {
-    const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
+    // agent-pilot.ts et ses modules agent-pilot/*.ts : les blocs vivent dans systeme-du-tour.ts (conv-1580).
+    const source = sourceDuPilote()
     // Les blocs systeme sont une FONCTION du texte de pilotage depuis le 2026-10-28 (conv-1229 :
     // consigne courte quand les outils directs sont servis) ; tout systeme envoye passe par elle.
     const debut = source.indexOf('const systemPartsAvec')

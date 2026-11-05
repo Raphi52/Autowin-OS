@@ -193,8 +193,8 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     kind: 'write',
     injecte: false,
     emission: 'spool',
-    sites: [{ file: 'src/main/commands.ts', anchor: 'const deposited = await rememberFact(' }],
-    trace: { file: 'src/main/commands.ts', anchor: 'query: `promotion: ${trustedProposal.title}`' },
+    sites: [{ file: 'src/main/commands/apprentissage.ts', anchor: 'const deposited = await rememberFact(' }],
+    trace: { file: 'src/main/commands/apprentissage.ts', anchor: 'query: `promotion: ${trustedProposal.title}`' },
     pourquoi: 'Dépôt automatique d’une leçon validée par les preuves du run.'
   },
   {

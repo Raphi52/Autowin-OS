@@ -1,6 +1,7 @@
 // Groupe de commandes « état, run, redémarrage, bureau caché, environnement », sorti de AppCommandBus.run (conv-1508, lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import { type AppCommandBus, argumentAbsent } from '../commands'
+import type { AppCommandBus } from '../commands'
+import { argumentAbsent } from './arguments'
 import { etatPourOutil, type ArgsEtat } from '../etat-outil'
 import { ensureAutowinAppData } from '../app-data'
 import { memoriserAutorisations } from '../store/autorisations-permanentes'

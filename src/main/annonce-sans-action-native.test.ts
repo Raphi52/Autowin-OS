@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { statusEstUneAction, statutComplet } from './chat-turn-messages'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 
 /**
  * FAUSSE ALERTE « tu as ANNONCÉ ce que tu allais faire, sans rien faire ».
@@ -54,10 +53,11 @@ describe('statusEstUneAction — un outil natif qui agit compte comme une action
   })
 
   it('le garde « annonce sans action » voit les actions natives', () => {
-    const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
-    expect(source).toMatch(/statusEstUneAction\(statutEntier\)\)\s*actionNativeCeTour = true/)
+    // Envoi et relances vivent dans agent-pilot/*.ts depuis conv-1580 (lot 4) : on lit la famille.
+    const source = sourceDuPilote()
+    expect(source).toMatch(/statusEstUneAction\(statutEntier\)\)\s*etat\.actionNativeCeTour = true/)
     expect(source).toMatch(
-      /exigeAgirPasAnnoncer\(\s*latestUserMessage,\s*visibleTextThisTurn,\s*anyActionExecuted \|\| actionNativeCeTour\s*\)/
+      /exigeAgirPasAnnoncer\(\s*latestUserMessage,\s*etat\.visibleTextThisTurn,\s*etat\.anyActionExecuted \|\| etat\.actionNativeCeTour\s*\)/
     )
   })
 })

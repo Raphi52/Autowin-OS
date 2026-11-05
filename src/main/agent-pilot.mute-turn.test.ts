@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { AgentPilot } from './agent-pilot'
+import { sourceDuPilote } from './agent-pilot/source-du-pilote.test-helpers'
 import type { Message, SendOptions, SendResult } from './providers/types'
 
 /**
@@ -87,7 +86,8 @@ describe('un tour qui a AGI ne peut plus rester muet', () => {
 })
 
 describe('contrat de code — la relance est mécanique et bornée', () => {
-  const source = readFileSync(join(__dirname, 'agent-pilot.ts'), 'utf8')
+  // Relances et lecture de la réponse vivent dans agent-pilot/*.ts depuis conv-1580 (lot 4).
+  const source = sourceDuPilote()
 
   it('la relance est consommée (un seul essai)', () => {
     expect(source).toContain('conclusionRecoveryAvailable = false')
@@ -95,14 +95,16 @@ describe('contrat de code — la relance est mécanique et bornée', () => {
 
   it('elle exige qu’une action ait REELLEMENT eu lieu', () => {
     expect(source).toContain('anyActionExecuted = true')
-    expect(source).toMatch(/!anySpokenText && anyActionExecuted && conclusionRecoveryAvailable/)
+    expect(source).toMatch(
+      /!etat\.anySpokenText && etat\.anyActionExecuted && etat\.conclusionRecoveryAvailable/
+    )
   })
 
   it('le silence est juge sur le TOUR ENTIER, pas sur la derniere iteration', () => {
     // Bug attrape par agent-pilot.streaming.test.ts : un tour « Avant. <action> Apres. » suivi d'une
     // reponse vide a deja tout dit. Le relancer serait du bavardage paye.
-    expect(source).toContain('if (spoken) anySpokenText = true')
-    expect(source).not.toMatch(/!spoken && anyActionExecuted/)
+    expect(source).toContain('if (spoken) etat.anySpokenText = true')
+    expect(source).not.toMatch(/!spoken && etat\.anyActionExecuted/)
   })
 
   it('la consigne de relance demande les preuves observées, pas une formule', () => {

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { sourceDuBus } from './commands/source-du-bus.test-helpers'
 import {
   createIndependentLearningAttestation,
   learningProposalAttestation,
@@ -78,7 +79,8 @@ describe('les deux côtés appellent bien cette définition', () => {
   })
 
   it('le consommateur appelle la même définition', () => {
-    expect(lire('commands.ts')).toContain('porteeDeLecon(')
+    // Le consommateur vit dans commands/apprentissage.ts (conv-1580, lot 6) : famille du bus.
+    expect(sourceDuBus()).toContain('porteeDeLecon(')
   })
 })
 
