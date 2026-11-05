@@ -13,9 +13,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   ID_BUREAU,
+  applicationDuBureauVivante,
   fermerHdesk,
   lireRegistre,
-  processusVivant,
   type DemandeFermeture,
   type ListeVivants,
   type EntreeRegistre,
@@ -51,14 +51,16 @@ type FicheComplete = EntreeRegistre & { executable?: string }
 export function listerTousLesBureaux(
   vivants: readonly string[],
   registre: readonly EntreeRegistre[],
-  pidVivant: (pid: number) => boolean = processusVivant
+  // Numero repris par un autre programme = bureau fini aussi (conv-1592) : meme regle que la TV.
+  pidVivant: (pid: number, fiche: EntreeRegistre) => boolean = (_pid, fiche) =>
+    applicationDuBureauVivante(fiche)
 ): BureauGere[] {
   const parId = new Map(registre.map((e) => [e.id, e as FicheComplete]))
   return [...new Set(vivants)]
     .filter((id) => ID_BUREAU.test(id))
     .filter((id) => {
-      const pid = parId.get(id)?.pid
-      return typeof pid !== 'number' || pidVivant(pid)
+      const fiche = parId.get(id)
+      return typeof fiche?.pid !== 'number' || pidVivant(fiche.pid, fiche)
     })
     .map((id): BureauGere => {
       const e = parId.get(id)
