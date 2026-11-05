@@ -31,8 +31,12 @@ enchaîne et rend UNE cible : un `fichier:ligne`, un chiffre avant, et une faço
 ### 1. CLASSER — chiffrer avant de lire du code
 
 ```
-node scripts/gels-classement.mjs --jours 2        # ou --depuis 2026-10-21T07:00:00Z, --top 15, --json
+node scripts/gels-classement.mjs --jours 2 --tranches 30   # ou --depuis 2026-10-21T07:00:00Z, --top 15, --json
 ```
+
+`--tranches 30` ajoute le découpage par demi-heure (UTC) : il montre QUAND la fenêtre a figé. Une
+bascule nette (calme, puis des gels de 10 s partout sur des appelants sans rapport) désigne un mur du
+système, pas un appelant : le confirmer hors de l'app avec `scripts/trace-blocage-disque.ps1 -Minutes 4`.
 
 Il rend trois familles, que tu ne dois JAMAIS additionner entre elles :
 

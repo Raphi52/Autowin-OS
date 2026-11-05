@@ -20,7 +20,8 @@
  *
  * Usage : node scripts/gels-classement.mjs [--jours 14 | --depuis <ISO>] [--journal <chemin>]
  *                                          [--out <dossier du bundle>] [--cartes <archive>]
- *                                          [--top 10] [--json]
+ *                                          [--top 10] [--tranches <minutes>] [--json]
+ * `--tranches` : ajoute le découpage par tranches de temps (UTC), pour voir QUAND la fenêtre a figé.
  * `--cartes` : l'archive des cartes de chaque construction (défaut : `gels-cartes/` à côté du
  * journal, remplie par le build — scripts/gels-cartes-archive.mjs).
  * Sortie 0 = classement rendu ; 2 = journal absent ; 3 = ni gel ni démarrage de l'instrument dans la
@@ -116,10 +117,17 @@ const trier = (table, nomCle) =>
  * Classe les gels d'une période. `depuisMs` absent = tout le journal.
  * Rend des totaux SÉPARÉS par famille, et l'attribution par appelant des seuls gels de fenêtre.
  */
-export function classerGels(gels, { depuisMs } = {}) {
+export function classerGels(gels, { depuisMs, trancheMin } = {}) {
   const fenetre = new Map()
   const rendu = new Map()
   const appelants = new Map()
+  /*
+   * Les gels se lisent par FENÊTRE de temps, pas en cumul (leçon du Brain). conv-1598, 2026-11-05 :
+   * 754 s figées sur la matinée, presque toutes après 08:10 UTC — la bascule ne se voyait qu'avec un
+   * `node -e` jetable. Mêmes filtres que les totaux, appels unitaires exclus ; tranches vides omises.
+   */
+  const trancheMs = Number(trancheMin) > 0 ? Number(trancheMin) * 60_000 : 0
+  const tranches = new Map()
   const totaux = {
     fenetre: { gels: 0, cumulMs: 0, pireMs: 0 },
     rendu: { gels: 0, cumulMs: 0, pireMs: 0 },
@@ -165,6 +173,17 @@ export function classerGels(gels, { depuisMs } = {}) {
     total.gels += 1
     total.cumulMs += ms
     if (ms > total.pireMs) total.pireMs = ms
+    if (trancheMs && Number.isFinite(instant)) {
+      const debut = Math.floor(instant / trancheMs) * trancheMs
+      const t = tranches.get(debut) ?? {
+        debut: new Date(debut).toISOString(),
+        fenetre: { gels: 0, cumulMs: 0 },
+        rendu: { gels: 0, cumulMs: 0 }
+      }
+      t[famille === 'rendu' ? 'rendu' : 'fenetre'].gels += 1
+      t[famille === 'rendu' ? 'rendu' : 'fenetre'].cumulMs += ms
+      tranches.set(debut, t)
+    }
     const agg = cumuler(famille === 'rendu' ? rendu : fenetre, nomDeLOperation(gel), ms, {
       dernierTs: gel.ts
     })
@@ -210,7 +229,13 @@ export function classerGels(gels, { depuisMs } = {}) {
     fenetre: trier(fenetre, 'operation'),
     rendu: trier(rendu, 'operation'),
     appelants: [...appelants.values()].sort((a, b) => b.cumulMs - a.cumulMs),
-    demarragesMs
+    demarragesMs,
+    ...(trancheMs
+      ? {
+          trancheMin: Number(trancheMin),
+          tranches: [...tranches.entries()].sort((a, b) => a[0] - b[0]).map(([, t]) => t)
+        }
+      : {})
   }
 }
 
@@ -409,6 +434,20 @@ export function rendreClassement(classement, { racineOut, archive, top = 10, per
       `| \`${o.operation}\` | ${o.gels} | ${secondes(o.cumulMs)} | ${secondes(o.pireMs)} | ${fils || '—'} |`
     )
   }
+  if (classement.tranches) {
+    l.push(
+      '',
+      `### Par tranche de ${classement.trancheMin} min (UTC)`,
+      '',
+      '| Début | Fenêtre : gels | Fenêtre : cumul | Rendu : gels | Rendu : cumul |',
+      '|---|---|---|---|---|'
+    )
+    for (const t of classement.tranches) {
+      l.push(
+        `| ${jour(t.debut)} | ${t.fenetre.gels} | ${secondes(t.fenetre.cumulMs)} | ${t.rendu.gels} | ${secondes(t.rendu.cumulMs)} |`
+      )
+    }
+  }
   return l.join('\n')
 }
 
@@ -433,7 +472,7 @@ export function principal(argv = process.argv.slice(2), sortie = console.log) {
     return 2
   }
   const { gels, illisibles } = lireJournal(readFileSync(journal, 'utf8'))
-  const classement = classerGels(gels, { depuisMs })
+  const classement = classerGels(gels, { depuisMs, trancheMin: argument(argv, '--tranches') })
   const periode = `depuis ${new Date(depuisMs).toISOString().slice(0, 16).replace('T', ' ')} (UTC)`
   if (argv.includes('--json')) {
     sortie(JSON.stringify({ journal, periode, illisibles, ...classement }, null, 2))

@@ -33,6 +33,16 @@ interface Depot {
   /** `null` = supprimer le fichier. */
   contenu: string | null
   mode?: number
+  /**
+   * ÉCARTER L'ANCIENNE VERSION au lieu de la remplacer (conv-1598, 2026-11-05) : `chemin` est d'abord
+   * renommé en `chemin.bak`, puis le temporaire prend la place libre, puis `.bak` est retiré. Une
+   * suppression retire aussi `.bak`. Mesuré sur le poste ce jour-là, 8 essais sur 8 : renommer
+   * par-dessus un fichier créé l'instant d'avant tient 20 à 28 s ; l'écarter puis renommer, 0,05 à
+   * 0,8 s. Hors du fil, ces 20 s tiendraient un des quatre fils d'E/S de Node. Réservé à un magasin
+   * dont les lecteurs relisent `.bak` quand le fichier manque (fenêtre d'un plantage entre les deux
+   * renommages) : `worktree-run-state.ts`.
+   */
+  ecarter?: boolean
 }
 
 interface Etat {
@@ -56,9 +66,33 @@ const ATTENTE_MAX_DU_RENOMMAGE_MS = 25_000
 const temporaireDe = (chemin: string): string =>
   `${chemin}.${process.pid}.${++numeroDeTemporaire}.tmp`
 
+const secoursDe = (chemin: string): string => `${chemin}.bak`
+
+/** Écarte `chemin` en `.bak` (s'il existe), installe le temporaire, retire `.bak`. */
+async function installerEnEcartant(temporaire: string, chemin: string): Promise<void> {
+  const secours = secoursDe(chemin)
+  await rm(secours, { force: true })
+  const ecarte = await rename(chemin, secours).then(
+    () => true,
+    (erreur: NodeJS.ErrnoException) => {
+      if (erreur.code === 'ENOENT') return false
+      throw erreur
+    }
+  )
+  try {
+    await rename(temporaire, chemin)
+  } catch (erreur) {
+    // Remettre l'ancienne version en place : le fichier ne doit pas rester absent.
+    if (ecarte) await rename(secours, chemin).catch(() => undefined)
+    throw erreur
+  }
+  await rm(secours, { force: true })
+}
+
 async function poser(chemin: string, depot: Depot, etat: Etat): Promise<void> {
   if (depot.contenu === null) {
     await rm(chemin, { force: true })
+    if (depot.ecarter) await rm(secoursDe(chemin), { force: true })
     return
   }
   await mkdir(dirname(chemin), { recursive: true })
@@ -70,7 +104,8 @@ async function poser(chemin: string, depot: Depot, etat: Etat): Promise<void> {
     })
     if (!etat.doublee) {
       etat.renommage = temporaire
-      await rename(temporaire, chemin)
+      if (depot.ecarter) await installerEnEcartant(temporaire, chemin)
+      else await rename(temporaire, chemin)
     }
   } finally {
     etat.renommage = undefined
@@ -108,7 +143,7 @@ async function derouler(chemin: string, etat: Etat): Promise<boolean> {
 export function deposerFichier(
   chemin: string,
   contenu: string | null,
-  options: { mode?: number } = {}
+  options: { mode?: number; ecarter?: boolean } = {}
 ): void {
   const depot: Depot = { contenu, ...options }
   const etat = etats.get(chemin) ?? { dernier: depot, doublee: false }
@@ -117,6 +152,15 @@ export function deposerFichier(
   etat.attente = depot
   // Un `await` d'abord : la rafale du même tour de boucle se résume à sa dernière valeur.
   etat.boucle ??= Promise.resolve().then(() => derouler(chemin, etat))
+}
+
+/**
+ * La dernière valeur déposée et pas encore posée, SANS toucher au disque : `undefined` = rien en
+ * attente, `null` = une suppression en attente. Pour une relecture asynchrone ou un inventaire de
+ * dossier, qui ne peuvent pas passer par `relireFichier` sans un appel bloquant (conv-1598).
+ */
+export function depotEnCours(chemin: string): string | null | undefined {
+  return etats.get(chemin)?.dernier.contenu
 }
 
 /** Ce qu'une relecture doit voir : la dernière valeur déposée, sinon le disque. */
@@ -141,9 +185,10 @@ export async function attendreFichier(chemin?: string): Promise<boolean> {
   return pose
 }
 
-function poserSurPlace(chemin: string, { contenu, mode }: Depot): void {
+function poserSurPlace(chemin: string, { contenu, mode, ecarter }: Depot): void {
   if (contenu === null) {
     rmSync(chemin, { force: true })
+    if (ecarter) rmSync(secoursDe(chemin), { force: true })
     return
   }
   mkdirSync(dirname(chemin), { recursive: true })
@@ -153,7 +198,22 @@ function poserSurPlace(chemin: string, { contenu, mode }: Depot): void {
       encoding: 'utf8',
       ...(mode === undefined ? {} : { mode })
     })
-    renameSync(temporaire, chemin)
+    if (ecarter) {
+      // Même ordre que `installerEnEcartant`, sur place : la fermeture ne paie pas non plus les 20 s.
+      const secours = secoursDe(chemin)
+      rmSync(secours, { force: true })
+      const ecarte = existsSync(chemin)
+      if (ecarte) renameSync(chemin, secours)
+      try {
+        renameSync(temporaire, chemin)
+      } catch (erreur) {
+        if (ecarte) renameSync(secours, chemin)
+        throw erreur
+      }
+      rmSync(secours, { force: true })
+    } else {
+      renameSync(temporaire, chemin)
+    }
   } finally {
     rmSync(temporaire, { force: true })
   }

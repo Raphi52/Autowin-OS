@@ -7,6 +7,7 @@ import {
   rmSync,
   statSync
 } from 'node:fs'
+import { appendFile, mkdir, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { ensureAutowinAppData } from '../app-data'
@@ -167,6 +168,95 @@ export function brainSpoolRoot(base = ensureAutowinAppData()): string {
   return root
 }
 
+/**
+ * ÉCRIRE UNE TRACE SANS TENIR LA FENÊTRE (conv-1598, 2026-11-05).
+ *
+ * `gels.jsonl`, matinée du 05/11 : `appendFileSync` de la ligne d'une trace a figé la fenêtre 29 s,
+ * quatre appels disque bloquants par trace, sur un SSD inactif à 93 % — le mur est au-dessus du disque
+ * (`scripts/trace-blocage-disque.ps1`). Même remède que `conversation-file-trace-spool.ts` : la ligne
+ * part sur le pool d'E/S de Node, une seule écriture en route par journal pour garder l'ORDRE, et les
+ * lignes pas encore posées restent LISIBLES (`enAttente`) : `readBrainTraces` les recolle.
+ *
+ * Reste SYNCHRONE : la rotation au-delà de SPOOL_MAX_BYTES (une fois tous les 2 Mo, atomique pour les
+ * lecteurs, qui lisent les quatre fichiers) et la fermeture (`flushBrainTraces`, dans `before-quit`).
+ * Une écriture refusée est COMPTÉE perdue, comme avant ; une mort BRUTALE du processus perd les
+ * traces pas encore posées. Garde : `brain-trace-spool.sans-gel.test.ts`.
+ */
+const enAttente = new Map<string, string[]>()
+const ecritures = new Map<string, Promise<void>>()
+
+function lignesEnAttente(journal: string): string[] {
+  return enAttente.get(journal) ?? []
+}
+
+function compterPerte(lignes: number, erreur: unknown): void {
+  tracesPerdues += lignes
+  dernierePerte = (erreur instanceof Error ? erreur.message : String(erreur)).slice(0, 500)
+}
+
+/** La rotation d'avant, inchangée : `events.jsonl` passe en `events.previous.jsonl`. */
+function tournerLeSpool(root: string, journal: string): void {
+  const previous = join(root, 'events.previous.jsonl')
+  if (existsSync(previous)) {
+    appendBoundedArchive(join(root, 'events.archive.jsonl'), previous)
+    rmSync(previous, { force: true })
+  }
+  renameSync(journal, previous)
+}
+
+function planifierEcriture(root: string, journal: string): void {
+  // Une écriture déjà en route reprendra, à sa fin, les lignes arrivées entre-temps.
+  if (ecritures.has(journal)) return
+  const lot = [...lignesEnAttente(journal)]
+  if (lot.length === 0) return
+  const contenu = lot.join('')
+  const ecriture = (async () => {
+    try {
+      await mkdir(root, { recursive: true })
+      const taille = await stat(journal).then(
+        (infos) => infos.size,
+        () => 0
+      )
+      if (taille > 0 && taille + Buffer.byteLength(contenu, 'utf8') > SPOOL_MAX_BYTES) {
+        tournerLeSpool(root, journal)
+      }
+      await appendFile(journal, contenu, 'utf8')
+    } catch (erreur) {
+      // Le traçage ne casse jamais l'action tracée, mais sa perte reste comptée (comme avant).
+      compterPerte(lot.length, erreur)
+    }
+    const reste = lignesEnAttente(journal).slice(lot.length)
+    if (reste.length === 0) enAttente.delete(journal)
+    else enAttente.set(journal, reste)
+  })().finally(() => {
+    ecritures.delete(journal)
+    planifierEcriture(root, journal)
+  })
+  ecritures.set(journal, ecriture)
+}
+
+/**
+ * Pose sur place, en BLOQUANT, les traces pas encore posées — réservé à la fermeture de l'app. Une
+ * ligne dont l'écriture était déjà en route peut alors être posée deux fois : `readBrainTraces`
+ * n'en garde qu'une (même identifiant).
+ */
+export function flushBrainTraces(): void {
+  for (const [journal, lignes] of [...enAttente.entries()]) {
+    enAttente.delete(journal)
+    if (lignes.length === 0) continue
+    try {
+      appendFileSync(journal, lignes.join(''), 'utf8')
+    } catch (erreur) {
+      compterPerte(lignes.length, erreur)
+    }
+  }
+}
+
+/** Attend que les traces en route soient posées. Pour les TESTS : la production n'attend jamais. */
+export async function attendreEcrituresTracesBrain(): Promise<void> {
+  while (ecritures.size > 0) await Promise.all([...ecritures.values()])
+}
+
 /** Écrit une trace Brain (append-only, ne jette jamais — l'observabilité n'interrompt pas un run). */
 export function appendBrainTrace(
   trace: BrainTrace,
@@ -176,20 +266,11 @@ export function appendBrainTrace(
     const identified = trace.id ? trace : { ...trace, id: randomUUID() }
     const redacted = boundedRedactedTrace(identified)
     const line = `${JSON.stringify(redacted)}\n`
-    const root = brainSpoolRoot(base)
+    // Aucun appel disque ici : le dossier se crée dans l'écriture, hors du fil (conv-1598).
+    const root = join(base, 'brain-trace-spool')
     const path = join(root, 'events.jsonl')
-    if (
-      existsSync(path) &&
-      statSync(path).size + Buffer.byteLength(line, 'utf8') > SPOOL_MAX_BYTES
-    ) {
-      const previous = join(root, 'events.previous.jsonl')
-      if (existsSync(previous)) {
-        appendBoundedArchive(join(root, 'events.archive.jsonl'), previous)
-        rmSync(previous, { force: true })
-      }
-      renameSync(path, previous)
-    }
-    appendFileSync(path, line, 'utf8')
+    enAttente.set(path, [...lignesEnAttente(path), line])
+    planifierEcriture(root, path)
     if (redacted.id && redacted.turnId) {
       latestTraceIds.set(
         correlationKey(base, redacted.conversationId, redacted.turnId),
@@ -200,9 +281,9 @@ export function appendBrainTrace(
   } catch (erreur) {
     // Le tracage ne doit JAMAIS casser l'action tracee — mais sa perte est desormais COMPTEE, et
     // lisible par `brainTraceSpoolHealth()` : une chronologie Observatory trouee ne peut plus se
-    // presenter comme complete.
-    tracesPerdues += 1
-    dernierePerte = (erreur instanceof Error ? erreur.message : String(erreur)).slice(0, 500)
+    // presenter comme complete. Une ecriture refusee par le disque est comptee plus tard, dans
+    // `planifierEcriture` : la trace rendue ici est deposee, pas encore posee.
+    compterPerte(1, erreur)
     return undefined
   }
 }
@@ -217,9 +298,12 @@ export function latestBrainTraceId(
 }
 
 function readFileTraces(path: string): BrainTrace[] {
-  if (!existsSync(path)) return []
+  const surDisque = existsSync(path) ? readFileSync(path, 'utf8') : ''
+  // Les lignes en route qui ne sont pas déjà sur le disque (fenêtre de fin d'écriture).
+  const memoire = lignesEnAttente(path).filter((ligne) => !surDisque.includes(ligne))
+  if (!surDisque && memoire.length === 0) return []
   const out: BrainTrace[] = []
-  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+  for (const line of [...surDisque.split(/\r?\n/), ...memoire]) {
     if (!line.trim()) continue
     try {
       out.push(JSON.parse(line) as BrainTrace)
@@ -243,7 +327,12 @@ export function readBrainTraces(
     ...readFileTraces(join(root, 'events.previous.jsonl')),
     ...readFileTraces(join(root, 'events.jsonl'))
   ]
+  // Une ligne posée deux fois à la fermeture (`flushBrainTraces`) n'est rendue qu'une fois.
+  const vus = new Set<string>()
+  const uniques = all.filter((t) => !t.id || (!vus.has(t.id) && Boolean(vus.add(t.id))))
   const scoped =
-    conversationId === undefined ? all : all.filter((t) => t.conversationId === conversationId)
+    conversationId === undefined
+      ? uniques
+      : uniques.filter((t) => t.conversationId === conversationId)
   return scoped.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
 }

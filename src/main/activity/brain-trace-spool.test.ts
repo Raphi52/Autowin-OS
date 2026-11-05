@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   appendBrainTrace,
   brainSpoolRoot,
+  attendreEcrituresTracesBrain,
   brainTraceSpoolHealth,
   latestBrainTraceId,
   readBrainTraces
@@ -21,11 +22,12 @@ import {
 describe('perte de trace Brain observable', () => {
   const roots: string[] = []
 
-  afterEach(() => {
+  afterEach(async () => {
+    await attendreEcrituresTracesBrain()
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
   })
 
-  it('compte la trace perdue quand l ecriture echoue, sans jeter', () => {
+  it('compte la trace perdue quand l ecriture echoue, sans jeter', async () => {
     // Un fichier en guise de base : la creation du dossier de spool echoue forcement.
     const fauxBase = join(mkdtempSync(join(tmpdir(), 'autowin-brain-perte-')), 'base')
     roots.push(fauxBase)
@@ -43,7 +45,9 @@ describe('perte de trace Brain observable', () => {
       fauxBase
     )
 
-    expect(rendu).toBeUndefined()
+    // L'écriture part hors du fil (conv-1598) : la trace est déposée, sa perte se compte à l'échec.
+    expect(rendu?.query).toBe('trace condamnee')
+    await attendreEcrituresTracesBrain()
     const sante = brainTraceSpoolHealth()
     expect(sante.tracesPerdues).toBe(avant + 1)
     expect(sante.enBonneSante).toBe(false)
@@ -75,7 +79,8 @@ describe('perte de trace Brain observable', () => {
 describe('brain trace spool causal identity', () => {
   const roots: string[] = []
 
-  afterEach(() => {
+  afterEach(async () => {
+    await attendreEcrituresTracesBrain()
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
   })
 
@@ -174,7 +179,7 @@ describe('brain trace spool causal identity', () => {
     ])
   })
 
-  it('conserve un appel Brain après trois rotations', () => {
+  it('conserve un appel Brain après trois rotations', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-brain-rotations-'))
     roots.push(root)
     appendBrainTrace(
@@ -190,6 +195,7 @@ describe('brain trace spool causal identity', () => {
       },
       root
     )
+    await attendreEcrituresTracesBrain()
     const current = join(brainSpoolRoot(root), 'events.jsonl')
     for (let index = 0; index < 3; index += 1) {
       appendFileSync(current, `${'x'.repeat(2 * 1024 * 1024 + 1)}\n`, 'utf8')
@@ -205,6 +211,7 @@ describe('brain trace spool causal identity', () => {
         },
         root
       )
+      await attendreEcrituresTracesBrain()
     }
 
     expect(readBrainTraces('conv-durable', root)).toEqual([
@@ -212,7 +219,7 @@ describe('brain trace spool causal identity', () => {
     ])
   })
 
-  it('borne la taille totale du spool apres de nombreuses rotations', () => {
+  it('borne la taille totale du spool apres de nombreuses rotations', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-brain-retention-'))
     roots.push(root)
     const spool = brainSpoolRoot(root)
@@ -230,6 +237,7 @@ describe('brain trace spool causal identity', () => {
         },
         root
       )
+      await attendreEcrituresTracesBrain()
     }
 
     const totalBytes = readdirSync(spool).reduce(
@@ -240,7 +248,7 @@ describe('brain trace spool causal identity', () => {
     expect(readBrainTraces(undefined, root).length).toBeLessThanOrEqual(6)
   })
 
-  it('borne une entree geante et redige aussi navigation.query avant toute persistance', () => {
+  it('borne une entree geante et redige aussi navigation.query avant toute persistance', async () => {
     const root = mkdtempSync(join(tmpdir(), 'autowin-brain-entry-bound-'))
     roots.push(root)
     const secret = 'sk-secret-navigation'
@@ -258,6 +266,7 @@ describe('brain trace spool causal identity', () => {
       },
       root
     )
+    await attendreEcrituresTracesBrain()
 
     const current = join(brainSpoolRoot(root), 'events.jsonl')
     const persisted = readFileSync(current, 'utf8')
@@ -285,11 +294,12 @@ describe('brain trace spool causal identity', () => {
 describe('brainTraceSpoolHealth — une trace perdue laisse une marque', () => {
   // `roots` du premier describe lui est LOCAL : ce bloc tient son propre nettoyage.
   const racines: string[] = []
-  afterEach(() => {
+  afterEach(async () => {
+    await attendreEcrituresTracesBrain()
     for (const r of racines.splice(0)) rmSync(r, { recursive: true, force: true })
   })
 
-  it('compte la perte et nomme sa cause quand l’ecriture est impossible', () => {
+  it('compte la perte et nomme sa cause quand l’ecriture est impossible', async () => {
     const avant = brainTraceSpoolHealth()
     // Un FICHIER a la place du dossier du spool : l'ecriture echoue de facon deterministe sur toutes
     // les plateformes, sans manipuler de permissions.
@@ -308,8 +318,10 @@ describe('brainTraceSpoolHealth — une trace perdue laisse une marque', () => {
       racine
     )
 
-    // Le tracage ne casse JAMAIS l'action tracee : il rend `undefined`, il ne jette pas.
-    expect(rendu).toBeUndefined()
+    // Le tracage ne casse JAMAIS l'action tracee : il ne jette pas. L'écriture part hors du fil
+    // (conv-1598) : la trace est déposée, et sa perte se compte quand le disque la refuse.
+    expect(rendu?.query).toBe('trace qui ne pourra pas s’ecrire')
+    await attendreEcrituresTracesBrain()
     const apres = brainTraceSpoolHealth()
     expect(apres.tracesPerdues).toBe(avant.tracesPerdues + 1)
     expect(apres.derniereErreur).toBeTruthy()
@@ -366,7 +378,8 @@ vi.mock('node:fs', async (importOriginal) => {
  */
 describe('rotation de l’archive Brain — cout borne, proprietes conservees', () => {
   const racines: string[] = []
-  afterEach(() => {
+  afterEach(async () => {
+    await attendreEcrituresTracesBrain()
     for (const r of racines.splice(0)) rmSync(r, { recursive: true, force: true })
   })
 
@@ -393,7 +406,7 @@ describe('rotation de l’archive Brain — cout borne, proprietes conservees', 
   }
 
   /** Declenche une rotation reelle et exige qu’aucune trace ne soit perdue au passage. */
-  function tourner(racine: string): void {
+  async function tourner(racine: string): Promise<void> {
     const avant = brainTraceSpoolHealth()
     const rendu = appendBrainTrace(
       {
@@ -406,10 +419,11 @@ describe('rotation de l’archive Brain — cout borne, proprietes conservees', 
       racine
     )
     expect(rendu).toBeTruthy()
+    await attendreEcrituresTracesBrain()
     expect(brainTraceSpoolHealth().tracesPerdues).toBe(avant.tracesPerdues)
   }
 
-  it('CONTRE-EXEMPLE — sous le plafond : tout est conserve, sans relire l’archive', () => {
+  it('CONTRE-EXEMPLE — sous le plafond : tout est conserve, sans relire l’archive', async () => {
     const segment = ligne('neuf', 4096)
     // 1 Mo : franchement SOUS le seuil de rotation (moitie de ARCHIVE_MAX_BYTES). Le fixture d'origine
     // valait 4 Mo, soit exactement le seuil : il exigeait donc qu'aucune rotation n'ait lieu au moment
@@ -419,7 +433,7 @@ describe('rotation de l’archive Brain — cout borne, proprietes conservees', 
     const cible = spoolPretARotation('autowin-brain-archive-append-', archive, segment)
 
     journalFs.lecturesIntegrales.length = 0
-    tourner(cible.racine)
+    await tourner(cible.racine)
     // RELEVE AVANT que le test lise l'archive : le mock compte TOUTES les lectures, y compris les
     // siennes. Mesurer le cout de la rotation exige de figer le journal a la fin de la rotation.
     const lecturesPendantRotation = [...journalFs.lecturesIntegrales]
@@ -432,14 +446,14 @@ describe('rotation de l’archive Brain — cout borne, proprietes conservees', 
     )
   })
 
-  it('au-dessus du plafond : taille bornee, aucune ligne partielle, segment conserve', () => {
+  it('au-dessus du plafond : taille bornee, aucune ligne partielle, segment conserve', async () => {
     const anciennes: string[] = []
     for (let i = 0; i < 8; i += 1) anciennes.push(ligne(`ancien-${i}`, 1024 * 1024))
     const segment = ligne('segment-neuf', 2 * 1024 * 1024)
     const cible = spoolPretARotation('autowin-brain-archive-cap-', anciennes.join(''), segment)
 
     journalFs.lecturesIntegrales.length = 0
-    tourner(cible.racine)
+    await tourner(cible.racine)
     // Meme raison que ci-dessus : le journal est fige avant les lectures du test.
     const lecturesPendantRotation = [...journalFs.lecturesIntegrales]
 

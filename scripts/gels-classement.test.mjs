@@ -97,6 +97,38 @@ describe('classerGels — trois familles, jamais additionnées', () => {
     expect(c.rendu[0].conversations).toEqual({ 'conv-1025': 2 })
   })
 
+  /*
+   * conv-1598 (2026-11-05) : 754 s de fenêtre figée sur la matinée, mais 7 % avant 08:10 UTC et le
+   * reste après. Le cumul seul cachait la bascule ; il a fallu un `node -e` jetable pour la voir.
+   */
+  it('découpe en tranches horaires, chaque famille à part, sans les appels unitaires', () => {
+    const c = classerGels(
+      [
+        { ...FENETRE, ts: '2026-10-21T07:31:00.000Z' },
+        { ...FENETRE, ts: '2026-10-21T07:39:59.000Z', blocageMs: 1000 },
+        { ...UNITAIRE, ts: '2026-10-21T07:35:00.000Z' },
+        { ...RENDU, ts: '2026-10-21T07:52:00.000Z' }
+      ],
+      { trancheMin: 10 }
+    )
+    expect(c.tranches).toEqual([
+      {
+        debut: '2026-10-21T07:30:00.000Z',
+        fenetre: { gels: 2, cumulMs: 31734 },
+        rendu: { gels: 0, cumulMs: 0 }
+      },
+      {
+        debut: '2026-10-21T07:50:00.000Z',
+        fenetre: { gels: 0, cumulMs: 0 },
+        rendu: { gels: 1, cumulMs: RENDU.blocageMs }
+      }
+    ])
+    expect(classerGels([FENETRE]).tranches).toBeUndefined()
+    const texte = rendreClassement(c, { racineOut: tmpdir(), top: 1 })
+    expect(texte).toContain('### Par tranche de 10 min (UTC)')
+    expect(texte).toContain('| 2026-10-21 07:30 | 2 | 31.7 s | 0 | 0.0 s |')
+  })
+
   it('compte une ligne illisible au lieu de la jeter', () => {
     const { gels, illisibles } = lireJournal(`${JSON.stringify(RENDU)}\n{pas du json\n\n`)
     expect(gels).toHaveLength(1)

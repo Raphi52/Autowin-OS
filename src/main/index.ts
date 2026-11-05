@@ -330,7 +330,7 @@ import { materializeChatArtifact, removeConversationArtifacts } from './store/ch
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
 import { BrainSearchCoordinator } from './viz/brain-search-coordinator'
-import { appendBrainTrace, readBrainTraces } from './activity/brain-trace-spool'
+import { appendBrainTrace, flushBrainTraces, readBrainTraces } from './activity/brain-trace-spool'
 import {
   releverDatesDesJournaux,
   resumeActionFor,
@@ -3004,6 +3004,8 @@ app.on('before-quit', (event) => {
   // Les traces de fichiers des fils s'ecrivent en DIFFERE depuis /gel conv-1118 (appendFileSync
   // figeait la fenetre jusqu'a 10 s) : ce qui reste en tampon doit atteindre le disque avant l'arret.
   flushConversationFileTraces()
+  // Les traces Brain aussi, depuis conv-1598 (appendFileSync figeait la fenetre 29 s en une matinee).
+  flushBrainTraces()
   // Le cout des tours s'ecrit desormais en DIFFERE (appendFileSync figeait l'interface 9,4 s,
   // mesure du 2026-09-12) : ce qui reste en tampon doit atteindre le disque avant l'arret.
   os.cost.flushPersistSync()

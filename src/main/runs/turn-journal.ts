@@ -11,7 +11,7 @@ import {
   statSync
 } from 'node:fs'
 import { appendFile, open, readFile, readdir, stat } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import {
   fusionnerGestes,
   gestesDuTexte,
@@ -110,6 +110,12 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>()
  *    est déjà fini (aucun streaming à figer). S'il partait en asynchrone et que le process mourait
  *    avant, le tour repasserait « inachevé » et la reprise le rejouerait — un tour ZOMBIE ;
  *  - l'arrêt de l'app (`flushAllTurnJournals`, appelé dans `before-quit`, qui est synchrone).
+ *
+ * Les INVENTAIRES ne vident plus les tampons (conv-1598, 2026-11-05 : 90 s de fenêtre figée en une
+ * matinée, `appendFileSync` appelé par `flushAllTurnJournals` depuis chaque inventaire). Une ligne
+ * en mémoire n'est jamais une clôture — une clôture part sur le disque aussitôt —, donc elle ne peut
+ * pas rendre « terminé » un tour : l'inventaire recolle la mémoire (`toursEnMemoireSeulement`), et
+ * le ménage saute un journal en cours d'écriture.
  *
  * ORDRE et COMPLÉTUDE : une seule écriture est en vol par journal (`chaines`), et les lignes soumises
  * restent lisibles en mémoire (`enVol`) tant qu'elles ne sont pas sur le disque — `readTurnJournal`
@@ -212,7 +218,9 @@ export function flushAllTurnJournals(): void {
  * dont tout l'intérêt est justement de ne pas attendre.
  */
 export async function attendreEcrituresJournal(): Promise<void> {
-  while (chaines.size > 0) await Promise.all([...chaines.values()])
+  while (chaines.size > 0 || prelectures.size > 0) {
+    await Promise.all([...chaines.values(), ...prelectures.values()])
+  }
 }
 
 /**
@@ -224,10 +232,84 @@ function signatureCloture(event: TurnJournalEvent): string {
   return JSON.stringify(reste)
 }
 
+/**
+ * LES CLÔTURES DÉJÀ SUR LE DISQUE, CONNUES SANS RELIRE (conv-1598, 2026-11-05).
+ *
+ * `clotureDejaEcrite` relisait le journal ENTIER en bloquant avant chaque clôture : 37 s de fenêtre
+ * figée en 15 appels, la matinée du 05/11 (`gels.jsonl`, `turn-journal.ts:231`). Au premier événement
+ * d'un journal, ce processus le PRÉLIT hors du fil (`prelireClotures`) et retient ses clôtures ; il y
+ * ajoute celles qu'il pose lui-même. Un tour dure bien plus que cette lecture : à sa clôture, le
+ * doublon se juge en mémoire. Prélecture pas encore rentrée (clôture sans événement avant, ou en plein
+ * mur) : la relecture bloquante d'avant reste le filet, le doublon est toujours refusé.
+ */
+const cloturesSurDisque = new Map<string, Set<string>>()
+const cloturesPosees = new Map<string, Set<string>>()
+const prelectures = new Map<string, Promise<void>>()
+/** Au-delà, les plus anciennes sont oubliées : leur clôture repassera simplement par le filet. */
+const CLOTURES_CONNUES_MAX = 2_000
+
+function retenir(table: Map<string, Set<string>>, path: string, signatures: Set<string>): void {
+  const deja = table.get(path)
+  if (deja) for (const signature of signatures) deja.add(signature)
+  else table.set(path, signatures)
+  if (table.size > CLOTURES_CONNUES_MAX) {
+    const plusAncien = table.keys().next().value
+    if (plusAncien !== undefined) table.delete(plusAncien)
+  }
+}
+
+/** Un journal supprimé repart de zéro : ses anciennes clôtures ne doivent plus refuser la suivante. */
+function oublierClotures(path: string): void {
+  cloturesSurDisque.delete(path)
+  cloturesPosees.delete(path)
+}
+
+function signaturesDesClotures(lignes: readonly string[]): Set<string> {
+  const signatures = new Set<string>()
+  for (const ligne of lignes) {
+    const nette = ligne.trim()
+    if (!nette) continue
+    try {
+      const parsed = JSON.parse(nette) as TurnJournalEvent
+      if (parsed && typeof parsed.kind === 'string' && TERMINAL_KINDS.has(parsed.kind)) {
+        signatures.add(signatureCloture(parsed))
+      }
+    } catch {
+      /* ligne tronquée : elle ne prouve aucune clôture */
+    }
+  }
+  return signatures
+}
+
+function prelireClotures(path: string): void {
+  if (cloturesSurDisque.has(path) || prelectures.has(path)) return
+  const lecture = readFile(path, 'utf8')
+    .then(
+      (texte) => signaturesDesClotures(texte.split('\n')),
+      (erreur: NodeJS.ErrnoException) => (erreur.code === 'ENOENT' ? new Set<string>() : undefined)
+    )
+    .then((signatures) => {
+      // Une lecture ratée autrement qu'un fichier absent ne prouve rien : le filet reste armé.
+      if (signatures) retenir(cloturesSurDisque, path, signatures)
+    })
+    .finally(() => {
+      prelectures.delete(path)
+    })
+  prelectures.set(path, lecture)
+}
+
 /** Vrai si ce tour porte DÉJÀ une clôture identique (même type, même erreur). */
 function clotureDejaEcrite(path: string, event: TurnJournalEvent): boolean {
   const signature = signatureCloture(event)
   const memoire = [...(enVol.get(path) ?? []), ...(pending.get(path) ?? [])].slice(0, -1)
+  const connues = cloturesSurDisque.get(path)
+  if (connues) {
+    return (
+      connues.has(signature) ||
+      Boolean(cloturesPosees.get(path)?.has(signature)) ||
+      signaturesDesClotures(memoire).has(signature)
+    )
+  }
   const surDisque = existsSync(path) ? readFileSync(path, 'utf8').split('\n') : []
   for (const ligne of [...surDisque, ...memoire]) {
     const trimmed = ligne.trim()
@@ -263,6 +345,7 @@ export function appendTurnEvent(
   const horodate = typeof event.at === 'number' ? event : { ...event, at: Date.now() }
   lines.push(`${JSON.stringify(horodate)}\n`)
   pending.set(path, lines)
+  if (!TERMINAL_KINDS.has(event.kind)) prelireClotures(path)
   if (TERMINAL_KINDS.has(event.kind)) {
     // CLÔTURE IDEMPOTENTE. Le contrat en tête de ce fichier dit « un événement terminal par tour » ;
     // dans les faits un refus de reprise annoncé DÉFINITIF revenait à chaque démarrage et réécrivait
@@ -279,6 +362,7 @@ export function appendTurnEvent(
     }
     // Clôture du tour : le disque AVANT de rendre la main, sinon le tour repasse « inachevé ».
     flushPathSync(path)
+    retenir(cloturesPosees, path, new Set([signatureCloture(horodate)]))
     return
   }
   if (lines.length >= FLUSH_EVERY) {
@@ -399,13 +483,52 @@ function journalTermineParLaQueue(path: string): boolean | undefined {
   }
 }
 
+/** Les journaux qui ont encore des lignes en mémoire ou une écriture en vol, en chemins résolus. */
+function journauxEnCoursDEcriture(): Set<string> {
+  return new Set(
+    [...pending.keys(), ...enVol.keys(), ...chaines.keys()].map((path) => resolve(path))
+  )
+}
+
+/**
+ * Les tours qui n'ont encore AUCUN fichier, seulement des lignes en mémoire. Avant (conv-1598), chaque
+ * inventaire vidait tous les tampons en bloquant pour que le disque les montre ; il les lit ici.
+ * `vus` = chemins résolus déjà trouvés sur le disque : leurs lignes en mémoire y sont déjà recollées.
+ */
+function toursEnMemoireSeulement(root: string, vus: ReadonlySet<string>): UnfinishedTurn[] {
+  const racine = resolve(root)
+  const out: UnfinishedTurn[] = []
+  for (const path of new Set([...enVol.keys(), ...pending.keys()])) {
+    const absolu = resolve(path)
+    if (vus.has(absolu)) continue
+    const morceaux = relative(racine, absolu).split(sep)
+    if (morceaux.length !== 2 || morceaux[0] === '..' || !morceaux[1].endsWith('.jsonl')) continue
+    const events: TurnJournalEvent[] = []
+    for (const ligne of [...(enVol.get(path) ?? []), ...(pending.get(path) ?? [])]) {
+      try {
+        const parsed = JSON.parse(ligne) as TurnJournalEvent
+        if (parsed && typeof parsed.kind === 'string') events.push(parsed)
+      } catch {
+        /* ligne illisible : ignorée, comme à la relecture */
+      }
+    }
+    if (events.length === 0 || isTurnFinished(events)) continue
+    out.push({
+      conversationId: morceaux[0],
+      turnId: morceaux[1].slice(0, -'.jsonl'.length),
+      events: events.length,
+      updatedAt: Date.now()
+    })
+  }
+  return out
+}
+
 export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
-  // Un SCAN de l'arborescence décide de ce qui est inachevé ou obsolète : les tampons encore en
-  // mémoire doivent être sur disque AVANT, sinon un tour en vol serait invisible (donc jamais repris).
-  flushAllTurnJournals()
-  if (!existsSync(root)) return []
+  // Un tour qui n'existe encore qu'en mémoire est recollé à la fin, sans vider les tampons en
+  // bloquant (conv-1598) : un tour en vol reste visible, donc repris.
   const found: UnfinishedTurn[] = []
-  for (const conversationId of readdirSync(root)) {
+  const vus = new Set<string>()
+  for (const conversationId of existsSync(root) ? readdirSync(root) : []) {
     const dir = join(root, conversationId)
     let entries: string[]
     try {
@@ -416,6 +539,7 @@ export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
     }
     for (const file of entries) {
       if (!file.endsWith('.jsonl')) continue
+      vus.add(resolve(dir, file))
       const turnId = file.slice(0, -'.jsonl'.length)
       // La FIN du journal suffit presque toujours à trancher, et elle coûte un bloc au lieu du
       // fichier entier. Les tours terminés — l'immense majorité — ne sont donc plus jamais ouverts
@@ -431,6 +555,7 @@ export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
       })
     }
   }
+  found.push(...toursEnMemoireSeulement(root, vus))
   return found.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
@@ -440,8 +565,8 @@ export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
  * fix-ok: 2026-09-17 18:59, `ipc:runs:unfinishedTurns` 1,48 s à l'ouverture dont 986 `openSync` —
  * la mémoire `termineConnus` est vide au premier appel, donc la version synchrone rouvre encore
  * chaque journal. Même logique, mêmes verdicts, mais toutes les E/S passent par `fs/promises` :
- * la fenêtre n'est plus figée pendant le parcours. Seul le vidage des tampons reste synchrone
- * (obligatoire : un tour en vol pas encore sur disque serait invisible).
+ * la fenêtre n'est plus figée pendant le parcours. Les tampons ne sont plus vidés en bloquant
+ * (conv-1598) : un tour en vol pas encore sur disque est recollé depuis la mémoire.
  */
 async function journalTermineParLaQueueAsync(path: string): Promise<boolean | undefined> {
   let fichier: Awaited<ReturnType<typeof open>> | undefined
@@ -575,14 +700,14 @@ export function readTurnJournalByIdAsync(
 
 /** Version non bloquante de `listUnfinishedTurns` : même résultat, aucune E/S synchrone. */
 export async function listUnfinishedTurnsAsync(root: string): Promise<UnfinishedTurn[]> {
-  flushAllTurnJournals()
   let conversations: string[]
   try {
     conversations = await readdir(root)
   } catch {
-    return []
+    conversations = []
   }
   const found: UnfinishedTurn[] = []
+  const vus = new Set<string>()
   for (const conversationId of conversations) {
     const dir = join(root, conversationId)
     let entries: string[]
@@ -595,6 +720,7 @@ export async function listUnfinishedTurnsAsync(root: string): Promise<Unfinished
     for (const file of entries) {
       if (!file.endsWith('.jsonl')) continue
       const path = join(dir, file)
+      vus.add(resolve(path))
       if ((await journalTermineParLaQueueAsync(path)) === true) continue
       const events = await readTurnJournalAsync(path)
       if (events.length === 0 || isTurnFinished(events)) continue
@@ -612,6 +738,7 @@ export async function listUnfinishedTurnsAsync(root: string): Promise<Unfinished
       })
     }
   }
+  found.push(...toursEnMemoireSeulement(root, vus))
   return found.sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
@@ -642,10 +769,10 @@ export function pruneFinishedTurnJournals(
   now = Date.now(),
   bornes: BornesMenage = {}
 ): number {
-  // Un SCAN de l'arborescence décide de ce qui est inachevé ou obsolète : les tampons encore en
-  // mémoire doivent être sur disque AVANT, sinon un tour en vol serait invisible (donc jamais repris).
-  flushAllTurnJournals()
+  // Un journal qui a encore des lignes en mémoire ou une écriture en vol est en cours d'écriture : le
+  // ménage le saute, au lieu de vider tous les tampons en bloquant avant (conv-1598).
   if (!existsSync(root)) return 0
+  const enCours = journauxEnCoursDEcriture()
   const maxSuppressions = bornes.maxSuppressions ?? 200
   const echeance = Date.now() + (bornes.budgetMs ?? 150)
   const cleRacine = resolve(root)
@@ -681,10 +808,11 @@ export function pruneFinishedTurnJournals(
       } catch {
         continue
       }
-      if (!stale) continue
+      if (!stale || enCours.has(resolve(path))) continue
       const events = readTurnJournal(root, conversationId, turnId)
       if (isTurnFinished(events)) {
         rmSync(path)
+        oublierClotures(path)
         removed += 1
       }
     }
@@ -697,8 +825,8 @@ export function pruneFinishedTurnJournals(
  * Rend les tours INACHEVES tout de suite, et ne differe QUE le menage.
  *
  * Le canal `runs:unfinishedTurns` faisait le contraire : ~2,8 s de fenetre figee par ouverture, 69 s
- * cumulees sur 25 gels. Ce qui ne se differe PAS, c'est le flush des tampons : un tour en vol pas
- * encore sur disque serait invisible, donc jamais repris. La verite rendue prime, le GC attend.
+ * cumulees sur 25 gels. Un tour en vol pas encore sur disque est recollé depuis la memoire
+ * (conv-1598), jamais vide en bloquant. La verite rendue prime, le GC attend.
  * Le menage differe ne doit jamais jeter : hors du handler, un throw ne serait plus capture.
  */
 export function listUnfinishedTurnsPuisMenage(
@@ -708,7 +836,6 @@ export function listUnfinishedTurnsPuisMenage(
     planifier?: (tache: () => void) => void
   } = {}
 ): UnfinishedTurn[] {
-  flushAllTurnJournals()
   const liste = listUnfinishedTurns(root)
   planifierMenage(root, options)
   return liste
@@ -752,6 +879,10 @@ export function removeConversationTurnJournals(root: string, conversationId: str
   const dir = join(root, safeSegment(conversationId))
   if (!existsSync(dir)) return false
   supprimerArbre(dir)
+  const prefixe = resolve(dir) + sep
+  for (const path of [...cloturesSurDisque.keys(), ...cloturesPosees.keys()]) {
+    if (resolve(path).startsWith(prefixe)) oublierClotures(path)
+  }
   return true
 }
 
