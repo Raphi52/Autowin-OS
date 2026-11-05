@@ -4,7 +4,8 @@
 // improvisée deux fois (conv-1546, conv-1554), la seconde dessinée en Python, donc seulement « à peu près »
 // comme la scène — le juge l'avait relevé.
 // Fidélité : `cousDeLAtlas` et `COU` sont lus TELS QUELS dans quartier-scene.ts (source extraite puis
-// dépouillée de ses types), et le dessin rejoue dans Edge les mêmes gestes de canvas que `poserFoulard`.
+// dépouillée de ses types), et le dessin rejoue dans Chrome les mêmes gestes de canvas que `poserFoulard`.
+// Chrome, jamais Edge : règle de l'utilisateur pour le navigateur des agents (scout conv-1576, lot conv-1590).
 //
 // Usage : node scripts/quartier-planche.mjs --rangees 23,24,25 [--colonne 0] [--couleur #c0392b]
 //         [--sortie .autowin-tmp/planche.png] [--animaux tanuki,renard,panda,panda-roux]
@@ -67,7 +68,7 @@ const atlas = Object.fromEntries(
   })
 )
 
-const navigateur = await chromium.launch({ channel: 'msedge', headless: true })
+const navigateur = await chromium.launch({ channel: 'chrome', headless: true })
 try {
   const page = await navigateur.newPage()
   await page.setContent('<body style="margin:0;background:#2b2b33"></body>') // couleur-fixe: fond neutre de la planche de preuve

@@ -46,11 +46,15 @@ const FILTRE = join(RACINE, 'src/renderer/src/components/chat-html-inline.ts')
 const CHAT_CSS = join(RACINE, 'src/renderer/src/components/ChatView.css')
 const THEME_MODES_CSS = join(RACINE, 'src/renderer/src/assets/theme-modes.css')
 
+// Chrome seul : règle de l'utilisateur « navigateur des agents : Chrome, jamais Edge » (profil de
+// l'utilisateur ; scout conv-1576, lot conv-1590). Plus aucun repli sur Edge (revue du 2026-11-05) :
+// sans Chrome, le script le dit au lieu de basculer en silence. AUTOWIN_NAVIGATEUR reste le choix
+// explicite de la personne qui lance le script.
 const NAVIGATEURS = [
   process.env.AUTOWIN_NAVIGATEUR,
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
-  'C:/Program Files/Google/Chrome/Application/chrome.exe'
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'Google/Chrome/Application/chrome.exe')
 ].filter(Boolean)
 
 function argument(nom, defaut) {
@@ -164,9 +168,18 @@ async function main() {
   const out = resolve(argument('--out', join(RACINE, '.autowin-tmp/html-render-apercu')))
   mkdirSync(out, { recursive: true })
 
+  // « jamais Edge » vaut aussi pour la variable : la refuser en le disant (contre-revue 2026-11-05).
+  if (/msedge/i.test(process.env.AUTOWIN_NAVIGATEUR ?? ''))
+    sortir(1, {
+      ok: false,
+      erreur: `AUTOWIN_NAVIGATEUR designe Edge (${process.env.AUTOWIN_NAVIGATEUR}) : regle « Chrome, jamais Edge » — vise chrome.exe`
+    })
   const executablePath = NAVIGATEURS.find((chemin) => existsSync(chemin))
   if (!executablePath)
-    sortir(1, { ok: false, erreur: `aucun navigateur trouve (essaye : ${NAVIGATEURS.join(' ; ')}) — regle AUTOWIN_NAVIGATEUR` })
+    sortir(1, {
+      ok: false,
+      erreur: `Chrome introuvable (essaye : ${NAVIGATEURS.join(' ; ')}) — installe Chrome ou regle AUTOWIN_NAVIGATEUR`
+    })
 
   const filtre = await compilerFiltre()
   const clair = process.argv.includes('--clair')
@@ -187,7 +200,16 @@ async function main() {
   // Fond du fil en theme clair : le panneau de Holographique blanc (`rgba(253, 253, 255, 0.985)`).
   const corps = clair ? 'background:#fdfdff;color:#1c172b' : 'background:#0b0b0e;color:#dde3ee'
   const browser = await chromium.launch({ executablePath, headless: true })
-  const rapport = { ok: true, fichier, fenetre, largeurs: [], defauts: [], captures: [] }
+  // `navigateur` dans le rapport : on voit d'un coup d'œil que l'aperçu a tourné sous Chrome.
+  const rapport = {
+    ok: true,
+    fichier,
+    navigateur: executablePath,
+    fenetre,
+    largeurs: [],
+    defauts: [],
+    captures: []
+  }
 
   try {
     for (const largeur of largeurs) {
