@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { buildBehaviourComposition, type InfluencerField } from './behaviour-composition'
 import { RoleModelConfig } from './roles'
@@ -219,5 +220,40 @@ describe("buildBehaviourComposition — l'effort par étape affiché suit la rè
     const valeur = champ(buildBehaviourComposition(roles, {}, undefined, null), 'subagent')
     expect(valeur).toContain('clean:claude-opus-5-5/xhigh,')
     expect(valeur).not.toContain('triviale')
+  })
+})
+
+/**
+ * PORTAGE ET AGRÉGAT DU JUGE : la valeur affichée et la ligne citée sont celles du code (conv-1582).
+ *
+ * Mesuré le 2026-11-05 : « portage phase→phase » affichait « tronquée à 2000 caractères » avec la
+ * source `orchestrator.ts:844`, alors que `porterVersPhaseSuivante` ne coupe plus rien depuis le
+ * 2026-09-27 et vit dans `orchestrator-contrats.ts`. Entrées qui rendent ce test rouge : le mot
+ * « tronquée » remis dans la valeur, ou une source qui ne pointe plus sur la ligne de la fonction.
+ */
+describe('buildBehaviourComposition — portage et agrégat du juge (conv-1582)', () => {
+  const champ = (label: string): InfluencerField => {
+    const trouve = build().orchestrated.injectedContext.find((f) => f.label === label)
+    expect(trouve, label).toBeDefined()
+    return trouve!
+  }
+  const ligneCitee = (source: string): string => {
+    const [, fichier, ligne] = /^(.+\.ts):(\d+)$/u.exec(source) ?? []
+    const texte = readFileSync(new URL(`../../${fichier}`, import.meta.url), 'utf8')
+    return texte.split(/\r?\n/u)[Number(ligne) - 1] ?? ''
+  }
+
+  it('le portage phase→phase est annoncé ENTIER et cite porterVersPhaseSuivante', () => {
+    const portage = champ('portage phase→phase')
+    expect(portage.value).not.toMatch(/tronqu|2000/iu)
+    expect(portage.value).toMatch(/entière/iu)
+    expect(ligneCitee(portage.source)).toMatch(/export function porterVersPhaseSuivante\(/u)
+  })
+
+  it("l'agrégat du juge cite la fonction qui le borne", () => {
+    const agregat = champ('agrégat juge')
+    expect(agregat.value).toMatch(/6000/u)
+    expect(agregat.value).toMatch(/60 000/u)
+    expect(ligneCitee(agregat.source)).toMatch(/export function agregerPhasesPourLeJuge\(/u)
   })
 })

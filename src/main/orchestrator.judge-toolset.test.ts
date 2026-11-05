@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CostAggregator } from './dashboards/cost'
-import { Orchestrator } from './orchestrator'
+import { Orchestrator, sandboxForPhase } from './orchestrator'
 import { ProviderRegistry } from './providers/registry'
 import type {
   Message,
@@ -132,5 +132,32 @@ describe('moyens du producteur opposables au juge', () => {
     const prompt = await promptDuJuge()
     expect(prompt).toMatch(/exige ce qui EST à portée/)
     expect(prompt).toMatch(/invérifiable/)
+  })
+
+  /**
+   * conv-1582 (2026-11-05) : le contrat disait au juge que le producteur n'a Bash/Edit/Write
+   * « qu'en phase de mutation » et « pas d'accès web ». Or `sandboxForPhase` rend
+   * `danger-full-access` à chaque phase de la chaîne, et `providers/claude.ts` charge Bash et
+   * WebFetch/WebSearch sur toute exécution. Le juge croyait donc impossible ce que le producteur
+   * peut faire, et contredisait `PIPELINE_DISCIPLINE_INSTRUCTION`, qui dit l'inverse au producteur.
+   *
+   * Entrées qui rendent ce test rouge : « en phase de mutation de Bash/Edit/Write » ou « Pas d'accès
+   * web » remis dans `JUDGE_TOOLSET_CONTRACT` ; une phase de lecture repassée en `read-only` par
+   * `sandboxForPhase` sans que le contrat change.
+   */
+  it('ne réserve ni Bash, ni Edit/Write, ni le web à certaines phases du producteur', async () => {
+    for (const phase of ['scout', 'frame', 'terrain', 'build', 'clean'] as const) {
+      expect(sandboxForPhase('tâche', phase), phase).toBe('danger-full-access')
+    }
+    const prompt = await promptDuJuge()
+    expect(prompt).not.toMatch(/en phase de mutation de\s+Bash/u)
+    expect(prompt).not.toMatch(/Pas d'accès web/iu)
+    expect(prompt).toMatch(/Read\/Grep\/Glob\/Bash et d'Edit\/Write/u)
+    expect(prompt).toMatch(/WebFetch\/WebSearch/u)
+    // Jumeau accepté : le juge sait toujours que seules BUILD et CLEAN modifient des fichiers,
+    // et qu'une sous-tâche parallèle d'un build qui ne modifie rien n'a pas Edit/Write
+    // (`orchestrator-parcours-glouton.ts`, `isMutationTask(task) ? … : 'read-only'`).
+    expect(prompt).toMatch(/seules BUILD et CLEAN modifient des fichiers/u)
+    expect(prompt).toMatch(/sous-tâche parallèle d'un build qui ne modifie rien/u)
   })
 })
