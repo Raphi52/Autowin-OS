@@ -8,16 +8,31 @@
  * malentendu (`dev-sans-watch.test.ts`) ; (b) « coût non exposé » jetait une information qu'on
  * possède : les tokens sont comptés (`execution-supervisor.ts`), seul le TARIF manque.
  *
- * Ce module reconstitue le tarif à partir du modèle servi. Les taux sont COPIÉS du catalogue
- * Anthropic (skill `claude-api`, tableau « Current Models », relu le 2026-08-18) — jamais devinés.
+ * Ce module reconstitue le tarif à partir du modèle servi. Les taux sont COPIÉS des grilles
+ * officielles, citées ligne par ligne dans `MODEL_RATES` avec leur date de lecture — jamais devinés.
  * Un modèle inconnu ne rend RIEN : on préfère afficher le volume de tokens qu'inventer un montant.
  */
 
 import type { TokenUsage } from './token-usage'
 import { isSubscriptionBilled } from './billing-model'
 
-/** Tarifs publics en $ par million de tokens. Source : catalogue Anthropic (2026-08-18). */
-interface ModelRate {
+/** Un couple de prix en $ par million de tokens. */
+interface Prix {
+  readonly inputPerMTok: number
+  readonly outputPerMTok: number
+}
+
+/**
+ * Ce que l'estimation lit d'un usage. `requests` dit combien de requêtes au modèle cet usage
+ * additionne : les paliers « long contexte » se jugent requête par requête, et seul `requests` = 1
+ * permet de dire qu'UNE requête a dépassé le seuil (conv-1602).
+ */
+export interface UsageAEstimer extends TokenUsage {
+  requests?: number
+}
+
+/** Tarifs publics en $ par million de tokens, une ligne par modèle exact ou par famille. */
+interface ModelRate extends Prix {
   /**
    * Fournisseur qui SERT ce tarif, en minuscules. Le catalogue est celui d'Anthropic : un tarif ne
    * vaut que pour le provider dont il est copié. Quand l'appelant nomme son provider, un motif de
@@ -27,62 +42,188 @@ interface ModelRate {
   readonly provider: string
   /** Motif reconnu dans l'identifiant du modèle, en minuscules. */
   readonly match: string
-  readonly inputPerMTok: number
-  readonly outputPerMTok: number
   /**
-   * Tarif d'INTRODUCTION, borné dans le temps. Appliqué seulement si l'appelant fournit une
-   * horloge : sans elle on garde le tarif standard. Le module n'a donc pas d'horloge cachée, et il
-   * cesse de lui-même d'appliquer l'intro passé `untilMs` — aucune date à venir retirer à la main.
+   * Part du tarif d'entrée payée par un token RELU en cache. Propre à chaque ligne : la grille
+   * Anthropic du 2026-11-05 la met à 0,1× en général, 0,05× sur Opus et Sonnet 5.5, 0,025× sur
+   * Fable et Mythos 5.1 ; OpenAI à 0,05× sur gpt-6.1. Le même ratio vaut aux deux paliers.
    */
-  readonly intro?: {
+  readonly cacheReadRatio: number
+  /**
+   * Seuil du palier « long contexte », en tokens d'entrée d'UNE requête, cache compris : au-delà
+   * (strictement), `long` remplace les prix courts. Absent = un seul prix quelle que soit la taille.
+   */
+  readonly longAboveTokens?: number
+  readonly long?: Prix
+  /**
+   * Tarif d'INTRODUCTION (ou de promotion), borné dans le temps. Appliqué seulement si l'appelant
+   * fournit une horloge : sans elle on garde le tarif standard. Le module n'a donc pas d'horloge
+   * cachée, et il cesse de lui-même d'appliquer l'intro passé `untilMs` — aucune date à retirer.
+   */
+  readonly intro?: Prix & {
     readonly untilMs: number
-    readonly inputPerMTok: number
-    readonly outputPerMTok: number
+    readonly long?: Prix
   }
 }
 
-/** Fin du tarif d'introduction de Sonnet 5 : 2026-08-31 23:59:59 UTC inclus (catalogue Anthropic). */
-export const SONNET_5_INTRO_UNTIL_MS = Date.UTC(2026, 7, 31, 23, 59, 59, 999)
+/**
+ * Fin de la promotion de gpt-5.6-sol : « GPT-5.6 Sol’s promotional pricing is available until
+ * November 30, 2026 » (https://developers.openai.com/api/docs/pricing.md, relu le 2026-11-05).
+ * La page ne donne pas de fuseau : fin du 30/11 en UTC, inclus (conv-1602).
+ */
+export const GPT_5_6_SOL_PROMO_UNTIL_MS = Date.UTC(2026, 10, 30, 23, 59, 59, 999)
+
+/** Grille Anthropic : https://platform.claude.com/docs/en/about-claude/pricing */
+const CLAUDE = 'claude'
+/** Grille OpenAI : https://developers.openai.com/api/docs/pricing.md, table « Standard pricing data » */
+const CODEX = 'codex'
+/** « Short context: ≤272K input tokens. Long context: >272K input tokens. » (grille OpenAI). */
+const OPENAI_LONG_ABOVE_TOKENS = 272_000
 
 /**
- * Ordre significatif : le premier motif qui correspond gagne. Les familles les plus spécifiques
- * (fable/mythos) passent avant les génériques, sinon un `claude-fable-5` serait tarifé en opus.
+ * Ordre significatif : le premier motif qui correspond gagne. Chaque MODÈLE EXACT passe avant le
+ * motif de sa famille, sinon `claude-opus-5-5` serait tarifé en `opus` et `gpt-6.1-sol` en `sol`
+ * (idées fausses relevées le 2026-11-05, conv-1602). Les motifs de famille ne servent plus qu'aux
+ * versions sans ligne propre.
+ * fix-ok: cause mesurée le 2026-11-05 — les deux grilles officielles relues par curl (exit 0) ne
+ * donnent plus les prix de cette table, et l'appel Haiku 5.5 réel (`total_cost_usd` 0,00093225 $)
+ * tombait sur le motif `haiku` à 1 $ / 5 $, d'où 0,0093225 $ estimés (conv-1602).
  */
 const MODEL_RATES: readonly ModelRate[] = [
-  { provider: 'claude', match: 'fable', inputPerMTok: 10, outputPerMTok: 50 },
-  { provider: 'claude', match: 'mythos', inputPerMTok: 10, outputPerMTok: 50 },
-  { provider: 'claude', match: 'opus', inputPerMTok: 5, outputPerMTok: 25 },
-  // Sonnet 5 AVANT le `sonnet` générique : seul lui porte le tarif d'introduction. Sonnet 4.6 reste
-  // à 3 $ / 15 $ en permanence, et l'attraper avec l'intro l'aurait sous-facturé de 33 %.
+  // ── Claude — grille Anthropic relue le 2026-11-05 (conv-1602) ──
+  // Fable 5.1 et Mythos 5.1 : 10 $ / 50 $, cache relu 0,25 $ = 0,025× (note 1 de la grille).
   {
-    provider: 'claude',
-    match: 'sonnet-5',
-    inputPerMTok: 3,
-    outputPerMTok: 15,
-    intro: { untilMs: SONNET_5_INTRO_UNTIL_MS, inputPerMTok: 2, outputPerMTok: 10 }
+    provider: CLAUDE,
+    match: 'fable-5-1',
+    inputPerMTok: 10,
+    outputPerMTok: 50,
+    cacheReadRatio: 0.025
   },
-  { provider: 'claude', match: 'sonnet', inputPerMTok: 3, outputPerMTok: 15 },
-  { provider: 'claude', match: 'haiku', inputPerMTok: 1, outputPerMTok: 5 },
-  // OpenAI / Codex — source primaire lue le 2026-08-18 :
-  // https://developers.openai.com/api/docs/pricing.md (table « Standard »).
-  // Les ratios de cache y sont IDENTIQUES a ceux d'Anthropic (relu -90 %, ecrit 1,25x), donc
-  // CACHE_READ_RATIO et CACHE_WRITE_RATIO s'appliquent sans exception a ajouter.
-  //
-  // Ces tarifs servent l'EQUIVALENT, pas une depense : cette application n'atteint codex que par
-  // l'abonnement ChatGPT (`shared/billing-model.ts`). Une surcharge long-contexte existe (~272k
-  // tokens) mais la table n'en publie pas le seuil exact : NON codee tant qu'elle n'est pas precise,
-  // plutot qu'approximee.
-  //
-  // `sol` et `terra` AVANT le motif generique `gpt-5`, sinon le premier motif gagnant les ecraserait.
-  // `gpt-6-luna` AVANT `luna` : meme nom, moitie du prix (meme page relue le 2026-10-31, conv-1414).
-  { provider: 'codex', match: 'sol', inputPerMTok: 5, outputPerMTok: 30 },
-  { provider: 'codex', match: 'terra', inputPerMTok: 2, outputPerMTok: 12 },
-  { provider: 'codex', match: 'gpt-6-luna', inputPerMTok: 0.1, outputPerMTok: 0.5 },
-  { provider: 'codex', match: 'luna', inputPerMTok: 0.2, outputPerMTok: 1.2 }
+  {
+    provider: CLAUDE,
+    match: 'mythos-5-1',
+    inputPerMTok: 10,
+    outputPerMTok: 50,
+    cacheReadRatio: 0.025
+  },
+  // Opus 5.5 : 4 $ / 20 $, cache relu 0,20 $ = 0,05× (note 2 de la grille).
+  { provider: CLAUDE, match: 'opus-5-5', inputPerMTok: 4, outputPerMTok: 20, cacheReadRatio: 0.05 },
+  // Sonnet 5.5 : 2 $ / 10 $, cache relu 0,10 $ = 0,05× (note 2). AVANT `sonnet-5`, qui l'attraperait.
+  {
+    provider: CLAUDE,
+    match: 'sonnet-5-5',
+    inputPerMTok: 2,
+    outputPerMTok: 10,
+    cacheReadRatio: 0.05
+  },
+  // Sonnet 5 : 2 $ / 10 $ PERMANENTS, cache relu 0,20 $. Le prix d'introduction est devenu le prix
+  // standard ; la hausse à 3 $ / 15 $ du 1er septembre « will not occur » (note 3 de la grille).
+  { provider: CLAUDE, match: 'sonnet-5', inputPerMTok: 2, outputPerMTok: 10, cacheReadRatio: 0.1 },
+  // Haiku 5.5 : 0,10 $ / 0,50 $ jusqu'à 100 000 tokens de prompt, 0,50 $ / 2,50 $ au-delà ; le cache
+  // relu reste à 0,1× aux deux paliers (0,01 $ puis 0,05 $). Section « Long context pricing ».
+  {
+    provider: CLAUDE,
+    match: 'haiku-5-5',
+    inputPerMTok: 0.1,
+    outputPerMTok: 0.5,
+    cacheReadRatio: 0.1,
+    longAboveTokens: 100_000,
+    long: { inputPerMTok: 0.5, outputPerMTok: 2.5 }
+  },
+  // Familles : Fable 5 et Mythos 5 (10 $ / 50 $, cache 1 $), Opus 4.5 à 5 (5 $ / 25 $, cache 0,50 $),
+  // Sonnet 4.5 et 4.6 (3 $ / 15 $, cache 0,30 $), Haiku 4.5 (1 $ / 5 $, cache 0,10 $). Les modèles
+  // retirés (Opus 4 et 4.1, Haiku 3.5) n'ont pas de ligne : ils prennent le prix de leur famille.
+  { provider: CLAUDE, match: 'fable', inputPerMTok: 10, outputPerMTok: 50, cacheReadRatio: 0.1 },
+  { provider: CLAUDE, match: 'mythos', inputPerMTok: 10, outputPerMTok: 50, cacheReadRatio: 0.1 },
+  { provider: CLAUDE, match: 'opus', inputPerMTok: 5, outputPerMTok: 25, cacheReadRatio: 0.1 },
+  { provider: CLAUDE, match: 'sonnet', inputPerMTok: 3, outputPerMTok: 15, cacheReadRatio: 0.1 },
+  { provider: CLAUDE, match: 'haiku', inputPerMTok: 1, outputPerMTok: 5, cacheReadRatio: 0.1 },
+
+  // ── OpenAI / Codex — grille OpenAI relue le 2026-11-05 (conv-1602) ──
+  // Ces tarifs servent l'ÉQUIVALENT, pas une dépense : cette application n'atteint codex que par
+  // l'abonnement ChatGPT (`shared/billing-model.ts`). Le palier long contexte EST publié (au-delà de
+  // 272K tokens d'entrée) : l'ancien commentaire disait le contraire. Partout, le prix long vaut
+  // 2× l'entrée et 1,5× la sortie, et le cache relu garde son ratio.
+  // Écriture en cache : 30 min à 1,25× l'entrée, comme `CACHE_WRITE_RATIO` ; la grille publie aussi
+  // une écriture 12 h à 2,5×, que l'usage remonté ne distingue pas — NON comptée (plancher).
+  {
+    provider: CODEX,
+    match: 'gpt-6.1-sol',
+    inputPerMTok: 2,
+    outputPerMTok: 10,
+    cacheReadRatio: 0.05,
+    longAboveTokens: OPENAI_LONG_ABOVE_TOKENS,
+    long: { inputPerMTok: 4, outputPerMTok: 15 }
+  },
+  {
+    provider: CODEX,
+    match: 'gpt-6.1-terra',
+    inputPerMTok: 1,
+    outputPerMTok: 5,
+    cacheReadRatio: 0.05,
+    longAboveTokens: OPENAI_LONG_ABOVE_TOKENS,
+    long: { inputPerMTok: 2, outputPerMTok: 7.5 }
+  },
+  {
+    provider: CODEX,
+    match: 'gpt-6-sol',
+    inputPerMTok: 2,
+    outputPerMTok: 10,
+    cacheReadRatio: 0.1,
+    longAboveTokens: OPENAI_LONG_ABOVE_TOKENS,
+    long: { inputPerMTok: 4, outputPerMTok: 15 }
+  },
+  {
+    provider: CODEX,
+    match: 'gpt-6-luna',
+    inputPerMTok: 0.1,
+    outputPerMTok: 0.5,
+    cacheReadRatio: 0.1,
+    longAboveTokens: OPENAI_LONG_ABOVE_TOKENS,
+    long: { inputPerMTok: 0.2, outputPerMTok: 0.75 }
+  },
+  // gpt-5.6-sol : 4 $ / 20 $ (long 8 $ / 30 $) en PROMOTION jusqu'au 30/11/2026. Prix d'après :
+  // 5 $ / 30 $, ceux que la page du modèle réduit de « 20% » et « 33% » pour arriver à 4 $ / 20 $,
+  // et leur palier long 10 $ / 45 $ par sa règle « 2x input and 1.5x output for the full request »
+  // (https://developers.openai.com/api/docs/models/gpt-5.6-sol.md, relue le 2026-11-05, conv-1602).
+  {
+    provider: CODEX,
+    match: 'gpt-5.6-sol',
+    inputPerMTok: 5,
+    outputPerMTok: 30,
+    cacheReadRatio: 0.1,
+    longAboveTokens: OPENAI_LONG_ABOVE_TOKENS,
+    long: { inputPerMTok: 10, outputPerMTok: 45 },
+    intro: {
+      untilMs: GPT_5_6_SOL_PROMO_UNTIL_MS,
+      inputPerMTok: 4,
+      outputPerMTok: 20,
+      long: { inputPerMTok: 8, outputPerMTok: 30 }
+    }
+  },
+  {
+    provider: CODEX,
+    match: 'gpt-5.6-terra',
+    inputPerMTok: 2,
+    outputPerMTok: 12,
+    cacheReadRatio: 0.1,
+    longAboveTokens: OPENAI_LONG_ABOVE_TOKENS,
+    long: { inputPerMTok: 4, outputPerMTok: 18 }
+  },
+  {
+    provider: CODEX,
+    match: 'gpt-5.6-luna',
+    inputPerMTok: 0.2,
+    outputPerMTok: 1.2,
+    cacheReadRatio: 0.1,
+    longAboveTokens: OPENAI_LONG_ABOVE_TOKENS,
+    long: { inputPerMTok: 0.4, outputPerMTok: 1.8 }
+  },
+  // Familles, pour une version sans ligne propre : le prix de gpt-5.6, sans palier long (inconnu).
+  { provider: CODEX, match: 'sol', inputPerMTok: 5, outputPerMTok: 30, cacheReadRatio: 0.1 },
+  { provider: CODEX, match: 'terra', inputPerMTok: 2, outputPerMTok: 12, cacheReadRatio: 0.1 },
+  { provider: CODEX, match: 'luna', inputPerMTok: 0.2, outputPerMTok: 1.2, cacheReadRatio: 0.1 }
 ]
 
-/** Un token relu en cache coûte 10 % du tarif d'entrée. */
-const CACHE_READ_RATIO = 0.1
 /**
  * Un token ÉCRIT dans le cache pour 5 MIN coûte 1,25× le tarif d'entrée. C'est aussi le tarif
  * appliqué quand la durée de vie est INCONNUE : un PLANCHER assumé, jamais une durée devinée.
@@ -114,7 +255,7 @@ function positive(value: unknown): number {
 export interface InputTokenSplit {
   /** Contexte envoyé au plein tarif : ni relu, ni écrit dans le cache. */
   readonly fresh: number
-  /** Relu depuis le cache (0,1× l'entrée). */
+  /** Relu depuis le cache (`cacheReadRatio` de la ligne : 0,1× l'entrée en général). */
   readonly cacheRead: number
   /** Écrit dans le cache (1,25× l'entrée pour 5 min, 2× pour 1 h — voir `estimateCostUsd`). */
   readonly cacheWrite: number
@@ -160,19 +301,33 @@ export function modelRate(model: string | undefined, provider?: string): ModelRa
 }
 
 /**
+ * Le palier long contexte ne s'applique qu'à UNE requête dont l'entrée dépasse le seuil. Un total
+ * sous le seuil est exact au prix court (chaque requête est plus petite que lui). Un total au-delà
+ * du seuil sur plusieurs requêtes, ou sur un nombre inconnu, ne dit pas qu'UNE requête l'a
+ * dépassé : prix court, un PLANCHER assumé comme la durée de vie de cache inconnue. Les appelants
+ * additionnent souvent plusieurs requêtes (`cli-usage-recovery.ts`, `dashboards/cost.ts`) ; juger le
+ * total aurait multiplié par 5 le coût de vingt petits appels Haiku 5.5 (conv-1602).
+ */
+function enLongContexte(rate: ModelRate, usage: UsageAEstimer, input: number): boolean {
+  return rate.longAboveTokens !== undefined && input > rate.longAboveTokens && usage.requests === 1
+}
+
+/**
  * Estimation en USD des tokens non tarifés. Rend `undefined` quand le modèle est inconnu ou
  * qu'aucun token n'a été compté — l'appelant affiche alors le volume, pas un montant inventé.
  */
-export function estimateCostUsd(usage: TokenUsageShape, nowMs?: number): number | undefined {
+export function estimateCostUsd(usage: UsageAEstimer, nowMs?: number): number | undefined {
   const rate = modelRate(usage.model, usage.provider)
   if (!rate) return undefined
   const intro =
     rate.intro && nowMs !== undefined && nowMs <= rate.intro.untilMs ? rate.intro : undefined
-  const inputPerMTok = intro?.inputPerMTok ?? rate.inputPerMTok
-  const outputPerMTok = intro?.outputPerMTok ?? rate.outputPerMTok
   const input = positive(usage.inputTokens)
   const output = positive(usage.outputTokens)
   if (input + output === 0) return undefined
+  const court: Prix & { readonly long?: Prix } = intro ?? rate
+  // Un tarif sans prix long publié garderait son prix court : un plancher, jamais un prix deviné.
+  const prix: Prix = enLongContexte(rate, usage, input) ? (court.long ?? court) : court
+  const { inputPerMTok, outputPerMTok } = prix
   // Les tokens de cache — relus ET écrits — sont un SOUS-ENSEMBLE de l'entrée : on les facture une
   // seule fois, à leur tarif propre, et on retire leur part du plein tarif. L'arbitrage de cet
   // invariant vit dans `splitInputTokens`, partagé avec le superviseur d'exécution.
@@ -183,7 +338,7 @@ export function estimateCostUsd(usage: TokenUsageShape, nowMs?: number): number 
     (freshInput * inputPerMTok +
       (cacheWrite - cacheWrite1h) * inputPerMTok * CACHE_WRITE_RATIO +
       cacheWrite1h * inputPerMTok * CACHE_WRITE_1H_RATIO +
-      cacheRead * inputPerMTok * CACHE_READ_RATIO +
+      cacheRead * inputPerMTok * rate.cacheReadRatio +
       output * outputPerMTok) /
     1_000_000
   )
@@ -209,7 +364,7 @@ function formatTokenVolume(tokens: number): string {
 }
 
 /** Ce qu'on sait dire du coût d'un usage — le tout, pas un morceau par surface. */
-export interface CostCoverageInput extends TokenUsage {
+export interface CostCoverageInput extends UsageAEstimer {
   /**
    * Montant TARIFÉ par le provider. `null` dit explicitement « la couverture est connue, et elle
    * est vide » ; `undefined` dit « on n'en sait rien ». Les deux mènent à l'estimation.

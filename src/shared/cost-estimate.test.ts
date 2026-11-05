@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  SONNET_5_INTRO_UNTIL_MS,
+  GPT_5_6_SOL_PROMO_UNTIL_MS,
   estimateCostUsd,
   modelRate,
   splitInputTokens
@@ -38,8 +38,8 @@ describe('estimation de coût des appels non chiffrés', () => {
       cacheReadTokens: 500_000,
       model: 'claude-sonnet-5'
     })
-    // 500k frais × 3 $ + 500k cache × 0,30 $ = 1,50 + 0,15.
-    expect(moitieEnCache).toBeCloseTo(1.65, 6)
+    // 500k frais × 2 $ + 500k cache × 0,20 $ = 1,00 + 0,10 (grille Anthropic du 2026-11-05).
+    expect(moitieEnCache).toBeCloseTo(1.1, 6)
   })
 
   it('borne un compteur de cache incohérent à l’entrée réelle', () => {
@@ -55,34 +55,28 @@ describe('estimation de coût des appels non chiffrés', () => {
   it('distingue les familles : fable/opus/sonnet/haiku n’ont pas le même tarif', () => {
     expect(modelRate('claude-fable-5')?.inputPerMTok).toBe(10)
     expect(modelRate('claude-opus-5')?.inputPerMTok).toBe(5)
-    expect(modelRate('claude-sonnet-5')?.inputPerMTok).toBe(3)
+    expect(modelRate('claude-sonnet-5')?.inputPerMTok).toBe(2)
+    expect(modelRate('claude-sonnet-4-6')?.inputPerMTok).toBe(3)
     expect(modelRate('claude-haiku-4-5')?.inputPerMTok).toBe(1)
   })
 
   /**
-   * Sonnet 5 est en tarif d'INTRODUCTION 2 $ / 10 $ jusqu'au 2026-08-31 inclus (catalogue Anthropic,
-   * relu le 2026-08-18). Le tarif standard 3 $ / 15 $ le surestimait de 50 % pendant cette fenetre.
-   * L'horloge est un PARAMETRE explicite : sans elle on garde le tarif standard, donc la fonction
-   * reste pure et le code ne se met pas a mentir tout seul le 1er septembre.
+   * Sonnet 5 : les 2 $ / 10 $ annoncés comme tarif d'introduction jusqu'au 2026-08-31 sont devenus
+   * le prix STANDARD ; la hausse à 3 $ / 15 $ du 1er septembre « will not occur » (grille Anthropic,
+   * note 3, relue le 2026-11-05). L'ancien code repassait à 3 $ / 15 $ et surestimait de 50 %.
    */
-  it('applique le tarif intro de Sonnet 5 pendant la fenetre, le standard apres', () => {
+  it('Sonnet 5 reste à 2 $ / 10 $ après le 31/08, avec ou sans horloge', () => {
     const usage = { inputTokens: 1_000_000, outputTokens: 1_000_000, model: 'claude-sonnet-5' }
-    const pendant = SONNET_5_INTRO_UNTIL_MS - 1
-    const apres = SONNET_5_INTRO_UNTIL_MS + 1
+    const apresLe31Aout = Date.UTC(2026, 10, 5)
 
-    expect(estimateCostUsd(usage, pendant)).toBeCloseTo(12, 6) // 2 + 10
-    expect(estimateCostUsd(usage, apres)).toBeCloseTo(18, 6) // 3 + 15
-    // Sans horloge : tarif standard, jamais l'intro.
-    expect(estimateCostUsd(usage)).toBeCloseTo(18, 6)
+    expect(estimateCostUsd(usage, apresLe31Aout)).toBeCloseTo(12, 6) // 2 + 10
+    expect(estimateCostUsd(usage)).toBeCloseTo(12, 6)
+    expect(modelRate('claude-sonnet-5')?.intro).toBe(undefined)
   })
 
-  it("n'applique l'intro qu'a Sonnet 5, pas a Sonnet 4.6", () => {
-    const pendant = SONNET_5_INTRO_UNTIL_MS - 1
+  it('Sonnet 4.6 garde ses 3 $ / 15 $ : seul Sonnet 5 a changé', () => {
     const usage46 = { inputTokens: 1_000_000, outputTokens: 0, model: 'claude-sonnet-4-6' }
-
-    expect(estimateCostUsd(usage46, pendant)).toBeCloseTo(3, 6)
-    expect(modelRate('claude-sonnet-4-6')?.intro).toBe(undefined)
-    expect(modelRate('claude-sonnet-5')?.intro?.inputPerMTok).toBe(2)
+    expect(estimateCostUsd(usage46, Date.UTC(2026, 10, 5))).toBeCloseTo(3, 6)
   })
 
   /**
@@ -192,7 +186,190 @@ describe('estimation de coût des appels non chiffrés', () => {
       undefined
     )
   })
+})
 
+// fix-ok: prix périmés mesurés le 2026-11-05 — grille https://platform.claude.com/docs/en/about-claude/pricing
+// relue par curl (exit 0) et appel Haiku 5.5 réel facturé 0,00093225 $ par le CLI, que l'ancien code
+// estimait à 0,0093225 $ (motif `haiku` à 1 $ / 5 $ au lieu de 0,10 $ / 0,50 $) (conv-1602).
+describe('grille Anthropic relue le 2026-11-05 : une ligne par modèle exact', () => {
+  /**
+   * ORACLE HORS MODÈLE : `.autowin-data/autowin-os/run-stdout/c55319db-076c-4201-b8b7-bd8b98515a11
+   * .stdout.jsonl`, ligne `result`, modèle « claude-haiku-5-5 », `total_cost_usd` 0,00093225 $ pour
+   * 2 frais + 2 923 écrits en 1 h + 13 095 relus + 433 sortis, une seule requête (`iterations` = 1).
+   * Le calcul : 2 × 0,10 + 2 923 × 0,20 + 13 095 × 0,01 + 433 × 0,50, en $ par million.
+   * Ce test devient rouge si `haiku-5-5` passe derrière le motif `haiku` (0,0093225 $), si le
+   * cache relu de Haiku 5.5 n'est plus à 0,1×, ou si l'écriture 1 h n'est plus à 2× l'entrée.
+   */
+  it('reproduit l’appel Haiku 5.5 réel facturé 0,00093225 $ par le CLI', () => {
+    expect(
+      estimateCostUsd({
+        inputTokens: 2 + 2_923 + 13_095,
+        cacheCreationTokens: 2_923,
+        cacheCreation1hTokens: 2_923,
+        cacheReadTokens: 13_095,
+        outputTokens: 433,
+        model: 'claude-haiku-5-5',
+        provider: 'claude'
+      })
+    ).toBeCloseTo(0.00093225, 10)
+  })
+
+  it('Opus 5.5 coûte 4 $ / 20 $ et relit son cache à 0,05× ; Opus 5 garde 5 $ / 25 $ et 0,1×', () => {
+    const million = { inputTokens: 1_000_000, outputTokens: 1_000_000 }
+    const toutEnCache = { inputTokens: 1_000_000, cacheReadTokens: 1_000_000 }
+    expect(estimateCostUsd({ ...million, model: 'claude-opus-5-5' })).toBeCloseTo(24, 6)
+    expect(estimateCostUsd({ ...toutEnCache, model: 'claude-opus-5-5' })).toBeCloseTo(0.2, 6)
+    // Jumeau : la famille `opus` n'a pas bougé pour Opus 5.
+    expect(estimateCostUsd({ ...million, model: 'claude-opus-5' })).toBeCloseTo(30, 6)
+    expect(estimateCostUsd({ ...toutEnCache, model: 'claude-opus-5' })).toBeCloseTo(0.5, 6)
+  })
+
+  it('Sonnet 5.5 coûte 2 $ / 10 $ et relit son cache à 0,05× ; Sonnet 5 à 0,1×', () => {
+    const toutEnCache = { inputTokens: 1_000_000, cacheReadTokens: 1_000_000 }
+    expect(modelRate('claude-sonnet-5-5')).toMatchObject({ inputPerMTok: 2, outputPerMTok: 10 })
+    expect(estimateCostUsd({ ...toutEnCache, model: 'claude-sonnet-5-5' })).toBeCloseTo(0.1, 6)
+    expect(estimateCostUsd({ ...toutEnCache, model: 'claude-sonnet-5' })).toBeCloseTo(0.2, 6)
+  })
+
+  it('Fable et Mythos 5.1 relisent leur cache à 0,025× ; Fable et Mythos 5 à 0,1×', () => {
+    const toutEnCache = { inputTokens: 1_000_000, cacheReadTokens: 1_000_000 }
+    expect(estimateCostUsd({ ...toutEnCache, model: 'claude-fable-5-1' })).toBeCloseTo(0.25, 6)
+    expect(estimateCostUsd({ ...toutEnCache, model: 'claude-mythos-5-1' })).toBeCloseTo(0.25, 6)
+    expect(estimateCostUsd({ ...toutEnCache, model: 'claude-fable-5' })).toBeCloseTo(1, 6)
+    expect(estimateCostUsd({ ...toutEnCache, model: 'claude-mythos-5' })).toBeCloseTo(1, 6)
+  })
+
+  /**
+   * Haiku 5.5 se paie au PALIER de la requête : au-delà de 100 000 tokens d'entrée (cache compris),
+   * 0,50 $ / 2,50 $ au lieu de 0,10 $ / 0,50 $. Le seuil se juge requête par requête (grille,
+   * « Long context pricing »). Or les appelants additionnent souvent plusieurs requêtes avant
+   * d'estimer : un total au-delà du seuil ne dit pas qu'une requête l'a dépassé.
+   */
+  it('Haiku 5.5 : palier haut seulement pour UNE requête au-delà de 100 000 tokens', () => {
+    const une = { model: 'claude-haiku-5-5', outputTokens: 0, requests: 1 }
+    // 100 000 tout juste : encore le palier bas (« up to 100,000 tokens »).
+    expect(estimateCostUsd({ ...une, inputTokens: 100_000 })).toBeCloseTo(0.01, 9)
+    // 100 001 sur UNE requête : tout passe au palier haut, entrée ET sortie.
+    expect(estimateCostUsd({ ...une, inputTokens: 100_001 })).toBeCloseTo(0.0500005, 9)
+    expect(estimateCostUsd({ ...une, inputTokens: 200_000, outputTokens: 1_000_000 })).toBeCloseTo(
+      0.1 + 2.5,
+      9
+    )
+    // Le cache compte dans la taille du prompt, et garde son ratio au palier haut (0,05 $ = 0,1×).
+    expect(estimateCostUsd({ ...une, inputTokens: 200_000, cacheReadTokens: 200_000 })).toBeCloseTo(
+      0.01,
+      9
+    )
+  })
+
+  it('Haiku 5.5 : un TOTAL de plusieurs requêtes au-delà du seuil reste au palier bas', () => {
+    const total = { model: 'claude-haiku-5-5', inputTokens: 200_000, outputTokens: 0 }
+    // Deux requêtes, ou un nombre inconnu : on ne sait pas qu'une seule a dépassé le seuil.
+    // Le palier bas est un PLANCHER assumé, comme la durée de vie de cache inconnue.
+    expect(estimateCostUsd({ ...total, requests: 2 })).toBeCloseTo(0.02, 9)
+    expect(estimateCostUsd(total)).toBeCloseTo(0.02, 9)
+  })
+})
+
+describe('grille OpenAI relue le 2026-11-05 : une ligne par modèle exact', () => {
+  /**
+   * Source : https://developers.openai.com/api/docs/pricing.md (curl, exit 0, 22 083 octets), table
+   * « Standard pricing data ». Le motif `sol` attrapait `gpt-6-sol` et `gpt-6.1-sol` au prix de
+   * `gpt-5.6-sol` ; le motif `terra` attrapait `gpt-6.1-terra` au prix de `gpt-5.6-terra`.
+   */
+  it('chaque version a son prix : le motif de famille ne les écrase plus', () => {
+    expect(modelRate('gpt-6-sol', 'codex')).toMatchObject({ inputPerMTok: 2, outputPerMTok: 10 })
+    expect(modelRate('gpt-6.1-sol', 'codex')).toMatchObject({ inputPerMTok: 2, outputPerMTok: 10 })
+    expect(modelRate('gpt-6.1-terra', 'codex')).toMatchObject({
+      inputPerMTok: 1,
+      outputPerMTok: 5
+    })
+    expect(modelRate('gpt-5.6-terra', 'codex')).toMatchObject({
+      inputPerMTok: 2,
+      outputPerMTok: 12
+    })
+  })
+
+  it('gpt-6.1 relit son cache à 0,05× ; gpt-6-sol à 0,1×', () => {
+    const toutEnCache = { inputTokens: 1_000_000, cacheReadTokens: 1_000_000, provider: 'codex' }
+    expect(estimateCostUsd({ ...toutEnCache, model: 'gpt-6.1-sol' })).toBeCloseTo(0.1, 6)
+    expect(estimateCostUsd({ ...toutEnCache, model: 'gpt-6.1-terra' })).toBeCloseTo(0.05, 6)
+    expect(estimateCostUsd({ ...toutEnCache, model: 'gpt-6-sol' })).toBeCloseTo(0.2, 6)
+  })
+
+  /**
+   * gpt-5.6-sol est en PROMOTION à 4 $ / 20 $ jusqu'au 30/11/2026 (« GPT-5.6 Sol’s promotional
+   * pricing is available until November 30, 2026 »). Après, ou sans horloge : 5 $ / 30 $, le prix
+   * que la page du modèle (https://developers.openai.com/api/docs/models/gpt-5.6-sol.md, relue le
+   * 2026-11-05) réduit de « 20% » et « 33% » pour arriver à 4 $ / 20 $ (conv-1602).
+   */
+  it('gpt-5.6-sol : 4 $ / 20 $ pendant la promotion, 5 $ / 30 $ après ou sans horloge', () => {
+    const usage = {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      model: 'gpt-5.6-sol',
+      provider: 'codex'
+    }
+    expect(estimateCostUsd(usage, GPT_5_6_SOL_PROMO_UNTIL_MS)).toBeCloseTo(24, 6)
+    expect(estimateCostUsd(usage, GPT_5_6_SOL_PROMO_UNTIL_MS + 1)).toBeCloseTo(35, 6)
+    expect(estimateCostUsd(usage)).toBeCloseTo(35, 6)
+  })
+
+  /**
+   * « Short context: ≤272K input tokens. Long context: >272K input tokens. » (même page). Le seuil
+   * EST publié : l'ancien commentaire disait le contraire. Comme pour Haiku 5.5, il se juge par
+   * requête : un total de plusieurs requêtes reste au prix court (plancher).
+   */
+  it('au-delà de 272 000 tokens sur UNE requête : le prix long contexte', () => {
+    const une = { provider: 'codex', requests: 1, outputTokens: 1_000_000 }
+    // 272 000 tout juste : encore le prix court.
+    expect(estimateCostUsd({ ...une, inputTokens: 272_000, model: 'gpt-6.1-sol' })).toBeCloseTo(
+      0.272 * 2 + 10,
+      6
+    )
+    // 300 000 : 4 $ / 15 $ pour gpt-6.1-sol, 2 $ / 7,50 $ pour gpt-6.1-terra.
+    expect(estimateCostUsd({ ...une, inputTokens: 300_000, model: 'gpt-6.1-sol' })).toBeCloseTo(
+      0.3 * 4 + 15,
+      6
+    )
+    expect(estimateCostUsd({ ...une, inputTokens: 300_000, model: 'gpt-6.1-terra' })).toBeCloseTo(
+      0.3 * 2 + 7.5,
+      6
+    )
+    // Pendant la promotion de gpt-5.6-sol : 8 $ / 30 $.
+    expect(
+      estimateCostUsd(
+        { ...une, inputTokens: 300_000, model: 'gpt-5.6-sol' },
+        GPT_5_6_SOL_PROMO_UNTIL_MS
+      )
+    ).toBeCloseTo(0.3 * 8 + 30, 6)
+    // Après la promotion : 10 $ / 45 $, soit « 2x input and 1.5x output for the full request »
+    // appliqués à 5 $ / 30 $ (page du modèle relue le 2026-11-05). Entrée qui donnerait tort à la
+    // correction : ce même appel rendrait 0,3 × 5 + 30 = 31,50 $ si l'après-promotion restait au
+    // prix court (conv-1602).
+    expect(
+      estimateCostUsd(
+        { ...une, inputTokens: 300_000, model: 'gpt-5.6-sol' },
+        GPT_5_6_SOL_PROMO_UNTIL_MS + 1
+      )
+    ).toBeCloseTo(0.3 * 10 + 45, 6)
+    // Jumeau : le même total sur plusieurs requêtes reste au prix court.
+    expect(
+      estimateCostUsd({ ...une, requests: 3, inputTokens: 300_000, model: 'gpt-6.1-sol' })
+    ).toBeCloseTo(0.3 * 2 + 10, 6)
+  })
+
+  it('l’écriture en cache reste à 1,25× l’entrée (écriture 30 min de la grille)', () => {
+    // gpt-6.1-sol : 2,50 $ le million écrit pour 30 min, soit 1,25 × 2 $.
+    expect(
+      estimateCostUsd({
+        inputTokens: 1_000_000,
+        cacheCreationTokens: 1_000_000,
+        model: 'gpt-6.1-sol',
+        provider: 'codex'
+      })
+    ).toBeCloseTo(2.5, 6)
+  })
 })
 
 describe('splitInputTokens — un seul arbitre de l’invariant « le cache est un sous-ensemble »', () => {
