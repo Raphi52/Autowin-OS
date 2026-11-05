@@ -1357,6 +1357,16 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
     if (!entree.proposerNouvelleCible || finEcriteParAutowin)
       return { action: 'arreter', raison: finDeChaine, message: MESSAGES_ARRET[finDeChaine] }
     /*
+     * AUTOWIN_FIN_V1 : l'agent DECLARE la chaine finie, le fil affiche s'eteint lui aussi (conv-1575,
+     * « quand ya écris ça, ça doit arrêter le mode auto aussi »). La releve ne reste que pour une fin
+     * devinee sur une rubrique « rien » (conv-307). Une question laissee ouverte garde sa raison :
+     * le fil affiche dit alors qu'elle attend l'utilisateur, pas seulement que c'est fini (conv-1341).
+     */
+    if (finDeChaine === 'fin-explicite') {
+      const raison: RaisonArret = dernierAsk(entree.fil) ? 'suite-attend-utilisateur' : finDeChaine
+      return { action: 'arreter', raison, message: MESSAGES_ARRET[raison] }
+    }
+    /*
      * Deja demandee DANS CETTE SERIE : on PATIENTE, l'interrupteur reste allume. Le compte vient du
      * FIL, depuis le dernier message de l'utilisateur — pas du seul dernier envoi. Depuis 4399faa7
      * (21/09), la reponse automatique a la question `ask` s'intercale entre deux releves : comparer

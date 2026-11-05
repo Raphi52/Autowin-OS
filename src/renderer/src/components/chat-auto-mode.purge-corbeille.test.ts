@@ -240,8 +240,9 @@ describe('mode auto — une question destructrice arrête aussi la fin de chaîn
     expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject(arret)
   })
 
+  // Une fin devinée sur « rien » : AUTOWIN_FIN_V1, lui, éteint le fil affiché (conv-1575).
   it('jumeau : sans question, la fin de chaîne envoie toujours sa relève', () => {
-    const fil = [humain, reponse('## À purger\n- rien\n\nAUTOWIN_FIN_V1')]
+    const fil = [humain, reponse('## À purger\n- rien\n\n⏳ Reste à faire : rien')]
     expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject({
       action: 'envoyer',
       texte: PROMPT_NOUVELLE_CIBLE
@@ -271,7 +272,7 @@ describe('mode auto — une question destructrice arrête aussi la fin de chaîn
     const fil = [
       humain,
       { role: 'user', content: PROMPT_NOUVELLE_CIBLE } as Msg,
-      avecQuestion('Bilan.\n\nAUTOWIN_FIN_V1', OPTIONS_DU_GC)
+      avecQuestion('Bilan.\n\n⏳ Reste à faire : rien', OPTIONS_DU_GC)
     ]
     expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject({
       action: 'attendre',
