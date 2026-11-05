@@ -155,6 +155,21 @@ export function verifierPropositions(spec) {
         erreurs.push('« scene3d » : « </script » fermerait le script de la scène dans la page')
     }
   }
+  /*
+   * UN SUJET MODÉLISÉ EN VOLUME SE MONTRE EN VOLUME (conv-1558, 2026-11-05) : le draft des
+   * tanukis expressifs avait 7 modèles Blender, et le carrousel montrait des têtes SVG
+   * « redessinées d'après les rendus » — « j'avais clairement demandé du 3d ». Le texte du
+   * carrousel qui dit lui-même que le sujet est en 3D exige la scène.
+   */
+  if (spec.scene3d === undefined) {
+    const texte = [spec.intro, ...(Array.isArray(spec.propositions) ? spec.propositions : []).map(
+      (p) => [p?.resume, p?.visuel, p?.fonctionnement].join(' ')
+    )].join(' ')
+    if (/\bblender\b|\.blend\b|\.glb\b|\bmod[ée]lis[ée]s?\b|\b3\s?d\b/iu.test(texte))
+      erreurs.push(
+        '« scene3d » : le sujet est modélisé en 3D (le texte le dit) — montre les modèles dans une scène three.js, pas des images redessinées'
+      )
+  }
   if (spec.mixer !== undefined && typeof spec.mixer !== 'boolean')
     erreurs.push('« mixer » : true ou false attendu')
   const propositions = spec.propositions

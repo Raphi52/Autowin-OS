@@ -114,6 +114,17 @@ describe('/draft en volume — une seule page interactive qui porte sa scene', (
     expect(() => pageDuCarrousel3d(spec(false))).toThrow(/scene3d/u)
   })
 
+  it('refuse un sujet modelise en 3D montre sans scene (conv-1558 : des SVG redessines des .blend)', () => {
+    const plat = {
+      ...spec(false),
+      intro: 'Modélisés dans Blender ; les têtes ci-dessous sont redessinées d’après les rendus.'
+    }
+    expect(verifierPropositions(plat).join(' ')).toMatch(/scene3d/u)
+    expect(verifierPropositions({ ...plat, scene3d: 'autowin.surChoix(f)' })).toEqual([])
+    // Controle negatif : un draft d'interface sans mot de volume reste libre de sa forme.
+    expect(verifierPropositions({ ...spec(false), intro: 'Trois mises en page.' })).toEqual([])
+  })
+
   it('refuse une scene qui ne suit pas la proposition affichee, ou qui fermerait son script', () => {
     const muette = { ...spec(), scene3d: 'const r = new THREE.WebGLRenderer();' }
     expect(verifierPropositions(muette).join(' ')).toMatch(/autowin\.surChoix/u)
