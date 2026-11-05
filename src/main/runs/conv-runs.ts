@@ -154,6 +154,17 @@ function comparableTask(task: string): string {
 }
 
 /**
+ * Jour AAAA-MM-JJ du fuseau du POSTE. `toISOString().slice(0, 10)` rend le jour UTC : entre minuit
+ * et 1 h à Paris (2 h l'été), le RUN.md portait la date de la veille (scout du 05/11, piste 18,
+ * conv-1602). `conv-runs.date-locale.test.ts` le prouve à 00 h 30 heure de Paris.
+ * fix-ok: cause mesurée — les deux dates (création, clôture) venaient de `toISOString().slice(0, 10)` ; à 23 h 30 UTC sous TZ=Europe/Paris, le test attendait [2026-11-06] et lisait [2026-11-05] (rouge avant, vert après).
+ */
+function jourLocal(instant: Date): string {
+  const deux = (n: number): string => String(n).padStart(2, '0')
+  return `${instant.getFullYear()}-${deux(instant.getMonth() + 1)}-${deux(instant.getDate())}`
+}
+
+/**
  * Crée le RUN.md (status: open) d'une tâche lancée depuis une conversation.
  *
  * POURQUOI AUCUNE CASE DE DoD N'EST PRÉ-REMPLIE. Le gabarit en posait une : « le juge valide le
@@ -192,7 +203,7 @@ export function createConvRun(
   const dir = join(root, convId, `${slugify(task)}-${now().toString(36)}-workspace`)
   mkdirSync(dir, { recursive: true })
   const path = join(dir, 'RUN.md')
-  const date = new Date(now()).toISOString().slice(0, 10)
+  const date = jourLocal(new Date(now()))
   const dod = rootDodLabels(task, phasesProgrammees)
     .map((label) => `- [ ] ${label}`)
     .join('\n')
@@ -392,10 +403,45 @@ export function populateConvRunSections(
       .filter((p) => p.phase === 'salvage' && p.text?.trim())
       .map((p) => `- Reprise (salvage) : ${p.text.replace(/\s*\n\s*/g, ' · ').trim().slice(0, 600)}`)
       .slice(-1)[0]
-    const contenuDefauts = [defauts, reprise].filter(Boolean).join('\n')
+    /*
+     * Les objections BLOQUANTES du juge sont des défauts du run (conv-1578) : un run refusé montrait
+     * `## Défauts` vide, ses MAJEUR/MINEUR enfouis dans l'annexe coupée à 2 000 caractères. Les
+     * lignes `OK:` n'en sont pas.
+     */
+    const objections = phaseOutputs
+      .filter((p) => /^(judge|juge)$/i.test(p.phase))
+      .slice(-1)
+      .flatMap((p) => p.text.split('\n'))
+      .map((ligne) => ligne.trim().replace(/^-\s*/, ''))
+      .filter((ligne) => /^(MAJEUR|MINEUR)\s*:/.test(ligne))
+      .slice(0, 10)
+      .map((ligne) => `- ${ligne.slice(0, 300)}`)
+    const contenuDefauts = [defauts, ...objections, reprise].filter(Boolean).join('\n')
     if (contenuDefauts) {
       md = md.replace(/(\n##\s+Défauts\s*\n)[\s\S]*?(?=\n##\s)/, `$1${contenuDefauts}\n`)
     }
+
+    /*
+     * `## Checks` naissait vide et rien ne l'écrivait (conv-1578), alors que chaque commande de
+     * vérification est connue avec son code de sortie. Une ligne par commande, son DERNIER résultat :
+     * un test rouge puis vert après correction se lit vert. Réécrit à chaque phase, donc idempotent.
+     */
+    const dernieres = new Map<string, ExecutionEvidence>()
+    for (const p of phaseOutputs)
+      for (const preuve of p.executionEvidence ?? []) {
+        const commande = preuve.command?.replace(/\s+/g, ' ').trim()
+        if (preuve.kind !== 'verification' || !commande) continue
+        dernieres.delete(commande)
+        dernieres.set(commande, preuve)
+      }
+    const checks = [...dernieres]
+      .slice(-CHECKS_MAX)
+      .map(
+        ([commande, preuve]) =>
+          `- ${preuve.exitCode !== undefined ? `exit ${preuve.exitCode}` : preuve.ok ? 'ok' : 'échec'} · ${commande.slice(0, 200)}`
+      )
+    if (checks.length)
+      md = md.replace(/(\n##\s+Checks[ \t]*\n)[\s\S]*?(?=\n##\s|$)/, `$1${checks.join('\n')}\n`)
 
     /*
      * Les titres `#`/`##` d'une phase sont rétrogradés (conv-1150, 2026-10-26). Un agent qui
@@ -436,15 +482,83 @@ export function ligneJournalDErreur(e: unknown): string {
     .slice(0, 600)
 }
 
+/** Commandes de vérification gardées sous `## Checks` : les plus récentes. */
+const CHECKS_MAX = 12
+
+/** Sections du gabarit qu'un run peut finir sans rien y avoir écrit. */
+const SECTIONS_DU_GABARIT = ['Contraintes', 'Options', 'SOP', 'Défauts', 'Cicatrices', 'Checks']
+
+/**
+ * Bornes de la DERNIÈRE section `## <titre>` : celle du gabarit, jamais un titre identique écrit
+ * plus haut par l'utilisateur dans son besoin (les phases annexées ont leurs titres rétrogradés).
+ */
+function bornesDeSection(
+  md: string,
+  titre: string
+): { debut: number; corps: number; fin: number } | null {
+  const titres = [...md.matchAll(new RegExp(`^## ${titre}[ \\t]*$`, 'gm'))]
+  const dernier = titres[titres.length - 1]
+  if (dernier?.index === undefined) return null
+  const corps = dernier.index + dernier[0].length
+  const suivante = md.slice(corps).search(/\n## /)
+  return { debut: dernier.index, corps, fin: suivante < 0 ? md.length : corps + suivante + 1 }
+}
+
+/**
+ * LA REPRISE ET LES SECTIONS VIDES À LA CLÔTURE (conv-1578). Aucun code de l'app n'écrivait
+ * `## Reprise` : ses cinq champs restaient vides sur chaque run. On y met ce qui est SU au moment de
+ * clore — le but (première ligne du besoin), les phases jouées, et pour un run qui n'est pas vert la
+ * cause de sa clôture — puis on retire les champs et les sections du gabarit restés vides. Rien n'est
+ * inventé : `Hypothesis` et `Next` n'ont pas de source dans l'app, ils partent s'ils sont vides.
+ */
+function rapportClos(md: string, status: RunFileStatus, journalLine: string): string {
+  const besoin = bornesDeSection(md, 'Besoin')
+  const but = besoin
+    ? md
+        .slice(besoin.corps, besoin.fin)
+        .split('\n')
+        .map((ligne) => ligne.trim())
+        .find(Boolean)
+        ?.slice(0, 200)
+    : undefined
+  const phases = [...new Set([...md.matchAll(/^### phase (\S+)/gm)].map((m) => m[1]))]
+  const valeurs: Record<string, string | undefined> = {
+    Goal: but,
+    Tried: phases.length ? `phases ${phases.join(', ')}` : undefined,
+    Blockers: status === 'green' ? undefined : journalLine.replace(/\s+/g, ' ').trim()
+  }
+  const reprise = bornesDeSection(md, 'Reprise')
+  if (reprise) {
+    const corps = md
+      .slice(reprise.corps, reprise.fin)
+      .replace(/^(Goal|Hypothesis|Tried|Next|Blockers):[ \t]*$/gm, (champ, nom: string) =>
+        valeurs[nom] ? `${nom}: ${valeurs[nom]}` : champ
+      )
+      .replace(/^(Goal|Hypothesis|Tried|Next|Blockers):[ \t]*\n/gm, '')
+    md = `${md.slice(0, reprise.corps)}${corps}${md.slice(reprise.fin)}`
+  }
+  for (const titre of [...SECTIONS_DU_GABARIT, 'Reprise']) {
+    const section = bornesDeSection(md, titre)
+    if (!section) continue
+    const contenu = md.slice(section.corps, section.fin).replace(/<!--[\s\S]*?-->/g, '')
+    if (!contenu.trim()) md = `${md.slice(0, section.debut)}${md.slice(section.fin)}`
+  }
+  return md
+}
+
 /** Texte d'un RUN.md une fois clos : partagé par la clôture synchrone et la réconciliation. */
 function texteClos(md: string, status: RunFileStatus, journalLine: string): string {
   // Le cochage auto de « le juge valide … » est retiré avec la case elle-même : il cochait un
   // pseudo-critère au moment où le statut le disait déjà. Une DoD RÉELLE, elle, n'est jamais cochée
   // par la clôture — c'est à celui qui produit la preuve de la cocher, sinon la case ne prouve rien.
-  return md
-    .replace(/^status: open/m, `status: ${status}`)
-    .replace(/^## Journal$/m, `## Journal`)
-    .replace(/(## Journal\n)/, `$1[${new Date().toISOString().slice(0, 10)}] ${journalLine}\n`)
+  return rapportClos(
+    md
+      .replace(/^status: open/m, `status: ${status}`)
+      .replace(/^## Journal$/m, `## Journal`)
+      .replace(/(## Journal\n)/, `$1[${jourLocal(new Date())}] ${journalLine}\n`),
+    status,
+    journalLine
+  )
 }
 
 /**
