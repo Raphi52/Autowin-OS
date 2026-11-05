@@ -4,6 +4,8 @@ import type { ConversationFileTrace } from './activity/conversation-file-trace-s
 import { appliquerLeTour, ouvrirCopieDeBase, type CopieDeBase } from './comparaison-a-la-base'
 import { exactLineFingerprint } from './exact-line-fingerprint'
 import { titreDeCommitAuto } from './titre-de-commit'
+import { lireLangueReglee } from './langue-reglage'
+import type { Langue } from '../shared/langue'
 import type { TypageAvantPublication } from './typage-avant-publication'
 import {
   autoCloseBranch,
@@ -263,12 +265,14 @@ function messageDeCommit(
   conversationId: string,
   request: string,
   compteRendu: string | undefined,
-  fichiers: readonly string[]
+  fichiers: readonly string[],
+  langueDuCompteRendu: Langue
 ): string {
   return titreDeCommitAuto({
     id: conversationId,
     demande: request,
     compteRendu,
+    langueDuCompteRendu,
     fichiers,
     repli: 'travail du chat'
   })
@@ -287,6 +291,11 @@ export async function publierTourDeChat(input: {
   request: string
   /** Texte final du tour : son bloc « ✅ Fait » donne le titre du commit (conv-1069). */
   compteRendu?: string
+  /**
+   * Langue de `compteRendu` ; absent = celle réglée dans Settings · Interface, qui est celle de la
+   * réponse. Une réponse en anglais n'est pas recopiée dans le titre (conv-1581).
+   */
+  langueDuCompteRendu?: Langue
   debut: ChatTurnStart
   traces: readonly ConversationFileTrace[]
   /**
@@ -506,7 +515,13 @@ export async function publierTourDeChat(input: {
   const project = await autoCloseRun({
     repo,
     branch: brancheDuTour(conversationId, turnId),
-    message: messageDeCommit(conversationId, input.request, input.compteRendu, publier),
+    message: messageDeCommit(
+      conversationId,
+      input.request,
+      input.compteRendu,
+      publier,
+      input.langueDuCompteRendu ?? lireLangueReglee()
+    ),
     paths: publier,
     runGit,
     direct: true,

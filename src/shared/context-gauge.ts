@@ -39,9 +39,10 @@ export interface ContextWindow {
  * les fenetres differant d'un facteur cinq entre eux (200 k a 1 M), appliquer 200 k partout
  * affichait « sature » a 20 % sur Gemini.
  *
- * La variante longue fenetre de Sonnet n'est deliberement pas declaree : elle depend d'un en-tete
- * de beta que ce depot n'envoie pas, et supposer 1 M la ou le modele en sert 200 k afficherait
- * 12 % pour un fil en realite sature.
+ * Un modele reellement servi a 200 k doit garder SON entree, placee avant le motif generique de
+ * sa famille (cas de `haiku-4-5`) : supposer 1 M la ou le modele en sert 200 k afficherait 12 %
+ * pour un fil en realite sature. (Ce paragraphe disait que la longue fenetre de Sonnet n'etait pas
+ * declaree : faux depuis le 2026-03-13, corrige le 2026-11-05, conv-1581.)
  */
 export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   // Anthropic — toute la famille servie par le CLI (`model-aliases.ts` : opus, sonnet, haiku,
@@ -62,12 +63,19 @@ export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   // tarif standard, sans en-tete de beta. L'utilisateur avait donc raison les trois fois, et
   // « aucune source ne l'etablit » etait un raisonnement tenu a la place d'une verification.
   //
-  // HAIKU garde 200 k : c'est desormais LUI le modele d'exemple des tests, plus opus ni sonnet.
+  // HAIKU, FABLE, MYTHOS : 1 M aussi (2026-11-05, conv-1581). Les fiches modèles Anthropic
+  // (platform.claude.com/docs/en/models/overview et les pages haiku-5-5, fable-5, fable-5-1,
+  // mythos-5-1) donnent « Context window: 1M tokens » à toute la gamme courante ; le CLI le
+  // confirme (`contextWindow: 1000000` pour `claude-haiku-5-5` dans 318 sorties de run). Les
+  // déclarer à 200 k faisait compacter le CLI vers 170 k au lieu de 850 k.
+  // Seul HAIKU 4.5 reste à 200 k (page models/haiku-4-5/overview) : son entrée passe AVANT
+  // `haiku`, la recherche prenant le premier motif contenu dans l'identifiant.
+  { match: 'haiku-4-5', provider: 'claude', tokens: 200_000, source: 'Anthropic — platform.claude.com/docs/en/models/haiku-4-5/overview : Context window 200K tokens (lu le 2026-11-05)' },
   { match: 'opus', provider: 'claude', tokens: 1_000_000, source: 'Anthropic — 1M généralement disponible depuis 2026-03-13 (Opus/Sonnet), tarif standard' },
   { match: 'sonnet', provider: 'claude', tokens: 1_000_000, source: 'Anthropic — 1M généralement disponible depuis 2026-03-13 (Opus/Sonnet), tarif standard' },
-  { match: 'haiku', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
-  { match: 'fable', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
-  { match: 'mythos', provider: 'claude', tokens: 200_000, source: 'Anthropic — Claude, fenêtre standard 200k' },
+  { match: 'haiku', provider: 'claude', tokens: 1_000_000, source: 'Anthropic — platform.claude.com/docs/en/models/overview : Claude Haiku 5.5, Context window 1M tokens (lu le 2026-11-05)' },
+  { match: 'fable', provider: 'claude', tokens: 1_000_000, source: 'Anthropic — platform.claude.com/docs/en/models/fable-5/overview et fable-5-1 : Context window 1M tokens (lu le 2026-11-05)' },
+  { match: 'mythos', provider: 'claude', tokens: 1_000_000, source: 'Anthropic — platform.claude.com/docs/en/models/mythos-5-1/overview : Context window 1M tokens, mêmes specs que Fable (lu le 2026-11-05)' },
   // OpenAI / Codex — `gpt-6` AVANT `luna`, dont le motif le prendrait sinon pour un GPT-5. 272 k est
   // la fenetre que le CLI 0.166 declare pour ce modele (`context_window`, mesure le 2026-10-31,
   // conv-1414) ; c'est aussi le seuil du tarif normal sur la grille OpenAI.

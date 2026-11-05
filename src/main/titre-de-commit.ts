@@ -8,7 +8,13 @@
  *
  * La phrase vient, dans l'ordre : de la 1re action du DERNIER bloc « ✅ Fait » du tour (ce qu'il a
  * réellement fait, `agent-pilot.ts` l'impose en liste numérotée), puis de la 1re ligne de la
- * demande si c'en est une vraie. Sinon, REPLI sur l'ancien format : on n'invente pas un résumé.
+ * demande si c'en est une vraie, puis des fichiers publiés. Sinon, REPLI sur l'ancien format : on
+ * n'invente pas un résumé.
+ *
+ * LANGUE (conv-1581, 2026-11-05) : la réponse suit le réglage Settings · Interface, le message de
+ * commit suit la règle du projet (français). Depuis le passage en anglais (conv-1172, 27/10), 18 des
+ * 424 derniers commits recopiaient « Created D:\AutoWinOS\… » depuis le « ✅ Fait ». Une réponse
+ * déclarée en anglais n'est donc JAMAIS recopiée : le titre vient de la demande, sinon des fichiers.
  */
 
 export interface EntreeTitreDeCommit {
@@ -17,6 +23,11 @@ export interface EntreeTitreDeCommit {
   demande: string
   /** Texte final du tour : son bloc « ✅ Fait » dit ce qui a été fait. */
   compteRendu?: string
+  /**
+   * Langue dans laquelle le tour a écrit `compteRendu` (réglage Settings · Interface). Seul le
+   * français est recopié dans le titre ; absent = français, l'usage d'avant le réglage.
+   */
+  langueDuCompteRendu?: 'fr' | 'en'
   /** Chemins publiés (relatifs au dépôt) : ils donnent la zone et parfois le type. */
   fichiers?: readonly string[]
   /** Zone quand aucun fichier n'est connu. */
@@ -47,9 +58,13 @@ const DOSSIERS_GENERIQUES = new Set([
   'lib'
 ])
 
+/** Chemin absolu Windows (`D:\…\x.ts`) : la consigne l'impose dans les réponses, pas dans un titre. */
+const CHEMIN_ABSOLU = /[A-Za-z]:[\\/](?:[^\s\\/]+[\\/])*([^\s\\/]+)/gu
+
 function sansMarkdown(texte: string): string {
   return texte
     .replace(/\[([^\]]+)\]\([^)]*\)/gu, '$1')
+    .replace(CHEMIN_ABSOLU, '$1')
     .replace(/\*\*|__|`/gu, '')
     .replace(/\s+/gu, ' ')
     .trim()
@@ -99,6 +114,22 @@ function zoneDesFichiers(fichiers: readonly string[]): string | undefined {
   return DOSSIERS_GENERIQUES.has(dernier) ? nomDeBase(retenus[0] ?? '') : dernier
 }
 
+/** Ce que les fichiers publiés disent du travail, en français : un fait, pas un résumé inventé. */
+function phraseDesFichiers(fichiers: readonly string[]): string {
+  if (fichiers.length === 0) return ''
+  const nom = (chemin: string): string => chemin.split(/[\\/]/u).pop() ?? chemin
+  const sources = fichiers.filter((f) => !EST_UN_TEST.test(f))
+  const tests = fichiers.length - sources.length
+  const cites = (sources.length > 0 ? sources : fichiers).map(nom)
+  const autres = cites.length - 3
+  const liste =
+    autres > 0
+      ? `${cites.slice(0, 3).join(', ')} et ${autres} autre${autres > 1 ? 's' : ''}`
+      : cites.join(', ')
+  if (sources.length === 0 || tests === 0) return `modifie ${liste}`
+  return `modifie ${liste} et ${tests} fichier${tests > 1 ? 's' : ''} de test`
+}
+
 function typeDuTravail(phrase: string, fichiers: readonly string[]): string {
   if (fichiers.length > 0 && fichiers.every((f) => EST_UN_TEST.test(f))) return 'test'
   if (fichiers.length > 0 && fichiers.every((f) => f.toLowerCase().endsWith('.md'))) return 'docs'
@@ -114,19 +145,21 @@ export function titreDeCommitAuto(entree: EntreeTitreDeCommit): string {
   ).replace(/\s+/gu, ' ')
   const commande = COMMANDE_SLASH.exec(demande)?.[1]
   const demandeSansCommande = demande.replace(COMMANDE_SLASH, '')
-  const faite = premiereActionFaite(entree.compteRendu)
+  // fix-ok: le titre recopiait le « ✅ Fait » de la réponse, écrite dans la langue de l'interface (anglais depuis conv-1172) — rouge reproduit « Created D:\AutoWinOS\… » (conv-1581)
+  const faite =
+    entree.langueDuCompteRendu === 'en' ? undefined : premiereActionFaite(entree.compteRendu)
+  const fichiers = entree.fichiers ?? []
   const phrase = faite
     ? sansMarkdown(faite)
     : !estElliptique(demandeSansCommande)
       ? sansMarkdown(demandeSansCommande)
-      : ''
+      : phraseDesFichiers(fichiers)
   if (!phrase) {
     // L'ancien format, à l'identique : sans « ✅ Fait » ni vraie demande, rien ne dit le travail.
     const tete =
       entree.demande.replace(/\s+/gu, ' ').trim().slice(0, 100) || entree.repli || 'travail du chat'
     return `auto(${entree.id}): ${tete}`
   }
-  const fichiers = entree.fichiers ?? []
   const zone = zoneDesFichiers(fichiers) ?? commande ?? entree.zoneParDefaut ?? 'chat'
   return `${typeDuTravail(phrase, fichiers)}(${zone}): ${borner(phrase)} (${entree.id})`
 }

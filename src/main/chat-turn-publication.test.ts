@@ -154,6 +154,33 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
     expect(subject).toBe('fix(mine): Corrigé la constante a qui manquait (conv-A)')
   })
 
+  it('réponse en anglais : le titre du commit vient de la demande, pas du « ✅ Fait » (conv-1581)', async () => {
+    // L'entrée qui ferait échouer ce test si la correction était fausse : le « ✅ Fait » anglais
+    // « Created D:\…\mine.ts » — un titre encore recopié de la réponse commence par « Created ».
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'mine.ts'), 'export const a = 1\n')
+
+    await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute la constante a au module',
+      compteRendu: '### ✅ Fait\n1. Created D:\\depot\\mine.ts with the missing constant\n',
+      langueDuCompteRendu: 'en',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ]
+    })
+
+    const subject = (await run('git', ['log', '-1', '--format=%s'], { cwd: repo })).stdout.trim()
+    expect(subject).toBe('feat(mine): ajoute la constante a au module (conv-A)')
+  })
+
   it('laisse en attente un fichier sans preuve par lignes quand un autre fil y a touché pendant le tour', async () => {
     const { repo, remote } = await depot()
     const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
