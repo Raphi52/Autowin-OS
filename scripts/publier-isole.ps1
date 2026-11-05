@@ -77,6 +77,23 @@ function Nettoyer {
   git -C $depot worktree prune 2>$null | Out-Null
 }
 
+<#
+  MESSAGE MAL DECODE = REFUS, avant tout geste. Mesure du 2026-11-05 (conv-1590) : un .ps1 appelant
+  enregistre en UTF-8 SANS BOM, lance par Windows PowerShell 5.1, est lu en ANSI ; son message de
+  commit est arrive ici deja casse (« aperÃ§us » pour « aperçus ») et a ete publie tel quel sur
+  main (d06f79a5), ou seul un push force le reparerait. L'UTF-8 lu en Windows-1252 laisse une
+  signature : un octet de tete (Â, Ã, Ä, Å ; â pour €, tirets, guillemets ; ð pour les
+  emojis) suivi d'un octet de suite lu en Windows-1252. Pas é/è/à : « fermé… » est du francais. Motif en
+  echappements \u : ce fichier peut lui-meme etre lu en ANSI.
+#>
+$motifMalDecode = '[\u00C2-\u00C5\u00E2\u00F0][\u0080-\u00BF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013\u2014\u2018-\u201E\u2020-\u2022\u2026\u2030\u2039\u203A\u20AC\u2122]'
+if ($Message -match $motifMalDecode) {
+  # Texte du refus en ASCII seul, pour la meme raison que le motif.
+  [Console]::Error.WriteLine("Message de commit mal decode (UTF-8 lu en ANSI) pres de '$($Matches[0])' : rien n'a ete publie. " +
+    'Enregistre le .ps1 appelant en UTF-8 AVEC BOM (Windows PowerShell 5.1 lit un fichier sans BOM en ANSI).')
+  exit 1
+}
+
 try {
   $manquants = $Fichiers | Where-Object { -not (Test-Path (Join-Path $depot $_)) }
   if ($manquants) { throw "Fichier(s) introuvable(s) : $($manquants -join ', ')" }
