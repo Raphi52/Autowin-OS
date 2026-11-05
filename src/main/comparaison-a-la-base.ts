@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process'
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, relative, sep } from 'node:path'
+import { readFile, readdir, stat } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { supprimerArbreAsync } from './fs-supprimer'
 import { delierLesDependances, lierLesDependances } from './store/dependances-copie-agent'
@@ -61,6 +62,9 @@ export type ComparaisonALaBase =
 
 const versSlash = (chemin: string): string => chemin.split(sep).join('/')
 
+/** Le préfixe des copies de base dans `%TEMP%` : le balayage ne regarde que lui. */
+export const PREFIXE_COPIE_DE_BASE = 'aw-base-'
+
 async function git(repo: string, args: readonly string[]): Promise<string> {
   const { stdout } = await executer('git', [...args], { cwd: repo, windowsHide: true })
   return String(stdout).trim()
@@ -78,8 +82,11 @@ async function git(repo: string, args: readonly string[]): Promise<string> {
  * fichiers de la copie sur le fil de la fenêtre, à chaque publication de tour — 320 s de fenêtre
  * figée du 21 au 23/10 dans `gels.jsonl`, pire 153,8 s (`comparaison-a-la-base.sans-gel.test.ts`).
  */
-export async function ouvrirCopieDeBase(repo: string): Promise<CopieDeBase> {
-  const parent = realpathSync.native(mkdtempSync(join(tmpdir(), 'aw-base-')))
+export async function ouvrirCopieDeBase(
+  repo: string,
+  racine: string = tmpdir()
+): Promise<CopieDeBase> {
+  const parent = realpathSync.native(mkdtempSync(join(racine, PREFIXE_COPIE_DE_BASE)))
   const chemin = join(parent, 'copie')
   const fermer = async (): Promise<void> => {
     const retrait = delierLesDependances(chemin)
@@ -104,6 +111,84 @@ export async function ouvrirCopieDeBase(repo: string): Promise<CopieDeBase> {
     throw erreur
   }
   return { chemin, fermer }
+}
+
+/**
+ * 6 h. Une copie de base vit le temps d'un contrôle de publication : un typage plafonné à 5 min
+ * (`typage-avant-publication.ts`), des lancements de tests plafonnés à 10 min (`VERIFY_TIMEOUT_MS`).
+ * Relevé du 05/11 à 08:00 : `aw-base-XT5ZBB` ouverte à 08:00:58, déjà refermée à 08:01:25. Au-delà
+ * de 6 h, plus aucune publication ne s'en sert — y compris celle d'une seconde instance de l'app.
+ */
+export const AGE_COPIE_DE_BASE_ORPHELINE_MS = 6 * 3_600_000
+
+export interface BalayageDesCopiesDeBase {
+  /** Les dossiers `aw-base-*` retirés (chemins complets). */
+  supprimees: string[]
+  /** Ceux qui sont restés, avec la cause lue : un ménage muet se lirait « tout est fait ». */
+  echecs: Array<{ chemin: string; raison: string }>
+}
+
+/** Le dépôt commun d'une copie, lu dans son `.git` (`gitdir: <commun>/worktrees/<nom>`). */
+async function depotCommunDe(copie: string): Promise<string | undefined> {
+  const contenu = await readFile(join(copie, '.git'), 'utf8').catch(() => '')
+  const gitdir = /^gitdir:\s*(.+?)\s*$/mu.exec(contenu)?.[1]
+  if (!gitdir || basename(dirname(gitdir)) !== 'worktrees') return undefined
+  return dirname(dirname(gitdir))
+}
+
+/**
+ * COPIES DE BASE LAISSÉES PAR UN PROCESSUS MORT (conv-1583, 2026-11-05, scout de conv-1576).
+ *
+ * `fermer()` ne tourne que si le processus vit jusqu'au bout de la comparaison. Relevé du 05/11 :
+ * quatre `%TEMP%\aw-base-*` du 04/11 toujours sur le disque et inscrites dans `git worktree list`,
+ * dont `aw-base-92mlRA\copie\node_modules`, jonction vers `D:\AutoWinOS\node_modules`. Rien d'autre
+ * ne les retirait — et un `git worktree remove --force` lancé à la main sur l'une d'elles efface les
+ * modules du dépôt à travers la jonction.
+ *
+ * Même ordre que `fermer()` : la jonction d'abord (`delierLesDependances`), puis le dossier par
+ * `supprimerArbreAsync` (qui ne suit jamais un lien), puis `git worktree prune` dans le dépôt de la
+ * copie pour retirer l'inscription. Seuls les `aw-base-*` plus vieux que `ageMiniMs` partent : une
+ * publication EN COURS n'est jamais touchée. Ne lève jamais : c'est un ménage de démarrage.
+ */
+export async function balayerCopiesDeBaseOrphelines(
+  options: { racine?: string; ageMiniMs?: number; maintenant?: number } = {}
+): Promise<BalayageDesCopiesDeBase> {
+  const racine = options.racine ?? tmpdir()
+  const ageMiniMs = options.ageMiniMs ?? AGE_COPIE_DE_BASE_ORPHELINE_MS
+  const maintenant = options.maintenant ?? Date.now()
+  const bilan: BalayageDesCopiesDeBase = { supprimees: [], echecs: [] }
+  const entrees = await readdir(racine, { withFileTypes: true }).catch(() => [])
+  const depots = new Set<string>()
+  for (const entree of entrees) {
+    if (!entree.isDirectory() || !entree.name.startsWith(PREFIXE_COPIE_DE_BASE)) continue
+    const parent = join(racine, entree.name)
+    const copie = join(parent, 'copie')
+    try {
+      // Le dossier parent n'est modifié qu'à la création de `copie` : sa date est celle de la copie.
+      if (maintenant - (await stat(parent)).mtimeMs < ageMiniMs) continue
+      const depot = await depotCommunDe(copie)
+      const retrait = delierLesDependances(copie)
+      if (retrait.fait === 'echec') {
+        bilan.echecs.push({ chemin: parent, raison: `jonction des modules : ${retrait.raison}` })
+        continue
+      }
+      await supprimerArbreAsync(parent)
+      bilan.supprimees.push(parent)
+      if (depot) depots.add(depot)
+    } catch (erreur) {
+      bilan.echecs.push({
+        chemin: parent,
+        raison: erreur instanceof Error ? erreur.message : String(erreur)
+      })
+    }
+  }
+  for (const depot of depots) {
+    if (!existsSync(depot)) continue
+    await git(depot, ['--git-dir', depot, 'worktree', 'prune']).catch((erreur: unknown) =>
+      console.warn(`[comparaison a la base] git worktree prune dans ${depot} :`, erreur)
+    )
+  }
+  return bilan
 }
 
 /** Pose sur la copie l'état des fichiers du tour tel qu'il sera commité (absent = supprimé). */
