@@ -349,6 +349,23 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
     expect(r.plan.toursLances).toBe(avant.toursLances - 1)
   })
 
+  // conv-1595 (plan-cf775786, lots 2 et 3) : copie de travail expirée, lots notés « fait », relance refusée.
+  it('tour ok dont l’orchestration a échoué hors quota : échec relançable, plan toujours en cours', () => {
+    const avant = deuxEnCours()
+    const delai = 'WorktreeOperationTimeoutError: Opération worktree interrompue après 182000 ms'
+    const r = noterFinDeTour(
+      avant,
+      'conv-110',
+      { ok: true, texte: `Échec du workflow : ${delai}`, echecOrchestration: delai },
+      3000
+    )
+    expect(r.lot?.etat).toBe('echec')
+    expect(r.lot?.raison).toMatch(/interrompue après 182000 ms/)
+    expect(r.plan.statut).toBe('en-cours')
+    expect(r.plan.toursLances).toBe(avant.toursLances)
+    expect(relancerLot(r.plan, 1).ok).toBe(true)
+  })
+
   // conv-1284 (2026-10-29, demande de l'utilisateur) : un tour qui n'a jamais démarré ne coûte rien.
   it('lancement qui n’a pas démarré : échec noté, tour rendu — une seule fois même s’il bute aussi sur la limite', () => {
     const avant = deuxEnCours()

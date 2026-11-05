@@ -850,6 +850,8 @@ function blocageDeclare(texte: string): string | undefined {
  * Un tour fini sans erreur dont la réponse se déclare bloquée (« ⛔ Bloqué », « ⚠️ Non résolu »)
  * est un ÉCHEC, avec sa ligne de blocage pour raison : noté « fait », le chef ne le relançait pas
  * (conv-1153). Seule la réponse visible compte, pas une suggestion invisible qui citerait le marqueur.
+ * Même chose pour un `orchestrate` en échec hors quota (copie de travail expirée, conv-1595) : le
+ * tour finit `ok` sur « Échec du workflow », et « fait » rendait le lot impossible à relancer.
  *
  * LIMITE D'USAGE (conv-1236, plan-c21413ba, 2026-10-28) : un lot coupé par le mur — erreur du tour
  * OU de son `orchestrate` — est en ÉCHEC et REND son tour au plafond, qu'il n'a pas pu dépenser.
@@ -870,9 +872,13 @@ export function noterFinDeTour(
   if (lot.etat !== 'en-cours' && !reprisApresRedemarrage) return { plan, effet: 'deja-note', lot }
   if (issue.tour && lot.tour && issue.tour !== lot.tour) return { plan, effet: 'autre-tour', lot }
   const erreur = (issue.erreur ?? '').trim()
-  const mur = [issue.ok ? '' : erreur, (issue.echecOrchestration ?? '').trim()].find(estMurDeQuota)
-  const blocage = issue.ok && !mur ? blocageDeclare(reponseVisible(issue.texte)) : undefined
-  const reussi = issue.ok && !blocage && !mur
+  const echecOrchestration = (issue.echecOrchestration ?? '').trim()
+  const mur = [issue.ok ? '' : erreur, echecOrchestration].find(estMurDeQuota)
+  // Un `orchestrate` en échec clôt le tour sur son seul message d'échec : rien n'a été livré.
+  const orchestrationRatee = !mur && echecOrchestration !== ''
+  const blocage =
+    issue.ok && !mur && !orchestrationRatee ? blocageDeclare(reponseVisible(issue.texte)) : undefined
+  const reussi = issue.ok && !blocage && !mur && !orchestrationRatee
   // conv-1284 : un blocage sur la question posée au chef n'est pas un échec — le lot attend.
   const attendChef = blocage !== undefined && ATTENTE_DU_CHEF.test(blocage)
   const raison = mur
@@ -882,7 +888,9 @@ export function noterFinDeTour(
       ? `question posée au chef ${plan.chef} : le lot attend sa réponse.`
       : blocage
         ? `le fil se déclare bloqué : ${blocage}`.slice(0, RAISON_MAX)
-        : issue.ok
+        : orchestrationRatee
+          ? `le travail lancé a échoué : ${echecOrchestration}`.slice(0, RAISON_MAX)
+          : issue.ok
           ? undefined
           : issue.annule
             ? 'tour arrêté avant la fin'
