@@ -50,7 +50,7 @@ describe('echelleMin', () => {
   })
 })
 
-// Le tanuki v3 est rendu en ×2 (conv-1558) : sa planche fait 3024 × 8840, les autres animaux restent en 1512 × 4420.
+// Les animaux v3 sont rendus en ×2 (conv-1558) : chaque planche fait 3024 × 9520 (28 rangées de 340 px).
 describe('finesseDePlanche', () => {
   it('lit 1 sur une planche à la grille de donnees.json, 2 sur une planche ×2', () => {
     expect(finesseDePlanche(1512, 126)).toBe(1)
@@ -79,13 +79,28 @@ function tailleAvif(chemin: string): [number, number] {
 
 describe('les planches livrées', () => {
   const dossier = join(__dirname, '../assets/quartier')
-  const { an } = JSON.parse(readFileSync(join(dossier, 'donnees.json'), 'utf8'))
+  const { an, gestes } = JSON.parse(readFileSync(join(dossier, 'donnees.json'), 'utf8')) as {
+    an: { cw: number; ch: number }
+    gestes: Record<string, { r: number; e?: { r: number } }>
+  }
   const planches = readdirSync(dossier).filter((f) => /^atlas.*\.avif$/.test(f))
+  // Chaque planche porte toutes les rangées que donnees.json fait jouer (28 depuis les visages de conv-1558) : une
+  // rangée qui manque chez un animal le rendrait invisible dans ce geste.
+  const rangees = 1 + Math.max(...Object.values(gestes).flatMap((g) => [g.r, g.e?.r ?? 0]))
 
-  it.each(planches)('%s : 12 colonnes et 26 rangées de la grille, à une finesse entière', (f) => {
-    const [w, h] = tailleAvif(join(dossier, f))
-    const k = finesseDePlanche(w, an.cw)
-    expect(w).toBe(COLONNES_PLANCHE * an.cw * k)
-    expect(h).toBe(26 * an.ch * k)
+  it('donnees.json fait jouer 28 rangées, visages compris', () => {
+    expect(rangees).toBe(28)
+    expect(gestes.bz.r).toBe(26)
+    expect(gestes.su.r).toBe(27)
   })
+
+  it.each(planches)(
+    '%s : 12 colonnes et toutes les rangées de la grille, à une finesse entière',
+    (f) => {
+      const [w, h] = tailleAvif(join(dossier, f))
+      const k = finesseDePlanche(w, an.cw)
+      expect(w).toBe(COLONNES_PLANCHE * an.cw * k)
+      expect(h).toBe(rangees * an.ch * k)
+    }
+  )
 })

@@ -14,7 +14,9 @@ zq = -pos[queue, 2]
 # le kendo, dont la case est décalée de 32 px vers l'avant, prend 0,22 et 0 (conv-1558).
 Z0 = float(sys.argv[3]) if len(sys.argv) > 3 else .30
 BOUT = float(sys.argv[4]) if len(sys.argv) > 4 else .3
-t = np.clip((zq - Z0) / (zq.max() - Z0), 0, 1)
+# Une queue qui ne dépasse pas Z0 (le panda, conv-1558) ne s'effile pas : sans le plancher, le dénominateur négatif
+# retournait le signe et raccourcissait TOUTE la queue au bout.
+t = np.clip((zq - Z0) / max(zq.max() - Z0, 1e-6), 0, 1)
 Q = np.ones(nv, np.float32)
 Q[queue] = 1 - (1 - BOUT) * t
 Q.tofile(sys.argv[2])

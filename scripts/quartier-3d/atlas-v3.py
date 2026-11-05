@@ -1,28 +1,32 @@
-# L'atlas du tanuki v3 en ×M (conv-1558, 2026-11-05) : les 26 rangées d'un coup, même ordre, mêmes nombres
+# L'atlas v3 d'un animal en ×M (conv-1558, 2026-11-05) : les 28 rangées d'un coup, même ordre, mêmes nombres
 # d'images, mêmes décalages et même traitement de case qu'atlas-plus.py puis atlas-plante.py (conv-1446/renard),
 # mais lues dans des rendus de 300·M px et réduites en cases de 126·M × 170·M. Une seule génération AVIF.
-# Usage : python atlas-v3.py <f-base> <f-plus> <f-plante> <sortie.avif> [M=2]   (QA = qualité AVIF, 62 par défaut)
+# Les cases à visage (liste-visages.txt) : le bain (rangée 13, content chez le tanuki), puis le bain endormi (26) et la
+# surprise (27), ajoutés pour « happy when a task finishes, surprised on an error, sleepy when nothing is running ».
+# Usage : python atlas-v3.py <f-base> <f-plus> <f-plante> <f-visages> <sortie.avif> [M=2]   (QA = qualité AVIF, 62 par défaut)
 import io, json, os, sys
 import numpy as np
 from PIL import Image
 from scipy import ndimage as ndi
 
-BASE, PLUS, PLANTE = (d.rstrip('/') + '/' for d in sys.argv[1:4])
-SORTIE = sys.argv[4]
-M = int(sys.argv[5]) if len(sys.argv) > 5 else 2
+BASE, PLUS, PLANTE, VISAGES = (d.rstrip('/') + '/' for d in sys.argv[1:5])
+SORTIE = sys.argv[5]
+M = int(sys.argv[6]) if len(sys.argv) > 6 else 2
 K = .62
 X0, Y0, X1, Y1 = 45, 25, 248, 299          # recadrage dans un rendu de 300 px (atlas.py, conv-1428)
 COLS = 12
 lig = [[BASE + f'm{y}-{i}.png' for i in range(8)] + [BASE + f'm{y}-d.png'] for y in (0, 45, 90, 135, 180)]
 lig += [[PLUS + f'{g}-{i}.png' for i in range(12)] for g in ('ma', 'pi', 'li', 'sa')]
 lig += [[PLUS + f'pa-{i}.png' for i in range(12)]]
-lig += [[PLUS + f'{e}-{i}.png' for i in range(12)] for e in ('as', 'at', 'pl', 'ba')]
+lig += [[PLUS + f'{e}-{i}.png' for i in range(12)] for e in ('as', 'at', 'pl')]
+lig += [[VISAGES + f'ba-{i}.png' for i in range(12)]]
 lig.append([BASE + f'me-{i}.png' for i in range(12)])
 NOUVEAUX = dict(mee=6, the=6, th=12, boe=6, bo=12, ra=12, ar=12, ke=12)
 for g, n in NOUVEAUX.items():
     lig.append([(PLUS if g in ('bo', 'ra', 'ar', 'ke') else BASE) + f'{g}-{i}.png' for i in range(n)])
 lig += [[PLANTE + f'{g}-{i}.png' for i in range(12)] for g in ('pr', 'fu', 'bi')]
-assert len(lig) == 26, len(lig)
+lig += [[VISAGES + f'{g}-{i}.png' for i in range(12)] for g in ('bz', 'su')]
+assert len(lig) == 28, len(lig)
 DECALE = dict(ra=20, ar=12, ke=32)          # le râteau, l'arrosoir et le sabre dépassent devant lui
 cw, ch = round((X1 - X0) * K), round((Y1 - Y0) * K)
 CW, CH = cw * M, ch * M

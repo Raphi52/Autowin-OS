@@ -72,6 +72,28 @@ Object.assign(GESTES, {
     c.o.buste.rotation.set(-.12, 0, 0)
     c.o.tete.rotation.set(-.26 + .04 * a, .14 * a, .05 * a)
     c.o.oG.rotation.z = -.32; c.o.oD.rotation.z = .32
+  },
+  // Endormi au bain (conv-1558, « sleepy when nothing is running ») : la pose du bain, mais la tête tombe sur
+  // l'épaule, les oreilles s'affaissent et seul un souffle lent soulève le buste.
+  somme(c, t, d) {
+    const a = Math.sin(TOUR * t / d)
+    c.o.hanches.position.y = c.o.hanches.userData.r.y - .1
+    c.o.epD.rotation.set(-.12, 0, -.82); c.o.epG.rotation.set(-.12, 0, .82)
+    c.o.coD.rotation.x = -.35; c.o.coG.rotation.x = -.35
+    c.o.buste.rotation.set(-.04 + .025 * a, 0, 0)
+    c.o.tete.rotation.set(.13 + .03 * a, .06, .24 + .02 * a)
+    c.o.oG.rotation.z = -.55; c.o.oD.rotation.z = .55
+  },
+  // Surpris (conv-1558, « surprised on an error ») : debout, il sursaute — bras levés et écartés, buste et tête
+  // rejetés en arrière, oreilles dressées —, puis retombe. Un sursaut par cycle, pieds au sol.
+  surpris(c, t, d) {
+    const u = (t / d) % 1
+    const s = Math.pow(Math.sin(Math.PI * u), 2)
+    c.o.buste.rotation.set(-.1 - .12 * s, 0, 0)
+    c.o.tete.rotation.set(-.12 - .1 * s, 0, 0)
+    c.o.epD.rotation.set(-.7 - .7 * s, 0, -.45 - .35 * s); c.o.epG.rotation.set(-.7 - .7 * s, 0, .45 + .35 * s)
+    c.o.coD.rotation.x = -1.1 + .3 * s; c.o.coG.rotation.x = -1.1 + .3 * s
+    c.o.oG.rotation.z = .1 + .06 * s; c.o.oD.rotation.z = -.1 - .06 * s
   }
 })
 `

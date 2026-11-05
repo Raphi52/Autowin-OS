@@ -26,8 +26,20 @@ import type { Metier } from './quartier-metiers'
 
 /** Un agent planté pleure ('pr'), fume ('fu') ou boit ('bi') : une seule des trois, choisie d'après son identifiant (conv-1554). */
 export const POSES_PLANTE = ['pr', 'fu', 'bi'] as const
-export type Pose = '' | 'as' | 'at' | 'ba' | (typeof POSES_PLANTE)[number]
-export const estPlante = (nom: string): boolean => (POSES_PLANTE as readonly string[]).includes(nom)
+/**
+ * Les visages du tanuki v3 sur l'Accueil (conv-1558, « happy when a task finishes, surprised on an error, sleepy when
+ * nothing is running ») : au bain, content ('ba') puis endormi ('bz') ; à l'échec, un sursaut surpris ('su') avant sa
+ * pose de planté. Les autres animaux jouent les mêmes cases avec leur visage habituel.
+ */
+export const POSES_BAIN = ['ba', 'bz'] as const
+export const SURSAUT = 'su'
+export type Pose =
+  '' | 'as' | 'at' | (typeof POSES_BAIN)[number] | typeof SURSAUT | (typeof POSES_PLANTE)[number]
+/** Planté, sursaut compris : la lueur et l'étiquette rouges le suivent dès l'échec. */
+export const estPlante = (nom: string): boolean =>
+  nom === SURSAUT || (POSES_PLANTE as readonly string[]).includes(nom)
+/** Dans l'eau : content ou endormi, c'est le même bain (bord qui cache le corps, pas d'ombre au sol). */
+export const estAuBain = (nom: string): boolean => (POSES_BAIN as readonly string[]).includes(nom)
 export type MetierPoste = Metier | 'bain' | 'pause'
 
 /**
@@ -680,7 +692,7 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
       return
     }
     // Fini sans baquet libre : sa pause tient lieu de bain ; sans poste, il s'assied là où il est.
-    const pose = c.pose === 'ba' && !w.face?.bain ? (w.poste !== null ? '' : 'as') : c.pose
+    const pose = estAuBain(c.pose) && !w.face?.bain ? (w.poste !== null ? '' : 'as') : c.pose
     if (pose) {
       if (w.etat !== 'etat' || w.nom !== pose) {
         // Une question ou un échec le relève d'abord, s'il était assis.

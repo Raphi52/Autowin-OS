@@ -1,10 +1,10 @@
 {
   "source": {
     "image": "src/renderer/src/assets/quartier/atlas.avif",
-    "sha256": "07114e6681034a97462c8d5b8cbdac425aa308a2b80ef35dde303f717a26914a",
+    "sha256": "6d9fee9cab7188ef445f9f2293f3c853e348354673ceb57f8d79274e92a84f84",
     "taille": [
       3024,
-      8840
+      9520
     ],
     "finesse": 2,
     "caseEnPixels": [
@@ -32,18 +32,18 @@
   },
   "masque": {
     "clair": {
-      "partDeLaTete": 0.2,
-      "couleur": "#ccbfa9",
+      "partDeLaTete": 0.196,
+      "couleur": "#cbbfa9",
       "boiteDansLaTete": [
         0.23,
         0,
-        0.786,
+        0.778,
         1
       ]
     },
     "sombre": {
-      "partDeLaTete": 0.024,
-      "couleur": "#383631",
+      "partDeLaTete": 0.025,
+      "couleur": "#393731",
       "boiteDansLaTete": [
         0.246,
         0.551,
@@ -56,7 +56,7 @@
     "longueurSurHauteur": 0.287,
     "anneauxSombres": 3,
     "couleurSombre": "#4b4740",
-    "couleurClaire": "#848077"
+    "couleurClaire": "#848078"
   },
   "palette": {
     "ensemble": [
@@ -65,20 +65,20 @@
         "part": 0.181
       },
       {
-        "hex": "#635b50",
-        "part": 0.169
+        "hex": "#ada392",
+        "part": 0.168
       },
       {
-        "hex": "#ada392",
-        "part": 0.167
+        "hex": "#635b50",
+        "part": 0.168
       },
       {
         "hex": "#332b25",
         "part": 0.15
       },
       {
-        "hex": "#c7612d",
-        "part": 0.131
+        "hex": "#c7612e",
+        "part": 0.13
       },
       {
         "hex": "#7d4028",
@@ -95,46 +95,46 @@
     ],
     "tete": [
       {
-        "hex": "#807464",
-        "part": 0.322
+        "hex": "#807465",
+        "part": 0.325
       },
       {
-        "hex": "#a49887",
+        "hex": "#a49888",
         "part": 0.319
       },
       {
         "hex": "#c6b9a3",
-        "part": 0.264
+        "part": 0.261
       },
       {
-        "hex": "#504b42",
-        "part": 0.094
+        "hex": "#514b42",
+        "part": 0.095
       }
     ],
     "corps": [
       {
-        "hex": "#80422a",
-        "part": 0.283
+        "hex": "#7f412a",
+        "part": 0.282
       },
       {
-        "hex": "#c86330",
-        "part": 0.268
+        "hex": "#c76230",
+        "part": 0.272
       },
       {
-        "hex": "#3a2e27",
-        "part": 0.143
+        "hex": "#392e27",
+        "part": 0.14
       },
       {
-        "hex": "#b79f89",
-        "part": 0.106
+        "hex": "#b79f88",
+        "part": 0.108
       },
       {
-        "hex": "#676562",
-        "part": 0.103
+        "hex": "#666562",
+        "part": 0.102
       },
       {
-        "hex": "#e5dcc9",
-        "part": 0.096
+        "hex": "#e5ddc9",
+        "part": 0.095
       }
     ]
   },

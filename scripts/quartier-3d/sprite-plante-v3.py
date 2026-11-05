@@ -255,9 +255,27 @@ if OBJET:
         o.rotation_quaternion = Vector((0, 0, 1)).rotation_difference(d.normalized())
         return attache(o, ma)
 
+    def ordre_fixe(o):
+        # conv-1558 : la sphère UV de Blender 5.0.1 a les mêmes points à chaque lancement, mais ses faces et leur
+        # premier coin changent d'ordre (mesuré : 3 lancements, 3 empreintes de coins). Les quads se coupent alors sur
+        # l'autre diagonale et la case diffère de 150 à 2 300 px. On la refait à l'identique, faces dans un ordre fixe.
+        m = o.data
+        faces = []
+        for p in m.polygons:
+            vs = list(p.vertices)
+            k = vs.index(min(vs))
+            faces.append(tuple(vs[k:] + vs[:k]))
+        faces.sort()
+        n = bpy.data.meshes.new(m.name)
+        n.from_pydata([v.co.copy() for v in m.vertices], [], faces)
+        n.update()
+        o.data = n
+        bpy.data.meshes.remove(m)
+
     def boule(c, r, ma, ech=(1, 1, 1), axe=None):
         bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=14, radius=r, location=c)
         o = bpy.context.active_object
+        ordre_fixe(o)
         o.scale = ech
         if axe is not None:
             o.rotation_mode = 'QUATERNION'

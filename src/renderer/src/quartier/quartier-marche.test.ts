@@ -179,6 +179,19 @@ describe('un tanuki suit son agent', () => {
     expect(autre?.metierIci).toBe('pause')
   })
 
+  // conv-1558 : content au bain, puis endormi — le même bain, il ne se relève pas pour changer de visage.
+  it("s'endort dans son bain sans en sortir", () => {
+    const m = creerMarche(D, graine(5))
+    const w = m.ajouter('a', fini)
+    for (let i = 0; i < 30 * 200 && (w.metierIci === null || w.etat === 'va'); i++) m.avance(IMAGE)
+    for (let i = 0; i < 30; i++) m.avance(IMAGE)
+    expect(w).toMatchObject({ etat: 'etat', nom: 'ba', metierIci: 'bain' })
+    const place = w.poste
+    w.consigne = { metier: 'bain', pose: 'bz', partir: false }
+    for (let i = 0; i < 30; i++) m.avance(IMAGE)
+    expect(w).toMatchObject({ etat: 'etat', nom: 'bz', metierIci: 'bain', poste: place })
+  })
+
   it('le grand onsen offre dix places, toutes dans son eau (conv-1434)', () => {
     expect(BAINS).toHaveLength(10)
     const m = creerMarche(D, graine(7))

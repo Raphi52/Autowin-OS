@@ -20,7 +20,7 @@
  * et la scène lit la liste à chaque image.
  */
 import { metierDeLOutil, type Metier } from './quartier-metiers'
-import { POSES_PLANTE, type Consigne, type Pose } from './quartier-marche'
+import { POSES_PLANTE, SURSAUT, type Consigne, type Pose } from './quartier-marche'
 import type { AgentAPublier } from '../../../shared/quartier-presence'
 
 export type PhaseAgent = 'travail' | 'reflexion' | 'attente' | 'plante' | 'fini'
@@ -63,6 +63,12 @@ export interface EvenementPilote {
 }
 
 export const REPOS_MS = 15 * 60_000
+/**
+ * Les visages du bain et de l'échec (conv-1558) : content les deux premières minutes après la fin, puis endormi pour
+ * le reste de son repos (rien ne tourne plus pour lui) ; à l'échec, un sursaut de quelques secondes avant sa pose.
+ */
+export const JOIE_MS = 2 * 60_000
+export const SURSAUT_MS = 6_000
 /** Au-delà, une question ou un échec restés sans suite ne sont plus de l'actualité : ils encombreraient. */
 export const SIGNAL_MAX_MS = 12 * 60 * 60_000
 /**
@@ -140,10 +146,15 @@ export function appliquerResumes(
     const age = maintenant - ecrit
     const phase = phaseSansTour(r, age)
     if (!phase) continue
+    // La phase date de l'écriture du fil, pas de sa lecture (conv-1558) : un échec retrouvé au démarrage de l'app ne
+    // fait pas sursauter, une fin vieille de dix minutes montre déjà le tanuki endormi.
     poser(
       a?.phase === phase
         ? { ...a, titre, actions: [] }
-        : { ...nouveau(r.id, titre, phase, maintenant), metier: a?.metier ?? null }
+        : {
+            ...nouveau(r.id, titre, phase, ecrit > 0 ? Math.min(ecrit, maintenant) : maintenant),
+            metier: a?.metier ?? null
+          }
     )
   }
   return suivante
@@ -252,9 +263,13 @@ export function consigneDe(a: AgentQuartier, maintenant: number): Consigne {
     case 'attente':
       return { metier: null, pose: 'at', partir: false }
     case 'plante':
-      return { metier: null, pose: poseDePlantage(a.id), partir: false }
+      return {
+        metier: null,
+        pose: maintenant - a.depuis < SURSAUT_MS ? SURSAUT : poseDePlantage(a.id),
+        partir: false
+      }
     case 'fini':
-      return { metier: 'bain', pose: 'ba', partir: false }
+      return { metier: 'bain', pose: maintenant - a.depuis < JOIE_MS ? 'ba' : 'bz', partir: false }
   }
 }
 

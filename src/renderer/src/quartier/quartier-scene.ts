@@ -46,6 +46,7 @@ import { abonnerMonAnimal, lireMonAnimal } from './mon-animal'
 import type { AnimalAgent } from '../../../shared/quartier-presence'
 import {
   creerMarche,
+  estAuBain,
   estPlante,
   type DonneesMarche,
   type Geste,
@@ -189,7 +190,7 @@ interface Monde {
    * Un atlas par animal, de même grille que celui du tanuki (conv-1446) : mes agents prennent celui
    * choisi dans les réglages de l'Accueil, ceux d'un collègue celui qu'il a choisi (conv-1537).
    */
-  animaux: Record<AnimalAgent, AtlasPeint>
+  animaux: AtlasALaDemande
   OB: ObjetCoupe[]
   FE: ObjetCoupe[]
   m: MarcheQuartier
@@ -252,27 +253,65 @@ function peindreAtlas(atlas: HTMLImageElement, an: { cw: number; ch: number }): 
   return { A, AO, niveaux, parts: niveaux.map((n) => n.cw / an.cw), base, cous: null, colonnes: 0 }
 }
 
-async function charger(): Promise<Monde> {
+const URL_ATLAS: Readonly<Record<AnimalAgent, string>> = {
+  tanuki: urlAtlas,
+  renard: urlAtlasRenard,
+  panda: urlAtlasPanda,
+  'panda-roux': urlAtlasPandaRoux
+}
+
+/**
+ * Les atlas préparés À LA DEMANDE (conv-1558). En ×2, un atlas peint garde ~300 Mo (planche, ombre et trois
+ * réductions) : les quatre animaux d'avance en prenaient ~1,2 Go, pour le plus souvent un seul animal à l'écran.
+ * `lire` rend null tant que l'atlas se prépare : le tanuki d'un collègue qui arrive apparaît une fraction de seconde
+ * plus tard. Un chargement en échec se retente à la demande suivante.
+ */
+interface AtlasALaDemande {
+  lire(animal: AnimalAgent): AtlasPeint | null
+  preparer(animal: AnimalAgent): Promise<AtlasPeint>
+}
+
+function atlasALaDemande(an: { cw: number; ch: number }): AtlasALaDemande {
+  const prets = new Map<AnimalAgent, AtlasPeint>()
+  const enCours = new Map<AnimalAgent, Promise<AtlasPeint>>()
+  const preparer = (animal: AnimalAgent): Promise<AtlasPeint> => {
+    let p = enCours.get(animal)
+    if (!p) {
+      p = image(URL_ATLAS[animal]).then((i) => {
+        const peint = peindreAtlas(i, an)
+        prets.set(animal, peint)
+        return peint
+      })
+      p.catch(() => enCours.delete(animal))
+      enCours.set(animal, p)
+    }
+    return p
+  }
+  return {
+    lire: (animal) => {
+      const peint = prets.get(animal)
+      if (peint) return peint
+      void preparer(animal)
+      return null
+    },
+    preparer
+  }
+}
+
+async function charger(animalInitial: AnimalAgent): Promise<Monde> {
   const module = await import('../assets/quartier/donnees.json')
   const D = (module.default ?? module) as unknown as DonneesQuartier
-  const [peinture, derriere, batiments, atlas, renard, panda, pandaRoux, B] = await Promise.all([
+  const animaux = atlasALaDemande(D.an)
+  // L'animal de MES agents se prépare avec le décor : l'Accueil s'ouvre avec lui, sans attendre son premier dessin.
+  const [peinture, derriere, batiments, B] = await Promise.all([
     image(urlFalaise),
     image(urlDerriere),
     Promise.all(D.obj.map((o) => image(adresseBatiment(nomDuBatiment(o))))),
-    image(urlAtlas),
-    image(urlAtlasRenard),
-    image(urlAtlasPanda),
-    image(urlAtlasPandaRoux),
-    image(urlBords)
+    image(urlBords),
+    animaux.preparer(animalInitial)
   ])
   const S = peinture.naturalWidth / LARGEUR
   const F = composerFalaise(peinture, derriere, D.obj, batiments, S)
-  const animaux: Record<AnimalAgent, AtlasPeint> = {
-    tanuki: peindreAtlas(atlas, D.an),
-    renard: peindreAtlas(renard, D.an),
-    panda: peindreAtlas(panda, D.an),
-    'panda-roux': peindreAtlas(pandaRoux, D.an)
-  }
   const OB = await Promise.all(D.obj.map((o) => coupe(F, S, o)))
   const FE = await Promise.all(D.feuilles.map((o) => coupe(F, S, o)))
   for (const id of HOME_WIDGET_IDS) {
@@ -421,7 +460,8 @@ export function creerSceneQuartier(): DecorScene | null {
    * l'agent : en repartant, son agent a déjà quitté la liste, et il ne doit pas redevenir tanuki en route.
    */
   const animalDuTanuki = new WeakMap<Tanuki, AnimalAgent>()
-  const atlasDe = (M: Monde, w: Tanuki): AtlasPeint => M.animaux[animalDuTanuki.get(w) ?? monAnimal]
+  const atlasDe = (M: Monde, w: Tanuki): AtlasPeint | null =>
+    M.animaux.lire(animalDuTanuki.get(w) ?? monAnimal)
   const etoffe = toile(1, 1)
 
   /** Le cadrage au repos : calé sur la largeur de l'Accueil, posé en bas. */
@@ -607,9 +647,11 @@ export function creerSceneQuartier(): DecorScene | null {
     const k = w.u / an.pu
     const cl = cellule(M, w)
     const planche = atlasDe(M, w)
+    // Son atlas se prépare encore (premier tanuki de cet animal) : il apparaîtra à l'image suivante.
+    if (!planche) return
     x.save()
     // Au bain, tout ce qui passe sous le bord du baquet est dans l'eau.
-    if (w.nom === 'ba' && w.face?.cl) {
+    if (estAuBain(w.nom) && w.face?.cl) {
       x.beginPath()
       x.rect(w.x - 90, w.y - 160, 180, w.face.cl - w.y + 160)
       x.clip()
@@ -704,7 +746,7 @@ export function creerSceneQuartier(): DecorScene | null {
   }
 
   function dessinerOmbre(M: Monde, w: Tanuki): void {
-    if (w.nom === 'ba') return
+    if (estAuBain(w.nom)) return
     const r = w.u * 0.3
     const sol = M.sols.find((q) => M.m.dans(q.n.p, w.x, w.y))
     x.save()
@@ -958,7 +1000,7 @@ export function creerSceneQuartier(): DecorScene | null {
     x.setTransform(1, 0, 0, 1, 0, 0)
   }
 
-  void charger()
+  void charger(monAnimal)
     .then((M) => {
       if (libere) return
       monde = M

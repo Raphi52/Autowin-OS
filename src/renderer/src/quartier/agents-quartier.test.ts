@@ -4,12 +4,14 @@ import {
   AGENTS_MAX,
   appliquerEvenement,
   appliquerResumes,
+  JOIE_MS,
   PAUSE_APRES_MS,
   consigneDe,
   poseDePlantage,
   REPOS_MS,
   RETARD_RESUMES_MS,
   SIGNAL_MAX_MS,
+  SURSAUT_MS,
   type AgentQuartier
 } from './agents-quartier'
 
@@ -186,8 +188,38 @@ describe('consigneDe', () => {
     expect(ids.map((id) => poseDePlantage(id))).toEqual(poses)
     expect(new Set(poses)).toEqual(new Set(['pr', 'fu', 'bi']))
     const a = { ...agent('plante', null), id: 'fil-7' }
-    expect(consigneDe(a, T0).pose).toBe(consigneDe(a, T0 + 60_000).pose)
-    expect(consigneDe(a, T0).pose).toBe(poseDePlantage('fil-7'))
+    expect(consigneDe(a, T0 + SURSAUT_MS).pose).toBe(consigneDe(a, T0 + 60_000).pose)
+    expect(consigneDe(a, T0 + SURSAUT_MS).pose).toBe(poseDePlantage('fil-7'))
+  })
+
+  // conv-1558 : « happy when a task finishes, surprised on an error, sleepy when nothing is running ».
+  it("sursaute à l'échec, puis prend sa pose de planté", () => {
+    const a = agent('plante', null)
+    expect(consigneDe(a, T0).pose).toBe('su')
+    expect(consigneDe(a, T0 + SURSAUT_MS - 1).pose).toBe('su')
+    expect(consigneDe(a, T0 + SURSAUT_MS).pose).toBe(poseDePlantage('a'))
+  })
+
+  it("au bain, il est content d'avoir fini, puis s'endort", () => {
+    const a = agent('fini', 'lire')
+    expect(consigneDe(a, T0 + JOIE_MS - 1)).toEqual({ metier: 'bain', pose: 'ba', partir: false })
+    expect(consigneDe(a, T0 + JOIE_MS)).toEqual({ metier: 'bain', pose: 'bz', partir: false })
+  })
+
+  it("date la phase lue dans un résumé de l'écriture du fil : un vieil échec ne fait pas sursauter", () => {
+    const carte = appliquerResumes(
+      vide,
+      [
+        { id: 'e', lastAssistantStatus: 'failed', updatedAt: T0 - 60_000 },
+        { id: 'f', lastAssistantStatus: 'completed', updatedAt: T0 - JOIE_MS - 1 }
+      ],
+      T0
+    )
+    const e = carte.get('e') as AgentQuartier
+    const f = carte.get('f') as AgentQuartier
+    expect(e.depuis).toBe(T0 - 60_000)
+    expect(consigneDe(e, T0).pose).toBe(poseDePlantage('e'))
+    expect(consigneDe(f, T0).pose).toBe('bz')
   })
 
   it("aucune autre phase n'emprunte une pose de plantage", () => {
@@ -203,7 +235,7 @@ describe('consigneDe', () => {
       partir: false
     })
     expect(consigneDe(agent('attente', 'lire'), T0).pose).toBe('at')
-    expect(['pr', 'fu', 'bi']).toContain(consigneDe(agent('plante', null), T0).pose)
+    expect(['pr', 'fu', 'bi']).toContain(consigneDe(agent('plante', null), T0 + SURSAUT_MS).pose)
     expect(consigneDe(agent('fini', 'lire'), T0)).toEqual({
       metier: 'bain',
       pose: 'ba',
