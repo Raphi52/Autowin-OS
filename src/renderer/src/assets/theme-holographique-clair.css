@@ -4185,64 +4185,29 @@
    Demande : « une animation de couleur pour mes boutons qui ont un degrade bleu et rose », puis
    « je veux que les couleurs changent en mode liquide » ; choix sur maquette : « la lampe a lave
    de avant » (/draft, fournee 2, proposition 1), livree telle quelle. Trois gouttes -- rose, bleue
-   et leur violet -- flottent sur le degrade bleu -> rose et se fondent, aller-retour de 9 s.
-   Les positions sont des proprietes ENREGISTREES (`@property`) : une variable libre sauterait d'une
-   valeur a l'autre au lieu de couler. Le fond est ecrit une fois dans `--nv-lave-fond`, pose sur
-   CHAQUE bouton : ses `var()` y lisent les positions animees du bouton lui-meme (pose sur :root, il
-   figerait celles de :root). Les etats gardent leur marque PAR-DESSUS la lave : reflet bombe au
-   survol, reflet et eclat de « Nouveau fil » sur un fil vide. Seul ecart a la maquette : le coeur
-   de la goutte bleue est le bleu PLEIN (la maquette passait par un bleu a 80 %), pour tenir la
-   regle « un seul bleu, toujours plein » (conv-182, test « Degrades : un seul bleu »).
-   Cout : en fluide, la carte graphique recomposait la fenetre 60 fois/s tant qu'un element a lave
-   etait a l'ecran (environ 20 % pour une animation fluide permanente, mesure du 22/10) -- et
-   l'onglet ouvert du menu la porte toute la journee. Depuis conv-1199 (2026-10-28, piste du scout
-   « la lave fait travailler la carte graphique en continu », lecture retenue : « par petits sauts,
-   comme les autres indicateurs ») la lave avance par crans de 100 ms (`steps()`), calee sur
-   l'horloge commune des indicateurs (animations-par-crans.ts, liste ANIMATIONS_PAR_CRANS) : entre
-   deux crans, aucune image (6 a 9 % mesures pour les autres indicateurs, contre 20 % en fluide).
-   Le mouvement devient lineaire par segment (`steps()` ne se combine pas a `ease-in-out`).
-   Toute duree, tout depart ou image cle de la lave reste multiple de 100 ms : tenu par
-   animations-par-crans.test.ts (onglet du menu a 18 s compris). Pas de garde
-   prefers-reduced-motion : ce poste l'a actif, et l'animation a ete choisie pour etre vue (meme
-   parti que le gresillement des neons).
+   et leur violet -- posees sur le degrade bleu -> rose. Les etats gardent leur marque PAR-DESSUS
+   la lave : reflet bombe au survol, reflet et eclat de « Nouveau fil » sur un fil vide. Seul ecart
+   a la maquette : le coeur de la goutte bleue est le bleu PLEIN (la maquette passait par un bleu a
+   80 %), pour tenir la regle « un seul bleu, toujours plein » (conv-182, test « Degrades : un seul
+   bleu »).
+   NOUVELLE LAVE, PEU GOURMANDE (conv-1610, 2026-11-05 : « refais une version tres peu gourmande,
+   enleve toute l'ancienne lave couteuse »). L'ancienne animait six positions de gouttes
+   (`@property --nv-lave-x1..y3`) : a CHAQUE image, Chromium recalculait le style et repeignait
+   les quatre degrades de chaque element, sur le fil principal de la fenetre (et la bulle refaisait
+   en plus son halo flou de 22 px). Mesure sur la fenetre reelle (Bureau a distance, Intel UHD
+   730), une fois le plafond de 10 images/s retire (0fd4866b, conv-1512) : les 8 laves a l'ecran
+   = 99 % d'un coeur pour la fenetre et 149 % pour la carte graphique ; en pause, 13 % et 30 %.
+   La nouvelle lave ne repeint plus rien :
+   - le fond de l'element est la lave FIGEE a sa premiere image (`--nv-lave-fond`, ci-dessous),
+     peinte une seule fois -- c'est tout ce que portent les bords, frises et calques de bord ;
+   - les SURFACES pleines (boutons au degrade, onglet du menu, derniere bulle) recoivent un calque
+     `::after` peint une seule fois avec une AUTRE disposition des gouttes, dont seule l'OPACITE
+     va et vient (fondu de 9 s, aller-retour). L'opacite est le seul reglage que la carte graphique
+     anime seule, sans repeindre : les couleurs passent d'une disposition a l'autre en fondu.
+   Pas de garde prefers-reduced-motion : ce poste l'a actif, et l'animation a ete choisie pour
+   etre vue (meme parti que le gresillement des neons).
    --------------------------------------------------------------------------- */
-@property --nv-lave-x1 {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 85%;
-}
-@property --nv-lave-y1 {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 30%;
-}
-@property --nv-lave-x2 {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 12%;
-}
-@property --nv-lave-y2 {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 70%;
-}
-@property --nv-lave-x3 {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 50%;
-}
-@property --nv-lave-y3 {
-  syntax: '<percentage>';
-  inherits: false;
-  initial-value: 100%;
-}
-/* Le fond liquide lui-meme, NON herite : il change a chaque image, et herite, il ferait recalculer
-   a chaque image tout ce que contient l'element (le contenu d'une bulle, d'un run deplie). */
-@property --nv-lave-fond {
-  syntax: '*';
-  inherits: false;
-}
-/* LE MOTEUR : chaque element ou calque qui porte la lave declare son fond et l'anime. Boutons (fond),
+/* LE FOND : chaque element ou calque qui porte la lave declare son fond, fige. Boutons (fond),
    bulles des messages de l'utilisateur (fond), puis tous les BORDS bleu -> rose -- demande du meme
    fil : « met ca aussi pour mes messages, et pour les borders bleu rose partout ou yen a », sur la
    capture des capsules Raisonnement / Actions / Etapes. Les bords nacres (bleu, rose ET argent :
@@ -4319,25 +4284,19 @@
 :root[data-theme='holographique-clair'] .nav-item.active {
   --nv-lave-fond:
     radial-gradient(
-      ellipse 60% 120% at var(--nv-lave-x1) var(--nv-lave-y1),
+      ellipse 60% 120% at 85% 30%,
       #d02b8c 0%,
       rgba(208, 43, 140, 0.8) 35%,
       rgba(208, 43, 140, 0) 100%
     ),
     radial-gradient(
-      ellipse 65% 130% at var(--nv-lave-x2) var(--nv-lave-y2),
+      ellipse 65% 130% at 12% 70%,
       #3c6eeb 0%,
       #3c6eeb 35%,
       rgba(60, 110, 235, 0) 100%
     ),
-    radial-gradient(
-      ellipse 45% 110% at var(--nv-lave-x3) var(--nv-lave-y3),
-      #9150dc 0%,
-      rgba(145, 80, 220, 0) 100%
-    ),
+    radial-gradient(ellipse 45% 110% at 50% 100%, #9150dc 0%, rgba(145, 80, 220, 0) 100%),
     linear-gradient(135deg, #3c6eeb, #d02b8c);
-  /* 3 segments de 3 s (images cles 0 / 33,3333 / 66,6667 / 100 %), 30 crans de 100 ms chacun. */
-  animation: nv-lave 9s ease-in-out infinite alternate;
 }
 /* Les boutons, puis les bulles : la lave EST leur fond. L'onglet ouvert du menu de gauche aussi
    (meme fil, capture du rond « Chat » sous l'avatar : « a mettre aussi sur ces boutons ») : sa
@@ -4360,22 +4319,99 @@
   background-origin: border-box;
   background-repeat: no-repeat;
 }
+/* LE MOUVEMENT (conv-1610) : un calque `::after` pose SOUS le contenu, peint UNE fois avec la lave
+   dans une autre disposition (gouttes rose et bleue echangees de cote, violet en haut), dont seule
+   l'opacite va et vient. Il redeclare `--nv-lave-fond` pour lui seul : les regles de reflet
+   ci-dessous le visent aussi, donc il porte le meme reflet que son bouton et le reflet ne clignote
+   pas. Hors de cette liste, la lave reste figee : bords, frises, calques de bord, bulles
+   precedentes, « Nouveau fil » sur un fil vide (son `::after` est l'eclat), « Supprimer
+   definitivement » (fenetre de confirmation passagere). Le bouton accentue de l'en-tete du chat
+   n'a pas la lave (fond rose translucide de la couche generee) : son calque est retire plus bas. */
+:root[data-theme='holographique-clair'] .nav-item.active,
+:root[data-theme='holographique-clair'] .btn-accent:not(.composer-send),
+:root[data-theme='holographique-clair']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled),
+:root[data-theme='holographique-clair'] .tests-run:not(:disabled),
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row:not(.active),
+:root[data-theme='holographique-clair'] .askd .askd-envoyer:not(:disabled),
+:root[data-theme='holographique-clair'] .runs-pane .sc-lancement-bouton:not(.is-on),
+:root[data-theme='holographique-clair'] .runs-pane .sc-relecture-envoyer,
+:root[data-theme='holographique-clair'] .shell.theme-serious .task-manager-primary,
+:root[data-theme='holographique-clair']
+  .msg.user:nth-last-child(1 of [data-origine='message-utilisateur'])
+  .msg-body {
+  /* Le calque se cale sur l'element et passe SOUS son contenu : il lui faut un repere et une pile
+     a lui. Aucun de ces elements n'est positionne autrement (lecture des feuilles, conv-1610). */
+  position: relative;
+  isolation: isolate;
+}
+:root[data-theme='holographique-clair'] .nav-item.active::after,
+:root[data-theme='holographique-clair'] .btn-accent:not(.composer-send)::after,
+:root[data-theme='holographique-clair']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled)::after,
+:root[data-theme='holographique-clair'] .tests-run:not(:disabled)::after,
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row:not(.active)::after,
+:root[data-theme='holographique-clair'] .askd .askd-envoyer:not(:disabled)::after,
+:root[data-theme='holographique-clair'] .runs-pane .sc-lancement-bouton:not(.is-on)::after,
+:root[data-theme='holographique-clair'] .runs-pane .sc-relecture-envoyer::after,
+:root[data-theme='holographique-clair'] .shell.theme-serious .task-manager-primary::after,
+:root[data-theme='holographique-clair']
+  .msg.user:nth-last-child(1 of [data-origine='message-utilisateur'])
+  .msg-body::after {
+  --nv-lave-fond:
+    radial-gradient(
+      ellipse 60% 120% at 18% 40%,
+      #d02b8c 0%,
+      rgba(208, 43, 140, 0.8) 35%,
+      rgba(208, 43, 140, 0) 100%
+    ),
+    radial-gradient(
+      ellipse 65% 130% at 75% 65%,
+      #3c6eeb 0%,
+      #3c6eeb 35%,
+      rgba(60, 110, 235, 0) 100%
+    ),
+    radial-gradient(ellipse 45% 110% at 30% 0%, #9150dc 0%, rgba(145, 80, 220, 0) 100%),
+    linear-gradient(135deg, #3c6eeb, #d02b8c);
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--nv-lave-fond);
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  opacity: 0;
+  animation: nv-lave 9s ease-in-out infinite alternate;
+}
+/* L'onglet du menu et la bulle ont un bord transparent de 1 px que leur fond traverse : le calque
+   le couvre aussi, sinon l'ancienne disposition resterait visible en liseré. */
+:root[data-theme='holographique-clair'] .nav-item.active::after,
+:root[data-theme='holographique-clair']
+  .msg.user:nth-last-child(1 of [data-origine='message-utilisateur'])
+  .msg-body::after {
+  inset: -1px;
+}
+:root[data-theme='holographique-clair'] .cosmic-outline .chat-head .btn-accent::after {
+  content: none;
+}
 /* L'onglet ouvert du menu coule DEUX FOIS plus lentement (18 s au lieu de 9) : il reste a l'ecran
-   toute la journee, au bord du regard (meme fil : « Ralentis la lampe a lave du rond Chat du menu de
-   gauche (cycle plus long), sans toucher aux autres boutons »). Seule la duree change. */
-:root[data-theme='holographique-clair'] .nav-item.active {
+   toute la journee, au bord du regard (conv-1163 : « Ralentis la lampe a lave du rond Chat du menu
+   de gauche (cycle plus long), sans toucher aux autres boutons »). Seule la duree change. */
+:root[data-theme='holographique-clair'] .nav-item.active::after {
   animation-duration: 18s;
-  /* Deux fois plus de crans pour une duree double : chaque cran reste de 100 ms (conv-1199). */
-  animation-timing-function: ease-in-out;
 }
 /* Deux boutons voisins ne coulent pas au meme rythme : chaque famille part d'un autre moment. */
-:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row,
-:root[data-theme='holographique-clair'] .shell.theme-serious .task-manager-primary {
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row:not(.active)::after,
+:root[data-theme='holographique-clair'] .shell.theme-serious .task-manager-primary::after {
   animation-delay: -3s;
 }
-:root[data-theme='holographique-clair'] .tests-run:not(:disabled),
-:root[data-theme='holographique-clair'] .askd .askd-envoyer:not(:disabled),
-:root[data-theme='holographique-clair'] .runs-pane .sc-relecture-envoyer {
+:root[data-theme='holographique-clair'] .tests-run:not(:disabled)::after,
+:root[data-theme='holographique-clair'] .askd .askd-envoyer:not(:disabled)::after,
+:root[data-theme='holographique-clair'] .runs-pane .sc-relecture-envoyer::after {
   animation-delay: -6s;
 }
 :root[data-theme='holographique-clair'] .btn-accent:hover:not(:disabled),
@@ -4384,7 +4420,14 @@
 :root[data-theme='holographique-clair']
   .runs-pane
   .sc-lancement-bouton:not(.is-on):hover:not(:disabled),
-:root[data-theme='holographique-clair'] .runs-pane .sc-relecture-envoyer:hover:not(:disabled) {
+:root[data-theme='holographique-clair'] .runs-pane .sc-relecture-envoyer:hover:not(:disabled),
+:root[data-theme='holographique-clair'] .btn-accent:hover:not(:disabled)::after,
+:root[data-theme='holographique-clair'] .cosmic-outline .btn-accent:hover:not(:disabled)::after,
+:root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row:not(.active):hover::after,
+:root[data-theme='holographique-clair']
+  .runs-pane
+  .sc-lancement-bouton:not(.is-on):hover:not(:disabled)::after,
+:root[data-theme='holographique-clair'] .runs-pane .sc-relecture-envoyer:hover:not(:disabled)::after {
   background:
     radial-gradient(
       55% 85% at 50% 0%,
@@ -4404,9 +4447,10 @@
 :root[data-theme='holographique-clair'] .shell.theme-serious .task-manager-primary {
   background: var(--nv-lave-fond) !important;
 }
+:root[data-theme='holographique-clair'] .shell.theme-serious .task-manager-primary:hover:not(:disabled),
 :root[data-theme='holographique-clair']
   .shell.theme-serious
-  .task-manager-primary:hover:not(:disabled) {
+  .task-manager-primary:hover:not(:disabled)::after {
   background:
     radial-gradient(
       55% 85% at 50% 0%,
@@ -4420,7 +4464,10 @@
    a la place du degrade fixe. Le carre creux de « rien a envoyer » n'a pas de degrade : intact. */
 :root[data-theme='holographique-clair']
   .cosmic-outline
-  .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled),
+:root[data-theme='holographique-clair']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled)::after {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
     var(--nv-lave-fond);
@@ -4429,7 +4476,10 @@
 }
 :root[data-theme='holographique-clair']
   .cosmic-outline
-  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover {
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover,
+:root[data-theme='holographique-clair']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):hover::after {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0) 64%),
     var(--nv-lave-fond);
@@ -4438,7 +4488,10 @@
 }
 :root[data-theme='holographique-clair']
   .cosmic-outline
-  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):active {
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):active,
+:root[data-theme='holographique-clair']
+  .cosmic-outline
+  .composer-send:not(.is-resume):not(.is-stop):not(:disabled):active::after {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 60%),
     var(--nv-lave-fond);
@@ -4553,12 +4606,9 @@
 }
 /* « Supprimer definitivement » (meme fil, capture du bouton plein : « a mettre aussi sur ces
    boutons ») : meme voie que « Garder ». La regle commune peint `--suppr-plein` (repos) et
-   `--suppr-plein-vif` (survol) ; on les redefinit SUR le bouton, ou la lave a ses positions animees
-   -- posees sur la carte, elles liraient celles de la carte, qui n'en a pas. Le gel du haut est
-   celui de la carte, inchange. Il part a mi-cycle : « Garder », juste dessous, ne coule pas en
-   meme temps que lui. */
+   `--suppr-plein-vif` (survol) ; on les redefinit SUR le bouton, qui declare la lave. Le gel du
+   haut est celui de la carte, inchange. Lave figee depuis conv-1610 : fenetre passagere. */
 :root[data-theme='holographique-clair'] .delete-confirm-card--fils .delete-confirm-gel {
-  animation-delay: -4.5s;
   --suppr-plein:
     linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
     var(--nv-lave-fond);
@@ -4568,19 +4618,19 @@
 }
 /* Le CADRE des blocs Raisonnement / Actions / Etapes et de la barre d'activite n'a qu'une source,
    anneau-activite.css (aucune feuille de theme ne le repeint, test « le cadre est dessine par les
-   jetons du theme ») : ce theme ne lui fournit que les couleurs des gouttes et leur mouvement. */
+   jetons du theme ») : ce theme ne lui fournit que les couleurs des gouttes, figees depuis
+   conv-1610 (un cadre de 2 px n'a pas de surface ou faire passer le calque en fondu). */
 :root[data-theme='holographique-clair'] {
   --thinking-capsule-lave-chaud: #d02b8c;
   --thinking-capsule-lave-froid: #3c6eeb;
   --thinking-capsule-lave-milieu: #9150dc;
-  --thinking-capsule-lave-animation: nv-lave 9s ease-in-out infinite alternate;
 }
 /* LES TOURS PRECEDENTS NE COULENT PLUS (meme fil : « Limite la lampe a lave des capsules
    Raisonnement / Actions au dernier tour du fil, pour alleger la carte graphique »). Une reponse
    suivie d'une autre reponse est un tour fini : ses capsules reprennent le degrade FIXE d'avant
-   la lave, et plus rien n'y bouge. Seule la derniere reponse du fil garde la lave.
-   - le cadre (anneau-activite.css, seul a le dessiner) : jetons des gouttes vides et mouvement
-     coupe, il retombe sur son degrade de base ;
+   la lave. Seule la derniere reponse du fil garde les gouttes (figees depuis conv-1610).
+   - le cadre (anneau-activite.css, seul a le dessiner) : jetons des gouttes vides, il retombe sur
+     son degrade de base ;
    - les pastilles et les tranches de la pile d'images : le degrade de ChatView.css et
      ArtifactPreview.css, recopie tel quel.
    `.msg--rail` ne marque que les reponses du fil : la TV du bureau cache, qui porte aussi
@@ -4593,7 +4643,6 @@
   --thinking-capsule-lave-chaud: transparent;
   --thinking-capsule-lave-froid: transparent;
   --thinking-capsule-lave-milieu: transparent;
-  --thinking-capsule-lave-animation: none;
 }
 :root[data-theme='holographique-clair']
   .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)
@@ -4606,44 +4655,23 @@
   .artifact-pile__tranches
   > .artifact-pile__tranche {
   background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
-  animation: none;
 }
-/* Images cles aux TIERS exacts (conv-1199) : a 33 % / 66 %, elles tombaient a 2970 / 5940 ms sur
-   9 s, hors de la grille de 100 ms des crans -- la lave aurait change d'image entre deux crans.
-   fix-ok: animation fluide mesuree (animations-par-crans.test.ts rouge : « nv-lave 9s ease-in-out :
-   animation fluide, pas de steps() ») -> crans de 100 ms sur images cles alignees. */
+/* LA LAVE DES BULLES : LA DERNIERE SEULE BOUGE (conv-1610, 2026-11-05 : « Garde la fluidite, mais
+   seulement sur ce qui est visible et sur ma derniere bulle »). Seule la derniere bulle tapee
+   recoit le calque `::after` (liste du MOUVEMENT, plus haut) ; les precedentes gardent la lave
+   figee et n'ont ni calque ni pile a elles. `:nth-last-child(1 of …)` et pas `:has(~ …)` : sous
+   `:has()`, `.msg-body` entrerait dans l'ensemble d'invalidation commun et chaque frappe
+   restylerait toutes les bulles (conv-1229, has-cible-nue.test.ts). L'attribut `data-origine` ne
+   marque que les bulles tapees : un recu d'orientation (`.msg.user.directive-receipt`) ne compte
+   pas comme la derniere bulle.
+   LE FONDU (conv-1610) : seule l'opacite du calque bouge, de 0 (lave de depart, celle du fond) a 1
+   (l'autre disposition). Aucune propriete enregistree, aucun degrade recalcule. */
 @keyframes nv-lave {
-  0% {
-    --nv-lave-x1: 85%;
-    --nv-lave-y1: 30%;
-    --nv-lave-x2: 12%;
-    --nv-lave-y2: 70%;
-    --nv-lave-x3: 50%;
-    --nv-lave-y3: 100%;
+  from {
+    opacity: 0;
   }
-  33.3333% {
-    --nv-lave-x1: 50%;
-    --nv-lave-y1: 85%;
-    --nv-lave-x2: 40%;
-    --nv-lave-y2: 10%;
-    --nv-lave-x3: 85%;
-    --nv-lave-y3: 40%;
-  }
-  66.6667% {
-    --nv-lave-x1: 18%;
-    --nv-lave-y1: 40%;
-    --nv-lave-x2: 75%;
-    --nv-lave-y2: 65%;
-    --nv-lave-x3: 30%;
-    --nv-lave-y3: 0%;
-  }
-  100% {
-    --nv-lave-x1: 65%;
-    --nv-lave-y1: 10%;
-    --nv-lave-x2: 88%;
-    --nv-lave-y2: 90%;
-    --nv-lave-x3: 10%;
-    --nv-lave-y3: 70%;
+  to {
+    opacity: 1;
   }
 }
 

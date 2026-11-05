@@ -333,7 +333,8 @@ describe('theme Nebuleuse de verre', () => {
       /, linear-gradient\(135deg, #3c6eeb, #e63ca0\)$/
     )
     expect(bulleTheme['--nv-lave-fond']).toContain(bulle)
-    expect(bulleTheme.animation).toMatch(/^nv-lave /)
+    // Lave FIGEE sur la bulle elle-meme depuis conv-1610 : seul son calque `::after` bouge.
+    expect(bulleTheme.animation).toBeUndefined()
     expect(
       decls(`${PREFIXE}:not([data-base='clair']) .cosmic-outline .msg.user .msg-body.msg-bulle`)
         .background
@@ -481,10 +482,24 @@ describe('theme Nebuleuse de verre', () => {
       expect(actif['--nv-lave-fond'], fichier).toContain(
         'linear-gradient(135deg, #3c6eeb, #e63ca0)'
       )
-      expect(actif.animation, fichier).toMatch(/^nv-lave /)
-      // Deux fois plus lente que les boutons (9 s), et seulement elle (conv-1163, « Ralentis la
+      // Depuis conv-1610, la pastille garde la lave FIGEE ; seul son calque `::after` bouge, deux
+      // fois plus lentement que les boutons (9 s), et seulement lui (conv-1163, « Ralentis la
       // lampe a lave du rond Chat [...] sans toucher aux autres boutons »).
-      expect(actif['animation-duration'], fichier).toBe('18s')
+      expect(actif.animation, fichier).toBeUndefined()
+      const calque: Record<string, string> = {}
+      postcss.parse(lire(fichier)).walkRules((regle) => {
+        if (
+          regle.selectors.some(
+            (s) => s.trim() === `:root[data-theme='${theme}'] .nav-item.active::after`
+          )
+        ) {
+          regle.walkDecls((d) => {
+            calque[d.prop] = d.value
+          })
+        }
+      })
+      expect(calque.animation, fichier).toMatch(/^nv-lave /)
+      expect(calque['animation-duration'], fichier).toBe('18s')
       expect(actif['background-origin'], fichier).toBe('border-box')
       expect(actif['box-shadow'], fichier).toBe('none')
       expect(lire(fichier), fichier).not.toMatch(/nv-lueur-toi/)
@@ -553,7 +568,18 @@ describe('Envoyer en gel fondu bleu-rose', () => {
     expect(pret['--nv-lave-fond'].replace(/\s+/g, ' ')).toMatch(
       /, linear-gradient\(135deg, #3c6eeb, #e63ca0\)$/
     )
-    expect(pret.animation).toMatch(/^nv-lave /)
+    // Lave figee sur le bouton (conv-1610) ; son calque `::after` porte le MEME reflet, sur
+    // l'autre disposition des gouttes, et seul lui bouge : le reflet ne clignote pas au fondu.
+    expect(pret.animation).toBeUndefined()
+    const calque = derniere(`${ENVOI}::after`)
+    expect(reflet(calque.background)).toBe(0.4)
+    expect(calque.animation).toMatch(/^nv-lave /)
+    expect(reflet(derniere(`${ENVOI}:hover::after`).background)).toBe(
+      reflet(derniere(`${ENVOI}:hover`).background)
+    )
+    expect(reflet(derniere(`${ENVOI}:active::after`).background)).toBe(
+      reflet(derniere(`${ENVOI}:active`).background)
+    )
     expect(pret.color).toBe('#ffffff')
     expect(pret['border-color']).toBe('transparent')
     expect(pret['background-origin']).toBe('border-box')
@@ -1042,8 +1068,8 @@ describe('Cadre chanfrein platine, coins seuls', () => {
  */
 describe('Pied de liste : une capsule a liseré, une seule case au survol', () => {
   const PIED = `${PREFIXE} .conv-foot`
-  // Le liseré bleu -> rose coule en lampe a lave depuis conv-1163 (2026-10-27, « les borders bleu
-  // rose partout ou yen a ») : le calque porte la lave, animee sur lui-meme.
+  // Le liseré bleu -> rose porte la lampe a lave depuis conv-1163 (2026-10-27, « les borders bleu
+  // rose partout ou yen a »), figee depuis conv-1610 (« version tres peu gourmande »).
   const LISERE = 'var(--nv-lave-fond)'
   const regles = (): postcss.Rule[] => {
     const toutes: postcss.Rule[] = []
@@ -1073,7 +1099,7 @@ describe('Pied de liste : une capsule a liseré, une seule case au survol', () =
     const avant = decls(`${PIED}::before`)
     anneau(avant)
     expect(avant.background).toBe(LISERE)
-    expect(avant.animation).toMatch(/^nv-lave /)
+    expect(avant.animation).toBeUndefined()
     expect(decls(PIED).position).toBe('relative')
   })
 
@@ -1414,8 +1440,8 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
       `${POPUPS} :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled)`
     )
     const ligne = derniere(`${PREFIXE} .model-select-menu .effort-matrix-row.is-active`)
-    // Le cadre coule en lampe a lave depuis conv-1163 (2026-10-27, « les borders bleu rose partout ») :
-    // meme fond choisi a l'interieur, la lave a la place du degrade fixe dans le bord.
+    // Le cadre porte la lampe a lave depuis conv-1163 (2026-10-27, « les borders bleu rose partout »),
+    // figee depuis conv-1610 : meme fond choisi a l'interieur, la lave dans le bord.
     for (const fond of [puce.background, ligne.background]) {
       expect(fond).toBe(
         'linear-gradient(var(--nv-pop-choisi), var(--nv-pop-choisi)) padding-box, var(--nv-lave-fond)'
@@ -1423,7 +1449,7 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     }
     for (const r of [puce, ligne]) {
       expect(r['background-origin']).toBe('border-box')
-      expect(r.animation).toMatch(/^nv-lave /)
+      expect(r.animation).toBeUndefined()
     }
   })
 
@@ -1451,7 +1477,7 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     expect(puce.background).toBe(
       'linear-gradient(var(--nv-choisi-fond), var(--nv-choisi-fond)) padding-box, var(--nv-lave-fond)'
     )
-    expect(puce.animation).toMatch(/^nv-lave /)
+    expect(puce.animation).toBeUndefined()
     expect(derniere(PREFIXE)['--nv-choisi-cadre']).toBe('linear-gradient(135deg, #3c6eeb, #e63ca0)')
   })
 
@@ -1515,21 +1541,19 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     // Plus aucune regle de bouton propre au theme : elle passerait devant la regle commune ou la
     // contredirait selon l'ordre de chargement.
     expect(derniere(`${PREFIXE} .delete-confirm-danger.delete-confirm-gel`)).toEqual({})
-    // Le liseré de « Garder » coule en lampe a lave (conv-1163, 2026-10-27) : le theme ne lui pose
-    // que des REGLAGES (la lave, son mouvement, et `--suppr-lisere` qui la designe) -- jamais un
-    // fond, qui contredirait la regle commune.
+    // Le liseré de « Garder » porte la lampe a lave (conv-1163, 2026-10-27), figee depuis conv-1610 :
+    // le theme ne lui pose que des REGLAGES (la lave et `--suppr-lisere` qui la designe) -- jamais
+    // un fond, qui contredirait la regle commune.
     const lisere = derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-cancel::before`)
-    expect(Object.keys(lisere).sort()).toEqual(['--nv-lave-fond', '--suppr-lisere', 'animation'])
+    expect(Object.keys(lisere).sort()).toEqual(['--nv-lave-fond', '--suppr-lisere'])
     expect(lisere['--suppr-lisere']).toBe('var(--nv-lave-fond)')
-    // « Supprimer definitivement » coule aussi (meme fil) : memes reglages seulement, le gel du haut
-    // de la carte garde par-dessus la lave, au repos comme au survol.
+    // « Supprimer definitivement » aussi (meme fil) : memes reglages seulement, le gel du haut de la
+    // carte garde par-dessus la lave, au repos comme au survol.
     const plein = derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-gel`)
     expect(Object.keys(plein).sort()).toEqual([
       '--nv-lave-fond',
       '--suppr-plein',
-      '--suppr-plein-vif',
-      'animation',
-      'animation-delay'
+      '--suppr-plein-vif'
     ])
     expect(plein['--suppr-plein']).toMatch(
       /rgba\(255, 255, 255, 0\.4\)[\s\S]*var\(--nv-lave-fond\)$/
@@ -1560,17 +1584,16 @@ describe('Lampe a lave des capsules : le dernier tour seul', () => {
   })
   const TOUR_FINI = `${PREFIXE} .msg.assistant.msg--rail:has(~ .msg.assistant.msg--rail)`
 
-  it('vide les gouttes du cadre et coupe son mouvement sur un tour fini', () => {
+  it('vide les gouttes du cadre sur un tour fini', () => {
     const jetons = regles.find((r) => r.selecteurs.includes(TOUR_FINI))?.decls
     expect(jetons).toEqual({
       '--thinking-capsule-lave-chaud': 'transparent',
       '--thinking-capsule-lave-froid': 'transparent',
-      '--thinking-capsule-lave-milieu': 'transparent',
-      '--thinking-capsule-lave-animation': 'none'
+      '--thinking-capsule-lave-milieu': 'transparent'
     })
   })
 
-  it('rend aux pastilles et aux tranches leur degrade fixe, immobile', () => {
+  it('rend aux pastilles et aux tranches leur degrade fixe', () => {
     const fige = regles.find((r) =>
       r.selecteurs.some((s) => s.startsWith(`${TOUR_FINI} :is(`) && s.endsWith('::before'))
     )
@@ -1582,7 +1605,145 @@ describe('Lampe a lave des capsules : le dernier tour seul', () => {
     expect(fige?.decls.background).toBe(
       'linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud))'
     )
-    expect(fige?.decls.animation).toBe('none')
+    expect(fige?.decls.animation).toBeUndefined()
+  })
+})
+
+/**
+ * LAMPE A LAVE DES BULLES : LA DERNIERE SEULE BOUGE (conv-1610, 2026-11-05 : « Garde la fluidite,
+ * mais seulement sur ce qui est visible et sur ma derniere bulle »). Seule la derniere bulle tapee
+ * recoit le calque `::after` qui bouge ; les autres gardent la lave figee de leur fond.
+ * Par `:nth-last-child(1 of …)`, jamais `:has()` (conv-1229, has-cible-nue.test.ts).
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : donner le calque a toutes les bulles, le poser sous
+ * `:has()`, ou compter un recu d'orientation comme la derniere bulle.
+ */
+describe('Lampe a lave des bulles : la derniere seule', () => {
+  it.each(['./theme-nebuleuse-verre.css', './theme-holographique-clair.css'])(
+    '%s : ne donne le calque qui bouge qu a la derniere bulle tapee',
+    (fichier) => {
+      const theme = fichier.includes('clair') ? 'holographique-clair' : 'nebuleuse-verre'
+      const derniereBulle = `:root[data-theme='${theme}'] .msg.user:nth-last-child(1 of [data-origine='message-utilisateur']) .msg-body::after`
+      const calquesDeBulle = new Set<string>()
+      let animee = false
+      postcss.parse(lire(fichier)).walkRules((regle) => {
+        for (const s of regle.selectors.map((x) => x.replace(/\s+/g, ' ').trim())) {
+          if (!/\.msg-body(\.msg-bulle)?::after$/.test(s)) continue
+          calquesDeBulle.add(s)
+          regle.walkDecls('animation', (d) => {
+            if (s === derniereBulle && /^nv-lave /.test(d.value)) animee = true
+          })
+        }
+      })
+      expect([...calquesDeBulle]).toEqual([derniereBulle])
+      expect(animee).toBe(true)
+    }
+  )
+})
+
+/**
+ * LAVE PEU GOURMANDE (conv-1610, 2026-11-05 : « refais une version tres peu gourmande, enleve toute
+ * l'ancienne lave couteuse »). L'ancienne animait les positions des gouttes (`@property`) : Chromium
+ * recalculait le style et repeignait chaque degrade a chaque image (8 laves a l'ecran = 99 % d'un
+ * coeur pour la fenetre, 13 % en pause). La nouvelle : fond FIGE, et un calque `::after` peint une
+ * fois dont seule l'OPACITE bouge -- ce que la carte graphique anime seule, sans repeindre.
+ * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : remettre une propriete enregistree ou une position animee,
+ * animer autre chose que l'opacite, animer la lave sur l'element lui-meme au lieu de son calque, ou
+ * poser le calque au-dessus du contenu.
+ */
+describe('Lave peu gourmande : seule l opacite d un calque bouge', () => {
+  it.each(['./theme-nebuleuse-verre.css', './theme-holographique-clair.css'])(
+    '%s : aucune propriete enregistree, images cles en opacite seule',
+    (fichier) => {
+      const racine = postcss.parse(lire(fichier))
+      const enregistrees: string[] = []
+      racine.walkAtRules('property', (regle) => {
+        if (regle.params.startsWith('--nv-lave')) enregistrees.push(regle.params)
+      })
+      expect(enregistrees).toEqual([])
+      const positions: string[] = []
+      racine.walkDecls((d) => {
+        if (/--nv-lave-[xy]\d/.test(d.prop + d.value)) positions.push(`${d.prop}: ${d.value}`)
+      })
+      expect(positions).toEqual([])
+      const proprietes = new Set<string>()
+      racine.walkAtRules('keyframes', (regle) => {
+        if (regle.params !== 'nv-lave') return
+        regle.walkDecls((d) => {
+          proprietes.add(d.prop)
+        })
+      })
+      expect([...proprietes]).toEqual(['opacity'])
+    }
+  )
+
+  it.each(['./theme-nebuleuse-verre.css', './theme-holographique-clair.css'])(
+    '%s : la lave ne bouge que sur un calque sous le contenu, transparent au depart, sans clic',
+    (fichier) => {
+      const surElement: string[] = []
+      const calques = new Map<string, Record<string, string>>()
+      const elements = new Map<string, Record<string, string>>()
+      postcss.parse(lire(fichier)).walkRules((regle) => {
+        const selecteurs = regle.selectors.map((x) => x.replace(/\s+/g, ' ').trim())
+        regle.walkDecls((d) => {
+          for (const s of selecteurs) {
+            if (d.prop === 'animation' && /\bnv-lave\b/.test(d.value) && !s.endsWith('::after')) {
+              surElement.push(s)
+            }
+            const cible = s.endsWith('::after') ? calques : elements
+            cible.set(s, { ...(cible.get(s) ?? {}), [d.prop]: d.value })
+          }
+        })
+      })
+      expect(surElement).toEqual([])
+      const animes = [...calques].filter(([, d]) => /^nv-lave /.test(d.animation ?? ''))
+      expect(animes.length).toBeGreaterThanOrEqual(9)
+      // L'element du calque doit etre positionne ET avoir sa propre pile : sans elle, le calque en
+      // `z-index: -1` passe DERRIERE le fond de l'element et ne se voit plus (« Nouveau fil »,
+      // trouve en direct le 2026-11-05).
+      for (const [s] of animes) {
+        const element = elements.get(s.slice(0, -'::after'.length)) ?? {}
+        expect({ s, position: element.position, pile: element.isolation }).toEqual({
+          s,
+          position: 'relative',
+          pile: 'isolate'
+        })
+      }
+      for (const [s, d] of animes) {
+        expect({
+          s,
+          z: d['z-index'],
+          o: d.opacity,
+          clic: d['pointer-events'],
+          c: d.content
+        }).toEqual({
+          s,
+          z: '-1',
+          o: '0',
+          clic: 'none',
+          c: "''"
+        })
+      }
+    }
+  )
+
+  it('fige les gouttes du cadre des capsules : aucune position ni animation', () => {
+    const anneau = readFileSync(
+      new URL('../components/anneau-activite.css', import.meta.url),
+      'utf8'
+    )
+    const valeurs: string[] = []
+    postcss.parse(anneau).walkDecls((d) => {
+      valeurs.push(`${d.prop}: ${d.value}`)
+    })
+    expect(valeurs.filter((v) => /--nv-lave-|thinking-capsule-lave-animation/.test(v))).toEqual([])
+    let animation: string | undefined
+    postcss.parse(anneau).walkRules((regle) => {
+      if (!regle.selectors.includes('.cadre-anneau::before')) return
+      regle.walkDecls('animation', (d) => {
+        animation = d.value
+      })
+    })
+    expect(animation).toBeUndefined()
   })
 })
 
