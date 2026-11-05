@@ -32,6 +32,8 @@ export type AppelCourt =
   | 'arbitrageDerive'
   | 'relectureFroide'
   | 'condenseBrain'
+  /** Titre du commit d'un fil fini, publié sans tour de modèle (git-apres-fil-sans-tour.ts). */
+  | 'messageDeCommit'
 
 /** Longueur gardée de l'issue : de quoi lire un format inattendu, pas de quoi recopier un texte. */
 const ISSUE_MAX = 160

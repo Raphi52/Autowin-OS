@@ -57,4 +57,14 @@ describe('enchaînement auto du chat — câblage de fin de tour', () => {
     expect(source.match(/new FileGitApresFil\(/g)).toHaveLength(1)
     expect(source).not.toMatch(/runPrompt\([^)]*promptGitDuFil/)
   })
+
+  // conv-1569 : « je veux pas que ça envoie un message à ma place » — aucun tour dans la passe.
+  it('la passe publie par l’app et le petit modèle, sans ouvrir de tour dans le fil', () => {
+    const debut = source.indexOf('suiviGitApresFil.file = new FileGitApresFil({')
+    const bloc = source.slice(debut, source.indexOf('noterTravauxTentes', debut))
+    expect(bloc).toContain('publierSansTour(')
+    expect(bloc).toContain('redigerUnCommit(charge, fil)')
+    expect(bloc).not.toContain('runPrompt')
+    expect(source).toContain('const redigerUnCommit = redacteurDeCommit(os)')
+  })
 })
