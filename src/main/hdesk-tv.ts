@@ -16,6 +16,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, mkdtempSync, mkdirSync }
 import { join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { supprimerArbre } from './fs-supprimer'
+import { empreinteConnue } from './store/worktree-manager-empreintes'
 
 /**
  * Racine des scripts de capture. Installée, l'app vit dans `app.asar`, que PowerShell ne sait pas
@@ -82,6 +83,50 @@ export function processusVivant(pid: number): boolean {
   }
 }
 
+/** Ticks .NET (100 ns depuis l'an 1) de l'epoque Unix : origine des dates de la sonde Windows. */
+const TICKS_EPOQUE_UNIX = 621_355_968_000_000_000n
+/** Meme marge que hdesk-lancer.ps1 et hdesk-fermer.ps1 (« ne avant lanceLe + 5 s »). */
+const MARGE_INSCRIPTION_MS = 5_000
+
+/** Instant de naissance (ms Unix) lu dans une empreinte Windows `ticks|chemin`, sinon null. */
+function naissanceEmpreinte(empreinte: string): number | null {
+  const ticks = /^(\d+)\|/.exec(empreinte)?.[1]
+  if (!ticks) return null
+  const valeur = BigInt(ticks)
+  // Une empreinte Linux (tops d'horloge depuis l'amorcage) n'est pas une date : illisible.
+  return valeur < TICKS_EPOQUE_UNIX ? null : Number((valeur - TICKS_EPOQUE_UNIX) / 10_000n)
+}
+
+/**
+ * L'APPLICATION DU BUREAU VIT-ELLE ENCORE ? (conv-1592, scout conv-1576)
+ *
+ * Un numero de processus vivant ne suffit pas : Windows reattribue les numeros, et la TV restait
+ * « en direct » sur un bureau vide des qu'un autre programme heritait du numero. Les scripts
+ * appliquaient deja la bonne regle (hdesk-lancer.ps1, hdesk-fermer.ps1 : ne avant `lanceLe` + 5 s) ;
+ * l'app ne la connaissait pas. La fiche est ecrite APRES la fenetre de l'application, donc
+ * l'application d'origine est nee avant `lanceLe` ; un heritier du numero nait apres sa mort.
+ *
+ * L'empreinte vient de la sonde PARTAGEE avec les copies de travail (`empreinteConnue`) : elle ne
+ * bloque JAMAIS le fil principal. Pas encore lue (`null`) = on garde, le passage suivant de la
+ * liste tranche. Mort prouvee (`undefined`) = bureau fini, comme avant. Ce qui ne se lit pas (fiche
+ * sans date, empreinte non Windows) reste vivant : jamais un bureau vivant cache a tort.
+ * Pas de comparaison de chemin : `executable` est l'argument du lanceur, pas forcement un chemin
+ * complet (« notepad »), et un chemin different ferait disparaitre un bureau bien vivant.
+ */
+export function applicationDuBureauVivante(
+  fiche: EntreeRegistre,
+  empreinte: (pid: number) => string | null | undefined = empreinteConnue
+): boolean {
+  if (typeof fiche.pid !== 'number') return true
+  const lue = empreinte(fiche.pid)
+  if (lue === undefined) return false
+  if (lue === null) return true
+  const ne = naissanceEmpreinte(lue)
+  const inscrit = Date.parse(fiche.lanceLe ?? '')
+  if (ne === null || !Number.isFinite(inscrit)) return true
+  return ne <= inscrit + MARGE_INSCRIPTION_MS
+}
+
 /**
  * Bureaux a montrer dans un fil : les VIVANTS relies a CE fil, plus recent d'abord.
  */
@@ -89,7 +134,8 @@ export function fusionnerBureaux(
   vivants: readonly string[],
   registre: readonly EntreeRegistre[],
   conversationId?: string,
-  pidVivant: (pid: number) => boolean = processusVivant
+  pidVivant: (pid: number, fiche: EntreeRegistre) => boolean = (_pid, fiche) =>
+    applicationDuBureauVivante(fiche)
 ): BureauTv[] {
   const parId = new Map(registre.map((e) => [e.id, e]))
   const tous: BureauTv[] = vivants
@@ -97,8 +143,8 @@ export function fusionnerBureaux(
     // APP MORTE = BUREAU FINI (conv-536, 2026-09-24) : le bureau Windows survit a son application
     // (le capteur en tient une poignee), donc la TV restait « en direct » sur un Bloc-notes tue.
     .filter((id) => {
-      const pid = parId.get(id)?.pid
-      return typeof pid !== 'number' || pidVivant(pid)
+      const fiche = parId.get(id)
+      return typeof fiche?.pid !== 'number' || pidVivant(fiche.pid, fiche)
     })
     .map((id) => {
       const e = parId.get(id)

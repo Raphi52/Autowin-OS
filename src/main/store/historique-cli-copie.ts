@@ -8,9 +8,20 @@ import { supprimerArbre } from '../fs-supprimer'
  *
  * POURQUOI. Le CLI Claude écrit ses conversations dans `<config>/projects/<cwd encodé>/`, hors de
  * tout ce qu'Autowin gère. `cleanupWorktree` supprime la copie de travail ; cet historique, lui,
- * survit pour toujours. Mesuré le 2026-09-12 sur le poste de dev : 80 dossiers d'historique pour
+ * restait sur le disque. Mesuré le 2026-09-12 sur le poste de dev : 80 dossiers d'historique pour
  * 11 copies vivantes, 87 Mo de déchet pur accumulés en 11 jours, dont AUCUN ne pouvait plus être
  * relu par qui que ce soit — le dossier qu'ils décrivent n'existe plus.
+ *
+ * LE CLI EN EFFACE AUSSI, MAIS TARD (vérifié le 2026-11-05, conv-1592). Depuis la 2.1.317, il purge
+ * les historiques anciens même quand des appels sautent ce ménage, « such as runs using
+ * `--setting-sources` » — c'est ainsi qu'Autowin lance chaque appel. Le délai est `cleanupPeriodDays`,
+ * 30 jours par défaut, et Autowin ne charge pas les réglages de l'utilisateur : c'est donc 30 jours.
+ * Sources : https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md (2.1.317) et
+ * https://code.claude.com/docs/en/data-usage (« for 30 days by default »). Ce module reste utile :
+ * il libère la place le jour même au lieu d'un mois plus tard. Les deux lecteurs de ces historiques
+ * vivent avec la purge : le repli local des quotas (`model-quotas.ts`) ne regarde que 5 h et 7 jours ;
+ * la relecture du coût d'un appel tué (`activity/cli-usage-recovery.ts`) ne retrouve plus rien
+ * au-delà de 30 jours, et l'appel redevient « non exposé ».
  *
  * L'ENCODAGE, vérifié sur le disque réel : le chemin absolu du répertoire courant, chaque caractère
  * non alphanumérique remplacé par un tiret. `D:\AutoWinOS` devient `D--AutoWinOS` (le deux-points

@@ -59,6 +59,36 @@ describe('vue Bureaux cachés — TOUS les bureaux, quel que soit le fil (conv-9
     expect(listerTousLesBureaux([], [{ id: 'a', conversationId: 'conv-1', pid: 1 }])).toEqual([])
   })
 
+  it.runIf(process.platform === 'win32')(
+    'numéro de processus repris par un autre programme → bureau fini, comme la TV (conv-1592)',
+    async () => {
+      // Ce processus de test est né après 2020 : la fiche « ancien » décrit un programme mort depuis.
+      const fiches = [
+        {
+          id: 'ancien',
+          conversationId: 'conv-1',
+          pid: process.pid,
+          lanceLe: '2020-01-01T00:00:00Z'
+        },
+        {
+          id: 'recent',
+          conversationId: 'conv-1',
+          pid: process.pid,
+          lanceLe: new Date().toISOString()
+        }
+      ]
+      // La sonde ne bloque jamais : la 1re lecture part en fond, une lecture suivante tranche.
+      await vi.waitFor(
+        () =>
+          expect(listerTousLesBureaux(['ancien', 'recent'], fiches).map((b) => b.id)).toEqual([
+            'recent'
+          ]),
+        { timeout: 15_000, interval: 200 }
+      )
+    },
+    20_000
+  )
+
   it('une liste illisible est une ERREUR, jamais une liste vide', async () => {
     const r = await bureauxGeres(
       async () => ({ ok: false as const, message: 'capture morte' }),

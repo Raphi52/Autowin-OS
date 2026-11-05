@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { execFileSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
@@ -7,8 +7,10 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { readFileSync } from 'node:fs'
 import {
+  applicationDuBureauVivante,
   processusVivant,
   CapteurHdesk,
+  type EntreeRegistre,
   type LanceurCapture,
   fusionnerBureaux,
   interpreterCapture,
@@ -422,6 +424,69 @@ describe('fusionnerBureaux — application morte', () => {
     expect(processusVivant(process.pid)).toBe(true)
     expect(processusVivant(2 ** 30)).toBe(false)
   })
+})
+
+/**
+ * NUMÉRO DE PROCESSUS REPRIS (conv-1592, scout conv-1576) : Windows réattribue les numéros de
+ * processus. Un numéro vivant ne prouvait pas que l'application du bureau vivait encore : la TV
+ * restait « en direct » sur un bureau vide dès qu'un autre programme héritait du numéro.
+ */
+describe('fusionnerBureaux — numéro de processus repris par un autre programme', () => {
+  const lanceLe = '2026-11-05T09:00:00.0000000+01:00'
+  // Empreinte Windows de la sonde partagée : « ticks .NET UTC du démarrage | chemin ».
+  const ne = (iso: string, exe = 'C:\\Windows\\notepad.exe'): string =>
+    `${BigInt(Date.parse(iso)) * 10_000n + 621_355_968_000_000_000n}|${exe}`
+
+  it('écarte le numéro né APRÈS l’inscription du bureau, garde le reste', () => {
+    const empreintes = new Map<number, string | null | undefined>([
+      [11, ne('2026-11-05T09:30:00+01:00', 'C:\\Autre\\autre.exe')],
+      [22, ne('2026-11-05T08:59:58+01:00')],
+      [33, null],
+      [44, undefined],
+      [55, '4242|/usr/bin/x'],
+      [66, ne('2026-11-05T09:00:04+01:00')]
+    ])
+    const sonde = (pid: number): string | null | undefined => empreintes.get(pid)
+    const fiche = (id: string, pid: number, avecDate = true): EntreeRegistre => ({
+      id,
+      conversationId: 'c',
+      pid,
+      ...(avecDate ? { lanceLe } : {})
+    })
+    expect(applicationDuBureauVivante(fiche('repris', 11), sonde)).toBe(false)
+    expect(applicationDuBureauVivante(fiche('vif', 22), sonde)).toBe(true)
+    // Empreinte pas encore lue : on garde, le passage suivant (5 s) tranche.
+    expect(applicationDuBureauVivante(fiche('nonlu', 33), sonde)).toBe(true)
+    expect(applicationDuBureauVivante(fiche('mort', 44), sonde)).toBe(false)
+    // Empreinte qui n'est pas une date Windows (Linux : tops d'horloge) : illisible, on garde.
+    expect(applicationDuBureauVivante(fiche('linux', 55), sonde)).toBe(true)
+    // Même marge de 5 s que hdesk-lancer.ps1 / hdesk-fermer.ps1.
+    expect(applicationDuBureauVivante(fiche('marge', 66), sonde)).toBe(true)
+    // Fiche ancienne sans date : seule la mort se prouve.
+    expect(applicationDuBureauVivante(fiche('sansdate', 11, false), sonde)).toBe(true)
+    expect(applicationDuBureauVivante({ id: 'sanspid', conversationId: 'c' }, sonde)).toBe(true)
+  })
+
+  it.runIf(process.platform === 'win32')(
+    'par défaut, la vraie sonde écarte un numéro vivant né après l’inscription',
+    async () => {
+      // Ce processus de test est né APRÈS 2020 : une fiche inscrite en 2020 sur son numéro décrit
+      // donc un autre programme, mort depuis. La fiche inscrite maintenant, elle, reste.
+      const registre: EntreeRegistre[] = [
+        { id: 'ancien', conversationId: 'c', pid: process.pid, lanceLe: '2020-01-01T00:00:00Z' },
+        { id: 'recent', conversationId: 'c', pid: process.pid, lanceLe: new Date().toISOString() }
+      ]
+      // La sonde ne bloque jamais : la 1re lecture part en fond, une lecture suivante tranche.
+      await vi.waitFor(
+        () =>
+          expect(fusionnerBureaux(['ancien', 'recent'], registre, 'c').map((b) => b.id)).toEqual([
+            'recent'
+          ]),
+        { timeout: 15_000, interval: 200 }
+      )
+    },
+    20_000
+  )
 })
 
 import { argumentsAct, agirHdesk, TOUCHES_TV } from './hdesk-tv'
