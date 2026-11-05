@@ -170,6 +170,24 @@ export function jaugesFausses(jauges) {
   })
 }
 
+/**
+ * Duree maximale de la sonde des jauges d'un carrousel /draft (`sondeJauges`, electron.cjs) : chaque
+ * jauge est bougee sur chaque proposition, et chaque position relit le style calcule de toute la carte.
+ * Elle ne tenait dans AUCUN delai de garde : conv-1586 (2026-11-05), 3 jauges x 6 propositions =
+ * 100,6 s mesurees, pour 73 s accordes a toute la verification -> Electron tue (SIGTERM), aucun verdict.
+ * 8 s par couple : 5,6 s mesurees sur des planches de ~120 elements par carte, plus une marge.
+ * Les jauges sont les etiquettes `dkc-rgl` du panneau, les propositions les boutons radio `dkp`
+ * (draft-reglages.mjs, draft-carrousel.mjs).
+ */
+export const DUREE_SONDE_PAR_JAUGE_ET_PROPOSITION_MS = 8_000
+
+export function dureeMaxJaugesMs(html) {
+  const compter = (motif) => (String(html ?? '').match(motif) ?? []).length
+  const jauges = compter(/class="dkc-rgl"/g)
+  const propositions = compter(/name="dkp"/g)
+  return jauges * propositions * DUREE_SONDE_PAR_JAUGE_ET_PROPOSITION_MS
+}
+
 /** Duree maximale d'un scenario : `html-interactif-apercu.mjs` en deduit son delai de garde. */
 export function dureeMaxScenarioMs(etapes) {
   return (etapes ?? []).reduce(
