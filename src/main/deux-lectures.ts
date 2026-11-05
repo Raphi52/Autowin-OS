@@ -492,9 +492,7 @@ function neRepondARien(message: MessageDuFil): boolean {
  * Un tour coupé est sauté : sa seule ligne compréhension n'est qu'une paraphrase d'un message que
  * `demandesResteesSansReponse` remet désormais tel quel.
  */
-export function dernierMessageAgent(
-  historique: ReadonlyArray<MessageDuFil>
-): string | undefined {
+export function dernierMessageAgent(historique: ReadonlyArray<MessageDuFil>): string | undefined {
   for (let i = historique.length - 1; i >= 0; i--) {
     const message = historique[i]
     if (message.role !== 'assistant' || typeof message.content !== 'string') continue

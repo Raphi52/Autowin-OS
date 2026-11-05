@@ -448,7 +448,8 @@ describe('tours coupés : les messages restés sans réponse font partie de la d
     {
       role: 'assistant',
       arrete: true,
-      content: 'Compréhension : « Retoucher la forme 3D du kimono du tanuki (volume, tombé des pans) »'
+      content:
+        'Compréhension : « Retoucher la forme 3D du kimono du tanuki (volume, tombé des pans) »'
     },
     { role: 'user', content: 'améliore tout fait un lot' }
   ]
