@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { deposerFichier, relireFichier } from './ecriture-hors-fil'
 import type { StatutDuPlan } from '../shared/plan-de-lots'
 import type { AutoCloseReport, GitRunner } from './run-autoclose'
+import { titreDuBandeau } from './titre-bandeau-git'
 
 /**
  * « PUBLIER SANS TAPER /git » (conv-1339, 2026-10-30, piste du scout conv-1332).
@@ -306,7 +307,8 @@ export function bandeauPublie(
     '```html-render',
     // Sans cette règle, le lien sort dans le bleu par défaut du navigateur, illisible sur fond sombre.
     '<style>.awp-annuler{display:inline-block;margin-top:6px;color:inherit;font-weight:600;text-decoration:none;cursor:pointer}.awp-shell{white-space:pre-wrap;word-break:break-all;margin:4px 0}</style>',
-    `<div class="aw-kicker">GIT : ${n} commit${n > 1 ? 's' : ''}</div>`,
+    // Titre = statut, « 1 commit et push origin main réussi » (conv-1573).
+    `<div class="aw-kicker">${echapper(titreDuBandeau(n, lignesShell))}</div>`,
     `<div><b>${actionDesLignes(lignesShell)}</b> : <b class="aw-chiffre">${n} commit${n > 1 ? 's' : ''}</b> de ce fil <b>en ligne</b>.</div>`,
     ...lignes,
     ...(lignesShell.length

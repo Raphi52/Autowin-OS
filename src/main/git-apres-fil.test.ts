@@ -262,10 +262,12 @@ describe('bandeauPublie', () => {
 
   // conv-1553 : « Publié sans /git » ne disait ni l'action ni la commande ; l'utilisateur veut
   // « GIT : N commit », le nom du commit, l'action et la ligne exacte envoyée au shell.
-  it('titre « GIT : N commits », nomme l’action et cite les lignes git exactes du tour', () => {
+  it('titre de statut, nomme l’action et cite les lignes git exactes du tour', () => {
     const ligne = 'cd /d/X && git commit -q -m "a <b>" && ALLOW_MAIN_PUSH=1 git push -q origin HEAD:main'
     const bandeau = bandeauPublie(commits, [ligne])
-    expect(bandeau).toContain('<div class="aw-kicker">GIT : 2 commits</div>')
+    // conv-1573 : le titre est un statut, « N commits et push <distant> <branche> réussi ».
+    expect(bandeau).toContain('<div class="aw-kicker">2 commits et push origin main réussi</div>')
+    expect(bandeau).not.toContain('GIT : 2 commits')
     expect(bandeau).not.toContain('Publié sans /git')
     expect(bandeau).toContain('Commit et push')
     expect(bandeau).toContain('git push -q origin HEAD:main')
