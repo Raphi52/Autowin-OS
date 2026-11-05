@@ -888,6 +888,12 @@ export interface OrchestratorDecompositionDeps {
   /** Injection substituable pour les tests ; en production charge le vrai kit via skill-pipeline. */
   skillInstruction?: (phase: NodePhase, opts: { withFoundation: boolean }) => string
   /**
+   * L'étape a-t-elle sa skill désactivée dans Settings › Skills ? Absent = aucune ne l'est (tests).
+   * En production : `etapeDesactiveeDansLesReglages` (os.ts) — une étape désactivée ne se joue pas
+   * (conv-1602).
+   */
+  etapeDesactivee?: (phase: string) => boolean
+  /**
    * Les outils Brain d'un noeud SKILL, en LIAISON TARDIVE.
    *
    * Le bus de commandes n'existe pas encore quand l'orchestrateur est construit (`index.ts` cree

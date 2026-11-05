@@ -15,6 +15,7 @@ import { combinePhaseInstruction } from './workflow-instruction'
 import { agentsForPhase, linearPhasesOf, resolveWorkflowAgents, type WorkflowAgentBinding, type WorkflowGraph } from './workflow-graph'
 import { classifyRegime, type TaskRegime } from './task-regime'
 import { GARDE_TACHE, phaseBrief } from './phase-briefs'
+import { grapheSansEtapesDesactivees, sansEtapesDesactivees } from './etapes-desactivees'
 import { anglesDuPanelScout, prioriserAnglesScout } from '../shared/persona'
 import type { SendOptions, TrustedLearningOracle } from './providers/types'
 import { identifiantBureauCache } from './consigne-bureau-cache'
@@ -224,10 +225,29 @@ export class Orchestrator {
     // sélectionné reste le contexte du run, mais son graphe ne doit pas réinjecter les autres phases.
     if (routeSkillRequest(task)?.explicitPhase) return undefined
     if (this.tacheTriviale(task)) return undefined
-    return this.workflowDuRun()?.graph
+    const graphe = this.workflowDuRun()?.graph
+    // Les étapes désactivées sortent du graphe ICI, avant le devis et le marcheur, qui le lisent
+    // tous deux : rien n'est réservé ni joué pour elles (conv-1602).
+    return graphe
+      ? grapheSansEtapesDesactivees(graphe, (phase) => this.etapeDesactivee(phase))
+      : undefined
   }
 
+  /** Vrai si l'utilisateur a désactivé la skill de cette étape (Settings › Skills, conv-1602). */
+  etapeDesactivee(phase: string): boolean {
+    return this.deps.etapeDesactivee?.(phase) ?? false
+  }
+
+  /**
+   * Les étapes du run, sans celles que l'utilisateur a désactivées (conv-1602). Un seul filtre ici :
+   * le devis, la liste plate et le découpage en sous-tâches (`phases.includes('build')`) lisent tous
+   * cette liste. Le marcheur de graphe ne la lit pas : `graphePourTache` lui retire les siennes.
+   */
   effectivePhases(task: string): NodePhase[] {
+    return sansEtapesDesactivees(this.phasesDuRun(task), (phase) => this.etapeDesactivee(phase))
+  }
+
+  private phasesDuRun(task: string): NodePhase[] {
     const explicitPhase = routeSkillRequest(task)?.explicitPhase
     if (explicitPhase) return explicitPhase === 'judge' ? [] : [explicitPhase]
     const workflow = this.workflowDuRun()

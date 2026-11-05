@@ -7,6 +7,7 @@ import { type PipelinePhase, type NodePhase } from './skill-pipeline'
 import { rootExecutionRequirements, programmeSansEcriture } from './root-execution-contract'
 import { isMutationTask } from './task-mutation-classifier'
 import { routeSkillRequest } from './skill-routing'
+import { refusEtapeDesactivee } from './etapes-desactivees'
 import { allocationFromGraph, recoveriesFromGraph, worstCaseNodeExecutions } from './workflow-graph'
 import { resumeConsigne } from './runs/plan-en-vagues'
 import type { ExecutionEvidence } from './providers/types'
@@ -104,6 +105,14 @@ export async function run(
   const workflow = this.workflowDuRun()
   const phases = this.effectivePhases(task)
   const explicitPhase = routeSkillRequest(task)?.explicitPhase
+  // Étape nommée ou build d'un run qui modifie, désactivés dans Settings › Skills : refus AVANT le
+  // premier appel, comme les autres refus de départ (conv-1602).
+  const refusEtape = refusEtapeDesactivee({
+    phaseNommee: explicitPhase,
+    modifie: isMut,
+    desactivee: (phase) => this.etapeDesactivee(phase)
+  })
+  if (refusEtape) throw new Error(refusEtape)
   const workflowGraph = this.graphePourTache(task)
   const depuisGraphe = workflowGraph ? allocationFromGraph(workflowGraph) : undefined
   const impose =

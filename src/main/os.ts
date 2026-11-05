@@ -88,6 +88,7 @@ import type { TypageAvantPublication } from './typage-avant-publication'
 import { sharedBrainRoot } from './brain-context'
 import { brainEstUnDepot } from './brain-paths'
 import { regimePhases } from './task-regime'
+import { etapeDesactiveeDansLesReglages } from './etapes-desactivees'
 import type { NodePhase } from './skill-pipeline'
 import {
   clearOrchestrationState,
@@ -826,6 +827,9 @@ export class AutowinOS {
       // le juge (rôle distinct). Déterministe/générique (task-regime.ts). Économise tokens + latence
       // sur les tâches simples sans jamais sous-traiter les complexes (doute → critical).
       classifyPhases: regimePhases,
+      // L'interrupteur de Settings › Skills, relu à chaque run : une étape désactivée ne se joue
+      // plus (conv-1602).
+      etapeDesactivee: etapeDesactiveeDansLesReglages,
       currentExecutionQuote: () => this.executionSupervisor.currentQuote(),
       currentExecutionUsage: () => this.executionSupervisor.currentSnapshot(),
       // Workflow nommé actif — posé le temps d'un run par la confrontation de workflows, absent le
