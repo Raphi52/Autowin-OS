@@ -40,6 +40,14 @@ describe('affichage selon la connexion — interface', () => {
     expect(app).not.toMatch(/decorMonte && !affichage/)
   })
 
+  it('une fenêtre réduite en largeur prend la mise en page téléphone, en direct', () => {
+    // La fenêtre étroite est lue à la largeur CSS courante (matchMedia), jamais au seul téléphone.
+    const hook = source('./affichage-session.ts')
+    expect(hook).toMatch(/REQUETE_FENETRE_ETROITE\s*=\s*`\(max-width: \$\{LARGEUR_FENETRE_ETROITE\}px\)`/)
+    expect(hook).toMatch(/addEventListener\('change', suivre\)/)
+    expect(hook).toMatch(/telephone: true \}/)
+  })
+
   it('à distance, aucune règle ne fige les animations ni les transitions', () => {
     const css = source('./assets/affichage-session.css')
     // Aucune règle ne vise la session distante : seul l'écran de téléphone change la page.
