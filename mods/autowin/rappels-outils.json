@@ -37,24 +37,5 @@
         { "outil": "Read", "texte": "D:/AutoWinOS/node_modules/typescript/bin/tsc -p" }
       ]
     }
-  },
-  {
-    "id": "formatage-de-tout-le-depot",
-    "source": "AGENTS.md « Règles du dépôt » : pas de `npm run format` (`prettier --write .`)",
-    "outils": "Bash|PowerShell|Monitor",
-    "motif": "\\bprettier\\b[^|;&\\n]*\\s(--write|-w)\\s+[\"']?\\.[\"']?(?=\\s|$|[;&|])|\\bnpm\\s+run\\s+format(?![\\w:-])",
-    "texte": "Ne reformate pas tout le dépôt (`npm run format`, `prettier --write .`) : plusieurs fils travaillent dans ce même dossier, et cela réécrirait leurs fichiers. Passe à prettier tes seuls fichiers : `npx prettier --write <tes chemins>`.",
-    "exemples": {
-      "oui": [
-        { "outil": "Bash", "texte": "npx prettier --write ." },
-        { "outil": "PowerShell", "texte": "npm run format" },
-        { "outil": "Bash", "texte": "npx prettier --log-level warn -w \".\" && git status" }
-      ],
-      "non": [
-        { "outil": "Bash", "texte": "npx prettier --write src/main/commands.ts" },
-        { "outil": "Bash", "texte": "npx prettier --check ." },
-        { "outil": "Bash", "texte": "npx prettier --write ./src/x.ts" }
-      ]
-    }
   }
 ]

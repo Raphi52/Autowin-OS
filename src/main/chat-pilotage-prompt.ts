@@ -1,4 +1,3 @@
-import { MODEL_QUESTION_INSTRUCTION } from './model-questions'
 import { consigneBureauCacheChat } from './consigne-bureau-cache'
 import { CONSIGNE_CLASSES_PAGES_HTML } from '../shared/classes-pages-html'
 import { CONSIGNE_BLOCS_DONNEES } from '../shared/blocs-donnees'
@@ -736,10 +735,10 @@ export function buildChatPilotagePrompt(
     // MESURÉ : après avoir autorisé la lecture, 7 essais sur 10 donnaient le nombre exact ; les 3
     // échecs répondaient en 2-3 secondes, donc SANS appeler d'outil — un chiffre sorti de nulle part.
     // La règle générale ne suffisait pas : il faut nommer le déclencheur, « un nombre est demandé ».
-    `RÈGLE ABSOLUE — si la question demande un NOMBRE, un COMPTE, une LISTE ou l'EXISTENCE d'un ` +
-    `fichier, tu appelles une commande de lecture AVANT de répondre, sans exception. Donner un ` +
-    `chiffre sans l'avoir lu est une faute, même si le chiffre te paraît évident : tu ne peux pas ` +
-    `connaître le contenu d'un dossier sans le lister.\n` +
+    // RACCOURCI le 2026-11-05 (conv-1577) : `exigeUnChiffreVerifie` (chat-turn-messages.ts) relance
+    // déjà un tour qui donne un chiffre sans lecture ; la prose ne garde que le déclencheur.
+    `RÈGLE ABSOLUE — un NOMBRE, un COMPTE, une LISTE ou l'EXISTENCE d'un fichier se LIT avant de ` +
+    `répondre, même si le chiffre te paraît évident.\n` +
     `Après une commande tu reçois le résultat + le ` +
     `nouvel état et tu peux continuer — SAUF après \`ask\`, qui clôt ton tour (voir QUESTION A ` +
     `L'UTILISATEUR). Quand tu as fini d'agir, termine par ta réponse en clair ` +
@@ -749,15 +748,12 @@ export function buildChatPilotagePrompt(
     // dix minutes du run, le panneau Graphe se remplissait et le fil restait sur « Réflexion… ».
     // L'interdit d'annoncer un SUCCES etait lu comme un interdit d'ECRIRE. On separe les deux : la
     // commande garde sa place en tete, mais le silence complet devient une faute.
-    `JAMAIS DE FIL MUET — au moment où tu émets une commande LONGUE (orchestrate, verify, run), ` +
-    `tu écris dans le MÊME message, juste après elle, une à trois lignes qui disent ce ` +
-    `que tu lances, sur quoi, et ce que tu attends comme résultat. Un message qui ne contient ` +
-    `qu'un bloc <cmd> laisse l'utilisateur devant un fil muet pendant toute la durée du travail : ` +
-    `il voit la machine tourner ailleurs et rien dans la conversation. Écris ces lignes au présent ` +
-    `d'INTENTION — « je lance… », « j'ouvre… », « je tente… », « ce que j'attends : … » —, jamais ` +
-    `au passé ni à l'accompli. Cette ligne de contexte n'est PAS une annonce de succès : elle dit ` +
-    `ce qui part, pas ce qui est obtenu. Même exigence entre deux itérations d'un même tour : si ` +
-    `un run tourne encore, dis en une ligne où il en est plutôt que de rendre un message vide.\n` +
+    // RACCOURCI le 2026-11-05 (conv-1577) : l'explication du « pourquoi » est ici, en commentaire ;
+    // le modèle n'a besoin que du geste.
+    `JAMAIS DE FIL MUET — une commande LONGUE (orchestrate, verify, run) s'accompagne, dans le MÊME ` +
+    `message, d'une à trois lignes au présent d'INTENTION (« je lance… », « je tente… », « ce que ` +
+    `j'attends : … ») : ce qui part, jamais un succès. Entre deux itérations d'un tour, une ligne dit ` +
+    `où en est le travail.\n` +
     // ÉTAPES VISIBLES (conv-304, 2026-10-17 : « un bloc avec les étapes de la task et leur
     // progression, ils ont mis ça dans claude.exe »). Le fil dessine le bloc Étapes à partir des
     // appels TaskCreate/TaskUpdate (providers/claude-etapes.ts). CAUSE de cette phrase, mesurée en A/B
@@ -812,9 +808,12 @@ export function buildChatPilotagePrompt(
     // les deux comportements que cette description ne porte pas : le refaire soi-meme meme si d'autres
     // agents tournent (conv-304), et ne jamais renvoyer le redemarrage a l'utilisateur (conv-103).
     horsLecture(
-      `TU VIS DANS L'APP QUE TU PILOTES — NE TUE JAMAIS TON PROCESSUS HOTE. Un "relance l'app", un "redemarre", un "kill electron" execute depuis toi COUPE la conversation en cours au milieu de ton propre tour : ta reponse n'arrive jamais. Cela vaut aussi pour un differe ou un detache (Start-Process, tache planifiee, sleep puis kill) : differer ne rend pas le geste sur, seulement invisible. Interdit aussi : kill, taskkill, ou arreter TOUS les processus d'un nom ou un binaire entier — un arret large emporte des fenetres et des runs qui ne t'appartiennent pas.
+      // RACCOURCI le 2026-11-05 (conv-1577) : l'arret PAR NOM (taskkill /IM, Stop-Process -Name,
+      // pkill) est refuse par le garde `refusArretHote` (shared/garde-hote-et-boucle.ts) ; la prose
+      // ne garde que ce qu'aucun garde ne voit : l'arret par PID ou differe de l'hote lui-meme.
+      `TU VIS DANS L'APP QUE TU PILOTES — NE TUE JAMAIS TON PROCESSUS HOTE : l'arreter ou le relancer depuis toi COUPE ton propre tour, ta reponse n'arrive jamais. Meme en differe ou detache (Start-Process, tache planifiee, sleep puis kill) : differer ne rend pas le geste sur. Un garde refuse deja d'arreter TOUS les processus d'un nom.
 ` +
-        `Un redemarrage necessaire, tu le FAIS toi-meme avec \`restart_app\` et sa consigne de reprise, MEME si d'autres agents tournent (il se met en file) : jamais la question « je redemarre ? ». NE DEMANDE JAMAIS a l'utilisateur de relancer l'app : « relance l'app », « fais Ctrl+R », « relance le dev serveur » ecrit en cloture est un ECHEC. Tu ne le lui rends que si \`restart_app\` te repond lui-meme qu'il est indisponible : cite alors son refus.
+        `Un redemarrage necessaire, tu le FAIS toi-meme avec \`restart_app\` et sa consigne de reprise, MEME si d'autres agents tournent (il se met en file) : jamais la question « je redemarre ? ». NE DEMANDE JAMAIS a l'utilisateur de relancer l'app : « relance l'app », « fais Ctrl+R » en cloture est un ECHEC, sauf si \`restart_app\` te repond lui-meme qu'il est indisponible : cite alors son refus.
 `
     ) +
     // RACCOURCI le 2026-10-28 (conv-1229) : « la meme approche qui echoue deux fois, arrete-la » et
@@ -1028,7 +1027,6 @@ export function buildChatPilotagePrompt(
         `modification. Avec \`ask\`, demande un choix concret entre fonctionnalité, correction, ` +
         `document ou autre livrable. Cette information est indispensable à toute preuve vérifiable.\n`
     ) +
-    CONSIGNE_LIGNE_BESOIN +
-    MODEL_QUESTION_INSTRUCTION
+    CONSIGNE_LIGNE_BESOIN
   )
 }
