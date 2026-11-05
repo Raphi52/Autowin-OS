@@ -1,0 +1,11 @@
+{
+  "name": "autowin",
+  "owner": { "name": "Autowin OS" },
+  "plugins": [
+    {
+      "name": "autowin-mods",
+      "source": "./",
+      "description": "Mods d'Autowin OS, chargés sur place quand le réglage administrateur du poste les active (scripts/mod-autowin-admin.mjs)."
+    }
+  ]
+}

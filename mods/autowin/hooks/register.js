@@ -6,7 +6,21 @@
  * `AUTOWIN_HDESK_ID` est posé par l'orchestrateur pour un run (identifiantBureauCache) ; sans lui,
  * le mod 1 ne change rien.
  */
-import { descriptionAvecRegle, rappelRetire, redirigerLancementGraphique } from './regles.js'
+import {
+  descriptionAvecRegle,
+  rappelRetire,
+  redirigerLancementGraphique,
+  sessionAutowin
+} from './regles.js'
+
+/**
+ * Session lancée par Autowin ? Le réglage administrateur charge aussi ce mod ailleurs (conv-1582).
+ * Le nom de la variable reste écrit EN CLAIR : `claude plugin validate` (CLI 2.1.318) refuse le mod
+ * quand `$.env.get` reçoit une constante — il doit pouvoir lister les variables lues.
+ */
+async function dansAutowin($) {
+  return sessionAutowin(await $.env.get('AUTOWIN_APP_DATA_ROOT'))
+}
 
 export function register(on) {
   // Mod 1 — rediriger une app graphique vers le bureau caché du run.
@@ -31,13 +45,14 @@ export function register(on) {
 
   // Mod 2 — retirer les rappels automatiques qui contredisent la constitution.
   on('prompt.attachment', async ($, e, next) => {
-    if (rappelRetire(e.type)) return { text: null }
+    if (rappelRetire(e.type) && (await dansAutowin($))) return { text: null }
     return next(e)
   })
 
   // Mod 3 — la règle du bureau caché dans la description de l'outil shell.
   on('tool.describe', { tool: ['Bash', 'PowerShell'] }, async ($, e, next) => {
     const r = await next(e)
+    if (!(await dansAutowin($))) return r
     return { ...r, description: descriptionAvecRegle(r && r.description) }
   })
 }

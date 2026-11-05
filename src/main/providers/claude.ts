@@ -965,14 +965,19 @@ export function claudeTransportEnvelope(
  * événement `init`. On ne PASSE que le dossier d'Autowin (un mod a tous les droits du CLI), mais
  * le CLI n'en charge pas que lui : il y ajoute ses mods intégrés (`…@builtin`).
  *
- * Mesuré le 2026-11-05 (conv-1582) : l'événement `init` liste six mods, `autowin-mods@inline` puis
- * cinq `cc-plugin-…@builtin`. L'un d'eux, `cc-plugin-sec-default`, se place AVANT les autres sur un
- * poste à réglages gérés (sa description, `claude plugin details cc-plugin-sec-default`) et tient le
- * contenu du prompt hors de portée des mods installés : le mod 2 (`prompt.attachment`) ne tourne
- * donc jamais ici — 315 des 3 795 journaux de `run-stdout/` portent « its prompt.attachment hook
- * was skipped », et le compte à rebours de tokens reste. Les mods 1 et 3 (outil shell) tournent.
- * Le rouvrir demande un réglage administrateur hors du dépôt (`prependPlugins` géré) ou le retrait
- * du mod 2 : décision de l'utilisateur, non prise ici.
+ * Mesuré le 2026-11-05 (conv-1582) : le CLI ajoute ses mods intégrés (`cc-plugin-…@builtin`). L'un
+ * d'eux, le garde `cc-plugin-sec-default`, se charge sur un poste à réglages administrateur OU avec
+ * une connexion Team/Enterprise (le compte principal `~/.claude` ici, pas `compte-3`) et saute le
+ * mod 2 (`prompt.attachment`) d'un mod installé : 315 des 3 795 journaux de `run-stdout/` portaient
+ * « its prompt.attachment hook was skipped ».
+ * Décision de l'utilisateur (conv-1582) : le poste porte désormais le réglage administrateur
+ * `C:\Program Files\ClaudeCode\managed-settings.json` (scripts/mod-autowin-admin.mjs), qui active
+ * `autowin-mods@autowin` depuis `mods/autowin/.claude-plugin/marketplace.json`, chargé SUR PLACE et
+ * placé avant le garde (`prependPlugins`) : debug « hooks module autowin-mods@autowin loaded … tier
+ * prepend », plus aucun « hook was skipped ». Le CLI ignore alors ce `--plugin-dir` (« --plugin-dir
+ * copy of "autowin-mods" ignored: plugin is locked by managed settings ») : on le passe quand même,
+ * c'est lui qui charge le mod sur un poste sans ce réglage. Ce réglage vaut pour TOUTES les sessions
+ * Claude Code du poste : les mods 2 et 3 ne changent rien hors d'Autowin (hooks/register.js).
  *
  * Le dossier est fixé au démarrage (`definirDossierModsAutowin`, index.ts). Non fixé ou absent du
  * disque : aucun argument, le run part comme avant.

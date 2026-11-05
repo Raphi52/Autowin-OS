@@ -17,5 +17,6 @@ export declare function commandeBureauCache(o: {
   travail: string
 }): string
 export declare function decoderCommande(commande: string): string
+export declare function sessionAutowin(valeur: unknown): boolean
 export declare function rappelRetire(type: unknown): boolean
 export declare function descriptionAvecRegle(description: unknown): string

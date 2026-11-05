@@ -198,6 +198,19 @@ export function redirigerLancementGraphique(commande, { idBureau, lanceur } = {}
   return change ? { action: 'reecrire', commande: resultat } : { action: 'laisser' }
 }
 
+/* ------------------------------------------------------- portée des mods */
+
+/**
+ * `valeur` = `AUTOWIN_APP_DATA_ROOT`, posée par Autowin dans chaque session du CLI qu'il lance
+ * (src/main/index.ts, héritée par `withClaudeAccountEnv`). Depuis conv-1582 (2026-11-05), le mod peut
+ * aussi être activé par le réglage administrateur du poste (scripts/mod-autowin-admin.mjs), qui vaut
+ * pour TOUTES les sessions Claude Code : hors d'Autowin, les mods 2 et 3 ne changent alors rien. Le
+ * mod 1 a déjà son propre filtre (`AUTOWIN_HDESK_ID`, posé seulement pour un run).
+ */
+export function sessionAutowin(valeur) {
+  return typeof valeur === 'string' && valeur.trim() !== ''
+}
+
 /* ---------------------------------------------------------------- mod 2 */
 
 /** Types de rappels automatiques retirés, avec la raison. Stable : même réponse à chaque requête. */
