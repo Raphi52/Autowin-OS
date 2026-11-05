@@ -93,7 +93,10 @@ describe('refusGitDestructeur', () => {
     'bash -c "npm run format"',
     // Exemples repris du rappel « formatage-de-tout-le-depot » (mods/autowin/rappels-outils.json,
     // conv-1457), retiré quand ce refus l'a rendu inatteignable.
-    'npx prettier --log-level warn -w "." && git status'
+    'npx prettier --log-level warn -w "." && git status',
+    // Une redirection ne masque pas une cible large (conv-1580).
+    'npx prettier --write . >/dev/null',
+    'npx prettier --write src > sortie.txt'
   ])('refuse le reformatage de tout le dépôt : %s', (c) => {
     const m = refusGitDestructeur(c)
     expect(m, c).toBeTruthy()
@@ -105,6 +108,12 @@ describe('refusGitDestructeur', () => {
     'npx prettier --write src/main/a.ts src/main/b.test.ts',
     'npx prettier --write --end-of-line lf src/main/a.ts',
     'npx prettier --write ./src/x.ts',
+    // conv-1580, 2026-11-05 : `>/dev/null` était lu comme une cible sans extension, donc « tout le
+    // dépôt » — refus à tort d'un formatage de deux fichiers nommés.
+    'npx prettier --write src/main/a.ts src/main/b.ts >/dev/null',
+    'npx prettier --write src/main/a.ts > /dev/null',
+    'npx prettier --write src/main/a.ts 2>&1',
+    'npx prettier --write src/main/a.ts 2>/dev/null',
     'npx prettier --check .',
     'npm run format:check',
     'npm run lint',

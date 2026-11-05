@@ -103,12 +103,20 @@ export function refusGitDestructeur(commande: string): string | undefined {
     'que tu as modifiés — npx prettier --write <chemin> [<chemin>…].'
   const valeurDOptionPrettier =
     /^--(config|ignore-path|log-level|loglevel|plugin|parser|stdin-filepath|cache-location|cache-strategy|end-of-line|trailing-comma|arrow-parens|prose-wrap|quote-props|print-width|tab-width|html-whitespace-sensitivity|embedded-language-formatting|object-wrap)$/i
+  // Une REDIRECTION du shell n'est pas une cible de prettier (conv-1580, 2026-11-05) : `>/dev/null`
+  // était lu comme un chemin sans extension, donc « large », et refusait un formatage de deux
+  // fichiers nommés. Opérateur collé à sa cible (`>/dev/null`, `2>&1`) : un seul mot ; opérateur
+  // seul (`>`, `2>`, `>>`) : il emporte le mot suivant.
+  const redirection = /^\d*(>>?|<)/
+  const redirectionSeule = /^\d*(>>?|<)&?$/
   const jugerPrettier = (args: string[]): string | undefined => {
     if (!args.some((m) => /^(--write|-w)$/i.test(m))) return undefined
     const cibles: string[] = []
     for (let j = 0; j < args.length; j++) {
       if (valeurDOptionPrettier.test(args[j])) j++
-      else if (!args[j].startsWith('-')) cibles.push(args[j])
+      else if (redirection.test(args[j])) {
+        if (redirectionSeule.test(args[j])) j++
+      } else if (!args[j].startsWith('-')) cibles.push(args[j])
     }
     const large = (t: string): boolean => /[*?]/.test(t) || !/\.[A-Za-z0-9]+$/.test(t)
     return cibles.some(large) ? motifFormatage : undefined
