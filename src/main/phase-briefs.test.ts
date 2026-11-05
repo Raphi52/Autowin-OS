@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { GARDE_TACHE, PHASE_BRIEFS, phaseBrief } from './phase-briefs'
 import { PIPELINE_PHASES } from './skill-pipeline'
+import { sandboxForPhase } from './orchestrator'
 import { parseScoutTable } from '../shared/scout-table'
 
 describe('phase-briefs (consignes courtes in-app)', () => {
@@ -346,8 +347,19 @@ ${n}. `)
     for (const phase of PIPELINE_PHASES) {
       expect(PHASE_BRIEFS[phase], phase).not.toMatch(/Write\/Edit\/Bash/u)
     }
+    // conv-1582 : la garde exigeait « absence de Write/Edit », une phrase FAUSSE depuis que
+    // `sandboxForPhase` donne à toutes les phases les droits du chat (2026-09-04). La lecture
+    // seule reste le contrat ; elle ne se justifie plus par un outil prétendu absent.
+    for (const phase of ['scout', 'frame', 'terrain', 'judge'] as const) {
+      expect(sandboxForPhase('tâche', phase), phase).not.toBe('read-only')
+      expect(PHASE_BRIEFS[phase], phase).not.toMatch(/absence de Write\/Edit|ni Edit ni Write/u)
+      expect(PHASE_BRIEFS[phase], phase).toMatch(/lecture seule/iu)
+    }
     for (const phase of ['scout', 'frame', 'terrain'] as const) {
-      expect(PHASE_BRIEFS[phase], phase).toContain('absence de Write/Edit')
+      // Entrée qui rend ce test rouge : un brief qui reparle d'outils manquants, ou qui ne dit
+      // plus qu'il a Edit/Write sans s'en servir.
+      expect(PHASE_BRIEFS[phase], phase).toMatch(/as Edit\/Write/u)
+      expect(PHASE_BRIEFS[phase], phase).toMatch(/pas un blocage/u)
     }
   })
 

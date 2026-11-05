@@ -962,7 +962,17 @@ export function claudeTransportEnvelope(
  *
  * Mesuré le 2026-10-02 (CLI 2.1.287) : un mod passé par `--plugin-dir` se charge MALGRÉ `-p`,
  * `--setting-sources ''` et `--disable-slash-commands` — le CLI le liste `…@inline` dans son
- * événement `init`. On charge le SEUL dossier d'Autowin : un mod a tous les droits du CLI.
+ * événement `init`. On ne PASSE que le dossier d'Autowin (un mod a tous les droits du CLI), mais
+ * le CLI n'en charge pas que lui : il y ajoute ses mods intégrés (`…@builtin`).
+ *
+ * Mesuré le 2026-11-05 (conv-1582) : l'événement `init` liste six mods, `autowin-mods@inline` puis
+ * cinq `cc-plugin-…@builtin`. L'un d'eux, `cc-plugin-sec-default`, se place AVANT les autres sur un
+ * poste à réglages gérés (sa description, `claude plugin details cc-plugin-sec-default`) et tient le
+ * contenu du prompt hors de portée des mods installés : le mod 2 (`prompt.attachment`) ne tourne
+ * donc jamais ici — 315 des 3 795 journaux de `run-stdout/` portent « its prompt.attachment hook
+ * was skipped », et le compte à rebours de tokens reste. Les mods 1 et 3 (outil shell) tournent.
+ * Le rouvrir demande un réglage administrateur hors du dépôt (`prependPlugins` géré) ou le retrait
+ * du mod 2 : décision de l'utilisateur, non prise ici.
  *
  * Le dossier est fixé au démarrage (`definirDossierModsAutowin`, index.ts). Non fixé ou absent du
  * disque : aucun argument, le run part comme avant.
@@ -1707,9 +1717,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        * Demande utilisateur (saisie du 2026-09-02, ts 1788376585435) : « tu dois pouvoir faire ca
        * partout pour tout en toute circonstances ».
        *
-       * Ce que cela n'ouvre PAS : Write, Edit, MultiEdit restent reserves aux phases qui produisent
-       * le livrable (build/clean/salvage/kaizen, via `sandboxForPhase`). Le fond autonome
-       * (`watchdog-read-only`) garde sa frontiere fermee : son contexte d'evenement n'est pas fiable.
+       * Write, Edit, MultiEdit suivent `execution.sandbox` : depuis le 2026-09-04, `sandboxForPhase`
+       * rend `danger-full-access` a TOUTES les phases (demande de l'utilisateur). La lecture seule de
+       * scout, frame, terrain et juge n'est qu'un contrat de consigne (phase-briefs.ts), aucun outil
+       * ne l'impose (conv-1582). Le fond autonome (`watchdog-read-only`) garde sa frontiere fermee :
+       * son contexte d'evenement n'est pas fiable.
        */
       const tools =
         (write ? 'Read,Grep,Glob,Bash,Edit,Write,MultiEdit' : 'Read,Grep,Glob,Bash') +

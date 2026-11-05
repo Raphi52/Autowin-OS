@@ -4,6 +4,8 @@ import { CONSTITUTION } from './constitution'
 import { describe, expect, it } from 'vitest'
 import { VUES_CONNUES } from '../../scripts/ui-capture.mjs'
 import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
+import { JUDGE_PHASE_CAP, porterVersPhaseSuivante, sandboxForPhase } from './orchestrator'
+import { AGGREGATE_MAX_CHARS } from './evidence-digest'
 
 describe('discipline de pipeline canonique', () => {
   it('annonce la preuve UI dans une instance cachée par défaut (conv-526)', () => {
@@ -73,7 +75,11 @@ describe('discipline de pipeline canonique', () => {
    * ordres opposés : « dis bloqué en cas d'échec » et « ne rends pas la main ».
    */
   it('ne demande de réparer QU aux phases outillées, et laisse une issue aux autres', () => {
-    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/SI TA PHASE DISPOSE DES OUTILS DE MUTATION/)
+    // conv-1582 : « DISPOSE DES OUTILS DE MUTATION » laissait croire que les autres ne les ont pas ;
+    // toutes les phases les ont (`sandboxForPhase`), seul l'usage distingue BUILD et CLEAN.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
+      /SI TA PHASE EST UNE PHASE DE MUTATION \(BUILD, CLEAN\)/
+    )
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/SI TA PHASE EST EN LECTURE SEULE/)
     // L'issue de la lecture seule : nommer l'obstacle dans le livrable, ni réparer ni taire.
     // Mais Bash lui reste ouvert (conv-155, tour 20f856a2-8dd5-4e78-b98b-f7c7319afd12 : un juge
@@ -98,16 +104,17 @@ describe('discipline de pipeline canonique', () => {
   })
 
   it('ne transforme pas le contrat read-only de scout frame terrain en faux blocage', () => {
+    // conv-1582 : même garde, sans prétendre Write/Edit absents (ils sont chargés partout).
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
-      /absence de Write\/Edit n'est ni un obstacle ni un droit manquant/i
+      /ne rien écrire n'est ni un obstacle ni un droit manquant/i
     )
-    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/ne la mentionne pas comme un blocage/i)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/ne le mentionne pas comme un blocage/i)
   })
 
   it('reconcilie la regle avec la phase JUDGE au lieu de la contredire', () => {
     // Le « bloqué » de JUDGE doit rester un cas de rendu de main EXPLICITEMENT autorisé.
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
-      /échec du résultat que l'outillage de ta phase ne permet pas de réparer/
+      /échec du résultat que ta phase n'a pas à réparer/
     )
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/JUDGE dit « bloqué », et il reste obligatoire/)
   })
@@ -179,9 +186,13 @@ describe('discipline de pipeline canonique', () => {
       ...new Set(
         // `valeurApres(...)` (choixDeListe, conv-981) est le TROISIEME idiome de lecture : `--tour`
         // y a demenage et sortait du classement sans bruit (rouge constate le 2026-10-22, conv-1056).
-        [...source.matchAll(/(?:argument|drapeau|valeurApres)\((?:'|")(--[a-z-]+)(?:'|")/g)].map(
-          (m) => m[1]
-        )
+        // `mot === '--click'` est le QUATRIEME : depuis f641c8b2 (conv-1530) chaque --click est lu
+        // en parcourant argv, et l'option sortait du classement (rouge constate le 2026-11-05, conv-1582).
+        [
+          ...source.matchAll(
+            /(?:(?:argument|drapeau|valeurApres)\(|mot === )(?:'|")(--[a-z-]+)(?:'|")/g
+          )
+        ].map((m) => m[1])
       )
     ].sort()
 
@@ -276,5 +287,54 @@ describe('fusion 2026-09-18 — chaque regle a un seul endroit', () => {
   it('n impose plus le mot « livrable » que le profil de réponse interdit', () => {
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/livrable/i)
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/RÉSULTAT : produis EXACTEMENT/)
+  })
+})
+
+/**
+ * LE TEXTE INJECTÉ DIT CE QUE LE CODE FAIT (conv-1582, lot 2 du plan de conv-1576).
+ *
+ * Mesuré le 2026-11-05 : la consigne annonçait « ton résultat porté à la phase suivante est
+ * tronqué à ~2000 caractères », alors que `porterVersPhaseSuivante` passe la sortie ENTIÈRE depuis
+ * le 2026-09-27 (règle de l'utilisateur : pas de budget). Elle annonçait aussi que scout, frame,
+ * terrain et juge n'ont « ni Edit ni Write », alors que `sandboxForPhase` donne à TOUTES les phases
+ * les droits du chat depuis le 2026-09-04. Un agent qui croit son résultat coupé le rogne lui-même.
+ *
+ * fix-ok: conv-1582 — cause mesurée : porterVersPhaseSuivante(50 000 car.) rend 50 000 car. et
+ * sandboxForPhase('…', 'scout') rend 'danger-full-access', alors que la consigne disait l'inverse ;
+ * les gardes plus haut verrouillaient ces phrases fausses mot pour mot, elles suivent le nouveau texte.
+ *
+ * Entrées qui rendent ces tests rouges : la phrase « tronqué à ~2000 caractères » remise dans
+ * la consigne ; une coupe remise dans `porterVersPhaseSuivante` ; un plafond du juge changé sans
+ * le texte ; « mais ni Edit ni Write » remis, tant que `sandboxForPhase` ouvre l'écriture.
+ */
+describe('la consigne et le code disent la même chose (conv-1582)', () => {
+  const budget = PIPELINE_DISCIPLINE_INSTRUCTION.match(/BUDGET : ([^\n]+)/u)?.[1] ?? ''
+
+  it('le portage phase → phase n est annoncé coupé que si porterVersPhaseSuivante coupe', () => {
+    const long = 'x'.repeat(50_000)
+    // Le code ne coupe pas : remettre une coupe ici sans corriger le texte rend ce test rouge.
+    expect(porterVersPhaseSuivante(long)).toBe(long)
+    expect(budget, 'la phrase BUDGET doit exister').not.toBe('')
+    expect(budget).not.toMatch(/tronqu|2000/iu)
+    expect(budget).toMatch(/ENTIER/u)
+  })
+
+  it('le chiffre lu par le juge est JUDGE_PHASE_CAP, et le total est AGGREGATE_MAX_CHARS', () => {
+    const nombres = [...budget.matchAll(/(\d[\d\s]*\d)\s*caractères/gu)].map((m) =>
+      Number(m[1]!.replace(/\s/gu, ''))
+    )
+    expect(nombres).toContain(JUDGE_PHASE_CAP)
+    expect(nombres).toContain(AGGREGATE_MAX_CHARS)
+  })
+
+  it('ne dit pas Edit/Write absents tant que sandboxForPhase les donne aux phases de lecture', () => {
+    for (const phase of ['scout', 'frame', 'terrain', 'judge'] as const) {
+      expect(sandboxForPhase('tâche', phase), phase).not.toBe('read-only')
+    }
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/ni Edit ni Write/u)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/absence de Write\/Edit/u)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(
+      /SI TA PHASE DISPOSE DES OUTILS DE MUTATION/u
+    )
   })
 })

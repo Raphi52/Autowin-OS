@@ -294,8 +294,9 @@ export function buildBehaviourComposition(
     },
     {
       label: 'portage phase→phase',
-      value: 'La sortie de chaque phase est portée à la suivante, tronquée à 2000 caractères.',
-      source: 'src/main/orchestrator.ts:844'
+      // conv-1582 : affichait « tronquée à 2000 caractères » ; plus aucune coupe depuis le 2026-09-27.
+      value: 'La sortie de chaque phase est portée entière à la suivante, sans coupe.',
+      source: 'src/main/orchestrator-contrats.ts:1136'
     },
     {
       label: 'session-resume chaîné',
@@ -306,8 +307,8 @@ export function buildBehaviourComposition(
     {
       label: 'agrégat juge',
       value:
-        'Le juge reçoit la concaténation des sorties de phases, chaque bloc plafonné à 6000 caractères.',
-      source: 'src/main/orchestrator.ts:854'
+        "Le juge reçoit la concaténation des sorties de phases : chaque bloc a une part de 6000 caractères, la place laissée par les courtes revient aux longues, 60 000 au total ; le bilan de fin d'étape passe entier.",
+      source: 'src/main/agregat-juge.ts:113'
     }
   ]
 

@@ -720,7 +720,7 @@ export async function runInner(
     if (phase !== 'scout' && phase !== 'frame' && phase !== 'terrain') return ''
     return [
       `MISSION ACTIVE — ${phase.toUpperCase()} UNIQUEMENT : produis le livrable textuel de cette phase en lecture seule.`,
-      `Le BESOIN GLOBAL ci-dessous décrit le résultat final du workflow ; ses verbes de mutation sont réservés à BUILD. N'essaie pas d'écrire ni de préparer un patch, et ne signale pas l'absence de Write/Edit comme un blocage.`
+      `Le BESOIN GLOBAL ci-dessous décrit le résultat final du workflow ; ses verbes de mutation sont réservés à BUILD. N'essaie pas d'écrire ni de préparer un patch, et ne signale pas le fait de ne rien écrire comme un blocage : tu as Edit/Write, ta phase ne s'en sert pas (conv-1582).`
     ].join(' ')
   }
   /**
