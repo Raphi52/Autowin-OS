@@ -6480,3 +6480,20 @@ button.chat-project-dot:disabled {
   border-color: color-mix(in srgb, var(--gold) 75%, transparent);
   background: color-mix(in srgb, var(--gold) 16%, transparent);
 }
+
+/* Bouton ☰ de la liste des conversations : n'existe qu'en version téléphone (affichage-session.css,
+   conv-1568). */
+.chat-liste-tel-btn {
+  display: none;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+}

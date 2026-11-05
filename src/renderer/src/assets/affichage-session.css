@@ -9,33 +9,59 @@
 
 /* ---- Version téléphone ----------------------------------------------------------------------- */
 
-/* LE MENU RESTE EN ICÔNES (App.tsx le replie d'office) et grossit pour le doigt : 44 px, la taille
-   tactile minimale courante. Le bouton de repli disparaît : il n'aurait aucun effet. */
-:root[data-ecran='telephone'] .rail.is-collapsed {
-  width: 64px;
+/* LE MENU PASSE EN BARRE DU BAS (conv-1568, 2026-11-05 : « fais une interface potable pour quand
+   je suis sur Windows App ») : en colonne à gauche, il mangeait 64 px sur ~400, et la liste des
+   conversations autant ; le fil gardait moins de la moitié de l'écran. En bas, il rend toute la
+   largeur, et ses icônes restent à 44 px pour le doigt. Logo, bouton de repli et pied disparaissent. */
+:root[data-ecran='telephone'] .shell {
+  flex-direction: column;
 }
+:root[data-ecran='telephone'] .shell::before,
 :root[data-ecran='telephone'] .shell:has(.rail.is-collapsed)::before {
-  left: 64px;
+  left: 0;
+}
+:root[data-ecran='telephone'] .rail,
+:root[data-ecran='telephone'] .rail.is-collapsed {
+  order: 2;
+  width: 100%;
+  height: auto;
+  flex-direction: row;
+  align-items: center;
+  padding: 4px 6px;
+  border-right: 0;
+  border-top: 1px solid var(--line-strong);
+}
+:root[data-ecran='telephone'] .rail .brand,
+:root[data-ecran='telephone'] .rail-toggle,
+:root[data-ecran='telephone'] .rail-foot {
+  display: none;
+}
+:root[data-ecran='telephone'] .rail .nav,
+:root[data-ecran='telephone'] .rail .nav-group {
+  flex-direction: row;
+  justify-content: space-between;
+  flex: 1;
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
 }
 :root[data-ecran='telephone'] .rail.is-collapsed .nav-item {
-  width: 44px;
-  margin-block: 2px;
+  width: 40px;
+  height: 44px;
+  flex: none;
+  justify-content: center;
+  padding: 0;
 }
 :root[data-ecran='telephone'] .rail.is-collapsed .space-toy-icon {
   width: 22px;
   height: 22px;
   font-size: 21px;
 }
-:root[data-ecran='telephone'] .rail-toggle {
-  display: none;
-}
-/* LE LOGO REPREND SA PLACE : le menu replié le masque (app-shell.css) parce que le bouton de repli
-   occupe la case ; sans ce bouton, la case restait vide (capture du 2026-11-03, conv-1442). */
-:root[data-ecran='telephone'] .rail.is-collapsed .brand-logo {
-  display: block;
-  width: 36px;
-  height: 36px;
-  margin-left: 0;
+:root[data-ecran='telephone'] .main,
+:root[data-ecran='telephone'] .shell:has(.rail.is-collapsed) .main {
+  order: 1;
+  min-height: 0;
 }
 
 /* Moins de marge autour des vues : chaque pixel de largeur compte. Le haut garde
@@ -53,14 +79,29 @@
   min-height: 40px;
 }
 
-/* LA LISTE DES CONVERSATIONS SE RESSERRE : sa largeur réglée à la souris (style en ligne) cède à une
-   largeur de téléphone, qui déclenche sa version dense déjà prévue pour ce cas (ChatView.css,
-   `@container convpane (max-width: 170px)`). La poignée de largeur, inutile au doigt, disparaît. */
-:root[data-ecran='telephone'] .conv-pane {
-  width: clamp(120px, 26vw, 170px) !important;
+/* LA LISTE DES CONVERSATIONS DEVIENT UN TIROIR (conv-1568) : cachée par défaut, le fil prend toute
+   la largeur ; le bouton ☰ de l'en-tête du chat l'ouvre par-dessus, choisir un fil la referme. */
+:root[data-ecran='telephone'] .chat-layout {
+  position: relative;
 }
+:root[data-ecran='telephone'] .conv-pane,
 :root[data-ecran='telephone'] .conv-pane-resizer {
   display: none;
+}
+:root[data-ecran='telephone'] .chat-layout.is-liste-tel > * > .conv-pane,
+:root[data-ecran='telephone'] .chat-layout.is-liste-tel > .conv-pane {
+  display: flex;
+  position: absolute;
+  z-index: 9;
+  /* Toute la hauteur : il se ferme par son propre bouton ✕ (conv-pane-fermer-tel). */
+  inset: 0 auto 0 0;
+  width: min(320px, 88%) !important;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-0);
+  backdrop-filter: blur(16px);
+}
+:root[data-ecran='telephone'] .chat-liste-tel-btn {
+  display: inline-flex;
 }
 
 /* LA SAISIE : texte à 16 px, lisible sans zoomer ; boutons de la rangée à 40 px. */
@@ -74,4 +115,9 @@
 :root[data-ecran='telephone'] .composer-input-row > .composer-stop {
   min-width: 40px;
   min-height: 40px;
+}
+
+/* Le ✕ du tiroir, calé en haut à droite de la liste (conv-1568). */
+:root[data-ecran='telephone'] .conv-pane-fermer-tel {
+  align-self: flex-end;
 }

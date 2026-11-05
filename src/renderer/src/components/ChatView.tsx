@@ -231,6 +231,9 @@ export function ChatView({
   const [convQuery, setConvQuery] = useState('')
   const conversationDateOrder: 'desc' | 'asc' = 'desc'
   const [activeId, setActiveId] = useState<string | null>(null)
+  // VERSION TÉLÉPHONE (conv-1568) : la liste des conversations devient un tiroir par-dessus le fil,
+  // ouvert par le bouton ☰ de l'en-tête (affichage-session.css) ; choisir un fil le referme.
+  const [listeTelOuverte, setListeTelOuverte] = useState(false)
   const [messages, setMessages] = useState<Msg[]>([])
   /** Le fil courant pour la carte du fil, dont le clic peut attendre quelques images (conv-1059). */
   const messagesRef = useRef<Msg[]>(messages)
@@ -3039,6 +3042,7 @@ export function ChatView({
     gesteLecteurRef.current = false
     activeRef.current = c.id
     setActiveId(c.id)
+    setListeTelOuverte(false)
     const branchMessages = detailed.messages ?? []
     const duStore = hydraterFilStocke(branchMessages)
     // Un rechargement ne RÉTRÉCIT pas le fil à zéro : le vide du store est une absence d'information,
@@ -3274,6 +3278,7 @@ export function ChatView({
     setHasNewActivity(false)
     activeRef.current = null
     setActiveId(null)
+    setListeTelOuverte(false)
     setMessages([])
     switchComposerDraft(NEW_DRAFT_KEY)
     void refreshRuntimeIdentity(true)
@@ -3985,7 +3990,7 @@ export function ChatView({
     <div
       className={`chat-layout${showRuns ? '' : ' is-runs-collapsed'}${
         convViewMode === 'mosaic' ? ' is-mosaic' : ''
-      }`}
+      }${listeTelOuverte ? ' is-liste-tel' : ''}`}
       data-testid="chat-view"
       data-active-conversation-id={activeId ?? ''}
     >
@@ -4006,6 +4011,16 @@ export function ChatView({
           data-recherche={convQuery.trim() ? 'oui' : undefined}
           style={{ width: `${conversationsPaneWidth}px` }}
         >
+          {/* Le tiroir téléphone porte SON bouton de fermeture (conv-1568) : posé sous l'en-tête à une
+              hauteur devinée, il recouvrait le ☰ de l'en-tête sur le vrai écran de l'utilisateur. */}
+          <button
+            type="button"
+            className="chat-liste-tel-btn conv-pane-fermer-tel"
+            aria-label="Fermer la liste des conversations"
+            onClick={() => setListeTelOuverte(false)}
+          >
+            ✕
+          </button>
           {/* SANS TITRE (demande du 2026-10-15) : « Conversations » prenait une ligne pour ne rien
             dire. La ligne d'en-tete n'existe plus que pour « Tout fermer », en mosaique. */}
           {convViewMode === 'mosaic' && mosaicIds.length > 0 && (
@@ -4810,6 +4825,15 @@ export function ChatView({
           )}
           <header className="chat-head row">
             <div className="row gap2 chat-head-titre" style={{ alignItems: 'center', minWidth: 0 }}>
+              <button
+                type="button"
+                className="chat-liste-tel-btn"
+                aria-label="Conversations"
+                aria-expanded={listeTelOuverte}
+                onClick={() => setListeTelOuverte((o) => !o)}
+              >
+                ☰
+              </button>
               <div className="col" style={{ gap: 1, minWidth: 0 }}>
                 <span className="chat-head-kicker">
                   {active ? active.title : texteFil('entete.nouvelle')}
