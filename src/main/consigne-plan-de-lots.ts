@@ -32,9 +32,9 @@ export const CONSIGNE_PLAN_DE_LOTS =
   `qui se découpe en au moins TROIS parties sur des fichiers séparés (une refonte, « rends X ` +
   `parfait », une fonctionnalité qui touche à la fois le cœur, l'interface et les tests) et qu'un ` +
   `seul fil y passerait plusieurs tours, lance-le toi-même avec \`plan_de_lots\` (action ` +
-  `« deposer ») au lieu de tout faire ici ou de lancer \`orchestrate\`. Même geste quand un message ` +
-  `demande PLUSIEURS tâches d'action dont aucune n'a besoin du résultat d'une autre, sur des sujets ` +
-  `différents : un lot par tâche, sans deviner leur durée. Déposer LANCE le plan aussitôt, ` +
+  // conv-1577 (2026-11-05) : le cas « plusieurs tâches indépendantes → un lot par tâche » est dit
+  // par PLUSIEURS TÂCHES DANS UN MESSAGE, servi dans le même prompt ; il n'est plus répété ici.
+  `« deposer ») au lieu de tout faire ici ou de lancer \`orchestrate\`. Déposer LANCE le plan aussitôt, ` +
   `sans clic de l'utilisateur (il peut l'arrêter dans le tableau) : ne dépose qu'un plan prêt. Avant de déposer, une lecture ` +
   `ciblée (le même escalier que pour un symptôme) estime les fichiers de chaque lot ; un lot qui a ` +
   `besoin du RÉSULTAT d'un autre l'attend par « apres ». Donne un « contexte » commun (le but, les ` +

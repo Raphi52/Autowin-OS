@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { compileExecutionQuote } from '../execution-quote'
 import {
   clearOrchestrationState,
+  DatesDesCheckpoints,
   admitAutomaticResumeRuntime,
   admitLiveReattachment,
   electStartupOrchestrationResumes,
@@ -1285,5 +1286,67 @@ describe('références d’agents — ce qui rend un run rattachable', () => {
       updatedAt: 2
     })
     expect(loadOrchestrationStates(root)[0].agents).toBeUndefined()
+  })
+})
+
+/**
+ * LA PÉREMPTION DE 36 H DOIT TOMBER SUR UN RUN QUI ÉCHOUE À CHAQUE DÉMARRAGE (conv-1589, 2026-11-05).
+ *
+ * Mesuré sur `run-49e50da90997-1` (conv-1461) : `startedAt` = `updatedAt` = l'heure de la dernière
+ * reprise ratée. L'écriture d'ouverture de chaque reprise (`orchestrator-run.ts`, avant la copie de
+ * travail) datait le checkpoint de maintenant : refusée aussitôt, la reprise remettait l'horloge à
+ * zéro, 33 démarrages de suite. L'entrée qui ferait échouer ces tests si la correction était fausse :
+ * une reprise ouverte 20 h après la dernière activité, relue 37 h après elle.
+ */
+describe('dates d’un checkpoint : premier départ et dernière activité réelle', () => {
+  const HEURE = 60 * 60 * 1000
+  const T0 = 1_000_000_000
+  const T1 = T0 + 2 * HEURE
+
+  it('une reprise refusée aussitôt garde la date du checkpoint repris : la péremption finit par tomber', () => {
+    const repris = { ...state('run-hante-1', T1, ['build']), startedAt: T0 }
+    const dates = new DatesDesCheckpoints()
+    dates.reprendre(repris)
+    const ouverture = dates.pourEcriture('run-hante-1', T1 + 20 * HEURE)
+    expect(ouverture).toEqual({ startedAt: T0, updatedAt: T1 })
+    saveOrchestrationState(root, { ...repris, ...ouverture })
+    expect(
+      pickOrchestrationsToResume(loadOrchestrationStates(root), T1 + 37 * HEURE).map((s) => s.runId)
+    ).toEqual([])
+  })
+
+  it('après l’ouverture, une écriture du run repris date de maintenant, départ inchangé', () => {
+    const dates = new DatesDesCheckpoints()
+    dates.reprendre({ runId: 'run-repris-1', startedAt: T0, updatedAt: T1 })
+    dates.pourEcriture('run-repris-1', T1 + HEURE)
+    expect(dates.pourEcriture('run-repris-1', T1 + 3 * HEURE)).toEqual({
+      startedAt: T0,
+      updatedAt: T1 + 3 * HEURE
+    })
+  })
+
+  it('un run neuf garde son premier départ sur toutes ses écritures', () => {
+    const dates = new DatesDesCheckpoints()
+    expect(dates.pourEcriture('run-neuf-1', T0)).toEqual({ startedAt: T0, updatedAt: T0 })
+    expect(dates.pourEcriture('run-neuf-1', T1)).toEqual({ startedAt: T0, updatedAt: T1 })
+  })
+
+  it('un run clos repart de son propre départ', () => {
+    const dates = new DatesDesCheckpoints()
+    dates.pourEcriture('run-clos-1', T0)
+    dates.oublier('run-clos-1')
+    expect(dates.pourEcriture('run-clos-1', T1)).toEqual({ startedAt: T1, updatedAt: T1 })
+  })
+
+  /*
+   * Aucun banc ne construit `AutowinOS` : le branchement se garde par sa source, comme
+   * « persiste le snapshot avec l acquis » plus haut. Sans lui, `os.ts` reviendrait à dater
+   * chaque écriture de maintenant et le défaut renaîtrait sans qu'un test le voie.
+   */
+  it('os.ts date ses checkpoints par DatesDesCheckpoints, reprise comprise', () => {
+    const osSource = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
+    expect(osSource).toMatch(/onPhaseCompleted:[\s\S]*datesDesCheckpoints\.pourEcriture\(runId/)
+    expect(osSource).toMatch(/datesDesCheckpoints\.reprendre\(resumeControl\)/)
+    expect(osSource).not.toContain('orchestrationStartedAt')
   })
 })

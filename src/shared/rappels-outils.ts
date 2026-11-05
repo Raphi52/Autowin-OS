@@ -5,7 +5,8 @@
  * est enfreinte au moment du geste. Mesure du 2026-11-03 dans les sorties brutes des modèles
  * (script `.autowin-tmp/conv-1457/mesure/regles-violees.mjs`) : 16 lectures directes de
  * `conversations.json` en une journée, alors qu'AGENTS.md dit que ce fichier n'est qu'un instantané.
- * AGENTS.md le reconnaît lui-même : « Règles du dépôt — AUCUN contrôle ne les bloque ».
+ * AGENTS.md le reconnaissait lui-même : « Règles du dépôt — AUCUN contrôle ne les bloque » (titre
+ * changé le 2026-11-05, conv-1577, quand ces règles sont passées dans le hook des gardes).
  *
  * Réponse : le script lancé AVANT chaque outil (`scriptHookGardes`) lit le fichier versionné
  * `mods/autowin/rappels-outils.json` et glisse, à côté de l'appel qui correspond, le texte de la

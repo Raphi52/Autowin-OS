@@ -91,6 +91,54 @@ export function refusGitDestructeur(commande: string): string | undefined {
   }
 
   /*
+   * REFORMATAGE DE TOUT LE DÉPÔT (conv-1577, 2026-11-05) : `npm run format` (= `prettier --write .`)
+   * réécrit AUSSI les fichiers non commités des autres fils du même dossier. La règle vivait en prose
+   * dans AGENTS.md (« AUCUN contrôle ne les bloque ») et avait déjà été enfreinte. Une cible de
+   * prettier est LARGE quand elle est un dossier ou un motif : pas d'extension de fichier, ou `*`/`?`.
+   * Un formatage nommé (`prettier --write src/x.ts`) et `--check` restent libres.
+   */
+  const motifFormatage =
+    'Reformatage de tout le dépôt refusé : plusieurs fils travaillent dans ce même dossier, et ce ' +
+    'formatage réécrit aussi leurs fichiers non commités. Voie sûre : formate seulement les fichiers ' +
+    'que tu as modifiés — npx prettier --write <chemin> [<chemin>…].'
+  const valeurDOptionPrettier =
+    /^--(config|ignore-path|log-level|loglevel|plugin|parser|stdin-filepath|cache-location|cache-strategy|end-of-line|trailing-comma|arrow-parens|prose-wrap|quote-props|print-width|tab-width|html-whitespace-sensitivity|embedded-language-formatting|object-wrap)$/i
+  const jugerPrettier = (args: string[]): string | undefined => {
+    if (!args.some((m) => /^(--write|-w)$/i.test(m))) return undefined
+    const cibles: string[] = []
+    for (let j = 0; j < args.length; j++) {
+      if (valeurDOptionPrettier.test(args[j])) j++
+      else if (!args[j].startsWith('-')) cibles.push(args[j])
+    }
+    const large = (t: string): boolean => /[*?]/.test(t) || !/\.[A-Za-z0-9]+$/.test(t)
+    return cibles.some(large) ? motifFormatage : undefined
+  }
+  /** Un APPEL de npm/pnpm/yarn/npx/prettier (`appel[0]` = le programme) : reformate-t-il tout ? */
+  const jugerFormatage = (appel: string[]): string | undefined => {
+    const prog = (appel[0].split(/[\\/]/).pop() ?? '')
+      .toLowerCase()
+      .replace(/\.(exe|cmd|bat|ps1)$/, '')
+    const args = appel.slice(1)
+    if (prog === 'prettier') return jugerPrettier(args)
+    if (prog === 'npx') {
+      const i = args.findIndex((m) => !m.startsWith('-'))
+      return i >= 0 && /^prettier(@.*)?$/i.test(args[i])
+        ? jugerPrettier(args.slice(i + 1))
+        : undefined
+    }
+    if (prog === 'npm' || prog === 'pnpm' || prog === 'yarn') {
+      const mots = args.filter((m) => !m.startsWith('-'))
+      const script = /^(run|run-script)$/i.test(mots[0] ?? '')
+        ? mots[1]
+        : prog === 'npm'
+          ? undefined
+          : mots[0]
+      return script === 'format' ? motifFormatage : undefined
+    }
+    return undefined
+  }
+
+  /*
    * SEUL UN APPEL EST REFUSE, jamais une simple MENTION (conv-770, 2026-09-28). L'ancienne lecture
    * coupait la ligne sur `;` `|` `&&` MEME ENTRE GUILLEMETS : `grep -o 'x\|git stash [a-z]' f` y
    * devenait un segment `git stash [a-z]'` et etait refuse, comme `git commit -m "a; git reset
@@ -106,6 +154,11 @@ export function refusGitDestructeur(commande: string): string | undefined {
   const lectureLarge = (texte: string): string | undefined => {
     for (const brut of texte.split(/;|&&|\|\||\||\r?\n/)) {
       const seg = brut.trim().replace(/^&\s*/, '')
+      if (/^(npm|pnpm|yarn|npx|prettier)\b/i.test(seg)) {
+        const refus = jugerFormatage(seg.split(/\s+/))
+        if (refus) return refus
+        continue
+      }
       if (!/^git\b/i.test(seg)) continue
       const refus = jugerGit(seg.split(/\s+/))
       if (refus) return refus
@@ -124,6 +177,7 @@ export function refusGitDestructeur(commande: string): string | undefined {
     for (let tour = 0; tour < 8 && k < mots.length; tour++) {
       const nom = nomDe(mots[k])
       if (nom === 'git') return jugerGit(mots.slice(k))
+      if (/^(npm|pnpm|yarn|npx|prettier)$/.test(nom)) return jugerFormatage(mots.slice(k))
       if (prefixes.test(nom)) {
         k++
         while (k < mots.length) {
@@ -261,7 +315,7 @@ export const GARDES_DU_HOOK: readonly { fn: string; label: string; description: 
   {
     fn: 'refusGitDestructeur',
     label: 'Effacement de travail git',
-    description: "Refuse git reset --hard, checkout/restore de tout l'arbre, clean -f et stash : ils détruisent du travail non commité."
+    description: "Refuse git reset --hard, checkout/restore de tout l'arbre, clean -f et stash : ils détruisent du travail non commité. Refuse aussi le reformatage de tout le dépôt (npm run format, prettier --write .), qui réécrit les fichiers des autres fils."
   },
   {
     fn: 'refusTacheWindows',

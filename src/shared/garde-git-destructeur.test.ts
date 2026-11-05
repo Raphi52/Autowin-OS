@@ -76,6 +76,45 @@ describe('refusGitDestructeur', () => {
     expect(refusGitDestructeur(c)).toBeTruthy()
   })
 
+  // conv-1577, 2026-11-05 : AGENTS.md interdisait `npm run format` (`prettier --write .`) en PROSE
+  // seulement (« AUCUN contrôle ne les bloque ») ; ce formatage a déjà réécrit des fichiers non
+  // commités d'autres fils du même dossier. La règle devient un refus, comme `git stash`.
+  it.each([
+    'npm run format',
+    'npm run-script format',
+    'npm.cmd run format',
+    'cd D:/AutoWinOS && npm run format',
+    'pnpm format',
+    'npx prettier --write .',
+    'npx -y prettier --write .',
+    'npx prettier -w src',
+    'prettier --write "src/**/*.ts"',
+    'node_modules/.bin/prettier --write ./',
+    'bash -c "npm run format"',
+    // Exemples repris du rappel « formatage-de-tout-le-depot » (mods/autowin/rappels-outils.json,
+    // conv-1457), retiré quand ce refus l'a rendu inatteignable.
+    'npx prettier --log-level warn -w "." && git status'
+  ])('refuse le reformatage de tout le dépôt : %s', (c) => {
+    const m = refusGitDestructeur(c)
+    expect(m, c).toBeTruthy()
+    expect(m).toMatch(/prettier --write <chemin>/)
+  })
+
+  it.each([
+    'npx prettier --write src/main/chat-pilotage-prompt.ts',
+    'npx prettier --write src/main/a.ts src/main/b.test.ts',
+    'npx prettier --write --end-of-line lf src/main/a.ts',
+    'npx prettier --write ./src/x.ts',
+    'npx prettier --check .',
+    'npm run format:check',
+    'npm run lint',
+    'npm test',
+    'echo "npm run format"',
+    'grep -n "prettier --write ." AGENTS.md'
+  ])('laisse passer un formatage ciblé, une vérification ou une mention : %s', (c) => {
+    expect(refusGitDestructeur(c)).toBeUndefined()
+  })
+
   it('est cable aux DEUX points d execution : le hook du CLI et la commande run interne', () => {
     const src = (p: string) => readFileSync(join(__dirname, p), 'utf8')
     expect(src('./garde-git-destructeur.ts')).toMatch(/scriptHookGardes/)
@@ -116,6 +155,9 @@ describe('hook reel du CLI', () => {
     expect(
       JSON.parse(passe('bash -c "git reset --hard"')).hookSpecificOutput.permissionDecision
     ).toBe('deny')
+    // conv-1577 : le reformatage de tout le dépôt est refusé aussi après sérialisation dans le script.
+    expect(JSON.parse(passe('npm run format')).hookSpecificOutput.permissionDecision).toBe('deny')
+    expect(passe('npx prettier --write src/main/a.ts')).toBe('')
     // Demande conv-114 : rien de créé que l'utilisateur ne pourrait supprimer dans le Task Manager.
     const tache = JSON.parse(passe('schtasks /create /tn X /tr notepad.exe /sc daily'))
     expect(tache.hookSpecificOutput.permissionDecision).toBe('deny')

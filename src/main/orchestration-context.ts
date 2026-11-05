@@ -77,6 +77,50 @@ function etatDuRun(run: { blocked: boolean; decisionAttendue?: boolean }): strin
   return run.blocked ? ', bloqué' : ''
 }
 
+type RunObserve = NonNullable<OrchestrationContextInput['runs']>[number]
+
+/**
+ * Nombre de SUJETS cités dans « Runs en cours/bloqués ». C'étaient 8 RUNS : le 2026-11-05, les huit
+ * places tenaient des essais d'un seul run de conv-1461, et l'agent ne voyait aucun autre run
+ * (scout conv-1576, lot conv-1589).
+ */
+const SUJETS_DE_RUNS_MAX = 8
+
+/**
+ * Le sujet d'un run sans son horodatage : son dossier s'appelle `<slug>-<Date.now() en base 36>`
+ * (`runs/conv-runs.ts`), 8 caractères de 1972 à 2059. Deux essais de la même demande ne diffèrent
+ * que par lui.
+ */
+function sujetSansHorodatage(subject: string): string {
+  return subject.replace(/-[0-9a-z]{8}$/, '')
+}
+
+/** Les runs groupés par sujet, dans l'ordre reçu (le plus récent d'abord). */
+function groupesParSujet(runs: readonly RunObserve[]): RunObserve[][] {
+  const groupes = new Map<string, RunObserve[]>()
+  for (const run of runs) {
+    const cle = sujetSansHorodatage(run.subject)
+    const groupe = groupes.get(cle)
+    if (groupe) groupe.push(run)
+    else groupes.set(cle, [run])
+  }
+  return [...groupes.values()]
+}
+
+/** Le plus récent du sujet, puis le compte de ses essais et, s'ils diffèrent, leurs états. */
+function ligneDuSujet(groupe: readonly RunObserve[]): string {
+  const [tete] = groupe
+  const ligne = `${tete.subject} (${tete.status}${etatDuRun(tete)})`
+  if (groupe.length === 1) return ligne
+  const parEtat = new Map<string, number>()
+  for (const run of groupe) parEtat.set(run.status, (parEtat.get(run.status) ?? 0) + 1)
+  const repartition =
+    parEtat.size > 1
+      ? ` (${[...parEtat].map(([status, nombre]) => `${nombre} ${status}`).join(', ')})`
+      : ''
+  return `${ligne} ×${groupe.length} essais du même sujet${repartition}`
+}
+
 export function collectOrchestrationContext(input: OrchestrationContextInput): string {
   const lines = [
     '[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation]',
@@ -155,12 +199,12 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
   if (input.app) {
     lines.push(`État application: onglet ${input.app.tab}`)
   }
-  const relevantRuns = (input.runs ?? [])
-    .filter((run) => run.blocked || run.status === 'open')
-    .slice(0, 8)
+  const groupes = groupesParSujet(
+    (input.runs ?? []).filter((run) => run.blocked || run.status === 'open')
+  ).slice(0, SUJETS_DE_RUNS_MAX)
   lines.push(
-    relevantRuns.length
-      ? `Runs en cours/bloqués: ${relevantRuns.map((run) => `${run.subject} (${run.status}${etatDuRun(run)})`).join('; ')}`
+    groupes.length
+      ? `Runs en cours/bloqués: ${groupes.map(ligneDuSujet).join('; ')}`
       : 'Runs en cours/bloqués: aucun observé'
   )
   if (input.unavailable?.length)

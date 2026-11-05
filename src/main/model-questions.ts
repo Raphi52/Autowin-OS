@@ -32,21 +32,13 @@ export function parseModelQuestion(text: string): ModelQuestion | null {
   }
 }
 
-// conv-1142 (2026-10-25) : cette consigne disait « Les actions destructives ou à effet externe
-// disponibles s’exécutent directement, sans demande d’approbation », à l’opposé de la limite
-// destructive de la constitution — injectée dans le MÊME prompt, et seule retenue d’un geste
-// irréversible (le filtre de commandes laisse passer `rm -rf /`, autorisation-commande.ts). Le
-// « sans approbation » ne vaut plus que pour le réversible.
-export const MODEL_QUESTION_INSTRUCTION =
-  'Avance de façon autonome : inspecte d’abord l’état disponible et choisis une hypothèse raisonnable ' +
-  'par défaut pour toute décision ordinaire et réversible. Ne pose une question que si une information ' +
-  'indispensable manque ou qu’un choix appartient vraiment à l’utilisateur. ' +
-  'Une action réversible dans le périmètre accordé s’exécute directement, sans demande d’approbation ; ' +
-  'un geste irréversible ou une publication suit la limite destructive de la constitution. ' +
-  'Une ambiguïté ordinaire reçoit un choix par défaut. Ne demande jamais un secret ou une donnée personnelle ' +
-  'dans le chat : indique en texte normal le provider ou réglage à configurer, sans valeur sensible. ' +
-  'N’émets aucune balise <question> : ce canal est désactivé tant que l’application ne peut pas prouver le ' +
-  'blocage et transporter la réponse hors des conversations et journaux.'
+// CONSIGNE « Avance de façon autonome » RETIRÉE du chat (conv-1577, 2026-11-05) : ses 881
+// caractères, payés à chaque tour, redisaient la CONSTITUTION injectée dans le même prompt
+// (Autonomie (3), réflexes 1 et 10, limite destructive, secrets) — et l'avaient déjà contredite une
+// fois (conv-1142 : « les actions destructives s'exécutent directement »). Sa seule phrase propre,
+// « ne demande pas un secret dans le chat », est passée dans la ligne Secrets de la constitution.
+// Interdire la balise <question> au modèle n'avait plus d'objet : `parseModelQuestion` rend null
+// quoi qu'il reçoive, et rien d'autre ne lui enseigne cette balise.
 
 export class ModelQuestionHub {
   private nextId = 1

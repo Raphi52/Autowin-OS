@@ -956,6 +956,48 @@ function resumeCheckpointIsStale(state: OrchestrationRunState, nowMs: number): b
 }
 
 /**
+ * LES DEUX DATES D'UN CHECKPOINT, tenues pour chaque run du process (conv-1589, 2026-11-05).
+ *
+ * La péremption ci-dessus compte depuis `updatedAt`. Mesuré sur `run-49e50da90997-1` (conv-1461) :
+ * `startedAt` = `updatedAt` = l'heure de la DERNIÈRE reprise ratée, 33 démarrages de suite. Deux
+ * causes, dans `os.ts` :
+ *  - `startedAt` lisait une table que rien ne remplissait : il valait l'heure de CHAQUE écriture ;
+ *  - l'écriture d'ouverture d'un run repris (`orchestrator-run.ts`, avant même sa copie de travail)
+ *    datait `updatedAt` de maintenant. Une reprise refusée aussitôt remettait donc l'horloge à zéro
+ *    à chaque démarrage, et la péremption, filet des refus non classés (`resume-refusal.ts`), ne
+ *    tombait jamais.
+ *
+ * Ici `startedAt` est le PREMIER départ du run, reprises comprises, et `updatedAt` la dernière
+ * activité réelle : l'ouverture d'une reprise ne fait que redire l'acquis, elle garde la date du
+ * checkpoint repris. Les écritures suivantes (phase livrée, agents) datent de maintenant.
+ */
+export class DatesDesCheckpoints {
+  private readonly premierDepart = new Map<string, number>()
+  private readonly ouvertureDeReprise = new Map<string, number>()
+
+  /** Run REPRIS : ses dates viennent du checkpoint relu, pas de l'heure de la reprise. */
+  reprendre(etat: { runId: string; startedAt?: number; updatedAt?: number }): void {
+    if (etat.startedAt !== undefined) this.premierDepart.set(etat.runId, etat.startedAt)
+    if (etat.updatedAt !== undefined) this.ouvertureDeReprise.set(etat.runId, etat.updatedAt)
+  }
+
+  /** Dates de la prochaine écriture du run ; la première après une reprise garde l'ancienne activité. */
+  pourEcriture(runId: string, nowMs: number): { startedAt: number; updatedAt: number } {
+    const startedAt = this.premierDepart.get(runId) ?? nowMs
+    this.premierDepart.set(runId, startedAt)
+    const activiteReprise = this.ouvertureDeReprise.get(runId)
+    this.ouvertureDeReprise.delete(runId)
+    return { startedAt, updatedAt: activiteReprise ?? nowMs }
+  }
+
+  /** Run clos : le même identifiant, s'il revenait, repartirait de son propre départ. */
+  oublier(runId: string): void {
+    this.premierDepart.delete(runId)
+    this.ouvertureDeReprise.delete(runId)
+  }
+}
+
+/**
  * `nowMs` est OPTIONNEL a dessein : omis, aucune peremption n'est appliquee et le comportement est
  * exactement l'historique. Fourni par l'appelant (`os.resumableOrchestrations`), il ecarte les
  * checkpoints hantes — ce module n'a donc pas d'horloge cachee.

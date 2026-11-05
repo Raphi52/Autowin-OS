@@ -91,6 +91,7 @@ import { regimePhases } from './task-regime'
 import type { NodePhase } from './skill-pipeline'
 import {
   clearOrchestrationState,
+  DatesDesCheckpoints,
   marquerCheckpointCoupeParQuota,
   loadOrchestrationState,
   loadOrchestrationStates,
@@ -563,7 +564,8 @@ export class AutowinOS {
   private skillCommandRunner?: LanceurCommandeSkill
   /** Dossier des états d'orchestration reprenables (survie niveau 3). */
   private readonly orchestrationStateRoot = join(ensureAutowinAppData(), 'run-state')
-  private readonly orchestrationStartedAt = new Map<string, number>()
+  /** Premier départ et dernière activité réelle de chaque run : la péremption de 36 h en dépend. */
+  private readonly datesDesCheckpoints = new DatesDesCheckpoints()
 
   constructor() {
     // Le 3e argument separe le mur de quota PAR COMPTE : deux abonnements Claude distincts ne
@@ -865,8 +867,7 @@ export class AutowinOS {
           // Les agents CLI du run : un processus detache survit a l'app, ces references sont ce qui
           // permettra de le retrouver vivant et de relire sa sortie au lieu de tout relancer.
           ...(agents && agents.length ? { agents } : {}),
-          startedAt: this.orchestrationStartedAt.get(runId) ?? Date.now(),
-          updatedAt: Date.now()
+          ...this.datesDesCheckpoints.pourEcriture(runId, Date.now())
         })
       },
       onAgentsChanged: (runId, agents) => {
@@ -878,7 +879,7 @@ export class AutowinOS {
         )
       },
       onRunSettled: (runId) => {
-        this.orchestrationStartedAt.delete(runId)
+        this.datesDesCheckpoints.oublier(runId)
         clearOrchestrationState(this.orchestrationStateRoot, runId)
         // « Publication auto » relit les travaux d'agents restés hors de la branche (conv-1544).
         this.finDeRunListener?.(runId)
@@ -1469,8 +1470,12 @@ export class AutowinOS {
     onBrainRetrieved?: (event: BrainRetrievalEvent) => void,
     turnId?: string,
     onRunLifecycle?: (event: RunLifecycleEvent) => void,
-    /** Etat budgetaire du run interrompu ; utilise uniquement avec `resumeOutputs`. */
-    resumeControl?: Pick<OrchestrationRunState, 'runId' | 'executionQuote' | 'usage'>,
+    /**
+     * Etat budgetaire du run interrompu ; utilise uniquement avec `resumeOutputs`. Ses dates, quand
+     * l'appelant passe le checkpoint entier, restent celles du run d'origine (`DatesDesCheckpoints`).
+     */
+    resumeControl?: Pick<OrchestrationRunState, 'runId' | 'executionQuote' | 'usage'> &
+      Partial<Pick<OrchestrationRunState, 'startedAt' | 'updatedAt'>>,
     /** Publication terminale si un provider ignore d'abord l'abort puis se règle réellement. */
     onLateUsageSettlement?: (usage: ExecutionUsageSnapshot) => void,
     /** Snapshot deja persiste par l'appelant ; absent, capture apres readiness. */
@@ -1490,6 +1495,9 @@ export class AutowinOS {
     } = {}
   ): Promise<OrchestrationResult> {
     await this.waitUntilReady()
+    // Une reprise ne remet pas l'horloge à zéro : sinon un run refusé à chaque démarrage échappe à
+    // la péremption de 36 h (conv-1589, `run-49e50da90997-1`).
+    if (resumeControl) this.datesDesCheckpoints.reprendre(resumeControl)
     // Certains harness historiques construisent le prototype avec un orchestrateur factice sans
     // magasin de roles. En production `roles` existe toujours ; le fallback laisse le mock intact.
     const admittedRuntime =

@@ -1,30 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MODEL_QUESTION_INSTRUCTION,
-  ModelQuestionHub,
-  parseModelQuestion
-} from './model-questions'
+import { ModelQuestionHub, parseModelQuestion } from './model-questions'
+import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { CATALOG } from './commands'
+import { CONSTITUTION } from './constitution'
 
 describe('model questions', () => {
-  it('reserves questions for genuine blockers after autonomous inspection and defaults', () => {
-    expect(MODEL_QUESTION_INSTRUCTION).toMatch(/inspecte|vérifie/i)
-    expect(MODEL_QUESTION_INSTRUCTION).toMatch(/défaut|hypothèse raisonnable/i)
-    expect(MODEL_QUESTION_INSTRUCTION).toMatch(/destruct|irréversible/i)
-    expect(MODEL_QUESTION_INSTRUCTION).toMatch(/indispensable|impossible/i)
-    expect(MODEL_QUESTION_INSTRUCTION).toMatch(/directement.*sans demande d.approbation/i)
-    expect(MODEL_QUESTION_INSTRUCTION).not.toMatch(/sas|confirmation/i)
-  })
-
-  // conv-1142 : la consigne autorisait les actions destructives « sans demande d'approbation »,
-  // à l'opposé de la limite destructive de la constitution, injectée dans le même prompt.
-  it('ne lève pas la limite destructive : le « sans approbation » ne vaut que pour le réversible', () => {
-    expect(MODEL_QUESTION_INSTRUCTION).not.toMatch(/destructives?[^.;]*s.exécutent directement/iu)
-    expect(MODEL_QUESTION_INSTRUCTION).toMatch(
-      /réversible[^.;]*s.exécute directement, sans demande d.approbation/iu
-    )
-    expect(MODEL_QUESTION_INSTRUCTION).toMatch(
-      /irréversible ou une publication suit la limite destructive/u
-    )
+  // conv-1577 : la consigne « Avance de façon autonome » doublait la constitution (et l'avait
+  // contredite en conv-1142). L'autonomie et la limite destructive ne vivent plus que là ; la seule
+  // phrase propre (ne pas réclamer un secret dans le chat) y a été reportée.
+  it("l'autonomie n'est dite qu'une fois : par la constitution, plus par une 2e consigne du chat", () => {
+    expect(buildChatPilotagePrompt(CATALOG)).not.toMatch(/Avance de façon autonome/u)
+    expect(CONSTITUTION).toMatch(/réversible ne se re-confirme pas/u)
+    expect(CONSTITUTION).toMatch(/Irréversible = arrêt/u)
+    expect(CONSTITUTION).toMatch(/jamais sa valeur, et ne la réclame pas dans le chat/u)
   })
 
   it('désactive le canal de question tant qu’aucune preuve applicative sécurisée ne l’autorise', () => {

@@ -48,12 +48,10 @@ const appel = (
 describe('fichier de règles du dépôt', () => {
   const regles = JSON.parse(readFileSync(FICHIER_DU_DEPOT, 'utf8')) as Regle[]
 
-  it('porte les trois règles d’AGENTS.md, chacune avec sa source', () => {
-    expect(regles.map((r) => r.id)).toEqual([
-      'conversations-json-direct',
-      'tsc-p-a-la-main',
-      'formatage-de-tout-le-depot'
-    ])
+  // conv-1577 : « formatage-de-tout-le-depot » est devenu un REFUS (refusGitDestructeur,
+  // garde-git-destructeur.ts), qui passe avant tout rappel : la règle ne pouvait plus se déclencher.
+  it('porte les deux règles d’AGENTS.md qu’aucun garde ne refuse, chacune avec sa source', () => {
+    expect(regles.map((r) => r.id)).toEqual(['conversations-json-direct', 'tsc-p-a-la-main'])
     for (const r of regles) expect(r.source).toMatch(/AGENTS\.md/)
   })
 
@@ -231,9 +229,10 @@ describe('script réel lancé avant chaque outil', () => {
   })
 
   it('P1-10 : deux règles dans un appel → deux rappels', () => {
-    const t = contexte(lancer(bash('npx tsc -p x && npm run format')).stdout)!
-    expect(t.indexOf('npm run typecheck')).toBeGreaterThan(-1)
-    expect(t.indexOf('prettier')).toBeGreaterThan(t.indexOf('npm run typecheck'))
+    // Ordre du fichier : conversations-json-direct avant tsc-p-a-la-main.
+    const t = contexte(lancer(bash('npx tsc -p x && cat conversations.json')).stdout)!
+    expect(t.indexOf('conversation_read')).toBeGreaterThan(-1)
+    expect(t.indexOf('npm run typecheck')).toBeGreaterThan(t.indexOf('conversation_read'))
   })
 
   it('P1-12 : refus d’une garde → refus seul, et le rappel reste dû', () => {
