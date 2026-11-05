@@ -1,4 +1,5 @@
 import { messageCommitAgent } from './store/worktree-manager'
+import { titreDuBandeau } from './titre-bandeau-git'
 
 /**
  * Ce que la clôture automatique a fait du commit sur le dépôt distant. Absent = rien poussé.
@@ -81,7 +82,8 @@ function bandeauGit(sha: string, sujet: string, push: PushDuRun): string {
   return [
     '```html-render',
     '<style>.awp-shell{white-space:pre-wrap;word-break:break-all;margin:4px 0}</style>',
-    '<div class="aw-kicker">GIT : 1 commit</div>',
+    // Titre = statut lu sur la ligne envoyée, comme le bloc de la passe /git (conv-1573).
+    `<div class="aw-kicker">${echapper(titreDuBandeau(1, [ligne]))}</div>`,
     `<div><b>Commit et push</b> : <b class="aw-chiffre">1 commit</b> <b>en ligne</b> par la clôture automatique.</div>`,
     `<div><span class="aw-chip">${echapper(sha.slice(0, 8))}</span> ${echapper(sujet)}</div>`,
     `<pre class="aw-chip awp-shell">${echapper(ligne)}</pre>`,

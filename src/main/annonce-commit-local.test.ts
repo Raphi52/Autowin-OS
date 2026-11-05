@@ -47,16 +47,18 @@ describe('annonceCommitLocal', () => {
     expect(repli).toContain('poussé sur la branche dédiée `origin/auto/run-1`')
   })
 
-  it('commit poussé → bandeau « GIT : 1 commit » avec le commit et la ligne git exacte (conv-1558)', () => {
+  it('commit poussé → bandeau titré par son statut, avec le commit et la ligne git exacte (conv-1558, conv-1573)', () => {
     const issue = { outcome: 'merged', committed: true, publishedSha: 'e4daf1702e098832' }
     const direct = annonceCommitLocal(issue, 'run-1', 't <x>', { branche: 'main', mode: 'direct' })
     expect(direct).toContain('```html-render')
-    expect(direct).toContain('GIT : 1 commit')
+    expect(direct).toContain('<div class="aw-kicker">1 commit et push origin main réussi</div>')
+    expect(direct).not.toContain('GIT : 1 commit')
     expect(direct).toContain('Commit et push')
     expect(direct).toContain('<span class="aw-chip">e4daf170</span> agent run-1: t &lt;x&gt;')
     expect(direct).toContain('ALLOW_MAIN_PUSH=1 git push origin e4daf1702e098832:refs/heads/main')
     const repli = annonceCommitLocal(issue, 'run-1', 't', { branche: 'auto/run-1', mode: 'pr' })
     expect(repli).toContain('git push origin e4daf1702e098832:refs/heads/auto/run-1')
+    expect(repli).toContain('1 commit et push origin auto/run-1 réussi')
     expect(repli).not.toContain('ALLOW_MAIN_PUSH')
   })
 
