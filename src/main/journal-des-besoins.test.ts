@@ -163,6 +163,55 @@ describe('le journal besoins.jsonl', () => {
     expect(journal.lire().size).toBe(0)
   })
 
+  /*
+   * conv-1578 : 7 demandes « sans fiche » de `ecarts.json` étaient des QUESTIONS recopiées dans une
+   * branche (conv-1498, depuis conv-1496). La copie change l'identifiant du message : le journal ne
+   * connaissait que l'original, et la mesure prenait la copie pour une demande perdue.
+   */
+  it('une branche reprend ce que le journal sait des messages qu’elle a recopiés', async () => {
+    const racine = dossierTemporaire()
+    let maintenant = 100
+    const journal = creerJournalDesBesoins({
+      racine,
+      identite: async () => ({ nom: 'Personne' }),
+      maintenant: () => (maintenant += 1)
+    })
+    for (const [turnId, reponse] of [
+      ['t1', 'AUTOWIN_BESOIN_V1: aucun'],
+      ['t2', 'AUTOWIN_BESOIN_V1: nouveau']
+    ] as const)
+      await journal.noterTour({
+        conversationId: 'conv-1',
+        turnId,
+        messages: [
+          { role: 'user', messageId: 'q1', ts: 10 },
+          { role: 'assistant', messageId: 'r1', parentMessageId: 'q1', turnId: 't1' },
+          { role: 'user', messageId: 'q2', ts: 20 },
+          { role: 'assistant', messageId: 'r2', parentMessageId: 'q2', turnId: 't2' }
+        ],
+        dossier: 'D:/depot',
+        texteReponse: reponse
+      })
+    const paires = new Map([
+      ['b-q1', 'q1'],
+      ['b-q2', 'q2'],
+      ['b-x', 'inconnu']
+    ])
+
+    expect(journal.recopierLaBranche({ branche: 'conv-2', source: 'conv-1', paires })).toBe(2)
+    expect(journal.lire().get(cleDuJournal('conv-2', 'b-q1'))).toEqual({
+      demandeur: { nom: 'Personne', dossier: 'D:/depot' },
+      besoin: { nature: 'aucun' },
+      demandeLe: 10
+    })
+    expect(journal.lire().get(cleDuJournal('conv-2', 'b-q2'))?.besoin).toEqual({
+      nature: 'nouveau'
+    })
+    expect(journal.lire().has(cleDuJournal('conv-2', 'b-x'))).toBe(false)
+    // Rejouée (création puis démarrage) : rien de neuf.
+    expect(journal.recopierLaBranche({ branche: 'conv-2', source: 'conv-1', paires })).toBe(0)
+  })
+
   it('fusionne une reprise : premier demandeur relevé, dernière ligne de besoin lisible', () => {
     const ligne = (e: Partial<EvenementDuJournal>): string =>
       JSON.stringify({ v: 1, ts: 1, conversationId: 'c', messageId: 'm', ...e })

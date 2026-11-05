@@ -41,6 +41,8 @@ export interface EvenementDuJournal {
   demandeur: (IdentiteGit & { dossier: string }) | null
   /** `null` = la réponse ne portait pas de ligne lisible. */
   besoin: LigneBesoin | null
+  /** Ligne recopiée d'un message de la source par une branche du fil (conv-1578) : aucun tour ici. */
+  recopieDe?: { conversationId: string; messageId: string }
 }
 
 /** Ce que la carte retient d'un message, toutes lignes fusionnées. */
@@ -228,11 +230,36 @@ export function creerJournalDesBesoins(deps: {
     dossier: string | undefined
     texteReponse: string | undefined
   }) => Promise<EvenementDuJournal | null>
+  /**
+   * Une branche du fil recopie ses messages sous des identifiants neufs (`messagesRecopies`) : elle
+   * reprend ce que le journal sait de chacun — demandeur, heure, ligne de besoin. Sans cela, une
+   * QUESTION recopiée devenait une demande sans fiche (conv-1578 : 7 sur 35, conv-1498). Rend le
+   * nombre de lignes écrites ; rejouée, elle n'écrit rien.
+   */
+  recopierLaBranche: (entree: {
+    branche: string
+    source: string
+    paires: ReadonlyMap<string, string>
+  }) => number
   lire: () => Map<string, EntreeDuJournal>
 } {
   const chemin = join(deps.racine, FICHIER_JOURNAL_DES_BESOINS)
   const maintenant = deps.maintenant ?? Date.now
   let memoire: { empreinte: string; entrees: Map<string, EntreeDuJournal> } | null = null
+
+  function lire(): Map<string, EntreeDuJournal> {
+    let empreinte: string
+    try {
+      const etat = statSync(chemin)
+      empreinte = `${etat.size}:${etat.mtimeMs}`
+    } catch {
+      return new Map()
+    }
+    if (memoire?.empreinte === empreinte) return memoire.entrees
+    const entrees = lireLeJournal(readFileSync(chemin, 'utf8'))
+    memoire = { empreinte, entrees }
+    return entrees
+  }
 
   return {
     chemin,
@@ -254,18 +281,27 @@ export function creerJournalDesBesoins(deps: {
       ajouterAuJournal(chemin, evenement)
       return evenement
     },
-    lire() {
-      let empreinte: string
-      try {
-        const etat = statSync(chemin)
-        empreinte = `${etat.size}:${etat.mtimeMs}`
-      } catch {
-        return new Map()
+    recopierLaBranche({ branche, source, paires }) {
+      const entrees = lire()
+      let ecrites = 0
+      for (const [dansLaBranche, dansLaSource] of paires) {
+        if (entrees.has(cleDuJournal(branche, dansLaBranche))) continue
+        const original = entrees.get(cleDuJournal(source, dansLaSource))
+        if (!original) continue
+        ajouterAuJournal(chemin, {
+          v: 1,
+          ts: maintenant(),
+          conversationId: branche,
+          messageId: dansLaBranche,
+          ...(original.demandeLe !== undefined ? { demandeLe: original.demandeLe } : {}),
+          demandeur: original.demandeur,
+          besoin: original.besoin,
+          recopieDe: { conversationId: source, messageId: dansLaSource }
+        })
+        ecrites += 1
       }
-      if (memoire?.empreinte === empreinte) return memoire.entrees
-      const entrees = lireLeJournal(readFileSync(chemin, 'utf8'))
-      memoire = { empreinte, entrees }
-      return entrees
-    }
+      return ecrites
+    },
+    lire
   }
 }
