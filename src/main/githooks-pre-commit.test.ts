@@ -109,6 +109,26 @@ describe('.githooks/pre-commit : module supprimé encore importé', () => {
     const r = git('commit', '-q', '-m', 'agent')
     expect(r.status, String(r.stderr)).toBe(0)
   })
+
+  /*
+   * « Essaie 3 façons » (conv-1583, 2026-11-05) : chaque façon travaille dans sa copie
+   * `retours-de-tour/essai__<fil>-<instant>-<rang>` (`photo-du-code.ts`, `ouvrirCopiesDEssai`), avec
+   * son propre index, comme une copie d'agent. Le hook ne les reconnaissait pas.
+   */
+  it("ne s'applique pas dans une copie d'« Essaie 3 façons » (son index n'est pas partagé)", () => {
+    const { git } = depot('retours-de-tour/essai__conv-1471-1793778602628-1')
+    git('rm', '-q', 'src/main/routeur.ts')
+    const r = git('commit', '-q', '-m', 'façon 1')
+    expect(r.status, String(r.stderr)).toBe(0)
+  })
+
+  it('reste actif dans un dépôt dont le nom contient « essai__ » sans commencer par lui', () => {
+    const { git } = depot('mon-essai__depot')
+    git('rm', '-q', 'src/main/routeur.ts')
+    const r = git('commit', '-m', 'retrait')
+    expect(r.status).not.toBe(0)
+    expect(String(r.stderr)).toMatch(/src\/main\/routeur\.ts supprimé/)
+  })
 })
 
 /**
