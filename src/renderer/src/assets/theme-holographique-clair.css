@@ -4731,22 +4731,8 @@
   box-shadow: none;
   position: relative;
 }
-/* Le neon « Brume » autour de la bulle (draft conv-199) : une copie floutee de son fond, posee
-   derriere elle. Meme reglage que le noir ; sur le blanc, il devient un halo bleu -> rose. */
-:root[data-theme='holographique-clair'] .cosmic-outline .msg.user {
-  isolation: isolate;
-}
-:root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body.msg-bulle::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  z-index: -1;
-  border-radius: inherit;
-  background: inherit;
-  filter: blur(22px);
-  opacity: 0.45;
-  pointer-events: none;
-}
+/* Le neon « Brume » autour de la bulle (draft conv-199, copie floutee de son fond) est retire le
+   2026-11-05 (conv-1623, « enleve les effets de flou ») : garde assets/aucun-flou.test.ts. */
 /* La base claire (theme-modes.css, « gris bleu franc ») peint ces champs en #dde2e9 ; le noir ne les
    repeint pas, le gris restait donc au milieu de la nacre (capture du 2026-10-10). La saisie interne
    laisse voir le satin de la saisie, comme sur le noir ; les autres prennent une nacre presque blanche.

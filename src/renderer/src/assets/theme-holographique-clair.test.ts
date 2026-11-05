@@ -225,10 +225,11 @@ describe('theme Holographique blanc', () => {
     )
     expect(teintes.join(', ')).toBe('#3c6eeb, #9b8cff 35%, #e63ca0 70%, #cfd6e4')
   })
-  it('« Halo nacre » : la lumiere de la souris est un blanc a 97 %, le neon Brume entoure la bulle', () => {
+  // Le neon Brume (copie floutee de la bulle) est retire le 2026-11-05 (conv-1623, « enleve les
+  // effets de flou ») : son absence est tenue par assets/aucun-flou.test.ts.
+  it('« Halo nacre » : la lumiere de la souris est un blanc a 97 %, sans neon flou autour de la bulle', () => {
     expect(css).toContain('--nv-lumiere-couleur: rgba(255, 255, 255, 0.97);')
-    const brume = css.slice(css.indexOf(`${PREFIXE} .cosmic-outline .msg.user .msg-body.msg-bulle::before {`))
-    expect(brume).toMatch(/background: inherit;\s*filter: blur\(22px\);\s*opacity: 0\.45;/)
+    expect(css).not.toContain(`${PREFIXE} .cosmic-outline .msg.user .msg-body.msg-bulle::before {`)
   })
 
   /* 2026-10-11 (conv-212, capture de l'utilisateur) : les reponses du bloc ASK restaient des barres

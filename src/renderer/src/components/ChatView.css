@@ -1076,7 +1076,6 @@
   /* Meme fond que les surcouches du fil (cf. `.chat-jump-latest`) : noir dense sur le decor
      cosmique, pas un gris opaque qui trancherait avec le theme. */
   background: rgba(2, 3, 7, 0.92);
-  backdrop-filter: blur(8px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 .chat-find-icone {
@@ -1655,7 +1654,6 @@
   place-items: center;
   padding: 24px;
   background: rgba(2, 4, 10, 0.7);
-  backdrop-filter: blur(8px);
 }
 .delete-confirm-card {
   position: relative;

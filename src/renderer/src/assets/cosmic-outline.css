@@ -165,7 +165,6 @@
 .cosmic-outline .graph-observatory--galaxy .theme-sidebar,
 .cosmic-outline .graph-observatory--galaxy .visibility-sidebar {
   background: var(--surface-panel);
-  backdrop-filter: blur(10px);
   box-shadow: none;
 }
 
@@ -850,29 +849,8 @@
   background-repeat: no-repeat;
   color: #ffffff;
   box-shadow: none;
-  /* Ancre la lueur « Brume » ci-dessous. */
   position: relative;
 }
-/*
- * Lueur « Brume » autour de la bulle envoyee (draft conv-199, 2026-10-10). Le relief passe par une
- * lumiere AUTOUR (« nan essaye plutot avec des shadows autour »), qui suit le degrade (« Néon mais
- * faut que la couleur suive le dégradé »), sans bord lumineux (« go Brume »). Une ombre CSS n'a
- * qu'UNE couleur : la lueur est donc une COPIE FLOUTEE du fond de la bulle (`background: inherit`),
- * posee derriere elle. Elle suit le degrade de chaque theme sombre.
- * `isolation` sur la ligne du message : sans elle, le calque a z-index -1 tomberait sous le fond du
- * fil, qui le cacherait.
- */
-:root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user {
-  isolation: isolate;
-}
-:root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user .msg-body.msg-bulle::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  z-index: -1;
-  border-radius: inherit;
-  background: inherit;
-  filter: blur(22px);
-  opacity: 0.45;
-  pointer-events: none;
-}
+/* La lueur « Brume » autour de la bulle envoyee (draft conv-199) etait une copie FLOUTEE de son
+   fond, posee derriere elle : retiree le 2026-11-05 (conv-1623, « enleve les effets de flou » — le
+   flou coutait la carte graphique). Garde : assets/aucun-flou.test.ts. */

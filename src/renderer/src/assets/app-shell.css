@@ -27,7 +27,6 @@
   width: 216px;
   flex: none;
   background: rgba(0, 0, 6, 0.48);
-  backdrop-filter: blur(12px);
   border-right: 1px solid var(--line-strong);
   display: flex;
   flex-direction: column;

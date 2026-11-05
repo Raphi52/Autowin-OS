@@ -160,7 +160,6 @@
   place-items: center;
   padding: 24px;
   background: rgb(1 2 4 / 82%);
-  backdrop-filter: blur(10px);
 }
 
 .html-render-preview.is-expanded {

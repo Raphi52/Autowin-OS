@@ -90,14 +90,12 @@
   /* Bordure gauche = la sélection. Un seul signal, lisible en périphérie. */
   border-left: 2px solid transparent;
   /*
-   * Surface + flou, la recette des conteneurs de l'app (ui-system.css). Les tokens de surface sont
-   * volontairement TRANSLUCIDES pour laisser vivre le fond cosmique ; seuls, ils laissaient le texte
-   * flotter sur la galaxie et la liste devenait illisible. C'est le flou qui rend la translucidité
-   * lisible — l'un ne va pas sans l'autre, et remettre une couleur opaque en dur serait sortir de la
-   * palette une deuxième fois.
+   * Une surface du thème, jamais une couleur opaque en dur : sans elle, le texte flottait sur la
+   * galaxie et la liste devenait illisible. Plus de flou par-dessus (2026-11-05, conv-1623 : il
+   * coûtait la carte graphique ; garde : assets/aucun-flou.test.ts) — la surface des cartes est
+   * déjà dense à 95 % (`.theme-serious`, ui-system.css).
    */
   background: var(--surface-card);
-  backdrop-filter: blur(var(--container-blur)) saturate(112%);
   border-radius: var(--container-radius-card);
 }
 

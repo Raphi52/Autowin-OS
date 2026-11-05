@@ -236,7 +236,6 @@
   color: var(--text);
   font-size: 12px;
   line-height: 1.4;
-  backdrop-filter: blur(10px);
 }
 .quartier-carte p {
   margin: 2px 0 0;
@@ -313,7 +312,6 @@
   background: var(--bg-1, rgba(0, 0, 0, 0.56));
   border: 1px solid var(--line, rgba(255, 255, 255, 0.18));
   border-radius: var(--r2, 12px);
-  backdrop-filter: blur(16px);
 }
 
 /* Le titre et son rouage sur la MEME ligne, dans la meme plaque. */
@@ -493,7 +491,6 @@
   background: rgba(0, 0, 0, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: var(--r2, 12px);
-  backdrop-filter: blur(18px) saturate(1.2);
   box-shadow:
     0 20px 46px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -2058,6 +2055,149 @@
   font-size: 11px;
   line-height: 1.45;
   color: var(--text-dim);
+}
+
+/* Les personnes du village (conv-1599) : le foulard de la personne devant son prénom, et l'état
+   « hors ligne » en retrait. La couleur du foulard est posée par la vue (palette fixe des collègues). */
+.home-settings__pastille {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+}
+
+.home-settings__discret {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.home-settings__bloc input[type='checkbox']:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* UN TABLEAU COMPACT pour les personnes (conv-1599, « il va prendre trop de place quand la liste va
+   grandir ») : une ligne par personne, ses deux interrupteurs côte à côte. La hauteur est bornée à
+   environ sept lignes ; au-delà le tableau défile et son en-tête (avec les comptes) reste en place. */
+.home-personnes__recherche {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+  padding: 5px 9px;
+  font-size: 12px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.home-personnes__recherche:focus-visible {
+  border-color: var(--line-strong);
+  outline: none;
+}
+
+.home-personnes__defile {
+  max-height: 216px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.home-personnes__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 12.5px;
+}
+
+.home-personnes__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* Plein, pour que les lignes qui défilent passent DESSOUS sans se lire au travers. */
+  background: var(--bg-0);
+  padding: 5px 6px;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+  cursor: help;
+}
+
+.home-personnes__table thead th.home-personnes__nom-col {
+  text-align: left;
+  cursor: default;
+}
+
+.home-personnes__table thead th:not(.home-personnes__nom-col) {
+  width: 62px;
+}
+
+.home-personnes__compte {
+  display: block;
+  margin-top: 1px;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--gold);
+}
+
+.home-personnes__table tbody th,
+.home-personnes__table tbody td {
+  padding: 3px 6px;
+  font-weight: normal;
+  text-align: left;
+}
+
+.home-personnes__table tbody td {
+  text-align: center;
+}
+
+.home-personnes__table tbody tr + tr th,
+.home-personnes__table tbody tr + tr td {
+  border-top: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
+}
+
+.home-personnes__table tbody tr:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.home-personnes__nom {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text);
+}
+
+.home-personnes__prenom {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-personnes__table tr[data-hors-ligne='true'] .home-personnes__prenom {
+  color: var(--text-dim);
+}
+
+.home-personnes__nom .home-settings__discret {
+  flex: none;
+  font-size: 9.5px;
+}
+
+.home-personnes__aide {
+  margin-top: 6px;
+}
+
+.home-personnes__defile .home-settings__note {
+  padding: 6px 8px;
 }
 
 /* ================================================================================================

@@ -521,11 +521,11 @@
 /* ── Détacher du fond cosmique ────────────────────────────────────────────
    Le fond de l'app est une image fixe (theme.css). Sans plan intermédiaire elle
    traverse les panneaux et concurrence le contenu — c'est le premier facteur de
-   « bruit » sur la capture. Un voile flouté redonne un plan de lecture, sans
-   toucher au fond global qui appartient à toute l'app.                        */
+   « bruit » sur la capture. Un voile dense à 88 % redonne un plan de lecture, sans
+   toucher au fond global qui appartient à toute l'app. Sans flou depuis le
+   2026-11-05 (conv-1623 : il coûtait la carte graphique ; assets/aucun-flou.test.ts). */
 .wf-palette-pane,
 .wf-plan-viewport {
-  backdrop-filter: blur(14px) saturate(115%);
   background: color-mix(in srgb, var(--bg-2) 88%, transparent);
 }
 /* Le voile va sur le VIEWPORT, pas sur la surface : posé sur `.wf-plan`, il écrasait le fond

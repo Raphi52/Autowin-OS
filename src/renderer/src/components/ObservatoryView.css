@@ -1,6 +1,7 @@
 /* `padding: 5px 28px` posait le titre de cette vue 11 px plus haut et 10 px plus a droite que
    partout ailleurs — l'ecart que l'utilisateur voyait en changeant d'onglet. Cadre delegue a
-   `.view-page` ; ne reste ici que le flou de fond, propre a cette vue. */
+   `.view-page`. Le flou de fond qui restait ici est retire (2026-11-05, conv-1623 : plus aucun flou
+   dans l'interface, il coutait la carte graphique ; garde : assets/aucun-flou.test.ts). */
 .observatory-view {
   color: var(--text);
   display: flex;
@@ -10,7 +11,6 @@
      version amont le sort dans `.view-page`, consomme par les sept vues. L'intention concurrente est
      donc SATISFAITE, et sans la troisieme copie qu'elle allait creer — c'est precisement la derive
      que son propre commentaire redoutait. Ne reste ici que ce qui appartient a cette vue. */
-  backdrop-filter: blur(var(--container-blur));
 }
 .observatory-head {
   display: flex;

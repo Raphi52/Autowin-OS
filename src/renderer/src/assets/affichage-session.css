@@ -98,7 +98,6 @@
   width: min(320px, 88%) !important;
   border: 1px solid var(--line-strong);
   background: var(--bg-0);
-  backdrop-filter: blur(16px);
 }
 :root[data-ecran='telephone'] .chat-liste-tel-btn {
   display: inline-flex;
