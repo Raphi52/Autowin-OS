@@ -6,7 +6,7 @@
  * Cause mesurée : un agent lançait depuis bash un banc Electron en fenêtre cachée (`show: false`).
  * Le script avait une faute de syntaxe : Electron a ouvert SUR L'ÉCRAN DE L'UTILISATEUR la boîte
  * « A JavaScript error occurred in the main process », et le banc est resté bloqué dessus 150 s.
- * La redirection vers le bureau caché (mods/autowin/hooks/logique.mjs) ne pouvait pas le rattraper :
+ * La redirection vers le bureau caché (mods/autowin/hooks/regles.js) ne pouvait pas le rattraper :
  * elle ne réécrit qu'une commande SIMPLE d'un programme graphique connu, et un banc sans fenêtre n'a
  * rien à faire dans hdesk-lancer.ps1 (il attend une fenêtre et ne rend pas la sortie du programme).
  *
