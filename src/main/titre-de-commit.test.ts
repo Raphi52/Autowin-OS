@@ -34,6 +34,58 @@ describe('titreDeCommitAuto', () => {
     )
   })
 
+  /**
+   * Réponses en anglais depuis conv-1172 (27/10, réglage Settings · Interface) : 18 des 424
+   * derniers commits commençaient par « Added/Created/Wrote… », chemin `D:\…` compris — par exemple
+   * `feat(annonce-commit-local): Created D:\AutoWinOS\src\main\titre-bandeau-git.ts. It turns the git…`
+   * (conv-1573). Le message de commit suit la règle du projet (AGENTS.md : français), pas la langue
+   * de l'interface (conv-1581). ENTRÉE QUI DOIT FAIRE ÉCHOUER UN MAUVAIS CORRECTIF : la réponse
+   * anglaise ci-dessous avec `langueDuCompteRendu: 'en'` — un titre encore tiré du « ✅ Fait »
+   * commence par « Created ».
+   */
+  const COMPTE_RENDU_ANGLAIS = [
+    '### ✅ Fait',
+    '1. Created D:\\AutoWinOS\\src\\main\\titre-bandeau-git.ts. It turns the git report into a status',
+    '2. Added 4 tests'
+  ].join('\n')
+
+  it('réponse en anglais : le titre vient de la demande, jamais du « ✅ Fait » traduit', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-1573',
+        demande: 'le titre du bloc git doit dire si le push a réussi',
+        compteRendu: COMPTE_RENDU_ANGLAIS,
+        langueDuCompteRendu: 'en',
+        fichiers: ['src/main/titre-bandeau-git.ts', 'src/main/titre-bandeau-git.test.ts']
+      })
+    ).toBe('feat(titre-bandeau-git): le titre du bloc git doit dire si le push a réussi (conv-1573)')
+  })
+
+  it('réponse en anglais et demande elliptique : le titre décrit les fichiers, en français', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-1573',
+        demande: 'vazy',
+        compteRendu: COMPTE_RENDU_ANGLAIS,
+        langueDuCompteRendu: 'en',
+        fichiers: ['src/main/titre-bandeau-git.ts', 'src/main/titre-bandeau-git.test.ts']
+      })
+    ).toBe('feat(titre-bandeau-git): modifie titre-bandeau-git.ts et 1 fichier de test (conv-1573)')
+  })
+
+  // Jumeau accepté : la MÊME réponse, déclarée française, garde sa 1re action (conv-1069).
+  it('réponse en français : le « ✅ Fait » reste la source, chemin absolu réduit au nom du fichier', () => {
+    expect(
+      titreDeCommitAuto({
+        id: 'conv-1573',
+        demande: 'vazy',
+        compteRendu: '### ✅ Fait\n1. Créé D:\\AutoWinOS\\src\\main\\titre-bandeau-git.ts : un statut lisible',
+        langueDuCompteRendu: 'fr',
+        fichiers: ['src/main/titre-bandeau-git.ts']
+      })
+    ).toBe('feat(titre-bandeau-git): Créé titre-bandeau-git.ts : un statut lisible (conv-1573)')
+  })
+
   it('lit le DERNIER bloc « ✅ Fait » quand la réponse en porte plusieurs', () => {
     const deux = `### ✅ Fait\n1. ancienne action\n\n### ✅ Fait\n1. ajoute le bouton Exporter\n`
     expect(titreDeCommitAuto({ id: 'conv-9', demande: 'go', compteRendu: deux })).toBe(
