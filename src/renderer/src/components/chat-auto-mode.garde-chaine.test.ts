@@ -7,11 +7,13 @@ import {
   SEUILS_CHAINE_DEFAUT,
   ancrerSurLaDemande,
   arretChaineAuto,
+  arretReglableDansBehaviour,
   deciderRelanceAuto,
   lireSeuilsChaine,
   quotaHebdoClaude,
   toursAutoDAffilee
 } from './chat-auto-mode'
+import { TEXTES_EN, TEXTES_FR } from '../textes-ecrans/chat-fil'
 
 /*
  * GARDE-FOU DE LA CHAINE ∞ (demande du 2026-10-02, conv-38) : conv-44 a consomme 226 M tokens
@@ -190,7 +192,9 @@ describe('le message d’arrêt ne promet que ce que le code permet', () => {
     const arret = arretChaineAuto({ quotaHebdoPct: 10, toursAutoDAffilee: 6 })
     expect(arret?.message).not.toMatch(/rallume ∞ pour continuer/i)
     expect(arret?.message).toContain('écris un message')
-    expect(arret?.message).toContain('Settings › Budget')
+    // La section Budget a été retirée le 2026-10-23 : le seuil se relève dans Behaviour (conv-1602).
+    expect(arret?.message).toContain('Settings › Behaviour')
+    expect(arret?.message).not.toContain('Budget')
     const filApres = [...filAvecToursAuto(6), humain('continue sur le point 2')]
     expect(toursAutoDAffilee(filApres)).toBe(0)
     expect(
@@ -208,7 +212,8 @@ describe('le message d’arrêt ne promet que ce que le code permet', () => {
     expect(arret?.message).not.toMatch(/reprendra/i)
     expect(arret?.message).toMatch(/rallume ∞ quand le quota/i)
     expect(arret?.message).not.toMatch(/rallume ∞ pour continuer/i)
-    expect(arret?.message).toContain('Settings › Budget')
+    expect(arret?.message).toContain('Settings › Behaviour')
+    expect(arret?.message).not.toContain('Budget')
     expect(
       arretChaineAuto({
         quotaHebdoPct: 85,
@@ -216,6 +221,38 @@ describe('le message d’arrêt ne promet que ce que le code permet', () => {
         seuils: { quotaHebdoPct: 90, toursAutoMax: 6 }
       })
     ).toBeNull()
+  })
+  // La version anglaise disait aussi « Settings › Budget », section retirée le 2026-10-23 (conv-1602).
+  it('en anglais aussi, les deux arrêts renvoient à Settings › Behaviour', () => {
+    for (const cle of ['autoArret.quotaHebdo', 'autoArret.toursAutoMax'] as const) {
+      expect(TEXTES_EN[cle]).toContain('Settings › Behaviour')
+      expect(TEXTES_EN[cle]).not.toContain('Budget')
+    }
+  })
+})
+
+/*
+ * Le bandeau ne garde que le TEXTE de l'arrêt : le bouton « Ouvrir Settings › Behaviour » ne doit
+ * s'afficher que pour les deux arrêts dont le seuil se règle là (conv-1602). Un arrêt « terminé »
+ * ou une pause n'a rien à régler : y mettre ce bouton enverrait l'utilisateur dans le vide.
+ */
+describe('arrêt dont le seuil se règle dans Behaviour', () => {
+  it('reconnaît les deux arrêts du garde-fou, chiffres compris', () => {
+    const quota = arretChaineAuto({ quotaHebdoPct: 85, toursAutoDAffilee: 0 })
+    const tours = arretChaineAuto({ quotaHebdoPct: 10, toursAutoDAffilee: 6 })
+    expect(arretReglableDansBehaviour(quota?.message ?? '')).toBe(true)
+    expect(arretReglableDansBehaviour(tours?.message ?? '')).toBe(true)
+  })
+  it('reconnaît un arrêt rangé dans l’autre langue (relu après un changement de langue)', () => {
+    const anglais = TEXTES_EN['autoArret.quotaHebdo']
+      .replace('{quota}', '91')
+      .replace('{seuil}', '80')
+    expect(arretReglableDansBehaviour(anglais)).toBe(true)
+  })
+  it('refuse les arrêts qui n’ont aucun seuil à régler', () => {
+    expect(arretReglableDansBehaviour(TEXTES_FR['autoArret.recommandationRien'])).toBe(false)
+    expect(arretReglableDansBehaviour(TEXTES_FR['autoArret.cibleDestructrice'])).toBe(false)
+    expect(arretReglableDansBehaviour('')).toBe(false)
   })
 })
 

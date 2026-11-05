@@ -66,6 +66,9 @@ describe('ChatView — le bandeau de pause du mode auto reste dans son fil et le
     await monterEtMettreEnPause()
     expect(bandeau()).toContain('Mode auto en pause')
     expect(bandeau()).toContain('« Conversation A »')
+    // Une pause n'a aucun seuil à relever : pas de bouton vers Settings › Behaviour (conv-1602).
+    expect(document.querySelector('[data-testid="chat-auto-arret"]')).not.toBeNull()
+    expect(document.querySelector('[data-testid="chat-auto-arret-reglages"]')).toBeNull()
   })
 
   it('un autre fil ne montre pas la pause d’un fil voisin, et la retrouve au retour', async () => {

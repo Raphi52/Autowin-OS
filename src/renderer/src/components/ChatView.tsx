@@ -89,7 +89,11 @@ import { SuperConvDuChat } from './SuperConvMosaique'
 import { DirectiveReceiptRow } from './ChatMessageRow'
 import { rejouerOrientations } from './orientations-rejouees'
 import { promptDeRelanceGratuite } from './auto-relance'
-import { lireSeuilsChaine, CLE_SEUILS_CHAINE_AUTO } from './chat-auto-mode'
+import {
+  arretReglableDansBehaviour,
+  lireSeuilsChaine,
+  CLE_SEUILS_CHAINE_AUTO
+} from './chat-auto-mode'
 import type {
   AsstMsg,
   ChatAttachment,
@@ -5087,6 +5091,20 @@ export function ChatView({
               <span>
                 {`« ${convs.find((c) => c.id === activeId)?.title || activeId} » — ${arretsAuto[activeId]}`}
               </span>
+              {/* Seuil réglable : le bandeau ouvre Settings › Behaviour au lieu d'un chemin à recopier,
+                  qui avait vieilli sans bruit (« Settings › Budget », section retirée le 23/10). Le
+                  nom `behaviour` mène à cette section (shared/navigation.ts) (conv-1602). */}
+              {arretReglableDansBehaviour(arretsAuto[activeId]) && (
+                <button
+                  type="button"
+                  data-testid="chat-auto-arret-reglages"
+                  className="chat-workflow-notice__action"
+                  onClick={() => void window.api.appCommand?.('navigate', { tab: 'behaviour' })}
+                  title={texteFil('auto.ouvrirSeuils.titre')}
+                >
+                  {texteFil('auto.ouvrirSeuils')}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => effacerArretAuto(activeId)}

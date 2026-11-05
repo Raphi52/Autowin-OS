@@ -23,7 +23,7 @@
  */
 import type { Msg, AsstMsg } from './chat-view-types'
 import { langueCourante } from '../langue'
-import { traduireChatFil } from '../textes-ecrans/chat-fil'
+import { TEXTES_EN, TEXTES_FR, traduireChatFil } from '../textes-ecrans/chat-fil'
 import type { ModelQuotaSnapshot } from '../../../shared/model-quotas'
 import { estUneRepriseApresQuota } from '../../../shared/reprise-quota'
 import type { ChatPart } from './chat-view-model'
@@ -683,6 +683,31 @@ export function arretChaineAuto(entree: {
       })
     }
   return null
+}
+
+/*
+ * Les deux arrêts ci-dessus, reconnus à leur MODÈLE de texte, dans les deux langues. Le bandeau du
+ * chat ne garde que le message (il est aussi relu du poste après un redémarrage) : c'est lui qui
+ * décide d'offrir « Ouvrir Settings › Behaviour ». Reconnaître le modèle plutôt que la présence du
+ * chemin : le bouton tient même si le texte cesse un jour d'écrire ce chemin (conv-1602).
+ */
+const MODELES_ARRET_REGLABLE: readonly RegExp[] = (
+  ['autoArret.quotaHebdo', 'autoArret.toursAutoMax'] as const
+)
+  .flatMap((cle) => [TEXTES_FR[cle], TEXTES_EN[cle]])
+  .map(
+    (modele) =>
+      new RegExp(
+        `^${modele
+          .split(/\{\w+\}/)
+          .map((morceau) => morceau.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+          .join('.+?')}$`
+      )
+  )
+
+/** Vrai si l'arrêt affiché vient d'un seuil réglable dans Settings › Behaviour (quota ou tours). */
+export function arretReglableDansBehaviour(message: string): boolean {
+  return MODELES_ARRET_REGLABLE.some((modele) => modele.test(message))
 }
 
 export type DecisionAuto =
