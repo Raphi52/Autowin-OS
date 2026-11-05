@@ -57,6 +57,11 @@ export interface EtatDuDossierDuBoard {
    * les collègues voient aussi (conv-1537). Absent = aucun choix : le tanuki (`ANIMAL_PAR_DEFAUT`).
    */
   animal?: AnimalAgent
+  /**
+   * « Afficher mes agents à » (conv-1599) : les postes, en minuscules, à qui ce poste masque ses
+   * agents. Absent = visibles pour tous, le défaut.
+   */
+  masquerPresencePour?: string[]
 }
 
 /** Rend `null` quand la valeur n'est pas un état manuel lisible : la vue n'est pas une source sûre. */

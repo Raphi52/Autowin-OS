@@ -195,6 +195,11 @@ export const TEXTES_FR = {
   'maj.aide.rebase':
     'Rejoue tes commits par-dessus origin/main — historique linéaire, hashes réécrits.',
   'maj.aide.switch-main': 'Bascule sur main et l’avance. Ton travail reste intact sur ta branche.',
+  // Aides des voies quand on EST sur main en avance d'origin/main (conv-1597, UpdateBanner.tsx).
+  'maj.aide.merge-main':
+    'Ta branche main porte des commits pas encore poussés : fusionne origin/main dans main, tes commits restent.',
+  'maj.aide.rebase-main':
+    'Ta branche main porte des commits pas encore poussés : les rejoue par-dessus origin/main — historique linéaire, hashes réécrits.',
   'maj.autresFichiers': '… et {nombre} autre(s) fichier(s)',
   'maj.titreConversation': 'Réparer la mise à jour',
   'maj.verificationImpossible': 'Verification des mises a jour impossible.',
@@ -391,6 +396,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
     'Replays your commits on top of origin/main — linear history, rewritten hashes.',
   'maj.aide.switch-main':
     'Switches to main and fast-forwards it. Your work stays intact on your branch.',
+  'maj.aide.merge-main':
+    'Your main branch has commits not pushed yet: merges origin/main into main, your commits stay.',
+  'maj.aide.rebase-main':
+    'Your main branch has commits not pushed yet: replays them on top of origin/main — linear history, rewritten hashes.',
   'maj.autresFichiers': '… and {nombre} more file(s)',
   'maj.titreConversation': 'Repair the update',
   'maj.verificationImpossible': 'Could not check for updates.',

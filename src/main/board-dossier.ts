@@ -33,7 +33,7 @@ import type {
 import type { EtageDuBoard, EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-dossier'
 import { carteDesProjetsPartages, projetsPartagesLisibles } from '../shared/board-projets-partages'
 import { nomDuPosteLisible } from '../shared/board-nom-du-poste'
-import { animalLisible, type AnimalAgent } from '../shared/quartier-presence'
+import { animalLisible, postesLisibles, type AnimalAgent } from '../shared/quartier-presence'
 import { tachesDuBoard } from '../shared/taches-du-board'
 import { DOSSIER_DES_FICHES } from './fiches-de-demande'
 
@@ -392,6 +392,22 @@ export function lireAnimalDuPoste(racine: string): AnimalAgent | null {
   }
 }
 
+/**
+ * « Afficher mes agents à » (conv-1599) : les postes à qui ce poste masque ses agents. Illisible = aucun :
+ * un réglage abîmé laisse les agents visibles, comme avant le réglage. Rangé à part pour la même
+ * raison que `lirePartageDeLaPresence`.
+ */
+export function lireMasquesDeLaPresence(racine: string): string[] {
+  try {
+    const lu = JSON.parse(readFileSync(join(racine, FICHIER_DU_REGLAGE), 'utf8')) as {
+      masquerPresencePour?: unknown
+    }
+    return postesLisibles(lu.masquerPresencePour)
+  } catch {
+    return []
+  }
+}
+
 /** Le dossier enregistré, ou `null`. Illisible = aucun dossier : le Board marche sans. */
 export function lireDossierDuBoard(racine: string): string | null {
   return lireReglageDuBoard(racine).dossier
@@ -445,6 +461,11 @@ export interface DossierDuBoard {
    * seul : `quartier-presence.ts` l'écrit dans `presence.json`, que les collègues relisent.
    */
   choisirAnimal: (animal: AnimalAgent | null) => Promise<EtatDuDossierDuBoard>
+  /**
+   * « Afficher mes agents à » (conv-1599) : retient les postes à qui ce poste masque ses agents (liste
+   * vide = visibles pour tous). Le réglage seul : `quartier-presence.ts` l'écrit dans `presence.json`.
+   */
+  choisirMasquesPresence: (postes: readonly string[]) => Promise<EtatDuDossierDuBoard>
   /** Le compte Windows du poste et le nom écrit sur ses post-it (le choisi, sinon le compte). */
   nomDuPoste: () => { compte: string; nom: string }
   /** Envoie le Board vers le dossier, sans attendre ; ne fait rien sans dossier choisi. */
@@ -483,6 +504,7 @@ export function creerDossierDuBoard(deps: {
   let nomChoisi = reglage.nom
   let partagerPresence = lirePartageDeLaPresence(deps.racine)
   let animal = lireAnimalDuPoste(deps.racine)
+  let masquesPresence = lireMasquesDeLaPresence(deps.racine)
   const nomDuPoste = (): { compte: string; nom: string } => ({ compte, nom: nomChoisi ?? compte })
   let dernier: EtatDuDossierDuBoard['dernier']
   let erreur: string | undefined
@@ -512,7 +534,9 @@ export function creerDossierDuBoard(deps: {
     ...(nomChoisi ? { nomChoisi } : {}),
     // Absent = actif, le défaut (D-9) : seul un partage coupé se dit (conv-1429).
     ...(partagerPresence ? {} : { partagerPresence: false }),
-    ...(animal ? { animal } : {})
+    ...(animal ? { animal } : {}),
+    // Absent = mes agents visibles pour tous (conv-1599).
+    ...(masquesPresence.length ? { masquerPresencePour: [...masquesPresence] } : {})
   })
 
   async function ecrire(travail: NonNullable<typeof enAttente>): Promise<void> {
@@ -573,15 +597,17 @@ export function creerDossierDuBoard(deps: {
   }
 
   /**
-   * Le dossier, le choix des projets, le nom, le partage de la présence et l'animal : changer l'un ne
-   * doit jamais effacer les autres (conv-1211, conv-1230, conv-1429, conv-1537).
+   * Le dossier, le choix des projets, le nom, le partage de la présence, l'animal et les postes à qui
+   * mes agents sont masqués : changer l'un ne doit jamais effacer les autres (conv-1211, conv-1230,
+   * conv-1429, conv-1537, conv-1599).
    */
   async function ecrireLeReglage(
     nouveauDossier: string | null,
     nouveauxProjets: readonly string[] | null,
     nouveauNom: string | null = nomChoisi,
     nouveauPartage: boolean = partagerPresence,
-    nouvelAnimal: AnimalAgent | null = animal
+    nouvelAnimal: AnimalAgent | null = animal,
+    nouveauxMasques: readonly string[] = masquesPresence
   ): Promise<void> {
     await mkdir(deps.racine, { recursive: true })
     await writeFile(
@@ -592,7 +618,8 @@ export function creerDossierDuBoard(deps: {
           ...(nouveauxProjets ? { projets: nouveauxProjets } : {}),
           ...(nouveauNom ? { nom: nouveauNom } : {}),
           ...(nouveauPartage ? {} : { partagerPresence: false }),
-          ...(nouvelAnimal ? { animal: nouvelAnimal } : {})
+          ...(nouvelAnimal ? { animal: nouvelAnimal } : {}),
+          ...(nouveauxMasques.length ? { masquerPresencePour: nouveauxMasques } : {})
         },
         null,
         2
@@ -622,6 +649,12 @@ export function creerDossierDuBoard(deps: {
       animal = retenu
       return etat()
     },
+    async choisirMasquesPresence(choix) {
+      const retenus = postesLisibles(choix)
+      await ecrireLeReglage(dossier, projets, nomChoisi, partagerPresence, animal, retenus)
+      masquesPresence = retenus
+      return etat()
+    },
     async choisirProjets(choix) {
       const retenus = choix === null ? null : [...new Set(choix)]
       await ecrireLeReglage(dossier, retenus)
@@ -649,8 +682,10 @@ export function creerDossierDuBoard(deps: {
     async effacer() {
       // Le choix des projets survit à l'oubli du dossier (conv-1211) : en rechoisir un ne doit pas
       // repartager d'un coup ce qu'on avait décoché. Le nom choisi survit aussi (conv-1230), et un
-      // partage de présence coupé reste coupé (conv-1429), et l'animal choisi reste (conv-1537).
-      if (projets || nomChoisi || !partagerPresence || animal) await ecrireLeReglage(null, projets)
+      // partage de présence coupé reste coupé (conv-1429), l'animal choisi reste (conv-1537), et mes
+      // agents restent masqués à ceux que j'avais décochés (conv-1599).
+      if (projets || nomChoisi || !partagerPresence || animal || masquesPresence.length)
+        await ecrireLeReglage(null, projets)
       else await rm(join(deps.racine, FICHIER_DU_REGLAGE), { force: true })
       dossier = null
       enAttente = null

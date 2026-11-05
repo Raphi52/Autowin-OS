@@ -9,6 +9,8 @@
  *    rend l'état du dossier du Board, que les réglages affichent déjà ;
  *  - `os:quartier-presence:animal` (conv-1537) : l'animal des agents du poste, choisi dans les
  *    réglages de l'Accueil, rangé dans le réglage du Board et écrit dans `presence.json` ;
+ *  - `os:quartier-presence:masques` (conv-1599) : « afficher mes agents à », les postes à qui ce poste
+ *    masque ses agents, choisis dans les réglages de l'Accueil, rangés dans le réglage du Board ;
  *  - `os:quartier-presence:etat` : où et quand le fichier a été écrit, et le dernier échec ;
  *  - `os:quartier-presence:collegues` (lot 2) : la présence des AUTRES postes, relue sur le partage
  *    (`quartier-presence-collegues.ts`), validée champ par champ, au plus toutes les 4 s.
@@ -18,6 +20,7 @@ import { ipcMain } from 'electron'
 import type { EtatDuDossierDuBoard } from '../../shared/board-dossier'
 import {
   animalLisible,
+  postesLisibles,
   type EtatDeLaPresence,
   type PresencesDesCollegues
 } from '../../shared/quartier-presence'
@@ -28,7 +31,10 @@ import { creerLecteurDePresence } from '../quartier-presence-collegues'
 
 export function registerQuartierPresenceIpc(deps: {
   publication: PublicationDeLaPresence
-  dossierDuBoard: Pick<DossierDuBoard, 'etat' | 'choisirPartagePresence' | 'choisirAnimal'>
+  dossierDuBoard: Pick<
+    DossierDuBoard,
+    'etat' | 'choisirPartagePresence' | 'choisirAnimal' | 'choisirMasquesPresence'
+  >
 }): void {
   const { publication, dossierDuBoard } = deps
   // Même dossier et même poste que la relecture des Boards (`carte-des-besoins.ts`) : le nôtre est la
@@ -73,6 +79,19 @@ export function registerQuartierPresenceIpc(deps: {
       if (animal !== null && !choix) return dossierDuBoard.etat()
       const etat = await dossierDuBoard.choisirAnimal(choix)
       // Les collègues voient le nouvel animal à la prochaine écriture permise (5 s au plus).
+      publication.reglageChange()
+      return etat
+    }
+  )
+
+  ipcMain.handle(
+    'os:quartier-presence:masques',
+    async (event, postes: unknown): Promise<EtatDuDossierDuBoard> => {
+      assertTrustedRendererSender(event, 'Présence du quartier')
+      // Pas une liste : rien ne change. Une liste abîmée ne garde que les noms de poste lisibles.
+      if (!Array.isArray(postes)) return dossierDuBoard.etat()
+      const etat = await dossierDuBoard.choisirMasquesPresence(postesLisibles(postes))
+      // Les postes nommés cessent de voir mes agents à la prochaine écriture permise (5 s au plus).
       publication.reglageChange()
       return etat
     }

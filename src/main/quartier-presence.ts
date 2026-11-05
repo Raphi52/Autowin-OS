@@ -25,6 +25,7 @@ import {
   PRESENCE_BATTEMENT_MS,
   PRESENCE_DELAI_ECRITURE_MS,
   PRESENCE_TAILLE_MAX,
+  postesLisibles,
   type AgentAPublier,
   type AgentPublie,
   type AnimalAgent,
@@ -47,6 +48,11 @@ export interface ReglageDeLaPresence {
    * dessinent le même. Absent = non écrit : le lecteur garde l'animal tiré du nom du poste.
    */
   animal?: AnimalAgent
+  /**
+   * « Afficher mes agents à » (conv-1599) : les postes à qui ce poste masque ses agents. Écrits dans
+   * `presence.json` ; l'Autowin de chacun d'eux ne les affiche pas. Absent ou vide = visibles pour tous.
+   */
+  masquesPour?: readonly string[]
 }
 
 // ———————————————————————————————————————————————————————————————— ce qui arrive de la vue
@@ -105,17 +111,20 @@ export function agentPublie(a: AgentAPublier): AgentPublie {
  */
 export function presenceAEcrire(
   agents: readonly AgentAPublier[],
-  reglage: Pick<ReglageDeLaPresence, 'nom' | 'partager' | 'animal'>,
+  reglage: Pick<ReglageDeLaPresence, 'nom' | 'partager' | 'animal' | 'masquesPour'>,
   poste: string
 ): Omit<PresenceDuPoste, 'enregistreA'> {
   if (!reglage.partager)
     return { format: FORMAT_PRESENCE, poste, nom: reglage.nom, coupe: true, agents: [] }
   const publies = agents.slice(0, PRESENCE_AGENTS_MAX).map(agentPublie)
+  // Relue ici aussi : le réglage vient d'un fichier du poste, et ce qui part sur le partage est borné.
+  const masquesPour = postesLisibles(reglage.masquesPour)
   const presence: Omit<PresenceDuPoste, 'enregistreA'> = {
     format: FORMAT_PRESENCE,
     poste,
     nom: reglage.nom,
     ...(reglage.animal ? { animal: reglage.animal } : {}),
+    ...(masquesPour.length ? { masquesPour } : {}),
     agents: publies
   }
   // La date ajoutée ensuite tient en 60 octets : la marge est gardée ici.

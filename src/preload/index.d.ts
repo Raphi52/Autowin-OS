@@ -595,6 +595,9 @@ interface ChatApi {
   /** L'animal des agents du poste, vu aussi par les collègues (`null` = le défaut, conv-1537) ;
    *  absent = preload d'avant redémarrage. */
   quartierPresenceAnimal?: (animal: AnimalAgent | null) => Promise<EtatDuDossierDuBoard>
+  /** « Afficher mes agents à » : les postes à qui ce poste masque ses agents (conv-1599) ; absent =
+   *  preload d'avant redémarrage. */
+  quartierPresenceMasques?: (postes: string[]) => Promise<EtatDuDossierDuBoard>
   /** Où et quand `presence.json` a été écrit, et le dernier échec (conv-1429). */
   quartierPresenceEtat?: () => Promise<EtatDeLaPresence>
   /** Les tanukis des AUTRES postes, relus sur le partage et validés (conv-1429, lot 2) ; absent =

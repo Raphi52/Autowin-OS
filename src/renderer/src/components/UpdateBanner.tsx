@@ -55,6 +55,18 @@ const CLES_DES_VOIES: Record<
   'switch-main': { nom: 'maj.voie.switch-main', aide: 'maj.aide.switch-main' }
 }
 
+/**
+ * Sur `main`, `merge` et `rebase` n'apparaissent que parce que main porte des commits pas encore
+ * poussés (`strategiesFor`, shared/update-contract.ts). Le bouton affichait alors « Fusionner
+ * origin/main … dans ta branche courante » : la gueule d'une branche de feature alors qu'on est sur
+ * main (conv-1597). Sur main, le bouton garde « Mettre à jour » et l'aide dit pourquoi ce n'est pas
+ * une simple avance. Seuls les TEXTES changent : la voie envoyée au main reste celle de la sonde.
+ */
+const AIDES_SUR_MAIN: Partial<Record<UpdateStrategy, CleArtefactsEtBandeaux>> = {
+  merge: 'maj.aide.merge-main',
+  rebase: 'maj.aide.rebase-main'
+}
+
 /** Un texte de la table, dans la langue du moment de l'appel (hors rendu : messages d'échec). */
 const texte = (cle: CleArtefactsEtBandeaux, valeurs?: Record<string, string | number>): string =>
   traduireArtefactsEtBandeaux(cle, langueCourante(), valeurs)
@@ -359,8 +371,12 @@ export function UpdateBanner({
     ailleurs: elsewhere,
     travail: dirtyNote
   })
+  const surMain = info.branch === 'main'
   const nomDeVoie = (voie: UpdateStrategy): string => t(CLES_DES_VOIES[voie].nom)
-  const aideDeVoie = (voie: UpdateStrategy): string => t(CLES_DES_VOIES[voie].aide)
+  const aideDeVoie = (voie: UpdateStrategy): string =>
+    t((surMain ? AIDES_SUR_MAIN[voie] : undefined) ?? CLES_DES_VOIES[voie].aide)
+  // Sur main, le bouton principal est TOUJOURS « Mettre à jour », quelle que soit la voie (conv-1597).
+  const nomDuBouton = surMain ? t('maj.voie.fast-forward') : nomDeVoie(primary)
   const buttonState = applying ? ' is-applying' : applyError ? ' is-error' : ''
   const incoming = info.incoming ?? []
   const incomingHidden = info.behind - incoming.length
@@ -372,7 +388,7 @@ export function UpdateBanner({
     ? t('maj.enCours')
     : applyError
       ? t('maj.echecReessayer', { erreur: applyError })
-      : `${nomDeVoie(primary)} — ${detail}. ${aideDeVoie(primary)}`
+      : `${nomDuBouton} — ${detail}. ${aideDeVoie(primary)}`
   return (
     <div className="rail-update" data-testid="update-banner">
       <div className="rail-update-row">
@@ -450,7 +466,7 @@ export function UpdateBanner({
             {!collapsed && (
               <>
                 <span className="thinking-label rail-update-label">
-                  {applying ? t('maj.miseAJour') : nomDeVoie(primary)}
+                  {applying ? t('maj.miseAJour') : nomDuBouton}
                 </span>
                 <span className="thinking-duree rail-update-count">+{info.behind}</span>
               </>

@@ -67,6 +67,38 @@ describe('checkForUpdate', () => {
     expect(await checkForUpdate('/r', run)).toMatchObject({ available: false, behind: 0 })
   })
 
+  // conv-1597 : main portait 3 commits « à récupérer » qui étaient NOTRE travail, publié par une copie
+  // isolée sous d'autres hashes. Fusionner origin/main ne changeait aucun fichier (arbre fusionné =
+  // arbre de HEAD), et le bouton restait affiché. On juge sur le CONTENU, plus sur le compte de commits.
+  const DIVERGE_SANS_APPORT = {
+    'fetch --quiet': '',
+    'rev-parse --abbrev-ref HEAD': 'main',
+    'rev-list --count HEAD..origin/main': '3',
+    'rev-list --count origin/main..HEAD': '3',
+    'rev-parse HEAD^{tree}': '11a76b1e'
+  }
+
+  it('commits entrants déjà présents en contenu (fusion sans aucun fichier changé) → pas de bouton', async () => {
+    const run = runnerFrom({
+      ...DIVERGE_SANS_APPORT,
+      'merge-tree --write-tree HEAD origin/main': `11a76b1e${NL}`
+    })
+    expect(await checkForUpdate('/r', run)).toMatchObject({ available: false, behind: 3 })
+  })
+
+  it('la fusion apporterait un fichier → le bouton reste', async () => {
+    const run = runnerFrom({
+      ...DIVERGE_SANS_APPORT,
+      'merge-tree --write-tree HEAD origin/main': `9f00aa21${NL}`
+    })
+    expect(await checkForUpdate('/r', run)).toMatchObject({ available: true, behind: 3 })
+  })
+
+  it('fusion en conflit ou sonde illisible → le bouton reste (jamais caché sur un doute)', async () => {
+    const run = runnerFrom(DIVERGE_SANS_APPORT, 'merge-tree')
+    expect(await checkForUpdate('/r', run)).toMatchObject({ available: true, behind: 3 })
+  })
+
   it('hors repo git / fetch échoue → indisponible silencieux (pas de throw)', async () => {
     const run = runnerFrom({}, 'fetch')
     const r = await checkForUpdate('/r', run)

@@ -120,6 +120,27 @@ async function readIncoming(
   }
 }
 
+/**
+ * Vrai si fusionner `reference` ne changerait AUCUN fichier : l'arbre fusionné est celui de HEAD.
+ *
+ * Cas réel (conv-1597, 2026-11-05) : `main` comptait 3 commits « à récupérer » qui étaient notre
+ * propre travail, publié par une copie isolée sous d'autres hashes. Le compte de commits disait
+ * « +3 », le contenu disait « rien » — et le bouton restait affiché sur main. `merge-tree` calcule
+ * la fusion en mémoire, sans toucher l'arbre de travail. Le moindre doute (conflit = code 1, git
+ * trop ancien, sortie vide) rend `false` : on ne cache jamais une vraie mise à jour sur un doute.
+ */
+async function rienARecuperer(run: GitRunner, cwd: string, reference: string): Promise<boolean> {
+  try {
+    const fusion = (await run(['merge-tree', '--write-tree', 'HEAD', reference], cwd)).stdout
+      .split(/\r?\n/)[0]
+      .trim()
+    const actuel = (await run(['rev-parse', 'HEAD^{tree}'], cwd)).stdout.trim()
+    return fusion.length > 0 && fusion === actuel
+  } catch {
+    return false
+  }
+}
+
 /** Détecte d'abord les conflits locaux, puis fetch et compte les commits de retard. */
 export async function checkForUpdate(
   cwd: string,
@@ -167,6 +188,10 @@ export async function checkForUpdate(
     }
     const behind = Number.parseInt(raw, 10)
     if (!Number.isFinite(behind)) return { available: false, behind: 0 }
+    // Des commits en retard qui n'apportent aucun fichier : rien à récupérer, donc pas de bouton.
+    if (behind > 0 && (await rienARecuperer(run, cwd, reference))) {
+      return { available: false, behind, branch, reference }
+    }
     // L'état de l'arbre est REMONTÉ, plus utilisé pour interdire : l'interface peut annoncer « ton
     // travail en cours sera mis de côté puis remis » au lieu de refuser après le clic.
     let dirty = false

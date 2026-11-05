@@ -407,6 +407,59 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
     )
   })
 
+  // conv-1597 : `main` porteuse de commits pas encore poussés (23 en avance, 1 en retard) recevait la
+  // voie `merge`, et le bouton affichait « Fusionner origin/main … dans ta branche courante » — la
+  // gueule d'une branche de feature. Sur main, le bouton reste « Mettre à jour » et l'aide dit
+  // pourquoi ce n'est pas une simple avance.
+  it('sur main en avance d’origin/main : reste « Mettre à jour », jamais la gueule d’une branche', async () => {
+    api({
+      checkUpdate: vi.fn().mockResolvedValue({
+        available: true,
+        behind: 1,
+        branch: 'main',
+        reference: 'origin/main',
+        dirty: true,
+        strategies: ['merge']
+      })
+    })
+    await render()
+    const button = container.querySelector('[data-testid="update-apply"]')!
+    expect(button.textContent).toContain('Mettre à jour')
+    expect(button.textContent).not.toContain('Fusionner')
+    const title = button.getAttribute('title')!
+    expect(title).toContain('main porte des commits pas encore poussés')
+    expect(title).not.toContain('branche courante')
+    expect(title).not.toContain('tu es sur')
+  })
+
+  it('sur main en avance, arbre propre : « Mettre à jour » rebase, la fusion reste dans les autres voies', async () => {
+    const applyUpdate = vi.fn().mockResolvedValue({ ok: true })
+    const enAvance = {
+      available: true,
+      behind: 1,
+      branch: 'main',
+      reference: 'origin/main',
+      strategies: ['rebase', 'merge']
+    }
+    api({ checkUpdate: vi.fn().mockResolvedValue(enAvance), applyUpdate })
+    await render()
+    const button = container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!
+    expect(button.textContent).toContain('Mettre à jour')
+    expect(button.getAttribute('title')).toContain('main porte des commits pas encore poussés')
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="update-more"]')!.click()
+    })
+    const fusion = container.querySelector('[data-testid="update-choice-merge"]')!
+    expect(fusion.textContent).toContain('Fusionner origin/main')
+    expect(fusion.getAttribute('title')).toContain('dans main')
+    await act(async () => {
+      button.click()
+      await Promise.resolve()
+    })
+    // Seul le LIBELLÉ change : la voie envoyée au main reste celle que la sonde a choisie.
+    expect(applyUpdate).toHaveBeenCalledWith('rebase')
+  })
+
   it('annonce que le travail en cours RESTE en place (aucun stash), refus si conflit', async () => {
     api({
       checkUpdate: vi
@@ -518,9 +571,10 @@ describe('choix PÉRIMÉ : re-sonder avant d’appliquer, jamais refuser', () =>
       })
     api({ checkUpdate, applyUpdate })
     await render()
-    expect(container.querySelector('[data-testid="update-apply"]')!.textContent).toContain(
-      'Rebaser sur origin/main'
-    )
+    // Sur main le bouton dit « Mettre à jour » (conv-1597) ; c'est l'aide qui annonce le rebase.
+    expect(
+      container.querySelector('[data-testid="update-apply"]')!.getAttribute('title')
+    ).toContain('les rejoue par-dessus origin/main')
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('[data-testid="update-apply"]')!.click()

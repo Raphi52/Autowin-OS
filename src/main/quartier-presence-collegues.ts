@@ -30,8 +30,10 @@ import {
   PRESENCE_TAILLE_MAX,
   PRESENCE_TITRE_MAX,
   animalLisible,
+  postesLisibles,
   type AgentPublie,
   type AnimalAgent,
+  type PersonneDuPartage,
   type PhasePresence,
   type PresenceDUnCollegue,
   type PresencesDesCollegues
@@ -51,6 +53,8 @@ type FichierLu =
       coupe: boolean
       /** L'animal choisi par le collègue (conv-1537) ; `null` = absent ou inconnu. */
       animal: AnimalAgent | null
+      /** Les postes à qui il masque ses agents (conv-1599), en minuscules ; vide = visibles pour tous. */
+      masquesPour: string[]
       agents: AgentPublie[]
     }
   | { kind: 'illisible'; motif: string }
@@ -143,6 +147,8 @@ export function presenceLue(contenu: string): FichierLu {
     enregistreA,
     coupe: o.coupe === true,
     animal: animalLisible(o.animal),
+    // Une liste abîmée ne masque rien de plus : seuls les noms lisibles comptent.
+    masquesPour: postesLisibles(o.masquesPour),
     agents
   }
 }
@@ -186,10 +192,13 @@ export function creerLecteurDePresence(deps: {
       .sort((a, b) => a.localeCompare(b))
       .slice(0, SOUS_DOSSIERS_MAX)
     const collegues: PresenceDUnCollegue[] = []
+    // Tout le partage, en ligne ou non (conv-1599) : les réglages de l'Accueil doivent pouvoir nommer
+    // quelqu'un d'éteint, pour lui masquer mes agents avant qu'il revienne. D'où la boucle qui va au
+    // bout des `SOUS_DOSSIERS_MAX`, même quand le village est plein.
+    const personnes: PersonneDuPartage[] = []
     const ecartes: string[] = []
     const a = maintenant()
     for (const posteDuCollegue of postes) {
-      if (collegues.length >= PRESENCE_COLLEGUES_MAX) break
       const fichier = join(dossier, posteDuCollegue, FICHIER_PRESENCE)
       try {
         const s = await stat(fichier)
@@ -211,9 +220,14 @@ export function creerLecteurDePresence(deps: {
         }
         // Périmé (poste éteint), ou daté dans le futur au-delà de la même marge (horloge folle ou
         // fichier piégé qui ne vieillirait jamais) : ignoré sans bruit, ce n'est pas une erreur.
-        if (Math.abs(a - lu.enregistreA) > PRESENCE_PERIMEE_MS) continue
-        // Partage coupé sur ce poste (D6) : la personne n'apparaît pas.
-        if (lu.coupe) continue
+        // Partage coupé sur ce poste (D6) : ses agents n'apparaissent pas. Masqués pour MOI par son
+        // réglage « afficher mes agents à » (conv-1599) : pareil, comme s'il avait coupé.
+        const enLigne =
+          Math.abs(a - lu.enregistreA) <= PRESENCE_PERIMEE_MS &&
+          !lu.coupe &&
+          !lu.masquesPour.includes(moi)
+        personnes.push({ poste: posteDuCollegue, prenom: prenomDe(lu.nom), enLigne })
+        if (!enLigne || collegues.length >= PRESENCE_COLLEGUES_MAX) continue
         collegues.push({
           poste: posteDuCollegue,
           nom: lu.nom,
@@ -229,6 +243,7 @@ export function creerLecteurDePresence(deps: {
     }
     return {
       collegues,
+      personnes,
       ...(ecartes.length ? { erreur: `Présence écartée : ${ecartes.join(', ')}` } : {})
     }
   }

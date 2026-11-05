@@ -22,6 +22,7 @@ import {
   METIERS_PRESENCE,
   PHASES_PRESENCE,
   PRESENCE_TITRE_MAX,
+  postesLisibles,
   type AnimalAgent,
   type PresencesDesCollegues
 } from '../../../shared/quartier-presence'
@@ -247,6 +248,80 @@ export function selonLeMode(
 }
 
 /* ---------------------------------------------------------------- *
+ * « Afficher les agents de » : une personne à la fois (conv-1599).
+ * ---------------------------------------------------------------- */
+
+/**
+ * Demande de l'utilisateur du 2026-11-05 : dans les réglages de l'Accueil, une liste de personnes à
+ * cocher pour afficher ou non leurs agents. C'est un choix de CE poste seul (rangé dans le navigateur
+ * de l'app) : il ne change rien à ce que les autres voient. Le bouton « Mes agents / Toute l'équipe »
+ * reste au-dessus : « Mes agents » masque tout le monde, quelles que soient les cases.
+ */
+export const CLE_MASQUES_LOCAUX = autowinStorageKey('home.quartier.agents-de.v1')
+/** Au plus 100 personnes listées : le nombre de sous-dossiers que relit le processus principal. */
+const PERSONNES_MAX = 100
+
+/** Une personne du partage, telle que les réglages la listent. */
+export interface PersonneDuVillage {
+  /** Le sous-dossier de son poste, tel quel ; la casse ne compte pas pour les choix. */
+  poste: string
+  prenom: string
+  /** Son foulard : la même couleur que ses agents sur la scène. */
+  couleur: string
+  /** Ses agents peuvent apparaître ici maintenant (fichier récent, partage ouvert, pas masqués pour moi). */
+  enLigne: boolean
+}
+
+/**
+ * Les personnes du partage, revalidées, sans doublon, rangées par prénom. Un processus principal
+ * d'avant le réglage ne rend pas `personnes` : on retombe sur les collègues en ligne.
+ */
+export function personnesDuVillage(
+  presences: PresencesDesCollegues | null | undefined
+): PersonneDuVillage[] {
+  const source: readonly unknown[] = Array.isArray(presences?.personnes)
+    ? presences.personnes
+    : Array.isArray(presences?.collegues)
+      ? presences.collegues.map((c) => ({ ...c, enLigne: true }))
+      : []
+  const vus = new Set<string>()
+  const sortie: PersonneDuVillage[] = []
+  for (const brut of source) {
+    if (sortie.length >= PERSONNES_MAX) break
+    const p = brut as { poste?: unknown; prenom?: unknown; nom?: unknown; enLigne?: unknown }
+    const poste = identifiant(p?.poste)
+    if (!poste || vus.has(poste.toLowerCase())) continue
+    vus.add(poste.toLowerCase())
+    sortie.push({
+      poste,
+      prenom: texte(p.prenom, PRENOM_MAX) ?? texte(p.nom, PRENOM_MAX) ?? poste,
+      couleur: couleurDuPoste(poste),
+      enLigne: p.enLigne === true
+    })
+  }
+  return sortie.sort((x, y) => x.prenom.localeCompare(y.prenom) || x.poste.localeCompare(y.poste))
+}
+
+/** Les postes masqués sur CE poste ; un contenu abîmé ne masque personne. */
+export function masquesLocauxLus(brut: string | null): string[] {
+  if (!brut) return []
+  try {
+    return postesLisibles(JSON.parse(brut))
+  } catch {
+    return []
+  }
+}
+
+/** Retire les agents des personnes décochées (comparées sans la casse, comme Windows). */
+export function sansLesPersonnesMasquees(
+  masques: readonly string[],
+  agents: readonly AgentCollegue[]
+): readonly AgentCollegue[] {
+  if (!masques.length) return agents
+  return agents.filter((a) => !masques.includes(a.collegue.poste.toLowerCase()))
+}
+
+/* ---------------------------------------------------------------- *
  * Le registre vivant.
  * ---------------------------------------------------------------- */
 
@@ -261,6 +336,13 @@ let mode: ModeVillage | null = null
 let empreinteListe = ''
 const abonnes = new Set<() => void>()
 const abonnesMode = new Set<() => void>()
+const AUCUNE_PERSONNE: readonly PersonneDuVillage[] = []
+let personnes: readonly PersonneDuVillage[] = AUCUNE_PERSONNE
+let empreintePersonnes = ''
+const abonnesPersonnes = new Set<() => void>()
+const AUCUN_MASQUE: readonly string[] = []
+let masquesLocaux: readonly string[] | null = null
+const abonnesMasques = new Set<() => void>()
 let suivis = 0
 let minuterie: ReturnType<typeof setInterval> | null = null
 let lectureEnCours = false
@@ -269,8 +351,62 @@ const api = (): ApiCollegues | undefined =>
   typeof window === 'undefined' ? undefined : (window as unknown as { api?: ApiCollegues }).api
 
 function annoncer(): void {
-  visibles = selonLeMode(lireModeVillage(), tous)
+  visibles = sansLesPersonnesMasquees(lireMasquesLocaux(), selonLeMode(lireModeVillage(), tous))
   for (const abonne of abonnes) abonne()
+}
+
+/** Les postes décochés dans « afficher les agents de » : la MÊME référence tant que rien ne change. */
+export function lireMasquesLocaux(): readonly string[] {
+  if (masquesLocaux) return masquesLocaux
+  try {
+    const lus = masquesLocauxLus(
+      typeof window === 'undefined' ? null : window.localStorage.getItem(CLE_MASQUES_LOCAUX)
+    )
+    masquesLocaux = lus.length ? lus : AUCUN_MASQUE
+  } catch {
+    masquesLocaux = AUCUN_MASQUE
+  }
+  return masquesLocaux
+}
+
+/** Coche (`true`) ou décoche une personne : ses agents apparaissent ou disparaissent aussitôt. */
+export function afficherLesAgentsDe(poste: string, afficher: boolean): void {
+  const cle = poste.trim().toLowerCase()
+  const avant = lireMasquesLocaux()
+  if (!cle || avant.includes(cle) === !afficher) return
+  const apres = afficher ? avant.filter((p) => p !== cle) : postesLisibles([...avant, cle])
+  masquesLocaux = apres.length ? apres : AUCUN_MASQUE
+  try {
+    window.localStorage.setItem(CLE_MASQUES_LOCAUX, JSON.stringify(masquesLocaux))
+  } catch {
+    // Sans enregistrement, le choix vit le temps de la session : rien ne casse.
+  }
+  for (const abonne of abonnesMasques) abonne()
+  annoncer()
+}
+
+export function abonnerMasquesLocaux(rappel: () => void): () => void {
+  abonnesMasques.add(rappel)
+  return () => abonnesMasques.delete(rappel)
+}
+
+/** Les personnes du partage, pour les réglages : la MÊME référence tant que rien ne bouge. */
+export function lirePersonnesDuVillage(): readonly PersonneDuVillage[] {
+  return personnes
+}
+
+export function abonnerPersonnesDuVillage(rappel: () => void): () => void {
+  abonnesPersonnes.add(rappel)
+  return () => abonnesPersonnes.delete(rappel)
+}
+
+/** Pose la liste des personnes : seulement si elle a changé. */
+export function poserPersonnesDuVillage(liste: readonly PersonneDuVillage[]): void {
+  const e = JSON.stringify(liste)
+  if (e === empreintePersonnes) return
+  empreintePersonnes = e
+  personnes = liste.length ? liste : AUCUNE_PERSONNE
+  for (const abonne of abonnesPersonnes) abonne()
 }
 
 export function lireModeVillage(): ModeVillage {
@@ -332,7 +468,9 @@ async function relire(): Promise<void> {
   if (!lire || lectureEnCours) return
   lectureEnCours = true
   try {
-    poserAgentsCollegues(agentsDesCollegues(await lire(), Date.now()))
+    const presences = await lire()
+    poserAgentsCollegues(agentsDesCollegues(presences, Date.now()))
+    poserPersonnesDuVillage(personnesDuVillage(presences))
   } catch {
     // Partage injoignable : la scène garde ce qu'elle montrait, la prochaine lecture la recalera.
   } finally {
@@ -364,10 +502,13 @@ export function suivreAgentsCollegues(): () => void {
   }
 }
 
-/** Pour les tests : oublie la liste et le mode lus. */
+/** Pour les tests : oublie la liste, le mode, les personnes et les cases lus. */
 export function oublierAgentsCollegues(): void {
   tous = RIEN
   visibles = RIEN
   mode = null
   empreinteListe = ''
+  personnes = AUCUNE_PERSONNE
+  empreintePersonnes = ''
+  masquesLocaux = null
 }
