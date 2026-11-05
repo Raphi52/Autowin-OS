@@ -3,6 +3,7 @@ import { joinThinking } from './thinking'
 import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 import { ligneDErreurDAction } from '../../shared/erreur-d-action'
 import { redactTrace } from '../activity/trace-redact'
+import { enregistrerTarifsCli } from '../activity/cli-usage-recovery'
 import {
   assertArgvWithinLimit,
   createStreamWatchdog,
@@ -2775,6 +2776,9 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       if (t === 'result') {
         resultSeen = true
         tourDuCliClos = true
+        // Ce que le CLI vient de facturer, modèle par modèle : ce prix tarifera les appels coupés
+        // avant la grille recopiée à la main (`activity/cli-usage-recovery.ts`, conv-1602).
+        enregistrerTarifsCli(o)
         resultatDeChantier = suiviChantiers.resultatRecu(o)
         // Le premier `result` d'un chantier ne clôt rien. Mesuré : il arrive après la fin du chantier
         // (182,8 s sur 182,8), parfois 2,9 s avant le second, et ce qui les sépare peut durer si
