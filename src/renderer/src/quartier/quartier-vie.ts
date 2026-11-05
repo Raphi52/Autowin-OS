@@ -168,7 +168,7 @@ export function placeDuTram(t: number): number {
   return lisse(Math.max(0, Math.min(1, (aller - pause) / (1 - 2 * pause))))
 }
 
-/** L'instant où la cloche sonne, après le début du geste. */
+/** L'instant où le gong sonne, après le début du geste. */
 const IMPACT_S = 0.34
 /** Hauteur d'une ligne de filet, en pixels de la peinture : entière, pour qu'aucune couture ne se voie. */
 const LIGNE_VAPEUR = 2
@@ -658,8 +658,8 @@ export async function creerVie(
         n.dx += n.v * dt
         if (n.dx > 1500) n.dx = -n.w - 60
       }
-      // La cloche de la Falaise o-1916 est peinte, sans maillet ni disque découpé (conv-1444) : rien ne s'y
-      // balance, le coup se voit à la lueur et aux ondes (voir `airs`).
+      // Le gong est une seule image avec son portique (batiments/task.webp, conv-1601 ; avant, une cloche,
+      // conv-1444) : rien ne s'y balance, le coup se voit à la lueur et aux ondes (voir `airs`).
       // Un tanuki au poste du gong le frappe de temps en temps : sans son (voir quartier-son.ts).
       if (actifs(26) && temps - frappeDebut > PAUSE_FRAPPE_S) {
         frappeDebut = temps
@@ -818,7 +818,7 @@ export async function creerVie(
         x.drawImage(VAPEUR, s.x - VAPEUR_L / 2, s.y - s.h, VAPEUR_L, s.h)
       }
       const t = temps - frappeDebut
-      // Le bronze s'éclaire au coup, et le son se voit : des ondes dorées qui partent de la cloche.
+      // Le bronze s'éclaire au coup, et le son se voit : des ondes dorées qui partent du gong.
       const [cx, cy, rayon] = GONG.disque
       x.globalCompositeOperation = 'lighter'
       if (t >= IMPACT_S && t < 3) {

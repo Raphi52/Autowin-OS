@@ -10,6 +10,7 @@ cacher les tanukis qui passent derrière, ligne de pied). Rien d'autre ne bouge.
 Usage :
   python -I scripts/quartier-batiment.py --liste
   python -I scripts/quartier-batiment.py <nom> <image.png> [--echelle 1.0] [--x X --y Y] [--pieds garder|recalculer]
+                                         [--apercu apercu.png]
 
   <nom>       le `n` ou la `cle` du bâtiment (voir --liste), ex. chat, knowledge, t_phare
   <image>     PNG ou WebP AVEC transparence ; ses pixels sont ceux de la peinture (2 par pixel d'Accueil)
@@ -17,6 +18,8 @@ Usage :
   --x --y     coin haut-gauche en pixels d'Accueil (1344 × 768) ; par défaut, la nouvelle image est posée
               sur le même pied que l'ancienne (centre du bas au même endroit)
   --pieds     `recalculer` (défaut si la place ou la taille change) ou `garder` la ligne de pied relevée
+  --apercu    <fichier.png> : la scène composée autour du bâtiment, nouvelle image en place, sans rien
+              installer (à regarder AVANT de poser)
 
 Pièces animées : `roue`, `roueFond`, `roueMoyeu` (la roue de Settings, dans vie.calques de donnees.json) se
 remplacent de la même façon, `<nom>` = le nom de la pièce. Elles gardent leur place et leur taille (la roue
@@ -101,6 +104,25 @@ def ligne_de_pied(alpha, x, y, w):
     return [v if v is not None else valeurs[min(connues, key=lambda k: abs(k - i))] for i, v in enumerate(valeurs)]
 
 
+def apercu(D, o, rgba, x, y, w, h, sortie, marge=40):
+    """Compose la Falaise comme l'Accueil (quartier-calques.ts : peinture, derrière, bâtiments dans l'ordre de
+    donnees.json), le nouveau bâtiment à sa future place, et écrit la zone autour en PNG. Aucun fichier du décor
+    n'est touché (conv-1601 : le gong a dû être vu dans sa scène avant d'être posé)."""
+    F = Image.open(os.path.join(QUARTIER, 'falaise.avif')).convert('RGBA')
+    F.alpha_composite(Image.open(os.path.join(QUARTIER, 'falaise-derriere.webp')).convert('RGBA'))
+    for q in D['obj']:
+        if q is o:
+            F.alpha_composite(Image.fromarray(rgba, 'RGBA'), (x * S, y * S))
+        else:
+            im = Image.open(os.path.join(BATIMENTS, nom_de(q) + '.webp')).convert('RGBA')
+            F.alpha_composite(im, (round(q['x'] * S), round(q['y'] * S)))
+    boite = (max(0, (x - marge) * S), max(0, (y - marge) * S),
+             min(F.width, (x + w + marge) * S), min(F.height, (y + h + marge) * S))
+    F.crop(boite).save(sortie)
+    print(f"aperçu écrit : {sortie} (zone x={boite[0] // S}..{boite[2] // S} y={boite[1] // S}..{boite[3] // S} "
+          f"en px d'Accueil, 2 px d'image par px) ; place prévue x={x} y={y} {w}×{h} ; rien n'est installé")
+
+
 def poser_piece(D, a):
     """Remplace une pièce animée de vie.calques (la roue de Settings) à sa place et à sa taille (conv-1534).
 
@@ -142,6 +164,7 @@ def main():
     p.add_argument('--x', type=float)
     p.add_argument('--y', type=float)
     p.add_argument('--pieds', choices=['garder', 'recalculer'])
+    p.add_argument('--apercu', metavar='PNG', help='écrit la scène composée autour du bâtiment, sans rien installer')
     a = p.parse_args()
     D = lire_donnees()
 
@@ -190,6 +213,9 @@ def main():
     rgba[oy:oy + hp, ox:ox + wp] = neuf
     if x < 0 or y < 0 or x + w > 1344 or y + h > 768:
         sys.exit(f"le bâtiment sortirait de la peinture : x={x} y={y} {w}×{h} (1344 × 768)")
+    if a.apercu:
+        apercu(D, o, rgba, x, y, w, h, a.apercu)
+        return
 
     actuel = os.path.join(BATIMENTS, a.nom + '.webp')
     if os.path.exists(actuel) and a.x is None and a.y is None:

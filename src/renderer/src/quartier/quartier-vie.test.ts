@@ -181,22 +181,25 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
     expect(eau.y + eau.h).toBeGreaterThanOrEqual(528)
   })
 
-  it("la cloche remplace le gong : rien de l'ancienne peinture n'est redessiné par-dessus (conv-1444)", () => {
+  it("un gros gong dans son portique, sans rien de l'ancienne peinture redessiné par-dessus (conv-1444, conv-1601)", () => {
     const d = donnees as unknown as {
       vie: { calques: Record<string, unknown>; gong: { disque: [number, number, number] } }
-      obj: { n?: string; cle?: string; x: number; y: number; w: number; h: number }[]
+      obj: { n?: string; cle?: string; nom?: string; x: number; y: number; w: number; h: number }[]
     }
     // Restés dans les données, le maillet et l'ombre du gong se peignaient sur le rocher de la Falaise o-1916.
     for (const n of ['maillet', 'gongOmbre', 'gong', 'longuevue'])
       expect(d.vie.calques[n], n).toBeUndefined()
     expect(d.obj.map((o) => o.n)).not.toContain('gong')
-    // La lueur et les ondes du coup partent de la cloche, dans la zone qui ouvre Task Manager.
+    // La lueur et les ondes du coup partent du gong, dans la zone qui ouvre Task Manager.
     const [cx, cy, r] = d.vie.gong.disque
-    const cloche = d.obj.find((o) => o.cle === 'task')!
-    expect(cx - r).toBeGreaterThanOrEqual(cloche.x)
-    expect(cx + r).toBeLessThanOrEqual(cloche.x + cloche.w)
-    expect(cy - r).toBeGreaterThanOrEqual(cloche.y)
-    expect(cy + r).toBeLessThanOrEqual(cloche.y + cloche.h)
+    const gong = d.obj.find((o) => o.cle === 'task')!
+    expect(gong.nom).toBe('Grand gong')
+    expect(cx - r).toBeGreaterThanOrEqual(gong.x)
+    expect(cx + r).toBeLessThanOrEqual(gong.x + gong.w)
+    expect(cy - r).toBeGreaterThanOrEqual(gong.y)
+    expect(cy + r).toBeLessThanOrEqual(gong.y + gong.h)
+    // « Un gros gong au lieu de la cloche » (conv-1601) : le disque fait 75 px d'Accueil, la cloche en faisait 54.
+    expect(2 * r).toBeGreaterThanOrEqual(70)
   })
 
   it('les lueurs du ciel tombent sur leurs objets : étoiles dans le Brain, anneau et phare sur leur tour', () => {
