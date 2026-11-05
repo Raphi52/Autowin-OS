@@ -48,6 +48,7 @@ const TOOL_TITLES: Record<
   chat_send: ['outil.chat_send', 'outil.chat_send.n'],
   ecrire_a_un_fil: ['outil.ecrire_a_un_fil', 'outil.ecrire_a_un_fil.n'],
   lire_mes_messages: 'outil.lire_mes_messages',
+  arreter_un_fil: ['outil.arreter_un_fil', 'outil.arreter_un_fil.n'],
   plan_de_lots: ['outil.plan_de_lots', 'outil.plan_de_lots.n'],
   attach_run: 'outil.attach_run',
   read_file: ['outil.read_file', 'outil.read_file.n'],

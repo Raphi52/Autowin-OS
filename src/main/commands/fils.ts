@@ -2,6 +2,7 @@
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from '../commands'
 import { ecrireAUnFil, reveillerSurOrdre, lireMesMessages } from '../messages-entre-fils-app'
+import { arreterUnFil } from '../arreter-un-fil'
 
 /** Cas de `AppCommandBus.run` : messages entre fils et plans de lots. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
 export async function executerFils(
@@ -65,6 +66,19 @@ export async function executerFils(
       const lu = lireMesMessages(conversationId ?? '')
       if (lu.livres) bus.broadcast({ type: 'refresh', scope: 'messages-fils' })
       return lu
+    }
+    // conv-1625 : le bouton « Arrêter » d'un AUTRE fil, pour l'agent. L'appelant vient du tour.
+    case 'arreter_un_fil': {
+      const arret = arreterUnFil(a, conversationId ?? '', {
+        existe: (fil) =>
+          bus.conversationExiste
+            ? bus.conversationExiste(fil)
+            : Boolean(bus.os.conversations?.get?.(fil)),
+        ...(bus.toursDeChat ? { tours: bus.toursDeChat } : {}),
+        couperLeRun: (fil, motif) => bus.abortOrchestration(fil, motif)
+      })
+      if (arret.tourCoupe || arret.runCoupe) bus.broadcast({ type: 'refresh', scope: 'chat' })
+      return arret
     }
     // conv-1150 : le chef est le fil de CET appel ; accepter ou reprendre un plan n'est pas ici
     // (clic de l'utilisateur, canal `os:plansDeLots`).
