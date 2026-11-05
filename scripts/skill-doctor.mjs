@@ -187,8 +187,9 @@ function jetonsParTour(data, depuis) {
 }
 
 /**
- * Chaque run joue ses étapes sous leur brief, sans lire le SKILL.md (`phaseInstruction` n'a aucun
- * appelant en production, /judge conv-1369). `trace.json` les nomme et porte leurs jetons ; les runs
+ * Chaque run joue ses étapes sous leur brief (`src/main/phase-briefs.ts`), sans lire le SKILL.md :
+ * l'ancien chargeur `phaseInstruction`, sans appelant (/judge conv-1369), est retiré le 05/11
+ * (conv-1602). `trace.json` les nomme et porte leurs jetons ; les runs
  * plus anciens n'ont que les titres `### phase x` de leur RUN.md. Une étape rejouée dans le même run
  * compte une fois : c'est le run qui sert la skill, pas ses reprises.
  */
