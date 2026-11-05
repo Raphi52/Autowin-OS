@@ -219,7 +219,8 @@ describe('Settings · Interface — langue', () => {
       'Holographic'
     )
     const sections = [...container.querySelectorAll('.settings-nav-item')].map((b) => b.textContent)
-    expect(sections).toContain('Routing')
+    // « Routing » est devenu « Providers » (61bcaa11, conv-1537) : la clé settings.section.routing reste.
+    expect(sections).toContain('Providers')
     expect(sections).toContain('Diagnostics')
     expect(container.querySelector('nav')?.getAttribute('aria-label')).toBe('Settings sections')
     // Les gras de la phrase sont gardés en anglais aussi.

@@ -50,6 +50,30 @@ export const ATTENTE_MAX_MS = 15_000
 export const DELAI_VERIFICATION_MS = 2_000
 
 /**
+ * Attente du DEMARRAGE de la page avant toute mesure (electron.cjs) : la page dit `lancee` (ou
+ * `erreur`) quand l'amorce a pose son HTML (amorce.js). Avant conv-1586 (2026-11-05), la sonde
+ * partait apres 1,5 s FIXES : sous charge, la page n'avait pas encore demarre — « page jamais
+ * lancee » sur un carrousel sain a 560 px, et « parameter 1 is not of type 'Element' » (document
+ * sans corps) sur une page d'une seule ligne, 1 essai sur 2. Le plafond garde le verdict honnete :
+ * une page qui ne demarre vraiment jamais est rendue comme telle, au bout de 20 s.
+ */
+export const ATTENTE_LANCEMENT_MAX_MS = 20_000
+
+export async function attendreLancement(
+  lireEtats,
+  { maxMs = ATTENTE_LANCEMENT_MAX_MS, pasMs = 100, pause, maintenant = Date.now } = {}
+) {
+  const debut = maintenant()
+  for (;;) {
+    const etats = (await lireEtats()) ?? []
+    const attenteMs = maintenant() - debut
+    if (etats.includes('lancee')) return { lancee: true, attenteMs }
+    if (etats.includes('erreur') || attenteMs >= maxMs) return { lancee: false, attenteMs }
+    await pause(pasMs)
+  }
+}
+
+/**
  * Le dossier de sortie par defaut : propre a la page et stable d'un lancement a l'autre. Un second
  * essai de la meme page ecrase le premier ; deux fils n'ecrivent jamais au meme endroit. Le dossier
  * unique d'avant faisait lire a un fil les captures d'un autre (2 fils sur 6 du banc conv-1304).

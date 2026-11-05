@@ -71,6 +71,10 @@ export const THEMES: readonly Theme[] = [
   // selection en negatif. Couche generee par scripts/theme-nebuleuse-verre.mjs nier-automata,
   // plus la feuille ecrite a la main assets/theme-nier-automata.css.
   { id: 'nier-automata', libelle: 'NieR:Automata', base: 'clair' },
+  // ENSEIGNES (« Signboards », conv-1586, 2026-11-05) : le Quartier de l'Accueil en theme. Ciel pale,
+  // panneaux blancs, une enseigne de couleur par entree du menu ; la zone ouverte (`data-zone` sur la
+  // coque) teinte l'en-tete, Envoyer et le focus. Feuille ecrite a la main : assets/theme-enseignes.css.
+  { id: 'enseignes', libelle: 'Enseignes', base: 'clair' },
   // SPECIAL MALVOYANT : contraste AAA (7:1) sur le texte courant, focus epais, bordures nettes,
   // texte agrandi. Une base de chaque cote pour heriter des corrections de lisibilite existantes.
   { id: 'malvoyant-sombre', libelle: 'Spécial malvoyant — sombre', base: 'sombre' },

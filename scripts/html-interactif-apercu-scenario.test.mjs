@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ATTENTE_LANCEMENT_MAX_MS,
   ATTENTE_MAX_MS,
+  attendreLancement,
   decrireEtape,
   dossierDeSortie,
   dureeMaxJaugesMs,
@@ -13,6 +15,40 @@ import {
 } from './html-interactif-apercu-scenario.mjs'
 
 const lire = (etapes) => lireScenario(JSON.stringify(etapes))
+
+// conv-1586 (2026-11-05) : la sonde partait après 1,5 s fixes. Sous charge, la page n'avait pas encore
+// dit « lancee » : « page jamais lancée » sur un carrousel sain, puis « parameter 1 is not of type
+// 'Element' » sur une page d'une ligne (1 essai sur 2).
+describe('attendreLancement : la sonde attend que la page ait démarré', () => {
+  // Horloge simulée : chaque pause avance le temps, aucune vraie attente.
+  const horloge = () => {
+    let t = 0
+    return { maintenant: () => t, pause: async (ms) => void (t += ms) }
+  }
+  const lecteur = (suite) => {
+    let n = 0
+    return async () => suite[Math.min(n++, suite.length - 1)]
+  }
+
+  it('attend le signal « lancee » au lieu de partir avant lui', async () => {
+    const h = horloge()
+    const r = await attendreLancement(lecteur([[], ['pret'], ['pret'], ['pret', 'lancee']]), h)
+    expect(r).toEqual({ lancee: true, attenteMs: 300 })
+  })
+
+  it('une erreur au démarrage arrête aussi l’attente : elle sera rapportée', async () => {
+    const h = horloge()
+    const r = await attendreLancement(lecteur([['pret'], ['pret', 'erreur']]), h)
+    expect(r.lancee).toBe(false)
+    expect(r.attenteMs).toBe(100)
+  })
+
+  it('une page qui ne démarre jamais est rendue au plafond, pas attendue sans fin', async () => {
+    const h = horloge()
+    const r = await attendreLancement(lecteur([['pret']]), h)
+    expect(r).toEqual({ lancee: false, attenteMs: ATTENTE_LANCEMENT_MAX_MS })
+  })
+})
 
 describe('jaugesFausses : une jauge visible change ce qu’on regarde', () => {
   const jauge = (visible, effet) => ({ nom: 'Rayon', variable: '--ex-r', visible, effet })

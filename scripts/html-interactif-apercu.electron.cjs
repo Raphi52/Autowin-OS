@@ -513,9 +513,11 @@ async function jouerScenario({ etapes, outils, contenu, cadre, largeur, ajuster,
 app
   .whenReady()
   .then(async () => {
-    const outilsScenario = config.scenario
-      ? await import(pathToFileURL(join(__dirname, 'html-interactif-apercu-scenario.mjs')).href)
-      : null
+    // Charge pour toute page : `attendreLancement` sert aussi sans scenario (conv-1586).
+    const outils = await import(
+      pathToFileURL(join(__dirname, 'html-interactif-apercu-scenario.mjs')).href
+    )
+    const outilsScenario = config.scenario ? outils : null
     const resultats = []
     for (const largeur of config.largeurs) {
       const fenetre = new BrowserWindow({
@@ -560,6 +562,12 @@ app
           html: config.html,
           url: urlScene
         })})`
+      )
+      // Attendre que la page ait DEMARRE avant de la mesurer, puis lui laisser `attente` pour se
+      // poser : 1,5 s fixes ne suffisaient pas sous charge (conv-1586, attendreLancement).
+      await outils.attendreLancement(
+        async () => (await contenu.executeJavaScript('window.__messagesPage')).map((m) => m.etat),
+        { pause }
       )
       await pause(config.attente)
       const hauteurCadre = () =>

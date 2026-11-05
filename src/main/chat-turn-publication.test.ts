@@ -1218,3 +1218,193 @@ describe('enchaînement auto du chat — fichier nommé par une commande shell d
     })
   })
 })
+
+/*
+ * VÉCU LE 2026-11-05 (conv-1578, tour 68e1eafb) : le fil n'avait fait que LIRE. Pendant son appel,
+ * conv-1573 a publié sa part de `git-apres-fil.ts` (commande nommée, puis `update-ref` : l'empreinte
+ * du diff passe de 83a7a601 à bcb7dcce). La comparaison avant/après de conv-1578 a vu exactement ce
+ * passage, l'a tracé à son nom, et le fichier est entré dans SES « laissés en attente » : un `/git`
+ * est parti dans un fil qui n'avait rien écrit. Un passage qu'un AUTRE fil a écrit et tracé de bout
+ * en bout n'appartient pas au fil qui l'a seulement vu.
+ */
+describe('enchaînement auto du chat — fichier seulement VU changer par le tour', () => {
+  /** Comparaison avant/après d'un appel : ni lignes, ni commande. */
+  const vu = (repo: string, avant: string | null, apres: string, partial = {}) =>
+    trace(repo, {
+      paths: ['partage.ts'],
+      pathBaseFingerprints: { 'partage.ts': avant },
+      pathFingerprints: { 'partage.ts': apres },
+      ...partial
+    })
+
+  it('conv-1578 : un passage écrit et tracé par un autre fil ne reste pas en attente pour ce fil', async () => {
+    const { repo } = await depot()
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 1\n')
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    const headAvant = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 2\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'quels sont les défauts ?',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          conversationId: 'conv-B',
+          turnId: 'tour-B',
+          paths: ['partage.ts'],
+          nommeParCommande: true,
+          pathFingerprints: { 'partage.ts': 'bcb7' }
+        }),
+        vu(repo, '83a7', 'bcb7', { conversationId: 'conv-B', turnId: 'tour-B' }),
+        vu(repo, '83a7', 'bcb7')
+      ]
+    })
+
+    expect(report).toBeUndefined()
+    expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
+    expect(await enAttente(repo)).toContain('partage.ts')
+  })
+
+  it('le passage vu peut être la SUITE de plusieurs écritures de l’autre fil', async () => {
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 3\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'lis le code',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          conversationId: 'conv-B',
+          turnId: 'tour-B',
+          paths: ['partage.ts'],
+          pathLineFingerprints: { 'partage.ts': lignes('export const partage = 3') },
+          pathBaseFingerprints: { 'partage.ts': null },
+          pathFingerprints: { 'partage.ts': 'p1' }
+        }),
+        vu(repo, 'p1', 'p2', { conversationId: 'conv-B', turnId: 'tour-B' }),
+        vu(repo, null, 'p2')
+      ]
+    })
+
+    expect(report).toBeUndefined()
+  })
+
+  it('la marche tracée par un fil qui a seulement VU le fichier n’explique rien', async () => {
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 7\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          conversationId: 'conv-B',
+          turnId: 'tour-B',
+          paths: ['partage.ts'],
+          nommeParCommande: true,
+          pathBaseFingerprints: { 'partage.ts': null },
+          pathFingerprints: { 'partage.ts': 'q1' }
+        }),
+        // conv-C a seulement vu q1 → q2 : cette marche peut être une écriture de conv-A.
+        vu(repo, 'q1', 'q2', { conversationId: 'conv-C', turnId: 'tour-C' }),
+        vu(repo, null, 'q2')
+      ]
+    })
+
+    expect(report).toMatchObject({
+      exclus: [{ path: 'partage.ts', motif: 'touche-par-un-autre-fil' }]
+    })
+  })
+
+  it('un passage vu que l’autre fil n’explique pas reste en attente, comme avant', async () => {
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 4\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          conversationId: 'conv-B',
+          turnId: 'tour-B',
+          paths: ['partage.ts'],
+          nommeParCommande: true,
+          pathBaseFingerprints: { 'partage.ts': null },
+          pathFingerprints: { 'partage.ts': 'b1' }
+        }),
+        // Le fil a vu b1 → a2 : la dernière marche n'est tracée par personne d'autre, elle peut être la sienne.
+        vu(repo, null, 'a2')
+      ]
+    })
+
+    expect(report).toMatchObject({
+      exclus: [{ path: 'partage.ts', motif: 'touche-par-un-autre-fil', fils: ['conv-B'] }]
+    })
+  })
+
+  it('un autre fil qui a seulement VU le même passage n’en devient pas l’auteur', async () => {
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 5\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      traces: [
+        vu(repo, null, 'v1', { conversationId: 'conv-B', turnId: 'tour-B' }),
+        vu(repo, null, 'v1')
+      ]
+    })
+
+    expect(report).toMatchObject({
+      exclus: [{ path: 'partage.ts', motif: 'touche-par-un-autre-fil' }]
+    })
+  })
+
+  it('le fil qui a ÉCRIT le fichier (lignes) le garde, même si un autre fil a tracé le même passage', async () => {
+    const { repo } = await depot()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'partage.ts'), 'export const partage = 6\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          conversationId: 'conv-B',
+          turnId: 'tour-B',
+          paths: ['partage.ts'],
+          nommeParCommande: true,
+          pathBaseFingerprints: { 'partage.ts': null },
+          pathFingerprints: { 'partage.ts': 'w1' }
+        }),
+        vu(repo, null, 'w1', {
+          pathLineFingerprints: { 'partage.ts': lignes('export const partage = 6') }
+        })
+      ]
+    })
+
+    expect(report?.project).toMatchObject({ status: 'pushed', files: 1 })
+  })
+})

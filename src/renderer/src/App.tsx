@@ -78,6 +78,9 @@ import './assets/theme-vanilla-claude.css'
 // NieR:Automata (conv-281) : meme mecanique que Vanilla Claude, genere puis feuille a la main.
 import './assets/theme-nier-automata.genere.css'
 import './assets/theme-nier-automata.css'
+// Enseignes (conv-1586) : feuille ecrite a la main, sans couche generee — la base claire est deja
+// gris bleu, la teinte du ciel de ce theme ; elle n'a rien a transposer.
+import './assets/theme-enseignes.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
 import { nomDeDestination, useTextes } from './textes'
 import type { InspectTurnTarget, ObservatoryFocus } from './observatory-focus'
@@ -598,6 +601,8 @@ export function MainApp(): React.JSX.Element {
   return (
     <div
       className="shell cosmic-outline theme-serious"
+      // L'ecran affiche, pour les themes qui teintent la zone ouverte (Enseignes, conv-1586).
+      data-zone={tab}
       data-automation-instance={testInstance ? 'test' : 'user'}
     >
       {testInstance && (

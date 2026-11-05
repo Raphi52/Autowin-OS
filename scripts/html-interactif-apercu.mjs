@@ -81,6 +81,7 @@ import {
   NOM_PAGE_SCENE_3D
 } from '../src/renderer/scene-3d/page-scene-3d.mjs'
 import {
+  ATTENTE_LANCEMENT_MAX_MS,
   dossierDeSortie,
   dureeMaxJaugesMs,
   dureeMaxScenarioMs,
@@ -278,7 +279,8 @@ const lancement = spawnSync(
     timeout:
       30_000 +
       dureeMaxJaugesMs(html) +
-      largeurs.length * (attente + 20_000 + dureeMaxScenarioMs(scenario))
+      // + l'attente du demarrage de la page, a chaque largeur (attendreLancement, conv-1586).
+      largeurs.length * (attente + ATTENTE_LANCEMENT_MAX_MS + 20_000 + dureeMaxScenarioMs(scenario))
   }
 )
 const cheminRapport = join(out, 'rapport.json')

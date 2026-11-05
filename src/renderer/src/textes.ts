@@ -311,6 +311,7 @@ export const THEMES_EN: Readonly<Record<string, string>> = {
   'ninja-claude': 'Ninja Claude',
   'vanilla-claude': 'Vanilla Claude',
   'nier-automata': 'NieR:Automata',
+  enseignes: 'Signboards',
   'malvoyant-sombre': 'Low vision — dark',
   'malvoyant-clair': 'Low vision — light'
 }

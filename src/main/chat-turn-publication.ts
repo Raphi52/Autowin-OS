@@ -357,6 +357,17 @@ export async function publierTourDeChat(input: {
    * sans lignes) dit seulement qu'il a VU le fichier changer.
    */
   const ecritsParUnAutreFil = new Set<string>()
+  /** Écrits par CE tour : commande nommée, lignes réclamées, ou source autre que la comparaison. */
+  const ecritsParLeTour = new Set<string>()
+  /** Passages (empreinte avant → après) que CE tour a seulement VUS, par sa comparaison avant/après. */
+  const vusParLeTour = new Map<string, Array<[string | null | undefined, string | undefined]>>()
+  /** Passages (empreinte avant → après) tracés par les AUTRES fils pendant le tour, avec leur fil. */
+  const passagesDesAutres = new Map<
+    string,
+    Array<{ fil: string; avant: string | null; apres: string }>
+  >()
+  /** Pour chaque fichier, les autres fils qui l'ont ÉCRIT pendant le tour. */
+  const auteursAutres = new Map<string, Set<string>>()
   for (const trace of input.traces) {
     if (typeof trace.workspaceRoot !== 'string' || !trace.workspaceRoot.trim()) continue
     const racine = racines.get(trace.workspaceRoot) ?? trace.workspaceRoot
@@ -366,15 +377,29 @@ export async function publierTourDeChat(input: {
       const absolu = absoluDeTrace(racine, path)
       if (!dansLeDepot(repo, absolu)) continue
       const key = cle(absolu)
-      const lignes = Object.entries(trace.pathLineFingerprints ?? {}).find(
-        ([candidate]) => cle(absoluDeTrace(racine, candidate)) === key
-      )?.[1]
+      const duChemin = <T>(parChemin: Record<string, T> | undefined): T | undefined =>
+        Object.entries(parChemin ?? {}).find(
+          ([candidate]) => cle(absoluDeTrace(racine, candidate)) === key
+        )?.[1]
+      const lignes = duChemin(trace.pathLineFingerprints)
+      const ecrit = Boolean(
+        trace.nommeParCommande || lignes?.length || trace.source !== 'chat_tool'
+      )
+      const avant = duChemin(trace.pathBaseFingerprints)
+      const apres = duChemin(trace.pathFingerprints)
       if (autreFil) {
         if (!pendantLeTour) continue
         concurrents.add(key)
         filsConcurrents.set(key, (filsConcurrents.get(key) ?? new Set()).add(trace.conversationId))
-        if (trace.nommeParCommande || lignes?.length || trace.source !== 'chat_tool')
+        if (ecrit) {
           ecritsParUnAutreFil.add(key)
+          auteursAutres.set(key, (auteursAutres.get(key) ?? new Set()).add(trace.conversationId))
+        }
+        if (avant !== undefined && apres !== undefined)
+          passagesDesAutres.set(key, [
+            ...(passagesDesAutres.get(key) ?? []),
+            { fil: trace.conversationId, avant, apres }
+          ])
         continue
       }
       if (!SOURCES_DU_CHAT.has(trace.source)) continue
@@ -382,6 +407,8 @@ export async function publierTourDeChat(input: {
       if (trace.turnId === turnId) {
         duTour.add(key)
         if (trace.nommeParCommande) nommesParLeTour.add(key)
+        if (ecrit) ecritsParLeTour.add(key)
+        else vusParLeTour.set(key, [...(vusParLeTour.get(key) ?? []), [avant, apres]])
       }
       if (lignes?.length) {
         const set = revendiquees.get(key) ?? new Set<string>()
@@ -392,13 +419,62 @@ export async function publierTourDeChat(input: {
   }
   if (duTour.size === 0) return undefined
 
+  /**
+   * Les fils qui ont ÉCRIT ce fichier pendant le tour ont-ils tracé, marche après marche, tout le
+   * chemin de `avant` à `apres` ? Un fil qui l'a seulement vu changer n'explique rien : le passage
+   * vu peut être celui de ce tour.
+   */
+  const expliqueParLesAutres = (
+    key: string,
+    avant: string | null | undefined,
+    apres: string | undefined
+  ): boolean => {
+    const auteurs = auteursAutres.get(key)
+    if (!auteurs || avant === undefined || apres === undefined) return false
+    const passages = new Map<string | null, Set<string>>()
+    for (const passage of passagesDesAutres.get(key) ?? []) {
+      if (!auteurs.has(passage.fil)) continue
+      passages.set(passage.avant, (passages.get(passage.avant) ?? new Set()).add(passage.apres))
+    }
+    const vus = new Set<string | null>([avant])
+    const aVisiter: Array<string | null> = [avant]
+    while (aVisiter.length > 0) {
+      for (const suivant of passages.get(aVisiter.pop() ?? null) ?? []) {
+        if (suivant === apres) return true
+        if (!vus.has(suivant)) {
+          vus.add(suivant)
+          aVisiter.push(suivant)
+        }
+      }
+    }
+    return false
+  }
+  /*
+   * SEULEMENT VU CHANGER, ET L'AUTEUR EST CONNU (conv-1578, 2026-11-05). Le fil n'avait fait que
+   * lire ; pendant son appel, conv-1573 a publié sa part de `git-apres-fil.ts` (commande nommée,
+   * empreinte du diff 83a7a601 → bcb7dcce). La comparaison avant/après de conv-1578 a vu ce même
+   * passage, le fichier est entré dans SES « laissés en attente », et un `/git` est parti dans un fil
+   * qui n'avait rien écrit. Un fichier que le tour n'a pas écrit, qu'un autre fil a ÉCRIT pendant le
+   * tour, et dont chaque passage vu est tracé de bout en bout par les autres fils n'est donc pas à ce
+   * tour : ni publié, ni laissé en attente à son nom. Un passage que personne d'autre n'explique, ou
+   * une comparaison sans empreinte, garde la règle d'avant (en attente, l'auteur reste à trouver).
+   */
+  const seulementVuChangerParUnAutreFil = (key: string): boolean => {
+    if (ecritsParLeTour.has(key) || !ecritsParUnAutreFil.has(key)) return false
+    const vus = vusParLeTour.get(key) ?? []
+    return vus.length > 0 && vus.every(([avant, apres]) => expliqueParLesAutres(key, avant, apres))
+  }
+
   let enAttente: string[]
   let changesDuDepot: string[] = []
   try {
     changesDuDepot = parsePorcelainPaths(
       await runGit(['status', '--porcelain=v1', '-z', '-uall'], repo)
     )
-    enAttente = changesDuDepot.filter((gitPath) => duTour.has(cle(resolve(repo, gitPath))))
+    enAttente = changesDuDepot.filter((gitPath) => {
+      const key = cle(resolve(repo, gitPath))
+      return duTour.has(key) && !seulementVuChangerParUnAutreFil(key)
+    })
   } catch (error) {
     return rapport(input, {
       status: 'failed',
@@ -543,7 +619,7 @@ export async function publierTourDeChat(input: {
  * Une copie impossible à ouvrir ne bloque pas la publication : comme pour le typage, elle part et le
  * rapport dit `non-verifie` avec la raison. Coût mesuré le 2026-10-22 : 1,7 s pour copier ce dépôt.
  */
-async function verifierCeQuiPart(
+export async function verifierCeQuiPart(
   repo: string,
   fichiers: readonly string[],
   verifier: (racine: string, fichiers: readonly string[]) => Promise<VerificationAvantPublication>,

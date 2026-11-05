@@ -1,0 +1,439 @@
+/* =================================================================================================
+ * THEME « ENSEIGNES » (id `enseignes`, « Signboards » en anglais) — conv-1586, 2026-11-05.
+ * Demande : « implémenter Signboards du premier caroussel » : la proposition 1 du tour 2 du /draft
+ * « un theme qui suit l'univers de l'accueil » (le Quartier). Base CLAIRE.
+ *
+ * Ce que la maquette montrait, et que cette feuille reproduit :
+ *   - un ciel pale (#dbeefd) derriere tout, des panneaux BLANCS sans bord, une ombre d'un pixel,
+ *     des coins de 14 px ;
+ *   - chaque entree du menu porte l'ENSEIGNE de sa tour : un carre arrondi a sa couleur, le symbole
+ *     du Quartier dessine dedans (torii, bulle, phare, cerveau, anneau, horloge, bonsai, punaise,
+ *     cloche, engrenage) ;
+ *   - la ZONE OUVERTE teinte l'en-tete (enseigne devant le titre, titre a sa couleur, filet de 4 px
+ *     dessous), le bouton Envoyer, la bulle de l'utilisateur, le bouton principal et le focus.
+ * L'or et le rose restent ceux de la base claire (theme-modes.css) : ils sont a Autowin.
+ *
+ * LA ZONE vient de `data-zone` sur la coque (App.tsx, = l'ecran affiche). Chaque regle de zone sert
+ * AUSSI l'entree du menu du meme ecran : l'entree garde sa couleur, quelle que soit la zone ouverte.
+ * Trois couleurs par zone : `--sb-signe` (l'enseigne, objet graphique), `--sb-fonce` (porte du
+ * texte : 4,5:1 sur le ciel et sous du blanc), `--sb-encre` (le symbole, 3:1 sur l'enseigne).
+ * Mesures : theme-enseignes.test.ts.
+ *
+ * Le prefixe porte DEUX attributs : il gagne sur la base claire (`:root[data-base='clair'] ...`) a
+ * selecteur egal. Sur le fond « Quartier » de l'Accueil, les tuiles gardent leur bois (HomeView.css,
+ * regles !important) : c'est le menu Fond de l'Accueil qui fait foi (conv-1076).
+ * ================================================================================================= */
+
+/* ---- 1. JETONS ---------------------------------------------------------------------------------- */
+:root[data-theme='enseignes'][data-base='clair'] {
+  color-scheme: light;
+  --bg-0: #dbeefd;
+  --bg-1: #dbeefd;
+  --bg-2: #eef5fc;
+  --bg-3: rgba(27, 42, 60, 0.05);
+  --bg-inset: #ffffff;
+
+  --line: rgba(27, 42, 60, 0.14);
+  --line-strong: rgba(27, 42, 60, 0.28);
+  --voile-rgb: 27, 42, 60;
+
+  --text: #1b2a3c;
+  --text-dim: #4f5f74;
+  --text-faint: #5a6b80;
+  --titlebar-symbol: #1b2a3c;
+
+  --r1: 8px;
+  --r2: 12px;
+  --r3: 14px;
+
+  /* L'ombre des panneaux de la maquette : un pixel dessous, un liseré presque invisible autour. */
+  --sb-ombre: 0 1px 0 rgba(27, 42, 60, 0.12), 0 0 0 1px rgba(27, 42, 60, 0.06);
+  /* Zone par defaut (Accueil) : aussi pour ce qui s'affiche HORS de la coque (fenetres flottantes). */
+  --sb-signe: #d2382b;
+  --sb-fonce: #c0372d;
+  --sb-encre: #ffffff;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%23ffffff' d='M1 2.5h14v2H1zM3 5.6h10v1.6H3zM4 4.5h2v10.5H4zM10 4.5h2v10.5h-2z'/%3E%3C/svg%3E");
+}
+
+:root[data-theme='enseignes'][data-base='clair'] .shell,
+:root[data-theme='enseignes'][data-base='clair'] .shell.theme-serious {
+  --surface-page: transparent;
+  --surface-panel: rgba(255, 255, 255, 0.88);
+  --surface-card: #ffffff;
+  --surface-inset: #eef5fc;
+  --surface-hover: rgba(27, 42, 60, 0.04);
+  --surface-selected: color-mix(in srgb, var(--sb-signe) 14%, transparent);
+  --container-border: rgba(27, 42, 60, 0.08);
+  --container-border-strong: rgba(27, 42, 60, 0.16);
+  --container-radius-page: 14px;
+  --container-radius-panel: 14px;
+  --container-radius-card: 12px;
+  --container-shadow: var(--sb-ombre);
+  --container-blur: 0px;
+  --module-title-color: var(--sb-fonce);
+  --module-eyebrow-color: #5a6b80;
+}
+
+/* ---- 2. LES ZONES : une couleur, une variante foncee, une encre et un symbole par ecran --------- */
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='accueil'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-accueil'] {
+  --sb-signe: #d2382b;
+  --sb-fonce: #c0372d;
+  --sb-encre: #ffffff;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%23ffffff' d='M1 2.5h14v2H1zM3 5.6h10v1.6H3zM4 4.5h2v10.5H4zM10 4.5h2v10.5h-2z'/%3E%3C/svg%3E");
+}
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='chat'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-chat'] {
+  --sb-signe: #1f7ae0;
+  --sb-fonce: #1e68bc;
+  --sb-encre: #ffffff;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%23ffffff' d='M2 2h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7.5L4 14.5V11H2a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z'/%3E%3C/svg%3E");
+}
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='agent-studio'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-agent-studio'] {
+  --sb-signe: #8a44d6;
+  --sb-fonce: #8843d3;
+  --sb-encre: #ffffff;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%23ffffff' d='M6 1h4l1 3H5zM5.6 5h4.8l1.1 10h-7z'/%3E%3C/svg%3E");
+}
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='knowledge'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-knowledge'] {
+  --sb-signe: #3b9fd9;
+  --sb-fonce: #2e6e97;
+  --sb-encre: #1b2a3c;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%231b2a3c' d='M8 3.2C7 1.6 3 1.9 3 5c-2 .6-2 4.2 0 4.7 0 2.6 3.5 3.3 5 1.6 1.5 1.7 5 1 5-1.6 2-.5 2-4.1 0-4.7 0-3.1-4-3.4-5-1.8z'/%3E%3C/svg%3E");
+}
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='observatory'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-observatory'] {
+  --sb-signe: #1fa356;
+  --sb-fonce: #1e774d;
+  --sb-encre: #ffffff;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%23ffffff' d='M8 1a5.5 5.5 0 1 0 0 11A5.5 5.5 0 0 0 8 1zm0 2.6a2.9 2.9 0 1 1 0 5.8 2.9 2.9 0 0 1 0-5.8zM7 12h2v3.5H7z'/%3E%3C/svg%3E");
+}
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='task-manager'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-task-manager'] {
+  --sb-signe: #e0a800;
+  --sb-fonce: #7a661f;
+  --sb-encre: #1b2a3c;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%231b2a3c' d='M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm0 2a5 5 0 1 1 0 10A5 5 0 0 1 8 3zM7.2 4.5h1.6v3.7H7.2zM7.2 7.2h3.8v1.6H7.2z'/%3E%3C/svg%3E");
+}
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='worktree'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-worktree'] {
+  --sb-signe: #5f8f3a;
+  --sb-fonce: #4c733b;
+  --sb-encre: #ffffff;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%23ffffff' d='M8 1c3 0 5 1.5 5 3.4S11 7.2 8 7.2 3 6.3 3 4.4 5 1 8 1zM7 7h2v4H7zM3 11h10l-1.5 4h-7z'/%3E%3C/svg%3E");
+}
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='besoins'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-besoins'] {
+  --sb-signe: #ef5b2a;
+  --sb-fonce: #ab4b30;
+  --sb-encre: #ffffff;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%23ffffff' d='M8 1a4.2 4.2 0 0 1 2.2 7.8L9 9.4v3.2L8 15l-1-2.4V9.4l-1.2-.6A4.2 4.2 0 0 1 8 1z'/%3E%3C/svg%3E");
+}
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='tests'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-tests'] {
+  --sb-signe: #b8862b;
+  --sb-fonce: #7f6531;
+  --sb-encre: #ffffff;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%23ffffff' d='M8 1a1 1 0 0 1 1 1v.6c2.3.5 4 2.6 4 5V11l1.5 2h-13L3 11V7.6c0-2.4 1.7-4.5 4-5V2a1 1 0 0 1 1-1zM6.5 14h3a1.5 1.5 0 0 1-3 0z'/%3E%3C/svg%3E");
+}
+:root[data-theme='enseignes'][data-base='clair'] .shell[data-zone='settings'],
+:root[data-theme='enseignes'][data-base='clair'] [data-testid='nav-settings'] {
+  --sb-signe: #6b7584;
+  --sb-fonce: #5e6978;
+  --sb-encre: #ffffff;
+  --sb-glyphe: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' fill='%23ffffff' d='M7 0h2l.4 2.2 1.6.7 1.9-1.3 1.4 1.4-1.3 1.9.7 1.6L16 7v2l-2.2.4-.7 1.6 1.3 1.9-1.4 1.4-1.9-1.3-1.6.7L9 16H7l-.4-2.2-1.6-.7-1.9 1.3-1.4-1.4 1.3-1.9-.7-1.6L0 9V7l2.2-.4.7-1.6-1.3-1.9 1.4-1.4 1.9 1.3 1.6-.7zM8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z'/%3E%3C/svg%3E");
+}
+
+/* ---- 3. FOND : le ciel du Quartier, plus soutenu en haut ---------------------------------------- */
+:root[data-theme='enseignes'][data-base='clair'] body {
+  background: linear-gradient(180deg, #c4e4f8 0, #dbeefd 38%, #e6f2fc 100%) fixed;
+  color: var(--text);
+}
+:root[data-theme='enseignes'][data-base='clair'] .decor-de-fond[data-fond='noir'] {
+  background: #dbeefd;
+}
+:root[data-theme='enseignes'][data-base='clair'] ::selection {
+  background: color-mix(in srgb, var(--sb-signe) 28%, transparent);
+  color: #1b2a3c;
+}
+:root[data-theme='enseignes'][data-base='clair']
+  :focus-visible:not(textarea):not(input):not([contenteditable]) {
+  outline: 2px solid var(--sb-signe);
+  outline-offset: 2px;
+}
+:root[data-theme='enseignes'][data-base='clair'] textarea,
+:root[data-theme='enseignes'][data-base='clair'] input {
+  caret-color: var(--sb-fonce);
+}
+:root[data-theme='enseignes'][data-base='clair'] ::placeholder {
+  color: #5a6b80;
+  opacity: 1;
+}
+
+/* ---- 4. MENU : panneau blanc, une enseigne par entree ------------------------------------------- */
+:root[data-theme='enseignes'][data-base='clair'] .rail,
+:root[data-theme='enseignes'][data-base='clair'] .theme-serious .rail {
+  border: 0;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 1px 0 0 rgba(27, 42, 60, 0.1);
+}
+:root[data-theme='enseignes'][data-base='clair'] .theme-serious .brand {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='enseignes'][data-base='clair'] .brand::after {
+  background: var(--sb-signe);
+}
+:root[data-theme='enseignes'][data-base='clair'] .brand-name {
+  color: #1b2a3c;
+  font-weight: 700;
+}
+:root[data-theme='enseignes'][data-base='clair'] .nav-item {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #34445a;
+  font-weight: 500;
+}
+:root[data-theme='enseignes'][data-base='clair'] .nav-item:hover {
+  background: color-mix(in srgb, var(--sb-signe) 9%, transparent);
+  color: #1b2a3c;
+}
+:root[data-theme='enseignes'][data-base='clair'] .nav-item.active {
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--sb-signe) 15%, transparent);
+  box-shadow: none;
+  color: #1b2a3c;
+  font-weight: 700;
+}
+/* L'enseigne remplace l'emoji : le carre a la couleur de la zone, le symbole dessine dedans. Le
+   filtre de la punaise du Board (app-shell.css, deux crans) tournerait aussi la couleur du carre. */
+:root[data-theme='enseignes'][data-base='clair'] .space-toy-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background:
+    var(--sb-glyphe) center / 13px 13px no-repeat,
+    var(--sb-signe);
+  color: transparent;
+  font-size: 0;
+  filter: none;
+}
+:root[data-theme='enseignes'][data-base='clair'] .space-toy-icon > * {
+  display: none;
+}
+
+/* ---- 5. EN-TETE : l'enseigne de la zone devant le titre, un filet de sa couleur dessous ---------- */
+:root[data-theme='enseignes'][data-base='clair'] .view-topbar {
+  padding-bottom: 10px;
+  border-bottom: 4px solid var(--sb-signe);
+}
+:root[data-theme='enseignes'][data-base='clair'] .view-topbar .module-header > h1::before,
+:root[data-theme='enseignes'][data-base='clair'] .view-topbar .module-header-line > h1::before {
+  content: '';
+  display: inline-block;
+  width: 26px;
+  height: 26px;
+  margin-right: 10px;
+  border-radius: 8px;
+  background:
+    var(--sb-glyphe) center / 15px 15px no-repeat,
+    var(--sb-signe);
+  vertical-align: -5px;
+}
+:root[data-theme='enseignes'][data-base='clair'] .domain-tabs > button.is-active {
+  box-shadow: inset 0 -3px 0 var(--sb-signe);
+  color: #1b2a3c;
+}
+
+/* ---- 6. BRIQUES COMMUNES : panneaux blancs, boutons, champs, badges ----------------------------- */
+:root[data-theme='enseignes'][data-base='clair'] .view-page {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='enseignes'][data-base='clair'] .card,
+:root[data-theme='enseignes'][data-base='clair'] .panel,
+:root[data-theme='enseignes'][data-base='clair'] .surface-panel {
+  border-color: transparent;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: var(--sb-ombre);
+}
+:root[data-theme='enseignes'][data-base='clair'] .btn {
+  border-color: rgba(27, 42, 60, 0.1);
+  border-radius: 10px;
+  background: #eef5fc;
+  box-shadow: none;
+  color: #1b2a3c;
+  font-weight: 600;
+}
+:root[data-theme='enseignes'][data-base='clair'] .btn:hover:not(:disabled) {
+  border-color: rgba(27, 42, 60, 0.18);
+  background: #e2edf9;
+}
+:root[data-theme='enseignes'][data-base='clair'] .btn-accent,
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .btn-accent {
+  border-color: var(--sb-fonce);
+  background: var(--sb-fonce);
+  box-shadow: none;
+  color: #ffffff;
+}
+:root[data-theme='enseignes'][data-base='clair'] .btn-accent:hover:not(:disabled),
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .btn-accent:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--sb-fonce) 82%, #1b2a3c);
+  background: color-mix(in srgb, var(--sb-fonce) 82%, #1b2a3c);
+}
+:root[data-theme='enseignes'][data-base='clair']
+  .cosmic-outline
+  :where(.input, .select, textarea.input),
+:root[data-theme='enseignes'][data-base='clair'] :where(.input, .select) {
+  border-color: rgba(27, 42, 60, 0.16);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: none;
+  color: #1b2a3c;
+}
+:root[data-theme='enseignes'][data-base='clair']
+  .cosmic-outline
+  :where(.input, .select, textarea.input):focus,
+:root[data-theme='enseignes'][data-base='clair'] :where(.input, .select):focus {
+  border-color: var(--sb-signe);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-signe) 30%, transparent);
+}
+:root[data-theme='enseignes'][data-base='clair'] .select option {
+  background: #ffffff;
+  color: #1b2a3c;
+}
+:root[data-theme='enseignes'][data-base='clair'] .badge {
+  border-color: transparent;
+  background: #eef5fc;
+  color: #4f5f74;
+  font-weight: 600;
+}
+
+/* ---- 7. ACCUEIL : tuiles en panneaux blancs (hors fond Quartier, qui garde son bois) ------------ */
+:root[data-theme='enseignes'][data-base='clair'] .home-tile .home-tile__panel {
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--sb-ombre);
+}
+
+/* ---- 8. CHAT ------------------------------------------------------------------------------------ */
+/* La base claire peint ces panneaux en gris bleu via `:is(...)` (4 crans) : ces selecteurs en ont 5. */
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .chat-layout,
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .composer {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .chat,
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .runs-pane,
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .conv-pane {
+  border-color: transparent;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--sb-ombre);
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .chat::before {
+  display: none;
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .chat::after {
+  background: transparent;
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .chat-head {
+  border: 0;
+  border-bottom: 4px solid var(--sb-signe);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .chat-head-title,
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .chat-head h2 {
+  color: #1b2a3c;
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .conv-item {
+  border-color: transparent;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow: none;
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .conv-item:hover {
+  background: rgba(27, 42, 60, 0.04);
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .conv-item.active {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--sb-signe) 13%, transparent);
+  box-shadow: inset 3px 0 0 var(--sb-signe);
+}
+/* La question : un aplat de la couleur de la zone, texte blanc (4,5:1 mesure sur --sb-fonce). */
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .msg.user .msg-body {
+  border: 0;
+  border-radius: 14px;
+  background: var(--sb-fonce);
+  box-shadow: none;
+  color: #ffffff;
+  font-weight: 600;
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .msg.user .msg-body::before {
+  display: none;
+}
+:root[data-theme='enseignes'][data-base='clair']
+  .cosmic-outline
+  .msg.user
+  .msg-body
+  :is(a, code, b, strong, em) {
+  color: inherit;
+}
+/* La reponse : une bulle bleu tres pale, sans le filet or de la base claire. */
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .msg.assistant .msg-body {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: #eef5fc;
+  box-shadow: none;
+  color: #1b2a3c;
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .msg.assistant .msg-role {
+  color: var(--gold);
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .msg-body a:not(.btn) {
+  color: var(--sb-fonce);
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .msg.user .msg-body a:not(.btn) {
+  color: inherit;
+}
+/* La saisie : un cadre blanc ; au focus, l'anneau de 2 px a la couleur de la zone. */
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .composer-field {
+  border: 1px solid rgba(27, 42, 60, 0.12);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 1px 0 rgba(27, 42, 60, 0.08);
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .composer-field:focus-within {
+  border-color: var(--sb-signe);
+  box-shadow: 0 0 0 2px var(--sb-signe);
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .composer-field textarea {
+  background: transparent;
+  color: #1b2a3c;
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .composer-send {
+  border: 0;
+  border-radius: 999px;
+  background: var(--sb-fonce);
+  box-shadow: none;
+  color: #ffffff;
+}
+:root[data-theme='enseignes'][data-base='clair']
+  .cosmic-outline
+  .composer-send:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sb-fonce) 82%, #1b2a3c);
+}
+:root[data-theme='enseignes'][data-base='clair'] .cosmic-outline .composer-send:disabled {
+  background: color-mix(in srgb, var(--sb-signe) 40%, #ffffff);
+  color: #ffffff;
+}
