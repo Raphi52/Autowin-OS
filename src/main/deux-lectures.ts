@@ -58,6 +58,9 @@ export const CONSIGNE_DEUX_LECTURES = [
   VOCABULAIRE_AUTOWIN,
   'Le dernier message de l’agent, s’il t’est donné, est le contexte : une demande courte ou une',
   'relance (« go », « ok », « met le ») porte sur ce dont il parlait, souvent sa dernière proposition.',
+  'Les messages précédents de l’utilisateur restés SANS RÉPONSE, s’ils te sont donnés, font partie de',
+  'la demande : elle les prolonge, les précise ou les regroupe (« tout », « un lot », « les deux »).',
+  'Ta phrase couvre CHACUN de leurs sujets, sauf celui que la demande remplace explicitement.',
   'Question : deux personnes compétentes, qui connaissent les commandes citées, pourraient-elles',
   'comprendre cette demande de deux façons qui mènent à des travaux ou des réponses DIFFÉRENTS, au',
   "point que l'un des deux résultats serait jeté ?",
@@ -131,14 +134,19 @@ export function extraitDuContexte(contexte: string): string {
   return `${contexte.slice(0, moitie).trimEnd()} […] ${contexte.slice(-moitie).trimStart()}`
 }
 
+/** Au plus tant de messages restés sans réponse, chacun coupé à tant de caractères. */
+const PLAFOND_DEMANDES_RESTEES = 6
+const PLAFOND_DEMANDE_RESTEE = 400
+
 /**
  * La charge envoyée au petit modèle : ce que font les commandes citées, l'extrait de contexte s'il
- * existe, puis la demande.
+ * existe, les messages restés sans réponse (`demandesResteesSansReponse`), puis la demande.
  */
 export function chargeDeuxLectures(
   demande: string,
   dernierMessageAgent?: string,
-  descriptionsDesCommandes: Readonly<Record<string, string>> = {}
+  descriptionsDesCommandes: Readonly<Record<string, string>> = {},
+  demandesRestees: readonly string[] = []
 ): string {
   const contexte = (dernierMessageAgent ?? '').replace(/\s+/gu, ' ').trim()
   const commandes = commandesNommees(demande)
@@ -147,10 +155,18 @@ export function chargeDeuxLectures(
       (nom) =>
         `- /${nom} : ${descriptionsDesCommandes[nom].replace(/\s+/gu, ' ').trim().slice(0, PLAFOND_DESCRIPTION)}`
     )
+  const restees = demandesRestees
+    .map((texte) => texte.replace(/\s+/gu, ' ').trim().slice(0, PLAFOND_DEMANDE_RESTEE))
+    .filter(Boolean)
+    .slice(-PLAFOND_DEMANDES_RESTEES)
+    .map((texte) => `- ${texte}`)
   return [
     commandes.length ? `Ce que font les commandes citées :\n${commandes.join('\n')}\n` : '',
     contexte
       ? `Dernier message de l'agent (extrait, pour le contexte) :\n${extraitDuContexte(contexte)}\n`
+      : '',
+    restees.length
+      ? `Messages précédents de l'utilisateur, restés sans réponse (leur tour a été coupé) — ils font partie de la demande :\n${restees.join('\n')}\n`
       : '',
     `Demande de l'utilisateur :\n${demande.trim()}`
   ]
@@ -439,15 +455,77 @@ export function suitUneQuestionDesLectures(
   return false
 }
 
-/** Le dernier message de l'agent avant la demande : le contexte d'un « nan, pas ça ». */
+/**
+ * TOURS COUPÉS : LES MESSAGES QU'ILS ONT LAISSÉS SANS RÉPONSE (kaizen conv-1558, 2026-11-05).
+ *
+ * L'utilisateur a écrit quatre messages d'affilée, chacun coupant le tour d'avant : « améliore la
+ * shape », « keep pushing (fur, kimono fabric, expressions) », « son kimono a pas une belle forme »,
+ * puis « améliore tout fait un lot ». Le petit modèle ne recevait que le dernier, avec pour contexte
+ * le « dernier message de l'agent » : le tour coupé juste avant, réduit à sa ligne compréhension
+ * « Retoucher la forme 3D du kimono… ». Il a compris « tout ce qui a été évoqué sur le kimono ».
+ * L'utilisateur : « il conglomere pas mes 3 messages précédents, il focus sur le dernier ».
+ *
+ * Un message de l'agent n'a RÉPONDU à rien quand son tour a été arrêté (`arrete`, posé par
+ * `run-pilot-chat.ts` depuis le statut du store, conv-1142), ou quand il ne porte que sa ligne
+ * compréhension et des marques d'artefact (un appelant qui ne transmet pas le statut).
+ */
+type MessageDuFil = { role: string; content?: unknown; arrete?: boolean }
+
+function neRepondARien(message: MessageDuFil): boolean {
+  if (message.arrete) return true
+  if (typeof message.content !== 'string') return true
+  const reste = message.content
+    .split('\n')
+    .map((ligne) => ligne.trim())
+    .filter(
+      (ligne) =>
+        ligne &&
+        !ligne.startsWith(DEBUT_LECTURE_RETENUE.trim()) &&
+        !ligne.startsWith('Lecture retenue :') &&
+        !/^\[(?:artefact|a exécuté)[^\]]*\]$/u.test(ligne)
+    )
+  return reste.length === 0
+}
+
+/**
+ * Le dernier message de l'agent QUI A RÉPONDU, avant la demande : le contexte d'un « nan, pas ça ».
+ * Un tour coupé est sauté : sa seule ligne compréhension n'est qu'une paraphrase d'un message que
+ * `demandesResteesSansReponse` remet désormais tel quel.
+ */
 export function dernierMessageAgent(
-  historique: ReadonlyArray<{ role: string; content?: unknown }>
+  historique: ReadonlyArray<MessageDuFil>
 ): string | undefined {
   for (let i = historique.length - 1; i >= 0; i--) {
     const message = historique[i]
-    if (message.role === 'assistant' && typeof message.content === 'string') return message.content
+    if (message.role !== 'assistant' || typeof message.content !== 'string') continue
+    if (neRepondARien(message)) continue
+    return message.content
   }
   return undefined
+}
+
+/**
+ * Les messages de l'utilisateur écrits AVANT la demande courante et restés sans réponse : ceux qui
+ * ne sont séparés d'elle que par des tours coupés. Dans l'ordre où il les a écrits ; vide dès que
+ * l'agent a répondu entre-temps. La demande courante (dernier message utilisateur) n'en fait pas
+ * partie.
+ */
+export function demandesResteesSansReponse(historique: ReadonlyArray<MessageDuFil>): string[] {
+  let i = historique.length - 1
+  while (i >= 0 && historique[i].role !== 'user') i--
+  i-- // la demande courante
+  const restees: string[] = []
+  for (; i >= 0; i--) {
+    const message = historique[i]
+    if (message.role === 'user') {
+      if (typeof message.content === 'string' && message.content.trim())
+        restees.unshift(message.content.trim())
+      continue
+    }
+    if (message.role === 'assistant' && neRepondARien(message)) continue
+    break
+  }
+  return restees
 }
 
 /** Les messages qui ne portent pas de demande neuve : une relance reprend la précédente. */

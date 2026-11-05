@@ -103,6 +103,7 @@ import {
   commandesNommees,
   consigneDeLectureRetenue,
   demandeDeChangementDeRendu,
+  demandesResteesSansReponse,
   dernierMessageAgent,
   issueDesLecturesPourLaTrace,
   lectureAAnnoncer,
@@ -1531,7 +1532,20 @@ export class AgentPilot {
       const descriptions = descriptionsDesCommandes(commandesNommees(demande))
       lecturesMemorisees ??= demander(
         CONSIGNE_DEUX_LECTURES,
-        chargeDeuxLectures(demande, dernierMessageAgent(history), descriptions),
+        // Les messages que des tours coupés ont laissés sans réponse font partie de la demande
+        // (kaizen conv-1558 : « améliore tout » lu « tout sur le kimono », le dernier sujet seul).
+        // Ceux qu'écrit l'app ou un agent n'en sont pas : aucun humain ne les a tapés.
+        chargeDeuxLectures(
+          demande,
+          dernierMessageAgent(history),
+          descriptions,
+          demandesResteesSansReponse(history).filter(
+            (texte) =>
+              !estUneRepriseAutomatique(texte) &&
+              !estUnMessageDuPlan(texte) &&
+              !estUnPromptDOrdre(texte)
+          )
+        ),
         // Le coût de l'appel appartient au fil, et sa trace dit ce que le contrôle a DÉCIDÉ, pas la
         // réponse brute coupée à 160 caractères (conv-1431 : 527 lignes sur 696 inclassables).
         {

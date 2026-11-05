@@ -6,6 +6,8 @@ import {
   annonceDeLaLectureRetenue,
   chargeDeuxLectures,
   consigneDeLectureRetenue,
+  demandesResteesSansReponse,
+  dernierMessageAgent,
   extraitDuContexte,
   lectureAAnnoncer,
   lireLesLectures,
@@ -413,5 +415,91 @@ describe('chargeDeuxLectures — skill nommée sans barre oblique (conv-412)', (
     expect(chargeDeuxLectures('kaizenons ce module', undefined, descriptions)).not.toContain(
       'commandes citées'
     )
+  })
+})
+
+/**
+ * Le fil RÉEL de conv-1558 (2026-11-05, positions 83 à 90) : quatre messages d'affilée, chacun
+ * coupant le tour d'avant, qui n'a laissé que sa ligne compréhension. Lu sur le seul dernier
+ * message, « améliore tout fait un lot » est devenu « tout ce qui a été évoqué sur le kimono ».
+ */
+describe('tours coupés : les messages restés sans réponse font partie de la demande (kaizen conv-1558)', () => {
+  const PROPOSITION =
+    'I have three directions… 👉 Recommandé Go with C, fix the ear in profile, then generate the 2x atlas.'
+  const FIL_1558 = [
+    { role: 'assistant', content: PROPOSITION },
+    { role: 'user', content: 'ok on a la texture maintenant améliore la shape' },
+    {
+      role: 'assistant',
+      arrete: true,
+      content:
+        "Compréhension : « Améliorer la forme 3D du tanuki (corriger l'oreille de profil) »\n\n[artefact cmp4.png]"
+    },
+    {
+      role: 'user',
+      content: 'None of them is 10x better yet: keep pushing (fur, kimono fabric, expressions)'
+    },
+    {
+      role: 'assistant',
+      arrete: true,
+      content: 'Compréhension : « Continuer à améliorer le modèle 3D du tanuki »\n\n'
+    },
+    { role: 'user', content: 'son kimono a pas une belle forme' },
+    {
+      role: 'assistant',
+      arrete: true,
+      content: 'Compréhension : « Retoucher la forme 3D du kimono du tanuki (volume, tombé des pans) »'
+    },
+    { role: 'user', content: 'améliore tout fait un lot' }
+  ]
+
+  it('rend les trois messages coupés, dans l’ordre, sans la demande courante', () => {
+    expect(demandesResteesSansReponse(FIL_1558)).toEqual([
+      'ok on a la texture maintenant améliore la shape',
+      'None of them is 10x better yet: keep pushing (fur, kimono fabric, expressions)',
+      'son kimono a pas une belle forme'
+    ])
+  })
+
+  it('le contexte est la dernière VRAIE réponse de l’agent, pas la ligne du tour coupé', () => {
+    expect(dernierMessageAgent(FIL_1558)).toBe(PROPOSITION)
+  })
+
+  it('la charge du petit modèle porte les trois messages avant la demande', () => {
+    const charge = chargeDeuxLectures(
+      'améliore tout fait un lot',
+      dernierMessageAgent(FIL_1558),
+      {},
+      demandesResteesSansReponse(FIL_1558)
+    )
+    expect(charge).toContain('restés sans réponse')
+    for (const sujet of ['améliore la shape', 'fur, kimono fabric, expressions', 'belle forme'])
+      expect(charge).toContain(sujet)
+    expect(charge).not.toContain('Retoucher la forme 3D du kimono')
+    expect(charge.indexOf('belle forme')).toBeLessThan(charge.indexOf('améliore tout fait un lot'))
+  })
+
+  it('la consigne dit que la phrase couvre chacun de leurs sujets', () => {
+    expect(CONSIGNE_DEUX_LECTURES).toContain('SANS RÉPONSE')
+    expect(CONSIGNE_DEUX_LECTURES).toContain('CHACUN de leurs sujets')
+  })
+
+  it('sans le statut, un message réduit à sa ligne compréhension ne répond à rien non plus', () => {
+    const fil = FIL_1558.map(({ role, content }) => ({ role, content }))
+    expect(demandesResteesSansReponse(fil)).toHaveLength(3)
+    expect(dernierMessageAgent(fil)).toBe(PROPOSITION)
+  })
+
+  it('contrôle : après une vraie réponse, rien n’est resté sans réponse', () => {
+    const fil = [
+      { role: 'user', content: 'améliore la shape' },
+      { role: 'assistant', content: 'Compréhension : « la forme »\n\nVoici la forme corrigée.' },
+      { role: 'user', content: 'et le kimono' }
+    ]
+    expect(demandesResteesSansReponse(fil)).toEqual([])
+    expect(chargeDeuxLectures('et le kimono', dernierMessageAgent(fil))).not.toContain(
+      'sans réponse'
+    )
+    expect(dernierMessageAgent(fil)).toContain('Voici la forme corrigée.')
   })
 })
