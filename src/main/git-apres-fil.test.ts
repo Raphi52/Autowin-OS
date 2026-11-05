@@ -26,6 +26,7 @@ import {
   promptsDesBoutons
 } from '../renderer/src/components/bouton-prompt-html'
 import type { AutoCloseReport } from './run-autoclose'
+import { annonceCommitLocal } from './annonce-commit-local'
 import { viderFichiersEnAttente } from './ecriture-hors-fil'
 
 /** Un tour qui REMPLIT toutes les conditions : chaque test n'en casse qu'une. */
@@ -427,6 +428,24 @@ describe('blocDuTour — le rail aussi quand le fil ou l’enchaînement auto pu
         contenusDuFil: ['Publié : abc12345 sur origin/main.']
       })
     ).toContain('awp-rail')
+  })
+
+  it('le bloc déjà posé par la clôture d’un run (annonce-commit-local.ts) compte comme montré', () => {
+    const blocDuRun = annonceCommitLocal(
+      { outcome: 'merged', committed: true, publishedSha: `${commit.sha}ffffffff` },
+      'run-1',
+      'tâche (conv-9)',
+      { branche: 'main', mode: 'direct' }
+    )
+    expect(blocDuRun).toContain('awp-rail')
+    expect(
+      blocDuTour({
+        commits: [commit],
+        actionsLog: [],
+        rapport: undefined,
+        contenusDuFil: [blocDuRun!]
+      })
+    ).toBeUndefined()
   })
 
   it('aucun commit du fil arrivé en amont : aucun bloc', () => {

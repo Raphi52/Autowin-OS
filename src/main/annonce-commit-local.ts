@@ -1,5 +1,5 @@
+import { bandeauPublie } from './git-apres-fil'
 import { messageCommitAgent } from './store/worktree-manager'
-import { titreDuBandeau } from './titre-bandeau-git'
 
 /**
  * Ce que la clôture automatique a fait du commit sur le dépôt distant. Absent = rien poussé.
@@ -66,27 +66,17 @@ export function annonceCommitLocal(
   return sha ? `${bandeauGit(sha, messageCommitAgent(agentId, task), push)}\n\n${phrase}` : phrase
 }
 
-const echapper = (texte: string): string =>
-  texte.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-
 /**
- * Le même bandeau « GIT : N commit » que la passe /git après un fil (`bandeauPublie`, conv-1553).
+ * Le même bloc git que la passe /git après un fil (`bandeauPublie`, conv-1553).
  * conv-1558 : les trois lots d'un plan ont poussé par la clôture automatique, et l'utilisateur n'a
  * vu aucun bandeau — celui-ci ne couvrait que la passe /git. La ligne est celle que
  * `run-autoclose.ts` envoie (`git push origin <sha>:refs/heads/<branche>`, `ALLOW_MAIN_PUSH=1`
  * en direct), pas une ligne lue dans un shell : la clôture appelle git sans passer par lui.
+ * conv-1600 : ce bloc avait sa propre copie de l'ancienne mise en page, et le rail compact
+ * (conv-1574) n'y est jamais arrivé ; il appelle donc `bandeauPublie` au lieu de la recopier.
  */
 function bandeauGit(sha: string, sujet: string, push: PushDuRun): string {
   const accord = push.mode === 'direct' ? 'ALLOW_MAIN_PUSH=1 ' : ''
   const ligne = `${accord}git push origin ${sha}:refs/heads/${push.branche}`
-  return [
-    '```html-render',
-    '<style>.awp-shell{white-space:pre-wrap;word-break:break-all;margin:4px 0}</style>',
-    // Titre = statut lu sur la ligne envoyée, comme le bloc de la passe /git (conv-1573).
-    `<div class="aw-kicker">${echapper(titreDuBandeau(1, [ligne]))}</div>`,
-    `<div><b>Commit et push</b> : <b class="aw-chiffre">1 commit</b> <b>en ligne</b> par la clôture automatique.</div>`,
-    `<div><span class="aw-chip">${echapper(sha.slice(0, 8))}</span> ${echapper(sujet)}</div>`,
-    `<pre class="aw-chip awp-shell">${echapper(ligne)}</pre>`,
-    '```'
-  ].join('\n')
+  return bandeauPublie([{ sha: sha.slice(0, 8), sujet }], [ligne])
 }

@@ -53,9 +53,17 @@ describe('annonceCommitLocal', () => {
     expect(direct).toContain('```html-render')
     expect(direct).toContain('<div class="aw-kicker">1 commit et push origin main réussi</div>')
     expect(direct).not.toContain('GIT : 1 commit')
-    expect(direct).toContain('Commit et push')
-    expect(direct).toContain('<span class="aw-chip">e4daf170</span> agent run-1: t &lt;x&gt;')
+    expect(direct).toContain(
+      '<span class="aw-chip awp-sha">e4daf170</span> agent run-1: t &lt;x&gt;'
+    )
     expect(direct).toContain('ALLOW_MAIN_PUSH=1 git push origin e4daf1702e098832:refs/heads/main')
+    // conv-1600 : le rail compact choisi en conv-1574 (« 1 · Compact rail »), pas l'ancien bloc —
+    // la fin d'un run poussé dessinait encore la liste d'avant le /draft.
+    expect(direct).toContain('class="awp-rail"')
+    expect(direct).toMatch(/<b>Commit<\/b>[\s\S]*<b>Push<\/b>[\s\S]*Annuler la publication/)
+    expect(direct).toContain('vers origin/main')
+    expect(direct).toContain('Annuler la publication (git revert e4daf170, puis push)')
+    expect(direct).not.toContain('<b>Commit et push</b>')
     const repli = annonceCommitLocal(issue, 'run-1', 't', { branche: 'auto/run-1', mode: 'pr' })
     expect(repli).toContain('git push origin e4daf1702e098832:refs/heads/auto/run-1')
     expect(repli).toContain('1 commit et push origin auto/run-1 réussi')
