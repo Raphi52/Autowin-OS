@@ -385,8 +385,10 @@ describe('Task Manager — dispatch d’un réveil événementiel', () => {
     }
   }
 
-  // fix-ok: ces contre-exemples verrouillent le fail-closed et l'absence d'interruption Watchdog.
-  it('traite une action historique absente comme un chat lecture seule d une iteration', async () => {
+  // fix-ok: ces contre-exemples verrouillent l'absence d'interruption Watchdog. La lecture seule
+  // d'un seul appel, elle, est levée (conv-1626, 2026-11-05) : une surveillance « /git à la fin du
+  // tour » ne pouvait rien publier.
+  it('traite une action historique absente comme un chat qui peut ecrire, en fond', async () => {
     const chat = runtime()
 
     await new ScheduledChatDispatcher(chat).run(task(), watchdogOccurrence)
@@ -396,8 +398,8 @@ describe('Task Manager — dispatch d’un réveil événementiel', () => {
       expect.any(String),
       undefined,
       {
-        readOnly: true,
-        maxIterations: 1,
+        readOnly: false,
+        maxIterations: 6,
         background: true
       },
       undefined
@@ -450,7 +452,7 @@ describe('Task Manager — dispatch d’un réveil événementiel', () => {
     expect(vi.mocked(chat.runPrompt).mock.calls[0][1]).toBe('Prépare le rapport.')
   })
 
-  it('un lancement manuel d une regle Watchdog chat reste en lecture seule', async () => {
+  it('un lancement manuel d une regle Watchdog chat peut ecrire, en fond', async () => {
     const chat = runtime()
     const rule = task({
       schedule: undefined,
@@ -468,8 +470,8 @@ describe('Task Manager — dispatch d’un réveil événementiel', () => {
       'Prépare le rapport.',
       undefined,
       {
-        readOnly: true,
-        maxIterations: 1,
+        readOnly: false,
+        maxIterations: 6,
         background: true
       },
       undefined
@@ -503,8 +505,8 @@ describe('Task Manager — dispatch d’un réveil événementiel', () => {
     await new ScheduledChatDispatcher(chat).run(rule, occurrence)
 
     expect(vi.mocked(chat.runPrompt).mock.calls[0][3]).toEqual({
-      readOnly: true,
-      maxIterations: 1,
+      readOnly: false,
+      maxIterations: 6,
       background: true,
       maxBudgetUsd: 0.0625
     })
@@ -756,8 +758,8 @@ describe('Task Manager — une règle qui ORCHESTRE au lieu de discuter', () => 
     expect(chat.runOrchestration).not.toHaveBeenCalled()
     expect(chat.runPrompt).toHaveBeenCalledOnce()
     expect(vi.mocked(chat.runPrompt).mock.calls[0][3]).toEqual({
-      readOnly: true,
-      maxIterations: 1,
+      readOnly: false,
+      maxIterations: 6,
       background: true
     })
   })

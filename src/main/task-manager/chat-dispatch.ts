@@ -225,28 +225,28 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
           ? { evidence: { trust: 'untrusted' as const, signal: occurrence.watchdog } }
           : {})
       }
-      // Le chat de tri est lecture seule et peut afficher le contexte brut. L'orchestration mutante,
-      // y compris son fallback sans runtime dédié, ne reçoit comme ordre que le prompt de la règle.
+      // Le chat de tri reçoit le contexte brut, mais dans l'enveloppe NON FIABLE de
+      // `buildWatchdogPrompt` : une donnée, jamais un ordre. L'orchestration, y compris son fallback
+      // sans runtime dédié, ne reçoit comme ordre que le prompt de la règle.
       const prompt =
         occurrence.watchdog && !wantsOrchestration
           ? buildWatchdogPrompt(task.prompt, occurrence.watchdog)
           : task.prompt
       const maxBudgetUsd =
         binding?.provider === 'claude' ? watchdogProviderBudgetUsd(task) : undefined
-      // Une regle mail doit FAIRE ce qu'on lui demande : mode auto (ecriture permise, plusieurs
-      // iterations), toujours en fond et borne par le budget de la regle.
+      // Une surveillance doit FAIRE ce qu'on lui demande : mode auto (ecriture permise, plusieurs
+      // iterations), toujours en fond et borne par le budget de la regle. C'etait reserve aux regles
+      // mail ; les autres tournaient en triage LECTURE SEULE d'un seul appel, sans aucune commande.
+      // Levee sur demande de l'utilisateur (conv-1626, 2026-11-05) : une surveillance « /git a la
+      // fin du tour » ne pouvait rien publier (conv-1280, conv-1317 le 30/10, puis conv-1625 et
+      // conv-1628 le 05/11) et payait un tour pour un rapport « rien n'a ete publie ».
       const isMailTask = task.watchdog?.source?.kind === 'outlook-mail'
-      const readOnlyPolicy = isMailTask
-        ? {
-            readOnly: false,
-            maxIterations: 6,
-            background: true,
-            ...(maxBudgetUsd === undefined ? {} : { maxBudgetUsd })
-          }
-        : (occurrence.watchdog || task.watchdog) && task.watchdog?.action !== 'orchestration'
+      const readOnlyPolicy =
+        isMailTask ||
+        ((occurrence.watchdog || task.watchdog) && task.watchdog?.action !== 'orchestration')
           ? {
-              readOnly: true,
-              maxIterations: 1,
+              readOnly: false,
+              maxIterations: 6,
               background: true,
               ...(maxBudgetUsd === undefined ? {} : { maxBudgetUsd })
             }
