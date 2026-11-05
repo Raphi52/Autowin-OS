@@ -313,6 +313,26 @@ function enLongContexte(rate: ModelRate, usage: UsageAEstimer, input: number): b
 }
 
 /**
+ * L'entrée comptée en tokens « au prix d'entrée » : chaque poste du cache pèse son multiple du prix
+ * d'entrée. Une seule définition pour la grille (`estimateCostUsd`) et pour le prix appris du CLI
+ * (`tokensPonderes`) : deux copies de cette pondération finiraient par diverger (conv-1602).
+ */
+function entreePonderee(usage: TokenUsage, cacheReadRatio: number): number {
+  // Les tokens de cache — relus ET écrits — sont un SOUS-ENSEMBLE de l'entrée : on les facture une
+  // seule fois, à leur tarif propre, et on retire leur part du plein tarif. L'arbitrage de cet
+  // invariant vit dans `splitInputTokens`, partagé avec le superviseur d'exécution.
+  const { fresh: freshInput, cacheRead, cacheWrite } = splitInputTokens(usage)
+  // La part 1 h est un SOUS-ENSEMBLE de l'écriture : bornée à elle, jamais ajoutée par-dessus.
+  const cacheWrite1h = Math.min(cacheWrite, positive(usage.cacheCreation1hTokens))
+  return (
+    freshInput +
+    (cacheWrite - cacheWrite1h) * CACHE_WRITE_RATIO +
+    cacheWrite1h * CACHE_WRITE_1H_RATIO +
+    cacheRead * cacheReadRatio
+  )
+}
+
+/**
  * Estimation en USD des tokens non tarifés. Rend `undefined` quand le modèle est inconnu ou
  * qu'aucun token n'a été compté — l'appelant affiche alors le volume, pas un montant inventé.
  */
@@ -328,20 +348,66 @@ export function estimateCostUsd(usage: UsageAEstimer, nowMs?: number): number | 
   // Un tarif sans prix long publié garderait son prix court : un plancher, jamais un prix deviné.
   const prix: Prix = enLongContexte(rate, usage, input) ? (court.long ?? court) : court
   const { inputPerMTok, outputPerMTok } = prix
-  // Les tokens de cache — relus ET écrits — sont un SOUS-ENSEMBLE de l'entrée : on les facture une
-  // seule fois, à leur tarif propre, et on retire leur part du plein tarif. L'arbitrage de cet
-  // invariant vit dans `splitInputTokens`, partagé avec le superviseur d'exécution.
-  const { fresh: freshInput, cacheRead, cacheWrite } = splitInputTokens(usage)
-  // La part 1 h est un SOUS-ENSEMBLE de l'écriture : bornée à elle, jamais ajoutée par-dessus.
-  const cacheWrite1h = Math.min(cacheWrite, positive(usage.cacheCreation1hTokens))
   return (
-    (freshInput * inputPerMTok +
-      (cacheWrite - cacheWrite1h) * inputPerMTok * CACHE_WRITE_RATIO +
-      cacheWrite1h * inputPerMTok * CACHE_WRITE_1H_RATIO +
-      cacheRead * inputPerMTok * rate.cacheReadRatio +
-      output * outputPerMTok) /
-    1_000_000
+    (entreePonderee(usage, rate.cacheReadRatio) * inputPerMTok + output * outputPerMTok) / 1_000_000
   )
+}
+
+/**
+ * FORME commune des prix Claude quand la grille ne connaît pas le modèle : sur toutes les lignes
+ * Claude de `MODEL_RATES` (grille du 2026-11-05), la sortie vaut 5× l'entrée, et le cache relu
+ * 0,1× sur la plupart. Seule la forme est supposée : le NIVEAU du prix vient du CLI (conv-1602).
+ */
+const FORME_CLAUDE_PAR_DEFAUT = { sortieParEntree: 5, cacheReadRatio: 0.1 } as const
+
+/**
+ * Tokens PONDÉRÉS : l'usage compté en tokens « au prix d'entrée », la sortie et le cache pesant
+ * leur multiple de ce prix. Le CLI Claude tarife chaque modèle (`modelUsage[<modèle>].costUSD`) :
+ * `costUSD ÷ tokensPonderes` donne alors le prix d'un token d'entrée SANS l'avoir recopié d'une
+ * grille, et `tokensPonderes × ce prix` réestime un autre usage du même modèle (conv-1602).
+ *
+ * Les MULTIPLES viennent de la ligne de grille du modèle quand elle existe (Opus 5.5 relit le cache
+ * à 0,05×), sinon de la forme Claude commune. Une hausse de prix qui garde la forme — le cas
+ * courant — est donc absorbée sans toucher à la table.
+ */
+export function tokensPonderes(usage: UsageAEstimer): number {
+  const rate = modelRate(usage.model, usage.provider)
+  const forme = rate
+    ? {
+        sortieParEntree: rate.outputPerMTok / rate.inputPerMTok,
+        cacheReadRatio: rate.cacheReadRatio
+      }
+    : FORME_CLAUDE_PAR_DEFAUT
+  return (
+    entreePonderee(usage, forme.cacheReadRatio) +
+    positive(usage.outputTokens) * forme.sortieParEntree
+  )
+}
+
+/**
+ * Vrai quand AUCUNE requête de cet usage n'a pu passer le palier long contexte : le total d'entrée
+ * ne dépasse pas le seuil (chaque requête est plus petite que lui). Un `costUSD` observé au-delà
+ * peut mêler prix courts et prix longs : son rapport ne dirait pas le prix court (conv-1602).
+ */
+export function sousLePalierLong(usage: UsageAEstimer): boolean {
+  const seuil = modelRate(usage.model, usage.provider)?.longAboveTokens
+  return seuil === undefined || positive(usage.inputTokens) <= seuil
+}
+
+/**
+ * Estimation au prix APPRIS du CLI (`usdParTokenPondere`, un prix court). `undefined` — l'appelant
+ * prend alors la grille — quand l'usage n'a rien de tarifable ou qu'UNE requête passe le palier long
+ * contexte de sa ligne : le prix appris ne dit rien de ce palier, la grille si (conv-1602).
+ */
+export function estimerAuTarifAppris(
+  usage: UsageAEstimer,
+  usdParTokenPondere: number
+): number | undefined {
+  if (!Number.isFinite(usdParTokenPondere) || usdParTokenPondere <= 0) return undefined
+  const rate = modelRate(usage.model, usage.provider)
+  if (rate && enLongContexte(rate, usage, positive(usage.inputTokens))) return undefined
+  const ponderes = tokensPonderes(usage)
+  return ponderes > 0 ? ponderes * usdParTokenPondere : undefined
 }
 
 /**

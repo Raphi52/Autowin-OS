@@ -1,7 +1,12 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { estimateCostUsd } from '../../shared/cost-estimate'
+import {
+  estimateCostUsd,
+  estimerAuTarifAppris,
+  sousLePalierLong,
+  tokensPonderes
+} from '../../shared/cost-estimate'
 import type { PromptCallRecord } from './prompt-observability'
 
 /**
@@ -41,9 +46,10 @@ export interface RecoveredCallUsage {
   /** Modèle réellement servi, tel que le CLI l'a écrit. Absent = aucune ligne ne le nommait. */
   model?: string
   /**
-   * Tarif PUBLIC appliqué aux tokens récupérés. Une ESTIMATION assumée : le CLI n'a pas eu le temps
-   * de rendre son `total_cost_usd`. `undefined` quand le modèle n'a pas de tarif connu — on préfère
-   * le volume à un montant inventé.
+   * Prix appliqué aux tokens récupérés. Une ESTIMATION assumée : le CLI n'a pas eu le temps de rendre
+   * son `total_cost_usd`. Le prix vient de ce que le CLI a facturé à ses dernières réponses complètes
+   * pour ce modèle, sinon de la grille publique (conv-1602). `undefined` quand ni l'un ni l'autre ne
+   * connaît le modèle — on préfère le volume à un montant inventé.
    */
   estimatedUsd?: number
   /** Fichier lu, pour que la valeur affichée reste traçable jusqu'à sa source. */
@@ -55,6 +61,93 @@ export interface RecoveryOptions {
   projectsRoots?: readonly string[]
   /** Horloge pour les tarifs bornés dans le temps (tarif d'introduction). */
   nowMs?: number
+  /** Prix appris du CLI. Défaut : ceux que ce processus a enregistrés (`enregistrerTarifsCli`). */
+  tarifsAppris?: ReadonlyMap<string, number>
+}
+
+/** Modèle (en minuscules) → $ par token pondéré (`tokensPonderes`), tel que le CLI l'a facturé. */
+export type TarifsAppris = Map<string, number>
+
+/**
+ * Prix appris par CE processus. En mémoire, à dessein : un appel coupé se réestime à chaque
+ * affichage du coût, et la première réponse complète du modèle après un redémarrage le réapprend.
+ * Avant elle, la grille sert — exactement le comportement d'avant (conv-1602).
+ */
+const tarifsDuProcessus: TarifsAppris = new Map()
+
+function objet(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
+}
+
+/**
+ * Prix par token pondéré de chaque modèle, lus dans un event `result` du CLI Claude.
+ *
+ * Le CLI tarife lui-même chaque modèle servi : `modelUsage[<modèle>].costUSD`, `costBasis` « list »
+ * (prix public). Rien ne le lisait, si bien que chaque nouveau modèle attendait qu'on recopie sa
+ * grille dans `shared/cost-estimate.ts` — Haiku 5.5 y était estimé 10× trop cher (conv-1602).
+ *
+ * Une entrée n'est apprise que si son coût est celui de ses SEULS tokens, au prix court :
+ * - `costBasis` autre que « list », ou `provider` autre que « firstParty » : un autre prix que le
+ *   prix public. Leur ABSENCE est acceptée — 22 entrées réelles sur 565 le 05/11 (des sous-agents),
+ *   toutes au prix public au centime près ;
+ * - `webSearchRequests` > 0 : le coût inclut les recherches (0,01 $ chacune), mesuré sur
+ *   run-stdout/1fbc33e9-… : 0,0119632 $ pour 0,0019632 $ de tokens, soit un prix appris 6× trop haut ;
+ * - au-delà du seuil long contexte de la grille : une requête a pu être facturée au prix long.
+ *
+ * fix-ok: cause mesurée le 2026-11-05 — `grep costUSD|costBasis` dans src/main et src/shared ne
+ * trouvait aucun lecteur, et l'appel coupé n'était tarifé que par la table recopiée à la main ; sur
+ * la ligne réelle run-stdout/c55319db-… (0,00093225 $ facturés), un modèle absent de la table était
+ * estimé 10× trop cher (conv-1602).
+ */
+export function lireTarifsDuResultat(resultat: unknown): Map<string, number> {
+  const tarifs = new Map<string, number>()
+  const event = objet(resultat)
+  if (event?.type !== 'result') return tarifs
+  // Le périmètre le plus ÉTROIT d'abord : moins il additionne de requêtes, moins le seuil du palier
+  // long refuse à tort une entrée. Les deux champs ont la même forme (ligne réelle du 05/11).
+  const parModele = objet(event.model_usage_since_last_result) ?? objet(event.modelUsage)
+  if (!parModele) return tarifs
+  for (const [modele, brut] of Object.entries(parModele)) {
+    const entree = objet(brut)
+    if (!entree) continue
+    if (entree.costBasis !== undefined && entree.costBasis !== 'list') continue
+    if (entree.provider !== undefined && entree.provider !== 'firstParty') continue
+    if (count(entree.webSearchRequests) > 0) continue
+    const cout = entree.costUSD
+    if (typeof cout !== 'number' || !Number.isFinite(cout) || cout <= 0) continue
+    // `inputTokens` du CLI = l'entrée FRAÎCHE seule ; `Usage` compte le cache DANS l'entrée.
+    const cacheRead = count(entree.cacheReadInputTokens)
+    const cacheWrite = count(entree.cacheCreationInputTokens)
+    const usage = {
+      inputTokens: count(entree.inputTokens) + cacheRead + cacheWrite,
+      outputTokens: count(entree.outputTokens),
+      cacheReadTokens: cacheRead,
+      cacheCreationTokens: cacheWrite,
+      cacheCreation1hTokens: Math.min(
+        cacheWrite,
+        count(entree.cacheCreationEphemeral1hInputTokens)
+      ),
+      model: modele,
+      provider: 'claude'
+    }
+    if (!sousLePalierLong(usage)) continue
+    const ponderes = tokensPonderes(usage)
+    if (ponderes > 0) tarifs.set(modele.toLowerCase(), cout / ponderes)
+  }
+  return tarifs
+}
+
+/**
+ * À appeler sur CHAQUE event `result` du CLI (`providers/claude.ts`). La dernière observation d'un
+ * modèle remplace la précédente : c'est elle qui suit le plus vite un changement de prix.
+ */
+export function enregistrerTarifsCli(
+  resultat: unknown,
+  tarifs: TarifsAppris = tarifsDuProcessus
+): void {
+  for (const [modele, prix] of lireTarifsDuResultat(resultat)) tarifs.set(modele, prix)
 }
 
 /** Racines `projects` du CLI. `CLAUDE_CONFIG_DIR` d'abord : c'est le compte réellement utilisé. */
@@ -236,6 +329,7 @@ export function recoverUnpricedCallsUsage(
   if (unpriced.length === 0) return recovered
   const roots = options.projectsRoots ?? claudeProjectsRoots()
   const nowMs = options.nowMs ?? Date.now()
+  const tarifsAppris = options.tarifsAppris ?? tarifsDuProcessus
   const ordered = [...calls].sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts))
   /** Requêtes déjà imputées : deux appels ne peuvent pas se partager la même requête. */
   const claimed = new Set<string>()
@@ -283,18 +377,24 @@ export function recoverUnpricedCallsUsage(
       cacheCreation1hTokens += line.cacheWrite1h
       if (!model && line.model) model = line.model
     }
+    const modeleServi = model ?? call.resolvedModel ?? call.model
     const usage = {
       inputTokens,
       outputTokens,
       cacheReadTokens,
       cacheCreationTokens,
       cacheCreation1hTokens,
-      ...((model ?? call.resolvedModel ?? call.model)
-        ? { model: model ?? call.resolvedModel ?? call.model }
-        : {}),
+      // Le palier long contexte se juge requête par requête : seul ce compte dit qu'il n'y en a
+      // qu'une (décision du lot 1, conv-1602).
+      requests: seen.size,
+      ...(modeleServi ? { model: modeleServi } : {}),
       ...(call.provider ? { provider: call.provider } : {})
     }
-    const estimatedUsd = estimateCostUsd(usage, nowMs)
+    // Le prix que le CLI a facturé pour ce modèle d'abord ; la grille publique en secours.
+    const appris = modeleServi ? tarifsAppris.get(modeleServi.toLowerCase()) : undefined
+    const estimatedUsd =
+      (appris !== undefined ? estimerAuTarifAppris(usage, appris) : undefined) ??
+      estimateCostUsd(usage, nowMs)
     recovered.set(call.id, {
       inputTokens,
       outputTokens,

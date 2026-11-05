@@ -3,9 +3,12 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  enregistrerTarifsCli,
+  lireTarifsDuResultat,
   recoverUnpricedCallsUsage,
   sessionIdFromArgv,
-  type RecoveredCallUsage
+  type RecoveredCallUsage,
+  type TarifsAppris
 } from './cli-usage-recovery'
 import {
   applyRecoveredUsage,
@@ -228,5 +231,188 @@ describe('le total ne dit plus « non exposé » quand la valeur est récupérab
       estimatedCalls: 1
     })
     expect(rows[0].estimatedUsd).toBeCloseTo(recupere.get('call-tue')!.estimatedUsd!, 9)
+  })
+})
+
+/**
+ * Ligne `result` RÉELLE du CLI Claude, copiée telle quelle de
+ * `.autowin-data/autowin-os/run-stdout/c55319db-076c-4201-b8b7-bd8b98515a11.stdout.jsonl` (05/11).
+ * Le CLI y facture lui-même chaque modèle : `modelUsage["claude-haiku-5-5"].costUSD` = 0,00093225 $,
+ * `costBasis` « list ». En tokens pondérés (multiples d'un token d'entrée) : 2 frais + 2 923 écrits
+ * pour 1 h (2×) + 13 095 relus (0,1×) + 433 sortis (5×) = 9 322,5, soit 0,10 $ le million (conv-1602).
+ */
+const RESULTAT_REEL =
+  '{"duration_api_ms":4531,"stop_reason":"end_turn","session_id":"359a9232-e4c1-41d9-b6d0-a7511872587a","total_cost_usd":0.00093225,"usage":{"input_tokens":2,"cache_creation_input_tokens":2923,"cache_read_input_tokens":13095,"output_tokens":433,"output_tokens_details":{"thinking_tokens":420},"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":2923,"ephemeral_5m_input_tokens":0},"inference_geo":"global","iterations":[{"input_tokens":2,"output_tokens":433,"cache_read_input_tokens":13095,"cache_creation_input_tokens":2923,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":2923},"type":"message"}],"speed":"standard","fallback_credit":null},"modelUsage":{"claude-haiku-5-5":{"inputTokens":2,"outputTokens":433,"cacheReadInputTokens":13095,"cacheCreationInputTokens":2923,"webSearchRequests":0,"costUSD":0.00093225,"contextWindow":1000000,"maxOutputTokens":128000,"thinkingTokens":420,"cacheCreationEphemeral5mInputTokens":0,"cacheCreationEphemeral1hInputTokens":2923,"canonicalModel":"claude-haiku-5-5","provider":"firstParty","costBasis":"list"}},"permission_denials":[],"terminal_reason":"completed","fast_mode_state":"off","fast_mode_disabled_reason":"sdk_opt_in_required","subagent_stats":{"spawned":0,"requested":{"background":0,"foreground":0,"unset":0},"started_in_background":0,"max_depth":0,"spawned_by_subagents":0,"completed":0,"failed":0,"killed":{"parent":0,"user":0,"system":0},"refused":{"depth_limit":0,"concurrency_limit":0,"budget":0},"by_type":{}},"safety_stops":0,"is_error":false,"num_turns":1,"subtype":"success","api_error_status":null,"result":"WORKFLOW: exploration","ttft_ms":4747,"type":"result","duration_ms":4776,"uuid":"cca20699-d8ed-4877-9f42-ad7173ad2d79","ttft_stream_ms":1407,"time_to_request_ms":247,"first_content_frame_ms":1408,"queued_turn_count":0,"result_index":0,"model_usage_since_last_result":{"claude-haiku-5-5":{"inputTokens":2,"outputTokens":433,"cacheReadInputTokens":13095,"cacheCreationInputTokens":2923,"webSearchRequests":0,"costUSD":0.00093225,"contextWindow":1000000,"maxOutputTokens":128000,"thinkingTokens":420,"cacheCreationEphemeral5mInputTokens":0,"cacheCreationEphemeral1hInputTokens":2923,"canonicalModel":"claude-haiku-5-5","provider":"firstParty","costBasis":"list"}},"credential_expires_at":"2026-11-10T07:39:36.560Z"}'
+
+/**
+ * Entrée RÉELLE `claude-haiku-5-5` de run-stdout/1fbc33e9-7b7e-482c-b083-7eca63aee289.stdout.jsonl.
+ * Son `costUSD` (0,0119632 $) = 0,0019632 $ de tokens + 1 recherche web à 0,01 $ : appris tel quel,
+ * il gonflerait le prix de Haiku 5.5 d'un facteur 6. Ni `costBasis` ni `provider` (conv-1602).
+ */
+const HAIKU_AVEC_RECHERCHE = {
+  inputTokens: 14407,
+  outputTokens: 1045,
+  thinkingTokens: 498,
+  cacheReadInputTokens: 0,
+  cacheCreationInputTokens: 0,
+  cacheCreationEphemeral5mInputTokens: 0,
+  cacheCreationEphemeral1hInputTokens: 0,
+  webSearchRequests: 1,
+  costUSD: 0.0119632,
+  contextWindow: 1000000,
+  maxOutputTokens: 128000
+}
+
+/**
+ * Entrée RÉELLE `claude-opus-5-5` SANS `costBasis` ni `provider`, de
+ * run-stdout/2cd73fa5-4633-427b-8de8-cc7f79e06291.stdout.jsonl : 22 entrées sur 565 le 05/11 ont
+ * cette forme, et leur `costUSD` tombe au centime sur le prix public (4 $ / 20 $, cache relu 0,05×).
+ */
+const OPUS_SANS_BASE = {
+  inputTokens: 130,
+  outputTokens: 58723,
+  thinkingTokens: 25443,
+  cacheReadInputTokens: 8029895,
+  cacheCreationInputTokens: 276946,
+  cacheCreationEphemeral5mInputTokens: 0,
+  cacheCreationEphemeral1hInputTokens: 276946,
+  webSearchRequests: 0,
+  costUSD: 4.996527,
+  contextWindow: 1000000,
+  maxOutputTokens: 128000
+}
+
+const resultatAvec = (
+  modele: string,
+  entree: Record<string, unknown>
+): Record<string, unknown> => ({
+  type: 'result',
+  modelUsage: { [modele]: entree }
+})
+
+/** Transcript d'UNE requête du modèle donné, aux tokens de la ligne réelle sauf surcharge. */
+function transcriptDUneRequete(modele: string, usage: Record<string, unknown> = {}): string {
+  const root = mkdtempSync(join(tmpdir(), 'autowin-cli-prix-appris-'))
+  const projet = join(root, 'D--AutoWinOS')
+  mkdirSync(projet, { recursive: true })
+  writeFileSync(
+    join(projet, 'sess-1.jsonl'),
+    JSON.stringify({
+      type: 'assistant',
+      timestamp: '2026-09-02T12:00:00.000Z',
+      requestId: 'req-1',
+      message: {
+        model: modele,
+        usage: {
+          input_tokens: 2,
+          cache_read_input_tokens: 13095,
+          cache_creation_input_tokens: 2923,
+          cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 2923 },
+          output_tokens: 433,
+          ...usage
+        }
+      }
+    }) + '\n',
+    'utf8'
+  )
+  return root
+}
+
+describe('prix appris de ce que le CLI facture déjà (conv-1602)', () => {
+  it('lit le prix par token pondéré dans une ligne réelle du CLI', () => {
+    const tarifs = lireTarifsDuResultat(JSON.parse(RESULTAT_REEL))
+    expect([...tarifs.keys()]).toEqual(['claude-haiku-5-5'])
+    expect(tarifs.get('claude-haiku-5-5')! * 1_000_000).toBeCloseTo(0.1, 12)
+  })
+
+  /**
+   * L'entrée qui doit faire ÉCHOUER ce test si l'estimation lisait la grille d'abord : la MÊME ligne
+   * réelle, seul le nom du modèle changé en `claude-haiku-6` — un modèle sorti avant que la grille
+   * soit relue. La grille le range dans la famille `haiku` (1 $ / 5 $), 10× le prix que le CLI a
+   * facturé. C'est l'erreur vécue le 05/11 avec Haiku 5.5 : 0,0093225 $ estimés pour 0,00093225 $.
+   */
+  it("estime l'appel coupé au prix appris du CLI, et garde la grille en secours", () => {
+    const tarifs: TarifsAppris = new Map()
+    enregistrerTarifsCli(
+      JSON.parse(RESULTAT_REEL.replaceAll('claude-haiku-5-5', 'claude-haiku-6')),
+      tarifs
+    )
+    const root = transcriptDUneRequete('claude-haiku-6')
+
+    const appris = recoverUnpricedCallsUsage([appelTue()], {
+      projectsRoots: [root],
+      tarifsAppris: tarifs
+    })
+    // Mêmes tokens que l'appel réellement facturé : l'estimation retombe sur sa facture.
+    expect(appris.get('call-tue')!.estimatedUsd).toBeCloseTo(0.00093225, 12)
+
+    // Jumeau : sans prix appris pour ce modèle, la grille tarife toujours (famille `haiku`).
+    const grille = recoverUnpricedCallsUsage([appelTue()], {
+      projectsRoots: [root],
+      tarifsAppris: new Map()
+    })
+    expect(grille.get('call-tue')!.estimatedUsd).toBeCloseTo(0.0093225, 12)
+  })
+
+  it("le prix enregistré à la fin d'une réponse sert, sans option, à la récupération suivante", () => {
+    // Nom propre à ce test : le magasin du processus est partagé entre les tests du fichier.
+    enregistrerTarifsCli(
+      JSON.parse(RESULTAT_REEL.replaceAll('claude-haiku-5-5', 'claude-haiku-6-defaut'))
+    )
+    const root = transcriptDUneRequete('claude-haiku-6-defaut')
+    const usage = recoverUnpricedCallsUsage([appelTue()], { projectsRoots: [root] })
+    expect(usage.get('call-tue')!.estimatedUsd).toBeCloseTo(0.00093225, 12)
+  })
+
+  it("n'apprend rien d'un coût qui contient une recherche web", () => {
+    expect(lireTarifsDuResultat(resultatAvec('claude-haiku-5-5', HAIKU_AVEC_RECHERCHE)).size).toBe(
+      0
+    )
+    // Jumeau : la même entrée sans la recherche (0,01 $ retirés) rend le prix de Haiku 5.5.
+    const sansRecherche = { ...HAIKU_AVEC_RECHERCHE, webSearchRequests: 0, costUSD: 0.0019632 }
+    const tarifs = lireTarifsDuResultat(resultatAvec('claude-haiku-5-5', sansRecherche))
+    expect(tarifs.get('claude-haiku-5-5')! * 1_000_000).toBeCloseTo(0.1, 12)
+  })
+
+  it('accepte une entrée sans costBasis, refuse une autre base ou un autre fournisseur', () => {
+    const tarifs = lireTarifsDuResultat(resultatAvec('claude-opus-5-5', OPUS_SANS_BASE))
+    expect(tarifs.get('claude-opus-5-5')! * 1_000_000).toBeCloseTo(4, 9)
+    const avecListe = { ...OPUS_SANS_BASE, costBasis: 'list', provider: 'firstParty' }
+    expect(lireTarifsDuResultat(resultatAvec('claude-opus-5-5', avecListe)).size).toBe(1)
+    const autreBase = { ...avecListe, costBasis: 'contract' }
+    expect(lireTarifsDuResultat(resultatAvec('claude-opus-5-5', autreBase)).size).toBe(0)
+    const autreFournisseur = { ...avecListe, provider: 'bedrock' }
+    expect(lireTarifsDuResultat(resultatAvec('claude-opus-5-5', autreFournisseur)).size).toBe(0)
+  })
+
+  it('palier long : rien appris au-delà du seuil, une requête longue garde le prix de la grille', () => {
+    const entree = JSON.parse(RESULTAT_REEL).modelUsage['claude-haiku-5-5'] as Record<
+      string,
+      number
+    >
+    // 100 000 tokens d'entrée au total : aucune requête n'a pu dépasser le seuil de Haiku 5.5.
+    const auSeuil = { ...entree, inputTokens: 100_000 - 13095 - 2923 }
+    expect(lireTarifsDuResultat(resultatAvec('claude-haiku-5-5', auSeuil)).size).toBe(1)
+    // Un token de plus : une requête a peut-être été facturée au prix long, le rapport serait faux.
+    const auDela = { ...auSeuil, inputTokens: auSeuil.inputTokens + 1 }
+    expect(lireTarifsDuResultat(resultatAvec('claude-haiku-5-5', auDela)).size).toBe(0)
+
+    // UNE requête de 150 000 frais : prix long de la grille (0,50 $ / 2,50 $), pas le prix court appris.
+    const tarifs = lireTarifsDuResultat(JSON.parse(RESULTAT_REEL))
+    const root = transcriptDUneRequete('claude-haiku-5-5', {
+      input_tokens: 150_000,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 0 },
+      output_tokens: 1000
+    })
+    const usage = recoverUnpricedCallsUsage([appelTue()], {
+      projectsRoots: [root],
+      tarifsAppris: tarifs
+    })
+    expect(usage.get('call-tue')!.estimatedUsd).toBeCloseTo(
+      (150_000 * 0.5 + 1000 * 2.5) / 1_000_000,
+      12
+    )
   })
 })
