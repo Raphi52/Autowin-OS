@@ -1,0 +1,89 @@
+/* Coffre à clés — même grammaire que les autres panneaux de réglages. Toutes les couleurs passent
+   par les jetons du thème : la section suit les thèmes sombres comme les clairs. */
+.coffre-cles .coffre-cles-phrase {
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.coffre-cles .coffre-cles-indisponible,
+.coffre-cles .coffre-cles-erreur {
+  color: var(--err);
+  line-height: 1.5;
+}
+.coffre-cles .coffre-cles-indisponible {
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--err) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--err) 8%, transparent);
+}
+.coffre-cles .coffre-cles-raison {
+  color: var(--text-dim);
+}
+.coffre-cles .coffre-cles-vide {
+  color: var(--text-dim);
+}
+.coffre-cles .coffre-cles-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.coffre-cles .coffre-cles-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.coffre-cles .coffre-cles-nom {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+.coffre-cles .coffre-cles-origine {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--text-dim);
+}
+.coffre-cles .coffre-cles-origine.is-utilisateur {
+  color: var(--gold);
+  border-color: color-mix(in srgb, var(--gold) 45%, transparent);
+}
+.coffre-cles .coffre-cles-detail {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.coffre-cles .coffre-cles-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 10px 0 4px;
+}
+.coffre-cles .coffre-cles-bilan {
+  color: var(--ok);
+}
+.coffre-cles .coffre-cles-formulaire {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-end;
+}
+.coffre-cles .coffre-cles-formulaire label {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-dim);
+}
+.coffre-cles .coffre-cles-formulaire input {
+  width: 100%;
+}
+/* L'exemple de nom ne doit pas passer pour un nom déjà saisi : dans les thèmes clairs, il sortait
+   presque aussi foncé que le texte. */
+.coffre-cles .coffre-cles-formulaire input::placeholder {
+  color: color-mix(in srgb, var(--text-dim) 70%, transparent);
+}

@@ -91,6 +91,7 @@ describe('Settings — les sections en liste à gauche', () => {
       'Providers',
       'Rules',
       'MCP',
+      'Clés',
       'Diagnostic'
     ])
   })

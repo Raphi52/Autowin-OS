@@ -50,6 +50,8 @@ export type SettingsSection =
   // Serveurs MCP : section à part (conv-1558, 2026-11-05 : « dans settings je vois pas le menu mcp »,
   // le panneau était enfoui sous trois autres dans Diagnostic).
   | 'mcp'
+  // Coffre à clés : les clés API dont les agents se servent par leur nom, sans en voir la valeur.
+  | 'cles'
   // Rules : les regles d'Autowin OS. La protection de production (ce qu'Autowin demande avant un
   // geste sur une base reelle) en est UNE — elle avait son propre onglet « Production » jusqu'a
   // la demande conv-242. Distincte de « capabilities » : accorder un outil n'est pas autoriser un
@@ -222,6 +224,9 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   diagnostic: { destination: 'settings', section: 'preflight' },
   preflight: { destination: 'settings', section: 'preflight' },
   mcp: { destination: 'settings', section: 'mcp' },
+  cles: { destination: 'settings', section: 'cles' },
+  clés: { destination: 'settings', section: 'cles' },
+  coffre: { destination: 'settings', section: 'cles' },
   prerequis: { destination: 'settings', section: 'preflight' },
   prérequis: { destination: 'settings', section: 'preflight' },
   // Un agent pilote l'app par des NOMS : sans ces entrées, la séparation Watchdog/Planification ne
