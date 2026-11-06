@@ -1,4 +1,5 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { readFileSync, statSync } from 'node:fs'
 // `main` = LE PROCESS PRINCIPAL, pas `index.ts` seul : le fenetrage et les gardes IPC en ont ete
 // extraits le 2026-09-02, et un deplacement de code n'est pas une regression de marque.
 import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
@@ -47,22 +48,36 @@ const forbidden = new RegExp(
   'i'
 )
 
+/*
+ * Les fichiers DU PROJET, pas tout le disque : suivis, plus les nouveaux non ignores (le meme
+ * perimetre que `gardes/separation-entreprise.test.ts`). Parcourir le disque faisait remonter les
+ * copies du depot que les agents posent dans des dossiers ignores : la liste ci-dessus a grossi
+ * trois fois pour cette seule raison, et `.autowin-tmp/` a fait echouer 13 lignes de plus le
+ * 2026-11-06, toutes dans des copies de `src/shared/app-identity.ts`. Un dossier ignore par git ne
+ * part jamais avec le projet ; `EXCLUDED` reste applique en plus pour `.claude/settings.json`, suivi.
+ */
 function activeTextFiles(): string[] {
-  const result: string[] = []
-  const visit = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (entry.isDirectory() && EXCLUDED.has(entry.name)) continue
-      const path = join(dir, entry.name)
-      if (entry.isDirectory()) visit(path)
-      else if (entry.isFile()) {
-        const dot = entry.name.lastIndexOf('.')
-        const extension = dot >= 0 ? entry.name.slice(dot) : ''
-        if (TEXT_EXTENSIONS.has(extension) && statSync(path).size <= 1_000_000) result.push(path)
+  const sortie = execFileSync(
+    'git',
+    ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
+    { cwd: ROOT, maxBuffer: 64 * 1024 * 1024 }
+  ).toString('utf8')
+  return [...new Set(sortie.split('\0').filter(Boolean))]
+    .filter((rel) => !rel.split('/').some((segment) => EXCLUDED.has(segment)))
+    .filter((rel) => {
+      const nom = rel.slice(rel.lastIndexOf('/') + 1)
+      const dot = nom.lastIndexOf('.')
+      return TEXT_EXTENSIONS.has(dot >= 0 ? nom.slice(dot) : '')
+    })
+    .map((rel) => join(ROOT, rel))
+    .filter((path) => {
+      try {
+        const info = statSync(path)
+        return info.isFile() && info.size <= 1_000_000
+      } catch {
+        return false // supprime du disque mais encore indexe : plus rien a lire
       }
-    }
-  }
-  visit(ROOT)
-  return result
+    })
 }
 
 describe('identite Autowin OS', () => {
@@ -172,8 +187,9 @@ describe('identite Autowin OS', () => {
     // Choix utilisateur du 2026-10-11 : la marque du rail porte le LOGO anneau, genere
     // par scripts/logo_anneau.py — « je garde mon spinner je veux juste changer le logo ici ». Il
     // remplace l'atome qu'y avait mis le choix du 2026-09-03 ; l'atome reste l'indicateur de
-    // chargement partout ailleurs.
-    expect(appShell).toContain("import logoAnneau from './assets/autowin-logo-anneau.png'")
+    // chargement partout ailleurs. Depuis le 2026-11-04, ce logo est EN RELIEF, comme l'anneau du
+    // film de l'ecran « nouveau fil » : image animee generee par `scripts/logo_anneau_relief.py`.
+    expect(appShell).toContain("import logoAnneau from './assets/autowin-logo-anneau-relief.webp'")
     expect(appShell).toContain('<img className="brand-logo" src={logoAnneau}')
     expect(appShell).not.toContain('<Spinner className="brand-logo"')
     expect(appShell).not.toContain('autowin-logo-transparent.png')

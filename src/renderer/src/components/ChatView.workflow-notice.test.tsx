@@ -129,7 +129,9 @@ describe('ChatView — les bandeaux glissent à l’entrée', () => {
   it('chacun des bandeaux du chat porte la classe d’apparition', () => {
     // Chemin depuis la racine du depot, comme les autres tests de source de ce dossier.
     const source = lireSourceDuChatView()
-    const classes = [...source.matchAll(/className="(chat-workflow-notice[^"]*)"/g)].map(
+    // La classe du bandeau seule : `chat-workflow-notice__action` (2026-11-05) est un bouton DANS
+    // un bandeau, pas un cinquieme bandeau -- il n'a pas a glisser a l'entree.
+    const classes = [...source.matchAll(/className="(chat-workflow-notice(?![\w-])[^"]*)"/g)].map(
       (m) => m[1]
     )
     expect(classes).toHaveLength(4)

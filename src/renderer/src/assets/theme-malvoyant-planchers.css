@@ -348,6 +348,11 @@
   color: var(--text);
 }
 
+/* components/CoffreClesSettings.css — tailles */
+:root[data-theme^='malvoyant-'] .coffre-cles .coffre-cles-origine {
+  font-size: 13px;
+}
+
 /* components/ComparaisonDesFacons.css — tailles */
 :root[data-theme^='malvoyant-'] .comparaison-facons-note,
 :root[data-theme^='malvoyant-'] .comparaison-facon-nom span,
@@ -663,6 +668,9 @@
 :root[data-theme^='malvoyant-'] .home-settings__actions button,
 :root[data-theme^='malvoyant-'] .home-tile__action,
 :root[data-theme^='malvoyant-'] .home-settings__note,
+:root[data-theme^='malvoyant-'] .home-settings__discret,
+:root[data-theme^='malvoyant-'] .home-personnes__table thead th,
+:root[data-theme^='malvoyant-'] .home-personnes__nom .home-settings__discret,
 :root[data-theme^='malvoyant-'] .home-inter__back,
 :root[data-theme^='malvoyant-'] .home-inter__titre em,
 :root[data-theme^='malvoyant-'] .home-chat__meta b,

@@ -24,9 +24,10 @@ const racineMain = join(process.cwd(), 'src', 'main')
  * RELAIS AUTORISES : le message n'est pas un litteral, il est construit — et deja prefixe — ailleurs.
  *
  * Liste NOMMEE et courte a dessein : ajouter un relais oblige a verifier a la main que sa source
- * prefixe bien. Fait pour ces trois-la, qui produisent `[pari]`, `[worktrees]` et `[brain-*]`.
+ * prefixe bien. Fait pour ces quatre-la, qui produisent `[pari]`, `[worktrees]`, `[brain-*]` et
+ * `[coffre]` (`ligne` : `importerLeCoffreAuDemarrage`, ipc/coffre-cles.ts, prefixe ses deux lignes).
  */
-const RELAIS_AUTORISES = new Set(['resumerMesure(mesure)', 'line', 'message'])
+const RELAIS_AUTORISES = new Set(['resumerMesure(mesure)', 'line', 'message', 'ligne'])
 
 function fichiersSources(dossier: string): string[] {
   const trouves: string[] = []
@@ -42,10 +43,21 @@ function fichiersSources(dossier: string): string[] {
   return trouves
 }
 
-/** L'argument passe au log, sans la parenthese fermante de l'appel ni les separateurs de fin. */
+/**
+ * L'argument passe au log, coupe a la parenthese qui ferme `console.log(`. Couper une seule `)` en
+ * fin de ligne ne suffit pas quand l'appel est imbrique : `f((ligne) => console.log(ligne)))` laissait
+ * `ligne))`, qu'aucun relais ne reconnait.
+ */
 function argumentRelaye(message: string): string {
-  const sansEspaces = message.trimEnd()
-  return sansEspaces.endsWith(')') ? sansEspaces.slice(0, -1) : sansEspaces
+  let profondeur = 0
+  for (let i = 0; i < message.length; i++) {
+    if (message[i] === '(') profondeur++
+    else if (message[i] === ')') {
+      if (profondeur === 0) return message.slice(0, i).trim()
+      profondeur--
+    }
+  }
+  return message.trim().replace(/,$/, '')
 }
 
 describe('journal du processus principal', () => {

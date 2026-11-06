@@ -641,9 +641,10 @@ describe('Envoyer en gel fondu bleu-rose', () => {
  * information gardent leur habit : mode auto allume (or), micro en ecoute ou en transcription.
  */
 describe('Icones de la saisie nues (Lineaire B)', () => {
-  // « ×3 » (Essaie 3 façons) suit les trois icônes voisines : même habit nu, même survol.
+  // « ×3 » (Essaie 3 façons) suit les trois icônes voisines : même habit nu, même survol. Devenu
+  // une bascule le 2026-11-04, il garde son habit une fois armé (.actif), comme le mode auto.
   // La question à côté (QuestionACote.tsx) aussi ; ouverte (.actif), elle garde son habit.
-  const NUES = `${PREFIXE} .composer-input-row > :is(.composer-auto:not(.actif), .attachment-button, .composer-trois-facons, .composer-question-a-cote:not(.actif), .composer-dictee:not(.is-recording):not(.is-transcribing))`
+  const NUES = `${PREFIXE} .composer-input-row > :is(.composer-auto:not(.actif), .attachment-button, .composer-trois-facons:not(.actif), .composer-question-a-cote:not(.actif), .composer-dictee:not(.is-recording):not(.is-transcribing))`
   /** Le formateur peut couper `:is(...)` sur plusieurs lignes : on compare sans ces blancs. */
   const aplati = (s: string): string =>
     s.replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim()

@@ -209,7 +209,19 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
     // partis avec le soulignement du bouton Details, desormais dessine par la capsule
     // Raisonnement / Actions.
     expect(definis.size).toBeGreaterThanOrEqual(106)
-    const mauvais = [...definis].filter(([, valeur]) => !/^#[0-9a-fA-F]{3,8}$/.test(valeur))
+    /*
+     * UN JETON D'OMBRE, PAS DE COULEUR (2026-11-05). Le halo du rond d'etat salissait le rond sur
+     * fond clair : il passe par `--chat-etat-halo`, `none` dans le bloc clair. Sa valeur sombre n'est
+     * pas un hex, c'est l'ombre qui etait en dur dans `.chat-etat`, au caractere pres -- la meme
+     * garantie que les hex : le theme Sombre rend les memes pixels. Nomme a la valeur exacte : un
+     * renvoi `var()` ou une ombre retouchee font toujours echouer.
+     */
+    const OMBRES_ASSUMEES = new Map([
+      ['--chat-etat-halo', '0 0 3px currentColor, 0 0 7px currentColor']
+    ])
+    const mauvais = [...definis].filter(
+      ([nom, valeur]) => !/^#[0-9a-fA-F]{3,8}$/.test(valeur) && OMBRES_ASSUMEES.get(nom) !== valeur
+    )
     expect(
       mauvais.map(([nom, valeur]) => `${nom} = ${valeur}`),
       'la valeur sombre doit rester le hex exact qui etait en dur : un var() la ferait deriver'
