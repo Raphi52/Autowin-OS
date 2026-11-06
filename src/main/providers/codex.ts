@@ -25,6 +25,7 @@ import {
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { findNpmGlobalFile } from './npm-global-resolve'
 import { materializeClaudeAttachments } from './claude'
+import { envDuCoffre } from './cles-du-coffre'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -323,14 +324,16 @@ export function codexNativeBinaryFromEntrypoint(
 }
 
 /**
- * Environnement du processus Codex : hérité, plus les variables du run (`execution.agentEnv`, ex. le
- * fil AUTOWIN_CONVERSATION_ID). Sans variable de run, l'héritage reste strictement identique.
+ * Environnement du processus Codex : hérité, puis les clés du coffre (sans celles qui feraient passer
+ * `codex exec` en facturation à la clé, voir `EXCLUSIONS_COFFRE`), puis les variables du run
+ * (`execution.agentEnv`, ex. le fil AUTOWIN_CONVERSATION_ID). Coffre vide et sans variable de run,
+ * l'héritage reste strictement identique.
  */
 export function environnementCodex(
   base: NodeJS.ProcessEnv,
   agentEnv?: Record<string, string>
 ): NodeJS.ProcessEnv {
-  return agentEnv ? { ...base, ...agentEnv } : { ...base }
+  return { ...base, ...envDuCoffre('codex'), ...(agentEnv ?? {}) }
 }
 
 export function codexExecSpec(

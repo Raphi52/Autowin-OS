@@ -15,6 +15,7 @@ import type { AppCommandBus } from './commands'
 import { pendantOperation } from '../gel/gel-main'
 import { lastUserMessageAt } from '../store/conversations'
 import { skillsInvocables } from './skills'
+import { listerCles } from '../app/coffre-cles'
 
 /** Projette le statut budget de l'OS sur les trois champs honnêtes du snapshot. */
 export function budgetSnapshot(status: {
@@ -28,6 +29,17 @@ export function budgetSnapshot(status: {
     budgetUnpricedTurns: unpriced,
     budgetIsPartial: status.spentIsPartial ?? unpriced > 0
   }
+}
+
+/**
+ * Le champ `clesDuCoffre` : les NOMS triés, rien d'autre. `listerCles` ne rend déjà ni valeur ni
+ * morceau de valeur ; on n'en garde que le nom pour que la longueur ne voyage pas non plus.
+ */
+export function clesDuCoffrePourLePrompt(): Pick<PromptSnapshot, 'clesDuCoffre'> {
+  const noms = listerCles()
+    .map((cle) => cle.nom)
+    .sort()
+  return noms.length > 0 ? { clesDuCoffre: noms } : {}
 }
 
 /** Le champ `tachesDeFondSuiviesParAutowin`, ou rien quand aucune tâche relancée ne tourne. */
@@ -156,6 +168,7 @@ export async function snapshotForPrompt(bus: AppCommandBus, jalon?: (nom: string
     ...(full.runsNonExamines ? { runsNonExamines: full.runsNonExamines } : {}),
     conversationsCount: full.conversations.length,
     ...(skillsInvocables().length > 0 ? { skillsDisponibles: skillsInvocables() } : {}),
+    ...clesDuCoffrePourLePrompt(),
     ...(bus.travauxNonAnnonces(full.travauxNonPublies).length > 0
       ? {
           travauxNonFusionnes: {

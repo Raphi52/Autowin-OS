@@ -78,6 +78,7 @@ import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { addedLineFingerprints, exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
 import { claudeCompteDuFil, withClaudeAccountEnv } from './claude-accounts'
+import { envDuCoffre } from './cles-du-coffre'
 import { coutDuTourDepuisCumul } from './claude-session-cost'
 import { sonderContexte, type IssueSonde } from './claude-sonde-contexte'
 import {
@@ -304,7 +305,8 @@ export function normalizeClaudeUsage(
  * périmètre par préfixe ne borne que le verbe.
  */
 /**
- * Environnement du processus agent : base, puis variables du run (`execution.agentEnv`, ex. le fil
+ * Environnement du processus agent : base, puis clés du coffre (`envDuCoffre`, sans celles qui
+ * changeraient la connexion du CLI), puis variables du run (`execution.agentEnv`, ex. le fil
  * AUTOWIN_CONVERSATION_ID), puis NON_INTERACTIVE_ENV EN DERNIER — une variable du run ne peut pas
  * rouvrir un pager ou une invite d'identifiants.
  */
@@ -404,9 +406,12 @@ export function envFiletElectronAgent(
 }
 
 export function environnementAgent(
-  base: NodeJS.ProcessEnv,
+  herite: NodeJS.ProcessEnv,
   agentEnv?: Record<string, string>
 ): NodeJS.ProcessEnv {
+  // Les clés du coffre (relu à chaque lancement) passent après l'héritage et AVANT le run : la
+  // valeur du coffre l'emporte sur celle du poste, et ni l'une ni l'autre ne touche aux garde-fous.
+  const base = { ...herite, ...envDuCoffre('claude') }
   return { ...base, ...(agentEnv ?? {}), ...NON_INTERACTIVE_ENV }
 }
 

@@ -181,6 +181,13 @@ export interface PromptSnapshot {
    */
   skillsDisponibles?: string[]
   /**
+   * Les NOMS des clés du coffre, triés — jamais une valeur. ABSENT quand le coffre est vide.
+   *
+   * Un agent lancé reçoit ces clés en variables d'environnement : il s'en sert par leur nom
+   * (`$NOM` dans sa commande) au lieu de les réclamer dans le fil ou de refuser faute de droit.
+   */
+  clesDuCoffre?: string[]
+  /**
    * DU TRAVAIL NON FUSIONNE, et la consigne pour le trier — ABSENT quand il n'y en a pas.
    *
    * Le recensement repare le 2026-08-26 rend ces travaux VISIBLES dans `get_state`. Mais voir n'est

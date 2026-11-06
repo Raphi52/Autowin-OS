@@ -13,6 +13,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk, Usage } from './types'
+import { envDuCoffre } from './cles-du-coffre'
 
 export const AGY_PROVIDER_ID = 'agy'
 
@@ -138,6 +139,8 @@ export class AgyAdapter implements ProviderAdapter {
     if (opts.execution?.cwd) args.push('--dangerously-skip-permissions')
     const enfant = (this.deps.spawnFn ?? spawn)(bin, args, {
       cwd: opts.execution?.cwd,
+      // Clés du coffre, sans celles qui feraient quitter à agy la connexion par compte Google.
+      env: { ...process.env, ...envDuCoffre('agy') },
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     })

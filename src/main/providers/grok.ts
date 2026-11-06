@@ -18,6 +18,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk, Usage } from './types'
+import { envDuCoffre } from './cles-du-coffre'
 
 export const GROK_PROVIDER_ID = 'grok'
 
@@ -134,7 +135,8 @@ export class GrokAdapter implements ProviderAdapter {
     if (opts.execution?.cwd) args.push('--cwd', opts.execution.cwd, '--always-approve')
     const enfant = (this.deps.spawnFn ?? spawn)(bin, args, {
       cwd: opts.execution?.cwd,
-      env: envSansCleXai(),
+      // Clés du coffre sans XAI_API_KEY ; `envSansCleXai` reste appliqué EN DERNIER, sur le tout.
+      env: envSansCleXai({ ...process.env, ...envDuCoffre('grok') }),
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
