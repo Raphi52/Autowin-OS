@@ -36,7 +36,7 @@ export function motsCites(texte: string): string[] {
 /**
  * Seuls ces préfixes désignent à coup sûr un chemin du DÉPÔT. Un nom nu (`x.ts`), un chemin de
  * données du poste (`turn-journals/<conv>/…`) ou relatif à un autre dossier (`assets/theme.css`)
- * reste hors contrôle : il ne dit pas où il vit.
+ * reste hors de ce contrôle : il ne dit pas où il vit (`cheminsPartiels` rattrape le chemin tronqué).
  */
 const PREFIXES_DU_DEPOT = /^(src|scripts|skills|\.githooks)\//
 
@@ -44,6 +44,36 @@ const PREFIXES_DU_DEPOT = /^(src|scripts|skills|\.githooks)\//
 export function cheminsCites(texte: string): string[] {
   const mots = motsCites(texte).filter((m) => PREFIXES_DU_DEPOT.test(m) || m === '.gitignore')
   return [...new Set(mots)]
+}
+
+/**
+ * Les chemins cités SANS leur début (`assets/theme.css` pour `src/renderer/src/assets/theme.css`),
+ * avec le chemin complet que l'auteur voulait dire. `fichiersSuivis` = `git ls-files` de la racine.
+ *
+ * POURQUOI : `cheminsCites` ne contrôle que les chemins aux préfixes du dépôt ; un chemin tronqué
+ * échappait donc à tout contrôle, et l'agent qui l'ouvre depuis la racine ne trouve rien. Seul un
+ * chemin à extension, sans placeholder, qui n'existe pas depuis la racine mais termine un fichier
+ * suivi, est signalé : un chemin de données du poste (`demandes/index.jsonl`) ne termine aucun
+ * fichier suivi et reste libre.
+ */
+export function cheminsPartiels(
+  texte: string,
+  racine: string,
+  fichiersSuivis: readonly string[]
+): string[] {
+  const candidats = motsCites(texte).filter(
+    (m) =>
+      m.includes('/') &&
+      /\.[\w-]+$/.test(m) &&
+      !/[<*]/.test(m) &&
+      !/^[./~]/.test(m) &&
+      !PREFIXES_DU_DEPOT.test(m) &&
+      !existsSync(join(racine, m))
+  )
+  return [...new Set(candidats)].flatMap((cite) => {
+    const complets = fichiersSuivis.filter((f) => f.endsWith(`/${cite}`))
+    return complets.length > 0 ? [`chemin partiel : ${cite} → ${complets.join(' ou ')}`] : []
+  })
 }
 
 /** Un segment `<nom>` ou `*` vaut n'importe quelle entrée du dossier. */

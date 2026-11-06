@@ -8,7 +8,7 @@ import {
   blocsSystemeEcran,
   buildChatPilotagePrompt
 } from '../consignes/chat-pilotage-prompt'
-import { cheminsCites, citationsCassees, existeAvecMotif } from './chemins-cites'
+import { cheminsCites, cheminsPartiels, citationsCassees, existeAvecMotif } from './chemins-cites'
 import { CATALOG } from '../commands/commands'
 import { consigneBureauCache } from '../consignes/consigne-bureau-cache'
 import { CONSTITUTION } from '../consignes/constitution'
@@ -72,6 +72,21 @@ describe('extraction des chemins cités', () => {
     const texte =
       '`node scripts/ui-capture.mjs --code-dev` · `src/main/` · `turn-journals/<conv>/x.jsonl` · `x.ts` · `.gitignore`'
     expect(cheminsCites(texte)).toEqual(['scripts/ui-capture.mjs', 'src/main/', '.gitignore'])
+  })
+
+  it('un chemin tronqué est rendu avec son chemin complet ; un chemin de données reste libre', () => {
+    const suivis = ['src/renderer/src/assets/theme.css', 'scripts/ui-capture.mjs']
+    expect(cheminsPartiels('`assets/theme.css`', RACINE, suivis)).toEqual([
+      'chemin partiel : assets/theme.css → src/renderer/src/assets/theme.css'
+    ])
+    // Jumeaux acceptés : le chemin complet, un chemin de données du poste, un placeholder.
+    expect(
+      cheminsPartiels(
+        '`src/renderer/src/assets/theme.css` · `demandes/index.jsonl` · `run-stdout/<token>.jsonl`',
+        RACINE,
+        suivis
+      )
+    ).toEqual([])
   })
 
   it('un placeholder vaut n’importe quelle entrée, mais une entrée doit exister', () => {

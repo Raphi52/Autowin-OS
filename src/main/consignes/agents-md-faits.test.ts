@@ -6,7 +6,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import { refusGitDestructeur } from '../../shared/garde-git-destructeur'
 import { refusArretHote } from '../../shared/garde-hote-et-boucle'
-import { cheminsCites, existeAvecMotif, scriptsNpmCites } from '../fichiers/chemins-cites'
+import {
+  cheminsCites,
+  cheminsPartiels,
+  existeAvecMotif,
+  scriptsNpmCites
+} from '../fichiers/chemins-cites'
 import { PROJECT_CONTEXT_MAX_BYTES } from './context-files'
 
 /**
@@ -33,12 +38,10 @@ import { PROJECT_CONTEXT_MAX_BYTES } from './context-files'
  * L'AGENTS.md à vérifier pour `racine` : le sien ; sinon, si `racine` est une copie liée
  * (`git worktree add`), celui du dossier principal du dépôt ; sinon `undefined`.
  *
- * POURQUOI (2026-11-05) : AGENTS.md est ignoré par git (`.gitignore`, consignes locales du
- * poste). Les copies des runs et de `verify` ne l'ont pas, et ce test y plantait (ENOENT) : suite rouge
- * dans chaque copie d'agent. Ces agents lisent l'AGENTS.md du dossier principal ; on le vérifie donc
- * contre le code de la copie. Un clone (version publique) n'en a aucun : les faits s'y déclarent
- * IGNORÉS avec leur raison. Écrit dans la copie du run, perdu à sa publication (d06f79a5),
- * reporté par /git après un ENOENT reproduit dans une copie posée sur origin/main.
+ * POURQUOI (2026-11-05) : AGENTS.md était alors ignoré par git, et les copies des runs et de
+ * `verify` ne l'avaient pas : ce test y plantait (ENOENT). Il est suivi par git depuis le 2026-11-06
+ * (le test « suivi par git » plus bas l'y tient), mais une copie posée sur un commit plus ancien
+ * n'en a toujours aucun : elle lit celui du dossier principal, vérifié contre le code de la copie.
  */
 function agentsMdDe(racine: string): string | undefined {
   const local = join(racine, 'AGENTS.md')
@@ -141,7 +144,7 @@ const PAIRES: Paire[] = [
     }
   },
   {
-    fait: 'Jeton neuf : sa valeur dans `assets/theme.css` ET dans le bloc clair de `assets/theme-modes.css`.',
+    fait: 'Jeton neuf : sa valeur dans `src/renderer/src/assets/theme.css` ET dans le bloc clair de `src/renderer/src/assets/theme-modes.css`.',
     // La règle elle-même, rejouée avec le contrôle de la suite : tout jeton littéral de theme.css a
     // sa valeur dans le bloc clair (revue 2026-11-05 : la seule existence des deux fichiers ne
     // prouvait rien).
@@ -242,6 +245,38 @@ describe('AGENTS.md — ses faits tiennent encore', () => {
     expect(chemins.length).toBeGreaterThan(10)
     const absents = chemins.filter((c) => !existeAvecMotif(c.split('/'), RACINE))
     expect(absents).toEqual([])
+  })
+
+  it('aucun chemin cité n’est tronqué : chacun s’ouvre tel quel depuis la racine', ({ skip }) => {
+    if (!CHEMIN_AGENTS) skip(SANS_AGENTS)
+    const suivis = execFileSync('git', ['ls-files'], {
+      cwd: RACINE,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      windowsHide: true
+    })
+      .split('\n')
+      .filter(Boolean)
+    expect(cheminsPartiels(AGENTS, RACINE, suivis)).toEqual([])
+  })
+
+  it('aucun renvoi à un fil : la provenance d’un fait vit dans le commit', ({ skip }) => {
+    if (!CHEMIN_AGENTS) skip(SANS_AGENTS)
+    // Le lecteur d'AGENTS.md n'ouvrira pas le fil cité ; `git log -p AGENTS.md` retrouve la source.
+    expect(AGENTS.match(/\bconv-\d+\b/g) ?? []).toEqual([])
+  })
+
+  it('AGENTS.md est suivi par git : partagé, historisé, réversible', () => {
+    // Ignoré par git, il n'avait ni historique ni copie ailleurs que sur ce poste : un fait effacé
+    // par erreur était perdu, et un collègue ou une copie de travail n'en recevait aucun.
+    expect(() =>
+      execFileSync('git', ['ls-files', '--error-unmatch', 'AGENTS.md'], {
+        cwd: RACINE,
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    ).not.toThrow()
+    expect(lire('.gitignore')).not.toMatch(/^\/?AGENTS\.md\s*$/m)
   })
 
   it('chaque `npm run X` cité est un script de package.json', ({ skip }) => {
