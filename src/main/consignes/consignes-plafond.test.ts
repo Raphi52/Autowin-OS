@@ -42,8 +42,10 @@ import type { PipelinePhase } from '../skills/skill-pipeline'
  */
 // Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 36 938 car. ; lot 2 (redites
 // de la constitution et règles déjà tenues par le code retirées) : 33 304 car. ; lot 3 (mode
-// d'emploi de la mémoire et du plan de lots passé dans la description de leurs outils) : 29 108.
-const PLAFOND_PILOTAGE = 29_500
+// d'emploi de la mémoire et du plan de lots passé dans la description de leurs outils) : 29 108 ;
+// lot 4 (détail des formats d'affichage — JSON des blocs aw-*, page interactive, types mermaid —
+// passé dans skills/mise-en-forme/SKILL.md, chargé par `skill_charger`) : 24 061.
+const PLAFOND_PILOTAGE = 24_500
 // Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 18 207 car. ; lot 2 : 18 484
 // (cinq parts que seules les copies portaient, reportées en une phrase chacune, payées par des
 // redites internes retirées). Marge : 16 car. — un report de plus se paie par un retrait ici même.

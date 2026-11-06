@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { CLASSES_PAGES_HTML } from '../../shared/classes-pages-html'
 import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
-import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { CONSIGNE_BLOCS_DONNEES } from '../../shared/blocs-donnees'
+import { chargerSkillPourLeModele } from '../commands/skill-charger-command'
+import { SKILL_MISE_EN_FORME, buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { construirePromptScoutInterne } from '../veille/scout-interne'
 
 /**
@@ -45,13 +47,28 @@ describe('prompts des pages html-render : des classes, pas des couleurs', () => 
 /**
  * Les blocs de donnees n'existent pour le modele que si son prompt les nomme. Entree qui
  * ferait echouer une mauvaise correction : un prompt qui parle de `aw-tableau` sans son JSON.
+ *
+ * Le JSON a quitte la consigne servie a chaque tour pour la skill mise-en-forme, que le modele
+ * charge avec `skill_charger` avant d'ecrire le bloc. La consigne garde le NOM de chaque forme et
+ * la route ; la skill, telle que `skill_charger` la rend, garde le JSON.
  */
 describe('prompt du chat : les blocs de données', () => {
-  it('nomme les trois formes et leurs champs', () => {
+  const detail = chargerSkillPourLeModele({ nom: SKILL_MISE_EN_FORME }).procedure
+  const formes = ['```aw-tableau', '```aw-comparaison', '```aw-etapes']
+
+  it('nomme les trois formes et la route vers leur JSON', () => {
     const prompt = buildChatPilotagePrompt([])
-    for (const forme of ['```aw-tableau', '```aw-comparaison', '```aw-etapes'])
-      expect(prompt).toContain(forme)
+    for (const forme of formes) expect(prompt).toContain(forme)
+    expect(prompt).toContain(`\`skill_charger\` (${SKILL_MISE_EN_FORME})`)
+    expect(prompt).not.toContain('"colonnes"')
+  })
+
+  it('la skill chargée porte les champs, mot pour mot la rédaction du lecteur', () => {
+    for (const forme of formes) expect(detail).toContain(forme)
     for (const champ of ['"colonnes"', '"lignes"', '"options"', '"etapes"', '"statut"'])
-      expect(prompt).toContain(champ)
+      expect(detail).toContain(champ)
+    // Source unique avec `lireBlocDonnees` : un champ renommé dans blocs-donnees.ts rougit ici
+    // tant que la skill n'a pas suivi.
+    expect(detail).toContain(CONSIGNE_BLOCS_DONNEES)
   })
 })

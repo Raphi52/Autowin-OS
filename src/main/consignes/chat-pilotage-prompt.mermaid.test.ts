@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { SKILL_MISE_EN_FORME, buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { chargerSkillPourLeModele } from '../commands/skill-charger-command'
 
 /**
  * UNE CAPACITE QUE LE PROMPT NE NOMME PAS RESTE MORTE. Le rendu de la fence ```mermaid a ete
@@ -22,9 +23,17 @@ describe('contrat des diagrammes dans le chat', () => {
 
   // 2026-10-28 : « on exploite tout le potentiel ou on se limite à quelques trucs ? »
   // Mermaid 11.16 en dessine une trentaine ; le prompt n'en nommait que 7, donc l'agent n'en
-  // employait que 7. Chaque type nommé ici a été rendu aux couleurs du thème.
+  // employait que 7. Chaque type nommé ici a été rendu aux couleurs du thème. La liste vit dans la
+  // skill mise-en-forme, rendue par `skill_charger` ; la consigne dit quand la charger.
+  // fix-ok: cause mesurée — la liste des types a quitté la consigne servie à chaque tour (test rouge
+  // sur `prompt`) ; l'assertion, inchangée, porte désormais sur le texte que rend skill_charger.
   it('nomme les types au-delà des 7 classiques, avec la limite d’accents du sankey', () => {
     const prompt = buildChatPilotagePrompt([])
+    expect(prompt).toMatch(/mermaid autre que flowchart\/sequenceDiagram/u)
+    expect(prompt).toContain(`\`skill_charger\` (${SKILL_MISE_EN_FORME})`)
+    expect(prompt).not.toContain('sankey-beta')
+    const detail = chargerSkillPourLeModele({ nom: SKILL_MISE_EN_FORME }).procedure
+    expect(detail).toContain('```mermaid')
     for (const type of [
       'mindmap',
       'timeline',
@@ -35,8 +44,8 @@ describe('contrat des diagrammes dans le chat', () => {
       'treeView-beta',
       'ishikawa-beta'
     ])
-      expect(prompt).toContain(type)
-    expect(prompt).toMatch(/sankey-beta \(flux ; AUCUNE lettre accentuee/u)
+      expect(detail).toContain(type)
+    expect(detail).toMatch(/sankey-beta \(flux ; AUCUNE lettre accentuee/u)
   })
 
   // kaizen, tour c7710deb-b58c-4732-90e6-6d0d7903a5e6 (saisie ts 1789378608553) :
