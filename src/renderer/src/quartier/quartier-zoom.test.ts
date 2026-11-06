@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import donnees from '../assets/quartier/donnees.json'
 import {
@@ -5,6 +7,8 @@ import {
   MARGE_BORD,
   rapprocherZoom,
   REMPLISSAGE,
+  sourcesDesBords,
+  TAMPON_BORDS,
   ZOOM_MAX,
   zoomSur
 } from './quartier-zoom'
@@ -93,5 +97,26 @@ describe('la roue et la clé, au bord de la peinture, se centrent au zoom (conv-
       expect(d).toBeGreaterThanOrEqual(-MARGE_BORD)
       expect(d + 220).toBeLessThanOrEqual(1344 + MARGE_BORD)
     }
+  })
+})
+
+/** La taille d'une image AVIF, lue dans sa boîte `ispe` (taille, type, version, largeur, hauteur). */
+function tailleAvif(nom: string): [number, number] {
+  const o = readFileSync(fileURLToPath(new URL(`../assets/quartier/${nom}`, import.meta.url)))
+  const i = o.indexOf('ispe')
+  return [o.readUInt32BE(i + 8), o.readUInt32BE(i + 12)]
+}
+
+describe('les bords prolongés se lisent à leur propre échelle (conv-1644, bande bleue au zoom)', () => {
+  const [largeur, hauteur] = tailleAvif('bords.avif')
+
+  it('chaque bord est lu en entier, toute sa hauteur et toute sa largeur', () => {
+    const { gauche, droite } = sourcesDesBords(largeur, hauteur)
+    expect(gauche.h).toBe(hauteur)
+    expect(droite.h).toBe(hauteur)
+    expect(droite.x).toBe(gauche.l + TAMPON_BORDS)
+    expect(droite.x + droite.l).toBe(largeur)
+    // Un bord fait MARGE_BORD de large sur la hauteur de la scène (768) : il n'est pas déformé.
+    expect(gauche.l / gauche.h).toBeCloseTo(MARGE_BORD / 768, 3)
   })
 })
