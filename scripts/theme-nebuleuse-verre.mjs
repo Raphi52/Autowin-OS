@@ -3,7 +3,7 @@
  * GENERATEUR du theme « Nebuleuse de verre » -- couches de couleurs ecrites EN DUR.
  *
  * Pourquoi : un theme Autowin ne redefinit que des jetons (theme-modes.css), or 2 637 couleurs
- * sont ecrites en dur dans 56 feuilles (mesure du 2026-10-09, conv-124) -- dont plus de 250 ors
+ * sont ecrites en dur dans 56 feuilles (mesure du 2026-10-09) -- dont plus de 250 ors
  * de la marque, des cyans HUD et des noirs bleutes. Sans ce fichier, le theme ne repeignait que
  * le cadre : chaque vue gardait ses bords dores et ses fonds bleu-noir.
  *
@@ -34,12 +34,12 @@ import { analyser, feuillesDuDisque } from './couches-theme-ecrasements.mjs'
 
 const RACINE = fileURLToPath(new URL('..', import.meta.url))
 const SOURCES = ['src/renderer/src/components', 'src/renderer/src/assets']
-// La variante or et noir « nebuleuse-doree » (conv-139) a ete supprimee le 2026-10-11 (conv-230) :
+// La variante or et noir « nebuleuse-doree » a ete supprimee le 2026-10-11 :
 // ce generateur ne produit plus que Nebuleuse de verre et son pendant blanc (holographique-clair).
 const THEME = 'nebuleuse-verre'
 const SORTIE = `src/renderer/src/assets/theme-${THEME}.genere.css`
 const PREFIXE = `:root[data-theme='${THEME}']`
-// AskDecision.css garde son OR (conv-136, 2026-10-10 : « les blocs comme ASK qui demandent des
+// AskDecision.css garde son OR (2026-10-10 : « les blocs comme ASK qui demandent des
 // actions utilisateur, mets-les en doré ») : le bloc qui attend l'utilisateur ressort du rose.
 const EXCLUS = /theme-nier-automata|theme-clair|theme-malvoyant|theme-nebuleuse-verre|theme-ninja-claude|AskDecision.css/
 
@@ -155,7 +155,7 @@ function hslVersRgb({ h, s, l }) {
 const borne = (v, a, b) => Math.min(b, Math.max(a, v))
 
 /**
- * UN SEUL VERT (conv-197, 2026-10-10) : 154 verts ecrits en dur dans 32 feuilles, en 65 nuances.
+ * UN SEUL VERT (2026-10-10) : 154 verts ecrits en dur dans 32 feuilles, en 65 nuances.
  * LE vert est #00ff55, « bien flashy » (choix de l'utilisateur, apres un premier essai en menthe
  * #4fd1a5) ; les deux themes Nebuleuse finissent aussi leur degrade de quota dessus. Moyens et
  * clairs le prennent tel quel ; un vert SOMBRE (fond, liseré fonce) prend sa teinte mais garde sa
@@ -191,7 +191,7 @@ function transposer(rgb, enFond) {
   }
   if (enFond && l < 0.09) {
     // Encre violette du theme (#0b0a18 = 11,10,24), a l'opacite d'origine.
-    return { r: 10, g: 10, b: 10 } // noir, plus de bleu marine (conv-139)
+    return { r: 10, g: 10, b: 10 } // noir, plus de bleu marine
   }
   return null
 }
@@ -220,7 +220,7 @@ function transposerValeur(valeur, enFond) {
 /**
  * Les widgets du fond Falaise sont des pièces de la maquette : leur bois et leur papier viennent de
  * la peinture et ne suivent aucun thème (HomeView.css). Sans ce filtre, la couche d'un thème repeint
- * le papier en blanc bleuté (vu en capture, conv-1421).
+ * le papier en blanc bleuté (vu en capture).
  */
 const estDuQuartier = (s) => s.includes("[data-fond='falaise']")
 
@@ -303,13 +303,13 @@ export function generer() {
 }
 
 /**
- * Le FOND de Nebuleuse de verre lui appartient (conv-159) : le bloc borne par FOND-PROPRE:DEBUT/FIN
+ * Le FOND de Nebuleuse de verre lui appartient : le bloc borne par FOND-PROPRE:DEBUT/FIN
  * dans theme-nebuleuse-verre.css est remplace par FOND_CLAIR dans Holographique blanc.
  */
 const BLOC_FOND_PROPRE = /\/\* FOND-PROPRE:DEBUT[\s\S]*?\/\* FOND-PROPRE:FIN \*\/\n/
 
 /* =================================================================================================
- * HOLOGRAPHIQUE BLANC (id `holographique-clair`, conv-212, 2026-10-10). Demande : « un theme
+ * HOLOGRAPHIQUE BLANC (id `holographique-clair`, 2026-10-10). Demande : « un theme
  * holographique blanc qui ressemble au holographique noir mais en gerant les pbms de lisibilite »,
  * « il faut baser tous les nouveaux theme en prenant holographique noir en template ». Choisi sur
  * maquette (/draft) : tour 2 « Feuille holo » (panneaux blancs, lisere irise, coins bleu et rose,
@@ -341,9 +341,9 @@ const CLAIR_ROSE = { r: 208, g: 43, b: 140 }
  * COCHEE porte le degrade, et son texte passe par --nv-askd-encre-bulle, deja garde blanc.
  */
 /*
- * L'onglet actif du panneau Details SOUS `.runs-pane` n'y est PAS (conv-229, 2026-10-11, capture :
+ * L'onglet actif du panneau Details SOUS `.runs-pane` n'y est PAS (2026-10-11, capture :
  * « Graph » blanc sur blanc, « pareil pour les headers du menu Details ») : sous le cadre a coins
- * coupes, il n'a plus de pastille degradee mais un simple trait sous le mot (conv-180), pose sur la
+ * coupes, il n'a plus de pastille degradee mais un simple trait sous le mot, pose sur la
  * nacre. Son blanc doit donc devenir encre ; seule la pastille de la section 6 garde le blanc.
  */
 const CLAIR_SUR_DEGRADE =
@@ -435,7 +435,7 @@ function recolorerClair(rgb, role, garder) {
  * Role d'une declaration, selon sa propriete ET sa regle. Rend un role, ou une fonction du RANG de la
  * couleur dans la valeur quand ses couleurs ne peignent pas la meme chose.
  *
- * L'ASCENSEUR (2026-10-11, conv-250 : « corrige dans le generateur du theme Holographique blanc la
+ * L'ASCENSEUR (2026-10-11, « corrige dans le generateur du theme Holographique blanc la
  * couleur du curseur des barres de defilement, pour qu'elles soient visibles sur la nacre dans toute
  * l'app »). `roleClair` ne voyait que la propriete : `scrollbar-color` et le fond du curseur
  * `::-webkit-scrollbar-thumb` tombaient en « fond », et un fond blanc reste blanc. Le curseur du noir
@@ -477,13 +477,13 @@ function recolorerValeurClair(valeur, role, garder) {
  */
 const CLAIR_REMPLACEMENTS = [
   // Satin de la page : nacre #f8f7fb, reflets a +7 / -4 niveaux (le noir : #080808 et #222222).
-  // Ses quatre teintes sont NOMMEES depuis conv-987 (l'entree des cadres les reprend une a une) :
+  // Ses quatre teintes sont NOMMEES (l'entree des cadres les reprend une a une) :
   // a 0 %, 18 %, 42/48/80 % et 64 %.
   [
     '--nv-satin-a: #0c0c0c;\n  --nv-satin-b: #222222;\n  --nv-satin-c: #080808;\n  --nv-satin-d: #1a1a1a;',
     '--nv-satin-a: #f8f7fb;\n  --nv-satin-b: #ffffff;\n  --nv-satin-c: #f5f4f9;\n  --nv-satin-d: #fcfbfe;'
   ],
-  // Lumiere de l'entree des cadres (conv-987) : la meme nacre que le halo de la souris, ci-dessous.
+  // Lumiere de l'entree des cadres : la meme nacre que le halo de la souris, ci-dessous.
   ['--nv-entree-lumiere: rgba(255, 255, 255, 0.17);', '--nv-entree-lumiere: rgba(255, 255, 255, 0.97);'],
   // Lumiere de la souris : un blanc a 13 % ne se voit pas sur la nacre ; le halo du /draft
   // (« Halo nacre ») part de 97 %.
@@ -504,7 +504,7 @@ const CLAIR_JETONS_FINAUX = {
 }
 
 const FOND_CLAIR = `/* ---------------------------------------------------------------------------
-   2. FOND NACRE UNI (Holographique blanc, conv-212) : piste « Le plus blanc » du /draft (tour 3),
+   2. FOND NACRE UNI (Holographique blanc) : piste « Le plus blanc » du /draft (tour 3),
    page presque blanche #f6f5f9 et rien d'autre -- le meme parti pris que le fond noir uni du noir
    (« oublie le rose et bleu »). Ni grain anime, ni voile de bord.
    --------------------------------------------------------------------------- */
@@ -531,7 +531,7 @@ const COMPLEMENT_CLAIR = `
 :root[data-theme='${CLAIR_ID}'] {
   --nv-holo-lisere: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, #cfd6e4);
 }
-/* L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16) : pendant l'entree, le lisere se pose AVEC
+/* L'ENTREE DES CADRES A CHANFREIN (2026-10-16) : pendant l'entree, le lisere se pose AVEC
    le satin (\`--ch-fond\`, bloc ENTREE-CHANFREIN de theme-nebuleuse-verre.css). Laisse tel quel, il
    flottait seul en haut de cadres encore vides, avant meme leurs coins (capture du 2026-10-16). Memes
    teintes que le lisere de repos, ci-dessus : a la fin de l'entree, rien ne saute. */
@@ -549,7 +549,7 @@ const COMPLEMENT_CLAIR = `
 /* La bulle de l'utilisateur : le degrade du noir, rose assombri (#d02b8c) pour que le blanc dessus
    passe 4,5:1 sur toute la bulle (4,54:1 sur le bleu, 4,77:1 sur le rose). La regle de
    cosmic-outline.css est reservee aux themes sombres : elle est reprise ici.
-   Depuis conv-1163 (2026-10-27, « met ca aussi pour mes messages ») la bulle coule en lampe a lave,
+   Depuis le 2026-10-27 (« met ca aussi pour mes messages ») la bulle coule en lampe a lave,
    comme sur le noir : \`--nv-lave-fond\` et son mouvement viennent de la section LAMPE A LAVE derivee
    du noir, aux memes couleurs (gouttes sur le degrade #3c6eeb -> #d02b8c, rose assombri compris). */
 :root[data-theme='${CLAIR_ID}'] .cosmic-outline .msg.user .msg-body.msg-bulle {
@@ -562,8 +562,8 @@ const COMPLEMENT_CLAIR = `
   box-shadow: none;
   position: relative;
 }
-/* Le neon « Brume » autour de la bulle (draft conv-199, copie floutee de son fond) est retire le
-   2026-11-05 (conv-1623, « enleve les effets de flou ») : garde assets/aucun-flou.test.ts. */
+/* Le neon « Brume » autour de la bulle (copie floutee de son fond) est retire le
+   2026-11-05 (« enleve les effets de flou ») : garde assets/aucun-flou.test.ts. */
 /* La base claire (theme-modes.css, « gris bleu franc ») peint ces champs en #dde2e9 ; le noir ne les
    repeint pas, le gris restait donc au milieu de la nacre (capture du 2026-10-10). La saisie interne
    laisse voir le satin de la saisie, comme sur le noir ; les autres prennent une nacre presque blanche.
@@ -575,7 +575,7 @@ const COMPLEMENT_CLAIR = `
 :root[data-theme='${CLAIR_ID}'][data-base='clair'] :is(.theme-serious .brand, .cosmic-outline .conv-search, .artifact-preview) {
   background: #fdfdff;
 }
-/* REPONSE DE L'AGENT EN NOIR SUR BLANC (conv-223, 2026-10-11, capture : texte sur un voile gris a
+/* REPONSE DE L'AGENT EN NOIR SUR BLANC (2026-10-11, capture : texte sur un voile gris a
    lisere rose). Demande : « ecris juste en noir sur blanc sans liserais et sans fond gris sous le
    texte ». La couche generee (theme-${CLAIR_ID}.genere.css) peint ce selecteur -- lisere rose,
    voile rgba(20, 15, 40, 0.07) -- avec le MEME poids que la feuille principale : seul l'ordre d'import
@@ -586,7 +586,7 @@ const COMPLEMENT_CLAIR = `
   background: transparent;
   color: #000000;
 }
-/* LE DECOR DE L'ACCUEIL REVIENT EN BLANC (conv-1076, 2026-10-22 : « dans le theme holographique
+/* LE DECOR DE L'ACCUEIL REVIENT EN BLANC (2026-10-22 : « dans le theme holographique
    blanc faut aussi le fond d'accueil cyberpunk », puis « c le select de l'accueil qui fait foi pour
    le fond de l'accueil pas le theme choisi »). Il etait cache ici depuis le « Le plus blanc »
    (0e753829, 2026-10-11). Il suit maintenant le menu Fond de l'Accueil, sans voile ; l'encre claire
@@ -599,7 +599,7 @@ const COMPLEMENT_CLAIR = `
     0 0 9px var(--nv-neon-a),
     0 0 18px color-mix(in srgb, var(--nv-neon-a) 70%, transparent);
 }
-/* CAPSULE D'ACTIONS (« 1 action terminee », conv-212 : « pas ouf »). Le noir la peint par sa couche
+/* CAPSULE D'ACTIONS (« 1 action terminee », « pas ouf »). Le noir la peint par sa couche
    generee : trait vif a gauche, teinte d'etat qui s'efface vers la droite. La base claire commune
    (theme-modes.css) la repeint en sarcelle (47,138,110) apres la couche generee du blanc : seule cette
    feuille, importee apres elle, peut la couvrir. Meme dessin que le noir, en clair : vert #09712c
@@ -647,8 +647,8 @@ const COMPLEMENT_CLAIR = `
   box-shadow: 0 3px 12px rgba(40, 30, 80, 0.16);
 }
 /* BLOC DE FIN DE TOUR (Fait / Maintenant / Reste a faire / Recommande) : « CADRE HOLO · TITRE ET
-   FILET » (/draft conv-212, 2026-10-11 : tour 1 « Cadre holo », tour 2 « go met le 5 »). Le noir le
-   peint en OR (conv-124) ; recolore, il restait un cadre or bruni sur un voile beige au milieu de la
+   FILET » (2026-10-11 : tour 1 « Cadre holo », tour 2 « go met le 5 »). Le noir le
+   peint en OR ; recolore, il restait un cadre or bruni sur un voile beige au milieu de la
    nacre. Ici : le CADRE du bloc ASK (memes bandes bleu, rose, argent, 1,5 px) autour d'une plaque
    nacree, « Fait » ecrit en degrade bleu -> rose, et un filet irise sous la liste.
    Feuille seule, sans toucher au balisage (Markdown.tsx) : le titre est la premiere ligne du bloc
@@ -702,7 +702,7 @@ const COMPLEMENT_CLAIR = `
   border-image: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, rgba(207, 214, 228, 0)) 1;
 }
 /* Texte BLANC sur les pastilles degradees.
-   SANS les cases du pied de liste (conv-229, 2026-10-11 : « les textes deviennent blanc quand je
+   SANS les cases du pied de liste (2026-10-11 : « les textes deviennent blanc quand je
    click dessus sur fond blanc ») : depuis le /draft du pied du 2026-10-10, une case dont le reglage
    a change ne porte plus de degrade, son fond est transparent sur la nacre. Ce blanc, plus precis
    que \`.conv-foot > button\`, rendait « Actives », « Compacte » et « Mosaique » invisibles. */
@@ -712,14 +712,14 @@ const COMPLEMENT_CLAIR = `
 :root[data-theme='${CLAIR_ID}'] .cosmic-outline .conv-new-row .conv-new-title {
   color: #ffffff;
 }
-/* QUESTION A L'UTILISATEUR (AskDecision) : « LISERE DU HAUT » (/draft conv-225, 2026-10-11, tour 1 :
-   « go : fais le 3 »). Derive du noir, le bloc gardait le cadre irise de conv-202 autour d'une plaque
+/* QUESTION A L'UTILISATEUR (AskDecision) : « LISERE DU HAUT » (/draft, 2026-10-11, tour 1 :
+   « go : fais le 3 »). Derive du noir, le bloc gardait le cadre irise autour d'une plaque
    GRISE #eceaf2, et des capsules grises #edebf3 : ce gris jurait sur la page #f6f5f9. Ici le bloc prend
    l'habit des panneaux du theme : nacre #fdfdff, contour gris fin, lisere irise de 3 px en haut
    (--nv-holo-lisere) sur lequel glisse le lustre. Chaque reponse est une capsule BLANCHE au contour gris ;
    les bandes bleu, rose, argent ne reviennent QUE sur la reponse survolee, focalisee ou recommandee
    (1,5 px, la marge negative garde le texte immobile). Cochee ou retenue : le degrade de la bulle,
-   inchange (conv-201). Le bloc Frame (.askd.cadrage-hyp) partage ces classes et cet habit (conv-202).
+   inchange. Le bloc Frame (.askd.cadrage-hyp) partage ces classes et cet habit.
    Maquette : artifacts/draft-ask-blanc/tour1.html, onglet 3. Double attribut : ces regles pesent plus
    que celles derivees du noir, quel que soit l'ordre des feuilles. */
 :root[data-theme='${CLAIR_ID}'][data-base='clair'] .askd {
@@ -796,7 +796,7 @@ export function genererMainClair() {
 }
 
 /* =================================================================================================
- * COUCHE GENEREE D'HOLOGRAPHIQUE BLANC (2026-10-11, conv-212 : « corrige les elements sombres », puis
+ * COUCHE GENEREE D'HOLOGRAPHIQUE BLANC (2026-10-11, : « corrige les elements sombres », puis
  * « le bloc ask et 1 action terminee sont pas ouf »). Holographique noir a DEUX feuilles : sa feuille
  * ecrite a la main ET une couche generee (`generer`) qui retraduit les couleurs ECRITES EN DUR dans
  * les feuilles des composants. Le blanc n'avait que la premiere : chaque couleur en dur des vues
@@ -953,7 +953,7 @@ export function genererCoucheClaire() {
 }
 
 /* =================================================================================================
- * NINJA CLAUDE (id `ninja-claude`, conv-269, 2026-10-16). Demande : « un theme "Ninja Claude", pour
+ * NINJA CLAUDE (id `ninja-claude`, 2026-10-16). Demande : « un theme "Ninja Claude", pour
  * que l'interface d'autowin ressemble en tous points a celle de claude ». Base SOMBRE (« ninja »).
  *
  * Palette de Claude en sombre (relevee sur une page tierce, design.hagicode.com, PAS sur une source
@@ -986,7 +986,7 @@ const NINJA_JETON_FOND = /fond|bg|surface|background|panel|card|inset/
 /**
  * Selecteurs JAMAIS recopies dans la couche Ninja. Une regle PAR DEFAUT recopiee avec le prefixe du
  * theme (0,3,0) bat ses variantes de la base (0,2,0) que la transposition laisse telles quelles,
- * puisque celles-ci n'ont alors aucune copie prefixee. Cas mesure le 2026-10-23 (conv-1105) : le gris
+ * puisque celles-ci n'ont alors aucune copie prefixee. Cas mesure le 2026-10-23 : le gris
  * bleute de `.observatory-gantt__lane` devenait un gris chaud qui ecrasait le bleu de scout, l'ocre
  * de build et le vert de judge dans le deroule de l'Observatory.
  */
@@ -1012,7 +1012,7 @@ function transposerNinja(rgb, enFond) {
  * `sources` dont un selecteur passe `prefixe` est recopiee avec ses SEULES declarations de couleur
  * que `transposer` change (alpha conserve). Un jeton dont le nom passe `jetonFond` compte comme fond.
  *
- * VARIANTES (conv-1105, 2026-10-23), avec `variantes: { theme, prefixe }` : la copie prefixee d'une
+ * VARIANTES (2026-10-23), avec `variantes: { theme, prefixe }` : la copie prefixee d'une
  * regle GENERALE (`.x`) bat les variantes plus precises (`.x.is-on`, `.x[data-phase]`, `.p .x:hover`)
  * que la transposition n'a pas recopiees — mesure : 105 variantes sous Ninja (vert de
  * `.control-status.is-on`, rouge de `.sc-diff-action.is-armed`, scout/build/judge du deroule), 8 sous
@@ -1148,7 +1148,7 @@ export function genererNinjaClaude() {
 }
 
 /* =================================================================================================
- * VANILLA CLAUDE (id `vanilla-claude`, conv-269, 2026-10-16). Demande : « une version claire
+ * VANILLA CLAUDE (id `vanilla-claude`, 2026-10-16). Demande : « une version claire
  * "Vanilla Claude" » de Ninja Claude. Base CLAIRE.
  *
  * La source n'est PAS la meme que pour Ninja : en base claire, theme-modes.css et theme-clair-gris.css
@@ -1255,7 +1255,7 @@ export function genererVanillaClaude() {
 
 
 /* =================================================================================================
- * NIER:AUTOMATA (id `nier-automata`, conv-281, 2026-10-19). Demande : « Fait moi un theme Nier
+ * NIER:AUTOMATA (id `nier-automata`, 2026-10-19). Demande : « Fait moi un theme Nier
  * Automata pour Autowin ». Base CLAIRE, meme mecanique que Vanilla Claude : les regles de la base
  * claire qui ecrivent une couleur en dur sont re-prefixees et transposees vers l'interface du jeu —
  * papier beige #dad4bb, encre brune #4e4b42. Toute teinte saturee (or, rose, bleus, violets) devient
