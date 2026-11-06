@@ -3,7 +3,7 @@
  *
  * La racine n'est JAMAIS fournie par le renderer : il ne transmet qu'un identifiant de conversation,
  * et le principal en deduit le dossier de travail (CWD) de cette conversation, avec la meme regle que
- * les tours de chat (`dossierDeTravailDuTour`), repli sur `os.executionWorkspace`. Sans cela, changer
+ * les tours de chat (`dossierDeLectureDuFil`), repli sur `os.executionWorkspace`. Sans cela, changer
  * de CWD laissait l'onglet sur le dossier global (demande du 2026-09-24). Le renderer ne manipule que des chemins RELATIFS, vérifiés sous cette
  * racine côté principal (voir `project-files.ts`). L'écriture ne crée aucun fichier.
  */
@@ -15,12 +15,12 @@ import { isAbsolute, join } from 'node:path'
 import { listProjectDir, readProjectFile, writeProjectFile } from '../fichiers/project-files'
 import { assertTrustedRendererSender } from './ipc-senders'
 import { guardString } from './ipc-guards'
-import { dossierDeTravailDuTour } from '../conversations/bascule-dossier-conversation'
+import { dossierDeLectureDuFil } from '../conversations/bascule-dossier-conversation'
 import type { AutowinOS } from '../app/os'
 
 export function registerProjectFilesIpc({ os }: { os: AutowinOS }): void {
   const racine = (rawConv: unknown): string =>
-    dossierDeTravailDuTour(
+    dossierDeLectureDuFil(
       typeof rawConv === 'string' && rawConv
         ? os.conversations?.get?.(rawConv)?.projectPath
         : undefined,

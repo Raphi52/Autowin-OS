@@ -85,5 +85,74 @@ export function dossierDeTravailDuTour(
   repli: string,
   dossierExiste: (chemin: string) => boolean = existsSync
 ): string {
+  const disparu = dossierRangeDisparu(projectPath, dossierExiste)
+  if (disparu !== null) throw new DossierRangeDisparuError(disparu)
+  return dossierRangeUtilisable(projectPath, dossierExiste) ?? repli
+}
+
+/**
+ * Le refus d'un tour dont le dossier rangé a disparu. Le fil AFFICHE `message` tel quel : il nomme
+ * le chemin perdu et le geste pour en choisir un autre. Rien ne se replie sur le dossier partagé :
+ * un fil rangé dans sa propre copie qui travaillerait là écrirait dans le dépôt d'où tourne l'app.
+ */
+export class DossierRangeDisparuError extends Error {
+  constructor(readonly dossierRange: string) {
+    super(
+      `⛔ Le dossier de travail rangé sur cette conversation (${dossierRange}) a disparu de ce poste. Je n'ai lancé aucun tour, pour ne pas travailler à sa place dans le dépôt partagé. Choisis un autre dossier pour cette conversation (la pastille du dossier, en haut du fil), puis renvoie ton message.`
+    )
+    this.name = 'DossierRangeDisparuError'
+  }
+}
+
+/** Le chemin rangé quand il est absolu mais absent du poste ; `null` dans tous les autres cas. */
+function dossierRangeDisparu(
+  projectPath: string | undefined | null,
+  dossierExiste: (chemin: string) => boolean
+): string | null {
+  const range = projectPath?.trim()
+  if (!range || !isAbsolute(range)) return null
+  const cible = resolve(range)
+  return dossierExiste(cible) ? null : cible
+}
+
+/** La raison du refus d'un tour, ou `null` si le tour peut partir. Ne lève pas. */
+export function refusDossierDuTour(
+  projectPath: string | undefined | null,
+  dossierExiste: (chemin: string) => boolean = existsSync
+): string | null {
+  const disparu = dossierRangeDisparu(projectPath, dossierExiste)
+  return disparu === null ? null : new DossierRangeDisparuError(disparu).message
+}
+
+/**
+ * Entrée d'un tour : si le dossier rangé du fil a disparu, écrit la raison dans le fil puis LÈVE,
+ * pour que le tour ne parte jamais dans le dépôt partagé. L'écriture dans le fil est best-effort :
+ * le refus est levé même si elle échoue. Sans dossier rangé, ne fait rien (comportement inchangé).
+ */
+export function refuserTourSiDossierDisparu(
+  projectPath: string | undefined | null,
+  ecrireDansLeFil: (raison: string) => void,
+  dossierExiste: (chemin: string) => boolean = existsSync
+): void {
+  const raison = refusDossierDuTour(projectPath, dossierExiste)
+  if (!raison) return
+  try {
+    ecrireDansLeFil(raison)
+  } catch {
+    // Le refus compte plus que son affichage : il reste levé.
+  }
+  throw new Error(raison)
+}
+
+/**
+ * Le dossier à LIRE pour un fil hors tour (fichiers, terminal, carte, contexte) : même résolution
+ * que le tour, mais un dossier disparu retombe sur le repli au lieu de lever, pour qu'un écran ne
+ * plante pas. Ne sert JAMAIS à lancer un tour : le refus se décide à l'entrée du tour.
+ */
+export function dossierDeLectureDuFil(
+  projectPath: string | undefined | null,
+  repli: string,
+  dossierExiste: (chemin: string) => boolean = existsSync
+): string {
   return dossierRangeUtilisable(projectPath, dossierExiste) ?? repli
 }
