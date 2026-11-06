@@ -316,7 +316,7 @@ import {
 import { creerSuiviDesPublications } from './git/publications-en-vol'
 import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './app/journal-arrets'
 import {
-  dossierDeTravailDuTour
+  dossierDeLectureDuFil
 } from './conversations/bascule-dossier-conversation'
 import { lecteurDeDeuxLectures } from './chat/deux-lectures-appel'
 import { creerMascotteDuBureau } from './mascotte/mascotte-fenetre'
@@ -1086,7 +1086,7 @@ amorcerRegistreOutils()
  * deux projets differents se voleraient le dossier.
  */
 const dossierDuTour = (conversationId?: string): string =>
-  dossierDeTravailDuTour(
+  dossierDeLectureDuFil(
     conversationId ? os.conversations.get(conversationId)?.projectPath : undefined,
     os.executionWorkspace
   )

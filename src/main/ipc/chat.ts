@@ -175,6 +175,7 @@ import { annoncerFermeture } from '../app/journal-arrets'
 import { consommerReprise } from '../app/redemarrage-reprise'
 import {
   avertissementDossierConversation,
+  refuserTourSiDossierDisparu,
   diagnostiqueDossierConversation
 } from '../conversations/bascule-dossier-conversation'
 import { depotCiteDansLeMessage } from '../git/depot-cite-dans-le-message'
@@ -2362,6 +2363,16 @@ Le fil reprend ensuite normalement.`
     activeChatTurns.trackPreparation(args[2], async () => {
       const conversationId = args[2]
       if (typeof conversationId !== 'string' || !conversationId.trim()) return lancerTour(...args)
+      /*
+       * DOSSIER RANGÉ DISPARU : LE TOUR EST REFUSÉ, il ne part jamais dans le dépôt partagé. Le fil
+       * reçoit la raison (chemin perdu + geste pour en choisir un autre) AVANT toute autre étape ;
+       * l'erreur levée est celle des autres refus d'avant-tour (`suivreLaFinDuTour` la relaie), donc
+       * sans plantage : l'issue du tour passe simplement en échec.
+       */
+      refuserTourSiDossierDisparu(os.conversations.get(conversationId)?.projectPath, (raison) => {
+        os.conversations.append(conversationId, { role: 'assistant', content: raison })
+        broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+      })
       alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
       /*

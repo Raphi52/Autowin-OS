@@ -1,5 +1,5 @@
 import { filtrerListeBrain, type Condenseur } from '../brain/brain-condenseur'
-import { dossierDeTravailDuTour } from '../conversations/bascule-dossier-conversation'
+import { dossierDeLectureDuFil } from '../conversations/bascule-dossier-conversation'
 import { avecDossierDuTour, dossierDuTourCourant } from '../chat/dossier-du-tour-courant'
 import {
   existsSync,
@@ -621,14 +621,14 @@ export class AppCommandBus {
 
   /**
    * Le dossier range sur la conversation quand il designe un dossier REEL, sinon le dossier global.
-   * Meme regle que le tour de chat (`dossierDeTravailDuTour`) : un libelle de categorie ou un
+   * Meme regle que le tour de chat (`dossierDeLectureDuFil`) : un libelle de categorie ou un
    * dossier disparu ne pilote rien. Lecture defensive : plusieurs tests montent un `os` partiel.
    */
   private dossierRangeSur(conversationId?: string): string {
     const range = conversationId
       ? this.os.conversations?.get?.(conversationId)?.projectPath
       : undefined
-    return dossierDeTravailDuTour(range, this.os.executionWorkspace)
+    return dossierDeLectureDuFil(range, this.os.executionWorkspace)
   }
 
   /**

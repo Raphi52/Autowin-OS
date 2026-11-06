@@ -34,7 +34,7 @@ import type {
   RunBloqueDeLaCarte,
   StatutDemande
 } from '../../shared/carte-des-besoins'
-import { dossierDeTravailDuTour } from '../conversations/bascule-dossier-conversation'
+import { dossierDeLectureDuFil } from '../conversations/bascule-dossier-conversation'
 import { cleDuJournal, type EntreeDuJournal, type IdentiteGit } from './journal-des-besoins'
 import {
   etatVide,
@@ -140,14 +140,14 @@ function demandeurDe(
 
 /**
  * Le dossier où git est interrogé pour un fil : celui où ses tours TRAVAILLENT
- * (`dossierDeTravailDuTour`, le même que celui du journal), donc la même identité que ses commits.
+ * (`dossierDeLectureDuFil`, le même que celui du journal), donc la même identité que ses commits.
  */
 export function dossierGitDuFil(
   conversation: Pick<ConversationPourLaCarte, 'projectPath'>,
   dossierParDefaut: string | undefined,
   dossierExiste?: (chemin: string) => boolean
 ): string | undefined {
-  const dossier = dossierDeTravailDuTour(
+  const dossier = dossierDeLectureDuFil(
     conversation.projectPath,
     dossierParDefaut ?? '',
     dossierExiste
