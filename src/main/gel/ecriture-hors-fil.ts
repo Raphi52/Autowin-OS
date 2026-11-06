@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { dirname, resolve } from 'node:path'
 
 /**
  * ÉCRIRE UN PETIT FICHIER ENTIER HORS DU FIL PRINCIPAL (2026-10-31).
@@ -161,6 +161,16 @@ export function deposerFichier(
  */
 export function depotEnCours(chemin: string): string | null | undefined {
   return etats.get(chemin)?.dernier.contenu
+}
+
+/**
+ * Les fichiers d'un dossier qui ont une valeur ou une suppression déposée et pas encore posée, quel
+ * que soit l'appelant qui l'a déposée. Pour un inventaire : `readdirSync` ne voit pas encore un
+ * fichier tout juste déposé, et un second lecteur du même dossier n'a pas la mémoire du premier.
+ */
+export function cheminsEnCoursDans(dossier: string): string[] {
+  const cible = resolve(dossier)
+  return [...etats.keys()].filter((chemin) => dirname(resolve(chemin)) === cible)
 }
 
 /** Ce qu'une relecture doit voir : la dernière valeur déposée, sinon le disque. */
