@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * conv-844 (2026-09-24) : `orientationsDuTourPrecedent` (7459e8cd) lit le drapeau `orientation`
+ * 2026-09-24 : `orientationsDuTourPrecedent` (7459e8cd) lit le drapeau `orientation`
  * dans l'historique, mais le renderer n'envoie que { role, content, attachments } : le drapeau
  * n'arrivait jamais au pilote. `run-pilot-chat.ts` le relit dans le store. Contrat de SOURCE
  * (meme idiome que run-pilot-chat.diagnostic-echec.test.ts) : ne prouve pas le chemin de bout en bout.

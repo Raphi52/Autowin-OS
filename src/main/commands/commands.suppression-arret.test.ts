@@ -4,7 +4,7 @@ import { AppCommandBus } from './commands'
 
 /**
  * La suppression faite par l'AGENT (`remove_conversation`, `remove_conversations`) ne coupait RIEN
- * (conv-1060, 2026-10-22) : ni le run de développement du fil, ni son tour de chat — les deux
+ * (2026-10-22) : ni le run de développement du fil, ni son tour de chat — les deux
  * continuaient sur un fil qui n'existait plus. Elle doit arrêter tout, comme le bouton Stop.
  *
  * Cas piège : l'agent qui supprime le fil DANS lequel il travaille. Attendre la fin de son propre

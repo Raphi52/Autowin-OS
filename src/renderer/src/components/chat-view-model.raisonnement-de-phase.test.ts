@@ -7,7 +7,7 @@ import {
 import type { ChatPart, OrchStep, PipelineChoice } from './chat-view-model'
 
 /**
- * DEMANDE (conv-918, 2026-10-13) : « dans le bloc orchestration ya du texte qui defile en dessous
+ * DEMANDE (2026-10-13) : « dans le bloc orchestration ya du texte qui defile en dessous
  * mais quand je depplie ce bloc je vois nulle part ce qui s'ecrit dans la 2e ligne du mode reduit ».
  *
  * Cause lue dans le code : le raisonnement du sous-agent partait comme une NOTE d'activite

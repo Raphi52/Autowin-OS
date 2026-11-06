@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * RÉPONSE COUPÉE PAR LE FILTRE DE SÉCURITÉ DU FOURNISSEUR = AVIS VISIBLE (conv-1161, 2026-10-27).
+ * RÉPONSE COUPÉE PAR LE FILTRE DE SÉCURITÉ DU FOURNISSEUR = AVIS VISIBLE (2026-10-27).
  *
  * Séquence rejouée : celle du tour a1ddde24-e8a1-4487-9604-44daeff499cd, journal brut
  * `run-stdout/aeaf1921-….stdout.jsonl` l.636-641 — bloc de raisonnement, `message_delta` à
@@ -152,7 +152,7 @@ describe('ClaudeCliAdapter — réponse coupée par le filtre de sécurité du f
   })
 
   /*
-   * LE SIGNAL EST AUSSI UNE DONNÉE, pas seulement un texte (conv-1161, 2e passe). L'avis affiché ne
+   * LE SIGNAL EST AUSSI UNE DONNÉE, pas seulement un texte (2e passe). L'avis affiché ne
    * suffisait pas à l'app : la rétrospective et le kaizen lisent le journal du tour, où la coupure
    * n'apparaissait nulle part — le diagnostic a dû fouiller `run-stdout/` pour la retrouver.
    * Chaque coupure part donc en fragment structuré, MÊME quand l'avis n'est pas répété.

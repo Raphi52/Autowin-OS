@@ -1,5 +1,5 @@
 /**
- * LE NOM D'UN POSTE SUR LE BOARD (demande utilisateur du 2026-10-28, conv-1230).
+ * LE NOM D'UN POSTE SUR LE BOARD (demande utilisateur du 2026-10-28).
  *
  * Constat : le Board affichait un surnom git pour ce poste et un compte Windows pour un collègue. Le
  * premier venait de l'identité git du dossier du fil (`journal-des-besoins.ts`), le second du nom

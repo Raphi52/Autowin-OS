@@ -9,7 +9,7 @@ import { AppCommandBus } from './commands'
  * LA SORTIE D'UNE COMMANDE WINDOWS DOIT ARRIVER LISIBLE, ACCENTS COMPRIS.
  *
  * DEFAUT VECU. `murs-rencontres.json` gardait deux sorties renvoyees a l'agent avec des « � » :
- * conv-92 « verify … ex�cutable ou un fichier de commandes » et conv-129 « run … ping … re�us ».
+ * « verify … ex�cutable ou un fichier de commandes » et « run … ping … re�us ».
  * Sous Windows, `cmd.exe` et les outils du systeme (`ping`) ecrivent dans la page de code OEM de la
  * console (850 sur un poste francais : « é » = 0x82), et `spawnVerify` decodait chaque morceau en
  * UTF-8 : tout octet >= 0x80 isole devenait U+FFFD, et l'agent lisait un message mutile.

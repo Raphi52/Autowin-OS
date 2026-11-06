@@ -1,7 +1,7 @@
 /**
  * COMPACTER ET PAGINER LE DOSSIER DE `retrospective`.
  *
- * Mesure du 2026-09-18 sur conv-703 : 363 064 caracteres rendus pour 6 messages. Le gros ne dit
+ * Mesure du 2026-09-18 : 363 064 caracteres rendus pour 6 messages. Le gros ne dit
  * rien de neuf : chaque tour re-injecte les memes instructions systeme (64 180 caracteres par
  * tour), le meme etat de l'app, et la reponse du modele revient telle quelle dans les messages,
  * la trace causale et le journal des tours. Le tout partait dans le prompt, plafonne a 120 000.
@@ -167,7 +167,7 @@ export const DEBUT_RESULTAT_OUTIL = 300
 const SEPARATEUR_RESULTAT = ' | tool-result: '
 
 /**
- * Mesure du 2026-09-18 sur conv-703 : 30 appels d'outils pesaient 78 387 caracteres dans la
+ * Mesure du 2026-09-18 : 30 appels d'outils pesaient 78 387 caracteres dans la
  * trace causale, soit le premier poste du dossier apres compaction. Pour relire un tour, la
  * COMMANDE lancee dit ce qui a ete tente ; du resultat, le debut suffit. On garde donc la commande
  * entiere et les DEBUT_RESULTAT_OUTIL premiers caracteres du resultat, en disant ce qui est coupe.

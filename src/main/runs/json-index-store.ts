@@ -25,7 +25,7 @@ export interface IndexStore<V> {
   lire(base?: string): Record<string, V>
   /**
    * Ecriture ATOMIQUE (temporaire puis `rename`) : une interruption ne laisse jamais un index tronque.
-   * Elle part hors du fil principal (conv-1368) : `renameSync` ici a fige la fenetre 23,7 s en 7 jours.
+   * Elle part hors du fil principal : `renameSync` ici a fige la fenetre 23,7 s en 7 jours.
    */
   ecrire(index: Record<string, V>, base?: string): void
   /** Oublie une cle. Sans effet si elle est inconnue — oublier deux fois n'est pas une erreur. */

@@ -107,7 +107,7 @@ describe('registre des serveurs MCP (conv-1558)', () => {
   })
 
   /*
-   * Garde d'expéditeur (conv-1575) : les 4 canaux étaient enregistrés SANS garde, mesuré par
+   * Garde d'expéditeur : les 4 canaux étaient enregistrés SANS garde, mesuré par
    * `security-critical-fixes.test.ts` (« ne laisse AUCUN canal hors d'index.ts échapper au
    * garde », rouge sur ces 4 noms). Or `save` déclare une COMMANDE que le CLI lancera, et `list`
    * rend les clés d'API saisies dans `env`. Le garde est INJECTÉ, comme pour tickets et veille :

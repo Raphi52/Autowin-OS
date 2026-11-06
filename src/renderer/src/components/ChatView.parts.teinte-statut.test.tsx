@@ -29,7 +29,7 @@ type Action = Parameters<typeof AssistantActivityGroup>[0]['actions'][number]
 function render(actions: Action[]): void {
   act(() => root.render(createElement(AssistantActivityGroup, { actions })))
 }
-// Une orchestration seule est une CAPSULE depuis conv-194 (2026-10-10) : elle porte le meme
+// Une orchestration seule est une CAPSULE depuis le 2026-10-10 : elle porte le meme
 // `data-state` que la carte, c'est lui que le theme et ces tests lisent.
 const carte = (): HTMLElement | null =>
   container.querySelector('.activity-anneau, .thinking-block--orchestration')
@@ -69,7 +69,7 @@ describe('B3-γ dans le fil d activité : la carte porte la teinte du statut', (
   })
 
   /*
-   * La TEINTE n'est plus portee par le fond de la carte (B3-γ) : depuis conv-904 (2026-10-12) le
+   * La TEINTE n'est plus portee par le fond de la carte (B3-γ) : depuis le 2026-10-12 le
    * verdict se lit dans l'ANNEAU d'arcs et la legende, l'etat du groupe dans le reflet du cadre.
    * Le data-state ci-dessus reste le contrat ; le dessin est verrouille par anneau-activite.test.tsx.
    */

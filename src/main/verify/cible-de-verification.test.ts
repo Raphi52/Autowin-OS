@@ -90,7 +90,7 @@ describe('la cible d’une vérification ciblée', () => {
     /*
      * CETTE ASSERTION DISAIT L'INVERSE, et elle encodait mon erreur.
      *
-     * Elle exigeait le refus de tout fichier non-test. Vécu le 2026-08-25 sur conv-1404 : un agent
+     * Elle exigeait le refus de tout fichier non-test. Vécu le 2026-08-25 : un agent
      * qui venait d'éditer un fichier source a demandé à le vérifier, s'est fait refuser, et le run a
      * échoué en laissant son bureau conservé. Refuser le cas le plus naturel — vérifier ce qu'on
      * vient de changer — était un faux refus.
@@ -165,7 +165,7 @@ describe('le chat peut réellement nommer une cible', () => {
 })
 
 /**
- * CE QUE `verify` FERAIT D'UN FICHIER, sans le lancer (conv-1423, 2026-11-01). La relance de preuve
+ * CE QUE `verify` FERAIT D'UN FICHIER, sans le lancer (2026-11-01). La relance de preuve
  * le demande avant de proposer `verify`.
  * fix-ok: une copie de ces refus, côté relance, avait divergé : 3 écarts sur 28 formes.
  */
@@ -219,7 +219,7 @@ describe('libelleDuVerifySur — le libellé d’un `verify` sur ce fichier', ()
 })
 
 /**
- * UN FICHIER SOURCE EST UNE CIBLE LÉGITIME — vécu le 2026-08-25 sur conv-1404.
+ * UN FICHIER SOURCE EST UNE CIBLE LÉGITIME — vécu le 2026-08-25.
  *
  * Un agent venait d'éditer `chat-pilotage-prompt.ts` et a demandé à vérifier CE fichier. Mon garde
  * l'a refusé : « la cible doit être un fichier de test ». C'était le cas le plus naturel qui soit —
@@ -269,14 +269,14 @@ describe('le routage est réellement branché', () => {
 
   it('une cible marquée `parPortee` passe par la vérification de portée', () => {
     // L'appel porte desormais le `signal` d'arret (bouton Stop) en dernier argument : on exige la
-    // meme cible, quel que soit ce qui suit (aligne le 2026-10-22, conv-1056).
+    // meme cible, quel que soit ce qui suit (aligne le 2026-10-22).
     expect(source).toMatch(
       /verdict\.parPortee[\s\S]{0,400}?runRelatedVerifyAt\(decision\.cwd, \[verdict\.chemin\][,)]/
     )
   })
 
   it('une portée indéterminable retombe sur la suite, elle ne rend pas un refus', () => {
-    // Un refus ici recréerait le faux refus de conv-1404 par une autre porte.
+    // Un refus ici recréerait le faux refus par une autre porte.
     expect(source).toMatch(/if \(parPortee\.allowed\) return parPortee/)
   })
 

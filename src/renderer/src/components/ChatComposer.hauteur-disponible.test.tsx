@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ChatComposer, type ChatComposerProps } from './ChatComposer'
 
 /**
- * LA RANGÉE D'OUTILS RESTE VISIBLE DANS UNE FENÊTRE BASSE (conv-1103, 2026-10-22).
+ * LA RANGÉE D'OUTILS RESTE VISIBLE DANS UNE FENÊTRE BASSE (2026-10-22).
  *
  * Défaut vu à 900 × 670 px avec deux suggestions cochées : la zone des messages était déjà
  * réduite à son minimum, la zone de saisie ne pouvait pas rétrécir, et le champ grandissait

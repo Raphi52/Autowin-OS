@@ -31,12 +31,12 @@ export function pushDuCompteRendu(compteRendu: unknown): PushDuRun | undefined {
  *
  * Ce commit est le transport obligatoire de la copie isolée vers la branche de l'utilisateur. Il
  * arrivait sans un mot : l'utilisateur découvrait `agent run-xxx-1` dans son historique et croyait
- * que le run avait commité en cachette malgré la consigne (conv-710). Rend `undefined` quand aucun
+ * que le run avait commité en cachette malgré la consigne. Rend `undefined` quand aucun
  * commit n'a été créé par ce run (rien de modifié, ou issue autre qu'une fusion).
  *
  * Le push est dit d'après `push`, le compte rendu de la clôture : « non poussé » était écrit en dur,
  * et la clôture automatique a poussé `494e7d45` puis `e4daf170` sur `origin/main` le 2026-10-24
- * sous cette phrase (conv-1139).
+ * sous cette phrase.
  */
 export function annonceCommitLocal(
   issue: unknown,
@@ -67,13 +67,13 @@ export function annonceCommitLocal(
 }
 
 /**
- * Le même bloc git que la passe /git après un fil (`bandeauPublie`, conv-1553).
- * conv-1558 : les trois lots d'un plan ont poussé par la clôture automatique, et l'utilisateur n'a
+ * Le même bloc git que la passe /git après un fil (`bandeauPublie`).
+ * Les trois lots d'un plan ont poussé par la clôture automatique, et l'utilisateur n'a
  * vu aucun bandeau — celui-ci ne couvrait que la passe /git. La ligne est celle que
  * `run-autoclose.ts` envoie (`git push origin <sha>:refs/heads/<branche>`, `ALLOW_MAIN_PUSH=1`
  * en direct), pas une ligne lue dans un shell : la clôture appelle git sans passer par lui.
- * conv-1600 : ce bloc avait sa propre copie de l'ancienne mise en page, et le rail compact
- * (conv-1574) n'y est jamais arrivé ; il appelle donc `bandeauPublie` au lieu de la recopier.
+ * Ce bloc avait sa propre copie de l'ancienne mise en page, et le rail compact
+ * n'y est jamais arrivé ; il appelle donc `bandeauPublie` au lieu de la recopier.
  */
 function bandeauGit(sha: string, sujet: string, push: PushDuRun): string {
   const accord = push.mode === 'direct' ? 'ALLOW_MAIN_PUSH=1 ' : ''

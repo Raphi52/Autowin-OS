@@ -39,9 +39,9 @@ describe('terrain reste à la demande de l’utilisateur', () => {
       new URL('../../renderer/src/components/CandidatsPickPanel.tsx', import.meta.url),
       'utf8'
     )
-    // Depuis la traduction anglaise (lot « Chat — décisions », conv-1177, 2026-10-27), l'infobulle
+    // Depuis la traduction anglaise (lot « Chat — décisions », 2026-10-27), l'infobulle
     // n'est plus en dur : le bouton rend `t('<clé>')` et le français fait foi dans la table
-    // `textes-ecrans/chat-decisions.ts` (salvage conv-1211).
+    // `textes-ecrans/chat-decisions.ts`.
     const cle = /data-testid="cpick-lancer"[\s\S]*?title=\{t\('([^']+)'\)\}/u.exec(source)?.[1]
     expect(cle, 'clé de l’infobulle du bouton introuvable').toBeDefined()
     const titre = TEXTES_CHAT_DECISIONS[cle as keyof typeof TEXTES_CHAT_DECISIONS]

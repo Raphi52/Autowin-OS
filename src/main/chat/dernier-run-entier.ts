@@ -14,13 +14,13 @@ import { pagesHtmlEnTexte } from '../../shared/pages-html-pour-le-modele'
 import { readTurnJournal } from '../runs/turn-journal'
 
 /**
- * SESSION NON REPRISE : LE MODELE RELIT LE DERNIER RUN EN ENTIER (conv-989, 2026-10-16).
+ * SESSION NON REPRISE : LE MODELE RELIT LE DERNIER RUN EN ENTIER (2026-10-16).
  *
  * Quand la session du modele n'est pas reprise (session neuve, compaction, modele qui ne reprend pas
  * ses sessions comme Codex), il relit l'historique du FIL. Or le fil coupe le resultat d'un run deux
  * fois : la bulle a 4 000 caracteres (`formatOrchestrationOutcome`), et les donnees de l'action a
  * 12 000 (`sanitizePersistedValue`), que `flattenChatPartsForModel` reduisait encore a 1 200. Mesure
- * sur conv-914 : 23 192 caracteres rendus par le scout, aucune copie entiere dans le fil. Seul le
+ * 23 192 caracteres rendus par le scout, aucune copie entiere dans le fil. Seul le
  * JOURNAL du tour (`turn-journals/<conv>/<tour>.jsonl`, evenement `result`) la porte.
  *
  * On relit donc le journal, pour le DERNIER run de la fenetre seulement : relire chaque run en entier
@@ -110,7 +110,7 @@ export function contenuAssistantPourLeModele(
         `fil, et le journal de ce tour n'existe plus : la fin du résultat n'est PAS ici.]`
       : ''
   // Les pages `html-render` du run passent en texte visible AVANT la borne : filtrees apres, la
-  // borne aurait deja coupe ce qui suit une page longue (conv-1074).
+  // borne aurait deja coupe ce qui suit une page longue.
   const compteRendu = bornerResultatDeCommande(
     'orchestrate',
     pagesHtmlEnTexte(

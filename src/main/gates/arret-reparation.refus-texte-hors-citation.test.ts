@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { memeRefus } from './stopgate'
 
 /**
- * conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4, objection du juge en reparation 21 :
+ * Tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4, objection du juge en reparation 21 :
  * le repli « du premier « au dernier » » avalait AUSSI le texte situe ENTRE deux citations.
  * Deux refus qui reprochent des choses differentes devenaient alors identiques, et la boucle
  * de reparation pouvait etre coupee sur un refus qui avait reellement change.

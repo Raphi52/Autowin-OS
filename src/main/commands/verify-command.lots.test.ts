@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { decouperEnLots, echecsDuRapport, fusionnerRapportsVitest } from './verify-command'
 
 /**
- * Mesuré le 2026-10-01 (conv-770, tour 532299a4) : la vérification avant publication d'un tour qui
+ * Mesuré le 2026-10-01 (tour 532299a4) : la vérification avant publication d'un tour qui
  * touchait `src/main/index.ts` et `src/main/commands/commands.ts` a lancé `vitest related` sur 194 tests qui
  * les citent. Commande : 9 121 caractères. Par `cmd.exe /c`, la limite est 8 191 : « La ligne de
  * commande est trop longue », exit 1, aucun rapport, publication bloquée en « tests-rouges ».

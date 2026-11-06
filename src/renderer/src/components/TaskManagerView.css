@@ -583,7 +583,7 @@
   line-height: 1.45;
 }
 
-/* En-tête du champ prompt : son libellé, et « Partir du modèle » à droite (conv-983). */
+/* En-tête du champ prompt : son libellé, et « Partir du modèle » à droite. */
 .task-manager-field-head {
   display: flex;
   align-items: center;

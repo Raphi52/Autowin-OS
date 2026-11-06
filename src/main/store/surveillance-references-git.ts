@@ -1,7 +1,7 @@
 /**
  * SURVEILLER LES RÉFÉRENCES GIT, pour que la liste des travaux non publiés suive le dépôt.
  *
- * Défaut constaté le 2026-10-19 (conv-360, /salvage) : treize références supprimées à la main
+ * Défaut constaté le 2026-10-19 (/salvage) : treize références supprimées à la main
  * (`git update-ref -d`, `git stash drop`) restaient listées dans `get_state.travauxNonPublies`.
  * Cause : le relevé est mis en cache SANS expiration (`run-worktree-coordinator.ts`,
  * `travauxNonPubliesCaches`) et ne se refait que sur nos propres gestes — fin de run, publication,

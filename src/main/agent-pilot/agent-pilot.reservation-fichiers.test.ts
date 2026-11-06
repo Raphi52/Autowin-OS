@@ -8,7 +8,7 @@ import { confReservationFichiers } from '../providers/claude'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /*
- * LE FIL QUI ÉCRIT VOYAGE JUSQU'AU HOOK DES AGENTS (conv-1083, 2026-10-22).
+ * LE FIL QUI ÉCRIT VOYAGE JUSQU'AU HOOK DES AGENTS (2026-10-22).
  *
  * Chaîne : le tour de chat pose `conversationId` dans ses options → l'adaptateur Claude écrit
  * `reservation.json` (fil + registre) à côté du script de hook → le hook réserve ou refuse

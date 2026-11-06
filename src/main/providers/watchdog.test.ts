@@ -36,7 +36,7 @@ describe('withHardDeadline', () => {
 
 describe('createStreamWatchdog', () => {
   it('ne tue JAMAIS un tour qui progresse, même au-delà de l’ancien cap de 40 minutes', () => {
-    // conv-729, turn aa90027e-01c1-4d39-9645-7e5d01619323 : deux appels tués à 2 400 018 ms alors
+    // Turn aa90027e-01c1-4d39-9645-7e5d01619323 : deux appels tués à 2 400 018 ms alors
     // que le tour battait toutes les 30 s. Plus aucun plafond de durée ne doit exister.
     vi.useFakeTimers()
     try {

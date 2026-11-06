@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { gererCopie, htmlPropreDeLaPlage } from './copie-propre'
 
 /**
- * Ce que ces tests défendent (conv-1073) : une sélection copiée dans Autowin et collée dans Gmail
+ * Ce que ces tests défendent : une sélection copiée dans Autowin et collée dans Gmail
  * ne doit plus emporter le fond sombre ni les couleurs du thème — Chromium les mettait en style en
  * ligne sur chaque paragraphe, d'où des bandes noires dans le mail. La structure, elle, doit rester.
  */

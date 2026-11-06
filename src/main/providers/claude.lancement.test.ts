@@ -1,5 +1,5 @@
 /**
- * LANCEMENT DU CLI CLAUDE — deux défauts trouvés par l'audit du branchement (conv-1040, 2026-10-21).
+ * LANCEMENT DU CLI CLAUDE — deux défauts trouvés par l'audit du branchement (2026-10-21).
  *
  * 1. Un Stop cliqué PENDANT la préparation (réglages, journal, binaire, mise à jour du CLI) était
  *    ignoré : l'écoute du signal n'était posée qu'après le lancement, et un signal déjà levé ne
@@ -168,7 +168,7 @@ describe('environnement du relais Windows', () => {
   })
 
   /*
-   * Cas réel de conv-1403 (conv-1416) : le compte actif de l'application et le compte choisi pour le
+   * Cas réel : le compte actif de l'application et le compte choisi pour le
    * fil diffèrent. Le CLI lisait le premier, quel que soit le clic de l'utilisateur.
    */
   it('fil au compte choisi : le CLI part dans le dossier de CE compte, pas dans celui du compte actif', async () => {

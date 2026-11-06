@@ -7,7 +7,7 @@ import { nomUtilisateurCourant } from './identite-utilisateur'
 /**
  * PROFIL UTILISATEUR — les goûts PERSONNELS du compte Windows du poste, relus en entier à chaque tour.
  *
- * POURQUOI (conv-1098, 2026-10-22, reprise du profil borné de Hermes Agent) : une préférence énoncée
+ * POURQUOI (2026-10-22, reprise du profil borné de Hermes Agent) : une préférence énoncée
  * dans le chat n'était relue de façon fiable par AUCUN canal. Le Brain (`remember type=preference`)
  * vaut pour toute l'équipe, passe par une revue, et le chat n'en reçoit que les chemins ; l'écho de
  * mémoire (`session-memory-echo.ts`) s'arrête au fil courant. Ce profil est le troisième canal :
@@ -194,7 +194,7 @@ export interface IssuePreferenceRetenue {
 }
 
 /**
- * `remember` de type `preference` → le profil local, JAMAIS le Brain partagé (conv-1098, 2026-10-22,
+ * `remember` de type `preference` → le profil local, JAMAIS le Brain partagé (2026-10-22,
  * demande de l'utilisateur). Pourquoi : les notes `preference` du Brain n'ont aucun champ « à qui »
  * (53 lues ce jour-là, dont 6 nomment un collègue), donc le goût d'une personne était servi à toute
  * l'équipe. Ne lève jamais, comme `rememberFact` : un refus est un compte-rendu qui dit que rien n'a
@@ -293,7 +293,7 @@ export function blocProfilUtilisateur(deps: ProfilDeps = {}): string {
     .split(/\r?\n/)
     .map((ligne) => ligne.replace(/={3,}/g, '=='))
   if (buf.byteLength > plafond) {
-    // REFUSÉ, PAS COUPÉ — demande de l'utilisateur (conv-1098, 2026-10-22). La première version
+    // REFUSÉ, PAS COUPÉ — demande de l'utilisateur (2026-10-22). La première version
     // servait les lignes entières jusqu'au plafond : un profil amputé, suivi comme s'il était complet.
     return (
       `\n=== PROFIL UTILISATEUR (${lieu.compte}) ===\n` +

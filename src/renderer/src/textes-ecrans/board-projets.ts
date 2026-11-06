@@ -1,11 +1,11 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — LES PROJETS PARTAGÉS DU BOARD (demande du 2026-10-28, conv-1211 : « dans le board je veux
+ * TEXTES — LES PROJETS PARTAGÉS DU BOARD (demande du 2026-10-28, « dans le board je veux
  * qu'on puisse choisir quel CWD on partage »).
  *
  * Écrans couverts : `ProjetsPartagesDuBoard`, la liste à cocher des projets, et `RouageDuBoard`, le
- * bouton ⚙ posé à côté du bouton 📁 du Board qui l'ouvre (conv-1230).
+ * bouton ⚙ posé à côté du bouton 📁 du Board qui l'ouvre.
  * Table à part de `board-et-maintenance.ts` : plusieurs fils écrivaient en même temps dans celle-là.
  * Mêmes règles, vérifiées par `tables.test.ts` : le français fait foi, l'anglais a les mêmes clés et
  * les mêmes `{valeurs}`.

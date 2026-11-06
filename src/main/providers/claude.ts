@@ -257,7 +257,7 @@ export function normalizeClaudeUsage(
  *
  * Il a existé une constante `CHAT_READ_ONLY_SHELL` : cinq périmètres `Bash(git …:*)` qui étaient le
  * SEUL shell d'un tour de chat, sans Write ni Edit. Elle est supprimée, pas oubliée, sur décision
- * explicite de l'utilisateur (2026-08-26, conv-1410) : « Tout ouvrir : Bash + Write + Edit ».
+ * explicite de l'utilisateur (2026-08-26) : « Tout ouvrir : Bash + Write + Edit ».
  * Motivation mesurée : une édition d'une ligne exigeait une orchestration, qui répond depuis un
  * worktree ISOLÉ — donc à côté du dépôt que l'utilisateur regarde.
  *
@@ -332,7 +332,7 @@ export function envSortieMcpNoeudSkill(
 }
 
 /**
- * DÉLAI D'UN APPEL D'OUTIL DIRECT, ALIGNÉ SUR LE PLUS LONG GESTE SERVI (conv-267, 2026-10-11).
+ * DÉLAI D'UN APPEL D'OUTIL DIRECT, ALIGNÉ SUR LE PLUS LONG GESTE SERVI (2026-10-11).
  *
  * MESURÉ ce jour-là (claude 2.1.296, serveur HTTP comme `skill-node-mcp.ts`, `MCP_TOOL_TIMEOUT` non
  * posé) : le CLI coupe un appel d'outil à 60,4 s (« The operation timed out ») alors que le serveur
@@ -367,7 +367,7 @@ export function envDelaiOutilsMcp(
 }
 
 /**
- * FILET ELECTRON DES AGENTS (conv-149, 2026-10-10). Un banc Electron lancé par un agent depuis bash
+ * FILET ELECTRON DES AGENTS (2026-10-10). Un banc Electron lancé par un agent depuis bash
  * a ouvert, SUR L'ÉCRAN DE L'UTILISATEUR, la boîte « A JavaScript error occurred in the main
  * process » (faute de syntaxe dans le script) et il est resté bloqué dessus. `NODE_OPTIONS` fait
  * charger `mods/autowin/runtime/electron-sans-fenetre-erreur.cjs` par chaque processus de l'agent :
@@ -387,7 +387,7 @@ export function envFiletElectronAgent(
   existe: (chemin: string) => boolean = existsSync
 ): Record<string, string> {
   if (!modAutowin) return {}
-  // APP EMPAQUETÉE (conv-1, 2026-11-04) : le mod vit dans `resources/app.asar/…`. Electron lit dans
+  // APP EMPAQUETÉE (2026-11-04) : le mod vit dans `resources/app.asar/…`. Electron lit dans
   // l'archive, donc `existsSync` répond oui, mais NODE_OPTIONS est hérité par des `node` ORDINAIRES
   // (les hooks de Claude Code) qui ne savent pas lire un asar : chaque hook plantait
   // (MODULE_NOT_FOUND) et, réglé pour bloquer, interdisait Bash/Edit/Write à l'agent. On vise la
@@ -417,7 +417,7 @@ export const NON_INTERACTIVE_ENV: Record<string, string> = {
   GIT_TERMINAL_PROMPT: '0',
   GIT_ASKPASS: 'echo',
   SSH_ASKPASS: 'echo',
-  // MESURE 2026-09-01 (conv-35) : ces trois variables ne suffisent PAS sous Windows. L'helper
+  // MESURE 2026-09-01 : ces trois variables ne suffisent PAS sous Windows. L'helper
   // `credential.helper=manager` (Git Credential Manager) est un PROCESSUS SEPARE qui ouvre sa
   // propre fenetre GUI : il ignore GIT_TERMINAL_PROMPT et GIT_ASKPASS. Un `git push` d'un run a
   // donc affiche TROIS fenetres de connexion GitHub et est reste bloque, invisible dans le fil.
@@ -540,7 +540,7 @@ export function claudeWrittenLineFingerprints(
  */
 function untitledArtifactName(blockType?: string, tool?: string, sourcePath?: string): string {
   // Le fichier lu (`Read`) a un nom : c'est lui qu'on montre. « image-Read » ne faisait que
-  // répéter le libellé « Image · Read » de la capsule, juste à côté (conv-195).
+  // répéter le libellé « Image · Read » de la capsule, juste à côté.
   const fichier = sourcePath?.split(/[\\/]/).pop()?.trim()
   if (fichier) return fichier
   const isImage = blockType === 'image'
@@ -671,11 +671,11 @@ export function materializeClaudeAttachments(
   /*
    * DEUX LISTES, CHACUNE COMPTEE — jamais une liste plate.
    *
-   * Vecu en conv-150, tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 (2026-10-10) : UNE capture jointe,
+   * Vecu, tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 (2026-10-10) : UNE capture jointe,
    * mais un seul titre « PIÈCES JOINTES FOURNIES PAR L'UTILISATEUR » sur deux `image.png` (la sienne
    * et celle de son premier message, rejointe d'office). Le modele a repondu « Je regarde tes deux
    * captures » avant de les ouvrir : la provenance ne tenait qu'a un suffixe entre parentheses.
-   * fix-ok: conv-150 tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 — cause mesuree dans la session
+   * fix-ok: tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 — cause mesuree dans la session
    * Claude eceabf8f (ligne 205, 08:24:53Z) : le prompt listait `1-image.png` et `2-image.png
    * (jointe a un message precedent)` sous UN seul titre ; test rouge 2/2 puis vert 48/48.
    */
@@ -891,7 +891,7 @@ const EFFORTS_CLI_CLAUDE = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 /** Ajoute au spawn les choix Agents réellement supportés par le CLI installé. */
 export function appendClaudeSelectionArgs(args: string[], opts: SendOptions): void {
   if (opts.model) args.push('--model', opts.model)
-  // ADVISOR (conv-1083) : seulement sur un accord de la table de la doc. Hors table, le CLI tourne
+  // ADVISOR : seulement sur un accord de la table de la doc. Hors table, le CLI tourne
   // sans advisor (advisor classé sous le principal) ou s'arrête au lancement (Haiku 4.5 comme
   // advisor, entre autres) — un cas de chaque mesuré sur 2.1.308, `claude-advisor.ts`. Ici il ne
   // part pas, et l'orchestrateur dit pourquoi dans le run.
@@ -955,7 +955,7 @@ export function claudeTransportEnvelope(
 }
 
 /**
- * MODS D'AUTOWIN (conv-58, 2026-10-02) — `mods/autowin`, chargé à chaque appel par `--plugin-dir`.
+ * MODS D'AUTOWIN (2026-10-02) — `mods/autowin`, chargé à chaque appel par `--plugin-dir`.
  *
  * Ils agissent sur ce que le modèle lit et exécute, au moment où il en a besoin : app graphique
  * redirigée vers le bureau caché du run, compte à rebours de tokens retiré, règle du bureau caché
@@ -966,12 +966,12 @@ export function claudeTransportEnvelope(
  * événement `init`. On ne PASSE que le dossier d'Autowin (un mod a tous les droits du CLI), mais
  * le CLI n'en charge pas que lui : il y ajoute ses mods intégrés (`…@builtin`).
  *
- * Mesuré le 2026-11-05 (conv-1582) : le CLI ajoute ses mods intégrés (`cc-plugin-…@builtin`). L'un
+ * Mesuré le 2026-11-05 : le CLI ajoute ses mods intégrés (`cc-plugin-…@builtin`). L'un
  * d'eux, le garde `cc-plugin-sec-default`, se charge sur un poste à réglages administrateur OU avec
  * une connexion Team/Enterprise (le compte principal `~/.claude` ici, pas `compte-3`) et saute le
  * mod 2 (`prompt.attachment`) d'un mod installé : 315 des 3 795 journaux de `run-stdout/` portaient
  * « its prompt.attachment hook was skipped ».
- * Décision de l'utilisateur (conv-1582) : le poste porte désormais le réglage administrateur
+ * Décision de l'utilisateur : le poste porte désormais le réglage administrateur
  * `C:\Program Files\ClaudeCode\managed-settings.json` (scripts/mod-autowin-admin.mjs), qui active
  * `autowin-mods@autowin` depuis `mods/autowin/.claude-plugin/marketplace.json`, chargé SUR PLACE et
  * placé avant le garde (`prependPlugins`) : debug « hooks module autowin-mods@autowin loaded … tier
@@ -999,7 +999,7 @@ export function argumentsModsAutowin(
 }
 
 /**
- * MOD PROPRE AU RUN (conv-419, 2026-11-02) — `<copie du run>/.autowin/mod-run`.
+ * MOD PROPRE AU RUN (2026-11-02) — `<copie du run>/.autowin/mod-run`.
  *
  * `mods/autowin` est cherché depuis `__dirname`, donc toujours dans le dépôt PRINCIPAL : un mod
  * écrit par un run dans sa copie de travail n'était jamais relu. Ce second dossier l'est, aux
@@ -1041,7 +1041,7 @@ export function argumentsModDuRun(
  */
 /**
  * Bases déclarées `non-prod` dans la liste d'autorité : les SEULES qu'un agent peut viser depuis son
- * terminal (revue conv-738). Liste illisible -> aucune : tout client SQL est alors refusé.
+ * terminal. Liste illisible -> aucune : tout client SQL est alors refusé.
  */
 function basesNonProdDeclarees(): string[] {
   try {
@@ -1055,19 +1055,19 @@ function basesNonProdDeclarees(): string[] {
 
 /**
  * Le script de garde COURANT, tel qu'écrit au lancement d'un agent — et réécrit au démarrage de l'app
- * chez les agents déjà lancés (`rafraichirGardesDesAgents`, conv-770 du 2026-10-01) : une seule source.
+ * chez les agents déjà lancés (`rafraichirGardesDesAgents`, Un fil du 2026-10-01) : une seule source.
  */
 export function scriptDesGardesCourant(): string {
   // Le mod chargé par les runs est protégé de leurs écritures (garde-mod-autowin.ts, plan-387b99e7).
-  // Ses rappels au bon moment (conv-1457, shared/rappels-outils.ts) sont relus à chaque appel
+  // Ses rappels au bon moment (shared/rappels-outils.ts) sont relus à chaque appel
   // d'outil : un run ne peut pas les faire taire, puisqu'il n'écrit pas dans ce dossier.
-  // fix-ok: branchement neuf (conv-1457), mesuré rouge puis vert : claude.rappels-outils.test.ts sans cette ligne → aucun rappel (sortie vide) ; 3 édits = import, appel, remise sur une ligne (3 tests lisent cet appel dans le source).
+  // fix-ok: branchement neuf, mesuré rouge puis vert : claude.rappels-outils.test.ts sans cette ligne → aucun rappel (sortie vide) ; 3 édits = import, appel, remise sur une ligne (3 tests lisent cet appel dans le source).
   const rappels = dossierModsAutowin ? join(dossierModsAutowin, NOM_FICHIER_RAPPELS) : undefined
   return scriptHookGardes(refusReglageProd, refusSqlAgent, basesNonProdDeclarees(), dossierModsAutowin, rappels)
 }
 
 /**
- * Dossier du MOD Autowin (`mods/autowin`, conv-58 du 2026-10-02), passé au CLI par `--plugin-dir`.
+ * Dossier du MOD Autowin (`mods/autowin`, Un fil du 2026-10-02), passé au CLI par `--plugin-dir`.
  * Cherché en REMONTANT depuis chaque point de départ, parce que `__dirname` varie selon le morceau du
  * bundle (`out/main` ou `out/main/chunks`). Le mod doit rester dans le dépôt Autowin : il appelle
  * `../../scripts/hdesk-lancer.ps1`. Introuvable -> `undefined`, et le run part sans mod.
@@ -1096,7 +1096,7 @@ export function dossierModAutowin(
  * le `.claude/settings.json` du dépôt, qui porte le même garde, ne les atteint pas.
  */
 /**
- * FENÊTRE DE COMPACTION des agents (conv-335, 2026-10-19 : « réduit le coût d'un long fil »).
+ * FENÊTRE DE COMPACTION des agents (2026-10-19 : « réduit le coût d'un long fil »).
  * Au-delà, le CLI résume le fil et repart de ce résumé. Sans elle, le CLI 2.1.302 prend « 1m tokens
  * (default for this model) » pour Opus 5.5 : un fil grossit jusqu'au million, et CHAQUE appel le
  * relit en entier depuis le cache. Mesure sur une semaine (172 sessions Opus 5.5) : 1,44 milliard de
@@ -1108,7 +1108,7 @@ export function dossierModAutowin(
 export const FENETRE_COMPACTION_CLI = 300_000
 
 /**
- * ATTENDRE ET ARRÊTER EN ARRIÈRE-PLAN (conv-1370, lot 5, 2026-10-31). L'aide de Bash dit « Foreground
+ * ATTENDRE ET ARRÊTER EN ARRIÈRE-PLAN (lot 5, 2026-10-31). L'aide de Bash dit « Foreground
  * `sleep` is blocked; use Monitor », même quand Monitor n'est pas chargé, et TaskStop est le seul
  * moyen propre d'arrêter une commande de fond. Sondé sur les CLI 2.1.314 et 2.1.316 avec les drapeaux
  * du chat : les deux répondent en `-p`, et coûtent +3 211 jetons par appel (13 827 → 17 038).
@@ -1120,13 +1120,13 @@ export const FENETRE_COMPACTION_CLI = 300_000
 export const OUTILS_ARRIERE_PLAN = 'Monitor,TaskStop'
 
 /**
- * LES OUTILS NATIFS D'UN TOUR DE CHAT, écrits UNE fois (conv-1362, lot 1/3) : le `--tools` du tour et
+ * LES OUTILS NATIFS D'UN TOUR DE CHAT, écrits UNE fois (lot 1/3) : le `--tools` du tour et
  * celui de la question à côté (`question-a-cote.ts`) doivent rester IDENTIQUES. Le cache de l'API
  * commence par les outils : une liste qui diffère d'un seul nom fait réécrire tout le fil, soit dix
  * fois le prix sur un fil de 148 000 jetons (mesure dans `question-a-cote.ts`).
  */
 /**
- * RECHERCHE D'OUTILS (conv-1465, 2026-11-03) : sans `ToolSearch` dans `--tools`, le CLI charge TOUTES
+ * RECHERCHE D'OUTILS (2026-11-03) : sans `ToolSearch` dans `--tools`, le CLI charge TOUTES
  * les définitions MCP d'avance (doc « Configure tool search »). Avec lui, seuls leurs noms partent et
  * chaque définition se charge à la demande. Mesuré sur le CLI 2.1.317 avec 40 outils MCP : 15 236
  * jetons écrits sans lui, 6 015 avec ; l'outil différé reste appelable.
@@ -1142,7 +1142,7 @@ export const OUTILS_TOUR_DE_CHAT =
   OUTIL_RECHERCHE_OUTILS
 
 /**
- * Ce que le hook des agents lit à côté de son script pour la RÉSERVATION DES FICHIERS (conv-1083) :
+ * Ce que le hook des agents lit à côté de son script pour la RÉSERVATION DES FICHIERS :
  * le fil qui écrit, et le registre unique partagé par tous les agents. Fil du chat
  * (`conversationId`), sinon celui du run (`AUTOWIN_CONVERSATION_ID`). Sans fil connu, rien : le hook
  * ne réserve ni ne refuse aucun fichier.
@@ -1194,7 +1194,7 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
   return {
     autoMemoryDirectory: '',
     autoCompactWindow: FENETRE_COMPACTION_CLI,
-    // BOÎTE DE RÉCEPTION NATIVE FERMÉE (conv-1139, 2026-10-24). Depuis le CLI 2.1.234 sous Windows,
+    // BOÎTE DE RÉCEPTION NATIVE FERMÉE (2026-10-24). Depuis le CLI 2.1.234 sous Windows,
     // toute session ouvre une boîte où les AUTRES sessions Claude Code du poste peuvent écrire.
     // MESURÉ sur le CLI 2.1.309 (banc D:/tmp/sonde-boite/experience.sh) : un agent réglé comme un
     // agent de run a reçu et recopié le message d'une session qui contourne aussi les permissions,
@@ -1203,7 +1203,7 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
     // il prime sur les réglages de l'utilisateur. Le statut de la session n'en montre rien : la
     // preuve est le banc rejoué. Source : https://code.claude.com/docs/en/cross-session-messaging
     crossSessionInbound: 'refuse',
-    // GROS CHANTIERS (conv-1362, lot conv-1366) : le CLI conseille moins de 10 agents par défaut, et
+    // GROS CHANTIERS : le CLI conseille moins de 10 agents par défaut, et
     // même moins de 5 sur une offre Pro. Posé ici, dans les réglages d'Autowin, jamais dans le
     // settings.json de l'utilisateur. Ce n'est qu'un conseil au modèle : sans effet tant que l'outil
     // n'est pas chargé (`demandeUnChantier`). https://code.claude.com/docs/en/workflows.md
@@ -1211,8 +1211,8 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
     hooks: {
       PreToolUse: [
         {
-          // Edit/Write/MultiEdit/NotebookEdit : les réglages de la protection de prod (conv-738, faille 2).
-          // Monitor exécute une commande shell (conv-1370, lot 5) : mêmes gardes que Bash. Mesuré sur
+          // Edit/Write/MultiEdit/NotebookEdit : les réglages de la protection de prod (faille 2).
+          // Monitor exécute une commande shell (lot 5) : mêmes gardes que Bash. Mesuré sur
           // le CLI 2.1.316 : un appel Monitor déclenche les hooks sous `Monitor` PUIS sous `Bash`, et
           // tant qu'il restait dans le second groupe, une garde en panne laissait passer la commande.
           matcher: 'Bash|PowerShell|Monitor|Edit|Write|MultiEdit|NotebookEdit',
@@ -1230,7 +1230,7 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
           ]
         },
         {
-          // Les AUTRES outils, pour le seul détecteur de boucle (conv-58) : matchers DISJOINTS du
+          // Les AUTRES outils, pour le seul détecteur de boucle : matchers DISJOINTS du
           // premier, sinon un appel shell passerait deux fois et compterait double.
           matcher: 'Read|Grep|Glob|WebFetch|WebSearch|Task|Agent|mcp__.*',
           hooks: [{ type: 'command', command: `node ${q(hookGarde)}` }]
@@ -1242,7 +1242,7 @@ export function reglagesCliAutowin(hookGarde: string, hookNpm?: string): Record<
 
 /**
  * Un hook de plus APRÈS un outil, À LA SUITE de ceux déjà posés : deux hooks de ce genre vivent dans
- * les mêmes réglages (conv-1353), et réécrire la clé `PostToolUse` effacerait celui d'avant. Sans
+ * les mêmes réglages, et réécrire la clé `PostToolUse` effacerait celui d'avant. Sans
  * `onFailure` : un hook après outil en panne ne doit rien bloquer, l'outil a déjà tourné.
  */
 function avecHookApresOutil(
@@ -1266,7 +1266,7 @@ function avecHookApresOutil(
 }
 
 /**
- * AVERTISSEMENT DES TESTS NON COMPTÉS (conv-1221, 2026-10-28) : un hook APRÈS chaque commande Bash
+ * AVERTISSEMENT DES TESTS NON COMPTÉS (2026-10-28) : un hook APRÈS chaque commande Bash
  * dit à l'agent qu'un test qu'il vient de lancer ne comptera pas sur le Board (script :
  * `scriptHookTestsNonComptes`). PostToolUse ET PostToolUseFailure : une ligne qui rend un code non
  * nul passe par le second (`npx vitest … | grep FAIL` sans résultat). Tours de CHAT seulement
@@ -1281,7 +1281,7 @@ export function avecAvertissementDesTests(
 }
 
 /**
- * SIGNAL DE CAUSE (conv-1353, 2026-10-31) : un hook APRÈS chaque outil d'édition prévient l'agent, à
+ * SIGNAL DE CAUSE (2026-10-31) : un hook APRÈS chaque outil d'édition prévient l'agent, à
  * la 3e modification d'un fichier sans cause vérifiée, que le contrôle final le refusera (script :
  * `scriptHookCauseEnCours`). PostToolUse ET PostToolUseFailure, car une édition en échec compte aussi
  * au contrôle final. Agents de run seulement : c'est eux que ce contrôle juge.
@@ -1297,7 +1297,7 @@ export function avecSignalDeCause(
  * Le script du signal de cause pour UN lancement, dans son dossier de réglages (nettoyé avec lui).
  * Seulement pour un agent qui peut écrire : `send` reconnaît un agent de run à `execution`, et les
  * lancements en lecture seule n'ont aucune édition à compter. Pas de `opts.conversationId` ici :
- * l'orchestrateur ne le passe pas (mesuré, conv-1353), et un run porte son fil dans `agentEnv`.
+ * l'orchestrateur ne le passe pas (mesuré), et un run porte son fil dans `agentEnv`.
  *
  * Écriture impossible → `undefined`, sans lever : dans `send`, une exception retirerait TOUS les
  * réglages du lancement, gardes comprises, pour un simple avertissement perdu.
@@ -1358,7 +1358,7 @@ export async function gardeNpmDuLancement(
 
 export function argumentsMcpNoeudSkill(
   opts: SendOptions,
-  // Serveurs MCP déclarés par l'utilisateur dans Autowin (conv-1558) : fusionnés ici, seul point
+  // Serveurs MCP déclarés par l'utilisateur dans Autowin : fusionnés ici, seul point
   // commun au chat et aux noeuds skill. `--strict-mcp-config` reste : rien n'est hérité du poste.
   serveursUtilisateur: readonly ServeurMcpUtilisateur[] = serveursMcpActifs()
 ): {
@@ -1431,7 +1431,7 @@ function dureeLisible(secondes: number): string {
 /**
  * APRES SON EVENT `result`, LE CLI N'A PLUS RIEN A DIRE — combien de temps on attend qu'il sorte.
  *
- * Mesure conv-159, tour `b60bf535-44e5-47e8-b43a-e3260ddc74ef` (promptCalls ts
+ * Mesure, tour `b60bf535-44e5-47e8-b43a-e3260ddc74ef` (promptCalls ts
  * 2026-10-10T12:00:20.721Z, iteration 0) : rejet « claude CLI figé (aucune sortie) — tué par le
  * watchdog » apres 600 464 ms. Le journal `run-stdout/f7fbf3a2-…` finit pourtant par un `result`
  * `success` (0,95 USD, commande valide) ecrit 300 s pile avant le kill, sans `.exit.json` : le
@@ -1447,7 +1447,7 @@ function dureeLisible(secondes: number): string {
  * cette tache pour traiter sa notification (5 journaux sur 302 finissent par un 2e `result`
  * `origin.kind` = `task-notification`). La tuer ici a un effet DIFFERE : a la reprise suivante, le CLI
  * signale « Background shell command didn't finish before the previous session ended » et emet un
- * `result` a 0 tour AVANT la demande — conv-217 : tue au tour f7d4bc2d-…, panne au tour 1d809770-…
+ * `result` a 0 tour AVANT la demande — : tue au tour f7d4bc2d-…, panne au tour 1d809770-…
  * (voir `resultatDeNotification`).
  */
 /**
@@ -1470,7 +1470,7 @@ export function delaiFinApresResultatMs(env: NodeJS.ProcessEnv = process.env): n
 }
 
 /**
- * Silence accepté d'un CLI qui garde une surveillance `Monitor` ouverte (conv-1370, lot 5). Le CLI la
+ * Silence accepté d'un CLI qui garde une surveillance `Monitor` ouverte (lot 5). Le CLI la
  * clôt lui-même au plus tard à 10 min (schéma de l'outil : « Deadlines above 600000ms are capped ») :
  * passé cette minute de marge, c'est lui qui est figé, et le tour est rendu au lieu de rester ouvert.
  */
@@ -1539,8 +1539,8 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               /**
                * Le JETON NE SORT PAS D'ICI. La version precedente copiait `mcpConfig` entier dans
                * l'enveloppe — or `index.ts` persiste ces options dans la trace causale sur disque,
-               * donc le jeton du serveur se retrouvait EN CLAIR dans un artefact durable (verifie
-               * dans `conv-1346`). On annonce que le canal MCP est actif, jamais son secret : le
+               * donc le jeton du serveur se retrouvait EN CLAIR dans un artefact durable (verifie).
+               * On annonce que le canal MCP est actif, jamais son secret : le
                * champ utile a l'observabilite est « y a-t-il des outils, lesquels », pas la creance.
                */
               mcpActif: true,
@@ -1637,7 +1637,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       // Les mods d'Autowin, et eux seuls (voir `argumentsModsAutowin`).
       ...argumentsModsAutowin()
     ]
-    // Mod Autowin (conv-58) : redirection des apps graphiques vers le bureau caché et règles posées
+    // Mod Autowin : redirection des apps graphiques vers le bureau caché et règles posées
     // dans la description des outils terminal. Chargé même avec `--setting-sources ""` (mesuré
     // 2026-10-02, CLI 2.1.287, `-p`).
     const modAutowin = dossierModAutowin([
@@ -1715,7 +1715,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        * script.mjs` ne le modifient pas — ce sont des LECTURES qui rendent un code de sortie, c'est
        * a dire la seule preuve hors-modele que ce depot accepte.
        *
-       * Mesure conv-155, tour `20f856a2-8dd5-4e78-b98b-f7c7319afd12` : la phase `judge` a rendu
+       * Mesure, tour `20f856a2-8dd5-4e78-b98b-f7c7319afd12` : la phase `judge` a rendu
        * « Bash is disabled for this session, in subagents as well as here », a ferme ses objections
        * « par lecture », et a ecrit dans le meme souffle « aucun test n'a ete lance ». Un juge sans
        * shell ne peut structurellement pas faire son metier : il note du texte.
@@ -1726,11 +1726,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        * Write, Edit, MultiEdit suivent `execution.sandbox` : depuis le 2026-09-04, `sandboxForPhase`
        * rend `danger-full-access` a TOUTES les phases (demande de l'utilisateur). La lecture seule de
        * scout, frame, terrain et d'une etape `judge` de la chaine n'est qu'un contrat de consigne
-       * (phase-briefs.ts), aucun outil ne l'impose (conv-1582). Le juge du controle final, lui, part
+       * (phase-briefs.ts), aucun outil ne l'impose. Le juge du controle final, lui, part
        * en `read-only` (orchestrator-parcours-sequentiel.ts et -glouton.ts), comme une sous-tache
        * parallele d'un build qui ne modifie rien : sans Write/Edit. Le fond autonome
        * (`watchdog-read-only`) garde sa frontiere fermee : son contexte d'evenement n'est pas fiable.
-       * fix-ok: conv-1582 — ce commentaire disait le juge sans outil de lecture seule ; mesure : les
+       * fix-ok: ce commentaire disait le juge sans outil de lecture seule ; mesure : les
        * appels du juge final passent `'read-only'` (orchestrator.execution.test.ts le verrouille).
        */
       const tools =
@@ -1755,11 +1755,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         ...outilsMcpAutorises
       )
     } else if (opts.toolProfile === 'sans-outil') {
-      // fix-ok: conv-1420 — claude.sans-outil.test.ts rouge sur a41081d6 : un appel sans `execution` chargeait Bash, Write et Edit en bypassPermissions. Une relecture a froid ne doit voir que son prompt.
+      // fix-ok: claude.sans-outil.test.ts rouge sur a41081d6 : un appel sans `execution` chargeait Bash, Write et Edit en bypassPermissions. Une relecture a froid ne doit voir que son prompt.
       args.push('--tools', '')
     } else {
       /**
-       * fix-ok: une piece jointe DESARMAIT le tour de chat (cause mesuree, conv-650 2026-09-17).
+       * fix-ok: une piece jointe DESARMAIT le tour de chat (cause mesuree, 2026-09-17).
        *
        * Il existait ici une branche `else if (materialized)` qui, des qu'une piece jointe etait
        * materialisee, remplacait TOUTE la branche chat : outils reduits a `Read,WebFetch,WebSearch`
@@ -1768,7 +1768,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        * depuis le 2026-08-27 : une seule image jointe au premier message desarmait donc TOUS les
        * tours suivants de la conversation.
        *
-       * Mesure conv-650, turnId 5bd288bc-7617-4ab7-9810-3acfbed17c23 : argv
+       * Mesure, turnId 5bd288bc-7617-4ab7-9810-3acfbed17c23 : argv
        * `--tools Read,WebFetch,WebSearch`, lectures parties de `D:\AutoWinOS` alors que la
        * conversation etait rangee sur `D:\ContosoV3Desktop`, et quatre demandes d'ecriture refusees
        * d'affilee (saisies ts 1789639857023, 1789639927623, 1789640030803, 1789640116782).
@@ -1779,7 +1779,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       /**
        * TOUR DE CHAT : PLEINEMENT OUTILLE (lecture + shell + ecriture).
        *
-       * DECISION UTILISATEUR du 2026-08-26 (conv-1410) : « Tout ouvrir : Bash + Write + Edit ».
+       * DECISION UTILISATEUR du 2026-08-26 : « Tout ouvrir : Bash + Write + Edit ».
        * L'historique ci-dessous explique d'ou l'on vient ; il ne decrit plus la politique en vigueur.
        * Mesure qui a motive l'ouverture : une correction d'une ligne dans `home-decor-scene.ts` a
        * exige une orchestration complete, qui repond depuis un worktree ISOLE — donc a cote du depot
@@ -1793,7 +1793,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        *
        * Avant, le chat partait avec `--disallowedTools '*'` : l'agent ne pouvait rien lire, donc
        * toute question factuelle (« que fait ce fichier ? ») exigeait une ORCHESTRATION complete.
-       * Mesure du 2026-07-28 sur conv-75 : 38,68 $ pour un travail qu'une lecture de deux fichiers
+       * Mesure du 2026-07-28 : 38,68 $ pour un travail qu'une lecture de deux fichiers
        * aurait couvert. Le gate conversationnel livre le meme jour autorise la reponse directe —
        * encore faut-il que l'agent ait de quoi la fonder.
        *
@@ -1836,7 +1836,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             '--add-dir',
             readOnlyWorkspace,
             ...(materialized ? ['--add-dir', materialized.dir] : []),
-            // ÉTAPES DU TOUR (conv-304, 2026-10-17) : la liste de tâches de claude.exe, relayée
+            // ÉTAPES DU TOUR (2026-10-17) : la liste de tâches de claude.exe, relayée
             // dans le fil par `claude-etapes.ts`. Coût mesuré : +2 850 jetons de prompt par appel.
             '--tools',
             OUTILS_TOUR_DE_CHAT,
@@ -1858,7 +1858,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             ...autorises(OUTIL_RECHERCHE_OUTILS),
             ...outilsMcpAutorises
           )
-          // GROS CHANTIERS (conv-1362, lot conv-1366) : `Workflow` s'ajoute à la liste du tour
+          // GROS CHANTIERS : `Workflow` s'ajoute à la liste du tour
           // quand l'utilisateur le demande, et seulement là : sa définition pèse 8 242 jetons par
           // appel (`claude-workflow.ts`). `OUTILS_TOUR_DE_CHAT` reste sans lui, pour que les tours
           // ordinaires et la question à côté gardent le même début de prompt, donc le même cache.
@@ -1914,12 +1914,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
        */
       settingsDir = await mkdtempAsync(join(tmpdir(), 'autowin-os-settings-'))
       const settingsFile = join(settingsDir, 'settings.json')
-      // GARDE EFFACEMENT DE TRAVAIL (conv-587) : un hook PreToolUse sur Bash refuse les commandes
+      // GARDE EFFACEMENT DE TRAVAIL : un hook PreToolUse sur Bash refuse les commandes
       // qui detruisent l'arbre de travail entier (git reset --hard & co).
       // Le script vit dans le MEME dossier temporaire, nettoye avec lui.
       const hookGarde = join(settingsDir, 'garde-git-destructeur.mjs')
       await writeFileAsync(hookGarde, scriptDesGardesCourant(), 'utf8')
-      // Tests non comptés (conv-1221) : tours de chat seulement, voir `avecAvertissementDesTests`.
+      // Tests non comptés : tours de chat seulement, voir `avecAvertissementDesTests`.
       let hookTests: string | undefined
       if (opts.conversationId?.trim()) {
         hookTests = join(settingsDir, 'tests-non-comptes.mjs')
@@ -1942,13 +1942,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         'utf8'
       )
       args.push('--settings', settingsFile)
-      // RÉSERVATION DES FICHIERS (conv-1083) : le fil qui écrit, lu par le hook à côté de son script.
+      // RÉSERVATION DES FICHIERS : le fil qui écrit, lu par le hook à côté de son script.
       // Son propre filet : un échec ici ne doit pas retirer les autres gardes du lancement.
       const reservation = confReservationFichiers(opts, autowinAppDataRoot())
       if (reservation) {
         try {
           // `depuis` : début de CET appel. Le contrôle ne remet que les orientations déposées
-          // depuis (conv-1241, `shared/orientations-en-cours.ts`) : une plus ancienne appartient à
+          // depuis (`shared/orientations-en-cours.ts`) : une plus ancienne appartient à
           // un appel fini ou à une vie précédente de l'app, elle ne doit pas ressurgir.
           await writeFileAsync(
             join(settingsDir, 'reservation.json'),
@@ -1961,7 +1961,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       }
     } catch {
       // Impossible d'ecrire : on garde le comportement d'origine (sans ces reglages), mais le
-      // dossier deja cree ne reste pas derriere (audit conv-1040, `claude.prompt-systeme.test.ts`).
+      // dossier deja cree ne reste pas derriere (`claude.prompt-systeme.test.ts`).
       const dossierPartiel = settingsDir
       settingsDir = undefined
       await nettoyerTemporairesDeLAppel({ settingsDir: dossierPartiel })
@@ -1973,7 +1973,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     /** Fin de la sortie d'erreur du CLI, bornee : la cause d'un exit non nul est ecrite la. */
     let stderrTail = ''
     /**
-     * ÉCHEC D'ÉCRITURE DU MESSAGE SUR L'ENTRÉE DU CLI (tuyau direct, audit conv-1040).
+     * ÉCHEC D'ÉCRITURE DU MESSAGE SUR L'ENTRÉE DU CLI (tuyau direct).
      *
      * Un CLI mort avant d'avoir lu son message fait émettre `write EOF` / `EPIPE` à son entrée. Sans
      * écoute, cette erreur sortait du processus principal, dont le gestionnaire de plantage arrête
@@ -1989,7 +1989,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      *
      * Le relais repartait de `process.env` entier, fusionné APRÈS `withClaudeAccountEnv` : un
      * `CLAUDE_CONFIG_DIR` hérité du processus écrasait le compte actif — le tour tournait sous une
-     * autre identité et un autre quota (audit conv-1040, `claude.lancement.test.ts`).
+     * autre identité et un autre quota (`claude.lancement.test.ts`).
      * `withClaudeAccountEnv` POSE le dossier du compte actif, ou le RETIRE pour le compte par défaut.
      */
     let envDuTour: NodeJS.ProcessEnv
@@ -2017,7 +2017,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
      * par `error` : sans ce bloc, les temporaires deja crees (reglages, prompt systeme, config MCP
      * qui porte un jeton) restaient dans %TEMP%.
      * Le prompt systeme s'ecrivait juste AVANT ce bloc, en synchrone : un echec a cet endroit
-     * abandonnait tout ce qui precede (audit conv-1040).
+     * abandonnait tout ce qui precede.
      * Gardes : `claude.nettoyage-sur-exception-avant-spawn.test.ts`, `claude.prompt-systeme.test.ts`.
      */
     try {
@@ -2039,7 +2039,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         // en ignorant le texte qu'on lui repasse. Mesure du 2026-09-22 (CLI 2.1.280) : premier tour
         // « reponds ANANAS », reprise avec « reponds MANGUE » -> ANANAS ; avec `off` -> MANGUE.
         // Une conversation commencee avant une retouche de la constitution ou du pilotage ne la
-        // voyait donc jamais. Cout : le prompt Autowin est stable d'un tour a l'autre (conv-792 :
+        // voyait donc jamais. Cout : le prompt Autowin est stable d'un tour a l'autre (
         // 1 prompt distinct sur 7 tours), donc le cache reste valide ; il ne se reconstruit qu'au
         // tour qui suit une vraie retouche — c'est exactement le but.
         if (systemInjected) args.push('--system-prompt-snapshot', 'off')
@@ -2052,7 +2052,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       await attendreMiseAJourClaudeCli()
       envDuTour = environnementAgent(
         {
-          // Le compte choisi pour le fil prime sur le compte actif de l'application (conv-1416).
+          // Le compte choisi pour le fil prime sur le compte actif de l'application.
           ...withClaudeAccountEnv(process.env, claudeCompteDuFil(filDeLAppel(opts))?.env),
           // Nœud skill outillé : un `brain_read` rend la note ENTIÈRE (voir envSortieMcpNoeudSkill).
           ...envSortieMcpNoeudSkill(argsMcp.mcp.length > 0, process.env),
@@ -2135,7 +2135,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           }
       entreePreparee = invocation.inputPath
       /**
-       * STOP RELU JUSTE AVANT LE LANCEMENT (audit conv-1040, `claude.lancement.test.ts`).
+       * STOP RELU JUSTE AVANT LE LANCEMENT (`claude.lancement.test.ts`).
        *
        * L'écoute du Stop n'est posée qu'après le lancement, et un signal DÉJÀ levé ne redéclenche
        * pas `abort`. Un Stop cliqué pendant la préparation (réglages, journal, binaire, jusqu'à 180 s
@@ -2187,7 +2187,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // `unref` n'existe que sur un vrai ChildProcess (doubles de test / stubs peuvent l'omettre).
     if (journal && typeof child.unref === 'function') child.unref() // l'app peut mourir sans emporter le CLI
     /*
-     * LE DETAIL DU CONTEXTE, MESURE EN PARALLELE DU TOUR (conv-1000, panneau « Contexte »).
+     * LE DETAIL DU CONTEXTE, MESURE EN PARALLELE DU TOUR (panneau « Contexte »).
      *
      * Memes arguments, meme dossier, meme environnement que le tour : la sonde voit le meme prompt
      * systeme, les memes outils et le meme serveur MCP. Lancee MAINTENANT et pas apres : le serveur
@@ -2232,7 +2232,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     // Vrai des qu'un `thinking_delta` partiel a ete recu : le bloc complet qui suit est alors un
     // DOUBLON du flux deja affiche, et ne doit etre ni re-pousse ni re-persiste.
     let partialThinkingSeen = false
-    // Un seul avis de coupure par tour, même si le filtre coupe plusieurs réponses (conv-1161).
+    // Un seul avis de coupure par tour, même si le filtre coupe plusieurs réponses.
     let coupureParLeFiltreSignalee = false
     let resolvedModel: string | undefined
     let sessionId: string | undefined
@@ -2267,7 +2267,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       /**
        * UNE IMAGE SE VOIT LA OU ELLE A ETE LUE, pas apres la conclusion du tour.
        *
-       * Mesure du 2026-09-10 (conv-426) : les artefacts n'etaient rendus qu'avec le `SendResult`,
+       * Mesure du 2026-09-10 : les artefacts n'etaient rendus qu'avec le `SendResult`,
        * donc APRES tout le texte deja diffuse en direct — les captures et les fichiers lus par
        * `Read` s'empilaient sous le bloc de cloture (« ✅ Fait »), a l'envers de l'ordre reel du
        * raisonnement. Le canal existait deja (`StreamChunk.artifacts`) mais personne ne l'emettait.
@@ -2316,7 +2316,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const coupeBoucle = creerCoupeBoucle()
     const entreesOutils = new Map<string, unknown>()
     /**
-     * UNE SURVEILLANCE `Monitor` N'EST PAS UNE COMMANDE DE FOND (conv-1370, lot 5, 2026-10-31).
+     * UNE SURVEILLANCE `Monitor` N'EST PAS UNE COMMANDE DE FOND (lot 5, 2026-10-31).
      *
      * Mesuré sur le CLI 2.1.314 : elle arrive en `task_type: local_bash`, `is_backgrounded: true`,
      * comme un Bash de fond ; seul l'appel d'outil la distingue. Mais après son `result` le CLI reste
@@ -2327,7 +2327,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const appelsMonitor = new Set<string>()
     const surveillances = new Set<string>()
     /**
-     * ARRÊTÉE PAR LE MODÈLE = FINIE (conv-1370, lot 5). `TaskStop` donne une `task_notification`
+     * ARRÊTÉE PAR LE MODÈLE = FINIE (lot 5). `TaskStop` donne une `task_notification`
      * `stopped`, le MÊME mot que la coupure de fin de tour : seul l'appel distingue les deux, et sans
      * lui la commande repartait au tour suivant par `tachesDeFondARelancer`. L'appel échoué (« No task
      * found », `is_error`) n'arrête rien : la tâche reste suivie.
@@ -2393,7 +2393,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       }
     })
     /*
-     * LE SILENCE D'UN CHANTIER N'EST PAS UN CLI FIGÉ (conv-1362, lot conv-1366).
+     * LE SILENCE D'UN CHANTIER N'EST PAS UN CLI FIGÉ.
      *
      * Mesuré sur le CLI 2.1.314 : pendant qu'un agent attend un outil, le flux se tait entièrement
      * (167 s sans une ligne sur un chantier de 176 s, aucun `tool_progress` ni `task_progress`). Deux
@@ -2420,7 +2420,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           if (!suiviChantiers.ouvert() && surveillances.size === 0)
             return arreterBattementDuChantier()
           const silenceMs = Date.now() - dernierFluxMs
-          // Même silence pour une surveillance qui attend sa ligne (conv-1370, lot 5), bornée plus
+          // Même silence pour une surveillance qui attend sa ligne (lot 5), bornée plus
           // court : le CLI la clôt seul à 10 min. Au-delà, il est figé et la réponse est rendue.
           if (surveillances.size > 0 && silenceMs > limiteSurveillanceMs()) {
             surveillances.clear()
@@ -2445,7 +2445,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       forceSettle(abortFailure('claude CLI', opts.signal))
     }
     /*
-     * ÉCOUTE RETIRÉE À LA FIN DU PROCESSUS (audit conv-1040) : elle restait accrochée au signal pour
+     * ÉCOUTE RETIRÉE À LA FIN DU PROCESSUS : elle restait accrochée au signal pour
      * toujours, si bien qu'un Stop levé APRÈS le tour tuait encore ce fils terminé et retenait sa
      * fermeture en mémoire. Un Stop levé entre la vérification d'avant lancement et cette ligne
      * (rappel `onSpawned` d'un appelant) est rattrapé tout de suite : un signal déjà levé ne
@@ -2543,7 +2543,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           typeof o['tool_name'] === 'string' && o['tool_name'] ? o['tool_name'] : 'outil'
         /*
          * NOMMER CE QUI TOURNE — « Bash en cours - 9 min » ne dit RIEN de ce que la machine fait.
-         * Mesure du 2026-09-04 (conv-288) : 9 minutes de battements nus sur un `vitest run` de six
+         * Mesure du 2026-09-04 : 9 minutes de battements nus sur un `vitest run` de six
          * suites, l'utilisateur ne pouvait pas savoir si c'etait une suite de tests ou une boucle
          * folle. La commande EXISTE deja cote Autowin — elle a ete captee au `tool_use` dans
          * `pendingTools` — elle n'etait simplement jamais relue ici.
@@ -2561,7 +2561,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         /*
          * UN BANC D'ARENE LANCE SES N BRAS DANS UNE SEULE COMMANDE (`lance.sh` : une sous-shell par
          * bras, puis `wait`). Sans cette relecture, le battement repete « Bash en cours - 2 min »
-         * pendant tout le banc et l'utilisateur ne sait pas OU il en est (conv-355, 2026-09-08 :
+         * pendant tout le banc et l'utilisateur ne sait pas OU il en est (2026-09-08 :
          * « ca fait 10 mins que le bloc reflexion est vide »). L'avancement existe deja sur disque.
          */
         const avancement = cibleBattement ? avancementDepuisCommande(cibleBattement) : null
@@ -2595,12 +2595,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         const demarre = o['subtype'] === 'task_started'
         const brut = String((demarre ? o['description'] : o['summary']) ?? '').trim()
         const commande = resumerCommandeDeFond(brut)
-        // fix-ok: conv-528 turnId 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9 — le CLI -p ARRETE les taches de fond a la fin du tour
+        // fix-ok: un fil turnId 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9 — le CLI -p ARRETE les taches de fond a la fin du tour
         // (`task_notification` status `stopped`, 263 ms avant `done`) ; le modele avait promis leur
         // resultat. On garde les taches ouvertes/arretees pour le dire dans la reponse au `result`.
         const idTache = String(o['task_id'] ?? commande ?? '')
         /*
-         * RELANCEE PAR AUTOWIN = PAS PERDUE. fix-ok: conv-253 tours dcb537d2-ed5a-4646-806d-880ef76df295
+         * RELANCEE PAR AUTOWIN = PAS PERDUE. fix-ok: tours dcb537d2-ed5a-4646-806d-880ef76df295
          * → bdfe38d3-5ba5-4693-bad2-f70b39bc845e — le CLI repris signalait `bmaye5d39` « stopped »
          * (journal 354008f8 l.1) alors qu'Autowin la faisait tourner (lot 6cb0f6b4) : l'avis disait
          * « son résultat est perdu » et le modele a relance un doublon. C'est la copie du CLI qui
@@ -2646,7 +2646,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
               toolUseId: connue?.toolUseId ?? '',
               enFond: connue?.enFond ?? false,
               // Inconnue de ce processus : le CLI repris signale une tache du tour d'AVANT
-              // (conv-217, `bd74t04oh` lancee au tour f7d4bc2d-…, signalee au tour 1d809770-…).
+              // (`bd74t04oh` lancee au tour f7d4bc2d-…, signalee au tour 1d809770-…).
               ...(connue ? {} : { precedente: true })
             })
           }
@@ -2694,7 +2694,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         /*
          * REPONSE COUPEE PAR LE FILTRE DE SECURITE DU FOURNISSEUR = AVIS VISIBLE.
          * fix-ok: cause mesuree — `message_delta` porte `stop_reason: "refusal"` (aeaf1921 l.637) et le relais l'ignorait.
-         * conv-1161, tours bdcc5891-038a-4f8f-95d7-e2877328d0bb et a1ddde24-e8a1-4487-9604-44daeff499cd — l'API
+         * Tours bdcc5891-038a-4f8f-95d7-e2877328d0bb et a1ddde24-e8a1-4487-9604-44daeff499cd — l'API
          * a rendu `stop_reason: "refusal"` (categorie `cyber`, journaux run-stdout f433315a-… l.1551
          * et aeaf1921-… l.637) ; le CLI renvoie alors au modele un message synthetique et le laisse
          * reprendre. Autowin ne lisait pas ce signal : l'utilisateur a vu l'agent s'arreter puis
@@ -2702,11 +2702,11 @@ export class ClaudeCliAdapter implements ProviderAdapter {
          * depuis ce PC », puis la morale) que la vraie. On ne relance rien et on ne contourne rien :
          * on DIT ce qui s'est passe, une fois, a l'endroit de la coupure.
          *
-         * ET ON LE GARDE EN DONNEE (2e passe, conv-1161). L'avis n'etait qu'un texte : le journal du
+         * ET ON LE GARDE EN DONNEE (2e passe). L'avis n'etait qu'un texte : le journal du
          * tour, que lisent la retrospective et le kaizen, n'en gardait aucune trace, et le diagnostic
          * a du fouiller `run-stdout/` pour retrouver la coupure. `coupureFiltre` porte la categorie
          * et l'explication du fournisseur, jointe a CHAQUE coupure meme quand l'avis n'est pas repete.
-         * fix-ok: cause mesuree — le journal du tour a1ddde24 (conv-1161) ne contient aucun evenement de coupure, seulement reasoning-step/provider-status.
+         * fix-ok: cause mesuree — le journal du tour a1ddde24 ne contient aucun evenement de coupure, seulement reasoning-step/provider-status.
          */
         if (ev?.type === 'message_delta' && delta?.stop_reason === 'refusal') {
           const categorieDuFournisseur =
@@ -2746,13 +2746,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         }
         return
       }
-      // fix-ok: conv-217 tour 1d809770-55bc-42b8-896d-ffab2d2270b0 — un `result` de notification emis AVANT la demande etait pris pour sa fin
+      // fix-ok: tour 1d809770-55bc-42b8-896d-ffab2d2270b0 — un `result` de notification emis AVANT la demande etait pris pour sa fin
       if (t === 'result' && !resultSeen && resultatDeNotification(o)) {
         /*
          * CE `result` NE REPOND PAS A LA DEMANDE. A la reprise d'une session (`--resume`) dont une
          * commande de fond avait ete coupee, le CLI traite d'abord cette notification et emet un
          * `result` a 0 tour (`origin.kind` = `task-notification`), PUIS seulement il joue notre
-         * demande. Journal `run-stdout/c4cf11ed-…` l.1-3, conv-217 : pris pour la fin du tour, il
+         * demande. Journal `run-stdout/c4cf11ed-…` l.1-3, : pris pour la fin du tour, il
          * armait la coupure de 30 s — CLI tue en plein travail, tour affiche « termine » a 0 token,
          * et son cumul (0,3023 USD, celui du 1er tour) facture au tour. On l'ignore en entier :
          * ni fin, ni texte, ni cout, ni avis. Les `result` de notification APRES la reponse (5 sur
@@ -2761,7 +2761,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
          * SAUF son cumul, qui n'est pas le cout de ce tour mais son POINT DE DEPART : le CLI repart
          * du cumul qu'il avait enregistre, parfois PLUS BAS que celui deja compte (CLI coupe avant
          * d'avoir enregistre son dernier tour). Sans ce point de depart, le `result` du vrai tour
-         * etait compare au cumul deja compte : conv-311 le 17/10, 19,22 USD factures pour un tour
+         * etait compare au cumul deja compte : un fil le 17/10, 19,22 USD factures pour un tour
          * a 0,96 (journal run-stdout/52247101-… l.3 et l.743). On le pose comme reference, sans
          * rien facturer.
          */
@@ -2777,13 +2777,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         resultSeen = true
         tourDuCliClos = true
         // Ce que le CLI vient de facturer, modèle par modèle : ce prix tarifera les appels coupés
-        // avant la grille recopiée à la main (`activity/cli-usage-recovery.ts`, conv-1602).
+        // avant la grille recopiée à la main (`activity/cli-usage-recovery.ts`).
         enregistrerTarifsCli(o)
         resultatDeChantier = suiviChantiers.resultatRecu(o)
         // Le premier `result` d'un chantier ne clôt rien. Mesuré : il arrive après la fin du chantier
         // (182,8 s sur 182,8), parfois 2,9 s avant le second, et ce qui les sépare peut durer si
         // le modèle travaille encore. La coupure ne s'arme donc qu'au dernier. Même règle pour une
-        // surveillance ouverte : la couper à 30 s perdrait toute ligne plus tardive (conv-1370, lot 5).
+        // surveillance ouverte : la couper à 30 s perdrait toute ligne plus tardive (lot 5).
         if (!suiviChantiers.attendUnResultat() && surveillances.size === 0) armerFinApresResultat()
       }
       if (t === 'assistant') {
@@ -2804,7 +2804,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             }
           | undefined
         // modèle RÉEL rapporté par Claude. `<synthetic>` est le message que le CLI FABRIQUE lui-même
-        // (texte d'erreur, 0 token) : l'adopter effaçait le vrai modèle — conv-120, appel du tour
+        // (texte d'erreur, 0 token) : l'adopter effaçait le vrai modèle, appel du tour
         // 3e00e0a5-5602-46e9-adb3-0d9c7a162b21, resolvedModel « <synthetic> » pour 0,37 USD facturés.
         if (msg?.model && msg.model !== '<synthetic>') resolvedModel = msg.model
         const usageAppel = normalizeClaudeUsage((msg as { usage?: unknown } | undefined)?.usage)
@@ -2819,12 +2819,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * SÉPARATION DES BLOCS RECOLLÉS — voir `shared/collage-blocs-texte.ts` pour la mesure.
              * Sans elle, un bloc qui finit par une phrase et un bloc suivant qui OUVRE une fence
              * donnaient « …branchée.```html-render » : plus une ouverture de bloc pour CommonMark,
-             * donc du HTML brut dans le fil (signalé par l'utilisateur sur conv-8, 2026-09-03).
+             * donc du HTML brut dans le fil (signalé par l'utilisateur, 2026-09-03).
              * Le MÊME séparateur part dans `text` (le brut relu en aval) et dans le delta diffusé :
              * une divergence entre les deux rejouerait le collage sur l'un des deux chemins.
              */
             // Une surveillance rouvre un tour à chaque événement : la règle étroite ci-dessus les
-            // soudait (mesuré, « ATTENTERECU TARD-LIGNE », conv-1370 lot 5).
+            // soudait (mesuré, « ATTENTERECU TARD-LIGNE », lot 5).
             const separation =
               tourDuCliClos && text && !text.endsWith('\n')
                 ? '\n\n'
@@ -2885,7 +2885,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
              * battement `tool_progress` ci-dessus, qui ne couvre QUE les outils LONGS : le CLI ne
              * l'emet qu'apres 30 s de silence, donc jamais pour une rafale de lectures rapides).
              *
-             * Mesure du 2026-08-31, run conv-9 : 52 appels d'outils TOUS reussis (26 Read, 23 Grep,
+             * Mesure du 2026-08-31, run : 52 appels d'outils TOUS reussis (26 Read, 23 Grep,
              * 3 Glob) en 223 659 ms, et ZERO texte produit — donc 224 s d'ecran muet. L'utilisateur
              * a stoppe a 3 min 43 et les 52 resultats ont ete jetes (run rouge, livrable vide).
              * `causal-trace/conv-9.jsonl` porte un seul trou de 224 s sans evenement, puis les 52
@@ -2901,7 +2901,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             // corps deplie, ou chaque signe de vie occupe UNE ligne. Des retours a la ligne dans le
             // texte y inseraient des lignes vides et casseraient l'en-tete (constat du 2026-09-01).
             // La coupure reste donc, mais elle ne decide plus de ce que la TRACE garde : `statusTarget`
-            // emporte la cible entiere quand le libelle l'a rognee (moignons mesures sur conv-130).
+            // emporte la cible entiere quand le libelle l'a rognee (moignons mesures).
             queue.push({
               delta: '',
               status: `${part.name}${cible ? ` · ${cible}` : ''}`,
@@ -2963,7 +2963,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             statusDetail: { envoye: call.envoye, retour: outputEntier }
           })
           // ACTION ROUGE : son message d'erreur la suit dans le journal d'actions, que le fil
-          // sauvegarde et dessine sous la ligne rouge — aucun appel au modèle (conv-341). Masqué
+          // sauvegarde et dessine sous la ligne rouge — aucun appel au modèle. Masqué
           // comme la trace (`redactTrace`) : une sortie en échec peut recopier un secret.
           const ligneErreur = part.is_error
             ? ligneDErreurDAction(call.name, String(redactTrace(outputEntier)))
@@ -2982,7 +2982,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
             killEscalate(child)
             forceSettle(new Error(motifBoucle))
           }
-          // TESTS DU TERMINAL (conv-1059) : la commande et son issue sont tenues ICI et nulle part
+          // TESTS DU TERMINAL : la commande et son issue sont tenues ICI et nulle part
           // ailleurs — le fil n'en recevait que les deux lignes de texte ci-dessus. Une commande en
           // FOND rend la main avant la fin : son « succès » n'est pas celui du test, on l'écarte.
           const appelShell = appelsShell.get(part.tool_use_id)
@@ -3032,7 +3032,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         if (typeof o['result'] === 'string' && !text) text = o['result'] as string
         if (resultatDeChantier) {
           /*
-           * LE DERNIER `result` EST LA RÉPONSE DU TOUR (conv-1362, lot conv-1366). Le texte accumulé
+           * LE DERNIER `result` EST LA RÉPONSE DU TOUR. Le texte accumulé
            * commence par « c'est lancé en arrière-plan », qui ne dit plus rien une fois le chantier
            * fini. La récupération d'un `<cmd>` s'appuie sur des positions dans ce texte : elles ne
            * valent plus. Un chantier mal fini se dit ici, quoi que le modèle ait écrit.
@@ -3085,7 +3085,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           }
         }
         if (tachesDeFond.size > 0) {
-          // fix-ok: le message disait « arrêtée » meme pour une tache sans notification `stopped` (objection juge, conv-528 tour 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9)
+          // fix-ok: le message disait « arrêtée » meme pour une tache sans notification `stopped` (objection juge, tour 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9)
           const lister = (arretee: boolean, precedente = false): string =>
             [...tachesDeFond.values()]
               .filter((x) => x.arretee === arretee && Boolean(x.precedente) === precedente)
@@ -3094,12 +3094,12 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           const arretees = lister(true)
           const ouvertes = lister(false)
           /*
-           * TACHE D'UN TOUR PRECEDENT — conv-217, tour 1d809770-55bc-42b8-896d-ffab2d2270b0 : la
+           * TACHE D'UN TOUR PRECEDENT, tour 1d809770-55bc-42b8-896d-ffab2d2270b0 : la
            * reponse au « go » s'ouvrait sur « Tâche de fond arrêtée à la fin de ce tour », alors que
            * ce tour n'avait rien lance en fond (la commande venait du tour f7d4bc2d-…). Et « relance
            * la demande » ne la referait pas : ce n'est pas cette demande qui l'avait lancee.
            */
-          // fix-ok: conv-217 tour 1d809770-55bc-42b8-896d-ffab2d2270b0 — tache du tour precedent annoncee « arretee a la fin de ce tour »
+          // fix-ok: tour 1d809770-55bc-42b8-896d-ffab2d2270b0 — tache du tour precedent annoncee « arretee a la fin de ce tour »
           const precedentes = lister(true, true)
           const parties = [
             arretees ? `Tâche de fond arrêtée à la fin de ce tour : ${arretees}.` : '',
@@ -3166,7 +3166,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
           // Un event `result` est deja la decision terminale du CLI (qui gere ses propres retries).
           // Le rejouer au niveau AgentPilot repaie le meme prompt et contourne la borne provider.
           //
-          // SAUF le plantage transitoire QUI N'A RIEN COUTE. Mesure conv-599, tour
+          // SAUF le plantage transitoire QUI N'A RIEN COUTE. Mesure, tour
           // `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : apres 4 iterations payees (≈1,06 USD, 917 k
           // tokens), l'iteration 4 meurt en `error_during_execution` en 1,9 s pour 0 token et
           // 0 USD. Ce n'est pas une decision du CLI sur le fond, c'est sa propre execution qui a
@@ -3244,7 +3244,7 @@ export class ClaudeCliAdapter implements ProviderAdapter {
       )
     } else {
       // Décodeur À ÉTAT : un caractère coupé entre deux morceaux du tuyau attend sa suite au lieu
-      // de devenir « �� » (audit conv-1040, `claude.tuyau-direct.test.ts`). Le mode journal a la
+      // de devenir « �� » (`claude.tuyau-direct.test.ts`). Le mode journal a la
       // même garantie dans `readChunkFromAsync`.
       const decodeur = new StringDecoder('utf8')
       child.stdout?.on('data', (chunk: Buffer) => consumeText(decodeur.write(chunk)))
@@ -3516,7 +3516,7 @@ export interface MessageTexte {
 const FERMETURES_OUTIL_NATIF = /^(?:\s*<\/(?:parameter|invoke|function_calls|antml:[a-z_]+)>)+\s*$/
 
 /**
- * `<cmd>` REFERME PAR LA SYNTAXE DES OUTILS NATIFS — conv-120, appel du tour
+ * `<cmd>` REFERME PAR LA SYNTAXE DES OUTILS NATIFS, appel du tour
  * 3e00e0a5-5602-46e9-adb3-0d9c7a162b21 (2026-10-09), recidive flux 1848f898 le meme jour.
  *
  * fix-ok: le modele ecrit `<cmd>{json complet}` puis `</parameter></invoke>` au lieu de `</cmd>` ;

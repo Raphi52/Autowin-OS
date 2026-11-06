@@ -1,8 +1,8 @@
 /**
- * ARRÊTS DE LA CHAÎNE ∞ GARDÉS SUR DISQUE (conv-38, 2026-10-02). L'arrêt posé par le garde-fou
+ * ARRÊTS DE LA CHAÎNE ∞ GARDÉS SUR DISQUE (2026-10-02). L'arrêt posé par le garde-fou
  * (quota hebdomadaire Claude ou tours automatiques d'affilée) vivait seulement dans l'état React du
  * chat : un redémarrage de l'app l'effaçait, et le fil ne disait plus pourquoi ∞ s'était éteint.
- * Seuls CES arrêts sont gardés : les autres pauses du mode auto restent volatiles (conv-891).
+ * Seuls CES arrêts sont gardés : les autres pauses du mode auto restent volatiles.
  * Clé = id de la conversation ; retiré par ×, par un message de l'utilisateur ou par le rallumage de ∞.
  * fix-ok: cause mesurée — test de remontage rouge (aucun arrêt affiché après redémarrage) car l'arrêt n'était qu'en état React ; ce module neuf, écrit en étapes vérifiées, le garde dans localStorage.
  */

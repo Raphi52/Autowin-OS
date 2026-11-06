@@ -11,7 +11,7 @@ vi.mock('./Markdown', () => ({
 /**
  * COMPTEUR HORS-MODÈLE du coût d'une frappe. `askReponseDuFil` et `lastUserPromptBefore`
  * balaient le fil pour CHAQUE message : si le fil est re-rendu à chaque caractère, on paie
- * O(n²) par touche — c'est le freeze mesuré (conv-1464). Le test ne juge pas un ressenti, il
+ * O(n²) par touche — c'est le freeze mesuré. Le test ne juge pas un ressenti, il
  * compte des appels réels.
  */
 const compteur = { scans: 0 }
@@ -129,8 +129,8 @@ describe('ChatView — coût d’une frappe dans le composer', () => {
     expect(compteur.scans).toBe(0)
   })
   /**
-   * GEL À L'OUVERTURE D'UN LONG FIL — cause des gels `vue-chat` (p95 ≈ 10 s, 859 gels, conv-526 en
-   * tête avec 87). Mesuré le 2026-09-18 : rendre les 164 messages de conv-526 d'UN SEUL COUP coûte
+   * GEL À L'OUVERTURE D'UN LONG FIL — cause des gels `vue-chat` (p95 ≈ 10 s, 859 gels, un fil en
+   * tête avec 87). Mesuré le 2026-09-18 : rendre les 164 messages d'UN SEUL COUP coûte
    * 3,3 s de rendu React. Le premier rendu ne doit porter que la FIN du fil ; le reste arrive par
    * tranches, dans des tâches séparées qui rendent la main à l'affichage entre deux.
    */

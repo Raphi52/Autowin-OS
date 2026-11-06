@@ -4,7 +4,7 @@ import { nomHistorique } from '../profil/identite-entreprise'
 /**
  * RECHARGER UNE VARIABLE D'ENVIRONNEMENT A CHAUD — sans redemarrer le processus principal.
  *
- * DEFAUT VECU (conv-1516, 2026-08-28) : le plafond de `verify` se regle par
+ * DEFAUT VECU (2026-08-28) : le plafond de `verify` se regle par
  * `AUTOWIN_VERIFY_TIMEOUT_MS`, mais `process.env` est FIGE au lancement d'Electron. `setx` a
  * enregistre 86 400 000 dans `HKCU\Environment` (verifie par `reg query`, exit 0) et le processus a
  * continue de couper a 600 s : la valeur existait, personne ne la lisait. Faute de pouvoir
@@ -25,7 +25,7 @@ import { nomHistorique } from '../profil/identite-entreprise'
  * rebrancher le canal a chaud. La valeur reste validee loopback par `requireLoopbackBrainOrigin`.
  */
 /*
- * `AUTOWIN_SQLCMD_BIN` — DEFAUT VECU (conv-152, 2026-09-02) : `sqlcmd` etait absent du poste.
+ * `AUTOWIN_SQLCMD_BIN` — DEFAUT VECU (2026-09-02) : `sqlcmd` etait absent du poste.
  * Installe en version portable puis ajoute au PATH utilisateur, il restait INVISIBLE pour l'app :
  * une modification du PATH ne se propage jamais aux processus deja lances, et le redemarrage passe
  * par le lanceur, qui herite de l'ancien environnement. Un `setx` du PATH suivi d'un redemarrage
@@ -124,10 +124,10 @@ export function rechargerEnv(
 }
 
 /**
- * CLÉS DES FOURNISSEURS RELUES DEPUIS L'OS (2026-11-04, conv-1499) : `setx MISTRAL_API_KEY` puis
+ * CLÉS DES FOURNISSEURS RELUES DEPUIS L'OS (2026-11-04) : `setx MISTRAL_API_KEY` puis
  * `restart_app` laissait le service absent du sélecteur. Cause prouvée : le redémarrage repasse par le
  * lanceur (`npm run dev` lancé à 13:37:16 par un cmd.exe déjà là), qui transmet son ANCIEN
- * environnement — même défaut que `AUTOWIN_SQLCMD_BIN` (conv-152). Le catalogue appelle donc ceci
+ * environnement — même défaut que `AUTOWIN_SQLCMD_BIN`. Le catalogue appelle donc ceci
  * avant de lire les clés : une clé ABSENTE du processus est reprise de `HKCU\Environment`.
  * Jamais d'écrasement d'une valeur déjà là, jamais de valeur venue du modèle, aucun journal.
  */

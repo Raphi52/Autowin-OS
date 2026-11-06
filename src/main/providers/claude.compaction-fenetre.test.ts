@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { FENETRE_COMPACTION_CLI, findClaudeExecutable, reglagesCliAutowin } from './claude'
 
 /**
- * FENÊTRE DE COMPACTION DES AGENTS (conv-335, 2026-10-19 : « réduit le coût d'un long fil »).
+ * FENÊTRE DE COMPACTION DES AGENTS (2026-10-19 : « réduit le coût d'un long fil »).
  *
  * MESURÉ sur le CLI 2.1.302 installé : sans réglage, `/autocompact` répond « Auto-compact window
  * for Opus 5.5: 1m tokens (default for this model) ». Le CLI ne résume donc un fil qu'à l'approche

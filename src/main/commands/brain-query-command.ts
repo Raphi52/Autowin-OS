@@ -111,7 +111,7 @@ const CAUSES_INDISPONIBLE: Record<BrainUnavailableReason, string> = {
     'cause exacte : le serveur est vivant mais a refuse d’ouvrir la session (GET /challenge non-ok)',
   'query-refused':
     'cause exacte : le serveur a refuse la requete (POST /query-secure non-ok hors 503 : jeton rejete ou requete invalide)',
-  // conv-1053 (2026-10-22) : depuis que l'index précédent répond pendant qu'une modification de
+  // 2026-10-22 : depuis que l'index précédent répond pendant qu'une modification de
   // notes est revérifiée (brain_retrieval.py, `_stale_serving_reason`), un 503 ne reste que dans deux
   // cas : la toute première vérification après le démarrage du serveur, ou un index douteux en
   // lui-même (autre version du code, racines, surveillance du corpus en panne).
@@ -142,7 +142,7 @@ const PANNE_GENERIQUE =
 
 function noteIndisponible(reason?: BrainUnavailableReason): string {
   // Ni une neutralisation de test ni une revérification d'index ne sont des pannes : la consigne
-  // « diagnostique et répare » ferait dépenser une session sur un serveur sain (conv-4, 2026-10-03).
+  // « diagnostique et répare » ferait dépenser une session sur un serveur sain (2026-10-03).
   if (reason === 'test-mode' || reason === 'reindexing') return CAUSES_INDISPONIBLE[reason]
   if (!reason) return PANNE_GENERIQUE
   return `${CAUSES_INDISPONIBLE[reason]}. ${PANNE_GENERIQUE}`
@@ -162,13 +162,13 @@ export function buildBrainOutcome(
     const note =
       effectiveStatus === 'invalid'
         ? unavailableReason === 'foreign-signature'
-          ? // conv-338 (2026-10-19, tour 8ce6230c) : la note anonyme ne disait pas qu'un autre serveur
+          ? // 2026-10-19, tour 8ce6230c : la note anonyme ne disait pas qu'un autre serveur
             // tenait le port ; l'agent a reecrit ses faits avant de regarder le serveur.
             `reponse Brain rejetee - ${CAUSES_INDISPONIBLE['foreign-signature']}. ${PANNE_GENERIQUE}`
           : "reponse Brain rejetee : identite ou integrite invalide - aucune connaissance n'a ete utilisee"
         : effectiveStatus === 'empty'
           ? 'aucun savoir cure sur cette question - ne pas conclure que la reponse est negative'
-          : // PANNE = TACHE, PAS FIN DE ROUTE (kaizen conv-151, saisie ts=1788375174361 :
+          : // PANNE = TACHE, PAS FIN DE ROUTE (kaizen, saisie ts=1788375174361 :
             // « t'aurais du reparer le brain »). La note disait seulement « ne conclus pas au
             // negatif » : le modele a relance SIX fois la meme question entre 18:57:46 et 19:04:52
             // (traces status=unavailable), puis s'est rabattu sur d'autres sources et a rendu la

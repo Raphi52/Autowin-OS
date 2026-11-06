@@ -5,9 +5,9 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { ChatContextRule } from './ChatContextRule'
 
 /**
- * LA JAUGE DE CONTEXTE EST LE SEPARATEUR ENTRE L'EN-TETE DU CHAT ET LE FIL (conv-179, 2026-10-10 :
+ * LA JAUGE DE CONTEXTE EST LE SEPARATEUR ENTRE L'EN-TETE DU CHAT ET LE FIL (2026-10-10 :
  * « la barre de contexte met-la en haut comme separateur entre le header du chat et le chat »).
- * Elle vivait sur le filet au-dessus du champ de saisie (demande conv-240) ; ses gestes restent.
+ * Elle vivait sur le filet au-dessus du champ de saisie ; ses gestes restent.
  *
  * Ce test existe parce qu'un trait de deux pixels ne se prouve pas sur une capture compressee : la
  * seule preuve lisible est la valeur reellement posee sur l'element. Il verifie les DEUX etats qui
@@ -42,7 +42,7 @@ describe('ChatContextRule — la jauge de contexte sous l en-tete', () => {
   })
 
   it('ecrit le mot « contexte » au bout du remplissage, meme sans panneau ouvert', () => {
-    // conv-189 : « qu'il y ait ecrit contexte au bout de la jauge ». Sa position vient du CSS
+    // « qu'il y ait ecrit contexte au bout de la jauge ». Sa position vient du CSS
     // (ChatContextRule.style.test.ts) ; ici on prouve qu'il est rendu, sans attendre le survol.
     const filet = jauge(monter(<ChatContextRule ratio={0.4} level="ok" panelNode={<p>detail</p>} />))
     const libelle = filet.querySelector('.chat-context-rule-libelle')
@@ -121,7 +121,7 @@ describe('ChatContextRule — la jauge de contexte sous l en-tete', () => {
 
   it('prend la largeur de la jauge des quotas, en bas du chat', () => {
     /*
-     conv-1399 (2026-10-31) : « la barre de contexte en haut faut la mettre de la meme largeur que
+     2026-10-31 : « la barre de contexte en haut faut la mettre de la meme largeur que
      celle d'en bas (donc moins large) ». Les marges de la jauge du bas viennent du theme : la jauge
      du haut MESURE ses bords. En-tete 1000 px a partir de 100 ; jauge du bas de 132 a 1068.
     */

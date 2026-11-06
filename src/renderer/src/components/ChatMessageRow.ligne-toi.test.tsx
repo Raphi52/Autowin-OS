@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Ligne « Toi » RETIRÉE au-dessus des messages de l'utilisateur (conv-227, 2026-10-11 : « Enlève
+ * Ligne « Toi » RETIRÉE au-dessus des messages de l'utilisateur (2026-10-11 : « Enlève
  * aussi la ligne « TOI » au-dessus de mes messages dans tous les thèmes », après la ligne
  * « Agent »). Elle vivait dans ChatMessageRow, commun à tous les thèmes.
  *

@@ -12,12 +12,12 @@ import { TrustLedger } from '../trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /**
- * CAS RÉEL conv-976, tour a0d81c84 (2026-10-15, run `scout-nouvelles-ameliorations-induites-mv9ia9nw`).
+ * CAS RÉEL, tour a0d81c84 (2026-10-15, run `scout-nouvelles-ameliorations-induites-mv9ia9nw`).
  *
  * Un `/scout` nommé a payé 7 juges et 6 nouveaux passages de scout (23 min, ~8,8 $). Seul le 1er
  * verdict portait un MAJEUR ; les verdicts 2 à 6 ne portaient QUE des MINEUR (« 10 fichiers » au
  * lieu de 22, « cinq vérifications » au lieu de six…) et ont chacun relancé scout + juge (~5,6 $).
- * Décision utilisateur (conv-977) : sur un `/scout` nommé, des MINEUR seuls deviennent des RÉSERVES
+ * Décision utilisateur : sur un `/scout` nommé, des MINEUR seuls deviennent des RÉSERVES
  * ajoutées au résultat ; un MAJEUR bloque toujours, et le build garde le blocage sur MINEUR.
  *
  * Les verdicts ci-dessous sont des extraits des verdicts RÉELS (`causal-trace/conv-976.jsonl`).
@@ -63,7 +63,7 @@ beforeAll(() => {
   // La mesure de code périmé reste active : on lui donne une racine vide (même précaution que
   // orchestrator.memoire-juge.test.ts), sinon elle coupe la boucle avant toute réparation.
   cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(RACINE_SANS_BUNDLE)
-  // Le VRAI mode de production (conv-844) : « jusqu'au vert », sans plafond — celui de conv-976.
+  // Le VRAI mode de production : « jusqu'au vert », sans plafond — celui.
   delete process.env.AUTOWIN_REPARATION_BORNEE
 })
 afterAll(() => {
@@ -169,7 +169,7 @@ describe('conv-976 : un /scout nommé garde les MINEUR seuls comme réserves au 
     expect(resultat.result).not.toContain('piste 1 tenue')
     // La trace dit pourquoi la boucle s'est arrêtée là.
     expect(resultat.trace.some((s) => /réserves? mineures? du juge gardées? dans le résultat/iu.test(s.detail ?? ''))).toBe(true)
-    // conv-339 (tour b6150a1a-6518-4d4b-99b4-3218b5efb501) : la version remplacée n'est PAS rendue
+    // tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : la version remplacée n'est PAS rendue
     // à l'utilisateur : seule la version finale, sans en-tête ni la mention « …plus bas » écrite
     // pour le juge.
     expect(resultat.result.startsWith('## Cible')).toBe(true)

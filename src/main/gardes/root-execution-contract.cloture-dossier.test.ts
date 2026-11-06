@@ -3,7 +3,7 @@ import { etatDeCloture } from './root-execution-contract'
 
 /*
  * Meme defaut que `cibles-dossier`, mais au SITE D'APPEL reel du gate (`orchestrator.ts:4770`) :
- * conv-470, tour 52fbe05f-0086-4806-8f07-c8762e8caa35, saisie ts=1789192601300
+ * Tour 52fbe05f-0086-4806-8f07-c8762e8caa35, saisie ts=1789192601300
  * (« /kaizen j'ai rien en preprompt »). La demande ne nomme aucun fichier ; le dossier de preuve
  * joint recopie « Ancrage : src/main/modeles/model-quotas.ts:62 » d'un message anterieur. Le gate a ferme
  * ROUGE trois fois de suite sur « Cible nommee ... src/main/modeles/model-quotas.ts » alors que le travail

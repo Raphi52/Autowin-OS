@@ -9,7 +9,7 @@ import { RouterView } from './RouterView'
 
 /**
  * LES PAGES SKILLS, BEHAVIOUR ET ROUTAGE DE SETTINGS SUIVENT LA LANGUE (traduction anglaise,
- * conv-1170, lot 15). Entrée qui doit faire échouer ce test : un libellé de ces pages laissé en dur
+ * Lot 15). Entrée qui doit faire échouer ce test : un libellé de ces pages laissé en dur
  * en français, ou une page qui ne se redessine pas quand la langue change (retour au français
  * compris, mot pour mot).
  */

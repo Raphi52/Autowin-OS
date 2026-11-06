@@ -12,12 +12,12 @@ import {
 import { assertTrustedRendererSender } from '../ipc/ipc-senders'
 
 /**
- * L'AFFICHAGE SELON LA CONNEXION (conv-1442, 2026-11-02) — le côté Windows : la session est-elle à
+ * L'AFFICHAGE SELON LA CONNEXION (2026-11-02) — le côté Windows : la session est-elle à
  * distance, et quelle taille a son écran ? La décision vit dans `shared/affichage-session.ts`.
  *
  * QUAND ON RE-MESURE : au démarrage, à chaque déverrouillage (une reconnexion par Windows App
  * déverrouille la session : journal Windows 4778 puis 4801, ce qu'Electron signale par
- * `unlock-screen` — même signal que `mascotte-fenetre.ts`, conv-1227) et à chaque changement
+ * `unlock-screen` — même signal que `mascotte-fenetre.ts`) et à chaque changement
  * d'écran (le téléphone impose sa résolution à la session). `process.env.SESSIONNAME` ne sert pas :
  * il est figé au lancement d'Autowin, il dirait encore « Console » après une reconnexion à distance.
  */

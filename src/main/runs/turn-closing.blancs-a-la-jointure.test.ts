@@ -4,7 +4,7 @@ import { closingTurnDelivery, resteADire } from './turn-closing'
 /**
  * LE MEME TEXTE, A UN SAUT DE LIGNE PRES, ETAIT PUBLIE UNE SECONDE FOIS.
  *
- * MESURE le 2026-10-11 sur `conv-234` (tour 8788916c, /draft du graphe de la demande). Le tour a
+ * MESURE le 2026-10-11 (tour 8788916c, /draft du graphe de la demande). Le tour a
  * parle entre ses outils, puis a rendu une galerie `html-render` derriere une question `ask`. Le
  * texte deja affiche (deltas recolles) portait « …telle quelle.\n\nJ'ai fait 6 directions » ; le
  * texte de cloture, rebati par `.join('')` des morceaux une fois la commande retiree, portait

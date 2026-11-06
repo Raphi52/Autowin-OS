@@ -73,11 +73,11 @@ describe('la carte de la Falaise', () => {
     for (const g of gestes) expect(D.gestes?.[g], g).toBeDefined()
   })
 
-  // fix-ok: ces deux tests cherchaient les escaliers P et B1, absents de D.esc (A à E) depuis le lot 1 (conv-1458).
+  // fix-ok: ces deux tests cherchaient les escaliers P et B1, absents de D.esc (A à E) depuis le lot 1.
   /**
    * La Falaise o-1916 n'a plus de passerelle entre le hangar et la bibliothèque : on descend du hangar
    * au sable par l'escalier A, puis on remonte par B. Un trou dans la grille le long du rocher ferait
-   * monter le tanuki droit dans la falaise, sans escalier (conv-1459).
+   * monter le tanuki droit dans la falaise, sans escalier.
    */
   it('va du hangar à la bibliothèque par le sable : escalier A, puis escalier B', () => {
     const P = D.postes
@@ -137,11 +137,11 @@ describe('un tanuki suit son agent', () => {
 
   /**
    * Les places de bain : celles du grand onsen, qui a remplacé les trois baquets, puis la machine et le
-   * tabouret (conv-1434).
+   * tabouret.
    */
   const BAINS = D.postes.filter((p) => p.me === 'bain')
   /**
-   * L'eau de l'onsen de la Falaise o-1916 (conv-1459), relevée sur la peinture un peu en retrait de ses pierres :
+   * L'eau de l'onsen de la Falaise o-1916, relevée sur la peinture un peu en retrait de ses pierres :
    * le fond sous les galets, la gauche contre le rocher et la barrière, la droite contre le tas de galets.
    */
   const ONSEN: [number, number][] = [
@@ -179,7 +179,7 @@ describe('un tanuki suit son agent', () => {
     expect(autre?.metierIci).toBe('pause')
   })
 
-  // conv-1558 : content au bain, puis endormi — le même bain, il ne se relève pas pour changer de visage.
+  // Content au bain, puis endormi — le même bain, il ne se relève pas pour changer de visage.
   it("s'endort dans son bain sans en sortir", () => {
     const m = creerMarche(D, graine(5))
     const w = m.ajouter('a', fini)
@@ -228,7 +228,7 @@ describe('un tanuki suit son agent', () => {
     // Personne au milieu du bassin.
     expect(BAINS.filter((p) => p.x > 250 && p.x < 460 && (p.cl as number) > 713)).toEqual([])
     // Ils font le tour : le fond, la gauche et la droite ont chacun leurs baigneurs. La barrière de devant coupe
-    // le bord gauche de l'eau à mi-hauteur (conv-1459) : la gauche compte aussi le coin du fond.
+    // le bord gauche de l'eau à mi-hauteur : la gauche compte aussi le coin du fond.
     const fond = BAINS.filter((p) => p.x >= 235 && p.x <= 455 && (p.cl as number) < 713)
     const gauche = BAINS.filter((p) => p.x < 235)
     const droite = BAINS.filter((p) => p.x > 455)
@@ -246,7 +246,7 @@ describe('un tanuki suit son agent', () => {
   /**
    * Sur la Falaise o-1916, l'onsen s'étend au pied du tunnel des commandes : c'est le trajet vers les
    * commandes, depuis un escalier ou l'entrée, qui couperait par l'eau. Mesuré en rendant marchables le
-   * bain et ses pierres : 15 trajets y passaient, et aucun entre deux escaliers (conv-1434, conv-1459).
+   * bain et ses pierres : 15 trajets y passaient, et aucun entre deux escaliers.
    */
   it("personne ne traverse l'onsen pour aller d'un escalier ou de l'entrée aux commandes", () => {
     const m = creerMarche(D, graine(5))
@@ -267,7 +267,7 @@ describe('un tanuki suit son agent', () => {
   })
 
   /**
-   * Demande (conv-1550) : « les personnages marchent sur l'eau, ils doivent marcher au bord du bassin pour
+   * Demande : « les personnages marchent sur l'eau, ils doivent marcher au bord du bassin pour
    * aller se mettre dans leur spot dans l'eau ». Mesuré avant correction : la grille gardait une bande d'eau
    * marchable le long des pierres, et les baigneurs y faisaient le tour du bassin.
    */
@@ -486,7 +486,7 @@ describe('dix minutes avec huit agents réalistes', () => {
       'brain',
       'publier',
       'messages',
-      // Réfléchir longtemps : 42 % du temps d'un tour (conv-1428).
+      // Réfléchir longtemps : 42 % du temps d'un tour.
       'pause',
       'pause',
       'pause'

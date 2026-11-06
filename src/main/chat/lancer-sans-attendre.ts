@@ -3,7 +3,7 @@
  *
  * `chat_send` avec `conversationId` reutilisait `runPrompt` des taches planifiees, qui attend la FIN
  * du tour cible (index.ts, `await runPilotChat`). Un agent qui ouvrait 7 fils ne pouvait donc les
- * lancer qu'un par un : mesure du 2026-10-02 (conv-40 -> conv-41/42/43), chaque envoi partait 0,1 a
+ * lancer qu'un par un : mesure du 2026-10-02 (-> conv-41/42/43), chaque envoi partait 0,1 a
  * 0,2 s apres la fin du precedent, ~2 min 15 chacun.
  *
  * Ici on rend la main des que le tour est ENREGISTRE comme actif dans le fil cible. Si le tour

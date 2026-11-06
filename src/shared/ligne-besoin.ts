@@ -1,5 +1,5 @@
 /**
- * LA LIGNE DE BESOIN — `AUTOWIN_BESOIN_V1` (carte des besoins, lot 2, conv-1089, 2026-10-22).
+ * LA LIGNE DE BESOIN — `AUTOWIN_BESOIN_V1` (carte des besoins, lot 2, 2026-10-22).
  *
  * Demande : « une ligne invisible AUTOWIN_BESOIN_V1 que l'agent écrit pour dire si un message est un
  * nouveau besoin ou la suite d'un besoin existant ». Le modèle a le contexte du fil chargé au moment
@@ -12,7 +12,7 @@
  * Formes lues :
  *   AUTOWIN_BESOIN_V1: nouveau          — changement ou livrable pas encore demandé
  *   AUTOWIN_BESOIN_V1: suite            — poursuit la demande précédente de CE fil
- *   AUTOWIN_BESOIN_V1: suite conv-1059  — reprend la demande d'un AUTRE fil
+ *   AUTOWIN_BESOIN_V1: suite — reprend la demande d'un AUTRE fil
  *   AUTOWIN_BESOIN_V1: aucun            — question, avis, conversation : pas un besoin
  * FAIL-OPEN : une ligne absente ou illisible ne range rien, elle ne casse rien.
  */

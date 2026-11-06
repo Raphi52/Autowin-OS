@@ -5,7 +5,7 @@ import { verifyTimeoutOutcome } from '../commands/verify-command'
 /**
  * DISTINGUER « TON CODE NE COMPILE PAS » DE « UN TEST ÉCHOUE ».
  *
- * DÉFAUT VÉCU le 2026-08-25 (conv-1404). Un tour a édité `WorkflowsPanel.tsx` pour remplacer un
+ * DÉFAUT VÉCU le 2026-08-25. Un tour a édité `WorkflowsPanel.tsx` pour remplacer un
  * `<details>/<summary>` par des `<div>`, et a laissé des balises fermantes qui ne correspondaient
  * plus. La vérification du bureau a donc échoué sur une erreur de TRANSFORMATION esbuild — du code
  * illisible, pas un test rouge. Le message rendu à l'agent était générique : « Vérification du
@@ -67,7 +67,7 @@ describe('natureDeLEchec', () => {
   /**
    * UN PLAFOND N'EST NI UNE FAUTE DE LOGIQUE NI UNE FAUTE DE SYNTAXE.
    *
-   * DÉFAUT VÉCU le 2026-08-26 (conv-1410). Deux `edit_file` sur `home-decor-scene.ts` ont été
+   * DÉFAUT VÉCU le 2026-08-26. Deux `edit_file` sur `home-decor-scene.ts` ont été
    * refusés après 600 s exactement : la suite GLOBALE a été jouée, coupée au plafond, donc rien
    * n'était prouvé. Mais la sortie de plafond embarque « ce que la suite avait écrit avant d'être
    * coupée » — donc des lignes `× …`. `MARQUEUR_TESTS` a matché, et la consigne rendue en TÊTE
@@ -111,7 +111,7 @@ describe('natureDeLEchec', () => {
   it('reconnaît la sortie RÉELLE du plafond, pas seulement une phrase recopiée', () => {
     // GARDE ANTI-DÉRIVE : le marqueur et le message vivent dans deux fonctions. Sans ce test, une
     // reformulation du message rebasculerait silencieusement les plafonds en « tests » — le défaut
-    // de conv-1410 reviendrait sans qu'aucun test ne bouge.
+    // reviendrait sans qu'aucun test ne bouge.
     const reelle = verifyTimeoutOutcome('npm run test:unit', 600_000, '× un test 14ms')
 
     expect(natureDeLEchec(reelle.output).nature).toBe('timeout')

@@ -286,7 +286,7 @@ describe('transport', () => {
 
 describe('issue métier — anti faux-vert dans la trace', () => {
   it('un remember refusé par le Brain ne passe PLUS pour un ok', () => {
-    // Valeurs COPIÉES du run réel conv-1346, où la trace affichait « remember : ok ».
+    // Valeurs COPIÉES du run réel, où la trace affichait « remember : ok ».
     expect(
       issueMetier({ allowed: true, stored: false, detail: 'refusé par le Brain : not found' })
     ).toBe('RIEN ECRIT — refusé par le Brain : not found')
@@ -653,7 +653,7 @@ describe('corrections de l’audit', () => {
 })
 
 /**
- * ANNOTATIONS ET VRAIS TYPES (conv-1370, 2026-10-31).
+ * ANNOTATIONS ET VRAIS TYPES (2026-10-31).
  *
  * Mesure sur 53 outils servis : tout partait en texte, 20 arguments sur 11 outils étaient exigés à
  * tort, et aucune annotation ne sortait alors que 51 commandes en portent. Documentation
@@ -919,7 +919,7 @@ describe('appels simultanés', () => {
 
   it('chat : quatre lectures d’un même message tournent ensemble, chaque résultat suit SA carte', async () => {
     /*
-     * ENSEMBLE DEPUIS conv-1388 (2026-10-31). Ce test gardait la file (conv-1372) tant que la trace
+     * ENSEMBLE DEPUIS le 2026-10-31. Ce test gardait la file tant que la trace
      * rattachait chaque événement au PRÉCÉDENT. `run-pilot-chat.ts` rattache maintenant le `result`
      * à SA `command`, `appelsDeLOutil` apparie par action, et `chat-mcp.ts` pose
      * `lecturesSimultanees: true` : les quatre lectures sont en vol en même temps.

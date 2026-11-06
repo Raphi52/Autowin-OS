@@ -25,7 +25,7 @@ interface OrchestrationTraceContext {
 /**
  * Un store PRETE par l'appelant (l'app prete `causalTrace`) reste ouvert. Un store cree ICI, faute
  * de store prete, est referme ici : son descripteur d'ecriture restait sinon ouvert pour toujours,
- * et sous Windows le dossier de trace ne s'effacait plus (EPERM, conv-246).
+ * et sous Windows le dossier de trace ne s'effacait plus (EPERM).
  */
 function avecTraceStore(prete: TraceStore | undefined, travail: (store: TraceStore) => void): void {
   if (prete) return travail(prete)

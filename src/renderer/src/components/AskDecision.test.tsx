@@ -91,7 +91,7 @@ describe('AskDecisionBlock — une ligne par réponse, jamais côte à côte', (
    * DEUX RENDUS, un clic chacun -- et non deux clics dans le meme bloc comme avant.
    *
    * Depuis le 2026-08-25 un bloc `ask` se VERROUILLE des la premiere reponse : l'utilisateur avait
-   * clique quatre fois la meme option et quatre envois etaient partis (conv-1400). Les assertions de
+   * clique quatre fois la meme option et quatre envois etaient partis. Les assertions de
    * ce test sont INCHANGEES -- il verifie la derivation du prompt (`envoi`, sinon le libelle), pas le
    * droit de repondre deux fois ; les deux clics n'etaient qu'une commodite.
    */
@@ -252,7 +252,7 @@ describe('AskDecisionBlock — plusieurs réponses à la fois', () => {
     act(() => cases[0].click())
     const envoyer = hote.querySelector<HTMLButtonElement>('[data-testid="ask-decision-envoyer"]')!
     expect(envoyer.disabled).toBe(false)
-    // Le compte est une pastille (conv-209), plus « (2) » ; le nom lu reste « Envoyer 2 ».
+    // Le compte est une pastille, plus « (2) » ; le nom lu reste « Envoyer 2 ».
     expect(hote.querySelector('[data-testid="ask-decision-compte"]')?.textContent).toBe('2')
     expect(envoyer.textContent).toBe('Envoyer 2')
     act(() => envoyer.click())

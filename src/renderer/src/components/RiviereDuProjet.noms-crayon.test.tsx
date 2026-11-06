@@ -10,7 +10,7 @@ import type {
 import { RiviereDuProjet } from './RiviereDuProjet'
 
 /**
- * LES NOMS DU BOARD AU CRAYON (conv-1132, 2026-10-23 : « met les noms en mode doodle / sketch, ça
+ * LES NOMS DU BOARD AU CRAYON (2026-10-23 : « met les noms en mode doodle / sketch, ça
  * les barre quand ils sont désélectionnés »). Fichier à part : `RiviereDuProjet.test.tsx` était en
  * cours d'édition par un autre fil. ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un nom barré alors que
  * personne n'est choisi (tout le monde est affiché), le nom choisi lui-même barré, un nom qui reste

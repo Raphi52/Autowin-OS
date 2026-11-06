@@ -6,7 +6,7 @@ import { autowinAppDataRoot } from '../app/app-data'
  * MÉMOIRE DE TÊTE — les quelques faits clés de l'entreprise (activité, clients, projets, équipe),
  * servis EN ENTIER à chaque tour du chat, pour que l'agent les sache sans chercher.
  *
- * POURQUOI (conv-1285, 2026-10-29, idée du `memory.md` d'un « second cerveau ») : le chat ne reçoit
+ * POURQUOI (2026-10-29, idée du `memory.md` d'un « second cerveau ») : le chat ne reçoit
  * du Brain que le CHEMIN d'au plus 3 notes proches (`brain-titres-du-tour.ts`), et une note n'est
  * ouverte que dans ~1 tour servi sur 6 (mesure du 13 au 22/10, note Brain « le chat reçoit à chaque
  * tour le chemin des notes Brain proches »). Une question de base (« que fait la boîte, qui y
@@ -23,7 +23,7 @@ import { autowinAppDataRoot } from '../app/app-data'
  * reste réutilisable par le cache du modèle d'un tour à l'autre.
  */
 
-/** Plafond en octets UTF-8 : « environ 2 Ko » de faits demandés (conv-1285), avec une marge. */
+/** Plafond en octets UTF-8 : « environ 2 Ko » de faits demandés, avec une marge. */
 export const MEMOIRE_DE_TETE_MAX_BYTES = 2_500
 
 /** Nom du fichier, à la racine des données de l'app. */

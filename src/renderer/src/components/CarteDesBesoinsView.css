@@ -1,7 +1,7 @@
-/* VUE « CARTE DU PROJET » (conv-1089, 2026-10-22). Couleurs tirées des variables du thème : vert =
+/* VUE « CARTE DU PROJET » (2026-10-22). Couleurs tirées des variables du thème : vert =
    --ok, refusé = --err. ATTENTION : `--s1`/`--s2`/`--s3` sont des ESPACEMENTS (theme.css), jamais des
    couleurs.
-   Depuis le 23/10 (conv-1113, « la vue n'est pas scrollable verticalement, on peut scroll que le
+   Depuis le 23/10 (« la vue n'est pas scrollable verticalement, on peut scroll que le
    kanban ») : la vue ne défile plus ; la rivière prend la hauteur restante et seul son tableau défile.
    Les règles de la fiche, de la liste et des filtres sont parties avec eux. */
 
@@ -14,7 +14,7 @@
 }
 
 /* ---------- En-tête ---------- */
-/* L'EN-TÊTE PASSE À LA LIGNE (conv-1211, 2026-10-28). Dans la grille commune (`ViewTopBar.css`), la
+/* L'EN-TÊTE PASSE À LA LIGNE (2026-10-28). Dans la grille commune (`ViewTopBar.css`), la
    colonne des actions (`auto`) prend toute la largeur qu'elle veut AVANT celle du titre
    (`minmax(0, 1fr)`) : à 900 px de fenêtre, le titre tombait à 0 px et « Board » passait sous les
    compteurs. En flex qui passe à la ligne, le titre garde sa largeur et les actions descendent
@@ -32,7 +32,7 @@
   flex: 0 1 auto;
   min-width: 0;
 }
-/* LES ONGLETS « DEMANDES · TICKETS » (conv-1397, 2026-10-31) : sur la ligne du titre, juste après lui,
+/* LES ONGLETS « DEMANDES · TICKETS » (2026-10-31) : sur la ligne du titre, juste après lui,
    plutôt qu'en rangée dessous comme les autres vues — le kanban garde toute sa hauteur. La marge
    automatique pousse les compteurs à droite. */
 .besoins-view > .view-topbar > .domain-tabs {
@@ -64,7 +64,7 @@
   align-items: center;
   gap: 6px 14px;
 }
-/* Le dossier où le Board est recopié (conv-1206) : son bouton et la croix qui l'oublie. */
+/* Le dossier où le Board est recopié : son bouton et la croix qui l'oublie. */
 .besoins-dossier {
   display: inline-flex;
   align-items: center;

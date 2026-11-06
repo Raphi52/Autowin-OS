@@ -6,10 +6,10 @@ import type { RuntimeModel, OrchestratorModelOption } from './chat-view-model'
 import { useTextesSettings } from '../textes-ecrans/settings'
 
 /**
- * LE MODÈLE DES PETITES TÂCHES, UN SEUL BLOC POUR DEUX ÉCRANS (conv-1240, 2026-10-28).
+ * LE MODÈLE DES PETITES TÂCHES, UN SEUL BLOC POUR DEUX ÉCRANS (2026-10-28).
  *
- * Le réglage existait dans Réglages → Routage (conv-1097), et Routage avait quitté Agent Studio le
- * 15/10 (conv-963). L'utilisateur le cherchait dans Agent Studio : « le petit model je dois pouvoir
+ * Le réglage existait dans Réglages → Routage, et Routage avait quitté Agent Studio le
+ * 15/10. L'utilisateur le cherchait dans Agent Studio : « le petit model je dois pouvoir
  * le changer dans agents studio je l'ai déjà demandé ». Le bloc est donc partagé, pas recopié :
  * même lecture (`os:petitesTaches`), même écriture (`os:setPetitesTaches`), et chaque écran se
  * relit sur l'événement `roles` — un changement fait dans l'un se voit dans l'autre.
@@ -130,7 +130,7 @@ export function PetitesTachesReglage({
         idBase={idBase}
         // Libellé et aide sont réservés aux lecteurs d'écran (`.model-select-label` est masqué) :
         // l'état « non réglé » a donc AUSSI sa phrase visible juste en dessous.
-        // Non réglé = Haiku en effort low (`roles.ts`, conv-1097), plus le modèle du chat.
+        // Non réglé = Haiku en effort low (`roles.ts`), plus le modèle du chat.
         libelle={
           petitesTaches?.reglage ? t('routeur.petites.regle') : t('routeur.petites.parDefaut')
         }

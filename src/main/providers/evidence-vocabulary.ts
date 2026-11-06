@@ -148,7 +148,7 @@ function isVerifyingScript(args: string[]): boolean {
  * Un interpréteur Python ne VÉRIFIE que s'il lance un oracle de test : `-m pytest|unittest`, ou un
  * script dont le NOM dit test (`tests.py`, `test_x.py`, `x_test.py`, `run_tests.py`). Sans cette
  * règle, un dépôt dont l'oracle est `python tools/tests.py` ne pouvait jamais cocher la case
- * « tests » du contrôle final (conv-355, 5 refus). Un script quelconque (`build.py`, `-c`) reste
+ * « tests » du contrôle final (5 refus). Un script quelconque (`build.py`, `-c`) reste
  * hors de la table : il peut écrire sans rien prouver.
  */
 function isPythonTest(args: string[]): boolean {
@@ -184,7 +184,7 @@ const POWERSHELL_OPTION_A_VALEUR = new Set([
  * Un script PowerShell lancé par fichier n'est un TEST que si son nom le dit : `*.test.ps1` (la
  * convention de `scripts/`) ou `*.Tests.ps1` (Pester). Sans cette règle, un oracle comme
  * `powershell -File scripts/hdesk-act.wpf.test.ps1` ne pouvait jamais cocher la case « tests » du
- * contrôle final (conv-415, 3 refus). Un script quelconque (`hdesk-lancer.ps1`) reste hors de la
+ * contrôle final (3 refus). Un script quelconque (`hdesk-lancer.ps1`) reste hors de la
  * table : il peut écrire sans rien prouver.
  */
 function isPowerShellTest(args: string[]): boolean {
@@ -427,7 +427,7 @@ function classifyShellCommand(command: string | undefined): ShellCommandKind {
   // sortie part dans un fichier — la consigne donnée aux agents pour les sorties longues —
   // ressortait en `mutation`. Le gate ne cochant sa case « tests » que sur un `verification`,
   // l'exigence devenait insatisfaisable et le run bouclait jusqu'à épuisement du budget d'agents
-  // (mesuré le 2026-09-03, conv-15 `run-004c4179e077-1` : 5 refus, 6ᵉ agent refusé, run rouge).
+  // (mesuré le 2026-09-03, `run-004c4179e077-1` : 5 refus, 6ᵉ agent refusé, run rouge).
   // Le marqueur RESTE en place pour les deux lignes suivantes : une redirection sans verbe de test
   // demeure une écriture.
   const verbeReel = (tokens: string[]): string[] =>

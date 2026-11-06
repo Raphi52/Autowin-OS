@@ -5,7 +5,7 @@ import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import type { Msg } from './chat-view-types'
 
 /**
- * « COMPACTER MONTRE CE QUI EST GARDÉ » (conv-1038, 2026-10-21 — idée 5 du scout). Le bouton
+ * « COMPACTER MONTRE CE QUI EST GARDÉ » (2026-10-21 — idée 5 du scout). Le bouton
  * Compacter était opaque : il envoie `COMPACT_REQUEST`, l'agent écrit un résumé, et dès lors le
  * processus principal ne renvoie plus que ce résumé et la suite (`depuisDerniereCompaction`,
  * `chat-turn-messages.ts`). Rien ne disait à l'utilisateur ce que l'agent garde ni ce qu'il ne

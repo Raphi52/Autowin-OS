@@ -115,7 +115,7 @@ describe('WatchdogRuleFields — créer une règle à la souris', () => {
     )
   })
 
-  // conv-1069 : cocher une case reconstruisait la source et effaçait le fil d'une règle
+  // Cocher une case reconstruisait la source et effaçait le fil d'une règle
   // « fin du tour de conv-N » posée par `task_create` — l'enregistrement était alors refusé.
   it('cocher un événement garde le fil surveillé d’une règle de fin de tour', () => {
     render({

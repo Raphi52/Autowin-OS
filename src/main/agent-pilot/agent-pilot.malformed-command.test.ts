@@ -64,12 +64,12 @@ describe('parseOrderedPilotTokens — un bloc inexploitable est SIGNALÉ, jamais
  * chemins, le token « invalid » ne servirait à rien et le faux « c'est fait » resterait possible.
  */
 describe('câblage — l’échec est visible ET corrigible', () => {
-  // L'exécution des `<cmd>` vit dans agent-pilot/execution-des-commandes.ts depuis conv-1580
+  // L'exécution des `<cmd>` vit dans agent-pilot/execution-des-commandes.ts
   // (lot 4) : on lit la famille du pilote.
   const source = (): string => sourceDuPilote()
 
   it('le parseur ne contient plus de catch VIDE', () => {
-    // Le parseur vit dans agent-pilot/jetons-de-commande.ts depuis conv-1580 (lot 1) : on lit la
+    // Le parseur vit dans agent-pilot/jetons-de-commande.ts (lot 1) : on lit la
     // famille, et la tranche s'arrête à la fin de la fonction, plus sur sa voisine d'avant.
     const code = sourceDuPilote()
     const debut = code.indexOf('export function parseOrderedPilotTokens')

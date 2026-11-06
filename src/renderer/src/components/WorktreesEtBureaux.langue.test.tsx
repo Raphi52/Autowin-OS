@@ -9,7 +9,7 @@ import { WorktreeView } from './WorktreeView'
 import { HdeskGestionView, type HdeskGestionApi } from './HdeskGestionView'
 
 /**
- * LES ÉCRANS WORKTREES ET BUREAUX CACHÉS SUIVENT LA LANGUE (traduction anglaise, conv-1170, lot 12).
+ * LES ÉCRANS WORKTREES ET BUREAUX CACHÉS SUIVENT LA LANGUE (traduction anglaise, lot 12).
  * Entrée qui doit faire échouer ce test : un libellé de ces deux écrans laissé en dur en français,
  * une date de commit restée au format français, ou un écran qui ne se redessine pas quand la langue
  * change (le retour au français est vérifié sur le MÊME rendu, sans remonter le composant).

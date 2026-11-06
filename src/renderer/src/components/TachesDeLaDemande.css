@@ -1,4 +1,4 @@
-/* La task de chaque demande dans la fiche d'un post-it (conv-1127). La fiche est un papier pastel
+/* La task de chaque demande dans la fiche d'un post-it. La fiche est un papier pastel
    aux couleurs FIXES (RiviereDuProjet.css) : mêmes encres fixes ici, jamais les boutons du thème,
    qui disparaissent sur ce papier. */
 
@@ -12,7 +12,7 @@
 }
 
 /* `min-width: 0` + `box-sizing` : sans eux, un titre long élargissait la ligne au-delà de la fiche
-   (capture de la fiche #2182, 23/10, conv-1127 : puce coupée au bord, barre de défilement en bas). */
+   (capture de la fiche #2182, 23/10, Puce coupée au bord, barre de défilement en bas). */
 .taches {
   display: flex;
   flex-wrap: wrap;

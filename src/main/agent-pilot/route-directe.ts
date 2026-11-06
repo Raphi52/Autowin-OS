@@ -1,5 +1,5 @@
 // La route SANS modèle : une phase nommée (« /scout … », « /build … ») part droit à l'orchestration,
-// précédée du contrôle des deux lectures. Sortie telle quelle de AgentPilot.chat() (conv-1580, lot 2).
+// précédée du contrôle des deux lectures. Sortie telle quelle de AgentPilot.chat() (lot 2).
 import {
   formatOrchestrationOutcome,
   formatOrchestrationOutcomePourLeModele,
@@ -78,7 +78,7 @@ export async function jouerLaRouteSansModele(
   }
   const directiveNotice = avisOrientationsTardives(lateDirectives)
   // Les FAITS, pas une formule : statut, validite, blocage de gate, cout, run et resultat sont
-  // tous rendus par l'orchestrateur et etaient jetes (conv-76 : 18 sous-agents, 10,05 $, le fil
+  // tous rendus par l'orchestrateur et etaient jetes (18 sous-agents, 10,05 $, le fil
   // n'affichait que « Workflow Autowin execute. »).
   const issueDuRun = result.ok ? (result.data as OrchestrationOutcome | undefined) : undefined
   const erreurDuRun = result.ok ? undefined : String(result.error ?? '')
@@ -91,10 +91,10 @@ export async function jouerLaRouteSansModele(
    * suivant. Sans ce depot, il se voit demander « on a bien fait tout le processus ? » a propos
    * d'un tour dont rien, dans sa session, ne porte la trace.
    *
-   * Le depot porte le resultat ENTIER, pas la bulle coupee a 4 000 caracteres (conv-914 : 6 pistes
+   * Le depot porte le resultat ENTIER, pas la bulle coupee a 4 000 caracteres (6 pistes
    * trouvees, une seule visible pour l'agent). Seule la borne de tout resultat injecte s'applique.
    * Les pages `html-render` du run y passent en texte visible AVANT la borne : ce compte-rendu reste
-   * ensuite dans la session du modele pour tous les tours suivants (conv-1074).
+   * ensuite dans la session du modele pour tous les tours suivants.
    */
   if (conversationId)
     deposerCompteRendu(

@@ -16,7 +16,7 @@ export interface JournalRecap {
   /**
    * Actions outillées relues dans l'ordre (« Bash · npx vitest », « Edit · src/x.ts »).
    *
-   * DEFAUT VECU (conv-152, reprise du 2026-09-03, tour 57656364-053f-40e6-bc8e-91efd5b74e39) : la
+   * DEFAUT VECU (reprise du 2026-09-03, tour 57656364-053f-40e6-bc8e-91efd5b74e39) : la
    * fenêtre relue du journal `c63dd8c1-ee90-480f-a852-beba47d2ae8f.stdout.jsonl` comptait 308
    * lignes, 21 messages assistant — dont ZERO texte : 12 appels d'outils et de la réflexion. Le
    * récapitulatif n'ayant que le texte à montrer, il a affiché « 308 étape(s) enregistrée(s), aucun
@@ -240,7 +240,7 @@ function corpsDeReprise(message: string): string {
 /**
  * UN SEUL message de reprise PAR CHANTIER, mis à jour d'un redémarrage à l'autre.
  *
- * Vécu dans conv-913 (2026-10-13) : le même chantier a traversé deux redémarrages (10:17, 10:26), et
+ * Vécu (2026-10-13) : le même chantier a traversé deux redémarrages (10:17, 10:26), et
  * chacun a AJOUTÉ sa bulle « Reprise du fil… » en bas du fil. La seconde cachait à l'écran le tour
  * encore vivant, et le fil s'encombrait d'une bulle de plus à chaque redémarrage.
  *
@@ -290,7 +290,7 @@ export function recapMessage(recap: JournalRecap, stillWorking: boolean): string
   /*
    * LES COMPTEURS INTERNES NE SORTENT QUE S'ILS DISENT QUELQUE CHOSE.
    *
-   * Mesure du 2026-09-03 (conv-18) : l'utilisateur relit son fil et y trouve « Couverture
+   * Mesure du 2026-09-03 : l'utilisateur relit son fil et y trouve « Couverture
    * structuree : 100 % (222/222) · 0 diagnostic(s) · 0 blocage(s) · 0 bruit(s) · 0 perte(s) de
    * preuve. » — cinq chiffres de mecanique interne, tous neutres, reposes a CHAQUE retour de
    * l'app. Un journal relu en entier n'a aucune reserve a formuler : la taire ne retire aucune

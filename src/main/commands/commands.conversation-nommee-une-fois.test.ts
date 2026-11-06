@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 
 /**
- * Defaut vecu conv-71 (2026-09-01) : l'utilisateur ecrit « lance une conversation test. », et
- * l'app cree « Test — conversation de verification »... DEUX fois (conv-72 puis conv-73, vide).
+ * Defaut vecu (2026-09-01) : l'utilisateur ecrit « lance une conversation test. », et
+ * l'app cree « Test — conversation de verification »... DEUX fois (vide).
  * Ces tests verrouillent les deux corrections cote code, la ou une consigne de prompt avait lache.
  */
 describe('create_conversation', () => {

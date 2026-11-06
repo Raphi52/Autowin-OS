@@ -1,5 +1,5 @@
 /**
- * LE FIL PRIVÉ DU VILLAGE COMMUN (D6 de `grill/agent-hq-japon-town.md`, conv-1429, lot 3).
+ * LE FIL PRIVÉ DU VILLAGE COMMUN (D6 de `grill/agent-hq-japon-town.md`, lot 3).
  *
  * Un fil marqué privé garde son tanuki chez les collègues, mais sans titre. Le drapeau suit le même
  * chemin que `inactive` : posé sur la conversation, effacé (jamais `false`) quand on le retire,

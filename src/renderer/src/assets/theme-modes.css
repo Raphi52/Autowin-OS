@@ -187,15 +187,15 @@
   --chat-lot-bleu:                  var(--info);   /* liseré de la 3e action de la barre de sélection multiple */
   --chat-frise-ok:                  var(--ok);   /* frise du bloc Actions : action réussie */
   --chat-frise-ko:                  var(--err);   /* frise du bloc Actions : action en échec */
-  --chat-icone-tour:                #6e6e6e;   /* icones sous un message au repos : gris neutre sur fond clair (conv-203) */
-  --chat-icone-tour-survol:         #111111;   /* au survol : le noir tient le role du blanc (conv-203) */
-  --chat-rail-trait:                #9155c6;   /* meme violet qu en sombre : trait et points pleins du rail du tour (conv-338) */
-  --chat-rail-reponse:             #3c6eeb;   /* meme bleu plein qu en sombre : point de la reponse au bout du rail (conv-338) */
+  --chat-icone-tour:                #6e6e6e;   /* icones sous un message au repos : gris neutre sur fond clair */
+  --chat-icone-tour-survol:         #111111;   /* au survol : le noir tient le role du blanc */
+  --chat-rail-trait:                #9155c6;   /* meme violet qu en sombre : trait et points pleins du rail du tour */
+  --chat-rail-reponse:             #3c6eeb;   /* meme bleu plein qu en sombre : point de la reponse au bout du rail */
   --chat-rail-juge:                 #06742b;   /* vert fonce sur fond clair, celui du verdict des juges (JugesPanel.css) */
-  --chat-rail-point-texte:          #a09cb0;   /* petit point discret d une phrase, sur fond clair (conv-338) */
-  --chat-rail-heure:                #8a8698;   /* colonne d heures du rail, sur fond clair (conv-338) */
-  --chat-rail-fond:                 #f4f3f8;   /* interieur des points : le fond clair du fil (conv-338) */
-  --chat-capsule-reflet-haut:       #ffffff66;   /* meme valeur qu en sombre : reflet bombe des capsules Raisonnement/Actions, haut de l arc : blanc a 40 % (conv-173) */
+  --chat-rail-point-texte:          #a09cb0;   /* petit point discret d une phrase, sur fond clair */
+  --chat-rail-heure:                #8a8698;   /* colonne d heures du rail, sur fond clair */
+  --chat-rail-fond:                 #f4f3f8;   /* interieur des points : le fond clair du fil */
+  --chat-capsule-reflet-haut:       #ffffff66;   /* meme valeur qu en sombre : reflet bombe des capsules Raisonnement/Actions, haut de l arc : blanc a 40 % */
   --chat-capsule-reflet-milieu:     #ffffff1a;   /* meme valeur qu en sombre : meme reflet a 55 % du rayon : blanc a 10 % */
   --chat-capsule-reflet-fin:        #ffffff00;   /* meme valeur qu en sombre : fin du reflet : blanc transparent */
   --chat-capsule-reflet-eteint-haut: #ffffff26;   /* meme valeur qu en sombre : reflet d une capsule eteinte (tour fini, non survolee) : blanc a 15 % */
@@ -417,7 +417,7 @@
 :root[data-base='clair'] .md-html pre {
   background-color: rgba(18, 24, 40, 0.05) !important;
 }
-/* LES CLASSES DE L'APP (`aw-*`, conv-1074) ECHAPPENT A L'ECRASEMENT ci-dessus : elles ne portent pas
+/* LES CLASSES DE L'APP (`aw-*`) ECHAPPENT A L'ECRASEMENT ci-dessus : elles ne portent pas
    une couleur de nuit ecrite par le modele, mais un jeton du theme, deja lisible en clair. Le cout
    assume plus haut (« les accents dores passent en sombre ») ne vaut plus pour elles. Le
    `[data-html-scope]` (pose sur chaque page rendue, Markdown.tsx) n'est pas decoratif : sans lui,
@@ -582,7 +582,7 @@
   color: var(--text);
 }
 
-/* BARRES D'ACTIVITÉ : plus de carte teintée à corriger ici (conv-904, 2026-10-12). Le cadre
+/* BARRES D'ACTIVITÉ : plus de carte teintée à corriger ici (2026-10-12). Le cadre
    « grand, deux lignes » (components/anneau-activite.css) ne pose que des jetons du thème : il est
    lisible en clair sans couche de correction. */
 
@@ -700,9 +700,9 @@
    Réversible d'une ligne : c'est l'argument qui a fait préférer cette voie au
    chantier de shaders. */
 /* L'eclairci central de l'Accueil (`.home-view::after`, blanc a 40 %) est RETIRE le 2026-10-22
-   (conv-1076 : « c le select de l'accueil qui fait foi pour le fond de l'accueil pas le theme
+   (« c le select de l'accueil qui fait foi pour le fond de l'accueil pas le theme
    choisi ») : il delavait le milieu du fond choisi sous les seuls themes clairs. Le calque reste
-   sans teinte, comme en sombre depuis conv-1037 (HomeView.css). */
+   sans teinte, comme en sombre (HomeView.css). */
 
 /* MACHINE A ECRIRE -- copie d Internet Typewriter (writer.bighugelabs.com), theme vert
    phosphore : fond NOIR, texte VERT, filets vert sombre, police a chasse fixe. Base SOMBRE. */
@@ -735,12 +735,12 @@
   --info: #33ff99;
   --voile-rgb: 51, 255, 51;
 }
-/* Carte de suppression des fils (conv-1078) : le bouton plein prend l'accent vert du thème ; un texte
+/* Carte de suppression des fils : le bouton plein prend l'accent vert du thème ; un texte
    blanc (--on-accent par défaut) y serait illisible, il prend le noir du fond. */
 :root[data-theme='machine-a-ecrire'] .delete-confirm-card--fils {
   --suppr-plein-texte: var(--bg-0);
 }
-/* Même accent, même raison : le lot qui tourne et « Relancer » de la frise (conv-1376). */
+/* Même accent, même raison : le lot qui tourne et « Relancer » de la frise. */
 :root[data-theme='machine-a-ecrire'] .scm-bandeau {
   --scm-sur-jauge: var(--bg-0);
 }
@@ -781,7 +781,7 @@
 :root[data-theme='machine-a-ecrire'] .cosmic-outline .msg.user .msg-role {
   color: #22c922;
 }
-/* Message ENVOYE en vert, comme dans la zone de saisie (demande conv-270, 2026-10-16). La bulle
+/* Message ENVOYE en vert, comme dans la zone de saisie (2026-10-16). La bulle
    degradee bleu/rose de cosmic-outline.css (~l.853, selecteur fort) passait devant la regle
    ci-dessus : selecteur plus fort encore ici, fond noir, texte et filet verts, sans lueur. */
 :root[data-theme='machine-a-ecrire']:not([data-base='clair']):not([data-theme^='malvoyant-'])
@@ -895,7 +895,7 @@
    visible », et elle balafrait le decor). La galaxie reste visible, lavee comme
    un ciel de jour — elle n'est ni cachee ni remplacee.
 
-   VOILE RETIRE le 2026-10-22 (conv-1076 : « c le select de l'accueil qui fait foi pour le fond de
+   VOILE RETIRE le 2026-10-22 (« c le select de l'accueil qui fait foi pour le fond de
    l'accueil pas le theme choisi »). Lave a 86-90 %, le decor n'etait plus le fond choisi dans le
    menu de l'Accueil (Cyberpunk, Planetes) mais des formes grises propres au theme clair. Le decor
    s'affiche donc tel quel sous tous les themes, et c'est ce qui est POSE dessus qui s'eclaircit :
@@ -957,12 +957,12 @@
   --voile-rgb: 0, 0, 0;
   --focus-malvoyant: #ffd84a;
 }
-/* Carte de suppression des fils (conv-1078) : texte NOIR sur l'accent jaune (#ffd84a) du bouton plein ;
+/* Carte de suppression des fils : texte NOIR sur l'accent jaune (#ffd84a) du bouton plein ;
    le blanc par défaut (--on-accent) y tomberait sous 1,5:1. */
 :root[data-theme='malvoyant-sombre'] .delete-confirm-card--fils {
   --suppr-plein-texte: var(--bg-0);
 }
-/* Même accent, même raison : le lot qui tourne et « Relancer » de la frise (conv-1376). */
+/* Même accent, même raison : le lot qui tourne et « Relancer » de la frise. */
 :root[data-theme='malvoyant-sombre'] .scm-bandeau {
   --scm-sur-jauge: var(--bg-0);
 }
@@ -1078,7 +1078,7 @@
   background: var(--bg-2);
 }
 /* Fond decoratif (image galaxie du body) : du bruit visuel derriere le texte. On le remplace par
-   l'aplat du theme. Le decor 3D de l'Accueil n'est PLUS retire ici (conv-1076, 2026-10-22 : « c le
+   l'aplat du theme. Le decor 3D de l'Accueil n'est PLUS retire ici (2026-10-22 : « c le
    select de l'accueil qui fait foi pour le fond de l'accueil pas le theme choisi ») : il suit le
    menu Fond de l'Accueil, dont « Aucun » reprend cet aplat. */
 :root[data-theme^='malvoyant-'] body {
@@ -1144,7 +1144,7 @@
 }
 /* Contour des controles GARANTI. Des regles d'ecran plus precises l'ecrasaient : dans
    l'Observatory, `.theme-serious .observatory-view .observatory-toolbar button` pose un blanc a
-   22 %, invisible sur le fond blanc du malvoyant clair (capture du 2026-09-22, conv-785). */
+   22 %, invisible sur le fond blanc du malvoyant clair (capture du 2026-09-22). */
 :root[data-theme^='malvoyant-'] :is(button, input, select, textarea, summary) {
   border-color: var(--line-strong) !important;
 }
@@ -1156,7 +1156,7 @@
    les lettres confondables (I/l/1, O/0, b/d). Essai demande le 2026-09-23. Le code garde sa police.
    Le JETON --font porte la police, et la regle forcee le relit : les schemas mermaid mesurent leurs
    etiquettes hors de .shell avec --font (theme-mermaid.ts). Forcer Atkinson en dur ici en laissant
-   --font en Segoe UI coupait la fin de 8 etiquettes sur 25 (conv-1322, 2026-10-30). */
+   --font en Segoe UI coupait la fin de 8 etiquettes sur 25 (2026-10-30). */
 :root[data-theme^='malvoyant-'] {
   --font: 'Atkinson Hyperlegible', system-ui, sans-serif;
 }
@@ -1213,7 +1213,7 @@
   --surface-inset: #dde2e9;
 }
 /* `.chat` n'est plus dans la liste : son fond est peint par `.chat::after`, qui s'arrete au-dessus
-   de la saisie (cosmic-outline.css, conv-150). Peint sur `.chat`, le gris repassait derriere elle. */
+   de la saisie (cosmic-outline.css). Peint sur `.chat`, le gris repassait derriere elle. */
 :root[data-base='clair'] :is(.theme-serious .rail, .cosmic-outline .conv-pane,
   .cosmic-outline .chat-head, .cosmic-outline .composer) {
   background: #cfd6e0;

@@ -68,7 +68,7 @@ describe('ChatView — orientation non lue en fin de tour', () => {
    * Le verrou d'envoi de la vue tient jusqu'a cette reponse : l'orientation sortie de la file
    * butait dessus, et `send` la jetait sans un mot (la mention disait pourtant « renvoyée »).
    *
-   * Perte reelle, conv-996, 2026-10-16 : orientation « basé sur les axes que t'as généré tour 1
+   * Perte reelle, 2026-10-16 : orientation « basé sur les axes que t'as généré tour 1
    * scout des améliorations » (saisie ts 1792149113401) pendant le tour 77143889, jamais lue par
    * son unique appel au modele, jamais renvoyee ; a sa place, la suite du mode auto est partie
    * 22 ms apres le `done` (saisie ts 1792149190716).

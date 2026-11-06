@@ -174,7 +174,7 @@ describe.skipIf(process.platform !== 'win32' || !process.env.AUTOWIN_HDESK_REEL)
 )
 
 /**
- * conv-344 (scout n°7) : la vue « Bureaux cachés » lançait un PowerShell NEUF à chaque tour de liste
+ * scout n°7 : la vue « Bureaux cachés » lançait un PowerShell NEUF à chaque tour de liste
  * (toutes les 4 s, 0,92 s mesurées par appel) alors que le processus de capture déjà ouvert sait
  * répondre `list`. Et seule la TV purgeait les fiches des bureaux fermés (scout n°13).
  * Faux hdesk-tv.ps1 : même protocole que le vrai, il compte ses démarrages dans un fichier.
@@ -262,7 +262,7 @@ describe.skipIf(process.platform !== 'win32')(
 )
 
 /**
- * conv-1077 (2026-10-22) : boucle de lancements PowerShell pendant le disque lent du 21/10. `spawn`
+ * 2026-10-22 : boucle de lancements PowerShell pendant le disque lent du 21/10. `spawn`
  * fige le fil principal ~20 s ; le minuteur d'inactivité (8 s) était armé AVANT le lancement, donc
  * expiré à son retour : le processus était tué avant de répondre, la TV réessayait 500 ms plus tard.
  * 6 lancements = 120,2 s figées sur 148,3 s de gels (gels.jsonl, `spawn powershell.exe`).
@@ -427,7 +427,7 @@ describe('fusionnerBureaux — application morte', () => {
 })
 
 /**
- * NUMÉRO DE PROCESSUS REPRIS (conv-1592, scout conv-1576) : Windows réattribue les numéros de
+ * NUMÉRO DE PROCESSUS REPRIS : Windows réattribue les numéros de
  * processus. Un numéro vivant ne prouvait pas que l'application du bureau vivait encore : la TV
  * restait « en direct » sur un bureau vide dès qu'un autre programme héritait du numéro.
  */
@@ -517,7 +517,7 @@ describe('TV interactive — geste vers hdesk-act', () => {
     expect(() => argumentsAct('R', { id: 'a', x: NaN, y: 1 })).toThrow()
     expect(() => argumentsAct('R', { id: 'a', x: -1, y: 1 })).toThrow()
   })
-  // conv-344 : hdesk-act.cs range x et y sur 16 bits (lParam) — x = 70000 cliquait AILLEURS, sans erreur.
+  // Hdesk-act.cs range x et y sur 16 bits (lParam) — x = 70000 cliquait AILLEURS, sans erreur.
   it('refuse des coordonnées énormes (> 32767) ; jumeau accepté à 32767', () => {
     expect(() => argumentsAct('R', { id: 'a', x: 70000, y: 1 })).toThrow(/hors bornes/)
     expect(() => argumentsAct('R', { id: 'a', x: 1, y: 32768 })).toThrow(/hors bornes/)
@@ -541,7 +541,7 @@ describe('TV interactive — geste vers hdesk-act', () => {
 })
 
 /**
- * conv-344 (scout n°5) : chaque geste — de la TV, de la vue ou d'un agent — est noté dans
+ * scout n°5 : chaque geste — de la TV, de la vue ou d'un agent — est noté dans
  * `<registre>/<id>.gestes.jsonl`, réussi ou refusé, SANS le texte tapé (seulement son nombre de
  * caractères). La carte du bureau montre les derniers. Vrai hdesk-act.ps1, registre temporaire.
  */
@@ -830,7 +830,7 @@ describe('TV interactive — touches et molette (conv-35)', () => {
 })
 
 /**
- * CLIC DÉCALÉ DANS UNE IMAGE RECADRÉE (conv-1009, 2026-10-16) : « Action refusée : Aucune fenetre en
+ * CLIC DÉCALÉ DANS UNE IMAGE RECADRÉE (2026-10-16) : « Action refusée : Aucune fenetre en
  * (362,144) dans ce bureau. dans la view bureaux virtuels les clicks marchent mal ». La TV et la vue
  * « Bureaux cachés » montrent une capture RECADRÉE autour des fenêtres (hdesk-shot.cs, recadrer=true),
  * mais le clic partait comme si l'image commençait au coin de l'écran. Mesure : boîte de dialogue en
@@ -885,7 +885,7 @@ describe.skipIf(process.platform !== 'win32')('TV interactive — origine de la 
         x: 1109,
         y: 601
       })
-      // conv-1457 : la même origine est lue par les outils du chat (hdesk-arbre.ts).
+      // La même origine est lue par les outils du chat (hdesk-arbre.ts).
       expect(capteur.origine('dialogue')).toEqual({ x: 747, y: 457 })
       // Un autre bureau jamais capturé : aucun décalage inventé.
       expect(capteur.versEcran({ id: 'autre', x: 362, y: 144 })).toMatchObject({ x: 362, y: 144 })
@@ -963,7 +963,7 @@ describe.skipIf(process.platform !== 'win32' || !process.env.AUTOWIN_HDESK_REEL)
         })
         const brut = await agirHdesk(racine, centre)
         expect(brut).toMatchObject({ ok: false, message: expect.stringMatching(/Aucune fenetre/) })
-        // conv-1374 (2026-10-31) : le refus dit OU sont les fenetres (titre + rectangle ecran),
+        // 2026-10-31 : le refus dit OU sont les fenetres (titre + rectangle ecran),
         // sans quoi l'agent retente a l'aveugle (6 echecs sur 16 en 10 jours).
         expect(brut).toMatchObject({
           message: expect.stringMatching(/Fenetres visibles .*"[^"]*" \(-?\d+,-?\d+\)-\(-?\d+,-?\d+\)/)

@@ -30,7 +30,7 @@ import {
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
- * Domaine metier FICTIF (conv-916), de la meme forme que celui d'un profil d'entreprise : le code ne
+ * Domaine metier FICTIF, de la meme forme que celui d'un profil d'entreprise : le code ne
  * nomme aucun domaine, ses categories et projets viennent du profil, absent du depot public.
  */
 const PROFIL_METIER_FICTIF = JSON.stringify({
@@ -2210,7 +2210,7 @@ tags: [${theme}]
     const portable = mkdtempSync(join(tmpdir(), 'autowin-os-portable-'))
     const dataRoot = join(portable, '.autowin-data', 'autowin-os')
     const runFile = join(dataRoot, 'runs', 'conv-1', 'subject-workspace', 'RUN.md')
-    // conv-1441 : la fiche d'une demande s'ouvre depuis le panneau du fil et le Board.
+    // La fiche d'une demande s'ouvre depuis le panneau du fil et le Board.
     const ficheFile = join(dataRoot, 'demandes', 'conv-1', 'besoin-abc', 'RUN.md')
     const sibling = join(dataRoot, 'conversations.json')
     mkdirSync(dirname(runFile), { recursive: true })

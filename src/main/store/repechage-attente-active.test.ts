@@ -13,7 +13,7 @@ import {
  * travaux impubliables etaient repeches indefiniment, chaque passage RESTAURANT leur copie —
  * 682 Mo recrees. Le supprimer a l'aveugle reintroduirait ce defaut.
  *
- * Mais il ferme aussi la porte au cas VECU le 2026-08-27 (conv-1450) : un `base-dirty` sur un arbre
+ * Mais il ferme aussi la porte au cas VECU le 2026-08-27 : un `base-dirty` sur un arbre
  * partage ou la cause ne disparait pas en trente minutes. Trois essais a l'aveugle, puis un echec
  * definitif, alors que le travail attendait simplement que l'utilisateur committe son fichier.
  *

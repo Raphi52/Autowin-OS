@@ -48,7 +48,7 @@ describe('Autowin UI contract', () => {
     ['SettingsView.tsx', 'domain-shell'],
     ['ObservatoryView.tsx', 'observatory-view'],
     ['TaskManagerView.tsx', 'task-manager-view'],
-    // TicketsView n'est plus une page (conv-1397) : l'onglet « Tickets » du Board, posé DANS le cadre
+    // TicketsView n'est plus une page : l'onglet « Tickets » du Board, posé DANS le cadre
     // de page du Board (CarteDesBesoinsView, `view-page besoins-view`).
     ['WorktreeView.tsx', 'worktree-tab']
   ] as const
@@ -83,7 +83,7 @@ describe('Autowin UI contract', () => {
       const selecteur = bloc.slice(0, coupe).trim()
       const declarations = bloc.slice(coupe + 1)
       // `.chat::after` compte : c'est LUI qui peint le panneau du fil depuis que la saisie en est
-      // detachee (conv-150) — `.chat` est transparent.
+      // detachee — `.chat` est transparent.
       if (!/\.(conv-pane|chat|runs-pane)(::after)?$/m.test(selecteur)) continue
       // Toute regle qui repose un `background` sur un de ces panneaux doit conserver la couche.
       // `transparent` est exclu : c'est un fond volontairement absent, pas un cadre a decorer.
@@ -119,7 +119,7 @@ describe('Autowin UI contract', () => {
       'aucune règle de fond trouvée : le sélecteur a été renommé'
     ).toBeGreaterThan(0)
     /*
-     * LE FOND PASSE PAR LE JETON, PLUS PAR UN NOIR EN DUR. Mesure du 2026-09-07 (conv-334) :
+     * LE FOND PASSE PAR LE JETON, PLUS PAR UN NOIR EN DUR. Mesure du 2026-09-07 :
      * depuis le commit 6c580973, la coque peint `var(--lisere-haut), var(--bg-0)` — c'est ce qui
      * permet aux themes clairs d'exister. Exiger `#000` ECRIT ICI rendait donc la garde
      * incompatible avec le produit : elle refusait le seul fond correct.
@@ -153,7 +153,7 @@ describe('Autowin UI contract', () => {
     expect(fond).toBe('#000')
   })
 
-  // Defaut vecu le 2026-09-09 (conv-384) : le repere de surlignage etait pose en
+  // Defaut vecu le 2026-09-09 : le repere de surlignage etait pose en
   // `background` + `box-shadow: inset` sur `.conv-item.surlignee`. Chaque theme repeint CES DEUX
   // proprietes sur `.conv-item.active` a specificite egale mais plus bas dans le fichier
   // (`.cosmic-outline .conv-item.active`) : sur la conversation ouverte, le repere disparaissait

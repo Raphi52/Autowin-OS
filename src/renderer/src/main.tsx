@@ -18,7 +18,7 @@ import { demarrerAgentsQuartier } from './quartier/agents-quartier'
 
 /*
  * En développement, React 19.2.7 empile une mesure par composant redessiné, jamais retirée : 1,5 Go
- * de mémoire pour 140 000 mesures, puis des gels de 12 à 19 s (conv-1413). Rien de tel en production.
+ * de mémoire pour 140 000 mesures, puis des gels de 12 à 19 s. Rien de tel en production.
  */
 if (import.meta.env.DEV) installerMesuresReactSansRetenue()
 
@@ -29,7 +29,7 @@ if (import.meta.env.DEV) installerMesuresReactSansRetenue()
 appliquerThemeMode(lireThemeMode())
 
 /*
- * La langue aussi, AVANT le premier rendu (conv-1146) : posée après, l'écran s'afficherait une image
+ * La langue aussi, AVANT le premier rendu : posée après, l'écran s'afficherait une image
  * en français avant de basculer. Le moteur la reçoit une fois ici — une instance neuve ou un dossier
  * de données recréé ne la connaît pas encore — puis à chaque changement dans Settings · Interface.
  */
@@ -38,7 +38,7 @@ appliquerLangue(langueAuDemarrage)
 void transmettreLangueAuMoteur(langueAuDemarrage)
 
 /*
- * Un Ctrl+C collé dans Gmail emportait le fond sombre de l'app, en bandes noires (conv-1073) :
+ * Un Ctrl+C collé dans Gmail emportait le fond sombre de l'app, en bandes noires :
  * la copie passe désormais par un HTML sans styles, pour toute la fenêtre.
  */
 installerCopiePropre()
@@ -46,18 +46,18 @@ installerCopiePropre()
 /*
  * Les indicateurs « ça travaille » (atomes, point de la carte du fil) avancent par crans de 100 ms,
  * tous calés sur la même horloge : en continu, un seul faisait recomposer toute la fenêtre 60 fois
- * par seconde, 20 à 33 % de la carte graphique de l'utilisateur (conv-1075).
+ * par seconde, 20 à 33 % de la carte graphique de l'utilisateur.
  */
 installerAnimationsParCrans()
 
 /*
  * Ce qui sort du champ (bulle remontée, fil masqué par le défilement) ne s'anime plus : les
- * animations fluides tournaient aussi hors de vue, 101 % d'un cœur pour la fenêtre (conv-1610).
+ * animations fluides tournaient aussi hors de vue, 101 % d'un cœur pour la fenêtre.
  */
 installerPauseHorsChamp()
 
 /*
- * Le contour de focus d'un bouton ne s'allume qu'en naviguant au clavier (conv-1222) : Chromium
+ * Le contour de focus d'un bouton ne s'allume qu'en naviguant au clavier : Chromium
  * l'allumait aussi sur un bouton cliqué dès qu'une touche partait ensuite, Maj seule comprise.
  * Posé AVANT le premier rendu, pour qu'aucun contour n'apparaisse au démarrage.
  */
@@ -82,7 +82,7 @@ surveillerGelsRenderer((dureeMs) => {
    * Aucune vue mesuree = aucune etiquette, jamais un nom invente.
    */
   const vue = vueDominanteRecente()
-  // Dominee par la liste des conversations : ses lignes redessinees et leurs declencheurs (conv-1115).
+  // Dominee par la liste des conversations : ses lignes redessinees et leurs declencheurs.
   const detail = detailDeGelPourVue(vue, dureeMs)
   if (detail) api?.signalerGelRenderer?.(dureeMs, vue, detail)
   else api?.signalerGelRenderer?.(dureeMs, vue)
@@ -91,15 +91,15 @@ surveillerGelsRenderer((dureeMs) => {
 /*
  * Les tanukis du poste écoutent les tours dès le démarrage, et non à la première ouverture du Quartier :
  * sinon, sous un autre décor ou tant que l'Accueil n'a pas été ouvert, le poste ne publiait rien au
- * village commun (conv-1429, décision du lot 1). Sans pont (navigateur ordinaire), l'appel ne fait rien.
+ * village commun (décision du lot 1). Sans pont (navigateur ordinaire), l'appel ne fait rien.
  */
 demarrerAgentsQuartier()
 
 /*
  * Ouverte dans un navigateur ordinaire (`localhost:5173` hors d'Electron), l'interface n'a pas le pont
- * `window.api` et plantait en écran noir : elle n'est alors pas montée, un écran dit pourquoi (conv-1286).
+ * `window.api` et plantait en écran noir : elle n'est alors pas montée, un écran dit pourquoi.
  *
- * LE DERNIER FILET (conv-1327) : ce qui tombe hors des écrans protégés par `VueMesuree` (le menu, la
+ * LE DERNIER FILET : ce qui tombe hors des écrans protégés par `VueMesuree` (le menu, la
  * coque, `App` lui-même) laisserait sinon la fenêtre noire, sans rien à cliquer.
  */
 createRoot(document.getElementById('root')!).render(

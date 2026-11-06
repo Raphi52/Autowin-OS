@@ -6,7 +6,7 @@ import { Markdown } from './Markdown'
 import { oublierRepriseMarkdown } from './markdown-blocs'
 
 /**
- * LES BLOCS DE DONNEES SONT DESSINES PAR L'APP DANS LE FIL (conv-1074, 2026-10-22).
+ * LES BLOCS DE DONNEES SONT DESSINES PAR L'APP DANS LE FIL (2026-10-22).
  *
  * Le modele envoie un JSON ; le fil montre un tableau, des options cote a cote, des etapes — pas le
  * JSON. Entree qui ferait echouer une mauvaise correction : un bloc `donnees` tombe dans la branche
@@ -63,7 +63,7 @@ describe('Markdown — blocs de données', () => {
   })
 
   /*
-   * VÉCU LE 2026-11-05 (conv-1578, capture de l'utilisateur) : la cellule « **English mode is
+   * VÉCU LE 2026-11-05 (capture de l'utilisateur) : la cellule « **English mode is
    * fragile** » et le chemin `D:\AutoWinOS\…` s'affichaient avec leurs astérisques et leurs
    * accents graves. La consigne du chat exige le gras porteur dans chaque ligne ; le modèle l'écrit
    * donc aussi dans les blocs de données, qui le montraient brut.

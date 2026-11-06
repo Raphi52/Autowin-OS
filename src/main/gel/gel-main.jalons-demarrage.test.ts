@@ -1,5 +1,5 @@
 /**
- * conv-1077 (2026-10-22) : 39 gels pour 103,8 s depuis le 15/10 sous l'étiquette
+ * 2026-10-22 : 39 gels pour 103,8 s depuis le 15/10 sous l'étiquette
  * `demarrage:corps du module terminé, whenReady enregistré`, mais les jalons de `jalonDemarrage`
  * (index.ts) ne vivaient que dans `console.log` : aucun fichier ne disait, lancement par lancement,
  * QUAND chaque jalon était passé — donc où le temps s'en allait entre deux.

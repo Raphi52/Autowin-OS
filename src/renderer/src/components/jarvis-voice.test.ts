@@ -305,7 +305,7 @@ describe('le mot d’éveil suit le NOM RÉGLÉ, pas une constante', () => {
   })
 
   it('le nom entier reste le nom même quand le moteur le PONCTUE', () => {
-    // LE DÉFAUT vécu le 2026-09-02 (conv-113), assistant nommé « Machin Bidule » : whisper coupe et
+    // LE DÉFAUT vécu le 2026-09-02, assistant nommé « Machin Bidule » : whisper coupe et
     // ponctue tout seul (« Machin, bidule », « Machin. Bidule »). Le séparateur n'admettait que
     // l'espace, le trait d'union et l'apostrophe : le nom ENTIER ne correspondait plus, seul le
     // raccourci « machin » réveillait, et « bidule » repartait comme ORDRE — une conversation
@@ -357,7 +357,7 @@ describe('le mot d’éveil suit le NOM RÉGLÉ, pas une constante', () => {
 })
 
 /**
- * DOUBLE ENVOI D'UN ORDRE DICTE — repeche de la remise de cote 646a83eb (2026-09-01, conv-71).
+ * DOUBLE ENVOI D'UN ORDRE DICTE — repeche de la remise de cote 646a83eb (2026-09-01).
  *
  * La phrase « rend la widget de Jarvis futuriste et ultra style. » dite UNE fois a produit DEUX
  * messages a 0,8 s d'ecart, donc deux tours de modele PAYANTS. Les moteurs republient un segment

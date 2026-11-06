@@ -83,7 +83,7 @@ async function tourAvecGarde(
    * existant, ou une fonction qui reçoit le dossier de réglages du lancement et rend le chemin.
    */
   gardeNpm?: string | { chemin: string } | ((dossierReglages: string) => Promise<string | undefined>),
-  /** `Monitor` : le « modèle » lance la commande témoin par une surveillance (conv-1370, lot 5). */
+  /** `Monitor` : le « modèle » lance la commande témoin par une surveillance (lot 5). */
   outil?: 'Monitor'
 ): Promise<{ temoinCree: boolean; resultat?: ResultatOutil; sortie: string }> {
   // Le dossier du banc EST un dossier de réglages d'agent : il en porte le préfixe. Effet voulu : le

@@ -159,7 +159,7 @@ describe('arbitrage', () => {
     expect(readRouteVerdict('ROUTE: fin')).toEqual({ kind: 'stop' })
   })
 
-  // conv-1097 : l'arbitre est un petit modèle ; le reste de sa ligne ne devient plus un nom de phase.
+  // L'arbitre est un petit modèle ; le reste de sa ligne ne devient plus un nom de phase.
   it('ne garde que le premier mot, et seulement s’il nomme une phase du pipeline', () => {
     expect(readRouteVerdict('ROUTE: `build` (car le défaut est localisé)')).toEqual({
       kind: 'phase',

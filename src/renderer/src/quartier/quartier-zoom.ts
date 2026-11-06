@@ -1,5 +1,5 @@
 /**
- * LE ZOOM AU CLIC SUR LA FALAISE (conv-1424, « le zoom quand je clique sur un élément doit aller
+ * LE ZOOM AU CLIC SUR LA FALAISE (« le zoom quand je clique sur un élément doit aller
  * beaucoup plus proche »). Avant, `760 / max(w, h × 1,75)` plafonné à 3 : tous les objets finissaient
  * vers ×2,3, et l'élément cliqué n'occupait qu'un quart à un tiers de l'écran quand la vue s'ouvrait.
  * Ici l'élément remplit presque la vue, dans sa dimension la plus contrainte.
@@ -39,7 +39,7 @@ export const TAMPON_BORDS = 16
  * Où lire chaque bord dans `bords.avif`, en pixels de l'IMAGE, d'après sa propre taille. Son échelle ne se
  * déduit pas de la peinture : le 04/11, la peinture est repassée de ×4 à ×2 (16104dda8) et les bords sont
  * restés en ×4 ; lus à l'échelle de la peinture, ils ne donnaient que le quart haut gauche du bord gauche, le
- * ciel, étiré sur toute la hauteur : la bande bleue à gauche au zoom sur le robot (conv-1644).
+ * ciel, étiré sur toute la hauteur : la bande bleue à gauche au zoom sur le robot.
  */
 export function sourcesDesBords(
   largeur: number,

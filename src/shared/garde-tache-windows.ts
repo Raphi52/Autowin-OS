@@ -2,7 +2,7 @@
 /**
  * GARDE : UN AGENT NE CRÉE PAS DE TÂCHE WINDOWS QUE L'UTILISATEUR NE VERRAIT PAS DANS AUTOWIN.
  *
- * Demande de l'utilisateur (conv-114, 2026-10-09) : « l'agent doit pouvoir les créer mais il ne doit
+ * Demande de l'utilisateur (2026-10-09) : « l'agent doit pouvoir les créer mais il ne doit
  * rien pouvoir créer que je ne peux pas supprimer manuellement dans le task manager ». Une tâche
  * posée dans le Planificateur de tâches Windows (schtasks, Register-ScheduledTask, l'objet COM
  * Schedule.Service) n'apparaît PAS dans l'écran Task Manager d'Autowin : elle échapperait à son

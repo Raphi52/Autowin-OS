@@ -1,8 +1,8 @@
 /**
  * L'ENTREE DES ELEMENTS QUAND ON CHANGE DE VUE — la « Cascade » choisie par l'utilisateur
- * (conv-987, 2026-10-16, direction 1 du draft « animations d'entree ») : chaque bloc de la vue monte
+ * (2026-10-16, direction 1 du draft « animations d'entree ») : chaque bloc de la vue monte
  * de 8 px en apparaissant, de haut en bas, un tous les 40 ms. Avant, la page entiere se fondait d'un
- * coup (conv-981) et les elements n'avaient aucune entree propre.
+ * coup et les elements n'avaient aucune entree propre.
  *
  * POURQUOI DU CODE ET PAS UN SELECTEUR CSS : les dix vues n'ont pas la meme profondeur. Mesure du
  * 16/10 (instance cachee) — Task Manager : en-tete, bandeau, puis deux colonnes un niveau plus bas ;
@@ -128,18 +128,18 @@ export const NOM_ANIMATION = 'entree-cascade'
 export const SECOURS_MS = 5000
 
 /**
- * L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16, draft « conteneurs a chanfrein », tour 3,
+ * L'ENTREE DES CADRES A CHANFREIN (2026-10-16, draft « conteneurs a chanfrein », tour 3,
  * variante « 2 · Elan », 1 s) : les deux coins coupes s'allument, puis un trait part de chacun et
  * court le long des bords, en freinant ; le satin se pose, le contour revient a son 7 %, une lumiere
  * traverse en diagonale. Le minutage vit dans app-shell.css (`@keyframes entree-chanfrein`), le
  * dessin dans les deux themes qui coupent les coins (Nebuleuse de verre, Holographique blanc).
  *
- * Les surfaces CANDIDATES sont celles que ces themes coupent (conv-177 : liste, fil, panneau de
- * droite ; conv-211 : tuiles et plaque de l'Accueil ; cadre de page des autres vues). Le THEME
+ * Les surfaces CANDIDATES sont celles que ces themes coupent (liste, fil, panneau de
+ * droite ; : tuiles et plaque de l'Accueil ; cadre de page des autres vues). Le THEME
  * decide : une candidate marquee qui ne recoit pas l'animation (tout autre theme) est demarquee
  * aussitot, et la cascade du contenu reste celle de toujours.
  *
- * LE TEXTE NE S'ANIME PAS (conv-987, 2026-10-16, retour apres la livraison de l'Elan : « le texte
+ * LE TEXTE NE S'ANIME PAS (2026-10-16, retour apres la livraison de l'Elan : « le texte
  * doit pas mettre du temps a s'afficher, il doit etre la instantanement, et l'animation concerne
  * les box ») : quand le theme dessine ses cadres, AUCUN bloc de contenu n'est marque. Avant, le
  * contenu attendait 300 ms l'elan des traits puis montait en cascade : le texte n'etait complet
@@ -261,12 +261,12 @@ export function jouerEntreeCascade(racine: Element, anime?: (surface: Element) =
 }
 
 /**
- * L'ENTREE D'UN CADRE QUI S'OUVRE (conv-987, 2026-10-16 : « quand j'ouvre le panneau detail je veux
+ * L'ENTREE D'UN CADRE QUI S'OUVRE (2026-10-16 : « quand j'ouvre le panneau detail je veux
  * l'animation des border ») : le meme dessin que celui d'un changement de vue — coins, deux traits
  * avec elan, satin, lumiere —, joue sur UN cadre qui apparait seul (panneau Details du Chat). Avant,
  * seul le changement de vue jouait l'entree : le panneau s'ouvrait en simple fondu.
  *
- * Meme entree pour le MENU DE GAUCHE quand on le reduit ou le deplie (conv-987 : « et quand je
+ * Meme entree pour le MENU DE GAUCHE quand on le reduit ou le deplie (« et quand je
  * reduis deploi la left bar aussi », App.tsx).
  *
  * INDEPENDANTE de l'entree de la vue (`enCours`) : ouvrir le panneau pendant qu'une vue entre ne doit

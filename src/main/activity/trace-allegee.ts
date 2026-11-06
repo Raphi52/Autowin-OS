@@ -45,7 +45,7 @@ export function extraitDemandeUtilisateur(contenu: string): string {
 
 /**
  * Longueur gardée de la CAUSE d'un échec. La carte d'un sous-agent en échec l'écrit sur une ligne
- * coupée (« checkpoint orchestration causalement invalide : … », 82 caractères sur conv-163) ; le
+ * coupée (« checkpoint orchestration causalement invalide : … », 82 caractères) ; le
  * texte entier reste lisible au clic, par `chargesDesEvenements`.
  */
 const EXTRAIT_CAUSE_MAX = 300

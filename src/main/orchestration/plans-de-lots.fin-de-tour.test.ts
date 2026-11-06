@@ -11,7 +11,7 @@ import type { IssueDuTour } from '../../shared/plan-de-lots'
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /*
- * CHEF OCCUPÉ, AVEC LE VRAI REGISTRE DES TOURS (conv-1150, 2026-10-26, objection du juge).
+ * CHEF OCCUPÉ, AVEC LE VRAI REGISTRE DES TOURS (2026-10-26, objection du juge).
  *
  * Défaut mesuré : l'annonce de fin partait de `createRunPilotChat`, donc de l'INTÉRIEUR de
  * `activeChatTurns.trackPreparation` (index.ts). Le chef restait compté « en cours » (`preparing`)
@@ -24,7 +24,7 @@ import { sourceProcessPrincipal } from '../app/source-process-principal.test-hel
  * en bas). Seul le corps du tour est faux : il s'enregistre dans le registre comme le vrai tour
  * (`set` au départ, `delete` dans son `finally`) puis attend qu'on le finisse. Aucun modèle appelé.
  *
- * fix-ok: conv-1150 (2026-10-26) — chaque édition de ce fichier suit une cause mesurée, rouge puis
+ * fix-ok: (2026-10-26) — chaque édition de ce fichier suit une cause mesurée, rouge puis
  * vert : (1) fin annoncée dans `trackPreparation` → chef jamais réveillé (4 rouges sur 4) ; (2) le
  * faux `lancer` rendait un `turnId` alors que le vrai `lancerSansAttendre`
  * (chat/lancer-sans-attendre.ts:42) rend `{ ok: true }` sans identifiant ; (3) reprise après
@@ -209,7 +209,7 @@ describe('plans de lots — chef occupé, avec le vrai registre des tours', () =
 })
 
 /*
- * REDÉMARRAGE PENDANT UN PLAN (objection du juge, conv-1150) : des agents survivent, l'app reprend
+ * REDÉMARRAGE PENDANT UN PLAN (objection du juge) : des agents survivent, l'app reprend
  * leur tour (`reprendreAppelChat`, index.ts) et les réserve par `setRecovered` — c'est cette
  * réservation, réelle ici, qui fait dire « occupé » au coordinateur.
  */
@@ -259,7 +259,7 @@ describe('plans de lots — redémarrage, avec le vrai registre des tours et de 
 })
 
 /*
- * LE PLAN SUIT L'AGENT QUI A SURVÉCU (conv-1308, 2026-10-30, demande de l'utilisateur). Vécu sur
+ * LE PLAN SUIT L'AGENT QUI A SURVÉCU (2026-10-30, demande de l'utilisateur). Vécu sur
  * plan-b4358910 : l'app redémarre pendant le lot 1, l'agent continue, le chef affiche « interrompu »
  * alors que le fil du lot tourne. « Reprendre » y aurait lancé un second agent, et rien ne devait
  * enchaîner les lots 2 et 3 à sa fin. Un lot dont l'agent vit n'est pas interrompu ; seul un lot
@@ -460,7 +460,7 @@ describe('plans de lots — branchement de la fin de tour dans index.ts', () => 
   })
 
   /*
-   * conv-1308 : index.ts ne se démarre pas sous test. Le comportement est prouvé plus haut et dans
+   * Index.ts ne se démarre pas sous test. Le comportement est prouvé plus haut et dans
    * `relaunch-resumable-run.test.ts` ; ici, le branchement des deux chemins de reprise.
    */
   it('une reprise d’appel chat prévient le plan dès qu’elle réserve le fil', () => {
@@ -504,7 +504,7 @@ describe('plans de lots — branchement de la fin de tour dans index.ts', () => 
     expect(suivi).toContain('suiviDesPlans.coordinateur?.agentRepris(')
     expect(suivi).toContain('annoncerLaFinDuTour(observateurDesPlans,')
     // Le démarrage et l'enregistrement des canaux n'ont pas la même portée : le suivi passe par ici.
-    // (conv-1508) l’enregistrement reçoit désormais l’état du démarrage : registerChatIpc(contexteIpcChat()).
+    // l’enregistrement reçoit désormais l’état du démarrage : registerChatIpc(contexteIpcChat()).
     expect(index).toContain('const suiviDuPlan = registerChatIpc(')
   })
 

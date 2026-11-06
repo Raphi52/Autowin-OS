@@ -54,7 +54,7 @@ export function createAvenueEnArrierePlan(): DecorScene | null {
   let canvasCourant: HTMLCanvasElement = canevas
   let taille: { largeur: number; hauteur: number } | null = null
   let enVol = false
-  /** Ce qu'a coûté au Worker la dernière image finie : la cadence de la page s'y règle (conv-347). */
+  /** Ce qu'a coûté au Worker la dernière image finie : la cadence de la page s'y règle. */
   let coutDerniere: number | null = null
   let libere = false
   const stats: StatsDecor | null = import.meta.env?.DEV ? { images: 0, couts: [] } : null

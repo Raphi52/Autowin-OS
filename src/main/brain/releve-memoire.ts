@@ -2,7 +2,7 @@ import { appendFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /**
- * RELEVÉ MÉMOIRE ET PROCESSEUR DE L'APP (conv-1077, 2026-10-22).
+ * RELEVÉ MÉMOIRE ET PROCESSEUR DE L'APP (2026-10-22).
  *
  * Mesure du 22/10 : trois `electron.exe` pesaient ~872, 433 et 307 Mo, et rien dans l'app ne disait
  * lequel est quoi (fenêtre, GPU, service) — `app.getAppMetrics()` n'était appelé nulle part. Décision
@@ -82,7 +82,7 @@ export function releveMemoire(): EtatReleveMemoire {
  * « Processus principal 232 Mo » seul pendant une minute. `getAppMetrics` lit la mémoire du
  * processus, sans disque : le refaire à la demande ne coûte rien et n'écrit rien ; l'écran ne le
  * demande qu'à l'ouverture de l'onglet et sur « Relire le journal ».
- * fix-ok: cause mesurée 2026-10-22 (conv-1077) — le seuil de 5 s laissait passer le relevé d'avant la fenêtre : onglet ouvert < 5 s après lui = [Browser] seul (capture code-construit de 16:07:40, test « 1 s après » rouge).
+ * fix-ok: cause mesurée 2026-10-22 — le seuil de 5 s laissait passer le relevé d'avant la fenêtre : onglet ouvert < 5 s après lui = [Browser] seul (capture code-construit de 16:07:40, test « 1 s après » rouge).
  */
 export function releveMemoireFrais(): EtatReleveMemoire {
   releverHorsCadence?.()

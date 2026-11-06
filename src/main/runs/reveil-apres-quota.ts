@@ -1,7 +1,7 @@
 /**
  * RÉVEIL APRÈS LE MUR DE QUOTA — un run suspendu repart tout seul à l'heure annoncée, app ouverte.
  *
- * Mesuré le 2026-10-22 (conv-1069) : `quotaWall.resumeAfter` n'était relu qu'au DÉMARRAGE
+ * Mesuré le 2026-10-22 : `quotaWall.resumeAfter` n'était relu qu'au DÉMARRAGE
  * (`index.ts`, filtre `repriseAutoRetenueParQuota`) et par le bouton « Reprendre tout ». Un run coupé
  * à 11:01 par « resets 11:30am » attendait donc le prochain redémarrage de l'app, à l'encontre du
  * choix de l'utilisateur cité dans `index.ts` : reprise AUTOMATIQUE, pas de bouton, pas de question.
@@ -48,7 +48,7 @@ export interface DependancesDuReveil<Etat extends RunSuspenduParQuota> {
    *
    * fix-ok: rien ne repassait entre deux échéances, et un départ écarté gardait sa clé : un fil
    * réactivé s'affichait « repart seule » avec 0 minuterie et 0 départ (essai du contrôle final sur le
-   * vrai `creerRepriseDesFils`, conv-1423). Option plutôt que changement : le contrat des runs tient.
+   * vrai `creerRepriseDesFils`). Option plutôt que changement : le contrat des runs tient.
    */
   surveillerEncore?: () => boolean
 }

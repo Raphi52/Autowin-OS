@@ -10,7 +10,7 @@ import { sandboxForPhase } from '../orchestration/orchestrator'
 /**
  * LE RUN SE TERMINE PAR UN TRI DU TRAVAIL, PAS PAR UNE DEMANDE A L'UTILISATEUR.
  *
- * Defaut vecu (conv-1521) : chaque run rendait la main sur « veux-tu que je commit / fusionne ? ».
+ * Defaut vecu : chaque run rendait la main sur « veux-tu que je commit / fusionne ? ».
  * Le travail restait dans une copie isolee et la decision d'integration retombait sur l'humain, run
  * apres run. La skill `salvage` faisait exactement ce tri (balayage, jugement par CONTENU, execution),
  * elle etait sur disque et n'etait jouee QUE sur demande explicite.

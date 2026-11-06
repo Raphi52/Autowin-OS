@@ -5,7 +5,7 @@ import { settleStrandedExecutionStatus, statusLabel } from './execution-interrup
 
 /**
  * VUE GRAPHE — « je vois encore des choses en cours dedans mais je suis quasi sûr que ça a juste
- * buggé » (conv-1056).
+ * buggé ».
  *
  * `persistOrchestrationPhaseStart` écrit un événement de trace `status: 'running'` au DÉMARRAGE
  * d'une phase. Si l'app meurt avant l'événement terminal, ce `running` reste sur disque à vie : le

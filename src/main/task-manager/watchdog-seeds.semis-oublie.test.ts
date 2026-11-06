@@ -17,8 +17,8 @@ import { seedWatchdogTasks } from './watchdog-seeds'
  * avec un reveil, pas avec une edition humaine. Le binaire en cours (`out/main/index.js`, reconstruit
  * le meme matin) contenait bien les sept empreintes : le menage a tourne et n'a rien supprime.
  *
- * Cout constate du trou : cinq reveils payants sur LA MEME signature (`run-c3ea95026bf4-1`,
- * conv-21), dont 7,64 $ le 09-05 et 12,28 $ le 09-06 — ce dernier ayant produit un travail valide
+ * Cout constate du trou : cinq reveils payants sur LA MEME signature (`run-c3ea95026bf4-1`),
+ * dont 7,64 $ le 09-05 et 12,28 $ le 09-06 — ce dernier ayant produit un travail valide
  * (110 tests verts) perdu ensuite au refus d'integration.
  *
  * Le TEMOIN ci-dessous est l'enregistrement DU DISQUE, recopie tel quel, et il passe par `hydrate`

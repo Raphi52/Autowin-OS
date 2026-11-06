@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { departPourModifier } from './modifier-relancer'
 
 /**
- * « MODIFIER ET RELANCER » (conv-1038, 2026-10-21) : reprendre un de ses messages, le corriger, et
+ * « MODIFIER ET RELANCER » (2026-10-21) : reprendre un de ses messages, le corriger, et
  * repartir de LÀ. `fork()` (store/conversations.ts) copie jusqu'au message choisi INCLUS : pour
  * repartir AVANT le message à modifier, la copie s'ancre sur le message qui le précède.
  */

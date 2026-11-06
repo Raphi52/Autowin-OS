@@ -13,7 +13,7 @@ import {
 } from './point-entree-local'
 
 /**
- * Point d'entrée local permanent (conv-1144) : un script extérieur crée un fil, y lance un tour et
+ * Point d'entrée local permanent : un script extérieur crée un fil, y lance un tour et
  * le relit, par le MÊME protocole que les outils du chat. Ces tests ouvrent le vrai serveur sur un
  * port local et lui parlent par `fetch` : asynchrone, donc sans le blocage d'un `spawnSync` vers un
  * serveur du même processus.
@@ -36,7 +36,7 @@ async function ouvrir(exec = vi.fn(async () => ({ ok: true, data: { lu: true } }
   aFermer.push(point)
   const description = JSON.parse(readFileSync(point.fichier, 'utf8'))
   // `null` = aucun jeton envoyé (un `undefined` reprendrait la valeur par défaut).
-  // fix-ok: conv-1144 — le cas « sans jeton » rendait 200 au lieu de 401 : passer `undefined` à
+  // fix-ok: le cas « sans jeton » rendait 200 au lieu de 401 : passer `undefined` à
   // `appeler` déclenchait la valeur par défaut, donc le VRAI jeton partait ; `null` le retire.
   const appeler = (corps: unknown, jeton: string | null = description.jeton) =>
     fetch(description.url, {
@@ -88,7 +88,7 @@ describe('point d’entrée local — ce qu’il sert', () => {
   })
 
   /*
-   * conv-1144 (cadrage, périmètre « dedans ») : un tour lancé par un script doit se voir comme tel
+   * cadrage, périmètre « dedans » : un tour lancé par un script doit se voir comme tel
    * dans le fil — pour l'utilisateur qui relit, et pour l'agent qui sait d'où vient la demande.
    */
   it('marque « lancé par un script » le message de chat_send, en tête', async () => {
@@ -122,7 +122,7 @@ describe('point d’entrée local — ce qu’il sert', () => {
   })
 
   /*
-   * conv-1144 (cadrage, point resté ouvert) : sans fil, `chat_send` part en simple question au
+   * cadrage, point resté ouvert : sans fil, `chat_send` part en simple question au
    * modèle (commands.ts, `case 'chat_send'`) — aucun tour, rien à attendre, et un appel payé. Le bus
    * lit un identifiant vide ou fait d'espaces comme « pas de fil » : les trois formes sont refusées.
    */
@@ -159,7 +159,7 @@ describe('point d’entrée local — ce qu’il sert', () => {
 
 /**
  * Requête HTTP brute : `fetch` ne laisse pas choisir l'en-tête `Host`. Rend le code HTTP.
- * conv-1144 (risque 1 du cadrage) : une page web ouverte dans un navigateur peut viser le port local
+ * risque 1 du cadrage : une page web ouverte dans un navigateur peut viser le port local
  * — elle porte alors un en-tête `Origin`, ou, par rebond DNS, un `Host` qui n'est pas la machine.
  */
 function requeteBrute(url: string, entetes: Record<string, string>): Promise<number> {

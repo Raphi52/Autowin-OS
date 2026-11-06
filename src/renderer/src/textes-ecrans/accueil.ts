@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — ÉCRAN ACCUEIL (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — ÉCRAN ACCUEIL (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : HomeView et ses widgets : Jarvis (voix, Whisper local), Interlocuteurs, Enregistrements,
  * Outlook, micros.
@@ -13,7 +13,7 @@ import { tableDeTextes } from '../textes'
  * volontairement identique au français (nom propre, nom de produit) se déclare dans
  * `IDENTIQUES_AU_FRANCAIS`, avec sa raison.
  *
- * RESTENT EN FRANÇAIS, hors de cette table (lot « Accueil », conv-1170) :
+ * RESTENT EN FRANÇAIS, hors de cette table (lot « Accueil ») :
  *  - ce que Jarvis PRONONCE (`phraseDeJarvis`, l'essai de voix) : la voix choisie d'office est
  *    française, la reconnaissance écoute en `fr-FR`, et le filtre d'écho compare ce qu'il entend à
  *    la phrase dite — une phrase anglaise passerait ce filtre et repartirait comme un ordre ;
@@ -31,17 +31,17 @@ export const TEXTES_FR = {
   'reglages.ariaPanneau': "Réglages de l'accueil",
   'reglages.fond': 'Fond',
   'reglages.ariaFond': "Fond de l'accueil",
-  // L'animal de mes agents, vu aussi par les collègues (conv-1537).
+  // L'animal de mes agents, vu aussi par les collègues.
   'reglages.animal': 'Animal de mes agents',
   'reglages.ariaAnimal': 'Animal qui représente mes agents, vu aussi par mes collègues',
   'reglages.animalAide': 'Vos collègues voient aussi cet animal.',
   'reglages.animalErreur': 'Choix non enregistré : réessayez.',
   'reglages.animalIndisponible': "Choix possible après le prochain redémarrage d'Autowin.",
-  // La couleur de leur tenue, sous l'animal, vue aussi par les collègues (conv-1633).
+  // La couleur de leur tenue, sous l'animal, vue aussi par les collègues.
   'reglages.tenue': 'Couleur de leur tenue',
   'reglages.ariaTenue': 'Couleur de la tenue de mes agents, vue aussi par mes collègues',
   'reglages.tenueAide': 'Vos collègues voient aussi cette couleur.',
-  // Les personnes du village : qui je vois, et qui me voit (conv-1599) — un seul tableau compact,
+  // Les personnes du village : qui je vois, et qui me voit — un seul tableau compact,
   // une ligne par personne, pour tenir quand l'équipe grandit.
   'reglages.personnes': 'Agents des collègues',
   'reglages.personnesColonne': 'Personne',
@@ -112,7 +112,7 @@ export const TEXTES_FR = {
   'quartier.metier.messages': 'Écrit à un autre fil',
   'quartier.metier.taches': 'Programme une tâche',
   'quartier.metier.sql': 'Interroge une base',
-  // Les agents des collègues dans le Quartier (plan « Village commun », conv-1429, D8 à D10).
+  // Les agents des collègues dans le Quartier (plan « Village commun », D8 à D10).
   'quartier.collegue.attente': 'Attend une réponse de {prenom}',
   'quartier.collegue.prive': 'Fil privé',
   'quartier.carte.aria': 'Agent de {prenom}',

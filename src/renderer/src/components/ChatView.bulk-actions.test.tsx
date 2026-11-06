@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, conversation, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * LA DEMANDE (conv-814) : en mode sélection, à côté de « Supprimer », un bouton « Marquer comme
+ * LA DEMANDE : en mode sélection, à côté de « Supprimer », un bouton « Marquer comme
  * inactive » et un bouton « Ranger dans une catégorie » (catégorie existante ou nouvelle).
  */
 describe('ChatView — actions groupées de la sélection', () => {

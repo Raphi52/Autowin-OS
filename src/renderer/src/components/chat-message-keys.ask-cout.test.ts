@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 /*
- * GEL DE LA VUE CHAT (heal du 2026-09-18, `gels.jsonl` : `renderer:vue-chat` 1,3 a 2,8 s, conv-680).
+ * GEL DE LA VUE CHAT (heal du 2026-09-18, `gels.jsonl` : `renderer:vue-chat` 1,3 a 2,8 s).
  * Mesure au profileur CPU, 591 conversations reelles, 30 deltas de flux : `askReponseDuFil` est
  * appele pour CHAQUE message assistant a CHAQUE delta (le fil est recalcule quand `messages`
  * change), et passait par `groupAssistantActivity` -> `coalesceAssistantParts` ->

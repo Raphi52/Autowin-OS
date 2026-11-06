@@ -28,7 +28,7 @@ describe('motif de non-jeu de la chaine apres-juge', () => {
     expect(orchestrateur).toContain('gateBloque: false')
     // Chaque motif CALCULÉ est POUSSÉ — une sortie par état du verdict. L'ancien compte du préfixe
     // `detail: motif` (2) attrapait aussi le `motif` de « Réparation interrompue » ajouté par
-    // 82522eec (2026-09-15) et rougissait sans défaut (conv-770, 2026-09-28).
+    // 82522eec (2026-09-15) et rougissait sans défaut (2026-09-28).
     const calcules = [
       ...orchestrateur.matchAll(
         /const (\w+) = motifChaineApresJugeNonJouee\(\{[^}]*gateBloque: (true|false)/g

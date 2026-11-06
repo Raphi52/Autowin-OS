@@ -162,7 +162,7 @@ export const POINT_LECTURE_BRAIN = 'command-brain-read'
 /**
  * TRACE D'UNE LECTURE BRAIN — `brain_read` (note entière) ou `brain_graph` (liens).
  *
- * POURQUOI (conv-1303, 2026-10-30) : ces deux commandes injectaient du savoir Brain dans le prompt
+ * POURQUOI (2026-10-30) : ces deux commandes injectaient du savoir Brain dans le prompt
  * sans écrire aucune trace. Mesure du 22 au 30/10 : 148 notes entières, 347 000 caractères — plus
  * que tout le bloc des notes proches (159 000) —, absents de l'Observatory et du registre qui se dit
  * exhaustif. La trace porte le chemin ouvert (`notes`) : c'est lui qui permet de compter, note par

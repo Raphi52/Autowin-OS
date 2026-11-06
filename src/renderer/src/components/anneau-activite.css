@@ -1,7 +1,7 @@
 /* ============================================================================================
    CADRE « GRAND, DEUX LIGNES » — barre d'activite, blocs Raisonnement et Actions.
 
-   Choix de l'utilisateur sur maquettes, conv-904 (2026-10-12, /draft, sept tours) : la barre
+   Choix de l'utilisateur sur maquettes, (2026-10-12, /draft, sept tours) : la barre
    d'activite prend la matiere des capsules du theme (verre fume, reflet bombe, bord degrade de
    2 px), PLEINE LARGEUR, un grand ROND DE VERRE a gauche (le nombre d'actions, une pastille pour
    l'exception), la phrase d'etat entiere puis la legende « couleur sur l'exception » et le
@@ -42,9 +42,9 @@
 }
 /* BORD DEGRADE de 2 px : un calque evide par masque, comme les capsules — `border-image` ignore
    l'arrondi, et un fond `border-box` masquerait le fil sous le cadre.
-   LAMPE A LAVE (conv-1163, 2026-10-27 : « les borders bleu rose partout ou yen a », sur la capture
+   LAMPE A LAVE (2026-10-27 : « les borders bleu rose partout ou yen a », sur la capture
    des blocs Raisonnement / Actions / Etapes) : trois gouttes posees sur le degrade du bord, aux
-   couleurs que le THEME donne (`--thinking-capsule-lave-*`). Gouttes FIGEES depuis conv-1610
+   couleurs que le THEME donne (`--thinking-capsule-lave-*`). Gouttes FIGEES
    (2026-11-05, « refais une version tres peu gourmande, enleve toute l'ancienne lave couteuse ») :
    leur position animee faisait repeindre ce calque a chaque image. Le cadre reste dessine ICI
    seul : un theme ne fait que fournir ces jetons. Sans eux, gouttes transparentes : le bord est le
@@ -102,7 +102,7 @@
   margin: 2px 0 6px;
   /* Le cadre n'a ni bord ni marge interne (son bord est le calque ::before) : sans contexte de
      formatage propre, la marge basse des etages traversait le cadre, et la derniere sous-ligne
-     collait au bord bas en debordant du coin arrondi (capture de conv-1201, 2026-10-28). */
+     collait au bord bas en debordant du coin arrondi (2026-10-28). */
   display: flow-root;
 }
 
@@ -166,7 +166,7 @@
   color: var(--anneau-texte-fini);
 }
 
-/* -- LE ROND DE VERRE (« Rond de verre », conv-904 : l'anneau de couleur « fait tache ») : le rond
+/* -- LE ROND DE VERRE (« Rond de verre », L'anneau de couleur « fait tache ») : le rond
    degrade des capsules, en grand, avec un REFLET de verre en haut a gauche. Il porte le NOMBRE
    d'actions (barre, Actions) ou l'icone de la pensee (Raisonnement) : les trois blocs ont le meme
    repere a gauche. -- */
@@ -210,12 +210,12 @@
   width: 1.15em;
   height: 1.15em;
 }
-/* LE ROND PORTE LE VERDICT DU GROUPE (conv-904 : « je preferais voir du vert et rouge la jme rend
+/* LE ROND PORTE LE VERDICT DU GROUPE (« je preferais voir du vert et rouge la jme rend
    pas compte si un truc a rate ») : un verre teinte, plus clair en haut a gauche, plus sombre en
    bas a droite, sous le meme reflet. Vert = tout a reussi, rouge = une action a echoue, ambre = une
    attend. En cours, il garde la couleur du theme et sa lueur. Le melange vers --text eclaircit, vers
    --bg-0 assombrit : le contraste du chiffre tient en sombre comme en clair. Le rond d'ICONE de
-   l'orchestration porte le meme verdict (conv-909) : la regle vise tout rond qui en a un. */
+   l'orchestration porte le meme verdict : la regle vise tout rond qui en a un. */
 .cadre-anneau .anneau-rond[data-verdict='ok'] {
   --rond-teinte: var(--anneau-ok);
 }
@@ -240,12 +240,12 @@
   box-shadow: 0 0 10px color-mix(in srgb, var(--rond-teinte) 35%, transparent);
 }
 
-/* LE VERDICT QUI « ATTERRIT » (conv-981, 2026-10-15) : a la FIN d'un run vu en cours, un reflet
+/* LE VERDICT QUI « ATTERRIT » (2026-10-15) : a la FIN d'un run vu en cours, un reflet
    balaie le verre s'il reussit, une breve secousse le marque s'il echoue (`data-atterrissage`, pose
    par useAtterrissage). Une seule fois : l'animation part a l'apparition de l'attribut, jamais en
    boucle, jamais a l'ouverture d'un fil deja fini. Pas de neutralisation sous prefers-reduced-motion :
    c'est un indicateur d'ETAT, et ce poste a le mouvement reduit actif (voir theme.css, spinner).
-   fix-ok: conv-981 - le rond changeait de teinte d'un coup a la fin d'un run, sans aucun mouvement
+   fix-ok: - le rond changeait de teinte d'un coup a la fin d'un run, sans aucun mouvement
    (seul effet du fichier avant ce bloc : le chevron, l.354). Fichier modifie UNE seule fois a la
    main dans run-52d36e67e4de-1 ; le controle des causes en comptait 3 (meme modification sous son
    chemin complet et son chemin court, plus le releve de fin d'etape : fichiersEditesParLeRun). */
@@ -332,7 +332,7 @@
 .cadre-anneau .legende-outil[data-etat='attente'] .legende-point {
   background: var(--anneau-attente);
 }
-/* BLOC ACTIONS PLIE = DEUX LIGNES, JAMAIS PLUS (conv-910, 2026-10-12 : « ce bloc fermé je veux
+/* BLOC ACTIONS PLIE = DEUX LIGNES, JAMAIS PLUS (2026-10-12 : « ce bloc fermé je veux
    qu'il fasse que 2 lignes » — sa legende passait a la ligne et le portait a 10 lignes). La legende
    reste sur la seconde ligne et se coupe en « … » ; le bilan complet reste dans le corps deplie. */
 .thinking-block--actions .anneau-l2 {
@@ -364,7 +364,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* -- LE VERDICT EN CAPSULE DE VERRE (« Rond de verre », conv-904 : « le highlight des actions verte
+/* -- LE VERDICT EN CAPSULE DE VERRE (« Rond de verre », « le highlight des actions verte
    rouge aussi est tres basique ») : deux cases, la commande puis le code, sur le verre des
    pastilles de duree. Le CODE est teinte : vert reussi, rouge echec, ambre refus (« je preferais
    voir du vert et rouge ») — une case de verre colore, pas un rectangle plein. La fleche reste
@@ -462,7 +462,7 @@
   text-align: left;
 }
 /* La coupe vit sur la COLONNE de texte, pas sur le bouton : posee sur le bouton, elle rognait la
-   lueur du rond (verdict ou en cours) en un carre a bords nets (capture de conv-1201, 2026-10-28). */
+   lueur du rond (verdict ou en cours) en un carre a bords nets (2026-10-28). */
 .activity-anneau .anneau-tete .activity-group-main > .anneau-col {
   overflow: hidden;
 }
@@ -484,7 +484,7 @@
 }
 /* Les etages deplies restent DANS le cadre, sous un filet. `.cadre-anneau` en plus : a poids egal,
    `.cosmic-outline .activity-steps` (cosmic-outline.css, charge apres) imposait ses marges, donc
-   ni retrait sous le texte ni marge a droite (capture de conv-1201, 2026-10-28). */
+   ni retrait sous le texte ni marge a droite (2026-10-28). */
 .activity-anneau.cadre-anneau .activity-steps {
   margin: 0 0.85em 0.6em 3.5em;
   padding-top: 0.35em;
@@ -493,7 +493,7 @@
 .thinking-block.cadre-anneau > .thinking-body {
   margin: 0 0.85em 0.6em 3.5em;
 }
-/* S'ALLUME AU SURVOL, comme les capsules (conv-192) : le reflet d'un bloc en cours. */
+/* S'ALLUME AU SURVOL, comme les capsules : le reflet d'un bloc en cours. */
 .activity-anneau.cadre-anneau:not(.is-live):hover,
 .thinking-block.cadre-anneau:not(.is-live):has(> summary:hover) {
   background: radial-gradient(

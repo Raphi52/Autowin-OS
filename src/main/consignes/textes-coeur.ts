@@ -2,8 +2,8 @@ import type { Langue } from '../../shared/langue'
 import { lireLangueReglee } from '../profil/langue-reglage'
 
 /**
- * LES TEXTES QUE LE PROCESSUS PRINCIPAL MET À L'ÉCRAN, en français et en anglais (conv-1170, lot 18,
- * 2026-10-27, d'après la table de l'interface de conv-1146).
+ * LES TEXTES QUE LE PROCESSUS PRINCIPAL MET À L'ÉCRAN, en français et en anglais (lot 18,
+ * 2026-10-27, d'après la table de l'interface).
  *
  * Pourquoi une table à part : celle de l'interface (`renderer/src/textes.ts`) importe React, que le
  * processus principal ne charge pas. Ici vivent les notifications de fin de tour (bulle Windows et
@@ -30,7 +30,7 @@ export const TEXTES_COEUR_FR = {
   'carte.ouvrirFil': 'Ouvrir le fil',
   'carte.fermer': 'Fermer',
   'carte.titreFenetre': 'Autowin — fin de tour',
-  // Clic droit sur la mascotte du bureau (`mascotte-menu.ts`, conv-1196).
+  // Clic droit sur la mascotte du bureau (`mascotte-menu.ts`).
   'mascotte.menu.aucunFil': 'Aucun fil ne t’attend',
   'mascotte.menu.ouvrirAutowin': 'Ouvrir Autowin',
   // Diagnostic de démarrage (`preflight.ts`).

@@ -7,7 +7,7 @@ import { revealableConversationArtifactPath } from '../store/chat-artifact-store
 import type { Conversation } from '../store/conversations'
 
 /**
- * LECTURE D'UNE VIDÉO DU FIL DEPUIS LE DISQUE, PAR MORCEAUX (kaizen conv-260, 2026-10-11).
+ * LECTURE D'UNE VIDÉO DU FIL DEPUIS LE DISQUE, PAR MORCEAUX (2026-10-11).
  *
  * Cause : la seule voie vers le lecteur était une copie base64 plafonnée à 16 Mo
  * (`readConversationArtifact`). La pub du tour 41ab69ad-0ff8-4a45-8ecd-efb9be30e4a2 (74,6 Mo,

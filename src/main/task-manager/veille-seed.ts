@@ -10,14 +10,14 @@ export const VEILLE_SEED_ID = 'veille-hebdo-v1'
  *
  * Pourquoi une graine : le dispatcheur `veille` (veille/dispatch-veille.ts) est branche au
  * planificateur, mais il ne se declenche que sur une tache `action: 'veille'` — et rien ne la posait,
- * le formulaire du Task Manager ne proposant pas ce choix. Constat du 2026-10-21 (conv-1032) : le
+ * le formulaire du Task Manager ne proposant pas ce choix. Constat du 2026-10-21 : le
  * stock ne contenait que des candidats internes, 0 echec de source, faute d'une seule passe web.
  *
  * Hebdomadaire et non quotidienne : une passe lance un scout par source (~4 min chacun, en
  * parallele) plus le scout interne, pour des pages de notes de version qui changent quelques fois
  * par mois. Lundi 09:00, apres /gc (08:00) et /maintenance et /curate (08:30).
  *
- * Limites ASSUMEES, relevees par la relecture independante de conv-1032 :
+ * Limites ASSUMEES, relevees par la relecture independante :
  *  - `active-only` : app fermee le lundi a 09:00 = occurrence manquee (alerte), sans rattrapage, donc
  *    une semaine sans veille. Meme choix que les autres graines, qui supposent l'app ouverte le matin.
  *  - Le cout des scouts web (`claude -p` sans `--model`, veille/scout-claude.ts) n'est PAS remonte

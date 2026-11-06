@@ -13,11 +13,11 @@ import { useTextesTaskManager, type CleTaskManager } from '../textes-ecrans/task
  * ce sont elles qui décident si un agent capable d'écrire tout seul peut partir en boucle ou en
  * rafale. Les cacher reviendrait à faire signer un pouvoir sans montrer ses limites.
  *
- * Les libellés suivent la langue de l'interface (conv-1170). Les exemples de saisie (chemin de
+ * Les libellés suivent la langue de l'interface. Les exemples de saisie (chemin de
  * log, motif ERROR|FATAL) restent tels quels : des valeurs techniques, les mêmes dans les deux langues.
  */
 
-// Des CLÉS de texte, traduites au rendu : le libellé suit la langue de l'interface (conv-1170).
+// Des CLÉS de texte, traduites au rendu : le libellé suit la langue de l'interface.
 const APP_EVENTS: { value: WatchdogAppEvent; label: CleTaskManager }[] = [
   { value: 'orchestration-red', label: 'regle.evenement.orchestrationRouge' },
   { value: 'workflow-gate-failed', label: 'regle.evenement.gateRefuse' },
@@ -118,7 +118,7 @@ export function WatchdogRuleFields({ rule, onChange }: Props): React.JSX.Element
                 onChange={(event) =>
                   onChange({
                     ...rule,
-                    // `...source` garde le fil surveillé posé par `task_create` (conv-1069).
+                    // `...source` garde le fil surveillé posé par `task_create`.
                     source: {
                       ...source,
                       events: event.target.checked

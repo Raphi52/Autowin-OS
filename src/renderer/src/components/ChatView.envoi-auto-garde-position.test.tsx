@@ -14,7 +14,7 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * Defaut vecu le 2026-09-13 (conv-518) : en mode auto, le chat redescendait tout seul a chaque tour
+ * Defaut vecu le 2026-09-13 : en mode auto, le chat redescendait tout seul a chaque tour
  * enchaine alors que le lecteur avait remonte. Cause : `send()` remettait le suivi du bas a chaque
  * envoi, y compris les envois AUTOMATIQUES. Un envoi automatique doit garder la position du lecteur.
  */

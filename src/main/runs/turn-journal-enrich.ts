@@ -187,7 +187,7 @@ const DEJA_JOURNALISES = new Set([
   'done',
   'cancellation',
   'prompt-call',
-  // Recopié en événement durable `tests-du-terminal` (conv-1059), donc déjà dans le journal.
+  // Recopié en événement durable `tests-du-terminal`, donc déjà dans le journal.
   'tests-du-terminal'
 ])
 
@@ -261,10 +261,10 @@ export type JournalDuPilote = {
 }
 
 /**
- * LA PENSÉE S'ÉCRIT PAR RAFALE, PAS MOT PAR MOT (conv-1431, 2026-11-02).
+ * LA PENSÉE S'ÉCRIT PAR RAFALE, PAS MOT PAR MOT (2026-11-02).
  *
  * `pilotJournalEvents` écrivait un `reasoning-step` par paquet reçu du modèle (« The », « con »…).
- * Mesuré sur les journaux conv-14* : 355 683 lignes, 28 Mo sur 51 (55 %), alors que la clôture
+ * Mesuré sur les journaux * : 355 683 lignes, 28 Mo sur 51 (55 %), alors que la clôture
  * écrit déjà le texte entier sous `reasoning`. Deux lecteurs recollaient ces miettes à chaque
  * relecture (`fusionnerFragmentsDeFlux`, `model-activity-log.ts`).
  *

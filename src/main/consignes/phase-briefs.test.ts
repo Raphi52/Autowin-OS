@@ -25,7 +25,7 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     expect(scout).toMatch(/d[ée]croissant/i)
   })
 
-  // Piste 3 de conv-1033 : la colonne de la commande de preuve n'existe que si le scout l'écrit. Le
+  // Piste 3 : la colonne de la commande de preuve n'existe que si le scout l'écrit. Le
   // nom annoncé par la consigne doit être celui que le lecteur du tableau reconnaît.
   it('le nom de la colonne de preuve annoncé au scout est celui que le lecteur du tableau lit', () => {
     const nom = /colonne `(\w+)`/u.exec(PHASE_BRIEFS.scout)?.[1]
@@ -38,7 +38,7 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     expect(parseScoutTable(tableau)?.[0]?.commande).toBe('npx vitest run src/a.test.ts')
   })
 
-  // Defaut vecu le 2026-08-18 (conv-1293) : le modele a rempli la colonne Score avec « 🟢 ».
+  // Defaut vecu le 2026-08-18 : le modele a rempli la colonne Score avec « 🟢 ».
   // Le brief disait « un seul nombre par ligne » — assez faible pour qu'une pastille passe.
   // Mesure du 2026-08-18 : le brief INTERDISAIT la pastille en l'AFFICHANT, et l'historique de la
   // conversation active portait 16 lignes a pastille pour 0 chiffree. Un exemple negatif ancre le
@@ -80,7 +80,7 @@ describe('phase-briefs (consignes courtes in-app)', () => {
   })
 
   /*
-   * LA CONSIGNE QUE L'APP ENVOIE ETAIT AMPUTEE (conv-890, 2026-09-30). Le pipeline in-app ne lit
+   * LA CONSIGNE QUE L'APP ENVOIE ETAIT AMPUTEE (2026-09-30). Le pipeline in-app ne lit
    * jamais skills/scout/SKILL.md (`orchestrator.ts`, `phasePrompt` : `corpsSkill` vaut '' pour une
    * phase du pipeline) : ce brief est le SEUL texte qui arrive au modele. Il notait en
    * « valeur × faisabilite » — l'inverse de la regle de la skill (« l'impact domine ») — et ne
@@ -107,9 +107,9 @@ describe('phase-briefs (consignes courtes in-app)', () => {
   })
 
   /*
-   * LA RÉFUTATION AVANT LA LISTE. conv-602 a noté 88 une piste dont l'ancrage (`Program.cs:300-304`)
+   * LA RÉFUTATION AVANT LA LISTE. Un fil a noté 88 une piste dont l'ancrage (`Program.cs:300-304`)
    * disait lui-même que la classe citée avait disparu : l'étape suivante l'a découvert, après l'avoir
-   * payée (trace du run « traite-ensemble » de conv-602). Un contrôle en code ne voit que la FORME
+   * payée (trace du run « traite-ensemble »). Un contrôle en code ne voit que la FORME
    * (`scout-plafond.ts`) : une piste fausse mais bien ancrée le passe. Pratique externe retenue :
    * Chain-of-Verification (Dhuliawala et al., ACL Findings 2024) — le MÊME modèle pose la question qui
    * tuerait sa réponse et y répond par une lecture séparée ; mesurée sur des réponses EN LISTE.
@@ -129,7 +129,7 @@ describe('phase-briefs (consignes courtes in-app)', () => {
   })
 
   /**
-   * Defaut vecu le 2026-09-02 (conv-126) : un run lance sur « distinguer les messages humains des
+   * Defaut vecu le 2026-09-02 : un run lance sur « distinguer les messages humains des
    * messages injectes par l'app » a livre une option `--depuis <date>` — une AUTRE tache, substituee
    * en route, jamais signalee. Aucune consigne ne portait cette obligation : la garde est commune,
    * donc elle se verifie sur TOUTES les phases, pas sur une.
@@ -155,7 +155,7 @@ describe('phase-briefs (consignes courtes in-app)', () => {
     }
   })
 
-  // Defaut vecu le 2026-08-17 (conv-1286) : 21 tours utilisateur pour une demande d'un tour. BUILD a
+  // Defaut vecu le 2026-08-17 : 21 tours utilisateur pour une demande d'un tour. BUILD a
   // rendu la main trois fois sur des blocages qu'il s'etait inventes — « vazy » declare
   // « n'identifie aucun dossier cible » alors que le tour precedent nommait l'action, un id de run
   // absent du depot traite comme un mur, et « reessaye en boucle » interprete comme une reecriture du
@@ -228,7 +228,7 @@ ${n}. `)
     }
   })
 
-  // conv-1302 : 4 runs juges 96/100 sur un AUTRE fichier que la cible ancree par l'utilisateur.
+  // 4 runs juges 96/100 sur un AUTRE fichier que la cible ancree par l'utilisateur.
   // Le gate ne bloque que le miss TOTAL ; la couverture partielle, c'est le juge qui la releve.
   it('le brief juge exige la matrice cible demandee -> fichier modifie -> preuve DoD', () => {
     const juge = PHASE_BRIEFS.judge
@@ -240,8 +240,8 @@ ${n}. `)
   })
 
   // fix-ok: rouge sur l’ancien brief juge (aucune réfutation par piste), vert après.
-  // Piste 3 de conv-890 : un VÉRIFICATEUR SÉPARÉ qui cherche à réfuter chaque piste avant la liste
-  // finale. conv-602 : une piste notée 88 était fausse (`Program.cs:300` est un commentaire), et seul
+  // Piste 3 : un VÉRIFICATEUR SÉPARÉ qui cherche à réfuter chaque piste avant la liste
+  // finale. Une piste notée 88 était fausse (`Program.cs:300` est un commentaire), et seul
   // le run suivant l'a vu. Le juge est déjà un appel distinct du scout : c'est lui qui réfute.
   it('le brief juge fait réfuter CHAQUE piste d’un scout en relisant son ancrage', () => {
     const juge = PHASE_BRIEFS.judge
@@ -307,7 +307,7 @@ ${n}. `)
     for (const phase of PIPELINE_PHASES) {
       expect(PHASE_BRIEFS[phase], phase).not.toMatch(/Write\/Edit\/Bash/u)
     }
-    // conv-1582 : la garde exigeait « absence de Write/Edit », une phrase FAUSSE depuis que
+    // La garde exigeait « absence de Write/Edit », une phrase FAUSSE depuis que
     // `sandboxForPhase` donne à toutes les phases les droits du chat (2026-09-04). La lecture
     // seule reste le contrat ; elle ne se justifie plus par un outil prétendu absent.
     for (const phase of ['scout', 'frame', 'terrain', 'judge'] as const) {
@@ -336,7 +336,7 @@ describe('fusion : la regle « tache donnee » vit dans la constitution, la cons
 })
 
 /*
- * SCOUT : LA SKILL LONGUE SUIT LA CONSIGNE LÀ OÙ ELLES SE RECOUPENT (conv-1602, piste 6 du scout du
+ * SCOUT : LA SKILL LONGUE SUIT LA CONSIGNE LÀ OÙ ELLES SE RECOUPENT (piste 6 du scout du
  * 05/11). Les deux textes restent : un run lit la consigne (`orchestrator.ts`, `corpsSkill` vaut ''
  * pour une étape), mais le fil charge encore `skills/scout/SKILL.md` — nom sans barre suivi d'une
  * question, outil `skill_charger`. Mesure du 05/11 sur ce poste : `skill_charger` a chargé `judge`

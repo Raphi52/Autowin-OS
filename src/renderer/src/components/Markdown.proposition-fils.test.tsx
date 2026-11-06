@@ -13,7 +13,7 @@ import {
 } from './proposition-fils-evenements'
 
 /**
- * LA CARTE « LANCER EN N FILS » (conv-1147, 2026-10-25). L'agent rend un bloc ```aw-fils. Le fil
+ * LA CARTE « LANCER EN N FILS » (2026-10-25). L'agent rend un bloc ```aw-fils. Le fil
  * montre les tâches regroupées, ce que ça coûte, et deux boutons. RIEN ne part sans clic. Un clic
  * émet UNE demande à ChatView et ne relance jamais après coup.
  */
@@ -109,7 +109,7 @@ describe('Markdown — carte « Lancer en N fils »', () => {
   })
 
   /*
-   * DÉFAUT 2 DU JUGE (conv-1147) : une réponse COPIÉE dans une branche porte
+   * DÉFAUT 2 DU JUGE : une réponse COPIÉE dans une branche porte
    * `turnConversationId` = le fil d'ORIGINE (`store/conversations.ts`, `fork`), que ChatMessageRow
    * pose en `data-fil-du-tour`. La carte le lisait en premier : un clic dans la branche lançait
    * depuis l'origine, en partant d'un autre message. La carte vise le fil qui l'AFFICHE.
@@ -201,7 +201,7 @@ describe('Markdown — carte « Lancer en N fils »', () => {
 })
 
 /*
- * DÉFAUT D5 DU JUGE (conv-1147, 2e passe) — le souvenir « déjà lancée » était tiré de la seule
+ * DÉFAUT D5 DU JUGE (2e passe) — le souvenir « déjà lancée » était tiré de la seule
  * SOURCE de la carte. Entrées qui font échouer l'ancienne version :
  * - deux réponses au même bloc (l'agent repropose le même découpage) : lancer l'une marquait
  *   l'autre « lancée » ;
@@ -279,7 +279,7 @@ describe('Markdown — carte « Lancer en N fils » : un souvenir par réponse',
 })
 
 /*
- * ANCIEN SOUVENIR (2e relecture externe, conv-1147, point bas) : une carte cliquée AVANT la
+ * ANCIEN SOUVENIR (2e relecture externe, point bas) : une carte cliquée AVANT la
  * correction D5 a son souvenir sous l'ancienne clé, tirée de la seule source. Sans relecture de
  * cette clé, ses boutons revenaient, et un second clic relançait N tours.
  */
@@ -351,7 +351,7 @@ describe('Markdown — carte « Lancer en N fils » : souvenir d’avant la corr
 })
 
 /*
- * RIEN N'EST PARTI (3e relecture externe, conv-1147) : quand ChatView refuse AVANT toute dépense
+ * RIEN N'EST PARTI (3e relecture externe) : quand ChatView refuse AVANT toute dépense
  * (réponse introuvable sur disque, fil illisible, aucune branche créée), la carte ne dit pas
  * « Lancé : ». Elle donne la raison et rend ses boutons : un nouvel essai ne coûte rien de plus.
  */

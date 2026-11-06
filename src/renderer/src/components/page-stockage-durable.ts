@@ -1,5 +1,5 @@
 /*
- * CE QU'UNE PAGE INTERACTIVE SAUVEGARDE SURVIT AU REDEMARRAGE DE L'APP (conv-1304, 2026-10-30).
+ * CE QU'UNE PAGE INTERACTIVE SAUVEGARDE SURVIT AU REDEMARRAGE DE L'APP (2026-10-30).
  *
  * Le cadre a une origine opaque : son `localStorage` est une imitation en memoire (amorce.js), et
  * le fil en gardait une copie le temps de la session (page-interactive.ts). Au redemarrage, un

@@ -46,7 +46,7 @@ describe('libellé de run lisible', () => {
   /*
    * ROUGE AVANT FIX (2026-10-14) — une relance « reprend » / « go » part avec l'objectif
    * `<relance>\n\nCIBLE CONTEXTUALISEE : <sujet>` (commands.ts). Le marqueur prenait deux des six
-   * mots du libellé : `go-cible-contextualisee-traite-trois-<ts>` (conv-517), et le sujet perdait
+   * mots du libellé : `go-cible-contextualisee-traite-trois-<ts>`, et le sujet perdait
    * ses derniers mots porteurs.
    */
   it('une relance ne fait pas entrer le marqueur « CIBLE CONTEXTUALISEE » dans le libellé', () => {

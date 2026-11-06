@@ -1,5 +1,5 @@
 /**
- * La vraie fenêtre de la carte de fin de tour, Electron simulé (conv-1066, 2026-10-22).
+ * La vraie fenêtre de la carte de fin de tour, Electron simulé (2026-10-22).
  *
  * Ce qui est prouvé ici, et que `notification-popup.test.ts` ne peut pas voir : le branchement de
  * `loadFile`. Son rejet arrive APRÈS que `fabriquer` a rendu la carte au notifieur ; avant ce test,

@@ -17,7 +17,7 @@ import type { TaskRegime } from './task-regime'
 import { TrustLedger } from '../trust/ledger'
 
 /**
- * LE BUILD DES RUNS TRIVIAUX PART SUR HAIKU (conv-1097, 2026-10-22).
+ * LE BUILD DES RUNS TRIVIAUX PART SUR HAIKU (2026-10-22).
  *
  * Mesure (scripts/banc-modeles-petits-defauts.mjs, 4 petits défauts réels) : Haiku 5.5 11/12 pour
  * ≈ 0,05 $ l'essai, Opus 5.5 10/12 pour ≈ 1,05 $. Décision de l'utilisateur : l'étape build d'un run

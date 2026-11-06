@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { THEMES, baseDuTheme } from '../theme-mode'
 
 /**
- * THEME « HOLOGRAPHIQUE BLANC » (id `holographique-clair`, conv-212, 2026-10-10).
+ * THEME « HOLOGRAPHIQUE BLANC » (id `holographique-clair`, 2026-10-10).
  * Demande : « un theme holographique blanc qui ressemble au holographique noir mais en gerant les
  * pbms de lisibilite », « il faut baser tous les nouveaux theme en prenant holographique noir en
  * template ». Choisi sur maquette (/draft) : « Feuille holo » + « Halo nacre » + « go le plus blanc ».
@@ -69,7 +69,7 @@ describe('theme Holographique blanc', () => {
     expect(genererMainClair()).toBe(css)
   })
 
-  /* conv-223 (2026-10-11, capture : texte de l'agent sur un fond gris a lisere rose) : « ecris juste en
+  /* 2026-10-11, capture : texte de l'agent sur un fond gris a lisere rose : « ecris juste en
      noir sur blanc sans liserais et sans fond gris sous le texte ». La couche generee peint le meme
      selecteur (lisere rose, voile gris) avec le MEME poids : seul l'ordre d'import la faisait perdre,
      et une feuille ajoutee a chaud passe en dernier. La regle du blanc doit donc gagner par son POIDS. */
@@ -142,7 +142,7 @@ describe('theme Holographique blanc', () => {
     expect(jeton('--on-accent')).toBe('#ffffff')
     expect(jeton('--chat-corps-vous')).toBe('#ffffff')
     const bulle = css.slice(css.indexOf(`${PREFIXE} .cosmic-outline .msg.user .msg-body.msg-bulle {`))
-    // La bulle coule en lampe a lave depuis conv-1163 (2026-10-27) : son fond est la lave du theme,
+    // La bulle coule en lampe a lave depuis le 2026-10-27 : son fond est la lave du theme,
     // des gouttes posees sur le degrade #3c6eeb -> #d02b8c. CHAQUE couleur pleine de la lave (gouttes
     // et degrade) doit tenir le blanc a 4,5:1.
     expect(bulle).toMatch(/^[^}]*background: var\(--nv-lave-fond\);/)
@@ -161,7 +161,7 @@ describe('theme Holographique blanc', () => {
       expect(contraste('#ffffff', couleur), couleur).toBeGreaterThanOrEqual(4.5)
   })
 
-  /* conv-229 (2026-10-11, capture : « Actives », « Compacte », « Mosaique » illisibles) : « dans le
+  /* 2026-10-11, capture : « Actives », « Compacte », « Mosaique » illisibles : « dans le
      menu en bas des conv les textes deviennent blanc quand je click dessus sur fond blanc ». Le pied
      n'a plus de fond depuis le /draft du 2026-10-10 (« rien ne s'y allume ») : aucune de ses cases,
      quel que soit son reglage, ne doit recevoir une couleur de texte illisible sur la nacre. */
@@ -178,8 +178,8 @@ describe('theme Holographique blanc', () => {
     }
   })
 
-  /* conv-229, suite (capture : « Graph » blanc sur blanc) : « pareil pour les headers du menu
-     Details ». Sous le cadre a coins coupes, l'onglet actif n'a plus de pastille (conv-180) : un
+  /* Suite (capture : « Graph » blanc sur blanc) : « pareil pour les headers du menu
+     Details ». Sous le cadre a coins coupes, l'onglet actif n'a plus de pastille : un
      simple trait sous le mot, sur la nacre. Son texte doit donc etre lisible sur la nacre. */
   it('panneau Details : l onglet actif en trait seul reste lisible sur la nacre', () => {
     const couleurs: string[] = []
@@ -194,9 +194,9 @@ describe('theme Holographique blanc', () => {
     }
   })
 
-  /* Ce que l'utilisateur a choisi sur maquette (conv-212). */
+  /* Ce que l'utilisateur a choisi sur maquette. */
   it('« Le plus blanc » : satin nacre #f8f7fb, page #f6f5f9 unie', () => {
-    // Teintes NOMMEES depuis conv-987 (l'entree des cadres les reprend une a une) : 0 %, 18 %,
+    // Teintes NOMMEES (l'entree des cadres les reprend une a une) : 0 %, 18 %,
     // 42/48/80 % et 64 % du satin.
     expect(css).toContain('--nv-satin-a: #f8f7fb;')
     expect(css).toContain('--nv-satin-b: #ffffff;')
@@ -211,10 +211,10 @@ describe('theme Holographique blanc', () => {
     expect(css).toContain('--nv-holo-lisere: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, #cfd6e4);')
     expect(css.match(/var\(--nv-holo-lisere\) left top \/ 100% 3px no-repeat/g)?.length ?? 0).toBeGreaterThanOrEqual(4)
   })
-  /* conv-987 (2026-10-16, capture) : pendant l'entree des cadres a chanfrein, le lisere flottait seul
+  /* 2026-10-16, capture : pendant l'entree des cadres a chanfrein, le lisere flottait seul
      en haut de cadres encore vides. Il se pose desormais avec le satin, dans les MEMES teintes que le
      lisere de repos (sinon il sauterait a la fin de l'entree). */
-  // Le menu de gauche aussi (conv-987 : « et quand je reduis deploi la left bar aussi ») : il porte
+  // Le menu de gauche aussi (« et quand je reduis deploi la left bar aussi ») : il porte
   // le meme lisere au repos.
   it('pose le lisere avec le satin pendant l entree des cadres, dans ses teintes de repos', () => {
     const debut = css.indexOf(`${PREFIXE} :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein],\n${PREFIXE} .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein],\n${PREFIXE} .theme-serious .rail[data-entree-chanfrein] {\n  --nv-holo-lisere:`)
@@ -225,14 +225,14 @@ describe('theme Holographique blanc', () => {
     )
     expect(teintes.join(', ')).toBe('#3c6eeb, #9b8cff 35%, #e63ca0 70%, #cfd6e4')
   })
-  // Le neon Brume (copie floutee de la bulle) est retire le 2026-11-05 (conv-1623, « enleve les
+  // Le neon Brume (copie floutee de la bulle) est retire le 2026-11-05 (« enleve les
   // effets de flou ») : son absence est tenue par assets/aucun-flou.test.ts.
   it('« Halo nacre » : la lumiere de la souris est un blanc a 97 %, sans neon flou autour de la bulle', () => {
     expect(css).toContain('--nv-lumiere-couleur: rgba(255, 255, 255, 0.97);')
     expect(css).not.toContain(`${PREFIXE} .cosmic-outline .msg.user .msg-body.msg-bulle::before {`)
   })
 
-  /* 2026-10-11 (conv-212, capture de l'utilisateur) : les reponses du bloc ASK restaient des barres
+  /* 2026-10-11 (capture de l'utilisateur) : les reponses du bloc ASK restaient des barres
      #202020 sous un texte devenu encre. Entree qui doit faire echouer : `.askd-item` remis dans la
      liste des regles « posees sur le degrade ». */
   it('bloc ASK : les reponses sont des plaques nacrees, plus aucun fond #202020 / #2c2c2c', () => {
@@ -243,8 +243,8 @@ describe('theme Holographique blanc', () => {
     expect(regles.length).toBeGreaterThan(0)
     expect(regles.join(' ')).not.toMatch(/#202020|#2c2c2c|#222222/i)
   })
-  /* conv-225 (2026-10-11, /draft du bloc ASK en blanc, tour 1 : « go : fais le 3 »). La plaque grise
-     #eceaf2 du cadre irise (conv-202) jurait sur la page #f6f5f9. Version 3 « Liseré du haut » : nacre,
+  /* (2026-10-11, /draft du bloc ASK en blanc, tour 1 : « go : fais le 3 »). La plaque grise
+     #eceaf2 du cadre irise jurait sur la page #f6f5f9. Version 3 « Liseré du haut » : nacre,
      contour gris fin, lisere irise de 3 px en haut ; reponses en capsules blanches, l'irise ne revient
      qu'au survol, au focus et sur la recommandee. Entree qui doit faire echouer : ces regles retirees du
      complement (le gris du cadre derive du noir revient), ou ecrites a UN seul attribut (elles ne
@@ -274,7 +274,7 @@ describe('theme Holographique blanc', () => {
       'border-image': 'none',
       'border-top': '1px solid rgba(20, 15, 40, 0.1)'
     })
-    // La reponse cochee ou retenue garde le degrade de la bulle (conv-201) : rien ne doit la repeindre en blanc.
+    // La reponse cochee ou retenue garde le degrade de la bulle : rien ne doit la repeindre en blanc.
     expect(regle('.askd .askd-item:has(.askd-coche input:checked)').background).toContain('var(--nv-degrade) padding-box')
   })
   it('capsule d actions terminee : trait vert du theme et teinte verte, plus le sarcelle de la base claire', () => {
@@ -286,7 +286,7 @@ describe('theme Holographique blanc', () => {
     expect(contraste('#09712c', NACRE)).toBeGreaterThanOrEqual(4.5)
   })
 
-  /* /draft du bloc de fin de tour (conv-212, 2026-10-11) : « Cadre holo », puis « go met le 5 »
+  /* /draft du bloc de fin de tour (2026-10-11) : « Cadre holo », puis « go met le 5 »
      (titre et filet). Entree qui doit faire echouer : le cadre or bruni recolore du noir revenu,
      ou l'emoji du titre laisse en encre transparente (il disparaitrait). */
   it('bloc Fait : cadre holo du bloc ASK, « Fait » en degrade, emoji garde, filet irise sous la liste', () => {
@@ -314,7 +314,7 @@ describe('theme Holographique blanc', () => {
 })
 
 /*
- * COUCHE GENEREE (2026-10-11, conv-212 : « corrige les elements sombres »). Comme le noir, le blanc
+ * COUCHE GENEREE (2026-10-11, « corrige les elements sombres »). Comme le noir, le blanc
  * a une couche qui retraduit les couleurs ecrites en dur dans les composants.
  */
 describe('theme Holographique blanc — couche generee des composants', () => {
@@ -359,7 +359,7 @@ describe('theme Holographique blanc — couche generee des composants', () => {
 })
 
 /**
- * ASCENSEURS VISIBLES SUR LA NACRE (conv-250, 2026-10-11 : « corrige dans le generateur du theme
+ * ASCENSEURS VISIBLES SUR LA NACRE (2026-10-11 : « corrige dans le generateur du theme
  * Holographique blanc la couleur du curseur des barres de defilement, pour qu'elles soient visibles
  * sur la nacre dans toute l'app »). Le generateur classait `scrollbar-color` et le fond du curseur
  * `::-webkit-scrollbar-thumb` en « fond » : le blanc a 16 % d'Holographique noir restait blanc, donc
@@ -426,7 +426,7 @@ describe('ascenseurs du theme Holographique blanc', () => {
 })
 
 /*
- * LE DETAIL DU COUT N'EST PAS COUPE (conv-981, 2026-10-15). La ligne d'en-tete coupe ses elements
+ * LE DETAIL DU COUT N'EST PAS COUPE (2026-10-15). La ligne d'en-tete coupe ses elements
  * trop longs (`.chat-runtime > * { overflow: hidden }`). Le cout du fil y vit depuis qu'il a quitte
  * la zone de saisie, et son detail s'ouvre en position absolue SOUS lui : coupe, il etait invisible
  * (mesure : clic sur « 8,55 $ », aucun panneau a l'ecran, a 900 comme a 1600 px de large).

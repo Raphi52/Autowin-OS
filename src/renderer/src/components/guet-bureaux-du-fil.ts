@@ -1,13 +1,13 @@
 /**
- * LE PANNEAU S'OUVRE QUAND LE FIL LANCE UN BUREAU CACHÉ (conv-1378, 2026-10-31) : « ça doit s'ouvrir
+ * LE PANNEAU S'OUVRE QUAND LE FIL LANCE UN BUREAU CACHÉ (2026-10-31) : « ça doit s'ouvrir
  * quand le chat lance une action hdesk, ça remplace le bloc qui s'affichait dans le chat ».
  *
- * Le guet de l'ancien bloc du fil (conv-528), sans son image : la seule liste des bureaux de CE fil, et
+ * Le guet de l'ancien bloc du fil, sans son image : la seule liste des bureaux de CE fil, et
  * de toute sa super conv : un lot ouvre son bureau dans son propre fil, pas dans celui qu'on regarde.
  * Un lanceur écrit une fiche sur disque, quel que soit le chemin (outil, script, run) : aucune action
  * de l'agent ne prévient l'interface, c'est donc cette liste qui dit qu'un bureau vient de naître.
  *
- * Rythme de conv-1077 : une lecture toutes les 5 s, attente doublée après chaque échec, 60 s au plus.
+ * Rythme : une lecture toutes les 5 s, attente doublée après chaque échec, 60 s au plus.
  * Chaque liste peut relancer PowerShell côté principal (boucle du 21/10 : 120,2 s figées).
  *
  * Un hook et pas un état de ChatView : une lecture sans nouveauté ne re-rend pas tout le fil.
@@ -29,7 +29,7 @@ export const ATTENTE_ECHEC_MAX_MS = 60000
 const OUVERTURE_APP = Date.now()
 
 /*
- * Dans sessionStorage et pas en mémoire du composant (conv-536) : ChatView se recharge à chaud, et un
+ * Dans sessionStorage et pas en mémoire du composant : ChatView se recharge à chaud, et un
  * panneau refermé ne doit revenir que pour un NOUVEAU lancement.
  */
 const CLE_STOCKAGE = 'autowin.bureaux-du-fil.vus'
@@ -128,7 +128,7 @@ export function useGuetBureauxDuFil({
     const tour = async (): Promise<void> => {
       if (typeof document === 'undefined' || !document.hidden) {
         try {
-          // L'une après l'autre : un fil sans fiche ne coûte aucun PowerShell (conv-1077), et une
+          // L'une après l'autre : un fil sans fiche ne coûte aucun PowerShell, et une
           // lecture de plus ne part pas pour un fil que l'écran vient de quitter.
           for (const fil of cleFils.split('\n')) {
             const liste = await lireListe(fil)
@@ -138,7 +138,7 @@ export function useGuetBureauxDuFil({
           }
           echecs = 0
         } catch {
-          // Une liste en échec n'annonce rien : elle espace seulement la suivante (conv-1077).
+          // Une liste en échec n'annonce rien : elle espace seulement la suivante.
           echecs++
         }
       }

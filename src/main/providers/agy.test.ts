@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { AGY_CONNEXION_REQUISE, AgyAdapter, lireLigneAgy, modelesAgy, resolveAgyBin } from './agy'
 import { planProviderLogin } from './provider-login'
 
-// Sortie RÉELLE d'agy 1.5.0 sans connexion (mesurée le 2026-11-04, conv-1499).
+// Sortie RÉELLE d'agy 1.5.0 sans connexion (mesurée le 2026-11-04).
 const ERREUR_CONNEXION =
   '{"event":"result","result":{"conversation_id":"","status":"ERROR","response":"","error":"authentication failed or timed out","duration_seconds":0,"num_turns":0,"usage":{"input_tokens":0,"output_tokens":0,"thinking_tokens":0,"cache_read_tokens":0,"total_tokens":0},"finished_reason":"error"}}'
 
@@ -120,7 +120,7 @@ describe('agy', () => {
     expect(args[0].join(' ').length).toBeLessThan(200)
     expect(args[0]).toEqual(expect.arrayContaining(['--input-format', 'stream-json']))
     const ligne = JSON.parse(recu.join('').trim())
-    expect(ligne.event).toBe('user') // forme exigée par agy 1.5.0 (mesuré, conv-1499)
+    expect(ligne.event).toBe('user') // forme exigée par agy 1.5.0 (mesuré)
     expect(ligne.message.content).toContain(long)
   })
 

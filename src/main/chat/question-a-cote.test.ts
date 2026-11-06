@@ -1,5 +1,5 @@
 /**
- * Moteur de la question à côté (conv-1362, lot 1/3) : un faux CLI et un faux serveur d'outils.
+ * Moteur de la question à côté (lot 1/3) : un faux CLI et un faux serveur d'outils.
  *
  * Ce qui est prouvé : la session est reprise dans le dossier et le compte du FIL (pas ceux de l'app),
  * sans rien écrire ; le CLI reçoit les mêmes outils que le tour mais un refus total ; un fil sans
@@ -211,7 +211,7 @@ describe('les arguments du CLI', () => {
     expect(valeurDe(args, '--permission-mode')).toBe('dontAsk')
     expect(args).not.toContain('--allowedTools')
     expect(args).not.toContain('bypassPermissions')
-    // Une liste différente d'un seul nom ferait réécrire tout le cache du fil (conv-1370, lot 5).
+    // Une liste différente d'un seul nom ferait réécrire tout le cache du fil (lot 5).
     expect(valeurDe(args, '--tools')?.split(',')).toEqual(
       expect.arrayContaining(['Monitor', 'TaskStop'])
     )
@@ -264,7 +264,7 @@ describe('poser une question', () => {
   })
 
   /**
-   * Piste 15 du scout du 05/11 (conv-1602) : chaque morceau du pipe était décodé seul
+   * Piste 15 du scout du 05/11 : chaque morceau du pipe était décodé seul
    * (`morceau.toString('utf8')`). Un « é » (C3 A9) coupé entre deux morceaux devenait deux U+FFFD,
    * le défaut que `runs/survivable-spawn.ts` corrige déjà par un décodeur en flux.
    * Entrée qui rend ces tests rouges : `toString('utf8')` remis à la place du décodeur.

@@ -6,7 +6,7 @@ import type { EtatDuDossierDuBoard } from '../../../shared/board-dossier'
 import { RouageDuBoard } from './RouageDuBoard'
 
 /**
- * Le rouage du Board (conv-1230 : « un ptit bouton rouage qui contiendra projet, le bouton refresh et
+ * Le rouage du Board (« un ptit bouton rouage qui contiendra projet, le bouton refresh et
  * le nom d'usage », au-dessus de la liste des projets). Entrée qui doit faire échouer ce fichier :
  * « Actualiser » ou le nom absents du menu, la liste des projets posée au-dessus du nom, ou un nom
  * enregistré qui ne recalcule pas le Board.

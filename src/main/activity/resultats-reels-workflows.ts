@@ -6,7 +6,7 @@ import { causeDInterruption } from '../orchestration/classe-terminale-echec'
 import { isDeliberateAbort } from '../task-manager/watchdog-suppression'
 
 /**
- * CE QUE CHAQUE WORKFLOW A RÉELLEMENT DONNÉ, LU DANS `causal-trace/` (piste 1, conv-1070).
+ * CE QUE CHAQUE WORKFLOW A RÉELLEMENT DONNÉ, LU DANS `causal-trace/` (piste 1).
  *
  * La vue Workflows n'affichait que les bancs d'essai (`arena-duels.jsonl`). Or chaque run écrit
  * déjà dans la trace causale sa `quote` — le workflow qui le pilote — et sa clôture : statut, durée,
@@ -16,7 +16,7 @@ import { isDeliberateAbort } from '../task-manager/watchdog-suppression'
  * 9 à 10 échecs sur 20 étaient des limites de session, des Stop ou des fermetures de l'app. Les
  * compter en échec ferait passer un workflow pour mauvais parce que l'abonnement a dit non. Ils
  * tombent dans `interrompues`, hors du taux et des médianes. La cause vient du champ
- * `closure.interruption` (écrit depuis conv-1070) ; une trace plus ancienne est relue par ses
+ * `closure.interruption` ; une trace plus ancienne est relue par ses
  * raisons, avec les MÊMES détecteurs que le moteur — sauf quand la raison est un refus du juge,
  * qui peut citer une limite de session sans en être une.
  *

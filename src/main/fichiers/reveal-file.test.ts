@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 /**
- * LES DEUX PROMESSES NON TENUES DU LIEN FICHIER (conv-1427, juge du 2026-08-27).
+ * LES DEUX PROMESSES NON TENUES DU LIEN FICHIER (juge du 2026-08-27).
  *
  * 1. La cible `a.ts:80` était parsée en `{path, line}`, la ligne portée jusqu'au main… puis JETÉE
  *    (`void rawLine`). Le lien ouvrait le fichier, jamais la ligne. Le livrable ne le disait nulle

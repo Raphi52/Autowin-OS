@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+// Le composant est découpé en fichiers voisins : la source lue les réunit.
 import { lireSourceDuChatView } from './ChatView.source-complete'
 import { describe, expect, it } from 'vitest'
 
@@ -62,7 +62,7 @@ describe('workflow sidebar header', () => {
     )
     // Le titre a ete retire du balisage : sa regle ne doit pas survivre en CSS mort.
     expect(css).not.toMatch(/\.workflow-panel-title/)
-    // 56 -> 28 px (conv-770, 2026-09-28) : la barre portait DEUX boutons de 28 px ; le bouton
+    // 56 -> 28 px (2026-09-28) : la barre portait DEUX boutons de 28 px ; le bouton
     // « Rafraîchir » est parti sur demande du 2026-09-26 (WorkflowsPanel.test.tsx : seule la
     // fermeture reste). La largeur fixe doit valoir UNE colonne, exactement celle de la grille.
     expect(css).toMatch(
@@ -80,11 +80,11 @@ describe('workflow sidebar header', () => {
 
 describe('workflow header toggle', () => {
   /*
-   * DÉTAILS PREND LE LOOK DE LA MINI-ADRESSE (conv-1317, 2026-10-30 : « le bouton détail met lui le
-   * meme look »). Il quitte la capsule Raisonnement / Actions de conv-178 et porte la classe de son
+   * DÉTAILS PREND LE LOOK DE LA MINI-ADRESSE (2026-10-30 : « le bouton détail met lui le
+   * meme look »). Il quitte la capsule Raisonnement / Actions et porte la classe de son
    * voisin, pour que les deux ne puissent pas diverger. Entrées qui doivent faire échouer : la
    * capsule qui revient, une classe propre à un seul des deux boutons, ou une règle de thème qui
-   * repeint Détails (le chanfrein de conv-302 lui donnait une autre silhouette).
+   * repeint Détails (le chanfrein lui donnait une autre silhouette).
    */
   it('dessine Détails et la Mini-adresse avec la même classe, sans capsule', () => {
     const lireCss = (chemin: string): string =>
@@ -98,7 +98,7 @@ describe('workflow header toggle', () => {
     expect(boutons).toContain('className="bouton-creux"')
     expect(boutons).toContain('className="bouton-creux workflow-toggle"')
     expect(boutons.match(/className="bouton-creux-texte"/g)).toHaveLength(2)
-    // Le libellé passe par la table des textes depuis la traduction anglaise (conv-1170) : sa clé
+    // Le libellé passe par la table des textes depuis la traduction anglaise : sa clé
     // `entete.details` porte « Détails » en français (textes-ecrans/chat-fil.ts).
     expect(source).toContain("libelle={texteFil('entete.details')}")
 
@@ -120,7 +120,7 @@ describe('workflow header toggle', () => {
   })
 
   /*
-   * LA FLÈCHE DE DÉTAILS POINTE À GAUCHE PANNEAU OUVERT (conv-177, 2026-10-10 : « la fleche doit
+   * LA FLÈCHE DE DÉTAILS POINTE À GAUCHE PANNEAU OUVERT (2026-10-10 : « la fleche doit
    * pointer vers la gauche pas vers le haut quand le paneau est ouvert »). Le panneau s'ouvre sur le
    * côté : fermé, la flèche pointe à droite (-45deg) ; ouvert, à gauche (135deg). Les capsules
    * Raisonnement / Actions, qui se déplient vers le bas, gardent leur flèche vers le haut (-135deg).
@@ -256,7 +256,7 @@ describe('chat image containment', () => {
 
 /**
  * VIGNETTE D'IMAGE DU CHAMP DE SAISIE — bordure et croix BLANCHES (demande du 2026-10-10,
- * conv-186, capture à l'appui : « le border […] je le veux blanc pas bleu et pareil pour la
+ * Capture à l'appui : « le border […] je le veux blanc pas bleu et pareil pour la
  * couleur de la croix »). La bordure était un cyan `rgba(104, 207, 250, 0.3)` que les thèmes
  * Nébuleuse transposaient en violet ou en or ; la croix suivait `--text-dim`, bleuté en verre.
  *

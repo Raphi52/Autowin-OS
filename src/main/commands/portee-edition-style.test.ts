@@ -7,7 +7,7 @@ import { porteeDUneEdition } from './verify-command'
 import { readTestsCitant } from '../git/git-read-main'
 
 /**
- * DEFAUT VECU le 2026-09-03 (conv-21) : `edit_file` rejouait la SUITE ENTIERE pour un changement de
+ * DEFAUT VECU le 2026-09-03 : `edit_file` rejouait la SUITE ENTIERE pour un changement de
  * couleur d'une seule feuille de style — donc plafond de temps atteint, donc edition refusee sans
  * qu'aucun verdict ne soit rendu. La derivation de portee existait deja, mais `EXTENSIONS_DE_CODE`
  * excluait `.css` : plus rien a cibler, repli global, chronometre.

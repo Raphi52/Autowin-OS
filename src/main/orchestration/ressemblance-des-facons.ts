@@ -1,5 +1,5 @@
 /**
- * « ESSAIE 3 FAÇONS » : LE CONTRÔLE DE RESSEMBLANCE (conv-1057, 2026-10-22).
+ * « ESSAIE 3 FAÇONS » : LE CONTRÔLE DE RESSEMBLANCE (2026-10-22).
  *
  * Constat : les trois branches reçoivent trois consignes différentes (`trois-facons.ts`), mais rien
  * ne vérifiait que leurs RÉSULTATS diffèrent. Elles travaillent en même temps sans se voir, et sur

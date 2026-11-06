@@ -3,7 +3,7 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
- * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-166) : « refais les boutons comme il faut en mode
+ * DEMANDE DE L'UTILISATEUR (2026-10-10) : « refais les boutons comme il faut en mode
  * mosaique » (capture : Envoyer tombé sur la rangée du bas, poussé à droite, avec ∞ et le micro
  * collés DERRIÈRE lui). En chat plein, Envoyer est SUR la ligne d'écriture et ∞ + micro restent
  * seuls à gauche en dessous. Cause : `width: 100%` sur le champ de la tuile — il prenait toute la

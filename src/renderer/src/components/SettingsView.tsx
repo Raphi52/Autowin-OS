@@ -22,7 +22,7 @@ import './SettingsView.css'
 
 type PreflightResult = Awaited<ReturnType<typeof window.api.recheckPreflight>>
 
-/** Le registre de capacités qu'ouvre chaque section qui en montre un (conv-1109). */
+/** Le registre de capacités qu'ouvre chaque section qui en montre un. */
 const REGISTRE_DE_SECTION: Partial<Record<SettingsSection, CapabilityKind>> = {
   capabilities: 'skills',
   hooks: 'hooks',
@@ -44,7 +44,7 @@ export function SettingsView({
   onSectionChange: (section: SettingsSection) => void
 }): React.JSX.Element {
   const [preflight, setPreflight] = useState<PreflightResult>()
-  // Les textes suivent la langue de Settings · Interface, sans redémarrage (conv-1146).
+  // Les textes suivent la langue de Settings · Interface, sans redémarrage.
   const { t } = useTextes()
   const [checking, setChecking] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -128,13 +128,13 @@ export function SettingsView({
   }, [section])
 
   const preflightAlert = preflight ? !preflight.ok || preflight.checks.some((c) => !c.ok) : false
-  /** Alerte de l'onglet Routage, venue d'Agent Studio avec lui (conv-963). */
+  /** Alerte de l'onglet Routage, venue d'Agent Studio avec lui. */
   const providersExpires = useProvidersAReconnecter(active)
 
   const registre = REGISTRE_DE_SECTION[section]
 
   const sections: readonly ViewTopBarTab<SettingsSection>[] = [
-    // Une section par registre de capacités (conv-1109) : c'était un seul écran à onglets internes.
+    // Une section par registre de capacités : c'était un seul écran à onglets internes.
     { id: 'capabilities', label: 'Skills' },
     { id: 'hooks', label: 'Hooks' },
     { id: 'gates', label: 'Gates' },
@@ -173,7 +173,7 @@ export function SettingsView({
         title={t('settings.titre')}
         description={t('settings.description')}
       />
-      {/* LES SECTIONS EN LISTE À GAUCHE, comme les conversations du chat (conv-1109, 2026-10-23).
+      {/* LES SECTIONS EN LISTE À GAUCHE, comme les conversations du chat (2026-10-23).
           Elles étaient une rangée de pastilles dans la barre du haut : avec huit sections, la rangée
           passait sur deux lignes et repoussait le contenu. Une colonne garde chaque nom sur sa ligne,
           et la section ouverte se repère comme la conversation ouverte. */}
@@ -197,7 +197,7 @@ export function SettingsView({
             // `key` : changer de registre remonte la vue, donc filtres et sélection repartent à zéro.
             <CapabilitiesView key={section} active={active} kind={registre} />
           )}
-          {/* Section Budget retirée le 2026-10-23 (conv-1119 : « ça sert à rien cette feature »). Ses
+          {/* Section Budget retirée le 2026-10-23 (« ça sert à rien cette feature »). Ses
               deux autres panneaux n'étaient pas du budget : l'arrêt du mode ∞ règle le comportement
               du chat, le pilote shadow mesure le routage — chacun rejoint la section dont il relève. */}
           {section === 'behaviour' && (
@@ -207,7 +207,7 @@ export function SettingsView({
             </>
           )}
           {section === 'interface' && <InterfaceView />}
-          {/* Routage vit ici depuis conv-963 (2026-10-15) : il était une section d'Agent Studio. */}
+          {/* Routage vit ici depuis le 2026-10-15 : il était une section d'Agent Studio. */}
           {(section === 'routing' || section === 'providers') && (
             <>
               <RouterView active={active} />
@@ -218,7 +218,7 @@ export function SettingsView({
           {section === 'preflight' && <ExecutionWorkspaceSettings />}
           {section === 'preflight' && <BrainSettings />}
           {section === 'preflight' && <BrainPersoSettings />}
-          {/* Serveurs MCP : section à part depuis le 2026-11-05 (conv-1558) — enfouis dans Diagnostic, introuvables. */}
+          {/* Serveurs MCP : section à part depuis le 2026-11-05 — enfouis dans Diagnostic, introuvables. */}
           {section === 'mcp' && <McpServersSettings />}
           {/* Coffre à clés : sa propre ligne, comme MCP — un panneau enfoui dans une autre section ne se trouve pas. */}
           {section === 'cles' && <CoffreClesSettings />}

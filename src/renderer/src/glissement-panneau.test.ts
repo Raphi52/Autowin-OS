@@ -8,7 +8,7 @@ import {
 } from './glissement-panneau'
 
 /**
- * LE PANNEAU DE DROITE GLISSE A L'OUVERTURE ET A LA FERMETURE (conv-987, 2026-10-16 : « je veux
+ * LE PANNEAU DE DROITE GLISSE A L'OUVERTURE ET A LA FERMETURE (2026-10-16 : « je veux
  * une animation d'ouverture fermeture pour le paneau de droite »).
  *
  * happy-dom n'a ni mise en page ni API d'animation : le panneau recoit ici sa largeur, et une

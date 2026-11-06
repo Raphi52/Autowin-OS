@@ -113,8 +113,8 @@ describe('ChatView — prévisu cliquable dans la prompt box', () => {
 })
 
 /**
- * IMAGE COLLÉE VIDE (conv-321, 2026-10-17). Le presse-papiers de Windows a livré une `image.png` de
- * 0 octet (conv-182 le 2026-10-10, conv-321 le 2026-10-17 : `size: 0`, aucune miniature, fichier de
+ * IMAGE COLLÉE VIDE (2026-10-17). Le presse-papiers de Windows a livré une `image.png` de
+ * 0 octet (un fil le 2026-10-10, un fil le 2026-10-17 : `size: 0`, aucune miniature, fichier de
  * 0 octet dans chat-artifacts). Elle s'attachait comme une vraie capture et partait à l'agent :
  * l'utilisateur croyait avoir montré son écran, l'agent ne recevait rien. Elle est maintenant
  * refusée au collage, avec un message qui dit quoi faire.
@@ -150,7 +150,7 @@ describe('ChatView — image collée vide', () => {
 })
 
 /**
- * COLLER PENDANT UN TOUR (conv-44, 2026-09-01). `addFiles` commençait par `if (!cible && busy)
+ * COLLER PENDANT UN TOUR (2026-09-01). `addFiles` commençait par `if (!cible && busy)
  * return` : un collage pendant qu'un tour tournait était ignoré EN SILENCE — rien d'attaché, aucun
  * message. Demande de l'utilisateur : la pièce jointe s'attache dans la barre comme hors tour ; elle
  * n'est pas envoyée à l'agent en cours, elle attend le prochain message.

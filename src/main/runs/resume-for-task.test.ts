@@ -142,13 +142,13 @@ describe('pickResumeForTask — reprend, ou refuse en le justifiant', () => {
 })
 
 /**
- * « REPREND » RETROUVE LA TÂCHE QU'IL PORTE (conv-1038, 2026-10-21).
+ * « REPREND » RETROUVE LA TÂCHE QU'IL PORTE (2026-10-21).
  *
  * Une relance sans objet devient l'objectif du run, enveloppée par commands.ts :
  * `<relance>\n\nCIBLE CONTEXTUALISEE : <tâche déléguée>`. Le point de reprise, lui, porte la tâche
  * d'origine. Comparées en entier, les deux ne s'appariaient jamais : le « REPREND » de 14 h 19 a
  * relancé un run complet (2 h, ~36 $) alors que le pilote déléguait la tâche d'origine MOT POUR MOT
- * — 5 249 caractères identiques, relus dans les deux RUN.md de conv-1038.
+ * — 5 249 caractères identiques, relus dans les deux RUN.md.
  *
  * Une reprise réécrit son point de reprise avec la tâche enveloppée ; la relance suivante (« go »,
  * « vazy ») doit donc la retrouver aussi, et la tâche retapée en clair également.
@@ -219,7 +219,7 @@ describe('câblage — la commande du chat reprend et rattache la conversation',
     // Délimite l'appel par sa PARENTHÈSE fermante, pas par un budget de caractères : un budget cassait
     // dès qu'une ligne était ajoutée dans le corps de l'appel (arrivé en ajoutant `durationMs`).
     // Le cas `orchestrate` vit dans commands/orchestration.ts, sorti du bus : `bus.` et un cran de
-    // retrait de moins (conv-1508, lot 2).
+    // retrait de moins (lot 2).
     const start = source.indexOf('const r = await bus.os.runTask(')
     expect(start).toBeGreaterThan(0)
     const call = source.slice(start, source.indexOf('\n        )', start))

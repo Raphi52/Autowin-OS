@@ -344,11 +344,11 @@ describe('les reglages de l assistant vivent DANS son widget', () => {
 
 describe('le choix du fond de l accueil', () => {
   /**
-   * DEMANDE DE L'UTILISATEUR (2026-10-19, conv-346) : « je veux dans les settings de l'accueil un
+   * DEMANDE DE L'UTILISATEUR (2026-10-19) : « je veux dans les settings de l'accueil un
    * menu pour choisir un fond noir ou l'image cyberpunk ou les planetes ». Avant, la direction du
    * fond n'avait AUCUN reglage : elle ne changeait qu'en editant le stockage a la main.
    */
-  // « Aucun » et non plus « Noir » (conv-1076, 2026-10-22 : « desfois c pas noir selon le theme ») :
+  // « Aucun » et non plus « Noir » (2026-10-22 : « desfois c pas noir selon le theme ») :
   // en Holographique blanc, ce choix peint un aplat BLANC. La valeur enregistree reste `noir`.
   it('propose exactement Aucun, le Quartier, Cyberpunk, Planetes et Nier Automata (radar), sur le fond affiche par defaut', async () => {
     window.localStorage.removeItem(autowinStorageKey('home.decor.v4'))
@@ -363,7 +363,7 @@ describe('le choix du fond de l accueil', () => {
       ['actuel', 'Planètes'],
       ['nier', 'Nier Automata (radar)']
     ])
-    // Rien d'enregistre : le menu montre le fond REELLEMENT affiche, le Quartier (conv-1421).
+    // Rien d'enregistre : le menu montre le fond REELLEMENT affiche, le Quartier.
     expect(menu.value).toBe('falaise')
   })
 
@@ -394,7 +394,7 @@ describe('le choix du fond de l accueil', () => {
   })
 })
 
-// L'animal des agents (conv-1537) : la liste offre les quatre animaux dont la scène a un atlas, sous
+// L'animal des agents : la liste offre les quatre animaux dont la scène a un atlas, sous
 // leur nom, et un choix part au processus principal, qui le publie aux collègues.
 describe('l animal de mes agents dans les reglages', () => {
   afterEach(() => reinitialiserMonAnimal())
@@ -424,7 +424,7 @@ describe('l animal de mes agents dans les reglages', () => {
   })
 })
 
-// La couleur de leur tenue (conv-1633) : « un settings pour choisir la couleur de leur tenue en dessous
+// La couleur de leur tenue : « un settings pour choisir la couleur de leur tenue en dessous
 // du setting où je choisis l'animal ». D'origine par défaut, huit couleurs, le choix part au processus
 // principal, qui le publie aux collègues ; revenir à « D'origine » envoie `null`.
 describe('la couleur de tenue de mes agents dans les reglages', () => {

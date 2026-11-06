@@ -197,7 +197,7 @@ describe('collectStdoutJournals — les sorties d erreur aussi', () => {
   })
 
   /*
-   * Mesure du 2026-10-19 (conv-359) : 3 452 `.exit.json` dans le vrai `run-stdout`, 3 341 sans leur
+   * Mesure du 2026-10-19 : 3 452 `.exit.json` dans le vrai `run-stdout`, 3 341 sans leur
    * journal, le plus ancien du 2 octobre — le menage ne les voyait pas.
    */
   it('supprime une preuve de sortie ORPHELINE et ancienne, garde celles qui servent encore', async () => {

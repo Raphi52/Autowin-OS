@@ -1,5 +1,5 @@
 /**
- * LE TUYAU DIRECT VERS LE CLI CLAUDE — deux défauts trouvés par l'audit du branchement (conv-1040).
+ * LE TUYAU DIRECT VERS LE CLI CLAUDE — deux défauts trouvés par l'audit du branchement.
  *
  * Ce chemin sert de repli quand le journal survivable est indisponible (ou `AUTOWIN_DETACHED_RUNS=0`).
  *

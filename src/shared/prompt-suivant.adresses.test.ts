@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { estPromptDePublication, extrairePropositionsSuite, PROMPT_SALVAGE } from './prompt-suivant'
 
 /*
- * VÉCU LE 2026-10-22 (conv-1091 → conv-1093). Le tour finit sur deux suites notées : [75] la
+ * VÉCU LE 2026-10-22. Le tour finit sur deux suites notées : [75] la
  * correction recommandée, [55] un /salvage différé. Le champ de saisie ne montre QUE la [55].
  * L'utilisateur : « j'ai même pas le truc recommandé comme choix alors que c'est mieux ».
  *
@@ -57,7 +57,7 @@ describe('une adresse ou un aparté ne fait pas passer une suite pour une public
 })
 
 /*
- * VÉCU LE 2026-10-22, tour suivant de conv-1093 : la correction ci-dessus livrée, la suite [62] du
+ * VÉCU LE 2026-10-22, tour suivant : la correction ci-dessus livrée, la suite [62] du
  * même tour disparaît à son tour. Elle finissait par « aucune vraie publication ne doit être
  * perdue » — une INTERDICTION, lue comme une demande de publier. Même famille, mesurée sur les
  * 3 671 suites réelles : « le commit bf2aa822 », « modifications non commitées », « sans commit »
@@ -108,7 +108,7 @@ describe('une interdiction ou un objet désigné ne fait pas passer une suite po
 })
 
 /*
- * VÉCU LE 2026-10-22, conv-1093, troisième tour : trois suites réelles des fils envoyaient du
+ * VÉCU LE 2026-10-22, troisième tour : trois suites réelles des fils envoyaient du
  * travail vers la branche principale SANS aucun mot de publication — « intègre-la dans main »,
  * « envoie-la sur Azure », « Fais rejoindre au dépôt principal la copie… ». Elles passaient sans
  * proposer de tri, alors que /salvage existe justement pour ces copies et ces branches.
@@ -157,7 +157,7 @@ describe('envoyer vers la branche principale est une publication, même sans le 
 })
 
 /*
- * VÉCU LE 2026-10-22, conv-1093, quatrième tour : « Reporte dans le dépôt principal le travail
+ * VÉCU LE 2026-10-22, quatrième tour : « Reporte dans le dépôt principal le travail
  * mermaid de run-d48026c47798-1… » rapatrie une copie de travail vers la branche principale, sans
  * aucun mot de publication. Même famille que « intègre-la dans main ».
  *

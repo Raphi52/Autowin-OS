@@ -2,7 +2,7 @@ import { ensureAutowinAppData } from '../app/app-data'
 import { creerIndexStore } from './json-index-store'
 
 /**
- * LE COMPTE-RENDU D'UN TOUR EXECUTE SANS LE MODELE SURVIT AU REDEMARRAGE (conv-989, 2026-10-16).
+ * LE COMPTE-RENDU D'UN TOUR EXECUTE SANS LE MODELE SURVIT AU REDEMARRAGE (2026-10-16).
  *
  * Un `/scout`, `/build`… lance par l'app rend la main AVANT tout appel au modele : son compte-rendu
  * est garde pour etre remis au tour suivant (`comptesRendusNonVus`, agent-pilot.ts — le trou de

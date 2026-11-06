@@ -1,5 +1,5 @@
 /**
- * LA CARTE « LANCER EN N FILS » (conv-1147, 2026-10-25). Elle est dessinée depuis le bloc
+ * LA CARTE « LANCER EN N FILS » (2026-10-25). Elle est dessinée depuis le bloc
  * ```aw-fils de l'agent (`shared/lancer-en-fils.ts`).
  *
  * Elle montre les tâches regroupées par fichiers communs et ce que ça coûte. Deux boutons :
@@ -43,7 +43,7 @@ export function PropositionDeFils({
   const plan = useMemo(() => planDesFils(taches), [taches])
   /*
    * L'ANCIENNE CLÉ, tirée de la seule source (avant la correction D5), est RELUE mais jamais plus
-   * écrite (2e relecture externe, conv-1147). Sans elle, une carte cliquée avant la correction
+   * écrite (2e relecture externe). Sans elle, une carte cliquée avant la correction
    * réaffichait ses boutons, et un second clic relançait N tours. Prix assumé : deux cartes au même
    * contenu cliquées AVANT la correction paraissent toutes deux lancées. Mieux vaut un bouton absent
    * que N tours relancés.
@@ -84,7 +84,7 @@ export function PropositionDeFils({
     const noeud = ref.current
     // Le fil qui AFFICHE la carte : la fenêtre de mosaïque le pose (`data-conv-id`) ; au chat
     // plein, ChatView prend le fil affiché. Jamais `data-fil-du-tour` : sur une réponse COPIÉE
-    // dans une branche, il vaut le fil d'ORIGINE, et le clic partait de là (défaut 2, conv-1147).
+    // dans une branche, il vaut le fil d'ORIGINE, et le clic partait de là (défaut 2).
     const conversationId =
       noeud?.closest('[data-conv-id]')?.getAttribute('data-conv-id') || undefined
     // La réponse et son tour, posés par ChatMessageRow. Le tour suffit à ChatView quand la réponse,

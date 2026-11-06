@@ -1,7 +1,7 @@
 /**
  * UNE SÉLECTION DE CANDIDATS SCOUT NE REJOUE PAS LE SCOUT — côté WORKFLOW du fil.
  *
- * Demande utilisateur du 2026-10-22 (conv-1080) : « le doublon enlève-le, ça c'est sûr ». Le message
+ * Demande utilisateur du 2026-10-22 : « le doublon enlève-le, ça c'est sûr ». Le message
  * envoyé par le panneau des candidats sort d'un scout qui vient d'éclairer et de localiser ses
  * pistes. Or un workflow qui porte un nœud `scout` (« Chantier Autowin », « Exploration »), qu'il
  * soit choisi à la main ou par le modèle, le rejouait en tête du run : un deuxième éclairage payé

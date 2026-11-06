@@ -11,7 +11,7 @@ import {
 } from './proposition-fils-evenements'
 
 /**
- * « LANCER EN N FILS » DE BOUT EN BOUT (conv-1147, 2026-10-25). La carte ```aw-fils émet une
+ * « LANCER EN N FILS » DE BOUT EN BOUT (2026-10-25). La carte ```aw-fils émet une
  * demande. ChatView ouvre une branche du fil par groupe de tâches, chacune à partir du message de
  * l'utilisateur. Chaque branche reçoit SA première tâche, et les tâches qui touchent les mêmes
  * fichiers attendent à la suite dans la même branche.
@@ -179,7 +179,7 @@ describe('ChatView — « Lancer en N fils »', () => {
 
     expect(h!.container.querySelector('[data-testid="chat-mosaic"]')).not.toBeNull()
     // Le fil d'ORIGINE reste ouvert à côté des branches : sa carte y montre le reçu (demande du
-    // 2026-10-25, conv-1147 : « garde le fil d'origine visible dans la mosaïque »).
+    // 2026-10-25, : « garde le fil d'origine visible dans la mosaïque »).
     const fenetres = [
       ...h!.container.querySelectorAll('[data-testid="chat-mosaic"] [data-conv-id]')
     ].map((fenetre) => fenetre.getAttribute('data-conv-id'))
@@ -224,7 +224,7 @@ describe('ChatView — « Lancer en N fils »', () => {
     expect(confirmations[0]!.fils).toEqual([{ id: 'A-2', titre: 'T2' }])
     expect(confirmations[0]!.refus?.[0]).toMatch(/T1 \+ T3.*refusée/u)
     // Une branche est PARTIE : jamais « rien n'est parti ». Sinon la carte rendrait ses boutons, et
-    // un nouvel essai recréerait la branche qui travaille déjà (4e relecture externe, conv-1147).
+    // un nouvel essai recréerait la branche qui travaille déjà (4e relecture externe).
     expect(confirmations[0]!.rienNestParti).toBeUndefined()
     // L'avis ne compte que ce qui est parti : la branche refusée portait T1 et T3.
     const avis = h!.container.querySelector('[data-testid="chat-workflow-notice"]')?.textContent
@@ -246,7 +246,7 @@ describe('ChatView — « Lancer en N fils »', () => {
   })
 
   /*
-   * PIÈCES JOINTES (conv-1147, 2e passe). Le processus principal retrouve les originaux d'un
+   * PIÈCES JOINTES (2e passe). Le processus principal retrouve les originaux d'un
    * message PASSÉ par son TEXTE exact dans le fil stocké de la branche (`run-pilot-chat.ts`, puis
    * `pieces-jointes-durables.ts` : image, journal, PDF). Il faut donc que le premier envoi de la
    * branche porte le message d'origine tel quel. Le renderer n'en transmet que la miniature
@@ -299,7 +299,7 @@ describe('ChatView — « Lancer en N fils »', () => {
   })
 
   /*
-   * DÉFAUTS 1, 3 ET 4 DU JUGE (conv-1147, 2e passe) — entrées qui faisaient échouer l'ancienne
+   * DÉFAUTS 1, 3 ET 4 DU JUGE (2e passe) — entrées qui faisaient échouer l'ancienne
    * version : un brouillon en cours dans le fil d'origine, la liste des fils en panne après la
    * création des branches, un renommage refusé.
    */
@@ -339,7 +339,7 @@ describe('ChatView — « Lancer en N fils »', () => {
   })
 
   /*
-   * RELECTURE EXTERNE DU 2026-10-25 (conv-1147, score 74). Une réponse peinte en direct dans une
+   * RELECTURE EXTERNE DU 2026-10-25 (score 74). Une réponse peinte en direct dans une
    * fenêtre non relue n'a pas d'identifiant de message : la demande ne porte que son TOUR. Le point
    * de départ se lit alors dans le fil STOCKÉ, où chaque message a le sien.
    */
@@ -388,7 +388,7 @@ describe('ChatView — « Lancer en N fils »', () => {
   })
 
   /*
-   * RÉPONSE INTROUVABLE SUR DISQUE = RIEN NE PART (3e relecture externe, conv-1147, point bas).
+   * RÉPONSE INTROUVABLE SUR DISQUE = RIEN NE PART (3e relecture externe, point bas).
    * Avant, le lancement repartait en silence du DERNIER message de l'utilisateur de tout le fil,
    * peut-être écrit après la carte (« attends, ne fais rien »). Rien n'étant dépensé, la carte le dit
    * et rend ses boutons (`rienNestParti`).

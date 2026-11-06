@@ -14,7 +14,7 @@ import {
 } from './fs-brains'
 
 /**
- * LE BRAIN PERSO DANS LA VUE KNOWLEDGE (conv-1233, 2026-10-28, demande utilisateur : « affiche le
+ * LE BRAIN PERSO DANS LA VUE KNOWLEDGE (2026-10-28, demande utilisateur : « affiche le
  * Brain perso dans la vue Knowledge, à côté du Brain d'équipe, avec ses notes marquées perso »).
  *
  * La vue lit le graphe par un processus à part, borné aux racines autorisées. Le Brain perso réglé

@@ -7,7 +7,7 @@ import {
 } from './chat-auto-mode'
 
 /*
- * conv-826, 2026-09-26 : la suite « Quand …/nuit-2026-09-26-iso/fin.txt existe, compare… » attendait
+ * 2026-09-26 : la suite « Quand …/nuit-2026-09-26-iso/fin.txt existe, compare… » attendait
  * son fichier, ∞ allumé. L'app a redémarré à 10:48 (puis 10:59, 11:10, 11:35, 13:38, 14:13) : la
  * surveillance vivait dans un minuteur de l'écran, perdu au redémarrage, et le premier passage
  * marquait le dernier tour « déjà traité ». fin.txt est apparu à 12:38:36, rien n'est parti jusqu'à

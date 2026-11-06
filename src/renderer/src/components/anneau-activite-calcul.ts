@@ -1,5 +1,5 @@
 /**
- * Calculs du rond de compte et de sa legende (conv-904, 2026-10-12) — separes des composants
+ * Calculs du rond de compte et de sa legende (2026-10-12) — separes des composants
  * (anneau-activite.tsx) pour que le rechargement a chaud des composants reste possible.
  */
 import { useState } from 'react'
@@ -7,7 +7,7 @@ import { useState } from 'react'
 export type EtatArc = 'ok' | 'ko' | 'encours' | 'attente'
 
 /**
- * L'EXCEPTION d'un groupe : la pastille au coin du rond de verre (« Rond de verre », conv-904 :
+ * L'EXCEPTION d'un groupe : la pastille au coin du rond de verre (« Rond de verre », :
  * « le rond autour du chiffre est pas tres moderne il fait tache »). Un groupe tout reussi n'en a
  * pas — il reste silencieux. Sinon, la plus grave l'emporte : un echec avant une attente (une
  * decision ou une reprise t'attend), une attente avant ce qui tourne encore.
@@ -20,7 +20,7 @@ export function exceptionDuGroupe(etats: readonly EtatArc[]): Exclude<EtatArc, '
 }
 
 /**
- * LA COULEUR DU ROND (conv-904, 2026-10-12 : « bof en vrai je preferais voir du vert et rouge la
+ * LA COULEUR DU ROND (2026-10-12 : « bof en vrai je preferais voir du vert et rouge la
  * jme rend pas compte si un truc a rate »). Le rond porte le verdict du GROUPE : vert si tout a
  * reussi, rouge si une action a echoue, ambre si une attend, la couleur du theme tant que ca tourne.
  * La pastille de 9 px qui portait seule l'echec ne se voyait pas.
@@ -29,11 +29,11 @@ export function verdictDuRond(etats: readonly EtatArc[]): EtatArc {
   return exceptionDuGroupe(etats) ?? 'ok'
 }
 
-/** L'effet joue sur le rond au moment ou le run se termine (conv-981). */
+/** L'effet joue sur le rond au moment ou le run se termine. */
 export type Atterrissage = 'reussi' | 'echec'
 
 /**
- * LE VERDICT QUI « ATTERRIT » (conv-981, 2026-10-15) : l'effet d'un PASSAGE d'etat du bloc
+ * LE VERDICT QUI « ATTERRIT » (2026-10-15) : l'effet d'un PASSAGE d'etat du bloc
  * d'orchestration (`data-state`). Seule la fin d'un run en cours atterrit : reflet s'il reussit,
  * secousse s'il echoue. Une interruption, un etat deja fini a l'ouverture du fil, ou un retour en
  * cours ne jouent rien. Le rond du COMPTE n'est pas un signal de fin : il vaut « ok » apres chaque
@@ -50,7 +50,7 @@ export function atterrissageDuPassage(avant: string, apres: string): Atterrissag
 export const ANIMATIONS_D_ATTERRISSAGE: readonly string[] = ['anneau-reflet', 'anneau-secousse']
 
 /**
- * L'effet a poser sur le rond quand l'etat du bloc PASSE de « en cours » a la fin (conv-981). Le
+ * L'effet a poser sur le rond quand l'etat du bloc PASSE de « en cours » a la fin. Le
  * premier etat vu est la reference : un fil ouvert sur un run deja fini ne joue rien. L'animation
  * CSS ne part qu'a l'APPARITION de l'attribut ; `effacer` le retire a la fin de l'effet. Sans cela,
  * l'effet REPARTIRAIT a chaque retour sur l'onglet Chat : une animation recommence quand son element
@@ -61,7 +61,7 @@ export const ANIMATIONS_D_ATTERRISSAGE: readonly string[] = ['anneau-reflet', 'a
 export function useAtterrissage(
   etat: string,
   // Le PASSAGE qui joue l'effet : par defaut la fin d'un run du chat. La bulle d'un ticket passe le
-  // sien (`eclatDuTicket`, ticket-treatment.ts, conv-981) : meme mecanique, autre etat.
+  // sien (`eclatDuTicket`, ticket-treatment.ts) : meme mecanique, autre etat.
   passage: (avant: string, apres: string) => Atterrissage | null = atterrissageDuPassage
 ): [Atterrissage | null, () => void] {
   // fix-ok: src/renderer/src/components/anneau-activite-calcul.ts — marque laissee posee = reflet

@@ -5,10 +5,10 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 /**
  * L'IDENTITÉ DU FIL INJECTÉE AU MODÈLE EST CELLE DU TOUR, PAS CELLE DE L'ONGLET AFFICHÉ.
  *
- * Mesuré le 2026-09-14 : un tour joué dans conv-526 pendant que l'utilisateur regardait conv-533
+ * Mesuré le 2026-09-14 : un tour joué pendant que l'utilisateur regardait
  * recevait `activeConversationId: "conv-533"` (valeur posée par l'interface au changement d'onglet).
  * Le modèle répondait « cet échange arrive dans un fil différent (conv-533)… ce fil-ci est vide »
- * — alors qu'il répondait DANS conv-526, dont l'historique lui était bien transmis.
+ * — alors qu'il répondait, dont l'historique lui était bien transmis.
  */
 function pilot(responses: string[], etatActif: string) {
   const sent: string[] = []

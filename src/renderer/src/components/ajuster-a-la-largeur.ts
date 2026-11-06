@@ -1,5 +1,5 @@
 /**
- * LE FIL NE DEFILE JAMAIS EN LARGEUR (2026-10-11, conv-248 : « je veux pas de scroll horizontal
+ * LE FIL NE DEFILE JAMAIS EN LARGEUR (2026-10-11, « je veux pas de scroll horizontal
  * dans le chat »).
  *
  * Mesure avant correctif, instance cachee a 900 px (colonne de 372 px) : un tableau de neuf

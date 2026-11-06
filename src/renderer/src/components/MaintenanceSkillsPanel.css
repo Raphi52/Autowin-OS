@@ -1,5 +1,5 @@
 /*
- * Boutons d'entretien de la vue Maintenance (conv-1101). Compacts : ils coiffent les suites de tests,
+ * Boutons d'entretien de la vue Maintenance. Compacts : ils coiffent les suites de tests,
  * ils ne doivent pas leur voler la hauteur. Couleurs par tokens seulement (thème clair et sombre).
  */
 /* Les groupes en COLONNES côte à côte : la hauteur vaut celle du plus long groupe (4 boutons), au lieu

@@ -9,7 +9,7 @@ import { parseDesktopActions } from './desktop-control'
  * inconnu: double_click ». Or le double-clic était déjà réalisable via `click` avec `clicks: 2` :
  * seul le NOM manquait.
  *
- * Conséquence observée dans `conv-1244` : l'action refusée, l'agent est parti cliquer à l'aveugle
+ * Conséquence observée : l'action refusée, l'agent est parti cliquer à l'aveugle
  * ailleurs sur le bureau, a ouvert les réglages rapides de Windows par erreur, et le tour a échoué.
  * Refuser un synonyme évident ne protège rien — cela transforme une action réalisable en échec.
  */

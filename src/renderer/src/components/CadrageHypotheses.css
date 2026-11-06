@@ -21,9 +21,9 @@
   font-weight: 600;
 }
 /*
- * REPLI SUR UNE LIGNE (conv-358, 19/10 : « remplace la croix par une fleche down up »). La fleche
+ * REPLI SUR UNE LIGNE (19/10 : « remplace la croix par une fleche down up »). La fleche
  * remplace la croix qui faisait disparaitre le bloc. Chevron DESSINE par deux bords, comme celui des
- * capsules du fil (anneau-activite.css) : bas = deplie, haut = replie (inverse a la demande, conv-358).
+ * capsules du fil (anneau-activite.css) : bas = deplie, haut = replie (inverse a la demande).
  */
 .cadrage-hyp-plier {
   margin-left: auto;

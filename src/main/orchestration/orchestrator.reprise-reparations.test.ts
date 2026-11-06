@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 // tourne pour de vrai, mais sur un dossier sans bundle, donc elle n'arrête pas la boucle.
 const RACINE_SANS_BUNDLE = mkdtempSync(`${tmpdir()}/autowin-bundle-`)
 let cwdSpy: ReturnType<typeof vi.spyOn>
-// Le vrai run tournait en mode « réparer jusqu’au vert » (conv-844), sans l’arrêt « même refus
+// Le vrai run tournait en mode « réparer jusqu’au vert », sans l’arrêt « même refus
 // 2 fois » que tests/reinit-couts-session.ts impose aux tests d’orchestrateur.
 const bornee = process.env.AUTOWIN_REPARATION_BORNEE
 beforeAll(() => {
@@ -38,7 +38,7 @@ import type { NodePhase } from '../skills/skill-pipeline'
 /**
  * UNE RÉPARATION DÉJÀ PAYÉE NE REPAIE PAS SON JUGE À LA REPRISE.
  *
- * Mesuré sur run-85d8e7f57af2-1 (conv-892, 2026-10-01) : au redémarrage de 12:54, le run repart avec
+ * Mesuré sur run-85d8e7f57af2-1 (2026-10-01) : au redémarrage de 12:54, le run repart avec
  * ses 15 étapes acquises (`run-state/run-85d8e7f57af2-1.json`, `phaseOutputs` : think, frame, puis
  * 7 build et 6 clean alternés). `phaseOutputs` est pré-rempli avec TOUTES : le premier juge voit
  * donc déjà le texte final. Ensuite chaque réparation rejouée sortait par `dejaPayee` sans rien

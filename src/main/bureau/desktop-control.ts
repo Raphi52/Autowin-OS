@@ -205,7 +205,7 @@ function normalizedKeys(input: unknown): string[] {
  * Les gestes tels que les envoient les DEUX voies d'appel. La voie <cmd> passe un vrai tableau ;
  * l'outil direct ne peut passer qu'une CHAÎNE, car `schemaEntree` (skill-node-mcp.ts) déclare tout
  * argument en `type: 'string'`. Sans cette lecture, desktop_act en outil direct refusait TOUS ses
- * gestes (« actions doit contenir entre 1 et 20 gestes », mesuré 3 fois en conv-942). Même règle
+ * gestes (« actions doit contenir entre 1 et 20 gestes », mesuré 3 fois). Même règle
  * que `cheminsEnvoyes` (proprietaire-fichier.ts) et `listeEnvoyee` (commands.ts) : une chaîne qui
  * commence par `[` est une liste JSON, mal formée elle est REFUSÉE en le disant ; le reste passe tel
  * quel au contrôle habituel.
@@ -657,7 +657,7 @@ export class WindowsDesktopController implements DesktopController {
   }
 
   /**
-   * LE REPERE UTILISE EST RENDU AVEC LE GESTE — mesure du 2026-09-08 (conv-342).
+   * LE REPERE UTILISE EST RENDU AVEC LE GESTE — mesure du 2026-09-08.
    *
    * Les coordonnees 0-1000 sont converties avec la geometrie de la DERNIERE observation. Observer
    * un seul moniteur (`display: 1`, largeur 1920) puis le bureau entier (largeur 3840) change donc

@@ -7,7 +7,7 @@ import { listRecoverableChatProviderCallsAsync, reglagesDeReprise } from './chat
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
- * UN TOUR REPRIS NE FIGE PAS LES RUNS QU'IL LANCE (conv-955, 2026-10-15).
+ * UN TOUR REPRIS NE FIGE PAS LES RUNS QU'IL LANCE (2026-10-15).
  *
  * Le contrôle final de « un effort par étape » l'a trouvé : la reprise d'un tour coupé par un
  * redémarrage rejouait le modèle et l'effort DU CHAT comme réglage IMPOSÉ au tour. Ce réglage

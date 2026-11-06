@@ -44,7 +44,7 @@ const MARQUE = '⛔ Cadrage incomplet'
  */
 const MARQUEURS_ENTREE: RegExp[] = [
   /(^|[^\w-])--[a-z][\w-]*/i,
-  // Mots NUS « option / argument / parametre / drapeau / champ / input » retires (conv-710, 19/09) :
+  // Mots NUS « option / argument / parametre / drapeau / champ / input » retires (19/09) :
   // ils designent aussi du code interne (« ajouter une option a `finalize` ») et refusaient a tort le
   // cadrage d'une tache sans aucune saisie. Ils ne comptent plus qu'avec un contexte d'entree.
   /\b(saisies?|formulaires?)\b/i,
@@ -74,7 +74,7 @@ function sectionBesoin(texte: string): string {
 }
 
 /*
- * UNE LIGNE DE TABLEAU EST UN CAS (conv-981, 2026-10-15) : 18 cas ecrits en tableau etaient comptes
+ * UNE LIGNE DE TABLEAU EST UN CAS (2026-10-15) : 18 cas ecrits en tableau etaient comptes
  * 0 et le cadrage repartait a `frame` -- deux passes payees pour les reecrire en puces. La ligne de
  * separation `|---|` n'est pas un cas, ni la ligne d'en-tete qui la precede. Meme regle dans
  * `scripts/frame-cas-limites-check.mjs`, tenue par le test de contrat.

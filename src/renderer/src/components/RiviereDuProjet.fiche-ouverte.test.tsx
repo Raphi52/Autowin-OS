@@ -12,7 +12,7 @@ import { RiviereDuProjet } from './RiviereDuProjet'
 import { CLE_ETATS_MANUELS_CARTE } from './etats-manuels-carte'
 
 /**
- * LE CLIC SUR UNE COLONNE QUAND UNE FICHE EST OUVERTE (conv-1130, 2026-10-23 : « fais que le clic
+ * LE CLIC SUR UNE COLONNE QUAND UNE FICHE EST OUVERTE (2026-10-23 : « fais que le clic
  * sur une colonne n'agisse pas quand une fiche est ouverte : le premier clic ferme juste la
  * fiche »). Fichier à part : `RiviereDuProjet.test.tsx` était en cours d'édition par un autre fil.
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un premier clic qui ferme la fiche ET déplace la loupe, sur

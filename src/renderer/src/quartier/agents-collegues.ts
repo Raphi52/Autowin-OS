@@ -1,5 +1,5 @@
 /**
- * LES AGENTS DES COLLÈGUES DANS LE QUARTIER (plan « Village commun », conv-1429, lot 4).
+ * LES AGENTS DES COLLÈGUES DANS LE QUARTIER (plan « Village commun », lot 4).
  *
  * Cadrage tranché dans `grill/agent-hq-japon-town.md` :
  *  - D-8 : les agents des collègues s'affichent comme les miens — mêmes lieux selon le métier et la phase ;
@@ -7,7 +7,7 @@
  *  - D8 : un bouton « Mes agents / Toute l'équipe » les masque quand il y a foule ;
  *  - D9 : foulard à la couleur de la personne, prénom au survol ; sa question ou son plantage restent
  *    discrets, car l'or veut dire « t'attend » et ce n'est pas moi qu'il attend. Le foulard est retiré
- *    en conv-1633 (« vire le foulard ») : ses agents portent la tenue à la couleur qu'IL a choisie ;
+ *    « vire le foulard » : ses agents portent la tenue à la couleur qu'IL a choisie ;
  *  - D10 : un clic montre sa carte, jamais l'ouverture d'un fil (le fil vit sur un autre poste).
  *
  * La relecture du partage est faite par le processus principal (`quartier-presence-collegues.ts`,
@@ -44,7 +44,7 @@ const PRENOM_MAX = 40
 /**
  * La couleur d'une personne, en pastille dans la liste des réglages. C'était celle de son foulard sur la
  * scène, d'où ces huit teintes loin de l'orange du kimono, de l'or (« t'attend ») et du rouge
- * (« planté ») ; le foulard est retiré depuis conv-1633. Elles ne suivent pas le thème de l'app.
+ * (« planté ») ; le foulard est retiré. Elles ne suivent pas le thème de l'app.
  */
 export const PALETTE_COLLEGUES = [
   '#22a884', // couleur-fixe: foulard d'un collègue peint sur le décor (jade)
@@ -58,8 +58,8 @@ export const PALETTE_COLLEGUES = [
 ] as const
 
 /**
- * L'animal d'un collègue qui n'en a pas choisi (plan « Renard des collègues », conv-1446) : son poste
- * le tire dans cette liste. Depuis conv-1537, chacun choisit le sien dans les réglages de l'Accueil
+ * L'animal d'un collègue qui n'en a pas choisi (plan « Renard des collègues ») : son poste
+ * le tire dans cette liste. Chacun choisit le sien dans les réglages de l'Accueil
  * (`ANIMAUX_AGENTS`) ; ce tirage ne sert plus qu'aux fichiers des versions d'avant le réglage.
  */
 export const ANIMAUX_COLLEGUES = ['renard'] as const
@@ -73,11 +73,11 @@ export interface InfosCollegue {
   prenom: string
   couleur: string
   /**
-   * L'atlas dont la scène le dessine : celui que le collègue a choisi (conv-1537), sinon celui tiré de
+   * L'atlas dont la scène le dessine : celui que le collègue a choisi, sinon celui tiré de
    * son poste.
    */
   animal: AnimalAgent
-  /** La couleur de tenue qu'il a choisie (conv-1633) ; `null` = la tenue d'origine de son animal. */
+  /** La couleur de tenue qu'il a choisie ; `null` = la tenue d'origine de son animal. */
   tenue: TenueAgent | null
   /** L'identifiant du fil sur SON poste : il ne s'ouvre jamais ici (D10). */
   idFil: string
@@ -177,9 +177,9 @@ export function agentsDesCollegues(
     vus.add(`poste:${poste.toLowerCase()}`)
     const prenom = texte(c.prenom, PRENOM_MAX) ?? texte(c.nom, PRENOM_MAX) ?? poste
     const couleur = couleurDuPoste(poste)
-    // Son choix d'abord (conv-1537) ; un fichier d'une version d'avant le réglage n'en porte pas.
+    // Son choix d'abord ; un fichier d'une version d'avant le réglage n'en porte pas.
     const animal = animalLisible(c.animal) ?? animalDuPoste(poste)
-    // Sa couleur de tenue (conv-1633) : revalidée, la valeur vient d'un autre poste.
+    // Sa couleur de tenue : revalidée, la valeur vient d'un autre poste.
     const tenue = tenueLisible(c.tenue)
     const siens: AgentCollegue[] = []
     for (const a of Array.isArray(c.agents) ? c.agents : []) {
@@ -255,7 +255,7 @@ export function selonLeMode(
 }
 
 /* ---------------------------------------------------------------- *
- * « Afficher les agents de » : une personne à la fois (conv-1599).
+ * « Afficher les agents de » : une personne à la fois.
  * ---------------------------------------------------------------- */
 
 /**

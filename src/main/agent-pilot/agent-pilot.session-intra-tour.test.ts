@@ -7,7 +7,7 @@ import { configureAutowinAppDataBase } from '../app/app-data'
 import type { Message, SendOptions, SendResult, StreamChunk } from '../providers/types'
 
 /**
- * DEFAUT VECU le 2026-08-28 (conv-1498, diagnostique en conv-1502). L'agent avait lui-meme propose
+ * DEFAUT VECU le 2026-08-28. L'agent avait lui-meme propose
  * une variante « 5A » deux tours plus tot ; a « je veux le 5A », il a repondu « 5A ne correspond a
  * rien dans les 961 conversations ». Amnesie au sein d'un MEME tour.
  *

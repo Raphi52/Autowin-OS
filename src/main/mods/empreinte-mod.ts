@@ -1,5 +1,5 @@
 /**
- * VERSION DU MOD — empreinte du CONTENU de `mods/autowin` (conv-420, 2026-11-02).
+ * VERSION DU MOD — empreinte du CONTENU de `mods/autowin` (2026-11-02).
  *
  * But : comparer le coût d'une demande AVANT et APRÈS une modification du harnais (pratique
  * « suivre le coût par tâche pour repérer une régression tôt », Vaughan, 2026-08-10 :

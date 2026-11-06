@@ -14,7 +14,7 @@ import { reclamerOuvertureConversation } from './pending-conversation-open'
 import { TestsView } from './TestsView'
 
 /**
- * LES ÉCRANS BOARD ET MAINTENANCE SUIVENT LA LANGUE (traduction anglaise, conv-1170, lot « Board et
+ * LES ÉCRANS BOARD ET MAINTENANCE SUIVENT LA LANGUE (traduction anglaise, lot « Board et
  * Maintenance »). Entrée qui doit faire échouer ce test : un libellé du Board (en-tête, rivière,
  * étages, fiche d'un post-it, gestes « vérifier », task d'une demande) ou de Maintenance (onglets,
  * skills d'entretien, suites de tests, panneau Latence) laissé en dur en français, ou un écran qui
@@ -113,11 +113,11 @@ describe('Board — langue', () => {
 
     await act(async () => appliquerLangue('en'))
     // La phrase d'en-tête (« Your threads placed on the day of their last request… ») n'est plus
-    // vérifiée : l'utilisateur l'a fait retirer de l'écran (conv-1209, « supprime cette ligne »).
+    // vérifiée : l'utilisateur l'a fait retirer de l'écran (« supprime cette ligne »).
     expect(vue()).toContain('The river')
     expect(texte(el, 'besoins-stats')).toContain('2 requests')
     expect(texte(el, 'besoins-actualiser')).toBe('Refresh')
-    // La ligne de compte (« threads over the last 14 days… ») a été retirée (conv-1226) : la
+    // La ligne de compte (« threads over the last 14 days… ») a été retirée : la
     // fenêtre ne se dit plus que dans l'aria-label de la rivière.
     expect(el.querySelector('[data-testid="riviere"]')?.getAttribute('aria-label')).toBe(
       'The river, the last 14 days'

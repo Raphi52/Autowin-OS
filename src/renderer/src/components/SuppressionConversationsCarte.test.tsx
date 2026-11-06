@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Carte « Supprimer la conversation ? » / « Supprimer N conversations ? » (conv-1078, 2026-10-22,
+ * Carte « Supprimer la conversation ? » / « Supprimer N conversations ? » (2026-10-22,
  * « Implémenter la 2 · En-tête en ligne »).
  *
  * Ce que ces tests verrouillent :
@@ -9,7 +9,7 @@
  *    chargée : la carte ne promet jamais moins que ce qui sera supprimé ;
  *  - « Garder » garde le focus ; seul le bouton rouge supprime ; un clic à côté de la carte garde ;
  *  - la carte est rendue dans `body`, hors du panneau du chat : dedans, la poignée de largeur de la
- *    liste des fils passait au-dessus d'elle et prenait les clics sur « Supprimer » (conv-1078).
+ *    liste des fils passait au-dessus d'elle et prenait les clics sur « Supprimer ».
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : lister moins de fils que la sélection sans « + N autres »,
  * ou donner le focus au bouton irréversible.
  */

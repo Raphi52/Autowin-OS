@@ -1,5 +1,5 @@
 /**
- * La publication de la présence (conv-1429, lot 1) : écrite pour de vrai dans un dossier temporaire,
+ * La publication de la présence (lot 1) : écrite pour de vrai dans un dossier temporaire,
  * avec une horloge et des minuteurs simulés pour le délai et le battement.
  */
 import {

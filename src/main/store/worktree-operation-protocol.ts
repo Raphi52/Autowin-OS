@@ -18,7 +18,7 @@ export interface WorktreeRecoveryInventory {
 export type WorktreeOperationRequest =
   | { operation: 'prepare'; agentId: string; context?: WorktreeRunContext }
   | { operation: 'changedFiles'; agentId: string }
-  /** Fichiers libres ET deja commites de la copie (`fichiersDuTravailDeLaCopie`, conv-1074). */
+  /** Fichiers libres ET deja commites de la copie (`fichiersDuTravailDeLaCopie`). */
   | { operation: 'fichiersDuTravail'; agentId: string }
   | {
       operation: 'finalize'
@@ -28,7 +28,7 @@ export type WorktreeOperationRequest =
         expectedAgentSha?: string
         task?: string
         conflictStrategy?: 'ours' | 'theirs'
-        /** Barreau 2 de `finalize`, autorisé par le coordinateur (conv-1086). */
+        /** Barreau 2 de `finalize`, autorisé par le coordinateur. */
         preserverEditionLocale?: boolean
       }
     }
@@ -45,13 +45,13 @@ export type WorktreeOperationRequest =
    * Le recensement des travaux non publies, ENTIEREMENT dans le worker.
    *
    * Il coute une commande git par branche : paye sur le thread main, il a bloque la fenetre
-   * 14 403 ms au demarrage (mesure du 2026-08-29, detecteur de gel, conv-1511).
+   * 14 403 ms au demarrage (mesure du 2026-08-29, detecteur de gel).
    */
   | { operation: 'recensementNonPublies'; baseRef?: string; limite?: number }
   /**
    * La passe de retention (un `git cherry` par ref de secours), ENTIEREMENT dans le worker : sur le
    * thread main, la seule creation des 78 processus a gele la fenetre jusqu'a 8,8 s au demarrage
-   * (gels.jsonl, 14-16/10, heal conv-1013). Rend des `VerdictRetention` ; la consigne s'applique
+   * (gels.jsonl, 14-16/10). Rend des `VerdictRetention` ; la consigne s'applique
    * cote appelant.
    */
   | { operation: 'verdictsRetention' }

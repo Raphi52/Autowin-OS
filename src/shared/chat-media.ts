@@ -1,5 +1,5 @@
 /**
- * ADRESSE D'UN MÉDIA DU FIL LU DEPUIS LE DISQUE (kaizen conv-260, 2026-10-11).
+ * ADRESSE D'UN MÉDIA DU FIL LU DEPUIS LE DISQUE (2026-10-11).
  *
  * Cause mesurée : une vidéo du fil n'avait qu'un seul chemin vers le lecteur, une copie encodée en
  * base64 renvoyée par `os:chatArtifact:read` et plafonnée à 16 Mo (`chat-artifact-store.ts`,

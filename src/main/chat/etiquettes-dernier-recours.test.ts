@@ -9,7 +9,7 @@ import { zoneDuTourDeChat } from '../app/source-process-principal.test-helpers'
  * l'utilisateur : « c'est pas du tout l'expérience utilisateur que je veux offrir ».
  *
  * Mais les supprimer purement ferait revenir un défaut plus ancien et pire — la BULLE VIDE d'un tour
- * qui n'a fait qu'agir (conv-1141). D'où le couple, indissociable :
+ * qui n'a fait qu'agir. D'où le couple, indissociable :
  *   · aucune étiquette quand une vraie réponse existe ;
  *   · jamais de bulle vide quand elle n'existe pas.
  *

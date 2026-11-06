@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { monterAtlantic } from './home-decor-avenue-atlantic'
 
 /*
- * LES VOITURES DE L'AVENUE : TOUTES DIFFÉRENTES, ET UNE GARÉE (conv-320).
+ * LES VOITURES DE L'AVENUE : TOUTES DIFFÉRENTES, ET UNE GARÉE.
  *
  * Demande de l'utilisateur : « refais les voitures du fond d'écran de l'accueil pour qu'elles soient
  * toutes différentes et mets en une garée avec un style futuriste top qualité comme les piétons ».
@@ -13,14 +13,14 @@ import { monterAtlantic } from './home-decor-avenue-atlantic'
  *   - « Bloc », fourgon blindé à facettes graphite, barre ambre pleine largeur (file de gauche) ;
  *   - « Flottante », berline volante magenta sans roues, quatre réacteurs bleus (file de gauche) ;
  *   - « Cycle », moto carénée rouge à roues sans moyeu, pilote caché sous la bulle (file de droite) ;
- *   - GARÉE le long du trottoir de droite, branchée à sa borne, warnings ambre : depuis conv-330,
+ *   - GARÉE le long du trottoir de droite, branchée à sa borne, warnings ambre
  *     l'« Atlantic volante » (home-decor-avenue-atlantic.ts) remplace la GT nacrée « Nacre ».
  *
  * POURQUOI DU CODE ET PAS DES FICHIERS, comme la foule : aucun modèle de voiture futuriste de cette
  * qualité n'est libre de droits et téléchargeable sans compte (recherche du 2026-10-17 : le seul
  * candidat, CarConcept des exemples Khronos, pèse 10 Mo, porte des logos et n'a qu'une forme). Les
- * carrosseries ne sont donc PAS des primitives assemblées (le reproche fait aux anciens bonshommes,
- * conv-301) : chacune est UNE surface continue, tirée de sections transversales (des superellipses)
+ * carrosseries ne sont donc PAS des primitives assemblées (le reproche fait aux anciens bonshommes)
+ * Chacune est UNE surface continue, tirée de sections transversales (des superellipses)
  * interpolées sur la longueur — la façon dont on dessine une carrosserie —, avec ses vitres, son bas
  * de caisse sombre et ses lames de lumière posées SUR la surface.
  *
@@ -755,7 +755,7 @@ export function monterVoitures(ctx: ContexteVoitures): Flotte {
   enCirculation(assembler(cycle), cycle, FILES.cycle, 0)
   enCirculation(assembler(flottante), flottante, FILES.flottante, 0.5)
 
-  // ---------- LA VOITURE GARÉE : l'Atlantic volante (conv-330), en charge, warnings allumés ----------
+  // ---------- LA VOITURE GARÉE : l'Atlantic volante, en charge, warnings allumés ----------
   // Elle remplace la GT nacrée : voir home-decor-avenue-atlantic.ts.
   const atlantic = monterAtlantic(ctx, env.texture)
   const garee = atlantic.g

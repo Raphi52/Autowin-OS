@@ -1,5 +1,5 @@
 /**
- * Le texte que `terminal_lire` rend à l'agent (conv-1362, lot 3/3). La première preuve est une VRAIE
+ * Le texte que `terminal_lire` rend à l'agent (lot 3/3). La première preuve est une VRAIE
  * capture : c'est elle qui a montré qu'un simple retrait des séquences rend un texte faux.
  */
 import { describe, expect, it } from 'vitest'

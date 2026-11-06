@@ -11,7 +11,7 @@ import type { OrchStep } from './chat-view-model'
 ).IS_REACT_ACT_ENVIRONMENT = true
 
 /**
- * ONGLET « SORTIES ENTIERES » DU RUN DEPLIE (conv-989, 2026-10-16).
+ * ONGLET « SORTIES ENTIERES » DU RUN DEPLIE (2026-10-16).
  *
  * Le fil des sous-agents montre chaque etape coupee a 4 000 caracteres (`trace.json`). Quand la
  * sortie entiere existe a cote du RUN.md, le panneau la propose dans un onglet a part.

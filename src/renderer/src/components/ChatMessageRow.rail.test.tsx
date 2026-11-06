@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * RAIL DU TOUR (conv-338, « Implémenter 1 + 5 » du /draft « mêler le texte du chat et mes blocs »).
+ * RAIL DU TOUR (« Implémenter 1 + 5 » du /draft « mêler le texte du chat et mes blocs »).
  * Chaque élément d'un tour assistant est un point d'un rail : colonne d'heures à gauche (la 1),
  * verdict des juges puis réponse en bleu au bout (la 5).
  *
@@ -106,7 +106,7 @@ describe('rail du tour : rendu', () => {
   })
 
   // Les IMAGES ont toujours eu leur heure (`createdAt`) : un tour d'avant le rail en garde. Mesuré
-  // sur conv-338 le 2026-10-19 : seules ses images étaient datées, et la colonne s'affichait trouée
+  // le 2026-10-19 : seules ses images étaient datées, et la colonne s'affichait trouée
   // (heure sur 4 images, rien sur 9 autres points). Sans texte ni action datés : aucune colonne.
   it('un tour enregistré avant le rail garde ses points mais aucune heure, même ses images', async () => {
     const ancien = {
@@ -125,7 +125,7 @@ describe('rail du tour : rendu', () => {
   it('pendant le tour, la dernière phrase n’est pas encore la réponse', async () => {
     const tour = await rendre({ ...tourFini, done: false, status: 'streaming' })
     expect(natures(tour)).not.toContain('reponse')
-    // Le point des juges est posé dès le tour en cours (conv-1021). Sans run reçu, il reste VIDE,
+    // Le point des juges est posé dès le tour en cours. Sans run reçu, il reste VIDE,
     // donc masqué (`.rail-noeud:empty`, ChatView.css) : la dernière phrase reste le dernier point vu.
     expect(tour.querySelector('[data-nature="juge"]')?.innerHTML).toBe('')
     expect(natures(tour, { visibles: true }).at(-1)).toBe('texte')
@@ -147,7 +147,7 @@ describe('rail du tour : rendu', () => {
     expect(natures(tour, { visibles: true }).at(-1)).toBe('juge')
     const bloc = tour.querySelector('[data-nature="juge"] [data-testid="juges-panel"]')
     expect(bloc?.getAttribute('data-verdict')).toBe('encours')
-    // Le bloc est PLIÉ par défaut (conv-1081, « je veux que ce bloc soit plié par défaut et
+    // Le bloc est PLIÉ par défaut (« je veux que ce bloc soit plié par défaut et
     // dépliable ») : le bandeau porte le COMPTE des objections lues dans le texte en direct, le
     // détail n'apparaît qu'au dépliage (couvert par JugesPanel.test.tsx, aide `deplier`). `rendre`
     // rend une copie figée du DOM : on y lit le bandeau, on ne peut pas y cliquer.

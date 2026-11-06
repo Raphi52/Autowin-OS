@@ -3,7 +3,7 @@
  *
  * Incident du 2026-09-09 (`gels.jsonl`, 15:38:48) : un `writeFileSync` + un `appendFileSync` sur
  * `conversations.json.journal.jsonl` ont bloqué 10 004 ms sur quelques Ko, dans le même gel de ~26 s
- * que le journal de tour. Le volume n'y était pour rien, le SSD non plus (420 ms au pire, conv-1368) :
+ * que le journal de tour. Le volume n'y était pour rien, le SSD non plus (420 ms au pire) :
  * l'appel attendait au-dessus du disque, et l'écriture vivait sur le fil qui dessine l'interface.
  *
  * Ce que ces tests exigent, et l'entrée qui les ferait échouer si la correction était défaite :
@@ -11,7 +11,7 @@
  *      retour à `appendFileSync` sur ce chemin rallume le gel et échoue ici ;
  *  (b) un disque LENT (10 s, la durée réellement mesurée) ne retarde pas l'émission des deltas ;
  *  (c) la CLÔTURE d'un tour, une création et une suppression (`urgency: 'immediate'`) ne bloquent
- *      pas non plus (conv-1368) ; seule la FERMETURE de l'app écrit sur place ;
+ *      pas non plus ; seule la FERMETURE de l'app écrit sur place ;
  *  (d) l'ORDRE du journal est préservé même quand une écriture `immediate` tombe pendant une écriture
  *      en vol — le journal se REJOUE au démarrage, deux enregistrements inversés reconstruiraient un
  *      autre état.
@@ -32,8 +32,8 @@ vi.mock('node:fs', async (importOriginal) => {
     mkdirSync: vi.fn(real.mkdirSync),
     writeFileSync: vi.fn(real.writeFileSync),
     /*
-     * Remplacer un fichier tout neuf peut tenir 20 s sur ce poste, hors de l'app aussi (`cmd move /y`,
-     * conv-1368) : assez pour faire tomber le test de fermeture sur un mur étranger à ce qu'il
+     * Remplacer un fichier tout neuf peut tenir 20 s sur ce poste, hors de l'app aussi (`cmd move /y`)
+     * Assez pour faire tomber le test de fermeture sur un mur étranger à ce qu'il
      * vérifie. Ce double retire d'abord la cible : l'écriture reste synchrone, et c'est elle qu'on juge.
      */
     renameSync: vi.fn((de: string, vers: string) => {
@@ -143,7 +143,7 @@ describe('journal des conversations — écriture hors du fil principal', () => 
   })
 
   /*
-   * conv-1368 (2026-10-31) : `conversations-disk.ts:883` a figé la fenêtre 36,6 s en 7 jours, sur
+   * 2026-10-31 : `conversations-disk.ts:883` a figé la fenêtre 36,6 s en 7 jours, sur
    * quelques octets : la clôture d'un tour, une création et une suppression écrivaient encore sur le
    * fil principal. Le SSD n'y était pour rien, donc seule la sortie du fil protège la fenêtre.
    */

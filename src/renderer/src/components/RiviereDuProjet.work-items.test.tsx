@@ -12,7 +12,7 @@ import { RiviereDuProjet } from './RiviereDuProjet'
 import { CLE_ETATS_MANUELS_CARTE } from './etats-manuels-carte'
 
 /**
- * LA FICHE D'UN POST-IT MONTRE LA TASK DE CHAQUE DEMANDE (option E du cadrage conv-1127).
+ * LA FICHE D'UN POST-IT MONTRE LA TASK DE CHAQUE DEMANDE (option E du cadrage).
  *
  * Les entrées qui font échouer une version fausse : une demande liée dont la fiche ne montre ni le
  * numéro ni le titre ; une demande sans lien qui ne dit pas « sans task » ; un rattachement qui

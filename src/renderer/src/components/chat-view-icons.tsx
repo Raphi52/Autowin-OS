@@ -15,7 +15,7 @@ export function ForkIcon(): React.JSX.Element {
   )
 }
 
-/** Icône « modifier et relancer » — un crayon, monochrome via currentColor (conv-1038). */
+/** Icône « modifier et relancer » — un crayon, monochrome via currentColor. */
 export function EditIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">
@@ -29,7 +29,7 @@ export function EditIcon(): React.JSX.Element {
   )
 }
 
-/** Icône « revenir à ce tour » — une flèche qui repart en arrière, monochrome (conv-1038). */
+/** Icône « revenir à ce tour » — une flèche qui repart en arrière, monochrome. */
 export function RewindIcon(): React.JSX.Element {
   return (
     <svg viewBox="0 0 16 16" width="13" height="13" fill="none" aria-hidden="true">

@@ -5,7 +5,7 @@ import { reduceAssistantPilotEvent } from '../renderer/src/components/chat-view-
 import { actionsDuTour } from '../renderer/src/components/thinking-block-corps'
 
 /**
- * PLAFOND MUET n°6 (conv-1228, 2026-10-28) : le journal du bloc Actions gardait les 500 DERNIÈRES
+ * PLAFOND MUET n°6 (2026-10-28) : le journal du bloc Actions gardait les 500 DERNIÈRES
  * lignes, chacune coupée à 300 caractères, sans le dire. Même défaut que le raisonnement : sur un
  * long tour, les premières actions disparaissaient du bloc pendant qu'on le lisait, et une commande
  * ou un message d'erreur long était amputé. Les bornes restent (un tour enregistré ne doit pas

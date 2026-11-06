@@ -4,7 +4,7 @@ import { langueCourante } from '../langue'
 import { riche, traduire, useTextes } from '../textes'
 
 /**
- * Renseigner le BRAIN : un chemin et/ou un dépôt git (demande utilisateur du 2026-10-13, conv-923).
+ * Renseigner le BRAIN : un chemin et/ou un dépôt git (demande utilisateur du 2026-10-13).
  *
  * Au travail, un simple dossier sur un partage réseau : chemin seul, et Autowin n'y lance aucune
  * commande git. À la maison, un dépôt : Autowin le clone s'il manque, et la clôture des runs y commite
@@ -12,7 +12,7 @@ import { riche, traduire, useTextes } from '../textes'
  * l'écran le DIT, comme celui du dossier de travail.
  */
 export function BrainSettings(): React.JSX.Element {
-  // Textes dans la langue de Settings · Interface (conv-1146, réparation 3). `state.erreur` vient du
+  // Textes dans la langue de Settings · Interface (réparation 3). `state.erreur` vient du
   // moteur : il reste tel quel, les messages du cœur de l'app ne sont pas encore traduits.
   const { t } = useTextes()
   const [state, setState] = useState<BrainReglageState | null>(null)

@@ -456,7 +456,7 @@ describe('rotation d’abonnement sur quota epuise', () => {
 })
 
 /**
- * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (conv-1063, 2026-10-22).
+ * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (2026-10-22).
  *
  * La rotation ci-dessus ne joue que si le refus arrive AVANT le premier fragment. Or le cas réel est
  * l'inverse : `run-stdout/c6ba0030-384c-4095-ac84-c96af2026180.stdout.jsonl` est UN appel de 31 min,

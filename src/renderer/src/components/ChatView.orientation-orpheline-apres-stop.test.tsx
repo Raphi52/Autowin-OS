@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * conv-61, 2026-10-02 : « ca a envoyé 2 fois : au lieu du code je veux un nom et prénom ».
+ * 2026-10-02 : « ca a envoyé 2 fois : au lieu du code je veux un nom et prénom ».
  * Saisie `ts 1790960554261` (voie orientation) pendant le tour 11229cd2-86e2-4b51-a445-92d879492ef9,
  * puis Stop (tour annule a 1790960577444). L'orientation non lue revient APRES le Stop, donc apres
  * que la file a ete rendue au composer : elle restait dans une file INVISIBLE. L'utilisateur la

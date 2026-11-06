@@ -329,10 +329,10 @@ describe('projectLatestRequestExecution', () => {
       totalDurationMs: 140,
       totalCostUsd: 0.42
     })
-    // fix-ok: conv-981 - test ajoute UNE seule fois dans run-52d36e67e4de-1 ; le controle des causes
+    // fix-ok: - test ajoute UNE seule fois dans run-52d36e67e4de-1 ; le controle des causes
     // en comptait 3 (meme modification sous son chemin complet et son chemin court, plus le releve
     // de fin d'etape).
-    // « Rejouer ce run » (conv-981) : la cloture porte le deroule par agent de CE run, calcule par
+    // « Rejouer ce run » : la cloture porte le deroule par agent de CE run, calcule par
     // le meme `buildAgentGantt` que la Chronologie — aucun second modele.
     expect(closure[0].display?.gantt?.lanes.map((lane) => lane.key)).toEqual(['builder'])
   })
@@ -459,7 +459,7 @@ describe('projectLatestRequestExecution', () => {
     ])
   })
 
-  // LE TITRE VISIBLE D'UNE ÉTAPE ÉTAIT SON IDENTIFIANT BRUT (conv-1094, 2026-10-22) : le graphe
+  // LE TITRE VISIBLE D'UNE ÉTAPE ÉTAIT SON IDENTIFIANT BRUT (2026-10-22) : le graphe
   // écrit `display.title`, qui valait « skill · learn » ; la table des libellés (« Learn ») n'était
   // lue par aucun affichage d'étape. Entrée qui fait échouer ces tests si le titre ne passe plus par
   // la table : la phase `learn` (titre « skill · learn » ou « learn » au lieu de « Learn »).
@@ -635,7 +635,7 @@ describe('projectLatestRequestExecution', () => {
     })
   })
 
-  // Noms du graphe en anglais (conv-1094) : l'étape s'appelle « Judge », son agent aussi — plus de
+  // Noms du graphe en anglais : l'étape s'appelle « Judge », son agent aussi — plus de
   // « Judge » au-dessus de trois « Juge ».
   it('nomme « Judge » l’agent qui rend le verdict, comme son étape', () => {
     const timeline = buildHarnessTimelineFromTrace([
@@ -1040,10 +1040,10 @@ describe('choix du tour quand la conversation contient un run', () => {
 /**
  * LE DÉTAIL D'UN SOUS-AGENT DE RUN MONTRE CE QU'IL A REÇU, RENDU, ET POURQUOI IL A ÉCHOUÉ.
  *
- * Constaté le 2026-10-10 (scout de conv-193) : dans un run orchestré, cliquer un sous-agent disait
+ * Constaté le 2026-10-10 : dans un run orchestré, cliquer un sous-agent disait
  * « Aucun prompt ni retour enregistré » — la projection des runs construisait chaque agent avec
- * `payloads: []`. Les traces réelles portent pourtant tout : sur conv-139 le prompt du sous-agent est
- * un `message` relié à sa TENTATIVE (`attemptId`), pas par parenté ; sur conv-163 les six échecs de
+ * `payloads: []`. Les traces réelles portent pourtant tout : le prompt du sous-agent est
+ * un `message` relié à sa TENTATIVE (`attemptId`), pas par parenté ; les six échecs de
  * `scout:dette` écrivent leur cause dans la charge du relais en échec. Formes rejouées ci-dessous.
  */
 describe('sous-agent de run — prompt, retour et cause d’échec', () => {
@@ -1198,8 +1198,8 @@ describe('sous-agent de run — prompt, retour et cause d’échec', () => {
     expect(agent?.display?.failure).toBeUndefined()
   })
 
-  // conv-914 (run-68594dd94c08-1) : le sous-agent clean bute sur le quota, la phase et la clôture
-  // passent au rouge — « Alias de phase » et « Raisons » vides, rien ne disait pourquoi (conv-966).
+  // run-68594dd94c08-1 : le sous-agent clean bute sur le quota, la phase et la clôture
+  // passent au rouge — « Alias de phase » et « Raisons » vides, rien ne disait pourquoi.
   const quota = 'Claude a interrompu l’appel : You’ve hit your session limit · resets 1pm'
   const cloture = (sequence: number, gateReasons?: string[]) =>
     runTrace('closure-red', 'turn-d', sequence, runId, {
@@ -1282,9 +1282,9 @@ describe('sous-agent de run — prompt, retour et cause d’échec', () => {
     for (const event of events) expect(event.display?.failure).toBeUndefined()
   })
 
-  // conv-955 (run-e6ef728f77ed-1, 2026-10-15) : le sous-agent clean coupé par le bouton Stop
+  // run-e6ef728f77ed-1, 2026-10-15 : le sous-agent clean coupé par le bouton Stop
   // s'affichait « échec » en rouge, « INTERROMPU » en ligne d'échec — une panne qui n'a jamais eu
-  // lieu (conv-966). Texte repris de la trace réelle.
+  // lieu. Texte repris de la trace réelle.
   const arretParStop =
     "Phase clean — appel du rôle subagent INTERROMPU avant sa fin : [abort] claude CLI interrompu : arret demande par l'utilisateur (Stop du chat)\nlast-event=none\nstderr=none. Ce n'est pas une panne : ni claude ni le binding du rôle ne sont en cause."
   const cleanArrete = runTrace('clean-stop', 'turn-d', 2, runId, {
@@ -1350,7 +1350,7 @@ describe('sous-agent de run — prompt, retour et cause d’échec', () => {
 /**
  * GRAPHE LISIBLE (2026-10-12) — mesuré sur les 13 traces encore sur disque : 5 titres seulement
  * (« orchestrator », « Demande utilisateur », « Étape », « Outil », « Résultat ») et un escalier de
- * 14 niveaux pour 6 actions successives (conv-904, /draft). Forme reprise de cette trace réelle :
+ * 14 niveaux pour 6 actions successives (/draft). Forme reprise de cette trace réelle :
  * chaque action est reliée à la PRÉCÉDENTE, le prompt de l'agent est écrit à la FIN de l'appel.
  */
 describe('graphe lisible — actions nommées, à plat, regroupées', () => {
@@ -1517,7 +1517,7 @@ describe('graphe lisible — actions nommées, à plat, regroupées', () => {
     const projection = projectLatestRequestExecution(buildHarnessTimelineFromTrace(events))
     const groupe = projection.events.find((event) => event.id === 'c2')
     expect(groupe?.status).toBe('failed')
-    // COMBIEN ont échoué (conv-937) : « Commandes ×10 · échec » pour UN échec sur dix se lisait
+    // COMBIEN ont échoué : « Commandes ×10 · échec » pour UN échec sur dix se lisait
     // « les dix ont échoué ». Le groupe garde son statut rouge et porte le nombre exact.
     expect(groupe?.display).toMatchObject({ count: 2, echecs: 1 })
     expect(statusLabelDuNoeud(groupe?.status, groupe?.display)).toBe('1 échec')
@@ -1622,7 +1622,7 @@ describe('durée du bloc « Orchestrateur » en chat direct', () => {
 /**
  * STATUT DU BLOC « Orchestrateur » (2026-10-12). Un appel au modèle qui se clôt par une erreur
  * s'affichait « terminé » : le bloc reprenait le statut du message ENVOYÉ, pas l'issue de l'appel,
- * alors que le bloc « Erreur » juste dessous disait l'inverse (conv-770, conv-879).
+ * alors que le bloc « Erreur » juste dessous disait l'inverse.
  */
 describe('statut du bloc « Orchestrateur » en chat direct', () => {
   const prompt = (id: string, turnId: string, sequence: number) =>
@@ -1658,8 +1658,8 @@ describe('statut du bloc « Orchestrateur » en chat direct', () => {
     expect(agent?.status).toBe('failed')
   })
 
-  // conv-907, conv-919 : « Orchestrateur » et la demande rouges, la cause seulement sur le bloc
-  // « Erreur » voisin (conv-966).
+  // « Orchestrateur » et la demande rouges, la cause seulement sur le bloc
+  // « Erreur » voisin.
   it('l’orchestrateur et la demande en échec disent la cause écrite par l’Erreur', () => {
     const cause = 'Claude a interrompu l’appel : Failed to authenticate: OAuth session expired'
     const { events } = projectLatestRequestExecution(

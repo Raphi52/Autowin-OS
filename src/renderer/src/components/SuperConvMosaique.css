@@ -1,9 +1,9 @@
-/* LA SUPER CONV DANS LA MOSAÏQUE (conv-1305, SuperConvMosaique.tsx) : une ligne par lot sur le chef ;
-   « ← Retour » et la ligne du lot seule sur un lot (conv-1387, conv-1396). Couleurs d'état =
+/* LA SUPER CONV DANS LA MOSAÏQUE (SuperConvMosaique.tsx) : une ligne par lot sur le chef ;
+   « ← Retour » et la ligne du lot seule sur un lot. Couleurs d'état =
    celles du tableau des lots (TableauDesLots.css) : accent = en cours, ok = fait, err = échec,
    warn = interrompu / attend le chef ; l'or marque les repères (titre, maintenant, non lu).
 
-   LA FRISE PARLE LA LANGUE DU THÈME (conv-1376, 2026-10-31 : « adapte ça aux thèmes, c'est super
+   LA FRISE PARLE LA LANGUE DU THÈME (2026-10-31 : « adapte ça aux thèmes, c'est super
    moche »). Elle posait son propre style sur tous les thèmes : chasse fixe en dur, chiffres en or,
    longues barres pleines dans la couleur d'état. Ces couleurs sont réglées pour de petits voyants :
    le #00ff55 d'Holographique, tiré sur 800 px, criait. Elle prend désormais ce que chaque thème
@@ -11,7 +11,7 @@
    (--surface-panel), ses voiles (--voile-rgb) et sa jauge (--run-jauge). La couleur d'état pleine
    reste aux mots.
 
-   LES COULOIRS (conv-1376, même jour — /draft, « Implémenter la 1 · Couloirs ») : un lot est un bloc
+   LES COULOIRS (même jour — /draft, « Implémenter la 1 · Couloirs ») : un lot est un bloc
    posé sur l'axe, titre et état dedans, et non plus une barre reliée à son nom par l'œil. Un lot fini
    s'efface en bloc neutre, celui qui tourne prend la jauge du thème, un échec ou une attente se
    teinte de sa couleur d'état. */
@@ -44,7 +44,7 @@
 .scm-bandeau {
   /* Ce qui tourne : la jauge du thème, sinon son accent qui monte depuis l'ombre. Le voile garde le
      texte lisible : le rose d'Holographique ou l'orange de Ninja, nus, restent sous 4:1 avec du blanc.
-     Jamais --accent-dim : très pâle dans Vanilla et NieR, il effacerait ce texte (conv-1376). */
+     Jamais --accent-dim : très pâle dans Vanilla et NieR, il effacerait ce texte. */
   --scm-jauge:
     linear-gradient(rgba(var(--ombre-rgb), 0.14), rgba(var(--ombre-rgb), 0.14)),
     var(
@@ -90,8 +90,8 @@
   font-weight: 600;
   color: var(--text);
 }
-/* Les gestes de la ligne des chiffres, calés à droite : Reprendre et Arrêter (case de mosaïque,
-   conv-1315), Réduire partout. */
+/* Les gestes de la ligne des chiffres, calés à droite : Reprendre et Arrêter (case de mosaïque),
+   Réduire partout. */
 .scm-actions {
   margin-left: auto;
   display: inline-flex;
@@ -143,13 +143,13 @@
   opacity: 0.6;
 }
 
-/* — LA LISTE DES LOTS (conv-1396, 2026-10-31 : « enlève le côté timeline, prends toute la longueur,
+/* — LA LISTE DES LOTS (2026-10-31 : « enlève le côté timeline, prends toute la longueur,
    mais écris la durée et quelle étape se lance après laquelle »). Une grille pour toute la liste, une
    sous-grille par ligne : titre, état, enchaînement, heures, durée, coût, phrase et geste s'alignent
    d'un lot à l'autre. La liste est son propre conteneur : dans une case étroite, elle ne garde que
    ce qui tient sur une ligne (fin de cette feuille).
 
-   LE TITRE EN ENTIER (conv-1387, 2026-10-31 : « écris le titre en entier »). Sa colonne prend ce
+   LE TITRE EN ENTIER (2026-10-31 : « écris le titre en entier »). Sa colonne prend ce
    qu'il lui faut, et c'est la phrase qui cède : elle est dans l'infobulle, pas le nom du lot. */
 .scm-pistes {
   container: scm-lignes / inline-size;
@@ -160,8 +160,8 @@
     minmax(0, max-content) max-content max-content max-content max-content max-content
     minmax(0, 1fr);
   column-gap: 12px;
-  /* Lignes serrées (conv-1396, « voir plus de lots sans faire défiler ») : 2 px d'écart au lieu de 3.
-     Encore resserrées pour que 8 lots tiennent sans ascenseur (conv-1387) : marge de 1,5 px et
+  /* Lignes serrées (« voir plus de lots sans faire défiler ») : 2 px d'écart au lieu de 3.
+     Encore resserrées pour que 8 lots tiennent sans ascenseur : marge de 1,5 px et
      interligne de 1,3, soit 21 px par lot au lieu de 24 ; le texte garde sa taille. */
   row-gap: 2px;
   font-size: 12px;
@@ -221,7 +221,7 @@
   box-shadow: inset 0 0 0 1px var(--line);
 }
 /* Le reflet avance par crans de 100 ms, sur l'horloge commune : en continu, il ferait recomposer
-   toute la fenêtre 60 fois par seconde (animations-par-crans.ts, conv-1075). */
+   toute la fenêtre 60 fois par seconde (animations-par-crans.ts). */
 .scm-bloc.scm-etat--en-cours {
   background:
     linear-gradient(
@@ -252,7 +252,7 @@
   color: var(--scm-sur-jauge);
 }
 /* La couleur d'état, tirée vers --text : pure, sur sa propre teinte, elle tombait à 2,76:1 en Clair et
-   3,16:1 en NieR (mesuré au pixel, conv-1376). */
+   3,16:1 en NieR (mesuré au pixel). */
 .scm-bloc.scm-etat--echec,
 .scm-bloc.scm-etat--attend-chef,
 .scm-bloc.scm-etat--interrompu {
@@ -303,7 +303,7 @@ button.scm-nom:not(:disabled) {
   cursor: pointer;
 }
 /* Le titre, étiré sur toute la ligne : c'est la ligne entière qu'on clique. S'il ne tient vraiment
-   pas, il passe à la ligne : jamais de points de suspension sur le nom d'un lot (conv-1387). */
+   pas, il passe à la ligne : jamais de points de suspension sur le nom d'un lot. */
 .scm-bloc .scm-nom {
   flex: none;
   width: 100%;
@@ -337,7 +337,7 @@ button.scm-nom:not(:disabled) {
 .scm-bloc:has(> button.scm-nom:not(:disabled):hover) {
   box-shadow: inset 0 0 0 1px var(--line-strong);
 }
-/* Un lot fini depuis ton dernier passage : doré tant que tu ne l'as pas ouvert (conv-1286). */
+/* Un lot fini depuis ton dernier passage : doré tant que tu ne l'as pas ouvert. */
 .scm-bloc.is-non-lu {
   box-shadow: inset 0 0 0 1px var(--gold);
 }
@@ -387,8 +387,8 @@ button.scm-nom:not(:disabled) {
   border-color: color-mix(in srgb, currentColor 45%, transparent);
 }
 
-/* — Les plans précédents du chef (conv-1394), une ligne par plan. Les lots pas encore lancés sont
-   dans la liste depuis conv-1396, « Relancer le 5 » au bout de leur ligne. */
+/* — Les plans précédents du chef, une ligne par plan. Les lots pas encore lancés sont
+   dans la liste, « Relancer le 5 » au bout de leur ligne. */
 .scm-file {
   display: flex;
   flex-wrap: wrap;
@@ -421,7 +421,7 @@ button.scm-nom:not(:disabled) {
   flex: 0 1 auto;
   color: var(--text-faint);
 }
-/* Sans marge verticale : il ne hausse pas sa ligne, 8 lots tiennent aussi avec lui (conv-1387). */
+/* Sans marge verticale : il ne hausse pas sa ligne, 8 lots tiennent aussi avec lui. */
 .scm-relancer {
   flex: none;
   padding: 0 10px;
@@ -443,13 +443,13 @@ button.scm-nom:not(:disabled) {
   color: var(--err);
   font-size: 11px;
 }
-/* — La même super conv dans le panneau de chat (conv-1315) : au-dessus du tableau du plan et de
-   la saisie depuis conv-1393 (« ce bloc, mets-le plutôt en bas »). Le
+/* — La même super conv dans le panneau de chat : au-dessus du tableau du plan et de
+   la saisie (« ce bloc, mets-le plutôt en bas »). Le
    bandeau y a pour parent ce bloc, de hauteur libre : sa borne en % n'y vaut plus rien, d'où `vh`.
 
-   PLUS DE LOTS SANS DÉFILER (conv-1396, 2026-10-31 : « agrandis le bloc du plan de lots dans le chat
+   PLUS DE LOTS SANS DÉFILER (2026-10-31 : « agrandis le bloc du plan de lots dans le chat
    pour voir plus de lots sans faire défiler, sans écraser le fil »). La borne de 30vh ne montrait que
-   9 lots sur 19 (capture du plan de conv-1335, fenêtre de 1000 px) ; 13 depuis, à 1040 px. Le bloc
+   9 lots sur 19 (capture du plan, fenêtre de 1000 px) ; 13 depuis, à 1040 px. Le bloc
    monte jusqu'à 50vh ; ce qui protège le fil n'est plus cette borne mais son propre minimum, une part
    de la colonne (plus bas) : le bloc ne prend que ce que le fil lui laisse. */
 .scm-chat {
@@ -471,7 +471,7 @@ button.scm-nom:not(:disabled) {
   border-radius: var(--r2);
   background: var(--surface-panel);
 }
-/* LA VUE D'UN LOT NE CÈDE PAS (conv-1348, 2026-10-30 : « c dégueu que ça soit scrollable comme
+/* LA VUE D'UN LOT NE CÈDE PAS (2026-10-30 : « c dégueu que ça soit scrollable comme
    ça ») : la ligne du lot a une hauteur connue, rien à faire défiler. Seule la liste du chef, dont la
    hauteur suit le nombre de lots, défile et rétrécit ; ici, 15 px d'ascenseur coupaient le bas de
    la vue. Le fil garde son minimum, plus bas dans cette feuille. */
@@ -485,7 +485,7 @@ button.scm-nom:not(:disabled) {
 }
 /* Hauteur serrée : c'est la frise qui cède (elle défile), pas l'en-tête. Il a une hauteur minimale
    fixe, donc rien ne l'empêchait de s'écraser sous son contenu, qui passait alors sur la frise.
-   Le fil garde de quoi se lire : sans minimum, sa base nulle le laissait à zéro. Depuis conv-1396,
+   Le fil garde de quoi se lire : sans minimum, sa base nulle le laissait à zéro.
    ce minimum est une part de la colonne, 30 % : c'est lui, et non la borne du bloc, qui empêche un
    grand plan d'écraser le fil ; 120 px restent le plancher d'une fenêtre très basse. */
 .chat:has(> .scm-chat) > .chat-head {
@@ -495,7 +495,7 @@ button.scm-nom:not(:disabled) {
   min-height: max(120px, 30%);
 }
 /* LISTE ÉTROITE (chat dans une fenêtre de 1200 px, case de mosaïque) : UNE LIGNE PAR LOT QUAND MÊME
-   (conv-1387, 2026-10-31 : « 8 lots sans ascenseur »). Chaque lot y prenait trois lignes, 57 px : à
+   (2026-10-31 : « 8 lots sans ascenseur »). Chaque lot y prenait trois lignes, 57 px : à
    1200 × 720, un seul lot restait visible. Le titre, l'état et la durée restent toujours ;
    l'enchaînement tant qu'il tient ; les heures, le coût et la phrase passent dans l'infobulle. */
 @container scm-lignes (max-width: 720px) {

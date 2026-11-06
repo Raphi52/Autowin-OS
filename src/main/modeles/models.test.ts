@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Ces tests portent sur la voie Claude : aucun ne doit lancer le vrai CLI Codex du poste.
 vi.mock('../providers/codex-model-source', () => ({ listCodexAppServerModels: async () => [] }))
-// agy est installé ou non selon le poste (conv-1499) : le catalogue testé n'en dépend pas.
+// agy est installé ou non selon le poste : le catalogue testé n'en dépend pas.
 vi.mock('../providers/agy', () => ({ modelesAgy: () => [] }))
 vi.mock('../providers/agy-modeles', () => ({ catalogueAgy: async () => [] }))
-// Même chose pour grok (CLI d'xAI, conv-1499).
+// Même chose pour grok (CLI d'xAI).
 vi.mock('../providers/grok', () => ({ modelesGrok: () => [] }))
 vi.mock('../providers/grok-modeles', () => ({ catalogueGrok: async () => [] }))
 
@@ -22,7 +22,7 @@ import { appendClaudeSelectionArgs } from '../providers/claude'
 import { createDefaultTopology } from '../topologie/topology'
 
 // Clés réelles du poste (setx MISTRAL_API_KEY…) : le catalogue les lit dans process.env et ajouterait
-// les modèles des services directs. Les tests restent hermétiques (conv-1499).
+// les modèles des services directs. Les tests restent hermétiques.
 const CLES_DU_POSTE = ['GEMINI_API_KEY', 'MISTRAL_API_KEY', 'CEREBRAS_API_KEY', 'GITHUB_MODELS_TOKEN', 'NVIDIA_API_KEY']
 beforeEach(() => {
   for (const cle of CLES_DU_POSTE) vi.stubEnv(cle, '')
@@ -53,7 +53,7 @@ describe('catalogue Agents dynamique', () => {
       })
     )
 
-    // Grok (xAI) reste visible sans clé (onglet voulu, conv-1517) : hors du sujet de ces tests.
+    // Grok (xAI) reste visible sans clé (onglet voulu) : hors du sujet de ces tests.
     const models = (
       await discoverImportedModels(fetchFn as unknown as typeof fetch, undefined, cliIds)
     ).filter((m) => m.provider !== 'api-xai')
@@ -108,7 +108,7 @@ describe('catalogue Agents dynamique', () => {
       throw new Error('service local absent')
     })
 
-    // Grok (xAI) reste visible sans clé (onglet voulu, conv-1517) : hors du sujet de ces tests.
+    // Grok (xAI) reste visible sans clé (onglet voulu) : hors du sujet de ces tests.
     const models = (
       await discoverImportedModels(fetchFn as unknown as typeof fetch, undefined, cliIds)
     ).filter((m) => m.provider !== 'api-xai')
@@ -126,7 +126,7 @@ describe('catalogue Agents dynamique', () => {
   it('n’importe AUCUN modèle du compte ChatGPT : Codex est retiré du produit', async () => {
     const fetchFn = vi.fn(async () => Response.json({ data: [{ id: 'claude-fable-5' }] }))
 
-    // Grok (xAI) reste visible sans clé (onglet voulu, conv-1517) : hors du sujet de ces tests.
+    // Grok (xAI) reste visible sans clé (onglet voulu) : hors du sujet de ces tests.
     const models = (
       await discoverImportedModels(fetchFn as unknown as typeof fetch, undefined, cliIds)
     ).filter((m) => m.provider !== 'api-xai')
@@ -253,7 +253,7 @@ describe('cache disque du dernier catalogue vu', () => {
   })
 
   it('un ancien cache qui nommait « Claude Opus 4.8 · CLI » ressort sans « CLI »', async () => {
-    // Demande utilisateur du 2026-10-11 (conv-237) : « C'est con que les noms de models contiennent
+    // Demande utilisateur du 2026-10-11 : « C'est con que les noms de models contiennent
     // CLI ». Le nom vient de l'id, il est RECALCULÉ à la relecture : un cache écrit avant le
     // changement ne doit pas ramener l'ancien suffixe.
     const cachePath = makeCachePath()
@@ -383,7 +383,7 @@ describe('sélection Claude depuis Agents', () => {
     })
 
     // `--autocompact` suit la fenetre declaree, a 85 % : fable porte 1 M dans CONTEXT_WINDOWS
-    // (fiche Anthropic fable-5, lue le 2026-11-05, conv-1581), donc le seuil vaut 850 000 et non
+    // (fiche Anthropic fable-5, lue le 2026-11-05), donc le seuil vaut 850 000 et non
     // le `auto` du CLI.
     expect(args).toEqual(['--model', 'claude-fable-5', '--effort', 'xhigh', '--autocompact', '850000'])
   })

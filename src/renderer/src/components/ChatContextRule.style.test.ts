@@ -14,7 +14,7 @@ const verre = readFileSync(new URL('../assets/theme-nebuleuse-verre.css', import
  * s'eclaircit reellement a mesure que le fil se remplit. Seul le CSS distingue les deux — d'ou ce
  * test, qui echoue si l'un est remplace par l'autre.
  *
- * Depuis conv-179 (2026-10-10) la jauge est le separateur sous l'en-tete du chat
+ * Depuis le 2026-10-10 la jauge est le separateur sous l'en-tete du chat
  * (`.chat-context-rule`, ChatContextRule.tsx), et non plus le filet au-dessus du champ.
  */
 describe('jauge de contexte sous l en-tete — degrade progressif', () => {
@@ -31,7 +31,7 @@ describe('jauge de contexte sous l en-tete — degrade progressif', () => {
     /*
      * La PROPRIETE, pas le reglage : des paliers dont l'opacite MONTE, puis une arrivee au voile a
      * pleine puissance (blanc pur en sombre ; il s'inverse sur les themes clairs, 2026-09-09).
-     * Les canaux sont lus par `var(--voile-rgb)` (conv-334, 2026-09-07), pas en blanc ecrit en dur.
+     * Les canaux sont lus par `var(--voile-rgb)` (2026-09-07), pas en blanc ecrit en dur.
      */
     const degrade = /linear-gradient\(\s*90deg,([^)]*\))*[^)]*\)/s.exec(regle)?.[0] ?? ''
     expect(degrade, 'aucun degrade horizontal trouve').not.toBe('')
@@ -61,7 +61,7 @@ describe('jauge de contexte sous l en-tete — degrade progressif', () => {
 })
 
 /**
- * « BLANCHE SUR GRIS, CA SERA PLUS DISCRET » (conv-189, 2026-10-10) : l'or de conv-179 a ete juge
+ * « BLANCHE SUR GRIS, CA SERA PLUS DISCRET » (2026-10-10) : l'or a ete juge
  * « trop orange », puis abandonne. Dans Nebuleuse de verre, le remplissage est BLANC uni sur un
  * rail GRIS, sans aucune teinte d'or.
  */
@@ -91,7 +91,7 @@ describe('jauge de contexte blanche sur gris, Nebuleuse de verre', () => {
 })
 
 /**
- * LE MOT « contexte » AU BOUT DE LA JAUGE (conv-189, 2026-10-10 : « qu'il y ait ecrit contexte au
+ * LE MOT « contexte » AU BOUT DE LA JAUGE (2026-10-10 : « qu'il y ait ecrit contexte au
  * bout de la jauge, pas tout a droite mais a droite de la jauge qui progresse »). Le mot suit la
  * POINTE du remplissage (`--context-fill`), pas le bord droit, et le rail reprend apres lui.
  */
@@ -108,7 +108,7 @@ describe('mot « contexte » au bout du remplissage', () => {
   })
 
   it('pose le mot dans une capsule NOIRE opaque, lisible sur le texte blanc du fil', () => {
-    // conv-189 : « le texte contexte doit etre dans une capsule noire pour etre visible par-dessus
+    // « le texte contexte doit etre dans une capsule noire pour etre visible par-dessus
     // du texte blanc du chat ». Noir en dur : le voile s'inverse sur les themes clairs.
     expect(libelle).toContain('background: #000000;')
     expect(libelle).toContain('border-radius: 999px;')

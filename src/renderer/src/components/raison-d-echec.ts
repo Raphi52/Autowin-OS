@@ -3,7 +3,7 @@ import type { RunClosureObservation, RunGitObservation } from '../../../shared/r
 import { texteChatExecution as t } from '../textes-ecrans/chat-execution'
 
 /**
- * POURQUOI UNE ÉTAPE ROUGE DU GRAPHE A ÉCHOUÉ (demande du 2026-10-15, conv-966 : « fais que chaque
+ * POURQUOI UNE ÉTAPE ROUGE DU GRAPHE A ÉCHOUÉ (demande du 2026-10-15, « fais que chaque
  * étape rouge du graphe dise pourquoi elle a échoué »).
  *
  * Mesuré le 2026-10-15 sur les 67 traces du poste : 74 étapes rouges, dont l'orchestrateur, la
@@ -62,7 +62,7 @@ export function raisonDeLaCloture(
   if (motifs.length > 0) return borne(motifs.join(' · '))
   if (causes.git) return causes.git
   if (causes.etapeEnEchec) return t('echec.cloture.avant-controle', { etape: causes.etapeEnEchec })
-  // Aucune étape en échec, mais une étape annulée : c'est le Stop qui a arrêté le run (conv-966).
+  // Aucune étape en échec, mais une étape annulée : c'est le Stop qui a arrêté le run.
   if (causes.etapeArreteeParStop)
     return t('echec.cloture.stop', { etape: causes.etapeArreteeParStop })
   return t('echec.cloture.sans-raison')

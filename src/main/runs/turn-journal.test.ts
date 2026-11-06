@@ -141,7 +141,7 @@ describe('turn-journal — horodatage systématique', () => {
 /*
  * CONTRAT EN TETE DE turn-journal.ts : « un evenement TERMINAL, un par tour ». Mesure du
  * 2026-09-12 : le refus de reprise annonce DEFINITIF revenait a chaque demarrage et reecrivait le
- * MEME `failed` — 92 occurrences dans un seul journal (conv-226, conv-246), 924 lignes « copie
+ * MEME `failed` — 92 occurrences dans un seul journal, 924 lignes « copie
  * durable absente » au total. Une cloture identique n'apporte rien : elle est refusee, bruyamment
  * en test pour que la source soit corrigee plutot que masquee.
  */

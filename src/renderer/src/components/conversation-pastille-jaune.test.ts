@@ -5,7 +5,7 @@ import { deriveConversationState } from './chat-view-model'
 import { estNonVue, marquerVue } from './conversation-seen'
 
 /**
- * DEMANDE (conv-1486) : la pastille doit etre JAUNE dans DEUX cas — le tour pose une question,
+ * DEMANDE : la pastille doit etre JAUNE dans DEUX cas — le tour pose une question,
  * ET le tour est fini mais la conversation n'a pas encore ete visitee. Elle passe verte quand
  * l'utilisateur ouvre la conversation.
  *

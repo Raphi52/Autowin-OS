@@ -14,7 +14,7 @@ const regles = (cible: string): string =>
     .join('\n')
 
 /**
- * LA FRISE D'UN PLAN DE LOTS SUIT LE THÈME (conv-1376, 2026-10-31 : « adapte ça aux thèmes, c'est
+ * LA FRISE D'UN PLAN DE LOTS SUIT LE THÈME (2026-10-31 : « adapte ça aux thèmes, c'est
  * super moche »). Elle écrivait sa chasse fixe en dur et tirait sur 800 px des couleurs d'état
  * réglées pour de petits voyants : le #00ff55 d'Holographique criait. Une valeur de secours en dur
  * a aussi un coût caché : la couche générée de chaque thème recopie la règle avec une priorité plus
@@ -65,7 +65,7 @@ describe('frise des lots — le style vient du thème', () => {
       expect(regles(cible)).toMatch(/border-radius:\s*var\(--r[123]\)/)
   })
 
-  // Le rail de la voie est parti avec la barre de temps de la vue d'un lot (conv-1396).
+  // Le rail de la voie est parti avec la barre de temps de la vue d'un lot.
   it('laisse les chiffres lisibles sur un thème clair comme sombre', () => {
     expect(regles('.scm-chiffre b')).toMatch(/color:\s*var\(--text\)/)
   })

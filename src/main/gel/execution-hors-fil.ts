@@ -1,7 +1,7 @@
 import { Worker } from 'node:worker_threads'
 
 /**
- * EXÉCUTER UNE COMMANDE SANS TENIR LE FIL PRINCIPAL (heal « les lags », conv-1413, 2026-10-31).
+ * EXÉCUTER UNE COMMANDE SANS TENIR LE FIL PRINCIPAL (heal « les lags », 2026-10-31).
  *
  * `execFile` n'est asynchrone que pour la suite : la CRÉATION du processus (CreateProcess) bloque le
  * fil qui l'appelle. Sur ce poste elle attend au-dessus du disque (note Brain « les blocages de 10 s
@@ -17,15 +17,15 @@ import { Worker } from 'node:worker_threads'
  * `lancement-hors-fil.ts` : aucun fichier de plus à construire ni à empaqueter.
  */
 /*
- * UN PROCESSUS SORTI EST FINI, MÊME SI SON TUYAU RESTE OUVERT AILLEURS (kaizen conv-1432, 2026-11-02).
+ * UN PROCESSUS SORTI EST FINI, MÊME SI SON TUYAU RESTE OUVERT AILLEURS (2026-11-02).
  *
  * `execFile` ne rend la main qu'à la FIN DE FICHIER de stdout/stderr. Or ce fil crée ses processus
  * en même temps que le fil principal crée les siens, et sous Windows CreateProcess hérite de TOUTES
  * les poignées héritables du processus : un enfant lancé au même instant par l'autre fil reçoit une
  * copie de l'extrémité d'écriture de notre tuyau, et la fin de fichier n'arrive qu'à SA sortie.
- * Mesuré : un `git status` du 2026-11-02 08:02:41 UTC tenu 52 min par le CLI Claude de conv-1433,
+ * Mesuré : un `git status` du 2026-11-02 08:02:41 UTC tenu 52 min par le CLI Claude,
  * lancé à la même seconde ; derrière lui, toutes les photos git du dossier, et quatre tours coupés
- * par le veilleur d'inactivité sans que le modèle ait démarré (conv-1429, conv-1432).
+ * par le veilleur d'inactivité sans que le modèle ait démarré.
  *
  * La sortie du processus est le vrai signal de fin. Après elle, on laisse le tuyau se vider tant que
  * des octets arrivent ; au bout de FIN_SANS_EOF_MS sans un octet, on ferme nos extrémités, ce qui

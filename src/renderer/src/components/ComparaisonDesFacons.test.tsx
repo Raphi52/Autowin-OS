@@ -6,7 +6,7 @@ import { ComparaisonDesFacons } from './ComparaisonDesFacons'
 import type { ComparaisonDUneFacon } from '../../../shared/essai-trois-facons'
 
 /**
- * LA CARTE DE COMPARAISON ET « GARDER CELLE-CI » (conv-1038, 2026-10-21 — idée 6).
+ * LA CARTE DE COMPARAISON ET « GARDER CELLE-CI » (2026-10-21 — idée 6).
  *
  * Une ligne par façon : son état, l'écart de code depuis la photo, ce que ses vérifications ont
  * rendu, ce qu'elle a coûté. « Garder celle-ci » publie dans main : c'est un geste qui sort du poste,
@@ -133,7 +133,7 @@ describe('ComparaisonDesFacons', () => {
   })
 
   /*
-   * LE CONTRÔLE DE RESSEMBLANCE (conv-1057, 2026-10-22) : deux façons au même code doivent se voir
+   * LE CONTRÔLE DE RESSEMBLANCE (2026-10-22) : deux façons au même code doivent se voir
    * d'un coup d'œil, sans comparer les chiffres à la main.
    */
   it('ressemblance : une façon identique à une autre est dite et mise en évidence', async () => {

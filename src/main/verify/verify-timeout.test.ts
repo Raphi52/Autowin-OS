@@ -6,7 +6,7 @@ import { AppCommandBus } from '../commands/commands'
 import { verifyTimeoutMs, VERIFY_TIMEOUT_MS } from '../commands/verify-command'
 
 /**
- * DEFAUT VECU le 22/08 (conv-1363) : `verify` — donc chaque `edit_file`, qui le rejoue dans son
+ * DEFAUT VECU le 22/08 : `verify` — donc chaque `edit_file`, qui le rejoue dans son
  * bureau isole — lancait la suite du projet SANS AUCUNE HORLOGE. La suite a tourne 6 min 40 ; le
  * pilote etant bloque DANS la commande, il ne drainait plus ses directives : bloc `ask` inerte,
  * prompts « orientes » sans effet, conversation apparemment morte, et rien pour y mettre fin.

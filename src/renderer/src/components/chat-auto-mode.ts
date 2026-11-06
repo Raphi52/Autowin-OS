@@ -4,7 +4,7 @@
  *
  * Cadrage utilisateur (2026-09-02) : l'interrupteur vit dans la barre de gauche et reste ACTIF
  * jusqu'à désactivation, pas de remise à zéro au changement de fil.
- * Révision (2026-10-02, après conv-44) : la chaîne d'un fil s'arrête désormais toute seule quand le
+ * Révision (2026-10-02) : la chaîne d'un fil s'arrête désormais toute seule quand le
  * quota hebdomadaire Claude atteint un seuil (80 % par défaut) OU après N tours automatiques
  * d'affilée sans message de l'utilisateur (6 par défaut) — seuils réglables, voir garde-fou 4.
  *
@@ -118,7 +118,7 @@ const replierLigne = (ligne: string): string =>
 /**
  * « passer à la prochaine demande » — LA FIN QU'AUTOWIN ÉCRIT LUI-MÊME après un run fini.
  *
- * Demande de l'utilisateur (conv-1575, 2026-11-05) : « quand ya écris ça, ça doit arrêter le mode
+ * Demande de l'utilisateur (2026-11-05) : « quand ya écris ça, ça doit arrêter le mode
  * auto aussi ». Sur le fil affiché, cette fin envoyait la relève (`PROMPT_NOUVELLE_CIBLE`) : un tour
  * payé pour proposer des cibles, puis la réponse automatique à son `ask`. Seule la ligne ENTIÈRE
  * compte : « passer à la prochaine demande du lot, lance /build » reste une vraie suite.
@@ -131,7 +131,7 @@ export function recommandationFinDeChaine(recommandation: string | null): boolea
 }
 
 /**
- * UNE FIN ECRITE EN PHRASE, pas avec le mot nu (conv-787) : « Rien de plus sur ce sujet : le
+ * UNE FIN ECRITE EN PHRASE, pas avec le mot nu : « Rien de plus sur ce sujet : le
  * comportement est retabli. » a ete RENVOYEE comme un ordre, un tour paye pour rien.
  *
  * On n'accepte que l'OUVERTURE de la ligne : « rien ne bloque, lance le judge » propose une vraie
@@ -158,11 +158,11 @@ function estUneFinRedigee(ligne: string): boolean {
 
 /** Les quatre en-têtes du bloc de clôture : ils bornent la rubrique qu'on veut lire. */
 const EN_TETES_CLOTURE =
-  // `\**` en tête : les réponses réelles titrent en gras (« **✅ Fait** », conv-733).
+  // `\**` en tête : les réponses réelles titrent en gras (« **✅ Fait** »).
   /^\s*\**\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)\b/u
 
 /*
- * DÉFAUT CONNU DE LA LECTURE CI-DESSUS, LAISSÉ EN PLACE EXPRÈS (conv-1038, 2026-10-21).
+ * DÉFAUT CONNU DE LA LECTURE CI-DESSUS, LAISSÉ EN PLACE EXPRÈS (2026-10-21).
  * `\b` ne connaît que les lettres ASCII : après le « é » final il ne voit aucune frontière, donc
  * l'intitulé « Recommandé » n'est JAMAIS reconnu (et « Recommandées » l'est, à tort). La rubrique
  * « Reste à faire » avale ainsi la recommandation qui la suit. Le corriger ici change les arrêts du
@@ -170,7 +170,7 @@ const EN_TETES_CLOTURE =
  * passe de 37 à 53 — « Reste : rien » suivi d'une vraie recommandation arrêterait la chaîne au lieu
  * de l'enchaîner. C'est un réglage du mode auto à trancher à part, pas un effet de bord du carnet.
  * La lecture EXACTE ci-dessous sert au carnet du fil ; le mode auto garde la sienne.
- * fix-ok: cause mesurée (conv-1038) — `/Recommandé\b/u.test('👉 Recommandé : x')` rend false : `\b` ne connaît que [A-Za-z0-9_], même avec `u` ; `(?![\p{L}\p{N}_])` borne le mot, rouge→vert dans chat-auto-mode.rubrique-bornee.test.ts.
+ * fix-ok: cause mesurée — `/Recommandé\b/u.test('👉 Recommandé : x')` rend false : `\b` ne connaît que [A-Za-z0-9_], même avec `u` ; `(?![\p{L}\p{N}_])` borne le mot, rouge→vert dans chat-auto-mode.rubrique-bornee.test.ts.
  */
 const EN_TETES_CLOTURE_EXACTS =
   /^\s*\**\s*(?:✅|⚠️?|📍|⏳|👉)\s*\**\s*(Fait|Maintenant|Reste à faire|Recommandé)(?![\p{L}\p{N}_])/u
@@ -187,7 +187,7 @@ function lignesDuBlocFait(texte: string): string[] {
 /**
  * Les lignes d'UNE rubrique de clôture. Deux rubriques portent le mot « rien » — « ✅ Fait » et
  * « ⏳ Reste à faire » —, et la seconde est celle qu'Autowin écrit lui-même en fin de chaîne.
- * Exportée pour le carnet du fil (conv-1038), qui relit les quatre rubriques avec le MÊME découpage
+ * Exportée pour le carnet du fil, qui relit les quatre rubriques avec le MÊME découpage
  * (bornes, dernière clôture gagnante) mais la lecture `exacte` des intitulés — voir
  * `EN_TETES_CLOTURE_EXACTS` pour l'écart avec le mode auto, et pourquoi il n'est pas refermé ici.
  */
@@ -205,7 +205,7 @@ export function lignesDeRubrique(
     if (entete) {
       dedans = entete[1] === rubrique
       if (dedans) {
-        // PLUSIEURS CLOTURES DANS UN MESSAGE (sondage conv-787 : jusqu'a 3) — seule la DERNIERE dit
+        // PLUSIEURS CLOTURES DANS UN MESSAGE (sondage : jusqu'a 3) — seule la DERNIERE dit
         // l'etat final. Les fusionner melangeait un « rien » ancien avec du travail encore listé.
         sortie.length = 0
         const reste = brute.replace(enTetes, '').replace(/^\s*\**\s*[:：—–-]?\s*/u, '')
@@ -213,7 +213,7 @@ export function lignesDeRubrique(
       }
       continue
     }
-    // BORNE BASSE (sondage conv-787) : sans elle, la rubrique avalait tout le texte qui suit quand
+    // BORNE BASSE : sans elle, la rubrique avalait tout le texte qui suit quand
     // un message enchaine plusieurs etapes — jusqu'a un « ⚠️ » encore ouvert lu comme une fin.
     if (dedans && FIN_DE_RUBRIQUE.test(brute)) {
       dedans = false
@@ -254,7 +254,7 @@ export function blocFaitDitRien(texte: string): boolean {
  */
 function resteAFaireDitRien(texte: string): boolean {
   /*
-   * SONDAGE conv-787 (2970 clotures reelles) : elargir cette porte aux fins ECRITES EN PHRASE, comme
+   * SONDAGE (2970 clotures reelles) : elargir cette porte aux fins ECRITES EN PHRASE, comme
    * on l'a fait pour « Recommande », a ete ESSAYE puis ANNULE. Cette rubrique n'est pas bornee par la
    * fin du message : quand plusieurs phases se suivent, elle avale la suite du texte, et une phrase
    * de fin trouvee la-dedans coupait des chaines qui portaient encore du travail (« ⚠️ Les 4 tickets
@@ -263,7 +263,7 @@ function resteAFaireDitRien(texte: string): boolean {
   const lignes = lignesDeRubrique(texte, 'Reste à faire')
   if (ligneNueDitRien(lignes)) return true
   /*
-   * SONDAGE conv-787 (2970 clotures reelles) : une fin ECRITE en phrase ne vaut ici que si la
+   * SONDAGE (2970 clotures reelles) : une fin ECRITE en phrase ne vaut ici que si la
    * rubrique ENTIERE est cette fin. En acceptant UNE ligne parmi d'autres, la porte coupait des
    * clotures qui listaient encore du travail (« Verifier que SELECT … INTO est bien refuse »).
    */
@@ -274,7 +274,7 @@ function resteAFaireDitRien(texte: string): boolean {
 /**
  * LES FORMULATIONS EQUIVALENTES A « rien ».
  *
- * Demande utilisateur du 2026-09-11 (conv-468) : le modele avait cloture par « Aucune suite
+ * Demande utilisateur du 2026-09-11 : le modele avait cloture par « Aucune suite
  * necessaire. » — une fin de chaine explicite — et le mode auto avait continue, parce que seul le
  * mot `rien` nu etait reconnu. Le signal d'arret est le SENS de la ligne, pas un mot unique ;
  * l'exigence de ligne ENTIERE, elle, ne bouge pas (« aucune piste ne bloque » reste une suite).
@@ -368,11 +368,11 @@ function optionsChoisies(fil: readonly Msg[], rang: number, choix: string): stri
 }
 
 /**
- * LA DEMANDE D'ANCRAGE — la DERNIERE demande que l'utilisateur a faite LUI-MEME (conv-889,
+ * LA DEMANDE D'ANCRAGE — la DERNIERE demande que l'utilisateur a faite LUI-MEME (
  * 2026-09-30).
  *
  * REMPLACE « le PREMIER message du fil ». Demande utilisateur : « ancre le mode auto sur ma derniere
- * demande tapee a la main, pas sur le premier message du fil ». Constat sur conv-889 : parti de
+ * demande tapee a la main, pas sur le premier message du fil ». Constat : parti de
  * « c'est quoi chatgpt dots », le fil a change de sujet plusieurs fois par des messages TAPES, et
  * chaque maillon automatique rappelait encore les Dots — l'ancre signalait une derive la ou
  * l'utilisateur avait lui-meme choisi le sujet. La derive a borner est celle que la machine produit
@@ -385,7 +385,7 @@ function optionsChoisies(fil: readonly Msg[], rang: number, choix: string): stri
  * Un choix par NUMEROS (« 2 3 4 ») est resolu en texte des options de la question qui le precede.
  *
  * UN ENVOI DU MODE AUTO porte l'ancre (voir `ancrerSurLaDemande`) : l'ancre qu'il porte EST la
- * reponse, et elle prime sur tout message plus ancien. Mesure conv-470 (saisie ts=1789159231523) :
+ * reponse, et elle prime sur tout message plus ancien. Mesure (saisie ts=1789159231523) :
  * lue sur la fenetre de messages CHARGEE, la tache devenait un maillon intermediaire des que la
  * fenetre ne commencait pas au debut du fil. Une ancre deja ecrite a ete calculee quand la fenetre
  * etait plus large : on la relit.
@@ -414,7 +414,7 @@ export function derniereDemandeHumaine(fil: readonly Msg[]): string | null {
 
 /**
  * CE QUE DEMANDE UN MESSAGE PRÉCIS du fil, lu avec les MÊMES règles que `derniereDemandeHumaine`,
- * mais sans remonter plus haut (conv-1059, carte du fil : une étape par demande, chacune titrée).
+ * mais sans remonter plus haut (carte du fil : une étape par demande, chacune titrée).
  * `accord` : « go », « ok »… accepte la suite proposée sans la nommer — l'appelant la retrouve dans
  * la clôture qui précède. `auto` : envoyé par le mode auto ; son texte est le prompt envoyé, SANS
  * l'ancrage qui le suit (l'ancrage cite une demande plus ancienne, pas celle de cette étape).
@@ -423,7 +423,7 @@ export type LectureDemande = { genre: 'demande' | 'auto'; texte: string } | { ge
 
 /**
  * `max` : 240 caractères par défaut (l'ancrage du mode auto). La fiche du Board en demande bien plus,
- * pour montrer le message ENTIER (conv-1278, 2026-10-29).
+ * pour montrer le message ENTIER (2026-10-29).
  */
 export function lectureDeLaDemande(
   fil: readonly Msg[],
@@ -465,7 +465,7 @@ const ANCRE_DEJA_ECRITE =
  * La boucle renvoyait le prompt du DERNIER tour, et RIEN d'autre : chaque maillon etait redige a
  * partir du precedent, sans aucune trace de la demande de depart. Le seul garde-fou etait
  * `prompt-identique`, qui n'attrape qu'une repetition mot pour mot — une derive LENTE passait
- * librement (mesure sur conv-138 : partie de « juge la qualite de mon prompting », la chaine est
+ * librement (mesure : partie de « juge la qualite de mon prompting », la chaine est
  * arrivee au shader du nuage d'accueil, six tours plus loin).
  *
  * Chaque envoi automatique porte donc la demande d'ancrage AVEC lui (depuis le 2026-09-30 : la
@@ -477,7 +477,7 @@ export function ancrerSurLaDemande(texte: string, demande: string | null): strin
   // La suite EST la demande (premier maillon) : l'ancrage ferait un doublon inutile.
   if (texte.trim() === demande.trim()) return texte
   /*
-   * L'AUTEUR RÉEL EST DIT. Mesure conv-113 : saisie ts 1791317725882 envoyée seule après une simple
+   * L'AUTEUR RÉEL EST DIT. Mesure : saisie ts 1791317725882 envoyée seule après une simple
    * question ; le tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 a vu l'écart puis a continué (« The user
    * explicitly sent the prompt… the user's real choice »). Un message au rôle utilisateur se lit
    * comme un choix de l'utilisateur tant que rien ne dit le contraire. La phrase vient APRÈS « ». » :
@@ -504,21 +504,21 @@ export type RaisonArret =
   | 'aucun-prompt'
   | 'prompt-identique'
   | 'chaine-finie'
-  /* APRES UN SCOUT (conv-308) — types poses par le harnais, la logique reste a ecrire. */
+  /* APRES UN SCOUT — types poses par le harnais, la logique reste a ecrire. */
   | 'scout-sans-cible'
   | 'cible-destructrice'
   /* MULTI-PISTES (`CIBLES:`) — des numeros seuls ne nomment rien hors du tableau. */
   | 'cibles-non-nommees'
-  /* conv-751 — la suite parle a la place de l'utilisateur et annonce une donnee qu'il n'a pas donnee. */
+  /* La suite parle a la place de l'utilisateur et annonce une donnee qu'il n'a pas donnee. */
   | 'suite-attend-utilisateur'
-  /* conv-767 — la suite ne peut avancer qu'à un moment donné (heure, « demain », « quand X existe »). */
+  /* La suite ne peut avancer qu'à un moment donné (heure, « demain », « quand X existe »). */
   | 'suite-differee'
-  /* conv-42 — tour coupé avec une tâche de fond en vol, sans suite proposée : attente muette. */
+  /* Tour coupé avec une tâche de fond en vol, sans suite proposée : attente muette. */
   | 'tache-de-fond-coupee'
-  /* conv-38 (2026-10-02) — garde-fou de la chaîne : quota hebdomadaire Claude, tours auto d'affilée. */
+  /* 2026-10-02 — garde-fou de la chaîne : quota hebdomadaire Claude, tours auto d'affilée. */
   | 'quota-hebdo'
   | 'tours-auto-max'
-  /* conv-42 — tour coupé avec une tâche de fond en vol, sans suite proposée : attente muette. */
+  /* Tour coupé avec une tâche de fond en vol, sans suite proposée : attente muette. */
   | 'tache-de-fond-coupee'
 
 export interface EntreeDecisionAuto {
@@ -535,7 +535,7 @@ export interface EntreeDecisionAuto {
   brouillonPresent: boolean
   /**
    * FIN DE CHAINE : au lieu d'ETEINDRE l'interrupteur, demander a l'agent de PROPOSER une nouvelle
-   * cible (demande utilisateur du 2026-09-05, conv-307 : « rien » ne doit plus couper le mode).
+   * cible (demande utilisateur du 2026-09-05, « rien » ne doit plus couper le mode).
    *
    * Reserve au fil AFFICHE. Un fil d'arriere-plan garde l'ancien comportement : on cesse de le
    * suivre sans depenser un tour payant sur une conversation que personne ne regarde.
@@ -543,7 +543,7 @@ export interface EntreeDecisionAuto {
   proposerNouvelleCible?: boolean
   /**
    * CE TOUR EST-IL UN SCOUT ? Un scout rend plusieurs pistes : sa suite ne part que si une ligne
-   * `CIBLE:` nomme UNE piste (conv-308). Champ pose par le harnais de tests ; encore lu par
+   * `CIBLE:` nomme UNE piste. Champ pose par le harnais de tests ; encore lu par
    * personne dans `deciderRelanceAuto` — c'est exactement ce que les tests rouges reclament.
    */
   tourEstUnScout?: boolean
@@ -554,7 +554,7 @@ export interface EntreeDecisionAuto {
    */
   depotPresent?: boolean
   /**
-   * RELANCES DIFFÉRÉES DÉJÀ PROGRAMMÉES D'AFFILÉE dans ce fil (conv-826 : « faudrait que le mode
+   * RELANCES DIFFÉRÉES DÉJÀ PROGRAMMÉES D'AFFILÉE dans ce fil (« faudrait que le mode
    * auto gère ce cas au lieu de s'arrêter »). Au-delà de `MAX_RELANCES_DIFFEREES`, la chaîne se
    * met en pause : une attente qui ne finit jamais ne doit pas payer un tour toutes les 15 min.
    */
@@ -573,7 +573,7 @@ export interface EntreeDecisionAuto {
 }
 
 /**
- * GARDE-FOU DE LA CHAÎNE ∞ (demande du 2026-10-02, conv-38). Mesure : conv-44 a consommé 226 M
+ * GARDE-FOU DE LA CHAÎNE ∞ (demande du 2026-10-02). Mesure : un fil a consommé 226 M
  * tokens d'entrée en tours enchaînés juste avant le plafond hebdomadaire de Claude du 30/09. Rien
  * ne bornait une chaîne qui ne disait jamais « rien ». La chaîne s'arrête désormais quand le quota
  * hebdomadaire Claude atteint `quotaHebdoPct`, OU après `toursAutoMax` tours automatiques d'affilée
@@ -689,7 +689,7 @@ export function arretChaineAuto(entree: {
  * Les deux arrêts ci-dessus, reconnus à leur MODÈLE de texte, dans les deux langues. Le bandeau du
  * chat ne garde que le message (il est aussi relu du poste après un redémarrage) : c'est lui qui
  * décide d'offrir « Ouvrir Settings › Behaviour ». Reconnaître le modèle plutôt que la présence du
- * chemin : le bouton tient même si le texte cesse un jour d'écrire ce chemin (conv-1602).
+ * chemin : le bouton tient même si le texte cesse un jour d'écrire ce chemin.
  */
 const MODELES_ARRET_REGLABLE: readonly RegExp[] = (
   ['autoArret.quotaHebdo', 'autoArret.toursAutoMax'] as const
@@ -734,7 +734,7 @@ export type DecisionAuto =
  * suite proposée — et s'éteignait comme si le travail était fini. Une absence de suite n'est pas
  * une fin : c'est juste « rien à envoyer sur CE tour ». On patiente, l'interrupteur reste allumé.
  */
-// Lus à l'appel, dans la langue de l'interface (conv-1170) : chaque message est un accesseur.
+// Lus à l'appel, dans la langue de l'interface : chaque message est un accesseur.
 const MESSAGES_ARRET: Record<string, string> = {
   get 'fin-explicite'() {
     return traduireChatFil('autoArret.finExplicite', langueCourante())
@@ -763,7 +763,7 @@ const MESSAGES_ARRET: Record<string, string> = {
   get 'suite-differee'() {
     return traduireChatFil('autoArret.suiteDifferee', langueCourante())
   },
-  // conv-113, tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 : « en pause » alors que ∞ venait d'être
+  // Tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 : « en pause » alors que ∞ venait d'être
   // ÉTEINT ; vu décoché ensuite, il a fait croire qu'il n'avait jamais été allumé.
   get 'tache-de-fond-coupee'() {
     return traduireChatFil('autoArret.tacheDeFondCoupee', langueCourante())
@@ -771,7 +771,7 @@ const MESSAGES_ARRET: Record<string, string> = {
 }
 
 /**
- * conv-42, tour 8268dddb-dfcc-4415-92d8-764b812603eb : l'agent lance 6 essais en arrière-plan, le
+ * Tour 8268dddb-dfcc-4415-92d8-764b812603eb : l'agent lance 6 essais en arrière-plan, le
  * tour se termine, `providers/claude.ts` ajoute l'avis « Tâche de fond … à la fin de ce tour » et
  * aucune ligne AUTOWIN_PROMPT_V1 n'est écrite. Le mode auto attendait alors (`aucun-prompt`), 5
  * essais puis silence : « le mode auto stagne » sans un mot (saisie ts 1790932156905).
@@ -781,29 +781,29 @@ const AVIS_TACHE_DE_FOND = /⚠️ Tâche de fond (pas terminée|arrêtée) à l
 /**
  * UNE SUITE ECRITE A LA PLACE DE L'UTILISATEUR (« Voici les identifiants… », « je te donne… »).
  *
- * Mesure conv-751 : tour 4a4374c0-3f0c-4c42-82f0-ff6b03b76a27 propose « Voici les identifiants
+ * Mesure : tour 4a4374c0-3f0c-4c42-82f0-ff6b03b76a27 propose « Voici les identifiants
  * Robux… : reporte-les » ; le mode auto l'envoie tel quel (saisie ts 1789993655768), SANS aucun
  * identifiant ; le tour 308ae1cf-9416-461f-a1ed-14775607df62 refuse d'inventer, ne propose rien, et
  * la chaine se tait (`aucun-prompt`) sans un mot. Seul l'utilisateur possede cette donnee : la suite
  * ne part pas seule, la pause est DITE.
  */
-// Le verbe seul ne suffit pas : « Voici le message du bandeau : dis-moi… » (conv-787) est une suite
+// Le verbe seul ne suffit pas : « Voici le message du bandeau : dis-moi… » est une suite
 // ordinaire. Il faut qu'il porte une DONNEE que seul l'utilisateur detient.
 const SUITE_PORTE_DONNEE_UTILISATEUR =
   /^\s*(?:voici|voil[aà]|je\s+te\s+(?:donne|colle|transmets|fournis|envoie))\s+(?:les|mes|le|la|l['’]|ma|nos|notre)\s*(?:\S+\s+){0,2}?(?:identifiants?|cl[ée]s?(?!\s+(?:de\s+(?:tri|cache|hachage)|primaires?|[ée]trang[eè]res?))|mots?\s+de\s+passe|tokens?|jetons?|secrets?|codes?\s+d['’]acc[eè]s|credentials?|logins?)(?![\p{L}])/iu
-// Mesure conv-798 : saisie ts 1790170650709 « Lance webtest record sur l'adresse de ma webapp que je
+// Mesure : saisie ts 1790170650709 « Lance webtest record sur l'adresse de ma webapp que je
 // te donne : <adresse> » est partie SEULE, trou non rempli ; le tour suivant a dû redemander l'adresse,
 // puis (tour 093342be-fc36-4489-864d-f091af4ec015) l'agent a DEVINÉ un projet au hasard sur D:.
 // Un emplacement « : <mot> » en fin de ligne est une valeur que seul l'utilisateur peut écrire.
 // « commande webtest record <url> qui … » (spécification, saisie ts 1790170354034) ne l'est pas.
 const SUITE_A_TROU = /:\s*<[\p{L}][\p{L}\s_'’-]{0,30}>\s*$/mu
-// Mesure conv-854 : saisies ts 1790329789299 et ts 1790331255647 (« J'ai saisi CE67N36QT et
+// Mesure : saisies ts 1790329789299 et ts 1790331255647 (« J'ai saisi CE67N36QT et
 // accepté, vérifie… ») sont parties SEULES, au nom de l'utilisateur, qui n'avait rien saisi. Les
 // tours suivants ont vérifié une connexion jamais faite. Un geste de l'utilisateur affirmé en
 // première personne en tête de suite est une donnée que seul lui détient.
 const SUITE_AFFIRME_GESTE_UTILISATEUR =
   /^\s*j['’]ai\s+(?:bien\s+)?(?:saisi|valid[ée]|accept[ée]|tap[ée]|entr[ée]|confirm[ée]|autoris[ée]|approuv[ée])(?![\p{L}])/iu
-// Mesuré le 2026-10-13 (passe /gc, relevée dans le Brain) et le 2026-10-28 (conv-1047) : le `/gc`
+// Mesuré le 2026-10-13 (passe /gc, relevée dans le Brain) et le 2026-10-28 : le `/gc`
 // propose la purge de ses corbeilles dans ses suites, et une suite libre ne passe par aucun filtre
 // destructeur : celle du 13/10 est partie seule. Vider une corbeille ne se rattrape pas, seul
 // l'utilisateur en décide.
@@ -813,13 +813,13 @@ const SUITE_AFFIRME_GESTE_UTILISATEUR =
 // « Continue : purge… ». Toute liste d'ouvertures laisse passer la suivante : la règle s'inverse. Une
 // phrase qui vise la corbeille s'arrête, SAUF si sa clause annonce un travail par son premier verbe (le
 // texte arrive ici sans accents ni capitales). « Ajoute un test à gc-purger-corbeilles.mjs » et
-// « Supprime le bouton Corbeille » restent du travail ordinaire (règles trop larges, conv-787). La phrase
+// « Supprime le bouton Corbeille » restent du travail ordinaire (règles trop larges). La phrase
 // se coupe en clauses, car « Vérifie la corbeille puis purge-la » commence par un travail. « pour » suivi
 // d'un verbe coupe aussi : « Vérifie la corbeille pour la vider » annonce le geste. Les 4 verbes de lecture
 // exclus ne font que garder « pour savoir ce qui reste » dans son travail.
 // Coût mesuré le 31/10 sur 1 181 fils, journal vivant compris, 5 976 réponses et 7 306 suites distinctes,
-// recommandations comprises : aucune décision ne change, et 3 suites s'arrêtent à tort (conv-504, conv-518,
-// conv-1279). La lecture depuis la cible, plus bas, n'en ajoute aucune.
+// recommandations comprises : aucune décision ne change, et 3 suites s'arrêtent à tort.
+// La lecture depuis la cible, plus bas, n'en ajoute aucune.
 // « Lance la suite » n'y entre pas : ce serait « continue », pas la suite de tests.
 const LANCE_LES_TESTS = /(?:re)?lanc(?:e|er|ez)\s+(?:(?:les?|la)\s+)?(?:suite\s+de\s+)?tests?\b/
   .source
@@ -892,7 +892,7 @@ const NOMME_UNE_CORBEILLE = /\b(?:corbeilles?|trash)\b/u
 // Une corbeille VISÉE arrête la suite quel que soit le verbe : aucune liste ne tient (« Fais disparaître
 // la corbeille », « La corbeille doit être vidée »). « Dans la corbeille » n'en vise aucune : y déplacer
 // se rattrape, et y lire ne détruit rien. Mesuré le 31/10 : sans cette réserve, 7 suites réelles sur les
-// 11 qui nomment une corbeille s'arrêtaient à tort (« Envoie aussi à la Corbeille… », conv-1167). Le
+// 11 qui nomment une corbeille s'arrêtaient à tort (« Envoie aussi à la Corbeille… »). Le
 // retrait y reste lu à part : « Supprime les fichiers dans la corbeille » vide bien.
 const CORBEILLE_EN_DESTINATION =
   /\b(?:dans|a|au|en|vers|into|to|in)\s+(?:(?:la|le|les|un|une|the)\s+)?(?:dossier\s+)?\.?(?:corbeilles?|trash)\b/gu
@@ -918,7 +918,7 @@ function ceQuiSuit(cible: RegExp, nu: string): string {
 // qui reprend la cible par un pronom, sans qu'aucune liste ne dise lequel. Ce qui suit un lieu passe aussi
 // par là : « Relis les fichiers dans la corbeille, puis brûle-les ». « le » devant un verbe n'est lu qu'après
 // « de » ou un verbe de pouvoir (« de le remplir », « tu peux le remplir ») : ailleurs, « le fichier » et
-// « le dernier » n'en sont pas. « sans les restaurer » (conv-1279) et « au lieu de le remplir » ne sont pas
+// « le dernier » n'en sont pas. « sans les restaurer » et « au lieu de le remplir » ne sont pas
 // des gestes.
 const REPRISE_DE_LA_CIBLE =
   /(\p{L}+)-(?:la|les|le|en|y)(?![\p{L}-])|(?<!\bsans\s)\b(?:la|les|l['’])\s*(\p{L}+(?:er|ir|ant))\b|\b(\p{L}+)\s+(?:it|them)\b|(?<!\b(?:lieu|que)\s)\b(?:de|peux|peut|dois|doit|faut)\s+le\s+(\p{L}+(?:er|ir|re))\b/gu
@@ -1024,14 +1024,14 @@ export function suiteAttendUneDonneeUtilisateur(suite: string): boolean {
 }
 
 /*
- * CE QU'UNE SUITE VEUT DIRE DÉPEND DE LA RÉPONSE QUI LA PORTE (conv-1341, 2026-10-30).
+ * CE QU'UNE SUITE VEUT DIRE DÉPEND DE LA RÉPONSE QUI LA PORTE (2026-10-30).
  *
- * « Purge both », texte réel de la question du 28/10 (conv-1047, message 11), ne nomme aucune corbeille :
+ * « Purge both », texte réel de la question du 28/10 (message 11), ne nomme aucune corbeille :
  * lue seule, cette phrase ne se distingue pas de « Purge le cache du navigateur ». Toutes les passes
- * `/gc` de conv-1047 ont une rubrique « ## À purger » (format fixé par skills/gc/SKILL.md), et un fil de
+ * `/gc` ont une rubrique « ## À purger » (format fixé par skills/gc/SKILL.md), et un fil de
  * code sur la corbeille n'a aucune raison d'en écrire une : c'est le contexte qui tranche.
  *
- * Dans une telle réponse, la règle est stricte, parce qu'elle ne coûte rien (conv-1341, 2026-10-31) : la
+ * Dans une telle réponse, la règle est stricte, parce qu'elle ne coûte rien (2026-10-31) : la
  * consigne y interdit toute suite de purge, et les 8 passes réelles n'ont proposé que 2 suites, dont une
  * purge. Seul un travail annoncé par son premier verbe, sans geste de purge, continue : la passe du 24/10
  * proposait « Cherche pourquoi … n'a pas été effacée, puis retire-la ». Tout le reste (« Oui, cette
@@ -1052,14 +1052,14 @@ function suiteRepondALaPasseGc(suite: string, texteReponse: string): boolean {
 /**
  * UNE SUITE QUI NE PEUT AVANCER QU'À UN MOMENT DONNÉ.
  *
- * Mesure conv-767 (2026-09-21, 20:59 → 21:04) : un tournoi programmé pour 01:05 ; la suite proposée
+ * Mesure (2026-09-21, 20:59 → 21:04) : un tournoi programmé pour 01:05 ; la suite proposée
  * « Relis debut.txt, statut.txt et fin.txt de essais/t2c-2026-09-22… » est partie TROIS fois, chaque
  * fois pour constater « rien n'a encore démarré ». L'échéance n'était PAS dans le prompt : elle vivait
  * dans « 👉 Recommandé » (« Demain matin, relire… ») ou dans le prompt lui-même sous la forme
  * « Quand … fin.txt existe, … ». Les deux textes sont donc lus. Le mode auto ne sait pas attendre une
  * heure : relancer tout de suite ne peut que constater l'attente, à chaque fois payée.
  */
-// fix-ok: la branche suite-differee de deciderRelanceAuto renvoyait arreter (mesure conv-826 : mode auto en pause sur « quand fin.txt existe ») ; elle renvoie maintenant programmer avec une echeance calculee.
+// fix-ok: la branche suite-differee de deciderRelanceAuto renvoyait arreter (mesure : mode auto en pause sur « quand fin.txt existe ») ; elle renvoie maintenant programmer avec une echeance calculee.
 const SUITE_DIFFEREE = new RegExp(
   [
     String.raw`\b(?:demain|ce\s+soir|cette\s+nuit|plus\s+tard)\b`,
@@ -1082,7 +1082,7 @@ export const DUREE_MAX_SONDAGE_FICHIER = 48 * 60 * MINUTE
 const ECHEANCE_MAX = 24 * 60 * MINUTE
 
 /**
- * QUAND relancer une suite différée (conv-826). Ordre : heure explicite (« à 01:05 ») → durée
+ * QUAND relancer une suite différée. Ordre : heure explicite (« à 01:05 ») → durée
  * (« dans 2 h », « après 1h ») → « demain » (8 h) / « ce soir » (19 h) → sinon on revient voir
  * toutes les 15 min. Toujours dans le futur (≥ 1 min), jamais au-delà de 24 h.
  */
@@ -1119,7 +1119,7 @@ export function echeanceSuiteDifferee(
 }
 
 /**
- * LE FICHIER ATTENDU d'une suite « quand X existe » (conv-826) : le mode auto le sonde — lecture
+ * LE FICHIER ATTENDU d'une suite « quand X existe » : le mode auto le sonde — lecture
  * seule, gratuite — avant de payer un tour. `null` = aucune condition de fichier lisible.
  */
 export function fichierAttenduSuiteDifferee(
@@ -1134,8 +1134,8 @@ export function fichierAttenduSuiteDifferee(
 }
 
 /**
- * LE FIL ATTENDU d'une suite « quand le tour de conv-N est terminé » (conv-1069). Mesuré sur
- * conv-1065 : la question « conv-N a-t-il fini ? » est partie 5 fois, dont 2 tours PAYÉS pour lire
+ * LE FIL ATTENDU d'une suite « quand le tour de conv-N est terminé ». Mesuré
+ * La question « conv-N a-t-il fini ? » est partie 5 fois, dont 2 tours PAYÉS pour lire
  * « pas terminé », et la fin a été vue 51 min en retard. Le mode auto sonde désormais l'état du fil
  * — lecture gratuite (`pilotChatActive`, l'autorité du processus principal) — avant de payer un tour.
  * `null` = aucune condition de fin de fil lisible. `\b` ignore « é » : la fin est bornée par une lettre.
@@ -1168,7 +1168,7 @@ export function suiteEstDifferee(suite: string, recommandation: string | null): 
 
 /**
  * Debut COMMUN a toutes les versions de la releve. Les fils et `dernierPromptEnvoye` gardent les
- * releves deja envoyees, dont celles au texte d'avant conv-996 (« …, et attends mon choix. ») :
+ * releves deja envoyees, dont celles au texte d'avant (« …, et attends mon choix. ») :
  * les reconnaitre au texte complet les ferait oublier, et la releve repartirait en double.
  */
 const DEBUT_RELEVE =
@@ -1189,7 +1189,7 @@ export function estUneReleve(texte: string): boolean {
  * (`prompt-identique` ne la protege PAS : ce chemin rend la main avant lui, et la reponse
  * automatique a l'`ask` s'intercale entre deux releves.)
  *
- * ELLE NE PROMET PLUS D'ATTENDRE (conv-996, 2026-10-16). Elle finissait par « et attends mon
+ * ELLE NE PROMET PLUS D'ATTENDRE (2026-10-16). Elle finissait par « et attends mon
  * choix », alors que `reponseAutoAuDernierAsk` envoie SEULE l'option recommandee de l'`ask` qu'elle
  * demande. L'agent a pris cet envoi pour une derive et a refuse de l'executer ; l'utilisateur a
  * tranche : « trust le pouvoir du mode auto ». Le texte dit donc ce qui va se passer.
@@ -1207,7 +1207,7 @@ export const PROMPT_NOUVELLE_CIBLE =
  * pas des « ouvertures » :
  *  - l'utilisateur vient d'allumer l'interrupteur EN VOYANT la suite proposee — c'est sa demande ;
  *  - l'agent a redemarre l'app LUI-MEME au milieu de la chaine (`restart_app` a pose une consigne
- *    de reprise sur le disque). Defaut vecu le 2026-09-05 (conv-303) : le repere de passage vit en
+ *    de reprise sur le disque). Defaut vecu le 2026-09-05 : le repere de passage vit en
  *    memoire, le redemarrage l'efface, la boucle croit arriver dans le fil et saute le maillon
  *    suivant. L'interrupteur reste allume mais la chaine meurt en silence.
  *
@@ -1223,7 +1223,7 @@ export function premierPassageLaisseSortirLeTour(entree: {
 }
 
 /**
- * REPRISE D'UNE ATTENTE DE FICHIER après un redémarrage (conv-826, 2026-09-26 — demande de
+ * REPRISE D'UNE ATTENTE DE FICHIER après un redémarrage (2026-09-26 — demande de
  * l'utilisateur : « après un redémarrage, ∞ reprend tout seul l'attente d'un fichier encore attendu »).
  *
  * Défaut vécu : la suite « Quand …/fin.txt existe, compare… » était surveillée par un minuteur de
@@ -1267,7 +1267,7 @@ function dernierAsk(fil: readonly Msg[]): ReturnType<typeof parseAskDecision> {
  * `recommande`, sinon la PREMIERE (le contrat de `ask` place la recommandee en tete). Une reponse
  * destructrice ne part jamais seule : on rend null et la question attend l'humain. Dans une passe
  * `/gc`, un simple « Oui » à « Purger ? » l'est aussi : le mot destructeur est dans la question, pas
- * dans l'option (conv-1341, 2026-10-30, rouge mesuré : le mode auto répondait « Oui » seul). La question
+ * dans l'option (2026-10-30, rouge mesuré : le mode auto répondait « Oui » seul). La question
  * de purge du `/gc` ne se répond pas du tout, même par « Non, garde » : skills/gc/SKILL.md le promet,
  * et le contrôle du 31/10 a fait partir ce « Non » recommandé ou coché en choix multiple.
  */
@@ -1284,7 +1284,7 @@ export function reponseAutoAuDernierAsk(fil: readonly Msg[]): string | null {
     return t !== '' && !estCibleDestructrice(t) && !suiteRepondALaPasseGc(t, texteReponse)
   }
   // CHOIX NON CONCURRENTS (`choixMultiple`) : on coche TOUTES les options sures — demande utilisateur
-  // conv-787 : « par défaut tous les choix si pas concurrents sinon faire au mieux ».
+  // « par défaut tous les choix si pas concurrents sinon faire au mieux ».
   if (decision.choixMultiple) {
     const retenues = decision.options.filter(sure)
     return retenues.length > 0 ? promptDesOptions(retenues).trim() : null
@@ -1365,7 +1365,7 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * faire : rien », le texte qu'Autowin ecrit lui-meme apres le dernier maillon.
    */
   // Le signal EXPLICITE passe devant : les portes « rien » ne restent que pour les fils ecrits avant lui.
-  // La fin ecrite par Autowin (conv-1575) vient en DERNIER : elle ne deplace aucune raison existante.
+  // La fin ecrite par Autowin vient en DERNIER : elle ne deplace aucune raison existante.
   const finEcriteParAutowin = recommandationFinDeChaine(extractRecommendation(texteReponse))
   const finDeChaine: RaisonArret | null = signalFinExplicite(texteReponse)
     ? 'fin-explicite'
@@ -1382,10 +1382,10 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
     if (!entree.proposerNouvelleCible || finEcriteParAutowin)
       return { action: 'arreter', raison: finDeChaine, message: MESSAGES_ARRET[finDeChaine] }
     /*
-     * AUTOWIN_FIN_V1 : l'agent DECLARE la chaine finie, le fil affiche s'eteint lui aussi (conv-1575,
+     * AUTOWIN_FIN_V1 : l'agent DECLARE la chaine finie, le fil affiche s'eteint lui aussi (
      * « quand ya écris ça, ça doit arrêter le mode auto aussi »). La releve ne reste que pour une fin
-     * devinee sur une rubrique « rien » (conv-307). Une question laissee ouverte garde sa raison :
-     * le fil affiche dit alors qu'elle attend l'utilisateur, pas seulement que c'est fini (conv-1341).
+     * devinee sur une rubrique « rien ». Une question laissee ouverte garde sa raison :
+     * le fil affiche dit alors qu'elle attend l'utilisateur, pas seulement que c'est fini.
      */
     if (finDeChaine === 'fin-explicite') {
       const raison: RaisonArret = dernierAsk(entree.fil) ? 'suite-attend-utilisateur' : finDeChaine
@@ -1403,7 +1403,7 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
     /*
      * fix-ok: une passe `/gc` finit par AUTOWIN_FIN_V1 avec sa question de purge ouverte (consigne de
      * skills/gc/SKILL.md) : `dernierAsk` non nul veut dire ici que le mode auto a refusé d'y répondre,
-     * et la relève partait quand même, tour payant par-dessus la question (sonde conv-1341 : `envoyer`).
+     * et la relève partait quand même, tour payant par-dessus la question (sonde : `envoyer`).
      */
     if (dernierAsk(entree.fil))
       return {
@@ -1455,7 +1455,7 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
       raison: 'suite-attend-utilisateur',
       message: MESSAGES_ARRET['suite-attend-utilisateur']
     }
-  // conv-826 : une suite différée n'arrête plus la chaîne — elle est PROGRAMMÉE (voir plus bas).
+  // Une suite différée n'arrête plus la chaîne — elle est PROGRAMMÉE (voir plus bas).
   const recommandationDifferee = extractRecommendation(texteReponse)
   const differee = suiteEstDifferee(suite, recommandationDifferee)
   if (differee && (entree.relancesDifferees ?? 0) >= MAX_RELANCES_DIFFEREES)
@@ -1475,8 +1475,8 @@ function deciderSuiteAuto(entree: EntreeDecisionAuto): DecisionAuto {
    * tableau sous les yeux. La cible NOMMEE est donc recopiee en tete de ce qui part.
    */
   /*
-   * TOUTES LES SUITES AFFICHÉES PARTENT (conv-1125, 2026-10-23 : « le mode auto doit lancer toutes
-   * les suggestions de préprompt pas une seule »). Avant, seule la mieux notée partait (conv-1005).
+   * TOUTES LES SUITES AFFICHÉES PARTENT (2026-10-23 : « le mode auto doit lancer toutes
+   * les suggestions de préprompt pas une seule »). Avant, seule la mieux notée partait.
    * Elles partent dans UN SEUL message : un tour par suite ferait proposer de nouvelles suites dès
    * le premier, et deux chaînes se mêleraient. La mieux notée porte les gardes ci-dessus (pause,
    * suite différée) ; une secondaire qui attend une donnée de l'utilisateur ou un moment donné reste
@@ -1534,7 +1534,7 @@ ${suites}`
   }
   // La même suite deux fois d'affilée = boucle : on ne la renvoie pas, sans couper l'interrupteur.
   /*
-   * MÊME SUITE ≠ BOUCLE quand le tour a TRAVAILLÉ. Mesuré conv-733, tour
+   * MÊME SUITE ≠ BOUCLE quand le tour a TRAVAILLÉ. Mesuré, tour
    * 98ce00d9-2276-4a96-bb15-b66c622bfee8 (saisie ts 1789970040849) : audit à 100 points, point #93
    * fait et rapporté dans « ✅ Fait », suite proposée mot pour mot identique (« Traite le point
    * suivant… ») → la chaîne s'est tue alors qu'il restait ~7 points. Une boucle, c'est la même
@@ -1554,7 +1554,7 @@ ${suites}`
  *
  * Un scout rend plusieurs pistes. Sans regle, le maillon suivant repart sur le tableau entier et la
  * boucle depense un tour PAYANT sur une cible que personne n'a choisie. Cadrage du 2026-09-05
- * (conv-308) : la sortie porte une ligne `CIBLE:` ; pas de cible = fin de chaine ; une cible
+ * La sortie porte une ligne `CIBLE:` ; pas de cible = fin de chaine ; une cible
  * destructrice ne part jamais toute seule.
  *
  * La porte lit la FORME (une cible nommee existe), jamais la qualite du choix : producteur et juge

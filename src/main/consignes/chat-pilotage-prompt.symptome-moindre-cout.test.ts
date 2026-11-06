@@ -5,13 +5,13 @@ import { CONSTITUTION } from './constitution'
 /**
  * SYMPTOME -> FIX AU MOINDRE COUT.
  *
- * Mesure hors-modele, conv-138, appel turnId 1fbd4d70-64fa-4086-80b3-bbf42259edd6 :
+ * Mesure hors-modele, appel turnId 1fbd4d70-64fa-4086-80b3-bbf42259edd6 :
  * localiser UNE cause tenant dans un seul fichier a consomme 3 471 481 tokens d'entree,
  * 2,26 $ et 180 741 ms. L'utilisateur ne fournit que des symptomes (saisie ts=1788375433820),
  * donc la consigne doit porter l'escalier de recherche du moins cher au plus cher.
  *
  * DEPLACE le 2026-09-12 : l'escalier vivait dans le prompt de pilotage EN PLUS de
- * règle « Symptôme nu » de la constitution (ex-SYMPTOME-HARD-GATE, renommée conv-1142), injectee dans le MEME prompt systeme — deux
+ * règle « Symptôme nu » de la constitution (ex-SYMPTOME-HARD-GATE), injectee dans le MEME prompt systeme — deux
  * protocoles concurrents sur le meme declencheur. La constitution porte desormais l'escalier,
  * et le prompt de pilotage ne doit PAS le redupliquer.
  */

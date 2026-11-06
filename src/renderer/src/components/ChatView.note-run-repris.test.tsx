@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 /**
- * LE FIL D'UN LOT REPRIS APRÈS UN REDÉMARRAGE NE DOIT PAS PARAÎTRE FIGÉ (conv-1330, 2026-10-30).
+ * LE FIL D'UN LOT REPRIS APRÈS UN REDÉMARRAGE NE DOIT PAS PARAÎTRE FIGÉ (2026-10-30).
  *
- * Vécu : conv-1324, lot 3 d'une super conv. L'app a redémarré à 14:44 ; le main a rattaché le
+ * Vécu : lot 3 d'une super conv. L'app a redémarré à 14:44 ; le main a rattaché le
  * travail, posé un récapitulatif « Reprise du fil » SOUS la bulle du tour, puis relancé une
  * construction à 14:52. Jusqu'à 15:27 au moins, l'agent travaillait (spinner allumé) et rien ne
  * bougeait dans le fil. Un tour de chat normal pose sa note d'activité (« Bash en cours — 2 min »)

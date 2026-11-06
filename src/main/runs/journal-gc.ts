@@ -62,7 +62,7 @@ export interface JournalGcPolicy {
    *
    * Journaux qu'un point de reprise REFERENCE encore. Ces fichiers sont intouchables quel que soit
    * leur age et quel que soit le plafond : ce n'est plus une heuristique de date, c'est une
-   * reference. Pourquoi ca compte, mesure : le journal de l'agent `build` de conv-43 a ete supprime
+   * reference. Pourquoi ca compte, mesure : le journal de l'agent `build` a ete supprime
    * a 43 h alors que sa reservation d'appel n'etait pas soldee. Le sidecar `.exit.json`, hors du
    * menage, a survecu — donc le run pouvait prouver que l'appel avait FINI, mais plus jamais lire
    * son resultat. Il est reste bloque, reelu premier a chaque demarrage, et clos rouge six fois.
@@ -180,10 +180,10 @@ const SUFFIXE_PREUVE = '.exit.json'
 /**
  * Decide quelles PREUVES DE SORTIE (`.exit.json`) supprimer. PUR.
  *
- * Mesure du 2026-10-19 (conv-359) : 3 452 preuves dans `run-stdout`, dont 3 341 sans leur journal et
+ * Mesure du 2026-10-19 : 3 452 preuves dans `run-stdout`, dont 3 341 sans leur journal et
  * 2 915 de plus de 7 jours — rien ne les nettoyait, le menage ne prenait que les journaux. Une preuve
  * ne vaut qu'AVEC son journal : elle dit qu'un appel a fini, le journal dit ce qu'il a rendu (seule,
- * elle a laisse le run de conv-43 « fini mais illisible » — voir `protectedPaths`). Regle :
+ * elle a laisse le run « fini mais illisible » — voir `protectedPaths`). Regle :
  * - preuve dont le journal existe encore : intouchable, elle partira apres lui ;
  * - preuve dont le journal est PROTEGE par une reservation : intouchable, meme journal absent ;
  * - preuve orpheline : supprimee une fois plus vieille que la fenetre des journaux (7 jours), la
@@ -221,7 +221,7 @@ export interface JournalGcOutcome {
  * suppression reussit meme fd ouvert. La surete vient UNIQUEMENT de `planJournalGc`.
  *
  * ASYNCHRONE, et lancee APRES l'affichage de la fenetre (index.ts, `interfaceVisible`) : mesure du
- * 2026-10-19 (`gels.jsonl`, conv-359), ce passage faisait 209 `statSync` au demarrage, 8 s de fenetre
+ * 2026-10-19 (`gels.jsonl`), ce passage faisait 209 `statSync` au demarrage, 8 s de fenetre
  * figee sur le disque D: sature. Les fichiers sont lus UN PAR UN (jamais en rafale) : sur un disque
  * mecanique, des lectures paralleles se gênent au lieu d'aller plus vite. Le plan est calcule sur un
  * inventaire qui peut avoir vieilli de quelques secondes : chaque fichier est donc relu juste avant
@@ -241,7 +241,7 @@ export async function collectStdoutJournals(
   const entries: JournalEntry[] = []
   const proofs: JournalEntry[] = []
   for (const name of names) {
-    // Les DEUX sorties d'un run detache. Mesure conv-131 : seul `.stdout.jsonl` entrait dans le
+    // Les DEUX sorties d'un run detache. Mesure : seul `.stdout.jsonl` entrait dans le
     // nettoyage, si bien que les `.stderr.log` s'accumulaient sans limite d'age ni de nombre.
     // Et leurs preuves de sortie, dans le meme cas jusqu'au 2026-10-19 (`planExitProofGc`).
     const preuve = name.endsWith(SUFFIXE_PREUVE)

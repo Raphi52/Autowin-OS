@@ -14,7 +14,7 @@ import { POSTIT_H, POSTIT_L, texteDuPostit } from './carte-riviere'
 import { CLE_ETATS_MANUELS_CARTE } from './etats-manuels-carte'
 
 /**
- * LE BOARD RESTE LISIBLE QUAND IL EST CHARGÉ OU ZOOMÉ (conv-1242, 2026-10-28) : « la vue board elle
+ * LE BOARD RESTE LISIBLE QUAND IL EST CHARGÉ OU ZOOMÉ (2026-10-28) : « la vue board elle
  * casse quand ya trop d'éléments et quand je fais ctrl molette les textes disparaissent, et c'est
  * illisible ». Mesuré sur un banc à 40 fils par jour : le texte des post-it du jour tombait à ~6 px,
  * et au zoom ×1,5 il disparaissait (post-it réduits à des pastilles). Deux causes :

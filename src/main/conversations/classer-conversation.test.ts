@@ -5,7 +5,7 @@ import { AppCommandBus, type AppEvent } from '../commands/commands'
  * CLASSER UNE CONVERSATION — la capacité absente poussait l'agent au pire chemin.
  *
  * Demande de l'utilisateur : « ranges moi mes conversations dans des sous catégories adéquates ».
- * Mesuré dans `conv-1244` le 2026-08-15, en rejouant le journal du tour : faute de commande pour
+ * Mesuré le 2026-08-15, en rejouant le journal du tour : faute de commande pour
  * classer, l'agent a tenté de piloter le BUREAU WINDOWS à la souris — `desktop_act`, clics qui
  * ouvrent les réglages rapides de Windows par erreur, tentative de relancer l'application — puis a
  * échoué sur « Type d'action desktop inconnu: double_click ». Rien n'a été rangé.

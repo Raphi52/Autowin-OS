@@ -12,7 +12,7 @@ import type {
 } from '../../../shared/carte-des-besoins'
 
 /**
- * LA VUE BRANCHE LES TASKS (option E du cadrage conv-1127). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER :
+ * LA VUE BRANCHE LES TASKS (option E du cadrage). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER :
  * une ouverture qui ne lance pas la lecture des `#1234` ; une carte non recalculée après une passe
  * qui a lu des fiches ; une source injoignable passée sous silence ; un rattachement qui vise une
  * autre demande que celle de la fiche, ou qui ne recalcule pas la carte.

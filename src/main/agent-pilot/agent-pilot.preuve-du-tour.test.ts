@@ -25,7 +25,7 @@ afterEach(() => {
 })
 
 /**
- * LA RELANCE DE PREUVE, DANS UN VRAI DÉROULÉ DU PILOTE (conv-1423).
+ * LA RELANCE DE PREUVE, DANS UN VRAI DÉROULÉ DU PILOTE.
  *
  * Le moteur de tour est le vrai ; seul le modèle est factice, et il rend les mêmes champs que
  * l'adaptateur Claude (`executionEvidence`). L'oracle : le nombre d'appels payés au modèle, et le

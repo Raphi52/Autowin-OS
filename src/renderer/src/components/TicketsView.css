@@ -374,7 +374,7 @@
   background: color-mix(in srgb, var(--danger, #ff7185) 18%, transparent);
 }
 
-/* LA TEINTE GLISSE, ET LE TRAITE ECLATE (conv-981, 2026-10-16) : la bulle changeait de couleur d'un
+/* LA TEINTE GLISSE, ET LE TRAITE ECLATE (2026-10-16) : la bulle changeait de couleur d'un
    coup (aucune transition dans cette feuille). Elle glisse d'une teinte a l'autre ; et quand un
    traitement EN COURS devient traite, un anneau vert s'en echappe une fois (`.is-eclat`, posee par
    BulleDuTicket.tsx au seul PASSAGE, retiree a la fin de l'animation). Jamais sur `.is-succeeded`

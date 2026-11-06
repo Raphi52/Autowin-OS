@@ -3,7 +3,7 @@ import { cheminsRelatifsCites, relanceCheminsComplets } from './chemins-complets
 import { STYLE_TON } from '../consignes/response-style'
 
 /*
- * Le rejeu d'origine : conv-1335, clôture du 2026-10-31. L'utilisateur a demandé « il est ou ? »,
+ * Le rejeu d'origine : clôture du 2026-10-31. L'utilisateur a demandé « il est ou ? »,
  * puis « donne le path complet », parce que ces deux chemins ne se copient nulle part.
  */
 const CLOTURE_CONV_1335 =

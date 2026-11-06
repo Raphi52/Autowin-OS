@@ -1,5 +1,5 @@
 /**
- * conv-1077 (2026-10-22) : le gel du fil (`renderer:vue-chat-fil`) arrive avec les messages qui ont
+ * 2026-10-22 : le gel du fil (`renderer:vue-chat-fil`) arrive avec les messages qui ont
  * rendu pendant lui. Le main les VALIDE avant de les écrire dans gels.jsonl : clé bornée, rôle connu,
  * nombres entiers, 5 au plus — jamais un texte de message, jamais un champ inattendu.
  */

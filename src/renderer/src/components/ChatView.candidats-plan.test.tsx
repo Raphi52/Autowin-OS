@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 /**
- * LE WORKFLOW INTELLIGENT EN SUPER CONVERSATION, CÂBLÉ DANS LE FIL (conv-1333, 2026-10-30).
+ * LE WORKFLOW INTELLIGENT EN SUPER CONVERSATION, CÂBLÉ DANS LE FIL (2026-10-30).
  *
  * Depuis le 22/10 : 4 sélections, 12 lots prévus, 4 partis, jamais un lot 2 — la file du fil vit dans
- * la vue. Puis, conv-1332 : « tu aurais dû tout paralléliser avec une super conv ». Le clic et la
+ * la vue. Puis, : « tu aurais dû tout paralléliser avec une super conv ». Le clic et la
  * saisie (« 1 et 2 ») déposent donc un plan. Entrées qui font tomber ce test : le lot part quand même
  * dans le fil, la saisie reste un message au modèle, ou un refus disparaît sans un mot.
  */

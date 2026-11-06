@@ -42,7 +42,7 @@ function compterCouleursEnDur(chemin: string): number {
 
 /*
  * Une reprise claire existe si theme-modes.css cible la classe de l'ecran sous le selecteur du
- * mode clair. LES DEUX NOMS SONT ACCEPTES : mesure du 2026-09-07 (conv-334), le commit 640f92ea a
+ * mode clair. LES DEUX NOMS SONT ACCEPTES : mesure du 2026-09-07, le commit 640f92ea a
  * renomme `data-theme='clair'` en `data-base='clair'` (les surcharges visent la BASE du theme).
  * Ce test ne cherchait que l'ancien nom : plus AUCUNE reprise n'etait vue, tous les ecrans
  * passaient pour « restera sombre », et la reserve etait declaree incomplete a tort.
@@ -56,14 +56,14 @@ function aUneRepriseClaire(themeModes: string, classe: string): boolean {
 }
 
 /*
- * LA réserve, pas le premier paragraphe qui en porte la classe (conv-770, 2026-09-28) : depuis
+ * LA réserve, pas le premier paragraphe qui en porte la classe (2026-09-28) : depuis
  * 3517698a (2026-09-22), un paragraphe « Pour agrandir tout l'écran » (`data-testid="interface-zoom"`)
  * reprend la classe `interface-reserve` et passe AVANT. Le test lisait ce paragraphe-là et
  * déclarait absents « Chat », « Memory » et « topologie », pourtant bien nommés dans la réserve.
  * On exige qu'il en reste EXACTEMENT une hors zoom : un troisième paragraphe ambigu refera rougir.
  */
 /*
- * LE TEXTE VIT DANS LA TABLE DES TEXTES depuis la bascule de langue (conv-1146, 2026-10-26) : le
+ * LE TEXTE VIT DANS LA TABLE DES TEXTES depuis la bascule de langue (2026-10-26) : le
  * paragraphe de `InterfaceView.tsx` ne porte plus que la clé `interface.reserve`. On vérifie donc
  * que l'écran rend CETTE clé, dans le paragraphe de réserve et lui seul, puis on lit son texte dans
  * les DEUX langues : une réserve anglaise incomplète tromperait l'utilisateur autant qu'une française.

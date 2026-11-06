@@ -7,7 +7,7 @@ import type { ContextGauge } from '../../../shared/context-gauge'
 import { composerContexte, lireReponseContexte } from '../../../shared/contexte-detaille'
 
 /**
- * Le panneau « Contexte » a la maniere de claude.exe (conv-1000, 2026-10-16).
+ * Le panneau « Contexte » a la maniere de claude.exe (2026-10-16).
  *
  * Ce qui ferait echouer ce test si la livraison etait fausse :
  *  - sans detail mesure, le panneau doit rester l'ancien (jauge simple) : le detail ne s'invente pas ;

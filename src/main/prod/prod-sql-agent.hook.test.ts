@@ -11,7 +11,7 @@ import { scriptHookGardes } from '../../shared/garde-git-destructeur'
 import * as garde from './prod-run-guard'
 
 /**
- * LES AGENTS LANCÉS PAR `orchestrate` FACE AU SQL DE PRODUCTION (revue conv-738, 2026-09-21).
+ * LES AGENTS LANCÉS PAR `orchestrate` FACE AU SQL DE PRODUCTION (2026-09-21).
  * Leur terminal ne passe ni par `run` ni par `sql_query` : seul le hook PreToolUse du CLI les voit.
  * Il ne peut pas ouvrir la fenêtre de confirmation, donc une base prod OU inconnue est refusée net ;
  * seules les bases déclarées `non-prod` dans la liste d'autorité passent.
@@ -48,7 +48,7 @@ describe('hook des agents — SQL vers la production', () => {
     expect(hook('npm run sqlcmd-docs')).toBe('')
   })
 
-  // conv-770, 2026-09-26 : le motif appliqué à TOUTE la ligne bloquait deux fois une simple lecture
+  // 2026-09-26 : le motif appliqué à TOUTE la ligne bloquait deux fois une simple lecture
   // (un grep dont le motif nommait un client SQL). Seul un APPEL doit être bloqué.
   it.each([
     'grep -c "sqlcmd|osql" src/main/prod/prod-run-guard.ts',
@@ -85,7 +85,7 @@ describe('hook des agents — SQL vers la production', () => {
       /scriptHookGardes\(refusReglageProd, refusSqlAgent, /
     )
   })
-  // conv-106, tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf : SELECT vers APP_DEV sur SRV-DEV<barre>DEV refusé.
+  // Tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf : SELECT vers APP_DEV sur SRV-DEV<barre>DEV refusé.
   // Objection du juge : écrit sans double barre, le littéral devenait « SRV-DEVDEV » et ne prouvait
   // rien. Ici la VRAIE barre oblique inverse, des deux côtés, à travers le VRAI script de hook
   // (liste non-prod sérialisée dans le script comprise).

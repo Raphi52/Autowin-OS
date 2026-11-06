@@ -1,5 +1,5 @@
 /**
- * LE PROMPT SYSTÈME D'UN APPEL CLAUDE — audit du branchement (conv-1040, 2026-10-21).
+ * LE PROMPT SYSTÈME D'UN APPEL CLAUDE — audit du branchement (2026-10-21).
  *
  * Au-delà de 4 000 caractères, il passe par un fichier temporaire `autowin-os-system-*`. Il était
  * écrit en SYNCHRONE, à chaque tour, alors que tout le reste de la préparation est passé en

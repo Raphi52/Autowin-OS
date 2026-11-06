@@ -12,7 +12,7 @@ import {
 } from './grok'
 import { planProviderLogin } from './provider-login'
 
-// Sortie RÉELLE de grok 1.0.70 sans connexion (mesurée le 2026-11-04, conv-1499).
+// Sortie RÉELLE de grok 1.0.70 sans connexion (mesurée le 2026-11-04).
 const PAS_CONNECTE =
   '{"type":"error","message":"Not signed in. To authenticate without a browser, run:\\n  grok login --device-code\\n\\nAlternatively, set the XAI_API_KEY environment variable or run `grok login` on a machine with a browser."}'
 

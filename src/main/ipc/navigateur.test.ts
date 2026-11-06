@@ -1,5 +1,5 @@
 /**
- * Canaux du navigateur intégré (conv-1286, lot 2/5) : le VRAI gestionnaire, une fausse fabrique de
+ * Canaux du navigateur intégré (lot 2/5) : le VRAI gestionnaire, une fausse fabrique de
  * pages, une fausse fenêtre principale, Electron simulé.
  *
  * Ce qui est prouvé : les canaux branchés sont EXACTEMENT ceux du contrat, tous derrière le contrôle
@@ -299,7 +299,7 @@ describe('canaux navigateur:*', () => {
     ).resolves.toBeUndefined()
     await expect(appeler('navigateur:basculer-mode', null)).resolves.toBeUndefined()
     await expect(appeler('navigateur:basculer-mode', 'choisir')).resolves.toBeUndefined()
-    // Annoter retiré (conv-1306, 2026-10-30) : son ancien nom est refusé comme n'importe quel inconnu.
+    // Annoter retiré (2026-10-30) : son ancien nom est refusé comme n'importe quel inconnu.
     await expect(appeler('navigateur:basculer-mode', 'annoter')).rejects.toThrow(/choisir/)
     await expect(
       appeler('navigateur:repondre-accord', 'https://exemple.fr', 'refuser')
@@ -311,7 +311,7 @@ describe('canaux navigateur:*', () => {
     await expect(appeler('navigateur:etat', 'x'.repeat(200))).resolves.toMatchObject({
       onglets: []
     })
-    // Pas-à-pas (conv-1286) : chacun des cinq ordres passe, et vaut pour CE fil seulement.
+    // Pas-à-pas : chacun des cinq ordres passe, et vaut pour CE fil seulement.
     for (const ordre of [
       'pas-suivant',
       'reprendre',

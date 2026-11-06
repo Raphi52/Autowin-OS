@@ -43,12 +43,12 @@ export function registerPerfIpc({ appDataRoot }: PerfIpcDeps): void {
     assertTrustedRendererSender(event, 'PerfGels')
     const n = typeof derniers === 'number' && derniers > 0 ? Math.floor(derniers) : 200
     // fix-ok: cause mesurée 2026-10-22 — un canal à part portait le compte des ipcMain.handle à 236 (security-critical-fixes.test.ts rouge).
-    // Memoire et CPU par processus (conv-1077) : dernier releve en memoire, joint SANS nouveau canal
+    // Memoire et CPU par processus : dernier releve en memoire, joint SANS nouveau canal
     // (le compte de `security-critical-fixes.test.ts` est un fil-piege des canaux exposes).
     return { ...lireGels(ensureAutowinAppData(appDataRoot), n), memoire: releveMemoireFrais() }
   })
   /*
-   * MEMOIRE ET CPU DE CHAQUE PROCESSUS (conv-1077, 2026-10-22). Trois `electron.exe` pesaient ~872,
+   * MEMOIRE ET CPU DE CHAQUE PROCESSUS (2026-10-22). Trois `electron.exe` pesaient ~872,
    * 433 et 307 Mo sans que rien ne dise lequel est quoi. Releve une fois par minute des
    * l'enregistrement des canaux ; `perf:gels` rend le dernier releve, sans rien relire.
    */
@@ -68,7 +68,7 @@ export function registerPerfIpc({ appDataRoot }: PerfIpcDeps): void {
   })
   /*
    * Vue des workflows : ce que chaque workflow a RÉELLEMENT donné en usage, relu dans la trace
-   * causale (piste 1, conv-1070). Lecture seule, AUCUN argument du renderer : le dossier lu vient du
+   * causale (piste 1). Lecture seule, AUCUN argument du renderer : le dossier lu vient du
    * processus principal. Lecture asynchrone ligne à ligne, gardée en mémoire par fichier.
    */
   ipcMain.handle('workflows:resultatsReels', (event) => {
@@ -97,9 +97,9 @@ export function registerPerfIpc({ appDataRoot }: PerfIpcDeps): void {
         typeof etiquette === 'string' && /^[a-z0-9:-]{1,48}$/i.test(etiquette)
           ? `renderer:${etiquette}`
           : 'renderer:longtask'
-      // Gel du FIL : les messages qui ont rendu pendant lui (conv-1077), relus champ par champ.
+      // Gel du FIL : les messages qui ont rendu pendant lui, relus champ par champ.
       const messages = lireMessagesDeGel(detail)
-      // Gel de la LISTE : lignes redessinées et déclencheurs (conv-1115), relus de même.
+      // Gel de la LISTE : lignes redessinées et déclencheurs, relus de même.
       const liste = lireListeDeGel(detail)
       journaliserGel({
         ts: new Date().toISOString(),

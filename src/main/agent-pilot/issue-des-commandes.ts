@@ -1,5 +1,5 @@
 // Issue réelle d'une commande du bus (réussite, mémoire non déposée, orchestration en échec),
-// sortie telle quelle de agent-pilot.ts (conv-1580, lot 1).
+// sortie telle quelle de agent-pilot.ts (lot 1).
 import type { CommandResult } from '../commands/commands'
 
 /** Réussite visible de l'action, distincte de la seule réussite du transport IPC. */
@@ -9,7 +9,7 @@ export function commandResultSucceeded(result: CommandResult): boolean {
   const data = result.data as Record<string, unknown>
   if (data.ok === false || data.valid === false || data.gateBlocked === true) return false
   /*
-   * UN REFUS TRANSPORTE DANS UN SUCCES EST UN ECHEC — decision utilisateur du 2026-09-01 (conv-52).
+   * UN REFUS TRANSPORTE DANS UN SUCCES EST UN ECHEC — decision utilisateur du 2026-09-01.
    *
    * Plusieurs commandes rendent `{ok:true}` en portant un REFUS dans leur charge : `remember`
    * (`stored:false`, portee/type/source invalides, doublon), `verify` et `brain_query`
@@ -22,12 +22,12 @@ export function commandResultSucceeded(result: CommandResult): boolean {
   /*
    * SAUF le doublon VOULU (`dejaConnu`, brain-remember.ts) : le fait est DEJA en memoire, il n'y a
    * rien a corriger. Compte comme un echec, il relancait le tour (« ta dernière action a ÉCHOUÉ »)
-   * deux fois pour rien — conv-1114, 2026-10-23.
+   * deux fois pour rien, 2026-10-23.
    */
   if (data.stored === false && data.dejaConnu !== true) return false
   if (data.allowed === false || data.refused === true) return false
   /*
-   * MEME FAMILLE, deux champs qui manquaient — mesure conv-244 (2026-09-04) sur les traces reelles :
+   * MEME FAMILLE, deux champs qui manquaient — mesure (2026-09-04) sur les traces reelles :
    * `run` refuse rend `{ok:true, data:{lance:false, detail:"Commande refusee : ..."}}` et
    * `restart_app` indisponible rend `{redemarre:false}`. Rien n'a tourne, pourtant la trace causale
    * enregistrait ces resultats en `status:"completed"` — donc aucune garde d'echec ne s'armait.
@@ -40,7 +40,7 @@ export function commandResultSucceeded(result: CommandResult): boolean {
 /**
  * Motif d'un depot memoire QUI N'A RIEN ECRIT, ou `undefined` quand la memoire est bien deposee.
  *
- * Mesure conv-33 (2026-09-01) : le Brain a rendu `{ok:true, data:{allowed:true, stored:false,
+ * Mesure (2026-09-01) : le Brain a rendu `{ok:true, data:{allowed:true, stored:false,
  * detail:"refuse par le Brain : not found"}}`. Ce resultat passe `commandResultSucceeded` — aucun
  * `ok:false`, aucun statut rouge, aucun exitCode — donc la garde de visibilite ne s'armait pas : le
  * tour s'est cloture sur « je depose la lecon » alors que RIEN n'etait ecrit, et l'utilisateur a lu

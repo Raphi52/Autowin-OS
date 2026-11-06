@@ -554,7 +554,7 @@ describe('observabilite orchestration', () => {
 })
 
 /*
- * UN STORE CREE ICI EST REFERME ICI (conv-246, 2026-10-11). Sans store prete par l'appelant, chaque
+ * UN STORE CREE ICI EST REFERME ICI (2026-10-11). Sans store prete par l'appelant, chaque
  * `persist*` creait un `TraceStore` neuf dont le descripteur d'ecriture restait ouvert pour toujours.
  * L'app prete toujours le sien (`causalTrace`), mais un bus sans `setTraceStore` -- tous les tests du
  * bus, et le banc e2e -- laissait la trace ouverte : sous Windows, son dossier ne s'effacait plus

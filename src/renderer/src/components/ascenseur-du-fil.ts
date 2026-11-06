@@ -1,10 +1,10 @@
 /**
  * ASCENSEUR DU FIL À CRANS — la logique, hors du composant.
  *
- * Demande conv-1114 (2026-10-23) : « une scroll bar dans les convs sophistiquées avec snappoints
+ * Demande (2026-10-23) : « une scroll bar dans les convs sophistiquées avec snappoints
  * pour mes messages », arrêtée par /draft sur « 1 · Dépli en place » : au repos une barre fine de
  * 18 px avec un cran par message de l'utilisateur ; dès la molette, elle se déplie en carte du fil
- * de 36 px (72 avant conv-1202) ; la vue s'AIMANTE sur ses messages.
+ * de 36 px (72) ; la vue s'AIMANTE sur ses messages.
  *
  * Fichier séparé du composant pour la même raison que `chat-mesure-messages.ts` : un module de
  * composant qui exporte aussi des fonctions casse le rafraîchissement à chaud.
@@ -30,7 +30,7 @@ export type Repere = {
   texte: string
   /**
    * L'élément du message dans le fil. Un glissement vers lui relit sa place à chaque image : le
-   * texte au-dessus peut se réagencer pendant le trajet (la carte décale le fil, conv-1114).
+   * texte au-dessus peut se réagencer pendant le trajet (la carte décale le fil).
    */
   element?: HTMLElement
 }
@@ -54,7 +54,7 @@ export function hautDeVuePour(repere: Pick<Repere, 'haut'>, geo: Geometrie): num
  *
  * `sens` : celui de la molette (1 = vers le bas, -1 = vers le haut, 0 = aucun, pour le relâchement
  * de la barre). Avec un sens, seul un message DANS ce sens peut tirer la vue. Sans lui, mesuré le
- * 2026-10-25 (conv-1139, « quand je scroll down ça remonte tout seul ») : un cran vers le bas qui
+ * 2026-10-25 (« quand je scroll down ça remonte tout seul ») : un cran vers le bas qui
  * dépassait ton message de moins de 72 px était ramené en arrière sur lui, 4 essais sur 4.
  */
 export function cibleAimant(
@@ -90,7 +90,7 @@ export function seuilMolette(clientHeight: number): number {
 
 /**
  * Ce coup de molette va-t-il faire défiler le fil ? Non en BUTÉE : tout en haut vers le haut, tout
- * en bas vers le bas (à 1 px près, `scrollTop` est fractionnaire). Demande conv-1114 : en butée, la
+ * en bas vers le bas (à 1 px près, `scrollTop` est fractionnaire). Demande : en butée, la
  * carte ne doit pas s'ouvrir quand on continue de tourner la molette.
  */
 export function moletteFaitDefiler(deltaY: number, geo: Geometrie): boolean {
@@ -110,7 +110,7 @@ export function dureeGlisse(ecart: number): number {
 /**
  * Position du glissement après `ecoule` ms sur `duree` (décélération cubique). La vue glisse
  * elle-même, image par image : `scrollTo({ behavior: 'smooth' })` sautait d'un coup sur ce poste,
- * qui a la réduction des animations active (sonde conv-1114 : 4 668 -> 4 618 px en une image).
+ * qui a la réduction des animations active (sonde : 4 668 -> 4 618 px en une image).
  */
 export function positionGlissee(
   depart: number,
@@ -177,7 +177,7 @@ export function poignee(geo: Geometrie, hauteurBarre: number): { haut: number; h
 
 /**
  * `scrollTop` qui CENTRE le cadre de la vue sur la souris posée à `yPiste` : la barre est un curseur
- * qu'on attrape et qu'on clique n'importe où (demande conv-1114, « la barre doit slider et je dois
+ * qu'on attrape et qu'on clique n'importe où (« la barre doit slider et je dois
  * pouvoir clicker n'importe où dessus »).
  */
 export function scrollTopSousPointeur(
@@ -268,7 +268,7 @@ export function cranSousPointeur(
 }
 
 /**
- * Centres des aperçus de tes messages, carte ouverte (conv-1114 : « pendant que je scroll je veux
+ * Centres des aperçus de tes messages, carte ouverte (« pendant que je scroll je veux
  * voir toutes les popups que je vois quand je hover mes msg »). Chaque aperçu (hauteur `hauteur`) se
  * pose en face de son cran (`ancres`, croissantes) ; des aperçus qui se chevaucheraient forment un
  * GROUPE, collé et centré au mieux sur ses crans, borné à [min, max]. `null` s'ils ne tiennent pas.
@@ -307,7 +307,7 @@ export function placerEtiquettes(
 }
 
 /**
- * Les aperçus montrés pendant le défilement (conv-1114 : « ça doit afficher que celui d'en bas et
+ * Les aperçus montrés pendant le défilement (« ça doit afficher que celui d'en bas et
  * celui au-dessus de là où je suis », puis « montre aussi le message d'avant celui que je lis ») :
  * AVANT, ton dernier message passé sous la ligne d'aimant — celui dont tu lis la réponse ; PRÉCÉDENT,
  * celui d'avant ; APRÈS, le suivant. Aux bouts du fil, il en manque.
@@ -337,7 +337,7 @@ export const ECART_CARTE = 8
 
 /**
  * Marge droite du fil pendant que la carte est ouverte : la conversation est DÉCALÉE, pas masquée
- * (conv-1114, « ça doit décaler la conv et pas la masquer »). Le fil n'a que 12 px de marge (mesuré
+ * (« ça doit décaler la conv et pas la masquer »). Le fil n'a que 12 px de marge (mesuré
  * dans l'app à 1 150, 1 400 et 1 800 px) : la décaler par une translation aurait coupé 60 px à
  * gauche ; on lui réserve donc la place de la carte à droite. Une marge déjà assez large ne change
  * pas.
@@ -407,12 +407,12 @@ const aDuTexte = (element: Element): boolean =>
 /**
  * Le bloc qui porte la LIGNE LUE, en haut de la vue juste sous la ligne d'aimant : c'est lui qui
  * doit rester immobile à l'écran pendant que le fil se rétrécit ou s'élargit — comme l'ancrage du
- * navigateur, qui ne le fait pas ici (mesuré conv-1114 : sans lui, la ligne lue descendait de 234 px
+ * navigateur, qui ne le fait pas ici (mesuré : sans lui, la ligne lue descendait de 234 px
  * à 1 400 px de large, de 404 px à 1 150). En haut, et non au tiers de la vue : une vue calée sur ta
  * bulle doit le rester.
  *
  * Trouvé par la MISE EN PAGE du fil, du fil vers le bloc le plus serré autour de la ligne, et non
- * par ce qui est affiché au point visé. Mesuré le 2026-10-25 (conv-1143, sonde sur conv-1139) :
+ * par ce qui est affiché au point visé. Mesuré le 2026-10-25 :
  *  - la carte et ses aperçus sont posés PAR-DESSUS le fil ; à 6 % du fil, les 4 points visés
  *    tombaient sur eux, et le repli prenait le message entier, dont le haut était loin au-dessus ;
  *  - un point entre deux blocs rendait le corps du message (haut à −1 609 px).
@@ -445,7 +445,7 @@ export function elementDeLecture(conteneur: HTMLElement): HTMLElement | null {
 /**
  * La ligne lue retenue à l'image précédente (ou par le maintien précédent) est-elle encore la
  * bonne ? Oui tant que la vue est restée là où le maintien l'a posée (`posee`) et qu'aucun
- * glissement ni la barre ne la mènent (`pilotee`). Mesuré conv-1143 : reprise à chaque image, la
+ * glissement ni la barre ne la mènent (`pilotee`). Mesuré : reprise à chaque image, la
  * ligne lue changeait entre l'ouverture et le repli de la carte (une ligne de liste au lieu du corps
  * du message), et la vue ne revenait pas à sa place.
  */
@@ -545,7 +545,7 @@ const EN_LIGNE = /^(|inline.*|contents|ruby.*)$/
 /**
  * Le bloc qui pose la ligne lue : un fragment en ligne (gras, code, lien) retenu par
  * `elementDeLecture` cède la place à son paragraphe ; un fragment sans texte (image, icône) reste.
- * Mesuré le 2026-10-25 (conv-1143, fil de 510 px) : retenu, le `strong` de la ligne lue gardait
+ * Mesuré le 2026-10-25 (fil de 510 px) : retenu, le `strong` de la ligne lue gardait
  * son haut à 18 px quand la carte s'ouvrait, mais le DÉBUT de la ligne, dans le paragraphe
  * réagencé, remontait à −4 px.
  */
@@ -566,7 +566,7 @@ function blocQuiPorteLaLigne(
 /**
  * Le point de lecture en haut de la vue : le bloc (voir `elementDeLecture`) et le PREMIER caractère
  * de son texte sur la ligne lue — le début de la ligne que tu lis. Mesuré le 2026-10-25
- * (conv-1143, sonde sur conv-1139) : tenir le HAUT du bloc laissait le texte descendre d'environ
+ * Tenir le HAUT du bloc laissait le texte descendre d'environ
  * une ligne (19 à 22 px) pendant que la carte était ouverte, 2 positions sur 4 — un paragraphe plus
  * étroit se réagence, et le texte lu passe plus bas DANS le paragraphe.
  */
@@ -578,8 +578,8 @@ export function pointDeLecture(conteneur: HTMLElement): PointDeLecture | null {
   const { sous, dessus } = caractereSousLaLigne(textes, ligneDeLecture(conteneur), plage)
   if (sous) return { element, noeud: sous.noeud, decalage: sous.decalage }
   // La ligne lue tombe SOUS la fin du texte (encore dans la boîte du bloc) : on tient la dernière
-  // ligne au-dessus, celle que tu vois en haut, par son DÉBUT. Mesuré le 2026-10-25 (conv-1143,
-  // conv-1139 à 1 150 px, vue à 31 539) : dernière ligne finie à 23,4 px pour une ligne lue à 24.
+  // ligne au-dessus, celle que tu vois en haut, par son DÉBUT. Mesuré le 2026-10-25 (
+  // à 1 150 px, vue à 31 539) : dernière ligne finie à 23,4 px pour une ligne lue à 24.
   // Tenir le haut du bloc, 1 050 px plus haut, laissait 87 px d'écart carte ouverte ; tenir le
   // dernier caractère (le point final), 21 px : la dernière ligne se coupe en deux quand le fil
   // rétrécit, et son début remonte d'une ligne.
@@ -602,7 +602,7 @@ export function pointDeLecture(conteneur: HTMLElement): PointDeLecture | null {
  * Parmi des textes, le caractère qui porte la ligne `ligne` (le plus HAUT de ceux qui finissent
  * dessous ; à égalité, le premier de la page : le début de la ligne), et à défaut le texte le plus
  * BAS tout au-dessus. Texte par texte, sans supposer que la page les range de haut en bas : dans un
- * schéma, les libellés se suivent dans un autre ordre que l'écran (mesuré conv-1139 : « réponse »
+ * schéma, les libellés se suivent dans un autre ordre que l'écran (mesuré : « réponse »
  * à −883 px, puis « rejuge » à −942, puis « juge » à −976). Dans UN texte, les lignes se suivent.
  */
 function caractereSousLaLigne(
@@ -674,7 +674,7 @@ export const SELECTEUR_MESSAGES =
  * Haut d'un élément dans le CONTENU du conteneur de défilement, lu dans la MISE EN PAGE (chaîne des
  * `offsetTop`) et non à l'écran. Les messages entrent avec `.fade-in` (translateY 3 px, theme.css) :
  * mesurée pendant l'animation, la position à l'écran est décalée d'autant, et aucun changement de
- * taille ne vient la corriger ensuite. Mesuré par la sonde conv-1114 : bulle calée à 7 px au lieu
+ * taille ne vient la corriger ensuite. Mesuré par la sonde : bulle calée à 7 px au lieu
  * de 10 après un clic sur son cran.
  */
 export function hautDansLeContenu(element: HTMLElement, conteneur: HTMLElement): number {
@@ -695,7 +695,7 @@ export function hautDansLeContenu(element: HTMLElement, conteneur: HTMLElement):
  * carte s'ouvre ou se referme ? Oui si la vue est toujours calée dessus (à moins d'un pixel), ou si un
  * glissement est en route vers lui. Sinon, la vue a été déplacée par autre chose que la barre.
  *
- * Mesuré le 2026-10-25 (conv-1139, sonde sur le fil réel) : seules la molette et la barre libéraient
+ * Mesuré le 2026-10-25 (sonde sur le fil réel) : seules la molette et la barre libéraient
  * ce message. Après un PageDown, la carte qui se refermait recalait la vue sur lui : 231 px de recul
  * sur 2 essais, et 2 880 px de saut sur le 3e. Le contrôle porte sur la POSITION et non sur le geste :
  * clavier, recherche dans le fil ou glisser de la barre sont tous couverts, sans liste à tenir.
@@ -726,8 +726,8 @@ export type ImageDuMaintien = {
  * Où poser la vue à une image du MAINTIEN de la ligne lue, pendant que le fil change de largeur
  * (la carte s'ouvre ou se replie). `null` = ne rien toucher.
  *
- * Mesuré le 2026-10-25 (conv-1143, « quand je scroll tout en bas ça remonte le scroll », sonde sur
- * conv-1139) : la carte ouverte allongeait le fil de 11 836 px. Vue au bas, au repli, le navigateur
+ * Mesuré le 2026-10-25 (« quand je scroll tout en bas ça remonte le scroll », sonde)
+ * La carte ouverte allongeait le fil de 11 836 px. Vue au bas, au repli, le navigateur
  * ramenait déjà la vue au nouveau bas, puis le maintien lui retirait EN PLUS le rétrécissement du
  * texte au-dessus : vue finie 11 813 px au-dessus du bas, 3 essais sur 3. D'où deux règles :
  *  - collé au bas, le lecteur lit la FIN du fil : elle reste à l'écran, comme pour l'aimant ;

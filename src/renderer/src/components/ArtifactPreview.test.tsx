@@ -414,7 +414,7 @@ A`
       expect.any(HTMLElement)
     )
     // Le dessin reste SEUL dans son conteneur : un style `& + *` n'a aucun voisin à atteindre. Le
-    // bouton Agrandir (conv-1322) vit donc à côté de ce conteneur, jamais à côté du <svg>.
+    // bouton Agrandir vit donc à côté de ce conteneur, jamais à côté du <svg>.
     const dessin = container.querySelector('.artifact-diagram__dessin')
     expect(dessin?.children).toHaveLength(1)
     expect(dessin?.firstElementChild?.tagName.toLowerCase()).toBe('svg')
@@ -569,7 +569,7 @@ A`
     expect(container.querySelector('pre.is-text')?.textContent).toBe('contenu différé')
   })
 
-  /* Kaizen conv-260, tour 41ab69ad-0ff8-4a45-8ecd-efb9be30e4a2 : la pub livrée pesait 74,6 Mo.
+  /* Kaizen, tour 41ab69ad-0ff8-4a45-8ecd-efb9be30e4a2 : la pub livrée pesait 74,6 Mo.
      Par la copie base64 (plafond 16 Mo), sa carte n'aurait montré que « Aperçu limité à 16 Mo ». */
   it('vidéo conservée de plus de 16 Mo : un lecteur lu par plages, sans copie base64', async () => {
     Object.defineProperty(globalThis, 'IntersectionObserver', {
@@ -634,7 +634,7 @@ describe('ArtifactPreview — aperçus visuels repliés par défaut', () => {
     const root = createRoot(container)
     act(() => root.render(<ArtifactPreview artifact={artifact} />))
 
-    // MÊME GUEULE que Raisonnement / Actions (conv-178), sur leur cadre à DEUX LIGNES (conv-907 :
+    // MÊME GUEULE que Raisonnement / Actions, sur leur cadre à DEUX LIGNES (
     // « le titre de l'image dans la capsule dans une ligne en dessous ») : le rond et son icône,
     // libellé + poids en ligne 1, nom du fichier en ligne 2 — DANS le cadre, plus à côté.
     const card = container.querySelector<HTMLDetailsElement>(

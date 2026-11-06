@@ -1,5 +1,5 @@
 /**
- * POINTER UNE IMAGE PRÉCISE D'UNE VIDÉO DANS LE CHAT (conv-253, 2026-10-11).
+ * POINTER UNE IMAGE PRÉCISE D'UNE VIDÉO DANS LE CHAT (2026-10-11).
  *
  * Demande : « je pourrais te dire modifie telle frame a telle seconde et on pourra echanger plus
  * fluidement ». Le lecteur du fil insère dans la saisie une RÉFÉRENCE que l'agent relit sans
@@ -34,7 +34,7 @@ export function fpsValide(valeur: unknown): number | undefined {
 /**
  * Cadence à AFFICHER : ffprobe mesure les cadences NTSC en fraction (30000/1001), que le texte
  * brut rendait « 29.97002997002997 ». Arrondie au millième (23,976 · 29,97 · 59,94), séparateur
- * décimal de la langue (virgule en français, point en anglais — conv-1170) ; le calcul des images
+ * décimal de la langue (virgule en français, point en anglais) ; le calcul des images
  * garde la valeur exacte.
  */
 export function libelleCadence(fps: number): string {
@@ -84,7 +84,7 @@ export interface MomentVideo {
 
 /**
  * `[vidéo <nom> · 00:12.40 · image 372/1188 · <chemin>]` — ce que l'agent relit. RESTE EN FRANÇAIS
- * quelle que soit la langue de l'app (conv-1170) : son format est décrit à l'agent mot pour mot
+ * quelle que soit la langue de l'app : son format est décrit à l'agent mot pour mot
  * (outil `show_video`), et une référence traduite ne serait plus reconnue.
  */
 export function referenceVideo(moment: MomentVideo): string {

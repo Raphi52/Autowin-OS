@@ -1,5 +1,5 @@
 /**
- * LA PUBLICATION DE LA PRÉSENCE DU POSTE (plan « Village commun », conv-1429, lot 1).
+ * LA PUBLICATION DE LA PRÉSENCE DU POSTE (plan « Village commun », lot 1).
  *
  * Demande : voir dans l'Accueil les tanukis des collègues à côté des siens. Ce module écrit ceux de
  * CE poste dans `<dossier du Board>\<compte Windows>\presence.json` (format dans
@@ -46,17 +46,17 @@ export interface ReglageDeLaPresence {
   /** `false` = partage coupé sur ce poste (D6). */
   partager: boolean
   /**
-   * L'animal des agents du poste (conv-1537), écrit dans `presence.json` pour que les collègues
+   * L'animal des agents du poste, écrit dans `presence.json` pour que les collègues
    * dessinent le même. Absent = non écrit : le lecteur garde l'animal tiré du nom du poste.
    */
   animal?: AnimalAgent
   /**
-   * La couleur de tenue des agents du poste (conv-1633), écrite dans `presence.json` pour que les
+   * La couleur de tenue des agents du poste, écrite dans `presence.json` pour que les
    * collègues dessinent la même. Absente = non écrite : la tenue d'origine de l'animal.
    */
   tenue?: TenueAgent
   /**
-   * « Afficher mes agents à » (conv-1599) : les postes à qui ce poste masque ses agents. Écrits dans
+   * « Afficher mes agents à » : les postes à qui ce poste masque ses agents. Écrits dans
    * `presence.json` ; l'Autowin de chacun d'eux ne les affiche pas. Absent ou vide = visibles pour tous.
    */
   masquesPour?: readonly string[]

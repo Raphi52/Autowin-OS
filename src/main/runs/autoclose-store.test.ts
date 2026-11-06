@@ -109,7 +109,7 @@ describe('persistance de l’interrupteur de clôture automatique', () => {
 })
 
 /**
- * Vécu le 2026-10-01 (conv-770) : le commit automatique du tour 235b91bd n'a pas publié le correctif
+ * Vécu le 2026-10-01 : le commit automatique du tour 235b91bd n'a pas publié le correctif
  * du garde Python, et le POURQUOI a disparu au redémarrage de 12:54 — le rapport ne vivait qu'en
  * mémoire (`lastAutoClose`). Plus rien ne disait au panneau, ni au journal, ce qui avait bloqué.
  */

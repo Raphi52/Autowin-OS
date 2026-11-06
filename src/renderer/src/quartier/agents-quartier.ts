@@ -1,5 +1,5 @@
 /**
- * LES VRAIS AGENTS DU QUARTIER (conv-1421) : un tanuki par fil, jamais une démonstration.
+ * LES VRAIS AGENTS DU QUARTIER : un tanuki par fil, jamais une démonstration.
  *
  * Deux sources, et elles ne disent pas la même chose :
  *  - les RÉSUMÉS de fils (`os:conversations`) disent CE QUI EST : un tour tourne, une question attend,
@@ -13,7 +13,7 @@
  *  - D-4 : un agent qui a fini sans rien demander reste 15 min au repos, puis part ;
  *  - D7 : une question reste en or et un échec en rouge jusqu'à l'ouverture du fil ;
  *  - D9 : si le fil repart, le même personnage retourne au travail ; ouvrir le fil le libère ;
- *  - D14 (revue le 2026-11-02, conv-1428) : une réflexion courte le laisse à son dernier poste ; une
+ *  - D14 (revue le 2026-11-02) : une réflexion courte le laisse à son dernier poste ; une
  *    longue l'envoie en pause, une activité parmi plusieurs (voir `quartier-marche.ts`).
  *
  * Le module ne dépend ni de React ni de la scène : la partie décisive est faite de fonctions pures,
@@ -36,7 +36,7 @@ export interface AgentQuartier {
   depuis: number
   /** Son dernier événement : une lecture des résumés partie avant le début du tour ne le chasse pas. */
   vuLe?: number
-  /** Fil marqué privé (D6, conv-1429) : son tanuki part dans le village commun sans titre. */
+  /** Fil marqué privé (D6) : son tanuki part dans le village commun sans titre. */
   prive?: boolean
 }
 
@@ -50,7 +50,7 @@ export interface ResumeFil {
   lastAssistantStatus?: string
   /** Fil mis de côté par l'utilisateur : il n'a plus de personnage (voir `setInactive`). */
   inactive?: boolean
-  /** Fil marqué privé (voir `setPrive`, D6, conv-1429) : son tanuki part au village sans titre. */
+  /** Fil marqué privé (voir `setPrive`, D6) : son tanuki part au village sans titre. */
   prive?: boolean
 }
 
@@ -64,7 +64,7 @@ export interface EvenementPilote {
 
 export const REPOS_MS = 15 * 60_000
 /**
- * Les visages du bain et de l'échec (conv-1558) : content les deux premières minutes après la fin, puis endormi pour
+ * Les visages du bain et de l'échec : content les deux premières minutes après la fin, puis endormi pour
  * le reste de son repos (rien ne tourne plus pour lui) ; à l'échec, un sursaut de quelques secondes avant sa pose.
  */
 export const JOIE_MS = 2 * 60_000
@@ -72,7 +72,7 @@ export const SURSAUT_MS = 6_000
 /** Au-delà, une question ou un échec restés sans suite ne sont plus de l'actualité : ils encombreraient. */
 export const SIGNAL_MAX_MS = 12 * 60 * 60_000
 /**
- * Un agent ne part en pause qu'après ce temps sans action. Mesuré sur 400 tours (conv-1428) : la moitié des
+ * Un agent ne part en pause qu'après ce temps sans action. Mesuré sur 400 tours : la moitié des
  * attentes entre deux outils dure moins de 9 s ; en dessous, il reste à son poste et continue son geste.
  */
 export const PAUSE_APRES_MS = 10_000
@@ -98,7 +98,7 @@ const auTravail = (a: AgentQuartier | undefined): boolean =>
 
 /**
  * La marque « privé » suit le RÉSUMÉ, à chaque lecture : démarquer le fil doit la retirer, pas
- * seulement la poser (D6, conv-1429). Le titre ne vient que des résumés, qui portent la marque en
+ * seulement la poser (D6). Le titre ne vient que des résumés, qui portent la marque en
  * même temps : un agent né d'un événement du pilote n'a pas encore de titre à divulguer.
  */
 function selonLaMarque(a: AgentQuartier, r: ResumeFil): AgentQuartier {
@@ -146,7 +146,7 @@ export function appliquerResumes(
     const age = maintenant - ecrit
     const phase = phaseSansTour(r, age)
     if (!phase) continue
-    // La phase date de l'écriture du fil, pas de sa lecture (conv-1558) : un échec retrouvé au démarrage de l'app ne
+    // La phase date de l'écriture du fil, pas de sa lecture : un échec retrouvé au démarrage de l'app ne
     // fait pas sursauter, une fin vieille de dix minutes montre déjà le tanuki endormi.
     poser(
       a?.phase === phase
@@ -241,7 +241,7 @@ function empreinteId(texte: string): number {
 }
 
 /**
- * Un agent planté pleure, fume ou boit (conv-1554, demande de l’utilisateur) : la pose est tirée de son
+ * Un agent planté pleure, fume ou boit (demande de l’utilisateur) : la pose est tirée de son
  * identifiant, donc il garde la même tant qu'il est planté, et plusieurs plantés varient.
  */
 // fix-ok: 'pl' était figée dans consigneDe (grep : seul site de production) ; la pose dérive maintenant de l'id.
@@ -255,7 +255,7 @@ export function consigneDe(a: AgentQuartier, maintenant: number): Consigne {
       return { metier: a.metier, pose: '', partir: false }
     case 'reflexion':
       // Réfléchir longtemps, c'est une pause : méditer au dojo, boire le thé, ratisser… La marche choisit
-      // laquelle (conv-1428, qui remplace la seule salle de méditation du 2026-11-01). Une pensée de
+      // laquelle (qui remplace la seule salle de méditation du 2026-11-01). Une pensée de
       // quelques secondes ne le fait pas traverser la scène.
       return maintenant - a.depuis > PAUSE_APRES_MS
         ? { metier: 'pause', pose: '', partir: false }
@@ -366,7 +366,7 @@ export function demarrerAgentsQuartier(): void {
 }
 
 /* ---------------------------------------------------------------- *
- * La présence du poste dans le village commun (conv-1429).
+ * La présence du poste dans le village commun.
  * ---------------------------------------------------------------- */
 
 /** Les changements de 2 s sont regroupés : un tour envoie des dizaines d'événements par seconde. */

@@ -6,19 +6,19 @@ export const APP_DESTINATIONS = [
   { id: 'observatory', label: 'Observatory', icon: '🔭' },
   { id: 'task-manager', label: 'Task Manager', icon: '◷' },
   { id: 'worktree', label: 'Worktrees', icon: '🌳' },
-  // Les Bureaux cachés ne sont plus un écran (conv-1378, 2026-10-31) : un panneau du chat, ouvert par
+  // Les Bureaux cachés ne sont plus un écran (2026-10-31) : un panneau du chat, ouvert par
   // l'icône à côté du navigateur. Leurs noms restent des adresses : voir `BUREAUX_CACHES`.
-  // Tickets n'est plus un écran (conv-1397, 2026-10-31) : les tickets des sources externes (Azure,
+  // Tickets n'est plus un écran (2026-10-31) : les tickets des sources externes (Azure,
   // GitHub, GitLab) sont un onglet du Board, la veille « Autowin OS » un bloc de Maintenance. Le nom
   // reste une adresse : voir `LEGACY_LOCATIONS`.
-  // Carte des besoins (conv-1089, 2026-10-22) : les demandes de tous les fils, par projet.
-  // Renommée « Carte du projet » (conv-1113, 2026-10-23) ; l'identifiant reste `besoins`, comme
+  // Carte des besoins (2026-10-22) : les demandes de tous les fils, par projet.
+  // Renommée « Carte du projet » (2026-10-23) ; l'identifiant reste `besoins`, comme
   // `tests` pour Maintenance, pour qu'un agent qui navigue vers « besoins » y aboutisse toujours.
-  // Renommée « Board » (conv-1126, 2026-10-23, proposition 5 : « le mot que tu emploies, ce
-  // board »). Icône 📌 (conv-1217, 2026-10-28, proposition 5) : le tableau à post-it dessiné en
+  // Renommée « Board » (2026-10-23, proposition 5 : « le mot que tu emploies, ce
+  // board »). Icône 📌 (2026-10-28, proposition 5) : le tableau à post-it dessiné en
   // traits cyan-violet se fondait dans la pilule active violet-rose ; un émoji plein comme ses voisins.
   { id: 'besoins', label: 'Board', icon: '📌' },
-  // Vue « Maintenance » (conv-1101, 2026-10-22 : « la view tests est nulle, appelle-la maintenance
+  // Vue « Maintenance » (2026-10-22 : « la view tests est nulle, appelle-la maintenance
   // et mets des boutons pour faire toutes nos skills de maintenance »). L'identifiant reste `tests` :
   // les suites y vivent toujours, et un agent qui dit « tests » doit continuer d'y aboutir.
   { id: 'tests', label: 'Maintenance', icon: '🛠️' },
@@ -27,13 +27,13 @@ export const APP_DESTINATIONS = [
 
 export type AppDestination = (typeof APP_DESTINATIONS)[number]['id']
 /**
- * Routage n'est plus une section d'Agent Studio : il vit dans Settings depuis la demande de conv-963
+ * Routage n'est plus une section d'Agent Studio : il vit dans Settings depuis la demande
  * (2026-10-15, « la view Routage il faut la mettre dans Settings »). Connexion des providers, compte
  * actif, modèle par défaut : ce sont des REGLAGES de l'application, pas l'atelier des rôles.
  */
 export type AgentStudioSection = 'topology' | 'workflows'
 export type SettingsSection =
-  // Les capacités, UNE section par registre (conv-1109, 2026-10-23 : « sépare la partie avec 4 mots
+  // Les capacités, UNE section par registre (2026-10-23 : « sépare la partie avec 4 mots
   // en 4 views ») : elles formaient un seul écran « Skills · Hooks · Gates · Mods · Tools » à onglets
   // internes. `capabilities` garde l'identifiant historique et ouvre les SKILLS : c'est la section
   // d'arrivée de Settings (App.tsx) et l'adresse que les agents connaissent déjà.
@@ -42,19 +42,19 @@ export type SettingsSection =
   | 'gates'
   | 'mods'
   | 'tools'
-  // Routage : connexion des providers, comptes, modèle par défaut (venu d'Agent Studio, conv-963).
+  // Routage : connexion des providers, comptes, modèle par défaut (venu d'Agent Studio).
   | 'routing'
   | 'behaviour'
   | 'providers'
   | 'preflight'
-  // Serveurs MCP : section à part (conv-1558, 2026-11-05 : « dans settings je vois pas le menu mcp »,
+  // Serveurs MCP : section à part (2026-11-05 : « dans settings je vois pas le menu mcp »,
   // le panneau était enfoui sous trois autres dans Diagnostic).
   | 'mcp'
   // Coffre à clés : les clés API dont les agents se servent par leur nom, sans en voir la valeur.
   | 'cles'
   // Rules : les regles d'Autowin OS. La protection de production (ce qu'Autowin demande avant un
   // geste sur une base reelle) en est UNE — elle avait son propre onglet « Production » jusqu'a
-  // la demande conv-242. Distincte de « capabilities » : accorder un outil n'est pas autoriser un
+  // la demande. Distincte de « capabilities » : accorder un outil n'est pas autoriser un
   // geste sur la prod.
   | 'rules'
   // Apparence de l'application (mode sombre / clair). Séparée de « behaviour » : régler ce qu'on
@@ -75,7 +75,7 @@ export type TaskManagerSection = 'watchdog' | 'planification'
  */
 export type WorktreeSection = 'carte' | 'activite' | 'sante'
 /**
- * Deux onglets dans le Board (conv-1397, 2026-10-31 : « la partie ticket azure faut trouver comment
+ * Deux onglets dans le Board (2026-10-31 : « la partie ticket azure faut trouver comment
  * la mettre dans board de manière élégante ») : les post-it des demandes, et les tickets des sources
  * externes que ces demandes rattachent (« + task », `#1234`). Le kanban reste seul dans son onglet.
  */
@@ -85,7 +85,7 @@ export interface AppLocation {
   destination: AppDestination
   section?:
     AgentStudioSection | SettingsSection | TaskManagerSection | WorktreeSection | BoardSection
-  /** Panneau à ouvrir en arrivant : les Bureaux cachés vivent dans le chat (conv-1378). */
+  /** Panneau à ouvrir en arrivant : les Bureaux cachés vivent dans le chat. */
   panneau?: 'bureaux-caches'
   /**
    * FAUX quand la valeur demandee n'a ete comprise par AUCUNE regle et qu'on a repli sur `chat`.
@@ -141,13 +141,13 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
   'carte des besoins': 'besoins',
   'carte-des-besoins': 'besoins',
   'map des besoins': 'besoins',
-  // Ses anciens libellés (conv-1113 puis conv-1126) : un agent qui a lu « Carte du projet » y aboutit.
+  // Ses anciens libellés : un agent qui a lu « Carte du projet » y aboutit.
   'carte du projet': 'besoins',
   'carte-du-projet': 'besoins',
   needs: 'besoins',
   demandes: 'besoins',
   backlog: 'besoins',
-  // L'ancien écran Tickets (conv-1397) : ses tickets externes vivent dans le Board, sa veille
+  // L'ancien écran Tickets : ses tickets externes vivent dans le Board, sa veille
   // « Autowin OS » dans Maintenance. Le Board précis (onglet Tickets) passe par `LEGACY_LOCATIONS`.
   tickets: 'besoins',
   ticket: 'besoins',
@@ -161,8 +161,8 @@ const LEGACY_DESTINATIONS: Readonly<Record<string, AppDestination>> = {
 }
 
 /**
- * LES BUREAUX CACHÉS, UN PANNEAU DU CHAT (conv-1378). L'utilisateur dit « Hdesk », l'interface dit
- * « Bureaux cachés », un agent dit aussi le singulier ou sans accent (conv-951) : sans ces entrées, ces
+ * LES BUREAUX CACHÉS, UN PANNEAU DU CHAT. L'utilisateur dit « Hdesk », l'interface dit
+ * « Bureaux cachés », un agent dit aussi le singulier ou sans accent : sans ces entrées, ces
  * noms retomberaient en silence sur le chat, panneau fermé.
  */
 const BUREAUX_CACHES: AppLocation = { destination: 'chat', panneau: 'bureaux-caches' }
@@ -176,7 +176,7 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   'bureaux caches': BUREAUX_CACHES,
   'bureau-cache': BUREAUX_CACHES,
   'bureaux-caches': BUREAUX_CACHES,
-  // Les tickets externes, un onglet du Board (conv-1397) : « va sur les tickets » ouvre CET onglet,
+  // Les tickets externes, un onglet du Board : « va sur les tickets » ouvre CET onglet,
   // pas le kanban des demandes.
   tickets: { destination: 'besoins', section: 'tickets' },
   ticket: { destination: 'besoins', section: 'tickets' },
@@ -185,7 +185,7 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   agents: { destination: 'agent-studio', section: 'topology' },
   roles: { destination: 'agent-studio', section: 'topology' },
   models: { destination: 'agent-studio', section: 'topology' },
-  // Routage vit dans Settings (conv-963) : les anciens noms y aboutissent, sans quoi « va sur le
+  // Routage vit dans Settings : les anciens noms y aboutissent, sans quoi « va sur le
   // routeur » ouvrirait Agent Studio sur une section qui n'existe plus.
   router: { destination: 'settings', section: 'routing' },
   routeur: { destination: 'settings', section: 'routing' },
@@ -200,7 +200,7 @@ const LEGACY_LOCATIONS: Readonly<Record<string, AppLocation>> = {
   run: { destination: 'agent-studio', section: 'workflows' },
   capabilities: { destination: 'settings', section: 'capabilities' },
   skills: { destination: 'settings', section: 'capabilities' },
-  // Chaque registre a sa section (conv-1109) : « va sur les hooks » ouvre les hooks, plus l'écran
+  // Chaque registre a sa section : « va sur les hooks » ouvre les hooks, plus l'écran
   // des skills.
   hooks: { destination: 'settings', section: 'hooks' },
   gates: { destination: 'settings', section: 'gates' },

@@ -5,7 +5,7 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
- * LA VUE MAINTENANCE DÉFILE, ET AUCUN BLOC NE S'ÉCRASE (conv-1402, 2026-10-31 : « la vue maintenance
+ * LA VUE MAINTENANCE DÉFILE, ET AUCUN BLOC NE S'ÉCRASE (2026-10-31 : « la vue maintenance
  * doit être scrollable, quand j'ouvre latence ça cache les tickets »).
  *
  * Constat à la capture, 1440 x 900 : Latence ouvert, le titre des tickets reste seul, leur liste est

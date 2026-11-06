@@ -10,7 +10,7 @@ import {
 } from './trois-facons'
 
 /**
- * LA CARTE DE COMPARAISON DES FAÇONS (conv-1038, 2026-10-21 — idée 6). Elle relie les branches d'un
+ * LA CARTE DE COMPARAISON DES FAÇONS (2026-10-21 — idée 6). Elle relie les branches d'un
  * même essai par le nom de leur copie (`essai__<fil>-<instant>-<rang>`), puis met en mots l'écart de
  * code, les vérifications et le coût de chacune.
  *
@@ -104,7 +104,7 @@ describe('les colonnes de la carte, en mots', () => {
   })
 
   /*
-   * LA RESSEMBLANCE (conv-1057, 2026-10-22). Les arrondis qui mentiraient : 99,6 % affiché « 100 % »
+   * LA RESSEMBLANCE (2026-10-22). Les arrondis qui mentiraient : 99,6 % affiché « 100 % »
    * pour deux codes qui ne sont PAS identiques, et 0,3 % affiché « 0 % » alors qu'une ligne est
    * commune.
    */

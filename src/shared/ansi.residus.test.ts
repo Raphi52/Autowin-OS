@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { sansSequencesAnsi as s } from './ansi'
 
 // Migré de scripts/arena-panel/p3-ansi-residus.mts (banc /arena, commit 191ab51d), retiré le
-// 2026-10-22 (residus, conv-1062). Défaut d'origine : des restes de séquences échappaient au
+// 2026-10-22 (residus). Défaut d'origine : des restes de séquences échappaient au
 // nettoyage — CSI 8 bits (U+009B) et choix de jeu de caractères (ESC ( B).
 describe('sansSequencesAnsi — séquences rares', () => {
   it('retire le CSI 8 bits', () => {

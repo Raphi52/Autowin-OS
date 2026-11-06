@@ -11,7 +11,7 @@ vi.mock('./Markdown', () => ({
 /**
  * MÊME COMPTEUR HORS-MODÈLE que `ChatView.frappe-cout.test.tsx`, braqué sur la barre de
  * recherche du fil : chercher ne doit PAS re-rendre les N messages à chaque caractère, sinon on
- * rouvre le gel réparé en conv-1464. Le test ne juge pas un ressenti, il compte des appels.
+ * rouvre le gel réparé. Le test ne juge pas un ressenti, il compte des appels.
  */
 const compteur = { scans: 0 }
 vi.mock('./chat-message-keys', async (importOriginal) => {

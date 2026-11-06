@@ -310,7 +310,7 @@ export function verdictMicro(
   return 'silence'
 }
 
-/** Lu pendant le rendu du widget : chaque message suit la langue de l'interface (conv-1170). */
+/** Lu pendant le rendu du widget : chaque message suit la langue de l'interface. */
 export const MESSAGE_VERDICT: Record<VerdictMicro, string> = {
   get coupe() {
     return traduireAccueil('micro.coupe', langueCourante())

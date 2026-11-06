@@ -1,5 +1,5 @@
 /**
- * RÉSERVATION DES FICHIERS ENTRE FILS (conv-1083, 2026-10-22).
+ * RÉSERVATION DES FICHIERS ENTRE FILS (2026-10-22).
  *
  * Plusieurs fils de chat travaillent dans le MÊME dossier (`D:\AutoWinOS`). Jusqu'ici, seule une
  * règle écrite (constitution, réflexe 14) disait « fichier déjà modifié par un autre = son travail ».
@@ -83,7 +83,7 @@ export function reserverOuRefuser(
       `Deux fils sur le même fichier non commité, c'est une publication bloquée pour les deux. ` +
       `Travaille sur un autre fichier : la réservation tombe dès que ${entree.fil} commite ce fichier, ou dans ${reste} min sans nouvelle édition de sa part. ` +
       `Si ce fichier est indispensable à ta tâche, dis-le à l'utilisateur en nommant ${entree.fil}. ` +
-      // conv-1139 : l'utilisateur recopiait le message d'un fil à l'autre (26 refus en deux jours).
+      // L'utilisateur recopiait le message d'un fil à l'autre (26 refus en deux jours).
       // « Si tu en disposes » : un agent d'étape de run n'a pas les outils de l'app.
       `Si tu disposes de l'outil ecrire_a_un_fil, écris-lui directement avec l'outil ecrire_a_un_fil (destinataire ${entree.fil}).`
     )
@@ -113,7 +113,7 @@ export interface IoCommitReserve {
 }
 
 /**
- * LE `git commit` D'UN AGENT CONSULTE LE REGISTRE (objection du contrôle final, conv-1083).
+ * LE `git commit` D'UN AGENT CONSULTE LE REGISTRE (objection du contrôle final).
  *
  * L'index git est partagé par tous les fils du même dossier : un `git commit -am`, un `git add -A`
  * ou un fichier déjà indexé par un autre fil emporte son travail sous un autre nom — les demi-commits

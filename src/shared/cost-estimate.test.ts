@@ -190,7 +190,7 @@ describe('estimation de coût des appels non chiffrés', () => {
 
 // fix-ok: prix périmés mesurés le 2026-11-05 — grille https://platform.claude.com/docs/en/about-claude/pricing
 // relue par curl (exit 0) et appel Haiku 5.5 réel facturé 0,00093225 $ par le CLI, que l'ancien code
-// estimait à 0,0093225 $ (motif `haiku` à 1 $ / 5 $ au lieu de 0,10 $ / 0,50 $) (conv-1602).
+// estimait à 0,0093225 $ (motif `haiku` à 1 $ / 5 $ au lieu de 0,10 $ / 0,50 $).
 describe('grille Anthropic relue le 2026-11-05 : une ligne par modèle exact', () => {
   /**
    * ORACLE HORS MODÈLE : `.autowin-data/autowin-os/run-stdout/c55319db-076c-4201-b8b7-bd8b98515a11
@@ -301,7 +301,7 @@ describe('grille OpenAI relue le 2026-11-05 : une ligne par modèle exact', () =
    * gpt-5.6-sol est en PROMOTION à 4 $ / 20 $ jusqu'au 30/11/2026 (« GPT-5.6 Sol’s promotional
    * pricing is available until November 30, 2026 »). Après, ou sans horloge : 5 $ / 30 $, le prix
    * que la page du modèle (https://developers.openai.com/api/docs/models/gpt-5.6-sol.md, relue le
-   * 2026-11-05) réduit de « 20% » et « 33% » pour arriver à 4 $ / 20 $ (conv-1602).
+   * 2026-11-05) réduit de « 20% » et « 33% » pour arriver à 4 $ / 20 $.
    */
   it('gpt-5.6-sol : 4 $ / 20 $ pendant la promotion, 5 $ / 30 $ après ou sans horloge', () => {
     const usage = {
@@ -346,7 +346,7 @@ describe('grille OpenAI relue le 2026-11-05 : une ligne par modèle exact', () =
     // Après la promotion : 10 $ / 45 $, soit « 2x input and 1.5x output for the full request »
     // appliqués à 5 $ / 30 $ (page du modèle relue le 2026-11-05). Entrée qui donnerait tort à la
     // correction : ce même appel rendrait 0,3 × 5 + 30 = 31,50 $ si l'après-promotion restait au
-    // prix court (conv-1602).
+    // prix court.
     expect(
       estimateCostUsd(
         { ...une, inputTokens: 300_000, model: 'gpt-5.6-sol' },

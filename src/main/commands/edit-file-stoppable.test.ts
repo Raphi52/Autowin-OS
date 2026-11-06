@@ -19,7 +19,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 /**
  * LE BOUTON STOP DOIT ATTEINDRE LA VERIFICATION AUTOMATIQUE D'`edit_file`.
  *
- * Suite de conv-978 (2026-10-15) : `run` et `verify` recoivent le signal d'arret du tour, mais la
+ * Suite (2026-10-15) : `run` et `verify` recoivent le signal d'arret du tour, mais la
  * verification qu'`edit_file` lance dans sa copie isolee (`mesurerAvecRapport` -> `spawnVerify`)
  * ne le recevait pas. Apres un Stop, la suite de tests continuait de tourner en arriere-plan
  * jusqu'a sa fin, et le tour coupe gardait un processus vivant derriere lui.

@@ -9,7 +9,7 @@ import { PorteProd } from './prod-gate'
 import { buildSqlTargetCatalog } from './sql-read-catalog'
 
 /**
- * conv-554 : une lecture sql-read sur APP_DEV (SRV-DEV\DEV) ouvrait une demande d'autorisation, car
+ * Une lecture sql-read sur APP_DEV (SRV-DEV\DEV) ouvrait une demande d'autorisation, car
  * la liste de déclaration sur disque ne la couvrait pas. Toute base de SRV-DEV\DEV est lisible sans
  * confirmation ; le reste garde sa protection.
  */

@@ -10,9 +10,9 @@ import {
 } from './ChatView.harness'
 
 /**
- * LE MODÈLE CHOISI DANS UN FIL DEVIENT L'ORCHESTRATEUR D'AGENTS STUDIO (conv-1529, 2026-11-04 :
+ * LE MODÈLE CHOISI DANS UN FIL DEVIENT L'ORCHESTRATEUR D'AGENTS STUDIO (2026-11-04 :
  * « quand je change de model et d'effort depuis un chat ca doit changer l'orchestrator de agents
- * studio »). Le fil garde son choix propre (conv-239) ; Agents Studio relit la topologie que
+ * studio »). Le fil garde son choix propre ; Agents Studio relit la topologie que
  * `setRole` réécrit. Montage réel de la vue : on clique un point de la grille modèle × effort de
  * l'en-tête, comme l'utilisateur.
  */

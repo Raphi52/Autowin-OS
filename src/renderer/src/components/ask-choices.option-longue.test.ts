@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseAskDecision, promptDeLOption } from './ask-choices'
 
 /*
- * conv-767, 2026-09-21 : une option en chaîne nue de plus de 200 caractères était coupée à
+ * 2026-09-21 : une option en chaîne nue de plus de 200 caractères était coupée à
  * l'affichage, et c'est ce texte coupé que le mode auto envoyait (« …bras B dans le proc »).
  */
 const LONGUE =

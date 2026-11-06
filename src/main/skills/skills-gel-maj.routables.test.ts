@@ -5,7 +5,7 @@ import { skillRoots } from '../app/native-registry'
 import { invokedSkillId, skillInstruction } from './skill-pipeline'
 
 /**
- * `/gel` ET `/maj` (conv-1036) SONT-ELLES ATTEINTES PAR LE VRAI CHEMIN D'INVOCATION ?
+ * `/gel` ET `/maj` SONT-ELLES ATTEINTES PAR LE VRAI CHEMIN D'INVOCATION ?
  *
  * Même sonde que `arena-routable.test.ts` : le routage est générique, un grep sur le nom ne prouve
  * rien. Pour `/maj`, le message testé est CELUI que le bouton « Réparer la mise à jour » envoie
@@ -38,9 +38,9 @@ describe('/gel — la skill et les outils qu elle cite existent', () => {
   })
 
   /*
-   * Le critère de la piste (scout conv-1036) : un fil « /heal j'ai eu un freeze » commence par le
+   * Le critère de la piste : un fil « /heal j'ai eu un freeze » commence par le
    * classement. `heal` doit donc, dans son corps CHARGÉ, renvoyer un gel d'Autowin vers `gel`.
-   * Entrée qui rend ce test rouge : skills/heal/SKILL.md d'avant conv-1036 (72b473a2).
+   * Entrée qui rend ce test rouge : skills/heal/SKILL.md d'avant (72b473a2).
    */
   it('le corps chargé de heal envoie un gel d Autowin vers gel, à l étape de mesure', () => {
     const corps = skillInstruction('heal', skillRoots())

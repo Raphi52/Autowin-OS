@@ -10,18 +10,18 @@
  * la liste passée sous silence tue le run. `pipeline-discipline.test.ts` croise donc le texte
  * avec `VUES_CONNUES` — toute vue ajoutée au harnais sans être annoncée ici rend ce test rouge.
  *
- * fix-ok: conv-1582 — deux phrases fausses mesurées le 2026-11-05 : « tronqué à ~2000 caractères »
+ * fix-ok: deux phrases fausses mesurées le 2026-11-05 : « tronqué à ~2000 caractères »
  * alors que `porterVersPhaseSuivante` (orchestrator-contrats.ts) rend le texte tel quel depuis le
  * 2026-09-27, et « ni Edit ni Write » pour les phases de lecture alors que `sandboxForPhase` rend
  * `danger-full-access` à toutes depuis le 2026-09-04. `pipeline-discipline.test.ts` lie désormais
  * ces phrases à ces deux fonctions.
- * fix-ok: conv-1582 — « chargés sur TOUTES les phases » était faux pour la sous-tâche parallèle d'un
+ * fix-ok: « chargés sur TOUTES les phases » était faux pour la sous-tâche parallèle d'un
  * build sans modification (`orchestrator-parcours-glouton.ts`, branche `read-only`) ; l'exception est
  * dite, et `pipeline-discipline.outils.test.ts` la lie à cette branche.
  *
  * Les sections de frame annoncées ici recopient la ligne « Livrable » de `PHASE_BRIEFS.frame` :
  * `## Confiance` y manquait (scout du 05/11, piste 14). `pipeline-discipline.test.ts` compare
- * désormais les deux listes (conv-1602).
+ * désormais les deux listes.
  */
 export const PIPELINE_DISCIPLINE_INSTRUCTION = `
 Suis la discipline de pipeline canonique, proportionnée au régime (une tâche triviale peut rester directe) :

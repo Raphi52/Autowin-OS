@@ -37,7 +37,7 @@ export interface GitReadResult {
 }
 /**
  * La seule branche courante, pour le badge du chat : lue dans `.git/HEAD`, sans processus git
- * (heal conv-1013 — voir `readGitBranch`). Même nom que `# branch.head` de `git status`.
+ * (heal — voir `readGitBranch`). Même nom que `# branch.head` de `git status`.
  */
 export type GitBranchResult =
   { available: true; state: { branch: string } } | { available: false; error: string }
@@ -70,7 +70,7 @@ const ECHAPPEMENTS_C: Readonly<Record<string, number>> = {
 }
 
 /**
- * LE VRAI NOM D'UN CHEMIN CITE PAR GIT — heal conv-204, 2026-10-10.
+ * LE VRAI NOM D'UN CHEMIN CITE PAR GIT — heal, 2026-10-10.
  *
  * Avec `core.quotePath` (defaut), git ecrit entre guillemets, a la maniere du C, tout chemin qui
  * porte un octet non ASCII ou un caractere special : `"accentu\303\251.ts"` pour `accentué.ts`. Ce

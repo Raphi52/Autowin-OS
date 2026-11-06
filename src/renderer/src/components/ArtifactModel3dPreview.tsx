@@ -27,7 +27,7 @@ export function ArtifactModel3dPreview({
 }): React.JSX.Element {
   const { t } = useTextesArtefactsEtBandeaux()
   const hostRef = useRef<HTMLDivElement>(null)
-  // Le refus est gardé en CLÉ et traduit au rendu : il suit un changement de langue (conv-1170).
+  // Le refus est gardé en CLÉ et traduit au rendu : il suit un changement de langue.
   const [failure, setFailure] = useState<{ id: string; message: CleArtefactsEtBandeaux }>()
 
   useEffect(() => {

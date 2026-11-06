@@ -9,7 +9,7 @@ import {
 } from './reprise-apres-arret'
 
 /**
- * conv-1142 (2026-10-25) : après un tour coupé juste après un résultat d'outil, le CLI insère à la
+ * 2026-10-25 : après un tour coupé juste après un résultat d'outil, le CLI insère à la
  * reprise « Continue from where you left off. » puis une réponse synthétique « No response
  * requested. » (83 cas relevés dans les sessions du poste). L'explication vivait dans la
  * constitution, relue à chaque tour ; elle part désormais avec le seul message qui suit un tour arrêté.
@@ -104,7 +104,7 @@ describe('le message envoyé au modèle porte la note, juste avant la demande', 
 })
 
 /**
- * Contrat de SOURCE (même idiome que run-pilot-chat.orientation.test.ts, conv-844) : le renderer
+ * Contrat de SOURCE (même idiome que run-pilot-chat.orientation.test.ts) : le renderer
  * n'envoie pas le statut d'un message, `run-pilot-chat.ts` le relit dans le store. Ne prouve pas
  * le chemin de bout en bout.
  */

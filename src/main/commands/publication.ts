@@ -1,7 +1,7 @@
 /**
  * Édition vérifiée et sa publication : textes de l'agent, mesure, restauration, archive des sorties.
  *
- * Code libre sorti de `commands.ts` tel quel (conv-1580, lot 5) ; `commands.ts` ré-exporte ce qu'il
+ * Code libre sorti de `commands.ts` tel quel (lot 5) ; `commands.ts` ré-exporte ce qu'il
  * exportait déjà, ses importeurs ne changent pas. Dans `commands/`, une VALEUR s'importe d'ici,
  * jamais par `'../commands'` (cycle d'import) : `commands/code-libre.test.ts` le garde.
  */

@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — SETTINGS — PAGES SKILLS, HOOKS, GATES, MODS, TOOLS, BEHAVIOUR, ROUTAGE, RULES (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — SETTINGS — PAGES SKILLS, HOOKS, GATES, MODS, TOOLS, BEHAVIOUR, ROUTAGE, RULES (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : CapabilitiesView, BehaviourView, RouterView, RulesView, SettingsView, BrainSettings,
  * InterfaceView, protection de prod, routage fantôme, seuils du mode auto, copie d’exécution — ce que
@@ -18,7 +18,7 @@ import { tableDeTextes } from '../textes'
  * (BehaviourView), `routeur.` (RouterView), `prod.` (ProdProtectionSettings), `shadow.`
  * (ShadowRoutingPilotSettings), `modeAuto.` (ModeAutoSeuilsSettings), `rules.` (RulesView).
  * SettingsView, BrainSettings, ExecutionWorkspaceSettings et InterfaceView sont déjà portés par la
- * table principale (`textes.ts`, conv-1146) : rien ici pour eux.
+ * table principale (`textes.ts`) : rien ici pour eux.
  *
  * Restent en dur dans les écrans, identiques dans les deux langues : les noms des sections (Skills,
  * Hooks, Gates, Mods, Tools, Behaviour), « Sources », « Global », « Active »/« Inactive », « Matcher »,

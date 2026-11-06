@@ -9,7 +9,7 @@ import { appliquerLangue } from '../langue'
 import { TEXTES_FR } from '../textes-ecrans/accueil'
 
 /**
- * L'ACCUEIL SUIT LA LANGUE (traduction anglaise, conv-1170, lot « Accueil »). Entrée qui doit faire
+ * L'ACCUEIL SUIT LA LANGUE (traduction anglaise, lot « Accueil »). Entrée qui doit faire
  * échouer ce test : un libellé de l'accueil ou d'un de ses widgets (Interlocuteurs, Transcription,
  * Jarvis) laissé en dur, un écran qui ne se redessine pas quand la langue change, ou un retour au
  * français qui ne rend pas le texte d'origine mot pour mot.
@@ -26,7 +26,7 @@ let root: Root | null = null
 let hote: HTMLDivElement | null = null
 
 beforeEach(() => {
-  // Outlook ne se lit qu'apres « Connecter Outlook » (conv-1555) : ces tests partent connectes.
+  // Outlook ne se lit qu'apres « Connecter Outlook » : ces tests partent connectes.
   window.localStorage.setItem('autowin.outlook.connecte', '1')
   // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
   window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')
@@ -89,7 +89,7 @@ describe('écran Accueil — langue', () => {
     expect(tuile(ecran, 'agenda')).toContain('Calendar')
     expect(tuile(ecran, 'notifications')).toContain('Agent reports')
     expect(tuile(ecran, 'notifications')).toContain('missed run')
-    // La croix d'acquittement n'a plus de mot visible (conv-1225) : son nom accessible se traduit.
+    // La croix d'acquittement n'a plus de mot visible : son nom accessible se traduit.
     expect(
       ecran.querySelector('[data-testid="home-widget-notifications"] .home-notices__acquitter')
         ?.getAttribute('aria-label')

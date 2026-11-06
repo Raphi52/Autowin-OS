@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { elementVise, referenceDeLElement } from './reference-element'
 
 /**
- * L'ÉLÉMENT CIBLÉ (conv-1038, 2026-10-21, étendu conv-1338) : l'utilisateur DÉCRIT ce qu'il voit
+ * L'ÉLÉMENT CIBLÉ (2026-10-21) : l'utilisateur DÉCRIT ce qu'il voit
  * (« la barre d'onglets doit être tout en haut au niveau de réduire fermer »). Un Alt+clic remplace
  * la description par une référence exacte : texte affiché, bloc, fichier source, composant, styles,
  * fil et tour — de quoi partir directement du bon endroit.
  *
- * fix-ok: conv-1338 — plusieurs passes sur ce fichier, sans correctif à l'aveugle : les tests de la
+ * fix-ok: plusieurs passes sur ce fichier, sans correctif à l'aveugle : les tests de la
  * phrase neutre, des styles et du composant sont écrits avant leur code ; le test du nom raccourci a
  * été remplacé quand `LONGUEUR_MIN_NOM` s'est révélée inutile, `composantDe` ne lisant aucun nom sur
  * une version construite (`import.meta.env.DEV`).

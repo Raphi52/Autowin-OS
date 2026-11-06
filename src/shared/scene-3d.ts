@@ -20,7 +20,7 @@ export const TYPE_MESSAGE_SCENE_3D = 'autowin-scene-3d'
 export const MAX_SCENE_3D_CHARS = 300_000
 
 /**
- * PAGE INTERACTIVE DU FIL (conv-1292, 2026-10-29) — un bloc ```html-interactif est une page HTML
+ * PAGE INTERACTIVE DU FIL (2026-10-29) — un bloc ```html-interactif est une page HTML
  * dont les scripts TOURNENT, dans le meme cadre isole que les scenes 3D (meme page, meme politique,
  * sans reseau ni acces a l'app). Le ```html-render reste rendu dans la page de l'app, sans script.
  * Nom partage par le decoupage du fil (markdown-blocs.ts) et la consigne du chat.
@@ -31,7 +31,7 @@ export const FORME_PAGE_INTERACTIVE = 'html-interactif'
 export const MAX_PAGE_INTERACTIVE_CHARS = 300_000
 
 /**
- * Fichier de la page isolee SANS moteur 3D (conv-1304, 2026-10-30), servie a cote de `index.html` :
+ * Fichier de la page isolee SANS moteur 3D (2026-10-30), servie a cote de `index.html` :
  * une page ```html-interactif qui ne nomme pas `THREE` y tourne (`pageIsoleePour`,
  * page-interactive.ts) au lieu de telecharger les ~750 Ko de three.js de `scene-3d.html`. Meme
  * amorce, meme politique, meme filtre de navigation (`isSceneFrameUrl`).

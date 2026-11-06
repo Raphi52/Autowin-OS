@@ -92,7 +92,7 @@ describe('prompt suivant prérempli dans le composer', () => {
 /**
  * AGIR PLUTOT QUE RECOMMANDER.
  *
- * Defaut mesure le 2026-08-27 dans conv-1422, trois tours d'affilee. Le profil rendait le bloc de
+ * Defaut mesure le 2026-08-27, trois tours d'affilee. Le profil rendait le bloc de
  * cloture OBLIGATOIRE sur tout travail substantiel, « 👉 Recommandé » y contient « une seule
  * prochaine action », et `AUTOWIN_PROMPT_V1` la reecrit a l'imperatif pour que l'utilisateur la
  * renvoie. Rien n'indiquait quand cette action doit simplement etre FAITE. Le tour 3 s'est donc
@@ -152,7 +152,7 @@ describe('agir plutot que recommander — la cloture ne sert pas a rendre le tra
 /**
  * RELANCE SANS CIBLE.
  *
- * Defaut mesure le 2026-08-31 (conv-5). Le tour precedent s'etait clos sur « 👉 Recommandé :
+ * Defaut mesure le 2026-08-31. Le tour precedent s'etait clos sur « 👉 Recommandé :
  * corriger l'include de tsconfig.node.json ». L'utilisateur a repondu « go ». L'agent a lu ce
  * « go » comme une demande VIDE — « go sans cible » — et a substitue sa propre idee du plus utile
  * (lancer la suite de tests complete) au lieu d'executer la recommandation qu'il venait lui-meme
@@ -181,14 +181,14 @@ describe('relance sans cible — un accord execute la derniere recommandation', 
   })
 
   /**
-   * Defaut mesure le 2026-09-02 (conv-122). Tour 2 : « et kaizen doit pouvoir editer les skills
+   * Defaut mesure le 2026-09-02. Tour 2 : « et kaizen doit pouvoir editer les skills
    * les tools le code autowin les fichiers.md le brain bref faut lui lister ses leviers » ->
    * annulation par l'utilisateur apres 93 s, 0 token, message affiche « Tour annule avant toute
    * reponse — rien n'a ete execute » (causal-trace/conv-122.jsonl, sequence 8-9). Tour 3 : « go ».
    * L'agent a applique la regle a la LETTRE — la derniere rubrique « Recommandé » ecrite datait du
-   * tour 1 — et est parti sur le tri de conv-124, laissant la demande annulee sans reponse. Cout
+   * tour 1 — et est parti sur le tri, laissant la demande annulee sans reponse. Cout
    * pour l'utilisateur : il a re-tape sa phrase MOT POUR MOT dans une nouvelle conversation
-   * (conv-123, 09:03:38Z) pour l'obtenir. Le paragraphe ne prevoyait pas le tour interrompu.
+   * (09:03:38Z) pour l'obtenir. Le paragraphe ne prevoyait pas le tour interrompu.
    */
   it('traite le tour INTERROMPU : la relance reprend la demande abandonnee', () => {
     expect(consigne).toMatch(/interrompu|annul[ée]/iu)
@@ -199,7 +199,7 @@ describe('relance sans cible — un accord execute la derniere recommandation', 
 /**
  * PARLE COMME À UN COLLÈGUE (ex-« LANGAGE SIMPLE », fusionné : c'était un doublon strict).
  *
- * Demande de l'utilisateur du 2026-09-01 (conv-30) : « les termes employés sont trop poussés »,
+ * Demande de l'utilisateur du 2026-09-01 : « les termes employés sont trop poussés »,
  * puis, apres levee d'ambiguite, « je parlais uniquement des réponses du model, faut simplifier un
  * max, que l'humain comprenne vite ». Le profil imposait deja « phrases courtes » et « supprime le
  * verbiage » — donc la LONGUEUR — mais rien sur le VOCABULAIRE. Un texte court en jargon reste
@@ -256,7 +256,7 @@ describe('langage simple — le vocabulaire, pas seulement la longueur', () => {
 })
 
 /**
- * CLÔTURE = MÊME CRITÈRE QUE LE CODE (2026-09-18, conv-710). La consigne disait « après une tâche
+ * CLÔTURE = MÊME CRITÈRE QUE LE CODE (2026-09-18). La consigne disait « après une tâche
  * substantielle » — jugement laissé au modèle — alors que `exigeUneConclusion` (chat-turn-messages.ts)
  * ne réclame les rubriques QUE si le tour a exécuté une commande. L'écart produisait des blocs de
  * clôture sur des réponses sans action (réponses verbeuses).
@@ -270,7 +270,7 @@ describe('STYLE_CLOTURE_CHAT — critère « a agi »', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(/sans commande.*aucun bloc de clôture/iu)
   })
 
-  // conv-267 (2026-10-11) : 2 tours réels sur 2 ont répondu sans clôture après un `get_state`
+  // 2026-10-11 : 2 tours réels sur 2 ont répondu sans clôture après un `get_state`
   // DIRECT ; la relance de conclusion a doublé l'appel au modèle et la phrase affichée.
   it('compte un outil direct mcp__autowin__ comme une commande, dans les DEUX sens de la règle', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(

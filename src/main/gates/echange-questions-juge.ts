@@ -2,7 +2,7 @@ import { TEXTE_MAX_MESSAGE_FIL } from '../conversations/messages-entre-fils-app'
 import { questionsDuJuge } from '../juge/objections-juge'
 
 /**
- * ÉCHANGE AVANT RÉPARATION — questions explicites du juge (conv-1139, 2026-10-25, étape 2 de
+ * ÉCHANGE AVANT RÉPARATION — questions explicites du juge (2026-10-25, étape 2 de
  * l'option A du cadrage forum-agents-partie2-juge-build ; étape 1 : `echange-sans-cause.ts`).
  *
  * Mesure du 24/10 : sur 36 objections du juge lues à la main, 4 (≈ 11 %) demandaient une

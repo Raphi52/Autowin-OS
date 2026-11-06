@@ -21,7 +21,7 @@ export type QuickFilter =
 
 /**
  * Le libellé se lit à l'affichage (accesseur) : il suit la langue courante sans que la liste soit
- * reconstruite (conv-1170). « Prompt / RAG » et « Artefacts » se disent pareil en anglais.
+ * reconstruite. « Prompt / RAG » et « Artefacts » se disent pareil en anglais.
  */
 function filtre(value: QuickFilter, cle: CleObservatory): { value: QuickFilter; label: string } {
   return {

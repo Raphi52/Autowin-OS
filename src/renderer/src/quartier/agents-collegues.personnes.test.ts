@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * « AFFICHER LES AGENTS DE » (demande utilisateur du 2026-11-05, conv-1599) : la liste des personnes du
+ * « AFFICHER LES AGENTS DE » (demande utilisateur du 2026-11-05) : la liste des personnes du
  * partage, revalidée, et les cases de CE poste qui retirent les agents d'une personne de la scène.
  */
 import { afterEach, describe, expect, it } from 'vitest'

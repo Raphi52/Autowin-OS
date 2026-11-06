@@ -69,7 +69,7 @@ import {
   type IndependentLearningAttestation
 } from '../brain/outcome-learning-proposal'
 
-// Le code libre du bus vit dans commands/*.ts (conv-1580, lot 5) ; ré-exporté pour les appelants.
+// Le code libre du bus vit dans commands/*.ts (lot 5) ; ré-exporté pour les appelants.
 export type { CommandSpec, CommandResult, AppSnapshot, PromptSnapshot, AppEvent } from './types'
 import type { CommandSpec, CommandResult, AppSnapshot, PromptSnapshot, AppEvent } from './types'
 import { DEFAULT_COMMAND_ANNOTATIONS } from './types'
@@ -88,7 +88,7 @@ export { ORCHESTRATE_PHASES, isolateWatchdogPromptPaths, watchdogEvidenceIdentit
 export { circonstanceDePublication, restaurer } from './publication'
 import type { MesureVerifiee } from './publication'
 
-// Le catalogue vit dans commands/catalogue.ts (conv-1508, lot 2) ; ré-exporté pour les appelants.
+// Le catalogue vit dans commands/catalogue.ts (lot 2) ; ré-exporté pour les appelants.
 export { CATALOG, TRANCHE_MESSAGE_LU } from './catalogue'
 import { CATALOG } from './catalogue'
 
@@ -117,8 +117,8 @@ export class AppCommandBus {
    * croyait donc l'app sur le chat alors qu'elle affichait l'accueil. Verifie hors-modele par
    * `autowin-cdp-proof.mjs --verify-navigation`, qui compare exactement ces deux valeurs.
    */
-  /** @internal (conv-1508) */ tab: AppDestination = 'accueil'
-  /** @internal (conv-1508) */ traceStore?: TraceStore
+  /** @internal */ tab: AppDestination = 'accueil'
+  /** @internal */ traceStore?: TraceStore
   /** Hook de traçage (ledger) — chaque commande exécutée y laisse une ligne. */
   trace?: (name: string, args: Record<string, unknown>, ok: boolean) => void
   /** Conversation active (contexte posé par le chat) : les workflows créés s'y rattachent. */
@@ -132,27 +132,27 @@ export class AppCommandBus {
    * plus récent, puis la supprimait dans son `finally` (la garde d'identité ne voit rien : l'entrée
    * courante est bien la sienne) → le bouton Stop du run en cours devenait un no-op silencieux.
    */
-  /** @internal (conv-1508) */ orchestrationRank = 0
+  /** @internal */ orchestrationRank = 0
   private readonly orchestrationRankByConv = new Map<string, number>()
 
   /** Arme le Stop pour ce run — sauf si un lancement PLUS RÉCENT a déjà pris la place. */
-  /** @internal (conv-1508) */ claimOrchestration(convId: string, rank: number, controller: AbortController): void {
+  /** @internal */ claimOrchestration(convId: string, rank: number, controller: AbortController): void {
     if ((this.orchestrationRankByConv.get(convId) ?? 0) > rank) return
     this.orchestrationRankByConv.set(convId, rank)
     this.activeOrchestrations.set(convId, controller)
   }
   /** Déduplique un même lancement tant que son orchestration est encore en vol. */
-  /** @internal (conv-1508) */ readonly activeOrchestrationByFingerprint = new Map<
+  /** @internal */ readonly activeOrchestrationByFingerprint = new Map<
     string,
     Promise<{ path: string; reused: boolean } | undefined>
   >()
   /** Sérialise écriture → snapshot → journal : aucune autre conversation ne peut s'intercaler. */
-  /** @internal (conv-1580) */ editFileTail: Promise<void> = Promise.resolve()
+  /** @internal */ editFileTail: Promise<void> = Promise.resolve()
 
   /**
    * Abort l'orchestration (sous-agent/juge) en cours pour une conversation.
    *
-   * La RAISON est obligatoire, et ce n'est pas une politesse. Mesure sur conv-1369 : un run de 28 min
+   * La RAISON est obligatoire, et ce n'est pas une politesse. Mesure : un run de 28 min
    * s'est termine par « [abort] claude CLI interrompu : raison non rapportee par l'appelant », et
    * l'application ne pouvait pas dire a l'utilisateur pourquoi son travail avait ete coupe. Le motif
    * existait UNE LIGNE plus haut chez l'appelant (`os:pilotChat:cancel` passe deja 'user' au tour de
@@ -169,11 +169,11 @@ export class AppCommandBus {
   }
 
   /**
-   * Arrête le tour et le run du fil `id` avant sa suppression par l'agent (conv-1060). `appelant` est
+   * Arrête le tour et le run du fil `id` avant sa suppression par l'agent. `appelant` est
    * le fil du tour qui supprime ; sans lui, le fil actif. S'il s'agit du même fil, le tour est coupé
    * SANS être attendu : il attend lui-même la fin de cet appel.
    */
-  /** @internal (conv-1508) */ arreterAvantSuppression(id: string, appelant: string | undefined): Promise<void> {
+  /** @internal */ arreterAvantSuppression(id: string, appelant: string | undefined): Promise<void> {
     return arreterLesTravauxDuFil(
       id,
       { couperLeRun: (fil, motif) => this.abortOrchestration(fil, motif), tours: this.toursDeChat },
@@ -241,7 +241,7 @@ export class AppCommandBus {
     this.traceStore = traceStore
   }
 
-  /** Corps : `commands/apprentissage.ts` (conv-1580, lot 6). */
+  /** Corps : `commands/apprentissage.ts` (lot 6). */
   observeOutcomeLearning(input: {
     conversationId: string
     turnId: string
@@ -292,7 +292,7 @@ export class AppCommandBus {
 
   /**
    * Les tours de chat en vol, câblés depuis index.ts : `remove_conversation(s)` les coupe avant de
-   * supprimer, comme le fait l'écran (conv-1060, `arret-avant-suppression.ts`). Absent -> seul le
+   * supprimer, comme le fait l'écran (`arret-avant-suppression.ts`). Absent -> seul le
    * run du fil est coupé.
    */
   toursDeChat?: Pick<ActiveChatTurns, 'abort' | 'abortAndWait'>
@@ -300,7 +300,7 @@ export class AppCommandBus {
   /**
    * FILE DE REDÉMARRAGE (`relance-auto-moteur.ts`, `mettreEnFile`) : relance au prochain repos, après
    * préavis. Rend `false` si la file n'existe pas (version installée, relance auto désactivée).
-   * Conv-304, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb : sans elle, `restart_app` coupait conv-303
+   * Conv-304, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb : sans elle, `restart_app` coupait
    * et l'agent a renvoyé le choix à l'utilisateur au lieu de redémarrer.
    */
   redemarrerAuRepos?: (demande: { cause: string; avantRelance?: () => void }) => boolean
@@ -313,26 +313,26 @@ export class AppCommandBus {
   fermerBureauCache?: (demande: DemandeFermeture) => Promise<ResultatFermeture>
 
   /**
-   * Outils `bureau_cache_lancer / observer / agir` (conv-344), câblés depuis index.ts sur
+   * Outils `bureau_cache_lancer / observer / agir`, câblés depuis index.ts sur
    * `creerBureau`, le processus de capture et `agirHdesk`. `ficheBureauCache` lit la fiche du
    * registre : observer et agir refusent un bureau sans fiche ou d'un autre fil. Absents -> l'outil
    * annonce l'indisponibilité.
    */
   lancerBureauCache?: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
-  /** L'image, et l'arbre d'accessibilité en texte quand il a pu être lu (conv-1457, hdesk-arbre.ts). */
+  /** L'image, et l'arbre d'accessibilité en texte quand il a pu être lu (hdesk-arbre.ts). */
   observerBureauCache?: (id: string) => Promise<ImageTv & { arbre?: string }>
   agirBureauCache?: (geste: GesteTv | GesteElement) => Promise<ResultatGeste>
   ficheBureauCache?: (id: string) => EntreeRegistre | undefined
 
   /**
-   * Outils `navigateur_*` (conv-1286, lot 4/5), câblés depuis index.ts sur
+   * Outils `navigateur_*` (lot 4/5), câblés depuis index.ts sur
    * `gestionnaireNavigateur()` : redemandé à CHAQUE appel, la fenêtre principale rouverte en porte
    * un neuf. Absent, ou `null` (fenêtre fermée) -> l'outil annonce l'indisponibilité.
    */
   navigateur?: () => NavigateurDeLAgent | null
 
   /**
-   * Outil `terminal_lire` (conv-1362, lot 3/3), câblé depuis index.ts sur `gestionnaireTerminal()`.
+   * Outil `terminal_lire` (lot 3/3), câblé depuis index.ts sur `gestionnaireTerminal()`.
    * Absent, ou `null` -> l'outil annonce l'indisponibilité.
    */
   terminal?: () => TerminalDeLAgent | null
@@ -361,8 +361,8 @@ export class AppCommandBus {
   tourDeChatActif?: (conversationId: string) => boolean
 
   /**
-   * Coordinateur des plans de lots (conv-1150), câblé tardivement depuis index.ts. Absent -> refus.
-   * `lancerParOrdre` (conv-1284) : l'ordre d'un chef vers un lot bloqué vaut relance du lot.
+   * Coordinateur des plans de lots, câblé tardivement depuis index.ts. Absent -> refus.
+   * `lancerParOrdre` : l'ordre d'un chef vers un lot bloqué vaut relance du lot.
    */
   plansDeLots?: Pick<CoordinateurDesPlans, 'outil' | 'lancerParOrdre'>
 
@@ -373,15 +373,15 @@ export class AppCommandBus {
   taskManager?: TaskCreateDeps
 
   /**
-   * Condensé des notes lues par `brain_read` (conv-1469, `brain-condenseur.ts`), câblé depuis
+   * Condensé des notes lues par `brain_read` (`brain-condenseur.ts`), câblé depuis
    * index.ts. Absent -> la note part entière, comme avant.
    */
   condenseurBrain?: Condenseur
 
   constructor(
-    /** @internal (conv-1508) */ readonly os: AutowinOS,
-    /** @internal (conv-1508) */ readonly broadcast: (e: AppEvent) => void,
-    /** @internal (conv-1508) */ readonly onChat?: (
+    /** @internal */ readonly os: AutowinOS,
+    /** @internal */ readonly broadcast: (e: AppEvent) => void,
+    /** @internal */ readonly onChat?: (
       provider: string | undefined,
       role: string | undefined,
       msg: string
@@ -392,19 +392,19 @@ export class AppCommandBus {
      * Sources Tickets configurées, relues à CHAQUE appel : le modèle nomme au plus un `sourceId`,
      * jamais un profil. Défaut vide → `ticket_create` refusera en disant de configurer une source.
      */
-    /** @internal (conv-1508) */ readonly listTicketSources: () => readonly TicketSourceProfile[] = () => [],
+    /** @internal */ readonly listTicketSources: () => readonly TicketSourceProfile[] = () => [],
     /** Créateur réel, câblé depuis index.ts. Absent → la commande annonce l'indisponibilité. */
-    /** @internal (conv-1508) */ readonly createTicket?: (request: TicketCreateRequest) => Promise<TicketItem>,
+    /** @internal */ readonly createTicket?: (request: TicketCreateRequest) => Promise<TicketItem>,
     /** Lecture réelle des tickets, câblée depuis index.ts. Absente → la commande annonce l'indisponibilité. */
-    /** @internal (conv-1508) */ readonly listTickets?: (
+    /** @internal */ readonly listTickets?: (
       request: TicketListRequest
     ) => Promise<{ items: TicketItem[]; hasMore: boolean; cursor?: string }>,
     /** Lecture d'UNE fiche par id, câblée depuis index.ts. */
-    /** @internal (conv-1508) */ readonly getTicket?: (request: TicketGetRequest) => Promise<TicketItem>,
+    /** @internal */ readonly getTicket?: (request: TicketGetRequest) => Promise<TicketItem>,
     /** Controle Windows local, reserve aux commandes explicites du chat. */
-    /** @internal (conv-1508) */ readonly desktop?: DesktopController,
+    /** @internal */ readonly desktop?: DesktopController,
     /** Retour réel vers une fiche existante, câblé depuis index.ts. */
-    /** @internal (conv-1508) */ readonly updateTicket?: (request: TicketUpdateRequest) => Promise<TicketItem>,
+    /** @internal */ readonly updateTicket?: (request: TicketUpdateRequest) => Promise<TicketItem>,
     /**
      * Chemin de `sqlcmd`, résolu au démarrage. Absent → `sql_query` annonce l'indisponibilité au lieu
      * de tenter un binaire inexistant.
@@ -416,7 +416,7 @@ export class AppCommandBus {
      */
     private readonly sqlcmdPath?: string,
     /** Ledger causal des leçons de run. Dernier paramètre pour préserver les appels positionnels. */
-    /** @internal (conv-1508) */ readonly outcomeLearning?: OutcomeLearningSupervisor,
+    /** @internal */ readonly outcomeLearning?: OutcomeLearningSupervisor,
     /**
      * LE POINT DE PASSAGE DE PRODUCTION (`prod-gate.ts`). Absent → rien ne change : les gardes
      * historiques s'appliquent seules. Présent → il décide, AVANT toute connexion, si la cible exige
@@ -425,13 +425,13 @@ export class AppCommandBus {
      * Ajouté en DERNIER, comme `sqlcmdPath` avant lui et pour la même raison : les paramètres de ce
      * constructeur sont positionnels, l'insérer plus haut décalerait silencieusement les appels.
      */
-    /** @internal (conv-1508) */ readonly porteProd?: PorteProd,
+    /** @internal */ readonly porteProd?: PorteProd,
     /**
      * LE GUICHET (`prod-guichet.ts`) : au refus de la porte, il ouvre l'écran de saisie chez
      * l'utilisateur et attend le jeton, puis le geste est rejoué. Absent → le refus part tel quel.
      * Positionnel lui aussi, donc ajouté APRÈS `porteProd`.
      */
-    /** @internal (conv-1508) */ readonly guichetProd?: GuichetProd
+    /** @internal */ readonly guichetProd?: GuichetProd
   ) {}
 
   /**
@@ -449,7 +449,7 @@ export class AppCommandBus {
   /**
    * Chemin de `sqlcmd`, choisi AU MOMENT DE L'APPEL et non au demarrage.
    *
-   * DEFAUT VECU (conv-152, 2026-09-02) : `sqlcmd` etait absent du poste, donc `sql_query` repondait
+   * DEFAUT VECU (2026-09-02) : `sqlcmd` etait absent du poste, donc `sql_query` repondait
    * « non localise sur ce poste ». Installe puis ajoute au PATH utilisateur, il restait INVISIBLE :
    * une modification du PATH ne se propage jamais aux processus deja lances, et le redemarrage passe
    * par le lanceur, qui herite de l'ancien environnement. Le chemin resolu une seule fois au
@@ -460,7 +460,7 @@ export class AppCommandBus {
    * est verifiee : un reglage qui pointe a cote doit laisser la main a la resolution par le PATH,
    * jamais faire echouer l'appel sur un binaire fantome.
    */
-  /** @internal (conv-1508) */ cheminSqlcmd(): string | undefined {
+  /** @internal */ cheminSqlcmd(): string | undefined {
     const designe = process.env.AUTOWIN_SQLCMD_BIN?.trim()
     if (designe && existsSync(designe)) return designe
     return this.sqlcmdPath
@@ -504,13 +504,13 @@ export class AppCommandBus {
     }))
   }
 
-  /** Corps : `commands/instantanes.ts` (conv-1580, lot 6). */
+  /** Corps : `commands/instantanes.ts` (lot 6). */
   snapshot(jalon?: (nom: string) => void): Promise<AppSnapshot> {
     return instantanes.snapshot(this, jalon)
   }
 
-  /** Corps : `commands/instantanes.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ jalonne<T>(jalon: ((nom: string) => void) | undefined, nom: string, lecture: () => T): T {
+  /** Corps : `commands/instantanes.ts` (lot 6). */
+  /** @internal */ jalonne<T>(jalon: ((nom: string) => void) | undefined, nom: string, lecture: () => T): T {
     return instantanes.jalonne<T>(jalon, nom, lecture)
   }
 
@@ -533,16 +533,16 @@ export class AppCommandBus {
    * La memoire est volontairement EN MEMOIRE : au redemarrage, l'application redit une fois ce qui
    * reste. Se taire pour toujours serait le defaut inverse, et le pire des deux.
    */
-  /** @internal (conv-1580) */ readonly travauxDejaAnnonces = new Set<string>()
+  /** @internal */ readonly travauxDejaAnnonces = new Set<string>()
 
-  /** Corps : `commands/instantanes.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ travauxNonAnnonces(
+  /** Corps : `commands/instantanes.ts` (lot 6). */
+  /** @internal */ travauxNonAnnonces(
     travaux: Array<{ agentId: string; date: string; fichiers: string[] }>
   ): Array<{ agentId: string; date: string; fichiers: string[] }> {
     return instantanes.travauxNonAnnonces(this, travaux)
   }
 
-  /** Corps : `commands/instantanes.ts` (conv-1580, lot 6). */
+  /** Corps : `commands/instantanes.ts` (lot 6). */
   snapshotForPrompt(jalon?: (nom: string) => void): Promise<PromptSnapshot> {
     return instantanes.snapshotForPrompt(this, jalon)
   }
@@ -571,7 +571,7 @@ export class AppCommandBus {
   /** Tours dont la capture d'ecran reel a deja ete refusee une fois (voir `refusEcranReel`). */
   private tourEcranReelRefuse?: string
 
-  /** Idem pour `desktop_act` (kaizen conv-854) : compteur distinct, une observation n'arme pas un clic. */
+  /** Idem pour `desktop_act` : compteur distinct, une observation n'arme pas un clic. */
   private tourActionReelleRefusee?: string
 
   /** Vrai si ce tour a deja recu le refus : on ne facture pas la friction deux fois. */
@@ -615,7 +615,7 @@ export class AppCommandBus {
    * mauvais depot. Hors de tout tour (appel IPC direct), le repli est le dossier global : le
    * comportement d'avant, a l'identique.
    */
-  /** @internal (conv-1508) */ get workspaceDuTour(): string {
+  /** @internal */ get workspaceDuTour(): string {
     return dossierDuTourCourant() ?? this.os.executionWorkspace
   }
 
@@ -632,11 +632,11 @@ export class AppCommandBus {
   }
 
   /**
-   * Les fils vus par `ecrire_a_un_fil` (conv-1139). Actif = connu ET touché depuis moins que le
+   * Les fils vus par `ecrire_a_un_fil`. Actif = connu ET touché depuis moins que le
    * seuil d'archivage (`SEUIL_ARCHIVE_MS`) ; lu dans la liste en mémoire, sans charger d'archive.
    * Le dossier d'un fil suit la même règle que son tour (`dossierRangeSur`).
    */
-  /** @internal (conv-1508) */ contexteDesFils(maintenant = Date.now()): ContexteFils {
+  /** @internal */ contexteDesFils(maintenant = Date.now()): ContexteFils {
     const actifs = new Map<string, true>()
     for (const c of this.os.conversations?.list?.() ?? []) {
       if (typeof c.updatedAt === 'number' && maintenant - c.updatedAt < SEUIL_ARCHIVE_MS)
@@ -650,7 +650,7 @@ export class AppCommandBus {
   }
 
   /**
-   * Un message écrit par l'APP au nom du fil `de` (compte rendu d'un lot au fil chef, conv-1150) :
+   * Un message écrit par l'APP au nom du fil `de` (compte rendu d'un lot au fil chef) :
    * mêmes règles que `ecrire_a_un_fil` (même dépôt, bornes, doublon), sans tour lancé.
    */
   ecrireDepuisLeFil(de: string, a: string, texte: string): void {
@@ -659,7 +659,7 @@ export class AppCommandBus {
   }
 
   /**
-   * Bloc « messages d'autres fils » remis en tête du tour de `conversationId` (conv-1139). Un
+   * Bloc « messages d'autres fils » remis en tête du tour de `conversationId`. Un
    * CONFORT, comme `rappelPourDemande` : une panne rend '' et le tour part quand même.
    */
   messagesDesFilsPourTour(conversationId?: string): string {
@@ -749,17 +749,17 @@ export class AppCommandBus {
         return { ok: true, data: bloc.resume, blocs: [bloc.bloc] }
       }
       if (name === 'desktop_act') {
-        // kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : un clic sur la barre des taches
+        // kaizen, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : un clic sur la barre des taches
         // de l'utilisateur est passe sans aucune garde (decision « confirm » jamais bloquante). Meme
         // friction d'un appel que `refusEcranReel`, porte de sortie `ecran_utilisateur: true`.
         // Le drapeau pose d'office au PREMIER appel ne compte pas (meme tour : le modele l'a ajoute
         // seul, sans demande) : le premier geste du tour est toujours refuse, le drapeau ne vaut
         // qu'apres avoir lu le refus qui nomme le bureau cache.
-        // Kaizen conv-854 (saisie ts 1790278416518) : le drapeau seul restait un contournement au 2e
+        // Kaizen (saisie ts 1790278416518) : le drapeau seul restait un contournement au 2e
         // appel. Agir sur l'ecran reel exige desormais que le DERNIER message de l'utilisateur parle
         // de son ecran ; le modele ne peut plus s'y autoriser lui-meme. Dans le tour 78a0d7d3 le
         // message etait « fais le toi stp » : le clic aurait ete refuse.
-        // Lu AVANT le premier refus (kaizen conv-835) : c'est lui qui dit si la porte de sortie
+        // Lu AVANT le premier refus : c'est lui qui dit si la porte de sortie
         // `ecran_utilisateur: true` existe vraiment — voir `refusActionSansDemande`.
         const dernierMessage = [...(this.os.conversations?.get?.(conversationId ?? '')?.messages ?? [])]
           .reverse()
@@ -816,7 +816,7 @@ export class AppCommandBus {
     }
   }
 
-  /** Corps : `commands/outils-bureau-navigateur.ts` (conv-1580, lot 6). */
+  /** Corps : `commands/outils-bureau-navigateur.ts` (lot 6). */
   private outilBureauCache(
     name: 'bureau_cache_lancer' | 'bureau_cache_observer' | 'bureau_cache_agir',
     a: Record<string, unknown>,
@@ -828,7 +828,7 @@ export class AppCommandBus {
     return outilsBureauNavigateur.outilBureauCache(this, name, a, conversationId)
   }
 
-  /** Corps : `commands/outils-bureau-navigateur.ts` (conv-1580, lot 6). */
+  /** Corps : `commands/outils-bureau-navigateur.ts` (lot 6). */
   private outilNavigateur(
     name: OutilNavigateur,
     a: Record<string, unknown>,
@@ -840,7 +840,7 @@ export class AppCommandBus {
     return outilsBureauNavigateur.outilNavigateur(this, name, a, conversationId)
   }
 
-  /** Corps : `commands/outils-bureau-navigateur.ts` (conv-1580, lot 6). */
+  /** Corps : `commands/outils-bureau-navigateur.ts` (lot 6). */
   private outilTerminalLire(
     a: Record<string, unknown>,
     conversationId?: string
@@ -848,8 +848,8 @@ export class AppCommandBus {
     return outilsBureauNavigateur.outilTerminalLire(this, a, conversationId)
   }
 
-  /** Corps : `commands/outils-bureau-navigateur.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ actionNavigateur(a: Record<string, unknown>): ActionAgentNavigateur | string {
+  /** Corps : `commands/outils-bureau-navigateur.ts` (lot 6). */
+  /** @internal */ actionNavigateur(a: Record<string, unknown>): ActionAgentNavigateur | string {
     return outilsBureauNavigateur.actionNavigateur(a)
   }
 
@@ -862,7 +862,7 @@ export class AppCommandBus {
     onProgress?: (text: string) => void
   ): Promise<unknown> {
     switch (name) {
-      // Chaque groupe de cas vit dans son module commands/<groupe>.ts (conv-1508, lot 2).
+      // Chaque groupe de cas vit dans son module commands/<groupe>.ts (lot 2).
       case 'desktop_act':
       case 'navigate':
       case 'ask':
@@ -929,8 +929,8 @@ export class AppCommandBus {
     }
   }
 
-  /** Corps : `commands/edition-isolee.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ identiteDeBureau(
+  /** Corps : `commands/edition-isolee.ts` (lot 6). */
+  /** @internal */ identiteDeBureau(
     famille: string,
     conversationId: string | undefined,
     cible: string | undefined
@@ -938,8 +938,8 @@ export class AppCommandBus {
     return editionIsolee.identiteDeBureau(this, famille, conversationId, cible)
   }
 
-  /** Corps : `commands/edition-isolee.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ withIsolatedMutation<T>(
+  /** Corps : `commands/edition-isolee.ts` (lot 6). */
+  /** @internal */ withIsolatedMutation<T>(
     command: 'edit_file',
     conversationId: string | undefined,
     action: (workspaceRoot: string) => T | Promise<T>,
@@ -952,9 +952,9 @@ export class AppCommandBus {
   }
 
   /** Ecriture de fichier, remplacable par un test pour prouver la branche « non restaure ». */
-  /** @internal (conv-1580) */ ecrireFichier: (chemin: string, contenu: Buffer) => void = writeFileSync
+  /** @internal */ ecrireFichier: (chemin: string, contenu: Buffer) => void = writeFileSync
 
-  /** Corps : `commands/verification-avant-publication.ts` (conv-1580, lot 6). */
+  /** Corps : `commands/verification-avant-publication.ts` (lot 6). */
   verifierAvantPublication(
     repo: string,
     fichiers: readonly string[]
@@ -962,8 +962,8 @@ export class AppCommandBus {
     return verificationAvantPublication.verifierAvantPublication(this, repo, fichiers)
   }
 
-  /** Corps : `commands/verification-avant-publication.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ mesurerParLots(
+  /** Corps : `commands/verification-avant-publication.ts` (lot 6). */
+  /** @internal */ mesurerParLots(
     workspaceRoot: string,
     cible: readonly string[],
     binDir?: string
@@ -971,8 +971,8 @@ export class AppCommandBus {
     return verificationAvantPublication.mesurerParLots(this, workspaceRoot, cible, binDir)
   }
 
-  /** Corps : `commands/verification-avant-publication.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ mesurerAvecRapport(
+  /** Corps : `commands/verification-avant-publication.ts` (lot 6). */
+  /** @internal */ mesurerAvecRapport(
     workspaceRoot: string,
     cible: readonly string[],
     /** Binaires du dépôt mesuré (voir `spawnVerify`) ; défaut : ceux du dossier du tour. */
@@ -983,8 +983,8 @@ export class AppCommandBus {
     return verificationAvantPublication.mesurerAvecRapport(this, workspaceRoot, cible, binDir, signal)
   }
 
-  /** Corps : `commands/verification-avant-publication.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ baselineAvantEdition(
+  /** Corps : `commands/verification-avant-publication.ts` (lot 6). */
+  /** @internal */ baselineAvantEdition(
     absolu: string,
     octetsAvant: Buffer,
     rejouer: () => Promise<MesureVerifiee>,
@@ -993,8 +993,8 @@ export class AppCommandBus {
     return verificationAvantPublication.baselineAvantEdition(this, absolu, octetsAvant, rejouer, commandeAttendue)
   }
 
-  /** Corps : `commands/edition-isolee.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ runEditFile(
+  /** Corps : `commands/edition-isolee.ts` (lot 6). */
+  /** @internal */ runEditFile(
     input: { path: unknown; oldText: unknown; newText: unknown },
     workspaceRoot: string,
     /** Reçoit les octets du fichier AVANT l'écriture — socle de la baseline différentielle. */
@@ -1008,8 +1008,8 @@ export class AppCommandBus {
     return editionIsolee.runEditFile(this, input, workspaceRoot, avantEdition)
   }
 
-  /** Corps : `commands/fichiers.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1508) */ runTracedFileCommand<R extends { allowed: boolean }>(
+  /** Corps : `commands/fichiers.ts` (lot 6). */
+  /** @internal */ runTracedFileCommand<R extends { allowed: boolean }>(
     rawPaths: unknown[],
     run: () => R,
     conversationId?: string,
@@ -1018,8 +1018,8 @@ export class AppCommandBus {
     return fichiersDuBus.runTracedFileCommand<R>(this, rawPaths, run, conversationId, turnId)
   }
 
-  /** Corps : `commands/fichiers.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1508) */ runCreateFile(input: { path: unknown; content: unknown }): {
+  /** Corps : `commands/fichiers.ts` (lot 6). */
+  /** @internal */ runCreateFile(input: { path: unknown; content: unknown }): {
     allowed: boolean
     reason?: string
     path?: string
@@ -1028,8 +1028,8 @@ export class AppCommandBus {
     return fichiersDuBus.runCreateFile(this, input)
   }
 
-  /** Corps : `commands/fichiers.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1508) */ runMoveFile(input: { from: unknown; to: unknown }): {
+  /** Corps : `commands/fichiers.ts` (lot 6). */
+  /** @internal */ runMoveFile(input: { from: unknown; to: unknown }): {
     allowed: boolean
     reason?: string
     from?: string
@@ -1038,8 +1038,8 @@ export class AppCommandBus {
     return fichiersDuBus.runMoveFile(this, input)
   }
 
-  /** Corps : `commands/fichiers.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1508) */ runDeleteFile(input: { path: unknown }): {
+  /** Corps : `commands/fichiers.ts` (lot 6). */
+  /** @internal */ runDeleteFile(input: { path: unknown }): {
     allowed: boolean
     reason?: string
     path?: string
@@ -1047,15 +1047,15 @@ export class AppCommandBus {
     return fichiersDuBus.runDeleteFile(this, input)
   }
 
-  /** Corps : `commands/fichiers.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1508) */ runWorktreeStatus(
+  /** Corps : `commands/fichiers.ts` (lot 6). */
+  /** @internal */ runWorktreeStatus(
     agentId: unknown
   ): Promise<{ allowed: boolean; reason?: string; status?: unknown; conflit?: unknown }> {
     return fichiersDuBus.runWorktreeStatus(this, agentId)
   }
 
-  /** Corps : `commands/edition-isolee.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1508) */ runTracedEditFile(
+  /** Corps : `commands/edition-isolee.ts` (lot 6). */
+  /** @internal */ runTracedEditFile(
     input: { path: unknown; oldText: unknown; newText: unknown },
     conversationId?: string,
     turnId?: string
@@ -1069,11 +1069,11 @@ export class AppCommandBus {
    * et `buildBrainOutcome` distingue « rien trouve » d'une panne — l'agent ne doit pas transformer un
    * silence en reponse negative.
    */
-  /** @internal (conv-1508) */ async runBrainQuery(
+  /** @internal */ async runBrainQuery(
     question: unknown,
     conversationId?: string,
     turnId?: string,
-    /** `true` : la liste complète, sans le filtre du petit modèle (conv-1571). */
+    /** `true` : la liste complète, sans le filtre du petit modèle. */
     entier?: unknown
   ): Promise<BrainQueryOutcome & { allowed: boolean; reason?: string }> {
     const decision = decideBrainQuery(question)
@@ -1088,7 +1088,7 @@ export class AppCommandBus {
       }
     }
     const corpus = brainCorpusForWorkspace(this.workspaceDuTour)
-    // DEUX BRAINS (conv-1233, 2026-10-28) : celui de l'équipe et, s'il est réglé, le Brain perso,
+    // DEUX BRAINS (2026-10-28) : celui de l'équipe et, s'il est réglé, le Brain perso,
     // interrogés EN MÊME TEMPS. Le perso n'a pas de filtre de dépôt : ses notes ne sont rangées
     // par aucun projet.
     const envPerso = envDuBrainPerso()
@@ -1129,7 +1129,7 @@ export class AppCommandBus {
     if (persoTrouve && scoped.status !== 'found' && scoped.status !== 'empty') {
       outcome.note = `Brain d’équipe indisponible (${scoped.unavailableReason ?? scoped.status}) — seules les notes perso sont listées`
     }
-    // Filtre du petit modèle AVANT la trace (conv-1571) : `injectedChars` mesure ce qui est
+    // Filtre du petit modèle AVANT la trace : `injectedChars` mesure ce qui est
     // réellement servi au modèle principal, donc l'économie se relit dans le spool Brain.
     const servi = await filtrerListeBrain(outcome, { entier }, this.condenseurBrain, conversationId)
     if (conversationId) {
@@ -1148,8 +1148,8 @@ export class AppCommandBus {
     return { allowed: true, ...servi }
   }
 
-  /** Corps : `commands/verification.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1508) */ runVerify(
+  /** Corps : `commands/verification.ts` (lot 6). */
+  /** @internal */ runVerify(
     onProgress?: (text: string) => void,
     cible?: string,
     conversationId?: string,
@@ -1158,16 +1158,16 @@ export class AppCommandBus {
     return verificationDuBus.runVerify(this, onProgress, cible, conversationId, type)
   }
 
-  /** Corps : `commands/verification.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ bureauDeVerification(
+  /** Corps : `commands/verification.ts` (lot 6). */
+  /** @internal */ bureauDeVerification(
     conversationId?: string,
     onProgress?: (text: string) => void
   ): Promise<string | undefined> {
     return verificationDuBus.bureauDeVerification(this, conversationId, onProgress)
   }
 
-  /** Corps : `commands/verification.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ runVerifyAt(
+  /** Corps : `commands/verification.ts` (lot 6). */
+  /** @internal */ runVerifyAt(
     workspaceRoot: string | undefined,
     onProgress?: (text: string) => void,
     cible?: string,
@@ -1177,13 +1177,13 @@ export class AppCommandBus {
     return verificationDuBus.runVerifyAt(this, workspaceRoot, onProgress, cible, signal)
   }
 
-  /** Corps : `commands/verification.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ fichiersNonCommites(cwd: string): Promise<string[]> {
+  /** Corps : `commands/verification.ts` (lot 6). */
+  /** @internal */ fichiersNonCommites(cwd: string): Promise<string[]> {
     return verificationDuBus.fichiersNonCommites(cwd)
   }
 
-  /** Corps : `commands/verification.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1580) */ runRelatedVerifyAt(
+  /** Corps : `commands/verification.ts` (lot 6). */
+  /** @internal */ runRelatedVerifyAt(
     workspaceRoot: string | undefined,
     paths: readonly string[],
     signal?: AbortSignal
@@ -1191,8 +1191,8 @@ export class AppCommandBus {
     return verificationDuBus.runRelatedVerifyAt(this, workspaceRoot, paths, signal)
   }
 
-  /** Corps : `commands/verification.ts` (conv-1580, lot 6). */
-  /** @internal (conv-1508) */ spawnVerify(
+  /** Corps : `commands/verification.ts` (lot 6). */
+  /** @internal */ spawnVerify(
     argv: string[],
     cwd: string,
     label: string,

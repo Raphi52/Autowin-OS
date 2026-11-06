@@ -1,5 +1,5 @@
 /**
- * La DUREE DU RAISONNEMENT survit au rechargement (conv-162, 2026-10-10 : « enregistre la durée du
+ * La DUREE DU RAISONNEMENT survit au rechargement (2026-10-10 : « enregistre la durée du
  * raisonnement avec le tour pour que le compteur de secondes de la capsule reste affiché après un
  * rechargement de la conversation »).
  *

@@ -8,8 +8,8 @@ describe('kaizenNamedConversationId', () => {
     )
   })
   it('lit « conv 150 » ecrit en clair dans la phrase (conv-152, tour 1dd28b24-4274-44a4-a9f5-2a36005f6afd)', () => {
-    // Saisie ts 2026-10-10T08:26:55.163Z : le dossier recu etait celui de conv-152 elle-meme,
-    // promptCalls / turnEvents / saisies vides, au lieu de celui de conv-150.
+    // Saisie ts 2026-10-10T08:26:55.163Z : le dossier recu etait celui elle-meme,
+    // promptCalls / turnEvents / saisies vides, au lieu de celui.
     expect(
       kaizenNamedConversationId(
         "/kaizen dans le dernier tour de la conv 150 j'ai envoyé qu'un screenshot et tu m'as répondu j'analyse les 2 screenshots"
@@ -21,7 +21,7 @@ describe('kaizenNamedConversationId', () => {
     expect(kaizenNamedConversationId('/kaizen Conv-61 puis conv-60')).toBe('conv-61')
   })
   it('lit le numero seul en tete (kaizen conv-1266, tour 9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f)', () => {
-    // Demande reelle : le dossier recu etait celui de conv-1266 elle-meme, vide.
+    // Demande reelle : le dossier recu etait celui elle-meme, vide.
     expect(
       kaizenNamedConversationId(
         "/kaizen 1263 le petit modele de l'app a parlé de dialogue c nimporte quoi il doit lui manquer du contexte pour faire ses actions interne a autowin OS"

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { motsDe } from './mots'
 
 // Migré de scripts/arena-panel/p2-ligatures.mts (banc /arena, commit 191ab51d), retiré le
-// 2026-10-22 (residus, conv-1062). Défaut d'origine : motsDe coupait sur les ligatures,
+// 2026-10-22 (residus). Défaut d'origine : motsDe coupait sur les ligatures,
 // « l'œuvre » -> ["uvre"].
 describe('motsDe — ligatures', () => {
   it('déplie œ, æ et ß au lieu de couper le mot', () => {

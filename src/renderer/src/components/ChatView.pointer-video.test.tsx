@@ -10,7 +10,7 @@ import {
 } from './ChatView.harness'
 
 /**
- * POINTER UNE IMAGE DU FILM DANS LA SAISIE, DE BOUT EN BOUT (conv-253, 2026-10-11).
+ * POINTER UNE IMAGE DU FILM DANS LA SAISIE, DE BOUT EN BOUT (2026-10-11).
  *
  * Carte vidéo du fil → « Pointer ce moment » → la référence est insérée AU CURSEUR du brouillon
  * (pas en fin, pas à la place) et l'image affichée est jointe en PNG. Le dédoublonnage des pièces

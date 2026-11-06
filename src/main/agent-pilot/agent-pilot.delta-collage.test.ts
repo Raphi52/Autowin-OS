@@ -43,7 +43,7 @@ describe('separationDeltaCollee', () => {
 
 describe('DeltaCollageTracker', () => {
   /**
-   * MESURE conv-1517 (2026-08-29, capture utilisateur) : le message persiste portait
+   * MESURE (2026-08-29, capture utilisateur) : le message persiste portait
    * `...cote `src/main`.```html-render` — la fence COLLEE en fin de phrase. CommonMark n'y voit
    * alors aucun bloc : le HTML s'affiche en brut, et le ``` de fermeture reste orphelin, ce qui
    * protege les lignes suivantes et empeche AUSSI l'encadre du bloc de cloture.

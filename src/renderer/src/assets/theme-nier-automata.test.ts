@@ -3,7 +3,7 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Theme « NieR:Automata » (conv-281, 2026-10-19) : papier beige, encre brune, coins carres. Base
+ * Theme « NieR:Automata » (2026-10-19) : papier beige, encre brune, coins carres. Base
  * CLAIRE, meme mecanique que Vanilla Claude :
  *   - theme-nier-automata.genere.css : les regles de la base claire qui ecrivent une couleur en dur,
  *     re-prefixees et transposees (`node scripts/theme-nebuleuse-verre.mjs nier-automata`) ;
@@ -123,7 +123,7 @@ describe('theme NieR:Automata', () => {
   })
 
   /**
-   * Menu du dossier de travail (pastille 📁, conv-1218) : il gardait le #ffffff de la base claire
+   * Menu du dossier de travail (pastille 📁) : il gardait le #ffffff de la base claire
    * (theme-modes.css), que le generateur ne transpose pas (blanc = non sature). La colonne des
    * croix d'oubli, transparente, le montrait en bande blanche a cote des lignes peintes en beige
    * par `button:not([class])`. ENTREE QUI DOIT FAIRE ECHOUER CE CAS : retirer le fond papier du

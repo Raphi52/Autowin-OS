@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AssistantActivityGroup } from './ChatView.parts'
 
 /**
- * « SKILL CHARGÉE » DANS LE FIL (conv-1034, 2026-10-21).
+ * « SKILL CHARGÉE » DANS LE FIL (2026-10-21).
  *
  * Le modèle peut choisir une skill seul (`skill_charger`). Mesuré dans une instance cachée : la
  * carte d'action du fil affichait le nom brut « skill_charger », parce que son libellé vient de

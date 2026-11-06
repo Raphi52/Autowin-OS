@@ -8,7 +8,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { lancerDetacheHorsFil } from '../gel/lancement-hors-fil'
 
 /**
- * LE LANCEMENT DU brain_server NE TIENT PLUS LE FIL PRINCIPAL (conv-1368, 2026-10-31).
+ * LE LANCEMENT DU brain_server NE TIENT PLUS LE FIL PRINCIPAL (2026-10-31).
  *
  * Mesure `gels.jsonl` sur 7 jours : `spawn cmd.exe start` de `brain-server-launch.ts:344` a figé la
  * fenêtre 18,5 s en 4 appels, dont 7,7 s d'un seul coup. `child_process.spawn` n'est asynchrone que

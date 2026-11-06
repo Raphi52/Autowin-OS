@@ -38,9 +38,9 @@ const RAISON_HORS_DU_TRAVAIL = /quota|rate.?limit|annul|cancel|canary|flaky|time
 const INTEGRATION_BLOQUEE_PAR_LA_BASE = /\bbase-(?:dirty|in-progress)\b/u
 
 /**
- * LA CLASSE D'UN RUN ALLÉ AU BOUT MAIS REFUSÉ PAR LE CONTRÔLE FINAL (piste 1, conv-1033). La mémoire
+ * LA CLASSE D'UN RUN ALLÉ AU BOUT MAIS REFUSÉ PAR LE CONTRÔLE FINAL (piste 1). La mémoire
  * du scout relit cette classe pour dire ce que sont devenues les pistes prises : un run vert bloqué
- * par la base y passait pour un échec de la piste (conv-981, 2026-10-16). Le refus du contrôle des
+ * par la base y passait pour un échec de la piste (2026-10-16). Le refus du contrôle des
  * causes reste `defect` : il porte sur la preuve du travail lui-même.
  */
 export function classeTerminaleDuControle(raisons: readonly string[]): 'external' | 'defect' {
@@ -62,7 +62,7 @@ export function classeTerminaleDEchec(erreur: unknown, annule: boolean): 'extern
 }
 
 /**
- * CE RUN VALIDÉ ATTEND-IL SEULEMENT SA PUBLICATION ? (conv-1455, 2026-11-03)
+ * CE RUN VALIDÉ ATTEND-IL SEULEMENT SA PUBLICATION ? (2026-11-03)
  *
  * Vrai quand la finalisation a refusé la fusion parce que la BASE était occupée — le travail non
  * commité d'un autre fil (`base-dirty`) ou une opération git en cours (`base-in-progress`). Ces deux
@@ -71,7 +71,7 @@ export function classeTerminaleDEchec(erreur: unknown, annule: boolean): 'extern
  *
  * Le défaut corrigé : l'orchestrateur clôturait ce run `red` sans cause, et la garde « commit
  * demandé » ajoutait un échec par-dessus le refus dont elle n'est que la conséquence. Mesuré par le
- * scout de conv-1455 : 99 runs sur 994 en échec portaient cette seule cause, dont conv-1431
+ * scout : 99 runs sur 994 en échec portaient cette seule cause, dont
  * (`mvz01n0m`), juge VALIDE, publié une heure plus tard à la main (b0c4cad9) et toujours « bloqué ».
  *
  * Même vocabulaire que `classeTerminaleDuControle` (`INTEGRATION_BLOQUEE_PAR_LA_BASE`) : un conflit
@@ -88,18 +88,18 @@ export function attendSaPublication(finalisation: unknown): boolean {
 }
 
 /**
- * POURQUOI CE RUN S'EST-IL ARRÊTÉ, QUAND CE N'EST PAS LA FAUTE DU TRAVAIL (piste 4, conv-1070).
+ * POURQUOI CE RUN S'EST-IL ARRÊTÉ, QUAND CE N'EST PAS LA FAUTE DU TRAVAIL (piste 4).
  *
  * `classeTerminaleDEchec` ne servait qu'à la mémoire d'apprentissage : le RUN.md, lui, recevait
  * `red` dans tous les cas, et `isBlocked` gardait ainsi « bloqués » pour toujours des runs coupés
  * par le bouton Stop ou par la limite de session (mesuré le 2026-10-22 : 8 runs, dont
- * `judge-carnet-fil`, conv-1058, coupé par Stop). Cette cause nommée est ce qui écrit
+ * `judge-carnet-fil`, coupé par Stop). Cette cause nommée est ce qui écrit
  * `status: interrupted` à la place, et ce que la vue Workflows retire de ses taux.
  *
  * MÊME règle que `classe external`, sans une de plus : `undefined` ⇔ `defect`. Un run allé au
  * bout puis refusé (aucune exception, aucun arrêt) n'est jamais une interruption.
  *
- * fix-ok: conv-1070 — cause lue dans le code puis mesurée : `commands.ts` écrivait `closeConvRun(…, 'red')` sans condition et l'orchestrateur émettait sa clôture terminale sans cause ; le test « mur de quota → red, interruption quota » (orchestrator.mur-de-quota.test.ts) était rouge avant ce module, vert après.
+ * fix-ok: cause lue dans le code puis mesurée : `commands.ts` écrivait `closeConvRun(…, 'red')` sans condition et l'orchestrateur émettait sa clôture terminale sans cause ; le test « mur de quota → red, interruption quota » (orchestrator.mur-de-quota.test.ts) était rouge avant ce module, vert après.
  */
 export function causeDInterruption(erreur: unknown, annule: boolean): RunInterruption | undefined {
   if (annule) return 'arret'

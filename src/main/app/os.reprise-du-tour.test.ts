@@ -12,7 +12,7 @@ import type { OrchestrationRunState } from '../runs/orchestration-state'
  *
  * Les regles de decision sont testees seules (`acquired-analysis.test.ts`, `think-briefing.test.ts`) ;
  * ce fichier teste le BRANCHEMENT : les etats lus sur le disque, le `git diff` reel des fichiers que
- * le briefing cite, et le run vivant d'un tour (conv-890, 2026-09-30 : run-3180eec71b06-1 repris au
+ * le briefing cite, et le run vivant d'un tour (2026-09-30 : run-3180eec71b06-1 repris au
  * redemarrage, puis run-66d6d5bdfc5a-1 lance sur le MEME tour et `think` repaye 1,94 $).
  */
 const dossiers: string[] = []

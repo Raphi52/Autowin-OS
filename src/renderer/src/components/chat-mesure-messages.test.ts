@@ -7,7 +7,7 @@ import {
 } from './position-lecture'
 
 /**
- * Defaut rapporte conv-307 (2026-10-17) : « des fois quand j'arrive sur une conv qui a ecrit,
+ * Defaut rapporte (2026-10-17) : « des fois quand j'arrive sur une conv qui a ecrit,
  * l'ecran devient eclectique, le scroll erratique ». Mesure dans l'instance cachee : a la reprise
  * d'un fil quitte au milieu, le fil sautait a CHAQUE image entre 620 et 27 282 px — deux positions
  * symetriques autour de la position retenue. `mesurerMessagesRendus` rendait le haut des messages

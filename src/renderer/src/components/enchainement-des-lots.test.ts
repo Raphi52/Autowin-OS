@@ -17,7 +17,7 @@ function lot(rang: number, debut?: number, fin?: number, apres?: number[]): LotD
   }
 }
 
-// Les heures du vrai plan de conv-1335 (capture de conv-1396) : 1 seul, puis 2 à 6 après lui, le 5
+// Les heures du vrai plan : 1 seul, puis 2 à 6 après lui, le 5
 // parti à la fin du 4, le 7 après tous, puis des lots ajoutés sans dépendance.
 const plan = {
   lots: [

@@ -8,7 +8,7 @@ import type { PromptSnapshot } from '../commands/commands'
 import { createChatTurn, reduceChatTurn, type ChatTurnEvent } from '../../shared/chat-turn'
 
 /*
- * Rejeu de conv-1335 à travers le VRAI pilote : la réponse qui cite un chemin relatif est refaite,
+ * Rejeu à travers le VRAI pilote : la réponse qui cite un chemin relatif est refaite,
  * et le fil n'affiche que la nouvelle. L'oracle est le réducteur du fil, comme pour les autres
  * relances de forme (agent-pilot.relance-remplace.test.ts).
  */

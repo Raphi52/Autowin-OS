@@ -6,7 +6,7 @@ import { ConversationStore } from '../store/conversations'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 
 /**
- * LA RÉPONSE EST ENREGISTRÉE SOUS LE TOUR QUE L'ÉCRAN A REÇU EN DIRECT (conv-1147, 2026-10-25).
+ * LA RÉPONSE EST ENREGISTRÉE SOUS LE TOUR QUE L'ÉCRAN A REÇU EN DIRECT (2026-10-25).
  *
  * « Lancer en N fils » retrouve sur DISQUE la réponse qui porte la carte par son TOUR, le seul repère
  * qu'une réponse peinte en direct possède (`ChatView.tsx`, `lancerEnFils`). Ce n'est juste que si le

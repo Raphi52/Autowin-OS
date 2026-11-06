@@ -8,7 +8,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { identiteGitDuDossier } from './journal-des-besoins'
 
 /**
- * L'IDENTITÉ GIT DU JOURNAL DES BESOINS NE CRÉE PLUS DE PROCESSUS SUR LE FIL PRINCIPAL (conv-1413).
+ * L'IDENTITÉ GIT DU JOURNAL DES BESOINS NE CRÉE PLUS DE PROCESSUS SUR LE FIL PRINCIPAL.
  *
  * Mesure `gels.jsonl`, session du 2026-10-31 19:33 → 20:22 UTC : `spawn git config` depuis
  * `journal-des-besoins.ts:61`, 6 appels, 19,3 s de fenêtre figée.

@@ -4,7 +4,7 @@ import { arretDeLaReparation, doitArreterLaReparation, evaluateClosure } from '.
 import { deciderDuPassage } from '../orchestration/boucle-reparation'
 
 /*
- * conv-540, tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : les 4 appels du juge (ts 09:44:57.329,
+ * Tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : les 4 appels du juge (ts 09:44:57.329,
  * 09:48:05.122, 09:51:14.024, 09:53:28.437) rendent tous VALIDE 72-74. Le controle de 09:53:28.450
  * recopie pourtant 6 de leurs puces en « Promis mais pas fait », dont des constats de verification
  * REUSSIE. Le blocage doit rester (l'echec amont est reel), mais sans accuser le travail.

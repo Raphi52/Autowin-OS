@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * conv-951 : vue « Bureaux cachés ». Cas limites du cadrage : aucun bureau, liste illisible, bureau
+ * Vue « Bureaux cachés ». Cas limites du cadrage : aucun bureau, liste illisible, bureau
  * sans fiche, fermeture répétée, saisie invalide refusée sans lancement, identifiant occupé.
  */
 import { readFileSync } from 'node:fs'
@@ -110,7 +110,7 @@ async function saisir(h: HTMLElement, cle: string, valeur: string): Promise<void
   })
 }
 
-// conv-1378 : « la tv doit prendre toute la largeur, il doit pouvoir y avoir plusieurs hdesk en même
+// « la tv doit prendre toute la largeur, il doit pouvoir y avoir plusieurs hdesk en même
 // temps pour les super convs et la liste elle sert à rien enlève la ». Entrées qui doivent faire échouer
 // ce bloc : une liste de retour, un seul bureau à l'image, un écran qui ne prend pas toute la largeur.
 describe('HdeskGestionView — un écran par bureau', () => {
@@ -222,7 +222,7 @@ describe('HdeskGestionView — un écran par bureau', () => {
   })
 })
 
-// conv-1378 : « ça devient un icône à côté de celui du navigateur et ça ouvre un right panel comme le
+// « ça devient un icône à côté de celui du navigateur et ça ouvre un right panel comme le
 // navigateur ». Entrées qui doivent faire échouer ce bloc : un panneau qui capture alors que le chat
 // n'est pas à l'écran, le bureau d'un autre fil montré d'abord, une largeur perdue à la fermeture.
 describe('HdeskGestionView — le panneau à droite du fil', () => {
@@ -401,7 +401,7 @@ describe('HdeskGestionView — l’écran', () => {
 })
 
 /**
- * conv-1025 : « en enlevant le mot multi color et le filtre télévision et en mettant un cadre en
+ * « en enlevant le mot multi color et le filtre télévision et en mettant un cadre en
  * fonction du thème au lieu du cadre rose sur le bureau sélectionné ». Un rendu ne se lit pas dans
  * happy-dom : on lit la feuille elle-même.
  */
@@ -416,7 +416,7 @@ describe('HdeskGestionView — la feuille de style (conv-1025)', () => {
     expect(regles).not.toMatch(/repeating-linear-gradient/)
     expect(regles).not.toMatch(/conic-gradient/)
     expect(regles).not.toMatch(/@keyframes/)
-    // Aucune couleur en dur (conv-1002) ; le `#000` des masques n'est qu'une opacité.
+    // Aucune couleur en dur ; le `#000` des masques n'est qu'une opacité.
     expect(regles.replace(/-webkit-mask:[^;]*;/g, '')).not.toMatch(/#[0-9a-f]{3,8}\b/i)
   })
 
@@ -502,7 +502,7 @@ describe('HdeskGestionView — Regarder / Piloter', () => {
     })
   })
 
-  // conv-1528 : un code de connexion collé par Ctrl+V dans le champ VIDE partait au bureau caché en ^V
+  // Un code de connexion collé par Ctrl+V dans le champ VIDE partait au bureau caché en ^V
   // brut (une console n'y collait rien). Il reste dans le champ, puis Entrée le tape.
   it('Piloter : Ctrl+V dans le champ vide colle dans le champ, et Entrée tape le texte collé', async () => {
     const act$ = gestes()
@@ -695,7 +695,7 @@ describe('HdeskGestionView — Créer', () => {
     expect(api.hdeskGestionCreer).toHaveBeenCalledTimes(1)
   })
 
-  // conv-344 : le bouton disait « jusqu’à 40 s » alors que l’application attend jusqu’à 90 s.
+  // Le bouton disait « jusqu’à 40 s » alors que l’application attend jusqu’à 90 s.
   it('pendant la création, le bouton annonce l’attente réelle', async () => {
     let finir: (r: ResultatCreationBureau) => void = () => undefined
     const api = faux([], {
@@ -714,7 +714,7 @@ describe('HdeskGestionView — Créer', () => {
 })
 
 /**
- * Repris de conv-344 dans l'Antenne (conv-1023) — « pk je suis obligé de choisir un path de
+ * Repris dans l'Antenne — « pk je suis obligé de choisir un path de
  * programme ? ». Le chemin reste obligatoire (un bureau vide est détruit par Windows) : il se
  * CHOISIT (« Parcourir… »), l'identifiant se PROPOSE, et un bureau fermé se RELANCE sans rien retaper.
  */
@@ -783,7 +783,7 @@ describe('HdeskGestionView — choisir sans taper (conv-344)', () => {
     expect($(h, 'hdesk-parcourir')).toBeNull()
   })
 
-  // conv-1378 : « Retire aussi Récents du panneau ». Le moteur rend encore cette liste : ce test tient
+  // « Retire aussi Récents du panneau ». Le moteur rend encore cette liste : ce test tient
   // le panneau à l'écart de ce qu'il reçoit, avec ou sans bureau ouvert.
   describe('« Récents » retiré du panneau', () => {
     const RECENT = {
@@ -833,7 +833,7 @@ describe('HdeskGestionView — choisir sans taper (conv-344)', () => {
   })
 })
 
-/** Repris de conv-344 (scout n°8) : le fil s'affichait comme un identifiant brut, sans lien. */
+/** Repris (scout n°8) : le fil s'affichait comme un identifiant brut, sans lien. */
 describe('HdeskGestionView — le fil par son titre, cliquable (conv-344)', () => {
   const titres = (liste: Array<{ id: string; title: string }>) =>
     vi.fn(async () => liste as unknown as Array<{ id: string; title: string }>)

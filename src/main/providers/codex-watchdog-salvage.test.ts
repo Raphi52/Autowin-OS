@@ -5,7 +5,7 @@ import type { ExecutionEvidence } from './types'
 /**
  * UN WATCHDOG QUI TUE NE DOIT PAS JETER CE QUI A DÉJÀ ÉTÉ PRODUIT.
  *
- * Mesuré sur la campagne du 2026-08-12, conv-1122 (vue Agent Studio) : un appel subagent a tourné
+ * Mesuré sur la campagne du 2026-08-12, (vue Agent Studio) : un appel subagent a tourné
  * 1 286 s — 21 minutes — puis s'est tu 5 minutes, et le watchdog l'a tué sur inactivité. Le seuil
  * est correct (5 minutes de silence TOTAL, c'est beaucoup) mais l'adaptateur `reject()` alors que
  * `finalText`, `executionEvidence`, `usage` et le raisonnement sont DÉJÀ accumulés en mémoire :

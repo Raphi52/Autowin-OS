@@ -6,7 +6,7 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 /**
  * TOUR MUET — un tour qui a AGI doit dire ce qu'il a fait.
  *
- * Constaté sur conv-76 (2026-07-29) : trois messages assistant de 40 à 64 caractères, contenant
+ * Constaté (2026-07-29) : trois messages assistant de 40 à 64 caractères, contenant
  * uniquement « [a exécuté edit_file] [a exécuté verify] ». Aucun texte de l'agent. L'utilisateur a
  * cru que les sous-agents ne se lançaient plus, alors que 18 appels avaient tourné pour 10,05 $ — il
  * n'avait simplement aucun moyen de le savoir.
@@ -86,7 +86,7 @@ describe('un tour qui a AGI ne peut plus rester muet', () => {
 })
 
 describe('contrat de code — la relance est mécanique et bornée', () => {
-  // Relances et lecture de la réponse vivent dans agent-pilot/*.ts depuis conv-1580 (lot 4).
+  // Relances et lecture de la réponse vivent dans agent-pilot/*.ts (lot 4).
   const source = sourceDuPilote()
 
   it('la relance est consommée (un seul essai)', () => {

@@ -1,8 +1,8 @@
 /*
- * LES POST-IT DES COLLÈGUES (conv-1210, 2026-10-28 : « affiche dans mon Board les post-it des
+ * LES POST-IT DES COLLÈGUES (2026-10-28 : « affiche dans mon Board les post-it des
  * collègues qui écrivent dans le même dossier de la GED, avec leur nom sur chaque post-it et en
  * lecture seule »). Posés par RiviereDuProjet.tsx avec `data-collegue` (le compte du collègue).
- * Feuille à part : RiviereDuProjet.css portait le travail non commité d'un autre fil (conv-1204).
+ * Feuille à part : RiviereDuProjet.css portait le travail non commité d'un autre fil.
  *
  * Lecture seule à l'œil : pas de main « saisir » (ils ne se glissent pas), et une bande claire en
  * haut, comme un ruban adhésif, qui les distingue des nôtres sans changer la couleur de leur étage.

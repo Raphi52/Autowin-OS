@@ -1,5 +1,5 @@
 /**
- * La souris est la source de lumière des panneaux (conv-191, 2026-10-10 : « le comportement je l'aime
+ * La souris est la source de lumière des panneaux (2026-10-10 : « le comportement je l'aime
  * pas trop draft moi des animations », « en fait j'aimerais que ca fasse comme si ma souris etait la
  * source de lumiere », puis « go Ambiance implemente »).
  *
@@ -17,7 +17,7 @@
 
 /**
  * Les panneaux éclairés : les cinq du Chat, plus le cadre de page des autres vues (`.view-page`)
- * et les panneaux de l'Accueil, tuiles et plaque du titre (conv-211 : « faut aligner toutes les
+ * et les panneaux de l'Accueil, tuiles et plaque du titre (« faut aligner toutes les
  * autres views »). La saisie vit DANS le fil (`.chat`) : les deux reçoivent la même position.
  */
 export const SELECTEUR_PANNEAUX = [

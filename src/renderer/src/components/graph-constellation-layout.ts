@@ -1,5 +1,5 @@
 /**
- * PLACEMENT DE LA CONSTELLATION — le graphe d'une demande dessiné en arbre étoilé (conv-234,
+ * PLACEMENT DE LA CONSTELLATION — le graphe d'une demande dessiné en arbre étoilé (
  * 2026-10-11, /draft « une belle gueule qui ressemble à mon thème holo » → « go fil holo »).
  *
  * Chaque étape devient une perle posée dans le panneau : la demande en haut, ses enfants étalés
@@ -8,7 +8,7 @@
  *
  * Contraintes mesurées sur les traces réelles (162 conversations, 464 tours, 2026-10-11) : une
  * demande compte 4 nœuds en médiane et 8 au 90e centile — le cas de la maquette — mais une chaîne
- * d'outils descend jusqu'à 14 niveaux et un niveau d'agents atteint 500 nœuds (conv-72). D'où les
+ * d'outils descend jusqu'à 14 niveaux et un niveau d'agents atteint 500 nœuds. D'où les
  * deux règles :
  *   - un niveau trop large pour le panneau PASSE À LA LIGNE (jamais de défilement horizontal) ;
  *   - un niveau profond n'est qu'une ligne de plus (le panneau défile déjà verticalement).
@@ -133,7 +133,7 @@ export function layoutConstellation(
   // ARBRE PAR SOUS-ARBRES : l'ordre préfixe garde les frères côte à côte, et chaque rangée de
   // frères est suivie de SES enfants avant la rangée suivante. Quand un niveau passe à la ligne
   // (9 phases dans 300 px), chaque phase garde ses agents juste sous elle : les liens restent
-  // courts. Placés niveau par niveau, ils traversaient toute la constellation (conv-108, mesuré).
+  // courts. Placés niveau par niveau, ils traversaient toute la constellation (mesuré).
   const enfants = new Map<string, ConstellationInputNode[]>()
   const racines: ConstellationInputNode[] = []
   for (const node of input) {
@@ -250,7 +250,7 @@ export const RAIL_X = CONSTELLATION.marge / 2
  * ligne, chacun suivi de ses agents) ne traverse pas la constellation en diagonale. Il rejoint le
  * RAIL de la marge LA PLUS PROCHE de son parent, le descend, et en ressort juste au-dessus de son
  * enfant. Les liens longs d'un même côté partagent ce rail : un seul trait au lieu d'un faisceau
- * (conv-108, mesuré le 2026-10-11).
+ * (mesuré le 2026-10-11).
  */
 export function constellationEdgePath(
   parent: PlacedConstellationNode,

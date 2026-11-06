@@ -71,7 +71,7 @@ export function dispatcherAvecVeille(deps: DispatchVeilleDeps): TaskDispatcher {
         //
         // Toutes les sources WEB muettes suffisent : `retenus` et `refuses` comptent AUSSI les
         // candidats internes du dépôt, triés dans la même passe — un seul d'entre eux rendait verte
-        // une passe qui n'avait lu aucune page (relecture de conv-1032).
+        // une passe qui n'avait lu aucune page.
         const toutesLesPagesMuettes =
           resultat.sourcesWeb > 0 && resultat.echecs.length >= resultat.sourcesWeb
         // Règle d'origine, inchangée : une source muette et rien du tout de trié.

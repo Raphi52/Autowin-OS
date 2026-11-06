@@ -1,4 +1,4 @@
-// Le texte d'un tour de chat qui se termine. Sorti tel quel de AgentPilot.chat() (conv-1580,
+// Le texte d'un tour de chat qui se termine. Sorti tel quel de AgentPilot.chat() (
 // lot 3) : il lit l'état du tour (`etat-du-tour.ts`) au lieu de capturer ses `let`.
 import { avertirSiLeconNonRetenue } from '../brain/lecon-non-retenue'
 import type { EtatDuTour } from './etat-du-tour'
@@ -8,7 +8,7 @@ import { texteCmdIlisible } from './jetons-de-commande'
 /**
  * Le texte d'un tour qui se termine — JAMAIS vide.
  *
- * Cause racine des « conversations qui echouent » (conv-1141) : un tour ayant AGI sans rien DIRE
+ * Cause racine des « conversations qui echouent » : un tour ayant AGI sans rien DIRE
  * produisait une bulle vide, et l'utilisateur renvoyait le meme prompt en boucle sans jamais
  * savoir ce qui ratait. Deux sites cloturent un tour ; ils partagent ce repli plutot que d'en
  * garder chacun une copie qui divergerait.
@@ -32,12 +32,12 @@ export function texteDeClotureDuTour(
    * UN REFUS DE MEMOIRE ENCORE DEBOUT SUIT LE TOUR JUSQU'A SA CLOTURE, QUELLE QU'ELLE SOIT.
    *
    * La mention ne vivait que dans le raccourci `onlyAuxiliaryRemember`. Des que la reprise rend
-   * la main au modele (conv-52), le tour se clot ailleurs — branche sans commande, question,
+   * la main au modele, le tour se clot ailleurs — branche sans commande, question,
    * repli sur le cap — et le refus disparaissait alors COMPLETEMENT : ni le modele ni
    * l'utilisateur n'apprenaient que rien n'avait ete ecrit. La mention est donc portee par le
    * point de cloture COMMUN, et elle s'efface d'elle-meme quand un depot rejoue reussit.
    */
-  // Une « Leçon : » écrite sans AUCUN dépôt dans le tour le dit aussi (conv-335) ; un refus
+  // Une « Leçon : » écrite sans AUCUN dépôt dans le tour le dit aussi ; un refus
   // encore debout le dit déjà, d'où l'une OU l'autre mention, jamais les deux.
   return etat.refusRememberAuxiliaire
     ? `${texte}
@@ -48,7 +48,7 @@ export function texteDeClotureDuTour(
 
 /**
  * La fin d'un tour arrivé au cap d'itérations sans réponse finale : la clôture la plus utile, sinon
- * l'erreur. Sortie telle quelle de AgentPilot.chat() (conv-1580, suite du plan, pour ramener
+ * l'erreur. Sortie telle quelle de AgentPilot.chat() (suite du plan, pour ramener
  * `chat()` sous 500 lignes) ; `texteDeCloture(x)` y devient `texteDeClotureDuTour(etat, x)`.
  */
 export function fermerAuCapDesIterations(
@@ -83,7 +83,7 @@ export function fermerAuCapDesIterations(
     return
   }
   // Le modèle a PARLÉ pendant ce tour : sa dernière parole EST la clôture. Mourir sur une erreur
-  // terminale jetterait un texte déjà payé et déjà diffusé en flux (conv-1485).
+  // terminale jetterait un texte déjà payé et déjà diffusé en flux.
   if (etat.visibleTextThisTurn.trim()) {
     emit({
       kind: 'done',

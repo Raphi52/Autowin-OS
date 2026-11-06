@@ -149,7 +149,7 @@ describe('reprise automatique après un 529', () => {
 })
 
 /**
- * SURCHARGE LIVRÉE COMME RÉPONSE (mesuré le 2026-09-03, conv-28). Le tour ne signale AUCUNE erreur :
+ * SURCHARGE LIVRÉE COMME RÉPONSE (mesuré le 2026-09-03). Le tour ne signale AUCUNE erreur :
  * le fournisseur a « répondu » le texte de l'incident (« API Error: 529 Overloaded… »). Le tour
  * comptait donc pour un succès, aucune reprise ne partait, et l'utilisateur devait retaper sa
  * demande à la main — c'est exactement ce qui s'est produit. La reprise doit partir quand même.

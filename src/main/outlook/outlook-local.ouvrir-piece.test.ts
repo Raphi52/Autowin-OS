@@ -1,5 +1,5 @@
 /**
- * OUVRIR une pièce jointe REÇUE depuis la tuile Interlocuteurs (conv-1220, 2026-10-28).
+ * OUVRIR une pièce jointe REÇUE depuis la tuile Interlocuteurs (2026-10-28).
  *
  * Demande : « rends les pièces jointes reçues cliquables : un clic sur le nom ouvre le fichier, en le
  * récupérant depuis Outlook ». Ce fichier tient la partie du processus principal : ce qui arrive du

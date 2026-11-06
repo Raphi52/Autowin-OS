@@ -11,7 +11,7 @@ import { motsDe } from '../../shared/mots'
 /**
  * TITRES BRAIN DU TOUR — le chat consulte le Brain À CHAQUE TOUR, au plus bas coût possible.
  *
- * Pourquoi (conv-892, 2026-09-30 : « a chaque tour mais via un mecanisme qui coute le moins de
+ * Pourquoi (2026-09-30 : « a chaque tour mais via un mecanisme qui coute le moins de
  * token possible »). Depuis le commit 3f35d512 (2026-07-29), le chat ne recevait plus rien du Brain :
  * il devait penser à lancer `brain_query`. Mesure sur les traces du 18/09 au 30/09 : 8 tours sur 824
  * l'ont fait, et jamais de lui-même (5 fois sur demande explicite, 3 fois imposé par /maintenance).
@@ -28,13 +28,13 @@ import { motsDe } from '../../shared/mots'
  * rang ≤ 5 ou score ≥ 0,30), 1,8 ligne en moyenne (le moins de toute la grille), 0 bloc sur les 3
  * questions hors sujet. Changer ces bornes = rejouer `scripts/sonde-titres-brain.mts`.
  *
- * BORNES CONFIRMÉES SUR L'USAGE RÉEL (conv-1303, 2026-10-30) : `scripts/banc-notes-proches-usage.mjs`
+ * BORNES CONFIRMÉES SUR L'USAGE RÉEL (2026-10-30) : `scripts/banc-notes-proches-usage.mjs`
  * rejoue d'autres tris sur 822 tours servis et compte les notes réellement ouvertes. Aucun ne fait
  * mieux pour le même nombre de lignes (sans seuil : +2 ouvertures pour 2× les lignes ; score mêlé
  * aux mots du titre : moins bien). Les notes ouvertes HORS du bloc étaient à 57 sur 75 absentes des
  * candidats.
  *
- * LA REQUÊTE RESTE LE MESSAGE ENTIER (conv-1303, 2026-10-30, `scripts/banc-notes-proches-requete.mts`,
+ * LA REQUÊTE RESTE LE MESSAGE ENTIER (2026-10-30, `scripts/banc-notes-proches-requete.mts`,
  * 825 tours rejoués sur le Brain vivant) : notes ouvertes couvertes 54/153 avec le message entier,
  * 25 avec ses mots-clés, 23 avec les mots-clés + le 1er ou le précédent message du fil, 59 avec
  * l'union message + mots-clés mais pour 35 % de lignes en plus. Ces 57 notes, l'agent les a trouvées
@@ -42,7 +42,7 @@ import { motsDe } from '../../shared/mots'
  * dans sa liste longue (67 sur 75), pas dans un bloc de 3 (20 sur 75) : aucune réécriture du message
  * ne les aurait servies. Le bloc et `brain_query` se complètent, comme prévu.
  *
- * BRAIN PERSO (conv-1233, 2026-10-28, demande utilisateur : « étends le Brain perso aux notes
+ * BRAIN PERSO (2026-10-28, demande utilisateur : « étends le Brain perso aux notes
  * proches servies à chaque tour »). S'il est réglé, il est interrogé EN MÊME TEMPS que celui de
  * l'équipe (le tour n'attend pas plus), avec les mêmes bornes, et ses notes arrivent sous le même
  * en-tête avec le préfixe `perso:` — celui que `brain_read` reconnaît pour ouvrir la note dans le
@@ -64,7 +64,7 @@ const FILS_MEMORISES_MAX = 200
 const NOTES_PAR_FIL_MAX = 150
 
 /**
- * MESSAGES COMPOSÉS PAR L'APP, SANS SUJET PROPRE — aucune recherche (conv-1303, 2026-10-30).
+ * MESSAGES COMPOSÉS PAR L'APP, SANS SUJET PROPRE — aucune recherche (2026-10-30).
  *
  * La requête est le message entier. Pour ces trois messages, il ne décrit que la MÉCANIQUE de l'app
  * (une tâche de fond rendue, des lots finis, la fin d'une chaîne) : la recherche ramenait les notes
@@ -105,7 +105,7 @@ export interface TitreBrain {
 export function selectionnerTitres(
   resultat: BrainRetrievalResult,
   dejaMontres: ReadonlySet<string> = new Set(),
-  /** `perso:` pour les notes du Brain perso (conv-1233) : porté par le chemin rendu ET mémorisé. */
+  /** `perso:` pour les notes du Brain perso : porté par le chemin rendu ET mémorisé. */
   prefixe = ''
 ): TitreBrain[] {
   const candidats = resultat.navigation?.candidates ?? []
@@ -158,7 +158,7 @@ interface OptionsTitresDuTour {
 }
 
 /**
- * Notes servies par une trace de ce point : son champ `notes` (exact, depuis conv-1303), sinon la
+ * Notes servies par une trace de ce point : son champ `notes` (exact), sinon la
  * même sélection rejouée sur la navigation qu'elle a gardée (traces plus anciennes).
  */
 export function notesServiesParTrace(trace: BrainTrace): string[] {
@@ -193,7 +193,7 @@ export function createBrainTitresDuTour(
   }
 
   /**
-   * MÉMOIRE QUI SURVIT AU REDÉMARRAGE (conv-1303, 2026-10-30) : elle ne vivait qu'en RAM, et
+   * MÉMOIRE QUI SURVIT AU REDÉMARRAGE (2026-10-30) : elle ne vivait qu'en RAM, et
    * 137 lignes ont été resservies dans un fil qui les avait déjà reçues (13-30/10). Le spool garde
    * chaque bloc servi : le relire une fois (~40 ms pour 1 900 traces) suffit, sans second fichier.
    */

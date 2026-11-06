@@ -1,5 +1,5 @@
 /**
- * LE PERSONNAGE DE LA MASCOTTE — « Filament blanc · Le chiffre » (conv-1227, 2026-10-28).
+ * LE PERSONNAGE DE LA MASCOTTE — « Filament blanc · Le chiffre » (2026-10-28).
  *
  * Choix de l'utilisateur sur maquettes (/draft, dix tours) : « comment personnifier notre
  * mascotte » -> une frimousse, de petits bras, un chapeau qui porte le chiffre -> un vrai chapeau de
@@ -48,7 +48,7 @@ export const CENTRE_BILLE = { x: 64, y: 70 } as const
 const ORIGINE = { x: CENTRE_BILLE.x - 26, y: CENTRE_BILLE.y - 26 }
 
 /**
- * Ce que peut afficher l'étoile : le VRAI compte, de 1 à 99 (conv-1270, « affiche le vrai nombre sur
+ * Ce que peut afficher l'étoile : le VRAI compte, de 1 à 99 (« affiche le vrai nombre sur
  * le chapeau jusqu'à 99 au lieu de 9+ »), et « ! » sur un échec. Un chiffre seul a ses propres
  * dessins (`SEULS`) ; un nombre à deux chiffres n'a pas 90 dessins : il allume une DIZAINE (1 à 9) et
  * une UNITÉ (0 à 9), chacune dessinée à sa place (`Place`). Toute la page reste fixe, sans script.
@@ -97,7 +97,7 @@ const lueur = (id: string, c: string): string =>
   rad(id, st(0, c, 0.95) + st(0.4, c, 0.5) + st(1, c, 0))
 
 const OR = '#ffd65c'
-/** Les couleurs de l'invocation (la capture de l'utilisateur, conv-1227) : cyan, rose, et l'or. */
+/** Les couleurs de l'invocation (la capture de l'utilisateur) : cyan, rose, et l'or. */
 const CYAN = '#8ff0ff'
 const ROSE = '#ff8fd8'
 const PLIEE =
@@ -205,7 +205,7 @@ function defs(): string {
 // ---------------- Les animations : une classe par (images clés, durée, retard, courbe) ----------------
 /**
  * `delai` : avance dans le cycle (retard négatif) ; `une` : jouée UNE fois, au moment où l'état la
- * DÉCLENCHE, puis figée sur sa dernière image (l'ouverture du grimoire, conv-1227).
+ * DÉCLENCHE, puis figée sur sa dernière image (l'ouverture du grimoire).
  *
  * Pourquoi la déclencher par l'état : dans ce dessin SVG, une animation tourne dès le chargement de
  * la page, même dans un groupe éteint (`display:none`) — sondé le 2026-10-28 avec
@@ -408,10 +408,10 @@ function resoudre(
 }
 
 /**
- * L'ENCRE DU TRACÉ, AUX COULEURS DES YEUX (conv-1247, 2026-10-28, « le numéro que la mascotte
+ * L'ENCRE DU TRACÉ, AUX COULEURS DES YEUX (2026-10-28, « le numéro que la mascotte
  * dessine doit être de la couleur dont les yeux vont s'allumer et changer la couleur de l'étoile du
  * chapeau », puis « au moment où un chiffre rouge atteint l'étoile, ça met l'étoile rouge »). Elle
- * était rouge à chaque sort (conv-1227, « le chiffre qu'il est en train de dessiner doit être rouge et
+ * était rouge à chaque sort (« le chiffre qu'il est en train de dessiner doit être rouge et
  * plus gros »). Un sort par couleur, dans l'ordre des yeux (`COULEURS_DES_YEUX` de `visage`) : cyan,
  * rouge, jaune, vert. `coeur` : le trait écrit ; `vif` : l'iris des yeux de lumière, le halo du trait
  * et l'étoile du chapeau ; `bord` : le contour de l'étoile.
@@ -424,7 +424,7 @@ const COULEURS_DU_SORT = [
 ] as const
 type Encre = (typeof COULEURS_DU_SORT)[number]
 const lueurDe = (c: string): string => `gl${c.slice(1)}`
-// Plus de lueur cyan ni rose : seuls les trois cercles magiques s'en servaient (retirés, conv-1258).
+// Plus de lueur cyan ni rose : seuls les trois cercles magiques s'en servaient (retirés).
 const LUEURS = [...COULEURS_DU_SORT.map((c) => c.vif), OR]
 
 function seg(dx: number, dy: number, b: number): string {
@@ -432,7 +432,7 @@ function seg(dx: number, dy: number, b: number): string {
   return `M0 0q${r2(dx / 2 + (-dy / l) * b)} ${r2(dy / 2 + (dx / l) * b)} ${r2(dx)} ${r2(dy)}`
 }
 /**
- * BRAS NOIRS (conv-1227, 2026-10-28, « ses bras doivent être noirs, pas lumineux ») : ils étaient
+ * BRAS NOIRS (2026-10-28, « ses bras doivent être noirs, pas lumineux ») : ils étaient
  * des filaments de lumière (bleus au travail, dorés pour toi). Ils sont maintenant d'encre mate, sans
  * aucune lueur, avec un reflet discret pour garder le volume. Seule la pointe de la baguette brille.
  */
@@ -531,12 +531,12 @@ const SIGNES: Record<string, Pt[][]> = {
   ],
   '8': [[...arc(0, -4.3, 3.8, 90, 450, 20), ...arc(0, 4.2, 4.4, -90, -450, 22).slice(1)]],
   '9': [[...arc(0, -3.6, 4.2, 0, -360, 22), [4.2, 1], [3.2, 5], [0.5, 7.8], [-2.8, 8.2]]],
-  // Le 0 n'existe qu'en unité (10, 20…, conv-1270) : un ovale tracé d'un trait, depuis le haut, vers
+  // Le 0 n'existe qu'en unité (10, 20…) : un ovale tracé d'un trait, depuis le haut, vers
   // la gauche, comme à la main. (Le « + » de « 9+ » est parti avec lui.)
   '0': [ovale(4.2, 8, -100, -460, 30)]
 }
 /**
- * Le chiffre écrit est 1,35 fois plus grand que la boîte des signes (conv-1227, « plus gros ») :
+ * Le chiffre écrit est 1,35 fois plus grand que la boîte des signes (« plus gros ») :
  * environ 12 × 23 px. Son coin le plus lointain reste à portée de la baguette (28,8 px de l'épaule
  * pour 29,5 au plus), ce que vérifie l'écart mesuré par le test.
  */
@@ -551,7 +551,7 @@ const poser = (traits: Pt[][], k: number, dx: number, centre: Pt = G): Pt[][] =>
 /** Les traits d'un chiffre seul, à sa place. */
 const traitsDuChiffre = (valeur: string): Pt[][] => poser(SIGNES[valeur] ?? [], 1, 0)
 /**
- * DEUX CHIFFRES CÔTE À CÔTE (conv-1270) : la baguette n'atteint que l'anneau compris entre 7,4 et
+ * DEUX CHIFFRES CÔTE À CÔTE : la baguette n'atteint que l'anneau compris entre 7,4 et
  * 29,5 px de l'épaule droite, trop étroit pour deux chiffres de la taille d'un chiffre seul. Chacun
  * est donc réduit à 0,7 (environ 8,5 × 15 px, la taille du 9 de l'ancien « 9+ »), leurs centres à
  * 10,8 px l'un de l'autre, et la paire descend un peu (centre `G2`) : c'est la place qui garde le
@@ -568,15 +568,15 @@ const dChemin = (pts: readonly Pt[]): string =>
 
 /**
  * Le chiffre, tel qu'il s'affiche dans l'étoile (`classe` : son allure). Toujours blanc, et plus gros
- * depuis conv-1227 (« celui du chapeau toujours blanc mais plus gros aussi », puis « le chiffre peut
- * dépasser de l'étoile, c'est pas grave ») : 26 px au lieu de 16. Il déborde de l'étoile (21 px de
+ * « celui du chapeau toujours blanc mais plus gros aussi », puis « le chiffre peut
+ * dépasser de l'étoile, c'est pas grave » : 26 px au lieu de 16. Il déborde de l'étoile (21 px de
  * large) ; sa ligne de base est abaissée pour que son centre reste sur celui de l'étoile (y = -3).
  */
 function texteChiffre(valeur: string, classe: string, remplissage: string): string {
   return `<text class="${classe}" x="25" y="6" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" font-weight="800" font-size="26" fill="${remplissage}">${valeur}</text>`
 }
 /**
- * Un chiffre d'un nombre à deux chiffres, à sa place (conv-1270) : 20 px, comme l'ancien « 9+ ». La
+ * Un chiffre d'un nombre à deux chiffres, à sa place : 20 px, comme l'ancien « 9+ ». La
  * dizaine finit en x = 25 (`end`), l'unité y commence (`start`) : les deux se touchent comme dans
  * un seul mot, et la paire reste centrée sur l'étoile quels que soient ses chiffres.
  */
@@ -614,7 +614,7 @@ const D_TRACE = 3.2
 /**
  * Les couleurs se relaient d'un sort à l'autre : un cycle de `n` sorts, la couleur `k` allumée
  * (opacité 1) pendant le sort `k` seul. Les yeux (`visage`) et l'encre du tracé (`tracer`) jouent
- * ces MÊMES images clés sur la même durée (conv-1247) : le chiffre écrit a toujours la couleur dont
+ * ces MÊMES images clés sur la même durée : le chiffre écrit a toujours la couleur dont
  * les yeux vont s'allumer. La bascule tombe entre deux sorts, quand les yeux sont éteints (`allume`
  * vaut 0 de 87 à 61 %) et l'encre effacée (de 88 % au premier trait) : on ne la voit jamais.
  */
@@ -801,7 +801,7 @@ function tracer(
 }
 
 /**
- * DEUX CHIFFRES, DEUX BRAS QUI SE RELAIENT (conv-1270). Un bras par chiffre et par place ne peut
+ * DEUX CHIFFRES, DEUX BRAS QUI SE RELAIENT. Un bras par chiffre et par place ne peut
  * pas savoir quel chiffre l'autre écrit : 90 nombres n'ont donc pas 90 bras, mais 19 (9 dizaines,
  * 10 unités). Le bras de la dizaine part du haut de la dizaine (`ATTENTE`), l'écrit, puis va au
  * centre de la paire (`RELAIS`) à `T_RELAIS` ; celui de l'unité y prend la main, l'écrit, s'attarde,
@@ -886,18 +886,18 @@ function ecartDuRelais(
 
 // ---------------- « Au travail » : ce que tout le reste fait en même temps ----------------
 /**
- * L'INVOCATION DE LA MAIN GAUCHE (conv-1227, 2026-10-28, « l'autre main fait apparaître des trucs
+ * L'INVOCATION DE LA MAIN GAUCHE (2026-10-28, « l'autre main fait apparaître des trucs
  * comme ce screenshot » : une main ouverte, une sphère d'énergie au-dessus, des cercles magiques
  * empilés en perspective, des colonnes de runes qui montent, des éclats de cristal). Elle remplace
  * la boule pétrie puis lancée en boule de feu. Même cycle que le tracé (`D_TRACE`) : la sphère
  * culmine quand le chiffre écrit file au chapeau, au moment où les yeux s'allument (`visage`).
- * Depuis conv-1258, des étoiles en orbite tiennent la place des cercles (`ORBITE`).
+ * Des étoiles en orbite tiennent la place des cercles (`ORBITE`).
  */
 const POIGNET: Pt = [-10, 43.5]
 /** La sphère flotte au-dessus de la paume. */
 const SPHERE: Pt = [-14, 27]
 /**
- * LES ÉTOILES EN ORBITE (conv-1258, /draft, « Implémenter la 3 · Étoiles en orbite ») : trois
+ * LES ÉTOILES EN ORBITE (/draft, « Implémenter la 3 · Étoiles en orbite ») : trois
  * étoiles d'or tournent autour de la sphère, passent devant puis derrière elle, et plongent dedans
  * au sommet du sort. Elles remplacent les trois cercles magiques empilés en perspective, qui à
  * taille réelle ne se lisaient que comme trois barres rose, or et cyan au-dessus de la main.
@@ -1026,7 +1026,7 @@ function invocation(f: Feuille): { bras: string; derriere: string; devant: strin
       .join('')
   const enRonde = (devant: boolean): string =>
     `<g transform="translate(${SPHERE[0]} ${SPHERE[1]})"><g class="jt ${ronde}">${etoiles(devant)}</g></g>`
-  // Les colonnes de runes qui montaient au-dessus de la main ont été retirées (conv-1227, « les
+  // Les colonnes de runes qui montaient au-dessus de la main ont été retirées (« les
   // ronds qui montent c'est trop, enlève-les ») : à la vraie taille, leurs runes ne se lisaient que
   // comme des points de couleur qui grimpaient.
   // Des éclats de cristal, roses et cyan, qui montent en tournant autour de la main.
@@ -1132,11 +1132,11 @@ function teinteDePage(a: number): string {
 }
 
 /**
- * LE GRIMOIRE (conv-1227, 2026-10-28, « remplace les 3 boules en dessous par un grimoire ») : à la
+ * LE GRIMOIRE (2026-10-28, « remplace les 3 boules en dessous par un grimoire ») : à la
  * place des trois pantins, un livre ouvert flotte sous la bille ; une lueur monte des pages, et des
  * étincelles s'en échappent. `lueur` et `encre` disent l'état (bleu au travail, or pour toi).
  *
- * LES PAGES SE TOURNENT TOUTES SEULES (conv-1227, « les pages du grimoire doivent se tourner toutes
+ * LES PAGES SE TOURNENT TOUTES SEULES (« les pages du grimoire doivent se tourner toutes
  * seules ») : la page d'avant, aplatie en largeur, restait dans le plan du livre et ne se voyait pas
  * tourner (constaté en capture). Trois pages se soulèvent maintenant l'une après l'autre, se dressent
  * au-dessus de la reliure en se cambrant, et retombent à gauche : une toutes les `feuillette`
@@ -1211,7 +1211,7 @@ function grimoire(
     etincelle(33, 0.9)
   if (!ouverture)
     return `<g class="grim ${flotte}">${MOITIE_GAUCHE}${MOITIE_DROITE}${RELIURE}${vivant}</g>`
-  // L'OUVERTURE (conv-1227, « fermé au calme, qui s'ouvre quand un agent se met au travail ») :
+  // L'OUVERTURE (« fermé au calme, qui s'ouvre quand un agent se met au travail ») :
   // jouée une fois, chaque fois que le travail commence. Au départ, c'est le grimoire fermé du
   // calme (`grimoireFerme`) ; la couverture bascule par-dessus la reliure pendant que le livre glisse
   // de 8 px vers la droite pour rester centré ; la moitié gauche apparaît sous la couverture qui se
@@ -1302,7 +1302,7 @@ const RELIURE = '<path d="M26 57.6V63" stroke="#c9a86a" stroke-width=".4"/>'
 const ETOILE_DE_COUVERTURE = `<path d="${etoile(34.2, 58.4, 2.6)}" fill="${OR}" stroke="#fff3c4" stroke-width=".3"/>`
 
 /**
- * LE GRIMOIRE FERMÉ, au calme (conv-1227, « affiche aussi le grimoire au calme, fermé ») : la
+ * LE GRIMOIRE FERMÉ, au calme (« affiche aussi le grimoire au calme, fermé ») : la
  * moitié droite du livre et sa couverture rabattue, une étoile d'or qui luit doucement ; décalé de
  * 8 px vers la gauche pour être centré sous la bille. C'est exactement la première image de
  * l'ouverture (`grimoire`, au travail) : le livre fermé du calme est celui qui s'ouvre.
@@ -1410,7 +1410,7 @@ function auTravail(f: Feuille): {
   const rune = (d: string, classe: string, halo = '#ff6ad5'): string =>
     `<g transform="scale(1.2)"><g class="${classe}"><path d="${d}" pathLength="30" stroke="${halo}" stroke-opacity=".35" stroke-width="3" stroke-dasharray="30" fill="none"/><path d="${d}" pathLength="30" stroke="#fff" stroke-width="1" stroke-dasharray="30" fill="none"/></g></g>`
   /**
-   * DES SYMBOLES QUI SE TRACENT TOUT AUTOUR (conv-1227, « mets des symboles qui se dessinent comme
+   * DES SYMBOLES QUI SE TRACENT TOUT AUTOUR (« mets des symboles qui se dessinent comme
    * ce losange un peu partout autour ») : le losange de la marge droite a sept frères, posés en
    * couronne autour du personnage, hors de l'invocation (à gauche) et du chiffre écrit (à droite).
    * Chacun se trace trait par trait, tient, puis s'efface ; leurs départs sont décalés pour qu'il y
@@ -1560,7 +1560,7 @@ function pourToi(f: Feuille): { bras: string; fete: string; eclair: string; ecar
     pluie(-2, 0.6) +
     pluie(56, 0.3) +
     pluie(70, 1) +
-    // Le grimoire, en or : ses pages tournent vite (conv-1227, à la place des pantins qui sautaient).
+    // Le grimoire, en or : ses pages tournent vite (à la place des pantins qui sautaient).
     grimoire(f, 'gGo', OR, 0.4) +
     (
       [
@@ -1578,7 +1578,7 @@ function pourToi(f: Feuille): { bras: string; fete: string; eclair: string; ecar
 
 // ---------------- Le visage : des expressions qui changent ----------------
 /**
- * LE VISAGE VIVANT (conv-1227, 2026-10-28, « ses expressions de visage doivent changer, pas
+ * LE VISAGE VIVANT (2026-10-28, « ses expressions de visage doivent changer, pas
  * statiques, pour le rendre vraiment vivant »). Chaque état a SON visage (`fT`, `fA`, `fR`, `fP`),
  * qui joue en boucle :
  * - au travail : les yeux suivent la baguette qui écrit (même durée que le tracé, donc en phase),
@@ -1716,7 +1716,7 @@ function visage(f: Feuille): string {
     3 * T,
     lineaire
   )
-  // LES YEUX S'ALLUMENT (conv-1227, 2026-10-28, « une expression où ses yeux s'éclairent et de
+  // LES YEUX S'ALLUMENT (2026-10-28, « une expression où ses yeux s'éclairent et de
   // l'énergie s'en échappe ») : au sommet du sort, quand la sphère éclate et que le chiffre file au
   // chapeau, ses yeux deviennent lumière et l'énergie en jaillit vers l'extérieur, en filets.
   const allume = f.anim(
@@ -1739,9 +1739,9 @@ function visage(f: Feuille): string {
     0.45,
     lineaire
   )
-  // YEUX DE COULEUR (conv-1227, 2026-10-28, « ses yeux peuvent aussi devenir rouges », puis « jaunes
+  // YEUX DE COULEUR (2026-10-28, « ses yeux peuvent aussi devenir rouges », puis « jaunes
   // ou verts ») : d'un sort à l'autre, les yeux s'allument en cyan, rouge, jaune, puis vert (`teinte`,
-  // la même relève que l'encre du chiffre écrit, conv-1247).
+  // la même relève que l'encre du chiffre écrit).
   const yeuxDeLumiere = (coeur: string): string =>
     [18.98, 33.02]
       .map((x) => `<ellipse cx="${x}" cy="21" rx="4.4" ry="5.2" fill="url(#${coeur})"/>`)
@@ -2069,10 +2069,10 @@ function construire(): Personnage {
     `<ellipse cx="26" cy="13.5" rx="21" ry="4.5" fill="url(#gSh)"/><path d="${PLIEE}" fill="url(#gH)"/>` +
     '<path d="M10 4C13-6 17-15 21-22" stroke="#fff" stroke-opacity=".35" stroke-width="1.5" fill="none"/><path d="M32-24Q30-19 33-10" stroke="#1d1460" stroke-opacity=".55" stroke-width="1.1" fill="none"/>' +
     '<ellipse cx="26" cy="9" rx="25" ry="4.2" fill="url(#gB)"/>'
-  // L'étoile JAUNE (conv-1227, « l'étoile du chapeau fais-la jaune ») : pleine, sans lueur — c'est
+  // L'étoile JAUNE (« l'étoile du chapeau fais-la jaune ») : pleine, sans lueur — c'est
   // toujours le chiffre blanc posé dessus qui brille.
   const etoileDuChapeau = `<path d="${etoile(25, -3, 10.5)}" fill="#ffd23f" stroke="#fff0a8" stroke-width=".9"/>`
-  // L'ÉTOILE PREND LA COULEUR DU CHIFFRE QUI L'ATTEINT (conv-1247, « au moment où un chiffre rouge
+  // L'ÉTOILE PREND LA COULEUR DU CHIFFRE QUI L'ATTEINT (« au moment où un chiffre rouge
   // atteint l'étoile, ça met l'étoile rouge ») : au travail, quand le chiffre écrit se pose sur elle
   // (`T_ARRIVEE` de chaque sort), elle prend sa couleur et la garde jusqu'au chiffre suivant. Hors
   // travail, le groupe `ET` est éteint : elle reste jaune.
@@ -2106,7 +2106,7 @@ function construire(): Personnage {
       `<g class="${eclair}">${texteChiffre(v, 'fx', '#fff')}</g></g>`
     )
   }).join('')
-  // Deux chiffres (conv-1270) : un groupe par chiffre et par place (`tracerALaPlace`). Les traits des
+  // Deux chiffres : un groupe par chiffre et par place (`tracerALaPlace`). Les traits des
   // deux chiffres volent ENSEMBLE au chapeau, dans un seul groupe : il rapetisse autour du centre de
   // ce qui y est allumé, la paire écrite, et pas chaque chiffre autour du sien. Même chose pour
   // l'embrasement des deux chiffres du chapeau.
@@ -2152,7 +2152,7 @@ function construire(): Personnage {
     '<ellipse cx="26" cy="66" rx="16" ry="2.4" fill="url(#gSh)"/>' +
     // `LG` : le grimoire seul, sans le reste du travail, pour la mascotte qui lit (`reglesDeLAccueil`).
     `<g class="ET LG">${travail.grimoire}</g>` +
-    // Au calme, le grimoire est fermé (conv-1227) ; il s'ouvre quand le travail commence.
+    // Au calme, le grimoire est fermé ; il s'ouvre quand le travail commence.
     `<g class="GF">${grimoireFerme(f)}</g>` +
     chapeau +
     chiffres +
@@ -2235,7 +2235,7 @@ export function visageDeLaBille(): string {
     // Et leur version rouge, un sort sur deux.
     rad('gEr', st(0, '#ffffff') + st(0.3, '#ffd6cf') + st(0.75, '#ff3b2f') + st(1, '#ff3b2f', 0)) +
     rad('gEhr', st(0, '#ff6a5c', 0.75) + st(0.5, '#ff6a5c', 0.3) + st(1, '#ff6a5c', 0)) +
-    // Puis jaune, puis vert (conv-1227, « les yeux peuvent aussi devenir jaunes ou verts »).
+    // Puis jaune, puis vert (« les yeux peuvent aussi devenir jaunes ou verts »).
     rad('gEj', st(0, '#ffffff') + st(0.3, '#fff6c2') + st(0.75, '#ffd21f') + st(1, '#ffd21f', 0)) +
     rad('gEhj', st(0, '#ffe066', 0.75) + st(0.5, '#ffe066', 0.3) + st(1, '#ffe066', 0)) +
     rad('gEv', st(0, '#ffffff') + st(0.3, '#d6ffd2') + st(0.75, '#3ee05a') + st(1, '#3ee05a', 0)) +
@@ -2248,7 +2248,7 @@ export function visageDeLaBille(): string {
 }
 
 /**
- * L'ACCUEIL D'UN FIL VIDE (conv-1401, « prend exactement la meme mascotte qu'on a dans les settings ») :
+ * L'ACCUEIL D'UN FIL VIDE (« prend exactement la meme mascotte qu'on a dans les settings ») :
  * deux humeurs que le bureau n'a pas, faites de ses pièces, sans aucun dessin neuf. Éveillée : le
  * visage heureux de « pour toi », bras au repos, grimoire fermé, car son repos à elle a les yeux
  * fermés. Lectrice : le visage concentré du travail et son grimoire ouvert, sans sort ni halo.

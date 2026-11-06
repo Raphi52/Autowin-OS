@@ -410,10 +410,10 @@ export class TraceStore {
     if (event.parentId && !seen.has(event.parentId))
       throw new Error(`parent causal introuvable: ${event.parentId}`)
     const descriptor = this.descripteurOuvert(event.conversationId)
-    // Jamais le base64 d'une piece jointe : 20 Mo par ligne ont fait planter l'ouverture de conv-331.
+    // Jamais le base64 d'une piece jointe : 20 Mo par ligne ont fait planter l'ouverture.
     const ligne = `${JSON.stringify(event, remplacerContenuJoint)}\n`
     const ecrits = writeSync(descriptor, ligne, undefined, 'utf8')
-    // fix-ok: conv-1069 — `append` n'avançait pas le curseur de `nextSequence` : chaque événement
+    // fix-ok: `append` n'avançait pas le curseur de `nextSequence` : chaque événement
     // rouvrait le journal pour relire sa propre ligne (test borne-warmup rouge sur ef5762bf).
     if (ecrits === Buffer.byteLength(ligne, 'utf8'))
       this.avancerCurseurApresEcriture(event.conversationId, descriptor, ecrits, event.sequence)
@@ -434,7 +434,7 @@ export class TraceStore {
   }
 
   /**
-   * LE CURSEUR DE `nextSequence` SUIT NOS PROPRES ÉCRITURES (conv-1069). Gels résolus avec la carte
+   * LE CURSEUR DE `nextSequence` SUIT NOS PROPRES ÉCRITURES. Gels résolus avec la carte
    * de la compilation du 2026-10-22 07:10 : `openSync` du journal (`nextSequence`, appelé par
    * `rebaseTraceSequence`), 8,9 s puis 1,0 s de fenêtre figée. `append` écrivait sans avancer ce
    * curseur : l'appel suivant voyait le fichier grandir et le ROUVRAIT pour relire la ligne qu'il
@@ -665,7 +665,7 @@ export class TraceStore {
    * QUEUE DE FICHIER LUE, PAS LE FICHIER ENTIER.
    *
    * Le défaut, mesuré le 2026-09-12 : cette fonction faisait `readFileSync` sur la trace COMPLÈTE
-   * au tout premier événement d'une conversation — 18 Mo pour conv-439, et 3,2 s pour 83 lectures
+   * au tout premier événement d'une conversation — 18 Mo, et 3,2 s pour 83 lectures
    * à l'ouverture d'une trace, sur le fil qui dessine l'interface. Or elle ne cherche qu'UNE
    * chose : le plus grand numéro d'événement déjà écrit.
    *
@@ -758,7 +758,7 @@ export class TraceStore {
    * Relache tous les descripteurs d'ecriture gardes par `descripteurOuvert`. Une ecriture suivante
    * rouvre simplement le sien. A appeler par qui a CREE le store pour un usage borne : sous Windows,
    * un fichier encore ouvert ne s'efface qu'« en attente », et son dossier ne se supprime plus
-   * (EPERM a la suppression des dossiers de test, conv-246).
+   * (EPERM a la suppression des dossiers de test).
    */
   fermer(): void {
     for (const descriptor of this.descriptors.values()) closeSync(descriptor)

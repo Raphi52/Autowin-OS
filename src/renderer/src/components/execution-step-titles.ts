@@ -69,13 +69,13 @@ const TOOL_TITLES: Record<
   bureau_cache_lancer: 'outil.bureau_cache_lancer',
   bureau_cache_observer: ['outil.bureau_cache_observer', 'outil.bureau_cache_observer.n'],
   bureau_cache_agir: ['outil.bureau_cache_agir', 'outil.bureau_cache_agir.n'],
-  // Navigateur intégré du chat (conv-1286, lot 4/5).
+  // Navigateur intégré du chat (lot 4/5).
   navigateur_ouvrir: ['outil.navigateur_ouvrir', 'outil.navigateur_ouvrir.n'],
   navigateur_lire: ['outil.navigateur_lire', 'outil.navigateur_lire.n'],
   navigateur_capture: ['outil.navigateur_capture', 'outil.navigateur_capture.n'],
   navigateur_agir: ['outil.navigateur_agir', 'outil.navigateur_agir.n'],
   navigateur_console: 'outil.navigateur_console',
-  // Terminal intégré du chat (conv-1362, lot 3/3).
+  // Terminal intégré du chat (lot 3/3).
   terminal_lire: 'outil.terminal_lire',
   show_video: 'outil.show_video',
   montrer_bloc: 'outil.montrer_bloc',
@@ -92,7 +92,7 @@ const TOOL_TITLES: Record<
   Grep: ['outil.find_in_files', 'outil.find_in_files.n'],
   Glob: 'outil.Glob',
   Bash: ['outil.run', 'outil.run.n'],
-  // Attendre et arrêter en arrière-plan (conv-1370, lot 5).
+  // Attendre et arrêter en arrière-plan (lot 5).
   Monitor: ['outil.Monitor', 'outil.Monitor.n'],
   TaskStop: ['outil.TaskStop', 'outil.TaskStop.n'],
   Edit: ['outil.edit_file', 'outil.edit_file.n'],
@@ -131,7 +131,7 @@ export function toolTitle(name: string | undefined, count = 1): string {
     ? TOOL_TITLES[name]
     : undefined
   if (entree === undefined) return name
-  // Dans la langue de l'interface (conv-1170) : la table garde des clés, traduites à la lecture.
+  // Dans la langue de l'interface : la table garde des clés, traduites à la lecture.
   if (typeof entree === 'string') return t(entree)
   return t(count > 1 ? entree[1] : entree[0])
 }
@@ -177,7 +177,7 @@ export function stepTitle(event: HarnessTimelineEvent): string {
 /** Rôle lisible d'un agent : l'identifiant interne « orchestrator » ne dit rien à l'utilisateur. */
 export function roleLabel(actor: string): string {
   const lower = actor.trim().toLowerCase()
-  // Noms du graphe EN ANGLAIS (demande du 2026-10-22, conv-1094) : les étapes s'y appelaient déjà
+  // Noms du graphe EN ANGLAIS (demande du 2026-10-22) : les étapes s'y appelaient déjà
   // « Judge », « Learn » ; leurs agents restaient « Juge », « Sous-agent ». La table des actions
   // (`TOOL_TITLES`) reste en français : le fil de conversation la partage.
   if (lower === 'orchestrator' || lower === 'orchestrateur') return 'Orchestrator'

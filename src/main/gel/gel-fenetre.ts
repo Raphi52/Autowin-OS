@@ -10,7 +10,7 @@ import type { Gel } from '../../shared/gel-detector'
 /**
  * LE SEUL GEL QUE PERSONNE NE VOYAIT — celui de la FENETRE.
  *
- * Mesure du 2026-09-08 (conv-353) : cliquer une grosse fiche du Brain figeait l'interface jusqu'a
+ * Mesure du 2026-09-08 : cliquer une grosse fiche du Brain figeait l'interface jusqu'a
  * devoir tuer l'application, et `gels.jsonl` n'en portait AUCUNE ligne. Deux angles morts se
  * cumulaient. Le battement de `gel-main` ne surveille que le process PRINCIPAL : il tournait
  * parfaitement pendant que la fenetre etait morte. Et le rapporteur cote interface n'emet qu'APRES

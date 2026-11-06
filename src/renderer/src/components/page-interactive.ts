@@ -1,5 +1,5 @@
 /*
- * PAGE INTERACTIVE DU FIL (bloc ```html-interactif, conv-1292, 2026-10-29) — ce que le fil envoie
+ * PAGE INTERACTIVE DU FIL (bloc ```html-interactif, 2026-10-29) — ce que le fil envoie
  * au cadre isole avec le HTML : la feuille de base et le theme courant.
  *
  * Le cadre a une origine opaque : ni les feuilles de l'app ni ses variables CSS ne le traversent.
@@ -32,7 +32,7 @@ export function pageUtiliseLeMoteur3d(html: string): boolean {
 }
 
 /**
- * La page isolee qui recoit ce HTML (conv-1304, 2026-10-30). Une page sans 3D part dans
+ * La page isolee qui recoit ce HTML (2026-10-30). Une page sans 3D part dans
  * `page-interactive.html`, qui ne porte PAS le moteur three.js : chaque cadre telechargeait sinon
  * ~750 Ko de moteur pour rien. Une page qui le nomme part dans `scene-3d.html`, comme une scene.
  */
@@ -41,7 +41,7 @@ export function pageIsoleePour(html: string): string {
 }
 
 /**
- * Le bac a sable du cadre. `allow-forms` (conv-1304, 2026-10-30) : sans lui, Chromium n'emet meme
+ * Le bac a sable du cadre. `allow-forms` (2026-10-30) : sans lui, Chromium n'emet meme
  * pas l'evenement `submit` — un `<form onsubmit="...">` de calculateur ne reagissait a rien (banc
  * `.autowin-tmp/conv-1304/banc-motifs.html` : « Blocked form submission »). L'envoi lui-meme reste
  * impossible : la politique de la page porte `form-action 'none'`, et le filtre de navigation de la
@@ -57,7 +57,7 @@ export const HAUTEUR_INITIALE_PAGE = 48
 export const MAX_TEXTE_COPIE = 1_000_000
 export const MAX_STOCKAGE_PAGE = 2_000_000
 /**
- * Longueur maximale d'un message qu'une page pose dans la saisie (bouton de choix, conv-1304). Plus
+ * Longueur maximale d'un message qu'une page pose dans la saisie (bouton de choix). Plus
  * large que le libelle d'un bouton du ```html-render (LONGUEUR_MAX_PROMPT, 300) : la page peut
  * composer un message a partir de ses reglages, et l'utilisateur le relit avant de l'envoyer.
  */
@@ -67,7 +67,7 @@ const MAX_RESSOURCE = 4_000_000
 const MAX_MESSAGE = 2000
 
 /**
- * Signe de vie (conv-1304, 2026-10-30) : le fil interroge la page qu'il montre. Une page en boucle
+ * Signe de vie (2026-10-30) : le fil interroge la page qu'il montre. Une page en boucle
  * infinie ne repond plus, et rien ne le disait : elle restait figee, sans message. Le seuil laisse
  * passer un calcul de quelques secondes ; un retour de reponse efface l'avis.
  */
@@ -77,7 +77,7 @@ export const SEUIL_PAGE_FIGEE_MS = 6000
 export const DELAI_RESSOURCES_MS = 4000
 
 /**
- * Un message de la page, LU et borne (conv-1304). La page est du code du modele : tout ce qu'elle
+ * Un message de la page, LU et borne. La page est du code du modele : tout ce qu'elle
  * envoie est une donnee a valider, jamais un ordre. Le fil (BlocHtmlInteractif.tsx) et l'apercu
  * lisent les messages par cette seule fonction.
  */
@@ -188,7 +188,7 @@ export function reponseALaPage(
 }
 
 /**
- * Le localStorage des pages (conv-1304) : changer de fil demonte la page, y revenir la relance —
+ * Le localStorage des pages : changer de fil demonte la page, y revenir la relance —
  * sans cette memoire, une liste de taches ou un score tenus par la page repartaient de zero.
  * Cle = empreinte du HTML : la meme page retrouve ses donnees, une autre ne les voit pas. Cette
  * Map est la copie de session, bornee aux 60 pages les plus recentes ; le disque garde le reste
@@ -331,7 +331,7 @@ export function borneHauteurPage(hauteur: unknown): number | null {
 }
 
 /**
- * Les jetons du theme lus sur le bloc du fil : ceux de la feuille de base, puis (conv-1304) ceux de
+ * Les jetons du theme lus sur le bloc du fil : ceux de la feuille de base, puis ceux de
  * l'habit holographique du carrousel /draft (scripts/draft-carrousel.mjs), devenu une page
  * interactive pour un sujet en volume. Sans eux, il retombait sur ses valeurs sombres de repli :
  * fiches noires sous un theme clair.
@@ -389,7 +389,7 @@ export function lireThemePourPage(element: Element): ThemePage {
  */
 export const STYLE_PAGE_INTERACTIVE = [
   // `--page-*` : valeurs de depart, remplacees par celles du fil des qu'il pose son theme (a la main
-  // sur la racine, elles passent devant). conv-1304, css-variables-definies.test.ts : une variable
+  // sur la racine, elles passent devant). Css-variables-definies.test.ts : une variable
   // sans definition dans les sources est invisible pour le controle des themes.
   'html[data-mode=page]{--page-texte:CanvasText;--page-police:system-ui,sans-serif;--page-taille:14px;height:auto;min-height:0;overflow:visible;background:transparent}',
   ':where(html[data-mode=page]) body{height:auto;min-height:0;overflow:visible;background:transparent;display:flow-root;margin:0;color:var(--page-texte);font-family:var(--page-police);font-size:var(--page-taille);line-height:1.5;overflow-wrap:anywhere}',

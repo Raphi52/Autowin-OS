@@ -1,9 +1,9 @@
 /**
- * LA RELECTURE DES BOARDS DES COLLÈGUES (demande utilisateur du 2026-10-28, conv-1210).
+ * LA RELECTURE DES BOARDS DES COLLÈGUES (demande utilisateur du 2026-10-28).
  *
  * Demande : « fais afficher dans mon Board les post-it des collègues qui écrivent dans le même
  * dossier de la GED, avec leur nom sur chaque post-it et en lecture seule ». Chaque poste écrit son
- * Board dans `<dossier du Board>\<son compte Windows>\board.json` (`board-dossier.ts`, conv-1206) ;
+ * Board dans `<dossier du Board>\<son compte Windows>\board.json` (`board-dossier.ts`) ;
  * ce module relit ceux des AUTRES sous-dossiers.
  *
  * Le fichier vient d'un partage d'équipe : c'est une DONNÉE, jamais une source sûre. Tout ce qui en
@@ -28,7 +28,7 @@ import { nomDuPosteLisible } from '../../shared/board-nom-du-poste'
 
 export const FORMAT_LU = 'autowin-board/1'
 export const DELAI_ENTRE_LECTURES_MS = 15_000
-/** 2,7 Mo mesurés pour 1 043 post-it (conv-1206) : 40 Mo laisse dix fois la place, pas plus. */
+/** 2,7 Mo mesurés pour 1 043 post-it : 40 Mo laisse dix fois la place, pas plus. */
 export const TAILLE_MAX_D_UN_BOARD = 40 * 1024 * 1024
 export const COLLEGUES_MAX = 50
 export const POSTITS_MAX = 10_000
@@ -81,7 +81,7 @@ function demandeLue(v: unknown): DemandeDuFichier | null {
   const s = statut(o.statut)
   if (titre === null || !s || typeof o.rang !== 'number' || !Number.isInteger(o.rang)) return null
   const constat = texte(o.constat) ?? ''
-  // Le message entier (conv-1278) : un fichier écrit avant ne l'a pas, la fiche montre alors le titre.
+  // Le message entier : un fichier écrit avant ne l'a pas, la fiche montre alors le titre.
   const entier = texte(o.texte)
   const messageId = texte(o.messageId, 200)
   const d = date(o.date)
@@ -137,7 +137,7 @@ function postItLu(v: unknown): PostItDuFichier | null {
   const manuelEtage = manuelBrut && etage(manuelBrut.etage)
   const manuelA = manuelBrut && date(manuelBrut.a)
   const demandeur = personne(o.demandeur)
-  // Le RUN.md de la tâche (conv-1456), tel que `fiches-de-demande.ts` le nomme : rien d'autre.
+  // Le RUN.md de la tâche, tel que `fiches-de-demande.ts` le nomme : rien d'autre.
   const fiche = texte(o.fiche, 200)
   return {
     conversationId,
@@ -157,7 +157,7 @@ function postItLu(v: unknown): PostItDuFichier | null {
  * Le nom écrit sur les post-it d'un collègue : celui que SON poste a écrit dans `board.json` (choisi
  * dans ses réglages, sinon son compte Windows), sinon son compte — le nom de son sous-dossier.
  *
- * Plus le demandeur git le plus fréquent (conv-1230) : un poste avec une identité git affichait
+ * Plus le demandeur git le plus fréquent : un poste avec une identité git affichait
  * un surnom git, un poste sans affichait son compte Windows — deux genres de noms côte à côte.
  */
 export function nomDuCollegue(poste: string, nomEcrit: unknown): string {
@@ -285,7 +285,7 @@ export function creerLecteurDesCollegues(deps: {
 export const TAILLE_MAX_D_UNE_FICHE = 512 * 1024
 
 /**
- * Le RUN.md léger d'un post-it de collègue (conv-1456) : « je dois pouvoir consulter les run.md de
+ * Le RUN.md léger d'un post-it de collègue : « je dois pouvoir consulter les run.md de
  * mes collègues dans le board ». Son Board le recopie dans `<dossier>/<poste>/fiches/<fiche>`
  * (`board-dossier.ts`). Le poste et la fiche viennent de la vue : chacun est validé sur sa forme
  * pour qu'aucun `..` ni chemin absolu ne fasse lire autre chose que ce sous-dossier.

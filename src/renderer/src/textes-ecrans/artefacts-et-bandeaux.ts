@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — APERÇUS D’ARTEFACTS ET BANDEAUX DE L’APP (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — APERÇUS D’ARTEFACTS ET BANDEAUX DE L’APP (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : les aperçus d’artefacts (vidéo, HTML, 3D, archive, police, diagramme, pile), Markdown et blocs
  * de données du fil, UpdateBanner, ModelQuestionPopup, et les durées « il y a… » (`depuis.ts`).
@@ -68,7 +68,7 @@ export const TEXTES_FR = {
   // ArtifactDiagramPreview
   'diagramme.invalide': 'Diagramme invalide ou syntaxe non prise en charge',
   'diagramme.rendu': 'Rendu du diagramme…',
-  // Grande vue d'un schéma (conv-1322)
+  // Grande vue d'un schéma
   'diagramme.agrandirAria': 'Agrandir le schéma',
   'diagramme.visionneuse': 'Schéma agrandi',
   'diagramme.aide': 'Molette : zoomer · Glisser : déplacer · Échap : fermer',
@@ -141,10 +141,10 @@ export const TEXTES_FR = {
   'scene.plantee': 'La scène a planté : {message}',
   'scene.cadre': 'Scène 3D du fil',
 
-  // BlocHtmlInteractif (conv-1292)
+  // BlocHtmlInteractif
   'pageInteractive.cadre': 'Page interactive du fil',
   'pageInteractive.plantee': 'La page a planté : {message}',
-  // Barre, avis et demandes de la page (conv-1304)
+  // Barre, avis et demandes de la page
   'pageInteractive.barre': 'Actions de la page interactive',
   'pageInteractive.relancer': 'Relancer',
   'pageInteractive.copierCode': 'Copier le code',
@@ -195,7 +195,7 @@ export const TEXTES_FR = {
   'maj.aide.rebase':
     'Rejoue tes commits par-dessus origin/main — historique linéaire, hashes réécrits.',
   'maj.aide.switch-main': 'Bascule sur main et l’avance. Ton travail reste intact sur ta branche.',
-  // Aides des voies quand on EST sur main en avance d'origin/main (conv-1597, UpdateBanner.tsx).
+  // Aides des voies quand on EST sur main en avance d'origin/main (UpdateBanner.tsx).
   'maj.aide.merge-main':
     'Ta branche main porte des commits pas encore poussés : fusionne origin/main dans main, tes commits restent.',
   'maj.aide.rebase-main':

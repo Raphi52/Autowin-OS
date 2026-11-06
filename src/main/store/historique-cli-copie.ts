@@ -12,7 +12,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
  * 11 copies vivantes, 87 Mo de déchet pur accumulés en 11 jours, dont AUCUN ne pouvait plus être
  * relu par qui que ce soit — le dossier qu'ils décrivent n'existe plus.
  *
- * LE CLI EN EFFACE AUSSI, MAIS TARD (vérifié le 2026-11-05, conv-1592). Depuis la 2.1.317, il purge
+ * LE CLI EN EFFACE AUSSI, MAIS TARD (vérifié le 2026-11-05). Depuis la 2.1.317, il purge
  * les historiques anciens même quand des appels sautent ce ménage, « such as runs using
  * `--setting-sources` » — c'est ainsi qu'Autowin lance chaque appel. Le délai est `cleanupPeriodDays`,
  * 30 jours par défaut, et Autowin ne charge pas les réglages de l'utilisateur : c'est donc 30 jours.

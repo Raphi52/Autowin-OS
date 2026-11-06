@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs'
-// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+// Le composant est découpé en fichiers voisins : la source lue les réunit.
 import { lireSourceDuChatView } from './ChatView.source-complete'
 import { describe, expect, it } from 'vitest'
 
 const source = lireSourceDuChatView()
 const modelsSource = readFileSync(new URL('./AgentsTopologyView.tsx', import.meta.url), 'utf8')
-// Le composer est un composant a part depuis conv-1466 : l invariant de Stop se lit sur les deux.
+// Le composer est un composant a part : l invariant de Stop se lit sur les deux.
 const composerSource = readFileSync(new URL('./ChatComposer.tsx', import.meta.url), 'utf8')
 
 describe('navigation pendant une reponse', () => {
@@ -40,8 +40,8 @@ describe('navigation pendant une reponse', () => {
     expect(creation).not.toMatch(/provider:\s*['"]claude['"]/)
     expect(source).toContain("if (e.scope === 'roles') refreshRuntimeIdentity()")
     expect(source).toContain('window.api.roles()')
-    // Depuis conv-239 (2026-10-11), le sélecteur pose le modèle de LA conversation ; depuis
-    // conv-1529 (2026-11-04), il pose AUSSI l'orchestrateur d'Agents Studio, en un seul endroit.
+    // Depuis le 2026-10-11, le sélecteur pose le modèle de LA conversation
+    // (2026-11-04), il pose AUSSI l'orchestrateur d'Agents Studio, en un seul endroit.
     expect(source.match(/window\.api\.setRole\(\s*'orchestrator'/g)).toHaveLength(1)
     expect(source).toContain('window.api.conversationSetModel(')
     expect(modelsSource).not.toContain('window.api.roles()')
@@ -79,14 +79,14 @@ describe('navigation pendant une reponse', () => {
     // defaut — arreter exigeait d aller vider la barre de prompt, donc l action la plus urgente
     // dependait de ce qui etait tape. Nouvel invariant : l arret est un bouton DEDIE, conditionne au
     // seul `busy`, et le bouton principal ne fait plus qu une chose a la fois (Reprendre/File/Envoyer).
-    // Depuis l extraction du composer (conv-1466), le bouton d envoi vit dans `ChatComposer` et
+    // Depuis l extraction du composer, le bouton d envoi vit dans `ChatComposer` et
     // Stop reste rendu par `ChatView` (il ne depend que de `busy`). L invariant, lui, ne bouge pas.
     expect(source).toContain('data-testid="composer-stop"')
     expect(composerSource.match(/data-testid="composer-send"/g)).toHaveLength(1)
     expect(source.match(/data-testid="composer-send"/g)).toBeNull()
     expect(source).toContain('stopPilotTurn()')
     expect(source).toContain('resumePilotTurn()')
-    // Depuis conv-1491 (c18d67b8, 2026-11-04), onQueue enveloppe queueCurrentMessage pour refuser ×3
+    // (c18d67b8, 2026-11-04), onQueue enveloppe queueCurrentMessage pour refuser ×3
     // pendant un tour : l'invariant est que la File du composer appelle bien queueCurrentMessage().
     const filesDuComposer = [...source.matchAll(/onQueue=\{\(\) => \{[\s\S]*?\n\s*\}\}/g)].map(
       (m) => m[0]

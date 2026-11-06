@@ -45,7 +45,7 @@ export async function reprendreApresRedemarrage(
   if (!(await deps.ouvrir(reprise.conversationId)))
     return { repris: false, motif: 'conversation-absente' }
   /*
-   * LE TOUR QUI A DEMANDE LE REDEMARRAGE TOURNE ENCORE (conv-1127, 2026-10-23 20:55). `restart_app`
+   * LE TOUR QUI A DEMANDE LE REDEMARRAGE TOURNE ENCORE (2026-10-23 20:55). `restart_app`
    * relance l'app 1,2 s apres sa reponse : le CLI de ce tour survit, le main le REPREND au demarrage
    * et refuse tout nouveau message dans ce fil tant qu'il vit. Envoyee aussitot, la consigne etait
    * refusee (« Un tour repris apres le redemarrage tourne encore ») — et perdue, le main l'ayant deja
@@ -66,7 +66,7 @@ export async function reprendreApresRedemarrage(
 const LECTURES_MAX = 50
 
 /**
- * TOUTES les consignes en attente, une par fil (conv-1306, 2026-10-30) : deux fils avaient demandé
+ * TOUTES les consignes en attente, une par fil (2026-10-30) : deux fils avaient demandé
  * un redémarrage dans la même file, et l'interface n'en lisait qu'une — l'autre fil ne reprenait
  * jamais. Le main en rend une par appel, la plus ancienne d'abord ; on lit jusqu'à épuisement. Une
  * conversation disparue n'arrête pas les suivantes.

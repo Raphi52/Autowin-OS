@@ -8,7 +8,7 @@ import { appliquerLangue } from '../langue'
 import type { GitReadResult } from '../../../shared/git-read'
 
 /**
- * LES PANNEAUX DU CHAT SUIVENT LA LANGUE (traduction anglaise, conv-1170, lot 5). Entrée qui doit
+ * LES PANNEAUX DU CHAT SUIVENT LA LANGUE (traduction anglaise, lot 5). Entrée qui doit
  * faire échouer ce test : un libellé du contrôle de source ou de l'indicateur de quotas laissé en
  * dur, ou un panneau qui ne se redessine pas quand la langue change.
  */

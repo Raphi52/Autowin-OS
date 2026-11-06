@@ -14,7 +14,7 @@ const humain = (t: string): Msg => ({ role: 'user', content: t }) as Msg
 const base = { actif: true, occupe: false, dernierTourTraite: null, dernierPromptEnvoye: null, brouillonPresent: false }
 
 /*
- * conv-767, 2026-09-21 de 20:59 à 21:04 : un tournoi programmé pour 01:05. La suite ci-dessous est
+ * 2026-09-21 de 20:59 à 21:04 : un tournoi programmé pour 01:05. La suite ci-dessous est
  * partie TROIS fois, chaque fois pour constater que rien n'avait démarré. L'échéance vivait dans
  * « 👉 Recommandé », pas dans le prompt.
  */
@@ -51,7 +51,7 @@ describe('suite qui ne peut avancer qu’à un moment donné (conv-767)', () => 
 
 AUTOWIN_PROMPT_V1: ${PROMPT_T2C}`)
   ]
-  // conv-826 : « faudrait que le mode auto gère ce cas au lieu de s'arrêter ».
+  // « faudrait que le mode auto gère ce cas au lieu de s'arrêter ».
   it('ne l’envoie pas maintenant : la PROGRAMME pour le moment venu', () => {
     const maintenant = new Date(2026, 8, 24, 11, 10).getTime()
     const d = deciderRelanceAuto({ ...base, fil: filT2C, maintenant })

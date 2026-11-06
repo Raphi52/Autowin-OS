@@ -5,7 +5,7 @@ import { FORME_FILS, lireBlocFils } from '../../shared/lancer-en-fils'
 
 /**
  * UNE CAPACITÉ QUE LE PROMPT NE NOMME PAS RESTE MORTE (même règle que la fence mermaid). La carte
- * « Lancer en N fils » (conv-1147) ne s'affiche que si l'agent écrit un bloc ```aw-fils. Sans ce
+ * « Lancer en N fils » ne s'affiche que si l'agent écrit un bloc ```aw-fils. Sans ce
  * paragraphe, aucun agent ne l'écrirait jamais, et un message à deux tâches resterait traité en série.
  */
 describe('contrat « Lancer en N fils » dans la consigne du chat', () => {
@@ -20,7 +20,7 @@ describe('contrat « Lancer en N fils » dans la consigne du chat', () => {
   })
 
   /*
-   * PLUS D'ÉTAPE DE VALIDATION (conv-1163, 2026-10-27 : « je ne veux plu avoir cette etape de
+   * PLUS D'ÉTAPE DE VALIDATION (2026-10-27 : « je ne veux plu avoir cette etape de
    * validation », sur la capture de la carte « 2 tâches dans ton message »). Plusieurs tâches se
    * font à la suite dans le tour ; la carte ne sert que si l'utilisateur demande lui-même des fils.
    * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : remettre « ne commence AUCUNE », ou faire rendre la carte
@@ -36,7 +36,7 @@ describe('contrat « Lancer en N fils » dans la consigne du chat', () => {
   })
 
   /*
-   * fix-ok: conv-1332 — faire « à la suite » ne vaut que pour des tâches liées ou déjà localisées :
+   * fix-ok: faire « à la suite » ne vaut que pour des tâches liées ou déjà localisées :
    * sans cette règle, « fais-les toutes » l'emportait sur le plan de lots : voir le test de
    * `chat-pilotage-prompt.plan-de-lots.test.ts`.
    */
@@ -46,7 +46,7 @@ describe('contrat « Lancer en N fils » dans la consigne du chat', () => {
   })
 
   /*
-   * Essai réel du 2026-10-25 (conv-1147, instance de test) : sans cette phrase, l'agent a LU le
+   * Essai réel du 2026-10-25 (instance de test) : sans cette phrase, l'agent a LU le
    * fichier joint et recopié dans chaque `demande` son contenu ET son chemin temporaire
    * (`autowin-os-attachments-…`), qui est effacé à la fin de son tour (`providers/claude.ts`,
    * `cleanup`). La branche reçoit pourtant les pièces jointes du message (`pieces-jointes-durables.ts`).

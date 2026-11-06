@@ -4,7 +4,7 @@ import { codexLauncher } from './codex'
 import { killEscalate } from './watchdog'
 
 /*
- * CATALOGUE DES MODÈLES CHATGPT — rétabli le 2026-10-31 (conv-1414, « ajoute les modèles de ChatGPT
+ * CATALOGUE DES MODÈLES CHATGPT — rétabli le 2026-10-31 (« ajoute les modèles de ChatGPT
  * à Autowin OS et branche tout ce qu'il faut »), après son retrait du 2026-09-04 (db73f84d).
  *
  * La source est le protocole officiel `codex app-server` (`model/list`) du CLI installé et connecté :

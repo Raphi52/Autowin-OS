@@ -16,9 +16,9 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 import { MARQUE_QUESTION_SANS_CAUSE } from '../gates/echange-sans-cause'
 
 /*
- * LA SESSION D'UN BUILD À AGENT COMPOSÉ (conv-1149, 2026-10-25).
+ * LA SESSION D'UN BUILD À AGENT COMPOSÉ (2026-10-25).
  *
- * Défaut vécu sur conv-1146 (run-ec2036c0932d-1) : 7 refus « sans cause » sur 7 sont partis en
+ * Défaut vécu (run-ec2036c0932d-1) : 7 refus « sans cause » sur 7 sont partis en
  * réparation complète avec « Échange impossible : aucune session du build à reprendre ». Les 18
  * appels de build portaient un bloc `persona` (prompt-observability/conv-1146.jsonl) : le profil de
  * travail « feature » pose un agent composé `{ persona: 'minimal' }` sur l'étape build, qui passe

@@ -4,7 +4,7 @@ import { closingTurnDelivery } from './turn-closing'
 /**
  * LE TEXTE FINAL D'UN TOUR QUI A DEJA PARLE ETAIT JETE.
  *
- * MESURE le 2026-09-11 sur `conv-471`. Le tour avait diffuse quatre courtes phrases entre ses
+ * MESURE le 2026-09-11. Le tour avait diffuse quatre courtes phrases entre ses
  * appels d'outils (222 caracteres) -- ce que la consigne « jamais de fil muet » demande -- puis le
  * process principal a ete relance pendant sa redaction. A la reprise, le pilote a bien produit son
  * texte final ; `shouldPersistClosingText` l'a refuse au seul motif que des deltas avaient ete vus,

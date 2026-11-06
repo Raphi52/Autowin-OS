@@ -1,6 +1,6 @@
 /**
  * PHOTO DU CODE AU DÉBUT DE CHAQUE TOUR, ET RETOUR À CETTE PHOTO DANS UNE COPIE SÉPARÉE
- * (conv-1038, 2026-10-21).
+ * (2026-10-21).
  *
  * Constat du scout : la branche depuis un message ne copiait que les MESSAGES
  * (`store/conversations.ts`, `fork`), jamais l'état des fichiers ; le `/rewind` de claude.exe ne sert
@@ -45,7 +45,7 @@ const DELAI_MAX_MS = 5_000
 /**
  * « Essaie 3 façons » est un CLIC : l'utilisateur attend ses copies, rien ne part sans elles. Le budget
  * du début de tour (5 s, fait pour ne jamais retenir un tour) faisait échouer le bouton dès que la
- * machine était chargée, avec un message qui accusait le dépôt (conv-1038, 2026-10-21 :
+ * machine était chargée, avec un message qui accusait le dépôt (2026-10-21 :
  * garder-un-essai.test.ts rouge en suite de 30 fichiers, vert 3 fois sur 3 seul).
  */
 const DELAI_PHOTO_ESSAIS_MS = 30_000
@@ -239,7 +239,7 @@ export async function photographierLeCode(entree: {
  * La photo prise au début du tour d'un message : la DERNIÈRE prise jusqu'à `jusqua` (l'heure du
  * message), et après `apres` (l'heure du message précédent) quand il y en a un.
  *
- * Pourquoi AVANT le message (conv-1050, 2026-10-22) : la photo est prise avant le tour
+ * Pourquoi AVANT le message (2026-10-22) : la photo est prise avant le tour
  * (`index.ts`, `photographierLeCode` puis `lancerTour`), et l'heure du message n'est posée
  * qu'ensuite, par `beginTurn` (`store/conversations.ts`). Mesuré sur 5 vrais tours : photo 393 à
  * 613 ms avant son message. L'ancienne règle (« la première à partir du message ») ne trouvait donc
@@ -277,7 +277,7 @@ export async function photoDuTour(entree: {
 }
 
 /*
- * L'ÉCHEC DE LA COPIE EN UNE PHRASE (conv-1050, 2026-10-22). L'erreur d'execFile porte
+ * L'ÉCHEC DE LA COPIE EN UNE PHRASE (2026-10-22). L'erreur d'execFile porte
  * `Command failed: git worktree add …` puis TOUTE la sortie de git : en « Filename too long », une
  * ligne par fichier mêlée aux « Updating files: NN% ». L'avis du chat (« Revenir à ce tour »,
  * « Essaie 3 façons ») en faisait un écran entier, la cause noyée dedans. On n'en garde que la
@@ -357,7 +357,7 @@ export async function ouvrirCopieDeLaPhoto(entree: {
      * (store/worktree-manager.ts, comparaison-a-la-base.ts), jamais dans la config de l'utilisateur.
      * Sans elle, git pour Windows refuse tout fichier de la copie à plus de 260 caractères
      * (« Filename too long ») : « Revenir à ce tour » et « Essaie 3 façons » échouaient sur un dépôt
-     * aux chemins profonds (conv-1050, 2026-10-22).
+     * aux chemins profonds (2026-10-22).
      */
     await git(
       ['-c', 'core.longpaths=true', 'worktree', 'add', '--detach', entree.destination, entree.sha],
@@ -423,7 +423,7 @@ export type CopiesDEssai =
   { ok: true; quand: number; chemins: string[] } | { ok: false; raison: string }
 
 /**
- * « ESSAIE 3 FAÇONS » (conv-1038, 2026-10-21) : UNE photo du code maintenant, puis `nombre` copies
+ * « ESSAIE 3 FAÇONS » (2026-10-21) : UNE photo du code maintenant, puis `nombre` copies
  * séparées à cette photo — une par branche du fil. Chaque façon travaille dans la sienne : aucune
  * n'écrit dans le dossier partagé ni dans la copie d'une autre, et rien n'est fusionné ici.
  */

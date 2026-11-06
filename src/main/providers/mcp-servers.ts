@@ -1,5 +1,5 @@
 /**
- * REGISTRE DES SERVEURS MCP DE L'UTILISATEUR (conv-1558, plan-b0502bd3, lot 1).
+ * REGISTRE DES SERVEURS MCP DE L'UTILISATEUR (plan-b0502bd3, lot 1).
  *
  * Pourquoi : le CLI Claude part toujours avec `--strict-mcp-config`, donc il n'hérite d'AUCUN serveur
  * MCP du poste. L'utilisateur veut pourtant brancher des serveurs externes (Blender d'abord) depuis
@@ -28,7 +28,7 @@ const MOTIF_ID = /^[a-z0-9][a-z0-9_-]{0,47}$/
 export const SERVEURS_PAR_DEFAUT: readonly ServeurMcpUtilisateur[] = [
   { id: 'blender', nom: 'Blender', commande: 'uvx', args: ['blender-mcp'], env: {}, actif: false },
   /**
-   * Génération d'images (conv-1565, lot 5 du plan tanukis). Source : serveur open source MIT
+   * Génération d'images (lot 5 du plan tanukis). Source : serveur open source MIT
    * `image-generation-mcp` (https://github.com/pvliesdonk/image-generation-mcp, paquet PyPI du même
    * nom) — OpenAI, Google Gemini, Stable Diffusion WebUI ; transport stdio par `serve`.
    * DÉSACTIVÉ, et les clés sont nommées mais VIDES : l'utilisateur les saisit dans les réglages,
@@ -191,7 +191,7 @@ export interface OptionsIpcServeursMcp {
   /**
    * Garde d'expéditeur, INJECTÉ (`assertTrustedRendererSender` depuis `index.ts`) comme pour
    * tickets et veille : ce module reste testable sans Electron. Il manquait aux 4 canaux
-   * (conv-1575, rouge de `security-critical-fixes.test.ts`) alors que `save` déclare une commande
+   * (rouge de `security-critical-fixes.test.ts`) alors que `save` déclare une commande
    * que le CLI lancera et que `list` rend les clés d'API saisies dans `env`.
    */
   assertTrusted(event: unknown, portee: string): void

@@ -1,7 +1,7 @@
 /**
- * CARTE DU FIL (conv-1059, 2026-10-22) — le socle PUR de la ligne de métro qui REMPLACE le carnet.
+ * CARTE DU FIL (2026-10-22) — le socle PUR de la ligne de métro qui REMPLACE le carnet.
  *
- * Pourquoi : le carnet (conv-1038) recopiait les rubriques de la dernière clôture, déjà affichée en
+ * Pourquoi : le carnet recopiait les rubriques de la dernière clôture, déjà affichée en
  * bas du fil. La carte montre ce que le défilement ne montre pas : le CHEMIN entier du fil, une
  * étape par demande, et ce que chacune a PROUVÉ.
  *
@@ -29,7 +29,7 @@ import { constatsRetenus } from '../../../shared/preuve-du-tour'
 
 export type StatutEtape = 'prouve' | 'refuse' | 'en-cours' | 'sans-preuve' | 'a-venir'
 
-// Textes laissés en français (traduction anglaise, conv-1170) : ce module tourne dans le processus
+// Textes laissés en français (traduction anglaise) : ce module tourne dans le processus
 // principal (`src/main/board/carte-des-besoins.ts`), qui garde la carte en cache, et
 // `carte-des-besoins-branches.ts` compare le constat « une question t’attend » mot pour mot. Le
 // Board traduit constats, titres de repli et états à l'AFFICHAGE (`RiviereDuProjet.tsx`).
@@ -52,13 +52,13 @@ export interface EtapeCarte {
   messageId?: string
   titre: string
   /**
-   * Le titre ENTIER pour la fiche (« Tout ensemble », conv-1088 : la fiche promet le titre entier) ;
+   * Le titre ENTIER pour la fiche (« Tout ensemble », La fiche promet le titre entier) ;
    * `titre`, coupé à 120 caractères (`MAX_TITRE`), reste celui des quais. Borné quand même : une première
    * ligne collée de plusieurs pages ne doit pas noyer la fiche.
    */
   titreEntier: string
   /**
-   * Le message ENTIER de la demande, sauts de ligne gardés, pour la fiche du Board (conv-1278 : « je
+   * Le message ENTIER de la demande, sauts de ligne gardés, pour la fiche du Board (« je
    * veux pouvoir voir les messages en entier quand j'ouvre le détail »). Borné à `MAX_TEXTE` : un
    * journal collé de plusieurs pages ne doit pas peser sur le Board partagé. Absent quand il ne dit
    * rien de plus que `titre`.
@@ -88,7 +88,7 @@ export interface Carte {
   /** Étapes réelles, hors étape à venir. */
   total: number
   /**
-   * LE BILAN de l'en-tête (« Tout ensemble », /draft conv-1088, 2026-10-22) : le compte de chaque
+   * LE BILAN de l'en-tête (« Tout ensemble », 2026-10-22) : le compte de chaque
    * couleur et le coût CONNU du fil. Le coût est la somme des seuls coûts reçus en direct : absent
    * si aucun n'est connu, jamais un zéro qui ferait croire à un fil gratuit.
    */
@@ -173,7 +173,7 @@ const libelleDUnTest = (commande: string, codeDeSortie: number): string =>
 
 /**
  * Les vérifications d'UNE réponse, dans l'ordre où elles ont eu lieu : ses actions `verify` et
- * `orchestrate`, puis les tests joués dans son terminal (conv-1059), rangés ensemble par heure.
+ * `orchestrate`, puis les tests joués dans son terminal, rangés ensemble par heure.
  * Une commande a la MÊME clé d'où qu'elle vienne : `npm test` rouge par `verify` puis vert au
  * terminal est la même boucle.
  */
@@ -196,7 +196,7 @@ function constatsDeLaReponse(reponse: AsstMsg): Constat[] {
   }
   for (const test of reponse.testsDuTerminal ?? []) {
     // Le dossier fait partie de la commande : `npm test` ici et `cd ../autre && npm test` sont deux
-    // vérifications, et le Board dit où chacune a tourné (conv-1423).
+    // vérifications, et le Board dit où chacune a tourné.
     // fix-ok: la clé et la règle lisaient `test.commande`, qui a perdu son `cd` dans le lecteur.
     const commande = commandeJouee(test)
     constats.push({
@@ -219,8 +219,8 @@ function constatsDeLaReponse(reponse: AsstMsg): Constat[] {
 /**
  * La DERNIÈRE issue de chaque vérification DISTINCTE (une commande = une clé, toutes les
  * orchestrations = une clé). Une même commande rouge puis verte est la boucle normale : verte. Un
- * rouge rejoué vert dans une commande plus large aussi (conv-1423). Deux commandes qui ne se couvrent
- * pas ne se rachètent pas (conv-76 : `typecheck exit 1` puis `npm test exit 0` ne prouvent PAS
+ * rouge rejoué vert dans une commande plus large aussi. Deux commandes qui ne se couvrent
+ * pas ne se rachètent pas (`typecheck exit 1` puis `npm test exit 0` ne prouvent PAS
  * l'étape) : la règle est `vertCouvreRouge`, la même que celle de la relance de fin de tour.
  */
 function issuesDuSegment(reponses: readonly AsstMsg[]): OutcomeSummary[] {
@@ -250,7 +250,7 @@ function statutDuSegment(
   const issues = issuesDuSegment(reponses)
   const echec = issues.find((issue) => issue.state === 'failed')
   if (echec) return { statut: 'refuse', constat: echec.label }
-  // Les deux emoji d'abord (conv-1248) : l'expression essaie chaque ligne de chaque réponse, ~95 ms
+  // Les deux emoji d'abord : l'expression essaie chaque ligne de chaque réponse, ~95 ms
   // mesurés à la première ouverture du Board (1 083 fils) pour des textes qui n'en ont presque jamais.
   const texte = texteDe(derniere)
   const blocage =
@@ -264,10 +264,10 @@ function statutDuSegment(
 export type Quai = 'haut' | 'bas'
 
 /**
- * LES QUAIS ALTERNÉS (« Tout ensemble », /draft conv-1088, 2026-10-22) : le titre d'une station se
+ * LES QUAIS ALTERNÉS (« Tout ensemble », 2026-10-22) : le titre d'une station se
  * pose AU-DESSUS de la ligne, celui de la suivante EN DESSOUS, et ainsi de suite. Chaque titre
  * s'étale ainsi sur sa voisine, dont le quai est de l'autre côté : presque deux fois plus de place,
- * contre « 5 titres sur 6 coupés » mesurés sur la carte d'origine (captures de conv-1059).
+ * contre « 5 titres sur 6 coupés » mesurés sur la carte d'origine.
  *
  * Les étapes d'avant le compactage n'ont pas de quai (`null`) : tassées, l'agent ne les relit plus.
  * La station du repère ▼ prend toujours son quai EN BAS : la flèche se pose au-dessus de son point.

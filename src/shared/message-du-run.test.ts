@@ -6,7 +6,7 @@ import {
 } from './orchestration-outcome'
 
 /**
- * LE RUN PARLE LUI-MEME A LA FIN (conv-1008) : la ligne `- Question :` du bilan de fin d'etape
+ * LE RUN PARLE LUI-MEME A LA FIN : la ligne `- Question :` du bilan de fin d'etape
  * devient une carte dans le fil, avec ses reponses cliquables. Ces tests fixent ce qui en est lu —
  * et surtout ce qui n'en est PAS lu : une question mal formee ne doit jamais devenir des boutons.
  */

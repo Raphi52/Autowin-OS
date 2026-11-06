@@ -13,7 +13,7 @@ import {
 } from './home-decor-avenue-ville'
 
 /**
- * LA VILLE DE GAUCHE DU FOND DE L'ACCUEIL : LE KOWLOON NÉON (conv-315).
+ * LA VILLE DE GAUCHE DU FOND DE L'ACCUEIL : LE KOWLOON NÉON.
  *
  * Demande de l'utilisateur : « /draft refais la ville de gauche du fond d'écran de l'accueil »,
  * « Affiner la 2 · Kowloon néon », puis « implémente 6 » — l'affinage 6 · Néons animés.
@@ -22,7 +22,7 @@ import {
  *   1. les réglages de la 6 changés (mouvement coupé, hologrammes retirés, graine changée) → ce
  *      n'est plus le quartier que l'utilisateur a choisi ;
  *   2. la ville tirée sur le hasard de la rue → elle change de visage dès qu'on touche à la rue ;
- *   3. une lumière ponctuelle ajoutée → toutes les matières de la rue s'alourdissent (conv-301) ;
+ *   3. une lumière ponctuelle ajoutée → toutes les matières de la rue s'alourdissent ;
  *   4. les enseignes ou les hologrammes qui ne regardent plus le trottoir → on lit leur tranche ;
  *   5. une texture dessinée gardée pour soi → elle n'est jamais libérée avec la scène ;
  *   6. l'ancienne ville (tours-boîtes, holo-panneaux, voies rapides) encore montée dans

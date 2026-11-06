@@ -178,7 +178,7 @@ export function bundledSkillsRoot(
  * Racines de skills scannées — UNIQUEMENT celles d'Autowin : la racine EMBARQUÉE (dépôt `skills/`) en
  * tête, puis la racine Autowin du poste `%LOCALAPPDATA%/autowin-os/skills`.
  *
- * Décision utilisateur du 2026-09-26 (conv-16) : « je garde que les skills d'autowin ». Avant, les kits
+ * Décision utilisateur du 2026-09-26 : « je garde que les skills d'autowin ». Avant, les kits
  * externes `~/.codex/skills` et `~/.claude/skills` étaient lus aussi : leurs skills (`_engine`,
  * `autowin-setup`, `capafy-publisher`) entraient dans la palette `/` et dans l'état remis au modèle à
  * chaque tour. `_engine` en est le cas d'école : ignoré dans le dépôt (il n'y porte pas de SKILL.md),
@@ -224,7 +224,7 @@ function skillDescriptionFrom(dir: string): string | undefined {
 /**
  * La description d'un SKILL.md, SOURCE UNIQUE pour la palette `/` et pour la vue Settings › Skills
  * (`skill-registry.ts`). Cette vue avait son propre lecteur : il affichait « >- » pour une
- * description repliée et coupait à la première apostrophe (« À utiliser quand l », conv-58).
+ * description repliée et coupait à la première apostrophe (« À utiliser quand l »).
  */
 export function descriptionDuFrontMatter(md: string): string | undefined {
   const lignes = md.replace(/\r/gu, '').split('\n')

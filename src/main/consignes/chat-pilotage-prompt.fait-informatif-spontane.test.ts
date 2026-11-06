@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 
 /**
- * TROU MESURÉ (conv-1543) : l'utilisateur énonce un fait durable SANS demander de le retenir
+ * TROU MESURÉ : l'utilisateur énonce un fait durable SANS demander de le retenir
  * (« je suis sur l'app dev, faut juste push sur main normalement »). Le bloc MÉMOIRE ne couvrait
  * que deux déclencheurs : « quand TU viens d'établir » et « si l'utilisateur te DEMANDE de
  * retenir ». Un fait informatif spontané ne tombait dans aucun des deux, donc rien n'était retenu.

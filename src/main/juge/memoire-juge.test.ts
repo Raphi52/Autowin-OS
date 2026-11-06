@@ -3,8 +3,8 @@ import { memesReservesMineures, noteVerdictPrecedentPourJuge, reservesMineuresSe
 
 const valideMineur = (...r: string[]) => `VALIDE\nSCORE: 84\nOBJECTIONS:\n${r.map((x) => `- MINEUR: ${x}`).join('\n')}\n- OK: tests verts`
 
-// conv-35 : ~107 passages sur 109 apres validation, juge sans memoire + MINEUR repetes sans fin.
-// fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
+// ~107 passages sur 109 apres validation, juge sans memoire + MINEUR repetes sans fin.
+// fix-ok: la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
 describe('memoire du juge entre deux passages', () => {
   it('le rappel contient les objections du verdict precedent et exige de tout lister', () => {
     const note = noteVerdictPrecedentPourJuge(valideMineur('libelle /24 encore visible', 'test manquant sur HdeskTv'))

@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { adapterNuanceurDeSprite, COUCHE_PORTEURS, regrouperHalos } from './home-decor-lots-halos'
 
 /**
- * Les halos du fond avenue dessinés par lots (home-decor-lots-halos.ts, conv-323). Mesure qui le
+ * Les halos du fond avenue dessinés par lots (home-decor-lots-halos.ts). Mesure qui le
  * motive : 424 halos additifs dessinés un par un, à chaque passe, sur ~1 900 dessins par image.
  * Ces tests tiennent les conditions du « rendu inchangé » que le module énonce.
  */

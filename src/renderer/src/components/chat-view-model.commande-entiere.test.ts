@@ -4,9 +4,9 @@ import { actionsDuTour } from './thinking-block-corps'
 import { cibleEntiereDe, statutComplet } from '../../../shared/chat-turn'
 
 /**
- * PLAFOND MUET n°5 (conv-1228, 2026-10-28) : le fournisseur coupe la commande d'une action à 120
+ * PLAFOND MUET n°5 (2026-10-28) : le fournisseur coupe la commande d'une action à 120
  * caractères pour l'en-tête d'une ligne (providers/claude.ts) et transmet l'entière à côté
- * (`data.target`). Le main s'en servait pour JUGER la commande (conv-861), mais le journal du bloc
+ * (`data.target`). Le main s'en servait pour JUGER la commande, mais le journal du bloc
  * Actions ne gardait que le moignon : en dépliant une action, on lisait une commande amputée.
  */
 type Message = Parameters<typeof reduceAssistantPilotEvent>[0]

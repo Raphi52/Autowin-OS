@@ -38,7 +38,7 @@ const enCours = (over: Partial<Action> = {}): Action =>
   ({ kind: 'action', name: 'orchestrate', args: { task: 'ma tache' }, ...over }) as Action
 
 /*
- * CAPSULE 2 (conv-194, 2026-10-10, choix de l'utilisateur sur maquettes) : une orchestration seule
+ * CAPSULE 2 (2026-10-10, choix de l'utilisateur sur maquettes) : une orchestration seule
  * n'a plus d'etage « Orchestration » avec sa cible. L'exigence reste la meme — la tache n'est pas
  * ecrite deux fois cote a cote — et se verifie sur la capsule : une fois dans l'en-tete plie (ligne
  * de lancement) ; ouverte, le corps montre les prompts des phases, pas une seconde fois la tache.
@@ -88,7 +88,7 @@ describe('defaut 2 — un niveau depliable sous chaque phase montre le prompt en
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
     // Replie par defaut : le prompt ne doit pas noyer le fil tant qu'on ne l'ouvre pas.
     expect(container.querySelector('[data-testid="activity-pipeline-prompt"]')).toBeNull()
-    // Capsule 2 (conv-194) : UN clic sur l'en-tete montre chaque phase avec son prompt.
+    // Capsule 2 : UN clic sur l'en-tete montre chaque phase avec son prompt.
     act(() => container.querySelector<HTMLElement>('[data-testid="activity-group"]')!.click())
     const lignes = container.querySelectorAll('[data-testid="activity-pipeline-line"]')
     // UNE seule ligne porte un prompt : la phase `scout` n'en a pas recu, elle ne promet donc rien.

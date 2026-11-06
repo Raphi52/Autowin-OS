@@ -21,7 +21,7 @@ describe('Native prompt trace read contract', () => {
 
     expect(body).not.toContain('causalTrace.append')
     expect(body).not.toContain('causalTrace.nextSequence')
-    // La migration de démarrage est RETIRÉE (conv-359, 2026-10-19) : chaque appel de modèle est
+    // La migration de démarrage est RETIRÉE (2026-10-19) : chaque appel de modèle est
     // écrit dans la trace au moment où il a lieu, avec le même identifiant (`run-pilot-chat.ts`,
     // `orchestration-observability.ts`) — 0 appel manquant sur 354 vérifiés. Elle ne rattrapait
     // plus rien et coûtait un `statSync` par conversation à chaque démarrage (9,1 s le 19/10).

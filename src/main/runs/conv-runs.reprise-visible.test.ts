@@ -8,7 +8,7 @@ const root = mkdtempSync(join(tmpdir(), 'aos-reprise-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
 /**
- * conv-597, 2026-09-16, turnId 4e502786-4887-4101-85b3-ea2dee304091.
+ * 2026-09-16, turnId 4e502786-4887-4101-85b3-ea2dee304091.
  *
  * Le juge valide à 12:33:59, la clôture est autorisée, puis `salvage` rend à 12:35:13
  * « J'ai trouvé le jeu. Ma conclusion précédente était trop courte ». Le RUN.md est resté

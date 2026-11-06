@@ -7,7 +7,7 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
  * BRANCHEMENT : la vidéo fabriquée pendant le tour et CITÉE dans la réponse arrive dans le lecteur
- * du fil, sans que l'agent appelle `show_video` (conv-253, constat conv-260 du 2026-10-11 : une pub
+ * du fil, sans que l'agent appelle `show_video` (constat du 2026-10-11 : une pub
  * rendue par ffmpeg, seulement nommée, l'utilisateur doit réclamer le lecteur).
  *
  * ffprobe est remplacé : la mesure a ses propres tests (`video-ffprobe.test.ts`) ; ici on prouve

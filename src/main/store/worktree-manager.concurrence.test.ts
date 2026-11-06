@@ -103,8 +103,8 @@ describe('WorktreeManager — concurrence (20/81 de la suite d’origine)', () =
   })
 
   it('une divergence local/origin ne bloque plus : le job part d’origin, commits locaux nommés', () => {
-    // Décision user 14/08 : « ça devrait auto-gérer les workspaces, pas bloquer » — mesuré sur
-    // conv-1178 : « Lancement bloqué : main et origin/main ont divergé » tuait toute orchestration.
+    // Décision user 14/08 : « ça devrait auto-gérer les workspaces, pas bloquer » — mesuré
+    // « Lancement bloqué : main et origin/main ont divergé » tuait toute orchestration.
     const root = mkdtempSync(join(tmpdir(), 'autowin-wmremote-'))
     roots.push(root)
     const remote = join(root, 'origin.git')

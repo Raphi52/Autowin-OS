@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"disableIframePageLoading":true}}
 /**
- * BOUTON DE CHOIX D'UNE PAGE INTERACTIVE DANS UNE FENETRE DE MOSAIQUE (conv-1304, 2026-10-30).
+ * BOUTON DE CHOIX D'UNE PAGE INTERACTIVE DANS UNE FENETRE DE MOSAIQUE (2026-10-30).
  *
  * Un lien `#autowin-prompt` d'un bloc ```html-interactif REMPLIT la saisie (saisie-du-fil.ts). En
  * mosaique, chaque fenetre a sa saisie : le texte doit aller dans celle de la fenetre OU la page a

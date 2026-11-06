@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 
 /**
- * Defaut mesure le 2026-09-03 (conv-181) : trois tours de chat se sont termines sur
+ * Defaut mesure le 2026-09-03 : trois tours de chat se sont termines sur
  * `error_during_execution` (le CLI Claude a rendu un `result` en erreur). Le store porte bien
  * `status: 'failed'` et `error` sur le message assistant — `terminalDuTour` les ecrit —, mais
  * `conversation_read` ne rendait QUE `role`, `ts` et `text`. Un tour echoue se relisait donc comme

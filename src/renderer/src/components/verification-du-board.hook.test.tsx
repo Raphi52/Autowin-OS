@@ -10,7 +10,7 @@ import {
 } from './verification-du-board'
 
 /**
- * LE GESTE « VÉRIFIER » DE LA VUE (conv-1136, 2026-10-23). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un
+ * LE GESTE « VÉRIFIER » DE LA VUE (2026-10-23). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un
  * envoi qui ne passe pas par `chat_send` avec le fil et `/check` (le tour ne partirait pas dans le
  * fil) ; une carte non recalculée après l'envoi (le post-it resterait dans « À vérifier ») ; un
  * recalcul périodique qui continue sans aucun fil suivi, ou qui ne part pas quand un fil tourne.

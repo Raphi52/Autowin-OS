@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
-// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+// Le composant est découpé en fichiers voisins : la source lue les réunit.
 import { lireSourceDuChatView } from './ChatView.source-complete'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
@@ -33,7 +33,7 @@ describe('ChatView — refus visible du workflow actif', () => {
     const notice = harness.container.querySelector('[data-testid="chat-workflow-notice"]')
     expect(notice?.getAttribute('role')).toBe('alert')
     expect(notice?.textContent).toContain('Cassé')
-    // Le bandeau ARRIVE en glissant (conv-981, 2026-10-16) : la classe d'apparition du theme.
+    // Le bandeau ARRIVE en glissant (2026-10-16) : la classe d'apparition du theme.
     expect(notice?.classList.contains('fade-in')).toBe(true)
   })
 
@@ -119,7 +119,7 @@ describe('ChatView — refus visible du workflow actif', () => {
 })
 
 /**
- * LES BANDEAUX GLISSENT A L'ENTREE (conv-981, 2026-10-16) : les 4 bandeaux du haut du chat (deux
+ * LES BANDEAUX GLISSENT A L'ENTREE (2026-10-16) : les 4 bandeaux du haut du chat (deux
  * alertes, deux statuts) apparaissaient d'un coup. Chacun porte `.fade-in` (fondu + glissement,
  * theme.css). Lu dans le source : trois d'entre eux ne s'affichent qu'apres un etat que ce banc ne
  * produit pas (travail non publie, arret du mode auto, quota illisible). ENTREE QUI DOIT FAIRE

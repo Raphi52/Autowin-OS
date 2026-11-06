@@ -20,7 +20,7 @@ vi.mock('electron', () => ({
 }))
 
 /**
- * LES TEXTES DU CŒUR SUIVENT LA LANGUE RÉGLÉE (conv-1170, lot 18) — par les vrais modules, pas par la
+ * LES TEXTES DU CŒUR SUIVENT LA LANGUE RÉGLÉE (lot 18) — par les vrais modules, pas par la
  * table seule : fin de tour (bulle et carte), Diagnostic (contrôles, résumé, Brain après la grâce,
  * résultat d'une réparation) et bulle d'abandon. Entrée qui fait échouer ce fichier : un de ces
  * modules qui garde son texte français en dur au lieu de passer par `traduireCoeur`.

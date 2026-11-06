@@ -369,9 +369,9 @@ describe('creerFichesDeDemande', () => {
   })
 
   /*
-   * conv-1578, mesuré dans `ecarts.json` : 21 des 35 demandes « sans fiche » en avaient une. Supprimer
-   * conv-1471 avait effacé la fiche où conv-1484 (sa branche, toujours ouverte) rangeait ses demandes,
-   * et leurs 18 lignes ; supprimer conv-1518 avait effacé de même les 3 suites de conv-1519.
+   * Mesuré dans `ecarts.json` : 21 des 35 demandes « sans fiche » en avaient une. Supprimer
+   * un fil avait effacé la fiche où (sa branche, toujours ouverte) rangeait ses demandes,
+   * et leurs 18 lignes ; supprimer avait effacé de même les 3 suites.
    */
   it('un fil supprimé laisse en place la fiche qu’un autre fil a nourrie, avec ses lignes', async () => {
     const racine = racineTemporaire()
@@ -424,7 +424,7 @@ describe('creerFichesDeDemande', () => {
   })
 })
 
-// conv-1441 : les fiches s'écrivaient, mais aucun écran ne les lisait.
+// Les fiches s'écrivaient, mais aucun écran ne les lisait.
 describe('resumeDeLaFiche', () => {
   it('lit l’état de l’en-tête seul et la première ligne du besoin', () => {
     const texte =
@@ -507,9 +507,9 @@ describe('lecture des fiches pour l’interface', () => {
 })
 
 /*
- * LES VERSIONS PARALLÈLES (« façon 1/3 »…) ET TOUTE BRANCHE D'UN FIL (conv-1441, 2026-11-03).
+ * LES VERSIONS PARALLÈLES (« façon 1/3 »…) ET TOUTE BRANCHE D'UN FIL (2026-11-03).
  * Mesuré dans `ecarts.json` : les 3 seules demandes sans fiche étaient la demande d'origine RECOPIÉE
- * dans conv-1425, 1426 et 1427 (branches de conv-1424). La copie change l'identifiant du message et
+ * et 1427. La copie change l'identifiant du message et
  * aucun tour ne finit dessus dans la branche : ni journal, ni fiche. Elle rejoint celle de l'origine.
  */
 describe('demandes recopiées dans une branche', () => {
@@ -625,7 +625,7 @@ describe('demandes recopiées dans une branche', () => {
   })
 
   /*
-   * conv-1578 : conv-1492, 1493 et 1494 sont nées pendant que conv-1491 écrivait encore sa réponse.
+   * Et 1494 sont nées pendant qu'un fil écrivait encore sa réponse.
    * La copie a gardé la réponse coupée (109 caractères de parties, 4 211 dans la source) : comparée
    * mot pour mot, plus rien n'était apparié, ni à la création ni à aucun démarrage.
    */

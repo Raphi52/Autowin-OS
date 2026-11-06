@@ -1,5 +1,5 @@
 /*
- * « Essaie 3 façons » — la carte de comparaison (conv-1038, 2026-10-21, idée 6). Même famille que le
+ * « Essaie 3 façons » — la carte de comparaison (2026-10-21, idée 6). Même famille que le
  * carnet du fil (CarnetDuFil.css) : un encart discret en haut du fil ou au-dessus de la mosaïque.
  */
 .comparaison-facons {
@@ -88,7 +88,7 @@
   margin: 0;
 }
 
-/* Deux façons au même code, ou presque (conv-1057) : on paie trois tours pour un seul avis. */
+/* Deux façons au même code, ou presque : on paie trois tours pour un seul avis. */
 .comparaison-facon-mesures dd.is-proche {
   color: var(--warn);
   font-weight: 600;

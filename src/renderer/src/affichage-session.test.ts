@@ -3,12 +3,12 @@ import { describe, expect, it } from 'vitest'
 import { appliquerAffichage } from './affichage-session'
 
 /**
- * L'AFFICHAGE SELON LA CONNEXION (conv-1442) — côté interface.
+ * L'AFFICHAGE SELON LA CONNEXION — côté interface.
  *
  * À DISTANCE, RIEN NE SE COUPE : la première version coupait le décor 3D en connexion Windows App
  * (« je veux pas que ça me cache mon accueil », 2026-11-03), la suivante figeait toutes les
  * animations hors de l'Accueil — retirée à son tour : « sur rdp ça m'a enlevé toutes mes animations
- * […] remet tout » (conv-1538, 2026-11-04). Vérifié sur les sources, comme
+ * […] remet tout » (2026-11-04). Vérifié sur les sources, comme
  * `decor-fond-empilement.contract.test.ts` : le banc ne calcule ni animation ni rendu WebGL.
  */
 const source = (chemin: string): string => readFileSync(new URL(chemin, import.meta.url), 'utf8')

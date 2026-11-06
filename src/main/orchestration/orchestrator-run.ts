@@ -1,5 +1,5 @@
 // Point d'entrée d'un run (préparation, choix du parcours, clôture) — méthodes de la classe Orchestrator déplacées telles quelles depuis
-// orchestrator.ts (conv-1508) ; elles s'exécutent avec `this` = l'instance, via les délégués de la classe.
+// orchestrator.ts ; elles s'exécutent avec `this` = l'instance, via les délégués de la classe.
 import type { RoleBinding } from '../profil/roles'
 import { raisonDeBlocageIntegration } from '../../shared/raison-de-blocage'
 import { fichiersTouchesGit } from '../hooks/default-gate-hooks'
@@ -75,7 +75,7 @@ export async function run(
   /*
    * ETAT DE DEPART DU DEPOT — ce qui etait DEJA modifie avant que ce run commence.
    *
-   * Mesure du 2026-09-12 (conv-512) : les garde-fous de preuve visuelle et de mouvement
+   * Mesure du 2026-09-12 : les garde-fous de preuve visuelle et de mouvement
    * reconstruisent leur diff depuis `git status` du depot, faute de recevoir celui du run.
    * Sur un arbre partage deja sale — 217 fichiers, dont 55 de rendu, laisses par d'autres
    * sessions — ils attribuaient tout au run courant et refusaient un vert merite. On fige
@@ -106,7 +106,7 @@ export async function run(
   const phases = this.effectivePhases(task)
   const explicitPhase = routeSkillRequest(task)?.explicitPhase
   // Étape nommée ou build d'un run qui modifie, désactivés dans Settings › Skills : refus AVANT le
-  // premier appel, comme les autres refus de départ (conv-1602).
+  // premier appel, comme les autres refus de départ.
   const refusEtape = refusEtapeDesactivee({
     phaseNommee: explicitPhase,
     modifie: isMut,
@@ -149,7 +149,7 @@ export async function run(
     )
     // `maxProviderCalls` est un plafond de PORTEFEUILLE : en mesure seule (défaut depuis le
     // 12/08), un workflow déterministe plus large que le régime agrandit le devis au lieu d'être
-    // refusé (conv-1148 : 12 obligatoires pour 10 places tuait le run avant le premier appel).
+    // refusé (12 obligatoires pour 10 places tuait le run avant le premier appel).
     // `maxConcurrency` protège la MACHINE, pas le portefeuille : son refus reste inconditionnel.
     if (
       mandatory > executionQuote.limits.maxProviderCalls &&
@@ -166,7 +166,7 @@ export async function run(
       )
     }
     /*
-     * UN APPEL N EST PAS UN AGENT — corrige le 2026-08-31 (conv-1587).
+     * UN APPEL N EST PAS UN AGENT — corrige le 2026-08-31.
      *
      * `maxAgents` etait cale sur `mandatory`, le nombre d appels OBLIGATOIRES du workflow. Or
      * une phase en FAN-OUT lance un agent PAR MEMBRE de son panel : le plafond valait donc
@@ -176,8 +176,8 @@ export async function run(
      * possible : paye, et rien de fini.
      *
      * Le raisonnement est celui deja pose quelques lignes plus haut pour `maxProviderCalls` : un
-     * workflow deterministe plus large que le regime AGRANDIT le devis au lieu d etre refuse
-     * (conv-1148). On dimensionne donc sur le fan-out REEL — chaque appel obligatoire pouvant
+     * workflow deterministe plus large que le regime AGRANDIT le devis au lieu d etre refuse.
+     * On dimensionne donc sur le fan-out REEL — chaque appel obligatoire pouvant
      * etre servi par un panel de `maxPanel` membres — plus les reprises promises.
      *
      * AUCUN frein reel ne bouge : `maxTotalTokens`, `maxUsd` et `maxDurationMs` bornent toujours
@@ -255,7 +255,7 @@ export async function run(
         impose.maxGreedyNodes !== undefined &&
         executionQuote.allocation.maxGreedyNodes < impose.maxGreedyNodes
       if (refusesJudge || refusePhase || refuseGreedy) {
-        // MESURE SEULE = ON COMPTE, ON NE REFUSE PAS (conv-188). Les deux refus voisins
+        // MESURE SEULE = ON COMPTE, ON NE REFUSE PAS. Les deux refus voisins
         // (`maxProviderCalls` ci-dessus, agents obligatoires dans `execution-quote.ts`) ont été
         // assouplis le 12/08 ; celui-ci avait été oublié et tuait encore le run AVANT le premier
         // appel. En mesure seule (défaut), l'allocation s'ALIGNE sur ce que le workflow impose ;
@@ -506,7 +506,7 @@ export async function run(
                   ? 'tâche jugée atomique — séquentiel'
                   : `plan de ${outcome.nodes.length} sous-tâches`,
             // Le plan ADMIS (même borne que plus bas) : c'est lui que le build exécutera, et que
-            // le RUN.md montre avant le code (conv-1083).
+            // le RUN.md montre avant le code.
             ...(outcome.kind === 'plan'
               ? {
                   plan: (executionQuote
@@ -589,7 +589,7 @@ export async function run(
     this.causalWatchPathsByRun.delete(runId)
     this.costContextByRun.delete(runId)
     this.learningOraclesByRun.delete(runId)
-    // Le bureau caché du run se ferme à la fin, quelle que soit l'issue (lot 1, conv-222). Sans
+    // Le bureau caché du run se ferme à la fin, quelle que soit l'issue (lot 1). Sans
     // conversation, hdesk-lancer refuse de lancer : rien à fermer. Non attendu, jamais levé.
     if (conversationId && this.deps.fermerBureauCache) {
       try {
@@ -682,7 +682,7 @@ export async function run(
       produced?.phaseOutputs.flatMap((output) => output.executionEvidence ?? []) ?? []
     // Une action Git explicitement ciblee et verifiee sur le depot reel n'a rien a publier depuis
     // la copie isolee. L'activite doit cependant prouver que cette copie n'a produit aucun fichier.
-    // fix-ok: conv-914 (2026-10-13) — run-a8a70cd0ee56-1, copie de 16 fichiers, fusion refusée
+    // fix-ok: (2026-10-13) — run-a8a70cd0ee56-1, copie de 16 fichiers, fusion refusée
     // (base-dirty), déclaré intégré par cette porte : `producedFileCount` lit `activity().files`,
     // que le coordinateur ne remplit qu'à la finalisation (run-worktree-coordinator.ts), donc 0
     // ici. La clôture a alors commité et poussé sous son nom 36 fichiers d'autres conversations
@@ -711,11 +711,11 @@ export async function run(
       typeof finalized === 'object' && finalized !== null
         ? (finalized as { outcome?: string }).outcome
         : undefined
-    // Defaut vecu le 2026-08-18 (conv-1286) : un run dont la copie portait 4 fichiers modifies a
+    // Defaut vecu le 2026-08-18 : un run dont la copie portait 4 fichiers modifies a
     // renvoye `nothing`, compte comme integre, et l'utilisateur a lu « fusion verifiee » alors que
     // le correctif n'avait jamais quitte la copie isolee. « Rien a fusionner » n'est credible que
     // si le run n'a RIEN produit : sinon c'est une integration vide, donc un faux vert.
-    // fix-ok: conv-914 (2026-10-14) — cette garde lisait `producedFileCount`, donc
+    // fix-ok: (2026-10-14) — cette garde lisait `producedFileCount`, donc
     // `activity().files`, vide jusqu'à la finalisation : elle ne mordait jamais en production (son
     // test historique fournissait une activité déjà remplie). Elle lit maintenant la mesure réelle
     // `fichiersDeLaCopie` ; une copie non mesurable ne prouve pas « rien produit ». Test « copie
@@ -729,7 +729,7 @@ export async function run(
       finalizeOutcome === 'cleanup-pending' ||
       finalizeOutcome === 'published-residue'
     // TOTALE et NON optionnelle : voir `raison-de-blocage.ts`. Une issue absente, de forme
-    // inconnue ou sans `reason` produit quand meme une phrase — le silence mesure sur conv-1
+    // inconnue ou sans `reason` produit quand meme une phrase — le silence mesure
     // (run « reprend-pardon-mthg437j », 2,13 $) n'est plus representable.
     const finalizeDiagnosis = raisonDeBlocageIntegration(finalized)
     const finalActivity = activityForRun()
@@ -802,8 +802,8 @@ export async function run(
       }
     }
     // Lu ICI, avant la garde « commit demandé » plus bas : elle pose `green = false` sur ce même
-    // refus, dont l'absence de commit n'est que la conséquence (conv-1431, conv-1455).
-    // fix-ok: conv-1455 — cause mesurée : la clôture d'un run validé puis refusé `base-dirty` partait `red` sans `interruption` (RUN.md conv-1431 mvz01n0m « status: red » ; test « commit demandé + base-dirty (conv-1431) » : expected undefined to be 'publication' avant, vert après).
+    // refus, dont l'absence de commit n'est que la conséquence.
+    // fix-ok: cause mesurée : la clôture d'un run validé puis refusé `base-dirty` partait `red` sans `interruption` (RUN.md mvz01n0m « status: red » ; test « commit demandé + base-dirty (conv-1431) » : expected undefined to be 'publication' avant, vert après).
     const enAttenteDePublication =
       green && !integrated && !retained && attendSaPublication(finalized)
     // Le rapport a ete redige DANS la copie isolee ; la ligne ci-dessus vient de la fusionner puis de
@@ -842,7 +842,7 @@ export async function run(
       produced.phaseOutputs = aligned.phaseOutputs ?? produced.phaseOutputs
     }
     // Sa modification non commitée restée hors de ses fichiers après la publication est DITE :
-    // le 2026-10-24 (conv-1139), elle dormait dans `stash@{0}` sous un compte rendu « intégré ».
+    // le 2026-10-24, elle dormait dans `stash@{0}` sous un compte rendu « intégré ».
     const annonceEdition = produced ? annonceEditionLocaleNonRemise(finalized) : undefined
     if (produced && annonceEdition && !produced.result.includes(annonceEdition)) {
       produced.result = `${produced.result.trimEnd()}
@@ -878,9 +878,9 @@ ${annonceEdition}`
       await closePublishedRun(projectPublication).catch(() => undefined)
     }
     // Le commit de transport est ANNONCÉ dans la réponse : il arrivait dans l'historique sans un mot
-    // et passait pour un commit fait en cachette malgré la consigne (conv-710). L'annonce vient
+    // et passait pour un commit fait en cachette malgré la consigne. L'annonce vient
     // APRÈS la dernière clôture possible (rappel pendant la fusion, ou chemin ci-dessus) : elle dit
-    // ce que la clôture a VRAIMENT poussé (conv-1139, 2026-10-25).
+    // ce que la clôture a VRAIMENT poussé (2026-10-25).
     const annonceCommit = produced
       ? annonceCommitLocal(finalized, runId, task, pushDuRun)
       : undefined
@@ -929,11 +929,11 @@ ${annonceCommit}`
       closure: {
         status: green && (integrated || retained) ? 'green' : 'red',
         // La cause d'un arrêt étranger au travail : elle ne change pas ce statut — le run n'a rien
-        // livré —, elle dit au RUN.md qu'il est interrompu, pas en échec (piste 4, conv-1070).
+        // livré —, elle dit au RUN.md qu'il est interrompu, pas en échec (piste 4).
         ...(() => {
           // Validé mais refusé par une base occupée : il attend sa reprise automatique, il n'a
           // pas échoué. Sans cette cause, le RUN.md disait `red` et le run restait « bloqué »
-          // même une fois publié (conv-1431 : publié en b0c4cad9, toujours bloqué).
+          // même une fois publié (Publié en b0c4cad9, toujours bloqué).
           if (enAttenteDePublication) return { interruption: 'publication' as const }
           if (green) return {}
           const interruption = causeDInterruption(erreurDuRun, signal?.aborted === true)
@@ -942,7 +942,7 @@ ${annonceCommit}`
         totalDurationMs: Math.max(0, Date.now() - runStartedAtMs),
         totalCostUsd: this.deps.currentExecutionUsage?.()?.knownCostUsd ?? produced?.costUsd ?? 0,
         // Un run qui PLANTE (quota, connexion, phase en échec) n'a pas de rapport : la clôture
-        // rouge partait sans aucune raison (conv-914, run-68594dd94c08-1, quota du sous-agent
+        // rouge partait sans aucune raison (run-68594dd94c08-1, quota du sous-agent
         // clean). L'erreur qui l'a arrêté devient sa raison.
         gateReasons: produced?.gateReasons ?? raisonsDArretDuRun(erreurDuRun),
         integrationOutcome: finalizeOutcome,

@@ -164,8 +164,8 @@ describe('le journal besoins.jsonl', () => {
   })
 
   /*
-   * conv-1578 : 7 demandes « sans fiche » de `ecarts.json` étaient des QUESTIONS recopiées dans une
-   * branche (conv-1498, depuis conv-1496). La copie change l'identifiant du message : le journal ne
+   * 7 demandes « sans fiche » de `ecarts.json` étaient des QUESTIONS recopiées dans une
+   * branche. La copie change l'identifiant du message : le journal ne
    * connaissait que l'original, et la mesure prenait la copie pour une demande perdue.
    */
   it('une branche reprend ce que le journal sait des messages qu’elle a recopiés', async () => {

@@ -7,7 +7,7 @@ import type { HarnessTraceEvent } from './harness-timeline-model'
 import { formatClock } from './observatory-timeline-axis'
 
 /**
- * Chronologie en FRISE — demande utilisateur du 2026-10-11 (conv-226) : « mon observatory je le
+ * Chronologie en FRISE — demande utilisateur du 2026-10-11 : « mon observatory je le
  * veux en mode timeline dans chronologie ». Avant, la Chronologie empilait des cartes numérotées
  * sans aucune heure. Ces tests fixent ce que l'axe doit montrer, sur la vraie vue montée.
  */

@@ -29,7 +29,7 @@ export class ActiveChatTurns {
    * Tours REPRIS après un redémarrage du main : leur CLI a survécu et travaille encore, mais l'app ne
    * fait qu'attendre son reçu `.exit.json` — elle n'a aucun canal pour lui parler.
    *
-   * Mesuré le 2026-10-11 (conv-260, tour 2d8540b1) : un tel tour, lancé à 22:29 et repris à 22:43,
+   * Mesuré le 2026-10-11 (tour 2d8540b1) : un tel tour, lancé à 22:29 et repris à 22:43,
    * n'était connu que de `turns`. L'envoi normal (`os:pilotChat`) ne consultait pas cette réservation,
    * si bien qu'un message tapé ouvrait un SECOND `claude.exe --resume` sur la même session, qui écrivait
    * dans le même historique que le premier. Les distinguer d'un tour ordinaire permet de refuser ce
@@ -44,7 +44,7 @@ export class ActiveChatTurns {
   /**
    * Une demande RECUE compte comme en cours des sa reception, jusqu'a la vraie fin de son tour.
    *
-   * Faux « Reponse interrompue avant la fin » (conv-809, conv-862) : le tour n'est ENREGISTRE (`set`)
+   * Faux « Reponse interrompue avant la fin » : le tour n'est ENREGISTRE (`set`)
    * qu'apres sa preparation — au premier message, `runPilotChat` (index.ts) interroge d'abord le
    * modele pour ranger la conversation, puis le tour peut encore attendre `waitForInteractiveAccess`.
    * Pendant ce temps la sonde de l'ecran entendait « rien ne tourne », declarait la reponse

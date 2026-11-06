@@ -9,7 +9,7 @@ import { nomUtilisateurCourant } from '../profil/identite-utilisateur'
 import { DOSSIER_PROFILS, nomDeFichierDuCompte } from '../profil/profil-utilisateur'
 
 /**
- * `remember` de type `preference` → PROFIL LOCAL, jamais le Brain partagé (conv-1098, 2026-10-22,
+ * `remember` de type `preference` → PROFIL LOCAL, jamais le Brain partagé (2026-10-22,
  * demande de l'utilisateur). Les notes `preference` du Brain n'ont aucun champ « à qui » : le goût
  * d'une personne était servi à toute l'équipe.
  *

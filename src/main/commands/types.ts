@@ -1,7 +1,7 @@
 /**
  * Types du bus de commandes : spécification, résultat, instantanés et événements diffusés.
  *
- * Code libre sorti de `commands.ts` tel quel (conv-1580, lot 5) ; `commands.ts` ré-exporte ce qu'il
+ * Code libre sorti de `commands.ts` tel quel (lot 5) ; `commands.ts` ré-exporte ce qu'il
  * exportait déjà, ses importeurs ne changent pas. Dans `commands/`, une VALEUR s'importe d'ici,
  * jamais par `'../commands'` (cycle d'import) : `commands/code-libre.test.ts` le garde.
  */
@@ -25,7 +25,7 @@ export interface CommandSpec {
   args: Record<string, string> // nom → description courte du type
   /**
    * Le VRAI type d'un argument de `args`, publié au modèle (`schemaEntree`, skill-node-mcp.ts). Sans
-   * lui, l'argument part en texte. Mesure de conv-1370 (2026-10-31) : tout partait en `string`, y
+   * lui, l'argument part en texte. Mesure (2026-10-31) : tout partait en `string`, y
    * compris les listes et les nombres. Clés = celles d'`args` : une autre clé n'est jamais publiée
    * (test `commands.outils-natifs.test.ts`). La commande accepte toujours AUSSI le texte, seul format
    * du chemin `<cmd>`.
@@ -33,7 +33,7 @@ export interface CommandSpec {
   argsTypes?: Record<string, SchemaArgument>
   /**
    * Présent, y compris vide : c'est LA liste des arguments facultatifs, le mot « facultatif » en tête
-   * de description n'est plus lu. 20 arguments sur 11 outils étaient exigés à tort (conv-1370).
+   * de description n'est plus lu. 20 arguments sur 11 outils étaient exigés à tort.
    */
   argsFacultatifs?: string[]
   annotations?: {
@@ -50,7 +50,7 @@ export interface CommandSpec {
   horsCanalNatif?: string
   /**
    * Vrai = le modele fait deja ce geste avec ses propres outils (Read, Grep, Glob, Edit, Write). La
-   * consigne du chat ne l'annonce donc plus quand les outils directs sont servis (conv-1352 : 3 appels
+   * consigne du chat ne l'annonce donc plus quand les outils directs sont servis (3 appels
    * en 676 tours). La commande reste au catalogue : un `<cmd>` emis s'execute toujours.
    */
   fichierCouvertParLeModele?: boolean
@@ -84,7 +84,7 @@ export interface AppSnapshot {
    * conversation ? » n'avait aucune réponse dans cet état — seuls `id`, `title` et `category` y
    * figuraient. L'ordre du tableau (récence d'`updatedAt`) portait l'information de façon
    * implicite, ce qui invitait à la deviner puis à raconter une méthode qui n'a pas eu lieu
-   * (mesuré conv-1291, 2026-08-18 : un protocole en 5 étapes décrit avec aplomb, dont aucune
+   * (mesuré, 2026-08-18 : un protocole en 5 étapes décrit avec aplomb, dont aucune
    * n'était réalisable avec ces données).
    *
    * `updatedAt` = dernière fois que la conversation a été TOUCHÉE, y compris par ce qui ne vient
@@ -102,7 +102,7 @@ export interface AppSnapshot {
      * Un tour de chat est-il EN VOL dans cette conversation, à l'instant de la lecture ? Présent
      * seulement quand c'est vrai — absent = au repos.
      *
-     * Ajouté 2026-09-08 (conv-346). Sans ce champ, « est-ce que ça tourne encore ? » n'avait aucune
+     * Ajouté 2026-09-08. Sans ce champ, « est-ce que ça tourne encore ? » n'avait aucune
      * réponse dans cet état : les journaux `activity/` et `causal-trace/` ne s'écrivent qu'en FIN de
      * tour, donc les lire pendant un tour vivant fait conclure à sa mort. Le main le sait déjà —
      * c'est la même vérité que la sonde `os:pilotChat:active` du renderer.
@@ -114,7 +114,7 @@ export interface AppSnapshot {
   /**
    * RUN.md NON LUS par le scan borné (au-delà des `LIMITE_RUNS_SNAPSHOT` plus récents) — ABSENT
    * quand rien n'a été écarté. Présent = `runs` et `runsBlocked` sont PARTIELS : un run bloqué plus
-   * ancien n'y figure pas. Ajouté le 2026-09-25 (conv-861) : ce compte était calculé puis jeté.
+   * ancien n'y figure pas. Ajouté le 2026-09-25 : ce compte était calculé puis jeté.
    */
   runsNonExamines?: number
   /**
@@ -153,7 +153,7 @@ export interface AppSnapshot {
  * ~60 conversations et les runs non bloqués : c'était l'essentiel du poids. L'agent liste
  * les conversations à la demande via une commande, il n'en a pas besoin inline.
  *
- * fix-ok: conv-253 tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e — raisonnement mesuré « The background
+ * fix-ok: tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e — raisonnement mesuré « The background
  * watcher process ended with the session » : l'état poussé au modèle taisait la copie d'Autowin
  * (champ `tachesDeFondSuiviesParAutowin`) ; 4 édits = import + champ + fonction + branchement ;
  * commands.taches-de-fond-suivies.test.ts rouge puis vert. Posé ICI, hors du bloc de 2eb85687,
@@ -167,7 +167,7 @@ export interface PromptSnapshot {
   /**
    * RUN.md NON EXAMINÉS pour `runsBlocked` — ABSENT quand le scan a tout lu. Présent, il dit que
    * `runsBlocked` ne couvre que les runs les plus récents : une liste vide n'y prouve PAS l'absence de
-   * run bloqué (conv-861, 2026-09-25).
+   * run bloqué (2026-09-25).
    */
   runsNonExamines?: number
   conversationsCount: number
@@ -201,7 +201,7 @@ export interface PromptSnapshot {
   /**
    * Commandes de fond qu'Autowin a relancées hors du tour et qui tournent encore. Le CLI repris les
    * dit « stopped » : c'est SA copie. Sans ce champ, le modèle croyait sa surveillance morte et en
-   * relançait une seconde (conv-253, tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e). Absent quand rien
+   * relançait une seconde (tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e). Absent quand rien
    * ne tourne.
    */
   tachesDeFondSuiviesParAutowin?: {
@@ -214,9 +214,9 @@ export type AppEvent =
   | { type: 'navigate'; tab: string; origin?: string }
   | { type: 'refresh'; scope: string; convId?: string }
   | { type: 'toast'; text: string; noticeId?: number }
-  // Clic sur la notification de fin de tour (conv-1038) : ouvrir CE fil, pas celui affiché.
+  // Clic sur la notification de fin de tour : ouvrir CE fil, pas celui affiché.
   | { type: 'open-conversation'; convId: string }
-  // Bouton de suite de la même notification (conv-1038) : envoyer CETTE suite dans CE fil.
+  // Bouton de suite de la même notification : envoyer CETTE suite dans CE fil.
   | { type: 'suite-depuis-notification'; convId: string; texte: string }
   // Orchestration LIVE (statut temps réel + fil des sous-agents), diffusée par étape.
   | { type: 'orchestrate-start'; convId?: string; runPath?: string; task: string }
@@ -240,7 +240,7 @@ export type AppEvent =
        *
        * Il voyageait dans `note` et devenait la ligne de vie du bloc Orchestration : des bouts de
        * phrase (« and now 1/2 could ») qui s'ecrasaient toutes les secondes et qu'on ne retrouvait
-       * nulle part en depliant le bloc (conv-918, 2026-10-13). Champ a part : le fil l'ACCUMULE
+       * nulle part en depliant le bloc (2026-10-13). Champ a part : le fil l'ACCUMULE
        * sous la phase qui le produit, la ligne de vie ne garde que ce que l'agent FAIT.
        */
       reasoning?: string

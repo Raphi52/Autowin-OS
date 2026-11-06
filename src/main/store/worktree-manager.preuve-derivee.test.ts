@@ -9,12 +9,12 @@ vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 /**
  * LA RÉCIDIVE — corriger un DOSSIER au lieu d'une CLASSE.
  *
- * Le 2026-08-21 (conv-1362), un run vert a bloqué sa propre publication : sa preuve vivait dans
+ * Le 2026-08-21, un run vert a bloqué sa propre publication : sa preuve vivait dans
  * `Audit/accueil-3d-anime.png`, un fichier ignoré, et la garde des « ignorés non régénérables » l'a
  * compté comme un livrable. Le correctif a ajouté `Audit/` à une liste d'exclusions écrite dossier
  * par dossier.
  *
- * Six jours plus tard, le 2026-08-27, conv-1425 a écrit sa preuve dans
+ * Six jours plus tard, le 2026-08-27, un fil a écrit sa preuve dans
  * `artifacts/nuage-conv1425-v2.png` et s'est fait refuser TROIS fois (07:57:25, 07:57:40, 08:07:40),
  * pour 3,22 $ et zéro livraison. `.gitignore` liste `Audit/` en ligne 9 et `artifacts/` en ligne 10 :
  * deux dossiers de preuves, même rôle, lignes voisines — un seul était dans la liste.

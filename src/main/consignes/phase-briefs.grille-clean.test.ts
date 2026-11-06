@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { PHASE_BRIEFS } from './phase-briefs'
 
 /*
- * LA GRILLE QUALITÉ DE CLEAN VIT EN DEUX COUCHES (conv-1035, 2026-10-21).
+ * LA GRILLE QUALITÉ DE CLEAN VIT EN DEUX COUCHES (2026-10-21).
  *
  * Le pipeline in-app ne lit que `PHASE_BRIEFS.clean` ; `/clean` invoqué dans le chat lit
  * `skills/clean/SKILL.md`. La grille est écrite deux fois : courte ici, avec la preuve attendue

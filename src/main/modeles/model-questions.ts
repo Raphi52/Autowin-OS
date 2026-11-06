@@ -32,10 +32,10 @@ export function parseModelQuestion(text: string): ModelQuestion | null {
   }
 }
 
-// CONSIGNE « Avance de façon autonome » RETIRÉE du chat (conv-1577, 2026-11-05) : ses 881
+// CONSIGNE « Avance de façon autonome » RETIRÉE du chat (2026-11-05) : ses 881
 // caractères, payés à chaque tour, redisaient la CONSTITUTION injectée dans le même prompt
 // (Autonomie (3), réflexes 1 et 10, limite destructive, secrets) — et l'avaient déjà contredite une
-// fois (conv-1142 : « les actions destructives s'exécutent directement »). Sa seule phrase propre,
+// fois (« les actions destructives s'exécutent directement »). Sa seule phrase propre,
 // « ne demande pas un secret dans le chat », est passée dans la ligne Secrets de la constitution.
 // Interdire la balise <question> au modèle n'avait plus d'objet : `parseModelQuestion` rend null
 // quoi qu'il reçoive, et rien d'autre ne lui enseigne cette balise.

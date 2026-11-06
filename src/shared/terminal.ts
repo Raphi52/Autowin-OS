@@ -1,6 +1,6 @@
 /**
  * TERMINAL INTÉGRÉ DU CHAT — le CONTRAT partagé entre le processus principal, le pont (preload) et
- * l'interface (conv-1362, lot 3/3, 2026-10-31).
+ * l'interface (lot 3/3, 2026-10-31).
  *
  * Pourquoi un fichier à part : le moteur (`src/main/bureau/terminal-integre.ts`) et le panneau, écrit dans un
  * lot suivant, doivent parler la même langue sans se voir. Tout ce qu'ils échangent est décrit ICI,

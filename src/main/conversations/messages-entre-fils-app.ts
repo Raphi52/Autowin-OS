@@ -14,7 +14,7 @@ import {
 } from '../../shared/messages-entre-fils'
 
 /**
- * MESSAGES ENTRE FILS, CÔTÉ APP (conv-1139, 2026-10-24) — les deux outils du chat
+ * MESSAGES ENTRE FILS, CÔTÉ APP (2026-10-24) — les deux outils du chat
  * (`ecrire_a_un_fil`, `lire_mes_messages`) et le bloc remis en tête de tour.
  *
  * Le journal vit À CÔTÉ du registre des réservations (`reservations-fichiers.json`), dans le dossier
@@ -70,7 +70,7 @@ const champ = (args: Record<string, unknown>, cle: string): string =>
   typeof args[cle] === 'string' ? (args[cle] as string).trim() : ''
 
 /**
- * fix-ok: conv-1139 réparation 1 — les lignes « message » du journal étaient converties de force
+ * fix-ok: un fil réparation 1 — les lignes « message » du journal étaient converties de force
  * (`as unknown as MessageDeFil`) : une ligne sans expéditeur faisait planter `messagesAAfficher`
  * (`m.de.fil`, TypeError mesurée par le test « ligne mal formée »). Le journal est un fichier
  * partagé que n'importe quel processus peut abîmer : une ligne lisible mais mal formée est sautée,
@@ -238,7 +238,7 @@ export function promptDOrdre(message: { id: string; de: string; texte: string })
 /**
  * Ce message est-il le tour lancé par un ordre (`promptDOrdre`), et non une demande de l'utilisateur ?
  * Le contrôle des deux lectures ne doit pas demander à un humain de choisir le sens d'un texte qu'un
- * agent a écrit : personne n'est là pour répondre (conv-1192, 2026-10-27).
+ * agent a écrit : personne n'est là pour répondre (2026-10-27).
  */
 export function estUnPromptDOrdre(message: string | undefined): boolean {
   return /^Ordre de \S+ \(message \S+, écrit par l'agent de ce fil avec ecrire_a_un_fil — pas l'utilisateur\) :/u.test(
@@ -249,7 +249,7 @@ export function estUnPromptDOrdre(message: string | undefined): boolean {
 export type IssueReveil = 'lance' | 'occupe' | 'indisponible' | 'echec'
 
 /**
- * RÉVEIL PAR UN ORDRE (conv-1139, 2026-10-25, demande de l'utilisateur) : un ordre vers un fil
+ * RÉVEIL PAR UN ORDRE (2026-10-25, demande de l'utilisateur) : un ordre vers un fil
  * INACTIF y lance un tour, signé « Ordre de <fil> ». Un fil occupé, ou dont l'activité ne peut pas
  * être vérifiée, n'est pas réveillé : il lira l'ordre à son prochain outil ou à son prochain tour.
  *

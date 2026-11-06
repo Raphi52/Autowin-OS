@@ -89,7 +89,7 @@ export function runsRoot(): string {
   return join(process.env.USERPROFILE ?? '.', '.claude', 'runs')
 }
 
-/** RUN.md ouverts en même temps au plus (conv-1248) : la fenêtre du snapshot (24) tient en un paquet. */
+/** RUN.md ouverts en même temps au plus : la fenêtre du snapshot (24) tient en un paquet. */
 const LECTURES_EN_PARALLELE = 32
 
 async function safeReaddir(p: string): Promise<string[]> {
@@ -136,7 +136,7 @@ export async function scanRunsBounded(
     ).values()
   ]
 
-  // TOUTES les dates lancées ensemble (conv-1248, 2026-10-29) : attendre chaque `stat` avant le
+  // TOUTES les dates lancées ensemble (2026-10-29) : attendre chaque `stat` avant le
   // suivant faisait ~1 150 allers-retours disque d'affilée sur le poste — 55 à 90 ms par scan,
   // 111 ms en médiane dans l'app (`snapshot:runs`), contre 16 à 39 ms ensemble, résultat identique.
   // L'ordre d'insertion reste celui des dossiers : le tri stable départage les dates égales pareil.
@@ -240,7 +240,7 @@ export type FenetreRuns<T> = T[] & { horsFenetre: number }
  * Variante BORNÉE destinée au chemin chaud — jamais `scanRuns()` sans borne.
  *
  * Elle passait par `scanRuns`, qui JETTE `remaining` : au-delà des 24 plus récents, un run bloqué
- * disparaissait de `runsBlocked` sans aucun signal (constat conv-861, 2026-09-25 : ranger des runs
+ * disparaissait de `runsBlocked` sans aucun signal (constat, 2026-09-25 : ranger des runs
  * récents a fait REMONTER 6 anciens runs bloqués, invisibles jusque-là). Le compte voyage désormais.
  */
 export async function scanRunsPourSnapshot(

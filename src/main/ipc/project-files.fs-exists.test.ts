@@ -1,5 +1,5 @@
 /**
- * Canal `fs:exists` (conv-826) : le mode auto demande au principal si le fichier attendu par une
+ * Canal `fs:exists` : le mode auto demande au principal si le fichier attendu par une
  * suite « quand X existe » est là, sans payer de tour. Lecture seule : vrai/faux/null, rien d'autre.
  */
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest'

@@ -1,8 +1,8 @@
 /**
  * LE VOCABULAIRE MAISON D'AUTOWIN, pour un modèle qui ne voit QUE la phrase de l'utilisateur
- * (kaizen conv-1266, 2026-10-29).
+ * (2026-10-29).
  *
- * Mesure : conv-1263, tour 60eda4d2-c6e0-491d-8b34-116257bf3766. « ce jeu est un 1/10 je veux un
+ * Mesure : tour 60eda4d2-c6e0-491d-8b34-116257bf3766. « ce jeu est un 1/10 je veux un
  * 10/10 fais une super conv pour faire ca » a été relu par le petit modèle (claude-haiku-5-5, appel
  * `deuxLectures` de `cost.jsonl`, 2026-10-29T09:04:15Z) comme « Rendre le jeu 10/10 en améliorant
  * ses dialogues : une grande conversation (dialogues, personnages) ». Ligne affichée à
@@ -13,7 +13,7 @@
  *
  * Cause : la consigne de ce modèle disait « un agent de développement », jamais Autowin, et la
  * charge ne porte que les commandes `/nom` citées. Les mots d'Autowin qui ne sont pas des commandes
- * (« super conv » = plan de lots, conv-1150) arrivaient sans leur sens, et une phrase sur un jeu les
+ * (« super conv » = plan de lots) arrivaient sans leur sens, et une phrase sur un jeu les
  * rabattait sur le jeu. Le modèle du chat, lui, les connaît par sa consigne
  * (`consigne-plan-de-lots.ts`).
  *

@@ -173,7 +173,7 @@ describe('renderer chat IPC contract', () => {
   })
 
   /*
-   * PLUS AUCUN TRI DE SUJET AVANT L'ENVOI (retire le 2026-10-17, conv-305 : « enleve le mecanisme
+   * PLUS AUCUN TRI DE SUJET AVANT L'ENVOI (retire le 2026-10-17, « enleve le mecanisme
    * qui redirige vers une autre conv quand on change de sujet c invasif je sais gerer »).
    * Un modele decidait a chaque envoi si le message ouvrait un autre sujet, creait un fil neuf et y
    * emmenait l'utilisateur. Ce temoin garde le canal ferme : le message reste dans le fil ecrit.
@@ -226,7 +226,7 @@ describe('renderer chat IPC contract', () => {
     expect(empile).toBeGreaterThan(ecriture)
     expect(handler.slice(empile)).toContain('+ suffixe)')
     // Une image SANS texte est un message : elle ne doit pas etre refusee comme vide.
-    // Le refus porte un motif depuis b6d2a3fc (conv-892). L'instruction ENTIÈRE est figée, comme
+    // Le refus porte un motif depuis b6d2a3fc. L'instruction ENTIÈRE est figée, comme
     // avant b6d2a3fc : une version qui ne gardait que la condition laissait passer un mauvais motif.
     expect(handler).toContain(
       "if (!directive && jointes.length === 0) return { ok: false, motif: 'vide' as const }"
@@ -236,7 +236,7 @@ describe('renderer chat IPC contract', () => {
   it('refuse d injecter une commande de skill en texte (conv-843, turn 6d0e352f)', () => {
     const { main } = readChatContractSources()
     const handler = extractIpcHandler(main, 'os:pilotChat:inject')
-    // Depuis b6d2a3fc (conv-892), le test `routeSkillRequest(...)?.reason === 'explicit-skill'` vit
+    // Depuis b6d2a3fc, le test `routeSkillRequest(...)?.reason === 'explicit-skill'` vit
     // dans `commandeNonInjectable` (skill-routing.ts, couvert par son propre test). Ce contrat garde
     // ce que ce test-la ne peut pas voir : le refus est RENDU, et avant la mise en file.
     // fix-ok: 2 rouges sur main 26c58dcd (texte d'avant b6d2a3fc), puis une version trop lâche qui
@@ -293,7 +293,7 @@ describe('renderer chat IPC contract', () => {
       // conversations inaccessibles. On exige donc desormais que les deux champs traversent
       // `guardString` AVANT d'atteindre le store.
       //
-      // Depuis a77507ed (2026-10-21, conv-1038) l'appel passe aussi un `projectPath` optionnel,
+      // Depuis a77507ed (2026-10-21) l'appel passe aussi un `projectPath` optionnel,
       // lui-meme gardé (`guardString` + chemin absolu) : l'objet s'ecrit sur plusieurs lignes. On
       // exige toujours `title` et `provider` gardés, en tete de l'objet transmis.
       /'os:conversations:create'[\s\S]*?guardString\([\s\S]*?'title'\)[\s\S]*?guardString\([\s\S]*?'provider'\)[\s\S]*?os\.conversations\.create\(\{\s*title,\s*provider\b[\s\S]*?scope: 'conversations'/

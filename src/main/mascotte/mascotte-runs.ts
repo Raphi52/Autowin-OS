@@ -1,5 +1,5 @@
 /**
- * LES RUNS EN COURS, COMPTÉS PAR LE MOTEUR, pour la mascotte du bureau (conv-1196, 2026-10-28 —
+ * LES RUNS EN COURS, COMPTÉS PAR LE MOTEUR, pour la mascotte du bureau (2026-10-28 —
  * scout « à quoi pourrait servir la mascotte », ligne 1 retenue par l'utilisateur : le compte des
  * runs se fige une fois la fenêtre principale fermée).
  *

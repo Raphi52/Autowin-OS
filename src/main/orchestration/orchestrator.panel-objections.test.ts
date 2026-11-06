@@ -34,7 +34,7 @@ import type { WorkflowGraph } from '../workflow/workflow-graph'
  * reduire un quorum atteint au seul mot « VALIDE ».
  *
  * Objection du juge restee ouverte : « le lien de cause pour la correction du panel reste une
- * deduction ». Mesure du dossier : conv-539, tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — quatre
+ * deduction ». Mesure du dossier : tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — quatre
  * appels juge (promptCalls ts 09:47:42.375, 09:50:30.425, 09:55:17.497, 09:58:16.977) rendent
  * « VALIDE » AVEC objections ; saisie ts 1789466353210 : « tu t'es arrete alors que 3/4 des juges
  * ont des objections ». Le test unitaire de verdictPanelValide ne couvrait QUE la fonction :
@@ -137,7 +137,7 @@ describe('un panel de juges qui atteint le quorum garde les objections de ses me
   })
 
   /**
-   * conv-539, tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e : le juge de 09:55:17.497 vote DEFAUT, les
+   * Tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e : le juge de 09:55:17.497 vote DEFAUT, les
    * 3 autres VALIDE. Le quorum passe — mais la puce du dissident doit rester MAJEUR, sinon le tour
    * se clot sur un DEFAUT explicite ignore (saisie ts 1789466353210).
    */

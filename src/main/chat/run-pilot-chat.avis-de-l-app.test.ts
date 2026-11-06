@@ -6,7 +6,7 @@ import { ConversationStore } from '../store/conversations'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 
 /**
- * L'AVIS DE L'APP EST MARQUÉ DANS L'HISTORIQUE DU TOUR (conv-1641, 2026-11-06).
+ * L'AVIS DE L'APP EST MARQUÉ DANS L'HISTORIQUE DU TOUR (2026-11-06).
  *
  * La carte « GIT : rien publié » posée sous une réponse a été lue comme le dernier message de
  * l'agent par la ligne compréhension (`deux-lectures.ts`). Le renderer ne transmet pas `turnId` :

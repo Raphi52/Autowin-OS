@@ -77,7 +77,7 @@ describe('OrchestratorModelSelector — matrice par provider dans la popup', () 
   })
 
   /*
-   * ONGLETS PAR FOURNISSEUR (conv-1496, 8fb688c1, 2026-11-04) : la matrice ne montre plus qu'UN
+   * ONGLETS PAR FOURNISSEUR (8fb688c1, 2026-11-04) : la matrice ne montre plus qu'UN
    * groupe à la fois, celui de l'onglet ouvert (par défaut, le fournisseur du modèle actif). Les
    * tests ci-dessous ouvrent donc l'onglet codex avant de le lire, au lieu d'attendre tous les
    * groupes côte à côte.

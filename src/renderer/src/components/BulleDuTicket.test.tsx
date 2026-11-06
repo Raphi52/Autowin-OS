@@ -6,7 +6,7 @@ import { BulleDuTicket } from './BulleDuTicket'
 import { eclatDuTicket, type TicketTreatmentStatus } from './ticket-treatment'
 
 /**
- * L'ECLAT DE LA BULLE D'UN TICKET (conv-981, 2026-10-16) — le tableau des passages du cadrage. Seul
+ * L'ECLAT DE LA BULLE D'UN TICKET (2026-10-16) — le tableau des passages du cadrage. Seul
  * « en cours -> traite » eclate. ENTREES QUI DOIVENT FAIRE ECHOUER : un eclat pose sur `.is-succeeded`
  * en CSS (il jouerait pour chaque ticket deja traite a l'ouverture de la vue), un eclat sur un
  * echec, ou une marque jamais retiree (il rejouerait a chaque retour sur l'onglet).

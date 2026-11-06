@@ -214,7 +214,7 @@ describe('AnimationAccueilChat — le teaser', () => {
       )
     })
 
-    // conv-1535 : des scènes de 5 s (« 2 secondes c trop rapide »), une skill puis une vue. Sous une
+    // Des scènes de 5 s (« 2 secondes c trop rapide »), une skill puis une vue. Sous une
     // skill, SA phrase, prise par son nom : sous /scout, l'usage de /scout, quel que soit son rang.
     it('sous chaque scène de skill, sa phrase s’écrit, puis se dissipe', () => {
       const { container } = monter()
@@ -238,7 +238,7 @@ describe('AnimationAccueilChat — le teaser', () => {
       expect(invoquee(container)).toBeNull()
     })
 
-    // conv-1535 : « fais-les s'écrire comme un humain qui tape au clavier, lettre par lettre ». Le
+    // « fais-les s'écrire comme un humain qui tape au clavier, lettre par lettre ». Le
     // curseur suit la dernière lettre tapée : chacune le porte de son arrivée à celle de la suivante.
     it('chaque lettre se tape à son tour, curseur compris, sans couper ni mot ni emoji', () => {
       const { container } = monter({ usages: [{ nom: '/draft', usage: 'ça 😀' }] })

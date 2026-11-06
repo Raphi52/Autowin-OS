@@ -154,7 +154,7 @@ describe('brain-paths — noms de reglage neutres, anciens noms en secours', () 
 })
 
 /**
- * DEFAUT VECU (conv-8, 2026-09-03) : le service a jour ecoutait 8766 et le processus principal
+ * DEFAUT VECU (2026-09-03) : le service a jour ecoutait 8766 et le processus principal
  * interrogeait 8765 — son defaut — parce que l'origine ne vivait que dans la variable d'un shell.
  * Chaque lecture du savoir rendait « indisponible » en 15 ms. Persister la variable N'A PAS suffi :
  * l'app relancee a herite de l'ancien environnement et a demarre un SECOND serveur sur 8765.
@@ -209,7 +209,7 @@ describe('origine du Brain — le port vient de l installation, pas d un shell',
   })
 
   /*
-   * LA RACINE SUIT LA MEME REGLE QUE LE PORT — defaut vecu le 2026-09-10 (conv-2) : le moteur de
+   * LA RACINE SUIT LA MEME REGLE QUE LE PORT — defaut vecu le 2026-09-10 : le moteur de
    * requete lisait `brain_root` du config.json pendant que la vue Knowledge ne lisait que
    * l'environnement et retombait sur le partage reseau, inexistant hors VPN. Resultat : les
    * requetes marchaient, AUCUN coffre de savoir affiche. Ces tests figent la resolution unique.
@@ -237,7 +237,7 @@ describe('origine du Brain — le port vient de l installation, pas d un shell',
 })
 
 /**
- * BRAIN PROPRE A AUTOWIN — constate le 2026-09-25 (conv-3). Sur un poste qui heberge AUSSI un Brain
+ * BRAIN PROPRE A AUTOWIN — constate le 2026-09-25. Sur un poste qui heberge AUSSI un Brain
  * personnel, l'installateur de celui-ci pose `ACME_BRAIN_ROOT` dans les variables UTILISATEUR :
  * Autowin en heritait, et ses lecons (`remember`, POST /ingest) partaient dans le Brain personnel.
  * `%LOCALAPPDATA%\AutowinBrain\config.json` donne a Autowin son propre Brain ; absent, rien ne change.

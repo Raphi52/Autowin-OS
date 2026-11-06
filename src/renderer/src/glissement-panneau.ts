@@ -1,5 +1,5 @@
 /**
- * LE PANNEAU DE DROITE GLISSE A L'OUVERTURE ET A LA FERMETURE (conv-987, 2026-10-16 : « je veux une
+ * LE PANNEAU DE DROITE GLISSE A L'OUVERTURE ET A LA FERMETURE (2026-10-16 : « je veux une
  * animation d'ouverture fermeture pour le paneau de droite »). Avant, le panneau Details du Chat
  * apparaissait et disparaissait d'un coup : il n'est monte que pendant qu'il est ouvert.
  *

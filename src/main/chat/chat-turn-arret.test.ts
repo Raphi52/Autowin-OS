@@ -10,7 +10,7 @@ import {
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
 
 /**
- * MESURE conv-136, 2026-09-02 — le défaut que ces tests interdisent.
+ * MESURE, 2026-09-02 — le défaut que ces tests interdisent.
  *
  * Un tour lance une orchestration ; elle travaille 25 min (1 508 365 ms mesurées). Le veilleur
  * d'inactivité la croit morte à 20 min et coupe le tour AVEC un motif nommé. L'utilisateur n'a

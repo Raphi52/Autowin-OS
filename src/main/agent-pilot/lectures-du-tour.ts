@@ -1,6 +1,6 @@
-// Les deux lectures d'une demande (`deux-lectures.ts`, conv-1092) pour UN tour de chat : appel
+// Les deux lectures d'une demande (`deux-lectures.ts`) pour UN tour de chat : appel
 // unique au petit modèle, question à boutons, ligne « Lecture retenue ». Sorti tel quel de
-// AgentPilot.chat() (conv-1580, lot 2).
+// AgentPilot.chat() (lot 2).
 import { estUnMessageDuPlan } from '../../shared/plan-de-lots'
 import { FLUX_LECTURE_RETENUE } from '../../shared/lecture-retenue'
 import { estUneRepriseAutomatique } from '../chat/relance-taches-de-fond'
@@ -67,16 +67,16 @@ export function lecturesDuTour(entree: {
     tourEstClos
   } = entree
   /*
-   * DEUX LECTURES PLAUSIBLES → UNE QUESTION, AVANT DE PAYER (deux-lectures.ts, conv-1092).
+   * DEUX LECTURES PLAUSIBLES → UNE QUESTION, AVANT DE PAYER (deux-lectures.ts).
    *
    * Trois points de passage, un seul appel au petit modèle par tour (promesse mémorisée) :
-   * le `/scout …` routé ci-dessous SANS modèle (conv-767 : 2,47 $ sur une mauvaise lecture), une
+   * le `/scout …` routé ci-dessous SANS modèle (2,47 $ sur une mauvaise lecture), une
    * demande qui change l'affichage (lue AVANT de passer la main au modèle, dont les éditions
    * natives ne sont pas interceptables), et l'`orchestrate` émis par le modèle. Jamais sur une
    * reprise interne, un tour de fond ni la réponse à cette même question.
    */
   /*
-   * LUE À CHAQUE MESSAGE D'UN HUMAIN (conv-1240) : la ligne « Lecture retenue » s'affiche à chaque
+   * LUE À CHAQUE MESSAGE D'UN HUMAIN : la ligne « Lecture retenue » s'affiche à chaque
    * tour, demande de l'utilisateur (« met le tout le temps »). La QUESTION garde ses filtres
    * d'avant : jamais sur une relance ou un message de moins de quatre mots, jamais deux fois.
    */
@@ -86,10 +86,10 @@ export function lecturesDuTour(entree: {
     !sendLimits?.tourDeFond &&
     sendLimits?.systemProfile !== 'watchdog-read-only' &&
     // Le tour de reprise d'une tâche de fond est écrit par Autowin, pas par l'utilisateur
-    // (conv-1118) : il n'a rien à départager.
+    // Il n'a rien à départager.
     !estUneRepriseAutomatique(latestUserMessage) &&
     // Même chose pour le message d'un lot, d'un ordre entre fils ou du réveil du chef : composé par
-    // l'app ou un agent, sans humain pour cliquer. conv-1192 (2026-10-27) s'y est arrêté net.
+    // l'app ou un agent, sans humain pour cliquer. (2026-10-27) s'y est arrêté net.
     !estUnMessageDuPlan(latestUserMessage) &&
     !estUnPromptDOrdre(latestUserMessage)
   const questionPermise =
@@ -101,12 +101,12 @@ export function lecturesDuTour(entree: {
     const demander = demanderDeuxLectures
     if (!lectureDuTourArmee || !demande || !demander) return Promise.resolve(undefined)
     // Ce que font les commandes citées (`/scout`, `/arena`) : sans elles, le petit modèle a lu
-    // conv-767 comme nette — rejeu sur le vrai modèle du 2026-10-22, 0 question sur 3 cas visés.
+    // un fil comme nette — rejeu sur le vrai modèle du 2026-10-22, 0 question sur 3 cas visés.
     const descriptions = descriptionsDesCommandes(commandesNommees(demande))
     lecturesMemorisees ??= demander(
       CONSIGNE_DEUX_LECTURES,
       // Les messages que des tours coupés ont laissés sans réponse font partie de la demande
-      // (kaizen conv-1558 : « améliore tout » lu « tout sur le kimono », le dernier sujet seul).
+      // (kaizen : « améliore tout » lu « tout sur le kimono », le dernier sujet seul).
       // Ceux qu'écrit l'app ou un agent n'en sont pas : aucun humain ne les a tapés.
       chargeDeuxLectures(
         demande,
@@ -120,7 +120,7 @@ export function lecturesDuTour(entree: {
         )
       ),
       // Le coût de l'appel appartient au fil, et sa trace dit ce que le contrôle a DÉCIDÉ, pas la
-      // réponse brute coupée à 160 caractères (conv-1431 : 527 lignes sur 696 inclassables).
+      // réponse brute coupée à 160 caractères (527 lignes sur 696 inclassables).
       {
         ...(conversationId ? { conversationId } : {}),
         issue: (texte) => issueDesLecturesPourLaTrace(texte, demande, { questionPermise, moment })
@@ -162,7 +162,7 @@ export function lecturesDuTour(entree: {
     })
   }
   /*
-   * UNE LECTURE DOMINE → ELLE PART, ANNONCÉE EN UNE LIGNE (conv-1123). Émise en vrai `delta`, pas
+   * UNE LECTURE DOMINE → ELLE PART, ANNONCÉE EN UNE LIGNE. Émise en vrai `delta`, pas
    * seulement dans le `done` : le renderer jette le texte du `done` quand le tour a déjà parlé, et
    * l'utilisateur doit voir la lecture AVANT la fin du travail pour pouvoir corriger. Une seule
    * fois par tour : les trois points de passage partagent la même décision mémorisée.
@@ -186,7 +186,7 @@ export function lecturesDuTour(entree: {
       ? deuxLecturesDuTour('avant-d-agir')
       : undefined
     /*
-     * TOUS LES AUTRES TOURS (conv-1240) : la lecture court EN PARALLÈLE du modèle, sans l'attendre.
+     * TOUS LES AUTRES TOURS : la lecture court EN PARALLÈLE du modèle, sans l'attendre.
      * Mesure sur turn-timing.jsonl du 2026-10-28 : le petit modèle répond en ~4 s, le premier jeton du
      * modèle du chat arrive en 24 s (médiane) et en moins de 5 s pour 5 % des tours seulement.
      * L'attendre aurait rallongé CHAQUE réponse ; la ligne arrive presque toujours avant le texte, et

@@ -75,7 +75,7 @@ describe('CadrageHypotheses — les suppositions du run, contestables sans l’a
   })
 
   /*
-   * REPLI SUR UNE LIGNE — demande du 19/10 (conv-358) : « ce bloc je veux pouvoir le réduire à une
+   * REPLI SUR UNE LIGNE — demande du 19/10 : « ce bloc je veux pouvoir le réduire à une
    * ligne, remplace la croix par une flèche down up ». La croix FAISAIT DISPARAÎTRE le bloc ; la
    * flèche le replie sur sa ligne de titre et le rouvre : les suppositions restent à portée.
    */

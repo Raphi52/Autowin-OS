@@ -6,7 +6,7 @@ import {
 } from './prompt-suivant'
 
 /*
- * LA BOUCLE SANS FIN DU 2026-09-04 (conv-288), vecue TROIS TOURS D'AFFILEE.
+ * LA BOUCLE SANS FIN DU 2026-09-04, vecue TROIS TOURS D'AFFILEE.
  *
  * L'utilisateur envoie `/salvage`. Le tri est fait de bout en bout : toutes les cachettes sondees,
  * chaque travail juge par son contenu, les verdicts enregistres. La seule suite qui reste est de
@@ -44,7 +44,7 @@ describe('le garde-fou de publication ne rejoue pas un tri deja fait', () => {
 })
 
 /*
- * LE HARCELEMENT A PUBLIER DU 2026-09-10 (conv-410). L'utilisateur demande le retrait d'un bouton
+ * LE HARCELEMENT A PUBLIER DU 2026-09-10. L'utilisateur demande le retrait d'un bouton
  * sur un projet tiers ; la cloture invente une publication ; l'application la reecrit en `/salvage`.
  * Reponse : « j'ai pas de git arrete de me casser les couilles pour publier ». Quand la demande
  * entrante ne parle PAS de publier, la bonne suite n'est ni publier ni trier : c'est aucune suite.
@@ -73,7 +73,7 @@ describe('une publication que personne n a demandee ne propose rien', () => {
   })
 
   /*
-   * VECU LE 2026-10-01 (conv-770), deux fois. La consigne du tour INTERDISAIT de publier
+   * VECU LE 2026-10-01, deux fois. La consigne du tour INTERDISAIT de publier
    * (« Ne publie rien : aucun commit, aucun push ») ; ses mots comptaient pourtant comme une demande
    * de publication, et la suite proposee etait reecrite en `/salvage`, puis envoyee par le mode auto.
    */

@@ -1,5 +1,5 @@
 /**
- * LE CANAL DE LA LANGUE (conv-1146, 2026-10-26) — Settings · Interface, liste « Langue ».
+ * LE CANAL DE LA LANGUE (2026-10-26) — Settings · Interface, liste « Langue ».
  *
  * L'interface transmet la langue choisie ; le moteur l'enregistre (`langue-reglage.ts`) pour écrire
  * la consigne de chaque tour dans cette langue. Une seule écriture, bornée : `ecrireLangueReglee`

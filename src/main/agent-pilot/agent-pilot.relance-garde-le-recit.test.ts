@@ -13,7 +13,7 @@ import {
 } from '../../renderer/src/components/chat-view-model'
 
 /**
- * UNE RELANCE NE REFAIT QUE LA CONCLUSION : LE RÉCIT DU TRAVAIL RESTE (conv-1401, 2026-10-31).
+ * UNE RELANCE NE REFAIT QUE LA CONCLUSION : LE RÉCIT DU TRAVAIL RESTE (2026-10-31).
  *
  * Tour réel 79a873fa : un seul appel de 3 h, son texte entrecoupé de 30 captures. Il finissait sur
  * « je reviens avec le film » ; la relance « tu promets un compte-rendu » a effacé le flux ENTIER

@@ -6,8 +6,8 @@ import { CATALOG } from '../commands/commands'
 /**
  * LE TEXTE QUI ENSEIGNE `ask` NOMMAIT LE /draft… COMME UN CAS D'`ask`.
  *
- * Les appels modèle des tours /draft c7d72274-db73-49bd-93fe-435f6647863a (conv-310),
- * 4c898868-7bfa-4535-8300-c2802e61cf10 (conv-311) et 938a67c1-78bc-4bc5-addf-865167663f44 (conv-312)
+ * Les appels modèle des tours /draft c7d72274-db73-49bd-93fe-435f6647863a,
+ * 4c898868-7bfa-4535-8300-c2802e61cf10 et 938a67c1-78bc-4bc5-addf-865167663f44
  * portaient la procédure « ne pose PAS de bloc ask sous le carrousel ». Mais le paragraphe QUESTION A
  * L'UTILISATEUR, injecté en dernier, disait « un choix entre approches → `ask` » et citait la
  * « galerie de maquettes » comme ce qui accompagne la question ; la description de `ask` aussi.

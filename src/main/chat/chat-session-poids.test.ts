@@ -18,7 +18,7 @@ describe('coupe de session par poids', () => {
   })
 
   it('compte un franchissement quand un tour depasse le seuil', () => {
-    // Le cas mesure conv-632 : 491 636 tokens d'entree pour 4 779 caracteres envoyes par Autowin.
+    // Le cas mesure : 491 636 tokens d'entree pour 4 779 caracteres envoyes par Autowin.
     expect(coupesParPoids([tour(10_000), tour(491_636)], 200_000)).toBe(1)
   })
 
@@ -48,7 +48,7 @@ describe('coupe de session par poids', () => {
 })
 
 /*
- * LA COUPE NE S'EST JAMAIS DECLENCHEE. Mesure conv-338 (kaizen du 2026-10-19) : six tours sur la
+ * LA COUPE NE S'EST JAMAIS DECLENCHEE. Mesure (kaizen du 2026-10-19) : six tours sur la
  * MEME session CLI (b0b8264c), occupation 260 866 puis jusqu'a 582 617 tokens au dernier appel du
  * tour 8ce6230c-374c-4de3-9429-583a648e286c — 46 $ pour six tours, 10,18 $ pour passer un point en
  * bleu. Cause : la coupe ne lisait que `kind: 'chat'`, alors que le reglement d'usage ecrit

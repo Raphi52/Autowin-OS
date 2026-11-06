@@ -1,7 +1,7 @@
 /**
  * La règle qui retient les lots d'une sélection scout après une coupure par la limite de quota
- * (conv-1080, 2026-10-22). Les refus sont recopiés des formes réelles : tour en échec (conv-1055 à
- * 11:01), échec rendu par la seule réponse de `pilotChat` (part d'erreur, `error` vide), et run du
+ * (2026-10-22). Les refus sont recopiés des formes réelles : tour en échec (
+ * 01), échec rendu par la seule réponse de `pilotChat` (part d'erreur, `error` vide), et run du
  * lot suspendu alors que le tour du chat se clôt.
  */
 import { describe, expect, it } from 'vitest'

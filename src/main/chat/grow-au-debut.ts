@@ -1,5 +1,5 @@
 /**
- * GROW CHARGÉE PAR LE CODE AU DÉBUT DE CHAQUE DEMANDE D'ACTION (conv-1445, 2026-11-03).
+ * GROW CHARGÉE PAR LE CODE AU DÉBUT DE CHAQUE DEMANDE D'ACTION (2026-11-03).
  *
  * Demande de l'utilisateur : « quand je fais une demande, ça améliore Autowin, ses tools et ses
  * skills PENDANT que ça traite la demande ». La skill `grow` (skills/grow/SKILL.md) agit pendant le
@@ -24,7 +24,7 @@ import { normalizeIntent } from '../orchestration/intent-phase-routing'
  * Skills invoquées qui MODIFIENT par nature : leur nom est le verbe (« /draft une page d'accueil »).
  * Les autres skills (analyse, routines, publication) ne comptent comme action que si la suite du
  * message porte un verbe d'action. `forge` et `graft` n'y sont pas : elles créent déjà l'outil ou la
- * skill, et l'utilisateur ne veut pas les rejouer par grow (conv-1445).
+ * skill, et l'utilisateur ne veut pas les rejouer par grow.
  */
 const SKILLS_D_ACTION = new Set(['build', 'heal', 'remake', 'draft', 'clean', 'terrain'])
 
@@ -43,7 +43,7 @@ const VOULOIR =
 /**
  * Un changement DÉSIRÉ, où qu'il soit dans la phrase : « dans les settings je veux que … »,
  * « je veux pouvoir cocher … », « il faut une map par dépôt », « l'idéal serait … ». Mesuré sur
- * les messages réels (conv-1445) : ancrée en tête, cette tournure manquait une partie de ses cas.
+ * les messages réels : ancrée en tête, cette tournure manquait une partie de ses cas.
  */
 const VOULOIR_QUE =
   /\b(?:(?:je veux|je voudrais|j'aimerais|il faut|il faudrait|faut|i want)\s+(?:que\b|qu'|pouvoir\b|une?\b|des\b)|l'ideal serait\b|ce serait (?:bien|mieux|top)\b|il manque\b)/
@@ -211,7 +211,7 @@ function sansSkillEnTete(texte: string, skill: string | undefined): string {
  */
 export function estUneDemandeDAction(demande: string | undefined, skillInvoquee?: string): boolean {
   // Réveil de plan de lots, reprise automatique, fin de chaîne : un message de l'APP, sans tâche
-  // propre (mesuré conv-1445 : 3 réveils sur 9 faux positifs). Même liste que le Brain du tour.
+  // propre (mesuré : 3 réveils sur 9 faux positifs). Même liste que le Brain du tour.
   if (messageSansSujetPropre(demande ?? '')) return false
   const brut = normalizeIntent(demande ?? '')
   if (!brut) return false

@@ -76,7 +76,7 @@ describe('rangement au premier message — effet reel', () => {
   })
 
   /*
-   * LE RANGEMENT TOURNE A COTE DE LA REPONSE (conv-867, 2026-09-26) : le tour ne l'attend plus.
+   * LE RANGEMENT TOURNE A COTE DE LA REPONSE (2026-09-26) : le tour ne l'attend plus.
    * Seul un rangement qui DEPLACE le dossier de travail attend la fin du tour — un tour a cheval
    * sur deux depots serait pire qu'un tour dans l'ancien.
    */

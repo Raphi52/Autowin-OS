@@ -68,7 +68,7 @@ export interface TicketDetail {
   description?: string
   relations?: { kind: string; target: string }[]
   /**
-   * La discussion, du plus ancien au plus récent. Absente avant conv-1228 (2026-10-28) : l'agent qui
+   * La discussion, du plus ancien au plus récent. Absente (2026-10-28) : l'agent qui
    * lisait une fiche n'en voyait jamais les commentaires, souvent là où vit la décision.
    */
   comments?: { author?: string; createdAt?: string; text: string }[]

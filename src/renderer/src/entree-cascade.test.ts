@@ -20,7 +20,7 @@ import {
 } from './entree-cascade'
 
 /**
- * LA CASCADE D'ENTREE D'UNE VUE (conv-987, 2026-10-16, direction « 1 · Cascade » du draft) : les
+ * LA CASCADE D'ENTREE D'UNE VUE (2026-10-16, direction « 1 · Cascade » du draft) : les
  * blocs de la vue montent de 8 px en apparaissant, de haut en bas, un tous les 40 ms.
  *
  * happy-dom ne calcule aucune mise en page : chaque element recoit ici le rectangle qu'il aurait a
@@ -238,7 +238,7 @@ describe('jouerEntreeCascade', () => {
 })
 
 /**
- * L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16, variante « 2 · Elan », 1 s). Le module
+ * L'ENTREE DES CADRES A CHANFREIN (2026-10-16, variante « 2 · Elan », 1 s). Le module
  * marque les cadres coupes de la vue ; le THEME decide (son animation est l'inscription). Seul le
  * CADRE entre : le texte est la tout de suite (retour utilisateur du 16/10 apres la livraison :
  * « le texte doit etre la instantanement, l'animation concerne les box »).
@@ -353,7 +353,7 @@ describe('cadres a chanfrein', () => {
 })
 
 /**
- * L'ENTREE D'UN CADRE QUI S'OUVRE (conv-987, 2026-10-16 : « quand j'ouvre le panneau detail je veux
+ * L'ENTREE D'UN CADRE QUI S'OUVRE (2026-10-16 : « quand j'ouvre le panneau detail je veux
  * l'animation des border ») : le panneau Details du Chat joue le dessin des bords a son ouverture,
  * independamment de l'entree de la vue.
  */
@@ -400,7 +400,7 @@ describe('jouerEntreeCadre', () => {
 
   it('rejouer en plein vol (menu replie puis redeplie) : le style est lu demarque avant de remarquer', () => {
     // Sans ce calcul entre le retrait et la nouvelle marque, le navigateur ne voit aucun changement
-    // et l'animation ne repart pas (conv-987 : « et quand je reduis deploi la left bar aussi »).
+    // et l'animation ne repart pas (« et quand je reduis deploi la left bar aussi »).
     const { panneau } = panneauDetails()
     const arreter = jouerEntreeCadre(panneau, () => true)
     const vus: boolean[] = []

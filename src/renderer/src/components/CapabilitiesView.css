@@ -4,9 +4,9 @@
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
-     le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
+     le meme dans toutes les vues (ViewPage.gabarit.test.ts). */
   padding: 18px 0 20px;
-  /* GABARIT DES VUES (conv-160, ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
+  /* GABARIT DES VUES (ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
      ni rayon de page, ni reflet, ni flou. Elle recopiait le cadre de `.view-page` et apparaissait
      comme une page dans la page. Le cadre est peint une fois, par `.view-page`. */
   color: var(--text);
@@ -136,7 +136,7 @@
   min-width: 0;
   min-height: 0;
   display: grid;
-  /* En-tête, liste, relations. La rangée des onglets internes est partie avec eux (conv-1109) :
+  /* En-tête, liste, relations. La rangée des onglets internes est partie avec eux :
      le registre est choisi par la liste de sections de Settings. */
   grid-template-rows: auto minmax(0, 1fr) auto;
   padding: 18px;
@@ -181,7 +181,7 @@
   font-size: 11px;
 }
 /* La description se lit EN ENTIER dans la liste : elle passe à la ligne au lieu d'être coupée
-   par une ellipse sur une seule ligne (demande utilisateur, 2026-10-16, conv-1011). La donnée
+   par une ellipse sur une seule ligne (demande utilisateur, 2026-10-16). La donnée
    arrivait déjà complète du registre ; seul ce style la tronquait. */
 .control-row p {
   margin: 4px 0 0;
@@ -406,7 +406,7 @@
   color: var(--text-faint);
   font-size: 10px;
 }
-/* RESPONSIVE (conv-244) — mesure : a 1000 px de fenetre l'inspecteur sortait du cadre de 112 px,
+/* RESPONSIVE — mesure : a 1000 px de fenetre l'inspecteur sortait du cadre de 112 px,
    a 820 px la liste aussi. Les seuils lisent la LARGEUR DE LA COLONNE de Settings (conteneur
    `settings`, SettingsView.css), pas celle de l'ecran : le menu deplie ou replie la change. */
 @container settings (max-width: 1050px) {

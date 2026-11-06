@@ -7,7 +7,7 @@ import { bundledSkillsRoot } from '../app/native-registry'
 /**
  * KAIZEN DOIT CONNAITRE SES LEVIERS — dans le texte qui lui est REELLEMENT envoye.
  *
- * Defaut mesure le 2026-09-03 (conv-9). La liste des sept leviers vit dans
+ * Defaut mesure le 2026-09-03. La liste des sept leviers vit dans
  * `skills/kaizen/SKILL.md` et `kaizen-perimetres.test.ts` la garde bien... dans CE fichier. Mais
  * kaizen est un workflow NATIF : `skill-pipeline.ts` rend '' pour la phase kaizen, donc aucun
  * corps de skill n'est charge. Le seul texte qui arrive au modele est `PHASE_BRIEFS.kaizen`, et il

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { rootExecutionRequirements } from './root-execution-contract'
 
 /**
- * conv-597, 2026-09-16, turnId 4e502786-4887-4101-85b3-ea2dee304091.
+ * 2026-09-16, turnId 4e502786-4887-4101-85b3-ea2dee304091.
  *
  * « Finis le Jeu ... online ready a etre publie sur le market » faisait naitre l'obligation
  * « Commit demande publie avec une identite Git verifiable ». Le RUN.md du run la porte en

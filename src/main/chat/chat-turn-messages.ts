@@ -29,7 +29,7 @@ export interface TurnMessageParts {
    *
    * Fourni, le bloc d'état devient un DIFF : la session du provider porte deja l'état complet, le
    * repousser entier le fait repayer PLEIN TARIF a chaque message (il change, donc il n'est jamais
-   * mis en cache). Mesure (conv-614) : 3 043 caracteres d'état a chaque tour, dont
+   * mis en cache). Mesure : 3 043 caracteres d'état a chaque tour, dont
    * 2 821 (93 %) pour la seule liste des skills, qui ne bouge jamais.
    *
    * `diffEtat` existait, teste, depuis le 2026-08-31 — mais n'etait appele NULLE PART.
@@ -50,7 +50,7 @@ export interface TurnMessageParts {
   /**
    * Messages que les agents d'AUTRES fils du même dépôt ont écrits à ce fil (`ecrire_a_un_fil`),
    * déjà mis en forme ; un message de nature « ordre » y est du travail à faire, jamais l'accord de
-   * l'utilisateur. Vide la plupart du temps (conv-1139).
+   * l'utilisateur. Vide la plupart du temps.
    */
   messagesDesFils?: string
   /**
@@ -62,8 +62,8 @@ export interface TurnMessageParts {
    */
   skillBody?: string
   /**
-   * Procédure `grow` chargée par l'app au début d'une demande d'action (`chat/grow-au-debut.ts`,
-   * conv-1445) : entière à la première demande d'action d'une session, un rappel d'une ligne
+   * Procédure `grow` chargée par l'app au début d'une demande d'action (`chat/grow-au-debut.ts`)
+   * Entière à la première demande d'action d'une session, un rappel d'une ligne
    * ensuite. Vide pour une question, un avis ou une analyse.
    */
   growAuDebut?: string
@@ -75,7 +75,7 @@ export interface TurnMessageParts {
     orientation?: boolean
     /**
      * Message de l'agent dont le tour s'est arrete avant sa fin (Stop, fermeture, erreur), relu dans
-     * le store par `run-pilot-chat.ts`. Voir `reprise-apres-arret.ts` (conv-1142).
+     * le store par `run-pilot-chat.ts`. Voir `reprise-apres-arret.ts`.
      */
     arrete?: boolean
     /**
@@ -126,7 +126,7 @@ export const CARACTERES_PAR_TOKEN = 4
  * https://platform.claude.com/docs/en/about-claude/pricing
  * Soit au pire ~ (2576 x 1449) / 750 = 4 977 tokens. On retient ce MAJORANT plutot qu'une
  * estimation fine : la borne sert a ne pas depasser la fenetre, sous-estimer y renvoie
- * directement (cf. conv-312, deux tours morts sur « Prompt is too long »).
+ * directement (deux tours morts sur « Prompt is too long »).
  */
 const TOKENS_PAR_PIECE_JOINTE = 5_000
 
@@ -283,7 +283,7 @@ export function depuisDerniereCompaction<T extends MessageBorne>(history: readon
     if (demande.role !== 'user' || demande.content.trim() !== COMPACT_REQUEST) continue
     if (resume.role !== 'assistant') continue
     /*
-     LA DEMANDE EST GARDEE AVEC SON RESUME — mesure du 2026-09-08 (conv-342).
+     LA DEMANDE EST GARDEE AVEC SON RESUME — mesure du 2026-09-08.
      Elle ne coutait presque rien (367 caracteres) et elle est la MARQUE qui prouve qu une
      compaction a eu lieu. La retirer effacait cette marque : `compactionsAbouties`, applique en aval
      de cette coupe (`agent-pilot`, cle de session), comptait alors zero — et la session du
@@ -405,7 +405,7 @@ export interface TurnMessageBlock {
  * dériverait de la première à la prochaine évolution du format.
  */
 /**
- * LES CONSIGNES DU TOUR PRECEDENT, REMISES A UNE SESSION REPRISE (conv-844, 2026-09-24).
+ * LES CONSIGNES DU TOUR PRECEDENT, REMISES A UNE SESSION REPRISE (2026-09-24).
  *
  * fix-ok: session reprise = seul `lastUserMessage` part ; une orientation posee pendant un tour
  * joue SANS le modele (`/kaizen` -> orchestrate) ou coupe par un redemarrage n'etait jamais remise.
@@ -436,7 +436,7 @@ export function orientationsDuTourPrecedent(history: TurnMessageParts['history']
 }
 
 /**
- * LES MOTS DE L'UTILISATEUR, ENCADRES (conv-889, 2026-09-30).
+ * LES MOTS DE L'UTILISATEUR, ENCADRES (2026-09-30).
  *
  * Tout le tour part dans UN seul message de role `user` : etat de l'app, echo de memoire, rappel
  * d'anciennes conversations, relances automatiques ET la demande. Seul le prefixe `UTILISATEUR:`
@@ -516,7 +516,7 @@ export function buildTurnMessageBlocks(parts: TurnMessageParts): TurnMessageBloc
         { name: 'skillBody', text: parts.skillBody ?? '' },
         { name: 'growAuDebut', text: parts.growAuDebut ?? '' },
         // Une page `html-render` de l'agent y revient en texte VISIBLE, pas en code : sinon ses
-        // balises et son `<style>` repartaient a chaque tour (conv-1074). Les mots de l'utilisateur,
+        // balises et son `<style>` repartaient a chaque tour. Les mots de l'utilisateur,
         // eux, restent intacts.
         ...parts.history.map((m, rang) => ({
           name: `historique:${m.role === 'user' ? 'utilisateur' : 'agent'}:${rang}`,
@@ -532,7 +532,7 @@ export function buildTurnMessages(parts: TurnMessageParts): string[] {
 
 /**
  * « Compte rendu » et « rendre compte » contiennent le mot « compte » sans demander aucun compte.
- * Mesure conv-879 (2026-09-30 → 2026-10-12) : le gabarit des tâches mail/Teams finit par
+ * Mesure (2026-09-30 → 2026-10-12) : le gabarit des tâches mail/Teams finit par
  * « <le compte rendu : …> », et chaque tri de notification conclu sans lecture était relancé
  * (3 fois dans ce fil). On retire ces expressions AVANT de chercher le mot : une vraie demande
  * qui les accompagne (« combien de comptes rendus ? ») reste vue par ses autres mots.
@@ -555,7 +555,7 @@ const EXPRESSIONS_SANS_DEMANDE_DE_COMPTE =
  * coûterait une itération inutile ; on préfère le faux négatif.
  */
 /**
- * La commande a-t-elle OBSERVÉ le réel, comme une lecture de dossier ? (conv-267, 2026-10-12)
+ * La commande a-t-elle OBSERVÉ le réel, comme une lecture de dossier ? (2026-10-12)
  *
  * Mesure sur un vrai tour : « combien de réponses le ping a-t-il reçues ? » a été relancé par
  * `exigeUnChiffreVerifie` alors que le nombre venait de la sortie de `run` (91 reçues sur 91). La
@@ -579,7 +579,7 @@ export function commandeAObserveLeReel(
 }
 
 /*
- * UN CALCUL N'EST PAS UN COMPTE (conv-1095, 2026-10-22, tour 1e32407a). « Question rapide, sans rien
+ * UN CALCUL N'EST PAS UN COMPTE (2026-10-22, tour 1e32407a). « Question rapide, sans rien
  * lancer : combien font 2 + 2 ? » a été relancé comme une demande de compte restée sans lecture : un
  * second appel au modèle payé, et une réponse alourdie d'un paragraphe sur la relance. La garde
  * existe parce qu'un compte de choses du MONDE (fichiers, tests, lignes) ne se devine pas ; ici les
@@ -602,7 +602,7 @@ const CALCUL_POSE = new RegExp(
 )
 
 /*
- * LA QUESTION EN ANGLAIS (conv-1197, 2026-10-28). L'interface peut être en anglais, et l'utilisateur
+ * LA QUESTION EN ANGLAIS (2026-10-28). L'interface peut être en anglais, et l'utilisateur
  * y écrit « how many », « count », « number of » : rien de tout cela n'était lu comme une demande de
  * compte, donc un chiffre deviné sans lecture sortait sans relance. Mêmes précautions qu'en français :
  * les tournures où « count » ou « number » ne demandent rien (« count on », « count as », « a number
@@ -658,7 +658,7 @@ function normaliserPourComparer(texte: string): string {
 }
 
 /**
- * Retire du message les lignes RECOLLÉES depuis une réponse précédente de l'agent (conv-335, 2026-10-19).
+ * Retire du message les lignes RECOLLÉES depuis une réponse précédente de l'agent (2026-10-19).
  *
  * Mesure : l'utilisateur recolle la réponse de l'agent et n'y ajoute qu'une question à lui (« Ca sert
  * vraiment ces lecons? »). Le texte recollé disait deux fois « la liste du fil » ; la garde du chiffre
@@ -710,7 +710,7 @@ export function exigeUnChiffreVerifie(
     AUCUN chiffre n'est exigé dans la réponse, et c'est une CORRECTION mesurée.
 
     Première version : la relance ne mordait que si la réponse contenait un nombre — l'agent qui
-    devine. Relevé du 2026-08-15 après ce correctif : encore 9/10, et l'échec (`conv-1205`) répondait
+    devine. Relevé du 2026-08-15 après ce correctif : encore 9/10, et l'échec répondait
     « Je vais vérifier directement le dossier `src/main` » — une ANNONCE, sans chiffre, sans action,
     le tour se terminant là. La garde ne pouvait pas mordre : elle cherchait un nombre absent.
 
@@ -725,7 +725,7 @@ export function exigeUnChiffreVerifie(
 /**
  * Ce qu'on renvoie à l'agent quand `exigeUnChiffreVerifie` mord : la VRAIE raison de la relance.
  *
- * Avant (conv-335, 2026-10-19) : « tu viens d'avancer un nombre SANS avoir appelé la moindre commande
+ * Avant (2026-10-19) : « tu viens d'avancer un nombre SANS avoir appelé la moindre commande
  * de lecture ». Or la garde ne cherche aucun nombre dans la réponse (voir plus haut) : elle mord sur
  * une demande de compte restée sans lecture. Accusé d'un chiffre qu'il n'avait pas écrit, l'agent est
  * allé « vérifier ses chiffres » — un Glob de 25 s en délai dépassé, puis 2 minutes de lectures.
@@ -758,7 +758,7 @@ export function exigeUneConclusion(aAgi: boolean, reponse: string): boolean {
   /*
    * UNE RUBRIQUE SE RECONNAIT A SA POSITION, PAS A SES LETTRES.
    *
-   * Mesure conv-44 (2026-09-01) : « t'as termine sans me donner le bloc de cloture ». La version
+   * Mesure (2026-09-01) : « t'as termine sans me donner le bloc de cloture ». La version
    * precedente cherchait `\bfait\b` et `recommand` N'IMPORTE OU dans le texte. Or
    * « fait » et « recommandation » sont deux mots courants du francais : la prose
    * « Ma RECOMMANDation du tour precedent etait a cote. Je depose le FAIT. » armait les DEUX
@@ -781,7 +781,7 @@ export function exigeUneConclusion(aAgi: boolean, reponse: string): boolean {
 /**
  * Une action a ÉCHOUÉ mais la réponse annonce « Fait » sans le dire — le mensonge le plus coûteux.
  *
- * TROUVÉ le 2026-08-15 dans une conversation de l'utilisateur (`conv-1178`, statut `cancelled`) : sa
+ * TROUVÉ le 2026-08-15 dans une conversation de l'utilisateur (statut `cancelled`) : sa
  * dernière action est un `edit_file` avec `ok: false`, et le texte qu'il lit se termine par
  * « ### ✅ Fait — Le défaut reste confirmé… ». L'échec n'existe que dans `parts[].ok = false`,
  * invisible à la lecture.
@@ -923,7 +923,7 @@ export function exigeCorrigerEtPoursuivre(echecNonCorrige: boolean, reponse: str
    * mot de la liste, se faisait relancer deux fois puis accuser de tourner en rond.
    */
   /*
-   * Chaque forme a sa jumelle ANGLAISE (conv-1197, 2026-10-28) : l'agent répond en anglais quand
+   * Chaque forme a sa jumelle ANGLAISE (2026-10-28) : l'agent répond en anglais quand
    * l'interface l'est, et « I need your approval » ou « Should I…? » ne désarmaient plus rien —
    * un mur réel, dit honnêtement, était relancé comme un abandon.
    */
@@ -979,7 +979,7 @@ function sansAccents(texte: string): string {
  * Les mots par lesquels une reponse AVOUE un echec. Une seule liste, partagee par la detection
  * d'aveu et par le retrait des negations : deux listes desynchronisees etaient le defaut d'origine.
  */
-// Les mots anglais (conv-1197, 2026-10-28) : « the edit failed » n'était pas lu comme un aveu, et
+// Les mots anglais (2026-10-28) : « the edit failed » n'était pas lu comme un aveu, et
 // l'agent honnête qui répond en anglais était relancé pour un échec qu'il venait de nommer.
 const MOTS_DECHEC =
   'echou|echec|erreur|impossible|refus|bloqu|probleme|souci|fail|error|unable|denied|blocked|problem'
@@ -1010,7 +1010,7 @@ const TOURNURES_DECHEC =
  * travers.
  */
 /*
- * Négateurs anglais (conv-1197) : « no errors », « nothing failed », « didn't fail ». Le « n't » n'est
+ * Négateurs anglais : « no errors », « nothing failed », « didn't fail ». Le « n't » n'est
  * négateur qu'après un AUXILIAIRE (did, has, was…) : « couldn't fix the error » reste un aveu.
  */
 const NEGATIONS_DECHEC = new RegExp(
@@ -1059,7 +1059,7 @@ export function exigeAgirPasAnnoncer(
   const q = (question ?? '').toLowerCase()
   // Un verbe d'ACTION à l'impératif ou à l'infinitif : l'utilisateur demande un effet, pas un avis.
   /*
-   * Les deux côtés ont leur forme ANGLAISE (conv-1197, 2026-10-28) : l'interface en anglais fait
+   * Les deux côtés ont leur forme ANGLAISE (2026-10-28) : l'interface en anglais fait
    * répondre l'agent en anglais, et « I'll first identify… » récité sans agir passait inaperçu.
    */
   const demandeUneAction =
@@ -1084,7 +1084,7 @@ export function exigeAgirPasAnnoncer(
 /**
  * Une QUESTION a-t-elle ete posee sans que rien n'ait ete LU ?
  *
- * LE DEFAUT, mesure le 2026-08-25 sur conv-1399. L'utilisateur demande « je vois toujours le fond
+ * LE DEFAUT, mesure le 2026-08-25. L'utilisateur demande « je vois toujours le fond
  * d'ecran [...] je veux une reproduction en 3d ». L'agent repond par un choix a quatre options
  * (« profondeur sur l'image existante » ou « vraie scene 3D qui remplace l'image ») en ayant lu
  * ZERO fichier -- et l'une de ses options etait DEJA implementee et committee dans le depot. Il a
@@ -1111,7 +1111,7 @@ export function questionPoseeSansAvoirLu(
 /**
  * UNE LECTURE NATIVE compte comme une lecture.
  *
- * LE DEFAUT, mesure le 2026-09-03 (conv-167). Le garde ci-dessus ne comptait que trois commandes
+ * LE DEFAUT, mesure le 2026-09-03. Le garde ci-dessus ne comptait que trois commandes
  * Autowin (`list_files`, `read_file`, `find_in_files`). Depuis que le tour de chat tourne en
  * `bypassPermissions` (providers/claude.ts), la consigne demande au contraire de LIRE avec les
  * outils natifs -- `Read`, `Grep`, `Glob`, ou un `Bash` de type `cat`/`sed -n`/`grep`. Ces appels
@@ -1128,13 +1128,13 @@ export function questionPoseeSansAvoirLu(
  */
 // WebFetch / WebSearch OBSERVENT le monde comme Read : un chiffre lu sur le web n'est pas devine.
 const LECTEURS_NATIFS = /^(Read|Grep|Glob|WebFetch|WebSearch)\b/
-// fix-ok: turn 852bb2fd-25e4-40dd-a959-57d9337b084c (conv-844) -- `cd D:/x; sed -n ...` n'etait pas
+// fix-ok: turn 852bb2fd-25e4-40dd-a959-57d9337b084c -- `cd D:/x; sed -n ...` n'etait pas
 // reconnu (ancre sur le 1er mot) : relance « question sans lecture » a tort, question affichee 2x.
-// MEME DEFAUT, AUTRES FORMES (conv-861, 2026-09-25) : `cd X; date; tail ...`, `N=...; tail ...` et
+// MEME DEFAUT, AUTRES FORMES (2026-09-25) : `cd X; date; tail ...`, `N=...; tail ...` et
 // `git -C X log` -- trois relances a tort dans le meme fil. On ne regarde donc plus le 1er mot : la
 // commande est DECOUPEE en segments (hors guillemets) et chaque segment est classe sur une liste
 // FERMEE. Le patch par forme (un `cd` ici, un `date` la) ne finissait jamais.
-// `curl` lit une API : conv-103 (2026-09-23→25), 4 relances « chiffre non verifie » a tort sur des
+// `curl` lit une API : (2026-09-23→25), 4 relances « chiffre non verifie » a tort sur des
 // nombres lus via curl sur l'API Azure DevOps.
 const LECTEUR_BASH = /^(cat|sed|head|tail|grep|rg|ls|find|wc|nl|type|curl)$/
 const SOUS_COMMANDE_GIT_LECTRICE = /^(log|show|diff|status)$/
@@ -1248,7 +1248,7 @@ function segmentNeutre(segment: SegmentBash): boolean {
   return commande === undefined || NEUTRE_BASH.test(commande)
 }
 
-// `statutComplet` vit dans src/shared/chat-turn.ts depuis conv-1228 : le journal du bloc Actions,
+// `statutComplet` vit dans src/shared/chat-turn.ts : le journal du bloc Actions,
 // côté interface, en a besoin aussi. Ré-exporté ici pour ses appelants du main.
 export { statutComplet } from '../../shared/chat-turn'
 
@@ -1259,7 +1259,7 @@ export { statutComplet } from '../../shared/chat-turn'
  * (`Bash terminé - 3 s`) et son message d'erreur (`Bash erreur - …`) parlent d'une commande déjà
  * classée à son départ. Avec un « · » facultatif, « terminé - 3 s » devenait la commande à juger,
  * qui n'est pas une lecture, donc une ACTION : un tour qui n'avait fait qu'un `grep` passait pour
- * un tour qui avait agi, et la garde « annonce sans action » se taisait (conv-341, 2026-10-19).
+ * un tour qui avait agi, et la garde « annonce sans action » se taisait (2026-10-19).
  */
 function commandeBash(texte: string): string | null {
   const bash = /^Bash(?:\s*·\s*(.*))?$/s.exec(texte)
@@ -1287,15 +1287,15 @@ function lecturePure(commande: string): boolean {
 /**
  * UN OUTIL NATIF QUI AGIT compte comme une action — pendant de `statusEstUneLecture`.
  *
- * Mesure (conv-782) : un tour qui avait cree un script (Write), modifie une skill
+ * Mesure : un tour qui avait cree un script (Write), modifie une skill
  * (Edit) et joue des tests (Bash) a recu « tu as ANNONCE ce que tu allais faire, sans rien faire ».
  * `anyActionExecuted` n'est leve que par un `<cmd>` Autowin ; les outils natifs passent par
  * `chunk.status`. Est une action : un ecrivain natif, ou un `Bash` qui n'est pas une lecture PURE.
  *
- * Pure, et non plus « le 1er mot lit » (conv-861) : depuis que `statusEstUneLecture` reconnait une
+ * Pure, et non plus « le 1er mot lit » : depuis que `statusEstUneLecture` reconnait une
  * lecture n'importe ou dans la commande, `date; rm -rf x; cat y` CONTIENT une lecture -- mais il agit.
  */
-// `Workflow` (conv-1366) : lancer un chantier est une action, sinon le tour qui en lance un passerait
+// `Workflow` : lancer un chantier est une action, sinon le tour qui en lance un passerait
 // pour une annonce sans geste, et finirait sans bloc de clôture.
 const ECRIVAINS_NATIFS = /^(Write|Edit|MultiEdit|NotebookEdit|Workflow)\b/
 
@@ -1313,7 +1313,7 @@ export function statusEstUneAction(status: string | undefined): boolean {
  * En direct, `anyReadExecuted` et `actionNativeCeTour` sont levés par les battements `chunk.status`
  * (« Read · x », « Bash · sed -n … »). Quand l'app redémarre pendant l'appel, ces battements ont
  * été vus par le process MORT : le process repris ne relit que le journal du relais, dont les
- * outils arrivent en `executionEvidence`. Mesuré le 2026-10-16 (conv-1002, tour
+ * outils arrivent en `executionEvidence`. Mesuré le 2026-10-16 (tour
  * 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc) : 12 lectures dans l'appel récupéré, drapeau resté faux,
  * relance « question sans lecture » payée 1,70 $. On reconstitue donc le battement (`outil · cible`,
  * format de `statutComplet`) et on le passe aux DEUX mêmes classeurs : aucune règle dupliquée.
@@ -1380,7 +1380,7 @@ export function exigePreuveAvantDePromettre(reponse: string, uneActionAEuLieu: b
     /\bje (?:te |vous )?(?:dirai|préviendrai|previendrai|informerai|recontacte|recontacterai)\b/i.test(
       texte
     ) ||
-    // Les mêmes promesses en anglais (conv-1197, 2026-10-28), l'agent répondant dans la langue choisie.
+    // Les mêmes promesses en anglais (2026-10-28), l'agent répondant dans la langue choisie.
     /\bI(?:[’']ll| will) (?:get back to you|come back to you|report back|keep you (?:posted|updated|informed|in the loop)|let you know|update you|ping you)\b/i.test(
       texte
     )
@@ -1455,7 +1455,7 @@ export const RELANCE_BLOC_VISUEL_NON_FERME =
   '```html-render et fermée par ``` sur une ligne seule. Elle REMPLACE la précédente à l’écran.'
 
 /**
- * RENDRE UN GESTE FAISABLE — garde déterministe. Mesuré conv-843, tour
+ * RENDRE UN GESTE FAISABLE — garde déterministe. Mesuré, tour
  * c4e319ca-783f-4b49-9b87-971cd6392c8e (saisie ts 1790275899514 « fais le ») : après avoir piloté
  * le bureau (desktop_act / desktop_observe), le chat a clos par « À faire : Va dans Brave… Saisis
  * le code CAP56FNHZ » — un geste que ses outils atteignaient. La consigne en prose (commit
@@ -1473,7 +1473,7 @@ export function exigeFaireLeGeste(reponse: string, bureauUtilise: boolean): bool
     )
   )
     return false
-  // Chaque forme a sa jumelle anglaise (conv-1197, 2026-10-28) : « To do: 1. Go to Brave… ».
+  // Chaque forme a sa jumelle anglaise (2026-10-28) : « To do: 1. Go to Brave… ».
   const rubrique = /(?:^|\n)\s*\**\s*(?:(?:à|a) faire|to ?do|next steps?)\b/i.test(texte)
   const GESTE =
     /(?:^|\n)\s*(?:\d+[.)]|[-*])?\s*\**(?:va dans|ouvre|clique|saisis|tape|colle|appuie|sélectionne|selectionne|go to|open|click|enter|type|paste|press|select)\b/i
@@ -1551,7 +1551,7 @@ function aEcritDuCode(trace: ExecutionEvidence, dossier: string): boolean {
 }
 
 /**
- * LE TOUR A ÉCRIT DU CODE SANS PREUVE RETENUE (conv-1423, 2026-11-01, repris de Paperclip).
+ * LE TOUR A ÉCRIT DU CODE SANS PREUVE RETENUE (2026-11-01, repris de Paperclip).
  *
  * Mesuré du 29/10 au 01/11 sur 139 demandes qui ont vraiment écrit du code par leurs Edit/Write : 66 %
  * finissent sur un test rouge, 5 % sans aucun test. Rien ne relançait l'agent sur ce point : le fil

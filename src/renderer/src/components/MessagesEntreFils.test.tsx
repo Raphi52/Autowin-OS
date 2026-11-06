@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { MessagesEntreFils, type MessageEntreFilsVu } from './MessagesEntreFils'
 
 /*
- * conv-1139 : ce que les agents de deux fils s'écrivent est VISIBLE dans les deux fils, séparé des
+ * Ce que les agents de deux fils s'écrivent est VISIBLE dans les deux fils, séparé des
  * messages de l'utilisateur.
  */
 let ecouteur: ((e: { type: string; scope?: string }) => void) | undefined
@@ -99,7 +99,7 @@ describe('MessagesEntreFils', () => {
   })
 
   /*
-   * conv-1139, 2026-10-25 (/draft, proposition 2 « Bulles » choisie) : les messages se lisent
+   * 2026-10-25 (/draft, proposition 2 « Bulles » choisie) : les messages se lisent
    * comme un petit chat, RANGÉS PAR FIL — un groupe « avec conv-X » par fil correspondant, le
    * groupe le plus récemment actif en bas ; l'avertissement n'accompagne plus que les ordres.
    */

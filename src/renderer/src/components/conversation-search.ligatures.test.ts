@@ -6,7 +6,7 @@ import {
 } from './conversation-search'
 
 // Migré de scripts/arena-panel/p14-recherche-ligatures.mts (banc /arena, commit 191ab51d), retiré
-// le 2026-10-22 (residus, conv-1062). Défaut d'origine : la recherche repliait les accents avec sa
+// le 2026-10-22 (residus). Défaut d'origine : la recherche repliait les accents avec sa
 // PROPRE copie, sans les ligatures — « oeuvre » ne trouvait pas « l'œuvre ». Le surlignage doit
 // rester exact sur le texte d'ORIGINE, même quand le repliage change la longueur (œ -> oe).
 const conv = (id: string, title: string): ConversationSearchSource => ({

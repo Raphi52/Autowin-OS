@@ -49,7 +49,7 @@ import { ChatMessageRow, DirectiveReceiptRow } from './ChatMessageRow'
 import { noterDeclencheursListe, declencheursDeListe } from './rendu-long'
 import { estNonVue } from './conversation-seen'
 
-// Extrait de ChatView.tsx tel quel, sans changement de comportement (conv-1508).
+// Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type ListeDesConversationsCtx = {
   active: import('./chat-view-types').Conv | undefined
   activeDirectiveReceiptsByMessage: Map<number, import('./chat-view-types').DirectiveReceipt[]>
@@ -128,7 +128,7 @@ export type ListeDesConversationsCtx = {
   toggleConvSelection: (id: string) => void
 }
 
-// Type de retour inféré : l'objet des valeurs que ChatView.tsx relit après l'appel (conv-1508).
+// Type de retour inféré : l'objet des valeurs que ChatView.tsx relit après l'appel.
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   const {
@@ -193,7 +193,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
    * qui fait apparaître la couleur, l'état vit sur le disque et non dans le composant.
    *
    * L'appel n'est PAS écrit `window.api.conversationsSetHighlight?.(…)`. Mesure du 2026-09-09
-   * (conv-384) : l'affichage se recharge à chaud, le processus principal NON — l'entrée de menu
+   * L'affichage se recharge à chaud, le processus principal NON — l'entrée de menu
    * existait donc avant le canal qui la sert. L'appel « si ça existe » ne faisait alors rien du
    * tout, sans message ni erreur : l'utilisateur a cliqué sur un bouton mort et n'avait aucun moyen
    * de le savoir. Un pont absent est un ÉTAT DE L'APPLICATION, pas un cas à ignorer : il se dit, et
@@ -228,7 +228,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   )
 
   /**
-   * Fil privé du village commun (D6, conv-1429) : le tanuki reste chez les collègues, sans titre.
+   * Fil privé du village commun (D6) : le tanuki reste chez les collègues, sans titre.
    * Même contrat que `marquerInactive` : un pont absent (preload d'avant redémarrage) se dit.
    */
   const marquerPrive = useCallback(
@@ -330,7 +330,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     if (amorce.current || convs.length === 0) return
     amorce.current = true
     // `projectPath` seulement, jamais `categorie` : un libellé de classement n'est pas un dossier
-    // de travail, et l'amorçage est justement par où ils entraient dans la liste (conv-81).
+    // de travail, et l'amorçage est justement par où ils entraient dans la liste.
     const utilises = convs
       .map((conv) => conv.projectPath?.trim())
       .filter((chemin): chemin is string => estCheminDeDossier(chemin))
@@ -346,7 +346,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   }, [convs])
 
   /**
-   * IMPORT claude.exe (conv-5, 2026-09-23) : les projets déjà ouverts dans le CLI Claude
+   * IMPORT claude.exe (2026-09-23) : les projets déjà ouverts dans le CLI Claude
    * rejoignent la liste des dossiers de travail, À CHAQUE lancement — un projet commencé demain
    * dans claude.exe arrivera seul. Le main lit et filtre le profil (`~/.claude.json`) ; ici on
    * fusionne, et la mémoire des retraits garantit qu'un dossier ôté par la croix ne revient pas.
@@ -380,7 +380,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   }, [])
 
   /*
-    « THIS COMPUTER » (conv-298, 2026-10-16 : « en CWD ajoute This computer dans les choix ») :
+    « THIS COMPUTER » (2026-10-16 : « en CWD ajoute This computer dans les choix ») :
     travailler sur la machine, sans projet — claude.exe lancé depuis le dossier personnel. Seul le
     main connaît ce dossier ; pont absent (preload d'avant redémarrage) = pas d'entrée, jamais une
     panne.
@@ -424,8 +424,8 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
    *
    * Elles ne sont pas memorisees en local comme les dossiers : une categorie n'existe QUE portee
    * par au moins un fil, donc la liste se deduit et ne peut pas se desynchroniser. Depuis la
-   * separation des deux roles (conv-81), le menu « Ranger dans… » ne proposait plus que des
-   * chemins : classer sous « Fiches Team » etait devenu impossible a la souris (conv-79).
+   * separation des deux roles, le menu « Ranger dans… » ne proposait plus que des
+   * chemins : classer sous « Fiches Team » etait devenu impossible a la souris.
    */
   const categoriesConnues = useMemo(
     () =>
@@ -442,7 +442,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   const [saisieCategorie, setSaisieCategorie] = useState<string | null>(null)
 
   /*
-   * À QUEL CHEF APPARTIENT CHAQUE FIL DE LOT (conv-1151 lot 5, puis conv-1158). UNE lecture groupée,
+   * À QUEL CHEF APPARTIENT CHAQUE FIL DE LOT (lot 5). UNE lecture groupée,
    * `plansDeLots('tous')`, rend tous les plans gardés : le chef, et le fil, le rang et le total de
    * chaque lot. Plus de repérage par le titre « Lot N/M — » : un fil de lot renommé reste rangé.
    * Relue en UN appel à chaque événement `plans-de-lots` (le coordinateur le signale à chaque
@@ -486,7 +486,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   }, [])
 
   /*
-   * LA SUPER CONV DU FIL OUVERT (conv-1315) : sur un fil chef ou un de ses lots, le panneau de chat
+   * LA SUPER CONV DU FIL OUVERT : sur un fil chef ou un de ses lots, le panneau de chat
    * porte les mêmes onglets et la même frise que la case de mosaïque (`SuperConvDuChat`).
    */
   const chefDuFilOuvert = useMemo(
@@ -497,7 +497,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   const ongletDuFilOuvert =
     planDuFilOuvert && activeId ? ongletDuFil(planDuFilOuvert, activeId) : null
   /*
-   * LES BUREAUX CACHÉS DU CHANTIER (conv-1378, 2026-10-31) : le panneau s'ouvre quand le fil lance un
+   * LES BUREAUX CACHÉS DU CHANTIER (2026-10-31) : le panneau s'ouvre quand le fil lance un
    * bureau, et il remplace le bloc qui s'affichait dans le fil. Toute la super conv compte : un lot
    * ouvre son bureau dans son propre fil. Vide en mosaïque : plusieurs fils à l'écran, le panneau les
    * montre tous et rien ne s'ouvre seul, faute de place à côté d'eux.
@@ -512,7 +512,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     onBureauLance: () => setPanneauOutil('bureaux')
   })
   /*
-   * Les titres des onglets de la super conv (conv-1286). La signature garde la MÊME Map tant
+   * Les titres des onglets de la super conv. La signature garde la MÊME Map tant
    * qu'aucun titre ne change : `convs` est refait à chaque rafraîchissement de la liste, et une Map
    * neuve redessinerait onglets et frise, que leur `memo` protège du flux.
    */
@@ -524,7 +524,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     () => new Map(JSON.parse(signatureDesTitres) as [string, string][]),
     [signatureDesTitres]
   )
-  // Une recherche montre tout, lots compris : chercher, c'est vouloir voir (conv-1381).
+  // Une recherche montre tout, lots compris : chercher, c'est vouloir voir.
   const rechercheEnCours = convQuery.trim() !== ''
   const lotsMasques = useMemo<ReadonlySet<string>>(
     () => (rechercheEnCours ? new Set() : lotsSousOnglets(liensDeLots, titresDesFils)),
@@ -534,7 +534,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
     () => activiteDesLots(convs, liensDeLots, busyConversations),
     [convs, liensDeLots, busyConversations]
   )
-  // Le signe de chaque fil chef dans la liste (conv-1395) : des chaînes, pour que la ligne mémorisée
+  // Le signe de chaque fil chef dans la liste : des chaînes, pour que la ligne mémorisée
   // ne se redessine que si SON signe change.
   const signesSuperConv = useMemo(
     () => signesDesSuperConvs(convs, liensDeLots, busyConversations),
@@ -572,7 +572,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
      * reste TOUJOURS en tête, hors du tri par date entre groupes (le trier n'aurait aucun sens : il
      * contient par construction la conversation la plus récente).
      */
-    // `langue` : « Récent » et « Divers » suivent la langue de l'interface (conv-1170).
+    // `langue` : « Récent » et « Divers » suivent la langue de l'interface.
     const recent = groupeRecent(
       entrees,
       (entree) => recenceUtilisateur(entree.hit.conversation),
@@ -674,7 +674,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   )
 
   /**
-   * FIL RENDU, MÉMOÏSÉ. Mesuré (conv-1464) : chaque caractère tapé dans le composer re-rendait la
+   * FIL RENDU, MÉMOÏSÉ. Mesuré : chaque caractère tapé dans le composer re-rendait la
    * liste ENTIÈRE, et `askReponseDuFil`/`lastUserPromptBefore` balaient le fil pour CHAQUE
    * message → O(n²) balayages par touche (400 pour 5 caractères sur 80 messages, mesuré par
    * `ChatView.frappe-cout.test.tsx`). D'où le gel à la frappe sur une conversation longue.
@@ -684,7 +684,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   // gels `vue-chat`) ; les index restent ceux du fil ENTIER, clés et balayages compris.
   const debutFil = useDebutProgressif(activeId, messages.length)
   // Tes messages pas encore rendus en haut du fil : l'ascenseur à crans les compte pour garder la
-  // numérotation du fil ENTIER pendant le rendu par tranches (conv-1114).
+  // numérotation du fil ENTIER pendant le rendu par tranches.
   const messagesUtilisateurAvantDebut = useMemo(
     () => messages.slice(0, debutFil).filter((message) => message.role === 'user').length,
     [messages, debutFil]
@@ -710,8 +710,8 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
               onAnswerAsk={answerAsk}
               /* VERROU DURABLE : seule une VRAIE reponse (le texte que le bloc envoie) ferme la
              question. Derive du fil, donc vrai apres un remontage comme apres un redemarrage.
-             Se fermer sur n'importe quel message posterieur avalait le clic (conv-50). Le TEXTE
-             de la reponse dit aussi au bloc quelle ligne encadrer (conv-240). */
+             Se fermer sur n'importe quel message posterieur avalait le clic. Le TEXTE
+             de la reponse dit aussi au bloc quelle ligne encadrer. */
               askReponse={
                 message.role === 'assistant' ? askReponseDuFil(messages, index) : undefined
               }
@@ -779,7 +779,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
    * sans invalider la memoire.
    */
   /*
-   * LE GEL DE LA LISTE NOMME SON DÉCLENCHEUR (conv-1115, 2026-10-23) : les données de la liste qui
+   * LE GEL DE LA LISTE NOMME SON DÉCLENCHEUR (2026-10-23) : les données de la liste qui
    * ont changé depuis son dernier rendu validé partent avec le gel (`rendu-long.ts`). La référence
    * n'avance qu'APRÈS validation : un double rendu (StrictMode) recalcule les mêmes noms.
    */
@@ -912,7 +912,7 @@ export function useListeDesConversations(ctx: ListeDesConversationsCtx) {
   )
 
   /*
-   * L'AVIS DE L'APPLICATION, DANS LES DEUX VUES (conv-1038, 2026-10-21). Il ne vivait que dans la
+   * L'AVIS DE L'APPLICATION, DANS LES DEUX VUES (2026-10-21). Il ne vivait que dans la
    * vue du fil unique : en mosaïque, rien ne l'affichait. Mesuré sur « Essaie 3 façons », qui bascule
    * en mosaïque PUIS écrit son avis (copies ouvertes, coût en tours) — l'utilisateur ne le voyait
    * jamais. En mosaïque, il flotte au-dessus des fenêtres, dans `.chat-avis-mosaique` (ChatMosaic.css).

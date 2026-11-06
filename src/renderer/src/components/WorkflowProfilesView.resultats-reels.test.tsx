@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkflowProfilesView } from './WorkflowProfilesView'
 
 /**
- * PISTES 1 ET 3 (conv-1070) — la vue Workflows dit ce que chaque workflow a RÉELLEMENT donné, et
+ * PISTES 1 ET 3 — la vue Workflows dit ce que chaque workflow a RÉELLEMENT donné, et
  * ce que veut dire « actif ».
  *
  * Piste 1 : la vue n'affichait que les bancs d'essai. L'entrée qui ferait échouer ce test si

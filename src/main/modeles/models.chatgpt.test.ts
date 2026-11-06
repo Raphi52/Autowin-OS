@@ -4,13 +4,13 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CodexAppServerModel } from '../providers/codex-model-source'
 
-// Le catalogue lance `agy models` quand agy est installé (conv-1530) : jamais dans ces tests.
+// Le catalogue lance `agy models` quand agy est installé : jamais dans ces tests.
 vi.mock('../providers/agy-modeles', () => ({ catalogueAgy: async () => [] }))
 import { discoverImportedModels, loadCachedImportedModels } from './models'
 import { CodexCliIntrouvable } from '../providers/codex'
 
 /**
- * LE CATALOGUE CHATGPT, rétabli le 2026-10-31 (conv-1414) : ce que le CLI connecté déclare pour le
+ * LE CATALOGUE CHATGPT, rétabli le 2026-10-31 : ce que le CLI connecté déclare pour le
  * compte, rien d'autre. La forme du listing est celle mesurée ce jour-là avec le CLI 0.166.
  */
 const modele = (

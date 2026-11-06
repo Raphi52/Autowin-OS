@@ -213,7 +213,7 @@ function cappedBehaviourFiles(groups: BehaviourFile[][]): BehaviourFile[] {
 /**
  * MÊME canonisation que `realpathSync`, sans bloquer. `fs/promises.realpath` est la version NATIVE :
  * sous Windows elle développe les noms courts (`PRENOM~1.NOM` → nom long), alors que `realpathSync`
- * (utilisé par `instruction()` et `normalizeQuery`) les garde. Mesuré le 2026-10-16 (conv-984) : avec
+ * (utilisé par `instruction()` et `normalizeQuery`) les garde. Mesuré le 2026-10-16 : avec
  * un TEMP en nom court, un fichier découvert et le même fichier vu par la chaîne portaient deux chemins
  * différents — doublon dans la vue, et 4 tests rouges de `behaviour-files.test.ts`.
  */
@@ -279,7 +279,7 @@ const CODEX_FICHIERS_PROJET_COUPES =
 /**
  * Pourquoi un AGENTS.md DE PROJET n'atteint jamais Codex par lui-même, et qui le replie à sa place.
  *
- * conv-984 (2026-10-16) : ces fichiers s'affichaient « codex · active · Au démarrage de la session
+ * 2026-10-16 : ces fichiers s'affichaient « codex · active · Au démarrage de la session
  * Codex ». Or `codexExecSpec` lance TOUJOURS le CLI avec `-c project_doc_max_bytes=0` : Codex ne lit
  * aucun AGENTS.md de projet (ni `AGENTS.override.md`). Seuls les fichiers retenus par la chaîne
  * d'Autowin (`loadProjectContextStack` sur le dossier de travail) atteignent le prompt, repliés par Autowin.
@@ -396,7 +396,7 @@ function claudeFiles(
     // (`context-files.ts`) : `AGENTS.md` → `CLAUDE.md` → `.cursorrules`, LE PREMIER TROUVÉ. Donc un
     // `CLAUDE.md` voisin d'un `AGENTS.md` ne sert pas, et `CLAUDE.local.md` n'est pas dans la chaîne
     // du tout — deux cas qui s'affichaient « actifs » sans jamais atteindre un prompt.
-    // conv-1067 : « actif » se demande au CHARGEUR, pas à la seule absence d'un AGENTS.md voisin. Un
+    // « actif » se demande au CHARGEUR, pas à la seule absence d'un AGENTS.md voisin. Un
     // `CLAUDE.md` d'un dossier parent s'affichait actif alors que seul le dossier de travail était lu.
     const agentsPresent = ['AGENTS.md', 'agents.md'].some((nom) => existsSync(join(dir, nom)))
     const claudeMd = join(dir, 'CLAUDE.md')
@@ -453,13 +453,13 @@ const CHAINE_LISIBLE = PROJECT_CONTEXT_CHAIN.filter(
 /**
  * Le fichier de contexte projet, tel que le CHARGEUR RÉEL le traite.
  *
- * conv-984 (2026-10-16) : cette entrée tenait sa propre liste (`AGENTS.md`, `CLAUDE.md`,
+ * 2026-10-16 : cette entrée tenait sa propre liste (`AGENTS.md`, `CLAUDE.md`,
  * `.cursorrules`) et affichait le gagnant « declared · injection non tracée », alors que
  * `projectContextBlock` le replie dans le prompt de chaque tour du chat (`index.ts`) et de chaque étape
  * lancée (`orchestrator.ts`). Le gagnant est maintenant demandé au chargeur lui-même : même
  * chaîne, mêmes sauts (fichier vide ou illisible), donc la vue ne peut plus diverger du prompt.
  *
- * conv-1067 (2026-10-22) : le chargeur EMPILE désormais un fichier par dossier, de la racine du dépôt
+ * 2026-10-22 : le chargeur EMPILE désormais un fichier par dossier, de la racine du dépôt
  * git au dossier de travail, sous un plafond partagé. La vue parcourt donc les MÊMES dossiers que lui
  * (`loadProjectContextStack(...).dossiers`) — y compris un parent au-dessus du workspace inspecté — et
  * dit, fichier par fichier, s'il est replié entier, coupé ou omis faute de place.
@@ -582,7 +582,7 @@ export async function readBehaviourFileFromManifest(
   const normalized = normalizeQuery(query)
   const file = manifest.find((candidate) => candidate.id === id)
   if (!file) throw new Error('Fichier de comportement inconnu ou hors du workspace autorisé')
-  // conv-1067 : un fichier d'un dossier PARENT du workspace, dans le même dépôt git, est replié dans
+  // Un fichier d'un dossier PARENT du workspace, dans le même dépôt git, est replié dans
   // chaque prompt par le chargeur. Le montrer n'expose rien de plus que ce que le modèle reçoit déjà ;
   // seul CE fichier est admis (son dossier comme racine), pas le reste de l'arbre parent.
   const cleDemandee = cleFichier(file.path)

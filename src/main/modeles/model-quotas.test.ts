@@ -58,7 +58,7 @@ const models = [
   }
 ]
 
-// La sonde de quota des services directs (conv-1499) lirait la vraie clé du poste : on la coupe ici.
+// La sonde de quota des services directs lirait la vraie clé du poste : on la coupe ici.
 beforeEach(() => {
   for (const cle of [
     'GEMINI_API_KEY',
@@ -583,7 +583,7 @@ describe('quota Claude réel (en-têtes API + repli client Desktop)', () => {
 })
 
 /*
- * BASCULE DE COMPTE : la barre doit parler du compte choisi SANS attendre un message (conv-1031,
+ * BASCULE DE COMPTE : la barre doit parler du compte choisi SANS attendre un message (
  * 2026-10-21). Deux causes mesurees sur le poste : un compte au 7 j epuise repond 429 (en-tetes
  * presents) et un compte laisse de cote plus de 8 h a un jeton expire (401). Dans les deux cas la
  * sonde retombait sur l'historique du client Desktop, UN fichier commun a tous les comptes.
@@ -749,7 +749,7 @@ describe('sonde Claude apres une bascule de compte', () => {
 })
 
 /**
- * Le quota d'un compte NOMMÉ, pas du compte actif (conv-1069, 2026-10-22) : la bascule avant
+ * Le quota d'un compte NOMMÉ, pas du compte actif (2026-10-22) : la bascule avant
  * lancement doit savoir si l'AUTRE compte a de la marge avant d'y partir.
  */
 describe('quota d’un compte nommé', () => {
@@ -803,7 +803,7 @@ describe('quota d’un compte nommé', () => {
   })
 
   /*
-   * Le constat de conv-1403 (conv-1416) : la puce disait le compte pro, la barre montrait gmail. La barre
+   * Le constat : la puce disait le compte pro, la barre montrait gmail. La barre
    * d'un fil au compte choisi décrit CE compte, sans toucher au relevé du compte actif.
    */
   it('relevé vu d’un fil au compte choisi : CE compte, sans remplacer le relevé du compte actif', async () => {

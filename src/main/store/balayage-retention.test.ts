@@ -10,7 +10,7 @@ import {
  * LA PASSE HORAIRE NE LAISSE AUCUN REJET SANS GESTIONNAIRE. Mesure : crash.log du 2026-10-28 a
  * 18:28:45Z porte « unhandledRejection: Opération worktree interrompue après 300000 ms » — le
  * recensement avait depasse le plafond de la file d'operations git, et `index.ts` lancait la passe
- * en `void` sans `.catch` (bulletins de maintenance du 29 et du 30/10, conv-1048). Le rejet
+ * en `void` sans `.catch` (bulletins de maintenance du 29 et du 30/10). Le rejet
  * polluait le journal de plantage et la passe ne disait nulle part pourquoi elle n'avait rien depose.
  */
 describe('jouerPasseDeRetention', () => {

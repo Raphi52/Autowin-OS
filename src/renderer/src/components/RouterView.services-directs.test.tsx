@@ -21,7 +21,7 @@ afterEach(() => {
   container?.remove()
 })
 
-// conv-1503 : les services du moteur direct ont leur carte, « Prêt » ou « Clé manquante (VARIABLE) ».
+// Les services du moteur direct ont leur carte, « Prêt » ou « Clé manquante (VARIABLE) ».
 describe('RouterView — services du moteur direct', () => {
   it('montre la variable manquante, le statut prêt, et aucun bouton de connexion', async () => {
     Object.defineProperty(window, 'api', {

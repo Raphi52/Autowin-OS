@@ -66,7 +66,7 @@ export type ConversationsIpcDeps = {
    * Où en est un fil coupé par le quota. Même règle que le réveil : l'écran dit ce qui partira.
    *
    * fix-ok: posé après `couperLeRun`, ce champ touchait l'ajout voisin d'`origin/main` : 1 conflit
-   * compté par `git merge-tree`, 0 une fois placé ici (conv-1423).
+   * compté par `git merge-tree`, 0 une fois placé ici.
    */
   etatDeReprise: (fil: Conversation) => EtatDeRepriseDuFil | undefined
   /**
@@ -74,19 +74,19 @@ export type ConversationsIpcDeps = {
    * personne regarde ce changement. Il n'attend pas la relecture du quart d'heure.
    *
    * fix-ok: ce canal changeait la situation d'un fil sans rien replanifier : fil réactivé, `attente` à
-   * l'écran, 0 minuterie et 0 départ (essai du contrôle final sur le vrai réveil, conv-1423).
+   * l'écran, 0 minuterie et 0 départ (essai du contrôle final sur le vrai réveil).
    */
   relireLesFilsCoupes: () => void
   /**
    * Coupe le run de developpement d'un fil (`bus.abortOrchestration`) : supprimer un fil l'arrete
-   * comme le bouton Stop, au lieu d'attendre sa fin (conv-1060, `arret-avant-suppression.ts`).
+   * comme le bouton Stop, au lieu d'attendre sa fin (`arret-avant-suppression.ts`).
    */
   couperLeRun: (conversationId: string, motif: string) => boolean
-  /** Les RUN.md légers du fil (conv-1418) partent avec lui, comme ses autres fichiers. */
+  /** Les RUN.md légers du fil partent avec lui, comme ses autres fichiers. */
   retirerLesFiches: (conversationId: string) => Promise<void>
   /**
    * Une branche (« façon 1/3 », « revenir à ce tour ») : ses demandes recopiées pointent sur la fiche
-   * de leur original (conv-1441). Rend le nombre de demandes rattachées.
+   * de leur original. Rend le nombre de demandes rattachées.
    */
   rattacherLesFiches: (branche: Conversation, source: Conversation) => Promise<number>
 }
@@ -171,7 +171,7 @@ export function registerConversationsIpc({
         provider: string
         /**
          * Dossier de travail dès la création : le fil neuf de « revenir au premier tour » naît dans
-         * sa copie séparée (conv-1038). Un rangement après coup pouvait échouer sans être lu.
+         * sa copie séparée. Un rangement après coup pouvait échouer sans être lu.
          */
         projectPath?: string
       }
@@ -194,7 +194,7 @@ export function registerConversationsIpc({
       const projectPath = brut === undefined ? undefined : guardString(brut, 'projectPath')
       // Le store IGNORE un non-chemin ; demandé explicitement, il refuse ici le fil entier — sinon le
       // fil naîtrait sans dossier, donc dans le dossier partagé, alors que l'appelant l'isolait.
-      // fix-ok: cause mesurée (conv-1038, rejeu du 2026-10-21) — create passait un non-chemin au store, qui l'ignore sans rien dire, et fork n'avait pas d'options. Entrées qui font rougir une version fausse (conversations.dossier-branche.test.ts) : projectPath « Factures » ou « retours/relatif » sans ce refus (2 rouges), dossier ignoré par fork (3 rouges).
+      // fix-ok: cause mesurée (rejeu du 2026-10-21) — create passait un non-chemin au store, qui l'ignore sans rien dire, et fork n'avait pas d'options. Entrées qui font rougir une version fausse (conversations.dossier-branche.test.ts) : projectPath « Factures » ou « retours/relatif » sans ce refus (2 rouges), dossier ignoré par fork (3 rouges).
       if (projectPath !== undefined && !estCheminDeDossier(projectPath))
         throw new Error(`IPC projectPath: chemin absolu attendu (${projectPath})`)
       const conversation = os.conversations.create({
@@ -258,7 +258,7 @@ export function registerConversationsIpc({
     return updated?.inactive === true
   })
   /**
-   * Fil privé pour le village commun (D6, conv-1429) : son tanuki part chez les collègues SANS titre.
+   * Fil privé pour le village commun (D6) : son tanuki part chez les collègues SANS titre.
    * Rend l'état retenu (`true` = privé). Le rafraîchissement relit les résumés, et le registre des
    * tanukis renvoie l'instantané au processus principal, qui réécrit `presence.json`.
    */
@@ -322,7 +322,7 @@ export function registerConversationsIpc({
     'os:conversations:fork',
     (event, rawId: string, rawMessageId: string, rawOptions?: unknown) => {
       assertTrustedRendererSender(event, 'Conversation fork')
-      // `dossier` : la copie séparée où la branche travaille DÈS sa création (conv-1038) — le store
+      // `dossier` : la copie séparée où la branche travaille DÈS sa création — le store
       // refuse un non-chemin avant de créer quoi que ce soit.
       const dossier = (rawOptions as { dossier?: unknown } | undefined)?.dossier
       return rattacherALaSource(
@@ -335,7 +335,7 @@ export function registerConversationsIpc({
     }
   )
   /*
-   * LA MEMOIRE DU FIL, VUE ET CORRIGEE PAR L'UTILISATEUR (conv-1038, 2026-10-21 — carnet du fil).
+   * LA MEMOIRE DU FIL, VUE ET CORRIGEE PAR L'UTILISATEUR (2026-10-21 — carnet du fil).
    * L'echo (`session-memory-echo.ts`) n'etait relu que par l'agent : invisible, donc incorrigeable.
    * Lecture : titre, corps et sort du depot, rien d'autre. Oubli : le fait barre sort de l'echo et
    * l'agent ne le relit plus au tour suivant.
@@ -353,7 +353,7 @@ export function registerConversationsIpc({
     return oublierFaitRetenu(guardString(rawId, 'id'), guardString(rawTitle, 'title'))
   })
   /*
-   * « REVENIR A CE TOUR » (conv-1038, 2026-10-21) : la photo du code prise au debut du tour d'un
+   * « REVENIR A CE TOUR » (2026-10-21) : la photo du code prise au debut du tour d'un
    * message, rouverte dans une COPIE SEPAREE (decision « branches-rewind », etape 2). Le dossier
    * partage n'est jamais touche. La branche du fil qui y travaille est creee par l'interface.
    */
@@ -377,7 +377,7 @@ export function registerConversationsIpc({
     }
   )
   /*
-   * « ESSAIE 3 FAÇONS » (conv-1038, 2026-10-21) : une photo du code maintenant, et une copie
+   * « ESSAIE 3 FAÇONS » (2026-10-21) : une photo du code maintenant, et une copie
    * séparée par branche. Deux ou trois, jamais plus : chaque façon est un tour payé.
    */
   ipcMain.handle(
@@ -402,7 +402,7 @@ export function registerConversationsIpc({
     }
   )
   /*
-   * « ESSAIE 3 FAÇONS » : LA CARTE DE COMPARAISON ET « GARDER CELLE-CI » (conv-1038, 2026-10-21 —
+   * « ESSAIE 3 FAÇONS » : LA CARTE DE COMPARAISON ET « GARDER CELLE-CI » (2026-10-21 —
    * idée 6). Comparer : pour chaque branche, l'écart de SA copie depuis la photo de l'essai, et le
    * bilan de son tour (`garder-un-essai.ts`). Garder : cet écart publié par le chemin des copies
    * (`os.worktrees`, le même que les commandes), avec sa garde des fichiers non commités du dossier
@@ -429,7 +429,7 @@ export function registerConversationsIpc({
         return { id, connue: true as const, bilan, copie, ecart }
       })
     )
-    // Le contrôle de ressemblance (conv-1057, 2026-10-22) : chaque façon contre ses voisines de la
+    // Le contrôle de ressemblance (2026-10-22) : chaque façon contre ses voisines de la
     // même photo — rien ne disait que deux façons avaient rendu le même code.
     const ressemblances = await ressemblanceDesEcarts(
       mesures.flatMap((mesure) => (mesure.connue ? [mesure] : []))

@@ -1,5 +1,5 @@
 /**
- * Raccourcis D'AFFICHAGE pour la ligne unique du panneau Logs (conv-247, 2026-10-11 : maquette
+ * Raccourcis D'AFFICHAGE pour la ligne unique du panneau Logs (2026-10-11 : maquette
  * « tour 4 » choisie par l'utilisateur, pistes 2 + 3 + 4). Sur une ligne de ~200 px, le titre
  * complet (« Appel modèle — claude-opus-5-5 ») mangeait la place du détail. Rien n'est perdu : la
  * ligne dépliée garde le titre et le détail entiers, et le filtre cherche dans le texte complet.

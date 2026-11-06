@@ -1,10 +1,10 @@
-/* BLOC DES JUGES — habit « 1 · Nacre » (conv-328, 2026-10-18) : celui du bloc de question
-   (conv-240). Cadre nacre de 1 px (bleu > rose > argent > rose clair > bleu, un seul cycle), aplats
+/* BLOC DES JUGES — habit « 1 · Nacre » (2026-10-18) : celui du bloc de question.
+   Cadre nacre de 1 px (bleu > rose > argent > rose clair > bleu, un seul cycle), aplats
    GRIS NEUTRES sans bord, DÉFAUT en pastille rouge #eb2828, NOUVELLE en gel bleu → rose, vert
    #00ff55 pour le déjà-corrigé. Maquette : artifacts/draft-juges-chat/tour4.html, proposition 1.
    Les gris sont mêlés depuis le VOILE du thème (--voile-rgb : blanc en nuit, sombre en clair) dans
    son fond : neutres (R = G = B en Holographique) et justes en Holographique blanc. Le bleu
-   #3c6eeb reste PLEIN (conv-182). */
+   #3c6eeb reste PLEIN. */
 .jpan {
   --jpan-texte: var(--text, #ece8f7);
   --jpan-dim: var(--text-dim, #b9b2d4);
@@ -62,7 +62,7 @@
   overflow-wrap: anywhere;
 }
 
-/* Bandeau : verdict, titre et décompte, quorum. C'est un bouton (conv-1081) : le bloc est plié par
+/* Bandeau : verdict, titre et décompte, quorum. C'est un bouton : le bloc est plié par
    défaut, un clic sur le bandeau déplie objections et juges ; le chevron se retourne. */
 .jpan-bandeau {
   display: flex;
@@ -120,7 +120,7 @@
   color: var(--jpan-texte);
   background: var(--jpan-aplat-clair);
 }
-/* EN COURS (conv-1021) : un juge écrit, aucun verdict n'est rendu — le gel bleu → rose de NOUVELLE,
+/* EN COURS : un juge écrit, aucun verdict n'est rendu — le gel bleu → rose de NOUVELLE,
    jamais le rouge ni le vert, qui diraient une décision. Le point bat tant qu'il écrit. */
 .jpan-verdict.is-encours {
   color: var(--jpan-encre);

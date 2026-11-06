@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { formatOrchestrationOutcome } from './orchestration-outcome'
 
 /**
- * LA LIGNE « Brain » COMPTE LES NOTES DES ÉTAPES (conv-339). Le nombre vient du run
+ * LA LIGNE « Brain » COMPTE LES NOTES DES ÉTAPES. Le nombre vient du run
  * (`notesBrainDeposees`, joint par `avecNotesDeposees`) ; ces tests tiennent son affichage.
  */
 const issue = (learning: Record<string, unknown>): Record<string, unknown> => ({

@@ -18,7 +18,7 @@ export interface BrainWorkerContract {
     args: [path: string, lod?: number, community?: number, corpus?: readonly string[]]
     result: AsyncResult<typeof import('./fs-brains').loadBrainGraphAsync>
   }
-  /** Les deux Brains reliés par leurs ponts (conv-1262) : racines résolues par le worker. */
+  /** Les deux Brains reliés par leurs ponts : racines résolues par le worker. */
   loadGraphReunis: {
     args: [lod?: number, corpus?: readonly string[]]
     result: AsyncResult<typeof import('./fs-brains').loadBrainsReunisAsync>

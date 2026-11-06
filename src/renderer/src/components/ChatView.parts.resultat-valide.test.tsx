@@ -7,7 +7,7 @@ import { StepThread } from './ChatView.parts'
 import { completerChoixDePipeline, type ChatPart } from './chat-view-model'
 
 /**
- * OÙ L'UTILISATEUR LIT LE RÉSULTAT VALIDÉ AVANT LA FIN DU RUN (piste 3 de conv-914).
+ * OÙ L'UTILISATEUR LIT LE RÉSULTAT VALIDÉ AVANT LA FIN DU RUN (piste 3).
  *
  * Objection du juge (réparation 3) : la ligne disait « affiché sans attendre learn puis salvage »
  * sans dire où regarder, et aucun test ne montrait ce qui s'affiche. L'étape testée ici est la MÊME

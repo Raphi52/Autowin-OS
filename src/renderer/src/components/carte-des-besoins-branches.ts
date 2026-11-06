@@ -1,5 +1,5 @@
 /**
- * LA FICHE DE LA CARTE DES BESOINS — le calcul PUR de ses branches (/draft conv-1102, 2026-10-22).
+ * LA FICHE DE LA CARTE DES BESOINS — le calcul PUR de ses branches (2026-10-22).
  *
  * Demande : « Implémente la Fiche avec un menu « Branches » qui propose état, semaine et dernier
  * constat, semaine par défaut, dans la vue Besoins. » La Fiche montre UN dépôt (un projet de la
@@ -14,8 +14,8 @@
  */
 import type { DemandeDeLaCarte, StatutDemande } from '../../../shared/carte-des-besoins'
 
-// Libellés laissés en français (traduction anglaise, conv-1170) : la Fiche et son menu « Branches »
-// ont été retirés de la vue le 23/10 (conv-1113), ces libellés ne s'affichent plus nulle part — seul
+// Libellés laissés en français (traduction anglaise) : la Fiche et son menu « Branches »
+// ont été retirés de la vue le 23/10, ces libellés ne s'affichent plus nulle part — seul
 // `filsDuProjet` sert encore. Et `classerConstat` compare le constat français écrit par
 // `carte-du-fil.ts` (« une question t’attend ») : ce texte-là ne doit pas changer.
 

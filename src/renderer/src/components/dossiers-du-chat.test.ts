@@ -10,7 +10,7 @@ import {
 } from './dossiers-du-chat'
 
 /**
- * La liste commune des dossiers du Chat, que la croix du Board retire (conv-1212). Entrée qui doit
+ * La liste commune des dossiers du Chat, que la croix du Board retire. Entrée qui doit
  * faire échouer ce fichier : une croix du Board qui laisserait le dossier dans la liste du Chat, qui
  * oublierait de le mémoriser comme retiré (l'import claude.exe le ressusciterait), ou un menu qui
  * perdrait les dossiers du Chat sans demande.
@@ -68,8 +68,8 @@ describe('lignesDuMenuDesProjets', () => {
   })
 
   /**
-   * conv-1231 : « j'ai perdu le this computer, il doit être impossible à supprimer ». Et son nom est
-   * celui du Chat, pas le nom du dossier (conv-1230 : « c'est quoi cette ligne <compte Windows> ? »).
+   * « j'ai perdu le this computer, il doit être impossible à supprimer ». Et son nom est
+   * celui du Chat, pas le nom du dossier (« c'est quoi cette ligne <compte Windows> ? »).
    */
   it('« This computer » n’a pas de croix et porte son nom du Chat, qu’il ait des demandes ou non', () => {
     const avecDemandes = lignesDuMenuDesProjets(
@@ -87,7 +87,7 @@ describe('lignesDuMenuDesProjets', () => {
     ])
   })
 
-  /** conv-1243 : « this computer met le en premier de la liste », quel que soit son rang d'activité. */
+  /** « this computer met le en premier de la liste », quel que soit son rang d'activité. */
   it('« This computer » est la première ligne, avec ou sans demande', () => {
     const avecDemandes = lignesDuMenuDesProjets(
       [

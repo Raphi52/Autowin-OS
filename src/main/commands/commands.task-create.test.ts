@@ -4,7 +4,7 @@ import { TaskStore } from '../task-manager/task-store'
 import { MODELE_PROMPT_TACHE_COURT, TETES_DU_MODELE_PROMPT_TACHE } from '../../shared/modele-prompt-tache'
 
 /**
- * Demande conv-114 (2026-10-09) : l'agent peut créer des tâches, mais rien que l'utilisateur ne
+ * Demande (2026-10-09) : l'agent peut créer des tâches, mais rien que l'utilisateur ne
  * puisse supprimer dans le Task Manager. Ce test verrouille le CÂBLAGE du bus : `task_create` passe
  * par le stockage de l'écran, et sans Task Manager câblé il refuse au lieu d'inventer un chemin.
  */
@@ -41,7 +41,7 @@ describe('task_create — câblage du bus', () => {
     })
   })
 
-  // conv-983 (2026-10-16) : l'agent rédige le prompt d'une tâche sur le modèle partagé, qu'il lit
+  // 2026-10-16 : l'agent rédige le prompt d'une tâche sur le modèle partagé, qu'il lit
   // au moment même de créer — la description de la commande, servie à chaque tour.
   it('donne à l’agent le modèle de prompt, sans redevenir un paragraphe', () => {
     const bus = new AppCommandBus(os as never, () => undefined)
@@ -71,7 +71,7 @@ describe('task_create — câblage du bus', () => {
   })
 
   /*
-   * conv-1069, candidat 3 : « attendre la fin d'un autre fil » sans le sonder. L'entrée qui ferait
+   * Candidat 3 : « attendre la fin d'un autre fil » sans le sonder. L'entrée qui ferait
    * échouer ce test si la correction était fausse : la même règle SANS fil — elle réveillerait sur
    * chaque tour de chaque fil, y compris celui qu'elle lance elle-même.
    */
@@ -126,7 +126,7 @@ describe('task_create — câblage du bus', () => {
 })
 
 /**
- * conv-114, 2026-10-09 : `task_list` était demandée avec `task_create` mais n'avait jamais été
+ * 2026-10-09 : `task_list` était demandée avec `task_create` mais n'avait jamais été
  * écrite — l'appel rendait « Commande inconnue : task_list » après le redémarrage.
  */
 describe('task_list — lecture du Task Manager', () => {

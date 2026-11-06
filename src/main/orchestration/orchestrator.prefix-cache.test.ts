@@ -52,7 +52,7 @@ function indexConsigneDePhase(texte: string): number {
 }
 
 describe('ordre des blocs système — préfixe cachable', () => {
-  // Le corps des parcours vit dans des modules voisins depuis le découpage (conv-1508) : on lit l'ensemble.
+  // Le corps des parcours vit dans des modules voisins depuis le découpage : on lit l'ensemble.
   const source = ['orchestration/orchestrator.ts', 'orchestration/orchestrator-run.ts', 'orchestration/orchestrator-parcours-glouton.ts', 'orchestration/orchestrator-parcours-sequentiel.ts']
     .map((f) => readFileSync(join(process.cwd(), 'src', 'main', f), 'utf8'))
     .join(String.fromCharCode(10))

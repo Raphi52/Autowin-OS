@@ -334,7 +334,7 @@
   padding: 14px 16px;
 }
 
-/* IMAGE EN CAPSULE (image lue, image envoyée -- conv-178, 2026-10-10). La capsule elle-même n'est
+/* IMAGE EN CAPSULE (image lue, image envoyée --, 2026-10-10). La capsule elle-même n'est
    PAS dessinée ici : ce sont les règles `.thinking-block` de ChatView.css, reprises telles quelles
    par ArtifactPreview.tsx. Ici, seulement le corps DÉPLIÉ, sur le modèle de `.thinking-body` : un
    filet à gauche aux couleurs de la capsule, l'image et son pied dessous. */
@@ -346,7 +346,7 @@
   border-left: 1px solid color-mix(in srgb, var(--capsule-froid) 35%, transparent);
 }
 
-/* Dans le cadre à deux lignes (conv-907), le corps déplié reste DANS le cadre, aligné sur les deux
+/* Dans le cadre à deux lignes, le corps déplié reste DANS le cadre, aligné sur les deux
    lignes — la même marge que `.thinking-block.cadre-anneau > .thinking-body` (anneau-activite.css). */
 .cadre-anneau > .artifact-capsule__corps {
   width: auto;
@@ -362,7 +362,7 @@
   border-top: 0;
 }
 
-/* PILE D'IMAGES (conv-332, 2026-10-18 : « implémente la 2 + 6 quand déployed », ArtifactPile.tsx).
+/* PILE D'IMAGES (2026-10-18 : « implémente la 2 + 6 quand déployed », ArtifactPile.tsx).
    La carte de devant est une capsule ordinaire (classes `thinking-block cadre-anneau`) : seul le
    reste est dessiné ici, et UNIQUEMENT avec les jetons du thème — les deux couleurs des capsules,
    le voile, le texte — pour rester juste en sombre comme en clair. */
@@ -474,7 +474,7 @@
   color: var(--text);
 }
 
-/* LECTEUR VIDÉO IMAGE PAR IMAGE (conv-253, 2026-10-11) : la vidéo, puis une barre sous elle —
+/* LECTEUR VIDÉO IMAGE PAR IMAGE (2026-10-11) : la vidéo, puis une barre sous elle —
    ±1 s / ±1 image, temps au centième + « image N/total », et « Pointer ce moment ». Le corps de la
    carte est borné à 430 px : la vidéo cède 90 px pour que la barre reste visible sans défilement.
    Boutons au trait de `.artifact-preview__reveal`. */

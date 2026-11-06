@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chantiersDuJournal } from '../../shared/chantier-du-tour'
 
 /**
- * UN CHANTIER (`Workflow` du CLI) DANS UN TOUR DE CHAT (conv-1362, lot conv-1366).
+ * UN CHANTIER (`Workflow` du CLI) DANS UN TOUR DE CHAT.
  *
  * Mesuré sur le CLI 2.1.314 (`.autowin-tmp/conv-1366/long-cli.jsonl`, 176 s, 3 agents) : le flux se
  * tait 167 s pendant que les agents attendent, puis deux `result` arrivent ensemble ; le second

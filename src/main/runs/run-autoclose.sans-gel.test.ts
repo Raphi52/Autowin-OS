@@ -8,7 +8,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { captureCloseBaseline, defaultGitRunner } from './run-autoclose'
 
 /**
- * LES `git` DE FIN DE TOUR NE SONT PLUS CRÉÉS SUR LE FIL PRINCIPAL (conv-1413, 2026-10-31).
+ * LES `git` DE FIN DE TOUR NE SONT PLUS CRÉÉS SUR LE FIL PRINCIPAL (2026-10-31).
  *
  * Mesure `gels.jsonl`, session du 2026-10-31 19:33 → 20:22 UTC : `spawn git rev-parse` et
  * `spawn git status` depuis `run-autoclose.ts:532`, appelés par `chat-turn-publication.ts:136/138`

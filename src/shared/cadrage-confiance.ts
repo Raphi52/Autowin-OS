@@ -31,7 +31,7 @@ export interface HypotheseDeCadrage {
 /** Au-dela, la liste cesse d'etre lisible et redevient le mur de texte qu'on veut eviter. */
 export const PLAFOND_HYPOTHESES = 5
 /*
- * 600 et non plus 240 (conv-536, 2026-09-24) : une hypothese reelle du cadrage (menu SURVBOD) faisait
+ * 600 et non plus 240 (2026-09-24) : une hypothese reelle du cadrage (menu SURVBOD) faisait
  * ~300 caracteres et s'affichait coupee au milieu d'un mot (« avant la c »). Le plafond ne sert qu'a
  * borner un texte aberrant ; il coupe desormais sur un mot, avec une ellipse visible.
  */
@@ -68,7 +68,7 @@ const ETIQUETTE_UTILISATEUR = /\bDE\s+L['’]UTILISATEUR\b/iu
  * Une puce Markdown est un marqueur SUIVI D'UN BLANC. L'ancien motif acceptait `*` sans blanc et
  * mangeait donc la premiere etoile d'un gras en tete de ligne : « **Non vérifié** » devenait
  * « *Non vérifié** », puis « * ** » une fois l'etiquette retiree — exactement ce que l'utilisateur
- * lisait a l'ecran (conv-919, 2026-10-13).
+ * lisait a l'ecran (2026-10-13).
  */
 const PREFIXE_PUCE = /^(\s*)(?:[-*•+]|\d+[.)])\s+/u
 const CASE_A_COCHER = /^\[[ xX]\]/u

@@ -137,7 +137,7 @@ function persistEcho(): void {
       evictedByWorkspace: echo.evictedByWorkspace
     }))
   }
-  // Hors du fil principal (conv-1368) : `renameSync` ici a figé la fenêtre 2,3 s en 7 jours.
+  // Hors du fil principal : `renameSync` ici a figé la fenêtre 2,3 s en 7 jours.
   deposerFichier(persistencePath, JSON.stringify(data), { mode: 0o600 })
 }
 
@@ -267,7 +267,7 @@ export function rememberedFacts(
 }
 
 /**
- * Retire de CE fil le fait que l'utilisateur a barré dans le carnet (conv-1038, 2026-10-21).
+ * Retire de CE fil le fait que l'utilisateur a barré dans le carnet (2026-10-21).
  *
  * Sans ce retrait, la correction ne valait rien : l'agent relisait le fait barré au tour suivant.
  * Égalité EXACTE du titre — la même clé que la supersession de `noteRemembered` — : « Décision A »

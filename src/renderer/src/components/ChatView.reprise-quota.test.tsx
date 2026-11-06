@@ -109,7 +109,7 @@ describe('bouton « Reprendre les conversations coupées par le quota »', () =>
   })
 
   /**
-   * LA LIGNE D'ÉTAT (conv-1423). Depuis qu'un fil repart seul, un fil coupé peut attendre son heure,
+   * LA LIGNE D'ÉTAT. Depuis qu'un fil repart seul, un fil coupé peut attendre son heure,
    * ou ne jamais repartir : à l'écran, les deux se confondaient. La ligne dit laquelle, et le bouton
    * reste dans tous les cas : c'est lui qui rend la main avant l'heure ou après un essai raté.
    */
@@ -130,16 +130,16 @@ describe('bouton « Reprendre les conversations coupées par le quota »', () =>
     const A_12H = Date.now() + 150 * 60_000
 
     /*
-     * Objection du contrôle final (conv-1423) : une coupure à 06:30 annoncée pour le surlendemain 2 h
+     * Objection du contrôle final : une coupure à 06:30 annoncée pour le surlendemain 2 h
      * donnait « repart seule à 02:02 », 44 h à l'avance. Sous 24 h, une heure ne désigne qu'un instant.
-     * fix-ok: `texteDeLaSituation` n'écrivait que l'heure, quelle que soit l'attente (conv-1403 : 44 h).
+     * fix-ok: `texteDeLaSituation` n'écrivait que l'heure, quelle que soit l'attente (44 h).
      */
     const HEURE_MS = 3_600_000
     const jour = (ms: number): string =>
       new Date(ms).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
 
     /*
-     * Objection du contrôle final (conv-1423) : un départ écarté à l'heure, puis redevenu possible,
+     * Objection du contrôle final : un départ écarté à l'heure, puis redevenu possible,
      * affichait « repart seule à 02:02 » avec une heure déjà passée. Il part à la relecture suivante.
      */
     it('heure passée : le fil repart sous peu, sans heure à contredire', async () => {

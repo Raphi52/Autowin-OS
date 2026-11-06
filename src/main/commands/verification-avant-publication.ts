@@ -1,5 +1,5 @@
 // Mesures avant publication (suite par lots, rapport vitest, base avant édition) : méthodes de AppCommandBus
-// sorties de commands.ts telles quelles (conv-1580, lot 6). À part de verification.ts pour qu'aucun module
+// sorties de commands.ts telles quelles (lot 6). À part de verification.ts pour qu'aucun module
 // ne dépasse ~800 lignes.
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
@@ -29,7 +29,7 @@ import type { MesureVerifiee } from './publication'
  * Rejoue, dans le dépôt RÉEL, les tests des fichiers qu'un tour de chat va publier — appelé par le
  * commit automatique AVANT de pousser (`chat-turn-publication.ts`).
  *
- * Mesuré le 2026-10-01 : `b6d2a3fc` (conv-892) a été poussé sans aucun test et a laissé main rouge
+ * Mesuré le 2026-10-01 : `b6d2a3fc` a été poussé sans aucun test et a laissé main rouge
  * 20 h. La portée est celle d'`edit_file`, plus les tests qui CITENT un fichier de code
  * (`porteeAvantPublication`) : c'est ce qui rejoue `chat-ipc-contract.test.ts`, qui LIT `index.ts`.
  *
@@ -104,7 +104,7 @@ export async function verifierAvantPublication(
       const encoreRouges = lectureBruteDuRapport(seules.rapport)?.suitesEnEchec.map(versRelatif)
       if (encoreRouges?.length) {
         /*
-         * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PLUS (conv-246, 2026-10-11, choix de l'utilisateur) : les
+         * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PLUS (2026-10-11, choix de l'utilisateur) : les
          * suites restées rouges sont rejouées sur le dernier commit, puis avec les fichiers du
          * tour, dans une copie propre. Seul un échec NOUVEAU bloque (voir `comparaison-a-la-base.ts`).
          */
@@ -171,7 +171,7 @@ export async function verifierAvantPublication(
 
 /**
  * La même mesure, en LOTS qui tiennent dans une ligne de `cmd.exe` (8 191 caractères), lancés l'un
- * après l'autre puis fusionnés. Mesuré le 2026-10-01 (conv-770, tour 532299a4) : 194 tests
+ * après l'autre puis fusionnés. Mesuré le 2026-10-01 (tour 532299a4) : 194 tests
  * citaient les fichiers du tour, la commande unique faisait 9 121 caractères, `cmd.exe` la
  * refusait, aucun rapport n'était produit et la publication restait bloquée.
  */

@@ -107,7 +107,7 @@ describe('pastille verte — Sol côté ChatGPT, Opus 5 côté Anthropic', () =>
     const section = host.querySelector('[data-provider="claude"]')
     expect(section).not.toBeNull()
     expect(section?.querySelectorAll('.effort-cran.is-recommended').length).toBe(1)
-    // Depuis l'onglet par fournisseur (conv-1496, 8fb688c1b) : une seule section à la fois.
+    // Depuis l'onglet par fournisseur (8fb688c1b) : une seule section à la fois.
     // Le test ouvre donc l'onglet ChatGPT avant de chercher sa pastille.
     const ongletCodex = host.querySelector<HTMLButtonElement>(
       '[data-testid="effort-matrix-onglet-codex"]'

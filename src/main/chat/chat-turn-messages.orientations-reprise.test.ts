@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildTurnMessages } from './chat-turn-messages'
 
-// conv-844 : saisie ts 1790273878476 perdue apres redemarrage, tour « reprend » ts 1790274416782.
+// Saisie ts 1790273878476 perdue apres redemarrage, tour « reprend » ts 1790274416782.
 const history = [
   { role: 'user', content: '/draft une view plus cool pour cet onglet' },
   { role: 'assistant', content: 'Voici 6 directions...' },

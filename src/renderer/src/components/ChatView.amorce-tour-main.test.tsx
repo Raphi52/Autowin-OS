@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * TRONCATURE À LA RÉOUVERTURE (conv-1376, « quand je suis retourné dans ma conversation »).
+ * TRONCATURE À LA RÉOUVERTURE (« quand je suis retourné dans ma conversation »).
  *
  * Un tour initié CÔTÉ MAIN (scout de veille, tâche planifiée) sur une conversation NON ouverte amorce
  * un fil live pour que les patchs aient une cible. Cette amorce était écrite sur un cache VIDE : le
@@ -84,7 +84,7 @@ describe('ChatView — tour initié côté main sur une conversation fermée', (
   })
 
   /*
-   * LE TOUR EN VOL PERSISTÉ EST LA BULLE ADOPTÉE, PAS UNE AMORCE VIDE (conv-1146, 2026-10-25 :
+   * LE TOUR EN VOL PERSISTÉ EST LA BULLE ADOPTÉE, PAS UNE AMORCE VIDE (2026-10-25 :
    * « la conv m'affiche uniquement le bloc raisonnement vide, aucun suivi dans le chat », pendant un
    * run de 8 h). L'écran perd son état (fenêtre rechargée) pendant que le tour attend son
    * orchestration ; le premier battement reçu ensuite fait adopter le tour. L'adoption posait une
@@ -150,7 +150,7 @@ describe('ChatView — tour initié côté main sur une conversation fermée', (
   })
 
   /*
-   * MÊME DÉFAUT, AUTRE CHEMIN : UN BROUILLON RETIENT L'ÉCRAN AILLEURS (conv-1149, 2026-10-25,
+   * MÊME DÉFAUT, AUTRE CHEMIN : UN BROUILLON RETIENT L'ÉCRAN AILLEURS (2026-10-25,
    * reproduit dans une instance cachée). Au rechargement, la reprise vise le tour en vol, mais un
    * brouillon garde l'écran sur un autre fil ; le texte du tour est alors REJOUÉ depuis son journal
    * en une bulle « terminée », sans la demande ni l'action, et sans lire l'enregistrement qui les

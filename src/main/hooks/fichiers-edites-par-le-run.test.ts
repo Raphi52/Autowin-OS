@@ -105,7 +105,7 @@ describe('preuve visuelle — le diff du run PRIME sur la soustraction git', () 
 })
 
 /**
- * UN FICHIER, UNE CLE. conv-539, tour 24e29815 (reparation 1) : le fix-gate a refuse DEUX fois le
+ * UN FICHIER, UNE CLE. Tour 24e29815 (reparation 1) : le fix-gate a refuse DEUX fois le
  * meme fichier — « 4 edits de src/main/orchestration/orchestrator.ts » ET « 4 edits de
  * D:/AutoWinOS/src/main/orchestration/orchestrator.ts ». Les mutations nomment le fichier tantot en relatif,
  * tantot en absolu ; sans le dossier de travail, les deux formes devenaient deux cles, et un jeton
@@ -127,7 +127,7 @@ describe('fichiersEditesParLeRun — chemin absolu et relatif du meme fichier', 
 })
 
 /**
- * UNE EDITION = UN COMPTE (conv-981, 2026-10-15). Run run-52d36e67e4de-1 : le controle des causes a
+ * UNE EDITION = UN COMPTE (2026-10-15). Run run-52d36e67e4de-1 : le controle des causes a
  * refuse 9 fichiers modifies UNE seule fois, chacun compte 3 fois. Formes relevees dans sa trace :
  *  - la preuve d'un `Edit` porte le fichier en `paths` (relatif) ET en `path` (absolu) : le
  *    dedoublonnage se faisait AVANT la normalisation, donc 2 comptes pour une edition ;

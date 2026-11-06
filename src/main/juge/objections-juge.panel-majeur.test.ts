@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { dodDuVerdict, verdictPanelValide } from './objections-juge'
 
 /**
- * conv-540, tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : les 4 appels du juge (promptCalls ts
+ * Tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : les 4 appels du juge (promptCalls ts
  * 09:44:57.329, 09:48:05.122, 09:51:14.024, 09:53:28.437) rendent VALIDE 72-74, et le controle de
  * 09:53:28.450 recopie 6 puces en « Promis mais pas fait » — dont des VERIFICATIONS REUSSIES
  * (« les 11 commits existent bien… 240 sur 240, code de sortie 0 »). Cause : dans un verdict

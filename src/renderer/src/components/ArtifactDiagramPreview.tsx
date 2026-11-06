@@ -60,7 +60,7 @@ export function ArtifactDiagramPreview({ source }: { source: string }): React.JS
     svg?: string
     /** L'identifiant de CE dessin : la copie agrandie s'en distingue (`copieDuSvg`). */
     idDuDessin?: string
-    /** Dessin refusé par mermaid : le message est traduit au rendu (conv-1170). */
+    /** Dessin refusé par mermaid : le message est traduit au rendu. */
     error?: true
   }>()
   const [agrandi, setAgrandi] = useState(false)
@@ -78,7 +78,7 @@ export function ArtifactDiagramPreview({ source }: { source: string }): React.JS
     const zone = creerZoneDeDessinHorsPage(placeRef.current?.clientWidth ?? 0)
     // Un identifiant NEUF par dessin : `mermaid.render` commence par retirer du document tout
     // élément qui porte déjà son identifiant — donc le schéma affiché. Avec le même identifiant, un
-    // redessin au changement de thème effaçait le schéma le temps du rendu (conv-1235).
+    // redessin au changement de thème effaçait le schéma le temps du rendu.
     dessinsRef.current += 1
     const idDuDessin = `${id}-${dessinsRef.current}`
     void import('mermaid')

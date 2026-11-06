@@ -3,7 +3,7 @@ import * as THREE from 'three'
 /**
  * LES HALOS DU FOND AVENUE DESSINÉS PAR LOTS — quelques dessins instanciés au lieu de 424 sprites.
  *
- * MESURE QUI LE MOTIVE (2026-10-18, conv-323, instance cachée `--code-dev`) : ~1 900 dessins par image
+ * MESURE QUI LE MOTIVE (2026-10-18, instance cachée `--code-dev`) : ~1 900 dessins par image
  * (reflet + écran), dont 424 halos additifs (`THREE.Sprite`) dessinés un par un à chaque passe. Le
  * coût de three est PAR DESSIN (choix du programme, réglages, état), pas par pixel.
  *

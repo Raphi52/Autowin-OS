@@ -5,9 +5,9 @@
  * `redigerPromptCorrectionDirecte`, src/renderer/src/components/veille-candidats-message.ts). Deux
  * lecteurs côté processus principal en dépendent : la mémoire du scout, qui note les pistes prises
  * (`scout-memoire.ts`), et le choix des étapes du run, qui ne rejoue pas un scout déjà fait
- * (`task-regime.ts`, `selection-sans-scout.ts`). Source unique depuis le 2026-10-22 (conv-1080).
+ * (`task-regime.ts`, `selection-sans-scout.ts`). Source unique depuis le 2026-10-22.
  *
- * Le « T » est facultatif : la demande de conv-890 est arrivée en « raite ENSEMBLE… », collée sans
+ * Le « T » est facultatif : la demande est arrivée en « raite ENSEMBLE… », collée sans
  * sa première lettre. Le `/build` facultatif est la correction DIRECTE : le routeur le recolle
  * devant l'en-tête (« /build Traite ce candidat… »).
  */
@@ -26,8 +26,8 @@ export interface RangDuLot {
 }
 
 /**
- * LES LOTS D'UNE SÉLECTION (conv-1080, 2026-10-22). Le panneau découpe une sélection en lots de quelques
- * pistes, chacun dans son fil depuis conv-1333 : sur 49 runs de sélection, 16 avaient été coupés par la
+ * LES LOTS D'UNE SÉLECTION (2026-10-22). Le panneau découpe une sélection en lots de quelques
+ * pistes, chacun dans son fil : sur 49 runs de sélection, 16 avaient été coupés par la
  * limite de session du modèle, avec 6 pistes en moyenne — un run coupé à la 5ᵉ piste ne livrait rien.
  *
  * La ligne est ÉCRITE par le panneau et LUE par la mémoire du scout : les lots ne doivent pas défaire

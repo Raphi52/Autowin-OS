@@ -1,5 +1,5 @@
 /**
- * POPUP « VERRE NACRÉ » — la fin d'un tour en carte au thème d'Autowin (conv-1066, 2026-10-22).
+ * POPUP « VERRE NACRÉ » — la fin d'un tour en carte au thème d'Autowin (2026-10-22).
  *
  * Pourquoi : la bulle Windows de fin de tour (`notification-fin-de-tour.ts`) n'est pas stylable.
  * L'utilisateur a demandé « des belles popups de notification en bas à droite », puis a retenu la
@@ -87,7 +87,7 @@ function echapper(texte: string): string {
 }
 
 /**
- * LES COULEURS DU THÈME CHOISI (conv-1090, 2026-10-22) — « fais suivre à la carte de fin de tour le
+ * LES COULEURS DU THÈME CHOISI (2026-10-22) — « fais suivre à la carte de fin de tour le
  * thème choisi dans Réglages · Interface (aujourd'hui figée sur les couleurs d'Holographique) ».
  *
  * La carte vit dans SA fenêtre, hors des feuilles de style de l'app : elle ne voit aucun thème.
@@ -127,7 +127,7 @@ const CLES_DE_PALETTE = [
 
 /**
  * Holographique (`theme-nebuleuse-verre.css`, jetons de base), le thème par défaut : c'est la carte
- * validée par le contrôle de conv-1066, et ce qu'affiche une carte avant que la page ait parlé.
+ * validée par le contrôle, et ce qu'affiche une carte avant que la page ait parlé.
  */
 export const PALETTE_HOLOGRAPHIQUE: PaletteCarte = {
   fond: '#0a0a0a',
@@ -207,7 +207,7 @@ export type CouleursDeCarte = {
 }
 
 /*
- * Proportions calées sur la maquette « Verre nacré » de conv-1066 (carte #262628 → #1c1c1e,
+ * Proportions calées sur la maquette « Verre nacré » (carte #262628 → #1c1c1e,
  * sous-titre #a49fb6, faits #cfcadd, bouton second #2f2f33, reflet du cadre #d9d9d9) : avec les
  * jetons d'Holographique, la carte dérivée retombe à quelques unités près sur la carte validée.
  */
@@ -246,9 +246,9 @@ export function couleursDeCarte(p: PaletteCarte): CouleursDeCarte {
 }
 
 /*
- * Valeurs reprises de la maquette (`.n3*` du générateur /draft, conv-1066), en pixels fixes là où la
+ * Valeurs reprises de la maquette (`.n3*` du générateur /draft), en pixels fixes là où la
  * hauteur doit se calculer. Le fondu-montée remplace la boucle de démonstration de la maquette ;
- * il s'efface quand Windows demande moins d'animations. Les couleurs viennent du thème (conv-1090).
+ * il s'efface quand Windows demande moins d'animations. Les couleurs viennent du thème.
  */
 function cssDePopup(c: CouleursDeCarte): string {
   return `
@@ -331,7 +331,7 @@ export function actionDuFragment(url: string): ActionPopup | null {
 /**
  * La zone où empiler les cartes. Par défaut, collées au bord DROIT et empilées du BAS vers le haut,
  * comme Windows 11. Les deux options suivent la mascotte du bureau là où l'utilisateur l'a glissée
- * (conv-1142, 2026-10-26, demande : « fais sortir les cartes de fin de tour à côté de la mascotte là
+ * (2026-10-26, demande : « fais sortir les cartes de fin de tour à côté de la mascotte là
  * où je l'ai déplacée ») :
  * - `bord: 'gauche'` : collées au bord gauche de la zone (cartes à droite de la bille) ;
  * - `sens: 'bas'` : la plus récente en HAUT de la zone, les plus anciennes descendent (bille posée
@@ -376,11 +376,11 @@ export type DependancesPile = {
   /** Zone de travail de l'écran principal, relue à chaque placement (écran changé entre-temps). */
   zone: () => ZoneDesCartes
   heure: () => string
-  /** Le thème choisi dans Réglages · Interface, relu à chaque carte (conv-1090). */
+  /** Le thème choisi dans Réglages · Interface, relu à chaque carte. */
   palette?: () => PaletteCarte
   /**
    * La bulle Windows, quand la page d'une carte DÉJÀ rendue au notifieur ne se charge pas : à ce
-   * moment, le secours de `index.ts` (sur un `fabriquer` qui jette) ne peut plus jouer (conv-1066).
+   * moment, le secours de `index.ts` (sur un `fabriquer` qui jette) ne peut plus jouer.
    */
   secours: (contenu: ContenuNotification) => NotificationAffichable
   ouvrirFenetre: (args: {
@@ -404,7 +404,7 @@ export function creerPileDePopups(deps: DependancesPile): {
   toutFermer: () => void
   /**
    * Repose les cartes ouvertes sur la zone relue : la mascotte glissée les emmène avec elle
-   * (conv-1195, « snap ensemble »). Aucune carte ne se ferme pendant le glisser.
+   * (« snap ensemble »). Aucune carte ne se ferme pendant le glisser.
    */
   replacer: () => void
 } {
@@ -436,7 +436,7 @@ export function creerPileDePopups(deps: DependancesPile): {
     while (pile.length > 1 && (pile.length > MAX_POPUPS || deborde())) pile[0].fermer()
   }
 
-  // fix-ok: conv-1066 — les éditions de ce fichier suivent chacune une cause mesurée : (1) création
+  // fix-ok: les éditions de ce fichier suivent chacune une cause mesurée : (1) création
   // du module ; (2) fenêtre créée à `show()` → le secours de `index.ts` ne jouait jamais (test « une
   // fenêtre impossible à créer fait jeter `fabriquer` » rouge si on la remet à `show()`) ; (3-4)
   // `loadFile` rejeté non rattrapé, vrai ERR_FAILED provoqué dans le bureau caché par
@@ -485,7 +485,7 @@ export function creerPileDePopups(deps: DependancesPile): {
     }
     // La fenêtre se crée ICI, pas à `show()` : une création impossible fait jeter `fabriquer`, et
     // `index.ts` passe alors à la bulle Windows. À `show()`, l'erreur tomberait dans le filet du
-    // notifieur, qui l'avale : ni carte ni bulle (défaut trouvé en relecture, conv-1066).
+    // notifieur, qui l'avale : ni carte ni bulle (défaut trouvé en relecture).
     carte.fenetre = deps.ouvrirFenetre({
       html: htmlDePopup(contenu, deps.heure(), deps.palette?.()),
       rect: disposerPopups(deps.zone(), [carte.hauteur])[0],

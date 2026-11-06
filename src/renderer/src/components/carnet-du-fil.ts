@@ -1,7 +1,7 @@
 /**
- * CARNET VIVANT DU FIL (conv-1038, 2026-10-21) — le socle PUR du panneau `CarnetDuFil`.
+ * CARNET VIVANT DU FIL (2026-10-21) — le socle PUR du panneau `CarnetDuFil`.
  *
- * Depuis conv-1059 (2026-10-22), le panneau est REMPLACÉ par la carte du fil (`CarteDuFil.tsx`,
+ * Depuis le 2026-10-22, le panneau est REMPLACÉ par la carte du fil (`CarteDuFil.tsx`,
  * `carte-du-fil.ts`), qui relit d'ici `compactageDuFil`, `questionOuverte` et `resumeDAbsence`.
  *
  * Constat du scout du même jour : les fils longs dérivent (p90 = 14 messages de l'utilisateur par
@@ -46,7 +46,7 @@ export interface FaitRetenu {
 
 /**
  * Libellés montrés à l'utilisateur, dans l'ordre d'affichage du panneau.
- * Restés en français (traduction anglaise, conv-1170) : depuis conv-1059, seul `texteDeCorrection`
+ * Restés en français (traduction anglaise) : seul `texteDeCorrection`
  * les lit, et plus aucun écran ne l'appelle (tests seulement). Les intitulés de clôture relus plus
  * bas (« Fait », « Maintenant »…) sont COMPARÉS au texte de l'agent : ils ne se traduisent pas.
  */
@@ -134,7 +134,7 @@ export type EtatCompactage =
     }
 
 /**
- * « COMPACTER MONTRE CE QUI EST GARDÉ » (conv-1038, 2026-10-21 — idée 5 du scout). Le bouton
+ * « COMPACTER MONTRE CE QUI EST GARDÉ » (2026-10-21 — idée 5 du scout). Le bouton
  * Compacter était opaque : il envoie `COMPACT_REQUEST`, l'agent écrit un résumé, puis le processus
  * principal ne renvoie plus que ce résumé et la suite (`depuisDerniereCompaction`,
  * `chat-turn-messages.ts`). La mémoire de l'agent, elle, reste remise à chaque tour
@@ -190,7 +190,7 @@ export function lignesDuCarnet(entree: {
     }
   }
 
-  // fix-ok: cause mesurée sur la capture réelle du 2026-10-21 (conv-1038) — la demande envoyée par
+  // fix-ok: cause mesurée sur la capture réelle du 2026-10-21 — la demande envoyée par
   // le bouton Compacter était lue comme la dernière demande humaine : l'Objectif devenait « Compacte
   // ce fil : … ». Elle n'est pas un objectif de l'utilisateur : le carnet la saute.
   const objectif = derniereDemandeHumaine(

@@ -7,7 +7,7 @@ import type { TypageAvantPublication } from '../verify/typage-avant-publication'
  *
  * Deux garde-fous structurels, non contournables depuis l'appelant :
  *  1. **La branche DÉDIÉE n'est jamais `main`/`master`** (`PROTECTED`). Sur ce dépôt, la règle est le
- *     push DIRECT sur `main` avec `ALLOW_MAIN_PUSH=1`, sans PR (2026-10-22, conv-1074) : c'est le mode
+ *     push DIRECT sur `main` avec `ALLOW_MAIN_PUSH=1`, sans PR (2026-10-22) : c'est le mode
  *     `direct` qui le fait (`ACCORD_PUSH_DIRECT`, plus bas). La branche dédiée
  *     `HEAD:refs/heads/<branche auto>` et sa PR ne sont que le repli quand un dépôt refuse ce push.
  *  2. **On ne déplace jamais le HEAD local** — pas de `checkout -b` : l'utilisateur travaille peut-être
@@ -30,7 +30,7 @@ export type GitRunner = (
 
 /**
  * L'interrupteur « Enchaînement auto » sur ON VAUT ACCORD de publier sur la branche courante
- * (conv-267, 2026-10-11, choix utilisateur : « Interrupteur ON = mon accord : publie directement sur
+ * (2026-10-11, choix utilisateur : « Interrupteur ON = mon accord : publie directement sur
  * main, sans PR »). Le garde-fou agent du dépôt (`.githooks/pre-push`) refuse tout push de l'app sur
  * main et nomme lui-même son exception assumée : `ALLOW_MAIN_PUSH=1`. Sans elle, mesuré ce jour-là :
  * 26 branches auto/… poussées, 0 PR ouverte (`gh` absent), main distant figé depuis 02:22.
@@ -253,7 +253,7 @@ async function publishRunCommits(input: {
   branch: string
   runGit: GitRunner
   /**
-   * ENCHAÎNEMENT GÉNÉRIQUE (conv-850, choix utilisateur : « la règle dépend du repo, mais je veux
+   * ENCHAÎNEMENT GÉNÉRIQUE (choix utilisateur : « la règle dépend du repo, mais je veux
    * que ça reste générique »). Aucune liste de dépôts : c'est le DÉPÔT qui tranche par ses propres
    * règles. On tente d'abord le push sur la branche courante ; si quoi que ce soit le refuse (hook
    * pre-push, politique de branche du distant, retard non fast-forward), on retombe sur la branche
@@ -526,7 +526,7 @@ export async function captureCloseBaseline(
 /**
  * Les `git` partent du fil d'exécution dédié (`execution-hors-fil.ts`) : leur CRÉATION tenait la
  * fenêtre à chaque fin de tour (`gels.jsonl`, 2026-10-31 : `git rev-parse`/`git status` de
- * `chat-turn-publication.ts` et `photo-du-code.ts`, 65 s en une session, pire 19,9 s — conv-1413).
+ * `chat-turn-publication.ts` et `photo-du-code.ts`, 65 s en une session, pire 19,9 s).
  */
 export async function defaultGitRunner(): Promise<GitRunner> {
   const { execFileHorsFil } = await import('../gel/execution-hors-fil')
@@ -601,7 +601,7 @@ export type VerificationAvantPublication =
       instablesSousCharge?: string[]
       /**
        * Suites restées rouges, mais DÉJÀ rouges au dernier commit, sans échec nouveau avec les
-       * fichiers du tour (conv-246) : on publie, et le panneau les NOMME.
+       * fichiers du tour : on publie, et le panneau les NOMME.
        */
       dejaRouges?: string[]
       /** Suites rouges dans l'arbre partagé, vertes avec ce qui part : le travail d'autres fils. */
@@ -623,8 +623,8 @@ export function projectPublicationNeedsRetry(report: AutoCloseReport): boolean {
 }
 
 /**
- * Message de commit : `type(zone): phrase (run-…)` tiré de la tâche du run (`titre-de-commit.ts`,
- * conv-1069) ; une tâche qui ne nomme pas le travail garde l'ancien `auto(run-…): …`.
+ * Message de commit : `type(zone): phrase (run-…)` tiré de la tâche du run (`titre-de-commit.ts`)
+ * Une tâche qui ne nomme pas le travail garde l'ancien `auto(run-…): …`.
  */
 function autoCloseMessage(task: string, runId: string): string {
   return titreDeCommitAuto({

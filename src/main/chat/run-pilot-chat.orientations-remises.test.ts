@@ -6,10 +6,10 @@ import { ConversationStore } from '../store/conversations'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 
 /**
- * FIN DE TOUR : UNE ORIENTATION DÉJÀ REMISE N'EST PAS ORPHELINE (conv-1241, 2026-10-28).
+ * FIN DE TOUR : UNE ORIENTATION DÉJÀ REMISE N'EST PAS ORPHELINE (2026-10-28).
  *
  * Depuis c1736619, le contrôle lancé avant chaque outil du CLI remet au modèle une orientation
- * en plein appel (conv-1240, tour 2e218711-cf9d-4a92-b161-b7840f791264, saisie ts 1793225455947).
+ * en plein appel (tour 2e218711-cf9d-4a92-b161-b7840f791264, saisie ts 1793225455947).
  * Elle reste pourtant dans la file en mémoire tant que la boucle ne l'a pas relue. Si le tour
  * s'arrête avant (Stop, erreur), le `finally` la rendait à l'écran : renvoyée comme un tour de plus,
  * alors que le modèle l'avait déjà lue. Le `finally` passe donc la file par le journal (`rendue`).

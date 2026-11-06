@@ -4,7 +4,7 @@ import { VERIFY_TIMEOUT_MS, verifyTimeoutOutcome } from './verify-command'
 /**
  * LE PLAFOND NE DOIT PLUS RENDRE LA MAIN LES MAINS VIDES.
  *
- * DÉFAUT VÉCU le 2026-08-25 (conv-1400). Un tour a lancé `verify`, qui rejoue la suite entière.
+ * DÉFAUT VÉCU le 2026-08-25. Un tour a lancé `verify`, qui rejoue la suite entière.
  * Elle a tourné 600 s, a été coupée au plafond, et le résultat rendu était `exitCode: null` avec
  * pour toute sortie la phrase « vérification arrêtée après 600 s ». Pendant ces dix minutes vitest
  * avait écrit des centaines de lignes — fichiers traversés, tests verts, rouges éventuels — et
@@ -39,7 +39,7 @@ describe('verifyTimeoutOutcome — le plafond rend ce qui a déjà été écrit'
   /*
    * L'ASSERTION D'ORIGINE COMPTAIT LES LIGNES — une approximation de l'intention, qui a cesse de
    * tenir le 2026-08-25 quand le message de plafond a gagne sa consigne de sortie de secours
-   * (conv-1405 : « rien n'est prouve » sterile faisait relancer la meme commande). L'intention n'a
+   * (« rien n'est prouve » sterile faisait relancer la meme commande). L'intention n'a
    * pas bouge d'un pouce : PAS de section « ce que la suite avait ecrit » quand il n'y a rien a y
    * mettre. On l'exige donc directement, au lieu de la deduire d'un nombre de lignes.
    */

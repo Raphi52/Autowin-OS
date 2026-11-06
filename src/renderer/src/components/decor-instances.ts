@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 
 /**
- * LES OBJETS FIXES IDENTIQUES, DESSINÉS EN UN SEUL APPEL (conv-337, 2026-10-19).
+ * LES OBJETS FIXES IDENTIQUES, DESSINÉS EN UN SEUL APPEL (2026-10-19).
  *
  * MESURE QUI LE MOTIVE (banc de rendu, relevé dessin par dessin) : three paie PAR DESSIN, pas par
  * triangle. Dans chaque travée de la toile électrique, les sacs-poubelle, les cartons et les poteaux

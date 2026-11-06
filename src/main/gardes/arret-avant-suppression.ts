@@ -1,7 +1,7 @@
 /**
  * ARRÊTER CE QUI TOURNE DANS UN FIL AVANT DE LE SUPPRIMER — comme le bouton Stop.
  *
- * Constaté le 2026-10-22 (conv-1060) : le Stop (`os:pilotChat:cancel`, index.ts) coupe DEUX choses,
+ * Constaté le 2026-10-22 : le Stop (`os:pilotChat:cancel`, index.ts) coupe DEUX choses,
  * le run de développement du fil (`abortOrchestration`) et le tour de chat. La suppression depuis
  * l'écran ne coupait que le tour. Or le run n'écoute QUE son propre interrupteur (`commands.ts`,
  * `runTask(…, abortController.signal)`) et le tour l'attend sans écouter le sien (`agent-pilot.ts`,
@@ -12,7 +12,7 @@
  * Une seule fonction pour les quatre chemins (écran ou agent, un fil ou un lot) : aucun ne peut
  * rediverger du Stop sans que les tests `*.suppression-arret.test.ts` le voient.
  *
- * Les terminaux du fil s'arrêtent ici aussi (conv-1362, lot 3/3) : ce sont les seuls chemins où un
+ * Les terminaux du fil s'arrêtent ici aussi (lot 3/3) : ce sont les seuls chemins où un
  * fil disparaît, et un shell laissé derrière n'aurait plus aucun écran pour le fermer.
  */
 import type { ActiveChatTurns } from '../chat/active-chat-turns'

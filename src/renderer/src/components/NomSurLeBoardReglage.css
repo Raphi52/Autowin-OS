@@ -1,4 +1,4 @@
-/* « Ton nom sur le Board » (Settings · Interface, conv-1230). Uniquement des jetons du thème : la
+/* « Ton nom sur le Board » (Settings · Interface). Uniquement des jetons du thème : la
    ligne reste lisible dans tous les thèmes, clairs compris. Elle reprend le gabarit `.interface-row`
    d'InterfaceView.css ; un filet la sépare du réglage au-dessus, comme la mascotte. */
 .interface-row[data-testid='interface-nom-board'] {
@@ -38,7 +38,7 @@
   color: var(--err, var(--text));
 }
 
-/* Le même champ dans le rouage du Board (conv-1230) : titre discret au-dessus, comme les autres
+/* Le même champ dans le rouage du Board : titre discret au-dessus, comme les autres
    parties du menu (`.besoins-projets-titre`). */
 .nom-board-compact {
   display: flex;

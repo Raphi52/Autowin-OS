@@ -1,5 +1,5 @@
 /**
- * NAVIGATEUR INTÉGRÉ DU CHAT — textes et fonctions sans rendu du panneau (conv-1286, lot 3/5).
+ * NAVIGATEUR INTÉGRÉ DU CHAT — textes et fonctions sans rendu du panneau (lot 3/5).
  *
  * À part de `NavigateurIntegre.tsx` parce que la vue chat les emploie aussi (bouton de l'en-tête,
  * liens du fil, bloc inséré dans la saisie) et qu'un fichier de composant n'exporte que des
@@ -19,7 +19,7 @@ import { langueCourante } from '../langue'
 
 /*
  * Les textes vivent ICI, pas dans `textes-ecrans/` : la table du chat est en cours d'édition par un
- * autre fil (conv-1286), et une nouvelle table imposerait de toucher son test commun.
+ * autre fil, et une nouvelle table imposerait de toucher son test commun.
  */
 const TEXTES_FR = {
   titre: 'Navigateur',
@@ -181,7 +181,7 @@ export function adresseDeLaSaisie(saisie: string): string | null {
 
 /**
  * L'adresse telle que la capsule la montre au repos : le site en gras, le reste atténué, sans le
- * protocole (conv-1306). Lue par `new URL`, jamais découpée à la main : dans
+ * protocole. Lue par `new URL`, jamais découpée à la main : dans
  * `https://banque.fr@pirate.net/`, le vrai site est pirate.net, et c'est lui qui doit ressortir.
  * `null` pour ce qui n'est pas une page web (saisie en cours, about:blank, data:) : on montre alors
  * le texte brut, sans cadenas.
@@ -205,7 +205,7 @@ export function decouperAdresse(
 }
 
 /**
- * Le site que le bouton de l'en-tête montre, panneau fermé (Mini-adresse, conv-1317) : hôte et port,
+ * Le site que le bouton de l'en-tête montre, panneau fermé (Mini-adresse) : hôte et port,
  * `localhost:5173`. Lu par `new URL` pour la même raison que `decouperAdresse` ; `null` pour ce qui
  * n'est pas une page web : le bouton reste alors au globe seul.
  */
@@ -231,7 +231,7 @@ export function fichierDeLaCapture(dataUrl: string, nom: string): File | null {
 /**
  * Le bloc posé dans la saisie pour l'agent (URL, sélecteur, extrait, styles) et la capture recadrée
  * à joindre en image. Le bloc reste en français : c'est l'agent qui le lit, comme la référence
- * d'Alt+clic (conv-1038).
+ * d'Alt+clic.
  */
 export function blocPourLeChat(element: ElementChoisiNavigateur): {
   texte: string
@@ -268,7 +268,7 @@ export function zoomDeLaFenetre(): number {
   return typeof lu === 'number' && Number.isFinite(lu) && lu > 0 ? lu : 1
 }
 
-// ── Pas-à-pas : frise et bandeau de pilotage (conv-1286, maquette « 1 · Jalons ») ───────────────
+// ── Pas-à-pas : frise et bandeau de pilotage (maquette « 1 · Jalons ») ───────────────
 
 /**
  * Temps pendant lequel le bandeau survit au dernier geste de l'onglet : `agentPilote` ne vaut vrai

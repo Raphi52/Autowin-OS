@@ -22,7 +22,7 @@ function corps(selecteur: string): string {
 }
 
 /**
- * DÉFAUT MESURÉ (conv-1322, 2026-10-30) : un second clic rapide sur un onglet était PERDU. Pendant
+ * DÉFAUT MESURÉ (2026-10-30) : un second clic rapide sur un onglet était PERDU. Pendant
  * le fondu de vue (`basculerVue`, transition-de-vue.ts), le calque `::view-transition` couvre la
  * fenêtre et livre tout clic à <html>. Copie cachée à 19-25 images/s : 8 seconds clics perdus sur 8
  * entre 0 et 400 ms ; `::view-transition { pointer-events: none }` SEUL n'y changeait rien (8 sur

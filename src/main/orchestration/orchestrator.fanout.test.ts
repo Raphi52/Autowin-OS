@@ -46,7 +46,7 @@ class RecordingProvider implements ProviderAdapter {
       this.avantUnePanne?.()
       throw new Error(`modèle ${model} en échec (simulé)`)
     }
-    // Panne passagère : le même juge, rappelé, répond (conv-1420).
+    // Panne passagère : le même juge, rappelé, répond.
     if (/panne-une-fois/i.test(model) && !this.dejaTombes.has(model)) {
       this.dejaTombes.add(model)
       throw new Error(`modèle ${model} en panne passagère (simulée)`)
@@ -158,7 +158,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
   })
 
   it('refuse un pipeline impossible sans toucher le provider — en mode bloquant', async () => {
-    // Depuis conv-1148 (13/08), en mesure seule (défaut) le devis s'agrandit au lieu de refuser ;
+    // Depuis le 13/08, en mesure seule (défaut) le devis s'agrandit au lieu de refuser ;
     // le refus ex-ante ne subsiste qu'en `blocking`, où le plafond est un contrat.
     const provider = new RecordingProvider()
     const supervisor = new ExecutionSupervisor()
@@ -209,7 +209,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
   })
 
   /*
-   * Piste 6 de conv-890 : un panel scout réglé dans `agent-topology.json` n'a pas d'angle (`FanMember`
+   * Piste 6 : un panel scout réglé dans `agent-topology.json` n'a pas d'angle (`FanMember`
    * n'a pas de champ `persona`, `os.ts`), donc `personaInstruction(undefined)` rendait '' et les N
    * membres recevaient la MÊME consigne — N fois le prix pour N fois le même avis. Seul le workflow
    * « Exploration » posait des angles. Chaque membre scout sans angle reçoit désormais le sien.
@@ -235,11 +235,11 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
   })
 
   /*
-   * conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : « /scout comment améliorer les humains
+   * Tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : « /scout comment améliorer les humains
    * pour qu'ils soient ultra quali comme dans le jeu cyberpunk? » est classé « trivial » (2 places),
    * et le canevas Exploration compose 5 angles. La coupe gardait les deux premiers, « dette » et
    * « fragilité » (« tu ignores l'esthétique »). Elle garde désormais la veille externe et la rupture.
-   * Depuis conv-344, cette demande n'est plus triviale (« comment » = « how », et un scout n'est
+   * Cette demande n'est plus triviale (« comment » = « how », et un scout n'est
    * jamais trivial, `task-regime.ts`) : elle a 4 places. La coupe à 2 est donc posée à la main.
    */
   it('un panel scout coupé par le devis garde ses angles les plus utiles, pas les premiers du canevas', async () => {
@@ -302,7 +302,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
   })
 
   /*
-   * conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : la fusion générique (« NE hiérarchise
+   * Tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : la fusion générique (« NE hiérarchise
    * pas ») a rendu « Score (P1 · P2) » = « 68 · 72 », que `scoreSur100` ne lit pas. La fusion d'un
    * panel scout reçoit désormais le contrat du scout ; celle des autres phases ne change pas.
    */
@@ -426,7 +426,7 @@ describe('Orchestrator — fan-out multi-modèles (phase frame)', () => {
     )
   })
 
-  // Vu en direct le 2026-10-13 (conv-914, `frame:probleme`) : un membre en éventail démarrait SANS
+  // Vu en direct le 2026-10-13 (`frame:probleme`) : un membre en éventail démarrait SANS
   // prompt et finissait sans lui — sa fiche du graphe n'a jamais montré ce qu'il avait reçu.
   it('annonce le prompt de chaque membre dès son démarrage, et le même à sa fin', async () => {
     const provider = new RecordingProvider()
@@ -617,14 +617,14 @@ describe('Orchestrator — fan-out juge (quorum de vote)', () => {
   })
 
   /**
-   * M1 RENVERSÉ VOLONTAIREMENT (conv-1420, 2026-11-01). Ce test figeait l'inverse : « un juge crashé
+   * M1 RENVERSÉ VOLONTAIREMENT (2026-11-01). Ce test figeait l'inverse : « un juge crashé
    * ne gonfle pas le dénominateur », pour qu'un panel ne refuse pas un travail que tous ses
    * répondants valident. Sur 3 juges prévus, 2 pannes et 1 VALIDE fermaient donc le run en VERT,
    * sans nommer les absents, alors que `skills/judge/SKILL.md:62` exige « 1 relance, sinon INVALIDE,
    * jamais un 100 silencieux ». Une panne ne reste plus muette, et elle ne refuse pas le travail
    * non plus : le run s'arrête en le disant.
    *
-   * fix-ok: conv-1420 — cause lue et rejouée sur a41081d6 : le seuil était borné aux répondants
+   * fix-ok: cause lue et rejouée sur a41081d6 : le seuil était borné aux répondants
    * (orchestrator.ts, votingN), ce test donnait valid === true avec 1 VALIDE sur 3 juges prévus.
    */
   it('M1 RENVERSÉ : 3 juges prévus, 2 en panne, 1 VALIDE → verdict incomplet, pas de vert', async () => {
@@ -703,7 +703,7 @@ describe('Orchestrator — fan-out juge (quorum de vote)', () => {
 
   /**
    * Une panne de juge n'est pas un refus du travail : rejouer un build ne ferait pas répondre les
-   * juges, et le mode jusqu'au vert (conv-844) n'aurait aucune autre raison de s'arrêter.
+   * juges, et le mode jusqu'au vert n'aurait aucune autre raison de s'arrêter.
    */
   describe.each([
     ['verdict incomplet', ['j-ok', 'crash1', 'crash2']],
@@ -808,7 +808,7 @@ describe('Orchestrator — fan-out exec : cas limites', () => {
 })
 
 /**
- * conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : le seul membre build (claude-opus-5) a ete
+ * Tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : le seul membre build (claude-opus-5) a ete
  * refuse par le filtre de securite du modele, et le tour a fini en rouge sans rien tenter d'autre.
  * Relancer le MEME modele echoue pareil : le repli passe sur le modele voisin de la meme generation.
  */
@@ -865,7 +865,7 @@ describe('Orchestrator — refus du filtre de sécurité (conv-540, tour 4dfe282
 })
 
 /**
- * conv-890, 2026-09-30 13:42 : l'étape build, sur le SEUL modèle du rôle subagent (claude-opus-5-5,
+ * 2026-09-30 13:42 : l'étape build, sur le SEUL modèle du rôle subagent (claude-opus-5-5,
  * aucun membre de panel), a été refusée par le filtre de sécurité. Le repli ci-dessus n'existait que
  * pour le lancement en parallèle : sur ce chemin, l'étape échouait sans nouvel essai, et le run
  * finissait rouge dans un tour à 46,88 $.
@@ -899,7 +899,7 @@ describe('Orchestrator — refus du filtre de sécurité sur le chemin à un seu
       executionWorkspace: 'C:\\ws',
       worktrees: makeTestWorktrees('C:\\ws'),
       execPhases: ['frame']
-      // AUCUN `phaseFanOut` : l'étape tourne sur le binding du rôle subagent, comme en conv-890.
+      // AUCUN `phaseFanOut` : l'étape tourne sur le binding du rôle subagent, comme.
     })
 
   it('rejoue l’étape une fois sur le modèle voisin et trace le modèle qui a vraiment répondu', async () => {

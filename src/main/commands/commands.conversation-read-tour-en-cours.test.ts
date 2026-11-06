@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 
 /**
- * conv-1144 : un script extérieur (point d'entrée local) attend la fin du tour qu'il a lancé. Il
+ * Un script extérieur (point d'entrée local) attend la fin du tour qu'il a lancé. Il
  * n'avait que `get_state`, qui liste TOUS les fils (908) pour en dire un seul : trop lourd à
  * interroger toutes les 2 s. `conversation_read` dit donc lui-même si un tour tourne dans CE fil, avec
  * la même autorité (`tourDeChatActif`, câblée sur `activeChatTurns.isInFlight`) que `get_state`.
@@ -48,7 +48,7 @@ describe('conversation_read — dit si un tour tourne dans le fil', () => {
   })
 
   /*
-   * conv-1144 : un tour qui finit par une question à l'utilisateur (`ask`) se relisait comme une
+   * Un tour qui finit par une question à l'utilisateur (`ask`) se relisait comme une
    * réponse ordinaire — un script le prenait pour un succès alors que le fil ATTEND quelqu'un. La
    * question est rangée dans le message comme une action `ask` (chat-turn.ts, évènement `command`).
    */

@@ -437,7 +437,7 @@ export interface CostBreakdownRow extends TokenUsage {
  *
  * Necessaire car le cout d'une conversation vit dans DEUX journaux : `prompt-observability` (les
  * appels traces finement) et le journal d'activite (`kind: 'exec'`, ou atterrissent les sous-agents).
- * Mesure du 2026-07-28 sur conv-75 : le breakdown base sur les seuls prompt-calls annonçait 2,83 $
+ * Mesure du 2026-07-28 : le breakdown base sur les seuls prompt-calls annonçait 2,83 $
  * alors que la conversation avait coute ~20,70 $ — les deux appels dominants (10,90 $ et 5,72 $)
  * n'existaient que dans l'activite. Une mesure de cout incomplete est pire qu'aucune mesure : elle
  * fait prendre des decisions fausses avec l'air d'etre fondee.
@@ -499,8 +499,8 @@ interface ActivityCostEntry {
 /**
  * Role porte par une entree d'activite. Le `kind` DECIDE, jamais le `label` seul : sur une entree
  * `chat`, `label` contient le TEXTE du message de l'utilisateur — s'y fier faisait apparaitre
- * « reprend pardon » comme un acteur dans la repartition (constate sur les donnees reelles de
- * conv-75). Seul le kind `exec` porte un role exploitable dans son label ('subagent'/'orchestrator').
+ * « reprend pardon » comme un acteur dans la repartition (constate sur les donnees reelles).
+ * Seul le kind `exec` porte un role exploitable dans son label ('subagent'/'orchestrator').
  */
 function activityActor(entry: ActivityCostEntry): string {
   switch (entry.kind) {
@@ -567,7 +567,7 @@ function hasSpend(sample: CostSample): boolean {
  * fois) de « deux appels distincts au meme cout » (a compter deux fois) — un dedoublonnage par
  * ensemble ecrasait le second cas et SOUS-comptait. Les prompt-calls sont la source preferee : eux
  * seuls portent le `cacheReadTokens` et le modele. Une entree d'activite non appariee est CONSERVEE :
- * les sous-agents les plus couteux n'existent que la (mesure conv-75 : 2,83 $ vus contre ~20,70 $ reels).
+ * les sous-agents les plus couteux n'existent que la (mesure : 2,83 $ vus contre ~20,70 $ reels).
  */
 export function costSamplesFrom(
   calls: readonly PromptCallRecord[],

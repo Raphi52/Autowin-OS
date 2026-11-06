@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { premierPassageLaisseSortirLeTour } from './chat-auto-mode'
 
 /*
- * DEFAUT VECU le 2026-09-05 (conv-303) : l'agent redemarre l'app lui-meme au milieu d'une chaine en
+ * DEFAUT VECU le 2026-09-05 : l'agent redemarre l'app lui-meme au milieu d'une chaine en
  * mode auto. Au retour, le repere « premier passage dans ce fil » — qui vit en memoire — est vide,
  * la boucle croit ARRIVER dans la conversation, fige le dernier tour et saute le maillon suivant.
  * L'interrupteur reste allume : la chaine meurt en SILENCE et l'utilisateur doit renvoyer la suite

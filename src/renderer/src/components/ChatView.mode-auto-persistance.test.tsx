@@ -125,7 +125,7 @@ describe('ChatView — mode auto : survit au redémarrage, insensible aux autres
     ])
   })
   /**
-   * DEFAUT VECU (2026-09-07, conv-339) : « j'avais pas le bouton allume mais quand meme le mode
+   * DEFAUT VECU (2026-09-07) : « j'avais pas le bouton allume mais quand meme le mode
    * auto arme ». L'ancien reglage GLOBAL herite armait tous les fils pendant que le bouton, lui,
    * ne regardait que le reglage propre au fil : arme et invisible, donc ineteignable.
    */

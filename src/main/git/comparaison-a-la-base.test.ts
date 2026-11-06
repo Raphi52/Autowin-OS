@@ -19,7 +19,7 @@ import {
 } from './comparaison-a-la-base'
 
 /**
- * COPIES DE BASE ABANDONNÉES DANS `%TEMP%` (conv-1583, 2026-11-05, scout de conv-1576).
+ * COPIES DE BASE ABANDONNÉES DANS `%TEMP%` (2026-11-05).
  *
  * Relevé du 05/11 : quatre `%TEMP%\aw-base-*` du 04/11 toujours sur le disque et toujours inscrites
  * dans `git worktree list` ; `aw-base-92mlRA\copie\node_modules` était encore une jonction vers

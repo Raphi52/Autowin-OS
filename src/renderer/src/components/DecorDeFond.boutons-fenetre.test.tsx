@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 ).IS_REACT_ACT_ENVIRONMENT = true
 
 /**
- * LES BOUTONS DE FENÊTRE SUIVENT CE QUI EST DERRIÈRE EUX (conv-1076, 2026-10-22).
+ * LES BOUTONS DE FENÊTRE SUIVENT CE QUI EST DERRIÈRE EUX (2026-10-22).
  *
  * Demande : « Sur l'Accueil avec le fond Cyberpunk ou Planètes, rends les boutons
  * réduire/agrandir/fermer clairs dans les thèmes clairs, et laisse-les foncés sur les autres vues ».

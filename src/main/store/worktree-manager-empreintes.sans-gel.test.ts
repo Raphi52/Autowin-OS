@@ -4,12 +4,12 @@ import { arreterFilDExecution } from '../gel/execution-hors-fil'
 import { empreinteConnue, oublierEmpreintesProcessus } from './worktree-manager-empreintes'
 
 /**
- * LA SONDE D'EMPREINTE NE CRÉE PLUS SON POWERSHELL SUR LE FIL PRINCIPAL (conv-1574, 2026-11-05).
+ * LA SONDE D'EMPREINTE NE CRÉE PLUS SON POWERSHELL SUR LE FIL PRINCIPAL (2026-11-05).
  *
  * Mesure `gels.jsonl` depuis le démarrage de 09:34 UTC (`node scripts/gels-classement.mjs
  * --depuis 2026-11-05T09:34:30Z`) : premier appelant de la fenêtre figée, `spawn powershell.exe`
  * depuis `worktree-manager-empreintes.ts:177` < `:326`, 13 appels, 82,8 s, dont 31,9 s d'un coup à
- * 09:51:40. Le sondage était déjà « asynchrone » (`execFile` plutôt qu'`execFileSync`, conv-1508),
+ * 09:51:40. Le sondage était déjà « asynchrone » (`execFile` plutôt qu'`execFileSync`),
  * mais `execFile` ne l'est que pour la suite : la CRÉATION du processus bloque le fil qui l'appelle,
  * et sur ce poste elle attend au-dessus du disque (une sentinelle hors de l'app y est restée 45,7 s,
  * `scripts/trace-blocage-disque.ps1`, même jour).

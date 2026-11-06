@@ -3,7 +3,7 @@ import { askReponseDuFil } from './chat-message-keys'
 import type { Msg } from './chat-view-types'
 
 /*
- * VECU (conv-50, 2026-09-01) : l'utilisateur clique une reponse du bloc `ask`, RIEN ne part, et le
+ * VECU (2026-09-01) : l'utilisateur clique une reponse du bloc `ask`, RIEN ne part, et le
  * bloc affiche deja « Répondu ». Cause : le verrou durable se fermait sur N'IMPORTE QUEL message
  * utilisateur posterieur au tour. Un message qui parlait d'autre chose condamnait donc la question,
  * et le clic suivant etait avale en silence. Le verrou doit se fermer sur une VRAIE reponse.

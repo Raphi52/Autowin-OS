@@ -37,7 +37,7 @@ describe('resolveAppLocation — le nom AFFICHÉ est une adresse valide', () => 
     })
   })
 
-  // Les Bureaux cachés sont un panneau du chat (conv-1378) : l'utilisateur dit toujours « Hdesk ». Sans
+  // Les Bureaux cachés sont un panneau du chat : l'utilisateur dit toujours « Hdesk ». Sans
   // ces noms, « va sur les bureaux cachés » retomberait en silence sur le chat, panneau fermé.
   it('atteint le panneau des Bureaux cachés par son nom, par « hdesk » et sans accent', () => {
     for (const nom of ['Bureaux cachés', 'bureaux caches', 'bureau caché', 'hdesk', 'Hdesk']) {

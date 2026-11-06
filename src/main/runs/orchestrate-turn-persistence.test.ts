@@ -123,7 +123,7 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
    * INTENTION CONSERVÉE — ne jamais répéter un texte DÉJÀ LU par l'utilisateur — mais le critère est
    * corrigé le 2026-08-17 : ce test comptait `step.text` comme « déjà porté par les étapes », ce qui
    * est FAUX. La carte `result` d'une étape ne transporte que `detail`, `error`, `costUsd` et
-   * `durationMs` ; `step.text` n'est émis NULLE PART. Conséquence mesurée sur `conv-1267` : dès qu'une
+   * `durationMs` ; `step.text` n'est émis NULLE PART. Conséquence mesurée : dès qu'une
    * phase produisait du texte, la clôture était supprimée et le tour se terminait sur quatre étiquettes
    * nues — « [a exécuté orchestrate] [a exécuté exec] [a exécuté judge] [a exécuté gate] », zéro mot,
    * alors que judge ET gate avaient passé. La déduplication ne peut porter que sur ce qui est
@@ -167,7 +167,7 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
   /**
    * Le critère est l'IDENTITÉ, pas la présence : un texte déjà livré ne doit pas éteindre une clôture
    * qui dit autre chose. Sans cette distinction, il suffit qu'une phase ait parlé pour perdre le
-   * verdict — c'est la forme faible du défaut de `conv-1267`.
+   * verdict — c'est la forme faible du défaut.
    */
   it('garde une clôture qui dit AUTRE CHOSE qu’un texte déjà livré', () => {
     const { store, id } = storeWithConversation()
@@ -220,7 +220,7 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
   })
 
   /*
-   * LA LISTE DOIT APPRENDRE LA FERMETURE (conv-914, 2026-10-13). Un tour lancé par le main (run
+   * LA LISTE DOIT APPRENDRE LA FERMETURE (2026-10-13). Un tour lancé par le main (run
    * repris, rattaché, direct) allume le spinner de la liste tant qu'il est `streaming`
    * (`hasStreamingTurn`). Sa fermeture ne rechargeait pas la liste : seul `refresh/conversations` le
    * fait, et seule la fin d'un tour de CHAT l'envoyait — le spinner serait resté allumé.
@@ -251,7 +251,7 @@ describe('persistance du tour pour le run direct os:orchestrate', () => {
   })
 
   /*
-   * SPINNER FANTÔME APRÈS UNE REPRISE SOUS UN NOUVEAU TOUR (juge du correctif spinner, conv-914,
+   * SPINNER FANTÔME APRÈS UNE REPRISE SOUS UN NOUVEAU TOUR (juge du correctif spinner
    * 2026-10-13). `hydrate` garde `streaming` le tour d'origine d'un checkpoint qui survit. Quand la
    * reprise ne peut pas le réutiliser (autre identité de modèle, snapshot absent, ancien checkpoint),
    * elle ouvre un NOUVEAU tour — et personne ne fermait l'ancien. `hasStreamingTurn` le voit où qu'il

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { AppCommandBus } from './commands'
 
 /**
- * ECRIRE DANS UN AUTRE DEPOT — le mur mesure en conv-12 (2026-09-02).
+ * ECRIRE DANS UN AUTRE DEPOT — le mur mesure (2026-09-02).
  *
  * L'utilisateur travaillait sur `D:\GIT\ContosoApp`, sur sa branche, et demandait la
  * modification de `ULT_TT_INPI.cs` en annoncant qu'il compilerait et committerait lui-meme. Les

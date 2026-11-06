@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { catalogueAgy, lireModelesAgy } from './agy-modeles'
 
-// Sortie RÉELLE de `agy models` (agy 1.5.0, compte connecté, 2026-11-04, conv-1530).
+// Sortie RÉELLE de `agy models` (agy 1.5.0, compte connecté, 2026-11-04).
 const SORTIE_REELLE = [
   'Fetching available models...',
   'gemini-3.8-flash-high\tGemini 3.8 Flash (High)',

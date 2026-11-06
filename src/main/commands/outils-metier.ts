@@ -1,4 +1,4 @@
-// Groupe de commandes « vérification, Brain, profil, skills, tâches, SQL, tickets », sorti de AppCommandBus.run (conv-1508, lot 2).
+// Groupe de commandes « vérification, Brain, profil, skills, tâches, SQL, tickets », sorti de AppCommandBus.run (lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import { profilAjouter, profilRetirer } from '../profil/profil-utilisateur'
@@ -16,7 +16,7 @@ import { getTicketFromCommand, type TicketGetArgs } from './ticket-get-command'
 import { updateTicketFromCommand, type TicketUpdateArgs } from './ticket-update-command'
 import { searchTicketsFromCommand, type TicketSearchArgs } from './ticket-search-command'
 
-/** Cas de `AppCommandBus.run` : vérification, Brain, profil, skills, tâches, SQL, tickets. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
+/** Cas de `AppCommandBus.run` : vérification, Brain, profil, skills, tâches, SQL, tickets. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerOutilsMetier(
   bus: AppCommandBus,
   name: string,
@@ -36,14 +36,14 @@ export async function executerOutilsMetier(
     case 'brain_query':
       return await bus.runBrainQuery(a.question, conversationId, turnId, a.entier)
     case 'profil_ajouter':
-      // Un refus (profil plein, identité inconnue, préférence vide) LÈVE : rien n'est écrit (conv-1098).
+      // Un refus (profil plein, identité inconnue, préférence vide) LÈVE : rien n'est écrit.
       return profilAjouter(a.preference)
     case 'profil_retirer':
       return profilRetirer(a.preference)
     case 'brain_graph':
     case 'brain_read': {
       /*
-       * NOTE DU BRAIN PERSO (conv-1233) : la recherche rend ses chemins préfixés `perso:`. On
+       * NOTE DU BRAIN PERSO : la recherche rend ses chemins préfixés `perso:`. On
        * l'ouvre sur le serveur perso, sans filtre de dépôt — les notes perso ne sont rangées
        * par aucun projet.
        */
@@ -91,7 +91,7 @@ export async function executerOutilsMetier(
       const debut = performance.now()
       const lu =
         name === 'brain_graph' ? await runBrainGraph(a, deps) : await runBrainRead(a, deps)
-      // conv-1303 : ces lectures injectaient des notes entières sans aucune trace Brain.
+      // Ces lectures injectaient des notes entières sans aucune trace Brain.
       tracerLectureBrain(name === 'brain_graph' ? 'brain_graph' : 'brain_read', a, lu, {
         conversationId,
         turnId,
@@ -114,7 +114,7 @@ export async function executerOutilsMetier(
       // Même chemin que le bouton « Créer » de l'écran : rien qui échappe au bouton « Supprimer ».
       return await createTaskFromCommand(a as { task?: unknown }, bus.taskManager)
     case 'task_update':
-      // Mêmes chemins que les boutons « Enregistrer » et « Supprimer » de l'écran (conv-1370).
+      // Mêmes chemins que les boutons « Enregistrer » et « Supprimer » de l'écran.
       return await updateTaskFromCommand(a as { id?: unknown; patch?: unknown }, bus.taskManager)
     case 'task_delete':
       return await deleteTaskFromCommand(a as { id?: unknown }, bus.taskManager)
@@ -137,7 +137,7 @@ export async function executerOutilsMetier(
           // contourne en ajoutant un second appelant. Aucun jeton n'est transmis par le modèle —
           // il ne peut donc pas s'autoriser en l'inventant dans ses arguments.
           // Le fil d'où part le geste : l'écran d'autorisation vit DANS la conversation, il ne
-          // doit donc s'afficher que dans celle-ci (conv-626, 2026-09-16).
+          // doit donc s'afficher que dans celle-ci (2026-09-16).
           ...(conversationId ? { conversationId } : {}),
           ...(bus.porteProd ? { porteProd: bus.porteProd } : {}),
           // Le guichet ne contourne rien : il ouvre l'écran de saisie de l'utilisateur quand la

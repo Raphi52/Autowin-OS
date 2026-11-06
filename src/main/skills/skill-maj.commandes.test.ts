@@ -9,7 +9,7 @@ import { refusTacheWindows } from '../../shared/garde-tache-windows'
 import { resoudreBash } from '../chat/relance-taches-de-fond'
 
 /**
- * LES COMMANDES QUE `/maj` PRESCRIT MARCHENT-ELLES, TELLES QU'ÉCRITES ? (conv-1036, 2026-10-21)
+ * LES COMMANDES QUE `/maj` PRESCRIT MARCHENT-ELLES, TELLES QU'ÉCRITES ? (2026-10-21)
  *
  * Le défaut d'origine était une consigne qu'un agent ne pouvait pas suivre : le bouton disait
  * « mets le fichier de côté (git stash) », et le garde-fou refuse `git stash` aux agents. Vérifier
@@ -21,7 +21,7 @@ import { resoudreBash } from '../chat/relance-taches-de-fond'
  * qu'origin/main ajoute (« untracked working tree files would be overwritten »), git répond
  * « did not match any file(s) known to git » et la mise à jour reste bloquée.
  */
-// fix-ok: conv-1036, 2026-10-21 — cause mesurée : avec skills/maj/SKILL.md du commit 45bcd2b6, ce test
+// fix-ok: 2026-10-21 — cause mesurée : avec skills/maj/SKILL.md du commit 45bcd2b6, ce test
 // sort 1 sur « error: pathspec 'nouveau.txt' did not match any file(s) known to git » ; avec l'étape 3
 // qui retire le non suivi par `rm` après `git show --stat`, il sort 0 (3 tests verts).
 const SKILL = readFileSync(join(process.cwd(), 'skills', 'maj', 'SKILL.md'), 'utf8').replace(
@@ -133,7 +133,7 @@ function jouer(cwd: string, bloc: string): ReturnType<typeof spawnSync> {
 }
 
 /*
- * Étape 2 (juge de conv-1043, 2026-10-21) : elle prescrivait seulement `git commit -m "…" -- <chemins>`
+ * Étape 2 (2026-10-21) : elle prescrivait seulement `git commit -m "…" -- <chemins>`
  * et déconseillait le `git add`. Sur un fichier NEUF, git répond « pathspec … did not match any
  * file(s) known to git » : le vrai travail récent ne pouvait pas être gardé tel qu'écrit.
  */

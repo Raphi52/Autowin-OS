@@ -11,7 +11,7 @@ import { AGGREGATE_MAX_CHARS } from '../verify/evidence-digest'
 /**
  * UNE LEÇON CORRIGÉE PAR UNE RÉPARATION REMPLACE LA PRÉCÉDENTE.
  *
- * Mesuré sur run-85d8e7f57af2-1 (conv-892, 2026-10-01), `run-state/run-85d8e7f57af2-1.json` :
+ * Mesuré sur run-85d8e7f57af2-1 (2026-10-01), `run-state/run-85d8e7f57af2-1.json` :
  * cinq réponses de build portaient une ligne `AUTOWIN_LESSON_V1`, aux caractères 9 054, 10 011,
  * 4 821, 8 363 et 4 559. L'agrégat coupait chaque réponse à 6 000 caractères : seules les versions
  * [8] (fausse) et [12] (corrigée) restaient lisibles, donc DEUX lignes et aucune leçon enregistrable
@@ -46,7 +46,7 @@ function lignesDeLecon(texte: string): string[] {
 
 describe('agrégat remis au juge — leçon proposée', () => {
   it('cas conv-892 : la leçon corrigée, coupée au-delà du plafond, est celle qui reste', () => {
-    // Piste 5 de conv-914 : la place des réponses courtes revient aux longues ; pour que la coupe ait
+    // Piste 5 : la place des réponses courtes revient aux longues ; pour que la coupe ait
     // lieu, les quatre réponses prennent les longueurs mesurées les plus grandes (9 054, 10 011, 8 363).
     const sorties = [
       { phase: 'build', text: reponse(9054, lecon('version fausse')) },
@@ -96,7 +96,7 @@ describe('agrégat remis au juge — leçon proposée', () => {
   })
 
   it('sans aucune leçon : en-têtes de phase, et un bloc trop long garde son début ET sa fin', () => {
-    // Piste 5 de conv-914 : la coupe gardait le seul début (`y` × 6 000 puis la marque). Elle garde
+    // Piste 5 : la coupe gardait le seul début (`y` × 6 000 puis la marque). Elle garde
     // désormais 2/3 du plafond en tête et le reste en fin, raccord compris : 4 000 + 1 + 1 999.
     // Deux blocs au-delà du plafond : la place mise en commun est épuisée, chacun garde sa part.
     const sorties = [
@@ -228,7 +228,7 @@ describe('agrégat remis au juge — piste 1 de conv-914 : seule la dernière ve
 })
 
 /**
- * conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : la réponse affichée d'un /scout rejoué trois
+ * Tour b6150a1a-6518-4d4b-99b4-3218b5efb501 : la réponse affichée d'un /scout rejoué trois
  * fois commençait par « [phase scout] » + la mention « …plus bas », deux fois, avant le tableau. Ce
  * texte est écrit pour le juge ; l'utilisateur ne doit lire que la version qui compte.
  */

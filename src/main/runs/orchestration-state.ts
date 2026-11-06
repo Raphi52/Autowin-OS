@@ -91,7 +91,7 @@ export interface OrchestrationRunState {
   }
   /**
    * Run SUSPENDU par le mur de quota (`orchestrator.ts`). Son acquis reste reprenable : l'effacer
-   * perdait des phases déjà payées (conv-914 et conv-916, 2026-10-13). `resumeAfter` est l'heure
+   * perdait des phases déjà payées (2026-10-13). `resumeAfter` est l'heure
    * de retour que le refus annonçait lui-même (`instantDeRetourAnnonce`) ; avant elle, la reprise
    * automatique du démarrage s'abstient (`repriseAutoRetenueParQuota`). Une reprise demandée
    * (relance de la tâche dans le fil, « Reprendre tout ») n'attend pas : c'est un geste voulu.
@@ -422,7 +422,7 @@ function isRunAgentRef(
      * Une phase du pipeline OU l'identifiant d'une skill du disque — meme borne que `isPhaseOutput`.
      *
      * Ce controle etait reste sur la liste FERMEE alors que le type venait d'etre elargi a
-     * `NodePhase`. Consequence mesuree sur un run REEL (conv-1336, workflow think->build->learn) :
+     * `NodePhase`. Consequence mesuree sur un run REEL (workflow think->build->learn) :
      * des qu'un agent est enregistre pour un noeud skill, cette ligne invalide le checkpoint ENTIER,
      * `saveOrchestrationState` jette « checkpoint orchestration causalement invalide », et le run
      * meurt avant sa premiere phase.
@@ -885,7 +885,7 @@ export function loadOrchestrationStates(root: string): OrchestrationRunState[] {
  * UN checkpoint, lu dans SON fichier — meme resultat que
  * `loadOrchestrationStates(root).find((c) => c.runId === runId)`, sans relire les autres.
  *
- * Pourquoi (heal conv-1013, 2026-10-16) : `gels.jsonl` porte a chaque demarrage ~1,15 s de
+ * Pourquoi (2026-10-16) : `gels.jsonl` porte a chaque demarrage ~1,15 s de
  * `readFileSync` (≈ 540 appels) partis de `terminalizeInterruptedPersistedRun`, qui rechargeait
  * TOUS les checkpoints pour en retrouver un, et ce pour CHAQUE run du balayage de demarrage :
  * N + N² lectures (1 332 sur les 36 checkpoints du poste, ~1,0 s). L'equivalence tient parce que
@@ -956,9 +956,9 @@ function resumeCheckpointIsStale(state: OrchestrationRunState, nowMs: number): b
 }
 
 /**
- * LES DEUX DATES D'UN CHECKPOINT, tenues pour chaque run du process (conv-1589, 2026-11-05).
+ * LES DEUX DATES D'UN CHECKPOINT, tenues pour chaque run du process (2026-11-05).
  *
- * La péremption ci-dessus compte depuis `updatedAt`. Mesuré sur `run-49e50da90997-1` (conv-1461) :
+ * La péremption ci-dessus compte depuis `updatedAt`. Mesuré sur `run-49e50da90997-1` :
  * `startedAt` = `updatedAt` = l'heure de la DERNIÈRE reprise ratée, 33 démarrages de suite. Deux
  * causes, dans `os.ts` :
  *  - `startedAt` lisait une table que rien ne remplissait : il valait l'heure de CHAQUE écriture ;
@@ -1287,7 +1287,7 @@ export function admitAutomaticResumeRuntime(
  * bouger depuis, et les rejouer est la seule façon honnête de savoir où en est le code.
  *
  * `think` en fait partie : son briefing est un texte, et l'en exclure le faisait repayer seul alors
- * que le `frame` bâti dessus était repris (conv-890, `run-66d6d5bdfc5a-1`, 1,94 $ le 2026-09-30).
+ * que le `frame` bâti dessus était repris (`run-66d6d5bdfc5a-1`, 1,94 $ le 2026-09-30).
  */
 const PHASES_ANALYSE_REUTILISABLES: readonly NodePhase[] = ['think', 'scout', 'frame', 'terrain']
 
@@ -1296,7 +1296,7 @@ const PHASES_ANALYSE_REUTILISABLES: readonly NodePhase[] = ['think', 'scout', 'f
  * demande a changé.
  *
  * `pickResumeForTask` exige la même tâche à la clé près. Le parcours réel ne la respecte jamais :
- * mesuré sur `conv-1061`, l'utilisateur enchaîne « scout des améliorations de la vue Chat » puis
+ * mesuré, l'utilisateur enchaîne « scout des améliorations de la vue Chat » puis
  * « Fais tout. Mène les chantiers retenus… ». Deux libellés, donc aucun acquis reconnu, donc le
  * scout est intégralement rejoué — 11,20 $ de scout+frame+terrain sur 15,16 $ de sous-agents.
  *
@@ -1366,7 +1366,7 @@ export function pickAcquiredAnalysis(
  * relance sans objet enveloppée par commands.ts (« REPREND » + CIBLE CONTEXTUALISEE), la tâche
  * déléguée qu'elle porte. Le point de reprise garde la tâche d'origine, et une reprise le réécrit
  * avec la tâche enveloppée : comparer les deux formes des deux côtés couvre la première relance,
- * la suivante (« vazy ») et la tâche retapée en clair (conv-1038, 2026-10-21).
+ * la suivante (« vazy ») et la tâche retapée en clair (2026-10-21).
  */
 function clesDeReprise(task: string): string[] {
   const cible = cibleDUneRelance(task)

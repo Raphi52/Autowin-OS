@@ -9,7 +9,7 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 /**
  * LE FIL N'EST PAS REPAYÉ À CHAQUE ITÉRATION D'UN MÊME TOUR.
  *
- * Mesuré le 2026-08-31 sur conv-1 : le livrable d'une phase `frame` (≈ 6 000 caractères, plus
+ * Mesuré le 2026-08-31 : le livrable d'une phase `frame` (≈ 6 000 caractères, plus
  * « 6106 caractères de plus » annoncés) réapparaissait VERBATIM à chaque itération suivante du même
  * tour — cinq fois — alors que sa conclusion utile tenait en cinq lignes.
  *

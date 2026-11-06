@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
- * CÂBLAGE DE LA PHOTO DU CODE (conv-1038, 2026-10-21). Le module est testé sur un vrai dépôt
+ * CÂBLAGE DE LA PHOTO DU CODE (2026-10-21). Le module est testé sur un vrai dépôt
  * (`photo-du-code.test.ts`) ; ce test tient les trois conditions qui font qu'une photo sert à
  * « revenir à ce tour » :
  *  - elle est prise dans le runner du tour de chat (`runPilotChat`), le seul passage de TOUS les

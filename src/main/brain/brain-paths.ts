@@ -60,7 +60,7 @@ export const AUTOWIN_OWN_BRAIN_STATE_DIR = 'AutowinBrain'
 /**
  * Racine du Brain PROPRE a Autowin, lue dans `%LOCALAPPDATA%\AutowinBrain\config.json` (`brain_root`).
  *
- * CONSTATE LE 2026-09-25 (conv-3) : sur un poste qui heberge AUSSI un Brain personnel (Hermes-Brain),
+ * CONSTATE LE 2026-09-25 : sur un poste qui heberge AUSSI un Brain personnel (Hermes-Brain),
  * l'installateur de celui-ci pose l'ANCIEN nom de `AUTOWIN_BRAIN_ROOT` dans les variables UTILISATEUR. Autowin en
  * heritait : il lisait ce Brain, y deposait ses lecons (`remember`, POST /ingest) et sa cloture
  * automatique y commitait. Ce dossier donne a Autowin son propre Brain : sa racine prime alors sur la
@@ -144,7 +144,7 @@ export function sharedBrainRoot(env: NodeJS.ProcessEnv = process.env): string {
  * Racine lue dans la CONFIGURATION POSEE PAR L'INSTALLATION (`config.json`, cle `brain_root`),
  * quand l'environnement est muet — meme logique que `origineDepuisInstallation` plus bas.
  *
- * DEFAUT VECU (conv-2, 2026-09-10) : le moteur de requete (`resolveBrainRuntime`) lisait deja
+ * DEFAUT VECU (2026-09-10) : le moteur de requete (`resolveBrainRuntime`) lisait deja
  * `config.json` et repondait depuis le brain local, pendant que la vue Knowledge
  * (`listBrains` → `scanBrainGraphs`) ne lisait QUE l'environnement et retombait sur le partage
  * reseau — inexistant hors VPN, donc AUCUN coffre de savoir affiche alors que les requetes,
@@ -182,7 +182,7 @@ export function requireLoopbackBrainOrigin(value: string): string {
 /**
  * Origine lue dans la CONFIGURATION POSEE PAR L'INSTALLATION, quand l'environnement est muet.
  *
- * DEFAUT VECU (conv-8, 2026-09-03) : le serveur a jour ecoutait 8766 (c'est lui qui porte l'echange
+ * DEFAUT VECU (2026-09-03) : le serveur a jour ecoutait 8766 (c'est lui qui porte l'echange
  * de defi du protocole 2 ; un binaire plus ancien squattait 8765). Cote client, l'origine ne vivait
  * QUE dans la variable d'origine du shell ou elle avait ete tapee : le processus
  * principal, lance sans elle, retombait sur le defaut 8765 et chaque lecture du savoir rendait

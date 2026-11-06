@@ -8,7 +8,7 @@ import {
 import { etatVide } from '../tickets/liens-work-items'
 
 /**
- * LE CALCUL DU BOARD, ÉTAPE PAR ÉTAPE (conv-1248, 2026-10-29).
+ * LE CALCUL DU BOARD, ÉTAPE PAR ÉTAPE (2026-10-29).
  *
  * Mesure dans l'app réelle après le calcul d'avance : 165 à 218 ms par ouverture, dont la lecture
  * des runs — 111 ms en médiane (`snapshot:runs` de `turn-timing.jsonl`, 300 tours). Elle partait

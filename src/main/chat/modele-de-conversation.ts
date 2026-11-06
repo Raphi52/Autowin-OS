@@ -1,7 +1,7 @@
 /**
  * LE MODÈLE D'UN TOUR DE CHAT, quand la conversation a choisi le sien.
  *
- * Demande du 2026-10-11 (conv-239) : le modèle est propre à chaque conversation. Le fil peut
+ * Demande du 2026-10-11 : le modèle est propre à chaque conversation. Le fil peut
  * mémoriser un modèle (`Conversation.modeleChoisi`) ; à défaut, le tour part sur le rôle
  * orchestrateur de l'application, comme avant.
  *

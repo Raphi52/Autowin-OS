@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 // fix-ok: vu rouge d abord (feuille et import absents), puis mis en forme par prettier ; aucune assertion desserree.
 /**
- * Theme « Ninja Claude » (conv-269, 2026-10-16) : l'apparence de Claude en sombre. Deux fichiers :
+ * Theme « Ninja Claude » (2026-10-16) : l'apparence de Claude en sombre. Deux fichiers :
  * la couche generee des couleurs en dur (theme-ninja-claude.genere.css, produite par
  * `node scripts/theme-nebuleuse-verre.mjs ninja-claude`) et la feuille ecrite a la main
  * (theme-ninja-claude.css : jetons, polices, chat, decor retire).

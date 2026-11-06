@@ -6,7 +6,7 @@ import { join } from 'node:path'
  *
  * Pourquoi. Rien ne bornait cet arbre : mesure du 2026-09-12 sur le poste de dev — 441 traces,
  * 667 Mo accumulés en 12 jours, dont 254 fichiers / 314 Mo de plus de 7 jours, et 31 fichiers de
- * plus de 5 Mo (le plus gros, conv-439 : 18 Mo). C'est le PREMIER poste de volume de
+ * plus de 5 Mo (le plus gros, 18 Mo). C'est le PREMIER poste de volume de
  * `.autowin-data` et la cause mesurée des blocages d'interface : 83 des 117 gels du 12/09 sont des
  * entrées-sorties disque synchrones.
  *
@@ -117,7 +117,7 @@ export interface CausalTraceGcOutcome {
  * Applique le plan. La sûreté vient UNIQUEMENT de `planCausalTraceGc`.
  *
  * ASYNCHRONE, et lancée APRÈS l'affichage de la fenêtre (index.ts, `interfaceVisible`) : mesure du
- * 2026-10-19 (conv-359), un `statSync` par trace au démarrage, sur le disque D: saturé. Lancée
+ * 2026-10-19, un `statSync` par trace au démarrage, sur le disque D: saturé. Lancée
  * avant, aucune conversation ne pouvait encore écrire ; lancée après, une conversation ancienne que
  * l'utilisateur rouvre peut se remettre à écrire PENDANT la passe. D'où deux gardes : l'appelant
  * protège les conversations touchées depuis le démarrage (`protectedConversationIds`), et chaque

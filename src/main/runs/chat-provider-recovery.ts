@@ -188,7 +188,7 @@ function providerLink(
 }
 
 /**
- * CE QUE REJOUE LA REPRISE D'UN TOUR DE CHAT (conv-955, 2026-10-15) — deux réglages, chacun à sa place.
+ * CE QUE REJOUE LA REPRISE D'UN TOUR DE CHAT (2026-10-15) — deux réglages, chacun à sa place.
  *
  *  - `runtimeBinding` : le modèle et l'effort avec lesquels le tour d'origine répondait. Le CHAT
  *    repris continue avec eux (même modèle avant et après la coupure).

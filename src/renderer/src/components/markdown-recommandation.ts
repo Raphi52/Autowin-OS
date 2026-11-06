@@ -11,7 +11,7 @@
 const AUTRE_EN_TETE = /^\s*(?:✅|⚠️?|📍|⏳|👉)/u
 
 /**
- * Lignes techniques (prompt pre-garni, carte des besoins conv-1089) : ce n'est pas le texte de la
+ * Lignes techniques (prompt pre-garni, carte des besoins) : ce n'est pas le texte de la
  * rubrique, et la ligne de besoin peut suivre « Recommandé » de pres.
  */
 const LIGNE_TECHNIQUE = /^\s*AUTOWIN_(?:PROMPT|BESOIN)_V1\s*:/u
@@ -29,7 +29,7 @@ function nettoyer(texte: string): string {
  * Rend le texte de l'etape recommandee (sans le libelle, sans le gras markdown), ou null.
  * Sert de ghost-text pre-rempli dans le composer du chat (accepte par Tab).
  *
- * DEFAUT VECU (conv-159, saisie ts=1788413714805) : la rubrique peut etre ecrite en TITRE NU, son
+ * DEFAUT VECU (saisie ts=1788413714805) : la rubrique peut etre ecrite en TITRE NU, son
  * contenu sur les lignes SUIVANTES. L'ancienne version ne lisait que la ligne du titre et rendait
  * donc le mot « Recommandé » — le mode auto l'a envoye comme ordre (un tour paye pour du bruit),
  * et le garde-fou d'arret n'a jamais vu le « rien » ecrit juste en dessous. On lit donc la

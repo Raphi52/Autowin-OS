@@ -4,7 +4,7 @@ import { AVENUE } from './home-decor-avenue'
 import { COMPOSITIONS, DECOR_VARIANTS } from './home-decor-scene'
 
 /**
- * CE QUE L'UTILISATEUR A CHOISI, conv-1399, mot pour mot :
+ * CE QUE L'UTILISATEUR A CHOISI, mot pour mot :
  *
  *   « Une scène 3D temps réel qui réinterprète le fond (couches, particules, lumière),
  *     pas une copie pixel du fond »
@@ -14,7 +14,7 @@ import { COMPOSITIONS, DECOR_VARIANTS } from './home-decor-scene'
  * ne l'empêchait de revenir : les tests voisins gardent l'OPACITÉ du canevas (`home-decor-scene.test`),
  * le fond de la vue (`HomeView.css.test`) et le catalogue des directions — aucun ne dit que le décor
  * doit être SYNTHÉTIQUE. Un futur agent lisant « reproduction du fond d'écran » (le tout premier mot
- * de la demande, conv-1397) pouvait plaquer `autowin-galaxy-bg-hq.png` en texture sur un plan, obtenir
+ * de la demande) pouvait plaquer `autowin-galaxy-bg-hq.png` en texture sur un plan, obtenir
  * une ressemblance pixel bien meilleure, et voir la suite rester verte. Ce fichier est l'oracle
  * manquant.
  *
@@ -56,7 +56,7 @@ describe('décor 3D — réinterprétation synthétique, pas copie pixel (choix 
 
   /*
    * COUCHES et PARTICULES visent la composition à planètes par son NOM. Elles visaient « la direction
-   * par défaut » tant que c'était elle ; depuis le 2026-10-17 le défaut est l'avenue (conv-301), et ses
+   * par défaut » tant que c'était elle ; depuis le 2026-10-17 le défaut est l'avenue, et ses
    * couches, ses particules, sa lumière et son refus de toute image sont tenus par
    * `home-decor-avenue.contract.test.ts`. Aucune garantie n'est perdue : chacune a changé d'adresse.
    */

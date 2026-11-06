@@ -1,5 +1,5 @@
 /**
- * Modèles Grok proposés par le CLI d'xAI (2026-11-04, conv-1499) : l'onglet Grok du choix de
+ * Modèles Grok proposés par le CLI d'xAI (2026-11-04) : l'onglet Grok du choix de
  * modèle n'offrait que l'entrée « défaut » (`modelesGrok` dans grok.ts), alors que
  * `grok models` annonce les modèles du compte SuperGrok. Même forme que agy-modeles.ts.
  */

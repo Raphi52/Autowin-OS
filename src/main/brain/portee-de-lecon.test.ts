@@ -79,7 +79,7 @@ describe('les deux côtés appellent bien cette définition', () => {
   })
 
   it('le consommateur appelle la même définition', () => {
-    // Le consommateur vit dans commands/apprentissage.ts (conv-1580, lot 6) : famille du bus.
+    // Le consommateur vit dans commands/apprentissage.ts (lot 6) : famille du bus.
     expect(sourceDuBus()).toContain('porteeDeLecon(')
   })
 })

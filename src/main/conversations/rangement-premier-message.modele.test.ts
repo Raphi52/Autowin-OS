@@ -7,7 +7,7 @@ import {
 } from './rangement-premier-message'
 
 /**
- * LE CAS FONDATEUR, AVEC SON VRAI MESSAGE (conv-611). Il ne contient pas le mot « Autowin » : seul
+ * LE CAS FONDATEUR, AVEC SON VRAI MESSAGE. Il ne contient pas le mot « Autowin » : seul
  * un jugement sur le SUJET peut le rattacher. Le modele est simule ici — ce qui est prouve, c'est
  * le contrat autour de lui : son choix est borne a la liste, sous seuil il ne range rien, et une
  * panne ne casse pas le tour.
@@ -16,7 +16,7 @@ const AUTOWIN = resolve('D:/AutoWinOS')
 const BRAINROT = resolve('D:/BrainRotRoyale')
 const CONNUS = [AUTOWIN, BRAINROT]
 const existe = (): boolean => true
-/** Le PREMIER message reel de conv-611, copie de sa trace causale — jamais reecrit. */
+/** Le PREMIER message reel, copie de sa trace causale — jamais reecrit. */
 const MESSAGE_REEL_CONV_611 =
   '/kaizen mes travaux en paralele se parasitent car ils utilise pas mon systeme de bureau virtuel'
 const repond = (charge: unknown) =>
@@ -116,7 +116,7 @@ describe('bout en bout — conv-611 rangee par le modele', () => {
 })
 
 /**
- * LE VRAI CAS conv-611, MESURE EN DIRECT le 2026-09-16 : la conversation portait
+ * LE VRAI CAS, MESURE EN DIRECT le 2026-09-16 : la conversation portait
  * `categorie = "Autowin OS"` et AUCUN `projectPath`. Le « dossier » de la barre laterale est donc
  * la CATEGORIE — c'est elle qu'il fallait deduire, sinon le cas fondateur reste non resolu.
  */
@@ -184,7 +184,7 @@ describe('rangement par CATEGORIE — le cas conv-611 tel qu il existe vraiment'
 })
 
 /**
- * MESURE EN DIRECT (sonde, conv-618, 2026-09-16) : le modele rendait bien « D:\AutoWinOS » a 0,88,
+ * MESURE EN DIRECT (sonde, 2026-09-16) : le modele rendait bien « D:\AutoWinOS » a 0,88,
  * et le rangement etait JETE parce que ce dossier etait aussi le dossier ACTIF — alors que celui-ci
  * n'etait qu'un repli, la conversation n'etant rangee nulle part. Le rangement doit s'ecrire.
  */
@@ -208,7 +208,7 @@ describe('dossier deja actif par simple repli', () => {
 })
 
 /**
- * LA CATEGORIE PASSE AVANT LE DOSSIER (choix utilisateur du 2026-09-16). Mesure conv-619 : le
+ * LA CATEGORIE PASSE AVANT LE DOSSIER (choix utilisateur du 2026-09-16). Mesure : le
  * modele choisissait D:\AutoWinOS alors que la categorie « Autowin OS » existait et designait la
  * meme chose. Une equivalence de NOM suffit a rebasculer sur le libelle.
  */

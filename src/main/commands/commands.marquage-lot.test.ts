@@ -5,7 +5,7 @@ import { AppCommandBus } from './commands'
  * REFERMER LE SALVAGE PAR LOT, comme on supprime deja les conversations par lot.
  *
  * Trace causale au 2026-09-12 : 225 appels a `marquer_travail_trie` repartis sur 94 tours, dont un
- * tour a 23 appels (conv-269), un a 13 (conv-274), un a 10 (conv-253). Chaque appel est un
+ * tour a 23 appels, un a 13, un a 10. Chaque appel est un
  * aller-retour modele complet pour une ecriture d'une ligne. La version au singulier LEVE sur un
  * identifiant inconnu — comportement voulu et conserve — ce qui la rend inutilisable en boucle :
  * le premier id perime annulerait tout le reste. Le lot agrege donc au lieu de lever.
@@ -65,7 +65,7 @@ describe('marquer_travaux_tries', () => {
   })
 
   /*
-   * L'OUTIL NATIF ENVOIE LA LISTE EN TEXTE (conv-927, 2026-10-13). `schemaEntree`
+   * L'OUTIL NATIF ENVOIE LA LISTE EN TEXTE (2026-10-13). `schemaEntree`
    * (skill-node-mcp.ts) declare TOUS les arguments en `type: 'string'` : le modele qui suit la
    * description (« ex. ["agent-a","agent-b"] ») envoie donc la chaine JSON, et le lot repondait
    * « ids doit etre une liste » — le marquage n'etait possible que par la voie <cmd>.

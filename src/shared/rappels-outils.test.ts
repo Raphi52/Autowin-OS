@@ -8,7 +8,7 @@ import { NOM_JOURNAL_MESSAGES_FILS } from './messages-entre-fils'
 import { BORNES_RAPPELS, rappelsDeLAppel } from './rappels-outils'
 
 /*
- * conv-1457 : les règles d'AGENTS.md que rien ne bloque sont RAPPELÉES juste avant l'appel d'outil
+ * Les règles d'AGENTS.md que rien ne bloque sont RAPPELÉES juste avant l'appel d'outil
  * qui les enfreint. Le fichier versionné `mods/autowin/rappels-outils.json` porte les règles ; le
  * script lancé avant chaque outil (scriptHookGardes) les lit à chaque appel.
  */
@@ -48,7 +48,7 @@ const appel = (
 describe('fichier de règles du dépôt', () => {
   const regles = JSON.parse(readFileSync(FICHIER_DU_DEPOT, 'utf8')) as Regle[]
 
-  // conv-1577 : « formatage-de-tout-le-depot » est devenu un REFUS (refusGitDestructeur,
+  // « formatage-de-tout-le-depot » est devenu un REFUS (refusGitDestructeur,
   // garde-git-destructeur.ts), qui passe avant tout rappel : la règle ne pouvait plus se déclencher.
   it('porte les deux règles d’AGENTS.md qu’aucun garde ne refuse, chacune avec sa source', () => {
     expect(regles.map((r) => r.id)).toEqual(['conversations-json-direct', 'tsc-p-a-la-main'])
@@ -298,7 +298,7 @@ describe('script réel lancé avant chaque outil', () => {
     rmSync(join(dir, 'rappels-donnes.json'))
     mkdirSync(join(dir, 'rappels-donnes.json'))
     // Commande différente à chaque fois : trois appels identiques d'affilée seraient refusés par le
-    // détecteur de boucle (conv-58), qui passe avant les rappels.
+    // détecteur de boucle, qui passe avant les rappels.
     for (let i = 0; i < 2; i++) {
       const r = lancer(bash(`cat conversations.json # essai ${i}`))
       expect(r.status).toBe(0)

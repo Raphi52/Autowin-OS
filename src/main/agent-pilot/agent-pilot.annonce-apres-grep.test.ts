@@ -21,7 +21,7 @@ afterEach(() => {
 })
 
 /**
- * UN GREP SEUL N'EST PAS UNE ACTION — même quand sa ligne de FIN ou son BATTEMENT arrive (conv-341).
+ * UN GREP SEUL N'EST PAS UNE ACTION — même quand sa ligne de FIN ou son BATTEMENT arrive.
  *
  * Le fournisseur émet, pour UNE commande, trois sortes de lignes : son départ (`Bash · grep …`), ses
  * battements (`Bash en cours - 1 min - …`) et sa fin (`Bash terminé - 3 s`). Seul le départ porte la

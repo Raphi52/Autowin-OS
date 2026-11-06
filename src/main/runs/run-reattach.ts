@@ -159,7 +159,7 @@ function hasUnprovenEndedActiveAgent(
 }
 
 /**
- * VERROU FANTÔME — le trou mesuré le 2026-09-06 sur `run-f668f46966fd-1` (conv-43).
+ * VERROU FANTÔME — le trou mesuré le 2026-09-06 sur `run-f668f46966fd-1`.
  *
  * Trois faits se cumulent : le processus est PROUVÉ mort (pid absent ou recyclé), sa sortie est
  * CERTIFIÉE réussie par le sidecar du relais, et son journal N'EXISTE PLUS. Le ménage des journaux
@@ -746,7 +746,7 @@ function detachedClaudeSuccess(
      * MÊME SÉPARATEUR QUE LE DIRECT (`providers/claude.ts`, `separationEntreBlocsTexte`). Un simple
      * `join('')` recollait « …le pilotage.Contrôle à 0. » là où le direct avait affiché
      * « …le pilotage.\n\nContrôle à 0. » : le préfixe déjà diffusé ne préfixait plus le texte
-     * récupéré, et `consumeStreamedPrefix` jetait TOUT le bloc. Mesuré le 2026-10-16 (conv-1002,
+     * récupéré, et `consumeStreamedPrefix` jetait TOUT le bloc. Mesuré le 2026-10-16 (
      * tour 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc) : la galerie html-render du tour 3, payée, n'a
      * jamais atteint le fil après le redémarrage.
      */
@@ -1218,7 +1218,7 @@ function pauseBeforeLivenessProbe(): Promise<void> {
  * Le plafond `maxRattacherProbes` compte les sondes depuis la DERNIÈRE avancée de
  * `readProgressMark` (la date d'écriture du journal), pas depuis le début de l'attente. Sans cela,
  * une étape de construction de plus de dix minutes était lâchée en plein travail : le 2026-10-09
- * (conv-115), run-9d787439fb32-1 et son doublon ont été déclarés « interrompus » à l'expiration
+ * Run-9d787439fb32-1 et son doublon ont été déclarés « interrompus » à l'expiration
  * alors que leurs journaux avançaient encore vingt minutes plus tard, et plus personne ne
  * reprenait leur résultat. Sans témoin (`readProgressMark` absent ou muet), le plafond reste
  * absolu, comme avant.

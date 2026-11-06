@@ -282,7 +282,7 @@ describe('fin de chaîne — « Reste à faire : rien » éteint la boucle', () 
 
 /**
  * ANCRAGE ANTI-DÉRIVE — demande du 2026-09-02 : « le mode auto doit pas trop trop partir en
- * couille par rapport a la tache initiale non plus ». Mesuré sur conv-138 : la chaîne est partie
+ * couille par rapport a la tache initiale non plus ». Mesuré : la chaîne est partie
  * de « juge la qualité de mon prompting » et est arrivée au shader du nuage d'accueil.
  */
 describe('le mode auto reste accroché à la tâche initiale', () => {
@@ -291,8 +291,8 @@ describe('le mode auto reste accroché à la tâche initiale', () => {
   const demande = (texte: string, orientation?: boolean): Msg =>
     ({ role: 'user', content: texte, ...(orientation ? { orientation: true } : {}) }) as unknown as Msg
 
-  // Depuis le 2026-09-30 (conv-889) : la DERNIERE demande tapee, pas la premiere. La derive que
-  // l'ancre borne est celle des envois AUTOMATIQUES (conv-138), qui portent l'ancre sans la changer.
+  // Depuis le 2026-09-30 : la DERNIERE demande tapee, pas la premiere. La derive que
+  // l'ancre borne est celle des envois AUTOMATIQUES, qui portent l'ancre sans la changer.
   it('prend la DERNIÈRE demande tapée par l’utilisateur, pas la première', () => {
     expect(
       derniereDemandeHumaine([
@@ -361,7 +361,7 @@ describe('le mode auto reste accroché à la tâche initiale', () => {
 })
 
 describe('audit à N points : la même suite générique après un vrai progrès', () => {
-  // Mesuré conv-733, tour 98ce00d9-2276-4a96-bb15-b66c622bfee8 (saisie ts 1789970040849) : le
+  // Mesuré, tour 98ce00d9-2276-4a96-bb15-b66c622bfee8 (saisie ts 1789970040849) : le
   // point #93 était fait, la suite proposée était mot pour mot celle du tour précédent, et la
   // chaîne s'est tue sur `prompt-identique` alors qu'il restait ~7 points.
   const reponse = (texte: string): Msg =>

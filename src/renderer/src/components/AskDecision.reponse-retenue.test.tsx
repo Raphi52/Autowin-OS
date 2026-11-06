@@ -7,11 +7,11 @@ import { askReponseDuFil } from './chat-message-keys'
 import { optionsRepondues } from './ask-choices'
 
 /**
- * LE DÉFAUT, vécu le 2026-10-11 (conv-240 : « et après avoir répondu ça doit me highlight celui qui
+ * LE DÉFAUT, vécu le 2026-10-11 (« et après avoir répondu ça doit me highlight celui qui
  * a été choisi par un cadre »). Le bloc ne savait QUELLE réponse avait été choisie que par son état
  * LOCAL (`repondu`, posé au clic). Le fil, lui, ne transmettait qu'un booléen (`askDejaRepondu`) :
  * après un changement de conversation ou un redémarrage, le bloc remonté affichait « Répondu » sans
- * aucune réponse en évidence (capture de l'utilisateur, conv-239 : trois lignes grisées).
+ * aucune réponse en évidence (capture de l'utilisateur, Trois lignes grisées).
  *
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER LA CORRECTION SI ELLE EST FAUSSE :
  *  - un bloc monté à froid avec la réponse du fil : la ligne choisie doit porter `data-choisi` ;

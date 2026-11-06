@@ -2,12 +2,12 @@ import type { ModelQuestion } from '../modeles/model-questions'
 import { objectionsDuJuge } from '../juge/objections-juge'
 
 /**
- * OBJECTION D'ÉTENDUE RÉPÉTÉE EN MODE JUSQU'AU VERT → PAUSE ET QUESTION (conv-1149, 2026-10-25).
+ * OBJECTION D'ÉTENDUE RÉPÉTÉE EN MODE JUSQU'AU VERT → PAUSE ET QUESTION (2026-10-25).
  *
- * Mesure sur conv-1146 (run-ec2036c0932d-1, `activity/conv-1146.jsonl`) : le juge a refusé quatre
+ * Mesure (run-ec2036c0932d-1, `activity/conv-1146.jsonl`) : le juge a refusé quatre
  * fois de suite « Ta demande n'est pas remplie. Tu as écrit « full anglais » », et chaque refus
  * relançait une réparation qui traduisait de nouveaux écrans (réparations 4, 8 et 11 : 33 $, 22 $,
- * 16 $). En mode jusqu'au vert (conv-844), ni le plafond ni l'arrêt sur refus répété ne mordent
+ * 16 $). En mode jusqu'au vert, ni le plafond ni l'arrêt sur refus répété ne mordent
  * (`arretDeLaReparation`, stopgate.ts) : rien n'arrêtait la boucle. Or livrer TOUT ou PAR ÉTAPES est
  * un choix de l'utilisateur, pas du juge ni du build.
  *
@@ -69,8 +69,8 @@ export type IssueEtendue =
  * Sans réponse (aucune fenêtre, fenêtre fermée), on ARRÊTE : relancer une réparation est
  * justement ce que l'utilisateur ne veut plus subir sans avoir tranché.
  *
- * Cet arrêt est DÉFINITIF, et le motif le dit (conv-1342, 2026-10-30). Un run rouge perd son état à
- * la clôture (`onRunSettled`, os.ts) : seule sa copie survit. Sur conv-1337, le motif promettait
+ * Cet arrêt est DÉFINITIF, et le motif le dit (2026-10-30). Un run rouge perd son état à
+ * la clôture (`onRunSettled`, os.ts) : seule sa copie survit. Le motif promettait
  * pourtant « Le run reste reprenable ». Garder l'état n'est pas la bonne correction : la reprise
  * automatique du démarrage (index.ts) relancerait alors la réparation que personne n'a tranchée.
  */

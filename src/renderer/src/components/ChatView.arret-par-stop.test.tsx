@@ -22,7 +22,7 @@ function rendre(step: OrchStep): HTMLDivElement {
 }
 
 /**
- * UN SOUS-AGENT COUPÉ PAR LE BOUTON STOP EST « ANNULÉ » DANS LE CHAT (conv-966). Sa pastille rouge
+ * UN SOUS-AGENT COUPÉ PAR LE BOUTON STOP EST « ANNULÉ » DANS LE CHAT. Sa pastille rouge
  * « échec » se lisait comme une panne. Erreurs reprises des fils de run enregistrés sur le poste
  * (`runs/conv-955/…/trace.json`, `runs/conv-636/…/trace.json`).
  */
@@ -87,7 +87,7 @@ describe('SubAgentStep — un sous-agent arrêté par le bouton Stop', () => {
 })
 
 /**
- * LA LIGNE D'ÉTAPE DU BLOC D'ORCHESTRATION (conv-966). `completerChoixDePipeline` posait
+ * LA LIGNE D'ÉTAPE DU BLOC D'ORCHESTRATION. `completerChoixDePipeline` posait
  * `ok: false` sur la phase coupée par le Stop : segment rouge dans la légende, rendu en rouge.
  */
 describe('bloc d’orchestration — une phase coupée par le bouton Stop', () => {

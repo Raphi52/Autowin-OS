@@ -12,7 +12,7 @@ import {
 import { RondDIcone } from './anneau-activite'
 import { Spinner } from './Spinner'
 
-/* PILE D'IMAGES (conv-332, 2026-10-18).
+/* PILE D'IMAGES (2026-10-18).
    Demande : « un moyen de grouper ces blocs car souvent ils s'enchainent » — six images lues à la
    suite faisaient six capsules empilées, environ 390 px de fil pour un seul geste. Choix sur
    maquettes : « implémente la 2 + 6 quand déployed ».
@@ -44,7 +44,7 @@ function useApercu(
     Boolean(lecture)
   const cle = `${conversationId ?? ''}\u0000${turnId ?? ''}\u0000${artifact.id}`
   // `indisponible` / `lecture` : échecs dits par l'interface, traduits au rendu pour suivre la
-  // langue (conv-1170) ; `error` : message du processus principal, montré tel quel.
+  // langue ; `error` : message du processus principal, montré tel quel.
   const [etat, setEtat] = useState<{
     cle: string
     src?: string
@@ -220,7 +220,7 @@ export function ArtifactPile({
       </details>
       {!ouverte && (
         <span className="artifact-pile__tranches" aria-hidden="true">
-          {/* Une CLASSE par tranche (conv-1229) : la règle `:has()` du thème qui fige la pile d'un
+          {/* Une CLASSE par tranche : la règle `:has()` du thème qui fige la pile d'un
               tour fini les vise par elle, jamais par la balise `span` — voir theme-nebuleuse-verre.css. */}
           <span className="artifact-pile__tranche" />
           <span className="artifact-pile__tranche" />

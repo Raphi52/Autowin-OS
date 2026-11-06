@@ -1,5 +1,5 @@
 /**
- * LA BARRE REUSSIS / ECHECS DE LA VUE TESTS (conv-981, 2026-10-16) : les totaux n'etaient que trois
+ * LA BARRE REUSSIS / ECHECS DE LA VUE TESTS (2026-10-16) : les totaux n'etaient que trois
  * textes (« N passés · N échecs · N ignorés »). La barre montre la part de chacun d'un coup d'oeil ;
  * le reste du rail, ce sont les ignores. Calcul separe du composant (rechargement a chaud).
  *

@@ -99,7 +99,7 @@ export class TrustLedger {
 
   /**
    * La vérité humaine porte sur le résultat que l'humain VOIT : le DERNIER verdict du run au moment
-   * de la confirmation (ordre d'enregistrement, rejoué tel quel au rechargement). conv-996
+   * de la confirmation (ordre d'enregistrement, rejoué tel quel au rechargement).
    * (2026-10-16) : 94 des 171 runs de trust.jsonl ont été validés après réparation ; ré-étiqueter
    * tous leurs passages comptait chaque rouge intermédiaire, qui jugeait une version antérieure,
    * comme un faux rouge. Un verdict arrivé après la confirmation reste donc non confirmé.

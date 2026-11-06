@@ -6,7 +6,7 @@ import { ConversationStore } from './conversations'
 import { conversationJournalPath, loadConversations } from './conversations-disk'
 
 /**
- * conv-717 (2026-09-19) : « quand j'ai écrit fais tout ça a effacé ton message précédent ».
+ * 2026-09-19 : « quand j'ai écrit fais tout ça a effacé ton message précédent ».
  * La réponse à une consigne écrite pendant un tour vit dans le message assistant AU-DESSUS d'elle.
  * La consigne doit donc porter le point où elle a coupé la réponse, pour que l'écran l'y remette.
  */

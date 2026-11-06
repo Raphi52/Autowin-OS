@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { separationEntreBlocsTexte as s } from './collage-blocs-texte'
 
 // Migré de scripts/arena-panel/p12-collage-fences.mts (banc /arena, commit 191ab51d), retiré le
-// 2026-10-22 (residus, conv-1062). Défaut d'origine : les délimiteurs ``` et ~~~ étaient comptés
+// 2026-10-22 (residus). Défaut d'origine : les délimiteurs ``` et ~~~ étaient comptés
 // ensemble, par parité ; un ~~~ cité DANS un bloc ``` passait pour une fermeture, et « \n\n »
 // était inséré au milieu du code affiché.
 describe('separationEntreBlocsTexte — blocs imbriqués', () => {

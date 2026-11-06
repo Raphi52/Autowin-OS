@@ -1,7 +1,7 @@
 /**
  * ARRÊTER UN AUTRE FIL, DEPUIS UN AGENT — le même geste que son bouton « Arrêter ».
  *
- * Constaté le 2026-11-05 (conv-1625) : conv-1613 a tourné deux heures dans une boucle de réparation
+ * Constaté le 2026-11-05 : un fil a tourné deux heures dans une boucle de réparation
  * que le contrôle final refusait à chaque essai, pour 402 $. L'agent qui a trouvé la cause n'avait
  * aucun outil pour la couper ; il a dû écrire « clique sur Arrêter » à l'utilisateur pendant que
  * le compteur continuait.

@@ -26,7 +26,7 @@ export interface OutcomeLearningResult {
 }
 
 /**
- * L'ÉTAT D'APPRENTISSAGE D'UN RUN COMPTE AUSSI LES NOTES DE SES ÉTAPES (conv-339).
+ * L'ÉTAT D'APPRENTISSAGE D'UN RUN COMPTE AUSSI LES NOTES DE SES ÉTAPES.
  *
  * Ce superviseur ne suit que LA leçon de fin de run (`AUTOWIN_LESSON_V1`). Les notes que l'étape
  * `learn` écrit par `remember` vont pourtant au Brain, en revue — sans conversation ni tour, donc
@@ -456,7 +456,7 @@ export class OutcomeLearningSupervisor {
   /**
    * Rejoue au démarrage les projections sans décision durable (crash promotion→invalidation).
    *
-   * Ne rejoue QUE les tours dont la proposition n'a pas de décision scellée — heal conv-1115 : chaque
+   * Ne rejoue QUE les tours dont la proposition n'a pas de décision scellée — heal : chaque
    * `reconcile` relit et réanalyse TOUT le journal, et le démarrage le faisait pour chaque tour
    * (~209 lectures de 6 Mo, 1,1 s de fenêtre figée à chaque lancement, `gels.jsonl`). Pour un tour
    * déjà décidé, `reconcile` rend sans rien écrire : l'écarter ici, depuis la lecture unique, ne
@@ -464,7 +464,7 @@ export class OutcomeLearningSupervisor {
    *
    * Écarte AUSSI les tours que la projection ne décide pas (proposition sans issue observée pour son
    * run) : `reconcile` y relisait les 6 Mo pour rendre « aucune décision » sans rien écrire — 40 tours
-   * sur ce poste, ~1 s à chaque démarrage (conv-1115). La projection ne lie la décision d'un tour qu'à
+   * sur ce poste, ~1 s à chaque démarrage. La projection ne lie la décision d'un tour qu'à
    * SA proposition et SES issues : les décisions scellées par les rejeux de cette boucle ne peuvent
    * pas en faire naître une pour un autre tour, donc une seule projection vaut pour toute la boucle.
    */

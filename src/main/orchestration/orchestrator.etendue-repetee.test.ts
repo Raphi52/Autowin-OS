@@ -35,7 +35,7 @@ import type { ModelQuestion } from '../modeles/model-questions'
 import { OPTION_ARRETER, OPTION_CONTINUER } from '../gates/etendue-repetee'
 
 /*
- * LE CAS conv-1146 REJOUÉ (conv-1149, 2026-10-25) : en mode jusqu'au vert, le juge refuse deux fois
+ * LE CAS REJOUÉ (2026-10-25) : en mode jusqu'au vert, le juge refuse deux fois
  * d'affilée pour l'ÉTENDUE de la demande. Avant ce correctif, la boucle relançait une réparation
  * après l'autre (le test lève au-delà de 6 builds pour échouer vite) ; désormais elle se met en
  * pause, pose la question, et suit la réponse.
@@ -197,7 +197,7 @@ describe('objection d’étendue répétée en mode jusqu’au vert : pause et q
   })
 
   /*
-   * LE MOTIF DIT CE QUI ARRIVE VRAIMENT (conv-1342, 2026-10-30). Sur conv-1337, la fenêtre s'est
+   * LE MOTIF DIT CE QUI ARRIVE VRAIMENT (2026-10-30). La fenêtre s'est
    * fermée sans réponse : `onRunSettled` a effacé l'état du run (`os.ts`) alors que le motif
    * promettait « Le run reste reprenable ». Garder cet état ne corrigerait rien : le run repartirait
    * seul au démarrage suivant (`index.ts`), c'est-à-dire une réparation que personne n'a tranchée.

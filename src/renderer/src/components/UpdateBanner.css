@@ -11,7 +11,7 @@
 }
 
 /* « Fusionner origin/main » et « Faire réparer » : des CAPSULES, la même gueule que le bouton
-   Détails du chat (conv-181, 2026-10-10). Elles ne sont PAS dessinées ici : la classe
+   Détails du chat (2026-10-10). Elles ne sont PAS dessinées ici : la classe
    `capsule-bouton` reprend les règles de la capsule de ChatView.css (bord dégradé, verre fumé,
    icône dans un rond dégradé, compteur dans une pastille sombre). Il ne reste ici que leur place
    dans le rail. L'ancien cadre doré à angles droits (« Or royal ») est retiré. */
@@ -21,7 +21,7 @@
   min-width: 0;
 }
 
-/* LA PLACE DU RAIL (mesure conv-181, Segoe UI, rail de 216 px) : à 12 px — la taille de Détails —
+/* LA PLACE DU RAIL (Segoe UI, rail de 216 px) : à 12 px — la taille de Détails —
    « Fusionner origin/main » demandait 121 px et n'en avait que 104, le libellé finissait en
    « origin/… ». Deux reprises : 11 px pour les capsules du rail, et un bout de pilule SERRÉ autour de
    la pastille « +1 » (0.25em, comme à gauche autour de l'icône) puisqu'il n'y a pas de chevron à
@@ -35,7 +35,7 @@
 /* Le libellé cède avant de déborder du rail : « … », le texte entier reste dans l'infobulle.
    Double classe : `.capsule-bouton .thinking-capsule` (ChatView.css) pose `flex: none` à la même
    priorité, et l'ordre de chargement des deux feuilles n'est pas garanti.
-   MARGE INTÉRIEURE de 0.4em tout autour (conv-192, 2026-10-10 : « il est trop petit le cadre ») :
+   MARGE INTÉRIEURE de 0.4em tout autour (2026-10-10 : « il est trop petit le cadre ») :
    à 0.25em, le bord dégradé de 2 px laissait moins d'1 px d'air autour du rond de l'icône et de la
    pastille « +1 ». À 0.4em (≈ 4,4 px à 11 px), il en reste ≈ 2,4 px. Le libellé cède ces px. */
 .rail-update-btn.capsule-bouton .thinking-capsule {
@@ -92,7 +92,7 @@
   margin-top: 4px;
 }
 
-/* MÊME AIR QUE « FUSIONNER » (conv-192, 2026-10-10) : 0.4em en haut, en bas et à gauche au lieu
+/* MÊME AIR QUE « FUSIONNER » (2026-10-10) : 0.4em en haut, en bas et à gauche au lieu
    de 0.25em, où le bord dégradé de 2 px collait au rond de la clé. La droite garde les 0.85em de la
    capsule : le libellé y finit, sans pastille ni chevron, et 0.4em l'aurait collé au bord.
    AVANT la règle du rail replié (même priorité) : replié, le rond garde 0.25em comme Fusionner. */
@@ -252,10 +252,10 @@
   min-width: 0;
 }
 
-/* L'ŒIL — A5 « Œil qui s'ouvre » (conv-182, 2026-10-10 : « le petit oeil rose c'est horrible »).
+/* L'ŒIL — A5 « Œil qui s'ouvre » (2026-10-10 : « le petit oeil rose c'est horrible »).
    Un rond JUMEAU de la capsule voisine, 23 px comme elle : même bord dégradé (calque évidé par
    masque, comme `.capsule-bouton .thinking-capsule::before` de ChatView.css), même reflet bombé,
-   MÊMES ÉTATS. Le bord reste PLEIN dans les deux (conv-182 : « le même bleu plein partout »).
+   MÊMES ÉTATS. Le bord reste PLEIN dans les deux (« le même bleu plein partout »).
    Liste repliée : reflet faible, trait adouci. Liste dépliée, survol ou focus : reflet bombé,
    trait clair. Le DESSIN de
    l'œil (fermé / ouvert) est choisi dans UpdateBanner.tsx. Aucune couleur écrite en dur : les deux
@@ -269,7 +269,7 @@
   flex: none;
   place-items: center;
   box-sizing: border-box;
-  /* MÊME HAUTEUR QUE « FUSIONNER » (conv-192, 2026-10-10) : la capsule mesure le rond de son icône
+  /* MÊME HAUTEUR QUE « FUSIONNER » (2026-10-10) : la capsule mesure le rond de son icône
      (1.6em) + sa marge haute et basse (2 × 0.4em) = 2.4em, à la même taille de police (11 px, 13 px
      en thème malvoyant). Les 23 px fixes d'avant restaient derrière ses ≈ 26 px. */
   width: 2.4em;
@@ -295,7 +295,7 @@
   z-index: -1;
   padding: 2px;
   border-radius: inherit;
-  /* De GAUCHE à DROITE, comme le bord de la capsule — pas en diagonale (conv-182). */
+  /* De GAUCHE à DROITE, comme le bord de la capsule — pas en diagonale. */
   background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
   pointer-events: none;
   -webkit-mask:
@@ -360,7 +360,7 @@
   position: relative;
 }
 
-/* ET PAR-DESSUS CE QUI EST À CÔTÉ (conv-208, 2026-10-10 : « quand je click sur l'oeil dans la left
+/* ET PAR-DESSUS CE QUI EST À CÔTÉ (2026-10-10 : « quand je click sur l'oeil dans la left
    barre le popup est caché »). Le rail est sa propre COUCHE : son flou de fond (app-shell.css, tous
    les thèmes) et ses coins coupés (`clip-path`, Nébuleuse verre) l'isolent. Le `z-index: 40` de la
    liste ne vaut donc QU'À L'INTÉRIEUR du rail, et le panneau des conversations, peint après lui dans

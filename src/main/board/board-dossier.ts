@@ -1,5 +1,5 @@
 /**
- * LE DOSSIER DU BOARD — réglage du poste et écriture (demande utilisateur du 2026-10-28, conv-1206).
+ * LE DOSSIER DU BOARD — réglage du poste et écriture (demande utilisateur du 2026-10-28).
  *
  * Demande : « dans le board il faut qu'on puisse définir un dossier [sur le partage réseau de
  * l'équipe] pour pouvoir y stocker les éléments affichés sur le board et faire le pont vers les
@@ -9,7 +9,7 @@
  *  - retient le dossier choisi SUR CE POSTE (`board-dossier.json` dans le dossier de données de
  *    l'app, à côté de `liens-work-items.jsonl`) — jamais un chemin écrit dans le code ;
  *  - à chaque calcul du Board, y écrit ce que le Board affiche : un post-it par tâche (son RUN.md
- *    léger, conv-1456 ; un fil plus ancien que les fiches garde le sien), à l'étage
+ *    léger ; un fil plus ancien que les fiches garde le sien), à l'étage
  *    affiché (état posé à la main compris), avec ses demandes, et l'identifiant de sa conversation —
  *    le pont vers le fil (`board.json` pour les outils, `board.md` pour les yeux) ;
  *  - écrit dans un sous-dossier PAR COMPTE WINDOWS : sur un partage d'équipe, deux postes qui
@@ -47,7 +47,7 @@ export const FICHIER_DU_REGLAGE = 'board-dossier.json'
 export const FORMAT_DU_BOARD = 'autowin-board/1'
 export const DELAI_ENTRE_ECRITURES_MS = 30_000
 /**
- * Le sous-dossier du poste où ses RUN.md légers sont recopiés (conv-1456) : « je dois pouvoir
+ * Le sous-dossier du poste où ses RUN.md légers sont recopiés : « je dois pouvoir
  * consulter les run.md de mes collègues dans le board ». Ils vivent sous le dossier de données de
  * CHAQUE poste ; sans copie sur le partage, aucun collègue ne peut les lire.
  */
@@ -94,7 +94,7 @@ export interface DemandeEnregistree {
   rang: number
   messageId?: string
   titre: string
-  /** Le message entier, pour la fiche du Board des collègues (conv-1278) ; absent si `titre` suffit. */
+  /** Le message entier, pour la fiche du Board des collègues ; absent si `titre` suffit. */
   texte?: string
   statut: StatutDemande
   constat: string
@@ -107,7 +107,7 @@ export interface PostItEnregistre {
   /** Le pont vers le fil : l'identifiant de la conversation dans Autowin (`conv-1206`). */
   conversationId: string
   /**
-   * Le RUN.md léger de la tâche, relatif au dossier `demandes/` du poste (conv-1456) : deux post-it
+   * Le RUN.md léger de la tâche, relatif au dossier `demandes/` du poste : deux post-it
    * d'un même fil se distinguent par lui. Absent = le post-it d'un fil plus ancien que les fiches.
    */
   fiche?: string
@@ -129,7 +129,7 @@ export interface BoardEnregistre {
   poste: string
   /**
    * Le nom à écrire sur ses post-it chez les collègues : choisi dans les réglages, sinon le compte
-   * Windows (conv-1230). Absent dans les fichiers écrits avant : le lecteur prend alors `poste`.
+   * Windows. Absent dans les fichiers écrits avant : le lecteur prend alors `poste`.
    */
   nom?: string
   enregistreA?: string
@@ -140,7 +140,7 @@ export interface BoardEnregistre {
   /** Fils dont aucune demande n'est datée : le Board ne les pose pas, ils sont seulement comptés. */
   filsSansDate: number
   runsBloques: RunEnregistre[]
-  /** Runs validés qui attendent une réponse de l'utilisateur. Absent = aucun (conv-1346). */
+  /** Runs validés qui attendent une réponse de l'utilisateur. Absent = aucun. */
   runsEnAttenteDeDecision?: RunEnregistre[]
 }
 
@@ -201,7 +201,7 @@ function demandeEnregistree(d: DemandeDeLaCarte): DemandeEnregistree {
 }
 
 /**
- * Les post-it du Board : un par tâche — son RUN.md léger et ses suites (conv-1456) —, posé au moment
+ * Les post-it du Board : un par tâche — son RUN.md léger et ses suites —, posé au moment
  * de sa dernière demande, à l'étage de l'état de cette dernière demande, ou de l'état posé à la main
  * s'il tient encore. Le regroupement est celui de la vue (`tachesDuBoard`, src/shared) : ce qui part
  * est ce que l'écran montre.
@@ -337,8 +337,8 @@ export function boardEnMarkdown(board: BoardEnregistre): string {
 // ———————————————————————————————————————————————————————————————— le réglage du poste
 
 /**
- * Le réglage du poste : le dossier (ou `null`), les projets partagés (`null` = tous, conv-1211) et
- * le nom choisi pour le Board (`null` = le compte Windows, conv-1230).
+ * Le réglage du poste : le dossier (ou `null`), les projets partagés (`null` = tous) et
+ * le nom choisi pour le Board (`null` = le compte Windows).
  * Fichier illisible = aucun dossier, tous les projets, le compte Windows : le Board marche sans.
  */
 export function lireReglageDuBoard(racine: string): {
@@ -367,7 +367,7 @@ export function lireReglageDuBoard(racine: string): {
 }
 
 /**
- * Le partage de la présence du poste dans le village commun (D6, conv-1429) : actif par défaut (D-9),
+ * Le partage de la présence du poste dans le village commun (D6) : actif par défaut (D-9),
  * coupé seulement par un `partagerPresence: false` écrit dans le réglage. Rangé à part de
  * `lireReglageDuBoard` pour ne pas changer la forme que lisent ses appelants.
  */
@@ -383,7 +383,7 @@ export function lirePartageDeLaPresence(racine: string): boolean {
 }
 
 /**
- * L'animal des agents du poste (conv-1537), choisi dans les réglages de l'Accueil ; `null` = aucun
+ * L'animal des agents du poste, choisi dans les réglages de l'Accueil ; `null` = aucun
  * choix, ou une valeur inconnue (fichier modifié à la main). Rangé à part pour la même raison que
  * `lirePartageDeLaPresence`.
  */
@@ -399,7 +399,7 @@ export function lireAnimalDuPoste(racine: string): AnimalAgent | null {
 }
 
 /**
- * La couleur de tenue des agents du poste (conv-1633), choisie sous l'animal ; `null` = aucun choix (la
+ * La couleur de tenue des agents du poste, choisie sous l'animal ; `null` = aucun choix (la
  * tenue d'origine), ou une valeur inconnue. Rangée à part pour la même raison que `lireAnimalDuPoste`.
  */
 export function lireTenueDuPoste(racine: string): TenueAgent | null {
@@ -414,7 +414,7 @@ export function lireTenueDuPoste(racine: string): TenueAgent | null {
 }
 
 /**
- * « Afficher mes agents à » (conv-1599) : les postes à qui ce poste masque ses agents. Illisible = aucun :
+ * « Afficher mes agents à » : les postes à qui ce poste masque ses agents. Illisible = aucun :
  * un réglage abîmé laisse les agents visibles, comme avant le réglage. Rangé à part pour la même
  * raison que `lirePartageDeLaPresence`.
  */
@@ -468,27 +468,27 @@ export interface DossierDuBoard {
   /** Enregistre le dossier choisi ; refuse un chemin incomplet ou un dossier introuvable. */
   choisir: (dossier: string) => Promise<EtatDuDossierDuBoard>
   effacer: () => Promise<EtatDuDossierDuBoard>
-  /** Retient les projets recopiés (`null` = tous) ; appliqué à la prochaine écriture (conv-1211). */
+  /** Retient les projets recopiés (`null` = tous) ; appliqué à la prochaine écriture. */
   choisirProjets: (projets: readonly string[] | null) => Promise<EtatDuDossierDuBoard>
-  /** Retient le nom affiché sur le Board (`null` = le compte Windows, conv-1230). */
+  /** Retient le nom affiché sur le Board (`null` = le compte Windows). */
   choisirNom: (nom: string | null) => Promise<EtatDuDossierDuBoard>
   /**
-   * Coupe (`false`) ou rétablit le partage de la présence dans le village commun (D6, conv-1429).
+   * Coupe (`false`) ou rétablit le partage de la présence dans le village commun (D6).
    * Le réglage seul : c'est `quartier-presence.ts` qui écrit `presence.json`.
    */
   choisirPartagePresence: (actif: boolean) => Promise<EtatDuDossierDuBoard>
   /**
-   * Retient l'animal des agents du poste (`null` = aucun choix, le tanuki), conv-1537. Le réglage
+   * Retient l'animal des agents du poste (`null` = aucun choix, le tanuki). Le réglage
    * seul : `quartier-presence.ts` l'écrit dans `presence.json`, que les collègues relisent.
    */
   choisirAnimal: (animal: AnimalAgent | null) => Promise<EtatDuDossierDuBoard>
   /**
-   * Retient la couleur de tenue des agents du poste (`null` = la tenue d'origine), conv-1633. Le
+   * Retient la couleur de tenue des agents du poste (`null` = la tenue d'origine). Le
    * réglage seul : `quartier-presence.ts` l'écrit dans `presence.json`, que les collègues relisent.
    */
   choisirTenue: (tenue: TenueAgent | null) => Promise<EtatDuDossierDuBoard>
   /**
-   * « Afficher mes agents à » (conv-1599) : retient les postes à qui ce poste masque ses agents (liste
+   * « Afficher mes agents à » : retient les postes à qui ce poste masque ses agents (liste
    * vide = visibles pour tous). Le réglage seul : `quartier-presence.ts` l'écrit dans `presence.json`.
    */
   choisirMasquesPresence: (postes: readonly string[]) => Promise<EtatDuDossierDuBoard>
@@ -544,7 +544,7 @@ export function creerDossierDuBoard(deps: {
   let derniereEcriture = Number.NEGATIVE_INFINITY
   /** Ce qui a été écrit en dernier, et où : un Board inchangé ne se réécrit pas. */
   let empreinte: { cible: string; corps: string } | null = null
-  /** Les RUN.md déjà recopiés, et la date de la version recopiée (conv-1456). */
+  /** Les RUN.md déjà recopiés, et la date de la version recopiée. */
   const fichesCopiees = new Map<string, number>()
 
   const cible = (): string | null => (dossier ? join(dossier, poste) : null)
@@ -559,18 +559,18 @@ export function creerDossierDuBoard(deps: {
     nom: nomDuPoste().nom,
     compte,
     ...(nomChoisi ? { nomChoisi } : {}),
-    // Absent = actif, le défaut (D-9) : seul un partage coupé se dit (conv-1429).
+    // Absent = actif, le défaut (D-9) : seul un partage coupé se dit.
     ...(partagerPresence ? {} : { partagerPresence: false }),
     ...(animal ? { animal } : {}),
     ...(tenue ? { tenue } : {}),
-    // Absent = mes agents visibles pour tous (conv-1599).
+    // Absent = mes agents visibles pour tous.
     ...(masquesPresence.length ? { masquerPresencePour: [...masquesPresence] } : {})
   })
 
   async function ecrire(travail: NonNullable<typeof enAttente>): Promise<void> {
     const ici = cible()
     if (!ici) return
-    // Seuls les projets choisis partent sur le partage (conv-1211), lus AU MOMENT d'écrire : un
+    // Seuls les projets choisis partent sur le partage, lus AU MOMENT d'écrire : un
     // choix changé pendant le délai entre deux écritures s'applique à celle qui attend.
     const board = boardAEnregistrer(
       carteDesProjetsPartages(travail.carte, projets),
@@ -627,7 +627,7 @@ export function creerDossierDuBoard(deps: {
   /**
    * Le dossier, le choix des projets, le nom, le partage de la présence, l'animal, les postes à qui
    * mes agents sont masqués et la couleur de leur tenue : changer l'un ne doit jamais effacer les
-   * autres (conv-1211, conv-1230, conv-1429, conv-1537, conv-1599, conv-1633).
+   * autres.
    */
   async function ecrireLeReglage(
     nouveauDossier: string | null,
@@ -724,10 +724,10 @@ export function creerDossierDuBoard(deps: {
       return etat()
     },
     async effacer() {
-      // Le choix des projets survit à l'oubli du dossier (conv-1211) : en rechoisir un ne doit pas
-      // repartager d'un coup ce qu'on avait décoché. Le nom choisi survit aussi (conv-1230), et un
-      // partage de présence coupé reste coupé (conv-1429), l'animal choisi reste (conv-1537), et mes
-      // agents restent masqués à ceux que j'avais décochés (conv-1599), dans la tenue choisie (conv-1633).
+      // Le choix des projets survit à l'oubli du dossier : en rechoisir un ne doit pas
+      // repartager d'un coup ce qu'on avait décoché. Le nom choisi survit aussi, et un
+      // partage de présence coupé reste coupé, l'animal choisi reste, et mes
+      // agents restent masqués à ceux que j'avais décochés, dans la tenue choisie.
       if (projets || nomChoisi || !partagerPresence || animal || masquesPresence.length || tenue)
         await ecrireLeReglage(null, projets)
       else await rm(join(deps.racine, FICHIER_DU_REGLAGE), { force: true })

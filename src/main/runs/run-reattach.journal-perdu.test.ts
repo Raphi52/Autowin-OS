@@ -12,7 +12,7 @@ import { compileExecutionQuote } from '../orchestration/execution-quote'
 import { writeSurvivableExit } from './stdout-journal'
 
 /**
- * VERROU FANTOME — cas reel conv-43 / `run-f668f46966fd-1`, lu sur disque le 2026-09-06.
+ * VERROU FANTOME — cas reel / `run-f668f46966fd-1`, lu sur disque le 2026-09-06.
  *
  * L'agent `build` a fini AVEC SUCCES (son sidecar `.exit.json` = `{"exit_code":0}` existe encore),
  * puis le menage des journaux a supprime son `.stdout.jsonl` — le sidecar, lui, n'entre pas dans le

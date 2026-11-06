@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { extraireDossiersProjetsClaude, lireDossiersProjetsClaude } from './dossiers-claude-cli'
 
 /**
- * L'import des projets claude.exe dans la liste des dossiers du Chat (conv-5, 2026-09-23).
+ * L'import des projets claude.exe dans la liste des dossiers du Chat (2026-09-23).
  *
  * La fixture reproduit la FORME du profil réel mesuré ce jour-là : 24 entrées dans `projects`
  * dont seulement 5 vrais projets — le reste est le dossier personnel, des doublons de
@@ -30,7 +30,7 @@ const PROJETS_REALISTES: Record<string, unknown> = {
   'E:\\PERSO\\Divers\\VideoToMp3': {},
   'E:\\SOURCES\\AzureDevOps\\AutoWinOS': {},
   'E:\\SOURCES\\AzureDevOps\\AutoWinOS\\.autowin-data\\autowin-os\\worktrees\\x\\agent__y': {},
-  // Un libellé de classement n'est pas un chemin : même frontière que la liste du Chat (conv-81).
+  // Un libellé de classement n'est pas un chemin : même frontière que la liste du Chat.
   'Clients/Acme': {}
 }
 

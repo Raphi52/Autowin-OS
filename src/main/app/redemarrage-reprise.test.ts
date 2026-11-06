@@ -64,7 +64,7 @@ describe('reprise apres redemarrage', () => {
   })
 
   /*
-   * conv-1033, 2026-10-21 : `restart_app` mis en file pose la consigne TOUT DE SUITE (commands.ts),
+   * 2026-10-21 : `restart_app` mis en file pose la consigne TOUT DE SUITE (commands.ts),
    * et le renderer la reclame a chaque montage de ChatView. A 15:20:30, l'interface l'a reprise
    * alors que le processus principal tournait depuis 10:22 : la verification du redemarrage est
    * partie sur l'ancien code, le redemarrage lui-meme etant encore en attente.
@@ -86,9 +86,9 @@ describe('reprise apres redemarrage', () => {
   })
 
   /*
-   * conv-1306, 2026-10-30 : un seul fichier pour toutes les conversations. conv-1329 a posé sa
-   * consigne à 15:50:32 PAR-DESSUS celle de conv-1306 (15:31) ; après le redémarrage, seule
-   * conv-1329 aurait repris, alors que les deux avaient reçu « la consigne sera rejouée ».
+   * 2026-10-30 : un seul fichier pour toutes les conversations. Un fil a posé sa
+   * consigne à 15:50:32 PAR-DESSUS celle (15:31) ; après le redémarrage, seule
+   * un fil aurait repris, alors que les deux avaient reçu « la consigne sera rejouée ».
    */
   it('deux conversations : chacune retrouve SA consigne, la plus ancienne d abord', () => {
     poserReprise(racine, {

@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { arreterFilDExecution, execFileHorsFil } from './execution-hors-fil'
 
 /**
- * LE LANCEUR HORS FIL (heal « les lags », conv-1413, 2026-10-31).
+ * LE LANCEUR HORS FIL (heal « les lags », 2026-10-31).
  *
  * `gels.jsonl` mesure la création d'un processus par la couture `ChildProcess.prototype.spawn`
  * (`gel-main.ts`). L'assertion qui garde le correctif : cette couture n'est JAMAIS appelée sur le
@@ -70,14 +70,14 @@ describe('execFileHorsFil', () => {
   })
 
   /*
-   * UN PROCESSUS FINI EST FINI, MÊME SI SON TUYAU RESTE OUVERT AILLEURS (kaizen conv-1432, 2026-11-02).
+   * UN PROCESSUS FINI EST FINI, MÊME SI SON TUYAU RESTE OUVERT AILLEURS (2026-11-02).
    *
    * Vécu : un `git status` lancé par ce fil à 08:02:41 UTC, à l'instant où le fil principal lançait le
-   * CLI Claude de conv-1433. Sous Windows, CreateProcess hérite de TOUTES les poignées héritables du
+   * CLI Claude. Sous Windows, CreateProcess hérite de TOUTES les poignées héritables du
    * processus : le CLI a reçu une copie de l'extrémité d'écriture du tuyau de git. git a fini, mais
    * `execFile` attend la FIN DE FICHIER du tuyau — elle n'est venue qu'à la sortie du CLI, 52 min
    * plus tard. Toutes les photos git du dossier attendaient derrière : 4 tours coupés par le veilleur
-   * (conv-1429, conv-1432) sans que le modèle ait jamais démarré.
+   * sans que le modèle ait jamais démarré.
    *
    * Reproduction fidèle du mécanisme : le petit-fils détaché garde l'extrémité d'écriture du tuyau
    * après la sortie de l'enfant, exactement comme le CLI gardait celle de git.

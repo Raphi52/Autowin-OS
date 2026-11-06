@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ConversationStore } from './conversations'
 
 /**
- * UNE DEMANDE DEJA POSEE PASSE DEVANT LE MOT PORTEUR (conv-889, 2026-09-30).
+ * UNE DEMANDE DEJA POSEE PASSE DEVANT LE MOT PORTEUR (2026-09-30).
  *
  * Le re-classement par mot porteur compte les occurrences du mot sujet dans TOUTE la conversation
  * (plafond 6). Une longue conversation qui repete les mots de la demande battait donc le fil ou

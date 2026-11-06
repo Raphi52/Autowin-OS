@@ -55,7 +55,7 @@ type AutoCloseViewResult =
 
 interface AutoCloseViewState {
   enabled: boolean
-  /** Second accord de « Publication auto » : /git sur ce que l'enchaînement laisse (conv-1339). */
+  /** Second accord de « Publication auto » : /git sur ce que l'enchaînement laisse. */
   gitApresFil?: boolean
   last?: {
     runId: string
@@ -84,7 +84,7 @@ interface Exclusion {
     | 'typage-rouge'
   /** Lignes que le fil ne réclame pas : les réécrire avec l'outil d'édition publie le fichier. */
   lignesNonReclamees?: number
-  /** Motif `touche-par-un-autre-fil` : les fils qui tiennent le fichier (conv-1083). */
+  /** Motif `touche-par-un-autre-fil` : les fils qui tiennent le fichier. */
   fils?: string[]
   /** Motif `tests-rouges` : les fichiers de test en échec. */
   testsEnEchec?: string[]
@@ -100,7 +100,7 @@ type Typage =
 
 /**
  * Le texte d'une clé dans la langue COURANTE, pour les libellés calculés hors du composant : ils
- * sont appelés pendant son rendu, qui lit la langue par `useTextesChatPanneaux` (conv-1170).
+ * sont appelés pendant son rendu, qui lit la langue par `useTextesChatPanneaux`.
  */
 type CleDuPanneau = Parameters<typeof traduireChatPanneaux>[0]
 const tx = (cle: CleDuPanneau, valeurs?: ValeursDeTexte): string =>
@@ -171,7 +171,7 @@ function libelleVerification(verification: Verification): string {
 
 /** Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que le panneau le dise. */
 function libelleExclusion(item: Exclusion): string {
-  // Le fil qui tient le fichier, nommé (conv-1083) : « touché aussi par conv-B ».
+  // Le fil qui tient le fichier, nommé : « touché aussi par conv-B ».
   const cleMotif = MOTIFS_EXCLUSION[item.motif]
   const motif = item.fils?.length
     ? tx('sc.exclusion.toucheParFils', { fils: item.fils.join(', ') })
@@ -450,7 +450,7 @@ export function SourceControlPane({
       if (target !== conversationId) return
       // OUTIL NATIF DE L'AGENT (son terminal : `git commit`, `git push`…) : il ne produit ni
       // `result` ni `done`, seulement des signes de vie `provider-status` puis du texte. Sans cette
-      // relecture, le bouton restait sur « Commiter » jusqu'a la fin du tour (conv-855). Relecture
+      // relecture, le bouton restait sur « Commiter » jusqu'a la fin du tour. Relecture
       // GROUPEE : au plus une par RELIRE_PENDANT_TOUR_MS, la derniere toujours jouee.
       if (event.kind === 'provider-status' || event.kind === 'delta') {
         if (relectureEnAttente) return
@@ -493,9 +493,9 @@ export function SourceControlPane({
   }, [refreshTick])
 
   /*
-   * UN SEUL INTERRUPTEUR (conv-1544, 2026-11-04) — demande de l'utilisateur : « je veux un seul
+   * UN SEUL INTERRUPTEUR (2026-11-04) — demande de l'utilisateur : « je veux un seul
    * bouton, et quand il est allumé je n'ai jamais besoin de faire /git ». Il porte les deux accords :
-   * publier ce que l'enchaînement prouve (conv-267), et lancer /git sur le reste (conv-1339). Un seul
+   * publier ce que l'enchaînement prouve, et lancer /git sur le reste. Un seul
    * des deux allumé (réglage d'avant) se lit éteint, et le clic allume tout.
    * fix-ok: l'état optimiste est remplacé par l'état RÉEL relu si le main ne peut pas persister.
    */
@@ -635,13 +635,13 @@ export function SourceControlPane({
             title={t('sc.onglet.git.titre')}
             onClick={() => selectView('workspace')}
           >
-            {/* « Git » et non « Workspace » : demande de l'utilisateur (conv-844). Nom propre,
+            {/* « Git » et non « Workspace » : demande de l'utilisateur. Nom propre,
                 identique dans les deux langues. */}
             Git
           </button>
         </div>
 
-        {/* « Lancer » vit dans l'onglet Projet (demande conv-72) ; il ne dépend pas de git. */}
+        {/* « Lancer » vit dans l'onglet Projet ; il ne dépend pas de git. */}
         {view === 'tree' && conversationId && (
           <LancementBarre key={conversationId} conversationId={conversationId} />
         )}

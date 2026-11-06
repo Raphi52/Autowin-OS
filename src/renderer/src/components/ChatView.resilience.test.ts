@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+// Le composant est découpé en fichiers voisins : la source lue les réunit.
 import { lireSourceDuChatView } from './ChatView.source-complete'
 import { describe, expect, it } from 'vitest'
 
@@ -46,7 +46,7 @@ describe('ChatView composer resilience', () => {
   })
 
   it('memoizes stable message rows for long histories', () => {
-    // La ligne reste mémorisée SOUS sa barrière d'erreur (conv-1327) : `ChatMessageRow` l'enveloppe.
+    // La ligne reste mémorisée SOUS sa barrière d'erreur : `ChatMessageRow` l'enveloppe.
     expect(rowSource).toContain('const LigneDuFil = memo(')
     expect(rowSource).toContain('prev.message === next.message')
     expect(source).toContain('<ChatMessageRow')

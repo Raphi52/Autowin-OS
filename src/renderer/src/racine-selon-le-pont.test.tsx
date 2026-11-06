@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { pontElectronPresent, racineSelonLePont } from './racine-selon-le-pont'
 
 /**
- * L'interface ouverte dans un navigateur ordinaire (conv-1286). Entrée qui doit faire échouer ce
+ * L'interface ouverte dans un navigateur ordinaire. Entrée qui doit faire échouer ce
  * fichier : une interface montée sans le pont `window.api` (elle plante et laisse un écran noir),
  * ou l'écran d'explication montré à la place de l'interface alors que le pont est là.
  */

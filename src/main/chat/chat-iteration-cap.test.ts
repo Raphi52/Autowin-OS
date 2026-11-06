@@ -61,7 +61,7 @@ describe('cap d’itérations — une seule valeur par défaut, celle qui est do
  */
 describe('message de cap — il rapporte le cap EFFECTIF', () => {
   it('l’erreur cite `iterationLimit`, pas le cap initial', () => {
-    // La fin sur le cap vit dans agent-pilot/texte-de-cloture.ts depuis conv-1580 : on lit la famille.
+    // La fin sur le cap vit dans agent-pilot/texte-de-cloture.ts : on lit la famille.
     const source = sourceDuPilote()
     expect(source).toContain("Cap d'itérations (${etat.iterationLimit})")
     expect(source).not.toContain("Cap d'itérations (${maxIter})")
@@ -71,14 +71,14 @@ describe('message de cap — il rapporte le cap EFFECTIF', () => {
 /**
  * LE BUDGET DU TOUR N'ÉTAIT ANNONCÉ QU'AU DERNIER APPEL — trop tard pour changer de méthode.
  *
- * Mesuré le 2026-09-03 (conv-10) : douze itérations dépensées une par une en lecture, la seule
+ * Mesuré le 2026-09-03 : douze itérations dépensées une par une en lecture, la seule
  * écriture tentée au douzième appel, et refusée. Le modèle n'a appris l'existence de son cap qu'en
  * 12/12, quand il ne pouvait plus que constater ce qu'il n'avait pas fait. Le manque n'est pas un
  * oubli du modèle : le moteur CONNAISSAIT le compte et ne le disait pas. L'annonce de mi-parcours
  * donne le reste ET le levier qui change quelque chose.
  */
 describe('budget du tour — annoncé à mi-parcours, pas seulement au dernier appel', () => {
-  // Le budget vit dans agent-pilot/relances-du-tour.ts depuis conv-1580 (lot 4) : on lit la famille.
+  // Le budget vit dans agent-pilot/relances-du-tour.ts (lot 4) : on lit la famille.
   const pilote = (): string => sourceDuPilote()
 
   it('une annonce de budget existe, distincte de la consigne de clôture', () => {

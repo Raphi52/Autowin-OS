@@ -523,7 +523,7 @@
    traverse les panneaux et concurrence le contenu — c'est le premier facteur de
    « bruit » sur la capture. Un voile dense à 88 % redonne un plan de lecture, sans
    toucher au fond global qui appartient à toute l'app. Sans flou depuis le
-   2026-11-05 (conv-1623 : il coûtait la carte graphique ; assets/aucun-flou.test.ts). */
+   2026-11-05 (Il coûtait la carte graphique ; assets/aucun-flou.test.ts). */
 .wf-palette-pane,
 .wf-plan-viewport {
   background: color-mix(in srgb, var(--bg-2) 88%, transparent);

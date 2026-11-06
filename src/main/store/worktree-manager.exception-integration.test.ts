@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 /**
  * L'INTÉGRATION QUI JETTE DOIT DIRE POURQUOI.
  *
- * Mesuré le 2026-08-27 (conv-1427) : un run vert — rouge→vert prouvé, typecheck exit 0, juge
+ * Mesuré le 2026-08-27 : un run vert — rouge→vert prouvé, typecheck exit 0, juge
  * VALIDE — a fini en `red` sur `merge-failed`, avec pour seule explication « La finalisation Git a
  * échoué de façon inattendue. » Un `catch` sans paramètre avalait l'exception : ni le `RUN.md`, ni
  * le `causal-trace`, ni l'utilisateur n'ont jamais su ce qui avait échoué. 2,47 $ et 1,97 M tokens

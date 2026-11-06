@@ -6,7 +6,7 @@ import type { Attachment } from './types'
 /**
  * UNE capture envoyee, « Je regarde tes deux captures » en reponse.
  *
- * Vecu en conv-150, tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 (saisie ts 1791620688803,
+ * Vecu, tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 (saisie ts 1791620688803,
  * 2026-10-10) : l'utilisateur joint UNE image ; le prompt du tour (session
  * eceabf8f-c2d3-472c-9e7d-bf103d5839c2) listait sous un seul titre « PIÈCES JOINTES FOURNIES PAR
  * L'UTILISATEUR » deux fichiers nommes tous deux `image.png` — la sienne et celle de son PREMIER

@@ -28,7 +28,7 @@ import {
 } from './ascenseur-du-fil'
 
 /*
- * Ascenseur du fil à crans (draft conv-1114, choix « 1 · Dépli en place ») : un cran par message de
+ * Ascenseur du fil à crans (choix « 1 · Dépli en place ») : un cran par message de
  * l'utilisateur, la vue s'y AIMANTE. Fil de 4 000 px vu dans 800 px.
  */
 const geo = (scrollTop: number) => ({ scrollTop, clientHeight: 800, scrollHeight: 4000 })
@@ -59,7 +59,7 @@ describe('aimant — la vue se cale sur TON message, à 10 px du haut', () => {
     expect(cibleAimant(geo(1300), crans, seuil)).toBeNull()
   })
 
-  // conv-1139 (2026-10-25) : « quand je scroll down ça remonte tout seul ». Mesuré par sonde sur le
+  // 2026-10-25 : « quand je scroll down ça remonte tout seul ». Mesuré par sonde sur le
   // fil réel, 4 essais sur 4 : un cran vers le bas posait la vue 20 px APRÈS ton message, et
   // l'aimant la ramenait en arrière sur lui. L'aimant suit maintenant le SENS de la molette.
   it('molette vers le bas : la vue n’est JAMAIS ramenée en arrière sur un message dépassé', () => {
@@ -153,7 +153,7 @@ describe('aperçu — début du message sur une ligne', () => {
 
 describe('mesure — par la mise en page, pas par l’écran', () => {
   /*
-   * Mesuré dans l'app (sonde conv-1114) : un clic sur le cran 3 posait la bulle à 7 px du haut au
+   * Mesuré dans l'app : un clic sur le cran 3 posait la bulle à 7 px du haut au
    * lieu de 10. Les messages entrent avec `.fade-in` (translateY 3 px, theme.css) ; mesurée pendant
    * l'animation, la position à l'écran était décalée d'autant. La mise en page, elle, ne bouge pas.
    */
@@ -177,7 +177,7 @@ describe('mesure — par la mise en page, pas par l’écran', () => {
 
 describe('butées — une molette qui ne fait plus rien défiler n’ouvre pas la carte', () => {
   /*
-   * Demande conv-1114 : « quand je suis tout en haut ou tout en bas et que je continue de scroll
+   * Demande : « quand je suis tout en haut ou tout en bas et que je continue de scroll
    * elle doit pas apparaître ». Sonde dans l'app avant correction : la carte s'ouvrait aux deux
    * butées, fil immobile (scrollTop 0 et 12 532 sur 12 532).
    */
@@ -200,7 +200,7 @@ describe('butées — une molette qui ne fait plus rien défiler n’ouvre pas l
 
 describe('glisse de l’aimant — image par image, quel que soit le réglage du système', () => {
   /*
-   * Sonde conv-1114 : `scrollTo({ behavior: 'smooth' })` sautait d'un coup (4 668 -> 4 618 px en une
+   * Sonde : `scrollTo({ behavior: 'smooth' })` sautait d'un coup (4 668 -> 4 618 px en une
    * image) sur ce poste, qui a la réduction des animations active. La vue glisse donc elle-même.
    */
   it('part du départ, décélère, et arrive exactement sur la cible', () => {
@@ -222,7 +222,7 @@ describe('glisse de l’aimant — image par image, quel que soit le réglage du
 
 describe('barre-curseur — on l’attrape et on clique n’importe où', () => {
   /*
-   * Demande conv-1114 : « la barre doit slider et je dois pouvoir clicker n'importe où dessus ».
+   * Demande : « la barre doit slider et je dois pouvoir clicker n'importe où dessus ».
    * Avant : seul un appui sur la poignée (20 px) faisait glisser, et un clic allait au message le
    * plus proche, pas à l'endroit cliqué. Barre de 424 px : piste 400, cadre 80, course 320 px pour
    * 3 200 px de fil (1 px de piste = 10 px de fil).
@@ -248,7 +248,7 @@ describe('barre-curseur — on l’attrape et on clique n’importe où', () => 
 
 describe('place de la carte — elle décale la conversation, elle ne la masque pas', () => {
   /*
-   * Demande conv-1114 : « ça doit décaler la conv et pas la masquer ». Mesuré dans l'app (1 150,
+   * Demande : « ça doit décaler la conv et pas la masquer ». Mesuré dans l'app (1 150,
    * 1 400 et 1 800 px) : le fil n'a que 12 px de marge de chaque côté, la carte de 72 px recouvrait
    * 60 px de texte. La marge droite s'élargit donc à la carte + 8 px d'écart pendant qu'elle est
    * ouverte ; une marge déjà plus large ne bouge pas.
@@ -266,7 +266,7 @@ describe('place de la carte — elle décale la conversation, elle ne la masque 
 
 describe('aperçus pendant le défilement — tous à la fois, sans chevauchement', () => {
   /*
-   * Demande conv-1114 : « pendant que je scroll je veux voir toutes les popups que je vois quand je
+   * Demande : « pendant que je scroll je veux voir toutes les popups que je vois quand je
    * hover mes msg ». Carte ouverte : un aperçu par message, au plus près de son cran.
    */
   it('des crans éloignés gardent leur aperçu en face', () => {
@@ -292,7 +292,7 @@ describe('aperçus pendant le défilement — tous à la fois, sans chevauchemen
 
 describe('aperçus pendant le défilement — seulement au-dessus et en dessous de là où tu es', () => {
   /*
-   * Demande conv-1114, capture à l'appui (24 aperçus empilés sur un long fil) : « ça affiche tout
+   * Demande, capture à l'appui (24 aperçus empilés sur un long fil) : « ça affiche tout
    * quand je scroll, ça doit afficher que celui d'en bas et celui au-dessus de là où je suis ».
    * Au-dessus : ton dernier message passé (celui dont tu lis la réponse). En dessous : le suivant.
    */
@@ -329,7 +329,7 @@ describe('aperçus pendant le défilement — seulement au-dessus et en dessous 
   })
 })
 
-// conv-1139 (2026-10-25) : après un recalage sur ton message, un défilement au CLAVIER puis la
+// 2026-10-25 : après un recalage sur ton message, un défilement au CLAVIER puis la
 // fermeture de la carte ramenaient la vue sur ce message (sonde : 231 px de recul, 2 essais sur 3,
 // le 3e projeté 2 880 px plus bas). Le message retenu n'était libéré que par la molette ou la barre.
 describe('message retenu — gardé seulement si la vue est encore calée dessus', () => {
@@ -348,7 +348,7 @@ describe('message retenu — gardé seulement si la vue est encore calée dessus
   })
 })
 
-// conv-1143 (2026-10-25), « quand je scroll tout en bas ça remonte le scroll » sur conv-1139. Sonde
+// (2026-10-25), « quand je scroll tout en bas ça remonte le scroll ». Sonde
 // sur le fil réel, fil de 410 px de large : la carte ouverte l'allonge de 58 959 à 70 795 px. Vue
 // au bas, la carte se replie : le navigateur ramène déjà la vue au nouveau bas, et le maintien
 // retranchait EN PLUS le rétrécissement du texte au-dessus. Vue finie 11 813 px au-dessus du bas,

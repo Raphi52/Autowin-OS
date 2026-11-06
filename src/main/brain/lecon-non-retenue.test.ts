@@ -7,7 +7,7 @@ import {
 } from './lecon-non-retenue'
 
 /**
- * Textes RÉELS de conv-335 et de fils voisins (conversations.json, 2026-10-19). Ce qui doit faire
+ * Textes RÉELS et de fils voisins (conversations.json, 2026-10-19). Ce qui doit faire
  * échouer ces tests : une étiquette « Leçon : » réelle qui passe inaperçue, ou une simple mention
  * du mot qui déclenche l'avertissement.
  */
@@ -26,7 +26,7 @@ describe('une leçon écrite sans dépôt est signalée à la clôture', () => {
     ).toBe(true)
     // Recollée par l'utilisateur, sans le gras.
     expect(ecritUneLecon('Leçon : quand le travail d’une étape est confié…')).toBe(true)
-    // conv-338, conv-157, conv-165, conv-265 : deux-points dans le gras, puce, parenthèse.
+    // Deux-points dans le gras, puce, parenthèse.
     expect(ecritUneLecon('**Leçon :** un test qui simule des données d’avant…')).toBe(true)
     expect(ecritUneLecon('- Leçon : pour reprendre la couleur d’un élément…')).toBe(true)
     expect(

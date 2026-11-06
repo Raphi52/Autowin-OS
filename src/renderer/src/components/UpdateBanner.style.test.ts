@@ -181,7 +181,7 @@ describe('boutons de mise à jour — même gueule que Détails (conv-181)', () 
   })
 
   it('fait passer le menu DEVANT la liste des conversations tant que la liste flottante est ouverte', () => {
-    // Constat utilisateur du 2026-10-10 (conv-208) : « quand je click sur l'oeil dans la left barre
+    // Constat utilisateur du 2026-10-10 : « quand je click sur l'oeil dans la left barre
     // le popup est caché ». Le menu est sa propre couche (flou de fond partout, coins coupés en
     // Nébuleuse verre) : le `z-index: 40` de la liste ne compte QU'À L'INTÉRIEUR du menu, et le
     // panneau des conversations, peint après lui, la recouvrait (0 point sur 15 au premier plan,

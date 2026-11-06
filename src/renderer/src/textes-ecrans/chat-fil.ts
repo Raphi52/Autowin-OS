@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — CHAT — LISTE DES FILS, EN-TÊTE, FIL DES MESSAGES ET SAISIE (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — CHAT — LISTE DES FILS, EN-TÊTE, FIL DES MESSAGES ET SAISIE (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : ChatView et ses parties, ChatMessageRow, ChatFindBar, ChatMosaic, SuppressionConversationsCarte,
  * AscenseurDuFil, BarrePassage, ChatContextRule, et ce que la table principale ne porte pas encore de
@@ -320,10 +320,10 @@ export const TEXTES_FR = {
   'liste.lot': 'lot {rang}/{total}',
   'liste.selectionner': 'Sélectionner « {titre} »',
   'liste.lot.titre': "Lot d'un plan, rangé sous son fil chef",
-  // Fil privé du village commun (D6, conv-1429).
+  // Fil privé du village commun (D6).
   'liste.prive': 'privé',
   'liste.prive.titre': 'Fil privé : les collègues voient son tanuki, pas son titre',
-  // Signe d'une super conv dans la liste (conv-1395).
+  // Signe d'une super conv dans la liste.
   'liste.superConv.compte': '{finis} lots finis sur {total}',
   'liste.superConv.question': 'Le lot {rang} attend ta réponse — l’ouvrir',
   'liste.mosaiqueOuverte': '« {titre} » ouverte en mosaïque — cliquer pour fermer',
@@ -422,8 +422,8 @@ export const TEXTES_FR = {
   'quota.raison.planDeLots': 'plan de lots, jamais relancé seul',
   'quota.raison.inactive': 'conversation marquée inactive',
   'quota.raison.horsDuChat': 'tour lancé hors du chat, ou d’origine inconnue',
-  // fix-ok: une exclusion sans texte laisse le fil rouge sans dire pourquoi il attend (`conv-879`, puis
-  // une coupure recopiée par `fork`) : chaque raison a sa ligne, en français comme en anglais.
+  // fix-ok: une exclusion sans texte laisse le fil rouge sans dire pourquoi il attend (un fil
+  // « Assistant mails », puis une coupure recopiée par `fork`) : chaque raison a sa ligne, en français comme en anglais.
   'quota.raison.branche': 'branche d’une conversation coupée',
   'pj.agrandirNom': 'Agrandir {nom}',
   'pj.agrandir': 'Agrandir',
@@ -527,7 +527,7 @@ export const TEXTES_FR = {
   'nonPublie.fermer': 'Fermer cet avertissement',
   'nonPublie.masquer': 'Masquer jusqu’au prochain changement',
   'auto.fermerArret': 'Fermer l’avertissement du mode auto',
-  // Bouton du bandeau d'arrêt : le chemin écrit en toutes lettres avait vieilli sans bruit (conv-1602).
+  // Bouton du bandeau d'arrêt : le chemin écrit en toutes lettres avait vieilli sans bruit.
   'auto.ouvrirSeuils': 'Ouvrir Settings › Behaviour',
   'auto.ouvrirSeuils.titre': 'Les seuils qui arrêtent le mode auto se règlent dans Behaviour',
   'auto.quotaInconnu':
@@ -559,7 +559,7 @@ export const TEXTES_FR = {
   'saisie.auto.titre':
     "Mode auto de CETTE conversation : renvoie tout seul la suite proposée, jusqu'à « Recommandé : rien »",
   'saisie.joindre': 'Joindre des fichiers',
-  // QuestionACote.tsx — question à côté du fil (conv-1362)
+  // QuestionACote.tsx — question à côté du fil
   'question.titre': 'Question à côté',
   'question.note': 'Rien n’est gardé dans le fil',
   'question.ouvrir': 'Question à côté (Ctrl+;)',
@@ -1132,7 +1132,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'saisie.auto.titre':
     'Auto mode for THIS conversation: sends the proposed next step by itself, until “Recommandé : rien”',
   'saisie.joindre': 'Attach files',
-  // QuestionACote.tsx — side question (conv-1362)
+  // QuestionACote.tsx — side question
   'question.titre': 'Side question',
   'question.note': 'Nothing is kept in the thread',
   'question.ouvrir': 'Side question (Ctrl+;)',

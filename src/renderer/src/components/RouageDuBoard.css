@@ -1,4 +1,4 @@
-/* LE ROUAGE DU BOARD (conv-1230) : le bouton ⚙ à côté du 📁 et son menu. Couleurs tirées des
+/* LE ROUAGE DU BOARD : le bouton ⚙ à côté du 📁 et son menu. Couleurs tirées des
    variables du thème, comme le reste de l'en-tête du Board (`CarteDesBesoinsView.css`). */
 
 .besoins-rouage {
@@ -34,7 +34,7 @@
   border: 1px solid var(--line-strong, var(--line));
   border-radius: var(--r2, 6px);
   /* `--bg-0` est OPAQUE dans chaque thème (theme.css.test.ts) ; `--surface-card` est un voile
-     translucide : la rivière se lisait à travers la liste (capture du 2026-10-28, conv-1211). */
+     translucide : la rivière se lisait à travers la liste (capture du 2026-10-28). */
   background: var(--bg-0);
   font-size: 12px;
   color: var(--text);

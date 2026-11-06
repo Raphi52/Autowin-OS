@@ -18,7 +18,7 @@ export interface OutlookRawPiece {
   nom: string
   taille: number
   /**
-   * Position de la pièce dans le message (base 1), pour l'OUVRIR depuis la tuile (conv-1220). Absent
+   * Position de la pièce dans le message (base 1), pour l'OUVRIR depuis la tuile. Absent
    * d'un instantané produit avant ce champ.
    */
   rang?: number

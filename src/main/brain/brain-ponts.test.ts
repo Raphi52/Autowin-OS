@@ -11,7 +11,7 @@ import {
 } from './brain-ponts'
 
 /**
- * PONTS perso → équipe (conv-1262, 2026-10-29) : relus depuis les index déjà écrits, en mémoire,
+ * PONTS perso → équipe (2026-10-29) : relus depuis les index déjà écrits, en mémoire,
  * sans rien écrire côté équipe.
  */
 

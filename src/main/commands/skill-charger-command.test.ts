@@ -5,7 +5,7 @@ import { outilsDuChat } from '../chat/chat-mcp'
 import { buildChatPilotagePrompt, REGLES_VISUELLES } from '../consignes/chat-pilotage-prompt'
 
 /**
- * LE MODELE CHOISIT LUI-MEME UNE SKILL (conv-1034, 2026-10-21).
+ * LE MODELE CHOISIT LUI-MEME UNE SKILL (2026-10-21).
  *
  * Avant : le corps d'un SKILL.md n'entrait dans le tour QUE si le message de l'utilisateur
  * commençait par son nom. Le modèle voyait `skillsDisponibles` et leurs déclencheurs, mais n'avait

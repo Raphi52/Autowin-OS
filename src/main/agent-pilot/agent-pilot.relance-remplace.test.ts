@@ -24,7 +24,7 @@ afterEach(() => {
 })
 
 /**
- * UNE RELANCE QUI FAIT REFAIRE LA REPONSE LA REMPLACE — ELLE NE S'Y AJOUTE PAS (D2, conv-267).
+ * UNE RELANCE QUI FAIT REFAIRE LA REPONSE LA REMPLACE — ELLE NE S'Y AJOUTE PAS (D2).
  *
  * Mesure du 2026-10-11 sur de vrais tours (copie du chantier « outils directs du chat ») : le texte
  * de chaque appel au modele part en direct dans la bulle. Quand la garde « conclusion absente » ou
@@ -166,7 +166,7 @@ describe('relance de forme — la nouvelle réponse REMPLACE l’ancienne dans l
     expect(consignes.at(-1)).toContain('REMPLACE')
   })
 
-  // conv-335 (2026-10-19) : la relance partait sur une réponse SANS aucun chiffre, et lui disait
+  // 2026-10-19 : la relance partait sur une réponse SANS aucun chiffre, et lui disait
   // pourtant « tu viens d'avancer un nombre ». L'agent est allé « vérifier ses chiffres » : un Glob
   // de 25 s en délai dépassé, puis 2 minutes de lectures payées pour une question sans compte.
   // Le texte envoyé dit la VRAIE raison : la demande réclame un compte, et rien n'a été lu.
@@ -248,7 +248,7 @@ describe('relance de forme — la nouvelle réponse REMPLACE l’ancienne dans l
     expect(consignes.at(-1)).toContain('REMPLACE')
   })
 
-  // conv-267 (2026-10-12) : le tour réel du ping de 90 s était relancé alors que le nombre venait
+  // 2026-10-12 : le tour réel du ping de 90 s était relancé alors que le nombre venait
   // de la sortie de `run`. Une commande qui a VRAIMENT tourné vaut une lecture pour cette garde.
   it('chiffre tiré de la sortie d’un run lancé : aucune relance, un seul appel au modèle', async () => {
     const { fil, appels, consignes } = await jouer(

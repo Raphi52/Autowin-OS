@@ -13,7 +13,7 @@ import {
 } from './claude-workflow'
 
 /*
- * Fragments repris du flux réel du CLI 2.1.314 (`.autowin-tmp/conv-1366/petit.jsonl`, conv-1366,
+ * Fragments repris du flux réel du CLI 2.1.314 (`.autowin-tmp/conv-1366/petit.jsonl`
  * 2026-10-31) : `workflow_progress` tel qu'il arrive, `run_id` et `origin` compris.
  */
 const DEBUT: EvenementCli = {

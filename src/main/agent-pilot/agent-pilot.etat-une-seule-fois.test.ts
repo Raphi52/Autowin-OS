@@ -5,7 +5,7 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 /**
  * L'ÉTAT NE SE REPAYE PAS À CHAQUE ITÉRATION.
  *
- * Mesuré le 2026-08-31 sur conv-1 : le bloc `ÉTAT DE L'APP` — dont les 17 descriptions de skills —
+ * Mesuré le 2026-08-31 : le bloc `ÉTAT DE L'APP` — dont les 17 descriptions de skills —
  * réapparaissait HUIT fois dans un seul tour, identique au caractère près, pour un contenu utile
  * d'une ligne. Ce test verrouille le CÂBLAGE de `etat-diff.ts` dans le pilote : entier une fois,
  * delta ensuite.

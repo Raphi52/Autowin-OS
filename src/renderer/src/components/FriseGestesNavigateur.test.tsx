@@ -9,7 +9,7 @@ import { FriseGestesNavigateur } from './FriseGestesNavigateur'
 import { gestesDeLOnglet, rangDuGeste, tempsDepuis } from './navigateur-integre-outils'
 
 /**
- * FRISE DES GESTES DE L'AGENT (conv-1286, maquette « 1 · Jalons », 2026-10-30).
+ * FRISE DES GESTES DE L'AGENT (maquette « 1 · Jalons », 2026-10-30).
  *
  * Entrées qui doivent faire échouer ce fichier : une frise affichée sans geste, les gestes d'un autre
  * onglet mêlés à ceux de l'onglet actif, un jalon dont la classe ne dit plus sa nature ou son état

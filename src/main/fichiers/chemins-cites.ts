@@ -4,7 +4,7 @@ import { join } from 'node:path'
 /**
  * Les chemins du dépôt et les scripts npm qu'un texte CITE, rejoués contre le dépôt.
  *
- * POURQUOI (scout du 05/11, piste ancien n° 9, conv-1602) : ce contrôle ne vivait que dans
+ * POURQUOI (scout du 05/11, piste ancien n° 9) : ce contrôle ne vivait que dans
  * `agents-md-faits.test.ts`, donc ne portait que sur AGENTS.md. Or la constitution, la consigne du
  * chat, les consignes d'étape (`phase-briefs.ts`) et les `skills/<nom>/SKILL.md` partent elles aussi
  * aux agents : un chemin renommé ou un script retiré y égare chaque tour, sans qu'aucun test le voie.
@@ -14,7 +14,7 @@ import { join } from 'node:path'
 /**
  * Mots des spans entre accents graves (un span peut être une commande : `node scripts/x.mjs --y`).
  *
- * fix-ok: trois nettoyages, causes mesurées le 05/11 sur les textes des agents (conv-1602) :
+ * fix-ok: trois nettoyages, causes mesurées le 05/11 sur les textes des agents :
  *  - les clôtures ``` sont retirées avant l'appariement : la description d'une commande du chat cite
  *    « ```html-render ou ```html-interactif », et leurs accents désappariaient tous les spans suivants
  *    (un span de prose finissait sur « scripts/draft-carrousel.mjs) ») ;

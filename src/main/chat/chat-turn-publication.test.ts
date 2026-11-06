@@ -122,7 +122,7 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
     expect(report?.brain).toBeUndefined()
     expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
     const subject = (await run('git', ['log', '-1', '--format=%s'], { cwd: repo })).stdout.trim()
-    // Titre `type(zone): phrase (conv-N)` (AGENTS.md, conv-1069) : zone = le fichier publié.
+    // Titre `type(zone): phrase (conv-N)` (AGENTS.md) : zone = le fichier publié.
     expect(subject).toBe('feat(mine): ajoute la constante a (conv-A)')
     // Le travail de l'autre fil est intact, toujours en attente.
     expect(await enAttente(repo)).toContain('base.txt')
@@ -204,7 +204,7 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
       project: { status: 'skipped', reason: 'unattributed' },
       exclus: [{ path: 'partage.ts', motif: 'touche-par-un-autre-fil' }]
     })
-    // Le refus NOMME le fil qui tient le fichier (conv-1083) : sans lui, l'utilisateur ne sait pas
+    // Le refus NOMME le fil qui tient le fichier : sans lui, l'utilisateur ne sait pas
     // quelle conversation finir ou commiter pour débloquer la publication.
     expect(report?.exclus?.[0].fils).toEqual(['conv-B'])
     expect((await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout).toBe(headAvant)
@@ -213,7 +213,7 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
   })
 
   /*
-   * VÉCU LE 2026-10-01 (a7602f5c, conv-770) : le tour a publié `src/main/commands/commands.ts`, qui importait
+   * VÉCU LE 2026-10-01 (a7602f5c) : le tour a publié `src/main/commands/commands.ts`, qui importait
    * `../shared/heredocs` ; ce fichier, créé par un tour PRÉCÉDENT du même fil, n'avait jamais été
    * commité. Les tests passaient dans la copie de travail complète ; sur main le build échouait
    * (« Could not resolve »), et l'app d'un collègue ne démarrait plus. Annulé par 65b6c2b3.
@@ -287,7 +287,7 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
   })
 
   /**
-   * Vécu le 2026-10-19 (conv-358, ba71a03e) : le tour a publié SEUL
+   * Vécu le 2026-10-19 (ba71a03e) : le tour a publié SEUL
    * `ChatView.cadrage-hypotheses.test.tsx`. `ChatView.tsx`, que ce test vérifie, était le travail du
    * même fil (écrit par un script `node - <<'EOF'`, sans preuve par lignes) et restait en attente
    * (« modifie-avant-le-tour »). Le contrôle des imports n'a rien vu : le test importe
@@ -503,10 +503,10 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
   })
 
   it('laisse en attente un fichier sans preuve par lignes tant qu’un autre fil a un tour en cours dans le dépôt', async () => {
-    // Mesuré le 2026-09-30 (commits 5fb0730d, bb8e6c0c) : conv-889 crée un fichier PENDANT le tour de
-    // conv-891. Ses traces ne sont écrites qu'à la fin de son appel au modèle (10:51:52), après la
-    // publication de conv-891 (10:32:31) : aucune trace concurrente, donc le repli publiait au nom de
-    // conv-891 le travail de conv-889. Le fichier prouvé par ses lignes, lui, part quand même.
+    // Mesuré le 2026-09-30 (commits 5fb0730d, bb8e6c0c) : un fil crée un fichier PENDANT le tour.
+    // Ses traces ne sont écrites qu'à la fin de son appel au modèle (10:51:52), après la
+    // publication (10:32:31) : aucune trace concurrente, donc le repli publiait au nom
+    // le travail. Le fichier prouvé par ses lignes, lui, part quand même.
     const { repo, remote } = await depot()
     const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
     const headAvant = (await run('git', ['rev-parse', 'HEAD'], { cwd: repo })).stdout
@@ -640,7 +640,7 @@ describe('enchaînement auto du chat — publication des fichiers du tour', () =
 /**
  * LES TESTS DES FICHIERS DU TOUR SONT REJOUÉS AVANT DE POUSSER.
  *
- * Mesuré le 2026-10-01 : le commit automatique `b6d2a3fc` (conv-892) a poussé une modification de
+ * Mesuré le 2026-10-01 : le commit automatique `b6d2a3fc` a poussé une modification de
  * `src/main/index.ts` sans rejouer aucun test, et `chat-ipc-contract.test.ts` est resté rouge sur
  * main pendant 20 h — son correctif dormait dans la copie de travail d'un autre run.
  */
@@ -705,8 +705,8 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
   })
 
   /*
-   * Vécu le 2026-10-22 (salvage conv-1091) : `973b70e2` (conv-1078) a publié un test de style sans
-   * le CSS qu'il lit, et `b86a144e` (conv-1087) du code sans son test. Les fichiers restés dehors
+   * Vécu le 2026-10-22 : `973b70e2` a publié un test de style sans
+   * le CSS qu'il lit, et `b86a144e` du code sans son test. Les fichiers restés dehors
    * avaient aussi été modifiés par d'autres fils. Rejoués dans l'arbre partagé, où ils étaient
    * encore là, les tests étaient verts. Ils doivent juger CE QUI PART, comme le typage.
    */
@@ -794,7 +794,7 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
     expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
   })
 
-  // Vécu le 2026-10-15 (`9d6bb850`, conv-954) : un fichier publié sans son appelant a cassé la
+  // Vécu le 2026-10-15 (`9d6bb850`) : un fichier publié sans son appelant a cassé la
   // compilation de main, alors que les tests rejoués dans l'arbre partagé étaient verts.
   it('typage ROUGE de ce qui part : rien n’est commité, les tests ne sont pas joués, chaque fichier nomme l’erreur', async () => {
     const { repo, remote, debut, traces } = await tourQuiModifieMine()
@@ -929,7 +929,7 @@ describe('enchaînement auto du chat — vérification avant de pousser', () => 
 /**
  * FICHIER NOMMÉ PAR UNE COMMANDE SHELL DU TOUR — rejeu des deux cas du 2026-10-13.
  *
- * d7af3730 (conv-932) et dd0c3d6a (conv-933) ont publié le code sans le test que le même tour venait
+ * d7af3730 et dd0c3d6a ont publié le code sans le test que le même tour venait
  * d'écrire. Le test avait été retouché en ligne de commande (`prettier --write`, puis `cat >> …
  * <<'EOF'` et `sed -i`), donc sans preuve par lignes, et un AUTRE fil l'avait seulement VU changer
  * pendant son propre tour (sa comparaison avant/après, sans lignes) : « touche-par-un-autre-fil ».
@@ -1042,7 +1042,7 @@ describe('enchaînement auto du chat — fichier nommé par une commande shell d
           paths: [CONFIG],
           pathLineFingerprints: { [CONFIG]: lignes(...inscription) }
         }),
-        // 13:10:39Z : conv-931 finit son tour, sa comparaison avant/après VOIT les fichiers de conv-932.
+        // 13:10:39Z : un fil finit son tour, sa comparaison avant/après VOIT les fichiers.
         trace(repo, { conversationId: 'conv-931', turnId: '8cfd4d8c', paths: [CONFIG, TEST] }),
         ...nommees
       ]
@@ -1092,7 +1092,7 @@ describe('enchaînement auto du chat — fichier nommé par une commande shell d
       request: "ca me met un bandeau que je comprend pas avec un pbm d'encodage du texte",
       debut,
       runGit: realGit,
-      // 13:21:14Z : le tour e4a3c760 de conv-930, parti à 13:20:45Z, tourne encore dans le dépôt.
+      // 13:21:14Z : le tour e4a3c760, parti à 13:20:45Z, tourne encore dans le dépôt.
       autresToursEnCours: [repo],
       traces: [
         trace(repo, {
@@ -1101,7 +1101,7 @@ describe('enchaînement auto du chat — fichier nommé par une commande shell d
           paths: [CODE],
           pathLineFingerprints: { [CODE]: lignes(exporte) }
         }),
-        // 13:20:04Z et 13:20:51Z : conv-930 et conv-932 finissent un tour et VOIENT le test changer.
+        // 13:20:04Z et 13:20:51Z : des fils finissent un tour et VOIENT le test changer.
         trace(repo, { conversationId: 'conv-930', turnId: 'c3ede00e', paths: [CODE, TEST] }),
         trace(repo, { conversationId: 'conv-932', turnId: 'e0322299', paths: [CODE, TEST] }),
         ...nommees
@@ -1220,9 +1220,9 @@ describe('enchaînement auto du chat — fichier nommé par une commande shell d
 })
 
 /*
- * VÉCU LE 2026-11-05 (conv-1578, tour 68e1eafb) : le fil n'avait fait que LIRE. Pendant son appel,
- * conv-1573 a publié sa part de `git-apres-fil.ts` (commande nommée, puis `update-ref` : l'empreinte
- * du diff passe de 83a7a601 à bcb7dcce). La comparaison avant/après de conv-1578 a vu exactement ce
+ * VÉCU LE 2026-11-05 (tour 68e1eafb) : le fil n'avait fait que LIRE. Pendant son appel,
+ * un fil a publié sa part de `git-apres-fil.ts` (commande nommée, puis `update-ref` : l'empreinte
+ * du diff passe de 83a7a601 à bcb7dcce). La comparaison avant/après a vu exactement ce
  * passage, l'a tracé à son nom, et le fichier est entré dans SES « laissés en attente » : un `/git`
  * est parti dans un fil qui n'avait rien écrit. Un passage qu'un AUTRE fil a écrit et tracé de bout
  * en bout n'appartient pas au fil qui l'a seulement vu.

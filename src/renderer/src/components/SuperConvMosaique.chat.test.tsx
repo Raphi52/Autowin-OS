@@ -6,9 +6,9 @@ import type { PlanDeLots } from '../../../shared/plan-de-lots'
 import { SuperConvDuChat } from './SuperConvMosaique'
 
 /*
- * conv-1315 : ChatView se redessine à chaque mot d'un flux. La frise du panneau de chat ne doit
+ * ChatView se redessine à chaque mot d'un flux. La frise du panneau de chat ne doit
  * pas suivre, sinon chaque image redemande toutes les phrases des pistes (le gel mesuré sur la
- * mosaïque, conv-1581).
+ * mosaïque).
  */
 const T0 = Date.UTC(2026, 9, 30, 13, 0)
 const PLAN: PlanDeLots = {

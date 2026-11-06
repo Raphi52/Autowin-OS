@@ -43,7 +43,7 @@ describe('scout interne en conversation visible', () => {
       expect(rt.createConversation).toHaveBeenCalledWith(
         expect.objectContaining({ title: expect.stringContaining('[veille] scout interne') })
       )
-      // readOnly:false — le « readOnly » du runtime est le profil Watchdog SANS outils (conv-1155) ;
+      // readOnly:false — le « readOnly » du runtime est le profil Watchdog SANS outils ;
       // background : le tour ne vole pas le focus.
       expect(rt.runPrompt).toHaveBeenCalledWith(
         'conv-scout',
@@ -95,7 +95,7 @@ describe('scout interne en conversation visible', () => {
   })
 
   it('un « [] » nu, sans synthèse d’exploration, est un ÉCHEC nommé — pas « 0 candidat »', async () => {
-    // Mesuré sur conv-1154 : 717 tokens, 2,7 s, zéro outil — l'agent a rendu [] sans rien lire.
+    // Mesuré : 717 tokens, 2,7 s, zéro outil — l'agent a rendu [] sans rien lire.
     await expect(
       genererCandidatsEnConversation({
         ...params,

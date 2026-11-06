@@ -20,10 +20,10 @@ import { makeTestWorktrees } from '../orchestration/orchestrator.test-helpers'
 /**
  * LE JUGE LIT LA MÊME RÈGLE QUE CELLE QUI LE LIT.
  *
- * Mesuré sur run-85d8e7f57af2-1 (conv-892, 2026-10-01) : trois verdicts VALIDE (84, 86, 88) ont
+ * Mesuré sur run-85d8e7f57af2-1 (2026-10-01) : trois verdicts VALIDE (84, 86, 88) ont
  * relancé une réparation chacun. On leur avait écrit « MINEUR: <réserve non bloquante> » à quatre
  * endroits (phase-briefs.ts et trois prompts d'orchestrator.ts), alors que depuis la décision
- * utilisateur de conv-844 (2026-09-24) `objectionsDuJuge` bloque sur TOUT MINEUR. Ils y rangeaient
+ * utilisateur (2026-09-24) `objectionsDuJuge` bloque sur TOUT MINEUR. Ils y rangeaient
  * donc des réserves qu'aucune réparation ne pouvait lever : la publication, faite par l'app APRÈS
  * le VALIDE ; une mesure qui attend 10 runs après la fusion.
  */

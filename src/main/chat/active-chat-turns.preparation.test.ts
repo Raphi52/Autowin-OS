@@ -3,7 +3,7 @@ import { ActiveChatTurns } from './active-chat-turns'
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
- * FAUX « Réponse interrompue avant la fin » (conv-809 le 2026-09-23, puis conv-862 le 2026-09-26 :
+ * FAUX « Réponse interrompue avant la fin » (un fil le 2026-09-23, puis un fil le 2026-09-26 :
  * « mais après il continue comme si de rien n'était »).
  *
  * L'écran demande toutes les 4 s au processus principal si une réponse tourne (`os:pilotChat:active`) ;
@@ -118,7 +118,7 @@ describe('câblage dans index.ts', () => {
 
   it('runPilotChat enveloppe le rangement ET le lancement du tour', () => {
     const pilote = source.slice(source.indexOf('const tourCompteDesReception: typeof lancerTour'))
-    // Le lancement AVEC rangement : `await lancerTour` (le rangement tourne a cote, conv-867).
+    // Le lancement AVEC rangement : `await lancerTour` (le rangement tourne a cote).
     const entete = pilote.slice(0, pilote.indexOf('return await lancerTour(...args)'))
     expect(entete).toContain('activeChatTurns.trackPreparation(args[2]')
     expect(entete.indexOf('trackPreparation')).toBeLessThan(

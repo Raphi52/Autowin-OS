@@ -44,7 +44,7 @@ export interface EncodedChatAttachment {
 }
 
 export function formatFileSize(bytes: number): string {
-  // Unités dans la langue de l'interface (conv-1170) ; le nombre garde son point décimal d'avant.
+  // Unités dans la langue de l'interface ; le nombre garde son point décimal d'avant.
   const langue = langueCourante()
   if (bytes < 1024) return traduireChatFil('taille.octets', langue, { n: bytes })
   if (bytes < 1024 * 1024)

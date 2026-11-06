@@ -28,10 +28,10 @@ describe('câblage — l’entrée du modèle est reconstruite depuis les parts'
     // L'entrée qui doit faire échouer un débranchement : sans cette ligne, la map serait remplie
     // puis ignorée, et le modèle continuerait de recevoir l'étiquette nue.
     //
-    // Depuis 1d20dd6c (2026-10-16, conv-989) le DERNIER run est relu en entier dans son journal :
+    // Depuis 1d20dd6c (2026-10-16) le DERNIER run est relu en entier dans son journal :
     // l'appel passe par `contenuAssistantPourLeModele`, qui rend `flattenChatPartsForModel` sur
     // toutes ses branches (vérifié par comportement ci-dessous, pas par texte). Aligné le
-    // 2026-10-22 (conv-1056).
+    // 2026-10-22.
     expect(INDEX, 'le contenu envoyé au modèle doit venir des parts reconstruites').toMatch(
       /const pourLeModele = parts \? contenuAssistantPourLeModele\( parts,[^;]*?\) \|\| m\.content : m\.content/
     )

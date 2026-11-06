@@ -1,5 +1,5 @@
 /**
- * QUESTION À CÔTÉ — ce que le panneau partage sans être un composant (conv-1362, lot 1/3).
+ * QUESTION À CÔTÉ — ce que le panneau partage sans être un composant (lot 1/3).
  *
  * Les échanges vivent dans une `Map` en mémoire : ils survivent à la fermeture du panneau et au
  * changement de fil, et sont perdus à la fermeture de l'app. C'est voulu : rien n'est écrit nulle part.

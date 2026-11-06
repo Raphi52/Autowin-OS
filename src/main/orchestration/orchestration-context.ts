@@ -8,7 +8,7 @@ import { pagesHtmlEnTexte } from '../../shared/pages-html-pour-le-modele'
 
 /**
  * Une demande de l'utilisateur, ENTIÈRE et avec ses retours à la ligne (une liste de points reste
- * une liste). Au-delà de la borne, la coupe est écrite (conv-1228).
+ * une liste). Au-delà de la borne, la coupe est écrite.
  */
 function demandeDeLUtilisateur(contenu: string): string {
   const texte = contenu.trim()
@@ -19,7 +19,7 @@ function demandeDeLUtilisateur(contenu: string): string {
   return garde.replace(/\r?\n/g, '\n    ')
 }
 
-/** Une réponse ANCIENNE de l'assistant : résumée sur une ligne, en disant ce qui manque (conv-1228). */
+/** Une réponse ANCIENNE de l'assistant : résumée sur une ligne, en disant ce qui manque. */
 function resumeDeReponse(contenu: string): string {
   const texte = contenu.replace(/\s+/g, ' ').trim()
   return texte.length > CONTEXT_MESSAGE_CHARS
@@ -31,7 +31,7 @@ function resumeDeReponse(contenu: string): string {
  * Contexte collecté AVANT toute orchestration substantielle. Cette collecte est locale,
  * bornée et tolérante : une source absente n'empêche jamais le fallback d'exécution.
  *
- * Le fil récent en fait partie depuis le 2026-08-23. Défaut mesuré sur conv-1376 : ce type n'avait
+ * Le fil récent en fait partie depuis le 2026-08-23. Défaut mesuré : ce type n'avait
  * même pas de champ `messages`, donc le sous-agent recevait la phrase-tâche NUE, hors du fil qui
  * l'avait produite. Il ne pouvait pas LIRE l'intention de l'utilisateur — seulement la deviner à
  * partir d'une phrase isolée. C'est ce qui fait exécuter la lettre d'une demande plutôt que son
@@ -70,7 +70,7 @@ const RUN_PATHS_MAX = 5
 
 /**
  * « green, bloqué » faisait lire comme un échec à réparer un run validé qui attend une réponse de
- * l'utilisateur (conv-1199, scout conv-1332). Texte lu par le modèle, d'où « de l'utilisateur ».
+ * l'utilisateur. Texte lu par le modèle, d'où « de l'utilisateur ».
  */
 function etatDuRun(run: { blocked: boolean; decisionAttendue?: boolean }): string {
   if (run.decisionAttendue) return ', en attente de la décision de l’utilisateur'
@@ -81,8 +81,7 @@ type RunObserve = NonNullable<OrchestrationContextInput['runs']>[number]
 
 /**
  * Nombre de SUJETS cités dans « Runs en cours/bloqués ». C'étaient 8 RUNS : le 2026-11-05, les huit
- * places tenaient des essais d'un seul run de conv-1461, et l'agent ne voyait aucun autre run
- * (scout conv-1576, lot conv-1589).
+ * places tenaient des essais d'un seul run, et l'agent ne voyait aucun autre run.
  */
 const SUJETS_DE_RUNS_MAX = 8
 
@@ -132,7 +131,7 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
       `Conversation: ${input.conversation.id}${input.conversation.title ? ` — ${input.conversation.title}` : ''}`,
       `Workflows attachés: ${runPaths.length}`
     )
-    // LE CHEMIN, PAS LE NOMBRE (conv-1098, 2026-10-22) : un cadrage rattaché par `attach_run` n'était
+    // LE CHEMIN, PAS LE NOMBRE (2026-10-22) : un cadrage rattaché par `attach_run` n'était
     // signalé que par son compte ; le run l'a cherché sous `runs/` de l'app (un /frame joué dans le
     // chat écrit sous ~/.claude/runs), ne l'a pas trouvé, et a refait un cadrage divergent. Le plus
     // récent d'abord : `attachRun` ajoute en fin de liste (store/conversations.ts).
@@ -147,7 +146,7 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
       )
     }
     // Les pages `html-render` des reponses arrivent en texte VISIBLE : le run lisait sinon leurs
-    // balises et leur `<style>`, jusqu'a 12 000 caracteres pour la derniere reponse (conv-1074).
+    // balises et leur `<style>`, jusqu'a 12 000 caracteres pour la derniere reponse.
     const recents = (input.conversation.messages ?? [])
       .slice(-CONTEXT_MESSAGE_LIMIT)
       .map((message) =>
@@ -164,7 +163,7 @@ export function collectOrchestrationContext(input: OrchestrationContextInput): s
             : `  ASSISTANT: ${resumeDeReponse(message.content)}`
         )
       )
-      // « juge ça / cette archi » désigne la dernière réponse : elle est jointe EN ENTIER (conv-798).
+      // « juge ça / cette archi » désigne la dernière réponse : elle est jointe EN ENTIER.
       const derniere = [...recents].reverse().find((m) => m.role === 'assistant')
       if (derniere && derniere.content.trim().length > CONTEXT_MESSAGE_CHARS) {
         const texte = derniere.content.trim()

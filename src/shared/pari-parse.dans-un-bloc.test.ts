@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { extrairePari as p } from './pari-parse'
 
 // Migré de scripts/arena-panel/p9-pari-dans-un-bloc.mts (banc /arena, commit 191ab51d), retiré le
-// 2026-10-22 (residus, conv-1062). Défaut d'origine : un EXEMPLE de pari cité dans un bloc ~~~,
+// 2026-10-22 (residus). Défaut d'origine : un EXEMPLE de pari cité dans un bloc ~~~,
 // ou dans un ```` contenant ```, comptait comme vrai pari dans le score de calibration.
 const L = (c: number, r: string): string =>
   `AUTOWIN_PARI_V1: {"confiance":${c},"refutateur":"${r}"}`

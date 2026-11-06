@@ -122,7 +122,7 @@ describe('routeSkillRequest', () => {
 
 describe('« scout » en tete de message declenche la phase SCOUT', () => {
   /**
-   * Defaut vecu le 2026-08-18 (conv-1297) : « scout des ameliorations de l'experience utilisateur »
+   * Defaut vecu le 2026-08-18 : « scout des ameliorations de l'experience utilisateur »
    * a produit un rapport de BUILD — trois lignes marquees « Implemente » au lieu d'une shortlist. La
    * phase scout n'a jamais tourne : seule la forme `/scout` etait routee, le mot nu partait au
    * modele, qui a choisi build.
@@ -163,7 +163,7 @@ describe('« scout » en tete de message declenche la phase SCOUT', () => {
 
 describe('« scout » apres un preambule declenche aussi la phase', () => {
   /**
-   * Defaut vecu le 2026-08-18 (conv-1298) : la regle ancree en tete ne tirait PAS sur le prompt reel
+   * Defaut vecu le 2026-08-18 : la regle ancree en tete ne tirait PAS sur le prompt reel
    * de l'utilisateur, « en te basant sur la derniere conversation qu'on a eu (cite la moi pour etre
    * sur) scout des ameliorations de l'experience utilisateur ». Le mot y est, mais precede d'un
    * preambule. Resultat mesure : phase build, tableau imite au format scout, colonne Score remplie
@@ -232,8 +232,8 @@ describe('« scout » COMPOSE avec une mutation garde le pipeline complet', () =
 })
 
 describe('« judge » / « juge » en tete de message declenche la phase JUDGE', () => {
-  // Defaut vecu 2026-09-21 (conv-738) : « judge le systeme de protection de la prod » n'a pas
-  // invoque /judge — seul le slash etait route, comme scout avant conv-1297.
+  // Defaut vecu 2026-09-21 : « judge le systeme de protection de la prod » n'a pas
+  // invoque /judge — seul le slash etait route, comme scout.
   it.each(['judge le systeme de protection de la prod', 'juge le rendu', 'Judge'])(
     'route %s vers judge',
     (message) => {

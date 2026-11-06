@@ -64,7 +64,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   L'ARBRE ÉTOILÉ (conv-234, 2026-10-11) : chaque étape est une PERLE posée par le calcul de
+   L'ARBRE ÉTOILÉ (2026-10-11) : chaque étape est une PERLE posée par le calcul de
    placement (graph-constellation-layout.ts), reliée à son parent par un lien courbe, avec un FLUX
    qui coule vers ce qui tourne et un FIL qui descend de l'étape choisie jusqu'à sa FICHE. Les
    couleurs passent par les jetons --wx-* de .workflow-execution-graph : chaque thème les règle.
@@ -223,7 +223,7 @@
 
 /* Interrompu : ni un succès (vert) ni un échec constaté (rouge) — une issue qui ne viendra jamais.
    Annulé : même famille — c'est un arrêt VOULU (bouton Stop), pas une panne. En rouge, un Stop se
-   lisait comme une alarme (conv-191, 2026-10-10). */
+   lisait comme une alarme (2026-10-10). */
 .workflow-execution-node.is-interrupted .workflow-execution-dot,
 .workflow-execution-node.is-cancelled .workflow-execution-dot {
   background: var(--text-faint);
@@ -398,7 +398,7 @@
 }
 
 /* Le nom de la skill reste distinct de la ligne grise, sans la couleur d'accent : sur 28 étapes,
-   autant de lignes roses brouillaient la constellation (conv-108, mesuré le 2026-10-11). */
+   autant de lignes roses brouillaient la constellation (mesuré le 2026-10-11). */
 .workflow-execution-skill {
   color: var(--wx-texte-chiffre);
   font-weight: 600;

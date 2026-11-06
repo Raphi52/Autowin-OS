@@ -1,7 +1,7 @@
 import { canonicalProjectPath, estCheminDeDossier } from '../../../shared/project-path'
 
 /**
- * FUSION des projets claude.exe dans la liste des dossiers du Chat (conv-5, 2026-09-23).
+ * FUSION des projets claude.exe dans la liste des dossiers du Chat (2026-09-23).
  *
  * La règle qui commande ce module : le RETRAIT VOLONTAIRE PRIME SUR L'IMPORT. La liste mémorisée
  * a déjà une règle de conception (ChatView) — un dossier retiré par la croix ne revient que sur un

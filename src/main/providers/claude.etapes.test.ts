@@ -1,7 +1,7 @@
 /**
  * ÉTAPES DU TOUR — rejoue le flux RÉEL du CLI 2.1.302 (capturé le 2026-10-17 :
  * `fixtures/claude-2.1.302-taches.jsonl`, trois TaskCreate puis trois TaskUpdate) dans l'adaptateur,
- * et vérifie ce que le fil recevra. Demande conv-304 : « un bloc avec les étapes de la task et leur
+ * et vérifie ce que le fil recevra. Demande : « un bloc avec les étapes de la task et leur
  * progression, ils ont mis ça dans claude.exe ».
  */
 import { EventEmitter } from 'node:events'

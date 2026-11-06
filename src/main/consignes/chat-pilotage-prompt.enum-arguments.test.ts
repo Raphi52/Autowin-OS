@@ -5,8 +5,8 @@ import { REMEMBER_TYPES } from '../brain/brain-remember'
 /**
  * LES VALEURS ATTENDUES D'UN ARGUMENT DOIVENT ATTEINDRE LE MODÈLE.
  *
- * Mesuré trois fois — 2026-08-20 (conv-1086, `cause-racine`), 2026-08-26, puis 2026-08-27
- * (conv-1426, `type: "contrainte"` ET `confidence: "haute"` dans le MÊME appel). À chaque fois
+ * Mesuré trois fois — 2026-08-20 (`cause-racine`), 2026-08-26, puis 2026-08-27
+ * (`type: "contrainte"` ET `confidence: "haute"` dans le MÊME appel). À chaque fois
  * `remember` est refusé, et à chaque fois le vocabulaire était pourtant DÉCLARÉ dans `commands.ts`
  * (`type: 'lesson | decision | preference | domain'`).
  *

@@ -29,7 +29,7 @@ describe('teinte du degrade des quotas', () => {
   })
 
   /**
-   * DEFAUT DU 2026-10-10 (conv-197) : la pastille recopiait la palette de BASE (vert #35d07f) alors
+   * DEFAUT DU 2026-10-10 : la pastille recopiait la palette de BASE (vert #35d07f) alors
    * que le theme Nebuleuse repeint la barre en #4fd1a5 — deux verts cote a cote. Aucune couleur
    * ecrite en dur ne doit sortir d'ici : seules les variables que le theme pose.
    */

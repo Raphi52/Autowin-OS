@@ -9,7 +9,7 @@ import { appliquerLangue } from '../langue'
 import type { ComparaisonDUneFacon } from '../../../shared/essai-trois-facons'
 
 /**
- * LES DÉCISIONS DU FIL SUIVENT LA LANGUE (traduction anglaise, conv-1170, lot « Chat — décisions et
+ * LES DÉCISIONS DU FIL SUIVENT LA LANGUE (traduction anglaise, lot « Chat — décisions et
  * blocs du fil »). Entrée qui doit faire échouer ce test : un libellé de la question `ask`, de la
  * carte de comparaison des façons ou du bloc Raisonnement / Actions / Étapes laissé en dur en
  * français, un composant qui ne se redessine pas quand la langue change, ou un retour au français

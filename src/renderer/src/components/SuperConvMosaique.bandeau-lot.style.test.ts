@@ -14,9 +14,9 @@ const regles = (cible: string): string =>
     .join('\n')
 
 /**
- * LE BANDEAU D'UN LOT NE DÉFILE PAS (conv-1348, 2026-10-30 : « c dégueu que ça soit scrollable comme
+ * LE BANDEAU D'UN LOT NE DÉFILE PAS (2026-10-30 : « c dégueu que ça soit scrollable comme
  * ça »). Un pixel de la ligne « maintenant », au bout de l'axe, créait une barre horizontale de 15 px
- * qui mangeait la deuxième ligne. Depuis conv-1396, la vue d'un lot n'a plus d'axe, seulement la
+ * qui mangeait la deuxième ligne. La vue d'un lot n'a plus d'axe, seulement la
  * ligne du lot ; son bloc ne cède toujours pas. Happy-dom ne calcule aucune mise en page : la règle
  * est vérifiée dans la feuille.
  */
@@ -35,8 +35,8 @@ describe('bandeau d’un lot de la super conv — sans ascenseur', () => {
 })
 
 /**
- * PLUS DE LOTS SANS DÉFILER (conv-1396, 2026-10-31 : « agrandis le bloc du plan de lots dans le chat
- * pour voir plus de lots sans faire défiler, sans écraser le fil »). Mesuré sur le plan de conv-1335 :
+ * PLUS DE LOTS SANS DÉFILER (2026-10-31 : « agrandis le bloc du plan de lots dans le chat
+ * pour voir plus de lots sans faire défiler, sans écraser le fil »). Mesuré sur le plan :
  * la borne de 30vh montrait 9 lots sur 19 (fenêtre de 1000 px), 13 depuis (1040 px). Le bloc monte
  * jusqu'à 50vh, les lignes sont serrées, et le fil garde 30 % de la colonne : c'est ce minimum qui
  * le protège.
@@ -62,9 +62,9 @@ const blocConteneur = (seuil: number): string =>
   )?.[1] ?? ''
 
 /**
- * TITRE ENTIER, HUIT LOTS SANS ASCENSEUR (conv-1387, 2026-10-31 : « écris le titre en entier, et
+ * TITRE ENTIER, HUIT LOTS SANS ASCENSEUR (2026-10-31 : « écris le titre en entier, et
  * garde un bloc de plan sans défilement : réduis la hauteur des lignes pour que 8 lots tiennent »).
- * Mesuré dans l'app sur le plan de conv-1370 (8 lots) : à 1400 × 860, le bloc laisse 170 px à la liste,
+ * Mesuré dans l'app sur le plan (8 lots) : à 1400 × 860, le bloc laisse 170 px à la liste,
  * et 8 lignes de 21,8 px en demandaient 188 ; dans une liste de moins de 620 px, chaque lot prenait
  * trois lignes (57 px), un seul lot restait visible. Happy-dom ne calcule aucune mise en page :
  * la preuve à l'écran est faite dans l'app, ici on garde les règles et le budget de hauteur.
@@ -74,7 +74,7 @@ const blocConteneur = (seuil: number): string =>
  * lot reprend plusieurs lignes.
  */
 describe('bloc du plan — titre entier, huit lots sans ascenseur', () => {
-  /** La place laissée à la liste par le bloc, à 1400 × 860 (mesure conv-1387). */
+  /** La place laissée à la liste par le bloc, à 1400 × 860. */
   const PLACE_DE_LA_LISTE = 170
 
   it('donne au titre sa largeur d’abord : c’est la phrase qui cède', () => {
@@ -102,7 +102,7 @@ describe('bloc du plan — titre entier, huit lots sans ascenseur', () => {
         Number(pastille.match(/line-height:\s*([\d.]+)/)?.[1]) +
       2 // sa bordure, haut et bas
     expect(hauteurDePastille).toBeLessThanOrEqual(12 * interligne)
-    // Une marge verticale sur « Relancer » hausserait sa ligne de 3 px (mesuré, conv-1387).
+    // Une marge verticale sur « Relancer » hausserait sa ligne de 3 px (mesuré).
     expect(regles('.scm-relancer')).toMatch(/padding:\s*0 10px/)
   })
 

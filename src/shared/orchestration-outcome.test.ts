@@ -36,7 +36,7 @@ describe('projection Markdown multi-fragments', () => {
 /**
  * Le fil doit rapporter ce que l'orchestration a VRAIMENT produit.
  *
- * Défaut mesuré sur conv-76 (2026-07-29) : 18 appels de sous-agents, 10,05 $, et le fil disait
+ * Défaut mesuré (2026-07-29) : 18 appels de sous-agents, 10,05 $, et le fil disait
  * « Workflow Autowin exécuté. » — alors que statut, validité, blocage de gate, coût et chemin du RUN
  * étaient tous disponibles. Ces cas figent le contraire : jamais de succès prétendu, toujours les faits.
  */
@@ -1023,7 +1023,7 @@ describe('runLabelFromPath — nommer le run lisiblement', () => {
 })
 
 describe('un run non valide ne garde pas le ✅ du worker', () => {
-  // Defaut vecu le 2026-08-17 (conv-1286) : sept tours ou l'en-tete disait « ⛔ Workflow BLOQUE par le
+  // Defaut vecu le 2026-08-17 : sept tours ou l'en-tete disait « ⛔ Workflow BLOQUE par le
   // gate » avec, juste dessous, « ✅ Fait … verifie via 74 tests » ecrit par le worker. Le worker
   // redige AVANT la gate : son ✅ ne peut rien savoir du verdict. L'utilisateur, lui, lisait un succes.
   const rapportWorker = [
@@ -1087,7 +1087,7 @@ describe('un run non valide ne garde pas le ✅ du worker', () => {
 /**
  * LE TRIO D'ÉTAT NE PEUT PAS ANNONCER LA FIN SOUS UN GATE QUI BLOQUE.
  *
- * Défaut vécu (conv-1302, 2026-08-18) : la rétrogradation ne touchait que la ligne `✅ Fait`. Sous
+ * Défaut vécu (2026-08-18) : la rétrogradation ne touchait que la ligne `✅ Fait`. Sous
  * un en-tête `⛔ Workflow BLOQUÉ`, le même message continuait d'afficher `⏳ Reste à faire : rien`
  * et `👉 Recommandé : aucune action`. Le lecteur y voit la fin, redemande, et le tour recommence :
  * neuf relances mesurées sur la même demande.

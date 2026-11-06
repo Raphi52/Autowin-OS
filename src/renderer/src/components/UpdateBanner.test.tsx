@@ -407,7 +407,7 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
     )
   })
 
-  // conv-1597 : `main` porteuse de commits pas encore poussés (23 en avance, 1 en retard) recevait la
+  // `main` porteuse de commits pas encore poussés (23 en avance, 1 en retard) recevait la
   // voie `merge`, et le bouton affichait « Fusionner origin/main … dans ta branche courante » — la
   // gueule d'une branche de feature. Sur main, le bouton reste « Mettre à jour » et l'aide dit
   // pourquoi ce n'est pas une simple avance.
@@ -509,7 +509,7 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
       expect(prompt.startsWith('/maj ')).toBe(true)
       expect(prompt).toContain('bloquée')
       expect(prompt).toContain('ton travail non committé bloque')
-      // conv-1036 : le bouton ne prescrit plus `git stash`, que le garde-fou refuse aux agents.
+      // Le bouton ne prescrit plus `git stash`, que le garde-fou refuse aux agents.
       expect(prompt).not.toContain('stash')
     } finally {
       window.removeEventListener('autowin:prefill-conversation', listener)
@@ -522,7 +522,7 @@ describe('SOUPLESSE hors de main — proposer, jamais choisir à sa place', () =
     expect(corps).toContain('ne réintroduis jamais')
     expect(corps).toContain('git diff HEAD origin/main')
     expect(corps).toContain('merge-tree')
-    // conv-1023 : une branche `autowin/recovery/…` a été publiée et poussée toute seule par l'app.
+    // Une branche `autowin/recovery/…` a été publiée et poussée toute seule par l'app.
     expect(corps).toContain('refs/heads/sauvegarde/')
     expect(corps).toMatch(/jamais `git stash`/)
   })
@@ -571,7 +571,7 @@ describe('choix PÉRIMÉ : re-sonder avant d’appliquer, jamais refuser', () =>
       })
     api({ checkUpdate, applyUpdate })
     await render()
-    // Sur main le bouton dit « Mettre à jour » (conv-1597) ; c'est l'aide qui annonce le rebase.
+    // Sur main le bouton dit « Mettre à jour » ; c'est l'aide qui annonce le rebase.
     expect(
       container.querySelector('[data-testid="update-apply"]')!.getAttribute('title')
     ).toContain('les rejoue par-dessus origin/main')
@@ -844,8 +844,8 @@ describe('qui a poussé quoi — décider AVANT de fusionner', () => {
   })
 
   /*
-   * Les commits automatiques prennent le format du dépôt `type(zone): phrase (conv-N)` (titre-de-commit.ts,
-   * conv-1069). Sans ce test, la règle de conv-1020 ne retirait plus rien : la note de version
+   * Les commits automatiques prennent le format du dépôt `type(zone): phrase (conv-N)` (titre-de-commit.ts).
+   * Sans ce test, la règle ne retirait plus rien : la note de version
    * aurait affiché « feat(chat): … (conv-1069) », le préfixe et le numéro de fil qu'elle cachait.
    */
   it('le format type(zone): … (conv-N) n’est pas une note de version non plus — gardé dans l’infobulle (conv-1069)', async () => {

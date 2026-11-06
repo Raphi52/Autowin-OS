@@ -7,7 +7,7 @@ import { loadWorkflowProfiles, seedDefaultWorkflows } from './workflow-profiles'
 import { skillInstruction } from '../skills/skill-pipeline'
 
 /**
- * La skill `salvage` a été supprimée le 2026-10-29 (conv-1252). Le fichier de workflows du poste
+ * La skill `salvage` a été supprimée le 2026-10-29. Le fichier de workflows du poste
  * gardait douze profils dont le dernier nœud était `{ id: 'salvage-1', phase: 'salvage' }` : relu
  * tel quel, ce nœud partait sans aucune consigne (`skillInstruction('salvage')` rend ''). Ces tests
  * prouvent que la relecture le convertit en nœud `git`, arêtes et entrée comprises.

@@ -170,7 +170,7 @@ describe('photo git du tour : partagee entre conversations simultanees', () => {
 })
 
 /**
- * UNE ENTREE NON SUIVIE INCHANGEE NE SE REDIFFE PAS — heal conv-204, mesure du 2026-10-10.
+ * UNE ENTREE NON SUIVIE INCHANGEE NE SE REDIFFE PAS — heal, mesure du 2026-10-10.
  *
  * Apres le lot, une photo du depot reel lancait encore 91 `git diff --no-index` : un par entree non
  * suivie, alors que presque toutes etaient identiques d'une photo a l'autre (banc sur D:/Autowin :
@@ -213,7 +213,7 @@ describe('photo git du tour : une entree non suivie inchangee ne se rediffe pas'
 })
 
 /**
- * UN NOM ACCENTUE EST VU SOUS SON VRAI NOM — heal conv-204, 2026-10-10.
+ * UN NOM ACCENTUE EST VU SOUS SON VRAI NOM — heal, 2026-10-10.
  *
  * `git status` cite tout chemin non ASCII : `"accentu\303\251.ts"`. La photo gardait ce texte comme
  * nom de fichier ; `git diff HEAD -- "accentu\303\251.ts"` ne designe aucun fichier et rend un diff

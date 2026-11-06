@@ -1,5 +1,5 @@
 // Émission des évènements d'un tour de chat : rappel protégé, lien de reprise des échecs et
-// anti-collage des deltas. Sorti tel quel de AgentPilot.chat() (conv-1580, lot 2).
+// anti-collage des deltas. Sorti tel quel de AgentPilot.chat() (lot 2).
 import { cleDEchec } from '../chat/chat-turn-messages'
 import { protegerRappel } from '../gel/observabilite-non-bloquante'
 import { DeltaCollageTracker, detacherFenceCollee } from './collage-des-deltas'
@@ -25,7 +25,7 @@ export function emetteurDuTour(onEvent: (e: PilotEvent) => void): EmetteurDuTour
    * UN GEL DE L'INTERFACE NE FAIT PLUS REPAYER LE TOUR.
    *
    * MESURE DU 2026-09-02 (journaux de la journee) : 14 appels « reprise du tour interrompu » pour
-   * 13,62 $, dont 3,44 $ sur un seul (conv-96, 04:19) — un tour deja paye, relance du debut.
+   * 13,62 $, dont 3,44 $ sur un seul (04:19) — un tour deja paye, relance du debut.
    *
    * Le consommateur de ces evenements ECRIT : trace causale, journal du tour, activite. Pendant un
    * gel, l'ecriture de la trace attend un verrou de sequence (`withSequenceLock`,
@@ -59,7 +59,7 @@ export function emetteurDuTour(onEvent: (e: PilotEvent) => void): EmetteurDuTour
   let emettreEchecsAbandonnes: (() => void) | undefined
   /**
    * Le tour a rendu sa fin (`done` ou `error`). La ligne « Lecture retenue » lue EN PARALLÈLE du
-   * modèle (conv-1240) ne s'écrit plus après : elle arriverait sous un message déjà clos.
+   * modèle ne s'écrit plus après : elle arriverait sous un message déjà clos.
    */
   let tourClos = false
   const emit = (e: PilotEventVariant): void => {

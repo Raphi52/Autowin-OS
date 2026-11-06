@@ -2602,7 +2602,7 @@ describe('câblage — le démarrage rejoue le journal et mémorise où il s’e
   })
 
   // Dans LE message de reprise du chantier, mis à jour d'un redémarrage à l'autre, et non plus une
-  // bulle ajoutée à chaque fois (conv-913, 2026-10-13 ; voir index.reprise-du-fil-unique.test.ts).
+  // bulle ajoutée à chaque fois (2026-10-13 ; voir index.reprise-du-fil-unique.test.ts).
   it('il remet le récapitulatif dans la conversation', () => {
     expect(bloc).toContain('os.conversations.noterRepriseDuChantier(conversationId')
   })
@@ -2651,7 +2651,7 @@ describe('surveillance continue apres rattachement', () => {
   })
 
   /*
-   * LE PLAFOND MESURE UN SILENCE, PAS UNE DURÉE (conv-115, 2026-10-09).
+   * LE PLAFOND MESURE UN SILENCE, PAS UNE DURÉE (2026-10-09).
    *
    * Après le redémarrage de 09:46, l'app s'est rattachée à run-9d787439fb32-1 (pid 16944) et à son
    * doublon run-6343a3697aa2-1 (pid 16232). Dix minutes plus tard, elle a journalisé « Rattachement
@@ -2802,7 +2802,7 @@ describe('câblage : les deux attentes de rattachement suivent le journal', () =
  * `agentVerdict` retombait sur son défaut prudent « vivant » — À VIE.
  *
  * Constaté sur l'état réel le 2026-08-07 : `run-state/run-135d936755f8-1.json` porte
- * `{"token":…,"journalPath":…,"pid":5396}` — sans `identity`. Conséquence dans conv-1056 : le
+ * `{"token":…,"journalPath":…,"pid":5396}` — sans `identity`. Conséquence : le
  * démarrage concluait « rattacher » à chaque fois, rouvrait le tour en `streaming` et empilait
  * quatre fois « l'agent … travaille encore ». Le run ne pouvait JAMAIS être déclaré terminé.
  */
@@ -2852,7 +2852,7 @@ describe('après un redémarrage, le journal rend les tests joués (conv-1423)',
   })
 
   // fix-ok: 30 `cd` sur 33 mesurés visent le dossier du tour ; sans lui, un tour récupéré marquerait
-  // ces tests « ailleurs ». Le journal le donne : événement `init`, champ `cwd` (conv-1423).
+  // ces tests « ailleurs ». Le journal le donne : événement `init`, champ `cwd`.
   const recuperer = (
     command: string,
     entree: Record<string, unknown>,

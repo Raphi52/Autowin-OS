@@ -9,7 +9,7 @@ import { forgetChatSession } from '../runs/chat-session-store'
 import { oublierCompteRenduNonVu } from '../runs/compte-rendu-non-vu-store'
 
 /**
- * LE RUN LANCE PAR L'APP SURVIT A UN REDEMARRAGE ENTRE DEUX TOURS (conv-989, 2026-10-16).
+ * LE RUN LANCE PAR L'APP SURVIT A UN REDEMARRAGE ENTRE DEUX TOURS (2026-10-16).
  *
  * Suite de `agent-pilot.trou-de-session.test.ts` : un `/frame` est execute par l'app SANS le modele,
  * son compte-rendu est garde pour le tour suivant. Cette note ne vivait qu'en memoire ; la session du
@@ -132,7 +132,7 @@ describe('le compte-rendu d’un tour exécuté sans le modèle survit au redém
 })
 
 /**
- * DEUX TOURS SANS LE MODELE D'AFFILEE : le second n'efface plus le premier (conv-989).
+ * DEUX TOURS SANS LE MODELE D'AFFILEE : le second n'efface plus le premier.
  *
  * La note etait un `set` par conversation : un `/scout` suivi d'un `/frame`, sans message entre les
  * deux, ne laissait au modele que le `/frame`. Le run du `/scout`, paye, n'existait plus pour lui.
@@ -171,7 +171,7 @@ describe('deux tours exécutés sans le modèle d’affilée arrivent tous les d
 })
 
 /**
- * conv-1074 (2026-10-22) : le compte-rendu d'un tour execute SANS le modele lui est remis au tour
+ * 2026-10-22 : le compte-rendu d'un tour execute SANS le modele lui est remis au tour
  * suivant, puis reste dans sa session pour tous les tours d'apres. Il portait le code ENTIER des
  * pages `html-render` du run. Entree qui ferait echouer une mauvaise correction : `#d4a94f`, la
  * couleur du `<style>` de la page, et le texte place APRES une page plus longue que la borne de tout

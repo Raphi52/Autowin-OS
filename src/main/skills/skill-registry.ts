@@ -27,7 +27,7 @@ const METADATA_BYTES = 16_384
  * Sources par défaut de l'écran Skills : les MÊMES racines que la palette `/` et l'état du modèle
  * (`skillRoots`, native-registry) — uniquement Autowin, le dépôt d'abord.
  *
- * Décision utilisateur du 2026-09-26 (conv-16) : « je garde que les skills d'autowin ». Avant, l'écran
+ * Décision utilisateur du 2026-09-26 : « je garde que les skills d'autowin ». Avant, l'écran
  * listait `~/.codex/skills` et `~/.claude/skills`, et sa source « Autowin » pointait vers
  * `%LOCALAPPDATA%/autowin-os/skills` seul — les skills du dépôt n'y figuraient même pas. Une source
  * supplémentaire reste possible, mais seulement si l'utilisateur la déclare dans `skill-sources.json`.

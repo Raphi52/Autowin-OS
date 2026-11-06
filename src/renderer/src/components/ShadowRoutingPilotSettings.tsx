@@ -25,7 +25,7 @@ function reason(error: unknown): string {
  */
 export function ShadowRoutingPilotSettings(): React.JSX.Element {
   // Messages posés dans l'état : traduits au moment où ils sont posés (`langueCourante`), comme
-  // BrainSettings ; les raisons venues du moteur restent telles quelles (conv-1170).
+  // BrainSettings ; les raisons venues du moteur restent telles quelles.
   const { t } = useTextesSettings()
   const [state, setState] = useState<PilotState | null>(null)
   const [loadError, setLoadError] = useState('')

@@ -1,5 +1,5 @@
 /**
- * ÉTATS POSÉS À LA MAIN SUR LA RIVIÈRE DE LA CARTE DU PROJET (/draft conv-1113, 2026-10-23).
+ * ÉTATS POSÉS À LA MAIN SUR LA RIVIÈRE DE LA CARTE DU PROJET (2026-10-23).
  *
  * Glisser un post-it vers un autre étage change son état : c'est ce qui fait de la rivière un kanban
  * (« ça doit aussi servir de kanban »). L'état prouvé, lui, vient des fils et ne se réécrit pas :

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * « LANCER EN N FILS » CLIQUÉ DANS UNE FENÊTRE DE MOSAÏQUE, DE BOUT EN BOUT (conv-1147, 2026-10-25).
+ * « LANCER EN N FILS » CLIQUÉ DANS UNE FENÊTRE DE MOSAÏQUE, DE BOUT EN BOUT (2026-10-25).
  *
  * Le scénario exact de la 2e relecture externe (note 74) : un tour se joue dans une fenêtre de
  * mosaïque qui n'est PAS le fil affiché en plein. Rien ne relit ce fil du disque

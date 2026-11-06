@@ -6,7 +6,7 @@ import { AppCommandBus } from '../commands/commands'
 import { porteeDerivableDesChangements, verifyTimeoutOutcome } from '../commands/verify-command'
 
 /**
- * DEFAUT VECU le 2026-08-25 (conv-1404) : `verify` sans cible a rendu
+ * DEFAUT VECU le 2026-08-25 : `verify` sans cible a rendu
  * « verification arretee apres 600 s (plafond) — rien n'est prouve, la suite n'a pas rendu son
  * verdict ». Ce n'est pas un rouge, c'est une ABSENCE de verdict : dix minutes d'attente pour
  * apprendre qu'on ne sait rien. Et c'est aussi le repli d'`edit_file` quand la portee n'est pas
@@ -21,7 +21,7 @@ import { porteeDerivableDesChangements, verifyTimeoutOutcome } from '../commands
  *  - un arbre PROPRE : il n'y a rien a cibler, donc la suite complete doit rester la reponse — sinon
  *    on repond « rien n'est casse » a la question « le depot est-il vert ? », ce qui est un faux vert ;
  *  - un vert rendu SANS nommer sa portee : un vert dont on ignore l'etendue se lit plus large qu'il
- *    n'est, et c'est exactement ainsi qu'un « pret pour la fusion » a ete conclu a tort (conv-1371).
+ *    n'est, et c'est exactement ainsi qu'un « pret pour la fusion » a ete conclu a tort.
  */
 const SAUT = String.fromCharCode(10)
 const RACINE = join(process.cwd(), '.autowin-data', 'tests-verify-defaut')
@@ -154,7 +154,7 @@ describe('porteeDerivableDesChangements', () => {
 })
 
 /**
- * DEFAUT VECU le 2026-08-25 (conv-1405), APRES le correctif ci-dessus : arbre PROPRE, donc plus
+ * DEFAUT VECU le 2026-08-25, APRES le correctif ci-dessus : arbre PROPRE, donc plus
  * rien a cibler, donc suite entiere, donc plafond — « rien n'est prouve » une fois de plus. Le
  * ménage du depot avait rendu ce chemin actif.
  *
@@ -201,7 +201,7 @@ describe('verify sans cible sur arbre PROPRE — la portee vient du dernier comm
 /**
  * Un plafond atteint doit dire QUOI FAIRE. « rien n'est prouve » est exact mais sterile : l'agent
  * relance la meme commande et reperd dix minutes. Mesure du 2026-08-25 : trois occurrences en une
- * journee (conv-1400, conv-1404, conv-1405), la meme commande relancee a chaque fois.
+ * journee, la meme commande relancee a chaque fois.
  */
 describe('verifyTimeoutOutcome — le plafond nomme la sortie de secours', () => {
   it('propose de cibler un fichier, au lieu de laisser relancer la meme commande', () => {

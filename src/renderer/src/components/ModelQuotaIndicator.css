@@ -18,7 +18,7 @@
   font: 750 9px/1 var(--font);
   font-variant-numeric: tabular-nums;
   /* Les 4 couleurs du degrade, lues par la barre ET par la pastille (quota-gradient.ts) : un theme
-     les change ICI, en un seul endroit, et la pastille suit (conv-197). */
+     les change ICI, en un seul endroit, et la pastille suit. */
   --quota-rouge: #b8201a;
   --quota-orange: #e0641e;
   --quota-jaune: #efc023;
@@ -376,7 +376,7 @@
 
 /* CHOIX DU FOURNISSEUR AFFICHE PAR LA BARRE (2026-09-06).
    La barre ne suit plus le modele du tour courant : l'utilisateur fixe le fournisseur ici. */
-/* ONGLETS SOULIGNÉS (2026-11-04, conv-1496, /draft « Underline ») : texte seul, filet rose sous
+/* ONGLETS SOULIGNÉS (2026-11-04, /draft « Underline ») : texte seul, filet rose sous
    l'onglet actif, filet fin sous la rangée. Même classe dans la popup de modèles. */
 .model-quota-providers {
   display: flex;

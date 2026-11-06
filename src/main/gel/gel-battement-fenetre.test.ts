@@ -197,7 +197,7 @@ describe('fenetre en plein chargement', () => {
 
 describe('fenetre que personne ne regarde', () => {
   /*
-   * REGRESSION du 2026-11-05 (conv-1604, « chaque fois que je change de fenetre je me mange un
+   * REGRESSION du 2026-11-05 (« chaque fois que je change de fenetre je me mange un
    * chargement de l'interface »). Ce jour-la, 37 rechargements par le battement dans gels.jsonl, tous
    * de 17 s a 25 min apres le dernier message tape : la fenetre etait laissee de cote. Sur ce poste,
    * chaque ouverture de fichier coutait 150 a 380 ms (filtre antivirus) et la page restait muette

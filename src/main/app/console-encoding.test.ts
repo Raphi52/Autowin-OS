@@ -24,7 +24,7 @@ const CP850_RECUS = Buffer.from([
 
 describe('decoderSortieConsole — page OEM de la console Windows', () => {
   it('le défaut : décodé en UTF-8, l’octet cp850 de « é » devient U+FFFD', () => {
-    // C'est EXACTEMENT ce que `spawnVerify` renvoyait à l'agent (conv-92).
+    // C'est EXACTEMENT ce que `spawnVerify` renvoyait à l'agent.
     expect(CP850_EXECUTABLE.toString('utf8')).toBe('un programme ex\uFFFDcutable')
   })
 

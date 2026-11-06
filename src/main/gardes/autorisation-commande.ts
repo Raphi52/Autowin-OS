@@ -47,7 +47,7 @@ export function binaireDe(ligne: string): string | undefined {
 /**
  * DÉCOUPE UNE LIGNE EN ARGUMENTS, EN RESPECTANT LES GUILLEMETS.
  *
- * Défaut vécu (conv-46, 2026-09-01) : la ligne était coupée par un simple `split(/\s+/)`, donc
+ * Défaut vécu (2026-09-01) : la ligne était coupée par un simple `split(/\s+/)`, donc
  * `git commit -m "message en plusieurs mots"` partait en huit arguments, guillemets compris. Git
  * répondait « pathspec 'message' did not match any file(s) », et un `bash -c "…"` recevait un script
  * tronqué. RIEN de guillemeté ne survivait — six appels perdus dans une seule session à chercher
@@ -92,7 +92,7 @@ const ENCHAINEMENTS = /[;|&`$><\n]|\$\(/
 /**
  * UN OPERATEUR ENTRE GUILLEMETS N'EST PAS UN ENCHAINEMENT — c'est du TEXTE.
  *
- * Defaut mesure le 2026-09-04 (conv-233) : une ligne portant `||` A L'INTERIEUR d'une chaine de
+ * Defaut mesure le 2026-09-04 : une ligne portant `||` A L'INTERIEUR d'une chaine de
  * caracteres etait refusee comme « enchainement shell ». Deux appels perdus dans la session. La
  * ligne partant en `shell: false`, ce qui est guillemete est passe TEL QUEL en argument : il ne
  * peut rien enchainer du tout.

@@ -9,7 +9,7 @@ import { MaintenanceSkillsPanel } from './MaintenanceSkillsPanel'
 import { GROUPES_MAINTENANCE, SKILLS_MAINTENANCE } from './maintenance-skills'
 
 /**
- * Vue Maintenance (conv-1101, 2026-10-22) : un bouton par skill d'entretien d'Autowin.
+ * Vue Maintenance (2026-10-22) : un bouton par skill d'entretien d'Autowin.
  *
  * Ce qui doit FAIRE ÉCHOUER ce fichier : une skill renommée ou supprimée de `skills/` sans retirer
  * son bouton (le clic enverrait une invocation que rien ne charge), une consigne qui ne commence plus
@@ -63,7 +63,7 @@ describe('skills de maintenance — la liste', () => {
     for (const skill of SKILLS_MAINTENANCE) expect(groupes.has(skill.groupe)).toBe(true)
   })
 
-  // Demande du 2026-10-23 (conv-1112) : « rajoute /heal dans la vue maintenance ».
+  // Demande du 2026-10-23 : « rajoute /heal dans la vue maintenance ».
   it('propose /heal pour corriger les défauts prouvés d’Autowin', () => {
     expect(SKILLS_MAINTENANCE.map((s) => s.nom)).toContain('heal')
   })

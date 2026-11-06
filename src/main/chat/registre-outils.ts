@@ -4,7 +4,7 @@ import { seedRegistrySnapshot, type RegistryItem } from '../app/native-registry'
 /**
  * LES LIGNES DE L'ÉCRAN DES OUTILS, amorcées à chaque démarrage (index.ts).
  *
- * DÉFAUT VÉCU (conv-353, 2026-10-19, reproduit par `registre-outils.redemarrage.test.ts`) : le
+ * DÉFAUT VÉCU (2026-10-19, reproduit par `registre-outils.redemarrage.test.ts`) : le
  * registre était amorcé depuis `bus.catalog()`, c'est-à-dire la liste DÉJÀ FILTRÉE par l'interrupteur
  * de ce même registre. Un outil coupé à l'écran sortait donc du catalogue enregistré au démarrage
  * suivant ; l'interrupteur, ne trouvant plus sa ligne, le disait actif par défaut. Résultat mesuré

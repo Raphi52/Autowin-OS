@@ -4,7 +4,7 @@ import { extraireBilan } from '../../shared/bilan-d-etape'
 import { messageDuRun } from '../../shared/message-du-run'
 
 /**
- * LES ETAPES DE TRAVAIL TERMINENT PAR LE BLOC FIXE (conv-989, 2026-10-16).
+ * LES ETAPES DE TRAVAIL TERMINENT PAR LE BLOC FIXE (2026-10-16).
  *
  * Le code qui coupe une sortie (bulle affichee, agregat du juge) remonte ce bloc en entier — mais
  * seulement s'il EXISTE, et seulement s'il a la forme qu'il reconnait. Ce test lie les deux bouts :

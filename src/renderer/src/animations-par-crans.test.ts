@@ -9,7 +9,7 @@ import {
 } from './animations-par-crans'
 
 /**
- * Plafond de 10 images/s levé le 2026-11-04 (conv-1512, « remove the 10 fps cap everywhere ») : les
+ * Plafond de 10 images/s levé le 2026-11-04 (« remove the 10 fps cap everywhere ») : les
  * animations de mouvement sont fluides. Seuls clignotent encore par `steps(1)` / `steps(2)` le curseur
  * de l'accueil et la pastille « question en attente », calés ensemble sur l'horloge du document.
  */

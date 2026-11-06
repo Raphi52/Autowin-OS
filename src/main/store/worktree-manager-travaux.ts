@@ -1,5 +1,5 @@
 // Travail non publié, travail trié et rétention des refs : méthodes de WorktreeManager déplacées telles quelles depuis worktree-manager.ts
-// (conv-1508, lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
+// (lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
 // par attacherMethodes dans worktree-manager.ts, donc les appels `this.x(...)` restent identiques.
 import { createHash } from 'node:crypto'
 import type { EntreeBalayage } from './balayage-retention'
@@ -83,7 +83,7 @@ export function marquerTravailTrie(this: WorktreeManager, agentId: string): bool
   /*
    * LE TROISIEME PORTEUR : l'adresse d'ATTENTE posee par `poserAttenteDIntegration`.
    *
-   * Mesure du 2026-09-12 (conv-506) : un travail publie-refuse pour arbre sale vit sur
+   * Mesure du 2026-09-12 : un travail publie-refuse pour arbre sale vit sur
    * `refs/autowin/integration/<agentId>` et NULLE PART ailleurs — ni branche de secours, ni
    * sauvetage, ni bureau (la copie avait ete nettoyee). Le recensement le listait, ce marquage
    * ne savait pas le resoudre : le bandeau criait un travail que rien ne pouvait refermer,
@@ -300,7 +300,7 @@ export function bureauPorteDuTravailNonCommitte(this: WorktreeManager, agentId: 
    * `status --porcelain` les modifications de l'ARBRE PRINCIPAL, attribuees a un bureau qui
    * n'existe plus. Le garde-fou du HEAD non ne ne mord pas : ce sha est parfaitement valide.
    *
-   * DEFAUT VECU le 2026-08-27 (conv-1428) : apres `git worktree remove`, le dossier survivait
+   * DEFAUT VECU le 2026-08-27 : apres `git worktree remove`, le dossier survivait
    * en portant son seul `node_modules` (non versionne, donc non supprime par git). Le
    * recensement a signale les quatre fichiers en cours de l'utilisateur dans main comme
    * « travail non publie » du bureau `run-bac93a8f28b6-1`. Le `.git` d'un worktree lie est un
@@ -417,7 +417,7 @@ export async function recenserRetentionAsync(
   executerInjecte?: (repo: string, args: string[]) => Promise<{ code: number; stdout: string }>
 ): Promise<EntreeBalayage[]> {
   /*
-   * DANS LE WORKER des qu'il existe (heal conv-1013, 2026-10-16). `execFile` n'attend pas git sur
+   * DANS LE WORKER des qu'il existe (2026-10-16). `execFile` n'attend pas git sur
    * le fil principal, mais il y CREE chaque processus — synchrone sous Windows. Une passe = 78
    * processus sur ce depot (631 ms cumulees a vide), et `gels.jsonl` porte 3 gels
    * `spawn git cherry` de 3,7 a 8,8 s, tous dans la passe du demarrage. Dans le worker, les memes
@@ -448,7 +448,7 @@ export async function recenserRetentionAsync(
 /**
  * CE BUREAU PRECIS PEUT-IL PORTER DU TRAVAIL ? — question a UN bureau, prix d'UN bureau.
  *
- * DEFAUT MESURE le 2026-09-04 (conv-233) : `edit_file` commence par demander la liste COMPLETE
+ * DEFAUT MESURE le 2026-09-04 : `edit_file` commence par demander la liste COMPLETE
  * des travaux non publies (`travauxNonPublies` + apercu, jusqu'a 100 entrees) uniquement pour
  * savoir si LE bureau qu'il s'apprete a prendre porte deja quelque chose. Sur ce depot, avec 40
  * copies accumulees, ce recensement coute 18 699 ms MESURES — payes avant la moindre edition, et
@@ -541,7 +541,7 @@ export function travauxNonPublies(this: WorktreeManager, baseRef = 'HEAD'): stri
      * copie est ensuite nettoyee, cette adresse devient le SEUL porteur du travail : ni branche de
      * secours, ni sauvetage, ni bureau. Aucun des quatre gisements ci-dessus ne la regarde.
      *
-     * Mesure du 2026-09-12 (conv-506) : 26 adresses d'attente dormaient dans le depot, dont
+     * Mesure du 2026-09-12 : 26 adresses d'attente dormaient dans le depot, dont
      * QUATRE portant du travail jamais applique — invisibles au bandeau, donc jamais triees. Le
      * defaut est exactement celui du troisieme gisement, une porte plus loin : un travail que
      * l'utilisateur finit par refaire parce que rien ne le lui montre.
@@ -582,7 +582,7 @@ export function travauxNonPublies(this: WorktreeManager, baseRef = 'HEAD'): stri
      *
      * `git cherry` ne connait que deux reponses — applique au patch-id pres, ou pas. Il ne voit
      * donc PAS une reecriture : un travail deja repris dans la base sous une meilleure forme
-     * compte comme non publie, a jamais. Mesure le 2026-08-27 (conv-1424) : deux salvages
+     * compte comme non publie, a jamais. Mesure le 2026-08-27 : deux salvages
      * successifs concluent « SUPERSEDED, deja dans main », conservent les branches comme le
      * protocole l'exige, et le bandeau repasse identique trente secondes plus tard. Aucun geste
      * ne pouvait le refermer, parce que rien n'enregistrait la conclusion.

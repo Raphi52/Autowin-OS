@@ -25,9 +25,9 @@ import {
 /*
  * COURSE ENTRE LA RÉSERVATION D'UN APPEL ET L'INSCRIPTION DE SON AGENT.
  *
- * Mesure conv-163 (run-a9feec26bda6-1, 2026-10-10 12:18:10) : `scout:dette` meurt en 284 ms sur
+ * Mesure (run-a9feec26bda6-1, 2026-10-10 12:18:10) : `scout:dette` meurt en 284 ms sur
  * « checkpoint orchestration causalement invalide : liens de reservation incoherents ».
- * Même message dans conv-44, 45, 46 et 47 depuis le 2026-10-02, toujours sur un panel scout.
+ * Même message et 47 depuis le 2026-10-02, toujours sur un panel scout.
  *
  * Mécanique : le registre réserve l'appel (`registry.ts`, `reserveProviderCall`), puis l'adaptateur
  * Claude attend deux fois (instantané du dépôt, mise à jour du CLI) AVANT d'annoncer son agent

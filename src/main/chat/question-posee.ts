@@ -1,7 +1,7 @@
 /**
  * La question à l'utilisateur qu'un message a posée (commande `ask`), ou `undefined`.
  *
- * conv-1144 : un tour qui finit par une question se relisait par `conversation_read` comme une
+ * Un tour qui finit par une question se relisait par `conversation_read` comme une
  * réponse ordinaire — un script qui attend la fin du tour le prenait pour un succès, alors que le
  * fil ATTEND l'utilisateur. La question est rangée dans le message comme une part `action` nommée
  * `ask` (`src/shared/chat-turn.ts`, évènement `command`) ; vérifié sur les données réelles du

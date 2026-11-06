@@ -1,5 +1,5 @@
 /**
- * LES MESURES DE REACT NE S'ACCUMULENT PLUS (heal « les lags », conv-1413, 2026-10-31).
+ * LES MESURES DE REACT NE S'ACCUMULENT PLUS (heal « les lags », 2026-10-31).
  *
  * En développement, React 19.2.7 écrit une entrée `performance.measure` par composant redessiné pour
  * ses pistes DevTools, et ne la retire jamais : le navigateur la garde jusqu'au rechargement de la

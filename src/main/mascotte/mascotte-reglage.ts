@@ -4,7 +4,7 @@ import { AUTOWIN_APP_DATA_DIR } from '../../shared/app-identity'
 import type { PositionMascotte } from './mascotte'
 
 /**
- * AFFICHER OU MASQUER LA MASCOTTE DU BUREAU — Settings · Interface (conv-1145, 2026-10-25).
+ * AFFICHER OU MASQUER LA MASCOTTE DU BUREAU — Settings · Interface (2026-10-25).
  *
  * Gardé par le MOTEUR, pas par l'interface : la mascotte vit hors de la fenêtre et doit savoir,
  * dès le démarrage et fenêtre principale fermée, si elle a le droit d'apparaître. Rangé à côté du
@@ -53,7 +53,7 @@ export function ecrireMascotteAffichee(
 }
 
 /**
- * LA PLACE DE LA BILLE (conv-1142, 2026-10-26) : là où l'utilisateur l'a glissée, gardée dans le
+ * LA PLACE DE LA BILLE (2026-10-26) : là où l'utilisateur l'a glissée, gardée dans le
  * même fichier, pour qu'elle y revienne au prochain démarrage. Chaque écriture garde l'autre champ :
  * déplacer ne réaffiche pas une bille fermée, la fermer n'oublie pas sa place.
  */
@@ -64,13 +64,13 @@ type ReglageMascotte = {
 }
 
 /**
- * LE STYLE DE LA MASCOTTE (conv-1249, 2026-10-29, demande : « dans settings interface met choix de
- * mascotte soit magicien soit basique ») : `magicien` = le personnage de conv-1227 (chapeau, bras,
+ * LE STYLE DE LA MASCOTTE (2026-10-29, demande : « dans settings interface met choix de
+ * mascotte soit magicien soit basique ») : `magicien` = le personnage (chapeau, bras,
  * sorts) ; `basique` = la bille seule d'avant lui, son halo et son nombre au milieu. Par défaut le
  * magicien : c'est la mascotte que l'utilisateur vient de faire dessiner, le choix sert à revenir à
  * la bille.
  */
-/** `machine` (conv-346) : la petite machine de NieR, rendue en 3D ; c'est elle que montre le thème NieR. */
+/** `machine` : la petite machine de NieR, rendue en 3D ; c'est elle que montre le thème NieR. */
 export const STYLES_MASCOTTE = ['magicien', 'basique', 'machine'] as const
 export type StyleMascotte = (typeof STYLES_MASCOTTE)[number]
 export const STYLE_MASCOTTE_PAR_DEFAUT: StyleMascotte = 'magicien'
@@ -100,7 +100,7 @@ function ecrireReglage(fichier: string, reglage: ReglageMascotte): void {
   mkdirSync(dirname(fichier), { recursive: true })
   const contenu: Record<string, unknown> = { affichee: reglage.affichee }
   if (reglage.position) contenu.position = reglage.position
-  // Le style par défaut n'est pas écrit : un fichier d'avant conv-1249 reste identique.
+  // Le style par défaut n'est pas écrit : un fichier d'avant reste identique.
   if (reglage.style !== STYLE_MASCOTTE_PAR_DEFAUT) contenu.style = reglage.style
   writeFileSync(fichier, `${JSON.stringify(contenu, null, 2)}\n`, 'utf8')
 }
@@ -167,7 +167,7 @@ export function ecrireStyleMascotte(
 }
 
 /**
- * LA MACHINE SUIT LE THÈME NIER (conv-346, 2026-10-29 ; d’abord la 2B, puis « fais de cette machine la
+ * LA MACHINE SUIT LE THÈME NIER (2026-10-29 ; d’abord la 2B, puis « fais de cette machine la
  * mascotte ») — demande d’origine : « fais passer automatiquement la mascotte en 2B
  * quand je choisis le thème NieR, et revenir à mon style d'avant quand j'en change ») : le thème
  * n'ÉCRIT rien dans le réglage, il le recouvre. Le style gardé reste celui de l'utilisateur ; tant

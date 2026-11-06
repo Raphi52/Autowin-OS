@@ -22,7 +22,7 @@ import type { WorkflowGraph } from '../workflow/workflow-graph'
 
 /**
  * UNE VRAIE RÉPARATION, DANS UNE COPIE DE TRAVAIL SÉPARÉE, QUI RETOUCHE LE FICHIER TEST: DU JUGE
- * NE CLÔT PAS EN VERT (piste 2 /build, conv-44). Jusqu'ici le branchement n'était prouvé que par
+ * NE CLÔT PAS EN VERT (piste 2 /build). Jusqu'ici le branchement n'était prouvé que par
  * une recherche dans le texte (objections-juge.test-protege.test.ts). Le fichier existe dans la
  * copie ET dans executionWorkspace ; seule la copie est modifiée : le refus prouve que le contrôle
  * lit la copie du run (commit d41eec5f), pas le dossier principal.

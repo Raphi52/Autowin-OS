@@ -13,7 +13,7 @@ import {
 } from './reprise-fil-apres-quota'
 
 /**
- * REPRISE AUTOMATIQUE D'UN FIL COUPÉ PAR LE QUOTA (conv-1423).
+ * REPRISE AUTOMATIQUE D'UN FIL COUPÉ PAR LE QUOTA.
  *
  * Horloge simulée : le test observe les tours relancés eux-mêmes, avec la vraie file séquentielle et
  * le vrai réveil. Ce qui ferait échouer ces tests : un second essai, une reprise par-dessus un
@@ -174,9 +174,9 @@ describe('etatDeRepriseDuFil — ce que l’écran annonce et ce qui part', () =
   /*
    * Un tour de règle a des bornes (lecture seule, budget, 6 itérations pour un mail : `chat-dispatch.ts`)
    * et un historique non fiable. Relancé sans elles, il retrouverait tous les droits, sans personne
-   * devant l'écran. Trouvé sur `conv-879` (Assistant mails, coupé le 30/09 pendant un mail).
+   * devant l'écran. Trouvé (Assistant mails, coupé le 30/09 pendant un mail).
    *
-   * fix-ok: `etatDeRepriseDuFil` ne lisait rien de l'origine du tour coupé : `conv-879` sortait
+   * fix-ok: `etatDeRepriseDuFil` ne lisait rien de l'origine du tour coupé : un fil sortait
    * « attente » (essai du contrôle final). 21 coupures sur 30 jours, aucune d'une règle, au plus 3
    * ouvertes par un autre fil : n'accepter que le tour marqué coûte peu et couvre les anciens tours.
    */
@@ -251,7 +251,7 @@ describe('etatDeRepriseDuFil — ce que l’écran annonce et ce qui part', () =
 
   /*
    * `fork` recopie tout le tour : statut, erreur, marque d'origine. Une coupure devenait deux fils
-   * coupés, donc deux tours payés : `partis ["conv-1","conv-2"]`, essai du nettoyage de conv-1423.
+   * coupés, donc deux tours payés : `partis ["conv-1","conv-2"]`, essai du nettoyage.
    *
    * fix-ok: `etatDeRepriseDuFil` lisait le tour copié comme un tour du fil, sans regarder
    * `turnConversationId`, que `fork` pose sur chaque tour copié (`store/conversations.ts`).
@@ -645,7 +645,7 @@ describe('creerRepriseDesFils — un seul essai, à l’heure, un fil à la fois
   })
 
   /*
-   * Objection du contrôle final (conv-1423, essai sur le vrai `creerRepriseDesFils`) : fil coupé et
+   * Objection du contrôle final (essai sur le vrai `creerRepriseDesFils`) : fil coupé et
    * marqué inactif, puis réactivé : `attente` à l'écran, 0 minuterie et 0 départ. Rien ne replanifiait
    * un fil qui changeait de situation, et un départ écarté à l'heure gardait sa clé.
    */

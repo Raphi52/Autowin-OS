@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 
 /**
- * Garde de la regle « 2 bis » (piege mesure le 2026-08-25, conv-1404) : `edit_file` verifie le
+ * Garde de la regle « 2 bis » (piege mesure le 2026-08-25) : `edit_file` verifie le
  * bureau apres CHAQUE edition, donc une balise ENGLOBANTE doit etre convertie ouverture ET
  * fermeture dans le MEME appel. La regle vit dans une chaine de prompt : rien d'autre qu'un test
  * n'empeche sa disparition silencieuse lors d'une reecriture du bloc « FACE A UN BLOCAGE ».
@@ -28,7 +28,7 @@ describe('chat-pilotage-prompt — regle 2 bis (edition atomique des balises eng
   })
 
   /*
-   * LA SECONDE FORME DU MEME PIEGE, et c'est celle qui a produit le vrai rouge de conv-1404.
+   * LA SECONDE FORME DU MEME PIEGE, et c'est celle qui a produit le vrai rouge.
    *
    * La regle ne couvrait que la balise ENGLOBANTE — un construit coupe en deux moities. Or l'echec
    * mesure ce jour-la etait d'une autre forme : `<SubAgentText/>` a ete CABLE dans le rendu avant
@@ -48,7 +48,7 @@ describe('chat-pilotage-prompt — regle 2 bis (edition atomique des balises eng
   })
 
   /*
-   * TROISIEME FORME, mesuree le 2026-08-31 (conv-1567). Les deux premieres supposent que c'est TON
+   * TROISIEME FORME, mesuree le 2026-08-31. Les deux premieres supposent que c'est TON
    * edition qui casse le bureau. Ici le bureau etait DEJA rouge (un test d'un autre chantier), donc
    * deux editions purement cosmetiques — un commentaire d'en-tete, un libelle de `it(...)` — ont ete
    * refusees l'une apres l'autre sans que rien ne progresse : deux appels perdus alors que la cause

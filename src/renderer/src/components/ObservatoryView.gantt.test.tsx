@@ -6,7 +6,7 @@ import { ObservatoryView } from './ObservatoryView'
 import type { HarnessTraceEvent } from './harness-timeline-model'
 
 /**
- * Déroulé par agent dans la Chronologie — demande utilisateur du 2026-10-11 (conv-232) : « j'aimerais
+ * Déroulé par agent dans la Chronologie — demande utilisateur du 2026-10-11 : « j'aimerais
  * une vue comme ça dans observatory chronology », capture d'un diagramme en barres par agent. Ces
  * tests montent la VRAIE vue sur une trace qui a la forme relevée dans `causal-trace/conv-222`.
  */
@@ -202,7 +202,7 @@ describe('Observatory · déroulé par agent', () => {
   })
 
   /**
-   * conv-1105 : « observatory doit ressembler au graph timeline des bilans de runs ». Un tour de chat
+   * « observatory doit ressembler au graph timeline des bilans de runs ». Un tour de chat
    * qui a AGI reçoit le même déroulé que le bilan : l'orchestrateur, puis une ligne par outil appelé.
    */
   it('pose aussi le déroulé sur un tour de chat qui a agi : une ligne par outil', async () => {

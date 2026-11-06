@@ -83,7 +83,7 @@ describe('carteDesProjetsPartages — ce qui part sur le partage', () => {
   })
 
   // La réduction refait les comptes depuis les projets gardés : un compte recopié de la carte
-  // entière annoncerait sur le Board le run d'un projet retiré (conv-1346).
+  // entière annoncerait sur le Board le run d'un projet retiré.
   it('le compte « en attente de votre décision » suit les projets gardés', () => {
     const attente = { sujet: 'attend', statut: 'green', chemin: 'c', mtime: 1 }
     const avecDecisions: CarteDesBesoins = {

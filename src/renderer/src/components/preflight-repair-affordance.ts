@@ -34,7 +34,7 @@ export const PREFLIGHT_REPAIRS: Record<string, RepairAffordance> = {
 }
 
 /**
- * Les clés de traduction de chaque réparable (conv-1170). `PREFLIGHT_REPAIRS` reste en français :
+ * Les clés de traduction de chaque réparable. `PREFLIGHT_REPAIRS` reste en français :
  * c'est lui que le test de contrat compare, mot pour mot, au plan du moteur (`preflight-repair.ts`).
  * Ce que l'écran AFFICHE passe par `repairAffordance`, dans la langue de l'interface.
  */

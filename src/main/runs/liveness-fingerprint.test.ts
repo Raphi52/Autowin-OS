@@ -79,7 +79,7 @@ describe('la garde de vivacité a besoin de l’empreinte pour garder quoi que c
        * Ce test vidait `process.env.PATH` pour faire echouer la sonde PowerShell. Mais `process.env`
        * est PARTAGE par tous les fichiers de test qui tournent dans le meme worker vitest : pendant
        * cette fenetre, les voisins ne trouvaient plus leurs binaires. Mesure du 2026-09-07
-       * (conv-336) : `src/main/orchestration/e2e-chaine.test.ts` echouait sur `spawnSync git ENOENT` et
+       * `src/main/orchestration/e2e-chaine.test.ts` echouait sur `spawnSync git ENOENT` et
        * `src/main/orchestration/e2e-chaine.harness.test.ts` sur `git rev-parse refs/heads/HEAD` dans la suite
        * complete, alors que les deux passent en isolation. La copie de travail isolee naissait donc
        * ROUGE, ce qui refusait toute edition verifiee sans aucun rapport avec elle.

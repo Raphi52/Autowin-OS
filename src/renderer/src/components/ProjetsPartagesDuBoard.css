@@ -1,4 +1,4 @@
-/* LES PROJETS PARTAGÉS DU BOARD (conv-1211) : la liste à cocher du rouage ⚙ (conv-1230), dont le
+/* LES PROJETS PARTAGÉS DU BOARD : la liste à cocher du rouage ⚙, dont le
    menu porte le fond et le cadre (`RouageDuBoard.css`). Couleurs tirées des variables du thème. */
 
 .besoins-projets {
@@ -29,7 +29,7 @@
   padding-bottom: 6px;
   border-bottom: 1px solid var(--line);
 }
-/* Une ligne de projet = la case (qui coche) + la croix (qui retire du Chat, conv-1212). */
+/* Une ligne de projet = la case (qui coche) + la croix (qui retire du Chat). */
 .besoins-projets-ligne.is-projet {
   cursor: default;
 }

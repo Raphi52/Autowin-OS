@@ -34,7 +34,7 @@ describe('setRoles — une seule écriture de roles.json pour un lot de rôles',
     expect(saveRoleBindings).toHaveBeenCalledWith(expect.any(Object), petitesTaches, undefined)
   })
 
-  // conv-1097 : l'interrupteur du build trivial sur Haiku vit dans le même fichier, réécrit en entier.
+  // L'interrupteur du build trivial sur Haiku vit dans le même fichier, réécrit en entier.
   it('réécrit roles.json SANS perdre l’interrupteur du build trivial', () => {
     saveRoleBindings.mockClear()
     const fake = { roles: new RoleModelConfig({ buildTrivialSurHaiku: false }) }

@@ -3,7 +3,7 @@ import { AgentPilot } from './agent-pilot'
 import type { PromptSnapshot } from '../commands/commands'
 
 /**
- * UN REFUS TRANSITOIRE NE CONSOMME PAS LE DROIT D'ORCHESTRER DU TOUR (mesure conv-489, 2026-09-12).
+ * UN REFUS TRANSITOIRE NE CONSOMME PAS LE DROIT D'ORCHESTRER DU TOUR (2026-09-12).
  *
  * `orchestrationIssued` est posé AVANT l'exécution : il empêche une SECONDE orchestration payante
  * dans le même tour. Mais « Reprise refusee : N appel(s) provider encore actif(s) » est jeté par

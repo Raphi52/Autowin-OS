@@ -350,7 +350,7 @@ export function citationEncorePresente(
  *
  * fix-ok: un candidat garde la citation figée au jour de sa détection. « La mise à jour propose
  * d'abord rebaser » (update-contract.ts, vu le 2026-09-22 à 11:40 UTC) a été corrigé trois heures
- * plus tard (191ab51d), et servi quand même le 2026-10-14 comme défaut à corriger (conv-947) — rien
+ * plus tard (191ab51d), et servi quand même le 2026-10-14 comme défaut à corriger — rien
  * ne relisait le fichier avant de le proposer.
  *
  * Appelé au moment de SERVIR le stock, jamais pour l'écrire : le statut humain reste sur disque, et

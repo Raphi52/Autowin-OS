@@ -1,6 +1,6 @@
 /**
  * QUESTION À CÔTÉ — le CONTRAT partagé entre le processus principal, le pont (preload) et l'interface
- * (conv-1362, lot 1/3, 2026-10-31), sur le modèle de `shared/navigateur.ts`.
+ * (lot 1/3, 2026-10-31), sur le modèle de `shared/navigateur.ts`.
  *
  * Une question posée depuis un fil, qui s'appuie sur tout ce fil, et dont rien n'est gardé : ni message,
  * ni journal de tour, ni Board, ni fichier. C'est `/btw` de Claude Code (section « Side questions » de

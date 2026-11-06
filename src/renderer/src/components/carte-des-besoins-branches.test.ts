@@ -9,7 +9,7 @@ import {
 import type { DemandeDeLaCarte, StatutDemande } from '../../../shared/carte-des-besoins'
 
 /**
- * LA FICHE DE LA CARTE DES BESOINS (/draft conv-1102, 2026-10-22). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER :
+ * LA FICHE DE LA CARTE DES BESOINS (2026-10-22). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER :
  * un fil compté refusé alors qu'une de ses demandes est prouvée, un fil rangé par sa PREMIÈRE
  * demande au lieu de la dernière, une semaine sans activité qui disparaît du peigne (le trou
  * compte), un historique de six mois qui étire le peigne sans fin, un run réussi pris pour un test.

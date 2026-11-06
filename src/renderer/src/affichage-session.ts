@@ -15,7 +15,7 @@ export const LARGEUR_FENETRE_ETROITE = 720
 export const REQUETE_FENETRE_ETROITE = `(max-width: ${LARGEUR_FENETRE_ETROITE}px)`
 
 /**
- * L'AFFICHAGE SELON LA CONNEXION (conv-1442) — le côté interface : le moteur dit si la session est
+ * L'AFFICHAGE SELON LA CONNEXION — le côté interface : le moteur dit si la session est
  * à distance et si l'écran est celui d'un téléphone (`main/affichage-session.ts`) ; on le pose sur
  * <html> (`data-session="distante"`, `data-ecran="telephone"`), que lit `affichage-session.css`.
  */

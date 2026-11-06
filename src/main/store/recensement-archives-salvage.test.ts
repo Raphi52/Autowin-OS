@@ -7,7 +7,7 @@ import { git, roots, tempRepo } from './worktree-manager.test-helpers'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
- * LE DÉFAUT, mesuré le 2026-08-29 (conv-1521).
+ * LE DÉFAUT, mesuré le 2026-08-29.
  *
  * `salvage` ARCHIVE tout travail qu'il jette sur une branche `autowin/recovery/salvage-<date>-<id>`
  * avant de nettoyer le bureau : c'est ce qui rend le « jeté » réversible. Mais le recensement

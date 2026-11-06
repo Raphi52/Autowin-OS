@@ -40,7 +40,7 @@ export type ModelsIpcDeps = {
   /** Vrai dans une instance isolée de test : les quotas y sont une fixture, jamais un appel réel. */
   isolatedTestInstance: boolean
   /**
-   * Le dossier du compte Claude dont un fil veut lire le quota (conv-1416), ou rien quand ce compte
+   * Le dossier du compte Claude dont un fil veut lire le quota, ou rien quand ce compte
    * est déjà celui que le relevé général décrit, ou qu'il a été retiré.
    */
   compteClaudeDuReleve: (id: string) => { configDir: string | undefined } | undefined

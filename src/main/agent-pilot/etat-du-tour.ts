@@ -1,6 +1,6 @@
 // État mutable d'un tour de chat : les drapeaux, compteurs et registres que la boucle d'itérations
 // de AgentPilot.chat() partage avec ses closures. Sortis tels quels de chat() — noms, valeurs
-// initiales et commentaires — (conv-1580, lot 3) : chat() les lit et les écrit sous `etat.<nom>`,
+// initiales et commentaires — (lot 3) : chat() les lit et les écrit sous `etat.<nom>`,
 // et les modules voisins prennent cet objet en paramètre au lieu de capturer une soixantaine de `let`.
 import type { EtatPrompt } from '../chat/etat-diff'
 import type { ExecutionEvidence, Message } from '../providers/types'
@@ -27,7 +27,7 @@ export interface EtatDuTour {
    * `onlyAuxiliaryRemember` clot le tour sans rendre la main au modele — economie voulue. Mais
    * il jetait AUSSI l'issue du depot : un refus deterministe (type inconnu, source invalide,
    * Brain injoignable) disparaissait, et le modele venait d'ecrire « je retiens ca ». Vecu le
-   * 31/08 (conv-1569) : deux tentatives, aucun retour, l'utilisateur constate « ca a pas marche »
+   * 31/08 : deux tentatives, aucun retour, l'utilisateur constate « ca a pas marche »
    * alors que rien dans le fil ne le disait. On ne repaie pas une generation : on AJOUTE la
    * verite au texte deja livre.
    */
@@ -36,12 +36,12 @@ export interface EtatDuTour {
   depotMemoireCeTour: boolean
   /** Le raccourci `remember` a AVALE la garde de cloture : une relance est due (voir plus bas). */
   consigneClotureApresRemember: boolean
-  /** Texte + `remember` avec un chemin relatif : la réponse est refaite (conv-1335). */
+  /** Texte + `remember` avec un chemin relatif : la réponse est refaite. */
   consigneCheminsApresRemember: string | undefined
   /**
    * UN DEPOT REFUSE SE CORRIGE, il ne se CONSTATE pas. Bornee a une reprise.
    *
-   * Mesure conv-49 (2026-09-01, capture de l'utilisateur) : `remember` refuse pour « portee
+   * Mesure (2026-09-01, capture de l'utilisateur) : `remember` refuse pour « portee
    * manquante », tour CLOS sur « ⚠️ Memoire NON deposee ». Le motif partait a l'utilisateur mais
    * JAMAIS au modele, qui ne pouvait donc pas ajouter la portee manquante — un refus pourtant
    * reparable en un seul argument. Verdict de l'utilisateur : « il doit se rendre compte quand ca
@@ -70,7 +70,7 @@ export interface EtatDuTour {
    */
   sessionEnCours: string | undefined
   /**
-   * Compte Claude qui a ouvert `sessionEnCours` (conv-1063). Une session CLI vit dans le dossier
+   * Compte Claude qui a ouvert `sessionEnCours`. Une session CLI vit dans le dossier
    * de SON compte : dès que le compte actif diffère — bascule à la main pendant le tour, ou rotation
    * après un quota épuisé —, la reprendre rend « No conversation found » et le tour meurt.
    */
@@ -104,7 +104,7 @@ export interface EtatDuTour {
   /**
    * TOUR MUET — un tour qui n'a produit que des etiquettes d'action est inexploitable.
    *
-   * Constate sur conv-76 (2026-07-29) : trois messages assistant de 40 a 64 caracteres, contenant
+   * Constate (2026-07-29) : trois messages assistant de 40 a 64 caracteres, contenant
    * uniquement « [a execute edit_file] [a execute verify] ». L'utilisateur ne pouvait pas savoir ce
    * qui avait ete fait — il a cru que les sous-agents ne se lançaient plus alors que 18 appels
    * avaient tourne pour 10,05 $. Le prompt demande deja de conclure ; le modele ne le fait pas
@@ -115,7 +115,7 @@ export interface EtatDuTour {
   /**
    * Un outil NATIF qui agit (Write, Edit, Bash non lecteur) a tourne dans ce tour. Separe de
    * `anyActionExecuted` a dessein : il ne sert qu'au garde « annonce sans action » (fausse alerte
-   * du 2026-09-22, conv-782), sans changer les autres gardes fondes sur les `<cmd>` Autowin.
+   * du 2026-09-22), sans changer les autres gardes fondes sur les `<cmd>` Autowin.
    */
   actionNativeCeTour: boolean
   /** Le modele a emis `<cmd>` dans ce tour (lu ou non) — sert au repli de cloture. */
@@ -131,7 +131,7 @@ export interface EtatDuTour {
   anyReadExecuted: boolean
   /**
    * Un `run` ou un `verify` a-t-il VRAIMENT tourne (`commandeAObserveLeReel`) ? Compte comme une
-   * lecture pour la SEULE garde « chiffre non verifie » (conv-267) : la garde « question sans
+   * lecture pour la SEULE garde « chiffre non verifie » : la garde « question sans
    * lecture » garde son critere, qui n'etait pas en cause.
    */
   sortieDeCommandeObservee: boolean
@@ -144,14 +144,14 @@ export interface EtatDuTour {
    */
   readonly artefactsDejaEmis: Set<string>
   /**
-   * VIDÉO LIVRÉE = VIDÉO MONTRÉE (conv-253, constat conv-260) : une vidéo citée dans la réponse et
+   * VIDÉO LIVRÉE = VIDÉO MONTRÉE : une vidéo citée dans la réponse et
    * écrite depuis ce début de tour arrive dans le lecteur du fil, sans `show_video`. L'ensemble
    * retient celles déjà montrées (par la commande ou ici) pour n'en afficher qu'un lecteur.
    */
   readonly debutDuTourMs: number
   readonly videosDejaMontrees: Set<string>
   /**
-   * Une QUESTION a-t-elle ete posee ce tour ? Mesure (conv-1399) : une question a
+   * Une QUESTION a-t-elle ete posee ce tour ? Mesure : une question a
    * quatre options posee sans avoir lu un seul fichier, dont une option DEJA implementee et
    * committee. L'utilisateur a attendu pour une reponse qui etait a portee de lecture.
    */
@@ -252,7 +252,7 @@ export interface EtatDuTour {
   gesteRenduRecoveryAvailable: boolean
   bureauUtilise: boolean
   /**
-   * LES FAITS DE LA RELANCE DE PREUVE (conv-1423) : ils ne viennent ni du texte ni des battements
+   * LES FAITS DE LA RELANCE DE PREUVE : ils ne viennent ni du texte ni des battements
    * d'outils, perdus au redémarrage, mais des traces de chaque appel, que le journal relu rend à
    * l'identique. Un tour repris à une itération > 0 a perdu les précédentes (`tourEntierVu`).
    */
@@ -276,7 +276,7 @@ export interface EtatDuTour {
    * Les echecs directs de CETTE iteration encore NON rattrapes, par nom + cible (`cleDEchec`).
    * Un tour d'outils directs tient en UN envoi : le modele y voit chaque resultat et rejoue sur
    * place. Lever le drapeau au premier rouge sans jamais le baisser au vert relancait « ta
-   * derniere action a ECHOUE » apres une reparation deja faite (conv-302, 2026-10-17, tour
+   * derniere action a ECHOUE » apres une reparation deja faite (2026-10-17, tour
    * 1201313c : typecheck rouge puis vert dans la meme reponse). Le drapeau suit donc ce registre.
    */
   readonly echecsNatifsNonRattrapes: Set<string>
@@ -286,19 +286,19 @@ export interface EtatDuTour {
   /*
    * L'APPEL EN COURS A-T-IL ÉCRIT DEPUIS SON DERNIER GESTE (outil direct, image) ? Une relance qui
    * refait la conclusion n'efface que ce dernier passage ; s'il est vide, elle n'efface rien — le
-   * texte d'avant est le récit du travail, pas la conclusion (conv-1401, 2026-10-31).
+   * texte d'avant est le récit du travail, pas la conclusion (2026-10-31).
    */
   gesteDansLAppel: boolean
   texteApresLeDernierGeste: boolean
   readonly replisNatifsDits: Set<string>
   /** Une fence ```html-render laissée ouverte : relance UNE fois, jamais plus. */
   blocVisuelRecoveryAvailable: boolean
-  /** Un chemin relatif cité à l'utilisateur : relance UNE fois, jamais plus (conv-1335). */
+  /** Un chemin relatif cité à l'utilisateur : relance UNE fois, jamais plus. */
   cheminsCompletsRecoveryAvailable: boolean
   /**
    * BLOC `<cmd>` INEXPLOITABLE ET AUCUNE COMMANDE VALIDE — le TOUR PARASITE.
    *
-   * Mesure sur `conv-1472` (2026-08-27, tour `c73fd638`) : le modele emet
+   * Mesure (2026-08-27, tour `c73fd638`) : le modele emet
    * `<cmd>{"name":"orchestrate","args":{...}` — une accolade fermante MANQUANTE. Le parseur en fait
    * bien un token `invalid`, mais le signalement (evenement visible + reinjection) vivait
    * EXCLUSIVEMENT dans la boucle d'execution, gardee par `hasCommand` qui ne compte QUE les tokens
@@ -316,7 +316,7 @@ export interface EtatDuTour {
 /**
  * Les valeurs initiales de l'état, dans l'ordre où chat() les déclarait : `Date.now()` puis
  * `chargerMurs` sont évalués dans ce même ordre, après les retours anticipés du tour (question des
- * deux lectures, route sans modèle), comme avant (conv-1580, lot 3).
+ * deux lectures, route sans modèle), comme avant (lot 3).
  */
 export function etatInitialDuTour(entree: {
   resumeSessionId: string | undefined

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetQuotasServicesHttpForTests, sonderQuotasServicesHttp } from './model-quotas'
 
-// Sonde de quota d’un service direct au relevé (conv-1499) : la barre se remplit sans attendre une tâche.
+// Sonde de quota d’un service direct au relevé : la barre se remplit sans attendre une tâche.
 describe('sonderQuotasServicesHttp', () => {
   beforeEach(() => resetQuotasServicesHttpForTests())
 

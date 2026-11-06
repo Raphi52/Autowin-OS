@@ -279,7 +279,7 @@ export interface ContexteRuntimeRelais {
 }
 
 /**
- * QUEL EXE FAIT TOURNER LE RELAIS (conv-902, 2026-10-12).
+ * QUEL EXE FAIT TOURNER LE RELAIS (2026-10-12).
  *
  * Le relais tournait sur `process.execPath` avec `ELECTRON_RUN_AS_NODE`. En dev, c'est
  * `.autowin-data/electron-dev/electron.exe`, dont les DLL sont des liens durs vers

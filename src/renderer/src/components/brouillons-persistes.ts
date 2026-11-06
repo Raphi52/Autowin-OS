@@ -1,7 +1,7 @@
 /**
  * BROUILLONS QUI SURVIVENT AU RECHARGEMENT DE LA FENÊTRE.
  *
- * Mesure du 2026-09-01 (conv-65) : « de temps en temps ça m'enlève de la conversation dans laquelle
+ * Mesure du 2026-09-01 : « de temps en temps ça m'enlève de la conversation dans laquelle
  * je suis en train d'écrire et ça m'efface le message ». Le texte en cours de frappe vivait
  * UNIQUEMENT dans une ref du renderer (`composerDraftsRef`) : un rechargement de fenêtre (mise à
  * jour appliquée, rechargement à chaud en dev, plantage du renderer) le perdait définitivement.

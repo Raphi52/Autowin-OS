@@ -23,7 +23,7 @@ const os = {
 
 /**
  * Ce que lira le processus SUIVANT, demarre apres la pose : une consigne n'est jamais rendue au
- * processus qui l'a posee (conv-1033, `redemarrage-reprise.ts`).
+ * processus qui l'a posee (`redemarrage-reprise.ts`).
  */
 const repriseAuDemarrageSuivant = (): ReturnType<typeof consommerReprise> =>
   consommerReprise(ensureAutowinAppData(), Date.now(), Date.now() + 1)
@@ -110,7 +110,7 @@ describe('restart_app', () => {
   })
 
   /*
-   * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : conv-303 tournait ; le seul
+   * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : un fil tournait ; le seul
    * redemarrage offert la coupait, l'agent a pose un `ask` au lieu d'agir. « J'ai un systeme pour
    * mettre le redemarrage en queue, tu aurais du l'utiliser. »
    */

@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * ÉCRIRE UN FICHIER ENTIER HORS DU FIL PRINCIPAL (conv-1368, 2026-10-31).
+ * ÉCRIRE UN FICHIER ENTIER HORS DU FIL PRINCIPAL (2026-10-31).
  *
  * Mesure `gels.jsonl` sur 7 jours : `renameSync` a figé la fenêtre 66,6 s, dont 16 s d'un coup, sur
  * huit petits fichiers JSON. Remplacer un fichier tout neuf peut tenir 20 s sous charge, même hors de

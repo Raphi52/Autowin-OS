@@ -21,7 +21,7 @@ import { RoleModelConfig } from '../profil/roles'
 import { TrustLedger } from '../trust/ledger'
 
 /**
- * MÉMOIRE DE TÊTE (conv-1285) : les faits clés de l'entreprise, servis en entier à chaque tour du
+ * MÉMOIRE DE TÊTE : les faits clés de l'entreprise, servis en entier à chaque tour du
  * chat ET dans chaque étape des runs (comme le profil). Un test par cas limite, puis le chemin réel :
  * le bloc présent dans le texte de départ du chat, puis dans celui d'une étape de run et de son juge.
  * Chaque test a sa racine de données à lui (la racine partagée des tests est lue en parallèle).
@@ -138,7 +138,7 @@ class CapturingProvider implements ProviderAdapter {
     return true
   }
 
-  // fix-ok: même faux fournisseur que profil-utilisateur.test.ts (conv-1098) — il rend sans yield, ce qu'eslint refuse sans la mention ci-dessous (require-yield).
+  // fix-ok: même faux fournisseur que profil-utilisateur.test.ts — il rend sans yield, ce qu'eslint refuse sans la mention ci-dessous (require-yield).
   // eslint-disable-next-line require-yield
   async *send(
     _messages: unknown,

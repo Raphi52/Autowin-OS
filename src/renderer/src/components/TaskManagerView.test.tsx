@@ -373,7 +373,7 @@ describe('TaskManagerView', () => {
     )
   })
 
-  // conv-983 (2026-10-16) : le champ vide montre le modèle de prompt, bloc par bloc, lisible en entier.
+  // 2026-10-16 : le champ vide montre le modèle de prompt, bloc par bloc, lisible en entier.
   it('montre le modèle de prompt en exemple grisé du champ prompt', async () => {
     const { container } = await mount()
     const newButton = [...container.querySelectorAll('button')].find((button) =>
@@ -391,7 +391,7 @@ describe('TaskManagerView', () => {
     )
   })
 
-  // conv-983 (2026-10-16) : partir du modèle pour l'éditer, sans jamais écraser un prompt déjà tapé.
+  // 2026-10-16 : partir du modèle pour l'éditer, sans jamais écraser un prompt déjà tapé.
   it('« Partir du modèle » remplit le champ vide, puis se grise tant qu’il contient un prompt', async () => {
     const { container } = await mount()
     const newButton = [...container.querySelectorAll('button')].find((button) =>

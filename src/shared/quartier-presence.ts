@@ -1,5 +1,5 @@
 /**
- * LA PRÉSENCE DU POSTE DANS LE VILLAGE COMMUN (plan « Village commun », conv-1429, 2026-11-02).
+ * LA PRÉSENCE DU POSTE DANS LE VILLAGE COMMUN (plan « Village commun », 2026-11-02).
  *
  * Demande : voir dans l'Accueil les tanukis des collègues à côté des siens. Cadrage tranché dans
  * `grill/agent-hq-japon-town.md` : D-8 (les agents des collègues s'affichent comme les miens), D-9
@@ -62,7 +62,7 @@ export const PRESENCE_COLLEGUES_MAX = 20
 export const PRESENCE_DELAI_RELECTURE_MS = 4_000
 
 /**
- * L'animal qui représente les agents d'un poste (demande utilisateur du 2026-11-04, conv-1537) :
+ * L'animal qui représente les agents d'un poste (demande utilisateur du 2026-11-04) :
  * « choisir dans les settings de l'accueil quel animal on veut pour représenter nos agents ; notre
  * setting doit affecter ce que les autres voient ». Choisi dans les réglages de l'Accueil, rangé dans
  * le réglage du Board du poste, écrit dans `presence.json` : chaque collègue dessine ce même animal.
@@ -81,7 +81,7 @@ export function animalLisible(v: unknown): AnimalAgent | null {
 }
 
 /**
- * La couleur de la tenue des agents d'un poste (demande utilisateur du 2026-11-06, conv-1633) : « je veux
+ * La couleur de la tenue des agents d'un poste (demande utilisateur du 2026-11-06) : « je veux
  * un settings pour choisir la couleur de leur tenue en dessous du setting où je choisis l'animal ». Comme
  * l'animal : choisie dans les réglages de l'Accueil, rangée dans le réglage du Board du poste, écrite dans
  * `presence.json`, et chaque collègue dessine la même. Absente = la tenue d'origine de l'animal. La
@@ -107,7 +107,7 @@ export function tenueLisible(v: unknown): TenueAgent | null {
 }
 
 /**
- * « Afficher mes agents à » (demande utilisateur du 2026-11-05, conv-1599) : les postes à qui CE poste
+ * « Afficher mes agents à » (demande utilisateur du 2026-11-05) : les postes à qui CE poste
  * masque ses agents, écrits dans `presence.json`. L'Autowin d'un poste nommé n'affiche alors pas ces
  * agents. C'est un réglage d'AFFICHAGE, pas une protection : le fichier reste lisible sur le partage.
  * 50 postes au plus : la liste ne doit pas manger la place des agents sous `PRESENCE_TAILLE_MAX`.
@@ -163,14 +163,14 @@ export interface PresenceDuPoste {
   /** Partage coupé sur ce poste (D6) : `agents` est alors vide. Jamais de suppression sur le partage. */
   coupe?: true
   /**
-   * L'animal choisi sur ce poste (conv-1537). Absent dans un fichier écrit par une version d'avant
+   * L'animal choisi sur ce poste. Absent dans un fichier écrit par une version d'avant
    * le réglage : le lecteur garde alors l'animal tiré du nom du poste (`animalDuPoste`).
    */
   animal?: AnimalAgent
-  /** La couleur de tenue choisie sur ce poste (conv-1633). Absente = la tenue d'origine de l'animal. */
+  /** La couleur de tenue choisie sur ce poste. Absente = la tenue d'origine de l'animal. */
   tenue?: TenueAgent
   /**
-   * Les postes (en minuscules) à qui ce poste masque ses agents (conv-1599). Absent = visibles pour
+   * Les postes (en minuscules) à qui ce poste masque ses agents. Absent = visibles pour
    * tous ; un lecteur nommé ici ne les affiche pas.
    */
   masquesPour?: string[]
@@ -178,7 +178,7 @@ export interface PresenceDuPoste {
 }
 
 /**
- * Une personne trouvée sur le partage (conv-1599) : tout `presence.json` lisible, en ligne ou non,
+ * Une personne trouvée sur le partage : tout `presence.json` lisible, en ligne ou non,
  * pour que les réglages de l'Accueil puissent la nommer dans « afficher les agents de » et
  * « afficher mes agents à ».
  */
@@ -197,9 +197,9 @@ export interface PresenceDUnCollegue {
   nom: string
   /** Le premier mot de `nom`, affiché au survol (D9). */
   prenom: string
-  /** L'animal qu'il a choisi (conv-1537) ; absent = fichier d'une version d'avant le réglage. */
+  /** L'animal qu'il a choisi ; absent = fichier d'une version d'avant le réglage. */
   animal?: AnimalAgent
-  /** La couleur de tenue qu'il a choisie (conv-1633) ; absente = la tenue d'origine de son animal. */
+  /** La couleur de tenue qu'il a choisie ; absente = la tenue d'origine de son animal. */
   tenue?: TenueAgent
   agents: AgentPublie[]
 }
@@ -208,7 +208,7 @@ export interface PresenceDUnCollegue {
 export interface PresencesDesCollegues {
   collegues: PresenceDUnCollegue[]
   /**
-   * Toutes les personnes du partage, en ligne ou non (conv-1599) ; absent = processus principal d'avant
+   * Toutes les personnes du partage, en ligne ou non ; absent = processus principal d'avant
    * le réglage : la vue retombe sur `collegues`.
    */
   personnes?: PersonneDuPartage[]

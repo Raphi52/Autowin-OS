@@ -5,7 +5,7 @@ import type { PromptSnapshot } from '../commands/commands'
 /**
  * UN TOUR QUI FINIT PAR `remember` DOIT QUAND MEME CONCLURE.
  *
- * Mesure conv-34 (2026-09-01), mots de l'utilisateur : « j'ai pas eu de bloc de fin ». La garde
+ * Mesure (2026-09-01), mots de l'utilisateur : « j'ai pas eu de bloc de fin ». La garde
  * `exigeUneConclusion` vit dans la branche SANS commande du pilote ; le raccourci
  * `onlyAuxiliaryRemember` rendait `done` AVANT elle. Consequence : tout tour terminant par
  * « texte + remember » — la forme normale d'un kaizen, qui depose sa lecon en dernier — se

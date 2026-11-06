@@ -3,7 +3,7 @@ import { AgentPilot } from './agent-pilot'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
- * UNE VIDÉO MONTRÉE PAR COMMANDE ARRIVE DANS LE FIL, JAMAIS DANS LE PROMPT (conv-253, 2026-10-11).
+ * UNE VIDÉO MONTRÉE PAR COMMANDE ARRIVE DANS LE FIL, JAMAIS DANS LE PROMPT (2026-10-11).
  *
  * `attachments` d'un résultat de commande part dans le prochain message du modèle ; seules les
  * IMAGES y sont republiées comme carte. Une vidéo ne doit suivre ni l'un ni l'autre chemin : elle

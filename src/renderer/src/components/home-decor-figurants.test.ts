@@ -15,7 +15,7 @@ import {
 import { AVATARS, HEURE_DE_POINTE, MARCHES } from './home-decor-foule'
 
 /**
- * LE DEAL ET LE FUMEUR, REJOUÉS PAR DES HUMAINS RÉELS (conv-312) : « Refais le deal et le fumeur du
+ * LE DEAL ET LE FUMEUR, REJOUÉS PAR DES HUMAINS RÉELS : « Refais le deal et le fumeur du
  * fond d'Accueil avec des humains Rocketbox animés par leurs gestes capturés, à côté des 18 passants ».
  *
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE FICHIER :

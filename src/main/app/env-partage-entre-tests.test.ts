@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
  * la duree de sa fenetre, et seulement dans la suite complete — jamais en isolation, ce qui rend le
  * defaut tres cher a localiser.
  *
- * MESURE DU 2026-09-07 (conv-336) : `liveness-fingerprint.test.ts` vidait le PATH pour simuler une
+ * MESURE DU 2026-09-07 : `liveness-fingerprint.test.ts` vidait le PATH pour simuler une
  * panne de la sonde PowerShell. Consequence observee dans la suite complete :
  * `src/main/orchestration/e2e-chaine.test.ts` echouait sur `spawnSync git ENOENT` et
  * `src/main/orchestration/e2e-chaine.harness.test.ts` sur `git rev-parse refs/heads/HEAD`, alors que les deux

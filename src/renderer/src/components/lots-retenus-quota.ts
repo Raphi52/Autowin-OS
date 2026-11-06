@@ -1,9 +1,9 @@
 /**
- * LES LOTS D'UNE SÉLECTION SCOUT NE PARTENT PAS DANS LE MUR DE QUOTA (conv-1080, 2026-10-22).
+ * LES LOTS D'UNE SÉLECTION SCOUT NE PARTENT PAS DANS LE MUR DE QUOTA (2026-10-22).
  *
  * Le panneau des candidats découpe une sélection en lots, envoyés un par tour par la file du fil.
  * Quand un lot bute sur la limite d'abonnement (« You've hit your session limit · resets 11:30am »,
- * conv-1055 à 11:01), la fin de son tour relâchait aussitôt le lot suivant : refusé à son tour par le
+ * 01), la fin de son tour relâchait aussitôt le lot suivant : refusé à son tour par le
  * même mur, il retombait en quelques secondes, relâchait le troisième, et la file se vidait en une
  * cascade d'échecs — chaque lot « parti », aucun traité. Sur les 49 runs lancés depuis le panneau,
  * 16 avaient été coupés par cette limite.
@@ -12,7 +12,7 @@
  *
  * DEUX FORMES DE COUPURE, toutes deux réelles :
  * - le tour du chat échoue sur le mur (`status: 'failed'`, erreur « Claude a interrompu l'appel :
- *   You've hit your session limit… », conv-1055) ;
+ *   You've hit your session limit… ») ;
  * - le RUN du lot bute sur le mur, mais le tour du chat se clôt quand même (`agent-pilot.ts` rend
  *   la parole au modèle après `orchestrate`, éventuellement sur un autre compte) : l'action
  *   `orchestrate` porte alors `ok: false` et le refus en `data` — le travail est suspendu

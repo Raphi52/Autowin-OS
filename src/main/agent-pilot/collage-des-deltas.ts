@@ -1,5 +1,5 @@
 // Texte streamé du tour : préfixe déjà émis, collage des deltas (fences, phrases soudées) et
-// retrait d’une conclusion bloquante prématurée, sortis tels quels de agent-pilot.ts (conv-1580,
+// retrait d’une conclusion bloquante prématurée, sortis tels quels de agent-pilot.ts (
 // lot 1).
 import { suivreBlocsDeCode } from '../../shared/bloc-de-code'
 
@@ -45,7 +45,7 @@ export function separationDeltaCollee(dejaEmis: string, suivant: string): string
 /**
  * FENCE SOUDEE EN MILIEU DE LIGNE — la moitie que `separationDeltaCollee` ne peut PAS voir.
  *
- * MESURE DU 2026-09-03 (conv-8, signalement utilisateur « le html ne s'est pas render ») : le
+ * MESURE DU 2026-09-03 (signalement utilisateur « le html ne s'est pas render ») : le
  * journal du tour porte un SEUL delta (`0:0:ordered:4`, 4 925 car.) dont le texte est
  * « …est bien branchee.```html-render
 <!doctype html> ». Le collage n'est donc pas a la JOINTURE
@@ -114,7 +114,7 @@ export class DeltaCollageTracker {
     /**
      * Le texte qui PRECEDE reellement ce delta dans la part rendue. Au premier delta d'un flux
      * NEUF, `dejaEmis` est vide par definition : lire ce flux-la ne pouvait donc rien separer,
-     * et la fence arrivait collee a la phrase du flux precedent (mesure conv-1517).
+     * et la fence arrivait collee a la phrase du flux precedent.
      */
     const precedent = changementDeFlux
       ? (this.emis.get(this.dernierStreamId as string) ?? '')

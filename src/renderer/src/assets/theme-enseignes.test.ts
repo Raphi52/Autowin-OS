@@ -6,7 +6,7 @@ import { THEMES_EN } from '../textes'
 import { THEMES } from '../theme-mode'
 
 /**
- * Thème « Enseignes » (Signboards en anglais) — conv-1586, 2026-11-05 : « implémenter Signboards du
+ * Thème « Enseignes » (Signboards en anglais), 2026-11-05 : « implémenter Signboards du
  * premier caroussel », la proposition 1 du tour 2 du /draft « un thème qui suit l'univers de
  * l'accueil ». Base CLAIRE : ciel pâle, panneaux blancs, coins de 14 px ; chaque entrée du menu porte
  * l'ENSEIGNE de sa tour (carré de couleur, symbole du Quartier), et la ZONE OUVERTE teinte l'en-tête,

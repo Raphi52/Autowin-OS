@@ -8,7 +8,7 @@ import { arreterFilDExecution } from '../gel/execution-hors-fil'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
- * LA MISE À JOUR DU CLI CLAUDE NE CRÉE PLUS DE PROCESSUS SUR LE FIL PRINCIPAL (conv-1413, 2026-10-31).
+ * LA MISE À JOUR DU CLI CLAUDE NE CRÉE PLUS DE PROCESSUS SUR LE FIL PRINCIPAL (2026-10-31).
  *
  * Mesure `gels.jsonl`, session du 2026-10-31 19:33 → 20:22 UTC : `spawn tasklist`
  * (`claude-cli-update.ts:125`, 20,8 s d'un seul appel — retenté toutes les 15 min tant que le CLI

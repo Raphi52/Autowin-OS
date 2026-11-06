@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 /**
- * LE GUET QUI OUVRE LE PANNEAU DES BUREAUX CACHÉS (conv-1378, 2026-10-31).
+ * LE GUET QUI OUVRE LE PANNEAU DES BUREAUX CACHÉS (2026-10-31).
  *
  * Entrées qui doivent faire échouer ce fichier : un panneau qui revient seul sur un bureau déjà vu, un
  * bureau d'avant l'ouverture de l'app pris pour un lancement, une relance dans le même bureau ignorée,
- * une liste redemandée plus vite que 5 s (conv-1077 : 120,2 s figées), une liste en échec sans attente.
+ * une liste redemandée plus vite que 5 s (120,2 s figées), une liste en échec sans attente.
  */
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'

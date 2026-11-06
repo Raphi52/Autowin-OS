@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { titreSansHomonyme as t } from './titre-sans-homonyme'
 
 // Migré de scripts/arena-panel/p15-titres-ligatures.mts (banc /arena, commit 191ab51d), retiré le
-// 2026-10-22 (residus, conv-1062). Ce script était devenu ROUGE sans que personne le voie : il
+// 2026-10-22 (residus). Ce script était devenu ROUGE sans que personne le voie : il
 // importait encore `src/renderer/src/components/titre-sans-homonyme`, déplacé dans `src/shared/`
 // le 2026-10-19 (b49ce52a). Défaut d'origine : « oeuvre » à côté d'un titre « Œuvre » n'était
 // pas reconnu comme homonyme, et deux conversations portaient le même titre pour l'œil.

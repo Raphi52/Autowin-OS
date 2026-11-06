@@ -5,7 +5,7 @@ import type { PromptSnapshot } from '../commands/commands'
 import { extractHumanMessage } from '../../renderer/src/components/human-message'
 
 /**
- * LES MOTS DE L'UTILISATEUR SONT ENCADRES, ET RIEN NE PEUT REFERMER LE CADRE (conv-889, 2026-09-30).
+ * LES MOTS DE L'UTILISATEUR SONT ENCADRES, ET RIEN NE PEUT REFERMER LE CADRE (2026-09-30).
  *
  * Avant : tout le tour partait dans un seul message `user`, et seul le prefixe `UTILISATEUR:`
  * separait la demande de ce que l'app ajoute (etat, memoire, rappel, relances). Aucune marque de fin :

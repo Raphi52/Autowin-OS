@@ -5,7 +5,7 @@ import { refusGitDestructeur } from './garde-git-destructeur'
 import { sourceDuBus } from '../main/commands/source-du-bus.test-helpers'
 
 /**
- * Preuve du defaut d'origine : conv-587, saisie ts=1789550244094. Un `git reset --hard` de nettoyage
+ * Preuve du defaut d'origine : saisie ts=1789550244094. Un `git reset --hard` de nettoyage
  * a detruit trois fichiers modifies non commites hors perimetre. Perte irreversible.
  */
 describe('refusGitDestructeur', () => {
@@ -42,7 +42,7 @@ describe('refusGitDestructeur', () => {
     expect(refusGitDestructeur('git log -S "reset --hard"')).toBeUndefined()
   })
 
-  // conv-770, 2026-09-28 : la ligne etait coupee sur `|` `;` MEME ENTRE GUILLEMETS. Un grep dont le
+  // 2026-09-28 : la ligne etait coupee sur `|` `;` MEME ENTRE GUILLEMETS. Un grep dont le
   // motif nommait `git stash` a ete refuse pendant la maintenance du jour. Seul un APPEL est refuse.
   it.each([
     "grep -o 'x\\|git stash [a-z]\\+' trace.jsonl",
@@ -76,7 +76,7 @@ describe('refusGitDestructeur', () => {
     expect(refusGitDestructeur(c)).toBeTruthy()
   })
 
-  // conv-1577, 2026-11-05 : AGENTS.md interdisait `npm run format` (`prettier --write .`) en PROSE
+  // 2026-11-05 : AGENTS.md interdisait `npm run format` (`prettier --write .`) en PROSE
   // seulement (« AUCUN contrôle ne les bloque ») ; ce formatage a déjà réécrit des fichiers non
   // commités d'autres fils du même dossier. La règle devient un refus, comme `git stash`.
   it.each([
@@ -91,10 +91,10 @@ describe('refusGitDestructeur', () => {
     'prettier --write "src/**/*.ts"',
     'node_modules/.bin/prettier --write ./',
     'bash -c "npm run format"',
-    // Exemples repris du rappel « formatage-de-tout-le-depot » (mods/autowin/rappels-outils.json,
-    // conv-1457), retiré quand ce refus l'a rendu inatteignable.
+    // Exemples repris du rappel « formatage-de-tout-le-depot » (mods/autowin/rappels-outils.json),
+    // retiré quand ce refus l'a rendu inatteignable.
     'npx prettier --log-level warn -w "." && git status',
-    // Une redirection ne masque pas une cible large (conv-1580).
+    // Une redirection ne masque pas une cible large.
     'npx prettier --write . >/dev/null',
     'npx prettier --write src > sortie.txt'
   ])('refuse le reformatage de tout le dépôt : %s', (c) => {
@@ -108,7 +108,7 @@ describe('refusGitDestructeur', () => {
     'npx prettier --write src/main/a.ts src/main/b.test.ts',
     'npx prettier --write --end-of-line lf src/main/a.ts',
     'npx prettier --write ./src/x.ts',
-    // conv-1580, 2026-11-05 : `>/dev/null` était lu comme une cible sans extension, donc « tout le
+    // 2026-11-05 : `>/dev/null` était lu comme une cible sans extension, donc « tout le
     // dépôt » — refus à tort d'un formatage de deux fichiers nommés.
     'npx prettier --write src/main/a.ts src/main/b.ts >/dev/null',
     'npx prettier --write src/main/a.ts > /dev/null',
@@ -154,7 +154,7 @@ describe('hook reel du CLI', () => {
     })
     expect(ok.stdout).toBe('')
     // La lecture « comme un shell » (fonctions internes) survit a la serialisation dans le script :
-    // une MENTION passe, un APPEL cache derriere `bash -c` est refuse (conv-770, 2026-09-28).
+    // une MENTION passe, un APPEL cache derriere `bash -c` est refuse (2026-09-28).
     const passe = (commande: string): string =>
       spawnSync(process.execPath, [script], {
         input: JSON.stringify({ tool_input: { command: commande } }),
@@ -164,10 +164,10 @@ describe('hook reel du CLI', () => {
     expect(
       JSON.parse(passe('bash -c "git reset --hard"')).hookSpecificOutput.permissionDecision
     ).toBe('deny')
-    // conv-1577 : le reformatage de tout le dépôt est refusé aussi après sérialisation dans le script.
+    // Le reformatage de tout le dépôt est refusé aussi après sérialisation dans le script.
     expect(JSON.parse(passe('npm run format')).hookSpecificOutput.permissionDecision).toBe('deny')
     expect(passe('npx prettier --write src/main/a.ts')).toBe('')
-    // Demande conv-114 : rien de créé que l'utilisateur ne pourrait supprimer dans le Task Manager.
+    // Demande : rien de créé que l'utilisateur ne pourrait supprimer dans le Task Manager.
     const tache = JSON.parse(passe('schtasks /create /tn X /tr notepad.exe /sc daily'))
     expect(tache.hookSpecificOutput.permissionDecision).toBe('deny')
     expect(tache.hookSpecificOutput.permissionDecisionReason).toMatch(/task_create/)

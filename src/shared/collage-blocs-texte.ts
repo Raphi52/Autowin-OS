@@ -2,7 +2,7 @@
  * SÉPARATION DE DEUX BLOCS DE TEXTE RECOLLÉS — règle PURE, partagée par le fournisseur qui accumule
  * la réponse et par la diffusion en direct, pour qu'ils ne divergent jamais.
  *
- * DÉFAUT VÉCU (conv-8, 2026-09-03). Une réponse de modèle arrive en plusieurs blocs de texte séparés
+ * DÉFAUT VÉCU (2026-09-03). Une réponse de modèle arrive en plusieurs blocs de texte séparés
  * par des appels d'outils. Le fournisseur les accumulait par `text += part.text`, sans séparateur.
  * Quand un bloc finissait par une phrase (« … est bien branchée. ») et que le suivant OUVRAIT une
  * fence (« ```html-render »), la fence se retrouvait EN MILIEU DE LIGNE :

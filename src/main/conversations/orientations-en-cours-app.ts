@@ -11,7 +11,7 @@ import {
 } from '../../shared/orientations-en-cours'
 
 /**
- * ORIENTATIONS EN COURS, CÔTÉ APP (conv-1241, 2026-10-28) — voir `shared/orientations-en-cours.ts`.
+ * ORIENTATIONS EN COURS, CÔTÉ APP (2026-10-28) — voir `shared/orientations-en-cours.ts`.
  *
  * La file en mémoire (`pendingDirectives`, `index.ts`) reste la source du tour : ce journal ne fait
  * que la DOUBLER pour le contrôle lancé avant chaque outil du CLI Claude, qui tourne dans un autre

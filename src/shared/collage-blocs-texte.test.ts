@@ -6,7 +6,7 @@ import { separationEntreBlocsTexte } from './collage-blocs-texte'
  * milieu de ligne quand le fournisseur recolle deux blocs de texte séparés par un appel d'outil.
  *
  * ENTRÉE QUI LES FAIT ÉCHOUER SI LA CORRECTION EST FAUSSE : les DEUX morceaux réellement mesurés
- * dans le journal du tour de conv-8 (delta `0:0:ordered:4`, 2026-09-03). Une accumulation par
+ * dans le journal du tour (delta `0:0:ordered:4`, 2026-09-03). Une accumulation par
  * simple `+=` produit « branchée.```html-render » et le premier test tombe rouge.
  */
 const AVANT_MESURE =

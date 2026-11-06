@@ -12,7 +12,7 @@ import {
 } from './model-quotas'
 import type { ImportedModel } from './models'
 
-// conv-1503 : le quota d'un service direct ne vient QUE de ses en-têtes x-ratelimit-*.
+// Le quota d'un service direct ne vient QUE de ses en-têtes x-ratelimit-*.
 afterEach(() => {
   resetQuotasServicesHttpForTests()
   invalidateModelQuotaCache()

@@ -1,7 +1,7 @@
-// Groupe de commandes « lecture et édition de fichiers », sorti de AppCommandBus.run (conv-1508, lot 2).
+// Groupe de commandes « lecture et édition de fichiers », sorti de AppCommandBus.run (lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 // En fin de fichier, les commandes de fichiers tracées (créer, déplacer, supprimer, état d'une copie) :
-// méthodes de AppCommandBus sorties telles quelles (conv-1580, lot 6).
+// méthodes de AppCommandBus sorties telles quelles (lot 6).
 import type { AppCommandBus } from './commands'
 import { decideRead, executeRead, enumererFichiersLisibles, enumererFichiersLisiblesDetail, rechercherDansFichiers } from './read-file-command'
 import { decoderUtf8, refusRacineSysteme } from './edit-file-command'
@@ -21,7 +21,7 @@ import {
   captureMutationTraceBase
 } from '../activity/trace-workspace-mutation'
 
-/** Cas de `AppCommandBus.run` : lecture et édition de fichiers. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
+/** Cas de `AppCommandBus.run` : lecture et édition de fichiers. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerFichiers(
   bus: AppCommandBus,
   name: string,

@@ -3,7 +3,7 @@ import * as THREE from 'three'
 /**
  * LA VILLE DE GAUCHE : UN KOWLOON NÉON, 95 M SOUS LE TROTTOIR.
  *
- * Demande de l'utilisateur (conv-315) : « /draft refais la ville de gauche du fond d'écran de
+ * Demande de l'utilisateur : « /draft refais la ville de gauche du fond d'écran de
  * l'accueil », puis « Affiner la 2 · Kowloon néon », et enfin « implémente 6 » : l'affinage
  * 6 · Néons animés du brouillon `.autowin-tmp/draft-ville/final2.js` (`V[6]`, générateur
  * `kowloon`). Ce qu'il montre, vu du trottoir par-dessus la rambarde :
@@ -27,7 +27,7 @@ import * as THREE from 'three'
  *   - la taille des lumières suit la hauteur du canevas du fond, pas celle de la fenêtre ;
  *   - toutes les textures dessinées sont rendues à l'appelant, qui les libère avec la scène ;
  *   - aucune lumière ajoutée : chaque lumière de plus alourdit toutes les matières de la rue
- *     (conv-301, 22 lumières → 8). L'éclat des néons est porté par les nuanceurs et des halos.
+ *     (22 lumières → 8). L'éclat des néons est porté par les nuanceurs et des halos.
  */
 
 /** Les réglages de l'affinage 6 · Néons animés, recopiés du brouillon (`K` complété par `V[6].o`). */
@@ -76,7 +76,7 @@ export const KOWLOON = {
  * L'AMBIANCE QUI VA AVEC (`V[6]` du brouillon) : la lueur de l'horizon, la brume, et le damier des
  * rues au sol, resserré au pas des îlots. Lue par `home-decor-avenue.ts` pour son ciel et son sol.
  *
- * L'HORIZON ET LA BRUME SUIVENT LE CIEL « ÉCLAIRCIE LUNAIRE » DEPUIS conv-319 (« implémente la 5 »,
+ * L'HORIZON ET LA BRUME SUIVENT LE CIEL « ÉCLAIRCIE LUNAIRE » (« implémente la 5 »,
  * voir `CIEL_LUNAIRE`) : plus de rose-violet, une lueur bleue azur (#2f8bff à moitié, en valeurs
  * linéaires comme `THREE.Color` les donne) et une brume bleu nuit. Le damier des rues ne change pas.
  */

@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — ÉCRAN OBSERVATORY (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — ÉCRAN OBSERVATORY (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : ObservatoryView, son rail et ses filtres rapides, le détail d’un appel, le Gantt des agents, les
  * traces RAG, BrainNavigationCard, BrainMarkdown, HumanJson, le registre des décisions.
@@ -16,7 +16,7 @@ import { tableDeTextes } from '../textes'
  * Pluriels : `{s}` reçoit « s » ou rien, selon la règle française (plus d'un) ; quand l'accord ne se
  * recolle pas en anglais, deux clés (singulier, `.pluriel` ou forme au pluriel).
  *
- * RESTENT EN DUR, hors de cette table (lot « Observatory », conv-1184) :
+ * RESTENT EN DUR, hors de cette table (lot « Observatory ») :
  *  - les mots identiques dans les deux langues, écrits une fois dans le composant : « Observatory »,
  *    « tokens in », « tokens out », « in », « cache », « out », « ms », « tokens », « conversations »,
  *    « TRANSCRIPTS », « Type », « Provider », « Actions », « Mode », « Mutation », « Observation »,
@@ -763,7 +763,7 @@ export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<keyof typeof TEXTES
   'vue.genre.options': 'même mot en anglais'
 }
 
-/** Une clé de cette table : les listes de libellés des fichiers du lot la portent (conv-1184). */
+/** Une clé de cette table : les listes de libellés des fichiers du lot la portent. */
 export type CleObservatory = keyof typeof TEXTES_FR
 
 export const { useTextes: useTextesObservatory, traduire: traduireObservatory } = tableDeTextes(

@@ -89,7 +89,7 @@ const MEDIUM_ROWS = 8
 const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   mails: { col: 0, colSpan: 1, row: 0, rowSpan: 3, z: 0 },
   // Les enregistrements sont sous les mails : on les consulte apres coup, pas en parlant.
-  // Tuile « Actions des utilisateurs » retiree (demande utilisateur du 2026-09-21, conv-750) :
+  // Tuile « Actions des utilisateurs » retiree (demande utilisateur du 2026-09-21) :
   // les enregistrements reprennent le bas de la colonne de gauche.
   enregistrements: { col: 0, colSpan: 1, row: 3, rowSpan: 5, z: -50 },
   agenda: { col: 1, colSpan: 1, row: 0, rowSpan: 3, z: -30 },
@@ -102,7 +102,7 @@ const WIDE: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
 
 const MEDIUM: Readonly<Record<HomeWidgetId, RelativeSpec>> = {
   // Huit rangees, quatre tuiles a gauche et trois a droite : les deux colonnes finissent a la MEME
-  // rangee. Avant (conv-785, 2026-09-22), la Transcription occupait seule une cinquieme ligne
+  // rangee. Avant (2026-09-22), la Transcription occupait seule une cinquieme ligne
   // (rangees 8-9 d'une grille de 12 dont 10-11 vides) : sur une fenetre courte, elle et les
   // Conversations passaient sous le bord, et le recadrage les ramenait toutes deux au meme y --
   // titres ecrits l'un sur l'autre.

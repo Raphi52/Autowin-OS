@@ -8,7 +8,7 @@ import {
 } from './transition-de-vue'
 
 /**
- * LE PASSAGE ANIME D'UNE VUE A L'AUTRE (conv-981, 2026-10-15) : fondu court de la page, et le
+ * LE PASSAGE ANIME D'UNE VUE A L'AUTRE (2026-10-15) : fondu court de la page, et le
  * surlignage du menu qui GLISSE vers l'onglet choisi (`document.startViewTransition`).
  *
  * Bornes du cadrage : l'API absente (happy-dom, tests) = bascule directe ; l'onglet deja actif = aucune
@@ -128,7 +128,7 @@ describe('basculerVue', () => {
   })
 
   /*
-   * « AbortError: Transition was skipped » rouge dans la console (conv-1322, 2026-10-30). Une
+   * « AbortError: Transition was skipped » rouge dans la console (2026-10-30). Une
    * transition remplacee par une plus recente rejette `ready` ET `finished` (spec, « skip the view
    * transition ») : seule `finished` etait ecoutee. Reproduit 5 fois sur 5 par clics repetes sur Chat
    * dans une instance cachee, 0 fois quand seule `ready` recoit un gestionnaire.
@@ -159,7 +159,7 @@ describe('basculerVue', () => {
 })
 
 /**
- * LE CHANGEMENT DE THEME EN CERCLE (conv-981, 2026-10-16). Bornes du cadrage : le meme theme et
+ * LE CHANGEMENT DE THEME EN CERCLE (2026-10-16). Bornes du cadrage : le meme theme et
  * l'API absente = application directe ; deux choix rapides = le dernier gagne, la classe tient
  * jusqu'a la fin de la DERNIERE transition ; la classe du theme ne pose JAMAIS celle des vues (le
  * cercle jouerait sur chaque changement d'onglet), et inversement.

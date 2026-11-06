@@ -160,7 +160,7 @@ export function buildBrainLaunchCommand(
  * problème n'est pas le timing et re-spawner en boucle ne le résoudra pas).
  */
 /*
- * UN COMPTEUR PAR SERVEUR, rangé par PORT (conv-1233, 2026-10-28) : le Brain perso tourne sur son
+ * UN COMPTEUR PAR SERVEUR, rangé par PORT (2026-10-28) : le Brain perso tourne sur son
  * propre port à côté de celui de l'équipe. Un compteur unique aurait fait payer à l'un les essais
  * ratés de l'autre.
  */
@@ -224,7 +224,7 @@ export function resolveBrainRuntime(env: NodeJS.ProcessEnv = process.env): Brain
         ? join(stateRoot, '.venv', 'Scripts', 'python.exe')
         : '')
   // Le Brain PROPRE a Autowin prime sur l'ancien nom de `AUTOWIN_BRAIN_ROOT` herite d'un autre Brain du poste
-  // (constate le 2026-09-25, conv-3) : voir `autowinOwnBrainRoot`.
+  // (constate le 2026-09-25) : voir `autowinOwnBrainRoot`.
   // Le dossier choisi dans les Réglages passe devant : c'est CE serveur qui écrit les notes déposées,
   // il doit servir le même dossier que celui que l'app lit (`racineBrainChoisie`).
   const brainRoot = racineBrainChoisie(env)
@@ -317,7 +317,7 @@ export async function ensureBrainServerStarted(
   /*
    * LE PORT DU SERVEUR VIENT DE LA MEME SOURCE QUE CELUI DU CLIENT.
    *
-   * MESURE DU 2026-09-03 (conv-8) : `brain_server.py` prend son port dans une variable, avec
+   * MESURE DU 2026-09-03 : `brain_server.py` prend son port dans une variable, avec
    * 8765 par defaut. L'environnement herite ne la portait pas, donc l'app a demarre un serveur sur
    * 8765 pendant que le service a jour ecoutait 8766 — deux serveurs, et le client qui interrogeait
    * celui que personne n'avait mis a jour. Deriver le port de `sharedBrainOrigin()` rend cette

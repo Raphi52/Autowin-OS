@@ -1,4 +1,4 @@
-// Groupe de commandes « état, run, redémarrage, bureau caché, environnement », sorti de AppCommandBus.run (conv-1508, lot 2).
+// Groupe de commandes « état, run, redémarrage, bureau caché, environnement », sorti de AppCommandBus.run (lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import { argumentAbsent } from './arguments'
@@ -17,7 +17,7 @@ import { annoncerFermeture } from '../app/journal-arrets'
 import { identifiantBureauCacheChat } from '../consignes/consigne-bureau-cache'
 import { rechargerEnv } from '../app/env-reload'
 
-/** Cas de `AppCommandBus.run` : état, run, redémarrage, bureau caché, environnement. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
+/** Cas de `AppCommandBus.run` : état, run, redémarrage, bureau caché, environnement. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerApplication(
   bus: AppCommandBus,
   name: string,
@@ -28,7 +28,7 @@ export async function executerApplication(
   const s = (k: string): string => String(a[k] ?? '')
   switch (name) {
     case 'get_state':
-      // Une section ou une limite invalide lève : le refus part au modèle, jamais ignoré (conv-1370).
+      // Une section ou une limite invalide lève : le refus part au modèle, jamais ignoré.
       return etatPourOutil(await bus.snapshot(), {
         sections: a.sections as ArgsEtat['sections'],
         ...(argumentAbsent(a.conversation) ? {} : { conversation: String(a.conversation) }),
@@ -69,11 +69,11 @@ export async function executerApplication(
         // c'est exactement ce qui a coute des semaines ici.
         return { lance: false, detail: `Commande refusée : ${decision.motif ?? 'non autorisée'}` }
       }
-      // Le refus des lancements graphiques au premier plan a ete RETIRE (conv-631, 2026-09-17,
+      // Le refus des lancements graphiques au premier plan a ete RETIRE (2026-09-17,
       // demande explicite de l'utilisateur) : il bloquait l'ouverture d'un fichier sur son propre
       // ecran, qu'il demandait nommement. Le bureau cache (scripts/hdesk-lancer.ps1) reste la voie
       // par defaut, portee par la CONSIGNE du prompt de pilotage — plus par un blocage.
-      // Garde conv-587 : pas d'effacement de l'arbre de travail entier (reset --hard & co).
+      // Garde : pas d'effacement de l'arbre de travail entier (reset --hard & co).
       // Même lecture que le hook du CLI : le corps d'un heredoc de simple texte n'est pas du shell
       // (rejeu du 2026-10-01 sur 29 371 commandes, `src/shared/heredocs.ts`).
       const shell = sansHeredocsDeDonnees(ligne)
@@ -85,12 +85,12 @@ export async function executerApplication(
       // Même garde que le hook du CLI (2026-10-01) : Python en mode texte passe un fichier en CRLF.
       const refusPython = refusEcriturePythonCrlf(ligne)
       if (refusPython) return { lance: false, detail: `Commande refusée : ${refusPython}` }
-      // Porte de production (conv-738) : `run` ne coupe pas la protection et ne contourne pas
+      // Porte de production : `run` ne coupe pas la protection et ne contourne pas
       // `sql_query` en lançant lui-même un client SQL. Même verdict, même fenêtre, une reprise.
       const refusReglage = refusReglageProd(shell)
       if (refusReglage) return { lance: false, detail: `Commande refusée : ${refusReglage}` }
       const cibleSql = cibleSqlDeCommande(shell)
-      // Sans porte branchée, un client SQL ne part PAS sans contrôle : refus par défaut (conv-738).
+      // Sans porte branchée, un client SQL ne part PAS sans contrôle : refus par défaut.
       if (cibleSql && !bus.porteProd)
         return { lance: false, detail: 'Commande refusée : la protection de production n’est pas disponible, aucun client SQL ne part sans elle.' }
       if (cibleSql && bus.porteProd) {
@@ -114,7 +114,7 @@ export async function executerApplication(
       }
       const cwd = bus.workspaceDuTour
       if (!cwd) return { lance: false, detail: 'Commande refusée : aucun workspace résolu' }
-      // Même garde que le hook du CLI (conv-1083, objection du contrôle final) : un `git commit`
+      // Même garde que le hook du CLI (objection du contrôle final) : un `git commit`
       // qui emporterait le fichier non commité qu'un AUTRE fil tient est refusé, en le nommant.
       // Sans fil (appel IPC direct), personne n'est au nom de qui réserver : rien n'est vérifié.
       if (conversationId) {
@@ -125,7 +125,7 @@ export async function executerApplication(
       // `split(/\s+/)` en faisait trois arguments et laissait les guillemets dans le texte.
       // Le Stop de l'utilisateur doit atteindre CE process : une commande qui ne rend jamais la
       // main (application a fenetre, serveur) bloquait sinon le tour jusqu'au plafond, bouton
-      // d'arret compris (conv-384, 2026-09-09).
+      // d'arret compris (2026-09-09).
       const issue = await bus.spawnVerify(
         decouperArguments(ligne),
         cwd,
@@ -168,7 +168,7 @@ export async function executerApplication(
       }
       const cause = `restart_app (${cible})${a.raison ? ` — ${String(a.raison).trim()}` : ''}`
       // D'AUTRES agents tournent : les couper n'est pas un geste de CE tour. Le redemarrage entre
-      // dans la file au repos (conv-304, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb : faute de
+      // dans la file au repos (tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb : faute de
       // file, l'agent a pose un `ask` au lieu de redemarrer). Le tour courant, lui, se termine.
       const autresConversations = (bus.conversationsEnVol?.() ?? []).filter((c) => c !== cible)
       const orchestrations = bus.orchestrationsEnVol()

@@ -1,6 +1,6 @@
 // Le MESSAGE d'ouverture d'un tour de chat : écho de mémoire, skill invoquée, grow, compte-rendu
 // non vu, rappel de conversations, messages des autres fils, blocs nommés. Sorti tel quel de
-// AgentPilot.chat() (conv-1580, lot 2).
+// AgentPilot.chat() (lot 2).
 import { blocGrowDuTour } from '../chat/grow-au-debut'
 import {
   buildTurnMessageBlocks,
@@ -44,7 +44,7 @@ export function messageDuTour(entree: {
   snapshot: TurnMessageParts['snapshot']
   retrievedContext: string
   tourCoupePourCeMessage: boolean | undefined
-  /** La lecture annoncée AVANT cet appel, remise au modèle (conv-1123). */
+  /** La lecture annoncée AVANT cet appel, remise au modèle. */
   lectureRetenue: LectureRetenue | undefined
   bus: Pick<AppCommandBus, 'rappelPourDemande' | 'messagesDesFilsPourTour'>
   growDejaEnvoye: Set<string>
@@ -89,7 +89,7 @@ export function messageDuTour(entree: {
    * part dans le main, donc le modèle recevait une commande dont il n'avait jamais lu le contrat.
    * Générique par construction : toute skill du kit devient atteignable, sans nouvelle phase.
    */
-  // Le nom NU en tete (« draft … », conv-988) charge le meme corps que `/draft` : c'est ce qui
+  // Le nom NU en tete (« draft … ») charge le meme corps que `/draft` : c'est ce qui
   // rend vraie la bulle de skill que le fil affiche desormais pour cette forme.
   const invoked =
     invokedSkillId(lastUserMessage?.content ?? '') ??
@@ -106,7 +106,7 @@ export function messageDuTour(entree: {
    * `/design` SIX fois apres son retrait du kit. On injecte donc la note a la place du corps vide.
    */
   /*
-   * UNE SKILL DÉSACTIVÉE N'EST PAS INJECTÉE NON PLUS PAR « /nom » (conv-1602) : `skill_charger`
+   * UNE SKILL DÉSACTIVÉE N'EST PAS INJECTÉE NON PLUS PAR « /nom » : `skill_charger`
    * la refusait déjà, mais l'invocation par l'utilisateur chargeait son corps sans lire
    * l'interrupteur. À la place, une note dit au modèle de ne pas la jouer et de le dire.
    */
@@ -115,7 +115,7 @@ export function messageDuTour(entree: {
       (skillInstruction(invoked) || (noteSkillInconnue(invoked) ?? '')))
     : ''
   /*
-   * GROW AU DEBUT DE CHAQUE DEMANDE D'ACTION (conv-1445) : decide par le CODE sur les mots de
+   * GROW AU DEBUT DE CHAQUE DEMANDE D'ACTION : decide par le CODE sur les mots de
    * l'utilisateur, pas laisse au choix du modele (`skill_charger`). Entiere une fois par session,
    * un rappel d'une ligne ensuite. Voir `chat/grow-au-debut.ts`.
    */
@@ -144,7 +144,7 @@ export function messageDuTour(entree: {
    * Les outils de recherche existent (`conversation_search`, `conversation_read`), mais rien ne
    * garantit que le modele PENSE a les appeler -- et il n'y pensera pas, parce qu'il ne sait pas
    * qu'il ignore quelque chose : « remake les pastilles de couleurs » se lit comme une demande
-   * complete. Attendre qu'il s'en avise, c'est reconduire conv-1407 en esperant mieux.
+   * complete. Attendre qu'il s'en avise, c'est reconduire en esperant mieux.
    *
    * Se declenche sur toute demande non vide (le seuil de brievete a ete retire), et exclut la
    * conversation courante : voir les bornes dans `rappel-conversations.ts`.
@@ -157,7 +157,7 @@ export function messageDuTour(entree: {
       ? bus.rappelPourDemande(lastUserMessage?.content, conversationId)
       : ''
   // Session neuve = rien d'envoye encore : on repart a zero. Session reprise = on ne renvoie
-  // pas un extrait que la session porte deja (conv-706 : conv-627/conv-624 a chaque tour).
+  // pas un extrait que la session porte deja (Conv-627/conv-624 a chaque tour).
   const cleRappel = conversationId ?? ''
   if (!resumeSessionId || !rappelDejaEnvoye.has(cleRappel)) {
     rappelDejaEnvoye.set(cleRappel, new Set())
@@ -166,7 +166,7 @@ export function messageDuTour(entree: {
     rappelBrut,
     rappelDejaEnvoye.get(cleRappel) as Set<string>
   )
-  // MESSAGES D'AUTRES FILS (conv-1139) : remis UNE fois, marqués livrés dans le journal commun.
+  // MESSAGES D'AUTRES FILS : remis UNE fois, marqués livrés dans le journal commun.
   // Dépendance optionnelle, comme le rappel : les bus factices des tests ne l'implémentent pas.
   const messagesDesFils =
     typeof bus.messagesDesFilsPourTour === 'function'
@@ -204,7 +204,7 @@ export function messageDuTour(entree: {
     tourCoupePourCeMessage
   }
   const blocsDuTour = buildTurnMessageBlocks(partiesDuMessage)
-  // La lecture annoncée est remise au modèle, qui fait alors le travail selon elle (conv-1123).
+  // La lecture annoncée est remise au modèle, qui fait alors le travail selon elle.
   if (lectureRetenue)
     blocsDuTour.push({
       name: 'lectureRetenue',

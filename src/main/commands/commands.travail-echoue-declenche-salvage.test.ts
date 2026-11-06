@@ -82,7 +82,7 @@ describe('du travail non fusionné déclenche `git` (ex-`salvage`, supprimé le 
   /**
    * LA LISTE EST UN POINT DE DEPART, PAS LE PERIMETRE.
    *
-   * DEFAUT VECU le 2026-09-02 (conv-121) : l'utilisateur a du lancer `/salvage` QUATRE fois. Au
+   * DEFAUT VECU le 2026-09-02 : l'utilisateur a du lancer `/salvage` QUATRE fois. Au
    * premier passage l'agent n'a trie que les N copies isolees citees ici, alors que deux remises de
    * cote (`git stash`) attendaient depuis la veille — dont une portant un vrai bug (un ordre dicte
    * partait DEUX fois, donc deux tours payants). Il les avait meme listees, puis ecartees d'un

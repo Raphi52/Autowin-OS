@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ConversationStore } from './conversations'
 
 /**
- * DEFAUT VECU le 2026-08-28 (conv-1498). L'utilisateur avait choisi une variante nommee « 5A » dans
+ * DEFAUT VECU le 2026-08-28. L'utilisateur avait choisi une variante nommee « 5A » dans
  * un echantillon front rendu par l'agent lui-meme, deux tours plus tot. A « non je veux le 5A
  * rapide », l'agent a appele `conversation_search('5A')`, recu ZERO resultat, et conclu : « 5A ne
  * correspond a rien dans l'historique des 961 conversations ». Le libelle etait pourtant dans SA

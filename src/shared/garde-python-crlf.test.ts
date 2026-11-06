@@ -8,7 +8,7 @@ import { sourceDuBus } from '../main/commands/source-du-bus.test-helpers'
  * Mesuré le 2026-10-01 : 48 fichiers de D:\AutoWinOS étaient LF dans git et CRLF sur le disque ; 47
  * venaient d'un script Python lancé par un agent, qui écrivait en MODE TEXTE. Sous Windows,
  * `open(p, 'w')` et `Path.write_text()` remplacent chaque `\n` par `os.linesep` (`\r\n`). Exemple
- * vécu : conv-817, 2026-09-23 19:13:13, `src/renderer/src/App.tsx` réécrit ainsi —
+ * vécu : 2026-09-23 19:13:13, `src/renderer/src/App.tsx` réécrit ainsi —
  * `moteur-perime-cablage.test.ts`, qui lit le fichier octet par octet, est rouge depuis.
  */
 const SAUT = String.fromCharCode(10)
@@ -69,7 +69,7 @@ describe('refusEcriturePythonCrlf', () => {
   })
 
   /**
-   * Vécu le 2026-10-01 (conv-770) : une commande qui écrivait par heredoc un fichier JavaScript dont
+   * Vécu le 2026-10-01 : une commande qui écrivait par heredoc un fichier JavaScript dont
    * le TEXTE contenait `; python - <<'E'` et `open(p,'w',…)` a été refusée, alors que Python n'était
    * jamais lancé (`cat > sonde.cjs <<'EOF' … EOF` puis `node sonde.cjs`). Le corps d'un heredoc est une
    * DONNÉE, sauf si Python (ou un shell) le lit, ou exécute ensuite le fichier qu'il écrit.
@@ -173,7 +173,7 @@ describe('hook réel du CLI — écriture Python en mode texte', () => {
     expect(refus.hookSpecificOutput.permissionDecision).toBe('deny')
     expect(refus.hookSpecificOutput.permissionDecisionReason).toMatch(/outil d.édition/)
     expect(sortie(heredoc("open(p,'w',encoding='utf8',newline='').write(s)"))).toBe('')
-    // Un heredoc de simple texte passe aussi par le script sérialisé (conv-770, 2026-10-01).
+    // Un heredoc de simple texte passe aussi par le script sérialisé (2026-10-01).
     const texte = [
       `cat > sonde.cjs <<'EOF'`,
       `const cmd = ["cd /d/AutoWinOS; python - <<'E'", "open(p,'w').write(s)", 'E']`,

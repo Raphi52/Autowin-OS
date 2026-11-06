@@ -1,5 +1,5 @@
 /**
- * UN CHEMIN CITÉ À L'UTILISATEUR EST UN CHEMIN COMPLET (conv-1335, 2026-11-01).
+ * UN CHEMIN CITÉ À L'UTILISATEUR EST UN CHEMIN COMPLET (2026-11-01).
  *
  * Mesuré sur ce fil : la clôture citait `film/sortie/…/autowin-os-film.mp4`, relatif à un dossier
  * que l'utilisateur ne peut pas deviner. Il a demandé « il est ou ? », puis « donne le path

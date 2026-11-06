@@ -375,7 +375,7 @@ describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', (
     expect(exigeUnChiffreVerifie(Q, '   ', false)).toBe(false)
   })
 
-  // Cas RÉEL de conv-879 (2026-09-30 → 2026-10-12) : le gabarit des tâches « Assistant mails
+  // Cas RÉEL (2026-09-30 → 2026-10-12) : le gabarit des tâches « Assistant mails
   // Outlook » et « Assistant Teams » finit par « <le compte rendu : …> ». La garde y lisait une
   // demande de compte et relançait chaque tri de notification conclu sans lecture — 3 fois dans
   // ce fil, un appel au modèle payé pour rien à chaque fois.
@@ -413,7 +413,7 @@ describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', (
     ).toBe(true)
   })
 
-  // Cas RÉEL de conv-1095 (2026-10-22, tour 1e32407a) : un calcul posé dans la question a été relancé
+  // Cas RÉEL (2026-10-22, tour 1e32407a) : un calcul posé dans la question a été relancé
   // comme un compte à aller lire — un second appel au modèle payé, et une réponse alourdie d'un
   // paragraphe sur « cette relance automatique ». Les opérandes sont DANS la question : rien à lire.
   it('ne mord PAS sur un calcul posé dans la question (phrase réelle de conv-1095)', () => {
@@ -462,7 +462,7 @@ describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', (
 })
 
 describe('exigeUnChiffreVerifie — le texte RECOLLÉ d’une réponse de l’agent n’est pas la demande', () => {
-  // Cas RÉEL de conv-335 (2026-10-19) : l'utilisateur recolle la réponse précédente de l'agent, telle
+  // Cas RÉEL (2026-10-19) : l'utilisateur recolle la réponse précédente de l'agent, telle
   // que le fil l'affiche (gras, code et numéros de liste perdus au copier), et n'ajoute qu'UNE
   // question à lui : « Ca sert vraiment ces lecons? ». Le texte recollé contient deux fois
   // « liste » ; la garde y lisait une demande de compte et forçait une relance — un Glob de 25 s
@@ -854,7 +854,7 @@ describe('compaction — le fil renvoye repart du resume', () => {
 
   it('coupe tout ce qui precede la compaction, en GARDANT sa demande', () => {
     // La demande reste : elle ne coute presque rien, elle donne son sens au resume, et elle est la
-    // MARQUE que `compactionsAbouties` cherche en aval pour perimer la session (conv-342).
+    // MARQUE que `compactionsAbouties` cherche en aval pour perimer la session.
     const retenus = depuisDerniereCompaction(fil)
     expect(retenus.map((m) => m.content)).toEqual([
       compact,
@@ -915,7 +915,7 @@ describe('compaction — le fil renvoye repart du resume', () => {
 })
 
 /**
- * REGRESSION conv-312 (2026-09-06) : deux tours consecutifs morts sur « Prompt is too long », et
+ * REGRESSION (2026-09-06) : deux tours consecutifs morts sur « Prompt is too long », et
  * chaque relance rejouait le MEME prompt — le fil devenait un cul-de-sac.
  *
  * Cause : `bornerParVolume` pesait `content.length` seulement. Les PIECES JOINTES (captures
@@ -951,7 +951,7 @@ describe('borne en volume — les pieces jointes comptent', () => {
 })
 
 /*
- * conv-267 (2026-10-12) : sur un vrai tour, « combien de réponses le ping a-t-il reçues ? » a été
+ * 2026-10-12 : sur un vrai tour, « combien de réponses le ping a-t-il reçues ? » a été
  * relancé alors que le nombre venait de la sortie de `run` — la garde ne comptait comme lecture que
  * list_files / read_file / find_in_files. La sortie d'une commande qui a VRAIMENT tourné observe le
  * réel autant qu'une lecture de dossier.
@@ -998,7 +998,7 @@ describe('commandeAObserveLeReel — run et verify qui ont tourné valent une le
 })
 
 /**
- * conv-1074 (2026-10-22) : une session NEUVE relit l'historique du fil. Chaque page `html-render`
+ * 2026-10-22 : une session NEUVE relit l'historique du fil. Chaque page `html-render`
  * d'une reponse y repartait en CODE — balises et `<style>` — a chaque tour. Le modele relit
  * desormais le texte visible de la page ; les mots de l'utilisateur, eux, restent intacts.
  * Entree qui ferait echouer une mauvaise correction : la couleur `#d4a94f` du `<style>`.
@@ -1034,7 +1034,7 @@ describe('buildTurnMessages — une page html-render de l’agent revient en tex
     expect(entries.join('\n')).toContain('<div class="c">TEXTE-VU</div>')
   })
 
-  // conv-1316 : une session neuve relisait les 141 000 caractères du jeu posé par `montrer_bloc`.
+  // Une session neuve relisait les 141 000 caractères du jeu posé par `montrer_bloc`.
   it('une page html-interactif de l’agent ne repart pas en code non plus', () => {
     const entries = buildTurnMessages({
       snapshot: {},

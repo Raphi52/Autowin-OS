@@ -83,7 +83,7 @@ function poserApi(over: Record<string, unknown> = {}): void {
 }
 
 beforeEach(() => {
-  // Outlook ne se lit qu'apres « Connecter Outlook » (conv-1555) : ces tests partent connectes.
+  // Outlook ne se lit qu'apres « Connecter Outlook » : ces tests partent connectes.
   window.localStorage.setItem('autowin.outlook.connecte', '1')
   // Ces tests portent sur les fonds classiques, où toutes les tuiles sont affichées.
   window.localStorage.setItem(autowinStorageKey('home.decor.v4'), 'avenue')

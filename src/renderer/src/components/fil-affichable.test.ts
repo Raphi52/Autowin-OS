@@ -18,7 +18,7 @@ const a = (content: string, done = true): MessageAffichable & { content: string 
 
 describe('filAffichable', () => {
   it("ne RETRECIT pas le fil : un cache tronque ne cache plus l'historique du store", () => {
-    // conv-152 : cache amorce par un tour lance cote main, store complet.
+    // Cache amorce par un tour lance cote main, store complet.
     const store = [u('q1'), a('r1'), u('q2'), a('r2'), u('/kaizen'), a('', false)]
     const cacheTronque = [a('', false)]
     const rendu = filAffichable(cacheTronque, store)
@@ -84,7 +84,7 @@ describe('completerAvecHistorique', () => {
 })
 
 /*
- * REJEU DE conv-1118 (2026-10-23, « j'ai eu 2x le meme bloc ») : un tour lancé côté main (reprise
+ * REJEU (2026-10-23, « j'ai eu 2x le meme bloc ») : un tour lancé côté main (reprise
  * automatique) a posé UNE question, enregistrée UNE fois — et le fil l'a montrée DEUX fois. Le tour
  * a fini 25 ms après son premier événement : quand la lecture du store est revenue, sa copie
  * persistée était déjà CLOSE, donc gardée, et recollée devant l'amorce live du MÊME tour.
@@ -133,7 +133,7 @@ describe('un même tour ne se peint jamais deux fois (conv-1118)', () => {
   }
 })
 
-// conv-1146 (2026-10-25) : la bulle vide d'une adoption prend pour base le tour persiste du MEME tour.
+// 2026-10-25 : la bulle vide d'une adoption prend pour base le tour persiste du MEME tour.
 describe('adopterLeTourPersiste', () => {
   type Bulle = MessageAffichable & { parts: string[]; providerStatus?: string }
   const amorce: Bulle = {

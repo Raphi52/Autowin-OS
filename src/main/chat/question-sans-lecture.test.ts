@@ -7,7 +7,7 @@ import {
 } from './chat-turn-messages'
 
 /**
- * LE DÉFAUT, mesuré le 2026-08-25 sur conv-1399.
+ * LE DÉFAUT, mesuré le 2026-08-25.
  *
  * L'utilisateur demande « je vois toujours le fond d'écran […] je veux une reproduction en 3d ».
  * L'agent répond par un choix à quatre options — « profondeur sur l'image existante » ou « vraie
@@ -44,7 +44,7 @@ describe('une question posée sans avoir rien lu est relancée', () => {
   it('la relance ORDONNE de lire, et laisse la question possible après lecture', () => {
     // Une relance qui interdirait de questionner tout court retirerait à l'utilisateur les
     // arbitrages qui lui appartiennent. Elle doit exiger la lecture, puis rouvrir les deux issues.
-    // Les outils du modele : les commandes texte ont quitte la consigne du chat (conv-1352).
+    // Les outils du modele : les commandes texte ont quitte la consigne du chat.
     expect(RELANCE_QUESTION_SANS_LECTURE).toContain('`Read`')
     expect(RELANCE_QUESTION_SANS_LECTURE).not.toMatch(/read_file|find_in_files|list_files/)
     expect(RELANCE_QUESTION_SANS_LECTURE).toContain('hypothèse énoncée')
@@ -60,7 +60,7 @@ describe('une question posée sans avoir rien lu est relancée', () => {
  * ci-dessus passerait à l'identique si le garde n'était branché nulle part.
  */
 describe('le garde est réellement branché dans la boucle de tour', () => {
-  // Relances, envoi et commandes vivent dans agent-pilot/*.ts depuis conv-1580 (lot 4).
+  // Relances, envoi et commandes vivent dans agent-pilot/*.ts (lot 4).
   const source = sourceDuPilote()
 
   it('lève le drapeau quand l’action `ask` s’exécute', () => {
@@ -73,7 +73,7 @@ describe('le garde est réellement branché dans la boucle de tour', () => {
       /questionPoseeSansAvoirLu\(etat\.questionPoseeCeTour,\s*etat\.anyReadExecuted\)/
     )
     // La relance rendue par le contrôle (agent-pilot/relances-du-tour.ts) ET son envoi par chat()
-    // (conv-1580, lot 4) : avant, une seule ligne `convo.push(RELANCE_QUESTION_SANS_LECTURE)`.
+    // (lot 4) : avant, une seule ligne `convo.push(RELANCE_QUESTION_SANS_LECTURE)`.
     expect(source).toMatch(
       /motif: 'question-sans-lecture',\s*consignes: \[RELANCE_QUESTION_SANS_LECTURE\]/
     )
@@ -84,10 +84,10 @@ describe('le garde est réellement branché dans la boucle de tour', () => {
    * Les outils NATIFS de lecture n'emettent aucun jeton `<cmd>` : ils passent par le battement
    * d'outil (`chunk.status`). Sans ce branchement, `anyReadExecuted` restait faux apres une douzaine
    * de fichiers lus, et le garde mordait a chaque question — en ordonnant d'avancer sans demander,
-   * donc en ecrasant la skill `draft` qui exige de faire choisir l'humain (conv-167, 2026-09-03).
+   * donc en ecrasant la skill `draft` qui exige de faire choisir l'humain (2026-09-03).
    */
   it('compte AUSSI les lectures natives, qui arrivent par le battement d’outil', () => {
-    // La commande ENTIERE (statusTarget) est jugée, pas le libellé coupé à 120 caractères (conv-861).
+    // La commande ENTIERE (statusTarget) est jugée, pas le libellé coupé à 120 caractères.
     expect(source).toMatch(/statutEntier = statutComplet\(chunk\.status, chunk\.statusTarget\)/)
     expect(source).toMatch(/statusEstUneLecture\(statutEntier\)\)\s*etat\.anyReadExecuted = true/)
   })
@@ -110,7 +110,7 @@ describe('une lecture NATIVE compte comme une lecture', () => {
     expect(statusEstUneLecture('Bash · cat src/main/skills/skill-pipeline.ts')).toBe(true)
     expect(statusEstUneLecture('Bash · sed -n 1,60p fichier.ts')).toBe(true)
     expect(statusEstUneLecture('Bash · grep -n motif src')).toBe(true)
-    // conv-103 : des chiffres lus sur l'API Azure DevOps via curl.
+    // Des chiffres lus sur l'API Azure DevOps via curl.
     expect(statusEstUneLecture('Bash · curl -s https://dev.azure.com/x/_apis/git/pullrequests')).toBe(true)
   })
 
@@ -143,7 +143,7 @@ describe('une seule question affichee par tour (conv-844, turn 852bb2fd-25e4-40d
 })
 
 /**
- * LECTURE COMPOSÉE — conv-861 (2026-09-25). La règle ne regardait que le 1er mot après un `cd`.
+ * LECTURE COMPOSÉE — (2026-09-25). La règle ne regardait que le 1er mot après un `cd`.
  * Trois relances « tu as posé une question SANS avoir lu un seul fichier » sont tombées à tort,
  * chacune après des lectures bien réelles dont la commande commençait par `date`, par une
  * affectation `N=…` ou par `git -C <dossier> log`. Formes RELEVÉES dans ce fil, tronquées comme le

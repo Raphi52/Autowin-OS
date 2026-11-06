@@ -44,11 +44,11 @@ describe('isolation du workflow entre conversations', () => {
    */
   it('chaque run construit son orchestrateur, avec SA closure de workflow', () => {
     // Un override explicite reste propre au run ; sinon le workflow du tour est résolu normalement.
-    // Depuis c55b4bb2 (conv-1091, 2026-10-22), le workflow résolu passe par UN filtre nommé,
+    // Depuis c55b4bb2 (2026-10-22), le workflow résolu passe par UN filtre nommé,
     // `workflowSansScoutPourSelection` : fonction PURE de (workflow, tâche) qui rend une copie, sans
     // aucun état partagé (`selection-sans-scout.ts`). Le motif l'admet, LUI seul et par son nom :
     // tout autre intermédiaire — un champ, un cache, une autre fonction — refait rougir la garde.
-    // Rouge mesuré par heal conv-1115 : 1 test sur 17 499 de la suite complète.
+    // Rouge mesuré par heal : 1 test sur 17 499 de la suite complète.
     expect(os).toMatch(
       /const workflowDuRun\s*=\s*runOptions\.workflowOverride\s*\?\?\s*(?:workflowSansScoutPourSelection\(\s*)?\(?await this\.poseConversationWorkflow\(/
     )
@@ -68,7 +68,7 @@ describe('isolation du workflow entre conversations', () => {
     expect(os).toMatch(/const orchestrator = this\.orchestrateurPour\(workflowDuRun[,)]/)
     /*
      * Le CORPS entier de la fabrique, pas une signature sur une ligne ni une fenêtre de N caractères
-     * (conv-770, 2026-09-28) : depuis cba6e809 (2026-09-17), l'ajout du paramètre `workspace` a mis la
+     * (2026-09-28) : depuis cba6e809 (2026-09-17), l'ajout du paramètre `workspace` a mis la
      * signature sur plusieurs lignes — l'ancien motif `orchestrateurPour\(workflow\?:` ne la trouvait
      * plus —, et deux commentaires ont repoussé la closure à 1 814 caractères, au-delà de la fenêtre
      * de 1 600. L'invariant, lui, n'avait pas changé. Et c'est CHAQUE orchestrateur construit

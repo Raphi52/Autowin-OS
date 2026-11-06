@@ -1,6 +1,6 @@
 // Petites aides du tour de chat (cap d'itérations, dernier message humain, capture annulable,
 // attente d'une réponse, identité du fil, descriptions des commandes), sorties telles quelles de
-// agent-pilot.ts (conv-1580, lot 1).
+// agent-pilot.ts (lot 1).
 import type { Message } from '../providers/types'
 import { captureMutationTraceBase } from '../activity/trace-workspace-mutation'
 import { nativeSkills } from '../app/native-registry'
@@ -20,12 +20,12 @@ import { nativeSkills } from '../app/native-registry'
  * justifiait 12 décrivait un monde qui n'existait pas.
  */
 /*
- * RELEVÉ DE 12 À 40 le 2026-09-03 : demande utilisateur mesurée dans conv-37. La boucle réelle d'une
+ * RELEVÉ DE 12 À 40 le 2026-09-03 : demande utilisateur mesurée. La boucle réelle d'une
  * correction pilotée depuis le chat (chercher la règle → lire le fichier → éditer → naviguer →
  * observer → lire la capture → revenir) dépense à elle seule une dizaine d'appels ; à 12, le tour se
  * coupait AVANT la phrase de clôture et l'app affichait « Réponse interrompue avant la fin ».
  *
- * SUPPRIMÉ le 2026-09-04, demande explicite de l'utilisateur (conv-233, « ENLEVE CE PUTAIN DE
+ * SUPPRIMÉ le 2026-09-04, demande explicite de l'utilisateur (« ENLEVE CE PUTAIN DE
  * BLOQUAGE DE BUDGET ») : relever la borne ne faisait que déplacer la coupure. Ce compteur coupait
  * des tours ENGAGÉS alors qu'il ne mesure RIEN du coût réel — un tour de 41 appels bon marché était
  * tué, un tour de 5 appels ruineux passait. Le seul frein qui reste est l'annulation manuelle : le
@@ -82,8 +82,8 @@ export function waitForAnswer(answer: Promise<string>, signal?: AbortSignal): Pr
  * Un tour qui se joue dans conv-A pendant que l'utilisateur regarde conv-B faisait donc lire au
  * modele l'id de conv-B : il se croyait dans un autre fil, declarait son historique vide, et pouvait
  * partir chercher « le vrai fil » avec `conversation_search` — alors que l'historique, lui, etait
- * correctement transmis. Mesure (conv-526) : reponse « cet echange arrive dans un fil
- * different (conv-533)… ce fil-ci est vide » rendue DANS conv-526.
+ * correctement transmis. Mesure : reponse « cet echange arrive dans un fil
+ * different (conv-533)… ce fil-ci est vide » rendue.
  */
 export function snapshotDuTour<T extends { activeConversationId?: string }>(
   snapshot: T,
@@ -115,7 +115,7 @@ export function descriptionsDesCommandes(noms: readonly string[]): Record<string
 
 /**
  * Motif d'une itération ACCORDÉE en plus du cap (`grantRecoveryIteration`, AgentPilot.chat()). Union
- * écrite deux fois dans chat() avant conv-1580 (lot 2) : une seule source désormais.
+ * écrite deux fois dans chat() (lot 2) : une seule source désormais.
  */
 export type MotifDeRallonge =
   | 'late-directive'

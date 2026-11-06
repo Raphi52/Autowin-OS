@@ -8,7 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 /**
  * UN `result` QUI ARRIVE AVANT LA DEMANDE N'EST PAS SA RÉPONSE.
  *
- * Mesure conv-217, tour `1d809770-55bc-42b8-896d-ffab2d2270b0` (promptCalls ts
+ * Mesure, tour `1d809770-55bc-42b8-896d-ffab2d2270b0` (promptCalls ts
  * 2026-10-10T20:43:04.816Z, saisie ts 1791664946556 « go ») : la session est reprise
  * (`--resume 21aa1316-…`) alors qu'une commande de fond du tour précédent avait été coupée. Le
  * journal brut `run-stdout/c4cf11ed-8ae5-46b9-960d-56fa769ee322.stdout.jsonl` commence par :
@@ -21,7 +21,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
  * 0,3023 USD du PREMIER tour recopié. L'utilisateur a attendu 17 min puis : « je crois que cette
  * conv a planté en route » (saisie ts 1791666005400).
  *
- * fix-ok: conv-217 tour 1d809770-55bc-42b8-896d-ffab2d2270b0 — cause mesurée dans le journal
+ * fix-ok: tour 1d809770-55bc-42b8-896d-ffab2d2270b0 — cause mesurée dans le journal
  * c4cf11ed l.1-3 : un `result` à `origin.kind = 'task-notification'` armait la coupure avant le
  * vrai tour (rouge sur l'ancien claude.ts : texte absent, coût 0,3023 recopié ; vert sous 4f094b4f).
  */
@@ -159,13 +159,13 @@ describe('claude — result de notification émis AVANT la demande (reprise de s
 
   /*
    * LE CUMUL DE LA NOTIFICATION EST LE POINT DE DÉPART DU TOUR, PAS UNE DONNÉE À JETER.
-   * Mesure conv-311, session 4873db1f-…, 17/10 : le tour de 17:07 a fini à un cumul de 26,7322 USD
+   * Mesure, session 4873db1f-…, 17/10 : le tour de 17:07 a fini à un cumul de 26,7322 USD
    * (journal run-stdout/9e89a30e-…), puis son CLI a été coupé pendant une commande de fond. À la
    * reprise de 17:30 (journal 52247101-… l.3), le CLI repart du cumul qu'il avait ENREGISTRÉ —
    * 18,2558, celui de 16:54 — et le dit dans le `result` de notification, puis finit à 19,2159.
    * Coût réel du tour : 19,2159 − 18,2558 = 0,9601. Comme la notification était jetée, Autowin a
    * comparé 19,2159 au 26,7322 déjà compté, a cru à une remise à zéro et a facturé 19,22 USD
-   * (idem au tour de 17:42 : 19,12 au lieu de 0,87 ; à l'inverse, conv-310 à 17:59 : 2,94 au lieu
+   * (idem au tour de 17:42 : 19,12 au lieu de 0,87 ; à l'inverse, :59 : 2,94 au lieu
    * de 8,02). 5 reprises de ce genre en 24 h, +31 USD d'écart net.
    */
   it('facture le tour à partir du cumul annoncé par la notification, pas du cumul déjà compté', async () => {

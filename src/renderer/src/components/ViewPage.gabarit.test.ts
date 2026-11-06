@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 /**
  * LE GABARIT DES VUES : UN seul cadre de page, peint UNE fois.
  *
- * Demande utilisateur (conv-160, 2026-10-10) : « les containers de toutes les vues devraient etre
+ * Demande utilisateur (2026-10-10) : « les containers de toutes les vues devraient etre
  * basees sur le meme template pour pas diverger ». Constat mesure ce jour-la, captures des huit vues
  * a l'appui : Task Manager, Worktrees, Tickets, Tests et Observatory posent leur contenu dans
  * `.view-page` ; Memory, Agent Studio (Modeles, Routage) et Settings (Skills, Behaviour) RECOPIAIENT
@@ -35,7 +35,7 @@ const RACINES_DE_CONTENU: Record<string, string> = {
   CapabilitiesView: 'capability-cockpit',
   BehaviourView: 'behaviour-view',
   InterfaceView: 'interface-view',
-  // Onglet Rules de Settings (conv-242) : une pile de panneaux de règles, sa racine ne peint rien.
+  // Onglet Rules de Settings : une pile de panneaux de règles, sa racine ne peint rien.
   RulesView: 'settings-rules'
 }
 /** Les en-tetes poses A MEME le cadre (comme `ViewTopBar`) : une bande peinte y refait un cadre. */
@@ -160,7 +160,7 @@ describe('Gabarit des vues : un seul cadre de page', () => {
 
   /*
    * L'ELEMENT PEINT D'UN `:is(...)` EST LE SUJET DE CHAQUE ARGUMENT, pas tout le bloc.
-   * Faux positif mesure le 2026-10-15 (conv-961) : la regle « elements choisis » des themes
+   * Faux positif mesure le 2026-10-15 : la regle « elements choisis » des themes
    * holographique-clair et nebuleuse-verre se termine par `:is(…, .graph-observatory--galaxy
    * .theme-filter.is-active, …)`. Lire le bloc entier comme dernier compose y trouvait
    * `.graph-observatory--galaxy`, un ANCETRE, et accusait le bouton de filtre choisi de repeindre
@@ -212,7 +212,7 @@ describe('Gabarit des vues : un seul cadre de page', () => {
 })
 
 /**
- * LE RETRAIT HORIZONTAL DU CONTENU, une seule valeur (conv-160, 2026-10-10 : « Aligne le retrait
+ * LE RETRAIT HORIZONTAL DU CONTENU, une seule valeur (2026-10-10 : « Aligne le retrait
  * horizontal du contenu de toutes les vues sur une seule valeur du gabarit »).
  *
  * Mesure au rendu (`ui-capture.mjs --retraits`, distance bord du cadre -> bloc peint le plus a

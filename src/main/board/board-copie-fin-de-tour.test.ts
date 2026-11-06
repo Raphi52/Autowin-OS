@@ -1,5 +1,5 @@
 /**
- * LA COPIE DU BOARD À CHAQUE FIN DE TOUR (conv-1210, 2026-10-28) : « fais que la copie du Board vers
+ * LA COPIE DU BOARD À CHAQUE FIN DE TOUR (2026-10-28) : « fais que la copie du Board vers
  * la GED se mette à jour même quand le Board n'est pas affiché, par exemple à chaque fin de tour ».
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : une fin de tour qui ne recopie rien, un calcul lancé sans
  * dossier choisi, un calcul par tour dans une rafale, un post-it glissé à la main recopié à l'étage

@@ -58,7 +58,7 @@ describe('description d’une règle', () => {
     )
   })
 
-  // conv-1069 : une règle posée par `task_create` attend la fin d'UN fil — l'écran le nomme.
+  // Une règle posée par `task_create` attend la fin d'UN fil — l'écran le nomme.
   it('décrit la fin de tour attendue avec le fil surveillé', () => {
     expect(
       describeWatchdogSource({

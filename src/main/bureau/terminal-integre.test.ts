@@ -1,5 +1,5 @@
 /**
- * Le gestionnaire du terminal intégré (conv-1362, lot 3/3) : le VRAI gestionnaire, une fausse fabrique
+ * Le gestionnaire du terminal intégré (lot 3/3) : le VRAI gestionnaire, une fausse fabrique
  * à la place du module natif. L'essai avec un vrai terminal, dans Electron, vit hors de cette suite :
  * il n'est pas rejouable ici, le paquet n'est pas installé avant le redémarrage.
  */

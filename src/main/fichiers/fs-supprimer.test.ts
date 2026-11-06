@@ -15,7 +15,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { motifDeRefus, supprimerArbre } from './fs-supprimer'
 
 /**
- * Un cas de test par cas limite du cadrage (conv-108, 2026-10-05). Les cas 5, 6 et 7 sont ceux
+ * Un cas de test par cas limite du cadrage (2026-10-05). Les cas 5, 6 et 7 sont ceux
  * où `fs.rmSync({ recursive: true })` d'Electron 44.5.1 (Node 24) détruit ou échoue : remplacer
  * `supprimerArbre` par un `rmSync` brut doit faire rougir ces tests sous ce Node-là.
  */
@@ -78,7 +78,7 @@ describe('supprimerArbre — cas limites', () => {
     expect(motifDeRefus(parse(process.cwd()).root)).toMatch(/racine/)
     expect(motifDeRefus(process.cwd())).toMatch(/dossier courant/)
     // Le parent du dossier courant peut ETRE la racine du lecteur (dépôt à `D:\AutoWinOS`) : il
-    // est alors refusé comme racine, contrôle qui passe en premier (conv-1056, 2026-10-22).
+    // est alors refusé comme racine, contrôle qui passe en premier (2026-10-22).
     const parent = dirname(process.cwd())
     expect(motifDeRefus(parent)).toMatch(
       parent === parse(parent).root ? /racine/ : /dossier courant/

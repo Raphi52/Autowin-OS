@@ -1,6 +1,6 @@
 /**
  * « Ouvrir Autowin » doit ramener la FENÊTRE PRINCIPALE, jamais une autre fenêtre de l'app
- * (conv-1142, 2026-10-26, demande : « que ça m'ouvre autowin quand je click dessus »).
+ * (2026-10-26, demande : « que ça m'ouvre autowin quand je click dessus »).
  *
  * Défaut reproduit ici : `showMainWindow` prenait la PREMIÈRE fenêtre vivante de
  * `BrowserWindow.getAllWindows()`. La mascotte du bureau (et les cartes de fin de tour) y figurent

@@ -1,5 +1,5 @@
 /**
- * LE WORKFLOW INTELLIGENT EN SUPER CONVERSATION (conv-1333, 2026-10-30).
+ * LE WORKFLOW INTELLIGENT EN SUPER CONVERSATION (2026-10-30).
  *
  * Mesuré sur les fils depuis le 22/10 : 6 panneaux, 4 lancements, 12 lots prévus et 4 partis ; 2
  * panneaux sur 6 ont reçu une réponse tapée, qui passait à côté de tout ; sur 64 pistes, l'effort

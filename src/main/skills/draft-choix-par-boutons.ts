@@ -1,12 +1,12 @@
 /**
  * /draft : LE CHOIX SE FAIT PAR LES BOUTONS DU BLOC, JAMAIS PAR `ask`.
  *
- * Demande de l'utilisateur, saisie ts 1792224829875 (conv-302, 2026-10-17) : « faut un bouton pour
+ * Demande de l'utilisateur, saisie ts 1792224829875 (2026-10-17) : « faut un bouton pour
  * prompter au lieu du bloc ask ». Le carrousel (scripts/draft-carrousel.mjs) porte depuis ses boutons
  * « Affiner la N · nom », « Implémenter la N · nom » et « Aucune : propose N autres directions », et
  * skills/draft/SKILL.md interdit le bloc `ask`. Le même jour, quatre tours /draft ont pourtant fini
- * par un `ask` sans AUCUN bloc de choix — conv-310 (tours c7d72274-db73-49bd-93fe-435f6647863a et
- * 40cbea6c-99bf-405f-8ad6-1e709913766a), conv-311 (4c898868-7bfa-4535-8300-c2802e61cf10), conv-312
+ * par un `ask` sans AUCUN bloc de choix — (tours c7d72274-db73-49bd-93fe-435f6647863a et
+ * 40cbea6c-99bf-405f-8ad6-1e709913766a), (4c898868-7bfa-4535-8300-c2802e61cf10)
  * (938a67c1-78bc-4bc5-addf-865167663f44), suivi de « je vois pas le block draft pour faire mon
  * choix » (saisie ts 1792247730596). Les trois appels modèle portaient la procédure ; la règle
  * générale « un choix → `ask` » (chat-pilotage-prompt.ts) l'a emporté. Une règle écrite de plus ne
@@ -28,27 +28,27 @@ interface MessageDuFil {
 const LIBELLE_DU_CARROUSEL = /^\s*(?:affiner la \d+\s*·|aucune?\s*:\s*propose \d+ autres)/i
 /**
  * « Implémenter la N · nom », « implémente la 2 », « go implémente » : la sortie de la boucle /draft.
- * « go implémente en fonction du theme » est relevé dans conv-1002 : sans le mot de tête, la
+ * « go implémente en fonction du theme » est relevé : sans le mot de tête, la
  * remontée ci-dessous traversait cet ordre et gardait le mode pour tout le reste du fil.
  */
 const ORDRE_D_IMPLEMENTATION = /^\s*(?:(?:go|ok|okay|oui|vas[- ]y|allez)[\s,:!.]+)*impl[ée]ment/i
 /**
- * `/draft` en pleine phrase : « ok balec /draft comment… » (conv-1284), « Reprends le /draft… »
- * (conv-1113). Un MOT à part, précédé d'un espace : « n'importe où » attraperait
- * `skills/draft/SKILL.md` (conv-1317) ou `scripts/draft-carrousel.mjs`, et une citation de code
- * (`` `/draft` ``, scout conv-1332) ne vaut pas invocation.
+ * `/draft` en pleine phrase : « ok balec /draft comment… », « Reprends le /draft… ».
+ * Un MOT à part, précédé d'un espace : « n'importe où » attraperait
+ * `skills/draft/SKILL.md` ou `scripts/draft-carrousel.mjs`, et une citation de code
+ * (`` `/draft` ``) ne vaut pas invocation.
  */
 const DRAFT_EN_PLEINE_PHRASE = /\s\/draft(?![\w/-]|\.\w)/i
 /**
  * Une invocation en pleine phrase est dans le début du message. Relevé sur le poste le 2026-10-30 :
- * les invocations tombent à 68 caractères au plus (conv-815) ; au-delà de 126, c'est une consigne
- * qui PARLE de /draft (« passe le carrousel /draft 3D en page interactive », conv-1304).
+ * les invocations tombent à 68 caractères au plus ; au-delà de 126, c'est une consigne
+ * qui PARLE de /draft (« passe le carrousel /draft 3D en page interactive »).
  */
 const ZONE_D_INVOCATION = 100
 /**
  * Réponses libres traversées, au plus, depuis le dernier repère. Un fil peut quitter la boucle sans
- * ordre reconnaissable (« la D », conv-802) : le mode ne doit pas durer jusqu'à la fin du fil. La
- * plus longue boucle relevée en compte 8 (conv-904) ; le rejeu en a laissé 25 sans cette borne.
+ * ordre reconnaissable (« la D ») : le mode ne doit pas durer jusqu'à la fin du fil. La
+ * plus longue boucle relevée en compte 8 ; le rejeu en a laissé 25 sans cette borne.
  */
 const MESSAGES_LIBRES_MAX = 10
 
@@ -61,9 +61,9 @@ const MESSAGES_LIBRES_MAX = 10
  *
  * La lecture se bornait aux deux derniers messages : le mode tombait à la deuxième réponse libre.
  * Rejoué le 2026-10-30 sur les fils du poste, ce défaut a laissé passer 16 `ask` qui faisaient choisir
- * entre des propositions, dans conv-1002 (« je vois pas de preview au tour precedent pour faire mon
- * choix »), conv-701, conv-903 et conv-904. Prix connu de la remontée : un `ask` de cadrage à six
- * options (conv-677) tombe aussi sous le refus ; le tour continue, le modèle reformule.
+ * entre des propositions, (« je vois pas de preview au tour precedent pour faire mon
+ * choix »). Prix connu de la remontée : un `ask` de cadrage à six
+ * options tombe aussi sous le refus ; le tour continue, le modèle reformule.
  *
  * Ne lit QUE les messages de l'utilisateur : le texte d'une réponse précédente n'est pas fiable dans
  * l'historique (il vit dans ses `parts`).

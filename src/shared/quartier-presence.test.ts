@@ -1,4 +1,4 @@
-// Les animaux que l'on choisit pour ses agents (conv-1546 : panda et panda roux s'ajoutent).
+// Les animaux que l'on choisit pour ses agents (Panda et panda roux s'ajoutent).
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -30,9 +30,9 @@ describe('un atlas par animal choisi', () => {
       const fichier = a === 'tanuki' ? 'atlas.avif' : `atlas-${a}.avif`
       expect(existsSync(join(dossier, fichier))).toBe(true)
       expect(scene).toContain(`../assets/quartier/${fichier}`)
-      // Depuis conv-1558, les atlas se préparent à la demande : chaque animal a son adresse dans
+      // Les atlas se préparent à la demande : chaque animal a son adresse dans
       // `URL_ATLAS`, et c'est elle que la scène charge puis peint (`peindreAtlas`). L'ancienne forme
-      // `tanuki: peindreAtlas(` n'existe plus ; ce test la cherchait encore (rouge relevé en conv-1633).
+      // `tanuki: peindreAtlas(` n'existe plus ; ce test la cherchait encore (rouge relevé).
       const adresses = scene.slice(
         scene.indexOf('const URL_ATLAS'),
         scene.indexOf('}', scene.indexOf('const URL_ATLAS'))

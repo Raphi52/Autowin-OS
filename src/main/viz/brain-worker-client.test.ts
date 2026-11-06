@@ -281,7 +281,7 @@ describe('BrainWorkerClient lifecycle', () => {
 })
 
 /**
- * LE TRAITEMENT LONG N'EST PLUS UNE FAUTE (2026-09-08, conv-353) — la premiere lecture du Brain sur
+ * LE TRAITEMENT LONG N'EST PLUS UNE FAUTE (2026-09-08) — la premiere lecture du Brain sur
  * un partage RESEAU depasse le delai fixe. Le tuer perdait son cache, donc l'essai suivant repartait
  * de zero et echouait pareil : la vue Memory ne pouvait plus JAMAIS charger. Un worker qui donne
  * signe de vie doit desormais etre attendu.

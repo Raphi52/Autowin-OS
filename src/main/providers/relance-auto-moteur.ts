@@ -13,8 +13,8 @@ import { surveillerDossier } from '../fichiers/surveiller-dossier'
  * L'interface se recharge à chaud (serveur Vite). Le MOTEUR (processus principal + preload), lui,
  * n'est compilé qu'au démarrage : `--watch` a été retiré du script `dev` au commit 447b85d4 parce
  * qu'il relançait Electron à chaque modification, en pleine orchestration (deux runs de
- * l'utilisateur perdus, `conv-1267`). Depuis, chaque modification du moteur attendait un
- * redémarrage à la main — et l'agent finissait ses tours par « redémarre l'app » (conv-918).
+ * l'utilisateur perdus). Depuis, chaque modification du moteur attendait un
+ * redémarrage à la main — et l'agent finissait ses tours par « redémarre l'app ».
  *
  * Ce module garde ce qui était bon dans `--watch` et retire ce qui tuait :
  * 1. il SURVEILLE `src/main`, `src/preload` et `src/shared` (les fichiers de test sont ignorés) ;
@@ -140,7 +140,7 @@ export function resumerErreurDeCompilation(erreur: string): string {
  * Redémarrage DEMANDÉ (par `restart_app`) alors que d'autres agents tournent : il entre dans la MÊME
  * file que la relance du moteur — même repos exigé, même préavis, même report si un agent démarre.
  * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : faute de cette entrée, le seul
- * redémarrage offert à l'agent coupait conv-303 ; il a renvoyé le choix à l'utilisateur par un `ask`.
+ * redémarrage offert à l'agent coupait ; il a renvoyé le choix à l'utilisateur par un `ask`.
  */
 export interface DemandeDeRedemarrage {
   /** Écrite dans le journal des arrêts à la relance. */
@@ -389,8 +389,8 @@ export function armerRelanceAutoMoteur(
     mettreEnFile: (nouvelle) => {
       if (arrete || relancee) return false
       // Une seconde demande S'AJOUTE à la première : une seule relance, et la consigne de CHAQUE fil
-      // reposée avant elle. La remplacer perdait la reprise du premier fil (conv-1306, 2026-10-30 :
-      // conv-1329 en file à 15:50 effaçait la demande de conv-1306 de 15:31).
+      // reposée avant elle. La remplacer perdait la reprise du premier fil (2026-10-30 :
+      // un fil en file à 15:50 effaçait la demande de 15:31).
       demande = demande ? cumulerDemandes(demande, nouvelle) : nouvelle
       journal(`redémarrage mis en file : ${nouvelle.cause}`)
       // Un moteur qui ne compile pas garde la relance bloquée (`annulerRelance`) : la demande reste
@@ -422,7 +422,7 @@ export function surveillerSourcesDuMoteur(
   for (const dossier of DOSSIERS_DU_MOTEUR) {
     try {
       // Nom court 8.3 dans `racine` = abort de libuv (code 127) : on passe par la seule porte qui
-      // canonicalise (`surveiller-dossier.ts`, conv-1056).
+      // canonicalise (`surveiller-dossier.ts`).
       const veilleur = surveillerDossier(
         join(racine, dossier),
         { recursive: true },
@@ -443,7 +443,7 @@ export function surveillerSourcesDuMoteur(
 
 /**
  * Empreinte du code compilé : les `.js` seulement (les `.map` portent les commentaires d'origine).
- * Lecture ASYNCHRONE depuis le 2026-10-22 (conv-1077) : appelée dans le `close` de la compilation,
+ * Lecture ASYNCHRONE depuis le 2026-10-22 : appelée dans le `close` de la compilation,
  * donc sur le processus principal, la version synchrone figeait la fenêtre le temps de relire tout
  * le code compilé (22 lectures lentes, 56,6 s du 15 au 22/10 dans gels.jsonl). La valeur ne change
  * pas — même ordre, mêmes séparateurs —, sinon la première compilation après la mise à jour
@@ -490,14 +490,13 @@ export async function compilerLeMoteur(
   } catch (e) {
     return { ok: false, erreur: `dossier temporaire impossible : ${e}` }
   }
-  // Suppression ASYNCHRONE : `rmSync` récursif a tenu la fenêtre 9,6 s (`gels.jsonl`, 2026-10-31 —
-  // conv-1413).
+  // Suppression ASYNCHRONE : `rmSync` récursif a tenu la fenêtre 9,6 s (`gels.jsonl`, 2026-10-31 ).
   const nettoyer = (): Promise<void> =>
     rm(dossier, { recursive: true, force: true }).catch(() => {
       /* dossier temporaire : le système le videra */
     })
   // Hors du fil principal : la CRÉATION de ce processus a tenu la fenêtre 68,8 s d'un seul coup
-  // (`gels.jsonl`, 2026-10-31, 94,5 s cumulées — conv-1413). La compilation se relance dès qu'un fil
+  // (`gels.jsonl`, 2026-10-31, 94,5 s cumulées). La compilation se relance dès qu'un fil
   // modifie le moteur.
   try {
     await execFileHorsFil(
@@ -535,7 +534,7 @@ export async function compilerLeMoteur(
       erreur: sortie || `compilation arrêtée (code ${code}, signal ${e.signal ?? 'aucun'})`
     }
   }
-  // Le dossier temporaire part APRÈS la lecture : l'empreinte est asynchrone (conv-1077).
+  // Le dossier temporaire part APRÈS la lecture : l'empreinte est asynchrone.
   try {
     return { ok: true, empreinte: await empreinteDuCodeCompile(dossier) }
   } catch (e) {

@@ -4,7 +4,7 @@ import { deriveConversationState, type ConversationState } from './chat-view-mod
 import type { Conv } from './chat-view-types'
 
 /**
- * CE QUE LA LISTE DE GAUCHE FAIT DES FILS DE LOT (conv-1381, 2026-10-31).
+ * CE QUE LA LISTE DE GAUCHE FAIT DES FILS DE LOT (2026-10-31).
  *
  * « Les conv de lot ne les affiche pas dans cette liste, on y accède que par les onglets » : un plan
  * de 8 lots ajoutait 8 lignes sous son chef, alors que les onglets de la super conv y mènent déjà.
@@ -14,7 +14,7 @@ import type { Conv } from './chat-view-types'
 
 /**
  * Pur : les fils de lot que la liste n'affiche pas — tous ceux dont le chef existe encore. Le bloc
- * du chef mène au plan qu'il montre, et depuis conv-1394 (« masque aussi les lots des anciens plans
+ * du chef mène au plan qu'il montre, et (« masque aussi les lots des anciens plans
  * d'un même chef, et rends-les accessibles depuis le bloc de la conv chef ») aux anciens plans aussi
  * (`PlansPrecedents`). Seul un lot dont le chef n'existe plus garde sa ligne : plus rien d'autre ne
  * mènerait à lui.
@@ -47,7 +47,7 @@ export function etatDuFil(
     lastMessageRole:
       c.lastMessageRole ??
       // Même règle que la projection du store : une consigne écrite pendant un
-      // tour (`orientation`) ne porte pas d'attente de réponse (conv-61).
+      // tour (`orientation`) ne porte pas d'attente de réponse.
       [...(c.messages ?? [])].reverse().find((m) => m.orientation !== true)?.role,
     lastAssistantStatus: c.lastAssistantStatus,
     asksUser: c.lastAssistantAsksUser === true,
@@ -68,7 +68,7 @@ export interface ActiviteDesLots {
 }
 
 /**
- * Pur : l'état des lots, reporté sur leur chef (conv-1381, « le spinner de la conv chef doit pas
+ * Pur : l'état des lots, reporté sur leur chef (« le spinner de la conv chef doit pas
  * s'arrêter quand y a des sous-agents qui tournent sous ses ordres », puis « quand une conv de lot a
  * une question ça doit mettre la bonne anim sur la conv chef et l'onglet »). Le chef n'a pas de tour
  * à lui pendant que ses lots travaillent : sans ce report, la liste montrerait un chantier en cours

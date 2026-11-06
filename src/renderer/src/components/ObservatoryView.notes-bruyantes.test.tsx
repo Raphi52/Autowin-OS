@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * conv-1303 (2026-10-30) : l'inventaire Brain liste les notes servies souvent et jamais ouvertes,
+ * 2026-10-30 : l'inventaire Brain liste les notes servies souvent et jamais ouvertes,
  * de quoi nourrir /curate — et le dit quand il n'y en a aucune, avec la date de début de la mesure.
  */
 import { act, createElement } from 'react'

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CLE_AUTRES, nomCanonique, regrouperLesProjets } from './board-projets-du-filtre'
 
 /**
- * LES PROJETS DU FILTRE DU BOARD (conv-1329). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : « AutoWinOS » et
+ * LES PROJETS DU FILTRE DU BOARD. ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : « AutoWinOS » et
  * « Autowin-OS » (le même projet sur deux postes) qui restent deux entrées ; une copie de fil
  * (« AutoWinOS-git-conv-1317 ») ou un dossier d'essai (« super-conv-test-1284 ») qui reste un projet
  * à son nom ; un mot qui contient « conv » sans être un nom de fil (« Convertisseur ») avalé.

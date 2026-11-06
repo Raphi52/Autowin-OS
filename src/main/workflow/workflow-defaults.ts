@@ -179,7 +179,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
             agentStudio('fragilite'),
             agentStudio('usage'),
             agentStudio('rupture'),
-            // Piste 6 de conv-890 : l'angle web du catalogue n'était lancé par aucun workflow livré.
+            // Piste 6 : l'angle web du catalogue n'était lancé par aucun workflow livré.
             agentStudio('externe')
           ]
         },
@@ -223,7 +223,7 @@ export const DEFAULT_WORKFLOWS: WorkflowProfile[] = [
     }
   },
   /*
-   * LES SEPT SUIVANTS VIENNENT DU CORPUS, pas d'une idée — conv-1094, 2026-10-22.
+   * LES SEPT SUIVANTS VIENNENT DU CORPUS, pas d'une idée, 2026-10-22.
    *
    * 921 conversations relues (snapshot + archives), classées par la première demande humaine.
    * Chaque profil ci-dessous couvre une famille de demandes RÉCURRENTE qu'aucun des sept premiers

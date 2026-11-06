@@ -1,6 +1,6 @@
 /**
  * GROS CHANTIERS — l'outil natif `Workflow` du CLI Claude, branché dans les tours de chat sans
- * recoder aucun moteur : le modèle écrit lui-même le script, le CLI le joue (conv-1362, lot conv-1366).
+ * recoder aucun moteur : le modèle écrit lui-même le script, le CLI le joue.
  * Ce module est PUR : il lit le flux du CLI et dit où en est le chantier. `claude.ts` s'en sert pour
  * tenir le processus en vie, et le fil pour dessiner la carte (`shared/chantier-du-tour.ts`).
  *
@@ -45,7 +45,7 @@ export const SEUIL_AGENTS_GROS_CHANTIER = 25
 export const SEUIL_JETONS_GROS_CHANTIER = 1_500_000
 
 /**
- * LE VRAI PIÈGE D'UN CHANTIER LONG EN `-p` (conv-1366, 2026-10-31).
+ * LE VRAI PIÈGE D'UN CHANTIER LONG EN `-p` (2026-10-31).
  *
  * Entrée fermée, ce qui est notre cas, le CLI attend ses tâches de fond au plus
  * `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS` après la fin du tour principal, 600 000 par défaut, puis les

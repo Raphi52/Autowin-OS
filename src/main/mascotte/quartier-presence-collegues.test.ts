@@ -6,7 +6,7 @@ import { creerLecteurDePresence, prenomDe, presenceLue } from './quartier-presen
 import { PRESENCE_AGENTS_MAX, PRESENCE_TITRE_MAX } from '../../shared/quartier-presence'
 
 /*
- * LA RELECTURE DE LA PRÉSENCE DES COLLÈGUES (plan « Village commun », conv-1429, lot 2).
+ * LA RELECTURE DE LA PRÉSENCE DES COLLÈGUES (plan « Village commun », lot 2).
  *
  * Le contenu d'un `presence.json` de collègue est une DONNÉE d'un partage d'équipe : ces tests le
  * piègent (champ trop long, type faux, 500 agents, JSON invalide) et vérifient qu'il ressort borné,

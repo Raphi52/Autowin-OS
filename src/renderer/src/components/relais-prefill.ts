@@ -1,7 +1,7 @@
 /**
  * RELAIS du pré-remplissage de conversation (`autowin:prefill-conversation`).
  *
- * Défaut MESURÉ le 2026-10-22 (conv-1101, instance cachée, code de dev) : un bouton qui crée une
+ * Défaut MESURÉ le 2026-10-22 (instance cachée, code de dev) : un bouton qui crée une
  * conversation, ouvre le chat PUIS émet l'événement le perdait quand le chat n'avait encore jamais
  * été affiché depuis le démarrage — l'écouteur de `ChatView` n'existait pas encore (sonde : chat
  * jamais monté → `recu: false` ; chat déjà monté → `recu: true`). L'utilisateur se retrouvait devant

@@ -75,7 +75,7 @@ describe('worktree add porte core.longpaths', () => {
    * `this.git(this.baseRepo, ['worktree', 'add', ...])` — c'est exactement la forme d'avant-fix.
    */
   it('aucun site de worktree add dans la source ne démarre par la sous-commande', () => {
-    // La classe est découpée en modules voisins worktree-manager-*.ts (conv-1508, lot 3) : on lit
+    // La classe est découpée en modules voisins worktree-manager-*.ts (lot 3) : on lit
     // tout le moteur, pas seulement le fichier principal.
     const source = readdirSync(__dirname)
       .filter((nom) => /^worktree-manager(-[a-z]+)?\.ts$/.test(nom))

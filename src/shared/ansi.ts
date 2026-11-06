@@ -1,7 +1,7 @@
 /**
  * DEPOUILLER LES SEQUENCES DE TERMINAL — un seul endroit, pour les deux processus.
  *
- * DEFAUT VECU le 2026-08-25 (conv-1404) : le fil affichait « 9 min 27 s · <ESC>[33m<ESC>[2m … » et
+ * DEFAUT VECU le 2026-08-25 : le fil affichait « 9 min 27 s · <ESC>[33m<ESC>[2m … » et
  * le panneau de `verify` des lignes entieres de codes de couleur. La cause n'etait pas un motif
  * faux — c'etait qu'il n'y en avait PAS sur ces deux chemins, alors qu'une version correcte dormait
  * dans `verify-command.ts` sans etre appliquee a ce qui est RENDU. Trois chemins de sortie, deux

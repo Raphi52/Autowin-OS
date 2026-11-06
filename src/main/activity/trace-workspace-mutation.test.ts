@@ -76,7 +76,7 @@ afterEach(() => {
 })
 
 /**
- * LE SPINNER D'UN LOT TOURNAIT ENCORE APRÈS SA RÉPONSE (conv-1379, 2026-10-31).
+ * LE SPINNER D'UN LOT TOURNAIT ENCORE APRÈS SA RÉPONSE (2026-10-31).
  *
  * Lot 1/3 : 76 modifications, 70 s entre sa dernière réponse et l'arrêt du spinner ; Lot 3/3 : 164
  * modifications, 81 s. Chaque modification reprenait une photo complète du dépôt (887 ms pour les

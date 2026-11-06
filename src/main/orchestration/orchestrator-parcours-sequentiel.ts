@@ -1,5 +1,5 @@
 // Parcours séquentiel (scout → frame → build → clean → judge) — méthodes de la classe Orchestrator déplacées telles quelles depuis
-// orchestrator.ts (conv-1508) ; elles s'exécutent avec `this` = l'instance, via les délégués de la classe.
+// orchestrator.ts ; elles s'exécutent avec `this` = l'instance, via les délégués de la classe.
 import { deciderDuPassage, traceDuPassage } from './boucle-reparation'
 import { randomUUID } from 'node:crypto'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from '../verify/evidence-digest'
@@ -114,7 +114,7 @@ export async function runInner(
   let facteursChoix: FacteursChoix = {}
   try {
     // D'abord les CHOIX : une demande de sélection dit quelles pistes du scout précédent ont été
-    // prises et lesquelles laissées (piste 7 de conv-890) ; le bilan suit, dans la même consigne.
+    // prises et lesquelles laissées (piste 7) ; le bilan suit, dans la même consigne.
     this.deps.memoireScout?.choisir?.(this.deps.executionWorkspace, task, runId)
     blocPistesConnues = blocPistesDejaConnues(
       this.deps.memoireScout?.connues(this.deps.executionWorkspace, runId, task) ?? [],
@@ -228,7 +228,7 @@ export async function runInner(
         if (voulu.kind === 'stop') return
         if (voulu.kind === 'phase' && isPipelinePhase(voulu.phase)) {
           /*
-           * UNE PHASE NOMMEE EST UNE COMMANDE ICI AUSSI (conv-767) : `graphePourTache` ecartait deja
+           * UNE PHASE NOMMEE EST UNE COMMANDE ICI AUSSI : `graphePourTache` ecartait deja
            * le graphe pour un `/scout`, mais cette branche suivait encore le `SUITE: frame` du
            * modele, et le scout demande en lecture seule finissait en build dans un autre depot.
            * Seul le retour vers la MEME phase reste permis : c'est par lui qu'un cadrage refuse
@@ -259,7 +259,7 @@ export async function runInner(
       const node = parId.get(courant)!
       /**
        * Le juge TERMINAL du canevas est le gate final exécuté juste après cette marche. Le jouer
-       * ici aussi ferait deux appels identiques (constaté sur le run réel conv-1071), dont le
+       * ici aussi ferait deux appels identiques (constaté sur le run réel), dont le
        * premier avait en plus le sandbox d'une phase de mutation. Un juge INTERMÉDIAIRE, lui,
        * garde son comportement de routage.
        *
@@ -308,10 +308,10 @@ export async function runInner(
   }
   /**
    * Début des preuves dont l'ORDRE est chronologique : base du bloc « TESTS DÉJÀ JOUÉS » du juge
-   * (`tests-deja-joues.ts`, piste 4 de conv-914). Avance après une reprise, et après toute étape
+   * (`tests-deja-joues.ts`, piste 4). Avance après une reprise, et après toute étape
    * où plusieurs agents travaillent en parallèle dans la même copie : leurs preuves arrivent dans
    * l'ordre où ils FINISSENT, pas dans celui où ils ont agi.
-   * fix-ok: conv-914 piste 4 — mesuré sur le contrôle final de run-a8a70cd0ee56-1 : 247 s dont 30 s
+   * fix-ok: piste 4 — mesuré sur le contrôle final de run-a8a70cd0ee56-1 : 247 s dont 30 s
    * à relancer vitest et typecheck, faute de savoir si le code avait changé depuis ; sans cette
    * borne, le test d'un agent parallèle passerait pour postérieur à l'édition d'un autre.
    */
@@ -363,7 +363,7 @@ export async function runInner(
   /**
    * Le verdict repris du contrôle final : celui du DERNIER juge enregistré, et seulement s'il a lu le
    * texte final (`dernierJugeLitLeTexteFinal`). Les juges restants sont tous consommés : un verdict
-   * intermédiaire ne doit être rejoué ni maintenant ni après la prochaine réparation (conv-1324).
+   * intermédiaire ne doit être rejoué ni maintenant ni après la prochaine réparation.
    */
   const verdictReprisDuTexteFinal = (): string | undefined => {
     const repris: string[] = []
@@ -380,7 +380,7 @@ export async function runInner(
    */
   let phasesJouees = 0
   /**
-   * LES NOTES QUE LE RUN DEPOSE AU BRAIN (conv-339) : chaque `remember` confirme d'un noeud, par
+   * LES NOTES QUE LE RUN DEPOSE AU BRAIN : chaque `remember` confirme d'un noeud, par
    * outil natif comme par repli texte, passe par CE lanceur. Le compte sort du run
    * (`notesBrainDeposees`) pour que la bulle dise « N notes en revue », pas « aucune leçon ».
    */
@@ -399,7 +399,7 @@ export async function runInner(
   // Le PLAFOND DE PREUVE passe au meme endroit, et pour la meme raison : les deux chemins lisent
   // ce texte. Idempotent (une note deja a 50 ne bouge plus). Voir `scout-plafond.ts`.
   const lireAncrages = lecteurAncrageDepuisDisque(this.deps.executionWorkspace)
-  // « Déjà fait ? » (piste 4, conv-1033) : `git log` tourne DANS le dossier de travail, donc sa
+  // « Déjà fait ? » (piste 4) : `git log` tourne DANS le dossier de travail, donc sa
   // lecture rejoint celle des fichiers, que la fin du run attend (EBUSY, voir `lecturesDeFondByRun`).
   // Pas encore revenue quand le scout finit : pas de marque, rien d'autre ne change.
   let dejaFaits: readonly SujetDejaFait[] = []
@@ -424,7 +424,7 @@ export async function runInner(
     Promise.all([lireAncrages.pret, lectureDejaFaits]).then(() => undefined)
   )
   // La note ajustee sur les choix reels passe AVANT le plafond : un aveu reste a 50.
-  // fix-ok: le facteur des choix (piste 7, conv-890) n'atteignait pas la note sans ce branchement :
+  // fix-ok: le facteur des choix (piste 7) n'atteignait pas la note sans ce branchement :
   // orchestrator.scout-cible.test.ts rend 72 au lieu de 36 quand il manque.
   const garderCibleScout = (phase: NodePhase, texte: string): string =>
     phase === 'scout'
@@ -484,7 +484,7 @@ export async function runInner(
     souhaitModele = readModelChoice(texte)
     // SAUF `think` : il redige un briefing, il ne choisit pas la suite. L'invitation « LE WORKFLOW
     // EST UN OUTIL » lui est donnee comme a tout noeud, et un `SUITE: fin` de sa part a coupe
-    // conv-1340 avant 2 etapes sur 3. Ignore ICI, le seul point par lequel passent tous les chemins.
+    // un fil avant 2 etapes sur 3. Ignore ICI, le seul point par lequel passent tous les chemins.
     // fix-ok: l'arbitre de derive ecrit sa decision par la MEME ligne `SUITE:` (bloc « [dérive] »),
     // son arret apres `think` etait donc ignore aussi — orchestrator.greedy.test.ts rouge (2/2) avant.
     if (phase === 'think' && souhaitModele && !suiteDeLArbitre) {
@@ -574,7 +574,7 @@ export async function runInner(
   // nécessaires. Dégrade à '' si le serveur est absent.
   const brainCorpus = brainCorpusForWorkspace(this.deps.executionWorkspace)
   /*
-   * BRAIN PERSO (conv-1233, 2026-10-28, demande utilisateur : « étends le Brain perso au contexte
+   * BRAIN PERSO (2026-10-28, demande utilisateur : « étends le Brain perso au contexte
    * des travaux lancés en arrière-plan »). Interrogé EN MÊME TEMPS que celui de l'équipe : le run
    * n'attend pas plus longtemps. Aucun filtre de dépôt (ses notes ne sont rangées par aucun
    * projet), mêmes règles sinon : sources signées seules, jamais `inbox/`. Ses chemins arrivent
@@ -762,7 +762,7 @@ export async function runInner(
   let prevSessionSandbox: NonNullable<SendOptions['execution']>['sandbox'] | undefined
   /**
    * La session du DERNIER build, gardée à part : en fin de run `prevSessionId` désigne le nettoyage
-   * (chaîne des sessions). Seule cible des questions d'un échange avant réparation (conv-1139,
+   * (chaîne des sessions). Seule cible des questions d'un échange avant réparation (
    * refus « sans cause » et questions du juge, `gates/echange-*.ts`) ; absente = pas d'échange,
    * réparation normale.
    */
@@ -808,7 +808,7 @@ export async function runInner(
     if (phase === 'build') sessionDuBuild = undefined
     absorberLesDirectives()
     const evidenceStart = aggregatedEvidence.length
-    // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 sur conv-75 : une
+    // DECOUPAGE DE TOUTE PHASE (et non du seul `build`). Mesure du 2026-07-28 : une
     // phase d'exploration monolithique a coute 10,90 $ en 11 min, quand le meme travail decoupe en
     // 5 sous-taches ciblees revenait a ~0,8 $ et ~1 min chacune. Rien ne justifiait de reserver ce
     // levier au build : une phase longue est presque toujours plusieurs travaux qui s'ignorent.
@@ -865,8 +865,8 @@ export async function runInner(
     /**
      * Une brique SKILL réglée sur UN agent — le modèle choisi dans le canevas d'Agent Studio — n'est
      * pas un panel. Le chemin panel ne sert ni les outils natifs ni la boucle d'outils d'un nœud
-     * skill : choisir un modèle sur `think` lui retirait donc brain_query et remember sans un mot
-     * (conv-1628). Elle joue le chemin simple, sur le binding de son agent.
+     * skill : choisir un modèle sur `think` lui retirait donc brain_query et remember sans un mot.
+     * Elle joue le chemin simple, sur le binding de son agent.
      */
     const agentPropreDuNoeudSkill =
       !isPipelinePhase(phase) && membresDeLaPhase.length === 1 ? membresDeLaPhase[0] : undefined
@@ -901,7 +901,7 @@ export async function runInner(
         // VARIABLE par phase — d'où sa place ici, et non en position 2.
         consigneDePhase(phase, true),
         // VARIABLE par sandbox : le plus volatile, donc en dernier.
-        // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+        // VARIABLE par run : le bureau caché réservé à CE run.
         { name: 'bureauCache', text: consigneBureauCache(runId) },
         {
           name: 'workspaceIsolation',
@@ -960,7 +960,7 @@ export async function runInner(
             : fanSystemBlocks
           // LE PROMPT DU MEMBRE (2026-10-13) : ce chemin n'annonçait AUCUNE enveloppe, ni au départ
           // ni à la fin. Un membre en éventail (`frame:probleme`…) n'écrivait donc jamais son prompt
-          // dans la trace : sa fiche du graphe ne montrait que son retour (conv-913, conv-914).
+          // dans la trace : sa fiche du graphe ne montrait que son retour.
           // Même construction que les autres chemins : décrite avant l'appel, précisée par
           // `observePrompt` quand le fournisseur la voit partir.
           let enveloppeMembre: PromptEnvelope | undefined
@@ -1021,10 +1021,10 @@ export async function runInner(
             const res = await registry.send(member.provider, fanMessages, opts, (c) => {
               supervision.onDelta(c.delta)
               if (c.reasoning) onDelta?.('exec', '', undefined, c.reasoning)
-              // LE BATTEMENT D'OUTIL, comme sur le chemin du binding du rôle (conv-42). Ce chemin
+              // LE BATTEMENT D'OUTIL, comme sur le chemin du binding du rôle. Ce chemin
               // le jetait : une étape à modèle attitré — build sur le poste de l'utilisateur —
               // restait 46 à 53 min sans une ligne d'activité au fil (conv-1069/1070/1077,
-              // mesuré en conv-1085). Plusieurs membres battent en parallèle sur la MÊME ligne :
+              // mesuré). Plusieurs membres battent en parallèle sur la MÊME ligne :
               // chacun la signe de son modèle, sinon on ne sait plus qui fait quoi.
               if (c.status) {
                 onDelta?.(
@@ -1075,7 +1075,7 @@ export async function runInner(
             })
             aggregatedEvidence.push(...(res.executionEvidence ?? []))
             supervision.dispose()
-            // Sa session, pour un build à membre UNIQUE : c'est alors la session du build (conv-1149).
+            // Sa session, pour un build à membre UNIQUE : c'est alors la session du build.
             const { observePrompt: _observeMembre, ...optionsDuMembre } = opts
             return {
               member,
@@ -1116,8 +1116,8 @@ export async function runInner(
       // Un modèle en échec (ok=false / texte vide) ne pollue pas la synthèse (filtré).
       let good = memberOutputs.filter((o) => o.ok && o.text.trim())
       if (good.length === 0) {
-        // fix-ok: conv-540 tour 4dfe2821 — refus « safeguards flagged » du seul membre claude-opus-5, fan-out sans repli -> tour rouge
-        // REPLI APRÈS REFUS (conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4) : le seul membre
+        // fix-ok: tour 4dfe2821 — refus « safeguards flagged » du seul membre claude-opus-5, fan-out sans repli -> tour rouge
+        // REPLI APRÈS REFUS (tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4) : le seul membre
         // build a été refusé par le filtre de sécurité du modèle et le tour a fini rouge sans rien
         // tenter. Relancer le MÊME modèle échoue pareil : on rejoue UNE fois sur le modèle voisin.
         const refuse = memberOutputs.find(
@@ -1174,7 +1174,7 @@ export async function runInner(
         )
         prevSessionId = undefined
         /*
-         * fix-ok: conv-1146 (run-ec2036c0932d-1) — 7 refus « sans cause » sur 7 partis en
+         * fix-ok: (run-ec2036c0932d-1) — 7 refus « sans cause » sur 7 partis en
          * réparation complète : « aucune session du build à reprendre ». Le profil « feature »
          * pose un agent composé (`persona: minimal`) sur build : les 18 builds sont passés ici
          * (bloc `persona` dans prompt-observability/conv-1146.jsonl), et ce chemin ne gardait pas
@@ -1236,7 +1236,7 @@ export async function runInner(
       const synthMessages = [
         {
           role: 'user' as const,
-          // conv-339 : un panel scout se fusionne selon le contrat du scout (`consigneFusionScout`).
+          // Un panel scout se fusionne selon le contrat du scout (`consigneFusionScout`).
           content:
             phase === 'scout'
               ? consigneFusionScout(good.length, labelled)
@@ -1269,7 +1269,7 @@ export async function runInner(
         reasoningEffort: orchBinding.reasoningEffort,
         phase,
         // Fusion multi-modeles d'une phase : elle n'annoncait aucune enveloppe, le deplie
-        // « prompt envoye » restait vide (conv-587, saisie ts=1789550244094).
+        // « prompt envoye » restait vide (saisie ts=1789550244094).
         prompt: synthEnvelopePhase,
         execution: synthExecution
       })
@@ -1335,7 +1335,7 @@ export async function runInner(
     // Et il ne REPREND PAS la session de l'exécution : son provider peut différer, où cette session
     // n'existe pas. Reprendre y aurait remplacé tout le contexte par « acquis déjà connus, ne les
     // redemande pas » — le juge aurait jugé à l'aveugle. Il reçoit donc le contexte complet.
-    // Même règle pour une brique skill sur son propre agent (conv-1628) : son fournisseur peut
+    // Même règle pour une brique skill sur son propre agent : son fournisseur peut
     // différer de celui qui a ouvert la session.
     const sansSessionReprise = jugeDedie || Boolean(agentPropreDuNoeudSkill)
     const resuming = Boolean(prevSessionId) && !sansSessionReprise
@@ -1344,7 +1344,7 @@ export async function runInner(
     // par provider, cassé par un fan-out) faisait perdre le besoin cadré exactement au moment où
     // la phase suivante en a le plus besoin → prompt de sous-agent dégradé.
     // Le DERNIER : un cadrage refait remplace le précédent, qui peut être celui qui a été refusé.
-    // fix-ok: conv-1420 — le test du rappel en session rend « Cadrage incomplet » sur a41081d6 : find() rappelait la version refusée.
+    // fix-ok: le test du rappel en session rend « Cadrage incomplet » sur a41081d6 : find() rappelait la version refusée.
     const framed = phaseContext.filter((entry) => entry.startsWith('[phase frame]')).at(-1) ?? ''
     /**
      * Les blocs poussés côté user sont composés EN MÊME TEMPS que le texte envoyé, y compris sur
@@ -1402,7 +1402,7 @@ export async function runInner(
       jugeDedie || Boolean(bindingOverride) || Boolean(agentPropreDuNoeudSkill)
     )
     // Un advisor réglé mais refusé par la table du CLI ne part pas (claude.ts) : on dit pourquoi,
-    // sinon le réglage disparaîtrait sans un mot (conv-1083).
+    // sinon le réglage disparaîtrait sans un mot.
     if (phaseBinding.advisorModel && providerDeLaPhase === 'claude') {
       const accord = advisorAccepte(phaseBinding.model, phaseBinding.advisorModel)
       if (!accord.accepte)
@@ -1421,7 +1421,7 @@ export async function runInner(
           // VARIABLE par phase.
           consigneDePhase(phase, false),
           // VARIABLE par sandbox.
-          // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+          // VARIABLE par run : le bureau caché réservé à CE run.
           { name: 'bureauCache', text: consigneBureauCache(runId) },
           {
             name: 'workspaceIsolation',
@@ -1441,7 +1441,7 @@ export async function runInner(
           // VARIABLE par phase.
           consigneDePhase(phase, true),
           // VARIABLE par sandbox — le plus volatile, donc en dernier.
-          // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+          // VARIABLE par run : le bureau caché réservé à CE run.
           { name: 'bureauCache', text: consigneBureauCache(runId) },
           {
             name: 'workspaceIsolation',
@@ -1505,8 +1505,8 @@ export async function runInner(
               step: 'exec',
               role: 'subagent',
               /**
-               * L'ISSUE METIER est dite, pas seulement le transport. Mesure du 2026-08-20 sur
-               * conv-1346 : cette ligne affichait `remember : ok` pendant que le Brain refusait
+               * L'ISSUE METIER est dite, pas seulement le transport. Mesure du 2026-08-20
+               * Cette ligne affichait `remember : ok` pendant que le Brain refusait
                * l'ecriture (`stored: false`). Un artefact de preuve qui annonce « ok » sur un
                * no-op est pire qu'une absence de trace. Depuis le 2026-09-27, la ligne porte aussi
                * la note ouverte et la longueur lue (`libelleAppelObserve`).
@@ -1646,7 +1646,7 @@ export async function runInner(
             /*
              * LE BATTEMENT D'OUTIL EXISTAIT ET ETAIT JETE ICI.
              *
-             * Mesure du 2026-09-07 (conv-42) : le journal du tour n'a rien recu entre la fin de
+             * Mesure du 2026-09-07 : le journal du tour n'a rien recu entre la fin de
              * `frame` (1788764779503) et celle de `build` (1788766075667) — 21 min 36 s de
              * silence pendant que la phase lisait, editait et rejouait des suites. Le fournisseur
              * battait pourtant toutes les 30 s : `claude.ts` traduit `tool_progress` en
@@ -1670,8 +1670,8 @@ export async function runInner(
         phaseRes = await envoyer(subOptions)
       } catch (error) {
         /*
-         * REPLI APRÈS REFUS, comme le lancement en parallèle (plus haut, conv-540). Mesuré en
-         * conv-890 (2026-09-30 13:42) : l'étape build, sur le SEUL modèle du rôle subagent
+         * REPLI APRÈS REFUS, comme le lancement en parallèle (plus haut). Mesuré
+         * 2026-09-30 13:42 : l'étape build, sur le SEUL modèle du rôle subagent
          * (claude-opus-5-5), a été refusée par le filtre de sécurité, et le run a fini rouge sans
          * rien tenter. Relancer le MÊME modèle échoue pareil : on rejoue UNE fois sur le voisin,
          * avec la même session (sur une reprise, le message ne porte que « continue »).
@@ -1769,7 +1769,7 @@ export async function runInner(
     // quelle — sinon la phase suivante reprendrait la session du juge au lieu de la sienne.
     supervision.dispose()
     // La brique skill sur son propre agent COUPE la chaîne, comme un panel : sa session est peut-être
-    // chez un autre fournisseur, et la phase suivante reçoit alors le contexte complet (conv-1628).
+    // chez un autre fournisseur, et la phase suivante reçoit alors le contexte complet.
     prevSessionId = jugeDedie
       ? prevSessionId
       : agentPropreDuNoeudSkill
@@ -1892,7 +1892,7 @@ export async function runInner(
            * contexte de la phase : le tour d'outil ne voyait plus que le resultat de sa propre
            * commande.
            *
-           * Mesure sur le run reel `conv-1341` : le noeud `learn` a interroge le Brain, puis a
+           * Mesure sur le run reel : le noeud `learn` a interroge le Brain, puis a
            * conclu « mon contexte ne contient aucune sortie de phase precedente — ni diff, ni
            * chemin de fichier ». Il disait VRAI : son premier tour avait 3661 caracteres avec
            * `[phase think]` et `[phase build]`, son second n'avait plus que le compte rendu de
@@ -1954,8 +1954,8 @@ export async function runInner(
       // seconde evaluation, qui pourrait annoncer une taille differente de celle envoyee.
       const briefDeLArbitrage = briefArbitrage(derive, phase, task)
       try {
-        // Une ligne à rendre, sans outil : le modèle des PETITES TÂCHES (Haiku par défaut,
-        // conv-1097). Il partait sur le modèle de la phase, donc Opus en effort maximal.
+        // Une ligne à rendre, sans outil : le modèle des PETITES TÂCHES (Haiku par défaut).
+        // Il partait sur le modèle de la phase, donc Opus en effort maximal.
         const arbitreBinding = roles.bindingDesPetitesTaches()
         const arbitre = await this.sendWithRoleContext(
           `arbitrage dérive ${phase}`,
@@ -2029,7 +2029,7 @@ export async function runInner(
     )
   }
   /**
-   * LA RELECTURE À FROID DU CADRAGE (conv-1420, règles et mesure dans `relecture-froide.ts`).
+   * LA RELECTURE À FROID DU CADRAGE (règles et mesure dans `relecture-froide.ts`).
    *
    * Branchée sur la boucle des phases, et non dans `recordPhase` qui est synchrone : tous les chemins
    * d'un cadrage (séquentiel, groupe, solo) y repassent. La reprise joue `frame` directement au lieu
@@ -2168,7 +2168,7 @@ export async function runInner(
   // J1 — le juge (et le résultat) reçoivent l'AGRÉGAT de toutes les phases, jamais la seule
   // dernière : sinon un livrable produit en frame/terrain devient invisible si clean dérive.
   // Recalculable : une phase de réparation (B5) ajoute à phaseOutputs, l'agrégat suit.
-  // conv-989 : la marque de coupe nomme la copie entiere. Un chemin illisible (identifiant de run
+  // La marque de coupe nomme la copie entiere. Un chemin illisible (identifiant de run
   // refuse) retombe sur la marque d'avant plutot que de casser le jugement.
   const cheminDuLivrableEntierDuRun = (): string | undefined => {
     try {
@@ -2183,7 +2183,7 @@ export async function runInner(
     blocsDEchange.length ? `${texte}\n\n${blocsDEchange.join('\n\n')}` : texte
   const buildExec = (): {
     text: string
-    /** Le même agrégat, SANS les versions remplacées : ce que lit l'utilisateur (conv-339). */
+    /** Le même agrégat, SANS les versions remplacées : ce que lit l'utilisateur. */
     rendu: string
     usage: Usage | undefined
     executionEvidence: ExecutionEvidence[]
@@ -2219,26 +2219,26 @@ export async function runInner(
   /** Le livrable agrégé tel que le juge précédent l'a reçu : base du bloc « CE QUI A CHANGÉ » (changements-juge.ts). */
   let texteDejaJuge = ''
   /**
-   * Les MINEUR du DERNIER verdict qui a clos un `/scout` nommé sans nouveau passage (conv-976,
+   * Les MINEUR du DERNIER verdict qui a clos un `/scout` nommé sans nouveau passage (
    * `reservesMineuresDuScout`) : ajoutés au résultat rendu, jamais perdus. Vidé à chaque jugement.
    */
   let reservesDuJuge: string[] = []
   /**
-   * Les objections d'une RELECTURE SEULE qui a refusé en les nommant (piste 5, conv-1070,
+   * Les objections d'une RELECTURE SEULE qui a refusé en les nommant (piste 5
    * `defautsDeLaRelectureSeule`) : la relecture est livrée, et ces défauts du travail relu sont
    * écrits en tête du résultat. Vidé à chaque jugement.
    */
   let defautsDeLaRelecture: string[] = []
   /**
-   * Le motif d'un panel de juges tombé en panne sans quorum (conv-1420, `quorum.ts`). Présent, le
+   * Le motif d'un panel de juges tombé en panne sans quorum (`quorum.ts`). Présent, le
    * passage s'arrête : rejouer un build ne ferait pas répondre les juges. Vidé à chaque jugement.
    */
   let panneDesJuges: string | undefined
   /**
    * Le texte RENDU à l'utilisateur : l'agrégat du DERNIER jugement SANS les versions remplacées
-   * d'une étape rejouée (conv-339, `exec.rendu`). Figé avec `exec` : learn, joué après, n'y entre
+   * d'une étape rejouée (`exec.rendu`). Figé avec `exec` : learn, joué après, n'y entre
    * pas. Le juge garde `exec.text`.
-   * fix-ok: conv-339 tour b6150a1a — `result` reprenait `exec.text`, l'agrégat écrit pour le juge :
+   * fix-ok: tour b6150a1a — `result` reprenait `exec.text`, l'agrégat écrit pour le juge :
    * la réponse affichée commençait par deux « [phase scout] (version remplacée…, plus bas) ».
    */
   const texteRendu = (): string =>
@@ -2251,7 +2251,7 @@ export async function runInner(
     bindingOverride ?? runtimeSnapshot?.roles.judge ?? roles.getBinding('judge')
   const judgeProvider = judgeBinding.provider
 
-  /** La trace DIT pourquoi un `/scout` nommé s'arrête malgré des MINEUR (conv-976). */
+  /** La trace DIT pourquoi un `/scout` nommé s'arrête malgré des MINEUR. */
   const pousserReservesDuJuge = (): void => {
     if (reservesDuJuge.length === 0) return
     push({
@@ -2269,7 +2269,7 @@ export async function runInner(
     learningAttestations: IndependentLearningAttestation[]
     /** Refusé par les contrôles locaux, AVANT tout juge (échange « sans cause »). */
     refusAvantJuge?: true
-    /** Refus du juge fait UNIQUEMENT de questions au build (échange de l'étape 2, conv-1139). */
+    /** Refus du juge fait UNIQUEMENT de questions au build (échange de l'étape 2). */
     questionsDuJuge?: string[]
   }> => {
     // Les contrôles locaux falsifiables passent AVANT le juge payant. Un livrable sans preuve ou
@@ -2303,7 +2303,7 @@ export async function runInner(
      * pre-gate est en prime moins cher : cela coupe AVANT de payer le juge.
      */
     const preGate = evaluateClosure({
-      // fix-ok: conv-835 tour 8641812d-6401-4129-a6b0-13a64228e0bc (activity 04:27:22.132Z) — un hook
+      // fix-ok: tour 8641812d-6401-4129-a6b0-13a64228e0bc (activity 04:27:22.132Z) — un hook
       // bloquant forcait `red`, donc le refus s'ouvrait sur « Échec déjà déclaré » alors que le run
       // n'avait rien declare : seul le fix-gate bloquait, et il porte deja sa raison (meme defaut
       // que 11f829ad au gate final). Sans raison du hook, on garde `red` pour ne pas bloquer muet.
@@ -2328,13 +2328,13 @@ export async function runInner(
     // Un juge terminal peut avoir fini dans son CLI détaché après la mort d'Electron. Le
     // rattachement l'ajoute alors aux acquis APRÈS les éventuels juges intermédiaires du graphe.
     // Consommer ici l'occurrence restante évite de payer/rejouer exactement le même verdict — mais
-    // seulement si elle a jugé le texte final, pas un texte dépassé (conv-1324).
+    // seulement si elle a jugé le texte final, pas un texte dépassé.
     const resumedJudgeText = verdictReprisDuTexteFinal()
     if (resumedJudgeText !== undefined) {
       const verdictDuJuge = lireVerdictJuge(verdictAvecObjectionsPortees(resumedJudgeText))
-      // conv-976 : sur un `/scout` nommé, des MINEUR seuls sont des réserves, pas un refus.
+      // Sur un `/scout` nommé, des MINEUR seuls sont des réserves, pas un refus.
       const reserves = evidenceOk ? reservesMineuresDuScout(phaseNommee, resumedJudgeText) : []
-      // Piste 5 (conv-1070) : une relecture seule qui nomme ses objections est livrée.
+      // Piste 5 : une relecture seule qui nomme ses objections est livrée.
       const defautsRelus =
         evidenceOk && !verdictDuJuge
           ? defautsDeLaRelectureSeule(phaseNommee, phaseOutputs.length, resumedJudgeText)
@@ -2408,17 +2408,17 @@ export async function runInner(
       }
     }
 
-    // fix-ok: cause PROUVÉE en live (verdict conv-30 : « le livrable requis est un RUN.md
+    // fix-ok: cause PROUVÉE en live (verdict : « le livrable requis est un RUN.md
     // physique ») — A2 a chargé le SKILL judge du kit qui exige un RUN.md/fingerprint absent
     // in-app ; on neutralise ce couplage côté juge, comme J4/B2 côté exec.
     // Une demande `judge` explicite ne joue AUCUNE phase d'exécution (`regimePhases` rend `[]`) :
     // l'agrégat et les preuves sont alors vides PAR CONSTRUCTION. Réclamer « au moins une preuve
     // d'outil ci-dessous » sur une liste vide condamnait ce cas au rouge quel que soit l'état réel
-    // du dépôt — mesuré sur le run conv-1078 (« DEFAUT: livrable agrégé vide et aucune preuve
+    // du dépôt — mesuré sur le run (« DEFAUT: livrable agrégé vide et aucune preuve
     // d'outil observée », trace : judge + gate, zéro exec). Ici le juge n'atteste pas le travail
     // d'un autre : il EST l'unique agent, et sa propre inspection read-only est la preuve.
     // CONTRAT DE TÂCHE DE LA CONVERSATION : un tour de relance (« finis », « répare ») ne nomme
-    // plus sa cible, donc le juge la perdait de vue — c'est ainsi que quatre runs de conv-1302 ont
+    // plus sa cible, donc le juge la perdait de vue — c'est ainsi que quatre runs ont
     // été validés 96/100 sur un AUTRE fichier que celui demandé. Le contrat encore ouvert est
     // déduit des `RUN.md` de la conversation (aucun nouveau stockage) et RAPPELÉ au juge. On
     // informe, on ne bloque pas : l'autorité reste au juge, qui peut peser une relocalisation
@@ -2444,7 +2444,7 @@ export async function runInner(
     /*
      * LE FIL DE LA CONVERSATION, POUR LE JUGE SEUL. Les phases le reçoivent (`phaseContext`,
      * `collectedContext`) ; le juge seul, UNIQUE agent du run, ne recevait que la TÂCHE nue.
-     * fix-ok: conv-113, run « judge-projet-ameliore-boucle-objectif-muwn6zvy » — « Judge le Projet »
+     * fix-ok: run « judge-projet-ameliore-boucle-objectif-muwn6zvy » — « Judge le Projet »
      * dans un fil consacré à PaperTrading2 mais rangé dans D:\Chirurgien\AssistantChirurgien : la
      * trace du juge contient 0 mention de PaperTrading, seul le CLAUDE.md du dossier (« # Projet :
      * assistant patients… ») nommait un projet. Il a jugé le dossier, et la chaîne a suivi.
@@ -2477,11 +2477,11 @@ ${CONTRAT_OBJECTIONS}`
         JUDGE_TOOLSET_CONTRACT +
         noteContrat +
         noteHypotheses +
-        // conv-35 : a partir du 2e passage, `lastJudgeMemoire` est encore le verdict PRECEDENT.
+        // A partir du 2e passage, `lastJudgeMemoire` est encore le verdict PRECEDENT.
         noteVerdictPrecedentPourJuge(lastJudgeMemoire) +
-        // conv-914 : à partir du 2e passage, le juge reçoit aussi les lignes changées depuis le texte déjà jugé.
+        // À partir du 2e passage, le juge reçoit aussi les lignes changées depuis le texte déjà jugé.
         noteChangementsPourJuge(texteDejaJuge, exec.text) +
-        // conv-914 piste 4 : les tests joués sur le code actuel ne sont pas à relancer.
+        // piste 4 : les tests joués sur le code actuel ne sont pas à relancer.
         noteTestsDejaJouesPourJuge(aggregatedEvidence.slice(debutPreuvesOrdonnees)) +
         `TÂCHE: ${task}\nRÉPONSE (livrable agrégé de TOUTES les phases) : ${clampAggregateForJudge(exec.text)}\n` +
         `PREUVES OUTILS OBSERVÉES: ${serializeEvidenceForJudge(exec.executionEvidence)}\n` +
@@ -2616,7 +2616,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
                 costUsd: r.usage.costUsd
               })
             }
-            // Une réponse vide n'est pas un refus du juge : elle suit le chemin d'une panne (conv-1420).
+            // Une réponse vide n'est pas un refus du juge : elle suit le chemin d'une panne.
             if (!r.text.trim()) throw new Error('le juge a rendu une réponse vide')
             // Un membre qui valide EN LISTANT des écarts vote DEFAUT : ses objections rejoignent
             // alors le verdict agrégé, donc le feedback de la réparation.
@@ -2649,18 +2649,18 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
               durationMs: performance.now() - startedAt,
               execution
             })
-            // Crashé : ne vote PAS. Il reste un juge prévu, donc un absent nommé (conv-1420).
+            // Crashé : ne vote PAS. Il reste un juge prévu, donc un absent nommé.
             return { ok: false, responded: false, text: '' }
           }
         })
       const premiersVotes = await Promise.all(interrogerLesJuges(judgeMembers))
-      // UNE relance du seul membre en panne, dans ce passage : `skills/judge/SKILL.md:62` (conv-1420).
+      // UNE relance du seul membre en panne, dans ce passage : `skills/judge/SKILL.md:62`.
       const aRappeler = signal?.aborted
         ? []
         : judgeMembers.filter((_, rang) => !premiersVotes[rang]?.responded)
       const results = [...premiersVotes, ...(await Promise.all(interrogerLesJuges(aRappeler)))]
       // Le seuil se calcule sur les juges PRÉVUS (renversement voulu, voir `quorum.ts`).
-      // fix-ok: conv-1420 — seuil borné aux répondants : test M1 rejoué sur a41081d6, vert à 1 VALIDE sur 3 juges prévus, absents jamais nommés.
+      // fix-ok: seuil borné aux répondants : test M1 rejoué sur a41081d6, vert à 1 VALIDE sur 3 juges prévus, absents jamais nommés.
       const responders = results.filter((r) => r.responded)
       const valideVotes = responders.filter((r) => r.ok).length
       const graphQuorum = this.workflowDuRun()?.graph
@@ -2684,7 +2684,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       )
       verdict = {
         text: verdictDuPanel(issuePanel, {
-          // Quorum atteint : les objections des membres RESTENT dans le verdict (conv-539,
+          // Quorum atteint : les objections des membres RESTENT dans le verdict (
           // tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e) au lieu d'etre reduites au mot VALIDE.
           verdictValide: verdictPanelValide(responders.map((r) => ({ text: r.text, ok: r.ok }))),
           raisons: reasons
@@ -2735,7 +2735,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       }
     }
     /*
-     * UN SEUL LECTEUR DE VERDICT — mesure du 2026-09-03 (conv-9).
+     * UN SEUL LECTEUR DE VERDICT — mesure du 2026-09-03.
      *
      * Ce site testait encore `/^\s*valide/i`, c'est-a-dire les premiers mots SEULEMENT. Un juge
      * qui a ecrit « VALIDE » puis s'est corrige a la ligne suivante par « DEFAUT: ... / SCORE: 40 »
@@ -2749,10 +2749,10 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
      * annonce comme resorbe ne l'etait que sur une lignee.
      */
     const verdictDuJuge = lireVerdictJuge(verdictAvecObjectionsPortees(verdict.text))
-    // conv-976 : sur un `/scout` nommé, des MINEUR seuls sont des réserves ajoutées au résultat,
+    // Sur un `/scout` nommé, des MINEUR seuls sont des réserves ajoutées au résultat,
     // pas un refus qui relance scout + juge. Un MAJEUR, et tout autre run, gardent le blocage.
     const reserves = evidenceOk ? reservesMineuresDuScout(phaseNommee, verdict.text) : []
-    // Piste 5 (conv-1070) : une relecture seule qui nomme ses objections est LIVRÉE — son verdict
+    // Piste 5 : une relecture seule qui nomme ses objections est LIVRÉE — son verdict
     // est la réponse. Le vote du juge, lui, reste `red` dans la calibration ci-dessous.
     const defautsRelus =
       evidenceOk && !verdictDuJuge
@@ -2763,7 +2763,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     defautsDeLaRelecture = defautsRelus
     lastJudgeText = verdict.text.trim()
     lastJudgeMemoire = memoirePanel.trim() || lastJudgeText
-    // Étape 2 de l'option A (conv-1139) : les questions au build d'un refus du juge. Sans section
+    // Étape 2 de l'option A : les questions au build d'un refus du juge. Sans section
     // QUESTIONS AU BUILD, l'examen rend tout vide et la clôture ci-dessous est celle d'avant.
     const examenDesQuestions = examinerQuestionsDuJuge({
       verdict: verdict.text,
@@ -2819,11 +2819,11 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     // déjà franchi le pré-gate local. Le juge est read-only, le signal local n'a donc pas changé.
     onPhase?.({ step: 'gate' })
     const g = evaluateClosure({
-      // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — pre-gate deja passe, donc `red` ne
+      // fix-ok: tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — pre-gate deja passe, donc `red` ne
       // venait que du juge : il doublait chaque refus d'un faux « Échec déjà déclaré » (reparations 1-9).
       // Le refus reste bloquant : dodDuVerdict(false) rend toujours au moins une case non cochee.
       status: 'green',
-      // fix-ok: conv-539 tour 24e29815 — une case DoD muette cachait les objections du juge a la reparation et figeait le refus
+      // fix-ok: tour 24e29815 — une case DoD muette cachait les objections du juge a la reparation et figeait le refus
       // Une question redevenue bloquante (trop longue, répétée, au-delà de 3) est NOMMÉE ici.
       dod: [...dodDuVerdict(ok, verdict.text), ...examenDesQuestions.dod],
       // Une sous-tache en echec ou sautee est du travail ANNONCE et non livre : elle bloque, et la
@@ -2884,7 +2884,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     push({ step: 'gate', role: 'gate', detail: politique.motif })
   }
   /**
-   * ÉCHANGE AVANT RÉPARATION — refus « sans cause » seul (conv-1139, 2026-10-24, étape 1 de
+   * ÉCHANGE AVANT RÉPARATION — refus « sans cause » seul (2026-10-24, étape 1 de
    * l'option A du cadrage forum-agents-partie2-juge-build ; règles dans `gates/echange-sans-cause.ts`).
    *
    * Mesure du 24/10 : 18 refus du contrôle final faits du SEUL fix-gate, dont 10 suivis d'un refus
@@ -2895,7 +2895,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
    * rend `false`, DIT pourquoi dans la trace, et la réparation normale suit.
    */
   /**
-   * La mécanique COMMUNE aux deux sources d'échange (conv-1139, étapes 1 et 2) : la question part
+   * La mécanique COMMUNE aux deux sources d'échange (étapes 1 et 2) : la question part
    * à la session du build, son coût est compté, l'échange est inscrit au journal commun, et
    * « ne rien modifier » est vérifié par l'empreinte de la copie. Rend la réponse, ou le motif de
    * l'échec à écrire dans la trace — l'appelant le dit, la réparation normale suit.
@@ -2918,7 +2918,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       if (conversationId) inscrireEchangeAuJournal({ fil: conversationId, runId, question })
       // La panne nomme le rôle et son binding, comme tout autre appel de modèle : sans ça, la trace
       // disait « panne pendant la réponse (spawn … ENOENT) » sans dire qui avait échoué (garde
-      // `provider-failure-diagnosis.test.ts`, rouge sur main depuis l'ajout de cet échange — salvage conv-1211).
+      // `provider-failure-diagnosis.test.ts`, rouge sur main depuis l'ajout de cet échange — salvage).
       // La cause brute reste en tête, entre parenthèses : c'est elle que la trace et ses tests lisent.
       const message = erreur instanceof Error ? erreur.message : String(erreur)
       const explique = explainRoleFailure(
@@ -3001,7 +3001,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     return true
   }
   /**
-   * ÉCHANGE AVANT RÉPARATION — refus du juge fait UNIQUEMENT de questions au build (conv-1139,
+   * ÉCHANGE AVANT RÉPARATION — refus du juge fait UNIQUEMENT de questions au build (
    * 2026-10-25, étape 2 ; règles dans `gates/echange-questions-juge.ts`). Même mécanique que
    * l'étape 1, même plafond. Rend `true` quand la réponse a rejoint le texte jugé, marquée comme
    * donnée : le juge rejuge alors dans le même passage, sur ses propres preuves.
@@ -3047,21 +3047,21 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
   let learningAttestations: IndependentLearningAttestation[] = []
   /** Motifs du refus precedent : sert a reconnaitre un refus qu'un rejeu ne peut pas faire evoluer. */
   let motifsPrecedents: string[] = []
-  /** Combien de fois DE SUITE le refus est revenu mot pour mot (conv-470, tour 52fbe05f : 4). */
+  /** Combien de fois DE SUITE le refus est revenu mot pour mot (tour 52fbe05f : 4). */
   let refusIdentiquesConsecutifs = 0
   /**
    * Empreintes d'ORIGINE de chaque fichier TEST: designe par un juge, accumulees sur TOUT le run :
    * jamais videes, un nouveau TEST: s'ajoute, un fichier deja releve garde sa premiere empreinte
-   * (juge independant conv-44 : une passe propre ou un 2e TEST: levaient la protection).
+   * (juge independant : une passe propre ou un 2e TEST: levaient la protection).
    */
   const empreintesProtegees: Record<string, string | null> = {}
-  // conv-844 : choix utilisateur, on repare jusqu'a ce qu'il n'y ait plus de defaut. Seul un budget
+  // Choix utilisateur, on repare jusqu'a ce qu'il n'y ait plus de defaut. Seul un budget
   // BLOQUANT (reparations accordees = 0) garde l'ancienne borne ; sinon on ne sort que sur un vert
   // ou sur un code perime (`arretDeLaReparation`).
   // Les tests d'orchestrateur gardent l'ancien plafond (tests/reinit-couts-session.ts).
   const jusquAuVert =
     politique.reparations > 0 && process.env.AUTOWIN_REPARATION_BORNEE !== '1'
-  // L'objection d'étendue du DERNIER verdict du juge, et si l'utilisateur a déjà tranché (conv-1149).
+  // L'objection d'étendue du DERNIER verdict du juge, et si l'utilisateur a déjà tranché.
   let etenduePrecedente: string | undefined
   let etendueTranchee = false
   for (
@@ -3071,7 +3071,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
   ) {
     if (attempt > 0) {
       /*
-       * UNE REPARATION REJOUE LA PHASE NOMMEE, pas `build` (conv-767 : un `/scout` refuse par le
+       * UNE REPARATION REJOUE LA PHASE NOMMEE, pas `build` (un `/scout` refuse par le
        * juge a ete « repare » par un build qui a ecrit dans un autre depot). Un `/judge` nomme n'a
        * rien a rejouer : son verdict EST la reponse demandee.
        */
@@ -3092,7 +3092,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
         `[RÉPARATION ${attempt}] Le gate a bloqué : ${gate.reasons.join('; ')}. Objections du juge : ${lastJudgeText || '(verdict vide)'}.${consigneTestsDuJuge(lastJudgeText)} Corrige le livrable et fournis une PREUVE d'outil (test rouge→vert / exit-code).`
       )
       // LE PASSAGE SE NOMME DANS LA TRACE : sans cette ligne, un run mort par epuisement ne
-      // permet pas de compter ses rejeus apres coup (objection du juge, conv-540).
+      // permet pas de compter ses rejeus apres coup (objection du juge).
       const ligneDuPassage = traceDuPassage(attempt, PLAFOND_DUR, jusquAuVert, phaseDeReparation)
       if (ligneDuPassage) push({ step: 'gate', role: 'gate', detail: ligneDuPassage })
       // Le nouveau passage doit recevoir le contexte complet, pas reprendre une session linéaire
@@ -3102,15 +3102,15 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       /**
        * UNE REPARATION QUI NE PEUT PLUS S'EXECUTER ARRETE LA BOUCLE, ELLE N'ANNULE PAS LE TOUR.
        *
-       * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — le build de reparation a leve
+       * fix-ok: tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — le build de reparation a leve
        * « Budget d'appels provider atteint : 42 appels ». L'exception traversait toute la boucle :
        * `orchestrate` rendait ok:false, et TOUT le travail deja juge (4 verdicts, objections
        * comprises) disparaissait de la reponse. L'utilisateur ne voyait qu'« echec du workflow ».
        * Desormais l'echec du passage de reparation est un MOTIF de refus nomme : le verdict et les
        * objections du dernier juge restent dans le resultat du run.
        */
-      // Le fichier TEST: du juge est fige pendant la reparation (piste 2 /build, conv-44).
-      // fix-ok: conv-44 — juge independant (2 MAJEUR) : vider apres une passe propre, ou ne relever qu'a vide, laissait passer un test retouche. On accumule ; un fichier absent (null) peut etre releve plus tard.
+      // Le fichier TEST: du juge est fige pendant la reparation (piste 2 /build).
+      // fix-ok: juge independant (2 MAJEUR) : vider apres une passe propre, ou ne relever qu'a vide, laissait passer un test retouche. On accumule ; un fichier absent (null) peut etre releve plus tard.
       for (const [cle, empreinte] of Object.entries(empreintesTestsDuJuge(lastJudgeText, workCwd))) {
         if (empreintesProtegees[cle] == null) empreintesProtegees[cle] = empreinte
       }
@@ -3135,7 +3135,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       /*
        * UNE RÉPARATION DÉJÀ PAYÉE NE REPAIE PAS SON JUGE.
        *
-       * fix-ok: run-85d8e7f57af2-1 (conv-892, redémarrage du 2026-10-01 12:54) — `phaseOutputs` est
+       * fix-ok: run-85d8e7f57af2-1 (redémarrage du 2026-10-01 12:54) — `phaseOutputs` est
        * pré-rempli avec les 15 étapes reprises : le juge du premier passage voit déjà le texte
        * final. Chaque réparation rejouée sortait ensuite par `dejaPayee` sans rien jouer, et
        * `judgeAndGate` repayait un juge sur un texte IDENTIQUE (3 juges constatés, `phaseOutputs`
@@ -3195,7 +3195,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
        * CAPITALISATION APRES LE GATE — jamais avant, et seulement sur un verdict qui PASSE.
        *
        * `learn` ne peut pas etre un noeud de la marche : un juge joue par le marcheur PUIS par le
-       * gate final produit deux appels identiques (conv-1071), et un juge non terminal fait
+       * gate final produit deux appels identiques, et un juge non terminal fait
        * consommer au marcheur le budget de retour que la boucle de reparation relit ensuite
        * (mesure du 2026-08-25 : `correctif` a 3 passages build la ou le profil en annonce 1).
        * `estJugeTerminal` ignore donc l'arete vers `learn`, et c'est ICI qu'elle se joue.
@@ -3221,7 +3221,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
         gateBloque: false
       })
       if (motifSansChaine) push({ step: 'gate', role: 'gate', detail: motifSansChaine })
-      // Piste 3 (conv-914) : le résultat validé part AVANT learn/salvage — voir shared/resultat-valide.ts.
+      // Piste 3 : le résultat validé part AVANT learn/salvage — voir shared/resultat-valide.ts.
       if (apresGate.length > 0) {
         push(
           etapeResultatValide(
@@ -3249,14 +3249,14 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
      *
      * Un refus qui CHANGE d'un passage a l'autre est un progres : on continue, meme au-dela des
      * reparations provisionnees. Un refus identique et entierement hors de portee de build ne peut
-     * pas evoluer : on s'arrete (mesure conv-1242 : 3 passages, le meme refus mot pour mot, 2 min
+     * pas evoluer : on s'arrete (mesure : 3 passages, le meme refus mot pour mot, 2 min
      * brulees). Et si le plafond dur mord, il le DIT — avant, cette sortie etait muette, si bien
      * qu'un run rendait « bloque » sans qu'on sache s'il avait renonce faute de progres ou faute de
      * tours.
      */
     /*
-     * OBJECTION D'ÉTENDUE RÉPÉTÉE → PAUSE ET QUESTION (conv-1149, règles dans
-     * `gates/etendue-repetee.ts`). Sur conv-1146, quatre refus « ta demande n'est pas remplie »
+     * OBJECTION D'ÉTENDUE RÉPÉTÉE → PAUSE ET QUESTION (règles dans
+     * `gates/etendue-repetee.ts`). Quatre refus « ta demande n'est pas remplie »
      * ont relancé quatre réparations, en mode jusqu'au vert où rien d'autre n'arrête la boucle.
      * Seul un verdict RENDU par le juge dans ce passage compte : un refus du contrôle avant le juge
      * laisse `lastJudgeText` sur le verdict précédent.
@@ -3291,8 +3291,8 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
             'directiveUtilisateur',
             `DIRECTIVE UTILISATEUR ARRIVEE PENDANT LE RUN — PRIORITAIRE, elle CORRIGE le cadre : ${issue.texte}`
           )
-        // conv-1625 (05/11/2026) : l'utilisateur vient de trancher CE refus. Le frein du refus
-        // répété, qui mord désormais jusqu'au vert (conv-1613), repart de zéro : sinon il couperait
+        // 05/11/2026 : l'utilisateur vient de trancher CE refus. Le frein du refus
+        // répété, qui mord désormais jusqu'au vert, repart de zéro : sinon il couperait
         // au passage suivant la suite qu'il vient de choisir.
         motifsPrecedents = []
         refusIdentiquesConsecutifs = 0
@@ -3312,14 +3312,14 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       plafondDur: PLAFOND_DUR,
       motifsCourants: gate.reasons,
       etat: { motifsPrecedents, refusIdentiquesConsecutifs },
-      // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — 14 reparations refusees
+      // fix-ok: tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — 14 reparations refusees
       // parce que out/main/index.js (11:06) etait plus ancien que les correctifs commites
       // (11:11-11:31) : le code qui jugeait n'etait pas celui qu'on reparait. La boucle le NOMME
       // desormais au lieu de bruler un build et un panel de juge par passage.
       bundlePerime: mesureBundlePerime(process.cwd()),
       jusquAuVert,
       ...(panneDesJuges ? { panneDesJuges } : {}),
-      // fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
+      // fix-ok: la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
       reservesMineuresFigees: reservesMineuresFigees(
         attempt,
         lastJudgeMemoire,
@@ -3331,7 +3331,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       /**
        * LE MOTIF EST AUSSI POUSSE DANS LA TRACE, et pas seulement dans le resultat.
        *
-       * Defaut trouve sur le run reel conv-1355 : le motif etait ajoute a `gate.reasons` APRES que
+       * Defaut trouve sur le run reel : le motif etait ajoute a `gate.reasons` APRES que
        * la ligne « Arrete au controle final » ait deja ete poussee. Il atteignait donc le resultat
        * du run mais JAMAIS la trace — la revendication « une borne qui mord doit se dire » n'etait
        * tenue qu'a moitie, et c'est precisement la moitie que l'on relit apres coup.
@@ -3357,7 +3357,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
 
   return {
     task,
-    // conv-976 : les MINEUR gardés sur un `/scout` nommé suivent le résultat rendu (vide sinon).
+    // Les MINEUR gardés sur un `/scout` nommé suivent le résultat rendu (vide sinon).
     result: resultatAvecReservesDuJuge(
       texteRendu(),
       valid && !gate.blocked ? reservesDuJuge : []
@@ -3367,12 +3367,12 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     gateReasons: gate.reasons,
     phaseOutputs,
     // Le verdict SORT du run : sans ce champ il mourait dans `lastJudgeText` et n'atteignait
-    // jamais le RUN.md, donc jamais la mémoire inter-runs (conv-1405).
+    // jamais le RUN.md, donc jamais la mémoire inter-runs.
     ...(lastJudgeText.trim() ? { judgeText: lastJudgeText.trim() } : {}),
     ...(valid && !gate.blocked && defautsDeLaRelecture.length > 0
       ? { defautsDuTravailRelu: [...defautsDeLaRelecture] }
       : {}),
-    // conv-989 : seulement si une étape a écrit quelque chose — un fichier vide n'est pas écrit.
+    // Seulement si une étape a écrit quelque chose — un fichier vide n'est pas écrit.
     ...(phaseOutputs.some((sortie) => sortie.text.trim()) && cheminDuLivrableEntierDuRun()
       ? { livrableEntier: cheminDuLivrableEntierDuRun() }
       : {}),

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useLangue } from '../langue'
 
 /**
- * Serveurs MCP de l'utilisateur (conv-1558, plan-b0502bd3, lot 2).
+ * Serveurs MCP de l'utilisateur (plan-b0502bd3, lot 2).
  *
  * Pourquoi : le chat Claude part avec `--strict-mcp-config`, il n'hérite d'aucun serveur du poste.
  * Ce panneau tient la liste déclarée dans Autowin (IPC `os:mcpServers:*` du lot 1) : ajouter,

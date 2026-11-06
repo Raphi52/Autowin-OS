@@ -1,10 +1,10 @@
 /**
  * LES PROJETS PARTAGÉS DU BOARD — la liste à cocher du rouage ⚙ posé à côté du bouton 📁 (demande du
- * 2026-10-28, conv-1211 : « dans le board je veux qu'on puisse choisir quel CWD on partage »). Elle
- * avait son propre bouton « Projets : … » ; depuis conv-1230 (« un ptit bouton rouage qui contiendra
+ * 2026-10-28, : « dans le board je veux qu'on puisse choisir quel CWD on partage »). Elle
+ * avait son propre bouton « Projets : … » ; (« un ptit bouton rouage qui contiendra
  * projet, le bouton refresh et le nom d'usage »), c'est `RouageDuBoard` qui l'ouvre.
  *
- * Le dossier du Board (conv-1206) recopiait TOUS les projets sur le partage de l'équipe. Ce menu
+ * Le dossier du Board recopiait TOUS les projets sur le partage de l'équipe. Ce menu
  * coche ceux qui partent : un projet = un dossier de travail (ou une catégorie) de la barre latérale.
  * « Tous, y compris les prochains » rend le choix ouvert (`null`) ; dès qu'on décoche un projet, la
  * liste devient explicite et un projet nouveau ne part plus sans être coché
@@ -23,7 +23,7 @@ export interface ProjetAffiche {
   cle: string
   libelle: string
   demandes: number
-  /** Le dossier du Chat que la croix de la ligne retire ; absent = pas de croix (conv-1212). */
+  /** Le dossier du Chat que la croix de la ligne retire ; absent = pas de croix. */
   retirable?: string
 }
 
@@ -39,7 +39,7 @@ export function ProjetsPartagesDuBoard({
   choisis: readonly string[] | null
   onChoisir: (projets: string[] | null) => void
   /**
-   * La croix au bout d'une ligne (conv-1212) : retire le dossier de la liste des dossiers de travail
+   * La croix au bout d'une ligne : retire le dossier de la liste des dossiers de travail
    * du Chat, la même que la croix du menu « Ranger dans… » — il quitte le Chat ET le Board.
    */
   onRetirer?: (chemin: string) => void

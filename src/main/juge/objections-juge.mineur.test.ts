@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { objectionsDuJuge, verdictAvecObjectionsPortees, dodDuVerdict } from './objections-juge'
 
-// conv-844 (2026-09-24) : run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont une puce
+// 2026-09-24 : run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont une puce
 // MINEUR etait un vrai trou. Decision utilisateur : tout defaut du juge, meme MINEUR, bloque la
 // cloture verte. Seuls les constats OK passent (remplace la regle de la saisie ts 1789462078031).
 describe('une objection MINEUR bloque un VALIDE ; seul OK passe', () => {
@@ -24,7 +24,7 @@ describe('une objection MINEUR bloque un VALIDE ; seul OK passe', () => {
 })
 
 /*
- * fix-ok: run-0940cc5e0fcd-1 (conv-857, 2026-09-26), reparation 13 (rouge 2/5 avant le correctif) : le juge rend « VALIDE / SCORE 86 ». Sa puce
+ * fix-ok: run-0940cc5e0fcd-1 (2026-09-26), reparation 13 (rouge 2/5 avant le correctif) : le juge rend « VALIDE / SCORE 86 ». Sa puce
  * « OK: Chaque correction annoncee existe dans le code : » porte 9 SOUS-puces indentees, toutes des
  * constats. Sans etiquette propre, elles etaient retenues comme objections : le controle final a
  * recite 8 d'entre elles en « Promis mais pas fait » (slice 0..8) et masque les 4 vraies reserves MINEUR.

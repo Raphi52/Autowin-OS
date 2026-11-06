@@ -12,7 +12,7 @@ import {
 } from './relais-appel-repris'
 
 /**
- * conv-1535 (tour 7fa28264, 2026-11-04) : l'app redémarre 12 s après la 2e action ; le CLI continue
+ * tour 7fa28264, 2026-11-04 : l'app redémarre 12 s après la 2e action ; le CLI continue
  * seul 20 min et le fil ne reçoit plus aucune ligne d'action ni d'étape. Ces flux reprennent la
  * forme mesurée dans `run-stdout/addf0f1f-….stdout.jsonl` (CLI Claude, `stream-json`).
  */

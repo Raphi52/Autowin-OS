@@ -58,7 +58,7 @@ describe('frame-cas-limites — la garde de handoff', () => {
   })
 
   /*
-   * UN TABLEAU EST UNE ENUMERATION (conv-981, 2026-10-15) : le cadrage du run
+   * UN TABLEAU EST UNE ENUMERATION (2026-10-15) : le cadrage du run
    * traite-ensemble-5-candidats-issus-scout-mv9lnufa listait 18 cas limites en tableau ; la garde ne
    * comptait que les puces, a vu 0 cas et a renvoye le cadrage a `frame` -- deux passes payees pour
    * reecrire les memes cas en puces. L'en-tete et la ligne de separation ne sont PAS des cas.

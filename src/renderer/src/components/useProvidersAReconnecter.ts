@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
  *
  * Une anomalie n'était visible qu'en OUVRANT l'onglet concerné : un provider expiré partait donc au
  * prompt suivant sans que rien ne l'annonce depuis l'onglet voisin. Cette sonde vivait dans Agent
- * Studio ; elle a suivi l'onglet Routage dans Settings (conv-963, 2026-10-15). Même contrat qu'avant :
+ * Studio ; elle a suivi l'onglet Routage dans Settings (2026-10-15). Même contrat qu'avant :
  * LECTURE seule, uniquement pendant que la vue est ouverte, relue quand les rôles changent (une
  * reconnexion faite depuis Routage émet `refresh/roles`).
  */

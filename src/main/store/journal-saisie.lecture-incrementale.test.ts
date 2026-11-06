@@ -1,5 +1,5 @@
 /**
- * conv-1077 (2026-10-22) : `saisies-utilisateur.jsonl` (2,64 Mo) était relu EN ENTIER à chaque message
+ * 2026-10-22 : `saisies-utilisateur.jsonl` (2,64 Mo) était relu EN ENTIER à chaque message
  * (`rattacherSaisieAuTour` via src/main/chat/run-pilot-chat.ts:250), à chaque ouverture de fil
  * (`lireOrientationsRattachees`, index.ts) et par le dossier kaizen — sur le fil principal. Disque
  * lent : 7 gels pour 56,2 s du 03/09 au 22/10, plus 4 lectures pour 26,7 s côté orientations.
@@ -27,7 +27,7 @@ vi.mock('node:fs', async (importOriginal) => {
   return { ...reel, default: { ...reel, readFileSync, readSync }, readFileSync, readSync }
 })
 
-// conv-1368 : rattacher et orientations lisent hors du fil principal ; leurs octets comptent pareil.
+// Rattacher et orientations lisent hors du fil principal ; leurs octets comptent pareil.
 vi.mock('node:fs/promises', async (importOriginal) => {
   const reel = await importOriginal<typeof import('node:fs/promises')>()
   const open = (async (...args: Parameters<typeof reel.open>) => {

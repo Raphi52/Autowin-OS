@@ -152,7 +152,7 @@ describe('createBrainTitresDuTour — le branchement du tour de chat', () => {
     expect(traces[0]).toMatchObject({ found: false, status: 'unavailable', injectedChars: 0 })
   })
 
-  // conv-1053 (2026-10-22) : la trace ne disait que « unavailable ». Départager un délai dépassé
+  // 2026-10-22 : la trace ne disait que « unavailable ». Départager un délai dépassé
   // d'un refus du serveur a demandé de recouper chaque trace avec l'heure de début de son tour.
   it('une indisponibilité trace son motif exact et la durée de l’appel', async () => {
     const { titres, traces } = monter(async () => ({
@@ -182,7 +182,7 @@ describe('createBrainTitresDuTour — le branchement du tour de chat', () => {
 })
 
 /**
- * BRAIN PERSO DANS LES NOTES PROCHES (conv-1233, 2026-10-28, demande utilisateur : « cherche aussi
+ * BRAIN PERSO DANS LES NOTES PROCHES (2026-10-28, demande utilisateur : « cherche aussi
  * dans le Brain perso et montre ses notes avec le préfixe perso: »).
  */
 describe('createBrainTitresDuTour — Brain perso', () => {
@@ -319,7 +319,7 @@ describe('createBrainTitresDuTour — Brain perso', () => {
   })
 })
 
-// conv-1303 (2026-10-30) : messages de l'app sans sujet propre, et mémoire qui survit au redémarrage.
+// 2026-10-30 : messages de l'app sans sujet propre, et mémoire qui survit au redémarrage.
 describe('notes proches — bruit mesuré le 30/10', () => {
   beforeEach(() => {
     vi.stubEnv('AUTOWIN_BRAIN_CORPUS', '*')

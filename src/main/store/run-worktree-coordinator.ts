@@ -35,7 +35,7 @@ import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
  * fusion a 3 branches (pre-vol a blanc, sauvegarde, restauration au moindre doute).
  *
  * Accordee par l'utilisateur le 2026-08-27 (« l'echelle complete ») et redemandee le 2026-10-22
- * (conv-1086) : sans elle, aucun appel de production ne jouait ce barreau, et run-edcf9630aaf1-1,
+ * Sans elle, aucun appel de production ne jouait ce barreau, et run-edcf9630aaf1-1,
  * vert et juge a 88, a ete refuse en `base-dirty` sur des fichiers que la fusion savait garder.
  * Chaque fin de run qui publie la porte : fin normale, fin en production, reprise et repechage.
  */
@@ -183,7 +183,7 @@ export interface RunWorktreeCoordinatorDeps {
    * Aucune récupération : instance de TEST isolée (`--isolated-test-instance`). Elle a son propre
    * dossier de données mais partage le `.git` du vrai dépôt : sa récupération y adoptait les branches
    * `autowin/recovery/*`, et le balayage rejouait `git worktree add` sur le VRAI dépôt, sans aucun
-   * clic. Vécu le 29/10 (`lot5nav`) et le 30/10 (`sonde-fondu-conv-1322`), conv-1048.
+   * clic. Vécu le 29/10 (`lot5nav`) et le 30/10 (`sonde-fondu-conv-1322`).
    */
   sansRecuperation?: boolean
   /**
@@ -192,7 +192,7 @@ export interface RunWorktreeCoordinatorDeps {
    *
    * Sans elle, la liste des travaux non publiés ne se refait que sur NOS gestes (fin de run,
    * publication, tri) : une référence supprimée ou créée en ligne de commande y restait figée
-   * jusqu'au redémarrage — constaté le 2026-10-19 (conv-360) après un /salvage. Absente = ce
+   * jusqu'au redémarrage — constaté le 2026-10-19 après un /salvage. Absente = ce
    * comportement d'avant, gardé pour les tests qui n'ont pas de dépôt.
    */
   surveillerReferences?: (siChange: () => void) => (() => void) | undefined
@@ -264,7 +264,7 @@ function stateFromFinalize(res: FinalizeResult): WorktreeState {
 /**
  * L'etat suivi d'un run RECUPERE apres redemarrage, rebati depuis son manifeste. Une seule
  * definition pour `finalizeRecovered` et `finalizeRecoveredAsync`, qui la recopiaient champ par champ
- * (conv-1508) ; `files` est calcule par l'appelant, a la demande, comme avant.
+ * `files` est calcule par l'appelant, a la demande, comme avant.
  */
 function trackedRecupere(
   runId: string,
@@ -309,7 +309,7 @@ function trackedRecupere(
 
 /**
  * Le contexte que la reprise soumet a `validateRecoveryContext(Async)`, tire du manifeste. Une seule
- * definition pour les deux variantes de `finalizeRecovered`, qui le recopiaient (conv-1508).
+ * definition pour les deux variantes de `finalizeRecovered`, qui le recopiaient.
  */
 function contexteDeValidationRecuperee(
   record: WorktreeRunRecord
@@ -347,7 +347,7 @@ const DELAIS_REPRISE_PLANCHER = 5_000
 /**
  * UN RUN ARRÊTÉ PAR LE MUR DE QUOTA N'EST PAS UN RUN REFUSÉ.
  *
- * Mesuré le 2026-10-13 : deux runs (conv-914, conv-916) arrêtés sur « session limit · resets 1pm »,
+ * Mesuré le 2026-10-13 : deux runs arrêtés sur « session limit · resets 1pm »,
  * l'un en phase clean après un build déjà payé. La finalisation rouge les traitait comme un travail
  * jugé raté : copie vide libérée, copie pleine classée « triée ». Or leur reprise rouvre CETTE copie
  * (`resumeExisting`) : libérée, elle rend « copie durable absente » et la reprise échoue. Le run
@@ -1082,7 +1082,7 @@ export class RunWorktreeCoordinator {
        * Rendre `undefined` ici disait la meme chose que « rien a publier » : l'orchestrateur en
        * tirait un rouge « integration locale non terminee » SANS cause, alors que la reprise
        * (`scheduleRecoveryRetry`, arme juste au-dessus) publie ensuite normalement. Mesure
-       * conv-1 (2,13 $, 16 fichiers verts) et deja vecu conv-1404 sur `edit_file`.
+       * (2,13 $, 16 fichiers verts) et deja vecu sur `edit_file`.
        *
        * APPLIQUE AUX DEUX JUMEAUX (`end` et `endAsync`), comme le reste de ce fichier.
        */
@@ -1260,7 +1260,7 @@ export class RunWorktreeCoordinator {
        * Rendre `undefined` ici disait la meme chose que « rien a publier » : l'orchestrateur en
        * tirait un rouge « integration locale non terminee » SANS cause, alors que la reprise
        * (`scheduleRecoveryRetry`, arme juste au-dessus) publie ensuite normalement. Mesure
-       * conv-1 (2,13 $, 16 fichiers verts) et deja vecu conv-1404 sur `edit_file`.
+       * (2,13 $, 16 fichiers verts) et deja vecu sur `edit_file`.
        *
        * APPLIQUE AUX DEUX JUMEAUX (`end` et `endAsync`), comme le reste de ce fichier.
        */
@@ -1317,7 +1317,7 @@ export class RunWorktreeCoordinator {
        * `finalize` est une SEQUENCE : commit dans la copie, fusion dans la base, crochets, puis
        * rangement du dossier. Le worker signale `integrated` des que la fusion tient ; ce qui suit
        * peut encore etre coupe (budget d'UNE commande git donne a la sequence entiere). Mesure le
-       * 2026-08-27 (conv-1423) : `acfe64dd` etait dans `main` a 09:09:50, et le refus
+       * 2026-08-27 : `acfe64dd` etait dans `main` a 09:09:50, et le refus
        * `merge-failed / interrompue apres 32000 ms` est trace a 09:10:21 — le rapport CONTREDISAIT
        * le depot, et tous les workflows finissaient sur « ARRETE au controle final ».
        *
@@ -1552,7 +1552,7 @@ export class RunWorktreeCoordinator {
   }
 
   /**
-   * Meme pre-vol, sans tenir la boucle (balayage de fond, conv-1055). `undefined` = base illisible.
+   * Meme pre-vol, sans tenir la boucle (balayage de fond). `undefined` = base illisible.
    * Un manager sans version asynchrone (doubles de test au contrat minimal) repond par la version
    * synchrone : le produit, lui, expose toujours `baseDirtyFilesAsync`.
    */
@@ -1589,7 +1589,7 @@ export class RunWorktreeCoordinator {
   /**
    * Les références git ont bougé — geste de l'app OU geste fait à la main en ligne de commande.
    *
-   * Défaut du 2026-10-19 (conv-360) : un /salvage supprime treize références par
+   * Défaut du 2026-10-19 : un /salvage supprime treize références par
    * `git update-ref -d`, et `get_state` liste encore l'une d'elles. Rien ne refaisait le relevé :
    * ses seuls déclencheurs étaient nos propres gestes. On écoute maintenant le dépôt lui-même.
    *
@@ -1633,7 +1633,7 @@ export class RunWorktreeCoordinator {
     /*
      * AUCUNE EXPIRATION PAR LE TEMPS — le relevé ne se refait que sur un FAIT.
      *
-     * Mesure du 2026-08-28 (détecteur de gel, conv-1511) : l'application se figeait 18 secondes
+     * Mesure du 2026-08-28 (détecteur de gel) : l'application se figeait 18 secondes
      * TOUTES LES 60 SECONDES pendant que l'utilisateur écrivait dans le chat — sept gels consécutifs
      * journalisés, 45 % du temps d'exécution passé fenêtre morte. La périodicité était exactement
      * celle de la TTL ci-dessous : à son expiration, `snapshot()` (appelé à chaque tour) relançait un
@@ -1646,7 +1646,7 @@ export class RunWorktreeCoordinator {
      * « la TTL est un pari sur le temps ; la fin d'un run est un fait connu d'ici ». Ce pari coûtait
      * 18 secondes de fenêtre morte par minute, pour une réponse que rien n'avait rendue fausse.
      *
-     * RÉSERVE établie le 2026-10-19 (conv-360) : ces appels ne couvraient que NOS gestes. Un geste
+     * RÉSERVE établie le 2026-10-19 : ces appels ne couvraient que NOS gestes. Un geste
      * git fait à la main (`git update-ref -d`, une branche supprimée) laissait la liste figée.
      * C'est la surveillance des références (`referencesGitChangees`) qui couvre ce fait-là — un
      * événement du dépôt, toujours pas une horloge.
@@ -1729,7 +1729,7 @@ export class RunWorktreeCoordinator {
    *
    * Le bandeau du chat relit `travauxNonPublies` toutes les 30 s. Sans ce geste, un travail juge
    * « deja repris dans la base sous une autre forme » revenait au tick suivant, indefiniment :
-   * `git cherry` ne voit pas une reecriture. Mesure du 2026-08-27 (conv-1424).
+   * `git cherry` ne voit pas une reecriture. Mesure du 2026-08-27.
    */
   marquerTravailTrie(agentId: string): boolean {
     const marque = this.manager.marquerTravailTrie?.(agentId) === true
@@ -1845,7 +1845,7 @@ export class RunWorktreeCoordinator {
    * qu'une copie n'a rien produit, et un « [] » par défaut ouvrirait cette porte à tort.
    *
    * La mesure compte aussi le travail DÉJÀ COMMITÉ dans la copie : `git status` seul l'ignorait, et
-   * run-bc699a65bae7-1 (conv-1074, 2026-10-22) — 35 fichiers commités par l'agent, fusion refusée
+   * run-bc699a65bae7-1 (2026-10-22) — 35 fichiers commités par l'agent, fusion refusée
    * `base-dirty` — a été déclaré intégré, sans que la cause atteigne le RUN.md. Les deux voies de
    * repli ne servent qu'un gestionnaire qui ne connaît pas encore cette mesure.
    */
@@ -3359,7 +3359,7 @@ export class RunWorktreeCoordinator {
      * 2026-10-22, une base illisible rendait une liste vide, lue « plus rien de sale » : le travail
      * repartait aussitot, sans plafond, au lieu d'attendre.)
      *
-     * UN SEUL `git status`, ASYNCHRONE, AVANT le tri (conv-1055) : il etait relance pour CHAQUE
+     * UN SEUL `git status`, ASYNCHRONE, AVANT le tri : il etait relance pour CHAQUE
      * candidat et en `execFileSync`, sur une minuterie de 5 min. Mesure le 2026-10-21 a 20:14
      * (`gels.jsonl`) : un seul de ces appels a fige la fenetre 60,1 s. Il n'est meme pas lance
      * quand aucun candidat REPECHABLE n'attend une base propre. Une lecture qui JETTE vaut une base

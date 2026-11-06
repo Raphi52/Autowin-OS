@@ -29,7 +29,7 @@ type Harness = Awaited<ReturnType<typeof mountChat>>
 const FULL = 'data:image/png;base64,YWJj'
 
 /**
- * DEMANDE du 2026-10-10 (conv-167) : « en mode mosaique met une miniature des images comme en mode
+ * DEMANDE du 2026-10-10 : « en mode mosaique met une miniature des images comme en mode
  * conversation ». Le composer de la mosaïque affichait l'icône générique ▤ pour une image collée,
  * là où le chat plein montre la miniature cliquable. Cause : deux copies du même rendu de pièce
  * jointe, dont une seule avait reçu la miniature.

@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * LES SECTIONS DE SETTINGS EN LISTE À GAUCHE — demande de conv-1109 (2026-10-23) : « dans les
+ * LES SECTIONS DE SETTINGS EN LISTE À GAUCHE — demande (2026-10-23) : « dans les
  * settings je veux que les noms des sections soient une liste à gauche des views comme les convs ».
  * Avant : une rangée de pastilles dans la barre du haut (`nav.domain-tabs` de ViewTopBar). Ce fichier
  * verrouille la nouvelle forme : une colonne de sections À GAUCHE du contenu, une ligne par section,
@@ -79,7 +79,7 @@ describe('Settings — les sections en liste à gauche', () => {
   it('une ligne par section, dans l’ordre d’avant', async () => {
     await render('behaviour')
     expect(lignes().map((b) => b.textContent?.trim())).toEqual([
-      // « Skills · Hooks · Gates · Mods · Tools » découpé, une section par mot (conv-1109,
+      // « Skills · Hooks · Gates · Mods · Tools » découpé, une section par mot (
       // 2nd tour : « sépare la partie avec 4 mots en 4 views » — le libellé en comptait 5).
       'Skills',
       'Hooks',

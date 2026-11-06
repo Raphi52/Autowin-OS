@@ -8,7 +8,7 @@ import { refusReglageProd } from './prod-run-guard'
 import { reglagesCliAutowin } from '../providers/claude'
 
 // fix-ok: rouge mesuré 3/4 avant correctif — le hook PreToolUse (scriptHookGardes) ne contenait que refusGitDestructeur, sans refusReglageProd ; les 3 édits de ce fichier = création + faute de saisie, pas des essais à l'aveugle.
-// Faille 2 (conv-738) : les réglages de la protection de prod ne se touchent pas par le terminal
+// Faille 2 : les réglages de la protection de prod ne se touchent pas par le terminal
 // ni par les outils d'édition de l'agent, qui ne passent pas par la commande `run`.
 function hook(entree: unknown): string {
   const script = join(mkdtempSync(join(tmpdir(), 'garde-prod-')), 'garde.mjs')

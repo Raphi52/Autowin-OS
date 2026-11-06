@@ -1,5 +1,5 @@
 /**
- * UNE ORIENTATION N'EST PAS UNE REPONSE (conv-50, 2026-09-01).
+ * UNE ORIENTATION N'EST PAS UNE REPONSE (2026-09-01).
  *
  * Vecu : l'utilisateur clique une reponse du bloc `ask`, le bloc affiche « Répondu — écrivez la
  * suite dans le composer », et RIEN ne part. Preuve hors-modele : `saisies-utilisateur.jsonl`, qui
@@ -7,7 +7,7 @@
  * atteint le chemin d'envoi.
  *
  * Cause : le verrou durable du bloc est « un message utilisateur existe-t-il APRES ce tour ? ». Or
- * depuis le correctif de conv-38 (meme jour), le texte tape PENDANT un tour est ecrit dans le fil
+ * depuis le correctif (meme jour), le texte tape PENDANT un tour est ecrit dans le fil
  * comme un message utilisateur ordinaire. Toute orientation fermait donc les questions du tour, en
  * pretendant qu'elles etaient repondues.
  *

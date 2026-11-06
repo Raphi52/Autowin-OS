@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — ÉCRANS WORKTREES ET BUREAUX CACHÉS (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — ÉCRANS WORKTREES ET BUREAUX CACHÉS (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : WorktreeView, BureauxConserves, ConflitBureau, DiffView, les étiquettes du graphe git, et
  * HdeskGestionView (Bureaux cachés).
@@ -13,7 +13,7 @@ import { tableDeTextes } from '../textes'
  * volontairement identique au français (nom propre, nom de produit) se déclare dans
  * `IDENTIQUES_AU_FRANCAIS`, avec sa raison.
  *
- * RESTENT EN DUR, hors de cette table (lot « Worktrees et Bureaux cachés », conv-1170) :
+ * RESTENT EN DUR, hors de cette table (lot « Worktrees et Bureaux cachés ») :
  *  - `HEAD` (git-graph-refs.ts) : un mot de git, que `brancheDeCommit` relit et compare ;
  *  - `'branche inconnue'` (worktree-chef-de-projet.ts, `BRANCHE_INCONNUE`) : la CLÉ de regroupement
  *    des runs sans branche, que le code et ses tests relisent ; seul son affichage passe par

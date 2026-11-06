@@ -1,5 +1,5 @@
 // Édition d'un fichier dans une copie isolée (identité du bureau, mutation isolée, edit_file) : méthodes de
-// AppCommandBus sorties de commands.ts telles quelles (conv-1580, lot 6). Elles s'appellent entre elles par
+// AppCommandBus sorties de commands.ts telles quelles (lot 6). Elles s'appellent entre elles par
 // `bus.<méthode>()` : un test en remplace une sur l'instance (edit-file-portee.test.ts).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
@@ -86,7 +86,7 @@ export async function identiteDeBureau(
   /*
    * SORTIE COURTE : ne pas payer le recensement COMPLET pour une question a UN bureau.
    *
-   * Mesure le 2026-09-04 (conv-233) : ce recensement coute 18 699 ms avec 40 copies accumulees,
+   * Mesure le 2026-09-04 : ce recensement coute 18 699 ms avec 40 copies accumulees,
    * paye AVANT la moindre edition et dans le meme budget que l'operation worktree — au-dela du
    * delai, `edit_file` echoue sur « Operation worktree interrompue » sans avoir rien ecrit. Le
    * cout croit avec le nombre de copies : allonger le delai deplace le mur, il ne l'enleve pas.
@@ -177,7 +177,7 @@ export async function withIsolatedMutation<T>(
       /*
        * On juge ce que l'EDITION a pu casser, pas l'etat general du depot.
        *
-       * DEFAUT VECU le 22/08 (conv-1363) : le verdict etait GLOBAL, donc une edition SAINE de
+       * DEFAUT VECU le 22/08 : le verdict etait GLOBAL, donc une edition SAINE de
        * `orchestration-outcome.ts` a ete jetee parce que `Markdown.test.tsx` echouait — 11 tests
        * sur 62, sur le commit COMMITTE, sans rapport avec elle. « Le depot est-il vert ? » et
        * « cette edition a-t-elle casse quelque chose ? » ne sont pas la meme question des que la
@@ -210,7 +210,7 @@ export async function withIsolatedMutation<T>(
        * differentielle (option A du cadrage) doit lever ensuite.
        */
       /*
-       * UNE FEUILLE DE STYLE A UNE PORTEE, ELLE AUSSI — corrige le 2026-09-03 (conv-21).
+       * UNE FEUILLE DE STYLE A UNE PORTEE, ELLE AUSSI — corrige le 2026-09-03.
        *
        * DEFAUT VECU : corriger une couleur dans `ChatView.css` rejouait la SUITE ENTIERE. Elle
        * depasse le plafond de temps, donc l'edition etait refusee sans qu'aucun verdict n'existe —
@@ -246,7 +246,7 @@ export async function withIsolatedMutation<T>(
        */
       let cibleEffective: readonly string[] = cible
       /*
-       * LE STOP ATTEINT AUSSI CETTE VERIFICATION, comme `run` et `verify` (suite de conv-978).
+       * LE STOP ATTEINT AUSSI CETTE VERIFICATION, comme `run` et `verify`.
        *
        * Sans le signal du tour, une suite lancee ici continuait jusqu'a sa fin apres un Stop :
        * processus vivant derriere un tour clos. Une mesure coupee ne prouve rien, donc l'edition
@@ -445,7 +445,7 @@ export async function withIsolatedMutation<T>(
         /*
          * LA NATURE DE L'ECHEC EN TETE, avant la sortie brute.
          *
-         * Mesure le 2026-08-25 (conv-1404) : ce message etait generique, et une edition qui avait
+         * Mesure le 2026-08-25 : ce message etait generique, et une edition qui avait
          * produit du JSX aux balises desequilibrees se lisait comme « un test casse ». L'agent a
          * donc retente une correction de LOGIQUE, reproduisant huit fois la meme faute de balises
          * jusqu'a ce que le budget d'appels coupe le tour. Les deux natures appellent des gestes
@@ -488,7 +488,7 @@ export async function withIsolatedMutation<T>(
     /*
      * UN REPORT N'EST PAS UN ECHEC.
      *
-     * DEFAUT VECU le 2026-08-25 (conv-1404) : trois `edit_file` sur quatre ont rendu « publication
+     * DEFAUT VECU le 2026-08-25 : trois `edit_file` sur quatre ont rendu « publication
      * automatique incomplete » alors que les trois manifestes portaient `verdict: green,
      * publication: complete` et que les trois commits etaient dans `HEAD`. Le coordinateur rend
      * `undefined` quand la copie a encore des processus actifs — typiquement les workers `vitest`
@@ -519,7 +519,7 @@ export async function withIsolatedMutation<T>(
     ) {
       // CHAQUE issue porte son propre message. Les six retombaient sur « publication differee »,
       // un texte unique qui ne nommait jamais la cause et promettait un geste impossible sur
-      // `absente` et `libere`. Mesure conv-1407 : le meme refus mot pour mot, trois fois, puis un
+      // `absente` et `libere`. Mesure : le meme refus mot pour mot, trois fois, puis un
       // run arrete a 0,96 $ -- face a un refus qui ne dit pas ce qui s'est passe, l'agent ne peut
       // que retenter a l'identique. Le detail porte la CIRCONSTANCE, jamais le nom de l'outil :
       // `edit_file` est deja affiche au-dessus du message.
@@ -620,7 +620,7 @@ export async function runTracedEditFile(
       existsSync(absolutePath) ? readFileSync(absolutePath, 'utf8') : null
     )
     /*
-     * RÉSERVATION DES FICHIERS ENTRE FILS (conv-1083) : le même registre que le hook des agents
+     * RÉSERVATION DES FICHIERS ENTRE FILS : le même registre que le hook des agents
      * Claude, consulté AVANT la bifurcation dépôt d'Autowin / autre dépôt, pour tout modèle IA.
      * Un fichier qu'un autre fil a modifié et pas encore commité est refusé en nommant ce fil.
      */
@@ -633,7 +633,7 @@ export async function runTracedEditFile(
      *
      * Toute la machinerie qui suit (bureau isole, `vitest related`, publication) est faite POUR CE
      * DEPOT : elle cree un bureau depuis le git d'Autowin, resynchronise un chemin RELATIF a lui, et
-     * juge l'edition avec la suite de tests d'Autowin. Sur `D:\GIT\ContosoApp` (mesure conv-12),
+     * juge l'edition avec la suite de tests d'Autowin. Sur `D:\GIT\ContosoApp`,
      * rien de tout cela n'a de sens : ce depot a son propre git, sa branche, sa compilation .NET.
      * L'appliquer la-bas ne protegerait rien — il refuserait tout, ou publierait ailleurs.
      * L'utilisateur garde la main sur la verification chez lui : c'est exactement ce qu'il a annonce

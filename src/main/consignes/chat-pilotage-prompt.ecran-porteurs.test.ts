@@ -1,5 +1,5 @@
 /**
- * QUI PORTE LA REGLE « PAS D'APPLI SUR L'ECRAN DE L'UTILISATEUR » (scout du 05/11, piste 16, conv-1602).
+ * QUI PORTE LA REGLE « PAS D'APPLI SUR L'ECRAN DE L'UTILISATEUR » (scout du 05/11, piste 16).
  *
  * Le commentaire de `REGLES_ECRAN_UTILISATEUR` disait « cette prose est le SEUL porteur de la
  * regle ». Faux dans un run : l'orchestrateur y pose `AUTOWIN_HDESK_ID`, et le mod Autowin

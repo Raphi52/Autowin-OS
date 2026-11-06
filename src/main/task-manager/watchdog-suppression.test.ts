@@ -8,10 +8,10 @@ import { isDeliberateAbort, isNonActionableWall, suppressionFor } from './watchd
  *
  * Motivation mesurée : sur 952 conversations, 720 portent un échec, amplifié par 2248 alertes
  * « 🚨 Auto-Kaizen suspendu ». Une part de ces alertes vient d'échecs NON actionnables passés à
- * travers la suppression — dont le token OAuth expiré de conv-1086.
+ * travers la suppression — dont le token OAuth expiré.
  */
 describe('suppression — un token d’auth expiré est un MUR, pas un défaut à kaizen', () => {
-  // La chaîne EXACTE vue sur conv-1086 (2026-08-13).
+  // La chaîne EXACTE vue (2026-08-13).
   const conv1086 =
     'Failed to authenticate. API Error: 401 OAuth access token has expired. Re-authenticate to continue.'
 
@@ -64,7 +64,7 @@ describe('suppression — un token d’auth expiré est un MUR, pas un défaut �
  * câblage sont partis) : il ne reste qu'un garde à vérifier, celui de ce module.
  */
 describe('suppression — le marqueur [abort] est un abandon voulu', () => {
-  // La chaîne EXACTE du Journal de conv-14 (2026-09-02), telle qu'elle remonte au garde.
+  // La chaîne EXACTE du Journal (2026-09-02), telle qu'elle remonte au garde.
   const conv14 =
     'Phase kaizen — appel du rôle subagent INTERROMPU avant sa fin : [abort] claude CLI interrompu : ' +
     "arret demande par l'utilisateur (Stop du chat) · last-event=none · stderr=none. Ce n'est pas " +

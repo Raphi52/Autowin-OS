@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { attendUneDecision, isBlocked, mentionDEtatDuRun } from './run-blocked'
 
 /**
- * LA RÈGLE DU « RUN BLOQUÉ » FACE À UN RUN QUI ATTEND SA PUBLICATION (conv-1455, 2026-11-03).
+ * LA RÈGLE DU « RUN BLOQUÉ » FACE À UN RUN QUI ATTEND SA PUBLICATION (2026-11-03).
  *
- * conv-1431 (`mvz01n0m`) : juge VALIDE, fusion refusée `base-dirty`, RUN.md clos `red` avec une DoD
+ * `mvz01n0m` : juge VALIDE, fusion refusée `base-dirty`, RUN.md clos `red` avec une DoD
  * à 3 sur 4 (la case du commit). Il restait « bloqué » dans la liste servie à chaque tour, alors que
  * le coordinateur le repêchait seul et qu'il a été publié une heure plus tard (b0c4cad9).
  *

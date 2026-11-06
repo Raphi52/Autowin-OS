@@ -20,7 +20,7 @@ import {
 } from '../providers/types'
 
 /**
- * UN FIL AU COMPTE CHOISI GARDE CE COMPTE D'UN BOUT À L'AUTRE DU TOUR (conv-1416, 2026-11-01).
+ * UN FIL AU COMPTE CHOISI GARDE CE COMPTE D'UN BOUT À L'AUTRE DU TOUR (2026-11-01).
  *
  * Câblé sur le VRAI `ProviderRegistry` : c'est la jonction registre → tour qui compte. Le compte
  * actif de l'application bouge sous le fil (un autre fil tourne, ou un compte tombe) : le fil choisi

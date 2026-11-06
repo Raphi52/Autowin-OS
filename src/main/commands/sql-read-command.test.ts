@@ -171,7 +171,7 @@ describe('runSqlRead — invocation de sqlcmd', () => {
   })
 
   /**
-   * DEUX BINAIRES PORTENT LE NOM `sqlcmd` — conv-152, 2026-09-02. Sur un poste équipé du portage
+   * DEUX BINAIRES PORTENT LE NOM `sqlcmd`, 2026-09-02. Sur un poste équipé du portage
    * moderne (`go-sqlcmd`), CHAQUE lecture échouait sur « Sqlcmd: 'f': Unknown Option » : `-f` n'a
    * jamais existé dans cette variante, qui écrit déjà de l'UTF-8. L'option doit donc SAUTER là, et
    * rester présente sur le sqlcmd historique (test précédent) — sans quoi les accents y reviennent
@@ -254,7 +254,7 @@ describe('runSqlRead — lecture du résultat', () => {
   })
 
   /**
-   * Défaut vécu (conv-1168, 27/10/2026, relevé par la maintenance du 28/10) : un agrégat sur une
+   * Défaut vécu (27/10/2026, relevé par la maintenance du 28/10) : un agrégat sur une
    * colonne qui contient des NULL fait écrire à SQL Server, APRÈS le JSON, l'avertissement « Warning:
    * Null value is eliminated by an aggregate or other SET operation. » (gravité 10, donc code de
    * sortie 0 même avec `-b`). Le JSON, valide, était rejeté en « Réponse illisible ».

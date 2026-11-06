@@ -16,7 +16,7 @@ import { roots, tempRepo } from './worktree-manager.test-helpers'
 /**
  * L'ECHEC SILENCIEUX DE `balayerLeChemin`.
  *
- * Mesure conv-1483 : 10 copies residuelles, ~413 Mo. Le balayage tente `worktree remove` SANS
+ * Mesure : 10 copies residuelles, ~413 Mo. Le balayage tente `worktree remove` SANS
  * `--force` ; s'il echoue et que la copie est encore ENREGISTREE, la fonction rend `false` sans
  * rien tenter d'autre et sans laisser aucune trace. Le residu revient a chaque demarrage, invisible.
  *
@@ -157,7 +157,7 @@ describe('balayerLeChemin escalade au lieu d’echouer en silence', () => {
 })
 
 /**
- * UNE JONCTION QUE `delierLesDependances` NE CONNAÎT PAS, mesuré le 2026-10-05 (conv-108).
+ * UNE JONCTION QUE `delierLesDependances` NE CONNAÎT PAS, mesuré le 2026-10-05.
  *
  * Le `node_modules` du HAUT de la copie est délié par `cleanupWorktree` avant toute suppression
  * (`delierLesDependances`, appelé dès le retrait doux). Mais une jonction posée PLUS BAS — un

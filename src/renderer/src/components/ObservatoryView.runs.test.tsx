@@ -120,7 +120,7 @@ describe('Observatory — vue globale des RUN.md', () => {
     const sansDecision = lignes.find((element) => element.textContent?.includes('zeta'))
     expect(decision?.textContent).toContain('en attente de votre décision')
     expect(decision?.textContent).not.toContain('bloqué')
-    // Objection du contrôle final (conv-1337) : la ligne disait « décision » pendant que le compteur
+    // Objection du contrôle final : la ligne disait « décision » pendant que le compteur
     // juste au-dessus disait « 1 bloqué(s) » et que le liseré rouge marquait un run sans issue.
     expect(decision?.getAttribute('data-run-blocked')).toBe('false')
     expect(sansDecision?.getAttribute('data-run-blocked')).toBe('true')
@@ -160,7 +160,7 @@ describe('Observatory — vue globale des RUN.md', () => {
     ) as HTMLButtonElement
     expect(saut.getAttribute('data-conversation-id')).toBe('conv-2')
     await act(async () => saut.click())
-    // La vue est bien passée sur conv-2 : ses sources ont été rechargées POUR cette conversation.
+    // La vue est bien passée : ses sources ont été rechargées POUR cette conversation.
     expect(promptCalls).toHaveBeenCalledWith('conv-2')
   })
 

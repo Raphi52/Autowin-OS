@@ -5,7 +5,7 @@ import { AVATARS, HEURE_DE_POINTE, MARCHES } from './home-decor-foule'
 import { TRIBUS } from './home-decor-foule-tribus'
 
 /**
- * LE TAGGEUR, REJOUÉ PAR UN HUMAIN RÉEL (conv-312) : « met un pieton taggeur aussi ». Il bombe le mur
+ * LE TAGGEUR, REJOUÉ PAR UN HUMAIN RÉEL : « met un pieton taggeur aussi ». Il bombe le mur
  * tagué de l'avenue, à côté des passants, du deal et du fumeur.
  *
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE FICHIER :

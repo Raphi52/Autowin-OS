@@ -3,7 +3,7 @@ import { useAtterrissage } from './anneau-activite-calcul'
 import { eclatDuTicket, type TicketTreatmentStatus } from './ticket-treatment'
 
 /**
- * LA BULLE DE CONVERSATION D'UN TICKET (conv-981, 2026-10-16) : sa teinte porte l'etat du traitement
+ * LA BULLE DE CONVERSATION D'UN TICKET (2026-10-16) : sa teinte porte l'etat du traitement
  * (TicketsView.css) et changeait d'un coup. Elle glisse maintenant d'une teinte a l'autre, et lance
  * UN eclat quand le traitement passe d'en cours a traite (`eclatDuTicket`).
  *

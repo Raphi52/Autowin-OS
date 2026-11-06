@@ -60,7 +60,7 @@ export interface AskDecision {
    */
   choixMultiple?: boolean
   /**
-   * QUI POSE LA QUESTION, quand ce n'est pas l'agent du chat (conv-1008). Absent = l'agent du chat
+   * QUI POSE LA QUESTION, quand ce n'est pas l'agent du chat. Absent = l'agent du chat
    * via `ask`. `run` = le run orchestre lui-meme, a la fin de son travail : le bloc porte alors
    * l'en-tete « Message du run », son resume et une croix pour le fermer.
    */
@@ -93,7 +93,7 @@ function optionNormalisee(valeur: unknown): AskOption | null {
     if (!libelle) return null
     /*
      * Une option en chaîne nue n'a pas d'`envoi` : son libellé EST le prompt qui repart. Le couper
-     * à l'affichage coupait donc l'ordre envoyé — mesuré conv-767 (2026-09-21) : le mode auto a
+     * à l'affichage coupait donc l'ordre envoyé — mesuré (2026-09-21) : le mode auto a
      * envoyé « …la mettre comme bras B dans le proc » et « …test repond-a ». L'affichage reste
      * plafonné ; le texte complet repart, sous le plafond d'une ligne envoyée.
      */
@@ -120,7 +120,7 @@ function optionNormalisee(valeur: unknown): AskOption | null {
 }
 
 /**
- * LA QUESTION DU RUN (conv-1008) : une action `orchestrate` livree qui porte `messageDuRun`.
+ * LA QUESTION DU RUN : une action `orchestrate` livree qui porte `messageDuRun`.
  *
  * Elle passe par `parseAskDecision` plutot que par un chemin a part : le verrou « deja repondu »
  * (`askReponseDuFil`), le mode auto (`reponseAutoAuDernierAsk`, qui refuse seul une reponse

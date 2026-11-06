@@ -77,7 +77,7 @@ export function decodeRoleBinding(value: unknown): RoleBinding | undefined {
 
 /** Clé du réglage « modèle des petites tâches », posée à côté des quatre rôles. */
 const CLE_PETITES_TACHES = 'petitesTaches'
-/** Interrupteur du build trivial sur Haiku (conv-1097, `roles.ts` modeleDuBuildTrivial). */
+/** Interrupteur du build trivial sur Haiku (`roles.ts` modeleDuBuildTrivial). */
 const CLE_BUILD_TRIVIAL = 'buildTrivialSurHaiku'
 
 function decodeRoleBindings(value: unknown): RolesPersistes | undefined {

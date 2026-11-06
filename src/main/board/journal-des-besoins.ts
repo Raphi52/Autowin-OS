@@ -1,5 +1,5 @@
 /**
- * LE JOURNAL DES BESOINS — `besoins.jsonl` (carte des besoins, lot 2, conv-1089, 2026-10-22).
+ * LE JOURNAL DES BESOINS — `besoins.jsonl` (carte des besoins, lot 2, 2026-10-22).
  *
  * Une ligne par TOUR DE CHAT, écrite à sa fin : qui a demandé, quand, dans quel fil, et ce que
  * l'agent a déclaré (`AUTOWIN_BESOIN_V1` : nouveau besoin, suite, ou pas un besoin).
@@ -41,7 +41,7 @@ export interface EvenementDuJournal {
   demandeur: (IdentiteGit & { dossier: string }) | null
   /** `null` = la réponse ne portait pas de ligne lisible. */
   besoin: LigneBesoin | null
-  /** Ligne recopiée d'un message de la source par une branche du fil (conv-1578) : aucun tour ici. */
+  /** Ligne recopiée d'un message de la source par une branche du fil : aucun tour ici. */
   recopieDe?: { conversationId: string; messageId: string }
 }
 
@@ -60,7 +60,7 @@ export type ExecGit = (args: readonly string[], dossier: string) => Promise<stri
 
 /**
  * Hors du fil principal (`execution-hors-fil.ts`) : la CRÉATION de ce `git config` a tenu la fenêtre
- * 19,3 s en 6 appels dans une seule session (`gels.jsonl`, 2026-10-31 — conv-1413).
+ * 19,3 s en 6 appels dans une seule session (`gels.jsonl`, 2026-10-31).
  */
 const execGitParDefaut: ExecGit = async (args, dossier) =>
   (
@@ -111,7 +111,7 @@ export async function identiteGitDuDossier(
 /**
  * Identités gardées en mémoire quelques minutes : un tour ne doit pas payer un `git` à chaque fois.
  *
- * `servirLaPerimee` (le Board, conv-1248) : une valeur expirée est rendue tout de suite pendant que
+ * `servirLaPerimee` (le Board) : une valeur expirée est rendue tout de suite pendant que
  * la relecture tourne, pour la fois suivante. Sans cela, toute ouverture du Board plus de 5 min après
  * la précédente attendait ~30 `git config` (0,36 à 0,54 s mesurés). Le journal des tours ne s'en sert
  * pas : il relève l'identité DU tour, pas celle d'il y a 5 minutes.
@@ -233,7 +233,7 @@ export function creerJournalDesBesoins(deps: {
   /**
    * Une branche du fil recopie ses messages sous des identifiants neufs (`messagesRecopies`) : elle
    * reprend ce que le journal sait de chacun — demandeur, heure, ligne de besoin. Sans cela, une
-   * QUESTION recopiée devenait une demande sans fiche (conv-1578 : 7 sur 35, conv-1498). Rend le
+   * QUESTION recopiée devenait une demande sans fiche (7 sur 35). Rend le
    * nombre de lignes écrites ; rejouée, elle n'écrit rien.
    */
   recopierLaBranche: (entree: {

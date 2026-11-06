@@ -47,11 +47,11 @@ import {
 import { isChatNearBottom } from './chat-view-model'
 
 /**
- * ASCENSEUR DU FIL À CRANS — « 1 · Dépli en place » (draft conv-1114, 2026-10-23).
+ * ASCENSEUR DU FIL À CRANS — « 1 · Dépli en place » (2026-10-23).
  *
  * Au repos : une barre fine de 18 px à la place de l'ascenseur du système, un cran dégradé par
  * message de l'utilisateur. Dès la molette (ou une prise de la barre), elle se DÉPLIE en carte du
- * fil de 36 px (72 avant conv-1202 : divisée par 2 pour laisser la place au texte), par-dessus
+ * fil de 36 px (72 : divisée par 2 pour laisser la place au texte), par-dessus
  * le bord du texte : ses bulles en dégradé, les réponses en pavés gris,
  * la vue en cadre. Elle se replie 1 s après l'arrêt, sauf si la souris est dessus.
  * L'aimant : une fin de molette tout près d'un message le cale à 10 px du haut. La barre est aussi
@@ -124,7 +124,7 @@ export function AscenseurDuFil({
     cranSousPoignee: Repere | null
   } | null>(null)
   const derniereMoletteRef = useRef(0)
-  /** Sens du dernier cran de molette : l'aimant ne tire la vue que dans ce sens (conv-1139). */
+  /** Sens du dernier cran de molette : l'aimant ne tire la vue que dans ce sens. */
   const sensMoletteRef = useRef<-1 | 0 | 1>(0)
   const minuteurRepliRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const minuteurFinRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -134,12 +134,12 @@ export function AscenseurDuFil({
    * Le message sur lequel la vue vient d'être amenée (clic sur un cran, aimant) : c'est LUI que le
    * maintien garde en place tant que le fil se réagence, jusqu'au prochain geste. Sans lui, le
    * maintien reprenait l'élément du haut de la vue pendant le trajet et déplaçait la bulle arrivée à
-   * 10 px de 22 à 43 px (trace de la sonde, conv-1114).
+   * 10 px de 22 à 43 px (trace de la sonde).
    */
   const ancreRef = useRef<HTMLElement | null>(null)
   /**
    * La ligne lue du dernier maintien, et la place où il a laissé la vue : le repli de la carte
-   * reprend la ligne tenue à l'ouverture si tu n'as pas bougé entre-temps (conv-1143).
+   * reprend la ligne tenue à l'ouverture si tu n'as pas bougé entre-temps.
    */
   const pointLuRef = useRef<{ point: PointDeLecture; posee: number } | null>(null)
   /** Horodatage de la dernière image où le glissement a posé la vue (voir le maintien). */
@@ -171,7 +171,7 @@ export function AscenseurDuFil({
       if (!conteneur) return
       arreterGlissement()
       // La vue glisse ELLE-MÊME, image par image : `scrollTo({ behavior: 'smooth' })` sautait d'un
-      // coup sur ce poste, qui a la réduction des animations active (conv-1114, « pas fluide »).
+      // coup sur ce poste, qui a la réduction des animations active (« pas fluide »).
       // Vers un MESSAGE, la cible est relue à chaque image : la carte qui s'ouvre décale le fil et
       // réagence le texte au-dessus pendant le trajet (bulle arrivée à 53 px au lieu de 10 sinon).
       ancreRef.current = vers?.element ?? null
@@ -313,7 +313,7 @@ export function AscenseurDuFil({
     }
     const surMolette = (event: WheelEvent): void => {
       // En butée (tout en haut vers le haut, tout en bas vers le bas), rien ne défile : la carte ne
-      // s'ouvre pas et ne prolonge pas son ouverture (conv-1114).
+      // s'ouvre pas et ne prolonge pas son ouverture.
       if (!moletteFaitDefiler(event.deltaY, lireGeo(conteneur))) return
       arreterGlissement()
       ancreRef.current = null
@@ -341,7 +341,7 @@ export function AscenseurDuFil({
     []
   )
 
-  // LA CARTE DÉCALE LA CONVERSATION (conv-1114 : « ça doit décaler la conv et pas la masquer ») :
+  // LA CARTE DÉCALE LA CONVERSATION (« ça doit décaler la conv et pas la masquer ») :
   // pendant qu'elle est ouverte, le fil réserve sa place à droite (AscenseurDuFil.css,
   // `data-ascenseur`), au même rythme qu'elle. La marge de départ se lit fil replié.
   // Le texte se réagence sur la nouvelle largeur : la ligne lue est tenue en place, image par image,
@@ -353,7 +353,7 @@ export function AscenseurDuFil({
     if (!conteneur) return
     if (deplie === (conteneur.dataset.ascenseur === 'deplie')) return
     if (maintienRef.current) cancelAnimationFrame(maintienRef.current)
-    // Message retenu PÉRIMÉ (conv-1139) : la vue a quitté sa place par un autre moyen que la barre
+    // Message retenu PÉRIMÉ : la vue a quitté sa place par un autre moyen que la barre
     // (clavier, recherche…). Le tenir ici recalerait la vue sur lui à l'ouverture ou à la fermeture.
     // Mesuré AVANT que la largeur change : sa place calée est encore exacte.
     const retenu = ancreRef.current?.isConnected ? ancreRef.current : null
@@ -377,7 +377,7 @@ export function AscenseurDuFil({
         : pointDeLecture(conteneur)
     let precedent = lu ? hautDuPointLu(lu, conteneur) : 0
     // Place laissée à chaque image : le navigateur BORNE la vue quand le fil raccourcit sous elle,
-    // et le maintien doit le savoir pour ne pas compenser deux fois (conv-1143).
+    // et le maintien doit le savoir pour ne pas compenser deux fois.
     const auBas = (): boolean => isChatNearBottom(conteneur, 1)
     let posee = conteneur.scrollTop
     let auBasAvant = auBas()
@@ -390,7 +390,7 @@ export function AscenseurDuFil({
       // bonne place, compenser en plus la déplacerait deux fois. Y compris dans l'image où le
       // glissement vient de FINIR : lancé au clic, il passe avant le maintien dans chaque image, et
       // sa dernière image se déclarait finie juste avant que le maintien compense le même
-      // réagencement une seconde fois (vue 22 à 43 px trop loin, trace conv-1114 sur conv-1113).
+      // réagencement une seconde fois (vue 22 à 43 px trop loin).
       const pilotee =
         glissementRef.current !== 0 ||
         imageDuGlissementRef.current === t ||
@@ -417,7 +417,7 @@ export function AscenseurDuFil({
       }
       // La ligne lue ne change que si la vue a bougé : ta molette, un glissement, la barre. Reprise
       // à chaque image, elle changeait d'élément pendant que le texte se réagençait, et la vue ne
-      // revenait pas à sa place au repli (conv-1143).
+      // revenait pas à sa place au repli.
       const retenuMaintenant = ancreRef.current?.isConnected ? ancreRef.current : null
       if (retenuMaintenant) lu = { element: retenuMaintenant, noeud: null, decalage: 0 }
       else if (!lu || !pointEncoreLa(lu) || !garderLePointLu(departImage, posee, pilotee))
@@ -461,7 +461,7 @@ export function AscenseurDuFil({
     event.clientY - event.currentTarget.getBoundingClientRect().top
 
   /*
-   * LA BARRE EST UN CURSEUR (conv-1114 : « la barre doit slider et je dois pouvoir clicker n'importe
+   * LA BARRE EST UN CURSEUR (« la barre doit slider et je dois pouvoir clicker n'importe
    * où dessus »). Avant, seul un appui sur la poignée (20 px) faisait glisser, et un clic allait au
    * message le plus proche, pas à l'endroit cliqué. Maintenant :
    *  - appui n'importe où : la vue y glisse (cadre centré sur la souris ; sur un cran, ton message) ;
@@ -482,9 +482,9 @@ export function AscenseurDuFil({
     const v = poignee(g, H)
     const surPoignee = py >= v.haut - 2 && py <= v.haut + v.hauteur + 2
     const vise = cranSousPointeur(py, crans, g.scrollHeight, H)
-    // LA POIGNÉE D'ABORD : dans un fil dense (24 crans sur conv-1113), elle recouvre presque toujours
+    // LA POIGNÉE D'ABORD : dans un fil dense (24 crans), elle recouvre presque toujours
     // un cran, et l'appui partait vers ce message au lieu de l'attraper — saut de 837 px mesuré par
-    // la sonde du curseur (conv-1114). Attrapée, elle ne saute pas ; un simple clic dessus mène
+    // la sonde du curseur. Attrapée, elle ne saute pas ; un simple clic dessus mène
     // quand même au cran qu'elle couvre (au relâchement).
     if (!surPoignee) {
       if (vise) {
@@ -566,7 +566,7 @@ export function AscenseurDuFil({
   const allume = survol ?? cale
   const yApercu = survol ? Math.max(18, Math.min(H - 18, y(survol.haut))) : 0
 
-  // TROIS APERÇUS, carte ouverte (conv-1114 : « ça doit afficher que celui d'en bas et celui
+  // TROIS APERÇUS, carte ouverte (« ça doit afficher que celui d'en bas et celui
   // au-dessus de là où je suis », après un essai à tous les aperçus qui couvraient le texte d'un long
   // fil ; puis « montre aussi le message d'avant celui que je lis ») : le message d'avant, celui dont
   // tu lis la réponse et le suivant, chacun en face de son cran. Compacts seulement si la barre est
@@ -702,7 +702,7 @@ export function AscenseurDuFil({
             />
           ))}
         </svg>
-        {/* CLIQUABLES (conv-1114 : « un clic amène son message en haut de la vue ») : l'appui
+        {/* CLIQUABLES (« un clic amène son message en haut de la vue ») : l'appui
             s'arrête ici, sinon la barre le prendrait pour une prise du curseur à cette hauteur. */}
         {etiquettes.items.map(({ cran, y: centre }) => (
           <button

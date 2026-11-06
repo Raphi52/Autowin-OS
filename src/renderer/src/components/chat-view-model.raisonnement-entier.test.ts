@@ -3,7 +3,7 @@ import { reduceAssistantPilotEvent, RAISONNEMENT_MAX } from './chat-view-model'
 import { createChatTurn, reduceChatTurn, REASONING_MAX } from '../../../shared/chat-turn'
 
 /**
- * Constat utilisateur du 2026-10-28 (conv-1228) : « le texte du raisonnement disparait […] le petit
+ * Constat utilisateur du 2026-10-28 : « le texte du raisonnement disparait […] le petit
  * 1 commence a disparaitre comme si y avait un nb de caracteres max ». Le direct ne gardait que les
  * 4 000 DERNIERS caracteres (et le tour enregistre la meme borne) : des qu'une pensee depassait
  * environ 600 mots, son debut — le point « 1. » — sortait du bloc pendant qu'on le lisait. Le

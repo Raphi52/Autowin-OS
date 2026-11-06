@@ -1,9 +1,9 @@
 /**
- * LE RÉSULTAT VALIDÉ PART AVANT LA FIN DU RUN (piste 3 de conv-914).
+ * LE RÉSULTAT VALIDÉ PART AVANT LA FIN DU RUN (piste 3).
  *
  * Le résultat ne sortait qu'au retour du run, APRÈS les étapes jouées après la validation
  * (enregistrement des leçons, récupération) : l'utilisateur attendait pour lire un travail déjà
- * validé (3 min 49 sur conv-911 d'après l'analyse de conv-914). L'orchestrateur envoie donc cette
+ * validé (3 min 49 d'après l'analyse). L'orchestrateur envoie donc cette
  * étape dès la validation ; l'ordre des étapes suivantes, `valid` et `gate` ne changent pas.
  *
  * OÙ ELLE SE LIT : onglet « Runs » du panneau de droite (`WorkflowsPanel` → `StepThread` →

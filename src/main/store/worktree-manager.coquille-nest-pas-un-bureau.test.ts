@@ -5,7 +5,7 @@ import { WorktreeManager } from './worktree-manager'
 import { git, roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
- * LE DÉFAUT, vécu le 2026-08-27 (conv-1428).
+ * LE DÉFAUT, vécu le 2026-08-27.
  *
  * Un salvage retire un bureau par `git worktree remove`. Git supprime les fichiers VERSIONNÉS, mais
  * pas `node_modules` — ignoré, donc jamais à lui. Le dossier `agent__<id>` survit ainsi sans son

@@ -1290,9 +1290,9 @@ describe('références d’agents — ce qui rend un run rattachable', () => {
 })
 
 /**
- * LA PÉREMPTION DE 36 H DOIT TOMBER SUR UN RUN QUI ÉCHOUE À CHAQUE DÉMARRAGE (conv-1589, 2026-11-05).
+ * LA PÉREMPTION DE 36 H DOIT TOMBER SUR UN RUN QUI ÉCHOUE À CHAQUE DÉMARRAGE (2026-11-05).
  *
- * Mesuré sur `run-49e50da90997-1` (conv-1461) : `startedAt` = `updatedAt` = l'heure de la dernière
+ * Mesuré sur `run-49e50da90997-1` : `startedAt` = `updatedAt` = l'heure de la dernière
  * reprise ratée. L'écriture d'ouverture de chaque reprise (`orchestrator-run.ts`, avant la copie de
  * travail) datait le checkpoint de maintenant : refusée aussitôt, la reprise remettait l'horloge à
  * zéro, 33 démarrages de suite. L'entrée qui ferait échouer ces tests si la correction était fausse :

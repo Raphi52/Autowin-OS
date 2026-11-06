@@ -10,7 +10,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 /**
  * UN VERDICT RENDU DANS UN DOSSIER PARTAGÉ NE PROUVE RIEN.
  *
- * DÉFAUT MESURÉ le 2026-09-02 (conv-133) : pendant un lot de tests, un autre agent a réécrit
+ * DÉFAUT MESURÉ le 2026-09-02 : pendant un lot de tests, un autre agent a réécrit
  * `src/main/runs/conv-runs.ts` à 14:23:44 puis l'a remis à l'identique. La suite a échoué au
  * chargement sur un fichier sain — un faux rouge. La même fenêtre rend un faux VERT possible.
  *
@@ -114,7 +114,7 @@ describe('verify — la suite tourne dans une copie isolée, à l’état couran
   })
 
   /*
-   * FAUX ROUGE MESURÉ le 2026-10-17 (conv-313). La copie de vérification naît sur `origin/main`, alors
+   * FAUX ROUGE MESURÉ le 2026-10-17. La copie de vérification naît sur `origin/main`, alors
    * que la branche locale avait 13 commits pas encore poussés. Seuls les fichiers NON COMMITÉS y
    * étaient reportés : la copie recevait le `src/main/index.ts` modifié, mais gardait les VIEUX
    * `commands.ts` et `relance-auto-moteur.ts`, commités localement. `verify type:typecheck` rendait
@@ -155,7 +155,7 @@ describe('verify — la suite tourne dans une copie isolée, à l’état couran
   })
 
   /*
-   * FAUX ROUGE MESURÉ le 2026-10-31 (conv-1376). La copie vit d'une vérification à l'autre, et seuls
+   * FAUX ROUGE MESURÉ le 2026-10-31. La copie vit d'une vérification à l'autre, et seuls
    * les chemins que git nomme dans le dépôt y sont reportés. Un autre fil a réécrit des tests, un
    * `verify` les a recopiés, puis ce fil les a rétablis : git ne les nommait plus, et la copie les a
    * gardés. Résultat, `verify` rendait 6 erreurs de typage et un test rouge sur un fichier supprimé

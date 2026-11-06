@@ -1,5 +1,5 @@
 /**
- * PETITE TV DU BUREAU CACHE (conv-528, 2026-09-13). Quand un agent travaille dans un bureau Windows
+ * PETITE TV DU BUREAU CACHE (2026-09-13). Quand un agent travaille dans un bureau Windows
  * cache (scripts/hdesk-lancer.ps1), le fil montre ce qui s'y passe, en lecture seule.
  *
  * - Bureaux VIVANTS : enumeres par le processus de capture (`list`). Un bureau ferme disparait de
@@ -98,7 +98,7 @@ function naissanceEmpreinte(empreinte: string): number | null {
 }
 
 /**
- * L'APPLICATION DU BUREAU VIT-ELLE ENCORE ? (conv-1592, scout conv-1576)
+ * L'APPLICATION DU BUREAU VIT-ELLE ENCORE ?
  *
  * Un numero de processus vivant ne suffit pas : Windows reattribue les numeros, et la TV restait
  * « en direct » sur un bureau vide des qu'un autre programme heritait du numero. Les scripts
@@ -140,7 +140,7 @@ export function fusionnerBureaux(
   const parId = new Map(registre.map((e) => [e.id, e]))
   const tous: BureauTv[] = vivants
     .filter((id) => ID_BUREAU.test(id))
-    // APP MORTE = BUREAU FINI (conv-536, 2026-09-24) : le bureau Windows survit a son application
+    // APP MORTE = BUREAU FINI (2026-09-24) : le bureau Windows survit a son application
     // (le capteur en tient une poignee), donc la TV restait « en direct » sur un Bloc-notes tue.
     .filter((id) => {
       const fiche = parId.get(id)
@@ -179,14 +179,14 @@ export function origineCapture(reponse: Record<string, unknown>): OrigineCapture
 }
 
 /**
- * CLIC DANS UNE IMAGE RECADREE (conv-1009, 2026-10-16) : « Action refusée : Aucune fenetre en
+ * CLIC DANS UNE IMAGE RECADREE (2026-10-16) : « Action refusée : Aucune fenetre en
  * (362,144) dans ce bureau ». La TV et la vue « Bureaux cachés » montrent une capture recadree autour
  * des fenetres, et le renderer rend le point en pixels de CETTE image ; hdesk-act.ps1 attend des
  * pixels de l'ECRAN du bureau. On ajoute donc l'origine du recadrage. Des coordonnees invalides
  * passent telles quelles : c'est argumentsAct qui les refuse, avec son message.
  */
 export function pointEcran(g: GesteTv, origine: OrigineCapture | undefined): GesteTv {
-  // Négatif = invalide aussi (conv-1457) : -1 + origine 7 donnait 6, un clic valide à un point jamais visé.
+  // Négatif = invalide aussi : -1 + origine 7 donnait 6, un clic valide à un point jamais visé.
   if (!origine || !Number.isFinite(g?.x) || !Number.isFinite(g?.y) || g.x < 0 || g.y < 0) return g
   return { ...g, x: g.x + origine.x, y: g.y + origine.y }
 }
@@ -247,7 +247,7 @@ export function purgerBureauxFermes(dossier: string, vivants: readonly string[])
       // Fichier encore tenu par un processus qui se termine : repris au prochain passage.
     }
   }
-  // JOURNAL DES GESTES (conv-344) : part avec son bureau, qu'il ait une fiche ou non (ui-capture-*).
+  // JOURNAL DES GESTES : part avec son bureau, qu'il ait une fiche ou non (ui-capture-*).
   for (const nom of existsSync(dossier) ? readdirSync(dossier) : []) {
     const m = /^([a-zA-Z0-9_-]+)\.gestes\.jsonl$/.exec(nom)
     if (!m || enVie.has(m[1])) continue
@@ -282,7 +282,7 @@ export class CapteurHdesk {
   private file: Promise<unknown> = Promise.resolve()
   private minuterie: NodeJS.Timeout | null = null
   private readonly dossierImages: string
-  /** Origine du recadrage de la derniere image rendue, par bureau (conv-1009). */
+  /** Origine du recadrage de la derniere image rendue, par bureau. */
   private readonly origines = new Map<string, OrigineCapture>()
 
   private readonly lancer: LanceurCapture
@@ -301,7 +301,7 @@ export class CapteurHdesk {
 
   async bureaux(conversationId?: string): Promise<BureauTv[]> {
     // fix-ok: cause mesurée 2026-10-22 — sans cette garde, un fil sans fiche lance PowerShell (test « aucune fiche » : 1 lancement au lieu de 0)
-    // AUCUNE FICHE POUR CE FIL = AUCUN POWERSHELL (conv-1077, 2026-10-22) : `fusionnerBureaux` ne
+    // AUCUNE FICHE POUR CE FIL = AUCUN POWERSHELL (2026-10-22) : `fusionnerBureaux` ne
     // rend que les bureaux dont la fiche porte ce fil ; sans fiche, la liste ne pouvait QUE finir vide,
     // et chaque fil ouvert relançait le processus de capture pour rien. La purge des fiches fermées
     // attend la prochaine vraie liste (un fil qui a un bureau, ou la vue « Bureaux cachés »).
@@ -317,7 +317,7 @@ export class CapteurHdesk {
   }
 
   /**
-   * TOUS les bureaux vivants, sans filtre par fil — pour la vue « Bureaux cachés » (conv-344, scout
+   * TOUS les bureaux vivants, sans filtre par fil — pour la vue « Bureaux cachés » (scout
    * n°7). Passe par CE processus déjà ouvert : la vue lançait un PowerShell neuf à chaque tour de
    * liste (0,92 s mesurées, toutes les 4 s). Purge au passage les fiches des bureaux fermés (n°13),
    * comme `bureaux()`, mais seulement sur une liste réellement obtenue.
@@ -357,7 +357,7 @@ export class CapteurHdesk {
     } catch (e) {
       return { statut: 'erreur', id, message: e instanceof Error ? e.message : String(e) }
     } finally {
-      // L'IMAGE PART EN MEMOIRE (dataUrl) : le fichier ne sert plus des la lecture. Demande conv-540
+      // L'IMAGE PART EN MEMOIRE (dataUrl) : le fichier ne sert plus des la lecture. Demande
       // (2026-09-15) : « les screenshots pris faut qu'ils soient nettoyes direct ».
       rmSync(png, { force: true })
     }
@@ -402,7 +402,7 @@ export class CapteurHdesk {
 
   private envoyer(commande: string): Promise<Reponse> {
     // fix-ok: cause mesurée 2026-10-22 — rearmer() avant demarrer() : lancement figé 300 ms pour 100 ms d’inactivité → « Processus de capture arrete. » (test rouge)
-    // MINUTEUR ARMÉ APRÈS LE LANCEMENT (conv-1077, 2026-10-22) : `spawn` est synchrone. Disque lent du
+    // MINUTEUR ARMÉ APRÈS LE LANCEMENT (2026-10-22) : `spawn` est synchrone. Disque lent du
     // 21/10 : il a figé l'app ~20 s, le minuteur de 8 s armé AVANT était expiré au retour, le processus
     // tué avant sa première réponse, relancé 500 ms plus tard — 6 lancements, 120,2 s figées.
     const p = this.demarrer()
@@ -504,7 +504,7 @@ export class CapteurHdesk {
 }
 
 /**
- * TV INTERACTIVE (conv-35, 2026-10-01) : « switcher vers les hdesk pour interagir avec ce qui s'y
+ * TV INTERACTIVE (2026-10-01) : « switcher vers les hdesk pour interagir avec ce qui s'y
  * passe ». Un geste de l'utilisateur dans la TV = un appel de scripts/hdesk-act.ps1 (messages fenêtre,
  * jamais la vraie souris ni le vrai clavier). Le script fait toujours un clic, puis la frappe éventuelle.
  */
@@ -514,7 +514,7 @@ export interface GesteTv {
   y: number
   texte?: string
   entree?: boolean
-  /** conv-35 : touche nommée (liste TOUCHES_TV), crans de molette (+ = haut), frappe sans reclic. */
+  /** Touche nommée (liste TOUCHES_TV), crans de molette (+ = haut), frappe sans reclic. */
   touche?: string
   molette?: number
   sansClic?: boolean
@@ -543,13 +543,13 @@ export const TOUCHES_TV = [
 ] as const
 
 /** Arguments PowerShell d'un geste ; lève si l'identifiant ou les coordonnées sont invalides. */
-/** hdesk-act.cs range x et y sur 16 bits (lParam) : au-delà, le clic partirait AILLEURS (conv-344). */
+/** hdesk-act.cs range x et y sur 16 bits (lParam) : au-delà, le clic partirait AILLEURS. */
 export const COORDONNEE_MAX = 32767
-/** Frappe bornée : un texte énorme bloquerait le geste jusqu'au délai de 20 s (conv-344). */
+/** Frappe bornée : un texte énorme bloquerait le geste jusqu'au délai de 20 s. */
 export const FRAPPE_MAX = 1000
 
 /**
- * `registre` : dossier du journal des gestes (`<id>.gestes.jsonl`, conv-344) ; absent = celui du script
+ * `registre` : dossier du journal des gestes (`<id>.gestes.jsonl`) ; absent = celui du script
  * (%LOCALAPPDATA%/autowin-hdesk, le même que CapteurHdesk). Les TESTS passent un dossier temporaire.
  */
 export function argumentsAct(racine: string, g: GesteTv, registre?: string): string[] {
@@ -596,7 +596,7 @@ export type ActionHdesk = {
   y?: number
   cible?: string
   messages?: unknown
-  /** Appui par nom (conv-1457) : l'élément visé et le moyen employé (`clic` ou `accessibilite:…`). */
+  /** Appui par nom : l'élément visé et le moyen employé (`clic` ou `accessibilite:…`). */
   element?: unknown
   appui?: string
 }
@@ -620,7 +620,7 @@ export function resultatAct(out: string): ResultatGeste {
 }
 
 /**
- * APPUI PAR NOM (conv-1457) : `element` = identifiant, nom ou libellé d'un élément de l'arbre
+ * APPUI PAR NOM : `element` = identifiant, nom ou libellé d'un élément de l'arbre
  * d'accessibilité du bureau (scripts/hdesk-arbre.cs). `origine` : celle de l'image que l'agent regarde,
  * pour que les positions citées dans un refus soient en pixels de SON image.
  */
@@ -690,11 +690,11 @@ export function agirHdesk(
 }
 
 /**
- * BASCULE DE L'ECRAN REEL (conv-35, option) : scripts/hdesk-basculer.ps1 porte lui-meme les trois
+ * BASCULE DE L'ECRAN REEL (option) : scripts/hdesk-basculer.ps1 porte lui-meme les trois
  * sorties (fenetre « Revenir », Échap, minuterie). Lance DETACHE : un arret ou un
  * plantage d'Autowin ne doit jamais laisser l'utilisateur sur le bureau cache.
  *
- * PAS DE `spawn(..., { detached: true })` (conv-951, 2026-10-16) : Windows PowerShell 5.1 lance en
+ * PAS DE `spawn(..., { detached: true })` (2026-10-16) : Windows PowerShell 5.1 lance en
  * DETACHED_PROCESS sort en ~0,1 s avec le code 0 SANS executer sa commande (mesure : `-Command "exit 7"`
  * rend 0 detache, 7 attache ; le journal « Windows PowerShell » n'avait jamais vu demarrer
  * hdesk-basculer.ps1). Le bouton rendait pourtant ok d'avance : echec muet. Le script part donc par
@@ -707,7 +707,7 @@ export const BASCULE_ATTENTE_MS = 30_000
 const BASCULE_SONDE_MS = 200
 
 /**
- * FERMER L'APP D'UN BUREAU CACHE (conv-222, lot 1 du RUN outils-agent-1-2-4-6-7) : scripts/hdesk-fermer.ps1
+ * FERMER L'APP D'UN BUREAU CACHE (lot 1 du RUN outils-agent-1-2-4-6-7) : scripts/hdesk-fermer.ps1
  * ferme PAR BUREAU, jamais par nom, et refuse le bureau d'une autre conversation. Codes du script :
  * 0 ferme / deja ferme · 1 entree invalide · 2 aucun bureau a ce nom · 5 autre conversation · 6 survivants.
  */
@@ -718,7 +718,7 @@ export type DemandeFermeture = {
 } & (
   | { conversationId: string; sansFiche?: false }
   /**
-   * BUREAU SANS FICHE (conv-344) : `-SansFiche` du script, reserve a la vue « Bureaux caches », sur le
+   * BUREAU SANS FICHE : `-SansFiche` du script, reserve a la vue « Bureaux caches », sur le
    * geste de l'utilisateur. Jamais de fil : le script refuse ce mode des qu'une fiche existe.
    * L'outil agent `bureau_cache_fermer` ne construit jamais cette forme.
    */

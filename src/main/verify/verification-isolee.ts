@@ -17,7 +17,7 @@ const executer = promisify(execFile)
 /**
  * LA VERIFICATION NE DOIT PAS SE JOUER DANS UN DOSSIER QUE QUELQU'UN D'AUTRE ECRIT.
  *
- * DEFAUT MESURE le 2026-09-02 (conv-133) : `verify` lance la suite dans l'espace de travail
+ * DEFAUT MESURE le 2026-09-02 : `verify` lance la suite dans l'espace de travail
  * PARTAGE. Pendant un lot de tests, un autre agent a reecrit `src/main/runs/conv-runs.ts` a
  * 14:23:44 puis l'a remis a l'identique — la suite a echoue au chargement (« Unterminated regular
  * expression ») sur un fichier qui n'avait aucun defaut. Un verdict qu'une ecriture concurrente
@@ -205,7 +205,7 @@ export function synchroniserBureauDeVerification(
 }
 
 /**
- * CE QUI EST COMMITE LOCALEMENT APRES LE COMMIT DE LA COPIE (conv-313, 2026-10-17).
+ * CE QUI EST COMMITE LOCALEMENT APRES LE COMMIT DE LA COPIE (2026-10-17).
  *
  * La copie nait sur `origin/main`, pas sur le commit LOCAL. Reporter seulement les fichiers non
  * commites laissait donc dans la copie la VIEILLE version de tout fichier commite localement mais
@@ -253,7 +253,7 @@ export async function fichiersCommitesHorsDeLaCopie(
 }
 
 /**
- * CE QUE LA COPIE GARDE DE LA VERIFICATION D'AVANT (conv-1376, 2026-10-31).
+ * CE QUE LA COPIE GARDE DE LA VERIFICATION D'AVANT (2026-10-31).
  *
  * La copie vit d'un `verify` a l'autre, et le depot ne nomme que ce qui y differe AUJOURD'HUI. Un
  * fichier recopie hier, puis retabli ou supprime par un autre fil, n'est plus nomme par personne :

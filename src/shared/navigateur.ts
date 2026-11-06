@@ -1,6 +1,6 @@
 /**
  * NAVIGATEUR INTÉGRÉ DU CHAT — le CONTRAT partagé entre le processus principal, le pont (preload) et
- * l'interface (conv-1286, lot 1/5, 2026-10-29).
+ * l'interface (lot 1/5, 2026-10-29).
  *
  * Pourquoi un fichier à part : quatre lots s'appuient dessus en parallèle (IPC, panneau, commandes de
  * l'agent, élément choisi envoyé au chat). Tout ce qu'ils échangent est décrit ICI, une seule fois ;
@@ -33,7 +33,7 @@ export interface DemandeAccordNavigateur {
 }
 
 /**
- * PAS-À-PAS (conv-1286, maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30) : chaque
+ * PAS-À-PAS (maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30) : chaque
  * geste de l'agent est noté dans un journal PAR FIL, que le panneau montre en frise de jalons ; le
  * pilotage du fil dit si ces gestes passent seuls, attendent un ordre, ou sont refusés.
  *

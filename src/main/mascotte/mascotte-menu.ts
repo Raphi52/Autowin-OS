@@ -1,5 +1,5 @@
 /**
- * LE CLIC DROIT SUR LA MASCOTTE : la liste des fils qui t'attendent (conv-1196, 2026-10-28 — scout
+ * LE CLIC DROIT SUR LA MASCOTTE : la liste des fils qui t'attendent (2026-10-28 — scout
  * « à quoi pourrait servir la mascotte », ligne 12 retenue par l'utilisateur).
  *
  * Le clic gauche n'ouvre que le fil le plus RÉCENT de l'état montré (`etatDeLaMascotte`,

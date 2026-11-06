@@ -35,7 +35,7 @@ describe('pickTurnToResume — reprise AUTOMATIQUE, sans popup', () => {
 
   /**
    * PEREMPTION — mesuree le 2026-08-18. `unfinishedTurns()` placait en tete DEUX tours de la veille
-   * (conv-1267, 1 evenement chacun), vestiges d'un processus tue avant leur cloture. Comme la
+   * (1 evenement chacun), vestiges d'un processus tue avant leur cloture. Comme la
    * reprise d'un tour inacheve est PRIORITAIRE sur la memoire de la derniere conversation ouverte,
    * l'utilisateur retombait a chaque demarrage sur cette conversation au lieu de son travail.
    */
@@ -69,7 +69,7 @@ describe('pickTurnToResume — reprise AUTOMATIQUE, sans popup', () => {
   })
 })
 
-// conv-1149 (2026-10-25) : le rejeu d'un tour encore en vol ne remplace plus son enregistrement.
+// 2026-10-25 : le rejeu d'un tour encore en vol ne remplace plus son enregistrement.
 describe('rejeuDejaEnregistre', () => {
   const enVol = { role: 'assistant', turnId: 'T', status: 'streaming', parts: [] }
 

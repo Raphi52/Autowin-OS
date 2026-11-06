@@ -5,7 +5,7 @@ import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView
 import { canonicalProjectPath } from '../../../shared/project-path'
 
 /**
- * « REVENIR À CE TOUR, CODE ET FIL » (conv-1038, 2026-10-21 — décision « branches-rewind », étape 2).
+ * « REVENIR À CE TOUR, CODE ET FIL » (2026-10-21 — décision « branches-rewind », étape 2).
  * Sous chacun de ses messages, l'utilisateur peut repartir de l'état du début de ce tour : le CODE
  * rouvert dans une copie séparée (le dossier partagé ne bouge pas) et le FIL arrêté juste avant le
  * message, ce fil travaillant dans cette copie. Le texte du message attend dans la saisie ; rien
@@ -18,7 +18,7 @@ import { canonicalProjectPath } from '../../../shared/project-path'
  * ouvrait quand même la branche et annonçait « Ce fil y travaille ». Le dossier part donc AVEC la
  * branche (`fork(…, { dossier })`), et la réponse est relue.
  *
- * fix-ok: cause mesurée (conv-1038, rejeu du 2026-10-21) — la branche était rattachée à sa copie par un 2e appel non relu. Entrée qui fait rougir une version fausse : un fork qui rend la branche SANS `projectPath`. Sans la relecture, « branche revenue SANS sa copie » est rouge ; avec un fork sans dossier, « RATTACHÉ à cette copie » est rouge.
+ * fix-ok: cause mesurée (rejeu du 2026-10-21) — la branche était rattachée à sa copie par un 2e appel non relu. Entrée qui fait rougir une version fausse : un fork qui rend la branche SANS `projectPath`. Sans la relecture, « branche revenue SANS sa copie » est rouge ; avec un fork sans dossier, « RATTACHÉ à cette copie » est rouge.
  */
 vi.mock('./Markdown', () => ({
   Markdown: ({ text }: { text: string }) => createElement('span', null, text),

@@ -7,7 +7,7 @@ import { projectScopeFromWorkspace, rememberFact } from './brain-remember'
 /**
  * LA PORTÉE D'UN FAIT NE SE DEVINE PAS.
  *
- * Mesuré le 2026-09-02 (conv-142) : `remember` refusé « portée manquante », rien d'écrit, et le
+ * Mesuré le 2026-09-02 : `remember` refusé « portée manquante », rien d'écrit, et le
  * modèle avait déjà annoncé le dépôt à l'utilisateur. La valeur qui a fait passer le second essai,
  * `autowin-os`, est le `name` du `package.json` du dépôt : Autowin la tenait de source sûre.
  *
@@ -72,7 +72,7 @@ describe('une portée absente est remplie depuis le projet', () => {
 /**
  * UN REFUS DOIT DIRE QU'IL N'A RIEN ÉCRIT.
  *
- * conv-142 : le compte-rendu ne portait que le motif de forme, et l'agent avait déjà annoncé
+ * Le compte-rendu ne portait que le motif de forme, et l'agent avait déjà annoncé
  * « je dépose la leçon ». Lire un motif ne lui disait pas que l'effet annoncé n'avait pas eu lieu.
  */
 describe('un refus de validation dit qu’il n’a rien écrit', () => {

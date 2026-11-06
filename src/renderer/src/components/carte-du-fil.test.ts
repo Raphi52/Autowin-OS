@@ -5,10 +5,10 @@ import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { MARQUE_REPRISE_APRES_QUOTA } from '../../../shared/reprise-quota'
 
 /**
- * CARTE DU FIL (conv-1059, 2026-10-22) — le calcul PUR de la ligne de métro qui remplace le carnet.
+ * CARTE DU FIL (2026-10-22) — le calcul PUR de la ligne de métro qui remplace le carnet.
  *
  * Les entrées qui font échouer une version fausse : une vérification RATÉE suivie d'une AUTRE qui
- * passe (conv-76 : `typecheck exit 1` puis `npm test exit 0` — le vert ne doit pas cacher le rouge) ;
+ * passe (`typecheck exit 1` puis `npm test exit 0` — le vert ne doit pas cacher le rouge) ;
  * la même commande rouge PUIS verte (la boucle normale : c'est prouvé) ; un tour fini SANS
  * vérification (jamais vert : auto-déclaré) ; un « go » (titré par la suite qu'il accepte, pas
  * « go ») ; un envoi du mode auto (titré par son prompt, pas par l'ancrage qui cite une autre
@@ -70,7 +70,7 @@ describe('carteDuFil — une étape par demande', () => {
 })
 
 /**
- * LE MESSAGE ENTIER POUR LA FICHE DU BOARD (conv-1278, 2026-10-29) : « je veux pouvoir voir les
+ * LE MESSAGE ENTIER POUR LA FICHE DU BOARD (2026-10-29) : « je veux pouvoir voir les
  * messages en entier quand j'ouvre le détail ». Entrées qui font échouer une version fausse : un
  * message de plusieurs lignes (le titre n'en garde qu'une), une ligne de plus de 240 caractères (la
  * borne de l'ancrage du mode auto), un journal collé de plusieurs pages (borné), un « go » (son texte
@@ -208,7 +208,7 @@ describe('carteDuFil — la couleur suit la PREUVE', () => {
   })
 })
 
-// LE BILAN DE L'EN-TÊTE (« Tout ensemble », /draft conv-1088, 2026-10-22) : une couleur = un compte,
+// LE BILAN DE L'EN-TÊTE (« Tout ensemble », 2026-10-22) : une couleur = un compte,
 // et le coût du fil n'additionne que les coûts CONNUS — l'étape à venir ne compte nulle part.
 describe('carteDuFil — le bilan de l’en-tête', () => {
   it('compte chaque couleur et additionne les seuls coûts connus', () => {
@@ -350,11 +350,11 @@ describe('carteDuFil — compactage et fichiers', () => {
 })
 
 /**
- * TESTS LANCÉS DANS LE TERMINAL DE L'AGENT (conv-1059, 2026-10-22). Le tour « vazy » de conv-1038
+ * TESTS LANCÉS DANS LE TERMINAL DE L'AGENT (2026-10-22). Le tour « vazy »
  * affichait 295/295 tests verts, joués par l'agent dans son propre terminal : sans leur code de
  * sortie, la carte le montrait « sans preuve ». Le tour garde maintenant ces codes
  * (`testsDuTerminal`) ; la carte les lit avec la MÊME règle que les `verify` : une commande = une
- * clé, la dernière issue compte, deux commandes différentes ne se rachètent pas (conv-76) — y
+ * clé, la dernière issue compte, deux commandes différentes ne se rachètent pas — y
  * compris d'une source à l'autre.
  *
  * fix-ok: mesuré le 01/11 sur les vraies conversations : 96 demandes de code refusées par un test,
@@ -453,7 +453,7 @@ describe('carteDuFil — les tests lancés dans le terminal de l’agent', () =>
     expect(etapes[0].statut).toBe('prouve')
   })
 
-  /* Objection du contrôle final (conv-1423) : la voie proposée par la relance laissait « Bloqué ». */
+  /* Objection du contrôle final : la voie proposée par la relance laissait « Bloqué ». */
   it('un `verify` sur le fichier de test rachète le rouge du terminal, avec son vrai libellé', () => {
     const { etapes } = carteDuFil({
       fil: [
@@ -480,7 +480,7 @@ describe('carteDuFil — les tests lancés dans le terminal de l’agent', () =>
     expect(etapes[0].statut).toBe('refuse')
   })
 
-  /* Objection du contrôle final (conv-1423) : un `cd` perdu donnait « Fait » à tort sur le Board. */
+  /* Objection du contrôle final : un `cd` perdu donnait « Fait » à tort sur le Board. */
   describe('un test lancé après un changement de dossier', () => {
     const ailleurs = (commande: string, codeDeSortie: number, at: number, cd: string): unknown => ({
       commande,

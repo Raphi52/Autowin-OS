@@ -7,7 +7,7 @@
  * sur le jeu statique historique — jamais d'écran vide.
  *
  * PUR (aucun React, aucun IPC) → testable directement. Rendu par `AnimationAccueilChat`, qui écrit
- * ces phrases une à une (conv-1401) ; le titre et le compte de chaque groupe ne s'affichent plus.
+ * ces phrases une à une ; le titre et le compte de chaque groupe ne s'affichent plus.
  */
 
 import { attendUneDecision, isBlocked } from '../../../shared/run-blocked'
@@ -24,7 +24,7 @@ export const STATIC_SUGGESTIONS = [
 ]
 
 /**
- * Les mêmes phrases, par clé de la table des textes (conv-1170) : la puce cliquée part telle
+ * Les mêmes phrases, par clé de la table des textes : la puce cliquée part telle
  * qu'affichée, donc dans la langue de l'interface. Même ordre que `STATIC_SUGGESTIONS`.
  */
 const CLES_STATIQUES = [
@@ -35,7 +35,7 @@ const CLES_STATIQUES = [
 ] as const
 
 /**
- * Ce que le cercle du film d'accueil invoque (conv-1401, « les phrases ca doit des usages de draft
+ * Ce que le cercle du film d'accueil invoque (« les phrases ca doit des usages de draft
  * scout judge kaizen etc... ») : de vraies skills, avec un usage concret. Le clic pose la phrase
  * entière dans la saisie, où elle se lit comme une commande. Les plus parlantes d'abord.
  */
@@ -91,11 +91,11 @@ export function buildHomeSuggestions(
 
   // LA règle unique (src/shared/run-blocked.ts), celle de get_state et de l'Observatoire. L'accueil
   // avait la sienne, par motif de texte sur le seul statut : elle ignorait `unknown`, les fossiles
-  // `running`/`pending` et toute case de DoD non cochée (conv-861, 2026-09-25).
+  // `running`/`pending` et toute case de DoD non cochée (2026-09-25).
   // Compter AVANT de couper : le sous-titre coupait la liste à 3 puis la comptait, et 7 runs
-  // bloqués s'affichaient « 3 » (conv-861, 2026-09-25). Seules les chips restent limitées à 3.
+  // bloqués s'affichaient « 3 » (2026-09-25). Seules les chips restent limitées à 3.
   // « Débloque » proposait de réparer un run validé dont la suite appartient à l'utilisateur
-  // (conv-1199) : ce run a son propre groupe, sous les runs bloqués. Cet accueil ne s'affiche que
+  // Ce run a son propre groupe, sous les runs bloqués. Cet accueil ne s'affiche que
   // sur un fil sans message : ce qui le garde visible partout ailleurs, c'est le Board.
   const aTraiter = (state.runs ?? []).filter((r) => isBlocked(r.summary))
   const decisions = aTraiter.filter((r) => attendUneDecision(r.summary))

@@ -1,8 +1,8 @@
 /* NAVIGATEUR INTÉGRÉ DU CHAT — bandeau du pas-à-pas et frise des gestes (maquette « 1 · Jalons »,
-   conv-1286, 2026-10-30).
+   2026-10-30).
    Fichier à part de `NavigateurIntegre.css` : `gen-malvoyant-planchers.mjs` écrit un bloc par feuille
    de style, et celui de `NavigateurIntegre.css` tient en une ligne que la refonte « Cadre de page »
-   (conv-1306, pas encore commitée) complète au même endroit. Ici, les deux travaux ne se croisent pas.
+   (pas encore commitée) complète au même endroit. Ici, les deux travaux ne se croisent pas.
    Un seul code couleur : `--jalon` dit la nature du geste, le dessin du point dit son état.
    Tailles en `font-size` et jamais dans le raccourci `font:` : le plancher des thèmes malvoyants ne
    lit que cette propriété. */
@@ -21,7 +21,7 @@
 .navigateur-pilotage.is-main {
   border-left-color: var(--cyan);
 }
-/* Pansement temporaire — cause réelle : la refonte « Cadre de page » (conv-1306, pas encore commitée
+/* Pansement temporaire — cause réelle : la refonte « Cadre de page » (pas encore commitée
    le 2026-10-30) réécrit les lignes de l'ancien bandeau ; les retirer ici ferait échouer la fusion
    à blanc du retour de ce lot. La phrase vit dans `.navigateur-pilotage` : l'ancienne ne se montre
    plus. Règle sans effet une fois la refonte commitée, à retirer alors. */
@@ -48,7 +48,7 @@
 /* Le dernier bouton est toujours celui qui change de conducteur : c'est lui qui doit se trouver vite. */
 .navigateur-pilotage-bouton:last-child {
   border-color: var(--gold);
-  /* Mêlé au texte : pur, `--gold` tombe à 4,3:1 sur le panneau en thème clair (conv-1324). */
+  /* Mêlé au texte : pur, `--gold` tombe à 4,3:1 sur le panneau en thème clair. */
   color: color-mix(in srgb, var(--gold) 65%, var(--text));
   font-weight: 600;
 }
@@ -137,8 +137,8 @@
 .navigateur-jalon.prochain .navigateur-jalon-verbe,
 .navigateur-jalon.refuse .navigateur-jalon-verbe {
   /* Texte de 10,5 px sur une surface plus foncée que le fond de page : pure, la teinte du jalon tombe
-     entre 3,8 et 4,3:1 en thème clair, 3,9:1 sur NieR:Automata (mesuré en vraie app, conv-1324).
-     fix-ok: conv-1324 (style calculé en vraie app, D:/tmp/lot3/run7.txt à run11.txt, puis run12.txt)
+     entre 3,8 et 4,3:1 en thème clair, 3,9:1 sur NieR:Automata (mesuré en vraie app).
+     fix-ok: (style calculé en vraie app, D:/tmp/lot3/run7.txt à run11.txt, puis run12.txt)
      — cause : les jetons --gold et --err tiennent 4,5:1 sur le FOND de page, pas sur la surface du
      panneau, plus foncée (clair : verbe en cours 4,3, refusé 4,04 ; NieR 3,91). Puis l'opacité de 85 %
      posée sur tout le jalon prochain retirait encore du contraste à son verbe (NieR 4,47, run12). */

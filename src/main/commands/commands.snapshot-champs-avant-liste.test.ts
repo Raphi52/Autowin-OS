@@ -3,7 +3,7 @@ import { AppCommandBus } from './commands'
 import { bornerResultatDeCommande } from '../chat/resultat-de-commande-borne'
 
 /**
- * DÉFAUT MESURÉ le 2026-10-22 (conv-1048, passe /maintenance). `get_state` rendait les 908
+ * DÉFAUT MESURÉ le 2026-10-22 (passe /maintenance). `get_state` rendait les 908
  * conversations AVANT tout le reste : la sortie dépassait le plafond de 120 000 caractères
  * (`resultat-de-commande-borne.ts`) et la coupe emportait `travauxNonPublies`, placé en dernier.
  * Le modèle ne lisait donc JAMAIS le champ que la description de l'outil lui ordonne de consulter

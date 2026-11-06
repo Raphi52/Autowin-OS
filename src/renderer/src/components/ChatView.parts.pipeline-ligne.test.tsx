@@ -54,7 +54,7 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
       ]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    // CAPSULE 2 (conv-194, 2026-10-10, choix de l'utilisateur sur maquettes) : une orchestration
+    // CAPSULE 2 (2026-10-10, choix de l'utilisateur sur maquettes) : une orchestration
     // seule est une capsule ; UN clic sur son en-tete montre chaque phase avec son prompt et son
     // rendu — plus de chevron par etage ni par ligne (« j'arrive pas a me rendre compte de comment
     // voir le detail »).
@@ -94,7 +94,7 @@ describe('chaque ligne du pipeline se deplie sur son prompt et sa decision', () 
       ]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    // CAPSULE 2 (conv-194, 2026-10-10, choix de l'utilisateur sur maquettes) : une orchestration
+    // CAPSULE 2 (2026-10-10, choix de l'utilisateur sur maquettes) : une orchestration
     // seule est une capsule ; UN clic sur son en-tete montre chaque phase avec son prompt et son
     // rendu — plus de chevron par etage ni par ligne (« j'arrive pas a me rendre compte de comment
     // voir le detail »).

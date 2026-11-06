@@ -11,7 +11,7 @@ export function depuis(dateIso: string, maintenant: number = Date.now()): string
   const instant = Date.parse(dateIso)
   if (!Number.isFinite(instant)) return dateIso
   const secondes = Math.round((instant - maintenant) / 1000)
-  // `fr` tel qu'avant en français ; la locale de la langue sinon (conv-1170).
+  // `fr` tel qu'avant en français ; la locale de la langue sinon.
   const locale = langue === 'fr' ? 'fr' : localeDeLangue(langue)
   const format = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' })
   const paliers: Array<[Intl.RelativeTimeFormatUnit, number]> = [

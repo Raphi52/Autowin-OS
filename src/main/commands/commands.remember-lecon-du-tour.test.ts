@@ -6,8 +6,8 @@ import { configureAutowinAppDataBase } from '../app/app-data'
 import { AppCommandBus } from './commands'
 
 /*
- * UN SEUL `learningOutcome` PAR TOUR NE VEUT PAS DIRE UNE SEULE NOTE (kaizen de conv-1332, sur le
- * dossier de conv-1306). Tour 72a6a446-668f-4d7a-ba3c-fe092a0d5a02, action natif:2:20 : l'agent
+ * UN SEUL `learningOutcome` PAR TOUR NE VEUT PAS DIRE UNE SEULE NOTE (kaizen, sur le
+ * dossier). Tour 72a6a446-668f-4d7a-ba3c-fe092a0d5a02, action natif:2:20 : l'agent
  * voulait corriger sa note, devenue fausse après un correctif du même tour. Le refus disait « aucun
  * doublon écrit » sans dire que la voie restait ouverte ; il a conclu qu'il ne pouvait rien faire,
  * et la note périmée est restée en revue. Rien ne bloquait pourtant un `remember` ordinaire.

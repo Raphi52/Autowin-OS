@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 
 /**
- * Capacite manquante mesuree le 2026-09-05 (conv-297 -> conv-300) : un agent pouvait CREER une
+ * Capacite manquante mesuree le 2026-09-05 : un agent pouvait CREER une
  * conversation mais rien y lancer. `runPrompt` — deja utilise par les taches planifiees — sait
  * pourtant demarrer un vrai tour dans un fil nomme. Ce test verrouille son cablage sur
  * `chat_send` : avec `conversationId`, le message devient un tour REEL dans ce fil (le pilote y

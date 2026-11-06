@@ -80,7 +80,7 @@ const WORK_ITEM_TYPE_PATTERN = /^[A-Za-z][A-Za-z0-9 _-]{0,63}$/
  * Bornes de l'ENRICHISSEMENT remonté du fournisseur (discussion + titre des relations).
  *
  * La discussion d'une fiche est souvent l'information décisive : elle passe ENTIÈRE. Avant
- * (conv-1228, 2026-10-28), on n'en gardait que 20 messages de 2 000 caractères, sans le dire : l'agent
+ * (2026-10-28), on n'en gardait que 20 messages de 2 000 caractères, sans le dire : l'agent
  * lisait une fiche amputée sans le savoir. Le budget d'un prompt se règle chez le consommateur qui
  * en a un (`ticket-treatment.ts`), pas ici pour tout le monde. Seul un message démesuré — une image
  * collée en ligne — est borné, et la coupe est ÉCRITE dans le texte.

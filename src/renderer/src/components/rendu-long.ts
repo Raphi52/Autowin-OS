@@ -43,11 +43,11 @@ export function signalerRenduLong(
     // Un sous-bloc mesure DANS la vue (harnais ChatView) donne son nom : `vue-chat-fil`, pas `vue-chat`.
     const bloc = sousBlocDominant(id)
     const etiquette = `vue-${bloc}`.slice(0, 48)
-    // Gel du FIL : il emporte ses messages les plus lourds (conv-1077). Chaque ligne du fil rend
+    // Gel du FIL : il emporte ses messages les plus lourds. Chaque ligne du fil rend
     // AVANT la vue qui l'englobe (React appelle les Profiler internes d'abord) : ils sont deja notes.
     const messages = bloc === 'chat-fil' ? messagesLesPlusLourds() : []
     // Gel de la LISTE : le rendu qui vient de se clore (`noterRendu`, appelé juste avant par
-    // VueMesuree) — ses lignes redessinées et ce qui l'a déclenché (conv-1115).
+    // VueMesuree) — ses lignes redessinées et ce qui l'a déclenché.
     const liste = bloc === VUE_LISTE ? dernierPassageDeListe() : undefined
     if (messages.length > 0) api.signalerGelRenderer(ms, etiquette, { messages })
     else if (liste) api.signalerGelRenderer(ms, etiquette, { liste })
@@ -123,7 +123,7 @@ export function sousBlocDominant(id: string, maintenant: number = Date.now()): s
 }
 
 /**
- * LE FIL MESURE MESSAGE PAR MESSAGE (conv-1077, 2026-10-22). `renderer:vue-chat-fil` = 28 gels pour
+ * LE FIL MESURE MESSAGE PAR MESSAGE (2026-10-22). `renderer:vue-chat-fil` = 28 gels pour
  * 62,4 s depuis le 15/10 (pire 7,6 s), mais le fil etait mesure D'UN BLOC : rien ne disait QUEL
  * message coutait. Chaque ligne (`ChatMessageRow`) note son propre rendu ici, dans un registre A PART
  * — le melanger a `rendusRecents` changerait le sous-bloc dominant des vues.
@@ -164,7 +164,7 @@ export function messagesLesPlusLourds(
 }
 
 /**
- * LA LISTE DES CONVERSATIONS MESURÉE LIGNE PAR LIGNE (conv-1115, 2026-10-23).
+ * LA LISTE DES CONVERSATIONS MESURÉE LIGNE PAR LIGNE (2026-10-23).
  * `renderer:vue-chat-liste` = 18 gels pour 73 s depuis le 20/10 (pire 12,9 s), et aucun ne disait
  * combien de lignes la liste avait redessinées ni quelle donnée avait changé : le diagnostic /gel n'a
  * pas pu trancher entre une liste remplacée en entier et une machine saturée.

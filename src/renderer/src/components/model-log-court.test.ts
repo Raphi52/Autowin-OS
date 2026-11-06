@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { detailCourt, titreCourt } from './model-log-court'
 
 /**
- * Logs « une ligne » (conv-247, 2026-10-11, maquette tour 4 piste 2 « Titres raccourcis » choisie
+ * Logs « une ligne » (2026-10-11, maquette tour 4 piste 2 « Titres raccourcis » choisie
  * par l'utilisateur) : sur une seule ligne, « Appel modèle — claude-opus-5-5 » prenait toute la
  * place et le détail tombait à « e. ». Le titre et les chiffres sont raccourcis À L'AFFICHAGE ; le
  * texte complet reste dans la ligne dépliée, et le filtre cherche toujours dans le texte complet.

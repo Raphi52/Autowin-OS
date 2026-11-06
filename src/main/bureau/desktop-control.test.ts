@@ -58,7 +58,7 @@ describe('desktop control validation', () => {
 
   it('lit une liste de gestes envoyée en TEXTE JSON par l’outil direct', () => {
     // L'outil direct ne transmet que des chaînes (`schemaEntree`, skill-node-mcp.ts) : `actions`
-    // arrivait en texte et desktop_act refusait TOUJOURS ses gestes (mesuré 3 fois en conv-942).
+    // arrivait en texte et desktop_act refusait TOUJOURS ses gestes (mesuré 3 fois).
     expect(
       parseDesktopActions('[{"type":"click","x":500,"y":320},{"type":"key","keys":["CTRL","A"]}]')
     ).toEqual([
@@ -174,7 +174,7 @@ describe('WindowsDesktopController', () => {
         { type: 'key', keys: ['CTRL', 'A'] }
       ])
       // Le repere est RENDU avec le geste : observer un moniteur puis le bureau entier change la
-      // conversion des coordonnees, et l appelant ne pouvait pas s en apercevoir (conv-342).
+      // conversion des coordonnees, et l appelant ne pouvait pas s en apercevoir.
     ).resolves.toEqual({
       executed: 2,
       repere: { largeur: 2000, hauteur: 1000, originX: -1000, originY: 0 }
@@ -199,7 +199,7 @@ describe('WindowsDesktopController', () => {
 
   it('LAISSE LE DEPLACEMENT ETRE DIGERE avant d appuyer, sinon le clic atterrit ou la souris trainait', async () => {
     /**
-     * VECU le 2026-09-09 (conv-363) : trois clics vises sur « Parametres audio » ont ouvert des
+     * VECU le 2026-09-09 : trois clics vises sur « Parametres audio » ont ouvert des
      * conversations de la liste voisine — la ou l'utilisateur avait laisse sa souris. Les
      * coordonnees etaient JUSTES (la conversion 0-1000 est testee plus haut) : c'est l'appui qui
      * partait dans le meme lot d'entrees que le mouvement, donc Chromium testait la cible sur la

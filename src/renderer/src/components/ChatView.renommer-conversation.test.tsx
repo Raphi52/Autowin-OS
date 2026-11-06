@@ -140,7 +140,7 @@ describe('renommer une conversation depuis la barre latérale', () => {
     expect(promptSpy, 'window.prompt est inutilisable dans Electron : rien ne s’affiche').not
       .toHaveBeenCalled()
     expect(document.querySelector('[data-testid="rename-conv-dialog"]')).not.toBeNull()
-    // Rendue dans `body` (portail, conv-1078) : sous le panneau du chat, la poignée de largeur de la
+    // Rendue dans `body` (portail) : sous le panneau du chat, la poignée de largeur de la
     // liste des fils passait au-dessus de la fenêtre.
     expect(container!.querySelector('[data-testid="rename-conv-dialog"]')).toBeNull()
     expect(

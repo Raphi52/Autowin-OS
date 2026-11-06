@@ -203,7 +203,7 @@ describe("l'usine a copies abandonnees : une copie SANS ENJEU n'attend plus 24 h
 
 describe('une copie de verification ne laisse pas de branche de secours vide', () => {
   /*
-    Mesure du 2026-10-24 (conv-1137) : le balayage a committe la copie `command-verify-conv-1048`
+    Mesure du 2026-10-24 : le balayage a committe la copie `command-verify-conv-1048`
     sur `autowin/recovery/command-verify-conv-1048` — 2 899 lignes, aucune neuve. `verify` ne fait
     que RECOPIER les fichiers non commites du depot dans sa copie (`synchroniserBureauDeVerification`)
     pour y rejouer les tests : ses fichiers « non publies » sont un miroir, jamais un travail. Chaque
@@ -235,7 +235,7 @@ describe('une copie de verification ne laisse pas de branche de secours vide', (
 })
 
 /**
- * LE RETRAIT D'UNE COPIE NE TIENT PLUS LA BOUCLE — heal conv-204, mesure du 2026-10-10.
+ * LE RETRAIT D'UNE COPIE NE TIENT PLUS LA BOUCLE — heal, mesure du 2026-10-10.
  *
  * Premier balayage horaire de la journee (`gels.jsonl`, 10:07, une heure apres le demarrage) :
  * trois copies retirees par `git worktree remove` SYNCHRONE, 1 747, 1 444 et 4 253 ms de fenetre

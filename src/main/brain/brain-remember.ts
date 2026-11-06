@@ -347,7 +347,7 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
   if (!body) return { allowed: false, reason: 'rien à retenir : le fait est vide' }
 
   /*
-   * L'ÉTAT D'UN FIL N'EST PAS UN FAIT DURABLE (conv-1303, 2026-10-30). Mesure : sur 1 468 notes du
+   * L'ÉTAT D'UN FIL N'EST PAS UN FAIT DURABLE (2026-10-30). Mesure : sur 1 468 notes du
    * Brain et 485 dépôts (13-30/10), un seul titre s'ouvrait sur un numéro de fil — « conv-1146 — le
    * travail non commité… est à l'abri dans refs/autowin/salvage » —, et c'était un statut daté, servi
    * 23 fois par les notes proches du chat sans une ouverture. Un fait durable se nomme par son SUJET ;
@@ -407,7 +407,7 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
   if (!type) {
     /*
      * UN REFUS QUI NE DIT PAS CE QU'IL A RECU SE REPRODUIT — mesure deux fois, le 2026-08-20
-     * (conv-1086, valeur `cause-racine`) puis le 2026-08-26. Le motif ne nommait jamais la valeur
+     * (valeur `cause-racine`) puis le 2026-08-26. Le motif ne nommait jamais la valeur
      * recue, et un champ ABSENT rendait exactement le meme libelle qu'un champ FAUX (`text(undefined)`
      * donne `''`, qui tombe hors de l'enumeration). Deux causes, un message, aucun indice.
      *
@@ -441,7 +441,7 @@ export function decideRemember(args: Record<string, unknown>): RememberDecision 
 
   // Une CHAÎNE est découpée aux virgules, comme `supersedes` (parseSupersedes) : l'outil direct publie
   // tous ses arguments en `type: 'string'` (skill-node-mcp.ts, schemaEntree), donc « a, b » arrivait
-  // en texte et repartait en `tags: []` sans un mot (conv-1100). Pas aux espaces : une étiquette peut
+  // en texte et repartait en `tags: []` sans un mot. Pas aux espaces : une étiquette peut
   // en porter (« notes proches »).
   const rawTags: unknown[] = Array.isArray(args.tags)
     ? args.tags
@@ -507,7 +507,7 @@ export interface RememberOutcome {
    * Rien n'a été écrit PARCE QUE le fait est déjà connu (doublon de session, appel concurrent,
    * quasi-doublon du Brain) : un refus VOULU, pas un échec. Sans ce marqueur, le contrôle de fin de
    * tour (agent-pilot.ts, commandResultSucceeded) relançait l'agent pour « corriger » un dépôt qui
-   * n'avait rien à corriger — conv-1114, 2026-10-23.
+   * n'avait rien à corriger, 2026-10-23.
    */
   dejaConnu?: boolean
   /**
@@ -545,7 +545,7 @@ const UNKNOWN_DEPOSIT = '[etat-inconnu]'
 /**
  * PLAFOND D'ATTENTE DU DEPOT — genereux ET reglable, jamais fige.
  *
- * DEFAUT VECU le 2026-09-02 (conv-143) : le plafond etait de 2 s en dur. Or le depot ecrit sur un
+ * DEFAUT VECU le 2026-09-02 : le plafond etait de 2 s en dur. Or le depot ecrit sur un
  * partage RESEAU (`\serveur\...\inbox`) apres un calcul d'embedding : deux secondes ne suffisent pas
  * toujours. Un depot legitime est donc ressorti « delai depasse », et comme cet etat est INCONNU
  * (le serveur a peut-etre ecrit), il marque durablement le fait dans le journal local et BLOQUE
@@ -571,7 +571,7 @@ export function forgetSessionDeposits(): void {
   persistDepositLedger()
 }
 
-/** Hors du fil principal (conv-1368) : `renameSync` ici a fige la fenetre 10,1 s en 7 jours. */
+/** Hors du fil principal : `renameSync` ici a fige la fenetre 10,1 s en 7 jours. */
 function persistDepositLedger(): void {
   if (!depositStorePath) return
   deposerFichier(
@@ -652,7 +652,7 @@ export interface RememberDeps {
 /**
  * LA PORTÉE NE SE DEVINE PAS : LE PROJET LA CONNAÎT.
  *
- * Mesuré le 2026-09-02 (conv-142) : un `remember` légitime a été REFUSÉ « portée manquante », rien
+ * Mesuré le 2026-09-02 : un `remember` légitime a été REFUSÉ « portée manquante », rien
  * n'a été écrit, et le modèle avait déjà annoncé le dépôt. La valeur qui a fait passer le second
  * essai — `autowin-os` — est exactement le `name` du `package.json` du dépôt : l'app la tenait de
  * source sûre pendant qu'on demandait au modèle de la deviner. La prose du prompt détaillait les
@@ -706,7 +706,7 @@ export async function rememberFact(
   )
   if (!decision.allowed) {
     /*
-     * UN REFUS DOIT DIRE QU'IL N'A RIEN ECRIT — conv-142, 2026-09-02. Le compte-rendu ne portait que
+     * UN REFUS DOIT DIRE QU'IL N'A RIEN ECRIT, 2026-09-02. Le compte-rendu ne portait que
      * le motif (« portee manquante — … »). Or l'agent avait deja ecrit « je depose la lecon » : lire
      * un motif de forme ne lui a pas dit que l'effet annonce n'avait PAS eu lieu, et l'utilisateur a
      * du le constater lui-meme. Les refus du transport le disaient deja (« jeton du Brain absent —
@@ -912,7 +912,7 @@ async function performDepositCandidate(
       }
     }
     /*
-     * UNE ROUTE ABSENTE N'EST PAS UN REFUS. Mesure conv-9 (2026-08-31) : un depot est ressorti
+     * UNE ROUTE ABSENTE N'EST PAS UN REFUS. Mesure (2026-08-31) : un depot est ressorti
      * « refusé par le Brain : not found ». Ce texte affirme que le Brain a EXAMINE le fait et l'a
      * ecarte ; un 404 dit exactement l'inverse — la route de depot n'existe pas sur ce serveur, donc
      * personne n'a rien lu. Le lecteur cherche alors ce qui cloche dans SON fait (type ? source ?
@@ -928,7 +928,7 @@ async function performDepositCandidate(
           'le fait n’a pas été examiné, rien n’a été refusé ; c’est le serveur qu’il faut corriger, pas le fait'
       }
     /*
-     * UN JETON REFUSE N'EST PAS UN FAIT REFUSE — meme famille que le 404 ci-dessus. Mesure conv-338
+     * UN JETON REFUSE N'EST PAS UN FAIT REFUSE — meme famille que le 404 ci-dessus. Mesure
      * (2026-10-19, tour 8ce6230c-374c-4de3-9429-583a648e286c) : « refusé par le Brain : forbidden »
      * a ete lu « il interdit de remplacer la note existante » ; le fait a ete reecrit pour rien, deux
      * fois, et seule une relance payante a trouve la cause — un ancien serveur Brain, avec un AUTRE

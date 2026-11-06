@@ -30,7 +30,7 @@ const has = (themes: readonly string[], ...cherches: string[]): boolean =>
  * (un chemin peut citer les deux).
  *
  * Le DOMAINE MÉTIER de l'entreprise (clé, libellé, sous-projet, documentation) vient de son profil
- * (`metier`, conv-916), transmis avec le Brain (`BrainGraphRef.metier`). Le code n'en nomme aucun :
+ * (`metier`), transmis avec le Brain (`BrainGraphRef.metier`). Le code n'en nomme aucun :
  * sans profil (version publique), ses fiches restent dans les sujets génériques.
  */
 export type BrainSubject = string
@@ -58,7 +58,7 @@ export function brainSubjectOf(
 }
 
 /**
- * LE SUJET TEL QU'IL S'AFFICHE (traduction anglaise, conv-1170, 2026-10-27). `brainSubjectOf` rend le
+ * LE SUJET TEL QU'IL S'AFFICHE (traduction anglaise, 2026-10-27). `brainSubjectOf` rend le
  * FRANÇAIS parce que le sujet devient l'IDENTIFIANT de sa branche (`__tree__:Transverse/…`), relu
  * par le code — branches repliées, sélection — et qui ne doit pas changer avec la langue. Seul ce qui
  * est montré passe par ici. Un libellé qui n'est pas un sujet générique (dossier, domaine métier)

@@ -8,14 +8,14 @@ import {
 } from './home-decor-scene'
 
 /**
- * Demande conv-1449, image jointe : « le nuage dans l'accueil je veux qu'il ressemble a ça et qu'il
+ * Demande, image jointe : « le nuage dans l'accueil je veux qu'il ressemble a ça et qu'il
  * soit plus dynamique ».
  *
  * L'image est une NÉBULEUSE COSMIQUE MULTICOLORE : braises orange/or à gauche, magenta, turquoise à
  * droite, et une ÉTOILE BLANCHE À BRANCHES au centre. Le nuage existant est bleu-violet, sans étoile,
  * et sa matière dérive à 0,017 unité/s — quasi immobile à l'œil.
  *
- * Le nuage doit RESTER bleu-violet dans ses deux teintes de base (contrat conv-1408, testé ailleurs) :
+ * Le nuage doit RESTER bleu-violet dans ses deux teintes de base (testé ailleurs) :
  * ce test ajoute les teintes CHAUDES et l'étoile, il ne les remplace pas.
  *
  * happy-dom n'a pas de WebGL : la preuve est portée par les RÉGLAGES exportés, les FONCTIONS PURES et
@@ -59,7 +59,7 @@ describe('nuage central — nébuleuse multicolore avec étoile, plus dynamique 
     }
     // Mesuré sur l'ancien réglage (amplitude 0,22 / vX 0,037 / vY 0,029) : ~4,6 unités.
     expect(course).toBeGreaterThan(7)
-    // Sans quitter le milieu : le contrat conv-1408 tient.
+    // Sans quitter le milieu : le contrat tient.
     expect(NUAGE_COSMIQUE.derive.amplitude).toBeLessThan(0.5)
   })
 

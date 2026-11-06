@@ -13,8 +13,8 @@ import { loadChatSessions } from '../runs/chat-session-store'
  * ADDITIONNE ces lignes, donc il additionnait des cumuls.
  *
  * Mesure du 2026-09-20 sur les journaux réels (661 conversations) : 9 320 $ affichés contre
- * 4 428 $ réellement dépensés. Sur conv-729, 1 896 $ affichés pour 110 $ réels (×17). Preuve que le
- * champ est bien un cumul, sur les 16 tours de conv-733 : la série est strictement croissante
+ * 4 428 $ réellement dépensés. 1 896 $ affichés pour 110 $ réels (×17). Preuve que le
+ * champ est bien un cumul, sur les 16 tours : la série est strictement croissante
  * (5,48 → 51,27) et chaque DIFFÉRENCE successive retombe à 2-3 % près sur le coût recalculé depuis
  * les tokens du tour au tarif public (`shared/cost-estimate`), alors que la valeur brute en est à
  * un facteur 15 sur les derniers tours.
@@ -138,7 +138,7 @@ function lireMagasin(chemin: string): Record<string, SessionCostState> {
 
 function écrireMagasin(chemin: string, états: Record<string, SessionCostState>): void {
   // Écriture atomique : un tour interrompu ne laisse pas un JSON tronqué qui ferait perdre TOUS les
-  // cumuls des autres sessions au prochain démarrage. Hors du fil principal (conv-1368) : `renameSync`
+  // cumuls des autres sessions au prochain démarrage. Hors du fil principal : `renameSync`
   // ici a figé la fenêtre 6,6 s en 7 jours. Le coût du tour reste juste pour CE tour si elle échoue :
   // seul le suivant sur-comptera.
   deposerFichier(chemin, JSON.stringify(états))

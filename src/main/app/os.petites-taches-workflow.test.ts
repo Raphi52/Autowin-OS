@@ -1,18 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 
 /**
- * LE CHOIX AUTOMATIQUE DU WORKFLOW LIT LE MODÈLE DES PETITES TÂCHES (conv-264, 2026-10-11).
+ * LE CHOIX AUTOMATIQUE DU WORKFLOW LIT LE MODÈLE DES PETITES TÂCHES (2026-10-11).
  *
  * `poseWorkflowDynamique` envoyait le modèle du chat avec un effort `low` écrit en dur. Il part
  * désormais sur le réglage « modèle des petites tâches » (écran Routeur) ; non réglé, sur l'alias
- * `haiku` du CLI en effort low (conv-1097 — avant : le modèle du chat en effort low).
+ * `haiku` du CLI en effort low (Avant : le modèle du chat en effort low).
  */
 vi.mock('../profil/role-store', () => ({ loadRoleBindings: () => undefined, saveRoleBindings: vi.fn() }))
 vi.mock('../workflow/workflow-profiles', async (original) => ({
   ...(await original<typeof import('../workflow/workflow-profiles')>()),
   loadWorkflowProfiles: () => ({ profiles: [] })
 }))
-// Aucun choix posé à la main : le choix automatique tourne (conv-1431, test du fil ci-dessous).
+// Aucun choix posé à la main : le choix automatique tourne (test du fil ci-dessous).
 vi.mock('../workflow/workflow-selection', async (original) => ({
   ...(await original<typeof import('../workflow/workflow-selection')>()),
   loadWorkflowSelections: () => ({ byConversation: {} })
@@ -77,7 +77,7 @@ describe('choix automatique du workflow — modèle des petites tâches', () => 
     })
   })
 
-  // conv-1097 : non réglé, le défaut n'est plus le modèle du chat mais l'alias Haiku du CLI.
+  // Non réglé, le défaut n'est plus le modèle du chat mais l'alias Haiku du CLI.
   it('non réglé : alias haiku, effort low', async () => {
     await expect(appelDuChoix(new RoleModelConfig({ orchestrator: CHAT }))).resolves.toEqual({
       provider: 'claude',
@@ -86,7 +86,7 @@ describe('choix automatique du workflow — modèle des petites tâches', () => 
     })
   })
 
-  // conv-1097, piste 1 du scout : « nouveau » + graphe JSON est de la GÉNÉRATION, pas un choix.
+  // Piste 1 du scout : « nouveau » + graphe JSON est de la GÉNÉRATION, pas un choix.
   it('Haiku CHOISIT seulement : on ne lui demande jamais d’écrire un graphe', async () => {
     const { send } = await poser(new RoleModelConfig({ orchestrator: CHAT }), [])
     const [, messages] = send.mock.calls[0] as unknown as [string, Array<{ content: string }>]
@@ -136,7 +136,7 @@ describe('choix automatique du workflow — modèle des petites tâches', () => 
   })
 
   /*
-   * LE COÛT DU CHOIX APPARTIENT AU FIL DU RUN (conv-1431, 2026-11-02). Mesuré sur `cost.jsonl`
+   * LE COÛT DU CHOIX APPARTIENT AU FIL DU RUN (2026-11-02). Mesuré sur `cost.jsonl`
    * depuis le 20/10 : 53 lignes `choixWorkflow`, aucune avec un `conversationId`. Le test part du
    * VRAI point d'entrée du run (`poseConversationWorkflow`) : une correction qui ajouterait le fil à
    * l'appel sans le faire descendre depuis la conversation laisserait la ligne orpheline. Entrée qui

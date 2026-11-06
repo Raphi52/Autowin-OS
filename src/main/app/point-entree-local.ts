@@ -5,7 +5,7 @@ import type { LanceurCommandeSkill } from '../skills/skill-node-tools'
 import { demarrerServeurOutilsNoeudSkill, type PerimetreOutils } from '../skills/skill-node-mcp'
 
 /**
- * POINT D'ENTRÉE LOCAL PERMANENT — piloter Autowin depuis un script extérieur (conv-1144).
+ * POINT D'ENTRÉE LOCAL PERMANENT — piloter Autowin depuis un script extérieur.
  *
  * POURQUOI. Lancer un fil, lui envoyer une demande et attendre sa réponse n'était possible que de
  * l'intérieur de l'app : le serveur d'outils (`skill-node-mcp.ts`) ne vivait que le temps d'un envoi
@@ -56,7 +56,7 @@ export interface PointEntreeLocal {
 }
 
 /**
- * Marque posée sur toute demande envoyée par cette porte (conv-1144, cadrage) : le fil montre d'où
+ * Marque posée sur toute demande envoyée par cette porte (cadrage) : le fil montre d'où
  * vient le tour, et l'agent le lit aussi — sur le modèle de « Ordre de <fil> »
  * (`messages-entre-fils-app.ts`, `promptDOrdre`).
  */
@@ -77,7 +77,7 @@ const refusHorsPerimetre = (nom: string): string =>
   `${COMMANDES_POINT_ENTREE.join(', ')}. L'appel n'a pas eu lieu.`
 
 /**
- * conv-1144 (cadrage, point resté ouvert) : sans fil, `chat_send` n'ouvre AUCUN tour — il part en
+ * cadrage, point resté ouvert : sans fil, `chat_send` n'ouvre AUCUN tour — il part en
  * simple question au modèle (commands.ts, `case 'chat_send'`). Un script n'aurait aucun tour à
  * attendre, et l'appel serait payé pour rien. Même lecture que le bus : vide ou espaces = pas de fil.
  */
@@ -120,7 +120,7 @@ export async function demarrerPointEntreeLocal(o: {
   const perimetre: PerimetreOutils = { outils: COMMANDES_POINT_ENTREE, refus: refusHorsPerimetre }
   const serveur = await (o.demarrer ?? demarrerServeurOutilsNoeudSkill)(lanceur, {
     perimetre,
-    // Ouvert toute la vie de l'app : une page web ne doit pas pouvoir le viser (conv-1144).
+    // Ouvert toute la vie de l'app : une page web ne doit pas pouvoir le viser.
     refuserRequetesNonLocales: true
   })
   const fichier = join(o.dossierDonnees, FICHIER_POINT_ENTREE)

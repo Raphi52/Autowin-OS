@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 /**
- * IMAGES/S ET NOMBRE D'IMAGES D'UNE VIDÉO, MESURÉS PAR FFPROBE (conv-253, 2026-10-11).
+ * IMAGES/S ET NOMBRE D'IMAGES D'UNE VIDÉO, MESURÉS PAR FFPROBE (2026-10-11).
  *
  * Demande : « ffprobe en échec = 30 i/s affiché comme supposé ». La mesure fait foi ; tout échec
  * rend `{ ok: false, raison }` (jamais une exception) et la carte part SANS `fps` : le lecteur
@@ -76,7 +76,7 @@ export function lireSortieFfprobe(stdout: string): MesureVideo {
   } catch {
     return { ok: false, raison: 'sortie d’ffprobe illisible' }
   }
-  // fix-ok: conv-253 — une image renommée en .mp4 sort en code 0 avec UN flux (`png_pipe`/`jpeg_pipe`
+  // fix-ok: une image renommée en .mp4 sort en code 0 avec UN flux (`png_pipe`/`jpeg_pipe`
   // à 25/1, `gif` à 10/1, ffprobe 8.0.1 mesuré) : le premier flux était pris tel quel et la carte
   // partait à « 25 i/s » mesuré sur un lecteur mort. Le format lu tranche ; video-ffprobe.test.ts
   // rouge (code 1, 3 tests) sans cette lecture, vert avec. Format absent = pas de jugement.
@@ -149,7 +149,7 @@ export async function mesurerVideo(
     ])
     return lireSortieFfprobe(stdout)
   } catch (erreur) {
-    // fix-ok: conv-253 — un texte/JSON/script renommé en .mp4 sort en code 1 + « Invalid data found
+    // fix-ok: un texte/JSON/script renommé en .mp4 sort en code 1 + « Invalid data found
     // when processing input » (ffprobe 8.0.1, mesuré) ; seul `streams: []` sous code 0 était reconnu,
     // la carte partait vide en « 30 supposé ». Test video-ffprobe.test.ts rouge (code 1), vert avec.
     if (illisibleCommeVideo(erreur))

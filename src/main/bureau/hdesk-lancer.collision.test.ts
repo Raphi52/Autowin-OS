@@ -1,5 +1,5 @@
 /**
- * conv-617 : « mes travaux en parallele se parasitent car ils utilisent pas mon systeme de bureau
+ * « mes travaux en parallele se parasitent car ils utilisent pas mon systeme de bureau
  * virtuel ». Le bureau cache, le dossier WebView2 et la fiche de la TV sont tous nommes par -Id :
  * deux travaux paralleles qui prennent le meme Id partagent tout. Le lanceur doit REFUSER tant que
  * l'occupant vit, et nommer un identifiant libre.
@@ -68,7 +68,7 @@ describe.skipIf(process.platform !== 'win32')('hdesk-lancer : identifiant deja p
 })
 
 /**
- * conv-344 (scout n°13) : le refus « occupé » ne regardait que le numéro de processus de la fiche
+ * scout n°13 : le refus « occupé » ne regardait que le numéro de processus de la fiche
  * (`Get-Process -Id`). Windows RÉUTILISE ces numéros : un autre programme, ou un processus né après
  * le lancement inscrit, rendait l'identifiant « occupé » à tort. Même règle que hdesk-fermer.ps1 :
  * même exécutable ET né avant `lanceLe` + 5 s. Le lancement qui part ici est `cmd /c exit 7` : il

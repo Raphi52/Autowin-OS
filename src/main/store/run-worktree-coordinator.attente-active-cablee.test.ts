@@ -11,7 +11,7 @@ import { ESSAIS_AUTOMATIQUES_MAX } from './repechage-automatique'
  * suite verifie le CABLAGE : le balayage interroge bien l'etat reel de la base, et il en tire les
  * deux conclusions opposees.
  *
- * Le cas vecu qu'il faut couvrir (conv-1450) : un `base-dirty` dont le fichier reste sale des heures
+ * Le cas vecu qu'il faut couvrir : un `base-dirty` dont le fichier reste sale des heures
  * parce qu'une autre session l'edite. Avant, trois essais a l'aveugle puis un echec definitif.
  */
 describe('balayage — l attente active est cablee sur l etat REEL de la base', () => {

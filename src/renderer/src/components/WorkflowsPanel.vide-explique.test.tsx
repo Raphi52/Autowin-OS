@@ -13,7 +13,7 @@ vi.mock('./ProjectPane', () => ({ ProjectPane: () => <div /> }))
 vi.mock('./WorkflowExecutionGraph', () => ({ WorkflowExecutionGraph: () => <div /> }))
 
 /*
-  conv-69 (2026-09-16) : vingt tours de chat direct, zero RUN.md, et l'utilisateur en conclut que la
+  2026-09-16 : vingt tours de chat direct, zero RUN.md, et l'utilisateur en conclut que la
   trace est perdue. Le message d'absence doit DIRE pourquoi il n'y en a pas et OU regarder.
 */
 function props(): WorkflowsPanelProps {
@@ -64,7 +64,7 @@ describe('WorkflowsPanel — absence de RUN.md expliquée', () => {
     await act(async () => onglet.click())
     const texte = container.textContent ?? ''
     expect(texte).toContain('Aucun RUN.md pour cette conversation')
-    // conv-1441 : depuis conv-1418, chaque demande a sa fiche ; seule une question n'en reçoit pas.
+    // Chaque demande a sa fiche ; seule une question n'en reçoit pas.
     expect(texte).toContain('seule une demande reçoit sa fiche')
     expect(texte).toContain('Observatory')
   })
@@ -92,7 +92,7 @@ describe('WorkflowsPanel — absence de RUN.md expliquée', () => {
     expect(texte).toContain('Construis le village commun')
     expect(texte).toContain('sans preuve')
     expect(texte).toContain('4 demande(s)')
-    // Le fil actif (conv-69) a rangé une suite dans la fiche d'un autre fil : on dit laquelle.
+    // Le fil actif a rangé une suite dans la fiche d'un autre fil : on dit laquelle.
     expect(texte).toContain('fiche de conv-1429')
     expect(texte).not.toContain('Aucun RUN.md pour cette conversation')
     expect(container.querySelector('.run-delete-button')).toBeNull()

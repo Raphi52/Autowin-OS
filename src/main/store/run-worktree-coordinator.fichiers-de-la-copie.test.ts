@@ -6,7 +6,7 @@ import type { RunWorktrees } from '../orchestration/orchestrator'
 /*
  * La porte « livraison par Git externe » de l'orchestrateur exige une copie SANS fichier. Elle lisait
  * `activity().files`, vide jusqu'à la finalisation : run-a8a70cd0ee56-1 (16 fichiers, fusion refusée)
- * a été déclaré intégré, et sa clôture a commité le travail d'autres conversations (conv-914,
+ * a été déclaré intégré, et sa clôture a commité le travail d'autres conversations (
  * 2026-10-13). Ces tests tiennent la MESURE qui la remplace.
  */
 function coordinateur(manager: Record<string, unknown>): RunWorktreeCoordinator {

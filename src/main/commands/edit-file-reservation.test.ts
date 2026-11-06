@@ -9,7 +9,7 @@ import { confReservationFichiers } from '../providers/claude'
 import { reserverOuRefuser } from '../../shared/reservation-fichiers'
 
 /*
- * LA COMMANDE `edit_file` DE L'APP CONSULTE LA RÉSERVATION DES FICHIERS (conv-1083, objection du
+ * LA COMMANDE `edit_file` DE L'APP CONSULTE LA RÉSERVATION DES FICHIERS (objection du
  * contrôle final du 2026-10-22).
  *
  * Avant : seul le hook des agents Claude (avant chaque Edit/Write) réservait et refusait. `edit_file`

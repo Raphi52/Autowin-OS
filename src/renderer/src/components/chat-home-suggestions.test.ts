@@ -28,7 +28,7 @@ describe('buildHomeSuggestions', () => {
     ).toEqual(['Débloque @run:workflow-bench-regression', 'Débloque @run:chatview-reprise-tours'])
   })
 
-  // conv-861 (2026-09-25) : la liste était coupée à 3 AVANT d'être comptée — 7 runs bloqués, « 3 ».
+  // 2026-09-25 : la liste était coupée à 3 AVANT d'être comptée — 7 runs bloqués, « 3 ».
   it('le sous-titre compte TOUS les runs bloqués, même quand seules 3 chips sont montrées', () => {
     const runs = Array.from({ length: 7 }, (_, i) => run(`bloque-${i}`, 'open'))
     const [groupe] = buildHomeSuggestions({ runs: [run('clos', 'green', 1, 1), ...runs] })
@@ -49,7 +49,7 @@ describe('buildHomeSuggestions', () => {
 })
 
 /**
- * UNE SEULE RÈGLE DU « BLOQUÉ » (conv-861, 2026-09-25). L'accueil jugeait sur le seul statut, par
+ * UNE SEULE RÈGLE DU « BLOQUÉ » (2026-09-25). L'accueil jugeait sur le seul statut, par
  * motif de texte, alors que `get_state` et l'Observatoire appliquent `isBlocked`
  * (src/shared/run-blocked.ts). Les deux listes divergeaient sur trois cas bien réels :
  * un `green` dont une case de DoD reste `- [ ]`, un RUN.md sans statut lisible (`unknown`), et les
@@ -72,7 +72,7 @@ describe('les chips « Runs bloqués » suivent la règle unique isBlocked', () 
     ).toEqual(STATIC_SUGGESTIONS)
   })
 
-  // conv-1199 (scout conv-1332) : l'accueil proposait « Débloque » pour un run validé dont la suite
+  // L'accueil proposait « Débloque » pour un run validé dont la suite
   // appartient à l'utilisateur. Le jumeau `sans-question` garde sa chip : même statut, même DoD.
   const attend = {
     subject: 'attend',

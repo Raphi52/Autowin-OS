@@ -14,7 +14,7 @@ export type Band = 'g' | 'y' | 'r' | null
 export type ScoutType = 'fix' | 'new' | null
 
 /**
- * « Pourquoi pas ? » sur une piste décochée (piste 2, conv-1033) : les 4 raisons de laisser une
+ * « Pourquoi pas ? » sur une piste décochée (piste 2) : les 4 raisons de laisser une
  * piste, au plus un clic. L'interface les affiche, la mémoire du scout les garde et les rend au scout
  * suivant. Partagé ici : les deux processus lisent déjà ce module.
  */
@@ -39,7 +39,7 @@ export interface ScoutRow {
   how: string
   /**
    * La commande de preuve que la machine pourra lancer (`npx vitest run …`) : 7e colonne FACULTATIVE
-   * `Commande`. Le « signal de fait » d'un correctif n'était que de la prose (piste 3, conv-1033).
+   * `Commande`. Le « signal de fait » d'un correctif n'était que de la prose (piste 3).
    */
   commande?: string
 }
@@ -141,7 +141,7 @@ const COLONNES_VALEUR = ['why', 'pourquoi', 'valeur', 'preuve', 'evidence', 'pro
  */
 const estColonneNote = (entete: string): boolean => /^note(?![a-z])/i.test(entete.trim())
 /**
- * La colonne de la commande de preuve (piste 3, conv-1033), en tête de cellule. Hors de
+ * La colonne de la commande de preuve (piste 3), en tête de cellule. Hors de
  * `COLONNES_VALEUR` (« Preuve » y est déjà le Why) et de `COLONNES_DEPART` ; « Comment », le How de
  * la skill, n'est pas « Command » : il diverge à la 5e lettre.
  */
@@ -191,7 +191,7 @@ export interface TableauScoutLocalise {
 /**
  * Le texte AUTOUR du tableau de candidats, sans le tableau ; `null` s'il n'y a pas de tableau.
  *
- * Défaut nommé le 2026-10-22 (conv-1083) : le panneau de sélection remplaçait le message ENTIER, et
+ * Défaut nommé le 2026-10-22 : le panneau de sélection remplaçait le message ENTIER, et
  * le texte avant le tableau (le rapport) comme après (la ligne `CIBLE:`, la clôture) disparaissait
  * sans signal. Seul le tableau devient le panneau ; le reste doit garder sa place.
  */
@@ -225,7 +225,7 @@ export function parseScoutTable(text: string): ScoutRow[] | null {
       num: at(iNum, String(rows.length + 1)),
       ...(note === undefined ? {} : { score: note }),
       // Une colonne « Score » peut porter un NOMBRE (« 82 », « 8/10 ») ou une PASTILLE (« 🟢 ») :
-      // constate le 2026-08-18 (conv-1293), le modele met souvent la pastille. Le nombre reste
+      // constate le 2026-08-18, le modele met souvent la pastille. Le nombre reste
       // prioritaire ; a defaut on relit la meme cellule comme un emoji, plutot que de rendre une
       // ligne sans aucun repere. On n'invente PAS de note depuis une pastille (`score` reste vide) :
       // ce serait une precision fausse.
@@ -303,7 +303,7 @@ export function localiserTableauScout(text: string): TableauScoutLocalise | null
      *
      * `isTableRow` accepte une ligne sur son SEUL `|` d'ouverture : la derniere ligne d'un tableau
      * coupe par un stream interrompu la franchit, et le repli `at(idx, '')` remplissait alors de
-     * vides les colonnes absentes. Mesure du 2026-08-27 (conv-1475) : un 7e candidat dont le
+     * vides les colonnes absentes. Mesure du 2026-08-27 : un 7e candidat dont le
      * « Pourquoi » s'arretait en plein mot (« chaque onglet visite reste MONTE dan ») est devenu
      * COCHABLE et a lance une chaine `/frame` sur un besoin ampute, sans aucun signal. Mieux vaut
      * six candidats entiers qu'un septieme qu'on croit lisible.

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Lisibilite des tuiles d'accueil (conv-1417) : hierarchie et contraste, DISPOSITION INCHANGEE.
+ * Lisibilite des tuiles d'accueil : hierarchie et contraste, DISPOSITION INCHANGEE.
  *
  * Trois exigences verifiables sur le CSS :
  *  1. l'etiquette (titre) n'est plus peinte en `--text-dim` : un titre plus eteint que son propre

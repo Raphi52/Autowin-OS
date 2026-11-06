@@ -37,7 +37,7 @@ describe('hooks déterministes in-app (repro kit)', () => {
     expect(v.some((x) => x.detail.includes('c.ts'))).toBe(false) // sous le seuil
   })
 
-  // conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : le refus ne disait pas le geste qui le leve,
+  // tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : le refus ne disait pas le geste qui le leve,
   // la reparation l'a recu 2 fois sans agir. Le refus doit nommer le fichier ET le commentaire a y deposer.
   it('fix-gate : le refus dit le geste de sortie (fichier + fix-ok)', () => {
     const [v] = detectBlindFixLoop({ 'src/main/juge/objections-juge.ts': 4 })
@@ -84,7 +84,7 @@ describe('detectRawSleep — le numero de ligne doit designer le VRAI diff', () 
 })
 
 /**
- * KAIZEN (2026-08-21, conv-1360). Defaut de PROCESS observe : le run `accueil-widgets` (remake du
+ * KAIZEN (2026-08-21). Defaut de PROCESS observe : le run `accueil-widgets` (remake du
  * fond d'ecran de l'Accueil) est passe le gate `done-without-proof` avec un simple exit-code de
  * test unitaire, puis s'est ferme `degraded` — l'utilisateur a du signaler lui-meme que le rendu
  * n'allait pas. La lecon retenue dans la conversation ("une modif front ne se valide que par une
@@ -134,7 +134,7 @@ describe('visual-proof : un diff de RENDU exige une preuve visuelle, pas un exit
 })
 
 /**
- * KAIZEN (2026-08-28, conv-1507 + conv-1498). Defaut de PROCESS mesure : le chantier « spinner » a
+ * KAIZEN (2026-08-28). Defaut de PROCESS mesure : le chantier « spinner » a
  * livre une animation declaree correcte sur la foi d'un `tsc` vert et d'une capture PNG FIXE. Une
  * image immobile ne peut pas dire si ce qu'elle montre tourne — c'est l'utilisateur qui a du
  * signaler « c'est cense bouger, la il est static », puis refuter d'un « nn » l'hypothese de cause
@@ -192,8 +192,8 @@ describe('motion-proof : un diff d ANIMATION exige une preuve de MOUVEMENT', () 
     expect(requireMotionProofForAnimationDiff(test, 0)).toEqual([])
   })
 
-  // fix-ok: conv-951 — ANIMATION_AJOUTEE (hooks.ts) prenait une mention enumeree des mots-cles (suivie de « , » « ) » ou « | ») pour une declaration ; mesure : l'ancien motif refuse ces deux entrees, le nouveau non, et refuse toujours @keyframes et transition reels
-  // Faux positif mesure le 2026-10-16 (conv-951) : ajouter une vue a la liste de la consigne
+  // fix-ok: ANIMATION_AJOUTEE (hooks.ts) prenait une mention enumeree des mots-cles (suivie de « , » « ) » ou « | ») pour une declaration ; mesure : l'ancien motif refuse ces deux entrees, le nouveau non, et refuse toujours @keyframes et transition reels
+  // Faux positif mesure le 2026-10-16 : ajouter une vue a la liste de la consigne
   // de pipeline-discipline.ts a fait refuser le run, parce que la MEME ligne source cite les
   // mots-cles entre parentheses. Une mention enumeree n'a pas de valeur : elle ne declare rien.
   it('ignore une MENTION enumeree des mots-cles (texte de consigne), sans valeur declaree', () => {
@@ -204,7 +204,7 @@ describe('motion-proof : un diff d ANIMATION exige une preuve de MOUVEMENT', () 
     expect(requireMotionProofForAnimationDiff(mention, 0)).toEqual([])
   })
 
-  // Meme faux positif, deuxieme forme (2026-10-16, conv-951) : la ligne qui DEFINIT le motif
+  // Meme faux positif, deuxieme forme (2026-10-16) : la ligne qui DEFINIT le motif
   // enumere les mots-cles separes par « | ». Toute retouche du detecteur le faisait se refuser
   // lui-meme. On lit la VRAIE ligne du source pour que le test suive le motif s'il change.
   it('ignore la ligne qui DEFINIT le motif (alternative « | »), et bloque toujours @keyframes reel', () => {
@@ -270,7 +270,7 @@ describe('fix-gate : les chemins Windows et POSIX designent le MEME fichier', ()
   })
 })
 
-// conv-539, tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : le refus a compte le meme fichier sous
+// Tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : le refus a compte le meme fichier sous
 // « D:/AutoWinOS/src/main/orchestration/orchestrator.ts » (08:52:58) puis « src/main/juge/objections-juge.ts »
 // (09:06:41) ; le jeton fix-ok depose sous le chemin court ne dedouanait pas le chemin absolu.
 describe('fix-gate : chemin absolu et chemin relatif au depot designent le MEME fichier', () => {

@@ -1,7 +1,7 @@
 import { Worker } from 'node:worker_threads'
 
 /**
- * LANCER UN PROCESSUS DÉTACHÉ SANS TENIR LE FIL PRINCIPAL (conv-1368, 2026-10-31).
+ * LANCER UN PROCESSUS DÉTACHÉ SANS TENIR LE FIL PRINCIPAL (2026-10-31).
  *
  * `child_process.spawn` n'est asynchrone que pour la suite : la création du processus, elle, bloque
  * le fil qui l'appelle. Mesuré sur 7 jours (`gels.jsonl`) : `spawn cmd.exe start` du brain_server a

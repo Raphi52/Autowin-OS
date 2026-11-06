@@ -134,14 +134,14 @@ describe('cablage — le texte du `done` atterrit dans le message', () => {
     const branch = source.slice(source.indexOf("else if (pilotEvent.kind === 'done')"))
     // Ancre mise a jour le 2026-08-17 : la decision et le trim vivent desormais dans
     // `closingTurnDelivery`, qui rend le durable ET le live d'un seul tenant — le texte etait persiste
-    // sans jamais etre livre au fil vivant (conv-1276). L'intention du test est inchangee : la branche
+    // sans jamais etre livre au fil vivant. L'intention du test est inchangee : la branche
     // `done` doit poser une part de texte durable.
     expect(branch).toContain('closingTurnDelivery(')
     expect(branch).toContain('applyTurnEvent(conversationId, turnId, livraison.durable)')
   })
 
   /*
-   * L'ANCIEN VETO EST PARTI, et c'est le fond du correctif du 2026-09-11 (conv-471).
+   * L'ANCIEN VETO EST PARTI, et c'est le fond du correctif du 2026-09-11.
    * `shouldPersistClosingText` refusait tout texte final des qu'un delta avait ete vu dans le tour.
    * Un tour qui parle ENTRE ses appels d'outils perdait donc son compte-rendu. La decision se prend
    * desormais sur le CONTENU : on publie ce qui n'a pas encore ete dit, et rien d'autre.

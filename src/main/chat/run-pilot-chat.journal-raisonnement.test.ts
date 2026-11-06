@@ -7,9 +7,9 @@ import { attendreEcrituresJournal, readTurnJournal } from '../runs/turn-journal'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 
 /**
- * LE JOURNAL D'UN VRAI TOUR ÉCRIT LA PENSÉE PAR RAFALE, À SA PLACE ENTRE LES GESTES (conv-1431).
+ * LE JOURNAL D'UN VRAI TOUR ÉCRIT LA PENSÉE PAR RAFALE, À SA PLACE ENTRE LES GESTES.
  *
- * Mesuré le 2026-11-02 sur les journaux conv-14* : 355 683 lignes `reasoning-step` (55 % du poids),
+ * Mesuré le 2026-11-02 sur les journaux * : 355 683 lignes `reasoning-step` (55 % du poids),
  * une par paquet reçu du modèle. Le regroupement vit dans `journalDuPiloteRegroupe` ; ce test prouve
  * son BRANCHEMENT dans le tour : vrai stockage, vrai journal fichier, faux modèle qui pense en
  * miettes, agit, puis repense.

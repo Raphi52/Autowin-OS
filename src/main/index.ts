@@ -387,7 +387,7 @@ guardBrokenProcessPipes(process.stdout, process.stderr)
 
 const scheduledTaskDispatch = process.argv.includes('--autowin-task-dispatch')
 const startupTaskOccurrence = taskOccurrenceFromArgs(process.argv)
-/** Le thème que la fenêtre a appliqué en dernier (conv-346) : le thème NieR montre la machine. */
+/** Le thème que la fenêtre a appliqué en dernier : le thème NieR montre la machine. */
 let themeDeLaMascotte: string | null = null
 const resolvedAutomationInstanceMode = resolveAutomationInstanceMode(
   process.argv,
@@ -416,7 +416,7 @@ const appDataRoot = resolveInstanceAppDataBase(
 )
 app.setName(isolatedTestInstance ? `${AUTOWIN_DISPLAY_NAME} Test` : AUTOWIN_DISPLAY_NAME)
 const explicitUserDataDir = explicitUserDataPath !== undefined
-// UN PROCESSUS PAR PAGE ISOLÉE DU FIL (conv-1304, 2026-10-30). Par défaut, Chromium range tous les
+// UN PROCESSUS PAR PAGE ISOLÉE DU FIL (2026-10-30). Par défaut, Chromium range tous les
 // cadres `sandbox` d'un même site dans UN processus : une page interactive en boucle infinie figeait
 // donc ses voisines, et « Relancer » ouvrait un cadre vide dans ce processus occupé, sans message.
 // Mesuré dans l'app construite, 6 pages : voisine vivante, relance qui marche, processus figé mort
@@ -521,15 +521,15 @@ jalonDemarrage('verrou instance obtenu')
 const os = new AutowinOS()
 jalonDemarrage('noyau applicatif construit')
 const turnJournalRoot = join(app.getPath('userData'), 'turn-journals')
-// Carte des besoins, lot 2 (conv-1089) : à chaque tour de chat, qui a prompté (identité git du
+// Carte des besoins, lot 2 : à chaque tour de chat, qui a prompté (identité git du
 // dossier du fil) et la ligne AUTOWIN_BESOIN_V1 de la réponse, dans `besoins.jsonl`.
 const journalDesBesoins = creerJournalDesBesoins({
   racine: app.getPath('userData'),
   identite: creerIdentitesEnCache()
 })
-// RUN.md léger (conv-1418) : une fiche par nouvelle demande, écrite par l'app à la fin du tour.
+// RUN.md léger : une fiche par nouvelle demande, écrite par l'app à la fin du tour.
 const fichesDeDemande = creerFichesDeDemande({ racine: app.getPath('userData') })
-// Une branche du fil (« façon 1/3 », « revenir à ce tour ») pointe sur les fiches de sa source (conv-1441).
+// Une branche du fil (« façon 1/3 », « revenir à ce tour ») pointe sur les fiches de sa source.
 const rattacherLaBrancheAuxFiches = (branche: object, source: object): Promise<number> =>
   fichesDeDemande.rattacherLaBranche({
     branche: branche as BranchePourLaFiche,
@@ -708,7 +708,7 @@ const persistanceConversations = {
     if (ajoutees > 0) broadcast({ type: 'refresh', scope: 'conversations' })
   },
   archivage: { apresMs: 2 * 60_000, intervalleMs: 24 * 60 * 60_000 },
-  // Réécriture de `conversations.json` (0,4 à 0,9 s mesurées, conv-359) : après la fenêtre.
+  // Réécriture de `conversations.json` (0,4 à 0,9 s mesurées) : après la fenêtre.
   compactionApres: interfaceVisible
 }
 
@@ -756,7 +756,7 @@ const pendingScheduledOccurrences = new Set<string>()
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
 /**
  * Réveille les règles Watchdog sur un incident interne. Best-effort : un réveil raté ne doit rien
- * casser de plus que l'incident qui l'a déclenché. D'où le `.catch` (conv-1658) : sans lui, un rejet
+ * casser de plus que l'incident qui l'a déclenché. D'où le `.catch` : sans lui, un rejet
  * de `notifyAppEvent` (son `fire` n'a qu'un `try/finally`) devenait un `unhandledRejection`, dont le
  * gestionnaire global coupe TOUTES les orchestrations en vol (`onFatal` de `installCrashHandlers`).
  * Même garde que `annoncerFinDeTour` (`chat/run-pilot-chat.ts`).
@@ -822,7 +822,7 @@ ${incident.detail}`,
 async function pickPath(
   sender: Electron.WebContents,
   kind: 'openDirectory' | 'openFile',
-  // conv-344 : filtre facultatif (« Parcourir… » des bureaux cachés : .exe seulement).
+  // Filtre facultatif (« Parcourir… » des bureaux cachés : .exe seulement).
   filters?: Electron.FileFilter[]
 ): Promise<string | null> {
   if (headlessTestInstance) return null
@@ -865,15 +865,15 @@ async function pickSavePath(
 
 function broadcast(e: AppEvent): void {
   for (const w of BrowserWindow.getAllWindows()) w.webContents.send('app:event', e)
-  // La mascotte compte les runs ICI, pas d'après l'interface : fenêtre fermée, son nombre se figeait
-  // (conv-1196). Filtré avant l'accès : `mascotteDuBureau` est déclarée plus bas dans ce module.
+  // La mascotte compte les runs ICI, pas d'après l'interface : fenêtre fermée, son nombre se figeait.
+  // Filtré avant l'accès : `mascotteDuBureau` est déclarée plus bas dans ce module.
   if (e.type === 'orchestrate-start' || e.type === 'orchestrate-end')
     mascotteDuBureau.evenementDeRun(e)
   // Réveil événementiel : `broadcast` est le point de passage UNIQUE de tout AppEvent, donc le seul
   // endroit où brancher un incident sans risquer d'en rater une source. Seuls les incidents dont
   // l'émission a été vérifiée dans le code sont branchés — pas un catalogue souhaité.
   if (e.type === 'orchestrate-end' && e.status === 'red') {
-    // Par `wakeWatchdog`, qui rattrape le rejet (conv-1658) : un `void` nu laissait un échec du
+    // Par `wakeWatchdog`, qui rattrape le rejet : un `void` nu laissait un échec du
     // réveil couper toutes les orchestrations en vol via le gestionnaire `unhandledRejection`.
     wakeWatchdog(
       'orchestration-red',
@@ -1032,7 +1032,7 @@ const bus = new AppCommandBus(
  * Le bus ne connait pas `activeChatTurns` -- et n'a pas a le connaitre : on lui remet une simple
  * question, « quel est le signal d'arret de cette conversation ». Sans cette ligne, `run` n'etait
  * borne que par son horloge, et un programme qui ne rend jamais la main (application a fenetre,
- * serveur) bloquait le tour jusqu'au plafond, Stop compris (conv-384, 2026-09-09).
+ * serveur) bloquait le tour jusqu'au plafond, Stop compris (2026-09-09).
  */
 bus.signalDuTour = (conversationId) => activeChatTurns.get(conversationId)?.controller.signal
 /**
@@ -1062,10 +1062,10 @@ os.setSkillCommandRunner({
         }),
   /**
    * Les specs REELLES des deux commandes, pour que le prompt d'outillage soit COPIE de la commande
-   * au lieu d'etre ecrit de memoire. Mesure du 2026-08-20 sur le run `conv-1339` : ecrit de memoire,
+   * au lieu d'etre ecrit de memoire. Mesure du 2026-08-20 sur le run : ecrit de memoire,
    * il annoncait `brain_query {"query": ...}` la ou la commande attend `question`, et `remember`
    * sans `scope` ni `source` alors que les deux sont obligatoires. L'outil etait branche, teste,
-   * et strictement inutilisable. Les specs passent ENTIÈRES (conv-1370, 2026-10-31) : un `.map` ne
+   * et strictement inutilisable. Les specs passent ENTIÈRES (2026-10-31) : un `.map` ne
    * gardait que le nom, la description et `args`, donc annotations et vrais types n'arrivaient pas.
    */
   catalogue: () =>
@@ -1090,7 +1090,7 @@ const dossierDuTour = (conversationId?: string): string =>
     os.executionWorkspace
   )
 /**
- * LE BRAIN À CHAQUE TOUR, AU PLUS BAS COÛT (conv-892, 2026-09-30). Mesure du 18/09 au 30/09 : 8 tours
+ * LE BRAIN À CHAQUE TOUR, AU PLUS BAS COÛT (2026-09-30). Mesure du 18/09 au 30/09 : 8 tours
  * de chat sur 824 ont lancé `brain_query`, jamais de leur propre initiative — « à la demande » voulait
  * dire « quand l'utilisateur y pense ». Choix de l'utilisateur : « a chaque tour mais via un mecanisme
  * qui coute le moins de token possible ». Chaque tour reçoit donc le CHEMIN des 3 notes les plus
@@ -1107,13 +1107,13 @@ const relancerBrainPerso = (): void => {
 }
 const titresBrainDuTour = createBrainTitresDuTour({
   workspace: (conversationId?: string) => dossierDuTour(conversationId),
-  // BRAIN PERSO (conv-1233, 2026-10-28) : ses notes proches arrivent aussi, préfixées `perso:`.
+  // BRAIN PERSO (2026-10-28) : ses notes proches arrivent aussi, préfixées `perso:`.
   brainPerso: () => envDuBrainPerso(),
   persoInjoignable: relancerBrainPerso,
-  // conv-1303 : les notes déjà servies survivent au redémarrage (137 lignes resservies du 13 au 30/10).
+  // Les notes déjà servies survivent au redémarrage (137 lignes resservies du 13 au 30/10).
   relireTraces: () => readBrainTraces()
 })
-// BRAIN PERSO dans le contexte des travaux en arrière-plan (conv-1233, 2026-10-28) : chaque run
+// BRAIN PERSO dans le contexte des travaux en arrière-plan (2026-10-28) : chaque run
 // cherche aussi dans le Brain perso, notes préfixées `perso:` (`orchestrator.ts`).
 os.brainPersoDuRun = () => envDuBrainPerso()
 os.brainPersoInjoignable = relancerBrainPerso
@@ -1125,7 +1125,7 @@ const contexteGrapheDuTour = createBrainContextProvider({
   // mediane a chaque tour (jusqu'a 1 500 ms, son timeout) alors que 73 % des tours n'en tiraient
   // AUCUNE source utile. Le Brain revient a chaque tour le 2026-09-30, mais en CHEMINS seuls et par
   // `titresBrainDuTour` ci-dessus : « a la demande » avait donne 8 appels sur 824 tours.
-  // POIDS MORT RETIRE (conv-703, mesure 2026-09-18) : le graphe poussait ~900 car. de noms de
+  // POIDS MORT RETIRE (mesure 2026-09-18) : le graphe poussait ~900 car. de noms de
   // fichiers sans rapport (« 0. Etat des lieux », `app-data.ts`...) sur 3 questions d'avis sur 3,
   // payes plein tarif a chaque tour. Pour une question sur le code, seule la recherche texte a la demande
   // (`find_in_files`) reste : ce n'est PAS la carte de structure du graphe (perte non evaluee).
@@ -1155,15 +1155,15 @@ const pilot = new AgentPilot(
   (conversationId?: string) => dossierDuTour(conversationId),
   // Commandes du chat AUSSI servies comme outils directs du modèle quand il les porte (chat-mcp.ts).
   true,
-  // Deux lectures plausibles → une question avant de payer (deux-lectures.ts, conv-1092). Le modèle
+  // Deux lectures plausibles → une question avant de payer (deux-lectures.ts). Le modèle
   // des petites tâches (réglage du Routeur) ; une panne rend une erreur, et le travail part comme avant.
-  // Sa ligne de coût porte le fil du tour et la décision du contrôle (deux-lectures-appel.ts, conv-1431).
+  // Sa ligne de coût porte le fil du tour et la décision du contrôle (deux-lectures-appel.ts).
   lecteurDeDeuxLectures(os)
 )
 const modelQuestions = new ModelQuestionHub()
 const activeChatTurns = new ActiveChatTurns()
 /**
- * La mascotte du bureau (conv-1145, « Bille · pastille ») : la bille au-dessus de l'horloge qui dit
+ * La mascotte du bureau (« Bille · pastille ») : la bille au-dessus de l'horloge qui dit
  * si Autowin travaille, t'attend ou a échoué. Tenue ici car les runs (`os:presence`) et les fins
  * de tour la nourrissent depuis deux endroits ; sa fenêtre n'existe qu'après `demarrer`.
  */
@@ -1174,7 +1174,7 @@ function drainPendingDirectives(conversationId: string): string[] {
   const enFile = pendingDirectives.get(conversationId) ?? []
   pendingDirectives.delete(conversationId)
   if (enFile.length) broadcast({ type: 'refresh', scope: 'directives' })
-  // fix-ok: conv-1241 (tour 6e6212f1) — la file n'était relue qu'ENTRE deux appels : conv-1240, tour 2e218711, saisie ts 1793225455947 absente du premier appel (16 min, 22:10:38 → 22:27:00), lue seulement au second (22:27:07).
+  // fix-ok: (tour 6e6212f1) — la file n'était relue qu'ENTRE deux appels : tour 2e218711, saisie ts 1793225455947 absente du premier appel (16 min, 22:10:38 → 22:27:00), lue seulement au second (22:27:07).
   // Celles que le contrôle avant outil a déjà remises au modèle EN PLEIN APPEL ne
   // repartent pas une seconde fois (`orientations-en-cours-app.ts`).
   const queued = solderOrientationsDuFil(conversationId, enFile, 'tour')
@@ -1206,7 +1206,7 @@ const diagnosticCapabilities = new DiagnosticCapabilities()
 /** Boucle de re-probe du diagnostic de démarrage (#4) — arrêtée à la fermeture pour ne pas fuir de timer. */
 let preflightWatchHandle: { stop: () => void } | null = null
 // Surveillance du brain_server APRÈS le démarrage : la boucle de preflight est bornée, celle-ci dure
-// toute la session et relance le service s'il meurt (conv-270, 2026-09-04).
+// toute la session et relance le service s'il meurt (2026-09-04).
 let brainSupervisionHandle: { stop: () => void } | null = null
 /** Relance automatique du moteur en développement (`relance-auto-moteur.ts`), coupée à la fermeture. */
 let relanceMoteurHandle: Pick<RelanceMoteurArmee, 'arreter' | 'mettreEnFile'> | null = null
@@ -1242,7 +1242,7 @@ configureClaudeAccountEnv(() => claudeAccounts.env())
 // (un compte epuise ne doit pas condamner l'autre). Sans cette ligne, le mecanisme existerait sans
 // jamais etre alimente.
 configureClaudeActiveAccountId(() => claudeAccounts.active().id)
-// Le compte CHOISI pour un fil voyage avec ses appels (conv-1416) : il ne passe plus par le compte
+// Le compte CHOISI pour un fil voyage avec ses appels : il ne passe plus par le compte
 // actif, global, que n'importe quel autre fil pouvait changer sous lui. Compte retire entre-temps :
 // rien, le tour suit alors le compte de l'application au lieu de casser.
 configureClaudeCompteDuFil((conversationId) => {
@@ -1253,7 +1253,7 @@ configureClaudeCompteDuFil((conversationId) => {
 // vers un compte encore vivant. Sans ce cablage, la rotation existerait sans jamais se declencher.
 configureClaudeAccountRotation((walled) => claudeAccounts.rotateAwayFrom(walled))
 // La sonde de quota fait renouveler par le CLI la session expiree du compte qu'elle lit : sans ce
-// cablage, la barre restait sur les chiffres d'avant la bascule jusqu'au prochain message (conv-1031).
+// cablage, la barre restait sur les chiffres d'avant la bascule jusqu'au prochain message.
 configureClaudeSessionRenewal((configDir) => renouvelerSessionClaude(configDir))
 // Tout changement du compte actif (interface, depart d'un tour, rotation) rend le quota memorise
 // faux et la liste des comptes de l'interface perimee : on jette l'un et on previent l'autre.
@@ -1341,7 +1341,7 @@ const modelCatalog = new ModelCatalogRefresher(
   agentModels,
   () => {
     // Une clé posée par `setx` n'atteint pas le processus : le redémarrage hérite de l'ancien
-    // environnement du lanceur. On la reprend de l'OS avant chaque relevé (env-reload.ts, conv-1499).
+    // environnement du lanceur. On la reprend de l'OS avant chaque relevé (env-reload.ts).
     hydraterClesFournisseurs(CLES_FOURNISSEURS)
     return discoverImportedModels(fetch, modelCatalogCachePath)
   },
@@ -1528,7 +1528,7 @@ process.env.AUTOWIN_RUN_JOURNAL_ROOT ??= join(app.getPath('userData'), 'run-stdo
  * LES MÉNAGES DE DÉMARRAGE, lancés APRÈS l'affichage de la fenêtre (`interfaceVisible`, dans
  * `app.whenReady`) et en lectures non bloquantes, un fichier à la fois.
  *
- * Mesure du 2026-10-19 (`gels.jsonl`, conv-359) : avant la fenêtre, les ménages de `run-stdout/`
+ * Mesure du 2026-10-19 (`gels.jsonl`) : avant la fenêtre, les ménages de `run-stdout/`
  * (209 `statSync`, 8 s), de `causal-trace/` et des workspaces de runs (108 `openSync` + 120
  * `readSync`, 16,7 s) figeaient le démarrage du matin sur le disque D: saturé, alors qu'aucun n'est
  * nécessaire pour afficher quoi que ce soit. Ils s'enchaînent ici, l'un après l'autre : lancés
@@ -1540,7 +1540,7 @@ async function menagesApresAffichage(): Promise<void> {
   // du GC ; best-effort : un echec de menage ne doit jamais gener l'app.
   //
   // PROTECTION PAR REFERENCE (2026-09-06). La garde d'inactivite ne suffisait pas : le journal de
-  // l'agent `build` de conv-43 a ete supprime a 43 h alors que son appel provider n'etait pas solde.
+  // l'agent `build` a ete supprime a 43 h alors que son appel provider n'etait pas solde.
   // Son run est devenu insolvable et s'est rejoue rouge a chaque demarrage. On passe donc au menage
   // la liste des journaux qu'un point de reprise ATTEND encore — un fait, pas une date.
   try {
@@ -1610,7 +1610,7 @@ async function menagesApresAffichage(): Promise<void> {
   } catch (error) {
     console.warn('[runs] GC des workspaces de runs impossible', error)
   }
-  // COPIES DE BASE ABANDONNÉES (conv-1583, 2026-11-05) : une publication coupée par la mort de l'app
+  // COPIES DE BASE ABANDONNÉES (2026-11-05) : une publication coupée par la mort de l'app
   // laissait sa `%TEMP%\aw-base-*` sur le disque, inscrite dans `git worktree list`, sa jonction vers
   // `node_modules` encore posée. Seules celles de plus de 6 h partent ; voir `comparaison-a-la-base.ts`.
   const copiesDeBase = await balayerCopiesDeBaseOrphelines()
@@ -1680,27 +1680,27 @@ bus.onConversationRemoved = (id: string): void => {
  * promettre une relance qui n'arriverait pas.
  */
 bus.redemarrerApp = (): void => restartApplication(app)
-// FILE DE REDÉMARRAGE (conv-304) : quand d'autres agents tournent, `restart_app` dépose sa demande
+// FILE DE REDÉMARRAGE : quand d'autres agents tournent, `restart_app` dépose sa demande
 // dans la relance au repos au lieu de les couper. Pas de file (version installée) -> `false`.
 // Un redémarrage attend aussi la publication d'un tour fini : elle part après la fin du tour, et il
-// la coupait une minute plus tard, laissant ses fichiers non commités (2026-11-01, conv-1048).
+// la coupait une minute plus tard, laissant ses fichiers non commités (2026-11-01).
 const publicationsEnVol = creerSuiviDesPublications()
 const conversationsOccupees = (): string[] => [
   ...new Set([...activeChatTurns.inFlightConversations(), ...publicationsEnVol.conversations()])
 ]
 bus.conversationsEnVol = conversationsOccupees
-// `remove_conversation(s)` arrête le tour et le run du fil supprimé, comme le Stop (conv-1060).
+// `remove_conversation(s)` arrête le tour et le run du fil supprimé, comme le Stop.
 bus.toursDeChat = activeChatTurns
 bus.redemarrerAuRepos = (demande) => relanceMoteurHandle?.mettreEnFile(demande) ?? false
-// Outil `bureau_cache_fermer` (lot 1, conv-222) : meme racine de scripts que la TV et les gestes,
+// Outil `bureau_cache_fermer` (lot 1) : meme racine de scripts que la TV et les gestes,
 // `app.asar.unpacked` une fois installee.
 bus.fermerBureauCache = (demande) =>
   fermerHdesk(racineScriptsHorsArchive(app.getAppPath()), demande)
-// Outils `bureau_cache_lancer / observer / agir` (conv-344) : mêmes chemins que la vue « Bureaux
+// Outils `bureau_cache_lancer / observer / agir` : mêmes chemins que la vue « Bureaux
 // cachés » — lanceur détaché (l'app survit au tour), processus de capture déjà ouvert, hdesk-act.
 bus.lancerBureauCache = (demande) =>
   creerBureau(racineScriptsHorsArchive(app.getAppPath()), demande)
-// conv-1457 (hdesk-arbre.ts) : l'observation joint l'arbre d'accessibilité, et le geste x/y suit
+// hdesk-arbre.ts : l'observation joint l'arbre d'accessibilité, et le geste x/y suit
 // l'image RECADRÉE comme la petite TV — avant, il partait tel quel et tombait à côté (origine (7,57)
 // mesurée sur la Table des caractères) ; `element` appuie par nom.
 const outilsHdeskDuChat = outilsBureauCacheDuChat({
@@ -1711,15 +1711,15 @@ const outilsHdeskDuChat = outilsBureauCacheDuChat({
 bus.observerBureauCache = outilsHdeskDuChat.observer
 bus.agirBureauCache = outilsHdeskDuChat.agir
 bus.ficheBureauCache = (id) => lireRegistre(registreParDefaut()).find((e) => e.id === id)
-// Outils `navigateur_*` de l'agent (conv-1286, lot 4/5) : le gestionnaire est redemandé à chaque
+// Outils `navigateur_*` de l'agent (lot 4/5) : le gestionnaire est redemandé à chaque
 // appel — la fenêtre principale rouverte en porte un neuf ; fermée, il vaut `null`.
 bus.navigateur = () => gestionnaireNavigateur()
-// Outil `terminal_lire` de l'agent (conv-1362, lot 3/3) : `null` tant que l'IPC n'est pas branché.
+// Outil `terminal_lire` de l'agent (lot 3/3) : `null` tant que l'IPC n'est pas branché.
 bus.terminal = () => gestionnaireTerminal()
 os.setCausalMemoryRetriever((conversationId) =>
   causalLearningContext(causalTrace.readConversation(conversationId))
 )
-// La mémoire du scout relit ici ce que sont devenues les pistes prises (piste 1, conv-1033). Un
+// La mémoire du scout relit ici ce que sont devenues les pistes prises (piste 1). Un
 // journal illisible ne prive le scout que de cette ligne du bilan : on le dit, on ne bloque rien.
 os.setResultatsDesRuns(() => {
   try {
@@ -1827,11 +1827,11 @@ function registerIdentiteIpc(): void {
   })
 }
 
-/** Petite TV du bureau cache (conv-528) : lecture seule, processus de capture cree a la demande. */
+/** Petite TV du bureau cache : lecture seule, processus de capture cree a la demande. */
 let capteurHdesk: CapteurHdesk | null = null
 /** Processus lancés par le bouton « Lancer » : arrêtés, eux seuls, à la fermeture de l’app. */
 let lancementIpc: { arreterTout: () => Promise<void> } | null = null
-/** Serveur ouvert aux scripts du poste (conv-1144) : fermé, et son fichier retiré, à la fermeture. */
+/** Serveur ouvert aux scripts du poste : fermé, et son fichier retiré, à la fermeture. */
 let pointEntreeLocal: PointEntreeLocal | null = null
 function registerHdeskTvIpc(): void {
   const capteur = (): CapteurHdesk =>
@@ -1849,7 +1849,7 @@ function registerHdeskTvIpc(): void {
   ipcMain.handle('hdesk:tv:act', (event, geste: GesteTv) => {
     assertTrustedRendererSender(event, 'Petite TV du bureau caché')
     if (process.platform !== 'win32') return { ok: false, message: 'Windows uniquement.' }
-    // Le point arrive en pixels de l'image RECADREE affichee : on le ramene a l'ecran du bureau (conv-1009).
+    // Le point arrive en pixels de l'image RECADREE affichee : on le ramene a l'ecran du bureau.
     return agirHdesk(racineScriptsHorsArchive(app.getAppPath()), capteur().versEcran(geste))
   })
   ipcMain.handle('hdesk:tv:basculer', (event, id: string) => {
@@ -1861,13 +1861,13 @@ function registerHdeskTvIpc(): void {
     assertTrustedRendererSender(event, 'Petite TV du bureau caché')
     return capteurHdesk?.arreter()
   })
-  // VUE « BUREAUX CACHÉS » (conv-951) : tous les bureaux, quel que soit le fil. Aperçu et bascule
+  // VUE « BUREAUX CACHÉS » : tous les bureaux, quel que soit le fil. Aperçu et bascule
   // reprennent les canaux de la TV ci-dessus. Fermer ne reçoit QUE l'identifiant : le fil vient de la
   // fiche du bureau (hdesk-gestion.ts), jamais de l'écran.
   ipcMain.handle('hdesk:gestion:bureaux', (event) => {
     assertTrustedRendererSender(event, 'Vue Bureaux cachés')
     if (process.platform !== 'win32') return { ok: true, bureaux: [] }
-    // Le processus de capture DÉJÀ ouvert pour les aperçus répond aussi à la liste (conv-344).
+    // Le processus de capture DÉJÀ ouvert pour les aperçus répond aussi à la liste.
     return bureauxGeres(() => capteur().listeVivants())
   })
   ipcMain.handle('hdesk:gestion:fermer', (event, id: string) => {
@@ -1876,7 +1876,7 @@ function registerHdeskTvIpc(): void {
       return { ok: false, code: null, message: 'Windows uniquement.' }
     return fermerBureauGere(racineScriptsHorsArchive(app.getAppPath()), String(id))
   })
-  // « Parcourir… » (conv-344) : le sélecteur natif, filtré sur les .exe ; le main juge le résultat.
+  // « Parcourir… » : le sélecteur natif, filtré sur les .exe ; le main juge le résultat.
   ipcMain.handle('hdesk:gestion:choisirExe', (event) => {
     assertTrustedRendererSender(event, 'Vue Bureaux cachés')
     return choisirExecutable(() =>
@@ -1893,9 +1893,9 @@ function registerHdeskTvIpc(): void {
 
 /**
  * L’état du démarrage dont a besoin `registerChatIpc` (src/main/ipc/chat.ts), extrait le
- * 2026-11-04 (conv-1508). Les `let` passent par accesseurs : le module lit leur valeur VIVANTE.
+ * 2026-11-04. Les `let` passent par accesseurs : le module lit leur valeur VIVANTE.
  */
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- son type EST le contrat (ContexteIpcChat), conv-1508
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- son type EST le contrat (ContexteIpcChat)
 function contexteIpcChat() {
   return {
     activeChatTurns,
@@ -2051,7 +2051,7 @@ if (ownsInstanceLock) {
       else pendingScheduledOccurrences.add(scheduledOccurrence)
       return
     }
-    // La fenêtre PRINCIPALE, pas la première venue : la mascotte du bureau peut l'être (conv-1142).
+    // La fenêtre PRINCIPALE, pas la première venue : la mascotte du bureau peut l'être.
     showMainWindow()
   })
 }
@@ -2065,7 +2065,7 @@ installCrashHandlers({
   onFatal: () => bus.abortAllOrchestrations()
 })
 
-// Vidéos du fil lues depuis le disque par plages (kaizen conv-260) : Electron n'accepte ce schéma
+// Vidéos du fil lues depuis le disque par plages : Electron n'accepte ce schéma
 // qu'AVANT l'évènement `ready`. Le service des requêtes est branché avec les canaux des artefacts.
 declarerSchemaMediaDuFil()
 
@@ -2090,7 +2090,7 @@ app.whenReady().then(async () => {
   if (process.platform === 'win32' && !app.isPackaged) {
     try {
       app.setToastActivatorCLSID(DEV_TOAST_ACTIVATOR_CLSID)
-      // Sans argument, un clic dans le menu Démarrer ouvrait la page d'accueil d'Electron (conv-954).
+      // Sans argument, un clic dans le menu Démarrer ouvrait la page d'accueil d'Electron.
       // Le script vient du dépôt de l'EXE, pas de `app.getAppPath()` : une instance de test lancée
       // sur une copie temporaire ne doit pas faire viser au raccourci un script qui disparaîtra.
       const racineExe = racineDepotDeLExeDev(process.execPath)
@@ -2103,7 +2103,7 @@ app.whenReady().then(async () => {
         identite: process.execPath,
         clsid: DEV_TOAST_ACTIVATOR_CLSID,
         // Copie à nom VERSIONNÉ : sous un chemin inchangé, l'Explorateur garde l'ancienne image
-        // (l'atome, mesuré conv-266). Détail : raccourci-demarrer-dev.ts, `cheminIconeVersionnee`.
+        // (l'atome). Détail : raccourci-demarrer-dev.ts, `cheminIconeVersionnee`.
         icone: poserIconeVersionnee({
           source: iconeRaccourciDev(app.getAppPath(), process.env['AUTOWIN_OS_DEV'] === '1'),
           dossier: dossierIconesVersionnees(process.env['LOCALAPPDATA'] ?? app.getPath('appData')),
@@ -2130,7 +2130,7 @@ app.whenReady().then(async () => {
       console.warn('[icone barre des taches dev]', erreur)
     }
     // Le raccourci du BUREAU, posé une fois par create-dev-shortcut.ps1, gardait l'ancien logo après
-    // une mise à jour (conv-930) : on ne repointe que son icône, et seulement s'il est celui de CE
+    // une mise à jour : on ne repointe que son icône, et seulement s'il est celui de CE
     // dépôt. Une instance de test isolée n'a pas à toucher au Bureau de l'utilisateur.
     if (!isolatedTestInstance) {
       try {
@@ -2188,20 +2188,20 @@ app.whenReady().then(async () => {
       : Promise.resolve({ values: {}, canWriteMarker: dejaMigre })
   registerStorageMigrationIpc(lectureHistorique)
   registerHdeskTvIpc()
-  // Navigateur intégré du chat (conv-1286) : ses pages vivent DANS la fenêtre principale.
+  // Navigateur intégré du chat : ses pages vivent DANS la fenêtre principale.
   registerNavigateurIpc({ fenetrePrincipale: fenetres.fenetrePrincipale })
-  // Terminal intégré du chat (conv-1362, lot 3/3) : même dossier et même compte que les tours du fil.
+  // Terminal intégré du chat (lot 3/3) : même dossier et même compte que les tours du fil.
   registerTerminalIpc({
     fenetrePrincipale: fenetres.fenetrePrincipale,
     dossierDuFil: dossierDuTour,
     environnement: () => environnementDuTerminal(withClaudeAccountEnv(process.env))
   })
-  // Question à côté (conv-1362) : le catalogue du bus et les comptes, ceux du tour de chat.
+  // Question à côté : le catalogue du bus et les comptes, ceux du tour de chat.
   registerQuestionACoteIpc({
     catalogue: () => bus.catalog(),
     comptes: () => claudeAccounts.current().accounts
   })
-  // Mods d'Autowin chargés par chaque run (conv-58) : hors archive, comme les scripts du bureau caché.
+  // Mods d'Autowin chargés par chaque run : hors archive, comme les scripts du bureau caché.
   definirDossierModsAutowin(join(racineScriptsHorsArchive(app.getAppPath()), 'mods', 'autowin'))
   registerProdPassphraseIpc(ipcMain, {
     lireEmpreinte: () => lireEmpreinteProd(ensureAutowinAppData(appDataRoot)),
@@ -2282,9 +2282,9 @@ app.whenReady().then(async () => {
     return guichetProd.enAttente()
   })
   registerIdentiteIpc()
-  // Version allégée à distance, version téléphone sur petit écran (conv-1442).
+  // Version allégée à distance, version téléphone sur petit écran.
   brancherAffichageSession()
-  // Serveurs MCP déclarés par l'utilisateur (conv-1558).
+  // Serveurs MCP déclarés par l'utilisateur.
   enregistrerIpcServeursMcp({ ipc: ipcMain, assertTrusted: assertTrustedRendererSender })
   const suiviDuPlan = registerChatIpc(contexteIpcChat())
   registerTicketsIpc({
@@ -2364,7 +2364,7 @@ app.whenReady().then(async () => {
   // échoue et pousse CHAQUE transition — dont la récupération ok qui efface la bannière. On ne pousse
   // que sur CHANGEMENT (ok-ness + set d'échecs) pour ne pas écraser un dismiss utilisateur inutilement.
   let lastPreflightSignature: string | null = null
-  // LES AGENTS QUI ONT SURVÉCU AU REDÉMARRAGE CHARGENT LA GARDE COURANTE (conv-770, 2026-10-01) :
+  // LES AGENTS QUI ONT SURVÉCU AU REDÉMARRAGE CHARGENT LA GARDE COURANTE (2026-10-01) :
   // leur script de hook était figé à leur lancement, donc l'ancienne garde restait active chez eux.
   try {
     const gardes = rafraichirGardesDesAgents({ racine: tmpdir(), script: scriptDesGardesCourant() })
@@ -2489,7 +2489,7 @@ app.whenReady().then(async () => {
     gardePlantage: creerGardeRepriseCrash(cheminGardeRepriseCrash(app.getPath('userData'))),
     plansDeLots: suiviDuPlan
   })
-  /** Un run rattaché se clôt ici sans repartir : le plan qui l'a adopté doit l'apprendre (conv-1308). */
+  /** Un run rattaché se clôt ici sans repartir : le plan qui l'a adopté doit l'apprendre. */
   const annoncerFinDuRunRepris = (
     run: { conversationId?: string; turnId?: string },
     raison: string
@@ -2514,7 +2514,7 @@ app.whenReady().then(async () => {
     relancer: (state) => relaunchResumableRun(state)
   })
   /*
-   * RÉVEIL APRÈS LE QUOTA (conv-1069). Un run suspendu par le quota ne repartait qu'au démarrage
+   * RÉVEIL APRÈS LE QUOTA. Un run suspendu par le quota ne repartait qu'au démarrage
    * suivant ou par « Reprendre tout » : app ouverte, il attendait indéfiniment. Même triage et même
    * file que « Reprendre tout » ; replanifié à chaque nouveau mur noté sur un checkpoint.
    */
@@ -2635,7 +2635,7 @@ app.whenReady().then(async () => {
       })
       continue
     }
-    // Le travail continue dans ce fil : son lot n'est pas interrompu (conv-1308). Fait AVANT d'attendre,
+    // Le travail continue dans ce fil : son lot n'est pas interrompu. Fait AVANT d'attendre,
     // parce que la file de démarrage peut retarder la relance jusqu'à la fin d'un autre run : pendant
     // ce temps, « Reprendre » y aurait lancé un second agent. `bloquer` n'est pas adopté : plus rien
     // ne tourne, et son lot attend le clic.
@@ -2706,7 +2706,7 @@ app.whenReady().then(async () => {
         })
         const message = recapMessage(recap, produitEncore)
         if (conversationId && message) {
-          // UN message par chantier, MIS À JOUR d'un redémarrage à l'autre (conv-913, 2026-10-13) :
+          // UN message par chantier, MIS À JOUR d'un redémarrage à l'autre (2026-10-13) :
           // l'ajouter à chaque fois empilait une bulle de plus en bas du fil, qui cachait à l'écran
           // le tour encore vivant.
           const heure = new Date().toLocaleTimeString('fr-FR', {
@@ -2774,7 +2774,7 @@ app.whenReady().then(async () => {
         undefined,
         undefined,
         // Le plafond compte le SILENCE du journal, pas la durée de l'étape : une construction de
-        // plus de 10 min n'est plus déclarée « interrompue » en plein travail (conv-115, 2026-10-09).
+        // plus de 10 min n'est plus déclarée « interrompue » en plein travail (2026-10-09).
         async () => {
           const latest = os
             .resumableOrchestrations()
@@ -2852,7 +2852,7 @@ app.whenReady().then(async () => {
     // ensuite jusqu'à sa disponibilité (warm-up fastembed). Fire-and-forget : ne bloque pas le push.
     const brainCheck = raw.checks.find((c) => c.id === 'brain')
     /*
-     * REARMEMENT — mesure conv-152, 2026-09-02. `ensureBrainServerStarted` ne se rearme QUE
+     * REARMEMENT — mesure, 2026-09-02. `ensureBrainServerStarted` ne se rearme QUE
      * lorsqu'elle est appelee et trouve le service vivant ; or on ne l'appelait que sur un check
      * ROUGE. Donc apres UNE tentative infructueuse, `attempted` restait vrai pour toute la session
      * et l'app ne relancait plus JAMAIS le brain_server : elle repondait « injoignable » alors que
@@ -2906,7 +2906,7 @@ app.whenReady().then(async () => {
     onEvent: (message) => console.log(message)
   })
 
-  // BRAIN PERSO (conv-1233, 2026-10-28) : son serveur démarre avec l'app, à côté de celui de
+  // BRAIN PERSO (2026-10-28) : son serveur démarre avec l'app, à côté de celui de
   // l'équipe. Une instance de TEST n'y touche pas, comme pour le Brain d'équipe.
   if (!isolatedTestInstance) {
     void demarrerBrainPersoAuLancement().catch((e) =>
@@ -2960,7 +2960,7 @@ app.whenReady().then(async () => {
 // resté dans la fenêtre de debounce de 120 ms de la persistance.
 let otelQuitDrainStarted = false
 app.on('before-quit', (event) => {
-  // Nos terminaux, un par un, par leur processus (conv-1362, lot 3/3). S'il y en avait, on ressort
+  // Nos terminaux, un par un, par leur processus (lot 3/3). S'il y en avait, on ressort
   // au tour suivant : quitter dans le même tour fige Electron (voir `fermerTerminauxAvantSortie`).
   if (fermerTerminauxAvantSortie(() => app.quit())) {
     event.preventDefault()
@@ -2977,7 +2977,7 @@ app.on('before-quit', (event) => {
   raccourciCapture = null
   flushConversations()
   flushScheduledTasks()
-  // Les petits magasins JSON s'ecrivent hors du fil principal depuis conv-1368 : ce qui reste en
+  // Les petits magasins JSON s'ecrivent hors du fil principal : ce qui reste en
   // attente doit etre pose avant l'arret. `flushScheduledTasks` le fait deja, mais il peut disparaitre.
   viderFichiersEnAttente()
   // Le journal de tour ecrit par LOTS : ce qui dort en tampon doit atteindre le disque avant
@@ -2986,10 +2986,10 @@ app.on('before-quit', (event) => {
   // Les appels modele s'ecrivent hors du fil principal : ce qui est encore en vol doit atteindre
   // le disque avant l'arret, sinon l'Observatory perdrait les derniers appels de la session.
   flushAllPromptCalls()
-  // Les traces de fichiers des fils s'ecrivent en DIFFERE depuis /gel conv-1118 (appendFileSync
+  // Les traces de fichiers des fils s'ecrivent en DIFFERE depuis /gel (appendFileSync
   // figeait la fenetre jusqu'a 10 s) : ce qui reste en tampon doit atteindre le disque avant l'arret.
   flushConversationFileTraces()
-  // Les traces Brain aussi, depuis conv-1598 (appendFileSync figeait la fenetre 29 s en une matinee).
+  // Les traces Brain aussi, (appendFileSync figeait la fenetre 29 s en une matinee).
   flushBrainTraces()
   // Le cout des tours s'ecrit desormais en DIFFERE (appendFileSync figeait l'interface 9,4 s,
   // mesure du 2026-09-12) : ce qui reste en tampon doit atteindre le disque avant l'arret.

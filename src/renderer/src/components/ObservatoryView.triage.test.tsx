@@ -136,7 +136,7 @@ describe('Observatory triage : gravité, remontée du verdict, scope des payload
       nativeTrace('native-conv-2', 'conv-2')
     ])
     const diagnostics = view.querySelector('.observatory-native-diagnostics')
-    // conv-1 est ouverte : ni le payload global, ni celui de conv-2 ne la décrivent.
+    // est ouverte : ni le payload global, ni celui ne la décrivent.
     expect(diagnostics).toBeNull()
 
     const conv2 = [...view.querySelectorAll('.observatory-conversations button')].find((button) =>

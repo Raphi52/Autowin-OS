@@ -13,7 +13,7 @@ import { convRunsRoot } from '../runs/conv-runs'
  * `suppliedRootTask ?? delegatedTask`. Quand l'utilisateur relance par « vas-y » ou « fais un truc
  * parfait », le prompt racine EST cette phrase vague — et la cible contextualisee produite par le
  * pilote etait purement JETEE. L'orchestrateur partait donc reparer la phrase elle-meme au lieu du
- * sujet discute juste avant (cas d'origine : conv-1265).
+ * sujet discute juste avant (cas d'origine).
  *
  * LE CORRECTIF NE RETIRE RIEN : le prompt racine reste l'autorite, on lui AJOUTE la cible
  * contextualisee. Un faux positif coute donc une ligne de contexte en trop, jamais une cible
@@ -60,7 +60,7 @@ async function lancer(rootTask: string, convId = 'conv-reprise'): Promise<string
 }
 
 // fix-ok: `rootNeedsContext` ne reconnaissait qu'une relance : un message composé par Autowin devenait
-// la tâche du run, ce que ces tests rendaient rouge avant `estUneRepriseAutomatique` (conv-1423).
+// la tâche du run, ce que ces tests rendaient rouge avant `estUneRepriseAutomatique`.
 describe('reprise automatique — le run garde la cible donnée par le modèle (conv-1423)', () => {
   it('le message de reprise après quota ne devient pas la tâche du run', async () => {
     const message = composerMessageDeReprise()

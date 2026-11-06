@@ -1,4 +1,4 @@
-// Groupe de commandes « dépôt d’une leçon ou d’une préférence », sorti de AppCommandBus.run (conv-1508, lot 2).
+// Groupe de commandes « dépôt d’une leçon ou d’une préférence », sorti de AppCommandBus.run (lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import type { RoleBinding } from '../profil/roles'
@@ -10,7 +10,7 @@ import { brainServiceToken } from '../brain/brain-retrieval'
 import { appendBrainTrace } from '../activity/brain-trace-spool'
 import { noteRemembered } from '../brain/session-memory-echo'
 
-/** Cas de `AppCommandBus.run` : dépôt d’une leçon ou d’une préférence. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
+/** Cas de `AppCommandBus.run` : dépôt d’une leçon ou d’une préférence. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerMemoire(
   bus: AppCommandBus,
   name: string,
@@ -21,11 +21,11 @@ export async function executerMemoire(
 ): Promise<unknown> {
   switch (name) {
     case 'remember': {
-      // PRÉFÉRENCE → PROFIL LOCAL (conv-1098, 2026-10-22, demande de l'utilisateur) : le type
+      // PRÉFÉRENCE → PROFIL LOCAL (2026-10-22, demande de l'utilisateur) : le type
       // `preference` s'arrête ICI, avant tout appel au Brain partagé. Voir `retenirPreferenceAuProfil`.
       if (a.type === 'preference') return retenirPreferenceAuProfil(a)
       /*
-       * BRAIN PERSO OU BRAIN D'ÉQUIPE (conv-1233, 2026-10-28) : l'agent range lui-même, d'après
+       * BRAIN PERSO OU BRAIN D'ÉQUIPE (2026-10-28) : l'agent range lui-même, d'après
        * `portee`. Sans Brain perso réglé, un fait perso est REFUSÉ, jamais rabattu sur l'équipe :
        * ce serait publier à toute l'équipe ce que l'utilisateur voulait garder pour lui.
        */

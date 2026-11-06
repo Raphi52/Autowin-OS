@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import type { OrchestrationStep } from '../orchestration/orchestrator'
 
 /**
- * LE PLAN DU BUILD, RELISIBLE DANS LE RUN.md (conv-1083, 2026-10-22).
+ * LE PLAN DU BUILD, RELISIBLE DANS LE RUN.md (2026-10-22).
  *
  * Le décomposeur (`greedy-decompose.ts`) rend un graphe de sous-tâches et leurs dépendances, et le
  * build les exécute dès que leurs dépendances ont rendu (`greedy-scheduler.ts`). Seul « plan de N

@@ -15,7 +15,7 @@ import {
 } from './ressemblance-des-facons'
 
 /**
- * « ESSAIE 3 FAÇONS » : LE CONTRÔLE DE RESSEMBLANCE (conv-1057, 2026-10-22). Les trois branches
+ * « ESSAIE 3 FAÇONS » : LE CONTRÔLE DE RESSEMBLANCE (2026-10-22). Les trois branches
  * reçoivent trois consignes différentes, mais rien ne vérifiait que leurs RÉSULTATS diffèrent : deux
  * correctifs identiques s'affichaient comme deux lignes aux mêmes chiffres. Le contrôle compare ce que
  * chaque façon a changé depuis la photo de l'essai : même état du code = identique, sinon la part de

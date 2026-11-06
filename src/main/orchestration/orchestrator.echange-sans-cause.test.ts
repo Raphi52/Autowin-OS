@@ -22,12 +22,12 @@ import { MARQUE_QUESTION_SANS_CAUSE } from '../gates/echange-sans-cause'
 import { messagesAAfficher } from '../conversations/messages-entre-fils-app'
 
 /*
- * ÉCHANGE AVANT RÉPARATION — refus « sans cause » seul (conv-1139, 2026-10-24, étape 1 de l'option A
+ * ÉCHANGE AVANT RÉPARATION — refus « sans cause » seul (2026-10-24, étape 1 de l'option A
  * du cadrage forum-agents-partie2-juge-build). Mesure du 24/10 : 18 refus du contrôle final faits du
  * SEUL fix-gate dans 14 runs ; chacun relançait build + nettoyage + juge, alors qu'une ligne
  * `CausalHypothesis: <chemin> — <cause>` dans le texte du run suffit à le lever.
  *
- * Fichier témoin SANS jeton (note Brain du 22/10, conv-1074) : `src/temoin-echange-sans-jeton.ts`
+ * Fichier témoin SANS jeton (note Brain du 22/10) : `src/temoin-echange-sans-jeton.ts`
  * n'existe pas, donc la source 3 des jetons (dernier changement git) ne peut rien créditer.
  */
 const TEMOIN = 'src/temoin-echange-sans-jeton.ts'
@@ -149,7 +149,7 @@ describe('refus « sans cause » seul : une question au build avant toute répar
     )
     // Un seul échange par refus : la 2e question suit un NOUVEAU build, jamais la 1re dans le même passage.
     expect(provider.questions[1].resume).toBe('sess-build-2')
-    // Plus de plafond par run (conv-1139, 2026-10-25) : un échange après CHAQUE build refusé, et le run
+    // Plus de plafond par run (2026-10-25) : un échange après CHAQUE build refusé, et le run
     // s'arrête quand même, au plafond dur des passages de réparation.
     expect(provider.questions.length).toBeGreaterThan(2)
     expect(provider.questions.map((q) => q.buildsAvant)).toEqual(

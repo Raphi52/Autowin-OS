@@ -96,7 +96,7 @@ export function codexStructuralFailure(error: unknown): Error {
 /**
  * Que faire du travail déjà accumulé quand le watchdog coupe le CLI.
  *
- * Mesuré le 2026-08-12 sur conv-1122 (vue Agent Studio) : un appel subagent a tourné 1 286 s —
+ * Mesuré le 2026-08-12 (vue Agent Studio) : un appel subagent a tourné 1 286 s —
  * 21 minutes — puis s'est tu 5 minutes, et le watchdog l'a tué sur inactivité. Le seuil est sain,
  * mais l'adaptateur rejetait alors que `finalText`, `executionEvidence` et l'usage étaient DÉJÀ en
  * mémoire : 21 minutes de travail perdues, run rouge, rien de récupérable.
@@ -355,7 +355,7 @@ export function codexExecSpec(
     '--skip-git-repo-check',
     /*
      * L'ÉQUIVALENT DE `--strict-mcp-config` CHEZ CLAUDE. Sans lui, l'agent charge les plugins du poste.
-     * Mesuré le 2026-10-31 (conv-1414) : pour écrire un simple fichier, `gpt-6-luna` a ouvert
+     * Mesuré le 2026-10-31 : pour écrire un simple fichier, `gpt-6-luna` a ouvert
      * `cua_repl`, le Computer Use de l'application Codex, qui pilote le VRAI écran de l'utilisateur.
      * La session du CLI, elle, reste lue : cette option n'écarte que `config.toml`.
      */
@@ -402,7 +402,7 @@ const LONGUEUR_MAX_CHEMIN_WINDOWS = 259
 /**
  * Le compagnon de `codex.exe`, par lequel passent TOUS les outils du modèle.
  *
- * Mesuré le 2026-10-31 (conv-1414) avec le Node de winget : `codex.exe` à 248 caractères se lance,
+ * Mesuré le 2026-10-31 avec le Node de winget : `codex.exe` à 248 caractères se lance,
  * `codex-code-mode-host.exe` à 264 rend ENOENT. Le modèle répondait, mais sans aucun outil, et une
  * jonction vers un chemin court n'y change rien : le CLI la résout. Mieux vaut refuser ce poste en
  * donnant le geste que proposer un agent qui ne peut rien faire.
@@ -417,7 +417,7 @@ function assertCompagnonLancable(binaire: string, platform: NodeJS.Platform): vo
 
 /**
  * OÙ EST LE CLI CODEX ? — résolution UNIQUE, partagée par `codex exec` (ci-dessus) et par le listing
- * des modèles (`codex-model-source.ts`). Avant le 2026-10-31 (conv-1414), le listing avait sa propre
+ * des modèles (`codex-model-source.ts`). Avant le 2026-10-31, le listing avait sa propre
  * copie qui ne cherchait que sous `%APPDATA%\npm` : sur ce poste le CLI vit dans le préfixe npm du
  * Node de winget, donc `codex exec` le trouvait et le catalogue, lui, restait vide.
  */
@@ -477,7 +477,7 @@ export function codexCliConnecte(spawnFn: typeof spawn = spawn): Promise<boolean
  * jeton du serveur ne passe JAMAIS sur la ligne de commande, lisible par tout processus du poste :
  * il part dans l'environnement de cet appel, et le CLI l'y relit par `env_http_headers`.
  * `default_tools_approval_mode` : sans lui, `codex exec` n'a personne à qui demander l'accord et
- * chaque appel d'outil serait annulé (mesuré le 2026-10-31, conv-1414).
+ * chaque appel d'outil serait annulé (mesuré le 2026-10-31).
  */
 export function optionsMcpCodex(outils: NonNullable<SendOptions['skillNodeTools']>): {
   config: string[]
@@ -653,7 +653,7 @@ async function executerCodex(
       inactivityMs: SUBAGENT_INACTIVITY_MS,
       onTrip: (reason) => {
         killEscalate(child)
-        // Ne pas jeter ce qui a déjà été produit : mesuré le 2026-08-12 (conv-1122), un appel de
+        // Ne pas jeter ce qui a déjà été produit : mesuré le 2026-08-12, un appel de
         // 21 minutes a été tué après 5 min de silence, emportant texte, preuves et usage déjà
         // accumulés. Le watchdog reste souverain sur la MORT du process, pas sur la destruction
         // du travail.
@@ -854,7 +854,7 @@ export function codexApiEffort(effort: string | undefined): string | undefined {
  * `agent-pilot.ts` remet a TOUS les modeles la meme liste : pieces du message courant, puis pieces
  * d'un tour anterieur rejointes d'office (`provenance: 'message-precedent'`). Ici chaque image
  * part en `input_image` NU (ni nom, ni provenance) : sans texte qui les separe, une image ancienne
- * est indiscernable de celle du message — le double comptage de conv-150 (tour
+ * est indiscernable de celle du message — le double comptage (tour
  * 1bf1ae63-adb7-47be-ba4e-5c65c5593851, « tes deux captures » pour une seule) en pire.
  * Sans piece ancienne, le contenu reste strictement celui d'avant.
  */
@@ -987,7 +987,7 @@ export class CodexAdapter implements ProviderAdapter {
     opts: SendOptions = {}
   ): AsyncGenerator<StreamChunk, SendResult, void> {
     /*
-     * LE CHAT PASSE PAR LE CLI CONNECTÉ DÈS QU'AUTOWIN N'A PAS SON PROPRE JETON (2026-10-31, conv-1414).
+     * LE CHAT PASSE PAR LE CLI CONNECTÉ DÈS QU'AUTOWIN N'A PAS SON PROPRE JETON (2026-10-31).
      *
      * Le jeton d'Autowin venait de `npm run codex:login`, supprimé le 2026-09-04 : sur un poste neuf,
      * tout tour de chat ChatGPT mourait sur « non authentifié » alors que `codex login status` répondait

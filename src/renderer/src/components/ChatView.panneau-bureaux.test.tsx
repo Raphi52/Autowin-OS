@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LE PANNEAU DES BUREAUX CACHÉS DANS LE CHAT (conv-1378, 2026-10-31) : « ça devient un icône à côté de
+ * LE PANNEAU DES BUREAUX CACHÉS DANS LE CHAT (2026-10-31) : « ça devient un icône à côté de
  * celui du navigateur et ça ouvre un right panel comme le navigateur ».
  *
  * Entrées qui doivent faire échouer ce fichier : un bouton absent de l'en-tête, les deux panneaux

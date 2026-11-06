@@ -37,7 +37,7 @@ function loadTaskStore(path = taskStorePath()): TaskStoreSnapshot {
 }
 
 /**
- * Hors du fil principal (conv-1368) : `renameSync` ici a figé la fenêtre 23,4 s en 7 jours, 16 s d'un
+ * Hors du fil principal : `renameSync` ici a figé la fenêtre 23,4 s en 7 jours, 16 s d'un
  * coup. La revendication d'une occurrence n'en reste pas moins durable avant son exécution :
  * `attendrePersistance` la fait attendre par le planificateur.
  */

@@ -56,7 +56,7 @@ export interface Gel {
   /**
    * TEMOIN DE VIE — ce n'est PAS un gel, c'est la preuve que l'instrument tourne.
    *
-   * Defaut vecu le 2026-09-05 (conv-303) : apres un redemarrage, `gels.jsonl` n'a plus rien ecrit
+   * Defaut vecu le 2026-09-05 : apres un redemarrage, `gels.jsonl` n'a plus rien ecrit
    * pendant que l'application etait sollicitee. Deux lectures possibles, et AUCUN moyen de les
    * distinguer : « plus aucun blocage » (le correctif marche) ou « plus rien ne s'ecrit » (la
    * mesure est morte). Un journal muet est donc indecidable, et une preuve indecidable ne vaut
@@ -101,19 +101,19 @@ export interface Gel {
    */
   appelant?: string
   /**
-   * LES MESSAGES DU FIL qui ont rendu pendant un gel d'affichage du fil (conv-1077, 2026-10-22).
+   * LES MESSAGES DU FIL qui ont rendu pendant un gel d'affichage du fil (2026-10-22).
    * `renderer:vue-chat-fil` portait 28 gels pour 62,4 s sans dire QUEL message coutait : le fil
    * etait mesure d'un bloc. Cle, role, taille et duree — jamais le texte.
    */
   messages?: MessageDeGel[]
   /**
    * CE QUE LA LISTE DES CONVERSATIONS A REDESSINE pendant un gel d'affichage de la liste
-   * (conv-1115, 2026-10-23). `renderer:vue-chat-liste` = 18 gels pour 73 s depuis le 20/10 (pire
+   * (2026-10-23). `renderer:vue-chat-liste` = 18 gels pour 73 s depuis le 20/10 (pire
    * 12,9 s) qui disaient seulement « N ms » : le diagnostic /gel n'a pas pu nommer la cause.
    */
   liste?: ListeDeGel
   /**
-   * La fenetre avait-elle le focus quand le battement l'a trouvee muette (conv-1604, 2026-11-05) ?
+   * La fenetre avait-elle le focus quand le battement l'a trouvee muette (2026-11-05) ?
    * 37 rechargements ce jour-la sans pouvoir dire si l'utilisateur la regardait. Absent sur les
    * autres lignes. `false` = silence journalise SANS rechargement (`gel-battement-fenetre.ts`).
    */
@@ -121,7 +121,7 @@ export interface Gel {
 }
 
 /**
- * Le rendu de la liste des conversations pendant un gel (conv-1115). Que des comptes et des noms
+ * Le rendu de la liste des conversations pendant un gel. Que des comptes et des noms
  * pris dans `DECLENCHEURS_DE_LISTE` — jamais un titre ni un identifiant de fil.
  */
 export interface ListeDeGel {
@@ -190,7 +190,7 @@ export function lireListeDeGel(detail: unknown): ListeDeGel | undefined {
   return { lignes, rendus, passages, declencheurs }
 }
 
-/** Un message du fil mesure pendant un gel d'affichage (conv-1077). */
+/** Un message du fil mesure pendant un gel d'affichage. */
 export interface MessageDeGel {
   /** `messageId` ou `turnId` : de quoi retrouver le message, pas son contenu. */
   cle: string
@@ -455,7 +455,7 @@ export function resumerGels(lignes: readonly string[]): ResumeGels {
  * l'agregation par operation doit regrouper les acces d'un meme partage, pas les eparpiller.
  */
 /**
- * LA CREATION D'UN PROCESSUS — l'angle mort mesure le 2026-10-10 (heal conv-204).
+ * LA CREATION D'UN PROCESSUS — l'angle mort mesure le 2026-10-10.
  *
  * 982 gels sur 1 234 sortaient en `inconnu` en un jour. Un profil CPU du main a montre la cause :
  * 264 processus `git` crees par photo du depot, 4,6 s de boucle tenue. `execFile` est asynchrone,

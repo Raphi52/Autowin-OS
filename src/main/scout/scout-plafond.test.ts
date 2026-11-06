@@ -30,8 +30,8 @@ function lecteur(etats: Record<string, EtatAncrage>) {
 describe('plafond de preuve appliqué en code sur la sortie du scout', () => {
   /*
    * Le plafond n'existait qu'en texte (`phase-briefs.ts`, bloc PLAFOND DE PREUVE). Relu le 30/09 dans
-   * les traces : conv-812 note 72 une piste dont le Pourquoi dit « Sous réserve : je n'ai cherché que
-   * les minuteurs », conv-775 note 60 une piste dont le Pourquoi dit « la cause exacte n'est pas
+   * les traces : un fil note 72 une piste dont le Pourquoi dit « Sous réserve : je n'ai cherché que
+   * les minuteurs », un fil note 60 une piste dont le Pourquoi dit « la cause exacte n'est pas
    * vérifiée ». Les deux lignes réelles sont rejouées plus bas, telles quelles.
    */
   it('ramène à 50 une piste dont le Pourquoi avoue ne pas avoir vérifié, et retrie', () => {
@@ -72,7 +72,7 @@ describe('plafond de preuve appliqué en code sur la sortie du scout', () => {
   })
 
   it('un Pourquoi qui se dit DÉDUCTIF est plafonné, comme le dit la consigne', () => {
-    // Formulation relevée dans conv-775 (piste 3) et conv-812 (piste 4), notées 45 : ici portée à 70.
+    // Formulation relevée (piste 3) et (piste 4), notées 45 : ici portée à 70.
     const texte = `${ENTETE}| 1 | 70 | 🆕 feature | Archiver les runs bloqués | C'est une déduction : je n'ai pas mesuré leur âge. | archiver |
 `
     expect(parseScoutTable(plafonnerNotesScout(texte))![0]!.score).toBe(50)
@@ -85,7 +85,7 @@ describe('plafond de preuve appliqué en code sur la sortie du scout', () => {
   })
 
   it('garde la note quand le Pourquoi NOMME ses chemins fermés, comme le dit la consigne (règle 4)', () => {
-    // Piste 4 du vrai scout du 30/09 (demande de conv-382), recopiée de artifacts/scout-reel-382-resultat.md.
+    // Piste 4 du vrai scout du 30/09, recopiée de artifacts/scout-reel-382-resultat.md.
     // Son « Non vérifié » porte sur un point annexe ; l'absence qu'elle affirme est « vérifié[e] dans
     // `gates/hooks.ts`, `orchestrator.ts` et `hooks/` ». La garde la ramenait de 70 à 50.
     const conv382 =
@@ -111,9 +111,9 @@ describe('plafond de preuve appliqué en code sur la sortie du scout', () => {
   })
 
   /*
-   * conv-602 : la piste n°1, notée 88, était fausse — son ancrage `Program.cs:300-304` dit lui-même
+   * La piste n°1, notée 88, était fausse — son ancrage `Program.cs:300-304` dit lui-même
    * que la classe citée a disparu (relevé par le run suivant, dans sa trace). Mais un
-   * commentaire cité n'est PAS toujours faux : la piste 1 de conv-890 (vraie) citait
+   * commentaire cité n'est PAS toujours faux : la piste 1 (vraie) citait
    * `orchestrator.ts:1371`, un commentaire qui documente une décision, avec `phase-briefs.ts:18-27`,
    * du code. Le plafond ne mord donc que si AUCUN ancrage contrôlable d'un correctif ne tombe sur du
    * code vivant.
@@ -143,7 +143,7 @@ describe('plafond de preuve appliqué en code sur la sortie du scout', () => {
   })
 
   it('lit aussi l’ancrage porté par la colonne What (vrai scout du 30/09, piste 4)', () => {
-    // Le scout réel rejoué le 30/09 sur la demande de conv-812 mettait son code dans What
+    // Le scout réel rejoué le 30/09 sur la demande mettait son code dans What
     // (`conversations-disk.ts:512`) et citait dans Why une ligne du fichier CONSTRUIT
     // (`index.js:45784`, ignoré par git, donc lu « introuvable ») : sans What, la piste tombait à 50.
     const texte = `${ENTETE}| 4 | 66 | 🔧 fix | Démarrage : lu de façon synchrone (\`conversations-disk.ts:512\`) | La ligne \`index.js:45784\` du fichier construit apparaît dans le gel | Chargement asynchrone |\n`
@@ -257,7 +257,7 @@ describe('lecture réelle des ancrages sur le disque', () => {
 })
 
 /**
- * LA LISTE DES FICHIERS SE LIT SANS GIT SYNCHRONE — heal conv-204, mesure du 2026-10-10.
+ * LA LISTE DES FICHIERS SE LIT SANS GIT SYNCHRONE — heal, mesure du 2026-10-10.
  *
  * `gels.jsonl`, 12:30:43 : `git ls-files --cached --others` lance en `execFileSync` depuis ce
  * lecteur, 1 502 ms de fenetre figee. Le lecteur est cree au debut de l'orchestration et ne sert
@@ -294,7 +294,7 @@ describe('liste des fichiers du dépôt : pré-lecture asynchrone', () => {
 })
 
 /*
- * AFFIRMER UNE ABSENCE SANS LA MONTRER (conv-339). Le juge a refusé deux fois le tableau du /scout
+ * AFFIRMER UNE ABSENCE SANS LA MONTRER. Le juge a refusé deux fois le tableau du /scout
  * « humains comme dans Cyberpunk » (notes 66 et 70) pour des absences affirmées à tort — « three.js
  * n'a rien de tout fait », « aucun test n'impose ce choix » : deux tours de jugement payés. Les
  * lignes ci-dessous sont RECOPIÉES de ses sorties (`run-livrables/run-f085fcccbb82-1.md`).
@@ -344,7 +344,7 @@ describe('plafond de preuve : une absence affirmée doit être montrée', () => 
 })
 
 /*
- * PISTE 4 (conv-1033) — « réfute avant de rendre » n'était que du texte (`phase-briefs.ts`). Une piste
+ * PISTE 4 — « réfute avant de rendre » n'était que du texte (`phase-briefs.ts`). Une piste
  * dont le sujet redit un commit récent, ou une piste déjà livrée, reçoit une MARQUE sous le tableau.
  * Une marque, pas un plafond : la ressemblance de mots est un indice, pas une preuve.
  * Sujets réels de `git log --since=30.days` (21/10).

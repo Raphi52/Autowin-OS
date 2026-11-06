@@ -9,7 +9,7 @@ import { WorkflowsPanel, type WorkflowsPanelProps } from './WorkflowsPanel'
 ).IS_REACT_ACT_ENVIRONMENT = true
 
 /**
- * L'OUVERTURE DU PANNEAU DETAILS DESSINE SES BORDS (conv-987, 2026-10-16 : « quand j'ouvre le
+ * L'OUVERTURE DU PANNEAU DETAILS DESSINE SES BORDS (2026-10-16 : « quand j'ouvre le
  * panneau detail je veux l'animation des border »). Le panneau n'est monte qu'a l'ouverture : son
  * montage joue l'entree du cadre, une seule fois, et sa fermeture la nettoie.
  */
@@ -19,7 +19,7 @@ const { arreter, jouerEntreeCadre } = vi.hoisted(() => {
 })
 vi.mock('../entree-cascade', () => ({ jouerEntreeCadre }))
 /**
- * ET IL GLISSE (conv-987, « je veux une animation d'ouverture fermeture pour le paneau de droite ») :
+ * ET IL GLISSE (« je veux une animation d'ouverture fermeture pour le paneau de droite ») :
  * le glissement lui-meme est teste dans glissement-panneau.test.ts ; ici, QUAND il est demande.
  */
 const glissement = vi.hoisted(() => ({

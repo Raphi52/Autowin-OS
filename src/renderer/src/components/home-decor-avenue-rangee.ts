@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 
 /**
- * LA RANGÉE DE DROITE DE L'AVENUE, EN VOLUMES (conv-1037).
+ * LA RANGÉE DE DROITE DE L'AVENUE, EN VOLUMES.
  *
  * Demande de l'utilisateur : « /draft la barre d'immeuble de droite a les toits qui forment une ligne
  * droite ca fait pas naturelle et les boutiques et tags font trop basique refait toute la partie de

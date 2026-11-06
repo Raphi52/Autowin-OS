@@ -102,7 +102,7 @@ export function CopyMessageButton({ message }: { message: Msg }): React.JSX.Elem
 }
 
 /**
- * Un texte MIS DE CÔTÉ dit qu'il attend, et POURQUOI (conv-891) : le refus d'injection est voulu,
+ * Un texte MIS DE CÔTÉ dit qu'il attend, et POURQUOI : le refus d'injection est voulu,
  * jamais un échec. Sans motif (app principale plus ancienne), on dit seulement ce qui est sûr.
  */
 function libelleAttente(receipt: DirectiveReceipt): string {
@@ -123,7 +123,7 @@ export function DirectiveReceiptRow({
 }: {
   receipt: DirectiveReceipt
   /**
-   * Retire de la file un texte qui attend la fin du tour (conv-1452, 2026-11-03) : sans lui, seul
+   * Retire de la file un texte qui attend la fin du tour (2026-11-03) : sans lui, seul
    * Stop l'en sortait, en coupant aussi le tour en cours. Offert aux deux statuts qui sont EN FILE.
    */
   onAnnuler?: (receipt: DirectiveReceipt) => void
@@ -132,7 +132,7 @@ export function DirectiveReceiptRow({
   const enFile = receipt.status === 'attente' || receipt.status === 'failed'
   return (
     <div className={`msg user directive-receipt is-${receipt.status}`}>
-      {/* Plus de libelle « Toi » (conv-227, 2026-10-11) ; l'etat de l'envoi, lui, reste. */}
+      {/* Plus de libelle « Toi » (2026-10-11) ; l'etat de l'envoi, lui, reste. */}
       <div className="msg-meta">
         <span className="directive-receipt-status" role="status">
           {receipt.status === 'sending' ? (
@@ -147,7 +147,7 @@ export function DirectiveReceiptRow({
               t('message.recu.repondu')
             ) : (
               // Pas « dans sa prochaine réponse » : l'orientation n'entre qu'à la fin de l'appel
-              // en cours, et le texte suivant n'y répond pas (conv-253, tour cdbc9802, 93 s).
+              // en cours, et le texte suivant n'y répond pas (tour cdbc9802, 93 s).
               t('message.recu.recue')
             )
           ) : receipt.status === 'differee' ? (
@@ -412,7 +412,7 @@ function tailleDuMessage(message: Msg): number {
 }
 
 /**
- * CHAQUE LIGNE MESURE SON RENDU (conv-1077, 2026-10-22) : le fil était mesuré d'un bloc (28 gels
+ * CHAQUE LIGNE MESURE SON RENDU (2026-10-22) : le fil était mesuré d'un bloc (28 gels
  * `vue-chat-fil`, 62,4 s depuis le 15/10) sans dire QUEL message coûtait. Voir rendu-long.ts.
  */
 // fix-ok: src/renderer/src/components/ChatMessageRow.tsx — composant et pas `return mesurer(<div…>)` : une ligne qui ne rend pas du JSX directement fait perdre ses props typées à react/prop-types (mesuré : 0 erreur avant, 44 après)
@@ -470,13 +470,13 @@ const LigneDuFil = memo(
     message: Msg
     /**
      * Heure où la pensée de cette bulle est passée à une bulle suivante du même tour, sous une
-     * orientation (`finDuRaisonnementRelaye`, conv-1547) : son chrono du raisonnement s'y arrête.
+     * orientation (`finDuRaisonnementRelaye`) : son chrono du raisonnement s'y arrête.
      */
     finDuRaisonnement?: number
     /**
      * Message utilisateur dont le tour court encore (`tourDuMessageEnCours`) : sa capsule
      * « Image envoyée » est alors allumée, comme l'image lue et Raisonnement / Actions du même
-     * tour (conv-178) ; tour fini, elle pâlit avec elles.
+     * tour ; tour fini, elle pâlit avec elles.
      */
     tourEnCours?: boolean
     conversationId: string | null
@@ -490,25 +490,25 @@ const LigneDuFil = memo(
     onInspectTurn?: (target: InspectTurnTarget) => void
     onFork?: (messageId: string) => void
     /**
-     * « Modifier et relancer » un message de l'utilisateur (conv-1038) : repartir d'une copie du fil
+     * « Modifier et relancer » un message de l'utilisateur : repartir d'une copie du fil
      * arrêtée JUSTE AVANT lui, son texte dans la saisie. N'envoie rien.
      */
     onModifier?: (messageId: string) => void
     /**
-     * « Revenir à ce tour, code et fil » (conv-1038) : le code du début de ce tour rouvert dans une
+     * « Revenir à ce tour, code et fil » : le code du début de ce tour rouvert dans une
      * copie séparée, et une copie du fil arrêtée juste avant ce message qui y travaille.
      */
     onRevenir?: (messageId: string) => void
     onOpenImage?: (image: { src: string; name: string }) => void
-    /** `suite` : les lots suivants d'une sélection de candidats scout, envoyés un par tour (conv-1080). */
+    /** `suite` : les lots suivants d'une sélection de candidats scout, envoyés un par tour. */
     onPickSuggestion?: (prompt: string, suite?: readonly string[]) => void
-    /** Une sélection de candidats en plusieurs lots part en super conversation (conv-1333). */
+    /** Une sélection de candidats en plusieurs lots part en super conversation. */
     onPlanSelection?: (selection: SelectionAPlanifier) => Promise<IssuePlanDeSelection>
     /** Mode auto : le panneau de candidats appuie lui-meme sur son bouton avec le choix du scout. */
     autoLancerCandidats?: boolean
     onOpenLiveAction?: (mode: 'live' | 'history') => void
     directiveReceipts?: DirectiveReceipt[]
-    /** Retire de la file un texte qui attend la fin du tour (conv-1452). Callback stable. */
+    /** Retire de la file un texte qui attend la fin du tour. Callback stable. */
     onAnnulerEnvoi?: (receipt: DirectiveReceipt) => void
     /**
      * Le texte du message du fil qui REPOND a une question de ce tour (`askReponseDuFil`),
@@ -523,7 +523,7 @@ const LigneDuFil = memo(
   }): React.JSX.Element {
     const { t } = useTextesChatFil()
     /*
-     * BOUTONS « PROMPTER » DES BLOCS html-render (conv-302, voir bouton-prompt-html.ts) : un lien
+     * BOUTONS « PROMPTER » DES BLOCS html-render (voir bouton-prompt-html.ts) : un lien
      * `#autowin-prompt` envoie son libellé visible par le chemin d'une réponse `ask`. Mêmes règles que
      * le bloc `ask` : rien avant la fin du tour, un seul envoi (verrou synchrone au clic, puis verrou
      * DURABLE par le fil : `askReponse` reconnaît aussi le libellé d'un bouton déjà envoyé).
@@ -550,14 +550,14 @@ const LigneDuFil = memo(
       const ligne = (
         <div
           className={`msg user fade-in${message.orientation ? ' is-orientation' : ''}`}
-          // Étiquettes lues par l'Alt+clic « C'est quoi ça ? » (reference-element.ts, conv-1038).
+          // Étiquettes lues par l'Alt+clic « C'est quoi ça ? » (reference-element.ts).
           data-origine="message-utilisateur"
           data-message-id={message.messageId}
         >
           {/* PLUS DE LIGNE « TOI » au-dessus des messages de l'utilisateur, dans aucun theme
-              (conv-227, 2026-10-11, apres la ligne « Agent »). L'en-tete ne reste que pour porter
+              (2026-10-11, apres la ligne « Agent »). L'en-tete ne reste que pour porter
               l'etiquette d'orientation ; l'heure passe dans la rangee de boutons sous la bulle. */}
-          {/* MESSAGE INJECTE EN COURS DE TOUR (conv-257, 2026-09-04). Le drapeau `orientation`
+          {/* MESSAGE INJECTE EN COURS DE TOUR (2026-09-04). Le drapeau `orientation`
               existait deja cote donnees, mais RIEN ne le montrait : un message tape pendant un
               tour n'ouvre pas de nouveau tour, il rejoint celui qui court -- et l'utilisateur
               concluait qu'il etait perdu (« mon dernier msg a pas lance de tour »). */}
@@ -568,7 +568,7 @@ const LigneDuFil = memo(
               </span>
             </div>
           ) : null}
-          {/* Une skill nommée ne change plus la bulle (conv-1334) : le texte reste celui que
+          {/* Une skill nommée ne change plus la bulle : le texte reste celui que
               l'utilisateur a tapé. Le bandeau « KAIZEN » cachait le préfixe et laissait croire
               à un mode à part, alors que le message ouvre un tour comme les autres. */}
           {message.content && (
@@ -655,7 +655,7 @@ const LigneDuFil = memo(
       )
       return <LigneMesuree message={message}>{ligne}</LigneMesuree>
     }
-    // RAIL DU TOUR (conv-338, « Implementer 1 + 5 ») : chaque element du tour devient un POINT d'un
+    // RAIL DU TOUR (« Implementer 1 + 5 ») : chaque element du tour devient un POINT d'un
     // rail trace a gauche du message — heures du tour a gauche (la 1), verdict des juges puis
     // reponse en bleu au bout (la 5). Calculs dans rail-du-tour.ts, dessin dans ChatView.css.
     const timeline = splitAssistantTimeline(
@@ -670,7 +670,7 @@ const LigneDuFil = memo(
     )
     const reponse = placeDeLaReponse(blocsParElement, message.done)
     // La ligne « compréhension » se lit EN TÊTE du tour, au-dessus des blocs Raisonnement, Actions
-    // et Étapes (conv-1280, 2026-10-29) : elle dit ce que l'agent a compris avant tout ce qu'il
+    // et Étapes (2026-10-29) : elle dit ce que l'agent a compris avant tout ce qu'il
     // fait. Elle sort donc de la suite du tour (`estLaLigneDeComprehension`) pour passer devant.
     const estLaLigneDeComprehension = (bloc: ChatRenderBlock): boolean =>
       bloc.kind === 'text' && bloc.lectureRetenue === true
@@ -678,7 +678,7 @@ const LigneDuFil = memo(
     const debut = message.debutDuTour
     // Une colonne d'heures n'a de sens que si le tour a ete enregistre AVEC elles : un texte ou une
     // action date. Les images ont toujours eu leur heure : sur un tour d'avant le rail, elles seules
-    // remplissaient la colonne, trouee partout ailleurs (conv-338, 2026-10-19). Ce tour-la se dessine
+    // remplissaient la colonne, trouee partout ailleurs (2026-10-19). Ce tour-la se dessine
     // donc sans colonne.
     const avecHeures =
       debut !== undefined &&
@@ -703,11 +703,11 @@ const LigneDuFil = memo(
     /* Panneau des JUGES : décisions en barre, verdict complet en dépliant — même manière que les
        candidats du scout (14/08). Rendu sous les tours qui ont orchestré, alimenté par le fil de
        sous-agents persisté du dernier run. Sur le rail, c'est l'AVANT-DERNIER point : juste avant
-       la réponse (la 5 du /draft conv-338), au lieu d'un bandeau sous elle. */
+       la réponse (la 5 du /draft), au lieu d'un bandeau sous elle. */
     const aOrchestre = message.parts.some(
       (candidate) => candidate.kind === 'action' && candidate.name === 'orchestrate'
     )
-    // PENDANT le tour, le bloc se remplit en direct (conv-1021, « pendant que ça judge ça remplisse
+    // PENDANT le tour, le bloc se remplit en direct (« pendant que ça judge ça remplisse
     // le bloc en live ») : il suivait jusqu'ici la seule trace sur disque, écrite à la fin du run.
     const juges =
       conversationId && aOrchestre
@@ -724,8 +724,8 @@ const LigneDuFil = memo(
         : null
     const rendreBloc = (part: ChatRenderBlock, index: number): React.ReactNode =>
       part.kind === 'text' && part.lectureRetenue ? (
-        // La lecture que l'agent a retenue (conv-1123), sous la « Pastille nacrée » (/draft
-        // conv-1280) : étiquette « compréhension » à cadre dégradé et coche, puis ce que l'agent a
+        // La lecture que l'agent a retenue, sous la « Pastille nacrée » (/draft)
+        // Étiquette « compréhension » à cadre dégradé et coche, puis ce que l'agent a
         // compris, en clair et en gras, seul. Le reflet ne passe que pendant le tour : un fil
         // rouvert plus tard ne fait pas reluire toutes ses anciennes pastilles.
         <p key={index} className="msg-lecture-retenue" dir="auto" data-testid="lecture-retenue">
@@ -748,7 +748,7 @@ const LigneDuFil = memo(
           onClick={surClicPrompt}
         >
           {/* La réponse qui porte les blocs : une carte « Lancer en N fils » s'en souvient par
-              réponse, pas par contenu (défaut D5, conv-1147, `message-du-fil.ts`). */}
+              réponse, pas par contenu (défaut D5, `message-du-fil.ts`). */}
           <MessageDuFil.Provider value={identiteDeLaReponse(message, conversationId)}>
             <Markdown
               text={part.text}
@@ -847,13 +847,13 @@ const LigneDuFil = memo(
     const ligne = (
       <div
         className={`msg assistant fade-in msg--rail${avecHeures ? ' avec-heures' : ''}`}
-        // Étiquettes lues par l'Alt+clic « C'est quoi ça ? » (reference-element.ts, conv-1038).
+        // Étiquettes lues par l'Alt+clic « C'est quoi ça ? » (reference-element.ts).
         data-origine="reponse-agent"
         data-turn-id={message.turnId}
         data-fil-du-tour={message.turnConversationId}
         data-message-id={message.messageId}
       >
-        {/* PLUS DE LIGNE « AGENT » au-dessus de la reponse, dans aucun theme (conv-227, 2026-10-11 :
+        {/* PLUS DE LIGNE « AGENT » au-dessus de la reponse, dans aucun theme (2026-10-11 :
             « enleve carrement cette ligne de tous les themes elle pollue pour rien »). Son spinner
             part avec elle : le tour en cours se lit aux capsules Raisonnement / Actions et au bouton
             d'arret de la saisie. Les styles `.msg.assistant > .msg-meta` restent : l'en-tete
@@ -1036,12 +1036,12 @@ const LigneDuFil = memo(
     prev.directiveReceipts === next.directiveReceipts &&
     prev.tourEnCours === next.tourEnCours &&
     // La relève arrive sans changer CE message : sans cette ligne, la bulle du dessus ne l'apprend
-    // jamais et son chrono continue de battre (conv-1547).
+    // jamais et son chrono continue de battre.
     prev.finDuRaisonnement === next.finDuRaisonnement
 )
 
 /**
- * UN MESSAGE ILLISIBLE N'EMPORTE PAS LE FIL (conv-1327) : son contenu vient d'un modèle ou d'un outil,
+ * UN MESSAGE ILLISIBLE N'EMPORTE PAS LE FIL : son contenu vient d'un modèle ou d'un outil,
  * c'est la donnée la plus imprévisible de l'interface. `cle` : la suite d'un message en cours d'écriture
  * est un nouvel objet, il retente donc seul (un texte encore partiel peut redevenir lisible).
  */

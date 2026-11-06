@@ -3,7 +3,7 @@ import donnees from '../assets/quartier/donnees.json'
 import { creerMarche, type DonneesMarche } from './quartier-marche'
 import { TOUR_DU_WIDGET } from './quartier-tuiles'
 
-// Les découpes de la Falaise o-1916 (conv-1460, plan conv-1444) : un objet qui passe devant un tanuki n'a de
+// Les découpes de la Falaise o-1916 : un objet qui passe devant un tanuki n'a de
 // sens que si un tanuki peut se tenir derrière lui. Une découpe restée de l'ancienne peinture tombe sur du
 // rocher ou dans le ciel de la nouvelle : elle ne cache plus personne, et repeint l'ancien décor par-dessus.
 interface Objet {
@@ -75,8 +75,8 @@ describe('les objets découpés dans la Falaise o-1916 (conv-1460)', () => {
   })
 })
 
-// conv-1633 (« les décors passent devant les mascottes : la barrière, le socle de la tablette, et sous
-// l'escalier une barre comme le _ dans /_ ») : la forme de `cloture_onsen` tenait en une image la rangée du
+// « les décors passent devant les mascottes : la barrière, le socle de la tablette, et sous
+// l'escalier une barre comme le _ dans /_ » : la forme de `cloture_onsen` tenait en une image la rangée du
 // fond, le retour du coin au premier plan, et quatre éclats du décor voisin (pied de l'escalier, bas du socle
 // de la tablette, herbe, galets). Une seule ligne de pied par colonne ne peut pas servir deux profondeurs :
 // dans le coin elle valait celle du retour (767), et la rangée du fond recouvrait les tanukis sur les galets.

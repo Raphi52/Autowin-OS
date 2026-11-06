@@ -5,7 +5,7 @@ import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
 /**
  * FAUSSE ALERTE « tu as ANNONCÉ ce que tu allais faire, sans rien faire ».
  *
- * Mesuré le 2026-09-22 (conv-782) : le tour avait créé `.arena/arenagame/lance-bras.sh` (Write),
+ * Mesuré le 2026-09-22 : le tour avait créé `.arena/arenagame/lance-bras.sh` (Write),
  * modifié `skills/arenagame/SKILL.md` (Edit) et joué deux tests (Bash) — et le garde a répondu
  * « aucune commande n'a été exécutée ». Cause : `anyActionExecuted` n'est levé que par un `<cmd>`
  * Autowin ; les outils NATIFS du modèle passent par `chunk.status`, où seule la LECTURE était
@@ -34,7 +34,7 @@ describe('statusEstUneAction — un outil natif qui agit compte comme une action
 
   /*
    * Une commande émet son DÉPART (`Bash · grep …`), ses BATTEMENTS et sa FIN : seul le départ porte
-   * la commande. Lire « terminé - 3 s » comme une commande en faisait une ACTION (conv-341) — un tour
+   * la commande. Lire « terminé - 3 s » comme une commande en faisait une ACTION — un tour
    * qui n'avait fait que lire passait pour un tour qui avait agi.
    */
   it('les lignes de fin et de battement d’un Bash ne sont pas des actions', () => {
@@ -53,7 +53,7 @@ describe('statusEstUneAction — un outil natif qui agit compte comme une action
   })
 
   it('le garde « annonce sans action » voit les actions natives', () => {
-    // Envoi et relances vivent dans agent-pilot/*.ts depuis conv-1580 (lot 4) : on lit la famille.
+    // Envoi et relances vivent dans agent-pilot/*.ts (lot 4) : on lit la famille.
     const source = sourceDuPilote()
     expect(source).toMatch(/statusEstUneAction\(statutEntier\)\)\s*etat\.actionNativeCeTour = true/)
     expect(source).toMatch(
@@ -63,7 +63,7 @@ describe('statusEstUneAction — un outil natif qui agit compte comme une action
 })
 
 /**
- * LECTURE COMPOSÉE — conv-861 (2026-09-25). « A agi » n'est plus « le 1er mot n'est pas un
+ * LECTURE COMPOSÉE — (2026-09-25). « A agi » n'est plus « le 1er mot n'est pas un
  * lecteur » : c'est « AU MOINS UN segment n'est ni une lecture ni neutre, ou écrit dans un fichier ».
  * Sans cela, reconnaître `date; …; cat y` comme lecture aurait fait passer `date; rm -rf x; cat y`
  * pour un tour sans action.
@@ -87,7 +87,7 @@ describe('statusEstUneAction sur une commande composée (conv-861)', () => {
 })
 
 /**
- * LA COMMANDE ENTIÈRE, PAS SON MOIGNON — rejeu des 134 commandes Bash de conv-861 (2026-09-25).
+ * LA COMMANDE ENTIÈRE, PAS SON MOIGNON — rejeu des 134 commandes Bash (2026-09-25).
  * Le libellé est coupé à 120 caractères ; `R=...; DEST=...; for d in ...` y ressemblait à une
  * lecture pure alors que son `cp` / `rm -r` venait après la coupure.
  */

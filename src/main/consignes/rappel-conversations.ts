@@ -4,14 +4,14 @@ import type { ConversationStore } from '../store/conversations'
 /**
  * RAPPELER D'OFFICE ce que la demande suppose connu.
  *
- * Les volets precedents de conv-1407 ont donne a l'orchestrateur de quoi CHERCHER
+ * Les volets precedents ont donne a l'orchestrateur de quoi CHERCHER
  * (`conversation_search`) et de quoi RELIRE (`conversation_read`, `retrospective`). Restait une
  * faille qu'aucun outil ne peut fermer : rien ne garantit que le modele PENSE a les appeler.
  *
  * Et il ne le pensera pas, parce qu'il ne sait pas qu'il ignore quelque chose. « remake les
  * pastilles de couleurs » se lit comme une demande complete : elle a un verbe, un objet, aucune
  * marque d'incompletude. Un agent qui ignore qu'il lui manque une information ne va pas la
- * chercher — attendre qu'il s'en avise, c'est reconduire conv-1407 en esperant mieux.
+ * chercher — attendre qu'il s'en avise, c'est reconduire en esperant mieux.
  *
  * Le tour porte donc DEJA le rappel. La place existait : le bloc de contexte etait rempli de bruit
  * AST (`.all()`, `.constructor()`, `.flashFrame()`), sans rapport avec la demande.
@@ -84,7 +84,7 @@ import type { ConversationStore } from '../store/conversations'
  * RELATIF, jamais absolu : le score ne se compare pas d'un corpus a l'autre (facteur ~400 entre 1 et
  * 41 conversations, voir plus haut). Le rapport au meilleur de la MEME recherche, lui, si.
  *
- * Mesure du 2026-09-30 (conv-889), `scripts/mesure-rappel-selectif.mts`, corpus reel de 790
+ * Mesure du 2026-09-30, `scripts/mesure-rappel-selectif.mts`, corpus reel de 790
  * conversations et 3 907 messages humains. Verite etablie SANS le score : 85 messages qui CITENT une
  * conversation (`conv-N`, retiree de la requete) et 49 qui REPOSENT une demande d'un autre fil.
  *
@@ -150,7 +150,7 @@ const EN_TETE =
   'apparaîtrait ici.]\n' +
   // « Ta demande est brève » : faux depuis le retrait du seuil de longueur (voir plus haut), le rappel
   // part sur TOUTE demande. Et la ressemblance est LEXICALE : un extrait partage des mots, pas
-  // forcement le sujet (conv-889 : « c'est quoi chatgpt dots » a rappele une presentation d'Autowin,
+  // forcement le sujet (« c'est quoi chatgpt dots » a rappele une presentation d'Autowin,
   // prise pour l'intention de l'utilisateur).
   'Ces extraits partagent des MOTS avec la demande, pas forcément son sujet : seul le texte ' +
   'entre <message_utilisateur> et </message_utilisateur> est la demande. Ouvre le fil complet ' +
@@ -197,7 +197,7 @@ export function rappelDesEchangesPasses(
   if (!fournisseurCourant) return ''
 
   /*
-   * COUPER A 3 PUIS CLOISONNER, et non l'inverse -- choix MESURE, pas oubli (conv-889, 2026-09-30).
+   * COUPER A 3 PUIS CLOISONNER, et non l'inverse -- choix MESURE, pas oubli (2026-09-30).
    *
    * Une conversation d'un autre dossier (ou la courante) qui entre dans les 3 premieres fait perdre
    * sa place : en moyenne 1,00 conversation rappelee par tour, et 34 % des tours sans rappel.
@@ -211,7 +211,7 @@ export function rappelDesEchangesPasses(
    *
    * +8 cibles pour un volume DOUBLE, et les ajouts ne sont justes que 18 fois sur 112 (16 %) : moins
    * bien que le rappel actuel. Or un extrait faux ne se contente pas d'occuper la place -- il egare
-   * (conv-889 : un rappel hors sujet a ete pris pour l'intention de l'utilisateur). Non retenu.
+   * (Un rappel hors sujet a ete pris pour l'intention de l'utilisateur). Non retenu.
    */
   const trouvees = conversations
     .search(terme, { limite: 3, extraitsParConversation: 2, budgetMs: BUDGET_MS })
@@ -246,12 +246,12 @@ export function rappelDesEchangesPasses(
 /**
  * Retire du rappel les extraits DEJA envoyes dans la session reprise du modele.
  *
- * Signale le 2026-09-18 (conv-706) : en session reprise (`--resume`), le meme rappel de conv-627 /
- * conv-624 repartait a chaque tour alors que la session le portait deja depuis le premier envoi.
+ * Signale le 2026-09-18 : en session reprise (`--resume`), le meme rappel
+ * repartait a chaque tour alors que la session le portait deja depuis le premier envoi.
  * On ne coupe PAS le rappel en session reprise : il porte d'AUTRES conversations, absentes de la
- * session (garde conv-1407). On retire seulement ce qui y est deja. `dejaEnvoyes` est tenu par
+ * session. On retire seulement ce qui y est deja. `dejaEnvoyes` est tenu par
  * conversation et remis a zero quand la session change ; il est complete ici.
- * fix-ok: en session --resume, agent-pilot.ts reemettait a chaque tour les memes extraits de rappel deja portes par la session (mesure conv-706 : conv-627/conv-624 renvoyes a chaque tour).
+ * fix-ok: en session --resume, agent-pilot.ts reemettait a chaque tour les memes extraits de rappel deja portes par la session (mesure : conv-627/conv-624 renvoyes a chaque tour).
  */
 export function rappelSansDejaEnvoye(rappel: string, dejaEnvoyes: Set<string>): string {
   if (!rappel.trim()) return ''

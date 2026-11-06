@@ -218,7 +218,7 @@ export async function readGitState(cwd: string, historyLimit = 20): Promise<GitR
 /**
  * La branche courante, SANS créer de processus : lue dans `HEAD`, en asynchrone.
  *
- * Pourquoi (heal conv-1013, 2026-10-16) : `gels.jsonl` porte, du 14 au 16/10, 9 gels de 3,3 à
+ * Pourquoi (2026-10-16) : `gels.jsonl` porte, du 14 au 16/10, 9 gels de 3,3 à
  * 9,8 s du fil principal, chacun dans la création d'UN processus `git status` lancé par
  * `readGitState` (`ipc:git:read`). `execFile` est asynchrone, mais la création du processus ne
  * l'est pas : elle tient le fil appelant (4,8 ms en médiane à vide, 19,7 ms au p95) et elle attend

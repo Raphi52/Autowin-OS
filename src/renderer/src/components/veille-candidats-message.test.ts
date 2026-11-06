@@ -120,7 +120,7 @@ describe('redigerPromptWorkflowSelection', () => {
    * Mesuré le 2026-08-19 en pilotant l'app : le préfixe `/frame` réduit le run à la seule phase
    * frame, donc un run ainsi lancé ne peut PAS atteindre un commit publié. Le juge le sanctionnait
    * pour ça — score 20/100, « le livrable s'arrête volontairement à FRAME sans déclarer cet échec ».
-   * C'est l'origine de conv-1302 : ce même prompt a ouvert douze tours de réparation.
+   * C'est l'origine : ce même prompt a ouvert douze tours de réparation.
    */
   it('porte les ancrages, les notes et la consigne de commit', () => {
     const candidats = extraireCandidatsAffiches(MESSAGE)!
@@ -162,7 +162,7 @@ describe('redigerPromptWorkflowSelection', () => {
     expect(prompt).toContain('Langue : fr')
   })
 
-  // Piste 3 de conv-1033 : la commande de preuve du tableau scout part avec la sélection, et le run
+  // Piste 3 : la commande de preuve du tableau scout part avec la sélection, et le run
   // qui la reçoit la lit à côté du Comment. Rouge avant : la colonne était jetée au passage.
   it('transmet la commande de preuve d’une ligne du tableau scout', () => {
     const [candidat] = candidatsDepuisScoutTable([
@@ -385,7 +385,7 @@ describe('selectionAutoDepuisScout', () => {
 })
 
 /**
- * conv-1074 (2026-10-22) : l'app RETRIE le tableau du scout apres avoir ajuste les notes, en gardant
+ * 2026-10-22 : l'app RETRIE le tableau du scout apres avoir ajuste les notes, en gardant
  * les numeros d'origine (`scout-plafond.ts:19`). La selection automatique comparait la cible a la
  * POSITION : sur un tableau retrie 4, 1, 3, « La ligne 1 passe devant. » cochait la ligne n° 4.
  * Entree qui ferait echouer une mauvaise correction : ce tableau retrie et cette cible.

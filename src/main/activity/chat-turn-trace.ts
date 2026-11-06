@@ -10,7 +10,7 @@ import { redactTrace } from './trace-redact'
  *
  * 1. LA DEMANDE REÇUE, au DÉBUT du tour. Le premier événement d'un tour de chat n'était écrit qu'à
  *    la FIN du premier appel au modèle (`agent-pilot.ts`, émission du `prompt-call`). Mesuré le
- *    2026-10-12 sur 43 tours de conv-879, 903, 904 et 906 : 32 à 100 % de la durée d'un tour
+ *    2026-10-12 sur 43 tours : 32 à 100 % de la durée d'un tour
  *    passaient sans aucun événement. L'arbre reprenait alors le DERNIER tour écrit — le précédent —
  *    sous la mention « en direct », et datait la demande de la fin du premier appel (tour e074265e :
  *    titré 11:09, parti vers 11:05). Cet événement est le même instant que l'envoi.

@@ -16,7 +16,7 @@ vi.mock('./Markdown', () => ({
 }))
 
 /**
- * Defaut vecu le 2026-10-23 (conv-1128) : « quand j'envoie le message ca doit me scroll down la
+ * Defaut vecu le 2026-10-23 : « quand j'envoie le message ca doit me scroll down la
  * conv ». Mesure sur l'app reelle (instance cachee, code en cours) : la vue DESCEND bien a l'envoi,
  * puis ~1 s plus tard elle REMONTE a l'endroit ou le lecteur lisait avant d'envoyer.
  *

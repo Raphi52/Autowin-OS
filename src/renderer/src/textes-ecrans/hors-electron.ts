@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — ÉCRAN « HORS DE L'APPLICATION » (conv-1286, 2026-10-29).
+ * TEXTES — ÉCRAN « HORS DE L'APPLICATION » (2026-10-29).
  *
  * Écran couvert : `HorsElectron.tsx`, affiché à la place de l'interface quand elle est ouverte dans un
  * navigateur ordinaire (`http://localhost:5173` hors de la fenêtre Electron), où le pont `window.api`

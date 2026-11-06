@@ -42,7 +42,7 @@ describe('estMurDeQuota', () => {
 
   it('NE ferme PAS le compte entier sur la limite d’UN modèle (Opus)', () => {
     // Le mur est indexé par compte (`quotaWallKey`, registry.ts) : le fermer sur « Opus limit »
-    // refuserait aussi Sonnet et Haiku. Forme relevée par les guides publics (revue de conv-1055).
+    // refuserait aussi Sonnet et Haiku. Forme relevée par les guides publics.
     expect(estMurDeQuota("You've hit your Opus limit · resets 3:45pm")).toBe(false)
   })
 

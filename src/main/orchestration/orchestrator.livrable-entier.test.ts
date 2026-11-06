@@ -15,7 +15,7 @@ import { TrustLedger } from '../trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /**
- * LE JUGE EST RENVOYE VERS UNE COPIE ENTIERE QUI EXISTE (conv-989, 2026-10-16).
+ * LE JUGE EST RENVOYE VERS UNE COPIE ENTIERE QUI EXISTE (2026-10-16).
  *
  * Bout de chaine de `agregat-juge.ou-lire.test.ts` : l'orchestrateur passe le chemin fourni par ses
  * dependances a l'agregat, et c'est CE texte que recoit le juge — et qui devient le resultat du run.

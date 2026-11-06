@@ -748,7 +748,7 @@ describe('Orchestrator — flip live worktree', () => {
     })
   })
 
-  // conv-914 (run-68594dd94c08-1) : le sous-agent clean a buté sur le quota, la clôture rouge est
+  // run-68594dd94c08-1 : le sous-agent clean a buté sur le quota, la clôture rouge est
   // partie avec « Raisons » vide — le graphe ne pouvait rien dire de l'échec.
   it('une clôture rouge par arrêt du run porte l’erreur qui l’a arrêté', async () => {
     class PlanteProvider extends CapturingProvider {
@@ -1076,7 +1076,7 @@ describe('Orchestrator — flip live worktree', () => {
       expect(result.gateBlocked).toBe(true)
       expect(result.valid).toBe(false)
       expect(result.gateReasons).toContain('intégration locale non terminée')
-      // Sans la CAUSE, un run rouge est indiagnosticable : constate le 2026-08-10 sur conv-1080,
+      // Sans la CAUSE, un run rouge est indiagnosticable : constate le 2026-08-10,
       // deux runs verts consécutifs bloqués par une base sale sans que le RUN.md ne le dise.
       // On exige les TROIS informations, pas une phrase au mot près : la catégorie, les fichiers,
       // et le sens en clair du code. Le 2026-09-03, `raison-de-blocage.ts` a ajouté la traduction
@@ -1096,7 +1096,7 @@ describe('Orchestrator — flip live worktree', () => {
     })
 
     /*
-     * DEFAUT MESURE le 2026-08-31 (conv-1, run « reprend-pardon-mthg437j », 2,13 $). Le rapport
+     * DEFAUT MESURE le 2026-08-31 (run « reprend-pardon-mthg437j », 2,13 $). Le rapport
      * rendu a l'utilisateur ne portait QU'UNE raison : `["intégration locale non terminée"]`.
      * Aucune cause — parce que la finalisation n'avait rendu AUCUN `reason` (verifie : la trace du
      * run ne contient aucun champ `reason`/`outcome`). L'utilisateur a donc paye un run dont les 16
@@ -1111,13 +1111,13 @@ describe('Orchestrator — flip live worktree', () => {
      * 1. Le manifeste du run vecu (`.runs/run-f42d9a79ad99-1.json`) : `verdict: green`,
      *    `publication: "blocked"`, `conflictFile: JarvisWidget.tsx`. La finalisation avait donc
      *    une CAUSE — elle est simplement arrivee APRES le verdict du run.
-     * 2. `commands.ts:3390` documente ce chemin exact, vecu conv-1404 : « Le coordinateur rend
+     * 2. `commands.ts:3390` documente ce chemin exact, vecu : « Le coordinateur rend
      *    `undefined` quand la copie a encore des processus actifs — typiquement les workers
      *    `vitest` que la verification vient elle-meme de lancer : elle passe en attente et
      *    `retryRecovery` la publie ensuite. »
      *
      * `edit_file` a recu son correctif ; l'orchestrateur, NON. Le meme differe y devenait un rouge
-     * sans cause — et face a un faux echec, l'agent RECOMMENCE (2,13 $ sur conv-1).
+     * sans cause — et face a un faux echec, l'agent RECOMMENCE (2,13 $).
      */
     it('finalisation DIFFÉRÉE → l’attente est NOMMÉE, pas avouée comme une ignorance', async () => {
       const provider = new CapturingProvider()
@@ -1181,7 +1181,7 @@ describe('Orchestrator — flip live worktree', () => {
       ).toBe(true)
     })
 
-    // Defaut vecu le 2026-08-18 (conv-1286) : la copie isolee portait 4 fichiers modifies, la
+    // Defaut vecu le 2026-08-18 : la copie isolee portait 4 fichiers modifies, la
     // finalisation a renvoye `nothing`, le run a ete compte INTEGRE et l'utilisateur a lu
     // « fusion materialisee, verifiee hors-modele » alors que le correctif n'a jamais atteint main.
     it('run vert dont la copie a produit des fichiers mais qui finalise sur « rien » → rouge, integration vide nommee', async () => {
@@ -1564,7 +1564,7 @@ describe('le rapport ne pointe pas vers une copie supprimée', () => {
 /**
  * LA CAUSE DOIT ATTEINDRE LE `RUN.md`, PAS SEULEMENT LE RECU.
  *
- * Mesure le 2026-08-27 (conv-1427) : un run vert — rouge->vert prouve, typecheck exit 0, juge
+ * Mesure le 2026-08-27 : un run vert — rouge->vert prouve, typecheck exit 0, juge
  * VALIDE, 2,47 $ — s'est clos en `red`. Le `RUN.md` portait pour tout diagnostic
  * « blocage d'integration: merge-failed ». Or `reason` nomme la CATEGORIE, `detail` porte la cause
  * reelle ; `detail` etait destructure ici puis jamais employe. Le recu Git l'exposait, le journal
@@ -1595,7 +1595,7 @@ describe('la cause d’un blocage atteint le journal du run', () => {
 })
 
 /*
- * UNE FUSION REFUSÉE N'EST JAMAIS UNE LIVRAISON « PAR GIT EXTERNE » (conv-914, 2026-10-13).
+ * UNE FUSION REFUSÉE N'EST JAMAIS UNE LIVRAISON « PAR GIT EXTERNE » (2026-10-13).
  *
  * Vécu : run-a8a70cd0ee56-1, vert, copie de 16 fichiers, fusion refusée (`base-dirty`). Ses agents
  * avaient lancé des commandes `git -C D:/AutoWinOS …` sur le vrai dépôt (lectures classées
@@ -1688,7 +1688,7 @@ describe('Orchestrator — une copie qui porte du travail ne passe pas pour une 
     expect(result.gateBlocked).toBe(true)
     expect(result.gateReasons).toContain('intégration locale non terminée')
     // La CAUSE et ses fichiers atteignent le rapport, donc le journal du RUN.md : run-bc699a65bae7-1
-    // (conv-1074) n'y portait que « Commit demande sans identite Git publiee verifiable ».
+    // n'y portait que « Commit demande sans identite Git publiee verifiable ».
     expect(
       result.gateReasons.some(
         (raison) => raison.includes('base-dirty') && raison.includes('src/a.ts')
@@ -1722,9 +1722,9 @@ describe('Orchestrator — une copie qui porte du travail ne passe pas pour une 
 })
 
 /*
- * LA GARDE « INTÉGRATION VIDE » MESURE LA COPIE (conv-914, 2026-10-14).
+ * LA GARDE « INTÉGRATION VIDE » MESURE LA COPIE (2026-10-14).
  *
- * La garde de conv-1286 refuse un « rien à fusionner » quand la copie portait des fichiers. Elle
+ * La garde refuse un « rien à fusionner » quand la copie portait des fichiers. Elle
  * lisait `activity().files`, que le coordinateur ne remplit qu'à la finalisation : toujours vide
  * avant `end`, donc la garde ne mordait jamais en production. Son test historique passait parce
  * qu'il fournissait une activité DÉJÀ remplie, ce que la production ne fait pas. Ici l'activité
@@ -1798,14 +1798,14 @@ describe('Orchestrator — la garde « intégration vide » lit la mesure réell
 })
 
 /**
- * UN RUN REFUSÉ SEULEMENT PARCE QUE LA BASE ÉTAIT OCCUPÉE N'A PAS ÉCHOUÉ (conv-1455, 2026-11-03).
+ * UN RUN REFUSÉ SEULEMENT PARCE QUE LA BASE ÉTAIT OCCUPÉE N'A PAS ÉCHOUÉ (2026-11-03).
  *
- * Cas vécu : conv-1431, run-9160c58139cd-1 (`mvz01n0m`). Juge VALIDE, 19 fichiers prêts, fusion
+ * Cas vécu : run-9160c58139cd-1 (`mvz01n0m`). Juge VALIDE, 19 fichiers prêts, fusion
  * refusée `base-dirty` parce que `src/main/index.ts` portait le travail non commité d'un autre fil.
  * La garde « commit demandé » a alors posé `green = false`, et la clôture est partie `red` SANS
  * cause : le RUN.md disait « échec » et le run restait dans la liste des bloqués, alors que la
  * reprise automatique du coordinateur (verdict `green`, `blocked / base-dirty`) attendait seulement
- * que la base se libère. Le travail a été publié une heure plus tard (b0c4cad9, conv-1438).
+ * que la base se libère. Le travail a été publié une heure plus tard (b0c4cad9).
  *
  * L'ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION EST FAUSSE : un refus `merge-failed`
  * (un conflit de contenu) marqué « en attente de publication ». Un conflit demande l'arbitrage de

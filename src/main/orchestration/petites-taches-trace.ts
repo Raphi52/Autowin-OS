@@ -3,12 +3,12 @@ import type { RoleBinding } from '../profil/roles'
 import type { SendResult } from '../providers/types'
 
 /**
- * LA TRACE DES PETITS APPELS (conv-1097, 2026-10-22).
+ * LA TRACE DES PETITS APPELS (2026-10-22).
  *
  * Quatre appels courts tournent hors pipeline, sans outil, pour une réponse d'une ligne : le choix
  * du workflow (`os.ts`), les deux lectures et le rangement du premier message (`index.ts`),
  * l'arbitrage d'une dérive (`orchestrator.ts`). Ils partent sur le modèle des petites tâches
- * (Haiku par défaut, `roles.ts`). Mesuré par le scout de conv-1097 : aucun n'écrivait de coût,
+ * (Haiku par défaut, `roles.ts`). Mesuré par le scout : aucun n'écrivait de coût,
  * `cost.jsonl` ne contenait aucune ligne Haiku, et une panne était avalée (`catch → undefined`).
  * L'économie annoncée n'existait que dans un commentaire, et un Haiku qui répondrait au mauvais
  * format éteignait la fonction sans que personne ne le voie.
@@ -16,7 +16,7 @@ import type { SendResult } from '../providers/types'
  * Chaque appel écrit donc UNE ligne dans `cost.jsonl` : son nom, le modèle RÉELLEMENT servi, son
  * coût, et son issue (ce que la réponse a donné). Une panne est nommée dans le journal du processus.
  *
- * La relecture à froid du cadrage (conv-1420) s'y ajoute, et elle seule passe `toolProfile:
+ * La relecture à froid du cadrage s'y ajoute, et elle seule passe `toolProfile:
  * 'sans-outil'`. Sans ce profil, un appel sans `execution` prend sur Claude la branche du tour de
  * chat, outillée : « sans outil » ci-dessus décrit l'intention, pas le lancement réel.
  */

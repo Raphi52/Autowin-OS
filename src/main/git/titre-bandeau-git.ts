@@ -2,8 +2,8 @@
  * Le titre des blocs git posés dans le fil — la passe /git après un fil (`bandeauPublie`,
  * `git-apres-fil.ts`) et la clôture automatique d'un run (`annonce-commit-local.ts`).
  *
- * conv-1573 : l'utilisateur veut un STATUT qui se lit seul, « 1 commit et push origin main réussi ».
- * « GIT : 1 commit » (conv-1553) comptait les commits sans dire si le push avait abouti ni où.
+ * L'utilisateur veut un STATUT qui se lit seul, « 1 commit et push origin main réussi ».
+ * « GIT : 1 commit » comptait les commits sans dire si le push avait abouti ni où.
  */
 
 /**

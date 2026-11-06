@@ -75,9 +75,9 @@ describe('ChatView — le reçu d’orientation dit la vérité', () => {
     await orienter(pilote)
     expect(injecte).toHaveBeenCalled()
     // « Orienté » disait seulement « transmis » : l'utilisateur croyait que rien ne se passait
-    // pendant les minutes du tour (conv-61, 2026-09-01). Le reçu dit maintenant QUAND il aura
+    // pendant les minutes du tour (2026-09-01). Le reçu dit maintenant QUAND il aura
     // sa réponse.
-    // « dans sa prochaine réponse » était FAUX (conv-253, tour cdbc9802-bbd2-4144-924d-a9f4cdb90ac3,
+    // « dans sa prochaine réponse » était FAUX (tour cdbc9802-bbd2-4144-924d-a9f4cdb90ac3,
     // saisie ts 1791720124446) : le texte suivant de l'agent finissait son étape en cours et ne
     // répondait pas ; la réponse est venue 93 s plus tard. L'utilisateur a conclu « pas pris en compte ».
     expect(recu()).toBe('✓ Reçue — l’agent finit ce qu’il fait, puis y répond')

@@ -105,8 +105,8 @@ function rapport(
     })
   }
   /*
-   * COMME VITEST : le fichier rouge PLUS chaque bloc `describe` qui contient un test rouge
-   * (conv-1001). Ce fixture annoncait un seul compte par fichier alors que ses tests « suite A > … »
+   * COMME VITEST : le fichier rouge PLUS chaque bloc `describe` qui contient un test rouge.
+   * Ce fixture annoncait un seul compte par fichier alors que ses tests « suite A > … »
    * vivent dans un bloc : il validait un controle croise que le vrai vitest faisait toujours echouer.
    */
   const suitesEnEchec = testResults
@@ -328,7 +328,7 @@ describe('verdictDifferentiel — ne refuser que les échecs NOUVEAUX', () => {
   /*
    * UN ROUGE SANS AUCUN TEST EN ECHEC N'ACCUSE PAS L'EDITION — il accuse la MACHINE.
    *
-   * MESURE le 2026-09-04 (conv-233) : 676 tests passes, ZERO echec, edition refusee quand meme
+   * MESURE le 2026-09-04 : 676 tests passes, ZERO echec, edition refusee quand meme
    * parce que trois processus de test avaient ete tues par la memoire. Le refus etait indefendable
    * — aucune regression mesurable, et aucun rejeu ne pouvait lever la cause, qui est HORS des
    * tests. On publie donc en NOMMANT la limite.
@@ -552,7 +552,7 @@ describe('les quatre défauts prouvés par le panel sur la v2', () => {
   })
 
   /*
-   * VITEST COMPTE LE FICHIER *ET* CHAQUE `describe` (conv-1001, 2026-10-16). `numFailedTestSuites`
+   * VITEST COMPTE LE FICHIER *ET* CHAQUE `describe` (2026-10-16). `numFailedTestSuites`
    * vient de `getSuites(files)` (vitest 3.2.7, chunks/index.*.js : `suites.filter(s => s.result?.state
    * === "fail")`), et un bloc passe rouge des qu'un test qu'il contient echoue. Le controle croise
    * comptait des FICHIERS : tout rouge range dans un `describe` rendait le rapport « incoherent », donc

@@ -343,7 +343,7 @@ describe('widget Jarvis', () => {
   })
 
   it('UNE parole = UN SEUL tour, même sous StrictMode', async () => {
-    // LE DÉFAUT VÉCU (conv-46, 2026-09-01) : une phrase dictée UNE fois lançait 6 tours en 1,5 s —
+    // LE DÉFAUT VÉCU (2026-09-01) : une phrase dictée UNE fois lançait 6 tours en 1,5 s —
     // 6 bulles identiques dans le chat, 6 appels au modèle facturés. Cause : l'envoi de l'ordre
     // était déclenché DEPUIS l'updater de `setEcoute`. React réexécute librement un updater (deux
     // fois d'office sous StrictMode, davantage lors d'un rejeu de file), donc l'effet de bord

@@ -23,7 +23,7 @@ function vraiGit(cwd: string, args: string[]): { code: number; stdout: string; s
 }
 
 /**
- * LE CAS DU 2026-10-24 (conv-1139, run run-58bfc90f8f7b-1) : le fichier en collision n'est PAS
+ * LE CAS DU 2026-10-24 (run run-58bfc90f8f7b-1) : le fichier en collision n'est PAS
  * touche par le travail de la copie, mais par un commit AMONT que la copie embarque.
  *
  * Ce soir-la, la copie etait partie d'`origin/main` (2c043d98, retrait de Graphify), en avance

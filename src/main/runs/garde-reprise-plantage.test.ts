@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { creerGardeRepriseCrash, DELAI_DE_SURVIE_MS } from './garde-reprise-plantage'
 
-// conv-1150 : la reprise de run-ec2036c0932d-1 faisait planter l'app à chaque démarrage (OOM).
+// La reprise de run-ec2036c0932d-1 faisait planter l'app à chaque démarrage (OOM).
 describe('garde de reprise au démarrage', () => {
   const chemin = (): string => join(mkdtempSync(join(tmpdir(), 'garde-reprise-')), 'm.json')
 

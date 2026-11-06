@@ -17,7 +17,7 @@ describe('registre canonique des destinations Autowin', () => {
     ])
   })
 
-  // L'ancien écran Tickets (conv-1397) : ses tickets externes sont l'onglet « Tickets » du Board, sa
+  // L'ancien écran Tickets : ses tickets externes sont l'onglet « Tickets » du Board, sa
   // veille « Autowin OS » un bloc de Maintenance. Ses noms mènent là, pas en silence sur le chat.
   it.each([
     ['tickets', { destination: 'besoins', section: 'tickets' }],
@@ -51,7 +51,7 @@ describe('registre canonique des destinations Autowin', () => {
     ['prompt-load', 'observatory'],
     ['tasks', 'task-manager'],
     ['scheduler', 'task-manager'],
-    // Les anciens libellés de la vue Board (conv-1113 puis conv-1126).
+    // Les anciens libellés de la vue Board.
     ['Carte du projet', 'besoins'],
     ['carte-du-projet', 'besoins']
   ] as const)('normalise %s vers %s', (input, expected) => {
@@ -69,13 +69,13 @@ describe('registre canonique des destinations Autowin', () => {
   })
 
   it.each([
-    // Routage vit dans Settings depuis conv-963 : l'ancien nom y aboutit, plus dans Agent Studio.
+    // Routage vit dans Settings : l'ancien nom y aboutit, plus dans Agent Studio.
     ['router', { destination: 'settings', section: 'routing' }],
     ['routeur', { destination: 'settings', section: 'routing' }],
     ['routage', { destination: 'settings', section: 'routing' }],
     ['models', { destination: 'agent-studio', section: 'topology' }],
     ['capabilities', { destination: 'settings', section: 'capabilities' }],
-    // Une section par registre (conv-1109) : chaque nom ouvre SON registre.
+    // Une section par registre : chaque nom ouvre SON registre.
     ['skills', { destination: 'settings', section: 'capabilities' }],
     ['hooks', { destination: 'settings', section: 'hooks' }],
     ['gates', { destination: 'settings', section: 'gates' }],

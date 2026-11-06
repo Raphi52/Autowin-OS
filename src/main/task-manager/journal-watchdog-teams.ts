@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 /**
  * JOURNAL DU WATCHDOG TEAMS — le seul temoin lisible apres coup de ce qu'il a fait.
  *
- * Pourquoi (conv-770, 2026-09-26) : le watchdog n'ecrivait que dans la console du processus
+ * Pourquoi (2026-09-26) : le watchdog n'ecrivait que dans la console du processus
  * principal, et une app relancee par `restart_app` jette cette console (`app-restart.ts`, stdio
  * 'ignore'). Impossible alors de prouver la voie choisie (local ou Graph), une detection ou une
  * reponse. Une ligne par EVENEMENT (jamais par passage de surveillance), dans
@@ -74,7 +74,7 @@ export function creerJournalWatchdog(
 
 /**
  * Detail d'une ligne `pilotage` : la ligne de `TeamsLocalClient` sans son prefixe console `[watchdog]`
- * (conv-770, 2026-09-27 : le motif ecrit en ligne dans index.ts avait perdu ses barres obliques,
+ * (2026-09-27 : le motif ecrit en ligne dans index.ts avait perdu ses barres obliques,
  * `/^[watchdog]s*\/`, et le prefixe restait dans le journal).
  */
 export function detailPilotage(ligne: string): string {
@@ -82,7 +82,7 @@ export function detailPilotage(ligne: string): string {
 }
 
 /**
- * BATTEMENT « TOUJOURS ACTIF » (conv-770, 2026-09-26) : le journal n'ecrit rien tant que tout va
+ * BATTEMENT « TOUJOURS ACTIF » (2026-09-26) : le journal n'ecrit rien tant que tout va
  * bien, donc un journal silencieux ne distinguait pas « aucun message » de « boucle de lecture morte ».
  * Rend une fonction a appeler a CHAQUE lecture Teams (ok ou en echec) : au plus une ligne
  * `actif lectures=N echecs=M depuisMin=X` par intervalle (une heure par defaut).

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { dossierDeduitDuPremierMessage } from './rangement-premier-message'
 
 /**
- * LE CAS QUI A PRODUIT CE CODE (conv-611, 2026-09-16) : conversation ouverte alors que le dossier
+ * LE CAS QUI A PRODUIT CE CODE (2026-09-16) : conversation ouverte alors que le dossier
  * actif etait BrainRotRoyale, premier message parlant des bureaux virtuels d'Autowin. Si la
  * deduction disparait ou devient trop laxiste, un de ces six cas tombe.
  */
@@ -11,7 +11,7 @@ const AUTOWIN = resolve('D:/AutoWinOS')
 const BRAINROT = resolve('D:/BrainRotRoyale')
 const CONNUS = [AUTOWIN, BRAINROT]
 const existe = (): boolean => true
-/** Le PREMIER message reel de conv-611, copie de sa trace causale — jamais reecrit. */
+/** Le PREMIER message reel, copie de sa trace causale — jamais reecrit. */
 const MESSAGE_REEL_CONV_611 =
   '/kaizen mes travaux en paralele se parasitent car ils utilise pas mon systeme de bureau virtuel'
 

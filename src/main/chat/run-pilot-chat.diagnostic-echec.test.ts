@@ -5,17 +5,17 @@ import { describeChatTurnFailure } from '../providers/provider-failure-diagnosis
 
 /**
  * fix-ok: run-pilot-chat.ts rendait l'erreur brute (`e.message`) sans appeler
- * provider-failure-diagnosis — mesuré conv-5, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a.
+ * provider-failure-diagnosis — mesuré, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a.
  * Entrée qui fait échouer ce test si le correctif est faux : le message réel REEL_CONV5
  * ci-dessous, rendu sans geste `→` par la version 9291acd1^ (rouge vérifié le 2026-09-23).
  *
  * UN TOUR DE CHAT QUI ÉCHOUE DOIT CONSEILLER UN GESTE, pas seulement citer l'incident.
  *
- * Mesuré conv-5, promptCall du tour `d98b3e44-bc1c-4d37-8495-d64f4bea225a` (2026-09-23T09:41:45Z) :
+ * Mesuré, promptCall du tour `d98b3e44-bc1c-4d37-8495-d64f4bea225a` (2026-09-23T09:41:45Z) :
  * le tour a échoué sur « Claude a interrompu l'appel : The model's tool call could not be parsed
  * (retry also failed) », 0,0956 USD payés, message assistant VIDE — et l'écran n'affichait que
  * l'erreur brute. `provider-failure-diagnosis.ts` savait pourtant classer cette panne
- * (`malformed-tool-call`, ajouté après conv-737) et conseiller le geste ; il n'était appelé que par
+ * (`malformed-tool-call`) et conseiller le geste ; il n'était appelé que par
  * l'orchestrateur et le watchdog, jamais par le chemin du chat direct (`run-pilot-chat.ts`).
  */
 const REEL_CONV5 =

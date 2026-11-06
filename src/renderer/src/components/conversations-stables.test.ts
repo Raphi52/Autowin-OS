@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { memeContenu, reutiliserConversationsInchangees } from './conversations-stables'
 
-/** Réconciliation de la liste rechargée par IPC (gel `renderer:vue-chat-liste`, conv-1115). */
+/** Réconciliation de la liste rechargée par IPC (gel `renderer:vue-chat-liste`). */
 const fil = (
   id: string,
   extra: Record<string, unknown> = {}

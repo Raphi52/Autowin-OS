@@ -12,7 +12,7 @@ import { contenuAssistantPourLeModele, rangDuDernierRun } from './dernier-run-en
 /**
  * SESSION NON REPRISE : le modele relit l'historique du fil, et le fil COUPE le resultat d'un run.
  *
- * Mesure sur conv-914 (2026-10-16) : le scout a rendu 23 192 caracteres. Le fil en garde deux copies
+ * Mesure (2026-10-16) : le scout a rendu 23 192 caracteres. Le fil en garde deux copies
  * coupees — la bulle a 4 000 caracteres, et l'action `orchestrate` a 12 000 (plafond d'enregistrement
  * des donnees d'action) — que l'historique du modele reduisait encore a 1 200. Seul le JOURNAL du
  * tour porte l'issue entiere. Une session non reprise (session neuve, modele qui ne reprend pas ses
@@ -147,7 +147,7 @@ describe('session non reprise : le modèle relit le DERNIER run en entier', () =
 })
 
 /**
- * conv-1074 (2026-10-22) : le dernier run relu EN ENTIER portait le code de ses pages `html-render`.
+ * 2026-10-22 : le dernier run relu EN ENTIER portait le code de ses pages `html-render`.
  * Le filtre passe AVANT la borne de tout resultat injecte (120 000 caracteres) : applique apres, il
  * laisserait la borne couper ce qui SUIT une page longue. Entree qui ferait echouer une mauvaise
  * correction : une page de plus de 120 000 caracteres suivie de `APRES-LA-PAGE`.

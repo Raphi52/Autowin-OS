@@ -44,7 +44,7 @@ export interface OrchestrateTurnPersistenceOptions {
    * prendre en main. Quand cette reprise ouvre un NOUVEAU tour (autre identité de modèle, snapshot
    * absent, ancien checkpoint), plus personne ne le fermait : `hasStreamingTurn` le voyait où qu'il
    * soit dans le fil et le spinner de la liste restait allumé jusqu'au redémarrage suivant
-   * (juge du correctif spinner, conv-914, 2026-10-13). `begin` le passe en `interrupted`.
+   * (juge du correctif spinner, 2026-10-13). `begin` le passe en `interrupted`.
    */
   supersededTurnId?: string
   /** Journal fichier du tour d'ORIGINE : sa fermeture y est écrite, pas dans celui du nouveau tour. */
@@ -54,7 +54,7 @@ export interface OrchestrateTurnPersistenceOptions {
   /**
    * Appelé UNE fois, APRÈS l'écriture de l'état terminal (`succeed` ou `fail`). Sert à recharger la
    * liste des conversations : tant que ce tour est `streaming`, la liste affiche un spinner
-   * (`hasStreamingTurn`), et seul `refresh/conversations` la recharge (conv-914, 2026-10-13).
+   * (`hasStreamingTurn`), et seul `refresh/conversations` la recharge (2026-10-13).
    */
   onClosed?: () => void
 }
@@ -119,7 +119,7 @@ export function createOrchestrateTurnPersistence(
    * pas se répéter.
    *
    * L'ancien critère comptait `step.text` comme « déjà dit ». C'était faux : le texte d'une phase part
-   * vers le panneau des sous-agents (`orchestrate:step`), jamais dans la bulle. Mesuré sur `conv-1267`
+   * vers le panneau des sous-agents (`orchestrate:step`), jamais dans la bulle. Mesuré
    * le 2026-08-17 — dès qu'une phase parlait, la clôture était supprimée et le tour finissait sur
    * quatre étiquettes nues (« [a exécuté orchestrate] … [a exécuté gate] »), zéro mot, alors que judge
    * ET gate avaient passé. Relire le fil couvre en plus tout futur écrivain de texte, pas seulement
@@ -218,7 +218,7 @@ export function createOrchestrateTurnPersistence(
       })
       // Le texte d'une phase n'est PAS livré au fil : la carte `result` ci-dessus ne transporte que
       // `detail`, `error`, `costUsd` et `durationMs`. Il ne peut donc pas compter comme « déjà dit ».
-      // Mesuré sur `conv-1267` le 2026-08-17 : il le comptait, et toute phase qui parlait supprimait la
+      // Mesuré le 2026-08-17 : il le comptait, et toute phase qui parlait supprimait la
       // clôture — le tour finissait sur quatre étiquettes nues, zéro mot, alors que judge ET gate
       // avaient passé. Seul ce qui est RÉELLEMENT livré (`deliver`) éteint la clôture.
     },
@@ -250,7 +250,7 @@ export function createOrchestrateTurnPersistence(
           error: reasons.join(' ; ') || closing || 'Livraison refusée par le gate Autowin.'
         })
       } else {
-        // GROW PROPOSÉE (conv-417) : même déclencheur que la clôture du tour de chat
+        // GROW PROPOSÉE : même déclencheur que la clôture du tour de chat
         // (`run-pilot-chat.ts`), pour les runs lancés depuis les tickets ou repris au redémarrage.
         const ligneGrow = ligneDePropositionGrowDuResultat(result, openedTask)
         if (ligneGrow) emit({ kind: 'delta', streamId: `${turnId}:grow`, text: ligneGrow })
@@ -270,7 +270,7 @@ export function createOrchestrateTurnPersistence(
        * AUCUN REFUS DE REPRISE N'EST DU TRAVAIL, temporaire ou definitif. Il est ecrit dans la
        * conversation pour laisser une trace, mais il n'execute rien et ne touche aucun fichier :
        * il ne doit donc pas faire remonter le fil en tete de liste ni le repeindre en « non lu ».
-       * Mesure conv-336 du 2026-09-07 : au demarrage de 10:20, 13 refus ont repeint 11
+       * Mesure du 2026-09-07 : au demarrage de 10:20, 13 refus ont repeint 11
        * conversations vieilles de plusieurs jours -- 12 d'entre eux etaient `copie-durable-absente`
        * (definitif), un seul `appel-provider-actif` (transitoire).
        */

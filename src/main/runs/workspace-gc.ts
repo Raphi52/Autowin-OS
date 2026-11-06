@@ -170,7 +170,7 @@ async function lireWorkspace(dossier: string, convId: string): Promise<Workspace
 /**
  * Inventorie les workspaces sous la racine des runs de conversation.
  *
- * ASYNCHRONE, un RUN.md à la fois : mesure du 2026-10-19 (`gels.jsonl`, conv-359), la version
+ * ASYNCHRONE, un RUN.md à la fois : mesure du 2026-10-19 (`gels.jsonl`), la version
  * synchrone ouvrait et lisait chaque RUN.md sur le fil de la fenêtre qui se charge — 108 `openSync`
  * et 120 `readSync`, 16,7 s de fenêtre figée sur le disque D: saturé.
  */

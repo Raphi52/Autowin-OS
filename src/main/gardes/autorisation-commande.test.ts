@@ -30,7 +30,7 @@ describe('binaireDe — ce qui sera réellement lancé', () => {
 
 describe('les guillemets GROUPENT — un message en plusieurs mots arrive intact', () => {
   /**
-   * DÉFAUT VÉCU (conv-46, 2026-09-01) : `git commit -m "trois mots"` repartait en autant
+   * DÉFAUT VÉCU (2026-09-01) : `git commit -m "trois mots"` repartait en autant
    * d'arguments, guillemets compris, et git répondait « pathspec 'trois' did not match any
    * file(s) ». Le lanceur coupait la ligne avec un simple `split(/\s+/)` : rien de guillemeté ne
    * survivait. Ces cas sont TOUS rouges avec l'ancien découpage.
@@ -107,7 +107,7 @@ describe('decisionDeCommande — plus aucune autorisation a retaper', () => {
   /*
    * UN OPERATEUR ENTRE GUILLEMETS EST DU TEXTE, PAS UN ENCHAINEMENT.
    *
-   * Mesure le 2026-09-04 (conv-233) : une ligne dont le `||` vivait a l'interieur d'une chaine de
+   * Mesure le 2026-09-04 : une ligne dont le `||` vivait a l'interieur d'une chaine de
    * caracteres etait refusee comme enchainement shell — deux appels perdus. La ligne part en
    * `shell: false` : ce qui est guillemete devient UN argument litteral, il n'enchaine rien.
    *

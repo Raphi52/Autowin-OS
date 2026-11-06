@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * UN BLOC SANS DESTINATAIRE NE PEUT PAS SE DECLARER « RÉPONDU » (conv-50, 2026-09-01).
+ * UN BLOC SANS DESTINATAIRE NE PEUT PAS SE DECLARER « RÉPONDU » (2026-09-01).
  *
  * Meme symptome que le defaut vecu — « j'ai répondu a la question et ca a rien fait » — mais par un
  * AUTRE chemin : `ChatMosaic.tsx` rend `ChatMessageRow` sans `onAnswerAsk`, donc le bloc recevait

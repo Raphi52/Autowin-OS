@@ -13,7 +13,7 @@ import { CLE_ETATS_MANUELS_CARTE } from './etats-manuels-carte'
 import type { BilanDeVerification } from './verification-du-board'
 
 /**
- * LES BOUTONS « VÉRIFIER » DU BOARD (conv-1136, 2026-10-23 : « un bouton pour tout vérifier et un
+ * LES BOUTONS « VÉRIFIER » DU BOARD (2026-10-23 : « un bouton pour tout vérifier et un
  * bouton vérifier sur un post it pour le faire quitter la ligne à vérifier », « et vérifier
  * manuellement »). Fichier à part : les autres tests de la rivière sont édités par d'autres fils.
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : « Tout vérifier » qui part sans confirmation, qui vise un

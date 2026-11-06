@@ -140,7 +140,7 @@ describe('ChatView — surligner une conversation depuis son menu', () => {
   /*
    * UN BOUTON MORT DOIT LE DIRE.
    *
-   * Vécu le 2026-09-09 (conv-384) : l'affichage se recharge à chaud, le processus principal non.
+   * Vécu le 2026-09-09 : l'affichage se recharge à chaud, le processus principal non.
    * L'entrée de menu est donc arrivée AVANT le canal qui l'enregistre, et l'appel etait ecrit
    * « appelle si ca existe » — le clic ne faisait rien, sans message ni erreur. L'utilisateur a
    * cliqué sur un bouton mort en croyant à un bug du surlignage.

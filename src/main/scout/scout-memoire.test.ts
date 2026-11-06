@@ -27,7 +27,7 @@ const fichier = (): string =>
   join(mkdtempSync(join(tmpdir(), 'autowin-memoire-')), 'scout-pistes.json')
 
 /*
- * conv-616 et conv-624, à 2 h 37 d'écart, sur le même sujet : 3 pistes sur 8 reprises (écriture du
+ * À 2 h 37 d'écart, sur le même sujet : 3 pistes sur 8 reprises (écriture du
  * cache, tri des conversations, préfixe du juge), relu dans leurs traces le 30/09. Le stock de la
  * veille gardait déjà ses pistes, écartées comprises — mais seuls les scouts de la veille le lisaient,
  * et les scouts du chat n'y écrivent jamais.
@@ -171,7 +171,7 @@ describe('mémoire des pistes déjà proposées par un scout', () => {
 })
 
 /*
- * Piste 7 de conv-890 : « une note ajustée sur ce que tu choisis vraiment ». Le chat n'enregistrait
+ * Piste 7 : « une note ajustée sur ce que tu choisis vraiment ». Le chat n'enregistrait
  * AUCUN choix de piste — seule la veille garde un statut (`veille/candidats.ts`). Or le choix arrive
  * déjà au processus principal : c'est la tâche du run suivant, au format fixe de
  * `redigerPromptWorkflowSelection` (« Traite ENSEMBLE ces N candidats… », une ligne « Quoi : » par
@@ -226,7 +226,7 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
       ['Logs', 'laissee']
     ])
     // La sélection n'a pas touché l'ancien scout (« Écriture du cache » y serait « prise ») : il est
-    // « ignoree » depuis l'arrivée de r1, sans aucun choix (piste 2 de conv-1033).
+    // « ignoree » depuis l'arrivée de r1, sans aucun choix (piste 2).
     expect(parRun('ancien').map(([, choix]) => choix)).toEqual(['ignoree', 'ignoree'])
     expect(parRun('r9').every(([, choix]) => choix === undefined)).toBe(true)
   })
@@ -265,7 +265,7 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
   })
 
   // fix-ok: rouge avant (facteursDesChoix absent) ; la note restait l’avis du modèle.
-  // Piste 7 de conv-890, à la lettre : la NOTE elle-même suit ce que l'utilisateur prend, type par type.
+  // Piste 7, à la lettre : la NOTE elle-même suit ce que l'utilisateur prend, type par type.
   const septPistes =
     ENTETE +
     '| 1 | 80 | 🔧 fix | A | p | a.ts:1 |\n| 2 | 80 | 🔧 fix | B | p | a.ts:1 |\n' +
@@ -300,7 +300,7 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
   })
 
   /*
-   * PISTE 5 (conv-1033) — un scout réparé garde une ligne par VERSION de son tableau. Mesuré dans
+   * PISTE 5 — un scout réparé garde une ligne par VERSION de son tableau. Mesuré dans
    * `scout-pistes.json` le 21/10 : run-8e6410f195c5-1 = 93 lignes, 11 versions, dernier tableau de 9
    * lignes ; il fournissait 93 des pistes « jugées ». L'utilisateur n'a vu que le DERNIER tableau.
    * Entrée qui tue une correction fausse : X, Y, Z n'existent que dans la version 1. Dédoublonner par
@@ -336,7 +336,7 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
   })
 
   /*
-   * PISTE 2 (conv-1033) — un scout dont rien n'est pris ne laissait AUCUNE trace : sans message de
+   * PISTE 2 — un scout dont rien n'est pris ne laissait AUCUNE trace : sans message de
    * sélection, `noterChoixScout` sort avant d'écrire. Mesuré le 21/10 : 6 runs scout sur 10 sans
    * aucun choix. Le scout SUIVANT du même dépôt le constate et le marque « ignoree ».
    * Entrée qui tue une correction fausse : la 2e version du MÊME run (une réparation) — marquer
@@ -400,8 +400,8 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
   })
 
   /*
-   * Les motifs « Pourquoi pas ? » DÉJÀ notés (piste 2, conv-1033). Le bouton qui les écrivait est
-   * retiré (conv-1198), mais une mémoire existante en porte encore : le bilan les compte, la sélection
+   * Les motifs « Pourquoi pas ? » DÉJÀ notés (piste 2). Le bouton qui les écrivait est
+   * retiré, mais une mémoire existante en porte encore : le bilan les compte, la sélection
    * les garde. Une piste PRISE n'a pas été refusée : son motif n'est plus un refus.
    * Entrée qui tue une correction fausse : compter tous les motifs du dernier tableau.
    */
@@ -440,7 +440,7 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
   })
 
   /*
-   * PISTE 1 (conv-1033) — « prise » ne dit pas si le travail a abouti. L'app note DÉJÀ la fin de
+   * PISTE 1 — « prise » ne dit pas si le travail a abouti. L'app note DÉJÀ la fin de
    * chaque run (`OutcomeObservedV1`, `outcome-learning/events-v1.jsonl`) : la piste prise garde le
    * run qui l'a traitée, et le bilan lit son résultat là, sans second suivi.
    * Entrée qui tue une correction fausse : un run qui a DEUX résultats (une reprise). Le plus récent
@@ -502,7 +502,7 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
   })
 
   /*
-   * « 1 LIVRÉE, 17 EN ÉCHEC » (conv-1341, 2026-10-30). Le bilan comptait une LIGNE par piste, alors
+   * « 1 LIVRÉE, 17 EN ÉCHEC » (2026-10-30). Le bilan comptait une LIGNE par piste, alors
    * que le résultat est celui du run entier : sur la mémoire réelle, ces 18 lignes venaient de 4 runs
    * finis (5, 4 et 8 pistes pour les trois refusés du 22/10). Un scout l'a lu comme « vos pistes
    * n'aboutissent pas », alors que le travail de ces trois runs a été publié dans la journée.
@@ -580,7 +580,7 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
   })
 
   /*
-   * LA SÉLECTION EST NOTÉE DEUX FOIS (conv-1341) : à son arrivée dans le fil, sans run, puis par le
+   * LA SÉLECTION EST NOTÉE DEUX FOIS : à son arrivée dans le fil, sans run, puis par le
    * run s'il y en a un. Rejouée sans run après un run, elle ne doit pas lui retirer sa piste.
    */
   it('une sélection renotée sans run garde le run qui a traité la piste', () => {
@@ -638,7 +638,7 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
   })
 
   /*
-   * PISTE 6 (conv-1033) — les 11 premières pistes prises venaient des 15 et 16/10, d'une même séance
+   * PISTE 6 — les 11 premières pistes prises venaient des 15 et 16/10, d'une même séance
    * sur les animations, et pesaient autant qu'un choix d'hier. Un choix vieillit : son poids est
    * divisé par deux toutes les `DEMI_VIE_CHOIX_JOURS`.
    * Entrée qui tue une correction fausse : deux séances SYMÉTRIQUES (l'ancienne prend tous les fix,
@@ -704,7 +704,7 @@ describe('choix réels des pistes : prises, laissées, et le bilan rendu au scou
 })
 
 /*
- * conv-339 : un /scout sur les humains de l'Accueil (« ultra quali comme dans Cyberpunk ») a reçu
+ * Un /scout sur les humains de l'Accueil (« ultra quali comme dans Cyberpunk ») a reçu
  * 60 titres « DÉJÀ PROPOSÉ » — outils, serveurs MCP, navigateur, coffre de mots de passe —, dont 25
  * en « (ex-#N) » redisant un titre déjà listé. La fixture est le bloc RÉEL de sa consigne
  * (prompt-observability, tour b6150a1a), un titre par ligne, le plus récent d'abord.
@@ -788,12 +788,12 @@ describe('pistes déjà proposées : seulement celles qui touchent la demande, s
 })
 
 /*
- * Objection du juge sur la correction précédente (conv-339) : filtrées sur les seuls mots de la
+ * Objection du juge sur la correction précédente : filtrées sur les seuls mots de la
  * demande, les pistes du scout PRÉCÉDENT sur les humains disparaissaient — 1 titre gardé sur 9
  * (« Humains filmés en volume ») ; « Peau moins plastique », « Visages vivants », les passants, les
  * ombres, la foule ne disent pas « humains ». Le prochain scout sur le sujet les aurait reproposés.
  * La fixture est le run RÉEL de ce scout (`scout-pistes.json`, run-f085fcccbb82-1, ses 27 titres).
- * fix-ok: rejeu sur la mémoire réelle du 19/10, demande de conv-339 : 1 titre sur les humains rendu
+ * fix-ok: rejeu sur la mémoire réelle du 19/10, demande : 1 titre sur les humains rendu
  * au lieu des 9 pistes de run-f085fcccbb82-1, faute de lire le sujet au niveau du run.
  */
 describe('pistes déjà proposées : le scout précédent sur le même sujet reste interdit en entier', () => {
@@ -812,7 +812,7 @@ describe('pistes déjà proposées : le scout précédent sur le même sujet res
       chemin
     })
   /*
-   * Le scout de conv-339 a rendu 3 versions de son tableau de 9 lignes (scout-pistes.json réel) :
+   * Le scout a rendu 3 versions de son tableau de 9 lignes (scout-pistes.json réel) :
    * chaque version est notée à part, comme `noterPistesScout` le fait en production.
    */
   const VERSIONS_F085 = [

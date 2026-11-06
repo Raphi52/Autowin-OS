@@ -33,7 +33,7 @@ export type TicketTreatmentStatus =
   | 'interrupted'
 
 /**
- * L'ECLAT DE LA BULLE D'UN TICKET (conv-981, 2026-10-16) : le PASSAGE d'un traitement en cours a
+ * L'ECLAT DE LA BULLE D'UN TICKET (2026-10-16) : le PASSAGE d'un traitement en cours a
  * traite, vu pendant que la vue est ouverte. Un ticket deja traite a l'ouverture, un echec, une
  * interruption ou un traite reenregistre ne jouent rien : l'eclat dit « ca vient de reussir ». Pure ;
  * branchee sur `useAtterrissage` (anneau-activite-calcul.ts) par `BulleDuTicket`.
@@ -347,7 +347,7 @@ export function ticketConversationTitle(item: TicketItem): string {
 
 /**
  * Le prompt garde un BUDGET (10 commentaires de 600 caractères) : il est prérempli dans le champ de
- * saisie. Mais un résumé lu comme le tout fait conclure à tort (conv-1228, 2026-10-28). Quand la
+ * saisie. Mais un résumé lu comme le tout fait conclure à tort (2026-10-28). Quand la
  * discussion a été résumée, on le DIT, hors des données non fiables, avec l'outil qui la rend entière.
  */
 function renvoiDiscussionEntiere(item: TicketItem): string {

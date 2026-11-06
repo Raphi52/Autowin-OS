@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * conv-1077 (2026-10-22) : `renderer:vue-chat-fil` = 28 gels pour 62,4 s depuis le 15/10 (pire 7,6 s),
+ * 2026-10-22 : `renderer:vue-chat-fil` = 28 gels pour 62,4 s depuis le 15/10 (pire 7,6 s),
  * mais le fil était mesuré D'UN BLOC (`<VueMesuree id="chat-fil" bloc>`, ChatView.tsx) : rien ne
  * disait QUEL message coûtait. On mesure donc message par message (clé, rôle, taille — jamais le
  * texte) et le gel du fil emporte les plus lourds.

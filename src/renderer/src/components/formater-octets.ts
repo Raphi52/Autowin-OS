@@ -8,7 +8,7 @@ import { traduireBoardEtMaintenance } from '../textes-ecrans/board-et-maintenanc
  * casse le rechargement a chaud (regle `react-refresh/only-export-components`).
  */
 export function formaterOctets(octets: number): string {
-  // L'unité suit la langue (« Mo » / « MB », conv-1170) ; le chiffre garde son point, comme avant.
+  // L'unité suit la langue (« Mo » / « MB ») ; le chiffre garde son point, comme avant.
   const unite = (
     cle: 'octets.o' | 'octets.ko' | 'octets.mo' | 'octets.go',
     n: string | number

@@ -1,5 +1,5 @@
 /**
- * LE SCOUT EN DOUBLE D'UNE SÉLECTION — conv-1080, « le doublon enlève-le, ça c'est sûr ».
+ * LE SCOUT EN DOUBLE D'UNE SÉLECTION, « le doublon enlève-le, ça c'est sûr ».
  *
  * Mesuré avant correction : 4 runs de sélection « Traite ENSEMBLE… » sur 43 rejouaient une phase
  * scout. Entrées qui tuent une correction fausse : les VRAIS workflows livrés (pas un graphe écrit
@@ -124,7 +124,7 @@ describe('régime par défaut (aucun workflow sur le fil)', () => {
 
 describe('branchement réel', () => {
   it('os.ts retire le scout autour du workflow du fil, workflow actif par défaut compris', () => {
-    // Plus de workflow imposé depuis conv-1070 : le workflow actif de la vue est rendu par
+    // Plus de workflow imposé : le workflow actif de la vue est rendu par
     // `poseConversationWorkflow` comme valeur par défaut, donc filtré comme les autres.
     const os = readFileSync(new URL('../app/os.ts', import.meta.url), 'utf8')
     expect(os).toMatch(

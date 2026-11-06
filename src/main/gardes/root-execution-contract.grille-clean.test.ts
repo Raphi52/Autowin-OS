@@ -4,7 +4,7 @@ import { evaluateClosure } from '../gates/stopgate'
 import type { ExecutionEvidence } from '../providers/types'
 
 /*
- * DEMANDE conv-1035 (2026-10-21) : la phase clean note les lignes du run sur une grille qualité et
+ * DEMANDE (2026-10-21) : la phase clean note les lignes du run sur une grille qualité et
  * termine par `Grille : N ✅ · K ❌ restants · S sans objet`. Tant que K > 0, le run ne ferme pas
  * vert. Le test passe par le site d'appel réel : `etatDeCloture` → `evaluateClosure`, exactement
  * comme le pré-contrôle de `orchestrator.ts` (dod `hasContent: true`).

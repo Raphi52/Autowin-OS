@@ -2,15 +2,15 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * LISIBILITÉ DE LA FRISE, calculée sur les couleurs réelles des thèmes (conv-1324, lot 3/3 de
- * conv-1286). Mesuré en vraie app (run11, style calculé) : en thème clair, le verbe d'un jalon actif
+ * LISIBILITÉ DE LA FRISE, calculée sur les couleurs réelles des thèmes (lot 3/3).
+ * Mesuré en vraie app (run11, style calculé) : en thème clair, le verbe d'un jalon actif
  * donnait 4,3:1 en `--gold` et 4,04:1 en `--err`, 3,91:1 sur NieR:Automata, pour un texte de 10,5 px.
  * Ces jetons tiennent 4,5:1 sur le fond de page, pas sur la surface du panneau, plus foncée.
  *
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : remettre `color: var(--jalon)` sur le verbe, ou
  * `color: var(--gold)` sur le dernier bouton du bandeau.
  *
- * fix-ok: conv-1324 (style calculé en vraie app, D:/tmp/lot3/run11.txt et run12.txt) — causes des
+ * fix-ok: (style calculé en vraie app, D:/tmp/lot3/run11.txt et run12.txt) — causes des
  * retouches de ce test : NieR:Automata ne déclare pas `--err` dans theme-nier-automata.css, sa valeur
  * vient du fichier généré (le 3,91:1 mesuré) et le reste de la base claire ; le test lit donc cette
  * chaîne (`base`) comme la page. Et l'opacité de 85 % sur tout le jalon prochain retirait du contraste
@@ -82,7 +82,7 @@ function melanger(accent: number[], texte: number[], part: number): number[] {
 
 const baseClaire = jetons('theme-modes.css', /:root\[data-(base|theme)=['"]clair['"]\]/)
 
-// Surfaces du panneau mesurées en vraie app (style calculé, 17-contrastes.json, conv-1324) : ce sont
+// Surfaces du panneau mesurées en vraie app (style calculé, 17-contrastes.json) : ce sont
 // elles qui comptent, pas le fond de page que les tests de thème mesurent déjà.
 const THEMES = [
   {

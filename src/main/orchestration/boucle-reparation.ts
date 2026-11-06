@@ -5,7 +5,7 @@ import {
 } from '../gates/stopgate'
 
 /**
- * POURQUOI CE MODULE — objection du juge sur conv-540, tour
+ * POURQUOI CE MODULE — objection du juge, tour
  * 8bc214db-8c48-4a29-880d-1ef4c4391d1f : « deux tests verifient le cablage en LISANT le texte de
  * orchestrator.ts (expect(source).toContain(...)). Ca casse au moindre renommage et ne prouve pas
  * l'execution. »
@@ -49,12 +49,12 @@ export function deciderDuPassage(entree: {
   motifsCourants: readonly string[]
   etat: EtatDeBoucleDeReparation
   bundlePerime?: { bundleMs: number; sourceMs: number; demarrageMs?: number; bundle: string }
-  /** conv-844 : réparer jusqu'à ce qu'il n'y ait plus de défaut (voir `arretDeLaReparation`). */
+  /** Réparer jusqu'à ce qu'il n'y ait plus de défaut (voir `arretDeLaReparation`). */
   jusquAuVert?: boolean
-  /** conv-35 : memes reserves MINEUR sur un VALIDE, deux passages de suite. */
-  // fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
+  /** Memes reserves MINEUR sur un VALIDE, deux passages de suite. */
+  // fix-ok: la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
   reservesMineuresFigees?: boolean
-  /** conv-1420 : le panel de juges est en panne, voir `arretDeLaReparation`. */
+  /** Le panel de juges est en panne, voir `arretDeLaReparation`. */
   panneDesJuges?: string
 }): PassageDeReparation {
   const { attempt, reparationsAccordees, plafondDur, motifsCourants, etat } = entree

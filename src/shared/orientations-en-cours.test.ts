@@ -14,7 +14,7 @@ import {
 } from './orientations-en-cours'
 
 /*
- * conv-1241 : l'orientation de conv-1240 (saisie ts 1793225455947, tour 2e218711-cf9d-4a92-b161-b7840f791264)
+ * L'orientation (saisie ts 1793225455947, tour 2e218711-cf9d-4a92-b161-b7840f791264)
  * n'a jamais atteint le modèle — un seul appel de 11 minutes, relecture seulement ENTRE deux appels.
  * Elle passe maintenant par le contrôle lancé avant chaque outil. Ici : le module, puis le script RÉEL.
  */

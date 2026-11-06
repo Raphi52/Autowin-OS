@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AskDecisionBlock } from './AskDecision'
 
 /**
- * LE DÉFAUT, vécu le 2026-08-25 dans la conversation `conv-1400`.
+ * LE DÉFAUT, vécu le 2026-08-25 dans la conversation.
  *
  * Rien ne marquait un bloc `ask` comme répondu. L'utilisateur a cliqué QUATRE fois sur la même
  * option — « Rejouer la vérif ciblée sur oracle-suite-complete uniquement » — et quatre envois sont

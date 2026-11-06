@@ -309,7 +309,7 @@ export function formatDuration(ms: number): string | undefined {
   if (!Number.isFinite(ms) || ms <= 0) return undefined
   if (ms < 1000) return `${Math.round(ms)} ms`
   const seconds = ms / 1000
-  // Séparateur décimal de la langue de l'interface (conv-1170) : « 4,2 s » / « 4.2 s ».
+  // Séparateur décimal de la langue de l'interface : « 4,2 s » / « 4.2 s ».
   if (seconds < 60)
     return `${formaterNombre(seconds, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`
   const minutes = Math.floor(seconds / 60)

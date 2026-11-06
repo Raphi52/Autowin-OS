@@ -121,8 +121,8 @@ describe('outcome learning — contrat visible par les modèles', () => {
     )
     // Le superviseur doit arriver à SON rang dans le constructeur (positionnel), pas seulement en
     // DERNIER : l'ancienne forme (`outcomeLearning\s*\)`) rougissait dès qu'un paramètre était ajouté
-    // après lui (`porteProd`, `guichetProd`, conv-738), sans que le câblage ait changé
-    // (conv-770, 2026-09-28).
+    // après lui (`porteProd`, `guichetProd`), sans que le câblage ait changé
+    // (2026-09-28).
     const commandes = readFileSync(join(process.cwd(), 'src/main/commands/commands.ts'), 'utf8')
     const constructeur = commandes.indexOf(
       'constructor(',
@@ -161,7 +161,7 @@ describe('outcome learning — contrat visible par les modèles', () => {
   })
 
   it('sépare l’auteur de la leçon de son attestation par le judge', () => {
-    // observeOutcomeLearning vit dans commands/apprentissage.ts (conv-1580, lot 6) : famille du bus.
+    // observeOutcomeLearning vit dans commands/apprentissage.ts (lot 6) : famille du bus.
     const commands = sourceDuBus()
     const orchestrator = ['orchestration/orchestrator-contrats.ts', 'orchestration/orchestrator.ts', 'orchestration/orchestrator-run.ts', 'orchestration/orchestrator-parcours-glouton.ts', 'orchestration/orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, '..', f), 'utf8')).join(String.fromCharCode(10))
 

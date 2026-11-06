@@ -1,5 +1,5 @@
 /**
- * LE PONT ENTRE L'ACCUEIL ET LA SCÈNE (conv-1421).
+ * LE PONT ENTRE L'ACCUEIL ET LA SCÈNE.
  *
  * La scène vit dans `.decor-de-fond`, derrière toute l'application, et ne reçoit aucun clic (`z-index`
  * négatif, `pointer-events: none`, voir `theme.css`). Elle y reste : c'est ce qui lui fait prendre toute

@@ -3,8 +3,8 @@ import type { PlanDeLots } from './plan-de-lots'
 /*
  * CE QUE DIT LE FIL D'UN LOT, EN UNE LIGNE — CALCUL PUR, partagé par le processus principal et l'écran.
  *
- * Né dans `frise-des-lots.ts` (conv-1305), côté écran : il ne lisait donc que les fils déjà peints, et
- * un lot jamais ouvert gardait sa piste vide. Déplacé ici (conv-1315, 2026-10-30) : le processus
+ * Né dans `frise-des-lots.ts`, côté écran : il ne lisait donc que les fils déjà peints, et
+ * un lot jamais ouvert gardait sa piste vide. Déplacé ici (2026-10-30) : le processus
  * principal tient TOUS les fils en mémoire, tour en cours compris (`applyTurnEvent`), et rend chaque
  * phrase par le canal `os:plansDeLots`, sans faire traverser les messages.
  */
@@ -16,7 +16,7 @@ export const PHRASE_MAX = 160
 const LIGNE_TECHNIQUE = /^(?:AUTOWIN_[A-Z_]+\d*:|```|<|\||[-=*_]{3,}$)/u
 /**
  * Lignes écrites par l'app ou par la forme de clôture, pas par le lot : les rubriques de fin de tour
- * et le bandeau d'un fil repris (mesuré sur conv-1307 : ce bandeau passait pour le résultat du lot).
+ * et le bandeau d'un fil repris (mesuré : ce bandeau passait pour le résultat du lot).
  */
 const LIGNE_DE_CADRE = /^(?:✅ Fait|📍 Maintenant|⏳ Reste à faire|👉 Recommandé|Reprise du fil\b)/u
 
@@ -43,7 +43,7 @@ export type MessagePourPhrase = {
 
 /**
  * Les textes d'un message, dans l'ordre. Un tour en écrit un par étape, entre deux outils : c'est pour
- * ça que la phrase d'un lot fini se lit dans le DERNIER (mesuré sur conv-1259, 24 textes : le premier
+ * ça que la phrase d'un lot fini se lit dans le DERNIER (mesuré, 24 textes : le premier
  * disait « Je lis encore les outils de capture », le dernier « J'ai fait les 21 captures »).
  */
 function textesDuMessage(message: MessagePourPhrase): string[][] {

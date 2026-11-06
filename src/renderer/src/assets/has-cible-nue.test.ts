@@ -8,13 +8,13 @@ import { describe, expect, it } from 'vitest'
  * GARDE-FOU : sous `:has()`, la cible finale d'un sélecteur se vise par une classe, un id ou un
  * attribut — jamais par une balise nue (`span`, `button`) ni par `*`.
  *
- * Mesure du 2026-10-28 (conv-1229) : l'interface s'est rechargée seule à 18:31. Le battement de
+ * Mesure du 2026-10-28 : l'interface s'est rechargée seule à 18:31. Le battement de
  * la fenêtre avait vu 15 s de silence pendant que l'utilisateur tapait un message : chaque lettre
  * coûtait ≈ 220 ms de recalcul de styles forcé (trace « long-animation-frame » de la fenêtre
  * réelle). Trace Chromium dans une copie cachée : 331 éléments restylés par frappe sur 501, 4 sans
  * aucune règle `:has()`, ≈ 12 avec n'importe laquelle SAUF deux, chacune à ≈ 220 :
- *   - `.home-notices li:has(> .home-notices__acquitter) > button:first-child` (conv-1225) ;
- *   - `… .msg--rail:has(~ .msg.assistant.msg--rail) .artifact-pile__tranches > span` (conv-1199).
+ *   - `.home-notices li:has(> .home-notices__acquitter) > button:first-child` ;
+ *   - `… .msg--rail:has(~ .msg.assistant.msg--rail) .artifact-pile__tranches > span`.
  * Pourquoi : Chromium range la cible finale de TOUTES les règles `:has()` dans UN SEUL ensemble
  * d'invalidation. Le cadre `.shell` est lui-même ancre d'un `:has()` (rail replié) : React réécrit
  * le texte de la saisie à chaque frappe, Chromium réévalue ce `:has()`, et applique l'ensemble

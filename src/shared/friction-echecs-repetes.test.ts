@@ -18,7 +18,7 @@ const livre = (): OrchestrationOutcome => ({
 })
 
 /**
- * Défaut mesuré (conv-1302) : douze orchestrations sans livraison sur la même demande, >20 $, et
+ * Défaut mesuré : douze orchestrations sans livraison sur la même demande, >20 $, et
  * rien à l'écran ne disait qu'on était dans une série. L'utilisateur a relancé neuf fois.
  */
 describe('frictionEchecsRepetes — la série devient visible avant la relance suivante', () => {

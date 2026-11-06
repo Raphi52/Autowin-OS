@@ -18,7 +18,7 @@ import {
 } from './hdesk-tv'
 
 /*
- * conv-1457 : arbre d'accessibilité du bureau caché joint à `bureau_cache_observer`, appui par nom
+ * Arbre d'accessibilité du bureau caché joint à `bureau_cache_observer`, appui par nom
  * dans `bureau_cache_agir`, et clic x/y converti comme la petite TV (capture recadrée).
  * Mesures réelles qui fondent les valeurs ci-dessous : Table des caractères dans un bureau caché le
  * 2026-11-03 — image recadrée d'origine (7,57), bouton « Sélectionner » id=103 en (329,405) 75×23.

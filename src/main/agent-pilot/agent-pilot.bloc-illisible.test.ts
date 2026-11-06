@@ -16,7 +16,7 @@ type Resultat = Extract<PilotEventVariant, { kind: 'result' }>
 /**
  * CE QUE L'UTILISATEUR VOIT QUAND UNE COMMANDE EST REFUSEE.
  *
- * Vecu le 2026-09-01 (conv-46), capture a l'appui : deux blocs `<cmd>` casses dans le meme tour ont
+ * Vecu le 2026-09-01, capture a l'appui : deux blocs `<cmd>` casses dans le meme tour ont
  * laisse leur JSON ENTIER affiche en plein milieu du fil, et le second n'a meme pas ete signale.
  *
  * Deux causes distinctes, donc deux garanties ici :

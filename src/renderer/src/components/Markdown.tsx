@@ -28,7 +28,7 @@ import {
 /**
  * Les aides de rendu ci-dessous ne sont pas des composants : elles lisent la langue au moment de
  * l'appel. `Markdown` s'abonne à la langue (`useTextesArtefactsEtBandeaux`) pour être redessiné
- * quand elle change, sinon `memo` garderait la bulle dans l'ancienne langue (conv-1170).
+ * quand elle change, sinon `memo` garderait la bulle dans l'ancienne langue.
  */
 const texte = (cle: CleArtefactsEtBandeaux, valeurs?: Record<string, string | number>): string =>
   traduireArtefactsEtBandeaux(cle, langueCourante(), valeurs)
@@ -71,7 +71,7 @@ export const Markdown = memo(function Markdown({
  * dans le meme texte, et seul le second etait entoure. `splitFinalSummary` isole le DERNIER bloc
  * complet ; on recommence donc sur ce qui le precede.
  *
- * LES CLES SE COMPTENT DEPUIS LE DEBUT DU TEXTE (conv-1395, 2026-10-31) : numerotees depuis la fin,
+ * LES CLES SE COMPTENT DEPUIS LE DEBUT DU TEXTE (2026-10-31) : numerotees depuis la fin,
  * elles changeaient pour tout ce qui precede des qu'une cloture arrivait, donc React jetait les blocs
  * vivants. Le carrousel de /draft, pose par `montrer_bloc` avant le texte final, redevenait une bande
  * vide de 48 px au-dessus de la zone visible, et ne revenait qu'a un defilement ou au message suivant.
@@ -100,8 +100,8 @@ function renderAvecClotures(source: string): React.ReactNode[] {
 }
 
 function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[] {
-  // Plus de scene ```threejs montee dans le carrousel /draft qui la suit (conv-318) : un carrousel
-  // en volume est desormais UNE page ```html-interactif qui porte sa scene (conv-1304,
+  // Plus de scene ```threejs montee dans le carrousel /draft qui la suit : un carrousel
+  // en volume est desormais UNE page ```html-interactif qui porte sa scene (
   // scripts/draft-carrousel.mjs). Chaque bloc se rend seul.
   return tokenizeMarkdownCodeBlocks(text).map((block, index) => {
     if (block.kind === 'html-render' && block.content.length > MAX_INLINE_HTML_CHARS)
@@ -157,12 +157,12 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
 
     if (block.kind === 'html-interactif')
       return (
-        // Page dont les scripts TOURNENT, dans le cadre isole des scenes 3D (conv-1292).
+        // Page dont les scripts TOURNENT, dans le cadre isole des scenes 3D.
         <BlocHtmlInteractif key={`${keyPrefix}-html-interactif-${index}`} html={block.content} />
       )
     if (block.kind === 'html-interactif-en-cours')
       return (
-        // Fence encore ouverte : rien ne s'execute avant la cloture (conv-1304). Le code reste
+        // Fence encore ouverte : rien ne s'execute avant la cloture. Le code reste
         // lisible a la demande, replie.
         <details
           key={`${keyPrefix}-html-interactif-en-cours-${index}`}
@@ -188,7 +188,7 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
 
     if (block.kind === 'donnees' && block.donnees)
       return (
-        // Bloc de DONNEES (conv-1074) : le modele a envoye un JSON, l'app le met en page.
+        // Bloc de DONNEES : le modele a envoye un JSON, l'app le met en page.
         <BlocDonnees
           key={`${keyPrefix}-donnees-${index}`}
           donnees={block.donnees}
@@ -198,7 +198,7 @@ function renderMarkdownBlocks(text: string, keyPrefix: string): React.ReactNode[
 
     if (block.kind === 'fils' && block.taches)
       return (
-        // Proposition « Lancer en N fils » (conv-1147) : la carte attend un clic, ChatView lance.
+        // Proposition « Lancer en N fils » : la carte attend un clic, ChatView lance.
         <PropositionDeFils
           key={`${keyPrefix}-fils-${index}`}
           taches={block.taches}
@@ -375,7 +375,7 @@ function BlocHtmlRendu({ html, scopeId }: { html: string; scopeId: string }): Re
   const ref = useRef<HTMLDivElement>(null)
   // fix-ok: React 19 compare `dangerouslySetInnerHTML` par IDENTITE d'objet (react-dom-client,
   // updateProperties : `propKey !== lastProp` -> `innerHTML = __html`). Un `{ __html }` neuf a chaque
-  // rendu reecrivait tout le bloc : un carrousel perdait la proposition cochee (mesure conv-318).
+  // rendu reecrivait tout le bloc : un carrousel perdait la proposition cochee.
   // Meme objet tant que le HTML ne change pas.
   const contenu = useMemo(() => ({ __html: html }), [html])
   useAjusterALaLargeur(ref, html)
@@ -514,7 +514,7 @@ function renderTextBlock(block: string): React.ReactNode[] {
       }
       list.push(<li key={`li-${key++}`}>{inline(item[1])}</li>)
     } else if (line.trim() === '') {
-      // LIGNE VIDE = SAUT DE PARAGRAPHE, pas une ligne blanche pleine (conv-227, 2026-10-11 : « ya
+      // LIGNE VIDE = SAUT DE PARAGRAPHE, pas une ligne blanche pleine (2026-10-11 : « ya
       // trop d'espacement vertical [...] ca fait scroller pour rien »). Rendue avant comme un `<br>`
       // de plus : chaque paragraphe coutait un interligne entier (≈ 22 px), et les lignes vides
       // autour d'un schema ou d'un bloc 44 a 48 px. Un seul petit separateur (`.md-para`, hauteur
@@ -611,7 +611,7 @@ function inline(line: string): React.ReactNode[] {
     } else if (m[4] !== undefined) {
       out.push(<code key={k++}>{m[4]}</code>)
     } else if (m[5] !== undefined) {
-      // conv-61 : le contenu d une mise en forme repasse par inline(), sinon une adresse en gras
+      // Le contenu d une mise en forme repasse par inline(), sinon une adresse en gras
       // (`**https://…**`) s affichait en texte brut, sans lien.
       out.push(<strong key={k++}>{inline(m[5])}</strong>)
     } else if (m[6] !== undefined) {

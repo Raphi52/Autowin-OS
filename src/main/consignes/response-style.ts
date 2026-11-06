@@ -8,10 +8,10 @@
  * pas des points de décision pour l'agent) :
  * - « parle comme à un collègue » : demande utilisateur du 2026-09-01 — « les termes employés
  *   sont trop poussés », « faut simplifier un max, que l'humain comprenne vite ».
- * - « changement de plan » : mesuré le 2026-09-02 (conv-128). « J'ai arrêté /skill à l'étape 1
+ * - « changement de plan » : mesuré le 2026-09-02. « J'ai arrêté /skill à l'étape 1
  *   (cadrage du banc) » a produit au tour suivant « je comprend pas résume moi la situation » —
  *   un tour perdu.
- * - « chemin complet » : conv-1335, 2026-11-01 — « il est ou ? », « donne le path complet », puis
+ * - « chemin complet » : 2026-11-01 — « il est ou ? », « donne le path complet », puis
  *   « kaizen ca en vrai que des full path ». Le chat le contrôle aussi : `chemins-complets.ts`.
  * - « changement de plan » (Autonomie 5) et « agir plutôt que recommander » (réflexe 10) vivent
  *   dans la constitution, injectée avec ce profil au chat et aux étapes de run : il ne les redit
@@ -34,14 +34,14 @@ Les blocs de contrôle comme <cmd>{"name":"...","args":{...}}</cmd> doivent cons
  * N'est PAS injecté aux phases d'agent : leur sortie est un tableau/SOP repris par la phase
  * suivante, que ces rubriques parasitent.
  *
- * UN OUTIL DIRECT EST UNE COMMANDE (conv-267, 2026-10-11). Le contrôle de fin de tour
+ * UN OUTIL DIRECT EST UNE COMMANDE (2026-10-11). Le contrôle de fin de tour
  * (`exigeUneConclusion`) compte un appel `mcp__autowin__*` exactement comme un `<cmd>`
  * (`executerAppelNatif`, agent-pilot.ts). La règle ne parlait que de « commande » : sur 2 tours
  * réels sur 2, le modèle a répondu en une phrase sans clôture après un `get_state` direct
  * (« pas de bloc `<cmd>` »), la relance de conclusion a coûté un second appel au modèle et la
  * phrase s'est affichée deux fois. La règle nomme donc les DEUX chemins.
  *
- * DES SUITES À CHOISIR, PAS UN REMPLISSAGE (conv-1087, 2026-10-22). La consigne disait « une suite
+ * DES SUITES À CHOISIR, PAS UN REMPLISSAGE (2026-10-22). La consigne disait « une suite
  * douteuse reçoit une note basse plutôt qu'une place » : le modèle écrivait donc ses à-côtés avec
  * une note basse — sur 90 tours notés, la suite secondaire valait 45 en médiane, et l'utilisateur
  * les jugeait « complètement useless ». La consigne ancre maintenant l'échelle (60-79 = un autre

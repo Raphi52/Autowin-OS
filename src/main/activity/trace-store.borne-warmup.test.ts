@@ -9,7 +9,7 @@ import type { TraceEventV1 } from './trace-event'
  * LE PREMIER ÉVÉNEMENT D'UNE CONVERSATION NE DOIT PAS RELIRE TOUTE SA TRACE.
  *
  * Défaut mesuré le 2026-09-12 : `warmSequenceCursor` faisait un `readFileSync` sur le fichier
- * ENTIER — 18 Mo pour conv-439 — juste pour retrouver le dernier numéro d'événement. Sur le fil qui
+ * ENTIER — 18 Mo — juste pour retrouver le dernier numéro d'événement. Sur le fil qui
  * dessine l'interface, cela a coûté 3,2 s à l'ouverture d'une trace.
  *
  * La borne figée ici : la mise en route ne lit que la QUEUE du fichier. Un retour au `readFileSync`
@@ -104,7 +104,7 @@ ${JSON.stringify(event(1, 'y'.repeat(400_000)))}
 })
 
 /**
- * SA PROPRE LIGNE NE SE RELIT PAS (conv-1069, candidat 7 du scout). Gels résolus avec la carte de
+ * SA PROPRE LIGNE NE SE RELIT PAS (candidat 7 du scout). Gels résolus avec la carte de
  * la compilation de 07:10 le 2026-10-22 : `openSync` à `trace-store.ts:579` appelé par
  * `rebaseTraceSequence` (:770), 8,9 s puis 1,0 s de fenêtre figée. `append` écrivait sans avancer le
  * curseur de `nextSequence` : l'appel suivant voyait le fichier grandir et le ROUVRAIT pour relire la

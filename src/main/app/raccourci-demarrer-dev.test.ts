@@ -66,7 +66,7 @@ describe('raccourci menu Démarrer en dev', () => {
     expect(f.ecritures).toHaveLength(1)
   })
 
-  // Constaté le 2026-10-15 (conv-954) : l'icône du menu Démarrer ouvrait la page d'accueil
+  // Constaté le 2026-10-15 : l'icône du menu Démarrer ouvrait la page d'accueil
   // d'Electron. Le raccourci était conforme sur tout ce qu'Electron contrôle, mais SANS argument.
   it('réécrit un raccourci conforme pour Electron mais sans argument : il ouvrait Electron nu', () => {
     const f = faux({ target: EXE, args: '', cwd: 'D:\\Autowin\\node_modules\\electron\\dist', appUserModelId: EXE, toastActivatorClsid: DEV_TOAST_ACTIVATOR_CLSID, icon: ICO })
@@ -221,7 +221,7 @@ describe('icône à nom versionné (conv-266 : l Explorateur gardait l atome sou
 })
 
 /**
- * RACCOURCI DU BUREAU — demande du 2026-10-13 (conv-930) : un collègue avait fait la mise à jour et
+ * RACCOURCI DU BUREAU — demande du 2026-10-13 : un collègue avait fait la mise à jour et
  * gardait l'ancien logo sur son Bureau. Ce raccourci, posé UNE fois par scripts/create-dev-shortcut.ps1,
  * visait jusqu'au 2026-10-11 `resources\autowin-os-dev.ico` sous un chemin FIXE : la mise à jour en
  * change le contenu, l'Explorateur garde l'image du chemin. L'app le réaligne donc au démarrage.

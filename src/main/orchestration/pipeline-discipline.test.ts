@@ -76,14 +76,14 @@ describe('discipline de pipeline canonique', () => {
    * ordres opposés : « dis bloqué en cas d'échec » et « ne rends pas la main ».
    */
   it('ne demande de réparer QU aux phases outillées, et laisse une issue aux autres', () => {
-    // conv-1582 : « DISPOSE DES OUTILS DE MUTATION » laissait croire que les autres ne les ont pas ;
+    // « DISPOSE DES OUTILS DE MUTATION » laissait croire que les autres ne les ont pas ;
     // toutes les phases les ont (`sandboxForPhase`), seul l'usage distingue BUILD et CLEAN.
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
       /SI TA PHASE EST UNE PHASE DE MUTATION \(BUILD, CLEAN\)/
     )
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/SI TA PHASE EST EN LECTURE SEULE/)
     // L'issue de la lecture seule : nommer l'obstacle dans le livrable, ni réparer ni taire.
-    // Mais Bash lui reste ouvert (conv-155, tour 20f856a2-8dd5-4e78-b98b-f7c7319afd12 : un juge
+    // Mais Bash lui reste ouvert (tour 20f856a2-8dd5-4e78-b98b-f7c7319afd12 : un juge
     // sans shell a note du texte au lieu de lancer les tests) : la consigne doit dire que toute
     // phase peut EXECUTER, et que seule l'ECRITURE de fichiers distingue build/clean.
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
@@ -105,7 +105,7 @@ describe('discipline de pipeline canonique', () => {
   })
 
   it('ne transforme pas le contrat read-only de scout frame terrain en faux blocage', () => {
-    // conv-1582 : même garde, sans prétendre Write/Edit absents (ils sont chargés partout).
+    // Même garde, sans prétendre Write/Edit absents (ils sont chargés partout).
     expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
       /ne rien écrire n'est ni un obstacle ni un droit manquant/i
     )
@@ -121,7 +121,7 @@ describe('discipline de pipeline canonique', () => {
   })
 
   /**
-   * Mesure du 2026-08-28 (chantier « spinner », conv-1507 puis conv-1498) : le prompt annoncait un
+   * Mesure du 2026-08-28 (chantier « spinner ») : le prompt annoncait un
    * harnais de capture FIXE comme LA preuve UI. Le producteur s'en est servi, l'a cite, et a
    * declare correcte une animation qui ne bougeait pas — une image immobile ne peut pas dire si ce
    * qu'elle montre tourne. L'utilisateur a du le signaler lui-meme.
@@ -144,7 +144,7 @@ describe('discipline de pipeline canonique', () => {
    * `visual-proof-missing` (src/main/gates/hooks.ts) TUE un run qui touche `src/renderer/**` sans
    * capture lue, et un agent ne demande jamais une vue que son prompt ne nomme pas. Un run sur
    * l'Accueil etait donc condamne a un refus pour une preuve declaree hors de portee alors qu'elle
-   * etait a portee — c'est exactement le reproche emis par le controle final de conv-46
+   * etait a portee — c'est exactement le reproche emis par le controle final
    * (« aucune preuve visuelle, alors qu'elle etait possible »).
    *
    * La cause n'est pas « l'agent n'y a pas pense » : c'est une liste DUPLIQUEE en prose, qui a
@@ -185,10 +185,10 @@ describe('discipline de pipeline canonique', () => {
     const source = readFileSync(new URL('../../../scripts/ui-capture.mjs', import.meta.url), 'utf8')
     const optionsLues = [
       ...new Set(
-        // `valeurApres(...)` (choixDeListe, conv-981) est le TROISIEME idiome de lecture : `--tour`
-        // y a demenage et sortait du classement sans bruit (rouge constate le 2026-10-22, conv-1056).
-        // `mot === '--click'` est le QUATRIEME : depuis f641c8b2 (conv-1530) chaque --click est lu
-        // en parcourant argv, et l'option sortait du classement (rouge constate le 2026-11-05, conv-1582).
+        // `valeurApres(...)` (choixDeListe) est le TROISIEME idiome de lecture : `--tour`
+        // y a demenage et sortait du classement sans bruit (rouge constate le 2026-10-22).
+        // `mot === '--click'` est le QUATRIEME : depuis f641c8b2 chaque --click est lu
+        // en parcourant argv, et l'option sortait du classement (rouge constate le 2026-11-05).
         [
           ...source.matchAll(
             /(?:(?:argument|drapeau|valeurApres)\(|mot === )(?:'|")(--[a-z-]+)(?:'|")/g
@@ -203,19 +203,19 @@ describe('discipline de pipeline canonique', () => {
     //   une preuve qu'AUCUNE navigation ne donne — la liste deroulante des themes est un <select>
     //   natif Windows, qui s'ouvre HORS de la page : aucun clic scriptable n'y choisit une option,
     //   donc un theme n'etait tout simplement pas capturable. Il appartient au contrat.
-    // `--code-dev` (2026-09-26, conv-863) : sans lui l'instance cachee lance l'application
+    // `--code-dev` (2026-09-26) : sans lui l'instance cachee lance l'application
     //   EMPAQUETEE, qui ne contient pas la modification a prouver ; depuis une copie de travail il la
     //   reconstruit et lance ses fichiers. C'est la seule preuve d'un changement d'interface non publie.
     //   Lu par `drapeau(...)` (option sans valeur) : le motif ci-dessus le repere aussi.
     // fix-ok: rouge depuis 712c6107 (2026-10-10) — quatre options lues par le harnais sans classement :
-    //   `--largeur`/`--hauteur` (128ffd16, conv-124), `--attendre`/`--retraits` (712c6107, conv-160).
+    //   `--largeur`/`--hauteur` (128ffd16), `--attendre`/`--retraits` (712c6107).
     // `--largeur` : l'instance cachee s'ouvre en 900 x 670, ou le chat replie panneau et colonnes ; la
     //   mise en page d'un ecran large n'etait capturable par AUCUNE autre option. Il appartient au contrat.
     // `--attendre` : une vue qui charge ses donnees (Worktrees, « Lecture… ») etait capturee sur son
     //   indicateur de chargement ; sans lui, la vue chargee n'est jamais prouvee. Contrat.
     // `--retraits` : MESURE au rendu le retrait du contenu dans le cadre de page — un ecart de 18 a
     //   38 px ne se lit pas sur une image. Aucune capture ne donne ce chiffre. Contrat.
-    // `--choisir <selecteur> --valeur <v>` (conv-981, classe le 2026-10-22, conv-1056) : choisir une
+    // `--choisir <selecteur> --valeur <v>` (classe le 2026-10-22) : choisir une
     //   valeur dans N'IMPORTE QUELLE liste <select> — le meme mur que `--theme` : le menu natif
     //   s'ouvre hors de la page, aucun clic n'y choisit. Il ouvre une preuve : contrat.
     const CONTRAT_DE_PREUVE = [
@@ -237,14 +237,14 @@ describe('discipline de pipeline canonique', () => {
     // ouvrent aucune. Les annoncer allongerait une consigne injectee a chaque appel pour rien.
     // `--scroll` (arrive par la mise a jour amont du 2026-09-21) : il AMENE la cible dans le
     //   cadre avant la capture — il affine une preuve deja accessible, il n'en ouvre aucune.
-    // `--donnees` et `--tour` (2026-10-15, conv-966, avec `--conversation`) : ils ne servent
+    // `--donnees` et `--tour` (2026-10-15, avec `--conversation`) : ils ne servent
     //   qu'avec `--conversation`, qui ouvre la preuve (une conversation reelle dans l'instance
     //   cachee). `--donnees` dit OU la lire, et son defaut (.autowin-data/autowin-os) est le bon ;
     //   `--tour` choisit QUELLE demande le graphe affiche, et son defaut (la derniere) suffit a
     //   prouver un changement frais. Ils affinent cette preuve, ils n'en ouvrent aucune.
     // `--hauteur` (128ffd16) : ne sert qu'avec `--largeur`, qui ouvre la preuve ; son defaut (largeur
     //   x 9/16, un ecran courant) suffit. Il affine cette preuve, il n'en ouvre aucune.
-    // `--stockage-local` (b49ce52a, conv-1000) : seme des cles localStorage, REFUSE hors de
+    // `--stockage-local` (b49ce52a) : seme des cles localStorage, REFUSE hors de
     //   l'instance cachee ou `--conversation` a copie un fil. Comme `--donnees` et `--tour`, il
     //   affine la preuve que `--conversation` ouvre ; il n'en ouvre aucune.
     const REGLAGES = [
@@ -292,7 +292,7 @@ describe('fusion 2026-09-18 — chaque regle a un seul endroit', () => {
 })
 
 /**
- * LE TEXTE INJECTÉ DIT CE QUE LE CODE FAIT (conv-1582, lot 2 du plan de conv-1576).
+ * LE TEXTE INJECTÉ DIT CE QUE LE CODE FAIT (lot 2 du plan).
  *
  * Mesuré le 2026-11-05 : la consigne annonçait « ton résultat porté à la phase suivante est
  * tronqué à ~2000 caractères », alors que `porterVersPhaseSuivante` passe la sortie ENTIÈRE depuis
@@ -300,7 +300,7 @@ describe('fusion 2026-09-18 — chaque regle a un seul endroit', () => {
  * terrain et juge n'ont « ni Edit ni Write », alors que `sandboxForPhase` donne à TOUTES les phases
  * les droits du chat depuis le 2026-09-04. Un agent qui croit son résultat coupé le rogne lui-même.
  *
- * fix-ok: conv-1582 — cause mesurée : porterVersPhaseSuivante(50 000 car.) rend 50 000 car. et
+ * fix-ok: cause mesurée : porterVersPhaseSuivante(50 000 car.) rend 50 000 car. et
  * sandboxForPhase('…', 'scout') rend 'danger-full-access', alors que la consigne disait l'inverse ;
  * les gardes plus haut verrouillaient ces phrases fausses mot pour mot, elles suivent le nouveau texte.
  *
@@ -341,7 +341,7 @@ describe('la consigne et le code disent la même chose (conv-1582)', () => {
 })
 
 /**
- * Piste 14 du scout du 05/11 (conv-1602) : la ligne RÉSULTAT annonçait « frame = ## Besoin /
+ * Piste 14 du scout du 05/11 : la ligne RÉSULTAT annonçait « frame = ## Besoin /
  * ## Contraintes / ## Options », alors que la consigne de frame (`PHASE_BRIEFS.frame`, ligne
  * « Livrable (sections Markdown) ») exige aussi `## Confiance`, que le code lit
  * (`src/shared/cadrage-confiance.ts`). Deux listes écrites à la main dérivent : on les compare.

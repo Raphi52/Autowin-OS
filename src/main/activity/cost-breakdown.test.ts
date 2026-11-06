@@ -47,7 +47,7 @@ describe('os:costBreakdown — chaine IPC complete', () => {
     expect(main).toMatch(/ipcMain\.handle\(\s*'os:costBreakdown'/)
     expect(main).toContain('summarizeCostSamples')
     // Exigence RENFORCEE : le handler doit reconcilier les DEUX journaux, sinon il sous-estime
-    // le cout d'un facteur ~7 (mesure conv-75 : 2,83 $ annonces contre ~20,70 $ reels).
+    // le cout d'un facteur ~7 (mesure : 2,83 $ annonces contre ~20,70 $ reels).
     expect(main).toContain('costSamplesFrom(')
     expect(main).toContain('loadConvActivity(')
     // Une dimension arbitraire venue du renderer ne doit pas etre passee telle quelle.
@@ -154,7 +154,7 @@ describe('comptabilite canonique des appels', () => {
 })
 
 /**
- * RECONCILIATION DES DEUX JOURNAUX — le defaut trouve le 2026-07-28 sur conv-75.
+ * RECONCILIATION DES DEUX JOURNAUX — le defaut trouve le 2026-07-28.
  *
  * Le breakdown base sur les seuls prompt-calls annonçait 2,83 $ pour une conversation qui avait
  * coute ~20,70 $ : les deux appels dominants (10,90 $ et 5,72 $) ne vivaient que dans le journal
@@ -247,7 +247,7 @@ describe('costSamplesFrom — les deux journaux, sans double comptage', () => {
 
 describe('acteur d’une entree d’activite — le kind decide, jamais le label seul', () => {
   it('une entree `chat` ne transforme PAS le texte du message en acteur', () => {
-    // Cas reel (conv-75) : le label valait « reprend pardon » et apparaissait comme un acteur.
+    // Cas reel : le label valait « reprend pardon » et apparaissait comme un acteur.
     const rows = summarizeCostSamples(
       costSamplesFrom(
         [],
@@ -316,7 +316,7 @@ describe('reconciliation des deux journaux — ni double comptage, ni perte', ()
   })
 
   it('une entree d’activite SANS equivalent est CONSERVEE (le sous-agent invisible)', () => {
-    // Mesure conv-75 : 2,83 $ vus cote prompt-calls contre ~20,70 $ reels — l'activite porte le reste.
+    // Mesure : 2,83 $ vus cote prompt-calls contre ~20,70 $ reels — l'activite porte le reste.
     const samples = costSamplesFrom(
       [callFixture('orchestrator', 0.1, 50)],
       [{ kind: 'exec', label: 'subagent', provider: 'claude', costUsd: 9.9, outputTokens: 3000 }]

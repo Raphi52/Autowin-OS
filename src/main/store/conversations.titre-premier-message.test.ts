@@ -7,7 +7,7 @@ import { attendreEcrituresConversations, persistConversations } from './conversa
 
 /*
  * Le titre d'un fil est celui de son PREMIER message et ne bouge plus. La règle « le titre suit le
- * dernier message » (conv-999, 2026-10-16) a été annulée le 2026-10-28 (conv-1203) : « annule le
+ * dernier message » (2026-10-16) a été annulée le 2026-10-28 : « annule le
  * changement de name des convs qui devient celui de mon dernier message ».
  */
 let tour = 0

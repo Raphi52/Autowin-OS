@@ -36,7 +36,7 @@ class FauxProvider implements ProviderAdapter {
   }
 }
 
-/** Le refus tel que Claude l'écrit vraiment (relevé dans conversations.json, conv-390). */
+/** Le refus tel que Claude l'écrit vraiment (relevé dans conversations.json). */
 const MUR_SESSION = new Error("You've hit your session limit · resets 7:10pm")
 
 const UN_TOUR = [{ role: 'user' as const, content: 'travaille' }]

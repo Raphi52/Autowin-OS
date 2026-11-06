@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { classifyMutationConfidence } from './task-mutation-classifier'
 
-// Mesure du 2026-09-18 (conv-690, run lance-judge-correctif-cibles-cible-src-mu6l123v) : « Lance le
+// Mesure du 2026-09-18 (run lance-judge-correctif-cibles-cible-src-mu6l123v) : « Lance le
 // judge … en lecture seule, sans toucher aux autres fichiers modifiés » a été classée MUTATION ; le
 // contrôle final a exigé une modification et refusé 4 fois une revue qui n'en demandait aucune.
 describe('« Lance le judge / le scout » — une phase de lecture introduite par un verbe de lancement', () => {

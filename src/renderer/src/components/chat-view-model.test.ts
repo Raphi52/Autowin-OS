@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+// Le composant est découpé en fichiers voisins : la source lue les réunit.
 import { lireSourceDuChatView } from './ChatView.source-complete'
 import { formatOrchestrationOutcome } from '../../../shared/orchestration-outcome'
 import {
@@ -100,7 +100,7 @@ describe('conversation state indicator', () => {
     ).toMatchObject({ key: 'running', label: 'En cours', glyph: '' })
   })
 
-  // conv-914 (2026-10-13) : un run rattaché au redémarrage travaille encore, mais le DERNIER tour
+  // 2026-10-13 : un run rattaché au redémarrage travaille encore, mais le DERNIER tour
   // (un tour de chat « reprend ») est terminé et l'écran n'a aucun tour ouvert. Spinner attendu.
   it('shows running when an earlier turn still streams behind a completed last turn', () => {
     expect(
@@ -1447,7 +1447,7 @@ describe('groupAssistantActivity', () => {
       {
         titre: 'Le journal accepte une ligne mal formee',
         // Le numero de la ligne du tableau suit le candidat : c'est lui que la cible du scout
-        // designe, meme sur un tableau retrie (conv-1074).
+        // designe, meme sur un tableau retrie.
         num: '1',
         url: 'src/main/activity/ledger.ts:63',
         type: 'fix',
@@ -1466,7 +1466,7 @@ describe('groupAssistantActivity', () => {
   })
 
   /*
-   * Defaut nomme le 2026-10-22 (conv-1083) : le panneau REMPLACAIT tout le message. Le texte avant le
+   * Defaut nomme le 2026-10-22 : le panneau REMPLACAIT tout le message. Le texte avant le
    * tableau (le rapport) et apres (la ligne `CIBLE:`, la cloture) disparaissaient sans signal. Un
    * rapport `steal` — paysage, matrice, pieces citees, puis ses candidats — aurait perdu toutes ses
    * preuves a l'ecran. Seul le TABLEAU devient le panneau ; le reste garde sa place, dans l'ordre.

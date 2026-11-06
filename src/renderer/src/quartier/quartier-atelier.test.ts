@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { creerRobotDeLAtelier, travailDe, TRAVAIL_S, type PoseAtelier } from './quartier-atelier'
 
-// Le réveil du grand robot du hangar (conv-1453) : assez rare pour rester un moment, jamais en boucle.
+// Le réveil du grand robot du hangar : assez rare pour rester un moment, jamais en boucle.
 const pose = (id: string, th: number): PoseAtelier => ({
   id,
   x: 250,
@@ -57,7 +57,7 @@ describe("le robot de l'atelier", () => {
   })
 })
 
-// Les métiers de l'atelier (conv-1464) : forge, soudure, ordinateur, robotique, en alternance.
+// Les métiers de l'atelier : forge, soudure, ordinateur, robotique, en alternance.
 describe("les travaux de l'atelier", () => {
   it('chaque agent change de travail toutes les 30 s, jamais deux fois le même de suite', () => {
     for (const id of ['a', 'run-12', 'conv-1464', 'zz']) {

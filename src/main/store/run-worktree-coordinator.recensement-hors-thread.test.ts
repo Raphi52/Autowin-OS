@@ -4,7 +4,7 @@ import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 /**
  * LE GEL DE 14 SECONDES DU CHEMIN CHAUD.
  *
- * Mesure du 2026-08-29 (detecteur de gel, conv-1511) : `ipc:worktree:activity (sync)` a bloque la
+ * Mesure du 2026-08-29 (detecteur de gel) : `ipc:worktree:activity (sync)` a bloque la
  * boucle main 14 403 ms — pas deduit, mesure. La chaine est `worktree:activity` → `activity()` →
  * `travauxNonPubliesCaches()` → recensement git ENTIEREMENT SYNCHRONE (`execFileSync`, une
  * commande par branche). Supprimer la TTL a supprime le gel PERIODIQUE ; il reste le gel A FROID :

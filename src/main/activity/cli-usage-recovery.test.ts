@@ -23,7 +23,7 @@ import {
  * PAS perdu : le CLI a écrit chaque message assistant, avec son `usage`, dans
  * `~/.claude/projects/<projet>/<session>.jsonl`. Ce test verrouille la récupération de ces valeurs.
  *
- * Mesure de terrain (2026-09-03, conv-1, session b5f40533) qui a servi d'oracle : sur un appel
+ * Mesure de terrain (2026-09-03, session b5f40533) qui a servi d'oracle : sur un appel
  * DÉJÀ tarifé par le CLI (2,2687 $), la même fenêtre lue dans le transcript rend exactement
  * `inputTokens` = 3 006 418 et `outputTokens` = 16 371 — les deux chiffres du journal, au token.
  */
@@ -178,7 +178,7 @@ describe('récupération des tokens auprès du CLI', () => {
 
   it("borne la fenêtre à l'appel PRÉCÉDENT quand la durée mesurée est absurde", () => {
     const root = transcriptRoot()
-    // Vécu sur conv-1 : le watchdog a écrit `durationMs` = 32 940 076 ms (9 h). Sans borne, la
+    // Vécu : le watchdog a écrit `durationMs` = 32 940 076 ms (9 h). Sans borne, la
     // fenêtre remonte avant un appel DÉJÀ tarifé et récupère ses tokens une seconde fois.
     const precedent = appelTue({
       id: 'call-tarife',
@@ -239,7 +239,7 @@ describe('le total ne dit plus « non exposé » quand la valeur est récupérab
  * `.autowin-data/autowin-os/run-stdout/c55319db-076c-4201-b8b7-bd8b98515a11.stdout.jsonl` (05/11).
  * Le CLI y facture lui-même chaque modèle : `modelUsage["claude-haiku-5-5"].costUSD` = 0,00093225 $,
  * `costBasis` « list ». En tokens pondérés (multiples d'un token d'entrée) : 2 frais + 2 923 écrits
- * pour 1 h (2×) + 13 095 relus (0,1×) + 433 sortis (5×) = 9 322,5, soit 0,10 $ le million (conv-1602).
+ * pour 1 h (2×) + 13 095 relus (0,1×) + 433 sortis (5×) = 9 322,5, soit 0,10 $ le million.
  */
 const RESULTAT_REEL =
   '{"duration_api_ms":4531,"stop_reason":"end_turn","session_id":"359a9232-e4c1-41d9-b6d0-a7511872587a","total_cost_usd":0.00093225,"usage":{"input_tokens":2,"cache_creation_input_tokens":2923,"cache_read_input_tokens":13095,"output_tokens":433,"output_tokens_details":{"thinking_tokens":420},"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":2923,"ephemeral_5m_input_tokens":0},"inference_geo":"global","iterations":[{"input_tokens":2,"output_tokens":433,"cache_read_input_tokens":13095,"cache_creation_input_tokens":2923,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":2923},"type":"message"}],"speed":"standard","fallback_credit":null},"modelUsage":{"claude-haiku-5-5":{"inputTokens":2,"outputTokens":433,"cacheReadInputTokens":13095,"cacheCreationInputTokens":2923,"webSearchRequests":0,"costUSD":0.00093225,"contextWindow":1000000,"maxOutputTokens":128000,"thinkingTokens":420,"cacheCreationEphemeral5mInputTokens":0,"cacheCreationEphemeral1hInputTokens":2923,"canonicalModel":"claude-haiku-5-5","provider":"firstParty","costBasis":"list"}},"permission_denials":[],"terminal_reason":"completed","fast_mode_state":"off","fast_mode_disabled_reason":"sdk_opt_in_required","subagent_stats":{"spawned":0,"requested":{"background":0,"foreground":0,"unset":0},"started_in_background":0,"max_depth":0,"spawned_by_subagents":0,"completed":0,"failed":0,"killed":{"parent":0,"user":0,"system":0},"refused":{"depth_limit":0,"concurrency_limit":0,"budget":0},"by_type":{}},"safety_stops":0,"is_error":false,"num_turns":1,"subtype":"success","api_error_status":null,"result":"WORKFLOW: exploration","ttft_ms":4747,"type":"result","duration_ms":4776,"uuid":"cca20699-d8ed-4877-9f42-ad7173ad2d79","ttft_stream_ms":1407,"time_to_request_ms":247,"first_content_frame_ms":1408,"queued_turn_count":0,"result_index":0,"model_usage_since_last_result":{"claude-haiku-5-5":{"inputTokens":2,"outputTokens":433,"cacheReadInputTokens":13095,"cacheCreationInputTokens":2923,"webSearchRequests":0,"costUSD":0.00093225,"contextWindow":1000000,"maxOutputTokens":128000,"thinkingTokens":420,"cacheCreationEphemeral5mInputTokens":0,"cacheCreationEphemeral1hInputTokens":2923,"canonicalModel":"claude-haiku-5-5","provider":"firstParty","costBasis":"list"}},"credential_expires_at":"2026-11-10T07:39:36.560Z"}'
@@ -247,7 +247,7 @@ const RESULTAT_REEL =
 /**
  * Entrée RÉELLE `claude-haiku-5-5` de run-stdout/1fbc33e9-7b7e-482c-b083-7eca63aee289.stdout.jsonl.
  * Son `costUSD` (0,0119632 $) = 0,0019632 $ de tokens + 1 recherche web à 0,01 $ : appris tel quel,
- * il gonflerait le prix de Haiku 5.5 d'un facteur 6. Ni `costBasis` ni `provider` (conv-1602).
+ * il gonflerait le prix de Haiku 5.5 d'un facteur 6. Ni `costBasis` ni `provider`.
  */
 const HAIKU_AVEC_RECHERCHE = {
   inputTokens: 14407,

@@ -1,7 +1,7 @@
 /**
  * DIRE AU DEPART CE QU'ON DECOUVRAIT A L'ARRIVEE.
  *
- * Vecu le 2026-08-27 (conv-1450) : l'utilisateur apprend la collision `base-dirty` APRES le travail,
+ * Vecu le 2026-08-27 : l'utilisateur apprend la collision `base-dirty` APRES le travail,
  * avec la facture — 1,32 $ pour un « statut echoue ». L'echelle de replis fait desormais atterrir ce
  * travail, mais rien ne le prevenait AVANT, alors que l'information existait deja : la copie remise a
  * l'agent EXCLUT les fichiers sales de l'utilisateur, et cette liste (`excludedDirtyFiles`) est

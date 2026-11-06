@@ -67,7 +67,7 @@ describe('system prompt — préfixe stable (cachable)', () => {
 })
 
 /**
- * UN TOUR D'ACTION GARDE TOUTES SES RÈGLES (conv-703, « enlève les poids morts », 2026-09-18).
+ * UN TOUR D'ACTION GARDE TOUTES SES RÈGLES (« enlève les poids morts », 2026-09-18).
  * La coupe des poids morts porte sur le contexte payé plein tarif (graphe de code), jamais sur
  * les règles : un tour qui agit doit toujours recevoir constitution + style complets.
  */

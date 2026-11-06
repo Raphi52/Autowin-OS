@@ -7,7 +7,7 @@ import { ArtifactPreview } from './ArtifactPreview'
 import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 
 /**
- * LE LECTEUR VIDÉO DU FIL, IMAGE PAR IMAGE (conv-253, 2026-10-11 : « je pourrais te dire modifie
+ * LE LECTEUR VIDÉO DU FIL, IMAGE PAR IMAGE (2026-10-11 : « je pourrais te dire modifie
  * telle frame a telle seconde »). Avant : un `<video controls>` nu, précis à la seconde, sans
  * numéro d'image ni lien avec la saisie.
  *
@@ -39,7 +39,7 @@ function carte(overrides: Partial<ChatArtifact> = {}): ChatArtifact {
   }
 }
 
-// fix-ok: conv-253 — causes re-prouvées en remettant l'ancien code dans ArtifactVideoPlayer.tsx,
+// fix-ok: causes re-prouvées en remettant l'ancien code dans ArtifactVideoPlayer.tsx,
 // chaque fois rouge (code 1) puis vert : libellé `${fps} i/s` brut (« 29.97002997002997 i/s ») ;
 // `immobile` absent (vidéo d'une image : 2 tests) ; `pret` toujours vrai (avant `loadeddata` et
 // pendant `seeking` : 2 tests).
@@ -133,10 +133,10 @@ describe('ArtifactVideoPlayer', () => {
   }
 
   /*
-   * VIDÉO DE PLUS DE 16 Mo = LUE PAR `autowin-media://` (cd9a7fe9, kaizen conv-260), une AUTRE
+   * VIDÉO DE PLUS DE 16 Mo = LUE PAR `autowin-media://` (cd9a7fe9), une AUTRE
    * origine que la fenêtre. Sans `crossorigin`, Chromium la charge sans CORS : le canevas où
    * « Pointer ce moment » dessine l'image est contaminé et `toBlob` lève une SecurityError, malgré
-   * l'en-tête `Access-Control-Allow-Origin` du serveur. La pub de 71 Mo de conv-260 aurait eu un
+   * l'en-tête `Access-Control-Allow-Origin` du serveur. La pub de 71 Mo aurait eu un
    * lecteur, mais aucune image pointable.
    */
   it('vidéo lue par plages (autowin-media://) : demandée en CORS, l’image reste copiable', () => {
@@ -358,7 +358,7 @@ describe('ArtifactVideoPlayer', () => {
 
     /*
      * Ancien cas limite (« plus de 16 Mo = message + Afficher le fichier, sans lecteur ») retiré par
-     * cd9a7fe9 (kaizen conv-260 : « tu dois me la montrer dans un lecteur » pour une pub de 74,6 Mo).
+     * cd9a7fe9 (kaizen : « tu dois me la montrer dans un lecteur » pour une pub de 74,6 Mo).
      * Une vidéo CONSERVÉE se lit désormais par plages : lecteur présent, aucune copie base64.
      */
     it('plus de 16 Mo conservée : lecteur par plages, sans copie base64 ; « Afficher le fichier » reste', async () => {

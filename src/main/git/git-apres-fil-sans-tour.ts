@@ -10,7 +10,7 @@ import type { AutoCloseResult, GitRunner, VerificationAvantPublication } from '.
 import type { TypageAvantPublication } from '../verify/typage-avant-publication'
 
 /**
- * PUBLIER LES FILS FINIS SANS TOUR DE MODÈLE (conv-1569, 2026-11-05).
+ * PUBLIER LES FILS FINIS SANS TOUR DE MODÈLE (2026-11-05).
  *
  * Avant, la passe de `git-apres-fil.ts` ENVOYAIT un message `/git : publie le travail terminé de ce
  * fil…` dans le fil, au nom de l'utilisateur, puis un tour complet du gros modèle triait, commitait
@@ -32,7 +32,7 @@ import type { TypageAvantPublication } from '../verify/typage-avant-publication'
 export interface IssueDePasse {
   /** Au moins un commit est parti vers le distant. */
   publie: boolean
-  /** Les commandes git `commit`/`push` exactement lancées (conv-1553 : la ligne vraie, pas une reconstitution). */
+  /** Les commandes git `commit`/`push` exactement lancées (La ligne vraie, pas une reconstitution). */
   lignesShell: string[]
   /** Ce que le bandeau doit dire en plus (tests non joués, message de secours…). */
   notes: string[]
@@ -60,7 +60,7 @@ export interface DepsSansTour {
   commiter(message: string, fichiers: string[], runGit: GitRunner): Promise<AutoCloseResult>
   /**
    * Un AUTRE fil du même dépôt a-t-il un tour en cours ? Ses Edit/Write n'arrivent au journal des
-   * fichiers qu'à la fin de son appel : ce qu'il écrit n'a pas encore d'auteur (conv-1641).
+   * fichiers qu'à la fin de son appel : ce qu'il écrit n'a pas encore d'auteur.
    * Absent = aucun.
    */
   autreTourEnCours?(): boolean
@@ -101,12 +101,12 @@ export function refusDAppartenance(
 
 /**
  * Refusé, ET les fils de la passe l'ont seulement VU changer à leur fin de tour (`vuSeulement`) :
- * ce n'est pas leur travail, il ne part pas et ne va pas à la note `/git`. Vrai cas conv-1587
+ * ce n'est pas leur travail, il ne part pas et ne va pas à la note `/git`. Vrai cas
  * (05/11/2026) : 18 fichiers écrits par un script à 08:13:00, vus par trois fils, et une note
  * `/git` dans chacun pour conclure « rien à publier ». Seul vu sans autre refus, il part encore :
  * c'est une commande du fil qui l'a écrit sans le nommer.
  *
- * SAUF SI UN AUTRE FIL DU DÉPÔT A UN TOUR EN COURS (`autreTourEnCours`, conv-1641, 06/11/2026) : ses
+ * SAUF SI UN AUTRE FIL DU DÉPÔT A UN TOUR EN COURS (`autreTourEnCours`, 06/11/2026) : ses
  * écritures ne sont pas encore au journal (traces posées en fin d'appel), donc « vu, sans autre
  * auteur » ne prouve plus rien. Le fichier reste dans l'arbre, à son vrai auteur.
  */

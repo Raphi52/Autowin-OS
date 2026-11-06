@@ -1,12 +1,12 @@
 /**
  * Projections de l'état de l'OS vers les instantanés (`AppSnapshot`, `PromptSnapshot`).
  *
- * Code libre sorti de `commands.ts` tel quel (conv-1580, lot 5) ; `commands.ts` ré-exporte ce qu'il
+ * Code libre sorti de `commands.ts` tel quel (lot 5) ; `commands.ts` ré-exporte ce qu'il
  * exportait déjà, ses importeurs ne changent pas. Dans `commands/`, une VALEUR s'importe d'ici,
  * jamais par `'../commands'` (cycle d'import) : `commands/code-libre.test.ts` le garde.
  *
  * Les fonctions qui prennent le bus (`snapshot`, `snapshotForPrompt` et leurs aides) sont des méthodes de
- * `AppCommandBus` sorties telles quelles (conv-1580, lot 6) ; la classe garde une méthode mince du même nom.
+ * `AppCommandBus` sorties telles quelles (lot 6) ; la classe garde une méthode mince du même nom.
  */
 
 import { tachesDeFondEnCours } from '../providers/taches-de-fond-suivies'
@@ -96,7 +96,7 @@ export async function snapshot(bus: AppCommandBus, jalon?: (nom: string) => void
     ...budgetSnapshot(bus.os.budget()),
     // EN DERNIER, toujours : c'est la seule liste sans borne (908 fils le 2026-10-22). Placee en
     // tete, elle faisait depasser les 120 000 caracteres de `resultat-de-commande-borne.ts` et la
-    // coupe emportait `travauxNonPublies`, jamais lu (conv-1048). Ici, la coupe ne retire que les
+    // coupe emportait `travauxNonPublies`, jamais lu. Ici, la coupe ne retire que les
     // fils les plus anciens.
     conversations: bus.os.conversations
       .list()

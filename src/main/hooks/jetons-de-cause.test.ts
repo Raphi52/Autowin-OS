@@ -157,7 +157,7 @@ describe('fix-gate — ARME, et un run iteratif LEGITIME passe', () => {
   })
 
   /*
-   * conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 (puis ses reparations) : la ligne
+   * Tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 (puis ses reparations) : la ligne
    * `// fix-ok:` etait bien DANS src/main/orchestration/orchestrator.ts, et le refus « 6 edits sans cause
    * verifiee » revenait quand meme. La preuve de mutation reelle (workspace_delta) ne porte
    * jamais `diff` : seulement les empreintes des lignes ecrites. Le jeton se lit donc sur le
@@ -194,7 +194,7 @@ describe('fix-gate — ARME, et un run iteratif LEGITIME passe', () => {
   })
 })
 
-// conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (turnEvents 5:gate) : le refus fix-gate est revenu 2 fois
+// tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (turnEvents 5:gate) : le refus fix-gate est revenu 2 fois
 // et la reparation n'a pas su le lever. Boucle complete, sans modele : refus -> geste LU dans le refus -> jeton lu -> vert.
 describe('fix-gate — la boucle refus -> geste dicte -> levee se referme', () => {
   it('appliquer a la lettre le geste nomme par le refus leve le refus', async () => {
@@ -214,7 +214,7 @@ describe('fix-gate — la boucle refus -> geste dicte -> levee se referme', () =
 /**
  * SOURCE 3 — le jeton DEJA present dans le fichier edite.
  *
- * Mesure conv-597, tour 4e502786-4887-4101-85b3-ea2dee304091 : le refus fix-gate demandait
+ * Mesure, tour 4e502786-4887-4101-85b3-ea2dee304091 : le refus fix-gate demandait
  * « depose dans src/main/gardes/root-execution-contract.ts un commentaire `fix-ok:` ». Le jeton a ete
  * depose (commit a9126f34), et le MEME refus est revenu au tour suivant : le compte d'edits est
  * CUMULE sur la session, alors que la source 1 ne credite le jeton que s'il fait partie des
@@ -252,7 +252,7 @@ describe('jetonsDeCauseParFichier — source 3 : le jeton deja dans le fichier e
 })
 
 /**
- * SOURCE 3 DEPUIS UNE COPIE DE TRAVAIL — conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091.
+ * SOURCE 3 DEPUIS UNE COPIE DE TRAVAIL, turnId 4e502786-4887-4101-85b3-ea2dee304091.
  * Les runs s'executent dans un worktree en HEAD detache ANTERIEUR au commit qui depose le jeton :
  * `git log -1 -- <fichier>` y renvoie l'ancien commit, le jeton reste invisible, et le meme refus
  * fix-gate revient a l'identique (4 reparations de suite).

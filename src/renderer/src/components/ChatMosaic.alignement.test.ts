@@ -3,7 +3,7 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
- * DEMANDE DE L'UTILISATEUR (2026-10-30, conv-1318) : « en mode mosaique la top barre du chat n'est
+ * DEMANDE DE L'UTILISATEUR (2026-10-30) : « en mode mosaique la top barre du chat n'est
  * pas aligne aux autres elements (en bas c'est pareil) ». Mesure sur capture : la fenetre allait de
  * y=33 a y=867 quand la liste des conversations va de y=25 a y=875. Cause : 8 px de retrait autour
  * de la grille. Le cadre de la fenetre doit tomber au meme pixel que celui du chat plein.

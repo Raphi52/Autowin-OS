@@ -10,7 +10,7 @@ import {
 } from './ChatView.harness'
 
 /**
- * RÉPONDRE À UN PASSAGE, DE BOUT EN BOUT (conv-1038, 2026-10-21) : sélectionner un bout de
+ * RÉPONDRE À UN PASSAGE, DE BOUT EN BOUT (2026-10-21) : sélectionner un bout de
  * réponse fait apparaître une barre « Citer · Détaille · C'est faux · Retiens ça » ; un clic pose le
  * texte dans la saisie, SANS envoyer. Avant, aucune sélection n'était gérée : l'utilisateur
  * retapait le passage qu'il voulait contester.

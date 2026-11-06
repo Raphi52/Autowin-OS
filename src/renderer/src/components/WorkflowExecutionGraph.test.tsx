@@ -161,7 +161,7 @@ describe('WorkflowExecutionGraph', () => {
   }
 
   /**
-   * AUCUNE « duree inconnue » DANS LE GRAPHE (conv-259). Un marqueur ponctuel (injection, appel
+   * AUCUNE « duree inconnue » DANS LE GRAPHE. Un marqueur ponctuel (injection, appel
    * d'outil) n'a pas de duree mesuree : la trace porte quand meme son horodatage, donc le bloc dit
    * sa POSITION dans la demande. Test discriminant : le fallback ne doit pas etre un texte
    * d'ignorance, et il ne doit pas non plus inventer une duree de 0 ms.
@@ -430,7 +430,7 @@ describe('WorkflowExecutionGraph', () => {
   })
 
   /**
-   * L'ARBRE ÉTOILÉ (conv-234) : la flèche en L entre deux cartes est remplacée par un lien courbe
+   * L'ARBRE ÉTOILÉ : la flèche en L entre deux cartes est remplacée par un lien courbe
    * de perle à perle. Chaque étape qui a un parent DOIT avoir son lien, sinon une perle flotte
    * sans qu'on sache d'où elle vient ; et le flux ne coule QUE vers ce qui tourne.
    */
@@ -472,7 +472,7 @@ describe('WorkflowExecutionGraph', () => {
 
   it('peint les perles par jetons de thème, le bleu plein, sans couleur écrite en dur', () => {
     const css = readFileSync(join(__dirname, 'WorkflowExecutionGraph.css'), 'utf8')
-    // Le dégradé de la perle part du bleu du thème, sans transparence sur lui (conv-182).
+    // Le dégradé de la perle part du bleu du thème, sans transparence sur lui.
     expect(css).toMatch(/linear-gradient\(135deg, var\(--wx-froid\), var\(--wx-chaud\)\)/)
     expect(css).not.toMatch(/--wx-froid\)?\s*\d+%/)
     // Les seules couleurs écrites en dur sont les replis des jetons, déclarés sur le conteneur.
@@ -771,7 +771,7 @@ describe('WorkflowExecutionGraph', () => {
       view.querySelector<HTMLButtonElement>('[data-execution-node="agent"]')?.click()
     )
     const detail = view.querySelector('.workflow-execution-detail')
-    // La fiche est ACCROCHÉE à son étape (choix « Fil holo », conv-234) : elle porte l'étape
+    // La fiche est ACCROCHÉE à son étape (choix « Fil holo ») : elle porte l'étape
     // qu'elle décrit, un fil part de cette étape, et elle se glisse juste sous sa ligne — pas en
     // bas de tout l'arbre (le détail du 2026-09-23 voulait déjà la brique dépliée sur place).
     expect(detail?.getAttribute('data-execution-detail-of')).toBe('agent')
@@ -927,7 +927,7 @@ describe('WorkflowExecutionGraph', () => {
  * LE GRAPHE NE RAPATRIE PLUS LES CONTENUS QU'IL N'AFFICHE PAS (scout du 2026-10-10).
  *
  * Relu chaque seconde en direct, `causalTrace` copiait toute la conversation, prompts compris — 409 Mo
- * sérialisés sur conv-72, et 23 gels de l'app attribués à ce canal. Le graphe lit désormais la trace
+ * sérialisés, et 23 gels de l'app attribués à ce canal. Le graphe lit désormais la trace
  * SANS contenus, et ne demande les charges d'une étape qu'au moment où on l'ouvre.
  */
 describe('WorkflowExecutionGraph — trace allégée, détail à la demande', () => {
@@ -1196,7 +1196,7 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
   ]
 
   // Un dépôt REFUSÉ est un échec de la commande : la trace range sa réponse en `error`, sur un
-  // résultat `failed` (conv-927). C'est ce cas qui affichait « texte du fait illisible » (conv-966).
+  // résultat `failed`. C'est ce cas qui affichait « texte du fait illisible ».
   async function ouvrirFaitRetenu(reponse: unknown, genre = 'tool-result', status = 'completed') {
     const causalTraceCharges = vi.fn().mockResolvedValue({
       retenu: [
@@ -1272,7 +1272,7 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
     )
   })
 
-  // « fais que chaque étape rouge du graphe dise pourquoi elle a échoué » (conv-966) : la cause est
+  // « fais que chaque étape rouge du graphe dise pourquoi elle a échoué » : la cause est
   // en tête de la fiche, entière, sans avoir à ouvrir le bloc « Erreur » voisin.
   it('une étape rouge dit pourquoi en tête de sa fiche', async () => {
     const cause = 'Claude a interrompu l’appel : You’ve hit your session limit · resets 1pm'
@@ -1428,7 +1428,7 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
    * « plein de nodes qui ont une erreur et pas de contenu, surtout pendant les orchestrations »
    * (2026-10-13). Un sous-agent EN COURS n'a pas de durée ni de retour : ni l'un ni l'autre n'est un
    * défaut. Sa fiche montre le prompt écrit au démarrage et dit que le retour viendra ; la phase
-   * garde sa limite connue, en ton neutre. Forme du démarrage reprise de conv-913 (build:minimal).
+   * garde sa limite connue, en ton neutre. Forme du démarrage reprise (build:minimal).
    */
   it('orchestration en cours : prompt affiché, retour attendu, aucun orange sans défaut', async () => {
     const light = executionRunTrace({ agent: 'running' }).map((event) =>
@@ -1482,10 +1482,10 @@ describe('WorkflowExecutionGraph — trace allégée, détail à la demande', ()
   })
 
   /*
-   * SOUS-AGENT D'UN RUN ORCHESTRÉ (scout du 2026-10-10, conv-193). Son prompt est relié par TENTATIVE
+   * SOUS-AGENT D'UN RUN ORCHESTRÉ (scout du 2026-10-10). Son prompt est relié par TENTATIVE
    * (`attemptId`), pas par parenté, et sa cause d'échec est écrite sur le relais en échec. Avant : la
    * carte taisait la cause et le clic disait « Aucun prompt ni retour enregistré ». Formes reprises
-   * des traces réelles conv-139 (sous-agent réussi) et conv-163 (`scout:dette` en échec).
+   * des traces réelles (sous-agent réussi) et (`scout:dette` en échec).
    */
   it('sous-agent de run : cause d’échec sur la carte, prompt et retour unique au clic', async () => {
     const cause = 'checkpoint orchestration causalement invalide : liens de reservation incoherents'

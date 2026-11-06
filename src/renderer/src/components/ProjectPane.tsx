@@ -32,7 +32,7 @@ export function ProjectPane({
   const [fichier, setFichier] = useState<string | null>(null)
   const [texte, setTexte] = useState('')
   const [initial, setInitial] = useState('')
-  // L'ÉTAT, pas son texte : il se traduit à l'affichage et suit un changement de langue (conv-1170).
+  // L'ÉTAT, pas son texte : il se traduit à l'affichage et suit un changement de langue.
   const [etat, setEtat] = useState<'' | 'enregistrement' | 'enregistre'>('')
   const [erreur, setErreur] = useState<string>('')
   const [vscodeEnCours, setVscodeEnCours] = useState(false)

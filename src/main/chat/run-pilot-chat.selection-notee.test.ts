@@ -7,11 +7,11 @@ import { ConversationStore } from '../store/conversations'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 
 /**
- * UNE SÉLECTION DE PISTES SE NOTE DÈS QU'ELLE ARRIVE, MÊME SANS RUN (conv-1341, 2026-10-30).
+ * UNE SÉLECTION DE PISTES SE NOTE DÈS QU'ELLE ARRIVE, MÊME SANS RUN (2026-10-30).
  *
  * `noterChoixScout` n'était appelée que par l'orchestrateur. Une sélection traitée directement dans
  * le fil n'existait donc pas pour le bilan : sur 25 sélections relevées du 12 au 30/10, 4 scouts
- * passaient pour « sans aucune piste prise » et les lots 3 et 4 du plan de conv-1332 pour « laissés ».
+ * passaient pour « sans aucune piste prise » et les lots 3 et 4 du plan pour « laissés ».
  * Ces pistes faussaient aussi le taux de prise qui ajuste les notes du scout suivant.
  *
  * Ici le VRAI tour de chat tourne, avec un faux modèle qui ne lance aucun run. Une version fausse

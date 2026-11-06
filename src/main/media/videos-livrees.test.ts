@@ -6,10 +6,10 @@ import type { ChatArtifact } from '../../shared/artifacts'
 import { cheminsVideoCites, cleDeVideo, videosLivreesDuTour } from './videos-livrees'
 
 /**
- * LA VIDÉO FABRIQUÉE PENDANT LE TOUR ARRIVE DANS LE LECTEUR SANS QU'ON LE DEMANDE (conv-253,
+ * LA VIDÉO FABRIQUÉE PENDANT LE TOUR ARRIVE DANS LE LECTEUR SANS QU'ON LE DEMANDE (
  * 2026-10-11).
  *
- * Constat (conv-260, ~22:10) : l'agent rend `D:\Autowin\.autowin-tmp\pub\autowin-os-pub-v2.mp4`
+ * Constat (~22:10) : l'agent rend `D:\Autowin\.autowin-tmp\pub\autowin-os-pub-v2.mp4`
  * par ffmpeg puis écrit seulement son chemin ; l'utilisateur doit taper « /kaizen tu dois me la
  * montrer dans un lecteur ». Une IMAGE lue arrive seule dans le fil (`claude.ts`, bloc image du
  * résultat d'outil) ; une vidéo n'y arrivait que par `show_video`, qu'il fallait penser à appeler.

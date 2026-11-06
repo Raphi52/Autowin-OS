@@ -81,7 +81,7 @@ export function InterlocuteursWidget({
   onOuvrir: (id: string) => Promise<void>
   ouvertureEnCours: string | null
   /**
-   * OUVRE une pièce jointe REÇUE (conv-1220) : Outlook la copie, Windows l'ouvre. Absent = le nom
+   * OUVRE une pièce jointe REÇUE : Outlook la copie, Windows l'ouvre. Absent = le nom
    * reste un simple texte, comme avant cette capacité.
    */
   onOuvrirPiece?: (
@@ -1166,7 +1166,7 @@ function Bulle({
         vraie boîte, 150 des 153 messages reçus n'ont aucune pièce, et un cadre vide sur chacun
         serait un bruit permanent.
         Nom et taille seulement : le contenu ne traverse pas l'instantané. Le NOM s'ouvre d'un clic
-        (conv-1220) : la pièce est alors demandée à Outlook, à ce moment-là seulement.
+        La pièce est alors demandée à Outlook, à ce moment-là seulement.
       */}
       {message.pieces.length > 0 ? (
         <ul className="home-chat__pieces" data-testid={`home-chat-pieces-${message.id}`}>

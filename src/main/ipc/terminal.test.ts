@@ -1,5 +1,5 @@
 /**
- * Canaux du terminal intégré (conv-1362, lot 3/3) : le VRAI gestionnaire, une fausse fabrique de
+ * Canaux du terminal intégré (lot 3/3) : le VRAI gestionnaire, une fausse fabrique de
  * terminaux, une fausse fenêtre principale, Electron simulé.
  *
  * Ce qui est prouvé : les canaux branchés sont EXACTEMENT ceux du contrat, tous derrière le contrôle

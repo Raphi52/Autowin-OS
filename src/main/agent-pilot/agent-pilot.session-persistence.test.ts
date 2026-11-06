@@ -78,8 +78,8 @@ describe('AgentPilot — la reprise de session survit au redémarrage', () => {
     // CLAUDE_CONFIG_DIR, et une session ouverte dans un autre dossier n'existe pas dans le
     // `projects/<cwd>` du nouveau — dans les deux cas le CLI rend « No conversation found ».
     // Le dernier segment compte les COMPACTIONS abouties du fil : une compaction de plus perime la
-    // session, sinon « Compacter » n allege rien sur un provider qui reprend sa session (conv-342) ;
-    // le segment `w` compte les coupes par POIDS du fil, qui la periment de meme (conv-632).
+    // session, sinon « Compacter » n allege rien sur un provider qui reprend sa session ;
+    // le segment `w` compte les coupes par POIDS du fil, qui la periment de meme.
     saveChatSession('conv-42', 'claude:opus:::c0:w0', 'sess-anterieure')
 
     // Pilote NEUF : sa Map mémoire est vide, comme après un redémarrage.

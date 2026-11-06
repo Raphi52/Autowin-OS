@@ -257,11 +257,11 @@ export function claudeRotateAccount(walledAccountId: string): string | undefined
 }
 
 /**
- * LE COMPTE CHOISI POUR UN FIL (conv-1416, 2026-11-01), injecte comme les accesseurs ci-dessus.
+ * LE COMPTE CHOISI POUR UN FIL (2026-11-01), injecte comme les accesseurs ci-dessus.
  *
  * Ce choix voyage avec l'appel au lieu de passer par le compte ACTIF, global a l'application. Avant,
  * il etait rendu actif au depart du tour : n'importe quel fil pouvait le defaire aussitot, et le
- * premier compte vide le remplacait sans un mot (conv-1403 : puce sur le compte pro, tour sur gmail).
+ * premier compte vide le remplacait sans un mot (Puce sur le compte pro, tour sur gmail).
  * Un fil au compte choisi ne change donc JAMAIS de compte tout seul : voir `ProviderRegistry`.
  * Par defaut il ne rend RIEN : un module non configure garde le comportement d'avant.
  */

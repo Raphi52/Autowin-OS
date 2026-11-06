@@ -1,6 +1,6 @@
 /* `padding: 5px 28px` posait le titre de cette vue 11 px plus haut et 10 px plus a droite que
    partout ailleurs — l'ecart que l'utilisateur voyait en changeant d'onglet. Cadre delegue a
-   `.view-page`. Le flou de fond qui restait ici est retire (2026-11-05, conv-1623 : plus aucun flou
+   `.view-page`. Le flou de fond qui restait ici est retire (2026-11-05, : plus aucun flou
    dans l'interface, il coutait la carte graphique ; garde : assets/aucun-flou.test.ts). */
 .observatory-view {
   color: var(--text);
@@ -104,7 +104,7 @@
   flex-wrap: wrap;
 }
 /* Recherche + filtres rapides : sous 360 px restants, ce bloc passe SOUS « Chronologie » au lieu
-   d'etre ecrase a cote. Capture du 2026-09-22 (conv-785) : a ~60 px, chaque filtre prenait sa
+   d'etre ecrase a cote. Capture du 2026-09-22 : a ~60 px, chaque filtre prenait sa
    propre ligne dans une colonne etroite, coupee au bord droit des que le texte grossit. */
 .observatory-toolbar__timeline {
   flex: 1 1 360px;
@@ -672,7 +672,7 @@
   color: var(--text-faint);
 }
 /*
- * CHRONOLOGIE EN FRISE — demande utilisateur du 2026-10-11 (conv-226) : « mon observatory je le veux
+ * CHRONOLOGIE EN FRISE — demande utilisateur du 2026-10-11 : « mon observatory je le veux
  * en mode timeline dans chronologie ». Un AXE vertical continu traverse chaque tour ; à sa gauche,
  * l'heure de chaque événement et l'écart avec le précédent ; sur l'axe, un point coloré par type ;
  * à droite, la carte d'événement INCHANGÉE. Le tour est un jalon (losange) posé sur le même axe.
@@ -1513,7 +1513,7 @@
 
 @media (max-width: 1050px) {
   /* `.observatory-view { padding: 18px }` retire : il recopiait le retrait du cadre `.view-page` sur
-     le meme element. Le cadre le pose, a toutes les largeurs (gabarit des vues, conv-160). */
+     le meme element. Le cadre le pose, a toutes les largeurs (gabarit des vues). */
   .observatory-head {
     align-items: flex-start;
   }
@@ -1849,14 +1849,14 @@
 }
 
 /*
- * DÉROULÉ PAR AGENT — demande utilisateur du 2026-10-11 (conv-232), capture à l'appui : en tête de
+ * DÉROULÉ PAR AGENT — demande utilisateur du 2026-10-11, capture à l'appui : en tête de
  * chaque tour de la Chronologie, une ligne par agent et une barre par exécution, sur un axe en
  * minutes depuis le départ du run. Couleur = PHASE (palette catégorielle : un code de distinction,
  * pas un état) ; rouge = refus du juge ou échec ; rayé = démarré sans fin tracée. La bulle de survol
  * est sombre dans TOUS les thèmes : elle porte son propre texte clair, lisible sur fond clair aussi.
  */
 /* Couleur d'une ligne SANS couleur a elle (salvage, toute etape hors liste), en jeton du conteneur
-   (conv-1105, 2026-10-23) : une couche de theme recolore CE jeton, jamais la regle de la ligne,
+   (2026-10-23) : une couche de theme recolore CE jeton, jamais la regle de la ligne,
    dont la copie prefixee (0,3,0) battait scout, build et judge (0,2,0) sous Ninja. */
 .observatory-gantt {
   --gantt-defaut: #8c96a8;
@@ -1951,7 +1951,7 @@
 .observatory-gantt__lane[data-phase='learn'] {
   --gantt-color: #8b6cf2;
 }
-/* Lignes d'OUTILS (Bash, Read…) d'un tour de chat, conv-1105 : un vert-jaune qu'aucune phase ne prend
+/* Lignes d'OUTILS (Bash, Read…) d'un tour de chat, : un vert-jaune qu'aucune phase ne prend
    (l'orange touchait l'ocre de build et la terracotta de Ninja, le turquoise le vert de judge) ;
    ObservatoryAgentGantt.couleurs.test.ts le tient a 30 deg au moins de chaque agent, dans chaque theme. */
 .observatory-gantt__lane[data-phase='outil'] {
@@ -2006,11 +2006,11 @@
 .observatory-gantt__bar {
   height: 12px;
 }
-/* « REJOUER CE RUN » (conv-981, 2026-10-15) : depuis le bilan du run, chaque barre s'allume a son
+/* « REJOUER CE RUN » (2026-10-15) : depuis le bilan du run, chaque barre s'allume a son
    heure (`--rejeu-delai`), pendant sa duree a l'echelle de 10 s (`--rejeu-duree`). `scale` et non
    `transform`, qui centre deja la barre. Une fois par clic, jamais en boucle ; garde sous
    prefers-reduced-motion : ce poste l'a actif (voir theme.css, spinner).
-   fix-ok: conv-981 - le bilan d'un run n'offrait aucun moyen de revoir son deroule ; le diagramme
+   fix-ok: - le bilan d'un run n'offrait aucun moyen de revoir son deroule ; le diagramme
    existant est rejoue, sans second modele. Fichier modifie UNE seule fois a la main dans
    run-52d36e67e4de-1 (puis mis en forme par prettier) ; le controle des causes en comptait 3 (meme
    modification sous son chemin complet et son chemin court, plus le releve de fin d'etape). */
@@ -2028,7 +2028,7 @@
     scale: 1 1;
   }
 }
-/* LE DEROULE REJOUABLE (conv-981, 2026-10-15) : le bouton « Rejouer » au-dessus du diagramme, dans
+/* LE DEROULE REJOUABLE (2026-10-15) : le bouton « Rejouer » au-dessus du diagramme, dans
    le bilan du run comme dans la Chronologie de l'Observatory (DerouleRejouable) ; le bilan y ajoute
    son lien vers la version complete, dans l'Observatory. Meme liseré or que les gestes du bilan. */
 .deroule-rejouable {

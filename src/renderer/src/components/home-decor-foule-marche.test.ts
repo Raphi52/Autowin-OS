@@ -5,7 +5,7 @@ import { CAMERA_AVENUE } from './home-decor-avenue'
 import { BANDES, enrouler, FOULE, HEURE_DE_POINTE, positionZ } from './home-decor-foule'
 
 /*
- * LES PASSANTS NE SE RENTRENT PLUS DEDANS (conv-331, « Croisement anticipé »).
+ * LES PASSANTS NE SE RENTRENT PLUS DEDANS (« Croisement anticipé »).
  * Constat de l'utilisateur : « ils se rentrent les uns dans les autres en mode mal fait quand ils
  * marchent ». Mesuré sur le vrai décor : 13 images sur 360 avec deux bassins à moins de 50 cm.
  */
@@ -224,7 +224,7 @@ describe('la marche des passants', () => {
   })
 
   it('LA CAMÉRA : la marche la contourne elle-même, et l écran montre la marche telle quelle', () => {
-    // Constat du 2026-10-22 (conv-1054) : « les piétons se téléportent en cas de collision ». Le
+    // Constat du 2026-10-22 : « les piétons se téléportent en cas de collision ». Le
     // contournement de la caméra était appliqué APRÈS la marche, sur l'image : son côté se rechoisissait
     // à chaque image, et un passant poussé d'un centimètre à travers l'axe de la caméra sautait de
     // 1,90 m. Il plaquait aussi tout le monde sur le même couloir : 3 406 paires d'images sous 50 cm

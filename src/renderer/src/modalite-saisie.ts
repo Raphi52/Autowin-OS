@@ -1,7 +1,7 @@
 /**
  * Contour de focus SEULEMENT pendant une vraie navigation au clavier.
  *
- * Pourquoi (conv-1222, 2026-10-28) : « cet encerclement du bouton apparaît même quand je touche pas
+ * Pourquoi (2026-10-28) : « cet encerclement du bouton apparaît même quand je touche pas
  * à mon clavier, c'est parasite » — capture du bouton « Chat » de la barre de gauche, entouré de
  * rose. Les thèmes dessinent un contour sur `:focus-visible`, et Chromium allume `:focus-visible`
  * sur un bouton CLIQUÉ À LA SOURIS dès qu'une touche part ensuite, Maj seule comprise (mesuré dans

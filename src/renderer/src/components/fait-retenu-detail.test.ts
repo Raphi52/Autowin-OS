@@ -27,7 +27,7 @@ describe('lireFaitRetenu — la réponse de remember, jamais ses arguments', () 
     expect(
       lireFaitRetenu(JSON.stringify({ allowed: true, stored: true, fact: fait }))
     ).toMatchObject({ retenu: true, depose: true })
-    // Réponse réelle de conv-927 (2026-10-13) : validé localement, refusé par le Brain.
+    // Réponse réelle (2026-10-13) : validé localement, refusé par le Brain.
     expect(
       lireFaitRetenu(
         JSON.stringify({

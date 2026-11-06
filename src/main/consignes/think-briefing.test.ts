@@ -74,7 +74,7 @@ describe('garde de forme du briefing `think`', () => {
 /**
  * UN BRIEFING REPRIS NE DOIT PAS POINTER DES LIGNES QUI ONT BOUGE.
  *
- * Objection du juge (run-85d8e7f57af2-1, reparation 2). Mesure conv-890 (2026-09-30) : entre le
+ * Objection du juge (run-85d8e7f57af2-1, reparation 2). Mesure (2026-09-30) : entre le
  * `think` de `run-3180eec71b06-1` (10:36Z) et la relance (13:36Z), 4 commits d'autres fils ont touche
  * 27 fichiers. UN seul est cite par le briefing : `skill-routing.ts:130-152`, decale de 13 lignes par
  * `b6d2a3fc` (insertion a la ligne 76). Ses reperes etaient donc faux : le rejouer etait juste. Les

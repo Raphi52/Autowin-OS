@@ -28,9 +28,9 @@ export type MarkdownBlock = {
     | 'donnees'
     | 'fils'
   content: string
-  /** Bloc `donnees` seulement : la source deja LUE (conv-1074). Le decoupage est cache par contenu. */
+  /** Bloc `donnees` seulement : la source deja LUE. Le decoupage est cache par contenu. */
   donnees?: BlocDonnees
-  /** Bloc `fils` seulement : les taches deja LUES de la proposition « Lancer en N fils » (conv-1147). */
+  /** Bloc `fils` seulement : les taches deja LUES de la proposition « Lancer en N fils ». */
   taches?: TacheDeFil[]
 }
 
@@ -84,7 +84,7 @@ const tokenCache = createBoundedCache<MarkdownBlock[]>(120)
 /**
  * REPRISE INCREMENTALE PENDANT LE STREAMING — le cache par contenu ne peut RIEN pour lui.
  *
- * Mesure du 2026-09-05 (conv-303) sur le plus long message reel du depot (76 ko) : analyse une
+ * Mesure du 2026-09-05 sur le plus long message reel du depot (76 ko) : analyse une
  * seule fois, il coute 14 ms ; analyse a chaque lot de texte recu, il en coute 1500 en 195
  * analyses, soit 107 fois plus. Le cache existant ne sert jamais ici puisque le texte GRANDIT :
  * chaque lot fabrique une cle neuve. Cote journal, 115 s de fenetre morte en « renderer:chat » et
@@ -203,7 +203,7 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
       ferme &&
       span.content.trim().length > 0 &&
       span.content.length <= MAX_SCENE_3D_CHARS
-    // Page interactive (conv-1292, BlocHtmlInteractif.tsx) : meme regle — ses scripts ne tournent
+    // Page interactive (BlocHtmlInteractif.tsx) : meme regle — ses scripts ne tournent
     // qu'une fois la fence close, jamais sur une page a moitie ecrite.
     const pageInteractive =
       span.language === FORME_PAGE_INTERACTIVE &&
@@ -211,7 +211,7 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
       span.content.trim().length > 0 &&
       span.content.length <= MAX_PAGE_INTERACTIVE_CHARS &&
       !authoritativeOrchestrationClosureSpan(span.content)
-    // Bloc de DONNEES (conv-1074, src/shared/blocs-donnees.ts) : fence close ET JSON lisible, sinon
+    // Bloc de DONNEES (src/shared/blocs-donnees.ts) : fence close ET JSON lisible, sinon
     // du code — un JSON a moitie ecrit pendant le streaming ne doit jamais devenir un tableau faux.
     const donnees =
       ferme && estFormeDonnees(span.language)
@@ -224,7 +224,7 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
       blocsSurs = blocks.length
       continue
     }
-    // Proposition « Lancer en N fils » (conv-1147, shared/lancer-en-fils.ts) : meme regle, fence
+    // Proposition « Lancer en N fils » (shared/lancer-en-fils.ts) : meme regle, fence
     // close ET JSON lisible. Une carte a boutons sur un JSON a moitie ecrit lancerait des tours faux.
     const fils = ferme && span.language === FORME_FILS ? lireBlocFils(span.content) : undefined
     if (fils && !('erreur' in fils)) {
@@ -245,7 +245,7 @@ function decouper(text: string): { blocs: MarkdownBlock[]; sur: number; blocsSur
                 ferme &&
                 !authoritativeOrchestrationClosureSpan(span.content)
               ? 'html-render'
-              : // Page interactive que le modele ECRIT encore (conv-1304) : une ligne d'attente
+              : // Page interactive que le modele ECRIT encore : une ligne d'attente
                 // au lieu d'un mur de code qui grandit puis disparait d'un coup.
                 span.language === FORME_PAGE_INTERACTIVE && !ferme
                 ? 'html-interactif-en-cours'

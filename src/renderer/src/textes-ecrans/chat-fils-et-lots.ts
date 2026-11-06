@@ -3,7 +3,7 @@ import { bilanDuPlan, type PlanDeLots } from '../../../shared/plan-de-lots'
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — CHAT — PLAN DE LOTS, FILS PROPOSÉS, MESSAGES ENTRE FILS, FILS DE DEMANDE (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — CHAT — PLAN DE LOTS, FILS PROPOSÉS, MESSAGES ENTRE FILS, FILS DE DEMANDE (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : TableauDesLots, PropositionDeFils, MessagesEntreFils, RequestThread, le carnet du fil, les
  * mentions et l’aperçu de l’inspecteur de run.
@@ -73,7 +73,7 @@ export const TEXTES_FR = {
   'lots.kicker': 'Plan de lots',
   'lots.avertissements.un': '{n} avertissement',
   'lots.avertissements.plusieurs': '{n} avertissements',
-  // conv-1284 : le contexte commun et les décisions que reçoit chaque lot, le modèle d'un lot.
+  // Le contexte commun et les décisions que reçoit chaque lot, le modèle d'un lot.
   'lots.contexte': 'Contexte commun envoyé à chaque lot',
   'lots.decisions.un': '{n} décision prise en route',
   'lots.decisions.plusieurs': '{n} décisions prises en route',
@@ -89,7 +89,7 @@ export const TEXTES_FR = {
   'lots.agrandir': 'Agrandir',
   'lots.agrandir.titre': 'Afficher les lots, le bilan et les boutons du plan',
 
-  // — La super conv dans la mosaïque (SuperConvMosaique, /draft conv-1305) : une case à onglets,
+  // — La super conv dans la mosaïque (SuperConvMosaique) : une case à onglets,
   // la frise pleine dans l'onglet Chef, la piste du lot dans son onglet.
   'superConv.retour': 'Retour',
   'superConv.retour.titre': 'Revenir à la super conv « {titre} »',

@@ -9,7 +9,7 @@ import { RiviereDuProjet } from './RiviereDuProjet'
 import { CLE_ETATS_MANUELS_CARTE } from './etats-manuels-carte'
 
 /**
- * LES POST-IT DES COLLÈGUES À L'ÉCRAN (conv-1210, 2026-10-28 : « avec leur nom sur chaque post-it
+ * LES POST-IT DES COLLÈGUES À L'ÉCRAN (2026-10-28 : « avec leur nom sur chaque post-it
  * et en lecture seule »). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un post-it de collègue sans son nom,
  * qui se glisse vers un autre étage, qui montre « vérifier », ou dont la fiche ouvre un fil d'ici.
  */

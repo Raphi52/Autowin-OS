@@ -9,7 +9,7 @@ import {
 } from './chat-find'
 
 /**
- * Barre « Ctrl+F » du fil (conv-21).
+ * Barre « Ctrl+F » du fil.
  *
  * COMPOSANT SÉPARÉ À DESSEIN : le terme cherché vit ici, pas dans `ChatView`. Frapper un
  * caractère ne re-rend donc que cette barre — les N messages du fil, mémoïsés, ne bougent pas

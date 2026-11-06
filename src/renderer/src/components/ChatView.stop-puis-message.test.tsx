@@ -22,10 +22,10 @@ describe('ChatView — message tape juste apres un Stop', () => {
     let finirLeTour: (() => void) | undefined
     /*
      * Le processus principal SIMULE dit la verite : un tour vit tant que sa promesse n'est pas
-     * revenue, et plus apres. Depuis f128d0f3 (2026-09-23, conv-809), le renderer ne clot un tour
+     * revenue, et plus apres. Depuis f128d0f3 (2026-09-23), le renderer ne clot un tour
      * qu'apres avoir demande a `pilotChatActive` s'il vit encore ; un faux qui repondait « actif »
      * POUR TOUJOURS gardait donc le premier tour ouvert a jamais, la file ne partait plus, et ce
-     * test rougissait sans que Stop ait regresse (conv-770, 2026-09-28).
+     * test rougissait sans que Stop ait regresse (2026-09-28).
      */
     let tourEnVol = false
     const pilotChat = vi.fn(() => {

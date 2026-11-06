@@ -12,17 +12,17 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * Lot 5 du plan « Rendre la super conversation parfaite » (conv-1151, plan-ba5b7d4a, 2026-10-26) :
+ * Lot 5 du plan « Rendre la super conversation parfaite » (plan-ba5b7d4a, 2026-10-26) :
  * chaque lot d'un plan ouvre un fil « Lot N/M — … » qui se mêlait aux autres fils de la liste. Avec
  * plusieurs plans, on ne savait plus quel fil appartenait à quel chef.
  *
  * La liste range les fils d'un plan juste après leur fil chef, un cran plus à droite, avec un repère
- * « lot N/M ». Un fil hors plan ne bouge pas. Depuis conv-1158, elle lit TOUS les plans en un seul
+ * « lot N/M ». Un fil hors plan ne bouge pas. Elle lit TOUS les plans en un seul
  * appel `plansDeLots('tous')` — plus de repérage par le titre : un fil de lot renommé reste rangé,
  * et 1 000 fils coûtent un appel.
  *
- * Depuis conv-1381 (« les conv de lot ne les affiche pas dans cette liste, on y accède que par les
- * onglets »), un lot qui a son onglet n'a plus de ligne. Depuis conv-1394 (« masque aussi les lots
+ * (« les conv de lot ne les affiche pas dans cette liste, on y accède que par les
+ * onglets »), un lot qui a son onglet n'a plus de ligne. (« masque aussi les lots
  * des anciens plans d'un même chef, et rends-les accessibles depuis le bloc de la conv chef »), un
  * lot d'un ancien plan non plus : le bloc du chef les liste. Seul un lot dont le chef a disparu garde
  * sa ligne. Le rangement sous le chef ne sert plus qu'aux résultats de recherche. Le spinner du chef

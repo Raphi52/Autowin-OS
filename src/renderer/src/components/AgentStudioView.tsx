@@ -27,7 +27,7 @@ export function AgentStudioView({
    * Une anomalie n'était visible qu'en OUVRANT l'onglet concerné : un workflow injouable partait donc
    * au prompt suivant sans que rien ne l'annonce depuis l'onglet voisin. La sonde est en LECTURE
    * seule et ne tourne que si Agent Studio est ouvert. (Celle des providers expirés a suivi l'onglet
-   * Routage dans Settings — conv-963.)
+   * Routage dans Settings.)
    */
   const [workflowProfils, setWorkflowProfils] = useState<ExecutabilityInput[]>([])
   /**
@@ -98,7 +98,7 @@ export function AgentStudioView({
           <WorkflowProfilesView active={active} />
         ) : (
           <>
-            {/* Le modèle des petites tâches, aussi ici (conv-1240) : même bloc que Routage. */}
+            {/* Le modèle des petites tâches, aussi ici : même bloc que Routage. */}
             <PetitesTachesReglage
               active={active}
               idBase="studio-petites-taches-modele"

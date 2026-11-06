@@ -1,7 +1,7 @@
 import { LARGEUR_DESSIN_PAR_DEFAUT } from './zone-dessin-diagramme'
 
 /**
- * LES CALCULS DE LA GRANDE VUE D'UN SCHÉMA (conv-1322, 2026-10-30 : « un schema que j'arrive pas a
+ * LES CALCULS DE LA GRANDE VUE D'UN SCHÉMA (2026-10-30 : « un schema que j'arrive pas a
  * lire et je peux pas l'agrandir »). Sans React ni page, pour se tester au chiffre près.
  *
  * Échelle 1 = la taille à laquelle mermaid a dessiné le schéma, donc son texte en 14 à 16 px : le
@@ -37,7 +37,7 @@ const VITESSE_MOLETTE = 0.0015
 const VITESSE_PINCEMENT = 0.01
 /**
  * Ctrl + molette arrive sous la même forme, mais par crans de 100 : sans plafond, un seul cran
- * multipliait l'échelle par 2,7 (sonde de conv-1322 : 66 % → 179 %).
+ * multipliait l'échelle par 2,7 (sonde : 66 % → 179 %).
  */
 const PAS_PINCEMENT_MAX = 20
 

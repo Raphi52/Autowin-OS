@@ -22,7 +22,7 @@ import type { IssueDuTour } from '../../shared/plan-de-lots'
 import type { OrchestrationRunState } from './orchestration-state'
 
 /**
- * LE PLAN DE LOTS SUIT LE RUN REPRIS (conv-1308, 2026-10-30). Un lot lancé en `/build` tourne dans un
+ * LE PLAN DE LOTS SUIT LE RUN REPRIS (2026-10-30). Un lot lancé en `/build` tourne dans un
  * run. Au redémarrage, ce run repart par ce module, pas par `reprendreAppelChat` (index.ts) : rien ne
  * prévenait le plan, son lot restait « interrompu » et sa fin n'enchaînait aucun lot.
  */
@@ -122,9 +122,9 @@ export type DependancesDeRelance = {
   executionCostCoverageFields: typeof import('../../shared/orchestration-outcome').executionCostCoverageFields
   reconcileLateRunLifecycle: typeof import('../activity/late-run-usage-settlement').reconcileLateRunLifecycle
   classifierRefusDeReprise: typeof import('./resume-refusal').classifierRefusDeReprise
-  /** Clôture `red` qui nomme une cause extérieure → `interrupted` (piste 4, conv-1070). */
+  /** Clôture `red` qui nomme une cause extérieure → `interrupted` (piste 4). */
   statutDuRunMd: typeof import('./conv-runs').statutDuRunMd
-  /** Stop, quota, panne en face : la cause d'un arrêt étranger au travail (piste 4, conv-1070). */
+  /** Stop, quota, panne en face : la cause d'un arrêt étranger au travail (piste 4). */
   causeDInterruption: typeof import('../orchestration/classe-terminale-echec').causeDInterruption
   randomUUID: () => string
   /** Fenetres vivantes a notifier. Injecte pour que le module ne depende pas d'`electron`. */
@@ -135,7 +135,7 @@ export type DependancesDeRelance = {
    * partage le `turnId` de son tour de chat : la relance du run ne doit pas le fermer à sa place.
    */
   appelChatReprisPourTour: (conversationId: string, turnId: string) => boolean
-  /** Une reprise qui a tué l'app au démarrage précédent n'est pas rejouée (conv-1150). */
+  /** Une reprise qui a tué l'app au démarrage précédent n'est pas rejouée. */
   gardePlantage?: import('./garde-reprise-plantage').GardeRepriseCrash
   /** Absent : aucun plan de lots à prévenir. */
   plansDeLots?: SuiviDuPlan
@@ -307,7 +307,7 @@ export function creerRelanceDeRunReprenable(
         ).catch(() => undefined)
       : undefined
     /*
-     * LE FIL REPART DE CE QUE LE DISQUE PORTE DÉJÀ (conv-1021, 2026-10-19).
+     * LE FIL REPART DE CE QUE LE DISQUE PORTE DÉJÀ (2026-10-19).
      *
      * Le run d'origine réécrit `trace.json` à chaque étape (`commands.ts`), et la reprise rattache
      * son MÊME RUN.md. Partir d'une liste vide écrasait donc, dès la première étape reprise, tout ce
@@ -404,9 +404,9 @@ export function creerRelanceDeRunReprenable(
             )
           },
           /*
-           * LE TEXTE DE L'AGENT REPRIS ARRIVE DANS SON FIL (conv-1330, 2026-10-30).
+           * LE TEXTE DE L'AGENT REPRIS ARRIVE DANS SON FIL (2026-10-30).
            *
-           * Ce rappel valait `undefined` : le lot 3 de conv-1324, repris après un redémarrage, a
+           * Ce rappel valait `undefined` : le lot 3, repris après un redémarrage, a
            * passé 35 min dans une nouvelle construction sans un mot dans son fil, spinner allumé —
            * l'utilisateur le croyait figé. Même diffusion que le run direct (`commands.ts`,
            * `orchestrate-delta`) : le texte, la note d'activité (« Bash en cours — 2 min ») et le

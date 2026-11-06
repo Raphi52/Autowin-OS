@@ -7,7 +7,7 @@ import {
 /**
  * L'avertissement doit informer sans crier, et se taire quand il n'y a rien a dire.
  *
- * Le cas vecu (conv-1450) : la collision apprise APRES le travail, avec la facture. Ce que ces tests
+ * Le cas vecu : la collision apprise APRES le travail, avec la facture. Ce que ces tests
  * verrouillent, c'est autant ce que le message DIT que ce qu'il ne dit PAS — il ne promet pas un
  * blocage (l'intersection est incalculable au lancement) et il ne parle pas sur un arbre propre.
  */

@@ -1,5 +1,5 @@
 // Pièces jointes reprises du fil : binaire lisible, ou repli sur la miniature. Sorties telles
-// quelles de agent-pilot.ts (conv-1580, lot 1).
+// quelles de agent-pilot.ts (lot 1).
 import type { Message } from '../providers/types'
 
 type PieceJointeDuFil = NonNullable<Message['attachments']>[number] & { thumbnail?: string }
@@ -38,7 +38,7 @@ export function replierSurLaMiniature(
 
 const MAX_PIECES_JOINTES_DU_FIL = 8
 
-// Sortie de AgentPilot.chat(), où elle était calculée en place (conv-1580, lot 2).
+// Sortie de AgentPilot.chat(), où elle était calculée en place (lot 2).
 /**
  * LES PIECES JOINTES DE TOUT LE FIL, PAS SEULEMENT DU DERNIER MESSAGE.
  *
@@ -86,7 +86,7 @@ export function piecesJointesDuFil(history: Message[]): NonNullable<Message['att
           : {
               ...lisible,
               name: `${lisible.name} (jointe a un message precedent)`,
-              // Le provider range les pieces par CE champ, pas par le nom (conv-150, tour 1bf1ae63).
+              // Le provider range les pieces par CE champ, pas par le nom (tour 1bf1ae63).
               provenance: 'message-precedent' as const
             }
       // Cle calculee sur la piece AVANT renommage : sinon la meme image, jointe au message

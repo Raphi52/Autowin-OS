@@ -1,5 +1,5 @@
 /**
- * LA MARCHE DES TANUKIS SUR LA FALAISE (conv-1421), sans aucun dessin : ce fichier se teste seul.
+ * LA MARCHE DES TANUKIS SUR LA FALAISE, sans aucun dessin : ce fichier se teste seul.
  *
  * Portée de la démonstration `grill/quartier/batiment/falaise2/page.tpl.html`, où elle a été mesurée :
  * 0 position hors du sol sur 432 000, 0 croisement dans un escalier, 992 trajets sur 992. Une seule
@@ -15,7 +15,7 @@
  * D15 de la fiche : au moins 20 s à un poste, une action plus courte ne le fait pas bouger. Sans cette
  * règle, un agent qui change d'outil toutes les 3 s courrait dans les escaliers sans jamais rien faire.
  *
- * LA PAUSE (conv-1428, « mes personnages passent leur temps à méditer, c'est pas assez varié »). Mesuré sur
+ * LA PAUSE (« mes personnages passent leur temps à méditer, c'est pas assez varié »). Mesuré sur
  * 400 tours : plus de la moitié des attentes entre deux outils dépassent 6 s, et 42 % du temps d'un tour
  * se passe à réfléchir. Réfléchir n'est donc plus un seul lieu : c'est une famille de postes (`me: 'pause'`)
  * — méditer au dojo, boire le thé, s'asseoir au bord, ratisser le sable, arroser, s'entraîner au sabre,
@@ -24,10 +24,10 @@
  */
 import type { Metier } from './quartier-metiers'
 
-/** Un agent planté pleure ('pr'), fume ('fu') ou boit ('bi') : une seule des trois, choisie d'après son identifiant (conv-1554). */
+/** Un agent planté pleure ('pr'), fume ('fu') ou boit ('bi') : une seule des trois, choisie d'après son identifiant. */
 export const POSES_PLANTE = ['pr', 'fu', 'bi'] as const
 /**
- * Les visages du tanuki v3 sur l'Accueil (conv-1558, « happy when a task finishes, surprised on an error, sleepy when
+ * Les visages du tanuki v3 sur l'Accueil (« happy when a task finishes, surprised on an error, sleepy when
  * nothing is running ») : au bain, content ('ba') puis endormi ('bz') ; à l'échec, un sursaut surpris ('su') avant sa
  * pose de planté. Les autres animaux jouent les mêmes cases avec leur visage habituel.
  */
@@ -110,7 +110,7 @@ export interface DonneesMarche {
   postes: PosteQuartier[]
   gestes?: Record<string, Geste>
   /**
-   * L'eau de l'onsen, relevée sur la peinture au ras de ses pierres : on n'y marche pas (conv-1550). Le
+   * L'eau de l'onsen, relevée sur la peinture au ras de ses pierres : on n'y marche pas. Le
    * baigneur longe le bord jusqu'au rebord le plus proche de sa place, puis y entre en un pas.
    */
   bassin?: [number, number][]
@@ -166,9 +166,9 @@ export interface Tanuki {
   /** Ce qu'il fera une fois relevé. */
   apres: (() => void) | null
   /**
-   * L'agent d'un collègue (D9, conv-1429) : ni lueur « t'attend » ni étiquette au-dessus de la tête.
+   * L'agent d'un collègue (D9) : ni lueur « t'attend » ni étiquette au-dessus de la tête.
    * Le repère vit sur le tanuki et non sur l'agent, car il le garde en repartant, quand son agent a déjà
-   * quitté la liste. Absent = le mien. C'était la couleur de son foulard, retiré en conv-1633 : sa tenue
+   * quitté la liste. Absent = le mien. C'était la couleur de son foulard, retiré : sa tenue
    * à la couleur qu'il a choisie le distingue désormais (`quartier-tenue.ts`).
    */
   collegue?: true
@@ -236,7 +236,7 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
         if (q < G.w) bits[j * G.w + q] = (v >> (3 - k)) & 1
       }
     }
-  // L'eau de l'onsen n'est pas un sol (conv-1550, « les personnages marchent sur l'eau ») : la grille gardait
+  // L'eau de l'onsen n'est pas un sol (« les personnages marchent sur l'eau ») : la grille gardait
   // une bande d'eau le long des pierres, et les baigneurs y faisaient le tour du bassin. Ses cases en sortent ;
   // seuls le pas qui entre à une place de bain et celui qui en sort s'y posent (`pied`).
   const BASSIN = D.bassin ?? []
@@ -799,7 +799,7 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
 
   /**
    * Où il pose le pied : le sol, plus l'eau du bassin quand il y entre (dernier pas, vers une place dans
-   * l'eau) ou qu'il en sort (il y est encore). Personne d'autre n'y met un pied (conv-1550).
+   * l'eau) ou qu'il en sort (il y est encore). Personne d'autre n'y met un pied.
    */
   function pied(w: Tanuki, px: number, py: number): boolean {
     if (libre(px, py)) return true

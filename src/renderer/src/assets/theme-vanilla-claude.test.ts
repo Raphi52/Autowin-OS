@@ -5,7 +5,7 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
- * Theme « Vanilla Claude » (conv-269, 2026-10-16) : la version CLAIRE de Ninja Claude, l'apparence
+ * Theme « Vanilla Claude » (2026-10-16) : la version CLAIRE de Ninja Claude, l'apparence
  * de Claude en mode clair. Base CLAIRE : il herite des corrections de lisibilite de la base claire
  * (theme-modes.css, theme-clair-gris.css), puis deux fichiers les recolorent :
  *   - theme-vanilla-claude.genere.css : chaque regle de la base claire qui ecrit une couleur EN DUR

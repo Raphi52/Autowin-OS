@@ -7,7 +7,7 @@ import { modeleDuTour, validerModeleDeConversation } from './modele-de-conversat
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
- * LE MODÈLE APPARTIENT À LA CONVERSATION (conv-239, 2026-10-11).
+ * LE MODÈLE APPARTIENT À LA CONVERSATION (2026-10-11).
  *
  * Trois exigences : le store le MÉMORISE (et l'oublie proprement), le choix est VALIDÉ contre le
  * catalogue, et le lancement d'un tour l'APPLIQUE — sans ce dernier point le choix serait un décor.

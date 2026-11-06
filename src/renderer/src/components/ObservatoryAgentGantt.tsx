@@ -14,11 +14,11 @@ import { formatClock, formatDuration } from './observatory-timeline-axis'
 
 /**
  * Déroulé par agent d'un tour, en tête de la Chronologie — demande utilisateur du 2026-10-11
- * (conv-232, capture à l'appui). Une ligne par agent, une barre par exécution, une bulle au survol.
+ * (capture à l'appui). Une ligne par agent, une barre par exécution, une bulle au survol.
  * Le calcul vit dans `observatory-agent-gantt.ts` ; ce composant ne fait que poser les barres.
  */
 
-// Des CLÉS de la table de textes, traduites au rendu : elles suivent la langue (conv-1170).
+// Des CLÉS de la table de textes, traduites au rendu : elles suivent la langue.
 const STATUS_BADGE: Record<AgentSpan['status'], CleObservatory | null> = {
   ok: null,
   refused: 'gantt.badge.refus',
@@ -49,7 +49,7 @@ function laneName(lane: AgentLane): string {
 
 /**
  * Position d'une barre, et son minutage quand le diagramme se REJOUE depuis le bilan du run
- * (conv-981) : la feuille l'allume a `--rejeu-delai`, pendant `--rejeu-duree`.
+ * La feuille l'allume a `--rejeu-delai`, pendant `--rejeu-duree`.
  */
 function styleDeBarre(
   geometrie: { left: number; width: number },
@@ -71,7 +71,7 @@ function anchor(left: number): 'start' | 'end' {
 }
 
 /**
- * LE DÉROULÉ REJOUABLE (conv-981, 2026-10-15) : le diagramme et son bouton « Rejouer », partagés par
+ * LE DÉROULÉ REJOUABLE (2026-10-15) : le diagramme et son bouton « Rejouer », partagés par
  * le bilan du run (panneau de droite) et la Chronologie de l'Observatory — demande « je veux un truc
  * pareil dans l'Observatory ». Le numéro du rejeu sert de clé : un second clic remonte le diagramme
  * et repart du début, sans doublon. `actions` ajoute un geste à côté du bouton (le bilan y met son
@@ -127,7 +127,7 @@ export function ObservatoryAgentGantt({
   selectedId?: string
   onSelect: (eventId: string) => void
   /**
-   * « Rejouer ce run » (conv-981) : numero du rejeu en cours, 0 = diagramme fixe. Les barres
+   * « Rejouer ce run » : numero du rejeu en cours, 0 = diagramme fixe. Les barres
    * s'allument alors l'une apres l'autre, a l'echelle du run ramene a 10 s.
    */
   rejeu?: number

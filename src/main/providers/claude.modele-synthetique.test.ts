@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 /**
  * LE MESSAGE FABRIQUE PAR LE CLI N'EST PAS LE MODELE.
  *
- * Mesure conv-120, appel du tour `3e00e0a5-5602-46e9-adb3-0d9c7a162b21` (2026-10-09) : le CLI
+ * Mesure, appel du tour `3e00e0a5-5602-46e9-adb3-0d9c7a162b21` (2026-10-09) : le CLI
  * emet, apres deux appels d'outil illisibles, un message assistant `model: "<synthetic>"` qui porte
  * son propre texte d'erreur. L'adaptateur l'adoptait comme modele resolu : promptCalls, activite et
  * Observatory affichaient `<synthetic>` au lieu de `claude-opus-5-5`, le modele qui avait reellement

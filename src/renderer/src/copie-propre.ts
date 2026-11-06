@@ -1,7 +1,7 @@
 /**
  * Copie PROPRE vers les autres applications (Gmail, Outlook, Word…).
  *
- * Pourquoi (conv-1073, 2026-10-22) : un Ctrl+C dans Autowin collé dans Gmail donnait des bandes
+ * Pourquoi (2026-10-22) : un Ctrl+C dans Autowin collé dans Gmail donnait des bandes
  * NOIRES, une par paragraphe. Cause reproduite dans Chromium : à la copie, Chromium sérialise le
  * HTML sélectionné AVEC les styles calculés de chaque bloc — `background-color: rgb(11, 15, 23)`
  * (le fond sombre de l'app, hérité d'un ancêtre), `color` clair, police, taille… —, et Gmail garde

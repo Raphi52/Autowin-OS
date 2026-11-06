@@ -1,6 +1,6 @@
 /**
- * VUE « BUREAUX CACHÉS » (conv-951, 2026-10-16) : « j'aimerais une view dédiée pour gérer tous mes
- * Hdesk, pouvoir les fermer, les créer et tout ». Refonte conv-1002 (même jour, skill draft, 5 tours
+ * VUE « BUREAUX CACHÉS » (2026-10-16) : « j'aimerais une view dédiée pour gérer tous mes
+ * Hdesk, pouvoir les fermer, les créer et tout ». Refonte (même jour, skill draft, 5 tours
  * de maquettes) : « Régie » → « Antenne + moniteurs » → « Antenne pilotable » → bandeau « Tu pilotes »
  * à hachures + rendu automatique, « en fonction du thème » (aucune couleur en dur : variables du thème).
  *
@@ -9,39 +9,39 @@
  * molette et frappe au bureau caché (scripts/hdesk-act.ps1) sous un
  * bandeau qui le dit ; sans geste pendant `delaiPilotageMs`, la vue repasse seule en Regarder.
  * Échap ne sert PAS à sortir du pilotage : il part au bureau caché (hdesk-tv-touches.ts).
- * PAS DE JOURNAL DES GESTES ici (conv-1010, 2026-10-16) : « tes gestes je m'en fous de logger ça dans
- * mes bureaux cachés ». La liste « Tes gestes » et ses repères numérotés, ajoutés par conv-1002, ont
+ * PAS DE JOURNAL DES GESTES ici (2026-10-16) : « tes gestes je m'en fous de logger ça dans
+ * mes bureaux cachés ». La liste « Tes gestes » et ses repères numérotés, ajoutés, ont
  * été retirés ; un geste refusé reste dit sur une seule ligne (hdesk-retour-geste).
  * Cas limites : aucun bureau -> état vide + Créer ; liste illisible -> erreur dite ; bureau sans fiche
  * -> « travail non relié », Fermer rend le refus ; bureau piloté fermé ou plus à l'écran -> le pilotage
  * s'arrête ; piloter un autre bureau -> le premier repasse en Regarder ; saisie de création invalide ->
  * refusée AVANT tout lancement ; identifiant occupé -> l'identifiant libre est proposé, jamais relancé.
- * REPRIS DE conv-344 (aperçu agrandi, écarté au profit de l'Antenne le 2026-10-19, conv-1023) : ce qui
+ * REPRIS (aperçu agrandi, écarté au profit de l'Antenne le 2026-10-19) : ce qui
  * ne dépend pas de la façon de montrer les bureaux — « Parcourir… » + identifiant proposé, « Récents /
- * Relancer », et le fil affiché par son titre, cliquable. Le journal des gestes de conv-344 reste dehors.
- * DISPOSITION « CONSOLE » (conv-1025, 2026-10-20, skill draft, proposition 1) : « implémente la 1 en
+ * Relancer », et le fil affiché par son titre, cliquable. Le journal des gestes reste dehors.
+ * DISPOSITION « CONSOLE » (2026-10-20, skill draft, proposition 1) : « implémente la 1 en
  * enlevant le mot multi color et le filtre télévision et en mettant un cadre en fonction du thème au
  * lieu du cadre rose sur le bureau sélectionné ». La liste des bureaux à gauche (le choisi porte le
  * cadre du choix du thème), l'aperçu à droite avec Regarder / Piloter : tout tient sans défiler. Plus
  * d'antenne géante ni de moniteurs ; « l'antenne » reste le nom interne du bureau choisi.
- * UN PANNEAU DU CHAT (conv-1378, 2026-10-31) : « refonte de la vue hdesk, ça devient un icône à côté de
+ * UN PANNEAU DU CHAT (2026-10-31) : « refonte de la vue hdesk, ça devient un icône à côté de
  * celui du navigateur et ça ouvre un right panel comme le navigateur ». Plus d'écran dans le menu : même
  * gabarit que NavigateurIntegre (poignée, plein cadre, croix), et mêmes classes pour ses boutons et sa
  * poignée, pour que les deux panneaux ne divergent pas. Tous les bureaux restent listés, quel que soit
  * le fil ; celui du fil affiché est simplement choisi d'abord.
  * Largeur retenue sur ce poste, comme le navigateur ; plein cadre remplace la grande image de l'ancien
  * écran.
- * IL REMPLACE LE BLOC DU FIL (conv-1378, même jour) : « ça doit s'ouvrir quand le chat lance une action
+ * IL REMPLACE LE BLOC DU FIL (même jour) : « ça doit s'ouvrir quand le chat lance une action
  * hdesk, ça remplace le bloc qui s'affichait dans le chat ». ChatView l'ouvre quand le fil lance un
  * bureau (guet-bureaux-du-fil.ts). Les images gardent la cadence de ce bloc, 0,5 s : à 4 s, on ne verrait
  * plus l'agent travailler.
- * PLUS DE LISTE (conv-1378, même jour) : « la tv doit prendre toute la largeur, il doit pouvoir y avoir
+ * PLUS DE LISTE (même jour) : « la tv doit prendre toute la largeur, il doit pouvoir y avoir
  * plusieurs hdesk en même temps pour les super convs et la liste elle sert à rien enlève la ». Un écran
  * par bureau, pleine largeur, tous à l'image en même temps : ceux du fil affiché et de sa super conv.
  * Sans bureau choisi, « l'antenne » n'existe plus : seul le bureau en Piloter se distingue, et il n'y en
- * a qu'un. « Tous les bureaux » garde l'accès aux autres fils et aux bureaux sans fil (conv-951 :
+ * a qu'un. « Tous les bureaux » garde l'accès aux autres fils et aux bureaux sans fil (
  * « gérer tous mes Hdesk »).
- * PLUS DE « RÉCENTS » (conv-1378, même jour) : d'abord repliés sous les écrans, puis retirés à la
+ * PLUS DE « RÉCENTS » (même jour) : d'abord repliés sous les écrans, puis retirés à la
  * demande de l'utilisateur. Un bureau fermé se rouvre par « Nouveau bureau ». Le moteur rend encore
  * cette liste (lireRecents, hdesk-gestion.ts) : ce panneau ne la lit plus.
  */
@@ -73,13 +73,13 @@ export interface HdeskGestionApi {
   hdeskGestionBureaux: () => Promise<ResultatListeBureaux>
   hdeskGestionFermer: (id: string) => Promise<ResultatFermetureGeree>
   hdeskGestionCreer: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
-  /** « Parcourir… » : sélecteur natif filtré sur les .exe (conv-344). Absent = pas de bouton. */
+  /** « Parcourir… » : sélecteur natif filtré sur les .exe. Absent = pas de bouton. */
   hdeskGestionChoisirExe?: () => Promise<ResultatChoixExe>
   /** Aperçu, bascule et gestes. */
   hdeskTvImage?: (id: string) => Promise<ImageTv>
   hdeskTvBasculer?: (id: string) => Promise<{ ok: boolean; message?: string }>
   hdeskTvAct?: (geste: GesteTv) => Promise<ResultatGeste>
-  /** Titres des fils (conv-344) : le fil s'affichait comme un identifiant brut. */
+  /** Titres des fils : le fil s'affichait comme un identifiant brut. */
   conversations?: () => Promise<Array<{ id: string; title?: string }>>
 }
 
@@ -138,7 +138,7 @@ const bureauxMontres = (
     ? [...bureaux]
     : bureaux.filter((b) => b.conversationId && fils.includes(b.conversationId))
 
-/** « 20/10 10:53 » (pied d'un bureau, maquette Console de conv-1025). */
+/** « 20/10 10:53 » (pied d'un bureau, maquette Console). */
 const quand = (iso: string): string => {
   const d = new Date(iso)
   return Number.isNaN(d.getTime())
@@ -188,7 +188,7 @@ export function HdeskGestionView({
   fils = AUCUN_FIL,
   onFermer,
   intervalleMs = 4000,
-  // 500 ms (conv-540) : la boucle ne se chevauche pas, donc la cadence réelle = max(500, durée capture).
+  // 500 ms : la boucle ne se chevauche pas, donc la cadence réelle = max(500, durée capture).
   intervalleImageMs = 500,
   delaiPilotageMs = 60_000,
   onOpenConversation
@@ -204,7 +204,7 @@ export function HdeskGestionView({
   const [form, setForm] = useState<Formulaire>(FORMULAIRE_VIDE)
   const [creationEnCours, setCreationEnCours] = useState(false)
   const [retourCreation, setRetourCreation] = useState<ResultatCreationBureau | null>(null)
-  // Identifiant tapé à la main : la proposition tirée du nom de l'appli ne l'écrase jamais (conv-344).
+  // Identifiant tapé à la main : la proposition tirée du nom de l'appli ne l'écrase jamais.
   const [idTouche, setIdTouche] = useState(false)
   // Le bureau en main : l'état pour le rendu, la référence pour la boucle de capture.
   const [piloteId, setPiloteId] = useState<string | null>(null)
@@ -325,7 +325,7 @@ export function HdeskGestionView({
     rafraichirRef.current?.()
   }, [filsStables, tous])
 
-  // Titres des fils, relus à chaque ouverture de la vue (conv-344). Échec = l'identifiant reste affiché.
+  // Titres des fils, relus à chaque ouverture de la vue. Échec = l'identifiant reste affiché.
   useEffect(() => {
     if (!active) return
     const lire = cibleDe(api)?.conversations
@@ -348,7 +348,7 @@ export function HdeskGestionView({
     }
   }, [active, api])
 
-  /** Le fil par son titre ; un clic ouvre la conversation (conv-344). « manuel » ou absent : texte. */
+  /** Le fil par son titre ; un clic ouvre la conversation. « manuel » ou absent : texte. */
   const fil = (b: BureauGere): React.JSX.Element | string => {
     const id = b.conversationId
     if (!id) return t('hdesk.fil.aucun')
@@ -476,7 +476,7 @@ export function HdeskGestionView({
     if (!ok) return
     setEnFermeture((prec) => new Set(prec).add(b.id))
     // Le libellé d'attente est rendu dans le JSX, AVEC son spinner, tant que `enFermeture` porte
-    // l'id (conv-1056) : l'entrée vide réserve seulement la place du retour.
+    // l'id : l'entrée vide réserve seulement la place du retour.
     setRetours((prec) => ({ ...prec, [b.id]: { ok: true, message: '' } }))
     const r = await f(b.id).catch((e: unknown): ResultatFermetureGeree => ({
       ok: false,
@@ -708,7 +708,7 @@ export function HdeskGestionView({
           </p>
         )}
 
-        {/* Ni liseré irisé, ni lignes de balayage, ni reflet (conv-1025). En Piloter, l'écran prend
+        {/* Ni liseré irisé, ni lignes de balayage, ni reflet. En Piloter, l'écran prend
             le cadre du choix du thème. */}
         <div className={`hdesk-ecran${pilote ? ' is-pilote' : ''}`} data-testid="hdesk-ecran">
           {ecran(b)}
@@ -887,7 +887,7 @@ export function HdeskGestionView({
         <div className="hdesk-panneau-corps">
           {formOuvert && (
             <form className="hdesk-formulaire" data-testid="hdesk-formulaire" onSubmit={creer}>
-              {/* L'application d'abord : l'identifiant se propose à partir d'elle (conv-344). */}
+              {/* L'application d'abord : l'identifiant se propose à partir d'elle. */}
               <div className="hdesk-champ-exe">
                 {champ('executable', t('hdesk.champ.executable'), t('hdesk.champ.executable.aide'))}
                 {cible()?.hdeskGestionChoisirExe && (
@@ -912,7 +912,7 @@ export function HdeskGestionView({
                 data-testid="hdesk-creer"
                 disabled={creationEnCours}
               >
-                {/* conv-344 : l'écran disait « 40 s » alors que l'application attend CREATION_ATTENTE_MS. */}
+                {/* L'écran disait « 40 s » alors que l'application attend CREATION_ATTENTE_MS. */}
                 {creationEnCours
                   ? t('hdesk.creation', { secondes: Math.round(CREATION_ATTENTE_MS / 1000) })
                   : t('hdesk.creer')}

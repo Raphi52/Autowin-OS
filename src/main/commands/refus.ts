@@ -1,15 +1,15 @@
 /**
  * Refus de regarder ou d'agir sur l'écran réel de l'utilisateur, et ce qui les lève.
  *
- * Code libre sorti de `commands.ts` tel quel (conv-1580, lot 5) ; `commands.ts` ré-exporte ce qu'il
+ * Code libre sorti de `commands.ts` tel quel (lot 5) ; `commands.ts` ré-exporte ce qu'il
  * exportait déjà, ses importeurs ne changent pas. Dans `commands/`, une VALEUR s'importe d'ici,
  * jamais par `'../commands'` (cycle d'import) : `commands/code-libre.test.ts` le garde.
  */
 
 /**
- * NON INVASIF PAR DEFAUT — garde-fou deterministe (kaizen conv-586, tour
+ * NON INVASIF PAR DEFAUT — garde-fou deterministe (kaizen, tour
  * 5e3d954a-f79f-45c6-82ed-c34b4ba9ae63, 2026-09-16). La prose l'exigeait deja deux fois
- * (`chat-pilotage-prompt.ts`, kaizen conv-526 puis conv-540) et a echoue une troisieme fois : le
+ * (`chat-pilotage-prompt.ts`) et a echoue une troisieme fois : le
  * modele a capture l'ecran reel pour verifier une modif qu'il venait de compiler, et l'utilisateur
  * a annule le tour 17 s plus tard (saisie du 2026-09-16T08:44:46). La prose ne suffit donc pas ;
  * le refus vit ici, au point de decision.
@@ -28,7 +28,7 @@ export const refusEcranReel =
 /**
  * Refus de `desktop_act` quand le dernier message de l'utilisateur ne demande PAS son ecran.
  *
- * Kaizen conv-835, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 (evenements 87-89) : l'appel portait
+ * Kaizen, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 (evenements 87-89) : l'appel portait
  * DEJA `ecran_utilisateur: true` et le refus repondait « reemets l'appel avec
  * `ecran_utilisateur: true` » — une sortie qui n'existait pas, le 2e appel etant refuse faute de
  * demande (« envoi un message teams a leslie… » ne parle pas de son ecran). Et il ne parlait que de

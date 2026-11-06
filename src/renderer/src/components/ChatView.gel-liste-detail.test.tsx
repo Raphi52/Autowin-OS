@@ -11,7 +11,7 @@ import {
 import { oublierRendusRecents } from './rendu-long'
 
 /**
- * GEL `renderer:vue-chat-liste` QUI NOMME SA CAUSE (conv-1115, 2026-10-23). 18 gels réels pour 73 s
+ * GEL `renderer:vue-chat-liste` QUI NOMME SA CAUSE (2026-10-23). 18 gels réels pour 73 s
  * depuis le 20/10 (pire 12,9 s) disaient seulement « la liste a mis N ms » : ni combien de lignes
  * elle avait redessinées, ni quelle donnée avait changé. Le diagnostic /gel n'a donc pas pu trancher.
  * Chaque gel de la liste porte désormais `liste` : lignes redessinées, rendus, et déclencheurs.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { selectionAutoDepuisScout } from './veille-candidats-message'
 
-// conv-690, saisie ts 1789715005953 : le scout avait choisi « la piste 1 », 5 candidats sur 5 sont partis.
+// Saisie ts 1789715005953 : le scout avait choisi « la piste 1 », 5 candidats sur 5 sont partis.
 const texte = [
   '## Cible',
   'La piste 1 : une ligne `CIBLES:` n’est pas reconnue. Règle de `skills/scout/SKILL.md` l.54-62.',

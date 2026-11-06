@@ -5,7 +5,7 @@ import type { PromptSnapshot } from '../commands/commands'
 /**
  * LE CHAT NE REND JAMAIS UNE BULLE VIDE.
  *
- * Cause racine des « quasi toutes mes conversations échouent », vue en lisant conv-1141 : l'utilisateur
+ * Cause racine des « quasi toutes mes conversations échouent », vue en lisant : l'utilisateur
  * envoyait un prompt, le tour AGISSAIT (« [a exécuté exec (échec)] ») mais ne DISAIT rien, et le
  * message d'assistant final était VIDE. Ne sachant pas ce qui avait raté, il renvoyait le même prompt
  * cinq fois — cinq bulles vides. Une bulle vide est pire qu'une erreur : elle ne dit rien.
@@ -39,8 +39,8 @@ function texteFinal(events: PilotEvent[]): string | undefined {
 
 describe('le chat ne rend jamais une bulle vide', () => {
   it('un tour qui A AGI mais n’a rien dit livre un repère, pas le silence (conv-1141)', async () => {
-    // Le modèle émet une commande (donc AGIT), puis ne dit plus rien : c'est le cas exact de
-    // conv-1141 (« [a exécuté exec (échec)] » suivi de bulles vides).
+    // Le modèle émet une commande (donc AGIT), puis ne dit plus rien : c'est le cas exact
+    // (« [a exécuté exec (échec)] » suivi de bulles vides).
     const responses = ['<cmd>{"name":"probe","args":{}}</cmd>', '', '']
     const send = vi.fn(async () => ({ text: responses.shift() ?? '', provider: 'claude' }))
     const bus = {
@@ -70,7 +70,7 @@ describe('le chat ne rend jamais une bulle vide', () => {
   it('une réponse dite + un remember auxiliaire livre le TEXTE, pas du vide', async () => {
     // Le modèle répond ET sauve une mémoire : on jetait son texte et on émettait vide.
     //
-    // LE DEPOT REUSSIT ICI, et c'est deliberé depuis le 2026-09-01 (conv-52) : un depot REFUSE rend
+    // LE DEPOT REUSSIT ICI, et c'est deliberé depuis le 2026-09-01 : un depot REFUSE rend
     // desormais la main au modele pour qu'il corrige, donc le texte final est celui de la reprise.
     // Ce test-ci porte sur la BULLE VIDE, pas sur le refus — le refus a son propre fichier
     // (`agent-pilot.remember-refus-visible.test.ts`), qui verifie la reprise ET le motif affiche.

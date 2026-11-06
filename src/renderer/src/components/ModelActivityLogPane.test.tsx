@@ -88,7 +88,7 @@ describe('ModelActivityLogPane — la trace de ce que les modèles ont fait', ()
     expect(ligne?.querySelector('time')?.textContent).toBe('07:05:09')
   })
 
-  // conv-247, 2026-10-11 : « n'affiche rien à la place du — quand un geste n'a pas d'heure ».
+  // 2026-10-11 : « n'affiche rien à la place du — quand un geste n'a pas d'heure ».
   // La colonne reste (les heures restent alignées), mais vide.
   it('laisse la colonne de l’heure VIDE quand le geste n’a pas d’heure', async () => {
     ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
@@ -103,7 +103,7 @@ describe('ModelActivityLogPane — la trace de ce que les modèles ont fait', ()
     expect(heure?.textContent).toBe('')
   })
 
-  // conv-247, 2026-10-11 : « retire aussi le — des en-têtes de tour quand le tour n'a pas d'heure
+  // 2026-10-11 : « retire aussi le — des en-têtes de tour quand le tour n'a pas d'heure
   // de début ». L'en-tête garde son rang et ses chiffres, sans case d'heure vide.
   it('n’écrit pas « — » dans l’en-tête d’un tour sans heure de début', async () => {
     ;(window as unknown as { api: { turnJournal: unknown } }).api.turnJournal = vi
@@ -166,7 +166,7 @@ describe('ModelActivityLogPane — la trace de ce que les modèles ont fait', ()
 })
 
 /**
- * LIGNE UNIQUE (conv-247, 2026-10-11 : maquette « tour 4 », pistes 2 + 3 + 4 retenues par
+ * LIGNE UNIQUE (2026-10-11 : maquette « tour 4 », pistes 2 + 3 + 4 retenues par
  * l'utilisateur — « go 2 3 4 »). Au repos, chaque geste tient sur UNE ligne : nature, titre court,
  * résumé gris ; l'heure seule à gauche de la frise ; un clic sur la carte la déplie.
  */
@@ -268,7 +268,7 @@ describe('ModelActivityLogPane — tenue du volume', () => {
     await act(async () => {
       await Promise.resolve()
     })
-    // Les LIGNES du journal, sans les têtes de groupe (conv-270) : une rafale semblable repliée
+    // Les LIGNES du journal, sans les têtes de groupe : une rafale semblable repliée
     // ajoute une tête, mais le plafond porte sur les gestes rendus, toujours 300 au plus.
     const lignes = (): number =>
       host.querySelectorAll('.model-log-row:not(.model-log-groupe__tete)').length
@@ -350,7 +350,7 @@ describe('ModelActivityLogPane — les quatre sources jusqu’à l’écran', ()
     expect(new Set(indexVoie.values()).size).toBe(indexVoie.size)
   })
 
-  // conv-247, 2026-10-11 : « enlève la légende en haut des logs » — la légende des voies a disparu,
+  // 2026-10-11 : « enlève la légende en haut des logs » — la légende des voies a disparu,
   // même pistes affichées ; isoler une source passe par le menu « Toutes sources ».
   it('n’affiche plus la légende des voies, même pistes affichées', async () => {
     brancher()
@@ -382,7 +382,7 @@ describe('ModelActivityLogPane — les quatre sources jusqu’à l’écran', ()
     expect(new Set(sources).size).toBeGreaterThan(1)
   })
 
-  // conv-247, 2026-10-11 : « enlève la colonne tout à gauche » — la colonne des pistes n'est plus
+  // 2026-10-11 : « enlève la colonne tout à gauche » — la colonne des pistes n'est plus
   // affichée d'office. Elle reste à un clic, par le bouton Pistes.
   it('n’affiche pas la colonne des pistes au montage ; le bouton Pistes l’affiche puis la replie', async () => {
     brancher()
@@ -571,7 +571,7 @@ describe('ModelActivityLogPane — les appels prompt', () => {
   })
 })
 
-// conv-270, 2026-10-11 : « dans les logs groupe les trucs qui se ressemblent qui se suivent ».
+// 2026-10-11 : « dans les logs groupe les trucs qui se ressemblent qui se suivent ».
 describe('ModelActivityLogPane — lignes semblables qui se suivent', () => {
   const rafale = [
     { kind: 'provider-status', text: 'Bash · git status --short', at: 1 },
@@ -613,7 +613,7 @@ describe('ModelActivityLogPane — lignes semblables qui se suivent', () => {
     expect(libelles.filter((libelle) => libelle === 'Action')).toHaveLength(1)
     await act(async () => {
       // Choisie par son TEXTE, comme à l'écran : la valeur de l'option est la clé de texte de la
-      // nature, pour qu'un filtre posé survive à un changement de langue (conv-1170).
+      // nature, pour qu'un filtre posé survive à un changement de langue.
       menu.value = [...menu.options].find((option) => option.textContent === 'Action')!.value
       menu.dispatchEvent(new Event('change', { bubbles: true }))
     })

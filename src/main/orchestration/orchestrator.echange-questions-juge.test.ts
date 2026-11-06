@@ -16,7 +16,7 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 import { messagesAAfficher } from '../conversations/messages-entre-fils-app'
 
 /*
- * ÉCHANGE AVANT RÉPARATION — questions explicites du juge (conv-1139, 2026-10-25, étape 2 de
+ * ÉCHANGE AVANT RÉPARATION — questions explicites du juge (2026-10-25, étape 2 de
  * l'option A du cadrage forum-agents-partie2-juge-build). Mesure du 24/10 : ≈ 11 % des objections
  * lues (4 sur 36) demandaient une INFORMATION que le build avait peut-être (« as-tu relancé les
  * tests ? »). Aujourd'hui un tel refus relance build + nettoyage + juge à l'aveugle.
@@ -213,7 +213,7 @@ describe('questions du juge : un refus fait UNIQUEMENT de questions interroge le
     expect(lignesDeTrace(r)).toMatch(/Échange 1 — refus maintenu : le juge refuse encore/)
   })
 
-  // Plus de plafond par run (conv-1139, 2026-10-25) : un échange à CHAQUE passage refusé, et le run
+  // Plus de plafond par run (2026-10-25) : un échange à CHAQUE passage refusé, et le run
   // s'arrête quand même, au plafond dur des passages de réparation.
   it('aucun plafond par run : un échange par passage refusé, le run s’arrête au plafond des réparations', async () => {
     const provider = new ProviderQuestions((_p, n) =>

@@ -192,7 +192,7 @@ describe('consigneDe', () => {
     expect(consigneDe(a, T0 + SURSAUT_MS).pose).toBe(poseDePlantage('fil-7'))
   })
 
-  // conv-1558 : « happy when a task finishes, surprised on an error, sleepy when nothing is running ».
+  // « happy when a task finishes, surprised on an error, sleepy when nothing is running ».
   it("sursaute à l'échec, puis prend sa pose de planté", () => {
     const a = agent('plante', null)
     expect(consigneDe(a, T0).pose).toBe('su')

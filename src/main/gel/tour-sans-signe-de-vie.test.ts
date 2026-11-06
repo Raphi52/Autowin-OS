@@ -5,7 +5,7 @@ import { estCoupureVeilleur, motifInactivite } from '../chat/chat-turn-arret'
 /**
  * UN TOUR QUI NE FINIT JAMAIS NE DOIT PAS RESTER SILENCIEUX.
  *
- * Vécu deux fois par l'utilisateur le même jour : `conv-1181` le matin, `conv-1242` le soir. Toutes
+ * Vécu deux fois par l'utilisateur le même jour : un fil le matin, un fil le soir. Toutes
  * deux figées en statut `streaming`, contenu « [a exécuté orchestrate] », action `ok: null` — ni
  * réponse, ni erreur, ni moyen de savoir que c'était mort. Sa demande : « ma dernière convers in app
  * a encore foiré, répare pour les prochains prompts ».
@@ -19,7 +19,7 @@ import { estCoupureVeilleur, motifInactivite } from '../chat/chat-turn-arret'
  */
 // La ZONE du tour de chat, pas un chemin : le veilleur a quitte `index.ts` pour
 // `chat/run-pilot-chat.ts`, et ces trois controles rougissaient sans qu'aucun cablage n'ait change
-// -- c'est ce faux vert qui a laisse passer la coupure muette de conv-136 (2026-09-02).
+// -- c'est ce faux vert qui a laisse passer la coupure muette (2026-09-02).
 const source = zoneDuTourDeChat()
 
 describe('veilleur d’inactivité du tour de chat', () => {

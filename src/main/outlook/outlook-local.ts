@@ -52,7 +52,7 @@ export interface OutlookNewMessageResult {
  * l'afficher. Outlook refuse lui-même ces types (« Level 1 ») : la tuile ne doit pas être la porte
  * qu'Outlook a fermée. Liste recopiée de la page Microsoft « Blocked attachments in Outlook »,
  * https://support.microsoft.com/en-us/office/blocked-attachments-in-outlook-434752e1-02d3-4e90-9124-8b81e49a8519
- * (lue le 2026-10-28, conv-1220), plus les paquets MSIX qu'elle ne nomme pas encore.
+ * (lue le 2026-10-28), plus les paquets MSIX qu'elle ne nomme pas encore.
  */
 const EXTENSIONS_QUI_LANCENT = new Set(
   (
@@ -209,7 +209,7 @@ export interface OutlookGatewayOptions {
   now?: () => number
   /**
    * Passerelle HORS SERVICE : aucun script lancé, aucun Outlook touché, chaque geste rend cette
-   * raison. Pour l'instance de test CACHÉE (conv-1016, 2026-10-17) : son Accueil lisait le vrai
+   * raison. Pour l'instance de test CACHÉE (2026-10-17) : son Accueil lisait le vrai
    * profil par COM, et Windows démarre Outlook dans le bureau de l'APPELANT. Mesure : trois
    * OUTLOOK.EXE vivaient dans les bureaux ui-capture-*, aucun sur l'écran de l'utilisateur, et ces
    * bureaux survivaient à leur capture.
@@ -694,7 +694,7 @@ export class OutlookLocalGateway {
    * OUVRE une pièce jointe REÇUE : Outlook la copie dans un dossier temporaire, puis Windows l'ouvre
    * avec le programme qu'il lui associe.
    *
-   * Demande du 2026-10-28 (conv-1220) : la tuile n'affichait que le nom et la taille, et renvoyait à
+   * Demande du 2026-10-28 : la tuile n'affichait que le nom et la taille, et renvoyait à
    * « Ouvrir dans Outlook ». `rang` est la position de la pièce dans le message (champ `rang` de
    * l'instantané) ; `null` pour un instantané plus ancien, le script retrouve alors la pièce par son
    * nom. Le nom est TOUJOURS comparé au vrai nom côté script : un rang décalé n'ouvre pas une autre

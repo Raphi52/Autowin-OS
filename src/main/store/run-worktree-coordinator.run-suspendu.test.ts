@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { DETAIL_RUN_SUSPENDU, RunWorktreeCoordinator } from './run-worktree-coordinator'
 
 /**
- * UN RUN ARRÊTÉ PAR LE MUR DE QUOTA GARDE SA COPIE (conv-914 / conv-916, 2026-10-13).
+ * UN RUN ARRÊTÉ PAR LE MUR DE QUOTA GARDE SA COPIE (2026-10-13).
  *
  * Sa reprise rouvre CETTE copie (`resumeExisting`). La finalisation rouge ordinaire libère une copie
  * vide et classe « triée » une copie pleine : sur un run suspendu, la première fait échouer la

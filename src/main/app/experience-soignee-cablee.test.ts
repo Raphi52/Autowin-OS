@@ -20,7 +20,7 @@ import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
 // La ZONE du process principal, pas un chemin : ce cablage a quitte `index.ts` pour
 // `src/main/chat/`. Un demenagement de code n'est pas une regression (mesure du 2026-09-02).
 const main = sourceProcessPrincipal()
-// Les gardes vivent dans agent-pilot/relances-du-tour.ts depuis conv-1580 (lot 4) : on lit la famille.
+// Les gardes vivent dans agent-pilot/relances-du-tour.ts (lot 4) : on lit la famille.
 const pilot = sourceDuPilote()
 
 describe('câblage de l’expérience soignée', () => {
@@ -41,7 +41,7 @@ describe('câblage de l’expérience soignée', () => {
     */
     // L'APPEL ENTIER, jusqu'a sa parenthese fermante — plus une fenetre fixe de 1200 caracteres :
     // l'appel a grossi (journal du fournisseur, bornes du tour) et le `true` final en sortait,
-    // alors qu'il etait toujours passe (rouge constate le 2026-10-22, conv-1056).
+    // alors qu'il etait toujours passe (rouge constate le 2026-10-22).
     const sansCommentaires = main.replace(/\/\/[^\n]*/g, '')
     const debut = sansCommentaires.indexOf('turnPilot.chat(')
     expect(debut).toBeGreaterThan(-1)

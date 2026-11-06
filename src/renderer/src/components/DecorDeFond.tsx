@@ -35,7 +35,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
   /** Lu par la boucle d'images à chaque battement : hors de l'Accueil, elle s'arrête. */
   const actifRef = useRef(actif)
   /**
-   * LE FOND CHOISI dans les réglages de l'Accueil (menu « Fond », conv-346), SUIVI en direct : le
+   * LE FOND CHOISI dans les réglages de l'Accueil (menu « Fond »), SUIVI en direct : le
    * changer libère la scène et monte la nouvelle, sans redémarrer. La clé, son historique et
    * l'événement vivent dans `fond-accueil.ts`, la même source que le menu.
    */
@@ -71,7 +71,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
   }, [])
 
   /**
-   * L'AVENUE NE LIT PAS LE THÈME (conv-337) : sa palette est la sienne, écrite dans
+   * L'AVENUE NE LIT PAS LE THÈME : sa palette est la sienne, écrite dans
    * home-decor-avenue.ts, qui ne consulte aucune teinte du thème. La reconstruire à chaque
    * changement de thème recompilait la scène pour rien (2 à 3,7 s sans rue). Seules les directions
    * « spatiales », qui relisent les teintes à leur création, suivent encore le thème.
@@ -88,7 +88,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
   }, [actif])
 
   /*
-   * LES BOUTONS DE FENETRE suivent ce qui est sous eux (conv-1076) : une scene affichee sur
+   * LES BOUTONS DE FENETRE suivent ce qui est sous eux : une scene affichee sur
    * l'Accueil les eclaircit dans un theme clair ; une autre vue, « Aucun » ou le decor demonte les
    * rend au theme. Voir `signalerSceneSousLaBarre` dans theme-mode.ts.
    */
@@ -103,7 +103,7 @@ export function DecorDeFond({ actif = true }: { actif?: boolean }): React.JSX.El
     // FOND NOIR : aucune scène, aucun contexte WebGL, aucune boucle — l'hôte peint l'aplat noir.
     if (!host || fondSansScene(variante)) return
     /*
-     * UNE SEULE CONSTRUCTION, MEME SOUS STRICTMODE (2026-10-17, conv-301).
+     * UNE SEULE CONSTRUCTION, MEME SOUS STRICTMODE (2026-10-17).
      *
      * En developpement, `<StrictMode>` (main.tsx) monte cet effet, le demonte et le remonte
      * AUSSITOT, d'un seul tenant (`commitDoubleInvokeEffectsInDEV`, pile relevee par sonde CDP).
@@ -196,7 +196,7 @@ function monterDecor(
   window.addEventListener('pointermove', onPointerMove)
 
   /**
-   * LE REPOS (conv-337) : fenetre sans le focus, ou aucun geste depuis `REPOS_APRES_MS` → la cadence
+   * LE REPOS : fenetre sans le focus, ou aucun geste depuis `REPOS_APRES_MS` → la cadence
    * passe a `IMAGES_PAR_SECONDE_REPOS`. Le premier geste (ou le retour du focus) la remonte.
    * Mesure qui le motive : 34 ms de calcul par image dans le fil du decor, soit les trois quarts d'un
    * coeur a 30 images/s, pour un Accueil qui reste ouvert des heures sans qu'on y touche.
@@ -233,9 +233,9 @@ function monterDecor(
       )
     )
     // Dessinee dans un Worker et l'image precedente pas encore finie : on attend le battement
-    // suivant SANS consommer le tour de la cadence. Avant (conv-347), la demande etait perdue en
+    // suivant SANS consommer le tour de la cadence. Avant, la demande etait perdue en
     // silence par l'hote et la suivante attendait un intervalle entier : 33 / 67 ms en alternance.
-    // Ce battement compte quand meme pour apprendre la periode de l'ecran (conv-1643).
+    // Ce battement compte quand meme pour apprendre la periode de l'ecran.
     if (scene.pret && !scene.pret()) {
       cadence.battement(time)
       return
@@ -246,12 +246,12 @@ function monterDecor(
     look.x += (aim.x - look.x) * 0.05
     look.y += (aim.y - look.y) * 0.05
     /*
-     * LE TEMPS DU DECOR EST L'HORLOGE REELLE, « mouvement reduit » ou non (2026-10-19, conv-1018).
+     * LE TEMPS DU DECOR EST L'HORLOGE REELLE, « mouvement reduit » ou non (2026-10-19).
      * Sur un PC ou les « Effets d'animation » de Windows sont coupes, Chromium annonce
      * `prefers-reduced-motion: reduce`. Le decor ralentissait alors son temps d'un facteur 0,25 :
      * plainte « le fond d'ecran 3d de l'accueil defile super lentement ». Decision de l'utilisateur :
      * le fond garde sa vitesse normale quel que soit ce reglage. Avant encore, un temps FIGE sous
-     * cette preference rendait le nuage immobile (conv-1476) : ni fige, ni ralenti, donc.
+     * cette preference rendait le nuage immobile : ni fige, ni ralenti, donc.
      * Garde : DecorDeFond.vitesse.test.tsx.
      */
     // Le cout qui regle le rythme : celui du fil ou l'image se dessine. Dans un Worker (l'avenue),
@@ -263,7 +263,7 @@ function monterDecor(
     const coutDansSonFil = scene.coutDerniereImage?.() ?? null
     if (coutDansSonFil !== null) cadence.noterCout(coutDansSonFil, 'dedie')
     else cadence.noterCout(performance.now() - debut)
-    // Repère lisible par CDP (conv-1512) : le coût réel de chaque image, mesuré sur le poste par
+    // Repère lisible par CDP : le coût réel de chaque image, mesuré sur le poste par
     // scripts/sonde-cout-image-accueil.mjs. Tampon borné à 300 entrées, vidé au-delà.
     performance.measure('decor:image', { start: debut })
     if (performance.getEntriesByName('decor:image').length > 300)

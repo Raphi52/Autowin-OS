@@ -169,7 +169,7 @@ describe('identite Autowin OS', () => {
     const runtimeIcon = readFileSync(join(ROOT, 'resources/icon.png'))
     const packagingIcon = readFileSync(join(ROOT, 'build/icon.png'))
 
-    // Choix utilisateur du 2026-10-11 (conv-228) : la marque du rail porte le LOGO anneau, genere
+    // Choix utilisateur du 2026-10-11 : la marque du rail porte le LOGO anneau, genere
     // par scripts/logo_anneau.py — « je garde mon spinner je veux juste changer le logo ici ». Il
     // remplace l'atome qu'y avait mis le choix du 2026-09-03 ; l'atome reste l'indicateur de
     // chargement partout ailleurs.
@@ -200,7 +200,7 @@ describe('identite Autowin OS', () => {
     expect(theme).toMatch(/body \{[\s\S]*?background:[^;]*#[0-9a-f]{6}\s*;/i)
     // Depuis 1b6b42c4 (2026-10-19, perf) le decor reste MONTE quelques minutes hors de l'Accueil
     // pour un retour en 106 ms, mais CACHE et sa boucle arretee : il n'est VISIBLE que sur
-    // l'Accueil. On verifie ce choix-la (test aligne le 2026-10-22, conv-1056).
+    // l'Accueil. On verifie ce choix-la (test aligne le 2026-10-22).
     expect(appShell).toContain("<DecorDeFond actif={tab === 'accueil'} />")
     expect(
       readFileSync(join(ROOT, 'src/renderer/src/components/DecorDeFond.tsx'), 'utf8')

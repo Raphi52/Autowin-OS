@@ -1,7 +1,7 @@
 /**
  * DE QUELLE NATURE EST L'ECHEC D'UNE VERIFICATION DE BUREAU ?
  *
- * DEFAUT VECU le 2026-08-25 (conv-1404). Un tour a edite `WorkflowsPanel.tsx` pour remplacer un
+ * DEFAUT VECU le 2026-08-25. Un tour a edite `WorkflowsPanel.tsx` pour remplacer un
  * `<details>/<summary>` par des `<div>`, en laissant des balises fermantes qui ne correspondaient
  * plus. La verification du bureau a echoue sur une erreur de TRANSFORMATION esbuild -- du code qui
  * ne compile pas, pas un test rouge. Mais le message rendu a l'agent etait generique :
@@ -42,7 +42,7 @@ const EMPLACEMENT = /([\w.@-]+\.(?:mts|cts|tsx|ts|jsx|js)):(\d+):(\d+):\s*(?:ERR
 const MARQUEUR_TESTS = /Tests\s+\d+\s+failed|AssertionError|✕|×\s|FAIL\s/
 
 /**
- * CausalHypothesis (verifiee, conv-1410) : une sortie de PLAFOND contient « ce que la suite avait
+ * CausalHypothesis (verifiee) : une sortie de PLAFOND contient « ce que la suite avait
  * ecrit avant d'etre coupee », donc des lignes `× …`. `MARQUEUR_TESTS` matchait, et la consigne
  * rendue en TETE disait « corrige la logique » juste au-dessus de « rien n'est prouve ». Les deux
  * `edit_file` du 26/08 sur `home-decor-scene.ts` sont partis dans cette contradiction et ont ete

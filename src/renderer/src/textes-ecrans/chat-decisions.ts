@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — CHAT — DÉCISIONS ET BLOCS DU FIL (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — CHAT — DÉCISIONS ET BLOCS DU FIL (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : ThinkingBlock, CadrageHypotheses, AskDecision, ComparaisonDesFacons, LancementBarre,
  * WorkflowsPanel, CandidatsPickPanel, ProdPassphraseGate.
@@ -135,7 +135,7 @@ export const TEXTES_FR = {
   'pensee.ensuite': 'Ensuite : {sujet}',
   'pensee.etapeSuivante': 'étape #{id}',
   'pensee.toutesTerminees': 'Toutes les étapes sont terminées',
-  // Carte d'un gros chantier (outil Workflow du CLI, conv-1366)
+  // Carte d'un gros chantier (outil Workflow du CLI)
   'pensee.chantier': 'Chantier',
   'pensee.chantier.enCours': '{n} en cours',
   'pensee.chantier.enAttente': '{n} en attente',
@@ -194,7 +194,7 @@ export const TEXTES_FR = {
   'workflows.stopEchoue': '⚠ Stop échoué',
   'workflows.annulationImpossible': 'Annulation impossible : {erreur}',
   'workflows.activite': 'Activité en cours du sous-agent',
-  // conv-1441 : depuis conv-1418, chaque nouvelle demande reçoit sa fiche ; seule une question n'en a pas.
+  // Chaque nouvelle demande reçoit sa fiche ; seule une question n'en a pas.
   'workflows.aucunRunMd':
     "Aucun RUN.md pour cette conversation. C'est normal quand elle ne contient que des questions : seule une demande reçoit sa fiche, à la fin de son tour. Le déroulé des tours reste lisible dans l'onglet Graph ci-dessus et dans l'Observatory.",
   'workflows.fiches.titre': 'Fiches de demande',
@@ -406,7 +406,7 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'pensee.ensuite': 'Next: {sujet}',
   'pensee.etapeSuivante': 'step #{id}',
   'pensee.toutesTerminees': 'All the steps are done',
-  // Carte d'un gros chantier (outil Workflow du CLI, conv-1366)
+  // Carte d'un gros chantier (outil Workflow du CLI)
   'pensee.chantier': 'Workflow',
   'pensee.chantier.enCours': '{n} running',
   'pensee.chantier.enAttente': '{n} queued',

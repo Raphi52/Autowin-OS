@@ -1,6 +1,6 @@
 /**
  * Canaux `os:conversations:create` et `os:conversations:fork` : le DOSSIER DE TRAVAIL part avec le fil
- * (conv-1038, 2026-10-21). « Revenir à ce tour » et « Essaie 3 façons » créaient la branche, puis la
+ * (2026-10-21). « Revenir à ce tour » et « Essaie 3 façons » créaient la branche, puis la
  * rangeaient dans sa copie séparée par un second appel dont l'échec n'était pas lu : la branche
  * travaillait alors dans le dossier PARTAGÉ.
  *

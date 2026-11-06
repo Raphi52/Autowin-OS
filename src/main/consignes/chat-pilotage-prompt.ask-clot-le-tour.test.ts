@@ -5,7 +5,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { CATALOG } from '../commands/commands'
 
 /**
- * `ask` CLOT LE TOUR — et le prompt disait le contraire. Mesuré le 2026-10-10, conv-171 (/draft).
+ * `ask` CLOT LE TOUR — et le prompt disait le contraire. Mesuré le 2026-10-10, (/draft).
  *
  * L'agent a émis `ask` (6 variantes en boutons) suivi de « la galerie suit », comptant reprendre la
  * main pour afficher les maquettes. Mais `agent-pilot.ts` termine le tour dès qu'une question est

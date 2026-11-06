@@ -1,5 +1,5 @@
 /**
- * conv-528 (2026-09-14) : un agent lancé par une orchestration doit CONNAÎTRE son fil sans le recopier,
+ * 2026-09-14 : un agent lancé par une orchestration doit CONNAÎTRE son fil sans le recopier,
  * pour que `scripts/hdesk-lancer.ps1` relie son bureau caché à la petite TV de CE fil.
  * Canal : la variable AUTOWIN_CONVERSATION_ID posée dans l'environnement du processus de l'agent.
  */

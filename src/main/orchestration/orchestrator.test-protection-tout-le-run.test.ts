@@ -21,7 +21,7 @@ import { TrustLedger } from '../trust/ledger'
 import type { WorkflowGraph } from '../workflow/workflow-graph'
 
 /**
- * SCÉNARIOS À PLUSIEURS PASSAGES (juge indépendant, conv-44, 2 MAJEUR) : la protection d'un fichier
+ * SCÉNARIOS À PLUSIEURS PASSAGES (juge indépendant, 2 MAJEUR) : la protection d'un fichier
  * TEST: dure TOUT le run — elle ne tombe ni après une passe propre, ni quand un autre TEST: est désigné.
  */
 const ORIGINAL = 'export const t = 1\n'

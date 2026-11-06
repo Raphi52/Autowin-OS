@@ -1,5 +1,5 @@
 /**
- * Canaux de la question à côté (conv-1362, lot 1/3), Electron simulé.
+ * Canaux de la question à côté (lot 1/3), Electron simulé.
  *
  * Ce qui est prouvé : les canaux branchés sont EXACTEMENT ceux du contrat, tous derrière le contrôle
  * d'expéditeur, et le contrôle passe AVANT tout effet ; une question vide ou trop longue et un

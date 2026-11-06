@@ -261,7 +261,7 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
       turnId: 'uuid-migration',
       resumeExisting: false,
       // Le tour d'origine, gardé `streaming` par hydrate, doit être fermé par le nouveau tour,
-      // sinon il garde le spinner de la liste allumé (conv-914, 2026-10-13).
+      // sinon il garde le spinner de la liste allumé (2026-10-13).
       supersededTurnId: 'turn-origine'
     })
     expect(divergent.observe.cartes[0].begin).toEqual(['[Reprise automatique] ajoute un bouton'])
@@ -290,7 +290,7 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
     })
   })
 
-  // conv-914 (2026-10-13) : le tour repris allume le spinner de la liste tant qu'il tourne. Sa
+  // 2026-10-13 : le tour repris allume le spinner de la liste tant qu'il tourne. Sa
   // fermeture doit recharger la liste, sinon le spinner reste allumé après la fin du run.
   it('recharge la liste des conversations quand le tour repris se ferme', async () => {
     const b = banc()
@@ -303,7 +303,7 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
   })
 
   /**
-   * conv-1330 (2026-10-30) : le lot 3 de conv-1324, repris après un redémarrage, a passé 35 min dans
+   * 2026-10-30 : le lot 3, repris après un redémarrage, a passé 35 min dans
    * une nouvelle construction sans qu'un mot n'arrive dans son fil, spinner allumé. Le lancement
    * normal (`commands.ts`) diffuse le texte, la note d'activité et le raisonnement de l'agent par
    * `orchestrate-delta` ; la relance passait `undefined` à `runTask` à la place de ce rappel.
@@ -361,7 +361,7 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
    * La note d'activité ne part PAS en battement pilote (`pilot:event`, `action-progress`) : l'écran
    * marquerait le fil comme un tour de chat en cours, que sa sonde `os:pilotChat:active` déclare mort
    * 8 s plus tard (pas de tour de chat ici) — Stop qui clignote et saisie partie en orientation
-   * refusée, à chaque note. L'écran pose lui-même la note dans la bulle (conv-1330).
+   * refusée, à chaque note. L'écran pose lui-même la note dans la bulle.
    */
   it('n envoie aucun battement pilote pour une note d activite', async () => {
     const battements: unknown[] = []
@@ -438,7 +438,7 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
     const b = banc()
     await b.relance()
 
-    // Deux écritures : à l'étape (conv-1021, trace suivie en direct), puis à la clôture.
+    // Deux écritures : à l'étape (trace suivie en direct), puis à la clôture.
     expect(b.observe.traces.map((t) => t.chemin)).toEqual(['C:/runs/RUN.md', 'C:/runs/RUN.md'])
     expect(b.observe.traces.at(-1)?.steps).toEqual([expect.objectContaining({ step: 'exec' })])
     expect(b.observe.sections).toHaveLength(1)
@@ -475,7 +475,7 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
   })
 
   /**
-   * conv-1021 : le run d'origine réécrit `trace.json` à chaque étape, et la reprise rattache son
+   * Le run d'origine réécrit `trace.json` à chaque étape, et la reprise rattache son
    * MÊME RUN.md. Repartir d'une liste vide effaçait les verdicts joués avant le redémarrage. Vrai
    * fichier sur disque, vraies fonctions de lecture et d'écriture.
    */
@@ -546,7 +546,7 @@ describe('relance d un run reprenable — les effets, pas le texte', () => {
   })
 
   /**
-   * PISTE 4 (conv-1070) : une reprise coupée de l'extérieur s'écrit `interrupted`. L'entrée qui
+   * PISTE 4 : une reprise coupée de l'extérieur s'écrit `interrupted`. L'entrée qui
    * ferait échouer ces tests si le correctif était faux : la clôture `red` sans cause juste
    * au-dessus, et l'erreur ordinaire de « sur l echec », qui restent `red`.
    */
@@ -749,7 +749,7 @@ describe('relance — un refus definitif tarit le checkpoint au lieu de le rejou
 })
 
 /**
- * LE PLAN DE LOTS SUIT LE RUN REPRIS (conv-1308, 2026-10-30). Un lot lancé en `/build` tourne dans
+ * LE PLAN DE LOTS SUIT LE RUN REPRIS (2026-10-30). Un lot lancé en `/build` tourne dans
  * un run : au redémarrage, il repart par CE module, pas par `reprendreAppelChat`. Aucune de ses
  * sorties ne prévenait le plan : le lot 1 de plan-b4358910 restait « interrompu » pendant que son
  * agent travaillait, et sa fin n'aurait lancé ni le lot 2 ni le lot 3.

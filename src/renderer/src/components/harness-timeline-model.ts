@@ -100,7 +100,7 @@ export interface HarnessTimelineEvent {
     /**
      * Nombre d'appels EN ÉCHEC d'un groupe d'outil (`count` > 1). Le groupe prend le statut le plus
      * grave : sans ce nombre, « Commandes ×10 · échec » se lisait « 10 commandes en échec » pour une
-     * seule (conv-937, 2026-10-13).
+     * seule (2026-10-13).
      */
     echecs?: number
     dependencyIds?: string[]
@@ -125,7 +125,7 @@ export interface HarnessTimelineEvent {
     verdictEventIds?: string[]
     /**
      * Nœud de CLÔTURE : le déroulé par agent de CE run (`buildAgentGantt`, le calcul de la
-     * Chronologie), pour « Rejouer ce run » depuis son bilan (conv-981). Absent sans agent tracé.
+     * Chronologie), pour « Rejouer ce run » depuis son bilan. Absent sans agent tracé.
      */
     gantt?: AgentGantt
   }

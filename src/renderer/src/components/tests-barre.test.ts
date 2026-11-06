@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { largeursDeLaBarre } from './tests-barre'
 
 /**
- * Cas limites du cadrage (conv-981) : total nul, seulement des ignores, tout reussi, tout en echec,
+ * Cas limites du cadrage : total nul, seulement des ignores, tout reussi, tout en echec,
  * et des totaux abimes dans le stockage local (negatifs, non numeriques, reussis + echecs > total).
  * ENTREE QUI DOIT FAIRE ECHOUER : diviser par `total` sans garde (NaN / Infinity en largeur), ou
  * laisser deux segments depasser 100 % a eux deux.

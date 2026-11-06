@@ -18,7 +18,7 @@ vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
  * BARREAU 1 DE L'ECHELLE — un travail refuse en `base-dirty` est MIS EN ATTENTE D'INTEGRATION,
  * jamais rendu comme un echec sec.
  *
- * Vecu le 2026-08-27 (conv-1450, 1,32 $) : « ⛔ Travail NON integre — ton arbre principal a une base
+ * Vecu le 2026-08-27 (1,32 $) : « ⛔ Travail NON integre — ton arbre principal a une base
  * sale », statut echoue, fin du tour. Le travail existait, n'etait pas perdu, et n'atterrissait pas.
  * Sur cet arbre partage par plusieurs sessions, la cause ne disparait pas d'elle-meme : le fichier en
  * cause etait `src/main/agent-pilot/agent-pilot.ts`, qu'une autre session editait — le repechage a rejoue trois

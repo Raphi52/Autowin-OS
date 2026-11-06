@@ -1,5 +1,5 @@
 /**
- * PC ÉVEILLÉ PENDANT QU'UN AGENT TRAVAILLE (conv-364).
+ * PC ÉVEILLÉ PENDANT QU'UN AGENT TRAVAILLE.
  *
  * Un run de nuit était coupé par la mise en veille de Windows. Chaque processus d'agent prend un
  * jeton au lancement et le rend à sa fin ; tant qu'au moins un jeton est tenu, Electron empêche la

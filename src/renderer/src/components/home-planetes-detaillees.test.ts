@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ANNEAU_FRAGMENT_SHADER, COMPOSITIONS, PLANETE_FRAGMENT_SHADER } from './home-decor-scene'
 
 /**
- * CE QUE L'UTILISATEUR A DEMANDE, conv-1400, mot pour mot :
+ * CE QUE L'UTILISATEUR A DEMANDE, mot pour mot :
  *
  *   « remake les planetes du fond d'écran d'accueuil pour qu'elles soient ultra stylé ultra détaillées »
  *
@@ -70,7 +70,7 @@ describe('planètes du décor — surface CALCULÉE et détaillée (demande conv
 
     it('chaque planète de la composition à planètes porte SON propre relief', () => {
       // Vise `actuel` par son NOM : la composition a planetes n'est plus le defaut depuis le 2026-10-17
-      // (l'avenue, conv-301), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
+      // (l'avenue), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
       const planetes = COMPOSITIONS.actuel.planetes
       expect(planetes.length).toBeGreaterThanOrEqual(3)
       for (const planete of planetes) {

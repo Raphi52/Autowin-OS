@@ -14,7 +14,7 @@ describe('bouton de la shortlist scout', () => {
     { titre: 'Journal permissif', url: 'src/main/activity/ledger.ts:63' }
   ])
 
-  // Sans scout depuis le 2026-10-22 (conv-1080) : la sélection sort d'un scout, le rejouer était un
+  // Sans scout depuis le 2026-10-22 : la sélection sort d'un scout, le rejouer était un
   // doublon payé (`selection-sans-scout.test.ts`). Cadrage, build et nettoyage restent tous là.
   it('lance le pipeline COMPLET, pas la seule phase frame — sans rejouer le scout', () => {
     expect(regimePhases(prompt)).toEqual(['frame', 'build', 'clean'])

@@ -8,7 +8,7 @@ import { ProviderCallError } from '../providers/types'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
- * CE QUE MONTRE LA CAPTURE DE conv-625 (demande utilisateur du 2026-09-16, tour
+ * CE QUE MONTRE LA CAPTURE (demande utilisateur du 2026-09-16, tour
  * `2fbc8f95-6a5d-4fd4-821c-7af5a197303a`) : un tour meurt sur « You've hit your session limit ·
  * resets 10:30pm », le MEME prompt renvoye juste apres meurt en
  * « Claude a interrompu l'appel : error_during_execution · 0.0000 USD » — alors que la barre de

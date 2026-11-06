@@ -1,7 +1,7 @@
 /**
  * GARDE-FOU : `fs.watch` ne s'appelle QUE par `surveiller-dossier.ts`, qui canonicalise le chemin.
  *
- * Récidive constatée le 2026-10-22 (contrôle final de conv-1056) : le correctif du 2026-08-31
+ * Récidive constatée le 2026-10-22 (contrôle final) : le correctif du 2026-08-31
  * (`realCanonique`) protégeait un seul veilleur ; un veilleur ajouté le 2026-10-19
  * (`store/surveillance-references-git.ts`) appelait `watch` en direct, et la suite entière
  * mourait en code 127 (`Assertion failed: !_wcsnicmp(filename, dir, dirlen)`, libuv) dès que
@@ -63,7 +63,7 @@ afterAll(() => rmSync(DOSSIER, { recursive: true, force: true }))
  * L'ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA PORTE NE CANONICALISAIT PLUS : un dossier atteint par
  * son NOM COURT 8.3, fabriqué ici depuis sa forme longue (forme
  * `C:\Users\PRENOM~1.NOM\AppData\Local\Temp\AUTOWI~1`). Jamais présumé de `os.tmpdir()` : il ne rend
- * un nom court que si le nom d'utilisateur dépasse 8 caractères. Mesuré le 2026-10-22 (conv-1056),
+ * un nom court que si le nom d'utilisateur dépasse 8 caractères. Mesuré le 2026-10-22,
  * porte réduite à `watch(chemin)` et `TEMP`/`TMP` en forme longue : l'ancienne version de ce test
  * passait au VERT (code 0), celle-ci passe au ROUGE sur l'assertion de libuv.
  */

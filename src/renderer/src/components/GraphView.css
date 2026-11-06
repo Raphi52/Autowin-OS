@@ -19,7 +19,7 @@
      retrait partage (`--view-head-pad`). Un decalage regle a l'oeil devient faux des que la reference
      bouge — et personne ne repasse verifier. */
   color: #e8edf4;
-  /* GABARIT DES VUES (conv-160, ViewPage.gabarit.test.ts) : cette racine ne peint RIEN. Elle
+  /* GABARIT DES VUES (ViewPage.gabarit.test.ts) : cette racine ne peint RIEN. Elle
      recopiait le cadre de page (fond, rayon de page, reflet) : Memory apparaissait comme une page
      noire posee dans le cadre dore. Le cadre est `.view-page` ; l'en-tete se pose dessus, comme
      partout, et chaque colonne est un PANNEAU separe par la meme gouttiere que Task Manager. */
@@ -82,7 +82,7 @@
   padding: 8px 10px;
 }
 
-/* Filtre des deux Brains (conv-1262) : Équipe · Perso · Les deux, et le compte des ponts. */
+/* Filtre des deux Brains : Équipe · Perso · Les deux, et le compte des ponts. */
 /* Mesure du 2026-10-29 (fenêtre de 900 px) : sans ces deux règles, les trois boutons
    s'empilaient et « Les deux » passait sur deux lignes. Le compte des ponts, lui, peut aller
    à la ligne. */
@@ -2193,7 +2193,7 @@
 }
 
 /*
- * LA MARQUE « PERSO » d'une note du Brain perso (conv-1233, 2026-10-28) : une puce discrète, posée
+ * LA MARQUE « PERSO » d'une note du Brain perso (2026-10-28) : une puce discrète, posée
  * dans la fiche de la note, la liste d'un thème et les résultats de recherche.
  */
 .note-perso {

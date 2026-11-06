@@ -13,7 +13,7 @@ import { traduire, useTextes } from '../textes'
  * partout) : un nouveau choix ne prend donc effet qu'au redémarrage, et l'écran le DIT.
  */
 export function ExecutionWorkspaceSettings(): React.JSX.Element {
-  // Textes dans la langue de Settings · Interface (conv-1146, réparation 3 : la page Diagnostic était
+  // Textes dans la langue de Settings · Interface (réparation 3 : la page Diagnostic était
   // annoncée traduite alors que ce panneau restait en français).
   const { t } = useTextes()
   const [state, setState] = useState<ExecutionWorkspaceState | null>(null)

@@ -1,5 +1,5 @@
 /**
- * UN FIL COUPÉ PAR LE QUOTA REPART SEUL, UNE FOIS (conv-1423, 2026-11-01, repris de Paperclip).
+ * UN FIL COUPÉ PAR LE QUOTA REPART SEUL, UNE FOIS (2026-11-01, repris de Paperclip).
  *
  * Mesuré sur 30 jours : 21 tours coupés dans 15 fils, dont 16 suivis d'un « reprend » tapé à la main,
  * 51 à 59 min après dans les cas récents. Les runs repartent déjà seuls à l'heure annoncée
@@ -19,7 +19,7 @@
  * règle contient un mail, texte non fiable qui n'a jamais dû ouvrir un tour sans bornes
  * (`chat-dispatch.ts`).
  *
- * fix-ok: rien ne lisait l'origine du tour coupé : `conv-879` (Assistant mails, coupé pendant un
+ * fix-ok: rien ne lisait l'origine du tour coupé : le fil « Assistant mails » (coupé pendant un
  * mail) sortait « attente » à l'essai du contrôle final, comme une règle sur le vrai tour et le vrai
  * stockage (`run-pilot-chat.origine-du-tour.test.ts`, rouge avant cette lecture).
  *
@@ -31,7 +31,7 @@
  * à la fin d'un tour en échec.
  *
  * fix-ok: fil coupé et marqué inactif, puis réactivé : `attente` à l'écran, 0 minuterie et 0 départ
- * (essai du contrôle final sur `creerRepriseDesFils`, conv-1423). Un plan fini et un run disparu
+ * (essai du contrôle final sur `creerRepriseDesFils`). Un plan fini et un run disparu
  * donnaient la même chose. `surveillerEncore` garde donc un passage prévu tant qu'un fil peut repartir :
  * au plus un quart d'heure après un tel changement, et aussitôt pour une réactivation (`index.ts`).
  *
@@ -103,7 +103,7 @@ const contientOrchestrate = (parts: readonly unknown[] | undefined): boolean =>
  *
  * fix-ok: une consigne écrite sous une réponse déjà commencée passe en fin de fil (`append`,
  * `store/conversations.ts`) ; lu par `at(-1)`, ce fil passait pour « pas coupé », sans départ et sans
- * raison affichée (5 tests rouges sur cet ordre réel, conv-1423).
+ * raison affichée (5 tests rouges sur cet ordre réel).
  */
 const tourDuFil = (messages: FilLu['messages']): FilLu['messages'][number] | undefined =>
   messages.findLast((message) => !message.orientation)

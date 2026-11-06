@@ -6,7 +6,7 @@ import { pagesHtmlEnTexte } from '../../shared/pages-html-pour-le-modele'
 /**
  * MÉMOIRE INTER-RUNS D'UNE CONVERSATION — ce qu'un run doit hériter du précédent.
  *
- * Défaut mesuré (conv-1405) : le chaînage de phases est INTRA-run (`phaseOutputs`), et le seul
+ * Défaut mesuré : le chaînage de phases est INTRA-run (`phaseOutputs`), et le seul
  * texte qui traverse vers un nouveau run est la tâche. Les objections du juge meurent donc avec
  * leur run : le run suivant de la même conversation refait la même erreur, et l'utilisateur doit
  * recopier les findings à la main. Symétriquement, seule la FIN du fil est reprise
@@ -54,7 +54,7 @@ export function findingsDuJuge(md: string): FindingsDuJuge {
  *
  * Sans lui, `findingsDuJuge` cherche une section que PERSONNE n'écrit : `orchestrator.ts` garde le
  * verdict dans `lastJudgeText` et ne le pousse pas dans `phaseOutputs`, seul tableau annexé par
- * `populateConvRunSections`. Mesuré sur conv-1405 : 5 RUN.md, 0 section `### phase judge`, mémoire
+ * `populateConvRunSections`. Mesuré : 5 RUN.md, 0 section `### phase judge`, mémoire
  * inter-runs vide en production.
  *
  * Un verdict VIDE n'écrit rien : une section juge fantôme ferait hériter le run suivant d'un
@@ -160,7 +160,7 @@ export function resumeDesTours(
     anciens
       .slice(-MAX_RESUME_TOURS)
       // Une reponse qui ouvre sur une page `html-render` ne laissait que du code dans ses 180
-      // caracteres : on resume son texte visible (conv-1074).
+      // caracteres : on resume son texte visible.
       .map((m) =>
         m.role === 'user'
           ? `U: ${clip(m.content, MAX_RESUME_CHARS)}`

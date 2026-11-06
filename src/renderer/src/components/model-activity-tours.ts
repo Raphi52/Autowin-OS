@@ -102,7 +102,7 @@ export type ModelActivityBloc =
   | { genre: 'groupe'; id: string; entries: ModelActivityEntry[] }
 
 /**
- * « Semblable » = même NATURE, même SOURCE, et même état d'échec (conv-270, 2026-10-11 : « dans les
+ * « Semblable » = même NATURE, même SOURCE, et même état d'échec (2026-10-11 : « dans les
  * logs groupe les trucs qui se ressemblent qui se suivent »). Le titre n'entre pas dans la clé :
  * mesuré sur trois conversations réelles, exiger le même titre ne réunissait que 2 lignes sur 503,
  * alors que les vraies rafales (« Bash · … », « tâche de fond en cours », « Bash terminé ») ont

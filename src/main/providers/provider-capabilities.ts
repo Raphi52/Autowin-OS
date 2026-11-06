@@ -6,7 +6,7 @@ import { join } from 'node:path'
  * futurs. Ajouter un provider = UNE entrée ici, zéro edit ailleurs : claude-hooks dérive ses fichiers
  * de cette liste. Aucun identifiant figé en dur ailleurs.
  *
- * Les racines de SKILLS n'en font plus partie (décision utilisateur du 2026-09-26, conv-16 : « je
+ * Les racines de SKILLS n'en font plus partie (décision utilisateur du 2026-09-26, « je
  * garde que les skills d'autowin ») : elles vivent dans `skillRoots` (native-registry), qui ne lit que
  * les dossiers Autowin.
  */

@@ -1,7 +1,7 @@
 /**
  * LA MÉMOIRE DES PISTES DÉJÀ PROPOSÉES PAR UN SCOUT — pour qu'un scout ne refasse pas le précédent.
  *
- * Relu dans les traces le 30/09 : conv-616 et conv-624, lancés à 2 h 37 d'écart (horodatage de leurs
+ * Relu dans les traces le 30/09 : lancés à 2 h 37 d'écart (horodatage de leurs
  * dossiers de run) sur le même sujet, reprennent 3 pistes sur 8 — écriture du cache (616 n°5 / 624
  * n°6), tri des conversations (n°2 / n°3), préfixe du juge (n°3 / n°2). La
  * mémoire anti-doublon EXISTAIT, mais pour la veille seule : `veille/scout-visible.ts` relit le stock
@@ -40,23 +40,23 @@ export interface EntreeMemoireScout {
   type?: 'fix' | 'new'
   /**
    * Ce que l'utilisateur en a fait, lu dans le message de sélection du run suivant. « ignoree » :
-   * aucune piste de ce scout n'a été prise avant le scout suivant du même dépôt (piste 2, conv-1033).
+   * aucune piste de ce scout n'a été prise avant le scout suivant du même dépôt (piste 2).
    */
   choix?: 'prise' | 'laissee' | 'ignoree'
   /**
    * Le run qui a traité la piste prise (celui du message de sélection). Son résultat est déjà noté
-   * par l'app (`OutcomeObservedV1`) : on le relit là, sans second suivi (piste 1, conv-1033).
+   * par l'app (`OutcomeObservedV1`) : on le relit là, sans second suivi (piste 1).
    */
   traitePar?: string
   /**
-   * La voie qui a traité la piste prise, lue sur le message de sélection (conv-1080) : `directe`
+   * La voie qui a traité la piste prise, lue sur le message de sélection : `directe`
    * (build → jugement) ou `complete` (cadrage → build → nettoyage → jugement). Avec le résultat du
    * run (`traitePar`), c'est la mesure qui dira si le seuil de la correction directe est le bon.
    */
   voie?: 'directe' | 'complete'
   /**
-   * « Pourquoi pas ? » : la raison donnée en un clic sur la piste décochée (piste 2, conv-1033). Le
-   * bouton est retiré (conv-1198) : plus rien ne l'écrit, mais les motifs déjà notés restent lus par
+   * « Pourquoi pas ? » : la raison donnée en un clic sur la piste décochée (piste 2). Le
+   * bouton est retiré : plus rien ne l'écrit, mais les motifs déjà notés restent lus par
    * le bilan.
    */
   motif?: MotifRefus
@@ -140,7 +140,7 @@ export function noterPistesScout(entree: {
 }
 
 /*
- * UN SCOUT DONT RIEN N'EST PRIS (piste 2, conv-1033). Sans sélection, aucun message n'arrive :
+ * UN SCOUT DONT RIEN N'EST PRIS (piste 2). Sans sélection, aucun message n'arrive :
  * `noterChoixScout` sort avant d'écrire, et le scout restait sans trace de son échec — 6 runs scout
  * sur 10 dans `scout-pistes.json` le 21/10. Le scout SUIVANT du même dépôt le constate : chaque run
  * précédent sans aucun choix passe en « ignoree ». Le run en cours est exclu (une réparation n'est
@@ -200,19 +200,19 @@ function memePiste(prise: string, gardee: string): boolean {
  * moins une piste prise, chaque piste devient « prise » ou « laissee ». Demande libre, ou aucun
  * scout connu qui la proposait : rien n'est écrit.
  *
- * LOTS (conv-1080) : une sélection découpée arrive en plusieurs messages, un par lot. Le lot 1
+ * LOTS : une sélection découpée arrive en plusieurs messages, un par lot. Le lot 1
  * remet le scout à plat comme une sélection d'un seul tenant ; les lots suivants AJOUTENT leurs
  * pistes sans toucher aux autres — sinon le lot 2 aurait marqué « laissee » les pistes prises par
  * le lot 1 et effacé le run qui les a traitées.
  *
- * DEUX APPELANTS (conv-1341) : le tour de chat dès que la sélection arrive, sans run
+ * DEUX APPELANTS : le tour de chat dès que la sélection arrive, sans run
  * (`run-pilot-chat.ts`), puis l'orchestrateur s'il en lance un.
  */
 export function noterChoixScout(entree: {
   depot: string
   demande: string
   maintenant: string
-  /** Le run qui porte la sélection : il TRAITE les pistes prises (piste 1, conv-1033). */
+  /** Le run qui porte la sélection : il TRAITE les pistes prises (piste 1). */
   run?: string
   chemin?: string
 }): void {
@@ -233,10 +233,10 @@ export function noterChoixScout(entree: {
     if (e.depot !== depot || e.run !== source.run) return e
     const prise = prises.some((p) => memePiste(p, e.titre))
     if (lotSuivant && !prise) return e
-    // EN PARALLÈLE (conv-1333) : un lot suivant a pu s'enregistrer avant le lot 1, qui ne défait pas
+    // EN PARALLÈLE : un lot suivant a pu s'enregistrer avant le lot 1, qui ne défait pas
     // ses pistes en remettant le scout à plat.
     if (decoupee && !prise && e.choix === 'prise') return e
-    // NOTÉE SANS RUN (à son arrivée dans le fil, conv-1341) : un run déjà connu reste celui qui a
+    // NOTÉE SANS RUN (à son arrivée dans le fil) : un run déjà connu reste celui qui a
     // traité la piste, seul un autre run le remplace.
     if (prise && !entree.run && e.traitePar) return { ...e, choix: 'prise' }
     const suivante: EntreeMemoireScout = { ...e }
@@ -309,7 +309,7 @@ export function pistesDejaLivrees(entree: {
 }
 
 /*
- * LES PISTES QUE L'UTILISATEUR A VRAIMENT JUGÉES (piste 5, conv-1033). Un scout réparé garde une
+ * LES PISTES QUE L'UTILISATEUR A VRAIMENT JUGÉES (piste 5). Un scout réparé garde une
  * ligne par VERSION de son tableau, et la sélection les marque toutes : run-8e6410f195c5-1 comptait
  * 93 lignes jugées pour 11 versions, alors que son dernier tableau — le seul affiché — en avait 9.
  * Seule la DERNIÈRE version de chaque run compte : un titre qui n'existe que dans une version
@@ -357,7 +357,7 @@ export const MIN_PISTES_JUGEES = 5
 /**
  * Le bilan des choix RÉELS sur ce dépôt, rendu au scout suivant : combien de pistes sont prises, la
  * note moyenne des prises face à celle des laissées, et le taux de prise par type. C'est la note
- * « ajustée sur ce que l'utilisateur choisit vraiment » (piste 7 de conv-890) : le scout reçoit la
+ * « ajustée sur ce que l'utilisateur choisit vraiment » (piste 7) : le scout reçoit la
  * mesure, au lieu de noter sur son seul avis. Moins de `MIN_PISTES_JUGEES` : chaîne vide.
  */
 export function bilanDesChoix(entree: {
@@ -405,17 +405,17 @@ export function bilanDesChoix(entree: {
 }
 
 /*
- * CE QUE SONT DEVENUES LES PISTES PRISES (piste 1, conv-1033) : le résultat du run qui les a traitées,
+ * CE QUE SONT DEVENUES LES PISTES PRISES (piste 1) : le résultat du run qui les a traitées,
  * lu dans ce que l'app note déjà. Seuls les runs FINIS comptent ; aucun → rien n'est dit. « en échec »
  * reste un fait sur le RUN, pas un verdict sur la piste : la classe d'un échec est déduite d'un motif
  * de texte (`commands.ts`), et un run peut échouer pour une cause sans rapport avec elle.
  *
- * ON COMPTE LES RUNS, PAS LES LIGNES (conv-1341, 2026-10-30). Le compte par piste donnait « 1 livrée,
+ * ON COMPTE LES RUNS, PAS LES LIGNES (2026-10-30). Le compte par piste donnait « 1 livrée,
  * 17 en échec » : 4 runs finis, dont 3 lots de 5, 4 et 8 pistes refusés le 22/10. Les trois avaient
  * un verdict du juge de 86 à 88, et leur travail est dans `origin/main` (5b3d42c1, 531a4778, cf450830) :
- * l'app n'avait pas pu publier, à cause de fichiers en cours dans d'autres fils (conv-1070, conv-1077)
- * ou d'un conflit avec des commits arrivés sur `main` (conv-1074), et ils l'ont été à la main dans la
- * journée, en partie seulement pour conv-1077 (5 pistes sur 8). Le journal des résultats garde ces 3
+ * l'app n'avait pas pu publier, à cause de fichiers en cours dans d'autres fils
+ * ou d'un conflit avec des commits arrivés sur `main`, et ils l'ont été à la main dans la
+ * journée, en partie seulement (5 pistes sur 8). Le journal des résultats garde ces 3
  * runs en `defect`, d'où la réserve écrite dans la ligne : c'est l'état du run à sa clôture, et un
  * scout l'avait lue comme « vos pistes n'aboutissent pas ». Les pistes prises sans run ne sont pas
  * comptées comme traitées : elles se disent.
@@ -458,7 +458,7 @@ export interface BilanDUneVoie {
 }
 
 /**
- * LA MESURE DU WORKFLOW INTELLIGENT (conv-1080) : pour chaque voie, les pistes prises dont le run a
+ * LA MESURE DU WORKFLOW INTELLIGENT : pour chaque voie, les pistes prises dont le run a
  * fini, et celles qu'il a livrées. C'est l'option « noter puis régler » des routeurs entraînés sur
  * leurs résultats (Not Diamond, RouteLLM) ramenée à ce qu'on peut compter honnêtement : un run
  * couvre tout son lot, donc une piste livrée est une piste d'un lot livré. Les seuils du choix
@@ -518,12 +518,12 @@ export const MIN_PISTES_PAR_TYPE = 3
 export type FacteursChoix = Partial<Record<'fix' | 'new', number>>
 
 /**
- * LA NOTE AJUSTÉE SUR CE QUE L'UTILISATEUR PREND (piste 7 de conv-890, à la lettre) : pour chaque
+ * LA NOTE AJUSTÉE SUR CE QUE L'UTILISATEUR PREND (piste 7, à la lettre) : pour chaque
  * type, son taux de prise rapporté au taux global, tous deux lissés (+1 / +2) pour qu'un petit
  * échantillon ne pèse pas comme un grand. Borné à [0,5 ; 1,5] ; un écart de moins de 5 % est omis.
  * Tout pris, ou rien : les choix ne départagent rien, aucun facteur.
  * fix-ok: le bilan (`bilanDesChoix`) n'était qu'un texte remis au modèle : la note restait SON avis
- * (objection du juge, conv-890) ; ce facteur est appliqué en code par `ajusterNotesSurChoix`.
+ * (objection du juge) ; ce facteur est appliqué en code par `ajusterNotesSurChoix`.
  */
 export function facteursDesChoix(entree: {
   depot: string
@@ -558,7 +558,7 @@ export function facteursDesChoix(entree: {
 }
 
 /*
- * UN CHOIX VIEILLIT (piste 6, conv-1033). Les 11 premières pistes prises venaient des 15 et 16/10,
+ * UN CHOIX VIEILLIT (piste 6). Les 11 premières pistes prises venaient des 15 et 16/10,
  * d'une même séance sur les animations, et pesaient autant qu'un choix d'hier sur un tout autre
  * sujet. Le poids d'un choix est divisé par deux toutes les `DEMI_VIE_CHOIX_JOURS`. 14 jours est un
  * choix, pas une mesure : assez court pour qu'une séance d'il y a un mois ne pèse plus qu'un quart.
@@ -617,7 +617,7 @@ export function pistesDejaConnues(entree: {
 }
 
 /*
- * SEULEMENT LES PISTES QUI TOUCHENT LA DEMANDE, ET UNE SEULE FOIS CHACUNE (conv-339).
+ * SEULEMENT LES PISTES QUI TOUCHENT LA DEMANDE, ET UNE SEULE FOIS CHACUNE.
  *
  * Un /scout sur les humains de l'Accueil (« ultra quali comme dans Cyberpunk ») a reçu 60 titres
  * « DÉJÀ PROPOSÉ » : les plus récents du dépôt, quel qu'en soit le sujet — outils, serveurs MCP,
@@ -627,14 +627,14 @@ export function pistesDejaConnues(entree: {
  * Règle lexicale, donc testable : un titre est gardé s'il partage une racine de mot avec la demande.
  * Une demande SANS sujet (« /scout améliore Autowin ») garde l'ancien comportement : tous les titres
  * récents, car c'est là que le scout risque le plus de refaire le précédent.
- * fix-ok: bloc réel de la consigne du scout de conv-339 (fixture scout-conv-339-deja-propose.txt) :
+ * fix-ok: bloc réel de la consigne du scout (fixture scout-conv-339-deja-propose.txt) :
  * 36 titres d'outillage sur 60 passaient, « mot de passe tapé dans le chat » 3 fois (scout-memoire.test.ts).
  */
 
 /*
  * LE SUJET D'UNE PISTE SE LIT AUSSI SUR SON RUN. Un scout répond à UNE demande : ses pistes en
  * partagent le sujet, même quand leurs mots diffèrent. Filtrées titre par titre, les 9 pistes du
- * scout de conv-339 sur les humains n'en gardaient qu'une (« Humains filmés en volume ») : « peau »,
+ * scout sur les humains n'en gardaient qu'une (« Humains filmés en volume ») : « peau »,
  * « visages », « passants », « ombres », « foule » ne disent pas « humains », et le scout suivant sur
  * le sujet les aurait reproposées. Un mot de la demande désigne donc les runs ENTIERS dont un titre
  * le porte — s'il est rare : présent dans un run sur cinq au plus. Un mot courant ne désigne rien,
@@ -643,7 +643,7 @@ export function pistesDejaConnues(entree: {
  * héritée » cite un objet en passant, et faisait revenir les 57 titres du scout sur les outils pour
  * une demande sur le graphe du chat. Limite : un run qui n'a jamais employé un mot de la demande
  * n'est reconnu que titre par titre.
- * fix-ok: rejeu de `pistesDejaConnues` sur `scout-pistes.json` réel, demande de conv-339 : 1 titre
+ * fix-ok: rejeu de `pistesDejaConnues` sur `scout-pistes.json` réel, demande : 1 titre
  * sur les humains rendu, contre les 9 pistes de run-f085fcccbb82-1 (objection du juge).
  */
 function runsQueLaDemandeDesigne(
@@ -679,7 +679,7 @@ function runsQueLaDemandeDesigne(
 /*
  * UN GRAND TABLEAU N'A PAS UN SUJET. « Un scout = un sujet » vaut pour un tableau de scout ordinaire :
  * sur la mémoire réelle du 19/10, 17 runs sur 18 n'ont que des tableaux de 3 à 9 lignes (un run
- * refait garde une ligne par version : 3 × 9 pour celui de conv-339). Le 18e, run-b83811373741-1,
+ * refait garde une ligne par version : 3 × 9 pour celui). Le 18e, run-b83811373741-1,
  * a des tableaux de 25 et 27 lignes : un inventaire des outils, du navigateur, de Teams, du coffre et
  * du téléphone. « téléphone » n'y est que dans 2 titres, et ramenait ses 57 titres. Un run dont un
  * tableau dépasse 12 lignes ne revient donc que titre par titre. 12 sépare le plus grand tableau

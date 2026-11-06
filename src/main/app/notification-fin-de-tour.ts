@@ -1,8 +1,8 @@
 /**
- * FIL ASYNCHRONE — la fin d'un tour vient chercher l'utilisateur (conv-1038, 2026-10-21).
+ * FIL ASYNCHRONE — la fin d'un tour vient chercher l'utilisateur (2026-10-21).
  *
  * Pourquoi : un tour de chat dure 226 s en médiane et ~17 min au 90e centile (mesure du scout
- * conv-1038 sur les fils enregistrés). L'utilisateur part faire autre chose ; rien ne le rappelait,
+ * un fil sur les fils enregistrés). L'utilisateur part faire autre chose ; rien ne le rappelait,
  * sauf la jauge de la barre des tâches et la pastille « non lu », invisibles hors de la fenêtre. La
  * seule notification Windows du main signalait un travail ABANDONNÉ (`os.ts`, `onAbandon`).
  *
@@ -35,12 +35,12 @@ export type ContenuNotification = {
    */
   suites?: string[]
   /**
-   * Titre NU du fil et issue du tour : la carte en bas à droite (`notification-popup.ts`, conv-1066)
+   * Titre NU du fil et issue du tour : la carte en bas à droite (`notification-popup.ts`)
    * les met sur deux lignes distinctes, là où la bulle Windows les recolle dans `title`.
    * fix-ok: pas un correctif à l'aveugle — les trois modifications de ce fichier posent ce même
    * couple `fil`/`issue` (ce type, le retour d'échec, le retour réussi), parce que `title` colle le
    * titre du fil à son issue ; attentes de notification-fin-de-tour.test.ts rouges avant, vertes
-   * après (conv-1066).
+   * après.
    */
   fil: string
   issue: 'prete' | 'echec'

@@ -3,7 +3,7 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
- * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-165) : « en mode mosaique ce bouton doit etre plus
+ * DEMANDE DE L'UTILISATEUR (2026-10-10) : « en mode mosaique ce bouton doit etre plus
  * haut, tout en bas de la partie chat » (capture : « ↓ Dernier message » pose SUR le champ de
  * saisie). Cause : `bottom: 72px` se mesurait depuis le bas de TOUTE la fenetre, et la saisie a
  * deux etages est plus haute que 72 px. La pastille doit suivre le bas du FIL, quelle que soit la
@@ -30,7 +30,7 @@ describe('pastille « ↓ Dernier message » de la mosaique', () => {
     expect(pastille.bottom).not.toMatch(/^\d+px$/)
   })
 
-  // Depuis conv-817 la fenetre EST un panneau de chat : son fil (`.chat-scroll`) porte l'ancre
+  // la fenetre EST un panneau de chat : son fil (`.chat-scroll`) porte l'ancre
   // `--chat-fil` du chat plein (cosmic-outline.css). Chaque fenetre doit la borner a elle-meme,
   // ainsi que celle de la saisie, sinon toutes les pastilles et tous les panneaux lisent la DERNIERE.
   it('chaque fenetre borne a elle-meme les ancres du fil et de la saisie', () => {

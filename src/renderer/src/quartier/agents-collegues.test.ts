@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LES AGENTS DES COLLÈGUES (conv-1429, lot 4) : ce qui décide de ce que la scène montre.
+ * LES AGENTS DES COLLÈGUES (lot 4) : ce qui décide de ce que la scène montre.
  * Couleur stable par poste, validation d'une donnée venue d'un autre poste, plafond, mode du bouton.
  */
 import { afterEach, describe, expect, it } from 'vitest'

@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * PARITÉ claude.exe — « orienter only, pas de queue » (demande du 2026-08-21, conv-1361).
+ * PARITÉ claude.exe — « orienter only, pas de queue » (demande du 2026-08-21).
  *
  * Un message tapé PENDANT un tour partait en FILE D'ATTENTE : l'agent ne le voyait qu'au tour
  * suivant, et l'utilisateur voyait un bloc « File d’attente » au lieu d'un effet. Le comportement
@@ -71,7 +71,7 @@ describe('ChatView — pendant un tour, un message ordinaire ORIENTE (pas de fil
 
     expect(injecte).toHaveBeenCalled()
     // Repli en file : plus aucun affichage, mais le texte reste visible via son reçu. Un refus n'est
-    // pas une panne : le reçu dit qu'il attend la fin du tour (conv-891), plus « Échec ».
+    // pas une panne : le reçu dit qu'il attend la fin du tour, plus « Échec ».
     expect(harness!.container.querySelector('.directive-receipt-status')?.textContent).toContain(
       'Attend la fin du tour'
     )

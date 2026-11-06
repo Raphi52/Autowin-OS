@@ -97,7 +97,7 @@ describe('vue Bureaux cachés — TOUS les bureaux, quel que soit le fil (conv-9
     expect(r).toEqual({ ok: false, message: 'capture morte' })
   })
 
-  // conv-344 (scout n°7) : la liste passe par le processus de capture DÉJÀ ouvert (CapteurHdesk),
+  // scout n°7 : la liste passe par le processus de capture DÉJÀ ouvert (CapteurHdesk),
   // plus par un PowerShell neuf à chaque tour. bureauxGeres ne lance plus rien lui-même.
   it('chaque tour interroge la source donnée, une fois, et relie les fiches', async () => {
     const lire = vi.fn(async () => ({ ok: true as const, vivants: ['zox'] }))
@@ -140,7 +140,7 @@ describe('vue Bureaux cachés — Fermer passe le fil de la FICHE', () => {
     expect(r.message).toMatch(/fil/)
   })
 
-  // conv-344 (scout n°1) : ce cas rendait « Ce bureau n'a pas de fiche » alors que le script sait
+  // scout n°1 : ce cas rendait « Ce bureau n'a pas de fiche » alors que le script sait
   // fermer ces bureaux depuis le 17/10 (-SansFiche, commit 41359673) — la vue ne le lui demandait pas.
   it('bureau sans fiche : fermé en mode « sans fiche », SANS fil — jumeau du cas avec fiche', async () => {
     const fermer = vi.fn(async (_r: string, _d: DemandeFermeture) =>
@@ -164,7 +164,7 @@ describe('vue Bureaux cachés — Fermer passe le fil de la FICHE', () => {
     expect(r.message).toMatch(/n’existe plus/)
   })
 
-  // conv-1374 (2026-10-31) : hdesk-fermer.ps1 rend aussi 2 pour un bureau VIVANT absent du registre
+  // 2026-10-31 : hdesk-fermer.ps1 rend aussi 2 pour un bureau VIVANT absent du registre
   // (fiche disparue entre la lecture et l'appel, `sansFiche: false`). Le traduire « n'existe plus »
   // annoncerait fermé un bureau qui tourne encore.
   it('bureau vivant absent du registre (code 2, sansFiche: false) : échec, le message du script remonte', async () => {
@@ -273,7 +273,7 @@ describe('vue Bureaux cachés — Créer', () => {
     expect(executer).toHaveBeenCalledTimes(1)
   })
 
-  // conv-344 (scout n°3) : le lanceur rend 2 quand l'app meurt AVANT sa fenêtre (instance unique qui
+  // scout n°3 : le lanceur rend 2 quand l'app meurt AVANT sa fenêtre (instance unique qui
   // passe la main, plantage au démarrage) — avant, 30 s d'attente puis « aucune fenêtre » (code 3).
   it('app arrêtée avant sa fenêtre (code 2) : le dit en clair, avec son code de sortie', async () => {
     const { deps } = depsCreation({
@@ -369,7 +369,7 @@ describe.skipIf(process.platform !== 'win32')('vue Bureaux cachés — chaîne r
 })
 
 /**
- * conv-344 — la question de départ : « pk je suis obligé de choisir un path de programme ? ». Le
+ * La question de départ : « pk je suis obligé de choisir un path de programme ? ». Le
  * chemin reste obligatoire (un bureau vide est détruit par Windows), mais il se CHOISIT (scout n°10)
  * et l'identifiant se PROPOSE (n°11).
  */
@@ -404,7 +404,7 @@ describe('vue Bureaux cachés — choisir l’application (conv-344)', () => {
   })
 })
 
-/** conv-344 (scout n°6) : « Relancer » un bureau fermé sans tout retaper. */
+/** scout n°6 : « Relancer » un bureau fermé sans tout retaper. */
 describe('vue Bureaux cachés — Récents (historique des lancements)', () => {
   const histo = (lignes: string[]): string => {
     const d = mkdtempSync(join(tmpdir(), 'hdesk-recents-'))
@@ -470,7 +470,7 @@ describe('vue Bureaux cachés — Récents (historique des lancements)', () => {
   })
 })
 
-/** conv-344 (scout n°5) : le journal des gestes (écrit par hdesk-act.ps1) sur la carte du bureau. */
+/** scout n°5 : le journal des gestes (écrit par hdesk-act.ps1) sur la carte du bureau. */
 describe('vue Bureaux cachés — derniers gestes du bureau', () => {
   it('journal absent : aucun geste', () => {
     expect(lireGestes(mkdtempSync(join(tmpdir(), 'hdesk-gestes-vide-')), 'zox')).toEqual([])

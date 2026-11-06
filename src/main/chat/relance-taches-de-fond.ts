@@ -23,8 +23,8 @@ import { survivableExitCode, writeSurvivableExit } from '../runs/stdout-journal'
 /**
  * UNE COMMANDE SHELL COUPÉE EN FIN DE TOUR EST RELANCÉE HORS DU TOUR, ET SON RÉSULTAT REVIENT.
  *
- * Le CLI `-p` arrête les tâches de fond à la fin du tour (conv-528 : `task_notification` `stopped`
- * 263 ms avant `done` ; conv-42 : 6 essais perdus). L'app ajoutait seulement « relance la demande »
+ * Le CLI `-p` arrête les tâches de fond à la fin du tour (`task_notification` `stopped`
+ * 263 ms avant `done` ; : 6 essais perdus). L'app ajoutait seulement « relance la demande »
  * et le mode auto se mettait en pause : le résultat était perdu, et c'était à l'utilisateur de
  * relancer.
  *
@@ -38,7 +38,7 @@ import { survivableExitCode, writeSurvivableExit } from '../runs/stdout-journal'
  * au démarrage suivant (`reprendreAuDemarrage`). Une durée maximale borne l'attente : au-delà, la
  * commande est arrêtée et le tour de reprise le DIT.
  *
- * fix-ok: conv-253 tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e — aucun registre ne disait qu'Autowin
+ * fix-ok: tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e — aucun registre ne disait qu'Autowin
  * avait relancé la tâche, d'où l'avis « perdu » (delta at=1791731278911) ; 3 édits = construction
  * du registre en plusieurs pas ; relance-taches-de-fond.registre.test.ts rouge 2/3 puis vert.
  * Posé ICI, hors du bloc de 6ec03033, pour que ce commit s'annule seul d'un `git revert`.
@@ -150,7 +150,7 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
   const surveiller = async (lot: string, taches: TacheRelancee[]): Promise<void> => {
     /*
      * INSCRITE AVANT D'ATTENDRE : le tour suivant doit savoir qu'elle tourne. Sinon le CLI repris
-     * la dit « stopped » et `claude.ts` concluait « son résultat est perdu » (conv-253, tour
+     * la dit « stopped » et `claude.ts` concluait « son résultat est perdu » (tour
      * bdfe38d3-5ba5-4693-bad2-f70b39bc845e) — le modèle relançait alors un doublon.
      */
     for (const tache of taches)
@@ -181,7 +181,7 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
       sortie: tache.journalPath ? lireSortieSure(tache.journalPath) : ''
     }))
     /*
-     * RENDU AVANT L'ENVOI, pas après (conv-1211, 2026-10-28) : `envoyerTour` attend la FIN du tour de
+     * RENDU AVANT L'ENVOI, pas après (2026-10-28) : `envoyerTour` attend la FIN du tour de
      * reprise. Effacé seulement ensuite, le lot survivait à un redémarrage fait PENDANT ce tour
      * (`restart_app`), et `reprendreAuDemarrage` renvoyait la même reprise : un tour payé pour rien.
      * Un échec d'envoi effaçait déjà le lot ; seul s'ajoute l'instant entre cet effacement et
@@ -257,7 +257,7 @@ export function creerRelanceurTachesDeFond(deps: DependancesRelance): RelanceurT
 /**
  * L'en-tête du message de reprise. Il sert AUSSI de marque : ce message est écrit par Autowin, pas
  * par l'utilisateur, et le contrôle des deux lectures ne doit jamais lui demander de choisir entre
- * deux sens d'un texte qu'il n'a pas écrit (conv-1118, 2026-10-23 : « tâche de fond » lu comme un
+ * deux sens d'un texte qu'il n'a pas écrit (2026-10-23 : « tâche de fond » lu comme un
  * changement d'affichage, à cause du mot « fond »).
  */
 export const ENTETE_REPRISE_AUTOMATIQUE = '[Reprise automatique]'
@@ -466,7 +466,7 @@ export function creerRelanceurSurDisque(entree: {
     // ce que cette session a lance (test « ne tue JAMAIS un pid lance par une autre session »)...
     // ...OU le relais qui porte encore, dans sa ligne de commande, le chemin de CE journal. Sans ce
     // second cas, une commande relancee avant un redemarrage n'etait plus jamais arretee : mesure du
-    // 2026-10-19 (conv-359), une boucle d'attente tournait encore 2 h apres sa duree maximale. Tuer
+    // 2026-10-19, une boucle d'attente tournait encore 2 h apres sa duree maximale. Tuer
     // le relais suffit : la commande entiere tombe avec lui, bash et sous-processus compris (test
     // « ARRETE le relais d'une autre session » : zero processus restant), sans preuve de sortie.
     arreter: async (pid, journalPath) => {

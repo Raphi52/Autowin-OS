@@ -5,8 +5,8 @@
  * UTF-8. Or, sous Windows, `cmd.exe` et les outils du système (`ping`, `where`, `chcp`…) écrivent
  * dans la page de code OEM de leur console — 850 sur un poste français, où « é » vaut l'octet 0x82.
  * Un tel octet n'est pas de l'UTF-8 valide : `Buffer.toString('utf8')` le remplace en silence par
- * U+FFFD. `murs-rencontres.json` en gardait la trace : conv-92 « ex�cutable ou un fichier de
- * commandes », conv-129 « re�us ». Décoder morceau par morceau pouvait EN PLUS couper un caractère
+ * U+FFFD. `murs-rencontres.json` en gardait la trace : « ex�cutable ou un fichier de
+ * commandes », « re�us ». Décoder morceau par morceau pouvait EN PLUS couper un caractère
  * multi-octets entre deux morceaux, d'où deux « � » au lieu d'un caractère valide.
  *
  * LA CORRECTION tient en deux gestes :

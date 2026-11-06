@@ -9,7 +9,7 @@ import { appliquerLangue } from '../langue'
 
 /**
  * SETTINGS · INTERFACE SUIT LA LANGUE : la liste des thèmes et le réglage de la mascotte (traduction
- * anglaise, conv-1170, lot « Noms des thèmes, mascotte, décors de l’accueil et derniers fichiers »).
+ * anglaise, lot « Noms des thèmes, mascotte, décors de l’accueil et derniers fichiers »).
  * Entrée qui doit faire échouer ce test : un texte de la mascotte laissé en dur, un nom de thème
  * affiché sans passer par la langue, un composant qui ne se redessine pas quand elle change, ou un
  * français modifié par la traduction.

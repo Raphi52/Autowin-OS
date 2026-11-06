@@ -4,7 +4,7 @@
  * `persistOrchestrationPhaseStart` (main) écrit un événement de trace `status: 'running'` au
  * DÉMARRAGE d'une phase, et compte sur l'événement terminal pour dire la suite. L'app tuée en pleine
  * phase, ce terminal n'arrive jamais : le `running` reste sur disque, et le graphe le relit
- * indéfiniment comme une étape active. C'est le « je vois encore des choses en cours » de conv-1056.
+ * indéfiniment comme une étape active. C'est le « je vois encore des choses en cours ».
  *
  * La réconciliation se fait ICI, à la lecture, parce que c'est le seul endroit qui connaît la
  * réponse : hors run vivant sur cette conversation, un `running`/`pending` persisté est par
@@ -37,7 +37,7 @@ export function statusLabel(status: string | undefined): string {
 
 /**
  * Libellé du statut d'un nœud. Un GROUPE d'appels en échec dit combien ont échoué : « 1 échec »
- * sous « Commandes ×10 », pas « échec », qui se lisait « les 10 ont échoué » (conv-937).
+ * sous « Commandes ×10 », pas « échec », qui se lisait « les 10 ont échoué ».
  */
 export function statusLabelDuNoeud(
   status: string | undefined,

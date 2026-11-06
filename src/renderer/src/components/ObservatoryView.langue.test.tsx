@@ -7,7 +7,7 @@ import type { HarnessTraceEvent } from './harness-timeline-model'
 import { appliquerLangue } from '../langue'
 
 /**
- * L'ÉCRAN OBSERVATORY SUIT LA LANGUE (traduction anglaise, conv-1170, lot « Observatory »). Entrée
+ * L'ÉCRAN OBSERVATORY SUIT LA LANGUE (traduction anglaise, lot « Observatory »). Entrée
  * qui doit faire échouer ce test : un libellé de l'en-tête, du rail ou de la barre de la chronologie
  * laissé en dur en français, ou un écran qui ne se redessine pas quand la langue change.
  */

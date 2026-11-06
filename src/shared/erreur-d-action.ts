@@ -1,5 +1,5 @@
 /**
- * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE, sans un seul appel au modèle (conv-341, 2026-10-19).
+ * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE, sans un seul appel au modèle (2026-10-19).
  *
  * Demande de l'utilisateur : « quand y a une action rouge, c'est possible d'avoir le message d'erreur
  * que l'action a rencontré ? […] un truc qui coûte pas de token ». Le bloc Actions ne montrait que
@@ -16,7 +16,7 @@
 import { ACTIONS_LINE_MAX } from './chat-turn'
 
 /**
- * Une ligne du journal d'actions plafonne à `ACTIONS_LINE_MAX` (chat-turn.ts). Avant conv-1228
+ * Une ligne du journal d'actions plafonne à `ACTIONS_LINE_MAX` (chat-turn.ts).
  * (2026-10-28), 300 caractères : le message d'erreur d'une action rouge était amputé au bout de
  * deux lignes, souvent avant la ligne qui disait POURQUOI.
  */

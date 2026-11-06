@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * COULEUR DES LIGNES D'OUTILS du déroulé (conv-1105, 2026-10-22) : « donne une couleur propre aux
+ * COULEUR DES LIGNES D'OUTILS du déroulé (2026-10-22) : « donne une couleur propre aux
  * lignes d'outils du graphe de l'Observatory, dans tous les thèmes ». Une ligne d'outil (Bash, Read…)
  * prenait le gris par défaut de `.observatory-gantt__lane`. Elle doit se distinguer d'un coup d'œil de
  * CHAQUE agent (orchestrateur, scout, judge…) dans CHAQUE thème : la couleur effective d'une phase y
@@ -34,7 +34,7 @@ const lire = (chemin: string): string => readFileSync(new URL(chemin, import.met
 function couleurs(css: string, prefixe = ''): Map<string | null, string> {
   const echappe = prefixe.replace(/[[\]().*'=^$]/g, '\\$&')
   // Le bord gauche se REGARDE sans se consommer : l'accolade qui ferme une règle ouvre la suivante,
-  // et la consommer sautait une règle sur deux (orchestrator, think… lus absents, conv-1105).
+  // et la consommer sautait une règle sur deux (orchestrator, think… lus absents).
   const regle = new RegExp(
     `(?<=^|[},]|\\*/)\\s*${echappe ? `${echappe}\\s+` : ''}\\.observatory-gantt__lane(?:\\[data-phase='([a-z]+)'\\])?\\s*{([^}]*)}`,
     'g'
@@ -105,7 +105,7 @@ function couchesDu(theme?: (typeof THEMES)[number]): Map<string | null, string>[
  * Couleur effective de chaque phase (et de `outil`) dans un thème, ou dans la base sans thème. On
  * suit la PRIORITÉ des sélecteurs, pas seulement l'ordre des feuilles : la ligne SANS phase d'un
  * thème (`:root[data-theme] .observatory-gantt__lane`, 0,3,0) bat la ligne AVEC phase de la base
- * (`.observatory-gantt__lane[data-phase]`, 0,2,0). Capture du 2026-10-22 (conv-1105) : sous Ninja,
+ * (`.observatory-gantt__lane[data-phase]`, 0,2,0). Capture du 2026-10-22 : sous Ninja,
  * dont la couche générée repeint la ligne par défaut en gris, les outils sortaient gris alors que
  * la première version de ce calcul, qui ignorait cette priorité, les disait vert-jaune.
  * `var(--gantt-defaut)` se résout comme le navigateur : jeton du thème, sinon celui de la base.
@@ -194,7 +194,7 @@ describe('Déroulé de l’Observatory — couleur des lignes d’outils (conv-1
   }
 
   /**
-   * Ninja (conv-1105, 2026-10-23) : sa couche générée recopiait la ligne SANS phase, en gris chaud,
+   * Ninja (2026-10-23) : sa couche générée recopiait la ligne SANS phase, en gris chaud,
    * avec la priorité d'un thème (0,3,0). Scout, build et judge, que la transposition ne change pas,
    * n'y ont pas de règle à eux : ils prenaient ce gris au lieu de leur couleur (capture Ninja du 22/10).
    * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE CAS : une règle `:root[data-theme] .observatory-gantt__lane` sans phase.
@@ -220,7 +220,7 @@ describe('Déroulé de l’Observatory — couleur des lignes d’outils (conv-1
   })
 
   /**
-   * Ninja (conv-1105, 2026-10-23) : une ligne SANS couleur à elle (salvage, toute étape hors de la
+   * Ninja (2026-10-23) : une ligne SANS couleur à elle (salvage, toute étape hors de la
    * liste) prend la couleur par défaut. Une fois retirée la copie du défaut qui écrasait scout, build
    * et judge, ce défaut redevenait le gris BLEUTÉ de la base (#8c96a8), que Ninja transpose partout
    * ailleurs en gris chaud (capture obs-1105-ninja-phases-b.png, ligne salvage).

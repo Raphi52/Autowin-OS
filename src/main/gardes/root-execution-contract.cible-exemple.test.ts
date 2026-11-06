@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { ciblesNommees } from './root-execution-contract'
 
 /**
- * UN FICHIER CITÉ EN EXEMPLE N’EST PAS UNE CIBLE (conv-1618, 2026-11-05 ; correctif conv-1626).
+ * UN FICHIER CITÉ EN EXEMPLE N’EST PAS UNE CIBLE (2026-11-05).
  *
- * La demande de conv-1618 citait deux fichiers comme POINTS DE COMPARAISON, au format « chemin:ligne » :
+ * La demande citait deux fichiers comme POINTS DE COMPARAISON, au format « chemin:ligne » :
  * « alors que le verrou V2 prend celle du serveur de base (X:31) » et « utilise le TimeProvider
  * déjà employé dans Y:77 ». Le contrôle final les a pris pour les fichiers à modifier, et a refusé 202
  * fois de suite un travail juste et publié (364 $). Les vrais fichiers à corriger étaient cités par
@@ -67,7 +67,7 @@ describe('ciblesNommees : un fichier cité en exemple n’est pas un fichier à 
     ).toEqual(['src/main/x.ts'])
   })
 
-  // conv-1613 (2026-11-05, correctif conv-1625) : phrase recopiée mot pour mot de sa demande. Le
+  // 2026-11-05 : phrase recopiée mot pour mot de sa demande. Le
   // fichier était cité comme LECTEUR à mesurer ; le contrôle a exigé sa modification 220 fois (402 $).
   it('demande verbatim conv-1613 : un lecteur cité entre parenthèses d’une mesure n’est pas une cible', () => {
     expect(

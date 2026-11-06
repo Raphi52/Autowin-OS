@@ -1,5 +1,5 @@
 /**
- * « ESSAIE 3 FAÇONS » : COMPARER LES FAÇONS, PUIS « GARDER CELLE-CI » (conv-1038, 2026-10-21 —
+ * « ESSAIE 3 FAÇONS » : COMPARER LES FAÇONS, PUIS « GARDER CELLE-CI » (2026-10-21 —
  * idée 6 du scout : « une carte compare les écarts, les tests et le coût, et fusionne la gagnante »).
  *
  * Chaque façon travaille dans sa copie séparée, ouverte à une PHOTO du code (`photo-du-code.ts`,
@@ -56,7 +56,7 @@ export function lireNomDEssai(copie: string, dossierDesRetours: string): EssaiNo
   // Le nom que pose `ouvrirCopiesDEssai`, lu par la même fonction que l'interface.
   const nom = nomDeCopieDEssai(basename(resolve(copie)))
   if (!nom) return null
-  // fix-ok: conv-1038, 2026-10-21 — l'écart puis « Garder » relisaient la photo par
+  // fix-ok: 2026-10-21 — l'écart puis « Garder » relisaient la photo par
   // `refDePhoto(...) as string` et `lireNomDEssai(...) as EssaiNomme`, deux conversions qui ne
   // tenaient que par cette garde, invisible au typage. La référence est portée ici, une fois.
   // Test : garder-un-essai.test.ts (fil avec espace ou `..`, référence portée) — rouge puis vert.

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 /**
  * IDENTITE D'ENTREPRISE, LUE EN OPTION — jamais ecrite dans le code.
  *
- * Pourquoi (2026-10-13, conv-913) : la version publique du depot ne doit porter aucune donnee
+ * Pourquoi (2026-10-13) : la version publique du depot ne doit porter aucune donnee
  * propre a une entreprise. Ces donnees vivent dans `entreprise/<nom>/identite.json`, un dossier
  * absent de la version publique. Le code ne connait que des valeurs NEUTRES ; un profil present
  * leur ajoute ce que les postes de cette entreprise ont DEJA sur disque : les anciens noms de
@@ -52,7 +52,7 @@ export interface IdentiteApplication {
 }
 
 /**
- * DOMAINE METIER de l'entreprise (conv-916) : le vocabulaire que son Brain range a part — un scope
+ * DOMAINE METIER de l'entreprise : le vocabulaire que son Brain range a part — un scope
  * de notes, son theme, sa carte, ses projets de code. Le code n'en connait aucun : sans profil
  * (version publique), le graphe et le Brain n'ont pas de domaine metier.
  */
@@ -249,7 +249,7 @@ export function nomHistorique(
 /**
  * Recopie, dans l'environnement d'un processus enfant, chaque reglage NEUTRE sous son ancien nom.
  * Un serveur Brain deja installe sur le poste ne lit que l'ancien nom : sans cette recopie, il
- * retomberait sur ses defauts (port 8765, racine heritee) — le defaut vecu le 2026-09-03 (conv-8).
+ * retomberait sur ses defauts (port 8765, racine heritee) — le defaut vecu le 2026-09-03.
  */
 export function recopierNomsHistoriques(
   enfant: NodeJS.ProcessEnv,

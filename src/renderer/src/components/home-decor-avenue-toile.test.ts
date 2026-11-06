@@ -10,7 +10,7 @@ import {
 } from './home-decor-avenue-toile'
 
 /**
- * LA TOILE ÉLECTRIQUE DANS LE FOND DE L'ACCUEIL (conv-311).
+ * LA TOILE ÉLECTRIQUE DANS LE FOND DE L'ACCUEIL.
  *
  * Demande de l'utilisateur, après le /draft « des éléments plus trash et chaotiques pour le fond
  * d'écran d'acceuil » et le mélange « 1+3+4 » : « je choisi que tu implémente le 3 », la variante
@@ -19,11 +19,11 @@ import {
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE FICHIER :
  *   1. la toile posée dans la scène et non dans le décor → elle ne défile pas avec la marche ;
  *   2. une lumière ponctuelle ajoutée pour l'étincelle ou le néon → toutes les matières de la rue
- *      s'alourdissent, le gel de l'Accueil revient (conv-301 : 22 lumières → 8) ;
+ *      s'alourdissent, le gel de l'Accueil revient (22 lumières → 8) ;
  *   3. un maillage par câble → plus de 150 appels de dessin par travée ;
  *   4. les réglages de la variante 3 changés → ce n'est plus ce que l'utilisateur a choisi ;
  *   5. la toile montée APRÈS la compilation de la rue en tâche de fond, ou non animée dans `render`.
- *   6. (conv-319, « j'éclaircis les câbles devant le vaisseau ») des câbles effacés en pointillé au lieu
+ *   6. (« j'éclaircis les câbles devant le vaisseau ») des câbles effacés en pointillé au lieu
  *      d'entiers, un filet qui ne s'éclaircit plus devant le vaisseau, ou qui s'éclaircit ailleurs.
  */
 

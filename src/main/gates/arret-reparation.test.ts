@@ -12,7 +12,7 @@ import { CLOSURE_UPSTREAM_REFUSAL, arretDeLaReparation } from './stopgate'
  * Le renversement : le PROGRÈS décide, le compte devient un garde-fou de dernier ressort. Un run dont
  * les refus changent à chaque passage progresse — l'arrêter parce qu'un compteur est arrivé au bout
  * est ce que l'utilisateur reprochait. Un run dont le refus est identique ET hors de portée de
- * `build` ne peut rien changer : lui, on l'arrête tout de suite (mesuré conv-1242 : 3 passages, le
+ * `build` ne peut rien changer : lui, on l'arrête tout de suite (mesuré : 3 passages, le
  * même refus mot pour mot, 2 min brûlées).
  */
 describe('arrêt de la réparation', () => {

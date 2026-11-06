@@ -35,7 +35,7 @@ export interface ProdAutorisationHoteProps {
   /**
    * LE FIL ACTUELLEMENT AFFICHÉ. Une demande qui nomme une AUTRE conversation n'est pas montrée ici :
    * l'écran vit dans le fil, et une question posée ailleurs n'a pas à s'afficher sous une discussion
-   * qui n'a rien demandé (conv-626, 2026-09-16). Une demande SANS origine reste montrée partout —
+   * qui n'a rien demandé (2026-09-16). Une demande SANS origine reste montrée partout —
    * un geste de production bloqué ne doit pas devenir invisible faute d'étiquette.
    */
   conversationId?: string | null

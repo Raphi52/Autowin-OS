@@ -7,7 +7,7 @@ import { oublierQuestionsACote, useRaccourciQuestionACote } from './question-a-c
 import { BoutonQuestionACote, QuestionACote } from './QuestionACote'
 
 /**
- * LE PANNEAU DE LA QUESTION À CÔTÉ (conv-1362, lot 1/3). Le pont est simulé : le moteur a ses tests.
+ * LE PANNEAU DE LA QUESTION À CÔTÉ (lot 1/3). Le pont est simulé : le moteur a ses tests.
  *
  * Entrées qui doivent faire échouer ce fichier : Échap qui ne ferme pas, une fermeture qui laisse la
  * question tourner (ou qui annule alors que rien ne tourne), un motif sans message, plus de 5 questions

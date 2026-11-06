@@ -1,7 +1,7 @@
 import { enHexadecimal } from '../theme-mode'
 
 /**
- * LE THÈME DES SCHÉMAS MERMAID, TIRÉ DU THÈME DE L'APP (conv-1235, 2026-10-28 : « on pourrait
+ * LE THÈME DES SCHÉMAS MERMAID, TIRÉ DU THÈME DE L'APP (2026-10-28 : « on pourrait
  * rendre les graph mermaid plus beau ? »).
  *
  * Avant : `theme: 'dark'` figé. Les schémas gardaient la palette grise de mermaid, sa police
@@ -346,7 +346,7 @@ const PALETTE_FIGEE_DU_SANKEY = [
 ]
 
 /**
- * Repeint un sankey dessiné par mermaid aux teintes du thème (conv-1235, 2026-10-28) : chaque
+ * Repeint un sankey dessiné par mermaid aux teintes du thème (2026-10-28) : chaque
  * couleur figée devient la teinte pleine de même rang (`cScaleInv<rang>`, celle des barres
  * d'histogramme et des courbes du radar). Correspondance un pour un, donc un nœud et ses liens
  * gardent la même couleur. Un autre schéma, une couleur hors palette ou l'absence de thème laissent

@@ -7,7 +7,7 @@ import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 /**
  * LE GEL PÉRIODIQUE DE 18 SECONDES — mesuré, pas supposé.
  *
- * Détecteur de gel du 2026-08-28 (conv-1511) : sept blocages consécutifs du process main pendant que
+ * Détecteur de gel du 2026-08-28 : sept blocages consécutifs du process main pendant que
  * l'utilisateur écrivait dans le chat, ~18 000 ms chacun, à 60 secondes d'intervalle EXACT
  * (18:51:07, 18:52:15, 18:53:15, 18:54:14, 18:55:16, 18:58:15, 18:59:16) — 45 % du temps
  * d'exécution passé fenêtre morte, c'est-à-dire « ce programme ne répond pas ».

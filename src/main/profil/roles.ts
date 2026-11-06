@@ -41,7 +41,7 @@ export interface RoleBinding {
         model?: string
         reasoningEffort?: ReasoningEffort
         /**
-         * Modèle ADVISOR de l'étape (Claude Code `--advisor`, conv-1083) : par exemple build sur
+         * Modèle ADVISOR de l'étape (Claude Code `--advisor`) : par exemple build sur
          * Sonnet avec Opus en renfort aux moments qui décident. Absent = pas d'advisor (défaut).
          * Ne part que sur un accord accepté par le CLI (`providers/claude-advisor.ts`).
          */
@@ -60,13 +60,13 @@ export function resolvePhaseBinding(
   return {
     model: override?.model ?? binding.model,
     reasoningEffort: override?.reasoningEffort ?? binding.reasoningEffort,
-    // L'advisor est PAR ÉTAPE seulement : il n'hérite d'aucun réglage du rôle (conv-1083).
+    // L'advisor est PAR ÉTAPE seulement : il n'hérite d'aucun réglage du rôle.
     ...(override?.advisorModel ? { advisorModel: override.advisorModel } : {})
   }
 }
 
 /**
- * L'EFFORT PAR DÉFAUT D'UNE ÉTAPE (conv-955, 2026-10-15).
+ * L'EFFORT PAR DÉFAUT D'UNE ÉTAPE (2026-10-15).
  *
  * Mesuré dans `prompt-observability` : les 100 appels d'étapes et les 63 juges partaient TOUS à
  * l'effort du rôle (`xhigh`), qu'il s'agisse d'écrire le code (build) ou de noter une leçon (learn).
@@ -101,7 +101,7 @@ const CRANS_RENDUS_PAR_DIFFICULTE: Readonly<Record<TaskRegime, number>> = {
   trivial: -1
 }
 
-// fix-ok: conv-955 — cause mesuree : aucune regle ne choisissait l'effort par etape (prompt-observability :
+// fix-ok: cause mesuree : aucune regle ne choisissait l'effort par etape (prompt-observability :
 // 100 appels d'etapes et 63 juges, tous a l'effort du role `xhigh`) ; effort-par-etape.test.ts rouge
 // (fonction absente) puis vert 10/10.
 export function effortParDefautDeLEtape(
@@ -169,16 +169,16 @@ const DEFAULT_BINDINGS: Record<Role, RoleBinding> = {
 }
 
 /**
- * LE MODÈLE DES PETITES TÂCHES (conv-264, 2026-10-11).
+ * LE MODÈLE DES PETITES TÂCHES (2026-10-11).
  *
  * Deux appels courts tournaient en fond, hors pipeline : le TRI des conversations (même sujet ou
- * nouveau fil ? — retiré le 2026-10-17, conv-305) et le CHOIX AUTOMATIQUE du workflow, qui reste. Aucun n'avait de réglage : le tri forçait le
+ * nouveau fil ? — retiré le 2026-10-17) et le CHOIX AUTOMATIQUE du workflow, qui reste. Aucun n'avait de réglage : le tri forçait le
  * défaut du code (`claude-fable-5`, 2× le prix d'Opus — 449 appels pour 28,68 $ relevés dans
  * `activity/*.jsonl`), le choix du workflow forçait l'effort `low` sur le modèle du chat.
  *
  * Désormais l'utilisateur le règle lui-même (écran Routeur, clé `petitesTaches` de `roles.json`).
  *
- * HAIKU PAR DÉFAUT (conv-1097, 2026-10-22). Demande de l'utilisateur : « utiliser haiku pour toutes
+ * HAIKU PAR DÉFAUT (2026-10-22). Demande de l'utilisateur : « utiliser haiku pour toutes
  * les petites opérations faciles qui n'ont qu'un résultat ». Ce sont des appels sans outil, à réponse
  * unique (un oui/non, un choix dans une liste) : la DÉCISION DU WORKFLOW (`os.ts`), les DEUX LECTURES
  * (`deux-lectures.ts`), le RANGEMENT DU PREMIER MESSAGE (`rangement-premier-message.ts`) et
@@ -221,7 +221,7 @@ export function bindingDesPetitesTaches(
 }
 
 /**
- * LE BUILD DES RUNS TRIVIAUX SUR HAIKU (conv-1097, 2026-10-22).
+ * LE BUILD DES RUNS TRIVIAUX SUR HAIKU (2026-10-22).
  *
  * Mesure : `scripts/banc-modeles-petits-defauts.mjs`, 4 petits défauts réels d'un seul fichier, effort
  * xhigh, test caché du vrai correctif comme juge. Haiku 5.5 a réussi 11/12 essais pour ≈ 0,05 $

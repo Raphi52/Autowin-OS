@@ -117,7 +117,7 @@ describe('ExecutionQuote', () => {
   })
 
   it("refuse un plan d'exécution impossible avant toute admission provider — en mode bloquant", () => {
-    // Depuis conv-1148 (13/08), le refus n'existe plus qu'en `blocking` : en mesure seule
+    // Depuis le 13/08, le refus n'existe plus qu'en `blocking` : en mesure seule
     // (défaut), le devis s'agrandit à la demande au lieu de tuer le run avant le premier appel.
     const quote = compileExecutionQuote('ajoute une page de réglages', {
       maxProviderCalls: 2,
@@ -140,7 +140,7 @@ describe('ExecutionQuote', () => {
 })
 
 describe('devis face à un workflow plus large que le régime', () => {
-  // Mesuré sur conv-1148 (13/08) : « Plan d’exécution impossible : 12 agent(s) obligatoires
+  // Mesuré (13/08) : « Plan d’exécution impossible : 12 agent(s) obligatoires
   // pour 10 place(s) restante(s) ». Le workflow choisi est un graphe DÉTERMINISTE au pire cas fini
   // et connu ; le refuser avant le premier appel contredit la décision utilisateur du 12/08
   // (« je m'en fous que ça dépense, détruis le blocage ») — le régime servait de plafond de
@@ -177,7 +177,7 @@ describe('devis face à un workflow plus large que le régime', () => {
 })
 
 /*
- * Regression du 2026-09-09 (conv-46). Trace du run run-3f7459905786-1 : devis `maxProviderCalls: 24`
+ * Regression du 2026-09-09. Trace du run run-3f7459905786-1 : devis `maxProviderCalls: 24`
  * pour `maxAgents: 5`. Les cinq places sont parties dans frame et le fan-out de build, puis le juge
  * FINAL a ete refuse sur « Budget d'agents atteint (5) » sans avoir rien consomme — le travail etait
  * fait et verifie, il n'a jamais ete publie.
@@ -191,7 +191,7 @@ describe('allocateExecutionTopology — un fan-out lance un agent PAR MEMBRE', (
     // Le provisionnement ne joue qu'en mesure seule : c'est le mode par défaut, on l'exige.
     expect(quote.limits.spendEnforcement).toBe('metering-only')
     /*
-     * La situation de conv-46 est REPRODUITE À LA MAIN (conv-770, 2026-09-28). Ce test exigeait
+     * La situation est REPRODUITE À LA MAIN (2026-09-28). Ce test exigeait
      * `maxAgents === 5` du régime, mais la décision utilisateur du 2026-09-12 (ceef36f8) avait déjà
      * relevé le régime standard à 500 têtes : il n'est jamais passé sur main. Et avec 500 places, les
      * deux assertions finales (> 5) passaient avec ou sans provisionnement — elles ne prouvaient plus

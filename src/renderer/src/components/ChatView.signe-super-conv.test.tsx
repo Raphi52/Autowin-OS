@@ -12,7 +12,7 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * conv-1395 (/draft « un signe distinctif pour les super convs dans la liste de gauche »,
+ * (/draft « un signe distinctif pour les super convs dans la liste de gauche »,
  * proposition retenue « 6 · Raccourci ») : la ligne d'un fil chef porte une pile, une jauge (un
  * segment par lot), le compte des lots finis et un raccourci « N ? » vers le lot qui attend ta
  * réponse. Un fil seul n'a rien de tout cela.
@@ -96,7 +96,7 @@ describe('ChatView — signe distinctif d’une super conv dans la liste', () =>
     )
     expect(segments).toEqual(['is-fini', 'is-question', 'is-afaire'])
     expect(chef?.querySelector('.conv-sc-compte')?.textContent).toBe('1/3')
-    // Structure de la maquette choisie (conv-1395, « ça ressemble pas du tout ») : titre, « N ? »
+    // Structure de la maquette choisie (« ça ressemble pas du tout ») : titre, « N ? »
     // puis « M/T » sur la ligne du titre, la jauge dessous.
     const raccourci = chef?.querySelector<HTMLElement>('.conv-sc-tete > .conv-sc-question')
     expect(raccourci?.textContent).toBe('2 ?')

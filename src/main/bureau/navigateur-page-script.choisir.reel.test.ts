@@ -1,6 +1,6 @@
 // @vitest-environment node
 /*
- * CHOISIR NE DOIT JAMAIS CLIQUER DANS LA PAGE — à la vraie souris (conv-1306, 2026-10-30).
+ * CHOISIR NE DOIT JAMAIS CLIQUER DANS LA PAGE — à la vraie souris (2026-10-30).
  *
  * Défaut mesuré : choisir le bouton « Payer » d'une page le déclenchait. happy-dom ne le voit pas :
  * il ne joue pas la séquence d'entrée d'un vrai navigateur (pointerdown → pointerup → mouseup →

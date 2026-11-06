@@ -4,7 +4,7 @@ import { ISSUES_CONNUES, issuePour, refusAvecIssue, type MotifRefus } from './is
 /**
  * UN REFUS SANS SORTIE FAIT BOUCLER — MESURÉ, PAS SUPPOSÉ.
  *
- * Le 2026-08-25 (conv-1404), `edit_file` a été refusé huit fois de suite sur le même message. Le
+ * Le 2026-08-25, `edit_file` a été refusé huit fois de suite sur le même message. Le
  * refus disait CE QUI N'ALLAIT PAS, jamais QUOI FAIRE. L'agent a donc retenté la seule chose qu'il
  * savait faire — la même édition — jusqu'à ce que le budget d'appels coupe le tour.
  *

@@ -6,7 +6,7 @@ import {
 } from './option-lecture-ou-solution'
 
 /**
- * Cas d'ancrage RÉEL — conv-1376, le 2026-08-23. C'est la séquence exacte qui a motivé ce module,
+ * Cas d'ancrage RÉEL, le 2026-08-23. C'est la séquence exacte qui a motivé ce module,
  * pas un exemple inventé : l'utilisateur décrit ce qu'il constate, l'assistant lui propose une
  * solution technique déjà choisie, il clique, et ce texte devient l'objectif du run.
  */
@@ -38,7 +38,7 @@ describe('une option cliquable est-elle une lecture du besoin, ou une solution d
   })
 
   it('juge le texte ENVOYÉ, pas le libellé affiché — c’est lui qui devient l’objectif du run', () => {
-    // Le piège exact de conv-1376 : un libellé anodin, un envoi qui fige une piste technique.
+    // Le piège exact : un libellé anodin, un envoi qui fige une piste technique.
     const signaux = optionsQuiPresupposentUneSolution(DEMANDE_REELLE, [
       { libelle: 'On y va', envoi: 'Corrige src/renderer/ChatView.tsx' }
     ])
@@ -65,7 +65,7 @@ describe('une option cliquable est-elle une lecture du besoin, ou une solution d
 
   /**
    * LE cas que le critère « dernier message » ratait. Au moment où l'option fautive a été proposée
-   * dans conv-1376, le dernier message de l'utilisateur était « Diagnostiquer d'abord… » — pas un
+   * Le dernier message de l'utilisateur était « Diagnostiquer d'abord… » — pas un
    * symptôme. Une garde branchée là-dessus serait passée à côté du seul cas qu'elle devait attraper.
    */
   it('juge le FIL, pas le dernier message — sinon elle rate son propre cas d’ancrage', () => {

@@ -25,7 +25,7 @@ export function corpsDuBloc(text: string): string {
 export type MorceauDePensee = { code: boolean; texte: string }
 
 /**
- * Le corps DÉPLIÉ du Raisonnement en PARAGRAPHES (conv-335, 2026-10-18, « Implémenter 1 + 3 » :
+ * Le corps DÉPLIÉ du Raisonnement en PARAGRAPHES (2026-10-18, « Implémenter 1 + 3 » :
  * Liseuse + Fil de pensée). Chaque paragraphe prend un point numéroté sur le rail : on coupe aux
  * lignes vides — plusieurs à la suite n'en font qu'une, et aucun paragraphe vide ne naît. Un retour
  * à la ligne simple reste DANS son paragraphe. Les `code` sortent en morceaux à part, pour être
@@ -90,13 +90,13 @@ const FIN = /^(.+?) (terminé|échoué)(?: - (.*))?$/
 export type EtatAction = 'ok' | 'ko' | 'encours'
 
 /**
- * TACHE NOMMEE (conv-910, 2026-10-12 : « une tache de fond est dépliable pour voir la liste
+ * TACHE NOMMEE (2026-10-12 : « une tache de fond est dépliable pour voir la liste
  * d'actions liées […] n'écris pas tache de fond, écris direct ce qu'est la tache de fond »).
  *
  * Ce que le CLI appelle une tache (`task_started` / `task_notification`, relayes par claude.ts en
  * « tache de fond en cours - <description> » puis « tache de fond terminee - <description> ») n'est
  * PAS un travail a part : c'est la commande Bash en cours elle-meme, devenue longue. Mesure sur le
- * flux brut du tour de la capture (run-stdout c10e16e5…, conv-906) : les 12 taches portent toutes
+ * flux brut du tour de la capture (run-stdout c10e16e5…) : les 12 taches portent toutes
  * `task_type: local_bash`, `is_backgrounded: false` et le `tool_use_id` de l'appel Bash qui les
  * precede ; l'ordre recu est `Bash · <commande>` → tache en cours → tache terminee → `Bash terminé`.
  * Elles ajoutaient donc DEUX lignes et deux pastilles de legende par commande, sous un libelle qui
@@ -121,7 +121,7 @@ export type ActionFrise = {
   tache?: { nom: string; etat: EtatAction }
   /** Les commandes enchainees par cette ligne — ce qu'on lit en depliant une tache nommee. */
   sousActions?: string[]
-  /** Message rendu par l'outil en ÉCHEC (ligne `<outil> erreur - …`, conv-341) : dit sous la ligne. */
+  /** Message rendu par l'outil en ÉCHEC (ligne `<outil> erreur - …`) : dit sous la ligne. */
   erreur?: string
 }
 
@@ -137,9 +137,9 @@ const CIBLE_MAX = 120
  * coule dans une autre. Un here-doc (`<<`) garde ses lignes : ce sont des donnees, pas des actions.
  */
 export function sousCommandes(commande: string): string[] {
-  // Par INDEX, sans recoller la commande caractère par caractère : depuis conv-1228 le journal porte
+  // Par INDEX, sans recoller la commande caractère par caractère : le journal porte
   // la commande entière, et ce parcours était la première source d'allocations de l'interface (419 Mo
-  // en 90 s sur le tas échantillonné, conv-1413). Le morceau gardé est exactement la même sous-chaîne.
+  // en 90 s sur le tas échantillonné). Le morceau gardé est exactement la même sous-chaîne.
   const sortie: string[] = []
   const coupeLigne = !commande.includes('<<')
   let debut = 0
@@ -181,7 +181,7 @@ export function sousCommandes(commande: string): string[] {
  * Le signe de vie COURANT, tel que la seconde ligne du bloc plie l'affiche : une tache s'y lit par
  * ce qu'elle fait (« Run the new trace event tests »), jamais par « tache de fond en cours - … ».
  */
-/** Le texte d'une clé dans la langue de l'interface (traduction anglaise, conv-1170). */
+/** Le texte d'une clé dans la langue de l'interface (traduction anglaise). */
 const tx = (
   cle: Parameters<typeof traduireChatDecisions>[0],
   valeurs?: Parameters<typeof traduireChatDecisions>[2]
@@ -214,7 +214,7 @@ function familleDe(outil: string): ActionFrise['famille'] {
   if (/^(Read|NotebookRead)$/i.test(outil)) return 'lire'
   if (/^(Grep|Glob|WebSearch|WebFetch|LS)$/i.test(outil)) return 'chercher'
   if (/^(Edit|Write|MultiEdit|NotebookEdit)$/i.test(outil)) return 'modifier'
-  // Monitor lance une commande : sa tâche de fond la nomme, comme celle d'un Bash (conv-1370, lot 5).
+  // Monitor lance une commande : sa tâche de fond la nomme, comme celle d'un Bash (lot 5).
   if (/^(Bash|PowerShell|Monitor|Commande)$/i.test(outil)) return 'commande'
   return 'autre'
 }
@@ -273,7 +273,7 @@ export function actionsDuTour(
   for (const { ligne, i } of lignes) {
     dater()
     origine = i
-    // MESSAGE D'ERREUR d'une action rouge (conv-341) : il ne crée pas de ligne, il se range SOUS
+    // MESSAGE D'ERREUR d'une action rouge : il ne crée pas de ligne, il se range SOUS
     // l'action que la ligne de fin précédente vient de fermer — la plus récente en échec de son
     // outil si cette fin manque (journal borné, tour relu).
     const erreur = lireLigneDErreur(ligne)
@@ -286,7 +286,7 @@ export function actionsDuTour(
       if (cible) cible.erreur = erreur.message
       continue
     }
-    // La ligne de tête d'un journal borné (conv-1228) dit combien d'actions anciennes manquent :
+    // La ligne de tête d'un journal borné dit combien d'actions anciennes manquent :
     // elle s'affiche telle quelle, close — ce n'est pas une action en cours.
     if (estMarqueDeLignesOmises(ligne)) {
       sortie.push({ ...nouvelle(ligne, '…', null), etat: 'ok' })
@@ -332,7 +332,7 @@ export function actionsDuTour(
     const suite = ((fin ? fin[3] : battement![2]) ?? '').trim()
     // Une fin rattache la PLUS ANCIENNE action de son outil encore en cours — l'ordre de lancement,
     // comme les taches de fond ci-dessus ; un battement, la derniere de son outil.
-    // DEUX Bash LANCES ENSEMBLE (conv-937, 2026-10-13) : la fin ne porte pas d'identifiant. Ne
+    // DEUX Bash LANCES ENSEMBLE (2026-10-13) : la fin ne porte pas d'identifiant. Ne
     // regarder que la DERNIERE action laissait la 2e fin sans cible des que la 1re l'avait close :
     // elle creait une action FANTOME (11 actions pour 10 commandes), la premiere commande restait
     // ouverte et prenait le nom de la tache de fond de la seconde.
@@ -372,7 +372,7 @@ export function actionsDuTour(
     const [tete, ...suite] = a.texte.split(' — ')
     const commande = tete!.replace(/^[^·]*·\s*/, '')
     const actions = sousCommandes(commande)
-    // Depuis conv-1228, le journal porte la commande ENTIÈRE : seule une ligne d'un tour plus ancien,
+    // Le journal porte la commande ENTIÈRE : seule une ligne d'un tour plus ancien,
     // coupée pile à 120 caractères, est encore un moignon à signaler.
     if (actions.length && commande.length === CIBLE_MAX) actions[actions.length - 1] += '…'
     a.sousActions = actions
@@ -390,7 +390,7 @@ export function dernierStatutDAction(
   statusLog: readonly string[] | undefined,
   status: string | undefined
 ): string | undefined {
-  // Le message d'erreur d'une action (conv-341) se lit sous sa ligne, déplié : sous la capsule,
+  // Le message d'erreur d'une action se lit sous sa ligne, déplié : sous la capsule,
   // c'est « Glob échoué - 25 s » qui reste, pas 280 caractères de sortie d'outil.
   const parle = (ligne: string): boolean =>
     !estLigneDEtape(ligne) && !estLigneDeChantier(ligne) && !lireLigneDErreur(ligne)
@@ -463,7 +463,7 @@ export function chantierAffiche(chantier: Chantier, tourFini: boolean): Chantier
 }
 
 /**
- * AVANCEMENT DE CHAQUE ÉTAPE (conv-303, 2026-10-17 : « un bloc qui montre comment la tâche est
+ * AVANCEMENT DE CHAQUE ÉTAPE (2026-10-17 : « un bloc qui montre comment la tâche est
  * décomposée et la progression de chaque tâche »). claude.exe ne donne que TROIS états par étape,
  * jamais un pourcentage : ce qui se mesure, ce sont les actions lancées pendant qu'elle était en
  * cours, et leur durée connue. Une action appartient à l'étape EN COURS à la ligne qui l'a créée (le
@@ -523,7 +523,7 @@ export function valeurDeLEtape(
 }
 
 /**
- * PIED AU TEMPS (conv-326, 2026-10-18, /draft « des meilleures barres de progression pour ce bloc »
+ * PIED AU TEMPS (2026-10-18, /draft « des meilleures barres de progression pour ce bloc »
  * en trois tours : « le 3 et 4 », « Affiner la 6 · Pastilles numérotées », puis « Implémenter la 5 ·
  * Pied au temps »). Sous la liste, une jauge dont chaque segment a la largeur du temps de son étape :
  * la MÊME durée que sa valeur (`valeurDeLEtape` — chrono mesuré à l'écran, sinon somme des actions).
@@ -559,7 +559,7 @@ export function piedDesEtapes(
 }
 
 /**
- * CHRONO DE CHAQUE ÉTAPE (conv-313, 2026-10-17 : « le timer est fix dans ce bloc »). La somme des
+ * CHRONO DE CHAQUE ÉTAPE (2026-10-17 : « le timer est fix dans ce bloc »). La somme des
  * durées d'outils ne bouge qu'à la fin d'un outil — ou au battement de 30 s d'un outil long — et
  * jamais pendant que le modèle réfléchit entre deux outils : sous une étape EN COURS, « 59 s »
  * restait figé. Comme le chrono du Raisonnement, le temps d'une étape se MESURE donc à l'écran : il
@@ -636,7 +636,7 @@ export function secondesDesActions(actions: readonly ActionFrise[]): number {
 }
 
 /**
- * Bilan complet des actions : `6 · 1 échec · 44 s`. Depuis la capsule R5 (conv-162, 2026-10-10)
+ * Bilan complet des actions : `6 · 1 échec · 44 s`. Depuis la capsule R5 (2026-10-10)
  * l'en-tete n'ECRIT plus que le nombre et la duree ; les echecs se lisent en rouge dans la barre.
  * Ce bilan reste l'infobulle de la capsule : le nombre d'echecs n'est jamais perdu.
  */
@@ -654,7 +654,7 @@ export function bilanDesActions(actions: readonly ActionFrise[]): string {
 
 /**
  * CHRONO DU RAISONNEMENT — le compteur de secondes de la capsule « Raisonnement » (variante R5,
- * conv-162 : « pas les mots de raisonnement, seulement un compteur de secondes »).
+ * « pas les mots de raisonnement, seulement un compteur de secondes »).
  *
  * PENDANT le tour, le chrono est MESURE A L'ECRAN jusqu'a la fin du tour, a partir du DEBUT DU TOUR
  * quand le message le porte (`chronoDepuisLeDebutDuTour`), sinon de l'apparition du bloc.
@@ -683,7 +683,7 @@ export function memoriserChrono(cle: string, chrono: Chrono): void {
 
 /**
  * Le chrono, recale sur l'HEURE DE DEBUT DU TOUR quand elle est connue et plus ancienne que son
- * debut mesure a l'ecran (conv-1084, 2026-10-22 : « le timer du bloc raisonnement demarre que quand
+ * debut mesure a l'ecran (2026-10-22 : « le timer du bloc raisonnement demarre que quand
  * je retourne sur la conv »). Un tour lance pendant que l'utilisateur regardait un autre fil n'avait
  * aucun bloc monte : le compteur partait du retour sur le fil. `debutDuTour` est pose par le main au
  * debut du tour — la meme origine que `reasoningMs` — et seul un debut PLUS ANCIEN est adopte.

@@ -16,7 +16,7 @@
  * pour rester juste même si un ancêtre intermédiaire est positionné.
  *
  * La position à l'écran d'un message DÉPEND du défilement : on lui rajoute donc `scrollTop`.
- * Défaut conv-307 (2026-10-17) : `scrollTop` était ajouté puis retranché, la mesure devenait
+ * Défaut (2026-10-17) : `scrollTop` était ajouté puis retranché, la mesure devenait
  * relative au haut VISIBLE ; la cible de reprise valait alors 2 × retenue − courante, et le fil
  * sautait à chaque image entre deux positions symétriques (620 ↔ 27 282 px mesurés).
  */

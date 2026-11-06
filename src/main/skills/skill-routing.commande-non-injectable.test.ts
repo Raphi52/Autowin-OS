@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { commandeNonInjectable } from './skill-routing'
 
 /**
- * LE REFUS D'INJECTION DOIT DIRE SON MOTIF (conv-891, 2026-09-30).
+ * LE REFUS D'INJECTION DOIT DIRE SON MOTIF (2026-09-30).
  *
  * Le processus principal refusait d'ajouter « et pour tester scout des améliorations… » au tour en
- * cours de conv-890 en rendant un simple `{ ok: false }` : l'écran ne pouvait pas distinguer ce refus
+ * cours en rendant un simple `{ ok: false }` : l'écran ne pouvait pas distinguer ce refus
  * VOLONTAIRE d'une panne et affichait « ⚠ Échec ». Cette fonction nomme la commande reconnue, pour
  * que le reçu puisse dire pourquoi le message attend.
  */

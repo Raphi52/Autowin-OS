@@ -8,7 +8,7 @@ import { recalerAncre } from './duree-vivante'
 /**
  * LE CHRONO D'UNE ACTION EN COURS AVANCE A LA SECONDE.
  *
- * Signale le 2026-10-15 (conv-982, capture) : « le timer de raisonnement s'actualise toutes les
+ * Signale le 2026-10-15 (capture) : « le timer de raisonnement s'actualise toutes les
  * secondes et celui de actions toutes les 5 ; passe celui de actions a une seconde aussi ». Sur la
  * meme capture, « Raisonnement 27 min 55 s » bougeait chaque seconde et « 1 action terminée · 1
  * action en cours 27 min 7 s » sautait de cinq en cinq.

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ciblesNommees } from './root-execution-contract'
 
 /*
- * Defaut vecu (conv-470, tour 52fbe05f-0086-4806-8f07-c8762e8caa35, saisie ts=1789192601300
+ * Defaut vecu (tour 52fbe05f-0086-4806-8f07-c8762e8caa35, saisie ts=1789192601300
  * « /kaizen j'ai rien en preprompt ») : la demande ne nommait AUCUN fichier, mais le dossier de
  * preuve joint recopiait un message anterieur portant « Ancrage : src/main/modeles/model-quotas.ts:62 ».
  * Le gate a exige la mutation de ce fichier et a refuse un travail juste. Une donnee rapportee ne

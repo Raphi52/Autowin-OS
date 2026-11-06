@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { passageDuFil, texteDeLActionSurPassage } from './passage-selectionne'
 
 /**
- * PLAFOND MUET n°7 (conv-1228, 2026-10-28) : un passage sélectionné dans le fil pour le citer était
+ * PLAFOND MUET n°7 (2026-10-28) : un passage sélectionné dans le fil pour le citer était
  * coupé à 4 000 caractères. L'utilisateur l'avait choisi lui-même, à la souris : la citation posée
  * dans la saisie en perdait la fin — souvent le point qu'il voulait contester.
  */

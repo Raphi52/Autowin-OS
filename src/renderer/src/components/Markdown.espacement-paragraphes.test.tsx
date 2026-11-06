@@ -1,5 +1,5 @@
 /**
- * ESPACEMENT VERTICAL DES RÉPONSES (conv-227, 2026-10-11 : « ya trop d'espacement vertical entre
+ * ESPACEMENT VERTICAL DES RÉPONSES (2026-10-11 : « ya trop d'espacement vertical entre
  * les différents éléments du chat ca fait scroller pour rien »).
  *
  * Mesuré dans l'app (copie cachée, Holographique blanc et Clair) : chaque ligne vide du texte était

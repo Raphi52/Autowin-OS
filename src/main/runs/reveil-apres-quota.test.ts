@@ -7,7 +7,7 @@ import {
 } from './reveil-apres-quota'
 
 /**
- * UN RUN SUSPENDU PAR LE QUOTA REPART TOUT SEUL, APP OUVERTE (conv-1069, candidat 4 du scout).
+ * UN RUN SUSPENDU PAR LE QUOTA REPART TOUT SEUL, APP OUVERTE (candidat 4 du scout).
  *
  * `resumeAfter` n'était relu qu'au démarrage (`index.ts`, filtre `repriseAutoRetenueParQuota`) et
  * par le bouton « Reprendre tout » : app ouverte, un run coupé à 11:01 par « resets 11:30am »
@@ -154,7 +154,7 @@ describe('réveil après le mur de quota', () => {
   })
 
   /*
-   * Objection du contrôle final (conv-1423) : un fil annoncé « repart seule » pouvait n'avoir aucun
+   * Objection du contrôle final : un fil annoncé « repart seule » pouvait n'avoir aucun
    * réveil prévu. Le réveil ne s'armait qu'aux échéances lues au dernier passage, et un départ écarté
    * à l'heure gardait sa clé dans `reveilles`, même une fois le fil redevenu éligible.
    *

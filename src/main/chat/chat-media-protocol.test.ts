@@ -15,7 +15,7 @@ const { plageMedia, reponseMedia, resoudreMediaConserve, servirMediaDuFil } =
   await import('./chat-media-protocol')
 
 /**
- * Kaizen conv-260 (tour 41ab69ad-0ff8-4a45-8ecd-efb9be30e4a2) : une pub de 74,6 Mo ne pouvait
+ * Kaizen (tour 41ab69ad-0ff8-4a45-8ecd-efb9be30e4a2) : une pub de 74,6 Mo ne pouvait
  * s'ouvrir dans aucun lecteur du fil, parce que la seule voie était une copie base64 plafonnée à
  * 16 Mo. Ces tests tiennent la nouvelle voie : lecture par plages, sous les mêmes gardes.
  */

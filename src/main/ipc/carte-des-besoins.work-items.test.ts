@@ -1,5 +1,5 @@
 /**
- * Canaux de la Carte du projet pour les WORK ITEMS (option E du cadrage conv-1127, 2026-10-23).
+ * Canaux de la Carte du projet pour les WORK ITEMS (option E du cadrage, 2026-10-23).
  *
  * Les entrées qui font échouer une version fausse : un calcul de la carte qui lit la source de
  * tickets (la carte se calcule sans réseau ni modèle) ; un rattachement ou une vérification qui

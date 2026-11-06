@@ -5,11 +5,11 @@ import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
 /**
  * /kaizen SANS CONVERSATION NOMMÉE : le dossier visait la conversation du /kaizen elle-même, vide.
  *
- * Mesuré le 2026-10-17, conv-314, tour f5733ff5-07ff-4c61-8dc3-c4d75fad8f32 : « /kaizen dans mes
+ * Mesuré le 2026-10-17, tour f5733ff5-07ff-4c61-8dc3-c4d75fad8f32 : « /kaizen dans mes
  * convs d'aujourd'hui j'ai eu un bug récurrent c'est que /draft ne me render pas le bbloc… ». Aucune
- * « conv N » dans la phrase, aucune citation : le dossier a été construit sur conv-314, qui ne
+ * « conv N » dans la phrase, aucune citation : le dossier a été construit, qui ne
  * contenait que cette demande — appels modèle, journal des tours et saisies VIDES. Les traces du
- * défaut étaient dans conv-310, conv-311 et conv-312, où « /draft » avait été tapé.
+ * défaut étaient, où « /draft » avait été tapé.
  */
 const ts = (iso: string): number => Date.parse(iso)
 const DU_JOUR = [

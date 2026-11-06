@@ -10,7 +10,7 @@ import type { PromptSnapshot } from '../commands/commands'
  * deterministe (type inconnu, source invalide, Brain injoignable) n'atteignait ni le modele ni
  * l'utilisateur, alors que le texte venait d'annoncer « je retiens ca ».
  *
- * Vecu le 31/08 (conv-1569) : deux `remember` de suite, aucun retour, l'utilisateur constate
+ * Vecu le 31/08 : deux `remember` de suite, aucun retour, l'utilisateur constate
  * « ca a pas marche anyway » — rien dans le fil ne le disait. Puis conv-49/52 (2026-09-01) :
  * refus « portee manquante », tour CLOS sur le constat. Le motif partait a l'utilisateur mais
  * jamais au MODELE, qui ne pouvait donc pas ajouter l'argument manquant. Decision : une reprise
@@ -96,7 +96,7 @@ describe('remember auxiliaire — le refus reste visible', () => {
   /*
    * LE MOTIF ATTEINT LE MODELE, ET LA COMMANDE EST REJOUEE.
    *
-   * C'est le defaut de conv-49 : le refus etait AFFICHE mais jamais REINJECTE, donc un refus
+   * C'est le defaut : le refus etait AFFICHE mais jamais REINJECTE, donc un refus
    * reparable en un argument (« portee manquante ») restait un echec definitif.
    */
   it('un refus reparable est REINJECTE au modele, qui rejoue le depot', async () => {
@@ -136,7 +136,7 @@ describe('remember auxiliaire — le refus reste visible', () => {
   })
 
   /*
-   * CAS DE conv-33 (2026-09-01) — le plus couteux, et celui qui passait.
+   * CAS (2026-09-01) — le plus couteux, et celui qui passait.
    *
    * Le Brain repond 200-hors-succes : `{ok:true, data:{allowed:true, stored:false, detail:'refuse
    * par le Brain : not found'}}`. Le transport a REUSSI, donc `commandResultSucceeded` disait vrai

@@ -6,7 +6,7 @@ import type { RegistryItem } from '../app/native-registry'
 import { dossierModAutowin, reglagesCliAutowin } from '../providers/claude'
 
 /**
- * CE QU'AUTOWIN INJECTE DANS CHAQUE RUN CLAUDE — pour la vue Settings › Skills · Hooks · Tools (conv-58).
+ * CE QU'AUTOWIN INJECTE DANS CHAQUE RUN CLAUDE — pour la vue Settings › Skills · Hooks · Tools.
  * Avant, la vue ne lisait que les hooks du settings.json de l'utilisateur, que les runs NE chargent
  * PAS (`--setting-sources ""`) : elle montrait « 0 hooks » alors que six gardes tournaient.
  * Tout est DÉRIVÉ du code qui tourne (réglages CLI, inventaire du script, manifeste du mod).
@@ -62,8 +62,8 @@ export function modsAutowin(
   }
   try {
     // Les modules que le CLI charge vraiment : ceux que nomme hooks.json. Un nom écrit en dur
-    // (`register.mjs`) lisait un fichier mort et taisait `prompt.attachment` (conv-1602, piste 12).
-    // fix-ok: 3e édit = mise en forme prettier de cette ligne ; cause mesurée du défaut : register.mjs lu en dur, « leurre.mort » rendu par le test (conv-1602)
+    // (`register.mjs`) lisait un fichier mort et taisait `prompt.attachment` (piste 12).
+    // fix-ok: 3e édit = mise en forme prettier de cette ligne ; cause mesurée du défaut : register.mjs lu en dur, « leurre.mort » rendu par le test
     const hooks = join(dossier, 'hooks')
     const { modules } = JSON.parse(readFileSync(join(hooks, 'hooks.json'), 'utf8')) as {
       modules?: unknown
@@ -91,7 +91,7 @@ export function modsAutowin(
 }
 
 /**
- * GATES — les contrôles qui décident si un run peut se dire « vert » ou doit s'arrêter (conv-58).
+ * GATES — les contrôles qui décident si un run peut se dire « vert » ou doit s'arrêter.
  * `bus: true` = handler `pre-green` de `createDefaultHookBus` : un test vérifie que leur nombre est
  * EXACTEMENT celui du bus, pour qu'un contrôle ajouté sans être inscrit ici fasse échouer le test.
  */
@@ -126,8 +126,8 @@ export const GATES_DU_RUN: readonly { id: string; label: string; description: st
     bus: true
   },
   {
-    // Branché sur le bus en conv-419 sans être inscrit ici : le test du nombre était rouge (5 contre 6)
-    // dans le dépôt le 2026-11-05 (conv-1602).
+    // Branché sur le bus sans être inscrit ici : le test du nombre était rouge (5 contre 6)
+    // dans le dépôt le 2026-11-05.
     id: 'gate-promotion-mod',
     label: 'Promotion du mod',
     description:

@@ -1,6 +1,6 @@
 /**
  * Le bloc « Raisonnement » d'un tour EN COURS ne doit plus être vide après un rechargement de la vue
- * (conv-1110, 2026-10-23 : « conv-1097 m'affiche raisonnement et rien dedans »).
+ * (2026-10-23 : « conv-1097 m'affiche raisonnement et rien dedans »).
  *
  * Entrées qui feraient échouer une correction fausse : la pensée réécrite EN ENTIER à la clôture
  * (elle se dédoublerait, le réducteur concatène) ; un espace entre deux rafales perdu ; un tour qui

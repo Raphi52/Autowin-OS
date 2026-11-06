@@ -1,5 +1,5 @@
 /**
- * RUN RÉEL (orchestrateur vrai, modèle simulé) — la relecture à froid du cadrage (conv-1420).
+ * RUN RÉEL (orchestrateur vrai, modèle simulé) — la relecture à froid du cadrage.
  *
  * Les tests de `relecture-froide.ts` prouvent que l'écart est LU. Ceux-ci prouvent que le pipeline
  * l'HONORE : ils lisent l'ordre des appels réellement payés, et ce que chaque étape a reçu.
@@ -327,7 +327,7 @@ describe('autres chemins d’un cadrage', () => {
 })
 
 /**
- * LA DEMANDE DISAIT « commencer par les tâches critiques » (conv-1420). Le premier passage l'avait
+ * LA DEMANDE DISAIT « commencer par les tâches critiques ». Le premier passage l'avait
  * retirée sur une preuve fausse : l'en-tête `regime: standard` des RUN.md est écrit en dur
  * (`runs/conv-runs.ts`). Passés dans `classifyRegime`, 19 runs sur 131 sont critiques.
  */
@@ -528,7 +528,7 @@ describe('après une reprise, le DERNIER cadrage fait foi', () => {
 
 /**
  * LE RAPPEL DU CADRAGE lisait le PREMIER : après un refus des cas limites, la phase reprise en session
- * se voyait rappeler comme « LA référence du livrable » la version refusée (conv-1420).
+ * se voyait rappeler comme « LA référence du livrable » la version refusée.
  */
 describe('rappel du cadrage en reprise de session', () => {
   class AvecSession extends Fournisseur {

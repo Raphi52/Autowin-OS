@@ -1,7 +1,7 @@
 /**
  * TOUTE issue de finalisation non fusionnée DOIT porter une cause lisible.
  *
- * Défaut mesuré le 2026-08-31 (conv-1, run « reprend-pardon-mthg437j », 2,13 $) : le rapport rendu
+ * Défaut mesuré le 2026-08-31 (run « reprend-pardon-mthg437j », 2,13 $) : le rapport rendu
  * à l'utilisateur portait `gateReasons: ["intégration locale non terminée"]` — un ÉTAT, aucune
  * CAUSE. Le run était vert, ses 16 fichiers existaient, et ils n'ont été retrouvés que par une
  * fouille manuelle des branches de secours. La lecture de l'issue rendait `undefined` dès que
@@ -26,7 +26,7 @@ const CAUSE_MAX = 300
 /**
  * LE CODE INTERNE NE SE DEVINE PAS — il vient avec son sens.
  *
- * Vécu le 2026-09-03 (conv-158, turnId `e0697674-fb4a-4f79-a6a0-565be7e07998`) : le tour a échoué
+ * Vécu le 2026-09-03 (turnId `e0697674-fb4a-4f79-a6a0-565be7e07998`) : le tour a échoué
  * sur `blocage d’intégration: base-dirty — fichiers en cause: .arena/banc-noms/RUN.md, …`, et
  * l'appel suivant (même turnId, 05:44:26) a annoncé à l'utilisateur une cause FAUSSE — « la fusion
  * a été refusée … la branche de base a bougé pendant l'intégration ». La base n'avait pas bougé.

@@ -25,7 +25,7 @@ export type UpdateAction = UpdateStrategy | 'abort-conflict'
  *
  * Existe pour que « Fusionner » ne soit plus un clic à l'aveugle : le bouton annonçait « +1 » sans
  * dire de qui ni de quoi, et l'utilisateur devait ouvrir un terminal pour décider (demande du
- * 2026-09-25, conv-858).
+ * 2026-09-25).
  */
 export interface IncomingCommit {
   hash: string
@@ -69,7 +69,7 @@ export const UPDATE_STRATEGY_HINTS: Record<UpdateStrategy, string> = {
  * `arbreSale` = des fichiers sont modifiés en local. `git rebase` refuse ALORS À COUP SÛR (« cannot
  * rebase: You have unstaged changes »), même si les commits entrants ne touchent aucun de ces
  * fichiers — seule la fusion ne refuse que sur un fichier touché des deux côtés. Le rebase n'est donc
- * plus proposé (conv-454, conv-604).
+ * plus proposé.
  */
 export function strategiesFor(
   branch: string | undefined,

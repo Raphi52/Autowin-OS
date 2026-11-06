@@ -277,7 +277,7 @@ describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () =
       expect(committed).toContain(mine)
       expect(committed).not.toContain(autrui) // le travail d'autrui reste non commité
     }
-    // conv-1069 : le commit fabriqué par la clôture (ici celui du Brain) suit `type(zone): phrase
+    // Le commit fabriqué par la clôture (ici celui du Brain) suit `type(zone): phrase
     // (run-…)` (`titre-de-commit.ts`). Entrée qui ferait échouer ce test si la correction était
     // fausse : l'ancien titre `auto(run-77): ajoute deux fichiers`, rendu par le code d'avant.
     expect((await realGit(['log', '-1', '--format=%s'], brain)).trim()).toBe(
@@ -324,7 +324,7 @@ describe('périmètre du run (ce qui traînait AVANT n’est pas publié)', () =
     // Projet : seul le commit du run part ; le fichier de l'autre conversation n'est commité nulle part.
     expect(report.project).toMatchObject({ status: 'pushed', files: 1 })
     // Aucun commit fabriqué par la clôture : ni l'ancien `auto(run-…)`, ni le titre tiré de la
-    // tâche (`titre-de-commit.ts`, conv-1069) — sans ce second motif, l'assertion passait à vide.
+    // tâche (`titre-de-commit.ts`) — sans ce second motif, l'assertion passait à vide.
     const sujets = await realGit(['log', '--format=%s'], repo)
     expect(sujets).not.toMatch(/^auto\(/m)
     expect(sujets).not.toMatch(/\(run-77\)$/m)
@@ -728,7 +728,7 @@ describe('provenance d’une note Brain de run', () => {
   })
 
   it('le dépôt des leçons d’un run écrit bien cette ligne (sinon plus aucune note de run ne partirait)', () => {
-    // Le dépôt des leçons vit dans commands/apprentissage.ts (conv-1580, lot 6) : on lit la famille du bus.
+    // Le dépôt des leçons vit dans commands/apprentissage.ts (lot 6) : on lit la famille du bus.
     const source = sourceDuBus()
     expect(source).toContain('Provenance Autowin (v1):\\n- run: ${input.runId}\\n')
   })
@@ -767,7 +767,7 @@ describe('helpers', () => {
   })
 })
 
-// conv-850 : « la règle dépend du repo … je veux que ça reste générique ». Le DÉPÔT tranche.
+// « la règle dépend du repo … je veux que ça reste générique ». Le DÉPÔT tranche.
 describe('enchaînement générique : push direct si le dépôt l’accepte, sinon branche dédiée + PR', () => {
   it('dépôt qui accepte : poussé sur la branche courante, aucune PR', async () => {
     const { repo, remote } = await repoWithRemote()
@@ -806,7 +806,7 @@ describe('enchaînement générique : push direct si le dépôt l’accepte, sin
     expect(res).toMatchObject({ status: 'pushed', branch: 'auto/r3', mode: 'pr', prError: 'gh absent' })
   })
 
-  // conv-267 (2026-10-11), choix utilisateur : « Interrupteur ON = mon accord : publie directement
+  // (2026-10-11), choix utilisateur : « Interrupteur ON = mon accord : publie directement
   // sur main, sans PR ». Le garde-fou agent de .githooks/pre-push refusait CHAQUE push direct de
   // l'app (26 branches auto/… poussées, 0 PR ouverte faute de `gh`, main distant figé à 02:22).
   it('interrupteur ON = accord : le garde-fou agent du dépôt (pre-push) laisse passer le push direct', async () => {

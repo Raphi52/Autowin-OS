@@ -9,7 +9,7 @@ import {
   visageDeLaBille
 } from './mascotte-personnage'
 
-/** Les chiffres seuls, puis ceux d'un nombre à deux chiffres : dizaines et unités (conv-1270). */
+/** Les chiffres seuls, puis ceux d'un nombre à deux chiffres : dizaines et unités. */
 const COMPTES = ['1', '2', '3', '4', '5', '6', '7', '8', '9']
 const SUFFIXES = [
   ...COMPTES,
@@ -18,7 +18,7 @@ const SUFFIXES = [
 ]
 /**
  * Un sort par couleur des yeux, dans leur ordre : [dégradé des yeux de lumière, cœur de l'encre du
- * chiffre écrit, couleur vive (iris des yeux, halo de l'encre, étoile du chapeau)] (conv-1247).
+ * chiffre écrit, couleur vive (iris des yeux, halo de l'encre, étoile du chapeau)].
  */
 const SORTS = [
   ['gE', '#9fe2ff', '#58c8ff'],
@@ -37,7 +37,7 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
       expect(ecarts[`trace ${v}`], `trace ${v}`).toBeLessThan(1)
     }
     // Deux chiffres : le bras de la dizaine passe la main à celui de l'unité dans la même pose (coude
-    // et pointe), et la reprend au tour suivant — la bascule ne se voit pas (conv-1270).
+    // et pointe), et la reprend au tour suivant — la bascule ne se voit pas.
     expect(ecarts['relais']).toBeLessThan(1)
     expect(ecarts['gauche au travail']).toBeLessThan(1)
     expect(ecarts['bras pour toi']).toBeLessThan(1)
@@ -52,7 +52,7 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
     expect(svg).toContain('class="ch nr vx"')
     expect(classesDeLaValeur('!')).toEqual(['vx'])
     expect(classesDuTrace('!')).toEqual([])
-    // Le vrai nombre jusqu'à 99 (conv-1270) : une dizaine et une unité, chacune à sa place.
+    // Le vrai nombre jusqu'à 99 : une dizaine et une unité, chacune à sa place.
     expect(classesDeLaValeur('7')).toEqual(['v7'])
     expect(classesDeLaValeur('47')).toEqual(['vd4', 'vu7'])
     expect(classesDeLaValeur('10')).toEqual(['vd1', 'vu0'])
@@ -165,12 +165,12 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
     expect(svg.match(/class="grim /gu)?.length).toBe(3)
     // L'invocation de la capture : sphère d'énergie, une main ouverte aux cinq doigts. Plus de
     // colonnes de runes qui montent (« c'est trop »), ni de cercles magiques couchés en perspective :
-    // à taille réelle, ils ne se lisaient que comme trois barres de couleur (conv-1258).
+    // à taille réelle, ils ne se lisaient que comme trois barres de couleur.
     expect(svg).toContain('url(#oS)')
     expect(svg).not.toMatch(/scale\(1 \.3\)/u)
     expect(svg).not.toMatch(/gK[123]/u)
     expect(svg).toContain('M.6 .4Q-3.4 2.8-7.6-.4')
-    // À leur place, trois étoiles d'or en orbite (conv-1258, « Étoiles en orbite ») : chacune a une
+    // À leur place, trois étoiles d'or en orbite (« Étoiles en orbite ») : chacune a une
     // copie derrière la sphère et une devant, pour passer vraiment devant puis derrière elle.
     const sphere = svg.indexOf('url(#oS)')
     const etoiles = [...svg.matchAll(/M0-4\.6L1\.15-1\.15/gu)].map((m) => m.index ?? 0)
@@ -194,8 +194,8 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
 
   it('le chiffre écrit est grand et coloré, celui du chapeau blanc et grand (conv-1227)', () => {
     const svg = svgDuPersonnage()
-    // Chaque trait écrit par la baguette est à l'encre d'une couleur des yeux (rouge seul avant
-    // conv-1247), plus épais qu'avant (1,5).
+    // Chaque trait écrit par la baguette est à l'encre d'une couleur des yeux (rouge seul),
+    // plus épais qu'avant (1,5).
     const traits = [
       ...svg.matchAll(
         /<path class="[^"]*" d="[^"]+" stroke="([^"]+)" stroke-width="([\d.]+)" stroke-dasharray/gu
@@ -214,7 +214,7 @@ describe('le personnage de la mascotte — Filament blanc · Le chiffre (conv-12
     expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThanOrEqual(20)
     // Le chiffre du chapeau : blanc, 26 px (16 avant), il peut déborder de l’étoile.
     expect(svg).toMatch(/<text class="ch nb v1"[^>]*font-size="26" fill="#ffffff">1<\/text>/u)
-    // Deux chiffres (conv-1270) : 20 px, la dizaine finit au centre de l'étoile, l'unité y commence.
+    // Deux chiffres : 20 px, la dizaine finit au centre de l'étoile, l'unité y commence.
     expect(svg).toMatch(
       /<text class="ch nb vd4" x="25" y="4" text-anchor="end"[^>]*font-size="20"[^>]*>4<\/text>/u
     )

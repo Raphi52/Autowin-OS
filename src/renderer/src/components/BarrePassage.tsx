@@ -1,5 +1,5 @@
 /**
- * Barre flottante posée sur un passage sélectionné du fil (conv-1038, 2026-10-21) :
+ * Barre flottante posée sur un passage sélectionné du fil (2026-10-21) :
  * Citer · Détaille · C'est faux · Retiens ça. Le texte de chaque geste vit dans
  * `passage-selectionne.ts` ; ici, seulement l'affichage.
  */

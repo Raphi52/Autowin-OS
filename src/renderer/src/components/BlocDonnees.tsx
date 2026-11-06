@@ -1,5 +1,5 @@
 /**
- * BLOC DE DONNEES DESSINE PAR L'APP (conv-1074, 2026-10-22) — le pendant affichage de
+ * BLOC DE DONNEES DESSINE PAR L'APP (2026-10-22) — le pendant affichage de
  * `src/shared/blocs-donnees.ts`.
  *
  * Le modele n'envoie qu'un JSON (```aw-tableau, ```aw-comparaison, ```aw-etapes) ; ce composant en
@@ -29,7 +29,7 @@ const classeDuTon = (cellule: CelluleDonnee): string | undefined =>
 const MARQUE_EN_LIGNE = /(\*\*[^*\n]+?\*\*|`[^`\n]+`)/
 
 /**
- * GRAS ET CODE DANS LES TEXTES DU BLOC (conv-1578, 2026-11-05). La consigne du chat exige un mot en
+ * GRAS ET CODE DANS LES TEXTES DU BLOC (2026-11-05). La consigne du chat exige un mot en
  * gras par ligne ; le modèle l'écrit donc aussi dans ses cellules, qui montraient « **…** » et les
  * accents graves bruts (capture de l'utilisateur). Seules ces deux marques sont lues : le reste
  * reste du texte, échappé par React comme avant.
@@ -52,7 +52,7 @@ function EnLigne({ texte }: { texte: string }): React.JSX.Element {
   )
 }
 
-// Le libellé est une clé de la table de textes, traduite au rendu (conv-1170).
+// Le libellé est une clé de la table de textes, traduite au rendu.
 const STATUTS: Record<StatutEtape, { glyphe: string; libelle: CleArtefactsEtBandeaux }> = {
   fait: { glyphe: '✓', libelle: 'donnees.statut.fait' },
   'en-cours': { glyphe: '●', libelle: 'donnees.statut.enCours' },

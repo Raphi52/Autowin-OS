@@ -1,5 +1,5 @@
 // Catalogue des commandes — conversations, retrospective, verdicts et travaux triés, état de l’app.
-// Entrées sorties telles quelles de commands/catalogue.ts (conv-1580), dans le même ordre :
+// Entrées sorties telles quelles de commands/catalogue.ts, dans le même ordre :
 // catalogue.ts les remet bout à bout dans CATALOG. Seuls des TYPES viennent de '../commands'.
 import type { CommandSpec } from './commands'
 import { AIDE_ARGS_ETAT, LIMITE_MAX } from '../chat/etat-outil'
@@ -29,7 +29,7 @@ export const CATALOGUE_CONVERSATIONS: CommandSpec[] = [
     /**
      * REGARDER son propre travail, sans avoir a le refaire.
      *
-     * Defaut vecu conv-1407 (2026-08-26), second volet. Autowin collecte deja tout ce qu'il faut
+     * Defaut vecu (2026-08-26), second volet. Autowin collecte deja tout ce qu'il faut
      * pour une retrospective — conversation, activite, traces Brain, evenements causaux, RUN.md
      * natifs — en UN appel (`collectAutowinKaizenEvidence`). Mais ce dossier n'etait atteignable
      * que par une tache commencant par `/kaizen`, donc en LANCANT un run complet : couteux,
@@ -65,7 +65,7 @@ export const CATALOGUE_CONVERSATIONS: CommandSpec[] = [
     /**
      * CHERCHER par contenu dans TOUTES les conversations.
      *
-     * Defaut vecu le 2026-08-26 (conv-1407). L'orchestrateur recoit « remake les pastilles de
+     * Defaut vecu le 2026-08-26. L'orchestrateur recoit « remake les pastilles de
      * couleurs » : quatre mots qui referent a un tour tenu dans une AUTRE conversation. Pour le
      * retrouver il lui fallait chercher par CONTENU dans le corpus -- or son catalogue n'offrait
      * cela que sur les FICHIERS du depot (`find_in_files`). `get_state` ne rend que des titres
@@ -115,13 +115,13 @@ export const CATALOGUE_CONVERSATIONS: CommandSpec[] = [
      * Defaut vecu le 2026-08-18 : « scout en te basant sur la derniere conversation (cite-la) » a
      * recu « je ne peux pas citer honnetement le contenu de la conversation precedente ». L'agent
      * disait VRAI : `get_state` n'expose que des titres tronques, et le store sur disque avait 1h41
-     * de retard (id max conv-1290 pour la conv-1291 demandee) — le contenu ne vivait qu'en memoire.
+     * de retard (id max pour la demandee) — le contenu ne vivait qu'en memoire.
      * Autowin garde 31 modules de retrospective, exposes a l'INTERFACE par 9 canaux IPC et a l'agent
      * par AUCUN outil : la rétrospective etait branchee pour l'oeil, pas pour le modele qui analyse.
      *
      * Lit le store VIVANT (`os.conversations`), jamais le fichier : c'est la seule source a jour.
      *
-     * Defaut vecu le 2026-10-19 (conv-335) : pour relire SON propre fil, l'agent a lance un
+     * Defaut vecu le 2026-10-19 : pour relire SON propre fil, l'agent a lance un
      * `node -e` sur `conversations.json`, n'y a pas trouve le fil (cree a 23:30, fichier ecrit a
      * 09:06), et a annonce a l'utilisateur que « le fichier sur disque a du retard » — formule
      * reprise de cette description. Le fil etait pourtant sur le disque, dans le journal : le
@@ -169,7 +169,7 @@ export const CATALOGUE_CONVERSATIONS: CommandSpec[] = [
      * CLASSER une conversation — la capacite qui manquait, et son absence poussait au pire chemin.
      *
      * Demande de l'utilisateur : « ranges moi mes conversations dans des sous categories adequates ».
-     * Mesure dans `conv-1244` le 2026-08-15 : faute de commande pour classer, l'agent a tente de
+     * Mesure le 2026-08-15 : faute de commande pour classer, l'agent a tente de
      * piloter le BUREAU WINDOWS a la souris — `desktop_act`, clics qui ouvrent les reglages rapides
      * par erreur, tentative de relancer l'application — puis a echoue sur
      * « Type d'action desktop inconnu: double_click ». Rien n'a ete range.
@@ -288,7 +288,7 @@ export const CATALOGUE_CONVERSATIONS: CommandSpec[] = [
     /*
      * LE GESTE QUI MANQUAIT AU BOUT DU SALVAGE.
      *
-     * Vecu le 2026-08-27 (conv-1424) : le bandeau annonce des travaux non publies, « Traiter »
+     * Vecu le 2026-08-27 : le bandeau annonce des travaux non publies, « Traiter »
      * lance un `/salvage`, le salvage conclut deux fois « SUPERSEDED — deja dans main sous une
      * meilleure implementation », conserve les branches comme le protocole l'exige, et le bandeau
      * repasse identique trente secondes plus tard. `git cherry` ne voit pas une REECRITURE, donc
@@ -340,8 +340,8 @@ export const CATALOGUE_CONVERSATIONS: CommandSpec[] = [
   {
     name: 'get_state',
     // La donnee ne sert que si l'agent sait qu'elle existe : sans cette phrase, il continue de
-    // deduire la recence de l'ordre du tableau au lieu de lire les dates (mesure conv-1291).
-    // conv-1370 (2026-10-31) : 187 000 caractères, coupés à 120 000, 6 appels sur 6 tronqués et aucun
+    // deduire la recence de l'ordre du tableau au lieu de lire les dates.
+    // 2026-10-31 : 187 000 caractères, coupés à 120 000, 6 appels sur 6 tronqués et aucun
     // argument pour rétrécir. Vue courte par défaut, `etat-outil.ts`.
     description:
       'Lire l’état courant de l’app. Sans argument : vue courte (onglet, conversation active, ' +

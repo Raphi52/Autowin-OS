@@ -1,5 +1,5 @@
 /**
- * QUESTION À CÔTÉ — les canaux IPC entre l'interface et le moteur (conv-1362, lot 1/3, 2026-10-31).
+ * QUESTION À CÔTÉ — les canaux IPC entre l'interface et le moteur (lot 1/3, 2026-10-31).
  *
  * Le moteur (`../question-a-cote.ts`) porte toutes les règles ; ce module vérifie chaque appel à la
  * frontière : expéditeur de confiance d'abord, puis la forme de chaque argument.

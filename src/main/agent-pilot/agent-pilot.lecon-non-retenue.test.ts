@@ -4,7 +4,7 @@ import type { PromptSnapshot } from '../commands/commands'
 import { AVERTISSEMENT_LECON_NON_RETENUE } from '../brain/lecon-non-retenue'
 
 /**
- * UNE LEÇON ÉCRITE SANS DÉPÔT EST DITE À LA CLÔTURE — conv-335, tours
+ * UNE LEÇON ÉCRITE SANS DÉPÔT EST DITE À LA CLÔTURE, tours
  * ff240730-2bbf-49e3-9923-5db1839772ba (deux « Leçon : » écrites, aucune déposée) et
  * d5bf24a1-958a-4c94-ad13-80b67a3a1fe0 (l'utilisateur doit demander « Ca sert vraiment ces lecons? »).
  *

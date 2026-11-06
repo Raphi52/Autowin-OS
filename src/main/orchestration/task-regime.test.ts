@@ -71,7 +71,7 @@ describe('classifyRegime', () => {
   })
 
   /*
-   * conv-344, demande « /scout comment améliorer la feature overall » (saisie ts 1792393145414) :
+   * Demande « /scout comment améliorer la feature overall » (saisie ts 1792393145414) :
    * classée « trivial » parce que `comment` (l'anglais pour « commentaire ») figurait dans les mots
    * triviaux. En français, « comment » veut dire « how ». Le régime trivial a privé ce scout du fil
    * (`commands.ts`, `substantial`) : il a répondu sur le fond 3D de l'Accueil alors que la

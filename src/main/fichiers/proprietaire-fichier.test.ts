@@ -13,7 +13,7 @@ import { ConversationStore } from '../store/conversations'
 
 /**
  * « À QUI EST CE FICHIER ? » — le réflexe 14 (ne pas écrire sur le travail d'un autre fil) en un
- * seul appel. Scout conv-1086 : 514 appels git à la main dans 143 journaux, et un vrai conflit
+ * seul appel. Scout : 514 appels git à la main dans 143 journaux, et un vrai conflit
  * (`<<<<<<< HEAD … >>>>>>> 05a597f5 (conv-1074`). L'app SAVAIT quel fil avait touché quel fichier
  * (`conversation-file-trace-spool.ts`), mais seule l'interface le lisait, et seulement pour le fil
  * AFFICHÉ (`readCurrentConversationPathOwnership(conversationId)`).
@@ -117,7 +117,7 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
   it('lit une liste de chemins envoyée en TEXTE JSON par l’outil direct, sans rendre « libre » à tort', async () => {
     // L'outil direct ne transmet que des chaînes (`schemaEntree`, skill-node-mcp.ts) : la liste
     // arrive donc en texte. Lue comme UN chemin, elle rendait un seul fichier « libre », alors que
-    // conv-a tient src/partage.ts (constaté en conv-1107, 23/10/2026).
+    // conv-a tient src/partage.ts (23/10/2026).
     donnees()
     const ws = depot()
     const b = bus(ws)
@@ -288,13 +288,13 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
   })
 
   /*
-   * ÉCRITURE D'UN FIL, COMPARAISON DE FIN DE TOUR D'UN AUTRE (conv-1142, 25/10/2026). En fin de
+   * ÉCRITURE D'UN FIL, COMPARAISON DE FIN DE TOUR D'UN AUTRE (25/10/2026). En fin de
    * tour, l'app compare tout le dossier avant/après le tour (`agent-pilot.ts`, `etatAvantEnvoi`) et
    * range au nom du fil tout ce qui a changé — y compris ce qu'un AUTRE fil a écrit pendant ce
-   * temps. Vrai cas : `src/main/app/reprise-apres-arret.ts`, créé par conv-1142 (trace de son Write à
-   * 13:36:07 UTC), puis compté par les comparaisons de conv-1147 (13:36:13) et de conv-1143
+   * temps. Vrai cas : `src/main/app/reprise-apres-arret.ts`, créé (trace de son Write à
+   * 13:36:07 UTC), puis compté par les comparaisons (13:36:13) et
    * (13:40:57) avec EXACTEMENT le même contenu et le même marqueur physique. La dernière trace
-   * l'emportait : l'outil répondait « conv-1143 » à conv-1142 sur son propre fichier.
+   * l'emportait : l'outil répondait « conv-1143 » sur son propre fichier.
    */
   const ecritAvecUnOutil = async (ws: string, fil: string, contenu: string): Promise<void> => {
     writeFileSync(join(ws, 'src/partage.ts'), contenu)
@@ -345,7 +345,7 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
 
   it('rend le fichier à son auteur même quand la comparaison de l’autre fil est écrite AVANT', async () => {
     // Les traces d'un tour ne s'écrivent qu'à SA fin : un tour qui finit plus tôt écrit sa
-    // comparaison avant l'écriture du vrai auteur (conv-1145 à 13:29:04, conv-1142 à 13:36:07).
+    // comparaison avant l'écriture du vrai auteur (29:04, 36:07).
     donnees()
     const ws = depot()
     const avantLeTourDeB = await captureMutationTraceBase(ws, [])
@@ -387,7 +387,7 @@ describe('proprietaire_fichier : à qui est ce fichier ?', () => {
 
   it('marque « vu seulement » chaque fil qui n’a fait que voir un script écrire (conv-1587)', async () => {
     // Vrai cas du 05/11/2026 : 18 fichiers écrits par un script à 08:13:00, sans outil d'écriture,
-    // vus par les comparaisons de fin de tour de conv-1575, conv-1577 et conv-1587.
+    // vus par les comparaisons de fin de tour.
     donnees()
     const ws = depot()
     const avantLeTourDe1575 = await captureMutationTraceBase(ws, [])

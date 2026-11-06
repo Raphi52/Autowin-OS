@@ -1,5 +1,5 @@
 /**
- * La VRAIE fenêtre de la carte de fin de tour (conv-1066, 2026-10-22) — la page, la taille et la
+ * La VRAIE fenêtre de la carte de fin de tour (2026-10-22) — la page, la taille et la
  * pile vivent dans `notification-popup.ts`, testées sans Electron.
  *
  * Fenêtre sans bordure, transparente (les coins arrondis du cadre irisé), au premier plan, hors de
@@ -26,7 +26,7 @@ import {
 import { traduireCoeur } from '../consignes/textes-coeur'
 
 /**
- * Le thème choisi dans Réglages · Interface, tel que la page de l'app l'a envoyé (conv-1090). Il
+ * Le thème choisi dans Réglages · Interface, tel que la page de l'app l'a envoyé. Il
  * vit ICI, dans le processus principal, et survit donc à la fenêtre principale fermée dans la
  * zone de notification : c'est justement là que les cartes servent.
  */
@@ -52,7 +52,7 @@ const ouvrirFenetre: DependancesPile['ouvrirFenetre'] = ({
 }) => {
   // fix-ok: une page chargée en `data:` ne suit JAMAIS un lien `#fragment` (aucune navigation, clic
   // reçu pourtant) ; chargée depuis un FICHIER, le même clic émet `did-navigate-in-page`. Mesuré le
-  // 2026-10-22 dans le bureau caché, 4 variantes js/focus/data/fichier (conv-1066).
+  // 2026-10-22 dans le bureau caché, 4 variantes js/focus/data/fichier.
   // Le fichier s'écrit AVANT la fenêtre : une écriture impossible fait jeter `fabriquer` (la bulle
   // prend le relais dans `index.ts`) sans laisser derrière elle une fenêtre cachée jamais fermée.
   const fichier = join(tmpdir(), `autowin-carte-${process.pid}-${(compteur += 1)}.html`)
@@ -103,11 +103,11 @@ const ouvrirFenetre: DependancesPile['ouvrirFenetre'] = ({
   win.once('closed', () => rmSync(fichier, { force: true }))
   // fix-ok: le rejet de `loadFile` (did-fail-load) partait dans un `void` : rejet non rattrapé,
   // fenêtre cachée laissée ouverte, NI carte NI bulle (notification-popup-fenetre.test.ts, rouge
-  // avant ce `catch`, conv-1066). La pile ferme la fenêtre et passe la main à la bulle ; une carte
+  // avant ce `catch`). La pile ferme la fenêtre et passe la main à la bulle ; une carte
   // fermée PENDANT son chargement fait aussi rejeter `loadFile` (ERR_ABORTED) : rien à signaler.
   win.loadFile(fichier).catch((erreur: unknown) => {
     if (win.isDestroyed()) return
-    // Journal seulement, lu par qui diagnostique : reste en français (conv-1170, lot 18).
+    // Journal seulement, lu par qui diagnostique : reste en français (lot 18).
     console.warn('[fin-de-tour] page de carte non chargée, bulle Windows —', String(erreur))
     surEchec(erreur)
   })
@@ -137,8 +137,8 @@ type PopupsDeFinDeTour = ReturnType<typeof creerPileDePopups> & {
 
 /**
  * Les cartes de fin de tour, posées en bas à droite de l'écran PRINCIPAL (là où Windows sonne).
- * `zone` retouche la zone de travail : la mascotte du bureau (conv-1145) la remplace par une zone
- * à côté de la bille, là où l'utilisateur l'a glissée (conv-1142). `page` retouche la page d'une
+ * `zone` retouche la zone de travail : la mascotte du bureau la remplace par une zone
+ * à côté de la bille, là où l'utilisateur l'a glissée. `page` retouche la page d'une
  * carte au moment de l'ouvrir : la mascotte y pose son liseré arc-en-ciel quand elle est affichée.
  */
 export function creerPopupsDeFinDeTour({

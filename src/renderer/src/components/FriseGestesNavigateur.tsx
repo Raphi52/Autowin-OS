@@ -1,5 +1,5 @@
 /**
- * NAVIGATEUR INTÉGRÉ DU CHAT — la frise des gestes de l'agent (conv-1286, maquette approuvée
+ * NAVIGATEUR INTÉGRÉ DU CHAT — la frise des gestes de l'agent (maquette approuvée
  * « 1 · Jalons · Aperçu du geste suivant », 2026-10-30).
  *
  * Un jalon par geste sur l'onglet actif, pour suivre d'un coup d'œil ce que l'agent fait de la page :

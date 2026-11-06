@@ -1,7 +1,7 @@
 /**
  * Skills invocables remises au modèle à chaque tour, une ligne chacune avec son déclencheur.
  *
- * Code libre sorti de `commands.ts` tel quel (conv-1580, lot 5) ; `commands.ts` ré-exporte ce qu'il
+ * Code libre sorti de `commands.ts` tel quel (lot 5) ; `commands.ts` ré-exporte ce qu'il
  * exportait déjà, ses importeurs ne changent pas. Dans `commands/`, une VALEUR s'importe d'ici,
  * jamais par `'../commands'` (cycle d'import) : `commands/code-libre.test.ts` le garde.
  */
@@ -20,7 +20,7 @@ import { nativeSkills } from '../app/native-registry'
 const DECLENCHEUR_MAX = 120
 
 /**
- * Longueur de la FRONTIERE (« PAS pour : … ») accolee au declencheur (conv-1033, 2026-10-21).
+ * Longueur de la FRONTIERE (« PAS pour : … ») accolee au declencheur (2026-10-21).
  *
  * `kit-cliquets.test.ts` impose cette clause a chaque description, pour qu'une skill ne soit pas
  * choisie a la place d'une voisine (heal, qui CORRIGE, pour un audit de `judge`). Mesure le

@@ -1,6 +1,6 @@
 /**
  * BLOC ```threejs DU FIL — une scene three.js VIVANTE, qu'on fait pivoter a la souris (demande
- * conv-299, 2026-10-16 : « je veux les planetes en three.js dans le chat, rendu reel »).
+ * 2026-10-16 : « je veux les planetes en three.js dans le chat, rendu reel »).
  *
  * Le code du bloc ne tourne JAMAIS dans la page de l'app : il est envoye a `scene-3d.html` (voir
  * `src/renderer/scene-3d/page-scene-3d.mjs`), chargee dans un cadre `sandbox="allow-scripts"`
@@ -17,14 +17,14 @@ import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-band
 import { codeSceneDuCarrousel } from '../../scene-3d/choix-scene.mjs'
 import './Bloc3D.css'
 
-// `message` absent : la scène n'a rien dit, « Erreur inconnue » est traduit au rendu (conv-1170).
+// `message` absent : la scène n'a rien dit, « Erreur inconnue » est traduit au rendu.
 type EtatScene = { etat: 'chargement' } | { etat: 'lancee' } | { etat: 'erreur'; message?: string }
 
 /** Marge autour de la colonne a partir de laquelle une scene est montee ou demontee. */
 const MARGE_VISIBILITE = '300px 0px'
 
 /**
- * ANCIENS /draft EN VOLUME (avant conv-1304, 2026-10-30) : leur scene ```threejs etait montee par le
+ * ANCIENS /draft EN VOLUME (2026-10-30) : leur scene ```threejs etait montee par le
  * fil dans le carrousel qui la suivait, avec `autowin.surChoix`. Ce montage n'existe plus (le
  * carrousel en volume est une page ```html-interactif qui porte sa scene) : une scene d'un fil
  * ancien se rend seule, au-dessus de son carrousel. Elle recoit le meme prelude pour montrer la

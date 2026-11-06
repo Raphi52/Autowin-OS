@@ -3,7 +3,7 @@
 
 
 /* Friction sur echecs repetes : une serie de runs sans livraison doit se VOIR avant la relance
-   suivante (mesure conv-1302 : neuf relances a l'aveugle). Reprend la geometrie de l'echo de
+   suivante (mesure : neuf relances a l'aveugle). Reprend la geometrie de l'echo de
    perimetre, sans son opacite reduite — c'est justement ce qu'il ne faut pas atténuer. */
 .composer-friction {
   display: flex;
@@ -20,7 +20,7 @@
 }
 
 
-/* Les suites proposées en boutons (conv-1005) : trois au plus, la mieux notée en premier et
+/* Les suites proposées en boutons : trois au plus, la mieux notée en premier et
    soulignée d'or. Une ligne qui passe à la ligne au lieu de déborder : la colonne peut être
    étroite (mosaïque), et un texte coupé se lit en entier au survol (title). */
 .composer-suites {
@@ -28,13 +28,13 @@
   flex-wrap: wrap;
   gap: 6px;
   padding: 2px 2px 6px;
-  /* Le bloc prend la largeur du champ, jamais celle de sa plus longue suggestion (conv-1103) :
+  /* Le bloc prend la largeur du champ, jamais celle de sa plus longue suggestion :
      sans cela, un texte qui ne passe pas à la ligne élargissait la zone de saisie à 900 px et
      poussait le bouton d'envoi hors de l'écran, au lieu de se couper avec « … ». */
   contain: inline-size;
 }
 
-/* Titre « Pour continuer… » (conv-1103) : toute la largeur, au-dessus des boutons. */
+/* Titre « Pour continuer… » : toute la largeur, au-dessus des boutons. */
 .composer-suites-titre {
   flex: 1 0 100%;
   padding: 0 2px;
@@ -71,7 +71,7 @@
   border-color: rgba(212, 169, 79, 0.55);
 }
 
-/* Suite COCHÉE (conv-1103) : plusieurs peuvent l'être, elles partent ensemble. La case porte
+/* Suite COCHÉE : plusieurs peuvent l'être, elles partent ensemble. La case porte
    l'état à elle seule — un thème qui repeint le bord du bouton ne le fait pas disparaître. */
 .composer-suite.is-cochee {
   border-color: var(--gold-bright, #e3ba55);
@@ -117,11 +117,11 @@
   text-overflow: ellipsis;
 }
 
-/* BARRE DE PROMPT COMPACTE (conv-1377, 2026-10-31 : « compacte la barre de prompt en hauteur »).
+/* BARRE DE PROMPT COMPACTE (2026-10-31 : « compacte la barre de prompt en hauteur »).
    Trois étages (texte, jauge, boutons) deviennent deux : la jauge des quotas rejoint la rangée des
    boutons et prend la place qui reste. La réserve de deux lignes de texte ne bouge pas (demande du
    2026-09-18, `ChatView.composer-hauteur.test.ts`) : la hauteur vient de l'étage en moins et des
-   marges. `order` et non un déplacement du JSX, comme pour le texte et l'envoi (conv-167).
+   marges. `order` et non un déplacement du JSX, comme pour le texte et l'envoi.
 
    POSITIONS (même demande : « question à côté en première position et le micro en 2ème »).
    La jauge reste en repli à la ligne dans une tuile de mosaïque étroite : base de 120 px.
@@ -136,9 +136,9 @@
 .composer-input-row > .composer-trois-facons {
   order: 1;
 }
-/* JAUGE SUR LE BORD DU CADRE (conv-1399, 2026-10-31 : « la barre de quota on peut la mettre au
+/* JAUGE SUR LE BORD DU CADRE (2026-10-31 : « la barre de quota on peut la mettre au
    niveau du bord du container, on gagnerait grave de la place en hauteur pour le chat »). Elle
-   avait une ligne à elle sous les icônes (conv-1392) : 20 px, plus 3 px d'écart. Sortie du flux,
+   avait une ligne à elle sous les icônes : 20 px, plus 3 px d'écart. Sortie du flux,
    elle se pose au pied de la rangée, qui touche le bas du cadre (marges du bas à 0, plus bas). Même
    largeur qu'avant : celle de la rangée, de bord à bord, sous les icônes et Stop. */
 .composer-input-row > .model-quota {
@@ -163,7 +163,7 @@
   gap: 3px;
   padding: 2px 2px 0;
 }
-/* MOINS DE VIDE EN HAUT ET EN BAS (conv-1392, 2026-10-31 : « ya bcp d'espace vide en haut et en
+/* MOINS DE VIDE EN HAUT ET EN BAS (2026-10-31 : « ya bcp d'espace vide en haut et en
    bas de cette barre de prompt, réduis tous les padding »). Les deux règles ci-dessus (2 niveaux)
    perdaient contre celles des thèmes (`:root[data-theme=…] .cosmic-outline .composer-field`,
    4 niveaux) : sur Nébuleuse, 14 px au-dessus du texte et 12 + 10 px sous la jauge, relevés au
@@ -177,7 +177,7 @@
   padding-top: 6px;
   padding-bottom: 4px;
 }
-/* LE TRAIT AU PIED DE LA RANGÉE, LE ROND CENTRÉ DESSUS (conv-1399, 2026-10-31 : « le chiffre du
+/* LE TRAIT AU PIED DE LA RANGÉE, LE ROND CENTRÉ DESSUS (2026-10-31 : « le chiffre du
    quota il est trop haut, il est plus centré sur la barre », puis « t'as remonté la barre au lieu de
    baisser le chiffre »). Le trait ne bouge pas : c'est le rond qui descend, et il passe sous le cadre.
    `top` vise le milieu du trait de 3 px, le `translateY(-50%)` de ModelQuotaIndicator.css fait le
@@ -191,7 +191,7 @@
 .composer-input-row > .model-quota .model-quota-bar-value {
   top: calc(100% - 1.5px);
 }
-/* LE ROND DÉPASSE DU CADRE D'ENVIRON 6 PX (conv-1399) : `overflow: hidden` sur ces deux conteneurs le
+/* LE ROND DÉPASSE DU CADRE D'ENVIRON 6 PX : `overflow: hidden` sur ces deux conteneurs le
    coupait net (`.chat` dans cosmic-outline.css, `.chat-layout` dans ChatView.css). `clip` coupe au
    même endroit à la marge près, et 8 px suffisent au rond. Sans risque pour la hauteur : `.chat-layout`
    fixe `min-height: 0` et `.chat` `min-width: 0`, que `clip` ne donne pas seul. */
@@ -200,7 +200,7 @@
   overflow: clip;
   overflow-clip-margin: 8px;
 }
-/* LA PLACE DE LA JAUGE SOUS LES ICÔNES (conv-1399). Plus de marge sous le champ ni sous le cadre :
+/* LA PLACE DE LA JAUGE SOUS LES ICÔNES. Plus de marge sous le champ ni sous le cadre :
    la rangée descend jusqu'au bord, et c'est elle qui garde 14 px sous ses boutons. Le haut du rond
    y tient sans toucher un bouton. `:has` : une saisie sans jauge garde ses marges. */
 .composer-input-row:has(> .model-quota) {

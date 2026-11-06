@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LE WORKFLOW INTELLIGENT DU PANNEAU DES CANDIDATS SCOUT (conv-1080) : « ça doit retenir les
+ * LE WORKFLOW INTELLIGENT DU PANNEAU DES CANDIDATS SCOUT : « ça doit retenir les
  * candidats puis lancer le workflow intelligent », puis « fais le truc parfait ». UN seul bouton garde
  * les cases cochées ; chaque ligne porte SA voie (direct / à cadrer) et sa raison ; le plan découpe la
  * sélection en lots par voie, 3 pistes au plus, envoyés l'un après l'autre. Le clic automatique suit

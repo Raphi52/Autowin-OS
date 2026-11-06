@@ -36,7 +36,7 @@ describe('ALLOWED_STYLE_PROPS — font et border-image', () => {
 })
 
 /**
- * MESURE du 2026-09-07 (conv-335) : quatre propositions d'icone dessinees en `<svg>` se sont affichees
+ * MESURE du 2026-09-07 : quatre propositions d'icone dessinees en `<svg>` se sont affichees
  * VIDES dans le fil — seuls les libelles texte restaient. Aucune balise SVG n'etait dans la liste
  * blanche, donc chaque dessin etait deplie et perdu.
  */

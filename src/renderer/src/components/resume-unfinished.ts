@@ -22,7 +22,7 @@ export interface UnfinishedTurn {
  *
  * Sans cette borne, un vestige de la veille gardait la priorité sur la mémoire de la dernière
  * conversation ouverte, et l'utilisateur retombait dessus à chaque démarrage (mesuré le 2026-08-18,
- * conv-1267 : deux tours interrompus par un processus tué, en tête de `unfinishedTurns()`).
+ * Deux tours interrompus par un processus tué, en tête de `unfinishedTurns()`).
  */
 export function pickTurnToResume(
   turns: readonly UnfinishedTurn[] | null | undefined,
@@ -53,7 +53,7 @@ export type MessageEnregistre = {
 /**
  * LE REJEU N'A RIEN À AJOUTER QUAND L'ENREGISTREMENT PORTE DÉJÀ LE TOUR.
  *
- * Vécu conv-1149 (2026-10-25), sur le défaut de conv-1146 (« uniquement le bloc raisonnement vide »),
+ * Vécu (2026-10-25), sur le défaut (« uniquement le bloc raisonnement vide »),
  * reproduit dans une instance cachée. Au rechargement de la fenêtre, la reprise vise un tour ENCORE EN
  * VOL ; un brouillon retient l'écran sur un autre fil, et le texte du tour est rejoué depuis son
  * journal en une bulle « terminée ». Ce rejeu ne lisait pas l'enregistrement : il posait un fil réduit

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 
 /**
- * PONTS ENTRE LE BRAIN PERSO ET LE BRAIN D'ÉQUIPE (conv-1262, 2026-10-29, demande utilisateur :
+ * PONTS ENTRE LE BRAIN PERSO ET LE BRAIN D'ÉQUIPE (2026-10-29, demande utilisateur :
  * « le brain personnel peut avoir des ponts vectoriels avec le brain d'entreprise ? » puis « oui
  * ajoute ça »).
  *

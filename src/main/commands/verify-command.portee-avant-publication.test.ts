@@ -4,7 +4,7 @@ import { porteeAvantPublication } from './verify-command'
 /**
  * La portée que le commit automatique du chat rejoue AVANT de pousser.
  *
- * Mesuré le 2026-10-01 : le commit automatique `b6d2a3fc` (conv-892) a modifié `src/main/index.ts`
+ * Mesuré le 2026-10-01 : le commit automatique `b6d2a3fc` a modifié `src/main/index.ts`
  * et rendu `chat-ipc-contract.test.ts` rouge sur main pendant 20 h. Ce test LIT `index.ts`
  * (`readFileSync`) au lieu de l'importer : `vitest related src/main/index.ts` ne l'aurait PAS
  * rejoué. La portée de publication ajoute donc, pour un fichier de code, les tests qui CITENT son nom.

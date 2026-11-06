@@ -4,7 +4,7 @@ import { AppCommandBus } from './commands'
 /**
  * LA LISTE DES RUNS BLOQUÉS NE DOIT PLUS MENTIR PAR OMISSION.
  *
- * Constat du 2026-09-25 (conv-861) : `get_state` affichait `runsBlocked: []` alors qu'il ne lit que
+ * Constat du 2026-09-25 : `get_state` affichait `runsBlocked: []` alors qu'il ne lit que
  * les 24 RUN.md les plus récents (`LIMITE_RUNS_SNAPSHOT`). Le scan borné calculait le nombre de
  * fichiers écartés (`remaining`) puis le JETAIT. Ranger 18 runs d'essai récents a fait REMONTER 6
  * anciens runs bloqués que la liste ne montrait pas une minute plus tôt. Deux troncatures
@@ -84,7 +84,7 @@ describe('runs bloqués : la troncature se voit', () => {
     expect(etat.runs[1]).toEqual({ subject: 'sujet-1', status: 'open', blocked: true })
   })
 
-  // Objection du contrôle final (conv-1337) : `runsBlocked` rendait `status: green` sans dire qu'il
+  // Objection du contrôle final : `runsBlocked` rendait `status: green` sans dire qu'il
   // attendait l'utilisateur, et l'agent qui le lisait le prenait pour un run à débloquer.
   it('l’état servi aux agents dit quel run attend une décision, et seulement celui-là', async () => {
     const attente = {

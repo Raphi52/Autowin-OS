@@ -8,7 +8,7 @@ import { hydrateStoredAssistant } from '../../renderer/src/components/chat-view-
 import type { Msg } from '../../renderer/src/components/chat-view-types'
 
 /**
- * DEFAUT MESURE — conv-23, tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba (2026-09-27).
+ * DEFAUT MESURE, tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba (2026-09-27).
  *
  * La reponse du tour se terminait par
  * `AUTOWIN_PROMPT_V1: Crée la démo pour les architectes…`. 143 ms apres la fin du tour

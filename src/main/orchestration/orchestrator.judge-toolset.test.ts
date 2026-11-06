@@ -18,8 +18,8 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
  *
  * Mesuré sur la campagne propre du 2026-08-12 : les quatre builds ont été rejetés, et deux d'entre
  * eux exigeaient une preuve hors de portée — « aucune preuve UI live sur un binaire packagé frais »
- * (conv-1135 Task Manager), « la capture/CDP de l'application réelle est affirmée sans preuve
- * d'exécution ou de relecture observable » (conv-1137 Tickets).
+ * (Task Manager), « la capture/CDP de l'application réelle est affirmée sans preuve
+ * d'exécution ou de relecture observable ».
  *
  * Asymétrie structurelle : le PRODUCTEUR reçoit `PIPELINE_DISCIPLINE_INSTRUCTION`, qui lui dit
  * « n'invente jamais un outil, une commande, un harnais absents ; l'absence d'un mécanisme non
@@ -112,7 +112,7 @@ describe('moyens du producteur opposables au juge', () => {
     expect(prompt).toMatch(/exit-code 0/)
   })
 
-  // 2026-09-26 (conv-863) : une capture verte de l'application EMPAQUETÉE ne contient pas une
+  // 2026-09-26 : une capture verte de l'application EMPAQUETÉE ne contient pas une
   // modification non empaquetée. Le juge doit savoir lire d'où vient l'interface capturée.
   it('apprend au juge à lire d’où vient l’interface capturée', async () => {
     const prompt = await promptDuJuge()
@@ -135,7 +135,7 @@ describe('moyens du producteur opposables au juge', () => {
   })
 
   /**
-   * conv-1582 (2026-11-05) : le contrat disait au juge que le producteur n'a Bash/Edit/Write
+   * 2026-11-05 : le contrat disait au juge que le producteur n'a Bash/Edit/Write
    * « qu'en phase de mutation » et « pas d'accès web ». Or `sandboxForPhase` rend
    * `danger-full-access` à chaque phase de la chaîne, et `providers/claude.ts` charge Bash et
    * WebFetch/WebSearch sur toute exécution. Le juge croyait donc impossible ce que le producteur

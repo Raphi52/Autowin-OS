@@ -113,17 +113,17 @@ export type BrainRetrievalStatus = 'found' | 'empty' | 'invalid' | 'unavailable'
  * - `reindexing` : `POST /query-secure` a répondu 503 — le serveur, SAIN, n'a pas encore prouvé son
  *   index depuis son démarrage, ou le juge douteux en lui-même (autre version du code, racines,
  *   surveillance du corpus en panne). Une simple modification de notes ne le provoque plus : l'index
- *   précédent répond pendant la revérification (`brain_retrieval.py`, `_stale_serving_reason`,
- *   conv-1053). Le plus souvent transitoire : attendre, ne rien réparer.
+ *   précédent répond pendant la revérification (`brain_retrieval.py`, `_stale_serving_reason`).
+ *   Le plus souvent transitoire : attendre, ne rien réparer.
  * - `timeout` : NOTRE délai a coupé l'appel (le serveur répondait peut-être, trop lentement).
  * - `network` : rien n'a répondu (serveur arrêté, port fermé, réseau).
  *
- * `reindexing` et `timeout` sont arrivés le 2026-10-22 (conv-1053) : un tour de chat sur trois
+ * `reindexing` et `timeout` sont arrivés le 2026-10-22 : un tour de chat sur trois
  * rendait « unavailable », et seule la durée de chaque échec, recoupée à la main avec l'heure de
  * début de son tour, a pu départager 57 refus 503 en 0,1-0,3 s de 23 délais dépassés à ~1,6 s.
  * - `test-mode` : neutralisation Vitest, jamais une panne réelle.
  * - `foreign-signature` (statut `invalid`, pas `unavailable`) : `GET /challenge` a répondu, mais
- *   signé avec une AUTRE clé que le jeton d'Autowin — un autre serveur Brain tient le port (conv-338,
+ *   signé avec une AUTRE clé que le jeton d'Autowin — un autre serveur Brain tient le port (
  *   2026-10-19 : l'ancien serveur d'une autre installation). Aucune question n'est partie.
  */
 export type BrainUnavailableReason =

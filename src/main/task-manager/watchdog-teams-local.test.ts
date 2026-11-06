@@ -291,7 +291,7 @@ describe('localValuesToSnapshot', () => {
 })
 
 describe('sourceTeams', () => {
-  // conv-770, 2026-09-26 : AUTOWIN_TEAMS_CLIENT_ID etait defini mais Graph jamais connecte (aucun
+  // 2026-09-26 : AUTOWIN_TEAMS_CLIENT_ID etait defini mais Graph jamais connecte (aucun
   // jeton) -> l'app choisissait Graph, restait « en pause », et la lecture locale ne servait jamais.
   it('Graph seulement s’il est configure ET connecte (jeton present)', () => {
     expect(sourceTeams({ clientId: 'id', jetonGraph: true, windows: true })).toBe('graph')

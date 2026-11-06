@@ -8,7 +8,7 @@
  * l'événement au chemin COURT qu'on lui a donné : ils diffèrent, il assert. Corrigé alors par
  * `realCanonique`, mais dans `providers/workspace-mutation-evidence.ts` SEULEMENT. Le 2026-10-19,
  * un nouveau veilleur (`store/surveillance-references-git.ts`, 0d1b527a) a rappelé `watch` en
- * direct : la suite entière mourait de nouveau en code 127 (contrôle final de conv-1056,
+ * direct : la suite entière mourait de nouveau en code 127 (contrôle final,
  * 2026-10-22).
  *
  * La cause de la RÉCIDIVE n'était pas un oubli isolé : chaque nouveau veilleur devait se souvenir

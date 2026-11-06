@@ -1,5 +1,5 @@
 /**
- * SERVICES DE MODÈLES SERVIS SANS CLI (2026-11-04, conv-1499) : la demande « l'architecture doit
+ * SERVICES DE MODÈLES SERVIS SANS CLI (2026-11-04) : la demande « l'architecture doit
  * pouvoir héberger n'importe quel modèle » interdit que tout passe par le CLI Claude ou Codex.
  * Chaque service qui parle le format OpenAI « chat completions » se déclare ICI par une ligne de
  * données ; le moteur unique `OpenAICompatAdapter` (openai-compat.ts) le sert. Ajouter un service =
@@ -23,7 +23,7 @@ export interface ServiceHttp {
   toujoursVisible?: boolean
 }
 
-// Liste vidée le 2026-11-04 (conv-1522) : l'utilisateur ne veut AUCUN modèle par clé d'API, seulement
+// Liste vidée le 2026-11-04 : l'utilisateur ne veut AUCUN modèle par clé d'API, seulement
 // ses abonnements (Claude, ChatGPT/Codex, Gemini par agy, Grok par son CLI).
 export const SERVICES_HTTP: readonly ServiceHttp[] = []
 

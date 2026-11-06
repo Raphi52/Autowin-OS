@@ -4,7 +4,7 @@ import { formatOrchestrationOutcome } from './orchestration-outcome'
 /**
  * UNE CAUSE REPARABLE N'EST PAS UN ECHEC — c'est une attente.
  *
- * Ce que l'utilisateur lisait, mot pour mot, le 2026-08-27 (conv-1450) :
+ * Ce que l'utilisateur lisait, mot pour mot, le 2026-08-27 :
  *   « ⛔ Travail NON integre — ton arbre principal a une base sale (des fichiers non committes) ·
  *     statut echoue · cout 1,32 $ »
  * Sa reponse : « je ne veux plus jamais voir ce panneau sens interdit il me rend fou » et

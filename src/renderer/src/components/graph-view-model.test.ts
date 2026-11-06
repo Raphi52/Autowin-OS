@@ -244,7 +244,7 @@ describe('graph view presentation model', () => {
   })
 
   it('summarises communities by size then id', () => {
-    // Le theme du domaine metier porte le libelle du profil (conv-916) ; le code n'en nomme aucun.
+    // Le theme du domaine metier porte le libelle du profil ; le code n'en nomme aucun.
     const metier = { cle: 'contoso', libelle: 'CONTOSO' }
     expect(buildThemeSummaries(nodes, [], metier)).toEqual([
       { id: 'theme/contoso', label: 'CONTOSO', count: 2 },

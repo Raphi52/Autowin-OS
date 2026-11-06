@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — ÉCRAN AGENT STUDIO (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — ÉCRAN AGENT STUDIO (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : AgentStudioView, la topologie des agents, les profils de workflow, le canevas et l’éditeur de
  * graphe, ViewTopBar.
@@ -13,7 +13,7 @@ import { tableDeTextes } from '../textes'
  * volontairement identique au français (nom propre, nom de produit) se déclare dans
  * `IDENTIQUES_AU_FRANCAIS`, avec sa raison.
  *
- * RESTENT EN DUR, hors de cette table (lot « Agent Studio », conv-1170) :
+ * RESTENT EN DUR, hors de cette table (lot « Agent Studio ») :
  *  - les mots déjà identiques dans les deux langues, écrits une fois dans le composant :
  *    « ORCHESTRATION », « Agent Studio », « Workflows », « Models », les noms de panneaux
  *    « Scouts », « Frame », « Terrain », « Judges » (noms des phases du moteur), « Phases »,

@@ -1,5 +1,5 @@
 /**
- * SCRIPTS DE PAGE du navigateur intégré (conv-1286, lot 1/5, 2026-10-29).
+ * SCRIPTS DE PAGE du navigateur intégré (lot 1/5, 2026-10-29).
  *
  * Ce fichier ne contient que des SOURCES JavaScript, jouées dans la page par
  * `webContents.executeJavaScriptInIsolatedWorld` (voir `navigateur-integre.ts`). Rien ici ne
@@ -32,9 +32,9 @@ export const PING_NAVIGATEUR = '__aw-nav:ping'
 
 /**
  * Version du noyau : un noyau plus ancien déjà posé dans la page est remplacé. 2 = aperçu du geste
- * suivant (`surligner` en pointillés, pas-à-pas de conv-1286, 2026-10-30). 3 = fonction Annoter
- * retirée (conv-1306, 2026-10-30). 4 = Choisir n'envoie plus le clic du choix à la page (conv-1306).
- * 5 = le cadre suit sa cible (conv-1324).
+ * suivant (`surligner` en pointillés, 2026-10-30). 3 = fonction Annoter
+ * retirée (2026-10-30). 4 = Choisir n'envoie plus le clic du choix à la page.
+ * 5 = le cadre suit sa cible.
  */
 const VERSION_NOYAU = 5
 
@@ -71,7 +71,7 @@ export interface FocusPage {
   description: string
   /**
    * Où surligner une frappe sans cible : le champ actif, ou toute la fenêtre quand rien n'a le
-   * focus (la touche va alors à la page). Ajouté sur objection du juge (conv-1287).
+   * focus (la touche va alors à la page). Ajouté sur objection du juge.
    */
   rect?: { x: number; y: number; largeur: number; hauteur: number }
 }

@@ -3,10 +3,10 @@ import type { Conv } from './chat-view-types'
 import { etatDuFil } from './lots-dans-la-liste'
 
 /**
- * LE SIGNE D'UNE SUPER CONV DANS LA LISTE DE GAUCHE (conv-1395, 2026-10-31, /draft « un signe
+ * LE SIGNE D'UNE SUPER CONV DANS LA LISTE DE GAUCHE (2026-10-31, /draft « un signe
  * distinctif pour les super convs dans la liste de gauche », proposition retenue « 6 · Raccourci »).
  *
- * Depuis conv-1381, les lots n'ont plus de ligne : rien ne distinguait un fil chef d'un fil seul. La
+ * Les lots n'ont plus de ligne : rien ne distinguait un fil chef d'un fil seul. La
  * ligne d'un chef porte donc une pile sous elle, une jauge fine (un segment par lot du plan qu'il
  * montre), le compte des lots finis, et un raccourci « N ? » vers le premier lot qui attend ta
  * réponse.

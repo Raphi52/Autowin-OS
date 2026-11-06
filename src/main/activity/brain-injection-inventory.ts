@@ -56,7 +56,7 @@ export const NOTE_BRUYANTE_SEUIL = 10
 const NOTES_BRUYANTES_MAX = 15
 
 /**
- * NOTES SERVIES SOUVENT, JAMAIS OUVERTES (conv-1303, 2026-10-30) — de quoi nourrir `/curate`.
+ * NOTES SERVIES SOUVENT, JAMAIS OUVERTES (2026-10-30) — de quoi nourrir `/curate`.
  *
  * Mesure du 13 au 30/10 : les notes « plan de lots » ont été servies 46 fois sans une ouverture,
  * une note d'état passager (« conv-1146 : travail non commité… ») 23 fois. Une telle note répond à

@@ -169,7 +169,7 @@ describe('Agent Studio — la section par défaut est CÂBLÉE', () => {
  */
 describe('Agent Studio — les onglets annoncent les anomalies', () => {
   /**
-   * Routage a quitté Agent Studio pour Settings (conv-963, 2026-10-15) : son onglet, et l'alerte des
+   * Routage a quitté Agent Studio pour Settings (2026-10-15) : son onglet, et l'alerte des
    * providers à reconnecter qu'il portait, n'existent plus ici — ils sont couverts par
    * `SettingsView.routage.test.tsx`.
    */

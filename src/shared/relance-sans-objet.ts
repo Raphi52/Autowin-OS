@@ -43,7 +43,7 @@ const MOTIFS: readonly RegExp[] = [
   // « lance le », « relance la suite », « lancer terrain », « lancer la phase suivante » : une
   // phase ou un pronom, jamais un objet.
   /^(?:re)?lance[rz]?(?:\s+(?:le|la|l'|ca|ceci|cela))?(?:\s*(?:(?:la\s+)?(?:phase|etape)\s+)?(?:\/?(?:scout|frame|cadrage|terrain|build|clean|judge|juge)|suivante|suite))?$/,
-  // Les formules vagues reconnues avant 2026-10-14 (conv-1265) : « fais un truc parfait »…
+  // Les formules vagues reconnues avant 2026-10-14 : « fais un truc parfait »…
   /^(?:(?:fais|fait)\s+)?(?:ca|ceci|cela|un truc|le truc)(?:\s+(?:bien|parfait|parfaitement))?$/,
   /^fais ce qu'il faut pour que (?:ca|ceci|cela)(?: se)? fasse (?:ca|ceci|cela) la prochaine fois$/,
   /^finis? (?:ca|ceci|cela)(?: une bonne fois pour toutes)?$/,
@@ -80,7 +80,7 @@ export function estRelanceSansObjet(texte: string): boolean {
  * Le texte avant le marqueur doit être une relance sans objet : seule une relance est enveloppée,
  * et un message qui nomme son objet reste seul maître du run même s'il cite le marqueur.
  * Sert à la recherche du point de reprise (`pickResumeForTask`) : « REPREND » comparé en entier ne
- * retrouvait jamais la tâche qu'il porte (conv-1038, 2026-10-21 — run complet repayé, ~36 $).
+ * retrouvait jamais la tâche qu'il porte (2026-10-21 — run complet repayé, ~36 $).
  */
 export function cibleDUneRelance(objectif: string): string | undefined {
   const separateur = `\n\n${MARQUEUR_CIBLE_CONTEXTUALISEE}`

@@ -5,7 +5,7 @@ import { deciderRelanceAuto, dernierTourEstUnScout, lireCibleScout } from './cha
 /*
  * APRES UN SCOUT — un scout rend PLUSIEURS pistes. Sans regle, le maillon suivant du mode auto
  * repart sur le tableau entier : la boucle enchaine un tour PAYANT sur une cible que personne n'a
- * choisie. Cadrage du 2026-09-05 (conv-308, decision B incluant A) : la sortie d'un scout porte en
+ * choisie. Cadrage du 2026-09-05 (decision B incluant A) : la sortie d'un scout porte en
  * TETE une ligne `CIBLE:` ; l'absence de cible est une FIN de chaine ; une cible destructrice ne
  * part JAMAIS toute seule, elle demande l'accord de l'utilisateur.
  *

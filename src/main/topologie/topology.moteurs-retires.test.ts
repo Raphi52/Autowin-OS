@@ -4,7 +4,7 @@ import { migrateTopologyShape, type AgentTopology } from './topology'
 /**
  * Kimi et Gemini sont retirés du produit. Une topologie DÉJÀ ENREGISTRÉE peut encore pointer
  * dessus. Cas réel mesuré le 2026-09-04 sur `agent-topology.json`, du temps où Codex l'était aussi :
- * `panels.terrain[0]` = `codex/gpt-5.6-sol`. Codex est revenu le 2026-10-31 (conv-1414).
+ * `panels.terrain[0]` = `codex/gpt-5.6-sol`. Codex est revenu le 2026-10-31.
  *
  * Sans migration, la validation au chargement rejette la topologie et RÉINITIALISE toute la
  * configuration de l'utilisateur. La migration doit donc rebrancher le slot sur le moteur vivant

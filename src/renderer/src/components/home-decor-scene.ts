@@ -96,13 +96,13 @@ const ANTHRACITE = 0x1b222c
  *
  * Ce n'est pas un detail cosmetique : en alpha 0, l'image plate `autowin-galaxy-bg-hq.png` posee sur
  * `body` par `theme.css` passait au travers du canevas, et l'utilisateur voyait l'image au lieu de sa
- * reproduction 3D (conv-1397). Un fond opaque fait du decor la SEULE source du fond sur l'accueil ;
+ * reproduction 3D. Un fond opaque fait du decor la SEULE source du fond sur l'accueil ;
  * le noir est celui du centre du fond d'ecran, donc la jonction avec les bords reste invisible.
  */
 export const FOND_DECOR = { couleur: 0x000000, alpha: 1 } as const
 
 /**
- * La CHAÎNE CINÉMATIQUE du décor (demande conv-1402 : « ultra magnifique, effet wow »).
+ * La CHAÎNE CINÉMATIQUE du décor (demande : « ultra magnifique, effet wow »).
  *
  * Ce qui manquait n'était pas de la matière — la scène en avait déjà beaucoup — mais l'étage qui
  * transforme une accumulation de points additifs en IMAGE. Trois réglages, chacun visible s'il est
@@ -283,7 +283,7 @@ function buildFilantes(random: () => number): THREE.Points {
  * centre noir, nébuleuses roses et cyan, or pour la structure.
  *
  * `avenue` est d'une autre famille : ce n'est pas une composition de ce fichier mais une scène à part
- * (`home-decor-avenue.ts`), l'avenue cyberpunk sous l'orage demandée le 2026-10-17 (conv-301).
+ * (`home-decor-avenue.ts`), l'avenue cyberpunk sous l'orage demandée le 2026-10-17.
  */
 export type DecorVariant = 'avenue' | 'actuel' | 'limbe' | 'poussiere' | 'orbites' | 'nappe'
 
@@ -356,7 +356,7 @@ function seededRandom(seed: number): () => number {
 }
 
 /**
- * Les ÉTOILES PRINCIPALES (demande conv-1410, 2026-08-27 : « rajoute quelques étoiles principales
+ * Les ÉTOILES PRINCIPALES (2026-08-27 : « rajoute quelques étoiles principales
  * au loin »). Une poignée d'astres nommables, posés sur le BORD EXTERNE de la coquille : au loin,
  * elles ne passent jamais devant les planètes, et leur rareté est ce qui les rend principales —
  * une dizaine de plus et le ciel redevient un semis uniforme.
@@ -551,7 +551,7 @@ export const SURFACE_LUNE = {
    * Part de blanc dans le ton clair des crêtes (planètes : 0,6 vers un blanc chaud).
    *
    * 0,06 : plancher pratique. Le test de contrat exige `> 0,05`, garde-fou contre une lune plate ;
-   * on s'y range au plus près après trois passes « encore trop lumineuses » (conv-1410, conv-1426).
+   * on s'y range au plus près après trois passes « encore trop lumineuses ».
    */
   clair: 0.06,
   /**
@@ -747,7 +747,7 @@ const PLANETE_VERTEX_SHADER = [
 ].join('\n')
 
 /**
- * La SURFACE d'une planète, calculée pixel par pixel (refonte demandée en conv-1400).
+ * La SURFACE d'une planète, calculée pixel par pixel (refonte demandée).
  *
  * Avant, le globe était une couleur UNIE sur une sphère : une bille de plastique. Quatre choix
  * portent le détail, et chacun se voit s'il est retiré :
@@ -805,7 +805,7 @@ export const PLANETE_FRAGMENT_SHADER = [
   '  float relief = (ridged - 0.5) * 0.55 + (matiere - 0.5) * 0.35;',
   '  float incidence = dot(n, normalize(uLumiere)) - relief * 0.11;',
   '  float jour = smoothstep(-0.22, 0.45, incidence);',
-  // LUMINOSITÉ BAISSÉE (demande conv-1451) : gain de jour 1.15 -> 0.70, ambiante 0.08 -> 0.05,
+  // LUMINOSITÉ BAISSÉE : gain de jour 1.15 -> 0.70, ambiante 0.08 -> 0.05,
   // braise de nuit et limbe atténués dans la même proportion. Les planètes se posent dans le fond
   // sombre au lieu de brûler ; le détail ci-dessus reste lisible parce qu il vient de l ALBEDO.
   '  vec3 couleur = albedo * (0.05 + 0.70 * jour);',
@@ -869,7 +869,7 @@ export const ANNEAU_FRAGMENT_SHADER = [
 ].join('\n')
 
 /**
- * LES LUNES (demande conv-1408 : « des lunes autour des planetes »).
+ * LES LUNES (demande : « des lunes autour des planetes »).
  *
  * Réglage tenu en fractions du RAYON de la planète, parce qu'une lune vit dans le repère local de sa
  * planète : le groupe est mis à l'échelle par `resize`, donc une distance en unités monde produirait
@@ -932,7 +932,7 @@ function buildLune(seed: number, teinte: number): THREE.Mesh {
         uBase: { value: base },
         // `uClair` sert AUSSI de couleur de rim dans PLANETE_FRAGMENT_SHADER. Sur un globe de 0,15
         // rayon, ce rim recouvre presque tout le disque à l'écran : à 0,6 de blanc la lune ne se lit
-        // plus que comme une boule de lumière (« on dirait des soleils », conv-1410).
+        // plus que comme une boule de lumière (« on dirait des soleils »).
         //
         // FUSION de deux corrections concurrentes du MÊME défaut, le 2026-08-26. `86baa8f6` (déjà
         // dans l'arbre) baissait `uClair` à 0,14 sans test ; la branche de secours
@@ -953,11 +953,11 @@ function buildLune(seed: number, teinte: number): THREE.Mesh {
 }
 
 /**
- * Une planète annelée, ULTRA détaillée (demande conv-1400).
+ * Une planète annelée, ULTRA détaillée.
  *
  * Le globe porte un shader de surface (continents fractals, bandes, terminateur adouci, limbe) ; ses
  * anneaux sont des disques de matière troués par des divisions, sur lesquels le globe projette son
- * ombre. Rien n'est texturé : tout est CALCULÉ — le décor reste synthétique, comme décidé en conv-1399.
+ * ombre. Rien n'est texturé : tout est CALCULÉ — le décor reste synthétique, comme décidé.
  */
 function buildPlanet(options: {
   radius: number
@@ -1088,7 +1088,7 @@ function buildPlanet(options: {
 }
 
 /**
- * LE NUAGE COSMIQUE CENTRAL (demande conv-1408 : « un nuage cosmique bleu violet au milieu qui se
+ * LE NUAGE COSMIQUE CENTRAL (demande : « un nuage cosmique bleu violet au milieu qui se
  * déplace »).
  *
  * La composition tenait le centre NOIR par principe — les nébuleuses vivent dans les angles pour que
@@ -1108,14 +1108,14 @@ export const NUAGE_COSMIQUE = {
   /** Turquoise : la teinte froide des bords, ce qui empeche la nebuleuse de virer monochrome. */
   froid: 0x2fe6ff,
   /**
-   * Les BRAISES (conv-1449, image jointe) : l'or-orange qui occupe la moitie chaude de la nebuleuse
+   * Les BRAISES (image jointe) : l'or-orange qui occupe la moitie chaude de la nebuleuse
    * de reference. Sans elle, le nuage reste un camaieu bleu-violet et ne ressemble pas a l'image.
    */
   chaud: 0xff8a2b,
   /** Profondeur : derrière les planètes, devant les nébuleuses d'angle. */
   z: -14,
   /**
-   * Taille du PLAN, en fraction du GRAND demi-cote du cadre (conv-1455 : « le nuage est coupe net »).
+   * Taille du PLAN, en fraction du GRAND demi-cote du cadre (« le nuage est coupe net »).
    * Le plan doit etre plus GRAND que le nuage : le fondu du masque s'eteint vers 0.46 en UV, il doit
    * donc finir avant le bord du plan (0.5 sur les cotes). k=2.9 avec un rayon nominal de 0.20 UV donne
    * un nuage qui couvre le grand cote de l'ecran, fondu compris.
@@ -1128,7 +1128,7 @@ export const NUAGE_COSMIQUE = {
   derive: { amplitude: 0.3, vitesseX: 0.062, vitesseY: 0.049 }
 }
 /*
- * PAS DE `as const` ICI, ET C'EST VOULU. Mesure du 2026-09-07 (conv-334) : le correctif du decor
+ * PAS DE `as const` ICI, ET C'EST VOULU. Mesure du 2026-09-07 : le correctif du decor
  * (commit 16037b48) recharge cinq teintes de ce nuage a chaque changement de theme, dans
  * `relireTeintesDuTheme()`. Avec `as const`, ces cinq champs etaient figes en lecture seule et
  * `npm run typecheck` rendait 5 erreurs TS2540 — le code tournait quand meme (Vite ne bloque pas),
@@ -1137,9 +1137,9 @@ export const NUAGE_COSMIQUE = {
  */
 
 /**
- * LE BORD (conv-1455 : « le container du nuage est un cercle c moche »). Le masque etait un disque
+ * LE BORD (« le container du nuage est un cercle c moche »). Le masque etait un disque
  * parfait ; il devient un profil polaire DENTELE : rayon = 1 + somme d'harmoniques hautes. Les
- * harmoniques restent BASSES (<= 11) : conv-1410 « les picots sur les cotes me derangent, la fumee
+ * harmoniques restent BASSES (<= 11) : « les picots sur les cotes me derangent, la fumee
  * ca fait jamais des pics aux bords ». Le contour reste irregulier, en ondulations LARGES.
  */
 export const BORD_NUAGE = {
@@ -1170,7 +1170,7 @@ export function profilBordNuage(angle: number): number {
 }
 
 /**
- * LA SATURATION (conv-1455 : « plus coloré », puis « saturation montée »). Le gain s'applique autour
+ * LA SATURATION (« plus coloré », puis « saturation montée »). Le gain s'applique autour
  * de la luminance : au-dela de 3, les teintes clippent et la nebuleuse devient un aplat fluo.
  */
 export const SATURATION_NUAGE = {
@@ -1179,7 +1179,7 @@ export const SATURATION_NUAGE = {
 } as const
 
 /**
- * LA DYNAMIQUE de la matiere (conv-1449 : « qu'il soit plus dynamique »). Les vitesses etaient en dur
+ * LA DYNAMIQUE de la matiere (« qu'il soit plus dynamique »). Les vitesses etaient en dur
  * dans le fragment (0.017 / 0.011), donc invisibles et non reglables ; elles remontent ici et passent
  * par des uniforms.
  */
@@ -1395,7 +1395,7 @@ export const NAPPE_FRAGMENT_SHADER = [
   'uniform float uGrain;',
   // Valeur-bruit interpolée en douceur : la base organique.
   // Hash sans transcendante (Hoskins) : `fract(sin(dot(...)))` sature et aligne ses cellules sur la
-  // grille, ce qui fabriquait des faisceaux de droites en travers de l'écran (conv-1582).
+  // grille, ce qui fabriquait des faisceaux de droites en travers de l'écran.
   'float hash(vec2 p) {',
   '  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));',
   '  q += dot(q, q.yzx + 33.33);',
@@ -1627,7 +1627,7 @@ interface Composition {
     seed: number
     /** Étirement du bruit en latitude : c'est lui qui fait la géante gazeuse plutôt qu'une tache. */
     bandes: number
-    /** Nombre de LUNES en orbite autour d'elle (conv-1408). 0 = aucune. */
+    /** Nombre de LUNES en orbite autour d'elle. 0 = aucune. */
     lunes: number
   }[]
   arcs: number
@@ -1700,7 +1700,7 @@ export const COMPOSITIONS: Record<DirectionSpatiale, Composition> = {
     ],
     arcs: 7,
     satellites: 0,
-    // Le nuage cosmique demandé en conv-1408 : ancré au milieu, il DÉRIVE autour de ce point.
+    // Le nuage cosmique demandé : ancré au milieu, il DÉRIVE autour de ce point.
     nuage: { fx: 0, fy: 0 },
     tempo: 1,
     parallaxe: 1
@@ -1822,15 +1822,15 @@ export const COMPOSITIONS: Record<DirectionSpatiale, Composition> = {
  * effacer la garantie d'une direction qu'on peut encore choisir.
  */
 /*
- * L'AVENUE CYBERPUNK, demandee le 2026-10-17 (conv-301), nouveau CHANGEMENT de decision assume.
+ * L'AVENUE CYBERPUNK, demandee le 2026-10-17, nouveau CHANGEMENT de decision assume.
  *
  * Apres une serie de brouillons regardes dans le fil, l'utilisateur a ecrit « Passe au vrai fond de
  * l'Accueil avec ce look » : l'avenue sous l'orage, sa foule dark cyberpunk, ses tags et la ville en
  * contrebas remplacent les planetes. Comme pour `poussiere` avant elles, les planetes ne sont pas
  * effacees : `actuel` reste choisissable et sa promesse reste testee sous son NOM.
  */
-// La valeur vit dans fond-accueil.ts, seule source du fond choisi (menu des réglages de l'Accueil,
-// conv-346) : le menu la lit sans charger three.js. Ré-exportée ici, où l'on cherche le défaut du décor.
+// La valeur vit dans fond-accueil.ts, seule source du fond choisi (menu des réglages de l'Accueil)
+// Le menu la lit sans charger three.js. Ré-exportée ici, où l'on cherche le défaut du décor.
 export { DECOR_DEFAUT }
 
 /**
@@ -1854,7 +1854,7 @@ export function createDecorScene(variante: DecorVariant = DECOR_DEFAUT): DecorSc
   const direction: DecorVariant = estDirectionDecor(variante) ? variante : DECOR_DEFAUT
   // L'avenue est une scene a part, avec sa propre chaine de rendu : elle ne partage rien des
   // compositions spatiales ci-dessous. Elle se dessine dans un Worker, hors du fil de l'interface
-  // (decor-avenue-hote.ts, conv-323) ; sans Worker, dans la page comme avant.
+  // (decor-avenue-hote.ts) ; sans Worker, dans la page comme avant.
   if (direction === 'avenue') return createAvenueEnArrierePlan()
   let renderer: THREE.WebGLRenderer
   try {

@@ -1,5 +1,5 @@
 /**
- * NOM AFFICHÉ D'UN FOURNISSEUR — source unique (conv-1499, 2026-11-04).
+ * NOM AFFICHÉ D'UN FOURNISSEUR — source unique (2026-11-04).
  *
  * La barre de quota, le sélecteur de modèle et le Routage tenaient chacun leur table : un fournisseur
  * ajouté dans l'une restait sous son identifiant technique (« agy », « api-xai ») dans les autres.
@@ -12,7 +12,7 @@ export const LIBELLES_FOURNISSEURS: Readonly<Record<string, string>> = {
   // agy = Gemini par l'abonnement Google ; api-gemini = Gemini par clé.
   agy: 'Gemini',
   'api-gemini': 'Gemini',
-  // grok = Grok par l'abonnement SuperGrok (CLI d'xAI) ; plus de Grok par clé (conv-1499).
+  // grok = Grok par l'abonnement SuperGrok (CLI d'xAI) ; plus de Grok par clé.
   grok: 'Grok',
   'api-groq': 'Groq',
   'api-mistral': 'Mistral',

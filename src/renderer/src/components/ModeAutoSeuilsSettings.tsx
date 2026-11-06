@@ -5,7 +5,7 @@ import { CLE_SEUILS_CHAINE_AUTO, SEUILS_CHAINE_DEFAUT, lireSeuilsChaine } from '
 import './OrchestrationBudgetSettings.css'
 
 /**
- * SEUILS DU GARDE-FOU DE LA CHAÎNE ∞ (demande du 2026-10-02, conv-38). Stockés dans l'interface,
+ * SEUILS DU GARDE-FOU DE LA CHAÎNE ∞ (demande du 2026-10-02). Stockés dans l'interface,
  * comme la liste des fils armés (`CLE_MODE_AUTO_CONVS`) : le chat les relit à CHAQUE décision
  * d'envoi automatique, donc un changement vaut dès le tour suivant, sans redémarrage.
  */

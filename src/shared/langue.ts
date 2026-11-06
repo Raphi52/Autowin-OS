@@ -1,5 +1,5 @@
 /**
- * LA LANGUE DE L'APPLICATION — Settings · Interface (conv-1146, 2026-10-26, « je veux pouvoir
+ * LA LANGUE DE L'APPLICATION — Settings · Interface (2026-10-26, « je veux pouvoir
  * basculer autowin OS en full anglais »).
  *
  * Partagé entre l'interface (ce qu'on LIT à l'écran) et le moteur (la langue dans laquelle l'agent

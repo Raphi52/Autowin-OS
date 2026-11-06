@@ -26,7 +26,7 @@ import { RoleModelConfig } from './roles'
 import { TrustLedger } from '../trust/ledger'
 
 /**
- * PROFIL UTILISATEUR (conv-1098, option C) : un fichier sur le poste, tenu à jour par l'agent quand
+ * PROFIL UTILISATEUR (option C) : un fichier sur le poste, tenu à jour par l'agent quand
  * l'utilisateur énonce une préférence, avec un ajout REFUSÉ si le profil est plein.
  *
  * Un test par cas limite du cadrage, puis le chemin réel : la commande du bus, et le bloc présent
@@ -166,7 +166,7 @@ describe('profil utilisateur — cas limites d’entrée', () => {
   })
 
   it('fichier allongé à la main au-delà du plafond : REFUSÉ en entier, avis seul, ajout refusé', () => {
-    // Demande de l'utilisateur (conv-1098) : « refusé au lieu d'être coupé s'il dépasse ». Servir
+    // Demande de l'utilisateur : « refusé au lieu d'être coupé s'il dépasse ». Servir
     // les 10 premières lignes revenait à couper : l'agent suivait un profil amputé.
     poser(profilDe199(15)) // 2 985 octets
     const bloc = blocProfilUtilisateur(deps())
@@ -250,7 +250,7 @@ describe('profil utilisateur — commandes du bus', () => {
   it('la prose MÉMOIRE envoie un goût personnel au profil, pas au Brain', () => {
     const prose = buildChatPilotagePrompt([])
     expect(prose).toContain('`profil_ajouter`')
-    // Depuis la redirection de `remember` type `preference` vers le profil (conv-1098).
+    // Depuis la redirection de `remember` type `preference` vers le profil.
     expect(prose).toContain("`preference` — un goût ou une règle de l'utilisateur, le sien")
     expect(prose).toContain('jamais partagé (pas au Brain)')
     expect(prose).toContain("une règle qui vaut pour l'équipe se retient en `decision`")
@@ -266,7 +266,7 @@ class CapturingProvider implements ProviderAdapter {
     return true
   }
 
-  // fix-ok: cause mesurée 2026-10-22 (conv-1098) — sans la mention ci-dessous, eslint rend 1 erreur require-yield sur `send` (ce faux fournisseur rend sans yield) ; la 3e retouche retirait `maxBytes`, jamais passé (grep vide).
+  // fix-ok: cause mesurée 2026-10-22 — sans la mention ci-dessous, eslint rend 1 erreur require-yield sur `send` (ce faux fournisseur rend sans yield) ; la 3e retouche retirait `maxBytes`, jamais passé (grep vide).
   // eslint-disable-next-line require-yield
   async *send(
     _messages: unknown,

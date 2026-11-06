@@ -61,7 +61,7 @@ async function drain(): Promise<StreamChunk[]> {
  *
  * `claude.ts` coupait la cible a 120 signes AVANT tout le monde : le libelle tenait sur une ligne
  * (contrainte reelle de l'en-tete « Reflexion », constat du 2026-09-01) mais le journal de tour, qui
- * recopie ce meme libelle via `provider-status`, ne recevait plus qu'un moignon — mesure sur conv-130,
+ * recopie ce meme libelle via `provider-status`, ne recevait plus qu'un moignon — mesure,
  * ligne tronquee en plein chemin. On ne retire donc PAS la coupure : on separe l'affichage de la trace.
  */
 describe('ClaudeCliAdapter — cible tronquee a l ecran, entiere dans la trace', () => {

@@ -148,7 +148,7 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     expect(second.conversationId).toBe('conv-new')
   })
 
-  // conv-298 : la conversation Maintenance, réutilisée chaque matin, restait rangée sur un ancien
+  // La conversation Maintenance, réutilisée chaque matin, restait rangée sur un ancien
   // clone (D:\Sources\AutoWinOS) au lieu du dépôt global courant.
   it('une tâche quotidienne sans dossier réaligne sa conversation sur le dossier global à CHAQUE run', async () => {
     const aligner = vi.fn()
@@ -178,7 +178,7 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     expect(aligner).not.toHaveBeenCalled()
   })
 
-  // fix-ok: mesuré le 2026-10-09 (conv-113) — une tâche « nouvelle conversation » dont la catégorie
+  // fix-ok: mesuré le 2026-10-09 — une tâche « nouvelle conversation » dont la catégorie
   // était le chemin d'un projet tournait dans le dossier global d'Autowin : la catégorie n'atteignait
   // jamais la conversation créée (ConversationStore.create ne lisait que title et provider).
   it('une tâche « nouvelle conversation » dont la catégorie est un CHEMIN y travaille (dossier de travail)', async () => {
@@ -205,11 +205,11 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
   })
 
   /*
-   * LA DEMANDE (conv-1213, 2026-10-28) : « dans task manager quand un agent se réveille il doit pas
+   * LA DEMANDE (2026-10-28) : « dans task manager quand un agent se réveille il doit pas
    * avoir de CWD il doit être sur this computer ». Sans chemin choisi, le fil créé tombait dans le
    * dossier d'Autowin (dossier global) : l'agent réveillé travaillait dans le dépôt de l'app sans
    * qu'on le lui ait demandé. Il part désormais du dossier personnel, le « This computer » du choix
-   * du dossier de travail (conv-298).
+   * du dossier de travail.
    */
   it('sans CHEMIN choisi, le fil créé travaille sur « This computer » (dossier personnel)', async () => {
     const store = new ConversationStore()
@@ -386,7 +386,7 @@ describe('Task Manager — dispatch d’un réveil événementiel', () => {
   }
 
   // fix-ok: ces contre-exemples verrouillent l'absence d'interruption Watchdog. La lecture seule
-  // d'un seul appel, elle, est levée (conv-1626, 2026-11-05) : une surveillance « /git à la fin du
+  // d'un seul appel, elle, est levée (2026-11-05) : une surveillance « /git à la fin du
   // tour » ne pouvait rien publier.
   it('traite une action historique absente comme un chat qui peut ecrire, en fond', async () => {
     const chat = runtime()

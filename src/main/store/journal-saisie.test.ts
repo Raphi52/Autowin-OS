@@ -12,7 +12,7 @@ import {
 } from './journal-saisie'
 
 /**
- * Le défaut reproduit ici est celui du 2026-09-01 (conv-30) : un texte tapé PENDANT un tour, dont
+ * Le défaut reproduit ici est celui du 2026-09-01 : un texte tapé PENDANT un tour, dont
  * l'injection échoue, n'atteint jamais la conversation et disparaît sans trace. Ces tests exigent
  * qu'il reste retrouvable, et que le journal ne puisse jamais faire échouer un envoi.
  */
@@ -31,7 +31,7 @@ describe('journal des saisies utilisateur', () => {
       .filter(Boolean)
       .map((ligne) => JSON.parse(ligne) as SaisieJournalisee)
 
-  // conv-113 : saisie ts 1791317725882 (envoyée par le mode auto) et ts 1791317691042 (tapée)
+  // Saisie ts 1791317725882 (envoyée par le mode auto) et ts 1791317691042 (tapée)
   // étaient deux lignes identiques — impossible de dire laquelle venait de la machine.
   it('écrit l’origine « mode-auto » d’un envoi automatique, et rien pour un texte tapé', () => {
     journaliserSaisie(
@@ -83,7 +83,7 @@ describe('journal des saisies utilisateur', () => {
 })
 
 /**
- * RATTACHEMENT AU TOUR — mesure conv-131 : la saisie porte la conversation mais AUCUN numero de
+ * RATTACHEMENT AU TOUR — mesure : la saisie porte la conversation mais AUCUN numero de
  * tour, parce qu'elle est ecrite AVANT que le tour existe. Relire « quel texte a produit ce tour »
  * se faisait donc au rapprochement d'horodatages, approximatif par construction.
  */

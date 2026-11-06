@@ -8,7 +8,7 @@ import { AppCommandBus } from './commands'
 import { refusReservationEdition } from '../fichiers/reservation-fichiers-app'
 
 /*
- * LE `git commit` LANCÉ PAR LA COMMANDE `run` DE L'APP CONSULTE LA RÉSERVATION (conv-1083,
+ * LE `git commit` LANCÉ PAR LA COMMANDE `run` DE L'APP CONSULTE LA RÉSERVATION (
  * objection du contrôle final du 2026-10-22).
  *
  * Avant : seul le hook des agents Claude (avant chaque commande) refusait un commit qui emporterait

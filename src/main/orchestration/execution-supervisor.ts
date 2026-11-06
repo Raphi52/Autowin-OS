@@ -278,7 +278,7 @@ export class ExecutionSupervisor {
       /*
        * UN REFUS QUI NE DIT PAS SA SUITE EST LU COMME UNE IMPOSSIBILITE.
        *
-       * Mesure conv-18, tour 6c581550-6be5-47cf-8c11-41901d4d885a (journal du tour, delta a
+       * Mesure, tour 6c581550-6be5-47cf-8c11-41901d4d885a (journal du tour, delta a
        * 1788425682673) : l'agent lit « Reprise refusee : 1 appel(s) provider encore actif(s). »,
        * en conclut « je ne peux pas relancer un run dans ce tour », et ecrit la fonctionnalite A
        * LA MAIN dans le depot reel (`cat > src/shared/reprise-surcharge.ts`, fichier resté non
@@ -286,7 +286,7 @@ export class ExecutionSupervisor {
        * (run-70137bee6f8d-1). Le refus reste inchange — il protege le budget ; c'est son TEXTE qui
        * doit dire ce qu'il est et ce qui repare, pour l'agent comme pour l'utilisateur.
        *
-       * DEUXIEME MESURE, conv-384 du 2026-09-09 : le texte disait « aucun fichier touche » SANS
+       * DEUXIEME MESURE, un fil du 2026-09-09 : le texte disait « aucun fichier touche » SANS
        * borner cette portee. L'agent l'a recopie tel quel dans sa cloture alors que le run encore
        * ACTIF (run-acf5e917a4ac-1) avait deja ecrit 8 fichiers + 1 test dans sa copie de travail
        * isolee. L'utilisateur a donc lu l'inverse de la realite. La phrase dit desormais DE QUOI

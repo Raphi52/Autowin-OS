@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * La souris est la source de lumière des panneaux (conv-191, « go Ambiance implémente ») : le script
+ * La souris est la source de lumière des panneaux (« go Ambiance implémente ») : le script
  * pose la position du curseur sur les cinq panneaux ; le thème Nébuleuse de verre peint une seule
  * lumière pour la page, calée sur l'écran, qui ne se voit qu'à travers les panneaux.
  */
@@ -56,7 +56,7 @@ describe('installerLumiereDesPanneaux', () => {
     const { panneaux, texte } = monter()
     debrancher = installerLumiereDesPanneaux(window)
     bouger(texte, 150, 40)
-    // Les panneaux du Chat, le cadre de page des autres vues et les tuiles de l'Accueil (conv-211).
+    // Les panneaux du Chat, le cadre de page des autres vues et les tuiles de l'Accueil.
     expect(panneaux).toHaveLength(5)
     for (const panneau of panneaux) {
       expect(panneau.style.getPropertyValue('--nv-lumiere-x'), panneau.className).toBe(
@@ -119,7 +119,7 @@ describe('theme Nebuleuse de verre : la lumiere de la souris', () => {
     ":root[data-theme='nebuleuse-verre'] .cosmic-outline .chat::after",
     ":root[data-theme='nebuleuse-verre'] .theme-serious .rail",
     ":root[data-theme='nebuleuse-verre'] .cosmic-outline .chat > .composer",
-    // Le cadre de page des autres vues et les panneaux de l'Accueil, alignes sur le Chat (conv-211).
+    // Le cadre de page des autres vues et les panneaux de l'Accueil, alignes sur le Chat.
     ":root[data-theme='nebuleuse-verre'] .view-page",
     ":root[data-theme='nebuleuse-verre'] :is(.home-tile__panel, .home-view__masthead)"
   ]

@@ -14,7 +14,7 @@ import { sharedBrainRoot } from '../brain/brain-paths'
  * POURQUOI CE MODULE EXISTE. La boucle a protocole texte (`skill-node-tools`) demande au modele
  * d'ecrire `<cmd>{...}</cmd>` dans sa reponse. Or un agent CLI possede DEJA son propre mecanisme
  * d'outils : il choisit le sien ou le notre selon le tour. Mesure sur deux runs reels du meme
- * prompt — `conv-1341` a emis `<cmd>` (outil execute), `conv-1342` a tente l'appel natif et a rendu
+ * prompt — un fil a emis `<cmd>` (outil execute), un fil a tente l'appel natif et a rendu
  * « No such tool available ». Un chemin qui marche une fois sur deux n'est pas un chemin, et
  * durcir le prompt pour « mieux convaincre » le modele revient a lutter contre son affordance
  * native — ce qui a deja echoue.
@@ -54,7 +54,7 @@ import { sharedBrainRoot } from '../brain/brain-paths'
  * au lieu de servir un port inutile en silence.
  *
  * `codex` passe par `codex exec` et traduit l'option en `-c mcp_servers.*` (`optionsMcpCodex`) ;
- * ajoute le 2026-10-31 (conv-1414). Son appel HTTP direct, lui, ne la porte pas : il ne reste que
+ * ajoute le 2026-10-31. Son appel HTTP direct, lui, ne la porte pas : il ne reste que
  * pour un jeton Autowin deja present. `gemini` et `kimi` spawnaient un CLI sans drapeau MCP. Ouvrir
  * un serveur pour eux reviendrait a annoncer
  * « outils natifs servis » sur un appel qui ne les recevra jamais — exactement le mensonge de trace
@@ -96,7 +96,7 @@ export interface AppelMcpObserve {
   ok: boolean
   /**
    * L'ISSUE METIER, quand le resultat la porte. `ok` ne veut dire que « le transport a marche » :
-   * mesure du 2026-08-20 sur le run conv-1346, la trace affichait `remember : ok` alors que le
+   * mesure du 2026-08-20 sur le run, la trace affichait `remember : ok` alors que le
    * resultat contenait `{"stored": false, "detail": "refuse par le Brain : not found"}` — et
    * `brain_query : ok` pour un `{"found": false, "status": "invalid"}`. Un libelle qui dit « ok »
    * quand rien n'a ete ni ecrit ni lu est un faux vert dans l'artefact meme qui sert de preuve.
@@ -222,7 +222,7 @@ export function libelleAppelObserve(appel: AppelMcpObserve, phase: string): stri
 
 /**
  * Le schéma publié d'UN argument, sous-ensemble de JSON Schema. `CommandSpec.argsTypes` le déclare
- * quand le texte ne suffit pas : mesure de conv-1370 (2026-10-31), tout partait en `string`, y
+ * quand le texte ne suffit pas : mesure (2026-10-31), tout partait en `string`, y
  * compris les nombres et les listes.
  */
 export interface SchemaArgument {
@@ -256,7 +256,7 @@ export interface AnnotationsOutil {
 
 /**
  * Une spec telle que ce module la lit. Type STRUCTUREL local : `CommandSpec` vit dans `commands.ts`
- * (conv-1370, lot 6) et ne porte pas encore `argsTypes` ni `argsFacultatifs`.
+ * (lot 6) et ne porte pas encore `argsTypes` ni `argsFacultatifs`.
  */
 type SpecPubliee = SpecCommandeSkill & DeclarationArguments & { annotations?: AnnotationsOutil }
 
@@ -264,14 +264,14 @@ type SpecPubliee = SpecCommandeSkill & DeclarationArguments & { annotations?: An
  * Le schema d'entree d'un outil, COPIE de la spec de la commande.
  *
  * Le bus decrit ses arguments en francais (`{ question: 'la question, en langage naturel' }`) : on
- * ne reecrit pas cette description, on la transporte. C'est la lecon de `conv-1339`, ou un prompt
+ * ne reecrit pas cette description, on la transporte. C'est la lecon, ou un prompt
  * ecrit DE MEMOIRE annoncait `brain_query {"query": ...}` quand la commande attend `question` —
  * l'outil etait branche, teste, et strictement inutilisable. Les NOMS viennent donc de `args` seul.
  *
  * Sans `argsFacultatifs`, `required` est derive du MOT `facultatif`. La degradation est
  * volontairement dissymetrique : un argument exige a tort est simplement fourni par le modele, alors
- * qu'un argument oublie revient en refus NOMME que le modele peut lire et corriger. Mesure de
- * conv-1370 : 20 arguments sur 11 outils exiges a tort, d'ou la liste exacte quand elle est declaree.
+ * qu'un argument oublie revient en refus NOMME que le modele peut lire et corriger. Mesure
+ * 20 arguments sur 11 outils exiges a tort, d'ou la liste exacte quand elle est declaree.
  */
 export function schemaEntree(
   args: Record<string, unknown>,
@@ -337,7 +337,7 @@ export interface PerimetreOutils {
 }
 
 export const PERIMETRE_NOEUD_SKILL: PerimetreOutils = {
-  // Sûr ici (conv-1372) : ni carte ni trace causale, l'observateur reçoit une ligne qui porte sa
+  // Sûr ici : ni carte ni trace causale, l'observateur reçoit une ligne qui porte sa
   // cible, et le compteur de notes ne compte que `remember`, qui n'est pas une lecture.
   lecturesSimultanees: true,
   // GETTER, pas une valeur : le cycle d'import skill-node-mcp -> skill-node-tools -> agent-pilot ->
@@ -380,7 +380,7 @@ function specsDuCatalogue(lanceur: LanceurCommandeSkill): readonly SpecPubliee[]
 }
 
 /**
- * LES LECTURES D'UN SERVEUR PASSENT UNE PAR UNE, sauf `lecturesSimultanees` (conv-1372, 2026-10-31).
+ * LES LECTURES D'UN SERVEUR PASSENT UNE PAR UNE, sauf `lecturesSimultanees` (2026-10-31).
  *
  * `readOnlyHint` fait arriver les lectures d'un même message ENSEMBLE. Mesure en vrai sur quatre
  * appels croisés : cartes du fil (par `actionId`), compteur de commandes en vol, bilan des échecs et
@@ -388,7 +388,7 @@ function specsDuCatalogue(lanceur: LanceurCommandeSkill): readonly SpecPubliee[]
  * rattachait chaque événement au PRÉCÉDENT, et l'Observatoire (`resultOfCall`, `appelsDeLOutil`)
  * donnait chaque résultat à la dernière commande ouverte : a.md sans résultat, b.md avec les deux notes.
  *
- * Le chat a levé sa file en conv-1388 : `run-pilot-chat.ts` rattache le `result` à SA `command`,
+ * Le chat a levé sa file : `run-pilot-chat.ts` rattache le `result` à SA `command`,
  * `appelsDeLOutil` apparie par action, et `chat-mcp.ts` pose `lecturesSimultanees: true`. Un serveur
  * sans ce drapeau garde la file : le client met en attente ce qu'il aurait lancé en série, on perd
  * le gain de vitesse, rien d'autre. Seules les lectures attendent, parce que seule l'annotation les rend
@@ -575,7 +575,7 @@ export async function traiterMessageMcp(
 /**
  * Motif de refus d'une requête qui ne vient pas d'un programme du poste, ou `undefined`.
  *
- * conv-1144 (risque 1 du cadrage du point d'entrée local) : une page web peut viser un port local.
+ * risque 1 du cadrage du point d'entrée local : une page web peut viser un port local.
  * Un navigateur pose toujours `Origin` sur un POST ; une page servie par rebond DNS parle à
  * 127.0.0.1 sous SON nom de domaine, donc avec un `Host` étranger. Le jeton protège déjà, ceci
  * ferme la porte AVANT lui (même logique que l'exigence de vérifier `Origin` de la spécification
@@ -605,7 +605,7 @@ export async function demarrerServeurOutilsNoeudSkill(
     /**
      * Refuser (403) toute requête de navigateur (`Origin`) ou au `Host` étranger. Activé par le
      * point d'entrée local, ouvert toute la vie de l'app ; les serveurs d'un seul envoi au modèle
-     * ne l'activent pas (conv-1144 : périmètre de la demande).
+     * ne l'activent pas (Périmètre de la demande).
      */
     refuserRequetesNonLocales?: boolean
   } = {}

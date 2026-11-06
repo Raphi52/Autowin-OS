@@ -44,7 +44,7 @@
   min-height: 0;
   overflow: auto;
   /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
-     le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
+     le meme dans toutes les vues (ViewPage.gabarit.test.ts). */
   padding: 16px 0 28px;
 }
 .project-strip {

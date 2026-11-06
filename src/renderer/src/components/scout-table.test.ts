@@ -150,7 +150,7 @@ describe('parseScoutTable', () => {
 
 describe('colonne Score remplie avec une PASTILLE et non un nombre', () => {
   /**
-   * Defaut vecu le 2026-08-18 (conv-1293) : le modele a rendu « | # | Score | Type | What | Why |
+   * Defaut vecu le 2026-08-18 : le modele a rendu « | # | Score | Type | What | Why |
    * How | » avec « 🟢 » dans la cellule Score. `scoreSur100` n'y trouve aucun chiffre, et le
    * lecteur d'emoji n'etait consulte QUE s'il existait une colonne « Impact » — absente ici. La
    * ligne perdait donc a la fois sa note ET sa pastille : « le scout est toujours pas score ».
@@ -183,7 +183,7 @@ describe('colonne Score remplie avec une PASTILLE et non un nombre', () => {
 })
 
 /*
- * PISTE 3 (conv-1033) — le « signal de fait » d'un correctif n'était que de la prose : une 7e colonne
+ * PISTE 3 — le « signal de fait » d'un correctif n'était que de la prose : une 7e colonne
  * FACULTATIVE `Commande` porte la commande de preuve que la machine pourra lancer. Elle n'est ni la
  * valeur (Why) ni le premier pas (How).
  * Entrée qui tue une correction fausse : l'ancien en-tête de la skill (`Comment`), qui est le How —
@@ -208,7 +208,7 @@ describe('colonne facultative Commande : la preuve que la machine lancera', () =
     expect(rows[1].commande).toBeUndefined()
   })
 
-  // Relu à la reprise de conv-1033 : le filtre des tirets contenait la LETTRE « s » au lieu de `\s`.
+  // Relu à la reprise : le filtre des tirets contenait la LETTRE « s » au lieu de `\s`.
   // Deux tirets séparés d'une espace passaient pour une commande ; un mot fait de « s » disparaissait.
   it('des tirets séparés d’espaces ne sont pas une commande, une commande en lettres « s » en reste une', () => {
     const tableau = [

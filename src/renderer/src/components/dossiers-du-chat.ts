@@ -1,6 +1,6 @@
 /**
  * LA LISTE DES DOSSIERS DE TRAVAIL DU CHAT — une seule liste, partagée par le Chat et le Board
- * (demande utilisateur du 2026-10-28, conv-1212 : « ça doit vraiment être uniquement mes CWD de la
+ * (demande utilisateur du 2026-10-28, « ça doit vraiment être uniquement mes CWD de la
  * partie chat et quand je les supprime ça doit aussi les supprimer là-bas, et là-bas je veux un
  * bouton croix au bout des lignes de projets qui fait pareil »).
  *
@@ -15,12 +15,12 @@
  * Board à ces dossiers, pour l'écran comme pour la copie vers le partage
  * (`shared/board-dossiers-du-chat.ts`). La vue rejoue la même règle sur ce qu'elle reçoit
  * (`carteDuBoardAffichee`) : un processus principal d'avant redémarrage ne réduit rien, et
- * l'utilisateur voyait alors « depot » et « Divers » sans croix (conv-1212, 2e demande).
+ * l'utilisateur voyait alors « depot » et « Divers » sans croix (2e demande).
  *
  * Les lignes du menu « Projets » ont une croix (même demande : « des éléments que je ne peux même
  * pas supprimer, ils n'ont pas la petite croix ») : sur le dépôt par défaut, que le Chat propose
  * toujours, elle le range dans la mémoire des retraits, et il quitte le Board comme le menu du Chat.
- * SAUF « This computer » (conv-1231 : « j'ai perdu le this computer, il doit être impossible à
+ * SAUF « This computer » (« j'ai perdu le this computer, il doit être impossible à
  * supprimer ») : pas de croix, et un retrait déjà mémorisé à son nom est ignoré partout.
  */
 import type { CarteDesBesoins } from '../../../shared/carte-des-besoins'
@@ -51,7 +51,7 @@ function stockageParDefaut(): Stockage {
 }
 
 /**
- * La liste mémorisée. SEULS DES CHEMINS y entrent (conv-81) : le filtre posé à la lecture vide ce
+ * La liste mémorisée. SEULS DES CHEMINS y entrent : le filtre posé à la lecture vide ce
  * qui s'y était installé avant, des libellés de classement proposés comme dossiers de travail.
  */
 export function lireDossiersDuChat(stockage: Stockage = stockageParDefaut()): string[] {
@@ -118,7 +118,7 @@ export async function transmettreDossiersDuChat(
 }
 
 /**
- * Le dossier personnel, « This computer » — jamais retirable (conv-1231). `null` = pont absent
+ * Le dossier personnel, « This computer » — jamais retirable. `null` = pont absent
  * (preload d'avant redémarrage) ou illisible.
  */
 export async function lireDossierPersonnel(): Promise<string | null> {
@@ -151,7 +151,7 @@ export async function lireDossiersToujoursProposes(): Promise<string[] | null> {
 /**
  * Le Board tel que la vue le montre : la règle du processus principal, rejouée sur ce qu'il rend
  * (sans effet s'il a déjà réduit). `toujours` à `null` = la carte reçue telle quelle. `personnel`
- * (« This computer ») reste même s'il a été retiré (conv-1231).
+ * (« This computer ») reste même s'il a été retiré.
  */
 export function carteDuBoardAffichee(
   carte: CarteDesBesoins,
@@ -164,7 +164,7 @@ export function carteDuBoardAffichee(
   return carteDesDossiersDuChat(carte, dossiersDuBoard(dossiers, toujours, retires, [personnel]))
 }
 
-/** Le nom du dossier personnel dans le menu « Projets » : le même que dans le Chat (conv-1230). */
+/** Le nom du dossier personnel dans le menu « Projets » : le même que dans le Chat. */
 export const NOM_DU_DOSSIER_PERSONNEL = '💻 This computer'
 
 /** Une ligne du menu « Projets » du Board. `retirable` = le chemin que sa croix retire du Chat. */
@@ -180,7 +180,7 @@ export interface LigneDeProjet {
  * les dossiers du Chat qui n'ont encore aucune demande — la liste commune y est donc entière.
  * Chaque ligne qui est un dossier a sa croix, y compris le dépôt par défaut, absent de la liste
  * mémorisée : sa croix le range dans la mémoire des retraits. Seul `personnel` (« This computer »)
- * n'en a pas : il ne se retire jamais (conv-1231).
+ * n'en a pas : il ne se retire jamais.
  */
 export function lignesDuMenuDesProjets(
   projets: readonly { cle: string; libelle: string; demandes: number }[],
@@ -191,7 +191,7 @@ export function lignesDuMenuDesProjets(
   const retirable = (chemin: string | undefined): string | undefined =>
     chemin && (!clePersonnelle || cleDeDossier(chemin) !== clePersonnelle) ? chemin : undefined
   // Le dossier personnel porte le nom que lui donne le Chat (ChatView.tsx), pas celui du dossier :
-  // le nom du compte Windows se lisait comme le nom d'une personne (conv-1230, « c'est quoi cette ligne »).
+  // le nom du compte Windows se lisait comme le nom d'une personne (« c'est quoi cette ligne »).
   const nomAffiche = (cle: string, libelle: string): string =>
     clePersonnelle && cle === clePersonnelle ? NOM_DU_DOSSIER_PERSONNEL : libelle
   const parCle = new Map<string, string>()
@@ -217,7 +217,7 @@ export function lignesDuMenuDesProjets(
       ...(croix ? { retirable: croix } : {})
     })
   }
-  // « This computer » en tête (conv-1243 : « met le en premier de la liste ») ; les autres gardent
+  // « This computer » en tête (« met le en premier de la liste ») ; les autres gardent
   // leur ordre d'activité.
   if (!clePersonnelle) return lignes
   const estPersonnelle = (l: LigneDeProjet): boolean =>

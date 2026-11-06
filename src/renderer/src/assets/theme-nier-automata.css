@@ -1,5 +1,5 @@
 /* =================================================================================================
- * THEME « NIER:AUTOMATA » (id `nier-automata`, conv-281, 2026-10-19). Demande : « Fait moi un theme
+ * THEME « NIER:AUTOMATA » (id `nier-automata`, 2026-10-19). Demande : « Fait moi un theme
  * Nier Automata pour Autowin ». Base CLAIRE. Structure reprise de theme-vanilla-claude.css, couleurs
  * et formes de l'interface du jeu (menus de YoRHa) :
  *   - papier beige #dad4bb, quadrille tres fin, panneaux #cdc8b0 ; encre brune #4e4b42 ;
@@ -80,7 +80,7 @@
   background: #dad4bb;
   color: var(--text);
 }
-/* LE FOND DE L'ACCUEIL N'EST PLUS RETIRE PAR LE THEME (conv-1076, 2026-10-22 : « c le select de
+/* LE FOND DE L'ACCUEIL N'EST PLUS RETIRE PAR LE THEME (2026-10-22 : « c le select de
    l'accueil qui fait foi pour le fond de l'accueil pas le theme choisi »). Le decor suit le menu
    Fond de l'Accueil ; « Aucun » y reprend l'aplat de ce theme. */
 :root[data-theme='nier-automata'][data-base='clair'] .decor-de-fond[data-fond='noir'] {
@@ -676,7 +676,7 @@
   color: #dad4bb;
 }
 
-/* ---- 12. RETOURS UTILISATEUR (conv-286) -------------------------------------------------------- */
+/* ---- 12. RETOURS UTILISATEUR -------------------------------------------------------- */
 /* Fenetre des quotas (clic sur « tokens restants ») : elle sortait blanche, « fait mal aux yeux ».
    Papier fonce, filet encre en haut, coins carres, comme les autres fenetres du theme. */
 :root[data-theme='nier-automata'][data-base='clair'] .model-quota-popover {
@@ -711,7 +711,7 @@
   border-radius: 0;
   background: #4e4b42;
 }
-/* Menu du dossier de travail (pastille 📁 du chat, conv-1218 : « grosse bande blanche au niveau des
+/* Menu du dossier de travail (pastille 📁 du chat, « grosse bande blanche au niveau des
    croix »). Il gardait le #ffffff de la base claire (theme-modes.css), que le generateur ne transpose
    pas (un blanc n'est pas sature) ; ses lignes, sans classe, prenaient le cadre beige de
    `button:not([class])` (regle des pages Worktrees/Tests), et la colonne des croix d'oubli,
@@ -782,8 +782,8 @@
 :root[data-theme='nier-automata'][data-base='clair'] .aw-atom::after {
   display: none;
 }
-/* Vue Tests : PAS de grisage global. Le vert pale des reussites devenait un gris illisible
-   (capture conv-286). Reussite = encre, echec = rouge eteint du theme, ignore = encre attenuee. */
+/* Vue Tests : PAS de grisage global. Le vert pale des reussites devenait un gris illisible.
+   Reussite = encre, echec = rouge eteint du theme, ignore = encre attenuee. */
 :root[data-theme='nier-automata'][data-base='clair'] .tests-summary .ok {
   color: #4e4b42;
   font-weight: 700;
@@ -813,12 +813,12 @@
 }
 
 /* Knowledge : le graphe CODE ses themes par couleur. En gris pur, pastilles et noeuds devenaient
-   identiques (capture conv-286). Teintes GARDEES mais eteintes, tirees vers le papier du jeu. */
+   identiques. Teintes GARDEES mais eteintes, tirees vers le papier du jeu. */
 :root[data-theme='nier-automata'][data-base='clair'] .graph-observatory {
   filter: saturate(0.45) sepia(0.25) brightness(0.94);
 }
 
-/* Gris trop clairs (capture conv-286) : ces textes ont des couleurs PASTEL ecrites en dur (une par
+/* Gris trop clairs : ces textes ont des couleurs PASTEL ecrites en dur (une par
    type d'evenement, or du jalon, couleurs de branche). Passees au gris, elles tombaient presque au
    blanc sur le papier. On les remet en encre. */
 :root[data-theme='nier-automata'][data-base='clair'] .observatory-view :is(.observatory-event, .observatory-event p, .observatory-event p strong, .observatory-event b, .observatory-event span, .observatory-event small) {
@@ -846,12 +846,12 @@
   opacity: 1;
 }
 
-/* Observatory : retour au rendu d'avant (choix utilisateur conv-286), filtre doux sans contraste. */
+/* Observatory : retour au rendu d'avant (choix utilisateur), filtre doux sans contraste. */
 :root[data-theme='nier-automata'][data-base='clair'] .observatory-view {
   /* Sepia franc (choix utilisateur) : moins blanc, ni rose ; brightness tire le papier vers le beige. */
   filter: none;
 }
-/* Observatory = MEME code couleur que Settings (choix utilisateur conv-286) : aucun filtre, la palette
+/* Observatory = MEME code couleur que Settings (choix utilisateur) : aucun filtre, la palette
    du theme telle quelle. Seules les couleurs ecrites en dur de la chronologie sont ramenees a l'encre :
    zones (Sortant bleu, Reponse or, violet), barres et points par type d'evenement, axe or. */
 :root[data-theme='nier-automata'][data-base='clair'] .observatory-view {
@@ -885,7 +885,7 @@
   background: rgba(78, 75, 66, 0.55);
 }
 
-/* ---- MENU REDUIT, TITRE, FOND D'ACCUEIL (2026-10-22, conv-295) -------------------------------- */
+/* ---- MENU REDUIT, TITRE, FOND D'ACCUEIL (2026-10-22) -------------------------------- */
 /* Menu reduit : le carre « ■ » de l'item actif prenait 6 px + sa largeur dans la case de 36 px et
    poussait l'icone hors du carre. Replie, seule l'icone reste. */
 :root[data-theme='nier-automata'][data-base='clair'] .rail.is-collapsed .nav-item.active::before {

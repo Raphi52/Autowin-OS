@@ -24,7 +24,7 @@ interface Item {
 type RelatedItem = Item & { relationKind: 'hook' | 'tool'; relationSource: string }
 
 // `title` : nom de la section de Settings, le même dans les deux langues. `empty` et `description`
-// sont des clés de `textes-ecrans/settings.ts` (traduction anglaise, conv-1170).
+// sont des clés de `textes-ecrans/settings.ts` (traduction anglaise).
 const META: Record<Kind, { title: string; empty: CleSettings; description: CleSettings }> = {
   skills: {
     title: 'Skills',
@@ -68,7 +68,7 @@ function sourceClass(source?: string): string {
 
 /**
  * UN registre de capacités. Le registre affiché est choisi par la liste de sections de Settings, plus
- * par des onglets internes (conv-1109, 2026-10-23 : « sépare la partie avec 4 mots en 4 views ») :
+ * par des onglets internes (2026-10-23 : « sépare la partie avec 4 mots en 4 views ») :
  * Skills, Hooks, Gates, Mods et Tools y sont cinq sections. Settings remonte la vue à chaque
  * changement de section (`key`), donc filtres, source et sélection repartent à zéro comme le
  * faisait l'ancien changement d'onglet — chaque registre s'ouvre filtré sur l'ACTIF.
@@ -80,7 +80,7 @@ export function CapabilitiesView({
   active: boolean
   kind?: Kind
 }): React.JSX.Element {
-  // Textes dans la langue de Settings · Interface (conv-1170). Ce qui vient des registres (noms,
+  // Textes dans la langue de Settings · Interface. Ce qui vient des registres (noms,
   // descriptions, sources, matchers, événements) reste tel quel.
   const { t } = useTextesSettings()
   const [items, setItems] = useState<Item[]>([])

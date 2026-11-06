@@ -20,7 +20,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const appelsSync: string[] = []
 const appelsAsync: string[] = []
 /**
- * La voie asynchrone passe par `execFileHorsFil` depuis conv-1574 (2026-11-05) : un `execFile` du
+ * La voie asynchrone passe par `execFileHorsFil` depuis le 2026-11-05 : un `execFile` du
  * fil principal CRÉAIT encore le processus sur ce fil (31,9 s d'un coup, gels.jsonl 09:51:40 UTC).
  * `appelsAsync` (l'`execFile` du fil principal) doit donc rester vide, et le sondage se voir ici.
  */

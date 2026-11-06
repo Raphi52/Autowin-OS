@@ -1,7 +1,7 @@
 /**
- * Canal de la capture d'un élément de l'interface (Alt+clic, conv-1338).
+ * Canal de la capture d'un élément de l'interface (Alt+clic).
  *
- * Mesures qui fondent ces refus (sonde Electron hors écran, conv-1338, 2026-10-30) : un rectangle de
+ * Mesures qui fondent ces refus (sonde Electron hors écran, 2026-10-30) : un rectangle de
  * largeur 0 rend PRESQUE TOUTE LA FENÊTRE (790×590) au lieu de rien, et un rectangle hors de la
  * fenêtre lève `UnknownVizError`. Sans contrôle, un clic mal mesuré joindrait donc l'écran entier.
  */
@@ -90,7 +90,7 @@ describe('capturerElement', () => {
     expect(await capturerElement({ capturePage }, RECT)).toBeNull()
   })
 
-  // Mesuré : un rectangle hors de la fenêtre lève `UnknownVizError` (sonde conv-1338).
+  // Mesuré : un rectangle hors de la fenêtre lève `UnknownVizError`.
   it('échec du moteur d’affichage : aucune capture, le texte de la référence reste', async () => {
     const capturePage = vi.fn().mockRejectedValue(new Error('UnknownVizError'))
     expect(await capturerElement({ capturePage }, RECT)).toBeNull()

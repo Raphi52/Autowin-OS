@@ -1,7 +1,7 @@
 /**
- * LES FICHES DE DEMANDE DANS L'INTERFACE (conv-1441, 2026-11-02).
+ * LES FICHES DE DEMANDE DANS L'INTERFACE (2026-11-02).
  *
- * Depuis conv-1418, l'app écrit un RUN.md léger par nouvelle demande, mais aucun écran ne les lisait :
+ * L'app écrit un RUN.md léger par nouvelle demande, mais aucun écran ne les lisait :
  * « je vois dans mes dernières convs que ça a pas spécialement généré plus de run.md ». Elles se
  * montrent désormais dans le panneau RUN.md du fil, et s'ouvrent depuis un post-it du Board.
  */

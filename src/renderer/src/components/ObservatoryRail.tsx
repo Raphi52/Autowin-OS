@@ -93,7 +93,7 @@ export function ObservatoryRail({
 }): React.JSX.Element {
   const { t } = useTextesObservatory()
   // Un run qui attend l'utilisateur n'est pas une panne : compté à part, sans liseré rouge. La ligne
-  // disait « décision » sous un titre « 1 bloqué(s) » (objection du contrôle final, conv-1337).
+  // disait « décision » sous un titre « 1 bloqué(s) » (objection du contrôle final).
   const decisions = runs.filter((r) => attendUneDecision(r.summary)).length
   const enPanne = (r: ObservatoryRunEntry): boolean =>
     isBlocked(r.summary) && !attendUneDecision(r.summary)

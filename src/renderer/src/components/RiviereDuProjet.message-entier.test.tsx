@@ -13,7 +13,7 @@ import { RiviereDuProjet } from './RiviereDuProjet'
 import { CLE_ETATS_MANUELS_CARTE } from './etats-manuels-carte'
 
 /**
- * LE MESSAGE ENTIER DANS LA FICHE DU BOARD (conv-1278, 2026-10-29) : « dans board je veux pouvoir
+ * LE MESSAGE ENTIER DANS LA FICHE DU BOARD (2026-10-29) : « dans board je veux pouvoir
  * voir les messages en entier quand j'ouvre le détail ». La fiche montrait la première ligne du
  * message, coupée à 120 caractères puis encore par « … » sur une seule ligne.
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : une fiche qui montre le titre coupé alors que le message entier

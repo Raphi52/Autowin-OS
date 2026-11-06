@@ -49,7 +49,7 @@ describe('remove_conversations', () => {
   })
 
   /*
-   * L'OUTIL NATIF ENVOIE LA LISTE EN TEXTE (conv-927, 2026-10-13) : `schemaEntree`
+   * L'OUTIL NATIF ENVOIE LA LISTE EN TEXTE (2026-10-13) : `schemaEntree`
    * (skill-node-mcp.ts) declare tout argument en `type: 'string'`, donc le modele envoie
    * '["conv-1","conv-3"]' et le lot repondait « ids doit etre une liste ». Meme defaut, meme
    * correctif que `marquer_travaux_tries` (commands.marquage-lot.test.ts).

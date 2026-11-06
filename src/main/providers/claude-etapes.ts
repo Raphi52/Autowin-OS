@@ -2,7 +2,7 @@
  * ÉTAPES DU TOUR — la liste de tâches que claude.exe dessine (☐ à faire, ◼ en cours, ✔ terminée),
  * relayée dans le fil d'Autowin.
  *
- * Demande de l'utilisateur (conv-304, 2026-10-17) : « j'aimerais que dans mon chat ça affiche un
+ * Demande de l'utilisateur (2026-10-17) : « j'aimerais que dans mon chat ça affiche un
  * bloc avec les étapes de la task et leur progression, ils ont mis ça dans claude.exe ».
  *
  * MESURÉ sur le CLI réel (2.1.302, flux `stream-json` du 2026-10-17, `.autowin-tmp/taches-cli/`) :

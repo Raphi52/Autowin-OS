@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Capsule « Image envoyée » ALLUMÉE comme l'image lue (conv-178, 2026-10-10 : « t'as modifié le
+ * Capsule « Image envoyée » ALLUMÉE comme l'image lue (2026-10-10 : « t'as modifié le
  * style de la capsule image lue mais pas celle d'image envoyée »).
  *
  * Les deux capsules partagent les mêmes règles ; ce qui les séparait, c'est l'ÉTAT. Pendant un tour,

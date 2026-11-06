@@ -11,7 +11,7 @@ import {
 import { RELANCE_CONCLUSION_ABSENTE } from './issue-des-commandes'
 
 /**
- * La boucle d'itérations de AgentPilot.chat() vit dans `agent-pilot/*.ts` depuis conv-1580 (lot 4) :
+ * La boucle d'itérations de AgentPilot.chat() vit dans `agent-pilot/*.ts` (lot 4) :
  * envoi au modèle, reprise après erreur, lecture de la réponse, exécution des `<cmd>` et relances.
  * chat() ne garde que l'ORDRE des contrôles de fin d'itération et l'envoi de la relance.
  *
@@ -53,7 +53,7 @@ function chaine(repere: string): string[] {
 
 describe('relances de fin d’itération sorties de chat() (conv-1580, lot 4)', () => {
   it('chat() garde l’ordre d’origine des contrôles d’une réponse sans commande', () => {
-    // Ordre de la branche `if (!hasCommand)` avant le déplacement (agent-pilot.ts, conv-1580 lot 3).
+    // Ordre de la branche `if (!hasCommand)` avant le déplacement (agent-pilot.ts, lot 3).
     expect(chaine('const relance =\n').map(motifDe)).toEqual([
       'commande-illisible',
       'muted-turn',

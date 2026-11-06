@@ -4,7 +4,7 @@
  * Le pilote repousse `ÉTAT MAINTENANT: <json complet>` après CHAQUE commande d'un tour. Or ce bloc
  * est presque toujours identique au précédent : le catalogue des skills, la liste des providers, le
  * recensement des travaux non fusionnés ne bougent pas parce qu'on vient de lire un fichier. Mesuré
- * le 2026-08-31 sur conv-1 : le même état sérialisé réapparaissait HUIT fois dans un seul tour,
+ * le 2026-08-31 : le même état sérialisé réapparaissait HUIT fois dans un seul tour,
  * pour un contenu utile d'une ligne (`exitCode: 0`).
  *
  * On n'envoie donc l'état ENTIER qu'une fois — celui du premier message —, puis seulement ce qui a

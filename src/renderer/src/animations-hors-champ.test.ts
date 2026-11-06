@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installerPauseHorsChamp, type AnimationPilotable } from './animations-hors-champ'
 
 /**
- * CE QUI N'EST PAS À L'ÉCRAN NE S'ANIME PAS (conv-1610, 2026-11-05 : « Garde la fluidité, mais
+ * CE QUI N'EST PAS À L'ÉCRAN NE S'ANIME PAS (2026-11-05 : « Garde la fluidité, mais
  * seulement sur ce qui est visible et sur ma dernière bulle »). Une animation continue sortie du
  * champ est mise en pause ; revenue, elle repart à sa phase d'origine. Les animations finies, dont
  * des vues attendent la fin, ne sont jamais touchées.

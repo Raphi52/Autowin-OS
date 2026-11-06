@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentsTopologyView } from './AgentsTopologyView'
 
 /**
- * AGENTS STUDIO RELIT L'ORCHESTRATEUR QUAND ON Y REVIENT (conv-1529, 2026-11-04).
+ * AGENTS STUDIO RELIT L'ORCHESTRATEUR QUAND ON Y REVIENT (2026-11-04).
  *
  * La vue reste montée quand on la quitte et n'écoute les changements de rôles que visible. Vécu :
  * l'effort « high » choisi dans l'en-tête d'un chat était bien écrit (roles.json.bak, 16:11:08),

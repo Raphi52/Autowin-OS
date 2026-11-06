@@ -6,14 +6,14 @@ import { formatOrchestrationOutcome } from '../../../shared/orchestration-outcom
 /**
  * « 👉 Recommandé : passer à la prochaine demande. » ÉTEINT LE MODE AUTO — sur le fil AFFICHÉ aussi.
  *
- * Demande de l'utilisateur (conv-1575, 2026-11-05) : « quand ya écris ça, ça doit arrêter le mode
+ * Demande de l'utilisateur (2026-11-05) : « quand ya écris ça, ça doit arrêter le mode
  * auto aussi ». Vécu dans ce fil : un run fini rendait cette clôture (écrite par Autowin, pas par le
  * modèle), et sur le fil affiché le mode auto envoyait quand même la relève « La chaîne de ce fil
  * est terminée… propose-moi avec `ask` 2 à 10 nouvelles cibles » — un tour payé de plus, puis la
  * réponse automatique à l'`ask`, sur une chaîne que l'utilisateur considérait finie.
  *
  * La relève reste pour une fin ÉCRITE par le modèle (« Reste à faire : rien » sans cette phrase) :
- * c'est la demande de conv-307, que celle-ci ne retire pas.
+ * c'est la demande, que celle-ci ne retire pas.
  */
 const agent = (texte: string): Msg =>
   ({ role: 'assistant', content: texte, parts: [{ kind: 'text', text: texte }] }) as unknown as Msg

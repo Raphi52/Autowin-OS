@@ -4,7 +4,7 @@ import { join } from 'node:path'
 /**
  * Texte complet du pilote de chat, pour les tests qui vérifient un câblage en lisant la source :
  * `agent-pilot.ts` puis ses modules `agent-pilot/*.ts`, en LF. Le pilote a été découpé en modules
- * voisins (conv-1580, lot 1) ; ces tests cherchent le même texte qu'avant, où qu'il vive désormais.
+ * voisins (lot 1) ; ces tests cherchent le même texte qu'avant, où qu'il vive désormais.
  */
 export function sourceDuPilote(): string {
   const dossier = join(__dirname, '..')

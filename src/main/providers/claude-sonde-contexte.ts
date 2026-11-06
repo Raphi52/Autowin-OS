@@ -2,7 +2,7 @@ import { spawn as spawnNode } from 'node:child_process'
 import { lireReponseContexte, type ContexteStatique } from '../../shared/contexte-detaille'
 
 /**
- * LA SONDE DE CONTEXTE — le detail par categorie du panneau « Contexte » (conv-1000, 2026-10-16).
+ * LA SONDE DE CONTEXTE — le detail par categorie du panneau « Contexte » (2026-10-16).
  *
  * Le CLI Claude sait dire de quoi sa fenetre est faite : requete de controle `get_context_usage`
  * sur une entree `stream-json`. Mesure du 2026-10-16, CLI 2.1.301 : reponse en ~1,1 s, AUCUN appel

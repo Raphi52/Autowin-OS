@@ -1,12 +1,12 @@
 /*
- * Panneau « Bureaux cachés » du chat (conv-1378, 2026-10-31 : plus un écran du menu, le même gabarit
+ * Panneau « Bureaux cachés » du chat (2026-10-31 : plus un écran du menu, le même gabarit
  * que NavigateurIntegre.css, dont il reprend la poignée et les boutons ronds).
- * Plus de liste (conv-1378, même jour) : un écran par bureau, pleine largeur, tous à l'image ensemble.
- * Vue « Bureaux cachés » (conv-951), disposition Console (conv-1025, 2026-10-20, skill draft).
+ * Plus de liste (même jour) : un écran par bureau, pleine largeur, tous à l'image ensemble.
+ * Vue « Bureaux cachés », disposition Console (2026-10-20, skill draft).
  * RETIRÉS à la demande (« en enlevant le mot multi color et le filtre télévision et en mettant un
  * cadre en fonction du thème au lieu du cadre rose sur le bureau sélectionné ») : le « REGARDER »
  * écrit en dégradé, le liseré irisé qui tournait autour de la TV, ses lignes de balayage et son
- * reflet (conv-1002), l'étiquette rouge « À l'antenne » et le cadre --err du bureau choisi.
+ * reflet, l'étiquette rouge « À l'antenne » et le cadre --err du bureau choisi.
  * AUCUNE couleur en dur : tout passe par les variables du thème actif.
  */
 .hdesk-gestion-view {
@@ -109,7 +109,7 @@
   color: inherit;
   font: inherit;
 }
-/* conv-344 : « Parcourir… » collé au champ de l'application. */
+/* « Parcourir… » collé au champ de l'application. */
 .hdesk-champ-exe {
   display: flex;
   gap: 6px;
@@ -359,7 +359,7 @@
 .hdesk-pied .is-alerte {
   color: var(--warn);
 }
-/* Le titre du fil se coupe DANS son bouton (conv-1378, 2026-10-31) : d'un seul bloc, le bouton trop long
+/* Le titre du fil se coupe DANS son bouton (2026-10-31) : d'un seul bloc, le bouton trop long
    était remplacé en entier par « … », et le pied du panneau n'affichait plus que « Fil … ». */
 .hdesk-pied > .hdesk-pied-fil {
   display: inline-flex;
@@ -378,7 +378,7 @@
   gap: 6px;
 }
 
-/* Le fil, par son titre, ouvre la conversation (conv-344). */
+/* Le fil, par son titre, ouvre la conversation. */
 .hdesk-lien {
   padding: 0;
   border: 0;

@@ -5,7 +5,7 @@ import type { Msg, RunEntry } from './chat-view-types'
 import { hydrateStoredAssistant, type OrchStep } from './chat-view-model'
 import { lireLivrableDuRun, relireRun, fusionnerRelecture } from './run-ouvert-a-jour'
 
-// Extrait de ChatView.tsx tel quel, sans changement de comportement (conv-1508).
+// Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type RepriseDesToursCtx = {
   activeRef: React.RefObject<string | null>
   busyConversations: Set<string>
@@ -29,7 +29,7 @@ export type RepriseDesToursCtx = {
   tourEncoreVivant: (id: string) => Promise<boolean>
 }
 
-// Type de retour inféré : l'objet des valeurs que ChatView.tsx relit après l'appel (conv-1508).
+// Type de retour inféré : l'objet des valeurs que ChatView.tsx relit après l'appel.
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
   const {
@@ -58,7 +58,7 @@ export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
    * un. Ce bouton les reprend tous — et SEULEMENT ceux-là : une pastille rouge tombée sur une
    * vraie erreur se relancerait dans le vide (tri dans `conversationsCoupeesParQuota`).
    *
-   * Depuis conv-1423, un fil repart aussi seul, une fois, à l'heure annoncée
+   * Un fil repart aussi seul, une fois, à l'heure annoncée
    * (`src/main/chat/reprise-fil-apres-quota.ts`). Le bouton reste : il rend la main avant l'heure,
    * et après un essai raté. La ligne d'état dit lequel des deux cas attend l'utilisateur.
    */
@@ -204,7 +204,7 @@ export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
       traceSilentFailure('run-trace', error)
       setOpenTrace(null)
     }
-    // conv-989 : la sortie ENTIÈRE des étapes, voisine du RUN.md — le fil la coupe à 4 000.
+    // La sortie ENTIÈRE des étapes, voisine du RUN.md — le fil la coupe à 4 000.
     const livrable = await lireLivrableDuRun(window.api, r.path)
     const avecLivrable = livrable ? { livrable } : {}
     try {
@@ -227,7 +227,7 @@ export function useRepriseDesTours(ctx: RepriseDesToursCtx) {
   async function relireRunOuvert(r: RunEntry): Promise<void> {
     const relu = await relireRun(window.api, r, openTrace, traceSilentFailure)
     // La fin du run réécrit le RUN.md APRÈS la sortie entière : c'est souvent cette relecture-ci
-    // qui la trouve, un run ouvert pendant qu'il tournait n'en avait pas encore (conv-989).
+    // qui la trouve, un run ouvert pendant qu'il tournait n'en avait pas encore.
     const livrable = await lireLivrableDuRun(window.api, r.path)
     if (openRunPathRef.current !== r.path) return
     setOpenTrace(relu.trace)

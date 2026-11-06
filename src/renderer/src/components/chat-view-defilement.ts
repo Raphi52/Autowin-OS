@@ -3,7 +3,7 @@ import { restaurerPositionLecture } from './position-lecture'
 import { mesurerMessagesRendus } from './chat-mesure-messages'
 import { scrollChatToBottom } from './chat-view-model'
 
-// Extrait de ChatView.tsx tel quel, sans changement de comportement (conv-1508).
+// Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type RepriseDeLectureCtx = {
   activeDirectiveReceipts: import('./chat-view-types').DirectiveReceipt[]
   atterrissageDemande: number

@@ -38,7 +38,7 @@ const NEGATIONS = [
   'absents du catalogue',
   'no such tool',
   /*
-   * Les memes negations en anglais (conv-1197, 2026-10-28) : l'agent repond en anglais quand
+   * Les memes negations en anglais (2026-10-28) : l'agent repond en anglais quand
    * l'interface l'est, et « `edit_file` does not exist » passait sous la garde. « n't available »
    * couvre isn't / aren't ; « not available » couvre is not / are not.
    */
@@ -75,7 +75,7 @@ function sansAccent(texte: string): string {
 }
 
 /*
- * LE NOM D'OUTIL QUI EST AUSSI UN NOM COMMUN (conv-1092, 2026-10-22). \u00ab Le d\u00e9clencheur \u00ab une
+ * LE NOM D'OUTIL QUI EST AUSSI UN NOM COMMUN (2026-10-22). \u00ab Le d\u00e9clencheur \u00ab une
  * question avant un run payant ambigu \u00bb n'existe pas encore \u00bb a d\u00e9clench\u00e9 la relance \u00ab tu affirmes
  * ne pas disposer de `run` \u00bb : ici, \u00ab run \u00bb est le nom courant d'une ex\u00e9cution, pas l'outil. Ce
  * qui marque l'usage commun est le D\u00c9TERMINANT qui le pr\u00e9c\u00e8de. Une mention CIT\u00c9E entre accents
@@ -89,7 +89,7 @@ function precedeParUnDeterminant(plat: string, position: number): boolean {
 }
 
 /**
- * TROISIEME FORME : le TABLEAU de capacites (mesure conv-650, 2026-09-17).
+ * TROISIEME FORME : le TABLEAU de capacites (2026-09-17).
  *
  * turnId 6a3498c3-8d01-4928-a4ae-9b97c7495af8 : aucune des phrases surveillees n'est ecrite. L'agent
  * dresse « | Capacite | Disponible ? | » et coche `edit_file` / `create_file` a **non**. La forme est
@@ -109,7 +109,7 @@ const CELLULES_NEGATIVES = new Set([
   '⛔',
   'no',
   'nope',
-  // Tableau ecrit en anglais (conv-1197, 2026-10-28).
+  // Tableau ecrit en anglais (2026-10-28).
   'none',
   'missing',
   'unavailable',
@@ -165,7 +165,7 @@ export function outilsFaussementAbsents(texte: unknown, catalogue: readonly stri
    * entre le nom et sa negation, donc toute mention citee — c'est-a-dire toutes les vraies —
    * etait rejetee comme rupture. Cinq tests rouges sur ce seul caractere.
    */
-  // L'apostrophe typographique (’) vaut la droite : « doesn’t exist », « n’existe pas » (conv-1197).
+  // L'apostrophe typographique (’) vaut la droite : « doesn’t exist », « n’existe pas ».
   const brut = sansAccent(texte).toLowerCase().replace(/[’‘]/gu, "'")
   let plat = ''
   // Pour chaque caractère de `plat` : vrai s'il suivait immédiatement un accent grave (nom cité).
@@ -263,7 +263,7 @@ const INACCESSIBLE = [
   /je\s+n.ai\s+pas\s+(?:acc[èe]s\s+[àa]\s+|)(?:cette|la|ces|les)\s+(?:conversation|conversations|tours?)/iu,
   /je\s+ne\s+vois\s+pas\s+(?:cette|la)\s+conversation/iu,
   /pas\s+(?:d.acc[èe]s|acc[èe]s)\s+[àa]\s+(?:l.historique|mes\s+conversations)/iu,
-  // Les memes refus en anglais (conv-1197, 2026-10-28), forme pour forme.
+  // Les memes refus en anglais (2026-10-28), forme pour forme.
   /\bonly\s+exists?\s+in\s+my\s+context/iu,
   /\boutside\s+(?:of\s+)?my\s+context/iu,
   /\bI\s+(?:can(?:not|.t)|am\s+unable\s+to|.m\s+unable\s+to)\s+(?:quote|re-?read|consult|reopen|see|view)\b/iu,
@@ -276,7 +276,7 @@ const INACCESSIBLE = [
  * Le sujet doit etre une conversation ou un tour passe, sinon le refus d'acces est peut-etre vrai —
  * et il doit l'etre DANS LA MEME PHRASE que la negation.
  *
- * FAUX POSITIF DU 2026-10-22 (conv-1089, tour 2425d493) : « Elle s'ecrit a la fin de ce tour-ci, que
+ * FAUX POSITIF DU 2026-10-22 (tour 2425d493) : « Elle s'ecrit a la fin de ce tour-ci, que
  * je ne peux pas relire de l'interieur » parlait d'une ligne de journal pas encore ecrite. Le seul
  * « conversation » du texte etait la cle JSON `conversationId`, trois puces plus haut : sujet et
  * negation etaient cherches chacun dans TOUT le texte, alors que le commentaire ci-dessus promettait
@@ -289,7 +289,7 @@ const SUJET_CONVERSATION =
 const FIN_DE_PHRASE = /[.!?…]+(?=\s|$)|\n/u
 
 /*
- * UNE NEGATION CITEE N'AFFIRME RIEN (conv-1089, 2026-10-22, tour 2425d493). Pour expliquer la garde,
+ * UNE NEGATION CITEE N'AFFIRME RIEN (2026-10-22, tour 2425d493). Pour expliquer la garde,
  * la reponse ecrivait : « …a pris ma phrase « que je ne peux pas relire de l'interieur » pour un refus
  * de lire une conversation. » La negation y est un OBJET de discours, pas une declaration de l'agent.
  * Elle n'est donc cherchee que HORS des guillemets (« », “ ”, " ") et des accents graves ; le SUJET,

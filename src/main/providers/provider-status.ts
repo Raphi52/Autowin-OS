@@ -26,7 +26,7 @@ export type AuthStatus =
 /**
  * `ready` : service du moteur direct (services-http.ts) dont la clé est posée dans l'environnement.
  * Ce n'est PAS « authenticated » : la clé n'a pas été essayée, seule sa présence est constatée
- * (conv-1503, lot 3 du plan conv-1499).
+ * (lot 3 du plan).
  */
 export type ProviderDisplayStatus = AuthStatus | 'standby' | 'ready'
 
@@ -104,7 +104,7 @@ function statutDuProvider(
 }
 
 /**
- * Statut des services du moteur direct (conv-1503) : lu dans l'environnement seulement, jamais de
+ * Statut des services du moteur direct : lu dans l'environnement seulement, jamais de
  * réseau. Sans clé, le détail NOMME la variable à poser ; la clé n'est lue que pour sa présence.
  */
 export function statutsServicesHttp(
@@ -130,7 +130,7 @@ export function buildProviderStatuses(inputs: {
   claudeResponds: boolean
   /** Absent : ChatGPT n'est pas sondé sur ce chemin, il sort « absent » plutôt qu'un statut inventé. */
   codexResponds?: boolean
-  /** Gemini par l'abonnement Google (CLI `agy`) et Grok par le CLI d'xAI : publiés depuis conv-1553. */
+  /** Gemini par l'abonnement Google (CLI `agy`) et Grok par le CLI d'xAI : publiés. */
   agyResponds?: boolean
   grokResponds?: boolean
   now: number
@@ -144,7 +144,7 @@ export function buildProviderStatuses(inputs: {
   return [
     statutDuProvider('claude', inputs.claudeResponds, inputs.states?.claude),
     statutDuProvider('codex', inputs.codexResponds === true, inputs.states?.codex),
-    // conv-1553 : agy et grok sont routés (routed-providers.ts) mais n'avaient aucun statut,
+    // Agy et grok sont routés (routed-providers.ts) mais n'avaient aucun statut,
     // donc la page Routage ne les montrait pas.
     statutDuProvider('agy', inputs.agyResponds === true, inputs.states?.agy),
     statutDuProvider('grok', inputs.grokResponds === true, inputs.states?.grok)

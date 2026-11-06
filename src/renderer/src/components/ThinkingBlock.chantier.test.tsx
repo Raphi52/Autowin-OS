@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * CARTE DU CHANTIER — un gros chantier (outil Workflow du CLI) suivi dans le fil (conv-1362, lot
- * conv-1366). Le journal mêle, comme en vrai, les lignes de chantier écrites par
+ * CARTE DU CHANTIER — un gros chantier (outil Workflow du CLI) suivi dans le fil (lot).
+ * Le journal mêle, comme en vrai, les lignes de chantier écrites par
  * `claude-workflow.ts` et des actions ordinaires.
  */
 import { describe, expect, it } from 'vitest'

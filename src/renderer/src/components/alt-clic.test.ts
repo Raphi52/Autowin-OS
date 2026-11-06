@@ -10,7 +10,7 @@ import {
 } from './alt-clic'
 
 /**
- * ALT+CLIC SUR TOUTE L'APP (conv-1338, 2026-10-30). Le geste vivait sur la vue chat : ni Réglages, ni
+ * ALT+CLIC SUR TOUTE L'APP (2026-10-30). Le geste vivait sur la vue chat : ni Réglages, ni
  * Accueil, ni la barre latérale, et rien en mosaïque.
  *
  * Mesures qui fondent ces tests (sonde Electron hors écran avec de vrais clics) :
@@ -44,7 +44,7 @@ function altClic(element: Element, options: MouseEventInit = {}): MouseEvent {
   return evenement
 }
 
-/** Ce qu'un bouton grisé reçoit d'une vraie souris (sonde conv-1338) : ni mousedown ni click. */
+/** Ce qu'un bouton grisé reçoit d'une vraie souris : ni mousedown ni click. */
 function clicSurGrise(element: Element, relache: Element = element, altKey = true): void {
   const init = { bubbles: true, cancelable: true, altKey, button: 0 }
   element.dispatchEvent(new PointerEvent('pointerdown', init))
@@ -147,7 +147,7 @@ describe('le geste', () => {
 })
 
 /**
- * fix-ok: conv-1338 — ACTIONS À L'APPUI : une ligne de menu agit sur `mousedown` (`acceptMention`,
+ * fix-ok: ACTIONS À L'APPUI : une ligne de menu agit sur `mousedown` (`acceptMention`,
  * ChatComposer.tsx), une poignée sur `pointerdown` (`beginConversationsResize`, ChatView.tsx).
  * Absorber le seul `click` les laissait partir : Alt+clic sur une ligne de mention l'acceptait AU
  * LIEU de la désigner (relevé en relecture).

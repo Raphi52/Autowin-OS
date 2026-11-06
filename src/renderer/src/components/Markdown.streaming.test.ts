@@ -6,7 +6,7 @@ import {
 } from './markdown-blocs'
 
 /*
- * DEFAUT MESURE le 2026-09-05 (conv-303) : pendant le streaming, le message est REANALYSE EN ENTIER
+ * DEFAUT MESURE le 2026-09-05 : pendant le streaming, le message est REANALYSE EN ENTIER
  * a chaque lot de texte recu. Sur le plus long message reel du depot (76 ko), 14 ms si on l'analyse
  * une fois, 1500 ms en 195 analyses successives — 107 fois plus. Cote journal : 115 s de fenetre
  * morte cote interface pour la seule journee du 04/09.

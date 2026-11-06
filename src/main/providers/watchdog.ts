@@ -22,7 +22,7 @@ const envMs = (name: string, fallback: number): number => {
  * Défaut anti-blocage des sous-agents CLI (env-overridable) : silence stdout au-delà → figé → kill.
  * L'inactivité est le SEUL détecteur de figé conservé.
  *
- * Le cap de DURÉE TOTALE a été supprimé le 2026-09-20. Mesure : conv-729, turn
+ * Le cap de DURÉE TOTALE a été supprimé le 2026-09-20. Mesure : turn
  * `aa90027e-01c1-4d39-9645-7e5d01619323` — deux appels tués à 2 400 018 ms et 2 400 022 ms (40 min
  * pile = l'ancien `SUBAGENT_TOTAL_MS`) avec l'erreur « claude CLI figé (durée max) », alors que le
  * journal du même tour montrait des battements réguliers (« Bash en cours - 30 s / 1 min / … /
@@ -141,7 +141,7 @@ export function withHardDeadline<T>(
  * mais depuis la DERNIÈRE activité signalée par `beat()`. Un tour qui produit encore n'est donc
  * jamais abandonné pour sa seule durée — seul un SILENCE de `idleMs` le fait.
  *
- * Pourquoi : supprimer le cap de durée des adaptateurs (conv-729, turn
+ * Pourquoi : supprimer le cap de durée des adaptateurs (turn
  * `aa90027e-01c1-4d39-9645-7e5d01619323`) ne sert à rien si le plafond de coordination, lui, coupe
  * toujours à date fixe — la coupure se contenterait de se déplacer de 40 à 45 minutes.
  */

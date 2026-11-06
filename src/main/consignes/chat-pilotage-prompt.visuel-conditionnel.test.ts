@@ -7,7 +7,7 @@ import {
 } from './chat-pilotage-prompt'
 
 /**
- * MESURE (conv-614, 2026-09-16, trace prompt-observability) : le prompt systeme du chat pesait
+ * MESURE (2026-09-16, trace prompt-observability) : le prompt systeme du chat pesait
  * 16 982 tokens envoyes a CHAQUE tour — constitution 4 004, pilotage 10 942, style 2 037. Dans le
  * pilotage, 1 874 tokens ne servent qu'aux tours qui touchent a l'interface ou capturent un ecran
  * (preuve visuelle, bureau cache, bissection, maquette tenue). Sur une question de code ou une
@@ -35,7 +35,7 @@ describe('regles visuelles conditionnelles', () => {
     ]) {
       expect(REGLES_VISUELLES).toContain(regle)
     }
-    // kaizen conv-835 : les regles de l'ecran de l'utilisateur ont quitte le bloc CONDITIONNEL pour
+    // kaizen : les regles de l'ecran de l'utilisateur ont quitte le bloc CONDITIONNEL pour
     // un bloc servi a chaque tour — elles ne sont pas perdues, elles sont ailleurs.
     for (const regle of [
       "ECRAN DE L'UTILISATEUR = SON ESPACE",
@@ -66,7 +66,7 @@ describe('regles visuelles conditionnelles', () => {
       'refais l icône de l app',
       'le CSS du tableau déborde',
       'montre-moi une maquette du menu',
-      // conv-742, tour 287a8f1e-0b71-48d5-a38e-fbb3e756cd43 : les images n'ouvraient pas le bloc
+      // Tour 287a8f1e-0b71-48d5-a38e-fbb3e756cd43 : les images n'ouvraient pas le bloc
       'analyse cette image',
       'que vois-tu sur cette photo ?',
       'lis rendu.png et dis-moi ce qui cloche'
@@ -87,7 +87,7 @@ describe('regles visuelles conditionnelles', () => {
       'commit et push sur main',
       'combien de tests dans le dépôt ?',
       'retiens que le client impose une facture mensuelle',
-      // FAUX POSITIF VECU (conv-614, tour de reprise du 2026-09-16 a 16:51) : cette consigne
+      // FAUX POSITIF VECU (tour de reprise du 2026-09-16 a 16:51) : cette consigne
       // ne parlait que de tailles de blocs de prompt, et le mot « style » a suffi a servir les
       // 3 966 caracteres du bloc visuel. Trace : prompt-observability/conv-614.jsonl.
       'compare les blocs a la reference : constitution 15349, pilotage 42882, style 8142',
@@ -105,7 +105,7 @@ describe('regles visuelles conditionnelles', () => {
    */
   it('pese une part utile mais minoritaire du pilotage', () => {
     const corps = buildChatPilotagePrompt([]).length
-    // 2 993 caracteres apres le depart des regles de l'ecran (kaizen conv-835, 2026-09-26).
+    // 2 993 caracteres apres le depart des regles de l'ecran (2026-09-26).
     expect(REGLES_VISUELLES.length).toBeGreaterThan(2500)
     expect(REGLES_VISUELLES.length).toBeLessThan(corps / 2)
   })

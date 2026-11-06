@@ -6,12 +6,12 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * LE BANDEAU DE PAUSE DU MODE AUTO APPARTIENT À SON FIL (conv-891, capture du 2026-09-30 12:22:46).
+ * LE BANDEAU DE PAUSE DU MODE AUTO APPARTIENT À SON FIL (capture du 2026-09-30 12:22:46).
  *
- * conv-885 a levé « Mode auto en pause : la suite proposée attend des informations que toi seul peux
+ * Un fil a levé « Mode auto en pause : la suite proposée attend des informations que toi seul peux
  * donner » le 2026-09-29 à 10:47 (suite « J'ai validé le code Quick Login : … »). Le bandeau vivait
- * dans un emplacement UNIQUE de l'écran du chat : 26 h plus tard il s'affichait encore au-dessus de
- * conv-890, qui tournait et n'attendait rien, sans dire de quel fil il venait.
+ * dans un emplacement UNIQUE de l'écran du chat : 26 h plus tard il s'affichait encore au-dessus
+ * Qui tournait et n'attendait rien, sans dire de quel fil il venait.
  */
 const cloture = (suite: string): string =>
   [
@@ -66,7 +66,7 @@ describe('ChatView — le bandeau de pause du mode auto reste dans son fil et le
     await monterEtMettreEnPause()
     expect(bandeau()).toContain('Mode auto en pause')
     expect(bandeau()).toContain('« Conversation A »')
-    // Une pause n'a aucun seuil à relever : pas de bouton vers Settings › Behaviour (conv-1602).
+    // Une pause n'a aucun seuil à relever : pas de bouton vers Settings › Behaviour.
     expect(document.querySelector('[data-testid="chat-auto-arret"]')).not.toBeNull()
     expect(document.querySelector('[data-testid="chat-auto-arret-reglages"]')).toBeNull()
   })

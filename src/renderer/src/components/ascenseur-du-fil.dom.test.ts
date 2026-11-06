@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { lireReperes } from './ascenseur-du-fil'
 
 /*
- * Le texte des aperçus de l'ascenseur à crans (conv-1114), lu dans le vrai balisage des bulles
- * (ChatMessageRow.tsx). Un message qui nomme une skill est une bulle comme les autres depuis
- * conv-1334 : son aperçu reste le texte tapé, préfixe compris.
+ * Le texte des aperçus de l'ascenseur à crans, lu dans le vrai balisage des bulles
+ * (ChatMessageRow.tsx). Un message qui nomme une skill est une bulle comme les autres
+ * Son aperçu reste le texte tapé, préfixe compris.
  */
 function filAvec(...bulles: string[]): HTMLElement {
   const fil = document.createElement('div')

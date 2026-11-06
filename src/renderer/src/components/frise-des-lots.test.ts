@@ -80,7 +80,7 @@ describe('calculerFrise', () => {
   })
 
   it('laisse au dernier lot parti la place de son bloc, sans l’écraser contre le précédent', () => {
-    // Capture conv-1393 : après 12 h 40 de plan, le lot parti derrière un lot fini d'une heure
+    // Capture : après 12 h 40 de plan, le lot parti derrière un lot fini d'une heure
     // n'avait plus que 0,3 % de l'axe, son texte écrasé en « 1… ». L'axe passe au-delà de maintenant.
     const p = plan([
       lot(1, { etat: 'fait', debut: T0, fin: T0 + 700 * MIN }),
@@ -146,7 +146,7 @@ describe('repartirEnCouloirs', () => {
 
   it('garde autant de couloirs que de lots tournant ensemble, même sur un plan très long', () => {
     // Le vrai plan après 1 h 27 : les lots courts du début pèsent 3,6 % de l'axe. Réserver leur largeur
-    // minimale dans le couloir montait à 5 lignes, pour 3 lots au plus en même temps (conv-1376).
+    // minimale dans le couloir montait à 5 lignes, pour 3 lots au plus en même temps.
     const couloirs = repartirEnCouloirs([
       barre(1, 0, 3.6),
       barre(2, 0, 21.8),

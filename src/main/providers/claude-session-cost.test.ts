@@ -87,7 +87,7 @@ describe('coût par tour depuis le cumul de session', () => {
 })
 
 /**
- * CAS RÉEL DU 13/10 (conv-770, session 46181d2b) : la tâche quotidienne /maintenance n'a pas tourné
+ * CAS RÉEL DU 13/10 (session 46181d2b) : la tâche quotidienne /maintenance n'a pas tourné
  * du 03/10 au 13/10. Entre-temps, la purge à 7 jours a effacé le cumul retenu pour sa session ; au
  * tour du 13/10, le CLI a rendu le cumul de la session (125,16 $) et Autowin l'a compté tel quel
  * comme coût du tour — contre ~9,00 $ au tarif public pour ses tokens (`cost.jsonl`).

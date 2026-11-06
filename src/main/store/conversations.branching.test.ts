@@ -352,7 +352,7 @@ describe('ConversationStore — fork', () => {
 })
 
 /**
- * LE DOSSIER DE TRAVAIL SUIT LA BRANCHE (conv-1038, 2026-10-21 — ancrage du scout : « la branche
+ * LE DOSSIER DE TRAVAIL SUIT LA BRANCHE (2026-10-21 — ancrage du scout : « la branche
  * depuis un message copie seulement les messages, pas l'état des fichiers »).
  *
  * Mesuré : `fork` ne recopiait PAS `projectPath`, que `dossierDuTour` (index.ts) relit à chaque tour.

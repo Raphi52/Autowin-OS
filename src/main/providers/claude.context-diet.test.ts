@@ -126,9 +126,9 @@ describe('spawn CLI — regime de contexte', () => {
 
   it('donne le PLEIN OUTILLAGE au tour de chat (il n’est ni aveugle ni manchot)', () => {
     // Etape 1 (avant le 2026-08-04) : `--disallowedTools '*'` -> l'agent ne pouvait rien lire, donc
-    // toute question factuelle exigeait une orchestration (conv-75 : 38,68 $).
+    // toute question factuelle exigeait une orchestration (38,68 $).
     // Etape 2 : lecture seule + 5 perimetres git. Il pouvait constater, pas agir.
-    // Etape 3 (2026-08-26, decision utilisateur, conv-1410) : Bash + Write + Edit ouverts. Une
+    // Etape 3 (2026-08-26, decision utilisateur) : Bash + Write + Edit ouverts. Une
     // correction d'une ligne ne doit plus couter une orchestration qui repond depuis un worktree
     // ISOLE, donc a cote du depot que l'utilisateur regarde.
     //
@@ -183,7 +183,7 @@ describe('spawn CLI — regime de contexte', () => {
      * assouplissement : les deux exigences restent, et la seule chose qu'on cesse d'imposer est
      * l'endroit ou prettier place ses retours a la ligne.
      */
-    // Recale le 2026-09-17 (conv-650) : la liste est nommee `outilsSansWorkspace` depuis que les
+    // Recale le 2026-09-17 : la liste est nommee `outilsSansWorkspace` depuis que les
     // pieces jointes n'ont plus de branche a elles. La propriete testee ne bouge pas — web CHARGE,
     // web AUTORISE, et `Read` seulement quand des pieces jointes existent vraiment.
     expect(chatBranch).toMatch(

@@ -1,5 +1,5 @@
 /*
- * « ENREGISTRER EN .HTML » (conv-1304, 2026-10-30) — une page interactive du fil, en fichier qu'on
+ * « ENREGISTRER EN .HTML » (2026-10-30) — une page interactive du fil, en fichier qu'on
  * garde ou qu'on envoie a un collegue. Elle doit tourner SEULE, dans un navigateur ordinaire :
  *   - la feuille de base et le theme du moment, recopies : ils ne traversent pas le fichier ;
  *   - `autowin.graphique` et, pour une page 3D, le moteur three.js, recopies en ligne ;

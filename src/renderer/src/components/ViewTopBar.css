@@ -44,7 +44,7 @@
 }
 
 /* PASSAGE À LA LIGNE des onglets, dans TOUTES les vues qui en ont : Settings, Agent Studio, Task
-   Manager et Tickets (conv-244, 2026-10-11 : « applique aux barres d'onglets … le même traitement que
+   Manager et Tickets (2026-10-11 : « applique aux barres d'onglets … le même traitement que
    Settings », puis « applique à la barre d'onglets de Tickets »). Sans lui, une colonne étroite
    empilait un libellé mot par mot ou poussait le dernier onglet hors du cadre (mesuré dans Settings à
    820 px : « Diagnostic » coupé). Spécificité (0,2,0) : en thème malvoyant, son `row-gap` plus large
@@ -61,8 +61,8 @@
 /* ONGLETS EN LISERÉ SEUL — toutes les barres d'onglets des vues, en Holographique (thèmes
    `nebuleuse-verre`, affiché « Holographique », et `holographique-clair`). L'onglet choisi n'a
    QU'UN trait de 2 px bleu → rose dessous : ni capsule, ni fond, ni bord, ni barre de fond derrière
-   la rangée (conv-244, 2026-10-11 : « je veux des liserés seuls sous les onglets que je sélectionne
-   dans chaque view »). Vocabulaire déjà validé pour les onglets du panneau de droite (conv-180 :
+   la rangée (2026-10-11 : « je veux des liserés seuls sous les onglets que je sélectionne
+   dans chaque view »). Vocabulaire déjà validé pour les onglets du panneau de droite (
    « la capsule ça va pas bien avec le border très angulaire ») ; le panneau de droite garde ses
    propres règles, au même dessin (theme-nebuleuse-verre.css, `.run-detail-tab`).
    Barres couvertes : la barre du haut de chaque vue (Settings, Agent Studio, Task Manager, Tickets),

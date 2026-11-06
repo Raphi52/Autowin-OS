@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 
 /**
- * DEFAUT VECU (conv-586, tour 5e3d954a-f79f-45c6-82ed-c34b4ba9ae63, saisie du 2026-09-16T08:44:46) :
+ * DEFAUT VECU (tour 5e3d954a-f79f-45c6-82ed-c34b4ba9ae63, saisie du 2026-09-16T08:44:46) :
  * pour verifier une modif d'UI qu'il venait de compiler, le chat a appele
  * `desktop_observe {display:1}` — l'ecran REEL de l'utilisateur — alors que le bureau cache
  * (hdesk-lancer / hdesk-observe) etait la voie attendue. L'utilisateur a annule le tour 17 s plus tard.
@@ -50,7 +50,7 @@ describe('desktop_observe : bureau cache par defaut', () => {
   })
 })
 
-// kaizen conv-854, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : clic sur la barre des taches reelle.
+// kaizen, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : clic sur la barre des taches reelle.
 describe('desktop_act : bureau cache par defaut', () => {
   const bus = (): AppCommandBus =>
     new AppCommandBus({ executionWorkspace: process.cwd() } as never, () => undefined)
@@ -96,7 +96,7 @@ describe('desktop_act : bureau cache par defaut', () => {
     expect(String(second.error)).toContain('Controle desktop indisponible')
   })
 
-  // kaizen conv-835, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 (evenements 87-89) : l'appel portait
+  // kaizen, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 (evenements 87-89) : l'appel portait
   // deja le drapeau, et le refus proposait... de reemettre avec le drapeau. Sortie inexistante : le
   // message de l'utilisateur ne parlait pas de son ecran.
   it('sans demande, le premier refus ne propose pas une sortie qui n existe pas (tour ac1d0434)', async () => {

@@ -54,7 +54,7 @@ export function detectRawSleep(diff: string): HookViolation[] {
 
 /**
  * Le seuil du fix-gate, partagé avec le signal donné à l'agent PENDANT son travail
- * (`providers/cause-en-cours.ts`, conv-1353, 2026-10-31) : deux copies du 3 finiraient par se
+ * (`providers/cause-en-cours.ts`, 2026-10-31) : deux copies du 3 finiraient par se
  * contredire, et l'agent serait prévenu trop tard ou pour rien.
  */
 export const SEUIL_FIX_GATE = 3
@@ -65,7 +65,7 @@ export const SEUIL_FIX_GATE = 3
  * tourne dans un autre process. Cette fonction ne doit donc rien nommer hors de son corps.
  */
 export function detailRefusFixGate(count: number, file: string): string {
-  // Le refus doit porter son geste de sortie : conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb,
+  // Le refus doit porter son geste de sortie : tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb,
   // la reparation l'a recu 2 fois sans deposer le jeton et la boucle s'est figee en rouge.
   return `${count} édits de ${file} sans cause vérifiée (CausalHypothesis/fix-ok/check:) — pour lever ce refus, dépose dans ${file} un commentaire \`fix-ok: <cause mesurée>\``
 }
@@ -80,7 +80,7 @@ export function detectBlindFixLoop(
   causeTokensByFile: Record<string, boolean> = {},
   threshold = SEUIL_FIX_GATE,
   /*
-   * SEULS LES FICHIERS D'UN DÉPÔT COMPTENT (conv-1149, 2026-10-25). Sur conv-1146, 3 des 17
+   * SEULS LES FICHIERS D'UN DÉPÔT COMPTENT (2026-10-25). 3 des 17
    * réparations venaient de scripts jetables hors dépôt (« 3 édits de D:/tmp/langue-outils/
    * codemod2.cjs ») : chaque refus rejouait build + nettoyage + juge. Le critère vient de
    * l'appelant (lecture du disque) ; ce module reste pur, et sans critère tout compte, comme avant.
@@ -110,7 +110,7 @@ export function detectBlindFixLoop(
 /**
  * Un chemin de fichier, quel que soit son separateur ET qu'il soit absolu ou relatif au depot,
  * designe le meme fichier.
- * fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — le refus comptait
+ * fix-ok: tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — le refus comptait
  * « D:/AutoWinOS/src/main/orchestration/orchestrator.ts » (08:52:58) et « src/main/juge/objections-juge.ts »
  * (09:06:41) sous deux cles distinctes ; un jeton fix-ok depose sous le chemin court ne
  * dedouanait donc pas le compte enregistre sous le chemin absolu.
@@ -166,8 +166,8 @@ export function requireVisualProofForFrontDiff(
 
 /**
  * motion-proof : une capture FIXE satisfait `visual-proof` tout en etant aveugle a la seule chose
- * qu'un diff d'animation modifie — le mouvement. Mesure du 2026-08-28 (chantier « spinner »,
- * conv-1507 puis conv-1498) : l'animation a ete livree comme correcte sur un `tsc` vert et un PNG
+ * qu'un diff d'animation modifie — le mouvement. Mesure du 2026-08-28 (chantier « spinner »)
+ * L'animation a ete livree comme correcte sur un `tsc` vert et un PNG
  * immobile ; c'est l'utilisateur qui a du signaler « c'est cense bouger, la il est static », puis
  * refuter l'hypothese de cause qui a suivi. Le fil s'est arrete sans verdict.
  *
@@ -180,7 +180,7 @@ export function requireVisualProofForFrontDiff(
  */
 const ANIMATION_AJOUTEE =
   /^\+(?!\+\+).*(?:@keyframes|animation\s*:|animation-name\s*:|transition\s*:)/
-// fix-ok: faux positif mesure le 2026-10-16 (conv-951) — ANIMATION_AJOUTEE prenait pour une
+// fix-ok: faux positif mesure le 2026-10-16 — ANIMATION_AJOUTEE prenait pour une
 // declaration une simple MENTION des mots-cles, sans valeur derriere : la phrase de consigne de
 // pipeline-discipline.ts qui les enumere entre parentheses, separes par « , », et la ligne
 // ci-dessus, qui les enumere separes par « | ». Ajouter une vue a la consigne, ou retoucher ce

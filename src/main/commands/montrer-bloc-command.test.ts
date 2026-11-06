@@ -15,7 +15,7 @@ import {
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
- * `montrer_bloc` (conv-1306, 2026-10-30) : un bloc lu dans un fichier arrive dans le TEXTE du fil,
+ * `montrer_bloc` (2026-10-30) : un bloc lu dans un fichier arrive dans le TEXTE du fil,
  * sur son propre flux, et jamais dans ce que reçoit le modèle IA.
  *
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER une mauvaise correction :

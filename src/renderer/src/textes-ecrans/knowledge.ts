@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — ÉCRAN KNOWLEDGE (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — ÉCRAN KNOWLEDGE (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : GraphView et ses panneaux (graphe Memory, catégories du Brain), KnowledgeInboxPanel,
  * BrainRetrievalBench.
@@ -13,7 +13,7 @@ import { tableDeTextes } from '../textes'
  * volontairement identique au français (nom propre, nom de produit) se déclare dans
  * `IDENTIQUES_AU_FRANCAIS`, avec sa raison.
  *
- * RESTENT EN DUR, hors de cette table (lot « Knowledge », conv-1170) :
+ * RESTENT EN DUR, hors de cette table (lot « Knowledge ») :
  *  - les mots déjà identiques dans les deux langues, écrits une fois dans le composant : « Memory »,
  *    « Clean memory », « relations » et « · N relation(s) », « Contradiction », « via », « Source »,
  *    « Question », les noms de canaux « dense », « lexical », « fusion », les dossiers `knowledge/`,
@@ -39,12 +39,12 @@ export const TEXTES_FR = {
   'graphe.eyebrow': 'Connaissances connectées',
   'graphe.description': 'Explore les connaissances reliées de ton Brain.',
   'graphe.selecteur': 'Graphe de connaissances',
-  // Brain PERSO à côté du Brain d'équipe (conv-1233) : nom dans le sélecteur, marque de ses notes.
+  // Brain PERSO à côté du Brain d'équipe : nom dans le sélecteur, marque de ses notes.
   'graphe.brainPerso': 'Brain perso',
   'graphe.notePerso': 'perso',
   'graphe.notePerso.titre':
     'Note de ton Brain perso, privée — l’agent l’ouvre avec le préfixe perso:',
-  // Filtre des deux Brains et leurs ponts (conv-1262).
+  // Filtre des deux Brains et leurs ponts.
   'graphe.filtreBrains': 'Brains affichés',
   'graphe.filtreBrains.equipe': 'Équipe',
   'graphe.filtreBrains.perso': 'Perso',

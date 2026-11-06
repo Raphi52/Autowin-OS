@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseOrderedPilotTokens, reparerAccoladeFinaleManquante } from './agent-pilot'
 
 /**
- * `<cmd>` À UNE ACCOLADE PRÈS — conv-159, tour `b60bf535-44e5-47e8-b43a-e3260ddc74ef` (2026-10-10).
+ * `<cmd>` À UNE ACCOLADE PRÈS, tour `b60bf535-44e5-47e8-b43a-e3260ddc74ef` (2026-10-10).
  *
  * Les deux blocs ci-dessous sont COPIÉS du journal des tours (deltas `0:1` et `1:0`) et du journal
  * brut `run-stdout/a18bb1fb-9dfa-434e-a294-47f7c4bbfae1.stdout.jsonl` : deux `{` ouvertes, une seule

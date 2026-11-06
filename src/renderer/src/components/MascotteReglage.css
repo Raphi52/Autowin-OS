@@ -1,4 +1,4 @@
-/* Interrupteur « Mascotte du bureau » (Settings · Interface, conv-1145). Uniquement des jetons du
+/* Interrupteur « Mascotte du bureau » (Settings · Interface). Uniquement des jetons du
    thème : il reste lisible dans tous les thèmes, clairs compris. La ligne reprend le gabarit
    `.interface-row` d'InterfaceView.css ; un filet la sépare du réglage du thème au-dessus. */
 .interface-row[data-testid='interface-mascotte'] {

@@ -25,7 +25,7 @@ export type GitRunner = (args: string[], cwd: string) => Promise<{ stdout: strin
 
 /**
  * Les `git` partent du fil d'exécution dédié, pas du fil principal : leur CRÉATION tenait la fenêtre
- * (`gels.jsonl`, 2026-10-31 : `git diff` 67 s sur 8 appels, `git fetch` 19,6 s — conv-1413).
+ * (`gels.jsonl`, 2026-10-31 : `git diff` 67 s sur 8 appels, `git fetch` 19,6 s).
  */
 const defaultRunner: GitRunner = async (args, cwd) => {
   const { stdout } = await execFileHorsFil('git', args, { cwd, windowsHide: true, timeout: 30_000 })
@@ -123,7 +123,7 @@ async function readIncoming(
 /**
  * Vrai si fusionner `reference` ne changerait AUCUN fichier : l'arbre fusionné est celui de HEAD.
  *
- * Cas réel (conv-1597, 2026-11-05) : `main` comptait 3 commits « à récupérer » qui étaient notre
+ * Cas réel (2026-11-05) : `main` comptait 3 commits « à récupérer » qui étaient notre
  * propre travail, publié par une copie isolée sous d'autres hashes. Le compte de commits disait
  * « +3 », le contenu disait « rien » — et le bouton restait affiché sur main. `merge-tree` calcule
  * la fusion en mémoire, sans toucher l'arbre de travail. Le moindre doute (conflit = code 1, git
@@ -433,7 +433,7 @@ export async function applyUpdate(
     // git refuse proprement (sans rien déplacer) si les commits entrants toucheraient un fichier
     // modifié localement. Le travail non committé reste EN PLACE, visible, jamais rangé ailleurs.
 
-    // REFUS AVANT GIT (conv-350, 2026-10-30) : cliquer « Mettre à jour » ne faisait RIEN de visible.
+    // REFUS AVANT GIT (2026-10-30) : cliquer « Mettre à jour » ne faisait RIEN de visible.
     // Un `git merge` qui échoue sur un arbre sale met les fichiers modifiés de côté puis les RÉÉCRIT
     // (mesuré : 15 fichiers datés de la seconde du clic, contenu identique). Le serveur de dev voit des
     // fichiers d'interface changer et recharge la page : le refus revient dans une page disparue, et le

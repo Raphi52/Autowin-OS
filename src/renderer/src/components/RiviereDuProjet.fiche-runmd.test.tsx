@@ -11,8 +11,8 @@ import { RiviereDuProjet } from './RiviereDuProjet'
 import { CLE_ETATS_MANUELS_CARTE } from './etats-manuels-carte'
 
 /**
- * LE LIEN « RUN.md » D'UNE DEMANDE (conv-1441, 2026-11-02) : l'app écrit une fiche par demande depuis
- * conv-1418, mais le Board ne la montrait nulle part. ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un lien sur
+ * LE LIEN « RUN.md » D'UNE DEMANDE (2026-11-02) : l'app écrit une fiche par demande
+ * Mais le Board ne la montrait nulle part. ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un lien sur
  * une demande sans fiche ; un lien qui ouvre la fiche d'une autre demande ; un lien sur la demande
  * d'un collègue, dont le fil vit dans SON Autowin.
  */

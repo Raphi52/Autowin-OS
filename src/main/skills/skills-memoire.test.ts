@@ -90,7 +90,7 @@ describe('skills learn/think — présentes, découvertes, invocables', () => {
 
   it('learn dit OU est sa matiere — sinon il refuse sur une premisse fausse', () => {
     /**
-     * Mesure du 2026-08-20, run reel `conv-1339` : le nœud `learn` a ecrit « je n'ai ni diff, ni
+     * Mesure du 2026-08-20, run reel : le nœud `learn` a ecrit « je n'ai ni diff, ni
      * fichier a ancrer » alors que son contexte contenait 3969 caracteres incluant le chemin exact
      * du fichier touche ET le diff complet, prefixes `[phase build]`. Un refus rigoureux applique a
      * une premisse fausse est le pire des refus : il a l'air d'une preuve de serieux.
@@ -114,7 +114,7 @@ describe('skills learn/think — présentes, découvertes, invocables', () => {
 
   it('think n arrete JAMAIS le run — il prepare, il ne conclut pas', () => {
     /**
-     * Mesure du 2026-08-20, run `conv-1340` : le briefing s'est termine par
+     * Mesure du 2026-08-20, run : le briefing s'est termine par
      * « Recommande — phase build » puis, deux lignes plus bas, `SUITE: fin`. L'orchestrateur honore
      * cette ligne : deux nœuds sur trois ne se sont jamais executes. Il a reclame build et l'a tue.
      *

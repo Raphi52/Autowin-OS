@@ -1,11 +1,11 @@
 /**
- * LE DÉCOR VIT (conv-1421, « ce décor doit pas etre statique il doit y avoir plein d'éléments qui
+ * LE DÉCOR VIT (« ce décor doit pas etre statique il doit y avoir plein d'éléments qui
  * bougent partout »). Tout ce qui bouge sans être un tanuki : ciel, ville, eau, vapeurs, feuillages.
  *
  * Rien n'est repeint : ce sont des morceaux de la peinture qui glissent, ou de petites touches
  * dessinées par-dessus. Les teintes sont fixes : ce décor est une maquette, il ne suit pas le thème.
  *
- * LA RÈGLE DE CE FICHIER (conv-1424, « les animations de décor sont éclatées »). La scène est une photo
+ * LA RÈGLE DE CE FICHIER (« les animations de décor sont éclatées »). La scène est une photo
  * de maquette : une forme plate posée dessus se voit tout de suite. Ce qui avait une matière (ballon,
  * bateaux, tram) est donc une petite peinture dans `vie.sprites`, et ce qui est de la lumière (phare,
  * anneau, reflets, fenêtres) se fond : ni bord dur, ni allumage d'un coup.
@@ -107,7 +107,7 @@ const assombrir = (c: string): string =>
  * De combien glisse une ligne d'eau, en pixels de la peinture.
  *
  * Deux houles longues, jamais une vague par ligne : un écart franc d'une ligne à la suivante découpe
- * le reflet en peigne et dentelle les berges (conv-1424). `k` va de 0 au fond à 1 sur la rive proche.
+ * le reflet en peigne et dentelle les berges. `k` va de 0 au fond à 1 sur la rive proche.
  */
 export function glissementEau(yPeinture: number, temps: number, k: number): number {
   return (
@@ -118,7 +118,7 @@ export function glissementEau(yPeinture: number, temps: number, k: number): numb
 
 /**
  * La forme d'un filet de vapeur à la hauteur `u` (0 au ras de l'eau, 1 en haut) : son écart à la verticale
- * et sa largeur. Un seul ruban continu : empiler des ronds blancs faisait un paquet de coton (conv-1424).
+ * et sa largeur. Un seul ruban continu : empiler des ronds blancs faisait un paquet de coton.
  */
 export function formeVolute(
   u: number,
@@ -189,7 +189,7 @@ export interface Vapeur {
   v: number
 }
 /**
- * La vapeur de l'onsen de la Falaise o-1916 (conv-1459) : elle monte du milieu de l'eau, devant les baigneurs
+ * La vapeur de l'onsen de la Falaise o-1916 : elle monte du milieu de l'eau, devant les baigneurs
  * adossés aux galets, là où la peinture la montre déjà.
  */
 export const VAPEURS_ONSEN: readonly Vapeur[] = [
@@ -200,14 +200,14 @@ export const VAPEURS_ONSEN: readonly Vapeur[] = [
   { x: 420, y: 748, h: 52, l: 20, a: 0.28, v: 14 },
   { x: 462, y: 756, h: 40, l: 16, a: 0.22, v: 15 }
 ]
-/** La théière du toit du Chat : la vapeur part de son couvercle, sous le Brain (conv-1459). */
+/** La théière du toit du Chat : la vapeur part de son couvercle, sous le Brain. */
 const VAPEUR_THEIERE: Vapeur = { x: 783, y: 224, h: 44, l: 13, a: 0.34, v: 13 }
-// fix-ok: positions relevées sur l'ancienne peinture — sur la capture du lot 3 (conv-1444), la roue orange, le
+// fix-ok: positions relevées sur l'ancienne peinture — sur la capture du lot 3, la roue orange, le
 // maillet rouge, les étoiles, la lueur de l'anneau et le faisceau du phare tombaient à côté des objets de la
 // Falaise o-1916. Tout ce qui suit est relevé sur elle.
-/** Le centre de l'anneau de Jarvis, sur la tour verte de la Falaise o-1916 (conv-1444). */
+/** Le centre de l'anneau de Jarvis, sur la tour verte de la Falaise o-1916. */
 export const ANNEAU: readonly [number, number] = [368, 197]
-/** La lanterne du phare, sous la flèche de la tour violette (conv-1444) : le faisceau en part. */
+/** La lanterne du phare, sous la flèche de la tour violette : le faisceau en part. */
 export const PHARE: readonly [number, number] = [433, 195]
 
 export interface VieDecor {
@@ -272,7 +272,7 @@ export async function creerVie(
   for (const o of OB) if (o.n && CAL[o.n]) o.cal = CAL[o.n]
   const e = VI.eau
   const EAUm = await image(e.m)
-  // À la taille de la peinture : à moitié moins, toute l'eau du fond sortait floue (conv-1424).
+  // À la taille de la peinture : à moitié moins, toute l'eau du fond sortait floue.
   const EAUc = toile(e.w * S, e.h * S)
   const EAUg = contexte(EAUc)
   const EAUs = toile(e.w * S, e.h * S)
@@ -301,7 +301,7 @@ export async function creerVie(
   let sonner: (() => void) | null = null
   const GONG = VI.gong
   // Des filets fins qui montent de l'eau et s'effacent, de tailles différentes. L'encens du dojo collé n'a plus
-  // de fumée : la Falaise o-1916 peint son dojo, sans brûle-encens (conv-1459).
+  // de fumée : la Falaise o-1916 peint son dojo, sans brûle-encens.
   const VOLUTES = [...VAPEURS_ONSEN, VAPEUR_THEIERE].map((o, i) => ({
     ...o,
     ph: i * 2.1,
@@ -321,7 +321,7 @@ export async function creerVie(
   }
   const POU: { x: number; y: number; r: number; age: number; vie: number }[] = []
   const ONDES: { age: number }[] = []
-  // Les cerisiers du quai de la Falaise o-1916 (conv-1444) : le grand à gauche, les deux près du torii.
+  // Les cerisiers du quai de la Falaise o-1916 : le grand à gauche, les deux près du torii.
   const NIDS = [
     [14, 335],
     [32, 340],
@@ -374,7 +374,7 @@ export async function creerVie(
     }
   })
   // Chaque voie reste dans l'eau libre : hors de là, la voile passerait devant le hangar ou la bibliothèque.
-  // Sur la Falaise o-1916, l'eau libre est entre le robot du hangar et la bibliothèque (conv-1444).
+  // Sur la Falaise o-1916, l'eau libre est entre le robot du hangar et la bibliothèque.
   const BAT = [
     { x: 250, y: 411, v: 3.6, min: 180, max: 324, l: 12, s: 'bateau2' },
     { x: 210, y: 416, v: 5, min: 183, max: 322, l: 16, s: 'bateau1' },
@@ -403,8 +403,8 @@ export async function creerVie(
     voulu: Math.random() < 0.3 ? 1 : 0,
     a: 0
   }))
-  // Ils restent sur les plantes : au-dessus d'un bain, ils se perdaient dans la vapeur (conv-1424). Celles de
-  // la Falaise o-1916 (conv-1444) : le palmier nain et la mousse au bord de l'onsen, le pot du chemin,
+  // Ils restent sur les plantes : au-dessus d'un bain, ils se perdaient dans la vapeur. Celles de
+  // la Falaise o-1916 : le palmier nain et la mousse au bord de l'onsen, le pot du chemin,
   // l'herbe sous la caméra et la grosse plante grasse à gauche.
   const FLEURS = [
     [336, 648],
@@ -429,7 +429,7 @@ export async function creerVie(
   const BAL = { x: 690, y: 92, v: -3.4 }
   const TRAM = {
     t: 0.2,
-    // Relevé sur le pont de pierre de la Falaise o-1916 (conv-1444) : le haut de la chaussée, de la ville jusqu'au
+    // Relevé sur le pont de pierre de la Falaise o-1916 : le haut de la chaussée, de la ville jusqu'au
     // toit de la bibliothèque, qui cache la fin du pont. Rien n'est devant lui.
     ps: [
       [254, 367],
@@ -578,9 +578,9 @@ export async function creerVie(
   }
 
   /**
-   * La roue de Settings, vue un peu de biais (conv-1444) : `roueFond` n'est plus que le bout de mât derrière
+   * La roue de Settings, vue un peu de biais : `roueFond` n'est plus que le bout de mât derrière
    * elle — la roue peinte est sortie du mât et un vrai ciel la remplace dans `falaise-derriere.webp`
-   * (conv-1534 : le disque de ciel opaque, peint pour une Falaise d'avant, pâlissait et cachait le ballon) ;
+   * (Le disque de ciel opaque, peint pour une Falaise d'avant, pâlissait et cachait le ballon) ;
    * la jante tourne autour de son centre ; le moyeu, rond et décalé vers nous, reste fixe par-dessus. Tournée
    * d'un bloc, la roue valsait autour de son moyeu.
    */
@@ -658,8 +658,8 @@ export async function creerVie(
         n.dx += n.v * dt
         if (n.dx > 1500) n.dx = -n.w - 60
       }
-      // Le gong est une seule image avec son portique (batiments/task.webp, conv-1601 ; avant, une cloche,
-      // conv-1444) : rien ne s'y balance, le coup se voit à la lueur et aux ondes (voir `airs`).
+      // Le gong est une seule image avec son portique (batiments/task.webp ; avant, une cloche)
+      // Rien ne s'y balance, le coup se voit à la lueur et aux ondes (voir `airs`).
       // Un tanuki au poste du gong le frappe de temps en temps : sans son (voir quartier-son.ts).
       if (actifs(26) && temps - frappeDebut > PAUSE_FRAPPE_S) {
         frappeDebut = temps
@@ -716,7 +716,7 @@ export async function creerVie(
       }
       // L'anneau de Jarvis respire derrière son cerclage, et le phare balaie la ville en passant
       // derrière les tours. Peints avant elles : posés dessus, ils brûlaient l'anneau en disque blanc.
-      // Sur la Falaise o-1916 (conv-1444) : l'anneau coiffe la tour verte, la lanterne du phare est sous la
+      // Sur la Falaise o-1916 : l'anneau coiffe la tour verte, la lanterne du phare est sous la
       // flèche de la tour violette.
       const v = 0.55 + 0.45 * Math.sin(temps * 1.5)
       const halo = 46 + v * 7
@@ -777,7 +777,7 @@ export async function creerVie(
       x.globalAlpha = 1
     },
     pieces(x) {
-      // Plus de dojo collé ni de coussins : la Falaise o-1916 les peint (conv-1459).
+      // Plus de dojo collé ni de coussins : la Falaise o-1916 les peint.
       dessinerRoue(x)
       // La longue-vue de l'observatoire cherche quelque chose, très lentement, autour de la tête de son pied.
       const lv = OB.find((o) => o.cle === 'observatory')

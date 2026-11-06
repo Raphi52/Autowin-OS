@@ -4,7 +4,7 @@ import { creerJumellesDuReflet } from './home-decor-reflet-jumelles'
 /**
  * LA SPIRALE : la rue inondée, une tour de contrôle et la rame express qui s'enroule autour d'elle.
  *
- * Demande de l'utilisateur (conv-310) : « /draft des moyens de rendre le fond d'écran de l'acceuil
+ * Demande de l'utilisateur : « /draft des moyens de rendre le fond d'écran de l'acceuil
  * magnifique effet waouh maximum », puis, de tour en tour, « innondé + des enseignes plus dynamiques
  * et dans la ville a gauche des trucs flottant », « 1 3 et 5 », « 6 2 5 », et enfin
  * « implémente spirale » : la variante 4 · Spirale du brouillon `.autowin-tmp/draft-waouh/scene5.js`.
@@ -25,11 +25,11 @@ import { creerJumellesDuReflet } from './home-decor-reflet-jumelles'
  *
  * CE QUI CHANGE, parce qu'un fond n'est pas une démo :
  *   - AUCUNE LUMIÈRE AJOUTÉE : tout l'éclat est porté par des halos et des matières qui émettent ;
- *     chaque lumière de plus alourdit toutes les matières de la rue (conv-301 : 22 lumières → 8) ;
+ *     chaque lumière de plus alourdit toutes les matières de la rue (22 lumières → 8) ;
  *   - LE REFLET A SES PROPRES PROGRAMMES : dessiner la scène dans une image à part fait préparer par
  *     three une seconde version de chaque nuanceur (sortie linéaire au lieu de sRGB). Préparées à la
- *     première image, elles figeraient l'Accueil comme en conv-301 ; `precompilerReflet` les fait
- *     compiler en tâche de fond — depuis conv-337 APRÈS la première image de la rue, qui ne les
+ *     première image, elles figeraient l'Accueil comme ; `precompilerReflet` les fait
+ *     compiler en tâche de fond — APRÈS la première image de la rue, qui ne les
  *     attend plus — et le décor les FINALISE ensuite un programme par tâche (`finaliserProgrammes`) :
  *     compilées seulement, elles se finalisaient d'un bloc au premier reflet (310 ms mesurées dans
  *     l'Accueil, 2026-10-17). Jusque-là l'eau ne reflète rien (`activerReflet`). Ces versions « reflet »
@@ -85,7 +85,7 @@ export const SPIRALE = {
 } as const
 
 /**
- * LE REFLET N'EST REDESSINÉ QU'UNE IMAGE SUR `REFLET_UNE_IMAGE_SUR` (conv-337, 2026-10-19).
+ * LE REFLET N'EST REDESSINÉ QU'UNE IMAGE SUR `REFLET_UNE_IMAGE_SUR` (2026-10-19).
  *
  * Mesure (scripts/banc-decor-budget.mjs, copie d'origin/main, instance cachée) : 1 684 dessins par
  * image, dont 702 pour le reflet, et 249 changements de programme sur 570. L'eau est ridée en
@@ -142,7 +142,7 @@ export interface Spirale {
   miroirs: THREE.Mesh[]
   /**
    * CE QUI NE SE VOIT PAS DANS L'EAU, donc n'y est pas dessiné : la rame, les portiques et les
-   * anneaux de la tour. Mesuré au banc de rendu (conv-337, 5 instants, chaque groupe retiré du SEUL
+   * anneaux de la tour. Mesuré au banc de rendu (5 instants, chaque groupe retiré du SEUL
    * reflet, même instant et même hasard) : l'écart à l'image complète reste au niveau du bruit du
    * banc (l'essaim, qui avance d'un rendu à l'autre), alors que les façades (≈ 210 000 pixels), les
    * prismes, les roues et les koïs changent nettement l'image. 66 dessins de moins par reflet.
@@ -1112,7 +1112,7 @@ export function monterSpirale(ctx: ContexteSpirale): Spirale {
         refletValide = false
       }
       // Pas de reflet tant que sa version des programmes n'est pas prête : la dessiner ici la
-      // compilerait sur le fil, à cette image (le gel de conv-301). L'eau reste sans reflet.
+      // compilerait sur le fil, à cette image (le gel). L'eau reste sans reflet.
       if (debutFondu === null) return
       miroirMat.uniforms.uForce.value =
         SPIRALE.miroir.force * Math.min(1, (performance.now() - debutFondu) / FONDU_REFLET_MS)

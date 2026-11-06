@@ -74,7 +74,7 @@
   /* MARGE DU HAUT DE LA VUE ET DU MENU : jamais moins haute que les boutons de fenêtre de Windows,
      dont le gris de survol se dessine par-dessus la page. Ces boutons ne suivent pas le zoom de
      l'app ; `env(titlebar-area-height)` donne leur hauteur convertie au zoom (mesuré le 2026-10-28,
-     conv-1223 : 24 px à 100 %, 30 px à 80 %, 48 px à 50 %, 16 px à 150 %). À 100 % et au-dessus, la
+     24 px à 100 %, 30 px à 80 %, 48 px à 50 %, 16 px à 150 %). À 100 % et au-dessus, la
      marge reste var(--s5) ; sous 100 %, elle grandit pour que le gris ne morde pas sur la vue. */
   --marge-haut-vue: max(var(--s5), env(titlebar-area-height, 0px));
 
@@ -249,19 +249,19 @@
   --chat-sur-vif-survol:            #001018;   /* texte pose sur le bouton d envoi vif, au survol */
   --chat-dictee:                    #ff8a96;   /* barre et bouton de dictee en cours */
   --chat-erreur-douce:              #e08b8b;   /* message d erreur des travaux non publies */
-  --chat-lot-rose:                  #e87fb0;   /* liseré de la 1re action de la barre de sélection multiple (conv-815) */
-  --chat-lot-bleu:                  #5b9cf0;   /* liseré de la 3e action de la barre de sélection multiple (conv-815) */
+  --chat-lot-rose:                  #e87fb0;   /* liseré de la 1re action de la barre de sélection multiple */
+  --chat-lot-bleu:                  #5b9cf0;   /* liseré de la 3e action de la barre de sélection multiple */
   --chat-frise-ok:                  #7fc98f;   /* frise du bloc Actions : action réussie */
   --chat-frise-ko:                  #e07a6a;   /* frise du bloc Actions : action en échec */
-  --chat-icone-tour:                #9a9a9a;   /* icones sous un message (copier, inspecter, brancher) au repos : gris NEUTRE, aucune teinte (conv-203) */
-  --chat-icone-tour-survol:         #ffffff;   /* les memes au survol : blanc pur (conv-203) */
-  --chat-rail-trait:                #9155c6;   /* trait et points pleins du rail du tour : le violet du milieu des capsules bleu > rose (conv-338) */
-  --chat-rail-reponse:             #3c6eeb;   /* point de la reponse au bout du rail et fin du trait qui y mene : le bleu plein des capsules (conv-338, au lieu de l or) */
-  --chat-rail-juge:                 #00ff55;   /* point du verdict des juges : le seul vert (conv-338) */
-  --chat-rail-point-texte:          #6e6a84;   /* petit point discret d une phrase sur le rail (conv-338) */
-  --chat-rail-heure:                #6e6a84;   /* colonne d heures du rail, a gauche (conv-338) */
-  --chat-rail-fond:                 #0d0d0d;   /* interieur des points : le fond du fil, qui cache le trait sous le point (conv-338) */
-  --chat-capsule-reflet-haut:       #ffffff66;   /* reflet bombe des capsules Raisonnement/Actions, haut de l arc : blanc a 40 % (conv-173) */
+  --chat-icone-tour:                #9a9a9a;   /* icones sous un message (copier, inspecter, brancher) au repos : gris NEUTRE, aucune teinte */
+  --chat-icone-tour-survol:         #ffffff;   /* les memes au survol : blanc pur */
+  --chat-rail-trait:                #9155c6;   /* trait et points pleins du rail du tour : le violet du milieu des capsules bleu > rose */
+  --chat-rail-reponse:             #3c6eeb;   /* point de la reponse au bout du rail et fin du trait qui y mene : le bleu plein des capsules (au lieu de l or) */
+  --chat-rail-juge:                 #00ff55;   /* point du verdict des juges : le seul vert */
+  --chat-rail-point-texte:          #6e6a84;   /* petit point discret d une phrase sur le rail */
+  --chat-rail-heure:                #6e6a84;   /* colonne d heures du rail, a gauche */
+  --chat-rail-fond:                 #0d0d0d;   /* interieur des points : le fond du fil, qui cache le trait sous le point */
+  --chat-capsule-reflet-haut:       #ffffff66;   /* reflet bombe des capsules Raisonnement/Actions, haut de l arc : blanc a 40 % */
   --chat-capsule-reflet-milieu:     #ffffff1a;   /* meme reflet a 55 % du rayon : blanc a 10 % */
   --chat-capsule-reflet-fin:        #ffffff00;   /* fin du reflet : blanc transparent */
   --chat-capsule-reflet-eteint-haut: #ffffff26;   /* reflet d une capsule eteinte (tour fini, non survolee) : blanc a 15 % */
@@ -753,7 +753,7 @@ button.card:hover {
   animation: fadeIn var(--dur) var(--ease);
 }
 
-/* LES BLOCS DEPLIABLES GLISSENT (conv-981, 2026-10-16) : la cinquantaine de <details> de l'app
+/* LES BLOCS DEPLIABLES GLISSENT (2026-10-16) : la cinquantaine de <details> de l'app
    (pensee, frise, details d'execution...) s'ouvrait et se refermait d'un coup. Le contenu
    (`::details-content`, Chromium 131+ ; Electron 44 = Chromium 152) passe de 0 a sa hauteur
    naturelle — `interpolate-size` permet d'animer vers `auto`, pose ICI seulement pour ne changer
@@ -837,7 +837,7 @@ details:not(
   place-items: center;
   width: 0.8375em;
   height: 0.8375em;
-  /* PAR CRANS DE 100 MS, pas en continu (conv-1075) : une rotation fluide fait recomposer toute la
+  /* PAR CRANS DE 100 MS, pas en continu : une rotation fluide fait recomposer toute la
      fenetre 60 fois par seconde — 20 a 25 % d'une GT 1030 pour ces atomes. Crans = duree / 0,1 s ;
      le calage sur une horloge commune est dans animations-par-crans.ts. */
   animation: aw-atom-spin 2.7s linear infinite;
@@ -919,7 +919,7 @@ details:not(
 }
 .aw-atom__star {
   clip-path: polygon(50% 0%, 58% 42%, 100% 50%, 58% 58%, 50% 100%, 42% 58%, 0% 50%, 42% 42%);
-  /* Par crans de 100 ms, comme les orbites (conv-1075) : 0,8 s par demi-battement = 8 crans. */
+  /* Par crans de 100 ms, comme les orbites : 0,8 s par demi-battement = 8 crans. */
   animation: aw-atom-tw 1.6s linear infinite;
 }
 .aw-atom__star--edge {
@@ -974,7 +974,7 @@ details:not(
   height: 100%;
 }
 
-/* FOND NOIR choisi dans les réglages de l'Accueil (conv-346, « un fond noir ou l'image cyberpunk ou
+/* FOND NOIR choisi dans les réglages de l'Accueil (« un fond noir ou l'image cyberpunk ou
    les planetes ») : aucune scène 3D n'est montée, l'hôte peint l'aplat. Sans lui, le fond 2D du
    `body` (la galaxie PNG du thème d'origine) reparaissait à la place du noir demandé. */
 .decor-de-fond[data-fond='noir'] {

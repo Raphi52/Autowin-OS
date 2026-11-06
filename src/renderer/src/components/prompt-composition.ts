@@ -94,7 +94,7 @@ export function aggregatePromptComposition(
     }
     // Un bloc peut être déclaré plus GRAND que le `system` final (troncature en aval) : le reste
     // non attribué ne peut pas être négatif.
-    // Libellé dans la langue de l'interface (conv-1170) ; le genre `unattributed` reste la clé relue.
+    // Libellé dans la langue de l'interface ; le genre `unattributed` reste la clé relue.
     const nonAttribue = traduireChatFil('composition.nonAttribue', langueCourante())
     ajoute(nonAttribue, 'unattributed', Math.max(0, systemChars - attribues))
     const aInjecte =

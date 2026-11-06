@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, conversation, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * DEMANDE DU 2026-10-10 (conv-158) : « la boule est trop grosse […] elle devrait matcher le state
+ * DEMANDE DU 2026-10-10 : « la boule est trop grosse […] elle devrait matcher le state
  * comme la pastille de conv », puis « et parfois le spinner quand la conv bosse ».
  *
  * La boule rose de 26 px a gauche du titre ne disait rien de la conversation. Variante retenue :

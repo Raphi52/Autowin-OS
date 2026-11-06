@@ -9,7 +9,7 @@ import { ClaudeCliAdapter, signalDeCauseDuLancement } from './claude'
 import { OUTILS_D_EDITION } from './cause-en-cours'
 
 /**
- * LE SIGNAL DE CAUSE TOURNE LÀ OÙ LE CONTRÔLE FINAL S'APPLIQUE (conv-1353, 2026-10-31).
+ * LE SIGNAL DE CAUSE TOURNE LÀ OÙ LE CONTRÔLE FINAL S'APPLIQUE (2026-10-31).
  *
  * Piège de la demande : l'avertissement des tests n'est posé qu'en tour de chat. Le contrôle final,
  * lui, s'applique aux agents de run (étapes de build et réparations), qui passent par `send` avec

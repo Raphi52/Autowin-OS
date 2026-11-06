@@ -1,5 +1,5 @@
 // Balayage des copies, processus actifs et retrait des copies : méthodes de WorktreeManager déplacées telles quelles depuis worktree-manager.ts
-// (conv-1508, lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
+// (lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
 // par attacherMethodes dans worktree-manager.ts, donc les appels `this.x(...)` restent identiques.
 import { causeGit } from './cause-git'
 import { randomUUID } from 'node:crypto'
@@ -198,7 +198,7 @@ export function reconcileResidues(
   if (swept.length > 0) result.swept = swept
 
   // Un residu qui RESISTE au balayage doit remonter dans l'etat : sans cela il reste invisible et
-  // revient a chaque demarrage (mesure conv-1483 : 10 copies, ~413 Mo, jamais signalees).
+  // revient a chaque demarrage (mesure : 10 copies, ~413 Mo, jamais signalees).
   for (const blocage of this.blocagesDeBalayage()) {
     if (result.blocked.some((b) => resolve(b.path) === resolve(blocage.path))) continue
     result.blocked.push({
@@ -402,7 +402,7 @@ export function deciderBalayageDUneCopie(
     // Elle retient du travail : la marge LARGE d'origine s'applique, inchangee.
     if (!(ageMs >= ABANDONED_AGENT_MIN_AGE_MS)) return undefined
     /*
-     * SAUF LA COPIE DE `verify` (conv-1137, 2026-10-24) : ses fichiers sales sont un MIROIR du
+     * SAUF LA COPIE DE `verify` (2026-10-24) : ses fichiers sales sont un MIROIR du
      * depot, recopie a chaque verification (`synchroniserBureauDeVerification`). Les preserver
      * creait `autowin/recovery/command-verify-conv-1048` — 2 899 lignes, aucune neuve. Elle suit
      * donc la garde du HEAD ci-dessous : un commit qu'aucune reference ne tient reste rattache.
@@ -469,7 +469,7 @@ export function balayerLeChemin(this: WorktreeManager, path: string): boolean {
   /*
    * ESCALADE plutot qu'abandon silencieux.
    *
-   * MESURE conv-1483 : 10 copies residuelles (~413 Mo) survivaient a chaque demarrage. Le retrait
+   * MESURE : 10 copies residuelles (~413 Mo) survivaient a chaque demarrage. Le retrait
    * DOUX (`worktree remove` sans `--force`) refuse des qu'un fichier non suivi traine — cas
    * NORMAL d'une copie d'agent. L'ancien code rendait alors `false` sans rien tenter d'autre et
    * sans laisser la moindre trace : le residu revenait indefiniment, invisible.
@@ -486,7 +486,7 @@ export function balayerLeChemin(this: WorktreeManager, path: string): boolean {
 /**
  * `balayerLeChemin` dont les retraits ne tiennent pas la boucle (balayage horaire) — ni git, ni
  * le disque. Le retrait disque était resté synchrone : 153,8 s de fenêtre figée le 2026-10-22
- * sur une copie oubliée de git (heal conv-1115, `balayage-disque-async.test.ts`).
+ * sur une copie oubliée de git (`balayage-disque-async.test.ts`).
  */
 export async function balayerLeCheminAsync(this: WorktreeManager, path: string): Promise<boolean> {
   if ((await this.cleanupWorktreeAsync(path, false)).ok) return this.oublierEchecDeBalayage(path)
@@ -629,7 +629,7 @@ export function commitsDejaReferences(
 }
 
 /**
- * LA MÊME QUESTION, DANS LE WORKER DÈS QU'IL EXISTE (heal « les lags », conv-1413, 2026-10-31).
+ * LA MÊME QUESTION, DANS LE WORKER DÈS QU'IL EXISTE (heal « les lags », 2026-10-31).
  * Le `rev-list` ci-dessus répond d'habitude en 50 ms, mais `gels.jsonl` le montre tenant la fenêtre
  * 125,7 s le 2026-10-31 à 19:27 UTC, le pire gel unitaire de la période : la commande bloque le fil
  * qui l'attend, et ce fil était celui qui dessine.
@@ -1085,9 +1085,9 @@ export function recoveredPublishedResidue(
  * publication. La question n'est pas « ce fichier est-il ignoré », c'est « est-il JETABLE ».
  *
  * LA RÈGLE SE DÉRIVE, ELLE NE S'ÉNUMÈRE PLUS, et c'est une récidive qui l'a imposé. Cette liste
- * nommait les dossiers un par un. Le 2026-08-21 (conv-1362) un run vert a bloqué sa propre
+ * nommait les dossiers un par un. Le 2026-08-21 un run vert a bloqué sa propre
  * publication parce que sa preuve vivait dans `Audit/` ; on a ajouté `Audit/` à la liste. Le
- * 2026-08-27 (conv-1425) le MÊME défaut est revenu par `artifacts/` — la ligne SUIVANTE du même
+ * 2026-08-27 le MÊME défaut est revenu par `artifacts/` — la ligne SUIVANTE du même
  * `.gitignore` — trois refus, 3,22 $, zéro livraison. Corriger un dossier ne corrige pas un
  * défaut : il revient par le dossier d'à côté.
  *

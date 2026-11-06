@@ -27,7 +27,7 @@ describe('cleDeCumul', () => {
   })
 
   /*
-   * Mesure du 2026-10-10 (heal conv-204) : 982 gels « inconnu » en un jour. Le coupable etait la
+   * Mesure du 2026-10-10 : 982 gels « inconnu » en un jour. Le coupable etait la
    * CREATION de 264 processus `git` par photo — un `execFile` asynchrone, dont la creation du
    * processus reste pourtant synchrone. Elle passe par `ChildProcess.prototype.spawn`, qui recoit
    * UN objet d'options normalise par Node : `file`, et `args` = argv complet, argv0 compris.

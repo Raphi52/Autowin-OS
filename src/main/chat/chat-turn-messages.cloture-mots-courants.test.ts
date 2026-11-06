@@ -4,7 +4,7 @@ import { exigeUneConclusion } from './chat-turn-messages'
 /**
  * LA GARDE DE CLOTURE NE DOIT PAS SE LAISSER TROMPER PAR DEUX MOTS FRANCAIS ORDINAIRES.
  *
- * Mesure conv-44 (2026-09-01), mots de l'utilisateur : « t'as terminé sans me donner le bloc de
+ * Mesure (2026-09-01), mots de l'utilisateur : « t'as terminé sans me donner le bloc de
  * cloture ». Le tour AVAIT agi et ne portait AUCUNE rubrique — mais `exigeUneConclusion` cherchait
  * `\bfait\b` d'un cote et `recommand` de l'autre, N'IMPORTE OU dans le texte. La phrase de prose
  * « Ma RECOMMANDation du tour precedent etait a cote » + « Je depose le FAIT » suffisait donc a

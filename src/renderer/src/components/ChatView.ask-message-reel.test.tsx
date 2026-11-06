@@ -10,7 +10,7 @@ import {
 } from './ChatView.harness'
 
 /**
- * DÉFAUT VÉCU (conv-38, 2026-09-01) : « j'ai répondu à un ask, ça a écrit le message, puis ça a
+ * DÉFAUT VÉCU (2026-09-01) : « j'ai répondu à un ask, ça a écrit le message, puis ça a
  * rechargé et le message a disparu, j'ai dû recliquer ».
  *
  * Répondre pendant un tour passait par l'injection, qui ne posait qu'un REÇU en mémoire de l'écran.

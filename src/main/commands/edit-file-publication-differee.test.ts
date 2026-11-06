@@ -16,7 +16,7 @@ import { RunWorktreeCoordinator } from '../store/run-worktree-coordinator'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
- * DEFAUT VECU le 2026-08-25 (conv-1404) : TROIS `edit_file` sur QUATRE ont rendu
+ * DEFAUT VECU le 2026-08-25 : TROIS `edit_file` sur QUATRE ont rendu
  * « Le bureau edit_file a ete conserve : publication automatique incomplete » — alors que les trois
  * manifestes portaient `verdict: green, publication: complete` et que les trois commits etaient
  * dans `HEAD`. Le travail etait publie ; seul le message disait le contraire.
@@ -165,7 +165,7 @@ describe('edit_file — une publication DIFFEREE n’est pas un echec', () => {
   /**
    * LE MESSAGE DOIT ARRIVER JUSQU'A L'AGENT, pas seulement exister dans un module.
    *
-   * Le quatrieme volet de conv-1407 a donne un motif propre a chacune des six issues. Prouver la
+   * Le quatrieme volet a donne un motif propre a chacune des six issues. Prouver la
    * FONCTION ne prouve pas le CHEMIN : ces trois cas passent par `edit_file` REEL et lisent l'erreur
    * telle que l'orchestrateur la recevra. Sans eux, « expose » aurait ete pris pour « integre ».
    */

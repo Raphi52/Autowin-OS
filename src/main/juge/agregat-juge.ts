@@ -11,7 +11,7 @@ import { couperEnGardantLeBilan } from '../../shared/bilan-d-etape'
  *
  * LA LEÇON PROPOSÉE EST CELLE DE LA RÉPONSE LA PLUS RÉCENTE QUI EN PORTE UNE.
  *
- * fix-ok: run-85d8e7f57af2-1 (conv-892, 2026-10-01) — cinq réponses de build portaient une ligne
+ * fix-ok: run-85d8e7f57af2-1 (2026-10-01) — cinq réponses de build portaient une ligne
  * `AUTOWIN_LESSON_V1` (caractères 9 054, 10 011, 4 821, 8 363, 4 559 dans `phaseOutputs`). Deux
  * causes, mesurées sur `run-state/run-85d8e7f57af2-1.json` en rejouant `parseAttestedLearningProposal` :
  * (1) le brief place la leçon en DERNIÈRE ligne, et le plafond garde le DÉBUT de la réponse : trois
@@ -31,7 +31,7 @@ export interface SortieDePhase {
 export const MARQUE_TRONQUE = '\n…[tronqué — voir le fil des sous-agents]'
 
 /**
- * La marque de coupe NOMME la copie entiere quand elle existe (conv-989, 2026-10-16). « Le fil des
+ * La marque de coupe NOMME la copie entiere quand elle existe (2026-10-16). « Le fil des
  * sous-agents » (`trace.json`) est plafonne a 4 000 caracteres par etape : plus court que ce que le
  * juge lit deja. `ouLire` est le fichier ecrit par `runs/livrable-entier.ts`.
  */
@@ -44,9 +44,9 @@ export const MENTION_LECON_REMPLACEE =
 /**
  * LA VERSION LA PLUS RÉCENTE D'UNE ÉTAPE REJOUÉE EN ENTIER REMPLACE LES PRÉCÉDENTES.
  *
- * fix-ok: conv-914 (2026-10-13) — cause lue dans le code : une réparation d'étape nommée rejoue
+ * fix-ok: (2026-10-13) — cause lue dans le code : une réparation d'étape nommée rejoue
  * l'étape EN ENTIER et `phaseOutputs.push` (orchestrator.ts) n'efface rien ; l'agrégat portait donc
- * toutes les versions du tableau du `/scout` réparé (4 d'après l'analyse de conv-914, non re-mesuré),
+ * toutes les versions du tableau du `/scout` réparé (4 d'après l'analyse, non re-mesuré),
  * relues en entier par le juge à chaque passage. Une étape nommée (scout, frame, terrain) rend un
  * résultat COMPLET à chaque passage (« porte le résultat, ne le remplace jamais ») : seule la
  * dernière fait foi. Un build ou un clean de réparation, lui, AJOUTE un changement : tous restent.
@@ -85,7 +85,7 @@ function estLigneDeLecon(ligne: string): boolean {
 }
 
 /**
- * LA PLACE QU'UNE ÉTAPE COURTE N'UTILISE PAS REVIENT AUX ÉTAPES LONGUES (piste 5 de conv-914).
+ * LA PLACE QU'UNE ÉTAPE COURTE N'UTILISE PAS REVIENT AUX ÉTAPES LONGUES (piste 5).
  *
  * Répartition « par remplissage » de `budget` : un bloc plus court que sa part garde tout, les autres
  * se partagent le reste à parts égales. Chaque bloc reçoit au moins min(sa longueur, budget / nombre
@@ -161,7 +161,7 @@ export function agregerPhasesPourLeJuge(
   return blocs
     .map((b) => {
       if (b.texte === undefined) return `${b.entete}${b.fixe}`
-      // conv-989 : le bilan de fin d'etape passe EN ENTIER, meme quand la part est petite.
+      // Le bilan de fin d'etape passe EN ENTIER, meme quand la part est petite.
       let body = couperEnGardantLeBilan(b.texte, parts[rang++]!, (corps, longueur) =>
         couperDebutEtFin(corps, longueur, marque)
       )
@@ -174,7 +174,7 @@ export function agregerPhasesPourLeJuge(
 /**
  * LE RÉSULTAT RENDU À L'UTILISATEUR NE PORTE PAS LES VERSIONS REMPLACÉES.
  *
- * fix-ok: conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 — le `result` du run reprenait
+ * fix-ok: tour b6150a1a-6518-4d4b-99b4-3218b5efb501 — le `result` du run reprenait
  * l'agrégat du JUGE : la réponse affichée commençait par deux fois « [phase scout] » +
  * `MENTION_VERSION_REMPLACEE` (« …plus bas »), une indication écrite pour le juge, avant la seule
  * version qui compte. Ici, une version remplacée disparaît, SAUF si elle porte la leçon la plus

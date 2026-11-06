@@ -100,7 +100,7 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>()
  *
  * Mesure du 2026-09-09 (`gels.jsonl`, 15:38:48 → 15:39:14) : TROIS `appendFileSync` de journal ont
  * bloqué 10 003, 10 007 et 10 004 ms d'affilée sur des fichiers de quelques Ko. Le volume n'y était
- * pour rien, le SSD non plus (420 ms au pire sur 675 relevés, conv-1368) : l'appel attendait au-dessus du disque, et comme
+ * pour rien, le SSD non plus (420 ms au pire sur 675 relevés) : l'appel attendait au-dessus du disque, et comme
  * l'écriture vivait sur le fil qui dessine l'interface, l'app est restée figée ~26 s, jusqu'à la
  * fermeture forcée. Une telle attente ne doit pas pouvoir geler l'interface : l'écriture courante
  * part donc sur le pool d'I/O de Node.
@@ -111,7 +111,7 @@ const timers = new Map<string, ReturnType<typeof setTimeout>>()
  *    avant, le tour repasserait « inachevé » et la reprise le rejouerait — un tour ZOMBIE ;
  *  - l'arrêt de l'app (`flushAllTurnJournals`, appelé dans `before-quit`, qui est synchrone).
  *
- * Les INVENTAIRES ne vident plus les tampons (conv-1598, 2026-11-05 : 90 s de fenêtre figée en une
+ * Les INVENTAIRES ne vident plus les tampons (2026-11-05 : 90 s de fenêtre figée en une
  * matinée, `appendFileSync` appelé par `flushAllTurnJournals` depuis chaque inventaire). Une ligne
  * en mémoire n'est jamais une clôture — une clôture part sur le disque aussitôt —, donc elle ne peut
  * pas rendre « terminé » un tour : l'inventaire recolle la mémoire (`toursEnMemoireSeulement`), et
@@ -233,7 +233,7 @@ function signatureCloture(event: TurnJournalEvent): string {
 }
 
 /**
- * LES CLÔTURES DÉJÀ SUR LE DISQUE, CONNUES SANS RELIRE (conv-1598, 2026-11-05).
+ * LES CLÔTURES DÉJÀ SUR LE DISQUE, CONNUES SANS RELIRE (2026-11-05).
  *
  * `clotureDejaEcrite` relisait le journal ENTIER en bloquant avant chaque clôture : 37 s de fenêtre
  * figée en 15 appels, la matinée du 05/11 (`gels.jsonl`, `turn-journal.ts:231`). Au premier événement
@@ -491,7 +491,7 @@ function journauxEnCoursDEcriture(): Set<string> {
 }
 
 /**
- * Les tours qui n'ont encore AUCUN fichier, seulement des lignes en mémoire. Avant (conv-1598), chaque
+ * Les tours qui n'ont encore AUCUN fichier, seulement des lignes en mémoire. Avant, chaque
  * inventaire vidait tous les tampons en bloquant pour que le disque les montre ; il les lit ici.
  * `vus` = chemins résolus déjà trouvés sur le disque : leurs lignes en mémoire y sont déjà recollées.
  */
@@ -525,7 +525,7 @@ function toursEnMemoireSeulement(root: string, vus: ReadonlySet<string>): Unfini
 
 export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
   // Un tour qui n'existe encore qu'en mémoire est recollé à la fin, sans vider les tampons en
-  // bloquant (conv-1598) : un tour en vol reste visible, donc repris.
+  // bloquant : un tour en vol reste visible, donc repris.
   const found: UnfinishedTurn[] = []
   const vus = new Set<string>()
   for (const conversationId of existsSync(root) ? readdirSync(root) : []) {
@@ -566,7 +566,7 @@ export function listUnfinishedTurns(root: string): UnfinishedTurn[] {
  * la mémoire `termineConnus` est vide au premier appel, donc la version synchrone rouvre encore
  * chaque journal. Même logique, mêmes verdicts, mais toutes les E/S passent par `fs/promises` :
  * la fenêtre n'est plus figée pendant le parcours. Les tampons ne sont plus vidés en bloquant
- * (conv-1598) : un tour en vol pas encore sur disque est recollé depuis la mémoire.
+ * Un tour en vol pas encore sur disque est recollé depuis la mémoire.
  */
 async function journalTermineParLaQueueAsync(path: string): Promise<boolean | undefined> {
   let fichier: Awaited<ReturnType<typeof open>> | undefined
@@ -770,7 +770,7 @@ export function pruneFinishedTurnJournals(
   bornes: BornesMenage = {}
 ): number {
   // Un journal qui a encore des lignes en mémoire ou une écriture en vol est en cours d'écriture : le
-  // ménage le saute, au lieu de vider tous les tampons en bloquant avant (conv-1598).
+  // ménage le saute, au lieu de vider tous les tampons en bloquant avant.
   if (!existsSync(root)) return 0
   const enCours = journauxEnCoursDEcriture()
   const maxSuppressions = bornes.maxSuppressions ?? 200
@@ -826,7 +826,7 @@ export function pruneFinishedTurnJournals(
  *
  * Le canal `runs:unfinishedTurns` faisait le contraire : ~2,8 s de fenetre figee par ouverture, 69 s
  * cumulees sur 25 gels. Un tour en vol pas encore sur disque est recollé depuis la memoire
- * (conv-1598), jamais vide en bloquant. La verite rendue prime, le GC attend.
+ * Jamais vide en bloquant. La verite rendue prime, le GC attend.
  * Le menage differe ne doit jamais jeter : hors du handler, un throw ne serait plus capture.
  */
 export function listUnfinishedTurnsPuisMenage(

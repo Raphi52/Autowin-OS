@@ -8,7 +8,7 @@ import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 import { PROPOSITION_GROW } from './proposition-grow'
 
 /**
- * GROW EST PROPOSÉE PAR LE CODE DE FIN DE TOUR, PAS PAR UNE PHRASE DE PROMPT (conv-417, 2026-11-02).
+ * GROW EST PROPOSÉE PAR LE CODE DE FIN DE TOUR, PAS PAR UNE PHRASE DE PROMPT (2026-11-02).
  *
  * La skill `grow` ne partait que si le modèle choisissait de la charger, ou si l'utilisateur tapait
  * `/grow`. Ici le VRAI tour de chat tourne (vrai stockage, faux modèle qui clôt sur une issue

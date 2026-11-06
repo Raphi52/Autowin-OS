@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { regrouperEnInstances } from './decor-instances'
 
 /**
- * LES OBJETS FIXES IDENTIQUES EN UN SEUL DESSIN (conv-337). Ce qui doit faire échouer ce fichier :
+ * LES OBJETS FIXES IDENTIQUES EN UN SEUL DESSIN. Ce qui doit faire échouer ce fichier :
  * une instance qui ne reprend pas EXACTEMENT la position, l'orientation et l'échelle de son objet
  * d'origine (le décor bougerait) ; un transparent ou un objet relu ailleurs (nommé, `userData`,
  * enfants) avalé par un lot (son ordre de dessin ou son animation seraient perdus).

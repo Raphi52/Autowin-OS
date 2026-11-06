@@ -31,7 +31,7 @@ export type WorkflowDecision =
   | { kind: 'none'; reason?: string }
 
 /**
- * QUI FAIT QUOI DANS LA DÉCISION (conv-1097, 2026-10-22).
+ * QUI FAIT QUOI DANS LA DÉCISION (2026-10-22).
  *
  * La décision part sur le modèle des PETITES TÂCHES (Haiku par défaut, `roles.ts`), réservé aux
  * appels à réponse unique. Or « WORKFLOW: nouveau » suivi d'un graphe JSON n'est pas un choix :

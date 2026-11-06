@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * RELIRE N'EST PAS RECALCULER (conv-252, 2026-10-11 : « corrige l'onglet Logs du panneau de droite
+ * RELIRE N'EST PAS RECALCULER (2026-10-11 : « corrige l'onglet Logs du panneau de droite
  * pour qu'il ne recalcule plus tout le journal toutes les 2 à 4 s quand rien n'a changé et qu'il lise
  * la trace allégée »). Mesure d'origine : `gels.jsonl`, 12:00-12:02, le panneau droit tenait
  * l'affichage 1,1 à 2,8 s toutes les 2 à 4 s pendant un tour vivant.

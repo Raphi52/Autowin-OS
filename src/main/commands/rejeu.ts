@@ -1,7 +1,7 @@
 /**
  * Empreinte d'un appel, registre des rejeux du tour et arguments caviardés pour la trace.
  *
- * Code libre sorti de `commands.ts` tel quel (conv-1580, lot 5) ; `commands.ts` ré-exporte ce qu'il
+ * Code libre sorti de `commands.ts` tel quel (lot 5) ; `commands.ts` ré-exporte ce qu'il
  * exportait déjà, ses importeurs ne changent pas. Dans `commands/`, une VALEUR s'importe d'ici,
  * jamais par `'../commands'` (cycle d'import) : `commands/code-libre.test.ts` le garde.
  */
@@ -75,8 +75,8 @@ export function redactedArgs(name: string, args: Record<string, unknown>): Recor
       newText: '[REDACTED]'
     }
   }
-  // conv-344 : un mot de passe peut passer par la frappe — seul son nombre de caractères est gardé.
-  // Même règle pour la saisie dans le navigateur intégré (conv-1286, lot 4/5).
+  // Un mot de passe peut passer par la frappe — seul son nombre de caractères est gardé.
+  // Même règle pour la saisie dans le navigateur intégré (lot 4/5).
   if (
     (name === 'bureau_cache_agir' || name === 'navigateur_agir') &&
     typeof args.texte === 'string'

@@ -53,7 +53,7 @@ describe('frontend cleanup guard', () => {
   })
 
   it('mounts NO startup preflight popup — the Settings « ! » carries the alert', () => {
-    // La popup de demarrage (FirstRunWizard) est retiree a la demande de l'utilisateur (conv-963,
+    // La popup de demarrage (FirstRunWizard) est retiree a la demande de l'utilisateur (
     // 2026-10-15) : un prerequis en echec s'annonce par le « ! » de Settings, 30 s apres le lancement.
     // Ce garde-fou refuse qu'une fenetre de demarrage revienne sans qu'on le voie ici.
     const app = source('App.tsx')

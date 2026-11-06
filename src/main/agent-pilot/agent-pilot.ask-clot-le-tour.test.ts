@@ -3,7 +3,7 @@ import { AgentPilot, type PilotEvent } from './agent-pilot'
 import type { PromptSnapshot } from '../commands/commands'
 
 /**
- * LE PROBLÈME DE FOND, choisi par l'utilisateur après le défaut vécu dans `conv-1400`.
+ * LE PROBLÈME DE FOND, choisi par l'utilisateur après le défaut vécu.
  *
  * `ask` ne suspendait rien : la commande rendait la question et le pilote enchaînait son itération
  * suivante. La conversation restait donc OCCUPÉE, et répondre passait par une DIRECTIVE — affichée
@@ -77,7 +77,7 @@ describe('une question clôt le tour', () => {
   })
 
   it('DIT quelque chose en se fermant — jamais de bulle vide', async () => {
-    // Défaut connu (`conv-1141`) : un tour qui a agi sans rien dire laissait une bulle vide, et
+    // Défaut connu : un tour qui a agi sans rien dire laissait une bulle vide, et
     // l'utilisateur renvoyait le même prompt en boucle sans savoir ce qui ratait.
     const { evenements } = await piloter([LECTURE + ASK])
 

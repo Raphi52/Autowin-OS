@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { instantDeRetourAnnonce as r } from './reprise-quota'
 
 // Migré de scripts/arena-panel/p7-heure-de-retour.mts (banc /arena, commit 191ab51d), retiré le
-// 2026-10-22 (residus, conv-1062). Défaut d'origine : « resets 13pm » -> 13 h, « resets 3:5pm »
+// 2026-10-22 (residus). Défaut d'origine : « resets 13pm » -> 13 h, « resets 3:5pm »
 // -> 3 h du matin le lendemain. Une heure illisible doit rendre undefined.
 const maintenant = new Date(Date.UTC(2026, 8, 21, 10, 0)) // 12 h 00 à Paris (UTC+2)
 const iso = (t: string): string | undefined => {

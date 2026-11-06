@@ -1,5 +1,5 @@
 /**
- * conv-1077 (2026-10-22) : trois `electron.exe` pesaient ~872, 433 et 307 Mo, sans que rien dans
+ * 2026-10-22 : trois `electron.exe` pesaient ~872, 433 et 307 Mo, sans que rien dans
  * l'app ne dise LEQUEL est quoi (fenêtre, GPU, service). `app.getAppMetrics()` n'était appelé nulle
  * part. Ces tests fixent le relevé : rôle de chaque processus, Mo, CPU, une fois par minute.
  */
@@ -121,7 +121,7 @@ describe('relevé mémoire et processeur (conv-1077)', () => {
         'GPU',
         'Browser'
       ])
-      // Redemandé 4 s plus tard, il est refait aussi : plus aucun seuil d'âge (conv-1077, voir le
+      // Redemandé 4 s plus tard, il est refait aussi : plus aucun seuil d'âge (voir le
       // test « 1 s après »). Le relevé de cadence, lui, ne s'ajoute pas : un seul appel de plus.
       const avant = appels
       vi.advanceTimersByTime(4_000)
@@ -134,7 +134,7 @@ describe('relevé mémoire et processeur (conv-1077)', () => {
   })
 
   it('demandé par l’écran 1 s après le relevé d’avant la fenêtre, il est refait : la fenêtre apparaît', () => {
-    // fix-ok: cause mesurée 2026-10-22 (conv-1077, capture ui-capture code-construit 16:07:40) — onglet
+    // fix-ok: cause mesurée 2026-10-22 (capture ui-capture code-construit 16:07:40) — onglet
     // ouvert moins de 5 s après le premier relevé : seuil de 5 s → l'écran recevait [Browser] seul.
     // ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST si un seuil d'âge revenait : la demande à 1 s.
     vi.useFakeTimers()

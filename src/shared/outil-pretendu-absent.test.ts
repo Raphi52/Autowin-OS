@@ -239,7 +239,7 @@ describe('correctionConversationLisible', () => {
 /**
  * TROISIEME FORME DU MEME DEFAUT : le TABLEAU de capacites.
  *
- * Mesure conv-650, turnId 6a3498c3-8d01-4928-a4ae-9b97c7495af8 (2026-09-17). L'agent n'ecrit
+ * Mesure, turnId 6a3498c3-8d01-4928-a4ae-9b97c7495af8 (2026-09-17). L'agent n'ecrit
  * aucune des phrases surveillees : il dresse un tableau markdown « Capacite | Disponible ? » et
  * coche `edit_file` / `create_file` a **non**. La garde ne voyait rien, l'utilisateur a redemande
  * quatre fois (saisies ts 1789639857023, 1789639927623, 1789640030803, 1789640116782) et le tour

@@ -3,12 +3,12 @@ import type { LiveRunPhase, ScopedLiveRun } from './chat-view-model'
 import type { StepDeRun } from './juges-votes'
 
 /**
- * LE RUN QUE L'INTERFACE A PERDU, RELU SUR DISQUE (conv-1021, 2026-10-19).
+ * LE RUN QUE L'INTERFACE A PERDU, RELU SUR DISQUE (2026-10-19).
  *
  * Les runs en direct du fil (`liveRuns`, ChatView) naissent à `orchestrate-start`. Une interface
  * rechargée en plein run (rechargement à chaud, Ctrl+R) a manqué ce départ, et le réducteur ignore
  * ensuite TOUS les événements d'un run inconnu (`reduceScopedLiveRuns` : `if (!existing) return`).
- * Le bloc des juges restait donc vide jusqu'à la fin du run — 2 h sur conv-1019. Le main écrit
+ * Le bloc des juges restait donc vide jusqu'à la fin du run — 2 h. Le main écrit
  * désormais `trace.json` à chaque étape, avant de la diffuser (`commands.ts`) : on relit ce fichier,
  * puis on suit les événements suivants du même run.
  *

@@ -1,5 +1,5 @@
 /**
- * LES CALQUES DE LA FALAISE (conv-1534, « pour l'écran d'accueil comment faire pour pouvoir modifier des
+ * LES CALQUES DE LA FALAISE (« pour l'écran d'accueil comment faire pour pouvoir modifier des
  * éléments sans tout régénérer à chaque fois ? »).
  *
  * Avant : les 39 bâtiments n'avaient aucun pixel à eux, ils étaient découpés dans la peinture. En changer un
@@ -11,7 +11,7 @@
  *  2. `falaise-derriere.webp` : ce qu'il y a DERRIÈRE chaque bâtiment, opaque dans son empreinte,
  *     transparent ailleurs (hors bâtiments, c'est donc la peinture d'origine, sans réencodage) ;
  *  3. un fichier par bâtiment, `batiments/<n ou cle>.webp`, posé à sa place, dans l'ordre de `donnees.json`.
- * Le résultat redonne la peinture d'origine à moins d'un niveau de couleur près (mesuré, conv-1534). Changer
+ * Le résultat redonne la peinture d'origine à moins d'un niveau de couleur près (mesuré). Changer
  * un bâtiment = remplacer son fichier (et son empreinte dans `donnees.json`) : rien d'autre ne bouge.
  */
 import { contexte, toile } from './quartier-vie'

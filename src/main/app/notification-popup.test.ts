@@ -17,9 +17,9 @@ import {
 } from './notification-popup'
 
 /**
- * POPUP « VERRE NACRÉ » (conv-1066, 2026-10-22) : la fin d'un tour s'affiche dans une carte au
+ * POPUP « VERRE NACRÉ » (2026-10-22) : la fin d'un tour s'affiche dans une carte au
  * thème d'Autowin en bas à droite, au lieu de la bulle Windows (non stylable). Direction 3 de la
- * maquette /draft du fil conv-1066 : cadre irisé, pastille « A », faits dans un encart, première
+ * maquette /draft du fil : cadre irisé, pastille « A », faits dans un encart, première
  * suite en bouton dégradé.
  */
 
@@ -163,7 +163,7 @@ describe('disposerPopups — en bas à droite de la zone de travail, la plus ré
     })
   })
 
-  // conv-1142 : les cartes suivent la mascotte glissée ailleurs que dans le coin de l'horloge.
+  // Les cartes suivent la mascotte glissée ailleurs que dans le coin de l'horloge.
   it('pile vers le bas : la plus récente collée en haut, les plus anciennes descendent', () => {
     const [recente, ancienne] = disposerPopups({ ...ZONE, y: 100, sens: 'bas' }, [101, 159])
     expect(recente).toEqual({
@@ -383,7 +383,7 @@ describe('creerPileDePopups — le contrat d’une notification, tenu par une ca
 })
 
 describe('la vraie fenêtre de la carte', () => {
-  // Mesuré le 2026-10-22 dans le bureau caché (conv-1066) : une page chargée en `data:` reçoit le
+  // Mesuré le 2026-10-22 dans le bureau caché : une page chargée en `data:` reçoit le
   // clic mais ne suit JAMAIS son lien `#ouvrir` ; chargée depuis un fichier, elle émet
   // `did-navigate-in-page`. Entrée qui ferait échouer ce test : revenir à `loadURL('data:…')`,
   // qui rendrait la carte entière inerte (ni ouvrir le fil, ni suite, ni croix).
@@ -429,7 +429,7 @@ describe('creerPileDePopups — la bulle Windows reste le secours', () => {
 describe('creerPileDePopups — une page qui ne se charge pas laisse la place à la bulle Windows', () => {
   // `loadFile` est ASYNCHRONE : quand il échoue, `fabriquer` a déjà rendu la carte au notifieur, et
   // le secours de `index.ts` (sur un `fabriquer` qui jette) ne joue plus. Sans relais, l'utilisateur
-  // n'a NI carte NI bulle (défaut relevé au nettoyage, conv-1066). Entrée qui ferait échouer ce
+  // n'a NI carte NI bulle (défaut relevé au nettoyage). Entrée qui ferait échouer ce
   // test si la correction était fausse : un échec de chargement APRÈS `show()`, sur une carte dont
   // le notifieur écoute déjà le clic et les boutons.
   it('après show() : la carte part, la bulle s’affiche avec les mêmes gestes', () => {
@@ -509,7 +509,7 @@ describe('creerPileDePopups — une page qui ne se charge pas laisse la place à
 })
 
 /*
- * LA CARTE SUIT LE THÈME CHOISI (conv-1090, 2026-10-22) : « fais suivre à la carte de fin de tour
+ * LA CARTE SUIT LE THÈME CHOISI (2026-10-22) : « fais suivre à la carte de fin de tour
  * le thème choisi dans Réglages · Interface (aujourd'hui figée sur les couleurs d'Holographique) ».
  * La page envoie les jetons CALCULÉS du thème appliqué (theme-mode.ts) ; la carte se peint avec.
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CES CAS : remettre une couleur d'Holographique en dur dans la page,

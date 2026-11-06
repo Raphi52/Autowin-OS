@@ -3,7 +3,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { CONSTITUTION } from './constitution'
 
 /**
- * LA QUESTION QUI SURVIT À SA RÉPONSE — mesuré le 2026-09-02, conv-128, tour 2.
+ * LA QUESTION QUI SURVIT À SA RÉPONSE — mesuré le 2026-09-02, tour 2.
  *
  * L'agent appelle `ask` (« quelle option pour le compteur de reprises ? »), puis la lecture du code
  * répond d'elle-même à la question : il continue, corrige la cause et LIVRE, dans le même tour.

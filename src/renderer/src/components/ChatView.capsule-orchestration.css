@@ -1,9 +1,9 @@
 /* ===========================================================================
-   CAPSULE D'ORCHESTRATION — choix de l'utilisateur sur maquettes (conv-194, 2026-10-10 :
+   CAPSULE D'ORCHESTRATION — choix de l'utilisateur sur maquettes (2026-10-10 :
    /draft « des jolis panel orchestration dans mon theme nebuleuse », puis « Capsule », puis
    « Go sur la capsule 2 · Phase dans la capsule »).
 
-   Le bloc EST le bloc « Actions » : depuis conv-909 (2026-10-12, « ce bloc orchestration doit
+   Le bloc EST le bloc « Actions » : depuis le 2026-10-12 (« ce bloc orchestration doit
    etre comme celui de Actions »), il prend le cadre « grand, deux lignes » d'anneau-activite.css
    (`thinking-block--deux-lignes cadre-anneau` : bord degrade de 2 px, verre fume, grand rond de
    verre a gauche, deux lignes, chevron dessine, boutons dans le cadre). Ce fichier n'ajoute QUE ce
@@ -119,7 +119,7 @@
   overflow-wrap: anywhere;
 }
 
-/* RAISONNEMENT EN DIRECT (conv-918) : la colonne inversee cale le defilement sur la FIN du texte,
+/* RAISONNEMENT EN DIRECT : la colonne inversee cale le defilement sur la FIN du texte,
    la ou il s'ecrit, et l'y garde pendant qu'il grandit ; remonter reste possible a la molette. */
 .thinking-block--orchestration .orch-raisonnement.is-direct {
   display: flex;

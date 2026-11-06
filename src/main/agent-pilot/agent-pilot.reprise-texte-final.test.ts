@@ -7,7 +7,7 @@ import { RoleModelConfig } from '../profil/roles'
 /**
  * REPRISE APRES REDEMARRAGE : LA REPONSE FINALE NE DOIT PAS DISPARAITRE.
  *
- * MESURE le 2026-09-11 sur `conv-471`. Le process principal a ete relance pendant un tour (une
+ * MESURE le 2026-09-11. Le process principal a ete relance pendant un tour (une
  * ecriture dans `src/main` suffit en mode dev). Le journal du tour montre `resumed`, puis un `done`
  * au texte VIDE : les phrases deja diffusees ont survecu (222 caracteres), mais le compte-rendu
  * final -- bloc de cloture compris -- n'a jamais atteint le fil, pour 10652 tokens de sortie deja

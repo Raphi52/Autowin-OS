@@ -1,5 +1,5 @@
 /**
- * GESTION DE TOUS LES BUREAUX CACHÉS (conv-951, 2026-10-16) : « j'aimerais une view dédiée pour gérer
+ * GESTION DE TOUS LES BUREAUX CACHÉS (2026-10-16) : « j'aimerais une view dédiée pour gérer
  * tous mes Hdesk, pouvoir les fermer, les créer et tout ». La petite TV du chat (hdesk-tv.ts) ne montre
  * que les bureaux du fil ouvert et ne sait ni fermer ni créer ; ce module voit TOUS les bureaux vivants.
  *
@@ -44,14 +44,14 @@ type FicheComplete = EntreeRegistre & { executable?: string }
 
 /**
  * TOUS les bureaux vivants, plus récent d'abord. Diffère de `fusionnerBureaux` (hdesk-tv.ts) sur un
- * seul point : aucun filtre par fil. Même règle « application morte = bureau fini » (conv-536) : le
+ * seul point : aucun filtre par fil. Même règle « application morte = bureau fini » : le
  * bureau Windows survit à son application, la liste ne doit pas montrer un bureau vide comme ouvert.
  * Un bureau vivant SANS fiche reste listé, marqué non relié : il existe, l'utilisateur doit le voir.
  */
 export function listerTousLesBureaux(
   vivants: readonly string[],
   registre: readonly EntreeRegistre[],
-  // Numero repris par un autre programme = bureau fini aussi (conv-1592) : meme regle que la TV.
+  // Numero repris par un autre programme = bureau fini aussi : meme regle que la TV.
   pidVivant: (pid: number, fiche: EntreeRegistre) => boolean = (_pid, fiche) =>
     applicationDuBureauVivante(fiche)
 ): BureauGere[] {
@@ -98,7 +98,7 @@ export type { ListeVivants }
 /**
  * TOUS les bureaux, reliés à leur fiche. `lire` est la liste du processus de capture DÉJÀ ouvert
  * (`CapteurHdesk.listeVivants`, câblé dans index.ts) : plus de PowerShell neuf à chaque tour
- * (conv-344, scout n°7 — la raison « méthode privée intouchable » du 2026-10-16 ne tenait plus).
+ * (scout n°7 — la raison « méthode privée intouchable » du 2026-10-16 ne tenait plus).
  */
 export async function bureauxGeres(
   lire: () => Promise<ListeVivants>,
@@ -120,7 +120,7 @@ export const RECENTS_MAX = 5
 export const GESTES_MONTRES = 5
 
 /**
- * Derniers gestes d'un bureau (conv-344, scout n°5), le plus ancien d'abord : le journal
+ * Derniers gestes d'un bureau (scout n°5), le plus ancien d'abord : le journal
  * `<id>.gestes.jsonl` qu'écrit scripts/hdesk-act.ps1 pour TOUT geste (TV, vue, agent). Ligne abîmée
  * ignorée ; journal absent = aucun geste.
  */
@@ -147,7 +147,7 @@ export function lireGestes(registre: string, id: string): GesteJournal[] {
 }
 
 /**
- * « Récents » (conv-344, scout n°6) : les derniers lancements réussis de `historique.jsonl` (écrit par
+ * « Récents » (scout n°6) : les derniers lancements réussis de `historique.jsonl` (écrit par
  * hdesk-lancer.ps1, borné à 50 lignes), plus récent d'abord. Une ligne abîmée ou incomplète est
  * ignorée ; le même lancement répété (même identifiant, exécutable et arguments) compte une fois ;
  * un bureau encore vivant n'en est pas : il est déjà dans la liste.
@@ -197,7 +197,7 @@ export function lireRecents(registre: string, vivants: readonly string[]): Lance
 }
 
 /**
- * « Parcourir… » (conv-344, scout n°10) : le sélecteur natif choisit le fichier, cette fonction le
+ * « Parcourir… » (scout n°10) : le sélecteur natif choisit le fichier, cette fonction le
  * juge. `null` = annulé (ou sélecteur refusé : instance de test, aucune fenêtre visible) ; un fichier
  * qui n'est pas un .exe est refusé AVANT d'arriver au lanceur.
  */
@@ -213,7 +213,7 @@ export async function choisirExecutable(
 /** Résultat du script de fermeture, dit pour un humain. */
 export function traduireFermeture(r: ResultatFermeture): ResultatFermetureGeree {
   // Code 2 = plus aucun bureau a ce nom (disparu entre la liste et le clic) : rien a fermer, pas un échec.
-  // Sauf `sansFiche: false` (conv-1374, 2026-10-31) : le script dit alors le bureau VIVANT et absent du
+  // Sauf `sansFiche: false` (2026-10-31) : le script dit alors le bureau VIVANT et absent du
   // registre, et le refus suit le chemin d'erreur commun pour ne pas annoncer fermé ce qui tourne encore.
   if (r.code === 2 && r.sansFiche !== false)
     return {
@@ -243,7 +243,7 @@ export function traduireFermeture(r: ResultatFermeture): ResultatFermetureGeree 
  * jamais une valeur venue de l'écran : le refus « bureau d'une autre conversation » (code 5) protège
  * les agents entre eux et reste intact pour eux (outil bureau_cache_fermer, commands.ts).
  * Un bureau SANS fiche (ui-capture-*, preuve-* : autowin-headless.ps1 n'en écrit pas) est fermé en mode
- * « sans fiche » (conv-344) : le script ne vise que ce qui a une fenêtre sur ce bureau, et refuse ce
+ * « sans fiche » : le script ne vise que ce qui a une fenêtre sur ce bureau, et refuse ce
  * mode si une fiche est apparue entre-temps. Une fiche SANS fil n'est pas fermée : la raison est rendue.
  */
 export async function fermerBureauGere(
@@ -267,7 +267,7 @@ export async function fermerBureauGere(
 }
 
 /**
- * CRÉATION (conv-951). Le lanceur passe par scripts/lancer-detache.ps1 (WMI) : Autowin tourne dans un
+ * CRÉATION. Le lanceur passe par scripts/lancer-detache.ps1 (WMI) : Autowin tourne dans un
  * Job Windows (sonde IsProcessInJob, job=True, 2026-10-16), et une application créée par un simple
  * execFile en hériterait — elle mourrait avec Autowin. Un PowerShell lancé détaché par Node ne
  * s'exécute pas du tout (leçon du 2026-10-16, bouton ⇄). Détaché, le lanceur ne rend ni sa sortie ni

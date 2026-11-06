@@ -10,7 +10,7 @@ import type { ValeursDeTexte } from '../textes'
  * Le Task Manager redéclare déjà ses types côté renderer ; on suit la même convention plutôt que
  * d'introduire un partage de types pour cette seule section.
  *
- * Les phrases suivent la langue de l'interface (traduction anglaise, conv-1170) : lues au moment de
+ * Les phrases suivent la langue de l'interface (traduction anglaise) : lues au moment de
  * l'appel, pendant le rendu de WatchdogAgentsSection ou de TaskManagerView, qui suivent la langue.
  */
 
@@ -28,7 +28,7 @@ export type WatchdogAppEvent =
 
 export type WatchdogSource =
   | { kind: 'file-match'; path: string; pattern: string; caseSensitive?: boolean }
-  /** `conversationId` : fil surveillé, posé par `task_create` avec `chat-turn-done` (conv-1069). */
+  /** `conversationId` : fil surveillé, posé par `task_create` avec `chat-turn-done`. */
   | { kind: 'app-event'; events: WatchdogAppEvent[]; conversationId?: string }
   | {
       kind: 'outlook-mail'
@@ -111,7 +111,7 @@ export function describeWatchdogSource(source: WatchdogSource): string {
   if (source.kind === 'outlook-mail') return texte('surveillance.source.outlookEtTeams')
   if (source.kind === 'app-event') {
     if (!source.events.length) return texte('surveillance.source.aucunEvenement')
-    // fix-ok: conv-1069 — `chat-turn-done` sans libellé s'affichait « Quand  » (rouge : watchdog-section-model.test.ts).
+    // fix-ok: `chat-turn-done` sans libellé s'affichait « Quand  » (rouge : watchdog-section-model.test.ts).
     const fil = source.conversationId
     const libelle = (event: WatchdogAppEvent): string =>
       event === 'chat-turn-done' && fil
@@ -165,7 +165,7 @@ export function describeWatchdogGuards(guards: WatchdogGuards): string {
   return parts.join(' · ')
 }
 
-// Accesseurs : le libellé est relu à chaque accès, donc dans la langue du moment (conv-1170).
+// Accesseurs : le libellé est relu à chaque accès, donc dans la langue du moment.
 export const OUTCOME_LABEL: Record<WatchdogOutcome, string> = {
   get benign() {
     return texte('surveillance.issue.benin')

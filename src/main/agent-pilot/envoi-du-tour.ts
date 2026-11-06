@@ -1,7 +1,7 @@
 // Envoi d'UNE itération d'un tour de chat au modèle : message et options de l'appel, outils
 // directs, flux diffusé en direct, reprises après erreur (`reprise-apres-erreur.ts`), puis journal
 // de l'appel — session retenue, fichiers écrits, coût. Sorti tel quel de la boucle de
-// AgentPilot.chat() (conv-1580, lot 4).
+// AgentPilot.chat() (lot 4).
 import { randomUUID } from 'node:crypto'
 import { lireLigneDErreur } from '../../shared/erreur-d-action'
 import { VisibleStreamFilter } from '../../shared/stream-markup-filter'
@@ -77,16 +77,16 @@ export async function appelDuModele(
   /**
    * LE FIL N'EST PAS REPAYÉ À CHAQUE ITÉRATION.
    *
-   * Mesuré le 2026-08-31 sur conv-1 : le livrable d'une phase `frame` (≈ 6 000 caractères)
+   * Mesuré le 2026-08-31 : le livrable d'une phase `frame` (≈ 6 000 caractères)
    * repartait VERBATIM à chaque itération suivante du même tour — cinq fois — alors que la
    * session du provider portait DÉJÀ tous les segments précédents (`resumeSessionId` est armé
-   * à chaque itération depuis conv-1498). On n'expédie donc que les segments NOUVEAUX quand la
+   * à chaque itération). On n'expédie donc que les segments NOUVEAUX quand la
    * reprise est réelle.
    *
    * Le repli est le comportement d'avant, et il est SÛR : sans session reprise (provider qui
    * n'honore pas `--resume`, premier appel, session perdue en cours de tour), le fil entier
-   * repart. Amputer un prompt que le provider ne complète pas est exactement le défaut de
-   * conv-1498 — il reste fermé.
+   * repart. Amputer un prompt que le provider ne complète pas est exactement le défaut
+   * Il reste fermé.
    */
   const reprisePorteLeFil = providerResumes && Boolean(etat.sessionEnCours)
   const segmentsAEnvoyer = reprisePorteLeFil ? convo.slice(etat.segmentsDejaEnvoyes) : convo
@@ -138,14 +138,14 @@ export async function appelDuModele(
      * l'historique (il est censé vivre dans la session CLI). Le modèle qui rédige la réponse
      * finale, après un appel d'outil, n'avait donc jamais vu le fil.
      *
-     * Mesuré en conv-1498 le 2026-08-28 : l'agent nie connaître une variante qu'il avait
+     * Mesuré le 2026-08-28 : l'agent nie connaître une variante qu'il avait
      * lui-même proposée deux tours plus tôt. Test : `agent-pilot.session-intra-tour.test.ts`.
      */
     ...(etat.sessionEnCours ? { resumeSessionId: etat.sessionEnCours } : {}),
     // Un tour de CHAT sait rouvrir un tour de reprise dans sa conversation : le provider peut
     // donc confier ses commandes de fond coupees au lieu de dire « relance la demande ».
     // Le panneau « Contexte » du chat, detaille par categorie : seul un tour de chat a un ecran.
-    // Options lues par le seul moteur Claude (`SendOptions.claude`, conv-1504).
+    // Options lues par le seul moteur Claude (`SendOptions.claude`).
     ...(conversationId
       ? {
           claude: {
@@ -155,7 +155,7 @@ export async function appelDuModele(
         }
       : {}),
     // Le fil qui écrit : le hook des agents réserve en son nom les fichiers édités, et refuse
-    // ceux qu'un autre fil tient encore (conv-1083, shared/reservation-fichiers.ts).
+    // ceux qu'un autre fil tient encore (shared/reservation-fichiers.ts).
     ...(conversationId ? { conversationId } : {}),
     observePrompt: (observed) => {
       observed.systemBlocks = blocsSystemeDeCetEnvoi
@@ -189,7 +189,7 @@ export async function appelDuModele(
   let etatAvantEnvoi: Awaited<ReturnType<typeof captureMutationTraceBase>>
   let callStartedAt = performance.now()
   // Préfixe diffusé, tentative réussie, flux affichés et effacement de la réponse relancée,
-  // partagés avec la suite de l'itération : agent-pilot/iteration-du-tour.ts (conv-1580, lot 4).
+  // partagés avec la suite de l'itération : agent-pilot/iteration-du-tour.ts (lot 4).
   const iter = iterationDuTour({ i, recoveredHere, etat, emit })
   if (iter.successfulStreamedPrefix)
     iter.fluxAffichesCetteIteration.add(`${i}:${iter.successfulAttempt}`)
@@ -203,14 +203,14 @@ export async function appelDuModele(
    * Remis a plat ICI, au debut de chaque iteration — pas seulement dans la boucle des `<cmd>`,
    * qu'un tour 100 % outils directs n'atteint jamais. Sans cela, un `verify` direct rouge puis
    * rejoue VERT laissait le drapeau leve : « ta derniere action a ECHOUE » revenait a chaque
-   * cloture (conv-908, 2026-10-12). Un echec encore NON repare reste vu par
+   * cloture (2026-10-12). Un echec encore NON repare reste vu par
    * `commandesEnEchecNonRattrape`, qui couvre tout le tour.
    */
   etat.echecDeLaDerniereIteration = false
   etat.rejeuNatifCetteIteration = false
   etat.iterationNatif = i
   // Appel récupéré après redémarrage : ses outils natifs n'ont battu que dans le process mort.
-  // Sans ce bilan, « question sans lecture » relançait un tour qui avait lu (conv-1002, tour
+  // Sans ce bilan, « question sans lecture » relançait un tour qui avait lu (tour
   // 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc, 1,70 $) — voir `bilanDesOutilsNatifsRecuperes`.
   if (recoveredHere) {
     const bilan = bilanDesOutilsNatifsRecuperes(recoveredHere.result.executionEvidence)
@@ -224,7 +224,7 @@ export async function appelDuModele(
    * (« Prompt is too long », plantage du CLI à 0 jeton, refus du filtre de sécurité). Seule la
    * branche « refus » reconstruisait le message : les deux autres repartaient dans une session
    * NEUVE avec le message d'une reprise — sans historique, et affirmant « ta session en porte
-   * l'historique » (audit conv-1040, `agent-pilot.reprise-abandonnee.test.ts`). Et « Prompt is too
+   * l'historique » (`agent-pilot.reprise-abandonnee.test.ts`). Et « Prompt is too
    * long » n'oubliait la session qu'en mémoire : elle revenait du disque après un redémarrage.
    *
    * Le message renvoyé est `convo` ENTIER : blocs d'ouverture refaits sans reprise (historique
@@ -261,7 +261,7 @@ export async function appelDuModele(
   while (!res) {
     const streamId = `${i}:${attempt}`
     compteDeCetEnvoi = compteDuTour()
-    // Le compte a changé depuis l'ouverture de la session (conv-1063) : elle est inouvrable
+    // Le compte a changé depuis l'ouverture de la session : elle est inouvrable
     // depuis le nouveau dossier, on la lâche et le fil ENTIER part sur le compte actif.
     if (etat.sessionEnCours && compteDeCetEnvoi !== etat.compteDeSession) repartirSansSession()
     const visibleFilter = new VisibleStreamFilter()
@@ -308,7 +308,7 @@ export async function appelDuModele(
       : undefined
     const outilsDeCetEnvoi = natif && 'servis' in natif ? natif.servis : undefined
     // Le service NORMAL ne s'annonce pas : la ligne « 37 commandes servies » sortait a CHAQUE
-    // tour dans le bloc d'actions sans rien apprendre a l'utilisateur (conv-908). Seule une
+    // tour dans le bloc d'actions sans rien apprendre a l'utilisateur. Seule une
     // panne se dit, ci-dessous.
     if (natif && 'repli' in natif && !etat.replisNatifsDits.has(natif.repli)) {
       etat.replisNatifsDits.add(natif.repli)
@@ -322,7 +322,7 @@ export async function appelDuModele(
       callStartedAt = performance.now()
       timer.mark(`send${i}:start`)
       let sawFirstChunk = false
-      // Outils servis : la consigne ne redit plus les commandes qu'ils décrivent déjà (conv-1229).
+      // Outils servis : la consigne ne redit plus les commandes qu'ils décrivent déjà.
       // Repli au texte `<cmd>` : la liste complète, seul chemin qui reste au modèle.
       const systemeDeCetEnvoi = outilsDeCetEnvoi
         ? systemeAvecOutilsDirects(outilsDeCetEnvoi.noms)
@@ -339,7 +339,7 @@ export async function appelDuModele(
          *
          * Une image lue par `Read` ou une capture d'ecran arrive au MILIEU du tour. Attendre le
          * `SendResult` pour l'afficher la faisait tomber sous le bloc de cloture (mesure du
-         * 2026-09-10, conv-426 : « les blocs image read apparaissent apres le bloc Fait »). On
+         * 2026-09-10, : « les blocs image read apparaissent apres le bloc Fait »). On
          * l'emet donc au moment ou le provider la voit, et on retient son identifiant pour ne
          * pas la republier a la fin du tour.
          */
@@ -352,13 +352,13 @@ export async function appelDuModele(
           }
           if (!chunk.delta) return
         }
-        // TESTS DU TERMINAL (conv-1059) : le tour les garde, la carte du fil les lit comme des
+        // TESTS DU TERMINAL : le tour les garde, la carte du fil les lit comme des
         // vérifications. Fragment sans texte : il ne doit pas passer pour le premier mot.
         if (chunk.testsDuTerminal?.length) {
           emit({ kind: 'tests-du-terminal', data: chunk.testsDuTerminal, iteration: i })
           if (!chunk.delta && !chunk.status) return
         }
-        // COUPURE DU FILTRE DE SÉCURITÉ (conv-1161) : une donnée pour le journal du tour, que
+        // COUPURE DU FILTRE DE SÉCURITÉ : une donnée pour le journal du tour, que
         // lisent la rétrospective et le kaizen. L'avis lisible suit dans `delta`, s'il y en a un.
         if (chunk.coupureFiltre) {
           const categorie = chunk.coupureFiltre.categorie
@@ -380,11 +380,11 @@ export async function appelDuModele(
            * ICI, en battement d'outil. Sans cette ligne, `anyReadExecuted` restait faux apres
            * une douzaine de fichiers lus et le garde « question sans lecture » mordait a chaque
            * question -- en ordonnant d'avancer sans demander, donc en ecrasant la skill `draft`
-           * qui exige justement de faire choisir l'humain (mesure conv-167, 2026-09-03).
+           * qui exige justement de faire choisir l'humain (2026-09-03).
            */
-          // Juge la commande ENTIERE, pas le libelle coupe a 120 caracteres (conv-861).
+          // Juge la commande ENTIERE, pas le libelle coupe a 120 caracteres.
           const statutEntier = statutComplet(chunk.status, chunk.statusTarget)
-          // Le message d'erreur d'une action rouge (conv-341) n'est ni une lecture ni un geste :
+          // Le message d'erreur d'une action rouge n'est ni une lecture ni un geste :
           // son action a été classée à son départ. Les classeurs reconnaissent un outil natif à
           // son NOM en tête de ligne : « Glob erreur - … » passerait sinon pour une lecture.
           if (!lireLigneDErreur(chunk.status)) {
@@ -440,7 +440,7 @@ export async function appelDuModele(
       iter.successfulAttempt = attempt
     } catch (error) {
       // Annulation, session abandonnée, bascule de compte, repli après refus, rejeu :
-      // agent-pilot/reprise-apres-erreur.ts (conv-1580, lot 4). Rend la tentative suivante, ou jette.
+      // agent-pilot/reprise-apres-erreur.ts (lot 4). Rend la tentative suivante, ou jette.
       attempt = await reprendreApresErreur(tour, {
         error,
         i,
@@ -499,7 +499,7 @@ export async function appelDuModele(
    * JOURNAL DES FICHIERS : ce que l'appel a écrit, outils d'édition et commandes shell. Le commit
    * automatique du chat en dépend (voir chat-turn-publication.ts) ; l'écriture du journal ne fait
    * jamais échouer le tour, et une seule photo du dépôt couvre tout l'appel : le spinner attend ce
-   * passage (conv-1379).
+   * passage.
    */
   if (conversationId && workspaceDuTour) {
     const dejaTraces = await appendCallMutationTraces({
@@ -533,7 +533,7 @@ export async function appelDuModele(
     etat.usage.costUsd += res.usage.costUsd ?? 0
     // ECRASE, ne cumule pas : la jauge de contexte veut la DERNIERE entree, pas leur somme.
     // `res.usage.inputTokens` est le CUMUL du tour cote provider : l'ecraser ici ne le
-    // desagregeait pas, la jauge restait donc collee a 100 % (conv-282, 2026-09-04). Le
+    // desagregeait pas, la jauge restait donc collee a 100 % (2026-09-04). Le
     // provider expose desormais l'entree de son DERNIER appel ; repli sur le cumul si absent.
     etat.usage.derniereEntree = res.usage.derniereEntree ?? res.usage.inputTokens
     etat.usage.derniereEntreeCache = res.usage.derniereEntreeCache ?? res.usage.cacheReadTokens

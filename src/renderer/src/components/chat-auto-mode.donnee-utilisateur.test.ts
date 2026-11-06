@@ -8,7 +8,7 @@ const humain = (t: string): Msg => ({ role: 'user', content: t }) as Msg
 const base = { actif: true, occupe: false, dernierTourTraite: null, dernierPromptEnvoye: null, brouillonPresent: false }
 
 /*
- * conv-751, tour 4a4374c0-3f0c-4c42-82f0-ff6b03b76a27 : la suite proposée parlait À LA PLACE de
+ * Tour 4a4374c0-3f0c-4c42-82f0-ff6b03b76a27 : la suite proposée parlait À LA PLACE de
  * l'utilisateur. Le mode auto l'a envoyée (saisie ts 1789993655768) sans aucun identifiant ; le tour
  * 308ae1cf-9416-461f-a1ed-14775607df62 a refusé d'inventer, n'a proposé aucune suite, et la chaîne
  * s'est tue sans message.

@@ -1,7 +1,7 @@
 /**
  * QUEL FIL PEINDRE : le cache d'affichage ou celui du store ?
  *
- * DEFAUT VECU (conv-152, saisie ts=1788413114634 : « la moitié de cette convers s'est effacé
+ * DEFAUT VECU (saisie ts=1788413114634 : « la moitié de cette convers s'est effacé
  * j'arrive pas a remonter le fil » ; tour /kaizen 57656364-053f-40e6-bc8e-91efd5b74e39). Le disque
  * portait bien les 41 messages, l'ecran n'en montrait que la fin, et rien ne permettait de remonter.
  *
@@ -25,7 +25,7 @@ export type MessageAffichable = { role: string; done?: boolean; turnId?: string 
 /**
  * Les tours deja peints par le fil live : un message persiste du MEME tour en est une copie.
  *
- * conv-1118 (2026-10-23, « j'ai eu 2x le meme bloc ») : un tour lance cote main a fini 25 ms apres
+ * 2026-10-23, « j'ai eu 2x le meme bloc » : un tour lance cote main a fini 25 ms apres
  * son premier evenement. Sa copie persistee etait donc deja CLOSE quand le store a repondu, et
  * le filtre « assistant non clos » la laissait passer : la meme question peinte deux fois, une
  * fois depuis le store, une fois depuis l'amorce. On decide sur l'IDENTITE du tour, pas sur son
@@ -59,7 +59,7 @@ export function filAffichable<M extends MessageAffichable>(
   const queue = cache.slice(debutVivant)
   const tours = toursPeints(queue)
   const tete = [...duStore]
-  // Le tour en vol peut AUSSI avoir ete persiste — non clos, ou deja clos (conv-1118) : ne pas le
+  // Le tour en vol peut AUSSI avoir ete persiste — non clos, ou deja clos : ne pas le
   // peindre deux fois.
   while (tete.length > 0) {
     const dernier = tete[tete.length - 1]
@@ -76,7 +76,7 @@ export function filAffichable<M extends MessageAffichable>(
 /**
  * LE TOUR EN VOL PERSISTE REMPLACE LA BULLE VIDE DU MEME TOUR.
  *
- * Vecu conv-1146 (2026-10-25 : « la conv m'affiche uniquement le bloc raisonnement vide, aucun suivi
+ * Vecu (2026-10-25 : « la conv m'affiche uniquement le bloc raisonnement vide, aucun suivi
  * dans le chat », pendant un run de 8 h). L'ecran perd son etat (fenetre rechargee) pendant qu'un tour
  * attend son orchestration. Le premier battement recu ensuite fait ADOPTER le tour : la vue pose une
  * bulle VIDE pour que les patchs aient une cible, puis rattrape l'historique du store en ecartant le
@@ -113,7 +113,7 @@ export function adopterLeTourPersiste<M extends MessageAffichable>(
 /**
  * RECOLLE l'historique persiste DEVANT un fil live, sans le coller DEUX FOIS.
  *
- * Meme defaut, autre bout de la chaine (conv-152, saisie ts=1788413114634) : le rattrapage de
+ * Meme defaut, autre bout de la chaine (saisie ts=1788413114634) : le rattrapage de
  * l'historique, apres un tour lance cote main, se refusait des que le fil live portait UN message
  * utilisateur (`courant.some((m) => m.role === 'user')`). C'est une heuristique, pas une identite :
  * un message utilisateur tape pendant que la lecture du store est en vol suffisait a ABANDONNER
@@ -133,7 +133,7 @@ export function completerAvecHistorique<
     (message) => !!message.messageId && identifiants.has(message.messageId)
   )
   if (dejaRecolle) return courant
-  // Le tour que le fil live peint deja n'est pas recolle depuis le store (conv-1118) : c'est le
+  // Le tour que le fil live peint deja n'est pas recolle depuis le store : c'est le
   // fil live qui continue de recevoir ses evenements.
   const tours = toursPeints(courant)
   const tete = tours.size

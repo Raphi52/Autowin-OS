@@ -20,7 +20,7 @@ import {
 } from './video-pointage'
 
 /**
- * LECTEUR VIDÉO IMAGE PAR IMAGE DU FIL (conv-253, 2026-10-11).
+ * LECTEUR VIDÉO IMAGE PAR IMAGE DU FIL (2026-10-11).
  *
  * Demande : « je pourrais te dire modifie telle frame a telle seconde et on pourra echanger plus
  * fluidement ». Avant, la carte vidéo était un `<video controls>` nu : précis à la seconde, sans
@@ -31,7 +31,7 @@ import {
  * La référence cite `source.originalPath` : le `path` d'une carte conservée est une COPIE dans
  * `.autowin-data/chat-artifacts/…`, inutile à l'agent qui doit modifier le film.
  *
- * Cas limites demandés (conv-253) :
+ * Cas limites demandés :
  * - total = `images` mesuré par ffprobe s'il est là, sinon déduit de la durée du navigateur ;
  * - une seule image : les 4 boutons de déplacement et les flèches sont inactifs ;
  * - « Pointer ce moment » est inactif tant que la première image n'est pas décodée

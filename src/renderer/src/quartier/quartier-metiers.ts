@@ -1,5 +1,5 @@
 /**
- * CE QUE FAIT UN AGENT, DIT EN MÉTIER DU QUARTIER (conv-1421).
+ * CE QUE FAIT UN AGENT, DIT EN MÉTIER DU QUARTIER.
  *
  * Un outil appelé par un agent devient un métier, et un métier un groupe de postes sur la Falaise.
  * La table vient de la mesure de 14 jours de journaux de tours (`grill/quartier/esplanade/etages.mjs`) :
@@ -8,7 +8,7 @@
  * Trois règles viennent de la fiche `grill/fond-accueil-atelier-des-agents.md` :
  *  - D12 : une commande se classe d'après son CONTENU, pas d'après l'outil « Bash » ;
  *  - D17 : un outil nouveau ou inconnu va aux commandes (la Machine jusqu'au 2026-11-02 ; l'onsen l'a
- *    remplacée, et les postes des commandes sont devant le coffre gris à gauche de l'escalier A, conv-1434) ;
+ *    remplacée, et les postes des commandes sont devant le coffre gris à gauche de l'escalier A) ;
  *  - la liste de tâches de l'agent n'est pas un travail : elle ne le fait pas bouger (`null`).
  */
 export type Metier =

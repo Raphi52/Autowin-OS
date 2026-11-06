@@ -60,7 +60,7 @@ async function monter(): Promise<void> {
 }
 
 describe('ProjectPane', () => {
-  /** Demande conv-72 : l'arbre surligne les fichiers modifiés par la conversation ET leurs dossiers. */
+  /** Demande : l'arbre surligne les fichiers modifiés par la conversation ET leurs dossiers. */
   it('surligne les fichiers modifies par la conversation et leurs dossiers parents', async () => {
     listProjectDir.mockResolvedValue({
       ok: true,

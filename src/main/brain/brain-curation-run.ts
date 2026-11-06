@@ -81,7 +81,7 @@ export function pendingCandidateCount(brainRoot: string): number {
 }
 
 /**
- * Racines déjà curées cette session. Une par Brain (conv-1233, 2026-10-28) : le Brain perso ne doit
+ * Racines déjà curées cette session. Une par Brain (2026-10-28) : le Brain perso ne doit
  * pas perdre sa curation parce que celle de l'équipe a déjà eu lieu.
  */
 const racinesTentees = new Set<string>()
@@ -119,7 +119,7 @@ export function startBrainCuration(
   instanceDeTest = false,
   /**
    * Faux pour le Brain PERSO : chaque fait retenu y est promu tout de suite, sans relecture humaine
-   * (choix de l'utilisateur, conv-1233). Le verrou de la boîte empêche toujours deux passes en même
+   * (choix de l'utilisateur). Le verrou de la boîte empêche toujours deux passes en même
    * temps.
    */
   uneFoisParSession = true

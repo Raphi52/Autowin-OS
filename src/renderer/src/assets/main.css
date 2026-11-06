@@ -1,7 +1,7 @@
 @import './theme.css';
 
 /*
- * LA PAGE NE DEFILE JAMAIS (conv-275, 2026-10-11 : « empêche aussi la page entière d'afficher sa
+ * LA PAGE NE DEFILE JAMAIS (2026-10-11 : « empêche aussi la page entière d'afficher sa
  * propre barre de défilement »). Toute l'interface vit dans `#root`, qui fait exactement la hauteur
  * de la fenêtre et coupe ce qui dépasse ; chaque vue a son propre défilement. Seul un élément ajouté
  * directement dans `<body>` (dessin temporaire d'une bibliothèque, fenêtre volante) pouvait donc
@@ -25,7 +25,7 @@ body {
 }
 
 /*
- * CONTOUR DE FOCUS = NAVIGATION AU CLAVIER SEULEMENT (conv-1222, 2026-10-28 : « cet encerclement du
+ * CONTOUR DE FOCUS = NAVIGATION AU CLAVIER SEULEMENT (2026-10-28 : « cet encerclement du
  * bouton apparait meme quand je touche pas a mon clavier, c'est parasite »). Chromium allume
  * `:focus-visible` sur un bouton clique a la souris des qu'une touche part ensuite, Maj seule
  * comprise : l'app suit donc elle-meme la facon de se deplacer (`modalite-saisie.ts`). Tant qu'elle

@@ -23,7 +23,7 @@ async function racineFactice(): Promise<string> {
   return racine
 }
 
-// conv-1016 (2026-10-17) : trois OUTLOOK.EXE tournaient dans les bureaux caches ui-capture-*, aucun
+// 2026-10-17 : trois OUTLOOK.EXE tournaient dans les bureaux caches ui-capture-*, aucun
 // sur l'ecran de l'utilisateur. L'instance de test y ouvrait l'Accueil, dont la tuile mails lisait le
 // VRAI profil par COM : Windows demarre alors Outlook dans le bureau de l'appelant.
 describe('passerelle Outlook HORS SERVICE (instance de test cachee)', () => {

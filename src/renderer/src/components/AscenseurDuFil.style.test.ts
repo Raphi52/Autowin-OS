@@ -13,10 +13,10 @@ const regle = (morceau: string): string => {
 }
 
 /**
- * LE TEXTE NE SE RÉAGENCE JAMAIS QUAND LA CARTE S'OUVRE (conv-1193, 2026-10-28 : « je veux pas que
+ * LE TEXTE NE SE RÉAGENCE JAMAIS QUAND LA CARTE S'OUVRE (2026-10-28 : « je veux pas que
  * ça envoie des mots à la ligne comme ça »).
  *
- * Deux demandes à tenir ensemble : la carte ne passe pas sur le texte (conv-1114, puis conv-1193
+ * Deux demandes à tenir ensemble : la carte ne passe pas sur le texte (puis
  * « la scrollbar repasse là en overlay pendant que je scroll au lieu de décaler »), ET le texte ne
  * change pas de largeur — sinon les lignes se recoupent à l'ouverture, des mots passent à la ligne
  * suivante, puis reviennent au repli. La seule forme qui tient les deux : la place de la carte
@@ -27,7 +27,7 @@ const regle = (morceau: string): string => {
 describe('ascenseur du fil — la largeur du texte ne dépend pas de la carte', () => {
   const repos = regle('.chat-scroll.chat-scroll--ascenseur,')
 
-  // Carte de 36 px + 8 d'écart : largeur divisée par 2 (conv-1202, « divise par 2 la largeur de la
+  // Carte de 36 px + 8 d'écart : largeur divisée par 2 (« divise par 2 la largeur de la
   // barre […] pour gagner de la place pour le contenu du chat ») — avant 72 + 8 = 80 px.
   it('la place de la carte ouverte est réservée au repos', () => {
     expect(repos).toMatch(/padding-right:\s*var\(--adf-reserve,\s*44px\)\s*!important/)

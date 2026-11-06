@@ -4,9 +4,9 @@ import { dodDuVerdict, leconRefuseeParLeJuge, objectionsDuJuge } from './objecti
 import { attestJudgeApprovedLearning } from '../orchestration/orchestrator'
 
 /*
- * UNE OBJECTION QUI NE PORTE QUE SUR LA LEÇON NE BLOQUE PAS LE LIVRABLE (conv-1149, 2026-10-25).
+ * UNE OBJECTION QUI NE PORTE QUE SUR LA LEÇON NE BLOQUE PAS LE LIVRABLE (2026-10-25).
  *
- * Défaut vécu sur conv-1146 (run-ec2036c0932d-1) : cinq refus d'affilée du juge (réparations 11 à 15)
+ * Défaut vécu (run-ec2036c0932d-1) : cinq refus d'affilée du juge (réparations 11 à 15)
  * portaient sur la LEÇON proposée en fin de résultat (`AUTOWIN_LESSON_V1`) — « 4 messages » au lieu
  * de 5, « 8 caractères dont 3 lettres » au lieu de « 3 lettres à la suite » —, jamais sur la
  * traduction demandée. La consigne disait « refuse si son contenu n'est pas exactement soutenu » :
@@ -14,7 +14,7 @@ import { attestJudgeApprovedLearning } from '../orchestration/orchestrator'
  *
  * Désormais : une réserve visible et non bloquante (« OK: leçon refusée — … »), et la leçon
  * refusée n'est PAS enregistrée — le refus de la leçon ne coûte plus une réparation, et une leçon
- * fausse n'entre pas pour autant au Brain. « MINEUR » ne convient pas : depuis conv-844, il bloque.
+ * fausse n'entre pas pour autant au Brain. « MINEUR » ne convient pas : il bloque.
  */
 const LECON =
   'AUTOWIN_LESSON_V1: {"outcome":"success","title":"Audit des textes","body":"Le seuil est de 8 caractères.","type":"lesson","scope":"project","tags":["langue"],"confidence":"medium"}'

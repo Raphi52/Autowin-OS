@@ -14,7 +14,7 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * conv-113 (2026-10-06) : la saisie ts 1791317725882, envoyée SEULE par le mode auto 0,6 s après la
+ * 2026-10-06 : la saisie ts 1791317725882, envoyée SEULE par le mode auto 0,6 s après la
  * fin du tour 0b93aa21-54c3-4be3-99f4-a23bbcb00bc4, était journalisée `voie: "message"` — comme la
  * saisie TAPÉE ts 1791317691042. L'utilisateur affirmait « il était pas coché » : rien sur le disque
  * ne permettait de dire si ce texte venait de lui ou de la machine. L'origine est désormais écrite.

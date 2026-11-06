@@ -1,5 +1,5 @@
 /*
- * ASCENSEUR DU FIL À CRANS — « 1 · Dépli en place » (draft conv-1114, 2026-10-23).
+ * ASCENSEUR DU FIL À CRANS — « 1 · Dépli en place » (2026-10-23).
  * Couleurs : celles des bulles de l'utilisateur (bleu -> rose, cosmic-outline.css `.msg-bulle`) et
  * le texte du thème en transparence, pour suivre chaque thème sans couleur de fond en dur.
  */
@@ -13,7 +13,7 @@
   width: 18px;
   touch-action: none;
   user-select: none;
-  /* Flèche ordinaire, pas de main (conv-1114 : « enlève la main sur curseur »). */
+  /* Flèche ordinaire, pas de main (« enlève la main sur curseur »). */
   cursor: default;
   /* Repli : décélération douce. Ouverture : 800 ms, courbe régulière (voir la carte). */
   --adf-courbe: cubic-bezier(0.22, 1, 0.36, 1);
@@ -27,7 +27,7 @@
 /* La LARGEUR change d'un coup : c'est seulement la zone de clic. Ce qui se voit est animé plus bas,
    sans recalcul de mise en page à chaque image (une transition de `width` en demandait un). */
 .adf.is-deplie {
-  /* 72 px divisé par 2 (conv-1202) : la place gagnée revient au texte du fil. */
+  /* 72 px divisé par 2 : la place gagnée revient au texte du fil. */
   width: 36px;
 }
 .adf svg {
@@ -78,7 +78,7 @@
 }
 
 /* --- Carte du fil (dépliée) ---
-   « Pas fluide » (conv-1114) : la carte s'écrasait en largeur (scaleX 0,25 -> 1), ce qui tordait
+   « Pas fluide » : la carte s'écrasait en largeur (scaleX 0,25 -> 1), ce qui tordait
    bulles et lignes ; et la garde prefers-reduced-motion coupait toute transition — or ce poste a ce
    réglage actif (theme.css, spinner) : la carte apparaissait d'un coup. Elle se DÉVOILE maintenant
    depuis la barre fine (ses 18 px de droite) vers la gauche, sans rien déformer, et sans garde. */
@@ -94,7 +94,7 @@
 .adf.is-deplie .adf-carte {
   opacity: 1;
   clip-path: inset(0 0 0 0 round 8px);
-  /* Ouverture LENTE (conv-1114 : « il doit y avoir une animation d'apparition lente de cette
+  /* Ouverture LENTE (« il doit y avoir une animation d'apparition lente de cette
      barre », puis « encore trop rapide : passe la carte à 800 ms ») : 150 ms au draft, puis 520 ms.
      Courbe RÉGULIÈRE (accélère puis ralentit) : la décélération du repli dévoilait la moitié de la
      carte dès la 2e image (sonde du 23/10), un « pop » et non une apparition lente. Le fil se pousse
@@ -143,7 +143,7 @@
   pointer-events: none;
 }
 .adf-apercu-k {
-  /* Numéro et heure toujours sur une ligne : en compact, l'heure passait dessous (capture conv-1114). */
+  /* Numéro et heure toujours sur une ligne : en compact, l'heure passait dessous. */
   flex: none;
   white-space: nowrap;
   color: var(--gold, #e9bd4e);
@@ -158,7 +158,7 @@
   text-overflow: ellipsis;
 }
 
-/* --- Les aperçus de la carte ouverte : celui au-dessus de la vue et celui en dessous (conv-1114) ---
+/* --- Les aperçus de la carte ouverte : celui au-dessus de la vue et celui en dessous ---
    Même habit que l'aperçu du survol, posés à gauche de la carte et reliés chacun à son cran par un
    trait. Ils arrivent avec la carte (un peu après elle) et repartent avec elle. Hauteurs FIXES :
    le placement sans chevauchement (`placerEtiquettes`) compte 44 px par aperçu, 26 en compact. */
@@ -191,7 +191,7 @@
   stroke-width: 1;
 }
 .adf-etiquette {
-  /* Un vrai bouton (cliquable, conv-1114) : on efface l'habit par défaut du navigateur. */
+  /* Un vrai bouton (cliquable) : on efface l'habit par défaut du navigateur. */
   margin: 0;
   border: 0;
   color: inherit;
@@ -249,15 +249,15 @@
 }
 /* Posée sur le fil par AscenseurDuFil : NON héritée. Héritée (le défaut d'une variable CSS), elle
    faisait recalculer le style des milliers d'éléments du fil à chaque ouverture — une image de
-   124 ms mesurée par la sonde de fluidité (conv-1114). */
+   124 ms mesurée par la sonde de fluidité. */
 @property --adf-reserve {
   syntax: '<length>';
   inherits: false;
   initial-value: 44px;
 }
-/* LA CARTE NE PASSE PAS SUR LE TEXTE (conv-1114) ET LE TEXTE NE SE RÉAGENCE PAS (conv-1193, « je
+/* LA CARTE NE PASSE PAS SUR LE TEXTE ET LE TEXTE NE SE RÉAGENCE PAS (« je
    veux pas que ça envoie des mots à la ligne comme ça ») : la place de la carte OUVERTE (36 px + 8,
-   `--adf-reserve` ; 72 + 8 avant la division par 2 de conv-1202) est réservée EN PERMANENCE à droite du fil. L'ouverture ne change plus la largeur
+   `--adf-reserve` ; 72 + 8 avant la division par 2) est réservée EN PERMANENCE à droite du fil. L'ouverture ne change plus la largeur
    du texte : aucun mot ne passe à la ligne, aucune mise en page du fil entier à l'ouverture.
    Avant : marge 12 px au repos, 80 px carte ouverte — poussée en 800 ms (texte recouvert pendant
    la poussée, 130 à 240 ms par image sur un long fil), puis d'un coup (mots renvoyés à la ligne).

@@ -10,7 +10,7 @@ import type { EtatDePhrase, MomentDuFilm } from './teaser-accueil-calcul'
 import './AnimationAccueilChat.css'
 
 /**
- * Accueil d'un fil vide (conv-1401, 2026-10-31, « implémente 3+5 ») : remplace le bloc « Parle à
+ * Accueil d'un fil vide (2026-10-31, « implémente 3+5 ») : remplace le bloc « Parle à
  * l'agent » et ses puces « Pour démarrer ». C'est le mélange de deux propositions du /draft :
  *  - 3 · Invite vivante : les suggestions s'écrivent une à une, et un clic pose la phrase dans la
  *    saisie. Elle n'envoie plus rien toute seule : l'utilisateur relit, puis envoie.
@@ -33,7 +33,7 @@ import './AnimationAccueilChat.css'
  * si la vidéo ne se lit pas.
  *
  * « que ce soit le cercle au sol qui les invoque » : sur le film du magicien, les lettres sortaient
- * du cercle de runes. Depuis conv-1535, le film montre les fonctionnalités d'Autowin à la place du
+ * du cercle de runes. Le film montre les fonctionnalités d'Autowin à la place du
  * magicien (`TeaserAccueil`), et la phrase se tape lettre à lettre, curseur compris (`PhraseTapee`).
  *
  * Aucune garde `prefers-reduced-motion` : ce poste a le réglage actif, l'animation ne se verrait
@@ -249,7 +249,7 @@ function Mascotte({
     // `html` : un changement de style en Settings recharge la page, et la feuille avec elle.
   }, [document, html, humeur, agents])
 
-  // Fluide, à chaque image (conv-1512 : « remove the 10 fps cap everywhere »). `requestAnimationFrame`
+  // Fluide, à chaque image (« remove the 10 fps cap everywhere »). `requestAnimationFrame`
   // s'arrête tout seul quand la fenêtre est cachée ou réduite : hors de la vue, la boucle ne coûte rien.
   useEffect(() => {
     if (!document || !actif) return
@@ -333,7 +333,7 @@ function AnimationAccueilChatBrute({
     setTaille({ largeur, hauteur })
   }, [])
   // Chaque entrée de phrase est une nouvelle invocation : le rang relance son animation
-  // d'apparition, la skill de la scène choisit le texte (conv-1535 : sous /draft, l'usage de /draft).
+  // d'apparition, la skill de la scène choisit le texte (Sous /draft, l'usage de /draft).
   const [invocation, setInvocation] = useState<{
     rang: number
     etat: EtatDePhrase

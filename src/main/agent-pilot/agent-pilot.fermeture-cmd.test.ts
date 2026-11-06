@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseOrderedPilotTokens } from './agent-pilot'
 
-// conv-686, tour 6185f7e7-88fa-4add-bf84-c51741d1b8b0 : `<cmd>{...}</invoke>` → tour muet, rien lancé.
+// Tour 6185f7e7-88fa-4add-bf84-c51741d1b8b0 : `<cmd>{...}</invoke>` → tour muet, rien lancé.
 describe('parseOrderedPilotTokens — fermeture </cmd> erronée', () => {
   it('récupère la commande et garde la conclusion visible', () => {
     const raw =
@@ -23,13 +23,13 @@ describe('parseOrderedPilotTokens — fermeture </cmd> erronée', () => {
   })
 })
 
-// conv-686, tour 30876029-68c5-43c8-948c-59786b28a081 : commande perdue affichée « Aucune reponse produite ».
+// Tour 30876029-68c5-43c8-948c-59786b28a081 : commande perdue affichée « Aucune reponse produite ».
 import { sourceDuPilote } from './source-du-pilote.test-helpers'
 import { texteCmdIlisible } from './agent-pilot'
 describe('repli de clôture après une commande illisible', () => {
   it('dit que rien n’a été lancé, et le repli est câblé', () => {
     expect(texteCmdIlisible()).toMatch(/rien n’a été lancé/)
-    // Le repli vit dans agent-pilot/texte-de-cloture.ts depuis conv-1580 (lot 3).
+    // Le repli vit dans agent-pilot/texte-de-cloture.ts (lot 3).
     const src = sourceDuPilote()
     expect(src).toMatch(/etat\.cmdEmisCeTour\s*\n?\s*\? texteCmdIlisible\(\)/)
     expect(src).toMatch(/texteProvider\.includes\('<cmd>'\)\) etat\.cmdEmisCeTour = true/)

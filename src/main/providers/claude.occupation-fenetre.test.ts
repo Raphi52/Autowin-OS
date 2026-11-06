@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  *
  * Un tour d'agent enchaine N appels au modele et chacun renvoie tout le prefixe. L'evenement
  * `result` du CLI porte l'usage AGREGE de ces N appels : parfait pour facturer, faux pour la jauge
- * de contexte. Mesure du 2026-09-04 sur conv-282 : un tour de ~14 appels a rendu 2 181 502 tokens
+ * de contexte. Mesure du 2026-09-04 : un tour de ~14 appels a rendu 2 181 502 tokens
  * d'entree pour une fenetre de 1 M, donc une barre collee a 100 % alors que l'occupation reelle
  * tenait sous 25 %. Ce test fige la separation : `inputTokens` reste le cumul, `derniereEntree`
  * porte l'entree du DERNIER message assistant.

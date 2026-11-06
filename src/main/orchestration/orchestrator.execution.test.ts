@@ -360,7 +360,7 @@ describe('Orchestrator execution contract', () => {
   })
 
   /*
-   * BRAIN PERSO DANS LE CONTEXTE DES RUNS (conv-1233, 2026-10-28, demande utilisateur : « étends le
+   * BRAIN PERSO DANS LE CONTEXTE DES RUNS (2026-10-28, demande utilisateur : « étends le
    * Brain perso au contexte des travaux lancés en arrière-plan : cherche aussi dans le Brain perso,
    * avec le préfixe perso: »).
    */

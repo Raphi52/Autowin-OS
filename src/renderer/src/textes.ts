@@ -4,21 +4,21 @@ import type { Langue } from '../../shared/langue'
 import { useLangue } from './langue'
 
 /**
- * LA TABLE DES TEXTES DE L'INTERFACE, en français et en anglais (conv-1146, 2026-10-26).
+ * LA TABLE DES TEXTES DE L'INTERFACE, en français et en anglais (2026-10-26).
  *
  * Maison, sans bibliothèque : aucune installation n'est possible pendant que l'app tourne
  * (`scripts/garde-npm-modules.mjs`), et le besoin tient en une table et une fonction.
  *
- * LA TRADUCTION A AVANCÉ PAR LOTS. Lot 1 (conv-1146) : la barre de navigation, Settings (sections,
+ * LA TRADUCTION A AVANCÉ PAR LOTS. Lot 1 : la barre de navigation, Settings (sections,
  * Interface, Providers, Diagnostic et ses trois panneaux) et la zone de saisie du chat — ici. Puis le
- * plan de 19 lots de conv-1170 (2026-10-27) : chaque groupe d'écrans dans sa table
+ * plan de 19 lots (2026-10-27) : chaque groupe d'écrans dans sa table
  * (`textes-ecrans/`, 16 tables), les textes du processus principal dans `main/textes-coeur.ts`, les
  * dates et nombres par `formaterDate` / `formaterNombre` (`langue.ts`). Restent en français, à dessein
  * ou faute de lot : les messages renvoyés tels quels par `src/main` et `src/shared` (dont
  * `shared/watchdog-regex.ts` et le moteur du plan de lots), les consignes destinées à l'agent, la
  * voix de Jarvis, et deux formats d'heure écrits en `fr-FR` (`heure-message.ts`,
  * `observatory-timeline-axis.ts`). La phrase `interface.langue.couverture` dit à l'utilisateur ce qui
- * est traduit et NOMME ce qui reste en français (objection du juge, conv-1146, réparation 3) —
+ * est traduit et NOMME ce qui reste en français (objection du juge, réparation 3) —
  * `textes.test.ts` vérifie qu'elle cite chaque écran de la navigation dans sa partie « traduit ».
  *
  * Le FRANÇAIS fait foi : c'est le texte d'avant ce réglage, mot pour mot, pour que rien ne change à
@@ -29,7 +29,7 @@ import { useLangue } from './langue'
  * (`riche`) — ce qui garde les mots en gras de l'écran sans couper les phrases en morceaux.
  *
  * Les autres écrans ont chacun LEUR table, faite par `tableDeTextes` (plus bas) dans
- * `textes-ecrans/` : mêmes règles, fichiers séparés (conv-1170).
+ * `textes-ecrans/` : mêmes règles, fichiers séparés.
  */
 export const TEXTES_FR = {
   'rail.deployer': 'Déployer le menu',
@@ -351,7 +351,7 @@ export interface TableDeTextes<Cle extends string> {
 }
 
 /**
- * UNE TABLE DE TEXTES PAR GROUPE D'ÉCRANS (traduction complète, conv-1170, 2026-10-27). Une seule
+ * UNE TABLE DE TEXTES PAR GROUPE D'ÉCRANS (traduction complète, 2026-10-27). Une seule
  * table pour toute l'app ferait écrire tous les lots de traduction dans le MÊME fichier en même temps ;
  * chaque groupe d'écrans a donc la sienne (`textes-ecrans/`), avec exactement les règles de la table
  * principale (`texteDans`, `riche` inchangé).

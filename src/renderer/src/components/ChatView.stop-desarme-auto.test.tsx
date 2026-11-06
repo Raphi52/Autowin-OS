@@ -28,7 +28,7 @@ const filAvecSuite = (suite: string): unknown[] => [
 
 /**
  * DEFAUT VECU (2026-09-03) : quatre fils portent mot pour mot « kaizen je click sur stop et ca fait
- * que de relancer la task » (conv-210, conv-214, conv-215, conv-221). Stop ne posait qu'un gel sur
+ * que de relancer la task ». Stop ne posait qu'un gel sur
  * la FILE des messages en attente ; l'interrupteur auto restait arme, le tour coupe arrivait comme
  * un tour termine, et la boucle renvoyait la suite proposee — la tache que l'utilisateur venait
  * d'arreter repartait toute seule.

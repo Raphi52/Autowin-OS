@@ -1,5 +1,5 @@
 /**
- * « ESSAIE 3 FAÇONS » — LA CARTE DE COMPARAISON ET « GARDER CELLE-CI » (conv-1038, 2026-10-21 —
+ * « ESSAIE 3 FAÇONS » — LA CARTE DE COMPARAISON ET « GARDER CELLE-CI » (2026-10-21 —
  * idée 6 du scout : « une carte compare les écarts, les tests et le coût, et fusionne la gagnante »).
  *
  * Une ligne par façon, avec ce que le processus principal a MESURÉ : l'état de son tour, l'écart de
@@ -201,7 +201,7 @@ export function ComparaisonDesFacons({
                     <dt>{t('facons.verifications')}</dt>
                     <dd>{mesuree ? phraseDesVerifications(mesuree.bilan) : '…'}</dd>
                   </div>
-                  {/* Le contrôle de ressemblance (conv-1057, 2026-10-22) : deux façons au même
+                  {/* Le contrôle de ressemblance (2026-10-22) : deux façons au même
                       code se voient d'un coup d'œil. */}
                   <div>
                     <dt>{t('facons.ressemblance')}</dt>

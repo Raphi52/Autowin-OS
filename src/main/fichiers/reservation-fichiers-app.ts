@@ -11,7 +11,7 @@ import {
 } from '../../shared/reservation-fichiers'
 
 /**
- * RÉSERVATION DES FICHIERS, CÔTÉ APP (conv-1083, 2026-10-22).
+ * RÉSERVATION DES FICHIERS, CÔTÉ APP (2026-10-22).
  *
  * Le hook des agents Claude réserve avant chaque Edit/Write et refuse un commit qui emporterait le
  * fichier d'un autre fil (`shared/garde-git-destructeur.ts`). Les commandes de l'app servies à TOUT

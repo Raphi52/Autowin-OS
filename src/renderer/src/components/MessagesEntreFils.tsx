@@ -9,7 +9,7 @@ import {
 import './MessagesEntreFils.css'
 
 /*
- * MESSAGES ENTRE FILS, DANS LE FIL (conv-1139, 2026-10-24).
+ * MESSAGES ENTRE FILS, DANS LE FIL (2026-10-24).
  *
  * Les agents de deux fils du même dépôt s'écrivent par `ecrire_a_un_fil` au lieu de passer par
  * l'utilisateur. Règle du cadrage : aucun échange hors de sa vue. Ce bloc montre donc ce que CE fil
@@ -137,7 +137,7 @@ export function MessagesEntreFils({
 
 /*
  * Un groupe par fil correspondant, dans l'ordre du journal à l'intérieur ; le groupe dont le
- * dernier message est le plus récent va EN BAS, comme dans un chat (conv-1139, 2026-10-25,
+ * dernier message est le plus récent va EN BAS, comme dans un chat (2026-10-25,
  * proposition « Bulles » du /draft).
  */
 function parFil(

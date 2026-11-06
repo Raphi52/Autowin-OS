@@ -116,7 +116,7 @@ describe('ModelEffortMatrix', () => {
       })
     )
 
-    // Onglets par fournisseur (conv-1496) : l'onglet du modèle actif s'ouvre, l'autre se clique.
+    // Onglets par fournisseur : l'onglet du modèle actif s'ouvre, l'autre se clique.
     const onglets = [...view.querySelectorAll('[role="tab"]')].map((n) => n.textContent)
     expect(onglets).toEqual(['Claude', 'openai'])
     expect(

@@ -149,7 +149,7 @@ import {
 } from '../shared/terminal'
 
 /**
- * NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 2/5) : la forme est celle du contrat `ApiNavigateur`,
+ * NAVIGATEUR INTÉGRÉ DU CHAT (lot 2/5) : la forme est celle du contrat `ApiNavigateur`,
  * les noms de canaux viennent de `CANAUX_NAVIGATEUR` — aucun n'est réécrit ici.
  */
 const navigateur: ApiNavigateur = {
@@ -190,7 +190,7 @@ const navigateur: ApiNavigateur = {
   }
 }
 
-/** QUESTION À CÔTÉ (conv-1362) : les noms de canaux viennent de `CANAUX_QUESTION_A_COTE`. */
+/** QUESTION À CÔTÉ : les noms de canaux viennent de `CANAUX_QUESTION_A_COTE`. */
 const questionACote: ApiQuestionACote = {
   poser: (conversationId, question) =>
     ipcRenderer.invoke(CANAUX_QUESTION_A_COTE.poser, conversationId, question),
@@ -198,7 +198,7 @@ const questionACote: ApiQuestionACote = {
 }
 
 /**
- * TERMINAL INTÉGRÉ DU CHAT (conv-1362, lot 3/3) : la forme est celle du contrat `ApiTerminal`, les
+ * TERMINAL INTÉGRÉ DU CHAT (lot 3/3) : la forme est celle du contrat `ApiTerminal`, les
  * noms de canaux viennent de `CANAUX_TERMINAL`. Un écouteur par abonnement, retiré par la fonction
  * rendue : un panneau démonté n'écoute plus.
  */
@@ -251,7 +251,7 @@ const api = {
   hdeskTvAct: (geste: GesteTv): Promise<ResultatGeste> => ipcRenderer.invoke('hdesk:tv:act', geste),
   hdeskTvBasculer: (id: string): Promise<{ ok: boolean; message?: string }> =>
     ipcRenderer.invoke('hdesk:tv:basculer', id),
-  // Vue « Bureaux cachés » (conv-951) : tous les bureaux, fermer (fil lu dans la fiche), créer.
+  // Vue « Bureaux cachés » : tous les bureaux, fermer (fil lu dans la fiche), créer.
   hdeskGestionBureaux: (): Promise<ResultatListeBureaux> =>
     ipcRenderer.invoke('hdesk:gestion:bureaux'),
   hdeskGestionFermer: (id: string): Promise<ResultatFermetureGeree> =>
@@ -260,10 +260,10 @@ const api = {
     ipcRenderer.invoke('hdesk:gestion:creer', demande),
   hdeskGestionChoisirExe: (): Promise<ResultatChoixExe> =>
     ipcRenderer.invoke('hdesk:gestion:choisirExe'),
-  // Navigateur intégré du chat (conv-1286) : `window.api.navigateur`, typé par `ApiNavigateur`.
+  // Navigateur intégré du chat : `window.api.navigateur`, typé par `ApiNavigateur`.
   navigateur,
   questionACote,
-  // Terminal intégré du chat (conv-1362) : `window.api.terminal`, typé par `ApiTerminal`.
+  // Terminal intégré du chat : `window.api.terminal`, typé par `ApiTerminal`.
   terminal,
   // Phrase de passe de production. Elle part de l'ecran vers le processus principal et n'en revient
   // JAMAIS : aucune de ces trois fonctions ne rend la phrase, seulement un etat, un refus ou un
@@ -423,12 +423,12 @@ const api = {
   // Mesures d'arene deja journalisees, agregees par workflow (lecture seule, aucun rejeu).
   arenaDuelsParWorkflow: (derniers?: number) =>
     ipcRenderer.invoke('arena:duelsParWorkflow', derniers),
-  // Résultats RÉELS de chaque workflow, relus dans la trace causale (lecture seule, conv-1070).
+  // Résultats RÉELS de chaque workflow, relus dans la trace causale (lecture seule).
   workflowResultatsReels: () => ipcRenderer.invoke('workflows:resultatsReels'),
   // Depose une tache longue du thread d'interface dans le journal de gels commun.
   // fix-ok: cause mesurée 2026-10-22 — sans `detail`, le gel du fil arrivait au main sans ses messages (rendu-long.messages.test.tsx rouge) ; le pont du canal mémoire à part est retiré avec lui.
-  // `detail` : messages du fil mesures pendant un gel du fil (conv-1077), ou lignes redessinees et
-  // declencheurs de la liste des conversations (conv-1115) ; relus champ par champ par le main.
+  // `detail` : messages du fil mesures pendant un gel du fil, ou lignes redessinees et
+  // declencheurs de la liste des conversations ; relus champ par champ par le main.
   signalerGelRenderer: (
     dureeMs: number,
     etiquette?: string,
@@ -473,7 +473,7 @@ const api = {
     etapesFaites: number
     etapesTotales: number
   }): Promise<boolean> => ipcRenderer.invoke('os:presence', etat),
-  /** Connecté à distance ? Sur un écran de téléphone ? (conv-1442, `affichage-session.ts`) */
+  /** Connecté à distance ? Sur un écran de téléphone ? (`affichage-session.ts`) */
   affichageSession: (): Promise<AffichageSession> =>
     ipcRenderer.invoke(CANAL_AFFICHAGE_SESSION),
   onAffichageSession: (cb: (etat: AffichageSession) => void): (() => void) => {
@@ -481,19 +481,19 @@ const api = {
     ipcRenderer.on(CANAL_AFFICHAGE_SESSION_MAJ, h)
     return () => ipcRenderer.removeListener(CANAL_AFFICHAGE_SESSION_MAJ, h)
   },
-  /** La mascotte du bureau est-elle affichée ? Le moteur garde le choix (conv-1145). */
+  /** La mascotte du bureau est-elle affichée ? Le moteur garde le choix. */
   mascotteAffichee: (): Promise<boolean> => ipcRenderer.invoke('os:mascotte'),
   /** L'interrupteur de Settings · Interface : rend le choix tel que le moteur l'a enregistré. */
   afficherMascotte: (affichee: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:mascotte:afficher', affichee),
-  /** Le style de la mascotte : le magicien ou la bille basique (conv-1249). */
+  /** Le style de la mascotte : le magicien ou la bille basique. */
   styleMascotte: (): Promise<'magicien' | 'basique' | 'machine'> => ipcRenderer.invoke('os:mascotte:style'),
   /** Le choix de Settings · Interface : rend le style tel que le moteur l'a enregistré. */
   choisirStyleMascotte: (style: 'magicien' | 'basique' | 'machine'): Promise<'magicien' | 'basique' | 'machine'> =>
     ipcRenderer.invoke('os:mascotte:choisir-style', style),
-  /** Le thème appliqué, pour que la mascotte passe en machine sous le thème NieR (conv-346). */
+  /** Le thème appliqué, pour que la mascotte passe en machine sous le thème NieR. */
   themeMascotte: (theme: string): Promise<boolean> => ipcRenderer.invoke('os:mascotte:theme', theme),
-  /** La vraie page de la mascotte, pour l'accueil d'un fil vide (conv-1401). */
+  /** La vraie page de la mascotte, pour l'accueil d'un fil vide. */
   mascottePage: (): Promise<{ html: string; largeur: number; hauteur: number }> =>
     ipcRenderer.invoke('os:mascotte:page'),
   /** La feuille d'humeur à poser sur cette page. */
@@ -504,10 +504,10 @@ const api = {
   // Ce que repond `prefers-color-scheme` dans l'app : la base du theme Autowin, pas celle de Windows.
   setColorScheme: (schema: 'dark' | 'light'): Promise<boolean> =>
     ipcRenderer.invoke('app:color-scheme', schema),
-  // Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090).
+  // Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite.
   setPaletteCarteFinDeTour: (palette: Record<string, string>): Promise<boolean> =>
     ipcRenderer.invoke('app:carte-fin-de-tour-palette', palette),
-  // La langue choisie dans Settings · Interface, pour la langue des réponses de l'agent (conv-1146).
+  // La langue choisie dans Settings · Interface, pour la langue des réponses de l'agent.
   setLangue: (langue: 'fr' | 'en'): Promise<'fr' | 'en'> =>
     ipcRenderer.invoke('app:langue:ecrire', langue),
   // Auto-update git au démarrage.
@@ -716,7 +716,7 @@ const api = {
     conversationId?: string
   ): Promise<CostBreakdownRow[]> =>
     ipcRenderer.invoke('os:costBreakdown', dimension, conversationId),
-  // Serveurs MCP de l'utilisateur (conv-1558).
+  // Serveurs MCP de l'utilisateur.
   mcpServersList: (): Promise<ReponseServeursMcp> => ipcRenderer.invoke('os:mcpServers:list'),
   mcpServersSave: (serveur: ServeurMcpUtilisateur): Promise<ReponseServeursMcp> =>
     ipcRenderer.invoke('os:mcpServers:save', serveur),
@@ -795,7 +795,7 @@ const api = {
   enregistrerBrainReglage: (entree: { chemin?: string; depot?: string }): Promise<BrainReglageState> =>
     ipcRenderer.invoke('os:brain-reglage:enregistrer', entree),
   resetBrainReglage: (): Promise<BrainReglageState> => ipcRenderer.invoke('os:brain-reglage:reset'),
-  // Brain PERSO (conv-1233) : même formulaire, son propre réglage.
+  // Brain PERSO : même formulaire, son propre réglage.
   brainPerso: (): Promise<BrainPersoState> => ipcRenderer.invoke('os:brain-perso'),
   enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }): Promise<BrainPersoState> =>
     ipcRenderer.invoke('os:brain-perso:enregistrer', entree),
@@ -839,61 +839,61 @@ const api = {
     ipcRenderer.invoke('os:transcript:revealer', chemin),
   // Conversations
   conversations: (): Promise<ConversationSummary[]> => ipcRenderer.invoke('os:conversations'),
-  /** La carte des besoins (conv-1089) : les demandes de TOUS les fils, par projet, sans modèle. */
+  /** La carte des besoins : les demandes de TOUS les fils, par projet, sans modèle. */
   carteDesBesoins: (options?: {
-    /** Les états posés à la main sur le Board, joints pour la copie vers son dossier (conv-1206). */
+    /** Les états posés à la main sur le Board, joints pour la copie vers son dossier. */
     etatsManuels?: Record<string, EtatManuelDuBoard>
   }): Promise<CarteDesBesoins> => ipcRenderer.invoke('os:carteDesBesoins', options),
-  /** Le dossier où le Board est recopié, choisi sur ce poste (conv-1206). */
+  /** Le dossier où le Board est recopié, choisi sur ce poste. */
   boardDossier: (): Promise<EtatDuDossierDuBoard> => ipcRenderer.invoke('os:board-dossier'),
-  /** La liste des dossiers de travail du Chat, la seule que le Board montre, et ses retraits
-   *  (conv-1212). */
+  /** La liste des dossiers de travail du Chat, la seule que le Board montre, et ses retraits.
+   *  */
   boardDossiersDuChat: (dossiers: string[], retires: string[] = []): Promise<boolean> =>
     ipcRenderer.invoke('os:board-dossiers-du-chat', dossiers, retires),
   boardDossierChoisir: (): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:board-dossier:choisir'),
   boardDossierEffacer: (): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:board-dossier:effacer'),
-  /** Les projets recopiés dans le dossier du Board, `null` = tous (conv-1211). */
+  /** Les projets recopiés dans le dossier du Board, `null` = tous. */
   boardDossierProjets: (projets: string[] | null): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:board-dossier:projets', projets),
-  /** Le nom de ce poste sur le Board, `null` = le compte Windows (conv-1230). */
+  /** Le nom de ce poste sur le Board, `null` = le compte Windows. */
   boardDossierNom: (nom: string | null): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:board-dossier:nom', nom),
-  /** Les Boards des collègues relus dans le dossier du Board (conv-1210), en lecture seule. */
+  /** Les Boards des collègues relus dans le dossier du Board, en lecture seule. */
   boardCollegues: (): Promise<BoardsDesCollegues> => ipcRenderer.invoke('os:board-collegues'),
-  /** Le RUN.md d'un post-it de collègue, recopié par son Board (conv-1456) ; `null` = pas recopié. */
+  /** Le RUN.md d'un post-it de collègue, recopié par son Board ; `null` = pas recopié. */
   boardFicheCollegue: (poste: string, fiche: string): Promise<string | null> =>
     ipcRenderer.invoke('os:board-fiche-collegue', poste, fiche),
-  /** L'instantané des tanukis de ce poste, publié filtré dans le village commun (conv-1429). */
+  /** L'instantané des tanukis de ce poste, publié filtré dans le village commun. */
   quartierPresence: (agents: AgentAPublier[]): Promise<void> =>
     ipcRenderer.invoke('os:quartier-presence:agents', agents),
-  /** Coupe (`false`) ou rétablit le partage de la présence du poste (D6, conv-1429). */
+  /** Coupe (`false`) ou rétablit le partage de la présence du poste (D6). */
   quartierPresencePartager: (actif: boolean): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:quartier-presence:partager', actif),
-  /** L'animal des agents du poste, vu aussi par les collègues (`null` = le défaut, conv-1537). */
+  /** L'animal des agents du poste, vu aussi par les collègues (`null` = le défaut). */
   quartierPresenceAnimal: (animal: AnimalAgent | null): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:quartier-presence:animal', animal),
-  /** La couleur de tenue des agents du poste, vue aussi par les collègues (`null` = d'origine, conv-1633). */
+  /** La couleur de tenue des agents du poste, vue aussi par les collègues (`null` = d'origine). */
   quartierPresenceTenue: (tenue: TenueAgent | null): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:quartier-presence:tenue', tenue),
-  /** « Afficher mes agents à » : les postes à qui ce poste masque ses agents (conv-1599). */
+  /** « Afficher mes agents à » : les postes à qui ce poste masque ses agents. */
   quartierPresenceMasques: (postes: string[]): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:quartier-presence:masques', postes),
-  /** Où et quand `presence.json` a été écrit, et le dernier échec (conv-1429). */
+  /** Où et quand `presence.json` a été écrit, et le dernier échec. */
   quartierPresenceEtat: (): Promise<EtatDeLaPresence> =>
     ipcRenderer.invoke('os:quartier-presence:etat'),
-  /** Les tanukis des AUTRES postes, relus sur le partage et validés (conv-1429, lot 2). */
+  /** Les tanukis des AUTRES postes, relus sur le partage et validés (lot 2). */
   presenceDesCollegues: (): Promise<PresencesDesCollegues> =>
     ipcRenderer.invoke('os:quartier-presence:collegues'),
-  /** Lier une demande de la carte à un work item, lu à la source avant d'être posé (conv-1127). */
+  /** Lier une demande de la carte à un work item, lu à la source avant d'être posé. */
   carteLierWorkItem: (cible: {
     conversationId: string
     demande: string
     saisie: string
     sourceId?: string
   }): Promise<ResultatDuRattachement> => ipcRenderer.invoke('os:carte:lierWorkItem', cible),
-  /** Détacher un work item d'une demande ; un lien automatique détaché ne revient pas (conv-1127). */
+  /** Détacher un work item d'une demande ; un lien automatique détaché ne revient pas. */
   carteDelierWorkItem: (cible: {
     conversationId: string
     demande: string
@@ -901,7 +901,7 @@ const api = {
     id: string
   }): Promise<{ ok: true } | { ok: false; raison: string }> =>
     ipcRenderer.invoke('os:carte:delierWorkItem', cible),
-  /** Lire à la source les `#1234` des prompts, et poser ceux qui existent (conv-1127). */
+  /** Lire à la source les `#1234` des prompts, et poser ceux qui existent. */
   carteVerifierMentions: (): Promise<BilanDesMentions> =>
     ipcRenderer.invoke('os:carte:verifierMentions'),
   /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */
@@ -949,40 +949,40 @@ const api = {
   /** Marque (`true`) ou retire (`false`) le statut inactive d'une conversation. */
   conversationsSetInactive: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setInactive', id, on),
-  /** Fil privé pour le village commun (D6, conv-1429) : son tanuki part sans titre. */
+  /** Fil privé pour le village commun (D6) : son tanuki part sans titre. */
   conversationsSetPrive: (id: string, on: boolean): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:setPrive', id, on),
-  /** `dossier` : la copie séparée où la branche travaille dès sa création (conv-1038). */
+  /** `dossier` : la copie séparée où la branche travaille dès sa création. */
   conversationsFork: (
     id: string,
     messageId: string,
     options?: { dossier?: string }
   ): Promise<Conversation> => ipcRenderer.invoke('os:conversations:fork', id, messageId, options),
-  /** Ce que l'agent a retenu dans ce fil (carnet du fil, conv-1038). */
+  /** Ce que l'agent a retenu dans ce fil (carnet du fil). */
   conversationMemoire: (
     id: string
   ): Promise<Array<{ title: string; body: string; state?: 'depose' | 'inconnu' | 'local' }>> =>
     ipcRenderer.invoke('os:conversations:memoire', id),
-  /** Retire un fait barré dans le carnet : l'agent ne le relit plus (conv-1038). */
+  /** Retire un fait barré dans le carnet : l'agent ne le relit plus. */
   conversationOublierFait: (id: string, title: string): Promise<boolean> =>
     ipcRenderer.invoke('os:conversations:oublierFait', id, title),
-  /** Rouvre le code du début du tour d'un message dans une copie séparée (conv-1038). */
+  /** Rouvre le code du début du tour d'un message dans une copie séparée. */
   conversationRevenirAuTour: (
     id: string,
     messageId: string
   ): Promise<
     { ok: true; chemin: string; deja: boolean; quand: number } | { ok: false; raison: string }
   > => ipcRenderer.invoke('os:conversations:revenirAuTour', id, messageId),
-  /** « Essaie 3 façons » : une photo du code, une copie séparée par branche (conv-1038). */
+  /** « Essaie 3 façons » : une photo du code, une copie séparée par branche. */
   conversationEssaisEnParallele: (
     id: string,
     nombre: number
   ): Promise<{ ok: true; quand: number; chemins: string[] } | { ok: false; raison: string }> =>
     ipcRenderer.invoke('os:conversations:essaisEnParallele', id, nombre),
-  /** La carte de comparaison des façons : écart, état du tour, vérifications (conv-1038). */
+  /** La carte de comparaison des façons : écart, état du tour, vérifications. */
   conversationComparerLesFacons: (ids: string[]): Promise<ComparaisonDUneFacon[]> =>
     ipcRenderer.invoke('os:conversations:comparerLesFacons', ids),
-  /** « Garder celle-ci » : l'écart de la façon publié par le chemin des copies (conv-1038). */
+  /** « Garder celle-ci » : l'écart de la façon publié par le chemin des copies. */
   conversationGarderEssai: (id: string): Promise<ResultatGarderUneFacon> =>
     ipcRenderer.invoke('os:conversations:garderEssai', id),
   /**
@@ -1115,12 +1115,12 @@ const api = {
   }),
   appCommand: (name: string, args?: Record<string, unknown>): Promise<CommandResult> =>
     ipcRenderer.invoke('os:appCommand', name, args),
-  /** Messages entre fils du même dépôt, envoyés et reçus par ce fil (conv-1139). Lecture seule. */
+  /** Messages entre fils du même dépôt, envoyés et reçus par ce fil. Lecture seule. */
   messagesEntreFils: (conversationId: string): Promise<MessageEntreFilsAffiche[]> =>
     ipcRenderer.invoke('os:messagesEntreFils', conversationId),
   /**
-   * Plan de lots d'un fil chef (conv-1150) : le voir, et les gestes de l'utilisateur. `lot` : le
-   * numéro du lot, pour le seul geste « relancer » (conv-1151, lot 3). « tous » (conv-1158) : tous
+   * Plan de lots d'un fil chef : le voir, et les gestes de l'utilisateur. `lot` : le
+   * numéro du lot, pour le seul geste « relancer » (lot 3). « tous » : tous
    * les plans en un appel, sans fil, pour ranger la liste des conversations.
    */
   plansDeLots: (
@@ -1237,7 +1237,7 @@ const api = {
       phase?: { step: string; provider?: string; role?: string }
       deltaStep?: 'exec' | 'judge'
       delta?: string
-      /** Fragment du raisonnement du sous-agent, a accumuler sous sa phase (conv-918). */
+      /** Fragment du raisonnement du sous-agent, a accumuler sous sa phase. */
       reasoning?: string
       /** Phase en cours quand ce fragment de raisonnement a ete emis. */
       reasoningPhase?: string
@@ -1245,7 +1245,7 @@ const api = {
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
       /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */
       textes?: string[]
-      /** Suite a envoyer dans ce fil, pressee sur la notification de fin de tour (evenement `suite-depuis-notification`, conv-1038). */
+      /** Suite a envoyer dans ce fil, pressee sur la notification de fin de tour (evenement `suite-depuis-notification`). */
       texte?: string
     }) => void
   ): (() => void) => {
@@ -1260,7 +1260,7 @@ const api = {
   // Workflows de la conversation active (créés in-app + attachés)
   conversationRuns: (convId: string): Promise<RunEntry[]> =>
     ipcRenderer.invoke('os:conversationRuns', convId),
-  // Les RUN.md légers, une fiche par demande (conv-1441) : panneau du fil et post-it du Board.
+  // Les RUN.md légers, une fiche par demande : panneau du fil et post-it du Board.
   fichesDuFil: (convId: string): Promise<FicheDeDemande[]> =>
     ipcRenderer.invoke('os:fichesDuFil', convId),
   fichesDesDemandes: (): Promise<FichesDesDemandes> => ipcRenderer.invoke('os:fichesDesDemandes'),

@@ -85,7 +85,7 @@ describe('ensureBrainServerStarted', () => {
 
   /*
    * UN SERVEUR DEJA INSTALLE NE LIT QUE LES ANCIENS NOMS. Sans leur recopie, il retombe sur ses
-   * defauts (port 8765, racine heritee) — le defaut vecu le 2026-09-03 (conv-8). Avec un profil
+   * defauts (port 8765, racine heritee) — le defaut vecu le 2026-09-03. Avec un profil
    * d'entreprise, l'enfant recoit les DEUX noms ; sans profil (version publique), les seuls neutres.
    */
   it('passe au serveur les noms neutres, et les anciens noms du profil d entreprise', async () => {
@@ -294,7 +294,7 @@ describe('ensureBrainServerStarted', () => {
   })
 
   it('le serveur lance par Autowin sert SON Brain, pas la racine heritee d un Brain personnel', () => {
-    // Constate le 2026-09-25 (conv-3) : `ACME_BRAIN_ROOT`, pose par l'installateur du Brain
+    // Constate le 2026-09-25 : `ACME_BRAIN_ROOT`, pose par l'installateur du Brain
     // personnel, primait et le serveur d'Autowin servait (et recevait les lecons de) ce Brain-la.
     const localAppData = mkdtempSync(join(tmpdir(), 'brain-autowin-launch-'))
     // L'installation partagee du Brain personnel, dont l'installateur a pose ACME_BRAIN_ROOT.

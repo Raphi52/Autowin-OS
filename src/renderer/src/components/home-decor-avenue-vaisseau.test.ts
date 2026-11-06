@@ -14,7 +14,7 @@ import {
 import { AMBIANCE_KOWLOON } from './home-decor-avenue-ville'
 
 /**
- * LE CIEL « ÉCLAIRCIE LUNAIRE » ET LE VAISSEAU MÈRE DU FOND DE L'ACCUEIL (conv-319).
+ * LE CIEL « ÉCLAIRCIE LUNAIRE » ET LE VAISSEAU MÈRE DU FOND DE L'ACCUEIL.
  *
  * Demande de l'utilisateur : « /draft le fond le ciel violet de l'acceuil », « Affiner la 4 · Azur
  * d'orage », puis « implémente la 5 et met un vaisseau mere » ; et pour le vaisseau, après deux /draft
@@ -30,7 +30,7 @@ import { AMBIANCE_KOWLOON } from './home-decor-avenue-ville'
  *      déplace la lune à gauche au-dessus de la ville ») ; un vaisseau qui n'est plus deux fois plus
  *      large qu'à l'origine (« plus grandes plus belle ») ;
  *   3. le vaisseau, sa couronne ou une de ses tours posés sur la lune (sa trouée est la raison d'être de la 5) ;
- *   4. une lumière ajoutée par le vaisseau → toutes les matières de la rue s'alourdissent (conv-301) ;
+ *   4. une lumière ajoutée par le vaisseau → toutes les matières de la rue s'alourdissent ;
  *   5. une matière du vaisseau soumise au brouillard de la rue → à 1,3 km il disparaît ;
  *   6. DEUX vaisseaux au lieu d'un ; une tour qui PEND de nouveau sous la ville, ou qui quitte le disque ;
  *      un dessus sans lumières, ou des feux de toit cachés par leur propre toit (pas de mât) ; plus de

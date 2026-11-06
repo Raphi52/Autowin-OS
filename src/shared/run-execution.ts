@@ -5,7 +5,7 @@ export type RunClosureStatus = 'open' | 'green' | 'degraded-closed' | 'red'
 /**
  * Le statut ÉCRIT dans un RUN.md. Il ajoute `interrupted` à ceux du moteur : un run coupé de
  * l'extérieur (bouton Stop, limite de session, panne du fournisseur) n'a ni échoué ni abouti, il
- * s'est arrêté (piste 4, conv-1070). Le moteur, lui, garde `red` — le run n'a rien livré — et nomme
+ * s'est arrêté (piste 4). Le moteur, lui, garde `red` — le run n'a rien livré — et nomme
  * la cause dans `RunClosureObservation.interruption` ; `statutDuRunMd` fait la traduction.
  */
 export type RunFileStatus = RunClosureStatus | 'interrupted'
@@ -14,7 +14,7 @@ export type RunFileStatus = RunClosureStatus | 'interrupted'
  * Cause d'un arrêt étrangère au travail (`causeDInterruption`, `classe-terminale-echec.ts`).
  * `publication` : le travail est allé au bout et validé, mais sa fusion a été refusée parce que la
  * base était occupée (`base-dirty` / `base-in-progress`) — il attend la reprise automatique du
- * coordinateur, il n'a pas échoué (`attendSaPublication`, conv-1455 sur le cas conv-1431).
+ * coordinateur, il n'a pas échoué (`attendSaPublication`, Un fil sur le cas).
  */
 export type RunInterruption = 'arret' | 'quota' | 'externe' | 'publication'
 
@@ -94,7 +94,7 @@ export interface RunClosureObservation {
    * PRÉSENT seulement sur une clôture `red` dont la cause est hors du travail : `arret` (Stop,
    * fermeture de l'app), `quota` (limite de session), `externe` (panne en face, session expirée),
    * `publication` (travail validé, fusion refusée par une base occupée : en attente de publication).
-   * ABSENT = un vrai échec, ou une trace écrite avant ce champ (piste 4, conv-1070).
+   * ABSENT = un vrai échec, ou une trace écrite avant ce champ (piste 4).
    */
   interruption?: RunInterruption
   integrationOutcome?: string

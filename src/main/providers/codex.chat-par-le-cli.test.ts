@@ -54,7 +54,7 @@ import {
 import type { Message, SendOptions, SendResult } from './types'
 
 /**
- * LE CHAT CHATGPT PASSE PAR LE CLI CONNECTÉ (2026-10-31, conv-1414).
+ * LE CHAT CHATGPT PASSE PAR LE CLI CONNECTÉ (2026-10-31).
  *
  * Défaut d'origine : le chat exigeait un jeton propre à Autowin, écrit par `npm run codex:login`,
  * script supprimé le 2026-09-04. Le CLI répondait « Logged in using ChatGPT » et le chat mourait

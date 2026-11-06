@@ -57,7 +57,7 @@ describe('annonceCommitLocal', () => {
       '<span class="aw-chip awp-sha">e4daf170</span> agent run-1: t &lt;x&gt;'
     )
     expect(direct).toContain('ALLOW_MAIN_PUSH=1 git push origin e4daf1702e098832:refs/heads/main')
-    // conv-1600 : le rail compact choisi en conv-1574 (« 1 · Compact rail »), pas l'ancien bloc —
+    // Le rail compact choisi (« 1 · Compact rail »), pas l'ancien bloc —
     // la fin d'un run poussé dessinait encore la liste d'avant le /draft.
     expect(direct).toContain('class="awp-rail"')
     expect(direct).toMatch(/<b>Commit<\/b>[\s\S]*<b>Push<\/b>[\s\S]*Annuler la publication/)

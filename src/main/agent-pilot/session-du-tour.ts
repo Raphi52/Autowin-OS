@@ -1,6 +1,6 @@
 // Reprise de session CLI d'un tour de chat : clé de session (modèle, compte, dossier, compactions,
 // poids du fil), session connue, session périmée oubliée. Sortie telle quelle de AgentPilot.chat()
-// (conv-1580, lot 2).
+// (lot 2).
 import { loadConvActivity } from '../activity/conv-activity'
 import { coupesParPoids } from '../chat/chat-session-poids'
 import { compactionsAbouties } from '../chat/chat-turn-messages'
@@ -10,9 +10,9 @@ import type { Message } from '../providers/types'
 import type { RoleBinding } from '../profil/roles'
 
 export type SessionDuTour = {
-  /** Clé de session pour un compte donné (conv-1063). */
+  /** Clé de session pour un compte donné. */
   cleDeSession: (compte: string | undefined) => string
-  /** Compte du fil, sinon compte actif de l'application, lu à l'appel (conv-1416). */
+  /** Compte du fil, sinon compte actif de l'application, lu à l'appel. */
   compteDuTour: () => string | undefined
   compteAuDepart: string | undefined
   providerResumes: boolean
@@ -62,14 +62,14 @@ export function sessionDuTour(entree: {
    * Le CLI range ses sessions par DOSSIER (`~/.claude/projects/<cwd encode>/`), et le cwd d'un tour
    * de chat EST `process.env[AUTOWIN_WORKSPACE_ENV]` (`providers/claude.ts`, `readOnlyCwd`). Changer
    * de workspace en cours de conversation faisait donc reclamer une session absente du nouveau
-   * dossier — meme `No conversation found`, meme mort a 0 message. Vecu le 2026-09-06 sur conv-48 :
+   * dossier — meme `No conversation found`, meme mort a 0 message. Vecu le 2026-09-06 :
    * ouverte dans `E:\GIT\Autowin-OS`, poursuivie apres bascule sur `E:\AutoWin-Temp`, tour mort en
    * `error_during_execution` pour 0 token et 0 USD. La session etait INTACTE (355 lignes, 141
    * messages assistant) : elle etait simplement reclamee depuis le mauvais dossier.
    */
   const workspaceDeSession = workspaceDuTour
   /**
-   * LA COMPACTION FAIT PARTIE DE L IDENTITE DE LA SESSION — mesure du 2026-09-08 (conv-342).
+   * LA COMPACTION FAIT PARTIE DE L IDENTITE DE LA SESSION — mesure du 2026-09-08.
    *
    * « Compacter » ecrivait bien son resume, et le fil renvoye repartait de ce resume
    * (`depuisDerniereCompaction`)... sauf que sur un provider qui REPREND sa session, Autowin
@@ -83,7 +83,7 @@ export function sessionDuTour(entree: {
    */
   const compactions = compactionsAbouties(history)
   /**
-   * LE POIDS DU FIL AUSSI — mesure du 2026-09-17 (conv-632).
+   * LE POIDS DU FIL AUSSI — mesure du 2026-09-17.
    *
    * Autowin poussait 4 779 caracteres au CLI et l'appel etait facture 491 636 tokens d'entree :
    * la reinjection reelle est le TRANSCRIPT du CLI (raisonnement + appels d'outils de tous les
@@ -95,11 +95,11 @@ export function sessionDuTour(entree: {
    * suivant repart sur le fil aplati d'Autowin — bulles finales + resultats d'action resumes.
    */
   const coupesPoids = conversationId ? coupesParPoids(loadConvActivity(conversationId)) : 0
-  // Une FONCTION du compte (conv-1063) : un tour qui bascule de compte en cours de route range sa
+  // Une FONCTION du compte : un tour qui bascule de compte en cours de route range sa
   // nouvelle session sous le compte qui l'a RÉELLEMENT ouverte, pas sous celui du départ.
   const cleDeSession = (compte: string | undefined): string =>
     `${provider}:${binding.model ?? ''}:${compte ?? ''}:${workspaceDeSession}:c${compactions}:w${coupesPoids}`
-  // Le compte choisi pour le fil prime sur celui de l'application (conv-1416) : le compte actif peut
+  // Le compte choisi pour le fil prime sur celui de l'application : le compte actif peut
   // bouger sous ce fil sans que sa session cesse d'être la bonne.
   const compteDuTour = (): string | undefined =>
     claudeCompteDuFil(conversationId)?.id ?? claudeActiveAccountId()

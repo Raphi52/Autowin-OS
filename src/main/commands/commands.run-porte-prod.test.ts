@@ -8,7 +8,7 @@ import { PorteProd } from '../prod/prod-gate'
 import type { NiveauProtectionProd } from '../../shared/prod-protection'
 
 /**
- * LA COMMANDE `run` PASSE PAR LA PORTE DE PRODUCTION (évaluation conv-738, 2026-09-21).
+ * LA COMMANDE `run` PASSE PAR LA PORTE DE PRODUCTION (2026-09-21).
  *
  * Deux failles : (1) seul `sql_query` passait par `PorteProd` — `run sqlcmd -S prod …` partait sans
  * rien demander ; (2) `run` pouvait réécrire `prod-niveau.json` et poser le niveau « aucun » : l'agent

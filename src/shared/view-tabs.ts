@@ -1,5 +1,5 @@
 /**
- * Onglets de vues « comme un navigateur » (demande conv-685 du 2026-09-18) : chaque vue ouverte
+ * Onglets de vues « comme un navigateur » (demande du 2026-09-18) : chaque vue ouverte
  * devient un onglet, qu'on peut réordonner ou lâcher HORS de la fenêtre pour l'ouvrir dans sa
  * propre fenêtre (sur un autre écran). Logique pure, partagée par le renderer et le main.
  */

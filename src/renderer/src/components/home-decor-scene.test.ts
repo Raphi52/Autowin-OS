@@ -12,7 +12,7 @@ import {
 } from './home-decor-scene'
 
 /**
- * Les directions COMPOSEES par `home-decor-scene.ts`. L'avenue (conv-301) est une scene a part, aux
+ * Les directions COMPOSEES par `home-decor-scene.ts`. L'avenue est une scene a part, aux
  * reglages d'une autre nature (metres et secondes, pas des facteurs de composition) : la comparer a
  * elles sur `parallaxe` ou `tempo` n'aurait pas de sens. Ses promesses sont tenues par
  * `home-decor-avenue.contract.test.ts`.
@@ -24,7 +24,7 @@ const SPATIALES = DECOR_VARIANTS.map((v) => v.id).filter(
 /**
  * Le decor 3D est le FOND de l'accueil, pas une surcouche posee sur l'image plate.
  *
- * Constat utilisateur conv-1397 : « je vois toujours le fond d'ecran qui est present dans toutes les
+ * Constat utilisateur : « je vois toujours le fond d'ecran qui est present dans toutes les
  * vues dans la vue accueil […] je veux une reproduction en 3d ». Le canevas s'effacait en alpha 0
  * (`setClearColor(0x000000, 0)`), donc l'image `autowin-galaxy-bg-hq.png` de `body` passait au
  * travers. Un effacement OPAQUE fait du decor la seule source du fond.
@@ -56,7 +56,7 @@ describe('le decor efface son canevas de maniere OPAQUE', () => {
  */
 describe('directions du decor', () => {
   it('expose les six directions, chacune avec un nom et un resume', () => {
-    // `avenue` EN TETE : la direction par defaut depuis le 2026-10-17 (conv-301).
+    // `avenue` EN TETE : la direction par defaut depuis le 2026-10-17.
     expect(DECOR_VARIANTS.map((v) => v.id)).toEqual([
       'avenue',
       'actuel',

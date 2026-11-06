@@ -30,22 +30,22 @@ import {
 import './TableauDesLots.css'
 
 /*
- * SUPER CONVERSATION — LE TABLEAU D'AVANCEMENT DU FIL CHEF (conv-1150, 2026-10-26).
+ * SUPER CONVERSATION — LE TABLEAU D'AVANCEMENT DU FIL CHEF (2026-10-26).
  *
  * Le fil chef est le seul que l'utilisateur suit : ce bloc, posé au-dessus de la zone de saisie,
  * montre chaque lot (à faire, en cours, fait, échec), le fil qui le traite, et le budget de tours.
- * Depuis conv-1171, le plan part dès que l'agent le dépose : ici, l'utilisateur suit et peut
+ * Le plan part dès que l'agent le dépose : ici, l'utilisateur suit et peut
  * arrêter. « Lancer le plan » ne reste que pour un plan déposé avant ce changement.
  *
  * Dans un fil enfant, une seule ligne rappelle quel lot il traite et pour quel chef.
  * Relu à chaque signal `refresh` (plans-de-lots, chat, conversations) et à chaque changement de fil.
  *
- * `aCoteDeLaFrise` (conv-1315) : le fil s'affiche avec les onglets et la frise de la super conv, qui
+ * `aCoteDeLaFrise` : le fil s'affiche avec les onglets et la frise de la super conv, qui
  * montrent déjà chaque lot, son état, sa durée, son coût et « Relancer ». Il ne reste ici que ce que
  * la frise n'a pas : titre et statut du plan, raison, mémoire et gestes du plan (Arrêter, Reprendre).
  */
 
-/* Les mesures (coût, durée, relance, réduction retenue) vivent dans `lots-mesures.ts` (conv-1305). */
+/* Les mesures (coût, durée, relance, réduction retenue) vivent dans `lots-mesures.ts`. */
 
 type GesteDuTableau = Exclude<GestePlanDeLots, 'voir' | 'phrases'>
 
@@ -236,7 +236,7 @@ export function TableauDesLots({
   }
 
   /*
-   * PLAN REFUSÉ = TABLEAU FERMÉ (conv-1283, 2026-10-29) : après « Refuser », le tableau restait
+   * PLAN REFUSÉ = TABLEAU FERMÉ (2026-10-29) : après « Refuser », le tableau restait
    * posé au-dessus de la saisie avec son seul statut « refusé » et la liste de lots qui ne partiront
    * jamais. Plus rien n'y est à suivre ni à cliquer : il disparaît.
    */
@@ -356,7 +356,7 @@ function TableauDeplie({
       )}
       {plan.raison ? <div className="tdl-raison">{plan.raison}</div> : null}
       {/*
-       * Repliés (conv-1171) : 36 lignes « les lots X et Y annoncent le même fichier » poussaient la
+       * Repliés : 36 lignes « les lots X et Y annoncent le même fichier » poussaient la
        * zone de saisie hors de l'écran. Montrés quel que soit l'état : le plan part sans clic, c'est
        * en cours qu'ils expliquent pourquoi un lot attend.
        */}
@@ -378,7 +378,7 @@ function TableauDeplie({
         </details>
       ) : null}
       {/*
-       * conv-1284 : ce que chaque lot reçoit en plus de sa demande — le contexte commun et les
+       * Ce que chaque lot reçoit en plus de sa demande — le contexte commun et les
        * décisions notées en route (par le chef ou un lot). Repliés, comme les avertissements.
        */}
       {plan.contexte ? (

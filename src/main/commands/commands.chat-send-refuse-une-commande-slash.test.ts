@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 
 /**
- * Defaut mesure le 2026-09-05 (conv-297 -> conv-300) : un agent a cree une conversation
+ * Defaut mesure le 2026-09-05 : un agent a cree une conversation
  * « /curate » puis a tente d'y lancer la skill avec `chat_send`. `chat_send` n'a AUCUNE
  * destination : le texte part en echange ponctuel avec le modele (`os.chat`). Le fil est reste
  * vide, la skill n'a jamais tourne, et le seul retour a ete « Unknown command: /curate » rendu

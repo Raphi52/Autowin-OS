@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 /**
- * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE, sous sa ligne — conv-341 (2026-10-19) : « quand y a une
+ * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE, sous sa ligne — (2026-10-19) : « quand y a une
  * action rouge, c'est possible d'avoir le message d'erreur que l'action a rencontré ? […] un truc
  * qui coûte pas de token ». L'adaptateur fait suivre `Glob échoué - 25 s` de
  * `Glob erreur - <texte rendu par l'outil>` ; le bloc le range sous la ligne rouge.
  *
- * Journal REPRIS du tour réel de conv-335 (session d91f9884…, 22:48:28) : le Glob coupé à 20 s.
+ * Journal REPRIS du tour réel (session d91f9884…, 22:48:28) : le Glob coupé à 20 s.
  */
 import { describe, expect, it } from 'vitest'
 import { act, createElement } from 'react'

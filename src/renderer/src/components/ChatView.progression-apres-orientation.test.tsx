@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * « CETTE CONV A PLANTÉ » ALORS QUE LE RUN TOURNAIT (conv-955, 2026-10-15).
+ * « CETTE CONV A PLANTÉ » ALORS QUE LE RUN TOURNAIT (2026-10-15).
  *
  * Tour `33bc18ab-a9f3-4bac-8058-ec4838c647b8` : une orchestration (action `0:0`) lancée à 08:28:37.
  * Orientations tapées pendant le run à 08:53:16 et 08:53:27 (saisies ts 1792054396405 et
@@ -51,7 +51,7 @@ describe('ChatView — progression d’une orchestration après une orientation'
       chatApi({
         conversations: vi.fn().mockResolvedValue([conversation('A')]),
         // Ce que le disque rend APRÈS l'écriture de l'orientation : la bulle du tour, encore en
-        // cours, puis l'orientation — exactement le fil de conv-955 à 08:53:27.
+        // cours, puis l'orientation — exactement le fil :53:27.
         conversation: vi.fn(async () => ({
           id: 'A',
           title: 'A',
@@ -93,7 +93,7 @@ describe('ChatView — progression d’une orchestration après une orientation'
         }),
         // TOUS les abonnés reçoivent l'événement, comme le vrai preload (`ipcRenderer.on`). Garder
         // le seul DERNIER abonné rendait ce test faux dès qu'un composant monté dans le chat
-        // s'abonnait après ChatView : le `refresh` n'atteignait plus le fil (conv-1056).
+        // s'abonnait après ChatView : le `refresh` n'atteignait plus le fil.
         onAppEvent: vi.fn((listener) => {
           abonnes.add(listener as (event: Record<string, unknown>) => void)
           return () => abonnes.delete(listener as (event: Record<string, unknown>) => void)

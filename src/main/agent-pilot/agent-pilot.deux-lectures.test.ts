@@ -20,13 +20,13 @@ import { forgetChatSession } from '../runs/chat-session-store'
 import { oublierCompteRenduNonVu } from '../runs/compte-rendu-non-vu-store'
 
 /**
- * REJEU DE conv-767 : DEUX LECTURES PLAUSIBLES → UNE QUESTION, ET AUCUN RUN PAYÉ (conv-1092).
+ * REJEU : DEUX LECTURES PLAUSIBLES → UNE QUESTION, ET AUCUN RUN PAYÉ.
  *
  * Le 2026-09-22, « /scout une task (toujours la meme) qui est pratique pour etre évaluée via
  * /arena » est parti DIRECTEMENT en orchestration, sans qu'aucun modèle ne lise la demande : 2,47 $
  * pour un scout de code (`Metier/RechercheArbre.cs`). Réponse de l'utilisateur : « t'as mal compris
  * je veux une task qui est facile a évaluer pour lancer des arena dessus et vraiment pouvoir
- * comparer les workflows ». Le lendemain, conv-768 a repayé 1,36 $ sur la même lecture.
+ * comparer les workflows ». Le lendemain, un fil a repayé 1,36 $ sur la même lecture.
  *
  * Le petit modèle est simulé : ce test prouve le BRANCHEMENT (la question remplace le run, une
  * seule fois, jamais sans humain, jamais bloquant en panne), pas le jugement du modèle.
@@ -34,7 +34,7 @@ import { oublierCompteRenduNonVu } from '../runs/compte-rendu-non-vu-store'
 const CONV = `conv-deux-lectures-${process.pid}`
 const DEMANDE_767 =
   '/scout une task (toujours la meme) qui est pratique pour etre évaluée via /arena'
-/** La réponse du petit modèle : chaque lecture et sa probabilité, en % (conv-1123). */
+/** La réponse du petit modèle : chaque lecture et sa probabilité, en %. */
 function reponse(...lectures: Array<[string, number]>): string {
   return JSON.stringify({ lectures: lectures.map(([texte, proba]) => ({ texte, proba })) })
 }
@@ -165,7 +165,7 @@ describe('rejeu de conv-767 : le /scout ambigu ne part pas, une question le remp
     expect(b.lecteur).toHaveBeenCalledTimes(1)
     expect(b.lecteur.mock.calls[0][0]).toBe(CONSIGNE_DEUX_LECTURES)
     expect(b.lecteur.mock.calls[0][1]).toContain(DEMANDE_767)
-    // Sans ce que font /scout et /arena, le vrai modèle lisait conv-767 comme nette (rejeu du 22/10).
+    // Sans ce que font /scout et /arena, le vrai modèle lisait comme nette (rejeu du 22/10).
     expect(b.lecteur.mock.calls[0][1]).toMatch(/- \/scout : .+\n- \/arena : .+/u)
 
     const args = b.bus.exec.mock.calls.find((appel) => appel[0] === 'ask')?.[1] as {
@@ -191,14 +191,14 @@ describe('rejeu de conv-767 : le /scout ambigu ne part pas, une question le remp
           '/scout une task (toujours la meme) facile à évaluer, pour lancer des /arena dessus et comparer les workflows'
       }
     ])
-    // Relue pour la ligne (conv-1240), jamais réinterrogée : la quasi-égalité ne repose rien.
+    // Relue pour la ligne, jamais réinterrogée : la quasi-égalité ne repose rien.
     expect(b.lecteur).toHaveBeenCalledTimes(1)
     expect(b.executees()).toEqual(['orchestrate'])
   })
 })
 
 /**
- * LE COÛT DU CONTRÔLE APPARTIENT AU FIL, ET SA TRACE DIT CE QU'IL A DÉCIDÉ (conv-1431, 2026-11-02).
+ * LE COÛT DU CONTRÔLE APPARTIENT AU FIL, ET SA TRACE DIT CE QU'IL A DÉCIDÉ (2026-11-02).
  *
  * Mesuré sur `cost.jsonl` depuis le 20/10 : 716 lignes `deuxLectures`, aucune ne portait de fil, et
  * 527 étaient la réponse brute coupée avant la deuxième lecture. Le pilote seul sait à quel fil le
@@ -320,7 +320,7 @@ describe('le jumeau : sans double lecture, rien ne change', () => {
 
   /*
    * Un message COMPOSÉ PAR L'APP pour un autre fil (lot d'un plan, ordre d'un fil, réveil du chef)
-   * n'a pas d'auteur humain à qui demander. Le 2026-10-27 (conv-1192), le lot 19 d'un plan s'est
+   * n'a pas d'auteur humain à qui demander. Le 2026-10-27, le lot 19 d'un plan s'est
    * arrêté sur « Ta demande peut se lire de deux façons » : personne pour cliquer, le plan l'a
    * compté « fait » sans une ligne écrite, et sa relance a été refusée.
    */

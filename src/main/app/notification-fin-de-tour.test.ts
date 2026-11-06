@@ -6,7 +6,7 @@ import {
 } from './notification-fin-de-tour'
 
 /**
- * FIL ASYNCHRONE (conv-1038, 2026-10-21) : la fin d'un tour vient chercher l'utilisateur.
+ * FIL ASYNCHRONE (2026-10-21) : la fin d'un tour vient chercher l'utilisateur.
  *
  * Mesuré par le scout : tour médian 226 s, p90 ≈ 17 min. La seule notification Windows du main
  * signalait un travail ABANDONNÉ (`os.ts`, `onAbandon`) ; un tour fini ne disait rien hors de la
@@ -44,7 +44,7 @@ describe('contenuDeNotificationDeFinDeTour — quand sonner', () => {
     expect(contenuDeNotificationDeFinDeTour(BASE)).toEqual({
       title: 'Refonte du chat — réponse prête',
       body: 'Barre flottante sur la sélection du fil\nAlt+clic remplit la saisie avec une référence exacte',
-      // La carte en bas à droite affiche le titre NU du fil et son issue (popup conv-1066).
+      // La carte en bas à droite affiche le titre NU du fil et son issue.
       fil: 'Refonte du chat',
       issue: 'prete'
     })

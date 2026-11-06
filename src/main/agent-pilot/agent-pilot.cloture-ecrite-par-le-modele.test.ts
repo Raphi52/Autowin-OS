@@ -5,7 +5,7 @@ import type { PromptSnapshot } from '../commands/commands'
 /**
  * LA CLÔTURE D'UNE ORCHESTRATION EST ÉCRITE PAR LE MODÈLE, pas par un gabarit.
  *
- * Constat utilisateur du 2026-08-27 (conv-1449) : le pied annonçait « 👉 Recommandé : faire exécuter
+ * Constat utilisateur du 2026-08-27 : le pied annonçait « 👉 Recommandé : faire exécuter
  * le travail si le besoin n'est pas encore réalisé » alors que le RUN.md du même run portait
  * `### phase build` ET `### phase judge`, la DoD cochée « Mutation demandée produite avec une preuve
  * exécutable », `status: green` et un juge validé. Le gabarit DEVINE la portée à partir de

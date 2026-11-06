@@ -23,7 +23,7 @@ import { sourceDuPilote } from './source-du-pilote.test-helpers'
  * reste non couverte, et je préfère l'écrire ici que la laisser croire couverte.
  */
 
-// La boucle du tour vit dans agent-pilot/*.ts depuis conv-1580 (lot 4) : on lit la famille.
+// La boucle du tour vit dans agent-pilot/*.ts (lot 4) : on lit la famille.
 const source = sourceDuPilote()
 
 describe('la comptabilité d’échec lit le prédicat d’ÉCHEC, pas celui d’affichage', () => {

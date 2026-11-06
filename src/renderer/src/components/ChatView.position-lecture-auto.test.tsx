@@ -2,7 +2,7 @@
 /**
  * REPRISE DE LECTURE — une position ne se retient que si le LECTEUR a bouge le fil.
  *
- * Defaut rapporte le 2026-09-01 (conv-61) : « je clique sur dernier message, je suis en bas ; je
+ * Defaut rapporte le 2026-09-01 : « je clique sur dernier message, je suis en bas ; je
  * change de conversation, je reviens, et je suis scrolle au MILIEU ». Les evenements `scroll` emis
  * par l'app elle-meme (ouverture d'une conversation, descente automatique) etaient memorises comme
  * une position de lecture choisie : la derniere frame d'une descente qui n'atterrit pas ecrivait un

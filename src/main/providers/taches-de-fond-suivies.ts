@@ -4,7 +4,7 @@
  * Écrit par `chat/relance-taches-de-fond.ts` (relance et reprise au démarrage), lu par
  * `providers/claude.ts` (avis de fin de tour) et par `commands.ts` (état poussé au modèle).
  *
- * POURQUOI IL EXISTE — conv-253, mesuré le 2026-10-11 :
+ * POURQUOI IL EXISTE, mesuré le 2026-10-11 :
  * - tour `dcb537d2-ed5a-4646-806d-880ef76df295` (« reprend ») : le modèle lance en fond une
  *   surveillance du run de construction (tâche CLI `bmaye5d39`). Le CLI la coupe en fin de tour ;
  *   Autowin la relance (lot `6cb0f6b4-…`, bash 24564 encore vivant 35 min plus tard) et l'annonce :

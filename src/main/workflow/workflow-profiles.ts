@@ -24,7 +24,7 @@ export function seedDefaultWorkflows(path = workflowProfilesPath()): WorkflowPro
   // présent, six livrés invisibles). Le marqueur permet aussi de ne pas ressusciter au démarrage
   // suivant ce que l'utilisateur a délibérément supprimé.
   //
-  // Le marqueur seul ne suffisait plus le jour où le catalogue a GRANDI (conv-1094, 2026-10-22) :
+  // Le marqueur seul ne suffisait plus le jour où le catalogue a GRANDI (2026-10-22) :
   // une installation déjà semée ne recevait jamais un workflow livré après coup. On retient donc
   // QUELS workflows livrés ont déjà été proposés — chacun l'est une fois, et un workflow supprimé
   // ne revient pas. Un fichier semé avant ce suivi a reçu le catalogue d'alors : on le présume.
@@ -63,12 +63,12 @@ const CATALOGUE_AVANT_SUIVI_PAR_ID = [
   'remake'
 ]
 
-/** Description d'Exploration semée avant l'ajout de l'angle « externe » (conv-890). */
+/** Description d'Exploration semée avant l'ajout de l'angle « externe ». */
 const DESCRIPTION_EXPLORATION_SANS_VEILLE =
   'On ne sait pas encore quoi faire. Quatre éclaireurs aux angles décorrélés, puis un cadrage, puis on garde la décision. Aucun build : le but est de décider.'
 
 /**
- * Piste 6 de conv-890 : l'angle « externe » (web daté) a rejoint les éclaireurs d'Exploration. Le
+ * Piste 6 : l'angle « externe » (web daté) a rejoint les éclaireurs d'Exploration. Le
  * catalogue n'est semé qu'une fois : sans cette migration, une installation existante garderait les
  * quatre angles d'avant. Seule l'empreinte EXACTE de l'ancien défaut est remplacée ; un Exploration
  * modifié par l'utilisateur reste tel quel.
@@ -292,7 +292,7 @@ export interface WorkflowProfilesFile {
    */
   seeded?: boolean
   /**
-   * Les identifiants des workflows livrés DÉJÀ proposés à cette installation (conv-1094).
+   * Les identifiants des workflows livrés DÉJÀ proposés à cette installation.
    *
    * `seeded` dit « le catalogue a été semé », pas LEQUEL : un workflow ajouté au catalogue ensuite
    * n'arrivait jamais. Absent sur un fichier semé avant ce suivi — voir `seedDefaultWorkflows`.
@@ -332,7 +332,7 @@ function normalizeGraph(value: unknown): WorkflowGraph | undefined {
 }
 
 /**
- * La skill `salvage` a été SUPPRIMÉE le 2026-10-29 (conv-1252) : `/git` porte son tri, puis publie
+ * La skill `salvage` a été SUPPRIMÉE le 2026-10-29 : `/git` porte son tri, puis publie
  * et range. Un graphe enregistré avant (douze profils sur le poste de l'utilisateur) fermait ses
  * runs par un nœud `salvage` dont la consigne n'existe plus : il partirait sans instruction. On le
  * relit en nœud `git`, identifiant compris (`salvage-1` → `git-1`), pour qu'un profil livré resté

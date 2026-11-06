@@ -4,9 +4,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * UN MESSAGE MIS DE CÔTÉ N'EST PAS UN ÉCHEC (conv-891, capture du 2026-09-30 12:22:46).
+ * UN MESSAGE MIS DE CÔTÉ N'EST PAS UN ÉCHEC (capture du 2026-09-30 12:22:46).
  *
- * Tapé pendant un tour de conv-890, « et pour tester scout des améliorations… » a été lu comme la
+ * Tapé pendant un tour, « et pour tester scout des améliorations… » a été lu comme la
  * commande scout ; une commande ne s'ajoute jamais à un tour en cours (`src/main/index.ts`, refus
  * volontaire), donc le texte a attendu la fin du tour. Rien n'avait échoué, et le badge disait
  * « ⚠ Échec — remis en file », en rouge. Puis le message est parti à 12:26:29 et le badge restait
@@ -94,7 +94,7 @@ describe('ChatView — le reçu d’un message mis de côté dit qu’il attend,
   })
 
   /*
-   * ANNULER UN ENVOI EN ATTENTE (conv-1452, 2026-11-03) : « /git » tapé pendant un tour attendait sa
+   * ANNULER UN ENVOI EN ATTENTE (2026-11-03) : « /git » tapé pendant un tour attendait sa
    * fin sans aucun moyen de le retirer — il fallait Stop, qui coupe aussi le tour en cours.
    */
   it('« Annuler » retire le message de la file : il ne part pas à la fin du tour', async () => {

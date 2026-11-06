@@ -1,5 +1,5 @@
 /**
- * VUE « BUREAUX CACHÉS » (conv-951, 2026-10-16) : « j'aimerais une view dédiée pour gérer tous mes
+ * VUE « BUREAUX CACHÉS » (2026-10-16) : « j'aimerais une view dédiée pour gérer tous mes
  * Hdesk, pouvoir les fermer, les créer et tout ». Types et validation partagés par le processus
  * principal (src/main/bureau/hdesk-gestion.ts), le pont et l'écran (HdeskGestionView.tsx) : la même règle
  * refuse une saisie invalide AVANT tout lancement, côté écran, et de nouveau côté processus principal,
@@ -11,19 +11,19 @@ export const MOTIF_IDENTIFIANT = /^[a-zA-Z0-9_-]+$/
 
 /**
  * Fil donné à un bureau créé à la main. Le lanceur EXIGE un fil (hdesk-lancer.ps1, 2026-09-13) : un
- * bureau sans fil n'est plus lançable. Hypothèse du cadrage conv-951, modifiable dans le formulaire.
+ * bureau sans fil n'est plus lançable. Hypothèse du cadrage, modifiable dans le formulaire.
  */
 export const FIL_MANUEL = 'manuel'
 
 /**
  * Attente maximale d'une création par la vue (lanceur : 30 s de fenêtre + 6 s de survie + journal
- * Windows, plus le lancement détaché). Partagée : l'écran annonçait « 40 s » en dur (conv-344).
+ * Windows, plus le lancement détaché). Partagée : l'écran annonçait « 40 s » en dur.
  */
 export const CREATION_ATTENTE_MS = 90_000
 
 /**
- * Une ligne du journal des gestes d'un bureau (`<id>.gestes.jsonl`, écrit par scripts/hdesk-act.ps1,
- * conv-344). Jamais le texte tapé : seulement son nombre de caractères.
+ * Une ligne du journal des gestes d'un bureau (`<id>.gestes.jsonl`, écrit par scripts/hdesk-act.ps1).
+ * Jamais le texte tapé : seulement son nombre de caractères.
  */
 export interface GesteJournal {
   quand: string
@@ -47,7 +47,7 @@ export interface BureauGere {
   travail: string
   /**
    * Faux quand aucune fiche ne relie ce bureau à un travail (ui-capture-*, preuve-*). Il se ferme
-   * quand même, en mode « sans fiche » : seules ses fenêtres sont visées (conv-344).
+   * quand même, en mode « sans fiche » : seules ses fenêtres sont visées.
    */
   relie: boolean
   conversationId?: string
@@ -59,7 +59,7 @@ export interface BureauGere {
 }
 
 /**
- * Un lancement réussi, gardé par hdesk-lancer.ps1 dans `historique.jsonl` (conv-344, scout n°6) : de
+ * Un lancement réussi, gardé par hdesk-lancer.ps1 dans `historique.jsonl` (scout n°6) : de
  * quoi relancer un bureau fermé sans rien retaper — la fiche, elle, est effacée à la fermeture.
  */
 export interface LancementRecent {
@@ -81,7 +81,7 @@ export type ResultatChoixExe = { ok: true; chemin: string } | { ok: false; messa
 const ID_PROPOSE_MAX = 40
 
 /**
- * Identifiant proposé à partir du nom de l'application (conv-344, scout n°11) : sans accent, en
+ * Identifiant proposé à partir du nom de l'application (scout n°11) : sans accent, en
  * minuscules, « - » pour tout le reste, 40 caractères au plus, « appli » si rien ne reste ; suffixe
  * -2, -3… s'il est déjà pris (comparaison sans casse : le registre vit sur un disque Windows). Le
  * lanceur garde le dernier mot (refus « occupé », exit 5).

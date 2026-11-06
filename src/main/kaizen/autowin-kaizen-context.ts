@@ -20,7 +20,7 @@ const TRACE_LIMIT = 80
 const RUN_LIMIT = 4
 const RUN_CAP = 4_000
 /*
-  Plancher de RÉSUMÉ d'un RUN. Mesuré sur le dossier réel de conv-105 : `runs: 0` et
+  Plancher de RÉSUMÉ d'un RUN. Mesuré sur le dossier réel : `runs: 0` et
   `troncature.runs = 4` — les QUATRE RUN.md partaient en entier, kaizen n'en voyait AUCUN. Cause :
   l'ajustement au budget ne savait que SUPPRIMER un élément, jamais le RACCOURCIR, et un RUN de
   4 000 signes est le plus lourd du dossier, donc le premier sacrifié. On le résume jusqu'à ce
@@ -37,7 +37,7 @@ const TURN_EVENT_LIMIT = 40
  * Plafond GLOBAL du deroule des tours reunis. Il DOIT valoir le plafond par tour multiplie par le
  * nombre de tours joints : le meme chiffre applique deux fois (une fois par tour, puis une fois sur
  * l'ensemble) rabotait les tours les plus anciens, si bien qu'un dossier annoncant 3 tours n'en
- * montrait qu'un (mesure du 2026-09-02, conv-131).
+ * montrait qu'un (mesure du 2026-09-02).
  */
 const TURN_EVENT_TOTAL_LIMIT = TURN_JOURNAL_LIMIT * TURN_EVENT_LIMIT
 const TURN_EVENT_CAP = 400
@@ -162,7 +162,7 @@ interface KaizenSaisie {
   ts: number
   voie: string
   texte: string
-  /** `mode-auto` = envoyé seul par ∞, pas tapé (conv-113). Absent = tapé par l'utilisateur. */
+  /** `mode-auto` = envoyé seul par ∞, pas tapé. Absent = tapé par l'utilisateur. */
   origine?: string
 }
 
@@ -219,7 +219,7 @@ function compactCausalEvent(event: TraceEventV1, cap = 900): KaizenCausalEvent {
 }
 
 function compactSaisie(saisie: SaisieJournalisee, cap = SAISIE_CAP): KaizenSaisie {
-  // Rédigé : conv-854 saisie ts 1790334398650 a recopié un mot de passe en clair dans le dossier kaizen.
+  // Rédigé : saisie ts 1790334398650 a recopié un mot de passe en clair dans le dossier kaizen.
   return {
     ts: saisie.ts,
     voie: saisie.voie,
@@ -240,7 +240,7 @@ function readNativeRuns(
     /*
       Le tri était ALPHABÉTIQUE (`.sort()`) alors que `slice(-RUN_LIMIT)` prétend garder les
       derniers : les dossiers de run sont nommés d'après le prompt (`frame-…`, `scout-…`), donc
-      leur ordre alphabétique n'a aucun rapport avec leur ordre chronologique. Sur conv-105, le
+      leur ordre alphabétique n'a aucun rapport avec leur ordre chronologique. Le
       run le plus ancien (`scout-…`) sortait DERNIER et le plus récent pouvait être jeté, en
       silence. On trie donc sur la date de dernière écriture du RUN.md, puis on rend du plus
       ancien au plus récent pour garder l'ordre de lecture.
@@ -259,7 +259,7 @@ function readNativeRuns(
 }
 
 /*
-  SELECTION des appels modele retenus dans le dossier. Mesure sur les appels REELS de conv-105
+  SELECTION des appels modele retenus dans le dossier. Mesure sur les appels REELS
   (`prompt-observability/conv-105.jsonl`, 2026-09-02) : 30 appels enregistres, dont DEUX echoues en
   position 6 et 7 — `subagent/build` coupe sur « You've hit your session limit », puis
   l'orchestrateur sur `error_during_execution`. La fenetre purement chronologique (les 12 derniers,
@@ -322,7 +322,7 @@ function readPromptCalls(
 }
 
 /*
-  FRAGMENTS DE FLUX FUSIONNES. Mesure conv-338, tour 8ce6230c-374c-4de3-9429-583a648e286c :
+  FRAGMENTS DE FLUX FUSIONNES. Mesure, tour 8ce6230c-374c-4de3-9429-583a648e286c :
   1 641 des 1 776 evenements du journal sont des `reasoning-step` de quelques mots — le flux du
   raisonnement, un evenement par paquet recu. Les `turnEvents` derniers gardes par tour n'etaient
   plus que ces miettes, et les deux `remember` refuses (« forbidden ») avec leurs resultats, coeur
@@ -345,7 +345,7 @@ export function fusionnerFragmentsDeFlux(events: readonly TurnJournalEvent[]): T
     const precedent = sortie[sortie.length - 1]
     if (cle !== undefined && cle === clePrecedente && precedent) {
       precedent.text = String(precedent.text) + String(event.text)
-      // Une ligne déjà regroupée à l'écriture apporte son propre compte (conv-1431).
+      // Une ligne déjà regroupée à l'écriture apporte son propre compte.
       const compte = (e: TurnJournalEvent): number =>
         typeof e.fragments === 'number' ? e.fragments : 1
       precedent.fragments = compte(precedent) + compte(event)
@@ -458,7 +458,7 @@ interface KaizenSnapshot {
 */
 function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<string, number> {
   /*
-    `protege` = element sacrifie EN DERNIER dans sa section. Mesure sur le dossier reel de conv-105 :
+    `protege` = element sacrifie EN DERNIER dans sa section. Mesure sur le dossier reel :
     les deux appels modele ECHOUES (`subagent/build` coupe sur « session limit », puis
     l'orchestrateur) etaient les plus ANCIENS des 12 retenus, et le budget retire par la tete — 9
     des 12 partaient, dont les deux echecs. Kaizen recevait donc un dossier sans aucune panne,
@@ -502,7 +502,7 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
     JSON.stringify(prochainElement(section) ?? null).length + 1
   /*
     Un RUN se RÉSUME avant de se perdre : on raccourcit le plus long jusqu'au plancher `RUN_MIN`
-    tant que ça suffit à rentrer dans le budget. Sans cette passe, les 4 RUN de conv-105 étaient
+    tant que ça suffit à rentrer dans le budget. Sans cette passe, les 4 RUN étaient
     tous supprimés.
   */
   for (;;) {
@@ -540,7 +540,7 @@ function ajusterAuBudget(snapshot: KaizenSnapshot, budget: number): Record<strin
     const sansRuns = nonVides.filter((section) => section.nom !== 'runs')
     const candidates = sansRuns.length > 0 ? sansRuns : nonVides
     /*
-      Mesure sur conv-105 : 23 870 signes retenus sur 28 000, un RUN entier jeté pour un
+      Mesure : 23 870 signes retenus sur 28 000, un RUN entier jeté pour un
       dépassement de quelques signes — un RUN pèse jusqu'à 4 000 signes, donc viser la section la
       plus LOURDE emportait 4 000 signes de budget avec lui. Dès qu'un SEUL retrait suffit à
       rentrer dans le budget, on prend le MOINS lourd de ceux-là ; sinon on continue d'alléger la
@@ -642,14 +642,14 @@ export function exigenceAppuiSourcesNeuves(task: string, sortie: string): AppuiS
   }
 }
 
-// fix-ok: conv-258 — mesure sur saisies-utilisateur.jsonl : la phrase citee n'existe que dans conv-253 (saisie ts 1791720124446, voie orientation) ; le dossier /kaizen partait sur conv-243 (tour cb786c88-9d33-413c-8faf-dc3a31b785f6) car le numero tape n'etait jamais confronte a la citation.
+// fix-ok: mesure sur saisies-utilisateur.jsonl : la phrase citee n'existe que dans un fil (saisie ts 1791720124446, voie orientation) ; le dossier /kaizen partait (tour cb786c88-9d33-413c-8faf-dc3a31b785f6) car le numero tape n'etait jamais confronte a la citation.
 /*
   LA PHRASE CITÉE DÉSIGNE LA SCÈNE MIEUX QUE LE NUMÉRO TAPÉ (2026-10-11).
 
   « /kaizen dans la conv 243 il a pas pris en compte le message "utiliser remotion ou hyperframes
-  c'est utile?" » a reçu le dossier de conv-243 : un seul tour (cb786c88-9d33-413c-8faf-dc3a31b785f6,
+  c'est utile?" » a reçu le dossier : un seul tour (cb786c88-9d33-413c-8faf-dc3a31b785f6,
   sur les refus « safeguards »), `saisies: []`, et aucune trace de la phrase. Elle avait été tapée
-  dans conv-253 (saisie ts 1791720124446, voie « orientation ») : un chiffre mal tapé, et tout le
+  saisie ts 1791720124446, voie « orientation » : un chiffre mal tapé, et tout le
   kaizen auditait une conversation sans rapport. Le numéro reste la cible par défaut ; mais une phrase
   citée entre guillemets qui n'y figure PAS est vérifiée contre les messages utilisateur de toutes
   les conversations. Une seule autre la contient → le dossier y part, et c'est DIT. Plusieurs, ou
@@ -802,7 +802,7 @@ ${MARQUEUR_FIN}
     `Applique ensuite toi-même les corrections que les preuves justifient : un commit par édition, ` +
     `annoncé et vérifié par un signal hors-modèle, pour que chacune reste annulable d'un seul revert.` +
     /*
-      Cette phrase était ABSENTE, et le défaut a été mesuré sur conv-105 : le dossier joignait bien
+      Cette phrase était ABSENTE, et le défaut a été mesuré : le dossier joignait bien
       les appels modèle, le journal des tours et les saisies, mais les corrections rendues portaient
       toutes sur le mécanisme qui FABRIQUE le dossier — aucune sur un fait lu dedans. L'exigence est
       posée ici (l'en-tête et le pied sont déduits du budget AVANT l'ajustement : ils ne sont jamais
@@ -810,12 +810,12 @@ ${MARQUEUR_FIN}
       exigence seulement écrite avait déjà été écrite, puis non tenue.
     */
     /*
-      TROIS SOURCES VIDES → PAS D'EXIGENCE (kaizen conv-1266, tour
-      9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f, 2026-10-29). Le dossier de conv-1266 avait promptCalls,
+      TROIS SOURCES VIDES → PAS D'EXIGENCE (kaizen, tour
+      9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f, 2026-10-29). Le dossier avait promptCalls,
       turnEvents et saisies vides ; le pied exigeait quand même une citation « sinon un contrôle
       refuse le rendu », alors que `exigenceAppuiSourcesNeuves` rend `applicable: false` sur ce
       même dossier (rien à citer). Une exigence impossible pousse à citer n'importe quoi ou à un
-      commit de pure forme (Brain : conv-742, commit qui n'ajoutait qu'un `fix-ok`). Le texte dit
+      commit de pure forme (commit qui n'ajoutait qu'un `fix-ok`). Le texte dit
       donc ce que le contrôle fait vraiment. Décidé sur les listes AVANT l'ajustement au budget,
       qui ne vide jamais les trois.
     */
@@ -838,21 +838,21 @@ ${MARQUEUR_FIN}
 
 /**
  * Conversation NOMMEE dans `/kaizen conv-61 …`. Sans elle, le dossier etait construit sur la
- * conversation ou la commande est tapee : conv-63, tour 93905e01-f715-4aab-aff8-40c7216dfc0c
- * (2026-10-02), a recu le dossier de conv-63 elle-meme (promptCalls, turnEvents, saisies vides)
- * au lieu de celui de conv-61 vise par l'utilisateur.
+ * conversation ou la commande est tapee : tour 93905e01-f715-4aab-aff8-40c7216dfc0c
+ * (2026-10-02), a recu le dossier elle-meme (promptCalls, turnEvents, saisies vides)
+ * au lieu de celui vise par l'utilisateur.
  *
- * La cible s'ecrit comme on PARLE, pas seulement `conv-N` colle a la commande : conv-152, tour
+ * La cible s'ecrit comme on PARLE, pas seulement `conv-N` colle a la commande : tour
  * 1dd28b24-4274-44a4-a9f5-2a36005f6afd (saisie ts 2026-10-10T08:26:55.163Z), « /kaizen dans le
- * dernier tour de la conv 150 … » a recu le dossier de conv-152 (promptCalls, turnEvents, saisies
+ * dernier tour de la conv 150 … » a recu le dossier (promptCalls, turnEvents, saisies
  * vides). On prend la PREMIERE mention `conv N` / `conv-N` / `conversation N` de la phrase ;
  * l'appelant retombe sur la conversation courante si elle n'existe pas.
  *
- * Le NUMÉRO SEUL en tête compte aussi (kaizen conv-1266, tour 9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f,
+ * Le NUMÉRO SEUL en tête compte aussi (kaizen, tour 9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f,
  * 2026-10-29) : « /kaizen 1263 le petit modele de l'app a parlé de dialogue … » a reçu le dossier
- * de conv-1266 elle-même, vide (« Aucune conversation n'est nommée »), alors que la scène était
- * dans conv-1263. L'utilisateur désigne ses conversations ainsi (« 1256 pk cette conv paralélise
- * pas tout », conv-1265). Seulement le PREMIER mot, et jamais une quantité (« 3 fois », « 1/10 ») ;
+ * elle-même, vide (« Aucune conversation n'est nommée »), alors que la scène était.
+ * L'utilisateur désigne ses conversations ainsi (« 1256 pk cette conv paralélise
+ * pas tout »). Seulement le PREMIER mot, et jamais une quantité (« 3 fois », « 1/10 ») ;
  * une mention `conv N` dans la phrase reste prioritaire.
  */
 const NUMERO_SEUL_EN_TETE =
@@ -954,24 +954,24 @@ function conversationsRecentes(
  * /kaizen SANS CONVERSATION NOMMEE, mais avec une COMMANDE citee (« … c'est que /draft ne me
  * render pas le bloc… ») : le dossier vise la DERNIERE conversation ou cette commande a ete tapee.
  *
- * Mesure le 2026-10-17, conv-314, tour f5733ff5-07ff-4c61-8dc3-c4d75fad8f32 : sans `conv N` ni
- * citation, le dossier a ete construit sur conv-314 elle-meme, qui ne contenait que la demande —
- * promptCalls, turnEvents et saisies vides. Les traces etaient dans conv-310, conv-311 et conv-312.
+ * Mesure le 2026-10-17, tour f5733ff5-07ff-4c61-8dc3-c4d75fad8f32 : sans `conv N` ni
+ * citation, le dossier a ete construit elle-meme, qui ne contenait que la demande —
+ * promptCalls, turnEvents et saisies vides. Les traces etaient.
  *
  * Rend undefined (l'appelant garde la conversation courante) hors /kaizen, sans commande citee,
  * quand la commande a ete tapee dans la conversation courante, ou quand personne ne l'a tapee.
  * L'avis nomme les AUTRES conversations ou la commande a ete tapee : leurs traces ne sont pas dans
  * le dossier, l'agent sait ou les chercher.
  *
- * CONVERSATION NEUVE (conv-318, tour 5b0c4fcb-e354-410e-99b6-567740e86db1, saisie ts
+ * CONVERSATION NEUVE (tour 5b0c4fcb-e354-410e-99b6-567740e86db1, saisie ts
  * 2026-10-17T15:40:06.421Z) : « /kaizen le bloc 3d doit etre dans le bloc draft », premier message
- * d'une conversation neuve, nomme la commande SANS sa barre. Le dossier etait celui de conv-318,
- * vide par construction ; le /draft vise etait dans conv-315 (tour
+ * d'une conversation neuve, nomme la commande SANS sa barre. Le dossier etait celui,
+ * vide par construction ; le /draft vise etait (tour
  * a6fcfb6e-c5ce-41c9-86c8-dcde195c67f2). Dans une conversation neuve seulement — ailleurs un mot
  * nu reste un mot —, le premier mot de la demande qui est le NOM d'une procedure (`commandes`, par
  * defaut les dossiers `skills/<nom>/SKILL.md`) et qui a ete tape comme `/nom` ailleurs designe le
  * dossier. Rejoue sur les vraies conversations, n'importe quel `/mot` deja tape ne suffisait pas :
- * « dans » partait sur conv-254, ou « /dans … » avait ete tape une fois. Sans un tel mot, le dossier
+ * « dans » partait, ou « /dans … » avait ete tape une fois. Sans un tel mot, le dossier
  * reste la conversation courante, mais l'avis DIT qu'elle est vide et nomme les plus recentes.
  */
 export function kaizenConversationParCommande(

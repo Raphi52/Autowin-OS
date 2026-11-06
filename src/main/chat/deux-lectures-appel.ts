@@ -6,11 +6,11 @@ import type { ProviderRegistry } from '../providers/registry'
 import type { RoleModelConfig } from '../profil/roles'
 
 /**
- * LE LECTEUR « DEUX LECTURES » BRANCHÉ DANS LE PILOTE (conv-1092), sorti de `index.ts` (conv-1431).
+ * LE LECTEUR « DEUX LECTURES » BRANCHÉ DANS LE PILOTE, sorti de `index.ts`.
  *
  * Il part sur le modèle des petites tâches (réglage du Routeur) ; une panne est nommée puis rejetée,
  * et le pilote fait alors partir le travail comme avant. Chaque réponse écrit UNE ligne dans
- * `cost.jsonl` (conv-1097), désormais sous le FIL du tour et avec la décision du contrôle.
+ * `cost.jsonl`, désormais sous le FIL du tour et avec la décision du contrôle.
  * Mesuré le 2026-11-02 : 716 lignes `deuxLectures` sans fil, donc absentes du coût par fil, et 527
  * issues coupées avant la deuxième lecture. Sorti de `index.ts` pour être exécuté par un test : une
  * fermeture locale du processus principal n'est atteignable par aucun import.

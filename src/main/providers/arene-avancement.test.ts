@@ -1,7 +1,7 @@
 /**
  * Entree qui ferait echouer une correction fausse : un banc dont UN SEUL bras a fini alors que la
  * commande observee est toujours en cours — c'est exactement l'instant ou l'utilisateur regarde un
- * bloc vide (conv-355, 2026-09-08). Un module qui n'afficherait que l'etat final serait vert sur un
+ * bloc vide (2026-09-08). Un module qui n'afficherait que l'etat final serait vert sur un
  * banc termine et inutile ici.
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest'

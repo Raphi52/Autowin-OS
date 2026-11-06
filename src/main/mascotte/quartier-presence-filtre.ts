@@ -1,5 +1,5 @@
 /**
- * LE FILTRE DES TITRES PUBLIÉS (plan « Village commun », conv-1429, D-9 de `grill/agent-hq-japon-town.md`).
+ * LE FILTRE DES TITRES PUBLIÉS (plan « Village commun », D-9 de `grill/agent-hq-japon-town.md`).
  *
  * Décision de l'utilisateur : le partage de présence est actif pour tous, donc un filtre passe AVANT
  * toute écriture sur le partage. Mesure du 2026-11-01 (`grill/quartier/scripts/bulles-sensibles.mjs`,

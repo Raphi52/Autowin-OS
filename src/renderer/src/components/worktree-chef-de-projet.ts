@@ -45,7 +45,7 @@ export const VERDICTS_CHANTIER = [
 
 export type VerdictChantier = (typeof VERDICTS_CHANTIER)[number]
 
-/** Le libellé de chaque verdict, par sa clé dans la table des textes (traduction, conv-1170). */
+/** Le libellé de chaque verdict, par sa clé dans la table des textes (traduction). */
 export const CLES_VERDICT: Record<VerdictChantier, CleWorktreesEtBureaux> = {
   'a-toi': 'verdict.aToi',
   pret: 'verdict.pret',
@@ -57,7 +57,7 @@ export const CLES_VERDICT: Record<VerdictChantier, CleWorktreesEtBureaux> = {
 
 /**
  * La CLÉ de regroupement des runs sans branche. Elle reste en français : le code et ses tests la
- * relisent et la comparent ; seul son AFFICHAGE passe par `chantier.brancheInconnue` (conv-1170).
+ * relisent et la comparent ; seul son AFFICHAGE passe par `chantier.brancheInconnue`.
  */
 export const BRANCHE_INCONNUE = 'branche inconnue'
 
@@ -204,7 +204,7 @@ export function formatAttente(ms: number | undefined): string | undefined {
   if (minutes < 60) return `${Math.max(minutes, 1)} min`
   const heures = Math.floor(minutes / 60)
   if (heures < 48) return `${heures} h`
-  // `min` et `h` sont les mêmes symboles en anglais ; seul le jour change (« j » / « d », conv-1170).
+  // `min` et `h` sont les mêmes symboles en anglais ; seul le jour change (« j » / « d »).
   return traduireWorktreesEtBureaux('attente.jours', langueCourante(), {
     n: Math.floor(heures / 24)
   })

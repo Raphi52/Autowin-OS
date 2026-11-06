@@ -13,7 +13,7 @@ import {
 } from './orchestration-state'
 
 /**
- * RUN SUSPENDU PAR LE MUR DE QUOTA (conv-914 / conv-916, 2026-10-13) : l'acquis payé reste
+ * RUN SUSPENDU PAR LE MUR DE QUOTA (2026-10-13) : l'acquis payé reste
  * reprenable, l'heure de retour annoncée est notée, et seule la reprise AUTOMATIQUE l'attend.
  */
 let root: string

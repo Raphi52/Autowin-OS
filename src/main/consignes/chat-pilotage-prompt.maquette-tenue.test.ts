@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { REGLES_VISUELLES } from './chat-pilotage-prompt'
 
 /**
- * DEFAUT VECU (conv-605, 2026-09-16) : le chat a propose trois maquettes d'un pas de frise dans un
+ * DEFAUT VECU (2026-09-16) : le chat a propose trois maquettes d'un pas de frise dans un
  * bloc html-render, l'utilisateur a repondu « A » (saisie ts=1789565236876), et le tour
  * d'application (turnId 4b057aa5-ec6d-4e90-a68d-30bbb7b1f17d) a ecrit « en CSS seul (pas de
  * changement de balisage) ». La maquette choisie montrait une coche ; le balisage reel affiche le

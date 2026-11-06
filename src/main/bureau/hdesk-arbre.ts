@@ -11,14 +11,14 @@ import {
 } from './hdesk-tv'
 
 /**
- * ARBRE D'ACCESSIBILITÉ DU BUREAU CACHÉ, POUR LES OUTILS DU CHAT (conv-1457).
+ * ARBRE D'ACCESSIBILITÉ DU BUREAU CACHÉ, POUR LES OUTILS DU CHAT.
  *
  * Constat du 2026-11-03 : dans un bureau caché, un agent ne visait que des pixels. Il lisait mal une
  * capture unie, ses clics restaient sans effet sur une fenêtre WPF non agrandie, et il visait FAUX
  * dès que la capture était recadrée : `bureau_cache_observer` rend l'image recadrée de
  * scripts/hdesk-tv.ps1 (mesure : origine (7,57) pour la Table des caractères), mais
  * `bureau_cache_agir` envoyait ses x/y tels quels à hdesk-act.ps1, qui attend des pixels de l'ÉCRAN du
- * bureau. La petite TV, elle, ajoutait déjà l'origine (`CapteurHdesk.versEcran`, conv-1009).
+ * bureau. La petite TV, elle, ajoutait déjà l'origine (`CapteurHdesk.versEcran`).
  *
  * D'où `outilsBureauCacheDuChat` : l'observation joint l'arbre en texte (positions en pixels de
  * l'IMAGE), et l'action convertit x/y comme la TV, ou appuie par nom (scripts/hdesk-act.ps1 -Element).
@@ -224,7 +224,7 @@ export function outilsBureauCacheDuChat(d: DependancesOutilsChat): {
     },
     agir(g) {
       if (estGesteElement(g)) return d.agir({ ...g, origine: d.capteur().origine(g.id) })
-      // x/y de l'image recadrée → pixels de l'écran du bureau, comme la petite TV (conv-1009).
+      // x/y de l'image recadrée → pixels de l'écran du bureau, comme la petite TV.
       return d.agir(d.capteur().versEcran(g))
     }
   }

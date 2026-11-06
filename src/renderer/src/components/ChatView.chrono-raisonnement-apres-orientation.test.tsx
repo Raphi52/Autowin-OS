@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 /**
  * « J'AI ORIENTÉ PENDANT LE TOUR ET LE PREMIER BLOC DE RAISONNEMENT A UN TIMER QUI CONTINUE DE
- * GRIMPER ALORS QUE PLUS RIEN NE S'ÉCRIT DANS LE BLOC » (conv-1547, 2026-11-04, capture jointe :
+ * GRIMPER ALORS QUE PLUS RIEN NE S'ÉCRIT DANS LE BLOC » (2026-11-04, capture jointe :
  * deux capsules « Reasoning 1 min 20 s », l'une au-dessus de l'orientation, l'autre dessous).
  *
  * Une orientation écrite pendant le tour se pose SOUS la bulle du tour ; la suite du raisonnement
  * s'écrit dans une bulle NEUVE du même tour, sous l'orientation (`patchLast`). La première bulle
  * reste « en cours » (`done` faux) — exprès : les battements d'une orchestration ouverte la visent
- * encore (conv-955). Mais son chrono du raisonnement suivait `done` seul : il comptait jusqu'à la
+ * encore. Mais son chrono du raisonnement suivait `done` seul : il comptait jusqu'à la
  * fin du tour, alors que sa pensée était passée dans la bulle d'en dessous.
  *
  * Règle tenue ici : le raisonnement d'une bulle RELAYÉE par une bulle suivante du même tour s'arrête

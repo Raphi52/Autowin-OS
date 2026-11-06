@@ -1,7 +1,7 @@
 import type { LotDuPlan, PlanDeLots } from '../../../shared/plan-de-lots'
 
 /*
- * QUEL LOT PART APRÈS LEQUEL (conv-1396, 2026-10-31 : « enlève le côté timeline, prends toute la
+ * QUEL LOT PART APRÈS LEQUEL (2026-10-31 : « enlève le côté timeline, prends toute la
  * longueur, mais écris la durée et quelle étape se lance après laquelle »).
  *
  * La frise disait l'enchaînement par la position des blocs sur l'axe des heures. Sans axe, il doit

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { lireSortieFfprobe, mesurerVideo, type ExecuteurFfprobe } from './video-ffprobe'
 
 /**
- * MESURER LES IMAGES/S D'UNE VIDÉO AVEC FFPROBE (conv-253, 2026-10-11 : « ffprobe en échec = 30 i/s
+ * MESURER LES IMAGES/S D'UNE VIDÉO AVEC FFPROBE (2026-10-11 : « ffprobe en échec = 30 i/s
  * affiché comme supposé »).
  *
  * Sorties RELEVÉES avec ffprobe 8.0.1 (`-v error -select_streams v:0 -show_entries
@@ -55,7 +55,7 @@ describe('lireSortieFfprobe', () => {
   })
 
   it('liste de flux vide sous code 0 (.mp4 / .webm son seul) : `sansFluxVideo`, pas un échec d’ffprobe', () => {
-    // fix-ok: conv-253 — lireSortieFfprobe confondait `streams: []` sous code 0 (réponse « pas de
+    // fix-ok: lireSortieFfprobe confondait `streams: []` sous code 0 (réponse « pas de
     // vidéo », mesurée) avec un échec d'ffprobe ; sans `sansFluxVideo`, ce test et son jumeau de
     // mesurerVideo sont rouges (code 1, 2 tests), verts avec.
     const r = lireSortieFfprobe(SORTIE_SANS_FLUX)
@@ -95,7 +95,7 @@ describe('lireSortieFfprobe', () => {
   ])(
     'image fixe ou animée (%s, format lu « %s ») : `sansFluxVideo`, jamais une cadence mesurée',
     (_cas, format, rFrameRate, nbFrames) => {
-      // fix-ok: conv-253 — relevé avec ffprobe 8.0.1 : une image renommée sort en code 0 avec UN flux
+      // fix-ok: relevé avec ffprobe 8.0.1 : une image renommée sort en code 0 avec UN flux
       // vidéo (`png_pipe`/`jpeg_pipe` à 25/1, `gif` à 10/1 et 5 images) ; lireSortieFfprobe prenait
       // tout premier flux et rendait 25 i/s « mesuré » sur un lecteur mort. Rouge (code 1) sans la
       // lecture de `format_name`, vert avec.

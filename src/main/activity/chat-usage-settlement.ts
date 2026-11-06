@@ -1,4 +1,4 @@
-// fix-ok: kaizen conv-260 tour 50a06982-1549-4759-9619-b815a8fff9b8 — persistRecoveredChatProviderUsage n'écrivait aucun turnId : la ligne « chat-recovered » (8,00 $) était la seule ligne de coût du journal sans tour ; turnId requis et recopié (commit 84a684b6, chat-usage-settlement.tour.test rouge avec turnId undefined, vert après)
+// fix-ok: kaizen tour 50a06982-1549-4759-9619-b815a8fff9b8 — persistRecoveredChatProviderUsage n'écrivait aucun turnId : la ligne « chat-recovered » (8,00 $) était la seule ligne de coût du journal sans tour ; turnId requis et recopié (commit 84a684b6, chat-usage-settlement.tour.test rouge avec turnId undefined, vert après)
 import { randomUUID } from 'node:crypto'
 import type { ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 import { sameExecutionUsage } from '../orchestration/execution-supervisor'
@@ -29,7 +29,7 @@ interface PersistChatUsageSettlementInput {
    * Le tour a ete coupe par l'utilisateur (bouton Stop), tel que tranche par `terminalDuTour`.
    * Le superviseur, lui, ne connait que « regle » ou « rate » : il range l'appel coupe dans
    * `failedCalls` (comptabilite de budget, inchangee). Sans ce drapeau, l'etape s'affichait
-   * « echec » en rouge pour un arret VOULU (conv-191, tour 4929e6b0, 2026-10-10).
+   * « echec » en rouge pour un arret VOULU (tour 4929e6b0, 2026-10-10).
    */
   arretVoulu?: boolean
   activityRoot?: string
@@ -40,7 +40,7 @@ interface PersistRecoveredChatProviderUsageInput {
   conversationId: string
   /**
    * Tour qui a PAYE l'appel recupere. Obligatoire : c'etait la seule ligne de cout du journal sans
-   * tour (kaizen conv-260, tour 50a06982-1549-4759-9619-b815a8fff9b8 : 8,00 $ hors de leur tour).
+   * tour (tour 50a06982-1549-4759-9619-b815a8fff9b8 : 8,00 $ hors de leur tour).
    */
   turnId: string
   usageCallId: string

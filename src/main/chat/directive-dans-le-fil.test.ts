@@ -5,7 +5,7 @@ import { ConversationStore } from '../store/conversations'
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
- * DÉFAUT VÉCU (conv-38, 2026-09-01) : « j'ai répondu à un ask, ça a écrit le message, puis ça a
+ * DÉFAUT VÉCU (2026-09-01) : « j'ai répondu à un ask, ça a écrit le message, puis ça a
  * rechargé et le message a disparu — j'ai dû recliquer ».
  *
  * Cause : répondre pendant qu'un tour tourne passe par l'INJECTION (`os:pilotChat:inject`). Ce
@@ -39,7 +39,7 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
   })
 
   /**
-   * MESURE DU 2026-09-11 (conv-439) : « le message vient de s'afficher APRÈS ton bloc fait, comme un
+   * MESURE DU 2026-09-11 : « le message vient de s'afficher APRÈS ton bloc fait, comme un
    * cheveu sur la soupe ». Le brouillon assistant est VIDE à l'injection : son texte n'arrive qu'à
    * la clôture. Poser la consigne après lui la met donc sous la réponse qui la traite — l'utilisateur
    * croit qu'elle a été ignorée. Elle se pose AVANT le brouillon encore en cours.
@@ -76,7 +76,7 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
   })
 
   /**
-   * MESURE DU 2026-09-15 (conv-544) : « enleve le widget reprendre meme en fait » a ete injecte
+   * MESURE DU 2026-09-15 : « enleve le widget reprendre meme en fait » a ete injecte
    * alors que la reponse en cours AVAIT DEJA ecrit plusieurs lignes que l'utilisateur venait de
    * lire. Remonte au-dessus de ce texte, son message se relisait AVANT ce qu'il venait de voir :
    * « il aurait du apparaitre tout en bas du fil ».
@@ -135,7 +135,7 @@ describe('une réponse injectée pendant un tour devient un VRAI message du fil'
 
 
   /**
-   * SUITE DIRECTE DU MEME MECANISME (conv-50, 2026-09-01). Ecrire l'orientation dans le fil a
+   * SUITE DIRECTE DU MEME MECANISME (2026-09-01). Ecrire l'orientation dans le fil a
    * casse le verrou du bloc `ask` : ce verrou lit « un message utilisateur existe-t-il apres ce
    * tour ? », et toute orientation le rendait vrai. L'utilisateur cliquait une reponse, le bloc
    * affichait « Répondu », et RIEN ne partait. Le message ecrit doit donc se DECLARER orientation.

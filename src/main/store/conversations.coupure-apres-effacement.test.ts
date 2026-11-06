@@ -7,7 +7,7 @@ import { ConversationStore } from './conversations'
 import { conversationJournalPath, loadConversations } from './conversations-disk'
 
 /**
- * conv-1401 (2026-10-31, saisie ts 1793470923242) : « quand j'ai envoyé mon message ça a suppr la
+ * 2026-10-31, saisie ts 1793470923242 : « quand j'ai envoyé mon message ça a suppr la
  * réponse du tour d'avant ». Trois consignes écrites pendant un tour de 3 h ; la première notait
  * une coupure à 51 parts. À 19:06:27, un `stream-reset` du flux `0:0` a retiré 30 parts de texte
  * (dont 20 AVANT la coupure) : la réponse n'avait plus que 50 parts, la coupure 51 ne tombait plus

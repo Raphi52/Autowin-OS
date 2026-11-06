@@ -5,7 +5,7 @@ import { VARIABLES_DU_THEME } from '../../renderer/src/components/page-interacti
 
 /**
  * UNE CAPACITE QUE LE PROMPT NE NOMME PAS RESTE MORTE. Le bloc ```html-interactif (pages dont les
- * scripts tournent, BlocHtmlInteractif.tsx) a ete branche le 2026-10-29 (conv-1292) : sans ce
+ * scripts tournent, BlocHtmlInteractif.tsx) a ete branche le 2026-10-29 : sans ce
  * paragraphe, aucun agent ne l'ecrirait. Servi a CHAQUE tour, pas seulement aux tours visuels.
  */
 describe('contrat des pages interactives dans le chat', () => {
@@ -20,7 +20,7 @@ describe('contrat des pages interactives dans le chat', () => {
     expect(prompt).toContain('```html-render')
   })
 
-  // Compatibilites de l'amorce (conv-1304) : sans elles dans la consigne, le modele continue
+  // Compatibilites de l'amorce : sans elles dans la consigne, le modele continue
   // d'eviter localStorage ou la copie, ou ecrit un confirm() que le fil refuse.
   it('annonce la boite a outils de graphiques, ses types et sa mise a jour', () => {
     const prompt = buildChatPilotagePrompt([])
@@ -40,7 +40,7 @@ describe('contrat des pages interactives dans le chat', () => {
     expect(prompt).toMatch(/Ni confirm, ni prompt, ni telechargement/u)
   })
 
-  // Boutons de choix (conv-1304) : sans cette phrase, le modele ne sait pas qu'un choix dans une
+  // Boutons de choix : sans cette phrase, le modele ne sait pas qu'un choix dans une
   // page interactive remplit la saisie au lieu d'envoyer, ni qu'il peut composer ce message.
   it('dit que les boutons de choix remplissent la saisie sans envoyer', () => {
     const prompt = buildChatPilotagePrompt([])
@@ -49,7 +49,7 @@ describe('contrat des pages interactives dans le chat', () => {
     expect(prompt).toContain('autowin.remplirSaisie(texte)')
   })
 
-  // L'apercu (conv-1292) n'existe pour l'agent que si la consigne le nomme, avec ses codes.
+  // L'apercu n'existe pour l'agent que si la consigne le nomme, avec ses codes.
   it('nomme le script d apercu, son code 0 exige et ses codes de defaut', () => {
     const prompt = buildChatPilotagePrompt([])
     expect(prompt).toContain('node scripts/html-interactif-apercu.mjs <fichier>')
@@ -57,7 +57,7 @@ describe('contrat des pages interactives dans le chat', () => {
     expect(prompt).toMatch(/7 = fond peint/u)
   })
 
-  // Banc conv-1304 : 4 modeles sur 6 ont ecrit un banc prive parce que l'apercu ne remplit aucun
+  // Banc : 4 modeles sur 6 ont ecrit un banc prive parce que l'apercu ne remplit aucun
   // champ. Sans ces phrases, l'option --scenario reste morte comme le bloc l'etait au depart.
   it('nomme les scenarios, leur code et leurs etapes, pour eviter un banc prive', () => {
     const prompt = buildChatPilotagePrompt([])

@@ -17,7 +17,7 @@ import './ModelQuotaIndicator.css'
 
 /**
  * Le texte d'une clé dans la langue COURANTE, pour les libellés calculés hors du composant : ils
- * sont appelés pendant son rendu, qui lit la langue par `useTextesChatPanneaux` (conv-1170).
+ * sont appelés pendant son rendu, qui lit la langue par `useTextesChatPanneaux`.
  */
 type CleDuPanneau = Parameters<typeof traduireChatPanneaux>[0]
 const tx = (cle: CleDuPanneau, valeurs?: ValeursDeTexte): string =>
@@ -292,7 +292,7 @@ export function ModelQuotaIndicator({
   const [ancrage, setAncrage] = useState<{ left: number; bottom: number; width: number }>()
   const requestSequenceRef = useRef(0)
   /**
-   * LA BARRE PARLE DU MÊME COMPTE QUE LA PUCE (conv-1416) : celui choisi pour le fil ouvert, sinon
+   * LA BARRE PARLE DU MÊME COMPTE QUE LA PUCE : celui choisi pour le fil ouvert, sinon
    * le compte de l'application. Changer de fil ou de compte recrée cette lecture, donc relit aussitôt.
    */
   const compteDuFil = comptes?.selectedId
@@ -601,7 +601,7 @@ export function ModelQuotaIndicator({
             </div>
             {error && <p className="model-quota-error">{error}</p>}
             <div className="model-quota-list">
-              {/* Seules les barres de l'onglet ouvert (2026-11-04, conv-1496) : la liste montrait les
+              {/* Seules les barres de l'onglet ouvert (2026-11-04) : la liste montrait les
                 quotas Claude quel que soit l'onglet choisi. */}
               {providerQuotas
                 .filter((model) => model.provider === affiche)

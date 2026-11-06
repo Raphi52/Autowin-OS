@@ -28,7 +28,7 @@ vi.mock('electron', () => ({
 }))
 
 /*
- * NAVIGATEUR INTÉGRÉ DU CHAT — les outils de l'agent (conv-1286, lot 4/5, 2026-10-29).
+ * NAVIGATEUR INTÉGRÉ DU CHAT — les outils de l'agent (lot 4/5, 2026-10-29).
  *
  * Trois promesses, sur le modèle de `bureau_cache_*` :
  *  - le fil est celui de l'APPEL : un `conversationId` glissé dans les arguments ne mène jamais au
@@ -124,7 +124,7 @@ describe('navigateur_* — déclarés au catalogue et servis en outils directs',
     }
   })
 
-  // Pas-à-pas (conv-1286, 2026-10-30) : un geste peut attendre l'utilisateur ; sans le savoir,
+  // Pas-à-pas (2026-10-30) : un geste peut attendre l'utilisateur ; sans le savoir,
   // l'agent prendrait l'attente pour une panne, ou réessaierait après « main reprise ».
   it('les quatre gestes disent qu’ils peuvent attendre une pause, et ce que veut dire « main-reprise »', () => {
     const description = (nom: string): string =>

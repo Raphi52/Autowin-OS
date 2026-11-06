@@ -9,7 +9,7 @@ import { CLE_FOND_ACCUEIL } from './fond-accueil'
 ).IS_REACT_ACT_ENVIRONMENT = true
 
 /**
- * LA PLAINTE (2026-10-19, conv-1018) : « sur ce pc le fond d'écran 3d de l'accueil défile super
+ * LA PLAINTE (2026-10-19) : « sur ce pc le fond d'écran 3d de l'accueil défile super
  * lentement ». Cause mesurée sur ce PC : les « Effets d'animation » de Windows y sont coupés
  * (`SPI_GETCLIENTAREAANIMATION` = False), Chromium le traduit en `prefers-reduced-motion: reduce`,
  * et `DecorDeFond` multipliait alors le temps du décor par 0,25 — l'avenue avançait 4 fois moins vite.

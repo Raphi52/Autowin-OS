@@ -1,4 +1,4 @@
-/* QUESTION À CÔTÉ (conv-1362, lot 1/3, 2026-10-31) : un petit panneau posé au-dessus de la saisie, à
+/* QUESTION À CÔTÉ (lot 1/3, 2026-10-31) : un petit panneau posé au-dessus de la saisie, à
    sa largeur. Aucune couleur en dur : tout suit le thème de l'app, clair comme sombre. */
 
 .question-a-cote {
@@ -139,7 +139,7 @@
 }
 
 /* La pastille de la rangée d'outils : même rond de 24 px que ∞ et ×3, et même opacité qu'eux
-   (conv-1377, 2026-10-31 : « a un border et pas les autres »). */
+   (2026-10-31 : « a un border et pas les autres »). */
 .composer-input-row > .composer-question-a-cote,
 .cosmic-outline .composer-input-row > .composer-question-a-cote {
   display: inline-flex;

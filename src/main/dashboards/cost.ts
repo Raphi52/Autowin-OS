@@ -34,7 +34,7 @@ export interface TurnCost extends TokenUsage {
   /** Tour de chat d'origine, quand il est REELLEMENT connu — jamais devine. */
   turnId?: string
   /**
-   * Petit appel hors pipeline (conv-1097) : LEQUEL (`choixWorkflow`, `deuxLectures`…) et ce qu'il a
+   * Petit appel hors pipeline : LEQUEL (`choixWorkflow`, `deuxLectures`…) et ce qu'il a
    * rendu. Sans eux, ces appels n'avaient aucune trace : ni leur modèle réel, ni leur coût, ni une
    * réponse au mauvais format qui les éteignait en silence (`petites-taches-trace.ts`).
    */

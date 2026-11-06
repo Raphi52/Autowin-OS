@@ -77,7 +77,7 @@ function murDepuisRefus(raison: string, maintenant: Date = new Date()): MurDeQuo
 }
 
 /**
- * LE MESSAGE D'UN TOUR ARRÊTÉ PARCE QUE LE COMPTE CHOISI EST VIDE (conv-1416, 2026-11-01).
+ * LE MESSAGE D'UN TOUR ARRÊTÉ PARCE QUE LE COMPTE CHOISI EST VIDE (2026-11-01).
  *
  * Il cite le refus d'origine en entier : c'est lui que relisent la reprise automatique
  * (`instantDeRetourAnnonce`) et le tri des fils coupés par le quota (`estMurDeQuota`).
@@ -102,7 +102,7 @@ function messageCompteChoisiVide(nomDuCompte: string, refus: string): string {
 }
 
 /**
- * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (conv-1063, 2026-10-22).
+ * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (2026-10-22).
  *
  * Cas réel : `run-stdout/c6ba0030-…stdout.jsonl`, un appel de 31 min et 96 blocs de texte, fini sur
  * « You've hit your session limit ». La rotation interne du registre ne joue qu'AVANT le premier
@@ -164,7 +164,7 @@ export class ProviderRegistry {
   private readonly quotaRotationFlights = new Map<string, Promise<string | undefined>>()
 
   /**
-   * TÉMOIN D'APPEL RÉUSSI (conv-1240, 2026-10-28) : le main y branche la mise à jour du statut
+   * TÉMOIN D'APPEL RÉUSSI (2026-10-28) : le main y branche la mise à jour du statut
    * d'authentification affiché (`ProviderStateStore.noterAppelReussi`). Le registre ne connaît pas
    * ce store — même partage des rôles que la rotation : il signale, il ne décide pas.
    */
@@ -210,7 +210,7 @@ export class ProviderRegistry {
       walledAccountId: string
     ) => string | undefined,
     /**
-     * LE COMPTE CHOISI POUR LE FIL DE L'APPEL (conv-1416, 2026-11-01). Présent, il prime sur le
+     * LE COMPTE CHOISI POUR LE FIL DE L'APPEL (2026-11-01). Présent, il prime sur le
      * compte actif et coupe la rotation automatique : l'utilisateur a nommé son compte, s'il est vide
      * le tour s'arrête et le dit (`messageCompteChoisiVide`). Absent, rien ne change : la rotation
      * reste la règle des fils sans compte choisi.
@@ -234,7 +234,7 @@ export class ProviderRegistry {
     providerId: string,
     walledAccountId: string
   ): Promise<string | undefined> {
-    // Le compte a déjà changé depuis le départ de l'appel (bascule faite À LA MAIN, conv-1063) et
+    // Le compte a déjà changé depuis le départ de l'appel (bascule faite À LA MAIN) et
     // il est libre : c'est lui la suite. Faire tourner le pool depuis le compte épuisé écraserait
     // le choix de l'utilisateur dès qu'il a plus de deux comptes.
     const actif = this.activeAccountOf?.(providerId)
@@ -472,7 +472,7 @@ export class ProviderRegistry {
     // INSCRIRE L'AGENT DANS LA MÊME SECTION SYNCHRONE QUE SA RÉSERVATION. L'adaptateur attend avant
     // d'annoncer son agent (`claude.ts` : instantané du dépôt, mise à jour du CLI) ; si l'inscription
     // attendait aussi, la sauvegarde obligatoire d'un membre voisin comptait 1 agent pour 2 appels
-    // réservés et tuait son lancement (« liens de reservation incoherents », conv-163, conv-44 à 47).
+    // réservés et tuait son lancement (« liens de reservation incoherents »).
     // Aucun `await` entre `reserveProviderCall` et cet appel : aucun autre agent ne peut s'intercaler.
     if (reservation && route.opts.execution?.onReservation) {
       try {

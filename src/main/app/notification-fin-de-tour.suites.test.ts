@@ -8,7 +8,7 @@ import {
 } from './notification-fin-de-tour'
 
 /**
- * LES SUITES PROPOSÉES, CLIQUABLES DEPUIS LA NOTIFICATION (conv-1038, 2026-10-21).
+ * LES SUITES PROPOSÉES, CLIQUABLES DEPUIS LA NOTIFICATION (2026-10-21).
  *
  * La notification de fin de tour ne savait qu'ouvrir le fil. Les suites notées du tour
  * (`AUTOWIN_PROMPT_V1:`, les mêmes que les boutons de la saisie, lues par `extrairePropositionsSuite`)

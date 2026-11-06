@@ -42,7 +42,7 @@ export interface ClosureState {
  * Le refus qu'un nouveau passage de BUILD ne peut pas lever.
  *
  * FORMULATION : ces motifs s'affichent dans le fil de conversation, donc ils sont écrits pour
- * l'utilisateur, pas pour le moteur. Demandé le 20/08 apres conv-1334 (« Statut "red" : la clôture a
+ * l'utilisateur, pas pour le moteur. Demandé le 20/08 (« Statut "red" : la clôture a
  * été refusée en amont. / DoD non tenue : … — je comprends même pas ce que ça veut dire »). Ni
  * `red`, ni « clôture », ni « DoD » : le vocabulaire interne reste dans le code.
  *
@@ -56,7 +56,7 @@ export const CLOSURE_UPSTREAM_REFUSAL =
 /**
  * Faut-il ARRÊTER la boucle de réparation plutôt que de payer un passage de plus ?
  *
- * Mesuré dans `conv-1242` le 2026-08-15 : trois passages `build` (73 s, 60 s, puis un troisième),
+ * Mesuré le 2026-08-15 : trois passages `build` (73 s, 60 s, puis un troisième),
  * chacun suivi du MÊME refus mot pour mot — « Statut "red" : la clôture a été refusée en amont ».
  * Plus de deux minutes de calcul brûlées, puis abandon. Chaque tour de boucle rejoue un build
  * complet, toutes les phases post-build et un panel de juge : ce n'est pas un retry bon marché.
@@ -87,7 +87,7 @@ export function doitArreterLaReparation(
  * `dodDuVerdict` dans `../objections-juge.ts`). Un nouveau passage de build ne peut pas le lever :
  * le juge n'a rien refuse, le blocage vient d'ailleurs.
  *
- * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — 4 appels du juge (ts 09:44:57.329,
+ * fix-ok: tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — 4 appels du juge (ts 09:44:57.329,
  * 09:48:05.122, 09:51:14.024, 09:53:28.437) tous VALIDE 72-74, rejoues jusqu'au plafond de
  * 42 appels provider ; le tour meurt sans rien rendre a l'utilisateur.
  */
@@ -147,7 +147,7 @@ export function plafondDurReparations(reparationsAccordees: number): number {
  *  - un refus qui CHANGE d'un passage à l'autre est un progrès : on continue, même au-delà du nombre
  *    de réparations accordées. C'est précisément ce qu'un compte fixe empêchait ;
  *  - un refus IDENTIQUE et entièrement hors de portée de `build` ne peut pas évoluer : on s'arrête
- *    au premier constat (mesuré conv-1242 : trois passages, le même refus mot pour mot, deux minutes
+ *    au premier constat (mesuré : trois passages, le même refus mot pour mot, deux minutes
  *    brûlées). Cette règle vit dans `doitArreterLaReparation` et n'est pas rejouée ici ;
  *  - le plafond DUR reste, parce que le budget ne bloque pas par défaut : sans lui, plus rien
  *    n'arrêterait un run qui reformule indéfiniment son refus.
@@ -156,14 +156,14 @@ export function plafondDurReparations(reparationsAccordees: number): number {
  * Au bout de combien de refus IDENTIQUES d'affilée un refus est-il tenu pour figé ?
  *
  * Deux : le premier retour à l'identique peut encore venir d'une preuve indisponible sur le coup, le
- * second montre que rien ne bouge. Mesuré sur conv-470 (tour 52fbe05f-0086-4806-8f07-c8762e8caa35) :
+ * second montre que rien ne bouge. Mesuré (tour 52fbe05f-0086-4806-8f07-c8762e8caa35) :
  * 4 réparations, 4 refus identiques, donc 2 passages économisés par cette borne.
  */
 const REFUS_FIGE_SEUIL = 2
 
 /**
  * En mode jusqu'au vert, à quelle APPARITION d'un même refus d'affilée s'arrête-t-on ?
- * Choix utilisateur du 05/11/2026 (conv-1626, après conv-1613 et conv-1618) : la troisième.
+ * Choix utilisateur du 05/11/2026 : la troisième.
  */
 const REFUS_FIGE_JUSQU_AU_VERT = 3
 
@@ -174,7 +174,7 @@ const REFUS_FIGE_JUSQU_AU_VERT = 3
  * comparaison dans l'orchestrateur en ferait un MIROIR, que ce depot a deja paye une fois.
  */
 /**
- * fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — 16 reparations payees parce que le
+ * fix-ok: tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — 16 reparations payees parce que le
  * motif « Promis mais pas fait » RECOPIE les objections du juge, reformulees a chaque passage : la
  * comparaison mot pour mot ne voyait jamais deux refus identiques, le compteur de refus fige ne
  * mordait jamais. On compare donc le motif SANS sa citation.
@@ -186,7 +186,7 @@ const REFUS_FIGE_JUSQU_AU_VERT = 3
 /**
  * Replie chaque citation de PREMIER niveau en «…», en suivant la profondeur des guillemets.
  *
- * fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — le repli precedent allait du
+ * fix-ok: tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — le repli precedent allait du
  * PREMIER « au DERNIER » (/«[\s\S]*»/), donc il avalait aussi le texte situe ENTRE deux
  * citations : « Fichier « a.ts » manquant et regle « X » violee » et la meme phrase avec
  * « present » devenaient identiques, et la boucle de reparation pouvait etre coupee sur un refus
@@ -216,20 +216,20 @@ function replierCitations(motif: string): string {
 function motifSansCitation(motif: string): string {
   return (
     replierCitations(motif)
-      // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — 20 reparations payees : les
+      // fix-ok: tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — 20 reparations payees : les
       // objections du juge recopiees dans « Promis mais pas fait » contiennent ELLES-MEMES des
       // guillemets francais (« pas corrige » puis « corrige »). La paire la plus courte s'arretait
       // donc au premier » interieur, et tout le texte suivant restait compare mot pour mot alors
       // qu'il est reformule a chaque passage. Le repli se fait desormais par profondeur
       // (replierCitations) ; le texte HORS citation reste compare en entier.
       .replace(/«[^»]*»/g, '«…»')
-      // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — neutraliser le TEXTE des
+      // fix-ok: tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — neutraliser le TEXTE des
       // citations ne suffisait pas : « Promis mais pas fait » JOINT toutes les objections du juge,
       // et le juge n'en rend pas le meme NOMBRE d'un passage a l'autre (6, puis 8, puis 7 sur ce
       // tour). La liste normalisee restait donc de longueur variable et le compteur de refus fige ne
       // mordait toujours pas. Une suite de citations compte pour une seule.
       .replace(/«…»(?:[\s,;]*«…»)+/g, '«…»')
-      // fix-ok: conv-540 tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — le refus fix-gate NOMME le
+      // fix-ok: tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 — le refus fix-gate NOMME le
       // nombre d'editions du fichier (« 4 edits » a la reparation 2, « 6 edits » a la reparation 3),
       // et ce nombre est incremente par la boucle de reparation ELLE-MEME a chaque passage. Le meme
       // refus ne pouvait donc jamais etre reconnu comme identique. Le fichier reproche, lui, reste
@@ -276,7 +276,7 @@ export function arretDeLaReparation(entree: {
   /**
    * Combien de fois DE SUITE ce refus est-il revenu mot pour mot, celui-ci compris ?
    *
-   * Défaut vécu conv-470, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` : quatre passages de
+   * Défaut vécu, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` : quatre passages de
    * réparation pour un refus MIXTE strictement identique (échec amont + une promesse portant sur un
    * fichier que la demande ne nommait pas). `doitArreterLaReparation` ne mord pas sur un refus mixte,
    * à raison au premier constat ; mais un refus qui se répète à l'identique a fait la preuve qu'il est
@@ -288,7 +288,7 @@ export function arretDeLaReparation(entree: {
   /**
    * Le code du gate REELLEMENT execute est-il plus vieux que sa source ?
    *
-   * Defaut vecu conv-539, tour `82a4f5d1-d92f-4d73-9f6f-cac70db65ecb` : 14 reparations refusees
+   * Defaut vecu, tour `82a4f5d1-d92f-4d73-9f6f-cac70db65ecb` : 14 reparations refusees
    * d'affilee. L'application jugeait avec `out/main/index.js` date de 11:06 pendant que les
    * correctifs etaient commites de 11:11 a 11:31. Aucune edition de la source ne pouvait faire
    * bouger ce refus, et la boucle brulait un build + un panel de juge par passage sans jamais le
@@ -296,25 +296,25 @@ export function arretDeLaReparation(entree: {
    */
   bundlePerime?: { bundleMs: number; sourceMs: number; demarrageMs?: number; bundle: string }
   /**
-   * JUSQU'AU VERT (conv-844, 2026-09-24, choix utilisateur : « que ça s'arrête que quand y a plus
+   * JUSQU'AU VERT (2026-09-24, choix utilisateur : « que ça s'arrête que quand y a plus
    * de défauts »). Ni plafond dur, ni arrêt sur refus répété : seul le code PÉRIMÉ arrête encore,
    * car aucune réparation ne peut alors changer le verdict.
    */
   jusquAuVert?: boolean
   /**
-   * conv-35 (2026-09-30) : le juge a VALIDE en rendant exactement les memes reserves MINEUR qu'au
+   * 2026-09-30 : le juge a VALIDE en rendant exactement les memes reserves MINEUR qu'au
    * passage precedent (`memesReservesMineures`). Constat de CODE, pas du juge : mord meme jusqu'au vert.
    */
-  // fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
+  // fix-ok: la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
   reservesMineuresFigees?: boolean
   /**
-   * conv-1420 : le motif d'un panel de juges en panne (`motifPanneDesJuges`, quorum.ts). Un build de
+   * Le motif d'un panel de juges en panne (`motifPanneDesJuges`, quorum.ts). Un build de
    * plus ne ferait pas répondre les juges : constat de CODE, il mord même jusqu'au vert.
    */
   panneDesJuges?: string
 }): string | undefined {
   const b = entree.bundlePerime
-  // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — comparer le bundle a la seule
+  // fix-ok: tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — comparer le bundle a la seule
   // SOURCE laissait un angle mort : recompile en cours de tour (11:46) il redevenait « a jour »
   // alors que le processus, lance a 11:06, executait toujours l'ancien code en memoire. Le refus
   // ne bougeait pas et la mesure se taisait (constat du juge, reparation 17).
@@ -326,7 +326,7 @@ export function arretDeLaReparation(entree: {
   }
   if (entree.reservesMineuresFigees) return MOTIF_RESERVES_MINEURES_FIGEES
   if (entree.panneDesJuges) return entree.panneDesJuges
-  // fix-ok: conv-44 — juge independant (MINEUR « refus sans fin ») : un fichier TEST: jamais restaure a l'octet pres relancait build + juge a l'infini en mode jusqu'au vert ; constat de CODE (empreinte), il mord meme jusqu'au vert.
+  // fix-ok: juge independant (MINEUR « refus sans fin ») : un fichier TEST: jamais restaure a l'octet pres relancait build + juge a l'infini en mode jusqu'au vert ; constat de CODE (empreinte), il mord meme jusqu'au vert.
   if (
     (entree.refusIdentiquesConsecutifs ?? 0) >= REFUS_FIGE_SEUIL &&
     entree.motifsCourants.some((m) => m.startsWith(PREFIXE_TEST_MODIFIE))
@@ -334,11 +334,11 @@ export function arretDeLaReparation(entree: {
     return `Réparation interrompue : le fichier de test désigné par le juge reste modifié depuis ${entree.refusIdentiquesConsecutifs} passages — rejouer ne le restaure pas. Rétablir son contenu d'origine (ou faire réécrire le test par le juge) avant de relancer.`
   }
   if (entree.jusquAuVert) {
-    // fix-ok: conv-1613 et conv-1618 (05/11/2026) — 220 et 208 refus du contrôle final identiques
+    // fix-ok: (05/11/2026) — 220 et 208 refus du contrôle final identiques
     // mot pour mot, ~390 $ chacun : ce mode sortait AVANT le frein du refus répété, et rien d'autre
-    // ne l'arrêtait (le budget ne bloque pas par défaut). conv-844 voulait « s'arrêter seulement
+    // ne l'arrêtait (le budget ne bloque pas par défaut). Un fil voulait « s'arrêter seulement
     // quand il n'y a plus de défaut » : un refus qui CHANGE reste un progrès et continue sans
-    // plafond. Choix utilisateur (conv-1626) : « le même refus revenu 3 fois de suite arrête la
+    // plafond. Choix utilisateur : « le même refus revenu 3 fois de suite arrête la
     // boucle, même en mode jusqu'au vert ». Le compteur transmis par la boucle est compté AVANT le
     // refus courant (`deciderDuPassage`) : on ajoute donc ici le refus courant et le premier.
     const apparitions = memeRefus(entree.motifsCourants, entree.motifsPrecedents)
@@ -353,7 +353,7 @@ export function arretDeLaReparation(entree: {
     return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
   }
   const repetitions = entree.refusIdentiquesConsecutifs ?? 0
-  // conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : un refus fix-gate se lève par UNE ligne
+  // tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : un refus fix-gate se lève par UNE ligne
   // `fix-ok:` que le build peut écrire ; il garde un passage de plus avant d'être déclaré figé.
   // Seulement si TOUS les motifs sont réparables ainsi (le relais d'échec amont excepté) : un refus
   // mixte ne gagne pas de passage (objection du juge, réparation 2 du même tour).
@@ -492,7 +492,7 @@ export function evaluateClosure(state: ClosureState): ClosureEvaluation {
 /**
  * Le libelle d'un PASSAGE de reparation, pousse dans la trace du run a chaque rejeu.
  *
- * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — le tour est mort sur « Budget
+ * fix-ok: tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — le tour est mort sur « Budget
  * d'appels provider atteint : 42 appels » apres 4 verdicts de juge, et le dossier de preuve ne
  * permettait PAS de dire combien de passages de reparation l'avaient consomme : la boucle ne
  * poussait un motif que lorsqu'elle s'ARRETAIT. Un passage muet est un passage non mesurable ;
@@ -502,10 +502,10 @@ export function libelleDuPassageDeReparation(
   rang: number,
   plafond: number,
   jusquAuVert = false,
-  // La phase REJOUEE : `build` d'ordinaire, la phase nommee quand la demande en nomme une (conv-767).
+  // La phase REJOUEE : `build` d'ordinaire, la phase nommee quand la demande en nomme une.
   phase = 'build'
 ): string {
-  // conv-35 : en mode « jusqu'au vert » (conv-844) le plafond ne borne PAS la boucle ; afficher
+  // En mode « jusqu'au vert » le plafond ne borne PAS la boucle ; afficher
   // « 98/24 (dernier autorise) » mentait. On affiche alors le rang seul.
   if (jusquAuVert) return `Réparation ${rang} — nouveau passage de ${phase} (jusqu'au vert, sans plafond).`
   const suffixe = rang >= plafond ? ' (dernier autorise)' : ''

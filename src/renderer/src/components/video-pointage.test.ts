@@ -12,7 +12,7 @@ import {
 } from './video-pointage'
 
 /**
- * POINTER UNE IMAGE D'UNE VIDÉO DANS LE CHAT (conv-253, 2026-10-11 : « je pourrais te dire
+ * POINTER UNE IMAGE D'UNE VIDÉO DANS LE CHAT (2026-10-11 : « je pourrais te dire
  * modifie telle frame a telle seconde »). Mesures faites sur le film B6 : 30 images/s, 1188 images,
  * 39,6 s (ffprobe, code 0). Une conversion naïve `floor(t * fps)` décale 22 images sur 1188
  * (k/30 * 30 tombe juste sous k en virgule flottante, ex. l'image 123).

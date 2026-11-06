@@ -26,7 +26,7 @@ vi.mock('./SourceControlPane', () => ({
 
 let closureChoisie: RunClosureObservation = { status: 'open', totalDurationMs: 0, totalCostUsd: 0 }
 let verdictsChoisis: string[] | undefined
-/** Tour et déroulé du nœud choisi : le lien « version complète dans l'Observatory » (conv-981). */
+/** Tour et déroulé du nœud choisi : le lien « version complète dans l'Observatory ». */
 let tourChoisi: string | undefined
 let deroulChoisi: AgentGantt | undefined
 

@@ -9,7 +9,7 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 import { loadChatSessions } from '../runs/chat-session-store'
 
 /**
- * SESSION ABANDONNÉE = FIL ENTIER RENVOYÉ (audit du branchement Claude, conv-1040, 2026-10-21).
+ * SESSION ABANDONNÉE = FIL ENTIER RENVOYÉ (audit du branchement Claude, 2026-10-21).
  *
  * Un tour qui REPREND une session n'envoie que la dernière demande : l'historique est censé vivre
  * dans la session du CLI (`buildTurnMessageBlocks`, branche reprise). Quand cette session est

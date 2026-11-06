@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 /**
- * LE FOND 3D EN VEILLE HORS DE L'ACCUEIL, au lieu d'être détruit (conv-337, 2026-10-19).
+ * LE FOND 3D EN VEILLE HORS DE L'ACCUEIL, au lieu d'être détruit (2026-10-19).
  *
  * MESURE QUI LE MOTIVE (scripts/banc-decor-budget.mjs, copie d'origin/main) : chaque retour sur
  * l'Accueil reconstruisait tout — contexte WebGL, compilation des programmes, 19 Mo de passants

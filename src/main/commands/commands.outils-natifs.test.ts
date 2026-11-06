@@ -10,7 +10,7 @@ import { APP_DESTINATIONS } from '../../shared/navigation'
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /*
- * LES OUTILS DU CHAT RATTRAPENT LES OUTILS NATIFS DE CLAUDE (conv-1370, lot 6, 2026-10-31).
+ * LES OUTILS DU CHAT RATTRAPENT LES OUTILS NATIFS DE CLAUDE (lot 6, 2026-10-31).
  *
  * Comparaison sur 53 outils et le journal du 22 au 31/10 : tout partait en `string`, 20 arguments
  * étaient exigés à tort, `get_state` rendait 187 000 caractères sans moyen de rétrécir, une tâche se
@@ -195,7 +195,7 @@ describe('(b) task_update et task_delete : l’agent peut modifier et supprimer'
     expect(zone).toContain('remove: (id) => scheduledTasks.remove(id)')
   })
 
-  // conv-1372 : le `.map` retirait annotations et types pour les étapes de workflow.
+  // Le `.map` retirait annotations et types pour les étapes de workflow.
   it('le catalogue d’un nœud de workflow garde annotations et types', () => {
     const source = sourceProcessPrincipal()
     const debut = source.indexOf('catalogue: () =>')
@@ -204,7 +204,7 @@ describe('(b) task_update et task_delete : l’agent peut modifier et supprimer'
     expect(zone).not.toContain('.map(')
   })
 
-  // Le chef a tranché (conv-1370) : un `verify` rejoué après une coupure lancerait deux suites.
+  // Le chef a tranché : un `verify` rejoué après une coupure lancerait deux suites.
   it('verify n’est plus rejouable d’office', () => {
     expect(specDe('verify')?.annotations?.idempotentHint).toBe(false)
   })

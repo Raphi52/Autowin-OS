@@ -1,7 +1,7 @@
 /* fix-ok: retouches = recalage de la palette apres lecture des captures --code-dev ; la superposition
    Accueil/Chat venait du fondu de vue (meme image sous Holographique), pas de cette feuille. */
 /* =================================================================================================
- * THEME « NINJA CLAUDE » (id `ninja-claude`, conv-269, 2026-10-16).
+ * THEME « NINJA CLAUDE » (id `ninja-claude`, 2026-10-16).
  * Demande : « un theme "Ninja Claude", pour que l'interface d'autowin ressemble en tous points a
  * celle de claude ». Base SOMBRE : Claude en mode sombre.
  *
@@ -97,7 +97,7 @@
   background: #262624;
   color: var(--text);
 }
-/* LE FOND DE L'ACCUEIL N'EST PLUS RETIRE PAR LE THEME (conv-1076, 2026-10-22 : « c le select de
+/* LE FOND DE L'ACCUEIL N'EST PLUS RETIRE PAR LE THEME (2026-10-22 : « c le select de
    l'accueil qui fait foi pour le fond de l'accueil pas le theme choisi »). Le decor suit le menu
    Fond de l'Accueil ; « Aucun » y reprend l'aplat de ce theme. */
 :root[data-theme='ninja-claude'] .decor-de-fond[data-fond='noir'] {
@@ -228,7 +228,7 @@
   border-color: #d97757;
   background: #d97757;
 }
-/* Carte de suppression des fils (conv-1078) : son bouton plein prend le terracotta des boutons pleins
+/* Carte de suppression des fils : son bouton plein prend le terracotta des boutons pleins
    de ce thème (#c96442, survol #d97757), comme `.btn-accent` ci-dessus ; --accent seul (#d97757)
    donnait un texte blanc à 3:1. Le liseré de « Garder » garde --accent. */
 :root[data-theme='ninja-claude'] .delete-confirm-card--fils {
@@ -373,7 +373,7 @@
   border-color: rgba(222, 220, 209, 0.3);
 }
 /* Le champ se pose directement dans le cadre arrondi : plus de bord a lui, ni au focus
-   (demande du 2026-10-16, conv-1001 — le `textarea.input` heritait du cadre des champs). */
+   (demande du 2026-10-16, Le `textarea.input` heritait du cadre des champs). */
 :root[data-theme='ninja-claude'] .cosmic-outline .composer-field textarea,
 :root[data-theme='ninja-claude'] .cosmic-outline .composer-field textarea:focus {
   border: 0;

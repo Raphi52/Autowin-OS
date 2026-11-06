@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 /**
- * UNE ORIENTATION RELUE DU DISQUE GARDE SON ÉTIQUETTE (conv-955, 2026-10-15).
+ * UNE ORIENTATION RELUE DU DISQUE GARDE SON ÉTIQUETTE (2026-10-15).
  *
  * Saisies ts 1792054396405 et 1792054407546 : deux messages tapés pendant le run du tour
  * `33bc18ab-a9f3-4bac-8058-ec4838c647b8`. Le main les écrit avec `orientation: true` (journal :
  * message-conv-955-5 et -6), puis l'écran relit le fil. `hydraterFilStocke` ne recopiait pas ce
  * drapeau : le message s'affichait comme une demande ORDINAIRE, sans « orienté en cours de tour »,
  * et l'utilisateur attendait une réponse propre à ce message (« ya pas ton retour sur ce tour »,
- * conv-965, 09:03). L'étiquette (ChatMessageRow, conv-257) n'était visible que dans son propre test.
+ * 03). L'étiquette (ChatMessageRow) n'était visible que dans son propre test.
  */
 import { act, createElement } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'

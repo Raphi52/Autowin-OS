@@ -1,4 +1,4 @@
-/* LE BOUTON CREUX DE L'EN-TÊTE DU FIL (/draft de conv-1317, proposition 6 « Mini-adresse », 2026-10-30) :
+/* LE BOUTON CREUX DE L'EN-TÊTE DU FIL (proposition 6 « Mini-adresse », 2026-10-30) :
    un CREUX dans l'en-tête, pas une pastille. La Mini-adresse et Détails portent cette même classe
    (« le bouton détail met lui le meme look ») : deux voisins ne peuvent donc pas diverger.
    Hauteur 28 px ; le fond est le plus sombre du thème, celui sur lequel l'en-tête est posé, d'où
@@ -62,7 +62,7 @@
   outline-offset: 2px;
 }
 /* Pas d'opacité : à 45 %, le champ entier virait au gris sur gris, le défaut de l'ancien bouton
-   (mesuré sur la capture de conv-1317). Seul le contenu s'éteint, le creux reste net. */
+   (mesuré sur la capture). Seul le contenu s'éteint, le creux reste net. */
 .bouton-creux:disabled {
   color: var(--text-faint);
   cursor: not-allowed;

@@ -4,7 +4,7 @@ import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
 import { JUDGE_TOOLSET_CONTRACT } from './orchestrator'
 
 /**
- * EDIT/WRITE : CE QUE LE PRODUCTEUR ET SON JUGE LISENT SUIT LE CODE (conv-1582, 2026-11-05).
+ * EDIT/WRITE : CE QUE LE PRODUCTEUR ET SON JUGE LISENT SUIT LE CODE (2026-11-05).
  *
  * `sandboxForPhase` rend `danger-full-access` à chaque phase de la chaîne, mais le build découpé en
  * sous-tâches parallèles part en `read-only` quand la tâche ne modifie rien

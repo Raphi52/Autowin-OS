@@ -20,7 +20,7 @@ describe('refus définitifs de reprise', () => {
     )
   })
 
-  // Message copié du journal réel de conv-1461 (turn-journals, 2026-11-03 → 05) : la copie a perdu
+  // Message copié du journal réel (turn-journals, 2026-11-03 → 05) : la copie a perdu
   // son `.git`, git remonte sur le dépôt principal. Non classé, ce refus a rejoué la reprise à
   // CHAQUE démarrage : 33 démarrages, 33 runs rouges identiques sur le Board.
   it('reconnaît la copie qui n’est plus une racine de travail (worktree-manager.ts:459)', () => {

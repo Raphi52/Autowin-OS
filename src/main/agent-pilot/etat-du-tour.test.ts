@@ -12,7 +12,7 @@ import { etatInitialDuTour } from './etat-du-tour'
 
 /**
  * L'ÉTAT MUTABLE DU TOUR — la soixantaine de `let` que la boucle de `AgentPilot.chat()` partageait
- * avec ses closures — vit dans `agent-pilot/etat-du-tour.ts` depuis conv-1580 (lot 3), et le
+ * avec ses closures — vit dans `agent-pilot/etat-du-tour.ts` (lot 3), et le
  * chemin des outils directs dans `agent-pilot/appels-natifs.ts`.
  *
  * Ce que le typage ne voit pas : une valeur initiale changée pendant le déplacement (le tour
@@ -35,7 +35,7 @@ const entree = (conversationId: string | undefined): Parameters<typeof etatIniti
   snapshot
 })
 
-// Valeurs écrites dans chat() avant le déplacement (agent-pilot.ts, conv-1580 lot 2), dans leur ordre.
+// Valeurs écrites dans chat() avant le déplacement (agent-pilot.ts, lot 2), dans leur ordre.
 const attendu = {
   timingWritten: false,
   orchestrationIssued: false,

@@ -10,7 +10,7 @@ vi.mock('./Markdown', () => ({
 const { chatApi, conversation, installRafShim, mountChat } = await import('./ChatView.harness')
 
 /**
- * « Je veux pouvoir Ctrl+F dans la conversation » (conv-21).
+ * « Je veux pouvoir Ctrl+F dans la conversation ».
  *
  * Ce que le test prouve, hors modèle : la barre s'ouvre au raccourci, elle COMPTE les
  * occurrences réellement présentes dans le fil rendu, Entrée avance en boucle, Échap ferme.

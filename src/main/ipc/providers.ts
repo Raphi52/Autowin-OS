@@ -99,7 +99,7 @@ async function probeProviderConnection(
 }
 
 export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDeps): void {
-  // Chaque appel réel réussi remet le statut à jour (conv-1240, 2026-10-28). Sans lui, seul le
+  // Chaque appel réel réussi remet le statut à jour (2026-10-28). Sans lui, seul le
   // bouton « Tester » l'écrivait : un « expiré » du 13/10 a bloqué quinze jours tout choix de modèle
   // Claude dans les sélecteurs, alors que tous les tours passaient.
   os.registry.quandAppelReussi((provider) => {
@@ -151,7 +151,7 @@ export function registerProvidersIpc({ os, providerStateStore }: ProvidersIpcDep
           grok: providerStateStore.get('grok')
         }
       }),
-      // Moteur direct (conv-1503) : présence de la clé dans l'environnement, aucun appel réseau.
+      // Moteur direct : présence de la clé dans l'environnement, aucun appel réseau.
       ...statutsServicesHttp(
         SERVICES_HTTP,
         process.env,

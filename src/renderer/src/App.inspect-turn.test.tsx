@@ -103,11 +103,11 @@ describe('App inspect-turn navigation', () => {
       'Observatory',
       'Task Manager',
       'Worktrees',
-      // Tickets n'est plus un écran (conv-1397) : un onglet du Board, et sa veille un bloc de Maintenance.
-      // Carte des besoins (conv-1089, 2026-10-22), placée avant Maintenance dans navigation.ts.
-      // Renommée « Carte du projet » (conv-1113), puis « Board » (conv-1126) : même identifiant `besoins`.
+      // Tickets n'est plus un écran : un onglet du Board, et sa veille un bloc de Maintenance.
+      // Carte des besoins (2026-10-22), placée avant Maintenance dans navigation.ts.
+      // Renommée « Carte du projet », puis « Board » : même identifiant `besoins`.
       'Board',
-      // L'ancienne vue Tests, renommée Maintenance (conv-1101) : même identifiant `tests`.
+      // L'ancienne vue Tests, renommée Maintenance : même identifiant `tests`.
       'Maintenance',
       'Settings'
     ]
@@ -130,7 +130,7 @@ describe('App inspect-turn navigation', () => {
     await act(async () => root.unmount())
   })
 
-  // Routage a quitté Agent Studio pour Settings (conv-963, 2026-10-15 : « la view Routage il faut
+  // Routage a quitté Agent Studio pour Settings (2026-10-15 : « la view Routage il faut
   // la mettre dans Settings ») : l'ancien nom « router » doit donc ouvrir Settings sur la vue
   // Routage, et non plus Agent Studio (cf. LEGACY_LOCATIONS de src/shared/navigation.ts).
   it('opens Settings on the Routage view when an agent navigates to the legacy Router target', async () => {

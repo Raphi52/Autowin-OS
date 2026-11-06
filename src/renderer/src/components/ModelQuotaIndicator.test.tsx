@@ -86,7 +86,7 @@ describe('indicateur de quotas modèles', () => {
     expect(popover?.textContent).not.toContain('Claude Opus')
     expect(popover?.textContent).not.toContain('GPT Terra')
     expect(popover?.textContent).toContain('Quota partagé')
-    // Onglet Claude ouvert : seules ses barres (conv-1496) ; « Non exposé » est une ligne ChatGPT.
+    // Onglet Claude ouvert : seules ses barres ; « Non exposé » est une ligne ChatGPT.
     expect(popover?.textContent).not.toContain('Non exposé')
     expect(popover?.textContent).toContain('72 % utilisé')
     expect(popover?.textContent).toContain('28 % restant')

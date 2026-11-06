@@ -53,10 +53,10 @@ describe('collapsed navigation rail', () => {
     )
   })
 
-  // conv-929 (2026-10-13) : « fais en sorte que le logo rond tourne », un tour en 3 s (8 s « trop
+  // 2026-10-13 : « fais en sorte que le logo rond tourne », un tour en 3 s (8 s « trop
   // lent »). La machine de l'utilisateur a `prefers-reduced-motion: reduce` ACTIF (voir theme.css) :
   // une rotation coupée dans ce cas ne tournerait jamais chez lui.
-  // conv-1535 (2026-11-04) : le logo prend le RELIEF de l'anneau du film (« dans la video tu lui as
+  // 2026-11-04 : le logo prend le RELIEF de l'anneau du film (« dans la video tu lui as
   // donne du relief »). C'est l'image animée qui fait tourner le dégradé sous une lumière fixe
   // (scripts/logo_anneau_relief.py) ; une rotation CSS ferait tourner la lumière avec l'anneau.
   // Entrée qui doit faire échouer : l'ancien PNG plat, une image qui ne boucle pas ou tourne en plus
@@ -102,14 +102,14 @@ describe('collapsed navigation rail', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
     // 54 - 2 x 8 px - 2 x 1 px de bord (cadre Nébuleuse) = 36 px : la piste tient un item rond.
     expect(css).toMatch(/\.rail\.is-collapsed\s*{[^}]*width:\s*54px[^}]*padding-inline:\s*8px/s)
-    // conv-198 : replié, l'item est un CARRÉ centré — un bord en capsule (999px) y dessine un
+    // Replié, l'item est un CARRÉ centré — un bord en capsule (999px) y dessine un
     // rond, pas un ovale. L'ancien 33 x 36 collé à gauche donnait un ovale décentré.
     // `width` est ancré sur une frontière pour qu'un `max-width: 36px` ne le satisfasse pas.
-    // conv-1165 : 36 px FIXE débordait la piste sous 100 % de zoom (35,78 px à 90 %, bord du cadre
+    // 36 px FIXE débordait la piste sous 100 % de zoom (35,78 px à 90 %, bord du cadre
     // arrondi à 1,11 px) et `.nav` rognait le rond à droite. Il est donc BORNÉ à la piste
     // (`min(36px, 100%)`) et gardé rond par `aspect-ratio: 1` — une hauteur fixe en px annulerait ce
     // ratio et rendrait un ovale dès que la largeur cède.
-    // conv-1178 : l'anneau de focus (Nébuleuse : 2 px + 2 px d'écart) se dessine HORS du rond et
+    // L'anneau de focus (Nébuleuse : 2 px + 2 px d'écart) se dessine HORS du rond et
     // `.nav` le rognait à gauche et à droite. Le rond cède 2 × `--rail-anneau` (≥ 4 px) sur la
     // piste, et la même marge haut/bas garde le pas des icônes.
     const collapsedNavItem =
@@ -130,7 +130,7 @@ describe('collapsed navigation rail', () => {
     expect(css).not.toMatch(/(?:^|\n)\.nav\s*{[^}]*overflow-x:\s*hidden/s)
   })
 
-  // conv-1208 : menu DÉPLIÉ, l'anneau de focus (Nébuleuse : 2 px + 2 px d'écart) dépassait de 4 px
+  // Menu DÉPLIÉ, l'anneau de focus (Nébuleuse : 2 px + 2 px d'écart) dépassait de 4 px
   // de chaque côté de la capsule ouverte, qui remplit `.nav` ; `overflow-y: auto` le rognait à
   // gauche et à droite. `.nav` garde ≥ 4 px de marge intérieure, rendus par une marge négative
   // égale pour que les items ne bougent pas. Entrée qui doit échouer : la marge retirée, ou une
@@ -144,14 +144,14 @@ describe('collapsed navigation rail', () => {
     expect(nav).toMatch(/(?:^|[;{\s])margin:\s*calc\(\s*-1\s*\*\s*var\(--nav-anneau\)\s*\)\s*;/)
   })
 
-  // conv-198 : l'ancien translateX(-3px) mettait l'icône 3 px à gauche du centre de son rond.
+  // L'ancien translateX(-3px) mettait l'icône 3 px à gauche du centre de son rond.
   // Centrée par la flexbox seule, elle tombe au milieu du rond et sous le bouton de repli.
   it('never shifts the navigation icons off the centre of their round item', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
     expect(css).not.toMatch(/\.space-toy-icon\s*{[^}]*transform:\s*translate/s)
   })
 
-  // conv-198 : un émoji (23,35 px à 17 px) déborde sa case de 18 px. Sans centrage de la piste,
+  // Un émoji (23,35 px à 17 px) déborde sa case de 18 px. Sans centrage de la piste,
   // il ne déborde qu'à droite : 2,7 px à droite du rond, alors que les icônes SVG restent centrées.
   it('centres the overflowing emoji glyph in its box when the rail is collapsed', () => {
     const css = readFileSync(new URL('./app-shell.css', import.meta.url), 'utf8')
@@ -193,8 +193,8 @@ describe('nappe de bruit organique (or/anthracite)', () => {
   })
 })
 
-// conv-981 : le nouveau theme s'ouvre en cercle PAR-DESSUS l'ancien. Une regle non qualifiee qui masque
-// l'ancienne vue (`::view-transition-old(root) { opacity: 0 }`, travail de conv-987 sur le passage de
+// Le nouveau theme s'ouvre en cercle PAR-DESSUS l'ancien. Une regle non qualifiee qui masque
+// l'ancienne vue (`::view-transition-old(root) { opacity: 0 }`, travail sur le passage de
 // vue) s'appliquerait aussi au theme : le cercle s'ouvrirait sur du vide. La regle qualifiee du cercle
 // fixe donc l'opacite de l'ancien theme, et sa specificite l'emporte sur la regle non qualifiee.
 describe('changement de theme en cercle', () => {

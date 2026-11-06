@@ -6,11 +6,11 @@ import { describe, expect, it, vi } from 'vitest'
 /**
  * LA LISTE DES RUNS VUE PAR L'AGENT LISAIT UN DOSSIER QU'AUTOWIN N'ÉCRIT PAS.
  *
- * Kaizen conv-253 (2026-10-11) : `runsWithGate()` → `scanRunsPourSnapshot()` → `runsRoot()` =
+ * Kaizen (2026-10-11) : `runsWithGate()` → `scanRunsPourSnapshot()` → `runsRoot()` =
  * `C:\Users\User\.claude\runs`, absent du poste. Les runs lancés depuis une conversation vivent dans
  * `convRunsRoot()` (`.autowin-data/autowin-os/runs`). Sonde tsx du 2026-10-11 17:19 : 0 run vu par
- * défaut, 24 dans le vrai dossier dont 9 « open » — parmi eux la construction du lecteur vidéo de
- * conv-253 (relais 25940 vivant). Conséquences : le contexte collecté de ce kaizen disait
+ * défaut, 24 dans le vrai dossier dont 9 « open » — parmi eux la construction du lecteur vidéo
+ * (relais 25940 vivant). Conséquences : le contexte collecté de ce kaizen disait
  * « Runs en cours/bloqués: aucun observé », `get_state` rendait `runs: []`, et les tours
  * dcb537d2-ed5a-4646-806d-880ef76df295 et bdfe38d3-5ba5-4693-bad2-f70b39bc845e ont payé
  * 1,03 M + 0,58 M de jetons d'entrée en sondes Bash pour savoir où en était la construction.

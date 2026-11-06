@@ -2,22 +2,22 @@
    theme-nebuleuse-verre.css -- ne pas modifier a la main (modifier la source, puis regenerer). */
 
 /* ===========================================================================
-   NEBULEUSE DE VERRE -- theme choisi le 2026-10-09 (conv-124) sur maquette :
+   NEBULEUSE DE VERRE -- theme choisi le 2026-10-09 sur maquette :
    direction « 5 · Messagerie », variante « 5.1 · Colonne en verre », validee
    par l'utilisateur (« le 5.1 est parfait fais un theme qui fait toute l'appli
-   comme ca »). Maquette de reference : bloc html-render de conv-124, rendu et
+   comme ca »). Maquette de reference : bloc html-render, rendu et
    capture par le filtre reel du fil avant validation.
 
    SON PARTI PRIS
-   - Fond : NOIR PUR (#000) uni, sans halo, sans filet ni grain (conv-184,
+   - Fond : NOIR PUR (#000) uni, sans halo, sans filet ni grain (
      section 2). Le decor 3D de l'Accueil reste, teinte dans la meme famille
      (jetons --decor-*).
    - Verre : chaque panneau est une plaque translucide (blanc 4-6 %), flou de
      fond 18 px, bord blanc 11 %, reflet d'un pixel en haut, rayon 16 px.
    - Accent : UN degrade rose -> violet (#e63ca0 -> #3c6eeb), reserve a ce qui
      est actif : element du menu ouvert, bulle de l'utilisateur, onglet choisi.
-   - Saisie : noir profond a cadre OR, bouton d'envoi rond qui s'allume en or
-     (conv-155). Le coin bas-droit pince n'appartient qu'aux bulles de message.
+   - Saisie : noir profond a cadre OR, bouton d'envoi rond qui s'allume en or.
+     Le coin bas-droit pince n'appartient qu'aux bulles de message.
    - Etats : vert menthe = termine, rose = en cours (seule lueur qui bat),
      violet = au repos / en attente, rouge = echec, ambre = interrompu.
    - Lueur = information (gout de l'utilisateur, skills/draft/design-glossary.html :
@@ -66,11 +66,11 @@
 
   --ok: #09712c;
   --warn: #714709;
-  --err: #a61712; /* rouge franc, pas rose : bouton Stop (conv-139) */
+  --err: #a61712; /* rouge franc, pas rose : bouton Stop */
 
   /* La jauge d'un travail en cours : le degrade de la jauge de contexte. Lue par la jauge DoD des
      runs (WorkflowsPanel.tsx ; un run vert garde le vert du theme) et par la frise d'un plan de
-     lots (SuperConvMosaique.css, conv-1376). */
+     lots (SuperConvMosaique.css). */
   --run-jauge: linear-gradient(90deg, #3c6eeb, #d02b8c);
 
   --on-accent: #ffffff;
@@ -98,11 +98,11 @@
   --decor-chaud: #ff5fa8;
 
   /* Le degrade signature, reutilise partout. */
-  /* C1 · D6 (choix du 2026-10-10, conv-139 : « go D6 ») : le degrade signature EST celui des
+  /* C1 · D6 (choix du 2026-10-10, « go D6 ») : le degrade signature EST celui des
      messages de l'utilisateur (cosmic-outline.css, `.msg-bulle` : bleu -> rose a 85 %). UN seul
      bleu (#3c6eeb), toujours PLEIN : un bleu dilue sur du noir devenait bleu marine (« ce bleu
      fonce il m'enerve »), donc aucun voile bleu dans ce theme -- les voiles sont roses. */
-  /* conv-182 (2026-10-10) : « Le même bleu plein partout — le repos s'atténue autrement (texte,
+  /* 2026-10-10 : « Le même bleu plein partout — le repos s'atténue autrement (texte,
      reflet), pas la couleur ». Le 85 % qui restait ici donnait un bleu de plus a l'ecran. Le
      degrade est donc PLEIN au repos ; le survol se marque par le REFLET bombe des capsules. */
   --nv-degrade: linear-gradient(135deg, #3c6eeb, #d02b8c);
@@ -115,12 +115,12 @@
     ),
     linear-gradient(135deg, #3c6eeb, #d02b8c);
   --nv-degrade-doux: linear-gradient(135deg, rgba(208, 43, 140, 0.22), rgba(208, 43, 140, 0.12));
-  /* Capsules des blocs Raisonnement / Actions (R5, conv-162, 2026-10-10) : bord bleu a gauche ->
+  /* Capsules des blocs Raisonnement / Actions (R5, 2026-10-10) : bord bleu a gauche ->
      rose a droite, les deux couleurs PLEINES des bulles de l'utilisateur. ChatView.css s'en sert ;
      sans elles, la capsule prend le cyan et l'or de la marque. */
   --thinking-capsule-froid: #3c6eeb;
   --thinking-capsule-chaud: #d02b8c;
-  /* LE COIN BAS-DROIT PINCE EST RESERVE AUX BULLES DE MESSAGE (conv-155, 2026-10-10 : il « faisait
+  /* LE COIN BAS-DROIT PINCE EST RESERVE AUX BULLES DE MESSAGE (2026-10-10 : il « faisait
      sens pour la bulle de chat mais pas pour les boutons et les highlights »). L'ancien jeton
      --nv-forme-toi, qui le pretait a la selection du menu, a l'onglet actif et au bouton d'envoi,
      est retire ; ces trois-la ont des coins reguliers. */
@@ -134,21 +134,21 @@
      bloc de chaque vue) -- voir les sections 3 (rail) et 3 bis (`.main`). */
   --nv-marge-fenetre: 10px;
   /* L'ecart ENTRE deux blocs : menu -> premier bloc de la vue, et entre les colonnes du chat
-     (« on peut reduire aussi entre les panels », conv-934). Meme valeur que la marge de fenetre :
+     (« on peut reduire aussi entre les panels »). Meme valeur que la marge de fenetre :
      un seul espacement horizontal dans tout le theme. */
   --nv-ecart-blocs: var(--nv-marge-fenetre);
   --nv-reflet: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  /* REFLETS DORES (variante 6.4 choisie le 2026-10-09, conv-124) : l'or vit DANS le
+  /* REFLETS DORES (variante 6.4 choisie le 2026-10-09) : l'or vit DANS le
      verre -- un reflet d'un pixel en haut de chaque plaque. Le fond, les boutons et les
      couleurs d'etat n'en recoivent jamais. Une seule teinte par degrade (regle de
      l'utilisateur : jamais de bouton a triple degrade).
-     PLUS DE VOILE CHAUD (retire le 2026-10-10, conv-169 : « plein de views ont un degrade
+     PLUS DE VOILE CHAUD (retire le 2026-10-10, « plein de views ont un degrade
      or qui part du sommet, enleve-le ») : le jeton --nv-voile-dore (180deg, or 13 % -> 0 a
      240 px) peignait le haut des vues, cartes, rail, popovers et colonnes du chat. */
   --nv-reflet-dore: inset 0 1px 0 rgba(255, 214, 140, 0.55);
   --nv-bord-dore: rgba(113, 76, 9, 0.45);
   --nv-orbe-reflet: inset 0 1px 2px rgba(255, 236, 190, 0.7);
-  /* PAS DE FLOU DE FOND (backdrop-filter) DANS CE THEME -- retire le 2026-10-10, conv-124.
+  /* PAS DE FLOU DE FOND (backdrop-filter) DANS CE THEME -- retire le 2026-10-10.
      Un parent qui porte un backdrop-filter devient, en CSS, le repere de ses enfants
      `position: fixed`. Or une quinzaine de fenetres d'Autowin s'ancrent sur la FENETRE de l'app
      (quotas : ModelQuotaIndicator.tsx l.496 ; jauge de contexte ; menu d'un fil ; choix du
@@ -159,7 +159,7 @@
      deja flous. Garde-fou : theme-nebuleuse-verre.test.ts. */
   /* Fenetres flottantes (menus, quotas, palette /) : OPAQUES. Sans flou de fond, 8 % de
      transparence laissaient lire le texte du fil au travers (capture du 2026-10-10). Leur fond
-     est depuis conv-250 le satin de la page, opaque lui aussi (section 6 quater) : l'ancien jeton
+     est le satin de la page, opaque lui aussi (section 6 quater) : l'ancien jeton
      --nv-flottant (rgb(20, 20, 20)) n'avait plus d'usage et est retire. */
   --nv-lueur-rose: 0 0 18px rgba(208, 43, 140, 0.45);
   --nv-rond: 16px;
@@ -176,7 +176,7 @@
   --chat-neuf-titre: #1c172b;
   --chat-bulle-texte: #1c172b;
   --chat-fond-page: transparent;
-  --chat-tete-kicker: #121018; /* titre en haut du fil — blanc, demande utilisateur conv-174 (2026-10-10) */
+  --chat-tete-kicker: #121018; /* titre en haut du fil — blanc, demande utilisateur (2026-10-10) */
   --chat-tete-titre: #121018;
   --chat-tete-bouton-fond: rgba(255, 255, 255, 0.05);
   --chat-suggestion-fond: rgba(255, 255, 255, 0.05);
@@ -187,10 +187,10 @@
   --chat-wf-fermer-survol: #ff6b8a;
   --chat-wf-onglet-survol: rgba(20, 15, 40, 0.7);
   --chat-etat-defaut: #a78bfa;
-  /* Tour fini = le BLEU du theme, plein (debut de `--nv-degrade`) : demande conv-205
+  /* Tour fini = le BLEU du theme, plein (debut de `--nv-degrade`) : demande
      (2026-10-10), « les pastilles vertes met les bleu a la place » — en tete du fil et liste. */
   --chat-etat-fini: #3c6eeb;
-  /* Pastilles VIVES (conv-197, 2026-10-10) : rouge du bouton Stop
+  /* Pastilles VIVES (2026-10-10) : rouge du bouton Stop
      (`.composer-send.is-stop`), non lu = couleur de la FIN des degrades (`--nv-degrade`). */
   --chat-etat-echec: #eb2828;
   --chat-etat-interrompu: #ffb547;
@@ -309,7 +309,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   2. FOND NACRE UNI (Holographique blanc, conv-212) : piste « Le plus blanc » du /draft (tour 3),
+   2. FOND NACRE UNI (Holographique blanc) : piste « Le plus blanc » du /draft (tour 3),
    page presque blanche #f6f5f9 et rien d'autre -- le meme parti pris que le fond noir uni du noir
    (« oublie le rose et bleu »). Ni grain anime, ni voile de bord.
    --------------------------------------------------------------------------- */
@@ -327,7 +327,7 @@
 :root[data-theme='holographique-clair'] body::before {
   opacity: 0.05;
 }
-/* Le décor à PLEINE intensité (conv-1037, 2026-10-21 : « ya un filtre qui assombrit je veux des
+/* Le décor à PLEINE intensité (2026-10-21 : « ya un filtre qui assombrit je veux des
    couleurs petantes »). Il était à 0,6 depuis le 2026-10-09 (128ffd16), pour la nébuleuse de
    l'époque ; sur l'avenue, ce voile éteignait les néons. Les tuiles gardent leur fond opaque. */
 :root[data-theme='holographique-clair'] .decor-de-fond {
@@ -337,14 +337,14 @@
   background: rgba(208, 43, 140, 0.38);
   color: #ffffff;
 }
-/* Barre de prompt : selection en BLEU du theme, plein (conv-263, 2026-10-11 : « met notre bleu
+/* Barre de prompt : selection en BLEU du theme, plein (2026-10-11 : « met notre bleu
    electrique quand je selectionne le texte de la barre de prompt au lieu du rose fonce »). Le rose
-   a 38 % virait au rose fonce sur le champ sombre. #3c6eeb plein, jamais dilue (conv-182). */
+   a 38 % virait au rose fonce sur le champ sombre. #3c6eeb plein, jamais dilue. */
 :root[data-theme='holographique-clair'] .composer-field textarea::selection {
   background: #3c6eeb;
   color: #ffffff;
 }
-/* Selection dans MES bulles en BLANC INVERSE (conv-1215, 2026-10-28 : « quand je selectionne mes
+/* Selection dans MES bulles en BLANC INVERSE (2026-10-28 : « quand je selectionne mes
    propres messages le fond rose sur rose fais que je vois pas ce que je selectionne », option 1
    choisie sur maquette). Le rose a 38 % se fondait dans la lave rose -> bleu -> violet de la bulle ;
    le blanc plein tranche sur toutes ses couleurs, a tout moment du mouvement. Le texte selectionne
@@ -392,8 +392,8 @@
    3. RAIL (menu de gauche) : colonne de verre flottante.
    --------------------------------------------------------------------------- */
 :root[data-theme='holographique-clair'] .theme-serious .rail {
-  /* Haut et bas : la marge des blocs (app-shell.css ; en haut, --marge-haut-vue suit le zoom,
-     conv-1223). Gauche : la marge de fenetre. */
+  /* Haut et bas : la marge des blocs (app-shell.css ; en haut, --marge-haut-vue suit le zoom).
+     Gauche : la marge de fenetre. */
   margin: var(--marge-haut-vue) 0 var(--s5) var(--nv-marge-fenetre);
   border: 1px solid var(--nv-bord);
   border-top-color: var(--nv-bord-dore);
@@ -401,7 +401,7 @@
   background: rgba(255, 255, 255, 0.045);
   box-shadow: var(--nv-reflet-dore);
 }
-/* 3 bis. BORD DROIT = BORD GAUCHE (conv-934, 2026-10-13 : « a droite on a une marge plus grande que
+/* 3 bis. BORD DROIT = BORD GAUCHE (2026-10-13 : « a droite on a une marge plus grande que
    celle de gauche », puis « l'espace de droite est trop grand »). Mesure avant : menu a 10 px du
    bord gauche de la fenetre, dernier bloc a 24 px du bord droit (marge de `.main`, var(--s5)), dans
    TOUTES les vues. La marge de droite prend donc la meme valeur que celle du menu.
@@ -430,7 +430,7 @@
 :root[data-theme='holographique-clair'] .rail-toggle:hover {
   border-color: rgba(208, 43, 140, 0.6);
 }
-/* Capsule (conv-187) : le survol prend la forme de l'element selectionne. */
+/* Capsule : le survol prend la forme de l'element selectionne. */
 :root[data-theme='holographique-clair'] .nav-item {
   border: 1px solid transparent;
   border-radius: 999px;
@@ -439,12 +439,12 @@
   background: rgba(255, 255, 255, 0.06);
 }
 /* L'element ouvert : la pastille degradee de la maquette (fond doux + bord rose).
-   SANS halo autour (conv-198, 2026-10-10 : « enleve le halo autour de ce que j'ai selectionne »). */
-/* D6 : la pastille prend le degrade des bulles de l'utilisateur, mais PAS leur coin pince
-   (conv-155). Forme CAPSULE, bouts en demi-cercle (conv-187 : « une belle capsule et pas un
+   SANS halo autour (2026-10-10 : « enleve le halo autour de ce que j'ai selectionne »). */
+/* D6 : la pastille prend le degrade des bulles de l'utilisateur, mais PAS leur coin pince.
+   Forme CAPSULE, bouts en demi-cercle (« une belle capsule et pas un
    rectangle a bord rond ») ; replie, l'item 36x36 devient un rond (app-shell.css). Le degrade part du
    bord EXTERIEUR et ne se repete pas : cale sur l'interieur, il reapparaissait sous le bord
-   transparent d'1 px -- un lisere rose a gauche et bleu a droite (« c moche », conv-139). */
+   transparent d'1 px -- un lisere rose a gauche et bleu a droite (« c moche »). */
 :root[data-theme='holographique-clair'] .nav-item.active {
   border: 1px solid transparent;
   border-radius: 999px;
@@ -554,14 +554,14 @@
 }
 
 /* Fenetres flottantes (menus, popovers, palette /) : leur cadre vit en section 6 quater (cadre holo
-   des panneaux, conv-250). La plaque noire arrondie a filet OR qui etait posee ici est retiree : la
+   des panneaux). La plaque noire arrondie a filet OR qui etait posee ici est retiree : la
    section 6 quater la recouvrait pour chacune de ces fenetres. */
 
 /* ---------------------------------------------------------------------------
    5. CHAT -- les quatre colonnes de verre de la maquette 5.1.
    --------------------------------------------------------------------------- */
 :root[data-theme='holographique-clair'] .cosmic-outline .chat-layout {
-  /* L'ESPACEMENT DU CHAT EST CELUI DES AUTRES VUES (conv-934, 2026-10-13 : « l'espacement entre la
+  /* L'ESPACEMENT DU CHAT EST CELUI DES AUTRES VUES (2026-10-13 : « l'espacement entre la
      colonne de gauche et la colonne d'icones doit etre le meme que l'espacement entre la barre de
      convs et le bloc de chat », puis « toutes les autres vues a part chat ont le bon espacement
      deja »). Mesure avant : toutes les autres vues a 24 px du menu (la marge de `.main`,
@@ -594,10 +594,10 @@
   box-shadow: var(--nv-reflet-dore);
 }
 /* LA COLONNE DU FIL S'ASSOMBRIT (variante 3 « Pose sur le fil », choisie le 2026-10-09,
-   conv-124, apres « les blocs de ta reponse ne sont pas hyper lisibles car trop clairs »).
+   Apres « les blocs de ta reponse ne sont pas hyper lisibles car trop clairs »).
    Le verre blanc a 5 % + voile dore devenait un mauve laiteux sur la nebuleuse : contraste
    mesure 7,5:1 au pire endroit. Fond encre a 86 % : 15,7:1 sur la maquette. */
-/* TOUS LES BLOCS COMME LE FIL (conv-136, 2026-10-10 : « je veux juste que tous les blocs
+/* TOUS LES BLOCS COMME LE FIL (2026-10-10 : « je veux juste que tous les blocs
    ressemblent a celui du milieu ou j'ecris ») : la liste des conversations, le panneau Details
    et le menu de gauche prennent le meme fond encre que le fil, au lieu du verre violet sature. */
 :root[data-theme='holographique-clair'] .cosmic-outline :is(.chat, .conv-pane, .runs-pane),
@@ -607,7 +607,7 @@
   background: rgba(245, 244, 248, 0.86);
   box-shadow: var(--nv-filet-or), 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
-/* LE FIL S'ARRETE AU-DESSUS DE LA SAISIE (conv-150) : la mecanique est commune a tous les themes
+/* LE FIL S'ARRETE AU-DESSUS DE LA SAISIE : la mecanique est commune a tous les themes
    (cosmic-outline.css, `.cosmic-outline .chat`). Ici, seulement la PEINTURE : le panneau (encre,
    bord, flou de verre) passe de `.chat` a `.chat::after`. Le bord de `.chat` devient transparent
    SANS changer d'epaisseur : rien ne bouge a l'interieur de la colonne. Le flou part avec le
@@ -625,7 +625,7 @@
   background: rgba(245, 244, 248, 0.86);
   box-shadow: var(--nv-filet-or);
 }
-/* CADRE « OR QUI COULE VERS LE BLANC » (conv-168, 2026-10-10 : « un cadre a mettre autour de mes
+/* CADRE « OR QUI COULE VERS LE BLANC » (2026-10-10 : « un cadre a mettre autour de mes
    containers sur les cotes et en bas », direction « 1 · Or qui coule » choisie sur maquette ;
    d'abord vers le rose du degrade bleu -> rose, puis « finalement fais un or qui coule vers le
    blanc et pareil pour le prompt panel »). L'or du haut descend le long des cotes, s'adoucit, puis
@@ -688,8 +688,8 @@
 :root[data-theme='holographique-clair'] .conv-search .input {
   border-radius: 12px;
 }
-/* RECHERCHE-GROSSE:DEBUT -- champ de recherche en gros (conv-185). */
-/* CHAMP « RECHERCHER PARTOUT… » EN GROS (conv-185, 2026-10-10 : « ce bloc je le veux en gros avec
+/* RECHERCHE-GROSSE:DEBUT -- champ de recherche en gros. */
+/* CHAMP « RECHERCHER PARTOUT… » EN GROS (2026-10-10 : « ce bloc je le veux en gros avec
    contour gris et contour blanc quand j'ecris dedans »). Gris neutre au repos, BLANC pendant la
    saisie, sans halo. Specificite (0,4,0) / (0,5,0) chargee APRES la couche generee : prime sur son
    bord violet et son focus rose. La colonne tres etroite (@container convpane <= 170px) garde la
@@ -703,7 +703,7 @@
 }
 /* HAUTEUR = CELLE DE « NOUVEAU FIL » (2026-10-15 : « reduit la hauteur du champs recherche pour
    matcher la hauteur du bouton nouveau fil ») : les deux blocs sont empiles en tete de colonne
-   depuis conv-967, 48 px sous un bouton de 38 px faisaient deux marches. Meme valeur que le
+   48 px sous un bouton de 38 px faisaient deux marches. Meme valeur que le
    `min-height` de `.conv-new-row` plus bas : changer l'un, c'est changer l'autre. */
 @container convpane (min-width: 171px) {
   :root[data-theme='holographique-clair'] .cosmic-outline .conv-search {
@@ -733,10 +733,10 @@
   background: rgba(255, 255, 255, 0.05);
 }
 /* Fil ouvert : CADRE degrade bleu -> rose de 1,5 px sur fond d'encre, SANS voile ni lueur
-   (D2-6 « Capsule », /draft conv-171 : « j'aime pas comment la conv selectionnee est entouree » ;
+   (D2-6 « Capsule », /draft : « j'aime pas comment la conv selectionnee est entouree » ;
    le voile rose etait le meme que celui de « Nouveau fil », on voyait deux selections). Le cadre
    passe par le double fond padding-box / border-box : une border-image perdrait les coins ronds.
-   Deux teintes, bleu a gauche et rose a droite (conv-157). */
+   Deux teintes, bleu a gauche et rose a droite. */
 :root[data-theme='holographique-clair'] .cosmic-outline .conv-item.active {
   border: 1.5px solid transparent;
   border-radius: 18px;
@@ -770,12 +770,12 @@
   font-weight: 600;
 }
 
-/* PAS D'ORBE PAR FIL (retire le 2026-10-09, conv-124 : « remet les anciens icones de
+/* PAS D'ORBE PAR FIL (retire le 2026-10-09, « remet les anciens icones de
    conversations sans les grosses boules colorees »). La liste garde la pastille d'etat
    d'origine (ChatView.css, `.conversation-state`), a sa place et a sa taille : sa FORME
    porte le sens (points qui sautillent = question, atome = en cours). Seule sa couleur suit
    les jetons --chat-etat-* de ce theme. */
-/* PASTILLE = ORBE DORE (demande du 2026-10-10, conv-139 : « la meme boule [que l'Agent] a gauche
+/* PASTILLE = ORBE DORE (demande du 2026-10-10, « la meme boule [que l'Agent] a gauche
    des convs a la place des points lumineux »). Seuls les etats en DISQUE la prennent : l'atome
    (en cours) et les trois points (question / attente) gardent leur forme, qui porte le sens.
    Le halo reste a la couleur de l'etat (currentColor) pour ne pas perdre echec / non lu. */
@@ -790,7 +790,7 @@
     currentColor 40%,
     color-mix(in srgb, currentColor 80%, #000) 95%
   );
-  /* PLUS FLASHY (conv-139, 2026-10-10) : couleur pleine, peu assombrie, double halo vif. */
+  /* PLUS FLASHY (2026-10-10) : couleur pleine, peu assombrie, double halo vif. */
   filter: saturate(1.5) brightness(1.1);
   box-shadow:
     var(--nv-orbe-reflet),
@@ -836,7 +836,7 @@
    Les bulles ORDINAIRES sont peintes par cosmic-outline.css (`.msg-body.msg-bulle`, selecteur plus
    fort). Cette regle-ci peint ce qui n'a PAS `msg-bulle` : les messages envoyes PENDANT un tour
    (ChatMessageRow.tsx, `DirectiveReceiptRow`). Elle portait rose -> bleu, l'inverse des autres
-   bulles ; alignee sur cosmic-outline.css (conv-157, 2026-10-10), bleu a gauche, rose a droite --
+   bulles ; alignee sur cosmic-outline.css (2026-10-10), bleu a gauche, rose a droite --
    le test compare les deux valeurs. */
 :root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body,
 :root[data-theme='holographique-clair'] .msg.user .msg-body {
@@ -847,7 +847,7 @@
   box-shadow: none;
 }
 /* La reponse de l'agent n'a plus de plaque : son texte se pose sur la colonne sombre du fil.
-   SANS filet a gauche ni retrait (conv-161, 2026-10-10 : « enleve le liserai rose a gauche des
+   SANS filet a gauche ni retrait (2026-10-10 : « enleve le liserai rose a gauche des
    textes il prend de la place pour rien ») : `border: 0` couvre le bord gauche que les couches
    generees et cosmic-outline.css posent, et le retrait gauche de 16 px qui l'accompagnait part
    avec lui. */
@@ -869,7 +869,7 @@
   margin-right: 7px;
   vertical-align: -2px;
   border-radius: 50%;
-  /* Orbe et libelle « Agent » DORES (demande du 2026-10-10, conv-139). */
+  /* Orbe et libelle « Agent » DORES (demande du 2026-10-10). */
   background: radial-gradient(circle at 35% 30%, #fff1c4, #e3ba55 45%, #8a6420 90%);
   box-shadow:
     var(--nv-orbe-reflet),
@@ -879,7 +879,7 @@
 :root[data-theme='holographique-clair'] .cosmic-outline .msg.assistant .msg-role {
   color: #695011;
 }
-/* LIGNE « AGENT » EN CAPSULE (« Fumé net · Agent assorti », choix sur maquettes, conv-173,
+/* LIGNE « AGENT » EN CAPSULE (« Fumé net · Agent assorti », choix sur maquettes
    2026-10-10 : « Agent assorti implémente c magnifique ») : l'orbe, le mot et le spinner dans le
    même verre fumé que les capsules Raisonnement / Actions, mais à bord OR — la couleur d'Agent.
    Le mot suit la maquette approuvée : « Agent » à 12 px, sans capitales forcées (la règle
@@ -910,7 +910,7 @@
 }
 
 /* BLOC DE FIN DE TOUR (Fait / Maintenant / Reste a faire / Recommande) : DORE (demande du
-   2026-10-09, conv-124 : « le bloc fait maintenant a faire doit etre dore »). Cadre or, voile or
+   2026-10-09, : « le bloc fait maintenant a faire doit etre dore »). Cadre or, voile or
    tres leger sur la colonne sombre, intertitres en or plus bas (typo). Une seule teinte : la
    regle « jamais de triple degrade » n'est pas en jeu. Le texte reste clair : le fond reste sombre. */
 :root[data-theme='holographique-clair'] .md-final-summary {
@@ -919,19 +919,19 @@
   box-shadow: inset 0 1px 0 rgba(255, 214, 140, 0.35);
 }
 
-/* QUESTION A L'UTILISATEUR (AskDecision) : CADRE « NACRE » (conv-240, 2026-10-11, /draft en 2 tours :
+/* QUESTION A L'UTILISATEUR (AskDecision) : CADRE « NACRE » (2026-10-11, /draft en 2 tours :
    « le bloc ASK et frame sont un peu trop exuberant », puis « le 1 [Cadre seul] mais le cadre en lui
    meme faut le changer et dans le cas de choix multiple ca doit aussi mettre le cadre autour des
-   reponses selectionnees », puis « implemente le 2 c parfait »). Remplace le cadre de conv-202, qui
+   reponses selectionnees », puis « implemente le 2 c parfait »). Remplace le cadre, qui
    peignait des bandes holo repetees tous les 240 px sur le cadre ET sur chaque reponse (1,5 px).
    Ici, le holo ne reste que sur le CADRE du bloc, 1 px, en UN SEUL cycle bleu > rose > argent > rose
    clair etale sur toute la largeur (--nv-askd-nacre). Les reponses sont des aplats gris sans bord
    visible ; survol, focus et reponse recommandee : un gris plus clair. Une reponse COCHEE (choix
    multiple) ou RETENUE (bloc repondu) porte le MEME cadre nacre autour d'un gris plus clair, texte
-   blanc. Bleu #3c6eeb toujours PLEIN (conv-182) : aucun voile bleu, les fonds sont des gris neutres.
+   blanc. Bleu #3c6eeb toujours PLEIN : aucun voile bleu, les fonds sont des gris neutres.
    Maquettes : artifacts/draft-ask-sobre/tour2.html, onglet « 2 · Nacre ».
    Le bloc des suppositions du cadrage (`.askd.cadrage-hyp`, « le bloc Frame ») reutilise ces
-   classes et prend le MEME habit (conv-202). --nv-askd-holo reste defini pour Holographique blanc,
+   classes et prend le MEME habit. --nv-askd-holo reste defini pour Holographique blanc,
    derive de ce fichier : il en borde ses reponses survolees. L'encre posee sur une reponse cochee
    passe par --nv-askd-encre-bulle. */
 :root[data-theme='holographique-clair'] .askd {
@@ -984,7 +984,7 @@
 }
 /* Le badge « cadrage » perd le contour or de CadrageHypotheses.css. Un contour TRANSPARENT ne
    suffit pas : le degrade, dessine dans la boite interieure, se repete sous le bord -- un filet
-   rose a gauche et bleu a droite (conv-202 : « juste le tag a un liserai rose a gauche et bleu a
+   rose a gauche et bleu a droite (« juste le tag a un liserai rose a gauche et bleu a
    droite enleve les »). Aucun bord, et la marge du badge ASK : meme taille que lui. */
 :root[data-theme='holographique-clair'] .cadrage-hyp .askd-badge {
   border: 0;
@@ -1058,7 +1058,7 @@
   outline-offset: 2px;
 }
 /* Reponse cochee (choix multiple) ou retenue (bloc repondu) : le MEME cadre nacre que le bloc,
-   autour d'un gris plus clair (conv-240 : « ca doit aussi mettre le cadre autour des reponses
+   autour d'un gris plus clair (« ca doit aussi mettre le cadre autour des reponses
    selectionnees »). */
 :root[data-theme='holographique-clair'] .askd .askd-item:has(.askd-coche input:checked),
 :root[data-theme='holographique-clair']
@@ -1099,8 +1099,8 @@
     var(--nv-lueur-or);
 }
 /* CARTES DE FICHIER DU FIL (image lue, document, page HTML -- ArtifactPreview.css) : BORD BLANC
-   depuis conv-161 (voir le calque `::before`). Historique : bord au DEGRADE DES BULLES DE
-   L'UTILISATEUR, rose -> bleu (conv-157, 2026-10-10 : « met des borders
+   (voir le calque `::before`). Historique : bord au DEGRADE DES BULLES DE
+   L'UTILISATEUR, rose -> bleu (2026-10-10 : « met des borders
    degrade bleu et violet sur les elements du chat qui ont un cadre comme ca », sur la capture de
    la carte « IMAGE · READ », precise aussitot : « bleu et rose, ca doit etre les memes couleurs
    que mes messages dans le chat », puis « le bleu est a gauche et le rose a droite »). La bulle
@@ -1124,9 +1124,9 @@
   z-index: 2;
   padding: 1px;
   border-radius: inherit;
-  /* BLANC (conv-161, 2026-10-10 : « ce cadre met le en blanc aussi ca rendra mieux », sur la
+  /* BLANC (2026-10-10 : « ce cadre met le en blanc aussi ca rendra mieux », sur la
      carte « IMAGE · READ », juste apres le lisere blanc des bulles de skill). Remplace le degrade
-     bleu -> rose des bulles demande en conv-157. */
+     bleu -> rose des bulles demande. */
   background: #ffffff;
   pointer-events: none;
   -webkit-mask:
@@ -1136,9 +1136,9 @@
   mask-composite: exclude;
 }
 /* « Nouveau fil » : PILULE pleine en degrade diagonal bleu -> rose, « + » dans un rond blanc a
-   DROITE (D2-6 « Capsule », /draft conv-171). Le « + » precede le titre dans le balisage : c'est
+   DROITE (D2-6 « Capsule »). Le « + » precede le titre dans le balisage : c'est
    `order` qui le passe a droite. Sur un fil vide (`.active`), il BRILLE au lieu de s'assombrir
-   (2026-10-10, conv-201 : « tu as rendu le bouton nouveau fil plus fonce mais au contraire
+   (2026-10-10, « tu as rendu le bouton nouveau fil plus fonce mais au contraire
    j'aimerais qu'il soit plus shiny ou avec une animation ») : meme degrade plein qu'au repos, un
    reflet bombe en haut, et un ECLAT blanc qui balaie la pilule toutes les 3,2 s, sous le texte.
    Le bleu reste plein ; seul le blanc du reflet est dose. Mouvement reduit : reflet sans eclat. */
@@ -1209,7 +1209,7 @@
 }
 
 /* PIED DE LISTE : UNE capsule a trois cases egales -- filtre, densite, vue --, chacune avec son
-   icone et son libelle (D2-6 « Capsule », /draft conv-171). Icones et libelles sont masques par
+   icone et son libelle (D2-6 « Capsule »). Icones et libelles sont masques par
    defaut (ChatView.css) : les autres themes gardent leur pied.
    RIEN NE S'Y ALLUME (2026-10-10, /draft du pied : « ils doivent pas s'allumer », puis « texte
    blanc et liseré bleu et rose au survol », puis « le 3 comme apparence par defaut et le 2 au
@@ -1333,7 +1333,7 @@
   text-transform: capitalize;
 }
 
-/* ZONE DE SAISIE : UN SEUL BLOC (demande du 2026-10-09, conv-124 : « ya 2 blocs l'un dans
+/* ZONE DE SAISIE : UN SEUL BLOC (demande du 2026-10-09, « ya 2 blocs l'un dans
    l'autre dans la barre de prompt, garde que celui du milieu fonce et agrandis-le pour qu'il
    ait la taille du dore et violet »). Trois couches s'empilaient, relevees au rendu par des
    contours de sonde : `.composer` (cadre exterieur, verre a bord DORE), `.composer-field`
@@ -1345,13 +1345,13 @@
   padding: 0 0 10px;
   border: 0;
   /* Coins du BAS au rayon du panneau (--nv-rond moins son bord de 1 px) : a 22 px, le coin du
-     panneau depassait en croissant sombre en bas a droite (conv-139, 2026-10-10). */
-  border-radius: calc(var(--nv-rond) - 1px); /* memes coins en haut qu'en bas (conv-139) */
-  /* DEGRADE OR -> NOIR sur TOUT le bloc (demande du 2026-10-10, conv-139, variante B1 eclaircie).
+     panneau depassait en croissant sombre en bas a droite (2026-10-10). */
+  border-radius: calc(var(--nv-rond) - 1px); /* memes coins en haut qu'en bas */
+  /* DEGRADE OR -> NOIR sur TOUT le bloc (demande du 2026-10-10, variante B1 eclaircie).
      Fond seul : la jauge de quota (::before / ::after) n'est pas touchee. */
   /* Sur CE theme, le degrade est ROSE et part d'en bas a droite (le dore « ne va pas avec le
      reste » ; il devient un theme a part entiere, demande du 2026-10-10). */
-  /* PLUS DE ROSE (conv-155, 2026-10-10, « enlever ce rose », variante « B · S'allume, rond »
+  /* PLUS DE ROSE (2026-10-10, « enlever ce rose », variante « B · S'allume, rond »
      choisie sur maquette) : un NOIR PROFOND UNI. Ecrit comme un degrade d'une seule teinte pour
      rester une couche d'image : la saisie detachee du fil le pose sur son encre (plus bas).
      En VARIABLE, ecrite UNE seule fois. */
@@ -1364,15 +1364,15 @@
   border: 0;
   box-shadow: none;
 }
-/* LA SAISIE DETACHEE DU FIL GARDE SES COULEURS (conv-150, 2026-10-10 : « ya un truc chelou avec
+/* LA SAISIE DETACHEE DU FIL GARDE SES COULEURS (2026-10-10 : « ya un truc chelou avec
    les couleurs »). Sortie du panneau, elle n'avait plus l'encre du fil derriere elle : son degrade
    translucide se posait sur la nebuleuse, quasi noir a gauche et magenta vif en bas a droite, et
    son bord se fondait dans le decor. L'encre du panneau (rgba(8, 8, 8, 0.86), plus haut) repasse
    SOUS le degrade : memes couleurs qu'avant la separation. Le bord reste le meme au focus. */
 :root[data-theme='holographique-clair'] .cosmic-outline .chat > .composer,
 :root[data-theme='holographique-clair'] .cosmic-outline .chat > .composer:focus-within {
-  /* CADRE « OR QUI COULE VERS LE BLANC » (conv-168, « pareil pour le prompt panel ») : le meme
-     degrade que les panneaux (--nv-cadre-coule), a la place du cadre or uni de conv-155.
+  /* CADRE « OR QUI COULE VERS LE BLANC » (« pareil pour le prompt panel ») : le meme
+     degrade que les panneaux (--nv-cadre-coule), a la place du cadre or uni.
      Le bloc est OPAQUE (--nv-saisie-degrade = #09090a plein) : le cadre est donc un FOND pose sur
      la boite du bord, et le noir du bloc, rogne a l'interieur (padding-box), le recouvre ailleurs.
      Les deux pseudo-elements sont deja pris par la jauge de contexte, qui recouvre le haut. */
@@ -1387,7 +1387,7 @@
     rgba(245, 244, 248, 0.86);
   /* Le degrade part du BORD exterieur : cale par defaut sur l'interieur, il se repetait SOUS le bord
      d'1 px, qui montrait alors le cote OPPOSE du degrade — un lisere quasi noir a droite et en bas
-     (conv-150 : « ya un liserai noir a droite du bloc de prompt »). Apres `background`, qui le remet
+     (« ya un liserai noir a droite du bloc de prompt »). Apres `background`, qui le remet
      a zero. */
   background-origin: border-box;
 }
@@ -1398,12 +1398,12 @@
   border-radius: 22px;
   background: transparent; /* le degrade du bloc .composer passe a travers */
   backdrop-filter: none;
-  box-shadow: none; /* le reflet du haut laissait un arc remanent en haut a droite (conv-139) */
+  box-shadow: none; /* le reflet du haut laissait un arc remanent en haut a droite */
 }
 /* Focus : le bord passe au rose, SANS halo autour. Le halo de 3 px se lisait, sur le haut
    du bloc, comme une seconde ligne au-dessus du bord (capture du 2026-10-09). */
 :root[data-theme='holographique-clair'] .cosmic-outline .composer-field:focus-within {
-  /* Plus de bord rose au focus (demande du 2026-10-10, conv-139 : « enleve le cadre rose »). */
+  /* Plus de bord rose au focus (demande du 2026-10-10, « enleve le cadre rose »). */
   border-color: transparent;
   box-shadow: none;
   outline: none;
@@ -1430,7 +1430,7 @@
   right: 22px;
   left: 22px;
 }
-/* LA JAUGE EPOUSE LE HAUT DU CADRE OR (conv-156, 2026-10-10 : « epaissis la barre de contexte pour
+/* LA JAUGE EPOUSE LE HAUT DU CADRE OR (2026-10-10 : « epaissis la barre de contexte pour
    qu'elle recouvre le cadre en or », puis « elle doit etre courbee au debut et a la fin pour suivre
    le contour du bloc ou je prompt » ; variante « A · Arc » choisie sur maquette, forme fixee par la
    capture jointe : un filet qui s'AMINCIT en entrant dans les deux coins du haut).
@@ -1462,7 +1462,7 @@
   z-index: 1;
   background: linear-gradient(rgba(var(--voile-rgb), 0.14), rgba(var(--voile-rgb), 0.14)), #f6f5f9;
 }
-/* REMPLISSAGE OR (conv-156 : « en fait F pas A », variante « F · Or courbe ») : or eteint -> or
+/* REMPLISSAGE OR (« en fait F pas A », variante « F · Or courbe ») : or eteint -> or
    clair -> blanc chaud, cale sur la largeur TOTALE comme le degrade de ChatView.css (meme decoupe
    par clip-path) : chaque point garde sa teinte, la pointe s'eclaircit a mesure que le fil se
    remplit. La piste reste sombre. */
@@ -1472,20 +1472,20 @@
   background-color: #f6f5f9;
   opacity: 1;
 }
-/* BOUTON D'ENVOI = UN ROND QUI S'ALLUME (conv-155, 2026-10-10, variante « B · S'allume, rond »
+/* BOUTON D'ENVOI = UN ROND QUI S'ALLUME (2026-10-10, variante « B · S'allume, rond »
    choisie sur maquette). Il quitte la forme de bulle -- le coin pince est reserve aux messages
    (« ca faisait sens pour la bulle de chat mais pas pour les boutons ») -- et le degrade
    bleu -> rose : un ROND de 38 px, comme les trois ronds de sa rangee. Champ vide : contour or
    eteint. Message pret : OR PLEIN, avion fonce -- l'or dit « ca peut partir ». Aucune lueur.
    Les couleurs passent par les jetons --nv-envoi-*.
-   CARRE « LINEAIRE B » (conv-302, 2026-10-17, /draft de la barre de saisie : « juste le bouton
+   CARRE « LINEAIRE B » (2026-10-17, /draft de la barre de saisie : « juste le bouton
    envoyer et les icones de B lineaire et il s'allume quand ya du texte dans le prompt »). Le rond
    de 38 px devient un CARRE de 32 px a coins de 3 px, dans TOUS ses etats (pret, vide, Orienter,
    Reprendre) : un bouton qui changerait de forme selon l'etat se lirait comme deux boutons.
    L'avion passe a 16 px, la moitie du carre comme il etait la moitie du rond. Stop (bouton
    `.composer-stop` a part) n'est pas touche. Ses coins de 3 px sont redevenus droits : la forme
-   vient du chanfrein « Platine » (bloc BOUTONS-CHANFREIN, conv-302) -- arrondie a 8 px depuis
-   conv-1068 (meme bloc). */
+   vient du chanfrein « Platine » (bloc BOUTONS-CHANFREIN) -- arrondie a 8 px
+   (meme bloc). */
 :root[data-theme='holographique-clair'] .cosmic-outline .composer-send {
   --nv-envoi-fond: #d9ae52;
   --nv-envoi-fond-survol: #e3ba55;
@@ -1548,12 +1548,12 @@
   background: rgba(235, 40, 40, 0.95);
 }
 :root[data-theme='holographique-clair'] .cosmic-outline .composer-send.is-stop {
-  /* ROUGE franc, pas rose (conv-139, 2026-10-10 : « paraissent rose au lieu de rouge »). */
+  /* ROUGE franc, pas rose (2026-10-10 : « paraissent rose au lieu de rouge »). */
   background: rgba(235, 40, 40, 0.85);
   box-shadow: 0 0 0 1px rgba(255, 70, 60, 0.9);
   color: #ffffff;
 }
-/* REPRENDRE EN GEL VERT (conv-902, 2026-10-12, capture : le rond vert d'Holographique blanc, fleche
+/* REPRENDRE EN GEL VERT (2026-10-12, capture : le rond vert d'Holographique blanc, fleche
    presque invisible -- « refais ce bouton pour qu'il soit mieux visible dans mes themes
    holographique »). Il etait un voile vert a 20 % cercle de neon, fleche #ccffdd : sur la nacre du
    blanc (qui recopie `.composer-send` tel quel, voir CLAIR_SUR_DEGRADE du generateur) la fleche
@@ -1597,19 +1597,19 @@
    (degrade radial clair au centre -> sombre au bord) coiffe d'un REFLET OVALE net en haut. Survol :
    le reflet s'avive. Appui : le reflet s'eteint et l'ombre se raccourcit -- l'appui se lit au
    reflet, le bouton ne retrecit plus (`transform: none` annule le scale(0.94) de cosmic-outline.css
-   et ChatView.css). Aucune lueur : ombres NOIRES et courtes. Deux teintes par degrade (conv-124).
+   et ChatView.css). Aucune lueur : ombres NOIRES et courtes. Deux teintes par degrade.
    Le bord garde son epaisseur (l'icone ne bouge pas) mais devient transparent, et le fond passe
    dessous (`background-origin: border-box`, repose apres chaque raccourci `background`).
-   Le Stop garde son rouge franc (conv-139) : reflet rouge-orange, jamais blanc, qui le rendrait
+   Le Stop garde son rouge franc : reflet rouge-orange, jamais blanc, qui le rendrait
    rose ; maquette : artifacts/draft-relief/tour2.md. Envoyer (et « Orienter », le meme bouton) a
-   quitte la perle or pour le gel bleu-rose ci-dessous (conv-200). Ses regles suivent celles
+   quitte la perle or pour le gel bleu-rose ci-dessous. Ses regles suivent celles
    d'Envoyer pret (meme selecteur, ecrites apres : elles gagnent). */
-/* ENVOYER EN GEL FONDU BLEU-ROSE (conv-200, 2026-10-10, /draft « une version bleu et violet comme
+/* ENVOYER EN GEL FONDU BLEU-ROSE (2026-10-10, /draft « une version bleu et violet comme
    le reste de mon theme » : « E · Gel » puis « implémente E4 »). La perle or d'Envoyer cede la
    place au degrade du theme, celui de « Nouveau fil » et de l'icone active du menu, avion BLANC, et
    un reflet blanc qui s'efface SANS ligne jusqu'au milieu. Il repeint, pour ce theme seulement, l'or
    des jetons --nv-envoi-* poses plus haut.
-   L'etat se lit au reflet et a l'avion, jamais a la couleur (conv-182 : le bleu reste plein) :
+   L'etat se lit au reflet et a l'avion, jamais a la couleur (Le bleu reste plein) :
    survol = reflet plus fort, appui = reflet eteint sans retrecir, rien a envoyer = le meme rond,
    reflet faible et avion a 50 % -- plus de contour or ni d'`opacity`. « Orienter » est le meme
    bouton : meme gel. Maquette : artifacts/draft-envoi-bleu-violet/tour2.html. */
@@ -1617,7 +1617,7 @@
   .cosmic-outline
   .composer-send:not(.is-resume):not(.is-stop):not(:disabled) {
   /* Aucun bord sous le gel : l'ancien `--nv-envoi-bord` (1,5 px) decalerait le cadre a chanfrein,
-     cale sur la boite interieure, de la coupe posee sur la boite exterieure (conv-302). */
+     cale sur la boite interieure, de la coupe posee sur la boite exterieure. */
   border-width: 0;
   border-color: transparent;
   background:
@@ -1651,11 +1651,11 @@
   background-repeat: no-repeat;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
 }
-/* RIEN A ENVOYER = CARRE CREUX, il s'allume au premier caractere (conv-302, « Lineaire B »). Le
+/* RIEN A ENVOYER = CARRE CREUX, il s'allume au premier caractere (« Lineaire B »). Le
    bouton est desactive tant que le champ est vide (ChatComposer.tsx, `disabled`) : c'est cet etat
    qui l'eteint, et le gel plein ci-dessus qui l'allume. Dedans, le FOND DE LA SAISIE
    (--nv-saisie-degrade : noir ici, nacre dans Holographique blanc) ; avion en couleur du texte.
-   Remplace le gel au reflet faible et avion a 50 % (conv-200), qui se lisait presque comme le
+   Remplace le gel au reflet faible et avion a 50 %, qui se lisait presque comme le
    bouton pret. Le contour est le cadre a chanfrein « Platine » (bloc BOUTONS-CHANFREIN), dans
    tous les etats ; il remplace le bord d'1 px au degrade bleu -> rose de « Lineaire B ». */
 :root[data-theme='holographique-clair']
@@ -1694,7 +1694,7 @@
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
 }
 /* RELIEF-PERLE:FIN */
-/* BANDEAUX DU HAUT DU CHAT EN PERLE D'OR (conv-179, 2026-10-10 : « les bandeaux en haut de chat
+/* BANDEAUX DU HAUT DU CHAT EN PERLE D'OR (2026-10-10 : « les bandeaux en haut de chat
    font pas dore ils font orange », puis « inspire-toi du bouton Perle envoyer »). ChatView.css les
    peint en var(--warn) : l'or dans le theme par defaut, l'ambre #ffb547 ici -- mesure dans l'app
    vivante, rgb(255, 181, 71). Le bandeau prend donc l'or de la perle d'Envoyer (#e2b65a -> #a27326),
@@ -1728,11 +1728,11 @@
 :root[data-theme='holographique-clair'] .chat-travail-non-publie button.chat-travail-non-publie__fermer:hover {
   border-color: transparent;
 }
-/* LA JAUGE DE CONTEXTE SOUS L'EN-TETE, BLANCHE SUR GRIS (conv-189, 2026-10-10 : « je veux pas
+/* LA JAUGE DE CONTEXTE SOUS L'EN-TETE, BLANCHE SUR GRIS (2026-10-10 : « je veux pas
    qu'elle soit doree, je veux qu'elle soit blanche sur gris, ca sera plus discret »). Elle etait en
-   or depuis conv-179, puis jugee « trop orange ». ChatView.css la pose sur le filet du bas de
+   or, puis jugee « trop orange ». ChatView.css la pose sur le filet du bas de
    l'en-tete (`.chat-context-rule`) et ecrit le mot « contexte » au bout du remplissage. Ici :
-   3 px, l'epaisseur demandee pour la jauge (conv-156) ; un rail gris (voile a 16 %) ; un
+   3 px, l'epaisseur demandee pour la jauge ; un rail gris (voile a 16 %) ; un
    remplissage BLANC uni, sans degrade ni or. Meme decoupe par clip-path que ChatView.css. */
 :root[data-theme='holographique-clair'] .chat-context-rule::after,
 :root[data-theme='holographique-clair'] .chat-context-rule::before {
@@ -1748,8 +1748,8 @@
   background-color: #ffffff;
   opacity: 0.9;
 }
-/* CADRE-CHANFREIN:DEBUT -- cadre chanfrein platine (conv-177). */
-/* CADRE CHANFREIN PLATINE, « COINS SEULS » (conv-177, 2026-10-10 : « /draft des Border de container
+/* CADRE-CHANFREIN:DEBUT -- cadre chanfrein platine. */
+/* CADRE CHANFREIN PLATINE, « COINS SEULS » (2026-10-10 : « /draft des Border de container
    styles », puis « j'adore le 3 » -- Chanfrein --, « Platine », et « coins seuls implemente » ;
    reglage 2 du tour 3 choisi sur maquette). Les coins HAUT GAUCHE et BAS DROIT sont COUPES a 45 deg
    (14 px) au lieu d'etre arrondis ; les deux autres coins sont droits. Seuls les deux pans coupes
@@ -1826,7 +1826,7 @@
     linear-gradient(var(--nv-chanfrein-cotes), var(--nv-chanfrein-cotes));
   /* Le noir de la saisie (--nv-saisie-degrade, plus haut), ici en couleur pleine. */
   --nv-chanfrein-encre: #f6f5f9;
-  /* SATIN GRIS PARALLELE (conv-191, 2026-10-10 : « /draft un moyen que mes blocs paraissent un
+  /* SATIN GRIS PARALLELE (2026-10-10 : « /draft un moyen que mes blocs paraissent un
      peu en relief », puis « il faut toucher au fond pas au border », « faut un effet leger »,
      « Satin Argent Froid Parallele » et enfin « un plus haut et un parallele plus leger plus bas »).
      Le relief vient du FOND des panneaux, jamais du cadre : deux reflets a 135 deg, donc
@@ -1836,12 +1836,12 @@
      gris ». Les reperes sont en % de la diagonale de chaque panneau : la lumiere se repartit pareil
      sur le menu (890 px de haut) et sur la saisie (185 px). Couleurs opaques, deja composees sur le
      fond #000 du theme (l'encre a 86 % y valait environ #070707).
-     UN SEUL SATIN POUR TOUTE LA PAGE (conv-191 : « ca fait trop bizarre que chaque bloc ait son propre
+     UN SEUL SATIN POUR TOUTE LA PAGE (« ca fait trop bizarre que chaque bloc ait son propre
      satin il faut un satin qui fait toute la page mais qui est visible que sur les cards ») : chaque
      panneau le pose en `fixed`, cale sur l'ECRAN et non sur sa propre boite. Les reperes en % se
      lisent donc sur la diagonale de la fenetre : le reflet net traverse le haut gauche (menu, liste),
      le second le bas droit (fil, saisie, panneau de droite), et chaque panneau en montre sa part. */
-  /* Les quatre teintes du satin, NOMMEES (conv-987, 2026-10-16) : l'entree des cadres (bloc
+  /* Les quatre teintes du satin, NOMMEES (2026-10-16) : l'entree des cadres (bloc
      ENTREE-CHANFREIN, plus bas) les reprend une a une pour poser le satin en fondu -- une liste de
      reflets ne se rend pas transparente d'un seul geste. */
   --nv-satin-a: #f8f7fb;
@@ -1852,7 +1852,7 @@
     var(--nv-satin-a) 0%, var(--nv-satin-b) 18%, var(--nv-satin-c) 42%, var(--nv-satin-c) 48%,
     var(--nv-satin-d) 64%, var(--nv-satin-c) 80%;
   --nv-satin: linear-gradient(135deg, var(--nv-satin-reflets));
-  /* LA SOURIS EST LA SOURCE DE LUMIERE (conv-191, 2026-10-10 : « le comportement je l'aime pas trop
+  /* LA SOURIS EST LA SOURCE DE LUMIERE (2026-10-10 : « le comportement je l'aime pas trop
      draft moi des animations », « en fait j'aimerais que ca fasse comme si ma souris etait la source
      de lumiere », puis « go Ambiance implemente »). Une LUMIERE LOINTAINE ET LARGE, centree sur la
      souris : tout le cote de la page proche du curseur s'eclaire doucement, en gris. Elle remplace le
@@ -1956,7 +1956,7 @@
   clip-path: var(--nv-chanfrein-anneau);
 }
 /* Le bas du fil remonte de la hauteur de la coupe : la fleche basse de l'ascenseur restait sinon
-   dans le coin coupe du panneau (meme cause que conv-150, `.cosmic-outline .chat > .chat-scroll`). */
+   dans le coin coupe du panneau (meme cause que, `.cosmic-outline .chat > .chat-scroll`). */
 :root[data-theme='holographique-clair'] .cosmic-outline .chat > .chat-scroll {
   margin-bottom: var(--nv-chanfrein);
 }
@@ -2049,7 +2049,7 @@
     linear-gradient(#000 0 0);
   mask-composite: intersect, exclude;
 }
-/* ONGLETS DU PANNEAU DE DROITE EN LISERE (conv-180, 2026-10-10 : « remplace la capsule par un
+/* ONGLETS DU PANNEAU DE DROITE EN LISERE (2026-10-10 : « remplace la capsule par un
    liseré et enlève le liseré rose en dessous, du coup la capsule ça va pas bien avec le border
    très angulaire »). Sous le cadre a coins coupes, la pastille arrondie de l'onglet actif (section 6)
    jurait : l'onglet actif devient un texte blanc souligne d'un trait de 2 px bleu -> rose, a la
@@ -2081,8 +2081,8 @@
   background-image: linear-gradient(90deg, #3c6eeb, #d02b8c);
   color: #121018;
 }
-/* PIED DE LISTE : UN SEUL TRAIT EN HAUT (conv-190, 2026-10-10 : « dans ce bloc de buttons en fait
-   laisse qu'un liseré top », sur une capture de la capsule a coins coupes de conv-188). Le cadre
+/* PIED DE LISTE : UN SEUL TRAIT EN HAUT (2026-10-10 : « dans ce bloc de buttons en fait
+   laisse qu'un liseré top », sur une capture de la capsule a coins coupes). Le cadre
    complet du pied disparait : plus de cotes, plus de bas, plus de coins coupes, plus de filets
    entre les cases. Il ne reste qu'un trait d'1 px tout en haut, sur toute la largeur, bleu -> rose
    au repos. Le comportement du survol est garde, ramene a ce seul trait : le trait redevient gris
@@ -2110,7 +2110,7 @@
 :root[data-theme='holographique-clair'] .cosmic-outline .conv-pane .conv-foot > button:not(:first-child) {
   border-left: 0;
 }
-/* LES AUTRES VUES COMME LE CHAT (conv-211, 2026-10-10 : « parfait j'adore ce qu'on a fait dans la
+/* LES AUTRES VUES COMME LE CHAT (2026-10-10 : « parfait j'adore ce qu'on a fait dans la
    view Chat maintenant faut aligner toutes les autres views »). Le cadre de page partage
    (`.view-page`, ViewPage.css : Task Manager, Worktrees, Tickets, Tests, Observatory, Agent Studio,
    Knowledge, Settings) prend le traitement des panneaux du Chat : coins haut gauche et bas droit
@@ -2179,7 +2179,7 @@
     var(--nv-satin) fixed;
   transition: var(--nv-lumiere-transition);
 }
-/* L'ACCUEIL AUSSI (meme demande, conv-211) : il n'a pas de cadre de page, ses panneaux sont les
+/* L'ACCUEIL AUSSI (meme demande) : il n'a pas de cadre de page, ses panneaux sont les
    tuiles (`.home-tile__panel`) et la plaque du titre (`.home-view__masthead`, HomeView.css). Meme
    coupe, meme trait, meme satin, meme lumiere que le cadre des vues. Ce qui differe :
    - ils ont un bord d'1 px : il devient transparent et les calques partent de la boite EXTERIEURE
@@ -2219,8 +2219,8 @@
   box-shadow: none;
 }
 /* CADRE-CHANFREIN:FIN */
-/* NEON-TUILES:DEBUT -- les tuiles de l'Accueil en tubes neon (conv-317). */
-/* LES TUILES DE L'ACCUEIL EN TUBES NEON (conv-317, 2026-10-17 : « /draft le style des widgets pour
+/* NEON-TUILES:DEBUT -- les tuiles de l'Accueil en tubes neon. */
+/* LES TUILES DE L'ACCUEIL EN TUBES NEON (2026-10-17 : « /draft le style des widgets pour
    qu'il colle plus au fond d'ecran », puis « Affiner la 2 · Tube neon », puis « implemente 3 +
    degrade different pour chaque widget » ; maquettes : artifacts/draft-widgets-neon/tour2.md, 3 et 2,
    avant/apres : accueil-large.png -> final-nebuleuse-verre.png).
@@ -2230,10 +2230,10 @@
    droite), toutes relevees sur les enseignes et les lumieres de l'avenue. Chaque bout du tube eclaire
    de sa couleur, dedans comme dehors ; le titre est une ENSEIGNE de la couleur de depart, qui gresille
    de temps en temps (decalage propre a chaque tuile : jamais deux enseignes ensemble).
-   Ce bloc RECOUVRE, pour les tuiles seulement, le cadre a chanfrein pose plus haut (CADRE-CHANFREIN,
-   conv-211) : coins ronds et lueur debordante, que la coupe (`clip-path`) rognait. La plaque du titre
+   Ce bloc RECOUVRE, pour les tuiles seulement, le cadre a chanfrein pose plus haut (CADRE-CHANFREIN)
+   Coins ronds et lueur debordante, que la coupe (`clip-path`) rognait. La plaque du titre
    (`.home-view__masthead`) garde son chanfrein. Le panneau garde ce qui portait la lisibilite : une
-   encre opaque a 88 % sous le texte, et la lumiere de la souris (conv-191) en premiere couche.
+   encre opaque a 88 % sous le texte, et la lumiere de la souris en premiere couche.
    L'entree des cadres (ENTREE-CHANFREIN, plus bas) anime `--ch-contour` sur le panneau : le tube s'y
    ALLUME, apres le fond, au lieu du trait argent. Au repos `--ch-contour` vaut 1 (app-shell.css).
    Pas de garde prefers-reduced-motion sur le gresillement : ce poste l'a actif, et le gresillement fait
@@ -2291,7 +2291,7 @@
   clip-path: none;
   border: 1.5px solid transparent;
   border-radius: 12px;
-  /* Toujours AUCUN flou de fond (conv-124, test « ne pose aucun flou de fond ») : l'encre a 88 %
+  /* Toujours AUCUN flou de fond (test « ne pose aucun flou de fond ») : l'encre a 88 %
      porte seule la lisibilite. */
   backdrop-filter: none;
   background:
@@ -2400,8 +2400,8 @@
   border-bottom-color: color-mix(in srgb, var(--nv-neon-a) 45%, transparent);
 }
 /* NEON-TUILES:FIN */
-/* BOUTONS-CHANFREIN:DEBUT -- le chanfrein « Platine » des boutons (conv-302). */
-/* BOUTONS A CHANFREIN « PLATINE » (conv-302, 2026-10-17 : « /draft des boutons a chanfrin », puis
+/* BOUTONS-CHANFREIN:DEBUT -- le chanfrein « Platine » des boutons. */
+/* BOUTONS A CHANFREIN « PLATINE » (2026-10-17 : « /draft des boutons a chanfrin », puis
    « Implementer la 1 · Platine » ; maquette : artifacts/draft-chanfrein/tour1.md, proposition 1).
    Envoyer, Nouveau fil et Details prennent le cadre des grands panneaux (bloc CADRE-CHANFREIN
    ci-dessus) a leur echelle : coins HAUT GAUCHE et BAS DROIT coupes a 45 deg, les deux autres
@@ -2410,7 +2410,7 @@
    jetons de couleur que les panneaux (--nv-chanfrein-haut, -bas, -cotes) : Holographique blanc,
    qui les repeint en bleu et rose, recolore aussi les boutons. Le REMPLISSAGE de chaque bouton ne
    change pas (gel bleu -> rose, fond de la saisie, verre fume de la capsule).
-   Les blocs interieurs des vues (cartes, colonnes) gardent leur rayon (conv-211) : seuls ces trois
+   Les blocs interieurs des vues (cartes, colonnes) gardent leur rayon : seuls ces trois
    boutons sont coupes. Les capsules Raisonnement et Actions du fil, qui partagent les classes de
    Details, restent arrondies : le selecteur passe par `.workflow-capsule`.
    COMMENT : la COUPE est un `clip-path` sur le bouton ; le CADRE est son `::before`, un anneau
@@ -2420,25 +2420,25 @@
    (Envoyer pret, Reprendre et vide posent donc `border-width: 0`). Details reprend son `::before`
    de bord degrade (ChatView.css, masque evide) ; Nouveau fil garde son `::after` pour l'eclat. La
    coupe rogne aussi le contour de focus : au clavier, tout le cadre s'allume a la place.
-   STOP rejoint les trois (conv-349, 2026-10-19 : « fais un bouton stop a chanfrin pour la barre
-   de prompt ») : son carre de 28 px (« COMPOSER PLUS BAS » de ChatView.css, qui ecrase les 38 px
-   de conv-254), pose sous Envoyer, prend la MEME coupe que lui (6 px, pans 12 px) : deux boutons
+   STOP rejoint les trois (2026-10-19 : « fais un bouton stop a chanfrin pour la barre
+   de prompt ») : son carre de 28 px (« COMPOSER PLUS BAS » de ChatView.css, qui ecrase les 38 px),
+   pose sous Envoyer, prend la MEME coupe que lui (6 px, pans 12 px) : deux boutons
    voisins aux coupes differentes se liraient comme deux familles. Il garde son dome rouge (bloc
    RELIEF-PERLE) ; ChatView.css lui pose un bord d'1 px au repos comme eteint, d'ou son
    `border-width: 0`. */
-/* COINS ARRONDIS POUR ENVOYER, STOP ET NOUVEAU FIL (conv-1068, 2026-10-22 : « remet des bords
+/* COINS ARRONDIS POUR ENVOYER, STOP ET NOUVEAU FIL (2026-10-22 : « remet des bords
    arrondis sur le bouton envoyer stop et nouveau fil »). Les trois boutons quittent la coupe a
-   45 deg : Envoyer (32 px) et Stop (28 px) restent des CARRES (« Lineaire B », conv-302) a coins
-   de 8 px, Nouveau fil redevient sa PILULE (« Capsule », conv-171). Le cadre « Platine » reste :
+   45 deg : Envoyer (32 px) et Stop (28 px) restent des CARRES (« Lineaire B ») a coins
+   de 8 px, Nouveau fil redevient sa PILULE (« Capsule »). Le cadre « Platine » reste :
    memes jetons, pans allumes en haut a gauche et en bas a droite, cotes a 7 %. Seule la facon de
    le tracer change : la coupe en `clip-path` ne suit pas un arrondi, l'anneau d'1 px est donc
    evide par masque (le fond, moins sa boite de contenu), et il prend l'arrondi du bouton par
    `border-radius: inherit`. Details garde son chanfrein (non nomme dans la demande).
    Sans `clip-path`, le contour de focus n'est plus rogne ; le cadre s'allume quand meme au clavier.
-   PLUS DE PANS ALLUMES (conv-1068, meme jour : « enleve le bord blanc dans les coins ») : sur un
+   PLUS DE PANS ALLUMES (meme jour : « enleve le bord blanc dans les coins ») : sur un
    arrondi, les deux equerres claires du haut gauche et du bas droit se lisaient comme un bord blanc
    pose dans les coins. L'anneau ne garde que les cotes a 7 %, uniformes ; Details garde les siens.
-   DETAILS QUITTE LE CHANFREIN (conv-1317, 2026-10-30 : « le bouton détail met lui le meme look ») :
+   DETAILS QUITTE LE CHANFREIN (2026-10-30 : « le bouton détail met lui le meme look ») :
    il prend le bouton creux de la Mini-adresse (BoutonCreux.css). Ses regles ont quitte ce bloc ; ce
    qui en parle plus haut est l'historique. */
 :root[data-theme='holographique-clair'] .cosmic-outline .composer-input-row > .composer-send {
@@ -2487,8 +2487,8 @@
   --nv-bouton-cotes: var(--nv-chanfrein-haut);
 }
 /* BOUTONS-CHANFREIN:FIN */
-/* ENTREE-CHANFREIN:DEBUT -- l'entree des cadres a chanfrein (conv-987). */
-/* L'ENTREE DES CADRES A CHANFREIN, LE DESSIN (conv-987, 2026-10-16 : « /draft des animations
+/* ENTREE-CHANFREIN:DEBUT -- l'entree des cadres a chanfrein. */
+/* L'ENTREE DES CADRES A CHANFREIN, LE DESSIN (2026-10-16 : « /draft des animations
    d'entree pour les containers a chanfrin », puis « 3 et 6 », « le 4 duree 1 second » et « Implemente
    la 2 (Elan, 1 s) » ; maquette du tour 3, rendue par le filtre reel du fil). A chaque changement de
    vue, `entree-cascade.ts` marque les cadres visibles (`data-entree-chanfrein`, rang en
@@ -2507,7 +2507,7 @@
    fil) en heritent. Ce sont les recettes de repos (plus haut), couleurs passees par `--ch-*` et
    traits ajoutes : a l'etat final, le dessin est le meme au pixel, et le cadre se libere sans saut.
    Le test « recette d'entree = recette de repos » les tient alignees.
-   Le MENU DE GAUCHE (`.rail`) entre de meme quand on le reduit ou le deplie (conv-987 : « et quand
+   Le MENU DE GAUCHE (`.rail`) entre de meme quand on le reduit ou le deplie (« et quand
    je reduis deploi la left bar aussi ») : meme anneau, meme satin que les volets du Chat.
    Les enfants DIRECTS reprennent le satin de repos : sans cela, la saisie (`var(--nv-satin)`) aurait
    recu sa propre lumiere et son propre fondu, en plus de ceux du fil. */
@@ -2584,7 +2584,7 @@
 :root[data-theme='holographique-clair'] .theme-serious .rail[data-entree-chanfrein] > * {
   --nv-satin: linear-gradient(135deg, var(--nv-satin-reflets));
 }
-/* LE PANNEAU DETAILS N'A PLUS SON FONDU (conv-987, 2026-10-16 : « quand j'ouvre le panneau detail je
+/* LE PANNEAU DETAILS N'A PLUS SON FONDU (2026-10-16 : « quand j'ouvre le panneau detail je
    veux l'animation des border ») : a l'ouverture, ce sont ses bords qui se dessinent
    (`jouerEntreeCadre`, WorkflowsPanel.tsx), et son texte est la tout de suite. Garde, `fade-in`
    faisait deux degats : le texte arrivait en fondu, et a la liberation du cadre, le nom d'animation
@@ -2594,9 +2594,9 @@
   animation: none;
 }
 /* ENTREE-CHANFREIN:FIN */
-/* PASTILLES DE LA SAISIE EN HABIT HOLOGRAPHIQUE (conv-324, 2026-10-18 : « met ces boutons au style
+/* PASTILLES DE LA SAISIE EN HABIT HOLOGRAPHIQUE (2026-10-18 : « met ces boutons au style
    holographique pour les hover et selected », capture du ∞ allume en or, du trombone et du micro).
-   Le langage est celui des fleches rondes du carrousel /draft (scripts/draft-carrousel.mjs, conv-302) :
+   Le langage est celui des fleches rondes du carrousel /draft (scripts/draft-carrousel.mjs) :
    un aplat GRIS neutre (texte 14 % sur le fond) cercle du cadre NACRE de 1 px (bleu > rose > argent >
    rose clair > bleu, le cadre du bloc de question). Survol = ce rond nacre ; ∞ ALLUME = le meme cadre
    autour d'un gris plus clair (21 %), glyphe en couleur du texte -- il remplace l'or du 2026-09-07 dans
@@ -2625,10 +2625,10 @@
     var(--nv-pastille-nacre) border-box;
   color: var(--text);
 }
-/* ICONES NUES « LINEAIRE B » (conv-302, 2026-10-17 : « juste le bouton envoyer et les icones de B
+/* ICONES NUES « LINEAIRE B » (2026-10-17 : « juste le bouton envoyer et les icones de B
    lineaire »). Mode auto, trombone et micro perdent leur rond blanc (ChatView.css, « BLANC FRANC
    POUR LES TROIS PASTILLES ») : il ne reste que le trace, en couleur du texte. Le bouton garde sa
-   boite de 24 px, la cible du clic ne retrecit pas. Survol = rond nacre holographique (conv-324,
+   boite de 24 px, la cible du clic ne retrecit pas. Survol = rond nacre holographique (
    juste au-dessus), au lieu du bord rose de `.btn`. Les etats qui PORTENT une information sont
    exclus et gardent leur habit : mode auto allume (cadre nacre), micro en ecoute ou en
    transcription. */
@@ -2659,7 +2659,7 @@
     linear-gradient(var(--nv-pastille-gris), var(--nv-pastille-gris)) padding-box,
     var(--nv-pastille-nacre) border-box;
 }
-/* « ↓ DERNIER MESSAGE » EN OR (conv-157, 2026-10-10 : « ce bouton met le en dore », capture de la
+/* « ↓ DERNIER MESSAGE » EN OR (2026-10-10 : « ce bouton met le en dore », capture de la
    pastille rose). Elle est doree a l'origine (cosmic-outline.css `.chat-jump-latest`) ; la couche
    generee transposait cet or en rose. On lui rend l'or de la saisie juste en dessous. La pastille
    de la mosaique suit : ChatMosaic.css impose la MEME pastille dans les deux vues (« un style
@@ -2690,9 +2690,9 @@
 }
 /* Memes paliers que l'original (12 / 30-42 / 56-68 / 86 %), teintes du theme. Posees en
    VARIABLES : la barre et sa pastille les lisent toutes deux (quota-gradient.ts), la pastille ne
-   recopie plus le vert de base (conv-197). */
+   recopie plus le vert de base. */
 :root[data-theme='holographique-clair'] .model-quota-trigger {
-  --quota-rouge: #e8302a; /* rouge franc (conv-139) */
+  --quota-rouge: #e8302a; /* rouge franc */
   --quota-orange: #ff8a5c;
   --quota-jaune: #ffcf5a;
   --quota-vert: #00ff55;
@@ -2728,14 +2728,14 @@
 }
 :root[data-theme='holographique-clair'] .workflow-section-tab.is-active {
   border: 0;
-  border-radius: 999px; /* la pastille des onglets voisins, sans coin pince (conv-155) */
+  border-radius: 999px; /* la pastille des onglets voisins, sans coin pince */
   background: var(--nv-degrade);
   background-origin: border-box;
   background-repeat: no-repeat;
   box-shadow: 0 0 14px rgba(208, 43, 140, 0.45);
   color: #ffffff;
 }
-/* Croix seule, blanche (conv-213, 2026-10-10 : « enlève le rond autour de cette croix, laisse
+/* Croix seule, blanche (2026-10-10 : « enlève le rond autour de cette croix, laisse
    juste une croix blanche ») : plus de pastille ronde, ni au repos ni au survol. */
 :root[data-theme='holographique-clair'] .workflow-panel-close,
 :root[data-theme='holographique-clair'] .workflow-panel-close:hover {
@@ -2756,7 +2756,7 @@
   }
 }
 
-/* Arbre du graphe : l'ARBRE ETOILE (conv-234, 2026-10-11, /draft « une belle gueule qui
+/* Arbre du graphe : l'ARBRE ETOILE (2026-10-11, /draft « une belle gueule qui
    ressemble a mon theme holo », arrete sur « go fil holo »). Le dessin vit dans
    WorkflowExecutionGraph.css ; le bleu PLEIN, le rose de la bulle et le vert unique y viennent
    deja des jetons du theme. Ce bloc ne regle que le reste : le rose clair de ce qui tourne,
@@ -2785,21 +2785,21 @@
 }
 
 /* ---------------------------------------------------------------------------
-   6 ter. RUNS, LOGS ET FILES EN HOLO (conv-245, 2026-10-11 : « embelli les vues : chat > Runs
+   6 ter. RUNS, LOGS ET FILES EN HOLO (2026-10-11 : « embelli les vues : chat > Runs
    Logs et Files pour que ca colle plus au theme holo »). Les trois onglets portaient encore
-   l'habit d'avant le holo : filet OR en haut des cartes de run (`.card`, reflets dores de
-   conv-124), sous-onglets en pastilles a bord (en capitales, police Arial : un bouton n'herite pas
+   l'habit d'avant le holo : filet OR en haut des cartes de run (`.card`, reflets dores),
+   sous-onglets en pastilles a bord (en capitales, police Arial : un bouton n'herite pas
    de la police), et la palette OR des Logs et de Files (#d4a94f, --gold) que la couche generee
    retraduit en ROSE-ROUGE (« COUT », « Lancer », l'etape suggeree). Ils reprennent le vocabulaire
    deja choisi pour le holo :
-   - sous-onglets = le LISERE des onglets du panneau (conv-180) : texte seul, trait bleu -> rose
+   - sous-onglets = le LISERE des onglets du panneau : texte seul, trait bleu -> rose
      de 2 px sous le mot actif, trait blanc 22 % au survol ;
-   - blocs = APLATS GRIS NEUTRES sans bord visible, comme les reponses du bloc ASK (conv-240) ;
-     aucune teinte froide dans les fonds (conv-191) ; survol = un gris plus clair ;
+   - blocs = APLATS GRIS NEUTRES sans bord visible, comme les reponses du bloc ASK ;
+     aucune teinte froide dans les fonds ; survol = un gris plus clair ;
    - element CHOISI (run deplie, bascule enfoncee, voie isolee, etape suggeree, champ actif) =
-     le CADRE bleu -> rose d'1 px du fil ouvert (conv-171), sur un gris fonce ;
+     le CADRE bleu -> rose d'1 px du fil ouvert, sur un gris fonce ;
    - action principale (Lancer, Envoyer, Appliquer) = la pilule au degrade de la bulle ;
-   - etats : le vert du theme #00ff55 (conv-197), l'ambre --warn, un rouge clair pour le TEXTE
+   - etats : le vert du theme #00ff55, l'ambre --warn, un rouge clair pour le TEXTE
      d'un echec (#ff6b7d : 5,6:1 sur le gris des puces, le rouge franc du Stop n'y fait que 3,5:1).
    Tout est borne a `.runs-pane` : la meme vue ouverte ailleurs (Observatory) n'est pas touchee.
    --------------------------------------------------------------------------- */
@@ -3035,7 +3035,7 @@
   :is([data-piste-source='fichiers'], [data-voie-source='fichiers']) {
   --piste-tone: var(--nv-rp-filet-voie-argent);
 }
-/* Logs en LIGNE UNIQUE (conv-247, 2026-10-11, maquette « tour 4 » choisie) : chaque geste est une
+/* Logs en LIGNE UNIQUE (2026-10-11, maquette « tour 4 » choisie) : chaque geste est une
    carte a coins coupes le long d'une frise ; les filets entre lignes et la puce grise de la nature
    disparaissent — la nature s'ecrit en couleur, la frise prend le degrade bleu -> rose. */
 :root[data-theme='holographique-clair'] .runs-pane .model-log-list {
@@ -3210,7 +3210,7 @@
 }
 /* L'EN-TETE COLLE DE FILES (onglets Fichiers / Projet / Brain / Git) peignait --surface-panel, qui
    vaut ici un blanc a 4,5 % : en faisant defiler la liste, les noms de fichiers et la tete d'une
-   carte de differences passaient AU TRAVERS des onglets (capture du 2026-10-11, conv-245). Il
+   carte de differences passaient AU TRAVERS des onglets (capture du 2026-10-11). Il
    reprend le fond EXACT du panneau : le satin et la lumiere de la souris, cales sur l'ecran
    (`fixed`). La position de la lumiere n'est pas heritee (proprietes enregistrees) : elle descend
    du panneau jusqu'a l'en-tete par `inherit`, maillon par maillon. La derniere couche finit par une
@@ -3272,7 +3272,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   6 quater. FENETRES FLOTTANTES EN HOLO (conv-250, 2026-10-11). D'abord les deux popups des
+   6 quater. FENETRES FLOTTANTES EN HOLO (2026-10-11). D'abord les deux popups des
    captures (« refais ces popup en mode holo comme le theme ») : le choix du modele -- matrice
    modele x effort, comptes -- et la fenetre « Contexte de cette conversation ». Puis le MEME cadre
    pour les autres menus flottants (« Applique le meme cadre holo (coins coupes, trait blanc et
@@ -3286,11 +3286,11 @@
    - le CADRE des panneaux (conv-177/211) : coins haut gauche et bas droit coupes a 14 px, trait
      blanc en haut, argent en bas, cotes a 7 %, peint dans le fond comme sur les tuiles de
      l'Accueil (bord transparent d'1 px, calques depuis la boite exterieure) ;
-   - le fond : le satin gris de la page (conv-191), PROPRE a la fenetre et non cale sur l'ecran.
+   - le fond : le satin gris de la page, PROPRE a la fenetre et non cale sur l'ecran.
      Cale sur l'ecran, il serait le MEME que celui du panneau dessous : la fenetre s'y fondrait.
      Un voile a 3,5 % la detache d'un cran ;
    - blocs = APLATS GRIS sans bord (conv-240/245) ; element CHOISI (compte retenu, modele par
-     defaut suivi, ligne du modele actif) = le CADRE bleu -> rose d'1 px sur un gris fonce (conv-171) ;
+     defaut suivi, ligne du modele actif) = le CADRE bleu -> rose d'1 px sur un gris fonce ;
    - points d'effort : gris au repos, ARGENT pour la memoire d'un autre modele, rose clair pour le
      modele actif, et le point choisi prend le degrade de la bulle -- seule lueur, parce qu'il dit
      l'etat actif (« lueur = information ») ; le vert du theme reste le cran conseille ;
@@ -3305,7 +3305,7 @@
    coupe sont traitees plus bas : l'ascenseur (sa fleche du bas tombait dans le coin coupe) et
    l'en-tete COLLE des reglages du graphe (son fond noir masquait le satin et le trait du coin).
    La CARTE DE CONFIRMATION du fil (`.delete-confirm-card` : supprimer une conversation, un lot,
-   un RUN, et renommer un fil, qui partage la classe) prend le meme cadre (2026-10-13, conv-924 :
+   un RUN, et renommer un fil, qui partage la classe) prend le meme cadre (2026-10-13, :
    « met le theme holo dans cette popup ») ; son contenu est accorde plus bas, fin de section.
    --------------------------------------------------------------------------- */
 :root[data-theme='holographique-clair']
@@ -3642,14 +3642,14 @@
   background: var(--nv-pop-aplat-survol);
   color: #121018;
 }
-/* CARTE DE CONFIRMATION (conv-924) : le cadre vient du bloc commun ci-dessus ; ici, son contenu.
+/* CARTE DE CONFIRMATION : le cadre vient du bloc commun ci-dessus ; ici, son contenu.
    - l'orbite : un APLAT gris sans bord, comme les blocs des autres fenetres ; l'etoile garde son
      rose (--chat-suppr-orbite) ;
    - le texte prend les trois encres des fenetres flottantes ;
    - « Garder » : aplat gris sans bord, eclairci au survol ;
    - « Supprimer definitivement » : le verre ROUGE du theme (`.btn-danger`, section 4). Sans cette
      regle, `.btn` du theme (meme specificite que `.delete-confirm-danger` + prefixe) lui retirait
-     son rouge : le geste irreversible avait le meme habit gris que « Garder » (capture conv-924). */
+     son rouge : le geste irreversible avait le meme habit gris que « Garder ». */
 :root[data-theme='holographique-clair'] .delete-confirm-orbit {
   border-color: transparent;
   background: var(--nv-pop-aplat);
@@ -3682,7 +3682,7 @@
   background: rgba(255, 90, 110, 0.28);
   color: #2a171a;
 }
-/* CARTE DE SUPPRESSION DES FILS (conv-1078, 2026-10-22 : /draft, mélange « 4 et 5 mais adapté en
+/* CARTE DE SUPPRESSION DES FILS (2026-10-22 : /draft, mélange « 4 et 5 mais adapté en
    fonction du theme », puis « Implémenter la 2 · En-tête en ligne ») — la mise en page commune est dans
    ChatView.css ; ici, l'habit.
    - Cadre NACRÉ d'1 px, le cycle bleu > rose > argent > rose clair du bloc de question
@@ -3692,7 +3692,7 @@
      (--nv-chanfrein-trait-fond) part : la nacre le remplace.
    - Tuile au coin coupé (8 px), aplat gris sans bord ; corbeille au trait dégradé bleu > rose.
    - Lignes carrées, liseré rouge du verre de suppression.
-   - Les deux boutons au DÉGRADÉ DU THÈME, bleu > violet (--nv-degrade) — conv-1078, même jour :
+   - Les deux boutons au DÉGRADÉ DU THÈME, bleu > violet (--nv-degrade), même jour :
      « quand je suis en theme holo le premier bouton doit etre en mode plein bleu et violet et celui
      du dessous avec liserai bleu et violet ». Le geste irréversible quitte son rouge : c'est le
      choix de l'utilisateur, et la carte nomme déjà les fils qui partent.
@@ -3764,7 +3764,7 @@
 }
 
 /* ---------------------------------------------------------------------------
-   6 bis. TYPO MODERNE (variante 7.4 choisie le 2026-10-09, conv-124) : titres un
+   6 bis. TYPO MODERNE (variante 7.4 choisie le 2026-10-09) : titres un
    peu plus grands et serres, fin des petites capitales espacees, metadonnees plus
    lisibles. Le code et les chemins dans les messages gardent leur chasse fixe.
    --------------------------------------------------------------------------- */
@@ -3821,7 +3821,7 @@
   white-space: nowrap;
 }
 /* Le cout du fil vit sur cette ligne et ouvre son detail SOUS lui, en position absolue : coupe par
-   la regle ci-dessus, ce detail etait invisible (conv-981 : clic sur « 8,55 $ », aucun panneau). */
+   la regle ci-dessus, ce detail etait invisible (Clic sur « 8,55 $ », aucun panneau). */
 :root[data-theme='holographique-clair'] .cosmic-outline .chat-runtime > .conv-cost {
   overflow: visible;
 }
@@ -3831,7 +3831,7 @@
 :root[data-theme='holographique-clair'] .cosmic-outline .chat-runtime-provider {
   font-weight: 600;
   /* Le nom du fournisseur reste en MAJUSCULES (« CLAUDE »), comme dans le thème de base : la
-     ligne passe en casse normale juste au-dessus, pas lui (conv-239, 2026-10-11). */
+     ligne passe en casse normale juste au-dessus, pas lui (2026-10-11). */
   text-transform: uppercase;
 }
 /* Corps des messages : un cran plus grand, interligne plus serre. */
@@ -3859,20 +3859,20 @@
   font-weight: 650;
 }
 
-/* SELECTION-VUES:DEBUT -- conv-261 (2026-10-11). */
+/* SELECTION-VUES:DEBUT -- (2026-10-11). */
 /* ---------------------------------------------------------------------------
    6 septies. LES VUES PARLENT COMME LE CHAT : un element CHOISI = le cadre du fil ouvert.
-   Demande (conv-261) : « dans toutes mes views les elements selectionnes sont moche, met des border
+   Demande : « dans toutes mes views les elements selectionnes sont moche, met des border
    comme ca » -- capture jointe : le fil ouvert du chat (`.conv-item.active`, section 5), cadre
    degrade bleu -> rose de 1,5 px sur fond d'encre, sans voile ni lueur. Releve avant correction, au
    meme theme : Agent Studio (modele choisi = aplat bordeaux sans bord), Task Manager et Tests (aplat
    bordeaux + bord rose), Observatory (« Chronologie » bordeaux), Knowledge (bord rose sur voile),
    Settings (cadre nacre, sources en aplat gris). Ici UN dessin pour tous.
-   HORS PERIMETRE, volontairement : les ONGLETS (lisere seul, conv-244, ViewTopBar.css), la pastille
-   du menu de gauche (conv-187), le panneau Details (section 6, deja au cadre), les barres de Gantt
+   HORS PERIMETRE, volontairement : les ONGLETS (lisere seul, ViewTopBar.css), la pastille
+   du menu de gauche, le panneau Details (section 6, deja au cadre), les barres de Gantt
    et les etiquettes du graphe (la couleur y porte une donnee). Les puces de compte de la vue
-   Routage, longtemps gardees intactes (conv-250), prennent le cadre a leur tour sur demande
-   (conv-261, 2nd tour) : voir « Routage » plus bas.
+   Routage, longtemps gardees intactes, prennent le cadre a leur tour sur demande
+   (2nd tour) : voir « Routage » plus bas.
    POIDS : chaque liste passe par :is(), qui prend la specificite de son membre le plus fort, sous
    `.shell.theme-serious` (toujours pose, App.tsx). Le choix bat ainsi les couches `.theme-serious`
    des vues et la couche generee ; le survol est ecrit AVANT le choix, a poids egal, pour lui ceder.
@@ -3913,7 +3913,7 @@
   box-shadow: none;
   transform: none;
 }
-/* Rangees de barre laterale (Knowledge, sections de Settings -- conv-1109) : transparentes au
+/* Rangees de barre laterale (Knowledge, sections de Settings --) : transparentes au
    repos, comme la liste des fils. */
 :root[data-theme='holographique-clair'] .shell.theme-serious :is(.theme-filter, .settings-nav-item) {
   border: 1.5px solid transparent;
@@ -4029,7 +4029,7 @@
 /* -- Routage : le compte choisi (`.router-account-chip.is-active`, desactive puisqu'on ne rebascule
       pas sur soi-meme) prend le meme cadre, en 1 px comme ces puces dans les popups (section 6) :
       une pilule de 1 px au repos qui passerait a 1,5 px sauterait d'un demi-pixel. Les autres
-      puces de la vue ne bougent pas. Demande conv-261 : « mets aussi le cadre bleu -> rose sur les
+      puces de la vue ne bougent pas. Demande : « mets aussi le cadre bleu -> rose sur les
       puces de compte choisies de la vue Routage ». */
 :root[data-theme='holographique-clair']
   .shell.theme-serious
@@ -4100,7 +4100,7 @@
   background: var(--nv-liste-fond);
 }
 /* Le bandeau du haut (« Sante du projet », « Branche »...) : plus de trait de 3 px a gauche ni de
-   filets entre les cases (demande conv-261 : « retire la bordure du bandeau du haut des
+   filets entre les cases (demande : « retire la bordure du bandeau du haut des
    Worktrees »). Ses cinq cases deviennent des plaques, comme la bande de chiffres juste dessous.
    Le trait disait l'etat de sante par sa couleur : le mot de la premiere case (Indisponible,
    Obsolete...) dit deja cet etat, il en reprend donc la couleur d'alerte. */
@@ -4180,21 +4180,21 @@
 
 /* ---------------------------------------------------------------------------
    6 bis. LAMPE A LAVE dans les boutons au degrade, les bulles des messages de l'utilisateur et
-   tous les bords bleu -> rose (conv-1163, 2026-10-27).
+   tous les bords bleu -> rose (2026-10-27).
    Demande : « une animation de couleur pour mes boutons qui ont un degrade bleu et rose », puis
    « je veux que les couleurs changent en mode liquide » ; choix sur maquette : « la lampe a lave
    de avant » (/draft, fournee 2, proposition 1), livree telle quelle. Trois gouttes -- rose, bleue
    et leur violet -- posees sur le degrade bleu -> rose. Les etats gardent leur marque PAR-DESSUS
    la lave : reflet bombe au survol, reflet et eclat de « Nouveau fil » sur un fil vide. Seul ecart
    a la maquette : le coeur de la goutte bleue est le bleu PLEIN (la maquette passait par un bleu a
-   80 %), pour tenir la regle « un seul bleu, toujours plein » (conv-182, test « Degrades : un seul
+   80 %), pour tenir la regle « un seul bleu, toujours plein » (test « Degrades : un seul
    bleu »).
-   NOUVELLE LAVE, PEU GOURMANDE (conv-1610, 2026-11-05 : « refais une version tres peu gourmande,
+   NOUVELLE LAVE, PEU GOURMANDE (2026-11-05 : « refais une version tres peu gourmande,
    enleve toute l'ancienne lave couteuse »). L'ancienne animait six positions de gouttes
    (`@property --nv-lave-x1..y3`) : a CHAQUE image, Chromium recalculait le style et repeignait
    les quatre degrades de chaque element, sur le fil principal de la fenetre (et la bulle refaisait
    en plus son halo flou de 22 px). Mesure sur la fenetre reelle (Bureau a distance, Intel UHD
-   730), une fois le plafond de 10 images/s retire (0fd4866b, conv-1512) : les 8 laves a l'ecran
+   730), une fois le plafond de 10 images/s retire (0fd4866b) : les 8 laves a l'ecran
    = 99 % d'un coeur pour la fenetre et 149 % pour la carte graphique ; en pause, 13 % et 30 %.
    La nouvelle lave ne repeint plus rien :
    - le fond de l'element est la lave FIGEE a sa premiere image (`--nv-lave-fond`, ci-dessous),
@@ -4299,7 +4299,7 @@
 }
 /* Les boutons, puis les bulles : la lave EST leur fond. L'onglet ouvert du menu de gauche aussi
    (meme fil, capture du rond « Chat » sous l'avatar : « a mettre aussi sur ces boutons ») : sa
-   pastille garde sa forme, son bord transparent et son absence de halo (conv-198). */
+   pastille garde sa forme, son bord transparent et son absence de halo. */
 :root[data-theme='holographique-clair'] .nav-item.active,
 :root[data-theme='holographique-clair'] .btn-accent,
 :root[data-theme='holographique-clair'] .cosmic-outline .btn-accent,
@@ -4318,7 +4318,7 @@
   background-origin: border-box;
   background-repeat: no-repeat;
 }
-/* LE MOUVEMENT (conv-1610) : un calque `::after` pose SOUS le contenu, peint UNE fois avec la lave
+/* LE MOUVEMENT : un calque `::after` pose SOUS le contenu, peint UNE fois avec la lave
    dans une autre disposition (gouttes rose et bleue echangees de cote, violet en haut), dont seule
    l'opacite va et vient. Il redeclare `--nv-lave-fond` pour lui seul : les regles de reflet
    ci-dessous le visent aussi, donc il porte le meme reflet que son bouton et le reflet ne clignote
@@ -4341,7 +4341,7 @@
   .msg.user:nth-last-child(1 of [data-origine='message-utilisateur'])
   .msg-body {
   /* Le calque se cale sur l'element et passe SOUS son contenu : il lui faut un repere et une pile
-     a lui. Aucun de ces elements n'est positionne autrement (lecture des feuilles, conv-1610). */
+     a lui. Aucun de ces elements n'est positionne autrement (lecture des feuilles). */
   position: relative;
   isolation: isolate;
 }
@@ -4398,7 +4398,7 @@
   content: none;
 }
 /* L'onglet ouvert du menu coule DEUX FOIS plus lentement (18 s au lieu de 9) : il reste a l'ecran
-   toute la journee, au bord du regard (conv-1163 : « Ralentis la lampe a lave du rond Chat du menu
+   toute la journee, au bord du regard (« Ralentis la lampe a lave du rond Chat du menu
    de gauche (cycle plus long), sans toucher aux autres boutons »). Seule la duree change. */
 :root[data-theme='holographique-clair'] .nav-item.active::after {
   animation-duration: 18s;
@@ -4606,7 +4606,7 @@
 /* « Supprimer definitivement » (meme fil, capture du bouton plein : « a mettre aussi sur ces
    boutons ») : meme voie que « Garder ». La regle commune peint `--suppr-plein` (repos) et
    `--suppr-plein-vif` (survol) ; on les redefinit SUR le bouton, qui declare la lave. Le gel du
-   haut est celui de la carte, inchange. Lave figee depuis conv-1610 : fenetre passagere. */
+   haut est celui de la carte, inchange. Lave figee : fenetre passagere. */
 :root[data-theme='holographique-clair'] .delete-confirm-card--fils .delete-confirm-gel {
   --suppr-plein:
     linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 60%),
@@ -4617,8 +4617,8 @@
 }
 /* Le CADRE des blocs Raisonnement / Actions / Etapes et de la barre d'activite n'a qu'une source,
    anneau-activite.css (aucune feuille de theme ne le repeint, test « le cadre est dessine par les
-   jetons du theme ») : ce theme ne lui fournit que les couleurs des gouttes, figees depuis
-   conv-1610 (un cadre de 2 px n'a pas de surface ou faire passer le calque en fondu). */
+   jetons du theme ») : ce theme ne lui fournit que les couleurs des gouttes, figees
+   (un cadre de 2 px n'a pas de surface ou faire passer le calque en fondu). */
 :root[data-theme='holographique-clair'] {
   --thinking-capsule-lave-chaud: #d02b8c;
   --thinking-capsule-lave-froid: #3c6eeb;
@@ -4627,14 +4627,14 @@
 /* LES TOURS PRECEDENTS NE COULENT PLUS (meme fil : « Limite la lampe a lave des capsules
    Raisonnement / Actions au dernier tour du fil, pour alleger la carte graphique »). Une reponse
    suivie d'une autre reponse est un tour fini : ses capsules reprennent le degrade FIXE d'avant
-   la lave. Seule la derniere reponse du fil garde les gouttes (figees depuis conv-1610).
+   la lave. Seule la derniere reponse du fil garde les gouttes.
    - le cadre (anneau-activite.css, seul a le dessiner) : jetons des gouttes vides, il retombe sur
      son degrade de base ;
    - les pastilles et les tranches de la pile d'images : le degrade de ChatView.css et
      ArtifactPreview.css, recopie tel quel.
    `.msg--rail` ne marque que les reponses du fil : la TV du bureau cache, qui porte aussi
    `.msg.assistant` et se pose apres le dernier message, ne compte pas comme une reponse.
-   Les tranches sont visees par leur CLASSE, jamais par `> span` (conv-1229) : Chromium range la
+   Les tranches sont visees par leur CLASSE, jamais par `> span` : Chromium range la
    cible finale de TOUTES les regles `:has()` dans un seul ensemble d'invalidation, et `span` y
    faisait restyler tous les `span` de l'app a chaque frappe dans la saisie (≈ 220 ms par lettre,
    gel de 15 s puis rechargement de la fenetre le 28/10 a 18:31). Garde : has-cible-nue.test.ts. */
@@ -4655,15 +4655,15 @@
   > .artifact-pile__tranche {
   background: linear-gradient(90deg, var(--capsule-froid), var(--capsule-chaud));
 }
-/* LA LAVE DES BULLES : LA DERNIERE SEULE BOUGE (conv-1610, 2026-11-05 : « Garde la fluidite, mais
+/* LA LAVE DES BULLES : LA DERNIERE SEULE BOUGE (2026-11-05 : « Garde la fluidite, mais
    seulement sur ce qui est visible et sur ma derniere bulle »). Seule la derniere bulle tapee
    recoit le calque `::after` (liste du MOUVEMENT, plus haut) ; les precedentes gardent la lave
    figee et n'ont ni calque ni pile a elles. `:nth-last-child(1 of …)` et pas `:has(~ …)` : sous
    `:has()`, `.msg-body` entrerait dans l'ensemble d'invalidation commun et chaque frappe
-   restylerait toutes les bulles (conv-1229, has-cible-nue.test.ts). L'attribut `data-origine` ne
+   restylerait toutes les bulles (has-cible-nue.test.ts). L'attribut `data-origine` ne
    marque que les bulles tapees : un recu d'orientation (`.msg.user.directive-receipt`) ne compte
    pas comme la derniere bulle.
-   LE FONDU (conv-1610) : seule l'opacite du calque bouge, de 0 (lave de depart, celle du fond) a 1
+   LE FONDU : seule l'opacite du calque bouge, de 0 (lave de depart, celle du fond) a 1
    (l'autre disposition). Aucune propriete enregistree, aucun degrade recalcule. */
 @keyframes nv-lave {
   from {
@@ -4682,7 +4682,7 @@
     animation: none;
     display: none;
   }
-  /* La lumiere des panneaux (conv-191) s'eteint : aucune lumiere, aucun glissement. Les transitions
+  /* La lumiere des panneaux s'eteint : aucune lumiere, aucun glissement. Les transitions
      restent une LISTE de durees nulles -- `none` ne peut pas s'y glisser, il annulerait aussi le
      repli du menu. */
   :root[data-theme='holographique-clair'] {
@@ -4699,7 +4699,7 @@
 :root[data-theme='holographique-clair'] {
   --nv-holo-lisere: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, #cfd6e4);
 }
-/* L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16) : pendant l'entree, le lisere se pose AVEC
+/* L'ENTREE DES CADRES A CHANFREIN (2026-10-16) : pendant l'entree, le lisere se pose AVEC
    le satin (`--ch-fond`, bloc ENTREE-CHANFREIN de theme-nebuleuse-verre.css). Laisse tel quel, il
    flottait seul en haut de cadres encore vides, avant meme leurs coins (capture du 2026-10-16). Memes
    teintes que le lisere de repos, ci-dessus : a la fin de l'entree, rien ne saute. */
@@ -4717,7 +4717,7 @@
 /* La bulle de l'utilisateur : le degrade du noir, rose assombri (#d02b8c) pour que le blanc dessus
    passe 4,5:1 sur toute la bulle (4,54:1 sur le bleu, 4,77:1 sur le rose). La regle de
    cosmic-outline.css est reservee aux themes sombres : elle est reprise ici.
-   Depuis conv-1163 (2026-10-27, « met ca aussi pour mes messages ») la bulle coule en lampe a lave,
+   Depuis le 2026-10-27 (« met ca aussi pour mes messages ») la bulle coule en lampe a lave,
    comme sur le noir : `--nv-lave-fond` et son mouvement viennent de la section LAMPE A LAVE derivee
    du noir, aux memes couleurs (gouttes sur le degrade #3c6eeb -> #d02b8c, rose assombri compris). */
 :root[data-theme='holographique-clair'] .cosmic-outline .msg.user .msg-body.msg-bulle {
@@ -4730,8 +4730,8 @@
   box-shadow: none;
   position: relative;
 }
-/* Le neon « Brume » autour de la bulle (draft conv-199, copie floutee de son fond) est retire le
-   2026-11-05 (conv-1623, « enleve les effets de flou ») : garde assets/aucun-flou.test.ts. */
+/* Le neon « Brume » autour de la bulle (copie floutee de son fond) est retire le
+   2026-11-05 (« enleve les effets de flou ») : garde assets/aucun-flou.test.ts. */
 /* La base claire (theme-modes.css, « gris bleu franc ») peint ces champs en #dde2e9 ; le noir ne les
    repeint pas, le gris restait donc au milieu de la nacre (capture du 2026-10-10). La saisie interne
    laisse voir le satin de la saisie, comme sur le noir ; les autres prennent une nacre presque blanche.
@@ -4743,7 +4743,7 @@
 :root[data-theme='holographique-clair'][data-base='clair'] :is(.theme-serious .brand, .cosmic-outline .conv-search, .artifact-preview) {
   background: #fdfdff;
 }
-/* REPONSE DE L'AGENT EN NOIR SUR BLANC (conv-223, 2026-10-11, capture : texte sur un voile gris a
+/* REPONSE DE L'AGENT EN NOIR SUR BLANC (2026-10-11, capture : texte sur un voile gris a
    lisere rose). Demande : « ecris juste en noir sur blanc sans liserais et sans fond gris sous le
    texte ». La couche generee (theme-holographique-clair.genere.css) peint ce selecteur -- lisere rose,
    voile rgba(20, 15, 40, 0.07) -- avec le MEME poids que la feuille principale : seul l'ordre d'import
@@ -4754,7 +4754,7 @@
   background: transparent;
   color: #000000;
 }
-/* LE DECOR DE L'ACCUEIL REVIENT EN BLANC (conv-1076, 2026-10-22 : « dans le theme holographique
+/* LE DECOR DE L'ACCUEIL REVIENT EN BLANC (2026-10-22 : « dans le theme holographique
    blanc faut aussi le fond d'accueil cyberpunk », puis « c le select de l'accueil qui fait foi pour
    le fond de l'accueil pas le theme choisi »). Il etait cache ici depuis le « Le plus blanc »
    (0e753829, 2026-10-11). Il suit maintenant le menu Fond de l'Accueil, sans voile ; l'encre claire
@@ -4767,7 +4767,7 @@
     0 0 9px var(--nv-neon-a),
     0 0 18px color-mix(in srgb, var(--nv-neon-a) 70%, transparent);
 }
-/* CAPSULE D'ACTIONS (« 1 action terminee », conv-212 : « pas ouf »). Le noir la peint par sa couche
+/* CAPSULE D'ACTIONS (« 1 action terminee », « pas ouf »). Le noir la peint par sa couche
    generee : trait vif a gauche, teinte d'etat qui s'efface vers la droite. La base claire commune
    (theme-modes.css) la repeint en sarcelle (47,138,110) apres la couche generee du blanc : seule cette
    feuille, importee apres elle, peut la couvrir. Meme dessin que le noir, en clair : vert #09712c
@@ -4815,8 +4815,8 @@
   box-shadow: 0 3px 12px rgba(40, 30, 80, 0.16);
 }
 /* BLOC DE FIN DE TOUR (Fait / Maintenant / Reste a faire / Recommande) : « CADRE HOLO · TITRE ET
-   FILET » (/draft conv-212, 2026-10-11 : tour 1 « Cadre holo », tour 2 « go met le 5 »). Le noir le
-   peint en OR (conv-124) ; recolore, il restait un cadre or bruni sur un voile beige au milieu de la
+   FILET » (2026-10-11 : tour 1 « Cadre holo », tour 2 « go met le 5 »). Le noir le
+   peint en OR ; recolore, il restait un cadre or bruni sur un voile beige au milieu de la
    nacre. Ici : le CADRE du bloc ASK (memes bandes bleu, rose, argent, 1,5 px) autour d'une plaque
    nacree, « Fait » ecrit en degrade bleu -> rose, et un filet irise sous la liste.
    Feuille seule, sans toucher au balisage (Markdown.tsx) : le titre est la premiere ligne du bloc
@@ -4870,7 +4870,7 @@
   border-image: linear-gradient(90deg, #3c6eeb, #9b8cff 35%, #e63ca0 70%, rgba(207, 214, 228, 0)) 1;
 }
 /* Texte BLANC sur les pastilles degradees.
-   SANS les cases du pied de liste (conv-229, 2026-10-11 : « les textes deviennent blanc quand je
+   SANS les cases du pied de liste (2026-10-11 : « les textes deviennent blanc quand je
    click dessus sur fond blanc ») : depuis le /draft du pied du 2026-10-10, une case dont le reglage
    a change ne porte plus de degrade, son fond est transparent sur la nacre. Ce blanc, plus precis
    que `.conv-foot > button`, rendait « Actives », « Compacte » et « Mosaique » invisibles. */
@@ -4880,14 +4880,14 @@
 :root[data-theme='holographique-clair'] .cosmic-outline .conv-new-row .conv-new-title {
   color: #ffffff;
 }
-/* QUESTION A L'UTILISATEUR (AskDecision) : « LISERE DU HAUT » (/draft conv-225, 2026-10-11, tour 1 :
-   « go : fais le 3 »). Derive du noir, le bloc gardait le cadre irise de conv-202 autour d'une plaque
+/* QUESTION A L'UTILISATEUR (AskDecision) : « LISERE DU HAUT » (/draft, 2026-10-11, tour 1 :
+   « go : fais le 3 »). Derive du noir, le bloc gardait le cadre irise autour d'une plaque
    GRISE #eceaf2, et des capsules grises #edebf3 : ce gris jurait sur la page #f6f5f9. Ici le bloc prend
    l'habit des panneaux du theme : nacre #fdfdff, contour gris fin, lisere irise de 3 px en haut
    (--nv-holo-lisere) sur lequel glisse le lustre. Chaque reponse est une capsule BLANCHE au contour gris ;
    les bandes bleu, rose, argent ne reviennent QUE sur la reponse survolee, focalisee ou recommandee
    (1,5 px, la marge negative garde le texte immobile). Cochee ou retenue : le degrade de la bulle,
-   inchange (conv-201). Le bloc Frame (.askd.cadrage-hyp) partage ces classes et cet habit (conv-202).
+   inchange. Le bloc Frame (.askd.cadrage-hyp) partage ces classes et cet habit.
    Maquette : artifacts/draft-ask-blanc/tour1.html, onglet 3. Double attribut : ces regles pesent plus
    que celles derivees du noir, quel que soit l'ordre des feuilles. */
 :root[data-theme='holographique-clair'][data-base='clair'] .askd {

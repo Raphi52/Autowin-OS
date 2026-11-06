@@ -7,7 +7,7 @@ import { scriptHookGardes } from './garde-git-destructeur'
 import { NOM_JOURNAL_MESSAGES_FILS, lignesDuJournal } from './messages-entre-fils'
 
 /*
- * conv-1139 : le contrôle lancé avant chaque outil remet au fil ses messages en attente
+ * Le contrôle lancé avant chaque outil remet au fil ses messages en attente
  * (`additionalContext`). Banc réel du 2026-10-24 sur le CLI 2.1.309 en -p : l'agent a recopié le
  * code glissé ainsi (D:/tmp/sonde-ctx/sortie-kuke33gu.jsonl). Ici : le script RÉEL, sérialisé.
  */
@@ -81,9 +81,9 @@ describe('contrôle avant chaque outil : messages d’autres fils', () => {
   })
 
   /*
-   * conv-1332, 2026-10-30 : msg-0e75e0e8 (conv-1333, 17:43, « dis-le-moi avant d'écrire ») n'a jamais
+   * 2026-10-30 : msg-0e75e0e8 (17:43, « dis-le-moi avant d'écrire ») n'a jamais
    * atteint le kaizen en cours : 0 ligne `livre` au journal. Le kaizen a écrit dans
-   * plans-de-lots-app.test.ts à 17:50, et ce fichier est resté refusé à conv-1333 jusqu'à 18:21.
+   * plans-de-lots-app.test.ts à 17:50, et ce fichier est resté refusé jusqu'à 18:21.
    */
   it('un agent d’étape de run lit une copie, une seule fois, et le message reste dû au fil', () => {
     writeFileSync(journal, `${message('msg-1')}\n`, 'utf8')

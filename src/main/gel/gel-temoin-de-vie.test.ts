@@ -7,7 +7,7 @@ import { resumerGels } from '../../shared/gel-detector'
 import type { Gel } from '../../shared/gel-detector'
 
 /*
- * DEFAUT VECU le 2026-09-05 (conv-303) : apres un redemarrage, `gels.jsonl` n'ecrit plus rien
+ * DEFAUT VECU le 2026-09-05 : apres un redemarrage, `gels.jsonl` n'ecrit plus rien
  * pendant que l'application est sollicitee. « Plus aucun blocage » et « la mesure est morte »
  * produisent EXACTEMENT le meme journal vide : la preuve etait indecidable. Une ligne de vie posee
  * a chaque demarrage tranche.

@@ -7,7 +7,7 @@ import { enumererFichiersLisibles, enumererFichiersLisiblesDetail } from './read
 /**
  * LA RECHERCHE S'ARRÊTAIT AU PLAFOND EN SILENCE, AU FOND D'UN SEUL ARBRE.
  *
- * Mesuré le 2026-09-22 (conv-782) : `find_in_files` avec `dir: D:/AutoWinOS` n'a pas trouvé
+ * Mesuré le 2026-09-22 : `find_in_files` avec `dir: D:/AutoWinOS` n'a pas trouvé
  * `.arena/arenagame/lance-bras.sh`, qui existait. Le parcours en PROFONDEUR avait rempli les
  * 20 000 fichiers du plafond avec `bench/runs/` (≈ 17 000 fichiers de copies d'essais) et laissé
  * 10 dossiers jamais visités — et la réponse portait `tronque: false`.

@@ -130,7 +130,7 @@ describe('ChatView — barre du haut : choisir le dossier et la branche', () => 
   })
 
   /*
-    GELS MESURES (heal conv-1013, gels.jsonl du 14 au 16/10) : 9 gels de 3,3 a 9,8 s du fil
+    GELS MESURES (gels.jsonl du 14 au 16/10) : 9 gels de 3,3 a 9,8 s du fil
     principal, chacun dans la CREATION d'un seul processus `git status` (`ipc:git:read`). Le badge
     relisait la branche toutes les 5 s par `getGitState`, soit `git status` + `git log` : 24
     processus par minute crees sur le fil principal pour un nom qui tient dans `.git/HEAD`, et

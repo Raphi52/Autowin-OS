@@ -130,7 +130,7 @@ export function materializeUserImageArtifact(
 
 /**
  * L'ORIGINAL D'UNE PIÈCE JOINTE QUI N'EST PAS UNE IMAGE (fichier texte, PDF, archive…) —
- * conv-1147, 2026-10-25. Seules les images étaient écrites à l'envoi : un journal ou un PDF joint
+ * 2026-10-25. Seules les images étaient écrites à l'envoi : un journal ou un PDF joint
  * ne gardait que son nom, sa taille et son type. Le tour suivant ne pouvait plus le lire, et « Lancer
  * en N fils » fait justement le travail AU TOUR SUIVANT (une branche, ou à la suite ici).
  * `kind: 'text'` arrive en UTF-8, le reste en base64 (contrat `providers/types.ts`, `Attachment`).

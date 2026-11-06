@@ -8,11 +8,11 @@
  * refus local n'y porte que son motif. Un fait refusé localement parce qu'il contenait un secret
  * n'apparaît donc jamais à l'écran.
  *
- * UNE RÉPONSE EN ÉCHEC EST ÉCRITE EN `error`, PAS EN `tool-result` (2026-10-15, conv-966 : « pk ça
+ * UNE RÉPONSE EN ÉCHEC EST ÉCRITE EN `error`, PAS EN `tool-result` (2026-10-15, « pk ça
  * veut le texte du fait »). Un dépôt refusé (`stored: false`) est un échec de la commande : la trace
  * range sa réponse dans une charge `error`. Le panneau ne lisait que `tool-result` ; il affichait
  * donc « le texte du fait n'est pas lisible » sur chaque appel refusé, et taisait le refus dans un
- * groupe où un autre appel avait réussi (conv-927 : « refusé par le Brain : likely personal data »).
+ * groupe où un autre appel avait réussi (« refusé par le Brain : likely personal data »).
  * Un fait validé mais NON déposé (Brain injoignable, refusé par le Brain) reste gardé dans le fil :
  * il se montre, marqué `depose: false`, avec la raison.
  */

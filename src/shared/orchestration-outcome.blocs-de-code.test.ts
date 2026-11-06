@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 /*
- * UN TEXTE N'EST ANALYSE QU'UNE FOIS POUR TROUVER SES BLOCS DE CODE (heal conv-1013, 2026-10-16).
+ * UN TEXTE N'EST ANALYSE QU'UNE FOIS POUR TROUVER SES BLOCS DE CODE (2026-10-16).
  *
  * Mesure : `gels.jsonl` porte 15 rendus de la vue chat au-dela de 1 s (jusqu'a 5,5 s) du 14 au
  * 16/10, sous l'etiquette `vue-chat-fil`. Profil de l'ouverture d'un fil (vrai ChatView, 882
@@ -95,7 +95,7 @@ describe('blocs de code Markdown — une analyse par texte', () => {
 
   it('une analyse qui echoue reste fermee : tout est protege, et elle n est pas rejouee', () => {
     // Quatre espaces en tête : sans eux, le texte ne pourrait porter aucun bloc de code et ne serait
-    // jamais analysé (conv-1248) — la panne du parseur ne serait pas atteinte.
+    // jamais analysé — la panne du parseur ne serait pas atteinte.
     const texte = `illisible ${(numero += 1)}\n    ligne 2`
     echouerSur = texte
     expect([...markdownCodeLineProtection([texte])[0]]).toEqual([1, 2])
@@ -106,7 +106,7 @@ describe('blocs de code Markdown — une analyse par texte', () => {
 })
 
 /*
- * UN TEXTE SANS AUCUN BLOC DE CODE POSSIBLE N'EST PAS ANALYSÉ DU TOUT (conv-1248, 2026-10-28).
+ * UN TEXTE SANS AUCUN BLOC DE CODE POSSIBLE N'EST PAS ANALYSÉ DU TOUT (2026-10-28).
  *
  * Mesure : première ouverture du Board, 1 083 fils et 11 385 messages relus par
  * `hydrateStoredAssistant` — 2,0 s, dont ~75 % dans `fromMarkdown` appelé ici. La mémoire ci-dessus

@@ -102,7 +102,7 @@ describe('WatchdogEngine — observer, filtrer, deleguer', () => {
   })
 
   /*
-   * conv-1069, candidat 3 : une regle « fin du tour de conv-1065 » ne se reveille QUE pour ce fil.
+   * Candidat 3 : une regle « fin du tour de conv-1065 » ne se reveille QUE pour ce fil.
    * L'entree qui ferait echouer ce test si le filtre etait faux : la fin d'un tour d'un AUTRE fil.
    */
   it('chat-turn-done : reveille pour le fil nomme, jamais pour un autre fil', async () => {

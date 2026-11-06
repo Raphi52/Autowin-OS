@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 /**
- * LIGNE « LECTURE RETENUE » (conv-1123, 2026-10-23 : « affiche la ligne avec un style distinct,
+ * LIGNE « LECTURE RETENUE » (2026-10-23 : « affiche la ligne avec un style distinct,
  * texte atténué et petite étiquette « lecture », pour qu'elle se repère d'un coup d'œil avant la
  * réponse »). Le processus principal l'envoie dans son propre flux (`FLUX_LECTURE_RETENUE`) ; le
- * fil la fondait jusqu'ici dans la réponse, au même style qu'elle (capture de conv-1124).
+ * fil la fondait jusqu'ici dans la réponse, au même style qu'elle.
  *
  * Entrées qui feraient échouer une correction fausse :
  *  - la ligne encore fusionnée dans le bloc de la réponse (un seul `.msg-body`) ;
@@ -23,7 +23,7 @@ import type { ChatPart } from './chat-view-model'
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const DEBUT = 1_790_000_000_000
-// Le texte RÉEL émis dans conv-1124 (turn-journals, 2026-10-23), raccourci.
+// Le texte RÉEL émis (turn-journals, 2026-10-23), raccourci.
 const ANNONCE =
   'Lecture retenue : « Ajouter à la rivière un sélecteur qui filtre les données » — si tu voulais plutôt « changer l’échelle de temps visible (zoom) », dis-le.\n\n'
 const lecture: ChatPart = {
@@ -79,12 +79,12 @@ describe('ligne « Lecture retenue » dans le fil', () => {
     expect(ligne?.closest('.msg-body'), 'jamais dans le bloc de la réponse').toBeNull()
     expect(ligne?.querySelector('.msg-lecture-etiquette')?.textContent).toBe('compréhension')
     const texte = ligne?.querySelector('.msg-lecture-texte')?.textContent ?? ''
-    // Ce qui a été compris, et rien d'autre (conv-1280 : « mets juste ce qu'il a compris, point ») :
+    // Ce qui a été compris, et rien d'autre (« mets juste ce qu'il a compris, point ») :
     // la ligne de cet ancien fil porte encore l'autre lecture, elle ne s'affiche plus.
     expect(texte).toBe('« Ajouter à la rivière un sélecteur qui filtre les données »')
     expect(texte).not.toContain('si tu voulais plutôt')
     expect(texte, 'l’étiquette dit déjà ce qu’est la ligne').not.toContain('Lecture retenue')
-    // Pastille nacrée (conv-1280) : la phrase comprise en gras, une coche dans l'étiquette.
+    // Pastille nacrée : la phrase comprise en gras, une coche dans l'étiquette.
     expect(ligne?.querySelector('.msg-lecture-sens')?.textContent).toBe(texte)
     expect(ligne?.querySelector('.msg-lecture-etiquette svg.msg-lecture-coche')).not.toBeNull()
     // La réponse reste un bloc ordinaire, APRÈS la ligne, et c'est elle le dernier point du rail.

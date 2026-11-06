@@ -30,13 +30,13 @@ describe('chat HTML rendering contract', () => {
   })
 
   it('dit que le bloc vit dans une colonne de largeur variable et donne l outil qui le montre ainsi', () => {
-    // conv-139, tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 : scene fixe de 1600 px coupee dans la
+    // Tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 : scene fixe de 1600 px coupee dans la
     // colonne, verifiee sur une copie a 1640 px — saisie ts=1791619766383 « je vois les 6 memes ».
     const prompt = buildChatPilotagePrompt([])
     // La regle de base sert a TOUT bloc, tableau d'une reponse ordinaire compris : servie a chaque tour.
     expect(prompt).toMatch(/COLONNE de réponse/u)
     expect(prompt).toMatch(/dessine-le FLUIDE \(largeur 100 %, flex-wrap/u)
-    // Le detail des maquettes (conv-1229, 2026-10-28) ne part qu'aux tours visuels : il n'est plus
+    // Le detail des maquettes (2026-10-28) ne part qu'aux tours visuels : il n'est plus
     // dans le corps, il est entier dans le bloc visuel, et une demande de maquette ouvre ce bloc.
     expect(prompt).not.toContain('html-render-apercu')
     expect(REGLES_VISUELLES).toContain('LARGEUR DU BLOC')

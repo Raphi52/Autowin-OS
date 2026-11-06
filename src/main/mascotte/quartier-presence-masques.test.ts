@@ -1,5 +1,5 @@
 /**
- * « AFFICHER MES AGENTS À » (demande utilisateur du 2026-11-05, conv-1599) : le poste retient les postes
+ * « AFFICHER MES AGENTS À » (demande utilisateur du 2026-11-05) : le poste retient les postes
  * à qui il masque ses agents, les écrit dans `presence.json`, et le lecteur d'un poste nommé ne les
  * affiche pas — tout en gardant la personne dans la liste des réglages. Écrit pour de vrai dans des
  * dossiers temporaires.

@@ -5,7 +5,7 @@ import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * LA COMPACTION AUTOMATIQUE N'EST PLUS REFUSÉE SANS UN MOT (conv-1080, 2026-10-22).
+ * LA COMPACTION AUTOMATIQUE N'EST PLUS REFUSÉE SANS UN MOT (2026-10-22).
  *
  * Elle se déclenche sur l'événement `done` dont la jauge franchit le palier critique. Or le main
  * relaie `done` PENDANT le tour et ne rend la réponse de `pilotChat` qu'après son `finally`
@@ -13,7 +13,7 @@ import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView
  * `send(COMPACT_REQUEST)` partait dans cet intervalle, butait sur le verrou et rendait la main sans
  * rien envoyer — alors que le fil était déjà noté « compacté » (`compactionAutoRef`) : aucune
  * nouvelle tentative avant que la jauge redescende, ce qu'elle ne fait justement pas sans résumé.
- * Même défaut que l'orientation perdue de conv-996 (`ChatView.orientation-orpheline.test.tsx`).
+ * Même défaut que l'orientation perdue (`ChatView.orientation-orpheline.test.tsx`).
  */
 describe('ChatView — compaction automatique et verrou d’envoi', () => {
   let harness: ChatHarness | undefined

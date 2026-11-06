@@ -5,7 +5,7 @@ import type { OrchestrationRunState } from './orchestration-state'
 /**
  * NE PAS REPAYER UNE ANALYSE DÉJÀ PRODUITE DANS LA MÊME CONVERSATION.
  *
- * Levier n°3 (score 86) du scout coût joué dans Autowin (conv-1120, 2026-08-12), adossé aux
+ * Levier n°3 (score 86) du scout coût joué dans Autowin (2026-08-12), adossé aux
  * conversations réelles : sur `conv-1061`, scout + frame + terrain coûtent 11,20 $, soit 73,9 %
  * des 15,16 $ de sous-agents du fil.
  *
@@ -75,7 +75,7 @@ describe('acquis d’analyse réutilisable dans une conversation', () => {
   })
 
   /*
-   * conv-890, 2026-09-30 : `run-3180eec71b06-1` est refusé au contrôle final à 13:32:48Z, puis le
+   * 2026-09-30 : `run-3180eec71b06-1` est refusé au contrôle final à 13:32:48Z, puis le
    * tour de chat restauré après le redémarrage lance `run-66d6d5bdfc5a-1` sur le même tour. Son
    * `frame` est repris, mais son `think` est REJOUÉ de 13:36:25Z à 13:42:34Z pour 1,94 $, alors que
    * `run-state/run-3180eec71b06-1.json` porte encore le briefing (13 372 caractères).

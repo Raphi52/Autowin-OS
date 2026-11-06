@@ -1,5 +1,5 @@
 /**
- * LA RELECTURE DE LA PRÉSENCE DES COLLÈGUES (plan « Village commun », conv-1429, lot 2).
+ * LA RELECTURE DE LA PRÉSENCE DES COLLÈGUES (plan « Village commun », lot 2).
  *
  * Demande : voir dans l'Accueil les tanukis des collègues à côté des siens (D-8, D-10 de
  * `grill/agent-hq-japon-town.md`). Chaque poste écrit `<dossier du Board>\<compte>\presence.json`
@@ -53,11 +53,11 @@ type FichierLu =
       nom: string
       enregistreA: number
       coupe: boolean
-      /** L'animal choisi par le collègue (conv-1537) ; `null` = absent ou inconnu. */
+      /** L'animal choisi par le collègue ; `null` = absent ou inconnu. */
       animal: AnimalAgent | null
-      /** La couleur de tenue qu'il a choisie (conv-1633) ; `null` = absente ou inconnue (d'origine). */
+      /** La couleur de tenue qu'il a choisie ; `null` = absente ou inconnue (d'origine). */
       tenue: TenueAgent | null
-      /** Les postes à qui il masque ses agents (conv-1599), en minuscules ; vide = visibles pour tous. */
+      /** Les postes à qui il masque ses agents, en minuscules ; vide = visibles pour tous. */
       masquesPour: string[]
       agents: AgentPublie[]
     }
@@ -198,7 +198,7 @@ export function creerLecteurDePresence(deps: {
       .sort((a, b) => a.localeCompare(b))
       .slice(0, SOUS_DOSSIERS_MAX)
     const collegues: PresenceDUnCollegue[] = []
-    // Tout le partage, en ligne ou non (conv-1599) : les réglages de l'Accueil doivent pouvoir nommer
+    // Tout le partage, en ligne ou non : les réglages de l'Accueil doivent pouvoir nommer
     // quelqu'un d'éteint, pour lui masquer mes agents avant qu'il revienne. D'où la boucle qui va au
     // bout des `SOUS_DOSSIERS_MAX`, même quand le village est plein.
     const personnes: PersonneDuPartage[] = []
@@ -227,7 +227,7 @@ export function creerLecteurDePresence(deps: {
         // Périmé (poste éteint), ou daté dans le futur au-delà de la même marge (horloge folle ou
         // fichier piégé qui ne vieillirait jamais) : ignoré sans bruit, ce n'est pas une erreur.
         // Partage coupé sur ce poste (D6) : ses agents n'apparaissent pas. Masqués pour MOI par son
-        // réglage « afficher mes agents à » (conv-1599) : pareil, comme s'il avait coupé.
+        // réglage « afficher mes agents à » : pareil, comme s'il avait coupé.
         const enLigne =
           Math.abs(a - lu.enregistreA) <= PRESENCE_PERIMEE_MS &&
           !lu.coupe &&

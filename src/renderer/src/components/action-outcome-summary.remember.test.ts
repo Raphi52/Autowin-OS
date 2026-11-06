@@ -12,7 +12,7 @@ import { groupOutcomeSummary } from './action-outcome-summary'
  * refus. Techniquement « terminée », faux au seul sens qui compte pour le lecteur.
  *
  * Le mot « terminée » posé au-dessus d'un refus est ce qui rend le faux vert crédible : c'est
- * exactement l'erreur que l'agent a commise sur conv-1086 en annonçant un dépôt qui n'avait pas eu
+ * exactement l'erreur que l'agent a commise en annonçant un dépôt qui n'avait pas eu
  * lieu. L'interface la répétait.
  */
 

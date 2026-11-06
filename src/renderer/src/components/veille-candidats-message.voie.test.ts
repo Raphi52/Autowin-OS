@@ -1,5 +1,5 @@
 /**
- * LE WORKFLOW INTELLIGENT, PISTE PAR PISTE — demandes du 2026-10-22 (conv-1080) : « parfois y a pas
+ * LE WORKFLOW INTELLIGENT, PISTE PAR PISTE — demandes du 2026-10-22 : « parfois y a pas
  * besoin du workflow complet », puis « fais le truc parfait ».
  *
  * Entrées qui tuent un choix faux : chaque raison de garder le workflow complet est exercée SEULE sur

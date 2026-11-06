@@ -6,7 +6,7 @@ import { ChatComposer, type ChatComposerProps } from './ChatComposer'
 import { appliquerLangue } from '../langue'
 
 /**
- * LA ZONE DE SAISIE SUIT LA LANGUE (conv-1146, lot 1). Entrée qui doit faire échouer ce test : un
+ * LA ZONE DE SAISIE SUIT LA LANGUE (lot 1). Entrée qui doit faire échouer ce test : un
  * libellé du composer laissé en dur, ou un composer qui ne se redessine pas quand la langue change.
  */
 beforeAll(() => {

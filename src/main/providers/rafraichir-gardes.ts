@@ -27,7 +27,7 @@ export interface ResultatRafraichissement {
  * LES AGENTS DÉJÀ LANCÉS CHARGENT LA GARDE COURANTE.
  *
  * Le hook PreToolUse d'un agent pointe vers un script écrit UNE FOIS, à son lancement
- * (`providers/claude.ts`). Mesuré le 2026-10-01 : un agent lancé à 12:45 (conv-890), qui a survécu
+ * (`providers/claude.ts`). Mesuré le 2026-10-01 : un agent lancé à 12:45, qui a survécu
  * au redémarrage de 12:54, gardait l'ancienne garde Python — le correctif ne valait que pour les
  * agents lancés après. Le script est relu par `node` à CHAQUE appel d'outil : le remplacer suffit.
  *

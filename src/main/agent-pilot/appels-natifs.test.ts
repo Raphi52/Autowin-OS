@@ -10,7 +10,7 @@ import { appelsNatifsDuTour } from './appels-natifs'
 import { etatInitialDuTour, type EtatDuTour } from './etat-du-tour'
 
 /**
- * LES DEUX DRAPEAUX QU'AUCUN TEST NE TENAIT (conv-1580, lot 3).
+ * LES DEUX DRAPEAUX QU'AUCUN TEST NE TENAIT (lot 3).
  *
  * Le lot 3 a réinjecté cinq défauts dans `appels-natifs.ts` : trois étaient attrapés, deux non —
  * `anyActionExecuted` levé par un appel direct, et `anyActionFailed` dans la comptabilité. Les

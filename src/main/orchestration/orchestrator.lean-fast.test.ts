@@ -816,7 +816,7 @@ describe('rattachement — l’état persisté porte les agents lancés', () => 
     const quote = compileExecutionQuote('modifie un fichier')
     let checkpointAtIntent: ReturnType<typeof loadOrchestrationStates>[number] | undefined
     // Capturé AU MOMENT où la phase build se clôt. Lire le disque en fin de run ne le donne plus :
-    // l'appel du juge qui suit est inscrit dès sa réservation (conv-163) et sa sauvegarde, juge
+    // l'appel du juge qui suit est inscrit dès sa réservation et sa sauvegarde, juge
     // encore en vol, arrive après celle-ci.
     let completedCheckpoint: ReturnType<typeof loadOrchestrationStates>[number] | undefined
     const provider = new SpawnIntentProvider()

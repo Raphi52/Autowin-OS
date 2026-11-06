@@ -8,7 +8,7 @@ import { noterRendu, signalerRenduLong } from './rendu-long'
  * seulement le registre recent ; c'est la vue englobante qui ecrit le gel, sous le nom du sous-bloc
  * dominant — sinon un meme rendu long serait journalise deux fois.
  *
- * LA ZONE MESUREE EST AUSSI LA ZONE PROTEGEE (conv-1327, 2026-10-30) : ce composant entoure deja chaque
+ * LA ZONE MESUREE EST AUSSI LA ZONE PROTEGEE (2026-10-30) : ce composant entoure deja chaque
  * ecran et les gros blocs du chat, les memes frontieres qu'une panne ne doit pas franchir. `cle` relance
  * le bloc en panne quand elle change (la conversation ouverte, le plus souvent).
  */

@@ -45,7 +45,7 @@ describe('parseGitStatus (porcelain v2 --branch)', () => {
   })
 
   /*
-   * NOM CITE PAR GIT — heal conv-204, 2026-10-10. Avec `core.quotePath` (defaut), git ecrit entre
+   * NOM CITE PAR GIT — heal, 2026-10-10. Avec `core.quotePath` (defaut), git ecrit entre
    * guillemets, a la maniere du C, tout chemin portant un octet non ASCII ou un caractere special :
    * `"accentu\303\251.ts"`. Garde tel quel, ce texte n'est le nom d'AUCUN fichier : la photo git
    * le passait a `git diff`, qui ne trouvait rien, et les modifications du fichier etaient invisibles.

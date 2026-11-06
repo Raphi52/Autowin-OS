@@ -1,5 +1,5 @@
 /**
- * LES BOUTONS « VÉRIFIER » DU BOARD (conv-1136, 2026-10-23) — le calcul et le pourquoi vivent dans
+ * LES BOUTONS « VÉRIFIER » DU BOARD (2026-10-23) — le calcul et le pourquoi vivent dans
  * `verification-du-board.ts` ; ici, seulement ce qui se clique.
  *
  * Deux gestes par post-it de la ligne « À vérifier », et un pour toute la ligne :

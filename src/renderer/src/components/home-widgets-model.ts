@@ -55,7 +55,7 @@ export function nextDepartures(
     .slice(0, limit)
 }
 
-/** Le délai avant un départ, dans la langue de l'interface (conv-1170) ; français par défaut. */
+/** Le délai avant un départ, dans la langue de l'interface ; français par défaut. */
 export function relativeDelay(deltaMs: number, langue: Langue = 'fr'): string {
   if (deltaMs < 0) return traduireAccueil('delai.enRetard', langue)
   const minutes = Math.round(deltaMs / 60000)

@@ -13,7 +13,7 @@ import { noterQuotaServiceHttp } from '../modeles/model-quotas'
 /**
  * Moteur NATIF « compatible OpenAI » : parle HTTP directement à `/chat/completions`, SANS aucun CLI.
  *
- * Pourquoi (conv-1499) : les deux moteurs existants délèguent la boucle d'agent à un outil en ligne
+ * Pourquoi : les deux moteurs existants délèguent la boucle d'agent à un outil en ligne
  * de commande (Claude, Codex). Codex 0.166 refuse `wire_api="chat"` et Gemini AI Studio rend 404 sur
  * `/responses` : tout service qui ne parle QUE le format « chat completions » (Gemini, Mistral,
  * Cerebras, Ollama, LM Studio…) n'avait donc aucune voie. Ici, c'est Autowin qui mène la boucle :
@@ -41,7 +41,7 @@ export interface OpenAICompatConfig {
   defaultModel: string
   outils?: OutilAgent[]
   /**
-   * Outils d'agent du DOSSIER DU RUN (lire, écrire, éditer, commande, grep, glob — conv-1502), créés
+   * Outils d'agent du DOSSIER DU RUN (lire, écrire, éditer, commande, grep), créés
    * à chaque envoi qui porte `execution.cwd`, gardés par le script PreToolUse du moteur Claude.
    * Défaut : actifs. `false` = moteur de chat pur même en exécution.
    */
@@ -209,7 +209,7 @@ export class OpenAICompatAdapter implements ProviderAdapter {
       signal
     })
     // Quota lu sur CHAQUE réponse, refus compris : un 429 porte justement les en-têtes
-    // x-ratelimit que l'écran du Routeur doit montrer (conv-1507, lot 5 du plan conv-1499).
+    // x-ratelimit que l'écran du Routeur doit montrer (lot 5 du plan).
     noterQuotaServiceHttp(this.id, rep.headers)
     if (!rep.ok) {
       const detail = (await rep.text().catch(() => '')).slice(0, 500)

@@ -21,7 +21,7 @@ import type { PromptCallRecord } from './prompt-observability'
  * `~/.claude/projects/<projet>/<session>.jsonl`. Ce module va les y relire (lecture SEULE), les
  * borne à la fenêtre de l'appel mort, et les tarife au tarif public.
  *
- * ORACLE (mesuré le 2026-09-03, conv-1, session b5f40533) : appliquée à un appel que le CLI avait
+ * ORACLE (mesuré le 2026-09-03, session b5f40533) : appliquée à un appel que le CLI avait
  * DÉJÀ tarifé (2,2687 $), cette lecture rend `inputTokens` = 3 006 418 et `outputTokens` = 16 371 —
  * exactement les deux chiffres du journal. La méthode est donc vérifiée sur un cas où la vérité est
  * connue, avant d'être appliquée aux cas où elle manque.
@@ -48,7 +48,7 @@ export interface RecoveredCallUsage {
   /**
    * Prix appliqué aux tokens récupérés. Une ESTIMATION assumée : le CLI n'a pas eu le temps de rendre
    * son `total_cost_usd`. Le prix vient de ce que le CLI a facturé à ses dernières réponses complètes
-   * pour ce modèle, sinon de la grille publique (conv-1602). `undefined` quand ni l'un ni l'autre ne
+   * pour ce modèle, sinon de la grille publique. `undefined` quand ni l'un ni l'autre ne
    * connaît le modèle — on préfère le volume à un montant inventé.
    */
   estimatedUsd?: number
@@ -71,7 +71,7 @@ export type TarifsAppris = Map<string, number>
 /**
  * Prix appris par CE processus. En mémoire, à dessein : un appel coupé se réestime à chaque
  * affichage du coût, et la première réponse complète du modèle après un redémarrage le réapprend.
- * Avant elle, la grille sert — exactement le comportement d'avant (conv-1602).
+ * Avant elle, la grille sert — exactement le comportement d'avant.
  */
 const tarifsDuProcessus: TarifsAppris = new Map()
 
@@ -86,7 +86,7 @@ function objet(value: unknown): Record<string, unknown> | undefined {
  *
  * Le CLI tarife lui-même chaque modèle servi : `modelUsage[<modèle>].costUSD`, `costBasis` « list »
  * (prix public). Rien ne le lisait, si bien que chaque nouveau modèle attendait qu'on recopie sa
- * grille dans `shared/cost-estimate.ts` — Haiku 5.5 y était estimé 10× trop cher (conv-1602).
+ * grille dans `shared/cost-estimate.ts` — Haiku 5.5 y était estimé 10× trop cher.
  *
  * Une entrée n'est apprise que si son coût est celui de ses SEULS tokens, au prix court :
  * - `costBasis` autre que « list », ou `provider` autre que « firstParty » : un autre prix que le
@@ -99,7 +99,7 @@ function objet(value: unknown): Record<string, unknown> | undefined {
  * fix-ok: cause mesurée le 2026-11-05 — `grep costUSD|costBasis` dans src/main et src/shared ne
  * trouvait aucun lecteur, et l'appel coupé n'était tarifé que par la table recopiée à la main ; sur
  * la ligne réelle run-stdout/c55319db-… (0,00093225 $ facturés), un modèle absent de la table était
- * estimé 10× trop cher (conv-1602).
+ * estimé 10× trop cher.
  */
 export function lireTarifsDuResultat(resultat: unknown): Map<string, number> {
   const tarifs = new Map<string, number>()
@@ -299,7 +299,7 @@ interface Window {
 /**
  * Fenêtre d'un appel mort : de la fin de l'appel PRÉCÉDENT (même session) à sa propre fin. La durée
  * mesurée resserre la fenêtre quand elle est plus courte ; elle ne l'élargit jamais au-delà du
- * plancher, parce qu'une durée de watchdog n'est pas une mesure fiable (32 940 076 ms vus sur conv-1).
+ * plancher, parce qu'une durée de watchdog n'est pas une mesure fiable (32 940 076 ms vus).
  */
 function windowFor(call: PromptCallRecord, floorMs: number | undefined): Window | undefined {
   const endMs = Date.parse(call.ts)
@@ -385,7 +385,7 @@ export function recoverUnpricedCallsUsage(
       cacheCreationTokens,
       cacheCreation1hTokens,
       // Le palier long contexte se juge requête par requête : seul ce compte dit qu'il n'y en a
-      // qu'une (décision du lot 1, conv-1602).
+      // qu'une (décision du lot 1).
       requests: seen.size,
       ...(modeleServi ? { model: modeleServi } : {}),
       ...(call.provider ? { provider: call.provider } : {})

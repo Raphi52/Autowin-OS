@@ -7,7 +7,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
  * La regle « ANALYSER, ce n'est pas MODIFIER » existait deja, et avait DEJA ete affinee une premiere
  * fois apres un « scoute src/main/ » parti en `orchestrate`. Elle n'a pas tenu une seconde fois.
  *
- * Mesure conv-9 (2026-08-31), lue dans la retrospective : demande « scout pour trouver les causes des
+ * Mesure (2026-08-31), lue dans la retrospective : demande « scout pour trouver les causes des
  * freezes (ne repond pas) pour les /heal » -> `orchestrate` lance -> sous-agent 223 659 ms, ZERO token
  * de sortie, RUN.md `status: red`, aucun livrable ; l'utilisateur coupe et reecrit « RECOMMENCE SANS
  * cette erreur ». Le meme scout, rendu en direct au tour suivant, a produit huit causes classees avec
@@ -25,7 +25,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 describe('chat-pilotage-prompt — le mot « scout » ne commande pas une orchestration', () => {
   it('nomme les MOTS qui ne declenchent pas de pipeline, « scout » en tete', () => {
     const prompt = buildChatPilotagePrompt([])
-    // Fondu dans la RÈGLE PREMIÈRE le 2026-10-28 (conv-1229) : la phrase change, pas la regle.
+    // Fondu dans la RÈGLE PREMIÈRE le 2026-10-28 : la phrase change, pas la regle.
     expect(prompt).toMatch(/Les MOTS de la demande ne décident pas/u)
     expect(prompt).toMatch(/nomment un livrable d'analyse que tu rends toi-même/u)
     for (const mot of ['scout', 'audit', 'trouve les causes', '/heal']) {
@@ -40,7 +40,7 @@ describe('chat-pilotage-prompt — le mot « scout » ne commande pas une orches
   })
 
   /*
-    conv-69 (2026-09-16), saisie ts=1789550619709 : 29 Extrait regeneres dans les bases de 15 bases de
+    (2026-09-16), saisie ts=1789550619709 : 29 Extrait regeneres dans les bases de 15 bases de
     production, en chat direct, sans qu'aucun fichier ne change -- donc zero RUN.md, et l'utilisateur
     constate le trou a la saisie ts=1789551433032. Le critere doit nommer la mutation EXTERNE.
   */

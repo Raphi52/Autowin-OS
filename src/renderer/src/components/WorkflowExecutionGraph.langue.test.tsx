@@ -7,7 +7,7 @@ import type { HarnessTraceEvent } from './harness-timeline-model'
 import { appliquerLangue } from '../langue'
 
 /**
- * LE GRAPHE D'EXÉCUTION D'UN TOUR SUIT LA LANGUE (traduction anglaise, conv-1170, lot « Chat —
+ * LE GRAPHE D'EXÉCUTION D'UN TOUR SUIT LA LANGUE (traduction anglaise, lot « Chat —
  * exécution, contrôles et bilans »). Entrée qui doit faire échouer ce test : un libellé du graphe
  * laissé en dur, un texte calculé par le modèle de l'arbre (titre d'outil, mode de la copie) qui ne
  * suit pas la langue, une durée ou un coût écrits à la française en anglais, ou un graphe qui ne

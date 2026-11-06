@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe('bloc Raisonnement', () => {
   // 2026-09-01 : le pave de pensee arrive PLIE, meme en cours — seul l'en-tete dit que ca pense.
-  // Depuis R5 (conv-162) l'en-tete en cours ne porte plus « … » : c'est la capsule allumee et son
+  // Depuis R5 l'en-tete en cours ne porte plus « … » : c'est la capsule allumee et son
   // compteur de secondes qui disent que ca pense.
   it('est PLIÉ mais marqué « en cours » tant que le tour stream', () => {
     const el = render({ text: 'je pèse les options', done: false })
@@ -112,7 +112,7 @@ describe('chevron du bloc Réflexion', () => {
    * doit verrouiller reste entier — un chevron DESSINÉ (bordures + content vide), jamais un
    * glyphe de police — mais aux tailles réellement retenues.
    */
-  // R5 (conv-162, 2026-10-10) : le chevron vit DANS la capsule de l'en-tete, plus en fin de ligne.
+  // R5 (2026-10-10) : le chevron vit DANS la capsule de l'en-tete, plus en fin de ligne.
   it('est DESSINÉ (bordures), pas un glyphe minuscule', () => {
     const regle = corps('.thinking-block > summary .thinking-capsule::after')
     expect(regle).toMatch(/content:\s*''/)

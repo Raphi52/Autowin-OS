@@ -385,7 +385,7 @@ describe('réconciliation au chargement des tours interrompus', () => {
     store.hydrate(zombie())
     const once = store.get('conv-1056')!.messages.at(-1)!.content
     // Le rattachement au démarrage REROUVRE le tour (`resumed` → `streaming`) et le repersiste :
-    // constaté sur conv-1056, où quatre redémarrages ont empilé quatre fois le même récapitulatif.
+    // constaté, où quatre redémarrages ont empilé quatre fois le même récapitulatif.
     // Le second chargement retrouve donc bien un tour `streaming` déjà porteur de l'avis.
     const reouvert = store.list().map((conversation) => ({
       ...conversation,
@@ -450,7 +450,7 @@ describe('réconciliation au chargement des tours interrompus', () => {
   })
 
   /**
-   * Defaut mesure conv-1291 (2026-08-18) : « quelle est la derniere conversation ? » n'avait aucune
+   * Defaut mesure (2026-08-18) : « quelle est la derniere conversation ? » n'avait aucune
    * reponse fiable. Le tri de la liste se fait sur `updatedAt`, que bougent aussi des ecritures qui
    * ne viennent PAS de l'utilisateur — d'ou une « plus recente » qui n'est pas la derniere utilisee.
    */
@@ -472,7 +472,7 @@ describe('réconciliation au chargement des tours interrompus', () => {
   })
 
   /**
-   * Defaut mesure conv-58 (2026-09-09) : un collage ecrit PENDANT un tour est range en fin de fil
+   * Defaut mesure (2026-09-09) : un collage ecrit PENDANT un tour est range en fin de fil
    * avec `orientation: true`. La pastille annoncait « Sans réponse » alors que la reponse etait la,
    * juste au-dessus : le statut ne regardait que le role du DERNIER message, sans egard pour les
    * consignes d'orientation qui ne reclament pas de reponse propre.
@@ -569,7 +569,7 @@ describe('réconciliation au chargement des tours interrompus', () => {
   })
 
   /**
-   * Défaut vécu (conv-1571, 2026-11-05) : « pk cette conv m'affiche 3 points violets ». Après un
+   * Défaut vécu (2026-11-05) : « pk cette conv m'affiche 3 points violets ». Après un
    * tour terminé, la publication auto (`git-apres-fil`) ajoute sa carte « GIT : 1 commit » en fin
    * de fil, écrite par `append` : rôle assistant, SANS statut ni `turnId`. Le résumé lisait le
    * statut du DERNIER message assistant, n'en trouvait aucun, et la pastille tombait dans son cas
@@ -763,7 +763,7 @@ describe('ConversationStore — importerTranscript', () => {
 
 describe('résumé IPC — un tour encore en cours AILLEURS que dans le dernier message', () => {
   /*
-   * VÉCU (conv-914, 2026-10-13) : deux runs rattachés au redémarrage de 10:26 travaillaient encore —
+   * VÉCU (2026-10-13) : deux runs rattachés au redémarrage de 10:26 travaillaient encore —
    * leurs réponses (message-conv-914-6 et -15) étaient remises `streaming` par `resumed`. Puis un
    * tour de chat « reprend » s'est ouvert et TERMINÉ après elles. Le résumé ne regardait que la
    * DERNIÈRE réponse (`completed`) : la liste n'affichait aucun spinner alors que le fil travaillait.

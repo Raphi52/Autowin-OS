@@ -20,7 +20,7 @@ import { riche } from '../textes'
  * l'agent a CONCLU. Les bornes sont visibles en permanence plutôt que repliées dans un formulaire :
  * ce sont elles qui rendent tenable une règle capable d'écrire toute seule.
  *
- * Les libellés suivent la langue de l'interface (conv-1170). « Watchdog Agents » reste tel quel :
+ * Les libellés suivent la langue de l'interface. « Watchdog Agents » reste tel quel :
  * c'est le nom de la fonction, le même dans les deux langues.
  */
 
@@ -49,7 +49,7 @@ export function WatchdogAgentsSection({
     <section className="watchdog-section" data-testid="watchdog-agents-section">
       <header className="watchdog-section-head">
         <div>
-          {/* « Watchdog Agents » : nom de la fonction, le même en anglais (conv-1170). */}
+          {/* « Watchdog Agents » : nom de la fonction, le même en anglais. */}
           <h2>Watchdog Agents</h2>
           <p>{riche(t('section.intro'))}</p>
         </div>

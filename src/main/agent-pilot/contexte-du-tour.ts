@@ -1,7 +1,7 @@
 // Ce que la boucle d'itérations d'un tour de chat lit du tour : les résultats de sa préparation
 // (consigne système, session, message d'ouverture, lectures, outils directs), son état mutable et
 // les paramètres de AgentPilot.chat() dont elle se sert. Construit une seule fois par chat(), juste
-// avant la boucle (conv-1580, lot 4) : les modules de la boucle le reçoivent au lieu de capturer
+// avant la boucle (lot 4) : les modules de la boucle le reçoivent au lieu de capturer
 // les locales de chat().
 import type { OuvertureOutilsNatifs } from '../chat/chat-mcp'
 import type { CommandSpec } from '../commands/types'

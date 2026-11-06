@@ -1,5 +1,5 @@
 /**
- * Le moteur du navigateur intégré, sans Electron (conv-1286, lot 1/5) : une fausse fabrique rend des
+ * Le moteur du navigateur intégré, sans Electron (lot 1/5) : une fausse fabrique rend des
  * pages en mémoire, et les scripts de page sont relus par `decoderAppelPage` pour répondre comme la
  * vraie page. La vraie fabrique est vérifiée en fin de fichier sur un Electron simulé.
  */
@@ -229,12 +229,12 @@ class FausseVue implements VueNavigateur {
     return Promise.resolve(true)
   }
   capturer(): Promise<string | null> {
-    // `capturePage` sur une page sans image : Chromium échoue ainsi (conv-1286, navigateur_capture).
+    // `capturePage` sur une page sans image : Chromium échoue ainsi (navigateur_capture).
     if (this.sansImage) return Promise.reject(new Error('UnknownVizError'))
     return Promise.resolve('data:image/png;base64,AAAA')
   }
   /**
-   * Règle de Chromium reproduite à la demande (conv-1293, lot 5/5 de conv-1286) : tant que la page
+   * Règle de Chromium reproduite à la demande (lot 5/5) : tant que la page
    * n'a produit aucune image, Blink jette clics, molette et touches ; seuls les déplacements passent
    * (`WidgetInputHandlerManager::DispatchEvent`). Une vue cachée n'en produit jamais d'elle-même.
    */
@@ -500,7 +500,7 @@ describe('surbrillance 800 ms et bandeau « l’agent pilote »', () => {
     expect(etats.at(-1)).toBe(false)
   })
 
-  // Objection du juge (conv-1287, réparation 1) : sans cible, la frappe partait sans surbrillance —
+  // Objection du juge (réparation 1) : sans cible, la frappe partait sans surbrillance —
   // l'utilisateur ne voyait pas où le texte allait arriver.
   it.each([
     { type: 'saisir', texte: 'bonjour' } as const,
@@ -533,7 +533,7 @@ describe('surbrillance 800 ms et bandeau « l’agent pilote »', () => {
 })
 
 /*
- * Objection du juge (conv-1293, réparation 1) — mesuré dans l'instance cachée (run8) : sur une page
+ * Objection du juge (réparation 1) — mesuré dans l'instance cachée (run8) : sur une page
  * qui n'avait encore produit aucune image (site changé, vue cachée), le clic de l'agent était jeté
  * par Chromium et l'outil répondait quand même « Clic sur … ». Cas réel : l'onglet d'un fil que
  * l'utilisateur ne regarde pas, ou panneau fermé. Entrée qui fait échouer ce test si la correction
@@ -569,7 +569,7 @@ describe('une page sans image reçoit quand même l’action de l’agent', () =
   })
 
   /*
-   * Mesuré dans l'app (conv-1286, 2026-10-29) : `navigateur_capture` sur `localhost:5173` rouvert,
+   * Mesuré dans l'app (2026-10-29) : `navigateur_capture` sur `localhost:5173` rouvert,
    * panneau fermé, échouait deux fois de suite en « UnknownVizError » alors que `navigateur_lire`
    * lisait la page. Entrée qui fait échouer ce test : une capture tentée sans image forcée avant.
    */
@@ -672,7 +672,7 @@ describe('garde (b) : accord par site', () => {
     expect(fabrique.vues[0].textes).toEqual([])
   })
 
-  // Objection du juge (conv-1287, réparation 1) : l'origine n'était lue qu'AVANT l'attente ; une
+  // Objection du juge (réparation 1) : l'origine n'était lue qu'AVANT l'attente ; une
   // redirection pendant les 120 s envoyait le clic sur un site jamais autorisé.
   it('la page change de site PENDANT l’attente : l’accord de l’ancien site ne vaut pas, rien n’est envoyé', async () => {
     nav.ouvrir('conv-a', 'https://site-a.fr/connexion')
@@ -852,7 +852,7 @@ describe('élément choisi : le canal de retour de la page', () => {
   })
 
   /*
-   * Mesuré le 2026-10-29 (conv-1293, lot 5/5 de conv-1286) dans l'instance cachée : après « Envoyer
+   * Mesuré le 2026-10-29 (lot 5/5) dans l'instance cachée : après « Envoyer
    * au chat », le mode reste allumé ; le clic de l'agent part, la page l'AVALE (écoutes
    * click/pointerdown du mode) et l'outil répond « Clic sur … » sans que rien ne change. L'entrée
    * qui ferait échouer ce test si la correction était fausse : un mode encore allumé au moment
@@ -949,7 +949,7 @@ describe('réglages, données, navigateur du système', () => {
 })
 
 /*
- * PAS-À-PAS (conv-1286, maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30). Ce qui fait
+ * PAS-À-PAS (maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30). Ce qui fait
  * échouer ces tests si le moteur est faux : un geste qui part pendant la pause (`evenements` non
  * vide), « Pas suivant » qui libère plus d'un geste, la main reprise qui touche encore la page
  * (`localiser` rejoué, qui fait défiler et donne le focus), ou une attente sans fin.
@@ -1036,7 +1036,7 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
     expect(etat.agentPilote).toBe(false)
   })
 
-  // Mesuré dans la vraie app (conv-1324, `cadre=null` dans run-final.txt) : le rechargement efface le
+  // Mesuré dans la vraie app (`cadre=null` dans run-final.txt) : le rechargement efface le
   // calque de la page. Le geste attendait toujours, la frise disait « prochain », et la page ne
   // montrait plus ce qui allait partir au prochain ordre.
   describe('page rechargée pendant l’attente', () => {
@@ -1105,7 +1105,7 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       expect(vue.evenements).toEqual([])
     })
 
-    // fix-ok: objection du juge (conv-1324, réparation) — mesuré `cadre=null` pour une cible par numéro
+    // fix-ok: objection du juge (réparation) — mesuré `cadre=null` pour une cible par numéro
     // dans la vraie app (run-definitif.txt:73) : un rechargement efface les numéros de la lecture, qui
     // ne reviennent jamais (une lecture neuve renumérote depuis 1). Le geste attendait quand même un
     // ordre, ou 9 min, alors qu'il ne pouvait plus partir — et `navigateur_agir` recommande le numéro.
@@ -1390,7 +1390,7 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
       expect(vue.methodes()).not.toContain('surligner')
     })
 
-    // fix-ok: objection du juge (conv-1324, réparation) — chaque geste qui finit relisait la cible du
+    // fix-ok: objection du juge (réparation) — chaque geste qui finit relisait la cible du
     // premier en attente même déjà tracée (`terminerGeste`), et `localiser` la recentre
     // (`scrollIntoView`, navigateur-page-script.ts) : l'utilisateur qui avait défilé ailleurs y était
     // ramené à chaque geste refusé à côté.
@@ -1539,7 +1539,7 @@ describe('pas-à-pas : journal des gestes et pilotage par fil', () => {
   })
 
   /*
-   * Mesuré en vraie app (conv-1324, run11) : page centrée, agent silencieux depuis 20 s. Le geste fait
+   * Mesuré en vraie app (run11) : page centrée, agent silencieux depuis 20 s. Le geste fait
    * réapparaître le bandeau, le cadre perd 44 px, la cible remonte de 22 px APRÈS son repérage ; le clic
    * partait aux anciennes coordonnées, tombait sur le champ voisin et l'outil répondait « Clic sur button ».
    * La remise en page d'une vue cachée n'arrive qu'avec l'image forcée : le test la livre là.
@@ -2802,7 +2802,7 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
   })
 
   /*
-   * Mesuré le 2026-10-29 (conv-1293, lot 5/5 de conv-1286) dans l'instance cachée : Ctrl+Shift+B
+   * Mesuré le 2026-10-29 (lot 5/5) dans l'instance cachée : Ctrl+Shift+B
    * tapé le focus DANS la page laissait le panneau ouvert — ses raccourcis écoutent le rendu de la
    * fenêtre, qui ne voit pas les touches de la vue native. L'entrée qui ferait échouer ce test si
    * la correction était fausse : un keyDown Ctrl+Shift+B venu de la page, non rejoué à la fenêtre.
@@ -2862,7 +2862,7 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
     return { vue, touche, fenetre }
   }
 
-  // Mesuré (conv-1293, run-r1-vert.txt) : `capturePage` échoue sur une page jamais dessinée sans la
+  // Mesuré (run-r1-vert.txt) : `capturePage` échoue sur une page jamais dessinée sans la
   // faire dessiner ; la capture du débogueur, elle, attend l'image.
   it.each([
     { dejaAttache: false, journal: ['attach 1.3', 'Page.captureScreenshot', 'detach'] },
@@ -2910,7 +2910,7 @@ describe('vraie fabrique Electron (Electron simulé)', () => {
   )
 
   /*
-   * FIL QUE L'UTILISATEUR NE REGARDE PAS (conv-1304, 2026-10-30) : conv-1309 est reste suspendu plus
+   * FIL QUE L'UTILISATEUR NE REGARDE PAS (2026-10-30) : un fil est reste suspendu plus
    * de 20 minutes sur `navigateur_agir`. Mesure dans une fenetre MONTREE : `Page.captureScreenshot`
    * ne revient JAMAIS sur une vue cachee (fromSurface et emulation du focus n'y changent rien), et
    * sans image, le clic est perdu. Une vue visible sur UN pixel de la fenetre dessine en 115 ms et

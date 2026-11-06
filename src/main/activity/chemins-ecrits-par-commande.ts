@@ -5,8 +5,8 @@ import { posix, win32 } from 'node:path'
  *
  * Le commit automatique du chat (`chat-turn-publication.ts`) ne publie un fichier que s'il est
  * PROUVÉ au fil. Une commande Bash n'en laissait aucune preuve : le fournisseur n'en garde que le
- * texte. Mesuré le 2026-10-13 : `npx prettier --write src/main/git/githooks-pre-push.test.ts` (conv-932,
- * d7af3730) et `cat >> src/main/providers/relance-auto-moteur.test.ts <<'EOF'` (conv-933, dd0c3d6a) ont
+ * texte. Mesuré le 2026-10-13 : `npx prettier --write src/main/git/githooks-pre-push.test.ts` (
+ * d7af3730) et `cat >> src/main/providers/relance-auto-moteur.test.ts <<'EOF'` (dd0c3d6a) ont
  * retouché un test que le commit a laissé de côté, parce qu'un AUTRE fil l'avait seulement vu changer.
  *
  * Seules les formes d'écriture explicites comptent, et seulement pour un chemin EXACT : redirection

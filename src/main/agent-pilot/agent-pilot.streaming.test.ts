@@ -27,9 +27,9 @@ function texteDuDone(events: PilotEvent[]): string {
 
 describe('AgentPilot chat streaming', () => {
   /*
-   * CE TEST A CHANGE D'INVARIANT le 2026-09-01, sur decision utilisateur (conv-52), et il faut le
+   * CE TEST A CHANGE D'INVARIANT le 2026-09-01, sur decision utilisateur, et il faut le
    * dire. Il verrouillait « ne repaie pas un appel pour un remember refuse » — l'economie. Constat
-   * de l'utilisateur sur sa capture (conv-49) : le refus s'affichait, le tour se fermait, et le
+   * de l'utilisateur sur sa capture : le refus s'affichait, le tour se fermait, et le
    * modele n'apprenait JAMAIS le motif, donc ne pouvait pas ajouter l'argument manquant. Le nouvel
    * invariant : UNE reprise est payee, jamais deux, et le refus qui survit est dit.
    */
@@ -193,7 +193,7 @@ describe('AgentPilot chat streaming', () => {
    * CE TEST A CHANGE D'INVARIANT le 2026-08-27, sur decision utilisateur, et il faut le dire.
    *
    * Il verrouillait « clot mecaniquement sans repayer un appel » : le tour se fermait sur l'issue
-   * structuree et le modele n'ecrivait jamais la cloture. Constat sur conv-1449 : le pied GABARIT
+   * structuree et le modele n'ecrivait jamais la cloture. Constat : le pied GABARIT
    * annoncait « Recommandé : faire exécuter le travail si le besoin n'est pas encore réalisé » alors
    * que le run avait joue build ET judge, DoD cochee, status green. Un gabarit qui devine la portee
    * se trompe des que le champ qu'il lit arrive vide — trois mensonges, trois rustines. Le modele

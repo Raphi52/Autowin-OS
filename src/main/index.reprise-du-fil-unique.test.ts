@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /*
- * UN SEUL message « Reprise du fil » PAR CHANTIER (conv-913, 2026-10-13).
+ * UN SEUL message « Reprise du fil » PAR CHANTIER (2026-10-13).
  *
  * Le câblage vit dans `index.ts`, qu'on ne peut pas démarrer sous test (Electron) : on épingle le
  * site d'appel réel. Le comportement est prouvé par `conversations.reprise-du-chantier.test.ts`

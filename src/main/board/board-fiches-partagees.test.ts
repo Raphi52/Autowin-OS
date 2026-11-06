@@ -1,5 +1,5 @@
 /**
- * LES RUN.md DES COLLÈGUES SUR LE PARTAGE (conv-1456) : « je dois pouvoir consulter les run.md de mes
+ * LES RUN.md DES COLLÈGUES SUR LE PARTAGE : « je dois pouvoir consulter les run.md de mes
  * collègues dans le board ». ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : une fiche recopiée deux fois sans
  * avoir bougé ; un nom de fiche qui sort du dossier ; une lecture qui suit `..` hors du poste visé.
  */

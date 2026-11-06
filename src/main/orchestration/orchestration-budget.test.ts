@@ -17,7 +17,7 @@ describe('plafonds d’orchestration', () => {
   })
 
   /*
-   * RÉGLAGE RETIRÉ le 2026-10-23 (conv-1119 : « enlève budget dans settings, ça sert à rien cette
+   * RÉGLAGE RETIRÉ le 2026-10-23 (« enlève budget dans settings, ça sert à rien cette
    * feature »). Le fichier `orchestration-budget.json` déjà écrit sur ce poste portait
    * `maxProviderCalls: 24` — posé par l'ancien script `maximize-budget`. Retirer l'écran sans
    * cesser de LIRE ce fichier aurait laissé une coupure à 24 appels par run que plus personne ne

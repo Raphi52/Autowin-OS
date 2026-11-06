@@ -190,7 +190,7 @@ async function photosDesEcritures(
 }
 
 /**
- * LE SPINNER D'UN LOT TOURNAIT ENCORE APRÈS SA RÉPONSE (conv-1379, 2026-10-31).
+ * LE SPINNER D'UN LOT TOURNAIT ENCORE APRÈS SA RÉPONSE (2026-10-31).
  *
  * Trace tout ce qu'un appel au modèle vient d'écrire, et rend les chemins des éditions du modèle.
  * Le tour ne s'arrête qu'une fois ces traces écrites (le commit automatique les relit), et chaque

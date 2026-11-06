@@ -1,7 +1,7 @@
 /**
- * LES POST-IT DU BOARD = LES RUN.md LÉGERS (conv-1456, 2026-11-03).
+ * LES POST-IT DU BOARD = LES RUN.md LÉGERS (2026-11-03).
  *
- * Demande d'origine (conv-1418) : « faire un run.md vraiment à chaque tâche et baser le board sur
+ * Demande d'origine : « faire un run.md vraiment à chaque tâche et baser le board sur
  * les run.md », reprise ici : « j'avais déjà demandé à ce que ça soit basé dessus, récup et finis ce
  * travail commencé ». Les deux premières étapes sont faites : une fiche par nouvelle demande
  * (f49e01a7, 9d898055), puis la mesure contre le Board — 134 demandes comparées le 03/11, 0 écart

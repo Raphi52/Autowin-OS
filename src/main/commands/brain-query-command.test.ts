@@ -98,7 +98,7 @@ describe('buildBrainOutcome status', () => {
   })
 
   /*
-   * conv-338 (2026-10-19, tour 8ce6230c-374c-4de3-9429-583a648e286c) : « identite ou integrite
+   * 2026-10-19, tour 8ce6230c-374c-4de3-9429-583a648e286c : « identite ou integrite
    * invalide » ne disait pas que le serveur sur le port n'avait pas le jeton d'Autowin. L'agent a
    * reecrit ses faits avant de regarder le serveur. La cause connue du code doit etre dite.
    */
@@ -111,8 +111,8 @@ describe('buildBrainOutcome status', () => {
     expect(outcome.note).toMatch(/PANNE/u)
   })
 
-  // conv-1053 (2026-10-22) : un 503 du serveur en revérification d'index est transitoire. La note
-  // générique « diagnostique, répare » a déjà fait dépenser une session sur un serveur sain (conv-4).
+  // 2026-10-22 : un 503 du serveur en revérification d'index est transitoire. La note
+  // générique « diagnostique, répare » a déjà fait dépenser une session sur un serveur sain.
   it('un index en revérification est dit transitoire, sans ordre de réparer', () => {
     const outcome = buildBrainOutcome('q', '', 'unavailable', 'reindexing')
     expect(outcome.unavailableReason).toBe('reindexing')
@@ -148,7 +148,7 @@ describe('cablage de brain_query', () => {
   it('est declaree au catalogue avec sa question, et annoncee en LECTURE SEULE', () => {
     const source = commands()
     // L'entrée entière, jusqu'à la suivante — pas une fenêtre de 600 caractères qu'une description
-    // plus longue fait déborder (conv-1571).
+    // plus longue fait déborder.
     const debut = source.indexOf("name: 'brain_query'")
     const spec = source.slice(debut, source.indexOf("name: '", debut + 1))
     expect(spec).toContain('question')

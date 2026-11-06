@@ -142,7 +142,7 @@ describe('isBlocked', () => {
   })
 
   /**
-   * INTERROMPU (piste 4, conv-1070) : Stop, quota ou panne en face. Le travail n'a pas échoué, il
+   * INTERROMPU (piste 4) : Stop, quota ou panne en face. Le travail n'a pas échoué, il
    * s'est arrêté avant sa fin — sa DoD est donc forcément incomplète, et c'est exactement ce qui
    * le gardait « bloqué ». L'entrée qui ferait échouer ce test si le correctif était faux : la
    * MÊME DoD sous `status: red`, qui doit rester bloquée (jumeau ci-dessous).
@@ -174,7 +174,7 @@ describe('isBlocked', () => {
 })
 
 /**
- * CE QUE LE RAIL DE L'OBSERVATOIRE ÉCRIT À CÔTÉ DU STATUT (piste 4, conv-1070). Un run interrompu
+ * CE QUE LE RAIL DE L'OBSERVATOIRE ÉCRIT À CÔTÉ DU STATUT (piste 4). Un run interrompu
  * ne dit plus « bloqué » : il dit qu'on peut le relancer. L'entrée qui ferait échouer ce test si le
  * correctif était faux : un `red` à DoD incomplète, qui doit garder « bloqué ».
  */
@@ -197,10 +197,10 @@ describe('mentionDEtatDuRun', () => {
 })
 
 /**
- * UN ARRÊT N'EST PAS UN ÉCHEC (conv-1069, candidat 8 du scout). Le 2026-10-22, la liste « Runs
+ * UN ARRÊT N'EST PAS UN ÉCHEC (candidat 8 du scout). Le 2026-10-22, la liste « Runs
  * en cours/bloqués » servie à chaque tour portait 15 entrées, dont des runs coupés par le bouton
  * Stop ou par le quota : rien à réparer dans le code, mais le chat les lisait comme du travail en
- * échec. Les lignes de clôture ci-dessous sont RECOPIÉES des RUN.md réels de conv-1058 et conv-1056.
+ * échec. Les lignes de clôture ci-dessous sont RECOPIÉES des RUN.md réels.
  *
  * L'entrée qui ferait échouer ces tests si la correction était fausse : un run rouge pour une VRAIE
  * raison dont le journal CITE le texte d'un quota ou du Stop ailleurs que dans sa ligne de clôture
@@ -263,7 +263,7 @@ describe('isBlocked — runs arrêtés par Stop ou suspendus par le quota', () =
 })
 
 /**
- * UN RUN VERT AVEC UNE QUESTION OUVERTE N'EST PAS « BLOQUÉ » (scout conv-1332, 2026-10-30).
+ * UN RUN VERT AVEC UNE QUESTION OUVERTE N'EST PAS « BLOQUÉ » (2026-10-30).
  *
  * `runs/conv-1199/build-traite-candidat-issu-scout-interne-mvrw7vi9-workspace/RUN.md` : le juge a
  * validé (`status: green`), mais la case « Commit demande publie » reste vide parce que publier
@@ -320,7 +320,7 @@ describe('la décision attendue d’un run', () => {
 
 /**
  * UN RUN VALIDÉ, REFUSÉ PAR UNE BASE OCCUPÉE, N'EST PAS BLOQUÉ : IL ATTEND SA PUBLICATION
- * (conv-1455, 2026-11-03, sur le cas conv-1431 `mvz01n0m`).
+ * (2026-11-03, sur le cas `mvz01n0m`).
  *
  * Bout à bout, avec les fonctions que la clôture du chat appelle VRAIMENT (`statutDuRunMd`,
  * `ligneDeClotureDuMoteur`, `closeConvRun`) : un texte de journal recopié à la main dans le test
@@ -331,7 +331,7 @@ describe('la décision attendue d’un run', () => {
  * relu « en attente de publication » au lieu de « relançable ».
  */
 describe('run validé puis refusé par une base occupée (conv-1431)', () => {
-  // L'en-tête et la DoD de conv-1431 tels qu'ils étaient avant la clôture : 3 cases sur 4.
+  // L'en-tête et la DoD tels qu'ils étaient avant la clôture : 3 cases sur 4.
   const OUVERT_CONV_1431 = `status: open
 session: conv-1431
 regime: standard

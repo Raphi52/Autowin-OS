@@ -1,4 +1,4 @@
-/* BLOCS DE DONNEES dessines par l'app (conv-1074, BlocDonnees.tsx). Uniquement des jetons du theme :
+/* BLOCS DE DONNEES dessines par l'app (BlocDonnees.tsx). Uniquement des jetons du theme :
    chaque theme (sombre, clair, Nebuleuse, NieR…) les peint sans regle a lui. Direction « transparence
    totale » des pages html-render : aucun fond opaque, des filets fins, l'or pour les accents. */
 .md-donnees {

@@ -1,5 +1,5 @@
 /*
- * Messages entre fils (conv-1139) — mise en page « Bulles », choisie au /draft du 2026-10-25 :
+ * Messages entre fils — mise en page « Bulles », choisie au /draft du 2026-10-25 :
  * un petit chat par fil correspondant. Bulles reçues en verre (dérivé de `currentColor`), envois de
  * CE fil à droite dans le dégradé du thème (`--violet` → `--accent`). Aucune couleur codée en dur :
  * tout vient des variables du thème actif.
@@ -72,7 +72,7 @@
 /*
  * Dégradé OPAQUE, assombri vers le noir plutôt que rendu transparent : sur un fond sombre il donne
  * le rendu de la maquette, et sur un thème clair le texte `--on-accent` reste lisible (un dégradé
- * transparent y virait au pastel, texte blanc illisible — capture du 2026-10-25, conv-1139).
+ * transparent y virait au pastel, texte blanc illisible — capture du 2026-10-25).
  */
 .mef-bulle--envoye .mef-corps {
   border-radius: 12px 12px 4px 12px;

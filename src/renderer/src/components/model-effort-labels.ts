@@ -8,7 +8,7 @@ import { traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
  * La liste des efforts REELLEMENT proposés vient toujours du catalogue
  * (`option.reasoningEfforts`) : ces tables ne servent qu'à nommer et ordonner.
  *
- * Les libellés suivent la langue de l'interface (conv-1170) : `effortLabel` est appelé pendant le
+ * Les libellés suivent la langue de l'interface : `effortLabel` est appelé pendant le
  * rendu, qui lit la langue. « Minimal », « Max », « Ultra » s'écrivent pareil dans les deux langues.
  */
 const EFFORT_CLES: Record<string, Parameters<typeof traduireChatPanneaux>[0]> = {
@@ -18,7 +18,7 @@ const EFFORT_CLES: Record<string, Parameters<typeof traduireChatPanneaux>[0]> = 
   xhigh: 'effort.tresEleve'
 }
 const EFFORT_IDENTIQUES: Record<string, string> = {
-  // Cran unique des modèles sans niveau de réflexion (Grok…, conv-1517).
+  // Cran unique des modèles sans niveau de réflexion (Grok…).
   none: 'Standard',
   minimal: 'Minimal',
   max: 'Max',

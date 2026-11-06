@@ -19,7 +19,7 @@ import { TrustLedger } from '../trust/ledger'
 import type { WorkflowGraph } from '../workflow/workflow-graph'
 
 /**
- * L'EFFORT PAR ÉTAPE ARRIVE VRAIMENT AU FOURNISSEUR (conv-955).
+ * L'EFFORT PAR ÉTAPE ARRIVE VRAIMENT AU FOURNISSEUR.
  *
  * Avant : les 100 appels d'étapes relevés dans `prompt-observability` partaient tous à l'effort du
  * rôle (`xhigh`), build comme learn. Ces tests lisent l'effort DEMANDÉ au fournisseur, rangé par le

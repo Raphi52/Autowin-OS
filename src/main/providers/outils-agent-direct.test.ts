@@ -9,7 +9,7 @@ import { creerOutilsAgentDirect } from './outils-agent-direct'
 import type { SendOptions, SendResult, StreamChunk } from './types'
 
 /**
- * Outils d'agent du moteur direct (conv-1502). Le faux serveur OpenAI-compatible demande un appel
+ * Outils d'agent du moteur direct. Le faux serveur OpenAI-compatible demande un appel
  * d'outil, puis répond en texte : on relit le disque et ce que le moteur a rendu au modèle.
  * La garde est le VRAI script PreToolUse (`scriptHookGardes`, celui de `scriptDesGardesCourant`),
  * construit avec un dossier de mod protégé, comme dans garde-mod-autowin.hook.test.ts.

@@ -51,7 +51,7 @@ describe('empilement du decor de fond', () => {
   })
 
   it('le decor 3D n’est DESSINE que sur l’Accueil, et n’est monte qu’apres l’avoir ouvert', () => {
-    // conv-337 : hors de l'Accueil, le decor reste en VEILLE quelques minutes (cache, boucle
+    // Hors de l'Accueil, le decor reste en VEILLE quelques minutes (cache, boucle
     // arretee) au lieu d'etre detruit. Il n'est jamais actif ailleurs que sur l'Accueil, et
     // `useDecorEnVeille` ne le monte pas avant la premiere visite (decor-veille.test.tsx).
     const app = readFileSync(new URL('../App.tsx', import.meta.url), 'utf8')

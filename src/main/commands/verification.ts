@@ -1,5 +1,5 @@
 // Commande `verify` : choix de la copie, lancement du script et portée du vert — méthodes de AppCommandBus
-// sorties de commands.ts telles quelles (conv-1580, lot 6).
+// sorties de commands.ts telles quelles (lot 6).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import { existsSync } from 'node:fs'
@@ -50,7 +50,7 @@ import { SAUT_PORTEE, archiverSortie } from './publication'
 /**
  * `verify` SE JOUE DANS UNE COPIE ISOLEE, PAS DANS LE DOSSIER PARTAGE.
  *
- * DEFAUT MESURE le 2026-09-02 (conv-133) : la suite tournait dans l'espace de travail partage.
+ * DEFAUT MESURE le 2026-09-02 : la suite tournait dans l'espace de travail partage.
  * Un autre agent y a reecrit `src/main/runs/conv-runs.ts` PENDANT le lot, et la suite a echoue au
  * chargement sur un fichier sain — un faux rouge, donc un verdict sans valeur. La meme fenetre
  * rend un faux VERT possible : un fichier remis a l'identique apres coup efface la trace.
@@ -71,9 +71,9 @@ export async function runVerify(
   type?: string
 ): Promise<VerifyOutcome & { allowed: boolean; reason?: string }> {
   /*
-   * LE STOP DOIT ATTEINDRE `verify`, comme il atteint deja `run` (conv-384).
+   * LE STOP DOIT ATTEINDRE `verify`, comme il atteint deja `run`.
    *
-   * DEFAUT VECU (conv-978, 2026-10-15) : Stop clique pendant un `verify type:typecheck`. Le tour
+   * DEFAUT VECU (2026-10-15) : Stop clique pendant un `verify type:typecheck`. Le tour
    * etait clos, mais `tsc` a tourne encore 15 s et ses battements (15 s, 20 s, 25 s) sont arrives
    * a l'ecran APRES la fin du tour — l'utilisateur a vu son tour « relance 3x ». `spawnVerify`
    * savait deja tuer l'arbre sur signal ; seul `run` le lui passait.
@@ -157,10 +157,10 @@ export async function bureauDeVerification(
       : worktrees.begin(runId, 'Commande verify', true, beginOptions)
     if (!bureauUtilisable(bureau)) return undefined
     // L'etat courant = le commit LOCAL + le travail non commite. La copie nait sur `origin` :
-    // sans les fichiers commites localement depuis, elle melangeait vieux et neuf (conv-313).
+    // sans les fichiers commites localement depuis, elle melangeait vieux et neuf.
     const commites = await fichiersCommitesHorsDeLaCopie(workspace, bureau)
     // Les ecarts de la copie elle-meme passent EN DERNIER : ce qu'une verification d'avant y a
-    // laisse, et que le depot ne nomme plus, revient a l'etat du depot (conv-1376).
+    // laisse, et que le depot ne nomme plus, revient a l'etat du depot.
     const rapport = synchroniserBureauDeVerification(workspace, bureau, [
       ...(commites ?? []),
       ...(await bus.fichiersNonCommites(workspace)),
@@ -225,7 +225,7 @@ export async function runVerifyAt(
     /*
      * UNE SOURCE PASSE PAR LA PORTEE, un test se joue directement.
      *
-     * Corrige le 2026-08-25 apres conv-1404 : ce point refusait une cible source, alors qu'un agent
+     * Corrige le 2026-08-25 : ce point refusait une cible source, alors qu'un agent
      * qui vient d'editer un fichier demande naturellement a le verifier. `runRelatedVerifyAt` joue
      * `vitest related <fichier> --run` -- les tests qui IMPORTENT le fichier -- et il existait deja.
      * On ROUTE donc, au lieu de refuser.
@@ -243,7 +243,7 @@ export async function runVerifyAt(
   /*
    * SANS CIBLE, LA PORTEE VIENT DE CE QUI A CHANGE.
    *
-   * DEFAUT VECU le 2026-08-25 (conv-1404) : `verify` nu a rendu « verification arretee apres 600 s
+   * DEFAUT VECU le 2026-08-25 : `verify` nu a rendu « verification arretee apres 600 s
    * (plafond) — rien n'est prouve ». Ce n'est pas un rouge, c'est une ABSENCE de verdict : dix
    * minutes d'attente pour apprendre qu'on ne sait rien. Et c'est le repli d'`edit_file` quand la
    * portee n'est pas derivable, donc une edition saine peut se faire refuser par un chronometre.
@@ -264,7 +264,7 @@ export async function runVerifyAt(
   /*
    * ARBRE PROPRE : LA PORTEE VIENT DU DERNIER COMMIT.
    *
-   * DEFAUT VECU le 2026-08-25 (conv-1405), APRES le correctif ci-dessus : plus rien de sale a
+   * DEFAUT VECU le 2026-08-25, APRES le correctif ci-dessus : plus rien de sale a
    * cibler, donc suite entiere, donc plafond — « rien n'est prouve » une fois de plus. Le menage
    * du depot avait rendu ce chemin actif. Mesure du meme jour : la suite entiere tourne PLUS DE
    * 40 MINUTES sans finir, sous un plafond de 600 s. Lancer une action dont l'echec est CERTAIN
@@ -293,7 +293,7 @@ export async function runVerifyAt(
   }
   const resultat = await bus.spawnVerify(argv, decision.cwd, etiquette, onProgress, signal)
   // Le verdict NOMME sa portee. Sans cela, un vert obtenu dans un arbre sale se lit comme un
-  // vert du depot : mesure du 2026-08-22 (conv-1371), « exit 0, 713 fichiers » a ete conclu
+  // vert du depot : mesure du 2026-08-22, « exit 0, 713 fichiers » a ete conclu
   // « pret pour la fusion » alors qu'`origin/main` portait 3 rouges au meme instant.
   const portee = porteeDuVert(await bus.fichiersNonCommites(decision.cwd))
   return portee ? { ...resultat, output: `${portee}${SAUT_PORTEE}${resultat.output}` } : resultat
@@ -340,7 +340,7 @@ export async function runRelatedVerifyAt(
 /**
  * ANNULATION -- `signal` est le SECOND declencheur de mise a mort, a cote de l'horloge.
  *
- * Defaut mesure le 2026-09-09 (conv-384) : un `dotnet run` sur une application a fenetre ne rend
+ * Defaut mesure le 2026-09-09 : un `dotnet run` sur une application a fenetre ne rend
  * JAMAIS la main. Le tour restait bloque ici jusqu'au plafond, et le bouton Stop -- qui passe par
  * `abortOrchestration` ou `activeChatTurns` -- n'avait AUCUNE prise sur l'enfant lance par `run`.
  * L'utilisateur voyait un bouton sans effet, et le message qu'il envoyait ensuite n'etait pas lu.
@@ -397,7 +397,7 @@ export async function spawnVerify(
     const oublierLArbre = suivreArbre(child.pid)
     /*
      * OCTETS BRUTS, decodes une seule fois (voir `console-encoding.ts`). Decoder chaque morceau en
-     * UTF-8 rendait « ex�cutable » (conv-92) et « re�us » (conv-129) : `cmd.exe` ecrit en
+     * UTF-8 rendait « ex�cutable » et « re�us » : `cmd.exe` ecrit en
      * page OEM (850 sur un poste francais), et un caractere pouvait etre coupe entre deux morceaux.
      */
     const morceaux: Buffer[] = []
@@ -409,13 +409,13 @@ export async function spawnVerify(
     child.stderr?.on('data', collect)
     /*
      * HORLOGE. Sans elle, une suite lente bloque le pilote DANS la commande : il ne draine plus
-     * ses directives, le chat n'a plus aucune prise (defaut vecu le 22/08, conv-1363). L'arbre
+     * ses directives, le chat n'a plus aucune prise (defaut vecu le 22/08). L'arbre
      * entier est tue — sous Windows le `cmd.exe /c` n'est qu'un parent, tuer le seul pid laissait
      * le runner vivant et le `close` ne venait jamais.
      */
     /*
      * BATTEMENT — la seule chose qui distingue, A L'ECRAN, une suite qui travaille d'une suite
-     * bloquee. Mesure le 2026-08-25 (conv-1400) : dix minutes de « 1 action en cours » sans une
+     * bloquee. Mesure le 2026-08-25 : dix minutes de « 1 action en cours » sans une
      * ligne de plus, puis un plafond. Le tampon est deja collecte ci-dessus ; on n'ajoute donc
      * aucune lecture, juste une projection periodique de son etat vers le fil.
      */
@@ -437,7 +437,7 @@ export async function spawnVerify(
       if (child.pid) tuerArbre(child.pid)
       else child.kill('SIGKILL')
       // La sortie deja collectee part AVEC le verdict : le plafond borne l'attente, il n'efface
-      // pas ce que la suite avait prouve avant d'etre coupee (conv-1400, 2026-08-25).
+      // pas ce que la suite avait prouve avant d'etre coupee (2026-08-25).
       resolve({ allowed: true, ...verifyTimeoutOutcome(label, plafond, sortie()) })
     }, plafond)
     horloge.unref?.()

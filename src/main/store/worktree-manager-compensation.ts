@@ -1,5 +1,5 @@
 // Hooks de publication et plans de compensation : méthodes de WorktreeManager déplacées telles quelles depuis worktree-manager.ts
-// (conv-1508, lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
+// (lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
 // par attacherMethodes dans worktree-manager.ts, donc les appels `this.x(...)` restent identiques.
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'

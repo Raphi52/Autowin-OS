@@ -9,10 +9,10 @@ import type { StepDeRun } from './juges-votes'
 import trace from './juges-bloc.conv253.fixture.json'
 
 /**
- * BLOC DES JUGES (conv-328, /draft « un bloc pour afficher les judges dans le chat », choix
+ * BLOC DES JUGES (/draft « un bloc pour afficher les judges dans le chat », choix
  * « 1 · Nacre » sur la mise en page « Corrigé dans l'objection »).
  *
- * La trace est la VRAIE trace du run jugé de conv-253 (relance-construction-lecteur-video-fil) :
+ * La trace est la VRAIE trace du run jugé (relance-construction-lecteur-video-fil) :
  * 4 verdicts du même juge, un par passage de réparation. Seuls les textes des phases non jugées
  * sont remplacés, et le chemin du dossier personnel est anonymisé.
  */
@@ -133,7 +133,7 @@ describe('objectionsDuVerdict — cas limites', () => {
 })
 
 /**
- * EN DIRECT (conv-1021) : la même trace de conv-253, coupée là où le run en était. Le dernier
+ * EN DIRECT : la même trace, coupée là où le run en était. Le dernier
  * verdict (index 27, réparation 5) est en train de s'écrire ; celui d'avant (index 21, réparation 4)
  * est rendu.
  */

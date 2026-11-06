@@ -7,7 +7,7 @@ import { ProdAutorisationHote } from './ProdAutorisationHote'
 /**
  * UNE DEMANDE D'AUTORISATION N'APPARTIENT QU'A SON FIL.
  *
- * Defaut vecu le 2026-09-16 (conv-626) : l'ecran d'autorisation a ete sorti de sa fenetre flottante
+ * Defaut vecu le 2026-09-16 : l'ecran d'autorisation a ete sorti de sa fenetre flottante
  * pour vivre DANS la conversation. Monte dans `ChatView`, il s'est alors affiche au bas de TOUTES
  * les conversations — l'utilisateur lisait, sous une discussion sans rapport, une question portant
  * sur une base de production, et pouvait l'autoriser sans en avoir le contexte.

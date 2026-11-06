@@ -1,5 +1,5 @@
 /**
- * LES RÉDUCTIONS DE LA PLANCHE DES PERSONNAGES, préparées une fois (conv-1526, « les personnages sont
+ * LES RÉDUCTIONS DE LA PLANCHE DES PERSONNAGES, préparées une fois (« les personnages sont
  * laggy dans l'accueil »).
  *
  * DÉFAUT MESURÉ (2026-11-04, sur l'app en Bureau à distance, Accueil affiché) : 3,4 images/s. Sauter les
@@ -25,12 +25,12 @@ export interface NiveauPlanche {
 /** Les réductions préparées, en part de la taille d'origine. */
 const REDUCTIONS = [0.5, 0.25, 0.125] as const
 
-/** Les colonnes de toute planche de personnages (`COLS` des scripts d'atlas, conv-1428). */
+/** Les colonnes de toute planche de personnages (`COLS` des scripts d'atlas). */
 export const COLONNES_PLANCHE = 12
 
 /**
  * La finesse d'une planche par rapport à la grille de `donnees.json` (cases de `cw` px) : 1 pour les
- * atlas d'origine, 2 pour le tanuki v3 rendu en ×2 (conv-1558), net quand le zoom approche d'une tour.
+ * atlas d'origine, 2 pour le tanuki v3 rendu en ×2, net quand le zoom approche d'une tour.
  * Lue sur sa largeur, puisqu'elle a toujours 12 colonnes. Une largeur qui n'en est pas un multiple
  * entier découperait des cases à cheval : on le dit plutôt que de dessiner des morceaux.
  */

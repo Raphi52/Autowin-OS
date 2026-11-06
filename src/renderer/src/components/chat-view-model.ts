@@ -55,7 +55,7 @@ export type ChatTextPart = PersistedChatTextPart & {
   /** Contexte de fence calculé pour le rendu seulement — jamais persisté. */
   markdownContinuationPrefix?: string
   /**
-   * Bloc de la ligne « Lecture retenue » (flux `FLUX_LECTURE_RETENUE`, conv-1123) : rendu à part,
+   * Bloc de la ligne « Lecture retenue » (flux `FLUX_LECTURE_RETENUE`) : rendu à part,
    * atténué, sous une étiquette « lecture ». Calculé pour le rendu seulement — jamais persisté.
    */
   lectureRetenue?: true
@@ -64,7 +64,7 @@ export type ChatPart = PersistedChatPart
 type ChatDisplayPart = ChatTextPart | ChatActionPart | ChatArtifactPart | ChatErrorPart
 export type ChatActivityBlock = { kind: 'activity'; actions: ChatActionPart[] }
 /**
- * PILE D'IMAGES (conv-332, 2026-10-18 : « un moyen de grouper ces blocs car souvent ils
+ * PILE D'IMAGES (2026-10-18 : « un moyen de grouper ces blocs car souvent ils
  * s'enchainent »). Deux images ou plus qui se suivent sans texte entre elles ne font plus qu'un
  * bloc ; une image seule reste une capsule ordinaire. Rendu par `ArtifactPile.tsx`.
  */
@@ -80,7 +80,7 @@ export type ChatCandidatsPickBlock = {
   texteScout?: string
   /**
    * Vrai pour un TABLEAU de scout : ses pistes vivent dans la mémoire du scout, qui peut noter le
-   * motif d'une piste décochée (« Pourquoi pas ? », piste 2 de conv-1033). Les candidats de la veille
+   * motif d'une piste décochée (« Pourquoi pas ? », piste 2). Les candidats de la veille
    * web vivent ailleurs et ont leur propre « Écarter ».
    */
   deTableauScout?: boolean
@@ -114,7 +114,7 @@ export interface HydratedAssistantMessage {
   /**
    * Récapitulatif « Reprise du fil » d'un chantier rattaché au redémarrage, posé SOUS la bulle du
    * tour encore vivant. Ce n'est pas un tour : la recherche de la bulle vivante le traverse
-   * (`indexDeLaBulleQuiPorte`, conv-1330).
+   * (`indexDeLaBulleQuiPorte`).
    */
   repriseDuChantier?: string
   /** Conversation qui possede le journal de ce tour (message copie par un fork). */
@@ -153,12 +153,12 @@ export interface HydratedAssistantMessage {
    */
   reasoningMs?: number
   /**
-   * Tests joués par l'agent dans son terminal et leur code de sortie (conv-1059) : la carte du fil
+   * Tests joués par l'agent dans son terminal et leur code de sortie : la carte du fil
    * les compte comme des vérifications. Relus du disque, et reçus EN DIRECT pendant le tour.
    */
   testsDuTerminal?: TestDuTerminal[]
   /**
-   * DEBUT DU TOUR (ms epoch) : le zero de la colonne d'heures du rail (conv-338). Relu du message
+   * DEBUT DU TOUR (ms epoch) : le zero de la colonne d'heures du rail. Relu du message
    * enregistre (`ts`, pose par le main au debut du tour) ; en direct, pris au premier evenement
    * date. Absent : le rail n'affiche aucune heure.
    */
@@ -180,7 +180,7 @@ export interface StoredAssistantMessage {
   reasoningMs?: number
   /** Tests joués au terminal, conservés par le tour : les preuves de la carte après rechargement. */
   testsDuTerminal?: TestDuTerminal[]
-  /** Heure de debut du tour (ms epoch), posee par le main : le zero du rail (conv-338). */
+  /** Heure de debut du tour (ms epoch), posee par le main : le zero du rail. */
   ts?: number
   /** Chantier dont ce message est le récapitulatif « Reprise du fil » (`Msg.repriseDuChantier`). */
   repriseDuChantier?: string
@@ -219,11 +219,11 @@ export function deriveConversationState(input: {
   /**
    * Un tour est encore en cours AILLEURS que dans le dernier message (résumé IPC
    * `hasStreamingTurn`) : run rattaché au redémarrage, dernier tour de chat déjà terminé
-   * (conv-914, 2026-10-13). L'écran n'a alors aucun tour ouvert, donc `busy` est faux.
+   * (2026-10-13). L'écran n'a alors aucun tour ouvert, donc `busy` est faux.
    */
   streamingTurn?: boolean
 }): ConversationState {
-  // Libellés dans la langue de l'interface (conv-1170) ; `key` reste la valeur que le code compare.
+  // Libellés dans la langue de l'interface ; `key` reste la valeur que le code compare.
   const langue = langueCourante()
   const texte = (cle: Parameters<typeof traduireChatFil>[0]): string => traduireChatFil(cle, langue)
   if (input.busy || input.lastAssistantStatus === 'streaming' || input.streamingTurn) {
@@ -322,7 +322,7 @@ export interface AssistantPilotEvent {
    */
   kind: PilotEventKind
   streamId?: string
-  /** `stream-reset` : seulement le dernier passage du flux (`rangsEffacesParLeReset`, conv-1401). */
+  /** `stream-reset` : seulement le dernier passage du flux (`rangsEffacesParLeReset`). */
   conclusionSeule?: true
   actionId?: string
   iteration?: number
@@ -332,7 +332,7 @@ export interface AssistantPilotEvent {
   ok?: boolean
   data?: unknown
   artifact?: PersistedChatArtifactPart['artifact']
-  /** Heure posee par le main a la reception (rail du tour, conv-338) : date la part ouverte. */
+  /** Heure posee par le main a la reception (rail du tour) : date la part ouverte. */
   at?: number
 }
 
@@ -471,7 +471,7 @@ export function completerChoixDePipeline(parts: ChatPart[], step: OrchStep): Cha
       : step.text || step.error || (step.step === 'exec' ? undefined : step.detail)
   const raisonnement = step.thinking?.trim() || undefined
   if (!prompt && !rendu && !raisonnement) return parts
-  // UN SOUS-AGENT COUPÉ PAR LE BOUTON STOP N'A PAS ÉCHOUÉ (conv-966) : le run l'écrit `failed`, mais
+  // UN SOUS-AGENT COUPÉ PAR LE BOUTON STOP N'A PAS ÉCHOUÉ : le run l'écrit `failed`, mais
   // son erreur porte le motif du Stop. `ok: false` peignait sa phase en rouge, comme une panne ; il
   // est « annulé », et son texte d'arrêt reste son rendu.
   const annule = step.status === 'failed' && estArretParStop(step.error)
@@ -531,7 +531,7 @@ export const RAISONNEMENT_MAX = REASONING_MAX
 /**
  * ACCUMULE un fragment de raisonnement sous la ligne de pipeline de la phase qui l'a emis.
  *
- * DEMANDE (conv-918, 2026-10-13) : « quand je deplie ce bloc je vois nulle part ce qui s'ecrit dans
+ * DEMANDE (2026-10-13) : « quand je deplie ce bloc je vois nulle part ce qui s'ecrit dans
  * la 2e ligne du mode reduit ». Les fragments ecrasaient la ligne de vie et n'etaient gardes nulle
  * part. Ils s'ajoutent ici, sur l'orchestration ENCORE EN COURS du tour (meme regle que
  * `noterChoixDePipeline`).
@@ -569,7 +569,7 @@ export function ajouterRaisonnementDePipeline(
 }
 
 /**
- * LA BULLE QUI PORTE CE QU'UN EVENEMENT VISE (conv-955, 2026-10-15, tour
+ * LA BULLE QUI PORTE CE QU'UN EVENEMENT VISE (2026-10-15, tour
  * `33bc18ab-a9f3-4bac-8058-ec4838c647b8`).
  *
  * Une orientation ecrite pendant un tour est relue du disque APRES la bulle du tour. `patchLast`
@@ -593,7 +593,7 @@ export function indexDeLaBulleQuiPorte(
     const message = messages[i] as HydratedAssistantMessage
     // Le récapitulatif « Reprise du fil » est posé SOUS le tour encore vivant : ce n'est pas un
     // tour clos, la recherche le traverse. S'y arrêter envoyait dans le récapitulatif, ou perdait,
-    // tout ce que le travail repris émet (conv-1324 : 35 min de fil figé, conv-1330).
+    // tout ce que le travail repris émet (35 min de fil figé).
     if (message.repriseDuChantier) continue
     if (message.done) return -1
     if (porte(message)) return i
@@ -897,7 +897,7 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
       ? { providerStatusLog: message.actionsLog, providerStatus: message.actionsLog.at(-1)! }
       : {}),
     // La DURÉE DU RAISONNEMENT survit de la même façon : sans elle, la capsule d'un tour relu
-    // disait « Raisonnement terminé » sans compteur (R5, conv-162).
+    // disait « Raisonnement terminé » sans compteur (R5).
     ...(typeof message.reasoningMs === 'number' ? { reasoningMs: message.reasoningMs } : {}),
     ...(testsDuTerminal.length > 0 ? { testsDuTerminal } : {}),
     ...(typeof message.ts === 'number' ? { debutDuTour: message.ts } : {}),
@@ -906,7 +906,7 @@ export function hydrateStoredAssistant(message: StoredAssistantMessage): Hydrate
 }
 
 /**
- * Le reducteur du fil, plus le DEBUT DU TOUR (rail, conv-338) : un tour en direct n'a pas encore
+ * Le reducteur du fil, plus le DEBUT DU TOUR (rail) : un tour en direct n'a pas encore
  * d'heure de debut ; le premier evenement date par le main la lui donne, puis elle ne bouge plus.
  */
 export function reduceAssistantPilotEvent(
@@ -933,9 +933,9 @@ function reduireEvenementDuPilote(
     // Une meme ligne re-emise (un battement qui se repete a l'identique) n'ajoute rien : on ne
     // duplique que ce qui CHANGE, et on borne l'historique pour un tour tres long.
     // Le JOURNAL garde la commande entière (`data.target`), l'en-tête garde la ligne courte : en
-    // dépliant une action, on lisait sinon une commande coupée à 120 caractères (conv-1228).
-    // Même borne que le tour enregistré, qui DIT ce qu'elle retire (`bornerJournalDActions`) : avant
-    // conv-1228, 500 lignes de 300 caractères, coupées en silence.
+    // dépliant une action, on lisait sinon une commande coupée à 120 caractères.
+    // Même borne que le tour enregistré, qui DIT ce qu'elle retire (`bornerJournalDActions`)
+    // 500 lignes de 300 caractères, coupées en silence.
     const ligne = bornerLigneDAction(statutComplet(event.text, cibleEntiereDe(event.data)))
     const journal = message.providerStatusLog ?? []
     const suite = journal.at(-1) === ligne ? journal : [...journal, ligne]
@@ -1364,7 +1364,7 @@ export function costByModel(steps: OrchStep[]): Array<{
 }
 
 /** Icône + libellé par type d'étape d'orchestration (affichage temps réel). */
-// Libellés lus à l'affichage, dans la langue de l'interface (conv-1170). « gate » est déjà le mot
+// Libellés lus à l'affichage, dans la langue de l'interface. « gate » est déjà le mot
 // anglais : il ne se traduit pas.
 export const STEP_META: Record<string, { icon: string; label: string }> = {
   exec: {
@@ -1699,14 +1699,14 @@ export interface LiveRunPhase {
   phase?: string
   /**
    * Provenance de la phase, telle que l'orchestrateur l'envoie. `groupId: 'judge:fanout'` dit que
-   * plusieurs juges écrivent en même temps : le bloc des juges ne lit pas leur texte mêlé (conv-1021).
+   * plusieurs juges écrivent en même temps : le bloc des juges ne lit pas leur texte mêlé.
    */
   execution?: { groupId?: string }
 }
 
 /** Libellé lisible d'une phase de pipeline (A4) — sinon retombe sur le libellé d'étape. */
 export function phaseLabel(p: { step: string; phase?: string }): string {
-  // Dans la langue de l'interface (conv-1170). « scout », « terrain » et « build » restent tels quels :
+  // Dans la langue de l'interface. « scout », « terrain » et « build » restent tels quels :
   // ce sont les noms des skills, les mêmes dans les deux langues.
   const langue = langueCourante()
   const PHASES: Record<string, string> = {
@@ -1817,7 +1817,7 @@ export function stripAssistantThinking(text: string): string {
 
 export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
   const compact: ChatDisplayPart[] = []
-  /** La ligne « Lecture retenue », rangée en tête à la fin (conv-1240). */
+  /** La ligne « Lecture retenue », rangée en tête à la fin. */
   let lecture: ChatDisplayPart | undefined
   const textParts = parts.filter((part): part is PersistedChatTextPart => part.kind === 'text')
   const continuationPrefixes = markdownCodeContinuationPrefixes(textParts.map((part) => part.text))
@@ -1832,7 +1832,7 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
     // appartenir à une preuve. `trim()` changeait donc la sémantique entre hydratation et écran.
     if (text.trim()) {
       const continuationPrefix = pendingText[0]?.continuationPrefix
-      // L'heure du bloc fusionne est celle de sa PREMIERE part datee (rail du tour, conv-338).
+      // L'heure du bloc fusionne est celle de sa PREMIERE part datee (rail du tour).
       const at = pendingText.find((part) => part.at !== undefined)?.at
       compact.push({
         kind: 'text',
@@ -1850,8 +1850,8 @@ export function coalesceAssistantParts(parts: ChatPart[]): ChatDisplayPart[] {
       continue
     }
     // La ligne « Lecture retenue » ne se fond pas dans la réponse qui la suit : elle reste un bloc
-    // à part pour être repérée d'un coup d'œil (conv-1123). Elle se range TOUJOURS en tête du
-    // message (conv-1240) : lue en parallèle du modèle, elle peut arriver après le début de sa
+    // à part pour être repérée d'un coup d'œil. Elle se range TOUJOURS en tête du
+    // message : lue en parallèle du modèle, elle peut arriver après le début de sa
     // réponse, qu'elle ne doit ni couper en deux ni suivre. Le texte autour reste d'un seul tenant.
     if (part.streamId === FLUX_LECTURE_RETENUE) {
       textIndex++
@@ -1892,7 +1892,7 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       // sélection passe donc AVANT le rendu en lecture seule.
       const scoutRows = parseScoutTable(part.text)
       if (scoutRows) {
-        // Seul le TABLEAU devient le panneau (conv-1083) : le texte avant (le rapport, ses preuves)
+        // Seul le TABLEAU devient le panneau : le texte avant (le rapport, ses preuves)
         // et après (`CIBLE:`, la clôture) disparaissait avec lui. Le texte d'après ne continue aucun
         // bloc de code ouvert plus haut : il ne reprend pas le préfixe de continuation.
         const autour = texteAutourDuTableauScout(part.text)
@@ -1930,7 +1930,7 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
       continue
     }
     /*
-     * LE RUN PARLE LUI-MEME (conv-1008) : une orchestration livree qui porte une question garde sa
+     * LE RUN PARLE LUI-MEME : une orchestration livree qui porte une question garde sa
      * ligne dans le bloc d'activite (son deplie, ses phases) ET ajoute sa carte de decision. Laisser
      * la branche `ask` ci-dessous la prendre aurait fait disparaitre le run du fil au profit de sa
      * seule question.
@@ -1955,7 +1955,7 @@ export function groupAssistantActivity(parts: ChatPart[]): ChatRenderBlock[] {
     const askDecision = parseAskDecision(part)
     if (askDecision) {
       /*
-       * UNE QUESTION REPOSEE REMPLACE LA PRECEDENTE (conv-116, 2026-09-24 : deux fenetres « Ask »
+       * UNE QUESTION REPOSEE REMPLACE LA PRECEDENTE (2026-09-24 : deux fenetres « Ask »
        * identiques). Le controle « question sans lecture » relance le modele, qui lit puis REPOSE la
        * meme question avec des options affinees. L'ancien bloc restait affiche et cliquable. Meme
        * libelle de question dans le meme message = la nouvelle version annule l'ancienne.
@@ -2178,7 +2178,7 @@ export function scrollChatToBottom(
     const heightMoved = height !== lastHeight
     const reculBrutalEnHaut = element.scrollTop <= 4 && lastTop > element.clientHeight
     // Un recul accompagne d'un GESTE DECLARE appartient au lecteur, meme si le fil grandit encore
-    // (streaming) : sans cela la descente re-visait le bas par-dessus sa molette (conv-518, 2026-09-13).
+    // (streaming) : sans cela la descente re-visait le bas par-dessus sa molette (2026-09-13).
     if (element.scrollTop < lastTop - 4 && heightMoved && lecteurAPrisLaMain?.() === true) {
       onSettled?.(isChatNearBottom(element))
       return
@@ -2369,7 +2369,7 @@ export function isRunRequestCurrent(
  * evenement `scroll` (position ecretee, hauteur qui change) AVANT que la descente vers le bas ne
  * demarre. Mesure au `scrollTop` de l'ancien fil, `nearBottom` repond `false` : le bouton
  * « ↓ Dernier message » s'allumait le temps d'une frame puis disparaissait — le CLIGNOTEMENT
- * rapporte le 2026-09-02 (« parfois »), residuel apres le correctif de conv-21 qui ne traitait que
+ * rapporte le 2026-09-02 (« parfois »), residuel apres le correctif qui ne traitait que
  * l'etat herite, pas cet evenement fantome.
  *
  * Tant que la bascule n'a pas atterri, un defilement que le LECTEUR n'a pas provoque n'a donc

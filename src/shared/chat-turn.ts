@@ -9,7 +9,7 @@ export interface PersistedChatTextPart {
   streamId?: string
   /**
    * HEURE D'APPARITION de la part (ms depuis l'époque) : celle de son premier fragment. Elle place
-   * la part sur le RAIL du tour (conv-338, « Implémenter 1 + 5 » : colonne d'heures à gauche du
+   * la part sur le RAIL du tour (« Implémenter 1 + 5 » : colonne d'heures à gauche du
    * fil). Absente sur les tours antérieurs : le rail n'affiche alors aucune heure, il n'en invente pas.
    */
   at?: number
@@ -34,7 +34,7 @@ export interface PersistedChatActionPart {
   /**
    * SIGNE DE VIE d'une action encore en cours — remplace a chaque battement, efface par le verdict.
    *
-   * DEFAUT VECU le 2026-08-25 (conv-1400) : `verify` a rejoue la suite unitaire pendant dix minutes
+   * DEFAUT VECU le 2026-08-25 : `verify` a rejoue la suite unitaire pendant dix minutes
    * et le fil n'a affiche que « 1 action en cours », sans une ligne de plus jusqu'au plafond. Rien
    * ne distinguait, a l'oeil, une suite qui TRAVAILLE d'une suite BLOQUEE ou d'une app plantee.
    *
@@ -96,7 +96,7 @@ export interface PipelineChoice {
    * Le RAISONNEMENT du sous-agent pendant cette etape, accumule fragment par fragment pendant qu'il
    * tourne, puis complete par l'etape terminee s'il n'en est rien arrive en direct.
    *
-   * DEMANDE (conv-918, 2026-10-13) : la ligne de vie du bloc montrait des bouts de cette reflexion
+   * DEMANDE (2026-10-13) : la ligne de vie du bloc montrait des bouts de cette reflexion
    * (« and now 1/2 could ») qu'on ne retrouvait nulle part en depliant. Transitoire comme le reste
    * de `pipeline` : jamais ecrit par le journal du tour.
    */
@@ -105,7 +105,7 @@ export interface PipelineChoice {
   ok?: boolean
   /**
    * Vrai quand l'etape a ete coupee par le bouton Stop du chat : ni reussie ni en echec, et `ok`
-   * reste alors absent. Un Stop compte comme un arret voulu, pas comme une panne (conv-966).
+   * reste alors absent. Un Stop compte comme un arret voulu, pas comme une panne.
    */
   annule?: boolean
 }
@@ -142,7 +142,7 @@ export interface ChatTurnRuntime {
   /**
    * Ce tour a été ouvert depuis une fenêtre, donc par une personne. Absent : une règle, une tâche
    * planifiée, le scout, un autre fil, ou un tour écrit avant ce champ. Seule cette marque autorise
-   * la reprise automatique après quota (`etatDeRepriseDuFil`, conv-1423) : un tour de règle a des
+   * la reprise automatique après quota (`etatDeRepriseDuFil`) : un tour de règle a des
    * bornes (`chat-dispatch.ts`) que cette reprise n'a pas.
    */
   ouvertDepuisLeChat?: true
@@ -169,7 +169,7 @@ export interface ChatTurnState {
   actionsLog?: string[]
   /**
    * DURÉE DU RAISONNEMENT, en millisecondes : le chiffre de la capsule « Raisonnement » du fil
-   * (variante R5, conv-162). Même mesure que le compteur en direct — du début du tour à sa clôture
+   * (variante R5). Même mesure que le compteur en direct — du début du tour à sa clôture
    * — pour que le chiffre ne change pas d'un rechargement à l'autre. Conservée avec le tour pour la
    * même raison que `reasoning` : sans elle, un tour relu affichait « Raisonnement terminé » sans
    * aucun compteur. Absente sur les tours antérieurs : la capsule n'invente alors aucun chiffre.
@@ -178,8 +178,8 @@ export interface ChatTurnState {
   /**
    * TESTS LANCÉS PAR L'AGENT DANS SON PROPRE TERMINAL, avec leur code de sortie — dans l'ordre.
    *
-   * Demande conv-1059 (2026-10-22) : la carte du fil ne comptait comme preuve que `verify` et les
-   * orchestrations. Le tour « vazy » de conv-1038, 295/295 tests verts joués au terminal, y restait
+   * Demande (2026-10-22) : la carte du fil ne comptait comme preuve que `verify` et les
+   * orchestrations. Le tour « vazy », 295/295 tests verts joués au terminal, y restait
    * « sans preuve » : l'adaptateur tenait la commande et son issue, et n'en laissait sortir que
    * deux lignes de texte (« Bash · … », « Bash terminé »). Absent sur les tours antérieurs.
    */
@@ -196,7 +196,7 @@ export interface TestDuTerminal {
   codeDeSortie: number
   /**
    * Les changements de dossier qui l'ont précédé dans sa ligne, tels que lancés : « cd ../autre ».
-   * Un `cd` vers le dossier du tour n'en est pas un. Absent : aucun, ou tour antérieur à conv-1423.
+   * Un `cd` vers le dossier du tour n'en est pas un. Absent : aucun, ou tour antérieur.
    */
   changementDeDossier?: string
   /** Heure d'arrivée du résultat (ms epoch) : range la preuve parmi les `verify` du même tour. */
@@ -207,7 +207,7 @@ export interface TestDuTerminal {
  * La commande réellement jouée : c'est elle que lisent le Board et la relance, jamais `commande`
  * seule. `cd ../autre && npm test` est une chaîne, donc inconnue pour la règle de couverture
  * (`preuve-du-tour.ts`) : elle ne rachète rien, rien ne la rachète, et deux dossiers gardent deux
- * clés (conv-1423, objection du contrôle final : `npm test` lu sans son `cd` donnait « Fait » à tort).
+ * clés (objection du contrôle final : `npm test` lu sans son `cd` donnait « Fait » à tort).
  *
  * fix-ok: `testDuMaillon` perdait le `cd`, et le réducteur plus bas recopiait les champs un par un.
  */
@@ -223,7 +223,7 @@ export function commandeJouee(
 export const TESTS_DU_TERMINAL_MAX = 100
 /**
  * Longueur gardée d'une commande de test, assez grande pour la lire ENTIÈRE : 300 coupait 117
- * commandes sur les demandes refusées du 29/10 au 01/11 (conv-1423), et une commande coupée ne peut
+ * commandes sur les demandes refusées du 29/10 au 01/11, et une commande coupée ne peut
  * ni couvrir un rouge ni être couverte (`preuve-du-tour.ts`). Le même plafond est écrit en dur dans
  * `LIBELLE_MAX` (`tests-du-terminal.ts`), dont le code part dans un script de hook sans import.
  */
@@ -266,13 +266,13 @@ export function lireTestsDuTerminal(valeur: unknown): TestDuTerminal[] {
 /**
  * Plafond du raisonnement conservé par tour, et SEULE borne du fil (direct, tour enregistré, ligne de
  * phase) : celle du fournisseur (`THINKING_CAP`, src/main/providers/thinking.ts). À 4 000, le début
- * d'une pensée sortait du bloc pendant qu'on la lisait (conv-1228, 2026-10-28 : « le petit 1
+ * d'une pensée sortait du bloc pendant qu'on la lisait (2026-10-28 : « le petit 1
  * commence a disparaitre »).
  */
 export const REASONING_MAX = 20_000
 
 /**
- * Plafonds du journal d'actions, les MÊMES en direct et dans le tour enregistré. Avant conv-1228
+ * Plafonds du journal d'actions, les MÊMES en direct et dans le tour enregistré.
  * (2026-10-28) : 500 lignes de 300 caractères, coupées sans le dire — sur un long tour, les premières
  * actions sortaient du bloc pendant qu'on le lisait. Les bornes ne protègent plus que d'un tour
  * démesuré, et toute coupe est ÉCRITE dans le journal (`bornerJournalDActions`).
@@ -315,11 +315,11 @@ export function estMarqueDeLignesOmises(ligne: string): boolean {
  *
  * Le fournisseur coupe la cible a 120 caracteres pour l'affichage et garde l'entiere dans
  * `statusTarget` (providers/claude.ts). Juger une commande sur son moignon est faux dans les deux
- * sens : rejoue sur les 134 commandes Bash de conv-861, `R=...; DEST=...; for d in ...` passait pour
+ * sens : rejoue sur les 134 commandes Bash, `R=...; DEST=...; for d in ...` passait pour
  * une lecture PURE alors que son `cp` / `rm -r` tombait apres la coupure. Seule la forme
  * `Outil · cible` est reconstruite ; le battement « Bash en cours - 2 min - ... » reste tel quel.
  *
- * PARTAGÉ depuis conv-1228 (2026-10-28) : le journal du bloc Actions (direct ET tour enregistré) garde
+ * PARTAGÉ depuis le 2026-10-28 : le journal du bloc Actions (direct ET tour enregistré) garde
  * lui aussi la ligne entière — en dépliant une action, on lisait jusque-là la commande amputée.
  */
 export function statutComplet(status: string | undefined, statusTarget?: string): string {
@@ -390,7 +390,7 @@ export type ChatTurnEvent =
    *
    * `transient` marque un echec qui ne raconte AUCUN travail : un refus de reprise TEMPORAIRE au
    * demarrage (un appel provider encore actif, l'appel se regle seul). Mesure du 2026-09-07
-   * (conv-336, journal des conversations a 07:48:19Z) : ces refus ont ecrit dans 11 conversations
+   * (journal des conversations a 07:48:19Z) : ces refus ont ecrit dans 11 conversations
    * vieilles de plusieurs jours, ce qui a bouge leur date de derniere touche -- elles sont
    * remontees en tete de liste et repassees en pastille « termine, non lu ». L'utilisateur a vu sa
    * liste repeinte par un evenement qui n'a rien produit. Le drapeau existe pour que le magasin
@@ -404,7 +404,7 @@ const SENSITIVE_KEY = /(?:password|passwd|secret|token|api[-_]?key|authorization
 const MAX_DEPTH = 6
 const MAX_KEYS = 80
 const MAX_ARRAY = 80
-/** Exporte pour qu'un lecteur du fil sache DIRE qu'une valeur y a ete coupee (conv-989). */
+/** Exporte pour qu'un lecteur du fil sache DIRE qu'une valeur y a ete coupee. */
 export const MAX_STRING = 12_000
 
 export function sanitizePersistedValue(value: unknown): unknown {
@@ -444,7 +444,7 @@ export function createChatTurn(turnId: string, runtime?: ChatTurnRuntime): ChatT
 /**
  * JAMAIS DE BULLE VIDE — y compris sur un tour ANNULE ou INTERROMPU.
  *
- * Constate dans `conv-1267` (message 5) : l'utilisateur commence une phrase, se corrige, le tour est
+ * Constate (message 5) : l'utilisateur commence une phrase, se corrige, le tour est
  * annule — et il ne reste RIEN a lire. La regle « jamais de bulle vide » existait deja, mais seulement
  * sur les chemins ou le modele avait parle ; une annulation precoce y echappait.
  *
@@ -452,7 +452,7 @@ export function createChatTurn(turnId: string, runtime?: ChatTurnRuntime): ChatT
  * quelque chose, ni si du travail a ete perdu. Le mot est ajoute UNIQUEMENT si rien d'autre n'existe —
  * un tour qui a deja parle garde sa reponse intacte.
  */
-// conv-798, tour caea20e6-d64b-436a-9af7-6912bdd13943 (saisie ts 1790162049307) : « annulé » sans
+// Tour caea20e6-d64b-436a-9af7-6912bdd13943 (saisie ts 1790162049307) : « annulé » sans
 // auteur a ete lu comme « réponse bizarre ». `cancelled` n'est pose que par un Stop (chat-turn-arret.ts) :
 // le dire, et dire quoi faire.
 export const MOT_ANNULE =
@@ -495,7 +495,7 @@ export function sansHeureInutile(
  *
  * Sans `conclusionSeule` : tout le texte du flux. Avec : seulement son dernier passage, en remontant
  * depuis sa dernière part de texte jusqu'au premier geste (action, image, autre flux). Mesure du
- * 2026-10-31 (conv-1401, tour 79a873fa) : une relance « tu promets un compte-rendu » effaçait le
+ * 2026-10-31 (tour 79a873fa) : une relance « tu promets un compte-rendu » effaçait le
  * flux ENTIER d'un appel de 3 h — 30 blocs, 8 384 caractères de récit du travail — alors que le
  * modèle ne refaisait que sa conclusion.
  */
@@ -665,7 +665,7 @@ export function reduceChatTurn(state: ChatTurnState, event: ChatTurnEvent): Chat
       error: event.error,
       parts: state.parts
         // Le mot du Stop n'est pas une réponse : un échec qui suit l'annulation (coupure du veilleur
-        // d'inactivité) le retire, sa cause s'affiche dans le bloc d'erreur (kaizen conv-1432).
+        // d'inactivité) le retire, sa cause s'affiche dans le bloc d'erreur.
         .filter((part) => !(part.kind === 'text' && part.text === MOT_ANNULE))
         .map((part) =>
           part.kind === 'action' && part.ok === undefined ? { ...part, ok: false } : part
@@ -719,7 +719,7 @@ function retirerAnnonceEnTete(texte: string): string {
  * pas du tout l'experience utilisateur que je veux offrir ».
  *
  * Les supprimer purement ferait revenir un defaut plus ancien et PIRE : la bulle VIDE d'un tour qui
- * n'a fait qu'agir (conv-1141). D'ou un couple de garanties indissociable — aucune etiquette quand
+ * n'a fait qu'agir. D'ou un couple de garanties indissociable — aucune etiquette quand
  * une vraie reponse existe, jamais de bulle vide quand elle n'existe pas.
  *
  * Les ERREURS et les actions ECHOUEES restent toujours visibles : un echec n'est pas du bruit

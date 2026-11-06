@@ -5,7 +5,7 @@ import { closingTurnDelivery, closingStreamId } from './turn-closing'
 /**
  * LE TEXTE DE CLÔTURE DOIT ÊTRE LIVRÉ AU FIL LIVE, PAS SEULEMENT ÉCRIT SUR DISQUE.
  *
- * MESURÉ le 2026-08-17 dans `conv-1276` (tour « finis ça une bonne fois pour toutes ») : le message
+ * MESURÉ le 2026-08-17 (tour « finis ça une bonne fois pour toutes ») : le message
  * persisté ne portait qu'UNE part de texte, de flux `<turnId>:closing`. L'utilisateur n'a vu que la
  * ligne « ⛔ Workflow BLOQUÉ par le gate » ; tout le reste n'est apparu qu'à l'envoi du message
  * suivant, qui relit le store. Le renderer, lui, ne reçoit que `done`, dont son réducteur jette le
@@ -31,7 +31,7 @@ describe('livraison du texte de clôture', () => {
    * Un tour qui a DEJA parle garde son texte final des lors qu'il dit quelque chose de NEUF — que
    * ce soit un verdict d'orchestration ou le compte-rendu d'un tour ordinaire. Le motif n'est plus
    * « l'outcome est distinct » mais « ce texte n'a pas encore ete affiche » : c'est le contenu qui
-   * tranche, et c'est ce qui rend le bloc de cloture d'un tour bavard enfin visible (conv-471).
+   * tranche, et c'est ce qui rend le bloc de cloture d'un tour bavard enfin visible.
    */
   it('livre la clôture d’un tour qui a déjà parlé, car son texte est NEUF', () => {
     const livraison = closingTurnDelivery('turn-9', 'verdict final', 'préambule déjà diffusé')

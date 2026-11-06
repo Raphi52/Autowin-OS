@@ -62,7 +62,7 @@ describe('ChatView — les suppositions du cadrage arrivent dans le fil', () => 
   })
 
   /**
-   * LE BLOC EST VIVANT, PAS PERSISTANT — defaut vecu sur conv-512.
+   * LE BLOC EST VIVANT, PAS PERSISTANT — defaut vecu.
    *
    * Le run s'est termine a 16:31:43 (tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`, evenement de
    * cloture `status: succeeded`). La capture jointe par l'utilisateur a la saisie `ts`
@@ -103,7 +103,7 @@ describe('ChatView — les suppositions du cadrage arrivent dans le fil', () => 
 })
 
 /**
- * LE REPLI SE GARDE PAR CONVERSATION — demande du 19/10 (conv-358) : « garde l'état replié du bloc
+ * LE REPLI SE GARDE PAR CONVERSATION — demande du 19/10 : « garde l'état replié du bloc
  * cadrage par conversation, pour qu'il reste fermé quand je change de fil et que je reviens ».
  *
  * Avant : le repli vivait DANS le composant. Changer pour un fil sans cadrage démontait le bloc et

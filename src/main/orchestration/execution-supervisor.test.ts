@@ -459,7 +459,7 @@ describe('ExecutionSupervisor', () => {
     /*
      * LE REFUS DOIT NOMMER SA SUITE.
      *
-     * conv-18, tour 6c581550-6be5-47cf-8c11-41901d4d885a (journal du tour, delta a 1788425682673) :
+     * Tour 6c581550-6be5-47cf-8c11-41901d4d885a (journal du tour, delta a 1788425682673) :
      * l'agent recoit « Reprise refusee : 1 appel(s) provider encore actif(s). », en conclut « je ne
      * peux pas relancer un run dans ce tour », et ecrit la fonctionnalite A LA MAIN dans le depot
      * reel (`cat > src/shared/reprise-surcharge.ts`). Le refus etait pourtant transitoire : la meme
@@ -478,7 +478,7 @@ describe('ExecutionSupervisor', () => {
     /*
      * LE REFUS DOIT BORNER SA PORTEE.
      *
-     * conv-384 du 2026-09-09 : le texte disait « aucun fichier touche » sans dire DE QUOI il
+     * Un fil du 2026-09-09 : le texte disait « aucun fichier touche » sans dire DE QUOI il
      * parlait. L'agent l'a recopie en cloture alors que le run encore actif avait deja ecrit
      * 8 fichiers dans sa copie de travail isolee — l'utilisateur a lu l'inverse du reel. On
      * epingle donc la borne (« cette tentative-ci ») ET le renvoi vers le worktree du run actif.
@@ -812,7 +812,7 @@ describe('ExecutionSupervisor — la duree borne l’immobilite, plus la longueu
   /**
    * UN SEUL APPEL, TRES LONG, N'EST PAS UN RUN PENDU.
    *
-   * Mesure du 2026-08-28 (conv-1511) : un run a ete tue sur « aucune progression depuis 2700000 ms »
+   * Mesure du 2026-08-28 : un run a ete tue sur « aucune progression depuis 2700000 ms »
    * apres avoir produit 19 fichiers. Le coeur ne battait qu'au DEMARRAGE et au REGLEMENT d'un appel :
    * une phase build tenue par un unique appel provider plus long que le budget d'inactivite ne battait
    * jamais. Un appel EN VOL prouve pourtant que rien n'est pendu.

@@ -46,7 +46,7 @@ export type OpenRunState = {
   mtime?: number
   /**
    * Sortie ENTIÈRE des étapes (`livrable.md` voisin du RUN.md), quand elle existe : le fil des
-   * sous-agents coupe chaque étape à 4 000 caractères (conv-989).
+   * sous-agents coupe chaque étape à 4 000 caractères.
    */
   livrable?: string
 }
@@ -85,7 +85,7 @@ const RUN_DOT: Record<string, string> = {
   open: 'st-warn',
   red: 'st-err',
   'degraded-closed': 'st-violet',
-  // Coupé par Stop, quota ou panne : ni échec ni succès (piste 4, conv-1070).
+  // Coupé par Stop, quota ou panne : ni échec ni succès (piste 4).
   interrupted: 'st-warn'
 }
 
@@ -124,7 +124,7 @@ export type WorkflowsPanelProps = {
   setShowRuns: (value: boolean) => void
   /**
    * Le panneau se FERME : il glisse vers la droite, puis `onFermee` permet a ChatView de le demonter
-   * (conv-987, « je veux une animation d'ouverture fermeture pour le paneau de droite »).
+   * (« je veux une animation d'ouverture fermeture pour le paneau de droite »).
    */
   fermeture?: boolean
   onFermee?: () => void
@@ -136,7 +136,7 @@ export type WorkflowsPanelProps = {
   visibleLiveRuns: [string, ScopedLiveRun<OrchStep>][]
   runs: RunEntry[]
   /**
-   * Les RUN.md LÉGERS du fil, une fiche par demande (conv-1441) : listés au-dessus des runs, ils se
+   * Les RUN.md LÉGERS du fil, une fiche par demande : listés au-dessus des runs, ils se
    * déplient comme eux, sans bouton de suppression (un fil supprimé emporte ses fiches).
    */
   fiches?: readonly FicheDeDemande[]
@@ -163,7 +163,7 @@ export type WorkflowsPanelProps = {
    * demande, pour que deux demandes identiques d'affilee rouvrent bien l'onglet.
    */
   ongletDemande?: { tab: PanelTab; jeton: number }
-  /** Ouvre un tour dans l'Observatory : lien « version complète » du déroulé du bilan (conv-981). */
+  /** Ouvre un tour dans l'Observatory : lien « version complète » du déroulé du bilan. */
   onInspectTurn?: (target: InspectTurnTarget) => void
 }
 
@@ -223,7 +223,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
    */
   const derniereRelecture = useRef<string | null>(null)
   /**
-   * L'OUVERTURE DU PANNEAU DESSINE SES BORDS (conv-987, 2026-10-16 : « quand j'ouvre le panneau
+   * L'OUVERTURE DU PANNEAU DESSINE SES BORDS (2026-10-16 : « quand j'ouvre le panneau
    * detail je veux l'animation des border ») : le panneau n'est monte qu'a l'ouverture (`showRuns`,
    * ChatView), donc son montage EST l'ouverture. Effet de mise en page : le cadre est marque avant la
    * premiere peinture, il n'apparait pas une image tout dessine. Le theme decide s'il l'anime.
@@ -231,7 +231,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   const panneau = useRef<HTMLElement>(null)
   useLayoutEffect(() => (panneau.current ? jouerEntreeCadre(panneau.current) : undefined), [])
   /**
-   * ET IL GLISSE (conv-987, 2026-10-16 : « je veux une animation d'ouverture fermeture pour le
+   * ET IL GLISSE (2026-10-16 : « je veux une animation d'ouverture fermeture pour le
    * paneau de droite ») : depuis le bord droit au montage, vers lui a la fermeture, puis ChatView le
    * demonte (`onFermee`). Une reouverture pendant la fermeture repart de la ou il en est
    * (glissement-panneau.ts). `onFermee` est lu au moment de conclure, pas fige au clic.
@@ -343,7 +343,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
   const choisirNoeud = (suivant: ExecutionNodeSelection | null): void => {
     setSelection(suivant)
     /**
-     * DESCENDRE SUR UN BLOC OUVRE SON DETAIL, SUR PLACE (conv-259, 2026-09-04).
+     * DESCENDRE SUR UN BLOC OUVRE SON DETAIL, SUR PLACE (2026-09-04).
      *
      * L'auto-bascule vers Runs faisait DISPARAITRE le graphe ET son panneau de detail au clic :
      * l'utilisateur cliquait un bloc et se retrouvait devant une autre section, sans le detail
@@ -477,7 +477,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
             data-workflow-detail={selection && !depot ? 'subagents' : 'runs'}
             style={{ gap: 'var(--s2)', minHeight: 0 }}
           >
-            {/* MESSAGES ENTRE FILS (conv-1139, 2026-10-25 : « ranges ce bloc dans Détails > Runs ») :
+            {/* MESSAGES ENTRE FILS (2026-10-25 : « ranges ce bloc dans Détails > Runs ») :
                 ce que les agents des autres fils du même dépôt ont écrit à CE fil, et l'inverse.
                 Ils étaient au-dessus de la zone de saisie ; en tête de l'onglet, ils restent
                 visibles même quand la liste des RUN.md est longue. */}
@@ -597,7 +597,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
               </details>
             </div>
           ))}
-          {/* FICHES DE DEMANDE (conv-1441) : le RUN.md léger que l'app écrit pour chaque demande. */}
+          {/* FICHES DE DEMANDE : le RUN.md léger que l'app écrit pour chaque demande. */}
           {fiches.length > 0 && (
             <div className="col fiches-du-fil" data-testid="fiches-du-fil">
               <span className="fiches-du-fil-titre">{t('workflows.fiches.titre')}</span>
@@ -691,7 +691,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                 >
                   <div className="run-card-shell">
                     {/* `aria-expanded` et `data-statut` : le run DEPLIE et son statut se lisent
-                        sans deviner (lecteur d'ecran), et le theme les habille (conv-245). */}
+                        sans deviner (lecteur d'ecran), et le theme les habille. */}
                     <button
                       className="card run-row"
                       aria-expanded={isOpen}
@@ -718,7 +718,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                         <div className="meter grow">
                           {/* Hors vert, la couleur se regle par le theme (`--run-jauge`) ; sans
                               reglage, l'accent comme avant. Le style en ligne battait toute feuille
-                              de theme (conv-245). Un run vert garde le vert du theme. */}
+                              de theme. Un run vert garde le vert du theme. */}
                           <span
                             style={{
                               width: `${pct}%`,
@@ -779,7 +779,7 @@ export function WorkflowsPanel(props: WorkflowsPanelProps): React.JSX.Element {
                               RUN.md
                             </button>
                           )}
-                          {/* conv-989 : le fil coupe chaque étape à 4 000 caractères ; la sortie
+                          {/* Le fil coupe chaque étape à 4 000 caractères ; la sortie
                               entière, écrite à côté du RUN.md, se lit ici. */}
                           {openRun?.livrable && (
                             <button

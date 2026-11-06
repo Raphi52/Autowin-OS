@@ -5,7 +5,7 @@ import type { PromptSnapshot } from '../commands/commands'
 /**
  * UNE RÉPONSE DE L'UTILISATEUR NE DOIT PAS ANNULER LES ACTIONS DÉJÀ DÉCIDÉES.
  *
- * Mesure du 2026-09-01 (conv-65). L'utilisateur répond pendant que le tour se termine ; sa réponse
+ * Mesure du 2026-09-01. L'utilisateur répond pendant que le tour se termine ; sa réponse
  * était traitée comme « cette réponse est périmée » et la réponse ENTIÈRE du modèle était jetée,
  * commandes comprises. Le tour portait un `ask` : aucun bouton n'est jamais apparu, et un `remember`
  * du même souffle a disparu — d'où « quand je réponds ça marche pas ». Preuve hors-modèle : aucun

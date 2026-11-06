@@ -39,7 +39,7 @@ export type WatchdogSource =
       events: WatchdogAppEvent[]
       /**
        * Fil surveillé : seuls les événements de CE fil réveillent la règle. Obligatoire avec
-       * `chat-turn-done` (conv-1069) — sans lui, la règle se réveillerait à chaque tour de chaque fil.
+       * `chat-turn-done` — sans lui, la règle se réveillerait à chaque tour de chaque fil.
        */
       conversationId?: string
     }
@@ -85,9 +85,9 @@ export interface WatchdogSender {
  *    il annonce un succes que rien n'etaye, et personne ne va le lire ;
  *  - `workflow-proof-lost`   : une reprise a perdu des preuves de son propre journal.
  *
- * `chat-turn-done` (conv-1069) : un tour de chat vient de se terminer, quelle qu'en soit l'issue.
+ * `chat-turn-done` : un tour de chat vient de se terminer, quelle qu'en soit l'issue.
  * Émis dans le `finally` du tour (`chat/run-pilot-chat.ts`, `annoncerFinDeTour`), APRÈS sa sortie
- * des tours actifs : c'est l'instant où `pilotChatActive` passe à faux. Sur conv-1065, attendre un
+ * des tours actifs : c'est l'instant où `pilotChatActive` passe à faux. Attendre un
  * autre fil a coûté 5 envois et 2 tours payés pour lire « pas terminé ».
  */
 export type WatchdogAppEvent =

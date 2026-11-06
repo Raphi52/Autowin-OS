@@ -142,9 +142,9 @@ interface ChatApi {
   hdeskGestionFermer: (id: string) => Promise<ResultatFermetureGeree>
   hdeskGestionCreer: (demande: DemandeCreationBureau) => Promise<ResultatCreationBureau>
   hdeskGestionChoisirExe: () => Promise<ResultatChoixExe>
-  /** Navigateur intégré du chat (conv-1286) : la forme est celle du contrat partagé. */
+  /** Navigateur intégré du chat : la forme est celle du contrat partagé. */
   navigateur: ApiNavigateur
-  /** Terminal intégré du chat (conv-1362) : la forme est celle du contrat partagé. */
+  /** Terminal intégré du chat : la forme est celle du contrat partagé. */
   terminal: ApiTerminal
   prodPassphraseEtat: () => Promise<EtatPhraseProd>
   prodPassphraseDefinir: (
@@ -280,7 +280,7 @@ interface ChatApi {
     import('../shared/gel-detector').ResumeGels & {
       disponible: boolean
       source: string
-      /** Memoire et CPU de chaque processus : dernier releve, total et pic (conv-1077). */
+      /** Memoire et CPU de chaque processus : dernier releve, total et pic. */
       memoire?: import('../main/brain/releve-memoire').EtatReleveMemoire
     }
   >
@@ -314,25 +314,25 @@ interface ChatApi {
     etapesFaites: number
     etapesTotales: number
   }) => Promise<boolean>
-  /** Connecté à distance ? Sur un écran de téléphone ? (conv-1442) */
+  /** Connecté à distance ? Sur un écran de téléphone ? */
   affichageSession: () => Promise<AffichageSession>
   onAffichageSession: (cb: (etat: AffichageSession) => void) => () => void
-  /** La mascotte du bureau (conv-1145) : affichée ou masquée, choix gardé par le moteur. */
+  /** La mascotte du bureau : affichée ou masquée, choix gardé par le moteur. */
   mascotteAffichee: () => Promise<boolean>
   afficherMascotte: (affichee: boolean) => Promise<boolean>
-  /** Le style de la mascotte du bureau : le magicien ou la bille basique (conv-1249). */
+  /** Le style de la mascotte du bureau : le magicien ou la bille basique. */
   styleMascotte: () => Promise<'magicien' | 'basique' | 'machine'>
   choisirStyleMascotte: (style: 'magicien' | 'basique' | 'machine') => Promise<'magicien' | 'basique' | 'machine'>
   themeMascotte: (theme: string) => Promise<boolean>
-  /** La vraie page de la mascotte, pour l'accueil d'un fil vide (conv-1401). */
+  /** La vraie page de la mascotte, pour l'accueil d'un fil vide. */
   mascottePage: () => Promise<{ html: string; largeur: number; hauteur: number }>
   /** La feuille d'humeur à poser sur cette page. */
   mascotteFeuilleAccueil: (humeur: string, agents: number) => Promise<string>
   setTitlebarSymbolColor: (couleur: string) => Promise<boolean>
   setColorScheme: (schema: 'dark' | 'light') => Promise<boolean>
-  /** Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite (conv-1090). */
+  /** Les couleurs du thème choisi, pour la carte de fin de tour en bas à droite. */
   setPaletteCarteFinDeTour: (palette: Record<string, string>) => Promise<boolean>
-  /** La langue choisie dans Settings · Interface ; rend celle que le moteur a enregistrée (conv-1146). */
+  /** La langue choisie dans Settings · Interface ; rend celle que le moteur a enregistrée. */
   setLangue: (langue: 'fr' | 'en') => Promise<'fr' | 'en'>
   checkUpdate: () => Promise<{
     available: boolean
@@ -539,9 +539,9 @@ interface ChatApi {
   choisirDossierBrain: () => Promise<string | null>
   enregistrerBrainReglage: (entree: { chemin?: string; depot?: string }) => Promise<BrainReglageState>
   resetBrainReglage: () => Promise<BrainReglageState>
-  /** Le Brain PERSO, privé, à côté de celui de l'équipe (conv-1233, `src/main/brain/brain-perso.ts`). */
+  /** Le Brain PERSO, privé, à côté de celui de l'équipe (`src/main/brain/brain-perso.ts`). */
   brainPerso: () => Promise<BrainPersoState>
-  // Serveurs MCP de l'utilisateur (conv-1558) : le preload les exposait sans type (lot 1).
+  // Serveurs MCP de l'utilisateur : le preload les exposait sans type (lot 1).
   mcpServersList: () => Promise<ReponseServeursMcp>
   mcpServersSave: (serveur: ServeurMcpUtilisateur) => Promise<ReponseServeursMcp>
   mcpServersDelete: (id: string) => Promise<ReponseServeursMcp>
@@ -568,60 +568,60 @@ interface ChatApi {
   ) => Promise<Array<{ nom: string; chemin: string; octets: number; le: number }>>
   transcriptRevealer: (chemin: string) => Promise<{ ok: true }>
   conversations: () => Promise<ConversationSummary[]>
-  /** La carte des besoins (conv-1089) : les demandes de TOUS les fils, par projet, sans modèle. */
+  /** La carte des besoins : les demandes de TOUS les fils, par projet, sans modèle. */
   carteDesBesoins: (options?: {
-    /** Les états posés à la main sur le Board, joints pour la copie vers son dossier (conv-1206). */
+    /** Les états posés à la main sur le Board, joints pour la copie vers son dossier. */
     etatsManuels?: Record<string, EtatManuelDuBoard>
   }) => Promise<CarteDesBesoins>
-  /** Le dossier où le Board est recopié, choisi sur ce poste (conv-1206). */
+  /** Le dossier où le Board est recopié, choisi sur ce poste. */
   boardDossier: () => Promise<EtatDuDossierDuBoard>
-  /** La liste des dossiers de travail du Chat, la seule que le Board montre (conv-1212) ; absent =
+  /** La liste des dossiers de travail du Chat, la seule que le Board montre ; absent =
    *  preload d'avant redémarrage. */
   boardDossiersDuChat?: (dossiers: string[], retires?: string[]) => Promise<boolean>
   boardDossierChoisir: () => Promise<EtatDuDossierDuBoard>
   boardDossierEffacer: () => Promise<EtatDuDossierDuBoard>
-  /** Les projets recopiés dans le dossier du Board, `null` = tous (conv-1211). */
+  /** Les projets recopiés dans le dossier du Board, `null` = tous. */
   boardDossierProjets: (projets: string[] | null) => Promise<EtatDuDossierDuBoard>
-  /** Le nom de ce poste sur le Board, `null` = le compte Windows (conv-1230) ; absent = preload
+  /** Le nom de ce poste sur le Board, `null` = le compte Windows ; absent = preload
    *  d'avant redémarrage. */
   boardDossierNom?: (nom: string | null) => Promise<EtatDuDossierDuBoard>
-  /** Les Boards des collègues relus dans le dossier du Board (conv-1210), en lecture seule. */
+  /** Les Boards des collègues relus dans le dossier du Board, en lecture seule. */
   boardCollegues: () => Promise<BoardsDesCollegues>
   boardFicheCollegue: (poste: string, fiche: string) => Promise<string | null>
-  /** L'instantané des tanukis de ce poste, publié filtré dans le village commun (conv-1429) ; absent
+  /** L'instantané des tanukis de ce poste, publié filtré dans le village commun ; absent
    *  = preload d'avant redémarrage. */
   quartierPresence?: (agents: AgentAPublier[]) => Promise<void>
-  /** Coupe (`false`) ou rétablit le partage de la présence du poste (D6, conv-1429). */
+  /** Coupe (`false`) ou rétablit le partage de la présence du poste (D6). */
   quartierPresencePartager?: (actif: boolean) => Promise<EtatDuDossierDuBoard>
-  /** L'animal des agents du poste, vu aussi par les collègues (`null` = le défaut, conv-1537) ;
+  /** L'animal des agents du poste, vu aussi par les collègues (`null` = le défaut) ;
    *  absent = preload d'avant redémarrage. */
   quartierPresenceAnimal?: (animal: AnimalAgent | null) => Promise<EtatDuDossierDuBoard>
-  /** La couleur de tenue des agents du poste, vue aussi par les collègues (`null` = d'origine,
-   *  conv-1633) ; absent = preload d'avant redémarrage. */
+  /** La couleur de tenue des agents du poste, vue aussi par les collègues (`null` = d'origine)
+   *  Absent = preload d'avant redémarrage. */
   quartierPresenceTenue?: (tenue: TenueAgent | null) => Promise<EtatDuDossierDuBoard>
-  /** « Afficher mes agents à » : les postes à qui ce poste masque ses agents (conv-1599) ; absent =
+  /** « Afficher mes agents à » : les postes à qui ce poste masque ses agents ; absent =
    *  preload d'avant redémarrage. */
   quartierPresenceMasques?: (postes: string[]) => Promise<EtatDuDossierDuBoard>
-  /** Où et quand `presence.json` a été écrit, et le dernier échec (conv-1429). */
+  /** Où et quand `presence.json` a été écrit, et le dernier échec. */
   quartierPresenceEtat?: () => Promise<EtatDeLaPresence>
-  /** Les tanukis des AUTRES postes, relus sur le partage et validés (conv-1429, lot 2) ; absent =
+  /** Les tanukis des AUTRES postes, relus sur le partage et validés (lot 2) ; absent =
    *  preload d'avant redémarrage. */
   presenceDesCollegues?: () => Promise<PresencesDesCollegues>
-  /** Lier une demande de la carte à un work item, lu à la source avant d'être posé (conv-1127). */
+  /** Lier une demande de la carte à un work item, lu à la source avant d'être posé. */
   carteLierWorkItem: (cible: {
     conversationId: string
     demande: string
     saisie: string
     sourceId?: string
   }) => Promise<ResultatDuRattachement>
-  /** Détacher un work item d'une demande ; un lien automatique détaché ne revient pas (conv-1127). */
+  /** Détacher un work item d'une demande ; un lien automatique détaché ne revient pas. */
   carteDelierWorkItem: (cible: {
     conversationId: string
     demande: string
     sourceId: string
     id: string
   }) => Promise<{ ok: true } | { ok: false; raison: string }>
-  /** Lire à la source les `#1234` des prompts, et poser ceux qui existent (conv-1127). */
+  /** Lire à la source les `#1234` des prompts, et poser ceux qui existent. */
   carteVerifierMentions: () => Promise<BilanDesMentions>
   /** Ids des conversations dont le CONTENU porte le terme (+ extrait a montrer). */
   conversationsSearchContent: (
@@ -632,7 +632,7 @@ interface ChatApi {
     title: string
     category: string
     provider: string
-    /** Dossier de travail dès la création (conv-1038) ; un non-chemin est refusé. */
+    /** Dossier de travail dès la création ; un non-chemin est refusé. */
     projectPath?: string
   }) => Promise<{
     id: string
@@ -660,32 +660,32 @@ interface ChatApi {
   dossierPersonnel?: () => Promise<string>
   conversationsSetInactive: (id: string, on: boolean) => Promise<boolean>
   /**
-   * Marque (`true`) ou démarque (`false`) un fil privé pour le village commun (D6, conv-1429) : son
+   * Marque (`true`) ou démarque (`false`) un fil privé pour le village commun (D6) : son
    * tanuki reste chez les collègues, sans titre. Absent d'un preload d'avant redémarrage.
    */
   conversationsSetPrive?: (id: string, on: boolean) => Promise<boolean>
-  /** `dossier` : la copie séparée où la branche travaille dès sa création (conv-1038). */
+  /** `dossier` : la copie séparée où la branche travaille dès sa création. */
   conversationsFork: (
     id: string,
     messageId: string,
     options?: { dossier?: string }
   ) => Promise<Conversation>
-  /** Ce que l'agent a retenu dans ce fil (carnet du fil, conv-1038) ; absent d'un preload ancien. */
+  /** Ce que l'agent a retenu dans ce fil (carnet du fil) ; absent d'un preload ancien. */
   conversationMemoire?: (
     id: string
   ) => Promise<Array<{ title: string; body: string; state?: 'depose' | 'inconnu' | 'local' }>>
-  /** Retire un fait barré dans le carnet : l'agent ne le relit plus (conv-1038). */
+  /** Retire un fait barré dans le carnet : l'agent ne le relit plus. */
   conversationOublierFait?: (id: string, title: string) => Promise<boolean>
-  /** « Essaie 3 façons » : une photo du code, une copie séparée par branche (conv-1038). */
+  /** « Essaie 3 façons » : une photo du code, une copie séparée par branche. */
   conversationEssaisEnParallele?: (
     id: string,
     nombre: number
   ) => Promise<{ ok: true; quand: number; chemins: string[] } | { ok: false; raison: string }>
-  /** La carte de comparaison des façons : écart, état du tour, vérifications (conv-1038). */
+  /** La carte de comparaison des façons : écart, état du tour, vérifications. */
   conversationComparerLesFacons?: (ids: string[]) => Promise<ComparaisonDUneFacon[]>
-  /** « Garder celle-ci » : l'écart de la façon publié par le chemin des copies (conv-1038). */
+  /** « Garder celle-ci » : l'écart de la façon publié par le chemin des copies. */
   conversationGarderEssai?: (id: string) => Promise<ResultatGarderUneFacon>
-  /** Rouvre le code du début du tour d'un message dans une copie séparée (conv-1038). */
+  /** Rouvre le code du début du tour d'un message dans une copie séparée. */
   conversationRevenirAuTour?: (
     id: string,
     messageId: string
@@ -783,11 +783,11 @@ interface ChatApi {
   detachView: (view: string, screenX: number, screenY: number) => Promise<{ ok: boolean }>
   windowBounds: () => { x: number; y: number; width: number; height: number }
   appCommand: (name: string, args?: Record<string, unknown>) => Promise<CommandResult>
-  /** Messages entre fils du même dépôt, envoyés et reçus par ce fil (conv-1139). Lecture seule. */
+  /** Messages entre fils du même dépôt, envoyés et reçus par ce fil. Lecture seule. */
   messagesEntreFils: (conversationId: string) => Promise<MessageEntreFilsAffiche[]>
   /**
-   * Plan de lots d'un fil chef (conv-1150) : le voir, et les gestes ; `lot` pour « relancer ».
-   * « tous » (conv-1158) : tous les plans en un appel, SANS fil, pour ranger la liste.
+   * Plan de lots d'un fil chef : le voir, et les gestes ; `lot` pour « relancer ».
+   * « tous » : tous les plans en un appel, SANS fil, pour ranger la liste.
    */
   plansDeLots: {
     (geste: 'tous'): Promise<ReponsePlansDeLots>
@@ -797,7 +797,7 @@ interface ChatApi {
       planId?: string,
       lot?: number
     ): Promise<ReponsePlansDeLots>
-    /** Le bouton du workflow intelligent (conv-1333) : la sélection devient un plan, et part. */
+    /** Le bouton du workflow intelligent : la sélection devient un plan, et part. */
     (
       geste: 'lancer-selection',
       conversationId: string,
@@ -842,7 +842,7 @@ interface ChatApi {
     conversationId: string,
     texte: string,
     voie: 'message' | 'orientation',
-    /** Absent = tapé par l'utilisateur ; `mode-auto` = envoyé seul par ∞ (conv-113). */
+    /** Absent = tapé par l'utilisateur ; `mode-auto` = envoyé seul par ∞. */
     origine?: 'mode-auto'
   ) => Promise<{ ok: boolean }>
 
@@ -889,7 +889,7 @@ interface ChatApi {
       note?: string
       /**
        * Fragment du raisonnement du sous-agent (`orchestrate-delta`), a ACCUMULER sous sa phase —
-       * jamais a afficher seul comme ligne d'etat (conv-918, 2026-10-13).
+       * jamais a afficher seul comme ligne d'etat (2026-10-13).
        */
       reasoning?: string
       /** Phase en cours quand ce fragment de raisonnement a ete emis. */
@@ -898,16 +898,16 @@ interface ChatApi {
       hypotheses?: { affirmation: string; source: 'confiance' | 'besoin' }[]
       /** Orientations non lues a la fin d'un tour, renvoyees a l'ecran pour repartir en file (evenement `directives-orphelines`). */
       textes?: string[]
-      /** Suite a envoyer dans ce fil, pressee sur la notification de fin de tour (evenement `suite-depuis-notification`, conv-1038). */
+      /** Suite a envoyer dans ce fil, pressee sur la notification de fin de tour (evenement `suite-depuis-notification`). */
       texte?: string
     }) => void
   ) => () => void
   emitIsolatedTestAppEvent: (event: Record<string, unknown> & { type: string }) => Promise<boolean>
   isolatedTestConversationReadCount: (reset?: boolean) => Promise<number>
   conversationRuns: (convId: string) => Promise<RunEntry[]>
-  /** Les RUN.md légers qu'un fil a nourris (conv-1441). */
+  /** Les RUN.md légers qu'un fil a nourris. */
   fichesDuFil: (convId: string) => Promise<FicheDeDemande[]>
-  /** La fiche de chaque demande, par fil puis par message (conv-1441). */
+  /** La fiche de chaque demande, par fil puis par message. */
   fichesDesDemandes: () => Promise<FichesDesDemandes>
   deleteConversationRun: (
     convId: string,
@@ -919,7 +919,7 @@ interface ChatApi {
   listBrains: () => Promise<BrainGraphRef[]>
   loadBrainGraph: (path: string, lod?: number, community?: number) => Promise<VizGraph>
   loadBrainGraphPreview: (path: string, lod?: number) => Promise<VizGraph>
-  /** Les deux Brains dans un graphe, reliés par leurs ponts perso → équipe (conv-1262). */
+  /** Les deux Brains dans un graphe, reliés par leurs ponts perso → équipe. */
   loadBrainGraphReunis: (lod?: number) => Promise<VizGraph>
   loadBrainThemes: (path: string) => Promise<BrainTheme[]>
   loadBrainThemeNodes: (path: string, themeIds: string[]) => Promise<VizGraph['nodes']>

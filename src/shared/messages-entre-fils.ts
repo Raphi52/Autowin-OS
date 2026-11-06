@@ -1,5 +1,5 @@
 /**
- * MESSAGES ENTRE FILS DU MÊME DÉPÔT — le journal commun (conv-1139, 2026-10-24).
+ * MESSAGES ENTRE FILS DU MÊME DÉPÔT — le journal commun (2026-10-24).
  *
  * Mesure du 24/10 : 26 refus « Fichier réservé par conv-… » dans 9 fils depuis la réservation des
  * fichiers (22/10). L'agent bloqué ne pouvait que « le dire à l'utilisateur », qui recopiait le
@@ -7,7 +7,7 @@
  * dans le fil visé : le mot d'un agent y passe pour un ordre de l'utilisateur.
  *
  * Ici, un message ne démarre aucun tour, l'expéditeur est posé par l'app, et le journal ne fait
- * qu'ajouter (une ligne JSON par événement). Depuis le 2026-10-25 (conv-1139, demande de
+ * qu'ajouter (une ligne JSON par événement). Depuis le 2026-10-25 (demande de
  * l'utilisateur : « ça doit pouvoir être un ordre pour une orchestration »), la nature `ordre` porte
  * du TRAVAIL à faire ; les autres restent des informations, et aucun ne vaut l'accord de l'utilisateur
  * (exception écrite dans la constitution). Deux sortes de lignes :
@@ -19,9 +19,9 @@
  * agents (`garde-git-destructeur.ts`) : elles ne référencent rien hors de leur corps — le découpage
  * du journal est PASSÉ en argument, jamais appelé par nom (les bundlers renomment un appel).
  *
- * fix-ok: conv-1332, 2026-10-30 — cause mesurée du silence en run : `messagesEnAttente`
+ * fix-ok: 2026-10-30 — cause mesurée du silence en run : `messagesEnAttente`
  * (garde-git-destructeur.ts) s'arrêtait dès que le fil venait de AUTOWIN_CONVERSATION_ID, donc un
- * agent de run ne recevait rien ; msg-0e75e0e8 (conv-1333) n'a laissé aucune ligne `livre` au journal.
+ * agent de run ne recevait rien ; msg-0e75e0e8 n'a laissé aucune ligne `livre` au journal.
  * Cette ligne vit ici, loin de `copieDejaLue`, pour que le correctif 2f5dea83 reste annulable seul.
  */
 
@@ -48,7 +48,7 @@ export interface LivraisonDeFil {
   ids: string[]
   /**
    * Par où le message est arrivé : utile pour savoir ce que l'agent a VRAIMENT vu. `reveil` : un
-   * ordre porté par le tour qu'il a lancé dans un fil inactif (conv-1139, 2026-10-25).
+   * ordre porté par le tour qu'il a lancé dans un fil inactif (2026-10-25).
    */
   par: 'tour' | 'outil' | 'controle' | 'reveil'
   /**
@@ -102,7 +102,7 @@ export interface IoJournalFils {
  *
  * `copieDejaLue` : lecture pour un agent d'étape de run, qui n'a pas les outils pour répondre. Rien
  * n'est noté livré (le fil garde le message pour son prochain tour) ; la liste écarte ce que cet
- * agent a déjà lu. conv-1332, 2026-10-30 : msg-0e75e0e8 (conv-1333, « dis-le-moi avant d'écrire »)
+ * agent a déjà lu. 2026-10-30 : msg-0e75e0e8 (« dis-le-moi avant d'écrire »)
  * n'a jamais atteint le kaizen en cours, qui a écrit 7 minutes plus tard dans le fichier en cause.
  */
 export function livrerMessagesEnAttente(

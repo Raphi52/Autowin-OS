@@ -6,7 +6,7 @@ import type { DemandeDeLaCarte, ResultatDuRattachement } from '../../../shared/c
 import { TachesDeLaDemande } from './TachesDeLaDemande'
 
 /**
- * LE CHOIX DE LA SOURCE DANS « + task » (conv-1127, 2026-10-23). Demande : « ajoute au champ
+ * LE CHOIX DE LA SOURCE DANS « + task » (2026-10-23). Demande : « ajoute au champ
  * « + task » de la fiche du Board le choix de la source quand plusieurs sources de tickets sont
  * configurées ». ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : deux sources sans aucun choix affiché ; la
  * source choisie qui ne part pas avec le numéro ; un choix affiché pour une seule source (inutile).

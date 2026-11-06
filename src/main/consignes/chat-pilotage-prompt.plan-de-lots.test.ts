@@ -3,14 +3,14 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { CATALOG } from '../commands/commands'
 
 /**
- * UNE CAPACITÉ QUE LE PROMPT NE NOMME PAS RESTE MORTE (conv-1151, 2026-10-27) : `plan_de_lots`
+ * UNE CAPACITÉ QUE LE PROMPT NE NOMME PAS RESTE MORTE (2026-10-27) : `plan_de_lots`
  * existait, mais aucune ligne de la consigne ne disait QUAND le proposer — un plan ne naissait que
  * sur demande explicite de l'utilisateur.
  */
 describe('règle « tâche longue → plan de lots » dans la consigne du chat', () => {
   const prompt = buildChatPilotagePrompt(CATALOG)
 
-  // conv-1171 : déposer lance le plan, sans clic — la consigne doit le dire à l'agent.
+  // Déposer lance le plan, sans clic — la consigne doit le dire à l'agent.
   it('dit quand lancer un plan, et que déposer le lance sans clic', () => {
     expect(CATALOG.some((c) => c.name === 'plan_de_lots')).toBe(true)
     expect(prompt).toMatch(/UNE TÂCHE LONGUE → LANCE UN PLAN DE LOTS/u)
@@ -24,12 +24,12 @@ describe('règle « tâche longue → plan de lots » dans la consigne du chat',
   })
 
   /*
-   * L'IMPASSE DES TÂCHES INDÉPENDANTES (kaizen de conv-1332, 2026-10-30). Cette consigne les
-   * renvoyait à la carte des fils, que `CONSIGNE_LANCER_EN_FILS` interdit depuis conv-1163 sauf
+   * L'IMPASSE DES TÂCHES INDÉPENDANTES (2026-10-30). Cette consigne les
+   * renvoyait à la carte des fils, que `CONSIGNE_LANCER_EN_FILS` interdit sauf
    * demande explicite : deux tâches indépendantes partaient donc toujours en série. Mesuré sur la
-   * saisie 1793364618896 de conv-1322 (hauteur des schémas, puis fondu entre vues) : les deux dans
-   * un seul tour de 33 minutes et 4,48 $, la 2 corrigée, la 1 bloquée par une réservation de
-   * conv-1317. Déposer un plan ne demande aucun clic (conv-1171) : le refus de la carte ne s'y
+   * saisie 1793364618896 (hauteur des schémas, puis fondu entre vues) : les deux dans
+   * un seul tour de 33 minutes et 4,48 $, la 2 corrigée, la 1 bloquée par une réservation.
+   * Déposer un plan ne demande aucun clic : le refus de la carte ne s'y
    * oppose pas.
    * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : renvoyer de nouveau ces tâches à la carte des fils.
    */
@@ -41,7 +41,7 @@ describe('règle « tâche longue → plan de lots » dans la consigne du chat',
   })
 
   /*
-   * fix-ok: conv-1332 — LA PREUVE ÉTAIT DU MAUVAIS CÔTÉ (reprise du 2026-10-30). La première version gardait
+   * fix-ok: LA PREUVE ÉTAIT DU MAUVAIS CÔTÉ (reprise du 2026-10-30). La première version gardait
    * la série par défaut et demandait « indépendantes, fichiers séparés, chacune un tour entier ». Les
    * deux dernières conditions ne se savent pas avant d'avoir travaillé : sondé sur la saisie
    * 1793364618896, le modèle voit que les tâches ne se croisent pas, classe la 1 en petite correction
@@ -52,7 +52,7 @@ describe('règle « tâche longue → plan de lots » dans la consigne du chat',
     expect(prompt).not.toMatch(/occuperait un tour entier/u)
     expect(prompt).not.toMatch(/petites tâches qui tiennent dans ce tour/u)
     // Aucune mesure n'établit qu'« une tâche qui paraît petite peut prendre 30 minutes » : le tour
-    // cité (3ac2be2e, conv-1322) a passé ces 33 minutes sur les DEUX tâches, et sa petite tâche était
+    // cité (3ac2be2e) a passé ces 33 minutes sur les DEUX tâches, et sa petite tâche était
     // bien petite. Une consigne ne donne pas pour raison un fait que personne n'a mesuré.
     expect(prompt).not.toMatch(/paraît petite/u)
     expect(prompt).toMatch(/leur durée n'entre pas dans ce choix/u)

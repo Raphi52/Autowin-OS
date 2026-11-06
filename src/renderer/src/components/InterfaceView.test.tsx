@@ -72,7 +72,7 @@ describe('Settings · Interface', () => {
   it('choisit le clair, le mémorise et le pose sur la racine du document', async () => {
     const container = await monter()
     const liste = container.querySelector<HTMLSelectElement>('[data-testid="interface-theme"]')!
-    // Rien de memorise = le theme par DEFAUT, Holographique depuis le 2026-10-11 (conv-269).
+    // Rien de memorise = le theme par DEFAUT, Holographique depuis le 2026-10-11.
     expect(liste.value).toBe('nebuleuse-verre')
 
     // Une liste native ne réagit pas à `click()` : on pose la valeur puis on émet `change`,
@@ -107,7 +107,7 @@ describe('Settings · Interface', () => {
 })
 
 /**
- * LE CERCLE DU CHANGEMENT DE THEME (conv-981, 2026-10-16) part du `onChange` de la liste, JAMAIS de
+ * LE CERCLE DU CHANGEMENT DE THEME (2026-10-16) part du `onChange` de la liste, JAMAIS de
  * l'effet qui rejoue le theme a chaque ouverture de l'ecran. Entree qui doit faire echouer ce bloc :
  * deplacer `basculerTheme` dans le `useEffect` (le cercle partirait a l'ouverture de Settings), ou
  * reprendre la classe des vues (le cercle jouerait a chaque changement d'onglet).
@@ -163,7 +163,7 @@ describe('Settings · Interface — cercle du changement de thème', () => {
 })
 
 /**
- * LA LISTE « LANGUE » (conv-1146, 2026-10-26, « basculer autowin OS en full anglais »). Entrée qui
+ * LA LISTE « LANGUE » (2026-10-26, « basculer autowin OS en full anglais »). Entrée qui
  * doit faire échouer ce bloc : une liste qui ne change pas les textes sans redémarrage, un choix non
  * mémorisé, un envoi au moteur à chaque ouverture de l'écran, ou le français par défaut qui bouge.
  */
@@ -219,7 +219,7 @@ describe('Settings · Interface — langue', () => {
       'Holographic'
     )
     const sections = [...container.querySelectorAll('.settings-nav-item')].map((b) => b.textContent)
-    // « Routing » est devenu « Providers » (61bcaa11, conv-1537) : la clé settings.section.routing reste.
+    // « Routing » est devenu « Providers » (61bcaa11) : la clé settings.section.routing reste.
     expect(sections).toContain('Providers')
     expect(sections).toContain('Diagnostics')
     expect(container.querySelector('nav')?.getAttribute('aria-label')).toBe('Settings sections')
@@ -245,7 +245,7 @@ describe('Settings · Interface — langue', () => {
   })
 
   /**
-   * L'ÉCHEC D'ENVOI SE VOIT (conv-1146, réparation après le contrôle final). Avant, un refus du
+   * L'ÉCHEC D'ENVOI SE VOIT (réparation après le contrôle final). Avant, un refus du
    * moteur était avalé : l'écran passait en anglais, l'agent répondait en français, rien ne le
    * disait. Entrée qui doit faire échouer ce cas : un refus sans avertissement à l'écran, ou un
    * avertissement qui reste après un envoi réussi.

@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+// Le composant est découpé en fichiers voisins : la source lue les réunit.
 import { lireSourceDuChatView } from './ChatView.source-complete'
 import { resolve } from 'node:path'
 // @vitest-environment happy-dom
@@ -27,7 +27,7 @@ describe('selecteur orchestrateur Chat', () => {
     /*
      * DÉMONTER, pas seulement retirer le conteneur : le menu vit dans un PORTAIL de
      * `document.body`. Sans démontage, le menu d'un test survivait dans la page et le test suivant
-     * comptait ses options en double (constaté le 2026-10-11 en ajoutant les tests conv-239).
+     * comptait ses options en double (constaté le 2026-10-11 en ajoutant les tests).
      */
     act(() => rendu?.unmount())
     rendu = null
@@ -418,8 +418,8 @@ describe('selecteur orchestrateur Chat', () => {
   })
 
   it('change le modèle de LA conversation et l’orchestrateur d’Agents Studio', () => {
-    // conv-239 (2026-10-11) : « rends le modèle propre à chaque conversation » — le fil garde son
-    // choix, que le main relit au départ de chacun de ses tours. conv-1529 (2026-11-04) : ce choix
+    // 2026-10-11 : « rends le modèle propre à chaque conversation » — le fil garde son
+    // choix, que le main relit au départ de chacun de ses tours. (2026-11-04) : ce choix
     // pose AUSSI l'orchestrateur d'Agents Studio, jamais sur « revenir au défaut » (comportement
     // prouvé par ChatView.modele-studio.test.tsx).
     const choix = source.slice(source.indexOf('async function changerModeleDuFil('))
@@ -468,7 +468,7 @@ describe('selecteur orchestrateur Chat', () => {
     expect(source).toContain('compactionAutoRef.current.add(conversationId)')
     expect(source).toContain('send(COMPACT_REQUEST, { targetConversationId: conversationId })')
     // Rendu du sélecteur : extrait dans OrchestratorModelSelector.
-    // Pendant un tour, le MODÈLE est verrouillé mais pas le COMPTE (conv-1039, 2026-10-21) : la
+    // Pendant un tour, le MODÈLE est verrouillé mais pas le COMPTE (2026-10-21) : la
     // pop-up reste ouvrable quand elle porte le bloc « Compte ». Le refus du modèle ligne par ligne
     // est vérifié en comportement par ChatView.compte-pendant-tour.test.tsx.
     expect(selectorSource).toContain(
@@ -478,7 +478,7 @@ describe('selecteur orchestrateur Chat', () => {
     // verifie reste qu'il existe UNE seule classe de menu, portee par le composant extrait.
     expect(selectorSource).toContain('className={`model-select-menu is-flottant')
     expect(selectorSource).toContain('createPortal(')
-    // L'aide vit dans la table de textes depuis la traduction anglaise (conv-1170).
+    // L'aide vit dans la table de textes depuis la traduction anglaise.
     expect(selectorSource).toContain("t('selecteur.aide.application')")
     expect(TEXTES_PANNEAUX_FR['selecteur.aide.application']).toContain(
       'Le changement s’appliquera au prochain tour'

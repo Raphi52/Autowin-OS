@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DeltaCollageTracker, detacherFenceCollee } from './agent-pilot'
 
 // Migré de scripts/arena-panel/p13-pilote-fences.mts (banc /arena, commit 191ab51d), retiré le
-// 2026-10-22 (residus, conv-1062). Défaut d'origine : agent-pilot.ts recopiait l'ancienne règle de
+// 2026-10-22 (residus). Défaut d'origine : agent-pilot.ts recopiait l'ancienne règle de
 // parité des fences — DeltaCollageTracker coupait au milieu d'un bloc ``` contenant ~~~, et
 // detacherFenceCollee insérait « \n\n » dans un bloc ```` contenant ```.
 const coupe = (avant: string, apres: string): string => {

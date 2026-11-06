@@ -15,7 +15,7 @@ import {
 /**
  * LA LISTE DES TRAVAUX NON PUBLIÉS SUIT LES RÉFÉRENCES GIT, même modifiées HORS de l'app.
  *
- * Défaut constaté le 2026-10-19 (conv-360) : après un /salvage qui a supprimé treize références par
+ * Défaut constaté le 2026-10-19 : après un /salvage qui a supprimé treize références par
  * `git update-ref -d`, `get_state.travauxNonPublies` listait encore `a-trancher-visuel-permanent`.
  * Le relevé est en cache sans expiration et ne se refaisait que sur nos propres gestes (fin de run,
  * publication, tri) : une suppression faite dans git ne le refaisait jamais.

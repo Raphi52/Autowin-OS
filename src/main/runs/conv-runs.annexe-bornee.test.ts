@@ -7,7 +7,7 @@ import { createConvRun, populateConvRunSections } from './conv-runs'
 const root = mkdtempSync(join(tmpdir(), 'aos-annexe-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
-// conv-1150 : RUN.md de conv-1146 à 497 Mo → OOM au démarrage, l'app se fermait seule.
+// RUN.md à 497 Mo → OOM au démarrage, l'app se fermait seule.
 describe("annexe « Livrable des phases » — taille bornée", () => {
   it('une phase qui recopie un `## Reprise` ne fait pas enfler le RUN.md', () => {
     const p = createConvRun('conv-1', 'Tâche', root, () => 1000)

@@ -15,18 +15,18 @@ import {
 } from './home-decor-avenue-spirale'
 
 /**
- * LA SPIRALE DANS LE FOND DE L'ACCUEIL (conv-310).
+ * LA SPIRALE DANS LE FOND DE L'ACCUEIL.
  *
  * Demande de l'utilisateur, au bout du /draft « des moyens de rendre le fond d'écran de l'acceuil
  * magnifique effet waouh maximum » : « implémente spirale », la variante 4 · Spirale du brouillon
  * (rue inondée, tour de contrôle, rame en hélice, essaim AUTOWIN → ✓, enseignes en prismes).
  *
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE FICHIER :
- *   1. une lumière ponctuelle ajoutée → toutes les matières de la rue s'alourdissent (conv-301) ;
+ *   1. une lumière ponctuelle ajoutée → toutes les matières de la rue s'alourdissent ;
  *   2. les prismes ou la marquise posés dans la scène et non dans le décor → ils ne défilent pas ;
  *   3. le reflet dessiné sans masquer les plans d'eau, ou sans rendre la foule à la fin du reflet ;
  *   4. la version « reflet » des nuanceurs non précompilée → elle se compile à la première image et
- *      fige l'Accueil, comme le gel de 3 s corrigé en conv-301 ;
+ *      fige l'Accueil, comme le gel de 3 s corrigé ;
  *   5. les réglages de la variante 4 changés → ce n'est plus ce que l'utilisateur a choisi ;
  *   6. la spirale non branchée dans l'avenue, ou branchée APRÈS la compilation de la rue.
  */
@@ -161,7 +161,7 @@ describe('la Spirale — fond de l Accueil (conv-310)', () => {
 
   it('L ESSAIM PASSE SOUS L EN-TÊTE « AUTOWIN ACCUEIL », transitions comprises', () => {
     // Fenêtre de l'utilisateur : 1745 × 938 px CSS ; le bas de l'en-tête de l'Accueil est à 88 px
-    // (mesuré le 2026-10-17 sur son app et sur l'instance cachée qui la reproduit, conv-310). Le ✓
+    // (mesuré le 2026-10-17 sur son app et sur l'instance cachée qui la reproduit). Le ✓
     // montait à 88 px : il touchait l'en-tête. On exige 20 px d'air sur un cycle entier de l'essaim.
     const { spirale, ctx } = monter()
     const vue = new THREE.PerspectiveCamera(58, 1745 / 938, 0.1, 6000)
@@ -260,7 +260,7 @@ describe('la Spirale — fond de l Accueil (conv-310)', () => {
   it('L HÉLICE SE LIT DE CÔTÉ À CÔTÉ dans l Accueil de l utilisateur, écartée des anneaux', () => {
     // Une hélice se lit à ses côtés, là où les boucles tournent. Fenêtre de l'utilisateur 1745 × 938 :
     // la ville est dégagée de x = 226 (bord du menu) à x = 615 (poteau noir de l'avenue), mesuré le
-    // 2026-10-17 (conv-310). À 52 m de rayon, l'hélice allait de 158 à 619 : ses deux côtés cachés.
+    // 2026-10-17. À 52 m de rayon, l'hélice allait de 158 à 619 : ses deux côtés cachés.
     const vue = new THREE.PerspectiveCamera(58, 1745 / 938, 0.1, 6000)
     vue.position.set(-5.55, 1.75, 10)
     vue.lookAt(-2.2, 1.45, -14)
@@ -410,8 +410,8 @@ describe('la Spirale — fond de l Accueil (conv-310)', () => {
   })
 
   it('PAS DE REFLET AVANT SES PROGRAMMES : rien n est dessiné et l eau ne reflète rien', () => {
-    // conv-337 : la rue apparaît avant que la version « reflet » ne soit prête. Dessiner le reflet à
-    // ce moment la compilerait sur le fil, à l'image (le gel de conv-301).
+    // La rue apparaît avant que la version « reflet » ne soit prête. Dessiner le reflet à
+    // ce moment la compilerait sur le fil, à l'image (le gel).
     const { spirale, rendu } = monter()
     spirale.animer(1, 0)
     const force = (spirale.miroirs[0].material as THREE.ShaderMaterial).uniforms.uForce
@@ -440,7 +440,7 @@ describe('la Spirale — fond de l Accueil (conv-310)', () => {
   })
 
   it('UN REFLET SUR DEUX IMAGES : entre deux, l eau relit le précédent avec SA matrice', () => {
-    // conv-337 : 702 dessins sur 1 684 par image allaient au reflet ; l'eau ridée en permanence ne
+    // 702 dessins sur 1 684 par image allaient au reflet ; l'eau ridée en permanence ne
     // laisse pas voir un reflet vieux d'une image.
     expect(REFLET_UNE_IMAGE_SUR).toBe(2)
     const { spirale, rendu, ctx } = monter()
@@ -529,10 +529,10 @@ describe('la Spirale est branchée dans l avenue', () => {
   })
 
   it('la rue apparaît sans attendre son reflet, qui ne s active qu une fois précompilé ET finalisé', () => {
-    // conv-337 : la rue attendait aussi les 37 programmes du seul reflet. Elle est désormais déclarée
+    // La rue attendait aussi les 37 programmes du seul reflet. Elle est désormais déclarée
     // compilée dès SES programmes prêts. Le reflet, lui, reste éteint jusqu'à ce que sa version des
     // programmes soit compilée en tâche de fond PUIS finalisée : compilée mais pas finalisée, elle se
-    // finalisait d'un bloc au premier reflet (`onFirstUse` 310 ms dans la première image, conv-310).
+    // finalisait d'un bloc au premier reflet (`onFirstUse` 310 ms dans la première image).
     expect(source).toMatch(
       /compilerEnFond\(scene\)\s*\.then\(\(\) => finaliserProgrammes\(scene\)\)\s*\.then\(rueEstCompilee,[\s\S]*?\)\s*\.then\(\(\) => \(vivante \? spirale\.precompilerReflet\(compilerEnFond\) : undefined\)\)\s*\.then\(\(\) => finaliserProgrammes\(scene, spirale\.matieresDuReflet\(\)\)\)\s*\.then\(refletEstPret/
     )
@@ -544,7 +544,7 @@ describe('la Spirale est branchée dans l avenue', () => {
     // Une matière transparente à double face a deux programmes (face arrière, face avant), et une
     // matière dessinée à l'écran puis dans le reflet en a deux aussi. Ne finaliser que le programme
     // courant en laissait deux pour le premier reflet : 187 ms de lecture de journaux (espion de
-    // linkProgram dans l'Accueil, 2026-10-17, conv-310).
+    // linkProgram dans l'Accueil, 2026-10-17).
     const debut = source.indexOf('const finaliserProgrammes')
     const corps = source.slice(debut, source.indexOf('\n  }\n', debut))
     expect(corps).toMatch(/\.programs\b/)
@@ -552,7 +552,7 @@ describe('la Spirale est branchée dans l avenue', () => {
 
   it('anime la spirale et dessine son reflet, foule et arêtes du viaduc exclues, juste avant le rendu', () => {
     expect(source).toMatch(/spirale\.animer\(t, parcours\)/)
-    // depuis conv-1037, les feux des toits du vaisseau en sont exclus aussi
+    // Les feux des toits du vaisseau en sont exclus aussi
     expect(source).toMatch(
       /const dessinerReflet = \(\): void =>\s*spirale\.avantRendu\(\[foule\?\.groupe, \.\.\.aretesViaduc, vaisseau\.feuxToits\]\)/
     )
@@ -560,7 +560,7 @@ describe('la Spirale est branchée dans l avenue', () => {
     expect(source).toMatch(
       /if \(!options\.refletApresImage\) dessinerReflet\(\)\s*\n\s*renderer\.render\(scene, camera\)/
     )
-    // dans le Worker (conv-347) : après l'image, dans sa propre tâche (decor-avenue.worker.ts)
+    // dans le Worker : après l'image, dans sa propre tâche (decor-avenue.worker.ts)
     expect(source).toMatch(/apresImage: options\.refletApresImage[\s\S]{0,120}dessinerReflet\(\)/)
     expect(source).toMatch(/aretesViaduc\.push\(arete\)/)
   })
@@ -571,7 +571,7 @@ describe('la Spirale est branchée dans l avenue', () => {
 })
 
 describe('le viaduc du métro aérien s écarte de la spirale', () => {
-  // Demande de l'utilisateur (conv-310, 2026-10-17) : « Écarte les viaducs du métro aérien de la zone
+  // Demande de l'utilisateur (2026-10-17) : « Écarte les viaducs du métro aérien de la zone
   // de la tour, pour qu'on voie toute la spirale ». Le viaduc en béton traversait toute la ville : la
   // boucle de la marche (70 m) en gardait toujours une ou deux dalles entre la caméra et la tour, qui
   // coupaient l'hélice en bandes.

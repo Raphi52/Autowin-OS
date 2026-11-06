@@ -10,7 +10,7 @@ import {
 } from './ChatView.harness'
 
 /**
- * GEL `renderer:vue-chat-liste` (diagnostic /gel conv-1115, 2026-10-23) : chaque évènement
+ * GEL `renderer:vue-chat-liste` (diagnostic /gel, 2026-10-23) : chaque évènement
  * « conversations changées » rechargeait la liste par IPC, donc en objets NEUFS, et `refreshConvs`
  * la posait telle quelle. `LigneConversation` est mémorisée sur l'objet `c` : les ~1 000 lignes se
  * redessinaient toutes alors qu'un seul fil avait bougé (57 à 87 ms par rafraîchissement mesurés

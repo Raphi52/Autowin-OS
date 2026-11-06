@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { REGLES_ECRAN_UTILISATEUR } from './chat-pilotage-prompt'
 
 /**
- * PROUVER UNE INTERFACE SUR LE CODE EN COURS (2026-09-26, conv-863).
+ * PROUVER UNE INTERFACE SUR LE CODE EN COURS (2026-09-26).
  *
  * L'agent du chat a capture le panneau Détails en fenêtre cachée pour prouver le retrait d'un
  * bouton : `ok: true`, mais la capture montrait encore le bouton. L'instance cachée lançait le

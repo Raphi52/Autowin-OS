@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /*
- * UN SCHÉMA SUIT LE CHANGEMENT DE THÈME (conv-1235, 2026-10-28).
+ * UN SCHÉMA SUIT LE CHANGEMENT DE THÈME (2026-10-28).
  *
  * Les couleurs du schéma sont lues sur le thème appliqué au moment du dessin. Changer de thème
  * doit donc le REDESSINER — sous un identifiant neuf : `mermaid.render` retire d'abord du document

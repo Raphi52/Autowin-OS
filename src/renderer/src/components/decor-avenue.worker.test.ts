@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { MessageDuDecor, MessageVersDecor } from './decor-avenue-messages'
 
 /**
- * L'IMAGE PUIS SON REFLET, EN DEUX TÂCHES (conv-347, « l'accueil il fait pas assez lissé »).
+ * L'IMAGE PUIS SON REFLET, EN DEUX TÂCHES (« l'accueil il fait pas assez lissé »).
  *
  * Une image dessinée dans le Worker s'affiche à la fin de la tâche qui la dessine. Le reflet de l'eau
  * (une image sur deux) était dessiné DANS cette tâche : une image sur deux s'affichait ~20 ms plus

@@ -47,8 +47,8 @@ export function isNonActionableWall(summary: string, detail: string): boolean {
 
 /**
  * TOKEN D'AUTH EXPIRE — mur non actionnable : l'agent ne peut PAS passer, seul l'utilisateur peut
- * se re-authentifier, et Auto-Kaizen ne peut rien « corriger » a un token expire. Vecu sur
- * conv-1086 (2026-08-13) : « 401 OAuth access token has expired. Re-authenticate to continue »
+ * se re-authentifier, et Auto-Kaizen ne peut rien « corriger » a un token expire. Vecu
+ * 2026-08-13 : « 401 OAuth access token has expired. Re-authenticate to continue »
  * passait a travers la suppression et declenchait un incident kaizen inutile — un des
  * amplificateurs des 2248 alertes de l'historique. Ancre sur le VOCABULAIRE d'authentification
  * pour ne pas avaler un vrai defaut qui mentionnerait « 401 » par hasard.

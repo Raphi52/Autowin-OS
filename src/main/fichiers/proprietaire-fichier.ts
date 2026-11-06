@@ -19,7 +19,7 @@ import {
  * « À QUI EST CE FICHIER ? » — le réflexe 14 de la constitution (ne pas écrire sur le travail d'un
  * autre fil) en UN appel, en lecture seule.
  *
- * Scout conv-1086 (2026-10-22) : 514 appels git faits à la main dans 143 journaux (`status`, `diff`,
+ * Scout (2026-10-22) : 514 appels git faits à la main dans 143 journaux (`status`, `diff`,
  * `log`, `fetch`) et un vrai conflit dans les traces (`>>>>>>> 05a597f5 (conv-1074`). L'app SAVAIT
  * déjà quel fil avait touché quel fichier (`conversation-file-trace-spool.ts`) ; seule l'interface
  * le lisait, et seulement pour le fil affiché. Trois questions, trois sources :
@@ -47,7 +47,7 @@ export interface FilProprietaire {
   toi: boolean
   /** Vrai si le diff actuel est encore exactement celui que ce fil a laissé. */
   diffInchange: boolean
-  /** Ce fil l'a seulement VU changer à sa fin de tour, sans l'écrire avec un outil (conv-1587). */
+  /** Ce fil l'a seulement VU changer à sa fin de tour, sans l'écrire avec un outil. */
   vuSeulement?: true
 }
 
@@ -293,7 +293,7 @@ function resumer(f: Omit<ProprietaireDeFichier, 'resume'>): string {
  * l'outil direct ne peut passer qu'une CHAÎNE, car `schemaEntree` (skill-node-mcp.ts) déclare tout
  * argument en `type: 'string'` — et la description de l'outil donne elle-même l'exemple
  * `["src/main/commands/commands.ts"]`. Lue comme UN chemin, cette liste rendait un seul fichier « libre » à
- * tort (conv-1107, 23/10/2026). Même règle que `listeEnvoyee` (commands.ts, conv-927) : une chaîne
+ * tort (23/10/2026). Même règle que `listeEnvoyee` (commands.ts) : une chaîne
  * qui commence par `[` est une liste JSON, mal formée elle est REFUSÉE en le disant ; toute autre
  * chaîne reste un chemin unique.
  */

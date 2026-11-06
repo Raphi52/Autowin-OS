@@ -49,7 +49,7 @@ function conversation(value: ChatArtifact): Conversation {
 
 describe('chat artifact store', () => {
   it('vidéo montrée de plus de 16 Mo : pas d’aperçu, message nommé, fichier toujours affichable', () => {
-    // conv-253 : « plus de 16 Mo = message et bouton Afficher le fichier ». La carte garde son
+    // « plus de 16 Mo = message et bouton Afficher le fichier ». La carte garde son
     // chemin conservé : c'est lui qu'ouvre « Afficher le fichier ».
     const base = mkdtempSync(join(tmpdir(), 'autowin-video-17mo-'))
     const projet = join(base, 'projet')

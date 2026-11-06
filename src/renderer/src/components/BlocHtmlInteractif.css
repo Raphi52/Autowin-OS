@@ -1,7 +1,7 @@
-/* Bloc ```html-interactif du fil (BlocHtmlInteractif.tsx, conv-1292). Aucun bord ni fond : la page
+/* Bloc ```html-interactif du fil (BlocHtmlInteractif.tsx). Aucun bord ni fond : la page
    se pose sur le fond du fil comme un ```html-render (direction « transparence totale »). Le cadre
    prend la hauteur que la page lui signale ; la transition evite un saut sec quand elle change. */
-/* `popover` (vue agrandie, conv-1304) : le navigateur cache un popover ferme et le centre avec un
+/* `popover` (vue agrandie) : le navigateur cache un popover ferme et le centre avec un
    cadre. Ferme, le bloc garde sa place normale dans le fil : il ne doit pas disparaitre. */
 .bloc-html-interactif {
   display: block;
@@ -73,7 +73,7 @@
   overflow: auto;
 }
 
-/* Avis de la page (conv-1304) : une ligne par avis, sans panneau. */
+/* Avis de la page : une ligne par avis, sans panneau. */
 .bloc-html-interactif__avis {
   margin: 4px 0 0;
   padding: 0;
@@ -141,7 +141,7 @@
   cursor: pointer;
 }
 
-/* Barre du bloc (conv-1304) : toujours a sa place sous la page (rien ne saute quand elle
+/* Barre du bloc : toujours a sa place sous la page (rien ne saute quand elle
    apparait), presque effacee tant que la souris ou le clavier n'est pas sur le bloc. Sous la page
    et non par-dessus : un bouton de la page en haut a droite reste cliquable. */
 .bloc-html-interactif__barre {
@@ -185,7 +185,7 @@
 }
 
 /* Page dont la fence n'est pas encore close (le modele l'ecrit) : une ligne au lieu d'un mur de
-   code qui grandit puis disparait d'un coup (conv-1304). */
+   code qui grandit puis disparait d'un coup. */
 .bloc-html-interactif-en-cours {
   margin: var(--s1, 8px) 0;
   font-size: 12px;

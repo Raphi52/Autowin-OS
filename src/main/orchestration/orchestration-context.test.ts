@@ -16,7 +16,7 @@ describe('collecte de contexte d’orchestration', () => {
   })
 
   /**
-   * Défaut mesuré le 2026-10-22 (conv-1098, run « option-c-fichier-poste-agent-tient-mvjxdkx3 ») : le
+   * Défaut mesuré le 2026-10-22 (run « option-c-fichier-poste-agent-tient-mvjxdkx3 ») : le
    * cadrage avait été rattaché au fil par `attach_run`, mais la collecte n'en donnait que le NOMBRE
    * (« Workflows attachés: 1 », lu dans la trace du run). Le run a cherché le RUN.md ailleurs, ne l'a
    * pas trouvé, et a refait un cadrage (10 $) qui s'écartait de l'option choisie.
@@ -38,7 +38,7 @@ describe('collecte de contexte d’orchestration', () => {
   })
 
   /**
-   * Défaut mesuré le 2026-08-23 sur conv-1376 : le sous-agent recevait la phrase-tâche NUE, sans une
+   * Défaut mesuré le 2026-08-23 : le sous-agent recevait la phrase-tâche NUE, sans une
    * ligne du fil qui l'avait produite — le type d'entrée n'avait même pas de champ `messages`. Il ne
    * pouvait donc pas LIRE l'intention de l'utilisateur, seulement la deviner à partir d'une phrase
    * hors contexte. C'est le mécanisme qui fait exécuter la lettre plutôt que le besoin.
@@ -64,8 +64,8 @@ describe('collecte de contexte d’orchestration', () => {
       content: `message numéro ${i} ${'x'.repeat(2000)}`
     }))
     const context = collectOrchestrationContext({ task: 't', conversation: { id: 'c', messages } })
-    // La fenêtre est celle du routeur (10 derniers messages) — pas une seconde vérité. Depuis
-    // conv-1228, une demande de l'utilisateur y passe ENTIÈRE (orchestration-context.demande-entiere.test.ts).
+    // La fenêtre est celle du routeur (10 derniers messages) — pas une seconde vérité.
+    // Une demande de l'utilisateur y passe ENTIÈRE (orchestration-context.demande-entiere.test.ts).
     expect(context).toContain('message numéro 39')
     expect(context).not.toContain('message numéro 29')
     expect(context).toContain(`message numéro 39 ${'x'.repeat(2000)}`)
@@ -88,7 +88,7 @@ describe('collecte de contexte d’orchestration', () => {
 })
 
 /**
- * Défaut mesuré (conv-1405) : les objections du juge sont INTRA-run (`phaseOutputs`), donc perdues
+ * Défaut mesuré : les objections du juge sont INTRA-run (`phaseOutputs`), donc perdues
  * au run suivant de la même conversation, et tout tour antérieur à la fenêtre reprise disparaît
  * sans trace. Le contexte doit porter les deux — c'est le seul texte qui traverse vers les phases.
  */
@@ -150,7 +150,7 @@ FIN-DE-REPONSE`
 })
 
 /**
- * conv-1074 (2026-10-22) : le contexte d'un run joignait la derniere reponse EN ENTIER, page
+ * 2026-10-22 : le contexte d'un run joignait la derniere reponse EN ENTIER, page
  * `html-render` comprise — balises et `<style>` jusqu'a 12 000 caracteres. Le run lit desormais le
  * texte VISIBLE de la page. Entree qui ferait echouer une mauvaise correction : la couleur `#e3ba55`.
  */
@@ -194,7 +194,7 @@ describe('contexte d’un run : les pages html-render y arrivent en texte visibl
 
 /**
  * « Runs en cours/bloqués » disait « green, bloqué » d'un run validé qui attend une réponse de
- * l'utilisateur (conv-1199, scout conv-1332). L'agent suivant le prenait pour un échec à réparer.
+ * l'utilisateur. L'agent suivant le prenait pour un échec à réparer.
  * L'entrée qui ferait échouer ce test si la correction était fausse : un run bloqué sans décision
  * attendue, qui doit garder « bloqué ».
  */
@@ -219,8 +219,8 @@ describe('la décision attendue dans la liste des runs', () => {
 
 /**
  * Les 8 places de « Runs en cours/bloqués » prenaient les 8 PREMIERS runs : le 2026-11-05, les huit
- * étaient des essais de conv-1461 (`build-nouvelle-falaise-o-1916-deja-<horodatage>`), et l'agent ne
- * voyait plus aucun autre run (scout conv-1576, lot conv-1589). Le sujet se lit sans son horodatage
+ * étaient des essais (`build-nouvelle-falaise-o-1916-deja-<horodatage>`), et l'agent ne
+ * voyait plus aucun autre run. Le sujet se lit sans son horodatage
  * en base 36 (`runs/conv-runs.ts`) ; l'entrée qui ferait échouer ce test : 33 essais d'un même sujet
  * devant deux autres runs.
  */

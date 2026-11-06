@@ -1,6 +1,6 @@
 /**
  * « ESSAIE 3 FAÇONS » — ce que l'interface et le processus principal lisent de la même façon
- * (conv-1038, 2026-10-21 — idée 6 : la carte de comparaison et « Garder celle-ci »).
+ * (2026-10-21 — idée 6 : la carte de comparaison et « Garder celle-ci »).
  *
  * LE NOM DE LA COPIE relie les branches d'un même essai : `ouvrirCopiesDEssai`
  * (`src/main/git/photo-du-code.ts`) les ouvre sous `essai__<fil>-<instant>-<rang>`. Le fil peut porter
@@ -43,7 +43,7 @@ export function nomDeCopieDEssai(chemin: string | undefined): CopieDEssai | null
 }
 
 /**
- * LA RESSEMBLANCE d'une façon avec la plus proche des autres (conv-1057, 2026-10-22 — calculée par
+ * LA RESSEMBLANCE d'une façon avec la plus proche des autres (2026-10-22 — calculée par
  * `src/main/orchestration/ressemblance-des-facons.ts`). `identique` : même état du code que cette autre façon.
  * `part` : lignes changées en commun sur l'ensemble des lignes changées par les deux (0 à 1).
  * `avec` : le rang de cette autre façon (1 à 3).

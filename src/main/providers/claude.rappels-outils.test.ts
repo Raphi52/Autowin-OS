@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { definirDossierModsAutowin, scriptDesGardesCourant } from './claude'
 
 /*
- * conv-1457 : le script de garde ÉCRIT POUR CHAQUE AGENT (`scriptDesGardesCourant`, le même que
+ * Le script de garde ÉCRIT POUR CHAQUE AGENT (`scriptDesGardesCourant`, le même que
  * `rafraichirGardesDesAgents` réécrit au démarrage) lit les rappels du mod Autowin chargé. Sans ce
  * branchement, la fonction marche dans ses tests mais aucun agent ne reçoit jamais un rappel.
  */

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LES DEUX LISTES DE PERSONNES DES RÉGLAGES DE L'ACCUEIL (demande utilisateur du 2026-11-05, conv-1599) :
+ * LES DEUX LISTES DE PERSONNES DES RÉGLAGES DE L'ACCUEIL (demande utilisateur du 2026-11-05) :
  * « afficher les agents de » change la scène de ce poste ; « afficher mes agents à » envoie au processus
  * principal la liste des postes à qui mes agents sont masqués.
  */

@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — CHAT — CONTRÔLE DE SOURCE, MODÈLES, QUOTAS ET COÛT (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — CHAT — CONTRÔLE DE SOURCE, MODÈLES, QUOTAS ET COÛT (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : SourceControlPane, TravauxNonPublies, ProjectPane, ModelQuotaIndicator, ModelActivityLogPane,
  * OrchestratorModelSelector, ModelEffortMatrix, ContextGaugeIndicator, ConversationCostIndicator.
@@ -132,7 +132,7 @@ export const TEXTES_FR = {
   'sc.brain.sources': '{n} source(s) retenue(s)',
   // SourceControlPane.tsx — vue « Git »
   'sc.branche': 'Branche',
-  // conv-1544 : un seul interrupteur, qui porte les deux accords (publier, puis /git sur le reste).
+  // Un seul interrupteur, qui porte les deux accords (publier, puis /git sur le reste).
   'sc.publicationAuto': 'Publication auto',
   'sc.publicationAuto.active.titre':
     'Activé — tu n’as plus à taper /git. Après chaque tour de chat ou tâche d’agent réussi qui a modifié des fichiers : commit de ces fichiers, puis push sur la branche courante (si le dépôt refuse : branche dédiée et PR). Ce qui touche aussi un fichier d’un autre fil part par un /git lancé tout seul, 3 minutes après le dernier tour du fil, typage et tests rejoués avant de pousser. Un plan de lots part en une passe dans son fil chef, quand il ne tourne plus. Le travail fini d’un run d’agents resté dans sa copie de travail part par un /git dans le fil qui l’a lancé, une seule tentative par travail. Jamais si ta demande interdit de publier. Chaque /git lancé coûte un tour du modèle. Clic : désactiver.',

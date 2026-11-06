@@ -7,7 +7,7 @@ import { ClaudeCliAdapter } from './claude'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 
 /**
- * UNE PIECE JOINTE NE DESARME PAS LE TOUR DE CHAT — mesure conv-650 (2026-09-17).
+ * UNE PIECE JOINTE NE DESARME PAS LE TOUR DE CHAT — mesure (2026-09-17).
  *
  * `send()` materialise les pieces jointes du fil ENTIER (agent-pilot, depuis le 2026-08-27) : des
  * qu'une image a ete jointe une fois, TOUS les tours suivants ont `materialized`. La branche
@@ -15,7 +15,7 @@ import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
  * `Read,WebFetch,WebSearch` ET aucun cwd transmis au spawn — le CLI repartait donc dans le dossier
  * du PROCESSUS (D:\AutoWinOS) au lieu du dossier range sur la conversation.
  *
- * Preuve dans le dossier de conv-650, turnId 5bd288bc-7617-4ab7-9810-3acfbed17c23 :
+ * Preuve dans le dossier, turnId 5bd288bc-7617-4ab7-9810-3acfbed17c23 :
  * argv `--tools Read,WebFetch,WebSearch`, puis quatre refus d'ecriture d'affilee
  * (saisies ts 1789639857023, 1789639927623, 1789640030803, 1789640116782).
  */

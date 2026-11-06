@@ -1,5 +1,5 @@
 // Catalogue des commandes — commandes, redémarrage, vérification, mémoire, Brain, skills, tâches, SQL et fiches.
-// Entrées sorties telles quelles de commands/catalogue.ts (conv-1580), dans le même ordre :
+// Entrées sorties telles quelles de commands/catalogue.ts, dans le même ordre :
 // catalogue.ts les remet bout à bout dans CATALOG. Seuls des TYPES viennent de '../commands'.
 import type { CommandSpec } from './commands'
 import { MODELE_PROMPT_TACHE_COURT } from '../../shared/modele-prompt-tache'
@@ -103,7 +103,7 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
-      // Faux depuis que les annotations sont publiées (conv-1370) : `idempotentHint` autorise le client
+      // Faux depuis que les annotations sont publiées : `idempotentHint` autorise le client
       // à rejouer un appel coupé, et le premier `verify` n'est pas annulé. Deux suites tourneraient.
       idempotentHint: false,
       openWorldHint: false
@@ -132,11 +132,11 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
       confidence: 'facultatif — low | medium | high',
       supersedes:
         'facultatif — uid(s) des notes que ce fait REMPLACE (lus via brain_read) ; la note ancienne ne passe « remplacée » qu’à la revue',
-      // conv-1233 (2026-10-28) : deux Brains, et c'est l'agent qui range (choix de l'utilisateur).
+      // 2026-10-28 : deux Brains, et c'est l'agent qui range (choix de l'utilisateur).
       portee:
         'equipe | perso — OÙ ranger le fait. equipe : il touche un projet, un outil ou un système de l’équipe. perso : tout le reste (notes personnelles, projets perso, vie hors équipe) — privé, jamais partagé. Défaut : equipe. Dis ensuite en une ligne où tu l’as rangé (champ `rangement` du résultat)'
     },
-    // conv-1370 : `scope` est rempli depuis le projet (`rememberFact`), `portee` vaut `equipe` par
+    // `scope` est rempli depuis le projet (`rememberFact`), `portee` vaut `equipe` par
     // défaut et `runId` se déduit de l'issue du tour. Les exiger coûtait un refus pour rien.
     argsFacultatifs: [
       'scope',
@@ -154,7 +154,7 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
       openWorldHint: true
     }
   },
-  // PROFIL UTILISATEUR (conv-1098) : le plafond est tenu par `profil-utilisateur.ts`, hors du modèle.
+  // PROFIL UTILISATEUR : le plafond est tenu par `profil-utilisateur.ts`, hors du modèle.
   {
     name: 'profil_ajouter',
     description:
@@ -265,7 +265,7 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
     }
   },
   {
-    // Le modèle choisit lui-même une skill (conv-1034) : voir `skill-charger-command.ts`.
+    // Le modèle choisit lui-même une skill : voir `skill-charger-command.ts`.
     name: 'skill_charger',
     description:
       'Charger la PROCÉDURE complète d’une skill d’Autowin (skills/<nom>/SKILL.md) que TU choisis d’appliquer, sans que l’utilisateur l’ait tapée — dès que sa demande correspond au déclencheur d’une skill listée dans skillsDisponibles. Rend le contenu à suivre et le dossier de ses fichiers compagnons. Inutile si cette procédure est déjà dans ton contexte (bloc « === SKILL <NOM> (kit) === »)',
@@ -336,7 +336,7 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
     }
   },
   /*
-   * conv-1370 (lot 3, 2026-10-31) : l'agent savait créer et lister une tâche, ni la modifier ni la
+   * lot 3, 2026-10-31 : l'agent savait créer et lister une tâche, ni la modifier ni la
    * couper ni la supprimer. Mêmes chemins que les boutons de l'écran : `task-create-command.ts`.
    */
   {

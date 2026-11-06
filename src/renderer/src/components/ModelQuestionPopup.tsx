@@ -13,7 +13,7 @@ interface PendingQuestion {
 export function ModelQuestionPopup(): React.JSX.Element | null {
   const { t } = useTextesArtefactsEtBandeaux()
   const [current, setCurrent] = useState<PendingQuestion | null>(null)
-  /** Aucune question à afficher : on le dit, une fenêtre vide ne laisse rien à cliquer (conv-1342). */
+  /** Aucune question à afficher : on le dit, une fenêtre vide ne laisse rien à cliquer. */
   const [introuvable, setIntrouvable] = useState(false)
   const [answer, setAnswer] = useState('')
   const [sending, setSending] = useState(false)
@@ -21,7 +21,7 @@ export function ModelQuestionPopup(): React.JSX.Element | null {
   const [sendError, setSendError] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // La page va chercher SA question une fois montée (conv-1342) : elle ne peut plus la manquer, et
+  // La page va chercher SA question une fois montée : elle ne peut plus la manquer, et
   // un rechargement la retrouve. Le détour par une fonction async attrape aussi un pont sans cette
   // demande (preload plus ancien que l'interface en développement), qui lèverait une erreur directe.
   useEffect(() => {

@@ -23,7 +23,7 @@ const imagesParSeconde = (hz: number, cout = 0): number => {
 
 describe('la cadence du décor de fond', () => {
   it('vise 30 images/s sur TOUS les écrans — l ancien seuil de 25 ms donnait 30, 30 ou 36 selon l écran', () => {
-    // conv-1643 : régulier d'abord. 30 images/s pile n'existe qu'en alternant les écarts là où 30
+    // Régulier d'abord. 30 images/s pile n'existe qu'en alternant les écarts là où 30
     // ne divise pas la fréquence (75 Hz : 2 puis 3 battements) — l'à-coup qu'on corrige. On exige
     // donc le nombre entier de battements le plus proche : au plus un demi-battement d'écart.
     for (const hz of [60, 66.2, 75, 120, 144, 165, 240]) {
@@ -57,7 +57,7 @@ describe('la cadence du décor de fond', () => {
 })
 
 /**
- * conv-1643, « quand je clique sur un élément de l'accueil et que ça zoome dessus, ça fait saccadé ».
+ * « quand je clique sur un élément de l'accueil et que ça zoome dessus, ça fait saccadé ».
  * Mesuré sur le poste de l'utilisateur : il regarde l'app par le Bureau à distance, dont l'écran
  * virtuel bat toutes les 15,1 ms (66 Hz). La cadence visait 16,7 ms : elle sautait un battement sur
  * dix environ, un trou de 30 ms six fois par seconde — invisible au repos, net pendant un zoom.

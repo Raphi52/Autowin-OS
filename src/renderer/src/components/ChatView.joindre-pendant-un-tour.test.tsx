@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * DEFAUT VECU le 2026-10-13 (conv-937) : « ca m'empeche d'upload des fichiers et de preparer mon
+ * DEFAUT VECU le 2026-10-13 : « ca m'empeche d'upload des fichiers et de preparer mon
  * prochain prompt pendant que la conv travaille ». Le bouton trombone et son champ fichier cache
  * portaient `disabled={busy}` : tant qu'un tour tournait, on ne pouvait plus joindre de fichier
  * par le bouton (le collage et le depot, eux, marchaient deja).

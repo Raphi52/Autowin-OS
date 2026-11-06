@@ -16,7 +16,7 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 /**
  * UNE DEMANDE `judge` EXPLICITE NE DOIT PAS ÊTRE CONDAMNÉE AU ROUGE PAR CONSTRUCTION.
  *
- * Mesuré sur le run réel conv-1078 (trace : 2 étapes, `judge` puis `gate`, aucune étape `exec`) :
+ * Mesuré sur le run réel (trace : 2 étapes, `judge` puis `gate`, aucune étape `exec`) :
  * `regimePhases()` rend `[]` pour une phase `judge` nommée, donc AUCUNE phase d'exécution ne tourne.
  * Le juge recevait alors « RÉPONSE (livrable agrégé de TOUTES les phases) : » vide et
  * « PREUVES OUTILS OBSERVÉES: [] », tout en étant sommé de « confronter au moins une preuve d'outil
@@ -101,7 +101,7 @@ describe('juge sans phase d’exécution : le prompt ne réclame pas un agrégat
   })
 
   /**
-   * conv-113 (2026-10-06, run « judge-projet-ameliore-boucle-objectif-muwn6zvy ») : « Judge le Projet
+   * 2026-10-06, run « judge-projet-ameliore-boucle-objectif-muwn6zvy » : « Judge le Projet
    * et améliore le en boucle ». Toute la conversation portait sur PaperTrading2, mais le fil était
    * rangé dans D:\Chirurgien\AssistantChirurgien. Le juge SEUL a reçu la TÂCHE nue et le CLAUDE.md de
    * ce dossier (« # Projet : assistant patients… ») — sa trace contient ZÉRO mention de PaperTrading.
@@ -142,9 +142,9 @@ describe('juge sans phase d’exécution : le prompt ne réclame pas un agrégat
 })
 
 /**
- * UNE RELECTURE SEULE QUI REND SON VERDICT EST LIVRÉE (piste 5, conv-1070).
+ * UNE RELECTURE SEULE QUI REND SON VERDICT EST LIVRÉE (piste 5).
  *
- * Mesuré : conv-955, conv-984, conv-1043 et conv-1056 — quatre `/judge` qui ont trouvé des défauts
+ * Mesuré : quatre `/judge` qui ont trouvé des défauts
  * finissent « Gate BLOQUÉ: Promis mais pas fait : « Objection du juge : … » » et `status: red`. Or
  * la demande était la relecture : le verdict est la réponse (`orchestrator.ts`, « aucune réparation
  * : la demande nomme le juge seul »). Les objections ne sont pas des promesses non tenues ; elles
@@ -232,9 +232,9 @@ describe('relecture seule : le verdict est livré, les défauts du travail relu 
   })
 
   // Le RUN.md est écrit par `commands.ts`, qui ne voit que ce résultat : sans ce champ, il écrivait
-  // « Juge: validé — clôture autorisée » sous un verdict qui dit le contraire (objection du juge,
-  // conv-1070). Entrée qui fait rougir ce test : VERDICT_AVEC_DEFAUTS rendu sans ses défauts.
-  // fix-ok: conv-1070 — mesuré : rouge avant le champ `defautsDuTravailRelu` (« Target cannot be
+  // « Juge: validé — clôture autorisée » sous un verdict qui dit le contraire (objection du juge).
+  // Entrée qui fait rougir ce test : VERDICT_AVEC_DEFAUTS rendu sans ses défauts.
+  // fix-ok: mesuré : rouge avant le champ `defautsDuTravailRelu` (« Target cannot be
   // null or undefined »), vert après. Retouche antérieure du fichier : `'C:\base'` contenait un
   // retour arrière (0x08) né d'un heredoc, remplacé par `'C:\\base'`.
   it('les défauts du travail relu sortent du run, pour le Journal du RUN.md', async () => {

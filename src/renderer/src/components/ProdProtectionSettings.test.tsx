@@ -307,7 +307,7 @@ describe('choix du niveau', () => {
   })
 
   /*
-   * L'ATTRIBUT NE SUFFIT PAS (constaté le 2026-10-11, conv-242) : le test ci-dessus passait alors
+   * L'ATTRIBUT NE SUFFIT PAS (constaté le 2026-10-11) : le test ci-dessus passait alors
    * que le champ « Phrase de passe » restait VISIBLE au niveau « confirmation ». La feuille pose
    * `display: grid` sur le formulaire, et une règle d'auteur passe devant le `display: none` que le
    * navigateur donne à `[hidden]`. On mesure donc l'affichage avec la VRAIE feuille.

@@ -1,5 +1,5 @@
 /**
- * LE DOSSIER DU BOARD (demande utilisateur du 2026-10-28, conv-1206).
+ * LE DOSSIER DU BOARD (demande utilisateur du 2026-10-28).
  *
  * Demande : « dans le board il faut qu'on puisse définir un dossier [sur le partage réseau de
  * l'équipe] pour pouvoir y stocker les éléments affichés sur le board et faire le pont vers les
@@ -29,7 +29,7 @@ export interface EtatDuDossierDuBoard {
   cible: string | null
   /**
    * Les projets du Board recopiés (leur `cle` : le dossier de travail, ou la catégorie). Absent =
-   * tous, y compris ceux à venir ; présent = seulement ceux-là (conv-1211, `board-projets-partages.ts`).
+   * tous, y compris ceux à venir ; présent = seulement ceux-là (`board-projets-partages.ts`).
    */
   projets?: string[]
   /** Le dernier enregistrement réussi depuis le démarrage. */
@@ -39,7 +39,7 @@ export interface EtatDuDossierDuBoard {
   /** Un enregistrement est en cours ou attend la fin du délai entre deux écritures. */
   enCours: boolean
   /**
-   * Le nom écrit sur les post-it de ce poste : `nomChoisi`, sinon `compte` (conv-1230). Absents
+   * Le nom écrit sur les post-it de ce poste : `nomChoisi`, sinon `compte`. Absents
    * quand aucun Board n'est câblé.
    */
   nom?: string
@@ -48,22 +48,22 @@ export interface EtatDuDossierDuBoard {
   /** Le nom choisi dans Settings · Interface ; absent = le compte Windows. */
   nomChoisi?: string
   /**
-   * Le partage de la présence dans le village commun (D6, conv-1429) : `false` = coupé sur ce poste.
+   * Le partage de la présence dans le village commun (D6) : `false` = coupé sur ce poste.
    * Absent = actif, le défaut (D-9).
    */
   partagerPresence?: false
   /**
    * L'animal choisi dans les réglages de l'Accueil pour représenter les agents du poste, celui que
-   * les collègues voient aussi (conv-1537). Absent = aucun choix : le tanuki (`ANIMAL_PAR_DEFAUT`).
+   * les collègues voient aussi. Absent = aucun choix : le tanuki (`ANIMAL_PAR_DEFAUT`).
    */
   animal?: AnimalAgent
   /**
-   * La couleur de la tenue de ces agents (conv-1633), choisie sous l'animal dans les réglages de
+   * La couleur de la tenue de ces agents, choisie sous l'animal dans les réglages de
    * l'Accueil et vue aussi par les collègues. Absente = la tenue d'origine de l'animal.
    */
   tenue?: TenueAgent
   /**
-   * « Afficher mes agents à » (conv-1599) : les postes, en minuscules, à qui ce poste masque ses
+   * « Afficher mes agents à » : les postes, en minuscules, à qui ce poste masque ses
    * agents. Absent = visibles pour tous, le défaut.
    */
   masquerPresencePour?: string[]

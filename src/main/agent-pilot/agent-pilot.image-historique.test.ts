@@ -62,7 +62,7 @@ describe('AgentPilot — pieces jointes de l historique', () => {
     expect(attachments.map((a) => a.name)).toEqual([
       'maquette.png (jointe a un message precedent)'
     ])
-    // Champ STRUCTURE lu par le provider pour la ranger a part (conv-150, tour 1bf1ae63).
+    // Champ STRUCTURE lu par le provider pour la ranger a part (tour 1bf1ae63).
     expect(attachments.map((a) => a.provenance)).toEqual(['message-precedent'])
   })
 

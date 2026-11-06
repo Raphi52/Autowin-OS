@@ -6,7 +6,7 @@ import { git, manager, nettoyerRacines, tempRepo } from './worktree-manager.test
 /**
  * LE BANDEAU QU'ON NE PEUT PAS REFERMER.
  *
- * Vecu le 2026-08-27 (conv-1424). Le bandeau annonce des travaux non publies ; « Traiter » depose
+ * Vecu le 2026-08-27. Le bandeau annonce des travaux non publies ; « Traiter » depose
  * un `/salvage` ; le salvage fait son travail, juge par CONTENU, et conclut deux fois de suite :
  * « rien a republier — les deux travaux sont deja dans main, sous une implementation plus
  * avancee ». Verdict SUPERSEDED, branches conservees (le prompt l'exige : « Ne supprime AUCUNE
@@ -60,7 +60,7 @@ describe('WorktreeManager — un travail TRIE cesse de crier, sans rien perdre',
   /*
    * LE GISEMENT QUI SE RECENSAIT MAIS NE SE MARQUAIT PAS.
    *
-   * Mesure du 2026-09-12 (conv-506) : quand la publication est refusee parce que l'arbre principal
+   * Mesure du 2026-09-12 : quand la publication est refusee parce que l'arbre principal
    * est sale, `poserAttenteDIntegration` depose le commit sur `refs/autowin/integration/<agentId>`.
    * Si la copie est ensuite nettoyee, cette adresse est le SEUL endroit ou le travail existe : ni
    * branche de secours, ni sauvetage, ni bureau. `marquerTravailTrie` ne resolvait que les deux
@@ -88,7 +88,7 @@ describe('WorktreeManager — un travail TRIE cesse de crier, sans rien perdre',
   /*
    * L'AUTRE MOITIE DU MEME DEFAUT : marquable ne veut pas dire VISIBLE.
    *
-   * Mesure du 2026-09-12 (conv-506) : 26 adresses d'attente dormaient dans le depot, dont QUATRE
+   * Mesure du 2026-09-12 : 26 adresses d'attente dormaient dans le depot, dont QUATRE
    * portant du travail jamais applique. Le recensement ne regardait que quatre gisements — branche
    * de secours, bureau pose, sauvetage, bureau sali — et jamais `refs/autowin/integration/<id>`.
    * Un travail refuse faute d'arbre propre, dont la copie a ensuite ete nettoyee, etait donc

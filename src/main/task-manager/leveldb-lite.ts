@@ -1,6 +1,6 @@
 // fix-ok: aucune lib leveldb/snappy dans package.json et les blocs .ldb de Teams sont compresses Snappy — editions successives = ajout du decodeur puis reparation de la ligne 33 abimee par un sed au nettoyage (mesure : typecheck rouge puis vert).
 /**
- * Lecteur LevelDB minimal, en LECTURE SEULE et sans dependance (demande conv-854, 2026-09-25).
+ * Lecteur LevelDB minimal, en LECTURE SEULE et sans dependance (2026-09-25).
  *
  * Sert a lire le stockage IndexedDB du client Teams (WebView2/Chromium) : tables `.ldb`
  * (compression Snappy ou aucune) et journal `.log` (lots d'ecriture). Pour chaque cle, seule la

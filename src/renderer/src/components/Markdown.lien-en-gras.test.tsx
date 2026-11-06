@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Markdown } from './Markdown'
 
 /**
- * conv-61 (2026-10-02) : l'agent a donne l'adresse du prototype en gras,
+ * 2026-10-02 : l'agent a donne l'adresse du prototype en gras,
  * « Ouvre **https://professional-distributors-valium-poetry.trycloudflare.com** ».
  * Le gras etait rendu en texte brut : l'adresse s'affichait sans etre cliquable.
  */

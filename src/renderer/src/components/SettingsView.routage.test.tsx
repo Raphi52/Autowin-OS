@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * ROUTAGE VIT DANS SETTINGS — demande de conv-963 (2026-10-15) : « la view Routage il faut la mettre
+ * ROUTAGE VIT DANS SETTINGS — demande (2026-10-15) : « la view Routage il faut la mettre
  * dans Settings ». Elle était une section d'Agent Studio. Ce fichier verrouille le câblage : l'onglet
  * existe, il rend la vraie vue Routage, et il porte toujours l'alerte des providers à reconnecter
  * qu'il avait dans Agent Studio.
@@ -72,7 +72,7 @@ async function render(
 }
 
 const onglets = (): HTMLButtonElement[] => [
-  // La liste de sections à gauche (conv-1109) a remplacé les pastilles de la barre du haut.
+  // La liste de sections à gauche a remplacé les pastilles de la barre du haut.
   ...container.querySelectorAll<HTMLButtonElement>('nav.settings-nav button')
 ]
 

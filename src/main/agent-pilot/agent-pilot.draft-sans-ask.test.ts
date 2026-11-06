@@ -6,14 +6,14 @@ import { askFaitChoisirUneProposition, boucleDraftEnCours } from '../skills/draf
 /**
  * /draft : LE CHOIX SE FAIT PAR LES BOUTONS DU BLOC, JAMAIS PAR `ask`.
  *
- * Demande de l'utilisateur, saisie ts 1792224829875 (conv-302, 2026-10-17) : « faut un bouton pour
+ * Demande de l'utilisateur, saisie ts 1792224829875 (2026-10-17) : « faut un bouton pour
  * prompter au lieu du bloc ask ». Le carrousel et ses boutons ont été livrés, et la procédure dit
  * « ne pose PAS de bloc ask sous le carrousel ». Pourtant, le même jour, quatre tours /draft ont fini
  * par un `ask` SANS aucun bloc de choix (journal des tours, aucun ```html-render ni #autowin-prompt) :
- *   - conv-310, tour c7d72274-db73-49bd-93fe-435f6647863a (appel modèle : procédure draft présente) ;
- *   - conv-310, tour 40cbea6c-99bf-405f-8ad6-1e709913766a (réponse « 1 et 3 » au tour précédent) ;
- *   - conv-311, tour 4c898868-7bfa-4535-8300-c2802e61cf10 ;
- *   - conv-312, tour 938a67c1-78bc-4bc5-addf-865167663f44, puis saisie ts 1792247730596 :
+ *   -, tour c7d72274-db73-49bd-93fe-435f6647863a (appel modèle : procédure draft présente) ;
+ *   -, tour 40cbea6c-99bf-405f-8ad6-1e709913766a (réponse « 1 et 3 » au tour précédent) ;
+ *   -, tour 4c898868-7bfa-4535-8300-c2802e61cf10 ;
+ *   -, tour 938a67c1-78bc-4bc5-addf-865167663f44, puis saisie ts 1792247730596 :
  *     « je vois pas le block draft pour faire mon choix ».
  * La règle écrite ne suffisait pas : c'est le pilote qui doit refuser.
  */
@@ -29,7 +29,7 @@ const LECTURE = '<cmd>{"name":"read_file","args":{"path":"src/a.ts"}}</cmd>'
 const ask = (options: string[]): string =>
   `<cmd>${JSON.stringify({ name: 'ask', args: { question: 'Laquelle ?', options } })}</cmd>`
 
-// Options RELEVÉES dans les tours fautifs (journal des tours de conv-312 et conv-310).
+// Options RELEVÉES dans les tours fautifs (journal des tours).
 const ASK_CONV_312 = ask([
   'Mélanger la 5 · Scènes de rue et la 4 · Contre-jour (recommandé)',
   'Affiner la 1 · Citadins',

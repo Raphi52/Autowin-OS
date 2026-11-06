@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Ligne « Agent » RETIRÉE du fil (conv-227, 2026-10-11 : « enleve carrement cette ligne de tous
+ * Ligne « Agent » RETIRÉE du fil (2026-10-11 : « enleve carrement cette ligne de tous
  * les themes elle pollue pour rien »). Elle vivait dans ChatMessageRow, commune à tous les thèmes :
  * ce test verrouille qu'aucune réponse de l'agent ne la rend plus, ni pendant le tour ni après.
  *

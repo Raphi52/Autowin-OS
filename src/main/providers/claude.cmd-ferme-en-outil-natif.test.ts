@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 /**
  * UNE COMMANDE `<cmd>` COMPLETE FERMEE PAR LA SYNTAXE DES OUTILS NATIFS N'EST PAS PERDUE.
  *
- * Mesure conv-120, appel du tour `3e00e0a5-5602-46e9-adb3-0d9c7a162b21` (2026-10-09) : deux fois
+ * Mesure, appel du tour `3e00e0a5-5602-46e9-adb3-0d9c7a162b21` (2026-10-09) : deux fois
  * (`msg_011CfrgvjC6…` puis la retentative `msg_011CfrgxTZo…`), le modele ecrit
  * `<cmd>{"name":"orchestrate","args":{…}}` puis le referme par `</parameter>\n</invoke>` au lieu de
  * `</cmd>`. L'API y voit un appel d'outil natif casse ; le CLI finit sur

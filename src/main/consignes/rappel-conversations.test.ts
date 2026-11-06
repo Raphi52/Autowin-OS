@@ -11,7 +11,7 @@ import { ConversationStore } from '../store/conversations'
  * quelque chose -- « remake les pastilles de couleurs » se lit comme une demande complete.
  *
  * Un agent qui ne sait pas qu'il lui manque une information ne va pas la chercher. Attendre qu'il
- * s'en avise, c'est reconduire conv-1407 en esperant mieux.
+ * s'en avise, c'est reconduire en esperant mieux.
  *
  * Le tour porte donc DEJA le rappel. Le bloc de contexte existait -- il etait rempli de bruit AST
  * (`.all()`, `.constructor()`) : la place etait la, mal employee.

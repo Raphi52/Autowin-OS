@@ -1,7 +1,7 @@
 /* Écran Settings · Interface (interrupteur sombre/clair). Les couleurs viennent
    des variables du thème : cet écran doit rester lisible dans LES DEUX modes. */
 /* Le retrait interieur, le titre et l'en-tete viennent du gabarit commun des panneaux de Settings
-   (SettingsView.css, conv-244). */
+   (SettingsView.css). */
 .interface-view {
   color: var(--text);
 }

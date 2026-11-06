@@ -27,7 +27,7 @@ export type RunSummary = {
   subject?: string
   /**
    * Run rouge parce qu'il a été COUPÉ (Stop du chat, quota), pas parce que le travail a échoué ; ou
-   * run `interrupted` validé qui attend sa publication (`publication`, conv-1455).
+   * run `interrupted` validé qui attend sa publication (`publication`).
    */
   interruption?: RunInterruption
   /**
@@ -51,7 +51,7 @@ const STATUSES = new Set([
   'green',
   'degraded-closed',
   // Coupé de l'extérieur (Stop, quota, panne) : sans lui ici, il serait relu `unknown`, donc
-  // bloqué — exactement le défaut qu'il corrige (piste 4, conv-1070).
+  // bloqué — exactement le défaut qu'il corrige (piste 4).
   'interrupted'
 ])
 
@@ -81,10 +81,10 @@ function extractSection(lines: string[], heading: string): string[] {
 const CLOTURE_EN_ECHEC = /^\[\d{4}-\d{2}-\d{2}\] Orchestration en échec: (.*)$/
 
 /**
- * POURQUOI CE RUN ROUGE S'EST ARRÊTÉ — lu dans sa ligne de clôture, et elle seule (conv-1069).
+ * POURQUOI CE RUN ROUGE S'EST ARRÊTÉ — lu dans sa ligne de clôture, et elle seule.
  *
  * Le 2026-10-22, la liste des runs « bloqués » servie à chaque tour comptait des runs coupés par le
- * bouton Stop (conv-1058) ou par le quota (conv-1056) : rien à réparer dans le code. Le RUN.md n'a
+ * bouton Stop ou par le quota : rien à réparer dans le code. Le RUN.md n'a
  * pas d'autre trace de la cause que cette ligne. `closeConvRun` l'insère EN TÊTE du journal : la
  * première trouvée est la plus récente — un run suspendu puis repris jusqu'à un vrai défaut est un
  * échec. Un texte de quota ou de Stop CITÉ ailleurs dans le journal ne compte pas.
@@ -108,10 +108,10 @@ const CLOTURE_DU_MOTEUR =
   /^\[\d{4}-\d{2}-\d{2}\] Cycle de vie terminal: \S+(?: \((.+?)\))? \(\d+ ms\)\.$/
 
 /**
- * UN RUN `interrupted` QUI ATTEND SA PUBLICATION (conv-1455) : validé, fusion refusée par une base
+ * UN RUN `interrupted` QUI ATTEND SA PUBLICATION : validé, fusion refusée par une base
  * occupée. Seule la PLUS RÉCENTE ligne de clôture du moteur compte — `closeConvRun` l'insère en
  * tête —, et seulement si elle nomme cette attente mot pour mot (`ATTENTE_DE_PUBLICATION`).
- * fix-ok: conv-1455 — cause mesurée : `parseRun` ne lisait aucune cause sur un RUN.md `interrupted`, donc `mentionDEtatDuRun` disait « interrompu, relançable » d'un travail validé qui n'attend que sa publication (test « clôture red publication → … en attente de publication » de runs.test.ts rouge avant, vert après).
+ * fix-ok: cause mesurée : `parseRun` ne lisait aucune cause sur un RUN.md `interrupted`, donc `mentionDEtatDuRun` disait « interrompu, relançable » d'un travail validé qui n'attend que sa publication (test « clôture red publication → … en attente de publication » de runs.test.ts rouge avant, vert après).
  */
 function attenteDePublicationDeCloture(journal: string[]): RunInterruption | undefined {
   for (const ligne of journal) {

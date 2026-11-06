@@ -12,7 +12,7 @@
 //            le binaire du CLI installé + les versions d'un service local s'il y en a un.
 //   codex  → le listing `model/list` du CLI Codex connecté, sinon le dernier catalogue vu en cache,
 //            sinon rien. Facultatif : un poste sans ce CLI ne voit simplement aucun modèle ChatGPT.
-// Kimi et Gemini sont retirés depuis le 2026-09-04 ; Codex est revenu le 2026-10-31 (conv-1414).
+// Kimi et Gemini sont retirés depuis le 2026-09-04 ; Codex est revenu le 2026-10-31.
 // Le CLI Claude est présent par construction : l'app le spawne pour tout appel Claude. C'est donc la
 // source à la fois portable et exacte — aucun service tiers, aucun appel payé, jamais périmée.
 
@@ -35,7 +35,7 @@ import { modelesServicesHttp, SERVICES_HTTP } from '../providers/services-http'
 import { catalogueAgy } from '../providers/agy-modeles'
 import { catalogueGrok } from '../providers/grok-modeles'
 
-/** Clés lues par le catalogue ; index.ts les reprend de l'OS avant chaque relevé (conv-1499). */
+/** Clés lues par le catalogue ; index.ts les reprend de l'OS avant chaque relevé. */
 export const CLES_FOURNISSEURS: readonly string[] = [
   ...new Set(SERVICES_HTTP.flatMap((s) => (s.apiKeyEnv ? [s.apiKeyEnv] : [])))
 ]
@@ -167,7 +167,7 @@ function labelClaudeAlias(family: string, latestModelId: string): string {
 }
 
 /**
- * Nom affiché d'un modèle Claude NOMMÉ. Sans suffixe « · CLI » (retiré le 2026-10-11, conv-237 :
+ * Nom affiché d'un modèle Claude NOMMÉ. Sans suffixe « · CLI » (retiré le 2026-10-11, :
  * « C'est con que les noms de models contiennent CLI ») : tous les modèles Claude passent par le
  * CLI, le suffixe ne distinguait rien et allongeait chaque ligne des listes de choix.
  */
@@ -453,7 +453,7 @@ export async function discoverImportedModels(
   cliModelIds: ClaudeCliModelIdsFn = realClaudeCliModelIds,
   listCodexModelsFn: () => Promise<CodexAppServerModel[]> = listCodexAppServerModels
 ): Promise<ImportedModel[]> {
-  // agy : `agy models` liste les modèles Gemini du compte, en parallèle des deux autres (conv-1530).
+  // agy : `agy models` liste les modèles Gemini du compte, en parallèle des deux autres.
   const [claude, codex, agy, grok] = await Promise.all([
     discoverClaudeModels(fetchFn, cliModelIds),
     discoverCodexModels(listCodexModelsFn),
@@ -500,7 +500,7 @@ export async function discoverImportedModels(
   )
 }
 
-// OpenRouter retiré du catalogue (2026-11-04, conv-1520) : jugé inutilisable par l'utilisateur.
+// OpenRouter retiré du catalogue (2026-11-04) : jugé inutilisable par l'utilisateur.
 
 /**
  * Retire les ALIAS de famille (`claude/opus`, `claude/fable`…) des qu'une VERSION NOMMEE de la meme
@@ -545,7 +545,7 @@ export function findModel(models: ImportedModel[], id: string): ImportedModel | 
   return undefined
 }
 
-// fix-ok: conv-955 — cause mesuree : l'orchestrateur ne voyait pas le catalogue des modeles (0 occurrence
+// fix-ok: cause mesuree : l'orchestrateur ne voyait pas le catalogue des modeles (0 occurrence
 // de `reasoningEfforts` ou `getCatalog` dans HEAD:src/main/orchestration/orchestrator.ts), donc la regle d'effort par
 // etape ne pouvait pas connaitre le plancher du modele.
 /**

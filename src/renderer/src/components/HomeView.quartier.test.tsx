@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * L'ACCUEIL SUR LE QUARTIER (conv-1421) : les widgets dans leurs tours, les gestes sur le fond.
+ * L'ACCUEIL SUR LE QUARTIER : les widgets dans leurs tours, les gestes sur le fond.
  *
  * La scène elle-même a besoin d'une vraie toile : ici, un pilote simulé joue son rôle, et c'est tout ce
  * que l'Accueil en connaît (`quartier-pont.ts`). Le rendu réel se prouve par capture de l'app.
@@ -166,7 +166,7 @@ describe('les gestes sur le décor', () => {
 })
 
 /*
- * LES AGENTS DES COLLÈGUES (plan « Village commun », conv-1429, D8 à D10) : prénom au survol, carte au
+ * LES AGENTS DES COLLÈGUES (plan « Village commun », D8 à D10) : prénom au survol, carte au
  * clic sans jamais ouvrir de fil, bouton « Mes agents / Toute l'équipe ». Le registre est posé à la main :
  * la relecture du partage passe par le processus principal, absent ici.
  */

@@ -1,11 +1,11 @@
 /**
  * LA MEMOIRE DU JUGE ENTRE DEUX PASSAGES DE REPARATION.
  *
- * Constat conv-35 (2026-09-30) : 109 passages, dont ~107 APRES que les juges avaient valide. Deux
+ * Constat (2026-09-30) : 109 passages, dont ~107 APRES que les juges avaient valide. Deux
  * causes lues dans le code :
  *   1. chaque juge repartait de zero — son prompt ne contenait jamais le verdict precedent, il
  *      relisait partiellement et relevait d'AUTRES details a chaque tour ;
- *   2. en mode « jusqu'au vert » (conv-844), une reserve MINEUR bloque et plus rien n'arrete un
+ *   2. en mode « jusqu'au vert », une reserve MINEUR bloque et plus rien n'arrete un
  *      refus qui se repete : les memes reserves revenaient sans fin.
  * Ce module donne au juge ses objections precedentes (1) et reconnait, PAR DU CODE, un VALIDE dont
  * les seules reserves MINEUR sont revenues identiques (2). Une reserve NOUVELLE relance toujours.
@@ -74,14 +74,14 @@ export function noteVerdictPrecedentPourJuge(verdictPrecedent: string): string {
   return (
     `VERDICT PRÉCÉDENT — ce livrable sort d'une réparation. Objections du juge précédent :\n${liste}\n` +
     `Pour CHAQUE objection ci-dessus, dis dans OBJECTIONS si elle est corrigée (OK: …) ou non (même gravité, même formulation). ` +
-    // conv-914 : le juge d'une réparation revérifiait TOUT le livrable à chaque passage.
+    // Le juge d'une réparation revérifiait TOUT le livrable à chaque passage.
     `Revérifie ce qui a changé et les objections précédentes ; les points OK sur des lignes inchangées ne sont pas à refaire. ` +
     `Puis liste en UNE FOIS TOUS les autres écarts que tu constates : un écart passé sous silence ce tour-ci et relevé au suivant coûte une réparation entière.\n`
   )
 }
 
 /**
- * Le verdict a MEMORISER pour un panel de juges (objection du juge, reparation 1 de conv-36).
+ * Le verdict a MEMORISER pour un panel de juges (objection du juge, reparation 1).
  * Un membre qui valide en listant des ecarts vote DEFAUT : le texte agrege commence alors par
  * « DEFAUT: quorum non atteint … » et `reservesMineuresSeules` ne le reconnaitrait jamais. On
  * reconstruit donc, a partir des textes BRUTS des membres, le verdict qu'ils ont reellement rendu :
@@ -94,7 +94,7 @@ export function verdictPanelPourMemoire(textesDesMembres: string[], texteAgrege:
 }
 
 /** Decision d'arret du passage courant : jamais au 1er passage, jamais sans verdict precedent. */
-// fix-ok: conv-35 — la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
+// fix-ok: la boucle juge-réparation relançait un passage quand le juge rendait VALIDE avec les MÊMES réserves MINEUR (107 passages sur 109 après validation) ; arrêt décidé par le code, jamais par le juge
 export function reservesMineuresFigees(attempt: number, courant: string, precedent: string): boolean {
   return attempt > 0 && precedent.trim() !== '' && memesReservesMineures(courant, precedent)
 }

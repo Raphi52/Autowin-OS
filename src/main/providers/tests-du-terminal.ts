@@ -1,18 +1,18 @@
 /**
- * TESTS DU TERMINAL (conv-1059, 2026-10-22) — lire, dans UNE ligne shell lancée par l'agent, les
+ * TESTS DU TERMINAL (2026-10-22) — lire, dans UNE ligne shell lancée par l'agent, les
  * tests qu'elle a joués et LEUR code de sortie. La carte du fil les compte ensuite comme preuve.
  *
  * Pourquoi un module à part, et pas `isVerificationCommand` (evidence-vocabulary.ts) : ce dernier
  * sert le contrôle des runs, qui veut savoir si un segment QUELCONQUE de la ligne vérifie quelque
  * chose (`node -e` et `npm run build` y comptent). Ici la question est plus étroite : le code de
- * sortie qu'on tient est-il celui d'un TEST ? Deux pièges, mesurés sur les tours de conv-1038 :
+ * sortie qu'on tient est-il celui d'un TEST ? Deux pièges, mesurés sur les tours :
  *   - le code rendu est celui du DERNIER maillon : `false | cat` rend 0 dans le terminal de l'agent
  *     (constaté le 2026-10-22), donc `npx vitest run … | tail -20` ne prouve RIEN par son code ;
  *   - le motif dominant de l'agent est `npm run typecheck > log 2>&1; echo EXIT=$?` : le code rendu
  *     est celui d'`echo` (0), et le vrai n'existe que dans la SORTIE (`EXIT=2`).
  * Dans le doute, rien n'est rendu : une étape « sans preuve » est honnête, un faux vert ne l'est pas.
  *
- * conv-1221 (2026-10-28) : « dans le board ya bcp de trucs qui restent en mode à vérifier meme quand
+ * 2026-10-28 : « dans le board ya bcp de trucs qui restent en mode à vérifier meme quand
  * claude a testé ». Mesure sur 6 jours de journaux : 251 tests lancés au terminal, 25 comptés ; 190
  * passaient par un tube. Deux ajouts, choisis par l'utilisateur :
  *   - lire le vrai code quand la SORTIE le montre : `echo "exit ${PIPESTATUS[0]}"` après un tube, ou
@@ -189,7 +189,7 @@ export function lecteurDeTests(): LecteurDeTests {
       else if (['sudo', 'command', 'time', 'nice', 'exec'].includes(verbe)) reste = reste.slice(1)
       else if (verbe === 'env') {
         reste = reste.slice(1)
-        // `env --chdir=x` lance le test ailleurs depuis son propre maillon (conv-1423) : l'option
+        // `env --chdir=x` lance le test ailleurs depuis son propre maillon : l'option
         // reste en tête, le verbe n'est plus reconnu, et rien ne compte. Dans le doute, rien n'est rendu.
         while (
           reste[0] &&
@@ -327,7 +327,7 @@ export function lecteurDeTests(): LecteurDeTests {
    *
    * fix-ok: l'option était lue brute et le verbe par `nu`, qui ne retire que les guillemets du bord et
    * lit `c\d` comme un chemin : `command "-p" cd ../x && npm test` et `c'd' ../x && npm test` effaçaient
-   * un rouge (essai du contrôle final sur `rougesRestants`, conv-1423). Ne remplace pas `nu` : sans ses
+   * un rouge (essai du contrôle final sur `rougesRestants`). Ne remplace pas `nu` : sans ses
    * barres, `D:\outils\cd` ne serait plus un `cd`.
    */
   const sansCitations = (mot: string): string => mot.replace(/\$(?=["'])|["'\\]/gu, '')
@@ -377,7 +377,7 @@ export function lecteurDeTests(): LecteurDeTests {
   }
 
   /**
-   * Les changements de dossier qui précèdent une chaîne, tels que lancés (conv-1423).
+   * Les changements de dossier qui précèdent une chaîne, tels que lancés.
    *
    * fix-ok: le libellé d'un test ne garde que SON maillon, donc `cd ../autre && npm test` se lisait
    * `npm test` et effaçait un rouge du projet courant (reproduit par le contrôle final sur
@@ -430,7 +430,7 @@ export function lecteurDeTests(): LecteurDeTests {
 
   /**
    * Un `echo …` qui suit immédiatement un test et imprime son code : `$?` (code du DERNIER maillon
-   * de la chaîne précédente) ou `${PIPESTATUS[k]}` (code du maillon k, conv-1221). Rend le maillon
+   * de la chaîne précédente) ou `${PIPESTATUS[k]}` (code du maillon k). Rend le maillon
    * visé (`null` = le dernier) et le motif qui relit ce code dans la sortie. Refusé si le marqueur
    * n'y serait pas développé (apostrophes) ou si autre chose y est développé ou redirigé : on ne
    * saurait plus ce que la ligne imprimée contient.
@@ -459,7 +459,7 @@ export function lecteurDeTests(): LecteurDeTests {
   }
 
   /**
-   * Le code lu dans le BILAN de vitest (conv-1221), ou null. Rouge dès qu'un « failed » ou une ligne
+   * Le code lu dans le BILAN de vitest, ou null. Rouge dès qu'un « failed » ou une ligne
    * « Errors » se lit, quel que soit le filtre. Vert seulement si rien n'a pu retirer une ligne du
    * bilan : après vitest, que des `tail`/`cat`/`tee` (ils gardent une fin CONTIGUË de la sortie), et
    * le bilan va jusqu'à « Duration ». Un `grep` qui ne garde que « Test Files|Tests » aurait aussi
@@ -553,7 +553,7 @@ export function lecteurDeTests(): LecteurDeTests {
         codeDeSortie: issue.codeDeSortie
       })
 
-    // 3. Le bilan de vitest resté visible (conv-1221) — si la ligne ne lance qu'UN vitest : avec
+    // 3. Le bilan de vitest resté visible — si la ligne ne lance qu'UN vitest : avec
     // deux, on ne saurait plus à qui est le bilan.
     const vitests = chaines.flatMap((chaine, rang) =>
       chaine.maillons.some((maillon) => estVitest(motsDuMaillon(maillon))) ? [rang] : []

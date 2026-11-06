@@ -25,7 +25,7 @@ import {
 } from './navigateur-integre-outils'
 
 /**
- * NAVIGATEUR INTÉGRÉ DU CHAT — panneau et intégration dans la vue chat (conv-1286, lot 3/5).
+ * NAVIGATEUR INTÉGRÉ DU CHAT — panneau et intégration dans la vue chat (lot 3/5).
  *
  * Entrées qui doivent faire échouer ce fichier : la page native laissée posée alors que le panneau
  * est caché (autre écran, menu ⋮, aperçu, démontage) — elle flotterait au-dessus du DOM ; un
@@ -184,7 +184,7 @@ function touche(key: string, options: { shiftKey?: boolean } = {}): Promise<void
 
 /**
  * Le nom accessible d'un bouton : sans ce qui est caché aux lecteurs d'écran (la coche ✓ du menu).
- * fix-ok: cause mesurée (conv-1286) — le textContent brut vaut « ✓Garder les cookies » : comparé tel
+ * fix-ok: cause mesurée — le textContent brut vaut « ✓Garder les cookies » : comparé tel
  * quel, le test du menu ⋮ échoue (« bouton introuvable : Garder les cookies », code 1).
  */
 function nomAccessible(b: Element): string {
@@ -456,7 +456,7 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(conteneur!.querySelector('[role="tablist"]')).toBeTruthy()
   })
 
-  // « il a pas d'onglet le navigateur ? » (conv-1306, 2026-10-30) : repliés dans un compteur, on ne
+  // « il a pas d'onglet le navigateur ? » (2026-10-30) : repliés dans un compteur, on ne
   // les trouvait pas. La rangée est toujours là, juste sous l'adresse, même sans aucun onglet.
   it('onglets toujours visibles juste sous l’adresse, + au bout, sans compteur', async () => {
     await monter()
@@ -527,7 +527,7 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(panneau.classList.contains('is-plein-cadre')).toBe(false)
   })
 
-  // « pas dans la barre d'url la crois dans la barre d'url enleve la » (conv-1317, 2026-10-30).
+  // « pas dans la barre d'url la crois dans la barre d'url enleve la » (2026-10-30).
   it('la croix ferme le panneau, au bout de la rangée et hors de la barre d’adresse', async () => {
     await monter()
     const croix = bouton(conteneur!, 'Fermer le navigateur (Ctrl+Shift+B)')
@@ -564,13 +564,13 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(conteneur!.querySelector('.navigateur-cadre-tete')?.textContent).toBe(
       'L’agent pilote cet onglet'
     )
-    // Doublon lu sur la capture du lot 2 (conv-1286) : la tête du cadre répétait le bandeau.
+    // Doublon lu sur la capture du lot 2 : la tête du cadre répétait le bandeau.
     expect(conteneur!.textContent?.split('L’agent pilote cet onglet')).toHaveLength(2)
     await nav.pousser({ agentPilote: false })
     expect(bandeau()).toBeNull()
   })
 
-  // « retire le titre en double » (conv-1306, 2026-10-30) : la bande reste, elle ne répète plus l'onglet.
+  // « retire le titre en double » (2026-10-30) : la bande reste, elle ne répète plus l'onglet.
   it('bande : vide au repos, elle ne répète jamais le titre de l’onglet', async () => {
     await monter()
     await nav.pousser({ onglets: [onglet('onglet-1')], ongletActif: 'onglet-1' })
@@ -583,7 +583,7 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(tete().textContent).toBe('')
   })
 
-  // Mesuré avant ce test (conv-1306, 520 px) : bandeau et frise AU-DESSUS du cadre, la page descendait
+  // Mesuré avant ce test (520 px) : bandeau et frise AU-DESSUS du cadre, la page descendait
   // de 115 px à l'arrivée de l'agent et remontait de 44 px quand le bandeau partait.
   it('tout ce qui arrive avec l’agent se pose SOUS la page : son haut ne bouge pas', async () => {
     await monter()
@@ -656,7 +656,7 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(nav.api.repondreAccord).toHaveBeenLastCalledWith('https://exemple.fr', 'refuser')
   })
 
-  // « enleve le bouton annoter » puis « supprime complètement Annoter » (conv-1306, 2026-10-30).
+  // « enleve le bouton annoter » puis « supprime complètement Annoter » (2026-10-30).
   it('plus d’Annoter : Choisir reste seul et bascule le mode, aucune liste sous la page', async () => {
     await monter()
     const noms = [...conteneur!.querySelectorAll('button')].map(
@@ -689,7 +689,7 @@ describe('NavigateurIntegre — le panneau', () => {
     expect(nav.api.prendreElementsChoisis).not.toHaveBeenCalled()
   })
 
-  // ── Pas-à-pas : frise et bandeau de pilotage (conv-1286, maquette « 1 · Jalons ») ─────────────
+  // ── Pas-à-pas : frise et bandeau de pilotage (maquette « 1 · Jalons ») ─────────────
 
   const bandeau = (): Element | null =>
     conteneur!.querySelector('[data-testid="navigateur-pilotage"]')

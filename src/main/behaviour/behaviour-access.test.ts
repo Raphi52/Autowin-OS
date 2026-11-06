@@ -63,7 +63,7 @@ describe('behaviour IPC authority', () => {
     ).toBe(false)
   })
 
-  // conv-299 : la page des scenes 3D du fil est le SEUL document de l'app qu'un cadre peut charger.
+  // La page des scenes 3D du fil est le SEUL document de l'app qu'un cadre peut charger.
   it('ne laisse un cadre charger que la page des scenes 3D de l app, a son adresse exacte', () => {
     const dev = { devRendererUrl: 'http://localhost:5173/' }
     expect(isSceneFrameUrl('http://localhost:5173/scene-3d.html', dev)).toBe(true)
@@ -81,7 +81,7 @@ describe('behaviour IPC authority', () => {
     expect(isSceneFrameUrl('pas une adresse', installee)).toBe(false)
   })
 
-  // conv-1304 : la jumelle sans moteur 3D, ou tournent les pages interactives sans 3D. Memes
+  // La jumelle sans moteur 3D, ou tournent les pages interactives sans 3D. Memes
   // regles d'adresse exacte ; aucune autre page de l'app ne passe pour autant.
   it('laisse aussi charger la page interactive sans moteur 3D, a son adresse exacte', () => {
     const dev = { devRendererUrl: 'http://localhost:5173/' }

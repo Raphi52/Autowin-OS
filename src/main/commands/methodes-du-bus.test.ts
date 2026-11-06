@@ -11,7 +11,7 @@ import * as verification from './verification'
 import * as verificationAvantPublication from './verification-avant-publication'
 
 /**
- * Les grosses méthodes de `AppCommandBus` vivent dans `commands/<famille>.ts` (conv-1580, lot 6) :
+ * Les grosses méthodes de `AppCommandBus` vivent dans `commands/<famille>.ts` (lot 6) :
  * des fonctions qui prennent le bus. La classe garde une méthode mince du même nom, que ses
  * appelants et les tests continuent d'appeler — certains la REMPLACENT sur l'instance
  * (`edit-file-portee.test.ts` substitue `baselineAvantEdition`) : les fonctions déplacées passent

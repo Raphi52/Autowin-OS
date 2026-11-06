@@ -40,7 +40,7 @@ export interface DecisionRejeu {
 
 /**
  * Le CLI s'est casse en cours d'execution — ce n'est pas un verdict sur le fond, c'est son process
- * qui est tombe. Mesure conv-623, tour `ee2cae40-7dca-4c58-8ebb-9fb9aeadbcbb` : l'appel meurt en
+ * qui est tombe. Mesure, tour `ee2cae40-7dca-4c58-8ebb-9fb9aeadbcbb` : l'appel meurt en
  * `error_during_execution` a 18:51:58.702 en 1,9 s pour 0 token, le rejeu part 10 ms plus tard
  * (event `retry`, at 1789584718704) et remeurt a l'identique en 1,9 s. Le tour ENTIER est jete
  * apres 753 650 tokens et 0,7190 USD deja payes, et ce que le modele avait a dire est perdu.
@@ -63,7 +63,7 @@ export function estCrashDExecutionDuCli(message: string): boolean {
  * et la phrase « usually temporary » sur laquelle repose la classification.
  */
 export function deciderRejeuDeChat(message: string, attempt: number): DecisionRejeu {
-  // MUR DE QUOTA (conv-717, point 1) : le rejouer est un appel payé contre un mur qui ne tombera
+  // MUR DE QUOTA (point 1) : le rejouer est un appel payé contre un mur qui ne tombera
   // qu'à l'heure annoncée. Mesuré : l'ancien rejeu « ordinaire » renvoyait un vide, que la garde du
   // tour muet relançait à son tour — 4 appels, et une clôture générique qui masquait le quota.
   if (estMurDeQuota(message)) return { rejouer: false, maxAttempts: 1, delaiMs: 0 }
@@ -80,7 +80,7 @@ export function deciderRejeuDeChat(message: string, attempt: number): DecisionRe
 /**
  * REFUS DU FILTRE DE SECURITE DU MODELE DANS UN TOUR DE CHAT : on relance UNE fois, autrement.
  *
- * Mesure conv-239, tour `d9a2ca62-65b1-498d-ad32-32c45d4f3558` (2026-10-11 06:46) : « parfait met
+ * Mesure, tour `d9a2ca62-65b1-498d-ad32-32c45d4f3558` (2026-10-11 06:46) : « parfait met
  * claude en full maj », sur claude-opus-5-5 en reprise de la session `78f72dd3`, meurt en « API
  * Error: Opus 5.5's safeguards flagged this message […] Try rephrasing the request in a new session
  * or change your model. Details: `[reasoning_extraction]` » — 536 411 jetons d'entree, 3,70 USD,
@@ -88,7 +88,7 @@ export function deciderRejeuDeChat(message: string, attempt: number): DecisionRe
  * la relancait telle quelle et le fil s'arretait : l'utilisateur a du reformuler a la main deux
  * minutes plus tard (tour `fef584d5`, meme session, meme modele, reussi).
  *
- * Rejouer a l'IDENTIQUE echoue pareil (le CLI le dit, l'orchestrateur l'a mesure en conv-890). On
+ * Rejouer a l'IDENTIQUE echoue pareil (le CLI le dit, l'orchestrateur l'a mesure). On
  * suit donc le conseil du CLI, dans cet ordre :
  *  1. `modele` — un modele VOISIN existe (Opus -> Sonnet de la meme generation, seule
  *     correspondance connue, voir `modeleDeRepliApresRefus`) : on garde la session, donc le fil.

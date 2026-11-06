@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, conversation, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * DEFAUT VECU le 22/08 (conv-1363) : « je clique dans le bloc ask, il se passe rien ».
+ * DEFAUT VECU le 22/08 : « je clique dans le bloc ask, il se passe rien ».
  *
  * `ask` ne SUSPEND pas le tour — le pilote enchaine son iteration suivante sans attendre. Le bloc
  * reste donc affiche pendant que la conversation est occupee, et son clic passait par `send()`, qui

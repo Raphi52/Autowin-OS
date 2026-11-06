@@ -46,7 +46,7 @@ export interface OrchestratorAccounts {
 }
 
 /**
- * LE MODÈLE PAR DÉFAUT, quand le sélecteur pilote UNE conversation (conv-239, 2026-10-11).
+ * LE MODÈLE PAR DÉFAUT, quand le sélecteur pilote UNE conversation (2026-10-11).
  *
  * Une conversation qui a choisi son modèle doit pouvoir revenir au défaut de l'application (le
  * rôle orchestrateur, réglé dans Routage) : sans ce retour, un choix fait une fois la détachait
@@ -74,10 +74,10 @@ const STATUTS_BLOQUANTS = new Set(['expired', 'absent', 'standby'])
 
 /**
  * Services directs (`api-xai`, `api-mistral`…) : sans niveau de réflexion, ils prennent un onglet de la
- * matrice avec un cran unique « Standard », au lieu d'une liste sous elle (conv-1517, onglet Grok).
+ * matrice avec un cran unique « Standard », au lieu d'une liste sous elle (onglet Grok).
  */
 // agy (Gemini par abonnement) a son onglet comme les services directs, à l'image de la barre de
-// quota (conv-1499) : il tombait sinon dans « Autres ».
+// quota : il tombait sinon dans « Autres ».
 const enOngletSansCran = (provider: string): boolean =>
   provider.startsWith('api-') || provider === 'agy' || provider === 'grok'
 
@@ -111,13 +111,13 @@ export function OrchestratorModelSelector({
   /**
    * Sens d'ouverture du menu flottant. `haut` (défaut) : posé AU-DESSUS du bouton, comme dans la
    * barre de saisie d'avant. `bas` : sous le bouton — obligatoire en tête de conversation, où un
-   * menu ouvert vers le haut sortirait de la fenêtre (conv-239).
+   * menu ouvert vers le haut sortirait de la fenêtre.
    */
   ouverture?: 'haut' | 'bas'
   /** Présent = le sélecteur pilote UNE conversation, qui peut revenir au défaut de l'app. */
   defaut?: OrchestratorModelDefaut
   /**
-   * Réglage autre que le modèle du chat (conv-264 : « modèle des petites tâches »). Sans ces trois
+   * Réglage autre que le modèle du chat (« modèle des petites tâches »). Sans ces trois
    * champs, le sélecteur disait « Orchestrateur » et « La conversation Autowin et son historique
    * sont conservés » sous un réglage qui ne touche aucune conversation, et ses `id` fixes
    * apparaissaient en double sur la page. Absents = libellés et identifiants d'avant.
@@ -220,7 +220,7 @@ export function OrchestratorModelSelector({
           model: option.model,
           option,
           // Un service direct sans niveau de réflexion (Grok…) garde un cran unique
-          // « none » : sans lui, la ligne était filtrée et son onglet n'existait pas (conv-1517).
+          // « none » : sans lui, la ligne était filtrée et son onglet n'existait pas.
           efforts: option.reasoningEfforts.some((effort) => effort !== 'none')
             ? option.reasoningEfforts.filter((effort) => effort !== 'none')
             : enOngletSansCran(option.provider)
@@ -371,7 +371,7 @@ export function OrchestratorModelSelector({
               const sansEffort = group.options.filter(
                 (option) => option.reasoningEfforts.filter((effort) => effort !== 'none').length === 0
               )
-              // Les services directs ont leur onglet dans la matrice (conv-1517) : ils sortent de
+              // Les services directs ont leur onglet dans la matrice : ils sortent de
               // cette liste, qui les doublait.
               const restants = sansEffort.filter(
                 (option) => !(matrixRows.length > 0 && enOngletSansCran(option.provider))

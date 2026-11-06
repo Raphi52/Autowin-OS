@@ -4,7 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 /**
  * UNE RÉPONSE FINIE N'EST PAS UN CLI FIGÉ.
  *
- * Mesure conv-159, tour `b60bf535-44e5-47e8-b43a-e3260ddc74ef` (promptCalls ts
+ * Mesure, tour `b60bf535-44e5-47e8-b43a-e3260ddc74ef` (promptCalls ts
  * 2026-10-10T12:00:20.721Z, iteration 0) : l'appel est rejeté « claude CLI figé (aucune sortie) —
  * tué par le watchdog » après 600 464 ms. Son journal `run-stdout/f7fbf3a2-…stdout.jsonl` finit
  * pourtant par un event `result` `success` (0,95 USD, commande `<cmd>` valide) écrit à 11:55:20.653Z,

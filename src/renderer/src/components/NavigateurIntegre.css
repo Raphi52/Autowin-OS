@@ -1,8 +1,8 @@
-/* NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 3/5) : panneau entre le fil et les Détails.
+/* NAVIGATEUR INTÉGRÉ DU CHAT (lot 3/5) : panneau entre le fil et les Détails.
    Aucune couleur en dur : seulement les variables du thème déjà employées par ChatView.css.
    La page elle-même n'est PAS dans le DOM : `.navigateur-zone` n'est que le cadre mesuré sur lequel
    le processus principal pose la vue Electron.
-   Habillage « Cadre de page » (/draft de conv-1306, tour 2) : capsule nacre, boutons ronds, bascule
+   Habillage « Cadre de page » (tour 2) : capsule nacre, boutons ronds, bascule
    en gel, et la page qui prend un cadre ambre quand l'agent est là. */
 .navigateur-panneau {
   width: 520px;
@@ -245,7 +245,7 @@
   }
 }
 /* Très étroit : Reculer et Avancer grisés ne servent à rien, leur place va à l'adresse (à 320 px, elle
-   se réduisait à « loc… » et la rangée débordait de 3 px, mesuré conv-1306). */
+   se réduisait à « loc… » et la rangée débordait de 3 px, mesuré). */
 @container navigateur (max-width: 360px) {
   .navigateur-site,
   .navigateur-barre > .navigateur-bouton:disabled {
@@ -325,7 +325,7 @@
   scrollbar-width: none;
 }
 /* Parts égales, comme dans un navigateur : à la longueur du titre, l'onglet actif était le plus coupé
-   (lu sur les photos, conv-1306). Quand ils n'y tiennent plus, la liste défile. Le filet garde la forme
+   (lu sur les photos). Quand ils n'y tiennent plus, la liste défile. Le filet garde la forme
    d'un onglet en thème clair, où `--bg-3` se confond avec le panneau. */
 .navigateur-onglet {
   display: flex;

@@ -26,7 +26,7 @@ import { Spinner } from './Spinner'
 import './SuperConvMosaique.css'
 
 /*
- * LA SUPER CONV DANS LA MOSAÏQUE (conv-1305, 2026-10-30 — /draft, « implémente 5 et 6 »).
+ * LA SUPER CONV DANS LA MOSAÏQUE (2026-10-30 — /draft, « implémente 5 et 6 »).
  *
  * Avant : un plan de lots ouvrait une fenêtre par fil (le chef, puis chaque lot), et la mosaïque
  * se remplissait de cases sans lien visible entre elles. Choix de l'utilisateur, deux maquettes
@@ -40,24 +40,24 @@ import './SuperConvMosaique.css'
  * Les mesures (coût d'un fil, durée, droit de relancer, plan relu) sont celles du tableau des lots,
  * partagées par `lots-mesures.ts` : une seconde façon de les calculer serait une seconde vérité.
  *
- * LES COULOIRS (conv-1376, 2026-10-31 — /draft, « Implémenter la 1 · Couloirs ») remplacent les
+ * LES COULOIRS (2026-10-31 — /draft, « Implémenter la 1 · Couloirs ») remplacent les
  * pistes de la frise pleine. Une piste par lot donnait sept lignes presque vides et une barre sans
  * rien dessus : c'était laid, et l'œil devait relier chaque barre à son nom, à gauche. Le lot est
  * maintenant un bloc posé sur l'axe, titre et état dedans ; ceux qui n'ont pas démarré passent dans
  * la file, dessous. La vue d'un lot garde sa piste réduite, avec le même remplissage que les blocs.
- * Depuis conv-1387 (« faut un lot par ligne »), chaque lot lancé a sa ligne.
+ * (« faut un lot par ligne »), chaque lot lancé a sa ligne.
  *
- * PLUS D'AXE DES HEURES (conv-1396, 2026-10-31 : « pour ce bloc la disposition est pourrie, enlève le
+ * PLUS D'AXE DES HEURES (2026-10-31 : « pour ce bloc la disposition est pourrie, enlève le
  * côté timeline, prends toute la longueur, mais écris la durée et quelle étape se lance après laquelle
  * et tout ce qu'on avait »). Posé sur l'axe d'un plan de 13 h, un lot de 40 min devenait un bloc de
  * 70 px au titre coupé. Chaque lot, lancé ou non, a maintenant toute la largeur, en colonnes alignées
  * d'une ligne à l'autre (`LigneDeLot`) : ce que l'axe disait par la position s'écrit — heures, durée,
  * et le lot après lequel il part (`enchainement-des-lots.ts`).
- * La vue d'un lot a perdu sa voie à son tour (conv-1396, même jour : « remplace aussi la petite barre
+ * La vue d'un lot a perdu sa voie à son tour (même jour : « remplace aussi la petite barre
  * de temps par la même ligne que dans la liste du chef ») : « ← Retour », puis la ligne du lot telle
  * que le chef la montre, titre compris mais sans lien, puisque le lot est déjà ouvert.
  *
- * PLUS D'ONGLETS (conv-1387, 2026-10-31 : « je veux pas d'onglets, je veux que cliquer sur une ligne
+ * PLUS D'ONGLETS (2026-10-31 : « je veux pas d'onglets, je veux que cliquer sur une ligne
  * m'emmène vers la conv en question, et qu'après il y ait un bouton retour »). La frise est le seul
  * chemin vers les lots : une ligne ouvre un lot, « ← Retour » ramène au chef. Ce que disaient les
  * onglets (question, spinner, fini pas lu) est passé sur ces lignes. `OngletSuperConv` garde son nom :
@@ -69,7 +69,7 @@ export type OngletSuperConv = 'chef' | number
 /**
  * Cadence du bandeau tant qu'un lot tourne : la barre avance, et la phrase des lots est relue. Elle
  * n'est PAS relue à chaque mot écrit : chaque relecture redessine la case, saisie comprise, et c'est
- * ce redessin à chaque image qui gelait la mosaïque (conv-1581).
+ * ce redessin à chaque image qui gelait la mosaïque.
  */
 const RELEVE_MS = 10_000
 
@@ -96,8 +96,8 @@ function useMaintenant(enMouvement: boolean): number {
 
 /**
  * Le repère d'une ligne de lot, devant son titre. Un lot qui travaille porte LE spinner de l'app,
- * comme sa ligne dans la liste des fils (conv-1330). Une question attendue passe devant : c'est ce qui
- * réclame l'utilisateur (conv-1381). Un autre état se lit déjà sur la ligne : rien à ajouter.
+ * comme sa ligne dans la liste des fils. Une question attendue passe devant : c'est ce qui
+ * réclame l'utilisateur. Un autre état se lit déjà sur la ligne : rien à ajouter.
  */
 function RepereDeLot({
   lot,
@@ -140,7 +140,7 @@ function texteDEnchainement(
 }
 
 /**
- * Un lot, lancé ou non, sur toute la largeur (conv-1396). Ses colonnes s'alignent sur celles des
+ * Un lot, lancé ou non, sur toute la largeur. Ses colonnes s'alignent sur celles des
  * autres lignes (sous-grille, SuperConvMosaique.css) : titre, état, enchaînement, heures, durée,
  * coût, ce que dit le fil, et « Relancer » s'il y a lieu. Le titre est un bouton étiré sur toute la
  * ligne : c'est la ligne entière qu'on clique, et son infobulle redonne ce que la largeur a coupé.
@@ -242,9 +242,9 @@ function LigneDeLot({
 }
 
 /**
- * « Relancer le 5 », au bout de la ligne de son lot (conv-1396 ; avant, dans la file, qu'un bloc
+ * « Relancer le 5 », au bout de la ligne de son lot (avant, dans la file, qu'un bloc
  * étroit ne pouvait pas porter). Un bouton par lot relançable, un échec comme un lot interrompu ou qui
- * attend le chef (`relanceAuClic`, conv-1284).
+ * attend le chef (`relanceAuClic`).
  */
 function BoutonRelance({
   plan,
@@ -284,7 +284,7 @@ function BoutonRelance({
 }
 
 /**
- * LES PLANS PRÉCÉDENTS DU CHEF (conv-1394, 2026-10-31 : « masque aussi les lots des anciens plans d'un
+ * LES PLANS PRÉCÉDENTS DU CHEF (2026-10-31 : « masque aussi les lots des anciens plans d'un
  * même chef dans la liste de gauche, et rends-les accessibles depuis le bloc de la conv chef »). Leurs
  * lots n'ont plus de ligne dans la liste : ce bloc est leur seul chemin. Une ligne par ancien plan, le
  * plus récent d'abord, un bouton par lot qui a un fil. Mêmes classes que la file : un ancien lot se lit
@@ -349,14 +349,14 @@ export function BandeauSuperConv({
   plan: PlanDeLots
   onglet: OngletSuperConv
   /**
-   * Arrêter et Reprendre dans la ligne des chiffres (conv-1315) : la case de mosaïque n'a aucun autre
+   * Arrêter et Reprendre dans la ligne des chiffres : la case de mosaïque n'a aucun autre
    * moyen de piloter le plan. La vue chat les laisse au tableau du bas du fil : deux boutons pour le
    * même geste à l'écran, c'est lequel croire.
    */
   gestesDuPlan?: boolean
-  /** Les fils de lot qui attendent ta réponse (conv-1381). STABLE d'un rendu à l'autre. */
+  /** Les fils de lot qui attendent ta réponse. STABLE d'un rendu à l'autre. */
   questions?: ReadonlySet<string>
-  /** Les lots finis depuis ton dernier passage (conv-1286), par rang. */
+  /** Les lots finis depuis ton dernier passage, par rang. */
   nonLus?: ReadonlySet<number>
   onOuvrirLot: (rang: number) => void
   /** « ← Retour », sur un lot : revient au chef. */
@@ -540,7 +540,7 @@ export function BandeauSuperConv({
 }
 
 /**
- * LA MÊME SUPER CONV DANS LE PANNEAU DE CHAT (conv-1315, 2026-10-30 : « quand je suis sur une conv
+ * LA MÊME SUPER CONV DANS LE PANNEAU DE CHAT (2026-10-30 : « quand je suis sur une conv
  * chef ça doit l'afficher comme la vue mosaïque dans la vue chat »). Même frise que la case de
  * mosaïque, sous l'en-tête du chat ; le fil et la saisie restent ceux du panneau.
  * Monter une vraie fenêtre de mosaïque à sa place aurait retiré au chef ce qui n'existe que dans le

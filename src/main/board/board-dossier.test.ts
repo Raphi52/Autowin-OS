@@ -95,7 +95,7 @@ describe('postItsDuBoard — ce que le Board affiche', () => {
     expect(caduc.manuel).toBeUndefined()
   })
 
-  // conv-1278 : les collègues lisent le message ENTIER dans la fiche, pas la première ligne coupée.
+  // Les collègues lisent le message ENTIER dans la fiche, pas la première ligne coupée.
   it('écrit le message entier d’une demande quand il en dit plus que son titre', () => {
     const { postIts } = postItsDuBoard(
       carte([
@@ -321,7 +321,7 @@ describe('creerDossierDuBoard — réglage et écriture', () => {
     expect(lireReglageDuBoard(racine).projets).toEqual([])
   })
 
-  // conv-1230 : « nom windows par défaut et un setting pour en choisir un autre ».
+  // « nom windows par défaut et un setting pour en choisir un autre ».
   it('écrit le compte Windows comme nom par défaut, puis le nom choisi, gardé au fil des réglages', async () => {
     const racine = temp()
     const partage = temp()
@@ -377,7 +377,7 @@ describe('creerDossierDuBoard — réglage et écriture', () => {
 
 describe('boardEnMarkdown', () => {
   // Le run retiré des « Runs bloqués » ne doit pas sortir du fichier pour autant : il y figurait
-  // avant que la carte le compte à part (conv-1346).
+  // avant que la carte le compte à part.
   it('écrit les runs en attente de décision à part, et rien s’il n’y en a pas', () => {
     const base = carte([])
     const enregistre = boardAEnregistrer(

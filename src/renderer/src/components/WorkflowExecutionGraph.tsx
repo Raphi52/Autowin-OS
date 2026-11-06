@@ -56,7 +56,7 @@ export interface ExecutionNodeSelection {
   closure?: RunClosureObservation
   /** Nœud « Clôture du run » : les verdicts rendus par le juge, dans l'ordre. */
   verdictEventIds?: string[]
-  /** Nœud « Clôture du run » : le déroulé par agent du run, pour le rejouer (conv-981). */
+  /** Nœud « Clôture du run » : le déroulé par agent du run, pour le rejouer. */
   gantt?: AgentGantt
 }
 
@@ -73,7 +73,7 @@ interface WorkflowExecutionGraphProps {
   onSelect?: (selection: ExecutionNodeSelection | null) => void
 }
 
-// Des CLÉS de texte, traduites à la lecture (traduction anglaise, conv-1170).
+// Des CLÉS de texte, traduites à la lecture (traduction anglaise).
 const EVENT_LABEL: Record<HarnessTimelineEvent['kind'], CleChatExecution> = {
   message: 'graphe.evenement.message',
   injection: 'graphe.evenement.injection',
@@ -315,14 +315,14 @@ function chiffreDuNoeud(node: CausalPathNode, offsetMs?: number): string {
 
 /**
  * La durée d'une étape telle que la constellation la montre. Une PHASE n'a pas de durée propre
- * (alias de skill, « 0 ms » sur conv-108) : elle prend la durée cumulée de ses agents, que le
+ * (alias de skill, « 0 ms ») : elle prend la durée cumulée de ses agents, que le
  * chemin causal calcule déjà. Une clôture porte le temps total du run.
  */
 function dureeDuNoeud(node: CausalPathNode): number | undefined {
   const event = node.event
   const positive = (ms: number | undefined): number | undefined =>
     ms != null && Number.isFinite(ms) && ms > 0 ? ms : undefined
-  // Un marqueur instantané (copie, plan, Git : « 0 ms » sur conv-108) n'a pas de durée à montrer :
+  // Un marqueur instantané (copie, plan, Git : « 0 ms ») n'a pas de durée à montrer :
   // `durationLabel` dit alors sa POSITION dans la demande, comme pour une durée absente.
   if (event.display?.kind === 'closure') return positive(event.display.closure?.totalDurationMs)
   return positive(event.durationMs) ?? positive(node.inclusiveDurationMs)
@@ -480,7 +480,7 @@ const GENRES_DU_DETAIL = [...NODE_PAYLOAD_KINDS]
 /**
  * Les genres relus selon la brique. « Fait retenu » ne relit que les RÉPONSES de `remember`, jamais
  * un argument — réussies (`tool-result`) ET en échec (`error`) : un dépôt refusé est écrit en
- * `error`, et sans lui le panneau ne savait dire que « texte illisible » (conv-966). Un autre outil
+ * `error`, et sans lui le panneau ne savait dire que « texte illisible ». Un autre outil
  * relit ses arguments, ses retours et ses erreurs.
  */
 const GENRES_PAR_DETAIL: Record<'echange' | 'fait-retenu' | 'appels', string[]> = {
@@ -865,7 +865,7 @@ function ExecutionNodeDetail({
 }
 
 /**
- * L'ARBRE ÉTOILÉ (conv-234, 2026-10-11) — remplace la pile de cartes égales.
+ * L'ARBRE ÉTOILÉ (2026-10-11) — remplace la pile de cartes égales.
  *
  * Choix de l'utilisateur, arrêté par /draft en cinq tours : « Constellation c'est incroyable »,
  * puis l'Arbre étoilé, puis le mélange Perles + Flux + Fiche accrochée, enfin « go fil holo ».
@@ -1068,14 +1068,14 @@ function ExecutionConstellation({
                     </>
                   )}
                   {/* Pas de ligne qui redit le titre (`hasCardMeta`) : une étape porte déjà son nom
-                      en titre (« Judge », `nomDEtape`, conv-1094), un outil ou un orchestrateur
+                      en titre (« Judge », `nomDEtape`), un outil ou un orchestrateur
                       sans skill n'a rien à ajouter. */}
                   {hasCardMeta(event) && (
                     <span className="workflow-execution-node-meta">
                       <ExecutionNodeMeta event={event} offsetMs={offset} sansDuree />
                     </span>
                   )}
-                  {/* POURQUOI L'ÉTAPE A ÉCHOUÉ, LISIBLE SANS CLIC (2026-10-10, conv-163). */}
+                  {/* POURQUOI L'ÉTAPE A ÉCHOUÉ, LISIBLE SANS CLIC (2026-10-10). */}
                   {event.display?.failure && (
                     <span
                       className="workflow-execution-node-failure"
@@ -1163,7 +1163,7 @@ function ExecutionFiche({
           </span>
         </div>
       )}
-      {/* POURQUOI L'ÉTAPE ROUGE A ÉCHOUÉ, EN TÊTE DE SA FICHE (conv-966). La carte la coupe sur une
+      {/* POURQUOI L'ÉTAPE ROUGE A ÉCHOUÉ, EN TÊTE DE SA FICHE. La carte la coupe sur une
           ligne ; ici elle est entière. Une clôture qui liste déjà ses « Raisons » ne la double pas. */}
       {status === 'failed' &&
         event.display?.failure &&
@@ -1287,7 +1287,7 @@ export function WorkflowExecutionGraph({
     if (active && conversationId && wasLive && !live) void load(false)
   }, [active, conversationId, live, load])
 
-  // LA LANGUE CHANGE : l'arbre est relu et reprojeté, sans écran de chargement (conv-1170). Le
+  // LA LANGUE CHANGE : l'arbre est relu et reprojeté, sans écran de chargement. Le
   // modèle écrit dans la langue courante ses titres d'action, ses raisons d'échec et ses repères ;
   // sans cette relecture, ils resteraient dans l'ancienne langue jusqu'à la prochaine écriture.
   const languePrecedente = useRef(langue)
@@ -1319,7 +1319,7 @@ export function WorkflowExecutionGraph({
   // RECONCILIATION AVANT construction : `persistOrchestrationPhaseStart` ecrit `running` au
   // DEMARRAGE d'une phase et compte sur l'evenement terminal pour dire la suite. L'app tuee en
   // pleine phase, ce terminal n'arrive jamais — le `running` reste sur disque et le graphe le
-  // relisait indefiniment comme une etape active (« je vois encore des choses en cours », conv-1056).
+  // relisait indefiniment comme une etape active (« je vois encore des choses en cours »).
   // Le composant CONNAISSAIT deja la reponse via `live` ; elle n'etait simplement pas consultee.
   // Rien n'est reecrit sur disque : la trace reste un fait historique, on corrige ce qu'on AFFICHE.
   const settledEvents = useMemo(() => {

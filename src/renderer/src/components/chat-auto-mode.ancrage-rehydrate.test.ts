@@ -3,7 +3,7 @@ import { derniereDemandeHumaine } from './chat-auto-mode'
 import type { Msg } from './chat-view-types'
 
 /**
- * DEFAUT MESURE (conv-470, saisie ts=1789159231523).
+ * DEFAUT MESURE (saisie ts=1789159231523).
  *
  * Le mode auto a envoye « Applique la piece 3… » en l'ancrant sur « Applique la piece 2… », alors
  * que les cinq autres envois automatiques du MEME fil citaient « Voici un besoin observe… ». La
@@ -12,7 +12,7 @@ import type { Msg } from './chat-view-types'
  * maillon intermediaire — exactement ce que l'ancrage devait empecher.
  *
  * L'ancre deja ECRITE dans un envoi automatique est une source plus sure que le haut d'une fenetre
- * tronquee : elle a ete calculee quand la fenetre etait plus large. Depuis le 2026-09-30 (conv-889),
+ * tronquee : elle a ete calculee quand la fenetre etait plus large. Depuis le 2026-09-30,
  * l'ancre est la DERNIERE demande de l'utilisateur : un message qu'il tape APRES un envoi automatique
  * reprend la main, et devient l'ancre.
  */

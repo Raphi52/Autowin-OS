@@ -9,7 +9,7 @@ import { delierLesDependances, lierLesDependances } from '../store/dependances-c
 import { echecsDuRapport, verdictDifferentiel } from '../commands/verify-command'
 
 /**
- * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PLUS LA PUBLICATION D'UN TOUR (conv-246, 2026-10-11).
+ * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PLUS LA PUBLICATION D'UN TOUR (2026-10-11).
  *
  * LE DÉFAUT, mesuré ce jour-là : l'interrupteur « Enchaînement auto » était sur ON, mais plus aucun
  * tour de chat ne publiait depuis 08:40 — 84 fichiers en attente. Le contrôle d'avant publication
@@ -78,7 +78,7 @@ async function git(repo: string, args: readonly string[]): Promise<string> {
  * `git worktree remove`, qui efface le `node_modules` du dépôt à travers la jonction encore posée
  * (vécu, voir la note « publier un commit isolé »). `git worktree prune` retire ensuite l'inscription.
  *
- * Elle est ASYNCHRONE depuis /gel conv-1118 (2026-10-23) : la forme synchrone effaçait les ~3 970
+ * Elle est ASYNCHRONE depuis /gel (2026-10-23) : la forme synchrone effaçait les ~3 970
  * fichiers de la copie sur le fil de la fenêtre, à chaque publication de tour — 320 s de fenêtre
  * figée du 21 au 23/10 dans `gels.jsonl`, pire 153,8 s (`comparaison-a-la-base.sans-gel.test.ts`).
  */
@@ -137,7 +137,7 @@ async function depotCommunDe(copie: string): Promise<string | undefined> {
 }
 
 /**
- * COPIES DE BASE LAISSÉES PAR UN PROCESSUS MORT (conv-1583, 2026-11-05, scout de conv-1576).
+ * COPIES DE BASE LAISSÉES PAR UN PROCESSUS MORT (2026-11-05).
  *
  * `fermer()` ne tourne que si le processus vit jusqu'au bout de la comparaison. Relevé du 05/11 :
  * quatre `%TEMP%\aw-base-*` du 04/11 toujours sur le disque et inscrites dans `git worktree list`,

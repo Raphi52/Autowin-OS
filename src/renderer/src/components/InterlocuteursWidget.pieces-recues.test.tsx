@@ -150,7 +150,7 @@ describe('les pieces jointes recues dans la bulle du fil', () => {
 })
 
 /**
- * conv-1220 (2026-10-28) : « rends les pièces jointes reçues cliquables : un clic sur le nom ouvre le
+ * 2026-10-28 : « rends les pièces jointes reçues cliquables : un clic sur le nom ouvre le
  * fichier, en le récupérant depuis Outlook ». Le NOM devient le bouton ; ce qui part vers Outlook est
  * l'identifiant du MESSAGE, le RANG de la pièce dans ce message et son nom — c'est ce triplet que le
  * script vérifie avant d'enregistrer quoi que ce soit.

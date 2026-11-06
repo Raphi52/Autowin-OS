@@ -2,18 +2,18 @@
  * LE PLAFOND DE PREUVE DU SCOUT, APPLIQUÉ EN CODE — il n'existait qu'en texte.
  *
  * La consigne dit « un Why DEDUCTIF est plafonné à 50 » (`phase-briefs.ts`). Écrite seule, la règle
- * n'engage rien. Relu dans les traces le 30/09 : conv-812 note 72 une piste dont le Pourquoi dit
- * « Sous réserve : je n'ai cherché que les minuteurs », conv-775 note 60 une piste dont le Pourquoi
- * dit « la cause exacte n'est pas vérifiée », et conv-602 note 88 une piste dont l'ancrage
+ * n'engage rien. Relu dans les traces le 30/09 : un fil note 72 une piste dont le Pourquoi dit
+ * « Sous réserve : je n'ai cherché que les minuteurs », un fil note 60 une piste dont le Pourquoi
+ * dit « la cause exacte n'est pas vérifiée », et un fil note 88 une piste dont l'ancrage
  * (`Program.cs:300-304`) dit lui-même que la classe citée a disparu — relevé par le run suivant.
  *
  * Trois contrôles de FORME, les seuls falsifiables quand producteur et juge sont le même modèle :
  *  1. le Pourquoi AVOUE ne pas avoir vérifié → la note tombe à 50 ;
  *  2. un CORRECTIF dont aucun ancrage contrôlable ne tombe sur du code vivant (commentaire, ligne
  *     vide, après la fin, fichier introuvable) → la note tombe à 50. « Aucun », pas « un » : un
- *     commentaire cité peut documenter une décision vraie (conv-890 : `orchestrator.ts:1371`) ;
+ *     commentaire cité peut documenter une décision vraie (`orchestrator.ts:1371`) ;
  *  3. le Quoi ou le Pourquoi AFFIRME une absence sans fichier ni commande qui la montre → 50
- *     (conv-339, voir `ABSENCE`).
+ *     (voir `ABSENCE`).
  *
  * On PLAFONNE, on ne refuse pas : un refus paierait une réparation entière pour une note. La raison
  * est écrite sous le tableau, et le tableau est retrié ; les numéros de ligne ne bougent pas, car la
@@ -42,13 +42,13 @@ export type LecteurAncrage = (chemin: string, ligne: number) => EtatAncrage
  * Un AVEU de non-vérification, à la première personne ou en étiquette. « le test vérifie X, pas Y »
  * est un constat sur le code, pas un doute du scout : il ne doit pas mordre.
  * Les formes « n'est pas vérifiée », « sous réserve », « je n'ai pas mesuré/lu » et « c'est une
- * déduction » viennent des sorties réelles : conv-775 (60) et conv-812 (72) passaient sans elles.
+ * déduction » viennent des sorties réelles : (60) et (72) passaient sans elles.
  */
 const AVEU_NON_VERIFIE = new RegExp(
   [
     String.raw`je n['’]ai pas (?:encore )?(?:v[ée]rifi|mesur|ouvert|lu\b|test)\p{L}*|n['’](?:est|sont) pas (?:encore )?v[ée]rifi\p{L}*|non v[ée]rifi\p{L}*|pas encore v[ée]rifi\p{L}*|sans l['’]avoir v[ée]rifi\p{L}*|(?:^|\s)[àa] v[ée]rifier(?![\p{L}])|\(\s*pas v[ée]rifi\p{L}*|(?:^|[—([]\s*)suppos[ée]\p{L}*|sous r[ée]serve|c['’]est une d[ée]duction|par d[ée]duction`,
     /*
-     * Les mêmes aveux en anglais (conv-1197, 2026-10-28) : le scout écrit son Why en anglais quand
+     * Les mêmes aveux en anglais (2026-10-28) : le scout écrit son Why en anglais quand
      * l'interface l'est, et « I haven't verified » gardait sa note de 80.
      */
     String.raw`\bI\s+(?:have(?:n['’]t|\s+not)|did(?:n['’]t|\s+not))\s+(?:yet\s+)?(?:verif|check|measur|open|read\b|test)\p{L}*`,
@@ -65,10 +65,10 @@ const AVEU_NON_VERIFIE = new RegExp(
  * « vérifié dans `gates/hooks.ts` » — a nommé ses chemins : son aveu ne le plafonne plus. Il faut un
  * CHEMIN (entre accents graves, ou avec `/` ou une extension) : « vérifié dans le code » ne nomme rien.
  * Une forme NIÉE (« je n'ai pas vérifié dans `a.ts` ») est un aveu, pas un chemin fermé.
- * fix-ok: vrai scout du 30/09 (demande de conv-382), piste 4 ramenée de 70 à 50 alors que son
+ * fix-ok: vrai scout du 30/09, piste 4 ramenée de 70 à 50 alors que son
  * Pourquoi nomme `gates/hooks.ts`, `orchestrator.ts` et `hooks/` : la règle 4 n'était codée qu'à moitié.
  */
-// En anglais aussi (conv-1197) : « checked in `gates/hooks.ts` », et « haven't checked in » reste nié.
+// En anglais aussi : « checked in `gates/hooks.ts` », et « haven't checked in » reste nié.
 const CHEMINS_FERMES =
   /(?<!(?:pas|non|jamais|ni|not|never|n['’]t)\s+(?:(?:encore|yet)\s+)?)(?<![\p{L}])(?:v[ée]rifi[ée]e?s?|cherch[ée]e?s?|relu|lu|verified|checked|searched|grepped)\s+(?:dans|sur|in|on)\s+(?:`[^`]+`|[\w.-]*[\\/][\w./\\-]*|[\w-]+\.\w+)/iu
 
@@ -85,7 +85,7 @@ const ANCRAGE = new RegExp(
 )
 
 /**
- * UNE ABSENCE AFFIRMÉE DOIT ÊTRE MONTRÉE (conv-339). Le juge a refusé deux fois le tableau du scout
+ * UNE ABSENCE AFFIRMÉE DOIT ÊTRE MONTRÉE. Le juge a refusé deux fois le tableau du scout
  * « humains comme dans Cyberpunk » (notes 66 et 70) pour des absences fausses — « three.js n'a rien
  * de tout fait » (une URL pour seule preuve), « aucun test n'impose ce choix » : deux tours payés.
  * La règle n'existait qu'en prose dans la consigne. Une absence dans le Quoi ou le Pourquoi doit y
@@ -212,7 +212,7 @@ export function plafonnerNotesScout(
 const MARQUE_AJUSTEMENT = 'Note ajustée sur tes choix réels par Autowin'
 
 /**
- * LA NOTE AJUSTÉE SUR LES CHOIX RÉELS (piste 7 de conv-890) : chaque note est multipliée par le
+ * LA NOTE AJUSTÉE SUR LES CHOIX RÉELS (piste 7) : chaque note est multipliée par le
  * facteur de son type (`facteursDesChoix`, `scout-memoire.ts`), bornée à 0-100, puis le tableau est
  * retrié et le facteur écrit dessous. À appliquer AVANT le plafond de preuve : un aveu reste à 50.
  * fix-ok: sans cette réécriture, le bilan des choix n'était qu'un texte que le modèle pouvait ignorer.
@@ -257,7 +257,7 @@ export function ajusterNotesSurChoix(texte: string, facteurs: FacteursChoix): st
 }
 
 /*
- * « DÉJÀ FAIT ? » CONTRÔLÉ EN CODE (piste 4, conv-1033). La règle « réfute avant de rendre » n'était
+ * « DÉJÀ FAIT ? » CONTRÔLÉ EN CODE (piste 4). La règle « réfute avant de rendre » n'était
  * que du texte dans `phase-briefs.ts`. Une piste dont le titre redit un commit récent du dépôt, ou une
  * piste déjà LIVRÉE par un run précédent (`pistesDejaLivrees`), reçoit une marque sous le tableau.
  * Une marque, pas un plafond : deux textes qui partagent leurs mots ne prouvent pas que le travail
@@ -332,7 +332,7 @@ const gitLogRecent: LanceurGitLog = (racine) =>
 
 /**
  * Les sujets des commits des 30 derniers jours, nettoyés. ASYNCHRONE à dessein, comme la liste des
- * fichiers (`lecteurAncrageDepuisDisque`) : un `git` synchrone a déjà figé l'app 1,5 s (conv-204).
+ * fichiers (`lecteurAncrageDepuisDisque`) : un `git` synchrone a déjà figé l'app 1,5 s.
  */
 export async function sujetsDesCommitsRecents(
   racine: string,
@@ -423,7 +423,7 @@ export function lecteurAncrageDepuisDisque(
   const base = resolve(racine)
   let index: string[] | null | undefined
   /*
-   * PRE-LECTURE ASYNCHRONE — heal conv-204, mesure du 2026-10-10 (`gels.jsonl`, 12:30:43) :
+   * PRE-LECTURE ASYNCHRONE — heal, mesure du 2026-10-10 (`gels.jsonl`, 12:30:43) :
    * `git ls-files` en `execFileSync` a fige l'app 1 502 ms. Le lecteur est cree au debut de
    * l'orchestration et ne sert qu'a la fin d'une phase scout : la liste arrive donc bien avant.
    * Le synchrone ne reste qu'en SECOURS, si elle n'est pas encore revenue — meme reponse qu'avant.

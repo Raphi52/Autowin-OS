@@ -1,5 +1,5 @@
 /**
- * LANCER EN PLUSIEURS FILS (conv-1147, 2026-10-25) — cadrage :
+ * LANCER EN PLUSIEURS FILS (2026-10-25) — cadrage :
  * `~/.claude/runs/conv-1147/fork-automatique-taches-independantes-workspace/RUN.md`, option A.
  *
  * Constat : un message qui demande deux tâches d'action était traité en série. Un tour ne lance
@@ -174,7 +174,7 @@ export function texteDeLaTache(tache: TacheDeFil, autres: readonly TacheDeFil[])
  * Clé d'un lancement. La carte s'en sert pour se souvenir qu'elle a déjà été cliquée : le fil
  * re-rend le texte à chaque tour, et un second clic relancerait N tours.
  *
- * La RÉPONSE qui porte la carte en fait partie (défaut D5, conv-1147) : tirée de la seule source,
+ * La RÉPONSE qui porte la carte en fait partie (défaut D5) : tirée de la seule source,
  * la clé était partagée par deux réponses au même bloc et par une réponse recopiée dans une
  * branche, et la seconde carte se croyait lancée. `reponse` = l'identité posée par ChatMessageRow
  * (fil + tour, `renderer/.../message-du-fil.ts`) ; sans elle (rendu hors d'un fil), la clé retombe
@@ -193,20 +193,20 @@ export function cleDuLancement(source: string, reponse?: string): string {
  * n'écrirait de bloc ```aw-fils. L'exemple est lu par la carte dans le test du contrat
  * (`chat-pilotage-prompt.lancer-en-fils.test.ts`), donc il ne peut pas dériver du format.
  *
- * PLUS D'ÉTAPE DE VALIDATION (conv-1163, 2026-10-27, sur la capture de la carte « 2 tâches dans ton
- * message » : « je ne veux plu avoir cette etape de validation »). Depuis conv-1147, deux tâches
+ * PLUS D'ÉTAPE DE VALIDATION (2026-10-27, sur la capture de la carte « 2 tâches dans ton
+ * message » : « je ne veux plu avoir cette etape de validation »). Deux tâches
  * indépendantes arrêtaient le tour sur la carte, et rien ne partait avant un clic ; quand les tâches
  * partageaient un fichier, la carte n'offrait même qu'un bouton (« Tout ici »). Désormais l'agent les
  * fait toutes, à la suite, dans le tour — règle d'Autonomie (4) de la constitution — et la carte ne
  * sert plus que si l'utilisateur demande lui-même de répartir le travail en fils.
  *
- * « À LA SUITE » NE VAUT QUE POUR DES TÂCHES LIÉES OU DÉJÀ LOCALISÉES (kaizen de conv-1332,
+ * « À LA SUITE » NE VAUT QUE POUR DES TÂCHES LIÉES OU DÉJÀ LOCALISÉES (kaizen,
  * 2026-10-30, « tu aurais dû tout paralléliser ») : ce qui est refusé, c'est la validation, pas le
  * parallélisme. Le plan de lots part sans clic ; voir `main/consigne-plan-de-lots.ts`.
- * fix-ok: conv-1332, saisie 1793364618896 de conv-1322 — cause mesurée : la série restait le défaut,
+ * fix-ok: saisie 1793364618896 — cause mesurée : la série restait le défaut,
  * et trois conditions cumulées, dont une durée impossible à connaître d'avance, faisaient rester ici.
  *
- * RACCOURCIE (conv-1229, 2026-10-28) : ce bloc part à CHAQUE appel du chat, alors qu'il ne sert que
+ * RACCOURCIE (2026-10-28) : ce bloc part à CHAQUE appel du chat, alors qu'il ne sert que
  * sur demande explicite de fils. Retirés : l'explication de la carte côté app (« L'app dessine une
  * carte… », mécanique que le modèle n'a pas à appliquer) et la seconde tâche de l'exemple. Toutes
  * les consignes de comportement restent, mot pour mot ou resserrées.

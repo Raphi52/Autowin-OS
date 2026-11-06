@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Bouton « prompter » d'un bloc html-render (conv-302, 2026-10-17 : « et faut un bouton pour
+ * Bouton « prompter » d'un bloc html-render (2026-10-17 : « et faut un bouton pour
  * prompter au lieu du bloc ask »). Le clic sur un lien `#autowin-prompt` envoie son libellé par le
  * chemin d'une réponse `ask`, avec les MÊMES garde-fous que le bloc `ask` :
  *   - rien ne part tant que le tour court (ChatMessageRow.ask-attend-fin-de-tour) ;

@@ -1,5 +1,5 @@
 /**
- * LES POST-IT DES COLLÈGUES DANS LE BOARD (demande utilisateur du 2026-10-28, conv-1210).
+ * LES POST-IT DES COLLÈGUES DANS LE BOARD (demande utilisateur du 2026-10-28).
  *
  * Demande : « fais afficher dans mon Board les post-it des collègues qui écrivent dans le même
  * dossier de la GED, avec leur nom sur chaque post-it et en lecture seule ». Le processus principal
@@ -90,7 +90,7 @@ export function carteAvecCollegues(
           statut: d.statut,
           constat: d.constat,
           ...(debut !== undefined && Number.isFinite(debut) ? { debut } : {}),
-          // Sa tâche (conv-1456) : deux post-it d'un même fil du collègue restent deux, et le
+          // Sa tâche : deux post-it d'un même fil du collègue restent deux, et le
           // préfixe de son poste les tient à part des nôtres.
           ...(p.fiche ? { fiche: `${board.poste}/${p.fiche}` } : {}),
           demandeur,

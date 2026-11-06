@@ -8,7 +8,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { compilerLeMoteur } from './relance-auto-moteur'
 
 /**
- * LA COMPILATION EN COULISSE NE TIENT PLUS LA FENÊTRE (conv-1413, 2026-10-31).
+ * LA COMPILATION EN COULISSE NE TIENT PLUS LA FENÊTRE (2026-10-31).
  *
  * Mesure `gels.jsonl`, 2 jours au 2026-10-31 : `spawn electron.exe build` 103,2 s en 5 gels (pire
  * 69,2 s) et `rmSync` du dossier temporaire 47,4 s en 9 gels, depuis `compilerLeMoteur`. Elle se

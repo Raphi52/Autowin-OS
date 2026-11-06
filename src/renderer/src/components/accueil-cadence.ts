@@ -1,11 +1,11 @@
 /**
- * LA CARTE GRAPHIQUE ET LE FIL PRINCIPAL (conv-1075, conv-1401) : la page de la mascotte anime tout
+ * LA CARTE GRAPHIQUE ET LE FIL PRINCIPAL : la page de la mascotte anime tout
  * en fluide. Sur le bureau, elle a sa fenêtre ; dans le fil, chaque image ferait recomposer TOUTE la
  * fenêtre d'Autowin 60 fois par seconde, soit 20 à 33 % de la carte. `AnimationAccueilChat` arrête
  * donc ses animations et les avance elle-même : entre deux crans, rien ne bouge.
  *
  * SEULES CELLES QU'ON VOIT AVANCENT. La page en compte 580, dont 565 dans des groupes éteints, où
- * elles existent quand même (note du Brain, conv-1227 ; sondé le 2026-10-31, éveillée). Les poser
+ * elles existent quand même (note du Brain ; sondé le 2026-10-31, éveillée). Les poser
  * toutes prend 3,8 ms à chaque cran, pour aucun pixel de plus.
  */
 

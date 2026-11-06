@@ -3,7 +3,7 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
- * BARRE DE FILTRE DE LOGS (conv-180, 2026-10-10 : « dans Logs les elements au sommet sont pas bien
+ * BARRE DE FILTRE DE LOGS (2026-10-10 : « dans Logs les elements au sommet sont pas bien
  * responsive »). Le panneau de droite descend a 280 px (barre de 248 px) ; sur une seule ligne, la
  * barre demandait 399 px : la recherche tombait a 22 px, « Toutes sources » etait coupe, Pistes,
  * Exporter et le compte sortaient du cadre. Elle passe donc a la ligne, et rien n'y est plafonne
@@ -39,7 +39,7 @@ describe('barre de filtre de Logs : elle passe a la ligne au lieu d ecraser', ()
   })
 
   /**
-   * UNE hauteur (conv-180, 2026-10-10 : « aligne la hauteur du champ de recherche, des deux listes
+   * UNE hauteur (2026-10-10 : « aligne la hauteur du champ de recherche, des deux listes
    * et des boutons »). Sans elle, chacun tirait la sienne de son remplissage : 36, 22 et 18 px.
    */
   it('donne a la recherche, aux listes et aux boutons la meme hauteur de 26 px', () => {

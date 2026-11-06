@@ -4,12 +4,12 @@ import type { PromptSnapshot } from '../commands/commands'
 import { pilotJournalEvents } from '../runs/turn-journal-enrich'
 
 /**
- * LA COUPURE DU FILTRE DE SÉCURITÉ ATTEINT LE JOURNAL DU TOUR (conv-1161, 2026-10-27).
+ * LA COUPURE DU FILTRE DE SÉCURITÉ ATTEINT LE JOURNAL DU TOUR (2026-10-27).
  *
  * L'adaptateur joint à un fragment la coupure d'une réponse par le filtre du fournisseur
  * (`coupureFiltre` : catégorie et explication). Le pilote doit la relayer en un événement
  * `coupure-filtre`, que le journal du tour écrit (`pilotJournalEvents`) et que la rétrospective et
- * le kaizen lisent. Mesuré sur conv-1161 : sans cet événement, la coupure n'existait que dans le
+ * le kaizen lisent. Mesuré : sans cet événement, la coupure n'existait que dans le
  * journal brut du CLI (`run-stdout/aeaf1921-…` l.637), et le diagnostic a dû l'y chercher.
  * Ce qui fait échouer ce test : un champ jeté en route, ou un fragment sans texte pris pour un mot.
  */

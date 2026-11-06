@@ -15,7 +15,7 @@ import {
 import type { FinalizeResult } from '../store/worktree-manager'
 
 /**
- * « ESSAIE 3 FAÇONS » : COMPARER, PUIS GARDER CELLE-CI (conv-1038, 2026-10-21 — idée 6).
+ * « ESSAIE 3 FAÇONS » : COMPARER, PUIS GARDER CELLE-CI (2026-10-21 — idée 6).
  *
  * Chaque façon travaille dans sa copie séparée, ouverte à une PHOTO du code (`ouvrirCopiesDEssai`).
  * Cette photo prend le dossier partagé tel quel, y compris le travail NON COMMITÉ des autres fils.
@@ -133,7 +133,7 @@ describe('lireNomDEssai — seule une copie d’essai, au bon endroit, est recon
       ref: 'refs/autowin/tour/conv-1038/1700'
     })
   })
-  // conv-1038, 2026-10-21 : le nom d'une copie accepte tout fil (`(.+)`), la référence de photo non
+  // 2026-10-21 : le nom d'une copie accepte tout fil (`(.+)`), la référence de photo non
   // (`ID_SUR`). L'écart utilisait `refDePhoto(...) as string` en comptant sur cette garde : sans elle,
   // git aurait été interrogé sur `null^{commit}` et l'utilisateur aurait lu « la photo n'existe plus ».
   // Entrées qui font échouer une version fausse : un fil avec une ESPACE, un fil avec `..`.
@@ -256,7 +256,7 @@ describe('garderLEssai — « Garder celle-ci » par le chemin de publication d�
   })
 
   // Ailleurs = séparé par une ligne inchangée. check: `git merge-file` rend 1 sur deux lignes
-  // VOISINES changées et 0 quand une ligne inchangée les sépare (mesuré le 2026-10-21, conv-1038).
+  // VOISINES changées et 0 quand une ligne inchangée les sépare (mesuré le 2026-10-21).
   it('un changement de main AILLEURS dans le fichier se fusionne', async () => {
     const { repo, retours, copies } = await depotAvecEssais()
     travaillerDansLaCopie(copies[0])

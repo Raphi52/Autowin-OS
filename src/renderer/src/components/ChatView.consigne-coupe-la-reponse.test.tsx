@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * conv-717 (2026-09-19) : « quand j'ai écrit fais tout ça a effacé ton message précédent ».
+ * 2026-09-19 : « quand j'ai écrit fais tout ça a effacé ton message précédent ».
  * Au rechargement, la réponse à une consigne écrite pendant un tour remontait AU-DESSUS de la
  * consigne (même message assistant). Elle doit se relire SOUS elle.
  */

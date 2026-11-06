@@ -12,7 +12,7 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * LA LISTE DES FILS ET L'EN-TÊTE DU CHAT SUIVENT LA LANGUE (traduction anglaise, conv-1170, lot
+ * LA LISTE DES FILS ET L'EN-TÊTE DU CHAT SUIVENT LA LANGUE (traduction anglaise, lot
  * « Chat — liste des fils, en-tête, fil et saisie »). Entrée qui doit faire échouer ce test : un
  * libellé de la liste ou de l'en-tête laissé en dur, ou un ChatView qui ne se redessine pas quand la
  * langue change — et, au retour, un français qui ne serait plus mot pour mot celui d'avant.

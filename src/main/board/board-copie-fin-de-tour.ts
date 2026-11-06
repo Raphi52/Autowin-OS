@@ -1,9 +1,9 @@
 /**
- * LE BOARD RECOPIÉ À CHAQUE FIN DE TOUR (demande utilisateur du 2026-10-28, conv-1210).
+ * LE BOARD RECOPIÉ À CHAQUE FIN DE TOUR (demande utilisateur du 2026-10-28).
  *
  * Demande : « fais que la copie du Board vers la GED se mette à jour même quand le Board n'est pas
  * affiché, par exemple à chaque fin de tour ». Jusque-là, le Board n'était recopié dans le dossier
- * (`board-dossier.ts`, conv-1206) qu'au moment où la vue le calculait : app ouverte sur une autre
+ * (`board-dossier.ts`) qu'au moment où la vue le calculait : app ouverte sur une autre
  * vue, la copie vieillissait.
  *
  * Ce module, appelé à la fin de chaque tour de chat (`index.ts`, observateur de fin de tour) :
@@ -16,7 +16,7 @@
  *    (`board-etats-manuels.json`) : sans eux, après un redémarrage et avant toute ouverture du
  *    Board, un post-it glissé à la main serait recopié à l'étage de ses preuves.
  *
- * Fichier à part : `board-dossier.ts` portait le travail en cours d'un autre fil (conv-1211).
+ * Fichier à part : `board-dossier.ts` portait le travail en cours d'un autre fil.
  */
 import { readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'

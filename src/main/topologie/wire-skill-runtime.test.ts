@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { skillInstruction } from '../skills/skill-pipeline'
 
 /*
- * Passé sur `skillInstruction` quand `phaseInstructionFromRoots` a été retirée sans appelant
- * (conv-1602). Son verrou « skill désactivée » ne valait que pour ce chargeur mort : dans le fil,
+ * Passé sur `skillInstruction` quand `phaseInstructionFromRoots` a été retirée sans appelant.
+ * Son verrou « skill désactivée » ne valait que pour ce chargeur mort : dans le fil,
  * seul l'outil `skill_charger` le lit (`skill-charger-command.ts`), pas `skillInstruction`.
  */
 describe('skill registry to runtime wiring', () => {

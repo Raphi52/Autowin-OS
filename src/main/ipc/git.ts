@@ -44,8 +44,8 @@ export function registerGitIpc({ os, pickDirectory }: GitIpcDeps): void {
   })
   /*
     La SEULE branche courante, pour le badge du chat qui la relit toutes les 5 s. Sans processus :
-    `git:read` en créait deux par lecture sur le fil principal (9 gels de 3,3 à 9,8 s, heal
-    conv-1013). Lecture seule.
+    `git:read` en créait deux par lecture sur le fil principal (9 gels de 3,3 à 9,8 s, heal).
+    Lecture seule.
   */
   ipcMain.handle('git:branch', (event, cwd?: string) => {
     assertTrustedRendererSender(event, 'GitBranch')

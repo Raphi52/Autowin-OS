@@ -138,7 +138,7 @@ describe('etatDeCloture — cablage du gate (INC-3, pas la fonction pure)', () =
 })
 
 /**
- * REGRESSION VECUE le 2026-08-18, en production, sur conv-1304.
+ * REGRESSION VECUE le 2026-08-18, en production.
  *
  * Le garde a bloque un run qui avait POURTANT modifie et committe la cible nommee. Cause : la preuve
  * d'execution portait `path: "0"` — une valeur degeneree, pas un chemin. `attributedPaths` la rend

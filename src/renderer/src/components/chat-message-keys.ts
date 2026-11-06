@@ -12,7 +12,7 @@ export function messageKey(message: Msg, index: number): string {
 }
 
 /**
- * Le tour LANCÉ par le message utilisateur `index` tourne-t-il encore ? (conv-178, 2026-10-10)
+ * Le tour LANCÉ par le message utilisateur `index` tourne-t-il encore ? (2026-10-10)
  *
  * Sa réponse est le message agent qui le suit : en cours tant qu'elle n'est pas `done`. Pas encore
  * de réponse : le tour démarre si la conversation est occupée. Suivi d'un AUTRE message de
@@ -27,11 +27,11 @@ export function tourDuMessageEnCours(messages: Msg[], index: number, occupe: boo
 
 /**
  * L'heure où la pensée de la bulle `index` est passée à une bulle SUIVANTE du même tour — `undefined`
- * si personne ne l'a relayée (conv-1547, 2026-11-04).
+ * si personne ne l'a relayée (2026-11-04).
  *
  * Une orientation écrite pendant le tour se pose sous la bulle du tour, et la suite s'écrit dans une
  * bulle neuve du même `turnId`, sous elle (`patchLast`). La première reste « en cours » exprès — les
- * battements d'une orchestration ouverte la visent encore (conv-955) —, donc son chrono du
+ * battements d'une orchestration ouverte la visent encore —, donc son chrono du
  * raisonnement, réglé sur `done` seul, grimpait jusqu'à la fin du tour sans qu'un mot s'y écrive :
  * « le premier bloc de raisonnement a un timer qui continue de grimper alors que plus rien ne
  * s'écrit dans le bloc ». La relève date son début au premier évènement reçu (`debutDuTour`, posé
@@ -79,10 +79,10 @@ function estUneReponseAuBloc(texte: string, decision: AskDecision): boolean {
  * Le message du fil qui REPOND a la question `ask` de ce tour — son texte, `undefined` s'il n'y en a
  * pas encore. Le bloc s'en sert deux fois : il se ferme, et il met en evidence la reponse choisie.
  *
- * VECU le 2026-09-01 (conv-50) : le verrou se fermait sur N'IMPORTE QUEL message utilisateur
+ * VECU le 2026-09-01 : le verrou se fermait sur N'IMPORTE QUEL message utilisateur
  * posterieur — orientation tapee pendant le tour, ou simple remarque hors sujet. La question
  * passait « Répondu » sans reponse, et le clic suivant etait AVALE EN SILENCE.
- * VECU le 2026-10-11 (conv-240, « apres avoir repondu ca doit me highlight celui qui a ete choisi
+ * VECU le 2026-10-11 (« apres avoir repondu ca doit me highlight celui qui a ete choisi
  * par un cadre ») : on ne transmettait qu'un booleen. Remonte a froid (autre conversation,
  * redemarrage), le bloc disait « Répondu » sans montrer QUELLE reponse : seul son etat local le
  * savait, et il ne survit pas au remontage.
@@ -101,7 +101,7 @@ export function askReponseDuFil(messages: Msg[], index: number): string | undefi
     const decision = parseAskDecision(part)
     return decision ? [decision] : []
   })
-  // Les boutons « prompter » d'un bloc html-render (conv-302, bouton-prompt-html.ts) sont une autre
+  // Les boutons « prompter » d'un bloc html-render (bouton-prompt-html.ts) sont une autre
   // forme de la même question : leur libellé envoyé ferme le tour, comme une option `ask`.
   const boutons = parts.flatMap((part) =>
     part.kind === 'text' ? promptsDesBoutons(part.text) : []
@@ -119,8 +119,8 @@ export function askReponseDuFil(messages: Msg[], index: number): string | undefi
 
 /**
  * Ce message utilisateur REPOND-il ? Une orientation écrite pendant le tour, non : elle précise,
- * elle ne choisit pas. Depuis conv-38 (2026-09-01) ces orientations sont de vrais messages du fil,
- * et les compter comme des réponses fermait les questions encore ouvertes (conv-50).
+ * elle ne choisit pas. Depuis le 2026-09-01 ces orientations sont de vrais messages du fil,
+ * et les compter comme des réponses fermait les questions encore ouvertes.
  */
 function estUneReponse(message: Msg): boolean {
   return message.role === 'user' && (message as { orientation?: boolean }).orientation !== true

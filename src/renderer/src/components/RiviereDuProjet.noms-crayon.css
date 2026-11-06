@@ -1,9 +1,9 @@
 /*
- * LES NOMS DU BOARD AU CRAYON (conv-1132, 2026-10-23 : « met les noms en mode doodle / sketch, ça
+ * LES NOMS DU BOARD AU CRAYON (2026-10-23 : « met les noms en mode doodle / sketch, ça
  * les barre quand ils sont désélectionnés »). Même feutre que les post-it, un contour tremblé et
  * penché comme tracé à la main ; un nom écarté par le choix d'une autre personne est rayé d'un
  * trait de crayon (`data-barre`, posé par RiviereDuProjet.tsx).
- * Feuille à part : RiviereDuProjet.css était réservé par un autre fil (conv-1130) au moment de
+ * Feuille à part : RiviereDuProjet.css était réservé par un autre fil au moment de
  * l'écrire. Le trait est un MASQUE (seule sa forme compte) peint dans la couleur du texte : il suit
  * le thème au lieu d'une couleur écrite en dur.
  */

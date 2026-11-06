@@ -7,7 +7,7 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * conv-826 (2026-09-26) : ∞ allumé, la suite « quand …/fin.txt existe, compare… » attendait son
+ * 2026-09-26 : ∞ allumé, la suite « quand …/fin.txt existe, compare… » attendait son
  * fichier. L'app a redémarré (10:48, 10:59, 11:10, 11:35, 13:38, 14:13) ; la surveillance, un minuteur
  * de l'écran, est morte, et ∞ — relu du stockage — restait affiché allumé. fin.txt est apparu à
  * 12:38:36, rien n'est parti avant 15:57. Ici : on MONTE l'écran avec ∞ déjà armé dans le stockage,

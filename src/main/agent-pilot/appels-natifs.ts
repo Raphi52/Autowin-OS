@@ -1,6 +1,6 @@
 // Outils directs du modèle (`chat-mcp.ts`) pendant un tour de chat, et la comptabilité commune à
 // toute commande exécutée — texte `<cmd>` comme appel direct. Sortis tels quels de
-// AgentPilot.chat() (conv-1580, lot 3) : ils lisent et écrivent l'état du tour qu'on leur passe
+// AgentPilot.chat() (lot 3) : ils lisent et écrivent l'état du tour qu'on leur passe
 // (`etat-du-tour.ts`) au lieu de capturer ses `let`.
 import { cleAppelNatif } from '../chat/chat-mcp'
 import {
@@ -168,7 +168,7 @@ export function appelsNatifsDuTour(entree: {
       ...(echecRattrape ? { retryOf: echecRattrape } : {}),
       ...(r.attachments?.length ? { attachments: r.attachments } : {})
     })
-    // `montrer_bloc` (conv-1306) : le bloc lu dans un fichier entre dans la réponse du fil, sur
+    // `montrer_bloc` : le bloc lu dans un fichier entre dans la réponse du fil, sur
     // son propre flux, sans repasser par le modèle IA.
     for (const [index, bloc] of (r.blocs ?? []).entries())
       emit({

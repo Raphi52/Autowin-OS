@@ -16,7 +16,7 @@ describe('une finalisation non fusionnée ne peut pas rester muette', () => {
     )
   })
 
-  // LE CAS VÉCU (conv-1, run « reprend-pardon-mthg437j », 2,13 $) : une issue SANS `reason`.
+  // LE CAS VÉCU (run « reprend-pardon-mthg437j », 2,13 $) : une issue SANS `reason`.
   it('sans reason, nomme l’issue OBSERVÉE et avoue que la cause manque', () => {
     const raison = raisonDeBlocageIntegration({ outcome: 'kept', files: ['src/a.ts'] })
     expect(raison).toContain('kept')

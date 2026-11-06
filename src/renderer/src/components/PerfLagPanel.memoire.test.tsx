@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { PerfLagPanel } from './PerfLagPanel'
 
 /**
- * conv-1077 (2026-10-22) : trois `electron.exe` pesaient ~872, 433 et 307 Mo et l'app ne disait
+ * 2026-10-22 : trois `electron.exe` pesaient ~872, 433 et 307 Mo et l'app ne disait
  * pas lequel est quoi. Le relevé (`releve-memoire.ts`) doit être LU dans l'onglet Latence.
  * fix-ok: rouge mesuré 2026-10-22 — aucune section « perf-memoire » ; relevé lu dans `gels.memoire` car un canal à part portait à 236 le compte de security-critical-fixes.test.ts.
  */

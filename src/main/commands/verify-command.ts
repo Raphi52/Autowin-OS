@@ -63,7 +63,7 @@ export const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
 /**
  * PLAFOND de la verification — le temps au bout duquel on ARRETE la suite et on le DIT.
  *
- * DEFAUT VECU le 22/08 (conv-1363) : chaque `edit_file` rejoue toute la suite unitaire dans un
+ * DEFAUT VECU le 22/08 : chaque `edit_file` rejoue toute la suite unitaire dans un
  * bureau isole (`withIsolatedMutation`), et ce `spawn` n'avait AUCUNE horloge. La suite a tourne
  * 6 min 40 ; pendant ce temps le pilote etait bloque DANS la commande, donc il ne drainait plus
  * ses directives, le bloc `ask` restait affiche et le chat semblait mort — sans qu'aucune borne
@@ -84,7 +84,7 @@ export function verifyTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
  * interrompue n'a rien prouve, et un `exitCode: null` seul se lirait comme une panne de lancement.
  *
  * `partiel` = ce que la suite avait DEJA ecrit avant la coupure, et il revient avec le verdict.
- * DEFAUT VECU le 2026-08-25 (conv-1400) : la sortie collectee etait jetee et REMPLACEE par le seul
+ * DEFAUT VECU le 2026-08-25 : la sortie collectee etait jetee et REMPLACEE par le seul
  * message de plafond. Apres dix minutes d'attente, l'utilisateur recevait « rien n'est prouve » et
  * pas une ligne de plus — impossible de distinguer une suite trop LENTE d'une suite BLOQUEE sur un
  * test qui ne rend jamais la main, ni de voir les rouges deja tombes. Le plafond doit borner
@@ -96,7 +96,7 @@ export function verifyTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
 /**
  * LE MARQUEUR D'UN ARRET AU PLAFOND, place a cote du texte qui le produit.
  *
- * `natureDeLEchec` doit reconnaitre un plafond pour ne pas le classer « tests » (conv-1410). Il ne
+ * `natureDeLEchec` doit reconnaitre un plafond pour ne pas le classer « tests ». Il ne
  * peut le faire qu'en lisant la sortie -- donc en dependant de cette phrase. La declarer ICI, sous
  * les yeux de qui edite le message, est la seule facon d'empecher les deux de deriver en silence ;
  * un test de derive verifie que le marqueur reconnait bien la sortie reelle de cette fonction.
@@ -112,8 +112,8 @@ export function verifyTimeoutOutcome(
    * UN PLAFOND DOIT DIRE QUOI FAIRE.
    *
    * « rien n'est prouve » est exact mais sterile : l'agent relance la MEME commande et reperd le
-   * meme temps. Mesure du 2026-08-25 : trois occurrences en une journee (conv-1400, conv-1404,
-   * conv-1405), la meme commande relancee a chaque fois. Un message qui ne nomme aucune issue
+   * meme temps. Mesure du 2026-08-25 : trois occurrences en une journee,
+   * la meme commande relancee a chaque fois. Un message qui ne nomme aucune issue
    * fabrique la boucle qu'il constate.
    */
   const plafond =
@@ -136,7 +136,7 @@ export function verifyTimeoutOutcome(
 /**
  * VERIFICATION DE PORTEE — ce que l'edition a REELLEMENT pu casser, et rien d'autre.
  *
- * DEFAUT VECU le 22/08 (conv-1363). `edit_file` conditionnait sa publication a un verdict GLOBAL :
+ * DEFAUT VECU le 22/08. `edit_file` conditionnait sa publication a un verdict GLOBAL :
  * la suite entiere devait sortir a 0. Or ce verdict repond « le depot est-il vert ? », jamais
  * « cette edition a-t-elle casse quelque chose ? ». Les deux questions coincident tant que la base
  * est verte, et divergent totalement des qu'elle ne l'est plus : une edition SAINE de
@@ -370,7 +370,7 @@ export function porteeDerivableDesChangements(
  * 2026-09-03, dans ce depot : `vitest related src/renderer/src/components/ChatView.css --run` rend
  * 89 fichiers / 401 tests en 38 s, la ou la suite entiere depasse le plafond de 600 s. Le cibler
  * MARCHE donc, et c'est ce qui manquait : l'edition d'une couleur rejouait tout, atteignait le
- * plafond, et se faisait refuser sans qu'aucun verdict n'existe (conv-21).
+ * plafond, et se faisait refuser sans qu'aucun verdict n'existe.
  */
 const EXTENSIONS_DE_STYLE = /[.](?:css|scss|sass|less)$/
 
@@ -481,7 +481,7 @@ export async function porteeDUneEdition(
 /**
  * LA PORTEE D'UNE PUBLICATION — ce que le commit automatique du chat rejoue AVANT de pousser.
  *
- * Mesure du 2026-10-01 : le commit automatique `b6d2a3fc` (conv-892) a poussé une modification de
+ * Mesure du 2026-10-01 : le commit automatique `b6d2a3fc` a poussé une modification de
  * `src/main/index.ts` sans rejouer aucun test, et `chat-ipc-contract.test.ts` est resté rouge sur
  * main pendant 20 h. Ce test LIT `index.ts` au lieu de l'importer : la portée de `porteeDUneEdition`
  * (graphe d'imports pour du code) ne l'aurait pas rejoué — c'est `VERIFY_RELATED_ANGLE_MORT`. Avant de
@@ -599,7 +599,7 @@ export function capVerifyOutput(
   /*
    * DEPOUILLER A L'ENTREE, une fois pour toutes.
    *
-   * DEFAUT VECU le 2026-08-25 (conv-1404) : le panneau de `verify` affichait des lignes entieres de
+   * DEFAUT VECU le 2026-08-25 : le panneau de `verify` affichait des lignes entieres de
    * codes de couleur. `sansCouleur` existait — mais elle ne servait qu'a TESTER la ligne contre le
    * motif de verdict : la ligne RETENUE gardait ses couleurs, et la queue aussi. Depouiller ici, au
    * seul entonnoir de ce qui est rendu, rend le geste inratable ; et le plafond se mesure enfin sur
@@ -639,7 +639,7 @@ const PORTEE_FICHIERS_NOMMES = 5
  * cet écart n'est pas théorique — il contient les correctifs en vol des autres, ET leurs
  * suppressions, qui masquent un rouge en empêchant un test de s'exécuter.
  *
- * Mesuré le 2026-08-22 (conv-1371) : « exit 0, 713 fichiers / 7754 tests » a été rendu, puis lu
+ * Mesuré le 2026-08-22 : « exit 0, 713 fichiers / 7754 tests » a été rendu, puis lu
  * comme « base unitaire prouvée verte, prête pour la fusion » — alors que `origin/main` portait
  * 3 tests rouges au même instant. `verify` ne peut pas empêcher cette conclusion, mais il peut
  * cesser de la laisser paraître fondée.
@@ -730,7 +730,7 @@ export function cibleDeVerification(
     return { ok: false, raison: `la cible n’existe pas : ${normalise}` }
   }
   /*
-   * UNE SOURCE EST ROUTEE, PAS REFUSEE -- corrige le 2026-08-25 apres conv-1404.
+   * UNE SOURCE EST ROUTEE, PAS REFUSEE -- corrige le 2026-08-25.
    *
    * Ce point refusait tout ce qui n'etait pas un fichier de test. Or un agent qui vient d'editer
    * `chat-pilotage-prompt.ts` demande naturellement a verifier CE fichier : le refus le laissait sans
@@ -755,7 +755,7 @@ export const libelleDuVerifyCible = (commande: string, chemin: string): string =
   `${commande} -- ${chemin}`
 
 /**
- * CE QUE `verify` ÉCRIRAIT POUR CE FICHIER, sans rien lancer (conv-1423, 2026-11-01). `null` s'il le
+ * CE QUE `verify` ÉCRIRAIT POUR CE FICHIER, sans rien lancer (2026-11-01). `null` s'il le
  * refuse, ou s'il ne le jouerait pas directement : une source part en `vitest related`, qu'aucune
  * règle ne sait lire. Mêmes étapes que `runVerifyAt`, pour que la relance de preuve ne puisse pas
  * promettre un `verify` différent de celui qui partira.
@@ -899,7 +899,7 @@ export function lectureBruteDuRapport(
 /**
  * LA PORTÉE EN LOTS QUI TIENNENT DANS UNE LIGNE DE COMMANDE.
  *
- * Mesuré le 2026-10-01 (conv-770, tour 532299a4) : 194 tests citaient les fichiers du tour, la
+ * Mesuré le 2026-10-01 (tour 532299a4) : 194 tests citaient les fichiers du tour, la
  * commande `vitest related …` faisait 9 121 caractères. Sous Windows elle passe par `cmd.exe /c`,
  * dont la limite est 8 191 : « La ligne de commande est trop longue », exit 1, aucun rapport, et la
  * publication était bloquée comme si les tests étaient rouges. Chaque chemin compte sa longueur plus
@@ -1064,7 +1064,7 @@ export function echecsDuRapport(
     let echecsDeCetteSuite = 0
     /*
      * Les chemins de `describe` qui contiennent un test rouge. VITEST LES COMPTE COMME DES SUITES
-     * (conv-1001, 2026-10-16) : `numFailedTestSuites` = `getSuites(files)` en etat `fail`, soit le
+     * (2026-10-16) : `numFailedTestSuites` = `getSuites(files)` en etat `fail`, soit le
      * fichier PLUS chaque bloc dont un descendant echoue (sonde vitest 3.2.7 : un rouge dans un bloc
      * = 2 suites ; rouges dans `a`, `a > b` et hors bloc = 3). Ne compter que le fichier rendait tout
      * rapport « incoherent » des qu'un rouge vivait dans un `describe`.
@@ -1220,7 +1220,7 @@ export function verdictDifferentiel(
   /*
    * UN ROUGE SANS AUCUN TEST EN ECHEC N'ACCUSE PAS L'EDITION — il accuse la MACHINE.
    *
-   * MESURE le 2026-09-04 (conv-233) : 676 tests passes, ZERO echec, edition refusee quand meme.
+   * MESURE le 2026-09-04 : 676 tests passes, ZERO echec, edition refusee quand meme.
    * La cause du rouge etait « Worker terminated due to reaching memory limit » — trois processus
    * de test tues par la memoire. Refuser la publication accusait l'auteur d'une regression
    * inexistante, et aucun rejeu ne pouvait la lever : la cause est HORS des tests.

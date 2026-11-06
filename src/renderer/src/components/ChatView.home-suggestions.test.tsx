@@ -27,7 +27,7 @@ describe('ChatView — la home propose l’état réel, plus quatre phrases fig�
     vi.restoreAllMocks()
   })
 
-  // La phrase est écrite lettre à lettre (conv-1401) : son texte complet se lit sur `aria-label`.
+  // La phrase est écrite lettre à lettre : son texte complet se lit sur `aria-label`.
   const phraseDuMoment = (conteneur: Element): string | null | undefined =>
     conteneur.querySelector('.aa-phrase')?.getAttribute('aria-label')
 

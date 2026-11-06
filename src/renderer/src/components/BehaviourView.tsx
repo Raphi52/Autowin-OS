@@ -68,7 +68,7 @@ interface LearningCurationEvent {
 /**
  * Titre de l'inventaire : ne compte que les FICHIERS réellement chargés, une fois chacun.
  *
- * conv-984 (2026-10-16) : il comptait les LIGNES, chargées ou non. Or un même fichier y figure sous
+ * 2026-10-16 : il comptait les LIGNES, chargées ou non. Or un même fichier y figure sous
  * plusieurs moteurs (AGENTS.md vu par Codex, inactif car `project_doc_max_bytes=0`, ET replié par
  * Autowin ; un CLAUDE.md seul, vu par Claude et par Autowin) : « réellement lues · 3 » pour un seul
  * fichier chargé. On compte donc les CHEMINS distincts dont au moins une ligne est active, et on dit
@@ -135,7 +135,7 @@ function Category({
 }
 
 export function BehaviourView(): React.JSX.Element {
-  // Textes dans la langue de Settings · Interface (conv-1170). Restent tels quels : les noms propres
+  // Textes dans la langue de Settings · Interface. Restent tels quels : les noms propres
   // (Behaviour, Cockpit, Direct, System prompt), les modes lus du moteur (auto, inbox, shadow) et
   // tout ce que rend `behaviourComposition` (libellés, valeurs et citations des champs).
   const { t } = useTextesSettings()

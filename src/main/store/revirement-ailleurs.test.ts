@@ -71,7 +71,7 @@ describe('un revirement hors du message porteur', () => {
 })
 
 /**
- * DEFAUT VECU conv-706 (2026-09-18) : la REPONSE annexee a la question portait un connecteur
+ * DEFAUT VECU (2026-09-18) : la REPONSE annexee a la question portait un connecteur
  * (« mais »), et la recherche de revirement repartait juste apres la QUESTION -- donc sur cette
  * meme reponse. Elle sortait deux fois, la seconde sous « [la suite revient sur ce qui precede] ».
  */

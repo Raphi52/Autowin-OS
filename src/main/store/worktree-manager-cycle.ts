@@ -1,5 +1,5 @@
 // Acquisition, description et validation des copies : méthodes de WorktreeManager déplacées telles quelles depuis worktree-manager.ts
-// (conv-1508, lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
+// (lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
 // par attacherMethodes dans worktree-manager.ts, donc les appels `this.x(...)` restent identiques.
 import { causeGit } from './cause-git'
 import { estCoquilleVide } from './coquilles-vides'
@@ -82,14 +82,14 @@ export function cleanupWorktree(
 }
 
 /**
- * LE MEME RETRAIT, SANS TENIR LA BOUCLE PENDANT `git worktree remove` — heal conv-204.
+ * LE MEME RETRAIT, SANS TENIR LA BOUCLE PENDANT `git worktree remove` — heal.
  *
  * Mesure du 2026-10-10 (`gels.jsonl`, 10:07) : le premier balayage horaire a retire trois copies
  * par la forme synchrone — 1 747, 1 444 et 4 253 ms de fenetre figee. Seul l'appel a git change
  * de forme : la preparation et la conclusion (coquille, historique CLI, escalade) sont PARTAGEES,
  * donc aucune protection du retrait ne peut diverger entre les deux chemins.
  *
- * heal conv-1115 : l'escalade disque (git en echec, `force`) changeait elle aussi de forme sans le
+ * heal : l'escalade disque (git en echec, `force`) changeait elle aussi de forme sans le
  * dire — elle restait synchrone. Elle est tentee ici en asynchrone, puis remise a la conclusion
  * partagee, qui ne la refait pas.
  */
@@ -248,7 +248,7 @@ export function acquire(
 /**
  * UN BUREAU RETROUVÉ NE DOIT PAS RESTER SUR UNE BASE PÉRIMÉE.
  *
- * DÉFAUT MESURÉ (conv-1516, 2026-08-29) : la clé de bureau d'`edit_file` est STABLE par tâche
+ * DÉFAUT MESURÉ (2026-08-29) : la clé de bureau d'`edit_file` est STABLE par tâche
  * (`cleDeBureau`). À la tentative suivante, ce point retrouvait le DOSSIER de la tentative
  * précédente et le rendait tel quel — sans jamais comparer sa tête à la révision demandée. Le
  * bureau restait accroché à une base vieille de plusieurs jours pendant que `read_file` lisait la
@@ -581,7 +581,7 @@ export function baseDirtyFiles(this: WorktreeManager): string[] {
  *
  * Mesuré le 2026-10-21 à 20:14 (`gels.jsonl`) : UN `git status` synchrone de la base a figé la
  * fenêtre 60,1 s (`baseDirtyFiles`, appelé depuis `repecherLesTravauxEnAttente`, minuterie de
- * 5 min). Le travail n'a rien d'illégitime ; c'est sa forme synchrone qui gèle l'app (conv-1055).
+ * 5 min). Le travail n'a rien d'illégitime ; c'est sa forme synchrone qui gèle l'app.
  *
  * Contrat différent sur un point, à dessein : une base ILLISIBLE rend `undefined`, pas une liste
  * vide. « Rien de sale » et « je n'ai pas pu lire » ne mènent pas à la même décision : le premier
@@ -617,7 +617,7 @@ export function changedFiles(this: WorktreeManager, agentId: string): string[] {
  * deja commites au-dela de la base — le meme `HEAD...<copie>` que lit `finalizeSansSecours` pour
  * decider `base-dirty`.
  *
- * `changedFiles` ne lit que `git status`. Vecu le 2026-10-22 (conv-1074, run-bc699a65bae7-1) :
+ * `changedFiles` ne lit que `git status`. Vecu le 2026-10-22 (run-bc699a65bae7-1) :
  * l'agent avait commite ses 35 fichiers DANS sa copie, `git status` y etait vide, et
  * l'orchestrateur, qui exige une copie vide pour accepter une livraison par Git externe, a declare
  * integre un run dont la fusion venait d'etre refusee. La cause `base-dirty` n'a jamais atteint le

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * BLOC ÉTAPES — la liste de tâches de claude.exe dans le fil (conv-304, 2026-10-17 : « un bloc
+ * BLOC ÉTAPES — la liste de tâches de claude.exe dans le fil (2026-10-17 : « un bloc
  * avec les étapes de la task et leur progression, ils ont mis ça dans claude.exe »).
  *
  * Le journal mêle, comme en vrai, les lignes d'étapes écrites par `claude-etapes.ts` (flux réel du
@@ -109,7 +109,7 @@ describe('bloc Étapes', () => {
   })
 
   /*
-   * RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (conv-326, 2026-10-18, /draft en trois tours, choix
+   * RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (2026-10-18, /draft en trois tours, choix
    * « Implémenter la 5 · Pied au temps ») : la case et la barre de dix blocs par étape laissent la
    * place à une pastille numérotée posée sur un rail, et à un pied dont chaque segment a la largeur
    * du temps MESURÉ de son étape.
@@ -246,7 +246,7 @@ describe('bloc Étapes', () => {
   })
 
   /*
-   * LE TEMPS DE L'ÉTAPE EN COURS AVANCE (conv-313, 2026-10-17 : « le timer est fix dans ce bloc »,
+   * LE TEMPS DE L'ÉTAPE EN COURS AVANCE (2026-10-17 : « le timer est fix dans ce bloc »,
    * capture : « Lire le vrai code… · 1 action · 59 s » immobile sous une étape rose qui défile). La
    * durée n'était que la SOMME des durées d'outils : elle ne bougeait qu'à la fin d'un outil (ou au
    * battement de 30 s d'un outil long), et jamais pendant que le modèle réfléchit entre deux outils.

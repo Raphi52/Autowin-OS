@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { remplacerContenuJoint } from './pieces-jointes-journal'
 
-const image = 'iVBORw0KGgo'.repeat(400_000) // ~4,4 Mo, comme une capture de conv-331
+const image = 'iVBORw0KGgo'.repeat(400_000) // ~4,4 Mo, comme une capture
 
 describe('remplacerContenuJoint', () => {
   it('retire le base64 d une image jointe (rejeu conv-331)', () => {

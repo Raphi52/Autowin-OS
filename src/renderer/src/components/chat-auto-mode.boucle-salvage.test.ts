@@ -4,7 +4,7 @@ import { deciderRelanceAuto, texteDerniereDemande } from './chat-auto-mode'
 import { PROMPT_SALVAGE } from '../../../shared/prompt-suivant'
 
 /*
- * LA BOUCLE SANS FIN DU 2026-09-04 (conv-288), cote MODE AUTO — le bord le plus couteux.
+ * LA BOUCLE SANS FIN DU 2026-09-04, cote MODE AUTO — le bord le plus couteux.
  *
  * L'utilisateur (ou le mode auto) envoie l'ordre de tri. Le tri est fait de bout en bout, la seule
  * suite qui reste est de publier, et ce prompt de publication etait REECRIT en `/salvage`. Le mode
@@ -45,7 +45,7 @@ describe('mode auto — le tri deja joue ne se rejoue pas', () => {
   })
 
   /*
-   * REVISION DU 2026-09-10 (conv-410). Avant, ce cas renvoyait `/salvage` : l'utilisateur demandait
+   * REVISION DU 2026-09-10. Avant, ce cas renvoyait `/salvage` : l'utilisateur demandait
    * une correction, l'agent inventait une publication, et le mode auto lancait un tri que personne
    * n'avait demande (« j'ai pas de git arrete de me casser les couilles pour publier »). Une
    * publication que la demande du tour n'evoque nulle part ne produit plus AUCUNE suite.

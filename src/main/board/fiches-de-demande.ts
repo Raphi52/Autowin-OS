@@ -1,5 +1,5 @@
 /**
- * LES RUN.md LÉGERS — une fiche par nouvelle demande (conv-1418, 2026-11-01).
+ * LES RUN.md LÉGERS — une fiche par nouvelle demande (2026-11-01).
  *
  * Demande : « fais écrire par l'app un RUN.md léger à chaque nouvelle demande, à la fin du tour et
  * sans appel au modèle, avec les suites ajoutées au même fichier ». Mesuré le même jour : 33 fils
@@ -22,7 +22,7 @@
  *
  * UNE BRANCHE DU FIL (« façon 1/3 », « revenir à ce tour ») recopie ses demandes sous des identifiants
  * neufs, et aucun tour ne finit dessus dans la branche : sans `rattacherLaBranche`, elles restaient
- * sans fiche (les 3 seuls « sans fiche » de `ecarts.json`, conv-1425 à 1427 — conv-1441). Une ligne
+ * sans fiche (les 3 seuls « sans fiche » de `ecarts.json`, à 1427). Une ligne
  * `copie` les fait pointer sur la fiche d'origine, sans rien écrire dans son RUN.md.
  */
 import { appendFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
@@ -64,7 +64,7 @@ interface RetraitDuFil {
   retraitDuFil: string
   /**
    * Les fiches du fil retiré qu'un AUTRE fil a nourries (une suite, une copie de branche) : elles
-   * restent sur le disque, avec les lignes de cet autre fil (conv-1578). Absent sur les retraits
+   * restent sur le disque, avec les lignes de cet autre fil. Absent sur les retraits
    * écrits avant : leurs fiches sont parties du disque, leurs lignes partent donc aussi.
    */
   fichesGardees?: string[]
@@ -100,7 +100,7 @@ function appliquer(index: IndexDesFiches, ligne: LigneDeFiche | RetraitDuFil): v
     return
   }
   index.parMessage.set(cleDuJournal(ligne.conversationId, ligne.messageId), ligne)
-  // Une copie rattachée APRÈS coup (branche née avant conv-1441) ne détourne pas la suite d'une
+  // Une copie rattachée APRÈS coup (branche née) ne détourne pas la suite d'une
   // branche qui a déjà sa propre fiche ; tant qu'elle n'en a pas, la dernière copie l'emporte.
   if (ligne.role === 'copie') {
     const fil = ligne.conversationId
@@ -166,8 +166,8 @@ export type BranchePourLaFiche = ConversationPourLaCarte & {
  * chaque paire a donc le même rôle et la même heure, et chaque DEMANDE le même texte. Au moindre écart
  * (fil réécrit depuis), rien n'est apparié : une demande sans fiche vaut mieux qu'une fiche fausse.
  *
- * Le texte d'une RÉPONSE n'est pas comparé (conv-1578) : une branche née pendant que la source
- * répondait encore garde la réponse coupée, que la source finit ensuite (conv-1492 à 1494 : 109
+ * Le texte d'une RÉPONSE n'est pas comparé : une branche née pendant que la source
+ * répondait encore garde la réponse coupée, que la source finit ensuite (109
  * caractères de parties contre 4 211). Le rôle et l'heure suffisent à la reconnaître.
  */
 export function messagesRecopies(
@@ -246,7 +246,7 @@ export function ficheMiseAJour(texte: string, etat: StatutDemande, quand: number
 }
 
 /**
- * L'état et le titre d'une fiche, lus sur son RUN.md (conv-1441) : l'état de l'EN-TÊTE seul — un
+ * L'état et le titre d'une fiche, lus sur son RUN.md : l'état de l'EN-TÊTE seul — un
  * texte d'utilisateur qui écrit « status: » plus bas ne compte pas —, le titre = la première ligne
  * non vide sous `## Besoin`.
  */
@@ -277,13 +277,13 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
   lignes: () => Promise<LigneDeFiche[]>
   /**
    * Les fiches qu'un fil a nourries, la plus récente d'abord : les siennes, et celle d'un autre fil
-   * quand il y a rangé une suite (un lot de chantier). Le panneau RUN.md du fil les liste (conv-1441).
+   * quand il y a rangé une suite (un lot de chantier). Le panneau RUN.md du fil les liste.
    */
   fichesDuFil: (conversationId: string) => Promise<FicheDeDemande[]>
-  /** La fiche de chaque demande rangée : le lien des post-it du Board (conv-1441). */
+  /** La fiche de chaque demande rangée : le lien des post-it du Board. */
   fichesDesDemandes: () => Promise<FichesDesDemandes>
   /**
-   * La même chose pour le calcul du Board (conv-1456), sous la clé du journal (`cleDuJournal`) et
+   * La même chose pour le calcul du Board, sous la clé du journal (`cleDuJournal`) et
    * relative à `demandes/` : c'est elle qui fait le post-it. Aucun RUN.md n'est ouvert.
    */
   fichesParDemande: () => Promise<Map<string, string>>
@@ -531,8 +531,8 @@ export function creerFichesDeDemande(deps: { racine: string; maintenant?: () => 
         if (!FIL_LISIBLE.test(conversationId)) return
         const index = await chargerIndex()
         /*
-         * Une fiche que d'autres fils ont nourrie porte AUSSI leur histoire : elle reste (conv-1578,
-         * 21 demandes de conv-1484 et conv-1519 perdues avec conv-1471 et conv-1518). Seul ce que
+         * Une fiche que d'autres fils ont nourrie porte AUSSI leur histoire : elle reste (
+         * 21 demandes perdues avec). Seul ce que
          * le fil retiré était le seul à nourrir part avec lui.
          */
         const gardees = [

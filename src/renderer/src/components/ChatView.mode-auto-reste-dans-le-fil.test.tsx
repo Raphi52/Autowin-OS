@@ -14,18 +14,18 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * DEFAUT MESURE — conv-19 -> conv-23, 2026-09-27 13:10:21.853 (journal d'activite de conv-19).
+ * DEFAUT MESURE, 2026-09-27 13:10:21.853 (journal d'activite).
  *
- * Le mode auto a envoye la suite proposee par l'agent de conv-19 (« Crée une démo pour les agences
+ * Le mode auto a envoye la suite proposee par l'agent (« Crée une démo pour les agences
  * immobilières… », ancree sur la tache initiale DE CE FIL). Le routeur de conversations l'a jugee
- * « new-topic » a 0,92 et l'a partie dans un fil NEUF, conv-23 :
+ * « new-topic » a 0,92 et l'a partie dans un fil NEUF, :
  *  - sans dossier de travail (le fil cree ne recoit que titre + fournisseur) : le tour de 3,26 $
  *    a tourne dans D:\Autowin, avec le contexte d'Autowin au lieu de celui du projet ;
- *  - sans mode auto (l'interrupteur est arme PAR fil ; conv-23 n'etait pas dans la liste) : la
- *    chaine s'est arretee la, et conv-19 n'a plus rien recu.
+ *  - sans mode auto (l'interrupteur est arme PAR fil ; Un fil n'etait pas dans la liste) : la
+ *    chaine s'est arretee la, et un fil n'a plus rien recu.
  * Une suite du mode auto est, par construction, l'etape suivante de CE fil : elle ne se re-route pas.
  *
- * Le tri de sujet a depuis ete RETIRE pour tous les messages (2026-10-17, conv-305 : « enleve le
+ * Le tri de sujet a depuis ete RETIRE pour tous les messages (2026-10-17, « enleve le
  * mecanisme qui redirige vers une autre conv quand on change de sujet c invasif je sais gerer »).
  * Ces temoins verifient donc qu'aucun envoi, auto ou tape, ne quitte le fil ou il est ecrit.
  */
@@ -73,13 +73,13 @@ describe('ChatView — la suite du mode auto reste dans son fil', () => {
   })
 
   /*
-   * DEFAUT MESURE — conv-961 -> conv-968, 2026-10-15 09:58:10-13 (trace du routeur, session
+   * DEFAUT MESURE, 2026-10-15 09:58:10-13 (trace du routeur, session
    * 913f0706 ; messages des deux fils). La suite proposee (« Lance /arena /frame sur une
    * modification de code existant… ») est acceptee par Tab : elle reste en BROUILLON, et le mode
    * auto, arme, patiente (porte « brouillon »). Entree l'envoie A LA MAIN : le routeur la juge
-   * « new-topic » a 0,9 et l'emporte dans un fil neuf, conv-968 (texte nu, sans l'en-tete du mode
-   * auto). conv-961 redevient libre, brouillon vide, dernier tour INCHANGE — et le mode auto, qui
-   * ne retient comme « traite » que ce qu'il a envoye lui-meme, renvoie la MEME suite dans conv-961
+   * « new-topic » a 0,9 et l'emporte dans un fil neuf, (texte nu, sans l'en-tete du mode
+   * auto). Un fil redevient libre, brouillon vide, dernier tour INCHANGE — et le mode auto, qui
+   * ne retient comme « traite » que ce qu'il a envoye lui-meme, renvoie la MEME suite
    * 32 ms plus tard. Deux bancs identiques sont partis sur le meme Bureau.
    *
    * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer de `send` la ligne qui marque le tour du fil

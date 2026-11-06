@@ -5,7 +5,7 @@ import { PROPOSITION_GROW } from '../chat/proposition-grow'
 import { createOrchestrateTurnPersistence } from './orchestrate-turn-persistence'
 
 /**
- * GROW PROPOSÉE SUR L'AUTRE FIN DE RUN (conv-417, objection du juge, 2026-11-02).
+ * GROW PROPOSÉE SUR L'AUTRE FIN DE RUN (objection du juge, 2026-11-02).
  *
  * Un run lancé depuis les tickets (`os:orchestrate`) ou repris après un redémarrage
  * (`relaunch-resumable-run.ts`) ne se clôt PAS par le tour de chat : il se clôt ici, par `succeed`,

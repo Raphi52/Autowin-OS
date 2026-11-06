@@ -50,7 +50,7 @@ describe('la liste des phases acceptees par le modele est DERIVEE, pas recopiee'
     // Lecture en fins de ligne NORMALISEES : l'ancre ci-dessous est une ligne vide, qui s'ecrit
     // sur deux caracteres en CRLF. Sans ca, le decoupage rendait le fichier ENTIER et le test
     // echouait sur du code parfaitement sain (copie Windows).
-    // La déclaration vit dans commands/orchestration-entrees.ts depuis conv-1580 : on lit la famille.
+    // La déclaration vit dans commands/orchestration-entrees.ts : on lit la famille.
     const source = sourceDuBus()
     const declaration = source.slice(source.indexOf('const ORCHESTRATE_PHASES'))
     const corps = declaration.slice(0, declaration.indexOf('\n\n'))

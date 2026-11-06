@@ -1,7 +1,7 @@
 /**
  * ÉTAPES DU TOUR — le format de ligne partagé entre le processus principal qui l'ÉCRIT
  * (`main/providers/claude-etapes.ts`, à chaque appel TaskCreate / TaskUpdate / TaskList du CLI)
- * et le fil qui le RELIT pour dessiner le bloc « Étapes » (demande conv-304, 2026-10-17 : « un bloc
+ * et le fil qui le RELIT pour dessiner le bloc « Étapes » (2026-10-17 : « un bloc
  * avec les étapes de la task et leur progression, ils ont mis ça dans claude.exe »).
  *
  * Une ligne = un CHANGEMENT d'une étape : `Étape #<id> <état> · <sujet>`. Le journal des actions

@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import { positionNuage } from './home-decor-scene'
 
 /**
- * LE DÉFAUT (conv-1476, « le nuage est statique ») : sur la machine de l'utilisateur,
+ * LE DÉFAUT (« le nuage est statique ») : sur la machine de l'utilisateur,
  * `prefers-reduced-motion: reduce` est ACTIF, et le décor recevait alors un temps
  * CONSTANT (`reduceMotion ? 12 : time / 1000`). Le shader du nuage et `positionNuage` sont tous
  * deux fonctions du temps : temps figé = nuage figé. La matière n'était pas en cause.
  *
- * PUIS (conv-1018, 2026-10-19) : le temps n'était plus figé mais RALENTI d'un facteur 0,25 sous la
+ * PUIS (2026-10-19) : le temps n'était plus figé mais RALENTI d'un facteur 0,25 sous la
  * même préférence — « le fond d'écran 3d de l'accueil défile super lentement ». Décision de
  * l'utilisateur : le décor suit l'horloge réelle, quel que soit ce réglage. La vitesse elle-même est
  * prouvée par `DecorDeFond.vitesse.test.tsx`.

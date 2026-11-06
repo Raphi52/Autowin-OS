@@ -5,7 +5,7 @@ import { askReponseDuFil } from './chat-message-keys'
 import type { Msg } from './chat-view-types'
 
 /*
- * Bouton « prompter » d'un bloc html-render (conv-302, 2026-10-17 : « faut un bouton pour prompter
+ * Bouton « prompter » d'un bloc html-render (2026-10-17 : « faut un bouton pour prompter
  * au lieu du bloc ask »). Ce qui part au clic est le libellé VISIBLE du lien — et le fil doit relire
  * EXACTEMENT ce même libellé dans la source pour savoir, après un redémarrage, qu'il est déjà parti.
  */

@@ -82,7 +82,7 @@ import { ComparaisonDesFacons } from './ComparaisonDesFacons'
 import { ChatComposer, type ChatComposerHandle } from './ChatComposer'
 import { PointerMomentVideo, type MomentPointe } from './video-pointage-context'
 // La demande d'autorisation de production s'affiche DANS LE FIL, en bas, juste au-dessus de la zone
-// de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16, conv-626).
+// de saisie — et non plus en fenêtre flottante (demande utilisateur du 2026-09-16).
 import { ProdAutorisationHote } from './ProdAutorisationHote'
 import { TableauDesLots } from './TableauDesLots'
 import { SuperConvDuChat } from './SuperConvMosaique'
@@ -247,15 +247,15 @@ export function ChatView({
   const [convQuery, setConvQuery] = useState('')
   const conversationDateOrder: 'desc' | 'asc' = 'desc'
   const [activeId, setActiveId] = useState<string | null>(null)
-  // VERSION TÉLÉPHONE (conv-1568) : la liste des conversations devient un tiroir par-dessus le fil,
+  // VERSION TÉLÉPHONE : la liste des conversations devient un tiroir par-dessus le fil,
   // ouvert par le bouton ☰ de l'en-tête (affichage-session.css) ; choisir un fil le referme.
   const [listeTelOuverte, setListeTelOuverte] = useState(false)
   const [messages, setMessages] = useState<Msg[]>([])
-  /** Le fil courant pour la carte du fil, dont le clic peut attendre quelques images (conv-1059). */
+  /** Le fil courant pour la carte du fil, dont le clic peut attendre quelques images. */
   const messagesRef = useRef<Msg[]>(messages)
   useTenirRefAJour(messagesRef, messages)
   /**
-   * Le TEXTE en cours de frappe ne vit plus ici : il appartient à `ChatComposer` (conv-1466).
+   * Le TEXTE en cours de frappe ne vit plus ici : il appartient à `ChatComposer`.
    * ChatView ne garde que la carte des brouillons (`composerDraftsRef`, source de vérité) et ce
    * handle, par lequel il RÉIMPOSE une valeur — sans qu'une frappe le re-rende.
    */
@@ -336,7 +336,7 @@ export function ChatView({
    * neuf tournait toujours dans le depot de repli. L'intention est gardee ici, puis posee sur la
    * conversation des sa creation — `dossierDeTravailDuTour` la lit alors des le premier tour.
    *
-   * Un LIBELLE deja memorise ici est ignore (conv-81) : avant la separation, le menu proposait des
+   * Un LIBELLE deja memorise ici est ignore : avant la separation, le menu proposait des
    * categories parmi les dossiers, et en choisir une armait le prochain fil sur un dossier qui
    * n'existe pas. La pastille du haut affichait alors ce libelle comme dossier de travail.
    */
@@ -355,11 +355,11 @@ export function ChatView({
     else window.localStorage.removeItem(CLE_DOSSIER_NOUVEAU_FIL)
   }, [dossierNouveauFil])
   /**
-   * fix-ok: kaizen conv-113 — cause mesuree : `autowin.chat.dossierNouveauFil` n'etait jamais vide
-   * apres usage (journal des conversations : conv-113 recoit ce dossier a sa creation, 08:15:43) ;
+   * fix-ok: kaizen — cause mesuree : `autowin.chat.dossierNouveauFil` n'etait jamais vide
+   * apres usage (journal des conversations : un fil recoit ce dossier a sa creation, 08:15:43) ;
    * ChatView.dossier-nouveau-fil.test.tsx rouge (garde 'D:/Projets/Cible') puis vert.
    * Le dossier arme sert au fil qui NAIT, puis se vide — comme ∞ arme sur un fil neuf. Il n'etait
-   * jamais vide (kaizen conv-113) : `conv-113`, ne d'un lien vers PaperTrading, a recu a sa creation
+   * jamais vide : un fil ne d'un lien vers PaperTrading, a recu a sa creation
    * `D:\Chirurgien\AssistantChirurgien`, arme des semaines plus tot pour un autre fil, et toute la
    * suite du fil a derive vers ce depot.
    */
@@ -368,17 +368,17 @@ export function ChatView({
     setDossierNouveauFil(null)
   }
   /**
-   * MODÈLE ARMÉ SUR UN FIL PAS ENCORE CRÉÉ (conv-239, 2026-10-11 : « rends le modèle propre à
+   * MODÈLE ARMÉ SUR UN FIL PAS ENCORE CRÉÉ (2026-10-11 : « rends le modèle propre à
    * chaque conversation »). Même logique que le dossier armé ci-dessus : l'intention est gardée
    * ici, posée sur la conversation dès sa création, puis vidée. Volontairement en MÉMOIRE seule —
    * pas de localStorage : un choix qui survit des jours et retombe sur un fil sans rapport est
-   * exactement le défaut du dossier armé (kaizen conv-113).
+   * exactement le défaut du dossier armé.
    */
   const [modeleNouveauFil, setModeleNouveauFil] = useState<ModeleDuFil | null>(null)
   const modeleNouveauFilRef = useRef<ModeleDuFil | null>(null)
   useTenirRefAJour(modeleNouveauFilRef, modeleNouveauFil)
   /**
-   * LE COMPTE ARMÉ POUR LE FIL QUI VA NAÎTRE (conv-1416), même chemin que le modèle ci-dessus : un clic
+   * LE COMPTE ARMÉ POUR LE FIL QUI VA NAÎTRE, même chemin que le modèle ci-dessus : un clic
    * sur une puce avant le premier message vaut pour ce fil, qui ne changera pas de compte tout seul.
    */
   const [compteNouveauFil, setCompteNouveauFil] = useState<string | null>(null)
@@ -425,7 +425,7 @@ export function ChatView({
     }
   }
   /**
-   * RELANCES DIFFÉRÉES PROGRAMMÉES, PAR CONVERSATION (conv-826 : « faudrait que le mode auto gère ce
+   * RELANCES DIFFÉRÉES PROGRAMMÉES, PAR CONVERSATION (« faudrait que le mode auto gère ce
    * cas au lieu de s'arrêter »). Le minuteur vit ici, pas dans l'effet du fil affiché : changer de
    * fil ne le tue pas. `differees` = nombre de relances différées d'affilée (borne dans
    * `deciderRelanceAuto`), remis à zéro au premier envoi ordinaire.
@@ -454,17 +454,17 @@ export function ChatView({
    *
    * DÉFAUT VÉCU le 2026-09-02 : « j'étais en mode auto et t'as pas enchaîné le workflow ». Les
    * horaires des journaux de tours le montrent — trois conversations tournaient en parallèle
-   * (conv-131, conv-133, conv-134) et la boucle, tenue par des compteurs UNIQUES, ne pouvait suivre
+   * et la boucle, tenue par des compteurs UNIQUES, ne pouvait suivre
    * que le fil affiché. Un état par conversation est la condition pour enchaîner les autres.
    */
   const autoEtatsRef = useRef(new Map<string, { tour: string | null; prompt: string | null }>())
   /*
-   * GARDE-FOU DE LA CHAÎNE ∞ (conv-38, 2026-10-02) : quota hebdomadaire Claude relevé (cache 60 s
+   * GARDE-FOU DE LA CHAÎNE ∞ (2026-10-02) : quota hebdomadaire Claude relevé (cache 60 s
    * côté main) et tours automatiques d'affilée comptés par fil. La DÉCISION reste dans
    * `deciderRelanceAuto` : ici on ne fait que lui fournir ces deux chiffres et les seuils réglés.
    */
   const quotaHebdoRef = useRef<number | null>(null)
-  /** Faux tant qu'aucun relevé n'a donné le quota : le fil le dit quand ∞ est allumé (cadrage conv-38). */
+  /** Faux tant qu'aucun relevé n'a donné le quota : le fil le dit quand ∞ est allumé. */
   const [quotaHebdoConnu, setQuotaHebdoConnu] = useState(false)
   const toursAutoRef = useRef(lireToursAuto(window.localStorage))
   function gardeChaine(id: string): {
@@ -499,7 +499,7 @@ export function ChatView({
   /**
    * REDEMARRAGE VOULU PAR L'AGENT — ce n'est PAS l'ouverture d'un fil.
    *
-   * Defaut vecu le 2026-09-05 (conv-303) : l'agent appelle `restart_app` au milieu d'une chaine en
+   * Defaut vecu le 2026-09-05 : l'agent appelle `restart_app` au milieu d'une chaine en
    * mode auto. Au retour, le repere « premier passage dans ce fil » vit en memoire seule, donc il
    * est vide : la boucle croit ARRIVER dans la conversation, fige le dernier tour comme deja traite
    * et saute le maillon suivant. L'interrupteur reste allume, mais la chaine s'arrete en silence —
@@ -521,7 +521,7 @@ export function ChatView({
     {}
   )
   /*
-   * REPLI DU BLOC CADRAGE, PAR CONVERSATION (conv-358, 19/10 : « garde l'etat replie [...] pour qu'il
+   * REPLI DU BLOC CADRAGE, PAR CONVERSATION (19/10 : « garde l'etat replie [...] pour qu'il
    * reste ferme quand je change de fil et que je reviens »). La valeur est le run replie : un cadrage
    * d'un AUTRE run arrive ouvert (suppositions neuves), meme si la fin du precedent s'est perdue.
    * La fin du run efface l'entree avec les suppositions.
@@ -591,9 +591,9 @@ export function ChatView({
   const [attachmentError, setAttachmentError] = useState<string | null>(null)
   const [appNotice, setAppNotice] = useState<AppNotice | null>(null)
   /**
-   * ARRÊTS DU MODE AUTO, FIL PAR FIL (conv-891, 2026-09-30). Ils passaient par `appNotice`, un
-   * emplacement UNIQUE pour tout l'écran : la pause levée par conv-885 le 29/09 à 10:47 s'affichait
-   * encore 26 h plus tard au-dessus de conv-890, qui n'attendait rien, sans dire d'où elle venait.
+   * ARRÊTS DU MODE AUTO, FIL PAR FIL (2026-09-30). Ils passaient par `appNotice`, un
+   * emplacement UNIQUE pour tout l'écran : la pause levée le 29/09 à 10:47 s'affichait
+   * encore 26 h plus tard au-dessus, qui n'attendait rien, sans dire d'où elle venait.
    * Clé = id de la conversation qui l'a levée ; effacée par ×, par un message de l'utilisateur dans
    * ce fil, ou par le rallumage du mode auto sur ce fil.
    */
@@ -661,7 +661,7 @@ export function ChatView({
   const [dragActive, setDragActive] = useState(false)
 
   /**
-   * CTRL+F DANS LA CONVERSATION (conv-21).
+   * CTRL+F DANS LA CONVERSATION.
    *
    * On intercepte le raccourci du navigateur : sa recherche native n'existe pas dans une fenêtre
    * Electron sans chrome, et l'utilisateur n'avait donc AUCUN moyen de retrouver un mot dans un
@@ -747,7 +747,7 @@ export function ChatView({
     dont le badge ne parlait pas : l'ecran ne « se positionnait » jamais dessus. Meme cwd des deux
     cotes, sinon le badge ment.
 
-    Meme regle pour un fil NEUF (conv-354, 2026-10-19 : « je suis oblige d'ecrire un premier
+    Meme regle pour un fil NEUF (2026-10-19 : « je suis oblige d'ecrire un premier
     message avant que ca affiche la branche ») : sans conversation ouverte, le dossier est celui
     ARME sur la pastille. Le badge l'ignorait et lisait le depot par defaut — il annoncait, listait
     et basculait les branches d'un autre depot jusqu'a la creation du fil. Une seule source pour la
@@ -759,7 +759,7 @@ export function ChatView({
     : (dossierNouveauFil ?? undefined)
   const gitCwd = dossierProjetAffiche || defaultWorkspace || undefined
   // `getGitBranch`, pas `getGitState` : ce dernier creait 2 processus git sur le fil principal a
-  // chaque relecture (toutes les 5 s) — 9 gels de 3,3 a 9,8 s (heal conv-1013).
+  // chaque relecture (toutes les 5 s) — 9 gels de 3,3 a 9,8 s.
   const lireEtatGit = useCallback(
     () => Promise.resolve(window.api.getGitBranch?.(gitCwd)),
     [gitCwd]
@@ -811,7 +811,7 @@ export function ChatView({
      * `categorie` = le classement de la barre laterale (un libelle libre). `dossier` = le
      * repertoire de travail de l'agent (un vrai chemin). Les deux tenaient dans une seule liste :
      * on choisissait sa categorie sous une pile de chemins de depots qui n'avaient rien a y faire
-     * (conv-79, 2026-09-17). Le choix se fait donc a l'etape D'AVANT — l'entree cliquee dans le
+     * (2026-09-17). Le choix se fait donc a l'etape D'AVANT — l'entree cliquee dans le
      * menu de la conversation dit lequel des deux on veut — et ce menu-ci n'en montre qu'un.
      */
     mode: 'categorie' | 'dossier'
@@ -905,7 +905,7 @@ export function ChatView({
     reasoningEffort?: string
   } | null>(null)
   /**
-   * LE MODÈLE DU FIL AFFICHÉ (conv-239) : son choix propre, sinon le modèle armé pour un fil neuf,
+   * LE MODÈLE DU FIL AFFICHÉ : son choix propre, sinon le modèle armé pour un fil neuf,
    * sinon le défaut de l'application (rôle orchestrateur). C'est CE binding que l'en-tête, la
    * jauge et les quotas décrivent : c'est celui que le prochain tour utilisera.
    */
@@ -976,7 +976,7 @@ export function ChatView({
   /**
    * Le mode d'affichage lu depuis un ECOUTEUR monte une seule fois (`prefill`, deps []) : sans cette
    * ref, il verrait eternellement le mode du premier rendu et un message pre-ecrit atterrirait dans
-   * le chat unique... qui n'est pas affiche en mosaique (bug mesure le 01/09, conv-44 : « Faire
+   * le chat unique... qui n'est pas affiche en mosaique (bug mesure le 01/09, « Faire
    * reparer » semblait mort).
    */
   const convViewModeRef = useRef(convViewMode)
@@ -1005,7 +1005,7 @@ export function ChatView({
   /* Fil remonté : le saut vers le dernier message ne dépend pas d'une nouvelle activité. */
   const [scrolledAwayFromTail, setScrolledAwayFromTail] = useState(false)
   const [showRuns, setShowRuns] = useState(false)
-  // LE PANNEAU RESTE AFFICHE LE TEMPS DE SORTIR (conv-987, 2026-10-16 : « je veux une animation
+  // LE PANNEAU RESTE AFFICHE LE TEMPS DE SORTIR (2026-10-16 : « je veux une animation
   // d'ouverture fermeture pour le paneau de droite ») : fermer (`showRuns` a faux) le fait glisser
   // vers la droite, et il n'est demonte qu'a la fin de son glissement (`onFermee`, WorkflowsPanel).
   // Ouvrir le monte tout de suite : l'etat suit pendant le rendu, sans image de retard.
@@ -1021,7 +1021,7 @@ export function ChatView({
   // Quatre sections : Sous-agents · Run · Graphe · Source control. Défaut = Sous-agents, la section qu'on regarde
   // pendant une orchestration — garder « Run » par défaut aurait retiré les sous-agents de la vue.
   const [runs, setRuns] = useState<RunEntry[]>([])
-  // Les fiches de demande du fil actif (conv-1441), tenues À PART des runs : une fiche n'entre dans
+  // Les fiches de demande du fil actif, tenues À PART des runs : une fiche n'entre dans
   // aucun calcul sur les runs (trace à ouvrir, run en cours, suppression).
   const [fiches, setFiches] = useState<FicheDeDemande[]>([])
   const fichesRequestRef = useRef(0)
@@ -1051,7 +1051,7 @@ export function ChatView({
    * statique si rien à dire. `AnimationAccueilChat` les écrit une à une.
    */
   /**
-   * FRICTION sur une série d'orchestrations sans livraison. Mesuré (conv-1302, 2026-08-18) : douze
+   * FRICTION sur une série d'orchestrations sans livraison. Mesuré (2026-08-18) : douze
    * runs d'affilée sur la même demande, plus de 20 $, et rien à l'écran ne disait qu'on était dans
    * une série — l'utilisateur a relancé neuf fois, ce qui est le comportement rationnel quand
    * personne ne lui montre le mur. Ce bandeau ne bloque RIEN : la relance reste à un geste, la
@@ -1063,7 +1063,7 @@ export function ChatView({
   )
   const homeSuggestions = useMemo(
     // `brouillonPresent` et non le texte : `buildHomeSuggestions` ne teste que sa présence. Puces dans
-    // la langue de l'interface (conv-1170) : la puce cliquée part telle qu'affichée.
+    // la langue de l'interface : la puce cliquée part telle qu'affichée.
     () => buildHomeSuggestions({ runs, resumedDraft: brouillonPresent ? 'brouillon' : '' }, langue),
     [runs, brouillonPresent, langue]
   )
@@ -1166,11 +1166,11 @@ export function ChatView({
    * STOP DEMANDE, tenu jusqu'au prochain envoi MANUEL dans ce fil. Le gel ci-dessus est a usage
    * unique et la transition busy→false le consomme AVANT que le main renvoie les orientations non
    * lues (`directives-orphelines`, emis dans le `finally` du tour) : sans ce drapeau, une orientation
-   * envoyee pendant un tour STOPPE repartait seule comme un nouveau message (conv-61, 2026-10-02).
+   * envoyee pendant un tour STOPPE repartait seule comme un nouveau message (2026-10-02).
    */
   const stopDemandeRef = useRef(new Set<string>())
   /**
-   * Fils dont les lots de sélection scout sont RETENUS par la limite de quota (conv-1080). Tenu
+   * Fils dont les lots de sélection scout sont RETENUS par la limite de quota. Tenu
    * jusqu'au prochain tour du fil (la reprise) : relire le fil ne suffit pas à l'ouverture d'un fil,
    * dont le cache peut manquer le temps d'une relecture — le lot partirait alors dans le mur.
    */
@@ -1198,11 +1198,11 @@ export function ChatView({
   )
   const activeRef = useRef<string | null>(null)
   /*
-   * NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 3/5) : panneau ouvert ou fermé (Ctrl+Shift+B, bouton
+   * NAVIGATEUR INTÉGRÉ DU CHAT (lot 3/5) : panneau ouvert ou fermé (Ctrl+Shift+B, bouton
    * de l'en-tête), et ouvert TOUT SEUL quand l'agent ouvre une page dans le fil actif. Les onglets
    * déjà vus par fil vivent dans une REF : un événement d'état (chargement, titre) ne re-rend pas la
    * vue chat, seule une ouverture de panneau le fait.
-   * UN SEUL PANNEAU À LA FOIS (conv-1378, 2026-10-31) : navigateur et Bureaux cachés se partagent cette
+   * UN SEUL PANNEAU À LA FOIS (2026-10-31) : navigateur et Bureaux cachés se partagent cette
    * valeur, parce qu'à 1280 px les deux ensemble ne laissent plus de place au fil. Une valeur unique
    * rend « les deux ouverts » impossible à écrire, là où deux booléens auraient dû se fermer l'un l'autre.
    */
@@ -1219,7 +1219,7 @@ export function ChatView({
     demandeBureauxVueRef.current = demandeBureaux
     setPanneauOutil('bureaux')
   }, [demandeBureaux])
-  // Question à côté (conv-1362) : Ctrl+;, fil unique. Son état de saisie vit dans son composant.
+  // Question à côté : Ctrl+;, fil unique. Son état de saisie vit dans son composant.
   const [questionACoteOuverte, setQuestionACoteOuverte] = useState(false)
   useRaccourciQuestionACote(isActive && convViewMode !== 'mosaic' && Boolean(activeId), () =>
     setQuestionACoteOuverte((ouverte) => !ouverte)
@@ -1283,7 +1283,7 @@ export function ChatView({
   /**
    * LE LECTEUR A-T-IL BOUGE LE FIL LUI-MEME ?
    *
-   * DEFAUT VECU le 2026-09-01 (conv-61) : « je clique sur dernier message, je suis en bas ; je
+   * DEFAUT VECU le 2026-09-01 : « je clique sur dernier message, je suis en bas ; je
    * change de conversation, je reviens, et je suis scrolle au MILIEU ». Un evenement `scroll` ne dit
    * PAS qui l'a provoque. Or l'app en emet beaucoup elle-meme (ouverture d'une conversation, reprise
    * de lecture, descente automatique pendant un tour) : chacun etait memorise comme une position
@@ -1324,7 +1324,7 @@ export function ChatView({
   const [atterrissageDemande, setAtterrissageDemande] = useState(0)
   /**
    * Passage du fil sélectionné à la souris, où poser sa barre, et le fil où il a été pris
-   * (conv-1038) : changer de fil la fait disparaître sans effet de remise à zéro.
+   * Changer de fil la fait disparaître sans effet de remise à zéro.
    */
   const [passageSelectionne, setPassageSelectionne] = useState<
     (PassageAffiche & { fil: string | null }) | null
@@ -1360,7 +1360,7 @@ export function ChatView({
   }
 
   /**
-   * RÉPONDRE À UN PASSAGE (conv-1038, 2026-10-21) : au relâchement de la souris dans le fil, une
+   * RÉPONDRE À UN PASSAGE (2026-10-21) : au relâchement de la souris dans le fil, une
    * sélection DANS un message fait apparaître sa barre, posée au-dessus du passage (coordonnées
    * dans le cadre du fil, celui du bouton « ↓ Dernier message »).
    */
@@ -1395,7 +1395,7 @@ export function ChatView({
   }
 
   /**
-   * ÉLÉMENT CHOISI → SAISIE (conv-1286, lot 3/5) : même chemin que la référence d'Alt+clic (texte
+   * ÉLÉMENT CHOISI → SAISIE (lot 3/5) : même chemin que la référence d'Alt+clic (texte
    * ajouté au brouillon du fil, sans envoyer) et que l'instant de vidéo pointé (capture jointe par
    * `addFiles`, dédoublonnée par NOM : chaque nom porte l'id de l'élément).
    */
@@ -1407,7 +1407,7 @@ export function ChatView({
   }
 
   /**
-   * LIENS DU FIL DANS LE NAVIGATEUR INTÉGRÉ (conv-1286, lot 3/5). Un serveur local (localhost,
+   * LIENS DU FIL DANS LE NAVIGATEUR INTÉGRÉ (lot 3/5). Un serveur local (localhost,
    * 127.0.0.1, [::1]) s'ouvre dans le panneau ; les autres liens aussi quand le réglage « Ouvrir ici
    * les liens du chat » est actif, sinon ils gardent leur chemin actuel (`target=_blank` de
    * Markdown.tsx → navigateur du système). Un clic déjà traité (référence de fichier) ou modifié
@@ -1457,14 +1457,14 @@ export function ChatView({
   }
 
   /**
-   * L'ÉLÉMENT DÉSIGNÉ PAR ALT+CLIC (conv-1038, étendu à toute l'app conv-1338, voir `alt-clic.ts`) :
+   * L'ÉLÉMENT DÉSIGNÉ PAR ALT+CLIC (étendu à toute l'app, voir `alt-clic.ts`) :
    * sa référence s'AJOUTE au brouillon, sans envoyer, et sa capture arrive en pièce jointe. Recliqué
    * ou double-cliqué, le même élément n'est pas redit ; une image refusée (plafond de pièces jointes)
    * laisse le texte et s'explique sous la saisie (`addFiles`).
    */
   function recevoirElementCible({ texte, image, fenetre }: ElementCible): void {
     const cle = fenetre ?? brouillonVisible()
-    // fix-ok: conv-1338 — une mosaïque sans fenêtre n'a aucune saisie : le texte finissait dans un
+    // fix-ok: une mosaïque sans fenêtre n'a aucune saisie : le texte finissait dans un
     // brouillon que rien n'affichait. Le chat normal en a une, et l'effet de `convViewMode` l'y repose.
     if (convViewMode === 'mosaic' && composersMosaiqueRef.current.size === 0)
       setConvViewMode('list')
@@ -1631,14 +1631,14 @@ export function ChatView({
    *
    * Le choix est memorise sur la conversation ouverte (`conversationSetClaudeAccount`) ET rendu
    * actif tout de suite, pour que le badge d'auth parle du bon compte. Chaque appel du fil lit ensuite
-   * ce compte sur la conversation (`claudeCompteDuFil`, conv-1416) : c'est le main qui tient la verite.
+   * ce compte sur la conversation (`claudeCompteDuFil`) : c'est le main qui tient la verite.
    */
   const choisirCompteDeConversation = async (accountId: string): Promise<void> => {
     if (compteBusy) return
     setCompteBusy(true)
     setCompteError(null)
     try {
-      // Sans conversation ouverte, le choix est ARME pour le fil qui va naitre (conv-1416).
+      // Sans conversation ouverte, le choix est ARME pour le fil qui va naitre.
       if (activeId) await window.api.conversationSetClaudeAccount?.(activeId, accountId)
       else setCompteNouveauFil(accountId)
       const payload = await window.api.claudeAccountSwitch?.(accountId)
@@ -1658,7 +1658,7 @@ export function ChatView({
   }
 
   /**
-   * LE MODÈLE, À L'ÉCHELLE DE LA CONVERSATION (conv-239, 2026-10-11).
+   * LE MODÈLE, À L'ÉCHELLE DE LA CONVERSATION (2026-10-11).
    *
    * Avant, ce choix réécrivait le rôle orchestrateur GLOBAL (`setRole`) : changer de modèle dans
    * un fil le changeait dans tous. Il est désormais mémorisé sur la conversation ouverte, que le
@@ -1666,9 +1666,9 @@ export function ChatView({
    * fil qui va naître. Le défaut de l'application se règle toujours dans Routage.
    * `option === null` : revenir au modèle par défaut.
    *
-   * ET L'ORCHESTRATEUR D'AGENTS STUDIO SUIT (conv-1529, 2026-11-04 : « quand je change de model et
+   * ET L'ORCHESTRATEUR D'AGENTS STUDIO SUIT (2026-11-04 : « quand je change de model et
    * d'effort depuis un chat ca doit changer l'orchestrator de agents studio »). Le fil garde son
-   * choix propre (conv-239) : un fil qui a choisi son modèle ne bouge pas quand un autre change ;
+   * choix propre : un fil qui a choisi son modèle ne bouge pas quand un autre change ;
    * seuls les fils sans choix propre suivent le nouveau défaut. Revenir au défaut ne touche pas
    * Agents Studio.
    */
@@ -1747,7 +1747,7 @@ export function ChatView({
    * Le choix de compte Claude de la conversation ouverte, partagé par la pop-up de modèle ET la
    * pop-up des quotas (demande du 2026-09-23) : un seul chemin, celui qui mémorise le compte sur le
    * fil — une bascule seulement globale ne vaudrait pas pour lui (chaque appel du fil lit son compte
-   * sur la conversation, conv-1416).
+   * sur la conversation).
    * Sans conversation ouverte (fil neuf pas encore créé), le bloc reste AFFICHÉ et montre le compte
    * armé, sinon le compte actif de l'application : le faire disparaître donnait l'impression que la
    * fonctionnalité avait été retirée.
@@ -1772,7 +1772,7 @@ export function ChatView({
     else busyConversationsRef.current.delete(id)
     setBusyConversations(new Set(busyConversationsRef.current))
     // UN TOUR REPART DANS LE FIL : c'est la reprise. Les lots retenus par le quota attendent de
-    // nouveau la fin d'un tour, et leur reçu le redit ; sa fin dira s'ils partent (conv-1080).
+    // nouveau la fin d'un tour, et leur reçu le redit ; sa fin dira s'ils partent.
     if (value && lotsRetenusRef.current.delete(id)) marquerRecusDesLots(id, 'lot')
   }
   function setConversationInterrupting(id: string, value: boolean): void {
@@ -1783,7 +1783,7 @@ export function ChatView({
   /**
    * FILET DE SÉCURITÉ : écrit le texte de l'utilisateur sur disque AVANT qu'il ne quitte le composer.
    *
-   * Mesure du 2026-09-01 (conv-30) : deux messages tapés pendant un tour ont disparu sans trace.
+   * Mesure du 2026-09-01 : deux messages tapés pendant un tour ont disparu sans trace.
    * Le composer se vide dès l'envoi, et le texte ne vit ensuite que dans des refs volatiles
    * (`composerDraftsRef`, `queueRef`, `directiveReceipts`) tant qu'aucun TOUR n'est créé — un
    * rechargement, un changement de conversation ou une injection refusée l'effaçait définitivement.
@@ -1885,7 +1885,7 @@ export function ChatView({
     })
   }
   /**
-   * ANNULER UN ENVOI EN ATTENTE (conv-1452, 2026-11-03) : « /git » tapé pendant un tour attendait sa
+   * ANNULER UN ENVOI EN ATTENTE (2026-11-03) : « /git » tapé pendant un tour attendait sa
    * fin, et seul Stop pouvait l'en sortir — en coupant aussi le tour. Le reçu et la file ne partagent
    * pas d'identifiant (`submitBtw`), seulement le TEXTE : on retire la PREMIÈRE entrée de ce texte,
    * pas toutes (deux envois identiques restent deux envois), puis ce reçu-là par son id.
@@ -1911,7 +1911,7 @@ export function ChatView({
         const anchorMessage = liveMessages[receipt.afterMessageIndex]
         if (anchorMessage?.role !== 'assistant') return receipt
         // Les MÊMES parts que retire le réducteur : une relance ne retire plus que la conclusion
-        // (conv-1401), compter tout le texte du flux décalerait le reçu à tort.
+        // Compter tout le texte du flux décalerait le reçu à tort.
         const effaces = rangsEffacesParLeReset(anchorMessage.parts, reset)
         const removedBefore = effaces.filter((rang) => rang < receipt.afterPartIndex).length
         const anchorRemoved = effaces.includes(receipt.afterPartIndex)
@@ -1939,7 +1939,7 @@ export function ChatView({
     cleDeDoublon: (fichier: { name: string; size: number }) => string = cleNomTaille
   ): Promise<void> {
     /*
-     * PLUS DE REFUS SILENCIEUX PENDANT UN TOUR (conv-44, 2026-09-01).
+     * PLUS DE REFUS SILENCIEUX PENDANT UN TOUR (2026-09-01).
      *
      * Ces deux lignes rendaient tout ajout de fichier inopérant tant qu'un tour tournait —
      * collage, dépôt, bouton fichier — sans un mot à l'écran : « ça la met juste dans la barre
@@ -1968,8 +1968,8 @@ export function ChatView({
       return
     }
     /*
-     * IMAGE VIDE (conv-321, 2026-10-17). Le presse-papiers peut annoncer une image sans en livrer les
-     * octets : Chromium rend alors une `image.png` de 0 octet (conv-182 et conv-321 : `size: 0`, pas
+     * IMAGE VIDE (2026-10-17). Le presse-papiers peut annoncer une image sans en livrer les
+     * octets : Chromium rend alors une `image.png` de 0 octet (`size: 0`, pas
      * de miniature, fichier vide dans chat-artifacts). Attachée, elle partait à l'agent comme une
      * vraie capture — l'utilisateur croyait l'avoir montrée, l'agent ne recevait rien. Ici, au seul
      * moment où l'utilisateur peut encore la recopier, on le lui dit.
@@ -1988,7 +1988,7 @@ export function ChatView({
     }
     try {
       const encoded = await Promise.all(candidates.map(encodeAttachment))
-      // Dédoublonner AUSSI sur le brouillon ACTUEL (conv-253) : deux ajouts lancés avant la fin du
+      // Dédoublonner AUSSI sur le brouillon ACTUEL : deux ajouts lancés avant la fin du
       // premier encodage se comparaient tous deux au brouillon d'AVANT (`originDraft`), et le même
       // instant vidéo pointé deux fois joignait deux PNG.
       // fix-ok: cause mesurée — le filtre ne comparait qu'à `originDraft`, lu avant l'await de l'encodage : sans ce second filtre, deux clics sans attente joignent 2 PNG et ChatView.pointer-video.test.tsx échoue (code 1) ; avec lui, 1 PNG (code 0).
@@ -2007,7 +2007,7 @@ export function ChatView({
   }
 
   /*
-   * POINTER UN MOMENT D'UNE VIDÉO DU FIL (conv-253, 2026-10-11) : la référence va au curseur de la
+   * POINTER UN MOMENT D'UNE VIDÉO DU FIL (2026-10-11) : la référence va au curseur de la
    * saisie, l'image passe par `addFiles` (mêmes plafonds, même dédoublonnage nom + taille). La
    * référence est insérée même si l'image est refusée (9e pièce jointe…). Valeur STABLE : le fil
    * mémoïsé (`filRendu`) n'a pas à se recalculer.
@@ -2039,7 +2039,7 @@ export function ChatView({
       return
     }
     // L'horloge ECARTE les vestiges : un tour interrompu la veille ne doit plus voler le demarrage
-    // a la conversation ou l'utilisateur travaille (mesure conv-1267, 2026-08-18).
+    // a la conversation ou l'utilisateur travaille (2026-08-18).
     const target = pickTurnToResume(turns, Date.now())
     /**
      * UN MESSAGE A MOITIE ECRIT GAGNE SUR LA REPRISE. Symptome du 2026-09-01 : « de temps en temps
@@ -2140,7 +2140,7 @@ export function ChatView({
     else queueRef.current.delete(id)
     // UN TEXTE QUI QUITTE LA FILE N'ATTEND PLUS RIEN — parti en message, ou rendu au composer par
     // Stop. Son reçu « Attend la fin du tour » mentirait alors, et doublait le vrai message dans le
-    // fil (conv-890 : message parti à 12:26:29, reçu toujours affiché). Point UNIQUE : les trois
+    // fil (Message parti à 12:26:29, reçu toujours affiché). Point UNIQUE : les trois
     // sorties de la file passent toutes par ici.
     const restants = new Set(next.map((entree) => entree.text))
     const sortis = avant.filter((entree) => !restants.has(entree.text)).map((e) => e.text)
@@ -2166,7 +2166,7 @@ export function ChatView({
     })
   }
   /**
-   * LE LOT SUIVANT NE PART PAS DANS LE MUR DE QUOTA (conv-1080, 2026-10-22). À consulter par CHAQUE
+   * LE LOT SUIVANT NE PART PAS DANS LE MUR DE QUOTA (2026-10-22). À consulter par CHAQUE
    * sortie automatique de la file, avant d'en relâcher la tête : le lot d'avant coupé par la limite
    * (`lots-retenus-quota.ts`), le suivant partait aussitôt, retombait sur le même refus et relâchait le
    * troisième — la sélection entière se vidait en échecs. Retenus, ils restent en file, visibles, et
@@ -2182,13 +2182,13 @@ export function ChatView({
     return true
   }
   /**
-   * LA TÊTE DE LA FILE ATTEND LE VERROU D'ENVOI, ELLE NE SORT PAS POUR ÊTRE JETÉE (conv-1080).
+   * LA TÊTE DE LA FILE ATTEND LE VERROU D'ENVOI, ELLE NE SORT PAS POUR ÊTRE JETÉE.
    *
    * `busy` tombe à l'événement `done`, mais le verrou d'envoi (`sendLocksRef`) ne se relâche que dans
    * le `finally` de `send`, à la RÉPONSE de `pilotChat` — que le main rend après son propre `finally`
    * (`run-pilot-chat.ts`, qui diffuse aussi `directives-orphelines` avant de répondre). Entre les
    * deux, un drain voyait le fil libre, sortait la tête de la file, et `send` la refusait sans un mot.
-   * Perte réelle : conv-996, 2026-10-16, orientation « basé sur les axes que t'as généré tour 1 scout
+   * Perte réelle : 2026-10-16, orientation « basé sur les axes que t'as généré tour 1 scout
    * des améliorations » (saisie ts 1792149113401), jamais lue ni renvoyée ; la suite du mode auto est
    * partie à sa place 22 ms après le `done`.
    *
@@ -2203,7 +2203,7 @@ export function ChatView({
     return true
   }
   /**
-   * LA COMPACTION AUTOMATIQUE ATTEND LE VERROU, ELLE AUSSI (conv-1080, 2026-10-22).
+   * LA COMPACTION AUTOMATIQUE ATTEND LE VERROU, ELLE AUSSI (2026-10-22).
    *
    * Décidée au `done` qui franchit le palier critique — donc dans l'intervalle où le verrou d'envoi
    * tient encore (voir `teteRetenueParLeVerrou`). `send` la refusait sans un mot, alors que le fil
@@ -2254,7 +2254,7 @@ export function ChatView({
     text: string,
     mode?: QueuedDirective['mode'],
     attachments?: ChatAttachment[],
-    /** `lot` : un lot de sélection scout mis en file par le panneau (conv-1080). */
+    /** `lot` : un lot de sélection scout mis en file par le panneau. */
     origine?: Pick<QueuedDirective, 'lot'>
   ): void {
     // Un texte qui arrive en file APRES un Stop est un geste explicite de l'utilisateur : il LEVE le
@@ -2303,7 +2303,7 @@ export function ChatView({
     if (isRunRequestCurrent(request, currentRequest)) setRuns(nextRuns)
   }
   /**
-   * Relit les fiches de demande du fil actif (conv-1441). Un échec de lecture vide la liste au lieu
+   * Relit les fiches de demande du fil actif. Un échec de lecture vide la liste au lieu
    * de garder celle d'un autre fil, et ne touche pas aux runs. Une ouverture demandée depuis un
    * post-it du Board (`demanderFicheAOuvrir`) est honorée ici, une fois les fiches de CE fil lues.
    */
@@ -2340,7 +2340,7 @@ export function ChatView({
   }, [activeId])
   /**
    * REPOSE le brouillon restaure dans le composer, a chaque fois que ce composer nait : au montage,
-   * et au retour de la mosaique, qui le demonte (conv-1338). La carte est hydratee depuis le stockage
+   * et au retour de la mosaique, qui le demonte. La carte est hydratee depuis le stockage
    * local, mais le composer garde son texte chez lui (handle imperatif) : sans cette remise, le
    * texte retrouve restait invisible tant qu'aucune conversation n'etait rouverte.
    */
@@ -2390,7 +2390,7 @@ export function ChatView({
         })
         .catch(() => undefined)
     })
-    // ÉLÉMENTS DÉSIGNÉS AVANT LE PREMIER AFFICHAGE DU CHAT (Alt+clic depuis une autre vue, conv-1338).
+    // ÉLÉMENTS DÉSIGNÉS AVANT LE PREMIER AFFICHAGE DU CHAT (Alt+clic depuis une autre vue).
     // Le fil ouvert au démarrage n'est connu qu'après ces deux étapes : écouter plus tôt posait le
     // texte dans le brouillon « nouveau fil », que l'ouverture du dernier fil cachait aussitôt.
     let couperElementsCibles: (() => void) | undefined
@@ -2436,7 +2436,7 @@ export function ChatView({
       (handle) => window.clearTimeout(handle)
     )
     /*
-     * LE RAISONNEMENT DES SOUS-AGENTS, range sous sa phase dans le bloc Orchestration (conv-918,
+     * LE RAISONNEMENT DES SOUS-AGENTS, range sous sa phase dans le bloc Orchestration (
      * 2026-10-13). Il arrive par fragments de quelques mots, plusieurs par seconde : on les regroupe
      * le temps d'un court delai, puis UN seul patch par conversation, au lieu d'un re-rendu du fil
      * par fragment. Les fragments consecutifs d'une meme phase sont recolles avant d'etre ranges.
@@ -2504,7 +2504,7 @@ export function ChatView({
         }
       } else if (e.type === 'suite-depuis-notification') {
         /*
-         * BOUTON DE SUITE DE LA NOTIFICATION DE FIN DE TOUR (conv-1038, 2026-10-21) : la suite part
+         * BOUTON DE SUITE DE LA NOTIFICATION DE FIN DE TOUR (2026-10-21) : la suite part
          * dans le fil DU TOUR comme un message tapé, sans changer le fil affiché ni vider son
          * brouillon. Fil encore occupé (un tour est reparti entre-temps) : elle attend en file et
          * part à la fin du tour, comme un message tapé pendant un tour.
@@ -2536,7 +2536,7 @@ export function ChatView({
           if (gele) stoppedQueueDrainRef.current.add(convId)
           /*
            * APRES UN STOP, RENDUES AU COMPOSER — jamais gardees dans une file invisible.
-           * conv-61, 2026-10-02 : orientation `ts 1790960554261` pendant le tour 11229cd2, Stop,
+           * 2026-10-02 : orientation `ts 1790960554261` pendant le tour 11229cd2, Stop,
            * puis elle revient ICI, apres que Stop a deja rendu la file au composer. Restee en file
            * (sans affichage), elle est partie seule a `ts 1790960868134` (tour b9f32631), alors que
            * l'utilisateur l'avait corrigee entre-temps (`ts 1790960608859`) : « ca a envoyé 2 fois ».
@@ -2550,10 +2550,10 @@ export function ChatView({
            * qu'on corrige se rejouerait sous une autre forme (message en attente que rien ne part).
            */
           // Des lots de sélection retenus par la limite de quota gardent la tête de la file : les
-          // orientations attendent derrière eux, la reprise du fil les relâchera (conv-1080).
+          // orientations attendent derrière eux, la reprise du fil les relâchera.
           const retenues = !gele && lotsRetenusDansLeFil(convId)
           // Cet événement part du `finally` du main, AVANT la réponse de `pilotChat` : le verrou
-          // d'envoi est encore tenu, la tête attend donc sa levée (conv-996, conv-1080).
+          // d'envoi est encore tenu, la tête attend donc sa levée.
           if (
             !gele &&
             !retenues &&
@@ -2574,9 +2574,9 @@ export function ChatView({
               })
             }
           }
-          // LE BANDEAU NOMME SON FIL (conv-1241) : il est commun à la vue et survit au changement de
-          // fil ; celui de conv-1227 (Stop à 22:09:11) s'affichait au-dessus de conv-1240, dont le
-          // tour tournait encore, et se lisait comme parlant de l'orientation de conv-1240.
+          // LE BANDEAU NOMME SON FIL : il est commun à la vue et survit au changement de
+          // fil ; celui (Stop à 22:09:11) s'affichait au-dessus, dont le
+          // tour tournait encore, et se lisait comme parlant de l'orientation.
           const titreDuFil =
             convsRef.current.find((conversation) => conversation.id === convId)?.title?.trim() ||
             convId
@@ -2596,11 +2596,11 @@ export function ChatView({
       } else if (e.type === 'refresh') {
         if (e.scope === 'conversations') refreshConvs()
         // Un plan a changé (lot ouvert, fini, relancé) : la liste relit tous les plans en UN appel
-        // (conv-1158), sans re-rendre la vue tant qu'aucun lien chef → lot ne change.
+        // Sans re-rendre la vue tant qu'aucun lien chef → lot ne change.
         if (e.scope === 'plans-de-lots') relirePlansRef.current()
         if (e.scope === 'workflows') {
           refreshRuns()
-          // Écrite en fin de tour, une fiche neuve se montre sans rouvrir le fil (conv-1441).
+          // Écrite en fin de tour, une fiche neuve se montre sans rouvrir le fil.
           void refreshFiches()
         }
         if (e.scope === 'roles') refreshRuntimeIdentity()
@@ -2719,9 +2719,9 @@ export function ChatView({
           reduceScopedLiveRuns(current, { type: 'note', convId, runPath: e.runPath, note })
         )
         /*
-         * UN RUN REPRIS N'A PAS DE TOUR DE CHAT (conv-1330, 2026-10-30). Un tour de chat pose cette
+         * UN RUN REPRIS N'A PAS DE TOUR DE CHAT (2026-10-30). Un tour de chat pose cette
          * note dans la bulle par son battement (`action-progress`) ; une orchestration reprise par le
-         * main après un redémarrage n'en envoie pas, et sa bulle restait muette 35 min (conv-1324,
+         * main après un redémarrage n'en envoie pas, et sa bulle restait muette 35 min (
          * spinner allumé). Fil non occupé = aucun tour de chat ne pilote cette ligne : l'écran la
          * pose lui-même sur l'orchestration encore ouverte. Fil occupé : le battement du tour suffit.
          */
@@ -2798,7 +2798,7 @@ export function ChatView({
          * LES SUPPOSITIONS MEURENT AVEC LE RUN QUI LES PORTAIT.
          *
          * Leur pied dit « Le run continue — rien n'attend ta réponse ». Tant que rien ne les
-         * effaçait, cette phrase survivait à la fin du run : sur conv-512, le run se termine à
+         * effaçait, cette phrase survivait à la fin du run : le run se termine à
          * 16:31:43 (tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`) et la capture jointe à la saisie
          * `ts` 1789233975928 (55 min plus tard) montre encore le bloc. L'utilisateur lisait donc
          * « ça continue » devant une application à l'arrêt.
@@ -2880,7 +2880,7 @@ export function ChatView({
     fn: (m: AsstMsg) => void,
     /**
      * L'evenement vise une part DEJA posee (battement, verdict, ligne de pipeline) : il rejoint la
-     * bulle qui la porte, meme si une orientation a ete ecrite dessous (conv-955, 2026-10-15 — sans
+     * bulle qui la porte, meme si une orientation a ete ecrite dessous (2026-10-15 — sans
      * cela, une bulle vide s'ouvrait sous l'orientation et le run semblait plante pendant 29 min).
      */
     porte?: (m: AsstMsg) => boolean
@@ -2936,7 +2936,7 @@ export function ChatView({
    * disparait, la file d'attente se vide, le bloc de cloture finit de se peindre). Personne ne
    * redescendait donc, et le fil restait arrete au milieu de la derniere reponse avec le bouton
    * « ↓ Derniere reponse » alors que l'utilisateur n'avait rien remonte (rapporte le 2026-09-01,
-   * conv-44, capture a l'appui).
+   * Capture a l'appui).
    *
    * Le plafond de frames est plus large qu'en streaming : le contenu tardif d'une fin de tour
    * (markdown final, blocs `html-render`, images) se stabilise en plusieurs centaines de
@@ -3097,7 +3097,7 @@ export function ChatView({
     /*
      * UN CACHE VIDE EST UNE ABSENCE, PAS UN FIL.
      *
-     * Vecu le 2026-09-01 (conv-82) : « les messages de conv-82 ont disparu » — la conversation
+     * Vecu le 2026-09-01 : « les messages de conv-82 ont disparu » — la conversation
      * existait, la barre laterale comptait ses 5 messages, le disque les rendait tous, l'ecran
      * n'affichait RIEN. Une conversation ouverte alors qu'elle etait encore VIDE (elle vient d'etre
      * creee) laisse un tableau vide dans le cache d'affichage ; l'agent la remplit ensuite cote
@@ -3109,7 +3109,7 @@ export function ChatView({
     /*
      * ... ET UN CACHE PLUS COURT QUE LE STORE N'EST PAS LE FIL.
      *
-     * Vecu conv-152 (saisie ts=1788413114634 : « la moitié de cette convers s'est effacé j'arrive
+     * Vecu (saisie ts=1788413114634 : « la moitié de cette convers s'est effacé j'arrive
      * pas a remonter le fil », tour 57656364-053f-40e6-bc8e-91efd5b74e39). Le disque portait les 41
      * messages, l'ecran la seule fin. Un tour lance cote main amorce ce cache avec le SEUL message
      * en cours ; `cache.length > 0` le faisait alors gagner sur un store PLEIN. `filAffichable`
@@ -3138,7 +3138,7 @@ export function ChatView({
     const messages = liveMessagesRef.current.get(id) ?? []
     const dernier = [...messages].reverse().find((message) => message.role === 'assistant')
     /*
-     * N'IMPORTE QUELLE bulle non close justifie la sonde, pas seulement la DERNIÈRE (conv-913,
+     * N'IMPORTE QUELLE bulle non close justifie la sonde, pas seulement la DERNIÈRE (
      * 2026-10-13). Au redémarrage, le main rattache une orchestration encore vivante et AJOUTE en bas
      * du fil un récapitulatif « Reprise du fil… » sans statut, donc relu comme terminé
      * (`index.ts`, `recapMessage`). La bulle du tour vivant n'était plus la dernière : l'écran ne
@@ -3158,7 +3158,7 @@ export function ChatView({
     if (activeRef.current !== id && !liveMessagesRef.current.has(id)) return
     if (actif) {
       /*
-       * UN TOUR VIVANT QUE L'ÉCRAN N'A PAS LANCÉ : il l'ADOPTE (conv-260, 2026-10-11).
+       * UN TOUR VIVANT QUE L'ÉCRAN N'A PAS LANCÉ : il l'ADOPTE (2026-10-11).
        * Cas réel : le main redémarre pendant un tour, le CLI survit et le main le REPREND, mais sans
        * émettre le moindre événement pilote pendant l'attente. L'écran ne passait un fil en
        * « occupé » que sur un tel événement : il croyait le fil libre, et le message suivant lançait
@@ -3220,7 +3220,7 @@ export function ChatView({
   async function ouvrirDansMosaique(id: string): Promise<void> {
     if (!mosaicIdsRef.current.includes(id)) mosaicIdsRef.current = [...mosaicIdsRef.current, id]
     setMosaicIds((courant) => (courant.includes(id) ? courant : [...courant, id]))
-    // UN CACHE VIDE EST UNE ABSENCE, PAS UN FIL — meme regle qu'au chat plein (conv-82). Une
+    // UN CACHE VIDE EST UNE ABSENCE, PAS UN FIL — meme regle qu'au chat plein. Une
     // conversation ouverte alors qu'elle etait encore vide laisse un tableau vide ici ; l'agent la
     // remplit ensuite cote main, sans passer par ce cache. Un `if (cache)` laissait donc ce vide
     // gagner sur un store PLEIN et la fenetre revenait « creuse » (« Aucun message. »).
@@ -3363,7 +3363,7 @@ export function ChatView({
        * prompt » des tickets) paraissait mort alors que la conversation etait bien creee. On ouvre
        * donc une fenetre DE PLUS — la mosaique reste en place —, on y depose le brouillon (deja
        * indexe par conversation) et on impose la valeur au composer de cette fenetre des qu'il est
-       * monte. Choix utilisateur du 2026-09-01 (conv-44) contre la sortie de mosaique.
+       * monte. Choix utilisateur du 2026-09-01 contre la sortie de mosaique.
        */
       if (id && convViewModeRef.current === 'mosaic') {
         const prompt = detail.prompt
@@ -3398,7 +3398,7 @@ export function ChatView({
         else {
           // Conversation créée À L'INSTANT (scout de veille) : la liste du renderer ne la porte pas
           // encore. La rafraîchir PUIS charger, sinon le panneau restait sur l'état vide « Parle à
-          // l'agent » pendant que le tour tournait dans le store (mesuré le 14/08, conv-1164).
+          // l'agent » pendant que le tour tournait dans le store (mesuré le 14/08).
           activeRef.current = id
           setActiveId(id)
           setMessages([])
@@ -3418,7 +3418,7 @@ export function ChatView({
     }
     window.addEventListener('autowin:prefill-conversation', prefill)
     window.addEventListener('autowin:brainwash', openBrainwash)
-    // Une demande émise AVANT le premier affichage du chat a été gardée par le relais (conv-1101,
+    // Une demande émise AVANT le premier affichage du chat a été gardée par le relais (
     // `relais-prefill.ts`) : on la réclame dans le MÊME bloc que la pose de l'écouteur.
     const gardee = ouvrirEcouteurPrefill()
     if (gardee) prefill(new CustomEvent('autowin:prefill-conversation', { detail: gardee }))
@@ -3453,7 +3453,7 @@ export function ChatView({
     // sérialisait tout le fil à chaque rejeu ET se trompait dans les deux sens — deux tours au
     // préambule identique se masquaient, un tour reformulé à la persistance se dupliquait.
     if (replayedTurnsRef.current.has(turnId)) return
-    // L'ENREGISTREMENT D'ABORD (conv-1149) : un tour encore en vol, ou dont le texte est déjà
+    // L'ENREGISTREMENT D'ABORD : un tour encore en vol, ou dont le texte est déjà
     // enregistré, n'a rien à rejouer — sa bulle rejouée remplaçait la demande et l'action en cours.
     let enregistre: MessageStocke[] = []
     try {
@@ -3513,7 +3513,7 @@ export function ChatView({
         const target = convsRef.current.find((conversation) => conversation.id === id)
         if (target) await loadConv(target)
         // Fil déjà ouvert : `activeId` ne change pas, l'effet ne relirait pas ses fiches, et la fiche
-        // demandée depuis le Board ne se déplierait pas (conv-1441).
+        // demandée depuis le Board ne se déplierait pas.
         if (target) await refreshFiches()
       })()
       // REJEU du journal : l'app était fermée pendant le tour → le store n'a pas reçu ces événements,
@@ -3637,7 +3637,7 @@ export function ChatView({
   async function forkFromMessage(messageId: string): Promise<void> {
     if (!activeId) return
     /*
-     * Ouvre la branche MÊME pendant un tour (conv-1543, 2026-11-04) : la retenue sur place avec un
+     * Ouvre la branche MÊME pendant un tour (2026-11-04) : la retenue sur place avec un
      * bandeau « la branche vous attend dans la liste » (2026-09-03) a été refusée par l'utilisateur —
      * cliquer la branche doit toujours l'y emmener. Le tour du fil d'origine continue en fond.
      */
@@ -3652,7 +3652,7 @@ export function ChatView({
     void loadConv(target)
   }
   /**
-   * « MODIFIER ET RELANCER » (conv-1038, 2026-10-21) : reprendre un de ses messages en le corrigeant.
+   * « MODIFIER ET RELANCER » (2026-10-21) : reprendre un de ses messages en le corrigeant.
    * La copie du fil s'arrête JUSTE AVANT lui (`departPourModifier`), s'ouvre, et le texte du message
    * attend dans sa saisie : rien n'est envoyé, l'utilisateur corrige puis envoie. Avant le premier
    * message, il n'y a rien à copier : un fil neuf. Même retenue que la branche pendant un tour : on ne
@@ -3697,7 +3697,7 @@ export function ChatView({
     requestAnimationFrame(() => composerRef.current?.focusAt(-1))
   }
   /**
-   * « REVENIR À CE TOUR, CODE ET FIL » (conv-1038, 2026-10-21 — décision « branches-rewind »,
+   * « REVENIR À CE TOUR, CODE ET FIL » (2026-10-21 — décision « branches-rewind »,
    * étape 2). Le main rouvre la photo du code prise au début du tour de ce message dans une COPIE
    * SÉPARÉE (`photo-du-code.ts`) ; ici, la copie du fil s'arrête juste avant le message (comme
    * « Modifier et relancer ») et travaille DANS cette copie : son tour suivant n'écrit jamais dans le
@@ -3750,13 +3750,13 @@ export function ChatView({
     requestAnimationFrame(() => composerRef.current?.focusAt(-1))
   }
   /**
-   * « ESSAIE 3 FAÇONS » (conv-1038, 2026-10-21) : la demande tapée part dans TROIS branches du fil,
+   * « ESSAIE 3 FAÇONS » (2026-10-21) : la demande tapée part dans TROIS branches du fil,
    * chacune rattachée à SA copie séparée du code (le main les ouvre à une même photo) et chacune avec
    * une façon imposée (`trois-facons.ts`). Les trois s'ouvrent en mosaïque pour être comparées. Rien
    * n'est fusionné dans le dossier partagé : garder une façon reste un geste de l'utilisateur. Chaque
    * branche est un tour payé — trois fois le coût d'un tour, et l'avis le dit.
    */
-  // Armé POUR UN FIL (conv-1491) : un booléen global restait allumé en changeant de fil, et
+  // Armé POUR UN FIL : un booléen global restait allumé en changeant de fil, et
   // l'envoi suivant partait en 3 branches dans un AUTRE fil que celui où ×3 avait été cliqué.
   const [troisFaconsFil, setTroisFaconsFil] = useState<string | null>(null)
   const troisFaconsArme = troisFaconsFil !== null && troisFaconsFil === activeId
@@ -3821,12 +3821,12 @@ export function ChatView({
     setAppNotice((current) => newestNotice(current, { text: `${lancees}${nonParties}` }))
   }
   /**
-   * Une branche du fil NÉE dans sa copie séparée (conv-1038, 2026-10-21) : le dossier part AVEC la
+   * Une branche du fil NÉE dans sa copie séparée (2026-10-21) : le dossier part AVEC la
    * branche (`fork(…, { dossier })`, ou la création d'un fil neuf quand il n'y a rien à copier), et
    * la réponse est RELUE. Mesuré avant : la branche était créée puis rangée par un second appel dont
    * l'échec n'était pas lu — elle s'ouvrait, recevait la demande et travaillait dans le dossier
    * PARTAGÉ. Un processus principal d'avant ce correctif ignore `dossier` : la relecture le voit.
-   * fix-ok: cause mesurée (conv-1038, rejeu du 2026-10-21) — rattachement par un 2e appel dont l'échec n'était pas lu. Sans la relecture ci-dessous, 2 tests rouges (revenir-au-tour, trois-facons) ; sans `{ dossier }` passé au fork, 3 rouges. Entrée décisive : une branche rendue sans `projectPath`.
+   * fix-ok: cause mesurée (rejeu du 2026-10-21) — rattachement par un 2e appel dont l'échec n'était pas lu. Sans la relecture ci-dessous, 2 tests rouges (revenir-au-tour, trois-facons) ; sans `{ dossier }` passé au fork, 3 rouges. Entrée décisive : une branche rendue sans `projectPath`.
    */
   async function brancheDansLaCopie(
     source: string,
@@ -3857,8 +3857,8 @@ export function ChatView({
     }
   }
   /**
-   * DES MESSAGES À LA SUITE DANS UN FIL (conv-1147) : le premier part, les autres attendent dans la
-   * file du fil, un par tour. C'est le même geste que les lots du scout (`pickRef`, conv-1080), mais
+   * DES MESSAGES À LA SUITE DANS UN FIL : le premier part, les autres attendent dans la
+   * file du fil, un par tour. C'est le même geste que les lots du scout (`pickRef`), mais
    * pour N'IMPORTE QUEL fil, affiché ou non. `filsAvecLotsRef` relâche la file d'un fil quitté, et
    * la marque `lot` la retient après une coupure par la limite d'abonnement (`lots-retenus-quota.ts`).
    */
@@ -3882,7 +3882,7 @@ export function ChatView({
     }
     // `keepComposerDraft` : le clic sur la carte n'est pas un envoi depuis la saisie. Sans lui,
     // « Tout ici » (fil visé = fil affiché) emportait les pièces jointes en attente de l'utilisateur
-    // et vidait le texte qu'il tapait (défaut 1 du juge, conv-1147).
+    // et vidait le texte qu'il tapait (défaut 1 du juge).
     void send(premier, { targetConversationId: id, keepComposerDraft: true })
     for (const texte of suite) mettreEnFile(texte)
   }
@@ -4060,7 +4060,7 @@ export function ChatView({
       data-active-conversation-id={activeId ?? ''}
     >
       {/* HARNAIS DE PROFILAGE (heal gels vue chat, 2026-09-18) : `vue-chat` seul ne disait pas QUELLE
-          zone tenait le fil d'affichage (1,3 a 2,8 s sur conv-680). Chaque zone signale son propre
+          zone tenait le fil d'affichage (1,3 a 2,8 s). Chaque zone signale son propre
           rendu long sous `vue-chat-<zone>`, par le canal existant de `gels.jsonl`. */}
       {/* ---- Panneau gauche : conversations ---- */}
       <VueMesuree id="chat-liste">
@@ -4076,7 +4076,7 @@ export function ChatView({
           data-recherche={convQuery.trim() ? 'oui' : undefined}
           style={{ width: `${conversationsPaneWidth}px` }}
         >
-          {/* Le tiroir téléphone porte SON bouton de fermeture (conv-1568) : posé sous l'en-tête à une
+          {/* Le tiroir téléphone porte SON bouton de fermeture : posé sous l'en-tête à une
               hauteur devinée, il recouvrait le ☰ de l'en-tête sur le vrai écran de l'utilisateur. */}
           <button
             type="button"
@@ -4295,7 +4295,7 @@ export function ChatView({
               }
             >
               {/* Icone et libelles du pied : MASQUES par defaut (ChatView.css), montres par le
-                theme qui les dessine (Nebuleuse de verre, capsule D2-6 choisie en conv-171). */}
+                theme qui les dessine (Nebuleuse de verre, capsule D2-6 choisie). */}
               {convStatusFilter === 'toutes' && (
                 <svg className="conv-foot-icone" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                   <path d="M4 5h16l-6 7v6l-4 2v-8z" />
@@ -4406,13 +4406,13 @@ export function ChatView({
               </button>
               {/*
                 L'entree « Choisir le repertoire de travail… » a ete RETIREE de ce menu sur demande
-                (conv-674, 2026-09-17). Le choix du depot de travail reste entier : il se fait par la
+                (2026-09-17). Le choix du depot de travail reste entier : il se fait par la
                 pastille 📁 de la barre du haut (data-testid="chat-project-dot"), qui ouvre le meme
                 selecteur en mode 'dossier', et par le glisser-deposer.
               */}
               {/*
                 La categorie compte autant que le dossier : sans elle dans ce test, un fil range
-                sous un libelle n'avait plus AUCUN moyen d'en sortir depuis le menu (conv-81).
+                sous un libelle n'avait plus AUCUN moyen d'en sortir depuis le menu.
               */}
               {(convMenu.conv.projectPath || convMenu.conv.categorie) && (
                 <button
@@ -4466,7 +4466,7 @@ export function ChatView({
                   ? texteFil('liste.desarchiver')
                   : texteFil('liste.archiver')}
               </button>
-              {/* Fil privé du village commun (D6, conv-1429) : une bascule, comme le surlignage. */}
+              {/* Fil privé du village commun (D6) : une bascule, comme le surlignage. */}
               <button
                 role="menuitem"
                 data-testid="conv-menu-prive"
@@ -4618,10 +4618,10 @@ export function ChatView({
                 Le dossier de REPLI est ce que la pastille affiche quand aucun dossier n'est
                 assigne. Il n'entrait jamais dans la memoire des dossiers connus : l'utilisateur
                 lisait donc « ContosoApp » sur l'en-tete sans le trouver dans ce menu
-                (conv-79, 2026-09-16). On l'expose en tete, marque « par defaut », et il devient
+                (2026-09-16). On l'expose en tete, marque « par defaut », et il devient
                 choisissable comme les autres.
               */}
-              {/* « This computer » est TOUJOURS là (conv-1231), même si une ancienne croix du Board
+              {/* « This computer » est TOUJOURS là, même si une ancienne croix du Board
                   l'a mémorisé comme retiré : il ne se retire pas. */}
               {convFolderMenu.mode === 'dossier' && dossierPersonnel && (
                 <button
@@ -4726,15 +4726,15 @@ export function ChatView({
               )}
               {/*
                 CATEGORIES — l'autre moitie du geste « ranger ». Depuis que le dossier de travail
-                et le libelle de classement sont deux champs distincts (conv-81), ce menu ne
+                et le libelle de classement sont deux champs distincts, ce menu ne
                 proposait plus que des chemins : « Fiches Team » etait devenu inatteignable a la
-                souris alors que des fils y vivaient toujours (conv-79). Le tri entre les deux se
+                souris alors que des fils y vivaient toujours. Le tri entre les deux se
                 fait plus bas, sur la FORME de la valeur — un libelle n'ecrase jamais le dossier.
               */}
               {/*
                 Les DOSSIERS sont aussi des categories dans la barre laterale (AUTOWINOS,
                 CONTOSOV3DESKTOP…). Sans eux ici, le menu ouvert depuis la selection multiple etait
-                vide des qu'aucun libelle libre n'existait (conv-815, 2026-09-23).
+                vide des qu'aucun libelle libre n'existait (2026-09-23).
               */}
               {convFolderMenu.mode === 'categorie' &&
                 (categoriesConnues.length > 0 || dossiersConversations.length > 0) && (
@@ -4904,7 +4904,7 @@ export function ChatView({
                   {active ? active.title : texteFil('entete.nouvelle')}
                 </span>
                 <div className="chat-runtime" data-testid="chat-runtime-identity">
-                  {/* La perle d'etat remplace l'ancienne boule de 26 px (conv-158) : meme case,
+                  {/* La perle d'etat remplace l'ancienne boule de 26 px : meme case,
                       meme perle, meme spinner que la liste des fils. */}
                   <PastilleEnTete
                     occupe={busy}
@@ -4926,7 +4926,7 @@ export function ChatView({
                     {bindingEffectif?.provider ?? texteFil('entete.connexion')}
                   </span>
                   {/*
-                    LE MODÈLE DU FIL, EN LISTE DÉROULANTE (conv-239, 2026-10-11). Il était affiché
+                    LE MODÈLE DU FIL, EN LISTE DÉROULANTE (2026-10-11). Il était affiché
                     ici en simple texte ET choisi dans la barre de saisie : deux fois la même
                     information. Le choix vit désormais ici seul, et il ne vaut QUE pour cette
                     conversation (`changerModeleDuFil`). Menu ouvert VERS LE BAS : vers le haut,
@@ -4990,7 +4990,7 @@ export function ChatView({
                       : cheminEffectif
                         ? nomDeDossier(cheminEffectif)
                         : 'Autowin OS'
-                    // Même icône que sa ligne du menu (💻), pas le 📁 d'un projet (conv-1231).
+                    // Même icône que sa ligne du menu (💻), pas le 📁 d'un projet.
                     const iconeDossier = surCetOrdinateur ? '💻' : '📁'
                     const titreDossier = dossierProjet
                       ? active
@@ -5048,7 +5048,7 @@ export function ChatView({
               </div>
             </div>
             <div className="row gap2 chat-head-actions">
-              {/* NAVIGATEUR INTÉGRÉ (conv-1286, lot 3/5 ; Mini-adresse, conv-1317) : ouvre ou ferme le
+              {/* NAVIGATEUR INTÉGRÉ (lot 3/5 ; Mini-adresse) : ouvre ou ferme le
                   panneau, comme Ctrl+Shift+B. */}
               <BoutonNavigateur
                 conversationId={activeId}
@@ -5061,8 +5061,8 @@ export function ChatView({
                   setPanneauOutil((ouvert) => (ouvert === 'bureaux' ? null : 'bureaux'))
                 }
               />
-              {/* DÉTAILS, LE MÊME BOUTON CREUX QUE LA MINI-ADRESSE (conv-1317, 2026-10-30 : « le bouton
-                  détail met lui le meme look »). Il portait le balisage de ThinkingBlock (conv-178),
+              {/* DÉTAILS, LE MÊME BOUTON CREUX QUE LA MINI-ADRESSE (2026-10-30 : « le bouton
+                  détail met lui le meme look »). Il portait le balisage de ThinkingBlock,
                   donc ses règles, ses reflets et le chanfrein de chaque thème : un vrai bouton de
                   la même classe que son voisin garde les deux identiques. */}
               <BoutonDetails
@@ -5073,7 +5073,7 @@ export function ChatView({
                 onBasculer={() => setShowRuns((v) => !v)}
               />
             </div>
-            {/* LA JAUGE DE CONTEXTE EST LE SEPARATEUR ENTRE L'EN-TETE ET LE FIL (conv-179) : posee sur
+            {/* LA JAUGE DE CONTEXTE EST LE SEPARATEUR ENTRE L'EN-TETE ET LE FIL : posee sur
                le filet du bas de l'en-tete. Meme source que tout le reste : `jaugeCourante`. Au survol,
                le panneau de detail et son action Compacter. */}
             <ChatContextRule
@@ -5154,7 +5154,7 @@ export function ChatView({
               </span>
               {/* Seuil réglable : le bandeau ouvre Settings › Behaviour au lieu d'un chemin à recopier,
                   qui avait vieilli sans bruit (« Settings › Budget », section retirée le 23/10). Le
-                  nom `behaviour` mène à cette section (shared/navigation.ts) (conv-1602). */}
+                  nom `behaviour` mène à cette section (shared/navigation.ts). */}
               {arretReglableDansBehaviour(arretsAuto[activeId]) && (
                 <button
                   type="button"
@@ -5191,7 +5191,7 @@ export function ChatView({
             </div>
           )}
 
-          {/* Rendues dans `body`, comme la carte de suppression des fils (conv-1078) : dans le panneau
+          {/* Rendues dans `body`, comme la carte de suppression des fils : dans le panneau
               du chat, la poignée de largeur de la liste (`.conv-pane-resizer`) passait au-dessus. */}
           {renameCandidate &&
             createPortal(
@@ -5247,7 +5247,7 @@ export function ChatView({
             )}
 
           {/* Une conversation ou un lot : la même carte, qui nomme les fils et leurs messages
-              (conv-1078, « Implémenter la 2 · En-tête en ligne »). */}
+              (« Implémenter la 2 · En-tête en ligne »). */}
           {deleteCandidate && (
             <SuppressionConversationsCarte
               fils={[deleteCandidate]}
@@ -5380,7 +5380,7 @@ export function ChatView({
               // La position de lecture se retient a chaque mouvement DU LECTEUR : quitter une
               // conversation ne passe pas toujours par un evenement de fermeture (changement de
               // conversation, fermeture brutale de l'app). Un defilement provoque par l'APP, lui,
-              // n'ecrit rien : c'est ce qui rouvrait le fil au milieu (conv-61).
+              // n'ecrit rien : c'est ce qui rouvrait le fil au milieu.
               if (activeRef.current && gesteLecteurRef.current)
                 memoriserPositionLecture(
                   activeRef.current,
@@ -5451,7 +5451,7 @@ export function ChatView({
             )}
 
             {/* Sans cadre autour : le panneau de l'ancien bloc restait gris sur les thèmes clairs.
-                La phrase REMPLIT la saisie, elle ne l'envoie pas (draft conv-1401, « 3+5 »). */}
+                La phrase REMPLIT la saisie, elle ne l'envoie pas (« 3+5 »). */}
             {convLoad.status === 'idle' &&
               messages.length === 0 &&
               (!busy || activeId === null) && (
@@ -5481,7 +5481,7 @@ export function ChatView({
 
             <VueMesuree id="chat-fil" bloc cle={activeId}>
               <PointerMomentVideo.Provider value={pointerMomentVideo}>
-                {/* Les runs en cours, pour le bloc des juges qui se remplit en direct (conv-1021). */}
+                {/* Les runs en cours, pour le bloc des juges qui se remplit en direct. */}
                 <RunsEnDirect.Provider value={liveRuns}>
                   {/* Boutons de choix des pages interactives : ils remplissent CETTE saisie. */}
                   <RemplirSaisieDuFil.Provider value={remplirSaisie}>
@@ -5493,7 +5493,7 @@ export function ChatView({
 
           </div>
 
-          {/* Ascenseur à crans du fil (draft conv-1114, « 1 · Dépli en place ») : remplace l'ascenseur
+          {/* Ascenseur à crans du fil (« 1 · Dépli en place ») : remplace l'ascenseur
               du système, un cran par message de l'utilisateur, carte du fil à la molette. */}
           <AscenseurDuFil
             key={activeId ?? 'aucune'}
@@ -5517,7 +5517,7 @@ export function ChatView({
                 setHasNewActivity(false)
                 setScrolledAwayFromTail(false)
                 /*
-                 * DESCENDRE PAR LE BOUTON, C'EST QUITTER SA LECTURE (conv-1128, 2026-10-23). La
+                 * DESCENDRE PAR LE BOUTON, C'EST QUITTER SA LECTURE (2026-10-23). La
                  * position retenue ne partait que si un `scroll` touchait le bas pendant que le
                  * drapeau « geste du lecteur » etait leve ; apres une reprise de lecture, il est
                  * baisse, et le rechargement suivant du fil y RAMENAIT le lecteur. Meme regle qu'a
@@ -5538,13 +5538,13 @@ export function ChatView({
            * zone de saisie : l'utilisateur lit la cible et l'opération SANS perdre de vue ce que
            * l'agent venait de dire, et le reste de l'application reste utilisable pendant qu'il
            * décide. La version précédente couvrait tout l'écran d'un voile translucide et rendait le
-           * fil et la question illisibles l'un à travers l'autre (capture, conv-626).
+           * fil et la question illisibles l'un à travers l'autre (capture).
            */}
           <ProdAutorisationHote conversationId={activeId} />
           {/* Les messages entre agents de fils du même dépôt vivent dans Détails > Runs
-              (conv-1139, 2026-10-25 : « ranges ce bloc dans Détails > Runs »), plus ici. */}
+              (2026-10-25 : « ranges ce bloc dans Détails > Runs »), plus ici. */}
           {/*
-           * LA FRISE DE LA SUPER CONV, EN BAS (conv-1393, 2026-10-31 : « ce bloc mets-le plutôt en
+           * LA FRISE DE LA SUPER CONV, EN BAS (2026-10-31 : « ce bloc mets-le plutôt en
            * bas »). Sous l'en-tête, elle poussait le fil vers le bas et le lecteur la traversait à
            * chaque arrivée sur le fil. Elle se pose ici, juste au-dessus du tableau du plan, qui
            * complète sa ligne de chiffres. Les onglets ne bougent pas : `fixed`, dans la bande des
@@ -5560,7 +5560,7 @@ export function ChatView({
               />
             </BarriereErreur>
           ) : null}
-          {/* Plan de lots d'un fil chef (conv-1150) : avancement, et le seul clic qui le lance. */}
+          {/* Plan de lots d'un fil chef : avancement, et le seul clic qui le lance. */}
           <BarriereErreur zone="chat-lots" cle={activeId}>
             <TableauDesLots conversationId={activeId} aCoteDeLaFrise={ongletDuFilOuvert !== null} />
           </BarriereErreur>
@@ -5592,7 +5592,7 @@ export function ChatView({
               onDraftPresence={setBrouillonPresent}
               onBtw={handleBtw}
               onSend={() => {
-                // Bascule ×3 (conv-1479) : un clic ARME le mode, l'envoi suivant part en 3 façons
+                // Bascule ×3 : un clic ARME le mode, l'envoi suivant part en 3 façons
                 // puis le mode retombe. Avant, chaque clic lançait 3 tours payés : spam.
                 if (troisFaconsArme) {
                   setTroisFaconsArme(false)
@@ -5602,7 +5602,7 @@ export function ChatView({
                 void send()
               }}
               onQueue={() => {
-                // ×3 pendant un tour (conv-1491) : la file l'ignorait en silence et ×3 restait
+                // ×3 pendant un tour : la file l'ignorait en silence et ×3 restait
                 // allumé pour un envoi plus tard. On refuse en clair et on éteint.
                 if (troisFaconsArme) {
                   setTroisFaconsArme(false)
@@ -5695,7 +5695,7 @@ export function ChatView({
                   {/* `btn` comme ∞ et le micro voisins : même fond, même survol, même état
                       désactivé. Sans elle, le trombone gardait un style à part (survol vert,
                       contour voilé) que les thèmes générés recopiaient.
-                      JAMAIS DÉSACTIVÉ PENDANT UN TOUR (conv-937, 2026-10-13 : « ça m'empêche
+                      JAMAIS DÉSACTIVÉ PENDANT UN TOUR (2026-10-13 : « ça m'empêche
                       d'upload et de préparer mon prochain prompt pendant que la conv travaille »).
                       Le glisser-déposer et le collage joignaient déjà pendant le tour ; l'envoi en
                       cours de tour emporte les pièces jointes (submitBtw, repli en file avec elles). */}
@@ -5734,7 +5734,7 @@ export function ChatView({
                       onBasculer={() => setQuestionACoteOuverte((ouverte) => !ouverte)}
                     />
                   )}
-                  {/* « ESSAIE 3 FAÇONS » (conv-1038) : la demande tapée, en trois branches comparées. */}
+                  {/* « ESSAIE 3 FAÇONS » : la demande tapée, en trois branches comparées. */}
                   <button
                     type="button"
                     className={`btn composer-trois-facons${troisFaconsArme ? ' actif' : ''}`}
@@ -5794,7 +5794,7 @@ export function ChatView({
         </section>
       )}
 
-      {/* ---- Navigateur intégré (conv-1286, lot 3/5) : entre le fil et les Détails, fil unique
+      {/* ---- Navigateur intégré (lot 3/5) : entre le fil et les Détails, fil unique
           seulement. Démonté en mosaïque ou fermé : il retire alors la page native (poserCadre(null)). */}
       {convViewMode !== 'mosaic' && navigateurOuvert && activeId && (
         <BarriereErreur zone="chat-navigateur" cle={activeId}>
@@ -5811,7 +5811,7 @@ export function ChatView({
         </BarriereErreur>
       )}
 
-      {/* ---- Bureaux cachés (conv-1378) : à la place du navigateur. Aussi sans fil ouvert et en
+      {/* ---- Bureaux cachés : à la place du navigateur. Aussi sans fil ouvert et en
           mosaïque, contrairement à lui : une demande « va sur les bureaux cachés » ne doit pas rester
           sans effet visible. */}
       {bureauxOuverts && (

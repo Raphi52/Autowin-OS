@@ -2,7 +2,7 @@ import type { ExecutionEvidence } from '../providers/types'
 import { isStrictlyReadOnlyCommand } from '../providers/evidence-vocabulary'
 
 /**
- * LE JUGE NE RELANCE PAS UN TEST DÉJÀ JOUÉ SUR LE CODE QU'IL INSPECTE (piste 4 de conv-914).
+ * LE JUGE NE RELANCE PAS UN TEST DÉJÀ JOUÉ SUR LE CODE QU'IL INSPECTE (piste 4).
  *
  * Mesuré sur le contrôle final de run-a8a70cd0ee56-1 (journal `c5d52ecc…jsonl`) : 247 s, dont
  * `vitest` (5,1 s) et `npm run typecheck` (25,3 s) relancés alors que le producteur venait de les
@@ -24,7 +24,7 @@ import { isStrictlyReadOnlyCommand } from '../providers/evidence-vocabulary'
  * - sinon réussi/échoué (Claude) : `ok` vient de `is_error`, levé par le CLI quand le code est non
  *   nul (mesuré sur run-a8a70cd0ee56-1 : 251 appels Bash, les 7 échecs d'exécution commencent par
  *   « Exit code N », le 8e est un refus du garde-fou, donc non exécuté).
- * fix-ok: conv-914 piste 4 — la 1re version exigeait un code de sortie chiffré ; or la preuve Claude
+ * fix-ok: piste 4 — la 1re version exigeait un code de sortie chiffré ; or la preuve Claude
  * n'en porte pas (`claude.ts`, push de `executionEvidence` sans `exitCode`), et les agents écrivent
  * presque toujours `; echo EXIT=$?`, que la 1re version refusait : la règle ne se déclenchait jamais.
  *

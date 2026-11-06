@@ -3,7 +3,7 @@ import { useTextesHorsElectron } from '../textes-ecrans/hors-electron'
 
 /**
  * L'écran montré à la place de l'interface quand elle est ouverte dans un navigateur ordinaire, sans
- * le pont `window.api` d'Electron (conv-1286). Le choix se fait dans `racine-selon-le-pont.tsx`.
+ * le pont `window.api` d'Electron. Le choix se fait dans `racine-selon-le-pont.tsx`.
  */
 export function HorsElectron(): ReactElement {
   const { t } = useTextesHorsElectron()

@@ -23,7 +23,7 @@
   box-shadow: 0 0 18px rgba(239, 63, 145, 0.24);
 }
 
-/* Memory : la racine et l'en-tete ne peignent rien (gabarit des vues, conv-160) ; les colonnes
+/* Memory : la racine et l'en-tete ne peignent rien (gabarit des vues) ; les colonnes
    sont des panneaux. */
 .theme-sidebar,
 .visibility-sidebar,
@@ -72,7 +72,7 @@
 /* Chat, Controls, Behaviour */
 .chat-layout {
   /* Page uniforme (--surface-panel) : cosmique seulement au contour (.main). Behaviour n'y est plus :
-     sa racine ne repeint pas le cadre de page (gabarit des vues, conv-160). */
+     sa racine ne repeint pas le cadre de page (gabarit des vues). */
   background: var(--surface-panel);
 }
 
@@ -240,7 +240,7 @@
 }
 /* Fenetre "conversation active" : carte autonome (fond 95% propre, plus dependante de
    chat-layout) bordee arrondie comme les autres panneaux. */
-/* LA SAISIE EST UN BLOC A PART, SOUS LE FIL — DANS TOUS LES THEMES (conv-150, 2026-10-10 : « le
+/* LA SAISIE EST UN BLOC A PART, SOUS LE FIL — DANS TOUS LES THEMES (2026-10-10 : « le
    container noir du chat doit pas deborder sur celui du bloc de prompt, je veux que le bord arrondi
    bottom right de la chat box soit situe au dessus du bord top right du bloc de prompting », puis
    « la meme separation partout »). La saisie est le DERNIER enfant de `.chat` : peint sur `.chat`,
@@ -279,7 +279,7 @@
   border-radius: var(--container-radius-panel);
   background: linear-gradient(rgba(0, 0, 0, 0.42), rgba(0, 0, 0, 0.42)), var(--surface-panel);
 }
-/* LA FLECHE BASSE DE L'ASCENSEUR RESTE DANS LE PANNEAU (conv-150 : « la fleche de la barre de
+/* LA FLECHE BASSE DE L'ASCENSEUR RESTE DANS LE PANNEAU (« la fleche de la barre de
    scroll depasse en bas maintenant, faut la remonter un peu »). Le bas du fil tombe desormais sur
    le coin ARRONDI du panneau : la fleche, au bout de la barre, depassait de la courbe. Le fil
    s'arrete une demi-courbure plus haut. */
@@ -288,7 +288,7 @@
   margin-bottom: calc(var(--container-radius-panel) / 2);
 }
 /* Le filet du haut (rail, ChatView.css) se retient hors des coins arrondis. La jauge de contexte
-   n'y est plus : elle est le separateur sous l'en-tete du chat depuis conv-179. */
+   n'y est plus : elle est le separateur sous l'en-tete du chat. */
 .cosmic-outline .chat > .composer::after {
   right: var(--container-radius-panel);
   left: var(--container-radius-panel);
@@ -508,7 +508,7 @@
   gap: 4px;
 }
 
-/* ESPACEMENT VERTICAL RESSERRE (conv-227, 2026-10-11 : « ya trop d'espacement vertical entre les
+/* ESPACEMENT VERTICAL RESSERRE (2026-10-11 : « ya trop d'espacement vertical entre les
    differents elements du chat ca fait scroller pour rien »). Mesure avant : 34 px entre deux
    messages, 38 px au-dessus du premier, 9-10 px entre les elements d'un message. */
 .cosmic-outline .chat-scroll {
@@ -559,7 +559,7 @@
   line-height: 1.62;
 }
 
-/* LA BARRE D'ACTIVITE N'EST PLUS UNE CARTE TEINTEE (conv-904, 2026-10-12) : elle prend le cadre
+/* LA BARRE D'ACTIVITE N'EST PLUS UNE CARTE TEINTEE (2026-10-12) : elle prend le cadre
    « grand, deux lignes » des capsules (verre fume, bord degrade, anneau d'arcs, legende), dessine
    par components/anneau-activite.css avec les seuls jetons du theme. Le cadre, le fond et le
    liseré de statut de l'ancienne carte (B3-γ) sont retires d'ici avec elle. */
@@ -644,14 +644,14 @@
 }
 
 /* Titre, legende et signe de vie de la barre d'activite : dessines par anneau-activite.css, avec les
-   jetons du theme (conv-904). Seule la fleche « ↗ » d'un groupe sans etage a deplier reste ici. */
+   jetons du theme. Seule la fleche « ↗ » d'un groupe sans etage a deplier reste ici. */
 .cosmic-outline .activity-group-go {
   margin-left: auto;
   color: var(--text-dim);
   font-size: 11px;
 }
 
-/* « ↓ Dernier message » SE POSE AU BAS DU FIL, DANS LE PANNEAU (conv-154 : « le badge dernier
+/* « ↓ Dernier message » SE POSE AU BAS DU FIL, DANS LE PANNEAU (« le badge dernier
    message doit etre plus haut (en bas du container du chat) »). Un `bottom: 106px` fixe se mesurait
    depuis le bas de TOUTE la colonne : la saisie et sa jauge de contexte ont une hauteur variable,
    et la pastille tombait a cheval sur la jonction fil/saisie. Elle est donc ACCROCHEE au bas du fil
@@ -730,7 +730,7 @@
 }
 
 /* Memory : le CHÂSSIS est IDENTIQUE en mode sombre ET galaxy — seul le RENDU DU GRAPHE (nœuds
-   étoiles WebGL) change en galaxy. GABARIT DES VUES (conv-160) : la racine et l'en-tete ne peignent
+   étoiles WebGL) change en galaxy. GABARIT DES VUES : la racine et l'en-tete ne peignent
    rien, le cadre de page `.view-page` s'en charge ; l'unique couche 0.95 passe sur CHAQUE colonne,
    qui devient un panneau (pas d'empilement, pas de blur galaxy, pas de fond bleu qui transparaît).
    Avant, la racine portait cette couche : une page noire dans le cadre de page. */
@@ -773,7 +773,7 @@
   color: #9fc3de;
 }
 
-/* BOUTON D ENVOI : APPARENCE (conv-257, 2026-09-04).
+/* BOUTON D ENVOI : APPARENCE (2026-09-04).
 
    Verdict utilisateur : un bouton envoyer meilleur que le disque plat actuel. Perimetre borne
    par lui a l APPARENCE seule : taille, forme et position restent celles de ChatView.css.
@@ -840,7 +840,7 @@
 :root:not([data-base='clair']):not([data-theme^='malvoyant-']) .cosmic-outline .msg.user .msg-body.msg-bulle {
   border: 1px solid transparent;
   border-radius: 12px 12px 3px 12px;
-  /* Bleu et rose PLEINS (conv-182 : « le même bleu plein partout ») : a 85 % sur le noir, le
+  /* Bleu et rose PLEINS (« le même bleu plein partout ») : a 85 % sur le noir, le
      bleu devenait un bleu de plus, plus sombre que celui des capsules et de l'onglet actif. */
   background: linear-gradient(135deg, #3c6eeb, #e63ca0);
   /* Le degrade part du bord EXTERIEUR : sinon il se repete sous la bordure transparente et
@@ -851,6 +851,6 @@
   box-shadow: none;
   position: relative;
 }
-/* La lueur « Brume » autour de la bulle envoyee (draft conv-199) etait une copie FLOUTEE de son
-   fond, posee derriere elle : retiree le 2026-11-05 (conv-1623, « enleve les effets de flou » — le
+/* La lueur « Brume » autour de la bulle envoyee etait une copie FLOUTEE de son
+   fond, posee derriere elle : retiree le 2026-11-05 (« enleve les effets de flou » — le
    flou coutait la carte graphique). Garde : assets/aucun-flou.test.ts. */

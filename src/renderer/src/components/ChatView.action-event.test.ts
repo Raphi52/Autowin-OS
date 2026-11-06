@@ -51,7 +51,7 @@ describe('AssistantActivityGroup', () => {
       })
     )
     // Le rendu statique ne clique pas : on vérifie le contrat d'intention affiché.
-    // Capsule (conv-194) : l'acces a Workflows est le bouton ↗ de l'en-tete.
+    // Capsule : l'acces a Workflows est le bouton ↗ de l'en-tete.
     expect(html).toContain('Voir la trace complète dans Workflows')
     expect(modes).toEqual([])
   })

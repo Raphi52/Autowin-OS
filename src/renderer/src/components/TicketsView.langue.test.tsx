@@ -9,10 +9,10 @@ import { VeilleCandidatsSection } from './VeilleCandidatsSection'
 import { appliquerLangue } from '../langue'
 
 /**
- * LES TICKETS SUIVENT LA LANGUE (traduction anglaise, conv-1170, lot « Tickets »). Entrée qui doit
+ * LES TICKETS SUIVENT LA LANGUE (traduction anglaise, lot « Tickets »). Entrée qui doit
  * faire échouer ce test : un libellé de TicketsView ou de la section des candidats de veille
  * (VeilleCandidatsSection) laissé en dur, ou un écran qui ne se redessine pas quand la langue change.
- * Depuis conv-1397, TicketsView est l'onglet « Tickets » du Board et la veille un bloc de Maintenance :
+ * TicketsView est l'onglet « Tickets » du Board et la veille un bloc de Maintenance :
  * chacun est monté seul.
  */
 beforeAll(() => {
@@ -117,7 +117,7 @@ describe('tickets — langue', () => {
     expect(parTestId(zone, 'tickets-refresh')?.textContent).toBe('Actualiser')
     expect(parTestId(zone, 'tickets-select-all')?.textContent).toBe('Tout sélectionner (2)')
 
-    // Plus de barre de titre ni d'onglets (conv-1397) : c'est le Board qui les porte.
+    // Plus de barre de titre ni d'onglets : c'est le Board qui les porte.
     expect(zone.querySelector('.view-topbar')).toBeNull()
 
     await act(async () => appliquerLangue('en'))

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { Cle, ContexteVoitures } from './home-decor-avenue-voitures'
 
 /*
- * LA VOITURE GARÉE : L'« ATLANTIC VOLANTE » (conv-330).
+ * LA VOITURE GARÉE : L'« ATLANTIC VOLANTE ».
  *
  * Demande de l'utilisateur : « /draft des plus belles voitures pour le fond d'écran de l'accueil ».
  * Tour 1 : six écoles de dessin ; il garde la 5 (Atlantic, streamliner art déco) et la 4 (Volante,

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 const styles = readFileSync(new URL('./ChatComposerExtras.css', import.meta.url), 'utf8')
 
 /**
- * UNE LONGUE SUGGESTION NE DOIT PAS ÉLARGIR LA ZONE DE SAISIE (conv-1103, 2026-10-22).
+ * UNE LONGUE SUGGESTION NE DOIT PAS ÉLARGIR LA ZONE DE SAISIE (2026-10-22).
  *
  * Défaut vu dans une fenêtre de 900 px : la suggestion la plus longue ne passe pas à la ligne
  * (`white-space: nowrap`, prévu pour se couper avec « … »), donc le bloc des suggestions annonçait

@@ -1,5 +1,5 @@
 /**
- * LE BLOC FIXE DE FIN D'ETAPE (conv-989, 2026-10-16).
+ * LE BLOC FIXE DE FIN D'ETAPE (2026-10-16).
  *
  * Chaque etape de travail (scout, frame, terrain, build, clean) termine sa sortie par un bilan court
  * et toujours de la meme forme — consigne `CONSIGNE_BILAN`, posee par `phaseBrief` (phase-briefs.ts) :

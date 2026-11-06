@@ -1,5 +1,5 @@
 /* =================================================================================================
- * THEME « ENSEIGNES » (id `enseignes`, « Signboards » en anglais) — conv-1586, 2026-11-05.
+ * THEME « ENSEIGNES » (id `enseignes`, « Signboards » en anglais), 2026-11-05.
  * Demande : « implémenter Signboards du premier caroussel » : la proposition 1 du tour 2 du /draft
  * « un theme qui suit l'univers de l'accueil » (le Quartier). Base CLAIRE.
  *
@@ -21,7 +21,7 @@
  *
  * Le prefixe porte DEUX attributs : il gagne sur la base claire (`:root[data-base='clair'] ...`) a
  * selecteur egal. Sur le fond « Quartier » de l'Accueil, les tuiles gardent leur bois (HomeView.css,
- * regles !important) : c'est le menu Fond de l'Accueil qui fait foi (conv-1076).
+ * regles !important) : c'est le menu Fond de l'Accueil qui fait foi.
  * ================================================================================================= */
 
 /* ---- 1. JETONS ---------------------------------------------------------------------------------- */

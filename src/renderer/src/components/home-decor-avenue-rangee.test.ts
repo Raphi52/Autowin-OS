@@ -11,7 +11,7 @@ import {
 } from './home-decor-avenue-rangee'
 
 /**
- * LA RANGÉE DE DROITE EN VOLUMES (conv-1037).
+ * LA RANGÉE DE DROITE EN VOLUMES.
  *
  * Demande de l'utilisateur : « la barre d'immeuble de droite a les toits qui forment une ligne droite
  * ca fait pas naturelle et les boutiques et tags font trop basique refait toute la partie de droite »,

@@ -3,7 +3,7 @@
  *  - l'agent, dans la description de la commande `task_create` (src/main/commands/commands.ts), forme courte ;
  *  - l'utilisateur, en exemple grisé du champ « Prompt envoyé » (TaskManagerView.tsx), forme longue.
  *
- * Demande de l'utilisateur (conv-983, 2026-10-16) : « dans autowin utilise-la dès que possible ».
+ * Demande de l'utilisateur (2026-10-16) : « dans autowin utilise-la dès que possible ».
  * Pourquoi ces blocs, et pas d'autres :
  *  - le prompt part SEUL dans la conversation (`runtime.runPrompt(conversationId, prompt)`,
  *    src/main/task-manager/chat-dispatch.ts) : aucun fil n'est relu, il doit se suffire ;

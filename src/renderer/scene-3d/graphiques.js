@@ -1,8 +1,8 @@
 /*
- * BOITE A OUTILS DE GRAPHIQUES DES PAGES INTERACTIVES (conv-1304, 2026-10-30) — `autowin.graphique`.
+ * BOITE A OUTILS DE GRAPHIQUES DES PAGES INTERACTIVES (2026-10-30) — `autowin.graphique`.
  *
  * Pourquoi : banc du 2026-10-30, chaque modele redessinait a la main axes, graduations, survol et
- * legende (conv-1310 : 40 lignes pour dix barres), et ce code differe d'une page a l'autre. Une
+ * legende (40 lignes pour dix barres), et ce code differe d'une page a l'autre. Une
  * ligne suffit maintenant :
  *   autowin.graphique('#zone', { type: 'barres', categories: ['jan', 'fev'], valeurs: [120, 135] })
  *

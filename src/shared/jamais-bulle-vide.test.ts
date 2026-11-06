@@ -4,7 +4,7 @@ import { createChatTurn, flattenChatParts, reduceChatTurn } from './chat-turn'
 /**
  * JAMAIS DE BULLE VIDE — y compris sur un tour ANNULÉ ou INTERROMPU.
  *
- * Constaté dans `conv-1267` (message 5) : l'utilisateur commence une phrase, se corrige, le tour est
+ * Constaté (message 5) : l'utilisateur commence une phrase, se corrige, le tour est
  * annulé — et il ne reste RIEN à lire. La règle existait déjà, mais seulement sur les chemins où le
  * modèle avait parlé ; une annulation précoce y échappait.
  *

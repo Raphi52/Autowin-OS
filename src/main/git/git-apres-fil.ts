@@ -7,20 +7,20 @@ import type { AutoCloseReport, GitRunner } from '../runs/run-autoclose'
 import { destinationDuPush, titreDuBandeau } from './titre-bandeau-git'
 
 /**
- * « PUBLIER SANS TAPER /git » (conv-1339, 2026-10-30, piste du scout conv-1332).
+ * « PUBLIER SANS TAPER /git » (2026-10-30, piste du scout).
  *
- * L'ACCORD DE PUBLIER EXISTAIT DÉJÀ : « Enchaînement auto » (conv-267), allumé sur ce poste depuis
+ * L'ACCORD DE PUBLIER EXISTAIT DÉJÀ : « Enchaînement auto », allumé sur ce poste depuis
  * le 23/10, publie chaque tour réussi dont il PROUVE les fichiers. Un second accord « dans le profil »
  * aurait fait deux interrupteurs pour un même consentement. Ce qui manquait est la suite : dans un
  * dossier partagé, un fichier touché par un autre fil reste en attente (`exclus`), et seul un tri par
  * contenu sait le rendre à son fil. Mesuré le 30/10 : 5 `/git` tapés pour finir ces fils-là, et 3
- * surveillances « /git à la fin du tour » posées à la main (conv-1280, conv-1317) qui n'ont rien
+ * surveillances « /git à la fin du tour » posées à la main qui n'ont rien
  * publié, car une surveillance tourne en lecture seule (`chat-dispatch.ts`, `readOnly: true`).
  *
  * CET INTERRUPTEUR-CI EST À PART ET ÉTEINT PAR DÉFAUT : chaque lancement est un tour de modèle, donc
- * un coût que l'accord de conv-267 ne couvrait pas. C'est l'utilisateur qui l'allume, jamais le code.
+ * un coût que l'accord ne couvrait pas. C'est l'utilisateur qui l'allume, jamais le code.
  *
- * « FINI » NE SE LIT PLUS DANS `AUTOWIN_FIN_V1` (conv-1544, 2026-11-04). Mesuré sur 7 jours :
+ * « FINI » NE SE LIT PLUS DANS `AUTOWIN_FIN_V1` (2026-11-04). Mesuré sur 7 jours :
  * 35 `/git` tapés à la main, dont 3 seulement après un tour qui avait écrit cette ligne, et UNE
  * seule publication par cet interrupteur. Presque aucun fil ne l'écrit : la consigne la réserve au
  * fil sans aucune suite, et chaque tour propose ses suites. Fini = le fil est resté CALME
@@ -45,7 +45,7 @@ const MOTIFS_DU_DOSSIER_PARTAGE: ReadonlySet<string> = new Set([
 const DEJA_UNE_PUBLICATION = /^\s*\/(?:git|salvage)(?:\s|$)/iu
 
 /**
- * Une demande qui interdit de publier prime sur l'accord permanent. Vécu le 2026-10-01 (conv-770) :
+ * Une demande qui interdit de publier prime sur l'accord permanent. Vécu le 2026-10-01 :
  * « Ne publie rien : aucun commit, aucun push » a été lu comme une demande de publication.
  */
 const PUBLICATION_INTERDITE =
@@ -61,7 +61,7 @@ export interface TourFini {
   demande: string
   /** Tous ses messages du fil : un « ne publie rien » du début vaut encore à la fin du fil. */
   demandesDuFil: readonly string[]
-  /** Plus lu depuis conv-1544 (voir l'en-tête) ; encore passé par `ipc/chat.ts`. */
+  /** Plus lu (voir l'en-tête) ; encore passé par `ipc/chat.ts`. */
   compteRendu?: string
   /** Rapport de l'enchaînement auto ; absent = interrupteur éteint, ou rien à publier. */
   rapport: AutoCloseReport | undefined
@@ -112,7 +112,7 @@ export interface FilDansUnPlan {
   plan: { chef: string; statut: StatutDuPlan }
 }
 
-/** Un plan dont des lots peuvent encore écrire : la passe de son chef attend sa fin (conv-1544). */
+/** Un plan dont des lots peuvent encore écrire : la passe de son chef attend sa fin. */
 const PLAN_QUI_TOURNE: ReadonlySet<StatutDuPlan> = new Set([
   'attente-accord',
   'en-cours',
@@ -137,7 +137,7 @@ export function publicationInterditeDans(textes: readonly string[]): boolean {
 /**
  * La condition de déclenchement, entière, sans effet de bord.
  *
- * LES FILS DE PLAN NE SONT PLUS ÉCARTÉS (conv-1544) : leur travail est rendu au fil CHEF par
+ * LES FILS DE PLAN NE SONT PLUS ÉCARTÉS : leur travail est rendu au fil CHEF par
  * l'appelant (`ipc/chat.ts`), et la passe attend que le plan ne tourne plus (`filOccupe`). Un lot
  * n'est donc jamais interrompu, et le plan entier part en une passe, à sa fin.
  */
@@ -156,7 +156,7 @@ export function decisionGitApresFil(tour: TourFini): DecisionGitApresFil {
 }
 
 /**
- * UN TRAVAIL D'AGENT FINI RESTÉ HORS DE LA BRANCHE (conv-1544) : copie de travail isolée ou branche
+ * UN TRAVAIL D'AGENT FINI RESTÉ HORS DE LA BRANCHE : copie de travail isolée ou branche
  * de secours d'un run, celui du bandeau « 1 travail terminé n'a jamais été publié ». Le 04/11, 8 des
  * `/git` tapés à la main visaient ces travaux-là (« trie les 25 copies de travail »).
  */
@@ -192,7 +192,7 @@ const echapper = (texte: string): string =>
 const MOTIFS_CITES = 12
 
 /**
- * LA NOTE QUAND RIEN NE PEUT PARTIR SEUL (conv-1569) : ce qui reste à trier, et un bouton `/git` que
+ * LA NOTE QUAND RIEN NE PEUT PARTIR SEUL : ce qui reste à trier, et un bouton `/git` que
  * l'utilisateur clique LUI-MÊME. Avant, la passe envoyait ce `/git` dans le fil à sa place ; il l'a
  * refusé (« je veux pas que ça envoie un message à ma place »).
  */
@@ -221,7 +221,7 @@ export interface CommitPublie {
 const COMMITS_DANS_LE_BOUTON = 25
 
 /**
- * RAIL COMPACT (conv-1574, /draft « 1 · Compact rail ») : un trait vertical, une LIGNE par étape —
+ * RAIL COMPACT (/draft « 1 · Compact rail ») : un trait vertical, une LIGNE par étape —
  * Commit, Push, Annuler —, et la ligne elle-même se déplie sur le sujet complet et sa commande.
  * Trait de 3 px et points de 10 px : les réglages choisis par l'utilisateur dans le /draft.
  * Points et trait sont des `background-image` : le thème clair force `background-color` sur toute
@@ -297,7 +297,7 @@ export function bandeauPublie(
   return [
     '```html-render',
     `<style>${STYLE_DU_RAIL}</style>`,
-    // Titre = statut, « 1 commit et push origin main réussi » (conv-1573).
+    // Titre = statut, « 1 commit et push origin main réussi ».
     `<div class="aw-kicker">${echapper(titreDuBandeau(n, lignesShell))}</div>`,
     // Ce que la passe sans tour n'a pas pu prouver (tests non joués, message de secours) : dit, pas tu.
     ...notes.map((note) => `<div class="aw-attention">${echapper(note)}</div>`),
@@ -312,7 +312,7 @@ export function bandeauPublie(
 
 /**
  * Une commande qui commite ou pousse, pas une qui lit (`git log`, `git show`, `git status`).
- * `publier-isole.ps1` compte LANCÉ par PowerShell : une lecture qui le nomme (conv-1590,
+ * `publier-isole.ps1` compte LANCÉ par PowerShell : une lecture qui le nomme (
  * `git hash-object scripts/publier-isole.ps1`) n'a rien publié.
  */
 const ECRIT_DANS_GIT =
@@ -327,7 +327,7 @@ export function lignesGitDuTour(actionsLog: readonly string[]): string[] {
 }
 
 /**
- * LE RAIL À CHAQUE PUBLICATION D'UN TOUR (conv-1574, « le style du bloc qu'on a drafté s'applique
+ * LE RAIL À CHAQUE PUBLICATION D'UN TOUR (« le style du bloc qu'on a drafté s'applique
  * jamais »). Seules la passe `/git` sans tour et la clôture d'un run posaient le bloc. Mesuré le
  * 05/11 : 136 commits sur main depuis la veille pour une douzaine de blocs, tous à l'ancien affichage.
  * Les autres partaient du fil lui-même (`publier-isole.ps1`, `git push` dans son tour) ou de
@@ -401,7 +401,7 @@ export interface PasseGit {
 
 export interface DepsGitApresFil {
   /**
-   * Publie SANS tour de modèle ni message dans le fil (conv-1569) : seul le message de commit part
+   * Publie SANS tour de modèle ni message dans le fil : seul le message de commit part
    * au petit modèle d'Agent Studio.
    */
   publier(conversationId: string, passe: PasseGit): Promise<IssueDePasse>
@@ -427,7 +427,7 @@ interface EnAttente {
 }
 
 /**
- * Le calme qui vaut « fini » (conv-1544). Un mode auto enchaîne ses tours en quelques secondes ; un
+ * Le calme qui vaut « fini ». Un mode auto enchaîne ses tours en quelques secondes ; un
  * humain qui lit la réponse puis répond reste souvent sous trois minutes. Au-delà, le fil est posé.
  */
 export const CALME_AVANT_PUBLICATION_MS = 3 * 60_000
@@ -437,7 +437,7 @@ export const CALME_AVANT_PUBLICATION_MS = 3 * 60_000
  * dessus (index, push, réalignement de l'arbre). La file vit en mémoire : un redémarrage la vide sans
  * rien perdre, le travail attend dans l'arbre comme avant, et le tour suivant du fil le reproposera.
  *
- * CHAQUE FIL ATTEND SON CALME (conv-1544) : chaque fin de tour relance son minuteur, et un fil occupé
+ * CHAQUE FIL ATTEND SON CALME : chaque fin de tour relance son minuteur, et un fil occupé
  * quand le minuteur sonne est ATTENDU, pas sauté — avant, ses fichiers sortaient de la file, et seul
  * un `/git` tapé à la main les rattrapait.
  */
@@ -456,7 +456,7 @@ export class FileGitApresFil {
 
   /**
    * `conversationId` est le fil où la passe tournera ; `origine` celui qui a écrit les fichiers — un
-   * lot, quand la passe tourne dans le chef de son plan (conv-1544).
+   * lot, quand la passe tourne dans le chef de son plan.
    */
   ajouter(conversationId: string, fichiers: readonly string[], origine = conversationId): void {
     const entree = this.#entree(conversationId)
@@ -465,7 +465,7 @@ export class FileGitApresFil {
     this.#armer(conversationId)
   }
 
-  /** Les travaux d'agents finis d'un fil, restés hors de la branche (conv-1544). */
+  /** Les travaux d'agents finis d'un fil, restés hors de la branche. */
   ajouterTravaux(
     conversationId: string,
     travaux: readonly TravailDAgent[],
@@ -563,7 +563,7 @@ export class FileGitApresFil {
 const TENTES_GARDES = 500
 
 /**
- * LES TRAVAUX D'AGENTS DÉJÀ TENTÉS, sur le disque (conv-1544) : la liste survit au redémarrage, sinon
+ * LES TRAVAUX D'AGENTS DÉJÀ TENTÉS, sur le disque : la liste survit au redémarrage, sinon
  * chaque relance de l'app repayerait une passe pour une copie qui ne se reprend pas. Une lecture
  * abîmée vaut liste vide : au pire une passe de plus, jamais une perte de travail.
  */

@@ -1,7 +1,7 @@
 /**
  * LA CADENCE DU DÉCOR DE FOND : quand dessiner l'image suivante.
  *
- * DÉFAUT CORRIGÉ (2026-10-18, conv-323). La boucle sautait toute image arrivée moins de 25 ms après
+ * DÉFAUT CORRIGÉ (2026-10-18). La boucle sautait toute image arrivée moins de 25 ms après
  * la précédente, « ~40 images/s » selon son commentaire. Or `requestAnimationFrame` ne tombe que sur
  * les battements de l'écran : à 60 Hz (16,7 ms) la première image acceptée est la deuxième (33,3 ms),
  * soit 30 images/s ; à 120 Hz, 25,0 ms mesurés à 24,99 près en faisaient sauter une sur trois de
@@ -16,7 +16,7 @@
  *      qu'il reste au moins la moitié du fil à l'interface. Mesuré le 2026-10-18 : le fond avenue
  *      coûtait 36 à 45 ms par image au fil principal — à 30 images/s, plus que le fil tout entier.
  *
- * DÉFAUT CORRIGÉ (2026-11-06, conv-1643, « chaque zoom in and out est laggy »). Les points 1 et 2
+ * DÉFAUT CORRIGÉ (2026-11-06, « chaque zoom in and out est laggy »). Les points 1 et 2
  * supposaient un écran à 60 Hz. Celui de l'utilisateur, vu par le Bureau à distance, bat toutes les
  * 15,1 ms (66 Hz, mesuré par requestAnimationFrame dans l'app ouverte) : la phase de 16,7 ms prenait
  * du retard et sautait un battement sur dix — un trou de 30 ms six fois par seconde, invisible quand
@@ -27,15 +27,15 @@
  */
 
 /** La cadence visée, en images par seconde. */
-export const IMAGES_PAR_SECONDE_DECOR = 60 // plafond 30 levé le 2026-11-04 (conv-1512, « ca pas smooth »)
+export const IMAGES_PAR_SECONDE_DECOR = 60 // plafond 30 levé le 2026-11-04 (« ca pas smooth »)
 
 /**
- * LA CADENCE AU REPOS (conv-337, 2026-10-19) : fenêtre sans le focus, ou aucun geste depuis
+ * LA CADENCE AU REPOS (2026-10-19) : fenêtre sans le focus, ou aucun geste depuis
  * `REPOS_APRES_MS`. Mesuré au banc (scripts/banc-decor-budget.mjs) : 34 ms de calcul par image dans
  * le fil du décor — à 30 images/s, les trois quarts d'un cœur, pour un Accueil qui reste ouvert des
  * heures sans qu'on y touche. Au repos, la moitié. Le premier geste ramène la cadence visée.
  */
-export const IMAGES_PAR_SECONDE_REPOS = 60 // repos à 15 levé (conv-1512) ; fenêtre cachée = aucune image (rAF)
+export const IMAGES_PAR_SECONDE_REPOS = 60 // repos à 15 levé ; fenêtre cachée = aucune image (rAF)
 
 /** Sans geste (souris, clavier, molette) depuis ce délai, en ms, le décor passe au repos. */
 export const REPOS_APRES_MS = 90_000
@@ -49,7 +49,7 @@ export function estAuRepos(maintenant: number, dernierGeste: number, aLeFocus: b
 export const PART_MAX_DU_FIL = 0.5
 
 /**
- * LE DÉCOR DESSINÉ DANS SON PROPRE FIL (Worker, decor-avenue-hote.ts) — conv-347, 2026-10-19,
+ * LE DÉCOR DESSINÉ DANS SON PROPRE FIL (Worker, decor-avenue-hote.ts), 2026-10-19,
  * « l'accueil il fait pas assez lissé ». La règle du fil principal (moyenne ÷ 0,5) n'y voyait que le
  * prix d'un `postMessage`, ≈ 0 ms : la cadence restait à 30 images/s pendant que le Worker en mettait
  * 30 à 52 (reflet une image sur deux), et une image sur deux tombait pendant que la précédente était
@@ -79,7 +79,7 @@ const HYSTERESE = 0.85
 /** Le plus petit nombre entier de battements qui couvre `ms`. */
 const enBattements = (ms: number): number => Math.ceil(ms / BATTEMENT_MS - 1e-6) * BATTEMENT_MS
 
-/** Combien d'écarts récents entre deux appels servent à apprendre la période de l'écran (conv-1643). */
+/** Combien d'écarts récents entre deux appels servent à apprendre la période de l'écran. */
 const FENETRE_PERIODE = 15
 /** Hors de ces bornes (ms), un écart n'est pas un battement : fenêtre cachée, veille, horloge figée. */
 const PERIODE_MIN_MS = 3
@@ -99,7 +99,7 @@ export interface Cadence {
   doitDessiner(maintenant: number): boolean
   /**
    * Un battement où la boucle ne consulte pas `doitDessiner` (fil du décor encore occupé) : il sert
-   * quand même à apprendre la période de l'écran, sinon elle paraîtrait double (conv-1643).
+   * quand même à apprendre la période de l'écran, sinon elle paraîtrait double.
    */
   battement(maintenant: number): void
   /** Ce qu'a coûté l'image qu'on vient de dessiner, en ms, et sur quel fil (défaut : l'interface). */
@@ -167,7 +167,7 @@ export function creerCadence(
         dernierDessin = maintenant
         return true
       }
-      // Un nombre ENTIER de battements entre deux images (conv-1643) : le plus proche de la cadence
+      // Un nombre ENTIER de battements entre deux images : le plus proche de la cadence
       // visée (égalité : le plus fluide), au moins ce qu'exige le plafond de charge. Le seuil à un
       // demi-battement absorbe le tremblement de l'horloge ; après une longue absence, l'image part
       // aussitôt, sans rattrapage.

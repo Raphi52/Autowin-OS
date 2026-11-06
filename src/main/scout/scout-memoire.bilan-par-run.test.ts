@@ -11,7 +11,7 @@ import {
 } from './scout-memoire'
 
 /*
- * « 1 LIVRÉE, 17 EN ÉCHEC » REJOUÉ (conv-1341, 2026-10-30). Mêmes tailles que la mémoire réelle :
+ * « 1 LIVRÉE, 17 EN ÉCHEC » REJOUÉ (2026-10-30). Mêmes tailles que la mémoire réelle :
  * 3 runs refusés le 22/10 sur 5, 4 et 8 pistes, 1 run livré sur 1 piste. Une version qui recompte
  * par ligne rend 17 ; une qui oublie le dédoublonnage rend 18 runs.
  *

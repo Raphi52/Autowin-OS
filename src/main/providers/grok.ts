@@ -1,6 +1,6 @@
 /**
  * Moteur `grok` (Grok Build, CLI officiel d'xAI) — Grok par l'ABONNEMENT SuperGrok, sans clé
- * (2026-11-04, conv-1499). Règle de l'utilisateur : Grok passe par le CLI d'xAI, jamais par
+ * (2026-11-04). Règle de l'utilisateur : Grok passe par le CLI d'xAI, jamais par
  * l'API directe avec XAI_API_KEY — d'où la clé RETIRÉE de l'environnement du processus : sans elle,
  * grok ne peut se servir que de la session ouverte par `grok login` (~/.grok/auth.json).
  *

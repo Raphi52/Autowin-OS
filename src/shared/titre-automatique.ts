@@ -1,10 +1,10 @@
 /**
  * LE TITRE D'UNE CONVERSATION EST CELUI DE SON PREMIER MESSAGE — il ne bouge plus ensuite.
  *
- * Historique : du 2026-10-16 (conv-999) au 2026-10-28, le titre suivait le DERNIER message de
- * l'utilisateur. Annulé à sa demande le 2026-10-28 (conv-1203) : « annule le changement de name
+ * Historique : du 2026-10-16 au 2026-10-28, le titre suivait le DERNIER message de
+ * l'utilisateur. Annulé à sa demande le 2026-10-28 : « annule le changement de name
  * des convs qui devient celui de mon dernier message ». Un fil garde donc le nom de son sujet de
- * départ, comme avant conv-999.
+ * départ, comme.
  *
  * Ce qui reste, et pourquoi :
  *  - un fil créé d'avance porte le titre PROVISOIRE « Nouvelle conversation » : son premier

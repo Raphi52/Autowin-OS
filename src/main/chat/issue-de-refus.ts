@@ -1,7 +1,7 @@
 /**
  * TOUT REFUS PORTE SA SORTIE.
  *
- * DEFAUT VECU le 2026-08-25 (conv-1404). `edit_file` a ete refuse HUIT fois de suite sur le meme
+ * DEFAUT VECU le 2026-08-25. `edit_file` a ete refuse HUIT fois de suite sur le meme
  * message. Le refus disait ce qui n'allait pas, jamais quoi faire. L'agent a donc retente la seule
  * chose qu'il savait faire — la meme edition — jusqu'a ce que le budget d'appels coupe le tour :
  * travail perdu, demande perdue, et un utilisateur bloque devant un mur sans poignee.

@@ -5,7 +5,7 @@ import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView
 import { canonicalProjectPath } from '../../../shared/project-path'
 
 /**
- * « ESSAIE 3 FAÇONS » DE BOUT EN BOUT (conv-1038, 2026-10-21). Un bouton de la zone de saisie
+ * « ESSAIE 3 FAÇONS » DE BOUT EN BOUT (2026-10-21). Un bouton de la zone de saisie
  * prend la demande tapée, ouvre trois copies séparées du code (main), trois branches du fil — une
  * par copie —, envoie à chacune la demande avec une façon imposée, et ouvre les trois en mosaïque.
  *
@@ -13,9 +13,9 @@ import { canonicalProjectPath } from '../../../shared/project-path'
  * écriraient l'une sur l'autre) ; une branche qui recevrait la demande sans sa façon imposée ; une
  * demande vide (rien ne doit partir, aucune copie ne doit s'ouvrir) ; une branche REVENUE SANS sa
  * copie (rangement après coup en échec, `setProject` → `null`) — la version en deux appels lui
- * envoyait quand même la demande, et l'agent travaillait alors dans le dossier PARTAGÉ (conv-1038).
+ * envoyait quand même la demande, et l'agent travaillait alors dans le dossier PARTAGÉ.
  *
- * fix-ok: cause mesurée (conv-1038, rejeu du 2026-10-21) — chaque branche était rattachée à sa copie par un 2e appel non relu. Ce test la fait naître avec son dossier (`fork(…, { dossier })`) et exige la relecture : sans la relecture, « une branche revenue SANS sa copie » est rouge ; avec un fork sans dossier, « trois branches, chacune dans SA copie » est rouge.
+ * fix-ok: cause mesurée (rejeu du 2026-10-21) — chaque branche était rattachée à sa copie par un 2e appel non relu. Ce test la fait naître avec son dossier (`fork(…, { dossier })`) et exige la relecture : sans la relecture, « une branche revenue SANS sa copie » est rouge ; avec un fork sans dossier, « trois branches, chacune dans SA copie » est rouge.
  */
 vi.mock('./Markdown', () => ({
   Markdown: ({ text }: { text: string }) => createElement('span', null, text),
@@ -90,7 +90,7 @@ describe('ChatView — « Essaie 3 façons »', () => {
       'button[aria-label="Essaie 3 façons"]'
     )
     expect(bouton).not.toBeNull()
-    // ×3 est une BASCULE (conv-1479) : le clic arme, l'envoi part en 3 façons.
+    // ×3 est une BASCULE : le clic arme, l'envoi part en 3 façons.
     await act(async () => {
       bouton!.click()
     })
@@ -179,6 +179,6 @@ describe('ChatView — « Essaie 3 façons »', () => {
     await cliquerTroisFacons()
     expect(api.conversationEssaisEnParallele).not.toHaveBeenCalled()
     expect(api.pilotChat).not.toHaveBeenCalled()
-    // Bascule (conv-1479) : sans texte, l'envoi est grisé — ×3 armé n'a rien à faire partir.
+    // Bascule : sans texte, l'envoi est grisé — ×3 armé n'a rien à faire partir.
   })
 })

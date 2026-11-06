@@ -87,7 +87,7 @@ describe('briques de skills', () => {
 })
 
 /**
- * conv-1628 : une brique sans agent réglé n'affichait AUCUN sélecteur de modèle — on ne pouvait
+ * Une brique sans agent réglé n'affichait AUCUN sélecteur de modèle — on ne pouvait
  * choisir le modèle de `think` qu'en passant le nombre d'agents à 2 puis à 1.
  */
 describe('modèle de chaque brique', () => {

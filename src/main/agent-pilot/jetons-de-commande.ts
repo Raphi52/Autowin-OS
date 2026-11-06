@@ -1,5 +1,5 @@
 // Lecture des blocs de commande et de question émis par le modèle, et réparation d’un bloc cassé
-// sans ambiguïté, sorties telles quelles de agent-pilot.ts (conv-1580, lot 1).
+// sans ambiguïté, sorties telles quelles de agent-pilot.ts (lot 1).
 import { VisibleStreamFilter } from '../../shared/stream-markup-filter'
 
 const CONTROL_RE = /<(cmd|question)>\s*([\s\S]*?)\s*<\/\1>/g
@@ -29,7 +29,7 @@ function filterVisibleText(raw: string): string {
 }
 
 /**
- * `<cmd>` A LA FERMETURE ERRONEE — mesure conv-686, tour `6185f7e7-88fa-4add-bf84-c51741d1b8b0`
+ * `<cmd>` A LA FERMETURE ERRONEE — mesure, tour `6185f7e7-88fa-4add-bf84-c51741d1b8b0`
  * (2026-09-18) : le modele emet `<cmd>{...JSON complet...}</invoke>
 </function_calls>` puis sa
  * phrase de cloture. Sans `</cmd>`, CONTROL_RE ne matchait rien : l'orchestration n'etait PAS
@@ -100,10 +100,10 @@ function commandeExploitable(valeur: unknown): boolean {
 const REPARATION_BUDGET_CARACTERES = 20_000_000
 
 /**
- * `<cmd>` A UNE ACCOLADE FERMANTE PRES — mesure conv-159, tour
+ * `<cmd>` A UNE ACCOLADE FERMANTE PRES — mesure, tour
  * `b60bf535-44e5-47e8-b43a-e3260ddc74ef` (2026-10-10, journal `run-stdout/a18bb1fb…`) : le modele
  * ecrit `<cmd>{"name":"brain_query","args":{"question":"…"}</cmd>`, deux `{` pour une seule `}`.
- * Rejete en « JSON illisible ». La relance unique (posee pour conv-1472, tour `c73fd638`, MEME
+ * Rejete en « JSON illisible ». La relance unique (posee, tour `c73fd638`, MEME
  * defaut) n'a pas suffi : le modele a attribue la position de l'erreur aux accents (raisonnement de
  * l'iteration 1), a re-emis la MEME forme en ASCII, et le tour s'est clos sur « renvoie ton message ».
  * Lapsus RECURRENT du modele : la cause est hors depot.
@@ -155,7 +155,7 @@ export function reparerAccoladeFinaleManquante(bloc: string): string | undefined
 }
 
 /**
- * conv-686, tours `6185f7e7-88fa-4add-bf84-c51741d1b8b0` et `30876029-68c5-43c8-948c-59786b28a081`
+ * Tours `6185f7e7-88fa-4add-bf84-c51741d1b8b0` et `30876029-68c5-43c8-948c-59786b28a081`
  * (saisies ts 1789711890089 et 1789712145048) : le modele a emis une commande `<cmd>` illisible,
  * rien n'a ete lance, et l'ecran disait « Aucune reponse produite » — l'utilisateur a renvoye le
  * meme message sans savoir qu'une commande avait ete perdue. Le repli le dit desormais.

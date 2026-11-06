@@ -24,7 +24,7 @@ export interface FichierEnregistre {
 export const MAX_LIGNES_AFFICHEES = 80
 
 export function formaterTaille(octets: number): string {
-  // Les unités suivent la langue (conv-1170) ; le nombre, lui, garde son point : le français
+  // Les unités suivent la langue ; le nombre, lui, garde son point : le français
   // affiché ne change pas.
   const langue = langueCourante()
   if (octets < 1_000) return traduireAccueil('taille.octets', langue, { n: octets })
@@ -103,7 +103,7 @@ export function ajouterLigneAffichee(lignes: readonly string[], texte: string): 
 export type Voix = 'moi' | 'interlocuteur'
 
 /**
- * L'étiquette suit la langue de l'interface au moment où la phrase est écrite (conv-1170) : le
+ * L'étiquette suit la langue de l'interface au moment où la phrase est écrite : le
  * fichier se relit par un humain, aucun code ne la reparse.
  */
 export const ETIQUETTE_VOIX: Record<Voix, string> = {

@@ -99,7 +99,7 @@ describe('verite visible des actions', () => {
 })
 
 /*
- * UN REFUS TRANSPORTE DANS UN SUCCES N'EST PAS UNE REUSSITE — decision du 2026-09-01 (conv-52).
+ * UN REFUS TRANSPORTE DANS UN SUCCES N'EST PAS UNE REUSSITE — decision du 2026-09-01.
  *
  * Certaines commandes rendent `{ok:true}` en portant leur refus dans la charge : `remember`
  * (`stored:false`), `verify` et `brain_query` (`allowed:false`, rien n'a tourne). Ces resultats
@@ -119,7 +119,7 @@ describe('commandResultSucceeded — un refus dans la charge compte comme echec'
   })
 
   /*
-   * MEME FAMILLE, CHAMPS MANQUANTS — mesure conv-244 (2026-09-04) sur les traces reelles : une
+   * MEME FAMILLE, CHAMPS MANQUANTS — mesure (2026-09-04) sur les traces reelles : une
    * commande `run` refusee rend `{ok:true, data:{lance:false, detail:"Commande refusee : ..."}}`
    * et `restart_app` indisponible rend `{redemarre:false}`. RIEN n'a tourne, pourtant la trace
    * causale les enregistrait en `status:"completed"` : 8 refus de ce type comptes comme des
@@ -141,7 +141,7 @@ describe('commandResultSucceeded — un refus dans la charge compte comme echec'
   })
 
   /*
-   * UN DOUBLON VOULU N'EST PAS UN REFUS — conv-1114 (2026-10-23). Le Brain a repondu « déjà connu
+   * UN DOUBLON VOULU N'EST PAS UN REFUS — (2026-10-23). Le Brain a repondu « déjà connu
    * (quasi-doublon) — rien n'a été ajouté, et c'est voulu » : le fait EST en memoire. Compte comme un
    * echec, il relancait le tour deux fois (« ta dernière action a ÉCHOUÉ ») alors qu'il n'y avait
    * rien a corriger. Le marqueur `dejaConnu` vient de brain-remember.ts ; sans lui, stored:false

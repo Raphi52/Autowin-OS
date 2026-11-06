@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
  */
 const css = readFileSync('src/renderer/src/assets/theme-modes.css', 'utf8')
 /*
- * LE SELECTEUR EST CHERCHE, PAS RECOPIE. Mesure du 2026-09-07 (conv-334) : le commit 640f92ea
+ * LE SELECTEUR EST CHERCHE, PAS RECOPIE. Mesure du 2026-09-07 : le commit 640f92ea
  * a renomme `:root[data-theme='clair']` en `:root[data-base='clair']` — les surcharges claires
  * visent desormais la BASE du theme. Ce test citait l'ancien nom en dur : `indexOf` rendait -1,
  * `slice(-1)` gardait UN caractere, et la garde jetait « Variable --bg-0 absente du mode clair »
@@ -112,7 +112,7 @@ describe('mode clair — vignette de pièce jointe du champ de saisie', () => {
  * n'étaient pas couvertes, et le décor y restait noir opaque (`FOND_DECOR`) sous du texte sombre.
  * Il est passé sur `.decor-de-fond::after`, qui est `fixed inset: 0`.
  *
- * LE VOILE DU DÉCOR EST RETIRÉ le 2026-10-22 (conv-1076 : « c le select de l'accueil qui fait foi
+ * LE VOILE DU DÉCOR EST RETIRÉ le 2026-10-22 (« c le select de l'accueil qui fait foi
  * pour le fond de l'accueil pas le theme choisi »). Lavé à 86-90 %, le fond choisi dans le menu de
  * l'Accueil (Cyberpunk, Planètes) n'était plus qu'un ciel gris propre au thème clair, et quatre
  * thèmes le cachaient même entièrement. Le décor s'affiche désormais tel quel sous TOUS les thèmes ;

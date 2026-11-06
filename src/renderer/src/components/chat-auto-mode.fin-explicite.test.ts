@@ -37,7 +37,7 @@ describe('mode auto — signal de fin explicite AUTOWIN_FIN_V1', () => {
 })
 
 /*
- * SUR LE FIL AFFICHÉ AUSSI, AUTOWIN_FIN_V1 ÉTEINT LE MODE AUTO (conv-1575, 2026-11-05).
+ * SUR LE FIL AFFICHÉ AUSSI, AUTOWIN_FIN_V1 ÉTEINT LE MODE AUTO (2026-11-05).
  *
  * Demande de l'utilisateur : « quand ya écris ça, ça doit arrêter le mode auto aussi ». La fin écrite
  * par Autowin (« passer à la prochaine demande ») le faisait déjà ; la ligne de fin du modèle, elle,

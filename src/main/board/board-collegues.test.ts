@@ -66,7 +66,7 @@ describe('boardDuCollegue — le fichier d’un autre poste est une donnée, con
       })
     )
     expect(lu?.postIts.map((p) => p.conversationId)).toEqual(['conv-1'])
-    // Sans `nom` écrit par son poste : son compte, pas le demandeur git (conv-1230).
+    // Sans `nom` écrit par son poste : son compte, pas le demandeur git.
     expect(lu?.nom).toBe('jdupont')
   })
 
@@ -88,7 +88,7 @@ describe('boardDuCollegue — le fichier d’un autre poste est une donnée, con
     expect(titre.length).toBeLessThanOrEqual(4000)
   })
 
-  // conv-1278 : la fiche montre le message ENTIER du collègue, ses retours à la ligne compris.
+  // La fiche montre le message ENTIER du collègue, ses retours à la ligne compris.
   it('relit le message entier d’une demande, sauts de ligne gardés, et s’en passe s’il manque', () => {
     const base = postIt('conv-1')
     const demande = (base.demandes as Record<string, unknown>[])[0]
@@ -106,7 +106,7 @@ describe('boardDuCollegue — le fichier d’un autre poste est une donnée, con
     expect(lu?.postIts[1].demandes[0]).not.toHaveProperty('texte')
   })
 
-  // conv-1230 : un poste avec identité git affichait un surnom git, un poste sans son compte.
+  // Un poste avec identité git affichait un surnom git, un poste sans son compte.
   it('nomme le collègue par le nom que son poste écrit, sinon par son compte — jamais par git', () => {
     const avecNom = boardDuCollegue(
       'jdupont',
@@ -144,7 +144,7 @@ describe('creerLecteurDesCollegues — relit les AUTRES sous-dossiers du dossier
     })
     const lu = await lecteur.lire()
     expect(lu.collegues.map((c) => c.poste)).toEqual(['jdupont'])
-    // Son fichier n'écrit pas de `nom` : son compte Windows (conv-1230).
+    // Son fichier n'écrit pas de `nom` : son compte Windows.
     expect(lu.collegues[0].nom).toBe('jdupont')
     expect(lu.erreur).toBeUndefined()
   })

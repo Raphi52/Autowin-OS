@@ -3,11 +3,11 @@ import { resolveSkillAlias } from '../../shared/skill-aliases'
 import type { EdgeCondition, WorkflowEdge, WorkflowGraph } from '../workflow/workflow-graph'
 
 /**
- * UNE SKILL D'ÉTAPE DÉSACTIVÉE NE SE JOUE PLUS (choix de l'utilisateur, conv-1602, 2026-11-05).
+ * UNE SKILL D'ÉTAPE DÉSACTIVÉE NE SE JOUE PLUS (choix de l'utilisateur, 2026-11-05).
  *
  * L'interrupteur « activé » de Settings › Skills n'avait plus aucun effet sur les étapes : l'ancien
  * lecteur (`phaseInstruction`, skill-pipeline.ts) ne retirait que le TEXTE de la skill, et n'avait
- * plus d'appelant depuis le 09/08 ; il a été retiré le 05/11 (conv-1613). Une étape désactivée se
+ * plus d'appelant depuis le 09/08 ; il a été retiré le 05/11. Une étape désactivée se
  * jouait donc quand même, dans un run comme par « /nom » dans le fil. Seul `skill_charger` refusait.
  *
  * Désactivée veut dire, pour une étape comme pour toute skill : ni injectée, ni jouée. Une exception :
@@ -138,7 +138,7 @@ export function noteSkillDesactivee(
  * - l'étape NOMMÉE par la demande (`/build …`, `/judge …`) : la sauter laisserait un run vide ;
  * - un run qui doit MODIFIER des fichiers sans l'étape build : seule elle modifie, et la boucle de
  *   réparation la rejouerait de toute façon après le refus du contrôle final (la boucle du lot 4,
- *   220 refus, conv-1613).
+ *   220 refus).
  * Ailleurs, une étape désactivée est simplement sautée.
  */
 export function refusEtapeDesactivee(entree: {

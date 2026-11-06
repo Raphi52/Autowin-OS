@@ -7,7 +7,7 @@ import {
 /**
  * LA CLOTURE DOIT DIRE DE QUOI ELLE PARLE.
  *
- * Defaut rapporte le 23/08 (conv-1376) : « ce bloc est trop generique il ne me donne pas d'info sur
+ * Defaut rapporte le 23/08 : « ce bloc est trop generique il ne me donne pas d'info sur
  * la task ». Le pied etait rigoureusement le meme pour n'importe quel travail — impossible, en
  * relisant un fil, de savoir a quelle demande ce « ✅ Fait » repondait. Le SUJET du run est pourtant
  * deja porte par l'issue (`runPath`), et deja lu ailleurs dans ce meme module.

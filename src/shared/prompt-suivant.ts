@@ -22,7 +22,7 @@ const MARQUEUR_PROMPT_SUIVANT = 'AUTOWIN_PROMPT_V1:'
 
 /**
  * Au-delà, ce n'est plus un prompt mais un pavé : la ligne est ÉCARTÉE (fail-open, comme le dit
- * l'en-tête), jamais coupée. Avant conv-1228 (2026-10-28), on la tronquait à 600 caractères en
+ * l'en-tête), jamais coupée. (2026-10-28), on la tronquait à 600 caractères en
  * pleine phrase, et un clic envoyait cet ordre amputé comme s'il était entier.
  */
 const LONGUEUR_MAX = 2_000
@@ -58,13 +58,13 @@ export function signalFinExplicite(texte: string): boolean {
 }
 
 /**
- * TROIS SUITES NOTÉES, PAS UNE (demande utilisateur du 2026-10-16, conv-1005 : « choisir entre 3
+ * TROIS SUITES NOTÉES, PAS UNE (demande utilisateur du 2026-10-16, « choisir entre 3
  * préprompts scorés et cliquer au lieu de faire Tab, et le mode auto choisit le meilleur score »).
  *
  * Le modèle peut émettre jusqu'à trois lignes `AUTOWIN_PROMPT_V1: [85] <message>` : une action
  * distincte par ligne, notée de 0 à 100. Le champ de saisie les montre en boutons, la mieux notée
- * reste le texte grisé accepté par Tab. Le mode auto envoyait cette mieux notée seule ; depuis
- * conv-1125 (2026-10-23) il envoie toutes les suites affichées dans un seul message.
+ * reste le texte grisé accepté par Tab. Le mode auto envoyait cette mieux notée seule
+ * (2026-10-23) il envoie toutes les suites affichées dans un seul message.
  *
  * Une ligne SANS note (l'ancien format, et tout l'historique des fils) reste lue : elle a
  * `score: null`, passe après les suites notées, et entre deux lignes sans note c'est la DERNIÈRE
@@ -81,7 +81,7 @@ export interface PropositionSuite {
 export const MAX_PROPOSITIONS = 3
 
 /**
- * UN CHOIX, PAS UN REMPLISSAGE (conv-1087, 2026-10-22) : « il me propose à chaque fois un choix
+ * UN CHOIX, PAS UN REMPLISSAGE (2026-10-22) : « il me propose à chaque fois un choix
  * pertinent et les autres sont complètement useless ». Mesuré sur les 90 tours notés du 16 au
  * 22/10 : la suite secondaire valait 45 en médiane, 25 points sous la meilleure — des à-côtés
  * (vieille idée du fil, vérification de confort) que la consigne invitait à écrire « avec une note
@@ -178,7 +178,7 @@ export function extrairePropositionsSuite(
 
 /**
  * Rend la suite la MIEUX notée — celle du texte grisé (Tab). Le mode auto, lui, lit toute la liste
- * (`extrairePropositionsSuite`) depuis conv-1125.
+ * (`extrairePropositionsSuite`).
  * `null` s'il n'y en a pas : l'appelant retombe alors sur la recommandation, donc rien ne régresse.
  */
 export function extrairePromptSuivant(
@@ -215,7 +215,7 @@ export function retirerLignePromptSuivant(texte: string): string {
         PREFIXES_PARTIELS.includes(nu) ||
         LIGNE_FIN.test(nu.replace(/`/g, '')) ||
         PREFIXES_FIN.includes(nu) ||
-        // Ligne de la carte des besoins (conv-1089) : même canal invisible, même retrait.
+        // Ligne de la carte des besoins : même canal invisible, même retrait.
         estLigneBesoinAMasquer(nu)
       ) {
         retireeEnFin = true
@@ -252,7 +252,7 @@ export function retirerLignePromptSuivant(texte: string): string {
 /*
  * FRONTIERES UNICODE, PAS `\b`.
  *
- * VECU LE 2026-09-11 (conv-467) : un prompt terminant par « les lignes deja PRESENTES » a ete
+ * VECU LE 2026-09-11 : un prompt terminant par « les lignes deja PRESENTES » a ete
  * classe « pull request », donc SUPPRIME — l'utilisateur n'a eu aucun prompt dans son champ.
  * Cause : en JavaScript `\b` est une frontiere ASCII, et une lettre accentuee n'est PAS un
  * caractere de mot. Le « pr » de « présentes » se retrouvait encadre de deux frontieres et
@@ -263,7 +263,7 @@ export function retirerLignePromptSuivant(texte: string): string {
  * MAJUSCULES, sinon n'importe quel « pr » isole redeviendrait une pull request.
  */
 /*
- * UNE ADRESSE N'EST PAS UN ACTE (conv-1093, 2026-10-22). Un mot de publication collé à un nom de
+ * UNE ADRESSE N'EST PAS UN ACTE (2026-10-22). Un mot de publication collé à un nom de
  * fichier, de branche ou de hook — `chat-turn-publication.ts`, `public/version-github`, `pre-push`,
  * `non-merged` — DÉSIGNE une chose, il ne demande pas de publier. Le bord gauche refuse donc aussi
  * `- . / \` juste avant le mot ; le bord droit refuse `/ \` et une extension (`.ts`). Il laisse
@@ -281,7 +281,7 @@ const ACTES_DE_PUBLICATION = new RegExp(
 const SIGLE_PULL_REQUEST = new RegExp(`${BORD_GAUCHE}PR${BORD_DROIT}`, 'u')
 
 /*
- * ENVOYER VERS LA BRANCHE PRINCIPALE, SANS LE MOT (conv-1093, 2026-10-22). Trois suites réelles
+ * ENVOYER VERS LA BRANCHE PRINCIPALE, SANS LE MOT (2026-10-22). Trois suites réelles
  * des fils publiaient sans aucun mot de la liste : « intègre-la dans main », « envoie-la sur
  * Azure », « Fais rejoindre au dépôt principal la copie… ». Elles passaient sans proposer de tri.
  *
@@ -327,7 +327,7 @@ function mentionneUnActeDePublication(texte: string): boolean {
 }
 
 /*
- * `/git` EN TÊTE (conv-1250, 2026-10-29). L'utilisateur relançait ce prompt en retapant la cible :
+ * `/git` EN TÊTE (2026-10-29). L'utilisateur relançait ce prompt en retapant la cible :
  * « /salvage push main origin », « /salvage all origin main ». `/git` trie comme salvage PUIS
  * publie selon les habitudes du dépôt et range ce qui traîne. En tête, parce que seule la forme
  * `/nom` en début de message charge la skill (`skill-nommee.ts`).
@@ -336,7 +336,7 @@ export const PROMPT_SALVAGE =
   '/git : trie par leur contenu tous les travaux non publiés (copies de travail isolées, remises de côté, branches jamais fusionnées), publie-les selon les habitudes du dépôt et range ce qui traîne.'
 
 /*
- * DEUX EXCEPTIONS, mesurees le 2026-09-03 (conv-210).
+ * DEUX EXCEPTIONS, mesurees le 2026-09-03.
  *
  * Le garde-fou ci-dessus est volontairement aveugle : il ne lit pas ce que le tour a fait. Deux cas
  * ou cette cecite retourne l'outil contre son but :
@@ -352,7 +352,7 @@ export const PROMPT_SALVAGE =
  * de publier.
  */
 /*
- * `/git` est l'ordre de tri au même titre que `/salvage` (conv-1250). Les bords excluent un chemin :
+ * `/git` est l'ordre de tri au même titre que `/salvage`. Les bords excluent un chemin :
  * `src/main/git/git-read-main.ts` ou `scripts/salvage-resurrection.mjs` nomment un fichier, ils
  * n'ordonnent aucun tri.
  */
@@ -362,7 +362,7 @@ const CHARNIERE_DE_SUITE = /\b(puis|ensuite|apr[eè]s (?:quoi|avoir)|et enfin)\b
 /*
  * TROISIEME EXCEPTION : LE TRI VIENT D'AVOIR LIEU.
  *
- * VECU LE 2026-09-04 (conv-288), trois tours d'affilee. L'utilisateur envoie `/salvage`, le tri est
+ * VECU LE 2026-09-04, trois tours d'affilee. L'utilisateur envoie `/salvage`, le tri est
  * fait de bout en bout — toutes les cachettes sondees, chaque travail juge par son contenu, les
  * verdicts enregistres —, et la seule suite qui reste est de publier. Ce prompt de publication est
  * alors reecrit en `/salvage`. L'utilisateur renvoie ce que le champ lui propose, le tri est refait,
@@ -382,7 +382,7 @@ export function ordreDeTriDejaJoue(demandeDuTour: string | undefined): boolean {
 /*
  * QUATRIEME EXCEPTION, LA PLUS LARGE : LA PUBLICATION N'A JAMAIS ETE DEMANDEE.
  *
- * VECU LE 2026-09-10 (conv-410). L'utilisateur demande « enleve le bouton historique vged » sur un
+ * VECU LE 2026-09-10. L'utilisateur demande « enleve le bouton historique vged » sur un
  * projet tiers. Le tour ne touche qu'un fichier, rien ne parle de publier — mais la cloture doit
  * proposer une suite, l'agent invente « committer », et l'application reecrit cette invention en
  * `/salvage`. Reponse de l'utilisateur : « j'ai pas de git arrete de me casser les couilles pour
@@ -412,7 +412,7 @@ export function publicationJamaisDemandee(
 }
 
 /*
- * UNE INTERDICTION N'EST PAS UNE DEMANDE. Vécu le 2026-10-01 (conv-770), deux fois : la consigne du
+ * UNE INTERDICTION N'EST PAS UNE DEMANDE. Vécu le 2026-10-01, deux fois : la consigne du
  * tour disait « Ne publie rien : aucun commit, aucun push », et ces mots comptaient comme une demande
  * de publication — la suite proposée était réécrite en `/salvage` et envoyée par le mode auto.
  * Avant de lire la demande, on écarte chaque MEMBRE de phrase (coupé sur . ; ! ? , saut de ligne et
@@ -460,7 +460,7 @@ export function estPromptDePublication(
 }
 
 /*
- * NOMMER N'EST PAS DEMANDER (conv-1093, 2026-10-22). La suite [62] d'un tour a disparu parce
+ * NOMMER N'EST PAS DEMANDER (2026-10-22). La suite [62] d'un tour a disparu parce
  * qu'elle finissait par « aucune vraie publication ne doit être perdue » : une INTERDICTION, lue
  * comme une demande de publier, puis supprimée. Même famille sur les 3 671 suites réelles des fils :
  * « le commit bf2aa822 », « les modifications non commitées », « sans commit », « déjà publié »
@@ -526,7 +526,7 @@ function estUnActe(avant: string): boolean {
 }
 
 /*
- * UN APARTÉ N'EST PAS L'ACTE (conv-1093, 2026-10-22). Une parenthèse précise ou rappelle — « le cas
+ * UN APARTÉ N'EST PAS L'ACTE (2026-10-22). Une parenthèse précise ou rappelle — « le cas
  * 973b70e2 (test de style publié sans son CSS) », « (commit 6a690851) » — elle ne porte jamais ce
  * que la suite demande de faire. Elle sort donc de la lecture du PROMPT, pas de celle de la demande
  * de l'utilisateur : là, retirer un mot ne pourrait que faire supprimer davantage de suites.

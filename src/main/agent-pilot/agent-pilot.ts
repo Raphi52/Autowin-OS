@@ -10,7 +10,7 @@ import { startTurnTimer } from '../chat/turn-timing'
 import { blocEtatSuivant } from '../chat/etat-diff'
 import type { OuvertureOutilsNatifs } from '../chat/chat-mcp'
 
-// Code libre du pilote rangé dans agent-pilot/ (conv-1580, lot 1) ; ré-exporté plus bas pour que
+// Code libre du pilote rangé dans agent-pilot/ (lot 1) ; ré-exporté plus bas pour que
 // les importeurs de './agent-pilot' ne changent pas.
 import {
   CAP_ITERATIONS_TOUR,
@@ -43,7 +43,7 @@ import {
   texteCmdIlisible,
   type OrderedPilotToken
 } from './jetons-de-commande'
-// Préparation du tour sortie de chat() (conv-1580, lot 2).
+// Préparation du tour sortie de chat() (lot 2).
 import { commandesDuTour } from './commandes-du-tour'
 import { emetteurDuTour } from './emission-du-tour'
 import { lecturesDuTour } from './lectures-du-tour'
@@ -52,11 +52,11 @@ import { piecesJointesDuFil } from './pieces-jointes-du-fil'
 import { jouerLaRouteSansModele } from './route-directe'
 import { sessionDuTour } from './session-du-tour'
 import { systemeDuTour } from './systeme-du-tour'
-// État mutable du tour (conv-1580, lot 3).
+// État mutable du tour (lot 3).
 import { etatInitialDuTour } from './etat-du-tour'
 import { appelsNatifsDuTour } from './appels-natifs'
 import { texteDeClotureDuTour, fermerAuCapDesIterations } from './texte-de-cloture'
-// Boucle d'itérations sortie de chat() (conv-1580, lot 4).
+// Boucle d'itérations sortie de chat() (lot 4).
 import type { ContexteDuTour } from './contexte-du-tour'
 import { appelDuModele } from './envoi-du-tour'
 import { executerLesCommandes } from './execution-des-commandes'
@@ -158,9 +158,9 @@ export class AgentPilot {
     private readonly outilsNatifs: boolean | Pick<OuvertureOutilsNatifs, 'demarrer'> = false,
     /**
      * Le petit modèle qui lit la demande AVANT un run payant ou un changement d'affichage, et dit
-     * si elle a deux lectures plausibles (`deux-lectures.ts`, conv-1092). Absent = aucun contrôle :
+     * si elle a deux lectures plausibles (`deux-lectures.ts`). Absent = aucun contrôle :
      * seul `index.ts` le branche, les fixtures et les tests existants gardent leurs appels exacts.
-     * `trace` : le fil du tour et la décision tirée de la réponse, pour la ligne de coût (conv-1431).
+     * `trace` : le fil du tour et la décision tirée de la réponse, pour la ligne de coût.
      */
     private readonly demanderDeuxLectures?: (
       systeme: string,
@@ -191,14 +191,14 @@ export class AgentPilot {
    * repond « la trace ne contient ni son runId, ni ses phases, ni son resultat ». Reponse honnete face
    * a un trou ; le defaut etait le trou.
    *
-   * DURABLE depuis conv-989 (2026-10-16) : la carte memoire est doublee d'un fichier a part
+   * DURABLE depuis le 2026-10-16 : la carte memoire est doublee d'un fichier a part
    * (`runs/compte-rendu-non-vu-store.ts`). Avant, un redemarrage entre les deux tours perdait la
    * note alors que la session, elle, etait rehydratee depuis le disque — le trou revenait. Les
    * methodes ci-dessous sont le SEUL acces : memoire d'abord, disque ensuite, oubli des deux.
    */
   private readonly comptesRendusNonVus = new Map<string, string>()
 
-  // Corps dans agent-pilot/persistance-entre-tours.ts (conv-1580, lot 1).
+  // Corps dans agent-pilot/persistance-entre-tours.ts (lot 1).
   private deposerCompteRendu(conversationId: string, texte: string): void {
     deposerCompteRenduEnAttente(this.comptesRendusNonVus, conversationId, texte)
   }
@@ -212,7 +212,7 @@ export class AgentPilot {
    *
    * Sert a n'envoyer QUE le changement quand la session du modele est reprise : cet etat part
    * cote MESSAGE, il change a chaque tour, donc il nest jamais mis en cache et se repaie PLEIN
-   * TARIF. Mesure (conv-614) : 3 043 caracteres par tour, dont 2 821 pour la seule
+   * TARIF. Mesure : 3 043 caracteres par tour, dont 2 821 pour la seule
    * liste des skills, identique dun tour a lautre.
    */
   private readonly dernierEtatPousse = new Map<string, unknown>()
@@ -222,7 +222,7 @@ export class AgentPilot {
 
   /**
    * Conversations dont la session COURANTE du modele a deja recu la procedure grow entiere
-   * (`chat/grow-au-debut.ts`, conv-1445). Session neuve = historique renvoye sans ce bloc : il
+   * (`chat/grow-au-debut.ts`). Session neuve = historique renvoye sans ce bloc : il
    * repart en entier.
    */
   private readonly growDejaEnvoye = new Set<string>()
@@ -239,7 +239,7 @@ export class AgentPilot {
    * fichier verrouille ou un JSON corrompu doivent couter un renvoi d'historique — cher, jamais faux —
    * et surtout PAS casser le tour de l'utilisateur. D'ou les `try/catch` muets ici, qui seraient une
    * faute sur une frontiere de securite et sont le bon choix sur un cache. Corps des methodes dans
-   * `agent-pilot/persistance-entre-tours.ts` depuis conv-1580 (lot 1).
+   * `agent-pilot/persistance-entre-tours.ts` (lot 1).
    */
   private chatSessionsHydrated = false
 
@@ -324,10 +324,10 @@ export class AgentPilot {
       ...(conversationId ? { conversationId } : {})
     })
     // Émission du tour (rappel protégé, reprise des échecs, anti-collage) :
-    // agent-pilot/emission-du-tour.ts (conv-1580, lot 2).
+    // agent-pilot/emission-du-tour.ts (lot 2).
     const { publier, emit, tourEstClos, armerEchecsAbandonnes } = emetteurDuTour(onEvent)
     const binding = runtimeBinding ?? bindingOverride ?? this.roles.getBinding('orchestrator')
-    // Exécution des commandes du tour : agent-pilot/commandes-du-tour.ts (conv-1580, lot 2).
+    // Exécution des commandes du tour : agent-pilot/commandes-du-tour.ts (lot 2).
     const { execCommand, execCommandTolerante } = commandesDuTour({
       bus: this.bus,
       conversationId,
@@ -364,9 +364,9 @@ export class AgentPilot {
     // hors pipeline (`/look`, `/think`, `/remake`...) est reconnue comme commande — elle garde le fil
     // courant — mais reste jouee par le MODELE avec le corps de sa skill injecte : la router vers un
     // run payant serait une orchestration que l'utilisateur n'a jamais demandee. `/kaizen` suit
-    // cette seconde voie depuis conv-1334 (`courtCircuiteLeModele`).
+    // cette seconde voie (`courtCircuiteLeModele`).
     const routeSansModele = courtCircuiteLeModele(directRoute)
-    // Les deux lectures du tour : agent-pilot/lectures-du-tour.ts (conv-1580, lot 2).
+    // Les deux lectures du tour : agent-pilot/lectures-du-tour.ts (lot 2).
     const {
       deuxLecturesDuTour,
       poserLaQuestionDesLectures,
@@ -385,7 +385,7 @@ export class AgentPilot {
       execCommand,
       tourEstClos
     })
-    // Phase nommée : orchestration sans le modèle, agent-pilot/route-directe.ts (conv-1580, lot 2).
+    // Phase nommée : orchestration sans le modèle, agent-pilot/route-directe.ts (lot 2).
     if (routeSansModele) {
       await jouerLaRouteSansModele({
         tache: directRoute?.task ?? '',
@@ -416,7 +416,7 @@ export class AgentPilot {
     if (issueDuRendu?.kind === 'retenue') annoncerLaLectureRetenue(issueDuRendu)
 
     // Consigne système, lecture seule et dossier du tour : agent-pilot/systeme-du-tour.ts
-    // (conv-1580, lot 2).
+    // (lot 2).
     const systeme = systemeDuTour({
       sendLimits,
       conversationId,
@@ -427,7 +427,7 @@ export class AgentPilot {
       projectContext: (id) => this.projectContext(id)
     })
 
-    // Reprise de session CLI et clé de session : agent-pilot/session-du-tour.ts (conv-1580, lot 2).
+    // Reprise de session CLI et clé de session : agent-pilot/session-du-tour.ts (lot 2).
     const session = sessionDuTour({
       provider,
       binding,
@@ -439,7 +439,7 @@ export class AgentPilot {
       oublierSession: (id) => this.forgetPersistedChatSession(id),
       registry: this.registry
     })
-    // Message d'ouverture du tour : agent-pilot/message-du-tour.ts (conv-1580, lot 2).
+    // Message d'ouverture du tour : agent-pilot/message-du-tour.ts (lot 2).
     const ouverture = messageDuTour({
       history,
       conversationId,
@@ -458,11 +458,11 @@ export class AgentPilot {
     // Le fil du tour, mutable : la boucle d'itérations y pousse les échanges suivants.
     const { convo } = ouverture
     // Pièces jointes de tout le fil, la plus récente d'abord : agent-pilot/pieces-jointes-du-fil.ts
-    // (conv-1580, lot 2).
+    // (lot 2).
     const currentAttachments = piecesJointesDuFil(history)
 
     // État mutable du tour — drapeaux, compteurs et registres partagés par les closures de la
-    // boucle —, regroupé dans agent-pilot/etat-du-tour.ts et lu `etat.<nom>` (conv-1580, lot 3).
+    // boucle —, regroupé dans agent-pilot/etat-du-tour.ts et lu `etat.<nom>` (lot 3).
     const etat = etatInitialDuTour({
       resumeSessionId: session.resumeSessionId,
       compteAuDepart: session.compteAuDepart,
@@ -496,7 +496,7 @@ export class AgentPilot {
       })
     })
     // Outils directs du modèle et comptabilité commune des commandes du tour :
-    // agent-pilot/appels-natifs.ts (conv-1580, lot 3).
+    // agent-pilot/appels-natifs.ts (lot 3).
     const natifs = appelsNatifsDuTour({
       etat,
       conversationId,
@@ -506,17 +506,17 @@ export class AgentPilot {
       execCommandTolerante
     })
     // Texte d'un tour qui se termine, jamais vide : agent-pilot/texte-de-cloture.ts
-    // (conv-1580, lot 3).
+    // (lot 3).
     const texteDeCloture = (spoken: string): string => texteDeClotureDuTour(etat, spoken)
     // Envoi d'une relance : rallonge du cap, réponse affichée remplacée, consignes poussées dans le
-    // fil. Les contrôles qui la décident : agent-pilot/relances-du-tour.ts (conv-1580, lot 4).
+    // fil. Les contrôles qui la décident : agent-pilot/relances-du-tour.ts (lot 4).
     const relancer = (iter: IterationDuTour, relance: Relance): void => {
       grantRecoveryIteration(relance.motif)
       if (relance.remplace) iter.effacerReponseRelancee()
       convo.push(...relance.consignes)
     }
     // Ce que les modules de la boucle lisent du tour : agent-pilot/contexte-du-tour.ts
-    // (conv-1580, lot 4).
+    // (lot 4).
     const tour: ContexteDuTour = {
       ...systeme,
       ...session,
@@ -560,13 +560,13 @@ export class AgentPilot {
         )
       }
       // Budget annoncé à mi-parcours, clôture forcée au dernier appel :
-      // agent-pilot/relances-du-tour.ts (conv-1580, lot 4).
+      // agent-pilot/relances-du-tour.ts (lot 4).
       convo.push(...consignesDuBudget(etat, i))
       // Envoi au modèle, flux en direct, reprises après erreur et journal de l'appel :
-      // agent-pilot/envoi-du-tour.ts (conv-1580, lot 4).
+      // agent-pilot/envoi-du-tour.ts (lot 4).
       const { res, iter } = await appelDuModele(tour, i)
       // Directive arrivée pendant l'appel, artefacts livrés : agent-pilot/reponse-du-tour.ts
-      // (conv-1580, lot 4).
+      // (lot 4).
       if (reinjecterLesDirectivesTardives(tour, res)) continue
       await publierLesArtefacts(tour, i, res)
       /**
@@ -596,7 +596,7 @@ export class AgentPilot {
           continue
         }
         // JAMAIS de bulle vide : une question refusee + reprises epuisees laissait l'utilisateur
-        // devant un message VIDE, sans savoir ce qui s'etait passe (vu sur conv-1141).
+        // devant un message VIDE, sans savoir ce qui s'etait passe.
         emit({
           kind: 'done',
           text:
@@ -608,7 +608,7 @@ export class AgentPilot {
       }
 
       // Jetons et texte parlé, refus d'une commande en lecture seule : agent-pilot/reponse-du-tour.ts
-      // (conv-1580, lot 4).
+      // (lot 4).
       const { ordered, hasCommand, spoken, onlyAuxiliaryRemember } = lireLaReponse(
         tour,
         iter,
@@ -619,7 +619,7 @@ export class AgentPilot {
       if (!hasCommand) {
         const blocsIllisibles = afficherLaReponseSansCommande(tour, iter, ordered, spoken)
         // UNE relance part : la première qui s'applique, dans cet ordre, chacune bornée par son
-        // propre crédit. Contrôles : agent-pilot/relances-du-tour.ts (conv-1580, lot 4).
+        // propre crédit. Contrôles : agent-pilot/relances-du-tour.ts (lot 4).
         const relance =
           relanceCommandeIllisible(etat, blocsIllisibles, texteProvider) ??
           relanceTourMuet(etat) ??
@@ -639,7 +639,7 @@ export class AgentPilot {
           relancer(iter, relance)
           continue
         }
-        // JAMAIS de bulle vide. Cause racine des « conversations qui echouent » (conv-1141) :
+        // JAMAIS de bulle vide. Cause racine des « conversations qui echouent » :
         // le tour a AGI (« [a execute exec (echec)] ») mais n'a rien DIT, la reprise de conclusion
         // etait deja consommee, et `spoken` vide produisait une bulle VIDE — l'utilisateur renvoyait
         // alors le meme prompt en boucle sans jamais savoir ce qui ratait.
@@ -657,13 +657,13 @@ export class AgentPilot {
       }
 
       // Exécution des `<cmd>` de la réponse : agent-pilot/execution-des-commandes.ts
-      // (conv-1580, lot 4).
+      // (lot 4).
       const results = await executerLesCommandes(tour, iter, ordered)
 
       // `remember` est une écriture auxiliaire : son résultat est déjà visible dans la carte action.
       // Quand le modèle a livré sa réponse dans le même message, repayer une génération uniquement
       // pour commenter un refus déterministe (type/locator/SHA) ne peut améliorer le travail rendu.
-      // Ses trois contrôles, dans cet ordre : agent-pilot/relances-du-tour.ts (conv-1580, lot 4).
+      // Ses trois contrôles, dans cet ordre : agent-pilot/relances-du-tour.ts (lot 4).
       const rallongeDuRaccourci =
         relanceClotureApresRemember(tour, onlyAuxiliaryRemember, spoken) ??
         relanceRepriseRemember(etat, onlyAuxiliaryRemember) ??
@@ -672,7 +672,7 @@ export class AgentPilot {
         grantRecoveryIteration(rallongeDuRaccourci)
       } else if (onlyAuxiliaryRemember) {
         // Le modele a livre sa reponse ET sauve une memoire. On emettait VIDE — donc on JETAIT son
-        // texte reel, laissant une bulle vide (conv-1141). `spoken` est garanti non vide ici.
+        // texte reel, laissant une bulle vide. `spoken` est garanti non vide ici.
         emit({
           kind: 'done',
           text: etat.refusRememberAuxiliaire
@@ -690,8 +690,8 @@ export class AgentPilot {
        *
        * `ask` ne suspendait rien : la commande rendait la question et le pilote enchainait. La
        * conversation restait donc OCCUPEE, et repondre passait par une DIRECTIVE -- affichee
-       * « ORIENTÉ », avec un composer bloque sur « Orienter l'agent sans l'interrompre ». Vecu dans
-       * `conv-1400` : l'utilisateur repondait a une question et le systeme enregistrait une
+       * « ORIENTÉ », avec un composer bloque sur « Orienter l'agent sans l'interrompre ». Vecu
+       * L'utilisateur repondait a une question et le systeme enregistrait une
        * orientation. Toute cette gymnastique n'existait que parce qu'un `ask` ne terminait pas le tour.
        *
        * L'agent vient de dire qu'il lui manque une entree : son tour est fini, c'est celui de
@@ -744,13 +744,13 @@ export class AgentPilot {
       convo.push(`TU AS ÉMIS: ${text}`)
       convo.push(`RÉSULTATS:\n${results.join('\n')}\n\n${bloc}`)
       // Consignes laissées par le raccourci `remember` : agent-pilot/relances-du-tour.ts
-      // (conv-1580, lot 4).
+      // (lot 4).
       for (const differee of consignesDifferees(etat)) {
         if (differee.remplace) iter.effacerReponseRelancee()
         convo.push(differee.consigne)
       }
     }
-    // Cap atteint sans réponse finale : agent-pilot/texte-de-cloture.ts (conv-1580, suite du plan).
+    // Cap atteint sans réponse finale : agent-pilot/texte-de-cloture.ts (suite du plan).
     fermerAuCapDesIterations(etat, emit)
   }
 }

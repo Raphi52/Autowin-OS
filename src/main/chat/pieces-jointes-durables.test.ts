@@ -8,7 +8,7 @@ import { ConversationStore } from '../store/conversations'
 import { metasDurablesDesPieces, piecesJointesPourLeModele } from './pieces-jointes-durables'
 
 /**
- * LES PIÈCES JOINTES SUIVENT LE TRAVAIL, MÊME QUAND IL SE FAIT PLUS TARD (conv-1147, 2026-10-25).
+ * LES PIÈCES JOINTES SUIVENT LE TRAVAIL, MÊME QUAND IL SE FAIT PLUS TARD (2026-10-25).
  *
  * « Lancer en N fils » sépare deux temps : le tour qui reçoit le message (et ses pièces jointes)
  * ne fait que proposer le découpage ; le travail part au tour SUIVANT, dans une branche du fil ou

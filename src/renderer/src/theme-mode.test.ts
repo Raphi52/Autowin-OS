@@ -12,7 +12,7 @@ import {
 
 /**
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : changer le thème par défaut (Holographique depuis le
- * 2026-10-11, conv-269), rendre le mode clair par défaut, oublier de poser
+ * 2026-10-11), rendre le mode clair par défaut, oublier de poser
  * `data-theme` sur la racine, ou retirer les surcharges claires de `theme-modes.css` — dans les
  * trois cas l'interrupteur de Settings · Interface ne changerait rien à l'écran.
  */
@@ -24,7 +24,7 @@ describe('mode d’affichage sombre / clair', () => {
   })
 
   /*
-   * HOLOGRAPHIQUE PAR DEFAUT depuis le 2026-10-11 (conv-269, « le mode holographique est le mode
+   * HOLOGRAPHIQUE PAR DEFAUT depuis le 2026-10-11 (« le mode holographique est le mode
    * par defaut de autowin os desormais »). ENTREE QUI DOIT FAIRE ECHOUER CES CAS : remettre le
    * sombre en defaut, ou confondre le defaut avec l etat NU (le defaut retirerait alors
    * l attribut et l ecran resterait sombre).
@@ -53,7 +53,7 @@ describe('mode d’affichage sombre / clair', () => {
   })
 
   /*
-   * SIX THEMES RETIRES le 2026-10-11 (conv-231, « supprime les theme nebula les 2 themes rose
+   * SIX THEMES RETIRES le 2026-10-11 (« supprime les theme nebula les 2 themes rose
    * versaille ardoise et parchemin »). Un poste qui en avait memorise un retombe sur le defaut.
    * ENTREE QUI DOIT FAIRE ECHOUER CE CAS : remettre l un d eux dans le registre ou sa feuille.
    */
@@ -104,7 +104,7 @@ describe('mode d’affichage sombre / clair', () => {
   })
   /*
    * `prefers-color-scheme` doit suivre la BASE du theme Autowin, pas Windows. Defaut constate le
-   * 2026-10-08 (conv-111) : Windows clair + Autowin sombre -> le HTML du fil ecrivait en bleu marine
+   * 2026-10-08 : Windows clair + Autowin sombre -> le HTML du fil ecrivait en bleu marine
    * sur noir. ENTREE QUI DOIT FAIRE ECHOUER CE CAS : ne plus appeler `setColorScheme`, ou envoyer
    * `light` pour un theme sombre NOMME (nebuleuse-verre) ou `dark` pour un clair NOMME (holographique-clair).
    */
@@ -126,7 +126,7 @@ describe('mode d’affichage sombre / clair', () => {
 
   // fix-ok: ecrit AVANT l entree du registre (vu rouge), puis mis en forme par prettier ; aucune assertion desserree.
   /*
-   * NINJA CLAUDE (conv-269, 2026-10-16) : l apparence de Claude, en base SOMBRE.
+   * NINJA CLAUDE (2026-10-16) : l apparence de Claude, en base SOMBRE.
    * ENTREE QUI DOIT FAIRE ECHOUER CES CAS : retirer l entree du registre (le choix memorise
    * retomberait sur Holographique), la declarer claire (data-base poserait les corrections du
    * clair sur un fond anthracite), ou accepter un identifiant approchant comme `ninja`.
@@ -153,7 +153,7 @@ describe('mode d’affichage sombre / clair', () => {
   })
 
   /*
-   * VANILLA CLAUDE (conv-269, 2026-10-16) : la version CLAIRE de Ninja Claude.
+   * VANILLA CLAUDE (2026-10-16) : la version CLAIRE de Ninja Claude.
    * ENTREE QUI DOIT FAIRE ECHOUER CES CAS : retirer l entree du registre, la declarer sombre (la
    * creme perdrait les corrections de lisibilite de la base claire), ou accepter un identifiant
    * approchant comme `vanilla`.
@@ -206,7 +206,7 @@ describe('mode d’affichage sombre / clair', () => {
 })
 
 /*
- * LA CARTE DE FIN DE TOUR SUIT LE THÈME (conv-1090, 2026-10-22) : elle vit dans sa propre fenêtre,
+ * LA CARTE DE FIN DE TOUR SUIT LE THÈME (2026-10-22) : elle vit dans sa propre fenêtre,
  * hors des feuilles de style ; la page lui envoie les jetons CALCULÉS du thème appliqué.
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CES CAS : ne plus envoyer la palette quand le thème s'applique,
  * envoyer un jeton non converti (`rgb(...)`, `#fff`), ou une palette à laquelle il manque une couleur.

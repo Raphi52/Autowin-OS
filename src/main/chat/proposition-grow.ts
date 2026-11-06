@@ -1,7 +1,7 @@
 /**
- * GROW PROPOSÉE PAR LE CODE DE FIN DE TOUR (conv-417, 2026-11-02 ; rôle revu conv-1445, 2026-11-03).
+ * GROW PROPOSÉE PAR LE CODE DE FIN DE TOUR (2026-11-02 ; rôle revu, 2026-11-03).
  *
- * Depuis conv-1445, la skill `grow` (skills/grow/SKILL.md) agit PENDANT le traitement d'une demande,
+ * La skill `grow` (skills/grow/SKILL.md) agit PENDANT le traitement d'une demande,
  * et son corps est chargé par le code au DÉBUT de chaque demande d'action (`grow-au-debut.ts`, lu par
  * `agent-pilot.ts`). Ce fichier-ci reste la porte d'APRÈS coup : quand un run orchestré a livré une
  * modification, le bouton « /grow sur la demande que tu viens de terminer » relance grow sur cette

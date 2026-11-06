@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildTurnMessageBlocks } from './chat-turn-messages'
 
 /**
- * CAUSE RACINE (conv-614, 2026-09-16) : `diffEtat` / `blocEtatSuivant` existaient et etaient
+ * CAUSE RACINE (2026-09-16) : `diffEtat` / `blocEtatSuivant` existaient et etaient
  * testes depuis le 2026-08-31, mais n'etaient appeles NULLE PART — une optimisation ecrite,
  * prouvee, jamais branchee. La trace le montrait : l'etat complet (3 043 caracteres) repartait a
  * CHAQUE appel, iterations comprises.

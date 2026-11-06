@@ -50,7 +50,7 @@ describe('récapitulatif d’un journal', () => {
   })
 
   /*
-   * Mesure du 2026-09-03 (conv-18). L'utilisateur relit sa conversation et y trouve un message
+   * Mesure du 2026-09-03. L'utilisateur relit sa conversation et y trouve un message
    * « Reprise du fil … » suivi de « Couverture structurée : 100 % (222/222) · 0 diagnostic(s) ·
    * 0 blocage(s) · 0 bruit(s) · 0 perte(s) de preuve. » — quatre compteurs internes tous à zéro,
    * dans SON fil, au milieu du travail. Un journal intégralement relu n'a RIEN à signaler : la
@@ -189,7 +189,7 @@ describe('actions relues (reprise conv-152)', () => {
 })
 
 /*
- * UN SEUL message de reprise par chantier (conv-913, 2026-10-13) : au redémarrage suivant, le
+ * UN SEUL message de reprise par chantier (2026-10-13) : au redémarrage suivant, le
  * message déjà posé est MIS À JOUR. L'en-tête dit l'état ACTUEL ; ce qui avait été montré reste ;
  * le nouveau s'ajoute dessous, daté. Rien d'une absence précédente ne disparaît du fil.
  */

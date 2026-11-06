@@ -16,7 +16,7 @@ import {
 } from './textes'
 
 /**
- * LA TABLE DES TEXTES (conv-1146). Entrée qui doit faire échouer ce fichier : une clé ajoutée d'un
+ * LA TABLE DES TEXTES. Entrée qui doit faire échouer ce fichier : une clé ajoutée d'un
  * seul côté, une entrée anglaise vide qui s'afficherait comme un blanc, un repli qui montrerait la
  * clé brute, ou un nom d'écran français recopié ici au lieu d'être lu dans `APP_DESTINATIONS`.
  */
@@ -55,8 +55,8 @@ describe('table des textes FR / EN', () => {
 
   /*
    * LA PHRASE DE COUVERTURE DIT CE QUI EST TRADUIT ET NOMME CE QUI RESTE EN FRANÇAIS (objection du
-   * juge, conv-1146, réparation 3 : « les autres écrans » ne disait pas lesquels). Depuis le bilan de
-   * conv-1170 (2026-10-27), chaque écran a sa table : la partie « traduit » doit citer chaque écran
+   * juge, réparation 3 : « les autres écrans » ne disait pas lesquels). Depuis le bilan
+   * (2026-10-27), chaque écran a sa table : la partie « traduit » doit citer chaque écran
    * de la navigation — un écran ajouté sans y être nommé fait échouer ce test —, et la partie « reste »
    * les restes réels, dont les messages de `shared/watchdog-regex.ts` et du plan de lots.
    */
@@ -85,7 +85,7 @@ describe('table des textes FR / EN', () => {
 })
 
 /*
- * LES TABLES DES ÉCRANS (`tableDeTextes`, conv-1170). Entrée qui doit faire échouer ce bloc : une
+ * LES TABLES DES ÉCRANS (`tableDeTextes`). Entrée qui doit faire échouer ce bloc : une
  * table d'écran qui ne suit pas les règles de la table principale (repli sur le français, `{nom}`
  * remplacé), ou un type qui accepte une table anglaise à qui il manque une clé, ou qui en a une de trop.
  */

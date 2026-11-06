@@ -29,7 +29,7 @@ import { brainScoreChannelLabel } from './graph-view-model'
 import { appliquerLangue } from '../langue'
 
 /**
- * L'ÉCRAN KNOWLEDGE SUIT LA LANGUE (traduction anglaise, conv-1170, lot « Knowledge »). Entrée qui
+ * L'ÉCRAN KNOWLEDGE SUIT LA LANGUE (traduction anglaise, lot « Knowledge »). Entrée qui
  * doit faire échouer ce test : un libellé de la vue Memory, de la boîte de réception, du banc d'essai
  * ou du panneau de nœud laissé en dur, un écran qui ne se redessine pas quand la langue change, ou un
  * nom de sujet traduit dans l'IDENTIFIANT de l'arbre (le code le relit : branches repliées, tests).

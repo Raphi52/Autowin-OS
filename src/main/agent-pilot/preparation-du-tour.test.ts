@@ -13,7 +13,7 @@ import * as systeme from './systeme-du-tour'
 
 /**
  * La PRÉPARATION du tour — tout ce que `AgentPilot.chat()` faisait avant sa boucle d'itérations —
- * vit dans `agent-pilot/*.ts` depuis conv-1580 (lot 2) ; `chat()` n'en garde que les appels.
+ * vit dans `agent-pilot/*.ts` (lot 2) ; `chat()` n'en garde que les appels.
  *
  * Le défaut que le typage et les tests de comportement ne voient pas : une COPIE du bloc laissée
  * dans `chat()` à côté de l'appel au module. Le tour marche, puis le correctif suivant n'est fait

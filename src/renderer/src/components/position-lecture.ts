@@ -39,7 +39,7 @@ export type PositionLecture = {
 export type AncrageMessage = { offsetTop: number }
 
 /**
- * Version de l'ANCRE retenue. Les ancres écrites avant conv-307 (2026-10-17) étaient mesurées par
+ * Version de l'ANCRE retenue. Les ancres écrites (2026-10-17) étaient mesurées par
  * rapport au haut VISIBLE du fil, pas au début du contenu (voir `chat-mesure-messages.ts`) : leur
  * décalage est faux. Une entrée sans cette version garde son px (`top`, lui, était juste) et perd
  * son ancre — sinon la reprise poserait le fil au double de la bonne profondeur.

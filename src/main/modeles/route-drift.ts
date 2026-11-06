@@ -12,7 +12,7 @@ import { isPipelinePhase } from '../../shared/pipeline-phases'
  *
  * Ce module est cette évaluation, et il est volontairement PUR : pas d'horloge, pas de provider, pas
  * d'Electron, aucune E/S. On lui donne des deltas, il rend un constat. C'est ce qui permet de le
- * tester exhaustivement sans lancer un run à 20 $ — le défaut mesuré (conv-1302 : douze
+ * tester exhaustivement sans lancer un run à 20 $ — le défaut mesuré (douze
  * orchestrations sur la même demande, aucune livrée) est exactement le genre de chose qu'on ne peut
  * pas se permettre de reproduire pour vérifier son détecteur.
  *
@@ -272,7 +272,7 @@ export function readRouteVerdict(texte: string): RouteVerdict {
     .toLowerCase()
   if (!valeur || /^continuer?$/.test(valeur)) return { kind: 'continuer' }
   if (/^(fin|stop|aucune?|rien)$/.test(valeur)) return { kind: 'stop' }
-  // conv-1097 : l'arbitre est désormais le modèle des PETITES TÂCHES (Haiku par défaut). Tout le
+  // L'arbitre est désormais le modèle des PETITES TÂCHES (Haiku par défaut). Tout le
   // reste de la ligne partait tel quel comme nom de phase : « `build` (car…) » devenait une phase
   // « `build` (car…) » dans la ligne SUITE. On ne garde que le premier mot, et seulement s'il nomme
   // une phase du pipeline ; sinon, comme pour une réponse illisible : on n'interrompt rien.

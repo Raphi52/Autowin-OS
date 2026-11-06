@@ -9,7 +9,7 @@ import { groupAssistantActivity, type ChatPart } from './chat-view-model'
 import { deciderRelanceAuto, reponseAutoAuDernierAsk } from './chat-auto-mode'
 
 /**
- * LE RUN PARLE LUI-MEME A LA FIN (conv-1008, 2026-10-16) — « claude.exe sait faire ça c pas mal
+ * LE RUN PARLE LUI-MEME A LA FIN (2026-10-16) — « claude.exe sait faire ça c pas mal
  * je veux pareil », capture d'une carte « Message from subagent › » : resume, question, reponses,
  * croix. Ici, la question vit dans l'issue de l'action `orchestrate` (`messageDuRun`) et passe par
  * le MEME bloc que `ask` : memes reponses empilees, meme verrou, meme mode auto.
@@ -160,7 +160,7 @@ describe('AskDecisionBlock — la carte du run', () => {
 })
 
 /*
- * « en mode auto ca répond tout seul » (conv-1008) : la question du run passe par la MEME porte
+ * « en mode auto ca répond tout seul » : la question du run passe par la MEME porte
  * que `ask` (`deciderRelanceAuto`), donc le mode auto y repond seul — la recommandee — et une
  * reponse destructrice attend toujours l'humain.
  */

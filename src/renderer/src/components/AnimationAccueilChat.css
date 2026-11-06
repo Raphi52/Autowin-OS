@@ -1,4 +1,4 @@
-/* Accueil d'un fil vide (conv-1401, 2026-10-31) : le film et la phrase qui s'écrit ; la vraie mascotte
+/* Accueil d'un fil vide (2026-10-31) : le film et la phrase qui s'écrit ; la vraie mascotte
    et son sol magique si le film ne se lit pas. Elle vit dans sa propre page (son iframe) : aucune de
    ses couleurs n'est ici.
    Le texte passe par les jetons du thème. Pas de garde prefers-reduced-motion : ce poste l'a actif,
@@ -83,7 +83,7 @@
   pointer-events: none;
 }
 /* 60 % : `CADRAGE_VERTICAL` de teaser-accueil-calcul.ts. Coupée en hauteur, la vidéo perd un peu plus
-   de haut que de bas : le nom écrit en haut de la carte reste entier (conv-1535). */
+   de haut que de bas : le nom écrit en haut de la carte reste entier. */
 .at-video {
   position: absolute;
   inset: 0;
@@ -109,7 +109,7 @@
 .avec-decor .aa-phrase-zone {
   font-size: clamp(17px, 1.9vw, 23px);
 }
-/* LA PHRASE SE TAPE (conv-1535 : « fais-les s'écrire comme un humain qui tape au clavier, lettre par
+/* LA PHRASE SE TAPE (« fais-les s'écrire comme un humain qui tape au clavier, lettre par
    lettre »). Chaque lettre paraît à son instant `--retard` (PhraseTapee, retardsDeFrappe) ; la mise en
    page est celle de la phrase finie dès le départ, rien ne se décale pendant la frappe. Hors de la
    liste des crans : elle ne joue qu'une fois, et le recalage sur l'horloge commune la finirait avant

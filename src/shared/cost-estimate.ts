@@ -1,7 +1,7 @@
 /**
  * ESTIMATION de coût quand le provider n'expose aucun prix.
  *
- * Constaté (conv-1267, 2026-08-18) : le fil affichait « bloqué par le gate · coût non exposé ·
+ * Constaté (2026-08-18) : le fil affichait « bloqué par le gate · coût non exposé ·
  * 3 appels non chiffrés ». Deux défauts dans une seule pastille : (a) le motif RÉEL du blocage
  * (`gateReasons`) était déjà dans l'outcome mais jamais affiché, si bien que la mention comptable
  * qui la suit se lisait comme la cause — un correctif d'UNE LIGNE a même été abandonné pour ce
@@ -25,7 +25,7 @@ interface Prix {
 /**
  * Ce que l'estimation lit d'un usage. `requests` dit combien de requêtes au modèle cet usage
  * additionne : les paliers « long contexte » se jugent requête par requête, et seul `requests` = 1
- * permet de dire qu'UNE requête a dépassé le seuil (conv-1602).
+ * permet de dire qu'UNE requête a dépassé le seuil.
  */
 export interface UsageAEstimer extends TokenUsage {
   requests?: number
@@ -68,7 +68,7 @@ interface ModelRate extends Prix {
 /**
  * Fin de la promotion de gpt-5.6-sol : « GPT-5.6 Sol’s promotional pricing is available until
  * November 30, 2026 » (https://developers.openai.com/api/docs/pricing.md, relu le 2026-11-05).
- * La page ne donne pas de fuseau : fin du 30/11 en UTC, inclus (conv-1602).
+ * La page ne donne pas de fuseau : fin du 30/11 en UTC, inclus.
  */
 export const GPT_5_6_SOL_PROMO_UNTIL_MS = Date.UTC(2026, 10, 30, 23, 59, 59, 999)
 
@@ -82,14 +82,14 @@ const OPENAI_LONG_ABOVE_TOKENS = 272_000
 /**
  * Ordre significatif : le premier motif qui correspond gagne. Chaque MODÈLE EXACT passe avant le
  * motif de sa famille, sinon `claude-opus-5-5` serait tarifé en `opus` et `gpt-6.1-sol` en `sol`
- * (idées fausses relevées le 2026-11-05, conv-1602). Les motifs de famille ne servent plus qu'aux
+ * (idées fausses relevées le 2026-11-05). Les motifs de famille ne servent plus qu'aux
  * versions sans ligne propre.
  * fix-ok: cause mesurée le 2026-11-05 — les deux grilles officielles relues par curl (exit 0) ne
  * donnent plus les prix de cette table, et l'appel Haiku 5.5 réel (`total_cost_usd` 0,00093225 $)
- * tombait sur le motif `haiku` à 1 $ / 5 $, d'où 0,0093225 $ estimés (conv-1602).
+ * tombait sur le motif `haiku` à 1 $ / 5 $, d'où 0,0093225 $ estimés.
  */
 const MODEL_RATES: readonly ModelRate[] = [
-  // ── Claude — grille Anthropic relue le 2026-11-05 (conv-1602) ──
+  // ── Claude — grille Anthropic relue le 2026-11-05 ──
   // Fable 5.1 et Mythos 5.1 : 10 $ / 50 $, cache relu 0,25 $ = 0,025× (note 1 de la grille).
   {
     provider: CLAUDE,
@@ -138,7 +138,7 @@ const MODEL_RATES: readonly ModelRate[] = [
   { provider: CLAUDE, match: 'sonnet', inputPerMTok: 3, outputPerMTok: 15, cacheReadRatio: 0.1 },
   { provider: CLAUDE, match: 'haiku', inputPerMTok: 1, outputPerMTok: 5, cacheReadRatio: 0.1 },
 
-  // ── OpenAI / Codex — grille OpenAI relue le 2026-11-05 (conv-1602) ──
+  // ── OpenAI / Codex — grille OpenAI relue le 2026-11-05 ──
   // Ces tarifs servent l'ÉQUIVALENT, pas une dépense : cette application n'atteint codex que par
   // l'abonnement ChatGPT (`shared/billing-model.ts`). Le palier long contexte EST publié (au-delà de
   // 272K tokens d'entrée) : l'ancien commentaire disait le contraire. Partout, le prix long vaut
@@ -184,7 +184,7 @@ const MODEL_RATES: readonly ModelRate[] = [
   // gpt-5.6-sol : 4 $ / 20 $ (long 8 $ / 30 $) en PROMOTION jusqu'au 30/11/2026. Prix d'après :
   // 5 $ / 30 $, ceux que la page du modèle réduit de « 20% » et « 33% » pour arriver à 4 $ / 20 $,
   // et leur palier long 10 $ / 45 $ par sa règle « 2x input and 1.5x output for the full request »
-  // (https://developers.openai.com/api/docs/models/gpt-5.6-sol.md, relue le 2026-11-05, conv-1602).
+  // (https://developers.openai.com/api/docs/models/gpt-5.6-sol.md, relue le 2026-11-05).
   {
     provider: CODEX,
     match: 'gpt-5.6-sol',
@@ -306,7 +306,7 @@ export function modelRate(model: string | undefined, provider?: string): ModelRa
  * du seuil sur plusieurs requêtes, ou sur un nombre inconnu, ne dit pas qu'UNE requête l'a
  * dépassé : prix court, un PLANCHER assumé comme la durée de vie de cache inconnue. Les appelants
  * additionnent souvent plusieurs requêtes (`cli-usage-recovery.ts`, `dashboards/cost.ts`) ; juger le
- * total aurait multiplié par 5 le coût de vingt petits appels Haiku 5.5 (conv-1602).
+ * total aurait multiplié par 5 le coût de vingt petits appels Haiku 5.5.
  */
 function enLongContexte(rate: ModelRate, usage: UsageAEstimer, input: number): boolean {
   return rate.longAboveTokens !== undefined && input > rate.longAboveTokens && usage.requests === 1
@@ -315,7 +315,7 @@ function enLongContexte(rate: ModelRate, usage: UsageAEstimer, input: number): b
 /**
  * L'entrée comptée en tokens « au prix d'entrée » : chaque poste du cache pèse son multiple du prix
  * d'entrée. Une seule définition pour la grille (`estimateCostUsd`) et pour le prix appris du CLI
- * (`tokensPonderes`) : deux copies de cette pondération finiraient par diverger (conv-1602).
+ * (`tokensPonderes`) : deux copies de cette pondération finiraient par diverger.
  */
 function entreePonderee(usage: TokenUsage, cacheReadRatio: number): number {
   // Les tokens de cache — relus ET écrits — sont un SOUS-ENSEMBLE de l'entrée : on les facture une
@@ -356,7 +356,7 @@ export function estimateCostUsd(usage: UsageAEstimer, nowMs?: number): number | 
 /**
  * FORME commune des prix Claude quand la grille ne connaît pas le modèle : sur toutes les lignes
  * Claude de `MODEL_RATES` (grille du 2026-11-05), la sortie vaut 5× l'entrée, et le cache relu
- * 0,1× sur la plupart. Seule la forme est supposée : le NIVEAU du prix vient du CLI (conv-1602).
+ * 0,1× sur la plupart. Seule la forme est supposée : le NIVEAU du prix vient du CLI.
  */
 const FORME_CLAUDE_PAR_DEFAUT = { sortieParEntree: 5, cacheReadRatio: 0.1 } as const
 
@@ -364,7 +364,7 @@ const FORME_CLAUDE_PAR_DEFAUT = { sortieParEntree: 5, cacheReadRatio: 0.1 } as c
  * Tokens PONDÉRÉS : l'usage compté en tokens « au prix d'entrée », la sortie et le cache pesant
  * leur multiple de ce prix. Le CLI Claude tarife chaque modèle (`modelUsage[<modèle>].costUSD`) :
  * `costUSD ÷ tokensPonderes` donne alors le prix d'un token d'entrée SANS l'avoir recopié d'une
- * grille, et `tokensPonderes × ce prix` réestime un autre usage du même modèle (conv-1602).
+ * grille, et `tokensPonderes × ce prix` réestime un autre usage du même modèle.
  *
  * Les MULTIPLES viennent de la ligne de grille du modèle quand elle existe (Opus 5.5 relit le cache
  * à 0,05×), sinon de la forme Claude commune. Une hausse de prix qui garde la forme — le cas
@@ -387,7 +387,7 @@ export function tokensPonderes(usage: UsageAEstimer): number {
 /**
  * Vrai quand AUCUNE requête de cet usage n'a pu passer le palier long contexte : le total d'entrée
  * ne dépasse pas le seuil (chaque requête est plus petite que lui). Un `costUSD` observé au-delà
- * peut mêler prix courts et prix longs : son rapport ne dirait pas le prix court (conv-1602).
+ * peut mêler prix courts et prix longs : son rapport ne dirait pas le prix court.
  */
 export function sousLePalierLong(usage: UsageAEstimer): boolean {
   const seuil = modelRate(usage.model, usage.provider)?.longAboveTokens
@@ -397,7 +397,7 @@ export function sousLePalierLong(usage: UsageAEstimer): boolean {
 /**
  * Estimation au prix APPRIS du CLI (`usdParTokenPondere`, un prix court). `undefined` — l'appelant
  * prend alors la grille — quand l'usage n'a rien de tarifable ou qu'UNE requête passe le palier long
- * contexte de sa ligne : le prix appris ne dit rien de ce palier, la grille si (conv-1602).
+ * contexte de sa ligne : le prix appris ne dit rien de ce palier, la grille si.
  */
 export function estimerAuTarifAppris(
   usage: UsageAEstimer,

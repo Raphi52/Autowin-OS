@@ -8,7 +8,7 @@ import type { SendOptions } from './types'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 
 /**
- * UN APPEL SANS `execution` N'EST PAS UN APPEL SANS OUTIL (conv-1420, 2026-11-01).
+ * UN APPEL SANS `execution` N'EST PAS UN APPEL SANS OUTIL (2026-11-01).
  *
  * Il prend la branche du tour de chat : Bash, Write et Edit, `bypassPermissions`, et le dossier de
  * travail global en lecture. Une relecture « à froid » y aurait donc lu le code, voire écrit dans le

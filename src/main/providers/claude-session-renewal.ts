@@ -1,5 +1,5 @@
 /**
- * RENOUVELLEMENT DE LA SESSION CLAUDE D'UN COMPTE, par le CLI lui-meme (conv-1031, 2026-10-21).
+ * RENOUVELLEMENT DE LA SESSION CLAUDE D'UN COMPTE, par le CLI lui-meme (2026-10-21).
  *
  * Le jeton d'acces d'un compte Claude vit 8 h et SEUL le CLI sait le renouveler (il detient le jeton
  * de rafraichissement, le verrou du fichier et son format). La sonde de quota (`model-quotas.ts`)

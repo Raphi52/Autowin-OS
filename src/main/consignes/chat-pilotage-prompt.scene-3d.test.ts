@@ -7,10 +7,10 @@ import {
 
 /**
  * UNE CAPACITE QUE LE PROMPT NE NOMME PAS RESTE MORTE (meme regle que mermaid). Le bloc ```threejs
- * est rendu en scene vivante depuis le 2026-10-16 (conv-299, Bloc3D.tsx) ; sans ce paragraphe, un
+ * est rendu en scene vivante depuis le 2026-10-16 (Bloc3D.tsx) ; sans ce paragraphe, un
  * /draft de planetes retomberait sur des dessins CSS — exactement ce que l'utilisateur refusait.
  *
- * Depuis le 2026-10-28 (conv-1229), le paragraphe ne part qu'aux tours VISUELS (bloc conditionnel
+ * Depuis le 2026-10-28, le paragraphe ne part qu'aux tours VISUELS (bloc conditionnel
  * REGLES_VISUELLES) : 1 000 caracteres de moins sur tout autre tour. Ce fichier tient les deux bouts :
  * la regle est entiere dans le bloc, et une demande de scene 3D ouvre bien ce bloc.
  */

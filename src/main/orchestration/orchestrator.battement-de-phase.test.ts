@@ -8,7 +8,7 @@ import { TrustLedger } from '../trust/ledger'
 import { makeTestWorktrees } from './orchestrator.test-helpers'
 
 /**
- * TROU NOIR MESURÉ le 2026-09-07 sur conv-42 : entre 09:06 et 09:27 le fil n'a reçu AUCUNE ligne.
+ * TROU NOIR MESURÉ le 2026-09-07 : entre 09:06 et 09:27 le fil n'a reçu AUCUNE ligne.
  * Journal du tour (`turn-journals/conv-42/0cea1626….jsonl`) : `action-progress` à 1788764779503
  * (fin de `frame`) puis plus rien jusqu'à 1788766075667 (fin de `build`) — 21 min 36 s de silence.
  *
@@ -70,11 +70,11 @@ describe("Orchestrateur — le battement d'outil d'une phase atteint le fil", ()
 })
 
 /**
- * LE MÊME TROU, SUR LES DEUX AUTRES CHEMINS DE L'ÉTAPE (conv-1085, 2026-10-22).
+ * LE MÊME TROU, SUR LES DEUX AUTRES CHEMINS DE L'ÉTAPE (2026-10-22).
  *
- * Le correctif de conv-42 ne couvrait que le chemin « binding du rôle ». Sur ce poste, `build` a un
+ * Le correctif ne couvrait que le chemin « binding du rôle ». Sur ce poste, `build` a un
  * modèle attitré (bloc topology) : elle passe par le chemin fan-out, dont le rappel de flux ne lisait
- * que `delta` et `reasoning`. Mesuré sur conv-1069, conv-1070 et conv-1077 : 0 ligne d'outil au fil
+ * que `delta` et `reasoning`. Mesuré : 0 ligne d'outil au fil
  * pendant 46 à 53 min de build, contre 63 à 110 pendant think et clean. Le fil n'affichait plus que
  * « réfléchit… » et l'utilisateur concluait à un gel. Le chemin des sous-tâches avait le même trou.
  */

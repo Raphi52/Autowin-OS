@@ -130,7 +130,7 @@ describe('ChatMosaic', () => {
     expect(hote.querySelector('[data-conv-id="b"] .chat-mosaic-window-busy')).toBeNull()
   })
 
-  // conv-817 (2026-10-13) : « mes chat dans le mode mosaique doivent avoir le style de chat normal
+  // 2026-10-13 : « mes chat dans le mode mosaique doivent avoir le style de chat normal
   // avec les chanfreins et tout ». Les themes habillent le chat plein par `.chat::before/::after`,
   // `.chat > .chat-scroll` et `.chat > .composer` : la fenetre doit offrir CETTE structure.
   it('chaque fenetre a la structure du chat plein : panneau .chat, fil .chat-scroll, saisie enfant direct', () => {

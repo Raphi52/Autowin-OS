@@ -1,5 +1,5 @@
 /**
- * LE GONG DU QUARTIER (conv-1421, « je voulais dire un gong pas un bong pardon »).
+ * LE GONG DU QUARTIER (« je voulais dire un gong pas un bong pardon »).
  *
  * Un gong n'attaque pas comme une cloche. Le grave part tout de suite ; les aigus, eux, montent après
  * le coup, le temps que la vibration gagne le bord du disque, et c'est ce souffle qui fait le gong.

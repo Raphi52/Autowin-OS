@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { filAttenduSuiteDifferee, suiteEstDifferee } from './chat-auto-mode'
 
 /**
- * ATTENDRE LA FIN D'UN AUTRE FIL (conv-1069, candidat 3 du scout). Mesuré sur conv-1065 : la même
+ * ATTENDRE LA FIN D'UN AUTRE FIL (candidat 3 du scout). Mesuré : la même
  * question « conv-N a-t-il fini ? » est partie 5 fois, dont 2 tours PAYÉS pour lire « pas terminé »,
  * et la fin a été vue 51 min en retard. La suite « quand le tour de conv-N est terminé » ne
  * matchait même pas la règle des suites différées (« est terminé » n'y figurait pas) : elle partait
@@ -25,7 +25,7 @@ describe('filAttenduSuiteDifferee', () => {
     expect(filAttenduSuiteDifferee('À la fin du tour de conv-9, relance le juge.', null)).toBe(
       'conv-9'
     )
-    // Recopiée du « 👉 Recommandé » de conv-1065 (22/10, 11:47) : le cas qui a coûté 5 envois.
+    // Recopiée du « 👉 Recommandé » (22/10, 11:47) : le cas qui a coûté 5 envois.
     expect(
       filAttenduSuiteDifferee(
         'Le tour de conv-1053 est-il terminé ? Si oui, vérifie que le verrou a disparu.',

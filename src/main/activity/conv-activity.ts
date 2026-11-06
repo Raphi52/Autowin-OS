@@ -46,7 +46,7 @@ export interface ConvActivityEntry {
   /** Phase du pipeline (frame, build, judge...) quand elle est connue — jamais devinee. */
   phase?: string
   /**
-   * Run d'orchestration d'origine. ABSENT jusqu'au 2026-09-02 (mesure conv-153 : 0 ligne sur 2578
+   * Run d'orchestration d'origine. ABSENT jusqu'au 2026-09-02 (mesure : 0 ligne sur 2578
    * en portait un), donc une depense de sous-agent n'etait rattachable a AUCUN run : un banc
    * /arena ne pouvait pas attribuer son cout a un bras. Renseigne seulement quand l'appelant le
    * connait — jamais devine.
@@ -54,7 +54,7 @@ export interface ConvActivityEntry {
   runId?: string
   /**
    * Duree de l'operation. ABSENTE jusqu'au 2026-07-29 : ce journal porte les sous-agents les plus
-   * couteux (mesure conv-75 : 2,83 $ vus cote appels contre ~20,70 $ reels), donc on ne pouvait pas
+   * couteux (mesure : 2,83 $ vus cote appels contre ~20,70 $ reels), donc on ne pouvait pas
    * repondre a « quelle phase prend le TEMPS », seulement a « laquelle prend l'argent » — les deux ne
    * coincident pas forcement.
    */

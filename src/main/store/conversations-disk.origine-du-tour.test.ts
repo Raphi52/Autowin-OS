@@ -7,7 +7,7 @@ import { ConversationStore } from './conversations'
 import { attendreEcrituresConversations, persistConversations } from './conversations-disk'
 
 /**
- * L'ORIGINE D'UN TOUR SURVIT AU REDÉMARRAGE (conv-1423, 2026-11-01). Une reprise après quota se décide
+ * L'ORIGINE D'UN TOUR SURVIT AU REDÉMARRAGE (2026-11-01). Une reprise après quota se décide
  * souvent après une relance de l'app. Si la marque se perdait au disque, tous les fils coupés
  * passeraient à « à relancer à la main » sans rien dire ; si elle se perdait à la fin du tour, ce
  * serait le cas de toutes les coupures. Ici : vrai stockage, vrai journal, vrai rejeu.

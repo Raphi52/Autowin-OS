@@ -1,9 +1,9 @@
 /**
- * Modèles Gemini proposés par agy (2026-11-04, conv-1530). Avant, le catalogue n'offrait que
+ * Modèles Gemini proposés par agy (2026-11-04). Avant, le catalogue n'offrait que
  * l'entrée « défaut » d'agy (`modelesAgy` dans agy.ts) : l'onglet Gemini du choix de modèle
  * n'avait aucun modèle à choisir, alors que `agy models` en annonce plusieurs pour le compte.
  *
- * Fichier à part plutôt qu'ajouté dans agy.ts : agy.ts portait le travail non commité de conv-1499
+ * Fichier à part plutôt qu'ajouté dans agy.ts : agy.ts portait le travail non commité
  * au moment de ce correctif.
  */
 import { execFile } from 'node:child_process'

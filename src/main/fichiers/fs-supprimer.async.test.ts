@@ -15,7 +15,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { supprimerArbre, supprimerArbreAsync } from './fs-supprimer'
 
 /**
- * `supprimerArbreAsync` rejoue les cas limites de `fs-supprimer.test.ts` (conv-108) — heal conv-1115.
+ * `supprimerArbreAsync` rejoue les cas limites de `fs-supprimer.test.ts` — heal.
  * Les deux formes ont chacune leur parcours : ces cas sont ce qui les empêche de diverger. Le cas
  * « jonction » est le plus grave : une suppression qui suit la jonction `node_modules` d'une copie
  * d'agent viderait les modules du dépôt.

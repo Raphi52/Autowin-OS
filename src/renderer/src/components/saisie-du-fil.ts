@@ -1,5 +1,5 @@
 /**
- * REMPLIR LA ZONE DE SAISIE DEPUIS UNE PAGE INTERACTIVE (conv-1304, 2026-10-30).
+ * REMPLIR LA ZONE DE SAISIE DEPUIS UNE PAGE INTERACTIVE (2026-10-30).
  *
  * Un bouton de choix `#autowin-prompt` d'un bloc ```html-render ENVOIE son libelle
  * (bouton-prompt-html.ts) : ce qui part est ce qui est ecrit, le fil le garantit parce qu'aucun

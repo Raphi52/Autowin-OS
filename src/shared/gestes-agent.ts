@@ -4,7 +4,7 @@
  * Ni la trace causale ni les messages enregistrés ne les gardent (seulement les commandes d'Autowin).
  * Le journal de la demande (`turn-journals/<conversation>/<demande>.jsonl`) porte en revanche une
  * ligne d'état par geste terminé : `{"kind":"provider-status","text":"Read terminé - 3 s"}`.
- * Mesuré le 2026-10-12 sur conv-904, conv-906 et conv-903 : « Bash terminé » 312 fois, « Read
+ * Mesuré le 2026-10-12 : « Bash terminé » 312 fois, « Read
  * terminé » 186, « Edit terminé » 79, « Bash échoué » 6. Une ligne « Read · chemin » marque le DÉBUT
  * d'un geste et n'est pas comptée : seul un geste fini a une issue et une durée.
  *

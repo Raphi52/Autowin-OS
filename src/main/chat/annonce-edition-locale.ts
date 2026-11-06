@@ -4,7 +4,7 @@ import type { EditionLocaleNonRemise } from '../store/worktree-manager'
  * Phrase qui ANNONCE, dans la réponse d'un run, que la modification non commitée de l'utilisateur
  * n'a pas été toute remise dans ses fichiers après la publication (`editionLocaleNonRemise`).
  *
- * Vécu le 2026-10-24 (conv-1139, run run-58bfc90f8f7b-1) : deux fichiers modifiés par
+ * Vécu le 2026-10-24 (run run-58bfc90f8f7b-1) : deux fichiers modifiés par
  * l'utilisateur sont restés dans `stash@{0}`, revenus à la version commitée, et le compte rendu
  * disait seulement « intégré ». Rend `undefined` quand il n'y a rien à annoncer.
  */

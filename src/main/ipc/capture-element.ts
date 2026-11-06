@@ -1,5 +1,5 @@
 /**
- * LE CANAL DE LA CAPTURE D'UN ÉLÉMENT DE L'INTERFACE (Alt+clic, conv-1338, 2026-10-30).
+ * LE CANAL DE LA CAPTURE D'UN ÉLÉMENT DE L'INTERFACE (Alt+clic, 2026-10-30).
  *
  * L'interface envoie le rectangle de l'élément ciblé, en pixels de la fenêtre ; la capture en sort
  * pour être jointe au brouillon du fil. Elle ne vise que la fenêtre qui demande (`event.sender`).

@@ -30,7 +30,7 @@ export interface VizNode {
   file?: string
   themes?: string[]
   /**
-   * Note du Brain PERSO dans la vue qui montre les deux Brains (conv-1262) : son id porte le
+   * Note du Brain PERSO dans la vue qui montre les deux Brains : son id porte le
    * préfixe `perso:` (les deux Brains ont des `knowledge/…`) et `file` reste son vrai chemin.
    */
   perso?: true
@@ -51,7 +51,7 @@ export interface VizGraph {
   /** Taille de la source avant application du LOD, si la vue est tronquée. */
   totalNodes?: number
   /**
-   * Vue des deux Brains (conv-1262) : nombre de ponts perso → équipe tracés, ou pourquoi aucun
+   * Vue des deux Brains : nombre de ponts perso → équipe tracés, ou pourquoi aucun
    * n'a pu l'être (Brain pas encore indexé, modèles différents).
    */
   ponts?: { nombre: number; raison?: string }

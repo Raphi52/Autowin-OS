@@ -204,9 +204,9 @@ describe('journal de tour — l evenement du pilote atteint bien le fichier', ()
 })
 
 /**
- * LA PENSÉE S'ÉCRIT PAR RAFALE, PAS MOT PAR MOT (conv-1431, 2026-11-02).
+ * LA PENSÉE S'ÉCRIT PAR RAFALE, PAS MOT PAR MOT (2026-11-02).
  *
- * Mesuré sur les journaux conv-14* : 355 683 lignes `reasoning-step` pour 28 Mo sur 51 Mo (55 %),
+ * Mesuré sur les journaux * : 355 683 lignes `reasoning-step` pour 28 Mo sur 51 Mo (55 %),
  * un paquet reçu = une ligne (« The », « con », « versation history se »). Le texte entier est déjà
  * écrit à la clôture sous `reasoning`, et deux lecteurs recollaient ces miettes à chaque relecture
  * (`fusionnerFragmentsDeFlux`, `model-activity-log.ts`). Le défaut se crée à l'écriture : il s'y

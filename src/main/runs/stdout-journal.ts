@@ -211,7 +211,7 @@ export interface TailResult {
  * Le journal est relu pendant que le CLI l'écrit : une lecture peut s'arrêter au milieu d'un « é »
  * (2 octets) ou d'un emoji (4). Décodé seul, ce morceau devenait « � », puis le reste « � » à la
  * lecture suivante — et `tailJournalOnce`, qui recalcule la position depuis le texte décodé, la
- * plaçait au mauvais octet (audit conv-1040, `stdout-journal.utf8-coupe.test.ts`).
+ * plaçait au mauvais octet (`stdout-journal.utf8-coupe.test.ts`).
  *
  * Seule une séquence INCOMPLÈTE EN FIN est retenue (au plus 3 octets), pour la lecture suivante :
  * un octet invalide au milieu reste décodé tel quel, il n'attendra jamais de suite.

@@ -12,8 +12,8 @@ import { creerSuiviAffichage } from './affichage-session'
 import { affichageDe, attributsAffichage, estEcranDeTelephone } from '../../shared/affichage-session'
 
 /**
- * L'affichage selon la connexion (conv-1442) : à distance sur un petit écran → version téléphone
- * (à distance sur un écran de PC, rien ne change depuis conv-1538). Écrans de référence : celui de la session mesurée le
+ * L'affichage selon la connexion : à distance sur un petit écran → version téléphone
+ * (à distance sur un écran de PC, rien ne change). Écrans de référence : celui de la session mesurée le
  * 2026-11-02 depuis le PC (1920 x 1080), un téléphone 2400 x 1080 à 200 % (1200 x 540).
  */
 describe("l'écran de téléphone se reconnaît à sa taille", () => {

@@ -7,7 +7,7 @@ import {
 import { estCibleDestructrice } from '../../../shared/scout-cible-lecture'
 
 /*
- * RELECTURE DES REGLES D'ARRET (conv-787, 2026-09-22) — apres deux fausses coupures vecues
+ * RELECTURE DES REGLES D'ARRET (2026-09-22) — apres deux fausses coupures vecues
  * (« Voici le message… » et « Rien de plus sur ce sujet… »), les autres portes ont ete sondees avec
  * des phrases realistes. Trois d'entre elles arretaient le mode auto A TORT. Ces tests figent le
  * partage : ce qui doit continuer a arreter, et ce qui ne doit plus.
@@ -51,7 +51,7 @@ describe('donnée utilisateur — toute « clé » n’est pas un secret', () =>
 })
 
 /*
- * SONDAGE SUR CLOTURES REELLES (conv-787) : 2970 blocs de cloture extraits de conversations.json ont
+ * SONDAGE SUR CLOTURES REELLES : 2970 blocs de cloture extraits de conversations.json ont
  * ete rejoues dans les portes « rien ». 15 vraies fins etaient RATEES sur la meme forme — « rien : »
  * ou « rien — » suivi de la justification. Les phrases ci-dessous sont copiees telles quelles.
  */

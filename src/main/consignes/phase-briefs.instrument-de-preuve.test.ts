@@ -4,7 +4,7 @@ import { PHASE_BRIEFS } from './phase-briefs'
 /**
  * L'INSTRUMENT DE PREUVE MANQUANT SE REPARE — IL NE SE SIGNALE PAS.
  *
- * Vecu le 2026-08-26 (conv-1420), et l'utilisateur l'a resume ainsi : « j'aimerais que ca marche
+ * Vecu le 2026-08-26, et l'utilisateur l'a resume ainsi : « j'aimerais que ca marche
  * la-bas du premier coup ». Deux runs, 1,95 $, pour un travail qui etait BON des le premier : le
  * code existait, le test etait rouge puis vert, la mutation prouvait sa falsifiabilite. Le juge a
  * refuse pour une raison que le producteur ne pouvait pas lever :

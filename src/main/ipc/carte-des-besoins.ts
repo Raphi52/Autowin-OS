@@ -1,5 +1,5 @@
 /**
- * LE CANAL DE LA CARTE DES BESOINS (conv-1089, 2026-10-22) — lecture seule, aucun appel de modèle.
+ * LE CANAL DE LA CARTE DES BESOINS (2026-10-22) — lecture seule, aucun appel de modèle.
  *
  * La vue demande la carte ; le processus principal la calcule à partir des fils qu'il a déjà en
  * mémoire et des runs du scan borné de `get_state` (`runsWithGate`), puis ne renvoie que la
@@ -8,18 +8,18 @@
  * Lot 2 : il relit aussi `besoins.jsonl` (qui a prompté, ligne de besoin) et, pour les demandes
  * antérieures au journal, l'identité git actuelle du dossier de chaque fil.
  *
- * Work items (conv-1127, 2026-10-23) : trois canaux de plus, pour lier un prompt à une task.
+ * Work items (2026-10-23) : trois canaux de plus, pour lier un prompt à une task.
  * `os:carte:lierWorkItem` et `os:carte:delierWorkItem` écrivent dans `liens-work-items.jsonl`, sur ce
  * poste ; `os:carte:verifierMentions` lit les fiches que des prompts nomment (`#1234`). Les trois ne
  * reçoivent du fournisseur de tickets que sa LECTURE (`get`) : aucune écriture chez lui n'est
  * possible d'ici. Le calcul de la carte, lui, ne lit que le fichier — jamais le réseau.
  *
- * Dossier du Board (conv-1206, 2026-10-28) : `os:carteDesBesoins` reçoit en plus les états posés à
+ * Dossier du Board (2026-10-28) : `os:carteDesBesoins` reçoit en plus les états posés à
  * la main (rangés dans la vue) et, si un dossier est choisi sur ce poste, y recopie le Board SANS
  * attendre (`board-dossier.ts`). Trois canaux le règlent : `os:board-dossier` (lecture),
  * `…:choisir` (sélecteur natif, aucun chemin reçu de la vue) et `…:effacer`.
  *
- * Collègues et fin de tour (conv-1210, 2026-10-28) : `os:board-collegues` rend les Boards que les
+ * Collègues et fin de tour (2026-10-28) : `os:board-collegues` rend les Boards que les
  * AUTRES postes ont écrits dans le même dossier (`board-collegues.ts`), et `recopierLeBoard`,
  * rendu à `index.ts`, recopie le Board à chaque fin de tour, vue fermée.
  */
@@ -122,31 +122,31 @@ export function registerCarteDesBesoinsIpc({
 }: {
   os: Pick<AutowinOS, 'conversations' | 'runsWithGate' | 'executionWorkspace'>
   journal?: { lire: () => ReadonlyMap<string, EntreeDuJournal> }
-  /** Dossier de `liens-work-items.jsonl` (conv-1127) ; absent = aucun lien gardé. */
+  /** Dossier de `liens-work-items.jsonl` ; absent = aucun lien gardé. */
   racineDesLiens?: string
   tickets?: LectureDesTickets
-  /** Le dossier où le Board est recopié (conv-1206) ; absent = aucune copie. */
+  /** Le dossier où le Board est recopié ; absent = aucune copie. */
   dossierDuBoard?: DossierDuBoard
   /** Le sélecteur de dossier natif (`pickDirectory` de `index.ts`). */
   choisirDossier?: (sender: Electron.WebContents) => Promise<string | null>
   /** Dossier de données du poste, où la copie de fin de tour garde les états posés à la main
-   *  (`board-etats-manuels.json`, conv-1210) ; absent = aucune copie de fin de tour. */
+   *  (`board-etats-manuels.json`) ; absent = aucune copie de fin de tour. */
   racineDuPoste?: string
-  /** Quand lancer le calcul à froid sans la vue (conv-1248) ; défaut : fenêtre affichée ET
+  /** Quand lancer le calcul à froid sans la vue ; défaut : fenêtre affichée ET
    *  archives dans le store. */
   prechauffageApres?: Promise<unknown>
-  /** La fiche de chaque demande (`fiches-de-demande.ts`, conv-1456) : un post-it par RUN.md léger. */
+  /** La fiche de chaque demande (`fiches-de-demande.ts`) : un post-it par RUN.md léger. */
   lireFiches?: () => Promise<ReadonlyMap<string, string>>
 }): {
-  /** Recopie le Board vers le dossier sans la vue (conv-1210) : appelée à chaque fin de tour. */
+  /** Recopie le Board vers le dossier sans la vue : appelée à chaque fin de tour. */
   recopierLeBoard: () => void
   /**
    * La carte complète, avant tout filtre d'affichage : la mesure des écarts avec les RUN.md légers
-   * (conv-1418) la lit, en partageant le calcul et la mémoire du Board.
+   * la lit, en partageant le calcul et la mémoire du Board.
    */
   lireLaCarte: () => Promise<CarteDesBesoins>
 } {
-  // Valeur expirée servie pendant sa relecture (conv-1248) : l'ouverture n'attend plus les `git`.
+  // Valeur expirée servie pendant sa relecture : l'ouverture n'attend plus les `git`.
   const identiteDuDossier = creerIdentitesEnCache(undefined, undefined, undefined, true)
   const liens = racineDesLiens ? creerLiensWorkItems({ racine: racineDesLiens }) : null
   // Le type du store et celui de la carte décrivent le même JSON ; seul le typage des parts diffère.
@@ -184,9 +184,9 @@ export function registerCarteDesBesoinsIpc({
     ...(lireFiches ? { lireFiches } : {}),
     identiteDuDossier
   })
-  // Le Board ne montre que les dossiers du Chat (conv-1212), plus ceux que le Chat propose toujours
+  // Le Board ne montre que les dossiers du Chat, plus ceux que le Chat propose toujours
   // — le dépôt par défaut et « This computer » —, sauf si une croix les a retirés ; « This computer »
-  // ne se retire jamais (conv-1231). Même réduction pour l'affichage et pour la copie vers le
+  // ne se retire jamais. Même réduction pour l'affichage et pour la copie vers le
   // dossier du Board : ce qui part est ce que la vue montre.
   const dossiersDuChat = creerDossiersDuChat(racineDuPoste ? { racine: racineDuPoste } : {})
   const calculerLeBoard = async (): Promise<CarteDesBesoins> => {
@@ -200,7 +200,7 @@ export function registerCarteDesBesoinsIpc({
             homedir()
           ])
     )
-    // Un seul nom pour ce poste, sur l'écran comme dans la copie partagée (conv-1230) : celui
+    // Un seul nom pour ce poste, sur l'écran comme dans la copie partagée : celui
     // choisi dans Settings · Interface, sinon le compte Windows — plus l'identité git du dossier.
     return dossierDuBoard ? carteAuNomDuPoste(reduite, dossierDuBoard.nomDuPoste()) : reduite
   }
@@ -210,7 +210,7 @@ export function registerCarteDesBesoinsIpc({
         lireFiche: (source: TicketSourceProfile, id: string) => tickets.get({ source, id })
       }
     : null
-  // Les collègues (conv-1210) : les AUTRES sous-dossiers du dossier choisi, le nôtre étant la cible.
+  // Les collègues : les AUTRES sous-dossiers du dossier choisi, le nôtre étant la cible.
   const collegues = dossierDuBoard
     ? creerLecteurDesCollegues({
         ou: () => {
@@ -219,7 +219,7 @@ export function registerCarteDesBesoinsIpc({
         }
       })
     : null
-  // La copie de fin de tour (conv-1210) : même calcul que la vue, lancé sans elle.
+  // La copie de fin de tour : même calcul que la vue, lancé sans elle.
   const copieDeFinDeTour =
     dossierDuBoard && racineDuPoste
       ? creerCopieDeFinDeTour({
@@ -232,16 +232,16 @@ export function registerCarteDesBesoinsIpc({
   ipcMain.handle('os:carteDesBesoins', async (event, options: unknown) => {
     assertTrustedRendererSender(event, 'CarteDesBesoins')
     const carte = await calculerLeBoard()
-    // Copie vers le dossier du Board (conv-1206), sans attendre : un partage lent ou injoignable ne
+    // Copie vers le dossier du Board, sans attendre : un partage lent ou injoignable ne
     // retarde jamais l'affichage. Les états posés à la main vivent dans la vue, qui les joint ici.
     const manuels = etatsManuelsLisibles(objet(options).etatsManuels)
-    // Gardés pour la copie de fin de tour, qui part sans la vue (conv-1210).
+    // Gardés pour la copie de fin de tour, qui part sans la vue.
     copieDeFinDeTour?.retenirManuels(manuels)
     dossierDuBoard?.enregistrer(carte, manuels)
     return carte
   })
 
-  // Le dossier du Board (conv-1206). Le chemin vient du sélecteur natif, jamais d'un texte de la vue.
+  // Le dossier du Board. Le chemin vient du sélecteur natif, jamais d'un texte de la vue.
   ipcMain.handle('os:board-dossier', (event) => {
     assertTrustedRendererSender(event, 'Dossier du Board')
     return dossierDuBoard?.etat() ?? { dossier: null, cible: null, enCours: false }
@@ -261,9 +261,9 @@ export function registerCarteDesBesoinsIpc({
       : { dossier: null, cible: null, enCours: false }
   })
 
-  // Les projets recopiés dans le dossier (conv-1211) : `null` = tous ; la liste reçue de la vue est
+  // Les projets recopiés dans le dossier : `null` = tous ; la liste reçue de la vue est
   // relue par `projetsPartagesLisibles` avant d'être gardée, illisible = rien ne change.
-  // Le nom de ce poste sur le Board (conv-1230) : texte relu par `nomDuPosteLisible`, `null` ou vide
+  // Le nom de ce poste sur le Board : texte relu par `nomDuPosteLisible`, `null` ou vide
   // = revenir au compte Windows, illisible = rien ne change.
   ipcMain.handle('os:board-dossier:nom', (event, brut: unknown) => {
     assertTrustedRendererSender(event, 'Dossier du Board')
@@ -286,7 +286,7 @@ export function registerCarteDesBesoinsIpc({
     return dossierDuBoard.choisirProjets(projets)
   })
 
-  // La liste des dossiers du Chat et ses retraits (conv-1212), transmis par la vue à chaque
+  // La liste des dossiers du Chat et ses retraits, transmis par la vue à chaque
   // changement : relus par `dossiersDuChatLisibles` avant d'être gardés, illisible = rien ne change.
   // Retraits absents = vue d'avant leur ajout : aucun retrait.
   ipcMain.handle(
@@ -301,7 +301,7 @@ export function registerCarteDesBesoinsIpc({
     }
   )
 
-  // Les Boards des collègues (conv-1210) : les AUTRES sous-dossiers du dossier du Board, relus à
+  // Les Boards des collègues : les AUTRES sous-dossiers du dossier du Board, relus à
   // part de la carte pour qu'un partage lent ne retarde jamais notre Board. Aucun argument : le
   // dossier est celui réglé sur ce poste, jamais un chemin reçu de la vue.
   ipcMain.handle('os:board-collegues', (event): Promise<BoardsDesCollegues> => {
@@ -309,7 +309,7 @@ export function registerCarteDesBesoinsIpc({
     return collegues ? collegues.lire() : Promise.resolve({ collegues: [] })
   })
 
-  // Le RUN.md d'un post-it de collègue (conv-1456), lu dans le dossier réglé sur CE poste.
+  // Le RUN.md d'un post-it de collègue, lu dans le dossier réglé sur CE poste.
   ipcMain.handle(
     'os:board-fiche-collegue',
     (event, poste: unknown, fiche: unknown): Promise<string | null> => {
@@ -372,7 +372,7 @@ export function registerCarteDesBesoinsIpc({
   })
 
   /*
-   * LE CALCUL À FROID FAIT SANS LA VUE (conv-1248, « accélère un max le loading du board ») : la
+   * LE CALCUL À FROID FAIT SANS LA VUE (« accélère un max le loading du board ») : la
    * première ouverture relisait les ~1 100 fils pendant que la vue affichait « Chargement… » — 2,0 s
    * mesurées, 1,0 s après le raccourci Markdown. Fait ici une fois la fenêtre affichée et les
    * archives dans le store, il laisse en mémoire ce que l'ouverture relit ensuite en ~20 ms ; une
@@ -386,7 +386,7 @@ export function registerCarteDesBesoinsIpc({
     )
 
   return {
-    // Le calcul n'est lancé qu'au moment d'écrire, et jamais sans dossier choisi (conv-1210).
+    // Le calcul n'est lancé qu'au moment d'écrire, et jamais sans dossier choisi.
     recopierLeBoard: () => copieDeFinDeTour?.recopier(),
     lireLaCarte: () => calculateur.calculer()
   }

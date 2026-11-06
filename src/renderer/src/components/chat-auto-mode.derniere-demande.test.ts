@@ -8,10 +8,10 @@ import {
 } from './chat-auto-mode'
 
 /**
- * LE MODE AUTO S'ANCRE SUR LA DERNIERE DEMANDE DE L'UTILISATEUR (conv-889, 2026-09-30).
+ * LE MODE AUTO S'ANCRE SUR LA DERNIERE DEMANDE DE L'UTILISATEUR (2026-09-30).
  *
  * Demande : « ancre le mode auto sur ma derniere demande tapee a la main, pas sur le premier message
- * du fil ». Constat : parti de « c'est quoi chatgpt dots », conv-889 a change de sujet par des
+ * du fil ». Constat : parti de « c'est quoi chatgpt dots », un fil a change de sujet par des
  * messages TAPES, et chaque envoi automatique rappelait encore les Dots.
  *
  * ENTREE QUI DOIT FAIRE ECHOUER CE FICHIER SI L'ANCRE REVIENT AU PREMIER MESSAGE : le fil de
@@ -87,7 +87,7 @@ describe('derniereDemandeHumaine', () => {
 })
 
 /**
- * conv-113 (2026-10-06) — saisie ts 1791317725882, envoyée SEULE 0,6 s après le tour
+ * 2026-10-06 — saisie ts 1791317725882, envoyée SEULE 0,6 s après le tour
  * 0b93aa21-54c3-4be3-99f4-a23bbcb00bc4 qui répondait à « ou t'as mis le projet paper trading ? ».
  * La suite partait sur AssistantChirurgien. Le tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 a VU
  * l'écart (« even though their last question had been about where the PaperTrading project was »)

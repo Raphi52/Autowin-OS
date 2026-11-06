@@ -54,7 +54,7 @@ describe('depotCiteDansLeMessage', () => {
   })
 
   it('ne bascule pas vers un depot git IMBRIQUE dans le depot de travail actuel', () => {
-    // Mesure du 2026-09-28 (conv-770) : la consigne de reprise citait un depot jetable range sous
+    // Mesure du 2026-09-28 : la consigne de reprise citait un depot jetable range sous
     // .autowin-data ; la conversation est partie travailler DEDANS, puis a rebascule au tour suivant.
     const jetable = `${ACTIF}\\.autowin-data\\essai-garde`
     const existe = disque(ACTIF, `${ACTIF}\\.git`, jetable, `${jetable}\\.git`)
@@ -115,7 +115,7 @@ describe('depotCiteDansLeMessage', () => {
   })
 
   /*
-   * MESSAGE ÉCRIT PAR UN AGENT (conv-1306, 2026-10-30). Un ordre de conv-1306 à conv-1329 citait
+   * MESSAGE ÉCRIT PAR UN AGENT (2026-10-30). Un ordre citait
    * D:/ContosoApp-arena/depart dans la LISTE DES DOSSIERS À RETIRER du Board : le fil a basculé
    * dans ce dossier, celui-là même que l'utilisateur voulait voir disparaître.
    */
@@ -131,7 +131,7 @@ describe('depotCiteDansLeMessage', () => {
 
   /*
    * La consigne de restart_app arrive telle quelle, sans en-tete (ChatView l'envoie comme une frappe).
-   * Celle de conv-1329 (2026-10-30) citait la meme liste de dossiers a retirer : rejouee, elle aurait
+   * Celle (2026-10-30) citait la meme liste de dossiers a retirer : rejouee, elle aurait
    * fait la meme bascule que l'ordre.
    */
   it('ne bascule pas sur la consigne rejouee apres un redemarrage', () => {

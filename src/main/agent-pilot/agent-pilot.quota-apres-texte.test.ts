@@ -17,7 +17,7 @@ import {
 import { loadChatSessions } from '../runs/chat-session-store'
 
 /**
- * UN TOUR DE CHAT COUPÉ PAR LE QUOTA APRÈS DU TEXTE REPART SUR LE COMPTE SUIVANT (conv-1063).
+ * UN TOUR DE CHAT COUPÉ PAR LE QUOTA APRÈS DU TEXTE REPART SUR LE COMPTE SUIVANT.
  *
  * Cas réel : `run-stdout/c6ba0030-384c-4095-ac84-c96af2026180.stdout.jsonl`, un appel de 31 min et
  * 96 blocs de texte, fini sur « You've hit your session limit · resets 11:30am ». Le tour mourait en

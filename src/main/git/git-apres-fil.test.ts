@@ -240,13 +240,13 @@ describe('bandeauPublie', () => {
     expect(prompt!.length).toBeLessThanOrEqual(LONGUEUR_MAX_PROMPT)
   })
 
-  // conv-1553 : « Publié sans /git » ne disait ni l'action ni la commande ; l'utilisateur veut
+  // « Publié sans /git » ne disait ni l'action ni la commande ; l'utilisateur veut
   // « GIT : N commit », le nom du commit, l'action et la ligne exacte envoyée au shell.
   it('titre de statut, nomme l’action et cite les lignes git exactes du tour', () => {
     const ligne =
       'cd /d/X && git commit -q -m "a <b>" && ALLOW_MAIN_PUSH=1 git push -q origin HEAD:main'
     const bandeau = bandeauPublie(commits, [ligne])
-    // conv-1573 : le titre est un statut, « N commits et push <distant> <branche> réussi ».
+    // Le titre est un statut, « N commits et push <distant> <branche> réussi ».
     expect(bandeau).toContain('<div class="aw-kicker">2 commits et push origin main réussi</div>')
     expect(bandeau).not.toContain('GIT : 2 commits')
     expect(bandeau).not.toContain('Publié sans /git')
@@ -254,7 +254,7 @@ describe('bandeauPublie', () => {
     expect(bandeau).toContain('&quot;a &lt;b&gt;&quot;'.replace(/&quot;/g, '"'))
   })
 
-  // conv-1574 (/draft « 1 · Compact rail ») : un rail, une ligne par étape, qui se déplie sur sa
+  // /draft « 1 · Compact rail » : un rail, une ligne par étape, qui se déplie sur sa
   // commande ; trait de 3 px et points de 10 px, les réglages choisis par l'utilisateur.
   it('rail compact : Commit, Push puis Annuler, chaque commande sous son étape', () => {
     const commit = "cd /d/X; git add -- a.ts\ngit commit -q -F - <<'EOF'\nfeat: a (conv-9)\nEOF"
@@ -325,7 +325,7 @@ describe('bandeauPublie', () => {
 })
 
 /*
- * conv-1574 : « le style du bloc qu'on a drafté s'applique jamais ». Mesuré le 05/11 : 136 commits sur
+ * « le style du bloc qu'on a drafté s'applique jamais ». Mesuré le 05/11 : 136 commits sur
  * main depuis la veille, une douzaine de blocs git. Les publications passaient par le fil lui-même
  * (`publier-isole.ps1`, `git push` dans son tour) ou par l'enchaînement auto, qui n'en posaient aucun.
  */
@@ -675,7 +675,7 @@ describe('FileGitApresFil — une passe à la fois', () => {
     expect(sans.annonces).toEqual([])
   })
 
-  // conv-1569 : « je veux pas que ça envoie un message à ma place » — la passe n'ouvre plus de tour.
+  // « je veux pas que ça envoie un message à ma place » — la passe n'ouvre plus de tour.
   it('publié : le fil ne reçoit QUE le bloc git, avec les lignes git vraiment lancées', async () => {
     const { file, fins, annonces } = banc({ commits: [{ sha: '1a2b3c4d', sujet: 'fix (conv-1)' }] })
     file.ajouter('conv-1', ['a.ts'])
@@ -796,7 +796,7 @@ describe('commitsPublies — lu sur un vrai dépôt et son distant', () => {
     expect(await commitsPublies(runGit, local, avant!, 'conv-9')).toEqual([])
   })
 
-  // conv-1574 : le fil pousse depuis une copie à part, comme `scripts/publier-isole.ps1` ; le
+  // Le fil pousse depuis une copie à part, comme `scripts/publier-isole.ps1` ; le
   // dossier du fil doit le voir sans fetch, sinon le bloc du tour ne part jamais.
   it('un push fait depuis une copie à part (publier-isole.ps1) donne le rail au dossier du fil', async () => {
     const { local } = depot()

@@ -165,7 +165,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
 
   /**
    * Le selecteur de repertoire de travail ne s'ouvre plus depuis le menu de la conversation
-   * (entree retiree, conv-674) : il s'ouvre par la pastille 📁 de la barre du haut, qui porte
+   * (entree retiree) : il s'ouvre par la pastille 📁 de la barre du haut, qui porte
    * sur la conversation ACTIVE — on la selectionne donc d'abord.
    */
   async function ouvrirSelecteurDossiers(nom: string): Promise<void> {
@@ -282,7 +282,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
   })
 
   /**
-   * LA CROIX DU BOARD RETIRE DE LA MÊME LISTE (conv-1212). Le Chat reste monté pendant qu'on est sur
+   * LA CROIX DU BOARD RETIRE DE LA MÊME LISTE. Le Chat reste monté pendant qu'on est sur
    * le Board : s'il ne relisait pas la liste, sa copie en mémoire réécrirait le dossier retiré à son
    * prochain changement. Et chaque état de la liste part au processus principal, qui réduit le Board.
    */
@@ -330,14 +330,14 @@ describe('ChatView behavior under concurrent UI actions', () => {
   })
 
   /**
-   * DES LIBELLES S'ETAIENT INSTALLES DANS LA LISTE DES DOSSIERS (conv-81, 2026-09-16).
+   * DES LIBELLES S'ETAIENT INSTALLES DANS LA LISTE DES DOSSIERS (2026-09-16).
    *
    * La liste memorise tout ce qui a servi a classer, et classer ecrivait dans le meme champ que le
    * dossier de travail : « Perso » ou « Clients/Acme » se retrouvaient donc proposes comme
    * dossiers de travail. Les choisir renvoyait le tour dans le depot d'Autowin. Le nettoyage se
    * fait a la LECTURE, pas par une migration : la liste vit dans le stockage local du navigateur, et
    * un filtre au chargement vide l'existant ET refuse le suivant.
-   * fix-ok: conv-81 — ces tests fixent la cause mesurée : la liste des dossiers connus était amorcée depuis projectPath, qui contenait aussi des libellés de catégorie ; ils ne doivent plus y entrer, ni à la lecture ni à l'écriture.
+   * fix-ok: ces tests fixent la cause mesurée : la liste des dossiers connus était amorcée depuis projectPath, qui contenait aussi des libellés de catégorie ; ils ne doivent plus y entrer, ni à la lecture ni à l'écriture.
    */
   it('retire de la liste des dossiers les libelles de categorie, et n’en reprend aucun', async () => {
     window.localStorage.setItem(
@@ -366,7 +366,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
   })
 
   /**
-   * LA PASTILLE DE LA BARRE DU HAUT DIT LE DOSSIER DE TRAVAIL, PAS LA CATEGORIE (conv-81).
+   * LA PASTILLE DE LA BARRE DU HAUT DIT LE DOSSIER DE TRAVAIL, PAS LA CATEGORIE.
    *
    * C'est le symptome que l'utilisateur voyait : « j'ai des CWD qui s'appellent comme des
    * categories ». Classer un fil sous « Factures » ecrivait « Factures » dans le champ qui pilote
@@ -800,7 +800,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
   })
 
   /*
-   * Le tri de sujet qui emportait ce message dans un fil neuf a ete RETIRE (2026-10-17, conv-305 :
+   * Le tri de sujet qui emportait ce message dans un fil neuf a ete RETIRE (2026-10-17, :
    * « enleve le mecanisme qui redirige vers une autre conv quand on change de sujet c invasif je
    * sais gerer »). Un message sans rapport avec le fil reste la ou l'utilisateur l'a ecrit.
    */
@@ -961,7 +961,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
    * file d'attente videe, bloc de cloture peint) SANS que les messages changent : l'effet de
    * descente, branche sur `messages`, ne se rejouait pas. Le fil restait arrete au milieu de la
    * derniere reponse avec le bouton « ↓ Derniere reponse », alors que l'utilisateur n'avait rien
-   * remonte (rapporte le 2026-09-01, conv-44, capture a l'appui).
+   * remonte (rapporte le 2026-09-01, capture a l'appui).
    */
   it('redescend tout en bas quand le tour se termine', async () => {
     const pilot = deferred<{ ok: boolean }>()
@@ -1461,7 +1461,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await type('keep me')
       await click('.composer-send')
 
-      // Le recu dit que le message ATTEND (un refus n'est pas une panne, conv-891) ; seule une vraie
+      // Le recu dit que le message ATTEND (un refus n'est pas une panne) ; seule une vraie
       // erreur d'envoi le dit. Et le message n'est pas perdu : il part au drain de fin de tour.
       expect(container!.querySelector('.directive-receipt .msg-body')?.textContent).toBe('keep me')
       expect(container!.querySelector('.directive-receipt-status')?.textContent).toContain(
@@ -1671,7 +1671,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await click('.run-row')
     expect(container!.querySelector('.run-detail-box')).toBeTruthy()
     await act(async () => deleteButton.click())
-    // La carte est rendue dans `body` (portail, conv-1078) : sous le panneau du chat, la poignée de
+    // La carte est rendue dans `body` (portail) : sous le panneau du chat, la poignée de
     // largeur de la liste des fils passait au-dessus d'elle. On la cherche donc dans le document.
     expect(container!.querySelector('[role="dialog"]')).toBeNull()
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain('ancien-run')
@@ -1746,7 +1746,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     // est TERMINÉ, donc son fil n'y est plus empilé — il s'ouvre en descendant sur son nœud.
     expect(container!.querySelector('.live-run')).toBeNull()
 
-    // DESCENDRE SUR UN BLOC NON-AGENT RESTE SUR LE GRAPHE (conv-259, 2026-09-04) : son panneau de
+    // DESCENDRE SUR UN BLOC NON-AGENT RESTE SUR LE GRAPHE (2026-09-04) : son panneau de
     // détail s'ouvre sous l'arbre, seule vue qui détaille injection, appel d'outil ou clôture.
     // L'auto-bascule vers Runs ne vaut plus QUE pour un bloc d'agent — ce cas-là est prouvé par
     // `WorkflowsPanel.test.tsx` (« descendre sur un nœud agent bascule sur Runs »), avec un vrai
@@ -1859,7 +1859,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
     await act(async () => pilot.resolve({ ok: true }))
   })
 
-  // conv-969 (2026-10-15) : « enlève le badge 2 green du bouton détail ». Un run vert ne porte
+  // 2026-10-15 : « enlève le badge 2 green du bouton détail ». Un run vert ne porte
   // plus de compteur sur le bouton Détails ; le run ouvert, chargé dans le même lot, prouve que
   // les runs de la conversation sont bien lus (sinon l'absence de « green » ne prouverait rien).
   it('shows no green counter on the Details button, only the open one', async () => {
@@ -1933,7 +1933,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
    * MOSAIQUE + message pre-ecrit. « Faire reparer » (bandeau de mise a jour), « Prompter dans
    * Autowin » (veille) et « Preparer le prompt » (tickets) passent TOUS par cet evenement. En
    * mosaique, le chat unique n'est pas rendu : remplir son champ n'affichait rien du tout, et les
-   * boutons paraissaient morts (mesure le 2026-09-01, conv-44). La fenetre doit s'OUVRIR, avec le
+   * boutons paraissaient morts (mesure le 2026-09-01). La fenetre doit s'OUVRIR, avec le
    * message dedans, sans faire sortir l'utilisateur de sa mosaique.
    */
   it('ouvre une fenetre de mosaique portant le message pre-ecrit, sans quitter la mosaique', async () => {
@@ -2240,13 +2240,13 @@ describe('ChatView behavior under concurrent UI actions', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
 
-    // Image envoyée = capsule, comme Raisonnement / Actions (conv-178).
+    // Image envoyée = capsule, comme Raisonnement / Actions.
     const sentImage = container!.querySelector('.msg.user .artifact-capsule')
     expect(sentImage).toBeTruthy()
     expect(sentImage?.querySelector('.artifact-capsule__provenance')?.textContent).toBe(
       'Image envoyée'
     )
-    // « image envoyée » en petit ne ferait que redire le libellé « Image envoyée » (conv-195).
+    // « image envoyée » en petit ne ferait que redire le libellé « Image envoyée ».
     expect(sentImage?.querySelector('.artifact-capsule__nom')).toBeNull()
     expect(container!.querySelector('.msg.user .attachment-chip')).toBeNull()
     // Les visuels sont repliés par défaut : seule la capsule est visible avant dépliage.
@@ -2660,7 +2660,7 @@ describe('ChatView behavior under concurrent UI actions', () => {
       expect(mockApi.resumePilotChat).toHaveBeenCalledWith('A')
     })
 
-    // conv-809 (2026-09-23) : « Réponse interrompue avant la fin » s'affichait puis la réponse
+    // 2026-09-23 : « Réponse interrompue avant la fin » s'affichait puis la réponse
     // repartait seule. Si le main dit que le tour VIT encore, le fil reste « en cours ».
     it('promesse revenue mais tour encore vivant cote main : pas d’« interrompu »', async () => {
       const turn = deferred<{ ok: boolean }>()

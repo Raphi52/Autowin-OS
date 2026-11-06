@@ -3,7 +3,7 @@ import { AgentPilot, type PilotEvent } from './agent-pilot'
 import type { PromptSnapshot } from '../commands/commands'
 
 /**
- * LES TESTS DU TERMINAL ATTEIGNENT LE TOUR (conv-1059, 2026-10-22). L'adaptateur joint à un
+ * LES TESTS DU TERMINAL ATTEIGNENT LE TOUR (2026-10-22). L'adaptateur joint à un
  * fragment les tests qu'une commande `Bash` a joués et leur code de sortie (`testsDuTerminal`) ; le
  * pilote doit les relayer en un événement `tests-du-terminal`, que le tour enregistre et que la
  * carte du fil lit comme une vérification. Ce qui fait échouer ce test : un champ jeté en route, ou

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { HOME_WIDGET_IDS } from '../components/home-layout'
 
 /**
- * LES TUILES DE L'ACCUEIL EN TUBES NEON (conv-317, 2026-10-17) — bloc NEON-TUILES de
+ * LES TUILES DE L'ACCUEIL EN TUBES NEON (2026-10-17) — bloc NEON-TUILES de
  * theme-nebuleuse-verre.css. Demande : « /draft le style des widgets pour qu'il colle plus au fond
  * d'ecran », puis « implemente 3 + degrade different pour chaque widget ».
  *
@@ -62,7 +62,7 @@ describe('Accueil Holographique : une tuile = un tube neon a son degrade', () =>
     expect(decls.background).toMatch(
       /linear-gradient\(135deg, var\(--nv-neon-tube-a\), var\(--nv-neon-tube-b\)\) border-box$/
     )
-    // La lumiere de la souris (conv-191) reste la premiere couche.
+    // La lumiere de la souris reste la premiere couche.
     expect(decls.background).toMatch(/^radial-gradient\( circle var\(--nv-lumiere-rayon\)/)
     expect(decls['--nv-neon-tube-a']).toContain('var(--ch-contour)')
 

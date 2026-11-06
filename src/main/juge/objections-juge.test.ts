@@ -21,7 +21,7 @@ describe('objectionsDuJuge', () => {
 })
 
 describe('verdictAvecObjectionsPortees', () => {
-  // Arbitrage conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : la puce est marquée MAJEUR.
+  // Arbitrage tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : la puce est marquée MAJEUR.
   // La protection testée est la même — une objection majeure non levée retourne un VALIDE en refus —
   // mais un juge qui n'étiquette RIEN garde son verdict (voir le describe plus bas).
   it('transforme un VALIDE porteur d’objections en refus lisible', () => {
@@ -40,7 +40,7 @@ describe('verdictAvecObjectionsPortees', () => {
 })
 
 describe('juge qui valide sans étiqueter aucune puce', () => {
-  // conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, réparations 17 à 19 : le juge rend
+  // tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, réparations 17 à 19 : le juge rend
   // « VALIDE / SCORE 72 » avec des puces NON étiquetées, dont des constats vérifiés (« 284 tests,
   // tous verts »). Non étiqueté = MAJEUR : son propre VALIDE était retourné en DEFAUT, le tour
   // repartait en réparation, et le refus « Promis mais pas fait » recitait ces mêmes constats.

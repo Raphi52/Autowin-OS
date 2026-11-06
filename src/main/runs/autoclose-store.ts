@@ -34,7 +34,7 @@ export function loadAutoClose(path = autoClosePath()): boolean {
 /**
  * LE DERNIER RAPPORT DE PUBLICATION SURVIT AU REDÉMARRAGE.
  *
- * Vécu le 2026-10-01 (conv-770) : le commit automatique du tour 235b91bd n'a pas publié le correctif
+ * Vécu le 2026-10-01 : le commit automatique du tour 235b91bd n'a pas publié le correctif
  * du garde Python, et le POURQUOI (tests rouges, autre fil, fichier non revendiqué…) a disparu au
  * redémarrage suivant : le rapport ne vivait qu'en mémoire. Le panneau Git relit ce fichier au
  * démarrage. Fichier : %APPDATA%\autowin-os\autoclose-last.json.
@@ -87,7 +87,7 @@ export function saveAutoClose(enabled: boolean, path = autoClosePath()): boolean
 }
 
 /**
- * « Publier les fils finis » (conv-1339, voir git-apres-fil.ts) : son PROPRE fichier, pour qu'une
+ * « Publier les fils finis » (voir git-apres-fil.ts) : son PROPRE fichier, pour qu'une
  * lecture ratée ici ne puisse jamais toucher à l'interrupteur de l'enchaînement. Éteint par défaut :
  * un fichier absent ou illisible ne doit jamais lancer un tour payant ni une publication.
  */

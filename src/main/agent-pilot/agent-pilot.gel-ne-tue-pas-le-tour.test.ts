@@ -7,7 +7,7 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
  *
  * MESURE DU 2026-09-02 (journaux de la journee, `.autowin-data/<profil>/activity/conv-*.jsonl`) :
  * 14 appels portent le libelle « reprise du tour interrompu » pour 13,62 $ — un tour deja paye,
- * relance depuis le debut. Le plus cher a lui seul : 3,44 $ (conv-96, 04:19).
+ * relance depuis le debut. Le plus cher a lui seul : 3,44 $ (04:19).
  *
  * LE LIEN, deja etabli et corrige COTE ORCHESTRATEUR le meme jour (commit d2f1f97d) : pendant un
  * gel, l'ecriture de la trace causale attend un verrou de sequence (`withSequenceLock`,

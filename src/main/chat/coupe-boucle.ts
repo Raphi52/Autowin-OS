@@ -1,5 +1,5 @@
 /**
- * COUPE-CIRCUIT DE BOUCLE (conv-364) — la règle « ne relance pas à l'identique en aveugle »
+ * COUPE-CIRCUIT DE BOUCLE — la règle « ne relance pas à l'identique en aveugle »
  * n'était que de la prose dans le prompt. Ici elle est tenue par le code : on observe chaque
  * résultat d'outil d'un tour et on rend un motif d'arrêt quand l'agent tourne en rond.
  *  - le MÊME appel (outil + arguments) rend le MÊME résultat `MEME_APPEL_MAX` fois ;

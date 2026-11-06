@@ -156,7 +156,7 @@ describe('localActionDetails — la cause d un echec doit se lire dans le fil', 
  * DEFAUT VECU le 2026-08-19 : « 1 action avec erreur — edit_file », et toujours rien au clic.
  *
  * Le correctif de la veille exposait `data.error` — en SUPPOSANT que `data` est un objet. Or un
- * `edit_file` en echec rend une CHAINE, verifiee dans les messages reels (conv-1308, conv-1326) :
+ * `edit_file` en echec rend une CHAINE, verifiee dans les messages reels :
  *   "Le bureau edit_file a ete conserve : publication automatique incomplete"
  * `asRecord()` rend alors `undefined`, et `if (!data) continue` SAUTE l'action. La cause etait la,
  * entiere, et se faisait jeter parce que le lecteur ne connaissait qu'une seule forme.

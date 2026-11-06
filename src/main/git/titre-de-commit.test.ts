@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { titreDeCommitAuto } from './titre-de-commit'
 
 /**
- * TITRES DE COMMIT AUTOMATIQUES (conv-1069, candidat 6 du scout). Le 2026-10-22, 125 des 400
+ * TITRES DE COMMIT AUTOMATIQUES (candidat 6 du scout). Le 2026-10-22, 125 des 400
  * derniers commits étaient `auto(conv-N): <100 premiers caractères de la demande>` — par exemple
  * `auto(conv-1075): vazy`, qui ne dit rien de ce qui a changé. AGENTS.md exige
  * `type(zone): phrase (conv-NNN)`.
@@ -35,11 +35,11 @@ describe('titreDeCommitAuto', () => {
   })
 
   /**
-   * Réponses en anglais depuis conv-1172 (27/10, réglage Settings · Interface) : 18 des 424
+   * Réponses en anglais depuis le 27/10 (réglage Settings · Interface) : 18 des 424
    * derniers commits commençaient par « Added/Created/Wrote… », chemin `D:\…` compris — par exemple
-   * `feat(annonce-commit-local): Created D:\AutoWinOS\src\main\git\titre-bandeau-git.ts. It turns the git…`
-   * (conv-1573). Le message de commit suit la règle du projet (AGENTS.md : français), pas la langue
-   * de l'interface (conv-1581). ENTRÉE QUI DOIT FAIRE ÉCHOUER UN MAUVAIS CORRECTIF : la réponse
+   * `feat(annonce-commit-local): Created D:\AutoWinOS\src\main\git\titre-bandeau-git.ts. It turns the git…`.
+   * Le message de commit suit la règle du projet (AGENTS.md : français), pas la langue
+   * de l'interface. ENTRÉE QUI DOIT FAIRE ÉCHOUER UN MAUVAIS CORRECTIF : la réponse
    * anglaise ci-dessous avec `langueDuCompteRendu: 'en'` — un titre encore tiré du « ✅ Fait »
    * commence par « Created ».
    */
@@ -73,7 +73,7 @@ describe('titreDeCommitAuto', () => {
     ).toBe('feat(titre-bandeau-git): modifie titre-bandeau-git.ts et 1 fichier de test (conv-1573)')
   })
 
-  // Jumeau accepté : la MÊME réponse, déclarée française, garde sa 1re action (conv-1069).
+  // Jumeau accepté : la MÊME réponse, déclarée française, garde sa 1re action.
   it('réponse en français : le « ✅ Fait » reste la source, chemin absolu réduit au nom du fichier', () => {
     expect(
       titreDeCommitAuto({

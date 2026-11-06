@@ -4,7 +4,7 @@ import { routeSkillRequest } from './skill-routing'
 import { skillInstruction } from './skill-pipeline'
 
 /**
- * Defaut vecu le 2026-09-04 (conv-257) : « /draf un bouton envoyer ... ».
+ * Defaut vecu le 2026-09-04 : « /draf un bouton envoyer ... ».
  * Une lettre manquante => aucune skill resolue, corps JAMAIS injecte, et AUCUN signal :
  * l'agent a improvise une maquette hors des regles de `draft`.
  */

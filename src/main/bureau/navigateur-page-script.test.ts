@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Les scripts de page du navigateur intégré, joués dans un VRAI DOM (conv-1286, lot 1/5).
+ * Les scripts de page du navigateur intégré, joués dans un VRAI DOM (lot 1/5).
  *
  * happy-dom ne calcule pas de mise en page : `getBoundingClientRect` y rend un rectangle nul, donc
  * tout serait « invisible ». On le remplace par une taille fixe, sauf pour un élément dont le style
@@ -187,7 +187,7 @@ describe('localiser et focus — la garde mot de passe côté page', () => {
     expect(document.activeElement).toBe(cible)
   })
 
-  // Objection du juge (conv-1287, réparation 1) : une frappe sans cible doit pouvoir surligner le
+  // Objection du juge (réparation 1) : une frappe sans cible doit pouvoir surligner le
   // champ actif, donc `focus` rend sa position ; sans champ actif, la touche va à la page entière.
   it('focus rend la position du champ actif, ou toute la fenêtre quand rien n’a le focus', () => {
     document.body.innerHTML = '<input id="q">'
@@ -221,7 +221,7 @@ describe('surbrillance', () => {
     expect(calque.querySelector('.surbrillance')).toBeNull()
   })
 
-  // Pas-à-pas (conv-1286, 2026-10-30) : en pause, le geste ATTEND ; sa cible est tracée en
+  // Pas-à-pas (2026-10-30) : en pause, le geste ATTEND ; sa cible est tracée en
   // pointillés, étiquette « prochain · … », pour que l'utilisateur voie ce qui partira au clic.
   it('aperçu du geste suivant : même cadre, en pointillés, étiquette « prochain · … »', () => {
     jouer('surligner', [
@@ -248,7 +248,7 @@ describe('surbrillance', () => {
 
 describe('surbrillance : le cadre suit sa cible', () => {
   /*
-   * Mesuré en vraie app (conv-1324, run9) : en pause, l'utilisateur fait défiler pour regarder la page ;
+   * Mesuré en vraie app (run9) : en pause, l'utilisateur fait défiler pour regarder la page ;
    * la cible part à y = -75, le cadre reste à y = 125 et désigne autre chose. Pareil quand le bandeau
    * remet la page en page. ENTRÉE QUI FAIT ÉCHOUER CE TEST si la correction est fausse : n'écouter que
    * `scroll` sans la capture, ou oublier `resize`.
@@ -344,7 +344,7 @@ describe('mode choisir', () => {
     expect(jouer<MessagePage[]>('prendre')).toEqual([{ type: 'mode-quitte' }])
   })
 
-  // Annoter retiré (conv-1306, 2026-10-30) : l'ancien nom du mode n'allume plus rien dans la page.
+  // Annoter retiré (2026-10-30) : l'ancien nom du mode n'allume plus rien dans la page.
   it('Annoter n’existe plus : son ancien nom n’active aucun mode et ne pose aucun écouteur', () => {
     document.body.innerHTML = '<p id="p">Texte</p>'
     const clicPage = vi.fn()

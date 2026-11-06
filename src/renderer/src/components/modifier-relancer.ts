@@ -1,5 +1,5 @@
 /**
- * « MODIFIER ET RELANCER » — d'où repartir (conv-1038, 2026-10-21).
+ * « MODIFIER ET RELANCER » — d'où repartir (2026-10-21).
  *
  * `fork()` (`src/main/store/conversations.ts`) copie le fil jusqu'au message choisi INCLUS. Pour
  * reprendre un message en le corrigeant, la copie doit donc s'arrêter JUSTE AVANT lui : elle s'ancre

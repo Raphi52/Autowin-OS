@@ -1,5 +1,5 @@
 /**
- * CARTE DES BESOINS — le calcul du lot 1 (conv-1089, 2026-10-22).
+ * CARTE DES BESOINS — le calcul du lot 1 (2026-10-22).
  *
  * Il tourne dans le processus PRINCIPAL parce que c'est là que vivent tous les fils (~20 Mo le
  * 2026-10-22, 940 conversations) : les envoyer à la vue pour qu'elle calcule aurait fait passer tout
@@ -12,7 +12,7 @@
  * Lot 2 : QUI A PROMPTÉ vient de `besoins.jsonl` (identité git relevée au tour) ; une demande plus
  * ancienne que le journal reçoit l'identité git ACTUELLE du dossier de son fil, marquée déduite.
  *
- * RUN.md légers (conv-1456) : chaque demande porte la FICHE qui la range (`demandes/index.jsonl`),
+ * RUN.md légers : chaque demande porte la FICHE qui la range (`demandes/index.jsonl`),
  * relue à chaque calcul — elle s'écrit en fin de tour, souvent sans que le fil bouge ensuite. C'est
  * elle qui fait le post-it (`src/shared/taches-du-board.ts`) ; l'état, lui, reste celui du fil.
  */
@@ -106,7 +106,7 @@ export function demandesDuFil(conversation: ConversationPourLaCarte): DemandeDeL
   const demandes: DemandeDeLaCarte[] = []
   for (const etape of etapes) {
     if (etape.rang === null || etape.compactage || etape.statut === 'a-venir') continue
-    // Les work items que le prompt NOMME (conv-1127) : lus ici, avec le fil, pour rester en cache
+    // Les work items que le prompt NOMME : lus ici, avec le fil, pour rester en cache
     // avec lui ; le lien lui-même est posé à l'assemblage, d'après `liens-work-items.jsonl`.
     const texte = conversation.messages[etape.rang]?.content
     const references = typeof texte === 'string' ? referencesDuPrompt(texte) : []
@@ -209,9 +209,9 @@ export function assemblerLaCarte(entree: {
   journal?: ReadonlyMap<string, EntreeDuJournal>
   /** Identité git ACTUELLE par dossier (`dossierGitDuFil`), pour les demandes antérieures au journal. */
   identitesParDossier?: ReadonlyMap<string, IdentiteGit | null>
-  /** `liens-work-items.jsonl` relu (conv-1127) ; absent = seuls les liens écrits par la vue Tickets. */
+  /** `liens-work-items.jsonl` relu ; absent = seuls les liens écrits par la vue Tickets. */
   liens?: EtatDesLiens
-  /** La fiche de chaque demande rangée (`cleDuJournal` → RUN.md relatif), conv-1456. */
+  /** La fiche de chaque demande rangée (`cleDuJournal` → RUN.md relatif). */
   fiches?: ReadonlyMap<string, string>
   calculeeA: number
   dureeMs: number
@@ -306,8 +306,8 @@ export function assemblerLaCarte(entree: {
         ? { conversationId: conversation.id, conversationTitre: conversation.title }
         : {})
     }
-    // Un run validé qui attend une réponse de l'utilisateur n'est pas une panne (conv-1199), mais le
-    // retirer sans rien à la place l'effaçait du Board (contrôle final, conv-1337). Rangé par projet
+    // Un run validé qui attend une réponse de l'utilisateur n'est pas une panne, mais le
+    // retirer sans rien à la place l'effaçait du Board (contrôle final). Rangé par projet
     // pour que les comptes refaits après un filtre (`carteDesProjetsPartages`) disent la même chose.
     if (run.summary.decisionAttendue) {
       ;(projet.runsEnAttenteDeDecision ??= []).push(bloque)
@@ -366,12 +366,12 @@ export function creerCalculateurDeCarte(deps: {
   lireJournal?: () => ReadonlyMap<string, EntreeDuJournal>
   identiteDuDossier?: (dossier: string) => Promise<IdentiteGit | null>
   /**
-   * `liens-work-items.jsonl` relu (conv-1127). Un FICHIER, jamais la source de tickets : le calcul
+   * `liens-work-items.jsonl` relu. Un FICHIER, jamais la source de tickets : le calcul
    * de la carte ne fait aucun appel réseau.
    */
   lireLiens?: () => EtatDesLiens
   /**
-   * La fiche de chaque demande rangée (conv-1456), lue dans `demandes/index.jsonl`. Son échec ne
+   * La fiche de chaque demande rangée, lue dans `demandes/index.jsonl`. Son échec ne
    * prive le Board que de ses fiches : chaque demande retombe alors sur le post-it de son fil.
    */
   lireFiches?: () => Promise<ReadonlyMap<string, string>>
@@ -413,7 +413,7 @@ export function creerCalculateurDeCarte(deps: {
 
   async function calculer(): Promise<CarteDesBesoins> {
     const debut = maintenant()
-    // La lecture des runs part D'ABORD (conv-1248, 2026-10-29) : c'est de l'attente disque (111 ms
+    // La lecture des runs part D'ABORD (2026-10-29) : c'est de l'attente disque (111 ms
     // en médiane dans l'app), qui avance pendant que les fils se relisent au lieu de s'y ajouter.
     // Son échec est capté tout de suite (pas de rejet orphelin) et relevé plus bas, comme avant.
     const runsEnCours = (async () => {

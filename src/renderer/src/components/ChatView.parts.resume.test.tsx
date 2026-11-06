@@ -75,7 +75,7 @@ describe('reprendre une action interrompue sans la retaper', () => {
 
   it('le bouton vit DANS la barre, à droite — pas en pleine largeur en dessous', () => {
     render([interrompue('une tâche')], () => undefined)
-    // Une orchestration seule est une capsule (conv-194) : le bouton vit dans SON en-tete.
+    // Une orchestration seule est une capsule : le bouton vit dans SON en-tete.
     const barre = container.querySelector('.activity-anneau, .thinking-block--orchestration')
     const bouton = container.querySelector('[data-testid="activity-resume"]')
     expect(barre?.contains(bouton ?? null)).toBe(true)

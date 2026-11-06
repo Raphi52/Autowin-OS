@@ -87,10 +87,10 @@ describe('deltaMs', () => {
 })
 
 /**
- * LIGNES SEMBLABLES QUI SE SUIVENT (conv-270, 2026-10-11 : « dans les logs groupe les trucs qui se
+ * LIGNES SEMBLABLES QUI SE SUIVENT (2026-10-11 : « dans les logs groupe les trucs qui se
  * ressemblent qui se suivent »). Mesure sur trois conversations réelles : même nature + même source
- * à la suite, dans un tour, ramène 503 lignes à 284 (conv-259), 272 à 172 (conv-266), 189 à 86
- * (conv-268) — surtout les rafales de « Signe de vie » d'une commande. Exiger le même TITRE en plus
+ * à la suite, dans un tour, ramène 503 lignes à 284, 272 à 172, 189 à 86
+ * Surtout les rafales de « Signe de vie » d'une commande. Exiger le même TITRE en plus
  * ne regroupait que 2 lignes sur 503 : le critère est la nature, pas le texte.
  */
 describe('grouperSemblables', () => {

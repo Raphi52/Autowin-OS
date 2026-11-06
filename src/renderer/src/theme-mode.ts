@@ -45,13 +45,13 @@ export type Theme = {
 export const THEMES: readonly Theme[] = [
   { id: 'sombre', libelle: 'Sombre', base: 'sombre' },
   { id: 'clair', libelle: 'Clair', base: 'clair' },
-  // RETIRES le 2026-10-11 (conv-231) : Obsidian Nebula, Solar Rose, Black Versailles, et leurs
+  // RETIRES le 2026-10-11 : Obsidian Nebula, Solar Rose, Black Versailles, et leurs
   // trois pendants clairs Ardoise, Parchemin, Rose poudre. Un poste qui en avait memorise un
   // retombe sur le defaut (lireThemeMode). Leurs maquettes restent dans sketches/.
-  // Affiche « Holographique » depuis le 2026-10-10 (conv-212), theme PAR DEFAUT depuis le
-  // 2026-10-11 (conv-269). L id reste `nebuleuse-verre` : c est la valeur memorisee sur le poste.
+  // Affiche « Holographique » depuis le 2026-10-10, theme PAR DEFAUT depuis le
+  // 2026-10-11. L id reste `nebuleuse-verre` : c est la valeur memorisee sur le poste.
   { id: 'nebuleuse-verre', libelle: 'Holographique', base: 'sombre' },
-  // Pendant BLANC d Holographique (conv-212, 2026-10-10, /draft « go le plus blanc ») : feuille
+  // Pendant BLANC d Holographique (2026-10-10, /draft « go le plus blanc ») : feuille
   // DERIVEE d Holographique noir par scripts/theme-nebuleuse-verre.mjs holographique-clair
   // (nacre #f8f7fb sur fond #f6f5f9, lisere irise, coins bleu et rose, lumiere de la souris).
   // L id reste `holographique-clair` : c est la valeur memorisee si la premiere version a ete choisie.
@@ -59,19 +59,19 @@ export const THEMES: readonly Theme[] = [
   // Vert phosphore sur noir, chasse fixe, copie d Internet Typewriter (writer.bighugelabs.com).
   { id: 'machine-a-ecrire', libelle: 'Machine à écrire', base: 'sombre' },
   // fix-ok: entree retiree puis remise expres pour prouver le test (sans elle : vitest exit 1, avec : 0).
-  // L apparence de Claude en sombre (conv-269, 2026-10-16) : anthracite chaud #262624, terracotta
+  // L apparence de Claude en sombre (2026-10-16) : anthracite chaud #262624, terracotta
   // #d97757, titres en serif, aucun decor. Couche generee par scripts/theme-nebuleuse-verre.mjs
   // ninja-claude, plus la feuille ecrite a la main assets/theme-ninja-claude.css.
   { id: 'ninja-claude', libelle: 'Ninja Claude', base: 'sombre' },
-  // La version CLAIRE de Ninja Claude (conv-269, 2026-10-16) : creme #faf9f5, encre #141413,
+  // La version CLAIRE de Ninja Claude (2026-10-16) : creme #faf9f5, encre #141413,
   // terracotta, titres en serif. Couche generee par scripts/theme-nebuleuse-verre.mjs vanilla-claude,
   // plus la feuille ecrite a la main assets/theme-vanilla-claude.css.
   { id: 'vanilla-claude', libelle: 'Vanilla Claude', base: 'clair' },
-  // NieR:Automata (conv-281, 2026-10-19) : papier beige #dad4bb, encre brune #4e4b42, coins carres,
+  // NieR:Automata (2026-10-19) : papier beige #dad4bb, encre brune #4e4b42, coins carres,
   // selection en negatif. Couche generee par scripts/theme-nebuleuse-verre.mjs nier-automata,
   // plus la feuille ecrite a la main assets/theme-nier-automata.css.
   { id: 'nier-automata', libelle: 'NieR:Automata', base: 'clair' },
-  // ENSEIGNES (« Signboards », conv-1586, 2026-11-05) : le Quartier de l'Accueil en theme. Ciel pale,
+  // ENSEIGNES (« Signboards », 2026-11-05) : le Quartier de l'Accueil en theme. Ciel pale,
   // panneaux blancs, une enseigne de couleur par entree du menu ; la zone ouverte (`data-zone` sur la
   // coque) teinte l'en-tete, Envoyer et le focus. Feuille ecrite a la main : assets/theme-enseignes.css.
   { id: 'enseignes', libelle: 'Enseignes', base: 'clair' },
@@ -90,7 +90,7 @@ export const THEME_MODE_STORAGE_KEY = 'autowin-theme-mode.v1'
  * les blocs de style ecrits sans prefixe en dependent.
  *
  * `THEME_MODE_PAR_DEFAUT` : ce qu un poste voit quand rien n est memorise, ou quand la valeur
- * memorisee est abimee ou retiree du registre. Holographique depuis le 2026-10-11 (conv-269,
+ * memorisee est abimee ou retiree du registre. Holographique depuis le 2026-10-11 (
  * « le mode holographique est le mode par defaut de autowin os desormais »). Un poste qui a CHOISI
  * le sombre l a memorise (`sombre`) et le garde.
  */
@@ -154,7 +154,7 @@ export function appliquerThemeMode(mode: ThemeId): void {
 }
 
 /**
- * LA MASCOTTE SUIT LE THÈME (conv-346) : le thème NieR la fait passer en machine, tout autre thème
+ * LA MASCOTTE SUIT LE THÈME : le thème NieR la fait passer en machine, tout autre thème
  * rend le style choisi dans les Réglages. Le moteur décide (`styleAffiche`) ; ici on ne fait que
  * lui dire quel thème est appliqué. Silencieux hors d'Electron ou face à un moteur plus ancien.
  */
@@ -169,7 +169,7 @@ function accorderMascotte(mode: ThemeId): void {
 }
 
 /**
- * LA CARTE DE FIN DE TOUR (conv-1090, 2026-10-22) — « fais suivre à la carte de fin de tour le
+ * LA CARTE DE FIN DE TOUR (2026-10-22) — « fais suivre à la carte de fin de tour le
  * thème choisi dans Réglages · Interface ». La carte vit dans SA fenêtre, en bas à droite de
  * l'écran (`src/main/app/notification-popup.ts`) : aucune feuille de style ne l'atteint. Même chemin
  * que les boutons de fenêtre : on lit les jetons CALCULÉS du thème appliqué et on les envoie.
@@ -216,7 +216,7 @@ function accorderCarteDeFinDeTour(racine: Element): void {
 /**
  * CE QUE REPOND `prefers-color-scheme` — la base du theme Autowin, pas le reglage de Windows.
  *
- * Electron repond par defaut la preference du SYSTEME. Mesure du 2026-10-08 (conv-111) : Windows
+ * Electron repond par defaut la preference du SYSTEME. Mesure du 2026-10-08 : Windows
  * en mode clair (`AppsUseLightTheme = 1`) + Autowin en sombre = `prefers-color-scheme: light` dans
  * le fil, et le HTML du modele, qui suit cette requete comme le lui demande sa consigne, ecrivait
  * en bleu marine sur noir. On transmet donc la base au processus principal, qui pose
@@ -243,7 +243,7 @@ let sceneSousLaBarre = false
  * la barre, ou de disparaitre (autre vue, fond « Aucun », decor demonte).
  *
  * Sans ce signal, la couleur des boutons n'etait recalculee qu'au changement de THEME : changer de
- * vue ou de fond ne la touchait pas (conv-1076). Rien n'est envoye si l'etat ne change pas.
+ * vue ou de fond ne la touchait pas. Rien n'est envoye si l'etat ne change pas.
  */
 export function signalerSceneSousLaBarre(affichee: boolean): void {
   if (affichee === sceneSousLaBarre) return
@@ -273,7 +273,7 @@ function accorderBoutonsDeFenetre(racine: Element, base: ThemeBase): void {
   const pont = (globalThis as { api?: { setTitlebarSymbolColor?: (c: string) => unknown } }).api
   if (!pont?.setTitlebarSymbolColor) return
   /*
-   * UNE SCENE DE L'ACCUEIL SOUS LA BARRE, theme clair : symboles clairs (conv-1076, 2026-10-22).
+   * UNE SCENE DE L'ACCUEIL SOUS LA BARRE, theme clair : symboles clairs (2026-10-22).
    * Depuis que le menu « Fond » de l'Accueil fait foi sous tous les themes, un theme clair affiche
    * la ville ou les planetes, sombres, juste sous ces boutons : ses symboles fonces, faits pour la
    * page claire des autres vues, s'y perdaient. Demande : « rends les boutons clairs dans les themes

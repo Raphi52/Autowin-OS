@@ -41,7 +41,7 @@ const POLL_INTERVAL_MS = 180_000
  * travail bloqué — ⤳ et ⑃ tombent en glyphe de substitution sur les polices Windows par défaut.
  */
 /**
- * Nom et aide de chaque voie, dans la langue de l'app (conv-1170). Le français est celui de
+ * Nom et aide de chaque voie, dans la langue de l'app. Le français est celui de
  * `UPDATE_STRATEGY_LABELS` / `UPDATE_STRATEGY_HINTS` (shared/update-contract.ts), recopié dans la
  * table des textes ; ArtefactsEtBandeaux.langue.test.tsx refuse que les deux divergent.
  */
@@ -59,7 +59,7 @@ const CLES_DES_VOIES: Record<
  * Sur `main`, `merge` et `rebase` n'apparaissent que parce que main porte des commits pas encore
  * poussés (`strategiesFor`, shared/update-contract.ts). Le bouton affichait alors « Fusionner
  * origin/main … dans ta branche courante » : la gueule d'une branche de feature alors qu'on est sur
- * main (conv-1597). Sur main, le bouton garde « Mettre à jour » et l'aide dit pourquoi ce n'est pas
+ * main. Sur main, le bouton garde « Mettre à jour » et l'aide dit pourquoi ce n'est pas
  * une simple avance. Seuls les TEXTES changent : la voie envoyée au main reste celle de la sonde.
  */
 const AIDES_SUR_MAIN: Partial<Record<UpdateStrategy, CleArtefactsEtBandeaux>> = {
@@ -87,10 +87,10 @@ function nomDeFichier(chemin: string): string {
  * Le sujet tel qu'une NOTE DE VERSION le dit. Les commits automatiques portent `auto(conv-NNN): `
  * ou `auto(<run>): ` (chat-turn-publication.ts, run-autoclose.ts) pour être reconnaissables dans
  * l'historique git ; dans cette liste, ce préfixe n'apprend rien à qui lit — retiré à l'affichage
- * seulement, l'infobulle garde le sujet entier (demande du 2026-10-19, conv-1020).
- * Depuis conv-1069, ces commits prennent le format du dépôt `type(zone): phrase (conv-N)`
+ * seulement, l'infobulle garde le sujet entier (demande du 2026-10-19).
+ * Ces commits prennent le format du dépôt `type(zone): phrase (conv-N)`
  * (titre-de-commit.ts) : le préfixe `type(zone):` et le suffixe `(conv-N)` / `(run-…)` sont retirés
- * de la même façon, sinon la règle de conv-1020 ne cachait plus rien.
+ * de la même façon, sinon la règle ne cachait plus rien.
  */
 function sujetLisible(sujet: string): string {
   return (
@@ -145,12 +145,12 @@ async function reparerBlocageUpdate(raison: string): Promise<void> {
     /* navigation refusée : le prompt reste préparé dans la conversation */
   }
   /*
-   * LA PROCÉDURE VIT DANS `skills/maj/SKILL.md`, le bouton ne fait que l'invoquer (conv-1036).
+   * LA PROCÉDURE VIT DANS `skills/maj/SKILL.md`, le bouton ne fait que l'invoquer.
    * L'ancienne consigne en ligne disait « mets le fichier de côté (git stash) » : le garde-fou le
-   * refuse aux agents (src/shared/garde-git-destructeur.ts), et conv-1023 s'est rabattu sur une
+   * refuse aux agents (src/shared/garde-git-destructeur.ts), et un fil s'est rabattu sur une
    * branche `autowin/recovery/…` que l'app a publiée et poussée toute seule. La skill porte la voie
    * sûre (branche `sauvegarde/…`) et la règle « ne réintroduis jamais ce que main a retiré ».
-   * Ce prompt RESTE EN FRANÇAIS quelle que soit la langue de l'app (conv-1170) : c'est une consigne
+   * Ce prompt RESTE EN FRANÇAIS quelle que soit la langue de l'app : c'est une consigne
    * pour l'agent, et `skills-gel-maj.routables.test.ts` vérifie qu'il route vers `/maj`.
    */
   const prompt =
@@ -375,7 +375,7 @@ export function UpdateBanner({
   const nomDeVoie = (voie: UpdateStrategy): string => t(CLES_DES_VOIES[voie].nom)
   const aideDeVoie = (voie: UpdateStrategy): string =>
     t((surMain ? AIDES_SUR_MAIN[voie] : undefined) ?? CLES_DES_VOIES[voie].aide)
-  // Sur main, le bouton principal est TOUJOURS « Mettre à jour », quelle que soit la voie (conv-1597).
+  // Sur main, le bouton principal est TOUJOURS « Mettre à jour », quelle que soit la voie.
   const nomDuBouton = surMain ? t('maj.voie.fast-forward') : nomDeVoie(primary)
   const buttonState = applying ? ' is-applying' : applyError ? ' is-error' : ''
   const incoming = info.incoming ?? []
@@ -403,7 +403,7 @@ export function UpdateBanner({
             title={whoLabel}
             onClick={() => setIncomingOpen((open) => !open)}
           >
-            {/* A5 « Œil qui s'ouvre » (conv-182) : FERMÉ (paupière et trois cils) tant que la liste
+            {/* A5 « Œil qui s'ouvre » : FERMÉ (paupière et trois cils) tant que la liste
                 est repliée, OUVERT quand elle est dépliée — le dessin dit l'état. Le rond qui
                 l'entoure est dessiné par `.rail-update-who` (UpdateBanner.css). */}
             <svg
@@ -443,7 +443,7 @@ export function UpdateBanner({
           title={actionLabel}
           onClick={() => void apply(primary)}
         >
-          {/* MÊME GUEULE QUE DÉTAILS (conv-181) : le balisage de la capsule, dessiné par les règles
+          {/* MÊME GUEULE QUE DÉTAILS : le balisage de la capsule, dessiné par les règles
               `.capsule-bouton` de ChatView.css. Le nombre de commits va dans la pastille sombre. */}
           <span className="thinking-capsule">
             <span className="thinking-capsule-icone rail-update-icon" aria-hidden="true">
@@ -563,7 +563,7 @@ export function UpdateBanner({
             onClick={() => void reparerBlocageUpdate(applyError)}
             title={t('maj.faireReparerAide')}
           >
-            {/* Capsule comme Détails (conv-181) : la clé est DESSINÉE (trait blanc dans le rond
+            {/* Capsule comme Détails : la clé est DESSINÉE (trait blanc dans le rond
                 dégradé, comme l'icône de Détails), plus l'emoji clé en couleur. */}
             <span className="thinking-capsule">
               <span className="thinking-capsule-icone" aria-hidden="true">

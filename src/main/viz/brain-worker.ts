@@ -48,7 +48,7 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
     let value: unknown
     switch (request.method) {
       case 'listBrains':
-        // Le Brain PERSO s'ajoute à côté de celui de l'équipe (conv-1233), sans catalogue de thèmes ici
+        // Le Brain PERSO s'ajoute à côté de celui de l'équipe, sans catalogue de thèmes ici
         // non plus : la vue les demande à part (`loadThemes`).
         value = [...scanBrainGraphs(undefined, false), ...brainPersoGraphRefs(undefined, false)]
         break
@@ -64,7 +64,7 @@ parentPort.on('message', async (request: BrainWorkerRequest) => {
         break
       }
       case 'loadGraphReunis': {
-        // Les deux Brains dans un graphe, reliés par leurs ponts (conv-1262). Les racines sont
+        // Les deux Brains dans un graphe, reliés par leurs ponts. Les racines sont
         // résolues ICI, jamais reçues de la vue : elle ne choisit pas quels dossiers sont lus.
         const racinePerso = racineBrainPerso()
         if (!racinePerso) throw new Error('aucun Brain perso réglé')

@@ -8,7 +8,7 @@ import type { ResultatPasse } from '../veille/passe'
 /**
  * La veille concurrents n'avait JAMAIS lu une page web sur ce poste : le dispatcheur `veille` est
  * branche au planificateur, mais aucune graine ne posait la tache `action: 'veille'` — mesure du
- * 2026-10-21 (conv-1032) : `scheduled-tasks.json` sans aucune tache veille, et les 12 candidats du
+ * 2026-10-21 : `scheduled-tasks.json` sans aucune tache veille, et les 12 candidats du
  * stock tous internes, 0 echec de source (la signature d'une passe INTERNE seule, sans scout web).
  */
 
@@ -58,7 +58,7 @@ describe('seedVeilleTask', () => {
   })
 
   // Prouve le ROUTAGE par le dispatcheur, avec une passe simulee : le branchement dans index.ts et
-  // le passage par TaskScheduler ne sont pas couverts ici (relecture independante, conv-1032).
+  // le passage par TaskScheduler ne sont pas couverts ici (relecture independante).
   it('le dispatcheur de veille capte la tache posee, sans tour de chat', async () => {
     const tasks = store()
     const task = tasks.getTask(seedVeilleTask(tasks)!)!

@@ -35,7 +35,7 @@ const REGIME_PHASES: Record<TaskRegime, PipelinePhase[]> = {
 
 // Signaux de COMPLEXITÉ (→ critical) et leurs négations : `src/shared/signaux-de-risque.ts`, source
 // unique partagée avec le panneau des candidats scout, qui ne doit pas recommander une correction
-// directe là où ce classement verrait un chantier (conv-1080).
+// directe là où ce classement verrait un chantier.
 
 /**
  * Signaux de TRIVIALITÉ (→ trivial) : micro-édition ciblée, déjà précise.
@@ -45,11 +45,11 @@ const REGIME_PHASES: Record<TaskRegime, PipelinePhase[]> = {
  * tombe », « border case du parseur »). Ils ne comptent que sous une forme sans équivoque visuelle
  * (`taille de la police`, `border-radius`, `background-color`…), listée à part.
  *
- * Mesuré sur conv-210 : chacune de ces demandes d'une ligne partait en pipeline complet alors qu'un
+ * Mesuré : chacune de ces demandes d'une ligne partait en pipeline complet alors qu'un
  * seul pas de build suffit. La rétrogradation reste bornée : `critical` est testé AVANT, et la tâche
  * doit rester courte et mono-clause.
  *
- * `comment` NU N'Y EST PLUS — conv-344, saisie ts 1792393145414 : en français « comment » veut dire
+ * `comment` NU N'Y EST PLUS, saisie ts 1792393145414 : en français « comment » veut dire
  * « how ». « /scout comment améliorer la feature overall », « comment faire pour lancer les tests »
  * partaient en trivial. Le commentaire de code reste couvert par `commentaire` et, en anglais, par
  * un déterminant devant `comment(s)` (« the comment », « a comment »), qu'aucune question française
@@ -161,7 +161,7 @@ export function regimePhases(task: string): PipelinePhase[] {
   // registre, pas une autorisation de réduire une tâche à risque. Mon test anti-régression passait à
   // côté : il exerçait une tâche critique SANS intention en tête.
   // Une phase NOMMÉE, elle, garde le droit de réduire (au-dessus) : c'est une décision explicite.
-  // UNE SÉLECTION DE CANDIDATS SCOUT NE REJOUE PAS LE SCOUT (conv-1080, « le doublon enlève-le ») :
+  // UNE SÉLECTION DE CANDIDATS SCOUT NE REJOUE PAS LE SCOUT (« le doublon enlève-le ») :
   // la demande sort d'un scout qui vient d'éclairer et de localiser ces pistes ; le régime critique
   // le relançait en tête (4 runs de sélection sur 43 mesurés). La vérification que le besoin tient
   // toujours est demandée au cadrage par le message lui-même.

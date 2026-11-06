@@ -16,7 +16,7 @@ import type { RunClosureObservation, RunLifecycleEvent } from '../../shared/run-
 /**
  * UN RUN ARRÊTÉ PAR LE MUR DE QUOTA EST SUSPENDU, PAS CLOS.
  *
- * Mesuré le 2026-10-13 : run-219bfae8dec4-1 (conv-914) s'est arrêté en phase clean sur le refus
+ * Mesuré le 2026-10-13 : run-219bfae8dec4-1 s'est arrêté en phase clean sur le refus
  * ci-dessous, après un build déjà payé, et son état reprenable avait disparu de `run-state/`.
  */
 const REFUS_DU_13_10 =
@@ -143,7 +143,7 @@ describe('mur de quota pendant un run', () => {
 })
 
 /**
- * LA CLÔTURE DU MOTEUR DIT POURQUOI LE RUN S'EST ARRÊTÉ (piste 4, conv-1070). Elle reste `red` —
+ * LA CLÔTURE DU MOTEUR DIT POURQUOI LE RUN S'EST ARRÊTÉ (piste 4). Elle reste `red` —
  * le run n'a rien livré —, mais elle porte `interruption` quand la cause est hors du travail :
  * c'est ce qui écrit `status: interrupted` dans le RUN.md, et ce que la vue Workflows retire de ses
  * taux. L'entrée qui ferait échouer ce test si le correctif était faux : `TypeError: boom`, une
@@ -170,7 +170,7 @@ describe('cause d’interruption portée par la clôture', () => {
       )
     ).rejects.toThrow()
     // La première clôture émise est celle d'OUVERTURE (`status: open`) : on lit la terminale.
-    // fix-ok: conv-1070 — mesuré : la première version lisait `find` (1re clôture) et le jumeau « TypeError: boom » rougissait AVANT tout correctif en recevant `status: 'open'` ; on lit donc la dernière clôture non `open`, comme `commands.ts`.
+    // fix-ok: mesuré : la première version lisait `find` (1re clôture) et le jumeau « TypeError: boom » rougissait AVANT tout correctif en recevant `status: 'open'` ; on lit donc la dernière clôture non `open`, comme `commands.ts`.
     const fin = evenements
       .flatMap((e) => (e.stage === 'closure' && e.closure.status !== 'open' ? [e.closure] : []))
       .pop()

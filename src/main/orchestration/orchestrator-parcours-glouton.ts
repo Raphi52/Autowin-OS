@@ -1,5 +1,5 @@
 // Parcours glouton (plan en nœuds parallèles, build puis juge/contrôle) — méthodes de la classe Orchestrator déplacées telles quelles depuis
-// orchestrator.ts (conv-1508) ; elles s'exécutent avec `this` = l'instance, via les délégués de la classe.
+// orchestrator.ts ; elles s'exécutent avec `this` = l'instance, via les délégués de la classe.
 import { randomUUID } from 'node:crypto'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from '../verify/evidence-digest'
 import { CONTRAT_OBJECTIONS, verdictAvecObjectionsPortees } from '../juge/objections-juge'
@@ -149,7 +149,7 @@ export async function greedyJudgeAndGate(
     fichiersTouchesAvantLeRun: this.fichiersSalesAuDemarrage
   })
   const preGate = evaluateClosure({
-    // fix-ok: conv-835 tour 8641812d-6401-4129-a6b0-13a64228e0bc — meme raccourci que 0014ffca :
+    // fix-ok: tour 8641812d-6401-4129-a6b0-13a64228e0bc — meme raccourci que 0014ffca :
     // un hook bloquant AVEC sa raison forcait `red`, donc « Échec déjà déclaré » alors que rien ne
     // l'etait. Test orchestrator.greedy rouge avant / vert apres. Sans raison du hook : `red` garde.
     status:
@@ -353,7 +353,7 @@ ${CONTRAT_OBJECTIONS}`
  * Execute UNE phase en la DECOUPANT en sous-taches parallelisees (DAG completion-driven).
  *
  * Anciennement reservee a `build` : toute autre phase tournait en un seul sous-agent monolithique.
- * Mesure du 2026-07-28 (conv-75) : une phase d'exploration non decoupee a coute 10,90 $ en 11 min,
+ * Mesure du 2026-07-28 : une phase d'exploration non decoupee a coute 10,90 $ en 11 min,
  * alors que le MEME travail, decoupe en 5 sous-audits cibles, a coute ~0,8 $ et ~1 min chacun.
  * Le decoupage n'est donc pas une specificite du build : c'est le levier de cout de TOUTE phase.
  *
@@ -487,7 +487,7 @@ export async function runGreedyBuildPhase(
           this.phasePrompt(phase, withFoundation),
           // VARIABLE par sandbox — le plus volatile, donc en dernier.
           // Vide quand le run tourne dans le dépôt de base : rien n'est payé en contexte.
-          // VARIABLE par run : le bureau caché réservé à CE run (conv-618).
+          // VARIABLE par run : le bureau caché réservé à CE run.
           { name: 'bureauCache', text: consigneBureauCache(runId) },
           {
             name: 'workspaceIsolation',
@@ -553,7 +553,7 @@ export async function runGreedyBuildPhase(
               reasoningEffort: phaseBinding.reasoningEffort,
               phase,
               // L'enveloppe est construite juste au-dessus : la ligne de pipeline montre le prompt
-              // DES le demarrage (recidive « rien en preprompt », conv-587 du 2026-09-16).
+              // DES le demarrage (recidive « rien en preprompt », Un fil du 2026-09-16).
               prompt: envelope,
               execution
             })
@@ -596,7 +596,7 @@ export async function runGreedyBuildPhase(
                 if (chunk.reasoning) onDelta?.('exec', '', undefined, chunk.reasoning)
                 // La NOTE remonte a l'interface, jamais au livrable : un battement d'outil dit
                 // que le sous-agent travaille, il ne fait pas partie de sa reponse. Ce commentaire
-                // l'annonçait mais le code ne la relayait pas (constaté en conv-1085). Les
+                // l'annonçait mais le code ne la relayait pas. Les
                 // sous-tâches tournent en parallèle sur la MÊME ligne : chacune la signe.
                 if (chunk.status) {
                   onDelta?.(
@@ -804,7 +804,7 @@ export async function runGreedyBuildPhase(
             reasoningEffort: orchBinding.reasoningEffort,
             phase,
             // Troisieme point d'annonce : la FUSION multi-modeles n'avait aucune enveloppe
-            // (meme recidive « rien en preprompt », conv-587, saisie ts=1789550244094).
+            // (meme recidive « rien en preprompt », saisie ts=1789550244094).
             prompt: synthEnvelope,
             execution: synthExecution
           })

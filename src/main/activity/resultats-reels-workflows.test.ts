@@ -6,7 +6,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { lireResultatsReelsParWorkflow } from './resultats-reels-workflows'
 
 /**
- * LES RÉSULTATS RÉELS DE CHAQUE WORKFLOW, LUS DANS `causal-trace/` (piste 1, conv-1070).
+ * LES RÉSULTATS RÉELS DE CHAQUE WORKFLOW, LUS DANS `causal-trace/` (piste 1).
  *
  * La vue Workflows n'affichait que les bancs d'essai (`arena-duels.jsonl`). Or chaque run écrit
  * déjà sa `quote` (le workflow qui le pilote) et sa clôture (statut, durée, coût) dans la trace.

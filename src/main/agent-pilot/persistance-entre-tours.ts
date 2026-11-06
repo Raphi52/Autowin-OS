@@ -1,5 +1,5 @@
 // Caches du chat entre deux tours (compte rendu non vu, sessions CLI), sortis des méthodes privées
-// de AgentPilot (conv-1580, lot 1). La classe garde des méthodes minces du même nom ; ses cartes
+// de AgentPilot (lot 1). La classe garde des méthodes minces du même nom ; ses cartes
 // mémoire restent privées et sont passées en argument.
 import { forgetChatSession, loadChatSessions, saveChatSession } from '../runs/chat-session-store'
 import {
@@ -10,9 +10,9 @@ import {
 import { bornerResultatDeCommande } from '../chat/resultat-de-commande-borne'
 
 /**
- * AJOUTE la note a celle qui attend encore, au lieu de la remplacer (conv-989) : un `/scout` suivi
+ * AJOUTE la note a celle qui attend encore, au lieu de la remplacer : un `/scout` suivi
  * d'un `/frame` sans message entre les deux ne laissait au modele que le `/frame`. Le cumul reste
- * sous la borne de tout resultat injecte (conv-312).
+ * sous la borne de tout resultat injecte.
  */
 export function deposerCompteRenduEnAttente(
   comptesRendusNonVus: Map<string, string>,

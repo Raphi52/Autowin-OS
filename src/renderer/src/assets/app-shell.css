@@ -13,7 +13,7 @@
   top: 0;
   left: 216px;
   right: 138px;
-  /* La hauteur de la barre de fenêtre, zoom compris (theme.css, conv-1223). */
+  /* La hauteur de la barre de fenêtre, zoom compris (theme.css). */
   height: var(--marge-haut-vue);
   -webkit-app-region: drag;
   pointer-events: none;
@@ -32,11 +32,11 @@
   flex-direction: column;
   padding: var(--s3);
   gap: var(--s4);
-  /* MEME HAUTEUR QUE LES BLOCS (demande du 2026-10-09, conv-124 : « met la au meme niveau
+  /* MEME HAUTEUR QUE LES BLOCS (demande du 2026-10-09, « met la au meme niveau
      vertical en haut et en bas que les autres blocs, sur tous les themes »). Les blocs de
      chaque vue commencent et finissent a la marge de `.main` (var(--s5)) : le menu reprend
      la MEME valeur, il suit donc si cette marge change. En haut, c'est `--marge-haut-vue` : elle
-     grandit sous 100 % de zoom avec celle de `.main` (theme.css, conv-1223). */
+     grandit sous 100 % de zoom avec celle de `.main` (theme.css). */
   margin-block: var(--marge-haut-vue) var(--s5);
   box-shadow: none;
   transition:
@@ -76,12 +76,12 @@
   flex: none;
   object-fit: contain;
   filter: none;
-  /* LE LOGO TOURNE (2026-10-13, conv-929 : « fais en sorte que le logo rond tourne »), un tour en
-     3 s (8 s « trop lent »). Depuis conv-1535 (2026-11-04), le logo a le RELIEF de l'anneau du film
+  /* LE LOGO TOURNE (2026-10-13, « fais en sorte que le logo rond tourne »), un tour en
+     3 s (8 s « trop lent »). Depuis le 2026-11-04, le logo a le RELIEF de l'anneau du film
      (« dans la video tu lui as donne du relief ») : c'est l'IMAGE ANIMÉE qui fait tourner le dégradé
      sous une lumière fixe (scripts/logo_anneau_relief.py). Plus de rotation CSS ici : elle ferait
      tourner la lumière avec l'anneau, et il redeviendrait plat. Une image animée tourne aussi quand
-     Windows réduit les animations, ce qu'exigeait conv-929 (la machine de l'utilisateur l'a actif). */
+     Windows réduit les animations, ce qu'exigeait (la machine de l'utilisateur l'a actif). */
 }
 .brand-name {
   min-width: 0;
@@ -157,7 +157,7 @@
 
 .rail.is-collapsed {
   width: 54px;
-  /* 8 px et non 9 (2026-10-10, conv-198) : 54 - 2 x 8 - 2 x 1 px de bord (le cadre des thèmes
+  /* 8 px et non 9 (2026-10-10) : 54 - 2 x 8 - 2 x 1 px de bord (le cadre des thèmes
      Nébuleuse) = 36 px, la largeur d'un item rond. À 9 px la piste ne faisait que 34 px. */
   padding-inline: 8px;
 }
@@ -177,19 +177,19 @@
 .rail.is-collapsed .rail-foot {
   display: none;
 }
-/* RAIL REPLIÉ : UN CARRÉ CENTRÉ, L'ICÔNE AU MILIEU (2026-10-10, conv-198 : « l'icône de worktrees
+/* RAIL REPLIÉ : UN CARRÉ CENTRÉ, L'ICÔNE AU MILIEU (2026-10-10, « l'icône de worktrees
    est pas centrée et le rond est pas parfaitement rond »). Avant : item de 33 x 36 collé à gauche
    (margin 0 3px) et icône poussée de translateX(-3px). Dans un thème à bord en capsule (999px),
    33 x 36 dessinait un OVALE ; l'icône tombait 3 px à gauche du centre de ce rond, et 3,6 px à
    gauche du bouton de repli. Mesuré dans l'app (Nébuleuse de verre) : rond 33 x 36 centré à
    26,4 px, icône à 23,4 px, menu à 27 px. Après : 36 x 36, rond, icône et bouton à 27 px.
    JAMAIS de translate sur l'icône : un décalage fixe défait le centrage que la flexbox donne.
-   LE ROND SUIT LA PISTE (2026-10-27, conv-1165 : « le rond de mon élément sélectionné est
+   LE ROND SUIT LA PISTE (2026-10-27, « le rond de mon élément sélectionné est
    légèrement cut sur la droite »). La piste ne fait 36 px qu'à 100 % : sous ce zoom, le bord de
    1 px du cadre Nébuleuse est arrondi à un pixel d'écran entier (1,11 px à 90 %), la piste tombe
    à 35,78 px et le rond fixe de 36 px dépassait de 0,19 px, rogné par `.nav` (overflow-x: hidden)
    en un méplat visible. `min()` le borne à la piste, `aspect-ratio` le garde rond.
-   LE ROND LAISSE LA PLACE À SON ANNEAU (2026-10-27, conv-1178 : « il faut rétrécir le rond de
+   LE ROND LAISSE LA PLACE À SON ANNEAU (2026-10-27, « il faut rétrécir le rond de
    sélection, il est coupé à gauche et à droite »). L'item cliqué garde le focus, et l'anneau de
    focus de Nébuleuse (`:focus-visible`, 2 px de trait + 2 px d'écart) se dessine HORS du rond :
    rond de 35,8 px + 2 × 2,2 px dans une piste de 35,8 px, rogné des deux côtés par `.nav`
@@ -207,7 +207,7 @@
   justify-content: center;
   padding: 0;
 }
-/* L'ÉMOJI DÉBORDE SA CASE, DES DEUX CÔTÉS À PARTS ÉGALES (2026-10-10, conv-198 : « des icônes trop
+/* L'ÉMOJI DÉBORDE SA CASE, DES DEUX CÔTÉS À PARTS ÉGALES (2026-10-10, « des icônes trop
    à droite par rapport au cercle, tous sauf worktrees et task planner »). Un émoji à 17 px fait
    23,35 px de large dans la case de 18 px : la grille le posait au bord gauche, il ne débordait
    qu'à DROITE et son centre tombait à 29,7 px pour un rond centré à 27 (mesuré dans l'app). Les
@@ -226,7 +226,7 @@
   scrollbar-width: none;
 }
 
-/* LE MENU LAISSE LA PLACE À L'ANNEAU DE FOCUS (2026-10-28, conv-1208 : « le border est coupé à
+/* LE MENU LAISSE LA PLACE À L'ANNEAU DE FOCUS (2026-10-28, « le border est coupé à
    gauche et à droite », capsule « Chat » du menu DÉPLIÉ). L'anneau de focus de Nébuleuse (2 px de
    trait + 2 px d'écart) se dessine 4 px HORS de l'item ; `overflow-y: auto` rogne aussi l'axe
    horizontal, et l'item remplissait toute la largeur de `.nav` : 4 px coupés de chaque côté
@@ -289,7 +289,7 @@
   line-height: 1;
   filter: saturate(1.15);
 }
-/* La punaise du Board en JAUNE (conv-1536, 2026-11-04 : « tu peux mettre l'icone de pin en
+/* La punaise du Board en JAUNE (2026-11-04 : « tu peux mettre l'icone de pin en
    jaune? »). L'icône est l'émoji 📌, rouge : `color` ne le teinte pas, le filtre tourne sa teinte
    (rouge → jaune), l'aiguille reste claire. Réglé à l'œil sur six variantes rendues par Edge :
    50° donne de l'orange, 84° tire au vert, `sepia()` jaunit aussi l'aiguille. Sélecteur à DEUX
@@ -333,7 +333,7 @@
   padding: var(--s5);
   /* Sous 100 % de zoom, les boutons de fenêtre de Windows deviennent plus hauts que var(--s5) en
      pixels de page : la vue descend d'autant pour que leur gris de survol ne la recouvre pas
-     (theme.css, conv-1223). */
+     (theme.css). */
   padding-top: var(--marge-haut-vue);
   overflow: hidden;
   display: flex;
@@ -355,20 +355,20 @@
   flex-direction: column;
 }
 
-/* LE PASSAGE D'UNE VUE A L'AUTRE (conv-981, 2026-10-15), par `document.startViewTransition`
+/* LE PASSAGE D'UNE VUE A L'AUTRE (2026-10-15), par `document.startViewTransition`
    (transition-de-vue.ts) : le surlignage du menu GLISSE vers l'onglet choisi (la page, elle, ne se
    fond plus depuis le 16/10 : ses blocs entrent en cascade, voir plus bas). Le nom n'existe que PENDANT la transition (classe posee sur
    <html>) : nomme en permanence, l'onglet deviendrait un contexte d'empilement et une racine de flou
    d'arriere-plan (spec css-view-transitions-1). Effet court, une fois par clic, garde sous
    prefers-reduced-motion : ce poste l'a actif, il ne se verrait jamais (voir theme.css, spinner).
-   fix-ok: conv-981 - chaque vue passait de display none a flex d'un coup (.view-slot ci-dessus) et
+   fix-ok: - chaque vue passait de display none a flex d'un coup (.view-slot ci-dessus) et
    le surlignage du menu sautait d'un onglet a l'autre. Fichier modifie UNE seule fois a la main dans
    run-52d36e67e4de-1 ; le controle des causes en comptait 3 (meme modification sous son chemin
    complet et son chemin court, plus le releve de fin d'etape : fichiersEditesParLeRun). */
 :root.vue-en-transition .nav-item.active {
   view-transition-name: nav-actif;
 }
-/* LES CLICS TRAVERSENT LE FONDU DE VUE (conv-1322, 2026-10-30) : un second clic rapide sur un onglet
+/* LES CLICS TRAVERSENT LE FONDU DE VUE (2026-10-30) : un second clic rapide sur un onglet
    etait PERDU. Le calque `::view-transition` couvre la fenetre et livre tout clic a <html> ; mesure,
    copie cachee a 19-25 images/s : 8 seconds clics perdus sur 8 entre 0 et 400 ms d'ecart, et
    `pointer-events: none` seul n'y changeait rien. La page n'a rien a animer ici (l'ancienne vue
@@ -388,7 +388,7 @@
   animation-duration: 220ms;
   animation-timing-function: var(--ease);
 }
-/* LA PAGE NE SE FOND PLUS (conv-987, 2026-10-16) : ce sont ses BLOCS qui entrent, en cascade
+/* LA PAGE NE SE FOND PLUS (2026-10-16) : ce sont ses BLOCS qui entrent, en cascade
    (ci-dessous). L'ancienne vue disparait d'un coup, comme dans la maquette choisie : fondue par-dessus
    la nouvelle pendant 180 ms, elle restait visible derriere les blocs encore transparents. Seul le
    surlignage du menu glisse encore (groupe `nav-actif`). */
@@ -400,7 +400,7 @@
   animation: none;
 }
 
-/* LA CASCADE D'ENTREE D'UNE VUE (conv-987, 2026-10-16) — direction « 1 · Cascade » du draft, choisie
+/* LA CASCADE D'ENTREE D'UNE VUE (2026-10-16) — direction « 1 · Cascade » du draft, choisie
    par l'utilisateur : chaque bloc monte de 8 px en apparaissant, de haut en bas, un tous les 40 ms.
    Les blocs et leur rang (`--entree-rang`) sont choisis par `entree-cascade.ts` a l'affichage de la
    vue, et l'attribut est retire a la fin : rien ne rejoue quand du contenu arrive plus tard.
@@ -420,7 +420,7 @@
   animation-delay: calc(var(--entree-rang, 0) * 40ms);
 }
 
-/* L'ENTREE DES CADRES A CHANFREIN — LE MINUTAGE (conv-987, 2026-10-16, draft « conteneurs a
+/* L'ENTREE DES CADRES A CHANFREIN — LE MINUTAGE (2026-10-16, draft « conteneurs a
    chanfrein », tour 3, variante « 2 · Elan », 1 s, choisie sur maquette). Theme-neutre : ces
    proprietes ne dessinent rien ici. Les deux themes qui coupent les coins (theme-nebuleuse-verre.css,
    et Holographique blanc qui en est genere) posent l'animation sur leurs cadres marques par
@@ -501,7 +501,7 @@
   }
 }
 
-/* LE CHANGEMENT DE THEME EN CERCLE (conv-981, 2026-10-16) : le nouveau theme s'ouvre en cercle
+/* LE CHANGEMENT DE THEME EN CERCLE (2026-10-16) : le nouveau theme s'ouvre en cercle
    depuis la liste de Settings · Interface (`basculerTheme`, transition-de-vue.ts, qui pose l'origine
    et le rayon en variables). L'ancien theme reste FIXE dessous : pas de fondu croise, et pas de
    melange additif des deux images (`plus-lighter` du navigateur) qui surexposerait le cercle.

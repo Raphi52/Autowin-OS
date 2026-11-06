@@ -23,7 +23,7 @@ import type { PipelinePhase } from '../skills/skill-pipeline'
 /**
  * Les textes ENVOYÉS AUX AGENTS ne citent que des chemins et des scripts qui existent.
  *
- * POURQUOI (scout du 05/11, piste ancien n° 9, conv-1602) : `agents-md-faits.test.ts` ne vérifiait
+ * POURQUOI (scout du 05/11, piste ancien n° 9) : `agents-md-faits.test.ts` ne vérifiait
  * qu'AGENTS.md. La constitution, la consigne du chat, les consignes d'étape et les SKILL.md partent
  * eux aussi à chaque agent, et un chemin périmé y passait sans bruit.
  *
@@ -33,7 +33,7 @@ import type { PipelinePhase } from '../skills/skill-pipeline'
  * fix-ok: premier passage du 05/11 sur les vrais textes, 6 rouges mesurés et AUCUN chemin réellement
  * cassé — 3 suffixes de ligne (`objections-juge.ts:30`, `claude.ts:821`, `verify-command.ts:75`),
  * 1 span désapparié par une clôture ``` (consigne du chat), 2 absents voulus (ABSENTS_VOULUS) ; et la
- * skill ignorée `skills/arenagame/` du poste citait les chemins de son propre projet (conv-1602).
+ * skill ignorée `skills/arenagame/` du poste citait les chemins de son propre projet.
  */
 
 // La racine se lit depuis CE fichier, pas depuis le dossier où vitest a été lancé.
@@ -145,14 +145,14 @@ const TEXTES: Array<[string, string]> = [
     buildChatPilotagePrompt(CATALOG, { outilsDirects: CATALOG.map((c) => c.name) })
   ],
   // Les blocs écran tels qu'`agent-pilot.ts` les envoie (`blocsSystemeEcran`), image jointe pour
-  // servir le bloc visuel EN ENTIER, bureau caché du fil compris (conv-1602).
+  // servir le bloc visuel EN ENTIER, bureau caché du fil compris.
   ...blocsSystemeEcran('', true, 'conv-test').map((b): [string, string] => [
     `consigne du chat : bloc ${b.name}`,
     b.text
   ]),
   ['consigne du chat : ligne de besoin', CONSIGNE_LIGNE_BESOIN],
   // Injectée au système de chaque étape d'un run (orchestrator-parcours-*.ts) ; elle cite
-  // `scripts/hdesk-lancer.ps1`, `scripts/hdesk-observe.ps1` et `scripts/ui-capture.mjs` (conv-1602).
+  // `scripts/hdesk-lancer.ps1`, `scripts/hdesk-observe.ps1` et `scripts/ui-capture.mjs`.
   ['consigne du bureau caché des étapes', consigneBureauCache('run-test')],
   ...(Object.keys(PHASE_BRIEFS) as PipelinePhase[]).map((phase): [string, string] => [
     `consigne d’étape ${phase}`,
@@ -174,9 +174,9 @@ describe('textes envoyés aux agents — leurs chemins et scripts cités existen
   // (`blocsSystemeEcran`) : n'en vérifier que le début laissait sans contrôle tout chemin écrit un
   // jour dans sa fin (mesuré le 05/11 : `consigneBureauCacheChat` n'en cite encore aucun). Les scripts
   // hdesk sont cités par le bloc `ecranUtilisateur` et par `consigneBureauCache` des étapes
-  // (objection du juge, conv-1602).
+  // (objection du juge).
   // fix-ok: mesuré le 05/11 — ce test rougissait avec 2 textes envoyés non vérifiés : le bloc visuel
-  // complet (REGLES_VISUELLES seul était dans TEXTES) et `consigneBureauCache` des étapes (conv-1602).
+  // complet (REGLES_VISUELLES seul était dans TEXTES) et `consigneBureauCache` des étapes.
   it('les blocs écran du chat sont vérifiés tels qu’ils partent, bureau caché compris', () => {
     const verifies = new Set(TEXTES.map(([, texte]) => texte))
     const envoyes = [

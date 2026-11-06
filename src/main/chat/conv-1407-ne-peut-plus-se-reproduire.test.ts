@@ -4,10 +4,10 @@ import { ConversationStore } from '../store/conversations'
 import { buildTurnMessages } from './chat-turn-messages'
 
 /**
- * LE SCENARIO DE conv-1407, REJOUE DE BOUT EN BOUT.
+ * LE SCENARIO, REJOUE DE BOUT EN BOUT.
  *
- * Le 2026-08-26, l'utilisateur ecrit dans conv-1405 : « tu peux m'expliquer le code couleur de la
- * pastille a cote des conversations ». Puis, dans conv-1407 : « remake les pastilles de couleurs ».
+ * Le 2026-08-26, l'utilisateur ecrit : « tu peux m'expliquer le code couleur de la
+ * pastille a cote des conversations ». Puis, : « remake les pastilles de couleurs ».
  * Quatre mots, dont le sens vit dans une AUTRE conversation.
  *
  * L'orchestrateur n'avait alors aucun chemin vers ce sens : son prompt lui AFFIRMAIT connaitre

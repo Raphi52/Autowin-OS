@@ -21,7 +21,7 @@ function longestTagPrefixSuffix(value: string, tags: readonly string[]): number 
  * Un bloc de contrôle n'est SUPPRIMÉ que s'il est réellement une commande : ouvert ET fermé ET
  * contenant du JSON objet valide. Une balise `<cmd>` CITÉE en prose (non fermée, ou fermée mais
  * contenu non-JSON) reste du TEXTE VISIBLE — sinon le message est tronqué dès qu'on mentionne la
- * balise pour l'expliquer (bug « t'as pas fini ta phrase », conv-57).
+ * balise pour l'expliquer (bug « t'as pas fini ta phrase »).
  */
 function isSuppressibleCommand(inner: string): boolean {
   try {
@@ -56,7 +56,7 @@ export class VisibleStreamFilter {
         // Une NOUVELLE ouverture avant toute fermeture = la commande courante est orpheline (jamais
         // fermée, ex. terminée par `</parameter></invoke>` d'un autre format). Sans cette coupure, la
         // fermeture de la commande SUIVANTE est capturée, le contenu combiné n'est pas du JSON et TOUT
-        // le markup s'affiche brut (bloc moche conv-66).
+        // le markup s'affiche brut (bloc moche).
         const reopen = lower.indexOf(open)
         if (reopen >= 0 && (end < 0 || reopen < end)) {
           const orphan = this.buffer.slice(0, reopen)

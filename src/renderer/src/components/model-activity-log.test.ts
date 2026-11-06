@@ -473,7 +473,7 @@ describe('le raisonnement DURABLE ne doit ni disparaître ni faire doublon', () 
 })
 
 /**
- * LES FRAGMENTS DE PENSÉE SE REGROUPENT (conv-257 : « dans les logs de conv groupe tous les
+ * LES FRAGMENTS DE PENSÉE SE REGROUPENT (« dans les logs de conv groupe tous les
  * raisonnements, là y a que des lignes raisonnement »). Le main écrit un `reasoning-step` par
  * fragment diffusé — quelques mots chacun, 143 pour un seul tour —, et chacun faisait une ligne.
  */
@@ -504,7 +504,7 @@ describe('le raisonnement diffusé en fragments tient en UNE ligne par passage',
     expect(pensees[0].fields).toMatchObject({ fragments: 4, iteration: 0 })
   })
 
-  // conv-1431 : le main regroupe désormais la pensée à l'écriture (`journalDuPiloteRegroupe`) ; une
+  // Le main regroupe désormais la pensée à l'écriture (`journalDuPiloteRegroupe`) ; une
   // pensée de plus d'1 s y fait deux lignes déjà regroupées. Entrée qui ferait échouer un lecteur qui
   // compte une ligne pour un fragment : 3 + 2 fragments affichés « 2 ».
   it('une rafale faite de lignes déjà regroupées additionne leurs fragments', () => {

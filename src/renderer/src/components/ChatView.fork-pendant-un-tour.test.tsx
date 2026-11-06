@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * conv-1543 (2026-11-04) : cliquer la branche OUVRE la copie, même pendant qu'un tour travaille.
+ * 2026-11-04 : cliquer la branche OUVRE la copie, même pendant qu'un tour travaille.
  * La retenue sur place avec un bandeau « la branche t'attend dans la liste » (2026-09-03) a été
  * refusée par l'utilisateur : « juste mets-moi sur une fork de la conv comme ça a toujours été ».
  */

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionEvidence, StreamChunk } from './types'
 
 // fix-ok: le lecteur perdait le `cd` d'un test, et 30 `cd` sur 33 mesurés visent le dossier du tour :
-// le dossier de l'appel doit donc atteindre le lecteur depuis l'adaptateur (conv-1423).
+// le dossier de l'appel doit donc atteindre le lecteur depuis l'adaptateur.
 // Même harnais de spawn que claude.cible-entiere.test.ts : on rejoue une séquence stream-json.
 const spawnCapture = vi.hoisted(() => ({
   stdoutEvents: [] as Array<Record<string, unknown>>
@@ -67,7 +67,7 @@ async function testsEmis(): Promise<NonNullable<StreamChunk['testsDuTerminal']>>
 }
 
 /**
- * LE CODE DE SORTIE D'UN TEST LANCÉ PAR L'AGENT QUITTE L'ADAPTATEUR (conv-1059, 2026-10-22).
+ * LE CODE DE SORTIE D'UN TEST LANCÉ PAR L'AGENT QUITTE L'ADAPTATEUR (2026-10-22).
  *
  * L'adaptateur tenait déjà la commande et l'issue de chaque `Bash` (`is_error`, « Exit code N »), et
  * n'en laissait sortir que deux lignes de texte (« Bash · npm test », « Bash terminé - 3 s ») : la

@@ -6,7 +6,7 @@ import { skillInstruction, stripSkillFrontmatter, PIPELINE_PHASES } from './skil
 
 /*
  * Le chargeur d'ÉTAPE (`phaseInstruction`, `engineForPhase`, `loadSkillText`, `loadEngineText`) et
- * ses tests sont retirés (conv-1602) : rien ne l'appelait hors de ce fichier depuis c8c90007, une
+ * ses tests sont retirés : rien ne l'appelait hors de ce fichier depuis c8c90007, une
  * étape de run lit sa consigne dans `phase-briefs.ts`. Reste ici ce que le fil charge vraiment.
  */
 describe('skill-pipeline — corps de skill chargé par le fil', () => {

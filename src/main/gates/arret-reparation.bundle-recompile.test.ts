@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { arretDeLaReparation } from './stopgate'
 
 /**
- * conv-539, tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (reparations 9 a 18, saisie ts 1789462078031).
+ * Tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (reparations 9 a 18, saisie ts 1789462078031).
  *
  * La mesure de peremption comparait le bundle a la SOURCE. Quand quelqu'un a recompile en cours de
  * tour, `out/main/index.js` est redevenu plus recent que la source (11:46 contre 11:40) : la mesure

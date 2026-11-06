@@ -36,7 +36,7 @@ import type { WorkflowGraph } from '../workflow/workflow-graph'
 /**
  * UN TOUR NE DOIT PAS PERDRE LES OBJECTIONS DES JUGES PARCE QUE LA REPARATION N'A PLUS DE BUDGET.
  *
- * Mesure : conv-539, tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e. Quatre appels juge (promptCalls
+ * Mesure : tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e. Quatre appels juge (promptCalls
  * 09:47:42 → 09:58:16) listent des objections ; le build de reparation suivant leve « Budget
  * d'appels provider atteint : 42 appels » et l'exception remonte jusqu'a `orchestrate`, qui rend
  * ok:false. Tout le travail juge disparait de la reponse : l'utilisateur ne lit qu'« Echec du

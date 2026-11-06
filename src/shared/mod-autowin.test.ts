@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import { dossierModAutowin } from '../main/providers/claude'
 
 /**
- * LE MOD TEL QUE LE CLI LE CHARGE (conv-1602, piste 4 du scout du 05/11).
+ * LE MOD TEL QUE LE CLI LE CHARGE (piste 4 du scout du 05/11).
  * Avant, ce fichier testait `hooks/logique.mjs`, que rien ne chargeait : `hooks.json` ne nomme que
  * `register.js`. Il passait au vert pendant que les runs lisaient encore la promesse fausse sur les
  * tâches de fond. Ici, chaque module est importé d'APRÈS `hooks.json` : le test suit le manifeste.

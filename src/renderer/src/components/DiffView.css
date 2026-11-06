@@ -58,7 +58,7 @@
    ecrite ici, morte car remplacee plus bas ; mais le generateur des themes holographiques la
    retraduisait avec une priorite plus forte : en Holographique, le texte d'une ligne ajoutee
    redevenait vert sur vert, et l'en-tete de bloc rose sur rose, au lieu du texte clair choisi
-   (conv-245, 2026-10-11). */
+   (2026-10-11). */
 .diff-meta {
   color: var(--muted, #8b939f);
 }
@@ -142,7 +142,7 @@
 }
 /* DIFF ETROIT (panneau Details, environ 300 px de code) : le retrait de 100 px qui aligne le
    commentaire sur le code laissait 150 px a l'editeur -- trois lignes visibles, « Ajouter a la
-   relecture » sur trois lignes et « Annuler » coupe (capture du 2026-10-11, conv-245). Sous 440 px,
+   relecture » sur trois lignes et « Annuler » coupe (capture du 2026-10-11). Sous 440 px,
    le commentaire et l'editeur prennent toute la largeur. */
 .diff-view {
   container-type: inline-size;
@@ -153,7 +153,7 @@
     margin-left: 6px;
   }
 }
-/* GOUTTIERE COMPACTE DANS LE PANNEAU DETAILS (conv-245, 2026-10-11 : « compacte la colonne des
+/* GOUTTIERE COMPACTE DANS LE PANNEAU DETAILS (2026-10-11 : « compacte la colonne des
    numeros de ligne des cartes de differences quand elles sont etroites, pour que le code ne se
    coupe plus tous les 20 caracteres »). Le panneau fait 340 px par defaut : les 100 px de gouttiere
    du « Contraste fort » y prenaient plus d'un tiers de la carte. Sous 440 px, et dans ce panneau

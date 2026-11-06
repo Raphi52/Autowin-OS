@@ -60,7 +60,7 @@ export function appPreflightProbes(): PreflightProbes {
         /*
          * ORIGINE CONFIGUREE, jamais une adresse ecrite en dur.
          *
-         * MESURE DU 2026-09-03 (conv-8) : ce ping visait `127.0.0.1:8765` en dur alors que le
+         * MESURE DU 2026-09-03 : ce ping visait `127.0.0.1:8765` en dur alors que le
          * service a jour ecoutait 8766 (c'est lui qui porte l'echange de defi du protocole 2). La
          * sonde voyait donc le cerveau ETEINT en permanence — meme quand la lecture du savoir, elle,
          * fonctionnait par `sharedBrainOrigin()`. Consequence observee dans `dev-app-stdout.log` :

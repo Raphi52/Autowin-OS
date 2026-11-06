@@ -11,7 +11,7 @@ import { startBrainCuration } from './brain-curation-run'
 import { reindexerApresMutation, startBrainIndexRebuild } from './brain-index-refresh'
 
 /**
- * LE BRAIN PERSO, À CÔTÉ DU BRAIN D'ÉQUIPE (demande utilisateur du 2026-10-28, conv-1233 :
+ * LE BRAIN PERSO, À CÔTÉ DU BRAIN D'ÉQUIPE (demande utilisateur du 2026-10-28, :
  * « avoir à la fois un brain d'équipe et un brain personnel »).
  *
  * Avant, Autowin ne connaissait qu'UN Brain : celui de l'équipe. Le profil local

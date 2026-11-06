@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildBrainOutcome } from './brain-query-command'
 
 /**
- * Kaizen conv-151, saisie ts=1788375174361 (« kaizen t'aurais du reparer le brain »).
+ * Kaizen, saisie ts=1788375174361 (« kaizen t'aurais du reparer le brain »).
  * Le Brain a rendu status=unavailable SIX fois (18:57:46 -> 19:04:52) sur la meme question :
  * la note ne disait que « ne conclus pas au negatif », donc rien n'appelait la reparation.
  */

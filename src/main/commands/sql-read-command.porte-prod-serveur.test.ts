@@ -12,7 +12,7 @@ import { CoffreAutorisationProd, definirPhrase } from '../prod/prod-passphrase'
 /**
  * UN SERVEUR DÉCLARÉ NON-PROD COUVRE SES BASES, DANS `sql_query` AUSSI.
  *
- * conv-106, tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf (saisie ts 1790604144331) : l'utilisateur veut
+ * Tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf (saisie ts 1790604144331) : l'utilisateur veut
  * des SELECT sur APP_DEV, hébergée sur SRV-DEV\DEV. Le contrôle du terminal a été corrigé (commit
  * dece44cf), mais `runSqlRead` ne passait à la porte que `nature: 'base'` : une déclaration
  * `nature: 'serveur'` n'y comptait pas. Barre oblique construite par fromCharCode(92) : un littéral
@@ -62,7 +62,7 @@ describe('sql_query : serveur déclaré non-prod', () => {
     expect(resultat.ok).toBe(false) // le témoin jette : preuve que la porte a laissé passer
   })
 
-  // conv-554 (2026-09-29) : l'utilisateur veut des SELECT sur TOUTES les bases de SRV-DEV\DEV sans
+  // 2026-09-29 : l'utilisateur veut des SELECT sur TOUTES les bases de SRV-DEV\DEV sans
   // autorisation, même quand la liste sur disque ne les déclare pas.
   it('laisse passer APP_DEV sur SRV-DEV\\DEV sans aucune déclaration', async () => {
     const { lancer } = await lire(SQL_DEV, 'APP_DEV', [])

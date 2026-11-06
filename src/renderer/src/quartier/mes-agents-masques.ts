@@ -1,5 +1,5 @@
 /**
- * « AFFICHER MES AGENTS À » (demande utilisateur du 2026-11-05, conv-1599).
+ * « AFFICHER MES AGENTS À » (demande utilisateur du 2026-11-05).
  *
  * Demande : dans les réglages de l'Accueil, une liste de personnes à cocher pour leur montrer ou non
  * mes agents. Le choix vit dans le réglage du Board du poste (`board-dossier.json`, à côté de l'animal

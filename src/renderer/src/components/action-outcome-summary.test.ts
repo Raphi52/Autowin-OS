@@ -9,7 +9,7 @@ import {
 /**
  * La PREUVE doit être lisible dans le fil.
  *
- * Constaté sur conv-76 (2026-07-29) : `verify` appelé trois fois, et le fil n'affichait que
+ * Constaté (2026-07-29) : `verify` appelé trois fois, et le fil n'affichait que
  * « 1 action terminée verify ». L'exit code — la seule chose qui prouve — restait invisible.
  */
 describe('verifyOutcomeSummary — le verdict est lisible', () => {
@@ -280,7 +280,7 @@ describe('cablage — le verdict est rendu dans le bloc d’activite', () => {
     return fs.readFileSync(path.join(__dirname, 'ChatView.parts.tsx'), 'utf8')
   }
 
-  // Depuis conv-904 (2026-10-12, « Rond de verre »), la barre rend le verdict par `VerdictDeVerre`
+  // Depuis le 2026-10-12 (« Rond de verre »), la barre rend le verdict par `VerdictDeVerre`
   // (anneau-activite.tsx), qui pose la classe d'etat ; la capsule d'orchestration garde le sien.
   const verre = (): string => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -315,7 +315,7 @@ describe('cablage — le verdict est rendu dans le bloc d’activite', () => {
  *
  * Le 2026-08-18, ce module a brièvement fait primer l'état terminal par nom d'action, pour qu'un
  * échec repris cesse d'être le verdict du groupe. Un juge adversarial l'a cassé par exécution :
- * deux actions de même nom ne sont pas une reprise. Le cas de conv-76 — `verify` appelé trois fois
+ * deux actions de même nom ne sont pas une reprise. Le cas — `verify` appelé trois fois
  * dans un seul tour — perdait alors son échec. Ces tests fixent le comportement voulu pour que la
  * même idée ne repasse pas sans discriminant.
  */

@@ -18,7 +18,7 @@
  * ET le message doit être ENTIÈREMENT à ce format : chaque ligne non vide est l'amorce (première
  * ligne seulement, terminée par « : »), un titre de groupe, ou une ligne faite UNIQUEMENT de
  * pastilles. Une seule autre ligne (prose, puce, bloc de code) → null. Pourquoi : la grille
- * REMPLACE le texte du message (chat-view-model.ts). conv-1014 : une réponse ordinaire a disparu
+ * REMPLACE le texte du message (chat-view-model.ts). Une réponse ordinaire a disparu
  * derrière 8 pastilles — « proposer » passait pour l'amorce, la ligne mermaid « G -- oui --> » pour
  * un titre, et les noms de fichiers des puces suivantes pour des pastilles.
  */

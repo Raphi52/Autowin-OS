@@ -1,7 +1,7 @@
 /**
  * LE ROND DE VERRE ET SA LEGENDE — le cadre « Grand, deux lignes » du fil.
  *
- * Choix de l'utilisateur sur maquettes, conv-904 (2026-10-12, /draft « une nouvelle apparence pour
+ * Choix de l'utilisateur sur maquettes, (2026-10-12, /draft « une nouvelle apparence pour
  * cette barre ») : « inspire toi du theme holo » -> « grand 2 lignes » -> « Legende » -> « Pleine
  * largeur » -> « go le 1 couleur sur l'exception et je veux aussi 2 lignes pour les boutons
  * raisonnement et actions ». Puis, sur le rendu : « le rond autour du chiffre est pas tres moderne
@@ -57,7 +57,7 @@ export function RondDuCompte({
 
 /**
  * Le meme emplacement, pour un bloc sans compte (Raisonnement) : le rond degrade et son icone.
- * Avec `etats` (capsule d'orchestration, conv-909 : « ce bloc orchestration doit etre comme celui de
+ * Avec `etats` (capsule d'orchestration, « ce bloc orchestration doit etre comme celui de
  * Actions »), le rond garde son icone mais prend la TEINTE du verdict, comme le rond de compte :
  * vert reussi, rouge echec, ambre attente — le nombre de phases ne dirait rien de plus.
  */
@@ -70,7 +70,7 @@ export function RondDIcone({
 }: {
   children: React.ReactNode
   etats?: readonly EtatArc[]
-  /** Le verdict qui « atterrit » : reflet ou secousse, au passage de fin du run (conv-981). */
+  /** Le verdict qui « atterrit » : reflet ou secousse, au passage de fin du run. */
   atterrissage?: Atterrissage | null
   /** Appele a la fin de l'effet, pour retirer la marque (sinon un retour d'onglet le rejouerait). */
   onAtterri?: () => void

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LE RUN.md D'UN COLLÈGUE DANS SA CARTE (conv-1456). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : une lecture
+ * LE RUN.md D'UN COLLÈGUE DANS SA CARTE. ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : une lecture
  * avec le préfixe du poste resté dans le nom ; un contenu non montré ; une fiche absente sans message.
  */
 import { act, createElement } from 'react'

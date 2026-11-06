@@ -31,7 +31,7 @@ describe('placeDeLaPhrase', () => {
   })
 })
 
-// conv-1535 : une skill puis une vue ; l'exemple « /draft … » sous chaque skill. Scènes de 2 s d'abord,
+// Une skill puis une vue ; l'exemple « /draft … » sous chaque skill. Scènes de 2 s d'abord,
 // puis « 2 secondes c trop rapide [...] fais des anim de 5 secondes ».
 describe('momentDuFilm', () => {
   it('sous /draft, la phrase de /draft entre avec la carte, puis se disperse avant la scène suivante', () => {
@@ -69,7 +69,7 @@ describe('momentDuFilm', () => {
   })
 })
 
-// conv-1535 : « l'invocation des phrases ça a plus de sens sans le sorcier, fais-les s'écrire comme un
+// « l'invocation des phrases ça a plus de sens sans le sorcier, fais-les s'écrire comme un
 // humain qui tape au clavier, lettre par lettre ». Entrées qui doivent faire échouer : des lettres
 // toutes au même pas (une machine), sans temps après le nom, ou une longue phrase qui déborde la scène.
 describe('retardsDeFrappe', () => {

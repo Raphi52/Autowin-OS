@@ -5,14 +5,14 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 /**
  * TOUR PARASITE — un `<cmd>` cassé ne peut plus clore le tour en silence.
  *
- * Mesuré sur `conv-1472` (2026-08-27, tour `c73fd638`) : le modèle émet un `orchestrate` dont
+ * Mesuré (2026-08-27, tour `c73fd638`) : le modèle émet un `orchestrate` dont
  * l'accolade fermante MANQUE. Le parseur en fait un token `invalid`, mais le signalement vivait
  * uniquement dans la boucle d'exécution, gardée par `hasCommand` (qui ne compte que les tokens
  * `command`). Le bloc brut s'affichait, RIEN ne s'exécutait, et le tour se cloturait sur
  * « Je lance la fusion en build. » : l'utilisateur devait retaper « go ».
  */
 // DEUX accolades manquent : aucune lecture unique, le bloc reste inexploitable. Le bloc a UNE
-// accolade manquante de conv-1472 est desormais repare (conv-159, voir plus bas).
+// accolade manquante est desormais repare (voir plus bas).
 const CMD_TRONQUE =
   '<cmd>{"name":"orchestrate","args":{"task":"Fusionner le travail non publié","phase":"build"' +
   '</cmd>\n\nJe lance la fusion en build.'

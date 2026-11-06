@@ -15,7 +15,7 @@ const NOW = 1_800_000_000_000
 const VIEUX_DE_43_H = NOW - 43 * 60 * 60 * 1000
 
 /**
- * CAUSE RACINE mesuree le 2026-09-06 sur `run-f668f46966fd-1` (conv-43).
+ * CAUSE RACINE mesuree le 2026-09-06 sur `run-f668f46966fd-1`.
  *
  * Le menage decidait par l'AGE seul. Il a donc supprime le `.stdout.jsonl` de l'agent `build` d'un
  * point de reprise encore vivant, dont la reservation d'appel n'etait pas soldee. Le sidecar
@@ -56,7 +56,7 @@ describe('un journal reference par une reservation non soldee', () => {
 
   it('recense les journaux a proteger depuis les points de reprise', () => {
     const reference = journauxReferencesParUneReservation([
-      // Le cas conv-43 : non terminal, un appel actif, l'agent `build` encore declare actif.
+      // Le cas : non terminal, un appel actif, l'agent `build` encore declare actif.
       {
         usage: { activeCalls: 1 },
         agents: [

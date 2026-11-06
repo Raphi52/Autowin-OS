@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 /**
- * BLOC ACTIONS — commandes nommées et dépliables, bloc plié sur deux lignes (conv-910, 2026-10-12).
+ * BLOC ACTIONS — commandes nommées et dépliables, bloc plié sur deux lignes (2026-10-12).
  *
  * Demande : « ce bloc fermé je veux qu'il fasse que 2 lignes et ouvert je veux que ce soit comme une
  * orchestration (une tache de fond est dépliable pour voir la liste d'actions liées a cette tache de
  * fond), n'écris pas tache de fond, écris direct ce qu'est la tache de fond ».
  *
- * Le JOURNAL ci-dessous est recopié tel quel du tour de la capture (conv-906, tour 24185479…,
+ * Le JOURNAL ci-dessous est recopié tel quel du tour de la capture (tour 24185479…,
  * lignes de statut 35 à 46). Une « tache de fond » y est la commande Bash en cours devenue longue :
  * même `tool_use_id`, annoncée entre `Bash · <commande>` et `Bash terminé`.
  */
@@ -88,7 +88,7 @@ describe('bloc Actions — une tâche nomme la commande qu’elle enveloppe', ()
   })
 
   it('deux Bash lancés ensemble : deux lignes, aucune fantôme, chacun son nom', () => {
-    // Recopié du tour conv-937 42305783… (lignes de statut 2 à 7). La 2e fin ne trouvait plus de
+    // Recopié du tour 42305783… (lignes de statut 2 à 7). La 2e fin ne trouvait plus de
     // cible quand la 1re avait clos la DERNIÈRE commande : 11 actions pour 10 commandes, la légende
     // disait « Bash ×6 » au lieu de ×5, et le fetch prenait le nom de la tâche des tests.
     const paralleles = [

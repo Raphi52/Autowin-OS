@@ -7,7 +7,7 @@ import { AssistantActivityGroup } from './ChatView.parts'
 /**
  * DEMANDE du 20/08 : « quand je clique sur une action avec erreur je veux que ça déplie le pourquoi ».
  *
- * Vécu sur conv-1334 : la pastille affichait « bloqué par le gate — Statut "red" : la clôture a été
+ * Vécu : la pastille affichait « bloqué par le gate — Statut "red" : la clôture a été
  * refusée en amont. · », tronquée, et le SECOND motif — la DoD non tenue, qui dit ce qu'il aurait
  * fallu produire — n'était visible nulle part. Le clic renvoyait vers Workflows, c'est-à-dire hors
  * du fil, pour une information qui tient en deux lignes.

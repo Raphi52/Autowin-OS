@@ -6,7 +6,7 @@ import { sourceProcessPrincipal } from '../main/app/source-process-principal.tes
 
 /**
  * Le gris de survol des boutons de fenêtre (dessinés par Windows) débordait de 4 px sur le haut
- * de la vue : boutons de 28 px, vue qui commence à 24 px (constaté le 2026-10-28, conv-1223).
+ * de la vue : boutons de 28 px, vue qui commence à 24 px (constaté le 2026-10-28).
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : remonter `HAUTEUR_BOUTONS_FENETRE` au-dessus de `--s5`,
  * changer la marge du haut de `.main`, ou remettre une hauteur en dur dans `window.ts` / `index.ts`.
  */
@@ -29,7 +29,7 @@ describe('hauteur des boutons de fenêtre', () => {
   /*
    * SOUS 100 % DE ZOOM, les boutons (en pixels d'écran) deviennent plus hauts que var(--s5) (en
    * pixels de page) : la marge du haut doit suivre leur hauteur convertie au zoom, que Chromium
-   * donne par `env(titlebar-area-height)` (mesuré le 2026-10-28, conv-1223 : 30 px à 80 %).
+   * donne par `env(titlebar-area-height)` (mesuré le 2026-10-28, 30 px à 80 %).
    * ENTRÉE QUI DOIT FAIRE ÉCHOUER : remettre var(--s5) en haut de `.main` ou du menu, dans
    * app-shell.css ou dans un thème qui redéfinit la marge du menu.
    */

@@ -4,7 +4,7 @@ import { basename, isAbsolute, resolve } from 'node:path'
 /**
  * LE RANGEMENT D'UNE CONVERSATION DEDUIT DE SON PREMIER MESSAGE.
  *
- * LE DEFAUT QUE CECI CORRIGE (conv-611, 2026-09-16) : une conversation ouverte alors que le dossier
+ * LE DEFAUT QUE CECI CORRIGE (2026-09-16) : une conversation ouverte alors que le dossier
  * actif etait `D:\BrainRotRoyale`, dont le premier message parlait des bureaux virtuels d'Autowin,
  * est restee rangee au mauvais endroit jusqu'a un deplacement a la main. `depotCiteDansLeMessage`
  * ne rattrape pas ce cas : l'utilisateur NOMME son projet, il n'ecrit pas son chemin.
@@ -123,9 +123,9 @@ export type DepsRangementPremierMessage = {
  * `null` si rien n'a bouge. Un echec de `ranger`/`annoncer` est avale : un rangement rate ne doit
  * JAMAIS empecher le tour de partir.
  *
- * LA REPONSE N'ATTEND PLUS CE RANGEMENT (2026-09-26, conv-867). L'appel au modele coutait ~5 s
+ * LA REPONSE N'ATTEND PLUS CE RANGEMENT (2026-09-26). L'appel au modele coutait ~5 s
  * AVANT le premier mot de chaque nouvelle conversation, et ce trou faisait afficher un faux
- * « Reponse interrompue avant la fin » (conv-809, conv-862). Il tourne desormais a cote du tour.
+ * « Reponse interrompue avant la fin ». Il tourne desormais a cote du tour.
  * Consequence assumee : un rangement qui DEPLACE le dossier de travail n'est applique qu'une fois
  * ce premier tour fini — les outils du tour relisent ce dossier a chaque appel (index.ts,
  * `workspace: dossierDuTour`), et un tour a cheval sur deux depots serait pire qu'un tour dans
@@ -144,7 +144,7 @@ export async function rangerConversationSurLePremierMessage(
   if (messagesUtilisateur.length > 1) return null
   const texte = messagesUtilisateur[0]?.content
   if (typeof texte !== 'string' || !texte.trim()) return null
-  // Le modele TRANCHE quand il est cable : il juge le sujet, la ou le nom seul rate conv-611 et
+  // Le modele TRANCHE quand il est cable : il juge le sujet, la ou le nom seul rate et
   // bascule a tort sur une mention en passant. Sans modele, le lexical reste le filet hors-ligne.
   const deduit = deps.demanderAuModele
     ? await dossierDeduitParModele(
@@ -169,7 +169,7 @@ export async function rangerConversationSurLePremierMessage(
   try {
     deps.ranger(deduit)
     // Meme dossier que le dossier de travail : le rangement ne fait qu'enregistrer ce qui etait deja
-    // vrai. L'annoncer laissait croire a une decision (conv-49, 2026-10-02) : on se tait.
+    // vrai. L'annoncer laissait croire a une decision (2026-10-02) : on se tait.
     if (isAbsolute(deduit) && !deplaceLeTravail) return deduit
     deps.annoncer(
       !isAbsolute(deduit)
@@ -191,10 +191,9 @@ export async function rangerConversationSurLePremierMessage(
 }
 
 /**
- * CE QUE LA CORRESPONDANCE DE NOM NE SAIT PAS FAIRE (audit du 2026-09-16, conv-612).
+ * CE QUE LA CORRESPONDANCE DE NOM NE SAIT PAS FAIRE (audit du 2026-09-16).
  *
- * Le vrai premier message de conv-611 — « /kaizen mes travaux en paralele se parasitent car ils
- * utilise pas mon systeme de bureau virtuel » — n'ecrit NULLE PART « Autowin ». Le score lexical
+ * Le vrai premier message n'ecrit NULLE PART « Autowin ». Le score lexical
  * rend donc 0 : le cas fondateur n'etait pas resolu, et le test qui pretendait le couvrir avait
  * reecrit le message. Symetriquement, « rien a voir avec AutoWinOS, parle moi de cuisine » faisait
  * basculer le dossier de travail sur une simple mention en passant.
@@ -288,13 +287,13 @@ export async function dossierDeduitParModele(
   if (!retenu) return null
   // LA CATEGORIE PASSE AVANT LE DOSSIER, et pas seulement dans la consigne du modele : celui-ci a
   // choisi D:\AutoWinOS alors que la categorie « Autowin OS » existait et designait la meme chose
-  // (mesure du 2026-09-16, conv-619, motif rendu : « du code du projet, donc du dossier »). Quand
+  // (mesure du 2026-09-16, motif rendu : « du code du projet, donc du dossier »). Quand
   // le nom du dossier et un libelle existant designent la MEME chose une fois normalises, on prend
   // le libelle : c'est le rangement que l'utilisateur pose lui-meme a la main.
   const equivalent = libelles.find((c) => normaliser(c) === normaliser(basename(retenu)))
   if (equivalent) return equivalent
   // PAS d'exclusion « c'est deja le dossier actif » ici, contrairement a la voie lexicale.
-  // Mesure du 2026-09-16 (sonde, conv-618) : le modele rendait bien D:\AutoWinOS a 0,88, et la
+  // Mesure du 2026-09-16 (sonde) : le modele rendait bien D:\AutoWinOS a 0,88, et la
   // decision etait jetee parce que ce dossier etait AUSSI le dossier actif — mais seulement par
   // REPLI (`dossierDeTravailDuTour`, index.ts:959), la conversation n'etant rangee nulle part.
   // Ecrire le rangement le rend VISIBLE dans la liste ; le dossier de travail, lui, ne bouge pas.

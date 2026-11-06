@@ -47,7 +47,7 @@ export type ChatMosaicProps = {
   fenetres: readonly ChatMosaicWindow[]
   /**
    * Un encart sur TOUTE la largeur, au-dessus des fenêtres : la carte de comparaison
-   * d'« Essaie 3 façons » (conv-1038, 2026-10-21). Hors de la grille des fenêtres, il ne déplace
+   * d'« Essaie 3 façons » (2026-10-21). Hors de la grille des fenêtres, il ne déplace
    * aucune d'elles.
    */
   entete?: React.ReactNode
@@ -63,14 +63,14 @@ export type ChatMosaicProps = {
   /** Ouvre une conversation NEUVE dans une case de plus. */
   onNouvelleConversation: () => void
   /**
-   * REPONSE A UNE QUESTION `ask` posee DANS une fenetre (conv-50, 2026-09-01).
+   * REPONSE A UNE QUESTION `ask` posee DANS une fenetre (2026-09-01).
    *
    * Sans ce destinataire, la ligne de message etait rendue sans chemin d'envoi : le clic ne
    * pouvait RIEN faire partir. La cible est la conversation de la FENETRE, jamais l'active.
    */
   onAnswerAsk?: (prompt: string, cible: string) => void
   /**
-   * Bouton de choix d'une page interactive (conv-1304, saisie-du-fil.ts) : il remplit la saisie de
+   * Bouton de choix d'une page interactive (saisie-du-fil.ts) : il remplit la saisie de
    * la FENETRE ou il est clique, jamais celle d'une autre.
    */
   onRemplirSaisie?: (texte: string, cible: string) => void
@@ -81,12 +81,12 @@ export type ChatMosaicProps = {
    */
   signatureComposer?: string
   /**
-   * SUPER CONVS (conv-1305, /draft « implémente 5 et 6 ») : fil de lot → son chef, son rang et le
+   * SUPER CONVS (/draft « implémente 5 et 6 ») : fil de lot → son chef, son rang et le
    * total (`liensDesPlans`, ChatView). Un chef ouvert ici devient UNE case, et ses lots ouverts y
    * entrent au lieu d'occuper chacun une case.
    */
   liensDeLots?: ReadonlyMap<string, LienDeLotMosaique>
-  /** Les fils de lot qui attendent ta réponse (conv-1381). Même Set tant qu'aucun ne change. */
+  /** Les fils de lot qui attendent ta réponse. Même Set tant qu'aucun ne change. */
   questionsDesLots?: ReadonlySet<string>
   /** Ouvre un fil de lot dans la mosaïque : clic sur la ligne d'un lot pas encore peint. */
   onOuvrirFil?: (id: string) => void
@@ -111,7 +111,7 @@ function FenetreChatBrut({
   onRemplirSaisie?: (texte: string, cible: string) => void
   /** Jamais lue ici : elle n'existe que pour le comparateur du memo ci-dessous. */
   signatureComposer?: string
-  /** Super conv (conv-1305) : la frise, posée entre l'en-tête et le fil. */
+  /** Super conv : la frise, posée entre l'en-tête et le fil. */
   bandeau?: React.ReactNode
 }): React.JSX.Element {
   const { t } = useTextesChatFil()
@@ -191,7 +191,7 @@ function FenetreChatBrut({
 
   const etat = fenetre.busy ? 'occupe' : attention ? 'attention' : undefined
   /*
-   * UNE FENETRE DE MOSAIQUE EST UN VRAI PANNEAU DE CHAT (conv-817, 2026-10-13 : « mes chat dans le
+   * UNE FENETRE DE MOSAIQUE EST UN VRAI PANNEAU DE CHAT (2026-10-13 : « mes chat dans le
    * mode mosaique doivent avoir le style de chat normal avec les chanfreins et tout »). Elle porte
    * les classes du chat plein — `lisere-dessus chat`, fil en `chat-scroll`, saisie `.composer` en
    * ENFANT DIRECT — pour que CHAQUE theme lui applique ce qu'il pose sur le chat plein : panneau
@@ -295,7 +295,7 @@ function FenetreChatBrut({
 }
 
 /**
- * MEMO PAR FENETRE — mesure (conv-1581, `ChatMosaic.cout-stream.test.tsx`) : pendant qu'UNE fenetre
+ * MEMO PAR FENETRE — mesure (`ChatMosaic.cout-stream.test.tsx`) : pendant qu'UNE fenetre
  * streame, ChatView refabrique un objet `fenetre` par case a chaque frame. Sans ce memo, les N
  * fenetres se re-rendaient entierement (fil + `ChatComposer` et ses palettes) 60 fois par seconde —
  * le gel. Le comparateur regarde le CONTENU de `fenetre` (l'objet est neuf, ses champs ne le sont
@@ -317,7 +317,7 @@ const FenetreMemorisee = memo(FenetreChatBrut, (avant, apres) => {
   )
 })
 
-/** Une fenêtre en panne n'emporte pas ses voisines de la mosaïque (conv-1327). */
+/** Une fenêtre en panne n'emporte pas ses voisines de la mosaïque. */
 function FenetreChat(props: ComponentProps<typeof FenetreMemorisee>): ReactElement {
   return (
     <BarriereErreur zone="chat-fil" cle={props.fenetre.id}>
@@ -331,14 +331,14 @@ const FIL_EN_ROUTE: readonly Msg[] = []
 const AUCUN_LOT: ReadonlyMap<string, ChatMosaicWindow> = new Map()
 
 /**
- * UNE CASE POUR TOUTE LA SUPER CONV (conv-1305, /draft : « implémente 5 et 6 »). Le chef et ses lots
+ * UNE CASE POUR TOUTE LA SUPER CONV (/draft : « implémente 5 et 6 »). Le chef et ses lots
  * ouverts ne font plus qu'une fenêtre : la frise pleine sur le chef, dont chaque ligne ouvre son lot
- * dans la case ; sur un lot, sa seule piste et « ← Retour » (plus d'onglets depuis conv-1387). Puis
+ * dans la case ; sur un lot, sa seule piste et « ← Retour » (plus d'onglets). Puis
  * le fil et la saisie de la vue ouverte — le vrai fil, la vraie saisie, ceux de `FenetreChat`.
  *
  * Les rappels et les nœuds passés à `FenetreChat` restent STABLES tant que le plan et la vue ne
  * changent pas : la mosaïque refabrique ses fenêtres à chaque image d'un flux, et un nœud neuf à
- * chaque image redessinerait la saisie de la case — le gel mesuré en conv-1581.
+ * chaque image redessinerait la saisie de la case — le gel mesuré.
  */
 function CaseSuperConv({
   chef,

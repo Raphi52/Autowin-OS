@@ -11,7 +11,7 @@ import type { Msg } from './chat-view-types'
 import { nomDeZone } from '../textes-ecrans/barriere-erreur'
 
 /**
- * L'ÉCRAN NOIR DU 2026-10-30 (conv-1327). À 14:14:00, `phrases.get is not a function` dans
+ * L'ÉCRAN NOIR DU 2026-10-30. À 14:14:00, `phrases.get is not a function` dans
  * `BandeauSuperConv` a fait démonter TOUTE l'interface : aucune barrière ne l'arrêtait, il ne restait
  * que le fond noir du thème. Entrée qui doit faire échouer ce fichier : une erreur de rendu qui emporte
  * ce qui est à côté d'elle, ou un bloc en panne qu'aucun clic ne peut relancer.
@@ -211,7 +211,7 @@ describe('ce que dit le bloc en panne', () => {
       readFileSync(join(composants, 'ChatView.tsx'), 'utf8')
     ].join('\n')
     const zones = [...sources.matchAll(/<VueMesuree id="([^"]+)"/g)].map((m) => m[1])
-    // 14 depuis conv-1397 : l'écran Tickets est devenu un onglet du Board, sa zone est partie avec lui.
+    // 14 : l'écran Tickets est devenu un onglet du Board, sa zone est partie avec lui.
     expect(zones.length).toBeGreaterThanOrEqual(14)
     for (const zone of zones) {
       expect(nomDeZone(zone, 'fr'), zone).not.toBe(zone)

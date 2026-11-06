@@ -3,7 +3,7 @@ import { libelleDuPassageDeReparation } from '../gates/stopgate'
 import { traceDuPassage } from '../orchestration/boucle-reparation'
 
 /**
- * POURQUOI CE TEST — objection du juge sur conv-540, tour
+ * POURQUOI CE TEST — objection du juge, tour
  * 8bc214db-8c48-4a29-880d-1ef4c4391d1f : « le lien "4 passages du juge -> plafond de 42 appels"
  * reste une deduction, pas une mesure. Le dossier ne contient pas de compteur de passages. »
  *

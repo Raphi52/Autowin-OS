@@ -9,7 +9,7 @@ import { avecAvertissementDesTests, findClaudeExecutable, reglagesCliAutowin } f
 import { scriptHookTestsNonComptes } from './tests-du-terminal'
 
 /**
- * TESTS NON COMPTÉS : L'AGENT EST PRÉVENU À CÔTÉ DU RÉSULTAT DE SA COMMANDE (conv-1221, 2026-10-28).
+ * TESTS NON COMPTÉS : L'AGENT EST PRÉVENU À CÔTÉ DU RÉSULTAT DE SA COMMANDE (2026-10-28).
  *
  * Demande : « Claude est prévenu dès qu'un test qu'il lance ne comptera pas, pour qu'il le relance
  * proprement ». Le banc prouve la chaîne ENTIÈRE avec le VRAI CLI et les réglages de production

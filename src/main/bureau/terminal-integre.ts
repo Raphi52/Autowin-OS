@@ -1,5 +1,5 @@
 /**
- * TERMINAL INTÉGRÉ DU CHAT — le moteur (conv-1362, lot 3/3, 2026-10-31).
+ * TERMINAL INTÉGRÉ DU CHAT — le moteur (lot 3/3, 2026-10-31).
  *
  * Un ou plusieurs vrais terminaux par fil, ouverts dans le dossier de travail du fil. Ce gestionnaire
  * vit avec l'APP, pas avec la fenêtre ni avec le fil affiché : changer de fil, fermer la fenêtre (l'app

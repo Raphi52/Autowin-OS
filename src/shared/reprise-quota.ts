@@ -8,7 +8,7 @@
  * reprend — le travail était bon, c'est l'abonnement qui a dit non.
  *
  * Ce module ne fait QUE trier. Il ne relance rien : la vue applique sa décision, et le processus
- * principal repart seul à l'heure annoncée (`src/main/chat/reprise-fil-apres-quota.ts`, conv-1423).
+ * principal repart seul à l'heure annoncée (`src/main/chat/reprise-fil-apres-quota.ts`).
  *
  * Le discriminant reprend celui de `quotaWallReason` (src/main/providers/registry.ts) — même
  * vocabulaire, même exclusion du rate-limit passager. Il est recopié ici parce que `registry.ts`
@@ -30,15 +30,15 @@ export function estMurDeQuota(texte: string | undefined | null): boolean {
   // « session limit » est le texte RÉELLEMENT enregistré par Claude dans conversations.json
   // (mesuré le 2026-09-05 : 3 fils sur 12 rouges). Il annonce une remise à zéro à heure fixe
   // (« resets 2am »), pas une attente de quelques secondes : c'est bien un quota mort.
-  // « weekly limit » (conv-1055, 2026-10-22) : même mur, autre fenêtre. Sur disque 355 fois
+  // « weekly limit » (2026-10-22) : même mur, autre fenêtre. Sur disque 355 fois
   // (« You've hit your weekly limit · resets 5am (Europe/Paris) », run-stdout/ et causal-trace/) ;
-  // ignoré, il rendait le run `…mvi7i58s` (conv-1038) définitif au lieu de le suspendre. Seule la
+  // ignoré, il rendait le run `…mvi7i58s` définitif au lieu de le suspendre. Seule la
   // forme « hit your … » est reconnue : nu, « weekly limit » attraperait un nom de test ou un titre.
-  // « Opus limit » est EXCLU à dessein (revue de conv-1055) : c'est la limite d'UN modèle, alors que
+  // « Opus limit » est EXCLU à dessein : c'est la limite d'UN modèle, alors que
   // le mur que ce vocabulaire ferme est celui du COMPTE entier (`quotaWallKey`, registry.ts) — il
   // refuserait aussi Sonnet et Haiku jusqu'à l'heure annoncée. Sa vraie réponse est de changer de
   // modèle, ce qu'aucun code ne sait faire aujourd'hui.
-  // « 5-hour limit » (conv-1236, 2026-10-28) : la limite de session du compte sous sa formulation
+  // « 5-hour limit » (2026-10-28) : la limite de session du compte sous sa formulation
   // actuelle (« You've hit your 5-hour limit · resets 11pm »), relevée dans 14 journaux de tour.
   // Ignorée, un plan de lots notait ses lots coupés « fait » et brûlait son plafond sur le mur.
   return /usage[_ ]limit|session limit|purchase more credits|hit your (?:usage|session|weekly|\d+-hour)|insufficient_quota|quota (?:exceeded|épuisé|epuise)|plan limit/i.test(
@@ -63,7 +63,7 @@ export function estUneRepriseApresQuota(message: string | undefined | null): boo
 /**
  * Pourquoi un fil coupé ne repartira pas seul.
  *
- * fix-ok: `hors-du-chat` vient de `conv-879`, règle mail relancée sans ses bornes, essai du contrôle
+ * fix-ok: `hors-du-chat` vient du fil « Assistant mails », règle mail relancée sans ses bornes, essai du contrôle
  * final ; `branche` vient de `partis ["conv-1","conv-2"]`, une coupure recopiée par `fork` et relancée
  * deux fois. Chaque exclusion a sa raison ici, sinon l'écran ne saurait pas dire pourquoi le fil attend.
  */
@@ -190,7 +190,7 @@ export function instantDeRetourAnnonce(
   if (!Number.isFinite(depart)) return undefined
   // « resets 3:20pm », « resets 6pm », « resets 2am » — les trois formes réellement relevées.
   // « resets Sep 29, 2am » — la forme DATÉE de la limite hebdomadaire (44 occurrences dans les
-  // journaux le 2026-10-22, conv-1055) : sans elle, le mur ne retombait qu'au redémarrage.
+  // journaux le 2026-10-22) : sans elle, le mur ne retombait qu'au redémarrage.
   // `(?![\w:])` : « 3:5pm » ne doit pas se lire « 3 » en laissant tomber le « :5pm ».
   const heure =
     /\bresets?\s+(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2}),?\s+(?:at\s+)?)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?![\w:])/i.exec(

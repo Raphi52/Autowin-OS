@@ -1,5 +1,5 @@
 /**
- * LES PERSONNES DU VILLAGE DANS LES RÉGLAGES DE L'ACCUEIL (demande utilisateur du 2026-11-05, conv-1599).
+ * LES PERSONNES DU VILLAGE DANS LES RÉGLAGES DE L'ACCUEIL (demande utilisateur du 2026-11-05).
  *
  * Demande : « dans l'accueil je veux un setting, afficher les agents de et afficher mes agents à, avec
  * des listes de personnes à toggle pour afficher ou pas les PNJ dans l'accueil ». Deux choix par

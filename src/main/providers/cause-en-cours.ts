@@ -1,9 +1,9 @@
 import { detailRefusFixGate, SEUIL_FIX_GATE } from '../gates/hooks'
 
 /**
- * LE CONTRÔLE « CAUSE VÉRIFIÉE » SE SIGNALE PENDANT LE TRAVAIL (conv-1353, 2026-10-31).
+ * LE CONTRÔLE « CAUSE VÉRIFIÉE » SE SIGNALE PENDANT LE TRAVAIL (2026-10-31).
  *
- * Mesure : conv-1324 (run-7b7d533c318e-1) a appris à la 134e minute, au contrôle final, que 14
+ * Mesure : (run-7b7d533c318e-1) a appris à la 134e minute, au contrôle final, que 14
  * modifications de src/main/bureau/navigateur-integre.ts n'avaient pas de cause vérifiée. Ce refus a rejoué
  * un passage complet, alors que l'agent aurait pu noter sa cause dès la 3e modification.
  *
@@ -81,7 +81,7 @@ export function decisionSignalDeCause(
   if (!plat) return
 
   /*
-   * MÊME EXCLUSION QUE LE CONTRÔLE FINAL (`estDansUnDepotGit`, conv-1149) : un `.git`, dossier ou
+   * MÊME EXCLUSION QUE LE CONTRÔLE FINAL (`estDansUnDepotGit`) : un `.git`, dossier ou
    * fichier d'une copie de travail, au-dessus du fichier. Un chemin relatif est relatif au dépôt du
    * run, il compte. Un autre dépôt que celui du run compte aussi.
    */
@@ -101,7 +101,7 @@ export function decisionSignalDeCause(
 
   /*
    * Le jeton compté est celui que l'agent ÉCRIT, jamais un ancien du fichier : navigateur-integre.ts
-   * portait déjà 21 `fix-ok:` dans le cas de conv-1324, et le contrôle final ne crédite que les
+   * portait déjà 21 `fix-ok:` dans le cas, et le contrôle final ne crédite que les
    * lignes ajoutées (sources 1 et 3 de `jetonsDeCauseParFichier`). Une ligne reprise telle quelle
    * dans le texte remplacé n'est donc pas écrite. Une modification en échec n'écrit rien.
    */

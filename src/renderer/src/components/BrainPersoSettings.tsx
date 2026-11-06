@@ -4,7 +4,7 @@ import { langueCourante } from '../langue'
 import { riche, traduire, useTextes } from '../textes'
 
 /**
- * Renseigner le BRAIN PERSO (demande utilisateur du 2026-10-28, conv-1233 : « avoir à la fois un
+ * Renseigner le BRAIN PERSO (demande utilisateur du 2026-10-28, « avoir à la fois un
  * brain d'équipe et un brain personnel »).
  *
  * Même formulaire que celui de l'équipe (`BrainSettings.tsx`) : un chemin et/ou un dépôt git. Pas de

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { memeRefus } from './stopgate'
 
 /**
- * Defaut mesure conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : le refus fix-gate NOMME le
+ * Defaut mesure, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : le refus fix-gate NOMME le
  * nombre d'editions du fichier (« 4 edits » a la reparation 2, « 6 edits » a la reparation 3). Ce
  * nombre est incremente par la boucle de reparation elle-meme a chaque passage : le meme refus ne
  * pouvait donc jamais etre reconnu comme identique, et le compteur de refus fige ne mordait pas.

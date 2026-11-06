@@ -1,8 +1,8 @@
 /**
- * L'ÉLÉMENT CIBLÉ — la référence exacte d'un élément de l'écran (conv-1038, 2026-10-21 ; étendue à
- * toute l'app, avec styles et composant, conv-1338, 2026-10-30).
+ * L'ÉLÉMENT CIBLÉ — la référence exacte d'un élément de l'écran (2026-10-21 ; étendue à
+ * toute l'app, avec styles et composant, 2026-10-30).
  *
- * Pourquoi : ~6 % des messages de l'utilisateur (71 sur 1 197, relevé du scout conv-1038) portent
+ * Pourquoi : ~6 % des messages de l'utilisateur (71 sur 1 197, relevé du scout) portent
  * sur l'app elle-même — « c'est quoi ce bloc chelou ? », « pk le bouton joindre fichier est
  * grisé » — et 163 retouches d'octobre décrivent un endroit en mots. Un Alt+clic pose à la place une
  * référence que l'agent sait suivre : le texte affiché, le bloc et son fichier source, le composant,
@@ -10,7 +10,7 @@
  * (`turn-journals/<fil>/<tour>.jsonl`), puis les styles calculés.
  *
  * La phrase est NEUTRE : « C'est quoi ça ? » n'a jamais servi (0 occurrence sur 1 094 messages depuis
- * le 01/10, conv-1338), et une question contredisait un ordre comme « met une croix ici ».
+ * le 01/10), et une question contredisait un ordre comme « met une croix ici ».
  *
  * Les étiquettes lues ici existent déjà dans le fil : `data-nature` sur chaque point du rail d'un
  * tour (`ChatMessageRow.tsx`, `noeud`) ; `data-origine`, `data-turn-id`, `data-message-id` et
@@ -25,7 +25,7 @@ const C = 'src/renderer/src/components/'
 
 /*
  * La référence est la question de l'UTILISATEUR, posée dans son message : elle suit la langue de
- * l'écran (traduction anglaise, conv-1170). Ce que l'agent cherche par grep — chemins, classes,
+ * l'écran (traduction anglaise). Ce que l'agent cherche par grep — chemins, classes,
  * repères de test, identifiants de fil et de tour — reste tel quel.
  */
 type Bloc = { libelle: CleChatFilsEtLots; source: string }
@@ -194,8 +194,8 @@ export function referenceDeLElement(
     )
   }
 
-  // fix-ok: conv-1338 — sans texte, classe ni repère, `morceaux` restait vide et le geste posait une
-  // référence qui ne nommait que le fil (lu dans la version de conv-1038 ; test des « cas vides »).
+  // fix-ok: sans texte, classe ni repère, `morceaux` restait vide et le geste posait une
+  // référence qui ne nommait que le fil (lu dans la version ; test des « cas vides »).
   // Le fil seul ne désignerait rien : le clic reste ordinaire.
   if (morceaux.length === 0) return null
 

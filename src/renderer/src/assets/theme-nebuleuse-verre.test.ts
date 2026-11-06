@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { THEMES, baseDuTheme } from '../theme-mode'
 
 /**
- * Theme « Nebuleuse de verre » (conv-124, 2026-10-09). Deux fichiers : les regles ecrites a la main
+ * Theme « Nebuleuse de verre » (2026-10-09). Deux fichiers : les regles ecrites a la main
  * (theme-nebuleuse-verre.css) et la couche generee des couleurs en dur
  * (theme-nebuleuse-verre.genere.css, scripts/theme-nebuleuse-verre.mjs).
  *
@@ -13,7 +13,7 @@ import { THEMES, baseDuTheme } from '../theme-mode'
  */
 const lire = (fichier: string): string => readFileSync(new URL(fichier, import.meta.url), 'utf8')
 const PREFIXE = ":root[data-theme='nebuleuse-verre']"
-/** Le bloc propre a Nebuleuse de verre (conv-177). */
+/** Le bloc propre a Nebuleuse de verre. */
 const BLOC_CHANFREIN = /\/\* CADRE-CHANFREIN:DEBUT[\s\S]*?\/\* CADRE-CHANFREIN:FIN \*\/\n/
 
 function selecteursHorsTheme(css: string): string[] {
@@ -35,7 +35,7 @@ function selecteursHorsTheme(css: string): string[] {
 describe('theme Nebuleuse de verre', () => {
   it('est propose dans la liste des themes, en base sombre', () => {
     expect(THEMES.map((t) => t.id)).toContain('nebuleuse-verre')
-    // Renomme a l affichage le 2026-10-10 (conv-212) : « le mode nebuleux appelle-le le mode
+    // Renomme a l affichage le 2026-10-10 : « le mode nebuleux appelle-le le mode
     // holographique ». L identifiant reste `nebuleuse-verre` : c est lui qui est memorise sur le
     // poste, le changer ferait retomber l utilisateur sur le theme sombre.
     expect(THEMES.find((t) => t.id === 'nebuleuse-verre')?.libelle).toBe('Holographique')
@@ -56,7 +56,7 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * REGLE CHANGEE PAR L'UTILISATEUR (2026-10-10, conv-197, « je veux que tout soit du vert de la
+   * REGLE CHANGEE PAR L'UTILISATEUR (2026-10-10, « je veux que tout soit du vert de la
    * fin du degrade actuel ») : les verts ne restent plus intacts, ils prennent TOUS le vert du
    * theme. Ce vert est #00ff55, « bien flashy » (meme fil, apres un premier essai en menthe
    * #4fd1a5). Le SENS reste verrouille : un vert ne devient jamais rose ni violet, et les jaunes
@@ -107,15 +107,15 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * REGLE DE L'UTILISATEUR (2026-10-09, conv-124) : « jamais de bouton a triple degrade ».
+   * REGLE DE L'UTILISATEUR (2026-10-09) : « jamais de bouton a triple degrade ».
    * Un bouton -- envoi, onglet, element de menu actif, pastille, choix -- porte au plus DEUX
    * teintes. Les jetons de degrade du theme sont resolus avant de compter : un rose -> violet
    * -> or cache derriere une variable compte comme trois teintes.
    *
-   * UNE EXCEPTION NOMMEE (conv-202, 2026-10-10) : le BORD des capsules du bloc ASK est un reflet
+   * UNE EXCEPTION NOMMEE (2026-10-10) : le BORD des capsules du bloc ASK est un reflet
    * holographique en bandes bleu > rose > argent, choisi par l'utilisateur sur maquette apres
-   * quatre tours (« Irisé mais holographique bleu rose argent », puis « go cadre c parfait »). Depuis
-   * conv-240 (2026-10-11, « implemente le 2 c parfait »), ce bord est le cadre « Nacre » : UN seul
+   * quatre tours (« Irisé mais holographique bleu rose argent », puis « go cadre c parfait »).
+   * (2026-10-11, « implemente le 2 c parfait »), ce bord est le cadre « Nacre » : UN seul
    * cycle bleu > rose > argent > rose clair (`linear-gradient`), pose sur les reponses cochees ou
    * retenues. Seul ce calque passe : un degrade peint en `border-box` sur `.askd-item`. Le
    * REMPLISSAGE de la capsule reste compte comme celui de tout bouton (deux teintes au plus).
@@ -165,7 +165,7 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * REGLE DE L'UTILISATEUR (2026-10-10, conv-155) : le coin bas-droit pince « faisait sens pour la
+   * REGLE DE L'UTILISATEUR (2026-10-10) : le coin bas-droit pince « faisait sens pour la
    * bulle de chat mais pas pour les boutons et les highlights ». Seule la bulle de SES messages a
    * le droit d'avoir des coins inegaux ; un bouton ou un element selectionne a des coins reguliers.
    */
@@ -196,7 +196,7 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * LA SAISIE SANS ROSE (2026-10-10, conv-155, variante « B · S'allume, rond » choisie sur
+   * LA SAISIE SANS ROSE (2026-10-10, variante « B · S'allume, rond » choisie sur
    * maquette) : bloc noir profond uni a bord or, bouton d'envoi ROND qui s'allume en or plein
    * quand le message peut partir, contour or eteint quand le champ est vide, aucune lueur.
    */
@@ -213,12 +213,12 @@ describe('theme Nebuleuse de verre', () => {
     }
     const saisie = decls(`${PREFIXE} .cosmic-outline .composer`)
     expect(saisie['--nv-saisie-degrade']).toBe('linear-gradient(#09090a, #09090a)')
-    // Le cadre or uni (conv-155) est remplace par le cadre « or qui coule vers le blanc » (conv-168).
+    // Le cadre or uni est remplace par le cadre « or qui coule vers le blanc ».
     const saisieDetachee = decls(`${PREFIXE} .cosmic-outline .chat > .composer`)
     expect(saisieDetachee['--nv-saisie-bord']).toBe('transparent')
     expect(saisieDetachee['--nv-saisie-cadre']).toBe('var(--nv-cadre-coule)')
     const envoi = decls(`${PREFIXE} .cosmic-outline .composer-send`)
-    // Le rond de 38 px (conv-155) est devenu le carre de « Lineaire B » (conv-302) : voir
+    // Le rond de 38 px est devenu le carre de « Lineaire B » : voir
     // « Envoyer en gel fondu bleu-rose » plus bas.
     expect(envoi['border-radius']).toBe('0')
     expect([envoi.width, envoi.height]).toEqual(['32px', '32px'])
@@ -231,7 +231,7 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * DEMANDE DE L'UTILISATEUR (2026-10-18, conv-324) : « met ces boutons au style holographique pour
+   * DEMANDE DE L'UTILISATEUR (2026-10-18) : « met ces boutons au style holographique pour
    * les hover et selected ». Le ∞ allume quitte l'or du 2026-09-07 pour le cadre nacre autour d'un
    * gris plus clair (langage du carrousel /draft). ECHOUE si l'or ou le rose generique reviennent, si
    * le cadre n'est plus peint en `border-box` sous un bord transparent, ou si le survol du ∞ allume
@@ -260,7 +260,7 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-157) : « ce bouton met le en dore » (pastille
+   * DEMANDE DE L'UTILISATEUR (2026-10-10) : « ce bouton met le en dore » (pastille
    * « ↓ Dernier message », rose dans ce theme). La regle ecrite a la main doit couvrir les DEUX
    * pastilles (fil et mosaique, identiques par choix) et ne garder aucun rose.
    */
@@ -283,7 +283,7 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-157) : « met des borders degrade [...] sur les
+   * DEMANDE DE L'UTILISATEUR (2026-10-10) : « met des borders degrade [...] sur les
    * elements du chat qui ont un cadre comme ca » (capture de la carte de fichier du fil), precise :
    * « ca doit etre les memes couleurs que mes messages dans le chat ». Le bord rose plein de la
    * couche generee laisse place a un calque au degrade EXACT des bulles de l'utilisateur, qui
@@ -318,14 +318,14 @@ describe('theme Nebuleuse de verre', () => {
       }
     })
     // Bleu en haut a gauche -> rose en bas a droite (« le bleu est a gauche et le rose a droite »).
-    // Bleu et rose PLEINS (conv-182 : « le même bleu plein partout »), plus de 85 %.
+    // Bleu et rose PLEINS (« le même bleu plein partout »), plus de 85 %.
     expect(bulle).toBe('linear-gradient(135deg, #3c6eeb, #e63ca0)')
-    // Le CADRE de la carte est passe en BLANC (conv-161, 2026-10-10 : « ce cadre met le en blanc
+    // Le CADRE de la carte est passe en BLANC (2026-10-10 : « ce cadre met le en blanc
     // aussi ca rendra mieux ») ; les bulles, elles, gardent leur degrade.
     expect(bord.background).toBe('#ffffff')
     // Les messages envoyes PENDANT un tour (DirectiveReceiptRow, sans `msg-bulle`) sont peints par
     // la regle du theme : meme sens que les bulles ordinaires (ils etaient rose -> bleu).
-    // Depuis conv-1163 (2026-10-27, « met ca aussi pour mes messages »), ce theme peint TOUTES les
+    // Depuis le 2026-10-27 (« met ca aussi pour mes messages »), ce theme peint TOUTES les
     // bulles a la lampe a lave : des gouttes qui coulent POSEES SUR ce meme degrade, son dernier calque.
     const bulleTheme = decls(`${PREFIXE} .msg.user .msg-body`)
     expect(bulleTheme.background).toBe('var(--nv-lave-fond)')
@@ -333,7 +333,7 @@ describe('theme Nebuleuse de verre', () => {
       /, linear-gradient\(135deg, #3c6eeb, #e63ca0\)$/
     )
     expect(bulleTheme['--nv-lave-fond']).toContain(bulle)
-    // Lave FIGEE sur la bulle elle-meme depuis conv-1610 : seul son calque `::after` bouge.
+    // Lave FIGEE sur la bulle elle-meme : seul son calque `::after` bouge.
     expect(bulleTheme.animation).toBeUndefined()
     expect(
       decls(`${PREFIXE}:not([data-base='clair']) .cosmic-outline .msg.user .msg-body.msg-bulle`)
@@ -344,7 +344,7 @@ describe('theme Nebuleuse de verre', () => {
     expect(bord['pointer-events']).toBe('none')
   })
 
-  // conv-169, 2026-10-10 : « plein de views ont un degrade or qui part du sommet, enleve-le ».
+  // 2026-10-10 : « plein de views ont un degrade or qui part du sommet, enleve-le ».
   // Le voile (--nv-voile-dore, 180deg or -> transparent) peignait le haut des vues, cartes, rail,
   // popovers et colonnes du chat. ENTREE QUI DOIT FAIRE ECHOUER CE TEST : remettre un fond
   // `linear-gradient(180deg, rgba(255, 206, 120, ...` ou le jeton lui-meme dans une regle.
@@ -361,12 +361,12 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-168) : un cadre sur les cotes et en bas des
+   * DEMANDE DE L'UTILISATEUR (2026-10-10) : un cadre sur les cotes et en bas des
    * conteneurs, « or qui coule », puis « finalement fais un or qui coule vers le blanc et pareil
    * pour le prompt panel ». Un seul degrade (--nv-cadre-coule) : or en haut, blanc en bas, porte
    * par les quatre colonnes ET la saisie.
    */
-  // Depuis conv-177, Nebuleuse de verre REMPLACE ce cadre par le chanfrein platine (bloc
+  // Nebuleuse de verre REMPLACE ce cadre par le chanfrein platine (bloc
   // CADRE-CHANFREIN, teste plus bas) ; l'or qui coule reste la BASE, sous ce bloc.
   it('garde en base, sous le chanfrein, le cadre or qui coule vers le blanc', () => {
     const regles: postcss.Rule[] = []
@@ -406,7 +406,7 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-173, maquettes « Fumé net ») : « Agent assorti
+   * DEMANDE DE L'UTILISATEUR (2026-10-10, maquettes « Fumé net ») : « Agent assorti
    * implémente c magnifique ». La ligne « Agent » devient une capsule de verre fumé à bord OR, qui
    * PALIT quand le tour est fini (classe `is-live` posée par ChatMessageRow tant qu'il tourne).
    * Entrée qui ferait échouer une copie fausse : un bord rose (la couleur des capsules) ou une
@@ -433,8 +433,8 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * FOND NOIR PUR (2026-10-10, conv-184). L'utilisateur a compare le fond « liseré · halo haut »
-   * (conv-159) a un apercu tout noir et a tranche : « met le noir, oublie le rose et bleu, c'est
+   * FOND NOIR PUR (2026-10-10). L'utilisateur a compare le fond « liseré · halo haut »
+   * a un apercu tout noir et a tranche : « met le noir, oublie le rose et bleu, c'est
    * moche ». Entree qui ferait echouer une copie fausse : un halo ou un filet bleu/rose qui reste
    * (47, 139, 255 · 255, 79, 159 · #8ccaff · #ffa3cf), l'ancien noir bleute #07080b, le grain
    * anime laisse visible, ou le voile violet de body::after.
@@ -461,8 +461,8 @@ describe('theme Nebuleuse de verre', () => {
     expect(voile['box-shadow']).toBe('none')
   })
 
-  // conv-198 (2026-10-10) : « enlève le halo autour de ce que j'ai sélectionné ». L'onglet ouvert
-  // du menu garde son dégradé, sans lueur autour. Depuis conv-1163 (2026-10-27, capture du rond
+  // 2026-10-10 : « enlève le halo autour de ce que j'ai sélectionné ». L'onglet ouvert
+  // du menu garde son dégradé, sans lueur autour. Depuis le 2026-10-27 (capture du rond
   // « Chat » : « a mettre aussi sur ces boutons »), ce dégradé coule en lampe à lave.
   it('ne met aucun halo autour de l onglet ouvert du menu', () => {
     for (const [fichier, theme] of [
@@ -482,8 +482,8 @@ describe('theme Nebuleuse de verre', () => {
       expect(actif['--nv-lave-fond'], fichier).toContain(
         'linear-gradient(135deg, #3c6eeb, #e63ca0)'
       )
-      // Depuis conv-1610, la pastille garde la lave FIGEE ; seul son calque `::after` bouge, deux
-      // fois plus lentement que les boutons (9 s), et seulement lui (conv-1163, « Ralentis la
+      // La pastille garde la lave FIGEE ; seul son calque `::after` bouge, deux
+      // fois plus lentement que les boutons (9 s), et seulement lui (« Ralentis la
       // lampe a lave du rond Chat [...] sans toucher aux autres boutons »).
       expect(actif.animation, fichier).toBeUndefined()
       const calque: Record<string, string> = {}
@@ -507,7 +507,7 @@ describe('theme Nebuleuse de verre', () => {
   })
 
   /**
-   * AUCUN FLOU DE FOND (2026-10-10, conv-124). Un parent porteur d'un `backdrop-filter` devient le
+   * AUCUN FLOU DE FOND (2026-10-10). Un parent porteur d'un `backdrop-filter` devient le
    * repere des enfants `position: fixed` : la fenetre des quotas (ModelQuotaIndicator.tsx), ancree
    * sur la fenetre de l'app, se calculait depuis le bloc de saisie et disparaissait. Le theme
    * sombre d'origine met deja `--container-blur` a 0 pour la meme raison (ui-system.css).
@@ -529,19 +529,19 @@ describe('theme Nebuleuse de verre', () => {
 })
 
 /**
- * ENVOYER EN GEL FONDU BLEU-ROSE (2026-10-10, conv-200, /draft « le bouton pour envoyer des
+ * ENVOYER EN GEL FONDU BLEU-ROSE (2026-10-10, /draft « le bouton pour envoyer des
  * messages une version bleu et violet comme le reste de mon theme » : tour 1 « E · Gel », tour 2
  * « implémente E4 »). La perle or d'Envoyer est remplacee par le degrade du theme -- #3c6eeb ->
  * #e63ca0, celui de « Nouveau fil » et de l'icone active du menu --, avion blanc, et un reflet
  * blanc qui s'efface SANS ligne jusqu'au milieu. L'etat se lit au reflet et a l'avion, jamais a la
- * couleur (conv-182 : le bleu reste plein) : survol = reflet plus fort, appui = reflet eteint sans
+ * couleur (Le bleu reste plein) : survol = reflet plus fort, appui = reflet eteint sans
  * retrecir, rien a envoyer = reflet faible et avion a 50 %. ENTREES QUI DOIVENT FAIRE ECHOUER : la
  * perle or remise, une `opacity` ou un contour or sur le rond vide, ou une lueur coloree.
  */
 describe('Envoyer en gel fondu bleu-rose', () => {
   const ENVOI = `${PREFIXE} .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):not(:disabled)`
   const VIDE = `${PREFIXE} .cosmic-outline .composer-send:not(.is-resume):not(.is-stop):disabled`
-  // Sous le reflet, la lampe a lave du theme depuis conv-1163 (2026-10-27) : des gouttes qui coulent
+  // Sous le reflet, la lampe a lave du theme depuis le 2026-10-27 : des gouttes qui coulent
   // posees sur le degrade bleu -> rose, qu'on verifie dans `--nv-lave-fond` (test « peint le rond »).
   const GEL =
     /^linear-gradient\(180deg, rgba\(255, 255, 255, (0?\.\d+)\), rgba\(255, 255, 255, 0\) (\d+)%\),\s*var\(--nv-lave-fond\)$/
@@ -568,7 +568,7 @@ describe('Envoyer en gel fondu bleu-rose', () => {
     expect(pret['--nv-lave-fond'].replace(/\s+/g, ' ')).toMatch(
       /, linear-gradient\(135deg, #3c6eeb, #e63ca0\)$/
     )
-    // Lave figee sur le bouton (conv-1610) ; son calque `::after` porte le MEME reflet, sur
+    // Lave figee sur le bouton ; son calque `::after` porte le MEME reflet, sur
     // l'autre disposition des gouttes, et seul lui bouge : le reflet ne clignote pas au fondu.
     expect(pret.animation).toBeUndefined()
     const calque = derniere(`${ENVOI}::after`)
@@ -597,10 +597,10 @@ describe('Envoyer en gel fondu bleu-rose', () => {
   })
 
   /**
-   * ENVOYER « LINEAIRE B » (conv-302, 2026-10-17 : « juste le bouton envoyer et les icones de B
+   * ENVOYER « LINEAIRE B » (2026-10-17 : « juste le bouton envoyer et les icones de B
    * lineaire et il s'allume quand ya du texte dans le prompt »). Le rond devient un CARRE de 32 px
    * a coins de 3 px. Champ vide : carre CREUX -- le fond de la saisie dedans, un bord d'1 px au
-   * degrade plein (le bleu n'est jamais dilue, conv-182), avion couleur du texte. Du texte : il
+   * degrade plein (le bleu n'est jamais dilue), avion couleur du texte. Du texte : il
    * S'ALLUME dans le gel fondu ci-dessus. ENTREES QUI DOIVENT FAIRE ECHOUER : le rond remis, un
    * vide rempli de degrade (plus rien ne s'allumerait), un bord eteint par opacity.
    */
@@ -635,14 +635,14 @@ describe('Envoyer en gel fondu bleu-rose', () => {
 })
 
 /**
- * ICONES NUES « LINEAIRE B » (conv-302, 2026-10-17). Le mode auto, le trombone et le micro
+ * ICONES NUES « LINEAIRE B » (2026-10-17). Le mode auto, le trombone et le micro
  * perdent leur rond blanc : le trace seul, en couleur du texte. Le survol pose un aplat gris
  * (langage des boutons holographiques), plus le rose de `.btn`. Les etats qui PORTENT une
  * information gardent leur habit : mode auto allume (or), micro en ecoute ou en transcription.
  */
 describe('Icones de la saisie nues (Lineaire B)', () => {
-  // « ×3 » (Essaie 3 façons, conv-1038) suit les trois icônes voisines : même habit nu, même survol.
-  // La question à côté (QuestionACote.tsx, conv-1365) aussi ; ouverte (.actif), elle garde son habit.
+  // « ×3 » (Essaie 3 façons) suit les trois icônes voisines : même habit nu, même survol.
+  // La question à côté (QuestionACote.tsx) aussi ; ouverte (.actif), elle garde son habit.
   const NUES = `${PREFIXE} .composer-input-row > :is(.composer-auto:not(.actif), .attachment-button, .composer-trois-facons, .composer-question-a-cote:not(.actif), .composer-dictee:not(.is-recording):not(.is-transcribing))`
   /** Le formateur peut couper `:is(...)` sur plusieurs lignes : on compare sans ces blancs. */
   const aplati = (s: string): string =>
@@ -666,7 +666,7 @@ describe('Icones de la saisie nues (Lineaire B)', () => {
     })
   })
 
-  // conv-324 (2026-10-18) : le survol devient le rond holographique -- aplat gris cercle de nacre.
+  // 2026-10-18 : le survol devient le rond holographique -- aplat gris cercle de nacre.
   it('marque le survol par un aplat gris cercle de nacre, sans bord rose', () => {
     const survol = derniere(`${NUES}:hover:not(:disabled)`)
     expect(survol['border-color']).toBe('transparent')
@@ -688,9 +688,9 @@ describe('Icones de la saisie nues (Lineaire B)', () => {
 })
 
 /**
- * BOUTONS A CHANFREIN « PLATINE » (conv-302, 2026-10-17 : « /draft des boutons a chanfrin », puis
+ * BOUTONS A CHANFREIN « PLATINE » (2026-10-17 : « /draft des boutons a chanfrin », puis
  * « Implementer la 1 · Platine »). Envoyer et Nouveau fil prennent le cadre des grands panneaux, a
- * leur echelle. Le remplissage reste celui de chaque bouton. Details en est sorti (conv-1317,
+ * leur echelle. Le remplissage reste celui de chaque bouton. Details en est sorti (
  * 2026-10-30 : il prend le look de la Mini-adresse, voir ChatView.style.test.ts).
  * ENTREES QUI DOIVENT FAIRE ECHOUER : un cadre sans anneau, des couleurs ecrites en dur (Holographique
  * blanc ne les recolorerait pas), un bord encore epais sous Envoyer (le cadre, cale sur la boite
@@ -699,7 +699,7 @@ describe('Icones de la saisie nues (Lineaire B)', () => {
 describe('Boutons a chanfrein Platine', () => {
   const BOUTONS = {
     envoyer: `${PREFIXE} .cosmic-outline .composer-input-row > .composer-send`,
-    // Stop (conv-349, « fais un bouton stop a chanfrin pour la barre de prompt ») : 28 px, pose
+    // Stop (« fais un bouton stop a chanfrin pour la barre de prompt ») : 28 px, pose
     // sous Envoyer, la meme coupe que lui.
     stop: `${PREFIXE} .cosmic-outline .composer-input-row > .composer-stop`,
     'nouveau fil': `${PREFIXE} .cosmic-outline .conv-new-row`
@@ -721,8 +721,8 @@ describe('Boutons a chanfrein Platine', () => {
     return valeurs
   }
 
-  /* conv-1068 (2026-10-22 : « remet des bords arrondis sur le bouton envoyer stop et nouveau
-     fil ») : ces trois-la quittent la coupe pour des coins arrondis. ENTREE QUI DOIT FAIRE
+  /* 2026-10-22 : « remet des bords arrondis sur le bouton envoyer stop et nouveau
+     fil » : ces trois-la quittent la coupe pour des coins arrondis. ENTREE QUI DOIT FAIRE
      ECHOUER : une coupe restee sur l'un des trois, ou un cadre encore taille en polygone (il ne
      suivrait pas l'arrondi et deborderait aux coins). Meme jour, « enleve le bord
      blanc dans les coins » : leurs pans allumes (haut gauche, bas droit) disparaissent, l'anneau
@@ -800,7 +800,7 @@ describe('Boutons a chanfrein Platine', () => {
 })
 
 /**
- * REPRENDRE EN GEL VERT (2026-10-12, conv-902, capture du rond vert d'Holographique blanc :
+ * REPRENDRE EN GEL VERT (2026-10-12, capture du rond vert d'Holographique blanc :
  * « refais ce bouton pour qu'il soit mieux visible dans mes themes holographique »). Le bouton
  * etait un voile vert a 20 % cercle de neon, fleche #ccffdd : invisible sur la nacre du blanc, qui
  * recopie `.composer-send` tel quel. Il prend la recette d'Envoyer -- gel fondu, reflet sans ligne,
@@ -867,8 +867,8 @@ describe('Reprendre en gel vert', () => {
  * STOP EN PERLE (2026-10-10, variante « C4 · Perle » choisie sur maquette : « PERLE implémente ») :
  * un dome radial et un reflet ovale net en haut ; au survol le reflet s'avive, a l'appui il
  * s'eteint et l'ombre se raccourcit, sans retrecissement. Aucune lueur (ombres noires seulement),
- * deux teintes par degrade (conv-124). Envoyer avait la meme perle en or jusqu'au gel bleu-rose
- * (conv-200, ci-dessus).
+ * deux teintes par degrade. Envoyer avait la meme perle en or jusqu'au gel bleu-rose
+ * (ci-dessus).
  */
 describe('Stop en perle', () => {
   const STOP = `${PREFIXE} .composer-input-row > .composer-stop:not(:disabled)`
@@ -911,7 +911,7 @@ describe('Stop en perle', () => {
 })
 
 /**
- * DEMANDE DE L'UTILISATEUR (2026-10-10, conv-177, /draft « des Border de container styles ») :
+ * DEMANDE DE L'UTILISATEUR (2026-10-10, /draft « des Border de container styles ») :
  * « j'adore le 3 » (Chanfrein), « Platine », puis « coins seuls implemente ». Coins haut gauche et
  * bas droit coupes a 14 px, seuls les pans coupes allumes (blanc / argent), cotes a 7 %, sur la
  * liste, le fil, le panneau de droite, le menu et la saisie. Entrees qui feraient echouer une copie
@@ -985,7 +985,7 @@ describe('Cadre chanfrein platine, coins seuls', () => {
     const saisie = derniere(`${PREFIXE} .cosmic-outline .chat > .composer`)
     expect(saisie['clip-path']).toBeUndefined()
     expect(saisie['border-radius']).toBe('0')
-    // conv-191 : le satin est celui de la PAGE (`fixed`), pose sur toute la boite de la saisie. Ses
+    // Le satin est celui de la PAGE (`fixed`), pose sur toute la boite de la saisie. Ses
     // coins restent coupes par 6 calques a 135 deg : le cache noir des deux triangles, les deux traits
     // de la diagonale redessines par-dessus le satin, puis (sous le bord) pan blanc, pan argent, cotes.
     expect(saisie.background.match(/linear-gradient\( 135deg,/g)).toHaveLength(6)
@@ -1041,7 +1041,7 @@ describe('Cadre chanfrein platine, coins seuls', () => {
     expect(trait.match(/var\(--nv-chanfrein-cotes\), var\(--nv-chanfrein-cotes\)/g)).toHaveLength(4)
   })
 
-  // Les TUILES ont quitte le chanfrein le 2026-10-17 (conv-317, « implemente 3 + degrade different
+  // Les TUILES ont quitte le chanfrein le 2026-10-17 (« implemente 3 + degrade different
   // pour chaque widget ») : le bloc NEON-TUILES les recouvre en tubes neon, et leur tenue / leur focus
   // clavier se disent par la lueur du tube (theme-nebuleuse-verre.neon-tuiles.test.ts). La regle
   // partagee ci-dessous reste celle de la plaque du titre, et la base des tuiles sous le neon.
@@ -1068,8 +1068,8 @@ describe('Cadre chanfrein platine, coins seuls', () => {
  */
 describe('Pied de liste : une capsule a liseré, une seule case au survol', () => {
   const PIED = `${PREFIXE} .conv-foot`
-  // Le liseré bleu -> rose porte la lampe a lave depuis conv-1163 (2026-10-27, « les borders bleu
-  // rose partout ou yen a »), figee depuis conv-1610 (« version tres peu gourmande »).
+  // Le liseré bleu -> rose porte la lampe a lave depuis le 2026-10-27 (« les borders bleu
+  // rose partout ou yen a »), figee (« version tres peu gourmande »).
   const LISERE = 'var(--nv-lave-fond)'
   const regles = (): postcss.Rule[] => {
     const toutes: postcss.Rule[] = []
@@ -1135,7 +1135,7 @@ describe('Pied de liste : une capsule a liseré, une seule case au survol', () =
 })
 
 /**
- * LES BANDEAUX DU HAUT DU CHAT EN PERLE D'OR (conv-179, 2026-10-10 : « les bandeaux en haut de chat
+ * LES BANDEAUX DU HAUT DU CHAT EN PERLE D'OR (2026-10-10 : « les bandeaux en haut de chat
  * font pas dore ils font orange », puis « inspire-toi du bouton Perle envoyer »). ChatView.css les
  * peint en var(--warn) : l'or dans le theme par defaut, l'ambre #ffb547 ici -- mesure dans l'app
  * vivante, rgb(255, 181, 71). Le bandeau prend l'or de la perle d'Envoyer ; le jeton --warn du
@@ -1188,7 +1188,7 @@ describe('bandeaux du haut du chat en perle d or', () => {
 })
 
 /**
- * ONGLETS DU PANNEAU DE DROITE EN LISERE (conv-180, 2026-10-10 : « remplace la capsule par un
+ * ONGLETS DU PANNEAU DE DROITE EN LISERE (2026-10-10 : « remplace la capsule par un
  * liseré et enlève le liseré rose en dessous, du coup la capsule ça va pas bien avec le border
  * très angulaire »). Sous le cadre a coins coupes, l'onglet actif est souligne d'un trait de 2 px
  * bleu -> rose, sans pastille ; le filet rose sous la barre disparait. Le reglage vit DANS le bloc
@@ -1225,8 +1225,8 @@ describe('Onglets du panneau de droite : un liseré au lieu de la capsule', () =
 })
 
 /**
- * PIED DE LISTE : UN SEUL TRAIT EN HAUT (conv-190, 2026-10-10 : « dans ce bloc de buttons en fait
- * laisse qu'un liseré top », sur la capsule a coins coupes posee par conv-188). Sous le cadre
+ * PIED DE LISTE : UN SEUL TRAIT EN HAUT (2026-10-10 : « dans ce bloc de buttons en fait
+ * laisse qu'un liseré top », sur la capsule a coins coupes posee). Sous le cadre
  * coupe, le pied n'a plus ni cotes, ni bas, ni coins coupes, ni filets entre les cases : un trait
  * d'1 px en haut, bleu -> rose au repos. Au survol, ce trait redevient gris (regle de base du pied)
  * et seule la portion au-dessus de la case survolee reprend le bleu -> rose. Le reglage vit DANS le
@@ -1278,7 +1278,7 @@ describe('Pied de liste sous le cadre coupe : un seul trait en haut', () => {
 })
 
 /**
- * UN SEUL BLEU DANS LES DEGRADES (conv-182, 2026-10-10). L'utilisateur : « j'ai l'impression que tu
+ * UN SEUL BLEU DANS LES DEGRADES (2026-10-10). L'utilisateur : « j'ai l'impression que tu
  * utilises jamais le meme bleu pour les degrades », puis « Le meme bleu plein partout — le repos
  * s'attenue autrement (texte, reflet), pas la couleur ». Mesure dans l'app : un seul #3c6eeb, mais
  * peint a 100 %, 85 % (degrade signature, bulles), 55 % (bord des capsules au repos) et 45 % (rond
@@ -1337,7 +1337,7 @@ describe('Degrades : un seul bleu, toujours plein', () => {
 })
 
 /**
- * POPUPS DU MODELE ET DU CONTEXTE EN HOLO (conv-250, 2026-10-11 : « refais ces popup en mode holo
+ * POPUPS DU MODELE ET DU CONTEXTE EN HOLO (2026-10-11 : « refais ces popup en mode holo
  * comme le theme »). Le choix du modele (matrice modele x effort, comptes) et la fenetre « Contexte
  * de cette conversation » prennent le cadre des panneaux : coins coupes, trait blanc / argent, satin.
  * ENTREES QUI DOIVENT FAIRE ECHOUER : le filet OR des fenetres flottantes qui reviendrait (bloc
@@ -1358,7 +1358,7 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     '.slash-detail',
     '.graph-settings-popover',
     '.model-question-popup',
-    // conv-924 : la carte de confirmation du fil (supprimer / renommer) prend le meme cadre.
+    // La carte de confirmation du fil (supprimer / renommer) prend le meme cadre.
     '.delete-confirm-card'
   ]
   const CADRE = `${PREFIXE} :is( ${FENETRES.join(', ')} )`
@@ -1440,8 +1440,8 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
       `${POPUPS} :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled)`
     )
     const ligne = derniere(`${PREFIXE} .model-select-menu .effort-matrix-row.is-active`)
-    // Le cadre porte la lampe a lave depuis conv-1163 (2026-10-27, « les borders bleu rose partout »),
-    // figee depuis conv-1610 : meme fond choisi a l'interieur, la lave dans le bord.
+    // Le cadre porte la lampe a lave depuis le 2026-10-27 (« les borders bleu rose partout »),
+    // figee : meme fond choisi a l'interieur, la lave dans le bord.
     for (const fond of [puce.background, ligne.background]) {
       expect(fond).toBe(
         'linear-gradient(var(--nv-pop-choisi), var(--nv-pop-choisi)) padding-box, var(--nv-lave-fond)'
@@ -1453,7 +1453,7 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     }
   })
 
-  // Hors des popups, la vue Routage etait gardee intacte (conv-250). conv-261 (2026-10-11, demande :
+  // Hors des popups, la vue Routage etait gardee intacte. (2026-10-11, demande :
   // « mets aussi le cadre bleu -> rose sur les puces de compte choisies de la vue Routage ») y pose
   // le meme cadre, mais sur le compte CHOISI seulement : les autres puces de la vue restent telles
   // quelles, et aucune regle sur les puces ne sort de `.router-view` ni des popups.
@@ -1462,7 +1462,7 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
       .map((r) => r.selecteur)
       .filter((s) => s.includes('router-'))
       .filter((s) => !/model-select-menu|model-quota-popover/.test(s))
-    // Plusieurs regles peuvent viser CE selecteur (le cadre, puis la lampe a lave de conv-1163) ;
+    // Plusieurs regles peuvent viser CE selecteur (le cadre, puis la lampe a lave) ;
     // aucune n'en vise un autre.
     expect([...new Set(horsPopup)]).toEqual([
       `${PREFIXE} .shell.theme-serious .router-view :is(.router-account-chip.is-active, .router-account-chip.is-active:disabled)`
@@ -1512,7 +1512,7 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     expect(derniere(`${PREFIXE} .model-quota-popover .model-quota-window > strong`).color).toBe('#ffffff')
   })
 
-  // conv-924 (« met le theme holo dans cette popup ») : la carte « Supprimer la conversation ? »
+  // « met le theme holo dans cette popup » : la carte « Supprimer la conversation ? »
   // etait une plaque noire arrondie, et `.btn` du theme effacait le rouge de son bouton destructif.
   it('carte de confirmation : cadre holo, et le bouton irreversible garde un habit ROUGE distinct de « Garder »', () => {
     const danger = derniere(`${PREFIXE} .delete-confirm-danger`)
@@ -1528,9 +1528,9 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     expect(garder.background).not.toBe(danger.background)
   })
 
-  // conv-1078 (« le premier bouton doit etre en mode plein bleu et violet et celui du dessous avec
+  // « le premier bouton doit etre en mode plein bleu et violet et celui du dessous avec
   // liserai bleu et violet », puis « applique a tous les themes mais avec des couleurs en fonction du
-  // theme ») : les regles des deux boutons sont communes (ChatView.css) ; ce theme ne regle que leurs
+  // theme » : les regles des deux boutons sont communes (ChatView.css) ; ce theme ne regle que leurs
   // couleurs, au degrade du theme. La carte du RUN garde son verre rouge (regle ci-dessus, non touchee).
   it('carte de suppression des fils : « Supprimer » plein au degrade, « Garder » cerne d’un liseré du degrade', () => {
     const carte = derniere(`${PREFIXE} .delete-confirm-card--fils`)
@@ -1541,7 +1541,7 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
     // Plus aucune regle de bouton propre au theme : elle passerait devant la regle commune ou la
     // contredirait selon l'ordre de chargement.
     expect(derniere(`${PREFIXE} .delete-confirm-danger.delete-confirm-gel`)).toEqual({})
-    // Le liseré de « Garder » porte la lampe a lave (conv-1163, 2026-10-27), figee depuis conv-1610 :
+    // Le liseré de « Garder » porte la lampe a lave (2026-10-27), figee :
     // le theme ne lui pose que des REGLAGES (la lave et `--suppr-lisere` qui la designe) -- jamais
     // un fond, qui contredirait la regle commune.
     const lisere = derniere(`${PREFIXE} .delete-confirm-card--fils .delete-confirm-cancel::before`)
@@ -1565,7 +1565,7 @@ describe('Popups du modele et du contexte en holo (conv-250)', () => {
 })
 
 /**
- * LAMPE A LAVE DES CAPSULES : LE DERNIER TOUR SEUL (conv-1163, 2026-10-27 : « Limite la lampe a lave
+ * LAMPE A LAVE DES CAPSULES : LE DERNIER TOUR SEUL (2026-10-27 : « Limite la lampe a lave
  * des capsules Raisonnement / Actions au dernier tour du fil, pour alleger la carte graphique »).
  * Une reponse suivie d'une autre reponse est un tour fini : ses capsules reprennent le degrade fixe
  * d'avant la lave et ne bougent plus. La TV du bureau cache (`.msg.assistant` sans `.msg--rail`)
@@ -1598,7 +1598,7 @@ describe('Lampe a lave des capsules : le dernier tour seul', () => {
       r.selecteurs.some((s) => s.startsWith(`${TOUR_FINI} :is(`) && s.endsWith('::before'))
     )
     // Par la CLASSE des tranches, jamais `> span` : sous `:has()`, une balise nue fait restyler
-    // toutes les balises de ce nom à chaque frappe (conv-1229, has-cible-nue.test.ts).
+    // toutes les balises de ce nom à chaque frappe (has-cible-nue.test.ts).
     expect(fige?.selecteurs).toContain(
       `${TOUR_FINI} .artifact-pile__tranches > .artifact-pile__tranche`
     )
@@ -1610,10 +1610,10 @@ describe('Lampe a lave des capsules : le dernier tour seul', () => {
 })
 
 /**
- * LAMPE A LAVE DES BULLES : LA DERNIERE SEULE BOUGE (conv-1610, 2026-11-05 : « Garde la fluidite,
+ * LAMPE A LAVE DES BULLES : LA DERNIERE SEULE BOUGE (2026-11-05 : « Garde la fluidite,
  * mais seulement sur ce qui est visible et sur ma derniere bulle »). Seule la derniere bulle tapee
  * recoit le calque `::after` qui bouge ; les autres gardent la lave figee de leur fond.
- * Par `:nth-last-child(1 of …)`, jamais `:has()` (conv-1229, has-cible-nue.test.ts).
+ * Par `:nth-last-child(1 of …)`, jamais `:has()` (has-cible-nue.test.ts).
  * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : donner le calque a toutes les bulles, le poser sous
  * `:has()`, ou compter un recu d'orientation comme la derniere bulle.
  */
@@ -1641,7 +1641,7 @@ describe('Lampe a lave des bulles : la derniere seule', () => {
 })
 
 /**
- * LAVE PEU GOURMANDE (conv-1610, 2026-11-05 : « refais une version tres peu gourmande, enleve toute
+ * LAVE PEU GOURMANDE (2026-11-05 : « refais une version tres peu gourmande, enleve toute
  * l'ancienne lave couteuse »). L'ancienne animait les positions des gouttes (`@property`) : Chromium
  * recalculait le style et repeignait chaque degrade a chaque image (8 laves a l'ecran = 99 % d'un
  * coeur pour la fenetre, 13 % en pause). La nouvelle : fond FIGE, et un calque `::after` peint une
@@ -1748,10 +1748,10 @@ describe('Lave peu gourmande : seule l opacite d un calque bouge', () => {
 })
 
 /**
- * SELECTION DANS LA BARRE DE PROMPT EN BLEU (conv-263, 2026-10-11 : « met notre bleu electrique
+ * SELECTION DANS LA BARRE DE PROMPT EN BLEU (2026-10-11 : « met notre bleu electrique
  * quand je selectionne le texte de la barre de prompt au lieu du rose fonce »). Le rose a 38 %
  * vire au rose fonce sur le champ sombre ; la selection du champ prend LE bleu du theme, PLEIN
- * (#3c6eeb, conv-182 : aucun bleu dilue). Le reste de l'app garde la selection rose.
+ * (#3c6eeb, Aucun bleu dilue). Le reste de l'app garde la selection rose.
  * ENTREE QUI DOIT FAIRE ECHOUER CE TEST : retirer la regle, ou peindre le champ en bleu transparent.
  */
 describe('Selection dans la barre de prompt', () => {
@@ -1769,7 +1769,7 @@ describe('Selection dans la barre de prompt', () => {
 })
 
 /**
- * SELECTION DANS MES BULLES EN BLANC INVERSE (conv-1215, 2026-10-28 : « quand je selectionne mes
+ * SELECTION DANS MES BULLES EN BLANC INVERSE (2026-10-28 : « quand je selectionne mes
  * propres messages le fond rose sur rose fais que je vois pas ce que je selectionne »). La
  * selection generale, rose a 38 %, se fondait dans la lave de la bulle ; option 1 choisie : fond
  * blanc plein, texte rose du theme. Les deux selecteurs comptent : le texte nu de la bulle ET celui
@@ -1804,7 +1804,7 @@ describe('Selection dans les bulles de l utilisateur', () => {
 })
 
 /*
- * LE DETAIL DU COUT N'EST PAS COUPE (conv-981, 2026-10-15). La ligne d'en-tete coupe ses elements
+ * LE DETAIL DU COUT N'EST PAS COUPE (2026-10-15). La ligne d'en-tete coupe ses elements
  * trop longs (`.chat-runtime > * { overflow: hidden }`). Le cout du fil y vit depuis qu'il a quitte
  * la zone de saisie, et son detail s'ouvre en position absolue SOUS lui : coupe, il etait invisible
  * (mesure : clic sur « 8,55 $ », aucun panneau a l'ecran, a 900 comme a 1600 px de large).
@@ -1824,7 +1824,7 @@ describe('Nebuleuse de verre : le detail du cout de la ligne d en-tete', () => {
 })
 
 /**
- * L'ENTREE DES CADRES A CHANFREIN (conv-987, 2026-10-16, variante « 2 · Elan », 1 s, choisie sur
+ * L'ENTREE DES CADRES A CHANFREIN (2026-10-16, variante « 2 · Elan », 1 s, choisie sur
  * maquette). Pendant l'entree, chaque cadre marque (`data-entree-chanfrein`, entree-cascade.ts)
  * redeclare chez lui les recettes de repos, couleurs passees par les `--ch-*` animes : une recette
  * calculee sur :root ne verrait jamais l'avancement d'un panneau. Le risque qui compte : une recette
@@ -1869,7 +1869,7 @@ describe('Entree des cadres a chanfrein (Elan, 1 s)', () => {
       .replaceAll('var(--nv-chanfrein-cotes)', 'var(--ch-cotes)')
   const CADRES = `${PREFIXE} :is(.view-page, .home-tile__panel, .home-view__masthead)[data-entree-chanfrein]`
   const VOLETS = `${PREFIXE} .cosmic-outline :is(.conv-pane, .chat, .runs-pane)[data-entree-chanfrein]`
-  // Le menu de gauche, quand on le reduit ou le deplie (conv-987 : « et quand je reduis deploi la
+  // Le menu de gauche, quand on le reduit ou le deplie (« et quand je reduis deploi la
   // left bar aussi ») : meme anneau et meme satin que les volets du Chat.
   const MENU = `${PREFIXE} .theme-serious .rail[data-entree-chanfrein]`
   const repos = derniere(PREFIXE)

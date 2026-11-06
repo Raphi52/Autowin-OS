@@ -10,7 +10,7 @@ import {
 } from './run-pilot-chat'
 
 /*
- * conv-1069, candidat 3 : une règle `task_create` « quand le tour de conv-N est terminé » attend un
+ * Candidat 3 : une règle `task_create` « quand le tour de conv-N est terminé » attend un
  * événement que personne n'émettait. L'entrée qui ferait échouer ces tests si la correction était
  * fausse : un tour qui finit sans rien annoncer, ou qui l'annonce AVANT de quitter les tours actifs
  * (l'agent réveillé lirait alors « il tourne encore » avec `pilotChatActive`).
@@ -47,7 +47,7 @@ describe('annoncerFinDeTour', () => {
 })
 
 /*
- * conv-1150 — le coordinateur des plans de lots apprend la fin de CHAQUE tour, avec son issue.
+ * Le coordinateur des plans de lots apprend la fin de CHAQUE tour, avec son issue.
  * L'entrée qui ferait échouer ces tests : une issue sans l'échec, l'arrêt ou le texte du tour, ou
  * un tour qui échoue sans être annoncé. OÙ l'annonce est branchée (autour de `trackPreparation`
  * dans index.ts) est gardé par `plans-de-lots.fin-de-tour.test.ts`.

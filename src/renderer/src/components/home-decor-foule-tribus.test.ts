@@ -17,7 +17,7 @@ import {
 } from './home-decor-foule-tribus'
 
 /**
- * CE QUE L'UTILISATEUR A DEMANDÉ, conv-312 : « ils doivent tous avoir l'air de voyous du futur »,
+ * CE QUE L'UTILISATEUR A DEMANDÉ, : « ils doivent tous avoir l'air de voyous du futur »,
  * puis, devant les six tribus rendues dans le vrai décor, « implémente survet et punk ».
  *
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE FICHIER :

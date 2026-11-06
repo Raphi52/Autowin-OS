@@ -29,7 +29,7 @@ describe('perimetre de lecture du chat', () => {
   })
 
   /*
-   * ECRITURE — mesure conv-12 (2026-09-02). La consigne ne couvrait que la lecture, et l'agent a
+   * ECRITURE — mesure (2026-09-02). La consigne ne couvrait que la lecture, et l'agent a
    * presente le refus « chemin hors du workspace » comme voulu : « l'asymetrie est volontaire — lire
    * partout, ecrire seulement chez soi ». Il rendait un patch a coller a la main apres 4 tentatives.
    */

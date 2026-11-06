@@ -29,7 +29,7 @@ interface ProviderStatus {
   lastCheckedAt?: number
 }
 
-// Les libellés vivent dans `textes-ecrans/settings.ts` (traduction anglaise, conv-1170).
+// Les libellés vivent dans `textes-ecrans/settings.ts` (traduction anglaise).
 const STATUS_LABEL: Record<ProviderDisplayStatus, CleSettings> = {
   authenticated: 'routeur.statut.authenticated',
   expired: 'routeur.statut.expired',
@@ -321,7 +321,7 @@ export function RouterView({ active = true }: { active?: boolean }): React.JSX.E
         />
       </section>
 
-      {/* Bloc partagé avec Agent Studio (conv-1240) : un seul code, un seul réglage. */}
+      {/* Bloc partagé avec Agent Studio : un seul code, un seul réglage. */}
       <PetitesTachesReglage
         active={active}
         models={models}

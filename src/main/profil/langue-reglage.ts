@@ -4,7 +4,7 @@ import { autowinAppDataRoot } from '../app/app-data'
 import { LANGUE_PAR_DEFAUT, estLangue, langueOuDefaut, type Langue } from '../../shared/langue'
 
 /**
- * LA LANGUE CHOISIE DANS SETTINGS · INTERFACE, CÔTÉ MOTEUR (conv-1146, 2026-10-26).
+ * LA LANGUE CHOISIE DANS SETTINGS · INTERFACE, CÔTÉ MOTEUR (2026-10-26).
  *
  * L'interface garde la sienne dans son stockage local (`renderer/src/langue.ts`) : elle doit la
  * connaître AVANT son premier rendu. Le moteur, lui, ne voit pas ce stockage ; or c'est lui qui écrit
@@ -59,7 +59,7 @@ export function ecrireLangueReglee(valeur: unknown, deps: LangueDeps = {}): bool
  * « Bilan de l’étape », l'orchestrateur lit `SUITE:` et les lignes `AUTOWIN_…`, le chat exécute les
  * blocs `<cmd>`. Exportés pour que le test vérifie qu'ils restent nommés dans la consigne.
  * Le juge et le cadrage reçoivent la même consigne : leurs repères aussi (objection du juge,
- * conv-1146 réparation 2) — `VALIDE`/`DEFAUT:` (`orchestrator.ts`, verdict), `OBJECTIONS:`,
+ * un fil réparation 2) — `VALIDE`/`DEFAUT:` (`orchestrator.ts`, verdict), `OBJECTIONS:`,
  * `MAJEUR:`/`MINEUR:`/`OK:`, `aucune`, `QUESTIONS AU BUILD:` (`objections-juge.ts`), `## Confiance`
  * et ses `VÉRIFIÉ`/`NON VÉRIFIÉ` (`cadrage-confiance.ts`), la rubrique des cas limites
  * (`frame-cas-limites.ts`). Un juge qui écrirait « VALID » serait lu comme un refus.

@@ -37,7 +37,7 @@ import {
 } from '../textes-ecrans/task-manager'
 
 /**
- * Hors composant, le texte dans la langue courante (traduction anglaise, conv-1170) : ces fonctions
+ * Hors composant, le texte dans la langue courante (traduction anglaise) : ces fonctions
  * sont appelées pendant le rendu de la vue, qui suit la langue par `useTextesTaskManager`.
  */
 const texte = (cle: CleTaskManager, valeurs?: ValeursDeTexte): string =>
@@ -884,7 +884,7 @@ export function TaskManagerView({
               />
             </label>
             {/* Un bouton DANS un <label> en deviendrait la cible (premier élément étiquetable) :
-                l'en-tête porte donc un label `htmlFor` et le bouton à côté (conv-983, 2026-10-16). */}
+                l'en-tête porte donc un label `htmlFor` et le bouton à côté (2026-10-16). */}
             <div className="task-manager-field is-wide">
               <span className="task-manager-field-head">
                 <label htmlFor="task-manager-prompt">{t('vue.prompt')}</label>

@@ -3,7 +3,7 @@
  * ca deplie le pourquoi ».
  *
  * La pastille est BORNEE a une ligne — elle tronque a 120 caracteres et ne garde que le PREMIER
- * motif de gate. Sur conv-1334, l'utilisateur voyait « bloqué par le gate — Statut "red" : la
+ * motif de gate. L'utilisateur voyait « bloqué par le gate — Statut "red" : la
  * clôture a été refusée en amont. · » : le second motif (la DoD non tenue), qui dit ce qu'il aurait
  * fallu produire, etait purement absent de l'ecran. Le resume porte donc desormais le texte INTEGRAL
  * a cote de sa forme courte.

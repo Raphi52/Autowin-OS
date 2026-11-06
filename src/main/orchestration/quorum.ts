@@ -10,7 +10,7 @@ export function defaultQuorumThreshold(votingGroups: number): number {
 }
 
 /**
- * UN JUGE EN PANNE RESTE COMPTÉ, ET NOMMÉ (conv-1420, 2026-11-01, repris de Google EGM).
+ * UN JUGE EN PANNE RESTE COMPTÉ, ET NOMMÉ (2026-11-01, repris de Google EGM).
  *
  * Le seuil se calculait sur les seuls juges qui avaient répondu : sur 3 prévus, 2 pannes et 1 VALIDE
  * donnaient un seuil de 1, donc un vert sans un mot sur les absents. `skills/judge/SKILL.md:62`

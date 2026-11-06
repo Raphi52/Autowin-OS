@@ -8,8 +8,8 @@ import {
 } from './ascenseur-du-fil'
 
 /*
- * LA LIGNE LUE, tenue pendant que la carte de l'ascenseur s'ouvre et se replie (conv-1143,
- * 2026-10-25). Sonde sur conv-1139 : après une ouverture puis un repli, la vue finissait de 24 à
+ * LA LIGNE LUE, tenue pendant que la carte de l'ascenseur s'ouvre et se replie (
+ * 2026-10-25). Sonde : après une ouverture puis un repli, la vue finissait de 24 à
  * 368 px plus bas qu'avant, 9 positions sur 25. L'espion de `document.elementFromPoint` a montré
  * pourquoi :
  *  - à 6 % du fil, les 4 points visés tombaient sur la CARTE et ses aperçus, posés par-dessus le
@@ -150,7 +150,7 @@ describe('ligne lue — gardée tant que la vue n’a pas bougé', () => {
 })
 
 /*
- * LE TEXTE EXACT SOUS LA LIGNE LUE (conv-1143, 2026-10-25). Sonde sur conv-1139, carte ouverte :
+ * LE TEXTE EXACT SOUS LA LIGNE LUE (2026-10-25). Sonde, carte ouverte :
  * quand la ligne lue tombait au milieu d'un paragraphe de plusieurs lignes, le texte descendait
  * d'environ une ligne (19 à 22 px), 2 positions sur 4. Le maintien tenait le HAUT du paragraphe ;
  * plus étroit, le paragraphe se réagence et le texte lu passe plus bas DANS le paragraphe.
@@ -240,7 +240,7 @@ describe('ligne lue — le caractère sous la ligne, pas le haut de son paragrap
   })
 
   it('un mot en gras au milieu de la ligne lue : le DÉBUT de la ligne, dans le paragraphe (mesuré à 6 %)', () => {
-    // Mesuré sur conv-1139 (fil de 510 px) : le bloc retenu était le `strong` de la ligne lue. Son
+    // Mesuré (fil de 510 px) : le bloc retenu était le `strong` de la ligne lue. Son
     // haut restait à 18 px quand la carte s'ouvrait, mais le début de la ligne remontait à −4 px.
     mesurerLesCaracteres()
     let parLigne = 40
@@ -306,7 +306,7 @@ describe('ligne lue — le caractère sous la ligne, pas le haut de son paragrap
   })
 
   it('la ligne lue tombe juste SOUS la fin du texte : le début de la dernière ligne, pas le haut du bloc (mesuré : 87 px)', () => {
-    // Mesuré sur conv-1139 (1 150 px, vue à 31 539) : la dernière ligne d'une réponse finissait à
+    // Mesuré (1 150 px, vue à 31 539) : la dernière ligne d'une réponse finissait à
     // 23,4 px, la ligne lue passait à 24 px, encore dans la boîte du bloc (fin à 25,5 px). Aucun
     // caractère ne finissait sous la ligne : la barre tenait le haut du bloc, 1 050 px plus haut,
     // et la ligne lue descendait de 87 px carte ouverte. À 31 538, elle finissait à 24,4 : 0 px.
@@ -334,7 +334,7 @@ describe('ligne lue — le caractère sous la ligne, pas le haut de son paragrap
   })
 
   it('un schéma dont les libellés ne sont pas rangés de haut en bas : le libellé sur la ligne lue', () => {
-    // Mesuré sur conv-1139 (1 150 px) : dans un schéma, les libellés se suivent dans la page sans
+    // Mesuré (1 150 px) : dans un schéma, les libellés se suivent dans la page sans
     // suivre l'écran (« réponse » à −883 px, puis « rejuge » à −942, puis « juge » à −976). Les
     // libellés sont dans un dessin vectoriel : la barre s'arrête au cadre du schéma et cherche le
     // caractère parmi eux. Une dichotomie, qui suppose le texte posé de haut en bas, y prenait un

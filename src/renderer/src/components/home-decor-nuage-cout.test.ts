@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { NUAGE_FRAGMENT_SHADER } from './home-decor-scene'
 
 /**
- * LE DÉFAUT (conv-1586, « gigalag ») : `fbm` recalcule DEUX `cos` et DEUX `sin` à CHAQUE
+ * LE DÉFAUT (« gigalag ») : `fbm` recalcule DEUX `cos` et DEUX `sin` à CHAQUE
  * octave (7 octaves), et `main()` appelle `fbm` neuf fois par fragment. Soit 9 × 7 × 4 = 252
  * transcendantes par PIXEL d'un plan plein écran — le commit qui a introduit la rotation
  * par octave affirmait « le coût est nul », ce qui est faux et mesurable ici.

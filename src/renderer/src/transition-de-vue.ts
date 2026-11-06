@@ -1,24 +1,24 @@
 import { flushSync } from 'react-dom'
 
 /**
- * LE PASSAGE ANIME D'UNE VUE A L'AUTRE (conv-981, 2026-10-15) : le surlignage du menu GLISSE vers
+ * LE PASSAGE ANIME D'UNE VUE A L'AUTRE (2026-10-15) : le surlignage du menu GLISSE vers
  * l'onglet choisi (`document.startViewTransition`, Chromium 111+, donc Electron). Chaque vue passait de
  * `display:none` a `flex` d'un coup (app-shell.css). La page se fondait aussi ; depuis le 16/10
- * (conv-987) ce sont ses blocs qui entrent en cascade (`entree-cascade.ts`).
+ * ce sont ses blocs qui entrent en cascade (`entree-cascade.ts`).
  *
  * Le nom de transition (`view-transition-name`, app-shell.css) n'est pose que PENDANT la transition,
  * par cette classe sur <html> : la spec (css-view-transitions-1, « Rendering Consolidation ») fait en
  * PERMANENCE d'un element nomme un contexte d'empilement et une racine de flou d'arriere-plan — le
  * verre des themes ne flouterait plus le fond de l'application.
  *
- * fix-ok: conv-981 - aucun appel a startViewTransition dans src/renderer avant ce module (grep
+ * fix-ok: - aucun appel a startViewTransition dans src/renderer avant ce module (grep
  * vide). Fichier ecrit UNE seule fois dans run-52d36e67e4de-1 ; le controle des causes en comptait
  * 3 (meme ecriture sous son chemin complet et son chemin court, plus le releve de fin d'etape).
  */
 export const CLASSE_TRANSITION_DE_VUE = 'vue-en-transition'
 
 /**
- * LE CHANGEMENT DE THEME EN CERCLE (conv-981, 2026-10-16) : le nouveau theme s'ouvre en cercle
+ * LE CHANGEMENT DE THEME EN CERCLE (2026-10-16) : le nouveau theme s'ouvre en cercle
  * depuis la liste de Settings · Interface (app-shell.css). `appliquerThemeMode` posait `data-theme`
  * d'un coup. Sa PROPRE classe : sous `vue-en-transition`, le cercle toucherait aussi le passage
  * d'une vue a l'autre (`::view-transition-new(root)` vaut pour les deux).
@@ -53,7 +53,7 @@ function transitionSousClasse(doc: DocumentDeVue, classe: string, appliquer: () 
   const transition = doc.startViewTransition(() => flushSync(appliquer))
   // Une transition sautee (un clic plus recent) ou en echec rejette `ready` ET `finished` : le
   // changement est quand meme applique, seule l'animation manque. `ready` sans gestionnaire sortait
-  // en « Uncaught AbortError: Transition was skipped » dans la console (conv-1322, spec « skip the
+  // en « Uncaught AbortError: Transition was skipped » dans la console (spec « skip the
   // view transition »). Rien n'est masque : une erreur de `appliquer` remonte par `updateCallbackDone`,
   // que la spec garde pour la signaler. La classe, elle, ne doit jamais rester posee.
   void transition.ready.catch(() => undefined)

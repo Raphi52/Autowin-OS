@@ -1,10 +1,10 @@
-// Groupe de commandes « messages entre fils et plans de lots », sorti de AppCommandBus.run (conv-1508, lot 2).
+// Groupe de commandes « messages entre fils et plans de lots », sorti de AppCommandBus.run (lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import { ecrireAUnFil, reveillerSurOrdre, lireMesMessages } from '../conversations/messages-entre-fils-app'
 import { arreterUnFil } from '../conversations/arreter-un-fil'
 
-/** Cas de `AppCommandBus.run` : messages entre fils et plans de lots. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
+/** Cas de `AppCommandBus.run` : messages entre fils et plans de lots. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerFils(
   bus: AppCommandBus,
   name: string,
@@ -13,7 +13,7 @@ export async function executerFils(
   turnId?: string
 ): Promise<unknown> {
   switch (name) {
-    // conv-1139 : l'expéditeur est le fil et le tour de CET appel, jamais un argument de l'agent.
+    // L'expéditeur est le fil et le tour de CET appel, jamais un argument de l'agent.
     // Aucun tour n'est lancé chez le destinataire, SAUF un ordre vers un fil inactif (2026-10-25,
     // demande de l'utilisateur), qui y lance un tour signé « Ordre de <fil> ».
     case 'ecrire_a_un_fil': {
@@ -30,13 +30,13 @@ export async function executerFils(
       const lancer = bus.lancerDansConversation
       const tourActif = bus.tourDeChatActif
       const plans = bus.plansDeLots
-      // conv-1284 : l'ordre d'un chef vers le fil d'un de ses lots en échec relance ce lot ; le
+      // L'ordre d'un chef vers le fil d'un de ses lots en échec relance ce lot ; le
       // coordinateur le compte et le suit. Tout autre ordre part tel quel.
       const lancerLOrdre = lancer
         ? (fil: string, prompt: string) =>
             plans
               ? plans.lancerParOrdre(expediteur, fil, prompt, (f, p, modele) =>
-                  // Le modèle du lot (conv-1284), par la même voie que `chat_send` (« model »).
+                  // Le modèle du lot, par la même voie que `chat_send` (« model »).
                   modele
                     ? lancer(f, p, {
                         provider: bus.os.conversations?.get?.(f)?.provider ?? 'claude',
@@ -67,7 +67,7 @@ export async function executerFils(
       if (lu.livres) bus.broadcast({ type: 'refresh', scope: 'messages-fils' })
       return lu
     }
-    // conv-1625 : le bouton « Arrêter » d'un AUTRE fil, pour l'agent. L'appelant vient du tour.
+    // Le bouton « Arrêter » d'un AUTRE fil, pour l'agent. L'appelant vient du tour.
     case 'arreter_un_fil': {
       const arret = arreterUnFil(a, conversationId ?? '', {
         existe: (fil) =>
@@ -80,7 +80,7 @@ export async function executerFils(
       if (arret.tourCoupe || arret.runCoupe) bus.broadcast({ type: 'refresh', scope: 'chat' })
       return arret
     }
-    // conv-1150 : le chef est le fil de CET appel ; accepter ou reprendre un plan n'est pas ici
+    // Le chef est le fil de CET appel ; accepter ou reprendre un plan n'est pas ici
     // (clic de l'utilisateur, canal `os:plansDeLots`).
     case 'plan_de_lots': {
       if (!bus.plansDeLots)

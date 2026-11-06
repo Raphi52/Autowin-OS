@@ -6,7 +6,7 @@ import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 import { WorktreeRunStateStore } from './worktree-run-state'
 
 /**
- * LE RÉCONCILIATEUR DES COPIES NE TIENT PLUS LA FENÊTRE SUR `git rev-list` (conv-1413, 2026-10-31).
+ * LE RÉCONCILIATEUR DES COPIES NE TIENT PLUS LA FENÊTRE SUR `git rev-list` (2026-10-31).
  *
  * Mesure `gels.jsonl`, 2026-10-31 19:27:23 UTC : `execFileSync git rev-list` 125,7 s, le pire gel
  * unitaire des 2 derniers jours, depuis `commitsDejaReferences` appelé par `reconcileExisting`.

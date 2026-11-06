@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { AUTOWIN_APP_DATA_DIR } from '../../shared/app-identity'
 
 /**
- * LE BRAIN CHOISI DANS LES RÉGLAGES (demande utilisateur du 2026-10-13, conv-923).
+ * LE BRAIN CHOISI DANS LES RÉGLAGES (demande utilisateur du 2026-10-13).
  *
  * Deux postes, deux formes de Brain : au travail, un simple DOSSIER sur un partage réseau, où Autowin
  * ne doit lancer aucune commande git ; à la maison, un DÉPÔT git. On renseigne donc un chemin et/ou
@@ -28,7 +28,7 @@ export interface BrainReglage {
 
 /**
  * QUEL Brain : celui de l'ÉQUIPE (partagé) ou le Brain PERSO (privé, demande utilisateur du
- * 2026-10-28, conv-1233). Même forme de réglage, un fichier chacun : `brain.json` et
+ * 2026-10-28). Même forme de réglage, un fichier chacun : `brain.json` et
  * `brain-perso.json`.
  */
 export type QuelBrain = 'equipe' | 'perso'

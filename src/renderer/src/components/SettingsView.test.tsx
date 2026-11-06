@@ -10,14 +10,14 @@ vi.mock('./BehaviourView', () => ({ BehaviourView: () => null }))
 vi.mock('./ExecutionWorkspaceSettings', () => ({ ExecutionWorkspaceSettings: () => null }))
 vi.mock('./BrainSettings', () => ({ BrainSettings: () => null }))
 vi.mock('./McpServersSettings', () => ({ McpServersSettings: () => null }))
-// Même isolement pour le panneau du Brain perso (conv-1233), couvert par BrainPersoSettings.test.tsx :
+// Même isolement pour le panneau du Brain perso, couvert par BrainPersoSettings.test.tsx :
 // sans lui, son alerte « réglage illisible » passait devant celle de la réparation.
 vi.mock('./BrainPersoSettings', () => ({ BrainPersoSettings: () => null }))
 // L'alerte de l'onglet Routage a sa sonde a elle (`useProvidersAReconnecter`, couverte par
 // `SettingsView.routage.test.tsx`) : neutralisee ici, sinon elle consommerait les reponses de
 // `providerStatus` que cette suite reserve a la section Providers.
 vi.mock('./useProvidersAReconnecter', () => ({ useProvidersAReconnecter: () => [] }))
-// Les deux panneaux qui vivaient sous l'onglet Budget, retiré le 2026-10-23 (conv-1119) : des
+// Les deux panneaux qui vivaient sous l'onglet Budget, retiré le 2026-10-23 : des
 // témoins, pour vérifier qu'ils sont montés par la section qui les reçoit désormais.
 vi.mock('./RouterView', () => ({ RouterView: () => null }))
 vi.mock('./ModeAutoSeuilsSettings', async () => {
@@ -336,7 +336,7 @@ describe('SettingsView diagnostic', () => {
   })
 
   /*
-   * DEMANDE UTILISATEUR (conv-1119, 2026-10-23) : « enlève budget dans settings, ça sert à rien
+   * DEMANDE UTILISATEUR (2026-10-23) : « enlève budget dans settings, ça sert à rien
    * cette feature ». L'onglet disparaît ; ses deux autres panneaux, qui n'étaient pas du budget,
    * rejoignent la section dont ils relèvent — l'arrêt du mode ∞ sous Behaviour, le pilote shadow
    * sous Routage. Aucun réglage n'est perdu en route.
@@ -376,7 +376,7 @@ describe('SettingsView diagnostic', () => {
   })
 
   /*
-   * DEMANDE UTILISATEUR (conv-242) : « Production » n'est plus un onglet de Settings. L'onglet
+   * DEMANDE UTILISATEUR : « Production » n'est plus un onglet de Settings. L'onglet
    * devient « Rules », et la protection de production y devient UNE règle d'Autowin OS parmi
    * d'autres à venir.
    */

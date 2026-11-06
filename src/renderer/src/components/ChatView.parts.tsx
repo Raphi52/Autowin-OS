@@ -34,7 +34,7 @@ import {
 } from './chat-parts-helpers'
 import { useDureeVivante } from './duree-vivante'
 
-// Libellés lus à l'affichage, dans la langue de l'interface (conv-1170). « Navigation », « Message »
+// Libellés lus à l'affichage, dans la langue de l'interface. « Navigation », « Message »
 // et « Orchestration » s'écrivent pareil en anglais : ils restent tels quels.
 const CMD_LABEL: Record<string, string> = {
   navigate: 'Navigation',
@@ -61,7 +61,7 @@ const CMD_LABEL: Record<string, string> = {
   get get_state() {
     return traduireChatFil('commande.lectureEtat', langueCourante())
   },
-  // Skill choisie par le modèle (conv-1034) : le fil montrait « skill_charger » brut.
+  // Skill choisie par le modèle : le fil montrait « skill_charger » brut.
   get skill_charger() {
     return traduireChatFil('commande.skillChargee', langueCourante())
   }
@@ -157,7 +157,7 @@ const ICONE_ORCHESTRATION = (
 
 /**
  * UNE PHASE dans le corps de la capsule d'orchestration : QUI la joue, le prompt qui lui a ete
- * envoye, puis ce qu'elle a rendu — tout visible des que la capsule est ouverte (capsule 2, conv-194).
+ * envoye, puis ce qu'elle a rendu — tout visible des que la capsule est ouverte (capsule 2).
  * Les regles des lignes depliables restent : rien d'invente (un champ absent n'est pas affiche),
  * et le controle final rend sa « décision et motif ». Le seul texte d'attente, « pas encore », est
  * reserve a la phase qui TOURNE : c'est un etat vrai, pas un depliage vide.
@@ -171,7 +171,7 @@ function PhaseDeLaCapsule({
 }): React.JSX.Element {
   // La PHASE nomme l'etape ; le role vient a part, apres un point median, et seulement s'il dit
   // autre chose qu'elle. Colle au nom, il donnait « prompt envoyé à scout subagent » (capture du
-  // 2026-10-10, conv-194) — une phase qui n'existe pas.
+  // 2026-10-10) — une phase qui n'existe pas.
   const { t } = useTextesChatFil()
   const nom = choix.phase ?? choix.role ?? t('capsule.etape')
   const role = choix.role && choix.role !== nom ? choix.role : undefined
@@ -189,7 +189,7 @@ function PhaseDeLaCapsule({
           {choix.prompt}
         </pre>
       )}
-      {/* LE RAISONNEMENT, en entier (conv-918, 2026-10-13) : c'est lui dont la ligne repliee
+      {/* LE RAISONNEMENT, en entier (2026-10-13) : c'est lui dont la ligne repliee
           montrait des bouts. Tant que la phase tourne, la zone reste calee sur la FIN — ce qui
           s'ecrit a l'instant —, sans empecher de remonter. */}
       {choix.raisonnement && (
@@ -436,10 +436,10 @@ function EnveloppeDePrompt({
 /** Rendu d'UN step de sous-agent (prompt, raisonnement, echec, texte, preuves). */
 export function SubAgentStep({ step: s }: { step: OrchStep }): React.JSX.Element {
   // Le détail et l'erreur d'une étape restent tels qu'ils arrivent : c'est le texte du modèle ou du
-  // contrôle, que d'autres parties du code relisent (conv-1170).
+  // contrôle, que d'autres parties du code relisent.
   const { t } = useTextesChatFil()
   const meta = STEP_META[s.step] ?? { icon: '•', label: s.step }
-  // UN SOUS-AGENT COUPÉ PAR LE BOUTON STOP EST « ANNULÉ », PAS « EN ÉCHEC » (conv-966). Le run
+  // UN SOUS-AGENT COUPÉ PAR LE BOUTON STOP EST « ANNULÉ », PAS « EN ÉCHEC ». Le run
   // l'écrit `failed` — l'étape ne s'est pas terminée — mais son erreur porte le motif du Stop. Sa
   // pastille rouge « échec » se lisait comme une panne ; le texte de l'arrêt reste affiché dessous.
   const annule = s.status === 'failed' && estArretParStop(s.error)
@@ -622,7 +622,7 @@ export function AssistantActivityGroup({
   const [resumeError, setResumeError] = useState<string | null>(null)
   /*
    * POURQUOI DEPLIE SUR PLACE. La pastille est bornee a une ligne : elle tronque et ne montre que le
-   * premier motif. Sur conv-1334 le second motif — la DoD non tenue, la seule chose qui dit ce qu'il
+   * premier motif. le second motif — la DoD non tenue, la seule chose qui dit ce qu'il
    * aurait fallu produire — n'etait visible NULLE PART, et le clic renvoyait vers Workflows, hors du
    * fil, pour une information qui tient en deux lignes. Le clic la deplie donc ICI ; l'acces au run
    * garde son propre bouton, rien n'est perdu.
@@ -668,7 +668,7 @@ export function AssistantActivityGroup({
       : interruptedCount > 0
         ? 'interrupted'
         : 'done'
-  // Le verdict qui « atterrit » sur le rond du run (conv-981) : appele avant toute sortie anticipee.
+  // Le verdict qui « atterrit » sur le rond du run : appele avant toute sortie anticipee.
   const [atterrissage, effacerAtterrissage] = useAtterrissage(etatOrchestration)
   /*
    * SIGNE DE VIE de l'action encore en vol. Sans lui, le groupe se resume a « 1 action en cours »
@@ -683,14 +683,14 @@ export function AssistantActivityGroup({
   // Avant le premier battement, la ligne d'etat du lancement dit QUOI tourne et OU.
   const ligneEtat = battement ?? ligneEtatLancement(actions)
   // La duree du battement n'arrive que toutes les 5 s : l'ecran l'avance seul chaque seconde, comme
-  // le bloc Raisonnement (conv-982, duree-vivante.ts). Pose AVANT le retour de la capsule
+  // le bloc Raisonnement (duree-vivante.ts). Pose AVANT le retour de la capsule
   // d'orchestration : un hook ne vit pas sous un `if`.
   const dureeVivante = useDureeVivante(
     battement ? decouperBattement(battement).duree : undefined,
     running
   )
   const plural = (n: number, word: string): string => `${n} ${word}${n > 1 ? 's' : ''}`
-  // « n action(s) » s'écrit pareil dans les deux langues ; seul l'état se traduit (conv-1170).
+  // « n action(s) » s'écrit pareil dans les deux langues ; seul l'état se traduit.
   const terminees = (n: number): string =>
     t(n > 1 ? 'activite.terminees' : 'activite.terminee', { actions: plural(n, 'action') })
   const interrompues = (n: number): string =>
@@ -713,7 +713,7 @@ export function AssistantActivityGroup({
   // carte du run si ça tourne, vers l'historique d'activité si c'est déjà terminé/interrompu.
   const tools = actions.map((action) => CMD_LABEL[action.name] ?? action.name).join(' · ')
   /**
-   * Verdict d'une VERIFICATION, lisible sans quitter le fil. Sur conv-76, `verify` a tourne trois
+   * Verdict d'une VERIFICATION, lisible sans quitter le fil. `verify` a tourne trois
    * fois et seul « 1 action terminee verify » s'affichait : l'exit code — la seule chose qui prouve —
    * restait invisible. On n'ouvre rien de plus (le detail vit toujours dans Workflows), on montre la
    * ligne qui porte le verdict. Un echec passe devant une reussite.
@@ -748,7 +748,7 @@ export function AssistantActivityGroup({
     : undefined
   const resumable = retryable?.task
   const retryVerb = retryable?.verb ?? 'Reprendre'
-  // Le verbe choisit la phrase entière, dans la langue de l'interface (conv-1170).
+  // Le verbe choisit la phrase entière, dans la langue de l'interface.
   const estRelance = retryVerb === 'Relancer'
   // Les deux boutons arretent le clic : dans la capsule d'orchestration, ils vivent DANS l'en-tete
   // depliable, et un clic sur ↗ ou Relancer ne doit pas plier/deplier le bloc au passage.
@@ -814,7 +814,7 @@ export function AssistantActivityGroup({
     </button>
   ) : null
   /*
-   * CAPSULE D'ORCHESTRATION (conv-194, 2026-10-10 — /draft sur maquettes, choix « Capsule » puis
+   * CAPSULE D'ORCHESTRATION (2026-10-10 — /draft sur maquettes, choix « Capsule » puis
    * « Go sur la capsule 2 · Phase dans la capsule »). SYMPTOME : « j'arrive pas a me rendre compte
    * de comment voir le detail » — le prompt envoye vivait a DEUX clics (pastille de la tache, puis
    * le ▶ de chaque phase) et l'en-tete ne disait que « 1 action en cours · Orchestration ».
@@ -826,8 +826,8 @@ export function AssistantActivityGroup({
    * se lit au reflet (vivant / eteint) et a la couleur du segment ; la phrase reste en infobulle.
    * Un groupe MIXTE (orchestration + verify…) garde la barre d'actions ci-dessous.
    *
-   * CADRE « GRAND, DEUX LIGNES » (conv-909, 2026-10-12 : « ce bloc orchestration doit etre comme
-   * celui de Actions », apres que conv-904 a redessine Actions). La capsule prend le cadre de
+   * CADRE « GRAND, DEUX LIGNES » (2026-10-12 : « ce bloc orchestration doit etre comme
+   * celui de Actions », apres qu'un fil a redessine Actions). La capsule prend le cadre de
    * BlocRepliable (ThinkingBlock.tsx) : le rond de verre a gauche — l'icone de l'orchestration,
    * TEINTEE par le verdict comme le rond de compte —, « Orchestration · phase » et la duree en
    * premiere ligne, dessous la legende des phases et le signe de vie ou le verdict en capsule de
@@ -877,7 +877,7 @@ export function AssistantActivityGroup({
       .map((task) => task.trim())
     // Le resultat du run, SEULEMENT quand aucune phase n'a parle (tour relu apres redemarrage : les
     // phases ne sont pas conservees). Sinon il redisait la tache, deja dans le prompt, et le statut,
-    // deja a droite de la capsule (capture du 2026-10-10, conv-194). Un echec montre deja sa cause
+    // deja a droite de la capsule (capture du 2026-10-10). Un echec montre deja sa cause
     // dans le pourquoi : la repeter dessous la ferait lire deux fois.
     const resultats =
       why.length || pipeline.length
@@ -999,7 +999,7 @@ export function AssistantActivityGroup({
     )
   }
   /*
-   * LE VERDICT DE CHAQUE ACTION (conv-904, 2026-10-12 — /draft, « Pleine largeur » + « couleur sur
+   * LE VERDICT DE CHAQUE ACTION (2026-10-12 — /draft, « Pleine largeur » + « couleur sur
    * l'exception », puis « Rond de verre ») : il colore la legende et la pastille au coin du rond. Un
    * groupe en echec ou sans effet dont aucune action ne porte `ok === false` (depot Brain refuse,
    * commande qui REUSSIT a rendre un echec) colore sa DERNIERE action terminee : sans cela l'en-tete

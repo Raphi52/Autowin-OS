@@ -1,5 +1,5 @@
 // Catalogue des commandes — fichiers, vidéo et blocs, runs, bureau caché, navigateur intégré et terminal.
-// Entrées sorties telles quelles de commands/catalogue.ts (conv-1580), dans le même ordre :
+// Entrées sorties telles quelles de commands/catalogue.ts, dans le même ordre :
 // catalogue.ts les remet bout à bout dans CATALOG. Seuls des TYPES viennent de '../commands'.
 import type { CommandSpec } from './commands'
 import { PHRASE_PAS_A_PAS_NAVIGATEUR, LISTE_DE_TEXTES } from './catalogue-champs'
@@ -26,7 +26,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   },
   {
     /**
-     * MONTRER UNE VIDÉO DANS LE FIL (conv-253, 2026-10-11) : un MP4 rendu par une commande shell
+     * MONTRER UNE VIDÉO DANS LE FIL (2026-10-11) : un MP4 rendu par une commande shell
      * n'y arrivait jamais, donc l'utilisateur ne pouvait pas en pointer une image. Voir
      * `show-video-command.ts`. La vidéo ne part jamais au modèle IA.
      */
@@ -45,7 +45,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   },
   {
     /**
-     * POSER UN BLOC LU DANS UN FICHIER (conv-1306, 2026-10-30) : le carrousel d'un /draft (52 ko)
+     * POSER UN BLOC LU DANS UN FICHIER (2026-10-30) : le carrousel d'un /draft (52 ko)
      * devait être recopié en entier dans la réponse et n'y tenait plus. Voir `montrer-bloc-command.ts`.
      */
     name: 'montrer_bloc',
@@ -216,10 +216,10 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   },
   {
     /*
-     * Le réflexe 14 (dépôt partagé) en UN appel — scout conv-1086 : 514 appels git à la main dans
+     * Le réflexe 14 (dépôt partagé) en UN appel — scout : 514 appels git à la main dans
      * 143 journaux, alors que l'app savait déjà quel fil avait touché quel fichier. Voir
      * `proprietaire-fichier.ts`.
-     * fix-ok: conv-1086 — commands.ts écrivait le journal des fichiers sans jamais l'exposer :
+     * fix-ok: commands.ts écrivait le journal des fichiers sans jamais l'exposer :
      * sans le `case 'proprietaire_fichier'` de l'aiguillage d'AppCommandBus, 8 tests sur 9 de
      * proprietaire-fichier.test.ts rendent « commande inconnue: proprietaire_fichier ».
      */
@@ -240,7 +240,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
   },
   {
     /*
-     * LOT 1 du RUN outils-agent-1-2-4-6-7 (conv-222, 2026-10-11). hdesk-lancer refuse une relance sur
+     * LOT 1 du RUN outils-agent-1-2-4-6-7 (2026-10-11). hdesk-lancer refuse une relance sur
      * le même identifiant tant que l'app vit (sortie 5), et rien ne la fermait : l'agent tuait un
      * processus à la main, par nom au pire — la même app ouverte chez l'utilisateur partait aussi.
      * La conversation n'est JAMAIS un argument du modèle : c'est le fil courant, et le script
@@ -262,7 +262,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
     }
   },
   /**
-   * conv-344 (scout n°4) : lancer, observer, agir étaient des commandes PowerShell RECOPIÉES de la
+   * scout n°4 : lancer, observer, agir étaient des commandes PowerShell RECOPIÉES de la
    * consigne — d'où les identifiants inventés et les fils oubliés (le lanceur a dû rendre -Travail
    * obligatoire). Le fil est celui de l'APPEL, jamais un argument ; l'identifiant par défaut est
    * `chat-<fil>` ; observer et agir refusent le bureau d'un autre fil (fiche du registre).
@@ -332,7 +332,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
     }
   },
   /**
-   * NAVIGATEUR INTÉGRÉ DU CHAT (conv-1286, lot 4/5, 2026-10-29) : le panneau navigateur à côté du
+   * NAVIGATEUR INTÉGRÉ DU CHAT (lot 4/5, 2026-10-29) : le panneau navigateur à côté du
    * fil, que l'utilisateur voit pendant que l'agent lit, capture et agit. Même contrat que
    * `bureau_cache_*` : le fil est celui de l'APPEL, jamais un argument ; les deux garde-fous (pas de
    * saisie dans un mot de passe, accord par site hors poste local) vivent dans le moteur
@@ -430,7 +430,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
     }
   },
   /**
-   * TERMINAL INTÉGRÉ DU CHAT (conv-1362, lot 3/3, 2026-10-31) : le terminal reste à l'utilisateur, il
+   * TERMINAL INTÉGRÉ DU CHAT (lot 3/3, 2026-10-31) : le terminal reste à l'utilisateur, il
    * est partagé avec l'agent en lecture seule. C'est volontairement le SEUL outil du terminal, et le
    * fil est celui de l'APPEL, jamais un argument. Sans `horsCanalNatif` : il passe en outil direct
    * (`chat-mcp.ts` sert tout le catalogue).

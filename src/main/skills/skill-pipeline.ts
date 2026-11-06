@@ -10,7 +10,7 @@ import { skillRoots } from '../app/native-registry'
  * Une ÉTAPE d'un run (scout, frame, build, clean, judge…) ne lit JAMAIS son SKILL.md : sa consigne
  * vient de `phase-briefs.ts` (`orchestrator.ts`, `corpsSkill` vaut '' pour une étape). L'ancien
  * chargeur d'étape (`phaseInstruction`, `engineForPhase`, `loadSkillText`, `loadEngineText`)
- * n'avait plus d'appelant depuis le commit c8c90007 du 09/08 : retiré le 05/11 (conv-1602).
+ * n'avait plus d'appelant depuis le commit c8c90007 du 09/08 : retiré le 05/11.
  * fix-ok: cause mesurée — grep du dépôt : ces fonctions n'étaient appelées que par des tests.
  */
 /**
@@ -58,7 +58,7 @@ export function invokedSkillId(message: string): string | undefined {
  *
  * Même règle que la bulle du fil (`shared/skill-nommee.ts`), appliquée aux seules skills présentes
  * sur disque : la bulle « DRAFT » ne s'allume donc que sur un message dont le corps est réellement
- * chargé. Avant (conv-988, 2026-10-16), la consigne du chat disait « SKILL NOMMÉE = SKILL
+ * chargé. Avant (2026-10-16), la consigne du chat disait « SKILL NOMMÉE = SKILL
  * INVOQUÉE » mais rien ne chargeait la procédure : l'agent ne l'a lue que 5 fois sur 169.
  */
 export function skillNommeeSansBarre(message: string, roots = skillRoots()): string | undefined {

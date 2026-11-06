@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { catalogueGrok, lireModelesGrok } from './grok-modeles'
 
-// Sortie réelle de `grok models`, Grok Build 1.0.70, 2026-11-04 (conv-1499).
+// Sortie réelle de `grok models`, Grok Build 1.0.70, 2026-11-04.
 const SORTIE = `You are logged in with grok.com.
 
 Default model: grok-4.7

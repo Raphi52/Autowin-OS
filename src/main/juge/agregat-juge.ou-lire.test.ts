@@ -12,7 +12,7 @@ import {
 } from '../runs/livrable-entier'
 
 /**
- * LA MARQUE DE COUPE DU JUGE NOMME UNE COPIE ENTIERE QUI EXISTE (conv-989, 2026-10-16).
+ * LA MARQUE DE COUPE DU JUGE NOMME UNE COPIE ENTIERE QUI EXISTE (2026-10-16).
  *
  * Avant : « voir le fil des sous-agents », soit `trace.json`, plafonne a 4 000 caracteres par etape —
  * plus court que les 6 000 que le juge lisait deja. La seule copie entiere (`run-state`) etait

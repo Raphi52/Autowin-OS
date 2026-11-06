@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { parseGitStatus, parseUnifiedDiff } from './git-read'
 
 // Migré de scripts/arena-panel/p10-git-conflits.mts et p11-diff-lignes.mts (banc /arena,
-// commit 191ab51d), retirés le 2026-10-22 (residus, conv-1062).
+// commit 191ab51d), retirés le 2026-10-22 (residus).
 describe('parseGitStatus — fichiers en conflit (p10)', () => {
   const h = '0123456789abcdef0123456789abcdef01234567'
   const u = (xy: string, path: string): string =>

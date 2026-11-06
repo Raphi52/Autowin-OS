@@ -10,7 +10,7 @@ vi.mock('./Markdown', () => ({
 }))
 
 /**
- * LE FIL PRIVÉ DU VILLAGE COMMUN (D6 de `grill/agent-hq-japon-town.md`, conv-1429, lot 3).
+ * LE FIL PRIVÉ DU VILLAGE COMMUN (D6 de `grill/agent-hq-japon-town.md`, lot 3).
  *
  * Une entrée du menu « ⋮ » d'un fil le marque privé : son tanuki reste chez les collègues, sans
  * titre. Ces tests exercent le GESTE (l'appel qui persiste, dans les deux sens), le RENDU (la

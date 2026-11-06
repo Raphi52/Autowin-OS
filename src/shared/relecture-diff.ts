@@ -1,7 +1,7 @@
 /**
  * RELECTURE LIGNE À LIGNE D'UN DIFF — commenter une ligne précise et renvoyer le lot à l'agent.
  *
- * Écart constaté le 2026-09-28 (veille concurrentielle, conv-877) : Conductor, l'application Codex,
+ * Écart constaté le 2026-09-28 (veille concurrentielle) : Conductor, l'application Codex,
  * Antigravity et GitHub laissent commenter une ligne du diff pour que l'agent reçoive un retour
  * PRÉCIS. Le diff d'Autowin était en lecture seule : un retour devait être retapé à la main dans le
  * chat, avec le chemin et la ligne recopiés de mémoire.

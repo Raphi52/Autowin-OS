@@ -8,7 +8,7 @@ import { DOSSIER_ENTREPRISE } from '../profil/identite-entreprise'
 /**
  * `.githooks/pre-push` — REFUS de tout push vers GitHub dont un commit contient `entreprise/`.
  *
- * Pourquoi (2026-10-13, conv-932) : ce qui est propre à l'entreprise vit dans `entreprise/` et ne
+ * Pourquoi (2026-10-13) : ce qui est propre à l'entreprise vit dans `entreprise/` et ne
  * doit jamais atteindre le dépôt public. La version publique se construit sans ce dossier
  * (`scripts/export-public.mjs`), mais rien n'empêchait un `git push github main` direct de publier
  * tout l'arbre : le hook ne gardait que la branche par défaut, et seulement contre les agents.
@@ -165,7 +165,7 @@ describe('.githooks/pre-push — rien de entreprise/ vers GitHub', () => {
 /**
  * `.githooks/pre-push` — REFUS de tout push vers GitHub qui envoie un nom ou un terme d'entreprise.
  *
- * Pourquoi (2026-11-03, conv-1457) : la garde `separation-entreprise.test.ts` ne jouait qu'avec
+ * Pourquoi (2026-11-03) : la garde `separation-entreprise.test.ts` ne jouait qu'avec
  * `npm test`, et quatre commentaires portant un terme métier sont partis sur le dépôt public. Le hook
  * applique maintenant les MÊMES règles (`scripts/identite-entreprise.mjs`) à ce que le push ENVOIE :
  * chaque fichier de chaque commit envoyé — même retiré au commit suivant, il part dans l'historique —
@@ -272,7 +272,7 @@ describe('.githooks/pre-push — aucun nom ni terme d entreprise vers GitHub', (
 /**
  * Garde « agent » : le message de refus doit donner la marche à suivre DU DÉPÔT.
  *
- * Pourquoi (2026-10-22, conv-1074) : sur ce dépôt on pousse directement sur `main` avec
+ * Pourquoi (2026-10-22) : sur ce dépôt on pousse directement sur `main` avec
  * `ALLOW_MAIN_PUSH=1`, sans pull request. Le refus conseillait encore « 1 branche par sujet +
  * Pull Request » : un agent l'a suivi, a poussé une branche pour une PR qui ne devait pas exister,
  * puis a dû la supprimer. Le message est la seule consigne qu'un agent lit à ce moment-là.

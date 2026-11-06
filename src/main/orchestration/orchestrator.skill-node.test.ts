@@ -84,7 +84,7 @@ describe('nœud portant une skill du disque', () => {
   })
 
   /**
-   * Defaut vecu le 2026-09-02 (conv-126) : c'est un noeud SKILL (`arena`) qui a substitue sa tache
+   * Defaut vecu le 2026-09-02 : c'est un noeud SKILL (`arena`) qui a substitue sa tache
    * en cours de route. Son corps vient du kit, donc il ne passe PAS par `phaseBrief` — la garde
    * commune doit etre posee sur CE second chemin d'assemblage, sinon elle ne couvre que la moitie
    * des noeuds.
@@ -258,7 +258,7 @@ describe('boucle d’outils d’un nœud skill, dans un run réel', () => {
      * `[contexte, reponse, resultat]` en croyant a une conversation faisait perdre le contexte de
      * la phase des le premier appel d'outil.
      *
-     * Mesure sur le run reel `conv-1341` : le nœud `learn` a interroge le Brain, puis a conclu
+     * Mesure sur le run reel : le nœud `learn` a interroge le Brain, puis a conclu
      * « mon contexte ne contient aucune sortie de phase precedente ». Il disait VRAI — son premier
      * tour avait 3661 caracteres avec `[phase think]` et `[phase build]`, son second n'avait plus
      * que le compte rendu de sa propre commande. La boucle censee l'outiller le rendait aveugle.
@@ -284,7 +284,7 @@ describe('boucle d’outils d’un nœud skill, dans un run réel', () => {
 })
 
 /*
- * conv-339 : l'étape learn a écrit 2 notes au Brain (inbox/, 18/10 22:34) et la bulle a affiché
+ * L'étape learn a écrit 2 notes au Brain (inbox/, 18/10 22:34) et la bulle a affiché
  * « Brain : aucune leçon proposée ». Ses `remember` passent par le lanceur des nœuds, sans tour :
  * c'est donc le RUN qui doit les compter, et le dire dans son résultat.
  */

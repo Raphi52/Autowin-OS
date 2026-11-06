@@ -2,10 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * LA LANGUE DE L'INTERFACE (conv-1146). Entrée qui doit faire échouer ce fichier : une valeur
+ * LA LANGUE DE L'INTERFACE. Entrée qui doit faire échouer ce fichier : une valeur
  * mémorisée abîmée qui ne retombe pas sur le français, un stockage en panne qui casse l'écran, ou
  * une langue redite qui repart vers le moteur (l'effet qui rejoue le thème à chaque ouverture de
- * Settings est le piège déjà connu, conv-981).
+ * Settings est le piège déjà connu).
  *
  * Le module garde la langue courante en mémoire : chaque cas le recharge à neuf.
  */
@@ -109,7 +109,7 @@ describe('langue de l’interface — changement', () => {
   })
 
   /**
-   * L'ÉCHEC D'ENVOI SE VOIT (conv-1146, réparation après le contrôle final) : avant, un refus du
+   * L'ÉCHEC D'ENVOI SE VOIT (réparation après le contrôle final) : avant, un refus du
    * moteur était avalé — l'écran passait en anglais, l'agent répondait en français, et rien ne le
    * disait. Entrée qui doit faire échouer ce cas : un refus, une panne du pont ou une langue gardée
    * différente qui ne laissent aucune trace lisible par l'écran.
@@ -165,7 +165,7 @@ describe('langue de l’interface — changement', () => {
   })
 
   /*
-   * LES DATES ET LES NOMBRES SUIVENT LA LANGUE (conv-1170). Entrée qui doit faire échouer ce cas :
+   * LES DATES ET LES NOMBRES SUIVENT LA LANGUE. Entrée qui doit faire échouer ce cas :
    * une locale restée en dur ('fr-FR') après le passage en anglais, une date sans heure là où
    * `toLocaleString` en donnait une, ou une date invalide qui lève au lieu de s'afficher.
    * Les espaces insécables d'Intl (U+00A0, U+202F) sont ramenés à une espace simple pour comparer.

@@ -46,7 +46,7 @@ const conv = (
 })
 
 /**
- * Le jeu commun. `vestige` est la plus récemment TOUCHÉE (comme conv-1267, remontée par des
+ * Le jeu commun. `vestige` est la plus récemment TOUCHÉE (comme, remontée par des
  * écritures non-utilisateur) mais l'utilisateur n'y a pas parlé depuis deux jours.
  */
 const CONVS = [

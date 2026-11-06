@@ -1,5 +1,5 @@
 /**
- * LA MASCOTTE DU BUREAU — « Bille · pastille » (conv-1145, 2026-10-25).
+ * LA MASCOTTE DU BUREAU — « Bille · pastille » (2026-10-25).
  *
  * Choix de l'utilisateur sur maquettes (/draft, trois tours) : « une mascotte sur le bureau
  * Windows, qui te prévient même quand l'app est réduite » -> « Orbe · Sentinelle » -> « Orbe
@@ -9,15 +9,15 @@
  * - une BILLE aux couleurs de l'anneau du logo (`assets/autowin-logo-anneau.png`, 12 couleurs
  *   relevées au pixel tous les 30°), avec un reflet de verre ;
  * - un HALO autour d'elle qui dit l'état : pointillés qui tournent (au travail), or qui bat (un fil
- *   t'attend), rouge (un tour a échoué), rien au calme ; depuis conv-1227, c'est un grand glyphe
+ *   t'attend), rouge (un tour a échoué), rien au calme ; c'est un grand glyphe
  *   de runes (`glypheDuHalo`), même code de couleurs ;
  * - une PASTILLE au coin qui compte : les agents au travail, ou les fils qui t'attendent ; « ! »
  *   sur un échec ;
  * - « Sentinelle » : dans le coin, juste au-dessus de l'horloge, et les cartes de fin de tour
- *   sortent à sa gauche (`zoneDesCartes`) ; depuis conv-1142, elle se glisse ailleurs et les cartes
+ *   sortent à sa gauche (`zoneDesCartes`) ; elle se glisse ailleurs et les cartes
  *   la suivent.
  *
- * Depuis conv-1227 (2026-10-28), la bille est un PERSONNAGE (`mascotte-personnage.ts`) : visage,
+ * Depuis le 2026-10-28, la bille est un PERSONNAGE (`mascotte-personnage.ts`) : visage,
  * chapeau de magicien, bras qui lancent des sorts, et la pastille devient le chiffre qui brille dans
  * l'étoile du chapeau. La fenêtre grandit d'autant ; seule la bille (et sa croix) prend les clics.
  *
@@ -64,7 +64,7 @@ export const HALO_DANS_LA_FENETRE = {
 } as const
 /**
  * Bande transparente sur les CÔTÉS de la fenêtre, hors du dessin (les notes et les runes s'arrêtent
- * à 11 px du bord) : les cartes s'y collent, au ras du personnage (conv-1195, conv-1227).
+ * à 11 px du bord) : les cartes s'y collent, au ras du personnage.
  */
 export const RETRAIT_COTE = 10
 /** Distance au coin de la zone de travail (au-dessus de la barre des tâches, pas dessous). */
@@ -73,9 +73,9 @@ const MARGE_MASCOTTE = 6
 const CROIX = { x: CENTRE_BILLE.x + 20, y: CENTRE_BILLE.y - 40, taille: 18 } as const
 
 /**
- * LA GÉOMÉTRIE DE CHAQUE STYLE (conv-1249, 2026-10-29, « choix de mascotte soit magicien soit
+ * LA GÉOMÉTRIE DE CHAQUE STYLE (2026-10-29, « choix de mascotte soit magicien soit
  * basique ») : le magicien vit dans sa grande fenêtre (chapeau, bras, sorts) ; la bille basique
- * reprend la fenêtre d'avant conv-1227, un carré de 80 px, le halo de 64 au milieu et la croix au
+ * reprend la fenêtre d'avant, un carré de 80 px, le halo de 64 au milieu et la croix au
  * coin haut-droit de son cadre de 68 px (`.m`). Tout ce qui place, colle les cartes ou lit les clics
  * passe par elle.
  */
@@ -104,7 +104,7 @@ const GEOMETRIES: Record<StyleMascotte, GeometrieMascotte> = {
     retraitCote: (80 - TAILLE_HALO) / 2,
     croix: { x: 56, y: 6, taille: 18 }
   },
-  // La machine (conv-346) : 104x125 px (agrandie 1,3 fois), posée au bas d'une fenêtre de 124x136 où tiennent sa bulle,
+  // La machine : 104x125 px (agrandie 1,3 fois), posée au bas d'une fenêtre de 124x136 où tiennent sa bulle,
   // ses étincelles et ses paillettes ; le centre est celui de son corps, la croix en haut à droite.
   machine: {
     largeur: 124,
@@ -120,7 +120,7 @@ export function geometrieMascotte(style: StyleMascotte = 'magicien'): GeometrieM
 
 /**
  * Le pointeur (relatif au coin de la fenêtre) est-il sur la bille ou sa croix ? Partout ailleurs —
- * chapeau, bras, sorts, vide —, la fenêtre laisse passer les clics vers le bureau (conv-1227) :
+ * chapeau, bras, sorts, vide —, la fenêtre laisse passer les clics vers le bureau :
  * le personnage déborde largement de la bille, il ne doit pas cacher ce qu'il y a dessous.
  */
 export function pointSurLaBille(
@@ -161,7 +161,7 @@ export type EntreesMascotte = {
 }
 
 /**
- * Le VRAI compte, jusqu'à 99 (conv-1270, « affiche le vrai nombre sur le chapeau jusqu'à 99 au lieu
+ * Le VRAI compte, jusqu'à 99 (« affiche le vrai nombre sur le chapeau jusqu'à 99 au lieu
  * de 9+ ») : il était « 9+ » au-delà de 9. La pastille tient deux caractères (22 px dans la bille
  * basique, deux chiffres côte à côte sur le chapeau) : au-delà de 99, elle reste à 99.
  */
@@ -250,7 +250,7 @@ export function placerMascotte(zone: Rect, style: StyleMascotte = 'magicien'): R
 }
 
 /**
- * LES CARTES SORTENT DE LA BILLE, LÀ OÙ ELLE EST (conv-1142, 2026-10-26, demande : « fais sortir les
+ * LES CARTES SORTENT DE LA BILLE, LÀ OÙ ELLE EST (2026-10-26, demande : « fais sortir les
  * cartes de fin de tour à côté de la mascotte là où je l'ai déplacée, au lieu de garder libre le
  * coin de l'horloge »). Avant, la zone des cartes perdait seulement la colonne du coin d'origine :
  * une bille glissée ailleurs laissait les cartes au coin de l'horloge.
@@ -261,14 +261,14 @@ export function placerMascotte(zone: Rect, style: StyleMascotte = 'magicien'): R
  * - sens : bille dans la moitié BASSE de l'écran, la pile part du bas de la bille et monte ; dans
  *   la moitié haute, elle part du haut de la bille et descend.
  *
- * CARTES COLLÉES AU HALO (conv-1195, 2026-10-28, demande : « j'aimerais que les notifs et la
+ * CARTES COLLÉES AU HALO (2026-10-28, demande : « j'aimerais que les notifs et la
  * mascotte soient snap ensemble ») : la carte était posée à `MARGE_CARTE` (12 px) de la FENÊTRE de
  * la bille, elle-même transparente sur 8 px autour du halo — 20 px de vide visible.
  * La carte touche maintenant le halo, et son bas (ou son haut, pile qui descend) est au niveau du
  * sien. Elle empiète donc sur la bande transparente de la fenêtre de la bille, jamais sur le halo :
  * le glisser, lu sur `.ob` seul (`PRELOAD_MASCOTTE`), reste entier.
  *
- * AU RAS DU PERSONNAGE (conv-1227) : depuis qu'elle a des bras, des sorts et des feux follets qui
+ * AU RAS DU PERSONNAGE : depuis qu'elle a des bras, des sorts et des feux follets qui
  * débordent du halo, une carte collée au halo cachait tout un côté du personnage. Elle touche donc
  * le bord du DESSIN (`RETRAIT_COTE`) ; son bas (ou son haut) reste au niveau de celui du halo.
  */
@@ -327,7 +327,7 @@ const COULEURS_ANNEAU = [
 ]
 
 /**
- * LE LISERÉ ARC-EN-CIEL des cartes de fin de tour quand la mascotte est affichée (conv-1145,
+ * LE LISERÉ ARC-EN-CIEL des cartes de fin de tour quand la mascotte est affichée (
  * demande : « le liseré arc-en-ciel de la maquette 5 […] sans toucher aux couleurs du thème »).
  *
  * Seul le BORD change : `.cadre` est le calque de 2 px qui entoure la carte
@@ -352,10 +352,10 @@ const ANNEAU =
  * La croix est un lien vers un fragment, lu par le processus principal sur la navigation interne,
  * comme les cartes (`notification-popup-fenetre.ts`).
  *
- * LE NOMBRE AU MILIEU DE LA BILLE (conv-1142, 2026-10-26, demande : « je veux que le nombre soit
+ * LE NOMBRE AU MILIEU DE LA BILLE (2026-10-26, demande : « je veux que le nombre soit
  * au milieu du cercle ») : la pastille `.n` était au coin bas-droit, elle a été centrée sur la bille.
  *
- * LE PERSONNAGE (conv-1227, 2026-10-28, « implémente le 2 ») : le nombre est maintenant le CHIFFRE
+ * LE PERSONNAGE (2026-10-28, « implémente le 2 ») : le nombre est maintenant le CHIFFRE
  * qui brille dans l'étoile du chapeau, dessiné avec tout le personnage (`svgDuPersonnage`) par-dessus
  * la bille ; le visage est peint sur la bille (`visageDeLaBille`). Le survol grossit tout le
  * personnage (`scale`), le saut de « pour toi » le soulève (`translate`) : deux propriétés
@@ -398,7 +398,7 @@ ${cssDuPersonnage()}
 }
 
 /**
- * LA BILLE BASIQUE (conv-1249, 2026-10-29) : la page d'avant le personnage, telle que conv-1142 l'a
+ * LA BILLE BASIQUE (2026-10-29) : la page d'avant le personnage, telle qu'un fil l'a
  * laissée — la bille, son halo en cercle et le nombre au milieu (`.n`), sans visage ni chapeau.
  * Mêmes noms de calques que le magicien là où ils existent (`.ob`, `.h`, `.bw`, `.bk`, `.bl`, `.z`,
  * `.f`) : le préchargement et la croix marchent pareil.
@@ -431,7 +431,7 @@ body{display:grid;place-items:center;font-family:ui-monospace,Consolas,monospace
 }
 
 /**
- * LA MACHINE (conv-346, 2026-10-29, « fais de cette machine la mascotte : 1 au repos, 3 au travail,
+ * LA MACHINE (2026-10-29, « fais de cette machine la mascotte : 1 au repos, 3 au travail,
  * 4 en erreur, 2 quand le travail est fini… rajoute des effets ») : la petite machine de NieR,
  * modelée en three.js puis rendue en planches de 16 images (`mascotte-machine-images.ts`), rejouées
  * ici en CSS — la page n'admet aucun script. Chaque état a sa planche : au repos elle somnole (yeux
@@ -553,7 +553,7 @@ function reglesDeLaMachine(etat: NomEtatMascotte, pastille: string | null): Arra
   return regles
 }
 
-/** Les règles d'état de la bille basique : celles d'avant conv-1227, inchangées. */
+/** Les règles d'état de la bille basique : celles d'avant, inchangées. */
 function reglesDeLaBilleBasique(
   etat: NomEtatMascotte,
   pastille: string | null
@@ -593,7 +593,7 @@ function reglesDeLaBilleBasique(
 }
 
 /**
- * FERMER LA BILLE (conv-1142, 2026-10-26, demande : « je veux pouvoir déplacer la mascotte et la
+ * FERMER LA BILLE (2026-10-26, demande : « je veux pouvoir déplacer la mascotte et la
  * fermer ») : au survol, une CROIX en haut à droite, lien vers `#fermer`. Elle reste 0,4 s après la
  * sortie du survol, le temps d'y arriver en biais.
  */
@@ -641,7 +641,7 @@ export function placerMascotteGardee(
 }
 
 /**
- * CHANGER DE STYLE SANS DÉPLACER LA BILLE (conv-1249) : la place gardée est le coin de la FENÊTRE,
+ * CHANGER DE STYLE SANS DÉPLACER LA BILLE : la place gardée est le coin de la FENÊTRE,
  * et les deux styles n'ont ni la même fenêtre ni la bille au même endroit dedans. Le coin est donc
  * recalculé pour que le centre de la bille reste au même point de l'écran.
  */
@@ -656,7 +656,7 @@ export function positionPourLeStyle(
 }
 
 /**
- * GLISSER-DÉPOSER LA BILLE ENTIÈRE, ET LA CLIQUER (conv-1142, 2026-10-26, demande : « je veux
+ * GLISSER-DÉPOSER LA BILLE ENTIÈRE, ET LA CLIQUER (2026-10-26, demande : « je veux
  * pouvoir la drag & drop […] et que ça m'ouvre autowin quand je click dessus »).
  *
  * Pourquoi pas `-webkit-app-region: drag` sur la bille : Windows la traite alors comme une barre de
@@ -772,11 +772,11 @@ for (const type of ['pointercancel', 'lostpointercapture']) {
 
 /**
  * La feuille de l'ÉTAT, ajoutée par-dessus la page. La pastille n'accepte que des chiffres, « + »
- * et « ! » (`etatDeLaMascotte`) ; depuis le personnage (conv-1227), elle n'entre même plus dans le
+ * et « ! » (`etatDeLaMascotte`) ; depuis le personnage, elle n'entre même plus dans le
  * CSS : elle choisit l'un des chiffres déjà dessinés dans la page (`reglesDuPersonnage`).
  *
  * Chaque sélecteur est préfixé par `body ` : une feuille posée par `insertCSS` passe AVANT celles de
- * la page à poids égal. Constaté le 2026-10-25 en capture de la vraie fenêtre (conv-1145) : la
+ * la page à poids égal. Constaté le 2026-10-25 en capture de la vraie fenêtre : la
  * rotation, absente de la page, s'appliquait ; `.h{display:block}` et `.n{display:grid}` perdaient
  * contre le `display:none` de la page, et ni halo ni pastille ne s'allumaient.
  */
@@ -787,11 +787,11 @@ export function cssDeLEtat(etat: EtatMascotte, style: StyleMascotte = 'magicien'
   const regles: Array<[string, string]> = reglesDuPersonnage(etat.etat, pastille)
   switch (etat.etat) {
     case 'calme':
-      // Opaque au repos aussi (conv-1227, « met la pas transparente au repos ») : l'ancien
+      // Opaque au repos aussi (« met la pas transparente au repos ») : l'ancien
       // `.cps{opacity:.55}` rendait le personnage à moitié transparent dès que rien ne tournait.
       regles.push(['.z', 'display:block'])
       break
-    // Le halo est un GLYPHE (`glypheDuHalo`, conv-1227) : sa couronne de runes (`.ge`) et son étoile
+    // Le halo est un GLYPHE (`glypheDuHalo`) : sa couronne de runes (`.ge`) et son étoile
     // (`.gi`) tournent en sens contraires ; l'état choisit couleur, lueur et vitesse.
     case 'travail':
       regles.push(
@@ -834,7 +834,7 @@ export const HUMEURS_ACCUEIL = ['coucou', 'eveil', 'lecture', 'sommeil'] as cons
 export type HumeurAccueil = (typeof HUMEURS_ACCUEIL)[number]
 
 /**
- * LA MÊME MASCOTTE SUR L'ACCUEIL D'UN FIL VIDE (conv-1401, 2026-10-31) : `AnimationAccueilChat` montre
+ * LA MÊME MASCOTTE SUR L'ACCUEIL D'UN FIL VIDE (2026-10-31) : `AnimationAccueilChat` montre
  * la vraie page (`htmlDeMascotte`) et lui pose cette feuille, dans le style choisi en Settings.
  * Dormir, c'est son état calme ; faire coucou, ses bras levés de « pour toi », sans chiffre. Dès
  * qu'un agent tourne, elle travaille avec le vrai compte, même si l'utilisateur ne bouge plus :

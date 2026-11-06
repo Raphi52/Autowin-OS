@@ -4,7 +4,7 @@ import { basename, dirname, extname, join } from 'node:path'
 /**
  * ICÔNE DE LA BARRE DES TÂCHES EN DEV — pourquoi ce module existe.
  *
- * Constaté le 2026-10-07 (conv-120) : en dev, la barre des tâches montrait l'atome Electron alors
+ * Constaté le 2026-10-07 : en dev, la barre des tâches montrait l'atome Electron alors
  * que la fenêtre reçoit l'icône Autowin (`window.ts`). La chaîne :
  * 1. En dev, `electronApp.setAppUserModelId` (@electron-toolkit/utils) remplace notre identité par
  *    `process.execPath` (`node_modules\electron\dist\electron.exe`).
@@ -54,7 +54,7 @@ export const PRODUIT_EXE_DEV = 'Autowin OS Dev'
  * Electron nomme ce raccourci d'après le NOM DE PRODUIT de l'exe (`GetApplicationName`,
  * windows_toast_activator.cc) : « Electron » pour le binaire npm — preuve sur ce poste, l'app appelle
  * `app.setName('Autowin OS')` et le raccourci s'appelle pourtant `Electron.lnk`. Le lanceur fait
- * tourner l'app sur l'EXE DE DEV (scripts/electron_dev.py, conv-266), produit « Autowin OS Dev ». Il
+ * tourner l'app sur l'EXE DE DEV (scripts/electron_dev.py), produit « Autowin OS Dev ». Il
  * garde le nom `electron.exe` (Electron en tire `app.isPackaged`) : c'est son DOSSIER qui le
  * reconnaît. Un autre nom que celui d'Electron créerait un doublon d'identité.
  */
@@ -67,7 +67,7 @@ export function cheminRaccourciDemarrerDev(appData: string, executable?: string)
 /**
  * ARGUMENTS DU RACCOURCI — ce qu'ouvre un clic dessus dans le menu Démarrer.
  *
- * Constaté le 2026-10-15 (conv-954) : le raccourci visait l'exe SANS argument, et un clic ouvrait la
+ * Constaté le 2026-10-15 : le raccourci visait l'exe SANS argument, et un clic ouvrait la
  * page d'accueil d'Electron (`default_app.asar`) au lieu d'Autowin OS. La cible ne peut pas changer
  * (Electron la contrôle), mais pas les arguments : ils désignent `scripts/menu-demarrer-dev.cjs`, que
  * l'application par défaut d'Electron exécute, et qui démarre le lanceur officiel du dépôt.
@@ -112,8 +112,8 @@ export type ResultatArgumentsRaccourci =
   | { etat: 'echec'; raison: string }
 
 /**
- * L'AUTRE raccourci de dev — celui de l'exe qui ne tourne PAS. Constaté le 2026-10-15 (conv-954) :
- * un poste passé sur l'exe de dev (conv-266) garde l'ancien `Electron.lnk`, avec l'icône Autowin et
+ * L'AUTRE raccourci de dev — celui de l'exe qui ne tourne PAS. Constaté le 2026-10-15 :
+ * un poste passé sur l'exe de dev garde l'ancien `Electron.lnk`, avec l'icône Autowin et
  * sans argument ; l'app ne réaligne que le raccourci de l'exe qui tourne, et celui-là continuait
  * d'ouvrir la page d'accueil d'Electron. On n'y écrit que les ARGUMENTS (opération `update`), et
  * seulement s'il vise un exe de CE dépôt : le raccourci d'un autre clone n'est pas le nôtre.
@@ -146,7 +146,7 @@ export function iconeRaccourciDev(racineApp: string, varianteDev: boolean): stri
 /**
  * ICÔNE À NOM VERSIONNÉ — pourquoi le raccourci ne vise plus `resources/autowin-os-dev.ico` lui-même.
  *
- * Mesuré le 2026-10-11 (conv-266) : le logo anneau avait été écrit SOUS LE MÊME CHEMIN que l'ancien
+ * Mesuré le 2026-10-11 : le logo anneau avait été écrit SOUS LE MÊME CHEMIN que l'ancien
  * atome. L'Explorateur range ses icônes par chemin : le Bureau, capturé par PrintWindow, dessinait
  * toujours l'atome, et ni `SHChangeNotify(UPDATEITEM)` ni `SHUpdateImage` ne l'ont fait changer. Le
  * même raccourci pointé vers un NOUVEAU chemin a montré l'anneau aussitôt. Le raccourci vise donc une
@@ -234,7 +234,7 @@ export function aligneRaccourciDemarrerDev(entree: {
 /**
  * RACCOURCI DU BUREAU — pourquoi l'app le réaligne elle-même.
  *
- * Constaté le 2026-10-13 (conv-930) : un collègue avait fait la mise à jour et gardait l'ancien logo
+ * Constaté le 2026-10-13 : un collègue avait fait la mise à jour et gardait l'ancien logo
  * sur son Bureau. Ce raccourci est posé UNE fois, à la main, par `scripts/create-dev-shortcut.ps1`,
  * et jusqu'au 2026-10-11 il visait `resources\autowin-os-dev.ico` sous un chemin FIXE : la mise à
  * jour en remplace le contenu, l'Explorateur garde l'image du chemin (cf. `cheminIconeVersionnee`).

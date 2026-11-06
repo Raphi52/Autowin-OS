@@ -8,7 +8,7 @@ export interface MomentPointe {
 }
 
 /**
- * Relie le lecteur vidéo d'une carte du fil à la zone de saisie (conv-253, 2026-10-11).
+ * Relie le lecteur vidéo d'une carte du fil à la zone de saisie (2026-10-11).
  * Fourni par `ChatView` ; un contexte plutôt qu'une prop pour ne pas toucher le fil MÉMOÏSÉ
  * (`filRendu`) ni chaque niveau entre la vue et la carte. Sans fournisseur, pas de bouton.
  */

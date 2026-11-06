@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path'
 import { brainReglageFile } from '../brain/brain-reglage'
 
 /**
- * LES DEUX BRAINS DANS UN SEUL GRAPHE (conv-1262, 2026-10-29, demande utilisateur : « ajoute les
+ * LES DEUX BRAINS DANS UN SEUL GRAPHE (2026-10-29, demande utilisateur : « ajoute les
  * ponts et un filtre pour voir que les nodes de l'un ou l'autre dans la vue knowledge »).
  */
 const dossiers: string[] = []

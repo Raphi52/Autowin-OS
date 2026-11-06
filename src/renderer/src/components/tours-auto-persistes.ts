@@ -1,5 +1,5 @@
 /**
- * TOURS AUTOMATIQUES D'AFFILÉE GARDÉS SUR LE POSTE (conv-38, 2026-10-02). Le compte du garde-fou ∞
+ * TOURS AUTOMATIQUES D'AFFILÉE GARDÉS SUR LE POSTE (2026-10-02). Le compte du garde-fou ∞
  * vivait seulement dans un `useRef` du chat : un redémarrage de l'app le remettait à zéro, et un
  * fil dont les envois ne portent pas la mention « (Mode auto — … » repartait pour un plein quota de
  * tours. Mesure : ChatView.mode-auto-garde-chaine.test.tsx (seuil 1, redémarrage, ∞ rallumé → le

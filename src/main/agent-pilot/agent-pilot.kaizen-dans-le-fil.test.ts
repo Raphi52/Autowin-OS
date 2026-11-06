@@ -11,9 +11,9 @@ import { oublierCompteRenduNonVu } from '../runs/compte-rendu-non-vu-store'
 import { commandeNonInjectable, routeSkillRequest } from '../skills/skill-routing'
 
 /**
- * `/kaizen` TAPÉ DANS LE CHAT SE JOUE DANS LE FIL, PAS DANS UN RUN (conv-1334, 2026-10-30).
+ * `/kaizen` TAPÉ DANS LE CHAT SE JOUE DANS LE FIL, PAS DANS UN RUN (2026-10-30).
  *
- * Rejeu de conv-1332, tour c7de932e-abac-4f8b-ba34-1b6335b62653 : « /kaizen tu aurais du tout
+ * Rejeu, tour c7de932e-abac-4f8b-ba34-1b6335b62653 : « /kaizen tu aurais du tout
  * paralléliser avec une super conv » partait en `orchestrate` sans qu'aucun modèle ne lise le
  * message. Le fil restait muet, son RUN.md ne portait que « Orchestration lancée ». Saisie de
  * l'utilisateur : « kaizen lance une orchestration un peu opaque c'est naze ca pourrait le faire

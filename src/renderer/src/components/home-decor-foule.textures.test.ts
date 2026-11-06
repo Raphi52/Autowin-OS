@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 /**
- * LE BUDGET DES TEXTURES DES PASSANTS (conv-337, 2026-10-19).
+ * LE BUDGET DES TEXTURES DES PASSANTS (2026-10-19).
  *
  * MESURE : 55 cartes de couleur en 1024², soit ≈ 307 Mo de mémoire graphique (RGBA + mipmaps) sur
  * les 366 Mo de la foule, pour des silhouettes de quelques centaines de pixels. Ramenées à 512², la

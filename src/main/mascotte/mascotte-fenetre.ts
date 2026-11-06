@@ -1,5 +1,5 @@
 /**
- * La VRAIE fenêtre de la mascotte du bureau (conv-1145, 2026-10-25) — l'état, la page et le
+ * La VRAIE fenêtre de la mascotte du bureau (2026-10-25) — l'état, la page et le
  * placement vivent dans `mascotte.ts`, testés sans Electron.
  *
  * Même fenêtre que les cartes de fin de tour (`notification-popup-fenetre.ts`) : sans bordure,
@@ -10,7 +10,7 @@
  * Elle se CACHE tant qu'une fenêtre d'Autowin est regardée : posée en bas à droite, elle couvrirait
  * le bas de la fenêtre (la saisie), pour la même raison que les cartes se ferment alors.
  *
- * Elle est RECRÉÉE au déverrouillage de la session (`recreerFenetre`, conv-1227) : née pendant une
+ * Elle est RECRÉÉE au déverrouillage de la session (`recreerFenetre`) : née pendant une
  * coupure du Bureau à distance, elle ne se dessinait plus après la reconnexion.
  */
 import {
@@ -64,14 +64,14 @@ export type DependancesMascotte = {
   ouvrirFil: (conversationId: string) => void
   /** Ramène Autowin, sans fil particulier. */
   ouvrirAutowin: () => void
-  /** Le titre d'un fil, pour le menu du clic droit (conv-1196) ; absent = son identifiant. */
+  /** Le titre d'un fil, pour le menu du clic droit ; absent = son identifiant. */
   titreDuFil: (conversationId: string) => string | null | undefined
 }
 
 export type MascotteDuBureau = {
   /**
    * Chaque événement diffusé par le moteur (`broadcast`) : les départs et fins de run y sont
-   * comptés, fenêtre principale fermée comprise (`mascotte-runs.ts`, conv-1196).
+   * comptés, fenêtre principale fermée comprise (`mascotte-runs.ts`).
    */
   evenementDeRun: (evenement: EvenementDeRun) => void
   /** Un tour de chat vient de finir : il attend peut-être l'utilisateur. */
@@ -82,30 +82,30 @@ export type MascotteDuBureau = {
   /**
    * Branche la mascotte sur Autowin (une seule fois) ; sa fenêtre n'est créée que si elle est
    * affichée (`affichee`, le choix de Settings · Interface lu au démarrage), dans le `style` gardé
-   * (magicien par défaut, conv-1249).
+   * (magicien par défaut).
    */
   demarrer: (deps: DependancesMascotte, affichee: boolean, style?: StyleMascotte) => void
   /**
-   * Le choix « Magicien / Basique » de Settings · Interface (conv-1249) : la fenêtre est recréée
+   * Le choix « Magicien / Basique » de Settings · Interface : la fenêtre est recréée
    * dans le nouveau style, la bille au même point de l'écran.
    */
   changerStyle: (style: StyleMascotte) => void
   /**
-   * L'interrupteur de Settings · Interface (conv-1145). Masquée = fenêtre FERMÉE, pas seulement
+   * L'interrupteur de Settings · Interface. Masquée = fenêtre FERMÉE, pas seulement
    * cachée : rien ne reste à l'écran ni en mémoire. Réaffichée = fenêtre recréée.
    */
   afficher: (affichee: boolean) => void
   estLaMascotte: (fenetre: BrowserWindow | null) => boolean
   /**
    * La zone des cartes de fin de tour : à côté de la bille, là où elle est et sur SON écran, quand
-   * elle est affichée (conv-1142) ; sinon la zone reçue (l'écran principal), inchangée.
+   * elle est affichée ; sinon la zone reçue (l'écran principal), inchangée.
    */
   zoneDesCartes: (zone: Rect) => ZoneDesCartes
   /** La page d'une carte : avec le liseré arc-en-ciel quand la mascotte est affichée. */
   decorerCarte: (html: string) => string
   /**
    * Prévenu à chaque déplacement de la bille (glisser, lâcher, écran changé) : les cartes de fin
-   * de tour se reposent contre elle et la suivent (conv-1195, « snap ensemble »).
+   * de tour se reposent contre elle et la suivent (« snap ensemble »).
    */
   quandElleBouge: (ecouteur: () => void) => void
 }
@@ -113,7 +113,7 @@ export type MascotteDuBureau = {
 /** Les réponses de chat n'émettent aucun événement de début : relues à ce rythme. */
 const RYTHME_MS = 1500
 /**
- * CLICS À TRAVERS LE PERSONNAGE (conv-1227) : la fenêtre a grandi pour le chapeau, les bras et les
+ * CLICS À TRAVERS LE PERSONNAGE : la fenêtre a grandi pour le chapeau, les bras et les
  * sorts, mais seule la bille (et sa croix) doit prendre les clics — une fenêtre transparente les
  * prend partout sinon (limite documentée d'Electron). Le pointeur est relu à ce rythme, et la
  * fenêtre laisse passer les clics (`setIgnoreMouseEvents`) dès qu'il n'est plus sur la bille. La
@@ -211,7 +211,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   }
 
   /**
-   * Le clic droit (conv-1196, ligne 12 du scout) : TOUS les fils qui t'attendent, le clic gauche n'en
+   * Le clic droit (ligne 12 du scout) : TOUS les fils qui t'attendent, le clic gauche n'en
    * ouvrant qu'un (`mascotte-menu.ts`). Lu par l'événement `context-menu` du moteur : la page n'a
    * aucun script, et le préchargement n'écoute que le bouton gauche. `x`/`y` sont relatifs à la
    * fenêtre, comme `popup` les attend.
@@ -313,7 +313,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       backgroundColor: '#00000000',
       hasShadow: false,
       resizable: false,
-      // Déplacée par le moteur pendant un glisser de la bille (`surGeste`, conv-1142).
+      // Déplacée par le moteur pendant un glisser de la bille (`surGeste`).
       movable: true,
       minimizable: false,
       maximizable: false,
@@ -333,7 +333,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
       }
     })
     const fenetre = win
-    // Une fenêtre neuve n'a pas forcément la taille de l'ancienne (style changé, conv-1249) : les
+    // Une fenêtre neuve n'a pas forcément la taille de l'ancienne (style changé) : les
     // cartes ouvertes se recollent contre elle.
     aBouge()
     traversante = null
@@ -385,7 +385,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   }
 
   /**
-   * RECONNEXION DU BUREAU À DISTANCE (conv-1227, 2026-10-28) : une fenêtre transparente née pendant
+   * RECONNEXION DU BUREAU À DISTANCE (2026-10-28) : une fenêtre transparente née pendant
    * une coupure de la session ne dessinait plus rien après la reconnexion. Windows l'affichait, sa
    * page se croyait visible, mais le moteur ne produisait aucune image (Autowin relancé à 22:04:27,
    * session coupée de 22:03:53 à 23:01:54, « capture sans image en 4 s » à 23:31:42) ; une fenêtre
@@ -406,7 +406,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   }
 
   /**
-   * MAGICIEN OU BASIQUE (conv-1249) : la page, la taille de la fenêtre et la zone qui prend les
+   * MAGICIEN OU BASIQUE : la page, la taille de la fenêtre et la zone qui prend les
    * clics changent avec le style ; la fenêtre est donc recréée, comme au déverrouillage. La place
    * gardée suit (`positionPourLeStyle`) : la bille ne saute pas quand on change de style.
    */
@@ -436,7 +436,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
   }
 
   /**
-   * La croix de la bille (conv-1142) : le MÊME choix que l'interrupteur « Masquée » de Settings ·
+   * La croix de la bille : le MÊME choix que l'interrupteur « Masquée » de Settings ·
    * Interface, donc gardé — fermée, elle ne revient pas au prochain démarrage, et c'est
    * l'interrupteur qui la rouvre. Un enregistrement impossible la ferme quand même : l'utilisateur
    * a demandé qu'elle parte, elle ne reviendra qu'au prochain démarrage.
@@ -487,7 +487,7 @@ export function creerMascotteDuBureau(): MascotteDuBureau {
         screen.on('display-added', placer)
         screen.on('display-removed', placer)
         powerMonitor.on('unlock-screen', () => recreerFenetre('session déverrouillée'))
-        // conv-346 (2026-11-01, « même hors d'Autowin je ne vois pas la mascotte ») : la visibilité
+        // 2026-11-01, « même hors d'Autowin je ne vois pas la mascotte » : la visibilité
         // ne se relisait qu'au `browser-window-blur` ; un focus perdu sans cet événement (fenêtre
         // cachée ou détruite qui le portait) la laissait masquée pour toujours. Relue à chaque battement.
         setInterval(() => {

@@ -1,28 +1,28 @@
 /**
- * QUAND PROPOSER UN PLAN DE LOTS (« super conversation », conv-1150) — servie par
+ * QUAND PROPOSER UN PLAN DE LOTS (« super conversation ») — servie par
  * `chat-pilotage-prompt.ts`, hors tour lecture seule et seulement si l'outil `plan_de_lots` est au
  * catalogue.
  *
- * Pourquoi (conv-1151, 2026-10-27) : la consigne du chat ne nommait nulle part `plan_de_lots` ; seule
+ * Pourquoi (2026-10-27) : la consigne du chat ne nommait nulle part `plan_de_lots` ; seule
  * la description de l'outil (`commands.ts`) disait CE QU'IL FAIT, jamais QUAND s'en servir. Résultat
  * mesuré : un plan ne naissait que si l'utilisateur le demandait en toutes lettres. La carte
  * ```aw-fils (`shared/lancer-en-fils.ts`) couvre l'autre cas — plusieurs demandes indépendantes de
  * l'utilisateur — et cette règle s'en distingue explicitement pour que les deux ne se marchent pas
- * dessus. Depuis conv-1171 (2026-10-27), déposer LANCE le plan, sans clic d'accord : « je ne veux pas
+ * dessus. Depuis le 2026-10-27, déposer LANCE le plan, sans clic d'accord : « je ne veux pas
  * avoir à confirmer, je veux que ça se lance tout seul ». La consigne le dit donc, coût compris.
  *
- * L'IMPASSE DES TÂCHES INDÉPENDANTES (kaizen de conv-1332, 2026-10-30, « tu aurais dû tout
- * paralléliser ») : cette règle les renvoyait à la carte des fils, que conv-1163 a retirée sauf
+ * L'IMPASSE DES TÂCHES INDÉPENDANTES (2026-10-30, « tu aurais dû tout
+ * paralléliser ») : cette règle les renvoyait à la carte des fils, qu'un fil a retirée sauf
  * demande explicite. Résultat : deux tâches indépendantes ne pouvaient plus partir qu'en série. Le
  * plan part sans clic, donc le refus de la carte ne s'y oppose pas.
  *
- * fix-ok: conv-1332 — LA PREUVE ÉTAIT DU MAUVAIS CÔTÉ : une première correction gardait la série
+ * fix-ok: LA PREUVE ÉTAIT DU MAUVAIS CÔTÉ : une première correction gardait la série
  * par défaut et exigeait « indépendantes, fichiers séparés, chacune un tour entier ». Les deux
  * dernières conditions ne se savent pas avant d'avoir travaillé, et une seule petite tâche suffisait
- * à tout garder ici. Saisie 1793364618896 de conv-1322 : le modèle sondé voit que les tâches ne se
+ * à tout garder ici. Saisie 1793364618896 : le modèle sondé voit que les tâches ne se
  * croisent pas, classe à raison la 1 en petite correction (une ligne de ChatView.css) et reste ici.
  * Le tour 3ac2be2e a passé 33 minutes et 4,48 $ sur les deux : la 2 corrigée (2b895ca7), la 1 bloquée
- * par une réservation de conv-1317. Il ne prouve PAS qu'un plan aurait été plus rapide, un lot aurait
+ * par une réservation. Il ne prouve PAS qu'un plan aurait été plus rapide, un lot aurait
  * pu buter sur la même réservation : il montre seulement que la règle ne mordait pas. La durée ne
  * décide donc plus : seuls comptent le lien entre les tâches et leur sujet, qui se lisent dans le
  * message.
@@ -32,7 +32,7 @@ export const CONSIGNE_PLAN_DE_LOTS =
   `qui se découpe en au moins TROIS parties sur des fichiers séparés (une refonte, « rends X ` +
   `parfait », une fonctionnalité qui touche à la fois le cœur, l'interface et les tests) et qu'un ` +
   `seul fil y passerait plusieurs tours, lance-le toi-même avec \`plan_de_lots\` (action ` +
-  // conv-1577 (2026-11-05) : le cas « plusieurs tâches indépendantes → un lot par tâche » est dit
+  // 2026-11-05 : le cas « plusieurs tâches indépendantes → un lot par tâche » est dit
   // par PLUSIEURS TÂCHES DANS UN MESSAGE, servi dans le même prompt ; il n'est plus répété ici.
   `« deposer ») au lieu de tout faire ici ou de lancer \`orchestrate\`. Déposer LANCE le plan aussitôt, ` +
   `sans clic de l'utilisateur (il peut l'arrêter dans le tableau) : ne dépose qu'un plan prêt. Avant de déposer, une lecture ` +

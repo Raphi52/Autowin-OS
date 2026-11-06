@@ -12,7 +12,7 @@
  * Messages echanges avec le parent, tous `{ type: 'autowin-scene-3d', ... }` :
  *   page -> parent : `{ etat: 'pret' }`, puis `{ etat: 'lancee' }` ou `{ etat: 'erreur', message }` ;
  *     en mode page, aussi `{ etat: 'hauteur', hauteur }` a chaque changement de taille du contenu,
- *     et (conv-1304) `alerte`/`avertissement` { message }, `stockage` { donnees }, `lien` { href },
+ *     et `alerte`/`avertissement` { message }, `stockage` { donnees }, `lien` { href },
  *     `defiler` { y } et `copier` { texte, demande } — ce dernier attend une reponse ; `pong`
  *     { ping } (signe de vie), `touchee` (premier geste de l'utilisateur), `echap` (touche Echap
  *     dans le cadre, que le fil ne voit pas) et `ressources` { demande, moteur, graphiques } ;
@@ -21,7 +21,7 @@
  *     change, `{ reponse, ok, message }` pour chaque `demande`, `{ ping }` et `{ ressources }`.
  *   Le format de chaque message de la page est lu par `lireMessagePage` (page-interactive.ts).
  *
- * MODE PAGE (bloc ```html-interactif, conv-1292, 2026-10-29 : « des pages visuelles avec du
+ * MODE PAGE (bloc ```html-interactif, 2026-10-29 : « des pages visuelles avec du
  * JavaScript », comme les reponses visuelles de T3 Code). Meme page, meme politique, meme
  * isolement que les scenes : seule la FORME du contenu change. Les `<script>` du HTML ne
  * s'executeraient pas (la politique n'en accepte aucun en ligne) : l'amorce les lit et les passe a
@@ -88,7 +88,7 @@
     }
   }
 
-  // MOTEUR A LA DEMANDE (conv-1304, voir page-scene-3d.mjs) : three.js est pose en TEXTE dans la
+  // MOTEUR A LA DEMANDE (voir page-scene-3d.mjs) : three.js est pose en TEXTE dans la
   // page, evalue seulement quand il sert — toujours pour une scene, pour une page si elle nomme
   // `THREE`. Le bloc est retire des sa lecture : le code du modele ne le retrouve pas dans le DOM.
   // Son texte reste dans cette fermeture une fois evalue : « Enregistrer en .html » le redemande.
@@ -102,7 +102,7 @@
     ;(0, eval)(`${texteMoteur}\n//# sourceURL=three.js`)
   }
 
-  // Boite a outils de graphiques (conv-1304, graphiques.js) : meme recette, evaluee au premier
+  // Boite a outils de graphiques (graphiques.js) : meme recette, evaluee au premier
   // `autowin.graphique`. Une page qui ne dessine rien ne paie rien.
   const blocGraphiques = document.getElementById('autowin-graphiques')
   const texteGraphiques = blocGraphiques ? blocGraphiques.textContent || '' : ''
@@ -117,7 +117,7 @@
 
   // Numeros de ligne : en mode page, les scripts du bloc sont concatenes dans UN eval (`page.js`) ;
   // un « ligne 57 » de cet eval ne dit rien a qui lit le bloc. `lancerPage` remplace cette
-  // traduction par la table « ligne de l'eval -> ligne du bloc » (conv-1304, 2026-10-30).
+  // traduction par la table « ligne de l'eval -> ligne du bloc » (2026-10-30).
   let ligneDuBloc = (ligne) => ligne
   const SOURCE_PAGE = 'page.js'
   const traduireLignes = (texte) =>
@@ -129,7 +129,7 @@
   window.addEventListener('error', (event) => {
     // Une notification de taille reportee au cadre suivant, pas un plantage : le navigateur la leve
     // des qu'un ResizeObserver change la mise en page. Le fil affichait « La page a plante » pour
-    // une page qui marchait (banc de autowin.graphique, conv-1304).
+    // une page qui marchait (banc de autowin.graphique).
     if (/^ResizeObserver loop/u.test(String(event.message))) return
     let ou = ''
     if (event.lineno) {
@@ -144,7 +144,7 @@
   })
 
   // En mode page, une erreur se dit en UNE ligne : son message et la ligne du bloc ou elle est
-  // levee. Mesure dans l'app (conv-1304) : la pile brute ajoutait « at eval (<anonymous>) », qui
+  // levee. Mesure dans l'app : la pile brute ajoutait « at eval (<anonymous>) », qui
   // ne dit rien a qui lit le bloc. Les scenes gardent leurs trois lignes de pile.
   const decrireErreur = (erreur) => {
     const pile = erreur && erreur.stack ? String(erreur.stack).split('\n') : []
@@ -179,7 +179,7 @@
   // AVANT : le retirer apres remettrait la propriete a null.
   // Ils se compilent DANS LA PORTEE DES SCRIPTS de la page (`compilerDansLesScripts`, pose par le
   // code evalue) : les `const`/`let` d'un script evalue restent privees a cet eval, et un
-  // `new Function` ne les voyait pas. Mesure de scripts/html-interactif-apercu.mjs (conv-1292,
+  // `new Function` ne les voyait pas. Mesure de scripts/html-interactif-apercu.mjs (
   // 2026-10-29) : `const valeurs = []` + `onclick="valeurs.push(1)"` levait « valeurs is not
   // defined » au clic, la ou un navigateur ordinaire les partage. `new Function` reste le repli si
   // les scripts n'ont pas pu demarrer, et sert a signaler une faute de syntaxe des la pose.
@@ -207,7 +207,7 @@
             const compilateur = compilerDansLesScripts || window[CLE_COMPILATEUR]
             compile = typeof compilateur === 'function' ? compilateur(source) : repli
           }
-          // L'erreur dit QUEL attribut de QUEL element a leve (conv-1304) : la pile d'un
+          // L'erreur dit QUEL attribut de QUEL element a leve : la pile d'un
           // gestionnaire recompile ne pointe sur aucune ligne du bloc. Signalee ici, elle ne
           // remonte pas : sinon le fil la recevrait deux fois.
           try {
@@ -231,7 +231,7 @@
     return `<${element.tagName.toLowerCase()}${id}>${texte ? ` « ${texte} »` : ''}`
   }
 
-  // 3 bis. COMPATIBILITE DU MODE PAGE (conv-1304, 2026-10-30 : « rends la feature ultra mature »).
+  // 3 bis. COMPATIBILITE DU MODE PAGE (2026-10-30 : « rends la feature ultra mature »).
   // Banc `.autowin-tmp/conv-1304/banc-motifs.html` passe par html-interactif-apercu.mjs : dans le
   // cadre isole (origine opaque, sans `allow-modals`, presse-papiers ferme par `allow`),
   // localStorage, sessionStorage et document.cookie levaient SecurityError, alert/confirm etaient
@@ -429,7 +429,7 @@
       }
     })
 
-    // BOUTONS DE CHOIX (conv-1304, 2026-10-30) : un lien `#autowin-prompt` d'une page interactive
+    // BOUTONS DE CHOIX (2026-10-30) : un lien `#autowin-prompt` d'une page interactive
     // REMPLIT la zone de saisie du fil avec son libelle, sans rien envoyer — dans un bloc
     // ```html-render, le meme lien envoie (bouton-prompt-html.ts), mais aucun script n'y tourne. Ici
     // le code de la page pourrait faire dire au bouton autre chose que ce qu'on lit : l'utilisateur
@@ -455,7 +455,7 @@
     poser(window, 'autowin', { value: autowin, writable: true })
 
     // Le fil ne voit rien de ce qui se passe dans le cadre : ni le premier geste, qui protege la page
-    // de la liberation hors ecran (conv-1304), ni Echap, qui ferme la vue agrandie.
+    // de la liberation hors ecran, ni Echap, qui ferme la vue agrandie.
     const geste = () => {
       document.removeEventListener('pointerdown', geste, true)
       signaler({ etat: 'touchee' })
@@ -665,7 +665,7 @@
     if (event.source !== parentWindow) return
     const donnees = event.data
     if (!donnees || donnees.type !== TYPE) return
-    // Signe de vie (conv-1304) : une page en boucle infinie ne peut plus repondre, le fil le voit.
+    // Signe de vie : une page en boucle infinie ne peut plus repondre, le fil le voit.
     if (typeof donnees.ping === 'number') {
       signaler({ etat: 'pong', ping: donnees.ping })
       return
@@ -687,7 +687,7 @@
     if (modePage && donnees.theme) {
       appliquerTheme(donnees.theme)
       // Un dessin (canvas, couleurs lues une fois) ne suit pas seul un changement de theme : la
-      // page peut ecouter `aw-theme` pour se redessiner (conv-1304).
+      // page peut ecouter `aw-theme` pour se redessiner.
       window.dispatchEvent(new Event('aw-theme'))
       return
     }

@@ -35,7 +35,7 @@ function runMd(status: string, besoin: string): string {
 }
 
 /**
- * Le contrat de tâche au niveau de la CONVERSATION — la pièce qui manquait à conv-1302, où quatre
+ * Le contrat de tâche au niveau de la CONVERSATION — la pièce qui manquait, où quatre
  * runs ont fermé vert en corrigeant un autre fichier que celui demandé, sur des tours de relance qui
  * ne nommaient plus rien (« finis », « répare jusqu'à finir »).
  */
@@ -256,9 +256,9 @@ describe('câblage — la note de contrat atteint le prompt du juge', () => {
  * MESURÉ SUR LE CORPUS RÉEL (1086 conversations) après la première réparation : deux défauts que
  * le panel n'avait pas vus, parce qu'ils ne se voient qu'en volume.
  *
- * - conv-349 et conv-356 produisaient un contrat de SEIZE cibles : une note illisible, donc un
+ * - et un fil produisaient un contrat de SEIZE cibles : une note illisible, donc un
  *   signal que le juge ne peut pas peser.
- * - conv-351, conv-357 et conv-1300 produisaient des chemins de COPIES ISOLÉES
+ * -, des fils produisaient des chemins de COPIES ISOLÉES
  *   (`worktrees/agent__run-…`, `appdata/roaming/…`, un fragment `20os/` issu d'un chemin
  *   URL-encodé) — ce ne sont pas des cibles du dépôt, et le même fichier y apparaissait deux fois.
  */

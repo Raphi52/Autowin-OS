@@ -16,7 +16,7 @@ export type TerminalStatus = 'cancelled' | 'interrupted' | 'failed'
 
 /*
  * Le brouillon est le message de l'UTILISATEUR, qu'il complète : il suit la langue de l'écran
- * (traduction anglaise, conv-1170). Seul le repère `[reprise] ` reste en français : il est relu
+ * (traduction anglaise). Seul le repère `[reprise] ` reste en français : il est relu
  * (`includes`) pour ne pas empiler deux blocs, quelle que soit la langue au moment du clic.
  */
 const MARQUEUR_REPRISE = '[reprise] '

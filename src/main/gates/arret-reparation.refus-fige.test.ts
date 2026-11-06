@@ -4,7 +4,7 @@ import { CLOSURE_UPSTREAM_REFUSAL, arretDeLaReparation, memeRefus } from './stop
 /**
  * UN REFUS MIXTE FIGÉ doit aussi couper la boucle.
  *
- * Défaut VÉCU, conv-470, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` (demande `/kaizen j'ai rien en
+ * Défaut VÉCU, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` (demande `/kaizen j'ai rien en
  * préprompt`, saisie `ts=1789192601300`) : QUATRE passages `[RÉPARATION 1..4]`, chacun suivi du même
  * refus mot pour mot — « Échec déjà déclaré … ; Promis mais pas fait : "Cible nommee …
  * src/main/modeles/model-quotas.ts" ». `doitArreterLaReparation` n'a pas mordu parce qu'elle exige que TOUS

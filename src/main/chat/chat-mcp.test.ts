@@ -225,7 +225,7 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
       'remember',
       'desktop_observe'
     ])
-    // SUCCES SILENCIEUX (conv-908, 2026-10-12 : « pk ca m'ecrit tout le temps ca dans le bloc
+    // SUCCES SILENCIEUX (2026-10-12 : « pk ca m'ecrit tout le temps ca dans le bloc
     // actions ») : le service normal ne s'annonce plus a chaque tour — seule une PANNE se dit
     // (« retour au texte », tests plus bas).
     expect(t.statuts().some((s) => /outils directs/i.test(s))).toBe(false)
@@ -315,7 +315,7 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
 
   it('echec direct REPARE par un appel direct : la reprise « derniere action ECHOUEE » ne revient pas', async () => {
     /*
-     * Mesure conv-908 (2026-10-12) : `verify` direct rouge, puis rejoue VERT (exit 0) — et la reprise
+     * Mesure (2026-10-12) : `verify` direct rouge, puis rejoue VERT (exit 0) — et la reprise
      * « ta derniere action a ECHOUE » revenait quand meme. Le drapeau d'echec de l'iteration n'etait
      * remis a plat que par la boucle des `<cmd>`, jamais atteinte par un tour 100 % outils directs.
      */
@@ -351,7 +351,7 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
 
   it('echec direct REPARE DANS LE MEME ENVOI : aucune reprise « derniere action ECHOUEE »', async () => {
     /*
-     * Mesure conv-302 (2026-10-17, tour 1201313c) : `verify` typecheck rouge (exit 2), corrigé puis
+     * Mesure (2026-10-17, tour 1201313c) : `verify` typecheck rouge (exit 2), corrigé puis
      * rejoué VERT dans la MEME réponse — un tour d'outils directs tient en un seul envoi. Le drapeau
      * d'echec de l'iteration restait leve par le rouge et la reprise « ta derniere action a ECHOUE »
      * partait quand meme, payee pour un tour deja repare. Tout cycle rouge -> vert d'un tour la
@@ -582,7 +582,7 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
   })
 
   /*
-   * CONSIGNE SANS DOUBLON (conv-1229, 2026-10-28) : une commande servie en outil direct n'est plus
+   * CONSIGNE SANS DOUBLON (2026-10-28) : une commande servie en outil direct n'est plus
    * redétaillée dans la consigne du chat ; sur un retour au texte, la liste complète repart, puisque
    * le `<cmd>` est alors le seul chemin du modèle.
    */
@@ -594,7 +594,7 @@ describe('chat — commandes servies aussi comme outils directs du modele', () =
     for (const nom of ['ask', 'orchestrate']) {
       expect(systeme).toContain(`\n- ${nom}(`)
     }
-    // Le faux catalogue de ce fichier doit porter le meme marquage que le vrai (conv-1352).
+    // Le faux catalogue de ce fichier doit porter le meme marquage que le vrai.
     for (const nom of ['get_state', 'remember', 'desktop_observe', 'read_file', 'edit_file']) {
       expect(systeme).not.toContain(`\n- ${nom}(`)
     }

@@ -3,7 +3,7 @@ import { CONSTITUTION } from './constitution'
 import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
 
 /**
- * LE PLAN QUI CHANGE, RACONTÉ EN MÉCANIQUE — mesuré le 2026-09-02, conv-128.
+ * LE PLAN QUI CHANGE, RACONTÉ EN MÉCANIQUE — mesuré le 2026-09-02.
  *
  * L'utilisateur lance `/skill …`. L'agent découvre que la chose demandée existe déjà, abandonne la
  * commande et fait autre chose — c'était le bon choix. Mais il l'annonce ainsi : « J'ai arrêté

@@ -10,7 +10,7 @@ import {
 } from './ChatView.harness'
 
 /**
- * BOUTON DE SUITE DE LA NOTIFICATION, CÔTÉ CHAT (conv-1038, 2026-10-21). Le main émet
+ * BOUTON DE SUITE DE LA NOTIFICATION, CÔTÉ CHAT (2026-10-21). Le main émet
  * `suite-depuis-notification` quand l'utilisateur presse un bouton de la bulle de fin de tour : la
  * suite doit partir dans le fil DU TOUR, comme un message tapé, sans changer le fil affiché.
  *

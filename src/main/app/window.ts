@@ -95,7 +95,7 @@ export type Fenetres = {
   refleterRunsVivants: (etat: EtatRunsVivants) => void
   /**
    * La fenêtre PRINCIPALE vivante, ou `null` (fermée : l'app vit dans la barre d'état). Lue par le
-   * navigateur intégré du chat, qui pose ses pages DANS cette fenêtre (conv-1286) ; seule cette
+   * navigateur intégré du chat, qui pose ses pages DANS cette fenêtre ; seule cette
    * fermeture la connaît, `getAllWindows()` mêlant les fenêtres de question et la mascotte.
    */
   fenetrePrincipale: () => BrowserWindow | null
@@ -114,9 +114,9 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
   const questionWindows = new Map<string, BrowserWindow>()
   /**
    * La question de chaque page, gardée jusqu'à la fermeture de sa fenêtre : c'est la page qui la
-   * demande quand elle est prête (conv-1342). Un envoi unique à la fin du chargement arrivait 6 à
+   * demande quand elle est prête. Un envoi unique à la fin du chargement arrivait 6 à
    * 8 ms après le branchement de l'écoute : manqué une fois, il laissait une fenêtre noire et un run
-   * en pause (conv-1337, 30/10), et il n'aurait pas non plus survécu à un rechargement de la page.
+   * en pause (30/10), et il n'aurait pas non plus survécu à un rechargement de la page.
    */
   const questionsParPage = new Map<number, PendingModelQuestion>()
   /**
@@ -145,7 +145,7 @@ export function createWindowing(deps: WindowingDeps): Fenetres {
   let isQuitting = false
   /**
    * Montre la fenêtre PRINCIPALE, ou la recrée si elle a été fermée : `createWindow` réveille
-   * `mainWindowVivante` quand elle existe. Avant (conv-1142, 2026-10-26), la première fenêtre de
+   * `mainWindowVivante` quand elle existe. Avant (2026-10-26), la première fenêtre de
    * `getAllWindows()` : la mascotte du bureau ou une carte de fin de tour y figurent aussi, et le
    * clic sur la bille « montrait » la bille — Autowin ne s'ouvrait pas.
    */

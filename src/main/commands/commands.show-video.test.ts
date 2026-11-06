@@ -15,7 +15,7 @@ const mesure = vi.mocked(mesurerVideo)
 const MESURE_B6: MesureVideo = { ok: true, fps: 30, images: 1188 }
 
 /**
- * MONTRER UNE VIDÉO DANS LE FIL (conv-253, 2026-10-11).
+ * MONTRER UNE VIDÉO DANS LE FIL (2026-10-11).
  *
  * Avant : un MP4 fabriqué par une commande shell (ffmpeg) n'arrivait JAMAIS dans le fil — une carte
  * ne naît que d'un bloc image/fichier d'un outil natif ou d'une capture IMAGE de commande. Le dossier
@@ -141,7 +141,7 @@ describe('show_video — une vidéo du dossier de travail devient une carte du f
   it('ffprobe répond SANS flux vidéo (son seul, ou texte renommé illisible) : refus NOMMÉ, pas de carte', async () => {
     // Relevé avec ffprobe 8.0.1 : .mp4 son seul = code 0 + `streams: []` ; texte renommé en .mp4 =
     // code 1 + « Invalid data… ». `mesurerVideo` rend `sansFluxVideo` dans les deux cas.
-    // fix-ok: conv-253 — preparerVideoAMontrer rangeait ce cas avec les échecs d'ffprobe (lecteur
+    // fix-ok: preparerVideoAMontrer rangeait ce cas avec les échecs d'ffprobe (lecteur
     // vide, « 30 supposé ») ; refus retiré de show-video-command.ts = ce test rouge (code 1).
     mesure.mockResolvedValue({ ok: false, sansFluxVideo: true, raison: 'aucun flux vidéo trouvé' })
     const { bus, conv } = monter()

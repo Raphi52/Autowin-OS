@@ -1,5 +1,5 @@
 /**
- * LE RUN.md PORTE LE JOUR DU POSTE, PAS CELUI DE LONDRES (scout du 05/11, piste 18, conv-1602).
+ * LE RUN.md PORTE LE JOUR DU POSTE, PAS CELUI DE LONDRES (scout du 05/11, piste 18).
  *
  * Les deux dates du RUN.md — la ligne de création (`createConvRun`) et celle de clôture
  * (`texteClos`, via `closeConvRun`) — venaient de `toISOString().slice(0, 10)`, le jour UTC. Entre

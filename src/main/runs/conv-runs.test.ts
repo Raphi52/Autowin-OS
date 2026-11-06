@@ -64,7 +64,7 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
     expect(degraded.summary.status).toBe('degraded-closed')
     expect(degraded.summary.dodChecked).toBe(0)
 
-    // INTERROMPU (piste 4, conv-1070) : écrit tel quel et relu tel quel — sans lui dans la liste
+    // INTERROMPU (piste 4) : écrit tel quel et relu tel quel — sans lui dans la liste
     // de `parseRun`, il serait relu `unknown`, donc bloqué, exactement comme `red`.
     const i = createConvRun('conv-9', 'modifie le projet puis coupe', root, () => 3600)
     closeConvRun(i, 'interrupted', 'Interrompu : arrêt demandé (Stop).')
@@ -214,12 +214,12 @@ describe('conv-runs — RUN.md par conversation (format autowin)', () => {
 /**
  * LA TRACE DURABLE NE DOIT PAS DETRUIRE LA RAISON DE L'ECHEC.
  *
- * Mesure du 2026-08-31, run conv-9 : le message reel porte la raison sur sa DEUXIEME ligne, et
+ * Mesure du 2026-08-31, run : le message reel porte la raison sur sa DEUXIEME ligne, et
  * `String(e).slice(0, 120)` coupait a « claude CLI interromp » — avant la raison, avant
  * `last-event=`, avant l'indice de reparation. La diffusion LIVE, deux lignes plus bas dans le meme
  * code, envoyait le message ENTIER : seule la trace relue apres coup etait aveugle. C'est ce qui a
  * force une seconde enquete pour expliquer un simple clic sur Stop. Recidive d'un incident deja
- * nomme dans le code (conv-1369).
+ * nomme dans le code.
  */
 describe('ligneJournalDErreur — la raison survit, le format tient', () => {
   const erreurReelle = new Error(
@@ -246,7 +246,7 @@ describe('ligneJournalDErreur — la raison survit, le format tient', () => {
 })
 
 /**
- * LE STATUT ÉCRIT DANS RUN.md DEPUIS LA CLÔTURE DU MOTEUR (piste 4, conv-1070). Le moteur clôt
+ * LE STATUT ÉCRIT DANS RUN.md DEPUIS LA CLÔTURE DU MOTEUR (piste 4). Le moteur clôt
  * `red` tout run non vert ; il note à côté la cause quand elle est extérieure au travail. L'entrée
  * qui ferait échouer ce test si le correctif était faux : une clôture `red` SANS cause — un refus
  * du juge — qui doit rester `red`.

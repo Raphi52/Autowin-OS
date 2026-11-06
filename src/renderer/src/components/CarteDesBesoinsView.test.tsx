@@ -12,7 +12,7 @@ import type {
 } from '../../../shared/carte-des-besoins'
 
 /**
- * VUE « CARTE DU PROJET » (conv-1089, 2026-10-22 ; réduite à la rivière le 23/10, conv-1113 : « il
+ * VUE « CARTE DU PROJET » (2026-10-22 ; réduite à la rivière le 23/10, « il
  * doit y avoir que ce board dans la view, supprime tout ce qui est en dessous »). ENTRÉES QUI
  * DOIVENT FAIRE ÉCHOUER : la fiche d'un dépôt, la liste des demandes, ses filtres ou son pied encore
  * rendus sous la rivière ; un fil qui ne s'ouvre pas quand le chat n'est pas encore monté ; un
@@ -115,14 +115,14 @@ describe('CarteDesBesoinsView', () => {
     ])
       expect(el.querySelector(`[data-testid="${parti}"]`)).toBeNull()
     expect(vue.textContent).not.toContain('Toutes les demandes')
-    // Sous la rivière, plus rien : elle est le dernier enfant de son onglet (conv-1397), et cet
+    // Sous la rivière, plus rien : elle est le dernier enfant de son onglet, et cet
     // onglet le dernier de la vue tant que les tickets n'ont pas été ouverts.
     const onglet = vue.querySelector('[data-testid="besoins-onglet-demandes"]')!
     expect(onglet.lastElementChild?.getAttribute('data-testid')).toBe('riviere')
     expect(vue.lastElementChild).toBe(onglet)
   })
 
-  // L'ancien écran Tickets, devenu onglet du Board (conv-1397, 2026-10-31 : « la partie ticket azure
+  // L'ancien écran Tickets, devenu onglet du Board (2026-10-31 : « la partie ticket azure
   // faut trouver comment la mettre dans board de manière élégante »). ENTRÉES QUI DOIVENT FAIRE
   // ÉCHOUER : des tickets rendus sous la rivière, une rivière démontée en allant sur les tickets, ou
   // les compteurs des post-it laissés au-dessus des tickets.
@@ -213,7 +213,7 @@ describe('CarteDesBesoinsView', () => {
     expect(stats).not.toContain('1 runs')
   })
 
-  // Contrôle final de conv-1337 : un run qui attend une décision disparaissait du Board. Le jumeau
+  // Contrôle final : un run qui attend une décision disparaissait du Board. Le jumeau
   // à zéro prouve que la mention ne s'affiche pas toujours ; `is-alerte` serait le rouge d'une
   // panne, ce que ce run n'est pas.
   it('affiche à part les runs en attente de votre décision, sans alerte', async () => {

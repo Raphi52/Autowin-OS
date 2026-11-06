@@ -81,7 +81,7 @@ describe('extraction de la sortie', () => {
   })
 
   it('lit le bloc ```json même si un texte ajouté APRÈS contient des crochets (conv-776)', () => {
-    // Mesuré sur conv-776, tour 3b9464dd-7788-45b4-809f-bb06dcd9cedc : l'app a ajouté après le
+    // Mesuré, tour 3b9464dd-7788-45b4-809f-bb06dcd9cedc : l'app a ajouté après le
     // JSON l'avertissement « Tâche de fond pas terminée » dont la commande contenait `]` — le
     // dernier `]` tombait dedans, JSON.parse échouait, et les 4 tickets n'ont jamais été créés.
     const sortie =
@@ -226,7 +226,7 @@ describe('une passe complète', () => {
 
   it('compte les sources WEB tentées : toutes muettes = tâche planifiée en échec, internes triés ou non', async () => {
     // Bout en bout avec la VRAIE passe : c'est elle qui doit remplir `sourcesWeb`, sinon la
-    // condition du dispatcheur ne voit jamais « toutes muettes » (relecture de conv-1032).
+    // condition du dispatcheur ne voit jamais « toutes muettes ».
     const autre: SourceVeille = { concurrent: 'Cursor', url: 'https://autre.test/changelog' }
     const res = await executerPasse({
       chemin: chemin(),

@@ -13,7 +13,7 @@ import {
 } from './plan-en-vagues'
 
 /*
- * LE PLAN DU BUILD, RELISIBLE DANS LE RUN.md (conv-1083, 2026-10-22).
+ * LE PLAN DU BUILD, RELISIBLE DANS LE RUN.md (2026-10-22).
  *
  * Le décomposeur rend un graphe de sous-tâches et leurs dépendances ; seul « plan de N sous-tâches »
  * arrivait à l'écran. Entrée qui ferait échouer ce banc si le calcul était faux : D dépend de B et C,

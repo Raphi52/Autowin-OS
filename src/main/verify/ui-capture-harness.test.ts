@@ -15,7 +15,7 @@ import {
  * LE HARNAIS DE CAPTURE DOIT ÊTRE INCAPABLE DE RENDRE UN FAUX VERT.
  *
  * Contexte mesuré le 2026-08-12 : le juge exigeait « une preuve UI live sur un binaire packagé
- * frais » (conv-1135) et « la capture/CDP de l'application réelle » (conv-1137) alors que le
+ * frais » et « la capture/CDP de l'application réelle » alors que le
  * producteur in-app ne dispose que de Read/Grep/Glob + Bash/Edit/Write. On met donc la preuve à
  * sa portée — mais une preuve qui peut mentir ne vaut pas mieux que pas de preuve du tout.
  *
@@ -109,7 +109,7 @@ describe('seuils', () => {
 /**
  * PROUVER UN ETAT QU'IL FAUT OUVRIR.
  *
- * Defaut vecu le 2026-08-26 (conv-1420) : un travail juste — test rouge puis vert, falsifiabilite
+ * Defaut vecu le 2026-08-26 : un travail juste — test rouge puis vert, falsifiabilite
  * demontree par mutation — a ete refuse par le juge, qui exigeait « une capture du popover OUVERT
  * montrant la jauge ». Le harnais navigue par le bouton `nav-<vue>` puis capture : il ne peut donc
  * prouver QUE des etats atteignables sans interaction. Popover, menu, onglet, modale : hors de
@@ -153,7 +153,7 @@ describe('verdict quand la preuve exige un clic', () => {
     // fix-ok: cause mesurée — verdictCapture exigeait une hausse du nombre d'éléments (>=) ; ce test, rouge avant le correctif de scripts/ui-capture.mjs, est vert après.
     // 2026-10-02 : clic sur l'onglet Budget des reglages, 521 elements -> 354, panneau visible sur
     // l'image, et pourtant « clic-sans-effet » (code 5) : la garde exigeait une HAUSSE.
-    // Depuis conv-1014 (2026-10-16) la cible de `--scroll` est REMESUREE a la photo (`cadrage`) :
+    // Depuis le 2026-10-16 la cible de `--scroll` est REMESUREE a la photo (`cadrage`) :
     // une cible retrouvee mais hors du cadre est refusee. L'onglet ouvert la montre entiere.
     expect(
       verdictCapture({
@@ -174,7 +174,7 @@ describe('verdict quand la preuve exige un clic', () => {
   })
 
   /*
-   * conv-1211, 2026-10-28 : clic sur le menu « Projets » du Board, un <details>. Sa liste est DÉJÀ
+   * 2026-10-28 : clic sur le menu « Projets » du Board, un <details>. Sa liste est DÉJÀ
    * dans la page fermée : le nombre d'éléments ne bouge pas, le menu est ouvert sur l'image, et
    * pourtant « clic-sans-effet ». Ce qui change, c'est ce qui est DESSINÉ : le compte des éléments
    * visibles le dit.
@@ -227,7 +227,7 @@ describe('verdict quand la preuve exige un clic', () => {
 /**
  * PROUVER QU'UN ELEMENT BOUGE.
  *
- * Defaut vecu le 2026-08-28 (conv-1507 puis conv-1498) : le chantier « spinner » a livre une
+ * Defaut vecu le 2026-08-28 : le chantier « spinner » a livre une
  * animation declaree correcte sur la foi d'un `tsc` vert et d'une capture PNG FIXE. C'est
  * l'utilisateur qui a du signaler « c'est cense bouger, la il est static », puis refuter d'un « nn »
  * l'hypothese de cause qui a suivi. Une image immobile ne peut pas, par construction, dire si ce
@@ -316,7 +316,7 @@ describe('verdict de mouvement', () => {
 })
 
 /**
- * MESURER UNE ANIMATION D'OUVERTURE (conv-981, 2026-10-15). Deux defauts mesures sur
+ * MESURER UNE ANIMATION D'OUVERTURE (2026-10-15). Deux defauts mesures sur
  * `--click ".model-select > summary" --motion ".model-select-menu"` (code 1, capture expiree) :
  * 1. la fenetre de l'instance cachee n'est jamais affichee (`presentAutomationWindow` rend false en
  *    mode test cache) : elle dessine ~2 images/s, et une capture sur deux attend une image qui ne

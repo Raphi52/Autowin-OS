@@ -133,7 +133,7 @@ describe('la case ANALYSE doit etre tenable par toute phase de LECTURE', () => {
     // CHANGEMENT DE COMPORTEMENT ASSUME le 2026-09-03, et sa raison est une MESURE, pas un avis.
     //
     // Cette assertion exigeait ici `false` : « aucune phase de LECTURE porteuse de texte ->
-    // l analyse reste DUE, pas offerte ». Consequence reelle sur run-90383ebef541-1 (conv-21) : un
+    // l analyse reste DUE, pas offerte ». Consequence reelle sur run-90383ebef541-1 : un
     // run qui n a joue QUE `build` — six fois, 4 607 a 9 803 caracteres de livrable chacune, lu dans
     // `.autowin-data/autowin-os/run-state/run-90383ebef541-1.json` — a ete bloque SIX fois par
     // « Promis mais pas fait : "Analyse demandee presente dans le livrable" », verdict de juge vide.

@@ -41,7 +41,7 @@ export interface GesteProd {
   operation: string
   /**
    * Le serveur qui héberge la base, quand l'outil le connaît. Une base NON DÉCLARÉE passe si ce
-   * serveur est déclaré `nature: serveur` non-prod ; une base déclarée prod reste bloquée. conv-106,
+   * serveur est déclaré `nature: serveur` non-prod ; une base déclarée prod reste bloquée.
    * tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf : APP_DEV sur SRV-DEV\DEV refusée faute de
    * déclaration base par base, alors que le serveur entier est de dev.
    */
@@ -57,7 +57,7 @@ export interface GesteProd {
   /**
    * La conversation d'où part le geste. Sert à l'ACCORD GROUPÉ : une lecture confirmée une fois vaut
    * pour les lectures suivantes du même fil pendant `DUREE_ACCORD_LECTURE_MS` (demande du
-   * 2026-09-23, conv-113 : 39 bases = 39 fenêtres pour une même requête répétée).
+   * 2026-09-23, : 39 bases = 39 fenêtres pour une même requête répétée).
    */
   conversationId?: string
 }
@@ -75,9 +75,9 @@ export const DUREE_ACCORD_LECTURE_MS = 15 * 60_000
 const OPERATIONS_GROUPABLES = new Set(['sql-read'])
 
 /**
- * LECTURES DISPENSÉES DE CONFIRMATION (demande utilisateur du 2026-09-24, conv-117). La base catalogue
+ * LECTURES DISPENSÉES DE CONFIRMATION (demande utilisateur du 2026-09-24). La base catalogue
  * configurée (`sql-catalog.json`) est lue en permanence (liste des bases exploitées), et l'utilisateur a décidé le
- * 2026-09-23 (conv-113) que l'agent peut y faire des SELECT. Seule l'opération `sql-read` est
+ * 2026-09-23 que l'agent peut y faire des SELECT. Seule l'opération `sql-read` est
  * dispensée : elle n'est émise que par `sql_query`, déjà bridé (un seul SELECT, enveloppe ROLLBACK,
  * pas de `SELECT *`, colonnes de mot de passe et de clé refusées par `sql-read-guard.ts`). Tout autre
  * geste sur la même base (`run-sqlcmd`, écriture) garde sa confirmation. La dispense ne vaut qu'au
@@ -191,7 +191,7 @@ export class PorteProd {
     const cible: Cible = { nature: geste.nature, nom: geste.nom }
     const verdict = classerCible(cible, this.ports.autorite())
     if (!verdict.estBloquant) return { autorise: true }
-    // conv-554 : toute lecture `sql-read` sur un serveur de développement (DEV_SERVERS) passe sans
+    // Toute lecture `sql-read` sur un serveur de développement (DEV_SERVERS) passe sans
     // confirmation, SAUF une base explicitement déclarée production (la déclaration prudente gagne).
     if (
       niveau === 'confirmation' &&

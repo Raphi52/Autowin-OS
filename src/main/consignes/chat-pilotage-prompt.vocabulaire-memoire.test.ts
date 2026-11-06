@@ -8,8 +8,8 @@ import { REMEMBER_TYPES } from '../brain/brain-remember'
  * Le bloc disait quoi retenir en français — « une cause racine vérifiée, une décision technique
  * tranchée, une CONTRAINTE d'un système, un chiffre mesuré » — quatre situations dont aucune n'est
  * une valeur de `REMEMBER_TYPES`. Le modèle y prenait le mot le plus proche de son fait et se
- * faisait refuser : `cause-racine` le 2026-08-20 (conv-1086), à nouveau le 2026-08-26, puis
- * `contrainte` le 2026-08-27 (conv-1426).
+ * faisait refuser : `cause-racine` le 2026-08-20, à nouveau le 2026-08-26, puis
+ * `contrainte` le 2026-08-27.
  *
  * `signatureDeCommande` porte désormais l'énumération dans la signature du catalogue, mais cela ne
  * suffit pas : elle DISPARAÎT quand `remember` est absent du catalogue courant (cas du catalogue en
@@ -48,7 +48,7 @@ describe('la prose du bloc MÉMOIRE parle le vocabulaire de `remember`', () => {
 /**
  * LA PORTÉE ÉTAIT LE SEUL CHAMP OBLIGATOIRE QUE LA PROSE NE NOMMAIT PAS.
  *
- * Mesuré le 2026-09-02 (conv-142) : `remember` refusé « portée manquante », rien d'écrit, et le
+ * Mesuré le 2026-09-02 : `remember` refusé « portée manquante », rien d'écrit, et le
  * modèle avait déjà annoncé le dépôt. `signatureDeCommande` n'expose que les ÉNUMÉRATIONS ; `scope`
  * n'a pas de liste fermée, donc il n'apparaissait que comme nom nu, sans dire ce qu'on en attend.
  */

@@ -7,7 +7,7 @@ import { configureAutowinAppDataBase } from '../app/app-data'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
- * DEFAUT VECU le 2026-09-06 (conv-312). Un appel `retrospective` a injecte 2 860 957 caracteres
+ * DEFAUT VECU le 2026-09-06. Un appel `retrospective` a injecte 2 860 957 caracteres
  * dans le prompt ; le fournisseur a repondu « Prompt is too long ». Le tour SUIVANT ne pesait que
  * 65 k caracteres et echouait a l'identique : il reprenait la MEME session (`--resume`), qui porte
  * encore le prompt geant cote fournisseur. Le fil devenait un CUL-DE-SAC — plus aucun message ne

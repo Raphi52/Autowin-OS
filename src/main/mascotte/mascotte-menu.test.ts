@@ -7,7 +7,7 @@ import { ecrireLangueReglee } from '../profil/langue-reglage'
 import { entreesDuMenuMascotte } from './mascotte-menu'
 
 /**
- * Le clic droit de la mascotte (conv-1196, ligne 12 du scout). Racine de données à soi, comme
+ * Le clic droit de la mascotte (ligne 12 du scout). Racine de données à soi, comme
  * `textes-coeur.test.ts` : la langue réglée vit sur le disque, et celle du poste ne doit rien décider.
  */
 let racine: string

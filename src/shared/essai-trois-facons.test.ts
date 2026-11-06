@@ -4,7 +4,7 @@ import { demandePourLaFacon } from '../renderer/src/components/trois-facons'
 
 /**
  * « ESSAIE 3 FAÇONS » — ce que l'interface et le processus principal doivent lire de la même façon
- * (conv-1038, 2026-10-21). Le nom de la copie (`essai__<fil>-<instant>-<rang>`, posé par
+ * (2026-10-21). Le nom de la copie (`essai__<fil>-<instant>-<rang>`, posé par
  * `ouvrirCopiesDEssai`) relie les branches d'un même essai ; la marque de la demande sépare le
  * travail de la façon des messages copiés du fil d'origine.
  *

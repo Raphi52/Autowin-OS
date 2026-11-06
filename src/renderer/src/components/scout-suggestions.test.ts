@@ -54,7 +54,7 @@ describe('parseScoutSuggestions', () => {
   })
 
   it('une réponse ordinaire (prose, diagramme, puces) → null, même avec amorce et ligne « G -- »', () => {
-    // conv-1014 : cette réponse a été REMPLACÉE par un groupe « G » de 8 pastilles. « proposer »
+    // Cette réponse a été REMPLACÉE par un groupe « G » de 8 pastilles. « proposer »
     // passait pour l'amorce, la ligne mermaid « G -- oui --> » pour un titre de groupe, et chaque
     // nom de fichier entre accents graves des puces suivantes pour une pastille.
     const reponse = [

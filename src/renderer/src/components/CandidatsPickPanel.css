@@ -30,7 +30,7 @@
 .cpick-item + .cpick-item {
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
-/* L'ARRIVEE EN CASCADE (conv-981) : chaque ligne monte et se pose, 40 ms apres la precedente
+/* L'ARRIVEE EN CASCADE : chaque ligne monte et se pose, 40 ms apres la precedente
    (`--i` = rang, plafonne a 10 par le composant). Une seule fois, au montage du panneau — aucune
    boucle. Pas de neutralisation sous prefers-reduced-motion : ce poste l'a actif, l'effet ne se
    verrait jamais (voir theme.css, spinner). */
@@ -80,7 +80,7 @@
 .cpick-type {
   font-size: 13px;
 }
-/* Le numéro du tableau du scout (conv-1074) : discret, chiffres alignés d'une ligne à l'autre. */
+/* Le numéro du tableau du scout : discret, chiffres alignés d'une ligne à l'autre. */
 .cpick-num {
   min-width: 2ch;
   text-align: right;
@@ -111,18 +111,18 @@
   color: #dde3ee;
   max-width: 78ch;
 }
-/* Le workflow intelligent (conv-1080) : la ligne dit la voie choisie, un seul bouton la lance. */
+/* Le workflow intelligent : la ligne dit la voie choisie, un seul bouton la lance. */
 .cpick-voie {
   margin-top: 10px;
   font-size: 12px;
   opacity: 0.8;
 }
-/* Un plan refusé se lit : il ne disparaît pas en silence (conv-1333). */
+/* Un plan refusé se lit : il ne disparaît pas en silence. */
 .cpick-refus {
   color: var(--err);
   opacity: 1;
 }
-/* Les lots, dans l'ordre où ils partiront (conv-1080) : une ligne par lot, sans retrait profond. */
+/* Les lots, dans l'ordre où ils partiront : une ligne par lot, sans retrait profond. */
 .cpick-lots {
   margin: 4px 0 0;
   padding-left: 20px;
@@ -130,7 +130,7 @@
 .cpick-lots li {
   line-height: 1.5;
 }
-/* La voie de CHAQUE piste (conv-1080) : un point de couleur ET un mot — jamais la couleur seule. */
+/* La voie de CHAQUE piste : un point de couleur ET un mot — jamais la couleur seule. */
 .cpick-voie-piste {
   display: inline-flex;
   align-items: center;

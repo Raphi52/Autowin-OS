@@ -1,5 +1,5 @@
 /**
- * Où poser la phrase sur la vidéo d'accueil (conv-1401, 2026-10-31 ; film refait en conv-1535). La
+ * Où poser la phrase sur la vidéo d'accueil (2026-10-31 ; film refait). La
  * vidéo est recadrée par `object-fit: cover`, donc sa taille dépend du fil : tout part de ses
  * repères, en parts de son image. Ils viennent du rendu (`teaser-fil/scene.js` du projet du film,
  * voir `TeaserAccueil.tsx`) : un nouveau rendu qui les bouge les change ici aussi.
@@ -24,7 +24,7 @@ export const VITESSE_AU_TRAVAIL = 1.6
 
 /**
  * LE MONTAGE DE LA BOUCLE, le même que `teaser-fil/scene.js` (SEG, SCENES) : dix scènes, une skill
- * puis une vue (conv-1535 : « des exemples genre /draft blablabla »). 2 s d'abord, puis 5 s : « je
+ * puis une vue (« des exemples genre /draft blablabla »). 2 s d'abord, puis 5 s : « je
  * trouve que 2 secondes c trop rapide [...] fais des anim de 5 secondes ». Sous une scène de skill,
  * l'usage de CETTE skill : la phrase s'écrit avec sa carte et se disperse avant la suivante. Une vue
  * n'a pas de phrase : son nom est écrit dans le film.
@@ -78,7 +78,7 @@ export function placeDeLaPhrase(largeurFil: number, hauteurFil: number): PlaceDe
 }
 
 /**
- * LA FRAPPE D'UN HUMAIN (conv-1535, 2026-11-04) : « l'invocation des phrases ça a plus de sens sans
+ * LA FRAPPE D'UN HUMAIN (2026-11-04) : « l'invocation des phrases ça a plus de sens sans
  * le sorcier, fais-les s'écrire comme un humain qui tape au clavier, lettre par lettre ». En ms depuis
  * l'entrée de la phrase : un temps avant la première touche, environ une touche toutes les 62 ms,
  * jamais au même pas, une hésitation à chaque espace et un temps après le nom de la skill. Une longue

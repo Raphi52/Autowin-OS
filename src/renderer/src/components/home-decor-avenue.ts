@@ -19,49 +19,49 @@ import { regrouperHalos } from './home-decor-lots-halos'
 /**
  * LE FOND DE L'ACCUEIL : UNE AVENUE CYBERPUNK SOUS L'ORAGE.
  *
- * Demande de l'utilisateur (conv-301) : « /draft un tout nouveau fond 3d pour l'accueil qui
+ * Demande de l'utilisateur : « /draft un tout nouveau fond 3d pour l'accueil qui
  * s'inspire un peu de cette image notre theme ville cyberpunk obscure street tag et de notre theme
  * noir holo », puis, après des tours de brouillon, « Passe au vrai fond de l'Accueil avec ce look ».
  * « Ce look », c'est le brouillon `.autowin-tmp/draft-cyber/r-avenue.js` : une avenue en corniche,
  * la foule sous la pluie, le mur tagué, la porte du deal contre le mur de sa photo, et toute la ville
  * en contrebas.
  *
- * LA FOULE EST RÉELLE DEPUIS conv-312 : « /draft les humains les plus realiste possible pour le fond
+ * LA FOULE EST RÉELLE : « /draft les humains les plus realiste possible pour le fond
  * decran d'accueil », puis « Implémenter la 6 · Heure de pointe ». Les corps sculptés par code et
  * leurs scènes (le deal, le taggeur, le couple, le fumeur) sont remplacés par 18 passants Microsoft
  * Rocketbox animés par capture de mouvement : voir `home-decor-foule.ts`.
  *
- * LA TOILE ÉLECTRIQUE DEPUIS conv-311 : « /draft des éléments plus trash et chaotiques pour le fond
+ * LA TOILE ÉLECTRIQUE : « /draft des éléments plus trash et chaotiques pour le fond
  * d'écran d'acceuil », puis « je choisi que tu implémente le 3 » (variante 3 · Toile électrique du
  * mélange Dépotoir + Jungle de câbles + Glitch holo). Le ciel de la rue devient un filet de câbles
  * nus (guirlandes retirées ensuite à sa demande) et de pubs holo pendues aux fils, avec des câbles
  * arrachés qui crachent des étincelles et deux enseignes qui lâchent : voir `home-decor-avenue-toile.ts`.
  *
- * LA SPIRALE DEPUIS conv-310 : « /draft des moyens de rendre le fond d'écran de l'acceuil
+ * LA SPIRALE : « /draft des moyens de rendre le fond d'écran de l'acceuil
  * magnifique effet waouh maximum », puis « implémente spirale ». Toute la chaussée devient un
  * miroir d'eau, deux koïs holo nagent sur la ville, une tour de contrôle se dresse au milieu, et
  * une rame express monte en hélice autour d'elle : voir `home-decor-avenue-spirale.ts`.
  *
- * LE CIEL EST UNE ÉCLAIRCIE LUNAIRE DEPUIS conv-319 : « /draft le fond le ciel violet de
+ * LE CIEL EST UNE ÉCLAIRCIE LUNAIRE : « /draft le fond le ciel violet de
  * l'acceuil », « Affiner la 4 · Azur d'orage », puis « implémente la 5 et met un vaisseau mere ».
  * Plus de violet : nuit bleue, plafond de nuages, trouée et lune, orage lointain (`CIEL_LUNAIRE`),
  * et, au-dessus de la ville, UN vaisseau mère choisi par /draft (« Implémenter la 6 · Anneaux
  * d'approche ») : une roue dont le moyeu porte une ville éclairée, des cercles de feux d'atterrissage
  * dessous, voir `home-decor-avenue-vaisseau.ts`.
  *
- * LA VILLE DE GAUCHE EST UN KOWLOON NÉON DEPUIS conv-315 : « /draft refais la ville de gauche du
+ * LA VILLE DE GAUCHE EST UN KOWLOON NÉON : « /draft refais la ville de gauche du
  * fond d'écran de l'accueil », « Affiner la 2 · Kowloon néon », puis « implémente 6 » (Néons
  * animés). Les tours-boîtes, les holo-panneaux du centre et les voies rapides laissent place à un
  * quartier bas et serré, hérissé d'enseignes dont le texte défile, avec cinq hologrammes au-dessus
  * des toits : voir `home-decor-avenue-ville.ts`.
  *
- * LES VOITURES SONT TOUTES DIFFÉRENTES DEPUIS conv-320 : « refais les voitures du fond d'écran de
+ * LES VOITURES SONT TOUTES DIFFÉRENTES : « refais les voitures du fond d'écran de
  * l'accueil pour qu'elles soient toutes différentes et mets en une garée avec un style futuriste top
  * qualité comme les piétons ». Les deux caisses extrudées identiques et la moto en pavés laissent
  * place à quatre carrosseries continues (hypercar, fourgon à facettes, berline volante, moto carénée)
  * et à une GT nacrée garée en charge le long du trottoir de droite : voir `home-decor-avenue-voitures.ts`.
  *
- * LA RANGÉE DE DROITE EST EN VOLUMES DEPUIS conv-1037 : « la barre d'immeuble de droite a les toits
+ * LA RANGÉE DE DROITE EST EN VOLUMES : « la barre d'immeuble de droite a les toits
  * qui forment une ligne droite ca fait pas naturelle et les boutiques et tags font trop basique »,
  * puis, après deux tours de /draft, « implémenter 1+2 ». Le plan peint de 140 × 24 m laisse place à
  * une pagode-tour qui se coiffe étage par étage sous sa grue, une ruelle de yatai dans une dent
@@ -93,15 +93,15 @@ export const AVENUE = {
   vitesse: 0.45,
   /** Amplitude du balancement de tête de la marche. */
   bob: 0.25,
-  /** Force de la pluie : plus fine sous l'éclaircie lunaire (conv-319), 0,35 contre 0,5 au brouillon. */
+  /** Force de la pluie : plus fine sous l'éclaircie lunaire, 0,35 contre 0,5 au brouillon. */
   pluie: 0.7,
-  /** Un éclair toutes les `orage` secondes : l'orage s'éloigne sous l'éclaircie lunaire (conv-319). */
+  /** Un éclair toutes les `orage` secondes : l'orage s'éloigne sous l'éclaircie lunaire. */
   orage: 22,
   /** Une enseigne qui claque en gerbe d'étincelles toutes les `gerbe` secondes. */
   gerbe: 16,
   /** Une voiture toutes les `voitures` secondes. */
   voitures: 16,
-  /** Nombre de passants : la direction « Heure de pointe » en compte 18 (conv-312). */
+  /** Nombre de passants : la direction « Heure de pointe » en compte 18. */
   passants: HEURE_DE_POINTE.length,
   /** Densité des voitures volantes au-dessus de la ville. */
   vols: 0.4,
@@ -110,11 +110,11 @@ export const AVENUE = {
 } as const
 
 /**
- * LE CIEL « ÉCLAIRCIE LUNAIRE » (conv-319) : « /draft le fond le ciel violet de l'acceuil », puis
+ * LE CIEL « ÉCLAIRCIE LUNAIRE » : « /draft le fond le ciel violet de l'acceuil », puis
  * « Affiner la 4 · Azur d'orage », puis « implémente la 5 et met un vaisseau mere ». C'est la 5 du
  * tour 2 (`.autowin-tmp/draft-ciel/t2/scene.js`, `V[4]`) : l'orage s'éloigne, une trouée s'ouvre dans
  * un plafond de nuages bleus, une lune y brille et argente le bord des nuages. Plus aucun violet :
- * l'utilisateur veut du rose et du bleu francs (conv-159).
+ * l'utilisateur veut du rose et du bleu francs.
  *
  * Les couleurs sont celles du brouillon, en hexadécimal sRGB : `THREE.Color` les convertit comme le
  * brouillon le faisait. La lueur de l'horizon et la brume de la ville sont dans `AMBIANCE_KOWLOON`.
@@ -134,7 +134,7 @@ export const CIEL_LUNAIRE = {
   /**
    * La lune, au milieu de sa trouée, à GAUCHE, au-dessus de la ville. Elle était en haut au centre
    * (azimut 0,19, hauteur 0,455) ; l'utilisateur a choisi de mettre le vaisseau mère à cette place
-   * (conv-319, 2026-10-18 : « Au centre en haut, en grand : je déplace la lune à gauche au-dessus de
+   * (2026-10-18 : « Au centre en haut, en grand : je déplace la lune à gauche au-dessus de
    * la ville et j'éclaircis les câbles devant le vaisseau »). Sur son écran (1745 × 938, tuiles
    * masquées), elle est en (470, 130) : sous le titre « Autowin Accueil » (y 40 à 87), au-dessus des
    * hologrammes de la ville. Plus à droite, la façade la cache (capture du 2026-10-17, azimut 0,4).
@@ -157,7 +157,7 @@ export function directionLune(): THREE.Vector3 {
  * `boucle` m, `copies` copies), hauteur et section du tablier, bout du béton côté ville (`gauche`)
  * et bout de la voie holographique qui file au-dessus du vide (`fin`), en x.
  *
- * LE BÉTON S'ARRÊTE APRÈS LA RAMBARDE (conv-310, 2026-10-17, « Écarte les viaducs du métro aérien
+ * LE BÉTON S'ARRÊTE APRÈS LA RAMBARDE (2026-10-17, « Écarte les viaducs du métro aérien
  * de la zone de la tour, pour qu'on voie toute la spirale ») : jusqu'à x = −230, avec trois piles,
  * la boucle de la marche gardait toujours une ou deux dalles entre la caméra et la tour, qui
  * coupaient l'hélice de la Spirale en bandes. Au-delà de x = −12, le tablier couvre l'hélice à un
@@ -206,7 +206,7 @@ interface Enseigne {
 
 /**
  * Où et comment l'avenue se dessine. Sans options : dans la page, sur son propre canevas.
- * Dans un Worker (decor-avenue.worker.ts, conv-323) : sur le canevas transféré, sans `window`.
+ * Dans un Worker (decor-avenue.worker.ts) : sur le canevas transféré, sans `window`.
  */
 export interface OptionsAvenue {
   /** Le canevas transféré au Worker (`transferControlToOffscreen`). */
@@ -216,7 +216,7 @@ export interface OptionsAvenue {
   /** Appelé à la première image de la rue, à la place du fondu que la page fait elle-même. */
   surApparition?: () => void
   /**
-   * LE REFLET APRÈS L'IMAGE, dans une tâche à part (Worker, conv-347). `render` ne dessine plus le
+   * LE REFLET APRÈS L'IMAGE, dans une tâche à part (Worker). `render` ne dessine plus le
    * reflet : `apresImage` le fait, juste après, pour l'image SUIVANTE. Raison : une image ne s'affiche
    * qu'à la fin de la tâche qui la dessine ; le reflet (une image sur deux) retardait donc une image
    * sur deux d'environ 20 ms, et les écarts entre images alternaient 33 / 67 ms (« pas lissé »).
@@ -251,7 +251,7 @@ export function createAvenueScene(options: OptionsAvenue = {}): DecorScene | nul
 /**
  * REPÈRES DE TEMPS DE L'APPARITION, lisibles par `performance.getEntriesByName('decor-avenue:…')`.
  *
- * Depuis que la rue attend la fin de sa compilation pour se dessiner (conv-301, gel corrigé), il
+ * Depuis que la rue attend la fin de sa compilation pour se dessiner (gel corrigé), il
  * existe un délai entre l'ouverture de l'Accueil et la première image de la rue. Sans repère, ce
  * délai ne se mesurait pas : la sonde de l'Accueil lit ces trois marques —
  * `cree` (scène montée), `rue-visible` (première image dessinée), `foule-visible` (la foule entre).
@@ -267,8 +267,8 @@ export const MARQUES_AVENUE = {
   rueCompilee: 'decor-avenue:rue-compilee',
   rueVisible: 'decor-avenue:rue-visible',
   /**
-   * La version « reflet » des programmes est compilée et finalisée : l'eau commence à refléter. Depuis
-   * conv-337, la rue n'attend plus son reflet pour apparaître ; ce repère mesure l'écart.
+   * La version « reflet » des programmes est compilée et finalisée : l'eau commence à refléter.
+   * La rue n'attend plus son reflet pour apparaître ; ce repère mesure l'écart.
    */
   refletPret: 'decor-avenue:reflet-pret',
   /** Les personnes et leurs textures sont chargées ; la compilation de leurs nuanceurs commence. */
@@ -311,7 +311,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   const FLASH = new THREE.Color(CIEL_LUNAIRE.flash)
   const scene = new THREE.Scene()
   // Les matrices sont mises à jour une fois par image dans `render`, avant les deux passes (reflet et
-  // écran) : three les recalculait à chacune (3 416 objets, inventaire du 2026-10-18, conv-323).
+  // écran) : three les recalculait à chacune (3 416 objets, inventaire du 2026-10-18).
   scene.matrixWorldAutoUpdate = false
   const fondCourant = FOND.clone()
   scene.background = fondCourant
@@ -478,7 +478,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   const decor = new THREE.Group()
   scene.add(decor)
   /**
-   * LA RANGÉE DE DROITE (conv-1037, « implémenter 1+2 ») : des volumes à la place du plan peint de
+   * LA RANGÉE DE DROITE (« implémenter 1+2 ») : des volumes à la place du plan peint de
    * 140 × 24 m — pagode-tour sous sa grue, ruelle de yatai dans une dent creuse, pignon mitoyen au 夢,
    * machiya basses (voir home-decor-avenue-rangee.ts). Montée ici, avant la compilation de la rue,
    * pour que ses programmes se compilent avec elle en tâche de fond. Elle n'ajoute aucune lumière.
@@ -772,7 +772,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     })
   }
   // l'éclairage d'ambiance de la rue : clair de lune bleu d'en haut, bitume mouillé d'en bas — plus de
-  // violet depuis le ciel « Éclaircie lunaire » (conv-319, voir `CIEL_LUNAIRE`)
+  // violet depuis le ciel « Éclaircie lunaire » (voir `CIEL_LUNAIRE`)
   scene.add(new THREE.HemisphereLight(0x4a62a0, 0x0d1220, 1.0))
 
   // pluie (autour de nous ; redouble pendant l'orage)
@@ -948,7 +948,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   const zVisible = (zp: number): number => (zp + decalB > 12 ? zp + decalB - W : zp + decalB)
 
   // ---------- LA VILLE EN CONTREBAS ----------
-  // Fixe pendant la marche (trop loin pour bouger) : 95 m plus bas, un Kowloon néon (conv-315) — un quartier bas et
+  // Fixe pendant la marche (trop loin pour bouger) : 95 m plus bas, un Kowloon néon — un quartier bas et
   // serré hérissé d'enseignes animées, cinq hologrammes, des gratte-ciel au loin —, des voitures volantes, des
   // projecteurs qui balaient les nuages.
   const SOL = -95
@@ -959,7 +959,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   const fragHaze =
     'c=mix(c,uBrume,1.0-exp(-pow(d*0.0011,1.6)));c=mix(c,uBrume*1.3,exp(-max(vW.y+95.0,0.0)*0.05)*0.35);'
 
-  // LE CIEL « ÉCLAIRCIE LUNAIRE » (conv-319, voir `CIEL_LUNAIRE`) : le nuanceur de la 5 du brouillon.
+  // LE CIEL « ÉCLAIRCIE LUNAIRE » (voir `CIEL_LUNAIRE`) : le nuanceur de la 5 du brouillon.
   // Un dégradé noir-bleu, la lueur bleue de la ville sur l'horizon, un plafond de nuages qui dérive,
   // éclairé par-dessous côté ville ; une trouée autour de la lune, dont la lumière argente le bord des
   // nuages ; et l'éclair, qui blanchit le ciel et allume le nuage d'où il part (`celluleEclair`).
@@ -1063,7 +1063,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   solVille.position.y = SOL
   scene.add(solVille)
 
-  // LE KOWLOON NÉON (conv-315, « implémente 6 ») : un quartier bas et serré hérissé d'enseignes dont le
+  // LE KOWLOON NÉON (« implémente 6 ») : un quartier bas et serré hérissé d'enseignes dont le
   // texte défile, cinq hologrammes au-dessus des toits, et au loin les gratte-ciel en silhouette. Monté ICI,
   // avant la compilation de la rue : ses programmes se compilent avec elle en tâche de fond.
   const villeBasse = monterVille({
@@ -1078,7 +1078,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     textures
   })
 
-  // LE VAISSEAU MÈRE (conv-319, « Implémenter la 6 · Anneaux d'approche ») : une cité sur le moyeu d'une
+  // LE VAISSEAU MÈRE (« Implémenter la 6 · Anneaux d'approche ») : une cité sur le moyeu d'une
   // roue, au-dessus de la ville, à gauche. Monté ICI, avant la compilation de la rue, comme la ville.
   const vaisseau = monterVaisseau({
     scene,
@@ -1182,7 +1182,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     return { g, ph: i * 1.7 }
   })
 
-  // les nuages bas, éclairés par la ville : dans les bleus du plafond de l'éclaircie lunaire (conv-319),
+  // les nuages bas, éclairés par la ville : dans les bleus du plafond de l'éclaircie lunaire,
   // et effacés autour de la lune pour ne pas refermer sa trouée (`horsTrouee`)
   const nuages: THREE.Sprite[] = []
   const OEIL_NUAGES = new THREE.Vector3(...CAMERA_AVENUE.position)
@@ -1274,7 +1274,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   // ---------- LE MÉTRO AÉRIEN : son viaduc traverse l'avenue et file au-dessus du vide ----------
   const PONT = VIADUC.z
   /**
-   * Les arêtes holo du viaduc ne se voient pas dans l'eau : mesuré au banc de rendu (conv-337), les
+   * Les arêtes holo du viaduc ne se voient pas dans l'eau : mesuré au banc de rendu, les
    * retirer du seul reflet laisse l'image au niveau du bruit du banc. Elles n'y sont plus dessinées.
    */
   const aretesViaduc: THREE.Object3D[] = []
@@ -1416,7 +1416,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   }
 
   // ---------- LA CIRCULATION : on s'éloigne à droite, on vient vers nous à gauche ----------
-  // Cinq véhicules tous différents, dont une GT garée le long du trottoir de droite (conv-320) :
+  // Cinq véhicules tous différents, dont une GT garée le long du trottoir de droite :
   // voir `home-decor-avenue-voitures.ts`. Aucune lumière ajoutée, phares et feux restent peints.
   const flotte = monterVoitures({
     scene,
@@ -1608,13 +1608,13 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   // ---------- LES LIEUX DES ANCIENNES SCÈNES : la porte du deal et le mur tagué restent dans la rue ----------
   const Z_DEAL = -25
   const Z_TAG = -45
-  /** Le fumeur accoudé à la rambarde, face à la ville (rejoué par un humain réel, conv-312). */
+  /** Le fumeur accoudé à la rambarde, face à la ville (rejoué par un humain réel). */
   const Z_FUMEUR = -42
   // la porte de service derrière le dealer et son néon rose qui grésille (comme la photo) : elle fait partie de la rue
   const lampeDeal = new THREE.Group()
   scene.add(lampeDeal)
   /*
-   * HUIT LUMIÈRES CALCULÉES, PAS VINGT-DEUX (2026-10-17, conv-301). Avec 22 lumières dans chaque
+   * HUIT LUMIÈRES CALCULÉES, PAS VINGT-DEUX (2026-10-17). Avec 22 lumières dans chaque
    * programme et des matières « physiques » pour la foule, la finalisation des programmes
    * (`onFirstUse` de three) prenait encore 4,7 s de fil principal : un gel de 6 à 7 s à l'ouverture
    * de l'Accueil, mesuré deux fois dans l'instance cachée. Restent dans la scène : 2 réverbères,
@@ -1622,7 +1622,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
    * électrique, le feu bleu et les phares gardent leur animation mais ne sont plus ajoutés à la
    * scène : leur lumière est peinte par les halos.
    *
-   * Depuis conv-312, la foule est réelle (`home-decor-foule.ts`), en matière « standard », et
+   * La foule est réelle (`home-decor-foule.ts`), en matière « standard », et
    * n'ajoute AUCUNE lumière : le nombre de lumières, qui fait partie de la clé de chaque programme,
    * reste le même avant et après son arrivée.
    */
@@ -1722,7 +1722,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   preparerTag()
   acheverTag()
   /**
-   * LE TAG EST PEINT PAR LE TAGGEUR (conv-312, « met un pieton taggeur aussi »). Un humain réel bombe le
+   * LE TAG EST PEINT PAR LE TAGGEUR (« met un pieton taggeur aussi »). Un humain réel bombe le
    * mur à chaque passage (home-decor-figurants.ts, home-decor-foule.ts) : le mot apparaît là où vise sa
    * bombe, son fond se remplit derrière la main, puis il est achevé et la peinture coule. Aucune
    * lumière ajoutée : la brume de peinture est un halo (le nombre de lumières reste celui de la rue).
@@ -1811,7 +1811,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
    * (le décor est reconstruit quand le thème change, ou quand on quitte l'Accueil aussitôt
    * ouvert), `currentProgram` n'existe plus,
    * la vérification lève une TypeError non rattrapée et la promesse ne se résout JAMAIS — mesuré le
-   * 2026-10-17 (conv-301, sonde de l'Accueil). Ici la vérification s'arrête avec la scène, et une
+   * 2026-10-17 (sonde de l'Accueil). Ici la vérification s'arrête avec la scène, et une
    * matière sans programme compte comme prête au lieu de faire tomber la boucle.
    */
   const compilerEnFond = (objet: THREE.Object3D, cible?: THREE.Scene): Promise<void> => {
@@ -1861,7 +1861,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
    * LES TEXTURES DE LA FOULE PARTENT VERS LA CARTE GRAPHIQUE UNE PAR UNE, AVANT SON ENTRÉE.
    *
    * Envoyées toutes à la première image où la foule apparaît, ses 79 textures donnaient une tâche de
-   * 917 ms (mesuré le 2026-10-17, conv-312, sonde de l'Accueil dans l'instance cachée, juste après
+   * 917 ms (mesuré le 2026-10-17, sonde de l'Accueil dans l'instance cachée, juste après
    * la marque `foule-visible`). Une par tâche, chacune reste courte et les images continuent de passer.
    */
   const envoyerTextures = async (prete: Foule): Promise<void> => {
@@ -1874,12 +1874,12 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   /**
    * LES PROGRAMMES DE LA FOULE SONT FINALISÉS AVANT SON ENTRÉE, un par tâche. Compilés en tâche de
    * fond, ils gardent pour leur première utilisation la lecture de leurs réglages (`onFirstUse` de
-   * three, via `getUniforms`) : 90 ms dans la première image de la foule (profil du 2026-10-17, conv-312).
+   * three, via `getUniforms`) : 90 ms dans la première image de la foule (profil du 2026-10-17).
    *
    * TOUS les programmes d'une matière, pas seulement le courant : une matière transparente à double
    * face en a deux (face arrière, face avant), et une matière dessinée à l'écran puis dans le reflet
    * de la Spirale en a deux aussi. Les seconds restaient à finaliser au premier reflet : 187 ms de
-   * lecture de journaux (espion de `linkProgram` dans l'Accueil, 2026-10-17, conv-310).
+   * lecture de journaux (espion de `linkProgram` dans l'Accueil, 2026-10-17).
    */
   const finaliserProgrammes = async (
     groupe: THREE.Object3D,
@@ -1909,7 +1909,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     }
   }
   /**
-   * LA TOILE ÉLECTRIQUE (conv-311, variante 3 du /draft « trash et chaotique ») : les câbles nus,
+   * LA TOILE ÉLECTRIQUE (variante 3 du /draft « trash et chaotique ») : les câbles nus,
    * les pubs pendues aux fils, l'arc dans la flaque et les enseignes qui lâchent. Montée
    * ICI, avant la compilation de la rue, pour que ses programmes se compilent avec elle en tâche de
    * fond. Elle n'ajoute aucune lumière : l'éclat des étincelles et du néon tombé est porté par des
@@ -1933,13 +1933,13 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     trainee,
     emettre,
     enseignes,
-    // conv-319 : « j'éclaircis les câbles devant le vaisseau » (le vaisseau mère, en haut au centre)
+    // « j'éclaircis les câbles devant le vaisseau » (le vaisseau mère, en haut au centre)
     eclaircie: eclaircieVaisseau(),
-    // conv-1037 : la rangée n'est plus un mur de 24 m, les câbles s'accrochent sous ses toits
+    // La rangée n'est plus un mur de 24 m, les câbles s'accrochent sous ses toits
     hauteurMur: (u) => hauteurMurRangee(u, P)
   })
   /**
-   * LA SPIRALE (conv-310, « implémente spirale ») : la rue inondée, la tour de contrôle et la rame
+   * LA SPIRALE (« implémente spirale ») : la rue inondée, la tour de contrôle et la rame
    * en hélice. Montée ICI, avant la compilation de la rue, pour que ses programmes se compilent
    * avec elle en tâche de fond. Le reflet de l'eau a sa propre version de chaque programme : elle
    * est compilée juste après, avant la première image (voir `precompilerReflet`).
@@ -1969,14 +1969,14 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     }))
   })
   /**
-   * LES HALOS PAR LOTS (conv-323) : les 424 halos additifs de la rue, de la ville, de la Spirale et
+   * LES HALOS PAR LOTS : les 424 halos additifs de la rue, de la ville, de la Spirale et
    * des nuages, dessinés un par un à chaque passe, passent en quelques dessins instanciés, sans rien
    * changer au rendu (voir home-decor-lots-halos.ts). Ici, une fois TOUS les halos posés et avant la
    * compilation de la rue : les programmes des lots se compilent avec elle, en tâche de fond.
    */
   const lots = regrouperHalos(scene)
   /**
-   * LA RUE AUSSI SE COMPILE EN TÂCHE DE FOND (2026-10-17, conv-301). Seule la foule passait par
+   * LA RUE AUSSI SE COMPILE EN TÂCHE DE FOND (2026-10-17). Seule la foule passait par
    * `compileAsync` : la première image de la rue compilait tous ses programmes d'un bloc sur le fil
    * principal (`onFirstUse` de three, 2,3 s mesurées par profil dans l'instance cachée, carte
    * RTX 3060 sous Direct3D 11, `KHR_parallel_shader_compile` présent) — un gel de 3 s à
@@ -1991,13 +1991,13 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
     if (vivante) marquer(MARQUES_AVENUE.rueCompilee)
   }
   /**
-   * LA RUE N'ATTEND PLUS SON REFLET (conv-337, 2026-10-19). Avant, la rue n'apparaissait qu'une fois
+   * LA RUE N'ATTEND PLUS SON REFLET (2026-10-19). Avant, la rue n'apparaissait qu'une fois
    * compilées ET finalisées les deux versions de chaque programme : celle de l'écran, puis celle du
-   * reflet (74 programmes, dont 37 pour le seul reflet — espion de linkProgram, conv-310). Désormais
+   * reflet (74 programmes, dont 37 pour le seul reflet — espion de linkProgram). Désormais
    * la rue apparaît dès que SES programmes sont prêts ; l'eau reste sans reflet jusqu'à ce que la
    * version « reflet » soit à son tour compilée en tâche de fond PUIS finalisée un programme par tâche
    * (sans cela, le premier reflet la finalisait d'un bloc : `onFirstUse` 310 ms dans la première
-   * image, conv-310). Alors seulement le reflet est activé, et monte en fondu.
+   * image). Alors seulement le reflet est activé, et monte en fondu.
    */
   const refletEstPret = (): void => {
     if (!vivante) return
@@ -2030,7 +2030,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
   }
   // La foule se charge pendant que la rue vit : un fichier à la fois, les images décodées hors du fil
   // principal. Un échec laisse la rue sans passants, il ne la casse pas, et il est écrit.
-  // Avec ses scènes : le deal contre le mur de la porte et le fumeur à la rambarde (conv-312).
+  // Avec ses scènes : le deal contre le mur de la porte et le fumeur à la rambarde.
   chargerFoule(HEURE_DE_POINTE.slice(0, p.passants), TROTTOIR, () => vivante, {
     facade: FACADE,
     garde: GARDE,
@@ -2064,7 +2064,7 @@ function monterAvenue(renderer: THREE.WebGLRenderer, options: OptionsAvenue): De
 
   /**
    * Le reflet de l'eau (une image sur deux, voir home-decor-avenue-spirale.ts), foule et viaduc exclus,
-   * ainsi que les FEUX DES TOITS du vaisseau (conv-1037 : « les lumieres sur le toit des immeubles de la
+   * ainsi que les FEUX DES TOITS du vaisseau (« les lumieres sur le toit des immeubles de la
    * ville flottante […] ne devaient pas se refléter dans l'eau », les feux sous la plaque restent).
    * Pourquoi la plaque ne les cachait pas dans l'eau (mesuré sur la carte graphique le 2026-10-22) : la
    * caméra du reflet est coupée au ras de l'eau, sa profondeur suit donc la HAUTEUR au-dessus de l'eau ;

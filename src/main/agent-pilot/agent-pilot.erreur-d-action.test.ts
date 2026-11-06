@@ -3,7 +3,7 @@ import { AgentPilot, type PilotEvent } from './agent-pilot'
 import type { PromptSnapshot } from '../commands/commands'
 
 /**
- * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE ATTEINT LE FIL — conv-341 (2026-10-19) : « quand y a une
+ * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE ATTEINT LE FIL — (2026-10-19) : « quand y a une
  * action rouge, c'est possible d'avoir le message d'erreur […] un truc qui coûte pas de token ».
  *
  * L'adaptateur Claude émet `Glob erreur - <message>` juste après `Glob échoué - 25 s`. Ce test

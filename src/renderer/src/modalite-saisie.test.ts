@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { ATTRIBUT_MODALITE, installerModaliteSaisie, modaliteApresTouche } from './modalite-saisie'
 
 /**
- * Ce que ces tests défendent (conv-1222) : le contour de focus d'un bouton ne s'allume qu'en
+ * Ce que ces tests défendent : le contour de focus d'un bouton ne s'allume qu'en
  * naviguant au clavier. Un clic suivi d'une touche quelconque (Maj pour une capture d'écran, une
  * lettre tapée) ne doit plus faire passer l'app en mode clavier.
  */

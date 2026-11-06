@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ConversationStore } from './conversations'
 
 /*
- * Defaut vecu conv-71 : `rename` ne rendait RIEN. L'appelant ne voyait aucune confirmation, en
+ * Defaut vecu : `rename` ne rendait RIEN. L'appelant ne voyait aucune confirmation, en
  * deduisait un echec, et rejouait — c'est le meme reflexe qui a fait partir la creation deux fois.
  * Un renommage doit se CONSTATER, pas se supposer.
  */

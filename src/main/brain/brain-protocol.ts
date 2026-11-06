@@ -253,7 +253,7 @@ export async function readSignedBrainPayload(
 
 /**
  * La signature est bien formée mais ne colle pas au jeton d'Autowin : le serveur qui répond signe
- * avec une AUTRE clé. Classe à part pour que l'appelant puisse nommer cette cause précise (conv-338 :
+ * avec une AUTRE clé. Classe à part pour que l'appelant puisse nommer cette cause précise (
  * un ancien serveur Brain, d'une autre installation, tenait le port) sans comparer un message.
  */
 export class SignatureBrainInvalide extends Error {

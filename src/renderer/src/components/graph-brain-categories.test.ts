@@ -4,7 +4,7 @@ import type { GraphNode } from './graph-view-model'
 import type { MetierGraphe } from '../../../main/viz/fs-brains'
 
 const RACINE = '//nas1/partage/Projets IA/Team Brain/'
-// Domaine metier FICTIF (conv-916) : le vrai vient du profil de l'entreprise, absent du depot public.
+// Domaine metier FICTIF : le vrai vient du profil de l'entreprise, absent du depot public.
 const METIER: MetierGraphe = {
   cle: 'zorg',
   libelle: 'ZORG',

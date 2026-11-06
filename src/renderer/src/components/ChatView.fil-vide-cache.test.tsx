@@ -2,7 +2,7 @@
 /**
  * UN FIL DEJA OUVERT VIDE NE DOIT PAS RESTER VIDE POUR TOUJOURS.
  *
- * Constaté le 2026-09-01 (conv-82) : « les messages de conv-82 ont disparu » — la conversation
+ * Constaté le 2026-09-01 : « les messages de conv-82 ont disparu » — la conversation
  * existait, la barre latérale comptait bien ses 5 messages, le disque les rendait tous, et l'écran
  * n'affichait RIEN. Chemin : une conversation ouverte alors qu'elle était encore vide (elle vient
  * d'être créée) laisse une entrée VIDE dans le cache d'affichage. L'agent la remplit ensuite côté

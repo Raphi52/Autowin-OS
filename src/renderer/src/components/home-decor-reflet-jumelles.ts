@@ -3,7 +3,7 @@ import * as THREE from 'three'
 /**
  * LE REFLET DESSINE AVEC SES PROPRES MATIÈRES — des « jumelles » qui lisent l'original en direct.
  *
- * DÉFAUT MESURÉ (2026-10-18, conv-312 puis conv-323, instance cachée `--code-dev`) : chaque image du
+ * DÉFAUT MESURÉ (2026-10-18, instance cachée `--code-dev`) : chaque image du
  * fond avenue coûtait 40 à 42 ms au fil principal, dont environ 34 ms dans `setProgram` de three, et
  * le nombre de changements de programme (`useProgram`) était de 516 à 520 par image. Cause, dans
  * three r185 (WebGLRenderer.js:2342 et 2396) : hors réalité virtuelle, une image à part

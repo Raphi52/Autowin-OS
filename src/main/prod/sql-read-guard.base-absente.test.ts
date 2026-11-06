@@ -9,7 +9,7 @@ import { buildSqlTargetCatalog } from './sql-read-catalog'
 /**
  * BASE OMISE : le refus doit dire QUOI corriger, pas « nom invalide : «  » ».
  *
- * Mesure conv-599, tour `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : l'appel modele d'iteration 0
+ * Mesure, tour `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : l'appel modele d'iteration 0
  * (75 s, 0,51 USD) emet `sql_query` SANS `database`. Le refus rendu ne nomme pas l'argument
  * manquant et ne liste rien ; l'iteration 1 rejoue la MEME requete en ajoutant la cible a
  * l'aveugle. Un aller-retour entier paye pour une information que le garde connait deja.

@@ -122,7 +122,7 @@ export function claudeExeEnCours(bin: string): Promise<boolean> {
   if (process.platform !== 'win32') return Promise.resolve(false)
   const image = /\.exe$/i.test(basename(bin)) ? basename(bin) : 'claude.exe'
   // Hors du fil principal : retenté toutes les 15 min tant que le CLI tourne, ce `tasklist` a tenu la
-  // fenêtre 20,8 s d'un seul appel (`gels.jsonl`, 2026-10-31 — conv-1413).
+  // fenêtre 20,8 s d'un seul appel (`gels.jsonl`, 2026-10-31).
   return execFileHorsFil('tasklist', ['/FO', 'CSV', '/NH', '/FI', `IMAGENAME eq ${image}`], {
     windowsHide: true,
     timeout: 10_000
@@ -134,7 +134,7 @@ export function claudeExeEnCours(bin: string): Promise<boolean> {
 
 /**
  * Hors du fil principal, comme `tasklist` : le `cmd.exe` de `claude update` a tenu la fenêtre 16,2 s
- * (`gels.jsonl`, 2026-10-31 — conv-1413). La sortie rend stdout puis stderr : l'erreur éventuelle
+ * (`gels.jsonl`, 2026-10-31). La sortie rend stdout puis stderr : l'erreur éventuelle
  * reste la dernière ligne, celle que `detail` retient.
  */
 async function runClaudeUpdate(bin: string): Promise<{ code: number | null; output: string }> {

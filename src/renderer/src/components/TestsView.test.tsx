@@ -70,7 +70,7 @@ describe('TestsView — multi-projets', () => {
     expect(container.textContent).toContain('aucun harnais vitest/jest declare')
   })
 
-  // conv-1397, 2026-10-31 : « garde que la partie ticket de autowin OS, mets-la dans maintenance entre
+  // 2026-10-31 : « garde que la partie ticket de autowin OS, mets-la dans maintenance entre
   // les skills et les tests ». ENTRÉE QUI DOIT FAIRE ÉCHOUER : la veille absente, ou rangée ailleurs
   // qu'entre les boutons des skills et les onglets des tests.
   it('range les tickets Autowin OS entre les skills et les tests', async () => {
@@ -366,7 +366,7 @@ describe('TestsView — 5 manques', () => {
 })
 
 /**
- * LE RESULTAT QUI ARRIVE (conv-981, 2026-10-16) : un rail reussis / echecs dont la largeur suit les
+ * LE RESULTAT QUI ARRIVE (2026-10-16) : un rail reussis / echecs dont la largeur suit les
  * totaux, et une marque `is-frais` (barre qui se remplit, compteurs qui montent, echecs en cascade)
  * posee QUAND un run finit, retiree a la fin du remplissage. ENTREES QUI DOIVENT FAIRE ECHOUER : une
  * marque posee sur un run MEMORISE rouvert (l'effet rejouerait a chaque ouverture), une marque jamais

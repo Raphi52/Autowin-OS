@@ -31,7 +31,7 @@ describe('ConversationStore — compte Claude par conversation', () => {
   })
 
   /*
-   * conv-1416 : le choix ne passe plus par le compte actif, global, que tout autre fil pouvait
+   * Le choix ne passe plus par le compte actif, global, que tout autre fil pouvait
    * changer. Il voyage avec chaque appel. Le comportement est prouvé dans
    * `registry.compte-du-fil.test.ts`, `agent-pilot.compte-du-fil.test.ts` et
    * `claude.lancement.test.ts` ; ici, le branchement que ces tests remplacent par un double.

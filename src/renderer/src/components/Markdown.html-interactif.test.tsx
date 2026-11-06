@@ -1,18 +1,18 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"disableIframePageLoading":true}}
 /*
- * LA FENCE ```html-interactif DEVIENT UNE PAGE DONT LES SCRIPTS TOURNENT (BlocHtmlInteractif.tsx,
- * conv-1292) — dans le cadre isole des scenes 3D, et seulement une fois la fence close. Verrouille :
+ * LA FENCE ```html-interactif DEVIENT UNE PAGE DONT LES SCRIPTS TOURNENT (BlocHtmlInteractif.tsx)
+ * Dans le cadre isole des scenes 3D, et seulement une fois la fence close. Verrouille :
  *   - le decoupage (fermee -> page ; ouverte, vide ou trop grosse -> code ; html-render inchange) ;
  *   - l'ISOLEMENT : `sandbox="allow-scripts"` exactement, la page des scenes et rien d'autre ;
  *   - le protocole : le HTML, la feuille de base et le theme ne partent que vers NOTRE cadre ;
  *   - la hauteur suit la page, bornee ; une erreur remontee s'affiche sous le cadre ;
- *   - (conv-1304) la barre (code, relancer, copier), les avis sans doublon, les demandes de la
+ *   - la barre (code, relancer, copier), les avis sans doublon, les demandes de la
  *     page (copie et lien seulement apres un vrai clic, stockage rendu a la relance) et la ligne
- *     d'attente d'une page encore en ecriture. `sandbox` : scripts ET formulaires depuis conv-1304 ;
- *   - (conv-1304) un bouton de choix `#autowin-prompt` REMPLIT la saisie du fil, apres un vrai clic
+ *     d'attente d'une page encore en ecriture. `sandbox` : scripts ET formulaires ;
+ *   - un bouton de choix `#autowin-prompt` REMPLIT la saisie du fil, apres un vrai clic
  *     seulement, et n'envoie jamais rien ;
- *   - (conv-1304) « Corriger » sous une page en erreur, l'avis d'une page figee et sa relance, la
+ *   - « Corriger » sous une page en erreur, l'avis d'une page figee et sa relance, la
  *     vue agrandie, l'enregistrement en .html et la liberation d'une page sans 3D loin de l'ecran.
  */
 import { act, createElement } from 'react'
@@ -144,7 +144,7 @@ describe('Markdown — pages interactives', () => {
   })
 
   /*
-   * conv-1395 : « le carrousel n'est apparu qu'au moment où j'ai envoyé le message d'après ». Le bloc
+   * « le carrousel n'est apparu qu'au moment où j'ai envoyé le message d'après ». Le bloc
    * de cloture arrive APRES la page (`montrer_bloc`, puis le texte final) : sa cle changeait alors de
    * `body-…` a `body-1-…`, React jetait le cadre et posait a sa place une bande vide de 48 px,
    * au-dessus de la zone visible.
@@ -196,7 +196,7 @@ describe('Markdown — pages interactives', () => {
     const cadre = cadreDuFil()
     expect(cadre?.getAttribute('sandbox')).toBe(SANDBOX_PAGE_INTERACTIVE)
     expect(SANDBOX_PAGE_INTERACTIVE.split(' ').sort()).toEqual(['allow-forms', 'allow-scripts'])
-    // Page sans 3D : la page isolee SANS moteur three.js (conv-1304).
+    // Page sans 3D : la page isolee SANS moteur three.js.
     expect(cadre?.getAttribute('src')).toBe(NOM_PAGE_INTERACTIVE)
     expect(cadre?.getAttribute('referrerpolicy')).toBe('no-referrer')
   })
@@ -257,7 +257,7 @@ describe('Markdown — pages interactives', () => {
   })
 
   /*
-   * conv-1395 : `.chat` et `.chat-layout` sont en `overflow: clip`, que `scrollMargin` n'elargit pas.
+   * `.chat` et `.chat-layout` sont en `overflow: clip`, que `scrollMargin` n'elargit pas.
    * Mesure en vrai Chromium : un bloc a 686 px de la zone visible etait « hors de 1500 px », et le
    * carrousel se liberait au moindre defilement.
    */

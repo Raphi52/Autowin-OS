@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ConversationStore } from './conversations'
 
 /**
- * DEFAUT VECU le 2026-08-26 (conv-1407). L'orchestrateur a recu « remake les pastilles de
+ * DEFAUT VECU le 2026-08-26. L'orchestrateur a recu « remake les pastilles de
  * couleurs » — quatre mots qui referent au tour precedent, dans une AUTRE conversation. Il n'avait
  * aucun moyen de le retrouver : `get_state` ne rend que des titres tronques, `conversation_read`
  * exige un id connu d'avance, et la seule recherche par CONTENU du catalogue, `find_in_files`,
@@ -71,7 +71,7 @@ describe('recherche par contenu dans le corpus des conversations', () => {
 
   it('retrouve une REFORMULATION : la demande n est jamais formulee comme la reponse', () => {
     const store = magasinPeuple()
-    // Ce que l utilisateur a tape en conv-1407, contre ce qui avait ete dit en conv-1405.
+    // Ce que l utilisateur a tape, contre ce qui avait ete dit.
     // Cherchee comme UNE chaine, cette demande ne trouvait rien ; ni au pluriel, ni dans le desordre.
     const trouve = store.search('remake les pastilles de couleurs')
     expect(trouve.map((c) => c.title)).toContain('Pastilles')

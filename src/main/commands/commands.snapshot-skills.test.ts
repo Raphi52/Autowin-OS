@@ -12,7 +12,7 @@ describe('snapshotForPrompt — skills disponibles', () => {
       .filter((s) => s.enabled)
       .map((s) => s.id)
     expect(ids).toContain('look')
-    // snapshotForPrompt vit dans commands/instantanes.ts (conv-1580, lot 6) : on lit la famille du bus.
+    // snapshotForPrompt vit dans commands/instantanes.ts (lot 6) : on lit la famille du bus.
     const source = sourceDuBus()
     expect(source).toContain('skillsDisponibles')
     expect(source).toContain('skillsInvocables()')

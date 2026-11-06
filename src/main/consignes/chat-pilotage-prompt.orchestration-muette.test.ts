@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 
 /**
- * LE FIL MUET PENDANT UNE ORCHESTRATION — mesuré le 2026-09-01 dans conv-17.
+ * LE FIL MUET PENDANT UNE ORCHESTRATION — mesuré le 2026-09-01.
  *
  * Trace causale du tour `0fb926e9-5e0a-4bf9-ab46-5f66ae57aa10`, séquence 21 : la réponse du modèle
  * pilote est EXCLUSIVEMENT `<cmd>{"name":"orchestrate",…}</cmd>` — 3074 tokens de sortie, aucun

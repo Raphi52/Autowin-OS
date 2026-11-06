@@ -14,7 +14,7 @@ vi.mock('./ProjectPane', () => ({ ProjectPane: () => <div /> }))
 vi.mock('./WorkflowExecutionGraph', () => ({ WorkflowExecutionGraph: () => <div /> }))
 
 /*
- * conv-1139 (2026-10-25, « ranges ce bloc dans Détails > Runs ») : les messages entre agents de
+ * 2026-10-25, « ranges ce bloc dans Détails > Runs » : les messages entre agents de
  * fils du même dépôt quittent le dessus de la zone de saisie pour l'onglet Runs du panneau Détails.
  */
 const ordre: MessageEntreFilsVu = {

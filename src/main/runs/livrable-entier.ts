@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { ensureAutowinAppData } from '../app/app-data'
 
 /**
- * LA COPIE ENTIERE ET DURABLE DES SORTIES D'ETAPES D'UN RUN (conv-989, 2026-10-16).
+ * LA COPIE ENTIERE ET DURABLE DES SORTIES D'ETAPES D'UN RUN (2026-10-16).
  *
  * Le juge lit chaque etape bornee (`agregerPhasesPourLeJuge`, 6 000 caracteres par etape, 60 000 au
  * total), et sa marque de coupe le renvoyait vers « le fil des sous-agents » — `trace.json`, lui-meme
@@ -88,7 +88,7 @@ async function purgerLesAnciens(dossier: string, maintenant: number): Promise<vo
 }
 
 /**
- * LA MEME COPIE, A COTE DU RUN.md (conv-989) — permanente, et lisible par le panneau du run.
+ * LA MEME COPIE, A COTE DU RUN.md — permanente, et lisible par le panneau du run.
  *
  * Le panneau « Fil des sous-agents » ouvre un run par le chemin de son RUN.md ; ni ce fichier ni
  * `trace.json` ne portent l'identifiant du run de l'orchestrateur, sous lequel `run-livrables` range

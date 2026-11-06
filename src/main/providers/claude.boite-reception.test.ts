@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { reglagesCliAutowin } from './claude'
 
 /**
- * BOÎTE DE RÉCEPTION NATIVE DES AGENTS (conv-1139, 2026-10-24).
+ * BOÎTE DE RÉCEPTION NATIVE DES AGENTS (2026-10-24).
  *
  * MESURÉ sur le CLI 2.1.309 (banc D:/tmp/sonde-boite/experience.sh) : sans réglage, un agent lancé
  * comme un agent de run Autowin (`-p`, `bypassPermissions`, `--setting-sources ''`) a REÇU le

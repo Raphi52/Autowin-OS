@@ -1,5 +1,5 @@
 /**
- * UNE LEÇON ÉCRITE QUE RIEN NE RETIENT SE DIT — conv-335 (2026-10-18).
+ * UNE LEÇON ÉCRITE QUE RIEN NE RETIENT SE DIT — (2026-10-18).
  *
  * Mesure : le tour ff240730-2bbf-49e3-9923-5db1839772ba écrit « **Leçon** : quand le travail d'une
  * étape est confié à une tâche programmée, je retire l'étape… », puis « **Leçon corrigée** : … ».
@@ -17,7 +17,7 @@
  * Une ligne qui S'ÉTIQUETTE leçon : « Leçon : », « **Leçon** : », « - **Leçon :** »,
  * « **Leçon corrigée** : », « **Leçon (pour les prochaines captures) :** ». Une mention en cours de
  * phrase (« les deux leçons que tu as recollées ») n'en est pas une, ni une citation (`>`).
- * En anglais aussi (conv-1197, 2026-10-28) : l'agent répond en anglais quand l'interface l'est, et
+ * En anglais aussi (2026-10-28) : l'agent répond en anglais quand l'interface l'est, et
  * « **Lesson**: » / « **Lesson learned:** » passaient sans avertissement.
  */
 const LIGNE_DE_LECON =
@@ -32,7 +32,7 @@ export function ecritUneLecon(texte: string): boolean {
 
 /**
  * Un outil natif qui ÉCRIT un fichier de mémoire du poste (`…/memory/<note>.md`) : c'est un dépôt,
- * au même titre qu'un `remember` accepté (conv-265 : « Leçon (enregistrée dans ma mémoire, … .md) »).
+ * au même titre qu'un `remember` accepté (« Leçon (enregistrée dans ma mémoire, … .md) »).
  */
 const ECRIVAIN_DE_MEMOIRE = /^(?:Write|Edit|MultiEdit)\b.*[\\/]memory[\\/][^\\/\n]+\.md\b/iu
 

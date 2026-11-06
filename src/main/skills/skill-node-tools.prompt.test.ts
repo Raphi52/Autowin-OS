@@ -6,7 +6,7 @@ import { OUTILS_NOEUD_SKILL, promptOutilsNoeudSkill } from './skill-node-tools'
  * Le prompt d'outillage doit décrire la commande QUE LE MODÈLE VA VRAIMENT APPELER.
  *
  * Écrit à la main, il annonçait `brain_query {"query": …}` alors que la commande attend `question`,
- * et `remember` sans `scope` ni `source` — tous deux obligatoires. Mesuré sur le run réel conv-1339 :
+ * et `remember` sans `scope` ni `source` — tous deux obligatoires. Mesuré sur le run réel :
  * le nœud a émis sa commande, le bus l'a reçue, et elle est revenue « question manquante ou
  * invalide ». L'outil était branché, testé, et strictement inutilisable.
  *

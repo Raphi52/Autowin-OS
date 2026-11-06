@@ -1,12 +1,12 @@
 /**
- * LE GLYPHE DU HALO (conv-1227, 2026-10-28, « le rond qui tourne autour je le veux plus gros et ça
+ * LE GLYPHE DU HALO (2026-10-28, « le rond qui tourne autour je le veux plus gros et ça
  * doit être une glyphe ») : le halo n'était qu'un cercle pointillé à 4 px de la bille. C'est
  * maintenant un cercle magique de 92 px, DERRIÈRE le personnage : une couronne de runes (`.ge`) qui
  * tourne dans un sens, une étoile à six branches cerclée de points (`.gi`) qui tourne dans l'autre.
  * Tout est en `currentColor` : l'état choisit sa couleur et ses mouvements (`cssDeLEtat`).
  * Repère : le carré du halo (64 px, 1 unité = 1 px), centre en (32, 32) ; le glyphe en déborde.
  *
- * Partagé depuis conv-1401 (2026-10-31, « Implémenter la 6 · Sol magique ») : le sol de l'accueil
+ * Partagé depuis le 2026-10-31 (« Implémenter la 6 · Sol magique ») : le sol de l'accueil
  * d'un fil vide (`AnimationAccueilChat`) est ce même cercle, couché sous la mascotte. Une seule
  * source : le jour où le glyphe change, les deux changent.
  */

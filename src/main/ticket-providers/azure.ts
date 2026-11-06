@@ -239,7 +239,7 @@ async function fetchComments(
   context: TicketProviderContext
 ): Promise<TicketItem['comments']> {
   /*
-   * TOUTE LA DISCUSSION, du plus ancien au plus récent (conv-1228, 2026-10-28). Avant : `$top=20`
+   * TOUTE LA DISCUSSION, du plus ancien au plus récent (2026-10-28). Avant : `$top=20`
    * sans suivre la page suivante, donc une fiche longue perdait ses commentaires en silence. On suit
    * `continuationToken` (https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/comments/get-comments) ;
    * `order=asc` aligne l'ordre sur le contrat de `TicketItem.comments`. La borne de pages ne protège

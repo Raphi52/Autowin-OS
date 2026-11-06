@@ -35,7 +35,7 @@ import { describe, expect, it } from 'vitest'
  */
 
 const chat = readFileSync(new URL('./ChatView.css', import.meta.url), 'utf8')
-/** L'accueil d'un fil vide a sa feuille à lui, et sa phrase garde le jeton de l'ancien titre (conv-1401). */
+/** L'accueil d'un fil vide a sa feuille à lui, et sa phrase garde le jeton de l'ancien titre. */
 const accueil = readFileSync(new URL('./AnimationAccueilChat.css', import.meta.url), 'utf8')
 const theme = readFileSync(new URL('../assets/theme.css', import.meta.url), 'utf8')
 const modes = readFileSync(new URL('../assets/theme-modes.css', import.meta.url), 'utf8')
@@ -69,7 +69,7 @@ const FAMILLE_ROSE = [
   '--chat-cran-focus',
   '--chat-envoi-rose',
   '--chat-dictee',
-  // Liseré rose de la barre de sélection multiple (conv-815), rattaché le 2026-09-28 (conv-770).
+  // Liseré rose de la barre de sélection multiple, rattaché le 2026-09-28.
   '--chat-lot-rose'
 ] as const
 
@@ -113,14 +113,14 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
      */
     const SELECTEURS_NOIR_ASSUME = ['.conv-menu-pop', '.cosmic-outline .conv-pane']
     /*
-     * QUATRE AUTRES COULEURS RESTENT EN DUR, PAR DEUX DECISIONS DE L'UTILISATEUR (conv-246, 2026-10-11).
+     * QUATRE AUTRES COULEURS RESTENT EN DUR, PAR DEUX DECISIONS DE L'UTILISATEUR (2026-10-11).
      *
      * Les passer par un jeton a ete essaye : la couche du theme Holographique blanc est GENEREE en
      * relisant ces valeurs litterales (`genererCoucheClaire`). Derriere un jeton, elle perdait la
      * bordure encre de la vignette, la capsule claire du mot « contexte » et le texte encre de la
      * duree -- une capsule noire et un texte blanc sur pastille claire, en theme blanc. Et deux gardes
-     * exigent ces valeurs ecrites telles quelles : `ChatView.style.test.ts` (vignette BLANCHE,
-     * conv-186) et `ChatContextRule.style.test.ts` (capsule NOIRE, conv-189). On les NOMME ici, a la
+     * exigent ces valeurs ecrites telles quelles : `ChatView.style.test.ts` (vignette BLANCHE)
+     * et `ChatContextRule.style.test.ts` (capsule NOIRE). On les NOMME ici, a la
      * declaration pres, plutot que de laisser deux gardes se contredire en silence.
      */
     const DECLARATIONS_ASSUMEES = [
@@ -137,7 +137,7 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
     let propriete = ''
     // UNE REGLE PEUT LISTER PLUSIEURS SELECTEURS, un par ligne. Seule la DERNIERE ligne etait lue :
     // en ajoutant `.activity-anneau .anneau-l1 .thinking-duree` sous `.capsule-bouton
-    // .thinking-duree` (conv-904), la declaration assumee ci-dessus devenait « fautive » sans avoir
+    // .thinking-duree`, la declaration assumee ci-dessus devenait « fautive » sans avoir
     // change. Le groupe entier est donc gardé, et une exception vaut si SON selecteur en fait partie.
     let enCours: string[] = []
     let groupe: string[] = []
@@ -155,9 +155,9 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
       if (declaration) propriete = declaration[1]
       if (!ligne.match(HEX)) return
       // Un MASQUE ne peint rien : seule son opacite compte, sa teinte est ignoree. Le noir plein
-      // `linear-gradient(#000 0 0)` du bord degrade des capsules (conv-176) n'est donc pas une
+      // `linear-gradient(#000 0 0)` du bord degrade des capsules n'est donc pas une
       // couleur d'interface. Toleree dans une declaration `mask` / `-webkit-mask`, et sous CETTE
-      // forme seulement (conv-246).
+      // forme seulement.
       if (/^(-webkit-)?mask$/.test(propriete) && /^linear-gradient\(#000 0 0\)/.test(ligne.trim()))
         return
       // Seules trois formes sont tolerees, et aucune n'est une couleur d'interface reglable :
@@ -189,7 +189,7 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
 
   it('garde la dette a son plancher : pas un hex de plus qu aujourd hui', () => {
     // Cliquet volontaire. Ce nombre ne doit que DESCENDRE. Descendu de 15 a 8 le 2026-10-11
-    // (conv-246) : les taux d'eclaircissement et les etincelles etaient deja partis, les blancs des
+    // Les taux d'eclaircissement et les etincelles etaient deja partis, les blancs des
     // capsules sont passes par des jetons. Restent les 2 noirs assumes, les 4 declarations assumees
     // et les 2 noirs du MASQUE du bord degrade des capsules (toleres plus haut).
     const total = (sansCommentaires(chat).match(HEX) ?? []).length
@@ -205,7 +205,7 @@ describe('les couleurs du Chat passent par des jetons de theme', () => {
     // Ce nombre ne doit pas remonter par ajout de couleurs en dur -- il peut descendre encore si
     // d'autres jetons se reduisent a un alias. Descendu a 108 le 2026-09-17 : --chat-file-envoi et
     // --chat-file-orienter sont partis avec le panneau de file d'attente, retire de l'interface.
-    // Descendu a 106 le 2026-10-10 (conv-178) : les six --chat-wf-bascule*/trait-*/icone* sont
+    // Descendu a 106 le 2026-10-10 : les six --chat-wf-bascule*/trait-*/icone* sont
     // partis avec le soulignement du bouton Details, desormais dessine par la capsule
     // Raisonnement / Actions.
     expect(definis.size).toBeGreaterThanOrEqual(106)

@@ -1,5 +1,5 @@
 /**
- * LA MESURE DES ÉCARTS entre les RUN.md légers et le Board (conv-1418, 2026-11-01).
+ * LA MESURE DES ÉCARTS entre les RUN.md légers et le Board (2026-11-01).
  *
  * Demande : « ne touche pas encore au Board et ajoute une mesure des écarts avec son état actuel ».
  * Le Board reste la référence : ce module le lit, il ne le change pas. Son bilan dit s'il est sûr de

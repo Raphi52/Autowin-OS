@@ -12,7 +12,7 @@ import { PROJECT_CONTEXT_MAX_BYTES } from './context-files'
 /**
  * Les FAITS d'AGENTS.md, rejoués contre le dépôt.
  *
- * POURQUOI (scout conv-1576, lot conv-1590, 2026-11-05) : AGENTS.md est relu à CHAQUE tour par chaque
+ * POURQUOI (2026-11-05) : AGENTS.md est relu à CHAQUE tour par chaque
  * agent. Un fait périmé (chemin renommé, script retiré, plafond changé) y égare tous les fils, et rien
  * ne le voyait : `context-files.test.ts` et `behaviour-files.test.ts` ne testent que le CHARGEMENT du
  * fichier, jamais ce qu'il affirme.
@@ -33,12 +33,12 @@ import { PROJECT_CONTEXT_MAX_BYTES } from './context-files'
  * L'AGENTS.md à vérifier pour `racine` : le sien ; sinon, si `racine` est une copie liée
  * (`git worktree add`), celui du dossier principal du dépôt ; sinon `undefined`.
  *
- * POURQUOI (conv-1590, 2026-11-05) : AGENTS.md est ignoré par git (`.gitignore`, consignes locales du
+ * POURQUOI (2026-11-05) : AGENTS.md est ignoré par git (`.gitignore`, consignes locales du
  * poste). Les copies des runs et de `verify` ne l'ont pas, et ce test y plantait (ENOENT) : suite rouge
  * dans chaque copie d'agent. Ces agents lisent l'AGENTS.md du dossier principal ; on le vérifie donc
  * contre le code de la copie. Un clone (version publique) n'en a aucun : les faits s'y déclarent
- * IGNORÉS avec leur raison. Écrit dans la copie du run de conv-1590, perdu à sa publication (d06f79a5),
- * reporté par /git (conv-1583) après un ENOENT reproduit dans une copie posée sur origin/main.
+ * IGNORÉS avec leur raison. Écrit dans la copie du run, perdu à sa publication (d06f79a5),
+ * reporté par /git après un ENOENT reproduit dans une copie posée sur origin/main.
  */
 function agentsMdDe(racine: string): string | undefined {
   const local = join(racine, 'AGENTS.md')
@@ -70,7 +70,7 @@ const ASSETS = 'src/renderer/src/assets'
 
 // L'extraction des chemins cités vit dans `chemins-cites.ts` depuis le 05/11 : la même règle passe
 // aussi sur la constitution, la consigne du chat, les consignes d'étape et les SKILL.md
-// (`chemins-cites.test.ts`, conv-1602).
+// (`chemins-cites.test.ts`).
 // fix-ok: cheminsCites et existeAvecMotif étaient privés à ce test, donc aucun autre texte des agents
 // n'était vérifié ; ce test reste vert (77/77 avec chemins-cites.test.ts, 05/11) après le déplacement.
 
@@ -294,7 +294,7 @@ describe('AGENTS.md à vérifier : copie liée et clone', () => {
     expect(vrai(agentsMdDe(principal))).toBe(vrai(join(principal, 'AGENTS.md')))
     expect(vrai(agentsMdDe(copie))).toBe(vrai(join(principal, 'AGENTS.md')))
     expect(agentsMdDe(clone)).toBeUndefined()
-    // Six processus git : 42,8 s mesurées le 05/11 sur un poste chargé (conv-1583), au-delà des 20 s
+    // Six processus git : 42,8 s mesurées le 05/11 sur un poste chargé, au-delà des 20 s
     // par défaut de vitest.config.ts ; même convention qu'edit-file-copie-desynchronisee.test.ts.
   }, 120_000)
 })

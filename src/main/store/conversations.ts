@@ -73,23 +73,23 @@ export interface Msg {
   /**
    * Message utilisateur ÉCRIT PENDANT un tour (orientation injectée) : il précise, il ne REPOND pas.
    *
-   * Depuis conv-38 (2026-09-01) ces orientations sont de vrais messages du fil. Le verrou du bloc
+   * Depuis le 2026-09-01 ces orientations sont de vrais messages du fil. Le verrou du bloc
    * `ask` — « un message utilisateur postérieur EST la réponse » — les prenait donc pour des
-   * réponses : la question se fermait sur « Répondu » et le clic devenait inerte (conv-50, même
+   * réponses : la question se fermait sur « Répondu » et le clic devenait inerte (même
    * jour). Ce drapeau est la seule chose qui distingue les deux.
    */
   orientation?: boolean
   /**
    * POINT DE COUPURE de la réponse en cours au moment où cette orientation a été écrite : nombre de
    * `parts` que le message assistant juste au-dessus avait DÉJÀ produit. L'écran s'en sert pour
-   * afficher la suite du tour SOUS la consigne (conv-717, 2026-09-19 : « quand j'ai écrit fais tout
+   * afficher la suite du tour SOUS la consigne (2026-09-19 : « quand j'ai écrit fais tout
    * ça a effacé ton message précédent » — la réponse à la question vivait au-dessus d'elle).
    */
   coupeLaReponse?: number
   /**
    * Identifiant du CHANTIER (run d'orchestration) dont ce message est le récapitulatif « Reprise du
    * fil… ». Au redémarrage suivant, c'est ce message qui est mis à jour, au lieu d'en empiler un
-   * nouveau en bas du fil (conv-913, 2026-10-13). Voir `noterRepriseDuChantier`.
+   * nouveau en bas du fil (2026-10-13). Voir `noterRepriseDuChantier`.
    */
   repriseDuChantier?: string
 }
@@ -103,7 +103,7 @@ export function pointDeCoupure(precedent: Msg | undefined): number | undefined {
 
 /**
  * Le message que coupe une NOUVELLE consigne : le dernier du fil, en sautant les consignes déjà
- * écrites pendant le même tour. Avant (conv-1401, 2026-10-31) : seule la 1re consigne d'un tour
+ * écrites pendant le même tour. Avant (2026-10-31) : seule la 1re consigne d'un tour
  * notait sa coupure — pour la 2e, le message juste au-dessus était la 1re, pas la réponse.
  */
 export function reponseAuDessusDesConsignes(messages: readonly Msg[]): Msg | undefined {
@@ -116,7 +116,7 @@ export function reponseAuDessusDesConsignes(messages: readonly Msg[]): Msg | und
 }
 
 /**
- * UN EFFACEMENT RECALE LES COUPURES DES CONSIGNES QUI SUIVENT (conv-1401, 2026-10-31).
+ * UN EFFACEMENT RECALE LES COUPURES DES CONSIGNES QUI SUIVENT (2026-10-31).
  *
  * La coupure compte des parts : retirer du texte AVANT elle la décale d'autant. Sans ce recalage,
  * 30 parts retirées laissaient une coupure à 51 sur une réponse de 50 parts, et l'écran remontait
@@ -168,7 +168,7 @@ export interface Conversation {
    * D'où vient `title` : `'auto'` = repris par l'app du dernier message de l'utilisateur, et il
    * le suivra encore ; `'utilisateur'` = donné à la main, plus jamais réécrit.
    *
-   * Demande du 2026-10-16 (conv-999) : le titre suit le DERNIER message, pas le premier, tant que
+   * Demande du 2026-10-16 : le titre suit le DERNIER message, pas le premier, tant que
    * l'utilisateur ne l'a pas nommé lui-même. OPTIONNEL : absent sur un fil antérieur, dont le
    * titre seul dit alors s'il est automatique (`titreEstAutomatique`, shared/titre-automatique).
    */
@@ -193,7 +193,7 @@ export interface Conversation {
    * dossier de travail ET catégorie de la barre latérale — et c'était le défaut : classer sous
    * « Perso » écrivait « Perso » comme dossier de travail, le tour partait quand même dans le dépôt
    * d'Autowin, et le libellé allait grossir la liste des dossiers connus du menu « Ranger dans… »
-   * (conv-81, 2026-09-16). Les libellés vivent désormais dans `categorie`.
+   * (2026-09-16). Les libellés vivent désormais dans `categorie`.
    *
    * Distinct de `provider`, qui porte le MOTEUR (`'claude' | 'codex' | ...`) : le détourner pour
    * y ranger un dossier casserait l'affichage et les recopies sans erreur visible.
@@ -213,7 +213,7 @@ export interface Conversation {
    * OPTIONNEL, et il le reste. Un ancien fichier qui range un libellé dans `projectPath` le voit
    * DÉPLACÉ ici à la relecture (`hydrate`) — déplacé, pas effacé : le rangement de l'utilisateur
    * lui survit.
-   * fix-ok: conv-81 — cause mesurée : projectPath servait de dossier de travail ET de catégorie ; ce champ prend les libellés pour que le dossier de travail ne soit plus écrit par un simple classement.
+   * fix-ok: cause mesurée : projectPath servait de dossier de travail ET de catégorie ; ce champ prend les libellés pour que le dossier de travail ne soit plus écrit par un simple classement.
    */
   categorie?: string
   /**
@@ -230,7 +230,7 @@ export interface Conversation {
   inactive?: boolean
   /**
    * Fil marqué privé (menu « Masquer le titre au village », décision D6 de
-   * `grill/agent-hq-japon-town.md`, conv-1429) : son tanuki reste visible chez les collègues, mais
+   * `grill/agent-hq-japon-town.md`) : son tanuki reste visible chez les collègues, mais
    * SANS titre. Absent = titre partagé (filtré). Retirer la marque EFFACE le champ, comme `inactive`.
    */
   prive?: boolean
@@ -246,7 +246,7 @@ export interface Conversation {
   /**
    * Le modèle (et son effort) que CETTE conversation doit utiliser pour ses tours de chat.
    *
-   * Demande du 2026-10-11 (conv-239) : « rends le modèle propre à chaque conversation ». Avant,
+   * Demande du 2026-10-11 : « rends le modèle propre à chaque conversation ». Avant,
    * le sélecteur réécrivait le rôle orchestrateur GLOBAL : changer de modèle dans un fil le
    * changeait dans tous les autres.
    *
@@ -286,7 +286,7 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
   lastAssistantAsksUser?: true
   /**
    * Un tour assistant est encore `streaming` QUELQUE PART dans le fil, pas forcément le dernier.
-   * Vécu conv-914 (2026-10-13) : deux runs rattachés au redémarrage travaillaient encore, mais un
+   * Vécu (2026-10-13) : deux runs rattachés au redémarrage travaillaient encore, mais un
    * tour de chat plus récent était terminé — `lastAssistantStatus` disait `completed` et la liste
    * n'affichait aucun spinner. Fiable : `hydrate` passe en `interrupted` tout `streaming` qu'aucune
    * reprise ne prendra en main. Absent quand rien ne tourne.
@@ -301,7 +301,7 @@ export type ConversationSummary = Omit<Conversation, 'messages'> & {
 }
 
 /**
- * AVIS DE L'APP (conv-1571, 2026-11-05) : message assistant écrit par `append` — carte de
+ * AVIS DE L'APP (2026-11-05) : message assistant écrit par `append` — carte de
  * publication auto, bascule de dossier, modèle indisponible —, donc sans `status` ni `turnId`.
  * La réponse d'un tour porte les deux dès `beginTurn`. Un avis ne répond à rien : il ne doit pas
  * décider de l'état du fil, sinon la pastille tombe dans son cas par défaut « Sans réponse ».
@@ -318,7 +318,7 @@ function estAvisDeLApp(message: Msg): boolean {
  * une question que la vue n'affiche pas comme telle.
  */
 function attendUneDecision(messages: readonly Msg[]): boolean {
-  // Une carte de l'app posée après la question (publication auto) ne l'a pas répondue (conv-1571).
+  // Une carte de l'app posée après la question (publication auto) ne l'a pas répondue.
   const dernier = [...messages].reverse().find((m) => !estAvisDeLApp(m))
   if (!dernier || dernier.role !== 'assistant') return false
   const parts = (dernier as { parts?: PersistedChatPart[] }).parts
@@ -448,7 +448,7 @@ const SEUIL_RACINE = 6
  * -- est une demande DEJA POSEE : elle passe devant le re-classement par mot porteur (fin de
  * `search`).
  *
- * Mesure du 2026-09-30 (conv-889), `scripts/mesure-rappel-selectif.mts --verites-seules
+ * Mesure du 2026-09-30, `scripts/mesure-rappel-selectif.mts --verites-seules
  * --diagnostic`, corpus reel de 795 conversations, 139 messages a verite connue (89 citent une
  * conversation, 50 reposent une demande d'un autre fil) :
  *
@@ -585,7 +585,7 @@ export interface ConversationChange {
         op: 'append-messages'
         messages: Msg[]
         updatedAt: number
-        /** Titre repris du message ajouté (conv-999) : le rejeu du journal doit le retrouver. */
+        /** Titre repris du message ajouté : le rejeu du journal doit le retrouver. */
         title?: string
         origineTitre?: OrigineTitre
       }
@@ -841,7 +841,7 @@ export class ConversationStore {
       const provider = legacy.provider as string
       const ancienChemin = legacy.projectPath as string | undefined
       /*
-       * UN LIBELLÉ ÉGARÉ DANS LE DOSSIER DE TRAVAIL EST DÉPLACÉ, PAS EFFACÉ (conv-81, 2026-09-16).
+       * UN LIBELLÉ ÉGARÉ DANS LE DOSSIER DE TRAVAIL EST DÉPLACÉ, PAS EFFACÉ (2026-09-16).
        *
        * `projectPath` a longtemps servi AUSSI de catégorie : les fichiers déjà écrits portent donc
        * des « Perso » ou « Clients/Acme » là où un chemin est attendu. Les effacer ferait perdre
@@ -894,7 +894,7 @@ export class ConversationStore {
      * PLANCHER MONOTONE, jamais un simple recalcul.
      *
      * `max + 1` sur les conversations VIVANTES fait RECULER le compteur des qu'on supprime la plus
-     * haute. Vecu le 2026-08-24 : `conv-1393` supprimee le matin, l'identifiant redevenu libre, et
+     * haute. Vecu le 2026-08-24 : une conversation supprimee le matin, l'identifiant redevenu libre, et
      * la conversation creee l'apres-midi l'a recupere -- avec, dans son graphe, un run de six heures
      * plus vieux portant un verdict ROUGE. L'utilisateur a legitimement lu « echec » sur un travail
      * qui n'etait pas le sien et qui, lui, tournait encore.
@@ -1033,7 +1033,7 @@ export class ConversationStore {
       /**
        * Insère le message JUSTE AVANT la réponse encore en cours, au lieu de l'ajouter en fin de fil.
        *
-       * Défaut vécu (conv-46, 2026-09-01) : « j'ai écrit un message et il se passe rien ». La
+       * Défaut vécu (2026-09-01) : « j'ai écrit un message et il se passe rien ». La
        * consigne injectée pendant un tour était reçue et traitée, mais elle s'écrivait APRÈS le
        * brouillon de réponse posé par `beginTurn` — donc sous une réponse qui répondait déjà.
        * L'utilisateur voyait sa phrase en dernier, avec rien en dessous.
@@ -1043,13 +1043,13 @@ export class ConversationStore {
        * AVIS DE L'APP SUR LE TOUR (rangement de la conversation) : il passe AU-DESSUS de la reponse
        * du tour, que celle-ci soit vide, en cours d'ecriture ou deja terminee.
        *
-       * Defaut mesure (conv-23, tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba, 2026-09-27) : le rangement
+       * Defaut mesure (tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba, 2026-09-27) : le rangement
        * differe ecrit son avis APRES la fin du tour, donc sous une reponse qui n'est plus vierge.
        * `avantLaReponseEnCours` ne jouait pas, l'avis finissait DERNIER message de l'agent, et le
        * champ pre-rempli comme le mode auto — qui lisent le dernier message de l'agent — perdaient la
        * suite `AUTOWIN_PROMPT_V1` du tour. Chaine arretee sans un mot (saisie ts 1790525003939).
        *
-       * Reserve aux avis de l'APP : une consigne de l'utilisateur garde la regle conv-544 ci-dessous
+       * Reserve aux avis de l'APP : une consigne de l'utilisateur garde la regle ci-dessous
        * (sous un brouillon deja lu).
        */
       auDessusDeLaReponseDuTour?: boolean
@@ -1067,17 +1067,17 @@ export class ConversationStore {
     const ts = this.now()
     // LA RÉPONSE EN COURS N'EST PAS UN VOISIN COMME LES AUTRES : quand on demande l'insertion,
     // le brouillon de réponse posé par `beginTurn` (dernier message, encore `streaming`) doit
-    // RESTER en dessous, sinon la consigne se lit après la réponse qui la traite (conv-46).
+    // RESTER en dessous, sinon la consigne se lit après la réponse qui la traite.
     const dernier = conversation.messages.at(-1)
     /*
      * LA POSITION DEPEND DE CE QUE L'UTILISATEUR A DEJA LU, PAS D'UN CAMP CHOISI UNE FOIS.
      *
      * Deux defauts opposes ont fait osciller cette ligne, parce qu'on decidait SANS REGARDER le
      * brouillon :
-     *  - brouillon encore VIDE (conv-439, 2026-09-11) : tout le texte du tour arrivera APRES, donc
+     *  - brouillon encore VIDE (2026-09-11) : tout le texte du tour arrivera APRES, donc
      *    poser la consigne sous lui la met sous une reponse qui la traite deja -- « comme un cheveu
      *    sur la soupe ». Elle doit passer AVANT.
-     *  - brouillon DEJA ECRIT (conv-544, 2026-09-15) : l'utilisateur a lu la reponse en cours et
+     *  - brouillon DEJA ECRIT (2026-09-15) : l'utilisateur a lu la reponse en cours et
      *    ecrit ensuite. La remonter au-dessus de ce qu'il vient de lire est un saut en arriere :
      *    « il aurait du apparaitre tout en bas du fil ». Elle reste EN FIN de fil.
      *
@@ -1139,7 +1139,7 @@ export class ConversationStore {
    * LE message « Reprise du fil » d'UN chantier : ajouté au premier redémarrage, puis MIS À JOUR en
    * place aux suivants, au lieu d'empiler une bulle de plus en bas du fil à chaque fois.
    *
-   * Vécu dans conv-913 (2026-10-13) : deux redémarrages, deux bulles pour le même chantier, et la
+   * Vécu (2026-10-13) : deux redémarrages, deux bulles pour le même chantier, et la
    * dernière cachait à l'écran le tour encore vivant. `composer` reçoit le texte déjà montré (ou
    * `undefined` la première fois) et rend le texte complet : le fusionner sans rien perdre est son
    * affaire (`fusionnerRepriseDuFil`). Un ancien récapitulatif SANS repère n'est pas adopté : rien ne
@@ -1232,7 +1232,7 @@ export class ConversationStore {
   /**
    * Un fil encore PROVISOIRE (« Nouvelle conversation ») prend le titre du premier message qui
    * lance un tour ; ensuite le titre ne bouge plus. La règle « le titre suit le dernier message »
-   * (conv-999) a été annulée le 2026-10-28 (conv-1203) — détail dans `titreApresMessage`.
+   * a été annulée le 2026-10-28 — détail dans `titreApresMessage`.
    *
    * Ici et non dans `append` : le seul message utilisateur qu'`append` reçoit est une consigne
    * tapée PENDANT un tour (« attends », « plutôt X ») ; elle oriente le sujet du tour en cours,
@@ -1303,7 +1303,7 @@ export class ConversationStore {
     // principal -- le poste dominant du gel de l'interface.
     const conversation = this.conversations.get(id)
     if (!conversation) throw new Error(`Conversation inconnue: ${id}`)
-    // L'heure (rail du tour, conv-338) ne reste que sur l'evenement qui OUVRE une part : c'est cet
+    // L'heure (rail du tour) ne reste que sur l'evenement qui OUVRE une part : c'est cet
     // evenement-la qui part au journal, et le rejeu au demarrage redonne donc la meme heure.
     const event = sansHeureInutile(partsDuTour(conversation.messages, turnId), eventRecu)
     const message = applyTurnEventToMessages(conversation.messages, turnId, event)
@@ -1323,7 +1323,7 @@ export class ConversationStore {
      * derniere touche : `resumed` (on se rebranche sur un tour, on n'a encore rien produit) et un
      * `failed` marque `transient` (refus de reprise temporaire, aucun fichier touche).
      *
-     * Mesure du 2026-09-07 (conv-336, `conversations.json.journal.jsonl` a 07:48:19Z) : au
+     * Mesure du 2026-09-07 (`conversations.json.journal.jsonl` a 07:48:19Z) : au
      * demarrage, ces deux evenements ont ete ecrits dans 11 conversations vieilles de plusieurs
      * jours. Leur date de derniere touche a bouge, donc elles sont remontees en tete de liste ET
      * repassees en pastille jaune « termine, non lu » -- l'utilisateur a vu sa liste repeinte par
@@ -1545,7 +1545,7 @@ export class ConversationStore {
 
   /**
    * Résolue quand la relecture des archives est finie, avec le nombre ajouté — tout de suite sans
-   * archive. Posée par `persistConversations` (conv-1248) : le préchauffage du Board l'attend, sans
+   * archive. Posée par `persistConversations` : le préchauffage du Board l'attend, sans
    * quoi il ne calculerait que les fils actifs et laisserait les ~800 archivés à la première ouverture.
    */
   archivesChargees: Promise<number> = Promise.resolve(0)
@@ -1567,7 +1567,7 @@ export class ConversationStore {
   /**
    * CHERCHER par CONTENU dans tout le corpus.
    *
-   * La capacité qui manquait, et dont l'absence poussait au pire chemin. Mesuré en conv-1407 le
+   * La capacité qui manquait, et dont l'absence poussait au pire chemin. Mesuré le
    * 2026-08-26 : l'orchestrateur, incapable de retrouver de quoi parlait « remake les pastilles de
    * couleurs », a fouillé le CODE SOURCE — `find_in_files` était la seule recherche par contenu de
    * son catalogue. Vingt inspections, zéro conversation lue, un run arrêté à 0,96 $.
@@ -1604,7 +1604,7 @@ export class ConversationStore {
     /*
      * TERME TROP COURT POUR ETRE TOKENISE : chemin LITTERAL, jamais un silence.
      *
-     * Defaut vecu le 2026-08-28 (conv-1498) : « 5A » designait une variante que l'agent avait
+     * Defaut vecu le 2026-08-28 : « 5A » designait une variante que l'agent avait
      * lui-meme proposee deux tours plus tot. `motsDe` ecarte les mots de moins de trois lettres --
      * regle saine pour « de / la / et » -- donc la demande ne portait AUCUN mot cherchable et
      * `search` rendait []. L'agent en a conclu l'ABSENCE : « 5A ne correspond a rien dans les 961
@@ -2069,7 +2069,7 @@ export class ConversationStore {
     const marques = candidats.map((c) => ({ c, porte: porte(c.id) }))
     marques.sort((a, b) => b.porte - a.porte)
     /*
-     * UNE DEMANDE DEJA POSEE PASSE DEVANT LE MOT PORTEUR (conv-889, 2026-09-30).
+     * UNE DEMANDE DEJA POSEE PASSE DEVANT LE MOT PORTEUR (2026-09-30).
      *
      * Le re-classement par mot porteur sert la demande qui NOMME un sujet parmi des mots d'adresse
      * (« rappelle-moi ce qu'on a dit a propos de X ») : le score, sac de mots, y noie X. Il ne sert
@@ -2107,7 +2107,7 @@ export class ConversationStore {
   /** Projection légère destinée aux listes IPC : les historiques se chargent séparément. */
   listSummaries(): ConversationSummary[] {
     return this.list().map(({ messages, ...summary }) => {
-      // Le dernier TOUR, pas la dernière carte de l'app posée après lui (conv-1571). Sans tour du
+      // Le dernier TOUR, pas la dernière carte de l'app posée après lui. Sans tour du
       // tout, on retombe sur le dernier message assistant, comme avant.
       const assistantsRecents = [...messages].reverse().filter((m) => m.role === 'assistant')
       const dernierAssistant =
@@ -2115,7 +2115,7 @@ export class ConversationStore {
       return {
         ...summary,
         messageCount: messages.length,
-        // UNE CONSIGNE ÉCRITE PENDANT UN TOUR N'EST PAS UN TOUR EN ATTENTE (conv-61, 2026-09-09).
+        // UNE CONSIGNE ÉCRITE PENDANT UN TOUR N'EST PAS UN TOUR EN ATTENTE (2026-09-09).
         // Défaut vécu : « il m'indique un statut sans réponse alors qu'il a bien pris en compte mon
         // message ». Le texte injecté pendant qu'un tour tourne est ajouté en FIN de fil avec
         // `orientation: true` — le dernier message devenait donc `user`, et la pastille annonçait
@@ -2144,7 +2144,7 @@ export class ConversationStore {
   /**
    * Renomme une conversation existante et REND le titre RELU apres coup.
    *
-   * Rendre `void` etait le defaut vecu (conv-71) : l'appelant ne voyait rien revenir, en deduisait
+   * Rendre `void` etait le defaut vecu : l'appelant ne voyait rien revenir, en deduisait
    * un echec, et rejouait l'appel. Un outil qui ne confirme rien pousse a reessayer. On relit donc
    * l'objet stocke — pas l'argument recu — et on rend `undefined` pour un id inconnu, ce qui est un
    * VRAI « non fait » distinguable d'un succes.
@@ -2154,7 +2154,7 @@ export class ConversationStore {
     if (!conversation) return undefined
     conversation.title = title
     // Seuls la barre latérale et l'outil `rename_conversation` passent ici : c'est un nom donné
-    // par l'utilisateur, que ses messages suivants ne réécriront plus (conv-999). Le titre
+    // par l'utilisateur, que ses messages suivants ne réécriront plus. Le titre
     // automatique, lui, est posé par `beginTurn` sans passer par ce chemin.
     conversation.origineTitre = 'utilisateur'
     this.changed(id)
@@ -2166,7 +2166,7 @@ export class ConversationStore {
    * Range la conversation — dans un DOSSIER de travail, ou sous une CATÉGORIE de la liste.
    *
    * Le routage se fait sur la FORME de la valeur reçue, et c'est le point unique qui empêche le
-   * défaut de revenir (conv-81, 2026-09-16) : un chemin (`D:\GIT\ContosoApp`) devient le
+   * défaut de revenir (2026-09-16) : un chemin (`D:\GIT\ContosoApp`) devient le
    * dossier de travail, tout le reste (« Perso », « Clients/Acme ») devient une simple catégorie.
    * Sans ce tri, classer sous un libellé écrivait ce libellé comme dossier de travail : le tour
    * partait quand même dans le dépôt d'Autowin, et le libellé se retrouvait proposé comme dossier
@@ -2238,7 +2238,7 @@ export class ConversationStore {
   }
 
   /**
-   * Marque le fil privé pour le village commun (D6, conv-1429). Ne touche pas `updatedAt` : masquer
+   * Marque le fil privé pour le village commun (D6). Ne touche pas `updatedAt` : masquer
    * un titre n'est pas travailler, le fil ne doit pas remonter en tête de liste.
    */
   marquerPrive(id: string, prive: boolean): Conversation | undefined {
@@ -2337,7 +2337,7 @@ export class ConversationStore {
    *
    * L'originale n'est pas touchée : forker n'enlève rien à ce qui existait.
    *
-   * LE DOSSIER DE TRAVAIL SUIT LA BRANCHE (conv-1038, 2026-10-21). Mesuré : `projectPath`, que
+   * LE DOSSIER DE TRAVAIL SUIT LA BRANCHE (2026-10-21). Mesuré : `projectPath`, que
    * `dossierDuTour` relit à chaque tour, n'était pas recopié — la branche d'un fil qui travaille dans
    * `D:\GIT\Contoso` repartait dans le dossier d'Autowin sans le dire. Elle garde désormais celui de
    * sa source. `options.dossier` l'impose À LA CRÉATION (copie séparée de « revenir à ce tour » et

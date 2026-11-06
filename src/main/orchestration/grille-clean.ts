@@ -1,5 +1,5 @@
 /**
- * LA GRILLE QUALITÉ DE CLEAN, LUE PAR LE CONTRÔLE FINAL (conv-1035, 2026-10-21).
+ * LA GRILLE QUALITÉ DE CLEAN, LUE PAR LE CONTRÔLE FINAL (2026-10-21).
  *
  * La consigne CLEAN (`phase-briefs.ts`, réflexe 5) note chaque ligne écrite par le run sur une
  * grille de critères et termine par `Grille : N ✅ · K ❌ restants · S sans objet`. Un « ❌ restant »
@@ -54,9 +54,9 @@ export function lireGrilleClean(texte: string): GrilleClean | undefined {
  * `phasesApresBuildDeReparation`) : c'est ce nouveau clean qui fait foi. Deux cas n'ont pas cette
  * issue, et bloquer y rendrait le refus impossible à lever :
  *  - un build joué APRÈS le dernier clean rend sa grille périmée (même portée que la garde
- *    « cadrage refusé », conv-710) ;
+ *    « cadrage refusé ») ;
  *  - un clean joué SANS build avant lui (`/clean` nommé) : la réparation rejoue clean seul, qui n'a
- *    pas le droit de corriger un ❌ restant. En mode « jusqu'au vert » (conv-844), aucun refus répété
+ *    pas le droit de corriger un ❌ restant. En mode « jusqu'au vert », aucun refus répété
  *    n'arrête la boucle (`arretDeLaReparation`, gates/stopgate.ts) : elle paierait clean sans fin.
  *    Les ❌ restent alors écrits dans la sortie de clean, sous les yeux du juge et de l'utilisateur.
  */

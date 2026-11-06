@@ -333,9 +333,9 @@ describe('une annulation ne doit pas se faire passer pour une panne du provider'
 
   /*
    * Le conseil renvoyait à « Settings › Budget » pour relever les plafonds du run. Cette section a
-   * été retirée le 2026-10-23 (conv-1119) et les plafonds viennent du devis, fixé au départ selon la
+   * été retirée le 2026-10-23 et les plafonds viennent du devis, fixé au départ selon la
    * taille de la tâche, sans réglage nulle part (orchestration-budget.ts) : on ne conseille plus un
-   * geste impossible (conv-1602).
+   * geste impossible.
    */
   it('plafond atteint : le conseil nomme le devis et un geste possible, jamais un écran disparu', () => {
     const { kind, hint } = diagnoseProviderFailure({

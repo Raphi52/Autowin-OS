@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { exigeFaireLeGeste } from './chat-turn-messages'
 
-// Cas réel : tour c4e319ca-783f-4b49-9b87-971cd6392c8e (conv-843, saisie ts 1790275899514
+// Cas réel : tour c4e319ca-783f-4b49-9b87-971cd6392c8e (saisie ts 1790275899514
 // « fais le »), iteration 4 : après desktop_act/desktop_observe, le chat a rendu la saisie du code.
 const REPONSE_C4E319CA =
   "⚠️ **Je n'ai pas pu saisir le code à ta place.**\n\n**À faire (30 secondes) :**\n" +

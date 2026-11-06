@@ -1,5 +1,5 @@
 /**
- * UN CARACTÈRE COUPÉ ENTRE DEUX LECTURES DU JOURNAL NE DEVIENT PAS « � » (audit conv-1040, 2026-10-21).
+ * UN CARACTÈRE COUPÉ ENTRE DEUX LECTURES DU JOURNAL NE DEVIENT PAS « � » (2026-10-21).
  *
  * Le journal est relu par morceaux pendant que le CLI l'écrit. Chaque morceau était décodé SEUL :
  * un « é » (2 octets) dont le premier octet tombait à la fin d'une lecture donnait « r��ponse ».

@@ -7,7 +7,7 @@ import { ecrireLangueReglee } from '../profil/langue-reglage'
 import { TEXTES_COEUR_EN, TEXTES_COEUR_FR, traduireCoeur, type CleCoeur } from './textes-coeur'
 
 /**
- * LA TABLE DES TEXTES DU PROCESSUS PRINCIPAL (conv-1170, lot 18). Une racine de données à soi : la
+ * LA TABLE DES TEXTES DU PROCESSUS PRINCIPAL (lot 18). Une racine de données à soi : la
  * racine des tests est partagée entre fichiers joués en parallèle, un `langue.json` à `en` laissé là
  * ferait parler anglais les tests des autres.
  */

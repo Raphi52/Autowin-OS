@@ -6,8 +6,8 @@ import type { PlanDeLots, ReponsePlansDeLots } from '../../../shared/plan-de-lot
 import { ChatMosaic, type ChatMosaicWindow, type LienDeLotMosaique } from './ChatMosaic'
 
 /*
- * conv-1305 (/draft, « implémente 5 et 6 ») : une super conv ouverte dans la mosaïque ne fait
- * qu'UNE case. conv-1387 retire les onglets : la frise pleine du chef mène à chaque lot par sa
+ * /draft, « implémente 5 et 6 » : une super conv ouverte dans la mosaïque ne fait
+ * qu'UNE case. Un fil retire les onglets : la frise pleine du chef mène à chaque lot par sa
  * ligne, et le lot ouvert (sa piste, son vrai fil, sa vraie saisie) ramène au chef par Retour.
  */
 const MIN = 60_000
@@ -89,7 +89,7 @@ beforeEach(() => {
       return Promise.resolve(reponse)
     },
     // Plusieurs abonnés, comme le vrai canal : le bloc du chef écoute aussi pour ses anciens plans
-    // (conv-1394), et un seul écouteur gardé faisait taire la relecture du plan montré.
+    // Et un seul écouteur gardé faisait taire la relecture du plan montré.
     onAppEvent: (ecouter: typeof signaler) => {
       abonnes.add(ecouter)
       return () => abonnes.delete(ecouter)
@@ -190,7 +190,7 @@ describe('la super conv dans la mosaïque', () => {
     const frise = hote.querySelector('[data-testid="scm-frise"]')
     expect(frise).not.toBeNull()
     expect(hote.querySelector('[data-testid="scm-chiffre-faits"]')?.textContent).toContain('1/3')
-    // Plus d'axe des heures (conv-1396) : les trois lots, lancés ou non, sont des lignes de la même
+    // Plus d'axe des heures : les trois lots, lancés ou non, sont des lignes de la même
     // liste, dans l'ordre des numéros, sans position ni largeur calculée.
     expect(hote.querySelector('.scm-axe, .scm-couloir')).toBeNull()
     const lignes = [

@@ -3,7 +3,7 @@ import { cheminDuLivrableDuRun, fusionnerRelecture, lireLivrableDuRun } from './
 import type { RunEntry } from './chat-view-types'
 
 /**
- * LE PANNEAU DU RUN LIT LA SORTIE ENTIERE DES ETAPES (conv-989, 2026-10-16).
+ * LE PANNEAU DU RUN LIT LA SORTIE ENTIERE DES ETAPES (2026-10-16).
  *
  * Le « Fil des sous-agents » vient de `trace.json`, plafonne a 4 000 caracteres par etape. La fin
  * du run ecrit desormais la sortie entiere a cote du RUN.md (`livrable.md`, runs/livrable-entier.ts) :

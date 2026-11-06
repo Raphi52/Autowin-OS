@@ -291,7 +291,7 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     expect(NON_INTERACTIVE_ENV.GIT_ASKPASS).toBeTruthy()
     // Git Credential Manager est un processus SEPARE a fenetre GUI : il ignore les deux variables
     // ci-dessus. Sans ces deux reglages, un `git push` d'un run attend une fenetre que personne ne
-    // relie au fil (mesure conv-35, 2026-09-01 : trois invites, run bloque, zero log).
+    // relie au fil (2026-09-01 : trois invites, run bloque, zero log).
     expect(NON_INTERACTIVE_ENV.GCM_INTERACTIVE).toBe('never')
     expect(NON_INTERACTIVE_ENV.GIT_CONFIG_COUNT).toBe('2')
     expect(NON_INTERACTIVE_ENV.GIT_CONFIG_KEY_1).toBe('credential.interactive')
@@ -310,8 +310,8 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
     // propriété n'ait bougé — et un garde qui crie à tort finit par ne plus être cru.
     // fix-ok: b389b5fe a deplace l'objet `env: {` du spawn dans `environnementAgent(` — le
     // repere litteral n'existait plus (indexOf = -1). On lit l'APPEL reel et la fonction.
-    // f8bd6612 (2026-10-21, conv-1040) calcule l'env UNE fois (`envDuTour`) et le passe au spawn ET
-    // au relais Windows : on lit cette affectation, puis on exige que le spawn l'utilise (conv-1056).
+    // f8bd6612 (2026-10-21) calcule l'env UNE fois (`envDuTour`) et le passe au spawn ET
+    // au relais Windows : on lit cette affectation, puis on exige que le spawn l'utilise.
     const start = source.indexOf('envDuTour = environnementAgent(')
     expect(start).toBeGreaterThan(-1)
     // (b) porte par la fonction : NON_INTERACTIVE_ENV etale EN DERNIER dans son retour.
@@ -357,7 +357,7 @@ describe('le shell du chat — connaissance conservée après l’ouverture du 2
 })
 
 /**
- * BOUCLE MESURÉE le 2026-09-03 (conv-15, `run-004c4179e077-1`) — un run tué par sa propre preuve.
+ * BOUCLE MESURÉE le 2026-09-03 (`run-004c4179e077-1`) — un run tué par sa propre preuve.
  *
  * Déroulé lu dans `.autowin-data/autowin-os/causal-trace/conv-15.jsonl` : la phase `build` a fait le
  * travail et lancé ses tests avec succès (`EXIT_CODE=0`, séquences 189, 191, 203). Le contrôle final
@@ -412,7 +412,7 @@ describe('une preuve de test redirigée vers un fichier reste une VÉRIFICATION'
 })
 
 /**
- * BOUCLE MESURÉE le 2026-10-30 (conv-355, `run-acf5f351f041-1`) — même pathologie que conv-15,
+ * BOUCLE MESURÉE le 2026-10-30 (`run-acf5f351f041-1`) — même pathologie que,
  * autre langage. Le lot RobloxFishingBrainrot exigeait « tests verts » ; ses tests se lancent par
  * `python tools/tests.py` (code 0, 898 OK, relancés à chaque passage). Le contrôle final a
  * pourtant refusé CINQ fois « Promis mais pas fait : "Tests demandes executes avec un code de
@@ -448,7 +448,7 @@ describe('un test lancé par l’interpréteur Python est une VÉRIFICATION', ()
 })
 
 /**
- * BOUCLE MESURÉE le 2026-11-02 (conv-415, `run-28ab6e5034bd-1`) — même pathologie, troisième
+ * BOUCLE MESURÉE le 2026-11-02 (`run-28ab6e5034bd-1`) — même pathologie, troisième
  * langage. Le lot « clics du bureau caché » prouvait son correctif par
  * `powershell -NoProfile -File scripts/hdesk-act.wpf.test.ps1` (code 0, et code 1 sans le
  * correctif). Le contrôle final a pourtant refusé TROIS fois « Promis mais pas fait : "Tests

@@ -7,7 +7,7 @@
   flex-direction: column;
   gap: var(--s3, 12px);
   /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
-     le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
+     le meme dans toutes les vues (ViewPage.gabarit.test.ts). */
   padding: var(--s3, 12px) 0;
   /* La vue occupe sa hauteur et NE grandit PAS au-delà : sans cela la liste poussait le bas de page
      hors de l'écran et les derniers workflows devenaient inatteignables — il n'y avait aucune barre
@@ -91,7 +91,7 @@
   border-left: 2px solid transparent;
   /*
    * Une surface du thème, jamais une couleur opaque en dur : sans elle, le texte flottait sur la
-   * galaxie et la liste devenait illisible. Plus de flou par-dessus (2026-11-05, conv-1623 : il
+   * galaxie et la liste devenait illisible. Plus de flou par-dessus (2026-11-05, : il
    * coûtait la carte graphique ; garde : assets/aucun-flou.test.ts) — la surface des cartes est
    * déjà dense à 95 % (`.theme-serious`, ui-system.css).
    */

@@ -7,7 +7,7 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * GARDE-FOU DE LA CHAÎNE ∞ AU SITE D'APPEL (demande du 2026-10-02, conv-38) : le quota hebdomadaire
+ * GARDE-FOU DE LA CHAÎNE ∞ AU SITE D'APPEL (demande du 2026-10-02) : le quota hebdomadaire
  * Claude relevé par l'écran du chat doit atteindre la porte de décision. Quota à 85 % → la suite
  * proposée ne part pas, ∞ s'éteint sur ce fil, et l'arrêt est dit dans le fil avec le chiffre.
  */
@@ -82,7 +82,7 @@ describe('ChatView — la chaîne ∞ s’arrête au seuil du quota hebdomadaire
   })
 
   // Le seuil se relève dans Settings › Behaviour : le bandeau l'ouvre d'un clic au lieu de donner
-  // un chemin à recopier — le chemin écrit « Settings › Budget » avait vieilli sans bruit (conv-1602).
+  // un chemin à recopier — le chemin écrit « Settings › Budget » avait vieilli sans bruit.
   it('le bandeau d’arrêt ouvre Settings › Behaviour d’un clic', async () => {
     const appCommand = vi.fn().mockResolvedValue({ ok: true })
     const pilotChat = vi.fn().mockResolvedValue({ ok: true })

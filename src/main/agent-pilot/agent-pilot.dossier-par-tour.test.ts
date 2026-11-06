@@ -14,7 +14,7 @@ import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
  * projets differents travaillaient dans le MEME dossier, et le seul moyen d'aligner etait un
  * redemarrage de l'app. Le dossier est desormais RESOLU par tour depuis la conversation courante et
  * PASSE au provider (`workspaceCwd`) — la meme valeur devant servir a la cle de session, sinon le CLI
- * reclame la session depuis un autre dossier et le tour meurt a 0 message (conv-48, 2026-09-06).
+ * reclame la session depuis un autre dossier et le tour meurt a 0 message (2026-09-06).
  */
 type Captured = { options: SendOptions; content: string }
 

@@ -1,5 +1,5 @@
 // Finalisation, fusion et nettoyage après publication : méthodes de WorktreeManager déplacées telles quelles depuis worktree-manager.ts
-// (conv-1508, lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
+// (lot 3). Chacune reçoit l'instance en `this` ; elles sont rattachées au prototype
 // par attacherMethodes dans worktree-manager.ts, donc les appels `this.x(...)` restent identiques.
 import { causeGit, sortieGit } from './cause-git'
 import { randomUUID } from 'node:crypto'
@@ -78,7 +78,7 @@ export function finalize(
   // `base-dirty` ne prend PAS le chemin du sauvetage : celui-ci committe le travail en cours de la
   // copie, ce qui contredirait la garde qu'on vient d'honorer. Mais ce n'est plus un cul-de-sac —
   // on pose une adresse d'ATTENTE sur le commit deja produit, sans rien ecrire chez l'utilisateur.
-  // Le tour cesse ainsi de finir sur un echec sec (conv-1450). Voir `poserAttenteDIntegration`.
+  // Le tour cesse ainsi de finir sur un echec sec. Voir `poserAttenteDIntegration`.
   if (issue.outcome === 'blocked' && issue.reason === 'base-dirty') {
     /*
      * L'ECHELLE, dans l'ordre : le barreau qui ATTERRIT d'abord, l'attente ensuite.
@@ -157,7 +157,7 @@ export function fusionEstPropreABlanc(
    * Ce qui atterrit chez l'utilisateur, c'est la fusion de la copie DANS sa base. Quand la copie
    * est partie d'`origin/main` et que le main local a des commits a lui (`describeForLaunch`,
    * historiques divergents), la version de la copie n'a pas ces commits : comparee a la base, elle
-   * semble les ANNULER. Vecu le 2026-10-22 (conv-1086) : une edition non commitee posee juste a
+   * semble les ANNULER. Vecu le 2026-10-22 : une edition non commitee posee juste a
    * cote d'un commit local etait jugee en conflit, alors que git la fusionnait sans heurt — le
    * pre-vol refusait a tort, et le run retombait en `base-dirty`.
    *
@@ -319,7 +319,7 @@ export function fusionEnPreservantLEditionLocale(
   /*
    * 3. LA PUBLICATION A ATTERRI : elle est rendue comme telle, quoi qu'il arrive ensuite.
    *
-   * Vecu le 2026-10-24 (conv-1139) et reproduit en test (`index.lock` tenu par un autre geste
+   * Vecu le 2026-10-24 et reproduit en test (`index.lock` tenu par un autre geste
    * git pendant le retour) : un `stash pop` rate faisait rendre `undefined`, donc « bloque »
    * pour un travail DEJA publie, puis `stash drop` jetait la remise et le fichier restait sans
    * ses editions — elles ne survivaient que dans la sauvegarde, sans que personne le sache. Le
@@ -636,7 +636,7 @@ export function finalizeSansSecours(
       outcome: 'blocked',
       agentId,
       files: ignoredFiles,
-      // PAS `merge-failed` : aucune fusion n'est tentée ici. Mesuré le 2026-08-21 (conv-1362) :
+      // PAS `merge-failed` : aucune fusion n'est tentée ici. Mesuré le 2026-08-21 :
       // le libellé de fusion a envoyé le diagnostic chercher un conflit git inexistant.
       reason: 'ignored-deliverables',
       detail: 'La copie contient des fichiers ignorés non régénérables.'

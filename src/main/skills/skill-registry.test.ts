@@ -125,7 +125,7 @@ describe('registre multi-source des skills (souverain de Native)', () => {
   })
 
   /**
-   * Décision utilisateur du 2026-09-26 (conv-16) : « je garde que les skills d'autowin ». Par défaut,
+   * Décision utilisateur du 2026-09-26 : « je garde que les skills d'autowin ». Par défaut,
    * l'écran Skills ne lit plus que les racines Autowin — ni `~/.claude` ni `~/.codex`.
    */
   it('par défaut, seules les racines Autowin sont des sources (ni ~/.claude ni ~/.codex)', () => {

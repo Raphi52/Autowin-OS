@@ -8,7 +8,7 @@ import {
 } from './reservation-fichiers'
 
 /*
- * RÉSERVATION DES FICHIERS ENTRE FILS (conv-1083, 2026-10-22).
+ * RÉSERVATION DES FICHIERS ENTRE FILS (2026-10-22).
  *
  * Entrée qui ferait échouer ce banc si la garde était fausse : conv-B édite
  * `D:\AutoWinOS\src\x.ts` 10 min après conv-A, fichier encore modifié et non commité — elle doit être
@@ -51,7 +51,7 @@ describe('reserverOuRefuser', () => {
     expect(motif).toMatch(/il y a 10 min/)
     // Le registre reste à conv-A : un refus ne vole pas la réservation.
     expect(r.registre()['d:/autowinos/src/x.ts'].fil).toBe('conv-A')
-    // conv-1139 : le texte d'avant reste, et le refus FINIT par le moyen d'écrire au détenteur.
+    // Le texte d'avant reste, et le refus FINIT par le moyen d'écrire au détenteur.
     expect(motif).toContain("dis-le à l'utilisateur en nommant conv-A.")
     expect(motif).toMatch(
       /écris-lui directement avec l'outil ecrire_a_un_fil \(destinataire conv-A\)\.$/

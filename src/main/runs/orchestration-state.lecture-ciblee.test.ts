@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 /*
- * LECTURE CIBLEE D'UN CHECKPOINT DE RUN (heal conv-1013, 2026-10-16).
+ * LECTURE CIBLEE D'UN CHECKPOINT DE RUN (2026-10-16).
  *
  * Mesure : a chaque demarrage, `gels.jsonl` porte « corps du module termine » a ~2,9 s, dont
  * ~1,15 s de `readFileSync` (≈ 540 appels) partis de `terminalizeInterruptedPersistedRun`. Le

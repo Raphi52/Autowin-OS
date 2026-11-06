@@ -64,7 +64,7 @@ describe('la boucle d etiquettes ne travaille que si la pose a change', () => {
 })
 
 /**
- * LA SIMULATION AUSSI (2026-09-08, conv-353) — la boucle par image etait gardee, mais le moteur de
+ * LA SIMULATION AUSSI (2026-09-08) — la boucle par image etait gardee, mais le moteur de
  * forces rappelait la synchro A NU a chaque tick (`onEngineTick={syncThemeClusterLabels}`). Une
  * synchro a nu lit la geometrie de toute la page puis reecrit sur le conteneur du canvas, ce qui
  * peut renotifier l'observateur de taille et relancer des ticks : boucle qui se nourrit d'elle-meme.

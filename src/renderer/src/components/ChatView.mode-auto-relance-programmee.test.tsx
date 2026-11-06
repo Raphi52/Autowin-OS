@@ -7,7 +7,7 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * conv-826 (2026-09-24) : « faudrait que le mode auto gère ce cas au lieu de s'arrêter ». Une suite
+ * 2026-09-24 : « faudrait que le mode auto gère ce cas au lieu de s'arrêter ». Une suite
  * qui ne peut partir qu'à un moment précis (« dans 20 min ») est PROGRAMMÉE, puis envoyée seule.
  * Le délai réel (20 min) est raccourci ici : seuls les minuteurs longs (≥ 60 s) sont accélérés.
  */
@@ -21,7 +21,7 @@ function accelererLesLongsMinuteurs(seuil = 60_000): void {
     vrai(fn, (ms ?? 0) >= seuil ? 150 : ms)) as typeof window.setTimeout)
 }
 /**
- * conv-1069 : rejoue le PIRE cas d'une machine chargée, à chaque passage. La sonde d'un fil se
+ * Rejoue le PIRE cas d'une machine chargée, à chaque passage. La sonde d'un fil se
  * reprogramme à `Date.now() + DELAI_SONDAGE_FIL`, puis le minuteur s'arme sur
  * `echeance - Date.now()` : une milliseconde écoulée entre les deux donne 59 999 ms. Mesuré :
  * rouge 1 fois sur 3 sous charge (`expected +0 to be 1`), la sonde suivante attendant alors une
@@ -138,7 +138,7 @@ describe('ChatView — une suite différée est programmée, pas abandonnée', (
 })
 
 /**
- * conv-826 (2026-09-24) : « quand fin.txt existe » — le mode auto sonde le fichier (lecture seule,
+ * 2026-09-24 : « quand fin.txt existe » — le mode auto sonde le fichier (lecture seule,
  * processus principal) AVANT de payer un tour : absent → aucun envoi, présent → un envoi.
  */
 describe('ChatView — suite « quand X existe » : sonde gratuite avant le tour', () => {
@@ -153,7 +153,7 @@ describe('ChatView — suite « quand X existe » : sonde gratuite avant le tour
   const SUITE_FICHIER = 'quand fin.txt existe, relever les résultats du tournoi.'
 
   it('fichier absent ou réponse inconnue (null) : aucun tour payé ; présent : la suite part une fois', async () => {
-    // conv-826, 14:38:57 : tout ce qui n'était pas `false` payait un tour. `null` doit attendre aussi.
+    // 38:57 : tout ce qui n'était pas `false` payait un tour. `null` doit attendre aussi.
     let present: boolean | null = null
     const fichierExiste = vi.fn(async () => present)
     const base = [{ role: 'user', content: 'salut' }, { role: 'assistant', content: cloture('lancer terrain.') }]
@@ -236,12 +236,12 @@ describe('ChatView — suite « quand X existe » : sonde gratuite avant le tour
   })
 
   /*
-   * conv-1069, candidat 3 : sur conv-1065, « conv-N a-t-il fini ? » est partie 5 fois (2 tours payés
+   * Candidat 3 : « conv-N a-t-il fini ? » est partie 5 fois (2 tours payés
    * pour lire « pas terminé »), fin vue avec 51 min de retard. La suite attend désormais la fin du
    * fil nommé par une sonde GRATUITE (`pilotChatActive`, l'autorité du processus principal).
    * L'entrée qui ferait échouer ce test si la correction était fausse : l'autre fil encore actif —
    * une suite envoyée tout de suite paierait un tour pour constater qu'il tourne.
-   * fix-ok: conv-1069 — rouge sur le code d'origine (ef5762bf : la suite n'attendait pas la fin du
+   * fix-ok: rouge sur le code d'origine (ef5762bf : la suite n'attendait pas la fin du
    * fil), vert avec la sonde `pilotChatActive`. Instabilité (1 rouge sur 3, juge) : délai de sonde
    * raboté à 59 999 ms par 1 ms écoulée, sous le seuil d'accélération 60 000 — rouge 3/3 avec
    * l'horloge qui dérive, vert avec le seuil DELAI_SONDAGE_FIL / 2 et des attentes d'événement.

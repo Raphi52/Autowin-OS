@@ -1,7 +1,7 @@
 /**
  * UN TRAVAIL ARRETE NE DOIT PAS TUER LA CHAINE AUTOMATIQUE.
  *
- * Mesure conv-597, tour `ac411810-571a-4a7c-ae59-86be8c15e759` (saisie ts 1789564941442 :
+ * Mesure, tour `ac411810-571a-4a7c-ae59-86be8c15e759` (saisie ts 1789564941442 :
  * « yavais pas de preprompt le mode auto a pas pu continuer ») : l'orchestration finit
  * `gateBlocked: true`, le texte affiche commence par « ⛔ Workflow ARRETE au controle final » et
  * ne porte AUCUNE ligne « 👉 Recommande » — celle-ci n'etait poussee que dans la branche

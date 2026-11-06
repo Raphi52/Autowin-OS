@@ -11,9 +11,9 @@ import {
 
 /**
  * LA DEMANDE : « si je veux classer une conversation, cela me propose les repertoires de travail,
- * alors que je voudrais les categories » (conv-79, 2026-09-17).
+ * alors que je voudrais les categories » (2026-09-17).
  *
- * CAUSE MESUREE : la separation du dossier de travail et du libelle de classement (conv-81) a
+ * CAUSE MESUREE : la separation du dossier de travail et du libelle de classement a
  * filtre la liste du menu « Ranger dans… » sur `estCheminDeDossier`. Le routage cote stockage
  * etait bon, mais l'INTERFACE ne proposait plus aucun libelle : « Fiches Team » portait encore des
  * fils et etait devenu inatteignable a la souris, et rien ne permettait d'en creer un.
@@ -92,7 +92,7 @@ describe('ChatView — classer une conversation par categorie', () => {
     })
 
     // La pastille 📁 de la barre du haut ne montre QUE des chemins (l'entree du menu de la
-    // conversation a ete retiree, conv-674).
+    // conversation a ete retiree).
     const dossiers = harness.container.querySelector<HTMLElement>(
       '[data-testid="chat-project-dot"]'
     )

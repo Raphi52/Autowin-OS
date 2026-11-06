@@ -5,7 +5,7 @@ import type { PromptSnapshot } from '../commands/commands'
 /**
  * LE CAP D'ITÉRATIONS TUAIT LE TOUR AU LIEU DE LE FAIRE CONCLURE.
  *
- * Mesuré (conv-1485) : « ⚠️ Le tour a échoué — Cap d'itérations (6) atteint sans réponse finale ».
+ * Mesuré : « ⚠️ Le tour a échoué — Cap d'itérations (6) atteint sans réponse finale ».
  * Le modèle n'est JAMAIS averti qu'il arrive au bout : il continue d'agir, et le tour meurt sur une
  * erreur terminale qui jette le texte déjà dit. Le cap doit être RÉINJECTÉ comme consigne de
  * clôture forcée : à la dernière itération, l'agent est prévenu, il règle/rapporte l'erreur en

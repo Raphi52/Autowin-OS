@@ -11,7 +11,7 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /**
- * UN CACHE VIDE EST UNE ABSENCE, PAS UN FIL — meme regle qu'au chat plein (conv-82).
+ * UN CACHE VIDE EST UNE ABSENCE, PAS UN FIL — meme regle qu'au chat plein.
  *
  * Une conversation ouverte en mosaique alors qu'elle etait encore vide laissait un tableau vide
  * dans le cache d'affichage. L'agent la remplit ensuite cote processus principal, sans passer par

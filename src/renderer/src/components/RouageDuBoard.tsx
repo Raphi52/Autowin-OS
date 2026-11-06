@@ -1,5 +1,5 @@
 /**
- * LE ROUAGE DU BOARD — le petit bouton ⚙ posé à côté du bouton 📁 (demande du 2026-10-28, conv-1230 :
+ * LE ROUAGE DU BOARD — le petit bouton ⚙ posé à côté du bouton 📁 (demande du 2026-10-28, :
  * « un ptit bouton rouage qui contiendra projet, le bouton refresh et le nom d'usage », au-dessus de
  * la liste des projets).
  *

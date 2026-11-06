@@ -83,13 +83,13 @@ describe('le choix atteint réellement le run du chat', () => {
   })
 
   it('le workflow actif de la vue ne passe plus avant le choix automatique', () => {
-    // Inversé le 2026-10-22 (conv-1070) : la confrontation qui justifiait cette priorité n'existe
+    // Inversé le 2026-10-22 : la confrontation qui justifiait cette priorité n'existe
     // plus, et le workflow actif court-circuitait le choix automatique sur 39 démarrages sur 39.
     // Le comportement est prouvé dans `os.workflow-par-defaut.test.ts` ; ici, le retour anticipé.
     expect(os).not.toMatch(
       /poseConversationWorkflow[\s\S]{0,300}if \(this\.workflowParDefaut\) return/
     )
-    // Le repli ne vient qu'après la proposition, et passe la garde du cadrage (conv-1070).
+    // Le repli ne vient qu'après la proposition, et passe la garde du cadrage.
     expect(os).toMatch(
       /if \(proposition\) return proposition[\s\S]{0,700}profilEcraseLeCadrage\(task \?\? '', phasesParDefaut\)\) return undefined\s*return parDefaut/
     )

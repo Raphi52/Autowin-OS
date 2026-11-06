@@ -4,7 +4,7 @@ import { prepareChatHtml } from './chat-html-inline'
 
 /**
  * Un bloc du fil vit dans la COLONNE de reponse ; ses requetes de largeur doivent la mesurer, elle,
- * et pas la fenetre. Defaut mesure conv-139, tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 : fenetre
+ * et pas la fenetre. Defaut mesure, tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 : fenetre
  * 1600 px, colonne 860 px, `@media (min-width:1251px) and (max-width:1640px){.stage{zoom:.9}}` s'est
  * declenche et la maquette a pris 1440 px, coupee a droite.
  */

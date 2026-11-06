@@ -4,7 +4,7 @@ import { createDefaultHookBus, creerPreuveVisuelleHandler } from './default-gate
 /**
  * LE HOOK DE PREUVE VISUELLE EXISTAIT, MAIS AUCUN APPELANT DE PRODUCTION NE L'ALLUMAIT.
  *
- * Mesure (conv-512, tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`, appel modèle iteration 1) : un run
+ * Mesure (tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`, appel modèle iteration 1) : un run
  * de construction modifie `src/renderer/src/components/ModelActivityLogPane.tsx` et son `.css`, se
  * clôture VERT, et l'agent écrit lui-même « je ne l'ai pas observé à l'écran — aucune capture,
  * aucun verdict visuel de ma part ». `requireVisualProofForFrontDiff` (gates/hooks.ts) aurait

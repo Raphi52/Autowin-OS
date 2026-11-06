@@ -7,7 +7,7 @@
  * Touche du champ de frappe -> touche nommée de hdesk-act. Entrée reste le « valider » du formulaire.
  * Ctrl+A/C/X/Z ne partent au bureau caché que si le champ est VIDE : sinon ils agissent sur
  * le champ lui-même (corriger sa frappe avant l'envoi).
- * Ctrl+V ne part JAMAIS (conv-1528, 2026-11-04) : hdesk-act le poste en caractère 22 sans l'état de
+ * Ctrl+V ne part JAMAIS (2026-11-04) : hdesk-act le poste en caractère 22 sans l'état de
  * Ctrl, et une console l'affichait « ^V » sans rien coller (mesure : « echo [^V »). Il colle donc dans
  * le champ, et Entrée tape le texte collé lettre par lettre, ce que la console reçoit bien.
  */

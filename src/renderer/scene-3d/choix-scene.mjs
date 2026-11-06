@@ -1,5 +1,5 @@
 /**
- * LE RANG CHOISI DANS UN CARROUSEL /draft, TRANSMIS A SA SCENE 3D (conv-318, 2026-10-17 : « le bloc
+ * LE RANG CHOISI DANS UN CARROUSEL /draft, TRANSMIS A SA SCENE 3D (2026-10-17 : « le bloc
  * 3d doit etre dans le bloc draft »).
  *
  * Fichier .mjs, et non TypeScript, parce que trois lecteurs en ont besoin et que deux sont des

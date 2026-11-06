@@ -6,7 +6,7 @@ import { createChatTurn, reduceChatTurn, type ChatTurnEvent } from '../../shared
 /**
  * UNE CONSIGNE ÉCRITE PENDANT LE TOUR N'EFFACE PAS LA RÉPONSE DÉJÀ AFFICHÉE.
  *
- * Mesure du 2026-10-05 (conv-99, tour 5ef60fbb-1b39-45c9-a173-418feb595345, saisie ts 1791186255017,
+ * Mesure du 2026-10-05 (tour 5ef60fbb-1b39-45c9-a173-418feb595345, saisie ts 1791186255017,
  * voie « orientation »). Le premier appel (iteration 0, promptCalls ts 2026-10-05T07:44:23.743Z) a
  * rendu une réponse complète et vérifiée (« le dossier du patient affiche maintenant chaque
  * consentement en entier… »). La consigne « met un rond simple » est arrivée pendant ce temps :

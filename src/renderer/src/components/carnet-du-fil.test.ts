@@ -3,7 +3,7 @@ import { lignesDuCarnet, resumeDAbsence, texteDeCorrection } from './carnet-du-f
 import type { Msg } from './chat-view-types'
 
 /**
- * CARNET VIVANT DU FIL (conv-1038, 2026-10-21). Les fils longs dérivent (p90 = 14 messages de
+ * CARNET VIVANT DU FIL (2026-10-21). Les fils longs dérivent (p90 = 14 messages de
  * l'utilisateur par fil), et la mémoire du fil n'existait que pour l'agent. Le carnet relit ce que
  * le fil a DÉJÀ écrit — la dernière demande, la dernière clôture, la question ouverte, les fichiers
  * touchés, ce que l'agent a retenu — sans rien inventer.

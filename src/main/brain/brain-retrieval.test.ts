@@ -425,7 +425,7 @@ describe('retrieveBrainContext', () => {
   })
 
   /*
-   * UN AUTRE SERVEUR BRAIN SUR LE PORT. Mesure conv-338 (2026-10-19, tour
+   * UN AUTRE SERVEUR BRAIN SUR LE PORT. Mesure (2026-10-19, tour
    * 8ce6230c-374c-4de3-9429-583a648e286c) : un ancien serveur, d'une autre installation, tenait le
    * port avec SON jeton. `/challenge` n'exige aucun jeton : il repond, mais signe avec une autre
    * cle. La lecture rendait un « invalid » anonyme, le meme que pour une reponse forgee ou un
@@ -639,7 +639,7 @@ describe('fraîcheur — aucune publication n’est masquée par le client', () 
 })
 
 /*
- * QUATRE ECHECS, QUATRE MOTIFS — mesure conv-586 (2026-09-16). `unavailable` seul obligeait a
+ * QUATRE ECHECS, QUATRE MOTIFS — mesure (2026-09-16). `unavailable` seul obligeait a
  * quatre sondes manuelles pour retrouver laquelle des causes s'etait produite. Entree qui DOIT
  * rougir : renvoyer le meme motif (ou aucun) pour des echecs distincts.
  */
@@ -674,7 +674,7 @@ describe('motif d’indisponibilité — la cause, pas une énumération', () =>
     expect(res.unavailableReason).toBe('query-refused')
   })
 
-  // conv-1053 (2026-10-22) : 57 tours de chat « unavailable » en 0,1-0,3 s étaient des 503 du
+  // 2026-10-22 : 57 tours de chat « unavailable » en 0,1-0,3 s étaient des 503 du
   // serveur en revérification d'index (salves des 15 et 16/10, pendant la curation). Confondus avec
   // un jeton rejeté sous « query-refused », ils poussaient à « réparer » un serveur sain.
   it('index en revérification (503) : motif à part, distinct d’un refus', async () => {
@@ -683,7 +683,7 @@ describe('motif d’indisponibilité — la cause, pas une énumération', () =>
     expect(res.unavailableReason).toBe('reindexing')
   })
 
-  // conv-1053 : 23 tours « unavailable » à ~1,6 s étaient le délai de 1,5 s dépassé, rangé sous
+  // 23 tours « unavailable » à ~1,6 s étaient le délai de 1,5 s dépassé, rangé sous
   // « network » avec un serveur arrêté — la trace ne pouvait pas dire lequel des deux.
   it('délai dépassé : motif à part, distinct d’un serveur qui ne répond pas', async () => {
     const res = await retrieveBrainContext('q', {

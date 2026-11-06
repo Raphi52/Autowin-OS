@@ -67,7 +67,7 @@ describe('spinner — source unique', () => {
 })
 
 /**
- * Défaut vécu (conv-1507) : `.conversation-state.is-running` RECOPIAIT à la main la géométrie
+ * Défaut vécu : `.conversation-state.is-running` RECOPIAIT à la main la géométrie
  * de l'atome dans ChatView.css. Les deux copies ont divergé (reduced-motion : `none` d'un côté,
  * ralentissement de l'autre) — d'où « le spinner n'agit pas pareil selon où il est ».
  * La garde ci-dessous vise la CAUSE : aucune orbite ne se déclare hors theme.css.

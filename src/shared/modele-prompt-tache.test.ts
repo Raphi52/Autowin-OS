@@ -6,7 +6,7 @@ import {
 } from './modele-prompt-tache'
 
 /**
- * conv-983 (2026-10-16) : un seul modèle de prompt de tâche, en deux formes (écran / agent).
+ * 2026-10-16 : un seul modèle de prompt de tâche, en deux formes (écran / agent).
  * Ce test tient leur accord : un bloc ajouté ou retiré l'est dans les deux à la fois.
  */
 describe('modèle de prompt d’une tâche', () => {

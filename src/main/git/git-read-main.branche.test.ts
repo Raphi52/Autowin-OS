@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 /*
- * LA BRANCHE DU BADGE SE LIT SANS CREER DE PROCESSUS (heal conv-1013, 2026-10-16).
+ * LA BRANCHE DU BADGE SE LIT SANS CREER DE PROCESSUS (2026-10-16).
  *
  * Mesure : `gels.jsonl` porte, du 14 au 16/10, 9 gels de 3,3 a 9,8 s du fil principal, chacun dans
  * la creation d'UN processus `spawn git status` (`ipc:git:read`, `readGitState`). `execFile` est

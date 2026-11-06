@@ -1,8 +1,8 @@
 /**
- * LES PROJETS PARTAGÉS DU BOARD (demande utilisateur du 2026-10-28, conv-1211 : « dans le board je
+ * LES PROJETS PARTAGÉS DU BOARD (demande utilisateur du 2026-10-28, « dans le board je
  * veux qu'on puisse choisir quel CWD on partage »).
  *
- * Le dossier du Board (conv-1206, `src/main/board/board-dossier.ts`) recopiait TOUS les projets sur le
+ * Le dossier du Board (`src/main/board/board-dossier.ts`) recopiait TOUS les projets sur le
  * partage de l'équipe, y compris les fils perso ou d'un autre client. On choisit désormais lesquels
  * partent. Un projet du Board = un dossier de travail (ou une catégorie de la barre latérale) : sa
  * `cle` est celle de `groupeDe`, la même que la vue affiche.

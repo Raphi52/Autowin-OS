@@ -7,11 +7,11 @@ import {
 import type { IoJournalFils, LivraisonDeFil, MessageDeFil } from '../../shared/messages-entre-fils'
 
 /**
- * ÉCHANGE AVANT RÉPARATION — refus « sans cause » seul (conv-1139, 2026-10-24, étape 1 de l'option
+ * ÉCHANGE AVANT RÉPARATION — refus « sans cause » seul (2026-10-24, étape 1 de l'option
  * A du cadrage forum-agents-partie2-juge-build).
  *
  * Mesure du 24/10 sur les `trace.json` : 18 refus du contrôle final faits du SEUL fix-gate
- * (« N édits de X sans cause vérifiée ») dans 14 runs depuis conv-914. Ce refus tombe AVANT le juge
+ * (« N édits de X sans cause vérifiée ») dans 14 runs. Ce refus tombe AVANT le juge
  * (`judgeAndGate`), puis la réparation rejoue build + nettoyage + juge à l'aveugle — alors qu'une
  * ligne `CausalHypothesis: <chemin> — <cause>` dans le texte du run suffit à le lever (source 2 de
  * `jetonsDeCauseParFichier`). On pose donc d'abord la question à la session du build.
@@ -22,7 +22,7 @@ import type { IoJournalFils, LivraisonDeFil, MessageDeFil } from '../../shared/m
  */
 
 /*
- * PLUS DE PLAFOND PAR RUN (conv-1139, 2026-10-25). Le cadrage bornait à deux échanges par run ;
+ * PLUS DE PLAFOND PAR RUN (2026-10-25). Le cadrage bornait à deux échanges par run ;
  * l'utilisateur l'a retiré pour VOIR si l'échange tourne vraiment en rond. Il reste borné : un seul
  * échange par refus et par source (orchestrateur), et le plafond dur des passages de réparation
  * (`plafondDurReparations`) arrête le run. Chaque échange est numéroté dans la trace (« Échange n »).

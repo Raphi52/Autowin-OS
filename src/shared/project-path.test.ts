@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { canonicalProjectPath as c } from './project-path'
 
 // Migré de scripts/arena-panel/p4-chemin-canonique.mts (banc /arena, commit 191ab51d), retiré le
-// 2026-10-22 (residus, conv-1062) : ce script sans appelant était la SEULE garde de ce correctif.
+// 2026-10-22 (residus) : ce script sans appelant était la SEULE garde de ce correctif.
 // Défaut d'origine : canonicalProjectPath rendait DEUX clés pour le MÊME dossier, donc deux
 // groupes dans la barre latérale.
 describe('canonicalProjectPath — une seule clé par dossier', () => {

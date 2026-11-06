@@ -1,6 +1,6 @@
 /**
  * L'annonce écrite par le processus principal et le texte affiché par le fil restent accordés
- * (conv-1123) : si `annonceDeLaLectureRetenue` change son début, l'étiquette « lecture » du fil
+ * Si `annonceDeLaLectureRetenue` change son début, l'étiquette « lecture » du fil
  * afficherait « Lecture retenue : » en double.
  */
 import { describe, expect, it } from 'vitest'

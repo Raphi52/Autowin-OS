@@ -98,7 +98,7 @@ const DROP_WITH_CONTENT = new Set(['script', 'link', 'meta', 'title', 'noscript'
 /**
  * Le dessin VECTORIEL declaratif, autorise explicitement.
  *
- * MESURE du 2026-09-07 (conv-335) : une reponse contenant quatre propositions d'icone en `<svg>` s'est
+ * MESURE du 2026-09-07 : une reponse contenant quatre propositions d'icone en `<svg>` s'est
  * affichee vide — seuls les libelles texte restaient. La liste blanche ci-dessus ne nommait aucune
  * balise SVG, donc chaque `<svg>` etait DEPLIE et son contenu graphique perdu. Un dessin est pourtant
  * exactement ce qu'un modele doit pouvoir montrer dans le fil.
@@ -467,7 +467,7 @@ function prefixerIdentifiantsCss(selector: string, prefixe: string): string {
  * LA LARGEUR QUI COMPTE EST CELLE DE LA COLONNE, PAS CELLE DE LA FENETRE.
  *
  * Un bloc du fil vit dans la colonne de reponse, dont la largeur depend de la fenetre ET des
- * panneaux ouverts. Un `@media (max-width: …)` y mesurait pourtant la FENETRE. Mesure conv-139,
+ * panneaux ouverts. Un `@media (max-width: …)` y mesurait pourtant la FENETRE. Mesure,
  * tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 : fenetre 1600 px, colonne 860 px, le palier « zoom .9 »
  * du modele s'est declenche et sa scene a pris 1440 px — coupee a droite, avec la moitie des
  * differences entre variantes hors de vue.
@@ -476,7 +476,7 @@ function prefixerIdentifiantsCss(selector: string, prefixe: string): string {
  * devient ce conteneur (voir `sanitizeChatHtml`). Tout le reste (`print`, `prefers-*`, hauteur,
  * orientation, `device-width`, listes a virgule, `not`) garde son sens de page et reste `@media`.
  *
- * fix-ok: cause mesuree conv-139 tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 (saisie ts=1791619766383) — un `@media` de largeur d'un bloc mesurait la fenetre (1600 px) et non la colonne (860 px) : contenu 1460 px, 600 px coupes ; apres conversion `@container` 1140 px, 280 px coupes (scripts/html-render-apercu.mjs). Test chat-html-inline.largeur-colonne : 3/5 rouges sur 9b180bfe^, 5/5 verts sur 9b180bfe.
+ * fix-ok: cause mesuree tour 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 (saisie ts=1791619766383) — un `@media` de largeur d'un bloc mesurait la fenetre (1600 px) et non la colonne (860 px) : contenu 1460 px, 600 px coupes ; apres conversion `@container` 1140 px, 280 px coupes (scripts/html-render-apercu.mjs). Test chat-html-inline.largeur-colonne : 3/5 rouges sur 9b180bfe^, 5/5 verts sur 9b180bfe.
  */
 const FEATURE_LARGEUR = String.raw`\(\s*(?:(?:min-|max-)?width\s*:[^()]*|[^():]*(?<![\w-])width(?![\w-])[^():]*)\)`
 const MEDIA_DE_LARGEUR = new RegExp(

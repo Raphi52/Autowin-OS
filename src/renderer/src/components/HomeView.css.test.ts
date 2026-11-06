@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest'
 /**
  * L'accueil ne montre PAS l'image plate du fond d'ecran : il en montre la reproduction 3D.
  *
- * CHANGEMENT DE DECISION, assume. conv-1358 demandait l'inverse (« sur la vue accueil je vois pas le
+ * CHANGEMENT DE DECISION, assume. Un fil demandait l'inverse (« sur la vue accueil je vois pas le
  * fond d'ecran ») et ce fichier imposait alors `background: transparent`. Constat utilisateur
- * conv-1397 : « je vois toujours le fond d'ecran qui est present dans toutes les vues dans la vue
+ * « je vois toujours le fond d'ecran qui est present dans toutes les vues dans la vue
  * accueil, ce n'est pas ce que je veux, je veux une reproduction en 3d du fond d'ecran ». Laisser
  * `.home-view` transparent laissait `body` (`theme.css:62-64`, `autowin-galaxy-bg-hq.png`) se voir a
  * travers le canevas efface en alpha 0 : l'utilisateur voyait l'image plate, pas la scene. La couche
@@ -52,7 +52,7 @@ describe('HomeView.css — l accueil laisse passer le decor 3D global', () => {
   })
 
   /*
-   * CHANGEMENT DE DECISION, assume (conv-1037, 2026-10-21) : « ya un filtre qui assombrit je veux des
+   * CHANGEMENT DE DECISION, assume (2026-10-21) : « ya un filtre qui assombrit je veux des
    * couleurs petantes ». Ce test imposait un assombrissement de 46 % au centre, pense pour les
    * nebuleuses ; sur l'avenue, il eteignait la rue. La lisibilite tient desormais au fond opaque de
    * chaque tuile (HomeView.css.lisibilite-tuiles.test.ts) et a l'ombre portee des titres poses sur

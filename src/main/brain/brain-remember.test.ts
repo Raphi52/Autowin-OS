@@ -53,7 +53,7 @@ const signedContextPayload = (context: string, token = 'jeton'): Record<string, 
 /**
  * UNE ROUTE ABSENTE N'EST PAS UN REFUS.
  *
- * Mesure conv-9 (2026-08-31), lue dans la trace causale : `remember` a rendu
+ * Mesure (2026-08-31), lue dans la trace causale : `remember` a rendu
  * `{ allowed: true, stored: false, detail: 'refusé par le Brain : not found' }`. Le mot « refusé »
  * envoie chercher le defaut dans le FAIT (type ? source ? longueur ?), alors qu'un 404 dit que la
  * route de depot n'existe pas sur ce serveur : rien n'a ete lu, rien n'a ete juge. Le meme tour
@@ -108,7 +108,7 @@ describe('remember — separer la panne de transport du refus de contenu', () =>
   })
 
   /*
-   * UN JETON REFUSE N'EST PAS UN FAIT REFUSE. Mesure conv-338 (2026-10-19), tour
+   * UN JETON REFUSE N'EST PAS UN FAIT REFUSE. Mesure (2026-10-19), tour
    * 8ce6230c-374c-4de3-9429-583a648e286c, actions natif:0:0 et natif:0:1 : deux `remember` ont rendu
    * « refusé par le Brain : forbidden ». L'agent a lu « il interdit de remplacer la note existante »,
    * a reecrit le fait, a recu le meme refus, puis a ecrit en memoire locale ; il a fallu une relance
@@ -433,7 +433,7 @@ describe('decideRemember — refuser TÔT, et en disant pourquoi', () => {
   })
 
   // L'outil direct publie TOUS ses arguments en `type: 'string'` (skill-node-mcp.ts, schemaEntree) :
-  // « glean, conv-1053 » arrivait en texte et repartait en `tags: []`, sans un mot (conv-1100).
+  // « glean, conv-1053 » arrivait en texte et repartait en `tags: []`, sans un mot.
   it('des étiquettes en texte séparé par des virgules sont gardées, pas jetées', () => {
     const decision = decideRemember({ ...FAIT_VALIDE, tags: 'glean, conv-1053 ,notes proches,' })
     expect(decision.allowed).toBe(true)
@@ -665,7 +665,7 @@ describe('contrat réel — la réponse de succès est un contexte signé', () =
     // Surtout : ne pas ressembler a une panne, sinon un agent reessaie en boucle.
     expect(outcome.detail).not.toMatch(/erreur|échec|injoignable/i)
     // Et le dire en DONNÉE, pas seulement en texte : le contrôle de fin de tour lit ce marqueur
-    // (agent-pilot.ts, commandResultSucceeded) — sans lui, deux relances pour rien (conv-1114).
+    // (agent-pilot.ts, commandResultSucceeded) — sans lui, deux relances pour rien.
     expect(outcome.dejaConnu).toBe(true)
   })
 
@@ -1140,7 +1140,7 @@ describe('câblage — le prompt enseigne toutes les formes, dont le repli sessi
   })
 })
 
-// conv-1303 (2026-10-30) : l'état d'un fil n'est pas un fait durable.
+// 2026-10-30 : l'état d'un fil n'est pas un fait durable.
 describe('decideRemember — titre ouvert par un fil', () => {
   it('refuse un titre qui commence par « conv-NNN » et dit quoi faire', () => {
     const decision = decideRemember({

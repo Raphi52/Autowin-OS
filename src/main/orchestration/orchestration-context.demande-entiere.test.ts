@@ -3,7 +3,7 @@ import { collectOrchestrationContext } from './orchestration-context'
 import { CONTEXT_LAST_REPLY_CHARS } from '../conversations/conversation-window'
 
 /**
- * PLAFOND MUET n°4 (conv-1228, 2026-10-28) : le contexte joint à un run coupait CHAQUE message du
+ * PLAFOND MUET n°4 (2026-10-28) : le contexte joint à un run coupait CHAQUE message du
  * fil à 600 caractères — y compris ceux de l'utilisateur. Une demande détaillée faite deux messages
  * plus tôt (une liste de points, un journal collé) arrivait au run amputée, sans autre signe qu'un
  * « … ». Les messages de l'utilisateur passent désormais entiers ; une réponse ancienne de

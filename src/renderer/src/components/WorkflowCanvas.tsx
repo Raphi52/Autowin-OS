@@ -144,7 +144,7 @@ export function WorkflowCanvas({
   /**
    * Les skills du disque qui ne sont pas déjà une phase, dans leur PROPRE bloc. Elles étaient
    * rangées sous le titre « Phases », à la suite des huit : rien ne disait qu'une brique par skill
-   * existait (conv-1628).
+   * existait.
    */
   const briquesSkills = useMemo<readonly Phase[]>(
     () => [...new Set(skills)].filter((id) => !PIPELINE_PHASES.includes(id as PipelinePhase)),
@@ -190,7 +190,7 @@ export function WorkflowCanvas({
   /**
    * Les membres AFFICHÉS d'une brique : au moins un. Une brique sans agent réglé n'en montrait
    * aucun, donc aucun sélecteur de modèle — on ne pouvait choisir le modèle de `think` qu'en
-   * passant par « Agents : 2 » puis 1 (conv-1628).
+   * passant par « Agents : 2 » puis 1.
    */
   const membresDe = (node: CanvasNode): CanvasAgent[] => (node.agents?.length ? node.agents : [{}])
 

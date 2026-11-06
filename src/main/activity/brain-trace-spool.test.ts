@@ -45,7 +45,7 @@ describe('perte de trace Brain observable', () => {
       fauxBase
     )
 
-    // L'écriture part hors du fil (conv-1598) : la trace est déposée, sa perte se compte à l'échec.
+    // L'écriture part hors du fil : la trace est déposée, sa perte se compte à l'échec.
     expect(rendu?.query).toBe('trace condamnee')
     await attendreEcrituresTracesBrain()
     const sante = brainTraceSpoolHealth()
@@ -319,7 +319,7 @@ describe('brainTraceSpoolHealth — une trace perdue laisse une marque', () => {
     )
 
     // Le tracage ne casse JAMAIS l'action tracee : il ne jette pas. L'écriture part hors du fil
-    // (conv-1598) : la trace est déposée, et sa perte se compte quand le disque la refuse.
+    // La trace est déposée, et sa perte se compte quand le disque la refuse.
     expect(rendu?.query).toBe('trace qui ne pourra pas s’ecrire')
     await attendreEcrituresTracesBrain()
     const apres = brainTraceSpoolHealth()

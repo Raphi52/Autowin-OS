@@ -24,12 +24,12 @@ import {
 } from './carte-riviere'
 
 /**
- * RIVIÈRE DE LA CARTE DU PROJET (/draft conv-1113, « implémente 1+2 »). ENTRÉES QUI DOIVENT FAIRE
+ * RIVIÈRE DE LA CARTE DU PROJET (« implémente 1+2 »). ENTRÉES QUI DOIVENT FAIRE
  * ÉCHOUER : un fil posé à sa PREMIÈRE demande au lieu de sa dernière, un fil ancien glissé dans la
  * fenêtre, deux post-it à la même heure posés l'un sur l'autre, un état manuel qui survit à une
  * nouvelle demande du fil, une colonne la plus large qui n'est pas celle du foyer, un post-it qui
  * déborde de sa colonne, une molette qui avale le défilement de la page en butée.
- * Frise sans fin (conv-1131, le choix de période retiré) : une molette qui bute avant le plus vieux
+ * Frise sans fin (le choix de période retiré) : une molette qui bute avant le plus vieux
  * fil, une frise qui recule sans montrer les fils de ses jours, un fil plus récent perdu au lieu d'être
  * compté, une loupe qui sort du tableau au lieu de faire glisser la frise, une molette qui ne ramène
  * pas à aujourd'hui. Frises longues : une colonne large qui fond, des étiquettes qui se chevauchent.
@@ -199,7 +199,7 @@ describe('la loupe', () => {
       const d = bords[jour + 1] * W
       for (let colonne = 0; colonne < PAR_LIGNE; colonne += 1) {
         // `kx` : l'échelle en largeur, celle qui borne au jour serré (sa hauteur garde 0,09).
-        // `largeur` : celle du papier, étiré quand sa case a de la place (conv-1204).
+        // `largeur` : celle du papier, étiré quand sa case a de la place.
         const { x, kx, largeur } = placer(jour, colonne, bords, W)
         expect(x - (largeur * kx) / 2).toBeGreaterThanOrEqual(g - 1e-9)
         expect(x + (largeur * kx) / 2).toBeLessThanOrEqual(d + 1e-9)
@@ -266,7 +266,7 @@ describe('la frise sans fin (conv-1131)', () => {
     expect(loupe).toEqual(l(JOURS - 0.5, 0))
   })
 
-  // conv-1135 : « quand je click sur une colonne du passé elle doit se mettre au centre et faire
+  // « quand je click sur une colonne du passé elle doit se mettre au centre et faire
   // apparaître les plus anciennes ou plus récentes ». ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : un clic
   // qui laisse le jour cliqué au bord, une frise qui dépasse aujourd'hui ou le plus vieux fil, un
   // jour cliqué qui n'est plus celui sous la loupe.
@@ -353,7 +353,7 @@ describe('les frises longues', () => {
       expect(l.indexOf(Math.max(...l))).toBe(n - 4)
       return Math.max(...l)
     })
-    // ~47 % depuis conv-1204 (« on optimise mal l'espace ») ; 38,4 % avant, celle des maquettes.
+    // ~47 % (« on optimise mal l'espace ») ; 38,4 % avant, celle des maquettes.
     expect(parts[0]).toBeCloseTo(0.469, 2)
     for (const part of parts) expect(part).toBeCloseTo(parts[0], 2)
     expect(poidsDesJours(13.5)[13]).toBeCloseTo(16, 9)
@@ -460,7 +460,7 @@ describe('tout tient dans la hauteur de l’écran', () => {
     }
   })
 
-  // conv-1214 : la ligne « À vérifier » garde sous chaque post-it la place de ses boutons.
+  // La ligne « À vérifier » garde sous chaque post-it la place de ses boutons.
   it('un étage au pas plus grand l’applique à ses lignes, et tout tient encore', () => {
     const bords = bordsDesColonnes(poidsDesJours(13.5))
     const etages = [etage('refuse', { 13: 2 }), etage('sans-preuve', { 13: 4, 2: 6 })]
@@ -501,7 +501,7 @@ describe('tout tient dans la hauteur de l’écran', () => {
     expect(tasse.kx).toBe(0.4)
   })
 
-  // conv-1204, « il doit y avoir plus de texte par post it » : tenu par la hauteur, le post-it
+  // « il doit y avoir plus de texte par post it » : tenu par la hauteur, le post-it
   // gardait 124 de large au milieu d'une case deux fois plus large.
   it('tenu par la hauteur, le post-it s’élargit pour remplir sa case, sans en sortir', () => {
     const bords = bordsDesColonnes(poidsDesJours(13.5))
@@ -514,7 +514,7 @@ describe('tout tient dans la hauteur de l’écran', () => {
     for (const echelleMax of [0.4, 0.7]) {
       const tasse = placer(13, 0, bords, W, echelleMax)
       expect(tasse.largeur).toBeGreaterThan(POSTIT_L)
-      // Sous l'échelle 1, le plafond suit le grossissement du texte (conv-1242, texteDuPostit) : à
+      // Sous l'échelle 1, le plafond suit le grossissement du texte (texteDuPostit) : à
       // l'écran, un post-it ne s'étire toujours pas au-delà de ETIREMENT_MAX × POSTIT_L.
       expect(tasse.largeur * tasse.k).toBeLessThanOrEqual(POSTIT_L * ETIREMENT_MAX + 1e-9)
       // L'écriture garde l'échelle que la hauteur lui laisse : c'est le papier qui s'élargit.

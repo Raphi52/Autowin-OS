@@ -8,7 +8,7 @@ import { AppCommandBus } from './commands'
 /**
  * LE BOUTON STOP DOIT ATTEINDRE LE PROGRAMME LANCE PAR `run`.
  *
- * DEFAUT VECU (conv-384, 2026-09-09). L'agent lance `dotnet run` sur une application a fenetre :
+ * DEFAUT VECU (2026-09-09). L'agent lance `dotnet run` sur une application a fenetre :
  * ce programme ne rend JAMAIS la main. Le tour reste bloque dans `spawnVerify`, dont la seule
  * sortie prematuree etait l'horloge `verifyTimeoutMs()`. L'utilisateur clique Stop : rien. Il
  * ecrit un message : personne ne le lit, le tour precedent occupe encore la place. De son point de

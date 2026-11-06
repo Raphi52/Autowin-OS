@@ -7,7 +7,7 @@
  * fois. Des qu'un tour parle ENTRE ses appels d'outils -- ce que la consigne « jamais de fil muet »
  * lui demande -- son texte final est du texte NEUF, et il etait perdu.
  *
- * MESURE le 2026-09-11 sur `conv-471` : quatre phrases diffusees (222 caracteres), puis le process
+ * MESURE le 2026-09-11 : quatre phrases diffusees (222 caracteres), puis le process
  * principal relance pendant la redaction. A la reprise le texte final existait ; le veto l'a jete.
  * L'utilisateur a lu « je lance les tests » puis plus rien, sans moyen de savoir si c'etait fini,
  * pour 10652 tokens de sortie deja payes.
@@ -23,7 +23,7 @@ export function resteADire(closing: string, dejaDit: string): string {
    * LE MEME TEXTE, AUX BLANCS PRES. Les deux textes compares ne sont pas assembles par le meme code :
    * le deja-dit recolle les deltas avec leurs separateurs (`collerTexteParle`, `\n\n` entre deux
    * messages), le texte de cloture rebatit les morceaux par `.join('')` une fois les `<cmd>` retires.
-   * Une jointure peut donc porter un saut de ligne d'un cote et rien de l'autre. MESURE sur `conv-234`
+   * Une jointure peut donc porter un saut de ligne d'un cote et rien de l'autre. MESURE
    * (2026-10-11) : identiques sans les blancs (34 967 caracteres), differents au caractere 972 a cause
    * d'un seul `\n\n` — et 37 970 caracteres, galerie `html-render` comprise, publies une seconde fois.
    * Le contenu est le critere ; les blancs n'en font pas partie.
@@ -59,7 +59,7 @@ export function closingStreamId(turnId: string): string {
 /**
  * DURABLE ET LIVE, DÉCIDÉS ENSEMBLE — sinon le texte est écrit sur disque sans jamais atteindre le fil.
  *
- * MESURÉ le 2026-08-17 dans `conv-1276` (tour « finis ça une bonne fois pour toutes ») : tout le texte
+ * MESURÉ le 2026-08-17 (tour « finis ça une bonne fois pour toutes ») : tout le texte
  * du tour tenait dans UNE part de flux `<turnId>:closing`, celle que la clôture écrit dans le store.
  * L'utilisateur n'a vu que la ligne du gate ; le reste n'est apparu qu'à l'envoi du message SUIVANT,
  * qui provoque une relecture du store. Cause : le renderer ne reçoit que l'événement `done`, et son

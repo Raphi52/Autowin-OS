@@ -157,7 +157,7 @@ function validateObj(source: string): RefusModele3d | undefined {
 
 /**
  * Le refus d'un modèle 3D, en CLÉ de la table de textes : l'aperçu la traduit au rendu, donc dans la
- * langue courante même si elle change après coup (conv-1170).
+ * langue courante même si elle change après coup.
  */
 export function refusDuModele3d(name: string, bytes: Uint8Array): RefusModele3d | undefined {
   const lower = name.toLowerCase()

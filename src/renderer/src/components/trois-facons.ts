@@ -1,5 +1,5 @@
 /**
- * « ESSAIE 3 FAÇONS » — le texte envoyé à chaque branche (conv-1038, 2026-10-21).
+ * « ESSAIE 3 FAÇONS » — le texte envoyé à chaque branche (2026-10-21).
  *
  * Constat du scout : pour comparer des approches, l'utilisateur ouvrait plusieurs fils à la main ;
  * l'arène, la mosaïque et la branche existaient sans rien pour les relier. La même demande part
@@ -15,13 +15,13 @@ import {
 import { formaterNombre, langueCourante } from '../langue'
 import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
 
-/** Le texte d'une clé dans la langue de l'interface (traduction anglaise, conv-1170). */
+/** Le texte d'une clé dans la langue de l'interface (traduction anglaise). */
 const tx = (
   cle: Parameters<typeof traduireChatDecisions>[0],
   valeurs?: Parameters<typeof traduireChatDecisions>[2]
 ): string => traduireChatDecisions(cle, langueCourante(), valeurs)
 
-// La 3e façon est la plus CRÉATIVE (choix utilisateur, conv-1057, 2026-10-22) : « une approche
+// La 3e façon est la plus CRÉATIVE (choix utilisateur, 2026-10-22) : « une approche
 // différente des deux plus évidentes » obligeait la branche à deviner ce que font les deux autres,
 // qu'elle ne voit pas.
 // Reste en français : c'est la consigne envoyée à la branche (`demandePourLaFacon`). La carte de
@@ -44,13 +44,13 @@ export function demandePourLaFacon(demande: string, rang: number, total: number)
 const MARQUE = /\s+—\s+façon \d+\/\d+$/u
 
 // Le titre de la branche reste en français dans les deux langues : `MARQUE` le relit pour ne pas
-// empiler deux marques quand une façon est relancée (traduction anglaise, conv-1170).
+// empiler deux marques quand une façon est relancée (traduction anglaise).
 export function titreDeLaFacon(titre: string, rang: number, total: number): string {
   return `${titre.replace(MARQUE, '').trim()} — façon ${rang + 1}/${total}`
 }
 
 /*
- * LA CARTE DE COMPARAISON (conv-1038, 2026-10-21 — idée 6 : « une carte compare les écarts, les tests
+ * LA CARTE DE COMPARAISON (2026-10-21 — idée 6 : « une carte compare les écarts, les tests
  * et le coût, et fusionne la gagnante »). Les branches d'un même essai se reconnaissent au nom de leur
  * copie (`nomDeCopieDEssai`) : même fil, même instant. Les phrases ci-dessous mettent en mots ce que
  * le processus principal a MESURÉ — l'écart de la copie depuis sa photo, ce que les vérifications ont
@@ -141,7 +141,7 @@ export function phraseDuCout(cout: { usd: number; partiel: boolean } | null): st
 }
 
 /*
- * LA RESSEMBLANCE (conv-1057, 2026-10-22 — calculée par `src/main/orchestration/ressemblance-des-facons.ts`).
+ * LA RESSEMBLANCE (2026-10-22 — calculée par `src/main/orchestration/ressemblance-des-facons.ts`).
  * Les arrondis ne mentent pas : un code qui n'est pas identique ne s'affiche jamais « 100 % », et
  * une ligne commune ne s'affiche jamais « 0 % ».
  */

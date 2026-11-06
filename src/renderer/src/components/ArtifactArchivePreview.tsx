@@ -135,7 +135,7 @@ export function ArtifactArchivePreview({
 }): React.JSX.Element {
   const { t } = useTextesArtefactsEtBandeaux()
   // Les erreurs sont des CLÉS, traduites au rendu : `useMemo` ne se recalcule pas quand la langue
-  // change (conv-1170).
+  // change.
   const result = useMemo(() => {
     if (!artifact.content || artifact.encoding !== 'base64')
       return { error: 'archive.indisponible' } as const

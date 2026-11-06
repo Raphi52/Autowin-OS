@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Conv } from './chat-view-types'
 import { lireSigneSuperConv, signesDesSuperConvs } from './signe-super-conv'
 
-// conv-1395 : le signe « Raccourci » d'une super conv dans la liste de gauche.
+// Le signe « Raccourci » d'une super conv dans la liste de gauche.
 const fil = (id: string, etat: Partial<Conv> = {}): Conv => ({
   id,
   title: id,

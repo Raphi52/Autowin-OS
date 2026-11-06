@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { extractRecommendation } from './markdown-recommandation'
 
 /**
- * DEFAUT VECU (conv-159, saisie ts=1788413714805) : le mode auto a envoye le mot « Recommandé »
+ * DEFAUT VECU (saisie ts=1788413714805) : le mode auto a envoye le mot « Recommandé »
  * tout seul comme ordre — un tour payant pour rien. Cause : la rubrique etait ecrite en TITRE sur
  * sa ligne et son contenu sur la LIGNE SUIVANTE ; l'extraction ne lisait que la ligne du titre et
  * rendait donc le titre lui-meme. Consequence double : le prompt envoye etait du bruit, ET le

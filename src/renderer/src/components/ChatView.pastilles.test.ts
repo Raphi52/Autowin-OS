@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+// Le composant est découpé en fichiers voisins : la source lue les réunit.
 import { lireSourceDuChatView } from './ChatView.source-complete'
 import { describe, expect, it } from 'vitest'
 
@@ -8,7 +8,7 @@ import { deriveConversationState } from './chat-view-model'
 /**
  * CONTRAT DES PASTILLES DE CONVERSATION (remake).
  *
- * Défaut vécu (conv-1407) : `waiting`, `interrupted` et `cancelled` partageaient la MÊME
+ * Défaut vécu : `waiting`, `interrupted` et `cancelled` partageaient la MÊME
  * couleur (#ffb020) et `completed` héritait du cyan de `running` — quatre états, deux couleurs.
  * Une pastille qui ne distingue pas ne renseigne pas.
  *
@@ -96,7 +96,7 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
   })
 
   it('la pastille porte une INFO-BULLE au survol, dans les DEUX branches de rendu', () => {
-    // Defaut vecu (conv-46) : `title` n'existait que sur la pastille statique. L'etat EN COURS
+    // Defaut vecu : `title` n'existait que sur la pastille statique. L'etat EN COURS
     // rend un <Spinner/>, qui ne recevait qu'un `label` — lu par les lecteurs d'ecran, invisible
     // a la souris. Une couleur muette oblige a venir demander ce qu'elle veut dire.
     const tsx = lireSourceDuChatView()
@@ -122,7 +122,7 @@ describe('pastilles de conversation — chaque état a sa propre couleur', () =>
   })
 
   it('pastille et spinner partagent une CASE FIXE de la largeur du spinner (titres alignés)', () => {
-    // Defaut vecu (conv-144, 2026-10-10) : chaque indicateur prenait sa largeur propre — le
+    // Defaut vecu (2026-10-10) : chaque indicateur prenait sa largeur propre — le
     // spinner 18px, la pastille 11px — donc le titre ne demarrait pas au meme x, et le spinner,
     // cale a gauche, avait son centre ~3,5px a droite de celui des pastilles.
     // ENTREE QUI DOIT FAIRE ECHOUER : retirer la case, ou changer `size` du spinner sans elle.

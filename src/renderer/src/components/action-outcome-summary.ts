@@ -1,7 +1,7 @@
 /**
  * RÉSUMÉ DE PREUVE d'une action, affiché directement dans le fil.
  *
- * Constaté sur conv-76 (2026-07-29) : la commande `verify` a été appelée trois fois, et le fil
+ * Constaté (2026-07-29) : la commande `verify` a été appelée trois fois, et le fil
  * n'affichait que « 1 action terminée verify ». L'exit code — la seule chose qui PROUVE quoi que ce
  * soit — restait invisible. On donne à l'agent le moyen de prouver, puis on cache la preuve.
  *
@@ -24,7 +24,7 @@ export interface OutcomeSummary {
    * Le POURQUOI intégral, pour le dépliage au clic — jamais tronqué, tous les motifs.
    *
    * La pastille est bornée à une ligne : elle coupe à 120 caractères et ne montre que le PREMIER
-   * motif de gate. Sur conv-1334, le second motif — la DoD non tenue, qui dit ce qu'il aurait fallu
+   * motif de gate. Le second motif — la DoD non tenue, qui dit ce qu'il aurait fallu
    * produire — n'était affiché NULLE PART. Le texte court reste le résumé ; ceci est la source.
    */
   why?: string[]
@@ -112,13 +112,13 @@ export function verifyOutcomeSummary(action: ActionLike): OutcomeSummary | undef
 }
 
 /**
- * Résumé d'une ORCHESTRATION : c'est là que part l'essentiel de l'argent (conv-76 : 10,05 $ sur
+ * Résumé d'une ORCHESTRATION : c'est là que part l'essentiel de l'argent (10,05 $ sur
  * 10,94 $) et le fil n'en montrait rien. On affiche le verdict et le coût, jamais un succès prétendu :
  * un gate bloqué ou un juge qui refuse compte comme un échec de livraison.
  */
 export function orchestrateOutcomeSummary(action: ActionLike): OutcomeSummary | undefined {
   if (action.name !== 'orchestrate') return undefined
-  // Certains refus arrivent en CHAÎNE brute, pas en objet (mesuré conv-1178, 14/08 : data =
+  // Certains refus arrivent en CHAÎNE brute, pas en objet (mesuré, 14/08 : data =
   // « Lancement bloqué : main et origin/main ont divergé » et la barre restait opaque).
   if (typeof action.data === 'string' && action.data.trim() && action.ok === false) {
     const raison = action.data.trim()
@@ -192,12 +192,12 @@ export function orchestrationOutcomesFromMessages(
  *
  * TENTÉ ET RETIRÉ le 2026-08-18 : faire primer l'état TERMINAL en dédupliquant par nom d'action,
  * pour qu'un échec repris ne reste pas le verdict du groupe. Un juge adversarial l'a réfuté par
- * exécution — deux actions de MÊME NOM ne sont pas une reprise du même geste. Sur conv-76, cité en
+ * exécution — deux actions de MÊME NOM ne sont pas une reprise du même geste. Cité en
  * tête de ce module, `verify` a tourné TROIS fois dans un seul groupe : `[typecheck exit 1,
  * npm test exit 0]` affichait alors `exit 0` et l'échec disparaissait. Perdre un échec réel est
  * pire que réafficher un échec déjà repris, et rien dans les données (ni `actionId`, ni la
  * commande) ne distingue une reprise d'une action indépendante. La règle d'origine est donc
- * restaurée telle quelle, et le cas de conv-76 est désormais gardé par un test.
+ * restaurée telle quelle, et le cas est désormais gardé par un test.
  */
 /**
  * UN DEPOT BRAIN REFUSE, dit comme tel.
@@ -210,7 +210,7 @@ export function orchestrationOutcomesFromMessages(
  * sens qui compte pour le lecteur.
  *
  * Le mot « terminee » pose au-dessus d'un refus est ce qui rend le faux vert credible : c'est
- * l'erreur commise sur conv-1086, ou l'agent a annonce un depot qui n'avait pas eu lieu. L'interface
+ * l'erreur commise, ou l'agent a annonce un depot qui n'avait pas eu lieu. L'interface
  * la repetait au lieu de la contredire.
  */
 function rememberOutcomeSummary(action: ActionLike): OutcomeSummary | undefined {

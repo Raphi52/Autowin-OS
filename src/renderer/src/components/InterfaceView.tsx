@@ -25,8 +25,8 @@ import './InterfaceView.css'
  * (`assets/theme-modes.css`) ; ce composant ne peint rien lui-même.
  */
 /**
- * LES COMPTES DU TEXTE VIENNENT DU REGISTRE (conv-244). La phrase disait « dix thèmes, cinq sombres
- * et cinq clairs » en dur : six thèmes en ont été retirés le 2026-10-11 (conv-231) et l'écran
+ * LES COMPTES DU TEXTE VIENNENT DU REGISTRE. La phrase disait « dix thèmes, cinq sombres
+ * et cinq clairs » en dur : six thèmes en ont été retirés le 2026-10-11 et l'écran
  * annonçait encore dix. Comme la liste, la phrase lit `THEMES`.
  */
 const NB_THEMES = THEMES.length
@@ -36,9 +36,9 @@ const NB_MALVOYANT = THEMES.filter((t) => t.id.startsWith('malvoyant')).length
 
 export function InterfaceView(): React.JSX.Element {
   const [theme, setTheme] = useState<ThemeId>(() => lireThemeMode())
-  // Les textes suivent la langue choisie juste au-dessus, sans redémarrage (conv-1146).
+  // Les textes suivent la langue choisie juste au-dessus, sans redémarrage.
   const { langue, t } = useTextes()
-  // L'envoi au moteur qui a échoué se DIT ici, au lieu d'être avalé (conv-1146, contrôle final).
+  // L'envoi au moteur qui a échoué se DIT ici, au lieu d'être avalé (contrôle final).
   const echecLangue = useEchecEnvoiLangue()
 
   // Le thème mémorisé est appliqué à l'ouverture aussi : si une autre fenêtre l'a changé,
@@ -55,7 +55,7 @@ export function InterfaceView(): React.JSX.Element {
           <h2>{t('interface.titre')}</h2>
         </div>
       </header>
-      {/* LA LANGUE (conv-1146, 2026-10-26, « basculer autowin OS en full anglais »). Le choix part du
+      {/* LA LANGUE (2026-10-26, « basculer autowin OS en full anglais »). Le choix part du
           `change` de la liste, jamais d'un effet : rouvrir cet écran ne renvoie rien au moteur. */}
       <div className="interface-row">
         <div className="interface-row-text">
@@ -116,7 +116,7 @@ export function InterfaceView(): React.JSX.Element {
             aria-label={t('interface.theme')}
             data-testid="interface-theme"
             onChange={(e) => {
-              // LE CERCLE PART D'ICI, et seulement d'ici (conv-981, 2026-10-16) : l'effet plus haut
+              // LE CERCLE PART D'ICI, et seulement d'ici (2026-10-16) : l'effet plus haut
               // rejoue le theme a CHAQUE ouverture de l'ecran. Un `change` de liste n'a pas de
               // position de souris : le cercle part du centre de la liste. Le theme est ecrit DANS
               // la transition, avant l'image du nouvel etat ; l'effet le reecrit a l'identique.

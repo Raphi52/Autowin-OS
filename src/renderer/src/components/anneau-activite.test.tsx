@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Le cadre « grand, deux lignes » de la barre d'activite (conv-904, 2026-10-12, /draft : « grand 2 lignes »,
+ * Le cadre « grand, deux lignes » de la barre d'activite (2026-10-12, /draft : « grand 2 lignes »,
  * « Pleine largeur », « couleur sur l'exception », puis « Rond de verre »).
  *
  * Ce que ces tests verrouillent :

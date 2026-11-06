@@ -3,7 +3,7 @@ import { creerSuiviDesPublications, PLAFOND_PUBLICATION_MS } from './publication
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
- * LE REDÉMARRAGE ATTEND LA PUBLICATION D'UN TOUR FINI (maintenance du 2026-11-01, conv-1048).
+ * LE REDÉMARRAGE ATTEND LA PUBLICATION D'UN TOUR FINI (maintenance du 2026-11-01).
  *
  * Vécu : le 31/10 à 23:33, puis le 01/11 à 07:25, la publication d'un tour fini a été coupée par un
  * redémarrage une minute plus tard. Ses fichiers sont restés non commités. Les deux chemins de

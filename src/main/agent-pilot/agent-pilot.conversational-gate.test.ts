@@ -67,7 +67,7 @@ describe('chat() — gate conversationnel', () => {
     expect(prompt).not.toContain('NETTOIE AVANT DE PARLER')
     expect(CONSTITUTION).toMatch(/après avoir annulé tes modifications inutiles/u)
     // « La meme approche qui echoue deux fois, arrete-la » vit dans la CONSTITUTION (reflexe 7),
-    // injectee dans le meme prompt systeme ; le doublon du pilotage est parti le 2026-10-28 (conv-1229).
+    // injectee dans le meme prompt systeme ; le doublon du pilotage est parti le 2026-10-28.
     expect(prompt).toContain("CHANGE D'APPROCHE (réflexe 7)")
     expect(CONSTITUTION).toMatch(/change d'approche, ne répète pas la même/u)
     // Un echec doit NOMMER ce qui a ete essaye et ce qui manque : la phrase du pilotage redisait
@@ -87,7 +87,7 @@ describe('chat() — gate conversationnel', () => {
   })
 
   it('borne la « demande ouverte » : conversationnelle -> reponse, code -> orchestrate', () => {
-    // Fondue dans la RÈGLE PREMIÈRE le 2026-10-28 (conv-1229) : la demande ouverte se tranche par le
+    // Fondue dans la RÈGLE PREMIÈRE le 2026-10-28 : la demande ouverte se tranche par le
     // MEME critere que le reste — quelque chose doit-il CHANGER ? Non : options dans la reponse, sans
     // commande. Oui (un chantier) : `orchestrate`, pipeline scout/frame.
     expect(prompt).toMatch(
@@ -118,7 +118,7 @@ describe('chat() — gate conversationnel', () => {
 /**
  * SKILL NOMMEE EN CLAIR / DEMANDE DE TEXTE.
  *
- * Mesure du 2026-09-07 (conv-331) : « donne moi un bon prompt pour lancer de l'arena » a declenche
+ * Mesure du 2026-09-07 : « donne moi un bon prompt pour lancer de l'arena » a declenche
  * un run, puis « kaizen ... » a ete lu comme un commentaire et non comme l'invocation de la skill.
  * Cause : `skillsDisponibles` etait pousse dans l'etat sans qu'aucune ligne du prompt dise quoi en
  * faire, et rien ne distinguait un livrable TEXTE d'une demande d'action.

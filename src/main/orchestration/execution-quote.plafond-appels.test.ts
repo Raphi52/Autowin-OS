@@ -5,9 +5,9 @@ import { compileExecutionQuote } from './execution-quote'
  * UN TOUR NE DOIT PAS MOURIR SUR UN COMPTEUR D'ÉTAPES.
  *
  * DÉFAUTS VÉCUS le 2026-08-25, deux fois dans la même journée :
- *   - conv-1397, coupé sur « Budget d'appels provider atteint (6) » APRÈS cinq éditions réussies,
+ *   -, coupé sur « Budget d'appels provider atteint (6) » APRÈS cinq éditions réussies,
  *     juste avant sa vérification — travail à moitié posé ;
- *   - conv-1404, coupé sur « (12) » après 3 réussites et 8 échecs — demande perdue.
+ *   -, coupé sur « (12) » après 3 réussites et 8 échecs — demande perdue.
  *
  * Ces plafonds datent de l'époque où un tour valait UN appel provider. Un tour agentique en
  * consomme un PAR ÉTAPE : lire, éditer, vérifier, corriger. Le compteur mesurait donc des COUPS,
@@ -22,7 +22,7 @@ describe('plafond d’appels — une séquence agentique réaliste tient dans le
     const quote = compileExecutionQuote('corrige le bug du panneau')
 
     expect(quote.regime).toBe('standard')
-    // 8 échecs suivis d'autant de reprises, plus la vérification finale : conv-1404 mourait à 12.
+    // 8 échecs suivis d'autant de reprises, plus la vérification finale : un fil mourait à 12.
     expect(quote.limits.maxProviderCalls).toBeGreaterThanOrEqual(30)
   })
 

@@ -27,7 +27,7 @@ import {
 import './JugesPanel.css'
 
 /**
- * LE BLOC DES JUGES dans le fil — choix « 1 · Nacre » du /draft de conv-328 (2026-10-18), sur la
+ * LE BLOC DES JUGES dans le fil — choix « 1 · Nacre » du /draft (2026-10-18), sur la
  * mise en page « Corrigé dans l'objection » : bandeau du verdict, objections À CORRIGER (adresse
  * dessous, déjà-corrigé accroché dedans, état du suivi à droite), juges en pied. Habit du bloc de
  * question : cadre nacre de 1 px, aplats gris sans bord, DÉFAUT en pastille rouge, NOUVELLE en
@@ -37,12 +37,12 @@ import './JugesPanel.css'
  * par passage, que l'ancien panneau listait comme autant de juges. Le verdict complet de chaque
  * juge reste à un clic, sur son nom en pied (demande du 14/08 : « rentrer dans le détail »).
  */
-// Des CLÉS de texte, traduites à l'affichage (conv-1170).
+// Des CLÉS de texte, traduites à l'affichage.
 const LIBELLE_VERDICT = {
   defaut: 'juges.verdict.defaut',
   valide: 'juges.verdict.valide',
   echec: 'juges.verdict.echec',
-  // Un juge écrit en ce moment (conv-1021) : aucun verdict n'est encore rendu.
+  // Un juge écrit en ce moment : aucun verdict n'est encore rendu.
   encours: 'juges.verdict.encours'
 } as const satisfies Record<string, CleChatExecution>
 type Verdict = keyof typeof LIBELLE_VERDICT
@@ -285,7 +285,7 @@ function sousTitreEnCours(enCours: JugeEnCours): string {
 function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JSX.Element | null {
   const { t } = useTextesChatExecution()
   const [ouvert, setOuvert] = useState<number | 'direct' | null>(null)
-  // Plié par défaut (conv-1081, « je veux que ce bloc soit plié par défaut et dépliable ») : le
+  // Plié par défaut (« je veux que ce bloc soit plié par défaut et dépliable ») : le
   // bandeau suffit à lire le verdict ; objections et juges se déplient au clic sur lui.
   const [deplie, setDeplie] = useState(false)
   if (!enCours && (!bloc || bloc.votes.length === 0)) return null
@@ -293,7 +293,7 @@ function BlocJuges({ bloc, enCours, reparationEnCours }: BlocEnDirect): React.JS
   const votes = enCours ? [] : (bloc?.votes ?? [])
   const objections = enCours ? enCours.objections : (bloc?.objections ?? [])
   const valides = votes.filter((vote) => vote.vote === 'valide').length
-  // Une objection MINEUR bloque la clôture même sous un VALIDE (décision conv-844) : le bandeau le dit.
+  // Une objection MINEUR bloque la clôture même sous un VALIDE : le bandeau le dit.
   const verdict: Verdict = enCours
     ? 'encours'
     : votes.some((vote) => vote.vote === 'defaut') || objections.length > 0
@@ -490,7 +490,7 @@ export function JugesPanel({
 }
 
 /**
- * Le bloc d'un tour EN COURS, rempli en direct (conv-1021) : le dernier verdict rendu dès qu'il
+ * Le bloc d'un tour EN COURS, rempli en direct : le dernier verdict rendu dès qu'il
  * tombe, puis, pendant qu'un juge écrit, ses objections au fur et à mesure qu'elles arrivent.
  * La source est ce que le fil reçoit en direct ; quand l'interface a perdu le run (rechargée en
  * plein run), c'est `trace.json`, que le main réécrit à chaque étape (`run-relu-du-disque.ts`).
@@ -521,7 +521,7 @@ export function JugesPanelEnDirect({
 /**
  * Le vrai chargeur : les runs de la conversation, du plus récent au plus ancien, et le PREMIER
  * qui porte des votes de juges gagne. « Le dernier run » ne suffisait pas : une conversation
- * porte souvent un run jugé ET un run annexe sans juge (mesuré sur conv-1122, deux runs).
+ * porte souvent un run jugé ET un run annexe sans juge (deux runs).
  */
 async function chargerTraceParDefaut(conversationId: string): Promise<StepDeRun[]> {
   const runs = (await window.api.conversationRuns?.(conversationId)) ?? []

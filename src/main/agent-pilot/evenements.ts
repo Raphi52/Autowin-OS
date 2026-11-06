@@ -1,5 +1,5 @@
 // Événements du pilote de chat et types de reprise d'un tour, sortis tels quels de
-// agent-pilot.ts (conv-1580, lot 1). agent-pilot.ts les ré-exporte : ses importeurs ne changent pas.
+// agent-pilot.ts (lot 1). agent-pilot.ts les ré-exporte : ses importeurs ne changent pas.
 import type { ContexteStatique } from '../../shared/contexte-detaille'
 import type { PilotEventKind } from '../../shared/pilot-events'
 import type { ChatArtifact } from '../../shared/artifacts'
@@ -22,7 +22,7 @@ export type TurnUsage = {
    * c'est faux pour l'OCCUPATION de la fenetre — le prefixe est renvoye a chaque appel, donc la
    * somme le compte autant de fois qu'il y a eu d'iterations. Un tour de neuf appels rendait
    * 578 207 tokens pour une fenetre de 200 000, et la jauge de contexte restait collee a 100 %
-   * (mesure du 2026-09-04 sur conv-240, journal d'activite). L'occupation reelle, c'est ce que le
+   * (mesure du 2026-09-04, journal d'activite). L'occupation reelle, c'est ce que le
    * DERNIER appel a recu.
    */
   derniereEntree?: number
@@ -39,7 +39,7 @@ export type TurnUsage = {
   /**
    * PARTIE FIXE DU CONTEXTE, mesuree par le CLI pendant le DERNIER appel (prompt systeme, outils,
    * outils MCP, fichiers memoire, skills). Ecrasee comme `derniereEntree` : le panneau « Contexte »
-   * en deduit les messages (conv-1000). Absente pour un provider qui ne sait pas mesurer.
+   * en deduit les messages. Absente pour un provider qui ne sait pas mesurer.
    */
   contexte?: ContexteStatique
 }
@@ -129,13 +129,13 @@ export type PilotEventVariant =
     }
   /** Commandes shell coupees par le CLI en fin de tour, que le tour de chat va RELANCER. */
   | { kind: 'taches-de-fond'; iteration: number; data: TacheDeFondARelancer[] }
-  /** Tests joués par l'agent dans son terminal et leur code de sortie (conv-1059). */
+  /** Tests joués par l'agent dans son terminal et leur code de sortie. */
   | {
       kind: 'tests-du-terminal'
       iteration: number
       data: Array<{ commande: string; codeDeSortie: number; changementDeDossier?: string }>
     }
-  /** Réponse coupée par le filtre de sécurité du fournisseur, une par coupure (conv-1161). */
+  /** Réponse coupée par le filtre de sécurité du fournisseur, une par coupure. */
   | {
       kind: 'coupure-filtre'
       iteration: number
@@ -199,7 +199,7 @@ export interface PilotEvent {
   /** `stream-reset` : ne retirer que le dernier passage du flux (`rangsEffacesParLeReset`). */
   conclusionSeule?: true
   actionId?: string
-  /** Heure de l'evenement (ms), posee a sa reception par le chat : rail du tour (conv-338). */
+  /** Heure de l'evenement (ms), posee a sa reception par le chat : rail du tour. */
   at?: number
   /** Cf. la variante `command` : action echouee que cette action retente (heuristique). */
   repriseProbableDe?: string

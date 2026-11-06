@@ -10,7 +10,7 @@ import {
 import type { ProprietaireDeFichier } from '../fichiers/proprietaire-fichier'
 import type { GitRunner } from '../runs/run-autoclose'
 
-/** Un fichier écrit par conv-1 seul, diff encore le sien : il part. */
+/** Un fichier écrit seul, diff encore le sien : il part. */
 function fichier(partiel: Partial<ProprietaireDeFichier> = {}): ProprietaireDeFichier {
   return {
     chemin: 'src/a.ts',
@@ -221,12 +221,12 @@ describe('publierSansTour', () => {
   })
 
   /*
-   * VRAI CAS (conv-1587, 05/11/2026) : la découpe de `commands.ts` en `commands/*.ts` — 18 fichiers —
+   * VRAI CAS (05/11/2026) : la découpe de `commands.ts` en `commands/*.ts` — 18 fichiers —
    * est écrite par UN script, en une seconde, à 08:13:00 (07:13:00 UTC). Aucun fil ne les a écrits
-   * avec un outil : conv-1575, conv-1577 et conv-1587 les ont seulement VUS changer, à la
+   * avec un outil : des fils les ont seulement VUS changer, à la
    * comparaison de fin de tour (`vueParComparaison`, conversation-file-trace-spool.ts). Le refus
-   * « aussi touché par conv-1575, conv-1577 » était juste, mais il partait en note `/git` dans
-   * conv-1587, qui n'avait rien écrit : un tour entier payé pour conclure « rien à publier ».
+   * « aussi touché par conv-1575, conv-1577 » était juste, mais il partait en note `/git`
+   * Qui n'avait rien écrit : un tour entier payé pour conclure « rien à publier ».
    */
   const decoupeDeCommands = [
     'src/main/commands/commands.ts',
@@ -297,7 +297,7 @@ describe('publierSansTour', () => {
     const { d, commiter } = deps({
       proprietaires: async (chemins) => {
         const fichiers = vusParTroisFils(chemins)
-        // conv-1587 a écrit ce fichier-là avec un outil (Edit/Write) : c'est son travail.
+        // a écrit ce fichier-là avec un outil (Edit/Write) : c'est son travail.
         fichiers[0] = fichier({
           chemin: fichiers[0]!.chemin,
           fils: [
@@ -338,13 +338,13 @@ describe('publierSansTour', () => {
   })
 
   /*
-   * VRAI CAS (conv-1641, 06/11/2026) : conv-1641 ne fait que répondre à des questions sur
-   * ElevenLabs. Pendant son premier tour, conv-1633 (le Quartier, un tour de 20 min encore en cours)
+   * VRAI CAS (06/11/2026) : un fil ne fait que répondre à des questions sur
+   * ElevenLabs. Pendant son premier tour, (le Quartier, un tour de 20 min encore en cours)
    * écrit `quartier-tenue.ts`, `board-dossier.ts`… Ses Edit/Write n'arrivent au journal des fichiers
-   * qu'à la FIN de son appel : la comparaison de fin de tour de conv-1641 est donc la seule trace, et
+   * qu'à la FIN de son appel : la comparaison de fin de tour est donc la seule trace, et
    * la passe lit « conv-1641 seul, diff inchangé ». Typage, tests de 42 fichiers, puis une note
    * « GIT : rien publié » posée au milieu d'une réponse sur les voix — et, tests verts, le travail
-   * inachevé de conv-1633 serait parti sous le nom de conv-1641.
+   * inachevé serait parti sous le nom.
    */
   it('un fichier seulement VU pendant qu’un autre fil du dépôt a un tour en cours n’est pas au fil (conv-1641)', async () => {
     const typer = vi.fn<DepsSansTour['typer']>(async () => ({ statut: 'sans-objet' }))

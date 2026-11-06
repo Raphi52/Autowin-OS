@@ -1,6 +1,6 @@
 /**
  * Supprimer un fil dont un RUN de développement tourne doit l'ARRÊTER, comme le bouton Stop
- * (conv-1060, 2026-10-22).
+ * (2026-10-22).
  *
  * Le défaut : `os:pilotChat:cancel` (Stop) coupe le run (`abortOrchestration`) ET le tour ; les deux
  * canaux de suppression ne coupaient que le tour. Or le run n'écoute QUE son propre interrupteur
@@ -36,7 +36,7 @@ const tours = new ActiveChatTurns()
 /** Les runs en vol, par fil : ce que tient `AppCommandBus.activeOrchestrations`. */
 const runs = new Map<string, AbortController>()
 const coupes: Array<{ id: string; motif: string }> = []
-/** Les fils dont les RUN.md légers ont été retirés (conv-1418). */
+/** Les fils dont les RUN.md légers ont été retirés. */
 const fichesRetirees: string[] = []
 
 beforeAll(() => {

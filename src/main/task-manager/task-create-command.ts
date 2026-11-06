@@ -1,7 +1,7 @@
 /**
  * Commande agent « task_create » — créer une tâche programmée ou une règle de surveillance.
  *
- * Demande de l'utilisateur (conv-114, 2026-10-09) : « l'agent doit pouvoir les créer mais il ne doit
+ * Demande de l'utilisateur (2026-10-09) : « l'agent doit pouvoir les créer mais il ne doit
  * rien pouvoir créer que je ne peux pas supprimer manuellement dans le task manager ».
  *
  * D'où le seul chemin admis : EXACTEMENT celui du bouton « Créer » de l'écran (`task-manager:create`,
@@ -18,7 +18,7 @@ import { parseTaskInput, parseTaskUpdate } from './task-manager-ipc'
 export interface TaskCreateDeps {
   create(input: ScheduledTaskInput): ScheduledTask
   /**
-   * `task_update` / `task_delete` (conv-1370, lot 3, 2026-10-31) : les mêmes gestes que les boutons
+   * `task_update` / `task_delete` (lot 3, 2026-10-31) : les mêmes gestes que les boutons
    * de l'écran (`task-manager:update` / `task-manager:remove`). Optionnels pour ne pas casser les
    * câblages existants ; absents = refus nommé « indisponible ». À brancher dans index.ts :
    * `get: (id) => scheduledTasks.getTask(id)`, `update: (id, input) => scheduledTasks.update(id, input)`,

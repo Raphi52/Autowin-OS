@@ -8,7 +8,7 @@ import { reglagesCliAutowin } from './claude'
  * « Tout ouvrir : Bash + Write + Edit, et ajuster les 3 tests qui verrouillent ».
  *
  * Avant : le tour de chat partait sans Write/Edit et avec un Bash borné à 5 périmètres git
- * (`CHAT_READ_ONLY_SHELL`). Conséquence mesurée sur conv-1410 : une correction d'une ligne dans
+ * (`CHAT_READ_ONLY_SHELL`). Conséquence mesurée : une correction d'une ligne dans
  * `home-decor-scene.ts` a exigé une orchestration complète, qui répond depuis un worktree ISOLÉ —
  * donc à côté du dépôt que l'utilisateur regarde. Plusieurs tours ont été dépensés à expliquer un
  * refus au lieu de faire le travail.
@@ -40,7 +40,7 @@ const blocWatchdog = () => {
 describe('tour de chat — outils de mutation ouverts', () => {
   it('charge Bash, Write, Edit et MultiEdit', () => {
     // MultiEdit ajouté le 2026-08-27 par agence de la copie isolée run-f2f7fec8c587-1 (0734729).
-    // La liste vit dans `OUTILS_TOUR_DE_CHAT` (conv-1362) : la question à côté déclare la même.
+    // La liste vit dans `OUTILS_TOUR_DE_CHAT` : la question à côté déclare la même.
     expect(blocChat()).toMatch(/'--tools',\s*OUTILS_TOUR_DE_CHAT,/)
     expect(source).toMatch(
       /OUTILS_TOUR_DE_CHAT =\s*'Read,Grep,Glob,Bash,Write,Edit,MultiEdit,WebFetch,WebSearch,'/
@@ -106,7 +106,7 @@ describe('tour de chat — outils de mutation ouverts', () => {
 })
 
 /**
- * RECHERCHE D'OUTILS (conv-1465, lot 1/3 de conv-1463, 2026-11-03). La doc du CLI : « If you deny
+ * RECHERCHE D'OUTILS (lot 1/3, 2026-11-03). La doc du CLI : « If you deny
  * `ToolSearch` or leave it out of `--tools`, MCP tools load upfront instead ». Le tour de chat
  * listait ses outils natifs SANS lui : les 55 outils du serveur Autowin partaient en entier à chaque
  * appel. Mesuré sur le CLI 2.1.317, 40 outils MCP de test : 15 236 jetons écrits sans `ToolSearch`,

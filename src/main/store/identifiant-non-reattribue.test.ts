@@ -14,7 +14,7 @@ import {
  * LE DÉFAUT, vécu par l'utilisateur le 2026-08-24, et sa plainte était exacte : « conv-1393 regarde
  * je l'ai fait c'est marqué échec dans le graph ».
  *
- * Ce n'était pas SON échec. `conv-1393` avait été créée le matin pour des tests, puis supprimée ;
+ * Ce n'était pas SON échec. Une conversation avait été créée le matin pour des tests, puis supprimée ;
  * l'identifiant est redevenu libre parce que `nextId` était recalculé comme `max + 1` sur les
  * conversations VIVANTES. La conversation créée l'après-midi a donc récupéré le même identifiant, et
  * un run vieux de SIX HEURES, portant un verdict `red`, s'est affiché dans son graphe. Son vrai

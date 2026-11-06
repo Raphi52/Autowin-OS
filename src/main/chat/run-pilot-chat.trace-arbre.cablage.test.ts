@@ -49,7 +49,7 @@ describe('run-pilot-chat écrit la demande reçue et les gestes de l’agent', (
   })
 
   it('le pilote relaie le détail que l’adaptateur joint à la ligne de fin', () => {
-    // Le flux du modèle vit dans agent-pilot/envoi-du-tour.ts depuis conv-1580 (lot 4).
+    // Le flux du modèle vit dans agent-pilot/envoi-du-tour.ts (lot 4).
     const pilote = sourceDuPilote()
     expect(pilote).toContain('...(chunk.statusDetail ? { detail: chunk.statusDetail } : {})')
   })

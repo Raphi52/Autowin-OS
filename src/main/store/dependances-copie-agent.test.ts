@@ -14,7 +14,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { delierLesDependances, lierLesDependances, messageLiaison } from './dependances-copie-agent'
 
 /**
- * LE DÉFAUT, mesuré le 2026-08-25 sur le run `je-vois-toujours-le-fond-d-ecran-…` (conv-1397).
+ * LE DÉFAUT, mesuré le 2026-08-25 sur le run `je-vois-toujours-le-fond-d-ecran-…`.
  *
  * Une copie agent est un `git worktree add` : elle ne porte que les fichiers suivis, et
  * `node_modules` est ignoré par git. Mesure directe dans une copie fraîche du dépôt :
@@ -154,11 +154,11 @@ describe('le lien est retiré avant qu’une copie ne soit supprimée', () => {
 /**
  * CE QUE CE TEST TRANCHE, et pourquoi il existe.
  *
- * Un cadrage du 2026-09-02 (conv-133) affirmait comme PROUVÉ qu'un effacement récursif d'une copie
+ * Un cadrage du 2026-09-02 affirmait comme PROUVÉ qu'un effacement récursif d'une copie
  * agent « détruirait les modules du dépôt réel » à travers la jonction. Mesuré ce jour-là sous
  * Node 22 (Electron 39) : c'était faux, `fs.rmSync({recursive})` retirait la jonction sans suivre.
  *
- * CE FAIT N'EST PLUS VRAI SOUS NODE 24, mesuré le 2026-10-05 avec Electron 44.5.1 (conv-108) :
+ * CE FAIT N'EST PLUS VRAI SOUS NODE 24, mesuré le 2026-10-05 avec Electron 44.5.1 :
  * `fs.rmSync({recursive})` TRAVERSE la jonction et VIDE sa cible (3 essais sur 3). C'est pourquoi
  * toute suppression récursive de l'app passe par `supprimerArbre` (`src/main/fichiers/fs-supprimer.ts`), qui
  * lit chaque entrée avec `lstat` et retire un lien sans jamais le suivre. Ce test verrouille CE

@@ -5,7 +5,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { construirePromptScoutInterne } from '../veille/scout-interne'
 
 /**
- * LE PROMPT NOMME LES CLASSES DE L'APP, PLUS DES COULEURS EN DUR (conv-1074, 2026-10-22).
+ * LE PROMPT NOMME LES CLASSES DE L'APP, PLUS DES COULEURS EN DUR (2026-10-22).
  *
  * Trois prompts recopiaient la meme recette (texte `#dde3ee`, or `#d4a94f`-`#e3ba55`, libelles
  * `#a9b2c4`) : le chat, le chat en lecture seule (`agent-pilot.ts`) et le scout interne. Ces teintes
@@ -30,7 +30,7 @@ describe('prompts des pages html-render : des classes, pas des couleurs', () => 
   // Le prompt du chat en LECTURE SEULE est ecrit en ligne dans `agent-pilot.ts` : seule la source
   // le montre sans monter tout un tour.
   it('le chat en lecture seule aussi (source d’agent-pilot.ts)', () => {
-    // agent-pilot.ts et ses modules agent-pilot/*.ts : le prompt systeme vit dans systeme-du-tour.ts (conv-1580).
+    // agent-pilot.ts et ses modules agent-pilot/*.ts : le prompt systeme vit dans systeme-du-tour.ts.
     const source = sourceDuPilote()
     expect(source).toContain('CONSIGNE_CLASSES_PAGES_HTML')
     for (const couleur of RECETTE_EN_DUR) expect(source).not.toContain(couleur)
@@ -43,7 +43,7 @@ describe('prompts des pages html-render : des classes, pas des couleurs', () => 
 })
 
 /**
- * Les blocs de donnees (conv-1074) n'existent pour le modele que si son prompt les nomme. Entree qui
+ * Les blocs de donnees n'existent pour le modele que si son prompt les nomme. Entree qui
  * ferait echouer une mauvaise correction : un prompt qui parle de `aw-tableau` sans son JSON.
  */
 describe('prompt du chat : les blocs de données', () => {

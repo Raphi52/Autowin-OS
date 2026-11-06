@@ -3,7 +3,7 @@ import { noterChoixDePipeline } from './chat-view-model'
 import type { ChatPart, PipelineChoice } from './chat-view-model'
 
 /**
- * DEFAUT MESURE (conv-470, saisie du 2026-09-12 ts=1789192601300 : « j'ai rien en preprompt »).
+ * DEFAUT MESURE (saisie du 2026-09-12 ts=1789192601300 : « j'ai rien en preprompt »).
  *
  * Le tour d'orchestration `52fbe05f-0086-4806-8f07-c8762e8caa35` n'a qu'un evenement `command` dans
  * son journal : pendant TOUTE la phase, la ligne de pipeline ne pouvait montrer aucun prompt, parce

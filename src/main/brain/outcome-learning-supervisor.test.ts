@@ -288,7 +288,7 @@ describe('OutcomeLearningSupervisor', () => {
 })
 
 /**
- * LE DÉMARRAGE RELISAIT LE JOURNAL ENTIER UNE FOIS PAR TOUR — heal conv-1115, 2026-10-23.
+ * LE DÉMARRAGE RELISAIT LE JOURNAL ENTIER UNE FOIS PAR TOUR — heal, 2026-10-23.
  *
  * Mesuré dans `gels.jsonl` : chaque démarrage tient la fenêtre ~3 s (16 démarrages sur 16), dont
  * 1,1 s dans ~209 `readFileSync` remontés par la carte du bundle à `outcome-learning-ledger.ts:156`
@@ -349,7 +349,7 @@ describe('reconcilePending au démarrage', () => {
   })
 
   /**
-   * Second temps du même heal (conv-1115) : sur le journal réel, les 40 tours encore sans décision
+   * Second temps du même heal : sur le journal réel, les 40 tours encore sans décision
    * ont TOUS une proposition sans aucune issue observée (40/40). Pour eux `reconcile` relisait les
    * 6 Mo, ne trouvait aucune décision à prendre et rendait « aucune décision » sans rien écrire —
    * ~1 s perdue à chaque démarrage, pour rien.

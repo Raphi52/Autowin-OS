@@ -7,8 +7,8 @@ import {
 } from './grow-au-debut'
 
 /**
- * Le classement « demande d'action ? » qui décide si grow part au début du tour (conv-1445).
- * Les phrases marquées conv-1445 sont les vrais messages de l'utilisateur dans ce fil.
+ * Le classement « demande d'action ? » qui décide si grow part au début du tour.
+ * Les phrases marquées sont les vrais messages de l'utilisateur dans ce fil.
  */
 describe('estUneDemandeDAction', () => {
   const actions: Array<[string, string?]> = [
@@ -34,7 +34,7 @@ describe('estUneDemandeDAction', () => {
     ['/draft une page d’accueil plus claire', 'draft'],
     ['heal le chat', 'heal'],
     ['/scout le module veille puis corrige ce que tu trouves', 'scout'],
-    // Messages réels manqués à la première mesure (conv-1445) :
+    // Messages réels manqués à la première mesure :
     ['rajoute /heal dans la vue maintenance'],
     ['je veux pouvoir cocher plusieurs propositions'],
     ['et il faut une map par repo/cwd'],

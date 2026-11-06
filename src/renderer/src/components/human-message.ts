@@ -19,7 +19,7 @@ export function extractHumanMessage(content: string, max = 100): string {
   let human: string
   if (utilisateur.length) {
     // Le DERNIER segment : un tour peut en empiler plusieurs, c'est le plus récent qui est la demande.
-    // Les mots sont encadres depuis conv-889 (`<message_utilisateur>…`) : la balise est une marque
+    // Les mots sont encadres (`<message_utilisateur>…`) : la balise est une marque
     // pour le modele, pas une partie de la demande.
     human = sansBaliseMessageUtilisateur(
       utilisateur[utilisateur.length - 1].replace(/^\s*UTILISATEUR\s*:\s*/, '')

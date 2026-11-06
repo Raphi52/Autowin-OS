@@ -2,7 +2,7 @@
 /**
  * LE FOND AVENUE DESSINÉ HORS DU FIL DE L'INTERFACE.
  *
- * Mesure du 2026-10-18 (conv-323, instance cachée `--code-dev`) : une image de l'avenue coûtait 36 à
+ * Mesure du 2026-10-18 (instance cachée `--code-dev`) : une image de l'avenue coûtait 36 à
  * 45 ms au fil principal APRÈS la correction du reflet, 62 à 66 ms avant. À 30 images/s, c'est plus
  * que le fil entier : l'interface de l'Accueil (tuiles, glisser-déposer, Jarvis) partageait le peu
  * qui restait. Ici le décor a son propre fil ; la page ne fait plus que poster une demande d'image.
@@ -24,7 +24,7 @@ let ratio = 1
 let coutEcran = 0
 
 /**
- * L'IMAGE, PUIS SON REFLET, EN DEUX TÂCHES (conv-347). L'image dessinée s'affiche à la fin de la
+ * L'IMAGE, PUIS SON REFLET, EN DEUX TÂCHES. L'image dessinée s'affiche à la fin de la
  * tâche qui la dessine : la passe « écran » finit donc la sienne, et le reflet de l'image suivante
  * part dans la tâche d'après — chaque image s'affiche avec le même délai, qu'un reflet la suive ou
  * non. `rendue` n'est envoyée qu'après le reflet : la page ne redemande rien tant que le Worker est

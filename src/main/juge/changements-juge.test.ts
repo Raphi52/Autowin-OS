@@ -7,7 +7,7 @@ import {
 import { AGGREGATE_MAX_CHARS } from '../verify/evidence-digest'
 
 /**
- * Piste 1 de conv-914 : le juge d'une réparation reçoit ce qui a changé depuis le texte déjà jugé,
+ * Piste 1 : le juge d'une réparation reçoit ce qui a changé depuis le texte déjà jugé,
  * au lieu de revérifier tout le livrable sans savoir ce que la réparation a touché.
  */
 describe('ce qui a changé entre deux passages du juge', () => {

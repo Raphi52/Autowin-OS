@@ -116,7 +116,7 @@ describe('relève du mode auto — une seule par série automatique', () => {
 })
 
 /*
- * LA RELÈVE NE PROMET PLUS D'ATTENDRE. conv-996 (2026-10-16) : elle disait « et attends mon
+ * LA RELÈVE NE PROMET PLUS D'ATTENDRE. (2026-10-16) : elle disait « et attends mon
  * choix », alors que `reponseAutoAuDernierAsk` répond SEUL à la question qu'elle demande. L'agent a
  * pris l'option envoyée pour une dérive et a refusé de l'exécuter ; l'utilisateur a tranché :
  * « trust le pouvoir du mode auto ». Le texte change, donc les relèves DÉJÀ écrites dans les fils

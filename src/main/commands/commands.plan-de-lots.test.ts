@@ -10,7 +10,7 @@ import { CoordinateurDesPlans } from '../orchestration/plans-de-lots-app'
 import { lignesDuJournal } from '../../shared/messages-entre-fils'
 
 /*
- * conv-1150 — l'outil `plan_de_lots` AU SITE D'APPEL : le vrai bus, le vrai coordinateur, le vrai
+ * L'outil `plan_de_lots` AU SITE D'APPEL : le vrai bus, le vrai coordinateur, le vrai
  * journal des messages entre fils. Ce qui est verrouillé : le chef est le fil de l'APPEL (jamais un
  * argument), l'outil ne lance rien, et le compte rendu d'un lot part du fil enfant vers le chef par
  * `ecrireDepuisLeFil` (mêmes règles que `ecrire_a_un_fil`).
@@ -86,7 +86,7 @@ describe('plan_de_lots par le bus', () => {
     expect(outilsDuChat(CATALOG)).toContain('plan_de_lots')
   })
 
-  // conv-1151, lot 2 : sans annonce dans la description, l'agent du chef ignore que le champ existe.
+  // Lot 2 : sans annonce dans la description, l'agent du chef ignore que le champ existe.
   it('la description annonce le champ « apres » (dépendance explicite entre lots)', () => {
     const outil = CATALOG.find((c) => c.name === 'plan_de_lots')
     expect(outil?.description).toMatch(/« apres »/)
@@ -120,7 +120,7 @@ describe('plan_de_lots par le bus', () => {
     expect(r.error).toMatch(/non câblé/)
   })
 
-  // Depuis conv-1171 (2026-10-27, « je ne veux pas avoir à confirmer, je veux que ça se lance tout
+  // Depuis le 2026-10-27 (« je ne veux pas avoir à confirmer, je veux que ça se lance tout
   // seul »), le dépôt par l'agent VAUT lancement : plus de clic « Lancer le plan » à attendre.
   it('le chef est le fil de l’appel ; déposer lance aussitôt ; un lot fini écrit au chef depuis SON fil', async () => {
     const { bus, coord, lances } = banc()
@@ -137,7 +137,7 @@ describe('plan_de_lots par le bus', () => {
     expect(String(messages[0].texte)).toContain('Lot un fait, code 0.')
   })
 
-  // conv-1284 (2026-10-29) : la réponse du chef à un lot bloqué, envoyée en ORDRE, relance le lot
+  // 2026-10-29 : la réponse du chef à un lot bloqué, envoyée en ORDRE, relance le lot
   // par le coordinateur — sans « relancer » à part, et sans second agent dans le fil du lot.
   it('l’ordre du chef au fil d’un lot bloqué le relance ; un ordre d’un autre fil part tel quel', async () => {
     const { bus, coord, lances } = banc()

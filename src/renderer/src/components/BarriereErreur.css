@@ -1,4 +1,4 @@
-/* LE BLOC EN PANNE (conv-1327, 2026-10-30). Il s'affiche à la place d'un composant qui a levé une
+/* LE BLOC EN PANNE (2026-10-30). Il s'affiche à la place d'un composant qui a levé une
    erreur, donc n'importe où : dans une colonne du chat, dans le menu, ou seul sur la page quand tout
    le reste est tombé (`--racine`, hors de `.shell`). D'où les couleurs du thème uniquement, et une
    largeur qui ne pousse jamais son parent. Tailles en px à 12 ou plus : sous ce seuil,

@@ -1,7 +1,7 @@
 /**
  * AVANCEMENT D'UN BANC D'ARENE PENDANT QU'IL TOURNE.
  *
- * Constat utilisateur du 2026-09-08 (conv-355) : « ca fait 10 mins que le bloc reflexion est vide
+ * Constat utilisateur du 2026-09-08 : « ca fait 10 mins que le bloc reflexion est vide
  * je sais meme pas ce qu'il fout ». Cause reelle : un banc d'arene lance ses N bras dans UNE SEULE
  * commande (`lance.sh` : une sous-shell par bras, puis `wait`). Le battement d'outil du CLI ne peut
  * donc dire qu'une chose — « Bash en cours - 2 min » — pendant toute la duree du banc, alors que

@@ -24,8 +24,8 @@ const FACTEUR_DOUBLE_CLIC = 2
 const resterIci = (event: React.SyntheticEvent): void => event.stopPropagation()
 
 /**
- * LA GRANDE VUE D'UN SCHÉMA (conv-1322, 2026-10-30). Dans le fil, la hauteur d'un schéma reste
- * plafonnée (`.md-mermaid svg`, conv-590) : à 420 px, celui de conv-1321 sortait avec un texte de
+ * LA GRANDE VUE D'UN SCHÉMA (2026-10-30). Dans le fil, la hauteur d'un schéma reste
+ * plafonnée (`.md-mermaid svg`) : à 420 px, celui sortait avec un texte de
  * 5 px. Ici il prend toute la fenêtre, se zoome et se déplace.
  *
  * `transform` plutôt qu'une largeur : mermaid a calé son texte à sa taille naturelle, et un
@@ -51,7 +51,7 @@ export function VisionneuseDiagramme({
   const dernierPointRef = useRef<Point | null>(null)
   /**
    * Un double clic ne zoome que s'il a COMMENCÉ ici. Celui qui ouvre la vue depuis le fil finit dans
-   * la scène : le schéma s'ouvrait déjà à 132 % au lieu de 66 % (sonde de conv-1322).
+   * la scène : le schéma s'ouvrait déjà à 132 % au lieu de 66 %.
    */
   const clicDansLaSceneRef = useRef(false)
 

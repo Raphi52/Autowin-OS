@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { NOM_SCRIPT_GARDE, rafraichirGardesDesAgents } from './rafraichir-gardes'
 
 /**
- * Mesuré le 2026-10-01 (conv-770) : l'agent de conv-890, lancé à 12:45 et vivant après le
+ * Mesuré le 2026-10-01 : l'agent, lancé à 12:45 et vivant après le
  * redémarrage de 12:54, gardait l'ANCIENNE garde Python — son script de hook est écrit à son
  * lancement et jamais réécrit.
  */

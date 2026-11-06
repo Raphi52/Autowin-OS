@@ -7,10 +7,10 @@ import { momentDuFilm, teaserVu, VITESSE_AU_TRAVAIL } from './teaser-accueil-cal
 import type { MomentDuFilm } from './teaser-accueil-calcul'
 
 /**
- * Le décor d'un fil vide (conv-1401, 2026-10-31) : « une video ca serait moin gourmand et plus
+ * Le décor d'un fil vide (2026-10-31) : « une video ca serait moin gourmand et plus
  * efficace ». Le film est précalculé, muet, et la phrase cliquable se pose dessus.
  *
- * LES FONCTIONNALITÉS À LA PLACE DU MAGICIEN (conv-1535, 2026-11-04) : « une video comme ca [le film
+ * LES FONCTIONNALITÉS À LA PLACE DU MAGICIEN (2026-11-04) : « une video comme ca [le film
  * de présentation en motion design] pour l'écran nouveau fil, qui montre des features de autowin a
  * la place du magicien », puis « présenter les skills avec des représentations de leur bloc associé
  * dans le chat, agent studio, workflows, task planner, knowledge et board [...] 2 secondes par

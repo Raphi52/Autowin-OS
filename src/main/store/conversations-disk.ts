@@ -320,10 +320,10 @@ function isConversation(value: unknown): value is Conversation {
   if (value.forkedFrom !== undefined && !isForkOrigin(value.forkedFrom)) return false
   if (value.autoKaizen !== undefined && !isAutoKaizenLink(value.autoKaizen)) return false
   if (!isOptionalString(value.projectPath)) return false
-  // Le libellé de classement, séparé du dossier de travail depuis conv-81 (2026-09-16). Optionnel :
+  // Le libellé de classement, séparé du dossier de travail depuis le 2026-09-16. Optionnel :
   // un fichier écrit avant la séparation n'en porte pas, et doit continuer à se relire.
   if (!isOptionalString(value.categorie)) return false
-  // fix-ok: conv-81 — même cause : le libellé de catégorie sort de projectPath, la relecture doit donc accepter le champ categorie, sinon toute conversation classée par libellé serait rejetée au chargement.
+  // fix-ok: même cause : le libellé de catégorie sort de projectPath, la relecture doit donc accepter le champ categorie, sinon toute conversation classée par libellé serait rejetée au chargement.
   if (
     value.runPaths !== undefined &&
     (!Array.isArray(value.runPaths) || value.runPaths.some((entry) => typeof entry !== 'string'))
@@ -588,7 +588,7 @@ type ConversationJournalRecord =
       id: string
       messages: Msg[]
       updatedAt: number
-      /** Titre repris du message (conv-999). Absent des journaux antérieurs : titre inchangé. */
+      /** Titre repris du message. Absent des journaux antérieurs : titre inchangé. */
       title?: string
       origineTitre?: 'auto' | 'utilisateur'
     }
@@ -884,11 +884,11 @@ function appendConversationChanges(
  *
  * Mesure du 2026-09-09 (`gels.jsonl`, 15:38:48) : un `writeFileSync` + un `appendFileSync` sur
  * `conversations.json.journal.jsonl` ont bloqué 10 004 ms sur quelques Ko. Ce n'était pas le disque :
- * les relevés Windows du 31/10 (conv-1368) donnent 420 ms au pire sur 675 heures pour le SSD, l'appel
+ * les relevés Windows du 31/10 donnent 420 ms au pire sur 675 heures pour le SSD, l'appel
  * attendait au-dessus de lui, sans doute dans ESET (scripts/trace-blocage-disque.ps1). Comme l'écriture vivait sur le
  * fil qui dessine l'interface, l'app est restée figée. Tout part donc sur le pool d'I/O de Node.
  *
- * Y COMPRIS `urgency: 'immediate'` (conv-1368, 2026-10-31) : la clôture d'un tour, une création et
+ * Y COMPRIS `urgency: 'immediate'` (2026-10-31) : la clôture d'un tour, une création et
  * une suppression écrivaient encore ici en bloquant, et `appendFileSync` a figé la fenêtre 36,6 s en
  * 7 jours pour quelques octets. Seul le vidage de `before-quit` reste synchrone, par nature.
  *
@@ -1025,7 +1025,7 @@ export function persistConversations(
     /*
       LES OCTETS SE FIGENT AU DÉPÔT, jamais à l'écriture. Une création porte le fil VIVANT : écrite
       plus tard, elle emporterait les messages ajoutés entre-temps, et leurs lignes du journal les
-      rejoueraient par-dessus au démarrage (message doublé, test « compactionApres », conv-1368).
+      rejoueraient par-dessus au démarrage (message doublé, test « compactionApres »).
     */
     const octets = octetsDuJournal(changes)
     const reecrituresAuDepot = depotsDeReecriture
@@ -1093,7 +1093,7 @@ export function persistConversations(
         writeConversationIdFloor(store.idFloor(), path)
       } catch (erreurSnapshot) {
         /*
-          FICHIER VERROUILLÉ À LA FERMETURE (conv-717, point 4). Le snapshot réécrit
+          FICHIER VERROUILLÉ À LA FERMETURE (point 4). Le snapshot réécrit
           conversations.json : un autre processus qui le tient fait échouer le renommage. Laisser
           l'erreur remonter perdait le lot ET cassait la suite de `before-quit` (tâches, journaux).
           Repli : le JOURNAL, un fichier distinct, rejoué au prochain démarrage. Seulement si aucune
@@ -1240,7 +1240,7 @@ export function persistConversations(
             return
           }
           // Renommage SYNCHRONE : entre ce contrôle et lui, aucun autre code ne peut écrire. Il reste
-          // sur le fil principal par choix (conv-1368, 1,0 s en 7 jours) : en vol, il recouvrirait le
+          // sur le fil principal par choix (1,0 s en 7 jours) : en vol, il recouvrirait le
           // snapshot de fermeture avec un état plus ancien alors que le journal est déjà effacé.
           renameSync(tmp, path)
         } catch (erreur) {
@@ -1368,14 +1368,14 @@ export function persistConversations(
   // session courante reste limité à la seule conversation touchée.
   //
   // HORS DU FIL PRINCIPAL, et APRÈS l'affichage quand l'appelant le demande (`compactionApres`).
-  // Mesure du 2026-10-19 (conv-359, 23,7 Mo, 232 fils) : cette réécriture synchrone figeait le
+  // Mesure du 2026-10-19 (23,7 Mo, 232 fils) : cette réécriture synchrone figeait le
   // démarrage 432 ms en médiane, jusqu'à 923 ms — 120 ms de sérialisation, le reste en écriture
   // sur le disque D: mécanique. Elle passe par la MÊME file que le journal (`reecrireSnapshot`) :
   // un lot écrit avant elle est absorbé, un lot écrit après rejoint le journal neuf. Son échec ne
   // perd rien : le journal n'est effacé qu'APRÈS un snapshot posé, il reste donc la référence et
   // le prochain démarrage recompacte. Et il ne met plus l'historique de côté : la version
   // synchrone levait, et `index.ts` ouvrait alors l'app sur un historique VIDE pour un simple
-  // fichier tenu (cas vécu : `.tmp` resté en dossier, conv-914).
+  // fichier tenu (cas vécu : `.tmp` resté en dossier).
   if (migrated || journalPresentAtStartup) {
     const compacter = (): void => {
       void reecrireSnapshot().catch((erreur: unknown) =>
@@ -1410,7 +1410,7 @@ export function persistConversations(
       return normalisee.get(id)
     }
     archivesChargees = chargerArchives()
-    // Le store la porte aussi (conv-1248) : ses lecteurs n'ont pas accès à cette persistance.
+    // Le store la porte aussi : ses lecteurs n'ont pas accès à cette persistance.
     store.archivesChargees = archivesChargees
   }
   void retirerArchivesPerimees()

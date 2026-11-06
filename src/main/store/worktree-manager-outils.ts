@@ -1,4 +1,4 @@
-// Outils de module de worktree-manager.ts, déplacés tels quels (conv-1508, lot 3) : partagés par la
+// Outils de module de worktree-manager.ts, déplacés tels quels (lot 3) : partagés par la
 // classe et ses modules voisins ; ré-exportés par worktree-manager.ts pour les appelants.
 import { execFile, execFileSync } from 'node:child_process'
 import type { EntreeBalayage } from './balayage-retention'
@@ -36,7 +36,7 @@ export const PASSE_RETENTION_TIMEOUT_MS = INVENTAIRE_RECUPERATION_TIMEOUT_MS
  * `finalize` n'est pas UNE commande git, c'est une SEQUENCE : commit dans la copie, fusion dans la
  * base, crochets du depot, puis suppression du dossier de travail. Lui donner le budget d'une seule
  * commande (32 s) est la meme erreur de CATEGORIE que celle deja corrigee pour l'inventaire de
- * recuperation. Mesure du 2026-08-27 (conv-1423) : la fusion a bien atterri dans `main`
+ * recuperation. Mesure du 2026-08-27 : la fusion a bien atterri dans `main`
  * (`acfe64dd`, 09:09:50) et le client a coupe pendant le rangement, a 09:10:21 — le run est reparti
  * en `merge-failed` alors que le travail etait publie.
  */
@@ -46,8 +46,7 @@ export const FINALIZE_TIMEOUT_MS = 300_000
  *
  * Le préfixe `agent <id>` est CONSERVÉ : des tests et la reprise repèrent ces commits par lui. On lui
  * ajoute le résumé de la tâche (première ligne non vide, sans caractère de contrôle, ≤ 72
- * caractères) pour que l'historique dise CE QUI a changé — `agent run-xxx-1` seul ne disait rien
- * (conv-710).
+ * caractères) pour que l'historique dise CE QUI a changé — `agent run-xxx-1` seul ne disait rien.
  * fix-ok: cause mesurée — les deux commits (finalize, commitCopyIfDirty) codaient en dur `agent ${agentId}` ; test rouge (3 échecs) sans ce helper, vert avec.
  */
 export function messageCommitAgent(agentId: string, task?: string): string {
@@ -170,7 +169,7 @@ export function tryGitAsync(
   })
 }
 
-/** `git status` de la base — une seule source, partagée par la lecture sync et async (conv-1055). */
+/** `git status` de la base — une seule source, partagée par la lecture sync et async. */
 export const ARGS_STATUT_DE_LA_BASE = [
   'status',
   '--porcelain=v1',
@@ -244,7 +243,7 @@ export function entreeDeRetention(
 /**
  * Rend une exception de finalisation LISIBLE par celui qui devra reparer le run.
  *
- * Mesure le 2026-08-27 (conv-1427) : un `catch` sans parametre remplacait l'erreur reelle par une
+ * Mesure le 2026-08-27 : un `catch` sans parametre remplacait l'erreur reelle par une
  * phrase constante. Le run - vert, juge VALIDE, 2,47 $ - s'est clos en `red` sur « La finalisation
  * Git a echoue de facon inattendue. », et plus personne, ni l'utilisateur ni la trace, ne pouvait
  * savoir ce qui avait echoue. La categorie (`merge-failed`) survivait ; la cause etait jetee.
@@ -299,7 +298,7 @@ export interface WorktreeManagerOptions {
   /** Suppression disque injectable pour simuler les verrous Windows dans les tests. */
   removeDirFn?: (path: string) => void
   /**
-   * Pendant ASYNCHRONE de `removeDirFn`, pour le retrait disque du balayage horaire (heal conv-1115 :
+   * Pendant ASYNCHRONE de `removeDirFn`, pour le retrait disque du balayage horaire (heal :
    * 153,8 s de fenêtre figée sur une copie supprimée en synchrone). Défaut : `supprimerArbreAsync` —
    * sauf si un `removeDirFn` a été injecté seul, auquel cas c'est LUI qui répond : un test qui
    * simule le disque le simule partout (même règle que `tryGitAsyncFn`).
@@ -426,7 +425,7 @@ export function cheminDeStatutPorcelain(ligne: string): string {
 /**
  * Rattache des fonctions `function f(this: WorktreeManager, ...)` au prototype comme le ferait une
  * méthode de classe (non énumérable, modifiable), pour découper la classe sans changer ses appels
- * (conv-1508, lot 3).
+ * (lot 3).
  */
 export function attacherMethodes(proto: object, methodes: Record<string, unknown>): void {
   for (const [nom, fn] of Object.entries(methodes)) {

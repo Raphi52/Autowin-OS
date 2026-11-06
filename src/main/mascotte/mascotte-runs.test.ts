@@ -3,7 +3,7 @@ import { creerCompteDesRuns } from './mascotte-runs'
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
- * Le compte des runs de la mascotte (conv-1196, ligne 1 du scout). Entrée qui doit faire échouer ce
+ * Le compte des runs de la mascotte (ligne 1 du scout). Entrée qui doit faire échouer ce
  * fichier : la bille qui reprend son nombre de l'interface (`os:presence`) au lieu des événements
  * du moteur — fenêtre fermée, le nombre se figeait.
  */

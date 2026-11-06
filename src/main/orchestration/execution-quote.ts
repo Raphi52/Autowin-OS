@@ -103,8 +103,8 @@ interface RegimePreset {
  * PLAFONDS D'APPELS — ils comptent des ETAPES, jamais de la depense.
  *
  * Releves le 2026-08-25 (4/12/24 -> 10/40/80) apres DEUX tours tues dans la meme journee :
- * conv-1397 coupe sur « Budget d'appels provider atteint (6) » apres cinq editions reussies, juste
- * avant sa verification ; conv-1404 coupe sur « (12) » apres 3 reussites et 8 echecs. Les deux ont
+ * un fil coupe sur « Budget d'appels provider atteint (6) » apres cinq editions reussies, juste
+ * avant sa verification ; coupe sur « (12) » apres 3 reussites et 8 echecs. Les deux ont
  * rendu la pire issue possible : paye, et rien de fini.
  *
  * Ces valeurs datent de l'epoque ou un tour valait UN appel provider. Un tour agentique en consomme
@@ -240,7 +240,7 @@ export function allocateExecutionTopology(
       ? nodeExecutions + judgePasses + recoveries
       : nodeExecutions)
   /*
-   * UNE PHASE EN FAN-OUT LANCE UN AGENT PAR MEMBRE — mesure du 2026-09-09 (conv-46).
+   * UNE PHASE EN FAN-OUT LANCE UN AGENT PAR MEMBRE — mesure du 2026-09-09.
    *
    * `mandatory` compte des APPELS : une visite de noeud, plus les passages de juge et les reprises.
    * Le plafond de TETES, lui, restait celui du regime. Trace du run run-3f7459905786-1 : devis
@@ -249,7 +249,7 @@ export function allocateExecutionTopology(
    * juge FINAL a ete refuse sur « Budget d'agents atteint (5) » sans avoir rien consomme : travail
    * fait, verifie, et jamais publie — la pire issue possible, payee et perdue.
    *
-   * C'est le defaut deja corrige le 2026-08-31 (conv-1587) dans l'orchestrateur, mais UNIQUEMENT
+   * C'est le defaut deja corrige le 2026-08-31 dans l'orchestrateur, mais UNIQUEMENT
    * pour les workflows EXPLICITES du canevas : un run lance depuis le chat n'y passait pas. La
    * correction vit donc ICI, sur le chemin commun, ou le devis est compile pour TOUS les runs.
    *
@@ -265,7 +265,7 @@ export function allocateExecutionTopology(
   }
   if (mandatory > available) {
     // En mesure seule (défaut depuis la décision utilisateur du 12/08), un workflow DÉTERMINISTE
-    // au pire cas fini ne se refuse pas : le devis S'AGRANDIT à sa demande. Mesuré sur conv-1148 :
+    // au pire cas fini ne se refuse pas : le devis S'AGRANDIT à sa demande. Mesuré :
     // « 12 agent(s) obligatoires pour 10 place(s) restante(s) » tuait le run avant le premier
     // appel — le régime servait de plafond de dépense déguisé. En mode bloquant, le refus reste :
     // là, le plafond est un contrat.

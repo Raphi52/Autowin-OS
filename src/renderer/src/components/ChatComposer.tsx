@@ -1,5 +1,5 @@
 /**
- * LE COMPOSER, ISOLÉ. Extrait de `ChatView.tsx` (conv-1466) parce qu'une frappe y coûtait un rendu
+ * LE COMPOSER, ISOLÉ. Extrait de `ChatView.tsx` parce qu'une frappe y coûtait un rendu
  * de la vue ENTIÈRE : listes de conversations, panneaux, fil. Symptôme mesuré par l'utilisateur —
  * les lettres n'apparaissent pas, puis tombent d'un coup.
  *
@@ -112,10 +112,10 @@ function IconeEnvoyer(): React.JSX.Element {
       viewBox="0 0 24 24"
       width="19"
       height="19"
-      /* RECENTRAGE OPTIQUE (conv-257, 2026-09-04) : la masse de l avion penche vers le haut
+      /* RECENTRAGE OPTIQUE (2026-09-04) : la masse de l avion penche vers le haut
          gauche, donc le centre GEOMETRIQUE ne tombe pas sur le centre PERCU du cercle.
          1 px vers le bas et vers la droite, demande par l utilisateur apres observation.
-         Puis 1 px de plus vers la droite (conv-203, 2026-10-10 : « decale la fleche dans le
+         Puis 1 px de plus vers la droite (2026-10-10 : « decale la fleche dans le
          bouton envoyer de 1 px a droite »). */
       style={{ transform: 'translate(2px, 1px)' }}
       fill="none"
@@ -127,7 +127,7 @@ function IconeEnvoyer(): React.JSX.Element {
       focusable="false"
     >
       {/* Avion en PLEIN avec son pli visible : le dart precedent se lisait comme une simple
-          fleche a 16px (retour utilisateur conv-257, 2026-09-04). Le pli separe l aile du corps
+          fleche a 16px (retour utilisateur, 2026-09-04). Le pli separe l aile du corps
           et rend l objet identifiable a cette taille. */}
       <path
         d="M2.2 21 22.4 12 2.2 3l0 7.1 13.3 1.9-13.3 1.9z"
@@ -184,7 +184,7 @@ export interface ChatComposerProps {
   ghostRecommendation: string | null
   /**
    * Les suites proposées par le modèle, de la mieux notée à la moins bien notée (trois au plus) :
-   * montrées en boutons quand le champ est vide, un clic remplit le champ comme Tab (conv-1005).
+   * montrées en boutons quand le champ est vide, un clic remplit le champ comme Tab.
    * Absent ou vide : seul le texte grisé reste, comme avant.
    */
   propositionsSuite?: readonly PropositionSuite[]
@@ -225,7 +225,7 @@ function espaceAuDessus(element: HTMLElement): number {
 }
 
 /**
- * Le message composé par les suites cochées (conv-1103) : le texte tel quel pour une seule — le
+ * Le message composé par les suites cochées : le texte tel quel pour une seule — le
  * clic d'avant, inchangé —, une liste numérotée au-delà, pour que l'agent les traite TOUTES.
  */
 function composerSuites(textes: readonly string[]): string {
@@ -235,7 +235,7 @@ function composerSuites(textes: readonly string[]): string {
 
 /**
  * AUTO-HAUTEUR DU CHAMP : la hauteur de son texte, 180 px au plus (règle d'avant l'extraction),
- * et JAMAIS plus que la place laissée par la colonne (conv-1103, 2026-10-22). Mesuré à 900 × 670
+ * et JAMAIS plus que la place laissée par la colonne (2026-10-22). Mesuré à 900 × 670
  * avec deux suggestions cochées : la zone des messages était déjà à son minimum, la saisie ne
  * rétrécit pas, et un champ de 5 lignes poussait la rangée d'outils (∞, trombone, micro) hors du
  * cadre. Le champ est le seul élément de la saisie qui sait défiler : c'est lui qui rend la place
@@ -258,7 +258,7 @@ function ajusterHauteurChamp(champ: HTMLTextAreaElement): void {
 export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
   function ChatComposer(props, ref): React.JSX.Element {
     const [input, setInput] = useState('')
-    // Les textes de la zone de saisie suivent la langue de Settings · Interface (conv-1146).
+    // Les textes de la zone de saisie suivent la langue de Settings · Interface.
     const { t } = useTextes()
     const { t: tFil } = useTextesChatFil()
     const [slashIndex, setSlashIndex] = useState(0)
@@ -269,7 +269,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     const [slashEspace, setSlashEspace] = useState(0)
     const [mentionIndex, setMentionIndex] = useState(0)
     const [mentionDismissed, setMentionDismissed] = useState(false)
-    /** Suites COCHÉES (conv-1103) : ne valent que tant que le champ est exactement leur composition. */
+    /** Suites COCHÉES : ne valent que tant que le champ est exactement leur composition. */
     const [suitesCochees, setSuitesCochees] = useState<readonly string[]>([])
     const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -382,7 +382,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     }
 
     /**
-     * INSÉRER UNE RÉFÉRENCE VIDÉO SANS RIEN EFFACER (conv-253, 2026-10-11).
+     * INSÉRER UNE RÉFÉRENCE VIDÉO SANS RIEN EFFACER (2026-10-11).
      *
      * Même calcul que la dictée (`insererDictee`), deux différences mesurées par
      * `ChatView.pointer-video.test.tsx` :
@@ -528,9 +528,9 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
       (c) => c.name === slashSurvol && c.description && c.description !== c.hint
     )
     /*
-     * LES SUITES EN BOUTONS (conv-1005) : seulement champ VIDE, hors tour en cours et sans palette
+     * LES SUITES EN BOUTONS : seulement champ VIDE, hors tour en cours et sans palette
      * ouverte — dès qu'on tape, on écrit autre chose, et pendant un tour le champ sert à orienter.
-     * COCHABLES depuis conv-1103 (« je veux pouvoir cocher plusieurs propositions ») : les boutons
+     * COCHABLES (« je veux pouvoir cocher plusieurs propositions ») : les boutons
      * restent aussi tant que le champ est EXACTEMENT la composition des cases cochées. L'état des
      * cases est déduit de ce champ, pas tenu à part : un texte retouché, envoyé ou vidé décoche
      * tout de lui-même, sans effet de remise à zéro à synchroniser.
@@ -547,7 +547,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
         : []
 
     // Auto-hauteur (voir `ajusterHauteurChamp`) : à la frappe, et quand les suggestions apparaissent
-    // ou disparaissent — elles prennent ou rendent de la place au-dessus du champ (conv-1103).
+    // ou disparaissent — elles prennent ou rendent de la place au-dessus du champ.
     useEffect(() => {
       if (inputRef.current) ajusterHauteurChamp(inputRef.current)
     }, [input, suitesVisibles.length])
@@ -568,7 +568,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
     }
 
     return (
-      // `data-origine` : lu par l'Alt+clic « C'est quoi ça ? » (reference-element.ts, conv-1038).
+      // `data-origine` : lu par l'Alt+clic « C'est quoi ça ? » (reference-element.ts).
       <div className="composer" data-origine="saisie">
         <div className="composer-field">
           {props.attachmentsNode}
@@ -657,7 +657,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
               aria-label={t('chat.suites')}
               data-testid="composer-suites"
             >
-              {/* Titre du bloc, demandé tel quel par l'utilisateur (conv-1103). */}
+              {/* Titre du bloc, demandé tel quel par l'utilisateur. */}
               <span className="composer-suites-titre" aria-hidden="true">
                 {t('chat.suites')}
               </span>
@@ -778,7 +778,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(
                 }
                 // Ghost-text (CLI-like) : Tab accepte la recommandation quand le champ est vide
                 // et qu'aucun menu slash n'est actif. Remplit l'input avec l'étape recommandée.
-                // MAJ+TAB = TOUTES les suites affichées, cochées (conv-1125 : « shift + tab pour
+                // MAJ+TAB = TOUTES les suites affichées, cochées (« shift + tab pour
                 // les 2 et tab le premier ») ; Tab seul garde la mieux notée.
                 if (
                   e.key === 'Tab' &&

@@ -64,7 +64,7 @@ export interface EntreeRepriseSurcharge {
   /** Message d'erreur du tour, tel que rendu par le processus principal. */
   erreur?: string
   /**
-   * Texte RENDU par le tour. Mesuré le 2026-09-03 (conv-28) : un fournisseur surchargé ne fait pas
+   * Texte RENDU par le tour. Mesuré le 2026-09-03 : un fournisseur surchargé ne fait pas
    * toujours ECHOUER le tour — il « répond » le texte de l'incident (« API Error: 529 Overloaded…
    * try again in a moment »). Le tour comptait alors pour un succès et aucune reprise ne partait.
    */

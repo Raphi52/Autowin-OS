@@ -4,7 +4,7 @@ import { classerPerimes, type CandidatVeille, type LireSource } from './candidat
 /**
  * Un candidat de CORRECTION ancré dans le code ne se sert plus quand sa ligne citée a disparu.
  *
- * Cas réel (conv-947, 2026-10-14) : « La mise à jour propose d'abord rebaser » citait
+ * Cas réel (2026-10-14) : « La mise à jour propose d'abord rebaser » citait
  * `return diverged ? ['rebase', 'merge'] : ['fast-forward']` dans src/shared/update-contract.ts. Le
  * défaut a été corrigé trois heures après sa détection (191ab51d, 2026-09-22), mais le ticket est
  * resté dans le stock avec sa citation figée et a été servi trois semaines plus tard comme défaut à

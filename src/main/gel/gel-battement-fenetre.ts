@@ -1,7 +1,7 @@
 /**
  * LE GEL QUE PERSONNE NE SIGNALE — quand la fenetre meurt SANS interaction.
  *
- * Mesure du 2026-09-08 (conv-353) : une fenetre qui ne repondait plus du tout (meme pas a une
+ * Mesure du 2026-09-08 : une fenetre qui ne repondait plus du tout (meme pas a une
  * evaluation triviale) n'a produit AUCUNE ligne `fenetre-injoignable`, donc aucune reanimation.
  * Raison : Electron n'emet `unresponsive` que lorsque la fenetre ne repond plus aux EVENEMENTS
  * D'ENTREE. Sans souris ni clavier — fenetre en arriere-plan, ou machine qui travaille seule — le
@@ -38,8 +38,8 @@ export function fenetreSilencieuse(
 /** Le minimum vital d'une fenetre pour ce battement — pas besoin d'un vrai Electron en test. */
 export interface FenetreBattante {
   /**
-   * L'utilisateur a-t-il la fenetre sous les yeux (focus) ? Absent = on la suppose regardee, comme
-   * avant conv-1604. Voir `OPERATION_SILENCE_AU_RETOUR` pour la raison de ce critere.
+   * L'utilisateur a-t-il la fenetre sous les yeux (focus) ? Absent = on la suppose regardee, comme.
+   * Voir `OPERATION_SILENCE_AU_RETOUR` pour la raison de ce critere.
    */
   isFocused?(): boolean
   /**
@@ -79,7 +79,7 @@ export const SILENCE_AVANT_ESCALADE_MS = 30_000
  * Motif journalise quand la fenetre, muette pendant que personne ne la regardait, l'est ENCORE au
  * retour de l'utilisateur : c'est a ce moment-la, et seulement la, qu'on la recharge.
  *
- * Mesure du 2026-11-05 (conv-1604, « chaque fois que je change de fenetre je me mange un
+ * Mesure du 2026-11-05 (« chaque fois que je change de fenetre je me mange un
  * chargement ») : 37 rechargements par le battement dans gels.jsonl, tous de 17 s a 25 min apres le
  * dernier message tape. Chaque ouverture de fichier coutait 150 a 380 ms sur ce poste (filtre
  * antivirus `eamonm`), et la page restait muette 15 a 20 s avant de repartir seule. Recharger une

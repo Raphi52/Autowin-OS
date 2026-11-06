@@ -1,5 +1,5 @@
 /**
- * LA TASK D'UNE DEMANDE, DANS LA FICHE D'UN POST-IT DE LA CARTE DU PROJET (conv-1127, 2026-10-23).
+ * LA TASK D'UNE DEMANDE, DANS LA FICHE D'UN POST-IT DE LA CARTE DU PROJET (2026-10-23).
  *
  * Demande : « rattacher les prompts à des work-items […] pour qu'un prompt soit lié à une task »,
  * option E du cadrage : lien automatique quand il est sûr, rattachement à la main depuis la fiche.
@@ -40,7 +40,7 @@ function aide(w: WorkItemDeLaDemande, langue: Langue): string {
   return `${type}${origine}${w.titre ? '' : traduireBoardEtMaintenance('taches.titreNonLu', langue)}`
 }
 
-/** Une source de tickets configurée, telle que le champ « + task » la propose (conv-1127). */
+/** Une source de tickets configurée, telle que le champ « + task » la propose. */
 export interface SourceDeTache {
   id: string
   label: string
@@ -61,8 +61,8 @@ export function TachesDeLaDemande({
   ) => Promise<ResultatDuRattachement>
   delier?: (demande: DemandeDeLaCarte, workItem: WorkItemDeLaDemande) => Promise<unknown>
   /**
-   * Les sources configurées. À partir de DEUX, le champ propose de choisir (demande du 23/10,
-   * conv-1127) : sans ce choix, le processus principal refuse, car il ne devine pas le projet.
+   * Les sources configurées. À partir de DEUX, le champ propose de choisir (demande du 23/10)
+   * Sans ce choix, le processus principal refuse, car il ne devine pas le projet.
    */
   sources?: readonly SourceDeTache[]
 }): React.JSX.Element {

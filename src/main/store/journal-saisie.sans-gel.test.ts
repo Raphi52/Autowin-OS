@@ -12,7 +12,7 @@ import {
 } from './journal-saisie'
 
 /**
- * LE JOURNAL DES SAISIES NE TIENT PLUS LE FIL PRINCIPAL (conv-1368, 2026-10-31).
+ * LE JOURNAL DES SAISIES NE TIENT PLUS LE FIL PRINCIPAL (2026-10-31).
  *
  * Mesure `gels.jsonl` sur 7 jours : `openSync` de `journal-saisie.ts` a figé la fenêtre 45,6 s, dont
  * 9,9 s d'un seul coup sur un fichier de 3 Mo, à l'ouverture d'un fil (`chat:orientations`) et à chaque

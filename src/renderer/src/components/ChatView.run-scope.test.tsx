@@ -61,7 +61,7 @@ describe('ChatView — portée du panneau Workflows', () => {
 
   const bouton = (): HTMLElement => h?.container.querySelector('.workflow-toggle') as HTMLElement
 
-  // Détails est un vrai bouton depuis conv-1317 : son état se lit sur lui, comme la Mini-adresse.
+  // Détails est un vrai bouton : son état se lit sur lui, comme la Mini-adresse.
   it('Détails dit lui-même si le panneau est ouvert', async () => {
     await monter()
     expect(bouton().tagName).toBe('BUTTON')
@@ -84,7 +84,7 @@ describe('ChatView — portée du panneau Workflows', () => {
     await monter()
     const texte = bouton().textContent ?? ''
     // 1 open vient de RUNS_DE_A ; 46/225 seraient la fuite globale. Le run vert de RUNS_DE_A
-    // n'a plus de badge sur le bouton (conv-969).
+    // n'a plus de badge sur le bouton.
     expect(texte).toContain('1 open')
     expect(texte).not.toContain('green')
     expect(texte).not.toContain('46')

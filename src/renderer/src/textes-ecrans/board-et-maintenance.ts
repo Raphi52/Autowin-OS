@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — ÉCRANS BOARD ET MAINTENANCE (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — ÉCRANS BOARD ET MAINTENANCE (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : Board : CarteDesBesoinsView, RiviereDuProjet, VerificationDuBoard, TachesDeLaDemande.
  * Maintenance : TestsView, MaintenanceSkillsPanel, PerfLagPanel, tailles en octets.
@@ -42,11 +42,11 @@ export const TEXTES_FR = {
   'vue.chargement': 'Calcul de la carte…',
   'vue.sourceInjoignable': 'source de tickets injoignable : liens #1234 non vérifiés',
   'vue.tasksNonVerifiees': 'tasks non vérifiées : {erreur}',
-  // Les deux onglets du Board (conv-1397) : les post-it des demandes, les tickets externes.
+  // Les deux onglets du Board : les post-it des demandes, les tickets externes.
   'vue.sections': 'Sections du Board',
   'vue.onglet.demandes': 'Demandes',
   'vue.onglet.tickets': 'Tickets',
-  // Le dossier où le Board est recopié (conv-1206)
+  // Le dossier où le Board est recopié
   'vue.dossier': 'Dossier…',
   'vue.dossierAide':
     'Choisir un dossier (un partage réseau par exemple) où recopier le Board à chaque calcul, un post-it par fil avec l’identifiant de sa conversation',
@@ -54,7 +54,7 @@ export const TEXTES_FR = {
   'vue.dossierAttente': 'Copie vers {cible} en attente…',
   'vue.dossierErreur': 'Copie vers le dossier impossible : {erreur}',
   'vue.dossierOublier': 'Ne plus recopier le Board dans ce dossier',
-  // Les post-it des collègues relus dans ce dossier (conv-1210)
+  // Les post-it des collègues relus dans ce dossier
   'vue.dossierCollegues': 'Post-it des collègues : {noms}',
   'vue.dossierColleguesErreur': 'Collègues non relus : {erreur}',
 
@@ -171,7 +171,7 @@ export const TEXTES_FR = {
   'maint.canalAbsent': 'canal tests:projects indisponible (moteur non reconstruit ?)',
   'maint.onglet.suites': 'Tests unitaires',
   'maint.onglet.latence': 'Latence',
-  // La veille, venue de l'ancien écran Tickets (conv-1397).
+  // La veille, venue de l'ancien écran Tickets.
   'maint.tickets': 'Tickets Autowin OS',
   'maint.filtre': 'Filtrer (motif de fichier)',
   'maint.echecsSeuls': 'Échecs seuls',

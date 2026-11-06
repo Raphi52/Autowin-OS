@@ -7,7 +7,7 @@ import { estJugeTerminal, noeudApprentissageApresJuge } from './workflow-walk'
  * QUI est le juge TERMINAL du canevas — et pourquoi la reponse actuelle est fausse.
  *
  * L'orchestrateur s'arrete avant le juge terminal, parce que ce juge EST le gate final joue juste
- * apres la marche : le jouer deux fois a ete constate sur le run reel conv-1071, le premier appel
+ * apres la marche : le jouer deux fois a ete constate sur le run reel, le premier appel
  * ayant en plus le sandbox d'une phase de mutation. Le retour rouge, lui, appartient a la boucle de
  * reparation.
  *
@@ -37,7 +37,7 @@ describe('juge terminal', () => {
        *
        * Cette arete n'appartient pas au canevas parcouru : `learn` est joue APRES le gate, une fois
        * le verdict rendu. La compter ferait revenir l'un des deux defauts mesures — le juge joue
-       * DEUX fois (conv-1071), ou le marcheur consommant le budget de retour que la boucle de
+       * DEUX fois, ou le marcheur consommant le budget de retour que la boucle de
        * reparation relit ensuite. Voir `juge-terminal-avec-learn.test.ts`.
        *
        * On asserte donc la forme EXACTE des sorties autorisees, pas un « tout est retour » devenu

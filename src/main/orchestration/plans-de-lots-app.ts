@@ -34,9 +34,9 @@ import {
 } from '../../shared/plan-de-lots'
 
 /**
- * SUPER CONVERSATION, CÔTÉ APP (conv-1150, 2026-10-26) — le coordinateur des plans de lots.
+ * SUPER CONVERSATION, CÔTÉ APP (2026-10-26) — le coordinateur des plans de lots.
  *
- * Le fil chef dépose un plan (`plan_de_lots`), qui part aussitôt (conv-1171 : plus de clic
+ * Le fil chef dépose un plan (`plan_de_lots`), qui part aussitôt (plus de clic
  * d'accord ; « Lancer le plan » ne reste que pour un plan déposé avant ce changement). Ensuite
  * l'app, et non l'agent :
  *  - ouvre un fil par lot dans le dossier du chef et y lance la demande (au plus 3 à la fois) ;
@@ -61,7 +61,7 @@ export interface DepsPlans {
   creerFil: (chef: string, titre: string) => string
   /**
    * Lance un tour dans le fil ; rend la main au démarrage du tour (`lancerDansConversation`).
-   * `modele` : celui du lot (conv-1284) ; absent, le tour suit le modèle du fil.
+   * `modele` : celui du lot ; absent, le tour suit le modèle du fil.
    */
   lancer: (
     fil: string,
@@ -93,7 +93,7 @@ export function stockageFichier(chemin = cheminFichierPlans()): NonNullable<Deps
   return {
     lire: () => relireFichier(chemin) ?? '',
     // Par fichier temporaire : un arrêt brutal ne laisse pas un JSON coupé. Hors du fil principal
-    // (conv-1368) : `renameSync` ici a figé la fenêtre 1,2 s en 7 jours.
+    // `renameSync` ici a figé la fenêtre 1,2 s en 7 jours.
     ecrire: (contenu) => deposerFichier(chemin, contenu)
   }
 }
@@ -192,12 +192,12 @@ export class CoordinateurDesPlans {
     this.#plans = plans.filter(estPlanLisible).map((p) => {
       // Au démarrage, l'app a perdu le suivi des lots « en cours » : ils passent interrompus. Leur
       // agent a pu survivre : un fil déjà réservé par `reprendreAppelChat` (index.ts) est adopté ici,
-      // les travaux reconnus plus tard le sont par `agentRepris` (conv-1308). Sa fin, annoncée
+      // les travaux reconnus plus tard le sont par `agentRepris`. Sa fin, annoncée
       // `repris`, compte, et « Reprendre » n'y lance jamais un second agent.
       const interrompu = interrompreAuDemarrage({
         ...p,
         avertissements: p.avertissements ?? [],
-        // Une décision abîmée sur disque est sautée, pas le plan (conv-1284).
+        // Une décision abîmée sur disque est sautée, pas le plan.
         ...(p.decisions
           ? {
               decisions: p.decisions.filter(
@@ -266,7 +266,7 @@ export class CoordinateurDesPlans {
   deposer(chef: string, brut: unknown): ResultatPlan {
     if (!chef.trim() || !this.#deps.existe(chef))
       return { ok: false, erreur: `fil chef « ${chef} » inconnu.` }
-    // PAS DE PLAN DANS UN LOT (conv-1284) — claude.exe refuse qu'une session lancée par une autre
+    // PAS DE PLAN DANS UN LOT — claude.exe refuse qu'une session lancée par une autre
     // en démarre une à son tour : sans borne, un lot qui juge sa part « longue » ouvrait ses
     // propres fils, hors du tableau et du plafond du chef.
     const vu = this.planDuFil(chef)
@@ -317,10 +317,10 @@ export class CoordinateurDesPlans {
   }
 
   /**
-   * LE BOUTON DU WORKFLOW INTELLIGENT (conv-1333, 2026-10-30). Une sélection de candidats en plusieurs
+   * LE BOUTON DU WORKFLOW INTELLIGENT (2026-10-30). Une sélection de candidats en plusieurs
    * lots vivait dans la file en mémoire de la vue : depuis le 22/10, sur 4 sélections et 12 lots
    * prévus, 4 sont partis et aucun lot 2 n'a jamais quitté cette file (Stop, redémarrage, ou verrou
-   * d'envoi avant conv-1080), sans une trace. Puis, conv-1332 : « tu aurais dû tout paralléliser avec
+   * d'envoi), sans une trace. Puis, : « tu aurais dû tout paralléliser avec
    * une super conv ». Le clic dépose donc un plan et le lance : durable, 3 fils à la fois, repris
    * après un redémarrage, suspendu par le quota, et les lots aux fichiers communs passent l'un après
    * l'autre.
@@ -404,7 +404,7 @@ export class CoordinateurDesPlans {
 
   /**
    * Un travail continue dans ce fil après un redémarrage : tour de chat repris, ou run rattaché ou
-   * relancé (conv-1308). Son lot redevient en cours et sa fin, annoncée par `surFinDeTour`, enchaîne
+   * relancé. Son lot redevient en cours et sa fin, annoncée par `surFinDeTour`, enchaîne
    * la suite. Aucun tour n'est lancé ici : le travail existe déjà.
    */
   agentRepris(fil: string, tour?: string): void {
@@ -428,7 +428,7 @@ export class CoordinateurDesPlans {
 
   /**
    * Relance d'un lot en échec : par l'agent du chef (`plan_de_lots`), ou par l'utilisateur au
-   * bouton « Relancer » du tableau (conv-1151, lot 3), qui nomme alors le plan qu'il VOIT — un
+   * bouton « Relancer » du tableau (lot 3), qui nomme alors le plan qu'il VOIT — un
    * tableau périmé ne relance pas un lot d'un autre plan. Même règle et même tour compté.
    */
   async relancer(chef: string, rang: number, planId?: string): Promise<ResultatPlan> {
@@ -475,7 +475,7 @@ export class CoordinateurDesPlans {
     if (action === 'deposer') {
       const r = this.deposer(chef, args.plan)
       if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
-      // LANCEMENT SANS CLIC (conv-1171, 2026-10-27) : « je ne veux pas avoir à confirmer, je veux que
+      // LANCEMENT SANS CLIC (2026-10-27) : « je ne veux pas avoir à confirmer, je veux que
       // ça se lance tout seul ». Le dépôt par l'agent vaut lancement ; l'utilisateur garde
       // « Arrêter » dans le tableau. Un plan déjà lancé (même contenu redéposé) n'est pas relancé.
       if (r.plan.statut !== 'attente-accord')
@@ -603,7 +603,7 @@ export class CoordinateurDesPlans {
   }
 
   /**
-   * Une décision notée va aussi, par message, aux lots EN COURS (conv-1284, demande de
+   * Une décision notée va aussi, par message, aux lots EN COURS (demande de
    * l'utilisateur) : sans cela un lot déjà parti travaillait jusqu'au bout sur une consigne
    * périmée. L'expéditeur est le fil qui a noté ; ni lui ni un lot fini ne la reçoivent. Un envoi
    * refusé (plafond horaire, fil disparu) ne bloque ni la note ni les autres envois. Rend les fils
@@ -629,7 +629,7 @@ export class CoordinateurDesPlans {
   }
 
   /**
-   * LE LOT BLOQUÉ RÉVEILLÉ PAR L'ORDRE DU CHEF (conv-1284, 2026-10-29, demande de l'utilisateur :
+   * LE LOT BLOQUÉ RÉVEILLÉ PAR L'ORDRE DU CHEF (2026-10-29, demande de l'utilisateur :
    * « réveiller directement un lot bloqué par la réponse du chef » au lieu de répondre puis relancer).
    * `ecrire_a_un_fil` (commands.ts) fait passer par ici le lancement du tour d'un ordre : si
    * l'expéditeur est le CHEF d'un plan et le destinataire le fil d'un de ses lots qui ATTEND sa
@@ -638,7 +638,7 @@ export class CoordinateurDesPlans {
    * cours AVANT le lancement (aucun second agent par `#lancerLesSuivants`), et sa fin notée comme
    * celle d'un lot. Tout autre ordre part tel quel. Un refus (plafond) ne lance rien : l'ordre reste
    * en attente et la raison remonte au chef par le détail de son envoi. Le tour part avec le MODÈLE
-   * du lot : sans lui, le lot 1 du test réel (conv-1299, en sonnet) avait repris en opus.
+   * du lot : sans lui, le lot 1 du test réel (en sonnet) avait repris en opus.
    */
   async lancerParOrdre(
     de: string,

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /*
- * LE DESSIN D'UN DIAGRAMME NE TOUCHE PAS A LA MISE EN PAGE (conv-275, 2026-10-11).
+ * LE DESSIN D'UN DIAGRAMME NE TOUCHE PAS A LA MISE EN PAGE (2026-10-11).
  *
  * Sans conteneur, mermaid posait son brouillon EN FLUX dans <body> : la page affichait sa propre
  * barre de defilement le temps du dessin, toute l'app retrecissait de 10 px et le fil sautait,

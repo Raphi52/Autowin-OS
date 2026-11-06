@@ -1,7 +1,7 @@
 /*
- * LA RIVIÈRE À ÉTAGES (/draft conv-1113, 2026-10-23). Visuel choisi au /draft : un tableau, un trait
+ * LA RIVIÈRE À ÉTAGES (2026-10-23). Visuel choisi au /draft : un tableau, un trait
  * de couleur par étage, des post-it pastel. Le TABLEAU BLANC et ses aimants sont devenus un TABLEAU
- * DE LIÈGE dans son cadre de bois le 2026-10-28 (conv-1204) : « le tableau de fond doit simuler un
+ * DE LIÈGE dans son cadre de bois le 2026-10-28 : « le tableau de fond doit simuler un
  * tableau en liège, les aimants disparaissent au profit d'une punaise au centre du post-it […] une
  * couleur par personne ». Le liège reste le même dans tous les thèmes : c'est l'objet montré et
  * choisi, pas un panneau de l'app — son grain est une IMAGE (`url(`), que les couches de thème
@@ -12,13 +12,13 @@
   --riviere-encre: #1f2a44;
   /* Le gris des noms de jours appartient au PAPIER, qui reste clair dans tous les thèmes : écrit en
      dur, scripts/gen-malvoyant-planchers.mjs le remplaçait par le texte du thème — clair en thème
-     sombre, donc illisible sur ce papier (conv-1113). */
+     sombre, donc illisible sur ce papier. */
   --riviere-encre-jour: #3b2a1a;
   --riviere-courbe: cubic-bezier(0.2, 0.8, 0.2, 1);
   display: flex;
   flex-direction: column;
   gap: 6px;
-  /* Seule dans sa vue, qui ne défile plus (conv-1113) : elle prend toute la hauteur restante. */
+  /* Seule dans sa vue, qui ne défile plus : elle prend toute la hauteur restante. */
   flex: 1;
   min-height: 0;
   min-width: 0;
@@ -52,7 +52,7 @@
   color: #14121c;
 }
 
-/* Le menu des projets (conv-1329) : une puce comme les noms, au feutre ; un projet choisi la
+/* Le menu des projets : une puce comme les noms, au feutre ; un projet choisi la
    remplit comme un nom choisi. La liste ouverte est une étiquette du tableau, encre sur papier
    (comme `.riviere-etage-nom`) : avec les couleurs du thème, son fond translucide (--surface-panel
    des thèmes de verre) s'ouvrait sur du blanc et le texte clair s'y lisait gris sur blanc. */
@@ -80,10 +80,10 @@
   overflow: hidden;
   border-radius: 10px;
   /* Le liège : grains sombres et grains clairs (bruit SVG) sur un fond ambré, dans un cadre de bois.
-     Éclairci le 2026-10-28 (conv-1207, « éclaircis un peu le liège du board ») : fond #bf8d5b →
+     Éclairci le 2026-10-28 (« éclaircis un peu le liège du board ») : fond #bf8d5b →
      #d2a679, grains sombres (filtre `s`) moins foncés et moins couvrants. */
   border: 7px solid #7b4f2c;
-  /* L'ombre dégradée (conv-1536, 2026-11-04, « met une ombre dégradé dans le board comme dans ce
+  /* L'ombre dégradée (2026-11-04, « met une ombre dégradé dans le board comme dans ce
      screenshot ») : une lumière tombe du haut, le liège fonce vers le bas et les coins. Première
      couche, donc peinte AU-DESSUS du grain qu'elle fonce avec lui, et SOUS le papier des jours et
      les post-it, qui restent clairs. Elle vit dans la MÊME déclaration que le grain : une valeur qui
@@ -118,7 +118,7 @@
   user-select: none;
 }
 
-/* La place du tableau : rien ne défile (« tout doit rentrer dans l'écran en hauteur », conv-1113).
+/* La place du tableau : rien ne défile (« tout doit rentrer dans l'écran en hauteur »).
    Le composant la mesure et y fait tenir les étages. */
 .riviere-plateau {
   position: relative;
@@ -144,7 +144,7 @@
     width 0.3s var(--riviere-courbe);
 }
 
-/* Un clic sur une colonne y amène la loupe (conv-1130) : sur son nom comme sur son fond. */
+/* Un clic sur une colonne y amène la loupe : sur son nom comme sur son fond. */
 .riviere-tete .riviere-jour,
 .riviere-tableau > .riviere-jour,
 .riviere-etage {
@@ -332,7 +332,7 @@
   visibility: hidden;
 }
 
-/* Le texte garde sa taille à l'écran quand le post-it rapetisse (conv-1242, texteDuPostit) : son
+/* Le texte garde sa taille à l'écran quand le post-it rapetisse (texteDuPostit) : son
    bloc est contre-échelonné (1/k), et cette transformation glisse en même temps que celle du papier
    — une taille de police changée d'un coup le faisait gonfler pendant 0,3 s à chaque cran. Quand la
    ligne projet · heure ne tient plus, le titre prend sa place. */
@@ -384,7 +384,7 @@
   pointer-events: none;
 }
 
-/* 4 lignes en 11 px (2 lignes en 12 px avant le 2026-10-28, conv-1204 : « plus de texte par post
+/* 4 lignes en 11 px (2 lignes en 12 px avant le 2026-10-28, « plus de texte par post
    it », puis « réduis un peu la taille de la police et passe à 4 lignes ») ; la ligne projet · heure
    en 9 px. 14 (punaise) + 4 × 13,2 + 2 + 10,8 + 4 ≤ POSTIT_H (carte-riviere.ts). */
 .riviere-postit-titre {
@@ -478,14 +478,14 @@
   cursor: pointer;
 }
 
-/* Le lien vers la fiche RUN.md de la demande (conv-1441) : la couleur de `.riviere-fiche-lien`. */
+/* Le lien vers la fiche RUN.md de la demande : la couleur de `.riviere-fiche-lien`. */
 .riviere-fiche-runmd {
   flex: none;
   padding: 0;
   font-size: 11px;
 }
 
-/* Le RUN.md d'un collègue, déplié dans la carte (conv-1456) : la carte défile, pas la page. */
+/* Le RUN.md d'un collègue, déplié dans la carte : la carte défile, pas la page. */
 .riviere-fiche-runmd-collegue {
   display: flex;
   flex-direction: column;
@@ -545,7 +545,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Le message ENTIER, sur autant de lignes qu'il en faut (conv-1278 : « voir les messages en entier
+/* Le message ENTIER, sur autant de lignes qu'il en faut (« voir les messages en entier
    quand j'ouvre le détail ») ; la fiche défile au-delà de la hauteur du tableau. `anywhere` coupe un
    chemin ou une URL sans espace au lieu d'élargir la fiche. */
 .riviere-fiche-texte {
@@ -555,8 +555,8 @@
 }
 
 /* PAS le bouton de l'app (.btn) : chaque thème le peint pour SON fond, avec une règle plus forte
-   (:root[data-theme] .btn), et sur le papier pastel il disparaissait (capture de l'app réelle,
-   conv-1113). Encre du tableau, papier éclairci. */
+   (:root[data-theme] .btn), et sur le papier pastel il disparaissait (capture de l'app réelle).
+   Encre du tableau, papier éclairci. */
 .riviere-fiche-ouvrir {
   padding: 4px 12px;
   border: 1px solid rgba(31, 42, 68, 0.45);
@@ -577,5 +577,5 @@
   color: var(--text-dim);
 }
 
-/* Pas de coupure sous prefers-reduced-motion : la machine de l'utilisateur l'a ACTIF (theme.css,
-   conv-929) et la loupe sauterait d'un bloc au lieu de glisser — le mouvement EST l'information. */
+/* Pas de coupure sous prefers-reduced-motion : la machine de l'utilisateur l'a ACTIF (theme.css)
+   et la loupe sauterait d'un bloc au lieu de glisser — le mouvement EST l'information. */

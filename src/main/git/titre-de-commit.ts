@@ -1,7 +1,7 @@
 /**
  * TITRE D'UN COMMIT AUTOMATIQUE — `type(zone): phrase (conv-NNN)`, la forme qu'exige AGENTS.md.
  *
- * Mesuré le 2026-10-22 (conv-1069) : 125 des 400 derniers commits portaient
+ * Mesuré le 2026-10-22 : 125 des 400 derniers commits portaient
  * `auto(conv-N): <100 premiers caractères de la demande>`, dont `auto(conv-1075): vazy` ou
  * `auto(conv-1062): corriges tout` — un historique où l'on ne retrouve plus ce qui a changé. Les
  * deux producteurs (`chat-turn-publication.ts`, `run-autoclose.ts`) partagent cette seule règle.
@@ -11,8 +11,8 @@
  * demande si c'en est une vraie, puis des fichiers publiés. Sinon, REPLI sur l'ancien format : on
  * n'invente pas un résumé.
  *
- * LANGUE (conv-1581, 2026-11-05) : la réponse suit le réglage Settings · Interface, le message de
- * commit suit la règle du projet (français). Depuis le passage en anglais (conv-1172, 27/10), 18 des
+ * LANGUE (2026-11-05) : la réponse suit le réglage Settings · Interface, le message de
+ * commit suit la règle du projet (français). Depuis le passage en anglais (27/10), 18 des
  * 424 derniers commits recopiaient « Created D:\AutoWinOS\… » depuis le « ✅ Fait ». Une réponse
  * déclarée en anglais n'est donc JAMAIS recopiée : le titre vient de la demande, sinon des fichiers.
  */
@@ -145,7 +145,7 @@ export function titreDeCommitAuto(entree: EntreeTitreDeCommit): string {
   ).replace(/\s+/gu, ' ')
   const commande = COMMANDE_SLASH.exec(demande)?.[1]
   const demandeSansCommande = demande.replace(COMMANDE_SLASH, '')
-  // fix-ok: le titre recopiait le « ✅ Fait » de la réponse, écrite dans la langue de l'interface (anglais depuis conv-1172) — rouge reproduit « Created D:\AutoWinOS\… » (conv-1581)
+  // fix-ok: le titre recopiait le « ✅ Fait » de la réponse, écrite dans la langue de l'interface — rouge reproduit « Created D:\AutoWinOS\… »
   const faite =
     entree.langueDuCompteRendu === 'en' ? undefined : premiereActionFaite(entree.compteRendu)
   const fichiers = entree.fichiers ?? []

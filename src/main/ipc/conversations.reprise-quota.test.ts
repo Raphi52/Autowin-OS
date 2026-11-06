@@ -10,7 +10,7 @@ import { registerConversationsIpc, resumesAvecReprise } from './conversations'
 import type { Conversation, ConversationSummary } from '../store/conversations'
 
 /**
- * LA LISTE PORTE L'ÉTAT DE REPRISE DES SEULS FILS COUPÉS (conv-1423). `os:conversations` se relit à
+ * LA LISTE PORTE L'ÉTAT DE REPRISE DES SEULS FILS COUPÉS. `os:conversations` se relit à
  * chaque tour, et ce calcul coûte une lecture : ce qui ferait échouer ce test, c'est de le payer
  * pour un fil qui n'a rien à reprendre.
  */
@@ -19,7 +19,7 @@ const resume = (id: string, partiel: Partial<ConversationSummary>): Conversation
 const MUR = "You've hit your session limit · resets 2am"
 
 /*
- * Objection du contrôle final (conv-1423) : un fil réactivé passait à « repart seule » sans que rien
+ * Objection du contrôle final : un fil réactivé passait à « repart seule » sans que rien
  * replanifie son réveil. C'est le seul changement de situation qu'une personne déclenche et regarde :
  * il ne peut pas attendre la relecture du quart d'heure.
  *

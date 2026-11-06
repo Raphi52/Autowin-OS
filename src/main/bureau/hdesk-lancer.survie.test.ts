@@ -1,5 +1,5 @@
 /**
- * Kaizen conv-540, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2 (2026-09-15) : ContosoV3 a ouvert sa
+ * Kaizen, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2 (2026-09-15) : ContosoV3 a ouvert sa
  * fenetre dans le bureau cache puis s'est ferme ~4 s plus tard ; hdesk-lancer.ps1 avait deja rendu
  * exit 0. Le lanceur doit signaler la mort de l'app DANS l'appel (exit 4), sans l'inscrire pour la TV.
  */
@@ -55,7 +55,7 @@ describe.skipIf(process.platform !== 'win32')(
 )
 
 /**
- * conv-344 (scout n°3) : une app qui meurt AVANT d'ouvrir sa fenetre (plantage au demarrage, ou app
+ * scout n°3 : une app qui meurt AVANT d'ouvrir sa fenetre (plantage au demarrage, ou app
  * a instance unique qui passe la main a sa copie deja ouverte — sur l'ecran de l'utilisateur) faisait
  * attendre toute l'attente de fenetre (30 s par defaut) pour rendre « aucune fenetre » (exit 3), un
  * message faux. Mesure avant correctif : exit 3 en 9,2 s pour -AttenteSecondes 8.
@@ -106,7 +106,7 @@ describe.skipIf(process.platform !== 'win32')(
         // Attente de fenetre par defaut : 30 s. Le verdict arrive bien avant.
         expect(duree).toBeLessThan(10_000)
         expect(existsSync(join(registre, `${id}.json`))).toBe(false)
-        // Un échec n'entre pas dans l'historique des lancements (conv-344, « Récents »).
+        // Un échec n'entre pas dans l'historique des lancements (« Récents »).
         expect(existsSync(join(registre, 'historique.jsonl'))).toBe(false)
       } finally {
         rmSync(registre, { recursive: true, force: true })
@@ -116,7 +116,7 @@ describe.skipIf(process.platform !== 'win32')(
 )
 
 /**
- * conv-344 (scout n°12) : un navigateur lancé sans `--user-data-dir` partage le profil de la copie
+ * scout n°12 : un navigateur lancé sans `--user-data-dir` partage le profil de la copie
  * déjà ouverte sur l'écran de l'utilisateur (deux Chrome ne peuvent pas tenir le même dossier de
  * profil). Le lanceur ajoute un profil PROPRE AU BUREAU pour chrome et brave. Edge est exclu : une
  * note du 26/09 mesure qu'un Edge à profil neuf se connecte seul au compte Microsoft de la session.

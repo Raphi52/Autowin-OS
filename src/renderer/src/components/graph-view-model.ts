@@ -15,7 +15,7 @@ export type GraphNode = {
   graphScore?: number
   fusedScore?: number
   relations?: Array<{ type: string; target: string }>
-  /** Note du Brain perso dans la vue des deux Brains (conv-1262) : id préfixé `perso:`. */
+  /** Note du Brain perso dans la vue des deux Brains : id préfixé `perso:`. */
   perso?: true
   /** Métadonnées uniquement présentes sur les dossiers synthétiques de l'arbre radial. */
   treeNodeId?: string
@@ -32,7 +32,7 @@ export type GraphNode = {
 
 /**
  * Arrondi par `toFixed` (l'arrondi d'avant, au millième près), séparateur décimal de la langue
- * courante (conv-1170 : la virgule était écrite en dur). Sans séparateur de milliers, comme avant.
+ * courante (La virgule était écrite en dur). Sans séparateur de milliers, comme avant.
  */
 function formatBrainScore(value: number | undefined): string {
   return typeof value === 'number' && Number.isFinite(value)
@@ -59,7 +59,7 @@ export type GraphLink = {
   relation?: string
 }
 /**
- * Vue des deux Brains (conv-1262) : les notes perso et les ponts ont leur propre couleur, pour se
+ * Vue des deux Brains : les notes perso et les ponts ont leur propre couleur, pour se
  * lire d'un coup d'œil au milieu des thèmes d'équipe. Couleurs de dessin 3D (WebGL), pas de CSS :
  * le thème de l'app ne les atteint pas, comme les couleurs de santé de `GraphView`.
  */
@@ -70,7 +70,7 @@ export type GraphData = {
   nodes: GraphNode[]
   links: GraphLink[]
   totalNodes?: number
-  /** Vue des deux Brains (conv-1262) : ponts tracés, ou pourquoi aucun ne l'a été. */
+  /** Vue des deux Brains : ponts tracés, ou pourquoi aucun ne l'a été. */
   ponts?: { nombre: number; raison?: string }
 }
 export type KnowledgeHealthIssue = {
@@ -536,7 +536,7 @@ export function mergeGraphDelta(graph: GraphData, delta: GraphData): GraphData {
     nodes,
     links,
     totalNodes: Math.max(graph.totalNodes ?? nodes.length, delta.totalNodes ?? nodes.length),
-    // Le compte de ponts appartient au graphe de base (conv-1262) : un voisinage fusionné n'en porte pas.
+    // Le compte de ponts appartient au graphe de base : un voisinage fusionné n'en porte pas.
     ...(graph.ponts ? { ponts: graph.ponts } : {})
   }
 }

@@ -111,7 +111,7 @@ describe('instrumenterEntreesSortiesDuMain — cablage sur les vrais modules', (
   })
 
   /*
-   * ANGLE MORT DU 2026-10-10 (heal conv-204) : 982 gels sur 1 234 sortis en `inconnu` en un jour.
+   * ANGLE MORT DU 2026-10-10 : 982 gels sur 1 234 sortis en `inconnu` en un jour.
    * Un profil CPU du main a montre 264 creations de processus `git` par photo du depot, 4,6 s de
    * boucle tenue. `execFile` est asynchrone, mais la CREATION du processus ne l'est pas — et
    * aucun appel instrumente ne la couvrait. Toutes passent par `ChildProcess.prototype.spawn`.
@@ -150,7 +150,7 @@ describe('instrumenterEntreesSortiesDuMain — cablage sur les vrais modules', (
     const defaire = instrumenterEntreesSortiesDuMain(0, () => {})
     try {
       /*
-       * REGRESSION DU 2026-08-31 (conv-9). `fs.realpathSync` porte une sous-fonction `.native`, et
+       * REGRESSION DU 2026-08-31. `fs.realpathSync` porte une sous-fonction `.native`, et
        * un enrobage nu ne la transportait pas : des le demarrage, les dix sites
        * `realpathSync.native(...)` du main tombaient sur « node_fs.realpathSync.native is not a
        * function » (`os:semanticTimeline` mort, telemetrie indisponible). Observer un appel ne doit

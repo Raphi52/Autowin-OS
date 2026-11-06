@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 /**
  * UN CRASH DU CLI N'EST PAS UNE DECISION TERMINALE.
  *
- * Mesure conv-599, tour `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : apres 4 iterations payees
+ * Mesure, tour `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : apres 4 iterations payees
  * (≈1,06 USD, 917 k tokens), l'iteration 4 meurt en `error_during_execution` en 1,9 s pour
  * 0 token et 0 USD. Marque `retryable: false`, le tour entier est jete ; l'utilisateur a du
  * retaper « /kaizen cette erreur et reprend » (saisie ts 1789562253947).

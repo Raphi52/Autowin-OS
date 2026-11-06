@@ -1,5 +1,5 @@
 // Outils du bureau caché, du navigateur et du terminal de l'agent : méthodes de AppCommandBus sorties de
-// commands.ts telles quelles (conv-1580, lot 6).
+// commands.ts telles quelles (lot 6).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import type { Message } from '../providers/types'
@@ -16,7 +16,7 @@ import {
 } from './navigateur-terminal'
 
 /**
- * `bureau_cache_lancer / observer / agir` (conv-344, scout n°4). Le fil est celui de l'APPEL : un
+ * `bureau_cache_lancer / observer / agir` (scout n°4). Le fil est celui de l'APPEL : un
  * `conversationId` glissé dans `a` est ignoré. Observer et agir exigent une fiche de CE fil.
  */
 export async function outilBureauCache(
@@ -110,7 +110,7 @@ export async function outilBureauCache(
   const nombre = (k: string): number | undefined =>
     a[k] === undefined || a[k] === null || a[k] === '' ? undefined : Number(a[k])
   const vrai = (k: string): boolean => booleenEnvoye(a[k], k)
-  // APPUI PAR NOM (conv-1457) : `element` OU x/y. Un nombre vaut texte (les identifiants Win32 sont
+  // APPUI PAR NOM : `element` OU x/y. Un nombre vaut texte (les identifiants Win32 sont
   // des nombres : « Sélectionner » = 103, mesuré) ; un objet, une liste ou un booléen ne sont pas des
   // noms — `s()` en aurait fait « [object Object] ».
   const brutElement = a.element
@@ -177,7 +177,7 @@ export async function outilBureauCache(
 }
 
 /**
- * `navigateur_*` (conv-1286, lot 4/5), sur le modèle de `outilBureauCache` : le fil est celui de
+ * `navigateur_*` (lot 4/5), sur le modèle de `outilBureauCache` : le fil est celui de
  * l'APPEL (un `conversationId` glissé dans `a` est ignoré), le moteur est redemandé à chaque appel,
  * et chaque refus est une phrase que l'agent peut suivre.
  */
@@ -311,7 +311,7 @@ export async function outilNavigateur(
 }
 
 /**
- * `terminal_lire` (conv-1362, lot 3/3). Le fil est celui de l'APPEL (un `conversationId` glissé dans
+ * `terminal_lire` (lot 3/3). Le fil est celui de l'APPEL (un `conversationId` glissé dans
  * `a` est ignoré), SANS le repli sur le fil affiché que prennent les outils `navigateur_*` : le fil
  * à l'écran n'est pas forcément celui de l'agent, et ce terminal-là ne serait pas le sien.
  */
@@ -402,7 +402,7 @@ export function actionNavigateur(a: Record<string, unknown>): ActionAgentNavigat
       const crans = nombreDe('crans') ?? 3
       if (!Number.isInteger(crans) || crans < -20 || crans > 20)
         return 'Refusé : `crans` est un entier de -20 à 20 (positif = vers le bas).'
-      // Le moteur attend des pixels : un cran vaut 100 px, convention de cet outil (conv-1286).
+      // Le moteur attend des pixels : un cran vaut 100 px, convention de cet outil.
       return { type: 'defiler', dy: crans * 100, ...(cible ? { cible } : {}) }
     }
     default:

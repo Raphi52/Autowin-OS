@@ -24,7 +24,7 @@ import { GraphView } from './GraphView'
 import { NodePanel, ThemeNodesPanel } from './GraphView.panels'
 
 /**
- * LE BRAIN PERSO DANS LA VUE KNOWLEDGE (conv-1233, 2026-10-28, demande utilisateur : « affiche le
+ * LE BRAIN PERSO DANS LA VUE KNOWLEDGE (2026-10-28, demande utilisateur : « affiche le
  * Brain perso dans la vue Knowledge, à côté du Brain d'équipe, avec ses notes marquées perso »).
  */
 ;(
@@ -221,7 +221,7 @@ describe('vue Knowledge — Brain perso à côté du Brain d’équipe', () => {
 })
 
 /**
- * LES DEUX BRAINS ET LEURS PONTS (conv-1262, 2026-10-29, demande utilisateur : « ajoute les ponts
+ * LES DEUX BRAINS ET LEURS PONTS (2026-10-29, demande utilisateur : « ajoute les ponts
  * et un filtre pour voir que les nodes de l'un ou l'autre dans la vue knowledge »).
  */
 describe('vue Knowledge — filtre Équipe · Perso · Les deux', () => {

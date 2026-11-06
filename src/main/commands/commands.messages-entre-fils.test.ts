@@ -9,10 +9,10 @@ import { cheminJournalMessagesFils, messagesAAfficher } from '../conversations/m
 import { lignesDuJournal } from '../../shared/messages-entre-fils'
 
 /*
- * conv-1139 : les deux outils du chat qui remplacent `chat_send` comme canal ENTRE agents. Ce qui
+ * Les deux outils du chat qui remplacent `chat_send` comme canal ENTRE agents. Ce qui
  * est verrouillé ici : l'expéditeur vient du tour (fil + tour de l'appel), et l'envoi ne lance
  * JAMAIS de tour chez le destinataire — sauf un ORDRE vers un fil inactif, qui le réveille
- * (conv-1139, 2026-10-25).
+ * (2026-10-25).
  */
 let base: string
 const maintenant = Date.now()
@@ -161,7 +161,7 @@ describe('ecrire_a_un_fil / lire_mes_messages par le bus', () => {
 })
 
 /*
- * RÉVEIL PAR UN ORDRE (conv-1139, 2026-10-25, demande de l'utilisateur) : un message de nature
+ * RÉVEIL PAR UN ORDRE (2026-10-25, demande de l'utilisateur) : un message de nature
  * « ordre » vers un fil INACTIF y lance un tour, signé « Ordre de conv-X ». L'ordre est noté remis
  * par ce réveil, pour ne pas revenir une seconde fois dans le bloc en tête du même tour ; si le
  * tour ne démarre pas, il redevient en attente.

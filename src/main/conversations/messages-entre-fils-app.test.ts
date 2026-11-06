@@ -11,7 +11,7 @@ import {
 } from './messages-entre-fils-app'
 import { lignesDuJournal } from '../../shared/messages-entre-fils'
 
-// conv-1139 : cas limites du cadrage « forum d'agents » (RUN.md de forum-agents-mvm3ohda).
+// Cas limites du cadrage « forum d'agents » (RUN.md de forum-agents-mvm3ohda).
 let dir: string
 let journal: string
 const depot = 'D:/depot'
@@ -174,7 +174,7 @@ describe('livraison', () => {
     expect(lu.messages).toContain('m0')
   })
 
-  // Un agent peut donner un ORDRE de travail à un autre fil (conv-1139, 2026-10-25) : nature acceptée,
+  // Un agent peut donner un ORDRE de travail à un autre fil (2026-10-25) : nature acceptée,
   // et livrée sous son nom pour que le destinataire la distingue d'une information.
   it('nature « ordre » : acceptée, livrée et affichée sous son nom', () => {
     envoyer({ destinataire: 'conv-B', texte: 'relance les tests de x.ts', nature: 'ordre' })
@@ -217,7 +217,7 @@ describe('livraison', () => {
     expect(blocMessagesPourTour('conv-B', { journal })).toContain('après')
   })
 
-  // conv-1139 (réparation 1) : une ligne « message » lisible mais mal formée (sans expéditeur,
+  // réparation 1 : une ligne « message » lisible mais mal formée (sans expéditeur,
   // texte non textuel) faisait planter l'affichage du fil (`m.de.fil`) et passait pour un vrai
   // message à `repondA`. Elle est sautée comme une ligne coupée ; le message bien formé reste.
   it('une ligne « message » mal formée est sautée par l’affichage et par repondA, le reste vaut', () => {

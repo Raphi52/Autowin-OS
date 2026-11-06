@@ -80,7 +80,7 @@ describe('scrollChatToBottom — un recul sans geste de lecture ne coupe pas la 
   })
 
   /**
-   * DEFAUT VECU le 2026-09-13 (conv-518) : remonter a la molette PENDANT qu'une reponse s'ecrit
+   * DEFAUT VECU le 2026-09-13 : remonter a la molette PENDANT qu'une reponse s'ecrit
    * ramenait le fil en bas. Le fil grandit a chaque frame : le recul du lecteur tombait dans la
    * branche « hauteur qui bouge » et la descente re-visait le bas par-dessus son geste.
    */

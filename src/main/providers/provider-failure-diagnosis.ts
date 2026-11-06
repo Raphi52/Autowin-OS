@@ -15,7 +15,7 @@
 export type ProviderFailureKind =
   /**
    * Le modèle a émis un appel d'outil ILLISIBLE, et le CLI a déjà retenté une fois (« retry also
-   * failed »). Mesuré conv-737, tour `f0e1c2b0-a1c9-4140-8496-dc40709fcab9` : 0,10 USD payés,
+   * failed »). Mesuré, tour `f0e1c2b0-a1c9-4140-8496-dc40709fcab9` : 0,10 USD payés,
    * réponse vide, et aucun conseil affiché (classé `other`). Ni le provider ni la connexion ne sont en
    * cause : c'est la sortie du modèle, à cet effort-là, qui a cassé.
    */
@@ -40,7 +40,7 @@ export type ProviderFailureKind =
   /** Le CLI est mort anormalement (tué, crash, arrêt de session Windows) → relancer a du sens. */
   | 'crashed'
   /**
-   * Le filtre de securite du MODELE a refuse le message (conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 :
+   * Le filtre de securite du MODELE a refuse le message (tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 :
    * « Opus 5's safeguards flagged this message … [reasoning_extraction] »). Terminal pour CE prompt :
    * relancer a l'identique echoue pareil — classe `other`, aucun conseil n'etait donne.
    */
@@ -215,7 +215,7 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
     )
   }
   if (kind === 'malformed-tool-call') {
-    // Plus de « monte l'effort » : conv-120, tour 3e00e0a5-5602-46e9-adb3-0d9c7a162b21, l'effort
+    // Plus de « monte l'effort » : tour 3e00e0a5-5602-46e9-adb3-0d9c7a162b21, l'effort
     // était DÉJÀ xhigh et la cause était une commande `<cmd>` refermée par `</parameter></invoke>`
     // (syntaxe des outils natifs) — un défaut de format, pas de profondeur de raisonnement.
     return (
@@ -225,8 +225,8 @@ export function repairHint(provider: string, kind: ProviderFailureKind): string 
   }
   if (kind === 'budget') {
     // Plus de « relève les plafonds (Settings › Budget) » : la section a été retirée le 2026-10-23
-    // (conv-1119) et les plafonds du devis ne se règlent plus nulle part (orchestration-budget.ts,
-    // execution-quote.ts PRESETS). Le seul geste réel est de demander moins par run (conv-1602).
+    // et les plafonds du devis ne se règlent plus nulle part (orchestration-budget.ts,
+    // execution-quote.ts PRESETS). Le seul geste réel est de demander moins par run.
     return (
       'Le run a atteint un plafond de son devis (appels, agents, durée ou tokens), ' +
       'fixé au départ selon la taille de la tâche ; aucun réglage ne le relève. ' +
@@ -248,8 +248,8 @@ export function diagnoseProviderFailure(failure: ProviderFailure): DiagnosedFail
  * surcharge, session expirée, quota) le lisent par inclusion, jamais par égalité.
  *
  * Pourquoi ce helper existe : ce module n'était appelé que par l'orchestrateur et le watchdog, le
- * chat direct rendait l'erreur brute et un message assistant vide. Mesuré conv-737 (tour
- * f0e1c2b0-a1c9-4140-8496-dc40709fcab9, 2026-09-21), récidive conv-5 (tour
+ * chat direct rendait l'erreur brute et un message assistant vide. Mesuré (tour
+ * f0e1c2b0-a1c9-4140-8496-dc40709fcab9, 2026-09-21), récidive (tour
  * d98b3e44-bc1c-4d37-8495-d64f4bea225a, 2026-09-23) : « The model's tool call could not be parsed
  * (retry also failed) », 0,0956 USD payés, et l'écran n'offrait aucun geste alors que `repairHint`
  * savait déjà conseiller de relancer / monter l'effort / changer de modèle.
@@ -313,7 +313,7 @@ export function explainRoleFailure(
   const target = `${failure.provider}${failure.model ? ` (${failure.model})` : ''}`
   const divergent = boundTo !== undefined && boundTo !== failure.provider
   // Un budget épuisé n'est pas une panne du provider sur lequel le rôle est bindé : l'appel a été
-  // refusé À L'ADMISSION, le provider ne l'a jamais vu (mesuré : durationMs 0.698 sur conv-1102).
+  // refusé À L'ADMISSION, le provider ne l'a jamais vu (mesuré : durationMs 0.698).
   // Nommer le binding désignait un innocent et envoyait chercher la panne du mauvais côté.
   // Une ANNULATION n'est pas une panne : ni le provider ni son binding n'ont fauté, l'appel a été
   // coupé de l'extérieur. Les nommer ici produisait un message MENTEUR — « le rôle subagent est
@@ -339,7 +339,7 @@ export function explainRoleFailure(
 }
 
 /**
- * Modèle de REPLI quand le filtre de sécurité d'un modèle Claude refuse un message (conv-540, tour
+ * Modèle de REPLI quand le filtre de sécurité d'un modèle Claude refuse un message (tour
  * 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4). Opus → Sonnet de la même génération : présent dans le CLI
  * installé (mesuré 2026-07-30, voir claude-cli-catalog.ts). Rien d'autre n'est deviné.
  */

@@ -5,12 +5,12 @@ import { ATLANTIC, caisseAtlantic } from './home-decor-avenue-atlantic'
 import { carrosserie, FILES, FORMES, GAREE, type Forme } from './home-decor-avenue-voitures'
 
 /*
- * LES VOITURES DE L'AVENUE (conv-320) : « refais les voitures du fond d'écran de l'accueil pour
+ * LES VOITURES DE L'AVENUE : « refais les voitures du fond d'écran de l'accueil pour
  * qu'elles soient toutes différentes et mets en une garée avec un style futuriste top qualité ».
  *
  * Ce que ces tests tiennent, sans carte graphique :
  *   1. aucune carrosserie n'est la copie d'une autre (l'ancien défaut : deux caisses du même profil) ;
- *      depuis conv-330, la garée est l'« Atlantic volante » (home-decor-avenue-atlantic.ts) ;
+ *      La garée est l'« Atlantic volante » (home-decor-avenue-atlantic.ts) ;
  *   2. chaque caisse est une surface fermée tournée vers l'extérieur (sinon elle s'affiche à l'envers) ;
  *   3. la voiture garée n'est sur le chemin d'aucune file, et ses roues restent avant la bordure ;
  *   4. aucune lumière ajoutée (chaque programme de la rue serait recompilé), et le branchement dans

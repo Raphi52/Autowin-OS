@@ -12,11 +12,11 @@
  *    CONSÉQUENCE non vérifiée) ; 84 et 82 aux deux candidats FAUX contre 66 à un vrai : la
  *    confiance était la plus haute là où la vérification était la plus faible.
  *  - Impact prime, web daté, lecture de la demande, doublon contre l'existant : mesure du 30/09
- *    (conv-890) — cette consigne est le SEUL texte qu'un scout in-app reçoit (le kit n'est jamais
+ *    Cette consigne est le SEUL texte qu'un scout in-app reçoit (le kit n'est jamais
  *    lu), et elle notait en « valeur × faisabilité » sans aucune de ces règles : 0 URL citée sur
  *    31 runs avec un scout. Le plafond de 50 est aussi appliqué en code (`scout-plafond.ts`).
  *    fix-ok: cause mesurée ci-dessus — `corpsSkill` vaut '' pour une phase du pipeline (orchestrator.ts).
- *  - REFUTE (item 5) : conv-602 a noté 88 une piste dont l'ancrage disait lui-même que la classe
+ *  - REFUTE (item 5) : un fil a noté 88 une piste dont l'ancrage disait lui-même que la classe
  *    citée avait disparu. Pratique retenue : Chain-of-Verification (ACL Findings 2024), le même
  *    modèle réfute sa liste par une lecture séparée — pas de second modèle, pas de coût en plus.
  */
@@ -26,7 +26,7 @@ import { CONTRAT_OBJECTIONS } from '../juge/objections-juge'
 /**
  * LA FUSION D'UN PANEL SCOUT RESPECTE LE CONTRAT DU SCOUT.
  *
- * fix-ok: conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 — la fusion générique dit « NE
+ * fix-ok: tour b6150a1a-6518-4d4b-99b4-3218b5efb501 — la fusion générique dit « NE
  * hiérarchise pas, NE tranche pas » et ne reçoit pas la consigne du scout (constitution, style et
  * contexte du dépôt seulement, orchestrator.ts). Elle a rendu une colonne « Score (P1 · P2) » aux
  * notes doubles (« 68 · 72 »), une phrase « La proposition 2 classe autrement… » et « Les deux
@@ -85,7 +85,7 @@ Leçon facultative : seulement si une leçon NOUVELLE, réutilisable et prouvée
 
   // fix-ok: réflexe 7 — rejeu de run-a8a70cd0ee56-1 : 64 commandes de test sur 68 passaient par un tube et chaque
   // nettoyage finissait par un rm, donc 0 test réutilisable par le juge (tests-deja-joues.ts).
-  // GRILLE QUALITÉ (réflexe 5) — demande utilisateur du 2026-10-21 (conv-1035) : clean sert aussi de
+  // GRILLE QUALITÉ (réflexe 5) — demande utilisateur du 2026-10-21 : clean sert aussi de
   // grille pour que le code produit vise le haut de la qualité. Critères de revue de Google
   // (https://google.github.io/eng-practices/review/reviewer/looking-for.html, lu le 2026-10-21) + santé
   // du code propre à ce dépôt (aucun pansement, typage, sécurité, ressources). Version longue avec la
@@ -118,11 +118,11 @@ Puis, APRÈS cette première ligne (sans jamais la modifier), complète pour l'u
 SCORE: <entier 0-100 — conformité du livrable au besoin, preuves à l'appui>
 ${CONTRAT_OBJECTIONS}
 SCOUT — si le livrable final est un tableau de pistes, tu es son VÉRIFICATEUR séparé : pour CHAQUE piste notée > 50, cherche ce qui la RÉFUTE en relisant toi-même son ancrage \`fichier:ligne\` (la ligne dit-elle ce que le Why affirme ?). Piste réfutée → « MAJEUR: piste <n> réfutée : <ce que tu as lu> » ; piste tenue → « OK: piste <n> tenue ».`,
-  // fix-ok: piste 3 de conv-890 — le juge ne jugeait que le texte global (conv-602 : piste notée 88
+  // fix-ok: piste 3 — le juge ne jugeait que le texte global (piste notée 88
   // sur un commentaire, vue au run suivant) ; c'est un appel distinct du scout, déjà payé.
 
   /*
-   * CE QUE KAIZEN LIT n'est PAS ce que kaizen peut EDITER — mesure du 2026-09-03 (conv-9).
+   * CE QUE KAIZEN LIT n'est PAS ce que kaizen peut EDITER — mesure du 2026-09-03.
    *
    * La premiere ligne disait « Tu n'utilises aucun transcript, hook, SESSION_ID, CLAUDE.md,
    * CONSTITUTION.md ou fichier de skill Claude ». Ecrite pour empecher kaizen d'INVENTER une
@@ -168,7 +168,7 @@ Livrable :
 /**
  * GARDE COMMUNE À TOUTES LES PHASES — la tâche donnée ne se remplace pas.
  *
- * Mesure (conv-126) : un run lancé sur « distinguer les messages humains des
+ * Mesure : un run lancé sur « distinguer les messages humains des
  * messages injectés par l'app » a livré, impeccablement, une option `--depuis <date>` — une
  * AUTRE tâche, substituée en cours de route et jamais signalée comme telle. Aucune consigne de
  * phase, ni `_engine/ENGINE.md`, ne portait alors d'obligation de garder l'énoncé reçu : les
@@ -181,7 +181,7 @@ Livrable :
 export const GARDE_TACHE = `TÂCHE DONNÉE = TÂCHE TRAITÉE — réflexe (5) de la constitution : PRÉCISER oui, SUBSTITUER jamais ; DÉJÀ FAITE, infaisable ou prémisse fausse → arrête-toi et dis-le, preuve du constat à l'appui.`
 
 /**
- * LE BLOC FIXE DE FIN D'ETAPE (conv-989, 2026-10-16) — sa forme est celle que lit `extraireBilan`
+ * LE BLOC FIXE DE FIN D'ETAPE (2026-10-16) — sa forme est celle que lit `extraireBilan`
  * (src/shared/bilan-d-etape.ts) ; `phase-briefs.bilan.test.ts` lie les deux.
  *
  * Une sortie d'etape est de la prose de longueur libre : ceux qui la COUPENT (bulle a 4 000
@@ -190,7 +190,7 @@ export const GARDE_TACHE = `TÂCHE DONNÉE = TÂCHE TRAITÉE — réflexe (5) de
  * que recopie dans cinq consignes : leurs formats propres (tableau du scout, sections du cadrage)
  * restent intacts. Pas pour le juge (format strict), ni kaizen et remake (livrable propre).
  *
- * LA LIGNE `Question` (conv-1008, 2026-10-16) : c'est la seule voie par laquelle un run demande
+ * LA LIGNE `Question` (2026-10-16) : c'est la seule voie par laquelle un run demande
  * quelque chose a l'utilisateur. Celle de la DERNIERE etape devient une carte « Message du run »
  * avec ses reponses cliquables (`messageDuRun`, src/shared/message-du-run.ts). Par defaut
  * « aucune » : le mandat d'autonomie ne change pas, seule une decision qui n'appartient pas au run
@@ -208,7 +208,7 @@ QUESTION — c'est la SEULE question du run que l'utilisateur verra, avec ses r�
 const PHASES_AVEC_BILAN: ReadonlySet<string> = new Set(['scout', 'frame', 'terrain', 'build', 'clean'])
 
 /**
- * LA CONSIGNE DU RELECTEUR À FROID d'un cadrage (conv-1420). Ce n'est pas une étape du pipeline, mais
+ * LA CONSIGNE DU RELECTEUR À FROID d'un cadrage. Ce n'est pas une étape du pipeline, mais
  * elle vit ici comme `GARDE_TACHE` et `CONSIGNE_BILAN` : toutes les consignes se relisent au même
  * endroit. Ses règles et sa mesure sont dans `relecture-froide.ts`.
  */

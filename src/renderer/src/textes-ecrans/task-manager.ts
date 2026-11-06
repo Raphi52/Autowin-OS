@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — ÉCRAN TASK MANAGER (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — ÉCRAN TASK MANAGER (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : TaskManagerView, les règles de surveillance (WatchdogRuleFields, WatchdogAgentsSection) et le
  * brouillon d’horaire.

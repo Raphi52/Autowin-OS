@@ -18,7 +18,7 @@ import {
 import { TEXTE_MAX_MESSAGE_FIL } from '../conversations/messages-entre-fils-app'
 
 /*
- * Étape 2 de l'option A du cadrage forum-agents-partie2-juge-build (conv-1139, 2026-10-25) : la
+ * Étape 2 de l'option A du cadrage forum-agents-partie2-juge-build (2026-10-25) : la
  * lecture de la section QUESTIONS AU BUILD et la règle « échange ou réparation ».
  */
 const refus = (corps: string): string =>

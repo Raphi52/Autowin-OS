@@ -5,7 +5,7 @@ import type { HookContext } from './hook-bus'
 /**
  * ATTRIBUTION — un run ne se fait pas bloquer par la saleté de quelqu'un d'autre.
  *
- * DEFAUT MESURE le 2026-09-12 (conv-512) : `orchestrator.hooks.test.ts` > « le VRAI runner exécute
+ * DEFAUT MESURE le 2026-09-12 : `orchestrator.hooks.test.ts` > « le VRAI runner exécute
  * la commande » echouait — `exit 0` rendait `gateBlocked: true`. Le runner n'y etait pour rien : le
  * test travaille dans le depot REEL, et le garde-fou de preuve visuelle reconstruit sa liste de
  * fichiers depuis `git status` du depot ENTIER. L'arbre portait 217 fichiers modifies, dont 55 de

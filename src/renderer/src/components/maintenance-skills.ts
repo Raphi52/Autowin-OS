@@ -1,7 +1,7 @@
 /**
  * Les skills d'ENTRETIEN d'Autowin OS, lançables d'un clic depuis la vue Maintenance.
  *
- * Demande du 2026-10-22 (conv-1101) : « la view tests est nulle, appelle-la maintenance et mets des
+ * Demande du 2026-10-22 : « la view tests est nulle, appelle-la maintenance et mets des
  * boutons pour faire toutes nos skills de maintenance d'autowin ». La procédure de chaque entretien
  * vit dans `skills/<nom>/SKILL.md` : un bouton ne fait que l'INVOQUER, il ne la réécrit pas — deux
  * procédures concurrentes, c'est la moins tenue qui gagne.
@@ -23,8 +23,8 @@ import {
 export type GroupeMaintenance = 'routine' | 'analyse' | 'depannage'
 
 /**
- * Titres, rôles et libellés de groupe sont lus dans la langue COURANTE à chaque lecture (getters,
- * conv-1170). Le `prompt` reste en français : c'est la consigne envoyée à l'agent, et sa tête
+ * Titres, rôles et libellés de groupe sont lus dans la langue COURANTE à chaque lecture (getters).
+ * Le `prompt` reste en français : c'est la consigne envoyée à l'agent, et sa tête
  * `/<nom>` est relue par `invokedSkillId` ; l'agent reçoit la langue de l'utilisateur à part.
  */
 const enLangue = (cle: CleBoardEtMaintenance): string =>
@@ -143,7 +143,7 @@ export const SKILLS_MAINTENANCE: readonly SkillMaintenance[] = [
     prompt:
       '/kaizen sur les conversations Autowin des dernières 24 h : trouve le défaut de comportement le plus coûteux et corrige sa cause.'
   },
-  // Ajout du 2026-10-23 (conv-1112) : « rajoute /heal dans la vue maintenance ».
+  // Ajout du 2026-10-23 : « rajoute /heal dans la vue maintenance ».
   {
     nom: 'heal',
     get titre() {

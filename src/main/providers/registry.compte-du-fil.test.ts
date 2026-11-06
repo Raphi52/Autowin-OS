@@ -11,14 +11,14 @@ import {
 } from './types'
 
 /**
- * LE COMPTE CHOISI POUR UN FIL N'EST JAMAIS REMPLACÉ EN SILENCE (conv-1416, 2026-11-01).
+ * LE COMPTE CHOISI POUR UN FIL N'EST JAMAIS REMPLACÉ EN SILENCE (2026-11-01).
  *
- * Cas réel : conv-1403 réglé sur le compte pro, vide jusqu'au 3 novembre. Le tour a pourtant
+ * Cas réel : un fil réglé sur le compte pro, vide jusqu'au 3 novembre. Le tour a pourtant
  * tourné sur le compte gmail (`run-stdout/9049aaed-…`, session rangée dans `claude-accounts/compte-3`),
  * sans un mot dans le fil, et la barre de quota montrait gmail à côté de la puce du compte pro.
  * Choix de l'utilisateur : « si le compte choisi est vide, le tour s'arrête avec un message ».
  *
- * Le changement automatique reste la règle des fils SANS compte choisi (conv-1069, conv-1328).
+ * Le changement automatique reste la règle des fils SANS compte choisi.
  */
 const REFUS = "You've hit your weekly limit · resets Nov 3, 1am (Europe/Paris)"
 const refusDeQuota = (): ProviderCallError =>

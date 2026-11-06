@@ -6,14 +6,14 @@ import type { PlanDeLots } from '../../../shared/plan-de-lots'
 import { BandeauSuperConv } from './SuperConvMosaique'
 
 /*
- * conv-1387 (2026-10-31) : « je veux pas d'onglets dans ce bloc, je veux que cliquer sur une ligne
+ * 2026-10-31 : « je veux pas d'onglets dans ce bloc, je veux que cliquer sur une ligne
  * m'emmène vers la conv en question, et qu'après dans la conv en question il y ait un bouton
  * retour ». Les onglets portaient trois choses que personne d'autre ne disait ; elles passent sur
  * la ligne du lot, seul endroit où le chef voit encore chaque lot :
- *  - conv-1330 : un lot qui travaille porte le spinner de l'app, pas un rond couleur d'accent, qui
+ *  - : un lot qui travaille porte le spinner de l'app, pas un rond couleur d'accent, qui
  *    voulait dire « fini » dans la liste des fils du thème Nébuleuse ;
- *  - conv-1381 : un lot qui attend ta réponse porte l'animation de question de la liste ;
- *  - conv-1286 : un lot fini depuis ton dernier passage reste signalé tant que tu ne l'as pas ouvert.
+ *  - : un lot qui attend ta réponse porte l'animation de question de la liste ;
+ *  - : un lot fini depuis ton dernier passage reste signalé tant que tu ne l'as pas ouvert.
  *
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION EST FAUSSE : retirer les onglets sans
  * reporter ces repères, ou laisser un lot sans bouton Retour.
@@ -119,7 +119,7 @@ describe('la ligne d’un lot — un lot qui pose une question (conv-1381)', () 
 })
 
 /*
- * conv-1387 (2026-10-31) : dans une liste étroite, les heures, le coût et ce que dit le fil ne se
+ * 2026-10-31 : dans une liste étroite, les heures, le coût et ce que dit le fil ne se
  * dessinent plus, pour tenir une ligne par lot. L'infobulle de la ligne est ce qui les redonne.
  *
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION EST FAUSSE : une information retirée de
@@ -187,10 +187,10 @@ describe('naviguer dans le plan (conv-1387)', () => {
 })
 
 /*
- * conv-1387 (2026-10-31) : « faut un lot par ligne ». Les couloirs (conv-1376) posaient sur une
+ * 2026-10-31 : « faut un lot par ligne ». Les couloirs posaient sur une
  * même ligne les lots qui s'enchaînent : les lots 1, 2 et 3 de PLAN, partis l'un après l'autre,
- * tenaient UNE ligne. Chaque ligne est maintenant un lot, et ce clic l'ouvre (conv-1387, Retour).
- * Depuis conv-1396, plus d'axe : le lot pas encore lancé a aussi sa ligne, et l'enchaînement que
+ * tenaient UNE ligne. Chaque ligne est maintenant un lot, et ce clic l'ouvre (Retour).
+ * Plus d'axe : le lot pas encore lancé a aussi sa ligne, et l'enchaînement que
  * l'axe montrait par la position s'écrit (« à la fin du 1 », « après 3 »).
  *
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST SI LA CORRECTION EST FAUSSE : deux lots sur la même ligne,
@@ -245,7 +245,7 @@ describe('le bloc du chef — un lot par ligne', () => {
 })
 
 /*
- * conv-1396 (2026-10-31) : « dans la vue d'un lot de super conv, remplace aussi la petite barre de
+ * 2026-10-31 : « dans la vue d'un lot de super conv, remplace aussi la petite barre de
  * temps par la même ligne que dans la liste du chef : état, après quel lot il part, heures, durée et
  * coût ». La vue d'un lot ne garde que « ← Retour » et la ligne du lot, la même que chez le chef.
  *

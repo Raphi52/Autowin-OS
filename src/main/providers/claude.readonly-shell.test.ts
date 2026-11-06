@@ -8,7 +8,7 @@ import { ClaudeCliAdapter } from './claude'
 /**
  * UN AGENT QUI OBSERVE DOIT POUVOIR EXECUTER — sinon il ne peut RIEN prouver.
  *
- * Defaut mesure sur conv-155, tour `20f856a2-8dd5-4e78-b98b-f7c7319afd12` : la phase `judge` de
+ * Defaut mesure, tour `20f856a2-8dd5-4e78-b98b-f7c7319afd12` : la phase `judge` de
  * `/judge la skill /arena` a rendu « Bash is disabled for this session, in subagents as well as
  * here » et a du fermer ses objections « par lecture ». Consequence directe dans le meme tour : le
  * juge ecrit « aucun test n'a ete lance » et baisse sa note. La cause n'est pas le CLI : c'est la

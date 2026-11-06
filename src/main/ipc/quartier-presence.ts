@@ -1,5 +1,5 @@
 /**
- * LE CANAL DE LA PRÉSENCE DU POSTE (plan « Village commun », conv-1429, lot 1).
+ * LE CANAL DE LA PRÉSENCE DU POSTE (plan « Village commun », lot 1).
  *
  * La vue tient le registre des tanukis (`agents-quartier.ts`) ; elle envoie ici son instantané, au plus
  * toutes les 2 s et seulement quand il change. Le processus principal le relit champ par champ, le
@@ -7,11 +7,11 @@
  *  - `os:quartier-presence:agents` : l'instantané (rien en retour, une écriture ne se fait pas attendre) ;
  *  - `os:quartier-presence:partager` : l'interrupteur du poste (D6), rangé dans le réglage du Board ;
  *    rend l'état du dossier du Board, que les réglages affichent déjà ;
- *  - `os:quartier-presence:animal` (conv-1537) : l'animal des agents du poste, choisi dans les
+ *  - `os:quartier-presence:animal` : l'animal des agents du poste, choisi dans les
  *    réglages de l'Accueil, rangé dans le réglage du Board et écrit dans `presence.json` ;
- *  - `os:quartier-presence:tenue` (conv-1633) : la couleur de leur tenue, choisie sous l'animal, rangée
+ *  - `os:quartier-presence:tenue` : la couleur de leur tenue, choisie sous l'animal, rangée
  *    et écrite de la même façon ;
- *  - `os:quartier-presence:masques` (conv-1599) : « afficher mes agents à », les postes à qui ce poste
+ *  - `os:quartier-presence:masques` : « afficher mes agents à », les postes à qui ce poste
  *    masque ses agents, choisis dans les réglages de l'Accueil, rangés dans le réglage du Board ;
  *  - `os:quartier-presence:etat` : où et quand le fichier a été écrit, et le dernier échec ;
  *  - `os:quartier-presence:collegues` (lot 2) : la présence des AUTRES postes, relue sur le partage

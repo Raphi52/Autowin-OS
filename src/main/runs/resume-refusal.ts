@@ -25,7 +25,7 @@ export type RefusDeReprise =
    * la reprise a ete tentee. Rien n'est casse, aucun fichier n'est touche, la meme demande repart
    * plus tard.
    *
-   * Mesure du 2026-09-07 (conv-336) : au demarrage, 11 conversations vieilles de plusieurs jours
+   * Mesure du 2026-09-07 : au demarrage, 11 conversations vieilles de plusieurs jours
    * ont recu ce refus. Chaque refus etant ecrit dans la conversation, leur date de derniere touche
    * a bouge -- elles sont remontees en tete de liste et sont repassees en pastille « termine, non
    * lu ». L'utilisateur a vu sa liste entiere repeinte par un evenement qui n'avait rien produit.
@@ -46,7 +46,7 @@ export function refusDeRepriseEstTransitoire(refus: RefusDeReprise | undefined):
  * touche de la conversation doit bouger. Un refus de reprise n'execute rien et ne touche aucun
  * fichier, quelle que soit sa cause : il ne doit donc JAMAIS repeindre la liste.
  *
- * Mesure du 2026-09-07 (conv-336), journal de demarrage de 10:20 : 13 refus de reprise ecrits en
+ * Mesure du 2026-09-07, journal de demarrage de 10:20 : 13 refus de reprise ecrits en
  * 12 secondes dans 11 conversations vieilles de plusieurs jours. UN SEUL etait
  * `appel-provider-actif` ; les 12 autres etaient `copie-durable-absente`, classes definitifs donc
  * encore comptes comme du travail. Ne traiter que le cas transitoire ne couvrait qu'un
@@ -106,8 +106,8 @@ export function classifierRefusDeReprise(message: string): RefusDeReprise | unde
   }
   // Même verdict, TROISIÈME phrase : `worktree-manager.ts:459` (`copieSansRacinePropre`) refuse un
   // dossier qui a perdu son `.git` — git remonte sur le dépôt principal. Le dossier existe encore,
-  // mais ce n'est plus une copie : aucun redémarrage ne la refera. Mesuré le 2026-11-05 (conv-1579)
-  // sur conv-1461 : non classé, ce refus a rejoué la reprise à chacun des 33 démarrages, 33 runs
+  // mais ce n'est plus une copie : aucun redémarrage ne la refera. Mesuré le 2026-11-05
+  // Non classé, ce refus a rejoué la reprise à chacun des 33 démarrages, 33 runs
   // rouges identiques. La variante « Impossible de prouver la racine » reste NON classée : elle
   // naît d'un git qui a échoué, possiblement un instant.
   if (/La copie .+ n[’']est pas une racine de travail : git remonte sur /.test(message)) {

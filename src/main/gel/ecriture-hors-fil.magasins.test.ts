@@ -18,7 +18,7 @@ import { TaskStore } from '../task-manager/task-store'
 import { TaskScheduler } from '../task-manager/task-scheduler'
 
 /**
- * CHAQUE MAGASIN DU RELEVÉ DES GELS, SORTI DU FIL PRINCIPAL (conv-1368, 2026-10-31).
+ * CHAQUE MAGASIN DU RELEVÉ DES GELS, SORTI DU FIL PRINCIPAL (2026-10-31).
  *
  * `gels.jsonl` sur 7 jours, `renameSync` : 23,4 s sur `scheduled-tasks.json`, 23,7 s sur
  * `json-index-store.ts:58` (`chat-sessions.json`, `murs-rencontres.json`), 10,1 s sur
@@ -41,7 +41,7 @@ vi.mock('node:fs', async (importOriginal) => {
 const bloquants = (): Array<ReturnType<typeof vi.fn>> =>
   [fs.renameSync, fs.writeFileSync] as unknown as Array<ReturnType<typeof vi.fn>>
 /*
- * Les espions ne suffisent pas (mesuré le 2026-10-31, conv-1368) : `tests/reinit-couts-session.ts`
+ * Les espions ne suffisent pas (mesuré le 2026-10-31) : `tests/reinit-couts-session.ts`
  * (setupFiles) charge `claude-session-cost`, donc `chat-session-store` et `json-index-store`, AVANT le
  * `vi.mock` de ce fichier. Ces modules gardent le vrai `node:fs` : sur le code d'avant, un `renameSync`
  * ici passait inaperçu et leurs tests restaient verts. D'où la seconde preuve, qui ne dépend d'aucun

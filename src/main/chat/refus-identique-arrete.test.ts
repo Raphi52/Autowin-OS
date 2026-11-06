@@ -10,7 +10,7 @@ import {
 /**
  * UN REFUS QUE BUILD NE PEUT PAS LEVER NE SE REJOUE PAS.
  *
- * Mesuré dans `conv-1242` le 2026-08-15, en rejouant le journal d'évènements du tour : trois
+ * Mesuré le 2026-08-15, en rejouant le journal d'évènements du tour : trois
  * passages `build` (73 s, 60 s, puis un troisième), chacun suivi du MÊME refus mot pour mot —
  * « Statut "red" : la clôture a été refusée en amont ». Plus de deux minutes de calcul brûlées pour
  * rien. Le run était rouge EN AMONT ; aucune réparation du livrable ne pouvait lever ce verrou.
@@ -109,7 +109,7 @@ describe('boucle de réparation : arrêt sur un refus hors de portée de build',
 
     // Le CABLAGE se prouve en EXECUTANT la decision que la boucle appelle (`deciderDuPassage`,
     // src/main/orchestration/boucle-reparation.ts), plus en lisant le texte de orchestrator.ts : un scan textuel
-    // ne prouve pas l'execution (objection du juge, conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f).
+    // ne prouve pas l'execution (objection du juge, tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f).
     const passage = deciderDuPassage({
       attempt: 1,
       reparationsAccordees: 5,

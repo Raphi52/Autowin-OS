@@ -1,6 +1,6 @@
 // fix-ok: cause mesurée — le hook PreToolUse (matcher Bash|PowerShell seul) ne vérifiait que git destructeur ; prod-niveau/autorite/passphrase.json passaient par Bash et Edit/Write (test rouge 3/4 : « Unexpected end of JSON input », « expected [Bash, PowerShell] to include Edit »).
 /**
- * LA COMMANDE `run` FACE À LA PRODUCTION (évaluation conv-738, 2026-09-21).
+ * LA COMMANDE `run` FACE À LA PRODUCTION (2026-09-21).
  *
  * Deux failles, deux fonctions pures, appelées DANS `commands.ts` au moment de lancer :
  *   1. `refusReglageProd` — les fichiers de réglage de la protection (`prod-niveau.json`,
@@ -54,7 +54,7 @@ export function cibleSqlDeCommande(ligne: string): CibleSqlRun | undefined {
 }
 
 /**
- * GARDE SQL DES AGENTS lancés par `orchestrate` (revue conv-738) : leur terminal ne passe ni par
+ * GARDE SQL DES AGENTS lancés par `orchestrate` : leur terminal ne passe ni par
  * `run` ni par `sql_query`, seul le hook PreToolUse du CLI le voit. Ce hook ne peut pas ouvrir la
  * fenêtre de confirmation : une base de production OU inconnue est donc refusée NET, et seules les
  * bases déclarées `non-prod` dans la liste d'autorité passent (refus par défaut, comme `classerCible`).
@@ -63,7 +63,7 @@ export function cibleSqlDeCommande(ligne: string): CibleSqlRun | undefined {
 export function refusSqlAgent(ligne: string, basesNonProd: readonly string[]): string | undefined {
   const texte = String(ligne ?? '')
   // Seul un APPEL est bloqué : le client en position de commande — début de ligne, après `;` `|` `&`
-  // `&&` `(` `{`, ou dans `bash -c`, `cmd /c`, `powershell -c`, `$(…)`, `find -exec`. Avant (conv-770,
+  // `&&` `(` `{`, ou dans `bash -c`, `cmd /c`, `powershell -c`, `$(…)`, `find -exec`. Avant (
   // 2026-09-26), le motif valait pour TOUTE la ligne et bloquait `grep -n "<client>" fichier`, tout en
   // laissant passer un appel par chemin complet (`"C:\…\SQLCMD.EXE" …`). Dans le doute — guillemet non
   // fermé, code passé à un interpréteur (`node -e`, `python -c`), imbrication profonde —, l'ancien
@@ -221,7 +221,7 @@ export function refusSqlAgent(ligne: string, basesNonProd: readonly string[]): s
   const nom = (base ?? '').replace(/^\[|\]$/g, '').trim().toLowerCase()
   if (nom && basesNonProd.some((b) => String(b).trim().toLowerCase() === nom)) return undefined
   // Serveur déclaré non-prod (entrée `nature: serveur`, transmise préfixée `serveur:`) : toutes ses
-  // bases le sont. Avant, seul `-d` comptait — conv-106, tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf :
+  // bases le sont. Avant, seul `-d` comptait, tour 41d5a982-93d1-4933-be80-e8ea1fbc7bbf :
   // un SELECT vers APP_DEV sur SRV-DEV\DEV refusé alors que le serveur entier est de dev.
   // fix-ok: pour sqlcmd/osql, `-s` minuscule est le séparateur de colonnes ; le comparer en minuscules
   // faisait passer `-s SRV-DEV\DEV -S SRV-PROD\PROD` (mesuré : test rouge, commande PROD acceptée).

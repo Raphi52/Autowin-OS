@@ -1,5 +1,5 @@
 /**
- * NAVIGATEUR INTÉGRÉ DU CHAT — les canaux IPC entre l'interface et le moteur (conv-1286, lot 2/5,
+ * NAVIGATEUR INTÉGRÉ DU CHAT — les canaux IPC entre l'interface et le moteur (lot 2/5,
  * 2026-10-29).
  *
  * Le moteur (`../navigateur-integre.ts`) porte toutes les règles ; ce module ne fait que trois choses :
@@ -294,7 +294,7 @@ export function registerNavigateurIpc(deps: NavigateurIpcDeps): void {
     const adresse = guardString(url, 'navigateur.ouvrirDansNavigateurParDefaut')
     await exiger().ouvrirDansNavigateurParDefaut(adresse)
   })
-  // Pas-à-pas (conv-1286, 2026-10-30) : boutons Pause, Reprendre, Pas suivant, Reprendre la main et
+  // Pas-à-pas (2026-10-30) : boutons Pause, Reprendre, Pas suivant, Reprendre la main et
   // Rendre la main du bandeau, pour UN fil. Le moteur ne fait que libérer, retenir ou refuser les
   // gestes de l'agent : aucune page chargée, rien écrit sur le disque.
   ipcMain.handle('navigateur:piloter', (event, conversationId: unknown, ordre: unknown) => {

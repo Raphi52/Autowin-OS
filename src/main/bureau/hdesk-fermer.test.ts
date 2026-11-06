@@ -1,5 +1,5 @@
 /**
- * LOT 1 du chantier « outils de l'agent » (RUN.md outils-agent-1-2-4-6-7, conv-222).
+ * LOT 1 du chantier « outils de l'agent » (RUN.md outils-agent-1-2-4-6-7).
  *
  * Pourquoi : un agent ne pouvait pas fermer l'application qu'il avait lancee dans SON bureau cache.
  * `hdesk-lancer.ps1` refuse une relance sur le meme identifiant tant que l'app vit (exit 5) et aucun
@@ -53,7 +53,7 @@ describe('argumentsFermer / resultatFermeture : ce que l app envoie au script, e
   ])('refuse avant de lancer quoi que ce soit : %s', (_cas, demande) => {
     expect(() => argumentsFermer('C:\\app', demande)).toThrow()
   })
-  // conv-344 (scout n°1) : mode « sans fiche » de la vue Bureaux caches. Aucun fil : le script n'en
+  // scout n°1 : mode « sans fiche » de la vue Bureaux caches. Aucun fil : le script n'en
   // exige pas, et en accepter un ferait croire qu'il sert de garde.
   it('sans fiche : -SansFiche, aucun -Conversation', () => {
     const args = argumentsFermer('C:\\app', { id: 'ui-capture-7208', sansFiche: true })
@@ -240,7 +240,7 @@ describe.skipIf(process.platform !== 'win32')(
     })
 
     it('ferme l app du bureau X, epargne la MEME app du bureau Y, et libere X pour une relance', () => {
-      // conv-344 (scout n°6) : l'historique des lancements réussis survit à la purge des fiches et
+      // scout n°6 : l'historique des lancements réussis survit à la purge des fiches et
       // garde les ARGUMENTS (la fiche ne les a pas) ; il est borné aux 50 derniers.
       const historique = join(registre, 'historique.jsonl')
       writeFileSync(
@@ -323,7 +323,7 @@ describe.skipIf(process.platform !== 'win32')(
       expect(existsSync(join(registre, `${id}.json`))).toBe(false)
     }, 60_000)
 
-    // conv-1374 (2026-10-31) : 8 fermetures sur 36 echouaient en 10 jours, toutes « Aucun bureau
+    // 2026-10-31 : 8 fermetures sur 36 echouaient en 10 jours, toutes « Aucun bureau
     // cache a ce nom » = deja ferme. Un bureau absent du registre est un succes explicite.
     it('un identifiant absent du registre est un succes « deja ferme » (exit 0)', () => {
       const r = fermer(`${base}inconnu`, 'conv-a')
@@ -333,7 +333,7 @@ describe.skipIf(process.platform !== 'win32')(
       expect(r.erreur).toBeUndefined()
     }, 60_000)
 
-    // conv-1374 (2026-10-31, retour de conv-1370) : un bureau peut vivre SANS fiche (ui-capture-*,
+    // 2026-10-31 : un bureau peut vivre SANS fiche (ui-capture-*,
     // autowin-headless.ps1). L'absence de fiche ne prouve donc pas qu'il est ferme. Mesure : charmap
     // pid 36012 toujours vivant apres code 0 et ferme:true. Le registre vide simule ce bureau.
     it('un bureau VIVANT absent du registre est refuse (exit 2) et n est pas touche', () => {
@@ -354,7 +354,7 @@ describe.skipIf(process.platform !== 'win32')(
         expect(r.dejaFerme).toBeUndefined()
         expect(String(r.erreur)).toMatch(/vivant/)
         // traduireFermeture (hdesk-gestion.ts) distingue ce refus par ce champ : sans lui, le code 2
-        // redevient « ce bureau n'existe plus » (conv-1374, 2026-10-31).
+        // redevient « ce bureau n'existe plus » (2026-10-31).
         expect(r.sansFiche).toBe(false)
         expect(vivant(v.pid)).toBe(true)
       } finally {
@@ -370,7 +370,7 @@ describe.skipIf(process.platform !== 'win32')(
       expect(r).toMatchObject({ ok: true, code: 0, ferme: true, dejaFerme: true })
     }, 60_000)
 
-    // conv-344 (scout n°1) : -SansFiche n'avait AUCUN test depuis son ajout (41359673). Un bureau
+    // scout n°1 : -SansFiche n'avait AUCUN test depuis son ajout (41359673). Un bureau
     // dont la fiche n'est pas dans le registre lu (ici : fiche dans un AUTRE dossier, vide est lu),
     // comme les ui-capture-* d'autowin-headless.ps1 qui n'en ecrivent pas.
     it('sans fiche : ferme l app du bureau (exit 0, sansFiche) — et refuse ce mode si une fiche existe', () => {

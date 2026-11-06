@@ -19,7 +19,7 @@
 }
 
 /* La barre de filtre reste visible pendant le defilement : on filtre en lisant.
-   Elle PASSE A LA LIGNE (conv-180, 2026-10-10 : « dans Logs les elements au sommet sont pas bien
+   Elle PASSE A LA LIGNE (2026-10-10 : « dans Logs les elements au sommet sont pas bien
    responsive »). Sur une seule ligne, le panneau a sa largeur minimale (280 px, barre de 248 px)
    devait loger 399 px : la recherche tombait a 22 px -- une capsule vide --, « Toutes sources »
    etait coupe et Pistes, Exporter et le compte sortaient du cadre (mesure dans l'app). */
@@ -41,7 +41,7 @@
   font-size: 12px;
 }
 
-/* UNE hauteur pour toute la barre (conv-180, 2026-10-10 : « aligne la hauteur du champ de
+/* UNE hauteur pour toute la barre (2026-10-10 : « aligne la hauteur du champ de
    recherche, des deux listes et des boutons »). Aucune hauteur n'etait fixee : chacun la tirait de
    son remplissage -- 8 px autour de la recherche (`.input`, 36 px), 2 px pour les listes (22 px),
    0 pour les boutons (18 px), mesure dans l'app. 26 px, la hauteur des onglets du panneau ; le
@@ -73,7 +73,7 @@
   gap: 0;
 }
 
-/* LIGNE UNIQUE (conv-247, 2026-10-11 : maquette « tour 4 », pistes 2 + 3 + 4 choisies par
+/* LIGNE UNIQUE (2026-10-11 : maquette « tour 4 », pistes 2 + 3 + 4 choisies par
    l'utilisateur — « go 2 3 4 »). UNE ENTREE = une grille [heure | perle | carte]. L'heure SEULE
    a gauche de la frise aligne toutes les heures en colonne ; la carte a coins coupes porte, au
    repos, une seule ligne (nature, titre court, resume gris) et se deplie au clic. */
@@ -291,7 +291,7 @@
   color: var(--log-tone, #a9b2c4);
 }
 
-/* GROUPE DE LIGNES SEMBLABLES QUI SE SUIVENT (conv-270, 2026-10-11). Sa tete EST une ligne
+/* GROUPE DE LIGNES SEMBLABLES QUI SE SUIVENT (2026-10-11). Sa tete EST une ligne
    (`.model-log-row` : meme grille, meme perle, meme teinte de nature) ; seul s'ajoute le compte
    « ×N » a cote de la nature. Pas de perle doublee : la couche generee des themes
    (theme-*.genere.css) redessine `.model-log-perle` plus fort et l'effacait. */
@@ -513,7 +513,7 @@
   color: #e2685f;
 }
 /* L'ecart depuis le debut du tour (« +230 min 42 s ») vit dans la carte DEPLIEE, a cote de la
-   source (conv-247, ligne unique). Dans la gouttiere, il debordait sur le texte (conv-245) puis
+   source (ligne unique). Dans la gouttiere, il debordait sur le texte puis
    forcait chaque ligne sur deux hauteurs ; la gouttiere ne garde plus que l'heure. */
 .model-log-delta {
   white-space: nowrap;

@@ -16,7 +16,7 @@ import {
 
 /*
  * Garde de `relance-taches-de-fond.ts` : une commande shell coupée en fin de tour est relancée hors
- * du tour, et UN tour de reprise rend son résultat réel dans la même conversation (conv-528, conv-42).
+ * du tour, et UN tour de reprise rend son résultat réel dans la même conversation.
  */
 
 function magasinMemoire(): MagasinLots & { lots: Map<string, TacheRelancee[]> } {
@@ -218,7 +218,7 @@ describe('relance des tâches de fond coupées en fin de tour', () => {
   })
 
   /*
-   * conv-1211, 2026-10-28 : le tour de reprise a appelé `restart_app`. Le lot n'était effacé qu'à la
+   * 2026-10-28 : le tour de reprise a appelé `restart_app`. Le lot n'était effacé qu'à la
    * FIN de ce tour (`envoyerTour` attend tout le tour) : coupé par le redémarrage, il est resté sur
    * disque et `reprendreAuDemarrage` a renvoyé la même reprise une seconde fois (un tour payé pour rien).
    */
@@ -417,7 +417,7 @@ describe('relance réelle (bash + lancement survivable)', () => {
   }, 60_000)
 
   /*
-   * MAIS LE RELAIS D'UNE AUTRE SESSION SE RECONNAIT, ET S'ARRETE. Mesure du 2026-10-19 (conv-359) :
+   * MAIS LE RELAIS D'UNE AUTRE SESSION SE RECONNAIT, ET S'ARRETE. Mesure du 2026-10-19 :
    * une boucle `until [ -f … ]` relancee a 15:15, Autowin redemarre ensuite ; a la duree maximale,
    * « NON arrêtée » — et la boucle tournait encore a 17:16, sans fin possible (son fichier attendu
    * avait ete supprime). Le relais porte dans sa ligne de commande le chemin de SON journal (base64,

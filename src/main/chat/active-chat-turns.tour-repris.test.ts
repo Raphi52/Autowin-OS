@@ -5,7 +5,7 @@ import { ActiveChatTurns } from './active-chat-turns'
  * TOUR REPRIS APRÈS REDÉMARRAGE : il occupe le fil comme un tour normal, et se distingue d'un tour
  * normal pour que l'envoi ordinaire (`os:pilotChat`) puisse le refuser.
  *
- * Vécu le 2026-10-11 (conv-260) : le CLI du tour 2d8540b1, lancé à 22:29, a survécu au redémarrage
+ * Vécu le 2026-10-11 : le CLI du tour 2d8540b1, lancé à 22:29, a survécu au redémarrage
  * de 22:43 ; le message suivant de l'utilisateur a ouvert un SECOND claude.exe sur la même session.
  */
 describe('ActiveChatTurns — tours repris après redémarrage', () => {

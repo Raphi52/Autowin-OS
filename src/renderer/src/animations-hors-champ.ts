@@ -1,8 +1,8 @@
 /**
- * CE QUI N'EST PAS À L'ÉCRAN NE S'ANIME PAS (conv-1610, 2026-11-05).
+ * CE QUI N'EST PAS À L'ÉCRAN NE S'ANIME PAS (2026-11-05).
  *
  * Demande : « Garde la fluidité, mais seulement sur ce qui est visible et sur ma dernière bulle »,
- * après « autowin OS est full laggy ». Depuis la levée du plafond de 10 images/s (conv-1512), les
+ * après « autowin OS est full laggy ». Depuis la levée du plafond de 10 images/s, les
  * animations continues sont fluides. Mesure sur la fenêtre réelle (port de débogage) : 118
  * animations tournaient, la fenêtre prenait 101 % d'un cœur et la carte graphique 93 % ; tout mis
  * en pause, 7 % et 8 %. Chromium continue de faire tourner une animation sortie du champ (bulle

@@ -38,7 +38,7 @@ describe('ligneDErreurDAction — la ligne qui voyage dans le journal d’action
     expect(ligneDErreurDAction('Glob', GLOB_DELAI)).toBe(`Glob erreur - ${GLOB_DELAI}`)
   })
 
-  // conv-1228 (2026-10-28) : la borne est celle d'une ligne du journal (`ACTIONS_LINE_MAX`), plus
+  // 2026-10-28 : la borne est celle d'une ligne du journal (`ACTIONS_LINE_MAX`), plus
   // 300 caractères — le message d'erreur était amputé avant la ligne qui disait pourquoi.
   it('tient dans une ligne du journal, coupée par « … »', () => {
     const ligne = ligneDErreurDAction('Bash', `Exit code 2\n${'x'.repeat(50_000)}`)!

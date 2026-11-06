@@ -96,7 +96,7 @@ describe('Settings — alerte preflight dans la nav principale', () => {
   })
 
   /**
-   * conv-963 (2026-10-15) : « je veux plus l'avoir cette popup, juste 30 secondes après si y a une
+   * 2026-10-15 : « je veux plus l'avoir cette popup, juste 30 secondes après si y a une
    * étape qui a foiré tu mets un point d'exclamation à côté de l'icône Settings ». Avant le délai, le
    * démarrage n'est pas fini : rien ne s'annonce.
    */

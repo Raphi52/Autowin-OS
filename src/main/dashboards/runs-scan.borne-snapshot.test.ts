@@ -62,7 +62,7 @@ describe('scan des runs sur le CHEMIN CHAUD (snapshot de tour)', () => {
     expect(LIMITE_RUNS_SNAPSHOT).toBeGreaterThanOrEqual(12)
   })
 
-  // conv-861 (2026-09-25) : le compte des RUN.md écartés était calculé puis jeté — la liste des
+  // 2026-09-25 : le compte des RUN.md écartés était calculé puis jeté — la liste des
   // runs bloqués ne pouvait donc jamais dire qu'elle était partielle.
   it('garde le nombre de RUN.md NON lus au lieu de le jeter', async () => {
     expect((await scanRunsPourSnapshot(racineAvecRuns(200))).horsFenetre).toBe(

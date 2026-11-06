@@ -6,7 +6,7 @@ import { ensureAutowinAppData } from '../app/app-data'
 /**
  * JOURNAL DES SAISIES — le filet de sécurité du texte tapé par l'utilisateur.
  *
- * Mesure du 2026-09-01 (conv-30) : l'utilisateur a écrit deux messages qui ont disparu de l'écran
+ * Mesure du 2026-09-01 : l'utilisateur a écrit deux messages qui ont disparu de l'écran
  * sans laisser la moindre trace. Les quatre sources de persistance (conversations.json, son journal,
  * causal-trace, prompt-observability) étaient vides. La cause : tant qu'un texte n'a pas produit un
  * TOUR, il ne vit que dans la mémoire volatile du renderer — brouillon du composer
@@ -40,7 +40,7 @@ export type VoieDeSaisie =
 /**
  * QUI a fait partir le texte, quand ce n'est pas l'utilisateur. Absent = tapé (ou cliqué) par lui.
  *
- * Mesure conv-113 (2026-10-06) : la saisie ts 1791317725882, envoyée SEULE par le mode auto, et la
+ * Mesure (2026-10-06) : la saisie ts 1791317725882, envoyée SEULE par le mode auto, et la
  * saisie TAPÉE ts 1791317691042 étaient deux lignes `voie: "message"` identiques. L'utilisateur
  * affirmait « il était pas coché » : ce journal ne permettait pas de trancher.
  */
@@ -119,7 +119,7 @@ const SEPARATEUR_LIGNE = /\r?\n/
 type EntreeJournal = SaisieJournalisee | RattachementDeSaisie
 
 /**
- * LECTURE INCRÉMENTALE (conv-1077, 2026-10-22). Le journal (2,64 Mo le 22/10) était relu EN ENTIER,
+ * LECTURE INCRÉMENTALE (2026-10-22). Le journal (2,64 Mo le 22/10) était relu EN ENTIER,
  * de façon synchrone sur le fil principal, à chaque message (`rattacherSaisieAuTour`), à chaque
  * ouverture de fil (`lireOrientationsRattachees`) et par le dossier kaizen. Disque lent : 7 gels pour
  * 56,2 s, plus 4 lectures pour 26,7 s côté orientations (gels.jsonl). Le fichier n'est QU'EN AJOUT :
@@ -218,8 +218,8 @@ async function lireOctetsAsync(
 }
 
 /**
- * LE MÊME INDEX, SANS TENIR LE FIL PRINCIPAL (conv-1368, 2026-10-31). La lecture incrémentale de
- * conv-1077 avait réduit le VOLUME, pas le risque : `openSync` seul a encore figé la fenêtre 45,6 s
+ * LE MÊME INDEX, SANS TENIR LE FIL PRINCIPAL (2026-10-31). La lecture incrémentale
+ * avait réduit le VOLUME, pas le risque : `openSync` seul a encore figé la fenêtre 45,6 s
  * en 7 jours (`gels.jsonl`), dont 9,9 s d'un coup sur 3 Mo, parce que l'appel attendait au-dessus du
  * disque (SSD à 420 ms au pire sur 675 relevés Windows). Seule la sortie du fil protège la fenêtre.
  *

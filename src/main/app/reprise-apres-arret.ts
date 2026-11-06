@@ -1,13 +1,13 @@
 /**
  * REPRISE APRÈS UN TOUR ARRÊTÉ — la note qui explique les deux lignes que le CLI insère.
  *
- * Constat (conv-1142, 2026-10-25, 83 cas relevés dans les sessions du CLI du poste) : quand un tour
+ * Constat (2026-10-25, 83 cas relevés dans les sessions du CLI du poste) : quand un tour
  * est coupé en plein travail (bouton Stop, fermeture de l'app, erreur) juste après un résultat
  * d'outil, la session du CLI se termine sans réponse de l'agent. À la reprise suivante (`--resume`),
  * le CLI insère lui-même un message méta « Continue from where you left off. » puis une réponse
  * SYNTHÉTIQUE « No response requested. » (modèle `<synthetic>`), juste avant le nouveau message.
  * L'agent la lit comme sa propre réponse et s'en excuse, ou invente une histoire de relance
- * (conv-798, tour 556f1923-e1d1-403b-b43b-56dbf9248428).
+ * (tour 556f1923-e1d1-403b-b43b-56dbf9248428).
  *
  * Ces deux lignes vivent dans la session du CLI : l'app ne peut pas les retirer avant qu'elles
  * soient écrites. Elle SAIT en revanche, par le statut du message stocké, que le tour précédent

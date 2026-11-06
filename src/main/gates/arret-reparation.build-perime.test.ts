@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { arretDeLaReparation } from './stopgate'
 
 /**
- * conv-539, tour `82a4f5d1-d92f-4d73-9f6f-cac70db65ecb` : 14 reparations consecutives refusees.
+ * Tour `82a4f5d1-d92f-4d73-9f6f-cac70db65ecb` : 14 reparations consecutives refusees.
  * Cause mesuree : l'application jugeait avec `out/main/index.js` date de 11:06 alors que les
  * correctifs du code principal etaient commites de 11:11 a 11:31 (`grep -c jugeRefuse` = 0 dans le
  * bundle, 2 dans la source). Aucune reparation ne pouvait faire bouger le refus, et RIEN ne le

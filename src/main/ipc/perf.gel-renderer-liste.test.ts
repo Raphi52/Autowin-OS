@@ -1,5 +1,5 @@
 /**
- * conv-1115 (2026-10-23) : le gel de la liste des conversations (`renderer:vue-chat-liste`) arrive
+ * 2026-10-23 : le gel de la liste des conversations (`renderer:vue-chat-liste`) arrive
  * avec ce qu'elle a redessiné et ce qui l'a déclenché. Le main le VALIDE avant de l'écrire dans
  * gels.jsonl : entiers positifs, déclencheurs pris dans une liste connue — jamais un texte libre.
  */

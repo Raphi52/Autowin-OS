@@ -4,7 +4,7 @@
  * Répondre à une question `ask` (ou orienter) pendant qu'un tour tourne passe par l'injection :
  * la directive rejoint la boucle pilote, mais rien n'était écrit dans la conversation. Le seul
  * témoin était un « reçu » vivant dans la mémoire de l'écran — un rechargement l'effaçait, et
- * l'utilisateur devait recliquer (conv-38, 2026-09-01).
+ * l'utilisateur devait recliquer (2026-09-01).
  *
  * Cette écriture est le pendant de `beginTurn` pour le texte qui n'ouvre pas de tour : elle
  * persiste le message utilisateur et demande à l'écran de relire la conversation active.
@@ -49,12 +49,12 @@ export function enregistrerDirectiveDansLeFil(params: {
       // VIGNETTE, PAS « 📎 nom » (2026-09-24) : l'image envoyee pendant un tour s'affichait en simple
       // libelle texte au lieu de sa miniature, parce que seule sa liste de noms etait ecrite.
       ...(attachments.length ? { attachments } : {}),
-      // CE MESSAGE ORIENTE, IL NE REPOND PAS (conv-50, 2026-09-01). Sans ce drapeau, le verrou du
+      // CE MESSAGE ORIENTE, IL NE REPOND PAS (2026-09-01). Sans ce drapeau, le verrou du
       // bloc `ask` le prend pour la reponse a la question du tour : le bloc affiche « Répondu » et
       // le clic de l'utilisateur ne part plus. Le verrou anti-double-envoi, lui, reste entier.
       orientation: true,
       /*
-       * LA CONSIGNE SE POSE AVANT LA RÉPONSE QUI LA TRAITE (mesure du 2026-09-11, conv-439).
+       * LA CONSIGNE SE POSE AVANT LA RÉPONSE QUI LA TRAITE (mesure du 2026-09-11).
        *
        * Trois tours d'aller-retour sur cette ligne, parce qu'on la croyait arbitrable entre deux
        * défauts opposés. Elle ne l'est pas, pour une raison mécanique : le brouillon assistant posé

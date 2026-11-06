@@ -1,9 +1,9 @@
 import type { EtatDuLot, LotDuPlan, PlanDeLots } from '../../../shared/plan-de-lots'
 
 /*
- * LA FRISE D'UN PLAN DE LOTS — CALCUL PUR (conv-1305, 2026-10-30).
+ * LA FRISE D'UN PLAN DE LOTS — CALCUL PUR (2026-10-30).
  *
- * Choix de l'utilisateur au /draft conv-1305 : « implémente 5 et 6 » — la super conv tient dans
+ * Choix de l'utilisateur au /draft : « implémente 5 et 6 » — la super conv tient dans
  * UNE case de la mosaïque, à onglets ; l'onglet Chef montre la frise PLEINE (une piste par lot sur
  * l'axe des heures, chiffrée), l'onglet d'un lot ne garde que SA piste. Ce module ne fait que la
  * géométrie : où commence et finit l'axe, où tombe chaque barre, où passe « maintenant ». Le rendu
@@ -61,11 +61,11 @@ function finDuLot(lot: LotDuPlan, maintenant: number): number | undefined {
 }
 
 /**
- * LE DERNIER LOT PARTI GARDE LA PLACE DE SON BLOC (conv-1393, 2026-10-31 — capture : « des blocs
+ * LE DERNIER LOT PARTI GARDE LA PLACE DE SON BLOC (2026-10-31 — capture : « des blocs
  * compacts à droite avec le texte écrasé »). Sur un plan de 12 h 49, les trois lots partis à la
  * dernière minute n'avaient plus que 0,3 à 1,4 % de l'axe : le bloc qui recule pour rester entier
  * (`blocsDuCouloir`) butait sur le lot fini juste avant lui dans son couloir. Seul sur sa ligne
- * (conv-1387, « un lot par ligne »), il reculait avant sa vraie heure. L'axe va donc assez loin pour
+ * (« un lot par ligne »), il reculait avant sa vraie heure. L'axe va donc assez loin pour
  * que le dernier départ laisse LARGEUR_MIN_BLOC devant lui : chaque bloc part à sa vraie heure, et
  * la ligne « maintenant » s'arrête avant le bout de l'axe.
  */
@@ -118,7 +118,7 @@ export function calculerFrise(plan: PlanDeLots, maintenant: number): FriseDuPlan
 }
 
 /**
- * LES COULOIRS DU PLAN (conv-1376, 2026-10-31 — /draft, « Implémenter la 1 · Couloirs »). Sept lots
+ * LES COULOIRS DU PLAN (2026-10-31 — /draft, « Implémenter la 1 · Couloirs »). Sept lots
  * lancés trois par trois tenaient sept lignes, presque vides. Un lot prend ici la place du premier
  * couloir libéré : autant de lignes que de lots tournant ensemble, et chaque ligne se lit comme le
  * fil de travail qui a enchaîné ces lots.
@@ -166,7 +166,7 @@ export function planEnMouvement(plan: PlanDeLots | null | undefined): boolean {
 
 /**
  * L'onglet qu'ouvre un fil dans son plan : « chef », le rang de son lot, ou `null` si le plan ne le
- * connaît pas — un lot d'un ANCIEN plan du même chef (conv-1315) : les onglets du plan récent n'en
+ * connaît pas — un lot d'un ANCIEN plan du même chef : les onglets du plan récent n'en
  * diraient rien de vrai.
  */
 export function ongletDuFil(plan: PlanDeLots, fil: string): number | 'chef' | null {

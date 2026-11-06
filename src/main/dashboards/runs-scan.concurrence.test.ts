@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
 /**
- * LES DATES DES RUN.md SE LISENT ENSEMBLE, PAS L'UNE APRÈS L'AUTRE (conv-1248, 2026-10-29).
+ * LES DATES DES RUN.md SE LISENT ENSEMBLE, PAS L'UNE APRÈS L'AUTRE (2026-10-29).
  *
  * `scanRunsBounded` attendait chaque `stat` avant de lancer le suivant : ~1 150 allers-retours
  * disque d'affilée sur le poste (1 127 runs hors fenêtre). Mesuré sur la vraie racine : 55 à 90 ms

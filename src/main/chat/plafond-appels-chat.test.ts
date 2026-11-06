@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_ORCHESTRATION_BUDGET } from '../orchestration/orchestration-budget'
 
 /**
- * LE DÉFAUT, mesuré le 2026-08-25 sur conv-1397. Un tour de chat a été coupé sur « Budget d'appels
+ * LE DÉFAUT, mesuré le 2026-08-25. Un tour de chat a été coupé sur « Budget d'appels
  * provider atteint (6) » APRÈS cinq éditions réussies, juste avant sa vérification : le travail est
  * resté à moitié posé et la demande de l'utilisateur perdue.
  *
@@ -13,7 +13,7 @@ import { DEFAULT_ORCHESTRATION_BUDGET } from '../orchestration/orchestration-bud
  * dépense — et il tuait au milieu au lieu de refuser au départ.
  *
  * Le plafond est un plafond FIXE (`maxChatProviderCalls`), volontairement large. Il était aussi
- * réglable dans Settings > Budget jusqu'au retrait de ce réglage (conv-1119, 2026-10-23).
+ * réglable dans Settings > Budget jusqu'au retrait de ce réglage (2026-10-23).
  */
 
 describe('plafond d’appels d’un tour de chat', () => {

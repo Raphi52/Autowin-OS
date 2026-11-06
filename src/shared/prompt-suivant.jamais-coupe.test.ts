@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { extrairePromptSuivant, extrairePropositionsSuite } from './prompt-suivant'
 
 /**
- * PLAFOND MUET n°2 (conv-1228, 2026-10-28) : une ligne de prompt suivant au-delà de 600 caractères
+ * PLAFOND MUET n°2 (2026-10-28) : une ligne de prompt suivant au-delà de 600 caractères
  * était COUPÉE en pleine phrase, sans marque — et un clic sur le bouton envoyait cet ordre amputé
  * comme s'il était entier. Un ordre coupé est pire qu'aucun ordre : on garde la ligne entière, et
  * seul un vrai pavé (qui n'est plus un prompt) est écarté — jamais tronqué.

@@ -46,7 +46,7 @@ let cached:
 let collectionSequence = 0
 
 /**
- * RENOUVELER LA SESSION CLAUDE D'UN COMPTE avant de lire son quota (conv-1031, 2026-10-21).
+ * RENOUVELER LA SESSION CLAUDE D'UN COMPTE avant de lire son quota (2026-10-21).
  *
  * Symptome rapporte : « quand je change de compte, la barre de quota ne s'actualise pas, je suis
  * oblige d'envoyer un message ». Cause mesuree : le jeton d'acces d'un compte vit 8 h (ecart
@@ -176,7 +176,7 @@ export function parseLatestCodexRateLimitSample(jsonl: string): {
 }
 
 /**
- * QUOTA DES SERVICES DU MOTEUR DIRECT (conv-1503, lot 3 du plan conv-1499).
+ * QUOTA DES SERVICES DU MOTEUR DIRECT (lot 3 du plan).
  *
  * Seul ce qu'un service PUBLIE est montré : les en-têtes `x-ratelimit-*` (format OpenAI,
  * Cerebras et d'autres reprennent) d'une vraie réponse. Un service qui n'en envoie pas reste
@@ -242,7 +242,7 @@ export function noterQuotaServiceHttp(
 }
 
 /**
- * Sonde de quota d'un service direct (conv-1499, 2026-11-04) : la mémoire ci-dessus est vide après
+ * Sonde de quota d'un service direct (2026-11-04) : la mémoire ci-dessus est vide après
  * chaque redémarrage, et `/models` d’un service n'envoie aucun en-tête x-ratelimit (vérifié par curl).
  * Seule une vraie complétion les porte : un appel d'UN jeton par service actif sans mesure, au plus
  * une fois toutes les 30 min, remplit la barre sans attendre la première tâche.
@@ -798,7 +798,7 @@ export function invalidateModelQuotaCache(): void {
 
 /**
  * QUOTA D'UN COMPTE NOMME, lu par dossier de compte (servi d'abord a la bascule avant lancement,
- * conv-1069, retiree depuis) : la mesure ne depend pas du compte actif. Indexe par dossier de
+ * Retiree depuis) : la mesure ne depend pas du compte actif. Indexe par dossier de
  * compte, donc jamais perime par une bascule, a l'inverse du snapshot ci-dessus. Une mesure ratee est memorisee aussi : un
  * compte non connecte ne doit pas etre resonde a chaque tour.
  */
@@ -865,9 +865,9 @@ export function resetQuotasParCompteForTests(): void {
 }
 
 /**
- * LE RELEVÉ VU D'UN FIL AU COMPTE CHOISI (conv-1416, 2026-11-01).
+ * LE RELEVÉ VU D'UN FIL AU COMPTE CHOISI (2026-11-01).
  *
- * Constat de conv-1403 : la puce du fil disait le compte pro, la barre montrait gmail, le compte actif de
+ * Constat : la puce du fil disait le compte pro, la barre montrait gmail, le compte actif de
  * l'application. Ce relevé remplace la seule partie Claude par les chiffres du compte choisi. Sans
  * mesure, la barre le dit : les replis du compte actif parleraient d'un AUTRE abonnement.
  */

@@ -1,9 +1,9 @@
 /**
- * RÉPONDRE À UN PASSAGE SÉLECTIONNÉ (conv-1038, 2026-10-21).
+ * RÉPONDRE À UN PASSAGE SÉLECTIONNÉ (2026-10-21).
  *
  * Pourquoi : pour contester un point d'une longue réponse, l'utilisateur le RETAPAIT — le fil ne
  * gérait aucune sélection (`getSelection` absent de `ChatView*.tsx` et `ChatMessageRow*.tsx`, relevé
- * du scout conv-1038). La barre flottante (`BarrePassage.tsx`) pose le passage dans la saisie ;
+ * du scout). La barre flottante (`BarrePassage.tsx`) pose le passage dans la saisie ;
  * c'est l'utilisateur qui envoie, rien ne part tout seul.
  *
  * Ce module est PUR (hors `passageDuFil`, qui lit une `Selection` qu'on lui donne) : la vue ne fait
@@ -20,7 +20,7 @@ export const ACTIONS_PASSAGE: ReadonlyArray<{
   libelle: string
   titre: string
 }> = [
-  // Libellé et titre lus À L'AFFICHAGE, dans la langue de l'interface (conv-1170) : la barre qui
+  // Libellé et titre lus À L'AFFICHAGE, dans la langue de l'interface : la barre qui
   // les montre se redessine quand la langue change. Les textes que le geste pose dans la saisie
   // (`texteDeLActionSurPassage`) restent en français : c'est une consigne envoyée à l'agent.
   {
@@ -108,7 +108,7 @@ export function passageDuFil(selection: Selection | null, fil: Element | null): 
     const message = element.closest('.msg')
     if (!message || !fil.contains(message)) return null
   }
-  // ENTIER : l'utilisateur a choisi ce passage à la souris. Avant conv-1228 (2026-10-28), il était
+  // ENTIER : l'utilisateur a choisi ce passage à la souris. (2026-10-28), il était
   // coupé à 4 000 caractères, et la citation perdait sa fin — souvent le point à contester. La seule
   // borne qui reste est celle de l'envoi d'un message (ipc-guards.ts), qui refuse en le disant.
   const texte = selection.toString().trim()

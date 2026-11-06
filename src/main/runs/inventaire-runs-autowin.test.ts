@@ -49,10 +49,10 @@ describe('vue Plugins — le mod Autowin', () => {
     expect(mod.enabled).toBe(true)
     expect(mod.description).toContain('bureau caché')
     // Les trois événements du module que nomme hooks.json (register.js), dont le retrait du compte
-    // à rebours de tokens (conv-1602, piste 12 du scout).
+    // à rebours de tokens (piste 12 du scout).
     expect(mod.description).toContain('Événements : tool.call, prompt.attachment, tool.describe.')
   })
-  // fix-ok: 3 édits pour poser un seul cas (imports, afterEach, cas) ; cause mesurée avant correctif : modsAutowin lisait hooks/register.mjs en dur et rendait « leurre.mort » (conv-1602)
+  // fix-ok: 3 édits pour poser un seul cas (imports, afterEach, cas) ; cause mesurée avant correctif : modsAutowin lisait hooks/register.mjs en dur et rendait « leurre.mort »
   it('lit le module nommé par hooks.json, pas un nom écrit en dur', () => {
     // Leurre : un register.mjs que hooks.json ne nomme pas. Lu en dur, il donnerait « leurre.mort ».
     const racine = mkdtempSync(join(tmpdir(), 'aos-inventaire-mod-'))

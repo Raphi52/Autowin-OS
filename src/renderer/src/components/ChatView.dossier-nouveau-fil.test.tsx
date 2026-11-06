@@ -71,14 +71,14 @@ describe('ChatView — dossier de travail du prochain fil', () => {
   })
 
   /**
-   * LA DEMANDE (conv-354, 2026-10-19) : « quand je fais nouvelle conv je suis obligé d'écrire un
+   * LA DEMANDE (2026-10-19) : « quand je fais nouvelle conv je suis obligé d'écrire un
    * premier message avant que ça affiche la branche ». Le badge de branche lisait le dossier de la
    * conversation OUVERTE, sinon le dépôt par défaut : sur un fil neuf, il ignorait le dossier armé
    * sur la pastille. Il annonçait donc la branche d'un autre dépôt, et son menu listait — et
    * basculait — les branches de cet autre dépôt, jusqu'à ce que le premier message crée le fil.
    */
   it('affiche et liste les branches du dossier choisi AVANT le premier message', async () => {
-    // `getGitBranch` et non `getGitState` : la barre du haut ne lit plus que la branche (heal conv-1013).
+    // `getGitBranch` et non `getGitState` : la barre du haut ne lit plus que la branche.
     const getGitBranch = vi.fn((cwd?: string) =>
       Promise.resolve({
         available: true,
@@ -114,8 +114,8 @@ describe('ChatView — dossier de travail du prochain fil', () => {
   })
 
   /**
-   * DEFAUT VECU (kaizen conv-113, 2026-10-06) : « la conversation a dévié vers le CWD sans
-   * raison ». `conv-113` est ne avec un lien GitHub vers PaperTrading et a recu, a la creation,
+   * DEFAUT VECU (2026-10-06) : « la conversation a dévié vers le CWD sans
+   * raison ». Un fil est ne avec un lien GitHub vers PaperTrading et a recu, a la creation,
    * `D:\Chirurgien\AssistantChirurgien` — le dossier arme des semaines plus tot pour un AUTRE fil
    * (conv-111/112). Le dossier du « prochain fil » n'etait jamais vide apres usage : il restait
    * dans `autowin.chat.dossierNouveauFil` et se posait sur CHAQUE fil neuf, session apres session.
@@ -163,7 +163,7 @@ describe('ChatView — dossier de travail du prochain fil', () => {
   })
 
   /**
-   * LA DEMANDE (conv-298, 2026-10-16) : « en CWD ajoute This computer dans les choix ». Travailler
+   * LA DEMANDE (2026-10-16) : « en CWD ajoute This computer dans les choix ». Travailler
    * sur la machine, sans projet : c'est claude.exe lancé depuis le dossier personnel. Le menu ne
    * proposait que des dépôts. L'entrée vise le dossier personnel lu côté main, la pastille l'annonce
    * « This computer » (pas « User »), et le même dossier n'apparaît pas une seconde fois en chemin brut.
@@ -201,7 +201,7 @@ describe('ChatView — dossier de travail du prochain fil', () => {
     })
     const pastille = harness.container.querySelector('[data-testid="chat-project-dot"]')
     expect(pastille?.textContent).toContain('This computer')
-    // conv-1231 : « l'icône s'affiche pas ici » — la pastille montre le 💻 du menu, pas le 📁.
+    // « l'icône s'affiche pas ici » — la pastille montre le 💻 du menu, pas le 📁.
     expect(pastille?.textContent).toContain('💻')
     expect(pastille?.textContent).not.toContain('📁')
 
@@ -211,11 +211,11 @@ describe('ChatView — dossier de travail du prochain fil', () => {
   })
 
   /**
-   * LA DEMANDE (conv-1212, 2026-10-28) : « des éléments que je ne peux même pas supprimer, ils n'ont
+   * LA DEMANDE (2026-10-28) : « des éléments que je ne peux même pas supprimer, ils n'ont
    * pas la petite croix ». La croix du Board retire aussi le dépôt par défaut, que ce menu propose
    * toujours : la liste est commune, il doit quitter ce menu à son tour — même quand la croix est
    * cliquée Chat monté (sur l'onglet Board).
-   * SAUF « This computer » (conv-1231, même jour : « j'ai perdu le this computer, il doit être
+   * SAUF « This computer » (même jour : « j'ai perdu le this computer, il doit être
    * impossible à supprimer ») : un retrait mémorisé à son nom, d'avant la règle, ne le cache pas.
    */
   it('le dépôt par défaut retiré par la croix du Board quitte ce menu, « This computer » reste', async () => {

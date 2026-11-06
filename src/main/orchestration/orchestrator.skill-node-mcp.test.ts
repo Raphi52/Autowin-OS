@@ -163,7 +163,7 @@ describe('serveur d’outils d’un nœud skill — cycle de vie', () => {
 })
 
 /**
- * conv-1628 : le canevas d'Agent Studio permet de choisir le modèle de CHAQUE brique, skills
+ * Le canevas d'Agent Studio permet de choisir le modèle de CHAQUE brique, skills
  * comprises. Un seul agent réglé envoyait la brique sur le chemin « panel », qui ne sert pas les
  * outils du nœud skill : choisir un modèle sur `think` lui retirait brain_query et remember.
  */
@@ -202,7 +202,7 @@ describe('brique skill réglée sur un modèle', () => {
 })
 
 /**
- * conv-339, CHEMIN NATIF : l'étape learn de Claude appelle `remember` par le serveur d'outils
+ * CHEMIN NATIF : l'étape learn de Claude appelle `remember` par le serveur d'outils
  * (`mcp__autowin__remember`), pas par un `<cmd>` dans son texte. Ce faux provider fait ce que fait
  * le CLI : il lit `mcpConfig` et appelle l'outil en HTTP, avec le jeton.
  */

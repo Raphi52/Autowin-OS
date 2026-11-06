@@ -8,7 +8,7 @@ import { amorcerRegistreOutils } from './registre-outils'
 import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
- * UN OUTIL COUPÉ À L'ÉCRAN DOIT LE RESTER APRÈS UN REDÉMARRAGE (conv-353).
+ * UN OUTIL COUPÉ À L'ÉCRAN DOIT LE RESTER APRÈS UN REDÉMARRAGE.
  *
  * L'interrupteur vit dans l'écran « Skills · Hooks · Gates · Mods · Tools » (CapabilitiesView) et
  * s'enregistre dans le registre natif. Au démarrage, `index.ts` construit le bus avec un filtre qui

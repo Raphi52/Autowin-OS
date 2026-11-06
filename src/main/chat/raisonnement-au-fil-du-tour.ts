@@ -1,8 +1,8 @@
 /**
  * LE RAISONNEMENT S'ENREGISTRE AU FIL DU TOUR, pas seulement à sa clôture.
  *
- * Défaut vécu (conv-1110, 2026-10-23 : « conv-1097 m'affiche raisonnement et rien dedans, ce bug
- * arrive souvent »). Le tour de conv-1097 avait produit 6 657 caractères de pensée, tous présents
+ * Défaut vécu (2026-10-23 : « conv-1097 m'affiche raisonnement et rien dedans, ce bug
+ * arrive souvent »). Le tour avait produit 6 657 caractères de pensée, tous présents
  * dans son journal de tour (`turn-journals/conv-1097/22595e17….jsonl`, 599 `reasoning-step`), puis
  * lancé un run de plus de 20 minutes. Le store de la conversation, lui, n'en avait RIEN : le
  * raisonnement n'y entrait qu'en une écriture, à la clôture du tour (`run-pilot-chat.ts`). Pendant

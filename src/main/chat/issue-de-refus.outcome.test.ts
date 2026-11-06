@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { refusPourOutcome, type OutcomeDePublication } from './issue-de-refus'
 
 /**
- * DEFAUT VECU conv-1407 (2026-08-26), quatrieme volet.
+ * DEFAUT VECU (2026-08-26), quatrieme volet.
  *
  * `withIsolatedMutation` blanchit quatre issues de publication et fait tomber TOUTES LES AUTRES
  * dans un seul et meme message, celui du motif `publication-differee` :
@@ -20,7 +20,7 @@ import { refusPourOutcome, type OutcomeDePublication } from './issue-de-refus'
  *    avoir corrige une fois deja -- « orienter vers un geste impossible coute PLUS qu'un refus nu ».
  * 3. Son detail est le nom de l'outil (`edit_file`), deja affiche au-dessus : zero information.
  *
- * Ironie du nom : depuis conv-1404, le VRAI differe (`finalized === undefined`) ne passe plus par
+ * Ironie du nom : le VRAI differe (`finalized === undefined`) ne passe plus par
  * la. Ce message s'appelle « publication differee » alors qu'il ne sert plus qu'a des cas qui n'en
  * sont pas.
  *

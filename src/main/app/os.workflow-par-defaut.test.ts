@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkflowRunOverride } from '../orchestration/orchestrator'
 
 /**
- * LE WORKFLOW ACTIF DE LA VUE N'EST PLUS QU'UNE VALEUR PAR DÉFAUT (conv-1070, 2026-10-22).
+ * LE WORKFLOW ACTIF DE LA VUE N'EST PLUS QU'UNE VALEUR PAR DÉFAUT (2026-10-22).
  *
  * Avant, `poseConversationWorkflow` rendait le workflow actif AVANT tout le reste : tant qu'un
  * workflow était actif (« Correctif » ici), le choix automatique ne tournait jamais. Mesuré le
@@ -121,7 +121,7 @@ describe('workflow actif = valeur par défaut, le choix automatique passe avant'
 })
 
 /**
- * LA GARDE DU CADRAGE VAUT AUSSI POUR LE WORKFLOW PAR DÉFAUT (conv-1070, 2026-10-22).
+ * LA GARDE DU CADRAGE VAUT AUSSI POUR LE WORKFLOW PAR DÉFAUT (2026-10-22).
  *
  * Le choix automatique écarte un profil de réparation quand la demande est un symptôme dont la
  * cause est inconnue (`profilEcraseLeCadrage`, `workflow-dynamic.ts`) : le régime reprend la main et

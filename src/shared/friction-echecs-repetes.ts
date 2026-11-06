@@ -4,7 +4,7 @@ import { isDeliveredOrchestrationOutcome, type OrchestrationOutcome } from './or
 /**
  * FRICTION SUR ÉCHECS RÉPÉTÉS — rendre visible le mur avant que l'utilisateur le paie une fois de plus.
  *
- * Défaut mesuré (conv-1302, 2026-08-18) : douze orchestrations d'affilée sur la MÊME demande, dont
+ * Défaut mesuré (2026-08-18) : douze orchestrations d'affilée sur la MÊME demande, dont
  * aucune n'a livré ce qui était demandé, pour un cumul supérieur à 20 $. À chaque tour, l'interface
  * proposait de relancer et rien ne disait « on est au troisième échec, le problème n'est pas la
  * chance ». L'utilisateur a relancé neuf fois — c'est le comportement rationnel quand personne ne

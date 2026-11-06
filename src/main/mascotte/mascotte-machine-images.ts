@@ -1,5 +1,5 @@
 /**
- * Les planches de la MACHINE (conv-346, 2026-10-29) : la machine de NieR modelee en three.js, rendue
+ * Les planches de la MACHINE (2026-10-29) : la machine de NieR modelee en three.js, rendue
  * hors ecran en 16 images par etat (160x192, WebP), cote a cote. La fenetre de la mascotte n'admet
  * aucun script : la 3D y est donc rejouee en CSS, par `steps(16)`. Genere — ne pas editer a la main.
  */

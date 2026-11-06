@@ -90,7 +90,7 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
       pastille: '3',
       fil: null
     })
-    // Le vrai nombre jusqu'à 99 (conv-1270, « au lieu de 9+ ») ; au-delà, la pastille reste à 99.
+    // Le vrai nombre jusqu'à 99 (« au lieu de 9+ ») ; au-delà, la pastille reste à 99.
     expect(etatDeLaMascotte({ ...VIDE, toursEnCours: 12 }).pastille).toBe('12')
     expect(etatDeLaMascotte({ ...VIDE, toursEnCours: 60, runsActifs: 39 }).pastille).toBe('99')
     expect(etatDeLaMascotte({ ...VIDE, toursEnCours: 150 }).pastille).toBe('99')
@@ -247,7 +247,7 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     expect(travail).toContain('body .v3{display:inline}')
     expect(travail).toContain('body .t3{display:inline}')
     expect(travail).toContain('body .ET{display:inline}')
-    // Le glyphe : couronne et étoile tournent en sens contraires (conv-1227).
+    // Le glyphe : couronne et étoile tournent en sens contraires.
     expect(travail).toMatch(/body \.h \.ge\{animation:ot [\d.]+s linear infinite\}/u)
     expect(travail).toMatch(/body \.h \.gi\{animation:ot [\d.]+s linear infinite reverse\}/u)
     const attente = cssDeLEtat({ etat: 'attente', pastille: '1', fil: 'c' })
@@ -261,7 +261,7 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
     expect(calme).not.toMatch(/\.v[0-9px]\{/u)
     expect(calme).toContain('.z{display:block}')
     expect(calme).toContain('body .fR{display:inline}')
-    // Opaque au repos (conv-1227) : aucune opacité réduite sur le personnage.
+    // Opaque au repos : aucune opacité réduite sur le personnage.
     expect(calme).not.toMatch(/opacity/u)
   })
 
@@ -300,7 +300,7 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
   it('le nombre est le chiffre qui brille dans l’étoile du chapeau, pas l’étoile (conv-1227)', () => {
     const html = htmlDeMascotte()
     // Un chiffre dessiné par chiffre possible, centré sur l'étoile (x = 25 de la boîte de la bille) ;
-    // un nombre à deux chiffres allume une dizaine et une unité (conv-1270), 0 compris.
+    // un nombre à deux chiffres allume une dizaine et une unité, 0 compris.
     for (const v of ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
       expect(html).toContain(`>${v}</text>`)
     expect(html).not.toContain('>9+</text>')
@@ -311,7 +311,7 @@ describe('mascotte du bureau — Bille · pastille (conv-1145)', () => {
       'body .vu7{display:inline}'
     )
     expect(html).toMatch(/<text class="ch nb v3" x="25"/u)
-    // C'est le chiffre qui a la lueur animée ; l'étoile, jaune et pleine depuis conv-1227 (« l'étoile
+    // C'est le chiffre qui a la lueur animée ; l'étoile, jaune et pleine (« l'étoile
     // du chapeau fais-la jaune »), n'a ni classe ni lueur.
     expect(html).toMatch(/\.p \.nb\{animation:nb /u)
     expect(html).toMatch(/<path d="M25 -13\.5[^"]*" fill="#ffd23f" stroke="#fff0a8"[^>]*\/>/u)

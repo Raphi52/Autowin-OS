@@ -5,10 +5,10 @@ import { artifactKindFor } from '../providers/artifacts'
 import { preparerVideoAMontrer, type VideoAMontrer } from '../commands/show-video-command'
 
 /**
- * LA VIDÉO LIVRÉE PENDANT LE TOUR ARRIVE DANS LE LECTEUR DU FIL (conv-253, 2026-10-11).
+ * LA VIDÉO LIVRÉE PENDANT LE TOUR ARRIVE DANS LE LECTEUR DU FIL (2026-10-11).
  *
  * Cause : une carte du fil naît d'un bloc image d'un outil natif (`claude.ts`) — une image LUE
- * arrive donc seule — ou de `show_video`, que l'agent doit PENSER à appeler. Constat conv-260
+ * arrive donc seule — ou de `show_video`, que l'agent doit PENSER à appeler. Constat
  * (~22:10) : l'agent rend une pub par ffmpeg, écrit son chemin, et l'utilisateur doit réclamer
  * « tu dois me la montrer dans un lecteur ». Le tour lui-même sait la montrer : la réponse NOMME
  * le fichier, et le disque dit s'il vient d'être écrit.

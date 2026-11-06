@@ -7,9 +7,9 @@ import {
 
 /*
   Cas reel (2026-10-11) : « /kaizen dans la conv 243 il a pas pris en compte le message "utiliser
-  remotion ou hyperframes c'est utile?" ». Le dossier recu etait celui de conv-243 (un seul tour,
+  remotion ou hyperframes c'est utile?" ». Le dossier recu etait celui (un seul tour,
   cb786c88-9d33-413c-8faf-dc3a31b785f6, sur les refus « safeguards » ; `saisies: []`) : la phrase
-  citee n'y figurait nulle part. Le journal des saisies la plaçait dans conv-253 (ts 1791720124446,
+  citee n'y figurait nulle part. Le journal des saisies la plaçait (ts 1791720124446,
   voie « orientation »). Tout le kaizen partait sur la mauvaise conversation.
 */
 const TACHE =

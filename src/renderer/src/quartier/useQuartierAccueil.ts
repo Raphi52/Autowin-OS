@@ -1,12 +1,12 @@
 /**
- * L'ACCUEIL, VU DEPUIS LE QUARTIER (conv-1421) : les gestes de la souris et les widgets dans leurs tours.
+ * L'ACCUEIL, VU DEPUIS LE QUARTIER : les gestes de la souris et les widgets dans leurs tours.
  *
  * Trois gestes, trois réponses :
  *  - un objet du décor : la caméra zoome dessus pendant que sa vue s'ouvre (D-11) ;
  *  - une tour : son widget en sort, et elle reste allumée tant qu'il est dehors ; un second clic l'y
  *    fait rentrer (demande de l'utilisateur du 2026-11-01, 20:25) ;
  *  - un tanuki : son fil s'ouvre (D-3) ; celui d'un collègue montre sa carte, sans rien ouvrir, car son
- *    fil vit sur un autre poste (D10 de `grill/agent-hq-japon-town.md`, conv-1429).
+ *    fil vit sur un autre poste (D10 de `grill/agent-hq-japon-town.md`).
  *
  * Tant que l'Accueil est affiché sur le Quartier, le partage des collègues se relit toutes les 5 s
  * (`agents-collegues.ts`) ; ailleurs, personne ne le relit.

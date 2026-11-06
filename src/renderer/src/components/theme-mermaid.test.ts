@@ -1,5 +1,5 @@
 /*
- * LES SCHÉMAS MERMAID PRENNENT LES COULEURS DU THÈME DE L'APP (conv-1235, 2026-10-28).
+ * LES SCHÉMAS MERMAID PRENNENT LES COULEURS DU THÈME DE L'APP (2026-10-28).
  *
  * Avant : `theme: 'dark'` figé, des boîtes noires même sur un thème clair. Ces tests tiennent les
  * deux défauts vus au premier rendu réel : le nom d'un état peint de la couleur de son fond
@@ -78,7 +78,7 @@ describe('configMermaidDuTheme', () => {
 })
 
 /*
- * LES AUTRES TYPES DE SCHÉMAS (conv-1235, rendu de 20 types sur mermaid 11.16) : carte mentale,
+ * LES AUTRES TYPES DE SCHÉMAS (rendu de 20 types sur mermaid 11.16) : carte mentale,
  * frise, treemap et radar tirent leurs couleurs de l'échelle `cScale0..11`, que mermaid assombrit
  * de 75 % en mode sombre — boîtes NOIRES. L'histogramme peignait son fond en noir et ses barres en
  * crème ; l'arborescence écrivait en noir (invisible sur fond sombre) ; les paquets en blanc.
@@ -117,7 +117,7 @@ describe('configMermaidDuTheme — les autres types de schémas', () => {
 })
 
 /*
- * LE SANKEY (conv-1235) : mermaid 11.16 le peint avec la palette d3 `schemeTableau10`, écrite en
+ * LE SANKEY : mermaid 11.16 le peint avec la palette d3 `schemeTableau10`, écrite en
  * dur dans son dessin — aucune variable de thème ne l'atteint. Ses 10 couleurs sont donc remplacées
  * dans le SVG produit, nœuds ET dégradés des liens, par les teintes pleines du thème.
  */

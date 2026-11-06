@@ -4,7 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * « MODIFIER ET RELANCER », DE BOUT EN BOUT (conv-1038, 2026-10-21). Sous ses messages,
+ * « MODIFIER ET RELANCER », DE BOUT EN BOUT (2026-10-21). Sous ses messages,
  * l'utilisateur n'avait que copier, brancher, inspecter et réessayer : pour corriger une demande, il
  * devait brancher au BON message puis retaper sa demande. Le bouton crée la copie qui s'arrête
  * JUSTE AVANT le message, l'ouvre, et y pose le texte du message dans la saisie, SANS envoyer.

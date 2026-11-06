@@ -1,5 +1,5 @@
 /**
- * UNE REPRISE QUI TUE L'APP N'EST JAMAIS REJOUÉE (conv-1150, 2026-10-26).
+ * UNE REPRISE QUI TUE L'APP N'EST JAMAIS REJOUÉE (2026-10-26).
  *
  * Mesuré le 26/10 à 08:56 : la reprise au démarrage de `run-ec2036c0932d-1` (une vingtaine de
  * boucles build/clean) a fait monter le processus principal à 3,2 Go → `JavaScript heap out of

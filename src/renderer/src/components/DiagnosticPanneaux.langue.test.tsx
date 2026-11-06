@@ -11,7 +11,7 @@ import type { BrainReglageState } from '../../../shared/preload-contracts'
 ).IS_REACT_ACT_ENVIRONMENT = true
 
 /**
- * LES DEUX AUTRES PANNEAUX DE LA PAGE DIAGNOSTIC SUIVENT LA LANGUE (conv-1146, objection du juge,
+ * LES DEUX AUTRES PANNEAUX DE LA PAGE DIAGNOSTIC SUIVENT LA LANGUE (objection du juge,
  * réparation 3) : la page était annoncée traduite alors que « Dossier de travail » et « Brain »
  * restaient en français. Entrée qui doit faire échouer ce test : un libellé, un placeholder, un
  * aria-label ou un message d'erreur local laissé en dur, ou un panneau qui ne se redessine pas quand

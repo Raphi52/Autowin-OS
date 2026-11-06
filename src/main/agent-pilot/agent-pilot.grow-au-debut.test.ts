@@ -11,7 +11,7 @@ import { forgetChatSession } from '../runs/chat-session-store'
 import { oublierCompteRenduNonVu } from '../runs/compte-rendu-non-vu-store'
 
 /**
- * GROW CHARGÉE PAR LE CODE AU DÉBUT DE CHAQUE DEMANDE D'ACTION (conv-1445, 2026-11-03).
+ * GROW CHARGÉE PAR LE CODE AU DÉBUT DE CHAQUE DEMANDE D'ACTION (2026-11-03).
  *
  * Le VRAI tour de chat tourne (`AgentPilot.chat`, vrai assemblage du message, vrai SKILL.md lu sur
  * le disque du dépôt) ; seul le modèle est faux, et on lit ce qui lui est ENVOYÉ. Avant ce

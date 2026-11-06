@@ -10,7 +10,7 @@ import {
 } from './evidence-digest'
 
 /**
- * Fixture calquée sur le run réel conv-1102 (vue Worktrees, 11/08) : des `stdout` massifs
+ * Fixture calquée sur le run réel (vue Worktrees, 11/08) : des `stdout` massifs
  * (fichiers lus en entier), des tableaux d'empreintes SHA-256, et les mêmes chemins absolus
  * répétés dans `path` et `paths`.
  */
@@ -105,7 +105,7 @@ describe('evidence-digest', () => {
   })
 
   it('borne le livrable agrégé en gardant sa substance et ses preuves', () => {
-    // Calqué sur conv-101 : 1,54 M de caractères transmis au juge pour 6,36 $ sur un seul appel.
+    // Calqué : 1,54 M de caractères transmis au juge pour 6,36 $ sur un seul appel.
     const livrable = `## Ce qui a changé\nP0-1 corrigé\n${'redite sans valeur\n'.repeat(80_000)}## Preuves\nexit 0, 103 passed`
     expect(livrable.length).toBeGreaterThan(1_000_000)
     const borne = clampAggregateForJudge(livrable)

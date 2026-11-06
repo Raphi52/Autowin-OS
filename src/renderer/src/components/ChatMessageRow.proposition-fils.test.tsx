@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LA CARTE « LANCER EN N FILS » DANS UNE VRAIE LIGNE DE RÉPONSE (conv-1147, défaut D5).
+ * LA CARTE « LANCER EN N FILS » DANS UNE VRAIE LIGNE DE RÉPONSE (défaut D5).
  *
  * ChatMessageRow pose la réponse qui porte la carte (`message-du-fil.ts`) : son souvenir « déjà
  * lancée » lui est propre. Entrées qui feraient échouer un câblage faux : une ligne qui ne pose pas
@@ -81,7 +81,7 @@ describe('ChatMessageRow — carte « Lancer en N fils »', () => {
    * La clé de la carte = (fil qui l'affiche, tour de la réponse). Un identifiant de MESSAGE ne
    * convient pas : une réponse peinte en direct n'en a pas tant que son fil n'est pas relu du disque,
    * et seul le fil affiché en plein l'est (`chat-event-routing.ts`). Relecture externe du 2026-10-25
-   * (conv-1147, score 74) : dans une fenêtre de mosaïque, la carte restait grisée pour de bon.
+   * (score 74) : dans une fenêtre de mosaïque, la carte restait grisée pour de bon.
    */
   it('réponse terminée : le clic porte la réponse, son tour et une clé (fil, tour)', async () => {
     const bouton = await rendre(true)

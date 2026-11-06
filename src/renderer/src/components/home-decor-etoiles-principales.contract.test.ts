@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ETOILES_PRINCIPALES } from './home-decor-scene'
 
 /**
- * Demande conv-1410, 2026-08-27 : « rajoute quelques étoiles principales au loin ».
+ * Demande, 2026-08-27 : « rajoute quelques étoiles principales au loin ».
  *
  * Pas de WebGL en test (happy-dom) : la preuve est le RÉGLAGE relu + la vérification que
  * `buildStars` le CONSOMME (buffers dimensionnés sur le total, boucle dédiée) au lieu de laisser
@@ -38,7 +38,7 @@ describe('étoiles principales du fond d’écran', () => {
   })
 
   /**
-   * Régression conv-1410 « je ne les vois pas » : le test ci-dessus borne `aSize` en ABSOLU, donc
+   * Régression « je ne les vois pas » : le test ci-dessus borne `aSize` en ABSOLU, donc
    * 4,2-6,4 le passait alors que les étoiles rendaient ~2,7 px à l'écran. Ici on refait le calcul du
    * vertex shader (`aSize * uPixelRatio * (52 / -view.z)`) à la distance RÉELLE de pose.
    *

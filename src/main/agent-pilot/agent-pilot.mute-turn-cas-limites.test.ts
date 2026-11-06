@@ -3,7 +3,7 @@ import { AgentPilot } from './agent-pilot'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
- * conv-717, point 1 — un tour qui finit SANS texte juste après un appel d'outil est relancé par le
+ * Point 1 — un tour qui finit SANS texte juste après un appel d'outil est relancé par le
  * code (pas par une consigne). Cas limites : réponse vide, seulement des espaces, et le mur de quota
  * « You've hit your session limit » qu'il faut laisser passer (aucune relance payée contre un mur).
  */

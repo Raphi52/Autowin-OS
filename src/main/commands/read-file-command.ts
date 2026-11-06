@@ -221,7 +221,7 @@ export function enumererFichiersLisibles(
 
 /**
  * Même énumération, avec `incomplet: true` quand le plafond l'a coupée. Parcours PAR NIVEAUX :
- * mesuré le 2026-09-22 (conv-782), le parcours en profondeur remplissait les 20 000 fichiers avec
+ * mesuré le 2026-09-22, le parcours en profondeur remplissait les 20 000 fichiers avec
  * `bench/runs/` et ne visitait jamais `.arena/` ni `skills/` — et la recherche le taisait.
  */
 export function enumererFichiersLisiblesDetail(

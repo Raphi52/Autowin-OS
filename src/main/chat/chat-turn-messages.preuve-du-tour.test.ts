@@ -11,7 +11,7 @@ import type { ExecutionEvidence } from '../providers/types'
 import { libelleDuVerifySur } from '../commands/verify-command'
 
 /**
- * LA GARDE DE PREUVE DE FIN DE TOUR (conv-1423). Elle lit des FAITS, jamais le texte de la réponse,
+ * LA GARDE DE PREUVE DE FIN DE TOUR. Elle lit des FAITS, jamais le texte de la réponse,
  * et ne bloque rien : elle dit seulement s'il faut une relance. Le dossier de ces essais est écrit
  * en deux formes parce que le tour parle Windows et que ses traces peuvent parler `/`.
  */
@@ -349,7 +349,7 @@ describe('relanceDePreuveManquante — ce que lit l’agent', () => {
   })
 
   /*
-   * LA PROMESSE DE LA RELANCE, testée sur son vrai effet (conv-1423, contrôle final) : l'agent obéit,
+   * LA PROMESSE DE LA RELANCE, testée sur son vrai effet (contrôle final) : l'agent obéit,
    * `verify` passe au vert, et la relance a payé pour rien si le rouge reste. Proposer `verify`
    * équivaut donc à : le libellé que `verify` donnerait à ce fichier fait taire la garde.
    *

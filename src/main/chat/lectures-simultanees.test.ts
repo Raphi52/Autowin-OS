@@ -22,7 +22,7 @@ import { ConversationStore } from '../store/conversations'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 
 /**
- * LES LECTURES D'UN MÊME MESSAGE, EN MÊME TEMPS (conv-1370, lot 8, 2026-10-31).
+ * LES LECTURES D'UN MÊME MESSAGE, EN MÊME TEMPS (lot 8, 2026-10-31).
  *
  * `readOnlyHint` fait arriver les lectures ensemble, et la trace causale du tour les écrit dans
  * l'ordre où elles passent : command, command, result, result. Rattachée à l'événement PRÉCÉDENT, la
@@ -246,7 +246,7 @@ type ReponseRpc = { result?: { content?: Array<{ text?: string }>; isError?: boo
  * en vol ; il les rend ensuite une à une, dans l'ordre INVERSE des chemins (d.md d'abord) : les fins
  * se croisent toujours. `quandArrivees(n)` rend la main quand n lectures ont atteint le bus.
  *
- * POURQUOI PAS DES MINUTERIES (conv-1370, 2026-10-31). Il y avait ici 40, 30, 20 puis 10 ms données
+ * POURQUOI PAS DES MINUTERIES (2026-10-31). Il y avait ici 40, 30, 20 puis 10 ms données
  * dans l'ordre d'arrivée, et les quatre requêtes partaient en même temps. Sous charge (typage lancé à
  * côté), 2 tests rouges sur 60 : fins dans le mauvais ordre, et b.md arrivé après d.md. Un tour de
  * boucle d'événements sépare chaque reprise : entre la fin de `exec` et l'écriture de son `result`,
@@ -330,7 +330,7 @@ async function lectureDUnSeulMessage(
       if (!premierEnvoi) return { text: 'Fin.' } as SendResult
       premierEnvoi = false
       // Une à une sur le port, sans attendre leur fin : les quatre sont en vol ensemble, et leur
-      // ordre d'arrivée ne dépend plus de la charge de la machine (conv-1370).
+      // ordre d'arrivée ne dépend plus de la charge de la machine.
       const envois: Array<Promise<ReponseRpc>> = []
       for (const [rang, path] of notes.entries()) {
         envois.push(posterAppel(options, 'brain_read', { path }))

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildTurnMessageBlocks } from './chat-turn-messages'
 
-// conv-1139 : le bloc des messages d'autres fils part dans le tour, session neuve OU reprise,
+// Le bloc des messages d'autres fils part dans le tour, session neuve OU reprise,
 // AVANT les mots de l'utilisateur — jamais fondu dedans.
 describe('bloc « messages d’autres fils » du tour', () => {
   const base = {

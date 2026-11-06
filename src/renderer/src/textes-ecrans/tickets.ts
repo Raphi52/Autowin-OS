@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — ÉCRAN TICKETS (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — ÉCRAN TICKETS (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : TicketsView et la section des candidats de veille (VeilleCandidatsSection).
  *
@@ -19,7 +19,7 @@ import { tableDeTextes } from '../textes'
  * (VeilleCandidatsSection).
  *
  * Les noms de fournisseurs (Azure DevOps, GitHub, GitLab) restent en dur dans TicketsView : noms
- * propres, identiques dans les deux langues. Depuis conv-1397, TicketsView est l'onglet « Tickets » du
+ * propres, identiques dans les deux langues. TicketsView est l'onglet « Tickets » du
  * Board (sans barre de titre) et la veille un bloc de Maintenance.
  */
 export const TEXTES_FR = {

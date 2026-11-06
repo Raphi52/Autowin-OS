@@ -5,8 +5,8 @@ import { evaluateClosure } from '../gates/stopgate'
 import { lireVerdictJuge } from './orchestrator'
 
 /**
- * TROIS DÉFAUTS D'UN MÊME SYMPTÔME, observés sur un run réel de l'utilisateur (`conv-1136`,
- * `scout-claude-propre-b-worktrees-audite-u`) dont la vignette affichait :
+ * TROIS DÉFAUTS D'UN MÊME SYMPTÔME, observés sur un run réel de l'utilisateur
+ * (`scout-claude-propre-b-worktrees-audite-u`) dont la vignette affichait :
  *
  *   status: failed · gateBlocked: true
  *   « Statut "red" : un signal de vérification est en échec.;
@@ -57,7 +57,7 @@ describe('lecture du verdict du juge — un seul lecteur, aligné sur le contrat
   })
 
   it('le mot « défaut » écrit en prose dans une puce OK n est PAS un rejet contractuel', () => {
-    // Mesuré run-9930e4959cf4-1 (conv-359, trace.json entrée 13) : juge « VALIDE / SCORE: 92 »,
+    // Mesuré run-9930e4959cf4-1 (trace.json entrée 13) : juge « VALIDE / SCORE: 92 »,
     // puces toutes OK, dont « Les tests repèrent un vrai défaut : avec l'aléa élargi… ». La
     // typographie française (espace avant « : ») suffisait à lire ce VALIDE comme un DEFAUT, et le
     // contrôle rendait « Promis mais pas fait : 1 point(s) » sur un travail validé.
@@ -135,7 +135,7 @@ describe('gate de clôture — une raison par fait, et aucune cause inventée', 
 })
 
 /**
- * LE FAUX VERT MESURE LE 2026-09-03 (conv-9) — un juge qui se CORRIGE.
+ * LE FAUX VERT MESURE LE 2026-09-03 — un juge qui se CORRIGE.
  *
  * Texte reellement rendu par le juge (`causal-trace/conv-9.jsonl`, sequence 11) :
  *
@@ -167,7 +167,7 @@ describe('faux vert du juge qui se corrige — un seul lecteur, sur TOUS les che
   })
 
   it("le lecteur faible n'existe plus dans l'orchestrateur : un seul lecteur pour tous les chemins", () => {
-    // Le corps des parcours vit dans des modules voisins depuis le découpage (conv-1508) : on lit l'ensemble.
+    // Le corps des parcours vit dans des modules voisins depuis le découpage : on lit l'ensemble.
     const source = ['orchestration/orchestrator.ts', 'orchestration/orchestrator-run.ts', 'orchestration/orchestrator-parcours-glouton.ts', 'orchestration/orchestrator-parcours-sequentiel.ts']
       .map((f) => readFileSync(join(__dirname, '..', f), 'utf8'))
       .join(String.fromCharCode(10))

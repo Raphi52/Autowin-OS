@@ -1,5 +1,5 @@
 /**
- * TERMINAL INTÉGRÉ DU CHAT — les canaux IPC entre l'interface et le moteur (conv-1362, lot 3/3,
+ * TERMINAL INTÉGRÉ DU CHAT — les canaux IPC entre l'interface et le moteur (lot 3/3,
  * 2026-10-31).
  *
  * Le moteur (`../terminal-integre.ts`) porte toutes les règles ; ce module ne fait que trois choses :

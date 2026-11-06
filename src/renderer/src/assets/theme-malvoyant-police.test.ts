@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 
 /**
  * Thèmes malvoyants : la police FORCÉE sur l'interface et le jeton `--font` doivent être la même.
- * Pourquoi (conv-1322, 2026-10-30) : mermaid mesure ses étiquettes hors de `.shell`, avec la police
+ * Pourquoi (2026-10-30) : mermaid mesure ses étiquettes hors de `.shell`, avec la police
  * qu'il lit dans `--font` (theme-mermaid.ts). Le thème forçait Atkinson Hyperlegible sur `.shell *`
- * mais laissait `--font` en Segoe UI : mesuré, 8 étiquettes sur 25 du schéma de conv-1321 avaient
+ * mais laissait `--font` en Segoe UI : mesuré, 8 étiquettes sur 25 du schéma avaient
  * leur fin de mot coupée. ENTRÉE QUI DOIT FAIRE ÉCHOUER : une police écrite en dur dans la règle
  * forcée, ou un `--font` malvoyant absent.
  */

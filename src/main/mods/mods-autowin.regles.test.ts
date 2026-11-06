@@ -10,7 +10,7 @@ import {
 } from '../../../mods/autowin/hooks/regles.js'
 
 /**
- * Cas limites des mods d'Autowin (conv-58, « fais le 1 2 3 ») — mods/autowin/hooks/regles.js.
+ * Cas limites des mods d'Autowin (« fais le 1 2 3 ») — mods/autowin/hooks/regles.js.
  * Le branchement réel sur le CLI est prouvé à part, par un run `claude -p --plugin-dir mods/autowin`.
  */
 const ctx = { idBureau: 'run-test-1', lanceur: 'D:/Autowin/scripts/hdesk-lancer.ps1' }

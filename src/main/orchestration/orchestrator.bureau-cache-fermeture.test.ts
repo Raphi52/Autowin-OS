@@ -1,5 +1,5 @@
 /**
- * LOT 1 (RUN outils-agent-1-2-4-6-7, conv-222) : en FIN DE RUN, le bureau caché du run
+ * LOT 1 (RUN outils-agent-1-2-4-6-7) : en FIN DE RUN, le bureau caché du run
  * (`run-<runId>`) est fermé sans geste de l'agent — vert, rouge ou planté. Une app laissée ouverte
  * par une phase occupait son identifiant (hdesk-lancer refuse une relance tant qu'elle vit).
  *

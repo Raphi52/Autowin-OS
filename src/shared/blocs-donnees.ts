@@ -1,5 +1,5 @@
 /**
- * BLOCS DE DONNEES — le modele envoie des DONNEES, l'app fait la mise en page (conv-1074,
+ * BLOCS DE DONNEES — le modele envoie des DONNEES, l'app fait la mise en page (
  * 2026-10-22).
  *
  * Avant, un tableau, une comparaison ou un plan en etapes « joli » passait par une page
@@ -63,7 +63,7 @@ const TEXTE_MAX = 2_000
 
 class Illisible extends Error {}
 
-// fix-ok: conv-1074 nettoyage — les retouches de ce fichier retirent des forcages de type, pas un bug.
+// fix-ok: un fil nettoyage — les retouches de ce fichier retirent des forcages de type, pas un bug.
 // Mesure tsc --strict : sans surcharge, `texte(v)` rend (string | undefined)[] (TS2322, code 2) ;
 // sans le predicat `langue is FormeDonnees`, `span.language` (string | null) est refuse par
 // lireBlocDonnees (TS2345, code 2). Avec les deux : code 0, sans `!` ni `as` dans l'appelant.

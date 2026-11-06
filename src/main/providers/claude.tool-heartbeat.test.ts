@@ -112,7 +112,7 @@ describe('ClaudeCliAdapter — un outil long donne signe de vie', () => {
   })
 
   /*
-   * « BASH EN COURS - 9 MIN » NE DIT RIEN. Mesure du 2026-09-04 (conv-288) : neuf minutes de
+   * « BASH EN COURS - 9 MIN » NE DIT RIEN. Mesure du 2026-09-04 : neuf minutes de
    * battements nus pendant un `vitest run` sur six suites. L'utilisateur voyait la machine tourner
    * sans pouvoir distinguer une suite de tests d'une boucle folle. La commande etait DEJA connue de
    * l'app — captee au `tool_use` — elle n'etait simplement pas relue au moment du battement.
@@ -272,7 +272,7 @@ describe('ClaudeCliAdapter — une tache de fond donne signe de vie', () => {
 
   /*
    * UNE TACHE DE FOND TUEE A LA FIN DU TOUR NE REVIENDRA JAMAIS — il faut le DIRE dans la reponse.
-   * Mesure conv-528, turnId 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9 : `task_started` a 1789370085871,
+   * Mesure, turnId 6dbf5a57-e142-46ca-bdf7-2ba66fc76dc9 : `task_started` a 1789370085871,
    * reponse « Le script tourne en fond. Je te rends le résultat dès qu'il se termine. », puis
    * `task_notification` status `stopped` a 1789370094489 et `done` 263 ms apres. Aucun resultat
    * n'est jamais revenu ; l'utilisateur a attendu 2 h 24 puis a lance /kaizen « cette conv a buggé ».
@@ -555,7 +555,7 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
   })
 
   /*
-   * ARRÊTÉE PAR LE MODÈLE = FINIE (conv-1370, lot 5, 2026-10-31). Forme mesurée sur le CLI 2.1.314
+   * ARRÊTÉE PAR LE MODÈLE = FINIE (lot 5, 2026-10-31). Forme mesurée sur le CLI 2.1.314
    * (sondes `claude -p --model haiku` avec les drapeaux du chat) : appel `TaskStop {task_id}`, puis
    * `task_notification` `status: stopped` — le MÊME mot que la coupure de fin de tour —, puis le
    * résultat de l'outil. Seul l'appel distingue les deux : sans lui, la commande repartait.
@@ -760,7 +760,7 @@ describe('ClaudeCliAdapter — tache de fond coupee, relancee par l appelant', (
 /**
  * UNE RAFALE DE LECTURES MUETTE PASSE POUR UNE APP MORTE.
  *
- * Mesure du 2026-08-31, run conv-9 (`scout-pour-trouver-les-causes-des-freeze-mth6zqy8-workspace`) :
+ * Mesure du 2026-08-31, run (`scout-pour-trouver-les-causes-des-freeze-mth6zqy8-workspace`) :
  * un sous-agent `scout` a enchaine 52 appels d'outils (26 Read, 23 Grep, 3 Glob), TOUS reussis,
  * pendant 223 659 ms — et a produit ZERO texte. Le journal `causal-trace/conv-9.jsonl` montre un
  * SEUL trou ininterrompu de 224 s sans aucun evenement live, puis les 52 enregistrements d'un coup
@@ -840,7 +840,7 @@ describe('ClaudeCliAdapter — une rafale d’outils rapides donne signe de vie'
 })
 
 /**
- * FIN D'ACTION — le bloc Actions (frise C3, conv-831, 2026-09-24) colore chaque action selon son
+ * FIN D'ACTION — le bloc Actions (frise C3, 2026-09-24) colore chaque action selon son
  * RESULTAT. Ce resultat n'existait que dans `executionEvidence` ; il voyage desormais aussi dans le
  * canal status, sous une forme que `thinking-block-corps.ts` replie sur la ligne de l'outil.
  */
@@ -924,7 +924,7 @@ describe('ClaudeCliAdapter — la fin d’une action dit si elle a échoué', ()
     ).toBeUndefined()
   })
 
-  // conv-341 (2026-10-19) : « quand y a une action rouge, c'est possible d'avoir le message d'erreur
+  // 2026-10-19 : « quand y a une action rouge, c'est possible d'avoir le message d'erreur
   // […] un truc qui coûte pas de token ». Le texte rendu par l'outil en échec suit sa ligne de fin,
   // dans le journal d'actions que le fil sauvegarde — sans aucun appel au modèle.
   it('fait suivre la ligne de fin d’un échec par le message d’erreur de l’outil', async () => {

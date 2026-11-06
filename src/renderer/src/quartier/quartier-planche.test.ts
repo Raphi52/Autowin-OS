@@ -8,7 +8,7 @@ import {
   niveauPourEchelle
 } from './quartier-planche'
 
-// Les parts réelles de la planche 126 × 170 : 1, 63/126, 32/126, 16/126 (conv-1526).
+// Les parts réelles de la planche 126 × 170 : 1, 63/126, 32/126, 16/126.
 const PARTS = [1, 0.5, 32 / 126, 16 / 126]
 
 describe('niveauPourEchelle', () => {
@@ -50,7 +50,7 @@ describe('echelleMin', () => {
   })
 })
 
-// Les animaux v3 sont rendus en ×2 (conv-1558) : chaque planche fait 3024 × 9520 (28 rangées de 340 px).
+// Les animaux v3 sont rendus en ×2 : chaque planche fait 3024 × 9520 (28 rangées de 340 px).
 describe('finesseDePlanche', () => {
   it('lit 1 sur une planche à la grille de donnees.json, 2 sur une planche ×2', () => {
     expect(finesseDePlanche(1512, 126)).toBe(1)
@@ -84,7 +84,7 @@ describe('les planches livrées', () => {
     gestes: Record<string, { r: number; e?: { r: number } }>
   }
   const planches = readdirSync(dossier).filter((f) => /^atlas.*\.avif$/.test(f))
-  // Chaque planche porte toutes les rangées que donnees.json fait jouer (28 depuis les visages de conv-1558) : une
+  // Chaque planche porte toutes les rangées que donnees.json fait jouer (28 depuis les visages) : une
   // rangée qui manque chez un animal le rendrait invisible dans ce geste.
   const rangees = 1 + Math.max(...Object.values(gestes).flatMap((g) => [g.r, g.e?.r ?? 0]))
 

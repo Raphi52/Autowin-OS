@@ -9,7 +9,7 @@ import {
 import './MaintenanceSkillsPanel.css'
 
 /**
- * Les boutons d'entretien d'Autowin OS, en tête de la vue Maintenance (conv-1101, 2026-10-22).
+ * Les boutons d'entretien d'Autowin OS, en tête de la vue Maintenance (2026-10-22).
  *
  * Un clic ouvre une conversation dédiée et y envoie la skill : la vue n'exécute rien elle-même, le
  * travail se suit dans le chat. Un échec d'envoi s'AFFICHE sous les boutons — un bouton muet paraît

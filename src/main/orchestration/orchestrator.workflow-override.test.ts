@@ -298,7 +298,7 @@ describe('un graphe pilote le run', () => {
   it('le devis provisionne le PIRE CAS du graphe, pas sa chaîne — refus en mode bloquant', async () => {
     // Régime standard : la chaîne seule (2 phases) passe. C'est bien le pire cas du graphe à boucles
     // — 7 exécutions de nœuds — qui fait refuser, AVANT de dépenser plutôt qu'en pleine course.
-    // Depuis conv-1148 (13/08), ce refus est réservé au mode `blocking` : en mesure seule (défaut),
+    // Depuis le 13/08, ce refus est réservé au mode `blocking` : en mesure seule (défaut),
     // le devis s'agrandit au pire cas au lieu de tuer le run.
     const bloquant = compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
     await expect(
@@ -354,14 +354,14 @@ describe('un graphe pilote le run', () => {
     /*
      * Le plafond d agents ne peut PLUS etre borne par le nombre d appels : une phase en fan-out
      * lance un agent par membre de son panel, et l ancienne egalite « un appel = un agent » tuait
-     * le run au premier fan-out (« Budget d agents atteint (6) », conv-1587). Il doit rester au
+     * le run au premier fan-out (« Budget d agents atteint (6) »). Il doit rester au
      * moins aussi large que le chemin obligatoire et ses reprises.
      */
     expect(quote.limits.maxAgents).toBeGreaterThanOrEqual(12 + quote.limits.maxRecoveries)
   })
 
   /*
-   * Regression du 2026-08-31 (conv-1587) : un run a ete tue sur « Budget d agents atteint (6) »
+   * Regression du 2026-08-31 : un run a ete tue sur « Budget d agents atteint (6) »
    * au premier fan-out de build, AVANT que le moindre modele ait produit une sortie. La cause :
    * `maxAgents` etait cale sur le nombre d APPELS obligatoires, alors qu une phase en fan-out
    * lance un agent PAR MEMBRE de son panel. Un panel de 3 sur six phases a donc besoin de bien
@@ -788,7 +788,7 @@ describe('mode bloquant : aucune reprise automatique sans nouveau tour humain', 
     expect(provider.phases).toEqual(['build', 'judge'])
   })
 
-  // conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparations 1 a 9 : chaque refus du juge
+  // tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparations 1 a 9 : chaque refus du juge
   // arrivait a la reparation precede de « Échec déjà déclaré », faux (la preuve avait passe le pre-gate).
   it('un refus du juge ne se double pas du motif « Échec déjà déclaré »', async () => {
     const result = await makeOrchestrator(

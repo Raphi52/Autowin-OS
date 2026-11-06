@@ -1,11 +1,11 @@
 /**
  * Types publics et internes de WorktreeManager (résultat de finalisation, contextes, options,
- * plans de compensation). Extraits tels quels de worktree-manager.ts (conv-1508), qui les ré-exporte.
+ * plans de compensation). Extraits tels quels de worktree-manager.ts, qui les ré-exporte.
  */
 /**
  * L'EDITION NON COMMITEE DE L'UTILISATEUR N'A PAS PU ETRE REMISE DANS SES FICHIERS (barreau 2).
  *
- * Vecu le 2026-10-24 (conv-1139, run run-58bfc90f8f7b-1) : la publication a atterri, deux fichiers
+ * Vecu le 2026-10-24 (run run-58bfc90f8f7b-1) : la publication a atterri, deux fichiers
  * modifies par l'utilisateur et touches par un commit entrant sont restes dans `stash@{0}`, revenus
  * a la version commitee, et le compte rendu disait seulement « integre ». Ce champ porte le constat
  * jusqu'au compte rendu (`annonce-edition-locale.ts`) : les fichiers, et ou leur version se trouve.
@@ -38,9 +38,9 @@ export type FinalizeResult =
    * PAS ENCORE — l'attente, distincte de l'absence d'issue.
    *
    * `undefined` disait DEUX choses incompatibles : « rien a faire » et « pas encore ». Mesure le
-   * 2026-08-31 (conv-1, run « reprend-pardon-mthg437j », 2,13 $) : la copie avait encore des
+   * 2026-08-31 (run « reprend-pardon-mthg437j », 2,13 $) : la copie avait encore des
    * processus vivants — typiquement les workers `vitest` que la verification vient elle-meme de
-   * lancer (deja documente conv-1404) —, la finalisation a ete DIFFEREE puis publiee par
+   * lancer (deja documente) —, la finalisation a ete DIFFEREE puis publiee par
    * `retryRecovery`, mais l'orchestrateur avait deja rendu un rouge « integration locale non
    * terminee » SANS cause. Face a un faux echec, l'agent RECOMMENCE.
    *
@@ -101,7 +101,7 @@ export type FinalizeResult =
       /**
        * Adresse git durable posee sur le commit que la copie a DEJA produit, quand la publication est
        * refusee pour une cause REPARABLE (`base-dirty`). Le travail est donc ATTEIGNABLE et attend
-       * son atterrissage, au lieu d'etre rendu comme un echec sec — vecu conv-1450, 1,32 $ payes pour
+       * son atterrissage, au lieu d'etre rendu comme un echec sec — vecu,32 $ payes pour
        * un « statut echoue ». N'ecrit RIEN dans l'arbre de l'utilisateur : voir
        * `worktree-manager.attente-integration.test.ts`.
        */

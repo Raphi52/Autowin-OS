@@ -1,5 +1,5 @@
 /**
- * LA NAPPE FABRIQUE-T-ELLE ENCORE DES DROITES ? (conv-1582, « ya encore pas mal de lignes »)
+ * LA NAPPE FABRIQUE-T-ELLE ENCORE DES DROITES ? (« ya encore pas mal de lignes »)
  *
  * Trois passes ont corrigé le NUAGE (hash saturant, aplats, rotation par octave) et l'utilisateur
  * voyait toujours des arêtes rectilignes en travers de l'écran — y compris LOIN du nuage, sur le

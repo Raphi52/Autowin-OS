@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { battementDOrchestration } from '../verify/verify-battement'
 
 /**
- * LE TROU NOIR DE 23 MINUTES, mesure le 2026-09-07 (conv-42).
+ * LE TROU NOIR DE 23 MINUTES, mesure le 2026-09-07.
  *
  * Un run d'orchestration a tourne de 09:45 a 10:08 sans qu'une ligne n'arrive dans le fil ;
  * l'utilisateur l'a signale comme un « arret ». Rien, a l'ecran, ne distinguait un sous-agent qui

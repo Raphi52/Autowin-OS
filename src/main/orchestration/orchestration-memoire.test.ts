@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { findingsDuJuge, memoireDesRunsPrecedents, resumeDesTours } from './orchestration-memoire'
 
 /**
- * Défaut mesuré (conv-1405) : les objections du juge d'un run meurent avec ce run. Le run SUIVANT
+ * Défaut mesuré : les objections du juge d'un run meurent avec ce run. Le run SUIVANT
  * de la même conversation ne reçoit que la phrase-tâche + la fin du fil ; il refait donc les mêmes
  * erreurs. Ces tests sont écrits ROUGE avant le module.
  */
@@ -132,7 +132,7 @@ describe('resumeDesTours', () => {
 })
 
 /**
- * conv-1074 (2026-10-22) : le resume d'une ligne d'un tour ancien coupait la reponse a 180
+ * 2026-10-22 : le resume d'une ligne d'un tour ancien coupait la reponse a 180
  * caracteres — une reponse qui commence par une page `html-render` n'y laissait que du code.
  * Entree qui ferait echouer une mauvaise correction : la couleur `#d4a94f` au debut de la page.
  */

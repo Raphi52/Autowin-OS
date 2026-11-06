@@ -3,10 +3,10 @@ import { CATALOG } from './commands'
 import { REGLES_ECRAN_UTILISATEUR } from '../consignes/chat-pilotage-prompt'
 
 /**
- * MESURE (conv-614, 2026-09-16) : le catalogue de commandes pese 12 390 caracteres dans le prompt
+ * MESURE (2026-09-16) : le catalogue de commandes pese 12 390 caracteres dans le prompt
  * systeme, et `desktop_observe` en occupait a lui seul 1 263 — dont un preambule qui REPETAIT mot
  * pour mot la regle du bureau cache deja portee par REGLES_VISUELLES (lanceur, script de capture,
- * defaut vecu conv-586). Deux fois la meme regle dans le MEME prompt.
+ * defaut vecu). Deux fois la meme regle dans le MEME prompt.
  *
  * Ce test tient la deduplication : la regle vit a UN endroit, la description garde le contrat de
  * l'argument (`ecran_utilisateur: true`) et y renvoie.
@@ -18,7 +18,7 @@ describe('catalogue de commandes sans doublon du prompt', () => {
     expect(desktopObserve).toBeDefined()
   })
 
-  // Depuis kaizen conv-835, la regle vit dans REGLES_ECRAN_UTILISATEUR, servi a CHAQUE tour.
+  // Depuis kaizen, la regle vit dans REGLES_ECRAN_UTILISATEUR, servi a CHAQUE tour.
   it('ne repete pas la procedure du bureau cache, qui vit dans les regles de l ecran', () => {
     const description = desktopObserve?.description ?? ''
     expect(REGLES_ECRAN_UTILISATEUR).toContain('hdesk-lancer.ps1')

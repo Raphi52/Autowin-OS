@@ -3,8 +3,8 @@ import { deciderDuPassage, type EtatDeBoucleDeReparation } from './boucle-repara
 import { evaluateClosure } from '../gates/stopgate'
 
 /**
- * conv-1618 (2026-11-05) : 202 passages build Opus, 364 $, le MÊME refus du contrôle final à chaque
- * passage, en mode « jusqu'au vert » (le mode de production, conv-844). Choix utilisateur conv-1626 :
+ * 2026-11-05 : 202 passages build Opus, 364 $, le MÊME refus du contrôle final à chaque
+ * passage, en mode « jusqu'au vert » (le mode de production). Choix utilisateur :
  * « le même refus revenu 3 fois de suite arrête la boucle, même en mode jusqu'au vert ».
  *
  * Ce test rejoue la BOUCLE telle que l'orchestrateur la mène (`orchestrator-parcours-sequentiel.ts` :

@@ -288,7 +288,7 @@
 /* Repere pose a la MAIN pour retrouver une conversation, en LISERE or a gauche.
 
    Le lisere passe par un PSEUDO-ELEMENT, et non par `box-shadow: inset` comme la premiere version.
-   Defaut vecu le 2026-09-09 (conv-384) : le repere etait ecrit pour le seul theme par defaut, et
+   Defaut vecu le 2026-09-09 : le repere etait ecrit pour le seul theme par defaut, et
    chaque theme repeint `.conv-item.active` avec sa propre `background` ET sa propre `box-shadow`, a
    specificite egale mais PLUS BAS dans le fichier (`.cosmic-outline .conv-item.active`, ligne
    ~1950). Sur la conversation ouverte — precisement celle qu'on surligne le plus souvent — les deux
@@ -331,7 +331,7 @@
 /* CASE DE L'INDICATEUR D'ETAT. Sa largeur = la taille du <Spinner size={18}/> de ChatView.tsx.
    Sans elle, chaque indicateur prenait sa largeur propre (pastille 7 ou 11px, points 15px,
    spinner 18px) : le titre demarrait a un x different selon l'etat, et le spinner, aligne a
-   gauche, avait son centre ~3,5px a droite de celui des pastilles (conv-144, 2026-10-10). */
+   gauche, avait son centre ~3,5px a droite de celui des pastilles (2026-10-10). */
 .conv-state-slot {
   display: inline-grid;
   place-items: center;
@@ -408,7 +408,7 @@
      sont COMBINEES en UN cycle de 1.8s : le « ? » gigote (0-500 ms), PUIS chaque point avance a
      droite a tour de role, de haut en bas (500-1300 ms), puis pause. Les deux @keyframes ont la MEME
      duree et demarrent ensemble (meme element, meme changement de classe) : elles restent calees.
-     PAR CRANS DE 100 MS (conv-1075) : en continu, cette pastille faisait recomposer toute la fenetre
+     PAR CRANS DE 100 MS : en continu, cette pastille faisait recomposer toute la fenetre
      60 fois par seconde. Ses images cles tombent donc sur des dix-huitiemes du cycle (100 ms : d'ou
      27.7778 % au lieu de 26 %), et le calage sur l'horloge commune vit dans animations-par-crans.ts.
      Boite de 18px : le « ? » a gauche, puis une piste de 9px ou la colonne avance de 5px. Tout est
@@ -1053,7 +1053,7 @@
   height: 100%;
   gap: var(--s3);
 }
-/* ---- Ctrl+F dans la conversation (conv-21) ----
+/* ---- Ctrl+F dans la conversation ----
    Posee EN SURCOUCHE en haut a droite du fil : elle ne pousse rien, donc l'ouvrir ne deplace
    pas le texte qu'on est en train de lire. `.chat` est deja `position: relative`. */
 .chat-find {
@@ -1149,7 +1149,7 @@
   gap: var(--s4);
   row-gap: 28px;
   padding: var(--s3) var(--s2);
-  /* LE FIL NE DEFILE QU'EN HAUTEUR (conv-248, 2026-10-11 : « je veux pas de scroll horizontal dans
+  /* LE FIL NE DEFILE QU'EN HAUTEUR (2026-10-11 : « je veux pas de scroll horizontal dans
      le chat »). `.scroll-y` ne pose que `overflow-y: auto`, ce qui rend `overflow-x` calcule a `auto`
      lui aussi : le moindre contenu trop large donnait une barre au fil entier. Le fil decoupait deja
      ce qui depasse (c'est un conteneur a defilement) ; seule la barre disparait. Ce sont les blocs
@@ -1278,7 +1278,7 @@
 .directive-receipt.is-failed .msg-body {
   border-color: color-mix(in srgb, var(--err) 55%, transparent);
 }
-/* « Annuler » un envoi en attente (conv-1452) : discret au repos, il ne doit pas voler l'œil au reçu. */
+/* « Annuler » un envoi en attente : discret au repos, il ne doit pas voler l'œil au reçu. */
 .directive-receipt-annuler {
   padding: 2px 8px;
   border: 1px solid var(--line);
@@ -1338,7 +1338,7 @@
   flex-direction: column;
   gap: 6px;
 }
-/* BARRE DE PROMPTING « DEUX ÉTAGES » (choix utilisateur, conv-167 direction C).
+/* BARRE DE PROMPTING « DEUX ÉTAGES » (choix utilisateur, Un fil direction C).
    Le TEXTE occupe toute la largeur (order:-1 + flex-basis 100% force le retour), les outils
    passent sur une seconde rangée séparée d'un filet. Motif : en mosaïque la rangée unique
    écrasait le champ — le bouton « Envoyer » et le micro lui mangeaient la place. Aucun JSX
@@ -1401,7 +1401,7 @@
 .attachment-input {
   display: none;
 }
-/* LE TROMBONE EST UN `.btn` COMME ∞ ET LE MICRO (2026-10-13, conv-937 : « grisé et vert au
+/* LE TROMBONE EST UN `.btn` COMME ∞ ET LE MICRO (2026-10-13, « grisé et vert au
    survol au lieu d'avoir le même comportement que les boutons d'à côté »). Il gardait ici son
    propre aspect — contour voilé à 16 %, fond d'encre, survol vert d'eau — que
    scripts/theme-nebuleuse-verre.mjs recopiait dans les thèmes générés à spécificité ÉGALE et
@@ -1430,9 +1430,9 @@
   margin: 0;
   text-align: left;
 }
-/* IMAGE ENVOYÉE EN CAPSULE (conv-178, 2026-10-10) : collée à DROITE sous ta bulle, comme tout ce
+/* IMAGE ENVOYÉE EN CAPSULE (2026-10-10) : collée à DROITE sous ta bulle, comme tout ce
    que tu écris — à gauche, elle se lisait comme une image de l'agent. Depuis le cadre à deux
-   lignes (conv-907), le nom est DANS le cadre, sous le libellé : c'est le cadre entier qui se
+   lignes, le nom est DANS le cadre, sous le libellé : c'est le cadre entier qui se
    range à droite. */
 .attachment-list.sent .artifact-capsule.cadre-anneau {
   margin-left: auto;
@@ -1443,7 +1443,7 @@
   align-items: center;
   gap: 6px;
   padding: 5px 7px;
-  /* BLANC, pas cyan : demande du 2026-10-10 (conv-186). Le blanc n'est transpose par aucun
+  /* BLANC, pas cyan : demande du 2026-10-10. Le blanc n'est transpose par aucun
      theme Nebuleuse, donc il reste blanc partout. */
   border: 1px solid #ffffff;
   border-radius: 7px;
@@ -1544,7 +1544,7 @@
   border: 0;
   border-radius: 50%;
   background: rgba(var(--voile-rgb), 0.08);
-  /* Croix BLANCHE (conv-186) : `--text-dim` etait bleute en Nebuleuse de verre. */
+  /* Croix BLANCHE : `--text-dim` etait bleute en Nebuleuse de verre. */
   color: #ffffff;
   cursor: pointer;
   line-height: 16px;
@@ -1733,14 +1733,14 @@
 .delete-confirm-danger:hover {
   background: var(--chat-suppr-bouton-survol);
 }
-/* CARTE DE SUPPRESSION DES FILS (conv-1078, 2026-10-22 : /draft « une plus jolie popup pour quand je
+/* CARTE DE SUPPRESSION DES FILS (2026-10-22 : /draft « une plus jolie popup pour quand je
    supprime les convs », puis « Implémenter la 2 · En-tête en ligne ») — SuppressionConversationsCarte.tsx.
    En-tête EN LIGNE (tuile corbeille, surtitre chiffré, titre), fils NOMMÉS avec leurs messages, bouton
    irréversible en pleine largeur au-dessus de « Garder ». Rien que des jetons : chaque thème garde son
    habit (Holographique y ajoute le cadre nacré et le gel). Les cartes du RUN et du renommage ne portent
    pas `--fils` et ne changent pas. */
 .delete-confirm-card--fils {
-  /* Les deux boutons dans TOUS les thèmes, aux couleurs de chacun (conv-1078 : « applique a tous les
+  /* Les deux boutons dans TOUS les thèmes, aux couleurs de chacun (« applique a tous les
      themes mais avec des couleurs en fonction du theme ») : « Supprimer » PLEIN de l'accent du thème,
      « Garder » cerné d'un LISERÉ de ce même accent. Les valeurs viennent des jetons partagés que
      chaque thème définit déjà (--accent, --on-accent, --text) ; un thème qui veut mieux surcharge
@@ -1850,8 +1850,8 @@
 }
 /* Sélecteurs volontairement LOURDS (0,6,0, et 0,8,0 au survol) : la carte est rendue dans `body` et
    ChatView.css est chargé AVANT les thèmes, dont les règles `.btn` (jusqu'à 0,5,0 au survol)
-   l'emporteraient sinon — Ninja Claude rendait les deux boutons gris (capture de l'utilisateur,
-   conv-1078). Le liseré est un `::before` évidé par masque (le fond moins sa boîte de contenu) : il
+   l'emporteraient sinon — Ninja Claude rendait les deux boutons gris (capture de l'utilisateur).
+   Le liseré est un `::before` évidé par masque (le fond moins sa boîte de contenu) : il
    suit l'arrondi du bouton de chaque thème, pilule ou coins de 8 px, et accepte un dégradé. */
 :root
   .delete-confirm-card.delete-confirm-card--fils
@@ -2001,7 +2001,7 @@
   overflow-wrap: anywhere;
 }
 /* Saut de paragraphe (Markdown.tsx, ligne vide) : un demi-interligne au lieu d'une ligne blanche
-   pleine (conv-227, 2026-10-11 : « trop d'espacement vertical [...] ca fait scroller pour rien »). */
+   pleine (2026-10-11 : « trop d'espacement vertical [...] ca fait scroller pour rien »). */
 .md-para {
   display: block;
   height: 0.5em;
@@ -2028,7 +2028,7 @@ h6.md-h {
   color: var(--chat-md-h6);
 }
 /* Tableaux GFM du chat : entêtes, bordures et zébrage discrets, colonnes alignées.
-   AUCUNE BARRE HORIZONTALE (conv-248) : les cellules ET les entetes passent a la ligne, et un
+   AUCUNE BARRE HORIZONTALE : les cellules ET les entetes passent a la ligne, et un
    tableau qui deborde encore (dizaines de colonnes) est reduit a l'echelle par Markdown.tsx
    (CadreDeTableau), jamais mis a defiler. Mesure avant : 1 366 px de contenu dans 327 px. */
 .md-table-wrap {
@@ -2061,7 +2061,7 @@ h6.md-h {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   /* Plus de `nowrap` : un entete insecable fixait la largeur minimale de sa colonne, et neuf
-     colonnes poussaient le tableau a 1 366 px dans une colonne de 327 (conv-248). */
+     colonnes poussaient le tableau a 1 366 px dans une colonne de 327. */
   white-space: normal;
 }
 .md-table tbody tr:nth-child(even) td {
@@ -2140,7 +2140,7 @@ ol.md-list li {
   max-width: 100%;
   margin: var(--s1) 0;
   overflow-x: auto;
-  /* AUCUN DEFILEMENT VERTICAL ICI (2026-09-16, conv-590). Le cadre borne a 300 px faisait
+  /* AUCUN DEFILEMENT VERTICAL ICI (2026-09-16). Le cadre borne a 300 px faisait
      apparaitre une barre de defilement pour quelques dizaines de pixels manquants : un schema qui
      depasse a peine est RETRECI par la regle du dessin ci-dessous, jamais mis a derouler. */
   overflow-y: visible;
@@ -2163,8 +2163,8 @@ ol.md-list li {
   height: auto;
   /* HAUTEUR PLAFONNEE ICI, pas par un cadre a derouler : un schema trop haut est mis a l'echelle,
      ratio conserve. 1200 px, soit environ deux hauteurs de fil : en dessous, un schema garde sa taille
-     naturelle et son texte reste lisible. L'ancien plafond de 420 px ramenait celui de conv-1321
-     (1053 px de haut) a un texte de 4,6 px (conv-1322). Au-dela, le bouton Agrandir prend le relais. */
+     naturelle et son texte reste lisible. L'ancien plafond de 420 px ramenait celui
+     (1053 px de haut) a un texte de 4,6 px. Au-dela, le bouton Agrandir prend le relais. */
   max-height: 1200px;
   min-height: 0;
 }
@@ -2174,14 +2174,14 @@ ol.md-list li {
   max-width: 100%;
   margin: var(--s1) 0;
   contain: layout paint style;
-  /* AUCUNE BARRE HORIZONTALE (conv-248 : 1 709 px de contenu dans 329 px, avec sa barre). Le
+  /* AUCUNE BARRE HORIZONTALE (1 709 px de contenu dans 329 px, avec sa barre). Le
      contenu est d'abord rendu fluide par les valeurs par defaut ci-dessous ; ce qu'il impose encore
      (pistes de grille fixes, `nowrap` voulu) est reduit a l'echelle par Markdown.tsx (BlocHtmlRendu). */
   overflow-x: hidden;
   overflow-wrap: anywhere;
   /* Le bloc est du HTML : ses retours a la ligne de SOURCE ne s'affichent pas, comme dans une page.
      Sans cela il heritait le `pre-wrap` de `.msg-body` (texte de bulle) et chaque saut de ligne
-     entre deux balises devenait une ligne vide : conv-254, 176 px de vide entre des onglets et leur
+     entre deux balises devenait une ligne vide : 176 px de vide entre des onglets et leur
      panneau. Un `pre` du bloc garde son `pre-wrap` (regle ci-dessous) ; une regle du modele gagne. */
   white-space: normal;
 }
@@ -2197,7 +2197,7 @@ ol.md-list li {
 .md-html pre {
   white-space: pre-wrap;
 }
-/* BOUTON « PROMPTER » FERMÉ (conv-302, bouton-prompt-html.ts) : tour en cours, ou bouton déjà envoyé.
+/* BOUTON « PROMPTER » FERMÉ (bouton-prompt-html.ts) : tour en cours, ou bouton déjà envoyé.
    Grisé et inerte, comme le bloc `ask` une fois répondu — un clic ne doit pas sembler marcher. */
 .msg-body[data-prompts='fermes'] .md-html a[href='#autowin-prompt'] {
   pointer-events: none;
@@ -2223,7 +2223,7 @@ ol.md-list li {
   padding: 6px 10px;
   border: 1px solid var(--line);
 }
-/* CLASSES DE L'APP POUR LES PAGES html-render (conv-1074, 2026-10-22). Le modele ecrivait des
+/* CLASSES DE L'APP POUR LES PAGES html-render (2026-10-22). Le modele ecrivait des
    couleurs de nuit en dur ; il nomme maintenant un ROLE, et l'app le peint avec les jetons du theme
    choisi. Liste et usages : src/shared/classes-pages-html.ts (le prompt la lit). Une seule classe de
    force : une regle ecrite par le modele dans son bloc l'emporte toujours. Reprise en theme clair :
@@ -2581,7 +2581,7 @@ ol.md-list li {
   justify-content: flex-end;
   margin-left: auto;
 }
-/* UN PANNEAU OUVERT À 1280 PX NE LAISSE QUE 270 PX AU FIL (mesuré, conv-1378, 2026-10-31) : les boutons
+/* UN PANNEAU OUVERT À 1280 PX NE LAISSE QUE 270 PX AU FIL (mesuré, 2026-10-31) : les boutons
    gardaient leur largeur et le titre passait à un mot par ligne, jusqu'à prendre toute la hauteur du
    fil. Les 200 px de base font passer les boutons à la ligne avant que le titre ne s'écrase ; le
    titre s'arrête à deux lignes, comme en pleine largeur où il est déjà raccourci. */
@@ -2598,13 +2598,13 @@ ol.md-list li {
   -webkit-line-clamp: 2;
 }
 
-/* Bouton Détails : le bouton creux de la Mini-adresse (BoutonCreux.css, conv-1317, 2026-10-30), qui
-   remplace la capsule de conv-178. Ne reste ici que ce qu'il a en plus : il ne rétrécit pas, seul
+/* Bouton Détails : le bouton creux de la Mini-adresse (BoutonCreux.css, 2026-10-30), qui
+   remplace la capsule. Ne reste ici que ce qu'il a en plus : il ne rétrécit pas, seul
    le site de son voisin le peut, et il a une flèche. */
 .workflow-toggle {
   flex: none;
 }
-/* LA FLECHE DE DETAILS POINTE A GAUCHE QUAND LE PANNEAU EST OUVERT (conv-177, 2026-10-10 : « la
+/* LA FLECHE DE DETAILS POINTE A GAUCHE QUAND LE PANNEAU EST OUVERT (2026-10-10 : « la
    fleche doit pointer vers la gauche pas vers le haut quand le paneau est ouvert »). Le panneau
    Details s'ouvre SUR LE COTE, a droite : ferme, la fleche pointe vers lui (a droite, -45deg) ;
    ouvert, elle pointe a GAUCHE, le sens qui le replie. */
@@ -2925,8 +2925,8 @@ ol.md-list li {
   background: linear-gradient(180deg, rgba(2, 4, 6, 0.74), var(--chat-saisie-fond) 30%);
 }
 
-/* LE TRAIT QUI SEPARE LE FIL DE LA ZONE DE SAISIE. Il portait la jauge de contexte (conv-240) ;
-   depuis conv-179 elle est le separateur sous l'en-tete du chat (`.chat-context-rule`, plus bas).
+/* LE TRAIT QUI SEPARE LE FIL DE LA ZONE DE SAISIE. Il portait la jauge de contexte ;
+   elle est le separateur sous l'en-tete du chat (`.chat-context-rule`, plus bas).
    Le trait reste, seul. PAS de prefixe de theme : il existe dans TOUS les themes. */
 .composer {
   position: relative;
@@ -2943,7 +2943,7 @@ ol.md-list li {
   pointer-events: none;
 }
 
-/* LA JAUGE DE CONTEXTE, SEPARATEUR ENTRE L'EN-TETE DU CHAT ET LE FIL (conv-179, 2026-10-10 :
+/* LA JAUGE DE CONTEXTE, SEPARATEUR ENTRE L'EN-TETE DU CHAT ET LE FIL (2026-10-10 :
    « la barre de contexte met-la en haut comme separateur entre le header du chat et le chat »).
    Composant ChatContextRule, dernier enfant de `.chat-head`. Elle se pose SUR le filet du bas de
    l'en-tete, qui lui sert de piste : rien n'est ajoute a la hauteur de l'ecran. La racine est une
@@ -2963,7 +2963,7 @@ ol.md-list li {
   /* Place reservee au mot « contexte » entre la pointe du remplissage et la reprise du rail. */
   --context-libelle-largeur: 60px;
 }
-/* LE RAIL reprend APRES le mot « contexte » (conv-189) : le mot s'ecrit dans une coupure du trait,
+/* LE RAIL reprend APRES le mot « contexte » : le mot s'ecrit dans une coupure du trait,
    pas sur lui. Sous le remplissage le rail ne se voit pas, il n'a donc pas a partir de 0. Le mot
    est borne au bord droit : a 100 % il recouvre la fin du trait plutot que de sortir de l'ecran. */
 .chat-context-rule::after {
@@ -2979,12 +2979,12 @@ ol.md-list li {
   pointer-events: none;
   transition: left 220ms ease;
 }
-/* LE MOT « contexte » AU BOUT DE LA JAUGE (conv-189, 2026-10-10 : « qu'il y ait ecrit contexte au
+/* LE MOT « contexte » AU BOUT DE LA JAUGE (2026-10-10 : « qu'il y ait ecrit contexte au
    bout de la jauge, pas tout a droite mais a droite de la jauge qui progresse ») : il suit la
    pointe du remplissage au meme rythme que la decoupe (220 ms), centre sur le trait. Remonte de
-   2 px (conv-189 : « remonter un poil le texte contexte ») : centrer la BOITE de 12 px laissait le
+   2 px (« remonter un poil le texte contexte ») : centrer la BOITE de 12 px laissait le
    milieu des minuscules 2,1 px sous le milieu du trait (mesure dans l'app, police Segoe UI 10 px). */
-/* DANS UNE CAPSULE NOIRE (conv-189 : « le texte contexte doit etre dans une capsule noire pour etre
+/* DANS UNE CAPSULE NOIRE (« le texte contexte doit etre dans une capsule noire pour etre
    visible par-dessus du texte blanc du chat ») : le mot deborde sous l'en-tete, sur le fil qui
    defile, ou les messages blancs le noyaient. Noir et blanc ECRITS EN DUR, pas le voile : la
    capsule porte son propre contraste dans tous les themes. Geometrie : capsule de 15 px centree
@@ -3037,7 +3037,7 @@ ol.md-list li {
   transition: clip-path 220ms ease;
 }
 
-/* DIRECTION C1 « NU » (choix utilisateur, conv-167) : la barre de prompting n'est plus une boite.
+/* DIRECTION C1 « NU » (choix utilisateur) : la barre de prompting n'est plus une boite.
    Le cadre et le fond opaque venaient de la rangee unique, ou il fallait dessiner la zone de saisie ;
    en deux etages le filet entre les etages suffit a la delimiter. Le focus se signale sur ce filet
    (voir `.composer-field:focus-within .composer-input-row .model-quota-bar`), plus par un halo. */
@@ -3144,7 +3144,7 @@ ol.md-list li {
   width: 26px;
   height: 26px;
   padding: 0;
-  /* Gris au repos, blanc au survol, AUCUNE teinte (retour utilisateur conv-203) : des jetons
+  /* Gris au repos, blanc au survol, AUCUNE teinte (retour utilisateur) : des jetons
      neutres, pas --text-faint/--cyan que chaque theme colore (lavande puis bleu en Nebuleuse). */
   border: 1px solid rgba(var(--voile-rgb), 0.2);
   border-radius: 8px;
@@ -3419,7 +3419,7 @@ button.chat-project-dot:disabled {
 .activity-local-details details.failed pre {
   border-color: var(--err);
 }
-/* LA BARRE D'ACTIVITE (conv-904, 2026-10-12) : plus de carte teintee (B3-γ, bord gauche + degrade
+/* LA BARRE D'ACTIVITE (2026-10-12) : plus de carte teintee (B3-γ, bord gauche + degrade
    par statut). Elle prend le cadre « grand, deux lignes » des capsules, dessine par
    anneau-activite.css : le VERDICT de chaque action se lit dans l'anneau d'arcs et la legende,
    l'etat du groupe dans le reflet du cadre (allume tant que ca tourne). */
@@ -3460,7 +3460,7 @@ button.chat-project-dot:disabled {
   line-height: 1;
 }
 
-/* Bouton d'action du bandeau d'arrêt du mode auto (« Ouvrir Settings › Behaviour », conv-1602) : la
+/* Bouton d'action du bandeau d'arrêt du mode auto (« Ouvrir Settings › Behaviour ») : la
    règle `button` ci-dessus est taillée pour la croix (17 px) et rendait l'action plus grosse que le
    texte. Une action écrite garde la taille du texte et prend un cadre, comme « Traiter » du bandeau
    des travaux non publiés ; la couleur suit celle du bandeau dans chaque thème. */
@@ -3844,7 +3844,7 @@ button.chat-project-dot:disabled {
   max-height: 40vh;
   overflow: auto;
   padding: 8px;
-  /* Les lignes longues du correctif passent a la ligne au lieu de defiler en largeur (conv-248 :
+  /* Les lignes longues du correctif passent a la ligne au lieu de defiler en largeur (
      1 045 px dans 348). L'alignement en colonnes d'un diff y perd un peu, la lecture non. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -4120,7 +4120,7 @@ button.chat-project-dot:disabled {
   color: var(--muted);
   white-space: pre-wrap;
   /* Un chemin ou un JSON sans espace ne trouvait aucun point de coupure : 1 563 px dans 284, avec
-     une barre horizontale (conv-248). Il se coupe desormais n'importe ou. */
+     une barre horizontale. Il se coupe desormais n'importe ou. */
   overflow-wrap: anywhere;
   font-size: 10.5px;
 }
@@ -4274,14 +4274,14 @@ button.chat-project-dot:disabled {
 
 /* BLOCS « Raisonnement » et « Actions » dans la bulle : la pensée du modèle et les actions du tour,
    repliables, écrits en direct. Volontairement DISCRETS — des satellites de la réponse.
-   En-tête « R5 · Sous la ligne » (choix sur maquettes, conv-162, 2026-10-10) : une CAPSULE à bord
+   En-tête « R5 · Sous la ligne » (choix sur maquettes, 2026-10-10) : une CAPSULE à bord
    dégradé porte l'icône, le libellé, les compteurs et le chevron ; le signe de vie reste DEHORS.
    Plus de filet à gauche du bloc.
-   Habillage « Fumé net » (choix sur maquettes, conv-173, 2026-10-10) : verre FUMÉ sans teinte
+   Habillage « Fumé net » (choix sur maquettes, 2026-10-10) : verre FUMÉ sans teinte
    (reflet bombé en arc), bord dégradé de 2 px, icône dans un rond dégradé cerclé de blanc,
    durées dans une pastille sombre cerclée ; la barre de temps des actions reste SOUS la ligne et
    déborde sous le signe de vie. Tour fini : bord à 55 %, reflet éteint, textes adoucis. */
-/* CAPSULE SUR UN BOUTON (conv-181, 2026-10-10 : « ces boutons [de mise à jour] avec la même gueule
+/* CAPSULE SUR UN BOUTON (2026-10-10 : « ces boutons [de mise à jour] avec la même gueule
    que le bouton Détails »). Un <button class="capsule-bouton"> qui contient le même balisage
    (`thinking-capsule`, `thinking-capsule-icone`, `thinking-label`, `thinking-duree`) est dessiné par
    les MÊMES règles que les capsules ci-dessous : chacune liste aussi `.capsule-bouton`, en sélecteur
@@ -4353,7 +4353,7 @@ button.chat-project-dot:disabled {
   padding: 0.25em 0.85em 0.25em 0.25em;
   border-radius: 999px;
   white-space: nowrap;
-  /* VERRE FUME, REFLET BOMBE (« reflet bombé », conv-173) : une lumiere BLANCHE neutre (aucune
+  /* VERRE FUME, REFLET BOMBE (« reflet bombé ») : une lumiere BLANCHE neutre (aucune
      teinte — « sans fond rose ») en ARC, plus forte au centre du haut, qui fait paraitre la
      capsule bombee comme une pilule de verre. */
   background: radial-gradient(
@@ -4363,9 +4363,9 @@ button.chat-project-dot:disabled {
     var(--chat-capsule-reflet-fin) 100%
   );
   /* PAS de reflet `inset 0 3px` : il depassait de 1 px sous le bord degrade et tracait un trait
-     gris sous lui — « ca fait pas pur » (conv-176, 2026-10-10). Le bord se suffit. */
+     gris sous lui — « ca fait pas pur » (2026-10-10). Le bord se suffit. */
 }
-/* DE L'AIR SOUS LE BORD (conv-192, 2026-10-10 : « pareil pour image read / Image sent / Détails /
+/* DE L'AIR SOUS LE BORD (2026-10-10 : « pareil pour image read / Image sent / Détails /
    Raisonnement et Actions », après « il est trop petit le cadre » sur le bouton de mise à jour).
    À 0.25em (3 px à 12 px), le bord dégradé de 2 px laissait 1 px autour du rond de l'icône. 0.4em
    en haut, en bas et à gauche en laisse ≈ 2,8 px ; la droite garde 0.85em, où loge le chevron.
@@ -4374,7 +4374,7 @@ button.chat-project-dot:disabled {
   padding-block: 0.4em;
   padding-left: 0.4em;
 }
-/* S'ALLUME AU SURVOL, COMME « FUSIONNER » (conv-192, 2026-10-10 : « je veux que ça les allume
+/* S'ALLUME AU SURVOL, COMME « FUSIONNER » (2026-10-10 : « je veux que ça les allume
    quand je les hover comme le bouton Fusionner »). Les règles « éteinte » d'une capsule de tour
    fini (images lues / envoyées, Détails fermé, Raisonnement, Actions) ne valent plus que capsule
    NON survolée et en-tête SANS focus clavier — le même `:not(:hover, :focus-visible)` que
@@ -4392,10 +4392,10 @@ button.chat-project-dot:disabled {
 /* BORD DEGRADE : un calque evide par masque, comme les cartes de fichier du theme Nebuleuse de
    verre. `border-image` ignore l'arrondi, et un fond `border-box` masquerait le fil sous la
    capsule. 2 px depuis Fumé net. Tour fini : le bord palit a 55 %, la capsule reste lisible sans
-   tirer l'oeil. Le liseré de « Garder » sur la carte de suppression des fils (conv-1078) prend ce
+   tirer l'oeil. Le liseré de « Garder » sur la carte de suppression des fils prend ce
    même calque, par un sélecteur LÉGER : sa règle propre, plus haut et plus lourde, en change
    l'épaisseur, la couleur et le plan quel que soit l'ordre. La pastille « compréhension » du fil
-   (conv-1280) aussi, en 1 px, dans son propre plan (isolation). */
+   aussi, en 1 px, dans son propre plan (isolation). */
 .thinking-block > summary .thinking-capsule::before,
 .capsule-bouton .thinking-capsule::before,
 .delete-confirm-card--fils .delete-confirm-cancel::before,
@@ -4414,7 +4414,7 @@ button.chat-project-dot:disabled {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
 }
-/* Le bord reste PLEIN au repos (conv-182, 2026-10-10 : « le même bleu plein partout — le repos
+/* Le bord reste PLEIN au repos (2026-10-10 : « le même bleu plein partout — le repos
    s'atténue autrement (texte, reflet), pas la couleur »). L'ancien `opacity: 0.55` d'un tour fini
    faisait un bleu de plus à l'écran. Le repos se lit au reflet plus faible et au texte adouci. */
 /* Texte adouci d'un tour fini : entre le texte et le gris lavande, encore lisible. */
@@ -4423,7 +4423,7 @@ button.chat-project-dot:disabled {
   --capsule-texte-fini: color-mix(in srgb, var(--text) 40%, var(--text-dim));
 }
 /* ICONE dans un rond DEGRADE (les deux couleurs de la capsule), sans anneau, les deux blocs
-   pareils. Tour fini : le dégradé reste PLEIN (conv-182), seul le trait de l'icône s'adoucit. */
+   pareils. Tour fini : le dégradé reste PLEIN, seul le trait de l'icône s'adoucit. */
 .thinking-block > summary .thinking-capsule-icone,
 .capsule-bouton .thinking-capsule-icone {
   flex: none;
@@ -4437,7 +4437,7 @@ button.chat-project-dot:disabled {
   background: linear-gradient(135deg, var(--capsule-froid), var(--capsule-chaud));
   color: var(--chat-capsule-sur-degrade);
   /* PAS d'anneau blanc : il se lisait comme un cercle gris autour de l'icone, comme le trait sous
-     le bord — « autour de l'icone aussi » (conv-176, 2026-10-10). */
+     le bord — « autour de l'icone aussi » (2026-10-10). */
 }
 .thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover) .thinking-capsule-icone,
 .capsule-bouton:is(:disabled, :not(:hover, :focus-visible)) .thinking-capsule-icone {
@@ -4495,7 +4495,7 @@ button.chat-project-dot:disabled {
   line-height: 1;
 }
 /* La pastille reste SOMBRE dans tous les themes : son texte reste donc CLAIR, juste adouci. Le gris
-   des libelles finis y etait illisible sur theme clair (capture du 2026-10-10, conv-173). */
+   des libelles finis y etait illisible sur theme clair (capture du 2026-10-10). */
 .thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover) .thinking-secondes,
 .thinking-block.is-done > summary:not(:focus-visible) .thinking-capsule:not(:hover) .thinking-duree,
 .capsule-bouton:is(:disabled, :not(:hover, :focus-visible)) .thinking-duree {
@@ -4570,7 +4570,7 @@ button.chat-project-dot:disabled {
 .thinking-block--actions > .thinking-body {
   border-left-color: color-mix(in srgb, var(--capsule-froid) 35%, transparent);
 }
-/* CORPS DÉPLIÉ DU RAISONNEMENT — « Liseuse + Fil de pensée » (conv-335, 2026-10-18, /draft « un
+/* CORPS DÉPLIÉ DU RAISONNEMENT — « Liseuse + Fil de pensée » (2026-10-18, /draft « un
    meilleur bloc raisonnement pour mieux voir le texte quand il est déplié », « Implémenter 1 + 3 »).
    Avant : <pre> gris lavande de 13 px, fenêtre de 240 px à ascenseur, première ligne coupée.
    - Liseuse : texte CLAIR en 14 px, aucun ascenseur ; coupé à une demi-fenêtre avec un fondu en
@@ -4685,11 +4685,11 @@ button.chat-project-dot:disabled {
 .thinking-block--raisonnement[open] > summary .anneau-l2 {
   display: none;
 }
-/* BLOC ÉTAPES (conv-304, 2026-10-17) : la liste de tâches de claude.exe.
-   RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (conv-326, 2026-10-18, /draft « des meilleures barres
+/* BLOC ÉTAPES (2026-10-17) : la liste de tâches de claude.exe.
+   RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (2026-10-18, /draft « des meilleures barres
    de progression pour ce bloc », trois tours : « le 3 et 4 », « Affiner la 6 · Pastilles
    numérotées », « Implémenter la 5 · Pied au temps »). Remplace la case et la barre de dix blocs par
-   étape (conv-303) : à gauche un RAIL où chaque étape pose sa PASTILLE (coche une fois finie, son
+   étape : à gauche un RAIL où chaque étape pose sa PASTILLE (coche une fois finie, son
    numéro sinon), à droite la valeur mesurée, en PIED une jauge dont chaque segment a la largeur du
    temps de son étape (`piedDesEtapes`). Dessiné en CSS : les glyphes ◻ ◼ ✔ sortent en émoji sous
    Windows. Le rail remplace le filet de gauche du corps.
@@ -4701,7 +4701,7 @@ button.chat-project-dot:disabled {
 }
 /* Le POULS de la pastille en cours (`etape-pouls`, jusqu'à 5 px autour d'elle) déborde de sa
    colonne de 18 px. Le corps défile (`overflow-y: auto`, donc rogne aussi en largeur) : le halo du
-   « 1 » était coupé à gauche, et en haut pour la première étape (conv-336). Le corps lui réserve
+   « 1 » était coupé à gauche, et en haut pour la première étape. Le corps lui réserve
    5 px, rendus par une marge négative : la liste reste exactement où elle était. */
 .thinking-block.cadre-anneau.thinking-block--etapes > .thinking-body {
   margin: -5px 0.85em 0 calc(3.5em - 5px);
@@ -4710,7 +4710,7 @@ button.chat-project-dot:disabled {
 /* Une GRILLE pour toute la liste (chaque <li> en `display: contents`) : le rail et les valeurs
    s'alignent en colonnes d'une étape à l'autre, quelle que soit la longueur du sujet. Le <li> garde
    son infobulle et ce qu'il transmet par héritage (gras de l'étape en cours). */
-/* CARTE D'UN GROS CHANTIER (conv-1362, lot conv-1366) : une ligne par phase, titre, jauge, comptes.
+/* CARTE D'UN GROS CHANTIER : une ligne par phase, titre, jauge, comptes.
    Aucune couleur en dur : les parts de la jauge prennent celles du thème. Le corps n'a pas de rail,
    il s'aligne sur le texte de l'en-tête. */
 .thinking-block.cadre-anneau.thinking-block--chantier > .chantier-corps {
@@ -4822,7 +4822,7 @@ button.chat-project-dot:disabled {
   background-size: 2px 18px;
   /* Les trois indicateurs d'une étape en cours (flux du rail, pouls de la pastille, reflet de la
      jauge) avancent PAR CRANS DE 100 MS, calés sur l'horloge commune (animations-par-crans.ts) :
-     en continu, chacun faisait recomposer toute la fenêtre 60 fois par seconde (conv-1075). */
+     en continu, chacun faisait recomposer toute la fenêtre 60 fois par seconde. */
   animation: etape-flux 1.2s linear infinite;
 }
 /* La PASTILLE : opaque, elle cache le rail qui passe dessous. */
@@ -4994,13 +4994,13 @@ button.chat-project-dot:disabled {
   }
 }
 
-/* DISPOSITION DES BLOCS DU TOUR (conv-303, 2026-10-17, « A · Côte à côte » : « centrer actions et
+/* DISPOSITION DES BLOCS DU TOUR (2026-10-17, « A · Côte à côte » : « centrer actions et
    raisonnement et en dessous un bloc qui montre comment la tâche est décomposée », puis « les 2 du
    haut font la même largeur que le bloc étapes »). Un cadre de la largeur des capsules (720 px au
    plus) : Raisonnement et Actions se partagent sa ligne du haut, Étapes le remplit dessous. Un bloc
    OUVERT prend toute la ligne : une pensée ou une frise ne se lit pas dans une demi-colonne. Colonne
    trop étroite pour deux fois 240 px : les capsules passent l'une sous l'autre.
-   CALÉ À GAUCHE, comme le texte du message (conv-309, 2026-10-17 : « remet-le à gauche en fait ») :
+   CALÉ À GAUCHE, comme le texte du message (2026-10-17 : « remet-le à gauche en fait ») :
    le centrage sur le fil, essayé le même jour, est retiré avec le conteneur `cqw` qui le servait. */
 .tour-blocs {
   display: flex;
@@ -5009,7 +5009,7 @@ button.chat-project-dot:disabled {
   width: min(100%, 720px);
   margin: 2px 0 6px;
 }
-/* LUEUR « EN COURS » BLANCHE dans ce cadre (conv-309 : « une shadow blanche au lieu de rose »). Le
+/* LUEUR « EN COURS » BLANCHE dans ce cadre (« une shadow blanche au lieu de rose »). Le
    cadre commun (anneau-activite.css) garde sa lueur chaude pour la barre d'activité et les autres
    capsules ; ici le voile du thème (blanc en nuit, sombre en clair), au même rayon et même dosage. */
 .tour-blocs .thinking-block.cadre-anneau.is-live {
@@ -5033,18 +5033,18 @@ button.chat-project-dot:disabled {
   flex-basis: 100%;
 }
 
-/* RAIL DU TOUR (conv-338, 2026-10-19, « Implémenter 1 + 5 » du /draft « mêler le texte du chat et
+/* RAIL DU TOUR (2026-10-19, « Implémenter 1 + 5 » du /draft « mêler le texte du chat et
    mes blocs ») : chaque élément d'un tour — le cadre Raisonnement / Actions / Étapes, une phrase, un
    groupe d'actions, une image, le verdict des juges, la réponse — est un POINT d'un rail tracé à
    gauche du message (ChatMessageRow.tsx, `.rail-noeud`, calculs dans rail-du-tour.ts).
    De la 1 « Rail net » : la colonne d'HEURES du tour à gauche (seulement si le tour en porte), un
    point plein pour un bloc, un petit point discret pour une phrase. De la 5 « Réponse au bout du
    rail » : le verdict des juges est l'avant-dernier point, la réponse le dernier, en OR, et le trait
-   qui y mène passe du violet au bleu (bleu demandé à la place de l'or, conv-338).
+   qui y mène passe du violet au bleu (bleu demandé à la place de l'or).
    Le trait est dessiné PAR SEGMENTS : chaque point trace le sien jusqu'au point suivant (le bas de
    son élément + l'écart réel entre éléments, `--msg-ecart` + la hauteur du point suivant) ;
    l'intérieur plein du point suivant cache le raccord.
-   CENTRAGE (conv-345, 2026-10-19 : « le rond bleu est pas centré ») : à un zoom non entier (1,1),
+   CENTRAGE (2026-10-19 : « le rond bleu est pas centré ») : à un zoom non entier (1,1),
    un trait de 2 px et un rond de 14 px posés chacun sur l'axe sont arrondis aux pixels de l'écran
    SÉPARÉMENT — mesuré jusqu'à 0,51 px d'écart. Trait et points partagent donc la MÊME boîte de
    14 px centrée sur l'axe : le trait est une bande de 2 px au milieu de cette boîte, les petits
@@ -5077,7 +5077,7 @@ button.chat-project-dot:disabled {
   --rail-point-y: 14px;
 }
 /* Le milieu de la ligne « VALIDE » du panneau des juges : sa marge haute (10 px), son bord et son
-   remplissage (10 px) passent avant elle (JugesPanel.css, .jpan). Mesuré sur capture de conv-314 le
+   remplissage (10 px) passent avant elle (JugesPanel.css, .jpan). Mesuré sur capture le
    2026-10-19 : 21 px posait le point 18 px au-dessus, sur le bord du panneau. */
 .msg--rail .rail-noeud[data-nature='juge'] {
   --rail-point-y: 39px;
@@ -5134,7 +5134,7 @@ button.chat-project-dot:disabled {
 /* Vers un texte, le tronçon s'arrête plus haut : son point est sur la première ligne.
    Le cadre du tour (Raisonnement / Actions) est posé HORS de `.msg-turn` : son point suivant est
    le premier point VISIBLE de cette liste, pas un frère direct. Oublié, son tronçon gardait la
-   longueur d'une capsule et passait sous le rond bleu de la réponse, en violet uni (conv-345). */
+   longueur d'une capsule et passait sous le rond bleu de la réponse, en violet uni. */
 .msg--rail
   .rail-noeud:has(+ .rail-noeud:is([data-nature='texte'], [data-nature='reponse']))::before,
 .msg--rail .rail-noeud:has(+ .rail-noeud:empty + .rail-noeud[data-nature='reponse'])::before,
@@ -5421,7 +5421,7 @@ button.chat-project-dot:disabled {
   border-color: color-mix(in srgb, var(--chat-etat-echec) 45%, transparent);
   color: var(--chat-etat-echec);
 }
-/* MESSAGE ORIENTE EN COURS DE TOUR (conv-257, 2026-09-04).
+/* MESSAGE ORIENTE EN COURS DE TOUR (2026-09-04).
    Un message tape pendant qu'un tour tourne n'ouvre PAS un nouveau tour : il rejoint la reponse en
    cours. Rien ne le distinguait dans le fil, donc l'utilisateur le croyait perdu. Marque DISCRETE :
    un filet a gauche + une mention en petites capitales, pas une carte de plus. */
@@ -5443,7 +5443,7 @@ button.chat-project-dot:disabled {
   opacity: 0.75;
 }
 
-/* BARRE D'OUTILS RONDE ET MINIMALISTE (demande utilisateur conv-199) — la 2e rangée porte,
+/* BARRE D'OUTILS RONDE ET MINIMALISTE (demande utilisateur) — la 2e rangée porte,
    dans l'ordre : trombone, micro, puis la ligne modèle/effort/prix/quota (remontée depuis
    sa propre ligne), et Envoyer/Orienter/Stop ancrés à droite. Tous les boutons sont des
    pastilles rondes de 32px, icône seule ; le libellé reste dans le DOM (accessibilité + tests)
@@ -5486,7 +5486,7 @@ button.chat-project-dot:disabled {
   box-shadow: none;
   font-size: 14px;
 }
-/* APPARENCE DU BOUTON D'ENVOI (conv-257, 2026-09-04).
+/* APPARENCE DU BOUTON D'ENVOI (2026-09-04).
 
    Verdict utilisateur sur le rond plat actuel : « un bouton envoyer meilleur que cette merde ».
    Perimetre EXPLICITEMENT borne par lui : « l'apparence du bouton SEULEMENT ». Donc la taille
@@ -5534,7 +5534,7 @@ button.chat-project-dot:disabled {
   opacity: 1;
 }
 
-/* STOP VISIBLE ET ATTEIGNABLE (conv-254, 2026-09-04) : mesure a l'ecran — le clic PASSE, mais la
+/* STOP VISIBLE ET ATTEIGNABLE (2026-09-04) : mesure a l'ecran — le clic PASSE, mais la
    cible fait 32px, porte un carre muet et touche le bouton d'envoi. On l'agrandit, on l'ecarte et
    on lui donne sa couleur d'arret : la cible devient visible et visable. */
 .composer-input-row > .composer-stop,
@@ -5621,7 +5621,7 @@ button.chat-project-dot:disabled {
   display: none;
 }
 
-/* PERLE D'ETAT DE L'EN-TETE (conv-158, 2026-10-10) : la ligne d'infos rogne ses elements
+/* PERLE D'ETAT DE L'EN-TETE (2026-10-10) : la ligne d'infos rogne ses elements
    (`overflow: hidden`, pour les « … »), ce qui coupait le halo de la perle et les orbites du
    spinner. La case garde ses 18 px fixes : elle ne se retrecit pas et ne rogne rien. Le `:root`
    renforce le selecteur : les themes Nebuleuse posent `overflow: hidden` sur `.chat-runtime > *`
@@ -5725,7 +5725,7 @@ button.chat-project-dot:disabled {
 }
 
 /* INFOBULLE DE LA JAUGE DE CONTEXTE (demande utilisateur du 2026-09-04). La bande de survol
-   (`.chat-context-rule`) la porte ; depuis conv-179 elle s'ouvre VERS LE BAS, dans le fil, sous
+   (`.chat-context-rule`) la porte ; elle s'ouvre VERS LE BAS, dans le fil, sous
    l'en-tete. Le `title` natif reste en repli. */
 .chat-context-rule-bulle {
   position: absolute;
@@ -5782,7 +5782,7 @@ button.chat-project-dot:disabled {
   transform: translateY(0);
 }
 
-/* COMPOSER PLUS BAS (conv-256, 2026-09-04) : sous la barre de quotas il ne reste que le micro,
+/* COMPOSER PLUS BAS (2026-09-04) : sous la barre de quotas il ne reste que le micro,
    le trombone et le modele — en petit. Envoyer remonte SUR la ligne d'ecriture, en couleur vive. */
 .composer-input-row > textarea {
   flex: 1 1 auto;
@@ -5844,7 +5844,7 @@ button.chat-project-dot:disabled {
   max-width: calc(100vw - 24px);
 }
 
-/* LE MODÈLE DU FIL, EN TÊTE DE CONVERSATION (conv-239, 2026-10-11). Le sélecteur a quitté la
+/* LE MODÈLE DU FIL, EN TÊTE DE CONVERSATION (2026-10-11). Le sélecteur a quitté la
    barre de saisie pour remplacer le libellé du modèle dans la ligne d'infos du haut. Il en prend
    la typographie (corps, casse, couleur) au lieu de sa taille de barre de saisie, et garde le
    séparateur « · » des éléments voisins. Le `:root` + les deux classes renforcent le sélecteur :
@@ -5854,7 +5854,7 @@ button.chat-project-dot:disabled {
 .chat-runtime > .model-select-shell.is-ouverture-bas {
   /* NE RÉTRÉCIT PAS : en fenêtre étroite, la pastille se tassait sous son contenu et, débordement
      visible oblige (pour la bulle d'état), « Élevé » venait chevaucher l'identifiant voisin
-     (capture conv-239 à 900 px). Le nom d'un modèle est court ; ce sont l'identifiant, le dossier
+     (capture à 900 px). Le nom d'un modèle est court ; ce sont l'identifiant, le dossier
      et la branche qui cèdent la place, avec leurs « … ». */
   flex: none;
   max-width: none;
@@ -5880,7 +5880,7 @@ button.chat-project-dot:disabled {
   letter-spacing: inherit;
   text-transform: inherit;
 }
-/* L'EFFORT DANS LA MÊME COULEUR QUE LE NOM DU MODÈLE (demande utilisateur, conv-249,
+/* L'EFFORT DANS LA MÊME COULEUR QUE LE NOM DU MODÈLE (demande utilisateur
    2026-10-11) : grisé (couleur « note » + opacité), « Très élevé » se lisait comme un libellé
    éteint à côté de « Opus 5.5 ». `:root` passe devant la règle du mode clair (plus haut dans ce fichier), qui le
    repeindrait en `--text-dim` ; `inherit` y rend `--text`, comme le nom. */
@@ -5943,7 +5943,7 @@ button.chat-project-dot:disabled {
   line-height: 1;
   opacity: 0.72;
 }
-/* LE ∞ EST UN TRACÉ SVG CENTRÉ PAR LA GÉOMÉTRIE (conv-118, 2026-10-06). L'ancien caractère de
+/* LE ∞ EST UN TRACÉ SVG CENTRÉ PAR LA GÉOMÉTRIE (2026-10-06). L'ancien caractère de
    police, remonté de 2 px à l'œil au zoom 100 % (demandes du 2026-09-07), sortait TROP HAUT sur
    21 crans de zoom Ctrl+molette sur 26 : la police le pose à une hauteur qui varie avec le zoom,
    aucun décalage fixe ne tient. Aucun `translate` ici : le centrage flex du bouton suffit.
@@ -5985,7 +5985,7 @@ button.chat-project-dot:disabled {
    pastilles invisibles sur fond pâle. */
 /* `.btn` dans le sélecteur du trombone : même poids (0,4,0) que ∞ et le micro, qui en gagnent un
    par `:not(.actif)` / `:not(.is-recording)`. Sans lui, `:root[data-theme=…] .btn` (0,3,0),
-   chargé après, voilait son seul contour (constat conv-937, thème nebuleuse-verre). */
+   chargé après, voilait son seul contour (thème nebuleuse-verre). */
 .composer-input-row > .composer-auto:not(.actif):not(:disabled),
 .composer-input-row > .attachment-button.btn:not(:disabled),
 .composer-input-row > .composer-dictee:not(.is-recording):not(:disabled) {
@@ -5999,10 +5999,10 @@ button.chat-project-dot:disabled {
   stroke: var(--text);
   color: var(--text);
 }
-/* « ESSAIE 3 FAÇONS » (conv-1038, 2026-10-21) : la même pastille que le trombone voisin — rond de
+/* « ESSAIE 3 FAÇONS » (2026-10-21) : la même pastille que le trombone voisin — rond de
    24 px, trait et contour en --text —, avec son libellé « ×3 » à la place d'une icône. Sans ces
    deux règles, `.btn` seul en faisait une gélule plus large que ses voisins (capture du jour).
-   24 px et non 32 (conv-1052, 2026-10-22 : « le cercle ×3 est plus gros que les autres icônes ») :
+   24 px et non 32 (2026-10-22 : « le cercle ×3 est plus gros que les autres icônes ») :
    les 32 px venaient de la règle groupée du trombone, mais la règle « rangée compacte » plus haut
    ramène trombone et micro à 24 px, et ∞ fait 24 px — le ×3 était le seul rond resté à 32. */
 .composer-input-row > .composer-trois-facons,
@@ -6097,8 +6097,8 @@ button.chat-project-dot:disabled {
   display: flex;
 }
 /* --- ...ET pour un fil de lot, qui garde son repère « lot N/M », SEUL, à droite du titre : sans
-       lui, les fils rangés sous leur chef ne disent plus de quel plan ils sont (2026-10-26,
-       conv-1159). Même ligne que le titre, pour que le cran serré reste d'une ligne ; numéro et
+       lui, les fils rangés sous leur chef ne disent plus de quel plan ils sont (2026-10-26).
+       Même ligne que le titre, pour que le cran serré reste d'une ligne ; numéro et
        nombre de messages restent masqués. La recherche garde sa propre règle ci-dessus. --- */
 .conv-pane[data-density='compact']:not([data-recherche]) .conv-item[data-lot] .conv-copy,
 .conv-pane[data-density='normal']:not([data-recherche]) .conv-item[data-lot] .conv-copy {
@@ -6206,7 +6206,7 @@ button.chat-project-dot:disabled {
   color: var(--gold-bright);
 }
 /* Icones et libelles des boutons du pied : MASQUES ici. Seul un theme qui les dessine les montre
-   (Nebuleuse de verre, capsule a trois cases choisie en conv-171) ; les autres themes gardent
+   (Nebuleuse de verre, capsule a trois cases choisie) ; les autres themes gardent
    leur pied d'avant, sans un pixel de change. */
 .conv-foot-icone,
 .conv-foot-libelle {
@@ -6214,7 +6214,7 @@ button.chat-project-dot:disabled {
 }
 
 /*
- * Barre de sélection multiple — style « liste d'actions » (choix conv-815, 2026-09-23) :
+ * Barre de sélection multiple — style « liste d'actions » (2026-09-23) :
  * les boutons en texte gris 10 px ne se lisaient pas comme des boutons.
  */
 .conv-bulk-bar {
@@ -6244,7 +6244,7 @@ button.chat-project-dot:disabled {
   border-left-color: var(--danger);
   color: var(--danger);
 }
-/* Un liseré de couleur par action (conv-815) : rose, doré, bleu ; Supprimer reste rouge. */
+/* Un liseré de couleur par action : rose, doré, bleu ; Supprimer reste rouge. */
 .conv-bulk-bar .conv-date-sort:nth-child(1) { border-left-color: var(--chat-lot-rose); }
 .conv-bulk-bar .conv-date-sort:nth-child(2) { border-left-color: var(--gold-doux); }
 .conv-bulk-bar .conv-date-sort:nth-child(3) { border-left-color: var(--chat-lot-bleu); }
@@ -6252,9 +6252,9 @@ button.chat-project-dot:disabled {
 
 /* Bloc Actions — variante C3 « frise » (2026-09-24) : frise a pastilles dans le corps deplie.
    Icones, pastilles et « … » en CSS : le texte du corps reste les lignes d'action.
-   La BARRE DE TEMPS qui passait sous l'en-tete (R5, conv-162) a disparu : le rond de verre et la
-   legende du cadre « deux lignes » la remplacent dans Actions (conv-904) puis dans Orchestration
-   (conv-909), ses derniers utilisateurs. */
+   La BARRE DE TEMPS qui passait sous l'en-tete (R5) a disparu : le rond de verre et la
+   legende du cadre « deux lignes » la remplacent dans Actions puis dans Orchestration
+   Ses derniers utilisateurs. */
 .thinking-block .thinking-frise {
   white-space: normal;
 }
@@ -6288,7 +6288,7 @@ button.chat-project-dot:disabled {
 .thinking-frise-ligne[data-etat='encours']::before {
   background: var(--gold-clair);
 }
-/* MESSAGE D'ERREUR d'une action rouge (conv-341) : le texte rendu par l'outil, sous sa ligne, aligné
+/* MESSAGE D'ERREUR d'une action rouge : le texte rendu par l'outil, sous sa ligne, aligné
    sur le libellé (après l'icône de 18 px), plus petit et en rouge adouci pour rester secondaire. */
 .thinking-frise-erreur {
   display: block;
@@ -6320,7 +6320,7 @@ button.chat-project-dot:disabled {
 }
 .thinking-frise-icone[data-famille='commande']::before {
   /* Invite de terminal, pas '▶' : un triangle se lit comme une fleche depliable alors que la
-     ligne ne s'ouvre pas (retour utilisateur du 2026-09-24, conv-831). */
+     ligne ne s'ouvre pas (retour utilisateur du 2026-09-24). */
   content: '>_';
   font-family: ui-monospace, Consolas, monospace;
   font-size: 11px;
@@ -6329,7 +6329,7 @@ button.chat-project-dot:disabled {
 .thinking-frise-icone[data-famille='autre']::before {
   content: '•';
 }
-/* COMMANDE NOMMEE, DEPLIABLE « comme une orchestration » (conv-910) : la ligne porte ce que fait la
+/* COMMANDE NOMMEE, DEPLIABLE « comme une orchestration » : la ligne porte ce que fait la
    commande, en texte plein ; le chevron remplace l'invite de terminal (cette ligne-la s'ouvre
    vraiment) ; les commandes qu'elle enchaine se lisent dessous, chacune avec son invite. */
 .thinking-frise-tache > summary {
@@ -6380,7 +6380,7 @@ button.chat-project-dot:disabled {
   padding: 1px 0;
 }
 
-/* LIGNE « LECTURE RETENUE » (conv-1123, 2026-10-23 : « un style distinct, texte atténué et petite
+/* LIGNE « LECTURE RETENUE » (2026-10-23 : « un style distinct, texte atténué et petite
    étiquette lecture, pour qu'elle se repère d'un coup d'œil avant la réponse »). Bloc à part
    (`lectureRetenue`, chat-view-model.ts) : plus petit et atténué que la réponse, précédé d'une
    étiquette en petites capitales. Le retrait haut aligne le milieu de sa première ligne sur le point
@@ -6393,7 +6393,7 @@ button.chat-project-dot:disabled {
   color: var(--text-dim);
   word-break: break-word;
 }
-/* « PASTILLE NACRÉE » (/draft conv-1280, 2026-10-29, choix 1 : « des apparences plus jolies et qui
+/* « PASTILLE NACRÉE » (2026-10-29, choix 1 : « des apparences plus jolies et qui
    mettent plus en valeur ») : cadre de 1 px en dégradé bleu > rose, intérieur teinté de l'accent,
    coche, libellé dans l'encre d'accent du thème (`--gold`, lisible en clair comme en sombre). Le
    cadre est le calque évidé des capsules (BORD DEGRADE, plus haut) : l'intérieur reste transparent
@@ -6455,7 +6455,7 @@ button.chat-project-dot:disabled {
   animation: msg-lecture-reflet 1.1s ease-in-out 0.15s 1 both;
   pointer-events: none;
 }
-/* THÈME CLAIR (conv-1280, 2026-10-29 : « rends le reflet plus visible en thème clair ») : le voile y
+/* THÈME CLAIR (2026-10-29 : « rends le reflet plus visible en thème clair ») : le voile y
    est sombre, et un éclat clair sur une pastille déjà claire ne se voit pas. Le reflet y devient
    donc un éclat COLORÉ, rose bordé de bleu, les deux couleurs du cadre. Le sombre garde son blanc. */
 :root[data-base='clair'] .msg-lecture-etiquette[data-arrivee]::after {
@@ -6476,12 +6476,12 @@ button.chat-project-dot:disabled {
     background-position: -60% 0;
   }
 }
-/* Ce que l'agent a compris, en clair et en gras : la seule chose que la ligne affiche (conv-1280). */
+/* Ce que l'agent a compris, en clair et en gras : la seule chose que la ligne affiche. */
 .msg-lecture-sens {
   color: var(--text);
   font-weight: 600;
 }
-/* ×3 ARMÉ (conv-1491) : la bascule de conv-1479 posait `.actif` sans aucune règle — le clic ne
+/* ×3 ARMÉ : la bascule posait `.actif` sans aucune règle — le clic ne
    changeait rien à l'écran, « marche pas ». Doré comme ∞ allumé ; sélecteur plus fort que les
    règles de rangée des thèmes (:root[data-theme] .composer-input-row > :is(...)). */
 :root .composer-input-row > .composer-trois-facons.actif[aria-pressed='true'],
@@ -6492,8 +6492,8 @@ button.chat-project-dot:disabled {
   background: color-mix(in srgb, var(--gold) 16%, transparent);
 }
 
-/* Bouton ☰ de la liste des conversations : n'existe qu'en version téléphone (affichage-session.css,
-   conv-1568). */
+/* Bouton ☰ de la liste des conversations : n'existe qu'en version téléphone (affichage-session.css).
+   */
 .chat-liste-tel-btn {
   display: none;
   flex: none;

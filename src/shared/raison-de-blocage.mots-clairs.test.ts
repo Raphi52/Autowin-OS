@@ -3,7 +3,7 @@ import { raisonDeBlocageIntegration } from './raison-de-blocage'
 import { formatOrchestrationOutcome } from './orchestration-outcome'
 
 /**
- * VECU le 2026-09-03, conv-158, turnId `e0697674-fb4a-4f79-a6a0-565be7e07998`.
+ * VECU le 2026-09-03, turnId `e0697674-fb4a-4f79-a6a0-565be7e07998`.
  *
  * Le tour a echoue avec `intégration locale non terminée ; blocage d’intégration: base-dirty —
  * fichiers en cause: .arena/banc-noms/RUN.md, …`. C'est ce texte-la que le modele a recu, et

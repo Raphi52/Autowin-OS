@@ -21,7 +21,7 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 import type { WorkflowGraph } from '../workflow/workflow-graph'
 
 /**
- * UNE SKILL D'ÉTAPE DÉSACTIVÉE NE SE JOUE PLUS (choix de l'utilisateur, conv-1602, 2026-11-05).
+ * UNE SKILL D'ÉTAPE DÉSACTIVÉE NE SE JOUE PLUS (choix de l'utilisateur, 2026-11-05).
  *
  * Avant : l'interrupteur de Settings › Skills n'était lu que par `skill_charger`. Un run jouait
  * l'étape quand même, et « /nom » dans le fil injectait la skill quand même.

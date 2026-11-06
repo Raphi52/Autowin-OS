@@ -1,7 +1,7 @@
 /*
  * Vue COURTE de l'état de l'app pour l'outil `get_state`.
  *
- * Origine (conv-1370, 2026-10-31) : `get_state` rendait tout `snapshot()`, 187 000 caractères sur
+ * Origine (2026-10-31) : `get_state` rendait tout `snapshot()`, 187 000 caractères sur
  * 1 190 conversations, coupé à 120 000 — 6 appels sur 6 tronqués, alors que l'avis de troncature
  * disait de relancer « plus étroit » sans aucun argument pour le faire. Ce module est PUR (aucun
  * import d'electron ni de commands.ts à l'exécution) : le branchement est fait par commands.ts.

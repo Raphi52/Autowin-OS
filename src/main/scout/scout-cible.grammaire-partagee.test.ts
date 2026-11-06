@@ -3,7 +3,7 @@ import { enteteCibleManquante, lireCibleScout, sortieScoutAvecCible } from './sc
 import { lireDecisionScout } from '../../shared/scout-cible-lecture'
 
 /**
- * DEFAUT MESURE (scout interne, conv-459) : le pipeline lisait `CIBLE: aucune — rien de rentable`
+ * DEFAUT MESURE (scout interne) : le pipeline lisait `CIBLE: aucune — rien de rentable`
  * comme une piste nommee « aucune » et lancait la phase suivante — un appel payant sur du vide —
  * alors que le mode auto du chat fermait la chaine sur exactement la meme phrase. Meme ecart sur
  * une cible IRREVERSIBLE : accord requis cote chat, aucun garde-fou cote pipeline.

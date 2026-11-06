@@ -1,5 +1,5 @@
 /*
- * LA PAGE ENTIERE NE DEFILE JAMAIS (conv-275, 2026-10-11).
+ * LA PAGE ENTIERE NE DEFILE JAMAIS (2026-10-11).
  *
  * La regle existait seulement dans l'ecran d'attente de `index.html`, que React efface a son
  * premier rendu : apres le demarrage, un element pose dans <body> suffisait a faire apparaitre la

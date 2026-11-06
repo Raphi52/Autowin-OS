@@ -8,7 +8,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { checkForUpdate } from './git-update'
 
 /**
- * LA VÉRIFICATION DE MISE À JOUR NE CRÉE PLUS SES `git` SUR LE FIL PRINCIPAL (conv-1413, 2026-10-31).
+ * LA VÉRIFICATION DE MISE À JOUR NE CRÉE PLUS SES `git` SUR LE FIL PRINCIPAL (2026-10-31).
  *
  * Mesure `gels.jsonl`, session du 2026-10-31 19:33 → 20:22 UTC : `spawn git diff` (8 appels, 67 s,
  * pire 22,9 s) et `spawn git fetch` (19,6 s) depuis `git-update.ts:28`, sous `ipc:update:check`

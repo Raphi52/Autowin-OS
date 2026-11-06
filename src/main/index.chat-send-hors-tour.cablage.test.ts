@@ -6,8 +6,8 @@ import { sourceProcessPrincipal } from './app/source-process-principal.test-help
  * peut pas atteindre). L'isolement lui-même — un `run` lancé par `runOutsideCurrent` ouvre son propre
  * devis — est prouvé par execution-supervisor.test.ts (« isole un reveil de fond… »).
  *
- * Mesure du 2026-10-05 (/maintenance du 06/10, conv-38) : conv-53 envoie la demande à conv-93,
- * `chat_send` répond `envoye: true`, puis le tour de conv-93 est annulé 5 s plus tard sur « Budget de
+ * Mesure du 2026-10-05 (/maintenance du 06/10) : un fil envoie la demande,
+ * `chat_send` répond `envoye: true`, puis le tour est annulé 5 s plus tard sur « Budget de
  * concurrence atteint (1) » (causal-trace/conv-53.jsonl:378-379, conv-93.jsonl:1). Le tour cible
  * héritait du devis du tour APPELANT, dont l'appel était déjà actif. L'utilisateur a dû renvoyer la
  * demande à la main 34 min plus tard.

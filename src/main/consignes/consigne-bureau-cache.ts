@@ -1,7 +1,7 @@
 /**
  * LA VOIE DU BUREAU CACHÉ, DITE À L'AGENT D'UN RUN — AVEC UN BUREAU À LUI.
  *
- * Défaut mesuré (conv-611 puis conv-618, 2026-09-16) : « mes travaux en parallèle se parasitent
+ * Défaut mesuré (2026-09-16) : « mes travaux en parallèle se parasitent
  * car ils utilisent pas mon système de bureau virtuel ». La consigne des runs
  * (`PIPELINE_DISCIPLINE_INSTRUCTION`) ne citait que `scripts/ui-capture.mjs` : `hdesk-lancer.ps1`
  * n'apparaissait QUE dans le prompt du chat. Un run qui devait ouvrir une AUTRE application
@@ -44,12 +44,12 @@ export function consigneBureauCache(runId: string): string {
 }
 
 /**
- * Le bureau caché réservé à UNE conversation du chat (conv-620).
+ * Le bureau caché réservé à UNE conversation du chat.
  *
  * Défaut mesuré : le prompt du chat prescrivait `-Id <nom>` — un nom LIBRE. Deux conversations
  * menées en parallèle sur la même application choisissaient le même nom évident (« contosov3 »),
  * donc le même bureau, le même profil et le même verrou d'instance : elles se parasitaient,
- * exactement comme les runs avant conv-618. L'identifiant est ici DÉRIVÉ de l'id du fil.
+ * exactement comme les runs. L'identifiant est ici DÉRIVÉ de l'id du fil.
  */
 export function identifiantBureauCacheChat(conversationId: string): string {
   const nettoye = String(conversationId ?? '')

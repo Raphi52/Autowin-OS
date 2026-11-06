@@ -435,7 +435,7 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
   /**
    * ABSENT n'est pas INVALIDE — le refus doit dire quoi ecrire.
    *
-   * Mesure conv-599, tour `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : l'appel modele d'iteration 0
+   * Mesure, tour `fa92ae4e-2126-40bf-9a21-e7133ebdd962` : l'appel modele d'iteration 0
    * (75 s, 0,51 USD) omet `database`. Le refus « Nom de base invalide : «  » » ne nomme pas
    * l'argument manquant et ne liste aucune cible ; l'iteration suivante rejoue la meme requete en
    * devinant la base. Le catalogue est pourtant ICI : on le rend.
@@ -580,7 +580,7 @@ export function decideSqlRead(args: SqlReadArgs, catalogue: SqlTargetCatalog): S
 /**
  * Colonnes SECRÈTES de la base catalogue configurée (`sql-catalog.json`) — elle peut porter des
  * mots de passe et des clés, quel que soit son nom.
- * Décision utilisateur du 2026-09-23 (conv-113) : la base est lisible, mais toute requête qui NOMME
+ * Décision utilisateur du 2026-09-23 : la base est lisible, mais toute requête qui NOMME
  * une colonne de ce type, ou qui utilise `*` (qui les ramènerait sans les nommer), est refusée.
  * Motif cherché en SOUS-CHAÎNE d'identifiant, sur la forme qui conserve le contenu des `[…]` et
  * vide les littéraux (chercher `'X_PWD'` comme valeur dans `sys.columns` reste permis : c'est

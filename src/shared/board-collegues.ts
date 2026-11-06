@@ -1,9 +1,9 @@
 /**
- * LES BOARDS DES COLLÈGUES (demande utilisateur du 2026-10-28, conv-1210).
+ * LES BOARDS DES COLLÈGUES (demande utilisateur du 2026-10-28).
  *
  * Demande : « fais afficher dans mon Board les post-it des collègues qui écrivent dans le même
  * dossier de la GED, avec leur nom sur chaque post-it et en lecture seule ». Chaque poste recopie
- * son Board dans SON sous-dossier du dossier du Board (`board-dossier.ts`, conv-1206) ; ce fichier
+ * son Board dans SON sous-dossier du dossier du Board (`board-dossier.ts`) ; ce fichier
  * décrit ce que `board.json` contient, pour que le processus principal relise ceux des AUTRES postes
  * et que la vue les pose à côté des siens.
  *
@@ -21,7 +21,7 @@ export interface DemandeDuFichier {
   rang: number
   messageId?: string
   titre: string
-  /** Le message entier (conv-1278) ; absent d'un fichier écrit avant, ou quand `titre` suffit. */
+  /** Le message entier ; absent d'un fichier écrit avant, ou quand `titre` suffit. */
   texte?: string
   statut: StatutDuFichier
   constat: string
@@ -31,7 +31,7 @@ export interface DemandeDuFichier {
 }
 
 /**
- * Un post-it de `board.json` : une tâche (son RUN.md léger, conv-1456 ; avant, un fil), à l'étage
+ * Un post-it de `board.json` : une tâche (son RUN.md léger ; avant, un fil), à l'étage
  * affiché sur le Board du poste qui l'a écrit.
  */
 export interface PostItDuFichier {
@@ -55,7 +55,7 @@ export interface PostItDuFichier {
 export interface BoardDUnCollegue {
   /** Le sous-dossier du collègue : son compte Windows. */
   poste: string
-  /** Le nom écrit sur ses post-it : celui que son poste a écrit (`nom`), sinon `poste` (conv-1230). */
+  /** Le nom écrit sur ses post-it : celui que son poste a écrit (`nom`), sinon `poste`. */
   nom: string
   /** Quand son poste a écrit ce fichier (ISO), s'il le dit. */
   enregistreA?: string

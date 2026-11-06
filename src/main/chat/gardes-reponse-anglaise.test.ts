@@ -16,9 +16,9 @@ import { ecritUneLecon } from '../brain/lecon-non-retenue'
 import { plafonnerNotesScout } from '../scout/scout-plafond'
 
 /**
- * LES GARDES QUI LISENT LE TEXTE LIBRE DE L'AGENT DOIVENT AUSSI LIRE L'ANGLAIS (conv-1197, 2026-10-28).
+ * LES GARDES QUI LISENT LE TEXTE LIBRE DE L'AGENT DOIVENT AUSSI LIRE L'ANGLAIS (2026-10-28).
  *
- * Depuis la bascule anglaise (conv-1146), l'agent répond en anglais quand l'interface l'est. Les
+ * Depuis la bascule anglaise, l'agent répond en anglais quand l'interface l'est. Les
  * repères imposés restent en français (`REPERES_GARDES_EN_FRANCAIS`), mais le TEXTE LIBRE, lui, est
  * en anglais : les gardes qui y cherchaient une tournure française ne voyaient plus rien. Deux effets
  * opposés, selon la garde :

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { sourceProcessPrincipal } from './app/source-process-principal.test-helpers'
 
 /**
- * LE BRANCHEMENT DE LA REPRISE D'UN FIL (conv-1423). `index.ts` ne se charge pas dans un test : il
+ * LE BRANCHEMENT DE LA REPRISE D'UN FIL. `index.ts` ne se charge pas dans un test : il
  * démarre l'application. Ce qui compte ici tient à sa composition, lue dans le source, comme le font
  * déjà `index.reprise-du-fil-unique.test.ts` et `run-reattach.test.ts`.
  *

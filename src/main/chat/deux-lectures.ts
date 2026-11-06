@@ -1,20 +1,20 @@
 /**
- * DEUX LECTURES PLAUSIBLES → UNE QUESTION, AVANT DE PAYER (conv-1092, 2026-10-22).
+ * DEUX LECTURES PLAUSIBLES → UNE QUESTION, AVANT DE PAYER (2026-10-22).
  *
  * Mesure sur 911 conversations : l'agent pose 382 questions, presque toutes APRES le travail
  * (maquette à garder, suite, publication). Il ne demande presque jamais ce que l'utilisateur VEUT
  * DIRE. Une quinzaine de recadrages « t'as mal compris » viennent d'une lecture fausse qu'une seule
- * question aurait évitée, et les plus chers partent d'un run payé : conv-767 puis conv-768, deux
+ * question aurait évitée, et les plus chers partent d'un run payé : deux
  * `/scout` (2,47 $ et 1,36 $) sur la même mauvaise lecture de « une task pratique pour /arena ».
  *
- * La cause n'est pas un oubli du modèle. Pour conv-767, aucun modèle n'a lu la demande :
+ * La cause n'est pas un oubli du modèle. Aucun modèle n'a lu la demande :
  * `/scout …` est routé par le code DIRECTEMENT vers l'orchestration (`agent-pilot.ts`, route
  * `explicit-skill`). Et quand le modèle orchestre lui-même, toute sa consigne lui dit de déduire
  * (constitution, Autonomie 3 ; `phase-briefs.ts`, « Ne termine JAMAIS un tour sur une question
  * dérivable »). Une phrase de plus n'y changerait rien : le contrôle doit vivre dans le code, au
  * point de passage.
  *
- * SEULEMENT À QUASI-ÉGALITÉ (conv-1123, 2026-10-23). La première version posait la question dès que
+ * SEULEMENT À QUASI-ÉGALITÉ (2026-10-23). La première version posait la question dès que
  * le petit modèle voyait DEUX lectures, même quand l'une dominait : « choix de période » sur la
  * rivière de la Carte du projet (zoom ou filtre) a bloqué le tour alors que le zoom allait de soi.
  * L'utilisateur : « que en cas d'extrême ambiguïté (score de proba quasi égal) ». Chaque lecture
@@ -23,7 +23,7 @@
  * ANNONCÉE en une ligne dans le fil (laquelle part, laquelle est écartée) et transmise au run ou au
  * modèle, pour que l'utilisateur corrige après coup sans être bloqué avant.
  *
- * À CHAQUE MESSAGE (conv-1240, 2026-10-28). L'utilisateur, en voyant la ligne de temps en temps :
+ * À CHAQUE MESSAGE (2026-10-28). L'utilisateur, en voyant la ligne de temps en temps :
  * « met le tout le temps ». Le petit modèle rend donc TOUJOURS sa lecture, même sans ambiguïté
  * (`{ kind: 'retenue' }` sans lecture écartée), et la ligne s'affiche à chaque message écrit par un
  * humain. La QUESTION, elle, ne change pas : seulement à quasi-égalité, et seulement aux trois points
@@ -41,14 +41,14 @@ import { VOCABULAIRE_AUTOWIN } from '../consignes/vocabulaire-autowin'
 /**
  * La consigne du petit modèle. Stable d'un appel à l'autre (cache).
  *
- * Première version rejouée sur le VRAI modèle le 2026-10-22 : « une seule lecture » pour conv-767,
- * conv-768 et conv-542 — les trois cas visés —, et une fausse alerte sur une demande nette. Elle
+ * Première version rejouée sur le VRAI modèle le 2026-10-22 : « une seule lecture »
+ * Et une fausse alerte sur une demande nette. Elle
  * demandait « la demande est-elle ambiguë ? » ; lue seule, une phrase paraît toujours claire. Ce qui
  * manquait : ce que fait la COMMANDE citée (`/scout` cherche des améliorations dans du code, pas un
  * exercice pour `/arena`), et la question qui compte — le résultat livré risque-t-il d'être jeté.
  *
- * Le VOCABULAIRE d'Autowin manquait aussi (kaizen conv-1266) : « fais une super conv » sur un jeu
- * a été lu « améliorer ses dialogues » (conv-1263, tour 60eda4d2-c6e0-491d-8b34-116257bf3766) —
+ * Le VOCABULAIRE d'Autowin manquait aussi : « fais une super conv » sur un jeu
+ * a été lu « améliorer ses dialogues » (tour 60eda4d2-c6e0-491d-8b34-116257bf3766) —
  * mesure et cause dans `vocabulaire-autowin.ts`.
  */
 export const CONSIGNE_DEUX_LECTURES = [
@@ -88,7 +88,7 @@ export const CONSIGNE_DEUX_LECTURES = [
 /**
  * Écart maximal, en points de probabilité, entre les deux lectures pour poser la question
  * (55/45 au plus). Au-delà, une lecture domine : la question couperait le tour de l'utilisateur pour
- * un choix que l'agent tranche seul (conv-1123).
+ * un choix que l'agent tranche seul.
  */
 export const ECART_MAX_POUR_DEMANDER = 10
 
@@ -106,7 +106,7 @@ export function commandesCitees(demande: string): string[] {
  * Les commandes citées, plus le PREMIER MOT quand il n'a pas de barre oblique : une skill nommée
  * ainsi (« kaizen », « heal … ») est aussi une invocation (chat-pilotage-prompt, « SKILL NOMMÉE =
  * SKILL INVOQUÉE »). Sans sa description, le petit modèle a lu « kaizen » comme « proposer sans les
- * appliquer » — l'inverse de la skill (conv-412). Un premier mot qui n'est pas une commande connue
+ * appliquer » — l'inverse de la skill. Un premier mot qui n'est pas une commande connue
  * est écarté plus loin, faute de description.
  */
 export function commandesNommees(demande: string): string[] {
@@ -125,7 +125,7 @@ const PLAFOND_CONTEXTE = 800
 
 /**
  * L'extrait du dernier message de l'agent : son DÉBUT et sa FIN. Depuis que chaque message est lu
- * (conv-1240), une relance (« go », « met le ») porte le plus souvent sur la FIN de ce message — sa
+ * Une relance (« go », « met le ») porte le plus souvent sur la FIN de ce message — sa
  * proposition, sa recommandation — que le seul début coupait.
  */
 export function extraitDuContexte(contexte: string): string {
@@ -222,8 +222,8 @@ function lireUneLecture(brut: unknown): { texte: string; proba: number } | undef
 
 /**
  * Ce que le contrôle décide : POSER la question (quasi-égalité), ou partir sur la lecture RETENUE
- * en l'annonçant (conv-1123 : « que je puisse corriger après coup sans être bloqué avant »).
- * `ecartee` absente : la demande n'avait qu'une lecture, annoncée quand même (conv-1240).
+ * en l'annonçant (« que je puisse corriger après coup sans être bloqué avant »).
+ * `ecartee` absente : la demande n'avait qu'une lecture, annoncée quand même.
  */
 export type IssueDesLectures =
   | { kind: 'question'; lectures: [string, string] }
@@ -247,9 +247,9 @@ export function lectureAAnnoncer(
  * `undefined` dans TOUS les cas douteux — JSON illisible, aucune lecture, une lecture SANS
  * probabilité, deux lectures identiques, une lecture trop longue. Le travail part alors comme avant,
  * sans annonce : ce contrôle ne doit jamais devenir un mur.
- * UNE lecture valide : `retenue` sans lecture écartée (conv-1240). Deux lectures valides : `question`
+ * UNE lecture valide : `retenue` sans lecture écartée. Deux lectures valides : `question`
  * si leur écart est de `ECART_MAX_POUR_DEMANDER` points ou moins ET qu'elles reprennent ses mots,
- * sinon `retenue` — la plus probable part, l'autre est nommée pour pouvoir corriger (conv-1123).
+ * sinon `retenue` — la plus probable part, l'autre est nommée pour pouvoir corriger.
  */
 export function lireLesLectures(reponse: unknown, demande: string): IssueDesLectures | undefined {
   if (typeof reponse !== 'string') return undefined
@@ -280,7 +280,7 @@ export function lireLesLectures(reponse: unknown, demande: string): IssueDesLect
     sansAccent(texte).toLowerCase().replace(/\W+/gu, ' ').trim()
   if (cle(a) === cle(b)) return undefined
   const ecart = ((premiere.proba - seconde.proba) / total) * 100
-  // Les BOUTONS doivent être dans ses mots (conv-1123) ; la ligne, non (conv-1240) : sur le vrai
+  // Les BOUTONS doivent être dans ses mots ; la ligne, non : sur le vrai
   // modèle, « met le tout le temps » lu « à chaque demande » perdait sa ligne faute du mot « temps ».
   const dansSesMots = reprendSesMots(a, demande) && reprendSesMots(b, demande)
   return ecart <= ECART_MAX_POUR_DEMANDER && dansSesMots
@@ -298,7 +298,7 @@ export function lireDeuxLectures(reponse: unknown, demande: string): [string, st
 }
 
 /**
- * Ce que le pilote transmet au lecteur pour la ligne de coût de l'appel (conv-1431, 2026-11-02).
+ * Ce que le pilote transmet au lecteur pour la ligne de coût de l'appel (2026-11-02).
  * Mesuré sur `cost.jsonl` depuis le 20/10 : 716 lignes `deuxLectures` sans fil, et 527 dont
  * l'issue était la réponse brute coupée avant la deuxième lecture. Seul le pilote sait à quel fil
  * le tour appartient et ce qu'il tire de la réponse ; le lecteur, lui, tient le journal des coûts.
@@ -310,7 +310,7 @@ export type TraceDesLectures = {
 }
 
 /**
- * Où le tour en est quand il lit la demande (conv-1431). `avant-d-agir` : il ATTEND la lecture avant
+ * Où le tour en est quand il lit la demande. `avant-d-agir` : il ATTEND la lecture avant
  * un run payant ou un changement d'affichage, et pose la question à égalité. `en-parallele` : un tour
  * ordinaire, qui ANNONCE la plus probable sans l'attendre ; la question n'y part que si un run suit.
  */
@@ -320,8 +320,8 @@ export type MomentDeLaLecture = 'avant-d-agir' | 'en-parallele'
  * La décision du contrôle, en une ligne lisible dans `cost.jsonl` — comme `issueDeDecision` pour le
  * choix du workflow. « question posée » n'est écrite que là où le tour attend la lecture pour agir :
  * l'égalité y ferme le tour sur la question (`agent-pilot.ts`). Lue en parallèle d'un tour ordinaire,
- * l'égalité ne pose RIEN tant que le modèle ne lance pas de run — objection du contrôle final sur
- * conv-1431 : l'étiquette d'avant écrivait « question » sur des tours où aucune ne partait. Limite :
+ * l'égalité ne pose RIEN tant que le modèle ne lance pas de run — objection du contrôle final
+ * L'étiquette d'avant écrivait « question » sur des tours où aucune ne partait. Limite :
  * la ligne est écrite à la réponse du petit modèle, avant de savoir si un run suivra ; le décompte
  * exact des questions posées reste la commande `ask` « Laquelle des deux lectures veux-tu ? » du
  * journal du tour. Une réponse illisible garde son début : de quoi lire un format inattendu. Vide →
@@ -343,8 +343,8 @@ export function issueDesLecturesPourLaTrace(
 }
 
 /**
- * La ligne affichée dans le fil quand une lecture domine (conv-1123) : ce que l'agent a compris,
- * et rien d'autre. L'autre lecture n'y figure plus (conv-1280, 2026-10-29 : « le bloc compréhension
+ * La ligne affichée dans le fil quand une lecture domine : ce que l'agent a compris,
+ * et rien d'autre. L'autre lecture n'y figure plus (2026-10-29 : « le bloc compréhension
  * met tout le temps : si tu voulais plutôt, c'est nul, mets juste ce qu'il a compris, point ») ;
  * elle reste dans la tâche du run et la consigne du modèle, qui doivent savoir ce qui est écarté.
  */
@@ -368,8 +368,8 @@ const DEBUT_PRECISION = "Compréhension de la demande, annoncée à l'utilisateu
 /**
  * La tâche SANS cette précision : ce que l'utilisateur a tapé. Tout ce qui lit la demande pour y
  * trouver une CIBLE passe par ici : la précision est une paraphrase du modèle, et elle porte aussi
- * la lecture ÉCARTÉE. Le /kaizen de conv-1332 (tour c7de932e-abac-4f8b-ba34-1b6335b62653) a pris le
- * `/draft` de cette lecture écartée pour une commande citée, et audité conv-1306 à la place.
+ * la lecture ÉCARTÉE. Le /kaizen (tour c7de932e-abac-4f8b-ba34-1b6335b62653) a pris le
+ * `/draft` de cette lecture écartée pour une commande citée, et audité à la place.
  */
 export function sansPrecisionDeLecture(tache: string): string {
   const debut = tache.indexOf(`\n\n${DEBUT_PRECISION}`)
@@ -383,7 +383,7 @@ export function sansPrecisionDeLecture(tache: string): string {
  * d'affichage). « SYSTÈME: » la fait encadrer comme une relance d'Autowin, jamais comme des mots de
  * l'utilisateur (`baliserRelanceAutomatique`).
  */
-/** Le nom de la ligne pour le modèle (conv-1280, 2026-10-29 : « la balise compréhension doit
+/** Le nom de la ligne pour le modèle (2026-10-29 : « la balise compréhension doit
  *  s'appeler compréhension par le modèle ») : c'est le mot de l'étiquette affichée dans le fil. */
 const NOM_DE_LA_LIGNE =
   'Si tu dois parler de cette ligne, appelle-la « compréhension », jamais « lecture retenue ».'
@@ -456,7 +456,7 @@ export function suitUneQuestionDesLectures(
 }
 
 /**
- * TOURS COUPÉS : LES MESSAGES QU'ILS ONT LAISSÉS SANS RÉPONSE (kaizen conv-1558, 2026-11-05).
+ * TOURS COUPÉS : LES MESSAGES QU'ILS ONT LAISSÉS SANS RÉPONSE (2026-11-05).
  *
  * L'utilisateur a écrit quatre messages d'affilée, chacun coupant le tour d'avant : « améliore la
  * shape », « keep pushing (fur, kimono fabric, expressions) », « son kimono a pas une belle forme »,
@@ -466,13 +466,13 @@ export function suitUneQuestionDesLectures(
  * L'utilisateur : « il conglomere pas mes 3 messages précédents, il focus sur le dernier ».
  *
  * Un message de l'agent n'a RÉPONDU à rien quand son tour a été arrêté (`arrete`, posé par
- * `run-pilot-chat.ts` depuis le statut du store, conv-1142), ou quand il ne porte que sa ligne
+ * `run-pilot-chat.ts` depuis le statut du store), ou quand il ne porte que sa ligne
  * compréhension et des marques d'artefact (un appelant qui ne transmet pas le statut).
  */
 type MessageDuFil = { role: string; content?: unknown; arrete?: boolean; avisDeLApp?: boolean }
 
 /*
- * UN AVIS DE L'APP N'EST PAS UNE RÉPONSE DE L'AGENT (conv-1641, 2026-11-06).
+ * UN AVIS DE L'APP N'EST PAS UNE RÉPONSE DE L'AGENT (2026-11-06).
  *
  * « ya des concurrents gratuits ? », envoyé deux fois après une réponse sur les voix d'ElevenLabs :
  * la première ligne compréhension a dit « concurrents d'ElevenLabs » (tour 87e4b765), la seconde
@@ -558,7 +558,7 @@ const RELANCE =
 
 /**
  * La demande mérite-t-elle une QUESTION en cas de doute ? Filtre déterministe : écarte un message
- * vide, d'un à trois mots, ou une relance (« ok », « go »). Depuis conv-1240, ces messages sont
+ * vide, d'un à trois mots, ou une relance (« ok », « go »). Ces messages sont
  * quand même LUS pour la ligne affichée ; seule la question leur reste épargnée.
  */
 export function meriteUneLecture(demande: string | undefined): boolean {

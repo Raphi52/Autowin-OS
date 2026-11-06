@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /*
  * Les trois ménages de démarrage tournent désormais APRÈS l'affichage de la fenêtre, en lectures non
- * bloquantes (conv-359) : entre l'inventaire et la suppression, l'app vit — une conversation rouverte
+ * bloquantes : entre l'inventaire et la suppression, l'app vit — une conversation rouverte
  * réécrit sa trace, un run repris réécrit son journal ou son RUN.md. Chaque ménage relit donc le
  * fichier juste avant de le supprimer. Ces tests jouent exactement ce moment : la DEUXIÈME lecture
  * d'un fichier (la relecture) déclenche d'abord une écriture concurrente.

@@ -1,7 +1,7 @@
 import { extraireBilan } from './bilan-d-etape'
 
 /**
- * LE RUN PARLE LUI-MEME A LA FIN (conv-1008, 2026-10-16).
+ * LE RUN PARLE LUI-MEME A LA FIN (2026-10-16).
  *
  * Demande : « claude.exe sait faire ça c pas mal je veux pareil », capture jointe d'une carte
  * « Message from subagent › » — deux lignes de resume, une question, deux reponses cliquables et

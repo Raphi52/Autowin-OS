@@ -38,7 +38,7 @@ describe('mesureBundlePerime', () => {
 /**
  * LE BRANCHEMENT EST TESTE, PAS SEULEMENT LA FONCTION.
  *
- * Objection du juge, conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (reparation 15) :
+ * Objection du juge, tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (reparation 15) :
  * « Le branchement de la mesure de code perime (orchestrator.ts) n'est couvert par aucun test :
  * seule la fonction mesureBundlePerime l'est. Rien ne garantit que l'appel reste en place. »
  * Sans ce test, retirer la ligne `bundlePerime:` du seul site d'appel laisse la suite verte et
@@ -57,7 +57,7 @@ describe('branchement au site d appel (orchestrator)', () => {
 })
 
 /**
- * conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : une reparation de ce tour a corrige le
+ * Tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : une reparation de ce tour a corrige le
  * controle final DANS `src/main/hooks/default-gate-hooks.ts` (lecture de la ligne `fix-ok` sur le
  * disque, commit a5d02ef8). Ce fichier ne figurait pas dans les sources surveillees : une reparation
  * qui ne touche que lui laissait la mesure de peremption MUETTE, alors que le bundle execute ne
@@ -83,10 +83,10 @@ describe('sources surveillees du controle final', () => {
 })
 
 /**
- * conv-539, tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (20 reparations refusees) : la liste des
+ * Tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (20 reparations refusees) : la liste des
  * sources du gate etait tenue A LA MAIN. Un fichier du controle final absent de cette liste rendait
  * la mesure MUETTE alors que le bundle execute ne contenait pas le correctif — c'est exactement le
- * defaut deja paye une fois (commentaire fix-ok de conv-540 dans bundle-perime.ts). La liste est
+ * defaut deja paye une fois (commentaire fix-ok dans bundle-perime.ts). La liste est
  * desormais DERIVEE des dossiers du controle final : un nouveau fichier y compte sans edition.
  */
 describe('sources du gate derivees, pas tenues a la main', () => {
@@ -121,7 +121,7 @@ describe('sources du gate derivees, pas tenues a la main', () => {
 })
 
 /**
- * conv-540, tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : 7 tests d'orchestrateur rouges parce que la
+ * Tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f : 7 tests d'orchestrateur rouges parce que la
  * mesure lisait le bundle du depot REEL alors que le processus tourne depuis les sources. Un bundle
  * plus vieux que les sources arretait toute reprise — en test comme en `npm run dev`.
  */

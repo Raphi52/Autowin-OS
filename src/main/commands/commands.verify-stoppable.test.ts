@@ -8,7 +8,7 @@ import { AppCommandBus } from './commands'
 /**
  * LE BOUTON STOP DOIT ATTEINDRE `verify`, comme il atteint `run` (commands.run-stoppable.test.ts).
  *
- * DEFAUT VECU (conv-978, 2026-10-15) : « mon bouton stop relance 3x le tour ». Stop clique pendant
+ * DEFAUT VECU (2026-10-15) : « mon bouton stop relance 3x le tour ». Stop clique pendant
  * un `verify type:typecheck` : le tour etait clos, mais `tsc` a continue 15 s, et ses trois
  * battements (15 s, 20 s, 25 s) sont arrives a l'ecran apres la fin du tour — chacun rallumait
  * « en cours ». `spawnVerify` savait tuer l'arbre sur signal ; `runVerify` ne le lui passait pas.

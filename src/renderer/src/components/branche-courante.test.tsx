@@ -37,7 +37,7 @@ async function monter(lire: () => Promise<unknown>): Promise<HTMLDivElement> {
 }
 
 /*
- * AUCUNE RELECTURE NE SURVIT À SON TEST — mesuré le 2026-10-22 (conv-1056).
+ * AUCUNE RELECTURE NE SURVIT À SON TEST — mesuré le 2026-10-22.
  *
  * Les quatre tests montaient la sonde sans jamais la démonter : chaque montage laissait son
  * battement de 50 ms tourner après la fin du fichier. Dans la suite complète (1959 fichiers,

@@ -1,6 +1,6 @@
-// Catalogue brut des commandes de l'app, extrait tel quel de commands.ts (conv-1508, lot 2).
+// Catalogue brut des commandes de l'app, extrait tel quel de commands.ts (lot 2).
 // commands.ts le ré-exporte : les appelants gardent leur import. Découpé par familles en modules
-// voisins `catalogue-*.ts` (conv-1580) ; CATALOG les remet bout à bout, dans l'ordre d'avant.
+// voisins `catalogue-*.ts` ; CATALOG les remet bout à bout, dans l'ordre d'avant.
 import type { CommandSpec } from './commands'
 import { TEXTE_MAX_MESSAGE_FIL } from '../conversations/messages-entre-fils-app'
 import { MOTIF_MAX_ARRET_FIL } from '../conversations/arreter-un-fil'
@@ -107,7 +107,7 @@ export const CATALOG: CommandSpec[] = [
     name: 'chat_send',
     description:
       'Envoyer un message. Avec `conversationId`, il devient un VRAI tour utilisateur dans cette conversation (une commande /skill y est reconnue). Sans destination, ce n est qu une simple question ponctuelle au modele et une commande /xxx est refusee. ' +
-      // conv-1139 : le mot d'un agent y passait pour un ordre de l'utilisateur ; l'information
+      // Le mot d'un agent y passait pour un ordre de l'utilisateur ; l'information
       // ENTRE agents passe désormais par `ecrire_a_un_fil`, qui ne lance aucun tour.
       'Pour INFORMER, QUESTIONNER ou CONFIER du travail a l agent d un autre fil (fichier reserve, travail en cours, orchestration), n utilise PAS chat_send — il y lancerait un tour comme un ordre de l utilisateur : passe par ecrire_a_un_fil (nature « ordre » pour du travail). chat_send avec conversationId reste reserve a ce que l utilisateur demande de lancer dans un fil.',
     args: {
@@ -123,7 +123,7 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     /*
-     * MESSAGES ENTRE FILS DU MÊME DÉPÔT (conv-1139, 2026-10-24) — `messages-entre-fils-app.ts`.
+     * MESSAGES ENTRE FILS DU MÊME DÉPÔT (2026-10-24) — `messages-entre-fils-app.ts`.
      * 26 refus « Fichier réservé par conv-… » en deux jours, et l'utilisateur recopiait les
      * messages d'un fil à l'autre. Expéditeur posé par l'app, journal en ajout seul. Nature
      * « ordre » depuis le 2026-10-25 (demande de l'utilisateur) : du travail confié par un agent,
@@ -171,7 +171,7 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     /*
-     * ARRÊTER UN AUTRE FIL (conv-1625, 2026-11-05) — `commands/fils.ts`. conv-1613 a payé 402 $ dans
+     * ARRÊTER UN AUTRE FIL (2026-11-05) — `commands/fils.ts`. Un fil a payé 402 $ dans
      * une boucle de réparation que le contrôle final refusait à chaque essai ; l'agent qui l'a
      * repérée n'avait aucun moyen de la couper et a dû renvoyer l'utilisateur à son bouton. Même
      * geste que ce bouton (`os:pilotChat:cancel`, `ipc/chat.ts`) : le tour et le run du fil, rien
@@ -197,9 +197,9 @@ export const CATALOG: CommandSpec[] = [
   },
   {
     /*
-     * SUPER CONVERSATION (conv-1150, 2026-10-26) — `plans-de-lots-app.ts`. conv-1146 avait confié
+     * SUPER CONVERSATION (2026-10-26) — `plans-de-lots-app.ts`. Un fil avait confié
      * 113 écrans à un seul agent. Ton fil devient CHEF : l'app ouvre un fil par lot, au plus 3 à la
-     * fois, et te réveille à chaque fin de lot avec son compte rendu. Depuis conv-1171, le plan part
+     * fois, et te réveille à chaque fin de lot avec son compte rendu. Le plan part
      * dès son dépôt, sans clic d'accord ; l'utilisateur garde « Arrêter » dans le tableau.
      */
     name: 'plan_de_lots',

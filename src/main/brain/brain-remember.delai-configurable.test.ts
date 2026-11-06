@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { brainDepositTimeoutMs, rememberFact } from './brain-remember'
 
 /**
- * LE DELAI D'ATTENTE DU DEPOT NE PEUT PAS ETRE FIGE A 2 s — conv-143, 2026-09-02.
+ * LE DELAI D'ATTENTE DU DEPOT NE PEUT PAS ETRE FIGE A 2 s, 2026-09-02.
  *
  * DEFAUT VECU : un depot legitime est ressorti « delai depasse (2000 ms) — etat du depot INCONNU »
  * alors que le serveur du Brain repondait ; l'ecriture passe par un partage reseau, donc une

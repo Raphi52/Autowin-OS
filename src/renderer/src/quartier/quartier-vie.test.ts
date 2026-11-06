@@ -108,7 +108,7 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
     expect(r.w).toBe(r.h)
     expect(r.x + r.w / 2).toBe(r.px)
     expect(r.y + r.h / 2).toBe(r.py)
-    // La roue est peinte dans la Falaise o-1916 (conv-1444) : un fond fixe cache ses rayons peints, et le
+    // La roue est peinte dans la Falaise o-1916 : un fond fixe cache ses rayons peints, et le
     // moyeu, fixe lui aussi, reste sur l'axe de la jante qui tourne.
     const fond = d.vie.calques.roueFond
     expect([fond.x, fond.y, fond.w, fond.h]).toEqual([r.x, r.y, r.w, r.h])
@@ -171,7 +171,7 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
     const { eau } = (
       donnees as unknown as { vie: { eau: { x: number; y: number; w: number; h: number } } }
     ).vie
-    // L'eau de la Falaise o-1916, relevée sur la peinture (conv-1444) : du bord gauche jusque derrière
+    // L'eau de la Falaise o-1916, relevée sur la peinture : du bord gauche jusque derrière
     // l'atelier (x 688), du quai au fond (y 340) jusqu'au plancher du hangar (y 528).
     // fix-ok: les bornes d'avant (y ≤ 332, x + w ≥ 790) étaient la mer de l'ancienne peinture ; sur la
     // Falaise o-1916 l'eau mesurée va de x 1 à 687,5 et de y 340 à 528,5 (lot 4, eau2.py).
@@ -198,7 +198,7 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
     expect(cx + r).toBeLessThanOrEqual(gong.x + gong.w)
     expect(cy - r).toBeGreaterThanOrEqual(gong.y)
     expect(cy + r).toBeLessThanOrEqual(gong.y + gong.h)
-    // « Un gros gong au lieu de la cloche » (conv-1601) : le disque fait 75 px d'Accueil, la cloche en faisait 54.
+    // « Un gros gong au lieu de la cloche » : le disque fait 75 px d'Accueil, la cloche en faisait 54.
     expect(2 * r).toBeGreaterThanOrEqual(70)
   })
 
@@ -259,7 +259,7 @@ describe('les animations du décor (conv-1424, « les animations de décor sont 
       obj: { cle?: string; x: number; y: number; w: number; h: number }[]
     }
     // Les fenêtres relevées sur l'ancienne peinture passaient le test d'au-dessus : 29 sur 72 tombaient hors
-    // des tours de la nouvelle, et s'allumaient là où elle ne peint aucune fenêtre (lot 4, conv-1461).
+    // des tours de la nouvelle, et s'allumaient là où elle ne peint aucune fenêtre (lot 4).
     const tours = ['t_bulle', 't_enveloppe', 't_horloge', 't_anneau', 't_phare'].map((cle) => {
       const t = d.obj.find((o) => o.cle === cle)
       expect(t, cle).toBeDefined()

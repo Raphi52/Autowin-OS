@@ -8,15 +8,15 @@ import { etatDeRepriseDuFil } from './reprise-fil-apres-quota'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 
 /**
- * SEUL UN TOUR OUVERT DEPUIS LE CHAT REPART SEUL APRÈS UNE COUPURE (conv-1423, 2026-11-01).
+ * SEUL UN TOUR OUVERT DEPUIS LE CHAT REPART SEUL APRÈS UNE COUPURE (2026-11-01).
  *
- * Le contrôle final a trouvé `conv-879` (Assistant mails, coupé pendant un mail) annoncé « repart
+ * Le contrôle final a trouvé le fil « Assistant mails » (coupé pendant un mail) annoncé « repart
  * seul ». Un tour de règle y est borné (`chat-dispatch.ts:232-246`), la reprise, elle, n'a aucune
  * borne. Ici, le VRAI tour de chat tourne sur le vrai stockage, avec un faux modèle coupé par le
  * quota, et la VRAIE décision lit ce qu'il a écrit : le fait et sa lecture ne peuvent pas diverger.
  *
  * fix-ok: `etatDeRepriseDuFil` ne lisait rien de l'origine du tour coupé, et aucun tour n'en écrivait
- * rien : `conv-879` sortait « attente » (essai du contrôle final).
+ * rien : un fil sortait « attente » (essai du contrôle final).
  */
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
@@ -47,7 +47,7 @@ const COUPE_A = Date.parse('2026-11-01T10:00:00+01:00')
 const MUR = "You've hit your 5-hour limit · resets 11pm (Europe/Paris)"
 /** Une fenêtre : le tour ne s'en sert que pour poser une question, jamais ici. */
 const FENETRE = {} as WebContents
-/** Les bornes d'une règle mail, telles que `chat-dispatch.ts` les donne : le cas de `conv-879`. */
+/** Les bornes d'une règle mail, telles que `chat-dispatch.ts` les donne : le cas du fil « Assistant mails ». */
 const BORNES_DE_REGLE = { readOnly: false, maxIterations: 6, background: true, maxBudgetUsd: 0.5 }
 
 function banc(chat: () => Promise<unknown>): {

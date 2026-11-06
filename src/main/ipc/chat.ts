@@ -310,7 +310,7 @@ import { dispatcherAvecVeille } from '../veille/dispatch-veille'
 import { deposerOrientationDuFil } from '../conversations/orientations-en-cours-app'
 import type { ContexteIpcChat } from '../index'
 
-// Extrait tel quel d’index.ts (conv-1508, lot 5) : l’enregistrement des IPC du chat pesait ~3 500 lignes
+// Extrait tel quel d’index.ts (lot 5) : l’enregistrement des IPC du chat pesait ~3 500 lignes
 // du démarrage. Le corps est INCHANGÉ ; l’état du module principal arrive par `ctx`. Les `let` du
 // démarrage y sont lus/écrits par accesseurs (`ctx.x`) pour rester vivants, les autres sont déstructurés.
 /** IPC : chat, orchestration, dashboards et graphe. */
@@ -458,7 +458,7 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
     })
     return true
   })
-  // L'interrupteur « Mascotte du bureau » de Settings · Interface (conv-1145). Le moteur garde le
+  // L'interrupteur « Mascotte du bureau » de Settings · Interface. Le moteur garde le
   // choix (`mascotte-reglage.ts`) : la mascotte vit hors de la fenêtre, fenêtre fermée comprise.
   ipcMain.handle('os:mascotte', (event) => {
     assertTrustedRendererSender(event, 'Mascotte du bureau')
@@ -470,7 +470,7 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
     mascotteDuBureau.afficher(lireMascotteAffichee())
     return lireMascotteAffichee()
   })
-  // Le choix « Magicien / Basique » de la même ligne de Settings · Interface (conv-1249).
+  // Le choix « Magicien / Basique » de la même ligne de Settings · Interface.
   ipcMain.handle('os:mascotte:style', (event) => {
     assertTrustedRendererSender(event, 'Mascotte du bureau')
     return lireStyleMascotte()
@@ -481,7 +481,7 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
     mascotteDuBureau.changerStyle(styleAffiche(lireStyleMascotte(), ctx.themeDeLaMascotte))
     return lireStyleMascotte()
   })
-  // Le thème appliqué par la fenêtre (conv-346) : le thème NieR montre la machine, sans toucher au
+  // Le thème appliqué par la fenêtre : le thème NieR montre la machine, sans toucher au
   // style gardé. Seul un identifiant de thème court en lettres, chiffres et tirets est accepté.
   ipcMain.handle('os:mascotte:theme', (event, theme: unknown) => {
     assertTrustedRendererSender(event, 'Mascotte du bureau')
@@ -490,7 +490,7 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
     mascotteDuBureau.changerStyle(styleAffiche(lireStyleMascotte(), ctx.themeDeLaMascotte))
     return true
   })
-  // La même mascotte sur l'accueil d'un fil vide (conv-1401) : sa vraie page, puis son humeur.
+  // La même mascotte sur l'accueil d'un fil vide : sa vraie page, puis son humeur.
   ipcMain.handle('os:mascotte:page', (event) => {
     assertTrustedRendererSender(event, 'Mascotte du bureau')
     return {
@@ -530,7 +530,7 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
    * `prefers-color-scheme` suit le THEME AUTOWIN, pas celui de Windows. Sans ce reglage, Electron
    * repond la preference du systeme (`themeSource: 'system'`) : un Windows en mode clair faisait
    * matcher `prefers-color-scheme: light` dans une app SOMBRE, et le HTML rendu dans le fil
-   * appliquait ses couleurs de theme clair -- texte bleu marine sur fond noir (conv-111,
+   * appliquait ses couleurs de theme clair -- texte bleu marine sur fond noir (
    * 2026-10-08, `AppsUseLightTheme = 1`). Doc : https://www.electronjs.org/docs/latest/api/native-theme
    * Seules deux valeurs passent : `system` reviendrait exactement au defaut corrige ici.
    */
@@ -540,7 +540,7 @@ export function registerChatIpc(ctx: ContexteIpcChat): SuiviDuPlan {
     nativeTheme.themeSource = schema
     return true
   })
-  // Les couleurs du thème choisi pour la carte de fin de tour, qui vit hors de la page (conv-1090).
+  // Les couleurs du thème choisi pour la carte de fin de tour, qui vit hors de la page.
   // `definirPaletteDeCarte` n'accepte que huit `#rrggbb` : ces valeurs finissent dans du CSS.
   ipcMain.handle('app:carte-fin-de-tour-palette', (event, palette: unknown) => {
     assertTrustedRendererSender(event, 'Couleurs de la carte de fin de tour')
@@ -1001,7 +1001,7 @@ Le fil reprend ensuite normalement.`
       // aucun appel n'est chiffré s'affichait « 0.00 $ ».
       const delivered = {
         ...result,
-        // Le JUGE joue compte parmi les phases, comme sur la lignee `commands.ts` (conv-981).
+        // Le JUGE joue compte parmi les phases, comme sur la lignee `commands.ts`.
         phaseOutputs: phasesAvecJuge(result.phaseOutputs, result.judgeText),
         ...executionCostCoverageFields(
           result.usage,
@@ -1465,7 +1465,7 @@ Le fil reprend ensuite normalement.`
     }
   }
 
-  // LE BRAIN renseigne dans les Reglages (conv-923, 2026-10-13) : un chemin et/ou un depot git.
+  // LE BRAIN renseigne dans les Reglages (2026-10-13) : un chemin et/ou un depot git.
   // Le dossier du demarrage sert de reference : le serveur Brain et la vue du graphe le gardent
   // jusqu'au redemarrage (`SHARED_BRAIN_ROOT` est lu a l'import de viz/fs-brains.ts).
   const racineBrainAuDemarrage = sharedBrainRoot()
@@ -1581,7 +1581,7 @@ Le fil reprend ensuite normalement.`
     return brainReglageState()
   })
 
-  // BRAIN PERSO (conv-1233, 2026-10-28) : même formulaire que celui de l'équipe, son propre fichier
+  // BRAIN PERSO (2026-10-28) : même formulaire que celui de l'équipe, son propre fichier
   // (`brain-perso.json`). Pas de redémarrage : le serveur perso démarre dès l'enregistrement.
   const brainPersoState = async (erreur?: string): Promise<BrainPersoState> => {
     const reglage = lireBrainReglage(process.env, 'perso')
@@ -1655,7 +1655,7 @@ Le fil reprend ensuite normalement.`
     }
   )
 
-  // La page de question demande la sienne quand elle est prête (conv-1342) : rien à perdre si elle
+  // La page de question demande la sienne quand elle est prête : rien à perdre si elle
   // charge lentement, et un rechargement la retrouve. Une page ne lit que la question de sa fenêtre.
   ipcMain.handle('model:question:pending', (event) => {
     assertTrustedRendererSender(event, 'Model question')
@@ -1684,7 +1684,7 @@ Le fil reprend ensuite normalement.`
   /** Assigné plus bas, une fois le coordinateur des plans construit : la reprise le consulte. */
   const suiviDesFilsCoupes: { reprise?: ReturnType<typeof creerRepriseDesFils> } = {}
   /*
-   * UNE BRANCHE REPREND LE JOURNAL ET LES FICHES DE SA SOURCE (conv-1578). Le journal d'abord : une
+   * UNE BRANCHE REPREND LE JOURNAL ET LES FICHES DE SA SOURCE. Le journal d'abord : une
    * question recopiée y redevient une question, au lieu d'une demande sans fiche. Fail-open, comme
    * le journal : un échec ici ne retient jamais le rattachement des fiches.
    */
@@ -1727,20 +1727,20 @@ Le fil reprend ensuite normalement.`
   })
   // Les canaux des artefacts du chat vivent dans src/main/ipc/chat-artifacts.ts.
   registerChatArtifactsIpc({ os })
-  // La langue de Settings · Interface (conv-1146) : l'agent répond dans celle qui est choisie.
+  // La langue de Settings · Interface : l'agent répond dans celle qui est choisie.
   registerLangueIpc()
-  // La capture de l'élément désigné par Alt+clic, jointe au brouillon du fil (conv-1338).
+  // La capture de l'élément désigné par Alt+clic, jointe au brouillon du fil.
   registerCaptureElementIpc()
-  // La carte des besoins (conv-1089) : lecture seule, calculée ici où vivent tous les fils.
-  // Work items (conv-1127) : les liens prompt → task dans `liens-work-items.jsonl`, et la seule
+  // La carte des besoins : lecture seule, calculée ici où vivent tous les fils.
+  // Work items : les liens prompt → task dans `liens-work-items.jsonl`, et la seule
   // LECTURE des fiches — aucune écriture chez le fournisseur n'est transmise.
-  // Le dossier où le Board est recopié (conv-1206) : réglé sur ce poste, rangé sous userData. Partagé
-  // avec la présence du village commun (conv-1429), qui écrit à côté de `board.json`.
+  // Le dossier où le Board est recopié : réglé sur ce poste, rangé sous userData. Partagé
+  // avec la présence du village commun, qui écrit à côté de `board.json`.
   const dossierDuBoard = creerDossierDuBoard({
     racine: app.getPath('userData'),
     utilisateur: nomUtilisateurCourant()
   })
-  // La présence de ce poste dans le village commun (conv-1429) : les tanukis de la vue, filtrés, dans
+  // La présence de ce poste dans le village commun : les tanukis de la vue, filtrés, dans
   // `<dossier du Board>\<compte>\presence.json`. Le réglage est relu à chaque écriture.
   registerQuartierPresenceIpc({
     dossierDuBoard,
@@ -1752,18 +1752,18 @@ Le fil reprend ensuite normalement.`
           dossier: etat.dossier,
           nom: dossierDuBoard.nomDuPoste().nom,
           partager: etat.partagerPresence !== false,
-          // Toujours écrit, même sans choix (conv-1537) : le réglage de l'Accueil montre l'animal que
+          // Toujours écrit, même sans choix : le réglage de l'Accueil montre l'animal que
           // les collègues voient, pas celui d'un tirage sur le nom du poste.
           animal: etat.animal ?? ANIMAL_PAR_DEFAUT,
-          // La couleur de leur tenue (conv-1633) ; absente = la tenue d'origine, rien à écrire.
+          // La couleur de leur tenue ; absente = la tenue d'origine, rien à écrire.
           ...(etat.tenue ? { tenue: etat.tenue } : {}),
-          // « Afficher mes agents à » des réglages de l'Accueil (conv-1599).
+          // « Afficher mes agents à » des réglages de l'Accueil.
           masquesPour: etat.masquerPresencePour ?? []
         }
       }
     })
   })
-  // Rend la copie du Board de fin de tour (conv-1210), appelée par l'observateur de fin de tour.
+  // Rend la copie du Board de fin de tour, appelée par l'observateur de fin de tour.
   const boardDuPoste = registerCarteDesBesoinsIpc({
     os,
     journal: journalDesBesoins,
@@ -1774,19 +1774,19 @@ Le fil reprend ensuite normalement.`
     },
     dossierDuBoard,
     choisirDossier: pickDirectory,
-    // Où la copie de fin de tour garde les états posés à la main (conv-1210).
+    // Où la copie de fin de tour garde les états posés à la main.
     racineDuPoste: app.getPath('userData'),
-    // Un post-it par RUN.md léger (conv-1456) : la fiche de chaque demande rangée.
+    // Un post-it par RUN.md léger : la fiche de chaque demande rangée.
     lireFiches: fichesDeDemande.fichesParDemande
   })
-  // Les RUN.md légers comparés au Board (conv-1418) : le Board est lu, jamais changé.
+  // Les RUN.md légers comparés au Board : le Board est lu, jamais changé.
   const mesureDesEcarts = creerMesureDesEcarts({
     racine: app.getPath('userData'),
     lireLaCarte: boardDuPoste.lireLaCarte,
     lireLignes: fichesDeDemande.lignes
   })
   /*
-   * Les branches nées avant le rattachement (conv-1441 : les « façon 1/3 » de conv-1424, seules
+   * Les branches nées avant le rattachement (les « façon 1/3 », seules
    * demandes sans fiche de `ecarts.json`) : leurs demandes recopiées rejoignent la fiche d'origine,
    * une fois, quand tous les fils sont chargés. Rejoué au démarrage suivant, cela n'ajoute rien.
    */
@@ -1805,7 +1805,7 @@ Le fil reprend ensuite normalement.`
   // vide dans src/ avant ce travail) : la liste des dossiers du Chat ne pouvait donc pas
   // s'enrichir des projets claude.exe. Sonde réelle sur le poste : 24 entrées `projects`,
   // 5 vrais projets après filtre.
-  // Les projets déjà ouverts dans claude.exe (conv-5) : le main lit et FILTRE `~/.claude.json`,
+  // Les projets déjà ouverts dans claude.exe : le main lit et FILTRE `~/.claude.json`,
   // le renderer ne reçoit que des chemins de dossiers — jamais le contenu du profil (jetons,
   // comptes). Relu à CHAQUE appel plutôt que mis en cache : le fichier bouge à chaque session
   // claude.exe, et le renderer n'appelle qu'une fois par montage du Chat.
@@ -1813,7 +1813,7 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Dossiers Claude CLI')
     return lireDossiersProjetsClaude()
   })
-  // « This computer » dans le choix du dossier de travail (conv-298) : travailler sur la machine
+  // « This computer » dans le choix du dossier de travail : travailler sur la machine
   // sans projet, comme claude.exe lancé depuis le dossier personnel. Le renderer n'a pas le
   // disque : seul le main connaît ce dossier.
   ipcMain.handle('os:dossierPersonnel', (event) => {
@@ -1934,7 +1934,7 @@ Le fil reprend ensuite normalement.`
     const ligne = ligneDemandee(rawLine, cible.line)
 
     // Un agent cite ce qu'il voit depuis SA copie. Chercher dans le seul workspace rendait
-    // `introuvable` sur tout fichier cree pendant le run — la plainte d'origine (conv-1427).
+    // `introuvable` sur tout fichier cree pendant le run — la plainte d'origine.
     const worktreesRoot = join(ensureAutowinAppData(appDataRoot), 'worktrees')
     const racines = racinesRevelation({
       workspace: process.env.AUTOWIN_OS_WORKSPACE ?? process.cwd(),
@@ -1996,15 +1996,15 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'App command')
     return bus.exec(guardString(name, 'name'), args)
   })
-  // Messages entre fils (conv-1139) : ce que le fil affiche, envoyés et reçus. Lecture SEULE —
+  // Messages entre fils : ce que le fil affiche, envoyés et reçus. Lecture SEULE —
   // afficher ne marque rien comme livré à l'agent.
   ipcMain.handle('os:messagesEntreFils', (event, conversationId: unknown) => {
     assertTrustedRendererSender(event, 'Messages entre fils')
     return messagesAAfficher(guardString(conversationId, 'conversationId'))
   })
-  // Plans de lots d'un fil chef (conv-1150) : le tableau, et les SEULS gestes qui lancent ou
+  // Plans de lots d'un fil chef : le tableau, et les SEULS gestes qui lancent ou
   // reprennent un plan — le clic de l'utilisateur. L'agent n'a que dépôt, état et relance d'un lot ;
-  // la relance a aussi son bouton (conv-1151, lot 3), qui porte le numéro du lot.
+  // la relance a aussi son bouton (lot 3), qui porte le numéro du lot.
   ipcMain.handle(
     'os:plansDeLots',
     async (
@@ -2019,16 +2019,16 @@ Le fil reprend ensuite normalement.`
       const geste = guardString(action, 'action')
       const coordinateur = suiviDesPlans.coordinateur
       if (!coordinateur) return { ok: false, erreur: 'coordinateur des plans pas encore démarré.' }
-      // Lecture groupée, sans fil (conv-1158) : la liste des conversations range tous les fils de
+      // Lecture groupée, sans fil : la liste des conversations range tous les fils de
       // lots sous leur chef en UN appel, au lieu de deviner les lots à leur titre « Lot N/M — ».
       if (geste === 'tous') return { ok: true, plans: plansPourLaListe(coordinateur.plans()) }
       const fil = guardString(conversationId, 'conversationId')
       if (geste === 'voir') return { ok: true, vue: coordinateur.planDuFil(fil) ?? null }
-      // Les plans que le chef ne montre plus (conv-1394) : leurs lots n'ont plus de ligne dans la
+      // Les plans que le chef ne montre plus : leurs lots n'ont plus de ligne dans la
       // liste, le bloc du chef les liste à leur place.
       if (geste === 'anciens')
         return { ok: true, anciens: anciensPlansDuChef(coordinateur.plans(), fil) }
-      // Ce que dit chaque lot (conv-1315) : lu ici, où TOUS les fils sont en mémoire, tour en cours
+      // Ce que dit chaque lot : lu ici, où TOUS les fils sont en mémoire, tour en cours
       // compris ; l'écran n'a que ceux qu'il a déjà peints, et une piste de lot jamais ouvert restait
       // vide. Seules les phrases traversent le canal, pas les messages.
       if (geste === 'phrases') {
@@ -2038,7 +2038,7 @@ Le fil reprend ensuite normalement.`
           : {}
         return { ok: true, phrases }
       }
-      // Le bouton du workflow intelligent (conv-1333) : le plan n'existe pas encore, il n'a pas d'id.
+      // Le bouton du workflow intelligent : le plan n'existe pas encore, il n'a pas d'id.
       if (geste === 'lancer-selection') return coordinateur.lancerSelection(fil, selection)
       const id = guardString(planId, 'planId')
       if (geste === 'accepter') return coordinateur.accepter(fil, id)
@@ -2060,7 +2060,7 @@ Le fil reprend ensuite normalement.`
   // les valeurs listees ici, qui lui sont desormais passees explicitement.
   /** Assigné plus bas, une fois `scheduledChatRuntime` construit (il ouvre le tour de reprise). */
   const relanceTachesDeFond: { relanceur?: RelanceurTachesDeFond } = {}
-  /** Assigné plus bas, une fois `lancerDansConversation` câblé (conv-1150, plans de lots). */
+  /** Assigné plus bas, une fois `lancerDansConversation` câblé (plans de lots). */
   const suiviDesPlans: { coordinateur?: CoordinateurDesPlans } = {}
   /** Assigné plus bas, une fois `scheduledChatRuntime` construit (il ouvre le tour `/git`). */
   const suiviGitApresFil: { file?: FileGitApresFil } = {}
@@ -2158,7 +2158,7 @@ Le fil reprend ensuite normalement.`
    * RANGEMENT AUTOMATIQUE AU PREMIER MESSAGE, quand la demande NOMME un projet connu sans donner
    * son chemin.
    *
-   * Cas mesure (conv-611, 2026-09-16) : conversation ouverte dans D:\BrainRotRoyale, premier
+   * Cas mesure (2026-09-16) : conversation ouverte dans D:\BrainRotRoyale, premier
    * message sur les bureaux virtuels d'Autowin -> restee au mauvais endroit jusqu'a un deplacement
    * a la main. `alignerDossierSurLaDemande` ne couvre que le chemin ECRIT ; ici l'utilisateur
    * nomme seulement son projet. On ne choisit QUE parmi les dossiers deja utilises sur ce poste,
@@ -2191,7 +2191,7 @@ Le fil reprend ensuite normalement.`
             .filter((chemin): chemin is string => Boolean(chemin))
         )
       ],
-      // Le « dossier » de la barre laterale est souvent une CATEGORIE, pas un chemin : conv-611
+      // Le « dossier » de la barre laterale est souvent une CATEGORIE, pas un chemin
       // portait `categorie = "Autowin OS"` et aucun projectPath (mesure du 2026-09-16). Sans cette
       // liste, le cas fondateur ne pouvait pas etre range.
       categoriesConnues: [
@@ -2204,9 +2204,9 @@ Le fil reprend ensuite normalement.`
       ],
       dossierActif: actif,
       // Un seul appel court, sur le PREMIER message : le nom du projet est souvent absent du
-      // message (cas conv-611), seul le SUJET le rattache. Une panne du modele rend null et le
+      // message, seul le SUJET le rattache. Une panne du modele rend null et le
       // tour part comme avant. Un choix dans une liste, sans outil : le modèle des PETITES TÂCHES
-      // (`roles.ts`, Haiku par défaut — conv-1097). Il partait sur le modèle du chat, effort xhigh.
+      // (`roles.ts`, Haiku par défaut). Il partait sur le modèle du chat, effort xhigh.
       demanderAuModele: async (systeme, charge) => {
         await os.waitUntilReady()
         const binding = os.roles.bindingDesPetitesTaches()
@@ -2239,7 +2239,7 @@ Le fil reprend ensuite normalement.`
       ranger: (chemin) => os.conversations.rangerDansDossier(conversationId, chemin),
       // Le tour est deja parti : l'annonce passe AU-DESSUS de sa reponse, vierge, en cours OU finie.
       // Un rangement differe l'ecrit APRES la fin du tour : en fin de fil, elle masquait la suite
-      // proposee au champ pre-rempli et au mode auto (conv-23, tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba).
+      // proposee au champ pre-rempli et au mode auto (tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba).
       annoncer: (message) =>
         os.conversations.append(conversationId, {
           role: 'assistant',
@@ -2254,12 +2254,12 @@ Le fil reprend ensuite normalement.`
   }
 
   /*
-   * FIL ASYNCHRONE (conv-1038, 2026-10-21) : un tour fini SONNE quand aucune fenetre d'Autowin
+   * FIL ASYNCHRONE (2026-10-21) : un tour fini SONNE quand aucune fenetre d'Autowin
    * n'est regardee (tour median 226 s, p90 ~17 min). Le clic ouvre le fil du tour ; la decision et
    * le texte vivent dans `notification-fin-de-tour.ts`, testes sans fenetre.
    */
   /*
-   * POPUP « VERRE NACRE » (conv-1066, 2026-10-22) : la fin d'un tour s'affiche dans une carte au
+   * POPUP « VERRE NACRE » (2026-10-22) : la fin d'un tour s'affiche dans une carte au
    * theme d'Autowin en bas a droite (`notification-popup.ts`), plus dans la bulle Windows, que
    * rien ne permet de styler. La bulle reste le SECOURS si la carte ne peut pas se creer.
    * Les cartes n'existent que tant qu'Autowin n'est pas regarde : une fenetre d'Autowin qui
@@ -2288,7 +2288,7 @@ Le fil reprend ensuite normalement.`
     zone: mascotteDuBureau.zoneDesCartes,
     page: mascotteDuBureau.decorerCarte
   })
-  // Les cartes collees a la bille la suivent quand on la glisse (conv-1195, « snap ensemble »).
+  // Les cartes collees a la bille la suivent quand on la glisse (« snap ensemble »).
   mascotteDuBureau.quandElleBouge(popupsDeFinDeTour.replacer)
   app.on('browser-window-focus', (_evenement, fenetre) => {
     if (!popupsDeFinDeTour.estUneCarte(fenetre)) popupsDeFinDeTour.toutFermer()
@@ -2320,7 +2320,7 @@ Le fil reprend ensuite normalement.`
     envoyerSuite: (id, suite) =>
       broadcast({ type: 'suite-depuis-notification', convId: id, texte: suite })
   })
-  // La mascotte du bureau (conv-1145) : jamais dans une instance cachée (capture, tâche planifiée),
+  // La mascotte du bureau : jamais dans une instance cachée (capture, tâche planifiée),
   // pour la même raison que les cartes — elle s'afficherait sur l'écran de l'utilisateur.
   if (!isolatedTestInstance && !headlessTestInstance)
     mascotteDuBureau.demarrer(
@@ -2330,7 +2330,7 @@ Le fil reprend ensuite normalement.`
           const fenetre = BrowserWindow.getFocusedWindow()
           return (
             fenetre !== null &&
-            // Une fenêtre cachée ou réduite ne se regarde pas, même si Electron la croit active (conv-346).
+            // Une fenêtre cachée ou réduite ne se regarde pas, même si Electron la croit active.
             fenetre.isVisible() &&
             !fenetre.isMinimized() &&
             !popupsDeFinDeTour.estUneCarte(fenetre) &&
@@ -2349,11 +2349,11 @@ Le fil reprend ensuite normalement.`
     )
 
   /*
-   * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26, conv-867).
+   * LA REPONSE PART TOUT DE SUITE, LE RANGEMENT SE FAIT A COTE (2026-09-26).
    *
    * Avant, le tour ATTENDAIT l'appel au modele qui range la conversation (~5 s au premier message) :
-   * attente sans un mot, et faux « Reponse interrompue avant la fin » pendant ce trou (conv-809,
-   * conv-862). Le rangement n'est plus attendu. Il demarre APRES la bascule par chemin cite (qui
+   * attente sans un mot, et faux « Reponse interrompue avant la fin » pendant ce trou.
+   * Le rangement n'est plus attendu. Il demarre APRES la bascule par chemin cite (qui
    * prime et le rend inutile), et un rangement qui deplacerait le dossier de travail attend
    * `finDuTour` : un tour ne change jamais de dossier en cours de route.
    * La demande compte toujours comme EN COURS des sa reception (voir trackPreparation).
@@ -2365,7 +2365,7 @@ Le fil reprend ensuite normalement.`
       alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
       /*
-       * LE MODÈLE DU FIL (conv-239, 2026-10-11) : une conversation peut porter son propre modèle.
+       * LE MODÈLE DU FIL (2026-10-11) : une conversation peut porter son propre modèle.
        * Un modèle imposé par l'appelant (reprise d'un tour coupé, qui rejoue SON modèle d'origine)
        * prime : on ne remplit que la place vide. Un choix devenu indisponible est DIT dans le fil,
        * puis le tour part sur le modèle par défaut au lieu d'échouer au premier appel.
@@ -2396,12 +2396,12 @@ Le fil reprend ensuite normalement.`
         console.warn('[rangement] premier message non range :', error)
       })
       /*
-       * ENCHAINEMENT AUTO DU CHAT (conv-871) : l'interrupteur ne publiait que les taches d'agent.
+       * ENCHAINEMENT AUTO DU CHAT : l'interrupteur ne publiait que les taches d'agent.
        * Photo de l'arbre AVANT le tour (~65 ms), publication APRES un tour reussi, sans faire
        * attendre la reponse. Un tour arrete ou en echec ne publie rien.
        */
       // L'amont AVANT le tour : ses commits publiés (par lui ou par l'enchaînement) ont leur bloc à
-      // la fin (conv-1574). Jamais attendu ici : une lecture lente ne retient pas la réponse.
+      // la fin. Jamais attendu ici : une lecture lente ne retient pas la réponse.
       const amontAuDebut = defaultGitRunner()
         .then((git) => lireAmont(git, dossierDuTour(conversationId)))
         .catch(() => undefined)
@@ -2409,7 +2409,7 @@ Le fil reprend ensuite normalement.`
         ? await photographierDebutDeTour(dossierDuTour(conversationId))
         : undefined
       /*
-       * PHOTO DU CODE AU DEBUT DU TOUR (conv-1038, 2026-10-21) : de quoi « revenir a ce tour » plus
+       * PHOTO DU CODE AU DEBUT DU TOUR (2026-10-21) : de quoi « revenir a ce tour » plus
        * tard, dans une copie separee (`photo-du-code.ts`, ~200 ms, jamais bloquante au-dela de 5 s).
        * Pas pour un tour REPRIS apres un redemarrage (`args[4]`) : il a commence avant, la photo
        * montrerait un etat a moitie ecrit sous le nom de son debut.
@@ -2418,7 +2418,7 @@ Le fil reprend ensuite normalement.`
         await photographierLeCode({ dossier: dossierDuTour(conversationId), conversationId })
       try {
         const resultat = await lancerTour(...args)
-        // Carte des besoins (conv-1089) : jamais attendu, un échec n'atteint jamais la réponse.
+        // Carte des besoins : jamais attendu, un échec n'atteint jamais la réponse.
         void journalDesBesoins
           .noterTour({
             conversationId,
@@ -2427,7 +2427,7 @@ Le fil reprend ensuite normalement.`
             dossier: dossierDuTour(conversationId),
             texteReponse: resultat.text
           })
-          // RUN.md léger (conv-1418) : même garantie, un échec n'atteint jamais la réponse.
+          // RUN.md léger : même garantie, un échec n'atteint jamais la réponse.
           .then((evenement) =>
             evenement
               ? fichesDeDemande.noterTour({
@@ -2440,9 +2440,9 @@ Le fil reprend ensuite normalement.`
           .then(async (ligne) => {
             if (!ligne) return
             /*
-             * Une branche née PENDANT ce tour (conv-1492 à 1494, depuis conv-1491) n'a rien trouvé à
+             * Une branche née PENDANT ce tour n'a rien trouvé à
              * rattacher : la fiche de cette demande n'existait pas encore. Elle la rejoint maintenant,
-             * sans attendre le prochain démarrage (conv-1578).
+             * sans attendre le prochain démarrage.
              */
             const source = os.conversations.get(conversationId)
             if (source)
@@ -2450,8 +2450,7 @@ Le fil reprend ensuite normalement.`
                 if (branche.forkedFrom?.conversationId === conversationId)
                   await rattacherLaBranche(branche, source)
             mesureDesEcarts.planifier()
-            // Le panneau RUN.md du fil relit ses fiches : la nouvelle s'y montre sans rouvrir le fil
-            // (conv-1441).
+            // Le panneau RUN.md du fil relit ses fiches : la nouvelle s'y montre sans rouvrir le fil.
             broadcast({ type: 'refresh', scope: 'workflows' })
           })
           .catch((error) => console.warn('[besoins] tour non noté :', error))
@@ -2481,11 +2480,11 @@ Le fil reprend ensuite normalement.`
                 .inFlightConversations()
                 .filter((id) => id !== conversationId)
                 .map((id) => dossierDuTour(id)),
-            // Les tests des fichiers du tour sont rejoués AVANT de pousser : `b6d2a3fc` (conv-892)
+            // Les tests des fichiers du tour sont rejoués AVANT de pousser : `b6d2a3fc`
             // a été poussé sans test et a laissé main rouge 20 h (mesuré le 2026-10-01).
             verifierAvantPublication: (repo, fichiers) =>
               bus.verifierAvantPublication(repo, fichiers),
-            // Le TYPAGE de ce qui part, avant les tests : `9d6bb850` (conv-954) a publié un fichier
+            // Le TYPAGE de ce qui part, avant les tests : `9d6bb850` a publié un fichier
             // sans son appelant, et main ne compilait plus alors que les tests de l'arbre étaient verts.
             typerAvantPublication: (repo, fichiers) =>
               typerCeQuiPart({ repo, fichiers, typer: typeurTsc(process.execPath) })
@@ -2493,7 +2492,7 @@ Le fil reprend ensuite normalement.`
           publicationDuTour = rapportDuTour.catch(() => undefined)
           void rapportDuTour
             // Ce que l'enchaînement n'a pas pu rendre à son fil : `/git` s'en charge, si
-            // l'utilisateur l'a accordé (conv-1339, voir git-apres-fil.ts).
+            // l'utilisateur l'a accordé (voir git-apres-fil.ts).
             .then((rapport) => {
               const decision = decisionGitApresFil({
                 accord: os.gitApresFilActif(),
@@ -2506,7 +2505,7 @@ Le fil reprend ensuite normalement.`
                 compteRendu: resultat.text ?? '',
                 rapport
               })
-              // Un lot de plan : sa passe tourne dans le CHEF, à la fin du plan (conv-1544).
+              // Un lot de plan : sa passe tourne dans le CHEF, à la fin du plan.
               if (decision.lancer)
                 suiviGitApresFil.file?.ajouter(
                   filDeLaPasse(
@@ -2521,7 +2520,7 @@ Le fil reprend ensuite normalement.`
             .finally(finPublication)
         }
         // Le bloc git des commits que CE tour a publiés, par lui-même ou par l'enchaînement auto,
-        // une fois l'enchaînement fini (conv-1574 : ces publications ne posaient aucun bloc).
+        // une fois l'enchaînement fini (Ces publications ne posaient aucun bloc).
         void Promise.all([amontAuDebut, publicationDuTour])
           .then(async ([depuis, rapport]) => {
             if (!depuis) return
@@ -2549,7 +2548,7 @@ Le fil reprend ensuite normalement.`
       }
     })
   /*
-   * LA FIN DU TOUR ANNONCÉE AUTOUR DU COMPTAGE, PAS DEDANS (conv-1150, 2026-10-26).
+   * LA FIN DU TOUR ANNONCÉE AUTOUR DU COMPTAGE, PAS DEDANS (2026-10-26).
    * Le coordinateur des plans de lots réveille un chef inactif à la fin de chaque tour. Annoncée
    * depuis `createRunPilotChat`, la fin partait de l'intérieur de `trackPreparation` : le chef était
    * encore compté « en cours » et son réveil était perdu (reproduit par le juge avec le vrai registre).
@@ -2561,13 +2560,13 @@ Le fil reprend ensuite normalement.`
     // Ici et pas sur `os.onMurDeQuota` : ce crochet n'a qu'un écouteur, celui du réveil des runs. Un
     // tour en échec relit tout : seul un mur y trouve une heure, et rien n'est prévu sinon.
     if (!issue.ok && repriseDesFilsActive) suiviDesFilsCoupes.reprise?.replanifier()
-    // LE BOARD RECOPIÉ À CHAQUE FIN DE TOUR (conv-1210 : « que la copie du Board vers la GED se
+    // LE BOARD RECOPIÉ À CHAQUE FIN DE TOUR (« que la copie du Board vers la GED se
     // mette à jour même quand le Board n'est pas affiché ») : sans attendre, ni calcul sans dossier
     // choisi ; une rafale de fins de tour ne calcule qu'une fois par délai (`board-dossier.ts`).
     boardDuPoste.recopierLeBoard()
   }
   const runPilotChat = suivreLaFinDuTour(tourCompteDesReception, observateurDesPlans)
-  /** Rendu au démarrage : les runs repris y préviennent les plans de lots (conv-1308). */
+  /** Rendu au démarrage : les runs repris y préviennent les plans de lots. */
   const suiviDuPlan: SuiviDuPlan = {
     agentRepris: (fil, tour) => suiviDesPlans.coordinateur?.agentRepris(fil, tour),
     finDuRun: (fil, issue) => annoncerLaFinDuTour(observateurDesPlans, fil, issue)
@@ -2585,15 +2584,15 @@ Le fil reprend ensuite normalement.`
       resolveRecovery = resolve
     })
     activeChatTurns.setRecovered(call.conversationId, recoveryController, recoveryCompletion)
-    // Le plan de lots suit cet agent (conv-1308). Les appels reconnus au chargement passent ici avant
+    // Le plan de lots suit cet agent. Les appels reconnus au chargement passent ici avant
     // que le coordinateur existe : il lira alors cette réservation lui-même (`tourActif`).
     suiviDesPlans.coordinateur?.agentRepris(call.conversationId, call.turnId)
     setImmediate(() => {
       void (async () => {
-        // L'issue, annoncée aux plans de lots APRÈS le relâchement de la réservation (conv-1150).
+        // L'issue, annoncée aux plans de lots APRÈS le relâchement de la réservation.
         let issueDeReprise: IssueDuTour | undefined
         try {
-          // Pendant l'attente, le fil voit ce que fait le CLI : actions et étapes (conv-1551 — conv-1535
+          // Pendant l'attente, le fil voit ce que fait le CLI : actions et étapes (
           // est resté 20 min sans une ligne après le redémarrage de 20:01). Arrêté avant la suite.
           const relais = relayerAppelChatRepris(call, {
             racineJournaux: turnJournalRoot,
@@ -2687,7 +2686,7 @@ Le fil reprend ensuite normalement.`
             .map((message) => ({ role: message.role, content: message.content }))
           // Le modèle du chat repart avec le chat ; seul un réglage réellement imposé au tour
           // d'origine est rejoué sur ses commandes. L'imposer à tort figeait l'effort des runs
-          // lancés par ce tour (conv-955, `reglagesDeReprise`).
+          // lancés par ce tour (`reglagesDeReprise`).
           const reglages = reglagesDeReprise(call, assistant.runtime)
           // Rejoué SANS l'annonce de `runPilotChat` : elle partirait réservation encore tenue.
           const rejoue = await tourCompteDesReception(
@@ -2802,7 +2801,7 @@ Le fil reprend ensuite normalement.`
       const worktrees = os.worktreeManager
       if (!worktrees) return
       // Le rejet d'un recensement trop long est GERE dans `jouerPasseDeRetention` (crash.log du
-      // 2026-10-28 : « unhandledRejection », bulletin de maintenance du 30/10, conv-1048).
+      // 2026-10-28 : « unhandledRejection », bulletin de maintenance du 30/10).
       await jouerPasseDeRetention({
         recenser: () => {
           const consignes = chargerShaConsignes(app.getAppPath())
@@ -2831,7 +2830,7 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
     assertTrustedRendererSender(event, 'PilotChat')
     /*
-     * UN SEUL AGENT PAR FIL, même après un redémarrage (conv-260, 2026-10-11) : un tour repris
+     * UN SEUL AGENT PAR FIL, même après un redémarrage (2026-10-11) : un tour repris
      * attend encore son CLI survivant. En lancer un second ouvrirait un deuxième `claude --resume`
      * sur la même session. L'écran route déjà la saisie en orientation pendant ce temps ; ce refus
      * est le filet si un envoi passe quand même (écran pas encore réconcilié).
@@ -2875,7 +2874,7 @@ Le fil reprend ensuite normalement.`
     agentStudioBinding: () => os.roles.getBinding('orchestrator'),
     hasConversation: (conversationId) => Boolean(os.conversations.get(conversationId)),
     createConversation: (input) => os.conversations.create(input),
-    // « This computer » (conv-1213) : même dossier que le choix du dossier de travail du Chat.
+    // « This computer » : même dossier que le choix du dossier de travail du Chat.
     dossierPersonnel: () => canonicalProjectPath(homedir()) ?? homedir(),
     bindConversation: (taskId, conversationId) => {
       scheduledTasks.bindConversation(taskId, conversationId)
@@ -2946,19 +2945,19 @@ Le fil reprend ensuite normalement.`
   }
   // CABLAGE TARDIF de `chat_send` vers une conversation NOMMEE. La capacite existait deja
   // (`runPrompt`, utilisee par les taches planifiees) mais n'etait branchee sur aucune commande
-  // du chat : un agent qui creait un fil ne pouvait rien y lancer (conv-300 vide, 2026-09-05).
+  // du chat : un agent qui creait un fil ne pouvait rien y lancer (Un fil vide, 2026-09-05).
   bus.conversationExiste = (conversationId) => scheduledChatRuntime.hasConversation(conversationId)
   // MEME autorite que la sonde `os:pilotChat:active` du renderer : l'agent du chat doit pouvoir
   // repondre « est-ce que ca tourne encore ? » sans deviner en lisant des journaux de fin de tour.
   bus.tourDeChatActif = (conversationId) => activeChatTurns.isInFlight(conversationId)
   // Rend la main des que le tour DEMARRE dans le fil cible, pas a sa fin : sinon un agent qui ouvre
-  // N fils les lance un par un (conv-40, 2026-10-02). Voir chat/lancer-sans-attendre.ts.
+  // N fils les lance un par un (2026-10-02). Voir chat/lancer-sans-attendre.ts.
   bus.lancerDansConversation = (conversationId, prompt, binding) =>
     lancerSansAttendre(
       async () => {
         // HORS du devis du tour appelant : sinon le tour cible hérite de ses compteurs, dont l'appel
         // est déjà actif, et il est annulé sur « Budget de concurrence atteint (1) » alors que
-        // chat_send a déjà répondu « envoyé » (conv-53 -> conv-93, 2026-10-05). Même isolement que
+        // chat_send a déjà répondu « envoyé » (2026-10-05). Même isolement que
         // le réveil des watchdogs plus bas.
         const resultat = await os.executionSupervisor.runOutsideCurrent(() =>
           scheduledChatRuntime.runPrompt(conversationId, prompt, binding)
@@ -2974,7 +2973,7 @@ Le fil reprend ensuite normalement.`
         console.warn(`[chat_send] tour de ${conversationId} en echec apres son envoi :`, erreur)
     )
   /*
-   * SUPER CONVERSATION (conv-1150) : le coordinateur des plans de lots. Un fil par lot, ouvert dans
+   * SUPER CONVERSATION : le coordinateur des plans de lots. Un fil par lot, ouvert dans
    * le dossier du chef ; lancé par la MÊME capacité que `chat_send` (hors du devis du tour appelant) ;
    * comptes rendus par le journal des messages entre fils, l'expéditeur étant le fil du lot.
    */
@@ -2987,7 +2986,7 @@ Le fil reprend ensuite normalement.`
         ...(source?.projectPath ? { projectPath: source.projectPath } : {})
       }).id
     },
-    // conv-1284 : le modèle d'un lot passe par la même capacité que `chat_send` (« model »).
+    // Le modèle d'un lot passe par la même capacité que `chat_send` (« model »).
     lancer: (fil, prompt, modele) =>
       bus.lancerDansConversation
         ? modele
@@ -3007,10 +3006,10 @@ Le fil reprend ensuite normalement.`
   })
   bus.plansDeLots = coordinateurDesPlans
   suiviDesPlans.coordinateur = coordinateurDesPlans
-  // POINT D'ENTRÉE LOCAL (conv-1144) : un script du poste crée un fil, y lance un tour et le relit,
+  // POINT D'ENTRÉE LOCAL : un script du poste crée un fil, y lance un tour et le relit,
   // par le même protocole que les outils du chat. Ouvert ICI, une fois `chat_send` et la sonde
   // `tourDeChatActif` câblés. Le jeton n'est jamais journalisé : il ne vit que dans le fichier.
-  // fix-ok: conv-1144 — pas une correction répétée : les 4 éditions de ce fichier sont les 4 points
+  // fix-ok: pas une correction répétée : les 4 éditions de ce fichier sont les 4 points
   // de branchement distincts d'un même ajout (import, variable, démarrage ici, arrêt à before-quit).
   void demarrerPointEntreeLocal({
     dossierDonnees: ensureAutowinAppData(appDataRoot),
@@ -3023,7 +3022,7 @@ Le fil reprend ensuite normalement.`
     })
     .catch((erreur) => console.warn("[point d'entree local] non demarre :", erreur))
   /*
-   * TACHES DE FOND COUPEES EN FIN DE TOUR (conv-528, conv-42) : relancees hors du tour, puis UN tour
+   * TACHES DE FOND COUPEES EN FIN DE TOUR : relancees hors du tour, puis UN tour
    * de reprise rend leur resultat dans la meme conversation. Hors du devis du tour appelant, comme
    * `chat_send` ci-dessus. Les lots restes sur disque (app fermee pendant la commande) reprennent ici.
    */
@@ -3043,7 +3042,7 @@ Le fil reprend ensuite normalement.`
   })
   relanceTachesDeFond.relanceur = relanceurTachesDeFond
   /*
-   * « PUBLIER LES FILS FINIS » (conv-1339) : une passe à la fois. Depuis conv-1569, AUCUN tour ni
+   * « PUBLIER LES FILS FINIS » : une passe à la fois. AUCUN tour ni
    * message dans le fil : l'app vérifie, commite et pousse elle-même, et seul le titre du commit part
    * au petit modèle d'Agent Studio. Le fil ne reçoit que le bloc git (ou la note de ce qui reste à trier).
    */
@@ -3068,7 +3067,7 @@ Le fil reprend ensuite normalement.`
               bus.verifierAvantPublication(racine, liste)
             ),
           rediger: (charge) => redigerUnCommit(charge, fil),
-          // Un tour d'un autre fil du dépôt en cours : ce qu'il écrit n'a pas encore d'auteur (conv-1641).
+          // Un tour d'un autre fil du dépôt en cours : ce qu'il écrit n'a pas encore d'auteur.
           autreTourEnCours: () =>
             activeChatTurns
               .inFlightConversations()
@@ -3086,7 +3085,7 @@ Le fil reprend ensuite normalement.`
         { fil, fichiers: passe.fichiers, fils: passe.fils, travaux: passe.travaux.length }
       )
     },
-    // Le chef d'un plan qui tourne encore attend : ses lots écrivent toujours (conv-1544).
+    // Le chef d'un plan qui tourne encore attend : ses lots écrivent toujours.
     filOccupe: (fil) =>
       activeChatTurns.isInFlight(fil) ||
       planTourneEncore(suiviDesPlans.coordinateur?.planDuFil(fil)),
@@ -3102,7 +3101,7 @@ Le fil reprend ensuite normalement.`
     journal: (message, detail) => console.warn('[git apres fil]', message, detail ?? '')
   })
   /*
-   * LES TRAVAUX D'AGENTS RESTÉS HORS DE LA BRANCHE (conv-1544) — le bandeau « 1 travail terminé n'a
+   * LES TRAVAUX D'AGENTS RESTÉS HORS DE LA BRANCHE — le bandeau « 1 travail terminé n'a
    * jamais été publié ». Relus à chaque fin de run et une fois après le démarrage, rangés par fil qui
    * a lancé le run, puis confiés à la même file : un /git par fil, après son calme. Même accord que
    * le reste de « Publication auto », mêmes refus (autre dépôt, publication interdite dans le fil).
@@ -3147,7 +3146,7 @@ Le fil reprend ensuite normalement.`
     .reprendreAuDemarrage()
     .catch((erreur) => console.warn('[taches de fond] reprise au demarrage impossible :', erreur))
   /*
-   * LES FILS COUPÉS PAR LE QUOTA (conv-1423) : une reprise automatique, à l'heure annoncée. File à
+   * LES FILS COUPÉS PAR LE QUOTA : une reprise automatique, à l'heure annoncée. File à
    * elle : elle attend la fin de chaque tour, et un long tour ne doit pas retenir le réveil d'un run.
    * Historique complet : sans session à reprendre, `runPrompt` ne laisserait à l'agent qu'une phrase.
    * fix-ok: mesuré sur 30 jours : 21 tours coupés, 16 suivis d'un « reprend » tapé à la main.
@@ -3193,14 +3192,14 @@ Le fil reprend ensuite normalement.`
     })
   })
   ctx.scheduledTaskScheduler = new TaskScheduler(scheduledTasks, dispatcherVeille, relay)
-  // `task_create` de l'agent : MÊME chemin que le bouton « Créer » du Task Manager (conv-114).
+  // `task_create` de l'agent : MÊME chemin que le bouton « Créer » du Task Manager.
   const schedulerPourAgent = ctx.scheduledTaskScheduler
-  // Les notes lues par brain_read passent par le petit modèle avant le fil (conv-1469).
+  // Les notes lues par brain_read passent par le petit modèle avant le fil.
   bus.condenseurBrain = condenseurDuBrain(os)
   bus.taskManager = {
     create: (input) => scheduledTasks.create(input),
     list: () => scheduledTasks.listTasks(),
-    // `task_update` / `task_delete` (conv-1370, 2026-10-31) : les boutons de l'écran, pas un second chemin.
+    // `task_update` / `task_delete` (2026-10-31) : les boutons de l'écran, pas un second chemin.
     get: (id) => scheduledTasks.getTask(id),
     update: (id, input) => scheduledTasks.update(id, input),
     remove: (id) => scheduledTasks.remove(id),
@@ -3331,7 +3330,7 @@ Le fil reprend ensuite normalement.`
    */
   os.directivesEnAttente = (conversationId) => drainPendingDirectives(conversationId)
   /*
-   * UN RUN SE MET EN PAUSE POUR TE DEMANDER (conv-1149, 2026-10-25) : objection d'étendue répétée en
+   * UN RUN SE MET EN PAUSE POUR TE DEMANDER (2026-10-25) : objection d'étendue répétée en
    * mode jusqu'au vert (`gates/etendue-repetee.ts`). Même fenêtre de question que `askModelQuestion`,
    * sur n'importe quelle fenêtre vivante ; aucune fenêtre = aucune réponse, et le run s'arrête au lieu
    * de relancer une réparation.
@@ -3351,10 +3350,10 @@ Le fil reprend ensuite normalement.`
    * rafraichissement de la page d'accueil.
    */
   // Instance de test CACHÉE : aucun Outlook. Lu par COM depuis un bureau caché, Outlook démarre DANS
-  // ce bureau, invisible, et le garde vivant après la capture (conv-1016, 2026-10-17).
+  // ce bureau, invisible, et le garde vivant après la capture (2026-10-17).
   const outlookGateway = new OutlookLocalGateway({
     appRoot: app.getAppPath(),
-    // Ouvre une piece jointe RECUE, une fois copiee par Outlook (conv-1220). `shell.openPath` rend
+    // Ouvre une piece jointe RECUE, une fois copiee par Outlook. `shell.openPath` rend
     // '' en cas de succes et la cause sinon : la passerelle affiche cette cause telle quelle.
     ouvreurFichier: (chemin) => shell.openPath(chemin),
     ...(headlessTestInstance ? { horsService: OUTLOOK_HORS_INSTANCE_CACHEE } : {})
@@ -3390,17 +3389,17 @@ Le fil reprend ensuite normalement.`
       return undefined
     }
   }
-  // Graph seulement s'il est deja CONNECTE ; sinon lecture locale (sourceTeams, conv-770).
+  // Graph seulement s'il est deja CONNECTE ; sinon lecture locale (sourceTeams).
   const modeTeams = sourceTeams({
     clientId: teamsClientId,
     jetonGraph: chargerJetonTeams() !== undefined,
     windows: process.platform === 'win32'
   })
   console.log(`[watchdog] Teams : ${modeTeams ?? 'désactivé'}`)
-  // Seul temoin lisible apres un redemarrage : la console du processus principal est jetee (conv-770).
+  // Seul temoin lisible apres un redemarrage : la console du processus principal est jetee.
   const journalTeams = creerJournalWatchdog(cheminJournalWatchdogTeams(appDataRoot))
   // Une ligne « actif » par heure, écrite par la boucle de lecture elle-même : plus d'une heure sans
-  // elle = surveillance arrêtée (conv-770).
+  // elle = surveillance arrêtée.
   const battementTeams = creerBattementWatchdog(journalTeams)
   journalTeams('source', {
     mode: modeTeams ?? 'désactivé',
@@ -3425,11 +3424,11 @@ Le fil reprend ensuite normalement.`
             console.log(
               `[watchdog] connexion Teams demandée : code ${prompt.userCode} sur ${prompt.verificationUri}`
             )
-            // Plus de fenetre (demande utilisateur conv-854, 2026-09-25) : le code reste dans le journal.
+            // Plus de fenetre (demande utilisateur, 2026-09-25) : le code reste dans le journal.
           }
         )
       : undefined
-  // Sans connexion Microsoft (conv-854, 2026-09-25) : lecture du stockage local du client Teams
+  // Sans connexion Microsoft (2026-09-25) : lecture du stockage local du client Teams
   // deja connecte, reponse en pilotant sa fenetre, repli par mail si ce pilotage echoue.
   const teamsLocal =
     modeTeams === 'local'
@@ -3461,8 +3460,8 @@ Le fil reprend ensuite normalement.`
   // Surveillance des mails pour les regles `outlook-mail`. Un canal n'est interroge que si une regle
   // ACTIVE l'ecoute : sans elle, aucun dialogue COM (Outlook) ni appel reseau (Teams).
   // fix-ok: une seule regle mail active suffisait a interroger Outlook ET Teams (ancien test `.some(kind === 'outlook-mail')`), et chaque `await notifyMail` attendait la FIN de l'agent : la lecture suivante, et Teams, attendaient l'agent Outlook.
-  // Salvage 2026-09-26 : cette surveillance (conv-857) et la source Teams locale + son journal
-  // (conv-770) ont ete ecrites en parallele ; la surveillance lit desormais `teamsSource`.
+  // Salvage 2026-09-26 : cette surveillance et la source Teams locale + son journal
+  // ont ete ecrites en parallele ; la surveillance lit desormais `teamsSource`.
   // Le journal ne note une lecture qu'a son RETABLISSEMENT et une erreur qu'a son CHANGEMENT : pas
   // une ligne par minute.
   let lectureTeamsAnnoncee = false
@@ -3478,7 +3477,7 @@ Le fil reprend ensuite normalement.`
     notifyMail: async (mail) => {
       const bilan = (await ctx.watchdogEngine?.notifyMail(mail)) ?? []
       if (mail.channel !== 'teams') return
-      // Journal Teams (conv-770) : POURQUOI un message detecte a eu, ou non, une reponse.
+      // Journal Teams : POURQUOI un message detecte a eu, ou non, une reponse.
       const conv = empreinteConversation(mail.itemId)
       const concernees = bilan.filter((b) => b.issue !== 'autre-canal')
       if (!concernees.length) journalTeams('ignore', { conv, raison: 'aucune-regle-teams-active' })
@@ -3521,7 +3520,7 @@ Le fil reprend ensuite normalement.`
         }
       }
       // Un echec Teams ne prive pas les mails, et inversement. Source : Graph s'il est connecte,
-      // sinon le stockage local du client Teams (conv-770).
+      // sinon le stockage local du client Teams.
       if (listening.teams && teamsSource) {
         let snapshot: unknown
         try {
@@ -3566,7 +3565,7 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Outlook')
     return outlookGateway.openItem(id)
   })
-  // OUVRE une piece jointe RECUE (conv-1220) : Outlook la copie dans un dossier temporaire, Windows
+  // OUVRE une piece jointe RECUE : Outlook la copie dans un dossier temporaire, Windows
   // l'ouvre. Rien n'est ecrit dans la boite. Identifiant, rang et nom sont revalides cote main, et un
   // type de fichier qui LANCE un programme (liste « Level 1 » d'Outlook) est refuse avant tout script.
   ipcMain.handle(
@@ -3659,7 +3658,7 @@ Le fil reprend ensuite normalement.`
       // Regle PERSONNELLE : posee seulement sur le poste qui l'a demandee (`setx AUTOWIN_WATCHDOG_MAILS 1`),
       // jamais chez tout le monde — elle lit la boite de l'utilisateur et repond en son nom.
       // `setx` n'atteint pas un lanceur deja ouvert : la relance heritait d'un environnement sans la
-      // variable (constat conv-839, 2026-09-24). On relit donc aussi la valeur persistee HKCU.
+      // variable (2026-09-24). On relit donc aussi la valeur persistee HKCU.
       const mailsPerso = (): boolean => {
         if (process.env.AUTOWIN_WATCHDOG_MAILS === '1') return true
         if (process.platform !== 'win32') return false
@@ -3693,7 +3692,7 @@ Le fil reprend ensuite normalement.`
       if (seedCurateTask(scheduledTasks))
         console.log('[task-manager] tâche Curation quotidienne posée')
       // Sans elle, `dispatcherVeille` ne voyait jamais de tâche `veille` : aucun scout web n'avait
-      // tourné sur ce poste (conv-1032, 2026-10-21).
+      // tourné sur ce poste (2026-10-21).
       if (seedVeilleTask(scheduledTasks))
         console.log('[task-manager] tâche Veille concurrents hebdomadaire posée')
       // Après le scheduler : chaque règle fichier se positionne à la FIN de son fichier, donc
@@ -3710,7 +3709,7 @@ Le fil reprend ensuite normalement.`
     assertTrustedRendererSender(event, 'Pilot chat cancel')
     const conversationId = guardString(rawConversationId, 'conversationId')
     // Stoppe le tour pilote ET le sous-agent en vol rattaché à cette conversation.
-    // Motif partagé avec le graphe, qui y reconnaît un arrêt voulu et non une panne (conv-966).
+    // Motif partagé avec le graphe, qui y reconnaît un arrêt voulu et non une panne.
     const orchestrationAborted = bus.abortOrchestration(conversationId, MOTIF_STOP_DU_CHAT)
     const pilotAborted = activeChatTurns.abort(conversationId, 'user')
     return { ok: pilotAborted || orchestrationAborted }
@@ -3755,12 +3754,12 @@ Le fil reprend ensuite normalement.`
       const directive = guardString(rawDirective, 'directive').trim()
       const jointes = guardAttachments(rawAttachments)
       if (!directive && jointes.length === 0) return { ok: false, motif: 'vide' as const }
-      // UNE COMMANDE DE SKILL NE S'INJECTE PAS EN TEXTE (conv-843, turn 6d0e352f-0624-4c9a-b2f5-c6aabf57d310,
+      // UNE COMMANDE DE SKILL NE S'INJECTE PAS EN TEXTE (turn 6d0e352f-0624-4c9a-b2f5-c6aabf57d310,
       // saisie ts 1790275118313) : « /judge mon watchdog » envoye pendant un tour a ete colle dans le
       // fil comme simple phrase ; la skill judge n'a jamais ete chargee et le modele a juge lui-meme.
       // Refus -> le renderer met le texte en FILE, il repart en message normal, donc route par
       // `routeSkillRequest` comme n'importe quel `/judge`.
-      // Le refus porte son MOTIF : sans lui, l'ecran affichait « ⚠ Échec » sur un refus voulu (conv-891).
+      // Le refus porte son MOTIF : sans lui, l'ecran affichait « ⚠ Échec » sur un refus voulu.
       const commande = jointes.length === 0 ? commandeNonInjectable(directive) : undefined
       if (commande) return { ok: false, motif: 'commande' as const, commande }
       // Le renderer passe busy avant que l'IPC `pilotChat` ait fini d'enregistrer son controleur.
@@ -3776,15 +3775,15 @@ Le fil reprend ensuite normalement.`
       const queued = pendingDirectives.get(conversationId) ?? []
       queued.push((directive || '(image envoyée sans texte)') + suffixe)
       pendingDirectives.set(conversationId, queued)
-      // REMISE EN PLEIN APPEL (conv-1241) : la boucle pilote ne relit la file qu'ENTRE deux appels ;
-      // un appel du CLI Claude peut durer 16 minutes (conv-1240, tour 2e218711 : saisie ts
+      // REMISE EN PLEIN APPEL : la boucle pilote ne relit la file qu'ENTRE deux appels ;
+      // un appel du CLI Claude peut durer 16 minutes (tour 2e218711 : saisie ts
       // 1793225455947 absente du premier appel, lue au second). Doublée sur disque, le contrôle
       // avant chaque outil la remet.
       deposerOrientationDuFil(conversationId, queued[queued.length - 1])
       broadcast({ type: 'refresh', scope: 'directives' })
       // La directive est acceptee -> elle devient un VRAI message du fil. Sans cette ecriture, le
       // seul temoin etait un recu vivant dans la memoire de l'ecran : un rechargement l'effacait et
-      // l'utilisateur devait recliquer (conv-38, 2026-09-01). L'echec de l'ecriture ne remonte
+      // l'utilisateur devait recliquer (2026-09-01). L'echec de l'ecriture ne remonte
       // jamais : la directive est deja empilee, une trace manquee n'annule pas un envoi reussi.
       const messageId = enregistrerDirectiveDansLeFil({
         conversations: os.conversations,
@@ -3803,7 +3802,7 @@ Le fil reprend ensuite normalement.`
    * FILET DE SÉCURITÉ DU TEXTE UTILISATEUR — appelé AVANT tout envoi, quelle que soit la suite.
    *
    * Le renderer vide son composer dès qu'un texte part, et ce texte ne vit ensuite que dans des refs
-   * volatiles tant qu'aucun tour n'est créé (mesure du 2026-09-01, conv-30 : deux messages disparus
+   * volatiles tant qu'aucun tour n'est créé (mesure du 2026-09-01, : deux messages disparus
    * sans trace). Cette écriture précède donc l'envoi, et son échec ne remonte jamais : elle rend
    * `{ ok: false }` plutôt que de lever, pour ne pas transformer une trace manquée en envoi manqué.
    */
@@ -3817,7 +3816,7 @@ Le fil reprend ensuite normalement.`
       if (voie !== 'message' && voie !== 'orientation') {
         return { ok: false }
       }
-      // conv-113 : un envoi du mode auto doit se distinguer d'un texte tapé (seule valeur admise).
+      // Un envoi du mode auto doit se distinguer d'un texte tapé (seule valeur admise).
       const origine = rawOrigine === 'mode-auto' ? ('mode-auto' as const) : undefined
       return {
         ok: journaliserSaisie({ conversationId, texte, voie, ...(origine ? { origine } : {}) })
@@ -3854,7 +3853,7 @@ Le fil reprend ensuite normalement.`
     return listConvRuns(convId, c?.runPaths ?? [])
   })
   // Les RUN.md LÉGERS (une fiche par demande) : le panneau RUN.md du fil et les post-it du Board les
-  // montrent. Ils s'écrivaient depuis conv-1418 sans qu'aucun écran les lise (conv-1441).
+  // montrent. Ils s'écrivaient sans qu'aucun écran les lise.
   ipcMain.handle('os:fichesDuFil', (event, convId: string) => {
     assertTrustedRendererSender(event, 'Fiches du fil')
     return fichesDeDemande.fichesDuFil(guardString(convId, 'convId'))
@@ -3916,7 +3915,7 @@ Le fil reprend ensuite normalement.`
         ? loadPromptCalls(id, undefined, { systeme: false })
         : loadAllPromptCalls(undefined, { systeme: false })
       // LES DEUX journaux : les sous-agents les plus couteux n'existent que dans l'activite
-      // (mesure conv-75 : 2,83 $ vus contre ~20,70 $ reels). costSamplesFrom deduplique.
+      // (mesure : 2,83 $ vus contre ~20,70 $ reels). costSamplesFrom deduplique.
       const activity = id ? loadConvActivity(id) : []
       // Un appel tue par le watchdog meurt avant l'event `result` : le journal n'a ni tokens ni
       // prix, et l'indicateur affichait « 4,20 $ + non expose ». Ces chiffres existent dans le

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LE FIL PRIVÉ, DU RÉSUMÉ AU PARTAGE (D6 de `grill/agent-hq-japon-town.md`, conv-1429, lot 3).
+ * LE FIL PRIVÉ, DU RÉSUMÉ AU PARTAGE (D6 de `grill/agent-hq-japon-town.md`, lot 3).
  *
  * Un fil marqué privé garde son tanuki chez les collègues, mais sans titre. La marque part du
  * résumé `os:conversations`, entre dans l'agent du Quartier, part dans l'instantané envoyé au

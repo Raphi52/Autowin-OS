@@ -5,12 +5,12 @@
   min-height: 0;
   overflow: auto;
   /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
-     le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
+     le meme dans toutes les vues (ViewPage.gabarit.test.ts). */
   padding: 16px 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  /* GABARIT DES VUES (conv-160, ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
+  /* GABARIT DES VUES (ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
      ni rayon de page, ni reflet, ni flou. Elle recopiait le cadre de `.view-page` et apparaissait
      comme une page dans la page. Le cadre est peint une fois, par `.view-page`. */
   color: #e7edf5;
@@ -81,7 +81,7 @@
   background: rgba(91, 139, 181, 0.12);
 }
 .router-badge.is-ready {
-  /* Service du moteur direct dont la clé est posée (conv-1503) : jetons de thème seulement. */
+  /* Service du moteur direct dont la clé est posée : jetons de thème seulement. */
   color: var(--ok);
   border-color: color-mix(in srgb, var(--ok) 40%, transparent);
   background: color-mix(in srgb, var(--ok) 12%, transparent);

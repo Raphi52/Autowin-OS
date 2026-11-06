@@ -119,8 +119,8 @@ const SLUG_LONGUEUR_MAX = 40
 
 export function slugify(task: string): string {
   // Le marqueur d'une relance (`reprend\n\nCIBLE CONTEXTUALISEE : <sujet>`, commands.ts) ne nomme
-  // rien : il prenait deux des six mots du libellé (`go-cible-contextualisee-traite-trois`,
-  // conv-517). Seul le marqueur EXACT est retiré, en majuscules : un sujet qui parle de la cible
+  // rien : il prenait deux des six mots du libellé (`go-cible-contextualisee-traite-trois`).
+  // Seul le marqueur EXACT est retiré, en majuscules : un sujet qui parle de la cible
   // contextualisée garde ses mots.
   const tokens = task
     .split(MARQUEUR_CIBLE_CONTEXTUALISEE)
@@ -155,8 +155,8 @@ function comparableTask(task: string): string {
 
 /**
  * Jour AAAA-MM-JJ du fuseau du POSTE. `toISOString().slice(0, 10)` rend le jour UTC : entre minuit
- * et 1 h à Paris (2 h l'été), le RUN.md portait la date de la veille (scout du 05/11, piste 18,
- * conv-1602). `conv-runs.date-locale.test.ts` le prouve à 00 h 30 heure de Paris.
+ * et 1 h à Paris (2 h l'été), le RUN.md portait la date de la veille (scout du 05/11, piste 18).
+ * `conv-runs.date-locale.test.ts` le prouve à 00 h 30 heure de Paris.
  * fix-ok: cause mesurée — les deux dates (création, clôture) venaient de `toISOString().slice(0, 10)` ; à 23 h 30 UTC sous TZ=Europe/Paris, le test attendait [2026-11-06] et lisait [2026-11-05] (rouge avant, vert après).
  */
 function jourLocal(instant: Date): string {
@@ -385,7 +385,7 @@ export function populateConvRunSections(
       .sort((a, b) => b.length - a.length)[0]
     /*
      * UNE REPRISE (`salvage`) EST UN DÉFAUT DU RUN, MÊME QUAND LE RUN EST VERT — mesure du
-     * 2026-09-16, conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091.
+     * 2026-09-16, turnId 4e502786-4887-4101-85b3-ea2dee304091.
      *
      * Déroulé lu dans le dossier de ce tour : le juge valide (12:33:59), la clôture est autorisée,
      * puis `salvage` rend à 12:35:13 « J'ai trouvé le jeu. Ma conclusion précédente était trop
@@ -404,7 +404,7 @@ export function populateConvRunSections(
       .map((p) => `- Reprise (salvage) : ${p.text.replace(/\s*\n\s*/g, ' · ').trim().slice(0, 600)}`)
       .slice(-1)[0]
     /*
-     * Les objections BLOQUANTES du juge sont des défauts du run (conv-1578) : un run refusé montrait
+     * Les objections BLOQUANTES du juge sont des défauts du run : un run refusé montrait
      * `## Défauts` vide, ses MAJEUR/MINEUR enfouis dans l'annexe coupée à 2 000 caractères. Les
      * lignes `OK:` n'en sont pas.
      */
@@ -422,7 +422,7 @@ export function populateConvRunSections(
     }
 
     /*
-     * `## Checks` naissait vide et rien ne l'écrivait (conv-1578), alors que chaque commande de
+     * `## Checks` naissait vide et rien ne l'écrivait, alors que chaque commande de
      * vérification est connue avec son code de sortie. Une ligne par commande, son DERNIER résultat :
      * un test rouge puis vert après correction se lit vert. Réécrit à chaque phase, donc idempotent.
      */
@@ -444,9 +444,9 @@ export function populateConvRunSections(
       md = md.replace(/(\n##\s+Checks[ \t]*\n)[\s\S]*?(?=\n##\s|$)/, `$1${checks.join('\n')}\n`)
 
     /*
-     * Les titres `#`/`##` d'une phase sont rétrogradés (conv-1150, 2026-10-26). Un agent qui
+     * Les titres `#`/`##` d'une phase sont rétrogradés (2026-10-26). Un agent qui
      * recopie le RUN.md y met un `## Reprise` : la réécriture ci-dessous s'arrêtait dessus, laissait
-     * l'ancienne annexe en place et le fichier enflait à chaque phase — 497 Mo sur conv-1146, lu
+     * l'ancienne annexe en place et le fichier enflait à chaque phase — 497 Mo, lu
      * au démarrage → `JavaScript heap out of memory`, l'app se fermait seule à chaque lancement.
      */
     const annexe = phaseOutputs
@@ -505,7 +505,7 @@ function bornesDeSection(
 }
 
 /**
- * LA REPRISE ET LES SECTIONS VIDES À LA CLÔTURE (conv-1578). Aucun code de l'app n'écrivait
+ * LA REPRISE ET LES SECTIONS VIDES À LA CLÔTURE. Aucun code de l'app n'écrivait
  * `## Reprise` : ses cinq champs restaient vides sur chaque run. On y met ce qui est SU au moment de
  * clore — le but (première ligne du besoin), les phases jouées, et pour un run qui n'est pas vert la
  * cause de sa clôture — puis on retire les champs et les sections du gabarit restés vides. Rien n'est
@@ -562,7 +562,7 @@ function texteClos(md: string, status: RunFileStatus, journalLine: string): stri
 }
 
 /**
- * LE STATUT DU RUN.md À PARTIR DE LA CLÔTURE DU MOTEUR (piste 4, conv-1070) : une clôture `red` qui
+ * LE STATUT DU RUN.md À PARTIR DE LA CLÔTURE DU MOTEUR (piste 4) : une clôture `red` qui
  * nomme une cause extérieure devient `interrupted` — ni échec, ni bloqué. Tout le reste passe tel
  * quel : un refus du juge reste `red`.
  */
@@ -575,7 +575,7 @@ export function statutDuRunMd(
 /**
  * LA LIGNE DE JOURNAL D'UNE CLÔTURE DU MOTEUR — écrite par `commands.ts`, relue par `parseRun`.
  *
- * Elle vivait en ligne dans `commands.ts`. Un run validé qui attend sa publication (conv-1455) y
+ * Elle vivait en ligne dans `commands.ts`. Un run validé qui attend sa publication y
  * aurait lu « interrompu : publication » ; il dit ce qu'il attend, et `parseRun` relit ce texte-là
  * (`ATTENTE_DE_PUBLICATION`) pour le montrer « en attente de publication » plutôt que « relançable ».
  * Les autres causes gardent leur texte mot pour mot.
@@ -666,9 +666,9 @@ type ExamenRun = 'absent' | 'recent' | 'deja-verifie' | 'clos' | 'ouvert' | 'ill
 
 /**
  * Clôture ASYNCHRONE d'un run abandonné ; faux si l'écriture n'a pas abouti. `interrupted`, pas
- * `red` (piste 4, conv-1070) : l'app s'est arrêtée sous lui, aucun juge ne l'a refusé — `red` le
+ * `red` (piste 4) : l'app s'est arrêtée sous lui, aucun juge ne l'a refusé — `red` le
  * laissait « bloqué » pour toujours (482 RUN.md ainsi clos, comptés le 2026-10-22).
- * fix-ok: conv-1070 — cause mesurée : cette fonction écrivait `red` ; le test « clos `interrupted`
+ * fix-ok: cause mesurée : cette fonction écrivait `red` ; le test « clos `interrupted`
  * … et ne bloque pas » (conv-runs-reconcile.test.ts) rendait « expected 'status: red' » avant, vert
  * après. Le texte « Abandonné : » reste : `runAbandonne` le relit, et sa reformulation rougit le test
  * du contrat de tâche du même fichier.
@@ -699,7 +699,7 @@ async function clorePourAbandon(path: string): Promise<boolean> {
  * fermeture, coupure — le `RUN.md` garde `status: open` et rien ne l'en sort jamais. Mesuré le
  * 2026-08-05 sur l'état réel (8888 workspaces) : 151 runs `open` dont **141 vieux de plus de 24 h**.
  * Le taux de réussite se lisant dans ces fichiers, ces 141 le faussaient en silence. Ils étaient clos
- * `red` ; depuis conv-1070 ils le sont `interrupted` : arrêtés avec l'app, pas jugés — `red` les
+ * `red` ; ils le sont `interrupted` : arrêtés avec l'app, pas jugés — `red` les
  * comptait parmi les échecs et les gardait « bloqués » pour toujours.
  *
  * Le SEUIL protège les runs en vol et ceux que la reprise va récupérer : ceux-là ont un `mtime` de
@@ -824,7 +824,7 @@ function tracePath(runPath: string): string {
 }
 
 /**
- * Borne d'une étape du fil : seulement contre une sortie démesurée. Avant conv-1228 (2026-10-28),
+ * Borne d'une étape du fil : seulement contre une sortie démesurée. (2026-10-28),
  * 4 000 caractères suivis d'un « … » nu : l'étape lue entière en direct ressortait amputée après un
  * rechargement ou une reprise (qui réécrit ce fichier à partir de sa propre relecture).
  */

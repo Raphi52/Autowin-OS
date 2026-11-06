@@ -6,12 +6,12 @@ import { BilanDeCloture } from './BilanDeCloture'
 import type { AgentGantt } from './observatory-agent-gantt'
 
 /**
- * « REJOUER CE RUN » (conv-981, 2026-10-15) : depuis le bilan du run, le déroulé par agent — le
+ * « REJOUER CE RUN » (2026-10-15) : depuis le bilan du run, le déroulé par agent — le
  * MÊME diagramme que la Chronologie de l'Observatory — se rejoue en 10 s, chaque étape s'allumant à
  * son heure. Bornes du cadrage : run en cours ou sans déroulé = pas de bouton ; un second clic
  * repart du début, sans doublon.
  *
- * fix-ok: conv-981 - le bilan ne recevait aucune étape (BilanDeCloture ne passait que `closure`).
+ * fix-ok: - le bilan ne recevait aucune étape (BilanDeCloture ne passait que `closure`).
  * Fichier écrit UNE seule fois dans run-52d36e67e4de-1 ; le contrôle des causes en comptait 3 (même
  * écriture sous son chemin complet et son chemin court, plus le relevé de fin d'étape).
  */

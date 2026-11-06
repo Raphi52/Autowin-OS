@@ -42,7 +42,7 @@ export interface ContextWindow {
  * Un modele reellement servi a 200 k doit garder SON entree, placee avant le motif generique de
  * sa famille (cas de `haiku-4-5`) : supposer 1 M la ou le modele en sert 200 k afficherait 12 %
  * pour un fil en realite sature. (Ce paragraphe disait que la longue fenetre de Sonnet n'etait pas
- * declaree : faux depuis le 2026-03-13, corrige le 2026-11-05, conv-1581.)
+ * declaree : faux depuis le 2026-03-13, corrige le 2026-11-05.)
  */
 export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   // Anthropic — toute la famille servie par le CLI (`model-aliases.ts` : opus, sonnet, haiku,
@@ -50,7 +50,7 @@ export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   // reellement servi n'affichait donc aucune jauge.
   // OPUS : 1 M. NE REMETS PAS 200_000 ICI.
   //
-  // Tranche par l'utilisateur TROIS fois (conv-267, conv-292, puis conv-297 du 2026-09-05, ou il a
+  // Tranche par l'utilisateur TROIS fois (puis un fil du 2026-09-05, ou il a
   // du le redire une troisieme fois). Le champ avait deja fait l'aller-retour : chaque passage
   // relisait le commentaire qui defendait 200 k, concluait « aucune source publique ne l'etablit »
   // et ANNULAIT la decision. Ce commentaire-la n'etait pas une garde, il etait la CAUSE de la
@@ -63,7 +63,7 @@ export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   // tarif standard, sans en-tete de beta. L'utilisateur avait donc raison les trois fois, et
   // « aucune source ne l'etablit » etait un raisonnement tenu a la place d'une verification.
   //
-  // HAIKU, FABLE, MYTHOS : 1 M aussi (2026-11-05, conv-1581). Les fiches modèles Anthropic
+  // HAIKU, FABLE, MYTHOS : 1 M aussi (2026-11-05). Les fiches modèles Anthropic
   // (platform.claude.com/docs/en/models/overview et les pages haiku-5-5, fable-5, fable-5-1,
   // mythos-5-1) donnent « Context window: 1M tokens » à toute la gamme courante ; le CLI le
   // confirme (`contextWindow: 1000000` pour `claude-haiku-5-5` dans 318 sorties de run). Les
@@ -77,8 +77,8 @@ export const CONTEXT_WINDOWS: readonly ContextWindow[] = [
   { match: 'fable', provider: 'claude', tokens: 1_000_000, source: 'Anthropic — platform.claude.com/docs/en/models/fable-5/overview et fable-5-1 : Context window 1M tokens (lu le 2026-11-05)' },
   { match: 'mythos', provider: 'claude', tokens: 1_000_000, source: 'Anthropic — platform.claude.com/docs/en/models/mythos-5-1/overview : Context window 1M tokens, mêmes specs que Fable (lu le 2026-11-05)' },
   // OpenAI / Codex — `gpt-6` AVANT `luna`, dont le motif le prendrait sinon pour un GPT-5. 272 k est
-  // la fenetre que le CLI 0.166 declare pour ce modele (`context_window`, mesure le 2026-10-31,
-  // conv-1414) ; c'est aussi le seuil du tarif normal sur la grille OpenAI.
+  // la fenetre que le CLI 0.166 declare pour ce modele (`context_window`, mesure le 2026-10-31)
+  // C'est aussi le seuil du tarif normal sur la grille OpenAI.
   { match: 'gpt-6', provider: 'codex', tokens: 272_000, source: 'CLI Codex 0.166 — context_window du catalogue du compte' },
   // La famille GPT-5 sert 400 k de contexte d'entree. Les noms internes
   // (`sol`, `terra`, `luna`, cf. MODEL_RATES) sont declares en plus du motif generique, car le

@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 const { chatApi, conversation, installRafShim, mountChat } = await import('./ChatView.harness')
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
-/** Une clôture réelle d'Autowin : c'est le texte qui a été mesuré le 2026-09-02 dans conv-131. */
+/** Une clôture réelle d'Autowin : c'est le texte qui a été mesuré le 2026-09-02. */
 const cloture = (suite: string): string =>
   [
     '✅ Fait',
@@ -23,7 +23,7 @@ const fil = (suite: string): unknown[] => [
 /**
  * DÉFAUT VÉCU le 2026-09-02 : « j'étais en mode auto et t'as pas enchaîné le workflow ».
  *
- * Les journaux de tours le datent : conv-131 a fini à 11:53:59 pendant que conv-133 était à
+ * Les journaux de tours le datent : un fil a fini à 11:53:59 pendant qu'un fil était à
  * l'écran depuis 11:53:17. La boucle ne suivait que le fil AFFICHÉ — la suite n'est jamais partie,
  * et au retour dans le fil le tour était marqué « déjà traité », donc perdu pour toujours.
  *

@@ -77,7 +77,7 @@ export function useObservatorySources<TNativeTrace>({
 } {
   const [runs, setRuns] = useState<ObservatoryRunEntry[]>([])
   // Le « en cours » se DEDUIT de la derniere cle reglee : une requete est en vol tant que la cle
-  // courante n'a pas ete reglee (conv-1654 : plus de setState synchrone dans l'effet).
+  // courante n'a pas ete reglee (Plus de setState synchrone dans l'effet).
   const [runsSettledKey, setRunsSettledKey] = useState<number | null>(null)
   const [activitySessions, setActivitySessions] = useState<ActivitySessionMeta[]>([])
   const [conversationActivity, setConversationActivity] = useState<ConversationActivity[]>([])

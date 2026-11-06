@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Compteur de secondes de la capsule « Raisonnement » (variante R5, conv-162, 2026-10-10 :
+ * Compteur de secondes de la capsule « Raisonnement » (variante R5, 2026-10-10 :
  * « pas les mots de raisonnement, seulement un compteur de secondes », puis « go R5 »).
  *
  * Aucune duree de pensee n'est enregistree par le tour : le chrono est mesure a l'ecran. Ce test
@@ -106,7 +106,7 @@ describe('capsule Raisonnement — compteur de secondes', () => {
     )
   })
 
-  // conv-162 : « enregistre la durée du raisonnement avec le tour pour que le compteur de secondes
+  // « enregistre la durée du raisonnement avec le tour pour que le compteur de secondes
   // de la capsule reste affiché après un rechargement de la conversation ».
   it('affiche la durée CONSERVÉE par le tour quand il est rechargé', () => {
     monter({ text: 'pensée d’hier', done: true, turnId: 'tour-relu', reasoningMs: 31_400 })
@@ -123,7 +123,7 @@ describe('capsule Raisonnement — compteur de secondes', () => {
     expect(compteur(), 'le chiffre ne doit pas sauter sous les yeux').toBe('12 s')
   })
 
-  // conv-916 (2026-10-13) : « le timer du bloc raisonnement ne bouge même plus ». Le tour avait été
+  // 2026-10-13 : « le timer du bloc raisonnement ne bouge même plus ». Le tour avait été
   // vu CLOS à l'écran, puis RALLUMÉ (son orchestration tournait encore) dans une nouvelle bulle : le
   // bloc remonté reprenait la `fin` mémorisée de cette fausse clôture et restait figé à 15 min 9 s,
   // sous le libellé « Raisonnement » d'un tour en cours.
@@ -154,7 +154,7 @@ describe('capsule Raisonnement — compteur de secondes', () => {
     expect(compteur(), 'un tour en cours avance').toBe('9 s')
   })
 
-  // conv-1084 (2026-10-22) : « le timer du bloc raisonnement démarre que quand je retourne sur la
+  // 2026-10-22 : « le timer du bloc raisonnement démarre que quand je retourne sur la
   // conv ». Le tour a démarré pendant que l'utilisateur regardait un autre fil : le bloc n'était pas
   // monté, et le chrono partait de son montage. L'heure de début posée par le main fait foi.
   it('compte depuis le DÉBUT du tour, pas depuis le retour sur la conversation', () => {

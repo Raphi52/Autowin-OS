@@ -9,7 +9,7 @@ import { CLE_FOND_ACCUEIL } from './fond-accueil'
 ).IS_REACT_ACT_ENVIRONMENT = true
 
 /**
- * LE FOND QUI SACCADE (conv-347, 2026-10-19, « l'accueil il fait pas assez lissé »).
+ * LE FOND QUI SACCADE (2026-10-19, « l'accueil il fait pas assez lissé »).
  *
  * Mesuré au profil du fil du décor (instance cachée, `--code-dev`) : 13 images/s, mais espacées de
  * 40 à 131 ms d'une image à l'autre — 19 écarts sous 55 ms, 62 entre 75 et 110 ms, 7 au-delà. Dans

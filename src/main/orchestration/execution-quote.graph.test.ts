@@ -67,7 +67,7 @@ describe('provisionner un graphe à boucles', () => {
 
   it('un graphe trop gourmand est REFUSÉ avant de dépenser — en mode bloquant seulement', () => {
     // Régime standard : les 2 phases seules passent, c'est bien le pire cas du graphe qui fait refuser.
-    // Depuis conv-1148 (13/08), ce refus est réservé au mode `blocking` : en mesure seule (défaut),
+    // Depuis le 13/08, ce refus est réservé au mode `blocking` : en mesure seule (défaut),
     // le devis s'agrandit au pire cas du graphe au lieu de tuer le run.
     const bloquant = compileExecutionQuote('corrige le bug', { spendEnforcement: 'blocking' })
     expect(() => allocateExecutionTopology(bloquant, requete())).not.toThrow()

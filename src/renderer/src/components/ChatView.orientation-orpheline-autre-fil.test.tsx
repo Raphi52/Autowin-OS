@@ -4,9 +4,9 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * conv-1241 (2026-10-28, capture jointe au tour 6e6212f1-6fad-4dc5-aff0-bbfea50db4f7) : le bandeau
+ * 2026-10-28, capture jointe au tour 6e6212f1-6fad-4dc5-aff0-bbfea50db4f7 : le bandeau
  * « 1 orientation(s) arrivée(s) après la fin du tour : remise(s) dans la zone de saisie (Stop
- * demandé) » s'affichait au-dessus de conv-1240, dont le tour tournait encore. Il venait de conv-1227
+ * demandé) » s'affichait au-dessus, dont le tour tournait encore. Il venait
  * (orientation saisie ts 1793225339296, Stop du tour 68a6d0e9 à 22:09:11). Le bandeau est commun à
  * toute la vue et survit au changement de fil : sans le nom du fil, il se lit comme concernant
  * celui qu'on regarde.

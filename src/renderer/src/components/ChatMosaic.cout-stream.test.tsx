@@ -5,12 +5,12 @@ import { describe, expect, it } from 'vitest'
 import { ChatMosaic, type ChatMosaicWindow } from './ChatMosaic'
 
 /**
- * COUT DU STREAMING EN MOSAIQUE — le gel mesure (conv-1581).
+ * COUT DU STREAMING EN MOSAIQUE — le gel mesure.
  *
  * Pendant qu'UNE fenetre streame, ChatView refabrique `fenetresMosaique` (nouvel objet par
  * fenetre) a chaque frame. Sans memo, TOUTES les fenetres se re-rendent : leurs fils entiers ET
  * leur `ChatComposer` (palettes `/` et `@`, pieces jointes) sont reconstruits 60 fois par seconde,
- * multiplie par le nombre de fenetres ouvertes. C'est le meme defaut que conv-1464 (gel a la
+ * multiplie par le nombre de fenetres ouvertes. C'est le meme defaut que (gel a la
  * frappe), jamais applique a la mosaique.
  *
  * Ce test compte les rendus du composer de la fenetre INACTIVE.

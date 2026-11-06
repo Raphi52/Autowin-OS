@@ -9,7 +9,7 @@ import type { PromptCallRecord } from '../activity/prompt-observability'
  * PREUVE SUR LE CHEMIN RÉEL DE L'ADAPTATEUR : le prix que le CLI facture à une réponse complète
  * (`modelUsage[<modèle>].costUSD`) doit être retenu par l'adaptateur Claude, et servir ensuite à
  * tarifer un appel coupé. Les tests de `activity/cli-usage-recovery.test.ts` prouvent la lecture et
- * l'estimation ; ils ne prouvent pas que l'adaptateur appelle `enregistrerTarifsCli` (conv-1602).
+ * l'estimation ; ils ne prouvent pas que l'adaptateur appelle `enregistrerTarifsCli`.
  */
 const spawnCapture = vi.hoisted(() => ({ stdoutLines: [] as string[] }))
 

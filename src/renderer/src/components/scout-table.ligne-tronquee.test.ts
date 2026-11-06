@@ -4,7 +4,7 @@ import { parseScoutTable } from './scout-table'
 /**
  * UN CANDIDAT TRONQUÉ EST DEVENU COCHABLE, ET A COÛTÉ UN TOUR DE FRAME.
  *
- * Mesuré le 2026-08-27 (conv-1475) : le prompt émis par le bouton du panneau de sélection portait un
+ * Mesuré le 2026-08-27 : le prompt émis par le bouton du panneau de sélection portait un
  * 7e candidat dont le « Pourquoi » s'arrêtait en plein mot — « chaque onglet visité reste MONTÉ dan ».
  * La consigne finale du prompt, elle, était bien présente : la coupure n'était donc pas dans
  * `redigerPromptWorkflowSelection` (aucun `slice` sur le contenu) mais dans la DONNÉE.

@@ -1,5 +1,5 @@
 /**
- * LES INVENTAIRES ET LA CLÔTURE DU JOURNAL DE TOUR NE TIENNENT PLUS LE FIL PRINCIPAL (conv-1598).
+ * LES INVENTAIRES ET LA CLÔTURE DU JOURNAL DE TOUR NE TIENNENT PLUS LE FIL PRINCIPAL.
  *
  * `gels.jsonl`, matinée du 2026-11-05 (05:00 → 09:10 UTC) : `appendFileSync` de
  * `turn-journal.ts:192` appelé par `flushAllTurnJournals` (`:206`) a figé la fenêtre 90 s en 20

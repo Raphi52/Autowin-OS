@@ -16,8 +16,8 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 /**
  * LE JUGE DOIT JUGER CONTRE LE CONTRAT QUE LE PRODUCTEUR A REÇU.
  *
- * Mesuré sur la campagne du 2026-08-12 : QUATRE scouts sur quatre (conv-1123 Knowledge,
- * conv-1125 Task Manager, conv-1128 Tickets, conv-1129 Settings) rejetés pour la MÊME raison,
+ * Mesuré sur la campagne du 2026-08-12 : QUATRE scouts sur quatre (Knowledge,
+ * Task Manager, Tickets, Settings) rejetés pour la MÊME raison,
  * purement cosmétique — « score /100 interdit par /scout, colonne # absente et bandes 🟢/🟡/🔴
  * non utilisées ». Aucun défaut de fond n'était reproché.
  *

@@ -30,7 +30,7 @@ import { messageDuRun } from '../../shared/message-du-run'
 import { lireLigneBesoin } from '../../shared/ligne-besoin'
 
 /**
- * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST (conv-1146) : une consigne d'anglais qui oublie de garder
+ * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : une consigne d'anglais qui oublie de garder
  * « Bilan de l’étape » en français (l'app ne retrouverait plus le bilan des étapes), un bloc non vide
  * en français (la consigne de tous les postes changerait), ou une valeur inconnue qui écraserait un
  * choix valable.
@@ -101,7 +101,7 @@ describe('langue de réponse choisie dans Settings · Interface (conv-1146)', ()
   /*
    * LE JUGE ET LE CADRAGE REÇOIVENT AUSSI LA CONSIGNE D'ANGLAIS (orchestrator.ts, juste avant le choix
    * du modèle du juge) : leurs repères lus mot pour mot doivent être nommés comme gardés (objection du
-   * juge, conv-1146, réparation 2). Liste écrite ICI, à part de `REPERES_GARDES_EN_FRANCAIS`, pour que
+   * juge, réparation 2). Liste écrite ICI, à part de `REPERES_GARDES_EN_FRANCAIS`, pour que
    * l'oubli d'un repère dans la consigne fasse échouer ce test. Sources : `orchestrator.ts`
    * (VALIDE, DEFAUT:), `objections-juge.ts` (OBJECTIONS:, MAJEUR:, MINEUR:, OK:, aucune, QUESTIONS AU
    * BUILD:), `phase-briefs.ts` (SCORE:, ## Confiance, VÉRIFIÉ, NON VÉRIFIÉ), `frame-cas-limites.ts`.
@@ -137,7 +137,7 @@ describe('langue de réponse choisie dans Settings · Interface (conv-1146)', ()
     expect(lireVerdictJuge(lignes('VALID', 'Every criterion is met, proofs were rerun.'))).toBe(
       false
     )
-    // Refus : MAJEUR et MINEUR bloquent, OK passe (conv-844) ; « aucune » gardé vaut une liste vide.
+    // Refus : MAJEUR et MINEUR bloquent, OK passe ; « aucune » gardé vaut une liste vide.
     const refus = lignes(
       'DEFAUT: the chat body is still in French',
       'SCORE: 40',
@@ -171,7 +171,7 @@ describe('langue de réponse choisie dans Settings · Interface (conv-1146)', ()
   })
 
   /*
-   * LES AUTRES REPÈRES LUS MOT POUR MOT (objection du juge, conv-1146, réparation 3) : la phrase
+   * LES AUTRES REPÈRES LUS MOT POUR MOT (objection du juge, réparation 3) : la phrase
    * générale « les titres imposés restent en français » ne garde que ce qu'elle NOMME. Liste écrite
    * ICI, à part de `REPERES_GARDES_EN_FRANCAIS`, pour que l'oubli d'un seul fasse échouer ce test.
    * Sources : rubriques de fin du chat (`agent-pilot.ts`, lues par `shared/orchestration-outcome.ts`,
@@ -262,7 +262,7 @@ describe('langue de réponse choisie dans Settings · Interface (conv-1146)', ()
   })
 
   /*
-   * LES DERNIERS REPÈRES LUS MOT POUR MOT (objection du juge, conv-1146, réparation 4), et ceux
+   * LES DERNIERS REPÈRES LUS MOT POUR MOT (objection du juge, réparation 4), et ceux
    * qu'un BALAYAGE de tous les lecteurs a trouvés au même passage, pour cesser de les découvrir un
    * par un. Méthode : chaque expression régulière à mot français de `src/main`, `src/shared` et
    * `src/renderer/src` (hors tests : 264 le 2026-10-26), gardée si elle lit une réponse d'agent ET

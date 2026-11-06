@@ -14,7 +14,7 @@ type Harness = Awaited<ReturnType<typeof mountChat>>
 const styles = readFileSync('src/renderer/src/components/ChatView.css', 'utf8')
 
 /**
- * DÉFAUT VÉCU (conv-118, 2026-10-06) : « l'icône est trop haut dans 90 % des cas quand je la
+ * DÉFAUT VÉCU (2026-10-06) : « l'icône est trop haut dans 90 % des cas quand je la
  * regarde avec Ctrl+molette ». Le ∞ était un CARACTÈRE de police, recentré par un
  * `translateY(-2px)` réglé à l'œil au zoom 100 %. Or la police place ce caractère à une hauteur
  * qui SAUTE avec le zoom (2,2 px trop bas à 100 %, ~1,3 px à 150-300 %) : aucun décalage fixe ne

@@ -3,22 +3,22 @@
  * ils ne sont plus proposés au premier lancement, ni sondés, ni listés au catalogue. Leur identifiant
  * reste TOLÉRÉ en lecture des données anciennes — voir `model-aliases`.
  *
- * `codex` (les modèles ChatGPT) est REVENU le 2026-10-31 à la demande de l'utilisateur (conv-1414),
+ * `codex` (les modèles ChatGPT) est REVENU le 2026-10-31 à la demande de l'utilisateur,
  * après son retrait du 2026-09-04. Il reste FACULTATIF : Claude garde la première place, et un poste
  * sans CLI Codex ne voit simplement aucun modèle ChatGPT.
  */
 import { SERVICES_HTTP, type ServiceHttpId } from './services-http'
 
 /**
- * Ouverte le 2026-11-04 (conv-1499) : aux deux CLI s'ajoutent les services HTTP déclarés dans
+ * Ouverte le 2026-11-04 : aux deux CLI s'ajoutent les services HTTP déclarés dans
  * `providers/services-http.ts`, servis sans CLI. Un service nouveau s'y déclare, jamais ici.
  */
-// `agy` (2026-11-04, conv-1499) : Gemini par l'abonnement Google, via Antigravity CLI.
+// `agy` (2026-11-04) : Gemini par l'abonnement Google, via Antigravity CLI.
 export const ROUTED_PROVIDERS: readonly ('claude' | 'codex' | 'agy' | 'grok' | ServiceHttpId)[] = [
   'claude',
   'codex',
   'agy',
-  // `grok` (conv-1499) : Grok par l'abonnement SuperGrok, via le CLI officiel d'xAI.
+  // `grok` : Grok par l'abonnement SuperGrok, via le CLI officiel d'xAI.
   'grok',
   ...SERVICES_HTTP.map((s) => s.id)
 ]

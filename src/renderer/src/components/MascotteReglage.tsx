@@ -3,15 +3,15 @@ import { riche } from '../textes'
 import { useTextesReglagesEtDecor } from '../textes-ecrans/reglages-et-decor'
 import './MascotteReglage.css'
 
-/** L'erreur est gardée par sa CLÉ, pour qu'un changement de langue la retraduise (conv-1170). */
+/** L'erreur est gardée par sa CLÉ, pour qu'un changement de langue la retraduise. */
 type ErreurMascotte = 'mascotte.erreurLecture' | 'mascotte.erreurEnregistrement'
 
-/** Les deux styles (conv-1249) ; le moteur refuse tout autre texte. */
+/** Les deux styles ; le moteur refuse tout autre texte. */
 type StyleMascotte = 'magicien' | 'basique' | 'machine'
 const STYLES: readonly StyleMascotte[] = ['magicien', 'basique', 'machine']
 
 /**
- * Settings · Interface — « Mascotte du bureau » (conv-1145, 2026-10-25).
+ * Settings · Interface — « Mascotte du bureau » (2026-10-25).
  *
  * La bille au-dessus de l'horloge (`src/main/mascotte/mascotte.ts`) vit HORS de la fenêtre : c'est le
  * moteur qui garde le choix (`mascotte-reglage.ts`), pas le stockage de la page. L'interrupteur
@@ -44,7 +44,7 @@ export function MascotteReglage(): React.JSX.Element {
         })
     }
     relire()
-    // Le style se lit une fois : seul cet écran le change (conv-1249).
+    // Le style se lit une fois : seul cet écran le change.
     const lireStyle = pont?.styleMascotte
     if (lireStyle)
       void lireStyle()
@@ -54,7 +54,7 @@ export function MascotteReglage(): React.JSX.Element {
         .catch(() => {
           if (vivant) setErreur('mascotte.erreurLecture')
         })
-    // La croix de la bille la ferme HORS de cette fenêtre (conv-1142) : relu au retour dans
+    // La croix de la bille la ferme HORS de cette fenêtre : relu au retour dans
     // Autowin, sinon l'interrupteur dirait encore « Affichée ».
     window.addEventListener('focus', relire)
     return () => {
@@ -113,7 +113,7 @@ export function MascotteReglage(): React.JSX.Element {
           </span>
         </button>
       </div>
-      {/* MAGICIEN OU BASIQUE (conv-1249, « dans settings interface met choix de mascotte soit
+      {/* MAGICIEN OU BASIQUE (« dans settings interface met choix de mascotte soit
         magicien soit basique ») : une liste, comme le thème et la langue juste au-dessus. La
         liste montre ce que le moteur a GARDÉ, jamais ce qu'elle a demandé. */}
       <div className="interface-row" data-testid="interface-mascotte-style-ligne">

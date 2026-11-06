@@ -6,7 +6,7 @@ import {
 } from './autowin-kaizen-context'
 
 /*
-  Mesuré sur les appels modèle réels de conv-105 (`prompt-observability/conv-105.jsonl`,
+  Mesuré sur les appels modèle réels (`prompt-observability/conv-105.jsonl`,
   2026-09-02) : 30 appels, dont DEUX échoués en position 6 et 7 — `subagent/build` coupé sur
   « You've hit your session limit », puis l'orchestrateur sur `error_during_execution`. La fenêtre
   chronologique que kaizen recevait (les 12 derniers, index 18 à 29) n'en contenait AUCUN.
@@ -61,7 +61,7 @@ describe('sélection des appels modèle du dossier kaizen', () => {
 })
 
 /*
-  Deuxieme endroit ou la MEME preuve disparaissait, mesure sur le dossier reel de conv-105 :
+  Deuxieme endroit ou la MEME preuve disparaissait, mesure sur le dossier reel :
   meme retenus par la selection, les appels echoues etaient les PLUS ANCIENS des 12, et
   l'ajustement au budget retire les appels par la tete — 9 des 12 retires, dont les deux echecs.
   Un appel non abouti ne se sacrifie donc qu'en dernier, apres tous les appels reussis.

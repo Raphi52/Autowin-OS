@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { lecteurDeDeuxLectures } from './deux-lectures-appel'
 
 /**
- * L'APPEL « DEUX LECTURES » ÉCRIT SA LIGNE DE COÛT SOUS LE FIL DU TOUR (conv-1431, 2026-11-02).
+ * L'APPEL « DEUX LECTURES » ÉCRIT SA LIGNE DE COÛT SOUS LE FIL DU TOUR (2026-11-02).
  *
  * Mesuré sur `cost.jsonl` depuis le 20/10 : 716 lignes `deuxLectures`, AUCUNE avec un
  * `conversationId` — le rappel branché dans `index.ts` ne recevait que (consigne, charge). Le coût

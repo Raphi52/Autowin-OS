@@ -25,7 +25,7 @@ export interface ViewTopBarTab<Id extends string = string> {
 
 /**
  * Les marques d'une section (compteur d'anomalies, alerte `!`), partagées par la barre du haut et
- * par la liste de sections à gauche de Settings (conv-1109) : deux copies du même badge finiraient
+ * par la liste de sections à gauche de Settings : deux copies du même badge finiraient
  * par diverger, et une alerte vue dans une forme mais pas dans l'autre ne préviendrait plus personne.
  */
 export function OngletMarques({ tab }: { tab: ViewTopBarTab }): React.JSX.Element {

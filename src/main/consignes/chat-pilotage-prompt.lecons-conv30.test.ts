@@ -3,7 +3,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
 
 /**
- * KAIZEN DE conv-30 (2026-09-01) — trois pertes MESUREES dans la trace causale de ce fil, dont
+ * KAIZEN (2026-09-01) — trois pertes MESUREES dans la trace causale de ce fil, dont
  * aucune ne venait d'un bug de code : la consigne ne disait pas ce que le produit exigeait.
  *
  * 1. MUTATION NON DEMANDEE SUR UN SYMPTOME. « dans autowin les termes employes sont trop pousses »
@@ -32,7 +32,7 @@ describe('chat-pilotage-prompt — lecons mesurees de conv-30', () => {
     const prompt = buildChatPilotagePrompt([])
     expect(prompt).toMatch(/je ne le passe pas en force/u)
     expect(prompt).toMatch(/t'ENGAGE/u)
-    // Une relance vague ne vaut pas accord — c'est exactement ce qui a derape dans conv-30.
+    // Une relance vague ne vaut pas accord — c'est exactement ce qui a derape.
     expect(prompt).toMatch(/n'est PAS cet accord/u)
   })
 

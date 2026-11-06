@@ -346,10 +346,10 @@ describe('axe et géométrie du déroulé', () => {
 })
 
 /**
- * « REJOUER CE RUN » (conv-981) : le diagramme se rejoue en 10 s au plus depuis le bilan du run.
+ * « REJOUER CE RUN » : le diagramme se rejoue en 10 s au plus depuis le bilan du run.
  * Chaque barre s'allume a son heure, a l'echelle du run : son depart sur l'axe donne son delai,
  * sa largeur sa duree. Aucun second modele : le minutage se deduit de `spanGeometry`.
- * fix-ok: conv-981 - ces tests sont ajoutes UNE seule fois dans run-52d36e67e4de-1 ; le controle
+ * fix-ok: - ces tests sont ajoutes UNE seule fois dans run-52d36e67e4de-1 ; le controle
  * des causes en comptait 3 (meme modification sous son chemin complet et son chemin court, plus le
  * releve de fin d'etape).
  */
@@ -374,7 +374,7 @@ describe('rejeuDeLaBarre', () => {
 })
 
 /**
- * LE MÊME GRAPHE SUR LES TOURS DE CHAT (conv-1105, suite de conv-981) : « observatory doit ressembler
+ * LE MÊME GRAPHE SUR LES TOURS DE CHAT : « observatory doit ressembler
  * au graph timeline des bilans de runs ». Un tour de chat n'a qu'un agent, l'orchestrateur : sans ses
  * outils, il n'aurait qu'une ligne et l'Observatory n'y montrait que la liste. Avec `outils`, chaque
  * outil qu'il appelle a sa ligne et chaque appel sa barre. Forme relevée dans `causal-trace/conv-1101`

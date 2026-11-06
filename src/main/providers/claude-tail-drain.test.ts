@@ -87,7 +87,7 @@ afterEach(() => {
 
 describe('Claude CLI — barrière de drain du journal', () => {
   it('ne coupe plus un appel sur sa DURÉE : le drain va jusqu’à la dernière ligne', async () => {
-    // conv-729, turn aa90027e-01c1-4d39-9645-7e5d01619323 : l'ancien cap de durée tuait le tour
+    // Turn aa90027e-01c1-4d39-9645-7e5d01619323 : l'ancien cap de durée tuait le tour
     // (« claude CLI figé (durée max) ») alors qu'il produisait encore. Ce cap n'existe plus.
     const root = mkdtempSync(join(tmpdir(), 'autowin-claude-sans-cap-'))
     roots.push(root)

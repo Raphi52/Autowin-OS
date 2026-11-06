@@ -7,7 +7,7 @@ import { WorktreeManager } from './worktree-manager'
 import { roots, tempRepo } from './worktree-manager.test-helpers'
 
 /**
- * LE BALAYAGE « NON BLOQUANT » SUPPRIMAIT LA COPIE EN SYNCHRONE — heal conv-1115, 2026-10-23.
+ * LE BALAYAGE « NON BLOQUANT » SUPPRIMAIT LA COPIE EN SYNCHRONE — heal, 2026-10-23.
  *
  * Mesuré dans `gels.jsonl` (2026-10-22, 15:27 → 15:32) : 273,7 s de fenêtre figée en 4 gels, dont
  * un de 153,8 s, sur 10 190 `unlinkSync` remontés à `fs-supprimer.ts:111 < :143` dans le bundle de

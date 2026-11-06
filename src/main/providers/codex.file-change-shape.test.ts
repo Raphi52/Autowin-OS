@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { structuredEvidenceFields } from './codex'
 
 /**
- * DEFAUT MESURE EN PRODUCTION le 2026-08-18, sur les traces reelles de conv-1302 et conv-1304.
+ * DEFAUT MESURE EN PRODUCTION le 2026-08-18, sur les traces reelles.
  *
  * Toutes les preuves d'execution portaient `path: "0"` ou `"0, 1"` — jamais un fichier. Cause :
  * `Object.keys(item.changes)` suppose un objet indexe PAR CHEMIN, alors que le provider emet un

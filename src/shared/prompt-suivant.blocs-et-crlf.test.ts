@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { extrairePromptSuivant as x, retirerLignePromptSuivant as r } from './prompt-suivant'
 
 // Migré de scripts/arena-panel/p6-prompt-crlf.mts et p8-prompt-dans-un-bloc.mts (banc /arena,
-// commit 191ab51d), retirés le 2026-10-22 (residus, conv-1062).
+// commit 191ab51d), retirés le 2026-10-22 (residus).
 describe('retirerLignePromptSuivant — fins de ligne CRLF (p6)', () => {
   it('une réponse en CRLF se rend comme en LF', () => {
     expect(r('a\r\nAUTOWIN_PROMPT_V1: fais x\r\n')).toBe('a')

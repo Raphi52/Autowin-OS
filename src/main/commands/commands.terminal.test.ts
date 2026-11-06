@@ -1,5 +1,5 @@
 /**
- * L'outil `terminal_lire` (conv-1362, lot 3/3) : le terminal est partagé avec l'agent en LECTURE
+ * L'outil `terminal_lire` (lot 3/3) : le terminal est partagé avec l'agent en LECTURE
  * SEULE, et chaque fil ne voit que le sien. Le VRAI bus, le VRAI gestionnaire, de faux terminaux.
  */
 import { mkdtempSync, rmSync } from 'node:fs'

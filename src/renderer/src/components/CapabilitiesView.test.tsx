@@ -9,7 +9,7 @@ describe('Capabilities plugins wiring', () => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
   })
 
-  // Le registre est choisi par la section de Settings depuis conv-1109, plus par un onglet interne.
+  // Le registre est choisi par la section de Settings, plus par un onglet interne.
   it('loads the plugins registry when its section opens it, without internal tabs', async () => {
     const capabilityControls = vi.fn(async (kind: string) =>
       kind === 'plugins'

@@ -1,4 +1,4 @@
-/* LES BOUTONS « VÉRIFIER » DU BOARD (conv-1136, 2026-10-23) — voir VerificationDuBoard.tsx. */
+/* LES BOUTONS « VÉRIFIER » DU BOARD (2026-10-23) — voir VerificationDuBoard.tsx. */
 
 .riviere-tout-verifier {
   display: inline-flex;
@@ -65,7 +65,7 @@
 }
 
 /* Sous le post-it, centré sur lui : la rivière pose son haut-milieu (`left` = centre du papier, `top`
-   = son bas). Au coin bas-droit, il cachait la ligne projet · heure (conv-1204). Montré quand la
+   = son bas). Au coin bas-droit, il cachait la ligne projet · heure. Montré quand la
    rivière le dit visible (survol du post-it, ou sa fiche ouverte : `data-visible`) ou quand un de ses
    boutons a le focus. Caché, il ne capte aucun clic : le glisser du post-it reste entier. */
 .riviere-verif-postit {
@@ -74,7 +74,7 @@
   flex-wrap: nowrap;
   justify-content: center;
   /* À l'échelle de leur post-it (`--riviere-gestes-echelle`, posée par la rivière), depuis leur
-     haut-milieu : ils tiennent dans la place gardée sous lui (PLACE_DES_GESTES, conv-1214). */
+     haut-milieu : ils tiennent dans la place gardée sous lui (PLACE_DES_GESTES). */
   transform: translateX(-50%) scale(var(--riviere-gestes-echelle, 1));
   transform-origin: 50% 0;
   opacity: 0;

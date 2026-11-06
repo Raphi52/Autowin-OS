@@ -1,12 +1,12 @@
-/* LE SIGNE D'UNE SUPER CONV DANS LA LISTE DE GAUCHE (conv-1395, /draft « 6 · Raccourci ») : pile sous
+/* LE SIGNE D'UNE SUPER CONV DANS LA LISTE DE GAUCHE (/draft « 6 · Raccourci ») : pile sous
    la ligne, jauge fine sous le titre, compte des lots finis, raccourci « N ? » vers le lot qui attend
    ta réponse. Couleurs = jetons d'état de la liste (`--chat-etat-*`), donc chaque thème les suit.
    Aucune animation : le voyant de la ligne bouge déjà (spinner, question), et une animation
-   continue de plus fait recomposer la fenêtre (conv-1075). */
+   continue de plus fait recomposer la fenêtre. */
 
 /* La pile dépasse SOUS la ligne : la place est réservée, sinon elle mordrait la ligne suivante.
    `overflow: visible` : la couche cosmique découpe chaque ligne (`.cosmic-outline .conv-item`,
-   ChatView.css, `overflow: hidden`), ce qui effaçait la pile entière — vu à la capture, conv-1395. */
+   ChatView.css, `overflow: hidden`), ce qui effaçait la pile entière — vu à la capture. */
 .conv-list .conv-item.conv-item--super {
   margin-bottom: 6px;
   overflow: visible;

@@ -7,9 +7,9 @@ import { parseRun } from '../dashboards/runs'
 import type { ExecutionEvidence } from '../providers/types'
 
 /**
- * LE RUN.md D'UN RUN FINI NE MONTRE PLUS DE SECTIONS VIDES (conv-1578, 2026-11-05).
+ * LE RUN.md D'UN RUN FINI NE MONTRE PLUS DE SECTIONS VIDES (2026-11-05).
  *
- * Constat sur le dernier RUN.md du poste (conv-1575, run vert jugé 94) : `## Contraintes`, `## Options`,
+ * Constat sur le dernier RUN.md du poste (run vert jugé 94) : `## Contraintes`, `## Options`,
  * `## SOP` en gabarit, `## Défauts` vide, `## Reprise` aux cinq champs vides, `## Cicatrices` et
  * `## Checks` vides. Aucun code de l'app n'écrivait `Reprise`, `Cicatrices` ni `Checks` : le gabarit
  * promettait des sections que personne ne remplissait, alors que les commandes de vérification et les

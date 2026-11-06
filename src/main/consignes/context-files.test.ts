@@ -60,7 +60,7 @@ describe('context-files — souveraineté (chaîne de précédence)', () => {
     const ctx = loadProjectContext(dir, undefined, 10)
     expect(ctx?.content.startsWith('xxxxxxxxxx')).toBe(true)
     expect(ctx?.content).toContain('tronqué')
-    // conv-1067 : la coupe se DIT — ce qui manque, et où lire la suite. « …[tronqué] » seul laissait
+    // La coupe se DIT — ce qui manque, et où lire la suite. « …[tronqué] » seul laissait
     // l'agent croire qu'il avait toutes les consignes.
     expect(ctx?.content).toContain('90 octets sur 100 manquent')
     expect(ctx?.content).toContain(join(dir, 'AGENTS.md'))
@@ -81,7 +81,7 @@ describe('context-files — souveraineté (chaîne de précédence)', () => {
     expect(projectContextBlock(dir)).toBe('\n=== CONTEXTE PROJET (CLAUDE.md) ===\nrégles projet\n')
   })
 
-  // conv-1067 (2026-10-22) : seul le dossier de travail était lu. Un fil rangé sur `App/front`
+  // 2026-10-22 : seul le dossier de travail était lu. Un fil rangé sur `App/front`
   // perdait les consignes de `App/AGENTS.md`, que Codex et Claude Code natifs chargent tous les deux.
   describe('empilement de la racine du dépôt au dossier de travail', () => {
     it('empile racine puis dossier, le plus proche en dernier, et dit lequel l’emporte', () => {

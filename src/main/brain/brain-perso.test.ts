@@ -25,7 +25,7 @@ import {
 } from './brain-server-launch'
 
 /**
- * BRAIN PERSO À CÔTÉ DU BRAIN D'ÉQUIPE (demande utilisateur du 2026-10-28, conv-1233).
+ * BRAIN PERSO À CÔTÉ DU BRAIN D'ÉQUIPE (demande utilisateur du 2026-10-28).
  * Même moteur, autre dossier, autre port : rien ne doit passer de l'un à l'autre.
  */
 const dossiers: string[] = []

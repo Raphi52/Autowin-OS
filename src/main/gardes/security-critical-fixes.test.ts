@@ -464,7 +464,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   soit EXACTEMENT un canal en moins. 192 - 1 = 191. Le chiffre monte donc de 189 a 191 non
     //   pas parce que la surface grandit, mais parce qu'on cesse de trainer un compteur perime ;
     //   la garantie reelle reste `unguarded` VIDE, qui n'a jamais faibli.
-    // +1 le 2026-09-18 (conv-685) : `window:detach-view` — un onglet lâché hors de la fenêtre
+    // +1 le 2026-09-18 : `window:detach-view` — un onglet lâché hors de la fenêtre
     //   ouvre sa vue dans une fenêtre séparée ; gardé par `assertTrustedRendererSender`.
     // MISE A JOUR 2026-09-15 - 189 -> 193. ATTRIBUTION DE L'ECART, mesuree avant de toucher le
     //   chiffre : la MEME detection (`(?:ipcMain|ipc)\.handle`) rejouee sur les fichiers de
@@ -493,8 +493,8 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   ligne ; `unguarded` reste vide). Le +1 restant etait DEJA arrive par la mise a jour amont
     //   sans reprise du compte : le fil-piege etait deja rouge avant cette integration.
     // MISE A JOUR 2026-09-23 — 200 -> 201. UN canal ajoute, relu AVANT de toucher le compte :
-    //   `os:dossiersClaudeCli` — import des projets claude.exe dans la liste des dossiers du Chat
-    //     (conv-5). LECTURE SEULE du profil `~/.claude.json` resolu cote main depuis
+    //   `os:dossiersClaudeCli` — import des projets claude.exe dans la liste des dossiers du Chat.
+    //     LECTURE SEULE du profil `~/.claude.json` resolu cote main depuis
     //     l'environnement : AUCUN argument ne vient du renderer, donc aucun chemin injectable.
     //     Ne rend que les CLES de `projects` filtrees (jamais jetons ni comptes du profil). Il
     //     porte `assertTrustedRendererSender(event, 'Dossiers Claude CLI')` des sa PREMIERE ligne.
@@ -509,7 +509,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   conversation Autowin ; la reference est resolue par `resolveListedSessionAsync` (inventaire,
     //   jamais un chemin forge par le renderer). `unguarded` reste VIDE.
     //   203 + 1 = 204 : les deux ajouts (VS Code / dossiers CLI sur main, importSession de run-37a45ad99156-1) cumulés au salvage.
-    // MISE A JOUR 2026-09-28 (conv-770, maintenance) — 204 -> 207. ATTRIBUTION MESUREE avant de toucher
+    // MISE A JOUR 2026-09-28 (maintenance) — 204 -> 207. ATTRIBUTION MESUREE avant de toucher
     //   le compte : la liste des canaux de src/main hors tests, a 4e4e0a61 (commit qui a fige 204) puis
     //   a HEAD, differe d'EXACTEMENT trois canaux, arrives sans reprise du compte (fil-piege rouge
     //   depuis le 23/09). Relus un par un, tous gardes des leur PREMIERE ligne :
@@ -521,7 +521,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     `guardString` puis `GRANT_ID.test` dans `claimClaudeReset` avant tout appel reseau, envoye dans
     //     un corps JSON (jamais une ligne de commande).
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-09-28 (conv-877) — 207 -> 210. TROIS canaux du bouton « Lancer » du panneau
+    // MISE A JOUR 2026-09-28 — 207 -> 210. TROIS canaux du bouton « Lancer » du panneau
     //   Fichiers (`src/main/ipc/lancement.ts`), mesures : 210 au lancement de ce test, exactement ces
     //   trois en plus. Tous gardes des leur PREMIERE ligne par `assertTrustedRendererSender` :
     //   `lancement:etat` ('LancementEtat') — LECTURE : l'etat du lancement et la commande declaree.
@@ -533,7 +533,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `lancement:arreter` ('LancementArreter') — arrete l'arbre de processus lance par CE bouton pour
     //     CETTE conversation, et lui seul (`taskkill /T` sur son propre PID).
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-08 (conv-111) — 210 -> 213. ATTRIBUTION MESUREE avant de toucher le compte :
+    // MISE A JOUR 2026-10-08 — 210 -> 213. ATTRIBUTION MESUREE avant de toucher le compte :
     //   ce test etait DEJA rouge a 212 avant ce changement. Les DEUX canaux non inscrits viennent du
     //   commit 853d8b64 (TV du bureau cache), relus : `hdesk:tv:act` et `hdesk:tv:basculer`
     //   (`src/main/index.ts`), gardes des leur PREMIERE ligne par
@@ -541,7 +541,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   UN canal ajoute par ce tour : `app:color-scheme` ('Schema de couleurs') — pose
     //   `nativeTheme.themeSource` pour que `prefers-color-scheme` suive le theme Autowin. N'accepte
     //   que `dark` ou `light` ; rien d'autre n'est lu ni ecrit. `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-10 (conv-163) — 213 -> 215. DEUX canaux de LECTURE pour le graphe du chat
+    // MISE A JOUR 2026-10-10 — 213 -> 215. DEUX canaux de LECTURE pour le graphe du chat
     //   (`src/main/index.ts`, logique dans `activity/trace-allegee.ts`), gardes des leur PREMIERE ligne
     //   par `assertTrustedRendererSender` :
     //   `os:causalTrace:graphe` ('Causal trace graph') — la trace de LA conversation (`guardString`)
@@ -549,14 +549,14 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:causalTrace:charges` ('Causal trace payloads') — les charges des seuls evenements nommes
     //     de cette conversation, aux seuls genres demandes ; listes bornees (500 ids, 32 genres) et
     //     refusees si mal formees. N'ecrit rien. `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-11 (conv-239) — 215 -> 216. UN canal, garde des sa PREMIERE ligne par
+    // MISE A JOUR 2026-10-11 — 215 -> 216. UN canal, garde des sa PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'SetConversationModel')` (`src/main/ipc/roles.ts`) :
     //   `os:conversations:setModel` — memorise le modele d'UNE conversation. Il ECRIT, mais rien ne
     //   SORT du poste : l'id doit etre une chaine non vide, le couple fournisseur/modele/effort est
     //   VALIDE contre le catalogue (`validerModeleDeConversation`) avant toute ecriture, `null` est
     //   le seul autre cas accepte (effacer), et aucun chemin n'est construit depuis l'appel.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-11 (conv-259) — 216 -> 219. TROIS canaux, chacun garde des sa PREMIERE
+    // MISE A JOUR 2026-10-11 — 216 -> 219. TROIS canaux, chacun garde des sa PREMIERE
     //   ligne par `assertTrustedRendererSender` :
     //   `prod:autorite:proposition` ('Protection de production', `index.ts`) — PROPOSE la liste de
     //     production depuis le catalogue SQL. LECTURE SEULE : il lit les bases exploitees et la
@@ -567,7 +567,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     meme jour : lecture de l'etat, et ecriture d'un binding VALIDE contre le catalogue
     //     (`assertRuntimeBindingAvailable`) avant toute ecriture ; `null` efface.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-15 (conv-961) — 219 -> 224. ATTRIBUTION MESUREE : ce test etait DEJA rouge
+    // MISE A JOUR 2026-10-15 — 219 -> 224. ATTRIBUTION MESUREE : ce test etait DEJA rouge
     //   (224) ; la difference des noms de canaux entre 81e6c36d et l'arbre courant donne exactement ces
     //   cinq, tous gardes des leur PREMIERE ligne par `assertTrustedRendererSender` (`src/main/index.ts`) :
     //   `runs:turnJournalGestes` ('TurnJournalGestes', 3480a25e) — LECTURE des gestes des tours d'UNE
@@ -582,12 +582,12 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     deguisee en URL (`brain-reglage.ts`).
     //   `os:brain-reglage:reset` ('Brain') — efface ce reglage seul ; aucun argument.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-16 (conv-298) — +1. UN canal, garde des sa PREMIERE ligne par
+    // MISE A JOUR 2026-10-16 — +1. UN canal, garde des sa PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'Dossier personnel')` (`src/main/index.ts`) :
     //   `os:dossierPersonnel` — rend le dossier personnel (`homedir()` canonise), cible de l'entree
     //   « This computer » du choix du dossier de travail. LECTURE SEULE, aucun argument recu, rien
     //   n'est ecrit ni execute. `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-16 (conv-951) — +3. Vue « Bureaux cachés » : TROIS canaux
+    // MISE A JOUR 2026-10-16 — +3. Vue « Bureaux cachés » : TROIS canaux
     //   (`src/main/index.ts`, registerHdeskTvIpc), chacun garde des sa PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'Vue Bureaux cachés')`, Windows seulement :
     //   `hdesk:gestion:bureaux` — LECTURE de la liste des bureaux vivants et du registre ; aucun argument.
@@ -596,8 +596,8 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `hdesk:gestion:creer` — demande VALIDEE (`refusCreation`) avant tout lancement ; les valeurs
     //     partent entre apostrophes PowerShell echappees dans une commande encodee, jamais par un shell.
     //   `unguarded` reste VIDE.
-    // Fusion des deux (mise a jour du 2026-10-18, conv-322) : 224 + 1 + 3 = 228.
-    // MISE A JOUR 2026-10-22 (conv-1070) — 228 -> 236. ATTRIBUTION MESUREE : canaux de 0a9296e6
+    // Fusion des deux (mise a jour du 2026-10-18) : 224 + 1 + 3 = 228.
+    // MISE A JOUR 2026-10-22 — 228 -> 236. ATTRIBUTION MESUREE : canaux de 0a9296e6
     //   (dernier compte) compares a l'arbre de ce travail — NEUF ajoutes, UN retire
     //   (`os:conversations:routeMessage`). Ce test etait DEJA rouge a 235 sur main avant ce travail.
     //   HUIT ajoutes par d'autres fils (+7 nets avec le retrait), deja dans main et gardes : `git:branch`,
@@ -607,14 +607,14 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   PREMIERE ligne par `assertTrustedRendererSender(event, 'WorkflowResultatsReels')` — LECTURE
     //   des traces causales pour la vue Workflows ; AUCUN argument du renderer, le dossier lu vient
     //   du processus principal ; n'ecrit rien. `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-22 (salvage conv-1096) — 236 -> 238. ATTRIBUTION MESUREE : canaux
+    // MISE A JOUR 2026-10-22 — 236 -> 238. ATTRIBUTION MESUREE : canaux
     //   d'origin/main 4cc80ec2 compares a l'arbre du salvage — DEUX ajoutes, aucun retire :
-    //   `os:carteDesBesoins` ('CarteDesBesoins', `ipc/carte-des-besoins.ts`, conv-1089) — LECTURE
+    //   `os:carteDesBesoins` ('CarteDesBesoins', `ipc/carte-des-besoins.ts`) — LECTURE
     //     seule du journal des besoins ; aucun argument du renderer, n'ecrit rien.
-    //   `app:carte-fin-de-tour-palette` ('Couleurs de la carte de fin de tour', `index.ts`, conv-1090)
+    //   `app:carte-fin-de-tour-palette` ('Couleurs de la carte de fin de tour', `index.ts`)
     //     — `definirPaletteDeCarte` n'accepte que huit `#rrggbb` avant de les poser dans du CSS.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-23 (conv-1127) — 238 -> 239. ATTRIBUTION MESUREE : noms de canaux de HEAD
+    // MISE A JOUR 2026-10-23 — 238 -> 239. ATTRIBUTION MESUREE : noms de canaux de HEAD
     //   (e78e0c30) compares a l'arbre de ce travail. Ce test etait DEJA rouge a 236 avant ce travail :
     //   DEUX retires par un travail NON COMMITE d'un autre fil (`index.ts` et
     //   `orchestration-budget.ts` modifies) : `os:orchestrationBudget:get` et `…:set`.
@@ -627,7 +627,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:carte:verifierMentions` — AUCUN argument ; LIT des fiches (plafond 20 par passe). Aucun
     //     des trois ne recoit d'ecriture chez le fournisseur (seul `tickets.get` leur est passe).
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-25 (conv-1145) — 239 -> 242. ATTRIBUTION MESUREE : noms de canaux de HEAD
+    // MISE A JOUR 2026-10-25 — 239 -> 242. ATTRIBUTION MESUREE : noms de canaux de HEAD
     //   (bbe0569f) et de 8ab2cbc3 compares a l'arbre de ce travail, avec la regex de ce test.
     //   Ce test etait DEJA rouge a 240 sur HEAD avant ce travail : UN ajoute par un autre run
     //   (494e7d45, `index.ts`), garde des sa PREMIERE ligne : `os:messagesEntreFils`
@@ -640,10 +640,10 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:mascotte:afficher` — ECRIT ce booleen ; `ecrireMascotteAffichee` refuse toute valeur
     //     qui n'est pas un vrai booleen, puis affiche ou ferme la fenetre de la mascotte.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-26 (conv-1150) — 239 -> 241. ATTRIBUTION MESUREE (noms de canaux du commit
+    // MISE A JOUR 2026-10-26 — 239 -> 241. ATTRIBUTION MESUREE (noms de canaux du commit
     //   8ab2cbc3 qui a pose 239, de HEAD 85d86866 et de l'arbre de ce travail) : ce test etait DEJA
     //   rouge a HEAD (240), un canal ayant ete ajoute sans mise a jour du compte :
-    //   `os:messagesEntreFils` (conv-1139) — LECTURE seule des messages affiches d'un fil, garde des
+    //   `os:messagesEntreFils` — LECTURE seule des messages affiches d'un fil, garde des
     //     sa premiere ligne par `assertTrustedRendererSender(event, 'Messages entre fils')`.
     //   UN ajoute par ce travail, garde des sa PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'Plans de lots')` :
@@ -652,19 +652,19 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     plan (`CoordinateurDesPlans`), sinon refus. C'est le seul chemin qui lance un plan : l'outil
     //     de l'agent ne fait que deposer, lire l'etat et relancer un lot.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-26 (conv-1150, integration du fil chef sur main 04ff1bce) — 241 -> 242.
+    // MISE A JOUR 2026-10-26 (integration du fil chef sur main 04ff1bce) — 241 -> 242.
     //   UN ajoute par la traduction anglaise (run-c7dc3f2f7237-1, `ipc/langue.ts`), integree sur main
     //   sans mise a jour du compte. Mesure sur l'arbre fusionne : 242 canaux, `unguarded` VIDE.
-    // REUNION 2026-10-26 (conv-1150) : fil chef + traduction (242, commit 07d5ad03) et mascotte
-    //   NON COMMITEE de conv-1145 (+2) dans le meme arbre de travail -> 244, mesure par ce test.
-    // 2026-10-26 (conv-1158) — compte INCHANGE : `os:plansDeLots` gagne un geste « tous », LECTURE
+    // REUNION 2026-10-26 : fil chef + traduction (242, commit 07d5ad03) et mascotte
+    //   NON COMMITEE (+2) dans le meme arbre de travail -> 244, mesure par ce test.
+    // 2026-10-26 — compte INCHANGE : `os:plansDeLots` gagne un geste « tous », LECTURE
     //   seule et sans fil (tous les plans gardes, reduits au chef et aux fils de lots), pour ranger
     //   la liste des conversations en un appel. Meme garde des la premiere ligne ; `action` passe par
     //   `guardString` avant tout, et les gestes qui ecrivent exigent toujours le fil chef du plan.
-    // 2026-10-30 (conv-1315) — compte INCHANGE : `os:plansDeLots` gagne un geste « phrases », LECTURE
+    // 2026-10-30 — compte INCHANGE : `os:plansDeLots` gagne un geste « phrases », LECTURE
     //   seule : la ligne que dit chaque lot du plan du fil donne, rien d'autre des messages. Meme
     //   garde des la premiere ligne, fil passe par `guardString`.
-    // MISE A JOUR 2026-10-28 (conv-1206) — 244 -> 247, mesure par ce test (vert a 244 avant ce
+    // MISE A JOUR 2026-10-28 — 244 -> 247, mesure par ce test (vert a 244 avant ce
     //   travail). TROIS ajoutes (`ipc/carte-des-besoins.ts`, dossier ou le Board est recopie), gardes
     //   des leur PREMIERE ligne par `assertTrustedRendererSender(event, 'Dossier du Board')` :
     //   `os:board-dossier` — LECTURE de l'etat du dossier ; aucun argument.
@@ -675,18 +675,18 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:carteDesBesoins` recoit en plus les etats poses a la main : chaque entree passe par
     //   `etatManuelLisible` (etage connu, nombre fini) et un id `[\w.-]{1,80}`, 20 000 au plus.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-28 (conv-1210 + conv-1211) — 247 -> 249, DEUX ajoutes dans
+    // MISE A JOUR 2026-10-28 — 247 -> 249, DEUX ajoutes dans
     //   `ipc/carte-des-besoins.ts`, gardes des leur PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'Dossier du Board')` :
-    //   `os:board-collegues` (conv-1210) — LECTURE seule des Boards des autres postes ; aucun
+    //   `os:board-collegues` — LECTURE seule des Boards des autres postes ; aucun
     //     argument, le dossier est celui regle sur le poste, jamais un chemin recu de la vue.
-    //   `os:board-dossier:projets` (conv-1211) — les projets recopies dans le dossier : une liste de
+    //   `os:board-dossier:projets` — les projets recopies dans le dossier : une liste de
     //     CLES de projet (jamais un chemin lu ou ecrit), passee par `projetsPartagesLisibles`
     //     (chaines seules, 500 au plus) ; illisible = refus, rien n'est retenu. `null` = tous.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-28 (conv-1220) — 249 -> 251. ATTRIBUTION MESUREE : ce test etait DEJA
+    // MISE A JOUR 2026-10-28 — 249 -> 251. ATTRIBUTION MESUREE : ce test etait DEJA
     //   rouge a 250 avant ce changement, sur `os:board-dossiers-du-chat` (`ipc/carte-des-besoins.ts`,
-    //   travail non commite de conv-1212, garde des sa PREMIERE ligne par
+    //   travail non commite, garde des sa PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'Dossiers du Chat')`). PLUS UN, garde des sa PREMIERE
     //   ligne par `assertTrustedRendererSender(event, 'Outlook')` :
     //   `outlook:ouvrir-piece` — OUVRE une piece jointe RECUE de la tuile Interlocuteurs. Rien n'est
@@ -695,9 +695,9 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     LANCE un programme (liste « Level 1 » d'Outlook) est refuse avant tout script ; nom et
     //     chemin partent par un fichier temporaire UTF-8, jamais en ligne de commande.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-28 (conv-1230) — 251 -> 255, MESURE sur l'arbre partage. ATTRIBUTION :
-    //   ce test etait DEJA rouge a 254 avant ce changement, sur TROIS canaux non commites de
-    //   conv-1233 (Brain perso, `index.ts`) : `os:brain-perso`, `os:brain-perso:enregistrer`,
+    // MISE A JOUR 2026-10-28 — 251 -> 255, MESURE sur l'arbre partage. ATTRIBUTION :
+    //   ce test etait DEJA rouge a 254 avant ce changement, sur TROIS canaux non commites
+    //   Brain perso, `index.ts` : `os:brain-perso`, `os:brain-perso:enregistrer`,
     //   `os:brain-perso:reset`. PLUS UN, garde des sa PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'Dossier du Board')` (`ipc/carte-des-besoins.ts`) :
     //   `os:board-dossier:nom` — le nom de ce poste sur le Board. Le texte passe par
@@ -705,20 +705,20 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     le compte Windows) ; illisible = refus, rien n'est retenu. Ecrit seulement dans
     //     `board-dossier.json` (userData) ; aucun chemin recu de la vue.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-29 (conv-1249) — +2, choix « Magicien / Basique » de la mascotte
+    // MISE A JOUR 2026-10-29 — +2, choix « Magicien / Basique » de la mascotte
     //   (`index.ts`), gardes des leur PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'Mascotte du bureau')` :
     //   `os:mascotte:style` — LECTURE du style (`mascotte.json`, %APPDATA%autowin-os) ; aucun argument.
     //   `os:mascotte:choisir-style` — ECRIT ce style ; `ecrireStyleMascotte` refuse tout ce qui n'est
     //     pas `magicien` ou `basique`, puis la fenetre de la mascotte est recreee dans ce style.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-29 (conv-1262) — 257 -> 258, MESURE sur l'arbre partage. UN canal, garde
+    // MISE A JOUR 2026-10-29 — 257 -> 258, MESURE sur l'arbre partage. UN canal, garde
     //   des sa PREMIERE ligne par `assertTrustedRendererSender(event, 'Brain')` (`ipc/brain.ts`) :
     //   `os:loadBrainGraphReunis` — LECTURE des deux Brains relies par leurs ponts. Seul argument :
     //     le plafond d'affichage (`lod`, nombre sinon ignore) ; AUCUN chemin recu de la vue — le
     //     worker resout lui-meme la racine d'equipe et celle du Brain perso regle.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-29 (conv-1286, lot 2/5) — 258 -> 278, MESURE sur la copie de travail
+    // MISE A JOUR 2026-10-29 (lot 2/5) — 258 -> 278, MESURE sur la copie de travail
     //   (258 avant, 278 apres). VINGT canaux du navigateur integre du chat (`ipc/navigateur.ts`),
     //   EXACTEMENT ceux de `CANAUX_NAVIGATEUR` (`src/shared/navigateur.ts`, sauf `evenementEtat`,
     //   qui va du principal vers le rendu), tous gardes des leur PREMIERE ligne par
@@ -730,7 +730,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   limitee a http(s) par le moteur. Une adresse recue de la vue n'est QUE chargee dans un
     //   onglet (http, https ou file:, liste de `normaliserUrlNavigateur`) : aucune ecriture disque.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-30 (conv-1286, pas-a-pas du navigateur integre, lot 1/3) — 278 -> 279,
+    // MISE A JOUR 2026-10-30 (pas-a-pas du navigateur integre, lot 1/3) — 278 -> 279,
     //   MESURE par ce test (rouge a 279 avant cette ligne). UN canal dans `ipc/navigateur.ts`, garde
     //   des sa PREMIERE ligne par `assertTrustedRendererSender(event, 'Navigateur intégré du chat')` :
     //   `navigateur:piloter` — boutons Pause / Reprendre / Pas suivant / Reprendre la main / Rendre la
@@ -739,19 +739,19 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     moteur ne fait que retenir, liberer ou refuser les gestes de l'agent : aucune page
     //     chargee, aucune ecriture disque. Aucune protection retiree.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-30 (conv-1338, Alt+clic sur toute l'app) — 279 -> 281, MESURE par ce test
+    // MISE A JOUR 2026-10-30 (Alt+clic sur toute l'app) — 279 -> 281, MESURE par ce test
     //   (rouge a 280 sur le main intact, 281 avec le canal ci-dessous). DEUX canaux, gardes des leur
     //   PREMIERE ligne par `assertTrustedRendererSender` :
     //   `app:capturer-element` (`ipc/capture-element.ts`) — image de l'element designe par Alt+clic.
     //     Ne capture que la fenetre qui demande (`event.sender`) ; rectangle controle avant toute
     //     capture (nombres finis, positifs, 32 768 au plus), aucune ecriture disque.
-    //   `run:gitApresFil:set` (e22e609b, conv-1339) — laisse hors compte par ce commit. Interrupteur
+    //   `run:gitApresFil:set` (e22e609b) — laisse hors compte par ce commit. Interrupteur
     //     de « publier apres un fil », relu ici et non ecrit a sa place.
     //   Aucune protection retiree. `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-30 (conv-1342, fenetre de question noire) — litteral INCHANGE a 279, et il
+    // MISE A JOUR 2026-10-30 (fenetre de question noire) — litteral INCHANGE a 279, et il
     //   faut dire pourquoi, MESURE par `creerLecteurSource` sur les deux arborescences. Ce test etait
     //   deja rouge avant ce canal : 280 sur `main` (825ccd5a) et 278 dans la copie partagee, ou
-    //   conv-1321 a du travail non commite dans `ipc/navigateur.ts` (les 3 canaux d'annotations
+    //   un fil a du travail non commite dans `ipc/navigateur.ts` (les 3 canaux d'annotations
     //   retires, `navigateur:prendre-elements-choisis` ajoute, soit 2 de moins). Avec le canal
     //   ci-dessous : 281 - 2 = 279, le total une fois les deux travaux publies. UN canal ajoute, garde
     //   des sa PREMIERE ligne par `assertTrustedRendererSender(event, 'Model question')` :
@@ -759,11 +759,11 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     seule, sans argument, et bornee a `event.sender.id` : une page n'atteint jamais la question
     //     d'une autre fenetre. Il remplace l'envoi `model:question`, retire avec son pont preload.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-31 (conv-1364, mise a jour d'Autowin) — 281 + 1 - 2 = 280 : les 281 de
-    //   conv-1338 sur origin/main, plus `model:question:pending` (conv-1342), moins les 2 du travail
-    //   de conv-1321 dans `ipc/navigateur.ts`. Les deux blocs ci-dessus ont ete ecrits sans se voir.
+    // MISE A JOUR 2026-10-31 (mise a jour d'Autowin) — 281 + 1 - 2 = 280 : les 281
+    //   sur origin/main, plus `model:question:pending`, moins les 2 du travail
+    //   dans `ipc/navigateur.ts`. Les deux blocs ci-dessus ont ete ecrits sans se voir.
     //   Aucune protection retiree. `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-31 (plan de conv-1362) — 280 + 2 + 6 = 288, MESURE par ce test (rouge a 288).
+    // MISE A JOUR 2026-10-31 — 280 + 2 + 6 = 288, MESURE par ce test (rouge a 288).
     //   DEUX canaux de la question a cote (`ipc/question-a-cote.ts`, lot 1/3), gardes des leur PREMIERE
     //   ligne par `assertTrustedRendererSender(event, 'Question à côté')` : `question-a-cote:poser` et
     //   `question-a-cote:annuler`. Identifiant de fil borne a 200, question non vide et bornee a
@@ -773,7 +773,7 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   SIX canaux du terminal integre (`ipc/terminal.ts`, lot 3/3) : `terminal:etat`, `ouvrir`,
     //   `ecrire`, `redimensionner`, `fermer`, `tampon`, gardes eux aussi. Leur raison est au lot 3.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-10-31 (conv-1401, la vraie mascotte sur l'accueil d'un fil vide) — 288 + 2 =
+    // MISE A JOUR 2026-10-31 (la vraie mascotte sur l'accueil d'un fil vide) — 288 + 2 =
     //   290, MESURE par ce test (rouge a 288). Gardes des leur PREMIERE ligne par
     //   `assertTrustedRendererSender(event, 'Mascotte du bureau')` (`index.ts`) :
     //   `os:mascotte:page` — LECTURE seule : rend le HTML fixe de la mascotte ; aucun argument.
@@ -781,16 +781,16 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //     comparee a une liste fermee (`HUMEURS_ACCUEIL`), le nombre d'agents ramene a un entier ;
     //     rien de recu n'entre tel quel dans le CSS rendu.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-11-01 (conv-346 et conv-1401 fusionnés, /git de conv-1421) — 290 + 1 = 291,
+    // MISE A JOUR 2026-11-01 (Des fils fusionnés) — 290 + 1 = 291,
     //   MESURE par ce test. `os:mascotte:theme` est gardé dès sa première ligne, et n'accepte qu'un
     //   identifiant court en lettres, chiffres et tirets.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-11-03 (conv-1451) — 291 -> 298, MESURE par ce test (rouge a 298 sur
+    // MISE A JOUR 2026-11-03 — 291 -> 298, MESURE par ce test (rouge a 298 sur
     //   origin/main de1b6a0c, avant tout changement). ATTRIBUTION MESUREE : noms de canaux de
     //   b49f020b (qui a pose 291) contre l'arbre courant, 7 ajoutes, aucun retire — comparatif
     //   rejouable : `node scripts/canaux-ipc.mjs <commit du compte precedent>`. Tous gardes des
     //   leur PREMIERE ligne par `assertTrustedRendererSender`. Aucune protection retiree.
-    //   CINQ du village commun (a1a91e43, conv-1429 a conv-1436) :
+    //   CINQ du village commun (a1a91e43) :
     //   `os:conversations:setPrive` (`ipc/conversations.ts`, garde 'Conversations') — marque UN fil
     //     prive ou non. Id passe par `guardString`, drapeau vrai seulement si `=== true` ; n'ecrit
     //     que ce drapeau dans l'etat des conversations.
@@ -803,29 +803,29 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   `os:quartier-presence:partager` — l'interrupteur du poste ; tout ce qui n'est pas un booleen
     //     ne fait que relire l'etat. Ecrit seulement `board-dossier.json` (userData).
     //   `os:quartier-presence:etat` — LECTURE seule : ou et quand le fichier a ete ecrit.
-    //   DEUX des fiches RUN.md legeres (9d898055, conv-1441, `index.ts`) :
+    //   DEUX des fiches RUN.md legeres (9d898055, `index.ts`) :
     //   `os:fichesDuFil` (garde 'Fiches du fil') — LECTURE des fiches d'UN fil. Id passe par
     //     `guardString` puis `^[\w-]+$` ; seules les fiches nommees par l'index de l'app
     //     (`demandes/index.jsonl`) sont lues, aucun chemin recu de la vue.
     //   `os:fichesDesDemandes` (garde 'Fiches des demandes') — LECTURE seule, aucun argument : le
     //     chemin de la fiche de chaque demande rangee, tire du meme index.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-11-04 (conv-1537) — 298 -> 299, MESURE par ce test (rouge a 299, signale par
-    //   conv-1544). UN canal dans `ipc/quartier-presence.ts`, garde 'Présence du quartier' des sa
+    // MISE A JOUR 2026-11-04 — 298 -> 299, MESURE par ce test (rouge a 299, signale).
+    //   UN canal dans `ipc/quartier-presence.ts`, garde 'Présence du quartier' des sa
     //   PREMIERE ligne : `os:quartier-presence:animal` — l'animal des agents du poste, choisi dans les
     //   reglages de l'Accueil. `null` revient au defaut ; toute autre valeur passe par `animalLisible`
     //   (liste fermee `ANIMAUX_AGENTS`) et une valeur inconnue ne fait que relire l'etat. Ecrit
     //   seulement `board-dossier.json` (userData), puis `presence.json` au rythme deja borne.
     //   `unguarded` reste VIDE.
-    // MISE A JOUR 2026-11-05 (conv-1580) — 299 -> 300, MESURE par ce test (rouge a 299) et NOMME par
-    //   `node scripts/canaux-ipc.mjs 957bad83e HEAD` : un seul ajout, venu de dbaf751d9 (conv-1599).
+    // MISE A JOUR 2026-11-05 — 299 -> 300, MESURE par ce test (rouge a 299) et NOMME par
+    //   `node scripts/canaux-ipc.mjs 957bad83e HEAD` : un seul ajout, venu de dbaf751d9.
     //   UN canal dans `ipc/quartier-presence.ts`, garde 'Présence du quartier' des sa PREMIERE ligne :
     //   `os:quartier-presence:masques` — les postes a qui ce poste masque ses agents, choisis dans les
     //   reglages de l'Accueil. Pas une liste : ne fait que relire l'etat. Sinon `postesLisibles` ne
     //   garde que des chaines, 50 au plus, 64 caracteres au plus, sans caractere de controle ou
     //   invisible ni `<>:"/\|?*`, sans doublon. Ecrit seulement `board-dossier.json` (userData), puis
     //   `presence.json` au rythme deja borne. `unguarded` reste VIDE.
-    // MISE A JOUR 2026-11-06 (conv-1633) — 300 -> 301, MESURE par ce test (rouge a 301). UN canal dans
+    // MISE A JOUR 2026-11-06 — 300 -> 301, MESURE par ce test (rouge a 301). UN canal dans
     //   `ipc/quartier-presence.ts`, garde 'Présence du quartier' des sa PREMIERE ligne :
     //   `os:quartier-presence:tenue` — la couleur de tenue des agents du poste, choisie sous l'animal
     //   dans les reglages de l'Accueil. `null` revient a la tenue d'origine ; toute autre valeur passe

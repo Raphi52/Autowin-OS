@@ -1,5 +1,5 @@
 /**
- * LA MINI-ADRESSE (/draft de conv-1317, proposition 6, 2026-10-30) : le bouton de l'en-tête du fil
+ * LA MINI-ADRESSE (proposition 6, 2026-10-30) : le bouton de l'en-tête du fil
  * qui ouvre le navigateur intégré. Un petit champ creusé qui dit où en est le navigateur sans
  * l'ouvrir : le site de l'onglet actif, ou le globe seul s'il n'y a rien à montrer. Il remplace
  * l'ovale gris « .btn », plus haut que Détails et sans information.
@@ -8,7 +8,7 @@
  * la vue chat, cet état re-rendrait tout le fil à chaque événement, ce qu'elle évite exprès (voir
  * « NAVIGATEUR INTÉGRÉ DU CHAT » dans ChatView.tsx).
  *
- * DÉTAILS, SON VOISIN, EST LE MÊME BOUTON (conv-1317 : « le bouton détail met lui le meme look ») :
+ * DÉTAILS, SON VOISIN, EST LE MÊME BOUTON (« le bouton détail met lui le meme look ») :
  * même classe, et le même repli à l'icône quand l'en-tête manque de place. Il a quitté ChatView.tsx
  * pour la même raison : mesurer l'en-tête là-bas re-rendrait le fil entier.
  */
@@ -22,16 +22,16 @@ import './BoutonCreux.css'
 /**
  * Largeur intérieure d'en-tête (sans ses marges de 24 px) sous laquelle le site ne s'affiche plus :
  * 280 px pour ce bouton au plus large et Détails, 42 px pour l'icône des bureaux cachés et son écart
- * (conv-1378), plus 160 px gardés au titre du fil. Sans ce seuil, l'en-tête débordait de 37 px à
- * 1280 px de large, panneau ouvert (mesuré, conv-1317). Mesuré en
+ * Plus 160 px gardés au titre du fil. Sans ce seuil, l'en-tête débordait de 37 px à
+ * 1280 px de large, panneau ouvert (mesuré). Mesuré en
  * JavaScript et pas par une requête CSS de conteneur : celle-ci aurait exigé `container-type` sur
  * `.chat` ou `.chat-head`, donc un nouveau contexte d'empilement pour les menus de tout le fil.
  */
 const ENTETE_MIN_POUR_LE_SITE = 482
 /**
  * Même chose pour le libellé de Détails : 144 px pour le globe, l'écart et Détails, 41 px pour l'icône
- * des bureaux cachés et son écart (conv-1378), plus 26 px de marge. Sans ce seuil, le passage de 92 à 103 px faisait déborder l'en-tête à 1180 px de large,
- * panneau ouvert (mesuré, conv-1317).
+ * des bureaux cachés et son écart, plus 26 px de marge. Sans ce seuil, le passage de 92 à 103 px faisait déborder l'en-tête à 1180 px de large,
+ * panneau ouvert (mesuré).
  */
 const ENTETE_MIN_POUR_DETAILS = 211
 
@@ -101,7 +101,7 @@ export function BoutonNavigateur({
       className="bouton-creux"
       data-testid="chat-navigateur-toggle"
       // Les onglets appartiennent à un fil : sans fil ouvert, le clic n'aurait rien à montrer.
-      // fix-ok: cause mesurée (conv-1286, 2026-10-29) — capture réelle sans conversation : clic sans effet visible ; sans cette ligne, NavigateurIntegre.test.tsx « aucun fil ouvert » échoue (code 1), avec elle 31/31 (code 0).
+      // fix-ok: cause mesurée (2026-10-29) — capture réelle sans conversation : clic sans effet visible ; sans cette ligne, NavigateurIntegre.test.tsx « aucun fil ouvert » échoue (code 1), avec elle 31/31 (code 0).
       disabled={!conversationId}
       aria-pressed={ouvert}
       aria-label={site ? `${action} : ${site}` : action}
@@ -132,7 +132,7 @@ export interface PropsBoutonBureauxCaches {
 }
 
 /**
- * L'ICÔNE DES BUREAUX CACHÉS (conv-1378, 2026-10-31) : « à côté de celui du navigateur ». Elle vaut
+ * L'ICÔNE DES BUREAUX CACHÉS (2026-10-31) : « à côté de celui du navigateur ». Elle vaut
  * sans fil ouvert, contrairement au globe : les bureaux n'appartiennent pas à un fil.
  */
 export function BoutonBureauxCaches({
@@ -190,7 +190,7 @@ export function BoutonDetails({
   onBasculer
 }: PropsBoutonDetails): React.JSX.Element {
   const { refBouton, assezLarge } = useEnteteAssezLarge(ENTETE_MIN_POUR_DETAILS)
-  // Plus de badge « N green » (conv-969, 2026-10-15 : « enlève le badge 2 green du bouton détail ») :
+  // Plus de badge « N green » (2026-10-15 : « enlève le badge 2 green du bouton détail ») :
   // seuls les runs encore ouverts méritent un compteur ici.
   const compteur = runsOuverts > 0 ? `${runsOuverts} open` : null
 

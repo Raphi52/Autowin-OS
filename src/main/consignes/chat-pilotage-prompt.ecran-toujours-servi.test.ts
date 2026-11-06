@@ -5,7 +5,7 @@ import { blocsSystemeEcran, tourTouchantAuVisuel } from './chat-pilotage-prompt'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
- * DEFAUT VECU (kaizen conv-835, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8, 2026-09-26).
+ * DEFAUT VECU (tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8, 2026-09-26).
  *
  * Saisie ts 1790393862643 : « envoi un message teams a leslie pour lui dire ou cest rangé ». Aucun
  * mot visuel : le bloc qui portait « ECRAN DE L'UTILISATEUR = SON ESPACE » et « ORDRE : d'abord le
@@ -51,7 +51,7 @@ describe("regles de l'ecran de l'utilisateur servies a chaque tour (conv-835)", 
   })
 
   it('nomme le profil Teams du bureau cache sans figer son etat de connexion', () => {
-    // Juge de la reparation 5 (kaizen conv-835) : « Ce profil n'est PAS connecte a son compte » devient
+    // Juge de la reparation 5 : « Ce profil n'est PAS connecte a son compte » devient
     // faux des que l'utilisateur s'y connecte, et le profil edge-teams n'etait pas nomme.
     // fix-ok: REGLES_ECRAN_UTILISATEUR (chat-pilotage-prompt.ts, tour ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8) figeait « n'est PAS connecte » sans nommer edge-teams ; ce test rejoue sur bc9b13d9^ le 2026-09-26 = rouge (1/8, « to contain 'autowin-hdesk\\edge-teams' »), sur bc9b13d9 = vert
     const [ecran] = blocsSystemeEcran(MESSAGE_DU_TOUR, false, 'conv-835')
@@ -107,7 +107,7 @@ describe("regles de l'ecran de l'utilisateur servies a chaque tour (conv-835)", 
   })
 
   it("est bien la fonction qu'agent-pilot.ts appelle pour construire le prompt systeme", () => {
-    // agent-pilot.ts et ses modules agent-pilot/*.ts : le prompt systeme vit dans systeme-du-tour.ts (conv-1580).
+    // agent-pilot.ts et ses modules agent-pilot/*.ts : le prompt systeme vit dans systeme-du-tour.ts.
     const source = sourceDuPilote()
     expect(source).toContain('...blocsSystemeEcran(')
     // Plus aucun chemin parallele qui re-servirait les regles visuelles sous condition a part.

@@ -8,7 +8,7 @@ import { WorktreeRunStateStore } from './worktree-run-state'
 /**
  * LE FAUX ROUGE QUI ARRETAIT TOUS LES WORKFLOWS.
  *
- * Mesure du 2026-08-27 (conv-1423). Le fil rendait « ⛔ Workflow ARRETE au controle final —
+ * Mesure du 2026-08-27. Le fil rendait « ⛔ Workflow ARRETE au controle final —
  * resultat non valide », cause `merge-failed`, detail « Operation worktree interrompue apres
  * 32000 ms ». Or le travail ETAIT dans la base : `git log` donne `acfe64dd « agent
  * run-c2f78f117161-1 »` a 09:09:50, trente secondes AVANT le refus trace a 09:10:21.

@@ -39,7 +39,7 @@ describe('extraction du prompt suivant', () => {
     expect(extrairePromptSuivant('AUTOWIN_PROMPT_V1: —')).toBeNull()
   })
 
-  // conv-1228 (2026-10-28) : un pavé est ÉCARTÉ, jamais coupé — un ordre tronqué partait au clic
+  // 2026-10-28 : un pavé est ÉCARTÉ, jamais coupé — un ordre tronqué partait au clic
   // comme s'il était entier (prompt-suivant.jamais-coupe.test.ts).
   it('écarte un prompt délirant plutôt que de remplir le composer d’un pavé', () => {
     const long = 'a'.repeat(3_000)
@@ -59,7 +59,7 @@ describe('extraction du prompt suivant', () => {
 })
 
 /*
- * TROIS SUITES NOTÉES (conv-1005, 2026-10-16) : l'utilisateur choisit d'un clic, le mode auto
+ * TROIS SUITES NOTÉES (2026-10-16) : l'utilisateur choisit d'un clic, le mode auto
  * envoie la mieux notée — c'est `extrairePromptSuivant` qu'il lit.
  */
 describe('trois suites notées', () => {
@@ -78,7 +78,7 @@ describe('trois suites notées', () => {
   })
 
   /*
-   * UN CHOIX, PAS UN REMPLISSAGE (conv-1087, 2026-10-22) : « il me propose à chaque fois un choix
+   * UN CHOIX, PAS UN REMPLISSAGE (2026-10-22) : « il me propose à chaque fois un choix
    * pertinent et les autres sont complètement useless ». Mesuré sur 90 tours : la suite secondaire
    * valait 45 en médiane. Une alternative notée sous le plancher ne s'affiche plus ; la mieux notée,
    * elle, reste TOUJOURS — c'est celle de Tab et du mode auto.
@@ -223,7 +223,7 @@ describe('publication → /salvage', () => {
   })
 
   /*
-   * Vecu le 2026-09-03 (conv-210) : le tri venait d'etre TERMINE dans le tour, et la suite utile
+   * Vecu le 2026-09-03 : le tri venait d'etre TERMINE dans le tour, et la suite utile
    * etait de restaurer un fichier precis. Le garde-fou a quand meme tout remplace par `/salvage`,
    * effacant la seule cible que le tour avait identifiee.
    */
@@ -268,7 +268,7 @@ describe('toutes les formes de « publier »', () => {
 })
 
 /*
- * VECU LE 2026-09-11 (conv-467). Un tour qui corrige le comptage du budget termine par
+ * VECU LE 2026-09-11. Un tour qui corrige le comptage du budget termine par
  * « …sans créer de doublon avec les lignes déjà PRÉSENTES ». L'utilisateur n'a vu AUCUN prompt
  * dans son champ de saisie.
  *

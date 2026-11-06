@@ -17,7 +17,7 @@ import {
 } from './verification-du-board'
 
 /**
- * VÉRIFIER DEPUIS LE BOARD (conv-1136, 2026-10-23). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : « Tout
+ * VÉRIFIER DEPUIS LE BOARD (2026-10-23). ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : « Tout
  * vérifier » qui vise un post-it hors de la ligne « À vérifier » ou d'une personne non choisie ; un
  * refus qui arrête les envois suivants ou qui disparaît du bilan ; un suivi qui s'arrête avant que
  * le tour ait fini, ou qui ne s'arrête jamais.

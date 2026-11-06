@@ -2,7 +2,7 @@
  * LE MODELE RELIT SES PAGES HTML EN TEXTE, PAS EN CODE — regle PURE, partagee par tous les endroits
  * ou Autowin renvoie au modele un texte qu'il a deja ecrit.
  *
- * DEFAUT MESURE (scout de conv-1074, 2026-10-22). Une reponse peut porter une page `html-render` :
+ * DEFAUT MESURE (2026-10-22). Une reponse peut porter une page `html-render` :
  * l'utilisateur voit la page dessinee, mais le texte renvoye au modele en portait le CODE entier —
  * balises, `<style>`, couleurs, parfois 30 000 caracteres pour quelques phrases visibles. Ce code
  * repartait a chaque tour par quatre chemins : l'historique d'une session neuve
@@ -18,9 +18,9 @@
  * Seules les VRAIES pages sont touchees — les fences que l'affichage dessine. Un bloc ```html (du
  * code MONTRE comme code) et une page citee a l'interieur d'une fence plus longue sont du contenu :
  * ils restent mot pour mot. Une fence jamais refermee (reponse coupee) et une fence collee en fin de
- * phrase (defaut conv-8, `collage-blocs-texte.ts`) sont filtrees aussi : le code y est le meme.
+ * phrase (`collage-blocs-texte.ts`) sont filtrees aussi : le code y est le meme.
  *
- * `html-interactif` AJOUTE LE 2026-10-30 (conv-1316) : ce bloc, apparu apres conv-1074, n'etait pas
+ * `html-interactif` AJOUTE LE 2026-10-30 : ce bloc, apparu, n'etait pas
  * dans la liste. Une session neuve du fil du jeu a recu 154 008 caracteres de message, dont les 141 000
  * de la page, alors que `montrer_bloc` promet qu'un bloc ne part pas au modele.
  */
@@ -139,7 +139,7 @@ function resumeDeLaPage(code: string, langue: string): string {
       ? `${visible.slice(0, TEXTE_VISIBLE_PAGE_MAX).trimEnd()} … (+${milliers(visible.length - TEXTE_VISIBLE_PAGE_MAX)} caractères de texte coupés)`
       : visible
   // Une page interactive ecrit l'essentiel de son contenu par ses scripts. « Texte visible » ferait
-  // prendre son texte de depart pour tout ce que l'utilisateur a lu (conv-1316).
+  // prendre son texte de depart pour tout ce que l'utilisateur a lu.
   const nature =
     sorte === FORME_PAGE_INTERACTIVE
       ? 'texte fixe, sans ce que ses scripts écrivent'

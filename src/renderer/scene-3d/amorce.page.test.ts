@@ -1,6 +1,6 @@
 // @vitest-environment node
 /*
- * L'AMORCE EN MODE PAGE, JOUEE DANS LE VRAI CHROMIUM (conv-1304, 2026-10-30). Les compatibilites
+ * L'AMORCE EN MODE PAGE, JOUEE DANS LE VRAI CHROMIUM (2026-10-30). Les compatibilites
  * de `amorce.js` (stockage, cookie, formulaire, alerte, copie, liens, numeros de ligne) n'existent
  * que dans un cadre isole reel : happy-dom n'a ni origine opaque ni bac a sable. Ce test passe donc
  * par `scripts/html-interactif-apercu.mjs`, qui monte la page comme le fil (meme page isolee, meme
@@ -87,7 +87,7 @@ describe('amorce en mode page — gestes courants dans le vrai cadre isole', () 
     expect(demande('copier')).toMatchObject({ detail: 'valeur copiee', accordee: true })
     expect(demande('lien')).toMatchObject({ detail: 'https://example.com/doc', accordee: true })
     expect(demande('defiler')?.accordee).toBe(true)
-    // Boutons de choix (conv-1304) : le libelle du lien, blancs reduits, puis le message compose
+    // Boutons de choix : le libelle du lien, blancs reduits, puis le message compose
     // par la page — tous deux DEMANDES au fil pour sa saisie, apres un clic.
     expect(r.demandes.filter((d) => d.demande === 'prompt')).toEqual([
       expect.objectContaining({ detail: 'Affiner la 2 · Nuit', accordee: true }),
@@ -155,8 +155,8 @@ describe('amorce en mode page — gestes courants dans le vrai cadre isole', () 
 })
 
 /*
- * LES SCENARIOS, DANS LE VRAI CADRE (conv-1304). Sans eux, l'apercu ne remplit aucun champ : 4 modeles
- * sur 6 du banc conv-1309 a conv-1314 ont ecrit leur propre harnais. Le texte `200 006 €` passe par
+ * LES SCENARIOS, DANS LE VRAI CADRE. Sans eux, l'apercu ne remplit aucun champ : 4 modeles
+ * sur 6 du banc ont ecrit leur propre harnais. Le texte `200 006 €` passe par
  * toLocaleString('fr-FR') : une espace fine insecable que le scenario n'ecrit pas.
  */
 describe('scenarios de l apercu — vraie souris et vrai clavier', () => {

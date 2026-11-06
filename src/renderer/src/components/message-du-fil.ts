@@ -1,5 +1,5 @@
 /**
- * LA RÉPONSE QUI PORTE UN BLOC DU FIL (conv-1147, 2026-10-25 — défaut D5 du juge).
+ * LA RÉPONSE QUI PORTE UN BLOC DU FIL (2026-10-25 — défaut D5 du juge).
  *
  * Le Markdown du fil ne reçoit que du texte (`memo` sur des primitives). La carte « Lancer en N
  * fils » tirait donc son souvenir « déjà lancée » de sa seule SOURCE : deux cartes au même

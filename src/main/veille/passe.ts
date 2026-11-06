@@ -34,7 +34,7 @@ export interface ResultatPasse {
    *
    * Sans lui, `echecs` ne dit pas si TOUTES les pages sont restées muettes : `retenus` et `refuses`
    * mêlent les candidats web et internes, donc un seul interne trié rendait verte une passe qui
-   * n'avait lu aucune page (relecture de conv-1032).
+   * n'avait lu aucune page.
    */
   sourcesWeb: number
   stock: StockVeille
@@ -93,7 +93,7 @@ export function construirePromptScout(source: SourceVeille): string {
  */
 export function extraireCandidats(sortie: string): CandidatBrut[] | undefined {
   // Le prompt exige un bloc ```json en dernière position, mais l'app peut AJOUTER du texte après
-  // (avertissement « Tâche de fond pas terminée », conv-776) : ce texte peut contenir des `]`.
+  // (avertissement « Tâche de fond pas terminée ») : ce texte peut contenir des `]`.
   // On lit donc d'abord les blocs ```json, du dernier au premier ; le premier/dernier crochet
   // n'est qu'un repli pour une sortie sans bloc.
   const blocs = [...sortie.matchAll(/```json\s*\n([\s\S]*?)```/g)].map((m) => m[1])

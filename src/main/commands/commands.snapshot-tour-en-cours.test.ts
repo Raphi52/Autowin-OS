@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AppCommandBus } from './commands'
 
 /**
- * DÉFAUT VÉCU le 2026-09-08 (conv-346). L'utilisateur demande si un tour relancé après un
+ * DÉFAUT VÉCU le 2026-09-08. L'utilisateur demande si un tour relancé après un
  * redémarrage « bosse réellement ». L'agent n'avait AUCUN signe de vie dans son état : `snapshot()`
  * ne rend qu'`updatedAt` / `lastUserMessageAt`. Il a donc deviné en lisant `activity/*.jsonl` et
  * `causal-trace/*.jsonl` — deux journaux écrits en FIN de tour — et a conclu « le tour est mort »

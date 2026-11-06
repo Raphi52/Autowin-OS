@@ -49,7 +49,7 @@ describe('extraireVotesJuges', () => {
    * Forme RÉELLE du détail, écrite par orchestrator.ts (`detail: ok ? 'validé' : 'défaut'`) :
    * mesurée sur toutes les traces du poste le 2026-10-18 — 194 « défaut », 66 « validé », jamais
    * « vote: VALIDE ». Le texte, lui, commence par un préambule. Résultat : les 66 juges qui
-   * validaient s'affichaient DÉFAUT (conv-253, run kaizen : VALIDE 88 montré « Refusé »).
+   * validaient s'affichaient DÉFAUT (run kaizen : VALIDE 88 montré « Refusé »).
    */
   it('lit le vote « validé » / « défaut » écrit par l’orchestrateur', () => {
     const preambule =

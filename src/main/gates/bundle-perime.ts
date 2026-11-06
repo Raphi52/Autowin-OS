@@ -12,8 +12,8 @@ const SOURCES_DU_GATE = [
 
 /**
  * Dossiers dont TOUT fichier .ts (hors tests) fait partie du controle final.
- * fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — la liste tenue a la main laissait la
- * mesure MUETTE des qu'un fichier du gate n'y figurait pas (deja paye une fois par conv-540 avec
+ * fix-ok: tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — la liste tenue a la main laissait la
+ * mesure MUETTE des qu'un fichier du gate n'y figurait pas (deja paye une fois avec
  * default-gate-hooks.ts). Deriver les dossiers ne peut qu'ELARGIR la mesure, jamais la desserrer.
  */
 const DOSSIERS_DU_GATE = ['src/main/gates', 'src/main/hooks']
@@ -52,7 +52,7 @@ export function mesureBundlePerime(
   argv: readonly string[] = process.argv
 ): { bundleMs: number; sourceMs: number; demarrageMs: number; bundle: string } | undefined {
   /**
-   * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — 7 tests d'orchestrateur rouges
+   * fix-ok: tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — 7 tests d'orchestrateur rouges
    * (greedy, lean-fast, workflow-override) parce que la mesure lisait out/main/index.js du depot
    * REEL alors que le processus tourne depuis les sources (vitest). Un bundle vieux d'une heure
    * arretait donc toute reprise, dans les tests comme pour un developpeur lance par `npm run dev`.

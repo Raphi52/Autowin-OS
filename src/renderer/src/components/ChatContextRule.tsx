@@ -12,7 +12,7 @@ import { useTextesChatFil } from '../textes-ecrans/chat-fil'
 type Bords = { gauche: number; droite: number }
 
 /**
- * MEME LARGEUR QUE LA JAUGE DES QUOTAS, EN BAS (conv-1399, 2026-10-31 : « la barre de contexte en
+ * MEME LARGEUR QUE LA JAUGE DES QUOTAS, EN BAS (2026-10-31 : « la barre de contexte en
  * haut faut la mettre de la meme largeur que celle d'en bas (donc moins large) »). Celle du bas
  * suit la rangee du champ de saisie, dont les marges changent avec le theme et la largeur du chat :
  * on MESURE ses bords au lieu de recopier les marges de chaque theme. Une ancre CSS ne peut pas la
@@ -61,11 +61,11 @@ function useBordsDeLaJaugeDuBas(
 }
 
 /**
- * LA JAUGE DE CONTEXTE, SEPARATEUR ENTRE L'EN-TETE DU CHAT ET LE FIL (conv-179, 2026-10-10 :
+ * LA JAUGE DE CONTEXTE, SEPARATEUR ENTRE L'EN-TETE DU CHAT ET LE FIL (2026-10-10 :
  * « la barre de contexte met-la en haut comme separateur entre le header du chat et le chat, et des
  * couleurs un peu plus dorees »).
  *
- * Elle etait peinte sur le filet au-dessus de la zone de saisie (ChatComposer, demande conv-240,
+ * Elle etait peinte sur le filet au-dessus de la zone de saisie (ChatComposer, demande,
  * reference claude.exe). Elle se pose desormais SUR le filet du bas de l'en-tete, qui lui sert de
  * rail : rien n'est ajoute a la hauteur de l'ecran. La part occupee de la fenetre du modele se lit
  * de gauche a droite.
@@ -132,7 +132,7 @@ export function ChatContextRule({
       onPointerLeave={() => setSurvole(false)}
       onClick={() => setFige((f) => !f)}
     >
-      {/* LE MOT « contexte » AU BOUT DU REMPLISSAGE (conv-189, 2026-10-10 : « qu'il y ait ecrit
+      {/* LE MOT « contexte » AU BOUT DU REMPLISSAGE (2026-10-10 : « qu'il y ait ecrit
           contexte au bout de la jauge, pas tout a droite mais a droite de la jauge qui progresse ») :
           il suit la pointe, le rail gris reprend apres lui (ChatView.css). */}
       <span className="chat-context-rule-libelle" aria-hidden="true">

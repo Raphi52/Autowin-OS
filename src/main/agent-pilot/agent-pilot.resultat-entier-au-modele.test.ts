@@ -5,7 +5,7 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 /**
  * LE MODELE RECOIT LE RESULTAT ENTIER DU RUN — l'affichage seul reste borne.
  *
- * Vecu dans conv-914 (« t'as trouvé que ce candidat ? c bizarre non ? ») : le scout avait rendu
+ * Vecu (« t'as trouvé que ce candidat ? c bizarre non ? ») : le scout avait rendu
  * 6 pistes, le fil n'en montrait qu'une. Le compte-rendu d'un run etait coupe a ses 4 000 premiers
  * caracteres par `formatOrchestrationOutcome`, et CE texte coupe servait deux lecteurs a la fois :
  * la bulle affichee ET l'agent du chat, qui le recevait comme « issue autoritative ». L'agent ne
@@ -108,7 +108,7 @@ describe('le résultat d’un run arrive ENTIER à l’agent du chat', () => {
     expect(bulle).toContain('[tronqué')
     expect(bulle).not.toContain('PISTE-6')
 
-    // Tour 3 — la question de conv-914 : le modèle doit voir les 6 pistes.
+    // Tour 3 — la question : le modèle doit voir les 6 pistes.
     await pilot.chat(
       [{ role: 'user', content: 't’as trouvé que ce candidat ?' }],
       () => {},

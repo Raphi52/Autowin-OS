@@ -54,7 +54,7 @@ describe('semis du catalogue', () => {
   })
 
   /*
-   * Défaut CONSTATÉ le 2026-10-22 (conv-1094) : le fichier réel de l'utilisateur portait
+   * Défaut CONSTATÉ le 2026-10-22 : le fichier réel de l'utilisateur portait
    * `seeded: true` et les sept workflows d'origine. Tout workflow ajouté au catalogue après ce
    * premier semis restait invisible — le marqueur disait « semé », pas « semé de QUOI ».
    */
@@ -152,7 +152,7 @@ describe('semis du catalogue', () => {
   it('ajoute la veille externe à un Exploration livré INTACT, sans toucher une variante (piste 6, conv-890)', () => {
     const p = chemin()
     const courant = DEFAULT_WORKFLOWS.find((profile) => profile.id === 'exploration')!
-    // L'Exploration semé avant conv-890, tel qu'il est encore sur le disque de l'utilisateur
+    // L'Exploration semé, tel qu'il est encore sur le disque de l'utilisateur
     // (comparé au fichier réel le 2026-10-01) : quatre éclaireurs, sans l'angle « externe ».
     const avant: WorkflowProfile = {
       ...courant,
@@ -186,7 +186,7 @@ describe('semis du catalogue', () => {
 
   it('reconnaît l’Exploration livré même écrit dans un autre ordre de champs, et dit quand il le laisse', () => {
     // fix-ok: rouge mesuré avant le correctif (4 angles au lieu de 5 sur le même profil en désordre).
-    // Objection du juge (conv-890) : la comparaison portait sur le TEXTE JSON, donc un fichier écrit
+    // Objection du juge : la comparaison portait sur le TEXTE JSON, donc un fichier écrit
     // par une version qui ordonnait autrement les champs n'était jamais mis à jour, sans un mot.
     const p = chemin()
     const courant = DEFAULT_WORKFLOWS.find((profile) => profile.id === 'exploration')!
@@ -417,7 +417,7 @@ describe('workflows livrés d’origine', () => {
   })
 
   it('Exploration lance TOUS les angles scout du catalogue — sinon un angle n’est lancé par aucun workflow livré', () => {
-    // Piste 6 de conv-890 : l'angle « externe » (web daté) avait rejoint le catalogue, mais aucun
+    // Piste 6 : l'angle « externe » (web daté) avait rejoint le catalogue, mais aucun
     // workflow livré ne le lançait, et `agent-topology.json` est vide par défaut.
     const exploration = DEFAULT_WORKFLOWS.find((profil) => profil.id === 'exploration')!
     const scout = exploration.graph!.nodes.find((node) => node.phase === 'scout')!
@@ -444,7 +444,7 @@ describe('workflows livrés d’origine', () => {
      * PLAFOND REBASÉ DE 24 À 32 LE 2026-08-25, puis DE 32 À 38 LE 2026-08-29 — avec les chiffres,
      * parce qu'un plafond relevé en silence n'est plus un garde.
      *
-     * 2026-08-29 (conv-1521) : un nœud `salvage` ferme les six profils substantiels, pour que le run
+     * 2026-08-29 : un nœud `salvage` ferme les six profils substantiels, pour que le run
      * TRIE le travail au lieu de rendre la main sur « veux-tu que je commit ? ». Coût MESURÉ après :
      * eclair 1 · correctif 13 · feature 37 · chantier-autowin 19 · panel-critique 17 ·
      * exploration 5 · remake 14. `feature` reste le majorant, pour la même raison qu'en août : ses

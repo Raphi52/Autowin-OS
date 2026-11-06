@@ -7,7 +7,7 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 import { NOM_JOURNAL_MESSAGES_FILS } from '../../shared/messages-entre-fils'
 
 /*
- * conv-1139 : les messages d'autres fils arrivent dans le tour du DESTINATAIRE, en tête, par le bus
+ * Les messages d'autres fils arrivent dans le tour du DESTINATAIRE, en tête, par le bus
  * (`messagesDesFilsPourTour`). Entrée qui ferait échouer ce banc si le maillon manquait : un tour de
  * conv-B dont le message envoyé au modèle IA ne porte pas le code déposé pour conv-B.
  */

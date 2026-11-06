@@ -13,7 +13,7 @@ import { RoleModelConfig } from '../profil/roles'
 import { TrustLedger } from '../trust/ledger'
 
 /*
- * L'ANNONCE DU COMMIT DIT LE VRAI ÉTAT DU PUSH (conv-1139, 2026-10-25).
+ * L'ANNONCE DU COMMIT DIT LE VRAI ÉTAT DU PUSH (2026-10-25).
  *
  * Constaté le 2026-10-24 : la clôture automatique a poussé `494e7d45` (19:12) puis `e4daf170` (23:50)
  * sur `origin/main`, et la réponse de chacun des deux runs affichait « intégré dans ta branche, non

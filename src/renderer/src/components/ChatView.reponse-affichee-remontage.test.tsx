@@ -2,8 +2,8 @@
 /**
  * « RÉPONSE AFFICHÉE » N'ENREGISTRE PLUS UN DÉBUT DE RÉPONSE QUAND LA VUE A ÉTÉ REMONTÉE.
  *
- * Mesuré le 2026-10-12 : 12 « Réponse affichée » sur 50 ne gardaient qu'un début (conv-912 : 185
- * caractères sur 5 053), et conv-910 et conv-912 s'étaient figées à la même seconde. L'envoi lisait,
+ * Mesuré le 2026-10-12 : 12 « Réponse affichée » sur 50 ne gardaient qu'un début (185
+ * caractères sur 5 053), et des fils s'étaient figées à la même seconde. L'envoi lisait,
  * en fin de tour, la copie du fil de la vue qui l'avait lancé ; remontée entre-temps (rechargement
  * à chaud en développement), cette vue ne recevait plus rien. La vue montée, elle, avait tout reçu.
  */

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { remplacerMatieres } from './home-decor-foule'
 
 /**
- * CE QUE L'UTILISATEUR A DEMANDÉ, conv-312 : « Partage les matières de la foule par matière d'origine
+ * CE QUE L'UTILISATEUR A DEMANDÉ, : « Partage les matières de la foule par matière d'origine
  * du modèle (environ 140 → 50) dans home-decor-foule.ts ».
  *
  * Le chargeur glTF découpe une matière d'origine en plusieurs morceaux de maillage : 157 morceaux de

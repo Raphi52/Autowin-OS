@@ -170,7 +170,7 @@ describe('dossier de preuve /kaizen — intégrité', () => {
         path: `C:/runs/run-${index}/RUN.md`,
         content: 'r'.repeat(4000)
       })),
-      // Une source neuve au moins : sans elle, le pied n'exige plus de citation (kaizen conv-1266),
+      // Une source neuve au moins : sans elle, le pied n'exige plus de citation,
       // et ce test vérifie justement que l'exigence survit à la saturation.
       saisies: [{ ts: 1_756_720_000_000, voie: 'chat', texte: 'reprend' }]
     })
@@ -347,7 +347,7 @@ describe('dossier de preuve /kaizen — ce que les journaux portent déjà', () 
     }
   })
 
-  // conv-113 : le dossier montrait la saisie automatique ts 1791317725882 et la saisie tapée
+  // Le dossier montrait la saisie automatique ts 1791317725882 et la saisie tapée
   // ts 1791317691042 avec la même `voie: "message"` — kaizen ne pouvait pas trancher « il était pas coché ».
   it('distingue dans le dossier une saisie envoyée par le mode auto d’une saisie tapée', () => {
     const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-origine-'))
@@ -531,7 +531,7 @@ describe('dossier de preuve /kaizen — appels modele et deroule des tours', () 
 
 describe('dossier de preuve /kaizen — budget reellement utilise', () => {
   /*
-    Mesure sur le dossier REEL de conv-105 : 23 870 signes utilises sur 28 000 alors que 167
+    Mesure sur le dossier REEL : 23 870 signes utilises sur 28 000 alors que 167
     elements avaient ete jetes. Cause : le retrait vise la section la plus LOURDE, or un RUN pese
     jusqu'a 4 000 signes ; pour resorber un depassement de quelques signes, un RUN entier partait
     et 4 000 signes de budget avec lui. Reproduction hermetique ci-dessous : 4 RUN + 30 lignes
@@ -565,7 +565,7 @@ describe('dossier de preuve /kaizen — budget reellement utilise', () => {
 
 describe('dossier de preuve /kaizen — les RUN survivent au resserrage', () => {
   /*
-    Mesure sur le dossier REEL de conv-105 (tsx sur le code du depot) : `runs: 0`, et
+    Mesure sur le dossier REEL (tsx sur le code du depot) : `runs: 0`, et
     `troncature.runs = 4`. Les QUATRE RUN.md etaient jetes en entier, donc kaizen n'avait
     AUCUN RUN sous les yeux. Cause : l'ajustement au budget ne sait que SUPPRIMER un element,
     jamais le RESUMER ; un RUN pesant jusqu'a 4 000 signes est le plus lourd, donc le premier
@@ -610,7 +610,7 @@ describe('dossier de preuve /kaizen — les RUN survivent au resserrage', () => 
 
 describe('dossier de preuve /kaizen — le deroule des 3 tours arrive en entier', () => {
   /*
-    Mesure du 2026-09-02 (conv-131) : le dossier annonce 3 tours mais n'en montre qu'un.
+    Mesure du 2026-09-02 : le dossier annonce 3 tours mais n'en montre qu'un.
     Cause : la coupure par tour existe deja (`events.slice(-TURN_EVENT_LIMIT)` par journal), puis
     une SECONDE coupure globale du meme plafond rabote l'ensemble des tours reunis — elle ne garde
     donc que la fin d'un seul journal. Il y a une coupure EN TROP, pas un plafond a ecrire.
@@ -656,7 +656,7 @@ describe('dossier de preuve /kaizen — le deroule des 3 tours arrive en entier'
 
 describe('dossier de preuve /kaizen — les fragments de flux ne chassent plus les actions', () => {
   /*
-    Mesure conv-338, tour 8ce6230c-374c-4de3-9429-583a648e286c : 1 641 des 1 776 evenements du
+    Mesure, tour 8ce6230c-374c-4de3-9429-583a648e286c : 1 641 des 1 776 evenements du
     journal sont des `reasoning-step` de quelques mots (« ment variables as a », « potential but »).
     Les 40 derniers gardes par tour n'etaient plus que ces miettes : les deux `remember` refuses
     (« forbidden ») et leurs resultats — le coeur du defaut — manquaient au dossier.
@@ -709,7 +709,7 @@ describe('dossier de preuve /kaizen — les fragments de flux ne chassent plus l
     }
   })
 
-  // conv-1431 : le journal arrive déjà regroupé à l'écriture. Entrée qui ferait échouer un lecteur
+  // Le journal arrive déjà regroupé à l'écriture. Entrée qui ferait échouer un lecteur
   // qui compte une ligne pour un fragment : 30 + 40 + 1 fragments comptés « 32 ».
   it('additionne les fragments de lignes déjà regroupées à l’écriture', () => {
     const fusion = fusionnerFragmentsDeFlux([

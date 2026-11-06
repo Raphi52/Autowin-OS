@@ -14,7 +14,7 @@ import {
 import { DECOR_DEFAUT } from './home-decor-scene'
 
 /**
- * CE QUE L'UTILISATEUR A DEMANDÉ, conv-301 : « /draft un tout nouveau fond 3d pour l'accueil qui
+ * CE QUE L'UTILISATEUR A DEMANDÉ, : « /draft un tout nouveau fond 3d pour l'accueil qui
  * s'inspire un peu de cette image notre theme ville cyberpunk obscure street tag et de notre theme
  * noir holo », puis, après les brouillons regardés dans le fil, « Passe au vrai fond de l'Accueil
  * avec ce look ».
@@ -56,7 +56,7 @@ describe('fond de l Accueil — l avenue cyberpunk (conv-301)', () => {
     )
     expect(scene).not.toMatch(/\bfetch\s*\(|\.src\s*=|VideoTexture|<video|url\(/)
     // Les textures dessinées existent bien, et elles viennent d'une toile créée ici — dans la page
-    // ou, depuis que l'avenue tourne dans un Worker (conv-323), hors d'elle : decor-toile.ts.
+    // ou, depuis que l'avenue tourne dans un Worker, hors d'elle : decor-toile.ts.
     expect(scene).toMatch(/nouvelleToile\(w, h\)/)
     const toile = readFileSync(new URL('./decor-toile.ts', import.meta.url), 'utf8')
     expect(toile).toMatch(/document\.createElement\('canvas'\)/)
@@ -120,7 +120,7 @@ describe('fond de l Accueil — l avenue cyberpunk (conv-301)', () => {
   })
 
   it('la clé de stockage est versionnée pour que le nouveau défaut atteigne toutes les machines', () => {
-    // La clé vit dans fond-accueil.ts depuis le menu « Fond » des réglages (conv-346) : le menu et le
+    // La clé vit dans fond-accueil.ts depuis le menu « Fond » des réglages : le menu et le
     // décor la lisent à la même source.
     const choix = readFileSync(new URL('./fond-accueil.ts', import.meta.url), 'utf8')
     expect(choix).toMatch(/autowinStorageKey\('home\.decor\.v3'\)/)
@@ -132,7 +132,7 @@ describe('fond de l Accueil — l avenue cyberpunk (conv-301)', () => {
 })
 
 /**
- * LA RUE ENTRE EN FONDU, ET SON DÉLAI SE MESURE (conv-301, « Mesurer le délai d'apparition de la rue
+ * LA RUE ENTRE EN FONDU, ET SON DÉLAI SE MESURE (« Mesurer le délai d'apparition de la rue
  * et ajouter un fondu d'entrée »).
  *
  * Mesuré le 2026-10-17 (instance cachée, code en cours) : la rue est compilée 0,6 à 0,8 s après la
@@ -157,7 +157,7 @@ describe('fond de l Accueil — l apparition de la rue', () => {
   })
 
   it('DANS LE WORKER, la page fait le même fondu : canevas invisible avant transfert, fondu à « apparue »', () => {
-    // conv-323 : un canevas transféré au Worker n'a plus de style côté Worker ; c'est la page qui
+    // Un canevas transféré au Worker n'a plus de style côté Worker ; c'est la page qui
     // garde l'élément et doit faire, à la première image, exactement le fondu de la page.
     const hote = readFileSync(new URL('./decor-avenue-hote.ts', import.meta.url), 'utf8')
     expect(hote).toMatch(
@@ -185,7 +185,7 @@ describe('fond de l Accueil — l apparition de la rue', () => {
       'decor-avenue:cree',
       'decor-avenue:rue-compilee',
       'decor-avenue:rue-visible',
-      // conv-337 : la rue n'attend plus son reflet ; ce repère mesure quand l'eau se met à refléter
+      // La rue n'attend plus son reflet ; ce repère mesure quand l'eau se met à refléter
       'decor-avenue:reflet-pret',
       'decor-avenue:foule-chargee',
       'decor-avenue:foule-visible'
@@ -212,7 +212,7 @@ function jsonGlb(nom: string): {
 }
 
 /**
- * LA FOULE : DES HUMAINS RÉELS, DIRECTION « HEURE DE POINTE » (conv-312).
+ * LA FOULE : DES HUMAINS RÉELS, DIRECTION « HEURE DE POINTE ».
  *
  * Demande : « /draft les humains les plus realiste possible pour le fond decran d'accueil », puis
  * « Implémenter la 6 · Heure de pointe ». Le casting recopie le brouillon validé ; les fichiers sont
@@ -290,7 +290,7 @@ describe('fond de l Accueil — la foule réaliste « Heure de pointe »', () =>
     expect(positionZ(p, 1, FOULE.tRef + 10, 0)).toBeCloseTo(enrouler(p.zf - 10), 9)
   })
 
-  // « Personne ne traverse la caméra » est tenu par la marche elle-même depuis conv-1054 :
+  // « Personne ne traverse la caméra » est tenu par la marche elle-même :
   // home-decor-foule-marche.test.ts, « LA CAMÉRA : la marche la contourne elle-même… ».
 
   it('la foule n ajoute aucune lumière, et décode ses images hors du fil principal', () => {

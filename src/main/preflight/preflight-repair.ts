@@ -117,7 +117,7 @@ export interface PreflightRepairOutcome {
 export function planPreflightRepair(checkId: string): PreflightRepairPlan | undefined {
   // `label` et `note` restent en français : l'écran affiche SA copie (`preflight-repair-affordance.ts`,
   // traduite côté interface), et le test de contrat de `preflight-repair.test.ts` exige l'égalité des
-  // deux sources (conv-1170, lot 18).
+  // deux sources (lot 18).
   switch (checkId) {
     case 'claude-session':
       return {

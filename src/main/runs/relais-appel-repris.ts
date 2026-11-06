@@ -1,7 +1,7 @@
 /**
- * UN TOUR REPRIS APRÈS REDÉMARRAGE MONTRE CE QUE SON MODÈLE FAIT (conv-1551, 2026-11-04).
+ * UN TOUR REPRIS APRÈS REDÉMARRAGE MONTRE CE QUE SON MODÈLE FAIT (2026-11-04).
  *
- * Vécu conv-1535, tour 7fa28264-f4bf-4631-ac72-09baf7994d0b : l'app a redémarré à 20:01:22, 12 s
+ * Vécu, tour 7fa28264-f4bf-4631-ac72-09baf7994d0b : l'app a redémarré à 20:01:22, 12 s
  * après la 2e action du tour. Le CLI, lancé détaché, a continué seul (15 Mo de sortie en 20 min,
  * des dizaines d'actions et d'étapes, `run-stdout/addf0f1f-….stdout.jsonl`). Le main l'a bien
  * repris (`reprendreAppelChat`, `ipc/chat.ts`), mais n'a fait qu'ATTENDRE son reçu de fin

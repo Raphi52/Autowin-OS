@@ -1,16 +1,16 @@
 // Champs et phrases partagés par plusieurs familles du catalogue des commandes, sortis tels quels
-// de commands/catalogue.ts (conv-1580) pour que chaque famille les importe sans cycle.
+// de commands/catalogue.ts pour que chaque famille les importe sans cycle.
 import type { SchemaArgument } from '../skills/skill-node-mcp'
 
 /**
- * Pas-à-pas du navigateur intégré (conv-1286, 2026-10-30) : chaque geste de l'agent (ouvrir, lire,
+ * Pas-à-pas du navigateur intégré (2026-10-30) : chaque geste de l'agent (ouvrir, lire,
  * capturer, agir) peut ATTENDRE l'utilisateur, ou être refusé s'il a repris la main. Phrase commune
  * aux quatre outils concernés : sans elle, l'agent prendrait l'attente pour une panne et relancerait.
  */
 export const PHRASE_PAS_A_PAS_NAVIGATEUR =
   '. Si l’utilisateur a mis l’agent en pause, ce geste attend qu’il le libère ; un refus « main-reprise » veut dire qu’il a repris la main : n’agis plus dans la page sans qu’il te le redemande'
 
-/** Une liste de textes, publiée comme telle (conv-1370) : `ids`, `chemins`. */
+/** Une liste de textes, publiée comme telle : `ids`, `chemins`. */
 export const LISTE_DE_TEXTES: SchemaArgument = { type: 'array', items: { type: 'string' } }
 
 /**
@@ -22,7 +22,7 @@ export const TRANCHE_MESSAGE_LU = 20_000
 /**
  * LA FORME D'UNE TÂCHE, publiée telle que `parseTaskInput` la valide (task-manager-ipc.ts).
  *
- * conv-1370, 2026-10-31 : `task` partait en texte, et 4 échecs sur 12 de `task_create` venaient de
+ * 2026-10-31 : `task` partait en texte, et 4 échecs sur 12 de `task_create` venaient de
  * `watchdog.guards`, un objet exigé même vide que rien n'annonçait. `task_update` publie les mêmes
  * champs sans rien exiger : on n'y passe que ce qui change.
  */

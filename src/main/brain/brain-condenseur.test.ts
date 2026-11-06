@@ -37,7 +37,7 @@ describe('condenserLecture (conv-1469)', () => {
 })
 
 /**
- * Filtre de la liste de `brain_query` (conv-1571). Format des listes copié du serveur
+ * Filtre de la liste de `brain_query`. Format des listes copié du serveur
  * (`describe_candidates`, `brain_context.py`) et de leur rendu (`renderStructuredBrainContext`) :
  * deux lignes par candidate, séparées par `---`.
  */

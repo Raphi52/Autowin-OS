@@ -8,7 +8,7 @@ import { sourceProcessPrincipal } from '../app/source-process-principal.test-hel
 /**
  * UNE ANNULATION DIT POURQUOI — jusqu'au message que l'utilisateur lit.
  *
- * Défaut mesuré sur `conv-1369` le 2026-08-22. Un run de 28 min 33 s s'est terminé sur
+ * Défaut mesuré le 2026-08-22. Un run de 28 min 33 s s'est terminé sur
  * « [abort] claude CLI interrompu : raison non rapportee par l'appelant », l'utilisateur a demandé
  * pourquoi, et l'application ne pouvait pas répondre. Le diagnostic proposait même une hypothèse
  * FAUSSE (« vérifie qu'un second lancement n'a pas interrompu le premier ») que le ledger réfute :
@@ -65,7 +65,7 @@ describe('une annulation d orchestration dit pourquoi', () => {
       expect(debut, `le canal ${canal} doit etre enregistre`).toBeGreaterThan(0)
       const bloc = source.slice(debut, debut + 900)
       // Le motif du Stop est la constante PARTAGÉE avec le graphe, qui y reconnaît un arrêt voulu
-      // (conv-966) : elle compte comme un motif nommé, et sa valeur est vérifiée juste dessous.
+      // Elle compte comme un motif nommé, et sa valeur est vérifiée juste dessous.
       expect(bloc, `${canal} doit passer un motif d'annulation`).toMatch(
         /abortOrchestration\([\s\S]{0,120}(Stop|utilisateur|MOTIF_STOP_DU_CHAT)/
       )

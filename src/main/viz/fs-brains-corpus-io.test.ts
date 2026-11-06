@@ -62,7 +62,7 @@ describe('I/O du corpus Brain', () => {
     await loadBrainThemes(roots[2], corpus, roots[2])
     loadVaultBrainNeighborhood(roots[3], 'knowledge/domain/autowin-os-guide', corpus)
 
-    // Les thèmes lisent en PARALLÈLE (conv-1219) : une lecture bloquante des 1931 notes du partage
+    // Les thèmes lisent en PARALLÈLE : une lecture bloquante des 1931 notes du partage
     // réseau prenait 13,7 à 16,3 s et figeait le worker, l'aperçu du graphe attendant derrière.
     expect(observedReads.sync).toHaveLength(1)
     expect(observedReads.async).toHaveLength(3)

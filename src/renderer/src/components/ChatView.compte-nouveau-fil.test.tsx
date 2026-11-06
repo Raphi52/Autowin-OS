@@ -10,7 +10,7 @@ import {
 } from './ChatView.harness'
 
 /**
- * UN CLIC SUR UN COMPTE AVANT LE PREMIER MESSAGE VAUT POUR LE FIL QUI VA NAÎTRE (conv-1416).
+ * UN CLIC SUR UN COMPTE AVANT LE PREMIER MESSAGE VAUT POUR LE FIL QUI VA NAÎTRE.
  *
  * Avant, sans conversation ouverte, le clic ne changeait que le compte de l'application : rien
  * n'était retenu, et le fil neuf pouvait changer de compte tout seul au premier quota vide. Même

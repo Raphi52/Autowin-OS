@@ -8,12 +8,12 @@ import {
 } from '../runs/resume-refusal'
 
 /**
- * DEMANDE (conv-336, 2026-09-07) : « un refus de reprise transitoire ne doit plus bouger la date de
+ * DEMANDE (2026-09-07) : « un refus de reprise transitoire ne doit plus bouger la date de
  * derniere touche d'une conversation ni la faire remonter en tete de liste ».
  *
  * VECU, et c'est la mesure : au demarrage de 09:48, `conversations.json.journal.jsonl` porte 22
  * evenements (`resumed` puis `failed`) ecrits en UNE seconde dans 11 conversations vieilles de
- * plusieurs jours -- conv-83, 226, 246, 266, 268, 288, 300, 305, 308, 321, 323. L'erreur etait a
+ * plusieurs jours --. L'erreur etait a
  * chaque fois « Reprise refusee : 1 appel(s) provider encore actif(s). Refus transitoire, aucun
  * fichier touche ». Consequence a l'ecran : ces 11 fils sont remontes en tete de la liste et sont
  * repasses en pastille jaune « termine, non lu », alors que rien n'avait ete produit.
@@ -65,7 +65,7 @@ describe('un refus de reprise transitoire ne repeint pas la liste', () => {
   })
 
   /**
-   * MESURE DU JOURNAL DE 10:20 (le demarrage SUIVANT, releve dans conv-336) : sur les 13 refus de
+   * MESURE DU JOURNAL DE 10:20 (le demarrage SUIVANT) : sur les 13 refus de
    * reprise ecrits en 12 secondes, UN SEUL etait « appel(s) provider encore actif » ; les 12 autres
    * portaient « copie durable absente ou incomplete » — classes DEFINITIFS, donc encore comptes
    * comme du travail et repeignant la liste. Un refus, definitif ou non, n'execute rien.

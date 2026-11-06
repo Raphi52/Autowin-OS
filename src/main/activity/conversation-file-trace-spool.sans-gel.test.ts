@@ -13,7 +13,7 @@ import {
 } from './conversation-file-trace-spool'
 
 /**
- * GEL MESURÉ (/gel conv-1118, 2026-10-23, `gels.jsonl`) : de 09:44:09 à 09:44:57 UTC, quatre
+ * GEL MESURÉ (2026-10-23, `gels.jsonl`) : de 09:44:09 à 09:44:57 UTC, quatre
  * `appendFileSync` de `conversation-file-trace-spool/events.jsonl` (une ligne de quelques Ko) ont
  * tenu la fenêtre 8,2 s, 10,0 s, 9,8 s puis 7,6 s — 37 s figées depuis le démarrage de 08:01, appelé
  * par `trace-workspace-mutation.ts:91` après chaque écriture d'un outil du chat. Le disque était

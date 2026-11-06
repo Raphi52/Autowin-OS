@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { pagesHtmlEnTexte, TEXTE_VISIBLE_PAGE_MAX } from './pages-html-pour-le-modele'
 
 /**
- * LE MODELE RELIT SES PAGES HTML EN TEXTE, PAS EN CODE (conv-1074, 2026-10-22).
+ * LE MODELE RELIT SES PAGES HTML EN TEXTE, PAS EN CODE (2026-10-22).
  *
- * Mesure du scout de conv-1074 : chaque bloc `html-render` d'une reponse etait renvoye au modele tel
+ * Mesure du scout : chaque bloc `html-render` d'une reponse etait renvoye au modele tel
  * quel — balises, `<style>` et couleurs compris — a chaque tour ou l'historique, le contexte d'un run
  * ou le compte-rendu d'un tour execute sans lui repartait. L'utilisateur voit une PAGE ; le modele
  * relisait son CODE source, des dizaines de milliers de caracteres pour quelques phrases visibles.
@@ -99,7 +99,7 @@ describe('pagesHtmlEnTexte — une page html-render devient son texte visible', 
 })
 
 /**
- * conv-1316 (2026-10-30) : une page ```html-interactif repartait en CODE, elle aussi. Mesure sur le
+ * 2026-10-30 : une page ```html-interactif repartait en CODE, elle aussi. Mesure sur le
  * fil du jeu : 154 008 caractères de message pour une session neuve, contre 7 432 au tour d'avant,
  * parce que l'historique portait les 141 000 caractères de la page. `montrer_bloc` promettait
  * pourtant qu'un bloc ne part jamais au modèle.

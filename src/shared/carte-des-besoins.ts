@@ -1,9 +1,9 @@
 /**
- * CARTE DES BESOINS — lot 1 (conv-1089, 2026-10-22).
+ * CARTE DES BESOINS — lot 1 (2026-10-22).
  *
  * Demande : « entretenir une map des besoins et du projet avec les demandes, la date, la personne
  * émettrice, l'état en cours / terminé ». Le lot 1 ne crée AUCUNE donnée : il agrège ce que la
- * carte du fil (conv-1059) calcule déjà pour UN fil, sur TOUS les fils, rangés par projet comme la
+ * carte du fil calcule déjà pour UN fil, sur TOUS les fils, rangés par projet comme la
  * barre latérale, avec les runs bloqués de chaque projet. Aucun appel de modèle.
  *
  * Lot 2 (même jour) : chaque demande porte QUI A PROMPTÉ — l'identité git (`user.name`,
@@ -33,7 +33,7 @@ export interface DemandeDeLaCarte {
   messageId?: string
   titre: string
   /**
-   * Le message ENTIER, sauts de ligne gardés, que la fiche du Board montre (conv-1278) ; absent quand
+   * Le message ENTIER, sauts de ligne gardés, que la fiche du Board montre ; absent quand
    * il ne dit rien de plus que `titre` (première ligne coupée à 120 caractères).
    */
   texte?: string
@@ -49,26 +49,26 @@ export interface DemandeDeLaCarte {
   /**
    * Les numéros de work item que le TEXTE du prompt nomme : ceux que la vue Tickets écrit dans le
    * prompt d'un fil qu'elle ouvre, et les mentions `#1234` / `AB#1234`. Une mention n'est qu'un
-   * candidat : elle ne devient un lien qu'après lecture de la fiche à la source (conv-1127).
+   * candidat : elle ne devient un lien qu'après lecture de la fiche à la source.
    */
   references?: ReferenceDeLaDemande[]
-  /** Les work items (tasks) liés à cette demande ; absent = « sans task » (conv-1127). */
+  /** Les work items (tasks) liés à cette demande ; absent = « sans task ». */
   workItems?: WorkItemDeLaDemande[]
   /**
    * Le RUN.md léger qui range cette demande, relatif au dossier `demandes/`
-   * (`conv-1441/slug-xyz/RUN.md`) : c'est lui qui fait le post-it du Board (conv-1456). Absent =
+   * (`conv-1441/slug-xyz/RUN.md`) : c'est lui qui fait le post-it du Board. Absent =
    * question, tour pas encore fini, ou demande plus ancienne que les fiches (01/11).
    */
   fiche?: string
   /**
-   * Le collègue dont vient cette demande (conv-1210, 2026-10-28) : posé par la VUE seulement, depuis
+   * Le collègue dont vient cette demande (2026-10-28) : posé par la VUE seulement, depuis
    * le Board qu'un autre poste a recopié dans le dossier du Board — jamais par le calcul de la
    * carte. Une telle demande se lit, elle ne se touche pas : ni glisser, ni vérifier, ni ouvrir.
    */
   collegue?: CollegueDeLaDemande
 }
 
-/** D'où vient une demande d'un collègue, et ce que son Board en montre (conv-1210). */
+/** D'où vient une demande d'un collègue, et ce que son Board en montre. */
 export interface CollegueDeLaDemande {
   /** Son sous-dossier dans le dossier du Board : son compte Windows. */
   poste: string
@@ -83,7 +83,7 @@ export interface CollegueDeLaDemande {
 }
 
 /**
- * D'où vient le lien d'une demande vers un work item (conv-1127, 2026-10-23) :
+ * D'où vient le lien d'une demande vers un work item (2026-10-23) :
  * `tickets` — le fil a été ouvert par la vue Tickets pour cette fiche, sûr par construction ;
  * `mention` — le prompt écrit `#1234`, et la fiche a été lue à la source avant de poser le lien ;
  * `manuel` — rattaché à la main depuis la fiche de la Carte du projet, lui aussi lu à la source.
@@ -113,7 +113,7 @@ export interface WorkItemDeLaDemande {
 /**
  * La clé d'une demande dans son fil, la même pour la vue et le processus principal : l'id du
  * message, sinon son rang (fils anciens sans id de message). Seule fonction de ce fichier de types :
- * deux copies divergentes feraient viser une autre demande que celle cliquée (conv-1127).
+ * deux copies divergentes feraient viser une autre demande que celle cliquée.
  */
 export function cleDeLaDemande(d: { messageId?: string; rang: number }): string {
   return d.messageId ?? `rang:${d.rang}`
@@ -141,7 +141,7 @@ export interface BilanDesMentions {
  * D'où vient le demandeur. `journal` : relevé dans git AU MOMENT du prompt. `git-du-dossier` : la
  * demande est antérieure au journal, l'identité est celle que git donne AUJOURD'HUI dans le dossier
  * du fil — une déduction, affichée comme telle. `poste` : le nom de ce poste sur le Board (choisi
- * dans les réglages, sinon le compte Windows), posé sur toutes ses demandes (conv-1230,
+ * dans les réglages, sinon le compte Windows), posé sur toutes ses demandes (
  * `board-nom-du-poste.ts`).
  */
 export type OrigineDuDemandeur = 'journal' | 'git-du-dossier' | 'poste'
@@ -192,7 +192,7 @@ export interface ProjetDeLaCarte {
   demandes: DemandeDeLaCarte[]
   runsBloques: RunBloqueDeLaCarte[]
   /**
-   * Runs validés dont la suite appartient à l'utilisateur : à traiter, mais pas en panne (conv-1199).
+   * Runs validés dont la suite appartient à l'utilisateur : à traiter, mais pas en panne.
    * Tenus par projet pour que les comptes refaits après un filtre (`carteDesProjetsPartages`) restent
    * justes. Absent = aucun.
    */
@@ -224,14 +224,14 @@ export interface CarteDesBesoins {
   /** Durée du calcul dans le processus principal, pour voir s'il devient trop lourd. */
   dureeMs: number
   /**
-   * Durée de chaque étape (conv-1248) : voir dans l'app OÙ part le temps, sans la redémarrer avec
+   * Durée de chaque étape : voir dans l'app OÙ part le temps, sans la redémarrer avec
    * un chrono. La lecture des runs se recouvre avec les autres : la somme dépasse `dureeMs`.
    * Absente d'une carte écrite par une version plus ancienne (Board d'un collègue).
    */
   etapesMs?: EtapesDuCalcul
 }
 
-/** Millisecondes par étape du calcul de la carte (conv-1248). */
+/** Millisecondes par étape du calcul de la carte. */
 export interface EtapesDuCalcul {
   /** Relecture des fils (seuls ceux qui ont bougé sont recalculés). */
   fils: number

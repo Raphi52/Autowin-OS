@@ -9,7 +9,7 @@ import type { WorkflowGraph } from '../workflow/workflow-graph'
  *
  * LE CONTEXTE MESURÉ, deux défauts qui encadrent ce point :
  *
- *  - `conv-1071` : un juge joué par le marcheur PUIS par le gate final produisait deux appels
+ *  - un juge joué par le marcheur PUIS par le gate final produisait deux appels
  *    identiques, dont le premier portait en plus le sandbox d'une phase de mutation. D'où la règle
  *    « le marcheur s'arrête AVANT un juge terminal », car le juge terminal EST le gate final.
  *  - `workflow-walk.recovery-budget` : quand le juge n'est pas reconnu terminal, le marcheur consomme

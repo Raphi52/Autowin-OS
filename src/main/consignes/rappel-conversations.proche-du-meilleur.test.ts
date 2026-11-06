@@ -3,7 +3,7 @@ import { rappelDesEchangesPasses } from './rappel-conversations'
 import type { ConversationRecherche } from '../store/conversations'
 
 /**
- * APRES LA 1re, SEULES LES CONVERSATIONS PROCHES DU MEILLEUR SONT RAPPELEES (conv-889, 2026-09-30).
+ * APRES LA 1re, SEULES LES CONVERSATIONS PROCHES DU MEILLEUR SONT RAPPELEES (2026-09-30).
  *
  * Mesure sur le corpus reel (`scripts/mesure-rappel-selectif.mts`) : le 2e rappele est juste 9 fois
  * sur 100, le 3e jamais. Un seuil a 80 % du meilleur score retire 45 % de ces inutiles pour une cible
@@ -44,7 +44,7 @@ describe('rappel — proche du meilleur', () => {
   })
 
   it('le seuil se mesure au 1er MONTRE, apres exclusion de la conversation courante', () => {
-    // La courante a le meilleur score mais n'est pas montree : la reference devient conv-1.
+    // La courante a le meilleur score mais n'est pas montree : la reference devient.
     const rendu = rappelSur([
       resultat('conv-courante', 10),
       resultat('conv-1', 1),

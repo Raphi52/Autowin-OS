@@ -1,7 +1,7 @@
 /**
  * Où chercher un fichier cité par un agent, et comment l'ouvrir À SA LIGNE.
  *
- * Deux défauts du lien fichier de conv-1427 vivent ici, tous deux relevés par le juge le
+ * Deux défauts du lien fichier vivent ici, tous deux relevés par le juge le
  * 2026-08-27 et laissés ouverts :
  *
  * - La racine était `AUTOWIN_OS_WORKSPACE ?? process.cwd()`. Or un agent cite ce qu'il voit depuis

@@ -8,7 +8,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 ).IS_REACT_ACT_ENVIRONMENT = true
 
 /**
- * LE DÉFAUT, mesuré le 2026-10-17 (conv-301, sonde de l'Accueil, pile d'appel relevée par CDP) :
+ * LE DÉFAUT, mesuré le 2026-10-17 (sonde de l'Accueil, pile d'appel relevée par CDP) :
  * à chaque ouverture de l'Accueil, le fond avenue était construit DEUX fois, à 0,2-0,8 s d'écart.
  * La seconde construction venait de `commitDoubleInvokeEffectsInDEV` : en développement,
  * `<StrictMode>` (main.tsx) monte chaque effet, le démonte et le remonte aussitôt. L'utilisateur
@@ -125,7 +125,7 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
   })
 
   it('un changement de thème NE reconstruit PAS l avenue : sa palette ne dépend pas du thème', async () => {
-    // conv-337 : home-decor-avenue.ts ne lit aucune teinte du thème ; la reconstruire recompilait
+    // Home-decor-avenue.ts ne lit aucune teinte du thème ; la reconstruire recompilait
     // toute la scène (2 à 3,7 s sans rue) pour une image identique.
     await monter()
     await act(async () => {
@@ -173,7 +173,7 @@ describe('le fond 3D n est construit qu une fois, même sous StrictMode', () => 
   })
 
   it('AU REPOS quand la fenêtre perd le focus, de retour à la cadence visée quand elle le retrouve', async () => {
-    // conv-337 : 34 ms de calcul par image, des heures durant, pour un Accueil qu'on ne regarde pas.
+    // 34 ms de calcul par image, des heures durant, pour un Accueil qu'on ne regarde pas.
     const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(false)
     try {
       await monter()

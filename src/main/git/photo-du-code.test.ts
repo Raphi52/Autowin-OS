@@ -24,7 +24,7 @@ import {
 
 /**
  * Aucun test de ce fichier ne porte sur le budget de 5 s du début de tour : sur une machine chargée,
- * il faisait rendre « pas de photo » en silence et le test échouait sur autre chose (conv-1038,
+ * il faisait rendre « pas de photo » en silence et le test échouait sur autre chose (
  * 2026-10-21 : « une photo plus vieille… sort » rouge à 18,8 s). Le budget reste celui du produit.
  */
 const photographierLeCode = (
@@ -33,7 +33,7 @@ const photographierLeCode = (
   photographierAvecBudgetDuTour({ delaiMaxMs: 60_000, ...entree })
 
 /**
- * REVENIR AU CODE D'UN TOUR (conv-1038, 2026-10-21 — décision « branches-rewind », étape 2 : le
+ * REVENIR AU CODE D'UN TOUR (2026-10-21 — décision « branches-rewind », étape 2 : le
  * retour du code se fait dans une COPIE SÉPARÉE, jamais dans le dossier partagé).
  *
  * La branche depuis un message ne copiait que les messages, jamais l'état des fichiers, et le
@@ -252,7 +252,7 @@ describe('ouvrirCopieDeLaPhoto — le code du tour, dans une copie séparée', (
 })
 
 /*
- * CHEMINS LONGS (conv-1050, 2026-10-22). Partout ailleurs, Autowin ouvre ses copies par
+ * CHEMINS LONGS (2026-10-22). Partout ailleurs, Autowin ouvre ses copies par
  * `git -c core.longpaths=true worktree add` (store/worktree-manager.ts, comparaison-a-la-base.ts) ;
  * « Revenir à ce tour » et « Essaie 3 façons » le faisaient sans. Git pour Windows refuse alors tout
  * fichier dont le chemin COMPLET dépasse 260 caractères (« Filename too long ») : la copie d'un
@@ -371,7 +371,7 @@ describe('ouvrirCopieDeLaPhoto — des fichiers à plus de 260 caractères dans 
 })
 
 /*
- * L'ÉCHEC DE LA COPIE SE DIT EN UNE PHRASE (conv-1050, 2026-10-22). Constaté à l'écran : un
+ * L'ÉCHEC DE LA COPIE SE DIT EN UNE PHRASE (2026-10-22). Constaté à l'écran : un
  * `git worktree add` en « Filename too long » remplissait l'avis du chat de TOUTE la sortie de git
  * (la commande, puis une ligne `error: unable to create file …` par fichier, mêlée aux « Updating
  * files: NN% ») — un écran entier, la cause noyée dedans. L'erreur ci-dessous a la forme exacte de
@@ -506,7 +506,7 @@ describe('revenirAuCodeDuTour — le bouton « Revenir à ce tour » d’un mess
   ]
 
   /*
-   * ORDRE RÉEL (conv-1050, 2026-10-22) : la photo est prise AVANT le tour (`index.ts`,
+   * ORDRE RÉEL (2026-10-22) : la photo est prise AVANT le tour (`index.ts`,
    * `photographierLeCode` avant `lancerTour`) et l'heure du message n'est posée qu'ensuite, par
    * `beginTurn` (`store/conversations.ts`). Mesuré sur 5 vrais tours : photo 393 à 613 ms AVANT
    * son message. Ces tests posaient l'ordre inverse (photo 50 ms après) : ils étaient verts
@@ -639,7 +639,7 @@ describe('ouvrirCopiesDEssai — « Essaie 3 façons » : une photo, trois copie
   })
 
   it('machine chargée : le clic attend sa photo au-delà des 5 s du début de tour', async () => {
-    // conv-1038, 2026-10-21 : garder-un-essai.test.ts est tombé rouge en suite chargée (photo
+    // 2026-10-21 : garder-un-essai.test.ts est tombé rouge en suite chargée (photo
     // abandonnée à 5 s, « son dossier n’est pas un dépôt git… »), vert 3 fois sur 3 seul. Git est
     // ici retenu le temps que l'horloge dépasse 5 s, puis relâché : la photo doit aboutir.
     const repo = await depot()

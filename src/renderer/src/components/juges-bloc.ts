@@ -1,13 +1,13 @@
 import { extraireVotesJuges, type StepDeRun, type VoteJuge } from './juges-votes'
 
 /**
- * BLOC DES JUGES dans le fil — choix « 1 · Nacre » du /draft de conv-328 (2026-10-18, « un bloc
+ * BLOC DES JUGES dans le fil — choix « 1 · Nacre » du /draft (2026-10-18, « un bloc
  * pour afficher les judges dans le chat »), sur la mise en page « Corrigé dans l'objection » :
  * bandeau du verdict, objections À CORRIGER avec leur ADRESSE dessous et ce qui est DÉJÀ CORRIGÉ
  * accroché dedans, état du suivi à droite, juges en pied.
  *
  * Tout vient du TEXTE du juge, rien n'est supposé :
- * - un run réparé porte UN verdict par PASSAGE. Mesuré sur la trace de conv-253 : 4 steps `judge`
+ * - un run réparé porte UN verdict par PASSAGE. Mesuré sur la trace : 4 steps `judge`
  *   du même modèle, séparés par les gates « Réparation N — nouveau passage ». L'ancien panneau les
  *   montrait comme 4 juges. Le bloc montre le DERNIER passage jugé ; le précédent ne sert qu'au suivi ;
  * - l'adresse = les fichiers que le juge cite (entre backticks, ou en clair avec un dossier) ;
@@ -15,7 +15,7 @@ import { extraireVotesJuges, type StepDeRun, type VoteJuge } from './juges-votes
  *   « reste faux »… → reprise ; rien de tel alors qu'un passage précède → nouvelle ;
  * - le déjà-corrigé = sa phrase « Ce qui est réglé … : a, et b ».
  *
- * Module PUR, testé sur la vraie trace de conv-253 (juges-bloc.test.ts).
+ * Module PUR, testé sur la vraie trace (juges-bloc.test.ts).
  */
 
 export type GraviteBloquante = 'MAJEUR' | 'MINEUR' | null
@@ -269,11 +269,11 @@ function constatsDuVerdict(texte: string): number {
 }
 
 /**
- * LE BLOC SE REMPLIT PENDANT QUE ÇA JUGE (demande du 2026-10-19, conv-1021 : « dans mon autre conv
+ * LE BLOC SE REMPLIT PENDANT QUE ÇA JUGE (demande du 2026-10-19, « dans mon autre conv
  * ça judge depuis 2 heures […] je veux que pendant que ça judge ça remplisse le bloc en live »).
  *
  * Le bloc ne lisait que `trace.json`, que le main n'écrit qu'à la FIN du run (`commands.ts`,
- * `saveConvRunTrace`) : un run en boucle juge → réparation → juge (conv-1019, 2 h) n'y montrait rien.
+ * `saveConvRunTrace`) : un run en boucle juge → réparation → juge (2 h) n'y montrait rien.
  * Le fil, lui, reçoit tout en direct : chaque étape terminée (`orchestrate-step`), la phase qui
  * démarre (`orchestrate-phase`, celle du juge comprise) et le texte qu'il écrit (`orchestrate-delta`),
  * rangés dans `ScopedLiveRun` (`chat-view-model.ts`). Cette fonction lit ces trois morceaux.

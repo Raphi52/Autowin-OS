@@ -8,10 +8,10 @@ import { ConversationStore } from '../store/conversations'
  * Un tour declare lecture-seule ne laisse passer que les commandes portant `readOnlyHint`
  * (`agent-pilot.ts` : « seule une commande de LECTURE atteint le bus »). C'est exactement le tour ou
  * l'orchestrateur doit COMPRENDRE avant d'agir -- et c'etait un tour conversationnel qui ouvrait
- * conv-1407 (« explique-moi le code couleur de la pastille »).
+ * (« explique-moi le code couleur de la pastille »).
  *
  * Ce depot a deja paye ce piege dans l'autre sens : avant `read_file` / `find_in_files`, une analyse
- * ne pouvait RIEN lire (mesure sur 4 runs du scout de veille, conv-1154 -> 1157). Une capacite de
+ * ne pouvait RIEN lire (mesure sur 4 runs du scout de veille). Une capacite de
  * lecture qui n'est pas declaree en lecture seule est une capacite absente la ou elle sert le plus.
  *
  * ENTREE QUI DOIT FAIRE ECHOUER CE TEST SI LE CADRAGE EST FAUX : une commande MUTANTE qui se

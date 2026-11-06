@@ -251,7 +251,7 @@ describe('runAppPreflight', () => {
   })
 
   /**
-   * DEFAUT VECU (conv-8, 2026-09-03) : ce ping visait `127.0.0.1:8765` ECRIT EN DUR alors que le
+   * DEFAUT VECU (2026-09-03) : ce ping visait `127.0.0.1:8765` ECRIT EN DUR alors que le
    * service a jour ecoutait 8766. La sonde declarait donc le cerveau eteint en permanence, et l'app
    * relancait des serveurs qui n'y servaient personne — pendant que la lecture du savoir, elle,
    * fonctionnait par l'origine CONFIGUREE. Meme defaut que celui corrige la veille dans

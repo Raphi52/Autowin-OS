@@ -10,20 +10,20 @@ import {
 import type { Msg } from './chat-view-types'
 
 /*
- * LE MODE AUTO NE VIDE PAS LA CORBEILLE À LA PLACE DE L'UTILISATEUR (conv-1341, 2026-10-30).
+ * LE MODE AUTO NE VIDE PAS LA CORBEILLE À LA PLACE DE L'UTILISATEUR (2026-10-30).
  *
  * Une suite libre ne passe par aucun filtre destructeur, seule une option de question le fait. Or le
  * `/gc` écrit la purge dans ses suites quand il la propose : le 13/10, le mode auto a renvoyé « Purge
  * définitivement les 8 corbeilles gc » tout seul, et l'agent a refusé de l'exécuter. Une consigne n'a
  * pas suffi : les passes des 27, 28 et 30/10 ont toutes réécrit la purge dans leur rubrique Recommandé,
- * celle du 28/10 aussi dans une ligne de suite (conv-1047). Les phrases ci-dessous sont les leurs.
+ * celle du 28/10 aussi dans une ligne de suite. Les phrases ci-dessous sont les leurs.
  * Aucune n'est partie sur ce fil. Le mode auto allumé, seul le gras de leur titre, que
  * `extractRecommendation` ne lit pas, aurait retenu celles des 27 et 30/10.
  *
- * Ce fichier a déjà souffert de règles trop larges (conv-787) : un fil qui supprime autre chose garde
+ * Ce fichier a déjà souffert de règles trop larges : un fil qui supprime autre chose garde
  * son enchaînement, et un fil de code sur la corbeille aussi si sa phrase commence par un verbe de
  * SUITE_DE_TRAVAIL. Sinon il s'arrête (« Teste la purge de la corbeille ») : ça coûte une réponse à la
- * main, et 3 suites réelles sur 7 306 sont dans ce cas (conv-504, 518 et 1279, mesuré le 31/10).
+ * main, et 3 suites réelles sur 7 306 sont dans ce cas (518 et 1279, mesuré le 31/10).
  */
 const humain = { role: 'user', content: '/gc passe quotidienne' } as Msg
 const base = {
@@ -95,11 +95,11 @@ describe('mode auto — une purge de corbeille attend toujours l’utilisateur',
 })
 
 /*
- * LES RÉPONSES EXACTES DE LA QUESTION DU `/gc` (conv-1341, objection du contrôle final, 2026-10-30).
+ * LES RÉPONSES EXACTES DE LA QUESTION DU `/gc` (objection du contrôle final, 2026-10-30).
  *
  * Le refus ci-dessus lisait la suite SEULE et exigeait le mot « corbeille » : « Oui, purge cette fois »,
  * que `skills/gc/SKILL.md` venait d'introduire, partait donc seule, comme « Purge both », texte réel de
- * la question du 28/10 (conv-1047, message 11). Ces phrases n'ont de sens que par la réponse qui les
+ * la question du 28/10 (message 11). Ces phrases n'ont de sens que par la réponse qui les
  * entoure, d'où les deux contextes réels ci-dessous : la rubrique de la passe et la question ouverte.
  */
 const passeGc = (suite: string): string =>
@@ -210,7 +210,7 @@ describe('mode auto — une question destructrice attend, dans tous les fils', (
 })
 
 /*
- * LA RELÈVE DE FIN DE CHAÎNE NE PASSE PAS DEVANT LA QUESTION (conv-1341, 2026-10-30).
+ * LA RELÈVE DE FIN DE CHAÎNE NE PASSE PAS DEVANT LA QUESTION (2026-10-30).
  *
  * `skills/gc/SKILL.md` fait finir par `AUTOWIN_FIN_V1` la passe qui pose la question de purge. Le mode
  * auto n'y répondait pas, puis, le fil affiché étant « fini », il envoyait la relève : un tour payant
@@ -240,7 +240,7 @@ describe('mode auto — une question destructrice arrête aussi la fin de chaîn
     expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject(arret)
   })
 
-  // Une fin devinée sur « rien » : AUTOWIN_FIN_V1, lui, éteint le fil affiché (conv-1575).
+  // Une fin devinée sur « rien » : AUTOWIN_FIN_V1, lui, éteint le fil affiché.
   it('jumeau : sans question, la fin de chaîne envoie toujours sa relève', () => {
     const fil = [humain, reponse('## À purger\n- rien\n\n⏳ Reste à faire : rien')]
     expect(deciderRelanceAuto({ ...affiche, fil })).toMatchObject({
@@ -298,7 +298,7 @@ describe('mode auto — ce qui n’est pas une purge de corbeille continue', () 
     expect(decider(texte)).toMatchObject({ action: 'envoyer' })
   })
 
-  // Phrases réelles de la passe du 24/10 (conv-1047, message 5) : le geste n'est pas en tête.
+  // Phrases réelles de la passe du 24/10 (message 5) : le geste n'est pas en tête.
   it.each([
     'Cherche pourquoi la copie %TEMP%\\aw-base-PaV9he\\copie du 23/10 16:10 (src/main/git/comparaison-a-la-base.ts) n’a pas été effacée par fermer(), puis retire-la proprement',
     'Relis le bilan de la corbeille du 16/10'
@@ -358,7 +358,7 @@ describe('mode auto — dans une passe /gc, il ne répond pas seul à la questio
 })
 
 /*
- * LE REFUS NE TIENT PLUS À UNE LISTE DE DÉBUTS DE PHRASE (conv-1341, objection du contrôle final,
+ * LE REFUS NE TIENT PLUS À UNE LISTE DE DÉBUTS DE PHRASE (objection du contrôle final,
  * 2026-10-31). Les phrases ci-dessous sont celles que le contrôle a fait partir seules dans le vrai
  * `deciderRelanceAuto`, plus leurs voisines : le geste n'est pas en tête, ou rien n'est nommé.
  */
@@ -439,7 +439,7 @@ describe('mode auto — le geste de purge s’arrête où qu’il soit dans la p
 })
 
 /*
- * TOUTE LA FAMILLE DU GESTE, PAS LA PHRASE CITÉE (conv-1341, 2026-10-31). Une sonde sur 285 formes en a
+ * TOUTE LA FAMILLE DU GESTE, PAS LA PHRASE CITÉE (2026-10-31). Une sonde sur 285 formes en a
  * fait partir 96 seules : « Jeter la corbeille », mais surtout « Supprime la corbeille », « Efface la
  * corbeille », « Delete the trash » : aucun verbe de suppression n'était lu hors de `gc-corbeille`, pour
  * épargner « Supprime le bouton Corbeille ». Le contrôle retrouvait chaque fois la variante d'à côté :
@@ -523,7 +523,7 @@ describe('mode auto — toutes les formes du geste s’arrêtent, sur toutes les
     'Vérifie que la corbeille a été supprimée',
     'Supprime les jetons expirés',
     'Supprime ce doublon dans X.ts',
-    // Tirées de suites réelles (conv-504, 518, 743, 1279, 1167), parfois abrégées : la corbeille y est
+    // Tirées de suites réelles (518, 743, 1279, 1167), parfois abrégées : la corbeille y est
     // un lieu ou une destination.
     'Déplace les 13 brouillons de la racine dans un dossier .corbeille/ plutôt que de les supprimer.',
     'Dis-moi ce qu’est page.html à la racine et s’il faut l’exclure, le déplacer dans .corbeille ou le garder.',
@@ -537,7 +537,7 @@ describe('mode auto — toutes les formes du geste s’arrêtent, sur toutes les
 })
 
 /*
- * RETIRER L'ACCORD SE LIT PAR CLAUSE (conv-1341, 2026-10-31). La règle regardait le début de toute la
+ * RETIRER L'ACCORD SE LIT PAR CLAUSE (2026-10-31). La règle regardait le début de toute la
  * phrase : « Supprime le bouton, puis crée gc-purge-auto.json » passait pour un retrait de l'accord,
  * alors qu'elle en pose un.
  */
@@ -575,7 +575,7 @@ describe('mode auto — poser l’accord après un autre retrait s’arrête', (
 })
 
 /*
- * LA CIBLE NE SE PERD PLUS À LA VIRGULE (conv-1341, contrôle final du 31/10). Chaque clause était jugée
+ * LA CIBLE NE SE PERD PLUS À LA VIRGULE (contrôle final du 31/10). Chaque clause était jugée
  * seule : « Vérifie la corbeille, puis fais-la disparaître » ouvre par un travail, et sa seconde clause
  * n'a plus de cible à lire. Ces phrases partaient seules. Celles qui n'ont pas de pronom (« puis fais de
  * la place ») montrent pourquoi la règle ne liste pas les pronoms : après la cible, seul un travail
@@ -756,7 +756,7 @@ describe('mode auto — il ne répond jamais à la question de purge, pas même 
 })
 
 /*
- * LA LISTE DE MOTS DE LIAISON EST CE QUI FUYAIT (nettoyage du 31/10, conv-1341). Une phrase ouverte par
+ * LA LISTE DE MOTS DE LIAISON EST CE QUI FUYAIT (nettoyage du 31/10). Une phrase ouverte par
  * un travail restait d'un seul tenant dès que son mot de liaison manquait à la liste : « mais », « sinon »,
  * une virgule sans espace, un « / ». Ajouter ces mots ne ferme que ces mots : tout ce qui suit la cible
  * est donc lu pour lui-même, quel que soit ce qui l'y relie. Les phrases ci-dessous sont celles que la
@@ -1033,7 +1033,7 @@ describe('mode auto — ce qui suit la cible se lit, quel que soit le mot qui l�
 })
 
 /*
- * AJOUTER, IMPLÉMENTER OU CORRIGER LE FICHIER D'ACCORD, C'EST L'ÉCRIRE (conv-1341, 2026-10-31).
+ * AJOUTER, IMPLÉMENTER OU CORRIGER LE FICHIER D'ACCORD, C'EST L'ÉCRIRE (2026-10-31).
  *
  * Ces trois verbes annoncent un travail partout ailleurs, mais leur complément direct est ici le fichier
  * qui autorise la purge. Seul le complément change la lecture : « Ajoute un test à gc-purge-auto.json »
@@ -1108,7 +1108,7 @@ describe('mode auto — écrire le fichier d’accord n’est pas un travail ord
 })
 
 /*
- * RELANCER LES TESTS N'EST PAS LANCER LE SCRIPT (conv-1341, 2026-10-31).
+ * RELANCER LES TESTS N'EST PAS LANCER LE SCRIPT (2026-10-31).
  *
  * Une suite de code sur ce script finit naturellement par « puis relance les tests », et toute phrase qui
  * le nommait avec le verbe s'arrêtait. Le verbe doit viser le script, pas les tests.
@@ -1152,7 +1152,7 @@ describe('mode auto — lancer les tests du script de purge reste du travail', (
 })
 
 /*
- * DEUX ANCIENNES RÈGLES CONTREDISAIENT LEURS VOISINES (conv-1341, 2026-10-31).
+ * DEUX ANCIENNES RÈGLES CONTREDISAIENT LEURS VOISINES (2026-10-31).
  *
  * Le verbe et la corbeille doivent être dans la même clause, et y déplacer se rattrape : rien ne testait
  * ces deux lignes, leur retrait laissait toute la suite verte. La première liste prouve qu'elles sont

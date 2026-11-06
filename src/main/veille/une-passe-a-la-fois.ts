@@ -26,7 +26,7 @@ export function unePasseALaFois<A extends unknown[], T>(
     // Les ARGUMENTS du premier appelant sont transmis : la garde precedente etait typee `() => Promise<T>`
     // et les avalait TOUS, meme sans passe concurrente. Le `conversationId` cree et ouvert par le bouton
     // « En generer plus » n'atteignait donc jamais le scout, qui s'en creait une seconde — la premiere
-    // restait VIDE dans la barre laterale (conv-465 et conv-466, creees a 5 ms d'ecart le 11/09/2026).
+    // restait VIDE dans la barre laterale (creees a 5 ms d'ecart le 11/09/2026).
     const passe = Promise.resolve().then(() => executer(...args))
     enCours = passe
     void passe.then(

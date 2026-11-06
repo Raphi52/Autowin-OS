@@ -7,7 +7,7 @@ import { corrigeSkillMalTapee, resolveSkillAlias } from '../../shared/skill-alia
 /**
  * `skill_charger` — LE MODELE CHOISIT LUI-MEME UNE SKILL, sans que l'utilisateur la tape.
  *
- * Demande du 2026-10-21 (conv-1034) : « que dynamiquement le modèle puisse choisir d'utiliser des
+ * Demande du 2026-10-21 : « que dynamiquement le modèle puisse choisir d'utiliser des
  * skills de autowin sans que je les invoque moi-même ». Cause localisée : le corps d'un SKILL.md
  * n'entrait dans le tour que par `invokedSkillId`/`skillNommeeSansBarre` (agent-pilot.ts), donc
  * seulement quand le MESSAGE DE L'UTILISATEUR commence par son nom. L'état remettait bien chaque

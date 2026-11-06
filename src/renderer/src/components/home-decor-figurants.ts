@@ -1,9 +1,9 @@
 /*
- * LE DEAL ET LE FUMEUR, REJOUÉS PAR DES HUMAINS RÉELS (conv-312, second tour).
+ * LE DEAL ET LE FUMEUR, REJOUÉS PAR DES HUMAINS RÉELS (second tour).
  *
  * Demande de l'utilisateur : « Refais le deal et le fumeur du fond d'Accueil avec des humains
  * Rocketbox animés par leurs gestes capturés, à côté des 18 passants ». Ces deux scènes venaient du
- * brouillon de conv-301 (« un deal avec le mec adossé au mur de ma photo initiale »), joué alors par
+ * brouillon (« un deal avec le mec adossé au mur de ma photo initiale »), joué alors par
  * des corps sculptés ; la direction « Heure de pointe » les avait retirées.
  *
  * Ce fichier ne contient QUE la chorégraphie, sans three.js : où est chacun, vers où il regarde et
@@ -24,7 +24,7 @@ export const GESTES = [
   'm_documents_take',
   'm_idle_look_around_02',
   'm_drink_drinking',
-  // le taggeur (conv-312, « met un pieton taggeur aussi ») : secouer la bombe, les grands traits
+  // le taggeur (« met un pieton taggeur aussi ») : secouer la bombe, les grands traits
   'm_work_mid',
   'm_wave_01'
 ] as const
@@ -193,7 +193,7 @@ export const GESTE_CLIENT: Record<Exclude<GesteClient, 'marche'>, NomGeste> = {
 }
 
 /*
- * LE TAGGEUR (conv-312) : « met un pieton taggeur aussi ». Face au mur tagué, il secoue sa bombe, trace
+ * LE TAGGEUR : « met un pieton taggeur aussi ». Face au mur tagué, il secoue sa bombe, trace
  * le mot en quatre traits — de loin vers nous, le sens où il se lit —, marche d'un trait au suivant,
  * puis surveille ses arrières. Rocketbox n'a pas de geste « bomber » : le trait est `m_wave_01`, le grand
  * balayage du bras droit (de côté, au-dessus de la tête, de côté), qui face au mur se lit comme un trait

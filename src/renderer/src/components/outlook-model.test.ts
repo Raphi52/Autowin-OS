@@ -476,7 +476,7 @@ describe('les pieces jointes RECUES traversent jusqu au message', () => {
   })
 
   it('garde le RANG de la piece, qui sert a l ouvrir, et ecarte un rang hors bornes', () => {
-    // conv-1220 : le rang est la position dans `Attachments` (base 1). Releve du 2026-10-28 sur la
+    // Le rang est la position dans `Attachments` (base 1). Releve du 2026-10-28 sur la
     // vraie boite : « RE: Bienvenue chez Passe Montagne ! » porte ses deux vraies pieces aux rangs 3
     // et 4, les rangs 1 et 2 etant des images de signature ecartees par l'instantane. Le rang n'est
     // donc PAS l'index dans la liste affichee.
@@ -528,7 +528,7 @@ describe('les pieces jointes RECUES traversent jusqu au message', () => {
       })
     ])
     const [premierFil] = groupThreads(contact)
-    // Le rang aussi : c'est lui que le clic sur le nom envoie a Outlook (conv-1220).
+    // Le rang aussi : c'est lui que le clic sur le nom envoie a Outlook.
     expect(premierFil.messages[0].pieces).toEqual([{ nom: 'note.pdf', taille: 2048, rang: 2 }])
   })
 })

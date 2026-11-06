@@ -1,7 +1,7 @@
 // Exécution des `<cmd>` d'une réponse du modèle, dans leur ordre : texte diffusé entre les
 // commandes, blocs illisibles signalés, `ask` borné à une question par tour, `orchestrate` gardé
 // par les deux lectures et par le verrou du tour, résultats comptés et bornés. Sortie telle quelle
-// de la boucle de AgentPilot.chat() (conv-1580, lot 4) : rend les résultats à réinjecter au modèle.
+// de la boucle de AgentPilot.chat() (lot 4) : rend les résultats à réinjecter au modèle.
 import { refusDeRepriseEstTransitoire, classifierRefusDeReprise } from '../runs/resume-refusal'
 import type { CommandResult } from '../commands/commands'
 import {
@@ -149,7 +149,7 @@ export async function executerLesCommandes(
       continue
     }
     if (token.name === 'ask' && etat.questionPoseeCeTour) {
-      // UNE SEULE QUESTION PAR TOUR. conv-844, turn 852bb2fd-25e4-40dd-a959-57d9337b084c : la
+      // UNE SEULE QUESTION PAR TOUR. Turn 852bb2fd-25e4-40dd-a959-57d9337b084c : la
       // relance « question sans lecture » a fait reposer la meme question -> 2 cartes a l'ecran.
       // La premiere est deja affichee : la seconde n'est pas emise.
       results.push('ask → une question est DÉJÀ affichée dans ce tour : ne la repose pas.')
@@ -158,7 +158,7 @@ export async function executerLesCommandes(
     }
     if (token.name === 'ask' && draftChoixParBoutons && askFaitChoisirUneProposition(token.args)) {
       // /draft : LE CHOIX SE FAIT PAR LES BOUTONS DU BLOC. Tours 938a67c1-78bc-4bc5-addf-865167663f44
-      // (conv-312) et c7d72274-db73-49bd-93fe-435f6647863a (conv-310) : `ask` sans aucun bloc de
+      // et c7d72274-db73-49bd-93fe-435f6647863a : `ask` sans aucun bloc de
       // choix, malgre la procedure. La question n'est pas affichee et le tour continue : le
       // modele recoit l'ordre de poser le carrousel (draft-choix-par-boutons.ts).
       emit({ kind: 'provider-status', iteration: i, text: STATUT_REFUS_ASK_DRAFT })
@@ -179,7 +179,7 @@ export async function executerLesCommandes(
       // Le run n'est PAS lancé : la question remplace l'orchestration (deux-lectures.ts).
       const issueAvantRun = await deuxLecturesDuTour('avant-d-agir')
       // Une lecture domine : le run part, mais sur ELLE (`rootTask` ci-dessous), et le fil la
-      // nomme (conv-1123).
+      // nomme.
       if (issueAvantRun?.kind === 'retenue') annoncerLaLectureRetenue(issueAvantRun)
       if (issueAvantRun?.kind === 'question') {
         await poserLaQuestionDesLectures(actionId, issueAvantRun.lectures)
@@ -210,7 +210,7 @@ export async function executerLesCommandes(
         ok: false,
         data: refusal
       })
-      // conv-1499 (2026-11-04) : « Termine avec son resultat » faisait RÉÉCRIRE la clôture déjà
+      // 2026-11-04 : « Termine avec son resultat » faisait RÉÉCRIRE la clôture déjà
       // affichée — trois blocs « ✅ Fait » empilés dans une seule bulle. Le texte du refus reste
       // tel quel (le fil le reconnaît à l'égalité, chat-view-model.ts) ; la consigne s'y ajoute.
       results.push(
@@ -225,7 +225,7 @@ export async function executerLesCommandes(
     signal?.throwIfAborted()
     const lectureRetenue = lectureRetenueDuTour()
     // `rootTask` est l'autorité du run (commands.ts) : la lecture annoncée y est jointe, sinon le
-    // run relirait la demande brute et pourrait faire l'autre lecture (conv-1123).
+    // run relirait la demande brute et pourrait faire l'autre lecture.
     const authoritativeArgs =
       token.name === 'orchestrate' && latestUserMessage
         ? {
@@ -256,7 +256,7 @@ export async function executerLesCommandes(
         )
     if (r.attachments?.length) etat.commandAttachments.push(...r.attachments)
     /*
-     * LA CAPTURE QUI SERT A VALIDER EST MONTREE (conv-1450).
+     * LA CAPTURE QUI SERT A VALIDER EST MONTREE.
      *
      * `attachments` alimentait uniquement le prochain prompt du modele : l'utilisateur ne voyait
      * jamais l'image sur laquelle reposait le verdict « c'est bon ». On la republie donc comme
@@ -282,7 +282,7 @@ export async function executerLesCommandes(
       })
     }
     /*
-     * CARTES DU FIL RENDUES PAR UNE COMMANDE (`show_video`, conv-253). Champ distinct
+     * CARTES DU FIL RENDUES PAR UNE COMMANDE (`show_video`). Champ distinct
      * d'`attachments` : elles s'affichent dans le fil et ne partent JAMAIS au modèle IA — une
      * vidéo dans `commandAttachments` serait envoyée au prochain appel.
      */
@@ -310,7 +310,7 @@ export async function executerLesCommandes(
         ...(echecRattrape ? { retryOf: echecRattrape } : {}),
         ...(r.attachments?.length ? { attachments: r.attachments } : {})
       })
-    // `montrer_bloc` (conv-1306) : même pose que par le canal direct, juste après le résultat.
+    // `montrer_bloc` : même pose que par le canal direct, juste après le résultat.
     for (const [index, bloc] of (r.blocs ?? []).entries())
       emit({
         kind: 'delta',
@@ -329,7 +329,7 @@ export async function executerLesCommandes(
         : failedOrchestrationOutcome(r.error)
       const deliveryClosed = r.ok && isDeliveredOrchestrationOutcome(outcome ?? {})
       /*
-       * UN REFUS TRANSITOIRE NE CONSOMME PAS LE VERROU DU TOUR (mesure conv-489, 2026-09-12).
+       * UN REFUS TRANSITOIRE NE CONSOMME PAS LE VERROU DU TOUR (2026-09-12).
        *
        * `orchestrationIssued` est pose AVANT l'execution, inconditionnellement : il protege
        * d'une SECONDE orchestration payante dans le meme tour. Mais « Reprise refusee : N
@@ -381,7 +381,7 @@ export async function executerLesCommandes(
        * LE MODELE REPREND LA PAROLE — decision utilisateur du 2026-08-27, et le contraire de ce
        * que ce chemin faisait.
        *
-       * Constate sur conv-1449 : le pied gabarit annoncait « 👉 Recommandé : faire exécuter le
+       * Constate : le pied gabarit annoncait « 👉 Recommandé : faire exécuter le
        * travail si le besoin n'est pas encore réalisé » quand le RUN.md du meme run portait
        * `### phase build` + `### phase judge`, la DoD cochee et `status: green`. Le gabarit DEVINE
        * la portee depuis `phaseOutputs` ; vide, il avoue une ignorance qui n'existe pas — tout en
@@ -405,9 +405,9 @@ export async function executerLesCommandes(
         closureNotice
       )
       etat.compteRenduOrchestration = compteRenduAutoritatif
-      // Le MODELE lit le resultat ENTIER (conv-914) ; `compteRenduAutoritatif`, coupe a 4 000
+      // Le MODELE lit le resultat ENTIER ; `compteRenduAutoritatif`, coupe a 4 000
       // caracteres, ne sert plus que de repli AFFICHE. La borne de tout resultat injecte
-      // (conv-312) protege seule la fenetre de contexte.
+      // protege seule la fenetre de contexte.
       const compteRenduPourLeModele = bornerResultatDeCommande(
         token.name,
         formatOrchestrationOutcomePourLeModele(
@@ -438,7 +438,7 @@ export async function executerLesCommandes(
       actionId
     ).reussie
     // BORNE OBLIGATOIRE : sans elle, une lecture volumineuse (`retrospective`, `read_file`,
-    // `conversation_read`) part telle quelle dans le prompt et tue le tour — conv-312, 2 860 957
+    // `conversation_read`) part telle quelle dans le prompt et tue le tour, 2 860 957
     // caracteres injectes, « Prompt is too long », fil devenu un cul-de-sac.
     results.push(
       bornerResultatDeCommande(

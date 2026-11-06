@@ -8,7 +8,7 @@ import * as issue from './issue-des-commandes'
 import * as jetons from './jetons-de-commande'
 
 /**
- * Le code libre de `agent-pilot.ts` vit dans `agent-pilot/*.ts` (conv-1580, lot 1) ;
+ * Le code libre de `agent-pilot.ts` vit dans `agent-pilot/*.ts` (lot 1) ;
  * `agent-pilot.ts` le ré-exporte pour ses importeurs, qui ne changent pas.
  *
  * Deux défauts possibles d'un déplacement, que le typage ne voit pas :

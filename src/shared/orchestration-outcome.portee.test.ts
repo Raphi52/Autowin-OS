@@ -146,7 +146,7 @@ describe('un livrable tronqué dit ce qui manque, et où', () => {
 })
 
 /*
- * CAS REEL conv-687 (18/09) : « scout comment améliorer le gameplay » en mode auto. Le run joue
+ * CAS REEL (18/09) : « scout comment améliorer le gameplay » en mode auto. Le run joue
  * scout puis frame ; la garde des cas limites REFUSE le cadrage (« ⛔ Cadrage incomplet … SUITE:
  * frame »). La clôture comptait pourtant frame comme acquis et recommandait « lancer terrain » — le
  * mode auto a sauté le cadrage. Une phase qui finit en demandant à être REFAITE n'est pas aboutie.

@@ -2,7 +2,7 @@ import { Component, type ReactNode } from 'react'
 import { BlocEnPanne } from './BlocEnPanne'
 
 /**
- * UNE PANNE RESTE DANS SON BLOC (conv-1327, 2026-10-30).
+ * UNE PANNE RESTE DANS SON BLOC (2026-10-30).
  *
  * L'interface n'avait aucune barrière : à 14:14:00, `phrases.get is not a function` dans
  * `BandeauSuperConv` a fait démonter TOUT l'arbre React, et il ne restait que le fond noir du thème

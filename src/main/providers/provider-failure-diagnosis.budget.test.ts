@@ -8,7 +8,7 @@ import {
 /**
  * UN BUDGET ÉPUISÉ N'EST PAS UNE PANNE DU RÔLE QUI SE LE VOIT REFUSER.
  *
- * Mesuré sur le run réel conv-1102 (vue Worktrees, 11/08). Message rendu à l'utilisateur :
+ * Mesuré sur le run réel (vue Worktrees, 11/08). Message rendu à l'utilisateur :
  *   « verdict — le rôle judge est bindé sur claude (claude-opus-5) :
  *     Budget tokens total depasse (9639639/2500000) »
  * Or la trace du même appel porte `"durationMs": 0.698` : l'appel du juge a été REFUSÉ à

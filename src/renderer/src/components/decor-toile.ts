@@ -1,7 +1,7 @@
 /**
  * Un canevas 2D pour dessiner une texture du décor — dans la page COMME dans un Worker.
  *
- * Depuis le 2026-10-18 (conv-323), le fond avenue se dessine dans un Worker (decor-avenue.worker.ts) :
+ * Depuis le 2026-10-18, le fond avenue se dessine dans un Worker (decor-avenue.worker.ts) :
  * il n'y a là ni `document` ni `HTMLCanvasElement`, mais un `OffscreenCanvas`, qui a la même surface
  * de dessin 2D (getContext('2d'), width, height) et que three accepte comme image de CanvasTexture.
  * Le type rendu reste `HTMLCanvasElement` pour ne pas réécrire chaque appelant : seules ces trois

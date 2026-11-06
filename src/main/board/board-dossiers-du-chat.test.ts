@@ -9,7 +9,7 @@ import {
 } from './board-dossiers-du-chat'
 
 /**
- * La liste des dossiers du Chat gardée sur le poste (conv-1212). Entrée qui doit faire échouer ce
+ * La liste des dossiers du Chat gardée sur le poste. Entrée qui doit faire échouer ce
  * fichier : une liste perdue au redémarrage (la recopie de fin de tour renverrait alors tout sur le
  * partage), ou un fichier illisible qui ferait échouer le Board.
  */

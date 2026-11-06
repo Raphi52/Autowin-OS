@@ -74,7 +74,7 @@ describe('hook du CLI — un run n’écrit pas dans le mod Autowin du dépôt p
 
   it('au site d’appel : la garde courante reçoit le dossier du mod chargé', () => {
     expect(readFileSync(join(__dirname, '../providers/claude.ts'), 'utf8')).toMatch(
-      // `[,)]` : un argument peut suivre le dossier du mod (le fichier de rappels, conv-1457).
+      // `[,)]` : un argument peut suivre le dossier du mod (le fichier de rappels).
       /scriptHookGardes\(refusReglageProd, refusSqlAgent, basesNonProdDeclarees\(\), dossierModsAutowin[,)]/
     )
   })

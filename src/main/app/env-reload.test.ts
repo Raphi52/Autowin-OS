@@ -8,7 +8,7 @@ import { sharedBrainOrigin } from '../brain/brain-paths'
 /**
  * CE QUE CE TEST PROUVE : le plafond de `verify` change SANS redemarrage.
  *
- * DEFAUT VECU (conv-1516) : `setx AUTOWIN_VERIFY_TIMEOUT_MS 86400000` a reussi (exit 0, valeur
+ * DEFAUT VECU : `setx AUTOWIN_VERIFY_TIMEOUT_MS 86400000` a reussi (exit 0, valeur
  * relue dans `HKCU\Environment`) et le processus principal a continue de couper a 600 s, parce que
  * `process.env` est fige au lancement. La valeur existait, personne ne la lisait.
  *
@@ -63,7 +63,7 @@ describe('reload_env — recharger une variable a chaud', () => {
   })
 
   /**
-   * DEFAUT VECU (conv-8, 2026-09-03) : le service Brain ecoutait 8766, le processus principal
+   * DEFAUT VECU (2026-09-03) : le service Brain ecoutait 8766, le processus principal
    * retombait sur le defaut 8765 parce que `ACME_BRAIN_ORIGIN` n'etait persistee NULLE PART —
    * elle ne vivait que dans le shell ou elle avait ete tapee. Chaque `brain_query` rendait
    * « indisponible » en 15 ms (connexion refusee), et l'origine n'etait pas rechargeable : la

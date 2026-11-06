@@ -5,7 +5,7 @@ import { grouperConversations } from '../../renderer/src/components/conversation
 /**
  * UN LIBELLE DE CLASSEMENT N'EST PAS UN DOSSIER DE TRAVAIL.
  *
- * Defaut vecu (conv-81, 2026-09-16) : `projectPath` portait DEUX roles a la fois — le dossier ou
+ * Defaut vecu (2026-09-16) : `projectPath` portait DEUX roles a la fois — le dossier ou
  * l'agent travaille, et la categorie qui groupe la conversation dans la barre laterale. Classer une
  * conversation sous « Perso » ecrivait donc « Perso » comme dossier de travail : le tour partait
  * quand meme dans le depot d'Autowin (avec un avertissement, `bascule-dossier-conversation.ts`), et
@@ -24,7 +24,7 @@ function horloge(depart = 1000): () => number {
 const neuve = (store: ConversationStore): string =>
   store.create({ title: 'A', provider: 'claude' }).id
 
-// fix-ok: conv-81 — test dédié à la cause mesurée : projectPath portait deux rôles, le magasin route désormais sur la FORME de la valeur et déplace le libellé à la relecture.
+// fix-ok: test dédié à la cause mesurée : projectPath portait deux rôles, le magasin route désormais sur la FORME de la valeur et déplace le libellé à la relecture.
 describe('un libelle de classement ne devient jamais un dossier de travail', () => {
   it('classer sous un LIBELLE renseigne `categorie` et laisse `projectPath` vide', () => {
     const store = new ConversationStore(horloge())

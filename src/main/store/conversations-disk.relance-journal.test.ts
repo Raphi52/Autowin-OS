@@ -1,10 +1,10 @@
 /**
- * INCIDENT du 2026-10-05 08:04 — conv-571, conv-572 et conv-573 absentes après la relance.
+ * INCIDENT du 2026-10-05 08:04 — des fils absentes après la relance.
  *
  * Faits relevés sur `.autowin-data/autowin-os` :
  * - snapshot `conversations.json` figé au 02/10 (démarrage précédent), conversations créées depuis
  *   présentes UNIQUEMENT dans le journal (18 / 29 / 14 lignes à 08:00, mesuré par la passe /gc) ;
- * - la relance de 08:04:51 a bien REJOUÉ ce journal : les changements de conv-570 postérieurs au
+ * - la relance de 08:04:51 a bien REJOUÉ ce journal : les changements postérieurs au
  *   snapshot (dernier à 14:57Z le 02/10) sont dans le nouveau snapshot, et le démarrage n'a affiché
  *   aucune « ligne de journal écartée » ;
  * - les fichiers annexes des trois conversations ont TOUS disparu, y compris
@@ -30,7 +30,7 @@ import {
 const dir = mkdtempSync(join(tmpdir(), 'aos-relance-journal-'))
 afterAll(() => rmSync(dir, { recursive: true, force: true }))
 
-/** Une session : un fil existant (conv-570 du snapshot) + trois fils créés par les tâches planifiées. */
+/** Une session : un fil existant (Un fil du snapshot) + trois fils créés par les tâches planifiées. */
 async function sessionAvecFilsSeulementDansLeJournal(p: string): Promise<{
   store: ConversationStore
   quitter: () => void
@@ -47,7 +47,7 @@ async function sessionAvecFilsSeulementDansLeJournal(p: string): Promise<{
   let horloge = 2000
   const store = new ConversationStore(() => horloge++)
   const quitter = persistConversations(store, p)
-  // La compaction de démarrage est posée hors du fil principal (conv-359) : on l'attend.
+  // La compaction de démarrage est posée hors du fil principal : on l'attend.
   await attendreEcrituresConversations()
   expect(existsSync(conversationJournalPath(p))).toBe(false)
 
@@ -102,7 +102,7 @@ describe('relance avec journal présent (incident du 05/10 08:04)', () => {
     avertissement.mockRestore()
 
     expect(ids.map((id) => relance.get(id))).toEqual([undefined, undefined, undefined])
-    // Le fil ancien, lui, garde sa suite rejouée depuis le même journal (conv-570 le 05/10).
+    // Le fil ancien, lui, garde sa suite rejouée depuis le même journal (Un fil le 05/10).
     expect(relance.get(ancien)?.messages.at(-1)?.content).toBe('suite du 02/10 après le snapshot')
     expect(avertissements).toBe(0)
     // Le plancher d'identifiants a tenu : un fil neuf ne réutilise pas un id supprimé.

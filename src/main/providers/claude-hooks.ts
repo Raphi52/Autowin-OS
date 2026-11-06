@@ -76,7 +76,7 @@ function listProviderHooks(providerId: string, projectRoot = process.cwd()): Cla
 /** Wrappers de compat (API stable) — délèguent au générique ci-dessus. */
 export function listClaudeHooks(projectRoot = process.cwd()): ClaudeHookItem[] {
   // Les gardes qu'Autowin INJECTE dans ses runs d'abord : ce sont les seuls hooks qui tournent
-  // vraiment dans un run (le settings.json utilisateur n'y est pas chargé, conv-58).
+  // vraiment dans un run (le settings.json utilisateur n'y est pas chargé).
   return [...gardesInjecteesAutowin(), ...listProviderHooks('claude', projectRoot)]
 }
 

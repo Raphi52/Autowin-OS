@@ -22,7 +22,7 @@ import * as tickets from './tickets'
 import * as worktreesEtBureaux from './worktrees-et-bureaux'
 
 /**
- * LES TABLES DE TEXTES DES ÉCRANS (traduction anglaise, conv-1170). Entrée qui doit faire échouer ce
+ * LES TABLES DE TEXTES DES ÉCRANS (traduction anglaise). Entrée qui doit faire échouer ce
  * fichier : une clé dont l'anglais est vide (l'écran retomberait en silence sur le français), un
  * anglais recopié du français sans raison déclarée, une `{valeur}` présente d'un seul côté (elle
  * s'afficherait brute, ou disparaîtrait), une raison d'identité devenue fausse, ou une table ajoutée

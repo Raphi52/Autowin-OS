@@ -91,7 +91,7 @@ export function SandboxedHtmlPreview({
   enforceInlineLimit = true
 }: SandboxedHtmlPreviewProps): React.JSX.Element {
   const { t } = useTextesArtefactsEtBandeaux()
-  // Sans titre fourni, « Rendu HTML » dans la langue courante (conv-1170).
+  // Sans titre fourni, « Rendu HTML » dans la langue courante.
   const title = titreDonne ?? t('html.titre')
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
   const [reloadVersion, setReloadVersion] = useState(0)

@@ -1,7 +1,7 @@
 /**
  * PLAFOND D'UN RESULTAT DE COMMANDE INJECTE DANS LE PROMPT.
  *
- * Mesure du 2026-09-06 (conv-312, trace `prompt-observability/conv-312.jsonl`) : un appel
+ * Mesure du 2026-09-06 (trace `prompt-observability/conv-312.jsonl`) : un appel
  * `retrospective` a rendu 2 860 957 caracteres, recopies TELS QUELS dans le message du tour.
  * Le prompt final pesait 3 120 985 caracteres — environ 890 k tokens pour une fenetre de 200 k.
  * Le fournisseur a repondu « Prompt is too long », le tour est mort, et la RELANCE rejouait le
@@ -17,13 +17,13 @@
  * Le plafond se regle par AUTOWIN_MAX_RESULTAT_COMMANDE_CHARS : une fenetre de contexte n'est pas
  * la meme d'un modele a l'autre, et l'exploitation doit pouvoir serrer (ou desserrer) sans rebuild.
  * Toute valeur inutilisable — absente, mal typee, nulle, negative — RETOMBE sur les 120 000 par
- * defaut : un reglage fautif ne doit jamais rouvrir le cul-de-sac de conv-312.
+ * defaut : un reglage fautif ne doit jamais rouvrir le cul-de-sac.
  */
 export const CARACTERES_MAX_RESULTAT_COMMANDE_PAR_DEFAUT = 120_000
 
 /**
- * BORNE HAUTE du reglage. Un plafond reglable sans maximum rouvre exactement le cul-de-sac de
- * conv-312 : il suffit d'ecrire 10000000 pour laisser repasser les 2 860 957 caracteres qui ont
+ * BORNE HAUTE du reglage. Un plafond reglable sans maximum rouvre exactement le cul-de-sac
+ * Il suffit d'ecrire 10000000 pour laisser repasser les 2 860 957 caracteres qui ont
  * tue le tour. 400 000 caracteres valent environ 115 k tokens — cela tient dans une fenetre de
  * 200 k en laissant la place au reste du prompt. Toute valeur au-dessus est ECRETEE, jamais
  * refusee : un reglage trop genereux doit degrader vers le sur, pas casser le demarrage.

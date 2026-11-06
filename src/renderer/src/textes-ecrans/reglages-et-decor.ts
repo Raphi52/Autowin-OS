@@ -1,7 +1,7 @@
 import { tableDeTextes } from '../textes'
 
 /**
- * TEXTES — NOMS DES THÈMES, MASCOTTE, DÉCORS DE L’ACCUEIL ET DERNIERS FICHIERS (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — NOMS DES THÈMES, MASCOTTE, DÉCORS DE L’ACCUEIL ET DERNIERS FICHIERS (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : theme-mode, MascotteReglage, NomSurLeBoardReglage, les décors animés de l’accueil (`home-decor-*`), la réparation du
  * diagnostic, le traitement des tickets et les derniers textes isolés.
@@ -25,7 +25,7 @@ export const TEXTES_FR = {
   'mascotte.erreurLecture': 'Le réglage de la mascotte n’a pas pu être lu.',
   'mascotte.erreurEnregistrement':
     'Le choix n’a pas pu être enregistré : la mascotte reste comme avant.',
-  // Le choix « Magicien / Basique » (conv-1249).
+  // Le choix « Magicien / Basique ».
   'mascotte.style.titre': 'Style de la mascotte',
   'mascotte.style.description':
     'Le **magicien** porte un chapeau où brille le nombre, et lance des sorts quand un agent travaille. La **bille basique** reste une bille seule, le nombre au milieu. La **machine** de NieR somnole au repos, visse au travail, salue quand c’est fini et fume en cas d’erreur ; c’est elle que montre le thème NieR. Le changement est immédiat ; la mascotte garde sa place.',
@@ -33,7 +33,7 @@ export const TEXTES_FR = {
   'mascotte.style.basique': 'Basique',
   'mascotte.style.machine': 'Machine (NieR)',
 
-  // Settings · Interface — « Ton nom sur le Board » (NomSurLeBoardReglage.tsx, conv-1230).
+  // Settings · Interface — « Ton nom sur le Board » (NomSurLeBoardReglage.tsx).
   'nomBoard.titre': 'Ton nom sur le Board',
   'nomBoard.description':
     'Le nom écrit sur **tes post-it**, dans ton Board et dans celui des **collègues** qui partagent le même dossier. Par défaut, ton **compte Windows** ({compte}).',
@@ -42,7 +42,7 @@ export const TEXTES_FR = {
   'nomBoard.parDefaut': 'Revenir au compte Windows',
   'nomBoard.erreurLecture': 'Le nom du Board n’a pas pu être lu.',
   'nomBoard.erreurEnregistrement': 'Le nom n’a pas pu être enregistré : il reste comme avant.',
-  // Settings · Interface — partage de la présence dans le village commun (D6, conv-1429).
+  // Settings · Interface — partage de la présence dans le village commun (D6).
   'presence.titre': 'Tes agents dans le village de l’équipe',
   'presence.description':
     'Tes **tanukis** apparaissent dans l’Accueil des **collègues** qui partagent le même dossier du Board. Seul le **titre du fil** part, sans chemin, adresse, long numéro ni identifiant ; un fil **privé** part sans titre. Coupé, **plus rien** n’est partagé.',

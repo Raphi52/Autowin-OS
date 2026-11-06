@@ -1,11 +1,11 @@
 /**
  * LE BOARD NE MONTRE QUE LES DOSSIERS DE TRAVAIL DU CHAT (demande utilisateur du 2026-10-28,
- * conv-1212 : « ça doit vraiment être uniquement mes CWD de la partie chat, et quand je les supprime
+ * « ça doit vraiment être uniquement mes CWD de la partie chat, et quand je les supprime
  * ça doit aussi les supprimer là-bas »).
  *
  * Avant : un projet du Board était tout groupe de `groupeDe` portant une demande ou un run bloqué.
- * Deux intrus s'y montraient : « depot », un dossier de mesure oublié (`D:\mesure-skills\depot`,
- * conv-1036), et « Divers », les runs bloqués dont le fil n'existe plus.
+ * Deux intrus s'y montraient : « depot », un dossier de mesure oublié (`D:\mesure-skills\depot`),
+ * et « Divers », les runs bloqués dont le fil n'existe plus.
  *
  * Désormais un projet du Board est un dossier de la liste du Chat — celle du menu « Ranger dans… »,
  * avec sa croix (`autowin.conv-folders.connus`) —, plus les dossiers que le Chat propose toujours :
@@ -13,7 +13,7 @@
  * Le dépôt par défaut se retire aussi depuis le Board (même jour : « des éléments que je ne peux
  * même pas supprimer, ils n'ont pas la petite croix ») : la croix le range dans la mémoire des
  * retraits (`autowin.conv-folders.retires`), et il quitte le Board comme le menu du Chat.
- * « This computer », LUI, NE SE RETIRE JAMAIS (même jour, conv-1231 : « j'ai perdu le this computer,
+ * « This computer », LUI, NE SE RETIRE JAMAIS (même jour, « j'ai perdu le this computer,
  * il doit être impossible à supprimer ») : c'est le dossier des fils sans projet et des agents
  * réveillés (`chat-dispatch.ts`). Un retrait déjà mémorisé à son nom est ignoré (`irretirables`).
  * La règle est appliquée par le processus principal AVANT l'affichage ET avant la copie vers le
@@ -68,7 +68,7 @@ export function carteDesDossiersDuChat(
  * Les dossiers que le Board montre : ceux du Chat, plus ceux qu'il propose toujours (dépôt par
  * défaut, « This computer »), sauf ceux-là quand une croix les a retirés. Les dossiers du Chat ne
  * sont pas filtrés par les retraits : le Chat les affiche tels quels, et le Board suit le Chat.
- * `irretirables` (« This computer », conv-1231) restent même retirés : une croix d'avant la règle a
+ * `irretirables` (« This computer ») restent même retirés : une croix d'avant la règle a
  * pu en garder la trace dans la mémoire des retraits.
  */
 export function dossiersDuBoard(

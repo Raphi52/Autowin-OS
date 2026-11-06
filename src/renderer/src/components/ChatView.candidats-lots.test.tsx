@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LES LOTS DU WORKFLOW INTELLIGENT, CÂBLÉS DANS LE FIL (conv-1080, 2026-10-22).
+ * LES LOTS DU WORKFLOW INTELLIGENT, CÂBLÉS DANS LE FIL (2026-10-22).
  *
  * Le panneau découpe une sélection mixte en lots ; ChatView doit envoyer le PREMIER tout de suite et
  * garder les suivants dans la file du fil, visibles (reçu « Lot suivant »), jusqu'à la fin du tour.
@@ -180,7 +180,7 @@ describe('ChatView — les lots d’une sélection scout', () => {
     expect(pilotChat.mock.calls[1]![1], 'il part dans le fil A, pas dans celui affiché').toBe('A')
   })
 
-  /** Le refus RÉELLEMENT enregistré sur un tour coupé (conv-1055, tour de 11:01). */
+  /** Le refus RÉELLEMENT enregistré sur un tour coupé (tour de 11:01). */
   const REFUS_QUOTA =
     "Claude a interrompu l'appel : You've hit your session limit · resets 11:30am (Europe/Paris)"
 
@@ -269,7 +269,7 @@ describe('ChatView — les lots d’une sélection scout', () => {
    * LA FIN DU TOUR S'AFFICHE AVANT LA RÉPONSE DE `pilotChat` — l'ordre où le main les envoie, chacun
    * dans son message : la vue peut se redessiner entre les deux. Le fil y redevient libre (`busy`
    * tombe au `done`) alors que le verrou d'envoi tient jusqu'à la réponse. Le lot 2 sortait de la
-   * file, butait sur ce verrou et disparaissait sans un mot (même perte que conv-996, côté file).
+   * file, butait sur ce verrou et disparaissait sans un mot (même perte que, côté file).
    */
   it('fin du tour affichée avant la réponse de pilotChat : le lot 2 part quand même, après elle', async () => {
     const { pilotChat, emettre, repondre } = await monterAvecLots()

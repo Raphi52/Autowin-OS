@@ -2,7 +2,7 @@
 // (`etat-du-tour.ts`) et rend la relance à envoyer au modèle — consignes poussées dans le fil,
 // motif de l'itération accordée en plus du cap, réponse affichée à remplacer —, ou rien ; quand il
 // mord, il consomme lui-même son crédit. AgentPilot.chat() garde l'ORDRE des contrôles et l'envoi.
-// Sortis tels quels de la boucle de chat(), textes compris (conv-1580, lot 4).
+// Sortis tels quels de la boucle de chat(), textes compris (lot 4).
 import { cheminsRelatifsCites, relanceCheminsComplets } from '../fichiers/chemins-complets'
 import {
   blocVisuelNonFerme,
@@ -49,7 +49,7 @@ export interface Relance {
 export function consignesDuBudget(etat: EtatDuTour, i: number): string[] {
   const consignes: string[] = []
   /**
-   * CAP RÉINJECTÉ COMME CONSIGNE DE CLÔTURE FORCÉE (conv-1485).
+   * CAP RÉINJECTÉ COMME CONSIGNE DE CLÔTURE FORCÉE.
    *
    * Le modèle ignorait tout du cap : il continuait d'agir jusqu'à ce que la boucle meure sur
    * « Cap d'itérations (N) atteint sans réponse finale », en jetant le texte déjà dit. On le
@@ -61,7 +61,7 @@ export function consignesDuBudget(etat: EtatDuTour, i: number): string[] {
    * BUDGET DU TOUR ANNONCE A MI-PARCOURS, PAS SEULEMENT AU DERNIER APPEL.
    *
    * Le modele n'apprenait son cap qu'a `iterationLimit - 1` : a cet instant il ne peut plus
-   * changer de methode, seulement CONSTATER. Mesure le 2026-09-03 (conv-10) : douze iterations
+   * changer de methode, seulement CONSTATER. Mesure le 2026-09-03 : douze iterations
    * depensees une par une en lecture (un `read_file` par appel), la seule ecriture tentee au
    * douzieme — et refusee. L'utilisateur a recu un diagnostic la ou il demandait un correctif,
    * alors que le levier existait des le premier appel : plusieurs commandes tiennent dans UN
@@ -279,7 +279,7 @@ export function relanceCorrectionApresEchec(tour: ContexteDuTour): Relance | und
 }
 
 /**
- * UNE ACTION A ECHOUE ET LA REPONSE N'EN DIT RIEN. Trouve dans `conv-1178` : dernier
+ * UNE ACTION A ECHOUE ET LA REPONSE N'EN DIT RIEN. Trouve : dernier
  * `edit_file` en `ok:false`, et le texte lu se termine par « ✅ Fait ». Un bloc de cloture
  * rendu obligatoire sans exigence d'honnetete produit un faux vert qui RASSURE.
  */
@@ -327,7 +327,7 @@ export function relanceGesteRendu(tour: ContexteDuTour): Relance | undefined {
 }
 
 /*
- * DU CODE ÉCRIT SANS PREUVE RETENUE (conv-1423). Une seule fois, et jamais bloquant : si
+ * DU CODE ÉCRIT SANS PREUVE RETENUE. Une seule fois, et jamais bloquant : si
  * l'agent ne fait rien de la relance, le tour finit normalement et le Board dit vrai. Un tour
  * de fond n'a personne devant lui pour le coût d'un appel de plus.
  * fix-ok: rouge resté en place sans aucune relance, mesuré du 29/10 au 01/11 sur 139 demandes
@@ -489,7 +489,7 @@ export function relanceChiffreNonVerifie(tour: ContexteDuTour): Relance | undefi
       latestUserMessage,
       etat.visibleTextThisTurn,
       etat.anyReadExecuted || etat.sortieDeCommandeObservee,
-      // conv-335 : une réponse recollée dans son message n'est pas SA demande de compte.
+      // Une réponse recollée dans son message n'est pas SA demande de compte.
       history.filter((message) => message.role === 'assistant').map((message) => message.content)
     )
   ) {
@@ -514,7 +514,7 @@ export function relanceChiffreNonVerifie(tour: ContexteDuTour): Relance | undefi
 /*
  * LE RACCOURCI NE DOIT PAS AVALER LA GARDE DE CLOTURE.
  *
- * Mesure conv-34 (2026-09-01) : « j'ai pas eu de bloc de fin ». `exigeUneConclusion` vit dans
+ * Mesure (2026-09-01) : « j'ai pas eu de bloc de fin ». `exigeUneConclusion` vit dans
  * la branche SANS commande (plus haut) ; ce `return` la rendait INATTEIGNABLE des qu'un tour
  * finit par « texte + remember » — le cas le plus courant d'un tour de kaizen, qui depose
  * justement sa lecon en dernier. Le tour se cloturait sur une phrase d'intention, sans ✅ Fait
@@ -572,7 +572,7 @@ export function relanceRepriseRemember(
 }
 
 // Même raccourci, même risque que la clôture ci-dessus : un tour qui finit par retenir une
-// leçon échapperait sinon au contrôle des chemins (conv-1335).
+// leçon échapperait sinon au contrôle des chemins.
 export function relanceCheminsApresRemember(
   tour: ContexteDuTour,
   onlyAuxiliaryRemember: boolean,

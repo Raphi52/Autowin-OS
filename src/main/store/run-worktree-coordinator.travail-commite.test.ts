@@ -5,7 +5,7 @@ import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 import { git, manager, nettoyerRacines, tempRepo } from './worktree-manager.test-helpers'
 
 /*
- * UN TRAVAIL DÉJÀ COMMITÉ DANS LA COPIE N'EST PAS UNE COPIE VIDE (conv-1074, 2026-10-22).
+ * UN TRAVAIL DÉJÀ COMMITÉ DANS LA COPIE N'EST PAS UNE COPIE VIDE (2026-10-22).
  *
  * Vécu : run-bc699a65bae7-1, juge 88/100, fusion refusée `base-dirty` (7 fichiers du commit
  * modifiés sans être commités dans le dépôt réel). L'agent avait commité ses 35 fichiers DANS sa

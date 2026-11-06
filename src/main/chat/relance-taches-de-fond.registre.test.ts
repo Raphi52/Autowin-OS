@@ -9,7 +9,7 @@ import {
 /*
  * Le relanceur INSCRIT ce qu'il fait tourner dans le registre lu par `claude.ts` et `commands.ts`.
  * Sans cette inscription, le registre reste vide en production et le tour suivant redit
- * « son résultat est perdu » (conv-253, tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e).
+ * « son résultat est perdu » (tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e).
  */
 
 function deps(lotsSurDisque: TacheRelancee[][] = []) {

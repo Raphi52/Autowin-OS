@@ -13,7 +13,7 @@ import { RiviereDuProjet } from './RiviereDuProjet'
 import type { BilanDeVerification } from './verification-du-board'
 
 /**
- * LE TABLEAU DE LIÈGE ET SES PUNAISES (conv-1204, 2026-10-28) : « le tableau de fond du board doit
+ * LE TABLEAU DE LIÈGE ET SES PUNAISES (2026-10-28) : « le tableau de fond du board doit
  * simuler un tableau en liège, les aimants disparaissent au profit d'une punaise au centre du
  * post-it […] les couleurs des punaises c'est une couleur par personne ». ENTRÉES QUI DOIVENT FAIRE
  * ÉCHOUER : un aimant encore rendu, un post-it sans punaise, deux personnes de même couleur (y
@@ -154,7 +154,7 @@ describe('RiviereDuProjet — liège et punaises (conv-1204)', () => {
     expect(regle('.riviere-cadre')).toMatch(
       /background:[^;]*url\("data:image\/svg\+xml[^]*feTurbulence/u
     )
-    // L'ombre dégradée (conv-1536) est une couche de CETTE déclaration, posée avant le grain (donc
+    // L'ombre dégradée est une couche de CETTE déclaration, posée avant le grain (donc
     // peinte au-dessus) : portée par le même `url(`, aucune couche générée ne la recopie. Peinte
     // seule sur `.riviere-plateau`, la couche claire changeait son brun en blanc et Ninja en gris.
     expect(regle('.riviere-cadre')).toMatch(/background:\s*radial-gradient\([^;]*url\("data:image/u)
@@ -187,12 +187,12 @@ describe('RiviereDuProjet — liège et punaises (conv-1204)', () => {
   })
 
   // « dans le board les boutons verifier apparaissent que quand ma souris est dans le haut de la
-  // carte » (conv-1214, 2026-10-28). Mesuré dans l'app (souris CDP, 2133 × 1146) : les boutons d'un
+  // carte » (2026-10-28). Mesuré dans l'app (souris CDP, 2133 × 1146) : les boutons d'un
   // post-it, posés sous lui, tombaient sur les 14 premiers pixels du post-it du dessous — l'écart
   // entre deux lignes (8 × k) est plus court que les boutons (20 px). Ils semblaient donc appartenir
   // à celui-là, et disparaissaient dès que la souris descendait plus bas dans sa carte.
   it('les gestes d’un post-it « À vérifier » ne mordent jamais sur le post-it du dessous', async () => {
-    /** La hauteur des deux boutons à l'échelle 1, mesurée dans Chromium (conv-1214). */
+    /** La hauteur des deux boutons à l'échelle 1, mesurée dans Chromium. */
     const HAUT_MESURE_DES_GESTES = 20
     const el = await monter(carte(8), true)
     const papiers = [...el.querySelectorAll<HTMLElement>('[data-testid="riviere-postit"]')].map(
@@ -223,7 +223,7 @@ describe('RiviereDuProjet — liège et punaises (conv-1204)', () => {
     expect(dessous).toBeGreaterThan(0)
   })
 
-  // « réduis un peu la taille de la police et passe à 4 lignes le contenu des post it » (conv-1204).
+  // « réduis un peu la taille de la police et passe à 4 lignes le contenu des post it ».
   it('le titre d’un post-it tient sur 4 lignes, dans une police plus petite qu’avant', () => {
     const css = readFileSync('src/renderer/src/components/RiviereDuProjet.css', 'utf8')
     // La règle propre au sélecteur, en début de ligne : `.riviere-postit[data-taille='puce']

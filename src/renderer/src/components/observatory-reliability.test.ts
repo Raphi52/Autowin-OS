@@ -52,7 +52,7 @@ describe('Observatory reliability', () => {
 
     expect(source).toContain('causalRequestGate.current.begin()')
     expect(source).toContain('causalRequestGate.current.isCurrent(requestId)')
-    // Les textes vivent dans la table de l'écran depuis la traduction anglaise (conv-1184) : la vue
+    // Les textes vivent dans la table de l'écran depuis la traduction anglaise : la vue
     // porte la clé, la table garde le français mot pour mot.
     expect(source).toContain("t('vue.certainesSourcesTelemetrieSont')")
     expect(source).toContain("t('vue.reessayer')")

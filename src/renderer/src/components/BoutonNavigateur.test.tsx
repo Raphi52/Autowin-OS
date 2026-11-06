@@ -13,7 +13,7 @@ import {
 import { siteDeLAdresse } from './navigateur-integre-outils'
 
 /**
- * LA MINI-ADRESSE (/draft de conv-1317, proposition 6) : le bouton de l'en-tête du fil montre le site
+ * LA MINI-ADRESSE (proposition 6) : le bouton de l'en-tête du fil montre le site
  * de l'onglet actif, panneau fermé.
  *
  * Entrées qui doivent faire échouer ce fichier : le site d'un AUTRE fil affiché dans celui-ci (l'état
@@ -92,7 +92,7 @@ describe('siteDeLAdresse', () => {
   })
 })
 
-// conv-1378 : les Bureaux cachés sont un icône à côté de celui du navigateur.
+// Les Bureaux cachés sont un icône à côté de celui du navigateur.
 describe('BoutonBureauxCaches', () => {
   let conteneur: HTMLDivElement
   let racine: Root | null = null
@@ -283,7 +283,7 @@ describe('BoutonNavigateur', () => {
     expect(site()).toBeNull()
   })
 
-  // Mesuré dans l'app (conv-1317) : panneau ouvert, le site faisait déborder l'en-tête de 37 px à
+  // Mesuré dans l'app : panneau ouvert, le site faisait déborder l'en-tête de 37 px à
   // 1280 px de large et poussait le bouton sous le panneau à 1180 px.
   describe('quand l’en-tête manque de place', () => {
     let observateurs: { cible: Element | null; deconnecte: boolean }[]
@@ -396,7 +396,7 @@ describe('BoutonNavigateur', () => {
         expect(onBasculer).toHaveBeenCalledOnce()
       })
 
-      // Mesuré dans l'app (conv-1317) : de 92 à 103 px en passant au creux, l'en-tête débordait de
+      // Mesuré dans l'app : de 92 à 103 px en passant au creux, l'en-tête débordait de
       // nouveau à 1180 px de large, panneau ouvert.
       it('cède son libellé quand l’en-tête est trop étroit, et le reprend avec la place', async () => {
         await monterDetails({ runsOuverts: 2 })

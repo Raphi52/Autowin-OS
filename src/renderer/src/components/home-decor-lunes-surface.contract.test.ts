@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { SURFACE_LUNE } from './home-decor-scene'
 
 /**
- * Demande conv-1410, suite : « on voit que de la lumière sur les lunes, on dirait des soleils ».
+ * Demande, suite : « on voit que de la lumière sur les lunes, on dirait des soleils ».
  *
  * Cause : `buildLune` réutilise `PLANETE_FRAGMENT_SHADER`, dont le terme de LIMBE (`rim`) ajoute
  * `uClair` sur tout le pourtour. Sur une bille de rayon 0,15, ce pourtour couvre presque tout le

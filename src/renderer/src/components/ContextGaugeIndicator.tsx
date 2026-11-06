@@ -224,7 +224,7 @@ export function ContextGaugeDetail({
                 title={
                   busy === true
                     ? t('contexte.compaction.indisponible')
-                    : // La carte du fil (conv-1059, à la place du carnet de conv-1038) montre
+                    : // La carte du fil (à la place du carnet) montre
                       // ensuite les étapes que l'agent ne relit plus.
                       t('contexte.compaction.carte')
                 }
@@ -245,7 +245,7 @@ export function ContextGaugeDetail({
 
 /**
  * « 2,5 % » — une decimale, comme les lignes du panneau de claude.exe ; separateur et signe suivent
- * la langue de l'interface (conv-1170 : « 2.5% » en anglais).
+ * la langue de l'interface (« 2.5% » en anglais).
  */
 function partDeFenetre(tokens: number, limite: number): string {
   return traduireChatPanneaux('contexte.pourcent', langueCourante(), {
@@ -291,7 +291,7 @@ function ListeContexte({
 }
 
 /**
- * LE PANNEAU « CONTEXTE » A LA MANIERE DE CLAUDE.EXE (conv-1000, 2026-10-16, capture fournie) :
+ * LE PANNEAU « CONTEXTE » A LA MANIERE DE CLAUDE.EXE (2026-10-16, capture fournie) :
  * « N % utilise » et « utilise / fenetre », une barre segmentee par categorie, la liste des
  * categories (pastille, tokens, part de la fenetre), les categories DIFFEREES en fin de liste avec
  * « — » (chargees a la demande, elles n'occupent rien tant que le modele ne les appelle pas), puis

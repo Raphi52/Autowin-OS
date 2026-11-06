@@ -1,5 +1,5 @@
 /**
- * L'ACCORD MODÈLE PRINCIPAL / ADVISOR QUE LE CLI CLAUDE ACCEPTE (conv-1083, 2026-10-22).
+ * L'ACCORD MODÈLE PRINCIPAL / ADVISOR QUE LE CLI CLAUDE ACCEPTE (2026-10-22).
  *
  * L'advisor est un second modèle, plus fort, que l'agent consulte aux moments qui décident (choisir
  * une approche, erreur qui revient, avant de dire « fini »). Intérêt pour Autowin : faire tourner
@@ -9,7 +9,7 @@
  * un accord hors table, et aucune ne sert l'utilisateur :
  * - advisor capable de conseiller mais classé SOUS le modèle principal : la session démarre et le
  *   modèle principal tourne SANS advisor. MESURÉ le 2026-10-22 sur le CLI 2.1.308 en `-p`
- *   (conv-1083), conforme à la doc : `--model claude-opus-5-5 --advisor claude-sonnet-5-5` → code 0,
+ *   Conforme à la doc : `--model claude-opus-5-5 --advisor claude-sonnet-5-5` → code 0,
  *   avertissement sur stderr (« cannot advise … will not be used »), seul `claude-opus-5-5` dans
  *   `modelUsage`. Le réglage se perdrait ;
  * - modèle principal qui ne prend pas d'advisor, modèle qui ne peut pas en être un (Haiku 4.5),
@@ -23,7 +23,7 @@
  * claude-opus-5-5`) : code 0, `claude-opus-5-5` présent dans `modelUsage`, étape `advisor_message`
  * dans `usage.iterations`.
  *
- * fix-ok: conv-1083 — quatre éditions, aucune à l'aveugle : (1) création ; (2) défaut remis EXPRÈS
+ * fix-ok: quatre éditions, aucune à l'aveugle : (1) création ; (2) défaut remis EXPRÈS
  * (accord Opus 5.5 + advisor Sonnet 5.5 envoyé sans contrôle), attrapé par claude-advisor.test.ts,
  * puis retiré ; (3) commentaires réécrits après MESURE sur le CLI 2.1.308 ; (4) l'étape (3) avait
  * présenté cette mesure comme opposée à la doc, à tort (objection du contrôle final, doc relue) : le

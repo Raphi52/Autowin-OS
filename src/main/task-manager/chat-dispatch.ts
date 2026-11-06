@@ -34,7 +34,7 @@ export interface ScheduledChatRuntime {
   }): { id: string }
   /**
    * Le dossier personnel, « This computer » du choix du dossier de travail : là où travaille un
-   * agent réveillé sans chemin choisi (conv-1213, 2026-10-28). Absent = dossier global, comme avant.
+   * agent réveillé sans chemin choisi (2026-10-28). Absent = dossier global, comme avant.
    */
   dossierPersonnel?(): string | undefined
   bindConversation(taskId: string, conversationId: string): void
@@ -42,7 +42,7 @@ export interface ScheduledChatRuntime {
    * Range la conversation sur le dossier global COURANT d'Autowin. Appelé à chaque déclenchement
    * d'une tâche dont la destination ne nomme aucun dossier (semis maintenance / gc / curate) : sans
    * cela, la conversation réutilisée d'un jour à l'autre gardait le dossier figé à sa création
-   * (constat conv-298 : maintenance sur un ancien clone au lieu du dépôt courant).
+   * (constat : maintenance sur un ancien clone au lieu du dépôt courant).
    */
   alignerSurDossierGlobal?(conversationId: string): void
   isConversationBusy(conversationId: string): boolean
@@ -237,9 +237,9 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
       // Une surveillance doit FAIRE ce qu'on lui demande : mode auto (ecriture permise, plusieurs
       // iterations), toujours en fond et borne par le budget de la regle. C'etait reserve aux regles
       // mail ; les autres tournaient en triage LECTURE SEULE d'un seul appel, sans aucune commande.
-      // Levee sur demande de l'utilisateur (conv-1626, 2026-11-05) : une surveillance « /git a la
-      // fin du tour » ne pouvait rien publier (conv-1280, conv-1317 le 30/10, puis conv-1625 et
-      // conv-1628 le 05/11) et payait un tour pour un rapport « rien n'a ete publie ».
+      // Levee sur demande de l'utilisateur (2026-11-05) : une surveillance « /git a la
+      // fin du tour » ne pouvait rien publier (des fils le 30/10, puis des fils
+      // le 05/11) et payait un tour pour un rapport « rien n'a ete publie ».
       const isMailTask = task.watchdog?.source?.kind === 'outlook-mail'
       const readOnlyPolicy =
         isMailTask ||
@@ -387,7 +387,7 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
       return task.destination.conversationId
     }
     // Sans chemin choisi, l'agent réveillé travaille sur « This computer », jamais dans le dépôt
-    // d'Autowin qu'on ne lui a pas confié. Demande de l'utilisateur, conv-1213 (2026-10-28) :
+    // d'Autowin qu'on ne lui a pas confié. Demande de l'utilisateur, (2026-10-28) :
     // « quand un agent se réveille il doit pas avoir de CWD il doit être sur this computer ».
     const dossier = estCheminDeDossier(category)
       ? category.trim()
@@ -400,7 +400,7 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
       // (semis : « Qualite »), le doublon historique du moteur (formulaire : « claude ») ou un
       // chemin de projet. Seul le CHEMIN désigne sans ambiguïté un dossier de travail : c'est la
       // même frontière de forme que le rangement d'une conversation (`estCheminDeDossier`).
-      // fix-ok: mesuré le 2026-10-09 (conv-113) — la catégorie n'atteignait jamais la conversation créée, qui tournait donc dans le dossier global d'Autowin au lieu du projet demandé.
+      // fix-ok: mesuré le 2026-10-09 — la catégorie n'atteignait jamais la conversation créée, qui tournait donc dans le dossier global d'Autowin au lieu du projet demandé.
       ...(dossier ? { projectPath: dossier } : {})
     })
     this.runtime.bindConversation(task.id, created.id)

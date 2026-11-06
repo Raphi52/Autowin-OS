@@ -16,7 +16,7 @@ import { useTextesChatDecisions } from '../textes-ecrans/chat-decisions'
  * POURQUOI LE CLIC PREREMPLIT AU LIEU D'ENVOYER. Corriger une supposition demande de dire ce qui est
  * VRAI ; un clic ne le sait pas. Le composer recoit donc l'amorce et garde la main a l'utilisateur.
  *
- * POURQUOI UNE FLECHE ET PLUS UNE CROIX (demande du 19/10, conv-358). La croix faisait DISPARAITRE
+ * POURQUOI UNE FLECHE ET PLUS UNE CROIX (demande du 19/10). La croix faisait DISPARAITRE
  * le bloc ; l'utilisateur voulait seulement le REDUIRE a une ligne pendant qu'il travaille. La fleche
  * replie la liste et le pied sous la ligne de titre (bas = deplie, haut = replie), et la ligne garde
  * le compte des suppositions : rien n'est perdu, il se rouvre d'un clic. Le bloc disparait toujours

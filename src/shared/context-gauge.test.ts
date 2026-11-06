@@ -85,7 +85,7 @@ describe('jauge de contexte', () => {
    * Haiku 5.5, Fable 5 / 5.1 et Mythos 5 / 5.1 portent 1 M (fiches modèles Anthropic, lues le
    * 2026-11-05) ; le CLI le confirme : `contextWindow: 1000000` pour `claude-haiku-5-5` dans 318
    * sorties de run récentes. La table leur donnait 200 k : le CLI compactait vers 170 k, six fois
-   * trop tôt (conv-1581). ENTRÉE QUI DOIT FAIRE ÉCHOUER UN MAUVAIS CORRECTIF :
+   * trop tôt. ENTRÉE QUI DOIT FAIRE ÉCHOUER UN MAUVAIS CORRECTIF :
    * `claude-haiku-4-5-20251001` — seul Haiku encore à 200 k ; un « haiku = 1 M » sans entrée
    * plus précise avant lui le passerait à tort à 1 M.
    */

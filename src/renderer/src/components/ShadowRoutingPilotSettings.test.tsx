@@ -125,7 +125,7 @@ describe('ShadowRoutingPilotSettings', () => {
   })
 })
 
-// Section Routage depuis le retrait de l'onglet Budget (conv-1119, 2026-10-23).
+// Section Routage depuis le retrait de l'onglet Budget (2026-10-23).
 describe('vue Settings — section Routage', () => {
   it('expose la bascule du pilote shadow dans la vue existante', async () => {
     Object.defineProperty(window, 'api', {

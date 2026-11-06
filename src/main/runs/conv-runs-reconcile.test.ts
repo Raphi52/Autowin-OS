@@ -16,7 +16,7 @@ import { contratDepuisRuns } from '../conversations/conversation-task-contract'
  * Mesuré le 2026-08-05 sur l'état réel (`%APPDATA%\autowin-os\runs`, 8888 workspaces) :
  * 151 runs `open`, dont **141 vieux de plus de 24 h** — donc abandonnés, pas en cours. Comme le taux
  * de réussite se lit dans ces fichiers, ces 141 le faussent silencieusement : ni clos ni ouverts
- * pour de bon. Depuis conv-1070 ils sont clos `interrupted` : arrêtés avec l'app, pas jugés.
+ * pour de bon. ils sont clos `interrupted` : arrêtés avec l'app, pas jugés.
  *
  * Même motif que l'incident auto-kaizen figé en `fix-running` : rien ne renonce jamais.
  */
@@ -47,12 +47,12 @@ describe('réconciliation des runs abandonnés', () => {
     return readFileSync(path, 'utf8').split(/\r?\n/)[0]
   }
 
-  // FERMETURE DE L'APP = INTERRUPTION (piste 4, conv-1070). Un run que plus personne ne porte n'a
+  // FERMETURE DE L'APP = INTERRUPTION (piste 4). Un run que plus personne ne porte n'a
   // pas été jugé : il s'est arrêté avec l'app. Le clore `red` le rangeait parmi les échecs ET le
   // laissait « bloqué » pour toujours (`isBlocked`) — 482 RUN.md clos ainsi, comptés le 2026-10-22.
   // Entrée qui fait rougir ce test si la correction est fausse : ce run `open` vieux de 72 h, clos
   // encore `red`.
-  // fix-ok: conv-1070 — mesuré : rouge avant la correction de `clorePourAbandon` (« expected
+  // fix-ok: mesuré : rouge avant la correction de `clorePourAbandon` (« expected
   // 'status: red' to be 'status: interrupted' »), vert après ; le test du contrat ci-dessous a rougi
   // sur le texte reformulé « Interrompu : », d'où le texte « Abandonné : » gardé.
   it('un run `open` plus vieux que le seuil est clos `interrupted`, avec sa raison au Journal, et ne bloque pas', async () => {

@@ -20,7 +20,7 @@ vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
 /**
  * LA FUSION A 3 BRANCHES N'ETAIT JAMAIS DEMANDEE EN VRAI.
  *
- * Vecu le 2026-10-22 (conv-1086, run-edcf9630aaf1-1) : run vert, juge a 88, et pourtant refuse en
+ * Vecu le 2026-10-22 (run-edcf9630aaf1-1) : run vert, juge a 88, et pourtant refuse en
  * `base-dirty`. Sa copie etait partie d'`origin/main` (main local DIVERGE : `describeForLaunch`),
  * donc la fin de run apporte aussi l'avance de GitHub — 9 fichiers reecrits chez l'utilisateur,
  * dont 7 que le run n'avait pas touches, 7 sur 9 portant du travail non commite d'autres fils.

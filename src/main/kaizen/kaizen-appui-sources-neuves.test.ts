@@ -7,7 +7,7 @@ import {
 import { appuiSourcesNeuvesHandler } from '../hooks/default-gate-hooks'
 
 /*
-  Défaut MESURÉ sur conv-105 (contrôle final du run précédent) : le dossier de preuve joint bien les
+  Défaut MESURÉ (contrôle final du run précédent) : le dossier de preuve joint bien les
   appels modèle, le journal des tours et les saisies, mais AUCUNE correction ne s'appuyait dessus —
   les deux corrections portaient sur le mécanisme qui fabrique le dossier. Une exigence écrite dans
   la consigne ne suffit pas : elle avait déjà été écrite, et non tenue. Il faut un contrôle
@@ -96,7 +96,7 @@ describe('une correction de kaizen doit s appuyer sur une source neuve', () => {
     ).toBeFalsy()
   })
 
-  // kaizen conv-1266, tour 9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f : dossier aux trois sources vides,
+  // kaizen, tour 9e5ae43d-d2ff-4b14-b770-f8d5fde43b8f : dossier aux trois sources vides,
   // dont le pied exigeait une citation impossible que le contrôle ne réclame pas.
   it('le pied n exige AUCUNE citation quand les trois sources sont vides, et l exige sinon', () => {
     const vide = buildAutowinKaizenTask('/kaizen conv-vide', {
@@ -113,7 +113,7 @@ describe('une correction de kaizen doit s appuyer sur une source neuve', () => {
     expect(plein).toContain('un contrôle hors modèle refuse le rendu')
   })
   /*
-    Deux defauts releves par le controle final sur CE controle, sur les donnees reelles de conv-105 :
+    Deux defauts releves par le controle final sur CE controle, sur les donnees reelles :
     le tour existe sous `9e9b58cc-0a65-499a-8fdf-7613ca85a0d1`, mais un humain — et un rapport —
     le cite abrege (`9e9b58cc`), ce que la comparaison exacte refusait ; et si le dossier contient
     lui-meme le marqueur de fin, la lecture cassait et le controle se desactivait sans le dire.

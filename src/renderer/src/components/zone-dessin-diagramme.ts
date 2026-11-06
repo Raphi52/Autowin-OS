@@ -4,7 +4,7 @@ export const LARGEUR_DESSIN_PAR_DEFAUT = 800
 /**
  * ZONE DE DESSIN HORS DE LA PAGE pour mermaid.
  *
- * Défaut mesuré (conv-275, 2026-10-11 : « quand j'arrive dans une convers la barre de scroll
+ * Défaut mesuré (2026-10-11 : « quand j'arrive dans une convers la barre de scroll
  * s'excite et la view devient frenetique »). Sans conteneur, `mermaid.render` (11.16.1,
  * `appendDivSvgG`) ajoute un `<div>` EN FLUX à la fin de `<body>` le temps de mesurer le texte. Ce
  * div faisait passer le document de 900 à 1 055 px : la page affichait sa propre barre de

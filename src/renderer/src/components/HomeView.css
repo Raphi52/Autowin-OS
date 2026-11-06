@@ -23,20 +23,20 @@
   perspective: 1600px;
   perspective-origin: 50% 40%;
   /* TRANSPARENT — et c est la TROISIEME position sur cette ligne, chacune correcte en son temps.
-     conv-1358 voulait transparent, conv-1397 a impose NOIR OPAQUE pour masquer l image plate que
+     Un fil voulait transparent, un fil a impose NOIR OPAQUE pour masquer l image plate que
      `body` peignait sous un canevas efface en alpha 0 (theme.css -> autowin-galaxy-bg-hq.png).
      Cette cause N EXISTE PLUS : le PNG est retire de `body`, et le decor 3D est monte a la racine
      de la coque (`DecorDeFond`), DERRIERE toutes les vues. Garder un noir opaque ici masquerait
      desormais ce decor -- l Accueil serait la seule vue SANS fond, exactement l inverse du but.
      La lisibilite reste portee par le fond opaque de chaque tuile, pas par une couche pleine
-     (l assombrissement du centre, .home-view::after, est retire depuis conv-1037). */
+     (l assombrissement du centre, .home-view::after, est retire). */
   background: transparent;
   border-radius: var(--container-radius-page, 16px);
 }
 
 /* Le calque du CENTRE, sans teinte en sombre : il assombrissait le milieu à 46 % pour un décor
    « qui garde le milieu noir » (les nébuleuses). Sur l'avenue, le milieu, c'est la rue et ses
-   néons : retiré le 2026-10-21 (conv-1037, « ya un filtre qui assombrit je veux des couleurs
+   néons : retiré le 2026-10-21 (« ya un filtre qui assombrit je veux des couleurs
    petantes »). La lisibilité reste portée par le fond opaque de chaque tuile. Le calque reste :
    la base claire y pose son éclairci central (theme-modes.css). */
 .home-view::after {
@@ -47,7 +47,7 @@
   pointer-events: none;
 }
 
-/* LE QUARTIER (conv-1421) : le fond se clique. L'en-tête occupe toute la largeur du haut, au-dessus du
+/* LE QUARTIER : le fond se clique. L'en-tête occupe toute la largeur du haut, au-dessus du
    ciel, du Brain et des tours : seuls ses vrais contrôles gardent la souris. */
 .home-view[data-sur-cible='true'] {
   cursor: pointer;
@@ -60,14 +60,14 @@
   pointer-events: auto;
 }
 
-/* LES WIDGETS DU QUARTIER (conv-1421, « faut qu'ils s'adaptent a cet environnement »).
+/* LES WIDGETS DU QUARTIER (« faut qu'ils s'adaptent a cet environnement »).
    Une tuile devient une pièce de la maquette : une enseigne en bois clair, le cadre du même bois, et
    un fond qui dépend du thème. Sombre : une planche de noyer. Clair : le papier d'un shoji.
    POURQUOI DEUX FONDS : le contenu des widgets écrit en couleurs fixes, claires, et les thèmes clairs
    les foncent à part. Le texte reste donc celui du thème ; c'est le fond qui lui répond.
    Le bois vient de la peinture et ne suit aucun thème : d'où les couleurs fixes.
    LES `!important` SONT VOULUS : un thème peint ses tuiles pour son propre décor (les tubes néon de
-   Nébuleuse sont relevés sur l'avenue Cyberpunk, conv-317). Sur le Quartier, le décor décide, et les
+   Nébuleuse sont relevés sur l'avenue Cyberpunk). Sur le Quartier, le décor décide, et les
    autres fonds gardent leurs tuiles telles quelles. */
 .home-view[data-fond='falaise'] .home-tile__label {
   height: 32px;
@@ -215,13 +215,13 @@
 .quartier-etiquette span {
   color: var(--text-dim);
 }
-/* Le titre du fil d'un collègue, entre son prénom et son activité (D9, conv-1429). */
+/* Le titre du fil d'un collègue, entre son prénom et son activité (D9). */
 .quartier-etiquette .quartier-etiquette__titre {
   color: var(--text);
   overflow-wrap: anywhere;
 }
 
-/* La carte de l'agent d'un collègue (D10, conv-1429) : posée à côté du clic, elle n'ouvre aucun fil.
+/* La carte de l'agent d'un collègue (D10) : posée à côté du clic, elle n'ouvre aucun fil.
    Sa position est écrite en `transform`, comme l'étiquette. */
 .quartier-carte {
   position: absolute;
@@ -322,7 +322,7 @@
   gap: 12px;
 }
 
-/* « Mes agents / Toute l'équipe » (D8, conv-1429) : deux boutons accolés sous le titre. Comme le rouage,
+/* « Mes agents / Toute l'équipe » (D8) : deux boutons accolés sous le titre. Comme le rouage,
    ils sont seuls à prendre les clics dans l'en-tête inerte. */
 .home-view__village {
   display: inline-flex;
@@ -452,7 +452,7 @@
   font-weight: 600;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  /* Le titre etait plus eteint que son propre contenu : hierarchie inversee (conv-1417). Il passe en
+  /* Le titre etait plus eteint que son propre contenu : hierarchie inversee. Il passe en
      --text, l'echelon dim reste pour le CONTENU secondaire. Meme graisse, meme gabarit : seule la
      couleur monte, d'un cran au-dessus de --text-dim. */
   color: var(--text);
@@ -486,7 +486,7 @@
   flex: 1;
   min-height: 0;
   padding: 8px 5px 8px 7px;
-  /* Fond et contour RENFORCES (conv-1417) : c'est le CADRE qui porte la lisibilite ici, et un alpha
+  /* Fond et contour RENFORCES : c'est le CADRE qui porte la lisibilite ici, et un alpha
      0.56 / 0.18 laissait les nebuleuses claires traverser le texte. Geometrie inchangee. */
   background: rgba(0, 0, 0, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.28);
@@ -906,7 +906,7 @@
 }
 
 /* La ligne est une RANGÉE : le message, puis la croix qui l'acquitte, à sa droite. Avant
-   (jusqu'au 2026-10-28, conv-1225), le mot « Acquitter » apparaissait PAR-DESSUS la fin du
+   (jusqu'au 2026-10-28), le mot « Acquitter » apparaissait PAR-DESSUS la fin du
    message au survol — et comme `.home-notices button` lui donnait aussi `width: 100%`, il
    recouvrait toute la ligne. */
 .home-notices li {
@@ -920,7 +920,7 @@
 }
 
 /* Les deux boutons forment une seule bande : seul le dernier garde l'arrondi de droite.
-   Sans `:has()` (conv-1229) : la croix est le seul frère possible du bouton, donc « suivi d'un
+   Sans `:has()` : la croix est le seul frère possible du bouton, donc « suivi d'un
    frère » suffit. Écrite `li:has(> .home-notices__acquitter) > button:first-child`, la règle
    ajoutait la balise `button` à l'ensemble d'invalidation que Chromium partage entre TOUTES les
    règles `:has()` : chaque frappe dans la saisie du chat restylait alors tous les boutons de
@@ -1886,7 +1886,7 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  /* OPAQUE, dans le fond du thème (conv-1533, 2026-11-04 : « cette popup faut la mettre couleur du
+  /* OPAQUE, dans le fond du thème (2026-11-04 : « cette popup faut la mettre couleur du
      theme pas transparent »). --bg-1 est un voile translucide dans la plupart des thèmes (5 % de blanc
      sur Nébuleuse) : le décor de l'accueil passait à travers, flouté, et noyait les réglages.
      --bg-0 est le fond plein de chaque thème, clair comme sombre. Sans valeur de secours : elle
@@ -2057,7 +2057,7 @@
   color: var(--text-dim);
 }
 
-/* Les personnes du village (conv-1599) : le foulard de la personne devant son prénom, et l'état
+/* Les personnes du village : le foulard de la personne devant son prénom, et l'état
    « hors ligne » en retrait. La couleur du foulard est posée par la vue (palette fixe des collègues). */
 .home-settings__pastille {
   flex: none;
@@ -2079,7 +2079,7 @@
   opacity: 0.5;
 }
 
-/* UN TABLEAU COMPACT pour les personnes (conv-1599, « il va prendre trop de place quand la liste va
+/* UN TABLEAU COMPACT pour les personnes (« il va prendre trop de place quand la liste va
    grandir ») : une ligne par personne, ses deux interrupteurs côte à côte. La hauteur est bornée à
    environ sept lignes ; au-delà le tableau défile et son en-tête (avec les comptes) reste en place. */
 .home-personnes__recherche {
@@ -2355,7 +2355,7 @@
   padding: 2px 0 5px;
   /* Opaque, sinon le contenu qui défile passe LISIBLEMENT derrière le titre. `--bg-0` et non
      `--bg-1` : `--bg-1` est un VOILE dans la plupart des thèmes (5 % de blanc en Holographique,
-     56 % de noir en Sombre) ; seul `--bg-0`, le fond de page, est plein partout (conv-1220). */
+     56 % de noir en Sombre) ; seul `--bg-0`, le fond de page, est plein partout. */
   background: var(--bg-0, #0c0d12);
   border-bottom: 1px solid var(--line);
 }
@@ -2540,7 +2540,7 @@
 }
 
 /*
- * Le nom devient un BOUTON qui ouvre la pièce (conv-1220). Il garde l'allure du nom — même police,
+ * Le nom devient un BOUTON qui ouvre la pièce. Il garde l'allure du nom — même police,
  * même troncature — et ne se distingue qu'au survol et au focus clavier : souligné, comme un lien.
  * `min-width: 0` laisse l'ellipse jouer dans la rangée flexible, comme pour le `span` qu'il remplace.
  */
@@ -2587,7 +2587,7 @@
   flex-direction: column;
   gap: 5px;
   padding-top: 6px;
-  /* Plein, comme la barre du haut (même raison, conv-1220) : sous un voile, le corps du message et
+  /* Plein, comme la barre du haut (même raison) : sous un voile, le corps du message et
      ses pièces jointes défilaient À TRAVERS la réponse — illisibles et inatteignables au clic. */
   background: var(--bg-0, #0c0d12);
   border-top: 1px solid var(--line);

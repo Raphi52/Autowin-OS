@@ -17,8 +17,8 @@ import { dirname, join } from 'node:path'
  *   echoue) ne doit pas resurgir trois jours plus tard dans une conversation devenue sans rapport.
  * - aucune execution ici : ce module ecrit et lit du texte, il ne redemarre rien.
  *
- * UNE CONSIGNE PAR CONVERSATION (conv-1306, 2026-10-30). Il n'y avait qu'UN fichier : conv-1329 a
- * pose sa consigne a 15:50:32 par-dessus celle de conv-1306 (15:31), dans le meme redemarrage en
+ * UNE CONSIGNE PAR CONVERSATION (2026-10-30). Il n'y avait qu'UN fichier : un fil a
+ * pose sa consigne a 15:50:32 par-dessus celle (15:31), dans le meme redemarrage en
  * file. Les deux fils avaient lu « la consigne sera rejouee dans cette conversation » ; un seul
  * l'aurait ete. Chaque fil a donc son fichier (`redemarrage/reprises/<fil>.json`), et une seconde
  * pose du MEME fil remplace seulement la sienne. L'ancien fichier unique reste LU : le processus
@@ -104,7 +104,7 @@ const DEMARRAGE_DU_PROCESSUS = Date.now() - process.uptime() * 1000
  * La suppression precede toute decision de validite : un fichier corrompu qui resterait la
  * ferait echouer chaque demarrage suivant de la meme facon.
  *
- * MEME PROCESSUS = PAS DE REPRISE (conv-1033, 2026-10-21). `restart_app` mis en file pose la
+ * MEME PROCESSUS = PAS DE REPRISE (2026-10-21). `restart_app` mis en file pose la
  * consigne tout de suite (commands.ts), et le renderer la reclame a CHAQUE montage de ChatView,
  * pas seulement apres un redemarrage. Mesure : l'interface l'a reprise a 15:20:30 alors que le
  * processus principal tournait depuis 10:22 et que le redemarrage attendait encore trois fils —
@@ -151,11 +151,11 @@ export function consommerReprise(
 }
 
 /**
- * LES CONSIGNES RENDUES PAR CE PROCESSUS (conv-1306, 2026-10-30). L'interface les envoie telles
+ * LES CONSIGNES RENDUES PAR CE PROCESSUS (2026-10-30). L'interface les envoie telles
  * quelles, comme une frappe : le tour les recoit avec le role `user`, sans aucune marque d'origine.
  * La bascule de dossier (`depotCiteDansLeMessage`) les prenait donc pour une demande de
- * l'utilisateur ; celle de conv-1329 citait des dossiers a RETIRER du Board. Le texte recu est
- * identique a la consigne (mesure sur conv-1330 : 870 caracteres, egaux) : on le reconnait a l'egalite.
+ * l'utilisateur ; celle citait des dossiers a RETIRER du Board. Le texte recu est
+ * identique a la consigne (mesure : 870 caracteres, egaux) : on le reconnait a l'egalite.
  * Borne : un redemarrage rend au plus quelques consignes ; 50 couvre largement la vie du processus.
  */
 const CONSIGNES_RENDUES_MAX = 50

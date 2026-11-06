@@ -1,8 +1,8 @@
 /**
- * ALT+CLIC SUR N'IMPORTE QUEL ÉLÉMENT D'AUTOWIN (conv-1338, 2026-10-30).
+ * ALT+CLIC SUR N'IMPORTE QUEL ÉLÉMENT D'AUTOWIN (2026-10-30).
  *
  * L'utilisateur décrit un endroit en mots (163 retouches d'interface en octobre), puis l'agent le
- * cherche dans le code. Le geste de conv-1038 ne vivait que sur la vue chat ; il couvre maintenant
+ * cherche dans le code. Le geste ne vivait que sur la vue chat ; il couvre maintenant
  * toute l'app et joint une capture de l'élément :
  *   1. `installerAltClic` écoute la fenêtre en phase de CAPTURE, avant tout gestionnaire de l'app :
  *      Alt+clic sur « brancher » ne crée pas de branche, sur un lien ne l'ouvre pas ;
@@ -14,7 +14,7 @@
  * `pointerup` (mesuré par de vrais clics hors écran). C'était pourtant l'exemple d'origine du geste
  * (« pk le bouton joindre fichier est grisé »). Le relâchement du pointeur y tient donc lieu de clic.
  *
- * fix-ok: conv-1338 — L'APPUI EST ABSORBÉ AUSSI : une ligne de menu agit sur `mousedown`
+ * fix-ok: L'APPUI EST ABSORBÉ AUSSI : une ligne de menu agit sur `mousedown`
  * (`acceptMention`, ChatComposer.tsx), une poignée sur `pointerdown` (`beginConversationsResize`,
  * ChatView.tsx), donc avant tout `click`. Absorber le seul clic laissait Alt+clic accepter la
  * mention au lieu de la désigner.

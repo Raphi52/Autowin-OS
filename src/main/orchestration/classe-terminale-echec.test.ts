@@ -15,10 +15,10 @@ import {
   learningProposalAttestation
 } from '../brain/outcome-learning-proposal'
 
-/** Le message RÉELLEMENT écrit dans RUN.md par le run conv-914 du 2026-10-13. */
+/** Le message RÉELLEMENT écrit dans RUN.md par le run du 2026-10-13. */
 const MUR_DU_13_10 =
   "Phase clean — le rôle subagent est bindé sur claude (claude-opus-5-5) : Claude a interrompu l'appel : You've hit your session limit · resets 1pm (Europe/Paris)"
-/** Et celui du run conv-916, passé par l'agrégat d'un fan-out. */
+/** Et celui du run, passé par l'agrégat d'un fan-out. */
 const MUR_FAN_OUT =
   "Fan-out build (rôle subagent) : aucun modèle n'a produit de sortie · • claude (claude-opus-5-5) : Claude a interrompu l'appel : You've hit your session limit · resets 1pm (Europe/Paris)"
 
@@ -33,7 +33,7 @@ describe('classeTerminaleDEchec', () => {
     expect(
       classeTerminaleDEchec(
         new Error(
-          '401 OAuth access token has expired. Re-authenticate to continue' /* conv-1086 */
+          '401 OAuth access token has expired. Re-authenticate to continue'
         ),
         false
       )
@@ -149,10 +149,10 @@ describe('classeTerminaleDEchec', () => {
 })
 
 /*
- * UN RUN VERT REFUSÉ À L'INTÉGRATION (piste 1, conv-1033). Le contrôle final n'ajoute
+ * UN RUN VERT REFUSÉ À L'INTÉGRATION (piste 1). Le contrôle final n'ajoute
  * `blocage d’intégration: base-dirty` que si le run était vert (`orchestrator.ts`, garde
  * `green && !integrated`) : ce sont les fichiers non commités d'un AUTRE travail qui bloquent.
- * Raisons RÉELLEMENT écrites dans le RUN.md du run conv-981 du 2026-10-16.
+ * Raisons RÉELLEMENT écrites dans le RUN.md du run du 2026-10-16.
  * Entrée qui tue une correction fausse : le refus du contrôle des causes, qui porte sur la preuve
  * du travail lui-même et doit rester `defect`.
  */
@@ -191,9 +191,9 @@ describe('classeTerminaleDuControle', () => {
 })
 
 /**
- * UN RUN ARRÊTÉ DE L'EXTÉRIEUR N'EST NI EN ÉCHEC NI BLOQUÉ (piste 4, conv-1070).
+ * UN RUN ARRÊTÉ DE L'EXTÉRIEUR N'EST NI EN ÉCHEC NI BLOQUÉ (piste 4).
  *
- * Le 2026-10-22, `judge-carnet-fil` (conv-1058) a été coupé par le bouton Stop et son RUN.md dit
+ * Le 2026-10-22, `judge-carnet-fil` a été coupé par le bouton Stop et son RUN.md dit
  * `status: red` : il reste « bloqué » pour toujours. L'entrée qui ferait échouer ce test si le
  * correctif était faux : un run REFUSÉ par le juge (aucune exception, aucun arrêt) — il doit
  * rester `red`, sinon l'interruption avalerait les vrais échecs.

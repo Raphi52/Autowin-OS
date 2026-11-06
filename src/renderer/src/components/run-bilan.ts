@@ -65,7 +65,7 @@ const COULEUR_VERDICT: Record<RunBilan['verdict'], string> = {
 }
 
 /**
- * Le verdict tel qu'on le LIT, dans la langue de l'interface (conv-1170). `verdict` reste le mot
+ * Le verdict tel qu'on le LIT, dans la langue de l'interface. `verdict` reste le mot
  * français : il sert de clé de couleur et d'attribut `data-verdict`, relus par le CSS et les tests.
  */
 const VERDICT_LIBELLE: Record<RunBilan['verdict'], CleChatExecution> = {
@@ -168,7 +168,7 @@ export type ClotureObservee = {
   usage?: { unpricedCalls?: number }
 }
 
-// Des CLÉS de texte, traduites à la lecture : la table reste une constante (conv-1170).
+// Des CLÉS de texte, traduites à la lecture : la table reste une constante.
 const CLOTURE_LIBELLE: Record<string, CleChatExecution | undefined> = {
   green: 'bilan.cloture.green',
   red: 'bilan.cloture.red',

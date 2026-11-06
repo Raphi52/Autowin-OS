@@ -13,7 +13,7 @@
  * encore JAUNE-OR a cet endroit : la pastille verte ne correspondait pas a ce qu'on voit juste a
  * cote. On interpole ici les MEMES arrets que `.model-quota-bar-fill`.
  *
- * Les COULEURS ne sont plus ecrites ici (conv-197, 2026-10-10) : la pastille recopiait la palette
+ * Les COULEURS ne sont plus ecrites ici (2026-10-10) : la pastille recopiait la palette
  * de base (vert #35d07f) alors que les themes Nebuleuse repeignent la barre (vert #4fd1a5) — deux
  * verts cote a cote. La barre et la pastille lisent desormais les MEMES variables CSS
  * (`--quota-rouge`, `--quota-orange`, `--quota-jaune`, `--quota-vert`, posees sur

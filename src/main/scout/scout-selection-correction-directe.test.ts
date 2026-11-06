@@ -1,5 +1,5 @@
 /**
- * LA CORRECTION DIRECTE NE JOUE QUE LA CORRECTION — preuve HORS du texte (conv-1080).
+ * LA CORRECTION DIRECTE NE JOUE QUE LA CORRECTION — preuve HORS du texte.
  *
  * Quand le workflow intelligent du panneau des candidats scout choisit la correction directe, il
  * envoie un message préfixé `/build`. Ce test passe le message RÉEL au routeur du chat puis au routeur de phases : il doit en

@@ -1,5 +1,5 @@
 /**
- * LE QUARTIER, FOND DE L'ACCUEIL (conv-1421) : la Falaise peinte, où vivent les vrais agents.
+ * LE QUARTIER, FOND DE L'ACCUEIL : la Falaise peinte, où vivent les vrais agents.
  *
  * Une toile 2D, pas de 3D : la peinture est l'image, et tout ce qui bouge se pose dessus. Elle se monte
  * comme les autres fonds (`DecorScene`) : même cadence, même veille, même chemin dans `DecorDeFond`.
@@ -9,7 +9,7 @@
  * l'écran, où marchent les tanukis ; ce qui manque se prolonge par le haut du ciel, et par un reflet de
  * la peinture sous le menu, dont le verre dépoli le rend invisible.
  *
- * LES OBJETS ont chacun leur image, posée sur la peinture au chargement (`quartier-calques.ts`, conv-1534),
+ * LES OBJETS ont chacun leur image, posée sur la peinture au chargement (`quartier-calques.ts`),
  * et repeinte par-dessus un tanuki quand ils sont devant lui.
  * Chacun a sa ligne de pied : c'est elle, et pas la profondeur, qui décide qui passe devant.
  */
@@ -166,31 +166,31 @@ export interface DonneesQuartier extends DonneesMarche {
 
 /**
  * Un atlas prêt à dessiner : l'image filtrée, sa silhouette d'ombre, et le masque de sa tenue, lu une fois
- * à la première tenue recolorée (conv-1633). La tenue dépend de l'animal : la veste turquoise du renard
+ * à la première tenue recolorée. La tenue dépend de l'animal : la veste turquoise du renard
  * n'a pas la teinte du kimono du tanuki.
  */
 interface AtlasPeint {
   animal: AnimalAgent
   A: HTMLCanvasElement
   AO: HTMLCanvasElement
-  /** L'original puis sa moitié, son quart, son huitième : de quoi dessiner sans réduction à refaire (conv-1526). */
+  /** L'original puis sa moitié, son quart, son huitième : de quoi dessiner sans réduction à refaire. */
   niveaux: NiveauPlanche[]
   parts: number[]
-  /** Le niveau aux cases de `donnees.json` (126 × 170) : la tenue s'y mesure et s'y teint (conv-1633). */
+  /** Le niveau aux cases de `donnees.json` (126 × 170) : la tenue s'y mesure et s'y teint. */
   base: NiveauPlanche
   masqueTenue: Uint8Array | null
 }
 
 interface Monde {
   D: DonneesQuartier
-  /** La Falaise composée de ses calques : peinture, fond derrière les bâtiments, bâtiments (conv-1534). */
+  /** La Falaise composée de ses calques : peinture, fond derrière les bâtiments, bâtiments. */
   F: HTMLCanvasElement
-  /** La peinture prolongée à gauche puis à droite, `MARGE_BORD` de large chacune (conv-1424). */
+  /** La peinture prolongée à gauche puis à droite, `MARGE_BORD` de large chacune. */
   B: HTMLImageElement
   S: number
   /**
-   * Un atlas par animal, de même grille que celui du tanuki (conv-1446) : mes agents prennent celui
-   * choisi dans les réglages de l'Accueil, ceux d'un collègue celui qu'il a choisi (conv-1537).
+   * Un atlas par animal, de même grille que celui du tanuki : mes agents prennent celui
+   * choisi dans les réglages de l'Accueil, ceux d'un collègue celui qu'il a choisi.
    */
   animaux: AtlasALaDemande
   OB: ObjetCoupe[]
@@ -243,7 +243,7 @@ function peindreAtlas(
   atlas: HTMLImageElement,
   an: { cw: number; ch: number }
 ): AtlasPeint {
-  // Le tanuki v3 est rendu en ×2 (conv-1558) : ses niveaux partent de ses cases de 252 × 340, et le
+  // Le tanuki v3 est rendu en ×2 : ses niveaux partent de ses cases de 252 × 340, et le
   // flou de l'ombre double avec lui pour rester le même une fois réduit.
   const f = finesseDePlanche(atlas.naturalWidth, an.cw)
   const A = toile(atlas.naturalWidth, atlas.naturalHeight)
@@ -275,7 +275,7 @@ const URL_ATLAS: Readonly<Record<AnimalAgent, string>> = {
 }
 
 /**
- * Les atlas préparés À LA DEMANDE (conv-1558). En ×2, un atlas peint garde ~300 Mo (planche, ombre et trois
+ * Les atlas préparés À LA DEMANDE. En ×2, un atlas peint garde ~300 Mo (planche, ombre et trois
  * réductions) : les quatre animaux d'avance en prenaient ~1,2 Go, pour le plus souvent un seul animal à l'écran.
  * `lire` rend null tant que l'atlas se prépare : le tanuki d'un collègue qui arrive apparaît une fraction de seconde
  * plus tard. Un chargement en échec se retente à la demande suivante.
@@ -396,20 +396,20 @@ export function creerSceneQuartier(): DecorScene | null {
   let sous: ObjetCoupe | null = null
   let dernier = -1
   const lumieres = new Map<string, number>()
-  /** Le grand robot du hangar, nourri par les coups des agents au poste des runs (conv-1453). */
+  /** Le grand robot du hangar, nourri par les coups des agents au poste des runs. */
   const robot = creerRobotDeLAtelier()
   let forgent: PoseAtelier[] = []
   let agents: readonly AgentQuartier[] = lireAgentsQuartier()
   const desabonner = abonnerAgentsQuartier(() => {
     agents = lireAgentsQuartier()
   })
-  // Les agents des collègues vivent dans le même quartier (D-10, conv-1429) ; le bouton « Mes agents »
+  // Les agents des collègues vivent dans le même quartier (D-10) ; le bouton « Mes agents »
   // vide cette liste, et leurs tanukis repartent comme ceux dont le fil s'est fermé.
   let collegues: readonly AgentCollegue[] = lireAgentsCollegues()
   const desabonnerCollegues = abonnerAgentsCollegues(() => {
     collegues = lireAgentsCollegues()
   })
-  // L'animal de MES agents (conv-1537) et la couleur de leur tenue (conv-1633), lus à chaque image :
+  // L'animal de MES agents et la couleur de leur tenue, lus à chaque image :
   // un nouveau choix les redessine aussitôt.
   let monAnimal: AnimalAgent = lireMonAnimal()
   let maTenue: TenueAgent | null = lireMaTenue()
@@ -418,14 +418,14 @@ export function creerSceneQuartier(): DecorScene | null {
     maTenue = lireMaTenue()
   })
   /**
-   * L'animal d'un tanuki de collègue (conv-1446). Il reste sur le tanuki et non sur l'agent : en
+   * L'animal d'un tanuki de collègue. Il reste sur le tanuki et non sur l'agent : en
    * repartant, son agent a déjà quitté la liste, et il ne doit pas redevenir tanuki en route.
    */
   const animalDuTanuki = new WeakMap<Tanuki, AnimalAgent>()
   const atlasDe = (M: Monde, w: Tanuki): AtlasPeint | null =>
     M.animaux.lire(animalDuTanuki.get(w) ?? monAnimal)
   /**
-   * La couleur de tenue d'un tanuki de collègue (conv-1633), mise à jour à chaque relecture tant que son
+   * La couleur de tenue d'un tanuki de collègue, mise à jour à chaque relecture tant que son
    * agent est là, puis gardée pour qu'il reparte dans la même tenue. Absente = la tenue d'origine.
    */
   const tenueDuTanuki = new WeakMap<Tanuki, TenueAgent | null>()
@@ -526,7 +526,7 @@ export function creerSceneQuartier(): DecorScene | null {
     },
     zoomerSur(c) {
       cible = c.rect
-      // La vue au repos, en pixels de scène : l'élément la remplit presque (conv-1424).
+      // La vue au repos, en pixels de scène : l'élément la remplit presque.
       z = zoomSur(c.rect, Math.max(1, W - ax) / e0, H / e0)
       sous = null
       return new Promise((r) => setTimeout(r, ZOOM_MS))
@@ -557,7 +557,7 @@ export function creerSceneQuartier(): DecorScene | null {
       else m.ajouter(a.id, consigne)
     }
     // Ceux des collègues : mêmes lieux selon le métier et la phase (D-8), dessinés avec l'atlas de leur
-    // animal (conv-1446), dans la tenue à la couleur qu'ils ont choisie (conv-1633).
+    // animal, dans la tenue à la couleur qu'ils ont choisie.
     for (const a of collegues) {
       const consigne = consigneDuCollegue(a, maintenant)
       const w = m.T.find((q) => q.id === a.id)
@@ -632,13 +632,13 @@ export function creerSceneQuartier(): DecorScene | null {
     x.scale(cl.m ? -k : k, k)
     const ox = -an.ax + (cl.dx ?? 0)
     // Rétréci, il est lu dans la réduction de sa taille, en « low » : en « high », la carte graphique
-    // refaisait les réductions de toute la planche à chaque dessin — 3,4 images/s au lieu de 32 (conv-1526).
+    // refaisait les réductions de toute la planche à chaque dessin — 3,4 images/s au lieu de 32.
     // Agrandi (zoom), l'original garde le lissage de la scène.
     const e = echelleMin(x.getTransform())
     const n = planche.niveaux[niveauPourEchelle(e, planche.parts)]
     const atlas = ombre ? n.AO : n.A
     const qualite = x.imageSmoothingQuality
-    // La tenue à la couleur choisie (conv-1633), posée sur chaque image lue, celle de la respiration
+    // La tenue à la couleur choisie, posée sur chaque image lue, celle de la respiration
     // comprise. L'ombre n'a pas de couleur.
     const tenue = ombre ? null : tenueDe(w)
     const lire = (c: number): void => {
@@ -659,10 +659,10 @@ export function creerSceneQuartier(): DecorScene | null {
   }
 
   /**
-   * La tenue à la couleur choisie (conv-1633), posée sur le personnage déjà dessiné, en mode « color » :
+   * La tenue à la couleur choisie, posée sur le personnage déjà dessiné, en mode « color » :
    * teinte et saturation de la couleur, luminosité de la peinture. Posée dans le repère du personnage,
    * elle suit le miroir, le pas et la marche sans calcul de plus. Un seul dessin d'une petite case, gardée
-   * une fois teinte : le coût de l'ancien foulard (mesuré négligeable, conv-1526). Le masque de la tenue
+   * une fois teinte : le coût de l'ancien foulard (mesuré négligeable). Le masque de la tenue
    * se lit une fois par animal, à sa première tenue recolorée, sur sa planche de base.
    */
   function poserTenue(
@@ -745,7 +745,7 @@ export function creerSceneQuartier(): DecorScene | null {
     forgent = []
     for (const w of [...M.m.T].sort((a, b) => a.y - b.y)) {
       dessinerOmbre(M, w)
-      // Au poste des runs, il forge au lieu de taper dans le vide (conv-1453).
+      // Au poste des runs, il forge au lieu de taper dans le vide.
       const atelier = poseAtelier(M, w)
       if (atelier) {
         forgent.push(atelier)
@@ -766,8 +766,8 @@ export function creerSceneQuartier(): DecorScene | null {
     const t = M.vie.temps()
     x.globalCompositeOperation = 'lighter'
     for (const w of M.m.T) {
-      // fix-ok: la lueur rouge testait la pose 'pl' (grep : 3 sites, signaux/étiquettes) ; planté = pr, fu ou bi (conv-1554).
-      // L'agent d'un collègue n'attend pas après moi : ni or ni rouge (D9, conv-1429).
+      // fix-ok: la lueur rouge testait la pose 'pl' (grep : 3 sites, signaux/étiquettes) ; planté = pr, fu ou bi.
+      // L'agent d'un collègue n'attend pas après moi : ni or ni rouge (D9).
       if ((w.nom !== 'at' && !estPlante(w.nom)) || w.collegue) continue
       const v = 0.5 + 0.5 * Math.sin(t * 3 + w.x)
       const r = w.u * (0.34 + v * 0.06)
@@ -880,7 +880,7 @@ export function creerSceneQuartier(): DecorScene | null {
     vx += (cx0 + (tx - cx0) * m - vx) * pas
     vy += (cy0 + (ty - cy0) * m - vy) * pas
     // Zoomée, la vue peut sortir de la peinture par ses bords prolongés : la roue de Settings et la clé du
-    // hangar, collées au bord, se centrent comme le reste (conv-1424). Au repos, la marge vaut 0.
+    // hangar, collées au bord, se centrent comme le reste. Au repos, la marge vaut 0.
     sx = bornerVue(vx, vw, Math.min(0, sx0), LARGEUR, MARGE_BORD * m)
     sy = Math.max(Math.min(0, sy0), Math.min(HAUTEUR - vh, vy - vh / 2))
     esc = e0 * zv
@@ -912,7 +912,7 @@ export function creerSceneQuartier(): DecorScene | null {
     // Les bords prolongés : à gauche, ils remplacent peu à peu le reflet à mesure que le zoom s'approche.
     const { B } = M
     const mb = MARGE_BORD
-    // Lus d'après la taille de `bords.avif`, pas l'échelle de la peinture (conv-1644, `sourcesDesBords`).
+    // Lus d'après la taille de `bords.avif`, pas l'échelle de la peinture (`sourcesDesBords`).
     const bord = sourcesDesBords(B.naturalWidth, B.naturalHeight)
     if (gaucheMonde < 0 && m > 0) {
       x.globalAlpha = m
@@ -938,7 +938,7 @@ export function creerSceneQuartier(): DecorScene | null {
     if (sous) {
       halo(M, sous)
       if (sous.cle === 'task') M.vie.pieces(x)
-      // La cloche de la Falaise o-1916 est dans la peinture (conv-1444) : le halo la repeint lui-même, sans
+      // La cloche de la Falaise o-1916 est dans la peinture : le halo la repeint lui-même, sans
       // gong découpé ni maillet à repasser devant.
     }
     etiquettes(M)

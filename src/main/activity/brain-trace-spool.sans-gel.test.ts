@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * L'AJOUT D'UNE TRACE BRAIN NE TIENT PLUS LE FIL PRINCIPAL (conv-1598, 2026-11-05).
+ * L'AJOUT D'UNE TRACE BRAIN NE TIENT PLUS LE FIL PRINCIPAL (2026-11-05).
  *
  * `gels.jsonl`, matinée du 05/11 (05:00 → 09:10 UTC) : `appendFileSync` de `brain-trace-spool.ts:192`
  * a figé la fenêtre 29 s, une ligne de quelques Ko à chaque fois, appelé depuis `orchestration.ts:595`

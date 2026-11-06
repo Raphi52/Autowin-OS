@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { FILANTE_FRAGMENT_SHADER, FILANTES, POST_TRAITEMENT } from './home-decor-scene'
 
 /**
- * Le saut « triple A » demandé en conv-1402 : « rend le fond d'écran de l'accueil ultra magnifique ».
+ * Le saut « triple A » demandé : « rend le fond d'écran de l'accueil ultra magnifique ».
  *
  * Ce qui manquait n'était PAS de la matière — la scène en avait déjà beaucoup — mais la CHAÎNE
  * CINÉMATIQUE qui transforme une accumulation de points additifs en image : bloom sur les hautes

@@ -158,7 +158,7 @@ export function localActionDetail(action: ActionLike): LocalActionDetail | undef
   {
     /**
      * `data` n'est PAS toujours un objet. Un `edit_file` en echec rend une CHAINE — verifie dans les
-     * messages reels (conv-1308, conv-1326) : « Le bureau edit_file a ete conserve : publication
+     * messages reels : « Le bureau edit_file a ete conserve : publication
      * automatique incomplete ». `asRecord` rendait `undefined` et l'action etait SAUTEE : la cause
      * etait la, entiere, et se faisait jeter parce que le lecteur ne connaissait qu'une forme.
      *

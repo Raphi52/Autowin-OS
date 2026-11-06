@@ -12,7 +12,7 @@ vi.mock('./Markdown', () => ({
  * ChatView : chaque exécution du corps le re-rend. (Il a remplacé `ChatQueuePanel`, supprimé avec
  * l'affichage de la file d'attente le 2026-09-17 — la sonde change, la mesure est la même.) S'il compte une frappe, c'est que la vue
  * entière (3800 lignes de JSX, listes, panneaux) se recalcule à chaque caractère — le freeze
- * mesuré en conv-1466. Le composer isolé doit absorber la frappe SEUL.
+ * mesuré. Le composer isolé doit absorber la frappe SEUL.
  */
 const compteur = { rendus: 0 }
 vi.mock('./ProdAutorisationHote', async (importOriginal) => {
@@ -100,7 +100,7 @@ describe('ChatView — le composer est isolé : taper ne re-rend pas la vue', ()
     await h.click('.conv-pick')
     await h.type('/')
     expect(h.container.querySelectorAll('.slash-palette .slash-item').length).toBeGreaterThan(0)
-    // Les deux palettes s'ouvrent en fondu (`.fade-in`, conv-981) : elles n'existent qu'ouvertes.
+    // Les deux palettes s'ouvrent en fondu (`.fade-in`) : elles n'existent qu'ouvertes.
     expect(h.container.querySelector('.slash-palette')?.classList.contains('fade-in')).toBe(true)
     await h.type('débloque @work')
     const items = h.container.querySelectorAll('[data-testid="mention-item"]')

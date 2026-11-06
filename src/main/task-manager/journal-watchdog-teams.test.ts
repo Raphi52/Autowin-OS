@@ -14,7 +14,7 @@ import { WatchdogEngine } from './watchdog-engine'
 import { mailWatchdogSeed } from './watchdog-mail'
 import type { ScheduledTask, WatchdogSource } from './types'
 
-// conv-770, 2026-09-26 : l'app relancee par restart_app n'enregistre pas sa sortie console
+// 2026-09-26 : l'app relancee par restart_app n'enregistre pas sa sortie console
 // (app-restart.ts, stdio 'ignore') ; le watchdog Teams n'ecrivait QUE dans cette console, donc on
 // ne pouvait prouver ni la voie choisie, ni une detection, ni une reponse. Ce journal est son seul
 // temoin lisible apres coup.
@@ -69,7 +69,7 @@ describe('journal du watchdog Teams', () => {
 })
 
 describe('ligne « pilotage » du journal', () => {
-  // conv-770, 2026-09-27 : le motif ecrit en ligne dans index.ts avait perdu ses barres obliques
+  // 2026-09-27 : le motif ecrit en ligne dans index.ts avait perdu ses barres obliques
   // (`/^[watchdog]s*/`, une classe de caracteres) : le prefixe `[watchdog]` restait dans le journal.
   it('retire le prefixe [watchdog] des vraies lignes de watchdog-teams-local.ts', () => {
     expect(detailPilotage('[watchdog] réponse Teams impossible : fenêtre introuvable')).toBe(
@@ -87,7 +87,7 @@ describe('ligne « pilotage » du journal', () => {
 })
 
 describe('battement « toujours actif » du watchdog Teams', () => {
-  // conv-770, 2026-09-26 : le journal n'ecrit rien tant que tout va bien (derniere ligne a 11:11:23,
+  // 2026-09-26 : le journal n'ecrit rien tant que tout va bien (derniere ligne a 11:11:23,
   // puis silence) ; on ne distinguait pas « aucun message » de « la boucle de lecture est morte ».
   const lignes: Array<[string, Record<string, ValeurJournal>]> = []
   const journal = (e: string, d: Record<string, ValeurJournal> = {}): void => {

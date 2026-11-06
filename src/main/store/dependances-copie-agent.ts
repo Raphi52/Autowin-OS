@@ -5,7 +5,7 @@ import { join } from 'node:path'
  * Rend les dependances du depot ATTEIGNABLES depuis une copie agent.
  *
  * LE DEFAUT, mesure le 2026-08-25 sur le run
- * `je-vois-toujours-le-fond-d-ecran-qui-est-mt8bi0ky` (conv-1397). Une copie agent est un
+ * `je-vois-toujours-le-fond-d-ecran-qui-est-mt8bi0ky`. Une copie agent est un
  * `git worktree add` : elle ne contient QUE les fichiers suivis. `node_modules` etant ignore par
  * git, il n'y est pas. Mesure directe dans une copie fraiche :
  *

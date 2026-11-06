@@ -132,7 +132,7 @@ describe('vue Behaviour', () => {
     await act(async () => root.unmount())
   })
 
-  // conv-984 (2026-10-16) : le titre comptait les LIGNES de l'inventaire, chargées ou non. Avec
+  // 2026-10-16 : le titre comptait les LIGNES de l'inventaire, chargées ou non. Avec
   // AGENTS.md vu par Codex (inactif : `project_doc_max_bytes=0`) et par Autowin (replié), plus un
   // CLAUDE.md masqué, il annonçait « réellement lues · 3 » pour UN seul fichier réellement chargé.
   it('le titre ne compte que les FICHIERS réellement chargés, une fois chacun', async () => {

@@ -4,7 +4,7 @@ import { evaluateClosure } from '../gates/stopgate'
 import type { ExecutionEvidence } from '../providers/types'
 
 /**
- * Defaut MESURE le 2026-09-03 (run-90383ebef541-1, conv-21) : six reparations d'affilee bloquees par
+ * Defaut MESURE le 2026-09-03 (run-90383ebef541-1) : six reparations d'affilee bloquees par
  * « Promis mais pas fait : "Analyse demandee presente dans le livrable" », verdict de juge VIDE.
  *
  * Etat reel du run, lu dans `.autowin-data/autowin-os/run-state/run-90383ebef541-1.json` :

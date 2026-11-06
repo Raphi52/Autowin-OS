@@ -129,7 +129,7 @@ export function readModelChoice(text: string): ModelChoice {
  *
  * Le juge terminal EST le gate final, joue juste apres la marche : le marcheur doit donc s'arreter
  * AVANT lui. Le jouer aux deux endroits produit deux appels identiques — constate sur le run reel
- * conv-1071, ou le premier portait en plus le sandbox d'une phase de mutation.
+ * Ou le premier portait en plus le sandbox d'une phase de mutation.
  *
  * LA DEFINITION QUI ETAIT FAUSSE : « un juge sans aucune arete sortante ». Or un profil exprime
  * « sur rouge, retourne au build » PAR une arete sortante. Aucun des sept profils livres n'a donc de
@@ -170,7 +170,7 @@ export function estJugeTerminal(
    *
    * `learn` n'est pas joue par la marche. Il est joue APRES le gate, une fois le verdict rendu --
    * capitaliser suppose un travail valide. Compter cette arete comme « arete qui avance » produirait
-   * l'un des deux defauts que ce module documente : soit le juge joue DEUX FOIS (conv-1071, le
+   * l'un des deux defauts que ce module documente : soit le juge joue DEUX FOIS (le
    * marcheur puis le gate final), soit le marcheur consomme le budget de retour que la boucle de
    * reparation relit ensuite (mesure : `correctif` a 3 passages build la ou le profil en annonce 1).
    *
@@ -208,10 +208,10 @@ export function noeudApprentissageApresJuge(graph: WorkflowGraph): string | unde
  * suivant est lui aussi un noeud d apres-gate (`learn` ou `git`) atteint par une sortie UNIQUE.
  * Le DERNIER maillon doit etre terminal : s il continuait, il appartiendrait a la marche.
  *
- * `salvage` y a ete ajoute le 2026-08-29 pour une raison mesuree (conv-1521) : un run vert rendait
+ * `salvage` y a ete ajoute le 2026-08-29 pour une raison mesuree : un run vert rendait
  * la main sur « veux-tu que je commit / fusionne ? » et laissait le travail dans une copie isolee.
  * Trier le travail est un GESTE DU RUN, pas une question a l utilisateur — et, comme la
- * capitalisation, il ne se joue que sur un verdict VERT. Depuis le 2026-10-29 (conv-1252) ce maillon
+ * capitalisation, il ne se joue que sur un verdict VERT. Depuis le 2026-10-29 ce maillon
  * est `git` : la skill `salvage` a été supprimée, `/git` porte son tri puis publie et range.
  */
 export function noeudsApresJuge(graph: WorkflowGraph): string[] {

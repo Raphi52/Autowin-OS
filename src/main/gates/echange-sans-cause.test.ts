@@ -13,7 +13,7 @@ import { jetonsDeCauseParFichier } from '../hooks/default-gate-hooks'
 import type { IoJournalFils } from '../../shared/messages-entre-fils'
 
 /*
- * Étape 1 de l'option A du cadrage forum-agents-partie2-juge-build (conv-1139, 2026-10-24).
+ * Étape 1 de l'option A du cadrage forum-agents-partie2-juge-build (2026-10-24).
  * Le motif est fabriqué par le VRAI fix-gate, joint comme le fait `syncGateHooksHandler` : si son
  * texte change, ce test rougit au lieu de laisser l'échange muet en silence.
  */
@@ -49,7 +49,7 @@ describe('decisionEchangeSansCause', () => {
       fichiers: ['src/a.ts']
     })
   })
-  // Plus de plafond par run (conv-1139, 2026-10-25, demande de l'utilisateur : « voir s'il tourne
+  // Plus de plafond par run (2026-10-25, demande de l'utilisateur : « voir s'il tourne
   // vraiment en rond ») : seul le plafond dur des passages de réparation borne encore les échanges.
   it('aucun plafond par run : 10 échanges déjà faits → tenter quand même', () => {
     expect(decisionEchangeSansCause({ motifs, echangesDuRun: 10, sessionDuBuild: true })).toEqual({

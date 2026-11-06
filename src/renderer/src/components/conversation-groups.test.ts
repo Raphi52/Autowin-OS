@@ -300,13 +300,13 @@ describe('groupeRecent — le raccourci « Récent »', () => {
 })
 
 /**
- * UNE CATEGORIE N'EST PAS UN DOSSIER (conv-81, 2026-09-16).
+ * UNE CATEGORIE N'EST PAS UN DOSSIER (2026-09-16).
  *
  * `projectPath` groupait la liste ET pilotait le dossier de travail de l'agent. Ranger un fil sous
  * « Perso » ecrivait donc « Perso » comme dossier de travail. Le libelle vit maintenant dans
  * `categorie`, et c'est LUI qui groupe quand il est la — le dossier de travail continue sa vie sans
  * toucher a la barre laterale.
- * fix-ok: conv-81 — test de la cause mesurée : groupeDe lisait projectPath, donc un libellé de classement devenait un dossier de travail.
+ * fix-ok: test de la cause mesurée : groupeDe lisait projectPath, donc un libellé de classement devenait un dossier de travail.
  */
 describe('une categorie de la liste n’est pas un dossier de travail', () => {
   it('la categorie groupe, et son groupe n’est pas un dossier', () => {

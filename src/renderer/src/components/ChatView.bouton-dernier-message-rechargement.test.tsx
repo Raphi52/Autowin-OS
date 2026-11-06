@@ -16,7 +16,7 @@ vi.mock('./Markdown', () => ({
 }))
 
 /**
- * Suite du defaut du 2026-10-23 (conv-1128, `ChatView.descente-envoi-rechargement.test.tsx`) :
+ * Suite du defaut du 2026-10-23 (`ChatView.descente-envoi-rechargement.test.tsx`) :
  * le bouton « ↓ Dernier message » descend au bas du fil, mais un rechargement du fil qui suit
  * peut le REMONTER a l'endroit ou le lecteur lisait.
  *

@@ -1004,7 +1004,7 @@ describe('AgentPilot turn contract', () => {
   })
 
   it('un tour lecture seule garde les commandes de LECTURE et execute read_file', async () => {
-    // Mesure sur 4 runs reels du scout de veille (conv-1154→1157) : classe read-only, l'agent
+    // Mesure sur 4 runs reels du scout de veille : classe read-only, l'agent
     // recevait ZERO commande et repondait « je n'ai pas pu executer les lectures obligatoires ».
     const send = vi
       .fn()

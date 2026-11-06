@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LE BATTEMENT DU CHRONO NE RECALCULE PLUS LE TOUR (conv-1413, 2026-10-31).
+ * LE BATTEMENT DU CHRONO NE RECALCULE PLUS LE TOUR (2026-10-31).
  *
  * Le chrono redessine `ThinkingBlock` chaque seconde pendant un tour. Tout y était recalculé depuis le
  * journal et la liste d'actions se redessinait entière : `actionsDuTour`, `sousCommandes` et les lignes

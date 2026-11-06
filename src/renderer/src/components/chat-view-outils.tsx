@@ -1,4 +1,4 @@
-/* eslint-disable react-refresh/only-export-components -- (conv-1508) aides déplacées telles quelles depuis ChatView.tsx, où elles côtoyaient déjà le composant. */
+/* eslint-disable react-refresh/only-export-components -- aides déplacées telles quelles depuis ChatView.tsx, où elles côtoyaient déjà le composant. */
 import {
   resolveChatRuntimeIdentity,
   deriveConversationState,
@@ -38,7 +38,7 @@ import {
 import { extractRecommendation } from './markdown-recommandation'
 import { flattenChatParts } from '../../../shared/chat-turn'
 
-// Extrait de ChatView.tsx tel quel, sans changement de comportement (conv-1508).
+// Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type RuntimeModel = Parameters<typeof resolveChatRuntimeIdentity>[1][number]
 /** Le modèle retenu pour un fil (voir `Conversation.modeleChoisi` côté main). */
 export type ModeleDuFil = { provider: string; model?: string; reasoningEffort?: string }
@@ -55,14 +55,14 @@ export type ModeleDuFil = { provider: string; model?: string; reasoningEffort?: 
  */
 const CLE_JAUGES = 'autowin.context-gauges.v1'
 /**
- * Detail du contexte PAR CATEGORIE, par conversation (conv-1000) : memorise comme la jauge, pour
+ * Detail du contexte PAR CATEGORIE, par conversation : memorise comme la jauge, pour
  * que le panneau survive au rechargement. Borne aux plus recents : la liste des outils MCP pese
  * ~2 ko par fil, et le stockage du navigateur est partage par toute l'app.
  */
 const CLE_CONTEXTES = 'autowin.contextes-detailles.v1'
 const CONTEXTES_MEMORISES_MAX = 40
 /**
- * Texte de CETTE vue dans la langue courante (traduction anglaise, conv-1170), pour le rendu comme pour
+ * Texte de CETTE vue dans la langue courante (traduction anglaise), pour le rendu comme pour
  * un gestionnaire ou un effet : lu à l'appel, il n'ajoute aucune dépendance de hook. La vue se
  * redessine quand la langue change, parce qu'elle lit `useTextesChatFil()`.
  */
@@ -75,7 +75,7 @@ export function texteFil(
 
 /**
  * fix-ok: sans ligne d'état, « en attente » et « bloqué » étaient identiques à l'écran ; puis
- * « repart seule à 02:02 » taisait le jour d'une attente de 44 h (conv-1403), et `conv-879` et les
+ * « repart seule à 02:02 » taisait le jour d'une attente de 44 h, et le fil « Assistant mails » et les
  * branches sortaient de la reprise sans raison lisible : `ChatView.reprise-quota.test.tsx`.
  */
 const TEXTE_DE_LA_RAISON = {
@@ -90,7 +90,7 @@ const TEXTE_DE_LA_RAISON = {
 
 /**
  * Sous 24 h, une heure ne désigne qu'un seul instant. Au-delà, elle en désigne plusieurs : une coupure
- * annoncée pour le surlendemain affichait « 02:02 », 44 h à l'avance (conv-1403, 1 coupure sur 21).
+ * annoncée pour le surlendemain affichait « 02:02 », 44 h à l'avance (1 coupure sur 21).
  */
 const ATTENTE_LISIBLE_SANS_JOUR_MS = 24 * 60 * 60 * 1000
 
@@ -125,7 +125,7 @@ export const LIBELLE_FILTRE_STATUT = {
 } as const satisfies Record<'toutes' | 'actives' | 'inactives', Parameters<typeof texteFil>[0]>
 /**
  * La liste des dossiers et la mémoire des retraits vivent dans `dossiers-du-chat.ts` depuis que la
- * croix du Board retire de la MÊME liste (conv-1212).
+ * croix du Board retire de la MÊME liste.
  */
 export function ecrireDossiersRetires(retires: string[]): void {
   const erreur = ecrireRetiresPartages(retires)
@@ -144,7 +144,7 @@ export const CLE_DOSSIER_NOUVEAU_FIL = 'autowin.chat.dossierNouveauFil'
  * un groupe DERIVE : « Auto-kaizen » vient du champ `autoKaizen`, « Divers » est l'absence de
  * rangement, « Recent » est un raccourci qui duplique. Y trainer une conversation ne voudrait rien
  * dire, et la cle du groupe n'est alors pas un rangement transmissible a `rangerDansDossier`.
- * fix-ok: conv-81 — cause mesurée dans la vue : la clé du groupe servait de cible de dépôt, or un groupe dérivé (Divers, Récent, Auto-kaizen) n'a pas de rangement transmissible ; on ne laisse déposer que sur un dossier ou une catégorie.
+ * fix-ok: cause mesurée dans la vue : la clé du groupe servait de cible de dépôt, or un groupe dérivé (Divers, Récent, Auto-kaizen) n'a pas de rangement transmissible ; on ne laisse déposer que sur un dossier ou une catégorie.
  */
 export function deposable(kind: ConversationGroupKind): boolean {
   return kind === 'dossier' || kind === 'categorie'
@@ -196,7 +196,7 @@ export function memoriserJauges(jauges: Record<string, ContextGauge>): void {
  * Extrait du composant pour que la MOSAIQUE l'obtienne aussi, par conversation (2026-08-30).
  */
 /**
- * SIGNE INFINI DU ROND « MODE AUTO » — un TRACÉ, pas le caractère ∞ (conv-118, 2026-10-06).
+ * SIGNE INFINI DU ROND « MODE AUTO » — un TRACÉ, pas le caractère ∞ (2026-10-06).
  *
  * Le caractère de police se pose à une hauteur qui SAUTE avec le zoom Ctrl+molette (2,2 px trop
  * bas à 100 %, ~1,3 px à 150-300 %) : le `translateY(-2px)` réglé à 100 % le rendait trop haut
@@ -244,7 +244,7 @@ function TexteSurligne({ texte, terme }: { texte: string; terme: string }): Reac
 }
 
 /**
- * PERLE D'ETAT DE L'EN-TETE (conv-158, 2026-10-10, variante « Jumeau »).
+ * PERLE D'ETAT DE L'EN-TETE (2026-10-10, variante « Jumeau »).
  *
  * Elle remplace l'ancienne boule de 26 px (`.chat-head-signal`) : trop grosse et toujours rose,
  * elle ne disait rien de la conversation. C'est desormais la JUMELLE de la pastille de la liste des
@@ -310,13 +310,13 @@ export const PastilleEnTete = memo(function PastilleEnTete({
 })
 
 /**
- * LES FILS D'UN PLAN DE LOTS RANGÉS SOUS LEUR FIL CHEF (conv-1151, lot 5 du plan-ba5b7d4a,
+ * LES FILS D'UN PLAN DE LOTS RANGÉS SOUS LEUR FIL CHEF (lot 5 du plan-ba5b7d4a,
  * 2026-10-26). Avec plusieurs plans, les fils « Lot N/M — … » se mêlaient aux autres et on ne
  * savait plus à quel chef ils répondaient. Un fil de lot ne porte aucun lien vers son chef : seul
  * le plan le sait (canal `os:plansDeLots`, `main/plans-de-lots-app.ts`).
  *
- * Depuis conv-1381, un lot qui a son onglet n'a plus de ligne (`lots-dans-la-liste.ts`) ; depuis
- * conv-1394, un lot d'un ancien plan non plus (le bloc du chef y mène). Ce rangement ne sert plus
+ * Un lot qui a son onglet n'a plus de ligne (`lots-dans-la-liste.ts`)
+ * Un lot d'un ancien plan non plus (le bloc du chef y mène). Ce rangement ne sert plus
  * qu'aux résultats de recherche.
  */
 export interface LienDeLot {
@@ -327,8 +327,8 @@ export interface LienDeLot {
   onglet: boolean
 }
 /**
- * Pur : fil de lot → son chef, son rang et le total, d'après la réponse du geste « tous »
- * (conv-1158). Les plans arrivent du plus ancien au plus récent : un fil présent dans deux plans
+ * Pur : fil de lot → son chef, son rang et le total, d'après la réponse du geste « tous ».
+ * Les plans arrivent du plus ancien au plus récent : un fil présent dans deux plans
  * suit le plus récent, comme `planDuFil` côté app. Un lot ouvert dans le fil chef lui-même n'est
  * pas un enfant.
  */
@@ -455,15 +455,15 @@ export const LigneConversation = memo(function LigneConversation({
   c: Conv
   snippet?: string
   depth: number
-  /** « lot N/M » quand le fil est un lot d'un plan (conv-1151) : une chaîne, pour garder `memo`. */
+  /** « lot N/M » quand le fil est un lot d'un plan : une chaîne, pour garder `memo`. */
   lot?: string
   actif: boolean
   occupe: boolean
   nonVue: boolean
-  /** Fil chef dont un lot attend ta réponse (conv-1381) : voir `etatDuFil`. */
+  /** Fil chef dont un lot attend ta réponse : voir `etatDuFil`. */
   questionDUnLot: boolean
   /**
-   * Signe d'un fil chef (conv-1395, `signe-super-conv.ts`), encodé en chaîne pour garder `memo` ;
+   * Signe d'un fil chef (`signe-super-conv.ts`), encodé en chaîne pour garder `memo` ;
    * absent pour un fil hors plan.
    */
   superConv?: string
@@ -475,7 +475,7 @@ export const LigneConversation = memo(function LigneConversation({
   actionsRef: { readonly current: ActionsLigneConversation }
   setConvMenu: Dispatch<SetStateAction<{ conv: Conv; top: number; left: number } | null>>
 }): React.JSX.Element {
-  // Le gel de la liste compte ses lignes redessinées (conv-1115, `rendu-long.ts`).
+  // Le gel de la liste compte ses lignes redessinées (`rendu-long.ts`).
   noterLigneListe(c.id)
   const { t } = useTextesChatFil()
   const conversationState = etatDuFil(c, occupe, nonVue, questionDUnLot)
@@ -519,7 +519,7 @@ export const LigneConversation = memo(function LigneConversation({
             ressemblait a aucun autre. Les autres etats restent une pastille.
             CASE FIXE (.conv-state-slot, largeur = taille du spinner) : spinner 18px,
             pastille 7/11px et points 15px y sont CENTRES sur le meme axe, et le titre
-            demarre au meme x sur toutes les lignes (2026-10-10, conv-144). */}
+            demarre au meme x sur toutes les lignes (2026-10-10). */}
         <span className="conv-state-slot">
           {conversationState.key === 'running' ? (
             <Spinner
@@ -541,7 +541,7 @@ export const LigneConversation = memo(function LigneConversation({
         </span>
         <span className="conv-copy">
           {signe && signe.total > 0 ? (
-            /* MÊME STRUCTURE QUE LA MAQUETTE CHOISIE (conv-1395, « ça ressemble pas du tout ») :
+            /* MÊME STRUCTURE QUE LA MAQUETTE CHOISIE (« ça ressemble pas du tout ») :
                titre, « N ? » puis « M/T » sur la ligne du titre, jauge dessous sur TOUTE la largeur.
                Les badges sont donc DANS le bouton de la ligne : le raccourci n'est pas un bouton
                (pas de bouton dans un bouton), il arrête le clic ; au clavier, le lot s'ouvre par
@@ -597,7 +597,7 @@ export const LigneConversation = memo(function LigneConversation({
                 {lot}
               </span>
             )}
-            {/* Fil privé (D6, conv-1429) : discret, à la couleur de la ligne de détail — ni or ni
+            {/* Fil privé (D6) : discret, à la couleur de la ligne de détail — ni or ni
                 rouge, ce n'est pas un signal qui appelle l'utilisateur. */}
             {c.prive && (
               <span
@@ -676,7 +676,7 @@ function dernierTourDuFil(fil: Msg[]): { text: string; demandeDuTour?: string } 
 }
 
 /**
- * Les suites notées du dernier tour, en boutons au-dessus du champ (conv-1005). Mêmes gardes de
+ * Les suites notées du dernier tour, en boutons au-dessus du champ. Mêmes gardes de
  * publication que le texte grisé : la première de la liste EST ce texte grisé dès que le modèle a
  * émis ses suites. Sans ligne de suite, la liste est vide et seul le repli « Recommandé » reste.
  */
@@ -743,7 +743,7 @@ export function newestNotice(current: AppNotice | null, incoming: AppNotice): Ap
 /**
  * Fil PERSISTÉ → fil live. Extrait de `loadConv` parce qu'un second appelant en a besoin : l'amorce
  * d'un tour initié côté main doit partir du store, sinon elle écrase l'historique dans le cache live
- * — qui fait autorité à la réouverture (conv-1376, « ma conversation était tronquée »).
+ * — qui fait autorité à la réouverture (« ma conversation était tronquée »).
  */
 export type MessageStocke = Partial<StoredAssistantMessage> & {
   role: string
@@ -757,7 +757,7 @@ export type MessageStocke = Partial<StoredAssistantMessage> & {
 }
 
 /**
- * LA SUITE DU TOUR SE RELIT SOUS LA CONSIGNE QUI L'A PROVOQUÉE (conv-717, 2026-09-19).
+ * LA SUITE DU TOUR SE RELIT SOUS LA CONSIGNE QUI L'A PROVOQUÉE (2026-09-19).
  *
  * Une consigne écrite pendant un tour est stockée APRÈS le message assistant du tour, qui porte
  * TOUT le texte — y compris la réponse à cette consigne. Au rechargement, cette réponse remontait
@@ -767,7 +767,7 @@ export type MessageStocke = Partial<StoredAssistantMessage> & {
  * l'affichage en direct a sa propre coupure (`.directive-receipt`).
  */
 /**
- * L'HEURE, QUAND LE NOMBRE NE VAUT PLUS (conv-1401, 2026-10-31). Un fil enregistré avant le
+ * L'HEURE, QUAND LE NOMBRE NE VAUT PLUS (2026-10-31). Un fil enregistré avant le
  * recalage des coupures (`recalerLesCoupures`, conversations.ts) porte une coupure au-delà de la
  * réponse, ou aucune pour la 2e consigne d'un tour : toute la réponse remontait au-dessus. On coupe
  * alors avant la première part datée APRÈS la consigne ; une part sans heure prend celle de la
@@ -843,7 +843,7 @@ export function hydraterFilStocke(messages: readonly MessageStocke[]): Msg[] {
           ts: m.ts,
           // Le drapeau QUE LE MAIN ECRIT (directive-dans-le-fil.ts) : sans lui, une orientation
           // relue passait pour une demande ordinaire — etiquette absente, question `ask` crue
-          // repondue, mode auto qui la comptait (conv-955, saisies ts 1792054396405, 1792054407546).
+          // repondue, mode auto qui la comptait (saisies ts 1792054396405, 1792054407546).
           ...(m.orientation ? { orientation: true } : {})
         }
       : { ...hydrateStoredAssistant(m as StoredAssistantMessage), messageId: m.messageId }

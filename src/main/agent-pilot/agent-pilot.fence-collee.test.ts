@@ -5,7 +5,7 @@ import { detacherFenceCollee } from './agent-pilot'
  * CE QUE CES TESTS PROUVENT : un bloc `html-render` dont la fence est SOUDEE a la fin de la phrase
  * precedente redevient rendable, et une simple MENTION de fence en prose ne devient jamais un bloc.
  *
- * DEFAUT VECU (conv-8, 2026-09-03) : l'utilisateur signale « le html ne s'est pas render ». Le
+ * DEFAUT VECU (2026-09-03) : l'utilisateur signale « le html ne s'est pas render ». Le
  * journal du tour porte un seul delta de 4 925 caracteres contenant
  * « …est bien branchee.```html-render\n<!doctype html> ». CommonMark exige une fence en DEBUT de
  * ligne : les 4 900 caracteres de HTML ont ete affiches en prose. `DeltaCollageTracker` ne regarde

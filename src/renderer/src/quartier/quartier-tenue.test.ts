@@ -1,7 +1,7 @@
 /**
- * La tenue à la couleur choisie (conv-1633) : le masque ne prend que la tenue, jamais le pelage. Les pixels
+ * La tenue à la couleur choisie : le masque ne prend que la tenue, jamais le pelage. Les pixels
  * ci-dessous sont des MÉDIANES relevées sur les atlas (4 premières rangées de chaque planche, pixels
- * opaques, conv-1633) : ce qui doit changer de couleur, et ce qui ne doit surtout pas. Vue d'ensemble :
+ * opaques) : ce qui doit changer de couleur, et ce qui ne doit surtout pas. Vue d'ensemble :
  * `node scripts/quartier-planche.mjs --rangees 0,2`.
  */
 import { describe, expect, it } from 'vitest'

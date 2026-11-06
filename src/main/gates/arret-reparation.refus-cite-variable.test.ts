@@ -4,7 +4,7 @@ import { CLOSURE_UPSTREAM_REFUSAL, memeRefus } from './stopgate'
 /**
  * UN REFUS FIGÉ DONT LA CITATION CHANGE reste le MÊME refus.
  *
- * Défaut VÉCU, conv-540, tour `4dfe2821-f6da-4cd9-8cb8-7afba10d3df4` (saisie `ts` 1789463252460) :
+ * Défaut VÉCU, tour `4dfe2821-f6da-4cd9-8cb8-7afba10d3df4` (saisie `ts` 1789463252460) :
  * SEIZE passages `[RÉPARATION 1..16]`, tous refusés sur le même couple de motifs — « Échec déjà
  * déclaré … ; Promis mais pas fait : « Objection du juge : … » ». Le compteur de refus figé n'a
  * jamais mordu parce que `memeRefus` comparait mot pour mot : le motif « Promis mais pas fait »
@@ -37,7 +37,7 @@ describe('refus figé dont la citation varie', () => {
 /**
  * MÊME REFUS, NOMBRE DE CITATIONS DIFFÉRENT.
  *
- * Défaut VÉCU, conv-540, tour `4dfe2821-f6da-4cd9-8cb8-7afba10d3df4` : le motif « Promis mais pas
+ * Défaut VÉCU, tour `4dfe2821-f6da-4cd9-8cb8-7afba10d3df4` : le motif « Promis mais pas
  * fait » JOINT toutes les objections du juge, et le juge n'en rend pas le même nombre à chaque
  * passage (6 objections en `[RÉPARATION 1]`, 8 en `[RÉPARATION 7]`, 7 en `[RÉPARATION 10]`).
  * Neutraliser le TEXTE de chaque citation ne suffit donc pas : la liste normalisée reste plus ou

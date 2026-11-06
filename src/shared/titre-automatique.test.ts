@@ -10,7 +10,7 @@ const QUAND = new Date(2026, 9, 16, 10, 5)
 
 /**
  * Le titre est celui du PREMIER message, puis il ne bouge plus. « Le titre suit le dernier
- * message » (conv-999) a été annulé le 2026-10-28 (conv-1203).
+ * message » a été annulé le 2026-10-28.
  */
 describe('titre automatique — seul un fil provisoire prend un nom', () => {
   it('nomme un fil provisoire d après son message', () => {

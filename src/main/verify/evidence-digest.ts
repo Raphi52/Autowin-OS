@@ -6,7 +6,7 @@ import type { ExecutionEvidence } from '../providers/types'
  * `ExecutionEvidence` sert DEUX consommateurs aux besoins opposés : le Chat, qui affiche
  * `stdout`/`diff` bruts inline, et le juge LLM, qui n'a besoin que des champs porteurs de verdict.
  * Sérialiser la structure entière (`JSON.stringify(evidence)`) faisait payer au juge la charge
- * d'affichage du Chat. Mesuré sur le run conv-1102 (vue Worktrees, 11/08) : prompt juge de
+ * d'affichage du Chat. Mesuré sur le run (vue Worktrees, 11/08) : prompt juge de
  * 422 504 caractères dont 44,7 % de `stdout` bruts, 26,6 % d'empreintes SHA-256 (1 652 hashes)
  * et 9,9 % de commandes recopiées — soit ~81 % de charge qu'aucun juge ne peut exploiter.
  * Le run mourait ensuite sur « Budget tokens total dépassé (9 639 639 / 2 500 000) ».
@@ -19,8 +19,8 @@ import type { ExecutionEvidence } from '../providers/types'
 /**
  * Bornes du LIVRABLE agrégé transmis au juge.
  *
- * Levier n°1 du scout coût joué dans Autowin le 2026-08-12 (conv-1120), adossé aux conversations
- * réelles : sur `conv-101`, un appel juge porte 1 540 000 caractères de messages pour 6,36 $, et
+ * Levier n°1 du scout coût joué dans Autowin le 2026-08-12, adossé aux conversations
+ * réelles : un appel juge porte 1 540 000 caractères de messages pour 6,36 $, et
  * trois passes juge du même fil totalisent 10,56 $. Le chemin greedy injecte l'agrégat ENTIER,
  * sans le plafond que les autres phases appliquent.
  *
@@ -31,7 +31,7 @@ import type { ExecutionEvidence } from '../providers/types'
 const AGGREGATE_HEAD = 40_000
 const AGGREGATE_TAIL = 20_000
 /** Taille maximale du livrable agrégé non coupé : ce qui s'ajoute au prompt du juge s'y mesure (changements-juge.ts). */
-// fix-ok: conv-914 (13/10) — le bloc « CE QUI A CHANGÉ » ajouté au prompt du juge n'avait aucune
+// fix-ok: (13/10) — le bloc « CE QUI A CHANGÉ » ajouté au prompt du juge n'avait aucune
 // borne : sans elle il faisait dépasser les 40 000 + 20 000 ci-dessus. Mesuré : borne remplacée par
 // Infinity → test « ne fait jamais dépasser la taille maximale » de changements-juge.test.ts rouge ;
 // avec AGGREGATE_MAX_CHARS → vert.

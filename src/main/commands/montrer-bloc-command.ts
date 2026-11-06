@@ -3,12 +3,12 @@ import { extname, isAbsolute, resolve } from 'node:path'
 
 /**
  * `montrer_bloc` — POSER DANS LE FIL UN BLOC ```html-render / ```html-interactif LU DANS UN FICHIER
- * (conv-1306, 2026-10-30).
+ * (2026-10-30).
  *
  * Cause : le fil n'affiche un bloc que s'il est écrit dans le TEXTE de la réponse. Pour montrer le
  * carrousel d'un /draft (scripts/draft-carrousel.mjs, 52 ko), l'agent devait relire le fichier puis le
  * réécrire en entier : le bloc passait deux fois par sa mémoire de travail (≈ 28 600 jetons chacune).
- * Mesuré dans conv-1306 : la relecture s'est arrêtée à la ligne 162 sur 218, et l'utilisateur a reçu
+ * Mesuré : la relecture s'est arrêtée à la ligne 162 sur 218, et l'utilisateur a reçu
  * des maquettes empilées, sans les boutons de choix.
  *
  * Le bloc part dans le fil comme un TEXTE de la réponse, sur un flux à lui (`PREFIXE_FLUX_BLOC`) :

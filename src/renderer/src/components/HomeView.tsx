@@ -104,7 +104,7 @@ import { Spinner } from './Spinner'
  *    gonflement, et c'est ce qui a fait rejeter une première version.
  */
 
-/** Le libellé de chaque animal du réglage (conv-1546) : une correspondance, pas un ternaire à deux branches. */
+/** Le libellé de chaque animal du réglage : une correspondance, pas un ternaire à deux branches. */
 const CLE_TEXTE_ANIMAL: Readonly<Record<(typeof ANIMAUX_AGENTS)[number], CleAccueil>> = {
   tanuki: 'animal.tanuki',
   renard: 'animal.renard',
@@ -112,7 +112,7 @@ const CLE_TEXTE_ANIMAL: Readonly<Record<(typeof ANIMAUX_AGENTS)[number], CleAccu
   'panda-roux': 'animal.pandaRoux'
 }
 
-/** Le libellé de chaque couleur de tenue du réglage (conv-1633). */
+/** Le libellé de chaque couleur de tenue du réglage. */
 const CLE_TEXTE_TENUE: Readonly<Record<(typeof TENUES_AGENTS)[number], CleAccueil>> = {
   rouge: 'tenue.rouge',
   orange: 'tenue.orange',
@@ -174,7 +174,7 @@ function cleDeLActivite(phase: PhaseAgent, metier: Metier | null): CleAccueil {
 
 /**
  * L'activité de l'agent d'un collègue : la même que celle des miens, sauf l'attente — « T'attend » serait
- * faux, il attend son humain, pas moi (D9, conv-1429).
+ * faux, il attend son humain, pas moi (D9).
  */
 function activiteDuCollegue(
   a: AgentCollegue,
@@ -210,7 +210,7 @@ interface TaskSnapshotLike {
  * et les deux ont diverge des que `luLe` a ete ajoute. Un type porte a deux endroits est un type qui
  * finira faux a l'un des deux.
  */
-/** Cle locale : Outlook a ete connecte par un clic de l'utilisateur (conv-1555). */
+/** Cle locale : Outlook a ete connecte par un clic de l'utilisateur. */
 const CLE_OUTLOOK_CONNECTE = 'autowin.outlook.connecte'
 
 export type OutlookState =
@@ -220,7 +220,7 @@ export type OutlookState =
   | { etat: 'panne'; cause: string }
 
 /**
- * La clé de traduction du titre de chaque tuile (conv-1170). Le français de ces clés est celui de
+ * La clé de traduction du titre de chaque tuile. Le français de ces clés est celui de
  * `HOME_WIDGET_TITLES`, mot pour mot (vérifié par `HomeView.langue.test.tsx`) ; Jarvis n'y est pas :
  * son titre est le nom choisi par l'utilisateur, pas un texte de l'interface.
  */
@@ -292,7 +292,7 @@ export function HomeView({
   const [snapshotError, setSnapshotError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   // Outlook ne se lit plus de lui-meme : sans Outlook installe, chaque essai relancait une tentative
-  // invasive (conv-1555). La lecture n'a lieu qu'apres un clic sur « Connecter Outlook », memorise.
+  // invasive. La lecture n'a lieu qu'apres un clic sur « Connecter Outlook », memorise.
   const [outlookConnecte, setOutlookConnecte] = useState<boolean>(
     () => window.localStorage?.getItem(CLE_OUTLOOK_CONNECTE) === '1'
   )
@@ -353,7 +353,7 @@ export function HomeView({
     lireVisibilite(window.localStorage)
   )
   /**
-   * LE FOND DE L'ACCUEIL (conv-346, « un menu pour choisir un fond noir ou l'image cyberpunk ou les
+   * LE FOND DE L'ACCUEIL (« un menu pour choisir un fond noir ou l'image cyberpunk ou les
    * planetes »). Lu à la même source que le décor (`fond-accueil.ts`) : le menu montre le fond
    * réellement affiché, et le choisir change le décor sans redémarrer.
    */
@@ -361,12 +361,12 @@ export function HomeView({
   /** Sur le Quartier, les tuiles vivent dans leurs tours : elles ne s'affichent que sorties. */
   const quartier = fond === FOND_FALAISE
   /**
-   * L'ANIMAL DE MES AGENTS (conv-1537) : rangé dans le réglage du Board du poste et écrit dans
+   * L'ANIMAL DE MES AGENTS : rangé dans le réglage du Board du poste et écrit dans
    * `presence.json`, il est aussi celui que les collègues voient. Un choix non enregistré le dit.
    */
   const monAnimal = useMonAnimal()
   const [animalNonEnregistre, setAnimalNonEnregistre] = useState(false)
-  /** LA COULEUR DE LEUR TENUE (conv-1633), sous l'animal : même chemin, mêmes règles. `null` = d'origine. */
+  /** LA COULEUR DE LEUR TENUE, sous l'animal : même chemin, mêmes règles. `null` = d'origine. */
   const maTenue = useMaTenue()
   const [tenueNonEnregistree, setTenueNonEnregistree] = useState(false)
   /**
@@ -402,7 +402,7 @@ export function HomeView({
    *
    * Tous les titres sont fixes SAUF celui de l'assistant, qui suit le nom choisi : le nom regle et le
    * titre affiche doivent etre la meme chose, sinon on aurait deux verites pour un seul objet.
-   * Les titres fixes suivent la langue de l'interface (conv-1170).
+   * Les titres fixes suivent la langue de l'interface.
    */
   const titreWidget = useCallback(
     (id: HomeWidgetId): string =>
@@ -719,7 +719,7 @@ export function HomeView({
   }, [active, outlookRequis, readOutlook])
 
   const departures = useMemo(
-    // « dans 12 min » suit la langue de l'interface (conv-1170).
+    // « dans 12 min » suit la langue de l'interface.
     () => (snapshot ? nextDepartures(snapshot.tasks, now, 12, langue) : []),
     [snapshot, now, langue]
   )
@@ -992,7 +992,7 @@ export function HomeView({
   )
 
   /**
-   * OUVRE une pièce jointe REÇUE (conv-1220) : Outlook la copie dans un dossier temporaire, Windows
+   * OUVRE une pièce jointe REÇUE : Outlook la copie dans un dossier temporaire, Windows
    * l'ouvre. Le résultat est RENDU à la tuile, qui affiche la cause d'un refus sous le fil — là où
    * l'utilisateur vient de cliquer. Rien n'est écrit dans la boîte : aucune relecture à forcer.
    */
@@ -1221,7 +1221,7 @@ export function HomeView({
               </svg>
             </button>
           </div>
-          {/* D8 (conv-1429) : masquer les agents des collègues quand il y a foule. Visible dès
+          {/* D8 : masquer les agents des collègues quand il y a foule. Visible dès
               l'en-tête, pas caché dans les réglages : c'est un geste de tous les jours. */}
           {quartier ? (
             <div
@@ -1311,7 +1311,7 @@ export function HomeView({
                 )}
               </p>
             </section>
-            {/* La couleur de leur tenue, juste sous l'animal (conv-1633) : elle remplace le foulard. */}
+            {/* La couleur de leur tenue, juste sous l'animal : elle remplace le foulard. */}
             <section className="home-settings__bloc">
               <h3>{t('reglages.tenue')}</h3>
               <label className="home-settings__champ">
@@ -1345,7 +1345,7 @@ export function HomeView({
                 )}
               </p>
             </section>
-            {/* Qui je vois, et qui me voit, dans le village commun (conv-1599). */}
+            {/* Qui je vois, et qui me voit, dans le village commun. */}
             <HomePersonnesReglages />
             <section className="home-settings__bloc">
               <h3>{t('reglages.widgets')}</h3>
@@ -1735,7 +1735,7 @@ function WidgetBody({
           {/* Solder l'alerte SANS quitter l'accueil : sinon traiter une alerte demandait de la
               retrouver ailleurs, alors que son identifiant est déjà là. Relevé par le scout (78).
               Une croix au bout de la ligne plutôt que le mot « Acquitter » posé par-dessus au
-              survol (demande utilisateur, 2026-10-28, conv-1225) : le mot reste son nom
+              survol (demande utilisateur, 2026-10-28) : le mot reste son nom
               accessible et son infobulle. */}
           {!notice.acknowledged ? (
             <button

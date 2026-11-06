@@ -75,8 +75,8 @@ export async function genererCandidatsEnConversation(
     construirePromptScoutInterne({ ...deps, dejaConnus }),
     deps.binding,
     // PAS de `readOnly: true` : cette politique n'est pas « lecture seule », c'est le profil de
-    // triage Watchdog — un pilote SANS AUCUN outil (`catalog: []`, exec refusé). Mesuré sur
-    // conv-1155 : le scout a répondu « je n'ai accès à aucun outil de lecture locale ». La retenue
+    // triage Watchdog — un pilote SANS AUCUN outil (`catalog: []`, exec refusé). Mesuré
+    // Le scout a répondu « je n'ai accès à aucun outil de lecture locale ». La retenue
     // vient du prompt (lecture seule exigée), de la classification des commandes du tour, et du
     // garde vide-sans-exploration ci-dessous. `background` : le tour ne vole pas le focus.
     { readOnly: false, maxIterations: 40, background: true }
@@ -95,7 +95,7 @@ export async function genererCandidatsEnConversation(
       `sortie du scout interne illisible : aucun JSON exploitable (conversation ${conversation.id})`
     )
   }
-  // Mesuré sur le premier run réel (conv-1154, 13/08) : 717 tokens, 2,7 s, zéro outil — l'agent a
+  // Mesuré sur le premier run réel (13/08) : 717 tokens, 2,7 s, zéro outil — l'agent a
   // répondu « [] » sans rien lire, et la vue affichait un carré. Un tableau vide n'est acceptable
   // qu'accompagné de la synthèse d'exploration exigée par le prompt ; nu, c'est un refus de travail
   // qu'on NOMME au lieu d'écrire « 0 candidat » comme si l'app avait été réellement lue.

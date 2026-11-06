@@ -68,7 +68,7 @@ function pilote(): { pilot: AgentPilot; envoyes: string[]; exec: ReturnType<type
 const CONV = 'conv-trou-1'
 
 /*
- * UNE RACINE À LUI (conv-1423, 2026-11-01). La note se relit sur disque quand la mémoire est vide, et
+ * UNE RACINE À LUI (2026-11-01). La note se relit sur disque quand la mémoire est vide, et
  * `comptes-rendus-non-vus.json` se relit puis se réécrit EN ENTIER : un fichier de test voisin sur la
  * racine commune remettait la note oubliée. Rouge en suite complète à la dernière assertion, vert seul.
  *

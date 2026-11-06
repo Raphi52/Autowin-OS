@@ -8,7 +8,7 @@ import {
 } from './orchestration-outcome'
 
 /**
- * LA COUPE DE LA BULLE NE TOMBE JAMAIS DANS UN TABLEAU (conv-339).
+ * LA COUPE DE LA BULLE NE TOMBE JAMAIS DANS UN TABLEAU.
  *
  * Le /scout « humains ultra quali comme dans Cyberpunk » rendait un tableau de 9 pistes ; la bulle,
  * bornée à 4 000 caractères, en montrait une ligne et demie. Pour un scout, le tableau EST le
@@ -56,9 +56,9 @@ describe('bulle bornée : jamais une ligne de tableau coupée, le tableau du sco
   })
 
   /*
-   * LE TABLEAU DU SCOUT N'A PAS DE PLAFOND (conv-348, choix de l'utilisateur : « Toujours afficher le
+   * LE TABLEAU DU SCOUT N'A PAS DE PLAFOND (choix de l'utilisateur : « Toujours afficher le
    * tableau du scout en entier, quelle que soit sa longueur »). Le plafond à 3 × la borne coupait le
-   * scout de conv-344 après 14 pistes sur 21 ; or la liste de choix sous la bulle se construit sur ce
+   * scout après 14 pistes sur 21 ; or la liste de choix sous la bulle se construit sur ce
    * texte (`chat-view-model.ts`, `candidatsDepuisScoutTable`) : les pistes 15 à 21 n'étaient ni lues
    * ni sélectionnables — dont la n°15, l'une des deux réponses à la question de départ du fil.
    */

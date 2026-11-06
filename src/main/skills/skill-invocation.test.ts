@@ -102,7 +102,7 @@ describe('le pilote injecte la skill invoquée', () => {
 })
 
 /**
- * NOM NU EN TÊTE (conv-988, 2026-10-16) : la bulle du fil s'allume désormais sur « remake … » tapé
+ * NOM NU EN TÊTE (2026-10-16) : la bulle du fil s'allume désormais sur « remake … » tapé
  * sans `/`. Elle ne doit pas mentir : le corps de la skill part donc AUSSI au modèle dans ce cas.
  */
 describe('le pilote injecte la skill nommée SANS barre', () => {

@@ -77,7 +77,7 @@ describe('decideVerifyCommand — AUTORISATION (le seul cas qui passe)', () => {
 
 describe('capVerifyOutput — la sortie n’inonde pas le tour', () => {
   /*
-   * DEFAUT VECU le 2026-08-25 (conv-1404) : le panneau de `verify` affichait des lignes entieres de
+   * DEFAUT VECU le 2026-08-25 : le panneau de `verify` affichait des lignes entieres de
    * `<ESC>[33m<ESC>[2m…`. `sansCouleur` existait deja dans ce fichier, mais elle ne servait qu'a
    * TESTER la ligne contre le motif de verdict — la ligne RETENUE gardait ses couleurs, et la queue
    * aussi. Un depouillement qui ne s'applique pas a ce qui est RENDU ne depouille rien.

@@ -6,7 +6,7 @@ import { useObservatorySources } from './useObservatorySources'
 
 const ignorer = (): void => undefined
 
-// Les indicateurs « en cours » sont deduits de la derniere cle reglee (conv-1654) : ce test
+// Les indicateurs « en cours » sont deduits de la derniere cle reglee : ce test
 // garde leur comportement (vrai pendant la requete, faux apres, vrai de nouveau a chaque cle).
 function Harness({ refreshKey, active = true }: { refreshKey: number; active?: boolean }) {
   const s = useObservatorySources<never>({

@@ -214,7 +214,7 @@ export function resolveExecutionWorkspace(input: ExecutionWorkspaceInput = {}): 
 }
 
 /**
- * Le texte de la bulle d'un travail abandonné, dans la langue réglée (conv-1170, lot 18). Sorti de
+ * Le texte de la bulle d'un travail abandonné, dans la langue réglée (lot 18). Sorti de
  * `onAbandon` pour être testé sans Electron (`textes-coeur.branchement.test.ts`).
  */
 export function contenuDeNotificationDAbandon(info: { runId: string; tache?: string }): {
@@ -232,7 +232,7 @@ export function contenuDeNotificationDAbandon(info: { runId: string; tache?: str
 const abandonsEnAttente: { runId: string; tache?: string }[] = []
 
 /**
- * UNE bulle pour plusieurs abandons (conv-1444, 2026-11-03) : une même réconciliation en abandonne
+ * UNE bulle pour plusieurs abandons (2026-11-03) : une même réconciliation en abandonne
  * souvent plusieurs d'un coup — 5 runs à la même seconde (15:47:47) ont sonné 5 bulles, vécu comme
  * du spam. Un seul abandon garde le texte d'origine.
  */
@@ -267,11 +267,11 @@ export function selectPhaseFanOut(fanOut: FanOutTopology, phase: NodePhase): Fan
 }
 
 /**
- * UN appel de la décision de workflow, tracé dans `cost.jsonl` (conv-1097). `choisir` part sur le
+ * UN appel de la décision de workflow, tracé dans `cost.jsonl`. `choisir` part sur le
  * modèle des petites tâches, `composer` sur celui du chat. Best-effort : une panne rend « aucun »,
  * comme avant, mais elle est désormais NOMMÉE au lieu d'être avalée.
  *
- * `conversationId` : le fil du run. Sans lui, mesuré le 2026-11-02 (conv-1431), les 53 lignes
+ * `conversationId` : le fil du run. Sans lui, mesuré le 2026-11-02, les 53 lignes
  * `choixWorkflow` de `cost.jsonl` étaient orphelines et le coût affiché par fil les oubliait.
  */
 async function demanderDecisionWorkflow(
@@ -314,7 +314,7 @@ export class AutowinOS {
   readonly executionSupervisor = new ExecutionSupervisor()
   readonly roles = new RoleModelConfig(loadRoleBindings()) // restaure la config persistée
   /**
-   * Aucun plafond de coût depuis le retrait du réglage Budget (conv-1119, 2026-10-23) : le
+   * Aucun plafond de coût depuis le retrait du réglage Budget (2026-10-23) : le
    * plafond USD n'est plus réglable, `budgetStatus()` rend donc `budget: null` et aucune alerte à
    * 80 % — honnête, puisqu'il n'y a plus de limite à approcher.
    */
@@ -343,7 +343,7 @@ export class AutowinOS {
   /**
    * Environnement du Brain PERSO, branché par `index.ts` (`envDuBrainPerso`) ; absent = aucun Brain
    * perso, comme dans les tests. Branchement tardif plutôt qu'un appel direct ici : un test qui
-   * construit l'OS ne doit pas aller lire le réglage réel du poste (conv-1233, 2026-10-28).
+   * construit l'OS ne doit pas aller lire le réglage réel du poste (2026-10-28).
    */
   brainPersoDuRun?: () => NodeJS.ProcessEnv | undefined
   /** Serveur du Brain perso injoignable pendant un run : `index.ts` tente de le démarrer. */
@@ -360,7 +360,7 @@ export class AutowinOS {
   private readonly orchestratorDeps: OrchestratorDeps
   /**
    * Le workflow ACTIF de la vue Workflows (`index.ts`, `appliquerWorkflowActif`) : une VALEUR PAR
-   * DÉFAUT, plus un forçage (choix de l'utilisateur, conv-1070, 2026-10-22). Il ne pilote un run que
+   * DÉFAUT, plus un forçage (choix de l'utilisateur, 2026-10-22). Il ne pilote un run que
    * si ni la conversation ni le choix automatique ne proposent de workflow (`poseConversationWorkflow`).
    * Avant, il passait avant tout : 39 démarrages sur 39 en source `manuel` dans `causal-trace/`, le
    * choix automatique ne tournait jamais. La confrontation qui imposait autrefois son workflow par ce
@@ -430,11 +430,11 @@ export class AutowinOS {
     const profileId = workflowForConversation(selections, conversationId)
     // MODE DYNAMIQUE : l'utilisateur ne s'est JAMAIS prononcé → on demande au modèle lequel convient.
     // Il a le droit de répondre « aucun ». Le workflow actif de la vue n'est alors que le REPLI : il
-    // ne passe plus avant ce choix (conv-1070, 2026-10-22).
+    // ne passe plus avant ce choix (2026-10-22).
     if (!profileId) {
       const proposition = task ? await this.poseWorkflowDynamique(task, conversationId) : undefined
       if (proposition) return proposition
-      // Le REPLI subit la même garde que le choix du modèle (conv-1070, 2026-10-22) : un workflow
+      // Le REPLI subit la même garde que le choix du modèle (2026-10-22) : un workflow
       // actif de réparation (« Correctif » : think, build, clean, judge) sur un symptôme dont la
       // cause est inconnue ferait sauter le cadrage. On rend alors la main au régime, qui le joue.
       const parDefaut = this.workflowParDefaut
@@ -472,7 +472,7 @@ export class AutowinOS {
     // Ne pas payer un appel de modèle pour apprendre qu'une demande de trois mots ne mérite rien.
     if (!meriteUneDecision(task)) return undefined
     const profiles = loadWorkflowProfiles().profiles
-    // Le modèle des petites tâches (réglage du Routeur ; Haiku par défaut, conv-1097) CHOISIT dans
+    // Le modèle des petites tâches (réglage du Routeur ; Haiku par défaut) CHOISIT dans
     // le catalogue. Il ne compose jamais : un « nouveau » repart sur le modèle du chat, seul à
     // écrire un graphe (`workflow-dynamic.ts`, ModeDecision).
     let decision = await demanderDecisionWorkflow(
@@ -545,7 +545,7 @@ export class AutowinOS {
   readonly worktreeManager?: WorktreeManager
   private worktreeRuntimeStatus!: WorktreeRuntimeStatus
   private worktreeActivityListener?: (a: WorktreeAgentActivity[]) => void
-  /** Prévenu quand un run vient d'être SUSPENDU par le quota (`reveil-apres-quota.ts`, conv-1069). */
+  /** Prévenu quand un run vient d'être SUSPENDU par le quota (`reveil-apres-quota.ts`). */
   private murDeQuotaListener?: () => void
   private finDeRunListener?: (runId: string) => void
   private refusIntegrationListener?: (refus: {
@@ -579,7 +579,7 @@ export class AutowinOS {
       // un autre. Seul `claude` est multi-comptes ; les autres providers rendent `undefined` et
       // gardent donc exactement le comportement d'avant (l'echec de quota remonte tel quel).
       (providerId, walled) => (providerId === 'claude' ? claudeRotateAccount(walled) : undefined),
-      // 5e argument : le compte CHOISI pour le fil de l'appel (conv-1416), jamais remplacé tout seul.
+      // 5e argument : le compte CHOISI pour le fil de l'appel, jamais remplacé tout seul.
       (providerId, fil) => (providerId === 'claude' ? claudeCompteDuFil(fil) : undefined)
     )
       // Claude d'abord : il reste l'exécuteur par défaut (`executors[0]` du registre). ChatGPT se
@@ -587,11 +587,11 @@ export class AutowinOS {
       // plus, donc jamais lancés, jamais sondés, jamais routés. Voir `routed-providers.ts`.
       .register(new ClaudeCliAdapter())
       .register(new CodexAdapter())
-      // Gemini par l'abonnement Google (conv-1499) : choisi à la main, jamais exécuteur par défaut.
+      // Gemini par l'abonnement Google : choisi à la main, jamais exécuteur par défaut.
       .register(new AgyAdapter())
-      // Grok par l'abonnement SuperGrok, via le CLI officiel d'xAI (conv-1499).
+      // Grok par l'abonnement SuperGrok, via le CLI officiel d'xAI.
       .register(new GrokAdapter())
-    // Services HTTP sans CLI (conv-1499) : après les deux CLI, donc jamais élus exécuteur par défaut.
+    // Services HTTP sans CLI : après les deux CLI, donc jamais élus exécuteur par défaut.
     for (const adaptateur of adaptateursServicesHttp()) this.registry.register(adaptateur)
     const executionWorkspace = resolveExecutionWorkspace()
     this.executionWorkspace = executionWorkspace
@@ -633,7 +633,7 @@ export class AutowinOS {
           // exactement ces lignes (2026-08-19). Un commentaire trop affirmatif se paie en diagnostic.
           deferRecoveryUntil: interfaceVisible,
           // `app?.` : hors d'Electron (bancs de test), `app` n'existe pas ; le `try` autour avalerait
-          // l'erreur et l'app partirait sans aucune copie isolée (e2e-chaine, conv-1421).
+          // l'erreur et l'app partirait sans aucune copie isolée (e2e-chaine).
           sansRecuperation: resolveAutomationInstanceMode(
             process.argv,
             process.env,
@@ -641,7 +641,7 @@ export class AutowinOS {
           ).isolated,
           manager,
           // La liste des travaux non publiés suit le dépôt, même touché en ligne de commande
-          // (conv-360) : sans lire git, seulement les fichiers de références sous `.git`.
+          // Sans lire git, seulement les fichiers de références sous `.git`.
           surveillerReferences: (siChange) => surveillerReferencesGit(executionWorkspace, siChange),
           stateStore: new WorktreeRunStateStore(identity.root, identity.repoId),
           /**
@@ -777,20 +777,20 @@ export class AutowinOS {
         bilan: (depot) => bilanDesChoix({ depot, resultatDuRun: this.lecteurResultatRun() }),
         // fix-ok: sans cette ligne, la note ajustee sur les choix reels restait vide en production.
         facteurs: (depot) => facteursDesChoix({ depot }),
-        // Piste 4 de conv-1033 : commits recents et pistes deja livrees, pour la marque « deja fait ? ».
+        // Piste 4 : commits recents et pistes deja livrees, pour la marque « deja fait ? ».
         dejaFaits: (depot) => sujetsDejaFaits({ depot, resultatDuRun: this.lecteurResultatRun() })
       },
       // Lue A CHAQUE phase, comme `skillCommands` : le fournisseur est branche par `index.ts` apres
       // construction, et une valeur figee ici resterait vide.
       drainDirectives: (conversationId) => this.directivesEnAttente?.(conversationId) ?? [],
-      // BRAIN PERSO (conv-1233) : relu à chaque run, même branchement tardif que `drainDirectives`.
+      // BRAIN PERSO : relu à chaque run, même branchement tardif que `drainDirectives`.
       brainPerso: () => this.brainPersoDuRun?.(),
       persoInjoignable: () => this.brainPersoInjoignable?.(),
       // Même branchement tardif que `drainDirectives` : la fenêtre de question vit dans `index.ts`
-      // (objection d'étendue répétée, conv-1149). Absente = personne ne peut répondre.
+      // (objection d'étendue répétée). Absente = personne ne peut répondre.
       demanderALUtilisateur: (question, contexte, signal) =>
         this.questionALUtilisateur?.(question, contexte, signal),
-      // Fin de run : ferme le bureau cache du run s'il a ete ouvert (lot 1, conv-222). Le chemin des
+      // Fin de run : ferme le bureau cache du run s'il a ete ouvert (lot 1). Le chemin des
       // scripts n'est lu qu'a ce moment-la : rien ne change au demarrage.
       fermerBureauCache: (demande) =>
         fermerBureauCacheSiOuvert(racineScriptsHorsArchive(app.getAppPath()), demande),
@@ -823,7 +823,7 @@ export class AutowinOS {
       // sur les tâches simples sans jamais sous-traiter les complexes (doute → critical).
       classifyPhases: regimePhases,
       // L'interrupteur de Settings › Skills, relu à chaque run : une étape désactivée ne se joue
-      // plus (conv-1602).
+      // plus.
       etapeDesactivee: etapeDesactiveeDansLesReglages,
       currentExecutionQuote: () => this.executionSupervisor.currentQuote(),
       currentExecutionUsage: () => this.executionSupervisor.currentSnapshot(),
@@ -831,7 +831,7 @@ export class AutowinOS {
       // reste du temps. Même portée ambiante que le devis ci-dessus.
       // Remplacé PAR RUN dans `runTask` : ici c'est le défaut inerte, pas la vraie source.
       currentWorkflow: () => undefined,
-      // conv-989 : la copie ENTIERE des sorties d'etapes, que nomme la marque de coupe du juge. Le
+      // La copie ENTIERE des sorties d'etapes, que nomme la marque de coupe du juge. Le
       // checkpoint ci-dessous est efface a la cloture ; celle-ci reste (`runs/livrable-entier.ts`).
       cheminDuLivrableEntier: (runId) => cheminDuLivrableEntier(runId),
       // SURVIE NIVEAU 3 : après CHAQUE phase, on persiste l'acquis du run ; à la clôture on l'efface.
@@ -880,7 +880,7 @@ export class AutowinOS {
       onRunSettled: (runId) => {
         this.datesDesCheckpoints.oublier(runId)
         clearOrchestrationState(this.orchestrationStateRoot, runId)
-        // « Publication auto » relit les travaux d'agents restés hors de la branche (conv-1544).
+        // « Publication auto » relit les travaux d'agents restés hors de la branche.
         this.finDeRunListener?.(runId)
       },
       // Mur de quota : l'état reprenable est GARDÉ et marqué, jamais effacé (`orchestrator.ts`).
@@ -894,7 +894,7 @@ export class AutowinOS {
           .catch((erreur: unknown) =>
             console.warn('[orchestration] mur de quota non noté sur le checkpoint', runId, erreur)
           )
-          // APRÈS l'écriture : le réveil relit l'heure de retour sur le disque (conv-1069).
+          // APRÈS l'écriture : le réveil relit l'heure de retour sur le disque.
           .then(() => this.murDeQuotaListener?.())
       },
       // Fan-out multi-modèles : les blocs topology scout/frame/terrain → phases composées ; judge → juges.
@@ -957,7 +957,7 @@ export class AutowinOS {
             )
           }
           // Rendu à l'orchestrateur : l'annonce du commit dit ce qui a VRAIMENT été poussé, au lieu
-          // de « non poussé » écrit en dur (conv-1139, 2026-10-25).
+          // de « non poussé » écrit en dur (2026-10-25).
           return this.lastAutoClose.project
         }
       }
@@ -977,7 +977,7 @@ export class AutowinOS {
   private readonly closeBaselines = new Map<string, Promise<CloseBaseline>>()
   /**
    * Dernier résultat de clôture — remonté à l'UI pour dire ce qui a réellement été publié, ou
-   * pourquoi rien ne l'a été. PERSISTÉ et relu au démarrage : le 2026-10-01 (conv-770), le motif du
+   * pourquoi rien ne l'a été. PERSISTÉ et relu au démarrage : le 2026-10-01, le motif du
    * non-commit du tour 235b91bd a disparu au redémarrage, faute d'exister ailleurs qu'en mémoire.
    */
   private dernierRapport: AutoCloseReport | undefined = loadLastAutoCloseReport()
@@ -1005,7 +1005,7 @@ export class AutowinOS {
     }
   }
 
-  /** « Publier les fils finis » (conv-1339, voir git-apres-fil.ts) : éteint tant qu'on ne l'allume pas. */
+  /** « Publier les fils finis » (voir git-apres-fil.ts) : éteint tant qu'on ne l'allume pas. */
   private gitApresFil = loadGitApresFil()
 
   setGitApresFil(enabled: boolean): void {
@@ -1036,7 +1036,7 @@ export class AutowinOS {
     conversationId: string
     turnId: string
     request: string
-    /** Texte final du tour : son « ✅ Fait » titre le commit (conv-1069). */
+    /** Texte final du tour : son « ✅ Fait » titre le commit. */
     compteRendu?: string
     debut: ChatTurnStart
     /** Dossiers de travail des tours d'AUTRES fils en cours, relus au moment de publier. */
@@ -1097,7 +1097,7 @@ export class AutowinOS {
 
   /**
    * Branche la lecture des résultats de runs (journal `outcome-learning`, construit dans le point
-   * d'entrée) : la mémoire du scout y relit ce que sont devenues les pistes prises (piste 1, conv-1033).
+   * d'entrée) : la mémoire du scout y relit ce que sont devenues les pistes prises (piste 1).
    */
   setResultatsDesRuns(lecteur: () => ReadonlyMap<string, ClasseResultatRun>): void {
     this.resultatsDesRuns = lecteur
@@ -1245,14 +1245,14 @@ export class AutowinOS {
 
   /**
    * Abonne le réveil des runs suspendus : sans lui, un run coupé par le quota app ouverte ne
-   * repartait qu'au redémarrage suivant (conv-1069). Idempotent.
+   * repartait qu'au redémarrage suivant. Idempotent.
    */
   onMurDeQuota(listener: () => void): void {
     this.murDeQuotaListener = listener
   }
 
   /**
-   * Abonne « Publication auto » à la fin de chaque run d'agents (conv-1544) : un travail fini resté
+   * Abonne « Publication auto » à la fin de chaque run d'agents : un travail fini resté
    * dans sa copie de travail part alors par un /git, sans bouton « Traiter » à cliquer. Idempotent.
    */
   onFinDeRun(listener: (runId: string) => void): void {
@@ -1323,7 +1323,7 @@ export class AutowinOS {
     const settings = DEFAULT_ORCHESTRATION_BUDGET
     /*
      * Le plafond d'un tour de chat vient UNIQUEMENT des plafonds fixes (`maxChatProviderCalls`,
-     * `maxTotalTokens`, `maxUsd`) — plus de reglage utilisateur depuis conv-1119 (2026-10-23).
+     * `maxTotalTokens`, `maxUsd`) — plus de reglage utilisateur depuis le 2026-10-23.
      *
      * Les caps d'environnement AUTOWIN_CHAT_CALL_CAP / _TOKEN_CAP / _USD_CAP ont ete SUPPRIMES le
      * 2026-09-16 avec le budget du tour de chat : plus aucun reglage cache ne resserre un tour.
@@ -1346,7 +1346,7 @@ export class AutowinOS {
     /*
      * LE PLAFOND D'APPELS DU TOUR EST CELUI DU REGLAGE, PAS CELUI DU REGIME.
      *
-     * Mesure du 2026-09-08 (conv-347, conv-241, conv-233) : trois tours morts sur « Budget d'appels
+     * Mesure du 2026-09-08 : trois tours morts sur « Budget d'appels
      * provider atteint : 10 appels » alors que le reglage en autorise 50. Cause : `compileExecutionQuote`
      * classe un tour de chat en regime `trivial`, dont le PREREGLAGE vaut 10 appels, et `stricter`
      * garde le plus petit des deux. Le plafond effectif ne venait donc ni du reglage ni d'un cap pose
@@ -1495,7 +1495,7 @@ export class AutowinOS {
   ): Promise<OrchestrationResult> {
     await this.waitUntilReady()
     // Une reprise ne remet pas l'horloge à zéro : sinon un run refusé à chaque démarrage échappe à
-    // la péremption de 36 h (conv-1589, `run-49e50da90997-1`).
+    // la péremption de 36 h (`run-49e50da90997-1`).
     if (resumeControl) this.datesDesCheckpoints.reprendre(resumeControl)
     // Certains harness historiques construisent le prototype avec un orchestrateur factice sans
     // magasin de roles. En production `roles` existe toujours ; le fallback laisse le mock intact.
@@ -1527,9 +1527,9 @@ export class AutowinOS {
           // deux conversations simultanées se volaient leur workflow, et le `finally` de l'une effaçait
           // celui de l'autre. Ici la contamination n'est plus improbable, elle est IMPOSSIBLE.
           //
-          // Une sélection de candidats scout ne rejoue pas le scout du workflow du fil (conv-1080,
+          // Une sélection de candidats scout ne rejoue pas le scout du workflow du fil (
           // `selection-sans-scout.ts`). Le workflow actif de la vue, devenu une simple valeur par
-          // défaut (conv-1070), passe par le même filtre : il n'y a plus de workflow imposé.
+          // défaut, passe par le même filtre : il n'y a plus de workflow imposé.
           const workflowDuRun =
             runOptions.workflowOverride ??
             workflowSansScoutPourSelection(
@@ -1597,7 +1597,7 @@ export class AutowinOS {
   /**
    * Le run que ce process execute DEJA pour ce tour de cette conversation, s'il y en a un.
    *
-   * fix-ok: conv-890, 2026-09-30 (objection du juge, reparation 4 de run-85d8e7f57af2-1) — au
+   * fix-ok: 2026-09-30 (objection du juge, reparation 4 de run-85d8e7f57af2-1) — au
    * redemarrage, run-3180eec71b06-1 repart a 13:36:17.850 sur le tour 386f4c48 ; le tour de chat
    * restaure relance `orchestrate` avec une tache REECRITE, la reprise stricte (meme texte) ne le
    * reconnait pas, et run-66d6d5bdfc5a-1 part a 13:36:21.030 sur le MEME tour : `think` rejoue,
@@ -1832,7 +1832,7 @@ export class AutowinOS {
     /*
      * LA RACINE OÙ AUTOWIN ÉCRIT, PAS SEULEMENT CELLE DU KIT. `runsRoot()` (`~/.claude/runs`) n'existe
      * pas sur le poste : `get_state`, l'état du prompt et le contexte des orchestrations voyaient
-     * ZÉRO run, alors que la construction de conv-253 tournait (kaizen du 2026-10-11, sonde : 0 run
+     * ZÉRO run, alors que la construction tournait (kaizen du 2026-10-11, sonde : 0 run
      * par défaut, 9 « open » dans `convRunsRoot()`). Les deux racines, une seule borne.
      */
     const fenetre = await scanRunsPourSnapshot([convRunsRoot(), runsRoot()])

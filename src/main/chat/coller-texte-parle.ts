@@ -1,7 +1,7 @@
 /**
  * COLLER LE TEXTE PARLÉ D'UN TOUR — sans souder deux messages en un seul.
  *
- * DEFAUT VECU (conv-152, 2026-09-02) : dans un tour à plusieurs itérations, chaque itération
+ * DEFAUT VECU (2026-09-02) : dans un tour à plusieurs itérations, chaque itération
  * produit son propre message. `streamedSpoken += texte` collait le message de l'itération 2
  * DIRECTEMENT à la fin de celui de l'itération 1, sans le moindre séparateur. Le fil affichait donc
  * « …dernier maillon du balayage.```html-render » — et comme une clôture de bloc Markdown ne compte

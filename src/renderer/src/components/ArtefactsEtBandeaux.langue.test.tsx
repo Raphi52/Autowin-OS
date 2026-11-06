@@ -12,7 +12,7 @@ import { depuis } from './depuis'
 import { libelleCadence } from './video-pointage'
 
 /**
- * LES APERÇUS D'ARTEFACTS ET LE BOUTON DE MISE À JOUR SUIVENT LA LANGUE (conv-1170, lot 6). Entrée
+ * LES APERÇUS D'ARTEFACTS ET LE BOUTON DE MISE À JOUR SUIVENT LA LANGUE (lot 6). Entrée
  * qui doit faire échouer ce test : un libellé laissé en dur dans ArtifactPreview, artifact-outils
  * ou UpdateBanner, un composant qui ne se redessine pas quand la langue change, ou un français qui
  * ne revient pas mot pour mot.

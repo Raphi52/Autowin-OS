@@ -10,7 +10,7 @@ import {
 } from './home-decor-scene'
 
 /**
- * CE QUE L'UTILISATEUR A DEMANDÉ, conv-1408, mot pour mot :
+ * CE QUE L'UTILISATEUR A DEMANDÉ, mot pour mot :
  *
  *   « dans l'accueil le fond d'écran je veux un nuage cosmique bleu violet au milieu qui se déplace
  *     et des lunes autour des planetes »
@@ -53,7 +53,7 @@ describe('accueil — nuage cosmique central mobile et lunes autour des planète
   describe('LE NUAGE : cosmique, bleu-violet, AU MILIEU, et il se déplace', () => {
     it('la composition à planètes porte un nuage central déclaré', () => {
       // Vise `actuel` par son NOM : la composition a planetes n'est plus le defaut depuis le 2026-10-17
-      // (l'avenue, conv-301), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
+      // (l'avenue), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
       const nuage = COMPOSITIONS.actuel.nuage
       expect(nuage).toBeTruthy()
       // « au milieu » : le nuage est posé au centre du cadre, pas dans un angle comme les nébuleuses.
@@ -108,7 +108,7 @@ describe('accueil — nuage cosmique central mobile et lunes autour des planète
   describe('LES LUNES : autour des planètes, et elles tournent', () => {
     it('chaque planète de la composition à planètes porte au moins une lune', () => {
       // Vise `actuel` par son NOM : la composition a planetes n'est plus le defaut depuis le 2026-10-17
-      // (l'avenue, conv-301), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
+      // (l'avenue), mais elle reste choisissable et doit tenir ce qui a ete demande pour elle.
       const planetes = COMPOSITIONS.actuel.planetes
       expect(planetes.length).toBeGreaterThanOrEqual(3)
       for (const planete of planetes) {

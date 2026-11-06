@@ -80,7 +80,7 @@ export function registerBrainIpc({
   invalidateBrainRuntime
 }: BrainIpcDeps): void {
   /**
-   * PORTÉE D'UN VAULT (conv-1233, 2026-10-28 : « affiche le Brain perso dans la vue Knowledge, à
+   * PORTÉE D'UN VAULT (2026-10-28 : « affiche le Brain perso dans la vue Knowledge, à
    * côté du Brain d'équipe »). Le Brain d'équipe suit le corpus du dossier de travail, comme avant.
    * Le Brain PERSO n'en a aucun — ses notes ne sont rangées par aucun projet — et se cherche sur SON
    * serveur. Le choix se fait sur le chemin envoyé par la vue ; l'AUTORISATION de lire reste celle
@@ -127,7 +127,7 @@ export function registerBrainIpc({
     const vault = guardString(path, 'path')
     return brainWorker.request('loadGraph', vault, lod, community, porteeDuVault(vault).corpus)
   })
-  // Les deux Brains reliés par leurs ponts (conv-1262) : l'équipe garde le corpus du dossier de
+  // Les deux Brains reliés par leurs ponts : l'équipe garde le corpus du dossier de
   // travail ; aucune racine ne vient de la vue, le worker les résout lui-même.
   ipcMain.handle('os:loadBrainGraphReunis', (event, lod?: number) => {
     assertTrustedRendererSender(event, 'Brain')

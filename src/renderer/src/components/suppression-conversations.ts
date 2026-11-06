@@ -1,5 +1,5 @@
 /**
- * Ce que la carte de suppression des fils affiche (conv-1078, 2026-10-22, « Implémenter la 2 ·
+ * Ce que la carte de suppression des fils affiche (2026-10-22, « Implémenter la 2 ·
  * En-tête en ligne ») : les fils nommés, leurs messages, et le reste regroupé au-delà de trois.
  * À part du composant (SuppressionConversationsCarte.tsx) : un fichier de composant n'exporte que
  * des composants (rafraîchissement à chaud, règle `react-refresh/only-export-components`).

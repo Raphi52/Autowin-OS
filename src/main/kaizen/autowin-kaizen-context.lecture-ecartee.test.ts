@@ -7,12 +7,12 @@ import {
 import { sansPrecisionDeLecture, tacheAvecLectureRetenue } from '../chat/deux-lectures'
 
 /*
- * LA CIBLE D'UN /KAIZEN SE LIT SUR LES MOTS DE L'UTILISATEUR (conv-1332, 2026-10-30).
+ * LA CIBLE D'UN /KAIZEN SE LIT SUR LES MOTS DE L'UTILISATEUR (2026-10-30).
  *
- * « /kaizen tu aurais du tout paralléliser avec une super conv », tapé dans conv-1332 (tour
+ * « /kaizen tu aurais du tout paralléliser avec une super conv », tapé (tour
  * c7de932e-abac-4f8b-ba34-1b6335b62653) : l'app y a joint sa compréhension ET la lecture qu'elle
  * ÉCARTAIT, « Reprendre maintenant le travail sur /draft… ». Ce `/draft`-là a été pris pour une
- * commande citée, et le dossier est parti sur conv-1306, la dernière conversation où /draft a été
+ * commande citée, et le dossier est parti, la dernière conversation où /draft a été
  * tapé. La phrase de compréhension, elle, a été prise pour une citation de l'utilisateur.
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : relire la tâche complète dans l'un des trois sélecteurs.
  */

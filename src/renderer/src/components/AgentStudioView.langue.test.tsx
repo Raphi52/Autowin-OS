@@ -6,7 +6,7 @@ import { AgentStudioView } from './AgentStudioView'
 import { appliquerLangue } from '../langue'
 
 /**
- * AGENT STUDIO SUIT LA LANGUE (traduction anglaise, lot « Agent Studio », conv-1170). Entrée qui
+ * AGENT STUDIO SUIT LA LANGUE (traduction anglaise, lot « Agent Studio »). Entrée qui
  * doit faire échouer ce test : un libellé de l'en-tête, de la topologie ou des workflows laissé en
  * dur, une phrase calculée hors composant (résumé d'un profil, mesures d'arène) qui ne suit pas la
  * langue, ou un écran qui ne se redessine pas quand la langue change.

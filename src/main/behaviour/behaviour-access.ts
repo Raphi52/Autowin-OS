@@ -77,7 +77,7 @@ export function isTrustedRendererUrl(
 /**
  * Les SEULES pages qu'un cadre du fil peut charger en plus d'une URL locale (`data:`/`blob:`) : la
  * page des scenes 3D (`scene-3d.html`, a cote de `index.html`), servie par l'app elle-meme, et
- * depuis conv-1304 (2026-10-30) sa jumelle SANS moteur 3D (`page-interactive.html`) — meme amorce,
+ * depuis le 2026-10-30 sa jumelle SANS moteur 3D (`page-interactive.html`) — meme amorce,
  * meme politique —, ou tournent les pages ```html-interactif qui ne font pas de 3D.
  *
  * Elle existe parce qu'un cadre local herite de la politique de l'app, qui interdit tout script

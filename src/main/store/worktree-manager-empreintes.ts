@@ -5,7 +5,7 @@ import { execFileHorsFil, type ErreurHorsFil, type OptionsHorsFil } from '../gel
 
 /**
  * Empreintes de processus (pid recyclé ou non) et leur sondage système, synchrone ou en lot.
- * Extrait tel quel de worktree-manager.ts (conv-1508) : bloc autonome, que la classe ne lit que
+ * Extrait tel quel de worktree-manager.ts : bloc autonome, que la classe ne lit que
  * par defaultProcessIdentity / empreinteConnue / prechargerEmpreintesProcessus.
  */
 
@@ -170,7 +170,7 @@ function planifierSondageAsynchrone(pids: number[], maintenant: () => number): v
     finir(empreintes)
   }
   /*
-   * LA CRÉATION DU PROCESSUS AUSSI PART HORS DU FIL (conv-1574, 2026-11-05). `execFile` n'est
+   * LA CRÉATION DU PROCESSUS AUSSI PART HORS DU FIL (2026-11-05). `execFile` n'est
    * asynchrone que pour la suite : créer `powershell.exe` tenait le fil principal, jusqu'à 31,9 s
    * d'un coup sur ce poste (gels.jsonl, 09:51:40 UTC), 82,8 s en 13 appels sur une session.
    * `execFileHorsFil` crée le processus dans un fil dédié ; la sortie arrive comme avant, erreur

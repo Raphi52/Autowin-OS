@@ -5,7 +5,7 @@ import { sourceDuBus } from './source-du-bus.test-helpers'
 /**
  * UN VERT D'ARBRE SALE N'ATTESTE PAS L'ETAT COMMITE.
  *
- * Defaut mesure le 2026-08-22 (conv-1371). Un agent a lance la suite via `verify`, obtenu
+ * Defaut mesure le 2026-08-22. Un agent a lance la suite via `verify`, obtenu
  * « exit 0, 713 fichiers / 7754 tests », et conclu « Base unitaire prouvee verte, PRETE POUR LA
  * FUSION » — puis recommande la fusion. Or la suite avait tourne dans l'arbre de travail PARTAGE,
  * qui portait alors 14 fichiers non commites d'autres sessions. Mesure independante le meme jour :
@@ -59,7 +59,7 @@ describe('verify — le vert nomme sa portée', () => {
  * le CÂBLAGE, pas l'effet. La mesure sur l'app reste l'autorité.
  */
 describe('la note de portée est réellement branchée sur `verify`', () => {
-  // runVerifyAt vit dans commands/verification.ts (conv-1580, lot 6) : on lit la famille du bus.
+  // runVerifyAt vit dans commands/verification.ts (lot 6) : on lit la famille du bus.
   const source = sourceDuBus()
 
   it('`runVerifyAt` appelle porteeDuVert', () => {

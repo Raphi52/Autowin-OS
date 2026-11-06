@@ -15,7 +15,7 @@ import { MainApp } from './App'
 import { reclamerOuvertureConversation } from './components/pending-conversation-open'
 
 /**
- * CLIC SUR LA NOTIFICATION DE FIN DE TOUR (conv-1038, 2026-10-21) : le main émet
+ * CLIC SUR LA NOTIFICATION DE FIN DE TOUR (2026-10-21) : le main émet
  * `open-conversation` ; l'interface doit ouvrir CE fil, que le chat ait déjà été monté ou non.
  */
 type Ecouteur = (event: { type: string; convId?: string; texte?: string }) => void
@@ -91,7 +91,7 @@ describe('notification de fin de tour → ouverture du fil', () => {
 })
 
 /*
- * BOUTON DE SUITE DE LA NOTIFICATION (conv-1038) : le chat monté l'envoie lui-même. Chat JAMAIS
+ * BOUTON DE SUITE DE LA NOTIFICATION : le chat monté l'envoie lui-même. Chat JAMAIS
  * monté, personne ne peut l'envoyer : la suite ne doit pas se perdre en silence — elle attend dans
  * le brouillon de CE fil, APRÈS ce qui y était déjà écrit, et le fil s'ouvre au montage du chat.
  */

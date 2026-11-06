@@ -1,15 +1,15 @@
-/* L'AFFICHAGE SELON LA CONNEXION (conv-1442, 2026-11-02). Les attributs sont posés sur <html> par
+/* L'AFFICHAGE SELON LA CONNEXION (2026-11-02). Les attributs sont posés sur <html> par
    `affichage-session.ts`, d'après ce que Windows rapporte au moteur.
    - `data-ecran="telephone"` : l'écran de la session est petit (le téléphone). Mise en page ÉTROITE
      à gros boutons.
    - `data-session="distante"` (Windows App, Bureau à distance) ne change RIEN à l'affichage : la
      « version allégée » qui figeait toutes les animations hors de l'Accueil a été retirée à la
-     demande de l'utilisateur (conv-1538, 2026-11-04) : « sur rdp ça m'a enlevé toutes mes
+     demande de l'utilisateur (2026-11-04) : « sur rdp ça m'a enlevé toutes mes
      animations […] remet tout ». Ne pas la réintroduire sans sa demande explicite. */
 
 /* ---- Version téléphone ----------------------------------------------------------------------- */
 
-/* LE MENU PASSE EN BARRE DU BAS (conv-1568, 2026-11-05 : « fais une interface potable pour quand
+/* LE MENU PASSE EN BARRE DU BAS (2026-11-05 : « fais une interface potable pour quand
    je suis sur Windows App ») : en colonne à gauche, il mangeait 64 px sur ~400, et la liste des
    conversations autant ; le fil gardait moins de la moitié de l'écran. En bas, il rend toute la
    largeur, et ses icônes restent à 44 px pour le doigt. Logo, bouton de repli et pied disparaissent. */
@@ -79,7 +79,7 @@
   min-height: 40px;
 }
 
-/* LA LISTE DES CONVERSATIONS DEVIENT UN TIROIR (conv-1568) : cachée par défaut, le fil prend toute
+/* LA LISTE DES CONVERSATIONS DEVIENT UN TIROIR : cachée par défaut, le fil prend toute
    la largeur ; le bouton ☰ de l'en-tête du chat l'ouvre par-dessus, choisir un fil la referme. */
 :root[data-ecran='telephone'] .chat-layout {
   position: relative;
@@ -116,7 +116,7 @@
   min-height: 40px;
 }
 
-/* Le ✕ du tiroir, calé en haut à droite de la liste (conv-1568). */
+/* Le ✕ du tiroir, calé en haut à droite de la liste. */
 :root[data-ecran='telephone'] .conv-pane-fermer-tel {
   align-self: flex-end;
 }

@@ -40,13 +40,13 @@ export function BilanDeCloture({
   conversationId?: string
   closure: RunClosureObservation
   verdictEventIds?: string[]
-  /** Le déroulé par agent du run (le diagramme de la Chronologie), pour le rejouer (conv-981). */
+  /** Le déroulé par agent du run (le diagramme de la Chronologie), pour le rejouer. */
   gantt?: AgentGantt
   runId?: string
   runs: readonly RunEntry[]
   onOuvrirRunMd: (run: RunEntry) => void
   /**
-   * Ouvre CE tour dans l'Observatory, la version complète du déroulé (conv-981) : barres
+   * Ouvre CE tour dans l'Observatory, la version complète du déroulé : barres
    * cliquables et liste des événements. Absent sans tour connu : aucun lien mort.
    */
   onVoirDansObservatory?: () => void
@@ -248,7 +248,7 @@ function sujetDuChemin(chemin: string): string {
 }
 
 /**
- * « REJOUER CE RUN » (conv-981, 2026-10-15) : le déroulé par agent du run — le MÊME diagramme que la
+ * « REJOUER CE RUN » (2026-10-15) : le déroulé par agent du run — le MÊME diagramme que la
  * Chronologie de l'Observatory, rien de redessiné — se rejoue en 10 s, chaque étape s'allumant à son
  * heure (`DerouleRejouable`). Un run encore ouvert n'a pas de déroulé fini : l'appelant ne monte
  * rien. Le lien « Version complète » ouvre ce tour dans l'Observatory, où chaque barre ouvre son

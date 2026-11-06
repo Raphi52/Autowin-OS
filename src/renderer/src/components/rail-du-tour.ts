@@ -1,5 +1,5 @@
 /**
- * RAIL DU TOUR (conv-338, 2026-10-19, « Implémenter 1 + 5 » du /draft « mêler le texte du chat et
+ * RAIL DU TOUR (2026-10-19, « Implémenter 1 + 5 » du /draft « mêler le texte du chat et
  * mes blocs »). Chaque élément d'un tour assistant — le cadre Raisonnement / Actions / Étapes, une
  * phrase, un groupe d'actions, une image, le verdict des juges, la réponse — devient un POINT d'un
  * rail vertical tracé à gauche du message :
@@ -83,7 +83,7 @@ export function placeDeLaReponse(
     const blocs = blocsParElement[element]
     for (let rang = blocs.length - 1; rang >= 0; rang -= 1) {
       const bloc = blocs[rang]
-      // La ligne « Lecture retenue » annonce le travail, elle n'est jamais la réponse (conv-1123).
+      // La ligne « Lecture retenue » annonce le travail, elle n'est jamais la réponse.
       if (bloc.kind === 'text' && !bloc.lectureRetenue) return [element, rang]
     }
   }

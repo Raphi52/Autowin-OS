@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { FORMES_DONNEES, LIGNES_TABLEAU_MAX, lireBlocDonnees } from './blocs-donnees'
 
 /**
- * BLOCS DE DONNEES (conv-1074, 2026-10-22) : le modele n'envoie que des DONNEES (JSON), l'app fait
+ * BLOCS DE DONNEES (2026-10-22) : le modele n'envoie que des DONNEES (JSON), l'app fait
  * la mise en page dans le theme choisi. Une source illisible n'est jamais devinee : elle est refusee
  * avec sa raison, et le fil la montre comme du code (meme repli qu'un diagramme mermaid invalide).
  *

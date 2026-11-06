@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * L'ANIMAL DE MES AGENTS (conv-1537) : relu du réglage du poste, changé par les réglages de
+ * L'ANIMAL DE MES AGENTS : relu du réglage du poste, changé par les réglages de
  * l'Accueil, et jamais affiché quand il n'a pas pu être enregistré (les collègues ne le verraient pas).
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'

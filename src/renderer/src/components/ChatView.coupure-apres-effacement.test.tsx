@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * conv-1401 (2026-10-31, saisie ts 1793470923242) : « quand j'ai envoyé mon message ça a suppr la
+ * 2026-10-31, saisie ts 1793470923242 : « quand j'ai envoyé mon message ça a suppr la
  * réponse du tour d'avant ». Le fil enregistré portait trois consignes écrites pendant le tour : la
  * 1re avec une coupure à 51 sur une réponse réduite à 50 parts par un effacement, les deux autres
  * sans coupure du tout. Relu, le fil remontait toute la réponse AU-DESSUS des trois consignes.

@@ -1,5 +1,5 @@
 /**
- * QUESTION À CÔTÉ — le moteur (conv-1362, lot 1/3, 2026-10-31).
+ * QUESTION À CÔTÉ — le moteur (lot 1/3, 2026-10-31).
  *
  * Une question posée depuis un fil : elle voit tout ce que la session du fil contient déjà, elle marche
  * pendant qu'un tour tourne sans l'interrompre, et RIEN n'en est gardé (ni message, ni journal de tour,
@@ -10,7 +10,7 @@
  * --no-session-persistence`. Le CLI reprend le fil dans une copie en mémoire ; la session d'origine
  * garde la même empreinte, aucun fichier n'apparaît (rejoué ici sur le CLI 2.1.314).
  *
- * LE CHOIX DES OUTILS, mesuré (conv-1365, 2026-10-31, CLI 2.1.314, session de 147 867 jetons, un vrai
+ * LE CHOIX DES OUTILS, mesuré (2026-10-31, CLI 2.1.314, session de 147 867 jetons, un vrai
  * tour enregistré juste avant, prix Opus 5.5 : lecture 0,50 $/M, écriture 1 h 10 $/M) :
  *
  *   appel                                   cache relu   cache écrit   coût par question
@@ -18,7 +18,7 @@
  *   `--tools ""`, cache des outils perdu        36 960        73 644   0,76 $
  *   `--tools ""`, tout premier appel                 0       110 457   1,10 $
  *
- * Sur le vrai fil chef du plan (conv-1362, 308 000 jetons, vrai serveur d'outils, ce module) : 305 942
+ * Sur le vrai fil chef du plan (308 000 jetons, vrai serveur d'outils, ce module) : 305 942
  * relus, environ 1 900 écrits, 0,17 $ et 3 s par question. `--tools ""` n'y a pas été joué.
  *
  * Le cache de l'API commence par la définition des outils : `--tools ""` lui présente un autre début
@@ -459,7 +459,7 @@ export class QuestionsACote {
         finir({ ok: false, motif, ...(detail ? { detail } : {}) })
       // Un caractère multi-octets peut être COUPÉ entre deux morceaux du pipe : décodé morceau par
       // morceau, « é » devenait deux U+FFFD. Le décodeur en flux garde la fin incomplète pour le
-      // morceau suivant, comme `runs/survivable-spawn.ts` (scout du 05/11, piste 15, conv-1602).
+      // morceau suivant, comme `runs/survivable-spawn.ts` (scout du 05/11, piste 15).
       // fix-ok: cause mesurée — `morceau.toString('utf8')` par morceau ; un JSON coupé entre C3 et A9 rendait « Cr��é. » (question-a-cote.test.ts, rouge avant ce décodeur, vert après).
       const decodeurSortie = new StringDecoder('utf8')
       const decodeurErreur = new StringDecoder('utf8')

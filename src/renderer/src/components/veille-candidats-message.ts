@@ -17,7 +17,7 @@ import { traduireChatDecisions } from '../textes-ecrans/chat-decisions'
 
 /*
  * Ce que l'ÉCRAN dit des pistes (voie, motif, plan) suit la langue de l'interface (traduction
- * anglaise, conv-1170) ; les PROMPTS rédigés plus bas restent en français : ce sont des consignes
+ * anglaise) ; les PROMPTS rédigés plus bas restent en français : ce sont des consignes
  * pour l'agent, que la langue de ses réponses règle à part.
  */
 const tx = (
@@ -30,7 +30,7 @@ export interface CandidatAffiche {
   /**
    * Le NUMÉRO de la ligne dans le tableau du scout (colonne `#`), tel qu'écrit. L'app retrie le
    * tableau après avoir ajusté les notes en GARDANT ces numéros (`scout-plafond.ts`) : la position
-   * dans la liste n'est donc pas le numéro que la cible du scout désigne (conv-1074).
+   * dans la liste n'est donc pas le numéro que la cible du scout désigne.
    */
   num?: string
   /**
@@ -49,7 +49,7 @@ export interface CandidatAffiche {
   what?: string
   why?: string
   how?: string
-  /** La commande de preuve de la ligne du tableau scout (colonne `Commande`, piste 3 de conv-1033). */
+  /** La commande de preuve de la ligne du tableau scout (colonne `Commande`, piste 3). */
   commande?: string
   /**
    * Pastilles du tableau scout, telles quelles ('g' | 'y' | 'r'). Sur un scout au format
@@ -148,7 +148,7 @@ function ancrageDansCellules(cellules: readonly string[]): string | undefined {
  * L'ancrage est EXTRAIT des cellules quand il y est, jamais inventé quand il n'y est pas.
  */
 /**
- * L'EFFORT ET LA PREUVE ÉCRITS DANS LE « COMMENT » (conv-1333, 2026-10-30). Le tableau actuel du scout
+ * L'EFFORT ET LA PREUVE ÉCRITS DANS LE « COMMENT » (2026-10-30). Le tableau actuel du scout
  * n'a ni colonne Effort ni colonne Commande : sur les 64 pistes proposées depuis le 22/10, l'effort
  * était vide 64 fois, alors que le texte disait « **Effort :** moyen ». La règle « effort fort = à
  * cadrer » ne se déclenchait donc jamais. Lecture bornée à ces deux formes : rien n'est deviné.
@@ -250,7 +250,7 @@ export function redigerPromptWorkflowSelection(
 /**
  * LA CORRECTION DIRECTE — le même contrat de fin (commit publié et vérifié), sans recadrer.
  *
- * Demande utilisateur du 2026-10-22 (conv-1080) : « après un scout ça me propose toujours lancer le
+ * Demande utilisateur du 2026-10-22 : « après un scout ça me propose toujours lancer le
  * workflow complet… mais parfois y a pas besoin du workflow complet ». Le pipeline complet rejoue un
  * cadrage et un nettoyage sur une piste que le scout vient de LOCALISER : pour une correction ancrée,
  * c'est payer deux fois l'éclairage déjà fait.
@@ -301,7 +301,7 @@ export interface VoieDeLaPiste {
 const ANCRAGE_DE_CODE =
   /(?:^|[\s(`])(?:[\w./-]+\.[a-z]{1,6}:\d+|[\w-]+(?:\/[\w.-]+)+\.[a-z]{1,6}\b(?!\/))/iu
 
-/** Le « Pourquoi » compte : c'est là que le scout cite la ligne qu'il a lue (conv-1332, `/draft`). */
+/** Le « Pourquoi » compte : c'est là que le scout cite la ligne qu'il a lue (`/draft`). */
 function estLocalisee(candidat: CandidatAffiche): boolean {
   if (candidat.commande) return true
   return [candidat.url, candidat.how, candidat.what, candidat.why].some(
@@ -311,7 +311,7 @@ function estLocalisee(candidat: CandidatAffiche): boolean {
 
 /**
  * Un chemin n'est pas un signal de risque : `orchestrator.ts:12` nomme une ADRESSE, pas un chantier
- * d'orchestration (conv-1097, deux corrections envoyées au cadrage pour ce seul mot). Le `/build` de
+ * d'orchestration (deux corrections envoyées au cadrage pour ce seul mot). Le `/build` de
  * la voie directe est une phase nommée, que `regimePhases` ne réélargit pas : le classement du run
  * n'a pas à lire la même chose.
  */
@@ -326,7 +326,7 @@ function sansCheminsNiCode(texte: string): string {
  * de son choix (le producteur et le juge sont le même modèle : contrainte du Brain « sélection auto
  * des candidats scout »), ni sur une confiance que le modèle déclarerait lui-même.
  *
- * PISTE PAR PISTE depuis le 2026-10-22 (conv-1080, « fais le truc parfait ») : la règle décidait pour
+ * PISTE PAR PISTE depuis le 2026-10-22 (« fais le truc parfait ») : la règle décidait pour
  * la sélection ENTIÈRE, et 26 sélections sur 49 étaient mixtes — une seule piste à cadrer envoyait
  * toutes les corrections localisées dans le workflow complet. Le reproche que la recherche fait à
  * l'adaptation « par demande entière » (DAAO, arXiv 2509.11079 : trop grossière) était exactement
@@ -371,11 +371,11 @@ export function voieDeLaPiste(candidat: CandidatAffiche): VoieDeLaPiste {
 }
 
 /**
- * Au plus 3 pistes par lot. Sur nos 49 runs de sélection (mesure du 2026-10-22, conv-1080), 16 ont
+ * Au plus 3 pistes par lot. Sur nos 49 runs de sélection (mesure du 2026-10-22), 16 ont
  * été coupés par la limite de session ou de quota du modèle, avec 6 pistes en moyenne : tout ce
  * qu'ils avaient fait était perdu. Un lot court finit, et chaque lot vert est livré.
  *
- * Pas une piste par lot : un lot coûte un run entier (11 $ pour une seule correction, conv-1199).
+ * Pas une piste par lot : un lot coûte un run entier (11 $ pour une seule correction).
  */
 export const MAX_PISTES_PAR_LOT = 3
 
@@ -392,8 +392,8 @@ export interface LotDeLancement {
  * groupées en lots de `MAX_PISTES_PAR_LOT` au plus, ÉQUILIBRÉS (4 pistes → 2 + 2, pas 3 + 1).
  *
  * Les corrections directes sont rangées EN PREMIER : courtes, elles livrent vite. Dans chaque voie,
- * l'ordre du scout est gardé. Deux lots ou plus partent en super conversation (`selectionAPlanifier`,
- * conv-1333) : chacun dans son fil, 3 à la fois, ceux qui annoncent un même fichier l'un après l'autre.
+ * l'ordre du scout est gardé. Deux lots ou plus partent en super conversation (`selectionAPlanifier`)
+ * Chacun dans son fil, 3 à la fois, ceux qui annoncent un même fichier l'un après l'autre.
  */
 export function planDeLancement(selection: readonly CandidatAffiche[]): LotDeLancement[] {
   const voies = selection.map(voieDeLaPiste)
@@ -466,7 +466,7 @@ function couper(texte: string | undefined, plafond: number): string | undefined 
 
 /**
  * LE MESSAGE D'UN LOT TIENT DANS LA BORNE DU PLAN. Un plan refuse une demande de plus de
- * `DEMANDE_MAX` caractères, et un seul « Pourquoi » de scout en fait déjà 2 000 (conv-1332). Le
+ * `DEMANDE_MAX` caractères, et un seul « Pourquoi » de scout en fait déjà 2 000. Le
  * « Pourquoi » et le « Comment » se raccourcissent ; le « Quoi » reste entier, c'est lui que la mémoire
  * du scout relit pour reconnaître la piste prise. Le détail coupé reste lisible dans le fil chef.
  */
@@ -487,7 +487,7 @@ function demandeBornee(lot: LotDeLancement, rang: RangDuLot): string {
 }
 
 /**
- * LA SÉLECTION CONFIÉE À LA SUPER CONVERSATION (conv-1333, 2026-10-30) — ce que le bouton dépose dès
+ * LA SÉLECTION CONFIÉE À LA SUPER CONVERSATION (2026-10-30) — ce que le bouton dépose dès
  * qu'elle compte au moins deux lots. Chaque lot garde le message exact d'un envoi dans le fil : l'en-tête
  * et le `/build` restent lus par la mémoire du scout et par le choix des étapes du run.
  */
@@ -597,7 +597,7 @@ export function emojiType(type: string | undefined): string {
 /**
  * Le numéro qu'affiche chaque ligne du panneau — et que la cible du scout désigne. Une seule règle
  * pour les deux : un numéro affiché qui ne serait pas celui que la sélection lit referait le défaut
- * de conv-1074 (« ligne 1 » qui cochait la ligne n° 4 d'un tableau retrié).
+ * (« ligne 1 » qui cochait la ligne n° 4 d'un tableau retrié).
  */
 export function numerosDesCandidats(candidats: readonly CandidatAffiche[]): number[] {
   return numerosDuTableau(candidats) ?? candidats.map((_, index) => index + 1)
@@ -641,7 +641,7 @@ export function selectionAutoDepuisScout(
   // « aucune » / « rien » = le scout dit explicitement de ne rien enchaîner : zéro case cochée.
   if (/^(aucune?|rien)\b/u.test(nues[0]!.trim())) return new Set()
   const numeros = new Set(nues.flatMap(numerosDesignes))
-  // Le NUMÉRO de la ligne, pas sa position : l'app retrie le tableau en gardant ses numéros (conv-1074).
+  // Le NUMÉRO de la ligne, pas sa position : l'app retrie le tableau en gardant ses numéros.
   const numerosLignes = numerosDesCandidats(candidats)
   const retenus = new Set<number>()
   candidats.forEach((candidat, index) => {
@@ -669,9 +669,9 @@ const NUMEROS_EN_TETE = new RegExp(
 )
 
 /**
- * LES NUMÉROS QU'UNE CIBLE DÉSIGNE, PAS CEUX QU'ELLE CITE (conv-1333, 2026-10-30). Tout nombre de la
+ * LES NUMÉROS QU'UNE CIBLE DÉSIGNE, PAS CEUX QU'ELLE CITE (2026-10-30). Tout nombre de la
  * déclaration valait un numéro de ligne : sur 5 cibles réelles depuis le 22/10, 4 cochaient des lignes
- * jamais nommées (conv-1332 : « ligne 1 » et « ligne 2 » voulues, « 13 % » et « 05/09 » cochaient 5,
+ * jamais nommées (« ligne 1 » et « ligne 2 » voulues, « 13 % » et « 05/09 » cochaient 5,
  * 9, 10 et 13 — en mode auto, elles partaient sans personne). Témoin :
  * `veille-candidats-message.cible-reelle.test.ts`.
  */
@@ -695,7 +695,7 @@ function sansAccents(texte: string): string {
  * `CIBLES:`, ou une section `## Cible` non vide. N'en reconnaître qu'une rendait le pont inerte sur
  * la forme la plus courante — le scout déclarait, le panneau restait « tout coché ».
  *
- * D'une section, seul le PREMIER paragraphe déclare : la suite commente (conv-1199 : « Piste 2 : la
+ * D'une section, seul le PREMIER paragraphe déclare : la suite commente (« Piste 2 : la
  * lumière est éteinte », une correction après relecture, pas un choix).
  */
 function lireLignesCibles(texteScout: string): string[] | null {
@@ -722,7 +722,7 @@ function lireLignesCibles(texteScout: string): string[] | null {
     const corps: string[] = []
     for (let j = i + 1; j < lignes.length; j++) {
       // fix-ok: le tableau qui suit la section n'est pas la declaration — ses chiffres (scores, l.3)
-      // cochaient tout (conv-690, saisie ts 1789715005953 : 5/5 envoyes pour « la piste 1 »).
+      // cochaient tout (saisie ts 1789715005953 : 5/5 envoyes pour « la piste 1 »).
       if (/^\s{0,3}#{1,6}\s+/u.test(lignes[j]!) || /^\s*\|/u.test(lignes[j]!)) break
       if (!lignes[j]!.trim()) {
         if (corps.length > 0) break
@@ -737,9 +737,9 @@ function lireLignesCibles(texteScout: string): string[] | null {
 }
 
 /**
- * CE QUE L'UTILISATEUR TAPE SOUS UN PANNEAU (conv-1333, 2026-10-30). Sur 6 panneaux depuis le 22/10,
- * 2 ont reçu une réponse tapée au lieu d'un clic : « 1 et 12 » (conv-1196) et « fais au mieux c trop
- * complexe pour moi » (conv-1097). Ces réponses passaient à côté de tout : aucune voie choisie, aucun
+ * CE QUE L'UTILISATEUR TAPE SOUS UN PANNEAU (2026-10-30). Sur 6 panneaux depuis le 22/10,
+ * 2 ont reçu une réponse tapée au lieu d'un clic : « 1 et 12 » et « fais au mieux c trop
+ * complexe pour moi ». Ces réponses passaient à côté de tout : aucune voie choisie, aucun
  * lot, et la mémoire du scout notait ces pistes « ignorées ».
  *
  * Reconnu : des numéros de lignes EXISTANTES, « toutes », ou une délégation (« fais au mieux », « go »,
@@ -823,7 +823,7 @@ export function planDeLaSaisie(
 /**
  * LE CLIC AUTOMATIQUE NE PART PAS D'UN TOUR REFUSÉ.
  *
- * Défaut vécu (conv-690, tour `dc63d3ea-7d64-472b-a6db-773f81ee5d82`) : le juge a refusé deux fois
+ * Défaut vécu (tour `dc63d3ea-7d64-472b-a6db-773f81ee5d82`) : le juge a refusé deux fois
  * (SCORE 60 puis 58, contrôle final rouge à 07:03:23), et 2,9 s plus tard le mode auto envoyait
  * « Traite ENSEMBLE ces 5 candidats… » (saisie ts 1789715005953) jusqu'au COMMIT PUBLIÉ. Le panneau
  * relisait le tableau scout reporté dans la bulle et cliquait sans rien savoir du verdict. Un tour

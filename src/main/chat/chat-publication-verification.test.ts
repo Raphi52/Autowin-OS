@@ -12,7 +12,7 @@ import type { GitRunner } from '../runs/run-autoclose'
 /**
  * LA VÉRIFICATION AVANT PUBLICATION, AVEC LE VRAI RUNNER.
  *
- * Mesuré le 2026-10-01 : le commit automatique `b6d2a3fc` (conv-892) a modifié `src/main/index.ts`
+ * Mesuré le 2026-10-01 : le commit automatique `b6d2a3fc` a modifié `src/main/index.ts`
  * et a été poussé sans aucun test ; `chat-ipc-contract.test.ts`, qui LIT `index.ts` au lieu de
  * l'importer, est resté rouge sur main 20 h. `vitest related index.ts` ne l'aurait pas rejoué.
  *
@@ -234,7 +234,7 @@ describe('vérification avant publication — le vrai runner, dans un vrai dép�
   })
 
   /*
-   * Mesuré le 2026-10-01 (conv-770, tour 532299a4) : 194 tests citaient les fichiers du tour, la
+   * Mesuré le 2026-10-01 (tour 532299a4) : 194 tests citaient les fichiers du tour, la
    * commande faisait 9 121 caractères ; par `cmd.exe /c` (limite 8 191) : « La ligne de commande est
    * trop longue », exit 1, aucun rapport, publication bloquée en « tests-rouges ». Ici, 60 tests à
    * chemin long citent `sujet.ts` : environ 9 000 caractères de chemins.
@@ -279,7 +279,7 @@ describe('vérification avant publication — le vrai runner, dans un vrai dép�
   )
 
   /*
-   * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PLUS (conv-246, 2026-10-11). Mesuré ce jour-là : plus aucun tour
+   * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PLUS (2026-10-11). Mesuré ce jour-là : plus aucun tour
    * ne publiait depuis 08:40, 84 fichiers en attente, pour 7 suites rouges dont AUCUNE n'était due au
    * tour refusé — 3 déjà rouges sur main, 2 cassées par le travail non publié d'autres fils. Le tour
    * est désormais jugé sur ce qui PART : le dernier commit + ses fichiers, comparé au dernier commit
@@ -347,7 +347,7 @@ describe('vérification avant publication — le vrai runner, dans un vrai dép�
 })
 
 /**
- * REJEU DE 973b70e2 (conv-1078, relevé par le salvage conv-1091 le 2026-10-22), AVEC LE VRAI RUNNER.
+ * REJEU DE 973b70e2 (relevé par le salvage le 2026-10-22), AVEC LE VRAI RUNNER.
  *
  * Un test de style est parti seul : le CSS qu'il lit était resté en attente, parce qu'un autre fil
  * l'avait modifié avant le tour. Les tests, rejoués dans l'arbre partagé où ce CSS était complet,

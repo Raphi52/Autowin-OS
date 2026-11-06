@@ -5,7 +5,7 @@ import { riche } from '../textes'
 import { useTextesReglagesEtDecor } from '../textes-ecrans/reglages-et-decor'
 import './NomSurLeBoardReglage.css'
 
-/** L'erreur est gardée par sa CLÉ, pour qu'un changement de langue la retraduise (conv-1170). */
+/** L'erreur est gardée par sa CLÉ, pour qu'un changement de langue la retraduise. */
 type ErreurNom = 'nomBoard.erreurLecture' | 'nomBoard.erreurEnregistrement'
 
 interface NomSurLeBoard {
@@ -22,7 +22,7 @@ interface NomSurLeBoard {
 
 /**
  * Le nom de ce poste sur le Board : lu et enregistré par le processus principal (`board-dossier.json`).
- * Partagé par la ligne de Settings · Interface et par le rouage du Board (conv-1230) : les deux
+ * Partagé par la ligne de Settings · Interface et par le rouage du Board : les deux
  * affichent ce que le moteur RÉPOND après l'enregistrement, jamais la saisie supposée gardée.
  */
 function useNomSurLeBoard(onEnregistre?: (etat: EtatDuDossierDuBoard) => void): NomSurLeBoard {
@@ -132,7 +132,7 @@ function ChampDuNom({ nom, prefixe }: { nom: NomSurLeBoard; prefixe: string }): 
 }
 
 /**
- * Settings · Interface — « Ton nom sur le Board » (demande utilisateur du 2026-10-28, conv-1230 :
+ * Settings · Interface — « Ton nom sur le Board » (demande utilisateur du 2026-10-28, :
  * « nom windows par défaut et un setting pour en choisir un autre »).
  *
  * Le nom vit dans le réglage du Board de ce poste (`board-dossier.json`, processus principal) : il
@@ -160,8 +160,8 @@ export function NomSurLeBoardReglage(): React.JSX.Element | null {
 }
 
 /**
- * Settings · Interface — « Tes agents dans le village de l'équipe » (D6, plan « Village commun »,
- * conv-1429). Le partage est actif par défaut (D-9) ; coupé, le poste écrit `{ coupe: true }` à la
+ * Settings · Interface — « Tes agents dans le village de l'équipe » (D6, plan « Village commun »).
+ * Le partage est actif par défaut (D-9) ; coupé, le poste écrit `{ coupe: true }` à la
  * place de ses agents. Rangé dans le réglage du Board (`board-dossier.json`), comme le nom juste
  * au-dessus : l'interrupteur montre ce que le moteur a GARDÉ, jamais ce qu'il a demandé.
  */
@@ -235,7 +235,7 @@ function PartageDeLaPresence(): React.JSX.Element | null {
 }
 
 /**
- * Le même réglage dans le rouage du Board (demande du 2026-10-28, conv-1230 : « un raccourci vers ce
+ * Le même réglage dans le rouage du Board (demande du 2026-10-28, « un raccourci vers ce
  * réglage dans le menu du dossier du Board »). `onEnregistre` laisse le Board se recalculer, pour que
  * ses post-it portent aussitôt le nouveau nom.
  */

@@ -4,14 +4,14 @@ import type { ModelQuestion } from '../modeles/model-questions'
 import { messageDuRun } from '../../shared/message-du-run'
 
 /**
- * UN CADRAGE RELU À FROID AVANT LE CODE (conv-1420, 2026-11-01, repris de Google Elephant-Goldfish).
+ * UN CADRAGE RELU À FROID AVANT LE CODE (2026-11-01, repris de Google Elephant-Goldfish).
  *
  * Rien ne comparait le cadrage à la demande avant le build. Une réduction de la demande n'apparaissait
  * donc qu'au juge final, après un ou plusieurs builds payés.
  *
  * MESURE, rejouée sur 7 vrais cadrages avec le modèle des petites tâches, sans outil (0,06 $ en
- * moyenne par relecture) : les 3 cadrages qui avaient réduit la demande sont repérés (conv-1146, deux
- * runs : « full anglais » réduit à un lot ; conv-1150 : test réel sorti du périmètre). Sur 4 témoins,
+ * moyenne par relecture) : les 3 cadrages qui avaient réduit la demande sont repérés (deux
+ * runs : « full anglais » réduit à un lot ; : test réel sorti du périmètre). Sur 4 témoins,
  * 1 fausse alerte. Le gain en argent n'est PAS prouvé : seule la détection l'est, et la mesure
  * `/arena` reste à faire.
  *
@@ -25,7 +25,7 @@ import { messageDuRun } from '../../shared/message-du-run'
  * LES TÂCHES CRITIQUES SEULEMENT, comme le voulait la demande (« commencer par les tâches critiques,
  * puis mesurer »). Repassés dans `classifyRegime`, 19 des 131 runs cadrage + build du corpus sont
  * critiques ; l'en-tête `regime: standard` de leurs RUN.md est écrit en dur par `runs/conv-runs.ts`
- * et ne prouve rien. LIMITE CONNUE : conv-1146 et conv-1150, qui ont servi à mesurer la détection,
+ * et ne prouve rien. LIMITE CONNUE : qui ont servi à mesurer la détection,
  * sont standard, et ce filtre les aurait laissés passer. Étendre la relecture aux tâches standard
  * se décide après la mesure `/arena`.
  *
@@ -41,7 +41,7 @@ export const BORNE_DEMANDE = 8_000
 export const BORNE_CADRAGE = 40_000
 
 /**
- * Combien de temps une question du cadrage repris retient le run (conv-1420). Sans borne, une fenêtre
+ * Combien de temps une question du cadrage repris retient le run. Sans borne, une fenêtre
  * ignorée le gardait en attente avant le code. Passé ce délai, le run suit le cadrage tel qu'il est
  * écrit, et la trace dit que la question est restée sans réponse.
  */

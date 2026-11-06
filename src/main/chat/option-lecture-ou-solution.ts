@@ -1,7 +1,7 @@
 /**
  * UNE OPTION CLIQUABLE EST-ELLE UNE LECTURE DU BESOIN, OU UNE SOLUTION DEJA CHOISIE ?
  *
- * Defaut mesure le 2026-08-23 sur conv-1376. L'utilisateur ecrit un SYMPTOME (« je vois plu
+ * Defaut mesure le 2026-08-23. L'utilisateur ecrit un SYMPTOME (« je vois plu
  * l'historique »). L'assistant lui propose des options redigees comme des SOLUTIONS techniques
  * (« Corrige ChatView.tsx piste A : amorce le cache… »). Il clique — c'est le chemin le plus court —
  * et ce texte devient son message, puis l'objectif du run. La machine execute alors fidelement un

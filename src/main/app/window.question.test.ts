@@ -1,6 +1,6 @@
 /**
- * LA FENÊTRE DE QUESTION NOIRE (conv-1342, 2026-10-30). La question partait une seule fois, à la fin
- * du chargement de la page. La fenêtre de conv-1337 l'a manquée : page montée, 0 question reçue, plus
+ * LA FENÊTRE DE QUESTION NOIRE (2026-10-30). La question partait une seule fois, à la fin
+ * du chargement de la page. La fenêtre l'a manquée : page montée, 0 question reçue, plus
  * rien à cliquer, et le run est resté en pause jusqu'à sa fermeture. Mesuré dans la vraie interface :
  * l'envoi arrivait 6 à 8 ms après le branchement de l'écoute. La question reste désormais à
  * disposition de SA page, qui la demande quand elle est prête, y compris après un rechargement.

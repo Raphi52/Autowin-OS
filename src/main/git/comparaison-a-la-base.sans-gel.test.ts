@@ -15,7 +15,7 @@ import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { ouvrirCopieDeBase } from './comparaison-a-la-base'
 
 /**
- * GEL MESURÉ (/gel conv-1118, 2026-10-23, `gels.jsonl`) : 320 s de fenêtre figée en 5 gels du 21 au
+ * GEL MESURÉ (2026-10-23, `gels.jsonl`) : 320 s de fenêtre figée en 5 gels du 21 au
  * 23/10, pire 153,8 s, encore 35 s le 23/10 à 09:45 UTC (866 `unlinkSync` d'un bloc). Les fichiers
  * lents étaient tous sur C:, dans `%TEMP%\aw-base-*` : la copie propre du dépôt (~3 970 fichiers)
  * que chaque publication de tour ouvre, puis efface par `fermer()` avec `supprimerArbre`, SYNCHRONE.

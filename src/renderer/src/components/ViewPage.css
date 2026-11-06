@@ -19,7 +19,7 @@
      fonctionnel) le consomment aussi : c'est ce qui rend la distance titre/bord identique partout,
      sans avoir a restructurer ces trois en-tetes. Mesure avant : 49/39 px pour quatre vues, mais
      58/38, 58/19 et 48/27 pour ces trois-la. */
-  /* LE RETRAIT HORIZONTAL DU CONTENU, une seule valeur pour toutes les vues (conv-160, 2026-10-10).
+  /* LE RETRAIT HORIZONTAL DU CONTENU, une seule valeur pour toutes les vues (2026-10-10).
      Les blocs du contenu commencent a `--view-retrait` du bord du cadre, et c'est CE padding qui
      le pose : aucun conteneur du contenu n'ajoute de retrait lateral (ViewPage.gabarit.test.ts).
      Mesure avant : 18 px dans Task Manager, Tests, Observatory, Memory, Modeles ; 36 a 38 px dans

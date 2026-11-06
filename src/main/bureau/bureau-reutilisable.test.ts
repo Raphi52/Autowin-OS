@@ -54,7 +54,7 @@ describe('decisionDeReutilisation — réinitialiser, sauf si du travail est en 
   })
 
   it('ne contient que la cible de la tâche : c’est le brouillon de l’essai précédent', () => {
-    // Le cas conv-1404 : 10 bureaux ne portant QUE WorkflowsPanel.tsx, non compilable.
+    // Le cas : 10 bureaux ne portant QUE WorkflowsPanel.tsx, non compilable.
     const decision = decisionDeReutilisation(
       ['src/renderer/src/components/WorkflowsPanel.tsx'],
       ['src/renderer/src/components/WorkflowsPanel.tsx']

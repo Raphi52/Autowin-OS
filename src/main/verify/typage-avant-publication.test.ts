@@ -9,7 +9,7 @@ import {
 } from './typage-avant-publication'
 
 /**
- * Vécu le 2026-10-15 (conv-954) : le commit automatique `9d6bb850` a publié un fichier dont une
+ * Vécu le 2026-10-15 : le commit automatique `9d6bb850` a publié un fichier dont une
  * fonction prenait un paramètre de plus, sans `index.ts` qui l'appelle. main ne compilait plus, et le
  * contrôle d'avant publication (tests rejoués dans l'arbre partagé) était vert.
  */

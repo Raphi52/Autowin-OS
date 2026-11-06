@@ -244,9 +244,9 @@ describe('citations des lignes VÉRIFIÉ', () => {
 })
 
 /*
- * TEXTES REELS des cadrages du 2026-10-13 (run-state live, conv-914 / conv-916). Rejoues sur
+ * TEXTES REELS des cadrages du 2026-10-13 (run-state live). Rejoues sur
  * l'ancien lecteur, 3 cadrages sur 3 affichaient un debris au lieu d'une phrase : « * ** » (la
- * capture envoyee par l'utilisateur, conv-919 : « les phrases écrites ici ont jamais aucun sens »),
+ * capture envoyee par l'utilisateur, : « les phrases écrites ici ont jamais aucun sens »),
  * « * , sans incidence sur la suite :** », « ** :** ». Deux causes : le `*` d'un gras en tete de
  * ligne lu comme une puce, et un EN-TETE « **Non vérifié :** » pris pour une affirmation alors que
  * les affirmations sont les puces qui le suivent.

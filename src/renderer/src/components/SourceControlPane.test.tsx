@@ -364,7 +364,7 @@ describe('SourceControlPane (prompt-first)', () => {
             // Mesuré le 2026-09-29 : un fichier écarté pour 2 lignes sur 146, sans que rien le dise.
             { path: 'src/b.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 2 },
             { path: 'src/c.ts', motif: 'modifie-avant-le-tour', lignesNonReclamees: 1 },
-            // conv-1083 : le fil qui tient le fichier est nommé, quand la publication le connaît.
+            // Le fil qui tient le fichier est nommé, quand la publication le connaît.
             { path: 'src/d.ts', motif: 'touche-par-un-autre-fil', fils: ['conv-1038'] }
           ]
         }
@@ -430,7 +430,7 @@ describe('SourceControlPane (prompt-first)', () => {
   })
 
   it('un tour bloqué par le TYPAGE de ce qui part nomme l’erreur, et rien n’est annoncé comme poussé', async () => {
-    // Vécu le 2026-10-15 (`9d6bb850`, conv-954) : un fichier publié sans son appelant a cassé la
+    // Vécu le 2026-10-15 (`9d6bb850`) : un fichier publié sans son appelant a cassé la
     // compilation de main. Le typage de ce qui part est joué avant les tests ; le panneau dit pourquoi.
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api
@@ -592,7 +592,7 @@ describe('SourceControlPane (prompt-first)', () => {
   })
 
   it('les rouges laissés passer (déjà là, ou venus d’ailleurs) sont NOMMÉS, jamais tus', async () => {
-    // conv-246 (2026-10-11) : un rouge déjà présent au dernier commit, ou dû au travail non publié
+    // 2026-10-11 : un rouge déjà présent au dernier commit, ou dû au travail non publié
     // d'un autre fil, ne bloque plus la publication — le panneau doit dire lesquels sont passés.
     mockApi(GIT)
     const api = (window as unknown as { api: Record<string, unknown> }).api

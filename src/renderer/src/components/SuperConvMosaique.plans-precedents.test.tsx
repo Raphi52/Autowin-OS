@@ -6,7 +6,7 @@ import type { PlanDeLots, ReponsePlansDeLots } from '../../../shared/plan-de-lot
 import { BandeauSuperConv } from './SuperConvMosaique'
 
 /*
- * conv-1394 (2026-10-31) : « masque aussi les lots des anciens plans d'un même chef dans la liste de
+ * 2026-10-31 : « masque aussi les lots des anciens plans d'un même chef dans la liste de
  * gauche, et rends-les accessibles depuis le bloc de la conv chef ». La liste ne leur donne plus de
  * ligne : le bloc du chef, nourri par le geste « anciens » du canal os:plansDeLots, est leur seul
  * chemin.

@@ -1,5 +1,5 @@
 /**
- * UNE QUESTION POSEE PENDANT UN /skill NE SE PERD PAS (conv-798, 2026-09-23).
+ * UNE QUESTION POSEE PENDANT UN /skill NE SE PERD PAS (2026-09-23).
  *
  * Saisie `ts 1790162150940` (voie orientation), envoyee pendant le tour
  * bf63ebf4-1324-493f-a4fa-32c5bd8b453a (/kaizen) : elle a ete videe de la file sans reponse. Le seul

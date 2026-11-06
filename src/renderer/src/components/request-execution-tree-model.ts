@@ -51,7 +51,7 @@ const TECHNICAL_PROVIDER_KINDS = new Set<HarnessTimelineEvent['kind']>([
   'model-response'
 ])
 
-// Les étapes des workflows livrés (`workflow-defaults.ts`) en plus des historiques (conv-1094,
+// Les étapes des workflows livrés (`workflow-defaults.ts`) en plus des historiques (
 // 2026-10-22 : learn dans 13 traces causales, think dans 12, salvage dans 8). C'est le nom que le
 // graphe AFFICHE pour une étape, via `display.title` (voir `nomDEtape`).
 const PHASE_LABELS: Record<string, string> = {
@@ -64,19 +64,19 @@ const PHASE_LABELS: Record<string, string> = {
   judge: 'Judge',
   kaizen: 'Kaizen',
   learn: 'Learn',
-  // `salvage` reste pour les traces d'avant le 2026-10-29 ; `git` le remplace depuis (conv-1252).
+  // `salvage` reste pour les traces d'avant le 2026-10-29 ; `git` le remplace depuis.
   salvage: 'Salvage',
   git: 'Git',
   remake: 'Remake',
   // Noms de skill (ceux qu'on tape après « / ») : des noms propres, gardés dans les deux langues
-  // comme « Scout » ou « Learn » (traduction anglaise, conv-1170).
+  // comme « Scout » ou « Learn » (traduction anglaise).
   gel: 'Gel',
   residus: 'Résidus',
   steal: 'Steal'
 }
 
 /**
- * LE TITRE VISIBLE D'UNE ÉTAPE (conv-1094, 2026-10-22). Le graphe écrit `display.title` : il valait
+ * LE TITRE VISIBLE D'UNE ÉTAPE (2026-10-22). Le graphe écrit `display.title` : il valait
  * « skill · learn », l'identifiant brut, et la table ci-dessus n'était lue par aucun affichage
  * d'étape. L'identifiant reste dans `skillName` (attribut du nœud, ligne « phase · learn » du
  * détail) ; une étape inconnue de la table garde son identifiant plutôt que d'être masquée.
@@ -301,7 +301,7 @@ function eventOrder(a: HarnessTimelineEvent, b: HarnessTimelineEvent): number {
 /**
  * Genres d'événements dont une TENTATIVE de sous-agent prête ses charges au nœud. Les appels
  * d'outil (`tool-call`, `tool-result`) en sont exclus à dessein : ils portent eux aussi une charge
- * `error` (conv-139), qui se serait affichée comme le retour du sous-agent.
+ * `error`, qui se serait affichée comme le retour du sous-agent.
  */
 const ATTEMPT_PAYLOAD_EVENT_KINDS = new Set<HarnessTimelineEvent['kind']>([
   'handoff',
@@ -315,7 +315,7 @@ const ATTEMPT_PAYLOAD_EVENT_KINDS = new Set<HarnessTimelineEvent['kind']>([
 
 /**
  * Charges montrées par le détail d'une étape : celles de `NODE_PAYLOAD_KINDS`, sans doublon. Le
- * relais terminal d'un sous-agent recopie la réponse du modèle mot pour mot (conv-139) : sans
+ * relais terminal d'un sous-agent recopie la réponse du modèle mot pour mot : sans
  * dédoublonnage, le retour s'afficherait deux fois. Sert à la projection ET aux charges relues au
  * clic (`ExecutionNodeContents`). Comparaison par genre, sans concaténer de clés : en direct, la
  * projection se rejoue chaque seconde sur des prompts de plusieurs dizaines de Ko.
@@ -338,7 +338,7 @@ export function distinctNodePayloads(
 
 /**
  * Cause d'un échec : la charge `error` (sinon `model-response`) du DERNIER événement en échec de la
- * tentative — conv-163 y écrit « checkpoint orchestration causalement invalide… ». Aucune charge
+ * tentative — un fil y écrit « checkpoint orchestration causalement invalide… ». Aucune charge
  * écrite → `undefined` : on n'invente pas de cause. En lecture allégée, la trace ne garde de ces
  * charges qu'un extrait borné (`EXTRAIT_CAUSE_MAX`, `trace-allegee.ts`) : assez pour la carte, le
  * texte entier reste dans le détail relu au clic.
@@ -358,11 +358,11 @@ function failureCause(sources: HarnessTimelineEvent[]): string | undefined {
 /**
  * L'ISSUE AFFICHÉE D'UNE ÉTAPE : son statut et, si elle a échoué, pourquoi.
  *
- * UN SOUS-AGENT ARRÊTÉ PAR LE BOUTON STOP EST « ANNULÉ », PAS « EN ÉCHEC » (conv-966). La trace
+ * UN SOUS-AGENT ARRÊTÉ PAR LE BOUTON STOP EST « ANNULÉ », PAS « EN ÉCHEC ». La trace
  * l'écrit `failed` — l'étape ne s'est pas terminée — mais sa cause porte le motif du Stop
  * (`estArretParStop`). Rouge, avec « INTERROMPU » en ligne d'échec, il se lisait comme une panne
- * (conv-955, sous-agent clean). Annulé, il reprend le gris déjà prévu pour un arrêt voulu
- * (conv-191) ; le texte de l'arrêt reste lisible au clic, dans son retour.
+ * (sous-agent clean). Annulé, il reprend le gris déjà prévu pour un arrêt voulu
+ * Le texte de l'arrêt reste lisible au clic, dans son retour.
  */
 function issueDeLEtape(
   statut: HarnessTimelineEvent['status'],
@@ -617,8 +617,8 @@ function projectRunExecutions(
       // LE DÉTAIL DU SOUS-AGENT SORT DE SA TENTATIVE, PAS SEULEMENT DE SA DESCENDANCE.
       //
       // `payloads: []` jetait tout : un clic sur un sous-agent de run disait « Aucun prompt ni
-      // retour enregistré » alors que la trace les portait (constaté le 2026-10-10 sur conv-139 et
-      // conv-163). Le prompt d'un sous-agent n'est PAS un descendant du relais : il est relié par
+      // retour enregistré » alors que la trace les portait (constaté le 2026-10-10).
+      // Le prompt d'un sous-agent n'est PAS un descendant du relais : il est relié par
       // `attemptId`. On réunit donc relais, descendants techniques et événements de la tentative,
       // puis on garde le même filtre que le chat direct (`NODE_PAYLOAD_KINDS`).
       const linked = runEvents.filter(
@@ -662,7 +662,7 @@ function projectRunExecutions(
       events.push(agent)
     }
 
-    // UNE PHASE ROUGE L'EST PARCE QU'UN DE SES SOUS-AGENTS A ÉCHOUÉ (conv-966) : le nœud « Clean »
+    // UNE PHASE ROUGE L'EST PARCE QU'UN DE SES SOUS-AGENTS A ÉCHOUÉ : le nœud « Clean »
     // ne disait que « alias de phase ». Le dernier sous-agent en échec de la phase dit pourquoi.
     for (const [phase, skill] of skillByPhase) {
       if (skill.status !== 'failed' || !skill.display) continue
@@ -687,7 +687,7 @@ function projectRunExecutions(
       const parentId =
         completedAgents.length === 1 ? completedAgents[0].id : (fallbackSkill?.id ?? runWorkspaceId)
       const git = gitFact.run.git
-      // « Cause : base-dirty » ne disait rien : le code est traduit, les fichiers nommés (conv-966).
+      // « Cause : base-dirty » ne disait rien : le code est traduit, les fichiers nommés.
       const failure = raisonDuGit(git)
       gitNode = {
         id: `git:${runId}`,
@@ -726,7 +726,7 @@ function projectRunExecutions(
         ? closureFact.run.closure
         : { status: 'open' as const, totalDurationMs: 0, totalCostUsd: 0 }
     // UNE CLÔTURE ROUGE DIT POURQUOI, même quand le run s'est arrêté AVANT le contrôle final : ses
-    // « Raisons » restaient vides (conv-914, conv-916 : quota du sous-agent). Les traces écrites
+    // « Raisons » restaient vides (Quota du sous-agent). Les traces écrites
     // depuis le 2026-10-15 portent l'erreur d'arrêt (`raisonsDArretDuRun`, orchestrator.ts) ; les
     // plus anciennes la retrouvent ici, sur la publication refusée ou l'étape en échec.
     const etapeEnEchec = [...projectedAgents].reverse().find((agent) => agent.status === 'failed')
@@ -783,8 +783,8 @@ function projectRunExecutions(
               event.kind === 'verdict' && event.status !== 'running' && event.status !== 'pending'
           )
           .map((event) => event.id),
-        // « Rejouer ce run » (conv-981) : le déroulé par agent de CE run, par le calcul de la
-        // Chronologie. Les événements d'agent portent `execution.runId` (mesuré sur conv-981 :
+        // « Rejouer ce run » : le déroulé par agent de CE run, par le calcul de la
+        // Chronologie. Les événements d'agent portent `execution.runId` (mesuré :
         // 211 sur 211), donc `runEvents` les contient.
         ...(() => {
           const gantt = buildAgentGantt(runEvents)
@@ -859,7 +859,7 @@ function runLauncherNode(
 
 /**
  * La demande porte le bilan du tour : durée et coût du superviseur, et son issue. Un tour arrêté par
- * Stop est « annulé » ; un tour dont TOUS les appels au modèle ont échoué est « en échec » (conv-879).
+ * Stop est « annulé » ; un tour dont TOUS les appels au modèle ont échoué est « en échec ».
  */
 function withRequestTotals(
   root: HarnessTimelineEvent,
@@ -994,7 +994,7 @@ export function projectLatestRequestExecution(
     // LA DURÉE DE L'AGENT EST CELLE DE SA RÉPONSE. En chat direct, `grouped` reste vide : la
     // réponse du modèle, absorbée sous le prompt, ne prêtait pas sa durée mesurée au bloc. Mesuré le
     // 2026-10-12 : 273 blocs « Agent principal » sur 273 sans durée, dont 272 avec une réponse chiffrée.
-    // Un appel en échec se clôt par une `error` chiffrée au lieu d'une réponse (conv-770, conv-879).
+    // Un appel en échec se clôt par une `error` chiffrée au lieu d'une réponse.
     // L'erreur n'est pas absorbée (elle garde son propre bloc « Erreur ») : on la cherche parmi les
     // enfants du prompt et de ses événements techniques.
     const ownIds = new Set([event.id, ...absorbed.map((candidate) => candidate.id)])
@@ -1010,11 +1010,11 @@ export function projectLatestRequestExecution(
     )
     // L'ISSUE DE L'APPEL DONNE LE STATUT, PAS LE MESSAGE ENVOYÉ. Le prompt est écrit « completed »
     // dès son envoi : un appel clos par une erreur s'affichait « terminé » au-dessus de son propre
-    // bloc « Erreur » (conv-770, conv-879). C'est la DERNIÈRE fin qui compte : une erreur suivie
+    // bloc « Erreur ». C'est la DERNIÈRE fin qui compte : une erreur suivie
     // d'une réponse n'est pas un échec.
     const lastClosing = closings[0]
     const callFailed = lastClosing?.kind === 'error' && lastClosing.status === 'failed'
-    // POURQUOI L'APPEL A ÉCHOUÉ (conv-966) : la cause vit dans l'« Erreur » qui le clôt, un bloc à
+    // POURQUOI L'APPEL A ÉCHOUÉ : la cause vit dans l'« Erreur » qui le clôt, un bloc à
     // part ; le bloc rouge « Orchestrateur » ne la disait pas. `closings` va du plus récent au plus
     // ancien, `failureCause` attend l'ordre du temps. Un arrêt par Stop y devient « annulé ».
     const { status, failure } = issueDeLEtape(
@@ -1094,7 +1094,7 @@ export function projectLatestRequestExecution(
   }
   // PAS D'ESCALIER. La trace relie chaque action à celle qui la PRÉCÈDE (« juste après ») ; le
   // graphe le lisait comme « à l'intérieur de » : 6 actions successives faisaient 14 niveaux
-  // (conv-904, /draft). On remonte donc jusqu'au premier ancêtre qui n'est pas une étape annexe —
+  // (/draft). On remonte donc jusqu'au premier ancêtre qui n'est pas une étape annexe —
   // l'agent, la phase ou la demande — et les actions deviennent sœurs, dans l'ordre.
   const anchorOf = (id: string): string => {
     const visited = new Set<string>()

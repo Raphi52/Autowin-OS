@@ -1,9 +1,9 @@
 /**
- * LA CIBLE DU SCOUT, LUE SUR SES VRAIES PHRASES (conv-1333, 2026-10-30).
+ * LA CIBLE DU SCOUT, LUE SUR SES VRAIES PHRASES (2026-10-30).
  *
  * Rejeu du panneau sur les scouts réels depuis le 22/10 : 4 cibles déclarées sur 5 cochaient des
  * lignes que le scout n'avait jamais nommées, parce que TOUT nombre de la section valait un numéro
- * de ligne. Sur conv-1332, le scout recommandait les lignes 1 et 2 ; « 13 % », « 05/09 » et « 10 500 »
+ * de ligne. Le scout recommandait les lignes 1 et 2 ; « 13 % », « 05/09 » et « 10 500 »
  * cochaient en plus les lignes 5, 9, 10 et 13. En mode auto, ces lignes partaient sans personne.
  *
  * Les textes ci-dessous sont recopiés des fils : ce sont eux qui font tomber une mauvaise lecture.

@@ -9,7 +9,7 @@
   padding-top: 9px;
   min-height: 0;
   overflow: hidden;
-  /* GABARIT DES VUES (conv-160, ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
+  /* GABARIT DES VUES (ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
      ni rayon de page, ni reflet, ni flou. Elle recopiait le cadre de `.view-page` et apparaissait
      comme une page dans la page. Le cadre est peint une fois, par `.view-page`. */
   color: #e7edf5;
@@ -24,7 +24,7 @@
   /* Texte du titre au meme retrait que celui de la page : `--view-head-retrait` (ViewPage.css). */
   padding: 0 var(--view-head-retrait);
   border-bottom: 1px solid var(--container-border);
-  /* Pose a meme le cadre de page (gabarit des vues, conv-160) : une bande peinte y refaisait un
+  /* Pose a meme le cadre de page (gabarit des vues) : une bande peinte y refaisait un
      cadre dans le cadre. */
   background: transparent;
 }
@@ -611,7 +611,7 @@
 
 /* Mode Noir · Black Glass: surfaces neutres et translucides, accents réservés aux rôles. */
 .theme-serious .agents-topology {
-  /* Aucun fond : le cadre de page le porte (gabarit des vues, conv-160). */
+  /* Aucun fond : le cadre de page le porte (gabarit des vues). */
   color: #f2f3f5;
 }
 

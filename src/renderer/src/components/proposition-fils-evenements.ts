@@ -1,5 +1,5 @@
 /**
- * LE CONTRAT ENTRE LA CARTE « LANCER EN N FILS » ET CHATVIEW (conv-1147, 2026-10-25).
+ * LE CONTRAT ENTRE LA CARTE « LANCER EN N FILS » ET CHATVIEW (2026-10-25).
  *
  * La carte vit dans le Markdown du fil, qui ne reçoit que du texte (`memo` sur des primitives). Elle
  * parle donc à ChatView par un événement de fenêtre, comme `autowin:prefill-conversation`.
@@ -27,7 +27,7 @@ export interface DemandeDeLancement {
   messageId?: string
   /**
    * Le TOUR de cette réponse : seul repère d'une réponse peinte en direct, qui n'a pas encore
-   * d'identifiant de message tant que son fil n'est pas relu du disque (conv-1147).
+   * d'identifiant de message tant que son fil n'est pas relu du disque.
    */
   turnId?: string
 }
@@ -45,7 +45,7 @@ export interface ConfirmationDeLancement {
   refus?: string[]
   /**
    * Refus AVANT toute dépense : aucun fil ouvert, aucun tour parti (réponse introuvable sur disque,
-   * fil illisible, aucune branche créée). La carte le dit et rend ses boutons (conv-1147).
+   * fil illisible, aucune branche créée). La carte le dit et rend ses boutons.
    */
   rienNestParti?: true
 }
@@ -66,7 +66,7 @@ export function lireSouvenir(cle: string): SouvenirDeCarte | null {
 
 /**
  * Écrit par la carte (« Lancement demandé… ») ET par ChatView (le reçu). Mesuré à l'essai réel du
- * 2026-10-25 (conv-1147) : le passage en mosaïque démonte la carte du chat plein AVANT la
+ * 2026-10-25 : le passage en mosaïque démonte la carte du chat plein AVANT la
  * confirmation. Si seule la carte écrivait le reçu, personne ne l'écoutait, et la carte restait figée
  * sur « Lancement demandé… » au retour dans le fil.
  */
@@ -98,7 +98,7 @@ export interface SuiviDuLancement {
  * même répondre à la carte, sinon elle reste figée sur « Lancement demandé… », même après
  * redémarrage.
  *
- * Il nomme les fils DÉJÀ ouverts (2e relecture externe, conv-1147) : ils existent et travaillent,
+ * Il nomme les fils DÉJÀ ouverts (2e relecture externe) : ils existent et travaillent,
  * la carte doit y mener. Et il se tait si le lancement avait déjà répondu : un reçu juste ne doit
  * pas être remplacé par un échec survenu après coup (une mise à jour d'affichage, par exemple).
  */

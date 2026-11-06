@@ -39,7 +39,7 @@ const pathWatchGenerations = new Map<string, number>()
  * `realCanonique` (forme canonique d'un chemin, seule acceptée par `fs.watch` sans abort de libuv
  * sur un nom court 8.3 — défaut reproduit le 2026-08-31, exit 127) vit désormais dans
  * `../surveiller-dossier`, la seule porte vers `fs.watch` du processus principal (récidive du
- * 2026-10-22, conv-1056). On canonicalise dans `filesystemPathKey` pour que la clé de lecture et la
+ * 2026-10-22). On canonicalise dans `filesystemPathKey` pour que la clé de lecture et la
  * clé d'écriture des générations restent la MÊME chaîne.
  */
 export { realCanonique }
@@ -138,7 +138,7 @@ function multisetDifference(before: readonly string[], after: readonly string[])
 }
 
 /**
- * LA PHOTO NE DOIT PAS GROSSIR AVEC LE NOMBRE DE CONVERSATIONS (mesure 2026-10-10, conv-172).
+ * LA PHOTO NE DOIT PAS GROSSIR AVEC LE NOMBRE DE CONVERSATIONS (mesure 2026-10-10).
  *
  * Le chat la prend avant ET apres chaque reponse. Elle lancait un `git diff` PAR fichier modifie
  * (deux par fichier non suivi), tous a la fois : 308 fichiers non commites = 175 processus git par
@@ -171,7 +171,7 @@ type DiffsDuLot = {
  * Decoupe un lot `git diff --no-renames` par son entete `diff --git a/P b/P`. Sans renommage, les
  * deux cotes sont le MEME chemin : on le retrouve sans ambiguite meme s'il contient des espaces.
  *
- * ENTETE CITE (heal conv-204, 2026-10-10) : un nom non ASCII arrive cite des deux cotes,
+ * ENTETE CITE (2026-10-10) : un nom non ASCII arrive cite des deux cotes,
  * `"a/accentu\303\251.ts" "b/accentu\303\251.ts"`. Tant que `git status` gardait lui aussi la forme
  * citee, aucun vrai nom accentue n'entrait dans le lot ; depuis qu'il est decode, ce bloc doit etre
  * attribue — sinon UN SEUL fichier accentue renvoyait toute la photo au diff fichier par fichier.
@@ -240,7 +240,7 @@ async function diffDuChemin(
 }
 
 /**
- * UNE ENTREE NON SUIVIE INCHANGEE NE SE REDIFFE PAS — heal conv-204, mesure du 2026-10-10.
+ * UNE ENTREE NON SUIVIE INCHANGEE NE SE REDIFFE PAS — heal, mesure du 2026-10-10.
  *
  * Apres le lot, une photo du depot reel lancait encore 91 `git diff --no-index` (banc sur
  * D:/Autowin : 95 processus par photo), un par entree non suivie, alors que presque toutes sont

@@ -2,7 +2,7 @@
  * Les journaux d'observation (`prompt-observability/`, `causal-trace/`) ne recopient JAMAIS le
  * contenu d'une piece jointe binaire (image, PDF...) : seuls son nom, son type et sa taille restent.
  *
- * Mesure 2026-11-02, conv-331 : 5 captures PNG rejointes « depuis un message precedent » a CHAQUE
+ * Mesure 2026-11-02, : 5 captures PNG rejointes « depuis un message precedent » a CHAQUE
  * appel modele, ~20 Mo de base64 par ligne → 336 Mo de `prompt-observability/conv-331.jsonl` et
  * 341 Mo de `causal-trace/conv-331.jsonl` pour 43 appels. Ouvrir le fil relisait et parsait ces
  * fichiers d'un bloc (`loadPromptCalls`, indicateur de cout) : l'app plantait a l'ouverture.

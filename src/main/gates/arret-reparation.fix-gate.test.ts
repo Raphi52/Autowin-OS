@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { CLOSURE_UPSTREAM_REFUSAL, arretDeLaReparation } from './stopgate'
 
 /**
- * conv-539, tour `82a4f5d1-d92f-4d73-9f6f-cac70db65ecb` (turnEvents actionId 5:gate, at=1789463201318) :
+ * Tour `82a4f5d1-d92f-4d73-9f6f-cac70db65ecb` (turnEvents actionId 5:gate, at=1789463201318) :
  * refus « hook fix-gate: 4 édits de src/main/juge/objections-juge.ts sans cause vérifiée » reçu 2 fois,
  * boucle coupée en rouge alors qu'UNE ligne `fix-ok:` le levait. Un refus fix-gate se lève par une
  * édition de build : il garde un passage de plus que le seuil générique, borné.

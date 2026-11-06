@@ -135,7 +135,7 @@ describe('#4 enrichissement borné à la frontière (discussion + titre des rela
     ...over
   })
 
-  // conv-1228 (2026-10-28) : la discussion passe ENTIÈRE ; seul un message démesuré est coupé, en le
+  // 2026-10-28 : la discussion passe ENTIÈRE ; seul un message démesuré est coupé, en le
   // disant (tickets-discussion-entiere.test.ts). Avant : 20 messages de 2 000 caractères, en silence.
   it('garde toute la discussion, dans l’ordre, et chaque texte entier', () => {
     const comments = Array.from({ length: 40 }, (_, index) => ({

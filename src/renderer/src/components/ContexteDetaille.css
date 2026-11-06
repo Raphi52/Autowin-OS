@@ -1,4 +1,4 @@
-/* PANNEAU « CONTEXTE » A LA MANIERE DE CLAUDE.EXE (conv-1000, 2026-10-16).
+/* PANNEAU « CONTEXTE » A LA MANIERE DE CLAUDE.EXE (2026-10-16).
    Le cadre (fond noir, bord, rayon) vient de `.model-quota-popover` ; ici seulement l'interieur.
    Couleurs de categorie reprises de la capture de claude.exe : memoire bleu, outils systeme
    orange, messages vert, outils MCP ambre, le reste en gris. */
@@ -141,7 +141,7 @@
 }
 
 /* COMPACTER RESTE A L'ECRAN : le panneau defile (listes longues), et le bouton passait sous le
-   bas du cadre — invisible sans faire defiler (capture du 2026-10-16, conv-1000). Accroche en bas. */
+   bas du cadre — invisible sans faire defiler (capture du 2026-10-16). Accroche en bas. */
 /* `.ctx-panneau` devant : `.model-quota-popover footer` (ModelQuotaIndicator.css) est plus
    specifique et collait le bouton a gauche. */
 .ctx-panneau .ctx-pied {

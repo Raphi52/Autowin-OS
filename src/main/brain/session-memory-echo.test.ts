@@ -365,9 +365,9 @@ describe('câblage — l’écho est réellement alimenté et réellement relu',
   })
 
   it('l’écho n’entre PAS dans le prompt système — le préfixe doit rester cachable', () => {
-    // agent-pilot.ts et ses modules agent-pilot/*.ts : les blocs vivent dans systeme-du-tour.ts (conv-1580).
+    // agent-pilot.ts et ses modules agent-pilot/*.ts : les blocs vivent dans systeme-du-tour.ts.
     const source = sourceDuPilote()
-    // Les blocs systeme sont une FONCTION du texte de pilotage depuis le 2026-10-28 (conv-1229 :
+    // Les blocs systeme sont une FONCTION du texte de pilotage depuis le 2026-10-28 (
     // consigne courte quand les outils directs sont servis) ; tout systeme envoye passe par elle.
     const debut = source.indexOf('const systemPartsAvec')
     const fin = source.indexOf('const assemblerSysteme')

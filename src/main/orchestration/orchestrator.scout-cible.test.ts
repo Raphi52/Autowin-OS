@@ -195,7 +195,7 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
     expect(consigneScout).toMatch(/DÉJÀ PROPOSÉ/u)
     expect(consigneScout).toContain('- Écriture du cache')
     expect(lectures).toHaveLength(1)
-    // conv-339 : la mémoire filtre ses titres sur la demande — encore faut-il qu'elle la reçoive.
+    // La mémoire filtre ses titres sur la demande — encore faut-il qu'elle la reçoive.
     expect(lectures[0]!.demande).toBe('améliore la vue Knowledge')
     expect(notes).toHaveLength(1)
     expect(notes[0]!.texte).toMatch(/cache périmé/u)
@@ -203,7 +203,7 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
     expect(notes[0]!.run).not.toBe('')
   })
 
-  // Piste 7 de conv-890 : la demande du run (le message de sélection) est lue AVANT la mémoire, pour
+  // Piste 7 : la demande du run (le message de sélection) est lue AVANT la mémoire, pour
   // que le bilan des choix réels arrive dans la consigne du scout de CE run.
   it('la demande du run part au noteur de choix, et le bilan arrive dans la consigne du scout', async () => {
     const provider = new ScoutQuiAvoue()
@@ -250,7 +250,7 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
     const consigneScout =
       [...provider.systemes, ...provider.prompts].find((p) => p.includes('phase SCOUT')) ?? ''
     expect(demandes[0]).toContain('améliore la vue Knowledge')
-    // Piste 1 de conv-1033 : le run qui porte la sélection est celui qui TRAITE les pistes prises.
+    // Piste 1 : le run qui porte la sélection est celui qui TRAITE les pistes prises.
     // Rouge avant le branchement : `choisir` ne recevait pas le run (undefined).
     expect(runsDuChoix[0]).toBeTruthy()
     expect(runsDuChoix[0]).toBe(runsExclus[0])
@@ -259,7 +259,7 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
   })
 
   // fix-ok: rouge avant le branchement (72 au lieu de 36), vert après.
-  // Piste 7 de conv-890, à la lettre : la NOTE du tableau suit les choix réels, en code. Le facteur
+  // Piste 7, à la lettre : la NOTE du tableau suit les choix réels, en code. Le facteur
   // est lu une fois au début du run et appliqué au texte que la phase suivante reçoit.
   it('le facteur des choix réels réécrit la note dans le texte enregistré du scout', async () => {
     const provider = new ScoutQuiAvoue()
@@ -301,7 +301,7 @@ describe('cablage : le scout recoit les pistes deja proposees et note les sienne
     expect(depots).toEqual(['C:\base'])
   })
 
-  // Piste 4 de conv-1033 : les sujets déjà traités sont lus au début du run (en tâche de fond, comme
+  // Piste 4 : les sujets déjà traités sont lus au début du run (en tâche de fond, comme
   // la liste des fichiers) et la marque « déjà fait ? » arrive dans le texte que la suite reçoit.
   // Rouge avant le branchement : le texte du scout ne portait aucune marque.
   it('une piste qui redit un sujet déjà traité arrive marquée « déjà fait ? » à la suite', async () => {

@@ -13,7 +13,7 @@ import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 /**
  * REPRISE APRES REDEMARRAGE : LA GALERIE NE DOIT PAS DISPARAITRE.
  *
- * MESURE le 2026-10-16 sur `conv-1002`, tour 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc (« 2 », tour 3
+ * MESURE le 2026-10-16, tour 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc (« 2 », tour 3
  * d'un /draft). L'app a redemarre pendant l'appel. L'appel recupere (promptCall du 14:52:08.897Z)
  * portait « …le pilotage.Contrôle à 0. Je relis les 6 onglets.Voici le tour 3 : … ```html-render » :
  * les blocs de texte du CLI recolles SANS separateur. Le direct, lui, les avait separes par

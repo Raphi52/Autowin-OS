@@ -8,7 +8,7 @@ import type { BrainPersoState } from '../../../shared/preload-contracts'
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true
 
-/** Réglages › Brain perso (conv-1233, 2026-10-28) : privé, à côté du Brain d'équipe. */
+/** Réglages › Brain perso (2026-10-28) : privé, à côté du Brain d'équipe. */
 const mounted: Array<{ root: ReturnType<typeof createRoot>; container: HTMLDivElement }> = []
 afterEach(async () => {
   for (const item of mounted.splice(0)) {

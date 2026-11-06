@@ -39,7 +39,7 @@ describe('conversations-disk — persistance à chaque mutation', () => {
     const back = b.get(c.id)
     expect(back?.title).toBe('Persistée')
     expect(back?.messages).toHaveLength(2)
-    // nextId repart APRÈS les ids existants (pas de collision conv-1)
+    // nextId repart APRÈS les ids existants (pas de collision)
     expect(b.create({ title: 'x', provider: 'claude' }).id).not.toBe(c.id)
   })
 
@@ -128,7 +128,7 @@ describe('conversations-disk structured restart', () => {
     const journal = `${p}.journal.jsonl`
     mkdirSync(journal)
 
-    // Hors du fil principal (conv-1368) : l'échec ne remonte plus, le lot revient en attente.
+    // Hors du fil principal : l'échec ne remonte plus, le lot revient en attente.
     expect(() => store.create({ title: 'Retenue', provider: 'codex' })).not.toThrow()
     await attendreEcrituresConversations()
     rmSync(journal, { recursive: true, force: true })
@@ -233,7 +233,7 @@ describe('conversations-disk structured restart', () => {
     vi.advanceTimersByTime(150)
     await attendreEcrituresConversations()
     expect(loadConversations(p)[0].messages.at(-1)?.content).toBe('partiel')
-    // Le terminal part sans le délai de regroupement, mais hors du fil principal (conv-1368).
+    // Le terminal part sans le délai de regroupement, mais hors du fil principal.
     store.applyTurnEvent(c.id, 'turn-debounce', { kind: 'done' })
     await attendreEcrituresConversations()
     expect(loadConversations(p)[0].messages.at(-1)?.status).toBe('completed')
@@ -265,7 +265,7 @@ describe('conversations-disk structured restart', () => {
 
     const restarted = new ConversationStore(() => 2000)
     persistConversations(restarted, p)
-    // Hors du fil principal depuis conv-359 : la compaction est déposée, pas encore posée.
+    // Hors du fil principal : la compaction est déposée, pas encore posée.
     await attendreEcrituresConversations()
 
     expect(existsSync(journal)).toBe(false)
@@ -273,7 +273,7 @@ describe('conversations-disk structured restart', () => {
   })
 
   /*
-   * Mesure du 2026-10-19 (conv-359) : la réécriture de démarrage figeait l'app 432 ms (jusqu'à
+   * Mesure du 2026-10-19 : la réécriture de démarrage figeait l'app 432 ms (jusqu'à
    * 923 ms) avant la fenêtre. Avec `compactionApres`, rien n'est réécrit avant le signal.
    */
   it('ne compacte qu’au signal `compactionApres`, et sans rien perdre entre-temps', async () => {

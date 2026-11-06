@@ -4,7 +4,7 @@ import { git, manager, nettoyerRacines, tempRepo } from './worktree-manager.test
 /**
  * LE PRIX D'UNE QUESTION POSEE A UN SEUL BUREAU.
  *
- * MESURE le 2026-09-04 (conv-233). `edit_file` demande la liste COMPLETE des travaux non publies
+ * MESURE le 2026-09-04. `edit_file` demande la liste COMPLETE des travaux non publies
  * uniquement pour savoir si LE bureau qu'il s'apprete a prendre porte deja du travail. Sur ce
  * depot, avec 40 copies accumulees, ce recensement coute 18 699 ms — payes AVANT la moindre
  * ligne editee, et dans le meme budget que l'operation worktree. Au-dela du delai, l'edition

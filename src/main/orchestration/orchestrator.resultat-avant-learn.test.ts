@@ -30,14 +30,14 @@ import type { WorkflowGraph } from '../workflow/workflow-graph'
 import { LIGNE_RESULTAT_VALIDE } from '../../shared/resultat-valide'
 
 /**
- * PISTE 3 DE CONV-914 : LE RÉSULTAT VALIDÉ PART AVANT LA FIN DE `learn`.
+ * PISTE 3 : LE RÉSULTAT VALIDÉ PART AVANT LA FIN DE `learn`.
  *
  * Avant : le résultat ne sortait qu'au retour de `run`, après `learn` puis `salvage`. Un `learn`
- * lent (3 min 49 sur conv-911 d'après l'analyse de conv-914) retardait d'autant un travail déjà
+ * lent (3 min 49 d'après l'analyse) retardait d'autant un travail déjà
  * validé. Le résultat part désormais dans le fil du run dès la validation, et `valid`/`gate` ne
  * bougent plus ensuite.
  *
- * fix-ok: conv-914 (13/10) — au commit b2b9e25a, orchestrator.ts:5808-5852 ne rendait le résultat
+ * fix-ok: (13/10) — au commit b2b9e25a, orchestrator.ts:5808-5852 ne rendait le résultat
  * qu'après `learn` puis `salvage`. Mesuré : avec orchestrator.ts de b2b9e25a, les événements sont
  * ['learn-debut', 'learn-fin'] sans 'resultat-valide' (`toEqual` du 1er test rouge) ; avec le correctif, vert.
  */

@@ -14,7 +14,7 @@ const cheminDe = (wm: WorktreeManager, id: string): string =>
 afterEach(nettoyerRacines)
 
 /**
- * DEFAUT MESURE (conv-1516, 2026-08-29) : `edit_file` derive une cle de bureau STABLE par tache
+ * DEFAUT MESURE (2026-08-29) : `edit_file` derive une cle de bureau STABLE par tache
  * (`cleDeBureau`). A la deuxieme tentative, `acquire` retrouve le DOSSIER de la tentative
  * precedente et le rend TEL QUEL : `if (existsSync(path)) return path`. Aucune comparaison avec la
  * revision de depart demandee. Le bureau reste donc accroche a la base d'il y a trois jours pendant
@@ -83,7 +83,7 @@ describe('acquire — un bureau retrouve ne doit pas rester sur une base perimee
   })
 
   /*
-   * DEFAUT MESURE (bulletin de maintenance du 2026-10-24, conv-1048) : `verify` recopie dans sa
+   * DEFAUT MESURE (bulletin de maintenance du 2026-10-24) : `verify` recopie dans sa
    * copie `command-verify-<conv>` les fichiers non commites du depot, pour verifier l'etat courant
    * (`synchroniserBureauDeVerification`). Ces fichiers sont un MIROIR, jamais du travail. Des que la
    * base avancait, le refus ci-dessus les prenait pour du travail non publie : la copie restait

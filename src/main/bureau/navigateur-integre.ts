@@ -1,5 +1,5 @@
 /**
- * NAVIGATEUR INTÉGRÉ DU CHAT — le moteur côté processus principal (conv-1286, lot 1/5, 2026-10-29).
+ * NAVIGATEUR INTÉGRÉ DU CHAT — le moteur côté processus principal (lot 1/5, 2026-10-29).
  *
  * Un panneau navigateur à côté du fil : onglets PAR FIL, l'utilisateur annote ou choisit un élément,
  * l'agent lit, capture et agit SOUS SES YEUX (cible surlignée, bandeau « l'agent pilote »).
@@ -20,7 +20,7 @@
  * Ce lot ne pose ni canal IPC, ni interface, ni commande d'agent : les lots suivants branchent les
  * méthodes publiques listées sur la classe.
  *
- * PAS-À-PAS (conv-1286, maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30) : chaque geste
+ * PAS-À-PAS (maquette « 1 · Jalons · Aperçu du geste suivant », 2026-10-30) : chaque geste
  * de l'agent (ouvrir, lire, capture, agir) est noté dans un journal PAR FIL (20 derniers), et passe
  * par le pilotage du fil. En pause, il ATTEND un ordre de l'utilisateur (sa cible tracée en
  * pointillés) ; main reprise, il est refusé sans toucher la page. Le délai d'attente
@@ -83,8 +83,8 @@ export const MAX_ELEMENTS_INSTANTANE = 400
 const RAYON_PAGE_PX = 10
 
 /**
- * Temps laissé à Chromium pour rendre une image (conv-1304) : une vue dessine en ~100 ms. Sans
- * borne, une image qui ne vient jamais suspend le tour pour toujours (conv-1309, plus de 20 min).
+ * Temps laissé à Chromium pour rendre une image : une vue dessine en ~100 ms. Sans
+ * borne, une image qui ne vient jamais suspend le tour pour toujours (plus de 20 min).
  */
 const DELAI_PEINTURE_MS = 5_000
 
@@ -173,7 +173,7 @@ export interface VueNavigateur {
   capturer(rect?: RectNavigateur): Promise<string | null>
   /**
    * Fait produire une image à la page, même cachée. Sans image depuis sa navigation, Chromium jette
-   * clics, molette et touches (conv-1293) : appelé avant chaque action de l'agent.
+   * clics, molette et touches : appelé avant chaque action de l'agent.
    */
   peindre(): Promise<void>
   envoyer(evenement: EvenementSaisie): void
@@ -907,10 +907,10 @@ export class GestionnaireNavigateur {
   private async capturerPage(conversationId: string): Promise<string | null> {
     const onglet = this.ongletActif(conversationId)
     if (!onglet) return null
-    // fix-ok: cause mesurée (conv-1286, 2026-10-29) — `capturePage` COPIE la dernière image sans en
+    // fix-ok: cause mesurée (2026-10-29) — `capturePage` COPIE la dernière image sans en
     // faire dessiner : sur une page rouverte panneau fermé, aucune image depuis la navigation, et
     // `navigateur_capture` échouait en « UnknownVizError » (deux fois de suite, page lisible par
-    // `navigateur_lire`). Même cause que le clic perdu de conv-1293 : on force une image d'abord.
+    // `navigateur_lire`). Même cause que le clic perdu : on force une image d'abord.
     await onglet.vue.peindre()
     return onglet.vue.capturer()
   }
@@ -1013,7 +1013,7 @@ export class GestionnaireNavigateur {
     )
     if (premierRegard) return premierRegard
 
-    // ATTENTE DE PAUSE (pas-à-pas, conv-1286) : APRÈS la garde mot de passe (un geste refusé d'office
+    // ATTENTE DE PAUSE (pas-à-pas) : APRÈS la garde mot de passe (un geste refusé d'office
     // n'a rien à faire attendre), AVANT l'accord du site (on ne demande pas l'accord d'un geste que
     // l'utilisateur n'a pas encore libéré). Sans cible, une frappe vise le champ actif : c'est lui
     // qu'on trace en pointillés.
@@ -1130,7 +1130,7 @@ export class GestionnaireNavigateur {
     let zone = cible?.rect
     try {
       // Sans cible, une frappe va au champ actif : c'est LUI qu'on surligne (objection du juge,
-      // conv-1287 — l'utilisateur ne voyait pas où le texte allait arriver).
+      // L'utilisateur ne voyait pas où le texte allait arriver).
       if (!zone && tape) zone = ((await this.jouer(onglet, 'focus', [])) as FocusPage | null)?.rect
       if (zone) {
         await this.jouer(onglet, 'surligner', [zone, decrireAction(action, undefined)])
@@ -1140,7 +1140,7 @@ export class GestionnaireNavigateur {
         const garde = await this.gardeSaisie(onglet, action, null)
         if (garde) return garde
       }
-      // fix-ok: cause mesurée (conv-1293, lot 5/5 de conv-1286) — en mode Choisir, la page AVALE
+      // fix-ok: cause mesurée (lot 5/5) — en mode Choisir, la page AVALE
       // clics et pointeurs (écoutes du mode, navigateur-page-script.ts) : le clic de l'agent partait,
       // l'outil disait « Clic sur … » et rien ne changeait (instance cachée, après « Envoyer au
       // chat »). On éteint donc le mode de CET onglet avant d'écrire ; le panneau le montre. Placé
@@ -1163,14 +1163,14 @@ export class GestionnaireNavigateur {
         modeCoupe = true
         await this.couperMode()
       }
-      // fix-ok: cause mesurée (conv-1293, réparation 1, objection du juge) — tant que la page n'a
+      // fix-ok: cause mesurée (réparation 1, objection du juge) — tant que la page n'a
       // produit aucune image depuis sa navigation, Blink JETTE clics, molette et touches (seuls les
       // déplacements passent : WidgetInputHandlerManager::DispatchEvent, « we don't want users
       // interacting with stuff they can't see »). Une vue cachée — fil non regardé, panneau fermé —
       // n'en produit jamais : page ouverte panneau fermé, clic perdu et « Clic sur … » quand même
       // (run-r1-rouge.txt). On force donc une image avant d'envoyer, AVANT la relecture du site.
       await onglet.vue.peindre()
-      // fix-ok: cause mesurée (conv-1324, run11, vraie app) — le geste fait réapparaître le bandeau, le
+      // fix-ok: cause mesurée (run11, vraie app) — le geste fait réapparaître le bandeau, le
       // cadre perd 44 px et une page centrée remonte sa cible de 22 px APRÈS son repérage : le clic
       // partait aux anciennes coordonnées, tombait sur le champ voisin, et l'outil disait « Clic sur
       // button ». Une page ne le signale pas. On relit donc la position ici, APRÈS `peindre` : c'est
@@ -1184,10 +1184,10 @@ export class GestionnaireNavigateur {
       }
       // Garde (b) rejouée au DERNIER moment : l'accord vaut pour une origine, et la page a pu en
       // changer pendant l'attente (jusqu'à 120 s) ou la surbrillance — redirection, rafraîchissement.
-      // Objection du juge (conv-1287) : sans cette relecture, le clic partait sur un site jamais
+      // Objection du juge : sans cette relecture, le clic partait sur un site jamais
       // autorisé. Aucun `await` entre cette lecture et l'envoi des événements.
       // Même relecture pour « Reprendre la main » ou Stop cliqué PENDANT la surbrillance : le geste
-      // n'est pas encore parti, il ne part pas (pas-à-pas, conv-1286).
+      // n'est pas encore parti, il ne part pas (pas-à-pas).
       const auDernierMoment = relire()
       if (auDernierMoment) return signalerMode(auDernierMoment)
       return signalerMode(await this.jouerAction(onglet, action, cible))
@@ -1706,7 +1706,7 @@ export class GestionnaireNavigateur {
    * fix-ok: run-adc12547df2d-1 (objection du juge) — le moteur n'avait aucun signal d'arrêt : pause,
    * clic, Stop, puis « Reprendre » → `mouseDown` parti et `ok: true` pour un agent déjà coupé.
    *
-   * fix-ok: conv-1324 (mesuré, `cadre=null` dans run-rouge-recharge.txt) — le tracé n'avait lieu qu'une
+   * fix-ok: (mesuré, `cadre=null` dans run-rouge-recharge.txt) — le tracé n'avait lieu qu'une
    * fois et un rechargement efface le calque de la page : le geste attendait, plus rien ne le montrait.
    */
   private async franchirPause(
@@ -1738,14 +1738,14 @@ export class GestionnaireNavigateur {
     let tourDuTrace = -1
     let refusPerdu = null as ResultatActionNavigateur | null
     const tracer = async (pageNeuve: boolean): Promise<void> => {
-      // fix-ok: conv-1324 (mesuré, run-rouge-deux.txt) — un seul cadre vit dans la page et chaque geste
+      // fix-ok: (mesuré, run-rouge-deux.txt) — un seul cadre vit dans la page et chaque geste
       // traçait par-dessus le précédent : elle montrait le dernier arrivé, « Pas suivant » joue le premier.
       if (fil.enPause[0] !== attente) return
       // L'aperçu est un confort : une page qui ne répond pas n'empêche pas d'attendre l'ordre.
       try {
         const vu = apercu && !libere ? await apercu(pageNeuve) : null
         if (!vu || libere) return
-        // fix-ok: objection du juge (conv-1324, réparation ; `cadre=null` mesuré pour une cible par
+        // fix-ok: objection du juge (réparation ; `cadre=null` mesuré pour une cible par
         // numéro, run-definitif.txt:73) — le geste attendait un ordre qui ne pouvait plus le faire
         // partir. Il tombe tout de suite, et le suivant prend le relais.
         if ('perdu' in vu) {
@@ -1778,7 +1778,7 @@ export class GestionnaireNavigateur {
       retracer: () => {
         traces = traces.then(() => tracer(true))
       },
-      // fix-ok: objection du juge (conv-1324, réparation) — le relais relisait une cible déjà tracée,
+      // fix-ok: objection du juge (réparation) — le relais relisait une cible déjà tracée,
       // et `localiser` recentre la page sur elle : chaque geste refusé à côté y ramenait l'utilisateur.
       // Le compte du cadre, pas un simple « déjà tracé » : un geste joué entre-temps a pu effacer ce
       // cadre (son `retirerSurbrillance`), et c'est alors au relais de le reposer.
@@ -1983,8 +1983,8 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
   function preparerSession(ses: Session): void {
     if (sessionsPretes.has(ses)) return
     sessionsPretes.add(ses)
-    // Le navigateur intégré se présente comme Chrome, pas comme Electron (demande de l'utilisateur,
-    // conv-1569) : certains sites refusent ou dégradent un agent « Electron/x ».
+    // Le navigateur intégré se présente comme Chrome, pas comme Electron (demande de l'utilisateur)
+    // Certains sites refusent ou dégradent un agent « Electron/x ».
     ses.setUserAgent(agentChrome(ses.getUserAgent()))
     ses.setPermissionRequestHandler((_contenu, permission, rappel) => {
       rappel(PERMISSIONS_ACCORDEES.has(permission))
@@ -2031,16 +2031,16 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
           safeDialogs: true
         }
       })
-      // La page passe au-dessus du DOM : le CSS de `.navigateur-zone` ne peut pas l'arrondir (conv-1306).
+      // La page passe au-dessus du DOM : le CSS de `.navigateur-zone` ne peut pas l'arrondir.
       vue.setBorderRadius(RAYON_PAGE_PX)
       const contenu = vue.webContents
       const idContenu = contenu.id
       preparerSession(contenu.session)
-      // L'agent de la page passe devant celui de la session : sans ceci, « Electron/x » restait (conv-1569).
+      // L'agent de la page passe devant celui de la session : sans ceci, « Electron/x » restait.
       contenu.setUserAgent(agentChrome(contenu.getUserAgent()))
       ecouteursParContenu.set(idContenu, ecouteurs)
       vue.setVisible(false)
-      // Une taille dès la création (conv-1304) : panneau jamais ouvert, la vue restait en 0 × 0, sa
+      // Une taille dès la création : panneau jamais ouvert, la vue restait en 0 × 0, sa
       // page sans mise en page et ses éléments sans position à cliquer.
       const { width, height } = fenetre.getContentBounds()
       let cadreVoulu = { x: 0, y: 0, width, height }
@@ -2054,7 +2054,7 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
         return { action: 'deny' }
       })
       /*
-       * RACCOURCIS DU PANNEAU TAPÉS DANS LA PAGE (conv-1293, lot 5/5 de conv-1286) — mesuré dans
+       * RACCOURCIS DU PANNEAU TAPÉS DANS LA PAGE (lot 5/5) — mesuré dans
        * l'instance cachée : Ctrl+Shift+B, le focus dans la page, laissait le panneau ouvert. Ses
        * écoutes (ChatView, NavigateurIntegre) vivent dans le rendu de la fenêtre, qui ne reçoit pas
        * les touches de cette vue. On les y rejoue ; la page ne les voit pas. La frappe de l'AGENT
@@ -2159,13 +2159,13 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
           return image.isEmpty() ? null : image.toDataURL()
         },
         /*
-         * Image forcée par le débogueur intégré (conv-1293, réparation 1) : `Page.captureScreenshot`
+         * Image forcée par le débogueur intégré (réparation 1) : `Page.captureScreenshot`
          * ATTEND l'image avant de la copier. `capturePage` ne convient pas : il copie tout de suite,
          * et sur une page jamais dessinée il échoue (« UnknownVizError », run-r1-vert.txt) sans rien
          * faire dessiner. Débogueur détaché après coup s'il ne l'était pas.
          *
-         * VUE CACHÉE DANS UNE FENÊTRE MONTRÉE (conv-1304, mesuré avec le vrai Electron, cause de
-         * conv-1309 suspendu 20 min) : l'image ne revient JAMAIS, `fromSurface:false` et l'émulation
+         * VUE CACHÉE DANS UNE FENÊTRE MONTRÉE (mesuré avec le vrai Electron, cause
+         * suspendu 20 min) : l'image ne revient JAMAIS, `fromSurface:false` et l'émulation
          * du focus n'y changent rien, et une vue placée toute entière hors de la fenêtre non plus. La
          * vue passe donc visible avec UN pixel dans la fenêtre : 115 ms, le clic arrive à la page, la
          * capture suivante marche. Elle n'est ni redimensionnée (la page ne se remet pas en page) ni
@@ -2233,7 +2233,7 @@ export function creerFabriqueElectron(fenetre: BrowserWindow): FabriqueVueNaviga
   }
 }
 
-/** Retire les marques Electron et Autowin de l'agent, pour qu'il reste celui de Chrome (conv-1569). */
+/** Retire les marques Electron et Autowin de l'agent, pour qu'il reste celui de Chrome. */
 export function agentChrome(agent: string): string {
   return agent
     .split(' ')
@@ -2241,7 +2241,7 @@ export function agentChrome(agent: string): string {
     .join(' ')
 }
 
-/** Chrome, jamais Edge ni le navigateur par défaut du poste (préférence de l'utilisateur, conv-1569). */
+/** Chrome, jamais Edge ni le navigateur par défaut du poste (préférence de l'utilisateur). */
 export const CHEMIN_CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 
 async function ouvrirDansChrome(url: string): Promise<void> {

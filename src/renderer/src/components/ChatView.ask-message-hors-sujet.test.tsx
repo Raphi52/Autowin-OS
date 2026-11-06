@@ -10,7 +10,7 @@ import {
 } from './ChatView.harness'
 
 /**
- * LE DÉFAUT, vécu le 2026-09-01 (conv-50, capture de l'utilisateur).
+ * LE DÉFAUT, vécu le 2026-09-01 (capture de l'utilisateur).
  *
  * L'utilisateur écrit un message pendant qu'une question `ask` est posée — un message qui parle
  * d'AUTRE CHOSE. Le bloc passait alors en « Répondu — écrivez la suite dans le composer » et son

@@ -7,7 +7,7 @@ import type { ExecutionEvidence } from '../providers/types'
 /**
  * REPRISE APRES REDEMARRAGE : LES LECTURES DE L'APPEL RECUPERE COMPTENT.
  *
- * MESURE le 2026-10-16 sur `conv-1002`, tour 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc. L'appel coupe par
+ * MESURE le 2026-10-16, tour 9296f09c-6986-41f9-8b6d-f4c2b2a9c2bc. L'appel coupe par
  * le redemarrage avait lu 9 captures et joue le controle de rendu : son journal de relais
  * (275f3911-9e1b-4803-b9f1-4cf537402fee) porte 13 outils natifs, dont 12 lectures au sens de
  * `statusEstUneLecture`. Mais ces lectures n'avaient leve `anyReadExecuted` que dans le process MORT

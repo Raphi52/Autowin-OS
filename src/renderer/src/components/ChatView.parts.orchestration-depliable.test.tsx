@@ -37,7 +37,7 @@ describe('le bloc orchestration se deplie et nomme les skills/agents choisis', (
       pipeline: [{ phase: 'scout', role: 'subagent', provider: 'claude', model: 'opus-4' }]
     })
     act(() => root.render(createElement(AssistantActivityGroup, { actions: [action] })))
-    // Capsule 2 (conv-194, 2026-10-10) : la phase jouee est ecrite dans la capsule, sans clic.
+    // Capsule 2 (2026-10-10) : la phase jouee est ecrite dans la capsule, sans clic.
     expect(
       container.querySelector('[data-testid="activity-capsule"] .orch-phase')?.textContent
     ).toBe('scout')

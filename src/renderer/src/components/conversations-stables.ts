@@ -1,6 +1,6 @@
 /**
  * LISTE DES CONVERSATIONS STABLE D'UN RAFRAÎCHISSEMENT À L'AUTRE (gel `renderer:vue-chat-liste`,
- * diagnostic /gel conv-1115, 2026-10-23).
+ * diagnostic /gel, 2026-10-23).
  *
  * L'IPC rend TOUJOURS des objets neufs : poser la liste rechargée telle quelle faisait redessiner
  * les ~1 000 lignes mémorisées (`LigneConversation`, mémorisée sur l'objet `c`) pour un seul fil

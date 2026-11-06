@@ -9,7 +9,7 @@ import { DECOR_VEILLE_MS, useDecorEnVeille } from './decor-veille'
 ).IS_REACT_ACT_ENVIRONMENT = true
 
 /**
- * LA VEILLE DU FOND 3D (conv-337). Avant : quitter l'Accueil détruisait la scène, et chaque retour la
+ * LA VEILLE DU FOND 3D. Avant : quitter l'Accueil détruisait la scène, et chaque retour la
  * reconstruisait (2,2 à 3,7 s avant la première image, banc du décor). Ce qui doit faire échouer ce
  * fichier : un démontage IMMÉDIAT au départ de l'Accueil (le défaut d'avant), une veille sans fin
  * (la mémoire graphique jamais rendue), ou un montage avant la première visite de l'Accueil.

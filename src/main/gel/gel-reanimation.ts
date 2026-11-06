@@ -1,7 +1,7 @@
 /**
  * REANIMER LA FENETRE AU LIEU DE TUER L'APPLICATION.
  *
- * Mesure du 2026-09-08 (conv-353) : la vue Knowledge se figeait sans fin — processeur a fond,
+ * Mesure du 2026-09-08 : la vue Knowledge se figeait sans fin — processeur a fond,
  * memoire qui monte, debogueur muet. La SEULE issue etait de fermer l'application, ce qui coute a
  * l'utilisateur tout ce qui tourne a cote, et coute au diagnostic un redemarrage complet par essai.
  *

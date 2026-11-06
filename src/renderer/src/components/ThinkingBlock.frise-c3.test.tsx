@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * Bloc Actions en variante C3 « frise » (choix de l'utilisateur, conv-831, 2026-09-24) :
+ * Bloc Actions en variante C3 « frise » (choix de l'utilisateur, 2026-09-24) :
  * bilan dans l'en-tete, barre de temps (un segment par action), frise avec l'etat de chaque action.
  * L'etat vient des lignes de FIN emises par `claude.ts` au resultat d'outil (`Bash échoué - 31 s`).
  */
@@ -34,8 +34,8 @@ describe('bloc Actions — frise C3', () => {
     expect(bilanDesActions(actions)).toBe('4 · 1 échec · 41 s')
   })
 
-  // R5 (conv-162, 2026-10-10) : l'en-tete ECRIT le nombre et la duree ; le bilan complet (echecs
-  // compris) reste son infobulle. DEUX LIGNES (conv-904, 2026-10-12, « Rond de verre ») : la barre
+  // R5 (2026-10-10) : l'en-tete ECRIT le nombre et la duree ; le bilan complet (echecs
+  // compris) reste son infobulle. DEUX LIGNES (2026-10-12, « Rond de verre ») : la barre
   // de temps sous la ligne devient le ROND a gauche — le nombre, teinte par l'exception la
   // plus grave — et la seconde ligne porte la legende des outils, colores seulement sur
   // l'exception. Visible bloc plie.

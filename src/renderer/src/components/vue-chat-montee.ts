@@ -7,8 +7,8 @@ import type { Msg } from './chat-view-types'
  * (`liveMessagesRef`). Si la vue est remontée entre-temps, cette copie est morte : elle ne reçoit
  * plus rien, et la fin du tour y lisait un début de réponse. En mode développement, la vue est
  * remontée chaque fois qu'un fichier qu'elle importe change sous les agents. Mesuré le 2026-10-12 :
- * 12 « Réponse affichée » sur 50 tronquées (conv-912 : 185 caractères sur 5 053), et conv-910 et
- * conv-912 figées à la MÊME seconde (17:08:47), celle d'un remontage.
+ * 12 « Réponse affichée » sur 50 tronquées (185 caractères sur 5 053), et des fils
+ * figées à la MÊME seconde (17:08:47), celle d'un remontage.
  *
  * Ce module ne vit pas dans `ChatView.tsx` : un module rechargé à chaud est réexécuté, et un état
  * posé dans SON corps repartirait de zéro avec lui. Ici, il survit au remontage.

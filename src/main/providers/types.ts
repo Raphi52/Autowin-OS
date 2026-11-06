@@ -24,7 +24,7 @@ export interface Attachment {
   /**
    * Absent = jointe au message COURANT. `message-precedent` = rejointe d'office depuis un tour
    * antérieur (`agent-pilot.ts`). Champ STRUCTURÉ : un suffixe dans `name` ne suffisait pas
-   * (conv-150, tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 — une capture, « tes deux captures »).
+   * (tour 1bf1ae63-adb7-47be-ba4e-5c65c5593851 — une capture, « tes deux captures »).
    */
   provenance?: 'message-precedent'
 }
@@ -41,7 +41,7 @@ export interface SendOptions {
   model?: string
   /**
    * Le fil (conversation) au nom duquel cet appel ÉDITE des fichiers. Le hook des agents s'en sert
-   * pour réserver les fichiers édités et refuser ceux qu'un autre fil tient (conv-1083,
+   * pour réserver les fichiers édités et refuser ceux qu'un autre fil tient (
    * `shared/reservation-fichiers.ts`). Un run le porte déjà dans `execution.agentEnv`.
    */
   conversationId?: string
@@ -50,7 +50,7 @@ export interface SendOptions {
   /**
    * Surface d'outils imposee par le controleur pour les tours automatiques sensibles. `sans-outil` :
    * le modele ne lit que ce qu'on lui envoie. Sans ce profil, un appel sans `execution` est un tour
-   * de chat, donc outille sur Claude (conv-1420).
+   * de chat, donc outille sur Claude.
    */
   toolProfile?: 'watchdog-read-only' | 'sans-outil'
   /**
@@ -124,7 +124,7 @@ export interface SendOptions {
    */
   onJournal?: (token: string, journalPath: string) => void
   /**
-   * Options que seul le CLI Claude comprend, lues par le seul `providers/claude.ts` (conv-1504,
+   * Options que seul le CLI Claude comprend, lues par le seul `providers/claude.ts` (
    * plan « Autowin héberge n'importe quel modèle ») : un autre moteur n'a pas à les connaître.
    * `skillNodeTools` reste commun : Codex le lit aussi (`codex.ts`, `optionsMcpCodex`).
    */
@@ -139,14 +139,14 @@ export interface SendOptions {
     /**
      * L'APPELANT sait relancer une commande shell que le CLI a coupée en fin de tour.
      *
-     * Le CLI `-p` arrête les tâches de fond à la fin du tour (conv-528, conv-42) : leur résultat était
+     * Le CLI `-p` arrête les tâches de fond à la fin du tour : leur résultat était
      * perdu et l'utilisateur devait relancer lui-même. Seul le tour de CHAT sait rouvrir un tour de
      * reprise dans la même conversation ; ce drapeau le dit. Absent, le provider garde l'avertissement
      * « relance la demande » : il ne promet jamais une reprise que personne ne fera.
      */
     relancerTachesDeFond?: boolean
     /**
-     * Mesurer le contexte PAR CATEGORIE pendant l'appel (panneau « Contexte » du chat, conv-1000).
+     * Mesurer le contexte PAR CATEGORIE pendant l'appel (panneau « Contexte » du chat).
      * Seul le tour de chat le demande : une phase de pipeline n'a pas d'ecran a renseigner. Un provider
      * qui ne sait pas mesurer ignore le drapeau — le panneau garde alors la jauge simple.
      */
@@ -175,7 +175,7 @@ export interface SendOptions {
     /**
      * Variables posées dans l'environnement du PROCESSUS de l'agent. Porte AUTOWIN_CONVERSATION_ID
      * (le fil du run) : scripts/hdesk-lancer.ps1 le lit pour relier un bureau caché à la petite TV
-     * de ce fil sans que l'agent recopie l'identifiant (conv-528, 2026-09-14).
+     * de ce fil sans que l'agent recopie l'identifiant (2026-09-14).
      */
     agentEnv?: Record<string, string>
     /** Vrai uniquement quand ce cwd appartient exclusivement à ce run/conversation. */
@@ -192,7 +192,7 @@ export interface SendOptions {
      * L'appel vient d'être ADMIS : son agent compte comme actif dès cet instant, dans la même section
      * synchrone que la réservation. Sans lui, l'adaptateur attendait (instantané du dépôt, mise à jour
      * du CLI) avant `onSpawnIntent`, et toute sauvegarde d'un agent voisin pendant cette attente voyait
-     * un appel réservé SANS agent — refusée (« liens de reservation incoherents », conv-163).
+     * un appel réservé SANS agent — refusée (« liens de reservation incoherents »).
      */
     onReservation?: (reservationId: string) => void
     /** Barrière durable posée avant spawn, levée seulement après enregistrement du PID enfant. */
@@ -275,7 +275,7 @@ export interface StreamChunk {
    *
    * `status` est un libellé d'ÉCRAN : l'en-tête « Réflexion » n'accepte qu'une ligne, d'où la coupure
    * à 120 signes dans `claude.ts`. Ce même libellé finissait recopié dans le journal de tour (via
-   * `provider-status`), qui n'y trouvait donc plus qu'un moignon — mesuré sur conv-130, chemin coupé
+   * `provider-status`), qui n'y trouvait donc plus qu'un moignon — mesuré, chemin coupé
    * en plein milieu. Ce champ porte la trace COMPLÈTE à côté du libellé, sans rallonger l'affichage.
    * Absent quand la cible tient déjà en entier dans `status`.
    */
@@ -296,7 +296,7 @@ export interface StreamChunk {
    */
   testsDuTerminal?: Array<{ commande: string; codeDeSortie: number; changementDeDossier?: string }>
   /**
-   * RÉPONSE COUPÉE PAR LE FILTRE DE SÉCURITÉ DU FOURNISSEUR, en DONNÉE (conv-1161). L'avis lisible
+   * RÉPONSE COUPÉE PAR LE FILTRE DE SÉCURITÉ DU FOURNISSEUR, en DONNÉE. L'avis lisible
    * part dans `delta` ; ce champ porte la catégorie et l'explication du fournisseur pour que le
    * pilote l'écrive au journal du tour, où la rétrospective et le kaizen la lisent. Joint à CHAQUE
    * coupure, même quand l'avis n'est pas répété.
@@ -341,8 +341,8 @@ export interface Usage {
    * `inputTokens`, qui est le CUMUL de tous les appels du tour.
    *
    * Un tour d'agent enchaine N appels au modele, et chacun renvoie tout le prefixe. Le cumul est
-   * la bonne quantite pour la DEPENSE et la pire pour la FENETRE : mesure du 2026-09-04 sur
-   * conv-282, un tour de ~14 appels a rendu 2 181 502 tokens d'entree pour une fenetre de 1 M,
+   * la bonne quantite pour la DEPENSE et la pire pour la FENETRE : mesure du 2026-09-04
+   * Un tour de ~14 appels a rendu 2 181 502 tokens d'entree pour une fenetre de 1 M,
    * donc une jauge collee a 100 % alors que l'occupation reelle tenait sous 25 %.
    * Absent quand le provider ne sait pas isoler son dernier appel : le consommateur se replie
    * alors sur `inputTokens`, en sachant que c'est un majorant.
@@ -412,7 +412,7 @@ export interface ExecutionEvidence {
    * `at` : heure d'arrivée, absente d'une trace relue (le journal n'en garde aucune).
    *
    * fix-ok: `changementDeDossier` voyage à côté du libellé : sans lui, `cd ../autre && npm test` se
-   * lisait `npm test` et effaçait un rouge du projet courant (reproduit par le contrôle final, conv-1423).
+   * lisait `npm test` et effaçait un rouge du projet courant (reproduit par le contrôle final).
    */
   testsLus?: Array<{
     commande: string

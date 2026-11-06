@@ -17,7 +17,7 @@ type RunInspectorSummary = {
 }
 
 // Les titres de section d'un RUN.md, en français dans les deux langues : ce sont ceux du document
-// affiché dessous, et `jumpToSection` les compare au texte de ses titres (conv-1170).
+// affiché dessous, et `jumpToSection` les compare au texte de ses titres.
 const SECTIONS = ['Besoin', 'Contraintes', 'Options', 'SOP', 'Journal', 'Défauts', 'Reprise']
 
 function hasSection(content: string, section: string): boolean {

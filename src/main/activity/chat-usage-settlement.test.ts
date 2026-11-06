@@ -104,7 +104,7 @@ describe('persistChatUsageSettlement', () => {
   })
 
   /*
-   * UN STOP N'EST PAS UN ECHEC. Mesure conv-191, tour 4929e6b0 (2026-10-10 19:22:18) : bouton Stop
+   * UN STOP N'EST PAS UN ECHEC. Mesure, tour 4929e6b0 (2026-10-10 19:22:18) : bouton Stop
    * apres 11,35 s → le superviseur compte l'appel coupe dans `failedCalls`, et son etape s'affichait
    * « echec » avec une pastille rouge, a cote de l'etape « annule ». L'utilisateur y a lu une alarme.
    */

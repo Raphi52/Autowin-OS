@@ -3,7 +3,7 @@ import { AppCommandBus } from './commands'
 import { ConversationStore } from '../store/conversations'
 
 /**
- * DEFAUT VECU conv-1407 (2026-08-26), second volet.
+ * DEFAUT VECU (2026-08-26), second volet.
  *
  * Apres avoir donne a l orchestrateur de quoi CHERCHER dans les conversations, il restait aveugle a
  * son PROPRE travail : ses runs, ses traces causales, l activite de ses tours. Autowin les collecte

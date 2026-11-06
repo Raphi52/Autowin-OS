@@ -9,7 +9,7 @@ import {
 } from './board-dossiers-du-chat'
 
 /**
- * Le Board réduit aux dossiers du Chat (conv-1212). Entrée qui doit faire échouer ce fichier :
+ * Le Board réduit aux dossiers du Chat. Entrée qui doit faire échouer ce fichier :
  * « Divers » ou un dossier absent de la liste du Chat qui resterait sur le Board, ou un dossier
  * écrit avec d'autres séparateurs ou une autre casse qui en sortirait.
  */
@@ -112,7 +112,7 @@ describe('dossiersDuBoard — même les dossiers que le Chat propose toujours se
     expect(dossiersDuBoard(['D:\\Factures'], [], ['D:\\Factures'])).toEqual(['D:\\Factures'])
   })
 
-  /** conv-1231 : « j'ai perdu le this computer, il doit être impossible à supprimer ». */
+  /** « j'ai perdu le this computer, il doit être impossible à supprimer ». */
   it('« This computer » reste au Board même si une ancienne croix l’a mémorisé comme retiré', () => {
     expect(
       dossiersDuBoard(

@@ -12,7 +12,7 @@ import { useTextesKnowledge } from '../textes-ecrans/knowledge'
  */
 
 /**
- * LA MARQUE « PERSO » d'une note du Brain perso (conv-1233, 2026-10-28 : « affiche le Brain perso
+ * LA MARQUE « PERSO » d'une note du Brain perso (2026-10-28 : « affiche le Brain perso
  * dans la vue Knowledge, à côté du Brain d'équipe, avec ses notes marquées perso »). Une seule
  * forme, posée partout où la vue liste ou ouvre une note perso.
  */
@@ -138,7 +138,7 @@ export function NodePanel({
   onSupersede?: () => void
   /** Ferme le panneau de droite (désélectionne le nœud). */
   onClose?: () => void
-  /** La note vient du Brain PERSO : elle porte la marque « perso » (conv-1233). */
+  /** La note vient du Brain PERSO : elle porte la marque « perso ». */
   perso?: boolean
 }): React.JSX.Element {
   const { t } = useTextesKnowledge()
@@ -312,7 +312,7 @@ export function ThemeNodesPanel({
 }: {
   nodes: GraphNode[]
   onNavigate: (node: GraphNode) => void
-  /** Les notes viennent du Brain PERSO : chacune porte la marque « perso » (conv-1233). */
+  /** Les notes viennent du Brain PERSO : chacune porte la marque « perso ». */
   perso?: boolean
 }): React.JSX.Element {
   const { t } = useTextesKnowledge()

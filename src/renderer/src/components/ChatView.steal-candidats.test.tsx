@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * LE RAPPORT `steal` REND DES CANDIDATS, COMME `scout` (demande du 2026-10-22, conv-1083).
+ * LE RAPPORT `steal` REND DES CANDIDATS, COMME `scout` (demande du 2026-10-22).
  *
  * Contrat entre deux fichiers qui ne se connaissent pas : l'en-tête que `skills/steal/SKILL.md`
  * impose au modèle, et le lecteur qui transforme un tableau en panneau à cocher

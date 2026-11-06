@@ -8,7 +8,7 @@ import { delierLesDependances } from '../store/dependances-copie-agent'
 import { typerCeQuiPart, typeurTsc } from './typage-avant-publication'
 
 /**
- * LE CAS `9d6bb850` REJOUÉ POUR DE VRAI (conv-954, 2026-10-15) : vrai dépôt git, vraie copie propre
+ * LE CAS `9d6bb850` REJOUÉ POUR DE VRAI (2026-10-15) : vrai dépôt git, vraie copie propre
  * (`ouvrirCopieDeBase`), vrai `tsc`. Une fonction prend un paramètre de plus ; son appelant, modifié
  * lui aussi dans l'arbre, ne part PAS. L'arbre compile, ce qui part ne compile pas.
  */

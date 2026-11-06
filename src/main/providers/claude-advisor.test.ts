@@ -3,7 +3,7 @@ import { advisorAccepte } from './claude-advisor'
 import { appendClaudeSelectionArgs } from './claude'
 
 /*
- * L'ADVISOR NE PART QUE SUR UN ACCORD QUE LE CLI ACCEPTE (conv-1083, 2026-10-22).
+ * L'ADVISOR NE PART QUE SUR UN ACCORD QUE LE CLI ACCEPTE (2026-10-22).
  *
  * Source copiée : https://code.claude.com/docs/en/advisor, « Choose an advisor model ». Hors table,
  * le CLI 2.1.308 tourne sans advisor (advisor classé sous le principal) ou s'arrête au lancement
@@ -11,7 +11,7 @@ import { appendClaudeSelectionArgs } from './claude'
  * L'entrée qui ferait échouer ce banc si le contrôle était faux : principal `claude-opus-5-5` +
  * advisor `claude-sonnet-5-5` (un advisor moins fort que le principal).
  *
- * fix-ok: conv-1083 — pas un correctif à l'aveugle : fichier neuf, écrit rouge avant le code, puis
+ * fix-ok: pas un correctif à l'aveugle : fichier neuf, écrit rouge avant le code, puis
  * retouché en forme et en en-tête. Retouches de fond : cet en-tête, réécrit après MESURE sur le CLI
  * 2.1.308, puis corrigé (objection du contrôle final) pour ne plus étendre à tout accord refusé le
  * seul cas mesuré alors ; et le cas Haiku 4.5 advisor ajouté, celui qui ferait tomber le lancement.

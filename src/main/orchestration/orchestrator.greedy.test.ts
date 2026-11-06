@@ -200,7 +200,7 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
   })
 
   /*
-   * CAS REEL conv-767 (trace `runs/conv-767/scout-task-toujours-pratique-etre-mubg4x51-workspace`) :
+   * CAS REEL (trace `runs/conv-767/scout-task-toujours-pratique-etre-mubg4x51-workspace`) :
    * un `/scout` nomme a fini sa sortie par `SUITE: frame`, et le run a joue scout → frame → juge
    * DEFAUT → « Réparation 1/120 — nouveau passage de build » → build, qui a cree une ref git et une
    * copie dans un autre depot. Deux portes laissaient passer : la branche SANS graphe suivait le
@@ -413,7 +413,7 @@ describe('Orchestrator — dispatch completion-driven (DAG de sous-tâches, fonc
     expect(result.gateBlocked).toBe(true)
   })
 
-  // conv-835, tour 8641812d-6401-4129-a6b0-13a64228e0bc : le juge (VALIDE 86) a releve que le
+  // Tour 8641812d-6401-4129-a6b0-13a64228e0bc : le juge (VALIDE 86) a releve que le
   // raccourci corrige par 0014ffca au pre-gate sequentiel restait ici. Preuve bonne + hook qui
   // bloque AVEC sa raison : le refus ne doit pas s'ouvrir sur « Échec déjà déclaré ».
   it('un hook pre-green bloquant du chemin greedy ne se double pas d’un faux « Échec déjà déclaré »', async () => {
@@ -745,7 +745,7 @@ describe('une sous-tache reparee sort du registre et laisse la cloture se faire'
 /**
  * UN REFUS QUI NE BOUGE PLUS ARRETE LA BOUCLE — au SITE D'APPEL, pas seulement dans la regle pure.
  *
- * Defaut vecu conv-470, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` (saisie `ts=1789192601300`) :
+ * Defaut vecu, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` (saisie `ts=1789192601300`) :
  * quatre passages `[REPARATION 1..4]` pour le MEME refus mot pour mot. La regle existait mais ne
  * mordait que sur un refus entierement hors de portee de build ; un refus MIXTE fige rejouait
  * jusqu'au plafond dur, chaque tour payant un build complet et un panel de juge.
@@ -787,8 +787,8 @@ describe('un refus IDENTIQUE qui revient arrete la boucle de reparation', () => 
   })
 
   /**
-   * RECIDIVE MESUREE (conv-587, saisie du 2026-09-16 ts=1789550244094 : « tu m'as pas ecris de
-   * preprompt » ; premiere occurrence conv-470, 2026-09-12 « j'ai rien en preprompt »).
+   * RECIDIVE MESUREE (saisie du 2026-09-16 ts=1789550244094 : « tu m'as pas ecris de
+   * preprompt » ; premiere occurrence, 2026-09-12 « j'ai rien en preprompt »).
    *
    * Le correctif de 2026-09-12 n'a branche le prompt sur l'evenement de demarrage que du chemin
    * SEQUENTIEL (orchestrator.ts, `prompt: execPrompt`). Le chemin GREEDY — celui que prend un
@@ -816,7 +816,7 @@ describe('un refus IDENTIQUE qui revient arrete la boucle de reparation', () => 
   })
 
   /**
-   * TROISIEME point d'annonce, laisse de cote par le correctif precedent (meme recidive, conv-587,
+   * TROISIEME point d'annonce, laisse de cote par le correctif precedent (meme recidive
    * saisie ts=1789550244094) : quand PLUSIEURS modeles traitent la meme sous-tache, leurs sorties
    * sont fusionnees par un appel supplementaire a l'orchestrateur. Ce site annoncait sa phase sans
    * aucune enveloppe : le deplie « prompt envoye » restait vide pour la fusion.
@@ -843,7 +843,7 @@ describe('un refus IDENTIQUE qui revient arrete la boucle de reparation', () => 
 /**
  * `think` REDIGE UN BRIEFING, IL NE CHOISIT PAS LA SUITE DU RUN.
  *
- * Cas reel conv-1340 : le briefing `think` a fini par `SUITE: fin` et 2 etapes sur 3 n'ont jamais
+ * Cas reel : le briefing `think` a fini par `SUITE: fin` et 2 etapes sur 3 n'ont jamais
  * ete jouees. Encore 1 briefing sur 34 le fait (`run-state/run-3f2ee2d1f0c2-1.json`). La cause :
  * l'invitation « LE WORKFLOW EST UN OUTIL » (`persona.ts`, `WORKFLOW_IS_A_TOOL_INSTRUCTION`) est
  * donnee a chaque noeud, `think` compris, et `recordPhase` lisait la ligne `SUITE:` de toutes les
@@ -955,7 +955,7 @@ describe('un briefing `think` qui ecrit SUITE: fin n’arrete pas le run', () =>
  * donc ignore lui aussi, et le plan continuait. Seule la ligne du MODELE doit l'etre.
  */
 class ThinkQuiDerive extends ThinkQuiArrete {
-  /** Options reçues par l'arbitre : son modèle et son effort (conv-1097). */
+  /** Options reçues par l'arbitre : son modèle et son effort. */
   optionsArbitre: SendOptions | undefined
   constructor(private readonly route: string) {
     super()
@@ -1027,7 +1027,7 @@ describe('l’arbitre de dérive garde la main juste apres `think`', () => {
     expect(phases.slice(0, 2)).toEqual(['think', 'build'])
   })
 
-  // conv-1097 : une ligne à rendre, sans outil → le modèle des PETITES TÂCHES, pas celui de la phase.
+  // Une ligne à rendre, sans outil → le modèle des PETITES TÂCHES, pas celui de la phase.
   it('l’arbitre part sur le modèle des petites tâches, avec son effort', async () => {
     const provider = new ThinkQuiDerive('continuer')
     const roles = new RoleModelConfig({

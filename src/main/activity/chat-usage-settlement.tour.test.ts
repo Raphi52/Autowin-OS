@@ -1,4 +1,4 @@
-// fix-ok: kaizen conv-260 tour 50a06982-1549-4759-9619-b815a8fff9b8 — le cas « appel récupéré après redémarrage » n'avait aucun test : sa ligne de coût (8,00 $) sortait sans turnId ; le test ajouté par 84a684b6 était rouge (turnId undefined) avant la correction, vert après
+// fix-ok: kaizen tour 50a06982-1549-4759-9619-b815a8fff9b8 — le cas « appel récupéré après redémarrage » n'avait aucun test : sa ligne de coût (8,00 $) sortait sans turnId ; le test ajouté par 84a684b6 était rouge (turnId undefined) avant la correction, vert après
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -108,7 +108,7 @@ describe('reglement d usage de chat — tour d origine', () => {
   })
 
   /**
-   * Kaizen conv-260, tour 50a06982-1549-4759-9619-b815a8fff9b8 (« reprend ») : l'appel provider de
+   * Kaizen, tour 50a06982-1549-4759-9619-b815a8fff9b8 (« reprend ») : l'appel provider de
    * ce tour a fini pendant un redemarrage et a ete recupere. Son cout (8,00 $) est parti dans une
    * ligne « chat-recovered » SANS turnId, tandis que la ligne du tour affichait 0 jeton et 269 ms.
    * Seule ligne de cout du journal sans tour : /rendement retombait sur l'heure.

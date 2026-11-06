@@ -1,5 +1,5 @@
 /*
- * PROTOCOLE DES PAGES INTERACTIVES (page-interactive.ts, conv-1304) : ce que la page envoie est du
+ * PROTOCOLE DES PAGES INTERACTIVES (page-interactive.ts) : ce que la page envoie est du
  * code du modele, donc une DONNEE a lire et borner. Le fil (BlocHtmlInteractif.tsx) et l'apercu
  * (scripts/html-interactif-apercu) passent par ces memes fonctions.
  */

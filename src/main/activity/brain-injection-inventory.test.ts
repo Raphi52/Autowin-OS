@@ -87,7 +87,7 @@ describe('inventaire des appels Brain', () => {
   })
 })
 
-// conv-1303 (2026-10-30) : notes servies souvent et jamais ouvertes, pour /curate.
+// 2026-10-30 : notes servies souvent et jamais ouvertes, pour /curate.
 describe('notes servies jamais ouvertes', () => {
   const servie = (chemin: string, ts: string, conversationId = 'conv-1'): BrainTrace =>
     trace({

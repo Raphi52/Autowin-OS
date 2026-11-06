@@ -4,10 +4,10 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * DEMANDE (conv-914, 2026-10-13) : « si cette conv est en train de bosser encore faut que j'ai un
+ * DEMANDE (2026-10-13) : « si cette conv est en train de bosser encore faut que j'ai un
  * spinner sur la conv ».
  *
- * VÉCU : deux runs rattachés au redémarrage travaillaient encore dans conv-914, mais un tour de chat
+ * VÉCU : deux runs rattachés au redémarrage travaillaient encore, mais un tour de chat
  * plus récent (« reprend ») était terminé. Le résumé ne servait que le statut du DERNIER tour
  * (`completed`) et l'écran n'avait aucun tour ouvert : pas de spinner sur la ligne.
  *

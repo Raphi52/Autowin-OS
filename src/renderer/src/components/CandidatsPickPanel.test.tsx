@@ -66,7 +66,7 @@ describe('CandidatsPickPanel', () => {
   })
 
   /*
-   * « Pourquoi pas ? » retiré (conv-1198, « ça sert à rien ») : une ligne DÉCOCHÉE n'a plus de bouton
+   * « Pourquoi pas ? » retiré (« ça sert à rien ») : une ligne DÉCOCHÉE n'a plus de bouton
    * de motif, ni ses 4 choix — décocher suffit.
    */
   it('une ligne décochée n’a plus de bouton « Pourquoi pas ? » ni de motifs', () => {
@@ -169,9 +169,9 @@ describe('CandidatsPickPanel', () => {
   })
 
   /*
-   * L'ARRIVEE DES CANDIDATS (conv-981) : cascade et details en fondu ; decalage de la cascade
+   * L'ARRIVEE DES CANDIDATS : cascade et details en fondu ; decalage de la cascade
    * plafonne a l'index 10 (30 candidats ne doivent pas attendre 1,2 s). La barre de note est
-   * retiree (conv-1198) : le chiffre seul reste.
+   * retiree : le chiffre seul reste.
    */
   const candidat = (
     titre: string,
@@ -236,7 +236,7 @@ describe('CandidatsPickPanel', () => {
   })
 
   /**
-   * conv-1074 (2026-10-22) : « dans scout les candidats sont pas numérotés donc je sais meme pas si tu
+   * 2026-10-22 : « dans scout les candidats sont pas numérotés donc je sais meme pas si tu
    * comprend 1 2 3 ». Chaque ligne montre le NUMÉRO du tableau du scout — celui que la cible désigne,
    * même quand l'app a retrié le tableau. Entrée qui ferait échouer une mauvaise correction : des
    * numéros 4, 1, 3 dans cet ordre (une numérotation par position afficherait 1, 2, 3).

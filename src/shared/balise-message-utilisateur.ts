@@ -1,5 +1,5 @@
 /**
- * Nom de la balise qui encadre les mots de l'utilisateur dans un tour compose (conv-889, 2026-09-30).
+ * Nom de la balise qui encadre les mots de l'utilisateur dans un tour compose (2026-09-30).
  *
  * Partage entre le processus principal, qui POSE la balise (`main/chat-turn-messages.ts`,
  * `motsUtilisateur`), et l'interface, qui la RETIRE pour afficher la demande
@@ -30,7 +30,7 @@ const SEGMENT_UTILISATEUR = /^\s*UTILISATEUR\s*:/
  * découpent sur les lignes vides. Une demande de plusieurs paragraphes n'y gardait que le premier.
  * Ici, le DERNIER bloc balisé gagne (le plus récent, comme pour le libellé) : la balise est
  * neutralisée dans les mots de l'utilisateur (`motsUtilisateur`), donc son bloc ne se coupe jamais
- * trop tôt. Sans balise (trace d'avant conv-889, extrait borné), même découpe que le libellé.
+ * trop tôt. Sans balise (trace d'avant, extrait borné), même découpe que le libellé.
  *
  * Vide sans marqueur `UTILISATEUR:` : seul lui identifie une demande humaine sans ambiguïté.
  */

@@ -1,5 +1,5 @@
 /**
- * Contrat des calques de la Falaise (conv-1534) : chaque bâtiment de `donnees.json` a son image, à la taille
+ * Contrat des calques de la Falaise : chaque bâtiment de `donnees.json` a son image, à la taille
  * de son empreinte, et aucune image ne traîne sans bâtiment. Une image manquante ferait disparaître le
  * bâtiment de l'Accueil (le calque « derrière » le recouvre) ; une taille fausse le décalerait.
  */

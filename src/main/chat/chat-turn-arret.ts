@@ -1,7 +1,7 @@
 /**
  * POURQUOI UN TOUR S'EST ARRÊTÉ — et comment le DIRE.
  *
- * Mesuré sur conv-136 le 2026-09-02. Un tour lance une orchestration de 25 min ; le veilleur
+ * Mesuré le 2026-09-02. Un tour lance une orchestration de 25 min ; le veilleur
  * d'inactivité (`run-pilot-chat.ts`) la croit morte à 20 min et coupe avec un motif soigneusement
  * rédigé (« aucun signe de vie depuis 20 minutes… »). Ce motif n'atteignait JAMAIS l'utilisateur :
  * le `catch` ne requalifiait que la coupure BUDGET, donc tout autre abort devenait `cancelled` —

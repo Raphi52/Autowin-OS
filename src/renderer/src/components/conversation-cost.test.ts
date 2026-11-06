@@ -357,7 +357,7 @@ describe('unknown pricing', () => {
   })
 
   it("nomme ce qui reste non chiffré à côté du montant, sans jamais l'appeler « non exposé »", () => {
-    // Cas RÉEL de conv-1 : deux appels tués, un seul récupérable (le transcript du second est vide).
+    // Cas RÉEL : deux appels tués, un seul récupérable (le transcript du second est vide).
     const summary = summarizeConversationCost([
       row({
         key: 'orchestrator',

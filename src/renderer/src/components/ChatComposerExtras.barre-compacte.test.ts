@@ -6,14 +6,14 @@ const lire = (...chemin: string[]): string => readFileSync(join(__dirname, ...ch
 const extras = lire('ChatComposerExtras.css')
 
 /**
- * BARRE DE PROMPT COMPACTE (conv-1377, 2026-10-31). Demandes : « compacte la barre de prompt en
+ * BARRE DE PROMPT COMPACTE (2026-10-31). Demandes : « compacte la barre de prompt en
  * hauteur », « le bouton question à côté a un border et pas les autres et met-le en première position
  * et le micro en 2ème ». La mise en page se joue dans `order` et `flex` : le DOM reste celui d'avant,
  * donc seule la feuille de style porte la garantie.
  */
 describe('barre de prompt compacte', () => {
-  // conv-1392 (2026-10-31) : « je veux qu'elle fasse toute la largeur comme avant », puis « mets-la
-  // en dessous des icônes ». Puis conv-1399 : « la barre de quota on peut la mettre au niveau du bord
+  // 2026-10-31 : « je veux qu'elle fasse toute la largeur comme avant », puis « mets-la
+  // en dessous des icônes ». Puis : « la barre de quota on peut la mettre au niveau du bord
   // du container, on gagnerait grave de la place en hauteur ». Elle reste de bord à bord sous les
   // icônes, mais SORTIE du flux, posée au pied de la rangée : plus de ligne à elle.
   it('la jauge longe le bas du cadre, de bord à bord, sans ligne à elle', () => {
@@ -24,7 +24,7 @@ describe('barre de prompt compacte', () => {
     expect(bloc).toMatch(/left:\s*0/)
     expect(bloc).toMatch(/right:\s*0/)
     expect(bloc).not.toMatch(/flex:\s*1 0 100%/)
-    // conv-1399 : « le chiffre du quota il est trop haut, il est plus centré sur la barre », puis
+    // « le chiffre du quota il est trop haut, il est plus centré sur la barre », puis
     // « t'as remonté la barre au lieu de baisser le chiffre ». Le trait reste au pied de la rangée et
     // le rond descend sur son milieu (trait de 3 px) : il dépasse donc du cadre.
     const jauge =
@@ -46,7 +46,7 @@ describe('barre de prompt compacte', () => {
     )
   })
 
-  // conv-1392 (2026-10-31) : « ya bcp d'espace vide en haut et en bas de cette barre de prompt,
+  // 2026-10-31 : « ya bcp d'espace vide en haut et en bas de cette barre de prompt,
   // réduis tous les padding ». Les marges des thèmes (`:root[data-theme=…] .cosmic-outline
   // .composer-field`, 4 niveaux) battaient celles du compactage (2 niveaux) : la règle doit les
   // dépasser, et ne fixer que le vertical pour garder les marges latérales de chaque thème.

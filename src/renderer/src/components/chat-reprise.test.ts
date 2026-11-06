@@ -32,7 +32,7 @@ describe('reprendreApresRedemarrage', () => {
   })
 
   /*
-   * conv-1127, 2026-10-23 20:55 : `restart_app` relance l'app 1,2 s après sa réponse, le tour qui l'a
+   * 2026-10-23 20:55 : `restart_app` relance l'app 1,2 s après sa réponse, le tour qui l'a
    * appelé tourne encore et le main le REPREND au démarrage. La consigne partait aussitôt : refus
    * « Un tour repris après le redémarrage tourne encore » et consigne perdue (déjà effacée du disque).
    */
@@ -81,7 +81,7 @@ describe('reprendreApresRedemarrage', () => {
 })
 
 /*
- * conv-1306, 2026-10-30 : deux fils avaient demandé un redémarrage ; l'interface ne lisait qu'UNE
+ * 2026-10-30 : deux fils avaient demandé un redémarrage ; l'interface ne lisait qu'UNE
  * consigne au démarrage. Le main en rend désormais une par appel : on lit jusqu'à épuisement.
  */
 describe('reprendreToutesApresRedemarrage', () => {

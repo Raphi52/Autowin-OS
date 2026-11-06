@@ -22,7 +22,7 @@ import type { ValeursDeTexte } from '../textes'
 import { traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
 
 /**
- * Les libellés des lignes s'écrivent dans la langue COURANTE (conv-1170) : le panneau qui les
+ * Les libellés des lignes s'écrivent dans la langue COURANTE : le panneau qui les
  * assemble refait ses lignes quand elle change (`ModelActivityLogPane`).
  */
 const tx = (cle: Parameters<typeof traduireChatPanneaux>[0], valeurs?: ValeursDeTexte): string =>
@@ -351,10 +351,10 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       // Pensée d'UNE itération : elle se lit comme une réflexion, pas comme un geste anonyme.
       // Le main écrit un `reasoning-step` par FRAGMENT diffusé (quelques mots chacun) : une ligne
       // par fragment noyait le journal sous des centaines de « Raisonnement » illisibles
-      // (conv-257 : 143 lignes pour un seul tour). Les fragments CONSÉCUTIFS d'une même itération
+      // (143 lignes pour un seul tour). Les fragments CONSÉCUTIFS d'une même itération
       // forment donc UNE ligne, à l'heure du premier ; tout autre événement (outil, signe de vie,
       // réponse) clôt la rafale, ce qui garde la pensée à sa place entre les gestes.
-      // Une ligne déjà regroupée à l'écriture porte son compte (`fragments`, conv-1431).
+      // Une ligne déjà regroupée à l'écriture porte son compte (`fragments`).
       const compte = typeof event.fragments === 'number' ? event.fragments : 1
       if (rafale && rafale.premier.iteration === event.iteration) {
         rafale.texte += String(event.text ?? '')
@@ -564,7 +564,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
       vides.add(r.ligne)
       continue
     }
-    // Le compte d'une ligne regroupée à l'écriture est un champ, pas de la pensée (conv-1431).
+    // Le compte d'une ligne regroupée à l'écriture est un champ, pas de la pensée.
     const detail = joinDetail(short(r.texte), rest(r.premier, 'text', 'iteration', 'fragments'))
     Object.assign(
       r.ligne,
@@ -574,7 +574,7 @@ function fromJournal(turnId: string, events: ReadonlyArray<Record<string, unknow
   }
   const gestes = vides.size > 0 ? out.filter((ligne) => !vides.has(ligne)) : out
   // Le `reasoning` AGRÉGÉ de clôture est la MÊME pensée que les rafales, réécrite d'un bloc (et
-  // parfois plus courte : mesuré conv-58, 12 001 caractères agrégés contre 20 213 en fragments).
+  // parfois plus courte : mesuré, 12 001 caractères agrégés contre 20 213 en fragments).
   // Il ne fait une ligne que pour un journal sans fragments (journaux anciens).
   const head: Brute[] = []
   if (reasoning.trim() && rafales.length === vides.size)
@@ -1038,7 +1038,7 @@ function turnIdDuTourSuivant(messages: readonly Msg[], depuis: number): string {
 }
 
 /**
- * L'ASSEMBLAGE EN TROIS MORCEAUX (conv-252, 2026-10-11 : « fais en sorte que l'onglet Logs ne
+ * L'ASSEMBLAGE EN TROIS MORCEAUX (2026-10-11 : « fais en sorte que l'onglet Logs ne
  * recalcule plus tout le journal à chaque morceau de réponse affiché pendant un tour, en ne
  * recalculant que les lignes du fil quand seuls les messages changent »).
  *

@@ -1,5 +1,5 @@
 /**
- * LES INDICATEURS ANIMÉS AVANCENT PAR CRANS, TOUS SUR LA MÊME HORLOGE (conv-1075, 2026-10-22).
+ * LES INDICATEURS ANIMÉS AVANCENT PAR CRANS, TOUS SUR LA MÊME HORLOGE (2026-10-22).
  *
  * Plainte : « ma carte graphique fait un bruit de fou ». Mesuré sur le poste de l'utilisateur
  * (GeForce GT 1030, fenêtre 1920×1032, par le port de débogage) : dès qu'UNE animation visible tourne
@@ -29,7 +29,7 @@ export function attenteDuCran(): number {
 }
 
 /** Les animations CSS qui avancent par crans et qu'on cale sur l'horloge commune. */
-// Plafond de 10 images/s levé le 2026-11-04 (conv-1512) : seules restent les animations qui clignotent
+// Plafond de 10 images/s levé le 2026-11-04 : seules restent les animations qui clignotent
 // par nature (`steps(1)` / `steps(2)`), calées ensemble pour changer d'image au même instant.
 export const ANIMATIONS_PAR_CRANS: ReadonlySet<string> = new Set([
   'conv-asking-list',

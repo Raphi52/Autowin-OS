@@ -11,7 +11,7 @@ import {
 } from '../../../scripts/mod-autowin-admin.mjs'
 
 /**
- * PORTÉE DU MOD AUTOWIN QUAND UN RÉGLAGE ADMINISTRATEUR L'ACTIVE (conv-1582, 2026-11-05).
+ * PORTÉE DU MOD AUTOWIN QUAND UN RÉGLAGE ADMINISTRATEUR L'ACTIVE (2026-11-05).
  *
  * Le garde intégré du CLI (`cc-plugin-sec-default`) saute le mod 2 (`prompt.attachment`) d'un mod
  * « installé par l'utilisateur ». Seul un mod « de l'organisation » le passe : activé par le réglage

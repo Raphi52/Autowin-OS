@@ -1,5 +1,5 @@
 /**
- * LES PROJETS DU FILTRE DU BOARD (conv-1329, 2026-10-30) — calcul PUR.
+ * LES PROJETS DU FILTRE DU BOARD (2026-10-30) — calcul PUR.
  *
  * Demande : « filtre par projet dans le board en plus du filtre par personne ». Puis, sur la
  * première liste : « pk ya autowinos et autowin-os dans les projets, pourquoi ya des projets qui

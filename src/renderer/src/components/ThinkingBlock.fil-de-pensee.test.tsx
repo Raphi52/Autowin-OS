@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * CORPS DÉPLIÉ DU BLOC RAISONNEMENT — « Liseuse + Fil de pensée » (conv-335, 2026-10-18, /draft
+ * CORPS DÉPLIÉ DU BLOC RAISONNEMENT — « Liseuse + Fil de pensée » (2026-10-18, /draft
  * « un meilleur bloc raisonnement pour mieux voir le texte quand il est déplié », puis « Implémenter
  * 1 + 3 »). Avant : un <pre> gris de 13 px dans une fenêtre de 240 px à ascenseur, première ligne
  * coupée en haut. Ce que le mélange garde :
@@ -124,7 +124,7 @@ describe('corps déplié du bloc Raisonnement', () => {
   it('au-delà de la demi-fenêtre : fondu + « Tout lire · N paragraphes », qui déplie TOUT', () => {
     corpsQuiDeborde()
     const el = render({ text: PENSEE, done: true })
-    // Le bloc fini est PLIÉ : la mesure se fait quand l'utilisateur le déplie (conv-1055).
+    // Le bloc fini est PLIÉ : la mesure se fait quand l'utilisateur le déplie.
     deplier(el)
     const corps = el.querySelector<HTMLElement>('[data-testid="thinking-block-body"]')!
     const bouton = el.querySelector<HTMLButtonElement>('[data-testid="thinking-block-tout-lire"]')
@@ -140,8 +140,8 @@ describe('corps déplié du bloc Raisonnement', () => {
 })
 
 /*
- * UN BLOC PLIÉ NE LIT PLUS `scrollHeight` (conv-1055, 2026-10-22). Profil CPU de l'ouverture de
- * conv-826 dans une instance cachée : 745 à 1 154 ms de temps propre dans `mesurer`, le premier
+ * UN BLOC PLIÉ NE LIT PLUS `scrollHeight` (2026-10-22). Profil CPU de l'ouverture
+ * dans une instance cachée : 745 à 1 154 ms de temps propre dans `mesurer`, le premier
  * poste. C'est le coût d'UNE mise en page du fil, payée par le premier lecteur : retirer cette
  * lecture la fait passer à `ajusterALaLargeur`, sans gain net sur l'arbre actuel. Ce que ce test
  * garde, c'est la CASCADE : quand un autre code salit la mise en page entre deux blocs, chaque bloc

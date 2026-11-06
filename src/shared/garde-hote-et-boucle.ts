@@ -1,6 +1,6 @@
 /**
  * DEUX GARDES DÉTERMINISTES qui remplacent des règles jusqu'ici en PROSE dans le prompt de pilotage
- * (demande utilisateur conv-58, 2026-10-02 : « on fait 1 et 2 pour tester »).
+ * (demande utilisateur, 2026-10-02 : « on fait 1 et 2 pour tester »).
  *
  * CONTRAINTE : fonctions AUTOPORTÉES (aucun import, aucune référence externe) — elles sont sérialisées
  * telles quelles dans le script de hook PreToolUse du CLI (`scriptHookGardes`).

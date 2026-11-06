@@ -31,7 +31,7 @@ export const GROUPE_DIVERS = 'divers'
 export const GROUPE_RECENT = 'recent'
 /**
  * Combien de conversations le raccourci « Récent » montre. Au-delà, ce n'est plus un raccourci.
- * Passé de 10 à 20 à la demande de l'utilisateur (conv-868, 2026-09-26 : « mets 20 conv dans récent »).
+ * Passé de 10 à 20 à la demande de l'utilisateur (2026-09-26 : « mets 20 conv dans récent »).
  */
 export const TAILLE_RECENT = 20
 
@@ -40,7 +40,7 @@ export interface ConversationLike {
   id: string
   projectPath?: string
   /**
-   * Libellé de classement libre, quand il ne correspond à AUCUN dossier de travail (conv-81).
+   * Libellé de classement libre, quand il ne correspond à AUCUN dossier de travail.
    * Présent → c'est lui qui groupe, et `projectPath` ne sert plus qu'au dossier de travail.
    */
   categorie?: string
@@ -101,7 +101,7 @@ export function nomDeDossier(chemin: string): string {
 export function groupeDe(
   conversation: ConversationLike,
   dossierParDefaut?: string,
-  /** Langue des libellés « Divers » (conv-1170) : la vue la passe pour se redessiner quand elle change. */
+  /** Langue des libellés « Divers » : la vue la passe pour se redessiner quand elle change. */
   langue: Langue = langueCourante()
 ): {
   key: string
@@ -114,11 +114,11 @@ export function groupeDe(
     // « Auto-kaizen » reste tel quel dans les deux langues : c'est le nom de la skill kaizen.
     return { key: GROUPE_KAIZEN, label: 'Auto-kaizen', kind: 'kaizen' }
   }
-  // La CATEGORIE avant le dossier : c'est la dissociation demandée le 2026-09-16 (conv-81). Un fil
+  // La CATEGORIE avant le dossier : c'est la dissociation demandée le 2026-09-16. Un fil
   // peut travailler dans `D:\GIT\ContosoApp` et se ranger sous « Factures » — sans cette
   // priorité, choisir une catégorie serait impossible dès qu'un dossier de travail est assigné. Le
   // libellé EST la clé : il ne se canonise pas, ce n'est pas un chemin.
-  // fix-ok: conv-81 — cause mesurée dans groupeDe : le groupement lisait projectPath, donc classer = écrire un dossier de travail. La catégorie passe devant, et elle seule groupe quand elle est là.
+  // fix-ok: cause mesurée dans groupeDe : le groupement lisait projectPath, donc classer = écrire un dossier de travail. La catégorie passe devant, et elle seule groupe quand elle est là.
   const libelle = conversation.categorie?.trim()
   if (libelle) return { key: libelle, label: libelle, kind: 'categorie' }
   const chemin = conversation.projectPath?.trim()

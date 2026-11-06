@@ -3,7 +3,7 @@ import { AUTOWIN_OWN_BRAIN_STATE_DIR } from './brain-paths'
 import { lireBrainReglage } from './brain-reglage'
 
 /**
- * OÙ VIT LE BRAIN PERSO — module LÉGER, sorti de `brain-perso.ts` (conv-1233, 2026-10-28).
+ * OÙ VIT LE BRAIN PERSO — module LÉGER, sorti de `brain-perso.ts` (2026-10-28).
  *
  * Le processus qui lit le graphe de la vue Knowledge (`viz/brain-worker.ts`) doit savoir quelle
  * racine perso il a le droit d'ouvrir. `brain-perso.ts` tire avec lui le lancement du serveur, la

@@ -1,7 +1,7 @@
 // Ce que l'envoi d'une itération au modèle fait d'une erreur : annulation, session abandonnée
 // (prompt trop long, crash du CLI sans coût), bascule de compte sur quota épuisé, repli après un
 // refus du filtre de sécurité, rejeu d'une panne serveur temporaire. Sorti tel quel du `catch` de
-// l'envoi dans AgentPilot.chat() (conv-1580, lot 4) : rend la tentative suivante — là où le `catch`
+// l'envoi dans AgentPilot.chat() (lot 4) : rend la tentative suivante — là où le `catch`
 // faisait `continue` —, ou jette comme avant.
 import {
   deciderRejeuDeChat,
@@ -69,7 +69,7 @@ export async function reprendreApresErreur(
   /*
    * SESSION EMPOISONNEE PAR UN PROMPT TROP LONG — on l'ABANDONNE au lieu de la rejouer.
    *
-   * Mesure (conv-312) : une injection de 2,86 Mo a fait exploser un tour en
+   * Mesure : une injection de 2,86 Mo a fait exploser un tour en
    * « Prompt is too long ». Le tour SUIVANT ne pesait que 65 k caracteres et echouait
    * pourtant a l'identique — parce qu'il reprenait la meme session (`--resume`), qui porte
    * encore le prompt geant cote fournisseur. La conversation devenait un CUL-DE-SAC :
@@ -77,7 +77,7 @@ export async function reprendreApresErreur(
    *
    * Reprendre une session dont le contenu ne tient plus dans la fenetre est sans issue :
    * on l'oublie, et on repart a blanc avec le fil ENTIER, reconstruit par
-   * `repartirSansSession` (avant conv-1040, le message ampute d'une reprise). Le cout
+   * `repartirSansSession` (le message ampute d'une reprise). Le cout
    * est une perte de contexte cote fournisseur, DIT au modele par le fil lui-meme —
    * infiniment moins cher qu'un fil definitivement mort.
    */
@@ -95,7 +95,7 @@ export async function reprendreApresErreur(
     return attempt
   }
   /*
-   * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (conv-1063, 2026-10-22).
+   * QUOTA ÉPUISÉ EN PLEIN TOUR, APRÈS DU TEXTE AFFICHÉ (2026-10-22).
    *
    * Cas réel : `run-stdout/c6ba0030-…stdout.jsonl`, 31 min et 96 blocs de texte, fini sur
    * « You've hit your session limit ». Le registre a basculé le pool sur un compte LIBRE et
@@ -122,7 +122,7 @@ export async function reprendreApresErreur(
     return attempt
   }
   /*
-   * REFUS DU FILTRE DE SECURITE (conv-239, tour d9a2ca62) : l'adaptateur le marque NON
+   * REFUS DU FILTRE DE SECURITE (tour d9a2ca62) : l'adaptateur le marque NON
    * rejouable — il est facture — et la ligne suivante abandonnait le tour. Le rejouer a
    * l'identique echouerait pareil : on suit le conseil du CLI (« in a new session or change
    * your model »), UNE fois par tour. Politique et mesure : `deciderRepliApresRefus`.
@@ -189,7 +189,7 @@ export async function reprendreApresErreur(
    *
    * CRASH DU CLI A 0 TOKEN SUR UNE SESSION HERITEE — on LACHE la session avant de rejouer.
    *
-   * Capture fournie par l'utilisateur sur conv-625 (tour `2fbc8f95-6a5d-4fd4-821c-7af5a197303a`,
+   * Capture fournie par l'utilisateur (tour `2fbc8f95-6a5d-4fd4-821c-7af5a197303a`,
    * 2026-09-16) : un tour meurt sur « You've hit your session limit · resets 10:30pm », le
    * meme prompt renvoye ensuite meurt en « error_during_execution · 0.0000 USD », et la
    * barre de quotas affiche 94 % de restant sur le compte actif. Rien n'a ete consomme :

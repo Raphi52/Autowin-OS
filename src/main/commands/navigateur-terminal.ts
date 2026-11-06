@@ -1,7 +1,7 @@
 /**
  * Ce que les outils `navigateur_*` et `terminal_lire` prennent de leurs moteurs.
  *
- * Code libre sorti de `commands.ts` tel quel (conv-1580, lot 5) ; `commands.ts` ré-exporte ce qu'il
+ * Code libre sorti de `commands.ts` tel quel (lot 5) ; `commands.ts` ré-exporte ce qu'il
  * exportait déjà, ses importeurs ne changent pas. Dans `commands/`, une VALEUR s'importe d'ici,
  * jamais par `'../commands'` (cycle d'import) : `commands/code-libre.test.ts` le garde.
  */
@@ -12,7 +12,7 @@ import type { GestionnaireTerminal } from '../bureau/terminal-integre'
 import type { RefusActionNavigateur } from '../../shared/navigateur'
 
 /**
- * Ce que les outils `navigateur_*` prennent du moteur (conv-1286) : ses méthodes d'agent, rien
+ * Ce que les outils `navigateur_*` prennent du moteur : ses méthodes d'agent, rien
  * d'autre. Pas `ouvrir`, le chemin des boutons de l'interface : aucune pause ne le retient.
  * fix-ok: run-adc12547df2d-1 (objection du juge) — `navigateur_ouvrir` + `nouvelOnglet` l'appelait :
  * en main reprise, `ok: true` et onglet actif changé. Un outil qui l'appellerait ne compile plus.
@@ -29,7 +29,7 @@ export type NavigateurDeLAgent = Pick<
 >
 
 /**
- * Ce que `terminal_lire` prend du moteur (conv-1362, lot 3/3) : lire, et l'état pour dire pourquoi il
+ * Ce que `terminal_lire` prend du moteur (lot 3/3) : lire, et l'état pour dire pourquoi il
  * n'y a rien à lire. Ni `ecrire` ni `ouvrir` : un outil qui taperait dans le terminal ne compile pas.
  */
 export type TerminalDeLAgent = Pick<GestionnaireTerminal, 'etat' | 'lire'>
@@ -51,7 +51,7 @@ export function estOutilNavigateur(name: string): name is OutilNavigateur {
 }
 
 /**
- * Ce que l'agent doit faire d'un refus des GARDE-FOUS du moteur (conv-1286). Les autres refus
+ * Ce que l'agent doit faire d'un refus des GARDE-FOUS du moteur. Les autres refus
  * (cible introuvable, page changée…) disent déjà quoi faire dans leur message.
  */
 export const SUITE_REFUS_NAVIGATEUR: Partial<Record<RefusActionNavigateur, string>> = {

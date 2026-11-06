@@ -48,7 +48,7 @@ describe('chat turn reducer', () => {
       pas du tout l'expérience utilisateur que je veux offrir ».
 
       L'étiquette reste un DERNIER RECOURS : sans aucun texte, elle réapparaît, sinon la bulle serait
-      vide — un défaut plus ancien et pire (`conv-1141`). Les deux garanties tiennent ensemble.
+      vide — un défaut plus ancien et pire. Les deux garanties tiennent ensemble.
     */
     expect(flattenChatParts(turn.parts)).toBe('Bonjour Raphaël.\n Terminé.')
     expect(flattenChatParts(turn.parts.filter((part) => part.kind === 'action'))).toContain(

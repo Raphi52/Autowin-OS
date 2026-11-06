@@ -6,7 +6,7 @@ import { execFileHorsFil, type ErreurHorsFil } from '../gel/execution-hors-fil'
 import { appliquerLeTour, ouvrirCopieDeBase, type CopieDeBase } from '../git/comparaison-a-la-base'
 
 /**
- * LE TYPAGE DE CE QUI PART, PAS CELUI DE L'ARBRE PARTAGÉ (conv-954, 2026-10-15).
+ * LE TYPAGE DE CE QUI PART, PAS CELUI DE L'ARBRE PARTAGÉ (2026-10-15).
  *
  * LE DÉFAUT, vécu ce jour-là : le commit automatique `9d6bb850` a publié
  * `src/main/app/raccourci-demarrer-dev.ts`, dont une fonction prenait un nouveau paramètre obligatoire,
@@ -19,7 +19,7 @@ import { appliquerLeTour, ouvrirCopieDeBase, type CopieDeBase } from '../git/com
  * dessus (même copie que `comparaison-a-la-base.ts`). Coût mesuré sur ce dépôt : 9 s pour
  * `tsconfig.node.json`, 14 s pour `tsconfig.web.json`, joués seulement pour les projets touchés.
  *
- * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PAS (même règle que les tests, choix de l'utilisateur conv-246) :
+ * UN ROUGE DÉJÀ PRÉSENT NE BLOQUE PAS (même règle que les tests, choix de l'utilisateur) :
  * si le typage est rouge, il est rejoué sur le dernier commit seul, et seule une erreur NOUVELLE
  * bloque. Une erreur se reconnaît à son fichier, son code et son message, sans ligne ni colonne :
  * une ligne ajoutée plus haut ne la fait pas passer pour nouvelle.
@@ -132,7 +132,7 @@ export function typeurTsc(executable: string): Typeur {
       return { lancee: false, exitCode: null, sortie: '', raison: `tsc introuvable : ${tsc}` }
     }
     // Hors du fil principal : la CRÉATION de ce processus a tenu la fenêtre 16 s (`gels.jsonl`,
-    // 2026-10-31 — conv-1413). Le plafond de sortie suit `SORTIE_MAX`, gardée au début : les
+    // 2026-10-31). Le plafond de sortie suit `SORTIE_MAX`, gardée au début : les
     // premières erreurs de typage sont celles qu'on lit.
     try {
       const { stdout, stderr } = await execFileHorsFil(

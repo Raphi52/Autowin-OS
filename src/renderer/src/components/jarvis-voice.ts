@@ -51,7 +51,7 @@ export interface JarvisEcoute {
   /**
    * LE DERNIER ORDRE RÉELLEMENT PARTI, et quand. C'est le verrou contre le DOUBLE ENVOI.
    *
-   * DÉFAUT VÉCU le 2026-09-01 (conv-71) : la phrase « rend la widget de Jarvis futuriste et ultra
+   * DÉFAUT VÉCU le 2026-09-01 : la phrase « rend la widget de Jarvis futuriste et ultra
    * stylé. » dite UNE fois a produit DEUX messages à 0,8 s d'écart, donc deux tours de modèle
    * PAYANTS. Les moteurs de reconnaissance republient un segment déjà figé (whisper.cpp quand le
    * silence est recoupé, `webkitSpeechRecognition` quand `resultIndex` rejoue la liste) : l'éveil
@@ -248,7 +248,7 @@ const TOLERANCE_FIN = '[a-zà-öø-ÿ]{0,3}'
 /**
  * Ce qui peut SEPARER deux mots d'un nom compose, tel que le moteur l'ecrit.
  *
- * DEFAUT VECU le 2026-09-02 (conv-113), assistant nomme « Machin Bidule » : whisper ponctue tout
+ * DEFAUT VECU le 2026-09-02, assistant nomme « Machin Bidule » : whisper ponctue tout
  * seul (« Machin, bidule », « Machin. Bidule »). Le separateur n'admettait que l'espace, le trait
  * d'union et l'apostrophe, donc le nom ENTIER ne correspondait plus ; seul le raccourci « machin »
  * reveillait, et le reste du NOM — « bidule » — repartait comme ORDRE : dire son nom ouvrait une
@@ -448,7 +448,7 @@ export function erreurDAutorisationMicro(code: string): boolean {
 }
 
 export function messageErreurMoteur(code: string): string {
-  // Affiché à l'écran : dans la langue de l'interface (conv-1170).
+  // Affiché à l'écran : dans la langue de l'interface.
   const langue = langueCourante()
   if (code === 'network') {
     return traduireAccueil('moteur.network', langue)
@@ -516,7 +516,7 @@ export function phraseDeJarvis(etat: JarvisEcoute, evenement: EvenementParle): s
   if (!etat.active) return null
   if (etat.mode === 'enregistrement') return null
   const sujet = sujetLisible(evenement.sujet)
-  // RESTE EN FRANÇAIS (conv-1170) : la voix choisie d'office est française, la reconnaissance
+  // RESTE EN FRANÇAIS : la voix choisie d'office est française, la reconnaissance
   // écoute en `fr-FR`, et le filtre d'écho compare ce qu'il entend à CETTE phrase.
   if (evenement.genre === 'ordre') return 'Tout de suite.'
   if (evenement.genre === 'fin') return sujet === '' ? 'C’est fait.' : `C’est fait : ${sujet}.`

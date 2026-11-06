@@ -88,7 +88,7 @@ describe('checkpoint oublie — la promesse « ne sera plus rejoue » tient', ()
   })
 
   /*
-   * DEFAUT MESURE LE 2026-10-19 : `run-77881113c261-1` (conv-301) est repris a CHAQUE demarrage
+   * DEFAUT MESURE LE 2026-10-19 : `run-77881113c261-1` est repris a CHAQUE demarrage
    * depuis le 17/10 et laisse un nouveau dossier de run a chaque fois (mvcpc24z le 17/10 a 20:00,
    * mveuoe1x le 19/10 a 08:05). Le journal de l'app dit « copie durable absente : echec conclu une
    * fois, checkpoint retire », mais `run-state/run-77881113c261-1.json` est reecrit a 08:05:21

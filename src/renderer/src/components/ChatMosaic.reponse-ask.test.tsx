@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * REPONDRE A UNE QUESTION DEPUIS UNE FENETRE DE MOSAIQUE (conv-50, 2026-09-01).
+ * REPONDRE A UNE QUESTION DEPUIS UNE FENETRE DE MOSAIQUE (2026-09-01).
  *
  * Meme symptome que le defaut vecu dans le fil unique — « j'ai répondu a la question et ca a rien
  * fait » — par un autre chemin : la mosaique rendait `ChatMessageRow` sans destinataire de reponse.

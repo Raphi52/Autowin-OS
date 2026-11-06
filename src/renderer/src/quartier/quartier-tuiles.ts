@@ -1,5 +1,5 @@
 /**
- * LES WIDGETS DANS LEURS TOURS (conv-1421, D-2 de la fiche du Quartier).
+ * LES WIDGETS DANS LEURS TOURS (D-2 de la fiche du Quartier).
  *
  * Sur la Falaise, chaque tuile de l'Accueil vit dans une tour de la ville. Un clic sur la tour fait
  * sortir le widget, et la tour reste allumée tant qu'il est dehors ; un second clic l'y fait rentrer.

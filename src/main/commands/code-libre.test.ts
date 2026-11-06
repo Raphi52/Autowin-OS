@@ -10,7 +10,7 @@ import * as rejeu from './rejeu'
 import * as skills from './skills'
 
 /**
- * Le code libre de `commands.ts` vit dans `commands/*.ts` (conv-1580, lot 5) ; `commands.ts` le
+ * Le code libre de `commands.ts` vit dans `commands/*.ts` (lot 5) ; `commands.ts` le
  * ré-exporte pour ses ~150 importeurs, qui ne changent pas.
  *
  * Deux défauts possibles d'un déplacement, que le typage ne voit pas :

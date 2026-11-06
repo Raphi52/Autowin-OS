@@ -6,12 +6,12 @@ import { ChatComposer, type ChatComposerProps } from './ChatComposer'
 import { extrairePropositionsSuite } from '../../../shared/prompt-suivant'
 
 /**
- * LES TROIS SUITES NOTÉES, EN BOUTONS (conv-1005, 2026-10-16) : « choisir entre 3 préprompts scorés
+ * LES TROIS SUITES NOTÉES, EN BOUTONS (2026-10-16) : « choisir entre 3 préprompts scorés
  * et cliquer au lieu de faire Tab ». Le test part d'une VRAIE fin de réponse (les lignes
  * `AUTOWIN_PROMPT_V1` telles que le modèle les écrit), passe par le même lecteur que l'écran du
  * chat, et vérifie ce que l'utilisateur voit et obtient : trois boutons classés, leur note, et un
- * clic qui remplit le champ comme Tab — et qui, depuis conv-1103, COCHE la suite pour en combiner
- * plusieurs. Depuis conv-1087 (2026-10-22), une alternative notée sous
+ * clic qui remplit le champ comme Tab — et qui, COCHE la suite pour en combiner
+ * plusieurs. Depuis le 2026-10-22, une alternative notée sous
  * `NOTE_MIN_ALTERNATIVE` n'a plus de bouton : l'utilisateur veut choisir entre des suites
  * PERTINENTES, pas lire des à-côtés.
  */
@@ -100,7 +100,7 @@ describe('ChatComposer — suites notées en boutons', () => {
     const champ = h.querySelector('textarea') as HTMLTextAreaElement
     expect(champ.value).toBe('Relance la suite de tests du composer.')
     expect(brouillons.at(-1)).toBe('Relance la suite de tests du composer.')
-    // Les boutons RESTENT pour en cocher d'autres (conv-1103), la cochée marquée comme telle.
+    // Les boutons RESTENT pour en cocher d'autres, la cochée marquée comme telle.
     expect(boutons(h).map((b) => b.getAttribute('aria-checked'))).toEqual([
       'false',
       'true',
@@ -109,7 +109,7 @@ describe('ChatComposer — suites notées en boutons', () => {
   })
 
   /*
-   * COCHER PLUSIEURS SUITES (conv-1103, 2026-10-22) : « je veux pouvoir cocher plusieurs
+   * COCHER PLUSIEURS SUITES (2026-10-22) : « je veux pouvoir cocher plusieurs
    * propositions ». Le champ devient la liste numérotée des suites cochées, dans l'ordre affiché
    * (de la mieux notée à la moins bien notée), quel que soit l'ordre des clics.
    */
@@ -190,7 +190,7 @@ describe('ChatComposer — suites notées en boutons', () => {
   })
 
   /*
-   * MAJ+TAB PREND TOUTES LES SUITES (conv-1125, 2026-10-23 : « shift + tab pour les 2 et tab le
+   * MAJ+TAB PREND TOUTES LES SUITES (2026-10-23 : « shift + tab pour les 2 et tab le
    * premier »). Même champ que si on cochait chaque bouton : la liste numérotée, dans l'ordre
    * affiché, toutes les cases cochées pour pouvoir en retirer une au clic.
    */
@@ -229,7 +229,7 @@ describe('ChatComposer — suites notées en boutons', () => {
     expect(boutons(h)).toHaveLength(0)
   })
 
-  // Titre demandé par l'utilisateur (conv-1103, 2026-10-22) : « le titre de cette popup c'est :
+  // Titre demandé par l'utilisateur (2026-10-22) : « le titre de cette popup c'est :
   // pour continuer... ». Il nomme aussi le groupe pour un lecteur d'écran.
   it('le bloc des suites porte le titre « Pour continuer… »', async () => {
     const h = await monter(proprietes())

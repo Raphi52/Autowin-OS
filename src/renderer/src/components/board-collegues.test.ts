@@ -53,7 +53,7 @@ const JEAN: BoardDUnCollegue = {
   nom: 'Jean Dupont',
   postIts: [
     {
-      // Même identifiant qu'un de nos fils : son conv-1 n'est pas le nôtre.
+      // Même identifiant qu'un de nos fils : son n'est pas le nôtre.
       conversationId: 'conv-1',
       titre: 'Le fil de Jean',
       projet: { cle: 'D:\\AutoWinOS', libelle: 'AutoWinOS' },

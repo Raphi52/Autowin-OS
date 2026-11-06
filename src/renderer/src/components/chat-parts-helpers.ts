@@ -67,7 +67,7 @@ export function raisonDuLien(
 /**
  * CIBLE d'une action, lue dans ses arguments. Sans elle, deux `edit_file` consecutifs rendent deux
  * lignes IDENTIQUES : l'utilisateur voit qu'il se passe quelque chose sans savoir SUR QUOI — grief
- * exact de conv-1536 (« on sait pas ce que le model est en train de faire au premier coup d'oeil »).
+ * exact (« on sait pas ce que le model est en train de faire au premier coup d'oeil »).
  * Aucun champ connu -> `undefined` : on prefere le seul libelle d'outil a une cible inventee.
  */
 const CLES_CIBLE = [
@@ -148,7 +148,7 @@ export function ligneEtatLancement(actions: ChatActionPart[]): string | undefine
 }
 
 /**
- * BATTEMENT D'UNE ORCHESTRATION, decoupe pour la capsule (conv-194, 2026-10-10, capsule 2 « Phase
+ * BATTEMENT D'UNE ORCHESTRATION, decoupe pour la capsule (2026-10-10, capsule 2 « Phase
  * dans la capsule »). Le processus principal l'ecrit `<duree> · <phase> · <dernier fait>`
  * (`battementDOrchestration`, src/main/verify/verify-battement.ts), la duree au format de `dureeCourte` :
  * « 45 s », « 3 min », « 4 min 12 s ».

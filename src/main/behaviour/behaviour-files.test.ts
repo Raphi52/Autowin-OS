@@ -69,7 +69,7 @@ describe('behaviour instruction map', () => {
     const codex = select(await listBehaviourFiles(opts), 'codex')
     const active = codex.filter((file) => file.state === 'active')
 
-    // CONTRAT CORRIGÉ (conv-984, 2026-10-16). Ce test affirmait la chaîne NATIVE de Codex :
+    // CONTRAT CORRIGÉ (2026-10-16). Ce test affirmait la chaîne NATIVE de Codex :
     // override du workspace et AGENTS.md du projet « active ». Faux sous Autowin : `codexExecSpec`
     // lance toujours le CLI avec `-c project_doc_max_bytes=0`, qui coupe la boucle des fichiers de
     // projet (le global est ajouté avant elle). Seul le global reste chargé par Codex.
@@ -119,7 +119,7 @@ describe('behaviour instruction map', () => {
     //      pas du tout.
     // Seul le `CLAUDE.md` du workspace est donc réellement replié dans un prompt.
     //
-    // conv-1067 (2026-10-22) : ce test le déclarait actif sans `.git`, alors que le chargeur ne lisait
+    // 2026-10-22 : ce test le déclarait actif sans `.git`, alors que le chargeur ne lisait
     // QUE le contexte sélectionné (`projectA`) — la vue mentait. Le chargeur empile désormais de la
     // racine du dépôt git au contexte : le workspace est donc rendu racine d'un dépôt ici, et le cas
     // hors dépôt est prouvé juste après.
@@ -136,7 +136,7 @@ describe('behaviour instruction map', () => {
     expect(claude.find((file) => file.path === projectB)?.state).toBe('conditional')
   })
 
-  // conv-1067 (2026-10-22) : un fil rangé sur un SOUS-dossier d'un dépôt reçoit aussi les consignes des
+  // 2026-10-22 : un fil rangé sur un SOUS-dossier d'un dépôt reçoit aussi les consignes des
   // dossiers parents. La vue doit les montrer injectés — même au-dessus du workspace inspecté — et
   // savoir en lire l'extrait (sinon l'IPC de la vue tombe « hors des racines autorisées »).
   it('un AGENTS.md parent, dans le même dépôt, est affiché EMPILÉ et son extrait se lit', async () => {
@@ -177,7 +177,7 @@ describe('behaviour instruction map', () => {
     expect(fiche?.active).toBe(false)
   })
 
-  // conv-984 (2026-10-16) : la vue Behaviour affichait le AGENTS.md du dépôt en « autowin · declared ·
+  // 2026-10-16 : la vue Behaviour affichait le AGENTS.md du dépôt en « autowin · declared ·
   // Candidat prioritaire, injection non tracée », alors que `projectContextBlock` le replie dans le
   // prompt de CHAQUE tour du chat (index.ts) et de chaque étape lancée (orchestrator.ts). L'entrée
   // Autowin doit dire ce que fait le chargeur réel : même chaîne, même gagnant.
@@ -217,7 +217,7 @@ describe('behaviour instruction map', () => {
     expect(saute?.reason).toMatch(/vide/i)
   })
 
-  // conv-984 (2026-10-16) : la vue affichait le AGENTS.md du dépôt en « codex · active · Applicable au
+  // 2026-10-16 : la vue affichait le AGENTS.md du dépôt en « codex · active · Applicable au
   // contexte sélectionné », « Au démarrage de la session Codex ». Or Autowin lance TOUJOURS Codex avec
   // `-c project_doc_max_bytes=0` (`providers/codex.ts`, défaut de `codexExecSpec`) : le CLI ne lit
   // aucun AGENTS.md de projet, c'est Autowin qui replie le fichier. Le fichier GLOBAL
@@ -332,7 +332,7 @@ describe('behaviour instruction map', () => {
 
     const files = await listBehaviourFiles(opts)
     // Découverts malgré la casse. Côté Codex, un fichier de projet n'est jamais chargé
-    // (`project_doc_max_bytes=0`, conv-984) : il ressort donc inactif, pas « conditionnel ».
+    // (`project_doc_max_bytes=0`) : il ressort donc inactif, pas « conditionnel ».
     expect(files.find((file) => file.path === override)?.state).toBe('shadowed')
     expect(files.find((file) => file.path === override)?.reason).toMatch(/project_doc_max_bytes=0/)
     expect(files.find((file) => file.path === base)?.state).toBe('shadowed')
@@ -354,7 +354,7 @@ describe('behaviour instruction map', () => {
       homeRoot: join(root, 'home')
     })
 
-    // Le repli se voit sur ce qu'Autowin replie : le fichier du workspace approuvé (conv-984 : Codex,
+    // Le repli se voit sur ce qu'Autowin replie : le fichier du workspace approuvé (Codex,
     // lui, ne charge plus aucun fichier de projet, son entrée ne prouve donc plus le repli).
     expect(
       files.find((file) => file.path === workspaceFile && file.engine === 'autowin')?.state

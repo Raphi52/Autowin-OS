@@ -7,7 +7,7 @@ import { ArtifactPile } from './ArtifactPile'
 import { partiesDistinctes } from './artifact-outils'
 import { groupAssistantActivity, type ChatPart } from './chat-view-model'
 
-/* PILE D'IMAGES (conv-332, 2026-10-18 : « implémente la 2 + 6 quand déployed »). Repliée = la
+/* PILE D'IMAGES (2026-10-18 : « implémente la 2 + 6 quand déployed »). Repliée = la
    proposition 2 (la dernière image devant, « +N », deux bords dessous) ; déployée = la proposition 6
    (une planche de vignettes). Une image seule ne change pas. */
 

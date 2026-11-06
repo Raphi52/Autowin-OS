@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { FACONS, demandePourLaFacon, titreDeLaFacon } from './trois-facons'
 
 /**
- * « ESSAIE 3 FAÇONS » (conv-1038, 2026-10-21) : la même demande part dans trois branches du fil,
+ * « ESSAIE 3 FAÇONS » (2026-10-21) : la même demande part dans trois branches du fil,
  * chacune dans sa copie séparée, avec une façon IMPOSÉE. Sans façon imposée, trois tours du même
  * modèle sur le même texte donnent trois fois à peu près la même réponse : on paierait trois fois
  * pour un seul avis.

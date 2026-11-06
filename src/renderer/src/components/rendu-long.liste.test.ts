@@ -1,5 +1,5 @@
 /**
- * conv-1115 (2026-10-23) : le gel de la liste des conversations porte ses lignes redessinées et
+ * 2026-10-23 : le gel de la liste des conversations porte ses lignes redessinées et
  * ses déclencheurs. Registre de `rendu-long.ts` : un PASSAGE = les lignes notées entre deux rendus
  * de la vue `chat-liste`, clos par `noterRendu`.
  */

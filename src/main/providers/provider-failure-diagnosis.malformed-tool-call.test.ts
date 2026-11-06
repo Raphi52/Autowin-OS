@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { classifyProviderFailure, diagnoseProviderFailure } from './provider-failure-diagnosis'
 
-// Message réel, conv-737, promptCall du tour f0e1c2b0-a1c9-4140-8496-dc40709fcab9 (2026-09-21).
+// Message réel, promptCall du tour f0e1c2b0-a1c9-4140-8496-dc40709fcab9 (2026-09-21).
 const REEL =
   "Claude a interrompu l'appel : The model's tool call could not be parsed (retry also failed)."
 
@@ -13,7 +13,7 @@ describe('appel d’outil illisible (conv-737)', () => {
     const d = diagnoseProviderFailure({ provider: 'claude', message: REEL })
     expect(d.hint).toMatch(/illisible/)
   })
-  // conv-120, tour 3e00e0a5-5602-46e9-adb3-0d9c7a162b21 : l'effort etait DEJA `xhigh` et la cause
+  // Tour 3e00e0a5-5602-46e9-adb3-0d9c7a162b21 : l'effort etait DEJA `xhigh` et la cause
   // etait une commande `<cmd>` refermee par `</parameter></invoke>` — « monte l'effort » etait faux.
   it('ne conseille pas de monter l’effort de raisonnement', () => {
     const d = diagnoseProviderFailure({ provider: 'claude', message: REEL })

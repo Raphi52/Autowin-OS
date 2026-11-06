@@ -109,7 +109,7 @@ export function saveAutoModeSettings(
 export function describeAutoModeCost(settings: AutoModeSettings, pendingRuns: number): string {
   const normalized = normalizeAutoModeSettings(settings)
   const planned = Math.max(0, Math.trunc(pendingRuns))
-  // Dans la langue de l'interface (conv-1170) : la vue des tickets l'appelle pendant son rendu.
+  // Dans la langue de l'interface : la vue des tickets l'appelle pendant son rendu.
   return traduireReglagesEtDecor('ticketsAuto.cout', langueCourante(), {
     aLancer: planned,
     parallele: normalized.concurrency,

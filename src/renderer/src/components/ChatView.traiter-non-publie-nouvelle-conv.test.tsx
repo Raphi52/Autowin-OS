@@ -69,7 +69,7 @@ describe('bandeau « travail jamais publié » — le bouton « Traiter »', () 
     expect(conversationsCreate, 'une conversation neuve doit être créée').toHaveBeenCalled()
     const cibles = pilotChat.mock.calls.map((appel) => appel[0]?.conversationId ?? appel[0])
     expect(cibles, 'le prompt ne doit pas partir dans la conversation ouverte').not.toContain('A')
-    // Ce qui PART, pas seulement où (2026-10-29, conv-1250) : le clic lance `/git`, qui trie puis
+    // Ce qui PART, pas seulement où (2026-10-29) : le clic lance `/git`, qui trie puis
     // publie, et non plus `/salvage`, qui s'arrêtait au tri.
     const envoye = pilotChat.mock.calls.at(-1)?.[0]?.at(-1)?.content ?? ''
     expect(envoye.split('\n')[0], 'le bouton doit lancer /git').toBe('/git')

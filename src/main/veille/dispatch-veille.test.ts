@@ -105,7 +105,7 @@ describe('ce que l’occurrence raconte', () => {
     expect(resultat.error).toContain('1 source muette')
   })
 
-  // Défaut relevé par la relecture de conv-1032 : la passe planifiée trie AUSSI les candidats
+  // Défaut relevé par la relecture : la passe planifiée trie AUSSI les candidats
   // internes du dépôt. Un seul interne retenu ou refusé (« deja connu », le cas courant) suffisait à
   // rendre verte une passe dont aucun scout web n'avait lu sa page.
   const muette = (concurrent: string): ResultatPasse['echecs'][number] => ({

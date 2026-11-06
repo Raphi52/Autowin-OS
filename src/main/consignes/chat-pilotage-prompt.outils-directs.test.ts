@@ -6,9 +6,9 @@ import { CATALOG } from '../commands/commands'
 import { outilsPublies } from '../skills/skill-node-mcp'
 
 /**
- * LISTE DES COMMANDES SANS DOUBLON (conv-1229, 2026-10-28).
+ * LISTE DES COMMANDES SANS DOUBLON (2026-10-28).
  *
- * Mesure sur le texte réellement envoyé (prompt-observability, conv-1229) : la consigne du chat
+ * Mesure sur le texte réellement envoyé (prompt-observability) : la consigne du chat
  * pesait 59 974 caractères, dont 21 107 pour la liste des commandes — et 46 des 55 commandes de cette
  * liste arrivaient AUSSI au modèle comme outils directs, avec la même description et des arguments
  * plus détaillés. Quand les outils directs sont servis, la consigne ne détaille plus que les
@@ -35,7 +35,7 @@ describe('consigne du chat — commandes déjà servies en outils directs', () =
   })
 
   /*
-   * COMMANDES DE FICHIERS EN TEXTE (conv-1352, 2026-10-31) : 3 appels en 676 tours, le modèle passe
+   * COMMANDES DE FICHIERS EN TEXTE (2026-10-31) : 3 appels en 676 tours, le modèle passe
    * par Read, Grep, Glob, Edit et Write. Retirer leurs lignes sans leurs règles laisserait la
    * consigne ordonner des commandes qu'elle ne décrit plus : le test porte donc sur tout le texte.
    */

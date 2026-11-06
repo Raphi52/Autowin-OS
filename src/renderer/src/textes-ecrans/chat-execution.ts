@@ -2,7 +2,7 @@ import { tableDeTextes, type ValeursDeTexte } from '../textes'
 import { langueCourante } from '../langue'
 
 /**
- * TEXTES — CHAT — EXÉCUTION, CONTRÔLES ET BILANS (traduction anglaise, conv-1170, 2026-10-27).
+ * TEXTES — CHAT — EXÉCUTION, CONTRÔLES ET BILANS (traduction anglaise, 2026-10-27).
  *
  * Écrans couverts : WorkflowExecutionGraph, RunInspector, RunBilanCard, BilanDeCloture, JugesPanel, la frise du
  * harnais, les titres d’étapes et les raisons d’échec.
@@ -20,7 +20,7 @@ import { langueCourante } from '../langue'
  * « Gel » et « Résidus » (noms propres, ceux qu'on tape après « / »), les mots du contrat du juge
  * lus dans sa réponse (MAJEUR, MINEUR, VALIDE, DEFAUT) et les messages d'erreur internes de la copie
  * en image (`run-bilan-copie.ts`, jamais affichés). Les mots déjà anglais du graphe (« Judge »,
- * « Run closure », « Green »…, conv-1094) n'y entrent pas non plus.
+ * « Run closure », « Green »…) n'y entrent pas non plus.
  */
 export const TEXTES_FR = {
   // run-bilan.ts — la carte « bilan de run » (inspecteur, clôture du graphe) et son image.

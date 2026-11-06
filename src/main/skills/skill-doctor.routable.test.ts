@@ -5,7 +5,7 @@ import { skillRoots } from '../app/native-registry'
 import { invokedSkillId, noteSkillInconnue, skillInstruction } from './skill-pipeline'
 
 /**
- * `/doctor` (conv-1368) EST-ELLE ATTEINTE PAR LE VRAI CHEMIN D'INVOCATION ?
+ * `/doctor` EST-ELLE ATTEINTE PAR LE VRAI CHEMIN D'INVOCATION ?
  *
  * Même sonde que `skills-gel-maj.routables.test.ts` : le routage est générique, un grep sur le nom
  * ne prouverait rien. `/checkup` doit charger le même corps, comme dans Claude Code.

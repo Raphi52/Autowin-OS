@@ -5,7 +5,7 @@ import type { Msg } from './chat-view-types'
 import { deciderRelanceAuto } from './chat-auto-mode'
 
 /*
- * BANC PERMANENT DES REGLES D'ARRET (conv-787, 2026-09-22).
+ * BANC PERMANENT DES REGLES D'ARRET (2026-09-22).
  *
  * POURQUOI. Les portes du mode auto sont des expressions de recherche sur du texte ECRIT PAR UN
  * MODELE. Un test ecrit a la main ne sonde que les phrases qu'on a imaginees : c'est ainsi que
@@ -46,7 +46,7 @@ const decisionsDuCorpus = (): { envoi: number; raisons: Record<string, number> }
       fil
     })
     if (d.action === 'arreter') raisons[d.raison] = (raisons[d.raison] ?? 0) + 1
-    // conv-826 : une suite différée est programmée au lieu d'arrêter — même règle, même compte.
+    // Une suite différée est programmée au lieu d'arrêter — même règle, même compte.
     if (d.action === 'programmer') raisons['suite-differee'] = (raisons['suite-differee'] ?? 0) + 1
     if (d.action === 'envoyer') envoi++
   }

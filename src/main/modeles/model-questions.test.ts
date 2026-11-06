@@ -5,8 +5,8 @@ import { CATALOG } from '../commands/commands'
 import { CONSTITUTION } from '../consignes/constitution'
 
 describe('model questions', () => {
-  // conv-1577 : la consigne « Avance de façon autonome » doublait la constitution (et l'avait
-  // contredite en conv-1142). L'autonomie et la limite destructive ne vivent plus que là ; la seule
+  // La consigne « Avance de façon autonome » doublait la constitution (et l'avait
+  // contredite). L'autonomie et la limite destructive ne vivent plus que là ; la seule
   // phrase propre (ne pas réclamer un secret dans le chat) y a été reportée.
   it("l'autonomie n'est dite qu'une fois : par la constitution, plus par une 2e consigne du chat", () => {
     expect(buildChatPilotagePrompt(CATALOG)).not.toMatch(/Avance de façon autonome/u)

@@ -15,7 +15,7 @@
  *
  * POURQUOI ON NE CORRIGE PAS EN REDEMARRANT TOUT SEUL. Le drapeau `--watch` ferait exactement cela,
  * et il a deja ete essaye : il tuait l'application PENDANT le travail. L'utilisateur l'a demande
- * retire (`conv-1267` : « pendant que je bosse le processus autowin OS se kill tout seul, fix ca »),
+ * retire (« pendant que je bosse le processus autowin OS se kill tout seul, fix ca »),
  * deux de ses runs ayant ete detruits. Un test l'interdit desormais (`dev-sans-watch.test.ts`).
  * On rend donc la peremption VISIBLE au lieu de la corriger dans le dos de l'utilisateur : voir,
  * c'est ce qui manquait ; redemarrer, c'est ce qui nuisait.

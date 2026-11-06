@@ -3,7 +3,7 @@
  *
  * La publication d'un tour (typage, tests, commit, push) part APRÈS la fin du tour, sans être
  * attendue : le redémarrage au repos ne voyait que les tours et les orchestrations, et la coupait
- * environ une minute plus tard. Mesuré le 2026-11-01 (maintenance, conv-1048) : 4 copies de
+ * environ une minute plus tard. Mesuré le 2026-11-01 (maintenance) : 4 copies de
  * comparaison abandonnées en 24 h, ouvertes juste avant un redémarrage, et leurs 7 fichiers encore
  * non commités dans `main`.
  *

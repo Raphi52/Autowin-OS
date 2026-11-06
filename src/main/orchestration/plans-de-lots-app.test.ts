@@ -4,7 +4,7 @@ import { ecrireAUnFil, type ContexteFils } from '../conversations/messages-entre
 import { lignesDuJournal, type IoJournalFils } from '../../shared/messages-entre-fils'
 
 /*
- * SUPER CONVERSATION (conv-1150) — le coordinateur côté app, sur de faux fils : aucun appel de
+ * SUPER CONVERSATION — le coordinateur côté app, sur de faux fils : aucun appel de
  * modèle. Les comptes rendus passent par le VRAI `ecrireAUnFil` sur un journal en mémoire : c'est
  * le journal que lit le fil chef en tête de tour.
  */
@@ -102,7 +102,7 @@ describe('CoordinateurDesPlans — dépôt et accord', () => {
   })
 
   /*
-   * conv-1171 (2026-10-27) : « je ne veux pas avoir à confirmer, je veux que ça se lance tout seul ».
+   * 2026-10-27 : « je ne veux pas avoir à confirmer, je veux que ça se lance tout seul ».
    * Le dépôt par l’outil de l’agent lance le plan : pas de clic « Lancer le plan ».
    */
   it('l’outil dépose ET lance : les premiers lots partent sans clic, une seule fois', async () => {
@@ -323,9 +323,9 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
   })
 
   /*
-   * Agents qui ont SURVÉCU au redémarrage (objection du juge, conv-1150) : l'app reprend leur tour
+   * Agents qui ont SURVÉCU au redémarrage (objection du juge) : l'app reprend leur tour
    * (`reprendreAppelChat`, index.ts) et annonce leur fin avec `repris`. Ici, les lots 1 et 2
-   * tournaient dans conv-100 et conv-101 au moment du redémarrage.
+   * tournaient au moment du redémarrage.
    */
   async function redemarre(): Promise<Banc & { planId: string }> {
     const b = banc()
@@ -384,7 +384,7 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
     await b.coord.surFinDeTour('conv-100', { ok: false, erreur: 'build rouge' })
     await b.coord.surFinDeTour('conv-101', { ok: true })
     await b.coord.surFinDeTour('conv-1', { ok: true })
-    // Quelqu'un tape dans conv-100 pendant que le chef relance le lot 1.
+    // Quelqu'un tape pendant que le chef relance le lot 1.
     b.actifs.add('conv-100')
     const avant = b.lancements.length
     await b.coord.relancer('conv-1', 1)
@@ -396,7 +396,7 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
   })
 
   /*
-   * conv-1151, lot 3 : l'utilisateur relance au bouton du tableau, qui nomme le plan qu'il voit.
+   * Lot 3 : l'utilisateur relance au bouton du tableau, qui nomme le plan qu'il voit.
    * Même règle que l'agent : le lot repart dans SON fil et compte un tour du plafond.
    */
   it('relance par l’utilisateur (plan nommé) : le lot repart dans son fil et compte un tour', async () => {
@@ -446,7 +446,7 @@ describe('CoordinateurDesPlans — outil du chat et redémarrage', () => {
 })
 
 /*
- * conv-1284 (2026-10-29) — les gestes repris des threads de claude.exe, au niveau du coordinateur :
+ * 2026-10-29 — les gestes repris des threads de claude.exe, au niveau du coordinateur :
  * un lot ne lance pas de plan (claude.exe refuse qu'une session lancée par une autre en démarre
  * une), une décision notée par un lot atteint les lots suivants, le chef ajoute des lots à son plan
  * lancé, et le modèle d'un lot part avec son tour.
@@ -547,7 +547,7 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
   })
 
   /*
-   * conv-1284 (2026-10-29, demande de l'utilisateur) : une décision notée part AUSSI par message aux
+   * 2026-10-29, demande de l'utilisateur : une décision notée part AUSSI par message aux
    * lots déjà en cours — avant, seuls les lots partis ensuite la recevaient.
    */
   it('une décision notée part par message aux lots EN COURS : ni à son auteur, ni aux lots finis', async () => {
@@ -608,7 +608,7 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
   })
 
   /*
-   * conv-1284 (2026-10-29, demande de l'utilisateur) : la réponse du chef à un lot bloqué part en
+   * 2026-10-29, demande de l'utilisateur : la réponse du chef à un lot bloqué part en
    * ORDRE et relance elle-même le fil du lot ; le coordinateur le suit comme une relance.
    */
   const bloque = async (b: Banc): Promise<void> => {
@@ -655,7 +655,7 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
   })
 
   /*
-   * conv-1284 (2026-10-29, demande de l'utilisateur) : « attend le chef » est un état à part — le
+   * 2026-10-29, demande de l'utilisateur : « attend le chef » est un état à part — le
    * tableau, le compte rendu et le réveil du chef le disent, et le plan ne se clôt pas sans réponse.
    */
   it('un lot qui pose sa question au chef « attend le chef » : compte rendu, réveil, plan ouvert', async () => {
@@ -738,7 +738,7 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
   })
 
   /*
-   * conv-1284 (2026-10-29, demande de l'utilisateur) : une relance compte un tour AVANT de lancer
+   * 2026-10-29, demande de l'utilisateur : une relance compte un tour AVANT de lancer
    * (la place est réservée). Si le tour ne démarre pas, ce tour n'a rien coûté : il est rendu au
    * plafond, que la relance vienne du chef, de l'utilisateur ou d'un ordre.
    */
@@ -834,7 +834,7 @@ describe('CoordinateurDesPlans — décisions, ajouts, modèle et garde des lots
 })
 
 /*
- * LE BOUTON DU WORKFLOW INTELLIGENT PASSE PAR LE PLAN (conv-1333, 2026-10-30). Depuis le 22/10, 4
+ * LE BOUTON DU WORKFLOW INTELLIGENT PASSE PAR LE PLAN (2026-10-30). Depuis le 22/10, 4
  * sélections ont prévu 12 lots dans la file en mémoire de la vue : 4 sont partis, aucun lot 2 n'a
  * jamais quitté cette file, sans une trace. Le clic dépose donc un plan : durable, en parallèle,
  * repris après un redémarrage, et le lot coupé par le quota suspend les autres.
@@ -857,7 +857,7 @@ describe('CoordinateurDesPlans — le bouton du workflow intelligent', () => {
     expect(r.ok).toBe(true)
     expect(b.lancements.map((l) => l.fil)).toEqual(['conv-100', 'conv-101', 'conv-102'])
     await b.coord.surFinDeTour('conv-100', { ok: true, texte: 'fait' })
-    // Le fil chef conv-1 est réveillé après chaque lot : on ne compare ici que les fils de lots (conv-1333).
+    // Le fil chef est réveillé après chaque lot : on ne compare ici que les fils de lots.
     expect(b.lancements.filter((l) => l.fil !== 'conv-1').map((l) => l.fil)).toEqual([
       'conv-100',
       'conv-101',

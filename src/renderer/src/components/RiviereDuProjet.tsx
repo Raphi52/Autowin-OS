@@ -1,5 +1,5 @@
 /**
- * LA RIVIÈRE À ÉTAGES DE LA CARTE DU PROJET (/draft conv-1113, 2026-10-23).
+ * LA RIVIÈRE À ÉTAGES DE LA CARTE DU PROJET (2026-10-23).
  *
  * Demande : « implémente 1+2 » — tour 9 du /draft, « la colonne la plus large est celle sur laquelle
  * mon scroll est situé ». Base choisie au tour 8 : la Rivière à étages d'état (tableau blanc, le
@@ -11,7 +11,7 @@
  * demande de l'utilisateur, le même jour : « enlève le mécanisme avec le curseur, laisse que la
  * roulette ». Seule la molette déplace la loupe ; la souris ne fait que cliquer et glisser.
  *
- * Le choix de période « 2 semaines / 1 mois / 3 mois » (même jour) est RETIRÉ (conv-1131) : « enlève
+ * Le choix de période « 2 semaines / 1 mois / 3 mois » (même jour) est RETIRÉ : « enlève
  * le filtre 2 semaines, on doit pouvoir remonter à l'infini en lazy load ». La frise garde ses 14
  * colonnes et GLISSE dans le passé : la molette vers le haut recule la loupe sans butée jusqu'au plus
  * vieux fil, et la frise suit quand la loupe approche de son bord (`loupeApresMolette`). Seuls les
@@ -30,11 +30,11 @@
  * Ajout au-delà des maquettes, pour qu'elle serve dans l'app : la loupe se FIGE tant qu'une fiche
  * est ouverte (sinon le post-it quitterait sa fiche).
  *
- * Puis (conv-1130) : « quand je click sur une colonne du board ca doit me scroll dessus ». Un CLIC
+ * Puis : « quand je click sur une colonne du board ca doit me scroll dessus ». Un CLIC
  * sur une colonne — son fond sur le tableau, ou son nom dans la bande des jours — y amène la loupe,
  * avec la même animation que la molette. Le SURVOL ne fait toujours rien (proposition 1 retirée) ;
  * le clic sur un post-it ouvre sa fiche sans déplacer la loupe. Puis : « le clic sur une colonne
- * n'agit pas quand une fiche est ouverte : le premier clic ferme juste la fiche ». Puis (conv-1135) :
+ * n'agit pas quand une fiche est ouverte : le premier clic ferme juste la fiche ». Puis :
  * « quand je click sur une colonne du passé elle doit se mettre au centre » — le clic fait aussi
  * GLISSER la frise pour poser ce jour au milieu (`loupeCentreeSur`), sans quoi la colonne de gauche
  * restait au bord et il fallait la molette pour voir les jours d'avant.
@@ -100,13 +100,13 @@ const HAUT_ETAGES = 2
 const HAUT_ETAGE_VIDE = 26
 const SOUS_LIGNE = POSTIT_H + 8
 /**
- * La ligne « À vérifier » garde sous chaque post-it la place de ses boutons (conv-1214) : posés dans
+ * La ligne « À vérifier » garde sous chaque post-it la place de ses boutons : posés dans
  * l'écart de 8, ils mordaient sur le post-it du dessous.
  */
 const SOUS_LIGNE_A_VERIFIER = SOUS_LIGNE + PLACE_DES_GESTES
 const sousLigneDe = (etage: EtageDeLaRiviere): number =>
   etage === 'sans-preuve' ? SOUS_LIGNE_A_VERIFIER : SOUS_LIGNE
-/** Entre le bas d'un post-it et ses gestes « vérifier », posés dessous (conv-1204). */
+/** Entre le bas d'un post-it et ses gestes « vérifier », posés dessous. */
 const ECART_DES_GESTES = 3
 const MARGE_ETAGE = 12
 /** Sans mesure (rendu de test), la largeur d'une colonne de chat moyenne. */
@@ -118,14 +118,14 @@ const PAS_DE_MOLETTE = 50
 const COLONNE_SERREE = 12
 /**
  * En dessous, les gestes « vérifier » reprennent leur taille d'origine au lieu de suivre le post-it.
- * Elle cachait aussi le texte jusqu'au 2026-10-28 : c'est désormais `texteDuPostit` (conv-1242).
+ * Elle cachait aussi le texte jusqu'au 2026-10-28 : c'est désormais `texteDuPostit`.
  */
 const ECHELLE_TEXTE = 0.55
 const DEMANDES_DE_LA_FICHE = 12
 const COULEURS_PERSONNES = ['#e9bd4e', '#4fb6e0', '#ff85c8', '#7cc46b', '#b48cff', '#ff9f5a']
 
 /**
- * La couleur de punaise de la i-ème personne : une couleur par personne (conv-1204). Au-delà de la
+ * La couleur de punaise de la i-ème personne : une couleur par personne. Au-delà de la
  * palette, l'ancien `i % 6` redonnait la couleur d'une autre ; l'angle d'or écarte chaque teinte
  * suivante de toutes les précédentes.
  */
@@ -156,7 +156,7 @@ const CLES_STATUT: Record<PostItDeLaRiviere['etatPreuve'], CleBoardEtMaintenance
 
 /**
  * Les constats et titres de repli d'une demande sont écrits EN FRANÇAIS par `carte-du-fil.ts`, qui
- * tourne dans le processus principal et dont la carte est gardée en cache (conv-1170) : on ne peut
+ * tourne dans le processus principal et dont la carte est gardée en cache : on ne peut
  * pas les traduire à la source — `carte-des-besoins-branches.ts` compare d'ailleurs le constat
  * « une question t’attend » mot pour mot. Ils sont donc traduits ICI, à l'affichage ; un texte qui
  * n'est pas l'un d'eux (titre écrit par l'utilisateur, sortie d'une vérification) passe tel quel.
@@ -206,7 +206,7 @@ interface Glisse {
 }
 
 /**
- * Le lien « RUN.md » de chaque demande d'un post-it (conv-1441) : la fiche que l'app écrit pour elle,
+ * Le lien « RUN.md » de chaque demande d'un post-it : la fiche que l'app écrit pour elle,
  * ouverte dans son fil. Absent = pas de lien (Board sans fiches, demande d'un collègue).
  */
 interface FichesDuBoard {
@@ -214,7 +214,7 @@ interface FichesDuBoard {
   ouvrirFiche?: (conversationId: string, chemin: string) => void
 }
 
-/** Lier / détacher un work item d'une demande (conv-1127) ; absents = la fiche ne fait que montrer. */
+/** Lier / détacher un work item d'une demande ; absents = la fiche ne fait que montrer. */
 interface GestesDesTaches {
   lierWorkItem?: (
     demande: DemandeDeLaCarte,
@@ -239,11 +239,11 @@ export function RiviereDuProjet({
 }: {
   carte: CarteDesBesoins
   ouvrir: (conversationId: string) => void
-  /** Envoie `/check` dans des fils (conv-1136) ; absent = seul « Vérifié à la main » reste. */
+  /** Envoie `/check` dans des fils ; absent = seul « Vérifié à la main » reste. */
   verifier?: Verifier
   /**
    * Le dossier personnel : le menu des projets le nomme « 💻 This computer », comme le Chat et le
-   * rouage du Board (conv-1329 : « prenom.nom » s'y lisait comme un projet à supprimer).
+   * rouage du Board (« prenom.nom » s'y lisait comme un projet à supprimer).
    */
   dossierPersonnel?: string | null
 } & GestesDesTaches &
@@ -257,7 +257,7 @@ export function RiviereDuProjet({
   const [loupe, setLoupeAffichee] = useState<Loupe>(() => ({ foyer: foyerDAujourdhui(), recul: 0 }))
   const { foyer, recul } = loupe
   // Seuls les JOURS affichés sont calculés : reculer la frise recalcule ces 14 jours, pas l'historique.
-  // La langue en fait partie : les noms des jours et des étages y sont écrits (conv-1170).
+  // La langue en fait partie : les noms des jours et des étages y sont écrits.
   const riviere = useMemo(
     () => riviereDe(carte, carte.calculeeA, manuels, JOURS, recul, langue),
     [carte, manuels, recul, langue]
@@ -265,7 +265,7 @@ export function RiviereDuProjet({
   // La place offerte au tableau, mesurée : il s'y tient en entier (0 = pas encore mesurée).
   const [taille, setTaille] = useState({ l: 0, h: 0 })
   const [personne, setPersonne] = useState<string | null>(null)
-  // Le filtre par projet (conv-1329, « filtre par projet dans le board en plus du filtre par
+  // Le filtre par projet (« filtre par projet dans le board en plus du filtre par
   // personne ») : la clé d'un GROUPE de libellés (`board-projets-du-filtre.ts`), jamais la clé du
   // dossier — un projet de collègue porte une clé à lui (`collegue:<poste>:…`) et parfois un autre
   // nom (« Autowin-OS »), et choisir AutoWinOS doit montrer les fils de tout le monde dessus.
@@ -284,7 +284,7 @@ export function RiviereDuProjet({
   const choisiCourant = useRef<string | null>(null)
   const cumulMolette = useRef(0)
   const clicAvale = useRef(false)
-  // Vrai quand l'appui sur le fond vient de fermer une fiche : son clic s'arrête là (conv-1130).
+  // Vrai quand l'appui sur le fond vient de fermer une fiche : son clic s'arrête là.
   const appuiAFermeLaFiche = useRef(false)
   // Chaque valeur que lisent les écouteurs (molette native, pointeur) est posée DANS la référence au
   // moment du changement, jamais pendant le rendu : l'écouteur lit toujours la dernière.
@@ -309,7 +309,7 @@ export function RiviereDuProjet({
   }
   /**
    * Un clic sur une colonne : la frise glisse pour la poser au MILIEU, ses voisins plus anciens et
-   * plus récents des deux côtés (conv-1135), et la loupe se pose sur elle.
+   * plus récents des deux côtés, et la loupe se pose sur elle.
    */
   const allerAuJour = (j: number): void => {
     cumulMolette.current = 0
@@ -344,7 +344,7 @@ export function RiviereDuProjet({
     if (!el) return
     const surMolette = (e: WheelEvent): void => {
       // Ctrl + molette est le zoom de l'app (App.tsx) : il déplaçait AUSSI la loupe d'une
-      // demi-journée par cran, et les post-it regardés perdaient leur texte (conv-1242).
+      // demi-journée par cran, et les post-it regardés perdaient leur texte.
       if (e.ctrlKey) return
       const facteur = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 400 : 1
       // La fiche ouverte garde son propre défilement.
@@ -458,7 +458,7 @@ export function RiviereDuProjet({
     (p: PostItDeLaRiviere): boolean => projet === null || groupeDuPostit(p).cle === projet,
     [projet, groupeDuPostit]
   )
-  // Les noms : ceux qui ont un post-it affiché DANS LE PROJET CHOISI (conv-1329 : « n'affiche dans
+  // Les noms : ceux qui ont un post-it affiché DANS LE PROJET CHOISI (« n'affiche dans
   // la liste des personnes que celles qui ont des post-its dans le projet choisi »). La personne
   // choisie reste, comme le projet choisi : sans son nom, plus rien ne dirait pourquoi tout est
   // estompé, ni ne permettrait de la décocher.
@@ -504,7 +504,7 @@ export function RiviereDuProjet({
   }
 
   const fiche = choisi ? riviere.postits.find((p) => p.cle === choisi) : undefined
-  // Les boutons « vérifier » (conv-1136) : la ligne « À vérifier » affichée, filtres de personne et
+  // Les boutons « vérifier » : la ligne « À vérifier » affichée, filtres de personne et
   // de projet compris.
   const aVerifier = useMemo(
     () => postitsAVerifier(riviere.postits, personne, dansLeProjet),
@@ -555,7 +555,7 @@ export function RiviereDuProjet({
                 className={`riviere-puce${personne === d.cle ? ' is-actif' : ''}`}
                 style={{ '--riviere-personne': couleurs.get(d.cle) } as React.CSSProperties}
                 aria-pressed={personne === d.cle}
-                // Barré au crayon quand une AUTRE personne est choisie (conv-1132) : sans choix,
+                // Barré au crayon quand une AUTRE personne est choisie : sans choix,
                 // tout le monde est affiché, donc personne n'est barré.
                 data-barre={personne !== null && personne !== d.cle ? 'true' : undefined}
                 title={d.email ?? d.nom}
@@ -589,7 +589,7 @@ export function RiviereDuProjet({
         )}
         {verifier && <ToutVerifier aVerifier={aVerifier} verifier={verifier} />}
         {/* Plus de ligne de compte ni d'aide à la molette en tête : l'utilisateur l'a fait retirer
-            (conv-1226, « vire ce texte du board »). La fenêtre reste dite par l'aria-label. */}
+            (« vire ce texte du board »). La fenêtre reste dite par l'aria-label. */}
       </div>
       <div ref={cadre} className="riviere-cadre" data-testid="riviere-cadre">
         {/* La bande des jours reste en place pendant que le tableau défile dessous. */}
@@ -608,7 +608,7 @@ export function RiviereDuProjet({
                 data-serre={l < COLONNE_SERREE || undefined}
                 style={{ left: bords[j] * zone, width: l, height: HAUT_JOURS }}
                 onClick={() => {
-                  // Fiche ouverte : le premier clic la ferme seulement (conv-1130).
+                  // Fiche ouverte : le premier clic la ferme seulement.
                   if (choisiCourant.current !== null) setChoisi(null)
                   else allerAuJour(j)
                 }}
@@ -642,7 +642,7 @@ export function RiviereDuProjet({
             onClick={(e) => {
               // Le fond seul : un post-it, sa fiche ou un nom d'étage gardent leur propre clic.
               if (e.target !== e.currentTarget && !(e.target as HTMLElement).dataset.fond) return
-              // Fiche ouverte : le premier clic la ferme seulement, la loupe reste (conv-1130).
+              // Fiche ouverte : le premier clic la ferme seulement, la loupe reste.
               if (appuiAFermeLaFiche.current) {
                 appuiAFermeLaFiche.current = false
                 return
@@ -689,7 +689,7 @@ export function RiviereDuProjet({
               const py = enMain ? enMain.y0 + enMain.dy : y
               const estompe =
                 (personne !== null && p.demandeur?.cle !== personne) || !dansLeProjet(p)
-              // Le texte garde sa taille à l'écran ; ce sont ses lignes qui cèdent (conv-1242). Son
+              // Le texte garde sa taille à l'écran ; ce sont ses lignes qui cèdent. Son
               // bloc est contre-échelonné même en pastille : il reste continu quand elle s'écrit.
               const texte = texteDuPostit(k, largeur)
               const cadreTexte = texte ?? cadreDuTexte(k, largeur)
@@ -716,8 +716,8 @@ export function RiviereDuProjet({
                     transform: `translate(${px - largeur / 2}px, ${py}px) scale(${kx}, ${k})`
                   }}
                   title={`${p.titre} — ${p.projet} · ${heure(p.instant)}${p.manuel ? t('riviere.postit.poseALaMain') : ''}${p.collegue ? t('riviere.postit.collegue', { nom: p.collegue.nom }) : ''}`}
-                  // Le survol montre ses gestes « vérifier », s'il est dans la ligne (conv-1136) —
-                  // jamais sur un post-it de collègue (conv-1210) : son fil vit sur son poste.
+                  // Le survol montre ses gestes « vérifier », s'il est dans la ligne —
+                  // jamais sur un post-it de collègue : son fil vit sur son poste.
                   {...(p.etage === 'sans-preuve' && !p.collegue
                     ? {
                         onPointerEnter: () => survol.entrer(p.cle),
@@ -725,7 +725,7 @@ export function RiviereDuProjet({
                       }
                     : {})}
                   onPointerDown={(e) => {
-                    // Un post-it de collègue ne se glisse pas (conv-1210) : son clic ouvre sa fiche.
+                    // Un post-it de collègue ne se glisse pas : son clic ouvre sa fiche.
                     if (e.button !== 0 || p.collegue) return
                     e.stopPropagation()
                     const [sx, sy] = pointDuTableau(e)
@@ -769,7 +769,7 @@ export function RiviereDuProjet({
                     setChoisi(choisiCourant.current === p.cle ? null : p.cle)
                   }}
                 >
-                  {/* La punaise (conv-1204, « les aimants disparaissent au profit d'une punaise au
+                  {/* La punaise (« les aimants disparaissent au profit d'une punaise au
                       centre du post-it ») : la couleur de la personne qui a demandé ; sans
                       personne connue, le gris de la feuille de style. */}
                   <span
@@ -793,7 +793,7 @@ export function RiviereDuProjet({
                       {p.titre}
                     </span>
                     <span className="riviere-postit-meta">
-                      {/* Le nom du collègue d'abord (conv-1210) : la ligne se coupe par la fin. */}
+                      {/* Le nom du collègue d'abord : la ligne se coupe par la fin. */}
                       {p.collegue && (
                         <b
                           className="riviere-postit-collegue"
@@ -809,15 +809,15 @@ export function RiviereDuProjet({
                 </button>
               )
             })}
-            {/* Les gestes « vérifier » de la ligne (conv-1136), centrés SOUS chaque post-it : posés
-                sur son coin bas-droit, ils cachaient sa ligne projet · heure (conv-1204, « les boutons
+            {/* Les gestes « vérifier » de la ligne, centrés SOUS chaque post-it : posés
+                sur son coin bas-droit, ils cachaient sa ligne projet · heure (« les boutons
                 doivent apparaître en dessous du post-it et être bien centrés »). Rendus à part : un
                 bouton n'entre pas dans un bouton. */}
             {riviere.postits.map((p) => {
               if (p.etage !== 'sans-preuve' || p.collegue || glisse?.id === p.cle) return null
               const { x, y, k } = position(p)
               // À l'échelle de leur post-it, comme son texte, pour tenir dans la place gardée dessous
-              // (conv-1214) ; une pastille sans texte garde des boutons lisibles, comme avant.
+              // Une pastille sans texte garde des boutons lisibles, comme avant.
               const kg = k >= ECHELLE_TEXTE ? k : 1
               return (
                 <GestesDeVerification
@@ -825,7 +825,7 @@ export function RiviereDuProjet({
                   postit={p}
                   variante="postit"
                   // Un `/check` vise la dernière demande du FIL : pour une tâche que son fil a
-                  // laissée derrière lui, il vérifierait une autre tâche (conv-1456).
+                  // laissée derrière lui, il vérifierait une autre tâche.
                   {...(verifier && p.derniereDuFil ? { verifier } : {})}
                   aLaMain={() => verifieALaMain(p.cle)}
                   visible={survol.id === p.cle || choisi === p.cle}
@@ -898,12 +898,12 @@ function FicheDeLaRiviere({
   FichesDuBoard): React.JSX.Element {
   const { t, langue } = useTextesBoardEtMaintenance()
   const L = 300
-  // La demi-largeur du post-it À L'ÉCRAN : il s'étire quand sa case a de la place (conv-1204).
+  // La demi-largeur du post-it À L'ÉCRAN : il s'étire quand sa case a de la place.
   const demi = (position.largeur * position.kx) / 2
   const droite = position.x + demi + 12
   const left = droite + L <= largeur ? droite : Math.max(4, position.x - demi - 12 - L)
   // Placée d'après sa hauteur MESURÉE (contenu entier, `scrollHeight`) et bornée au bas du tableau :
-  // supposée de 240 px, la fiche « À vérifier » et ses gestes rognaient « Ouvrir le fil » (conv-1136).
+  // supposée de 240 px, la fiche « À vérifier » et ses gestes rognaient « Ouvrir le fil ».
   const boite = useRef<HTMLDivElement | null>(null)
   const [haute, setHaute] = useState(240)
   // Mesurée à chaque post-it montré ; ce qui grandit ensuite (« + task » ouvert) défile dans la fiche.
@@ -944,7 +944,7 @@ function FicheDeLaRiviere({
         {p.demandeur?.nom ?? t('fiche.demandeurInconnu')} · {p.projet} · {date} ·{' '}
         {nomDEtage(p.etage)}
       </span>
-      {/* Le post-it EST un RUN.md léger (conv-1456) : « je devrais pouvoir voir le run.md depuis le
+      {/* Le post-it EST un RUN.md léger : « je devrais pouvoir voir le run.md depuis le
           board ». Un bouton en tête, plutôt qu'un petit lien répété sur chaque demande. */}
       {(() => {
         if (!p.fiche || p.collegue || !ouvrirFiche) return null
@@ -967,7 +967,7 @@ function FicheDeLaRiviere({
           </button>
         )
       })()}
-      {/* Le RUN.md d'un collègue (conv-1456) : son fil vit dans SON Autowin, sa fiche se lit ici,
+      {/* Le RUN.md d'un collègue : son fil vit dans SON Autowin, sa fiche se lit ici,
           recopiée par son Board dans le dossier partagé. */}
       {p.collegue && p.fiche && <RunMdDuCollegue poste={p.collegue.poste} fiche={p.fiche} />}
       {p.manuel && (
@@ -994,13 +994,13 @@ function FicheDeLaRiviere({
             <span className="riviere-fiche-heure">
               {d.debut !== undefined ? heure(d.debut) : '—'}
             </span>
-            {/* Le message ENTIER, retours à la ligne gardés (conv-1278) : la première ligne coupée
+            {/* Le message ENTIER, retours à la ligne gardés : la première ligne coupée
                 à 120 caractères ne laissait pas lire la demande. */}
             <span className="riviere-fiche-texte" data-testid="riviere-fiche-texte">
               {texteDeLaCarte(d.texte ?? d.titre, langue)}
             </span>
-            {/* Une tâche peut courir sur plusieurs fils (un chantier et ses lots, une « façon N/3 »,
-                conv-1456) : la demande venue d'un autre fil dit lequel, et l'ouvre. */}
+            {/* Une tâche peut courir sur plusieurs fils (un chantier et ses lots, une « façon N/3 »)
+                La demande venue d'un autre fil dit lequel, et l'ouvre. */}
             {!d.collegue && d.conversationId !== p.conversationId && (
               <button
                 type="button"
@@ -1028,8 +1028,8 @@ function FicheDeLaRiviere({
                 </button>
               )
             })()}
-            {/* La task de la demande (conv-1127) : liée, héritée, ou « sans task » + rattachement.
-                Chez un collègue (conv-1210), ses tasks telles que son Board les lie, sans geste. */}
+            {/* La task de la demande : liée, héritée, ou « sans task » + rattachement.
+                Chez un collègue, ses tasks telles que son Board les lie, sans geste. */}
             {d.collegue ? (
               d.collegue.taches?.length ? (
                 <span className="riviere-fiche-taches-collegue" data-testid="riviere-fiche-taches">
@@ -1055,7 +1055,7 @@ function FicheDeLaRiviere({
           aLaMain={aLaMain}
         />
       )}
-      {/* Un fil de collègue vit dans SON Autowin (conv-1210) : rien à ouvrir ici, on dit où il est. */}
+      {/* Un fil de collègue vit dans SON Autowin : rien à ouvrir ici, on dit où il est. */}
       {p.collegue ? (
         <span className="riviere-fiche-collegue" data-testid="riviere-fiche-collegue">
           {t('fiche.collegue', { nom: p.collegue.nom, conv: p.collegue.conversationId })}
@@ -1075,7 +1075,7 @@ function FicheDeLaRiviere({
 }
 
 /**
- * Le RUN.md d'un post-it de collègue, déplié dans sa carte (conv-1456). `fiche` porte le préfixe du
+ * Le RUN.md d'un post-it de collègue, déplié dans sa carte. `fiche` porte le préfixe du
  * poste (`board-collegues.ts`) : il est retiré avant la lecture.
  */
 export function RunMdDuCollegue({

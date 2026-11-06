@@ -1,5 +1,5 @@
 /**
- * LA TENUE DES AGENTS À LA COULEUR CHOISIE (demande utilisateur du 2026-11-06, conv-1633).
+ * LA TENUE DES AGENTS À LA COULEUR CHOISIE (demande utilisateur du 2026-11-06).
  *
  * Demande : « je veux un settings pour choisir la couleur de leur tenue en dessous du setting où je
  * choisis l'animal », puis « vire le foulard ». La couleur se choisit dans les réglages de l'Accueil,
@@ -8,7 +8,7 @@
  *
  * Les atlas sont des rendus 3D peints une fois pour toutes : aucun calque ne sépare la tenue du reste.
  * Mais chaque animal porte une tenue d'une teinte que son pelage n'a pas, mesuré sur les atlas
- * (conv-1633, pixels de saturation > 0,3) : kimono orange et pantalon brun du tanuki à 10-40°, sur un
+ * (pixels de saturation > 0,3) : kimono orange et pantalon brun du tanuki à 10-40°, sur un
  * pelage gris ; veste turquoise du renard à 160-180°, pelage roux à 10-30° ; gilet vert du panda à
  * 80-100°, pelage noir et blanc ; veste bleue du panda roux à 210-240°, pelage roux à 10-30°. Le masque
  * de la tenue se lit donc à la teinte, une fois par animal. La couleur s'y pose en mode « color » : teinte
@@ -36,7 +36,7 @@ export const TEINTE_DES_TENUES: Readonly<Record<TenueAgent, string>> = {
  * Ce qui est de la tenue, pour un animal : une teinte entre `h0` et `h1` degrés (fondue sur 8° de part et
  * d'autre), assez saturée (`s0`, fondue sur ± 0,1), assez claire (de `v0` à `v1`). Le tanuki demande plus
  * de saturation et de clarté : l'intérieur de ses oreilles et ses sourcils sont d'un brun voisin de son
- * pantalon, mais plus ternes ou plus sombres (vu sur la planche, conv-1633).
+ * pantalon, mais plus ternes ou plus sombres (vu sur la planche).
  */
 export interface FenetreDeTenue {
   h0: number

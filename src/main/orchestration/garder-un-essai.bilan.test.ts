@@ -3,7 +3,7 @@ import { bilanDeLaFacon } from './garder-un-essai'
 import { demandePourLaFacon } from '../../renderer/src/components/trois-facons'
 
 /**
- * LA CARTE DE COMPARAISON, CÔTÉ TOUR (conv-1038, 2026-10-21 — idée 6) : où en est chaque façon, et
+ * LA CARTE DE COMPARAISON, CÔTÉ TOUR (2026-10-21 — idée 6) : où en est chaque façon, et
  * ce que ses vérifications (`verify`) ont RENDU — un code de sortie, pas ce que l'agent en dit.
  *
  * Les entrées qui feraient échouer une version fausse :

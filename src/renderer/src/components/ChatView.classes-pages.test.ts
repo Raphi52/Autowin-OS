@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { CLASSES_PAGES_HTML } from '../../../shared/classes-pages-html'
 
 /**
- * LES CLASSES `aw-*` DES PAGES HTML SUIVENT LE THEME CHOISI (conv-1074, 2026-10-22).
+ * LES CLASSES `aw-*` DES PAGES HTML SUIVENT LE THEME CHOISI (2026-10-22).
  *
  * Avant : le prompt dictait au modele des couleurs EN DUR (texte `#dde3ee`, or `#d4a94f`-`#e3ba55`).
  * En theme clair, l'app les ecrasait toutes en `!important` (`theme-modes.css`), accents compris :

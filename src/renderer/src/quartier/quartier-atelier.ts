@@ -1,5 +1,5 @@
 /**
- * L'ATELIER DES RUNS (conv-1453) : au poste « runs », devant le grand robot du hangar, les agents
+ * L'ATELIER DES RUNS : au poste « runs », devant le grand robot du hangar, les agents
  * jouaient leur geste `ma` (pattes au museau, puis poussées en avant) dans le vide.
  *
  * Ce qu'on dessine, à l'échelle réelle de la scène (un agent y mesure ~60 px de peinture) :
@@ -42,7 +42,7 @@ const VOL_S = 0.85
 const CHARGE_PLEINE = 30
 const REVEIL_S = 2.8
 
-/** Le grand robot du hangar, mesuré sur la peinture (conv-1453). */
+/** Le grand robot du hangar, mesuré sur la peinture. */
 const ROBOT = {
   yeux: { x: 218, y: 461 },
   voyants: [
@@ -219,7 +219,7 @@ function outilForge(x: CanvasRenderingContext2D, p: PoseAtelier): void {
 }
 
 /**
- * LES MÉTIERS DE L'ATELIER (conv-1464) : un agent au poste des runs ne fait pas que forger. Il passe
+ * LES MÉTIERS DE L'ATELIER : un agent au poste des runs ne fait pas que forger. Il passe
  * d'un travail à l'autre — forge, soudure, ordinateur, robotique —, tiré de son id et changé toutes
  * les 30 s, pour que deux voisins ne fassent pas la même chose au même moment. Le geste du sprite ne
  * change pas : seul ce qu'il tient et ce qu'il y a devant lui change. Chaque coup charge le robot.

@@ -1,4 +1,4 @@
-/* Agrandir un schema (conv-1322). Couleurs par jetons du theme : aucun hex en dur, pour suivre le
+/* Agrandir un schema. Couleurs par jetons du theme : aucun hex en dur, pour suivre le
    sombre comme le clair. */
 
 /* LE BOUTON SUR LE SCHEMA DU FIL. Toujours visible, pas seulement au survol : personne ne cherche
@@ -9,7 +9,7 @@
 .artifact-diagram__dessin {
   /* Mermaid mesure ses textes hors de la page et les enferme dans des cadres a cette largeur exacte.
      Herite du fil, un espacement entre lettres qu'il n'a pas mesure coupe la derniere lettre de chaque
-     ligne (0,0675 px par lettre : 108,53 px de texte pour un cadre de 107,31, conv-1322). */
+     ligne (0,0675 px par lettre : 108,53 px de texte pour un cadre de 107,31). */
   letter-spacing: normal;
   cursor: zoom-in;
 }
@@ -39,7 +39,7 @@
 }
 
 /* LA GRANDE VUE. Meme plan que la visionneuse d'images (`.image-lightbox`). Le haut reste libre :
-   cette bande sert a deplacer la fenetre et porte ses boutons Windows (`--marge-haut-vue`, conv-1223),
+   cette bande sert a deplacer la fenetre et porte ses boutons Windows (`--marge-haut-vue`),
    un clic sur nos boutons n'y arriverait pas. */
 .visionneuse-diagramme {
   position: fixed;

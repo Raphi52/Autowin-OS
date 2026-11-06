@@ -1,5 +1,5 @@
 /**
- * La vraie fenêtre de la mascotte, Electron simulé (conv-1227, 2026-10-28).
+ * La vraie fenêtre de la mascotte, Electron simulé (2026-10-28).
  *
  * Ce qui est prouvé ici : la RECRÉATION de la fenêtre au déverrouillage de la session. Une
  * fenêtre transparente née pendant une coupure du Bureau à distance ne dessinait plus rien après
@@ -177,7 +177,7 @@ describe('la vraie fenêtre de la mascotte — reconnexion du Bureau à distance
     expect(etat.fenetres.filter((f) => !f.detruite)).toHaveLength(1)
   })
 
-  // conv-346, 2026-11-01 : le journal montre DEUX « session déverrouillée » à la suite ; la
+  // 2026-11-01 : le journal montre DEUX « session déverrouillée » à la suite ; la
   // fenêtre restait ensuite masquée hors d'Autowin.
   it('deux déverrouillages à la suite : la fenêtre vivante finit visible', async () => {
     const mascotte = creerMascotteDuBureau()

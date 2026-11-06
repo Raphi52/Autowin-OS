@@ -4,7 +4,7 @@ import { dureeLisible, secondesDe } from './thinking-block-corps'
 /**
  * CHRONO A LA SECONDE D'UNE ACTION EN COURS.
  *
- * Signale le 2026-10-15 (conv-982) : « le timer de raisonnement s'actualise toutes les secondes et
+ * Signale le 2026-10-15 : « le timer de raisonnement s'actualise toutes les secondes et
  * celui de actions toutes les 5 ». La pastille de duree d'une action en cours (orchestration,
  * verify) n'est pas une horloge : c'est le debut du TEXTE du battement que le processus principal
  * envoie toutes les `VERIFY_BATTEMENT_MS` (5 s, src/main/verify/verify-battement.ts). Entre deux

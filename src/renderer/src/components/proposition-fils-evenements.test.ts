@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-// Le composant est découpé en fichiers voisins (conv-1508) : la source lue les réunit.
+// Le composant est découpé en fichiers voisins : la source lue les réunit.
 import { lireSourceDuChatView } from './ChatView.source-complete'
 import {
   EVT_FILS_LANCES,
@@ -12,7 +12,7 @@ import {
 } from './proposition-fils-evenements'
 
 /*
- * LE DERNIER FILET DE « LANCER EN N FILS » (2e relecture externe, conv-1147, point bas). Une erreur
+ * LE DERNIER FILET DE « LANCER EN N FILS » (2e relecture externe, point bas). Une erreur
  * imprévue APRÈS la création de branches répondait « Lancé : » avec une liste VIDE : les fils déjà
  * ouverts, qui travaillaient, n'étaient nommés nulle part sur la carte. Entrées qui font échouer
  * l'ancienne version : une branche créée puis une erreur ; une erreur APRÈS la réponse du lancement,

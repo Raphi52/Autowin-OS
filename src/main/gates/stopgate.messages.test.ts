@@ -1,7 +1,7 @@
 /**
  * LES MOTIFS DE REFUS SONT ÉCRITS POUR L'UTILISATEUR, PAS POUR LE MÉCANISME.
  *
- * Demandé le 20/08, après conv-1334 : « Statut "red" : la clôture a été refusée en amont. / DoD non
+ * Demandé le 20/08, : « Statut "red" : la clôture a été refusée en amont. / DoD non
  * tenue : « Mutation demandee produite avec une preuve executable ». — je comprends même pas ce que
  * ça veut dire ». Trois jargons dans deux lignes : `red` (le statut interne du RUN.md), « clôture »
  * (le fait de fermer un run), « DoD » (Definition of Done, la liste de ce qui était promis). Le

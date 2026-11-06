@@ -46,7 +46,7 @@ const FORBIDDEN_FILES = [
   'settings.local.json',
   'credentials.json',
   'id_rsa',
-  // Réglages de la protection de production (conv-738) : seul l'écran de réglages les écrit.
+  // Réglages de la protection de production : seul l'écran de réglages les écrit.
   'prod-niveau.json',
   'prod-autorite.json',
   'prod-passphrase.json'
@@ -97,7 +97,7 @@ export function decideEdit(
   /*
    * 1. LOCALISATION DE LA CIBLE — et non plus confinement au seul dossier Autowin.
    *
-   * MESURE le 2026-09-02 (conv-12) : l'utilisateur travaillait sur `D:\GIT\ContosoApp`, sur SA
+   * MESURE le 2026-09-02 : l'utilisateur travaillait sur `D:\GIT\ContosoApp`, sur SA
    * branche, et a demande la modification de `ULT_TT_INPI.cs` en disant qu'il compilerait et
    * committerait lui-meme. Les QUATRE voies d'ecriture ont ete refusees, dont celle-ci avec
    * « chemin hors du workspace » : quatre appels de modele (~1,06 $) pour finir sur un patch a
@@ -142,7 +142,7 @@ export function decideEdit(
   }
   /*
    FINS DE LIGNE — un fichier Windows (CRLF) refusait tout extrait de PLUSIEURS lignes.
-   Mesure du 2026-09-08 (conv-342) : deux editions rejetees d affilee sur ChatView.tsx, avec le
+   Mesure du 2026-09-08 : deux editions rejetees d affilee sur ChatView.tsx, avec le
    message  introuvable  alors que le texte etait bien la — seul le separateur differait. L agent
    ecrit des sauts de ligne simples ; le fichier en porte des doubles. Ce n est pas un ecart de
    contenu, c est une convention de fichier : on traduit l extrait dans CELLE du fichier avant de

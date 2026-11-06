@@ -35,8 +35,8 @@ describe('le chat passe ses voiles par le theme', () => {
   it("n'ecrit plus aucun blanc translucide en dur", () => {
     const css = readFileSync(CHAT, 'utf8')
     /*
-     * UNE SEULE EXCEPTION, NOMMEE (conv-246, 2026-10-11) : le texte de la capsule NOIRE du mot
-     * « contexte » (conv-189). Le voile s'inverserait en theme clair -- texte sombre sur capsule
+     * UNE SEULE EXCEPTION, NOMMEE (2026-10-11) : le texte de la capsule NOIRE du mot
+     * « contexte ». Le voile s'inverserait en theme clair -- texte sombre sur capsule
      * noire --, `ChatContextRule.style.test.ts` exige ce blanc ecrit tel quel, et la couche generee
      * du theme Holographique blanc le relit pour le passer a l'encre. Elle est retiree AVANT le
      * balayage, et on verifie qu'elle est bien la, une fois : elle ne couvre rien d'autre.

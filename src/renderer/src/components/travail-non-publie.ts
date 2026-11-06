@@ -59,7 +59,7 @@ export function messageTravailNonPublie(entrees: readonly EntreeTravail[]): stri
     if (branches.length === BRANCHES_CITEES) break
   }
   const reste = enAttente.length - branches.length
-  // Une phrase entière par cas (conv-1170) : l'accord « a »/« ont » ne se traduit pas en morceaux.
+  // Une phrase entière par cas : l'accord « a »/« ont » ne se traduit pas en morceaux.
   const langue = langueCourante()
   const valeurs = { n: enAttente.length, branches: branches.join(', '), reste }
   if (enAttente.length === 1) return traduireChatPanneaux('tnp.message.un', langue, valeurs)
@@ -111,7 +111,7 @@ export function promptTravauxNonPublies(entrees: readonly EntreeTravail[]): stri
    * branches non fusionnees), juge par CONTENU et non par le message, et exige un SHA consigne
    * avant toute suppression. Quand deux procedures se concurrencent, c'est la moins tenue qui gagne.
    *
-   * `/git` ET NON PLUS `/salvage` (2026-10-29, conv-1250) : `/git` joue ce meme balayage et ce meme
+   * `/git` ET NON PLUS `/salvage` (2026-10-29) : `/git` joue ce meme balayage et ce meme
    * tri par contenu PUIS publie vers la cible deduite et range les porteurs vides, SHA notes. Apres un
    * `/salvage`, l'utilisateur retapait « push main origin » a chaque fois ; le bouton s'arretait
    * donc a mi-chemin du geste qu'il voulait.

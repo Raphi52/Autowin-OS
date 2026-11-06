@@ -10,9 +10,9 @@ import {
 } from './etendue-repetee'
 
 /*
- * OBJECTION D'ÉTENDUE RÉPÉTÉE EN MODE JUSQU'AU VERT → PAUSE ET QUESTION (conv-1149, 2026-10-25).
+ * OBJECTION D'ÉTENDUE RÉPÉTÉE EN MODE JUSQU'AU VERT → PAUSE ET QUESTION (2026-10-25).
  *
- * Cas conv-1146 (run-ec2036c0932d-1) : le juge a refusé QUATRE fois de suite « Ta demande n'est pas
+ * Cas (run-ec2036c0932d-1) : le juge a refusé QUATRE fois de suite « Ta demande n'est pas
  * remplie. Tu as écrit « full anglais » » ; chaque refus relançait une réparation qui traduisait de
  * nouveaux écrans (33 $, 22 $, 16 $ pour les réparations 4, 8 et 11). Livrer tout ou par étapes est
  * un choix de l'utilisateur, pas du juge ni du build.
@@ -80,8 +80,8 @@ describe('questionDEtendue et issueDeLaReponse', () => {
   })
 
   /*
-   * LA FAUSSE PROMESSE DE conv-1337 (conv-1342, 2026-10-30) : le motif disait « Le run reste
-   * reprenable », et conv-1342 l'a répété à l'utilisateur. Or un arrêt sans réponse efface l'état du
+   * LA FAUSSE PROMESSE (2026-10-30) : le motif disait « Le run reste
+   * reprenable », et un fil l'a répété à l'utilisateur. Or un arrêt sans réponse efface l'état du
    * run : seule la copie survit. Le parcours complet est rejoué dans
    * `orchestrator.etendue-repetee.test.ts`.
    */

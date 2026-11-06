@@ -33,7 +33,7 @@ describe('decideEdit — CONFINEMENT au workspace', () => {
   })
 
   /*
-   * MESURE conv-12 (2026-09-02) : l'edition d'un fichier d'un AUTRE depot (D:\GIT\ContosoApp) a
+   * MESURE (2026-09-02) : l'edition d'un fichier d'un AUTRE depot (D:\GIT\ContosoApp) a
    * ete refusee « chemin hors du workspace », alors que l'agent lisait ce depot depuis 20 tours.
    * Un chemin ABSOLU externe est donc recevable, et marque `externe`.
    */
@@ -96,7 +96,7 @@ describe('decideEdit — FINS DE LIGNE Windows', () => {
   /*
    Un fichier CRLF refusait TOUT extrait de plusieurs lignes : l agent ecrit des sauts simples,
    le fichier en porte des doubles, et la recherche etait faite sur le texte brut. Mesure le
-   2026-09-08 (conv-342) : deux editions rejetees de suite alors que le texte etait bien la.
+   2026-09-08 : deux editions rejetees de suite alors que le texte etait bien la.
   */
   const contenuWindows = ['const a = 1', 'const b = 2'].join('\r\n')
 

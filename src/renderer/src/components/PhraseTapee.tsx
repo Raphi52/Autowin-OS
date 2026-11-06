@@ -6,8 +6,8 @@ import { retardsDeFrappe } from './teaser-accueil-calcul'
  * Une phrase sur le film d'accueil : le nom de la skill en or, son usage dessous. Les lettres sont
  * dans le fil, pas dans la vidéo : le clic pose la vraie commande dans la saisie.
  *
- * ELLE SE TAPE (conv-1535, 2026-11-04). Avant, ses lettres sortaient du cercle de runes du magicien
- * (conv-1401, « des lettres invoquées du cercle qui s'assemblent »). Le magicien parti, l'utilisateur :
+ * ELLE SE TAPE (2026-11-04). Avant, ses lettres sortaient du cercle de runes du magicien
+ * (« des lettres invoquées du cercle qui s'assemblent »). Le magicien parti, l'utilisateur :
  * « l'invocation des phrases ça a plus de sens sans le sorcier, fais-les s'écrire comme un humain qui
  * tape au clavier, lettre par lettre ». Chaque lettre paraît à son instant (`retardsDeFrappe`), et le
  * curseur doré de l'accueil (`.aa-barre`) la suit : chaque lettre le porte de son arrivée à celle de la

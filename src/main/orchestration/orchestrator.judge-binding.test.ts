@@ -127,7 +127,7 @@ describe('le juge terminal du workflow est jugé par le rôle judge, pas par l�
     const { provider, lancer } = harnais()
     await lancer()
     // Le nœud terminal et le gate sont une seule étape : compter deux appels réintroduirait le
-    // doublon coûteux observé sur le run réel conv-1071.
+    // doublon coûteux observé sur le run réel.
     const appelsDuJuge = provider.modelesDemandes.filter((m) => m === 'juge-dedie').length
     expect(appelsDuJuge).toBe(1)
   })

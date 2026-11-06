@@ -7,7 +7,7 @@ import { AppCommandBus } from '../commands/commands'
 import { isForbidden } from '../commands/edit-file-command'
 
 /**
- * LES TROIS RESTES DE LA PROTECTION DE PRODUCTION (conv-738, 2026-09-21).
+ * LES TROIS RESTES DE LA PROTECTION DE PRODUCTION (2026-09-21).
  * (a) edit_file/create_file/move_file/delete_file partagent `isForbidden` : les réglages de la
  *     protection doivent y être interdits ; (b) `run` d'un client SQL sans porte branchée doit
  *     être REFUSÉ, pas lancé sans contrôle ; (c) `desktop_act` ne doit pas pouvoir cliquer
@@ -53,10 +53,10 @@ describe('protection prod — trois restes', () => {
     expect(lances).toEqual([])
   })
 
-  // Depuis le kaizen conv-854 (commands.ts, règle de l'écran réel), le PREMIER desktop_act d'un tour est
+  // Depuis le kaizen (commands.ts, règle de l'écran réel), le PREMIER desktop_act d'un tour est
   // toujours refusé et les suivants n'agissent que si le dernier message de l'utilisateur parle de SON
   // écran. Un appel unique après « vas-y » s'arrêtait donc là, sans jamais atteindre le contrôle de
-  // confirmation de production que ces tests visent (conv-770, 2026-09-26). Ils rejouent le chemin
+  // confirmation de production que ces tests visent (2026-09-26). Ils rejouent le chemin
   // réel : demande explicite de l'écran, 1er appel refusé par la règle, 2e appel jusqu'au contrôle prod.
   const clic = { actions: [{ type: 'click', x: 1, y: 1 }] }
   const demandeEcran = 'clique sur mon écran'

@@ -8,7 +8,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
  * observable ». Mais tout ce paragraphe parle d'ORCHESTRATION : il cite `reused`, `running`,
  * `failed`, `succeeded`, `runId`. Une commande ordinaire n'y est pas couverte.
  *
- * Le trou a coûté, et c'est mesuré. conv-1086, 2026-08-20 : l'agent écrit « je dépose le diagnostic
+ * Le trou a coûté, et c'est mesuré. 2026-08-20 : l'agent écrit « je dépose le diagnostic
  * au Brain », puis `remember` est REFUSÉ (`type invalide`). Rien n'a été retenu. Son constat au tour
  * suivant : « J'ai écrit "je dépose le diagnostic au Brain" sans attendre le compte-rendu de la
  * commande. » L'utilisateur, lui, repart en croyant une leçon retenue — donc il ne la redonnera pas.

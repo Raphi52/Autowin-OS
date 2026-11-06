@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * BLOC DES JUGES monté sur la VRAIE trace du run jugé de conv-253 (4 passages du même juge).
- * Choix « 1 · Nacre » du /draft de conv-328 : bandeau, À corriger avec adresse et déjà-corrigé,
+ * BLOC DES JUGES monté sur la VRAIE trace du run jugé (4 passages du même juge).
+ * Choix « 1 · Nacre » du /draft : bandeau, À corriger avec adresse et déjà-corrigé,
  * état du suivi, juges en pied qui déplient le verdict complet.
  */
 import { describe, expect, it } from 'vitest'
@@ -28,7 +28,7 @@ async function monter(steps: readonly StepDeRun[]): Promise<HTMLElement> {
 
 const texte = (el: Element | null): string => (el?.textContent ?? '').replace(/\s+/g, ' ').trim()
 
-/** Le bloc est plié par défaut (conv-1081) : un clic sur le bandeau le déplie. */
+/** Le bloc est plié par défaut : un clic sur le bandeau le déplie. */
 async function deplier(host: HTMLElement): Promise<void> {
   const bandeau = host.querySelector<HTMLButtonElement>('[data-testid="jpan-bandeau"]')!
   if (bandeau.getAttribute('aria-expanded') !== 'true') await act(async () => bandeau.click())
@@ -136,7 +136,7 @@ describe('JugesPanel — bloc Nacre', () => {
 })
 
 /**
- * EN DIRECT (conv-1021, « pendant que ça judge ça remplisse le bloc en live ») : le bloc d'un tour
+ * EN DIRECT (« pendant que ça judge ça remplisse le bloc en live ») : le bloc d'un tour
  * en cours suit le run que le fil reçoit, sans attendre la trace écrite à la fin.
  */
 describe('JugesPanelEnDirect — le bloc se remplit pendant que ça juge', () => {
@@ -217,9 +217,9 @@ describe('JugesPanelEnDirect — le bloc se remplit pendant que ça juge', () =>
 })
 
 /**
- * L'INTERFACE A PERDU LE RUN (conv-1021) : rechargée en plein run, elle n'a pas vu son départ et
+ * L'INTERFACE A PERDU LE RUN : rechargée en plein run, elle n'a pas vu son départ et
  * ignore ses événements. Le bloc relit alors `trace.json` — réécrit par le main à chaque étape —
- * puis suit le bus. Disque et bus sont simulés ; la trace est celle, réelle, de conv-253.
+ * puis suit le bus. Disque et bus sont simulés ; la trace est celle, réelle.
  */
 describe('JugesPanelEnDirect — run perdu par l’interface, relu sur disque', () => {
   const steps = trace as StepDeRun[]

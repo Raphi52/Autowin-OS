@@ -1,6 +1,6 @@
 /*
  * LA PAGE DES SCENES 3D (`scene-3d.html`) : sa politique de securite est la frontiere qui isole le
- * code des blocs ```threejs (conv-299). Ce test relit la page CONSTRUITE, telle qu'elle sera servie.
+ * code des blocs ```threejs. Ce test relit la page CONSTRUITE, telle qu'elle sera servie.
  */
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
@@ -17,7 +17,7 @@ describe('page des scenes 3D', () => {
     expect(page.NOM_PAGE_INTERACTIVE).toBe(NOM_PAGE_INTERACTIVE)
   })
 
-  // conv-1304 : la jumelle sans moteur — meme amorce, meme politique, et pas un octet de three.js.
+  // La jumelle sans moteur — meme amorce, meme politique, et pas un octet de three.js.
   it('construit la page interactive SANS le moteur, avec la meme amorce et la meme politique', async () => {
     const [avec, sans] = await Promise.all([
       page.construirePageScene3d(),
@@ -55,7 +55,7 @@ describe('page des scenes 3D', () => {
     expect(directives['script-src']).not.toContain('unsafe-inline')
     expect(directives['script-src']).not.toMatch(/https?:|data:|blob:|\*/u)
 
-    // Moteur a la demande (conv-1304) : un seul script execute, l'amorce. Le moteur est du TEXTE
+    // Moteur a la demande : un seul script execute, l'amorce. Le moteur est du TEXTE
     // que l'amorce evalue quand il sert ; il n'a pas besoin d'empreinte et n'en a pas.
     const scripts = scriptsEnLigne(html)
     expect(scripts).toHaveLength(1)

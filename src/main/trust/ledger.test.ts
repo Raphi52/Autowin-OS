@@ -149,7 +149,7 @@ describe('TrustLedger — confirmation humaine apres coup', () => {
   })
 
   /*
-   * conv-996 (2026-10-16) : 94 des 171 runs de trust.jsonl ont été validés APRÈS réparation (rouge,
+   * 2026-10-16 : 94 des 171 runs de trust.jsonl ont été validés APRÈS réparation (rouge,
    * réparation, vert). L'humain juge le résultat final ; appliquer sa vérité à tous les passages
    * comptait les rouges intermédiaires, qui jugeaient une version antérieure, comme des faux rouges.
    */

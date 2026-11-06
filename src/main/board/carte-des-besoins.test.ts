@@ -13,7 +13,7 @@ import type { DemandeDeLaCarte } from '../../shared/carte-des-besoins'
 import { cleDuJournal, type EntreeDuJournal } from './journal-des-besoins'
 
 /**
- * CARTE DES BESOINS — lot 1 (conv-1089, 2026-10-22).
+ * CARTE DES BESOINS — lot 1 (2026-10-22).
  *
  * Les entrées qui font échouer une version fausse : des messages au format STOCKÉ (`ts`, sans
  * `done`), pas au format de l'affichage — la carte lit le store, pas la vue ; un tour fini sans
@@ -199,8 +199,8 @@ describe('assemblerLaCarte — rangée par projet comme la barre latérale', () 
     expect(projets[0].libelle).toBe('P1')
   })
 
-  // conv-1199 (scout conv-1332) : un run validé qui attend une réponse de l'utilisateur n'est pas une
-  // alerte « run bloqué », mais il ne doit pas disparaître pour autant (contrôle final, conv-1337).
+  // Un run validé qui attend une réponse de l'utilisateur n'est pas une
+  // alerte « run bloqué », mais il ne doit pas disparaître pour autant (contrôle final).
   // Les entrées qui font échouer une version fausse : `attend` (retiré sans remplacement) ;
   // `sans-question`, même statut (un tri sur le statut le prendrait pour une décision) ; `clos`,
   // même question mais rien à traiter (un tri sur la seule question le compterait).

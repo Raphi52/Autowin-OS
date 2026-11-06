@@ -276,10 +276,10 @@ export function ArtifactPreview({
     artifact?: ChatArtifact
     /** Message du processus principal, montré tel quel. */
     error?: string
-    /** Échec dit par l'interface : traduit au rendu, il suit un changement de langue (conv-1170). */
+    /** Échec dit par l'interface : traduit au rendu, il suit un changement de langue. */
     erreurLocale?: CleArtefactsEtBandeaux
   }>()
-  /* VIDÉO ET SON CONSERVÉS = LUS PAR PLAGES (kaizen conv-260, 2026-10-11). La copie base64 de
+  /* VIDÉO ET SON CONSERVÉS = LUS PAR PLAGES (2026-10-11). La copie base64 de
      `readChatArtifact` est plafonnée à 16 Mo : la pub de 74,6 Mo du tour
      41ab69ad-0ff8-4a45-8ecd-efb9be30e4a2 n'aurait jamais eu de lecteur. Le lecteur reçoit une
      adresse `autowin-media://` faite du seul triplet d'identité ; le processus principal retrouve
@@ -416,16 +416,16 @@ export function ArtifactPreview({
     </footer>
   )
 
-  /* IMAGE EN CAPSULE (conv-178, 2026-10-10 : « les blocs images lues / image envoyée, mets-leur
+  /* IMAGE EN CAPSULE (2026-10-10 : « les blocs images lues / image envoyée, mets-leur
      la même gueule que les capsules Action et Raisonnement »). Ce n'est PAS une copie de leur
      style : on reprend leur BALISAGE et leurs classes (`thinking-block`, `thinking-capsule`…),
      donc ChatView.css et chaque thème les dessinent à l'identique, et toute retouche future des
      capsules s'applique aussi aux images. Libellé de provenance et poids en première ligne, nom
-     du fichier sur la seconde, à la place du signe de vie (conv-907, voir plus bas).
+     du fichier sur la seconde, à la place du signe de vie (voir plus bas).
      Replié = plus AUCUN pixel d'aperçu (choix utilisateur du 27/08) : le corps n'est rendu
      qu'ouvert. L'ouverture est pilotée ici (clic intercepté) : l'image ne se charge qu'à la
      demande, et l'état reste juste au clavier comme à la souris. */
-  /* DEUX LIGNES (conv-907, 2026-10-12 : « comme les capsules raisonnement actions etc je veux que
+  /* DEUX LIGNES (2026-10-12 : « comme les capsules raisonnement actions etc je veux que
      le titre de l'image soit dans la capsule dans une ligne en dessous »). La capsule prend le
      cadre de BlocRepliable (ThinkingBlock.tsx) : le rond degrade et son icone a gauche, le libelle
      et le poids en premiere ligne, le NOM du fichier dessous, DANS le cadre, puis le chevron. Un

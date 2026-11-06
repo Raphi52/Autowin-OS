@@ -10,7 +10,7 @@ import { flattenChatParts } from './chat-turn'
  * mesure — dernier défaut restant après cinq correctifs.
  *
  * Mais les supprimer purement ferait revenir un défaut plus ancien et PIRE : la bulle VIDE d'un tour
- * qui n'a fait qu'agir (`conv-1141`). D'où le couple, indissociable :
+ * qui n'a fait qu'agir. D'où le couple, indissociable :
  *   · aucune étiquette quand une vraie réponse existe ;
  *   · jamais de bulle vide quand elle n'existe pas.
  *
@@ -56,7 +56,7 @@ describe('flattenChatParts — les étiquettes ne masquent plus la réponse', ()
 
 describe('annonce d’intention en tête — retirée quand le résultat suit', () => {
   it('retire « Je dois d’abord lire… » quand la réponse suit', () => {
-    // Cas RÉEL, `conv-1257` : dernier défaut refusé par le juge d'expérience.
+    // Cas RÉEL : dernier défaut refusé par le juge d'expérience.
     const rendu = flattenChatParts([
       texte(
         'Je dois d’abord lire le contenu direct de `src/main` pour donner un nombre vérifié.\n226 fichiers.'

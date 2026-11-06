@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /*
- * AGRANDIR UN SCHEMA (conv-1322, 2026-10-30 : « un schema que j'arrive pas a lire et je peux pas
- * l'agrandir »). Le schema de conv-1321, tres haut, sortait a 420 px de haut dans le fil : texte de
+ * AGRANDIR UN SCHEMA (2026-10-30 : « un schema que j'arrive pas a lire et je peux pas
+ * l'agrandir »). Le schema, tres haut, sortait a 420 px de haut dans le fil : texte de
  * 5 px, et rien pour le voir en grand. Mermaid ne dessine rien ici (pas de moteur de rendu) : le
  * vrai dessin, la vraie molette et le vrai glisser sont prouves par la sonde CDP de ce fil.
  */

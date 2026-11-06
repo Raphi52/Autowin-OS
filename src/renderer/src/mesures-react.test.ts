@@ -3,7 +3,7 @@ import { installerMesuresReactSansRetenue } from './mesures-react'
 
 /**
  * ENTRÉE QUI DOIT FAIRE ÉCHOUER : une mesure de React qui reste dans le tampon du navigateur. Il n'a
- * aucune limite : 139 941 entrées pesaient 1,5 Go de mémoire privée sur l'app ouverte (conv-1413).
+ * aucune limite : 139 941 entrées pesaient 1,5 Go de mémoire privée sur l'app ouverte.
  */
 const NOM = '​TacheDeLaFrise'
 const OPTIONS_DE_REACT = {

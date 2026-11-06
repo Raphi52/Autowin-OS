@@ -14,7 +14,7 @@ import {
 } from '../textes-ecrans/artefacts-et-bandeaux'
 
 /**
- * Libellé de chaque type : une clé de la table quand l'anglais diffère du français (conv-1170),
+ * Libellé de chaque type : une clé de la table quand l'anglais diffère du français,
  * sinon le mot lui-même, identique dans les deux langues.
  */
 const LABELS: Record<ArtifactKind, { cle: CleArtefactsEtBandeaux } | string> = {
@@ -61,7 +61,7 @@ export function kindLabel(artifact: ChatArtifact): string {
 
 /**
  * Un nom qui ne fait que REDIRE le libellé de la capsule n'est pas affiché à côté d'elle
- * (conv-195 : « image-Read » en petit à côté de « Image · Read », « image envoyée » à côté de
+ * (« image-Read » en petit à côté de « Image · Read », « image envoyée » à côté de
  * « Image envoyée »). Les nouveaux artefacts lus portent le nom du fichier (claude.ts), mais ceux
  * déjà enregistrés gardent leur nom fabriqué : on compare donc sans casse ni séparateurs.
  */

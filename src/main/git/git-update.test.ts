@@ -67,7 +67,7 @@ describe('checkForUpdate', () => {
     expect(await checkForUpdate('/r', run)).toMatchObject({ available: false, behind: 0 })
   })
 
-  // conv-1597 : main portait 3 commits « à récupérer » qui étaient NOTRE travail, publié par une copie
+  // Main portait 3 commits « à récupérer » qui étaient NOTRE travail, publié par une copie
   // isolée sous d'autres hashes. Fusionner origin/main ne changeait aucun fichier (arbre fusionné =
   // arbre de HEAD), et le bouton restait affiché. On juge sur le CONTENU, plus sur le compte de commits.
   const DIVERGE_SANS_APPORT = {
@@ -302,7 +302,7 @@ describe('applyUpdate', () => {
     expect(r.error).toMatch(/committe|mets-le de côté/i)
   })
 
-  // conv-350 (2026-10-30) : cliquer « Mettre à jour » ne faisait RIEN de visible. Un `git merge` qui
+  // 2026-10-30 : cliquer « Mettre à jour » ne faisait RIEN de visible. Un `git merge` qui
   // échoue sur un arbre sale met les fichiers modifiés de côté puis les RÉÉCRIT : leur date change, le
   // serveur de dev recharge la page, et le refus arrive dans une page disparue. On refuse donc AVANT
   // git dès qu'un fichier modifié est aussi touché par les commits entrants.

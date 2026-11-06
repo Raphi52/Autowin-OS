@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ECLAT_LUNES, MATIERE_NUAGE } from './home-decor-scene'
 
 /**
- * Demande conv-1410 : « les lunes sont trop lumineuses et le nuage est moche ».
+ * Demande : « les lunes sont trop lumineuses et le nuage est moche ».
  *
  * « Lunes » = les corps annelés du décor (`planetes` de la composition) : ce qui brille sur eux
  * n'est pas leur surface mais leur HALO additif et leurs anneaux additifs — deux opacités en dur

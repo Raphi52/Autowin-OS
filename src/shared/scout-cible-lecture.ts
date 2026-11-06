@@ -23,7 +23,7 @@ export const CIBLE_DESTRUCTRICE =
 export const LIGNE_CIBLE = /^\s*[>*_`]*\s*cible\s*[:：]\s*(.*?)\s*[*_`]*\s*$/iu
 
 /**
- * Une piste qui EMPECHE la destruction n'est pas destructrice (conv-787) : « Verifier que rien
+ * Une piste qui EMPECHE la destruction n'est pas destructrice : « Verifier que rien
  * n'est supprime », « Empecher l'effacement du brouillon » etaient bloquees a tort.
  */
 export const PISTE_PROTECTRICE =

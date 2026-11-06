@@ -20,7 +20,7 @@ describe('barre de quota cliquable', () => {
   /**
    * REFERENCE RECALEE le 2026-09-04 : ces assertions decrivaient encore le premier degre
    * (#ef4444 / #f59e0b / #facc15), remplace depuis par le degrade A PALIERS demande par
-   * l'utilisateur (commit e7e233b2, conv-240 : « le degrade passait au vert des 62 %, et une seule
+   * l'utilisateur (commit e7e233b2, « le degrade passait au vert des 62 %, et une seule
    * teinte ambre servait d'orange ET de jaune »). Elles etaient donc ROUGES tout en protegeant une
    * version abandonnee : un garde-fou qui refuse la barre reelle ne garde plus rien. Les quatre
    * teintes et l'ORDRE restent verrouilles — seules les valeurs suivent le CSS servi.
@@ -28,7 +28,7 @@ describe('barre de quota cliquable', () => {
   it('garde le dégradé rouge → orange → jaune → vert dans ce sens, calé sur la barre entière', () => {
     // Paliers PLATS (deux arrets par teinte) : chaque couleur tient une plage lisible au lieu de
     // fondre dans la suivante. Retirer un palier ou reordonner les teintes fait echouer ceci.
-    // Les teintes sont des VARIABLES (conv-197) : la pastille lit les memes que la barre, et un
+    // Les teintes sont des VARIABLES : la pastille lit les memes que la barre, et un
     // theme les change en un seul endroit. Leurs valeurs de base restent verrouillees ci-dessous.
     expect(styles).toMatch(
       /\.model-quota-bar-fill\s*{[^}]*linear-gradient\(\s*90deg,\s*var\(--quota-rouge\) 0%,\s*var\(--quota-rouge\) 12%,\s*var\(--quota-orange\) 30%,\s*var\(--quota-orange\) 42%,\s*var\(--quota-jaune\) 56%,\s*var\(--quota-jaune\) 68%,\s*var\(--quota-vert\) 86%,\s*var\(--quota-vert\) 100%\s*\);/s
@@ -36,7 +36,7 @@ describe('barre de quota cliquable', () => {
     expect(styles).toMatch(
       /\.model-quota-trigger\s*{[^}]*--quota-rouge: #b8201a;\s*--quota-orange: #e0641e;\s*--quota-jaune: #efc023;\s*--quota-vert: #35d07f;/s
     )
-    // Le vert n'arrive qu'a 86 % : le defaut nomme en conv-240 etait un basculement au vert des
+    // Le vert n'arrive qu'a 86 % : le defaut nomme etait un basculement au vert des
     // 62 %, qui faisait passer un quota entame pour sain.
     expect(styles).not.toMatch(/var\(--quota-vert\) (?:[0-7]\d|8[0-5])%/)
     // Le restant DÉCOUPE le dégradé au lieu de le compresser : à 10 % restant il ne reste que du
@@ -88,7 +88,7 @@ describe('barre de quota cliquable', () => {
 
   it('conserve le popover existant, désormais ouvert par la barre', () => {
     expect(component).toContain('model-quota-popover')
-    // Le titre vit dans la table de textes depuis la traduction anglaise (conv-1170).
+    // Le titre vit dans la table de textes depuis la traduction anglaise.
     expect(component).toContain("t('quota.titre')")
     expect(TEXTES_FR['quota.titre']).toBe('Quotas fournisseurs')
   })

@@ -177,7 +177,7 @@ describe('archive des conversations inactives', () => {
 
     const suivant = redemarrer(p)
     expect(suivant.store.get(vieux)?.messages.at(-1)?.content).toBe('Je reprends ce vieux fil')
-    // La compaction de démarrage est posée hors du fil principal (conv-359).
+    // La compaction de démarrage est posée hors du fil principal.
     await attendreEcrituresConversations()
     expect(idsDuSnapshot(p)).toContain(vieux)
     await suivant.persistance.archivesChargees
@@ -310,9 +310,9 @@ describe('archive des conversations inactives', () => {
     expect(readdirSync(conversationArchiveDir(p))).toContain(`${vieux}.json`)
   })
   /*
-   * CONTRAT CHANGÉ le 2026-10-19 (conv-359). La compaction de démarrage était synchrone : son échec
+   * CONTRAT CHANGÉ le 2026-10-19. La compaction de démarrage était synchrone : son échec
    * levait, et `index.ts` mettait le store de côté — l'app s'ouvrait sur un historique VIDE pour un
-   * simple `.tmp` resté en dossier (conv-914). Elle passe désormais par la file du journal : en
+   * simple `.tmp` resté en dossier. Elle passe désormais par la file du journal : en
    * échec, le journal n'est pas effacé et reste la référence. Le démarrage ne lève plus, et le fil
    * revenu actif reste relisible même quand son archive périmée a été retirée.
    */
@@ -337,7 +337,7 @@ describe('archive des conversations inactives', () => {
       'utf8'
     )
     rmSync(sauvegarde)
-    // La compaction échoue : son fichier temporaire est un dossier (même forme que conv-914).
+    // La compaction échoue : son fichier temporaire est un dossier (même forme que).
     const obstacle = `${p}.archivage.tmp`
     mkdirSync(obstacle, { recursive: true })
     const avertissement = vi.spyOn(console, 'warn').mockImplementation(() => undefined)

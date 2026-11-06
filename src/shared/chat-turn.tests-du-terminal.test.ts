@@ -1,5 +1,5 @@
 /**
- * Les TESTS LANCÉS DANS LE TERMINAL DE L'AGENT sont gardés avec le tour (conv-1059, 2026-10-22 :
+ * Les TESTS LANCÉS DANS LE TERMINAL DE L'AGENT sont gardés avec le tour (2026-10-22 :
  * « garde leur code de sortie dans le tour, puis lis-le dans carte-du-fil.ts comme une
  * vérification »).
  *
@@ -68,7 +68,7 @@ function ecrire(nom: string, testsDuTerminal: unknown): string {
 }
 
 /*
- * Le dossier d'un test traverse les mêmes étapes que sa commande (conv-1423) : perdu à une seule
+ * Le dossier d'un test traverse les mêmes étapes que sa commande : perdu à une seule
  * d'entre elles, le Board reverrait `npm test` et le faux vert reviendrait sans qu'aucun test du
  * lecteur ne le dise.
  *

@@ -5,7 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ecouterElementsCibles, type ElementCible } from './components/alt-clic'
 
 /**
- * ALT+CLIC HORS DU CHAT (conv-1338, 2026-10-30) : `App` installe le geste une fois pour toute l'app.
+ * ALT+CLIC HORS DU CHAT (2026-10-30) : `App` installe le geste une fois pour toute l'app.
  * Depuis une autre vue, la capture est prise, puis le chat s'ouvre et reçoit l'élément, même s'il
  * n'avait encore jamais été affiché (`visitedTabs`). Le chat est ici un faux qui écoute la vraie file.
  */

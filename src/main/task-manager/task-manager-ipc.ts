@@ -303,7 +303,7 @@ function watchdog(raw: unknown): WatchdogRule {
     if (!events.length) throw new Error('Choisis au moins un événement interne à surveiller')
     const conversationId =
       typeof source.conversationId === 'string' ? source.conversationId.trim().slice(0, 200) : ''
-    // conv-1069 : sans fil nommé, « fin de tour » réveillerait la règle à chaque tour de chaque fil.
+    // Sans fil nommé, « fin de tour » réveillerait la règle à chaque tour de chaque fil.
     if (events.includes('chat-turn-done') && !conversationId)
       throw new Error(
         'Nomme le fil dont la fin de tour réveille la règle : watchdog.source.conversationId (ex. "conv-1065")'

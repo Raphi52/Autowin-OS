@@ -1,7 +1,7 @@
 /**
  * SURVEILLANCE DU brain_server PENDANT TOUTE LA SESSION.
  *
- * Défaut mesuré le 2026-09-04 (conv-270) : `watchAppPreflight` est une boucle de DÉMARRAGE bornée
+ * Défaut mesuré le 2026-09-04 : `watchAppPreflight` est une boucle de DÉMARRAGE bornée
  * (7 re-sondes, ~118 s cumulés) qui s'arrête dès que le check `brain` passe au vert. Donc un
  * brain_server qui MEURT en cours de session n'était jamais relancé : l'app répondait « Brain
  * injoignable » jusqu'à un démarrage à la main dans une console — exactement ce que l'utilisateur

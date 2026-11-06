@@ -8,7 +8,7 @@ import { DEFAULT_DRAFT_GUARDS, type WatchdogRule } from './watchdog-section-mode
 import { appliquerLangue } from '../langue'
 
 /**
- * L'ÉCRAN TASK MANAGER SUIT LA LANGUE (traduction anglaise, conv-1170, lot « Task Manager »).
+ * L'ÉCRAN TASK MANAGER SUIT LA LANGUE (traduction anglaise, lot « Task Manager »).
  * Entrée qui doit faire échouer ce test : un libellé de la planification, de la surveillance ou du
  * formulaire de règle laissé en dur, une date encore formatée en `fr-FR`, ou un écran qui ne se
  * redessine pas quand la langue change. Le retour au français prouve que le français n'a pas bougé.

@@ -304,7 +304,7 @@ describe('chat() — le compte Claude actif fait partie de l’identite de sessi
  * tour de chat EST `process.env[AUTOWIN_WORKSPACE_ENV]` (`providers/claude.ts`, `readOnlyCwd`).
  * Reprendre depuis un AUTRE dossier fait donc rendre au CLI « No conversation found with session ID ».
  *
- * VÉCU le 2026-09-06, conv-48 : conversation ouverte dans `E:\GIT\Autowin-OS`, workspace basculé sur
+ * VÉCU le 2026-09-06, : conversation ouverte dans `E:\GIT\Autowin-OS`, workspace basculé sur
  * `E:\AutoWin-Temp` le temps d'un essai. Le tour est mort à `error_during_execution`, 0 message,
  * 0 token, 0 USD — l'appel n'avait pas démarré. La session n'était ni perdue ni corrompue : 355
  * lignes, 141 messages assistant, `cwd = E:\GIT\Autowin-OS`. Elle était simplement réclamée depuis

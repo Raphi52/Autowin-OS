@@ -2,7 +2,7 @@
  * SCRIPTS DE PRÉPARATION ET DE LANCEMENT D'UNE COPIE DE TRAVAIL — la partie PURE (aucun disque,
  * aucun processus : tout se teste seul).
  *
- * Écart constaté le 2026-09-28 (veille concurrentielle, conv-877) : Conductor joue un script de
+ * Écart constaté le 2026-09-28 (veille concurrentielle) : Conductor joue un script de
  * préparation à la création de chaque copie et offre un bouton « Run ». Autowin ne savait relier que
  * `node_modules` (en dur, `store/dependances-copie-agent.ts`) : un `.env` ignoré par git, un
  * `pip install`, un fichier généré manquaient dans chaque copie d'agent, et rien ne lançait l'appli.

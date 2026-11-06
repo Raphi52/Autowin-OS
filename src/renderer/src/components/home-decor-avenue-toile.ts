@@ -4,7 +4,7 @@ import { regrouperEnInstances } from './decor-instances'
 /**
  * LA TOILE ÉLECTRIQUE : le ciel de l'avenue devient un filet de câbles.
  *
- * Demande de l'utilisateur (conv-311) : « /draft des éléments plus trash et chaotiques pour le fond
+ * Demande de l'utilisateur : « /draft des éléments plus trash et chaotiques pour le fond
  * d'écran d'acceuil », puis le mélange « 1+3+4 » (Dépotoir, Jungle de câbles, Glitch holo), et enfin
  * « je choisi que tu implémente le 3 » : la variante 3 · Toile électrique du brouillon
  * `.autowin-tmp/draft-trash/mix.js` (`VARIANTES[2]`). Ce qu'elle montre :
@@ -21,7 +21,7 @@ import { regrouperEnInstances } from './decor-instances'
  * animations du brouillon.
  *
  * SANS GUIRLANDES : le brouillon accrochait huit guirlandes clignotantes aux câbles ; l'utilisateur
- * les a retirées une fois la toile branchée (conv-311 : « enleve les guirlandes lumineuses des fils
+ * les a retirées une fois la toile branchée (« enleve les guirlandes lumineuses des fils
  * electriques »). Les fils restent nus.
  *
  * CE QUI CHANGE, parce qu'un fond n'est pas une démo :
@@ -29,7 +29,7 @@ import { regrouperEnInstances } from './decor-instances'
  *     du décor : il défile avec la marche, comme la façade ;
  *   - AUCUNE LUMIÈRE AJOUTÉE. Le brouillon éclairait l'étincelle et le néon tombé par deux lumières
  *     ponctuelles ; chaque lumière de plus alourdit TOUTES les matières de la rue, et le nombre de
- *     lumières a déjà figé l'Accueil (conv-301, 22 lumières → 8). L'éclat est porté par des halos ;
+ *     lumières a déjà figé l'Accueil (22 lumières → 8). L'éclat est porté par des halos ;
  *   - les câbles d'une travée sont FUSIONNÉS en un seul maillage : un appel de dessin par travée au
  *     lieu de cent cinquante ;
  *   - le hasard a sa propre graine : la toile ne déplace ni la ville ni la façade, tirées avant elle.
@@ -118,11 +118,11 @@ export interface ContexteToile {
   enseignes: EnseigneDeToile[]
   /**
    * L'éclaircie : une direction du ciel devant laquelle le filet s'éclaircit — le vaisseau mère
-   * (conv-319 : « j'éclaircis les câbles devant le vaisseau »). Absente, la toile reste entière.
+   * (« j'éclaircis les câbles devant le vaisseau »). Absente, la toile reste entière.
    */
   eclaircie?: { direction: THREE.Vector3; rayon: number }
   /**
-   * La hauteur du mur sur rue à l'abscisse `u` d'une travée (conv-1037) : depuis que la rangée de
+   * La hauteur du mur sur rue à l'abscisse `u` d'une travée : depuis que la rangée de
    * droite est en volumes, un câble s'accroche SOUS le toit du lot qu'il touche, pas dans le vide
    * au-dessus d'une machiya basse. Absente, le mur fait 24 m partout, comme le plan peint d'avant.
    */
@@ -742,7 +742,7 @@ export function monterToile(c: ContexteToile): ToileElectrique {
   travee.add(cables)
 
   /**
-   * LES OBJETS FIXES DE LA TRAVÉE EN QUELQUES DESSINS (conv-337) : sacs, cartons, poteaux et leurs
+   * LES OBJETS FIXES DE LA TRAVÉE EN QUELQUES DESSINS : sacs, cartons, poteaux et leurs
    * traverses partagent géométrie et matière ; chacun coûtait un dessin, à l'écran et dans le reflet
    * (107 dessins à l'écran pour trois travées visibles). Un `InstancedMesh` par géométrie et matière,
    * même rendu (voir decor-instances.ts). Avant les copies : chaque copie hérite des lots.

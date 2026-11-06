@@ -3,7 +3,7 @@
  *
  * Sur Claude CLI, Autowin REPREND la session (`--resume`) et n'envoie que le dernier message :
  * tout le transcript — raisonnement et appels d'outils compris — est rejoue par le CLI a chaque
- * tour. Mesure du 2026-09-17 (conv-632) : Autowin poussait 4 779 caracteres (~1,2 k tokens) et
+ * tour. Mesure du 2026-09-17 : Autowin poussait 4 779 caracteres (~1,2 k tokens) et
  * l'appel etait facture 491 636 tokens d'entree. Mediane sur 8 891 appels journalises : 210 979
  * tokens d'entree par appel. Autowin ne voyait donc PAS 99 % de ce qu'il payait en reinjection.
  *
@@ -28,7 +28,7 @@ export interface OccupationTour {
  * LES TYPES QUI SONT DES TOURS DE CHAT. La version d'origine ne lisait que `chat` ; or le reglement
  * d'usage (`activity/chat-usage-settlement.ts`) ecrit `chat-usage` depuis le 2026-08-04, et c'est
  * la SEULE ligne qui porte `derniereEntree`. La coupe n'a donc jamais joue. Mesure du kaizen
- * conv-338 (2026-10-19) : six tours sur la meme session CLI, jusqu'a 582 617 tokens au dernier appel
+ * 2026-10-19 : six tours sur la meme session CLI, jusqu'a 582 617 tokens au dernier appel
  * du tour 8ce6230c-374c-4de3-9429-583a648e286c ; sur le poste, 589 entrees au-dela de 200 k dans
  * 91 fils. `chat` reste lu pour les anciens journaux ; `chat-recovered` (appel repris apres
  * redemarrage) est un tour de chat aussi, ignore tant qu'il ne porte pas d'occupation.

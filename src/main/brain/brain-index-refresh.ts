@@ -148,7 +148,7 @@ export function needsIndexRebuild(health: BrainHealth | null): boolean {
  */
 type EtatReindexation = { etat: 'libre' | 'en-cours' | 'echec'; redemandee: boolean }
 /**
- * Un état PAR RACINE de Brain (conv-1233, 2026-10-28) : l'index du Brain perso se reconstruit à
+ * Un état PAR RACINE de Brain (2026-10-28) : l'index du Brain perso se reconstruit à
  * côté de celui de l'équipe, et l'échec de l'un ne doit pas interdire l'autre.
  */
 const etats = new Map<string, EtatReindexation>()

@@ -17,7 +17,7 @@ import type { Message, SendOptions, SendResult } from '../providers/types'
 /**
  * JOURNAL DES FICHIERS — l'onglet Fichiers ne montre qu'un fichier TRACÉ par la conversation.
  * Seule `edit_file` écrivait la trace : create/move/delete_file et les Edit/Write natifs du chat
- * restaient invisibles (conv-804). Échoue si un de ces sites d'appel n'écrit plus sa trace.
+ * restaient invisibles. Échoue si un de ces sites d'appel n'écrit plus sa trace.
  */
 function depot(): string {
   const ws = mkdtempSync(join(tmpdir(), 'autowin-journal-ws-'))

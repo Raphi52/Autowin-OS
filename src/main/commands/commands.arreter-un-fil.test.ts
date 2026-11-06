@@ -4,7 +4,7 @@ import { AppCommandBus, CATALOG } from './commands'
 import { MOTIF_MAX_ARRET_FIL } from '../conversations/arreter-un-fil'
 
 /*
- * conv-1625 (2026-11-05) : conv-1613 a payé 402 $ en boucle et l'agent qui l'a vue ne pouvait pas
+ * 2026-11-05 : un fil a payé 402 $ en boucle et l'agent qui l'a vue ne pouvait pas
  * la couper. Verrouillé ici : `arreter_un_fil` coupe le tour ET le run d'un AUTRE fil (le geste du
  * bouton Arrêter), refuse le fil de l'appelant, et dit quand rien ne tournait.
  */

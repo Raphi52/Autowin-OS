@@ -1,6 +1,6 @@
 // @vitest-environment node
 /*
- * CE QU'UNE PAGE SAUVEGARDE SURVIT VRAIMENT AU REDEMARRAGE (conv-1304, 2026-10-30). happy-dom n'a pas
+ * CE QU'UNE PAGE SAUVEGARDE SURVIT VRAIMENT AU REDEMARRAGE (2026-10-30). happy-dom n'a pas
  * d'IndexedDB, et un faux ne prouverait rien sur le point qui compte : le disque apres l'arret du
  * processus. Ce test fait donc tourner `page-stockage-durable.ts` dans l'Electron du depot, deux fois
  * de suite sur le meme profil, et lit le stockage dans le second processus.

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { runtimeDuRelais, type ContexteRuntimeRelais } from './survivable-spawn'
 
 /**
- * LE RELAIS NE DOIT PAS TENIR ELECTRON (conv-902, 2026-10-12). Le relais survivable des agents
+ * LE RELAIS NE DOIT PAS TENIR ELECTRON (2026-10-12). Le relais survivable des agents
  * tournait sur `process.execPath` -- en dev, `.autowin-data/electron-dev/electron.exe`, dont les DLL
  * sont des liens durs vers `node_modules/electron/dist`. Conçu pour survivre à l'app, il tenait encore
  * l'exe quand le lanceur voulait réinstaller Electron : trois redémarrages de suite ont fini sur

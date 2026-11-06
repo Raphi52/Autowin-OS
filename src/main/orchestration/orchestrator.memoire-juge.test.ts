@@ -9,7 +9,7 @@ let cwdSpy: ReturnType<typeof vi.spyOn>
 const bornePrecedente = process.env.AUTOWIN_REPARATION_BORNEE
 beforeAll(() => {
   cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(RACINE_SANS_BUNDLE)
-  // Le VRAI mode de production (conv-844) : reparation sans plafond. Seul l'arret sur reserves
+  // Le VRAI mode de production : reparation sans plafond. Seul l'arret sur reserves
   // mineures figees peut terminer la boucle — le provider leve au-dela de 6 juges pour echouer vite.
   delete process.env.AUTOWIN_REPARATION_BORNEE
 })
@@ -29,7 +29,7 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 import type { WorkflowGraph } from '../workflow/workflow-graph'
 
 /**
- * BRANCHEMENT DE LA MEMOIRE DU JUGE DANS L'ORCHESTRATEUR (objections du juge, conv-36 reparation 1) :
+ * BRANCHEMENT DE LA MEMOIRE DU JUGE DANS L'ORCHESTRATEUR (objections du juge, Un fil reparation 1) :
  * (a) le 2e juge recoit les objections du 1er ; (b) la boucle s'arrete quand les memes reserves
  * MINEUR reviennent ; (c) idem avec un panel ou chaque membre valide en listant une reserve
  * (vote DEFAUT -> texte agrege « DEFAUT: quorum non atteint »).
@@ -113,9 +113,9 @@ describe('memoire du juge branchee dans la boucle de reparation', () => {
     expect(prompts[0]).not.toMatch(/VERDICT PRÉCÉDENT/)
     expect(prompts[1]).toMatch(/VERDICT PRÉCÉDENT/)
     expect(prompts[1]).toContain(RESERVE)
-    // conv-914 (piste 1) : le 2e juge reçoit aussi ce qui a changé depuis le texte déjà jugé —
+    // piste 1 : le 2e juge reçoit aussi ce qui a changé depuis le texte déjà jugé —
     // ici le 2e build de réparation, ajouté à l'agrégat.
-    // fix-ok: conv-914 (13/10) — au commit b2b9e25a, orchestrator.ts:5326 renvoyait au juge
+    // fix-ok: (13/10) — au commit b2b9e25a, orchestrator.ts:5326 renvoyait au juge
     // l'agrégat ENTIER sans dire ce qui avait changé. Mesuré : avec orchestrator.ts et memoire-juge.ts
     // de b2b9e25a, l'assertion `CE QUI A CHANGÉ` ci-dessous est rouge ; avec le correctif, verte.
     expect(prompts[0]).not.toMatch(/CE QUI A CHANGÉ/)

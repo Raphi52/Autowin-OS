@@ -3,7 +3,7 @@ import { etatDeCloture } from './root-execution-contract'
 import { sortieFrameAvecCasLimites } from '../orchestration/frame-cas-limites'
 
 /*
- * CAS REEL conv-687 (18/09) : « scout comment améliorer le gameplay ». Le run joue scout puis frame ;
+ * CAS REEL (18/09) : « scout comment améliorer le gameplay ». Le run joue scout puis frame ;
  * la garde des cas limites REFUSE le cadrage (« ⛔ Cadrage incomplet … SUITE: frame »), et le run
  * s'affichait pourtant « succeeded ». Un cadrage refusé n'est pas un livrable validé.
  */

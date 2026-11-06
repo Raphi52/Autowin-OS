@@ -4,7 +4,7 @@ import { reduceChatTurn, type ChatTurnState } from './chat-turn'
 /**
  * SIGNAL DE VIE D'UNE ACTION EN COURS.
  *
- * DÉFAUT VÉCU le 2026-08-25 (conv-1400). Un tour lance `verify`, qui rejoue la suite unitaire. Le
+ * DÉFAUT VÉCU le 2026-08-25. Un tour lance `verify`, qui rejoue la suite unitaire. Le
  * fil affiche « 1 action en cours » et PLUS RIEN pendant dix minutes, jusqu'au plafond. Rien ne
  * distingue, à l'œil, une suite qui travaille d'une suite bloquée — ni d'une app plantée. La
  * question réelle de l'utilisateur, ce jour-là, était « je crois que c'est bon mais il le sait pas

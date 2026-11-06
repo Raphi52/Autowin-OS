@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { ciblesNommees } from '../gardes/root-execution-contract'
 
 /**
- * CONTRAT DE TÂCHE AU NIVEAU DE LA CONVERSATION — la pièce qui manquait à conv-1302.
+ * CONTRAT DE TÂCHE AU NIVEAU DE LA CONVERSATION — la pièce qui manquait.
  *
  * Défaut mesuré le 2026-08-18 : sur douze tours, quatre runs ont fermé `succeeded` avec un juge à
  * 96/100 en corrigeant un AUTRE fichier que celui demandé. La garde déterministe de clôture croise
@@ -69,7 +69,7 @@ const STATUTS_HONORES = new Set(['green', 'degraded-closed'])
 /**
  * Plafond de cibles portées par un contrat.
  *
- * Mesuré sur le corpus réel : conv-349 et conv-356 produisaient SEIZE cibles. Une note de seize
+ * Mesuré sur le corpus réel : des fils produisaient SEIZE cibles. Une note de seize
  * chemins n'est pas un signal que le juge peut peser, c'est du bruit qu'il survolera. Les cibles
  * écartées ne sont pas tues pour autant — la note dit combien.
  */
@@ -79,7 +79,7 @@ const PLAFOND_CIBLES = 5
  * Chemins qui ne sont PAS des cibles du dépôt : copies isolées de run, espaces applicatifs, et les
  * fragments qu'un chemin URL-encodé laisse derrière lui (`…/Autowin%20OS/…` → `20os/…`).
  *
- * Mesuré sur le corpus réel : conv-351, conv-357 et conv-1300 en portaient, et conv-1300 y voyait
+ * Mesuré sur le corpus réel : des fils en portaient, et un fil y voyait
  * le MÊME fichier deux fois — une fois dans le dépôt, une fois dans la copie du run.
  */
 const CHEMIN_HORS_DEPOT =
@@ -100,8 +100,8 @@ function runAbandonne(content: string): boolean {
  * 2. Une LIVRAISON ACCEPTÉE (`green` / `degraded-closed`) solde tout ce qui précède, qu'elle ait
  *    ancré une cible ou non. C'est la correction du défaut le plus grave de la première version :
  *    elle ne consultait le statut que sur le run qui ancrait, si bien qu'un chantier livré vert sans
- *    `chemin:ligne` dans son besoin ne libérait rien. Mesuré sur le store live : conv-1063,
- *    conv-1065 et conv-76 portaient ainsi un contrat MORT, prêt à faire refuser du travail juste.
+ *    `chemin:ligne` dans son besoin ne libérait rien. Mesuré sur le store live : des fils
+ * portaient ainsi un contrat MORT, prêt à faire refuser du travail juste.
  *    L'ancrage `chemin:ligne` est rare — 31 conversations sur 1086 — donc miser la péremption du
  *    contrat sur son apparition était miser sur un événement qui n'arrive presque jamais.
  * 3. Un besoin qui ancre des cibles fait le contrat, avec sa provenance et son éloignement.

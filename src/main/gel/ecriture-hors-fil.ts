@@ -3,7 +3,7 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
 /**
- * ÉCRIRE UN PETIT FICHIER ENTIER HORS DU FIL PRINCIPAL (conv-1368, 2026-10-31).
+ * ÉCRIRE UN PETIT FICHIER ENTIER HORS DU FIL PRINCIPAL (2026-10-31).
  *
  * Mesure `gels.jsonl` sur 7 jours : `renameSync` a figé la fenêtre 66,6 s, dont 16 s d'un coup, sur
  * huit petits JSON. Remplacer un fichier tout neuf peut tenir 20 s sous charge, même hors de l'app
@@ -34,7 +34,7 @@ interface Depot {
   contenu: string | null
   mode?: number
   /**
-   * ÉCARTER L'ANCIENNE VERSION au lieu de la remplacer (conv-1598, 2026-11-05) : `chemin` est d'abord
+   * ÉCARTER L'ANCIENNE VERSION au lieu de la remplacer (2026-11-05) : `chemin` est d'abord
    * renommé en `chemin.bak`, puis le temporaire prend la place libre, puis `.bak` est retiré. Une
    * suppression retire aussi `.bak`. Mesuré sur le poste ce jour-là, 8 essais sur 8 : renommer
    * par-dessus un fichier créé l'instant d'avant tient 20 à 28 s ; l'écarter puis renommer, 0,05 à
@@ -157,7 +157,7 @@ export function deposerFichier(
 /**
  * La dernière valeur déposée et pas encore posée, SANS toucher au disque : `undefined` = rien en
  * attente, `null` = une suppression en attente. Pour une relecture asynchrone ou un inventaire de
- * dossier, qui ne peuvent pas passer par `relireFichier` sans un appel bloquant (conv-1598).
+ * dossier, qui ne peuvent pas passer par `relireFichier` sans un appel bloquant.
  */
 export function depotEnCours(chemin: string): string | null | undefined {
   return etats.get(chemin)?.dernier.contenu

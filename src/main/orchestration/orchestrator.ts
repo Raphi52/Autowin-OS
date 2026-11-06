@@ -23,7 +23,7 @@ import { explainRoleFailure } from '../providers/provider-failure-diagnosis'
 import { retryOnTransientOverload } from '../providers/transient-overload'
 import { promptOutilsNoeudSkill } from '../skills/skill-node-tools'
 import { OrchestrationRuntimeSnapshot, OrchestratorDeps, PhasePromptBlock, RunAgentRef, WorkflowRunOverride, bindingDeRepliPourPhase, jetonDeReservation } from './orchestrator-contrats'
-// Partie hors classe déplacée dans orchestrator-contrats.ts, ré-exportée à l'identique (conv-1508).
+// Partie hors classe déplacée dans orchestrator-contrats.ts, ré-exportée à l'identique.
 import { run } from './orchestrator-run'
 import { runGreedyPipeline, greedyJudgeAndGate, runGreedyBuildPhase } from './orchestrator-parcours-glouton'
 import { runInner } from './orchestrator-parcours-sequentiel'
@@ -80,7 +80,7 @@ export class Orchestrator {
       !agent.reasoningEffort &&
       !fallback.phaseModel?.[phase as PipelinePhase]?.reasoningEffort
     // Un panel scout de la topologie n'a pas d'angle (`FanMember`, os.ts) : sans cette répartition,
-    // ses N membres recevaient la MÊME consigne (piste 6 de conv-890). Le canevas, lui, pose les siens.
+    // ses N membres recevaient la MÊME consigne (piste 6). Le canevas, lui, pose les siens.
     const resolved = composes
       ? resolveWorkflowAgents(composes, fallback).map((member, rang) =>
           heriteDuRole(composes[rang])
@@ -104,7 +104,7 @@ export class Orchestrator {
       this.deps.currentExecutionQuote?.()?.limits.maxConcurrency ??
       Number.POSITIVE_INFINITY
     const membres = resolved.filter((member) => member && member.provider)
-    // conv-339 : un panel scout COUPÉ par le devis garde ses angles les plus utiles, pas les premiers
+    // Un panel scout COUPÉ par le devis garde ses angles les plus utiles, pas les premiers
     // du canevas (`prioriserAnglesScout`, persona.ts). Sans coupe, l'ordre composé reste tel quel.
     return (
       phase === 'scout' && membres.length > admis ? prioriserAnglesScout(membres) : membres
@@ -147,7 +147,7 @@ export class Orchestrator {
     const resolu = resolvePhaseBinding(binding, phase)
     if (fige) return resolu
     const reglageDeLEtape = binding.phaseModel?.[phase as PipelinePhase]
-    // Build d'un run TRIVIAL sur le dernier Haiku (conv-1097, mesure et motif : roles.ts,
+    // Build d'un run TRIVIAL sur le dernier Haiku (mesure et motif : roles.ts,
     // modeleDuBuildTrivial). Un réglage de l'étape build, un binding figé ou l'interrupteur coupé
     // gardent la main ; le juge n'est jamais concerné (rôle `judge`).
     const haiku =
@@ -227,19 +227,19 @@ export class Orchestrator {
     if (this.tacheTriviale(task)) return undefined
     const graphe = this.workflowDuRun()?.graph
     // Les étapes désactivées sortent du graphe ICI, avant le devis et le marcheur, qui le lisent
-    // tous deux : rien n'est réservé ni joué pour elles (conv-1602).
+    // tous deux : rien n'est réservé ni joué pour elles.
     return graphe
       ? grapheSansEtapesDesactivees(graphe, (phase) => this.etapeDesactivee(phase))
       : undefined
   }
 
-  /** Vrai si l'utilisateur a désactivé la skill de cette étape (Settings › Skills, conv-1602). */
+  /** Vrai si l'utilisateur a désactivé la skill de cette étape (Settings › Skills). */
   etapeDesactivee(phase: string): boolean {
     return this.deps.etapeDesactivee?.(phase) ?? false
   }
 
   /**
-   * Les étapes du run, sans celles que l'utilisateur a désactivées (conv-1602). Un seul filtre ici :
+   * Les étapes du run, sans celles que l'utilisateur a désactivées. Un seul filtre ici :
    * le devis, la liste plate et le découpage en sous-tâches (`phases.includes('build')`) lisent tous
    * cette liste. Le marcheur de graphe ne la lit pas : `graphePourTache` lui retire les siennes.
    */
@@ -478,7 +478,7 @@ export class Orchestrator {
    *
    * Les garde-fous de preuve visuelle et de mouvement n'ont pas le diff du run : ils relisent
    * `git status`. Sur un arbre partage deja sale, ils attribuaient au run le travail des autres
-   * sessions et refusaient un vert merite (mesure du 2026-09-12, conv-512 : 217 fichiers, dont
+   * sessions et refusaient un vert merite (mesure du 2026-09-12, : 217 fichiers, dont
    * 55 de rendu). Fige une fois par run, soustrait par les handlers.
    */
   fichiersSalesAuDemarrage: readonly string[] = []
@@ -516,7 +516,7 @@ export class Orchestrator {
       cwd,
       sandbox,
       // Le fil du run, lisible par l'agent et ses scripts (hdesk-lancer.ps1 -> petite TV du fil).
-      // Et son bureau caché (AUTOWIN_HDESK_ID) : le mod Autowin y redirige une app graphique (conv-58).
+      // Et son bureau caché (AUTOWIN_HDESK_ID) : le mod Autowin y redirige une app graphique.
       agentEnv: {
         ...(filDuRun ? { AUTOWIN_CONVERSATION_ID: filDuRun } : {}),
         AUTOWIN_HDESK_ID: identifiantBureauCache(runId)
@@ -571,22 +571,22 @@ export class Orchestrator {
     })
   }
 
-  /** Corps déplacé dans ./orchestrator-run.ts (conv-1508). */
+  /** Corps déplacé dans ./orchestrator-run.ts. */
   run(...args: Parameters<typeof run>): ReturnType<typeof run> {
     return run.apply(this, args)
   }
 
-  /** Corps déplacé dans ./orchestrator-parcours-glouton.ts (conv-1508). */
+  /** Corps déplacé dans ./orchestrator-parcours-glouton.ts. */
   runGreedyPipeline(...args: Parameters<typeof runGreedyPipeline>): ReturnType<typeof runGreedyPipeline> {
     return runGreedyPipeline.apply(this, args)
   }
 
-  /** Corps déplacé dans ./orchestrator-parcours-glouton.ts (conv-1508). */
+  /** Corps déplacé dans ./orchestrator-parcours-glouton.ts. */
   greedyJudgeAndGate(...args: Parameters<typeof greedyJudgeAndGate>): ReturnType<typeof greedyJudgeAndGate> {
     return greedyJudgeAndGate.apply(this, args)
   }
 
-  /** Corps déplacé dans ./orchestrator-parcours-glouton.ts (conv-1508). */
+  /** Corps déplacé dans ./orchestrator-parcours-glouton.ts. */
   runGreedyBuildPhase(...args: Parameters<typeof runGreedyBuildPhase>): ReturnType<typeof runGreedyBuildPhase> {
     return runGreedyBuildPhase.apply(this, args)
   }
@@ -653,7 +653,7 @@ export class Orchestrator {
     }
   }
 
-  /** Corps déplacé dans ./orchestrator-parcours-sequentiel.ts (conv-1508). */
+  /** Corps déplacé dans ./orchestrator-parcours-sequentiel.ts. */
   runInner(...args: Parameters<typeof runInner>): ReturnType<typeof runInner> {
     return runInner.apply(this, args)
   }

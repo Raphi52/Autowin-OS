@@ -31,7 +31,7 @@ export function registerProjectFilesIpc({ os }: { os: AutowinOS }): void {
     return racine(rawConv)
   })
   /*
-   * « CE FICHIER EXISTE-T-IL ? » — lecture seule, pour le mode auto (conv-826) : une suite « quand
+   * « CE FICHIER EXISTE-T-IL ? » — lecture seule, pour le mode auto : une suite « quand
    * fin.txt existe » n'est relancée (tour payé) que si le fichier est là. Répond vrai/faux, jamais
    * un contenu ni un listing ; `null` = chemin relatif sans dossier de base absolu (on ne sait pas).
    */
@@ -41,7 +41,7 @@ export function registerProjectFilesIpc({ os }: { os: AutowinOS }): void {
     const base = typeof rawBase === 'string' ? guardString(rawBase, 'base').trim() : ''
     if (!chemin) return null
     // Sans dossier de conversation, le relatif part de l'espace de travail de l'app : rendre `null`
-    // faisait retomber le renderer sur un tour PAYÉ (mesuré conv-826, 14:22, fin.txt absent).
+    // faisait retomber le renderer sur un tour PAYÉ (14:22, fin.txt absent).
     const racine = isAbsolute(base) ? base : os.executionWorkspace
     const cible = isAbsolute(chemin) ? chemin : isAbsolute(racine) ? join(racine, chemin) : null
     if (!cible) return null

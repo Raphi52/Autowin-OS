@@ -47,7 +47,7 @@ export interface SqlReadCommandDeps extends CatalogDeps {
    */
   /**
    * La conversation d'où part le geste. Transmise telle quelle au guichet, pour que l'écran
-   * d'autorisation n'apparaisse QUE dans le fil concerné (conv-626, 2026-09-16).
+   * d'autorisation n'apparaisse QUE dans le fil concerné (2026-09-16).
    */
   conversationId?: string
   porteProd?: PorteProd
@@ -129,7 +129,7 @@ export async function runSqlRead(
       // d'autoriser — et c'est au modèle qu'on demanderait de recommencer, alors qu'il est
       // justement la pièce qui n'a pas le droit de décider.
       // L'IDENTIFIANT DE CONVERSATION VOYAGE AVEC LA DEMANDE : l'écran d'autorisation vit dans le
-      // fil, et sans lui la question s'affichait au bas de toutes les conversations (conv-626).
+      // fil, et sans lui la question s'affichait au bas de toutes les conversations.
       const reponse = deps.guichetProd
         ? await deps.guichetProd.demander({
             ...verdict.demande,

@@ -4,7 +4,7 @@ import { useTextesSettings } from '../textes-ecrans/settings'
 /**
  * ONGLET « RULES » DE SETTINGS — les règles d'Autowin OS.
  *
- * La protection de production avait son propre onglet « Production ». Demande conv-242 : l'onglet
+ * La protection de production avait son propre onglet « Production ». Demande : l'onglet
  * devient « Rules » et Production y devient UNE règle d'Autowin OS. Chaque règle reste son propre
  * panneau (titre = nom de la règle) ; une nouvelle règle s'ajoute à cette liste.
  */

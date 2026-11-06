@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 /**
  * `.githooks/pre-commit` — REFUS d'un commit qui supprime un module encore importé par le commit.
  *
- * Rejeu de l'incident du 2026-10-17 (conv-318, commit 06c5ede1) : l'index de l'arbre partagé portait
- * la suppression stagée de `conversation-router.ts` (travail de conv-305), l'importeur n'était
+ * Rejeu de l'incident du 2026-10-17 (commit 06c5ede1) : l'index de l'arbre partagé portait
+ * la suppression stagée de `conversation-router.ts`, l'importeur n'était
  * modifié que dans l'arbre de travail, et un `git add <autres fichiers> && git commit` a emporté la
  * suppression seule. Ces tests commitent VRAIMENT, à travers git et le hook du dépôt
  * (`core.hooksPath`), dans des dépôts jetables.
@@ -111,7 +111,7 @@ describe('.githooks/pre-commit : module supprimé encore importé', () => {
   })
 
   /*
-   * « Essaie 3 façons » (conv-1583, 2026-11-05) : chaque façon travaille dans sa copie
+   * « Essaie 3 façons » (2026-11-05) : chaque façon travaille dans sa copie
    * `retours-de-tour/essai__<fil>-<instant>-<rang>` (`photo-du-code.ts`, `ouvrirCopiesDEssai`), avec
    * son propre index, comme une copie d'agent. Le hook ne les reconnaissait pas.
    */
@@ -132,7 +132,7 @@ describe('.githooks/pre-commit : module supprimé encore importé', () => {
 })
 
 /**
- * Règle du 2026-10-31 (conv-1386) : une interface nouvelle suit les thèmes. Le chemin choisi ici n'est
+ * Règle du 2026-10-31 : une interface nouvelle suit les thèmes. Le chemin choisi ici n'est
  * dans aucun plancher : c'est un fichier nouveau, qui n'a droit à aucune couleur en dur.
  */
 describe('.githooks/pre-commit : interface qui ne suivrait pas les thèmes', () => {

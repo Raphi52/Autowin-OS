@@ -6,7 +6,7 @@ import { AssistantActivityGroup } from './ChatView.parts'
 import { decouperBattement } from './chat-parts-helpers'
 
 /**
- * CAPSULE D'ORCHESTRATION — choix de l'utilisateur sur maquettes (conv-194, 2026-10-10, /draft
+ * CAPSULE D'ORCHESTRATION — choix de l'utilisateur sur maquettes (2026-10-10, /draft
  * « des jolis panel orchestration dans mon theme nebuleuse », puis « Capsule », puis « Go sur la
  * capsule 2 · Phase dans la capsule »).
  *
@@ -18,8 +18,8 @@ import { decouperBattement } from './chat-parts-helpers'
  * vie a droite, barre de temps dessous), la PHASE ecrite dans la capsule, et le corps qui montre
  * DIRECTEMENT le prompt envoye a chaque phase — un seul clic.
  *
- * conv-909 (2026-10-12) : « ce bloc orchestration doit etre comme celui de Actions », redessine en
- * cadre « grand, deux lignes » par conv-904. Le rond de verre teinte et la legende des phases
+ * 2026-10-12 : « ce bloc orchestration doit etre comme celui de Actions », redessine en
+ * cadre « grand, deux lignes ». Le rond de verre teinte et la legende des phases
  * remplacent la barre de temps, comme dans Actions.
  */
 let container: HTMLDivElement
@@ -47,7 +47,7 @@ function rendre(props: Props): void {
 }
 
 const bloc = (): HTMLElement | null => container.querySelector('.thinking-block--orchestration')
-// La premiere ligne du cadre (conv-909) : « Orchestration · phase » et la duree.
+// La premiere ligne du cadre : « Orchestration · phase » et la duree.
 const capsule = (): HTMLElement =>
   container.querySelector('[data-testid="activity-capsule"]') as HTMLElement
 // Le rond de verre : l'icone de l'orchestration, teintee par le verdict (remplace la barre de temps).
@@ -292,7 +292,7 @@ describe('AssistantActivityGroup — capsule d une orchestration', () => {
   })
 
   /*
-   * conv-918 (2026-10-13) : « dans le bloc orchestration ya du texte qui defile en dessous mais quand
+   * 2026-10-13 : « dans le bloc orchestration ya du texte qui defile en dessous mais quand
    * je depplie ce bloc je vois nulle part ce qui s'ecrit dans la 2e ligne du mode reduit ». La 2e
    * ligne montrait des fragments du raisonnement du sous-agent, gardes nulle part.
    */
@@ -347,12 +347,12 @@ describe('AssistantActivityGroup — capsule d une orchestration', () => {
 })
 
 /**
- * LE VERDICT QUI « ATTERRIT » (conv-981, 2026-10-15). Le rond de verre ne passe plus d'un coup au
+ * LE VERDICT QUI « ATTERRIT » (2026-10-15). Le rond de verre ne passe plus d'un coup au
  * vert ou au rouge : un reflet le balaie quand le run REUSSIT, une breve secousse le marque quand il
  * ECHOUE. L'effet ne joue qu'au PASSAGE de « en cours » a la fin, vu pendant qu'il est affiche — le
  * rond du compte, lui, vaut « ok » apres chaque outil et n'est pas un signal de fin.
  *
- * fix-ok: conv-981 - ces tests sont ajoutes UNE seule fois dans run-52d36e67e4de-1 ; le controle
+ * fix-ok: - ces tests sont ajoutes UNE seule fois dans run-52d36e67e4de-1 ; le controle
  * des causes en comptait 3 (meme modification sous son chemin complet et son chemin court, plus le
  * releve de fin d'etape).
  */

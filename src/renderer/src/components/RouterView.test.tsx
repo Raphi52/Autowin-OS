@@ -76,7 +76,7 @@ describe('RouterView — erreurs provider locales', () => {
     expect(container.querySelector('[data-provider="kimi"]')?.textContent).toContain(
       'installer/authentifier Kimi'
     )
-    // Coquille du message Codex (conv-1097) : l'infinitif « installer/reconnecter » jurait avec
+    // Coquille du message Codex : l'infinitif « installer/reconnecter » jurait avec
     // l'impératif « rouvre » de la même phrase. Seule la ligne Codex était visée : la ligne Kimi
     // ci-dessus reste à l'identique, elle attrape une correction élargie aux autres providers.
     expect(container.querySelector('[data-provider="codex"]')?.textContent).toContain(

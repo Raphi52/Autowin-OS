@@ -9,7 +9,7 @@ import { AGENT_STUDIO_DEFAULT_PROVIDER } from '../../shared/task-provider'
  * (outils d'ecriture autorises, plusieurs iterations) traite la demande dans une conversation
  * dediee, puis le compte rendu qu'il redige est envoye en REPONSE au mail.
  *
- * Demande utilisateur du 2026-09-24 (conv-839). Teams est couvert depuis par `watchdog-teams.ts`
+ * Demande utilisateur du 2026-09-24. Teams est couvert depuis par `watchdog-teams.ts`
  * (Microsoft Graph) : ses messages perso entrent dans ce meme pipeline, et depuis le 2026-09-25 la
  * regle est separee en deux, une par canal (`splitMailWatchdogByChannel`).
  */

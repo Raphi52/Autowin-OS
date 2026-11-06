@@ -6,10 +6,10 @@ import type { ProviderRegistry } from '../providers/registry'
 import type { RoleModelConfig } from '../profil/roles'
 
 /**
- * CONDENSEUR DES NOTES DU BRAIN (conv-1469, 2026-11-04).
+ * CONDENSEUR DES NOTES DU BRAIN (2026-11-04).
  *
  * POURQUOI : `brain_read` versait la note ENTIÈRE dans le contexte du modèle principal. Mesure du
- * 22 au 30/10 (conv-1303) : 148 notes, 347 000 caractères, plus que tout le bloc des notes proches.
+ * 22 au 30/10 : 148 notes, 347 000 caractères, plus que tout le bloc des notes proches.
  * Demande de l'utilisateur : le fil ne doit recevoir qu'un MINIMUM d'information pertinente, après
  * un passage par le modèle des petites tâches (Haiku, réglage du Routeur).
  *
@@ -30,7 +30,7 @@ export const CONSIGNE_CONDENSEUR = [
 ].join('\n')
 
 /**
- * FILTRE DE LA LISTE DE `brain_query` (conv-1571, 2026-11-05).
+ * FILTRE DE LA LISTE DE `brain_query` (2026-11-05).
  *
  * POURQUOI : la liste de 30 candidates arrivait entière au modèle principal. Mesure du 23/10 au
  * 05/11 (spool Brain) : 176 appels, médiane 5 279 caractères, 891 000 au total — le plus gros

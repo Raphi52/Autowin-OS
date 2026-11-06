@@ -1,5 +1,5 @@
 /*
- * Tableau d'avancement d'un plan de lots (conv-1150) — même grammaire sobre que les messages entre
+ * Tableau d'avancement d'un plan de lots — même grammaire sobre que les messages entre
  * fils : filet, texte hérité du thème, couleurs d'état tirées des variables du thème.
  */
 .tdl {
@@ -11,7 +11,7 @@
   line-height: 1.45;
   border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   /*
-   * Hauteur bornée (conv-1171) : sans elle, un plan de 19 lots et ses avertissements poussaient la
+   * Hauteur bornée : sans elle, un plan de 19 lots et ses avertissements poussaient la
    * zone de saisie hors de la fenêtre. Seule la liste des lots défile ; titre, bilan et boutons restent.
    */
   max-height: min(40vh, 340px);
@@ -95,7 +95,7 @@
   overflow-y: auto;
 }
 
-/* conv-1284 : contexte commun et décisions du plan, repliés comme les avertissements. */
+/* Contexte commun et décisions du plan, repliés comme les avertissements. */
 .tdl-memoire {
   font-size: 12px;
   color: var(--text-dim);
@@ -141,7 +141,7 @@
 
 .tdl-lot {
   display: grid;
-  /* état · titre · durée · coût · fil (durée et coût : conv-1151, lot 4) */
+  /* état · titre · durée · coût · fil (durée et coût, lot 4) */
   grid-template-columns: 78px minmax(0, 1fr) auto auto auto;
   align-items: baseline;
   gap: 8px;
@@ -189,7 +189,7 @@
   color: var(--warn);
 }
 
-/* conv-1284 : le lot a posé sa question au chef et attend sa réponse — ni fini, ni cassé. */
+/* Le lot a posé sa question au chef et attend sa réponse — ni fini, ni cassé. */
 .tdl-lot--attend-chef {
   border-left-color: var(--warn);
   border-left-style: dashed;
@@ -231,7 +231,7 @@
   text-decoration: underline dotted;
 }
 
-/* Bouton « Relancer » d'un lot en échec (conv-1151, lot 3) : à côté de la raison de l'échec. */
+/* Bouton « Relancer » d'un lot en échec (lot 3) : à côté de la raison de l'échec. */
 .tdl-relance {
   display: inline-flex;
   flex-wrap: wrap;
@@ -292,7 +292,7 @@
 }
 
 /*
- * Bouton « Réduire / Agrandir » (conv-1283) : discret, calé à droite de la ligne de titre. Réduit,
+ * Bouton « Réduire / Agrandir » : discret, calé à droite de la ligne de titre. Réduit,
  * le tableau ne garde que cette ligne et rend sa hauteur à la zone de saisie.
  */
 .tdl-reduire {
@@ -318,13 +318,13 @@
 }
 
 /*
- * À côté de la frise de la super conv (conv-1315) : plus de liste de lots, le reste tient sur une
+ * À côté de la frise de la super conv : plus de liste de lots, le reste tient sur une
  * ligne pour rendre sa hauteur au fil. Un panneau déplié (contexte, décisions) passe sous la ligne.
  */
 .tdl--frise {
   /*
    * Hauteur serrée : le tableau rétrécit et défile plutôt que de pousser la saisie hors de la
-   * fenêtre (déjà signalé, conv-1171). Les gestes passent sur la première ligne (`order`, plus bas),
+   * fenêtre (déjà signalé). Les gestes passent sur la première ligne (`order`, plus bas),
    * la seule que ce minimum garde visible.
    */
   flex: 0 1 auto;

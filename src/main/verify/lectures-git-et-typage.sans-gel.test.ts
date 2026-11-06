@@ -9,7 +9,7 @@ import { readGitState } from '../git/git-read-main'
 import { typeurTsc } from './typage-avant-publication'
 
 /**
- * LECTURES GIT ET TYPAGE NE CRÉENT PLUS LEUR PROCESSUS SUR LE FIL PRINCIPAL (conv-1413, 2026-10-31).
+ * LECTURES GIT ET TYPAGE NE CRÉENT PLUS LEUR PROCESSUS SUR LE FIL PRINCIPAL (2026-10-31).
  *
  * Mesure `gels.jsonl`, session du 2026-10-31 depuis 19:33 UTC : `spawn git status` 11,8 s et
  * `spawn git diff` 9,1 s depuis `git-read-main.ts`, `spawn electron.exe` 16 s depuis

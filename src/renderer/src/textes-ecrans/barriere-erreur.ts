@@ -3,7 +3,7 @@ import { tableDeTextes, nomDeDestination } from '../textes'
 import type { Langue } from '../../../shared/langue'
 
 /**
- * TEXTES — LE BLOC EN PANNE (conv-1327, 2026-10-30).
+ * TEXTES — LE BLOC EN PANNE (2026-10-30).
  *
  * Écran couvert : `BarriereErreur.tsx`, affiché à la place d'un composant qui a levé une erreur. Règles
  * communes, vérifiées par `tables.test.ts` : le FRANÇAIS fait foi ; l'anglais a les MÊMES clés, n'est

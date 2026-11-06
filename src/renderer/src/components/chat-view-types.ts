@@ -40,7 +40,7 @@ export type SendOptions = {
   automatique?: boolean
   /**
    * SUITE PROPOSEE PAR L'AGENT ET RENVOYEE PAR LE MODE AUTO : l'etape suivante de CE fil. Elle ne
-   * passe pas par le routeur de conversations. Mesure conv-19 -> conv-23 (2026-09-27 13:10:21.853) :
+   * passe pas par le routeur de conversations. Mesure (2026-09-27 13:10:21.853) :
    * jugee « new-topic » a 0,92, elle est partie dans un fil neuf sans dossier de travail ni mode
    * auto — tour paye dans D:\Autowin, chaine arretee. `automatique` ne suffit pas a le dire : il
    * couvre aussi la file d'attente, ecrite par l'utilisateur.
@@ -64,7 +64,7 @@ export interface UserMsg {
    *
    * Sans cette distinction, le verrou du bloc `ask` — « un message utilisateur postérieur EST la
    * réponse » — prenait toute orientation pour une réponse et fermait la question en affichant
-   * « Répondu » (conv-50, 2026-09-01). Posé côté main par `enregistrerDirectiveDansLeFil`.
+   * « Répondu » (2026-09-01). Posé côté main par `enregistrerDirectiveDansLeFil`.
    */
   orientation?: boolean
   /** Heure d'écriture (ms epoch), montrée au survol à côté de « Toi ». */
@@ -84,7 +84,7 @@ export interface PilotEvent {
   kind: PilotEventKind
   text?: string
   streamId?: string
-  /** `stream-reset` : seulement le dernier passage du flux (`rangsEffacesParLeReset`, conv-1401). */
+  /** `stream-reset` : seulement le dernier passage du flux (`rangsEffacesParLeReset`). */
   conclusionSeule?: true
   actionId?: string
   iteration?: number
@@ -138,14 +138,14 @@ export type Conv = {
   /**
    * Un tour est encore en cours quelque part dans le fil, pas forcément le dernier. Servi par la
    * projection IPC (`ConversationSummary.hasStreamingTurn`) : c'est lui qui garde le spinner d'un
-   * run rattaché au redémarrage quand un tour de chat plus récent est déjà terminé (conv-914).
+   * run rattaché au redémarrage quand un tour de chat plus récent est déjà terminé.
    */
   hasStreamingTurn?: boolean
   /** Repère visuel posé à la main sur cette conversation (voir `Conversation.surlignee`). */
   surlignee?: boolean
   /** Statut manuel : `true` = marquée inactive (voir `Conversation.inactive`). */
   inactive?: boolean
-  /** Fil privé pour le village commun : tanuki sans titre (voir `Conversation.prive`, conv-1429). */
+  /** Fil privé pour le village commun : tanuki sans titre (voir `Conversation.prive`). */
   prive?: boolean
   /** Compte Claude retenu pour CETTE conversation (voir `Conversation.claudeAccountId`). */
   claudeAccountId?: string
@@ -164,7 +164,7 @@ export type Conv = {
   /**
    * La catégorie de la barre latérale, quand elle ne correspond à aucun dossier de travail. Elle
    * GROUPE et rien d'autre ; présente, elle l'emporte sur `projectPath` pour le groupement.
-   * fix-ok: conv-81 — le type n'avait qu'un champ pour deux rôles ; sans ce second champ la vue ne peut pas grouper un fil sans lui écrire un dossier de travail.
+   * fix-ok: le type n'avait qu'un champ pour deux rôles ; sans ce second champ la vue ne peut pas grouper un fil sans lui écrire un dossier de travail.
    */
   categorie?: string
   /** Marque une analyse Auto-Kaizen : elles vivent dans leur propre groupe, replié par défaut. */
@@ -200,7 +200,7 @@ export type QueuedDirective = {
   mode?: 'btw'
   attachments?: ChatAttachment[]
   /**
-   * Un lot d'une sélection de candidats scout, mis en file par le panneau (conv-1080). Il ne part
+   * Un lot d'une sélection de candidats scout, mis en file par le panneau. Il ne part
    * pas après un tour coupé par la limite de quota : il attend la reprise (`lots-retenus-quota.ts`).
    */
   lot?: true
@@ -221,12 +221,12 @@ export type DirectiveReceipt = {
   /**
    * `attente` : le texte n'a PAS rejoint le tour en cours, il attend sa fin en file et partira seul
    * juste après. Ce n'est pas une panne : « ⚠ Échec — remis en file » le disait pourtant, en rouge,
-   * sur un refus voulu (conv-891, 2026-09-30). `failed` ne sert plus qu'à une vraie erreur d'envoi.
+   * sur un refus voulu (2026-09-30). `failed` ne sert plus qu'à une vraie erreur d'envoi.
    */
   status: 'sending' | 'sent' | 'differee' | 'attente' | 'failed'
   /**
    * Pourquoi le texte attend, quand l'app principale l'a dit (`attente` seulement). `lot` : un lot
-   * suivant d'une sélection de candidats scout, mis en file exprès pour partir après (conv-1080).
+   * suivant d'une sélection de candidats scout, mis en file exprès pour partir après.
    * `lot-quota` : ce même lot, RETENU parce que le lot d'avant a buté sur la limite de quota ; il
    * repasse à `lot` dès qu'un tour reprend dans le fil.
    */

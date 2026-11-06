@@ -15,7 +15,7 @@ import { RoleModelConfig } from './roles'
 import { TrustLedger } from '../trust/ledger'
 
 /**
- * LA LANGUE DE RÉPONSE ARRIVE VRAIMENT À L'AGENT (conv-1146) — le chemin réel, pas la fonction
+ * LA LANGUE DE RÉPONSE ARRIVE VRAIMENT À L'AGENT — le chemin réel, pas la fonction
  * seule : la consigne de départ du chat ET celle de chaque étape d'un run (et de son juge).
  * Entrée qui doit faire échouer ce fichier : retirer `blocLangueDeReponse()` d'un des sites qui
  * plient le profil (`agent-pilot.ts`, `orchestrator.ts`), ou le servir en français.

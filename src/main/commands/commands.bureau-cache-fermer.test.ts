@@ -10,7 +10,7 @@ import type {
 import type { DemandeCreationBureau } from '../../shared/hdesk-gestion'
 
 /*
- * LOT 1 du RUN outils-agent-1-2-4-6-7 (conv-222) : l'outil Autowin `bureau_cache_fermer`.
+ * LOT 1 du RUN outils-agent-1-2-4-6-7 : l'outil Autowin `bureau_cache_fermer`.
  * Le pont d'outils (lot 2) ne sert que des commandes DÉCLARÉES au catalogue : sans cette
  * déclaration, il n'y aurait rien à servir.
  *
@@ -65,7 +65,7 @@ describe('bureau_cache_fermer', () => {
     expect(appels).toEqual([{ id: 'run-abc', conversationId: 'conv-222', delaiDouxSecondes: 3 }])
   })
 
-  // conv-344 : le mode « sans fiche » (aucun fil exigé) est réservé à la vue Bureaux cachés. Un
+  // Le mode « sans fiche » (aucun fil exigé) est réservé à la vue Bureaux cachés. Un
   // modèle qui le glisse en argument ne doit pas pouvoir fermer le bureau d'un autre fil par là.
   it('ignore un `sansFiche` glissé par le modèle : le fil courant reste exigé', async () => {
     const { bus, appels } = busAvec()
@@ -101,7 +101,7 @@ describe('bureau_cache_fermer', () => {
 })
 
 /*
- * conv-344 (scout n°4) : lancer, observer et agir étaient des commandes PowerShell que l'agent
+ * scout n°4 : lancer, observer et agir étaient des commandes PowerShell que l'agent
  * RECOPIAIT de sa consigne — d'où les identifiants inventés et les fils oubliés (le lanceur a dû
  * rendre -Travail obligatoire). Ces outils fixent le fil (celui de l'appel, jamais un argument) et
  * l'identifiant par défaut (`chat-<fil>`) ; observer et agir refusent le bureau d'un autre fil.
@@ -214,7 +214,7 @@ describe('bureau_cache_lancer / observer / agir', () => {
   })
 
   /*
-   * conv-1457 : arbre d'accessibilité joint à l'observation, appui par nom (`element`) dans agir.
+   * Arbre d'accessibilité joint à l'observation, appui par nom (`element`) dans agir.
    * Cas limites du cadrage P2-1 à P2-7 : chaque refus est une phrase, et RIEN n'est envoyé au script.
    */
   it('observer : l’arbre part avec l’image quand il a été lu', async () => {

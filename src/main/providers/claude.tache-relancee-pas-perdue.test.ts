@@ -8,7 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 /**
  * UNE TÂCHE DE FOND RELANCÉE PAR AUTOWIN N'EST PAS « PERDUE » À LA REPRISE SUIVANTE.
  *
- * fix-ok: conv-253 tours dcb537d2-ed5a-4646-806d-880ef76df295 → bdfe38d3-5ba5-4693-bad2-f70b39bc845e
+ * fix-ok: tours dcb537d2-ed5a-4646-806d-880ef76df295 → bdfe38d3-5ba5-4693-bad2-f70b39bc845e
  * — cause mesurée : `claude.ts` marquait `precedente` toute notification `stopped` d'une tâche
  * inconnue du processus, sans consulter les relances d'Autowin. Journal brut
  * `run-stdout/354008f8-….stdout.jsonl` l.1 : `task_notification` `bmaye5d39` `stopped` ; lot

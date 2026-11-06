@@ -1,6 +1,6 @@
 // Consigne SYSTÈME d'un tour de chat : modes lecture seule, dossier du tour, blocs système et
 // variante sans les commandes servies en outils directs. Sortie telle quelle de AgentPilot.chat()
-// (conv-1580, lot 2).
+// (lot 2).
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { CONSIGNE_CLASSES_PAGES_HTML } from '../../shared/classes-pages-html'
 import { blocsSystemeEcran, buildChatPilotagePrompt } from '../consignes/chat-pilotage-prompt'
@@ -51,7 +51,7 @@ export function systemeDuTour(entree: {
   // OPEN BAR (choix utilisateur explicite 2026-08-14) : un tour PILOTÉ PAR L'UTILISATEUR reçoit
   // TOUJOURS le catalogue complet — jamais un catalogue réduit derrière une classification
   // « lecture seule » du message. Cette classification (`classifyMutationConfidence`) starvait des
-  // tours qui devaient agir, mesuré à répétition (dont le scout de veille conv-1154→1157). L'utilisateur
+  // tours qui devaient agir, mesuré à répétition (dont le scout de veille). L'utilisateur
   // ASSUME la perte de garde-fou, dans la continuité du retrait du sandbox (décision C, 2026-08-06) :
   // dans SON chat, si une demande d'analyse amène le modèle à écrire ou supprimer, c'est permis.
   //
@@ -62,7 +62,7 @@ export function systemeDuTour(entree: {
   const commandFreeReadOnly = watchdogReadOnly || directReadOnly
   // Le dossier du tour est RESOLU depuis la conversation (le dossier global fige au demarrage n'est
   // plus qu'un repli, cf. `dossierDeTravailDuTour`). Meme valeur que le cwd envoye au CLI, sinon la
-  // session est reclamee depuis un autre dossier et le tour meurt a 0 message (conv-48, 2026-09-06).
+  // session est reclamee depuis un autre dossier et le tour meurt a 0 message (2026-09-06).
   const workspaceDuTour =
     executionWorkspace(conversationId).trim() || (process.env[AUTOWIN_WORKSPACE_ENV] ?? '')
   const providerLimits: Pick<SendOptions, 'maxBudgetUsd' | 'toolProfile' | 'workspaceCwd'> = {
@@ -76,7 +76,7 @@ export function systemeDuTour(entree: {
    * L'allègement d'origine (pas de catalogue sur un tour read-only) datait d'un catalogue où
    * TOUTES les commandes mutaient quelque chose. Depuis `read_file`/`find_in_files`, c'est
    * l'inverse : une ANALYSE est exactement le tour qui a besoin de lire. Mesuré sur 4 runs réels
-   * du scout de veille (conv-1154→1157) : classé read-only, il recevait zéro outil et répondait
+   * du scout de veille : classé read-only, il recevait zéro outil et répondait
    * honnêtement « je n'ai pas pu exécuter les lectures obligatoires ». Le triage Watchdog, lui,
    * reste volontairement sans commandes (son pilote refuse tout exec de toute façon).
    */
@@ -97,7 +97,7 @@ export function systemeDuTour(entree: {
    * être réutilisé. Il est désormais passé dans le MESSAGE (voir `convo`) : même information remise
    * au modèle, mais le system redevient identique d'un tour à l'autre, donc cachable.
    *
-   * Fonction du texte de pilotage (conv-1229) : un envoi qui reçoit les outils directs prend la
+   * Fonction du texte de pilotage : un envoi qui reçoit les outils directs prend la
    * consigne SANS les commandes déjà servies en outils (`systemeAvecOutilsDirects`, plus bas).
    */
   const systemPartsAvec = (pilotage: string): Array<{ name: string; text: string }> =>
@@ -133,12 +133,12 @@ export function systemeDuTour(entree: {
                 'panneau ni fond opaque, typographie sur le fond de l’app, mise en page COMPACTE ' +
                 '(interlignes 1.45-1.55, marges de section <=10px, aucun grand vide vertical), jamais de ' +
                 'halos ; sans JavaScript ni URL externe. ' +
-                // Les classes de l'app remplacent la recette de couleurs en dur (conv-1074).
+                // Les classes de l'app remplacent la recette de couleurs en dur.
                 CONSIGNE_CLASSES_PAGES_HTML +
                 ' Garde le texte simple pour une ou deux phrases.\n'
             },
             // Les commandes de LECTURE restent servies : une analyse est exactement le tour qui a
-            // besoin de lire (mesure : scout de veille, conv-1154→1157, zero outil, zero candidat).
+            // besoin de lire (mesure : scout de veille, zero outil, zero candidat).
             // `pilotage` est deja reduit au catalogue readOnlyHint dans ce cas ('' si vide).
             { name: 'pilotage-lecture', text: pilotage }
           ]
@@ -146,8 +146,8 @@ export function systemeDuTour(entree: {
             { name: 'constitution', text: CONSTITUTION },
             { name: 'pilotage', text: pilotage },
             { name: 'style', text: CONCISE_STRUCTURED_RESPONSE_INSTRUCTION },
-            // Le profil personnel suit le contexte projet : stable entre deux ajouts (conv-1098).
-            // La mémoire de tête (faits clés de l'entreprise) le suit, stable elle aussi (conv-1285).
+            // Le profil personnel suit le contexte projet : stable entre deux ajouts.
+            // La mémoire de tête (faits clés de l'entreprise) le suit, stable elle aussi.
             {
               name: 'projectContext',
               text:
@@ -158,10 +158,10 @@ export function systemeDuTour(entree: {
             },
             /**
              * DERNIERS blocs (`blocsSystemeEcran`, chat-pilotage-prompt.ts) : l'ecran de l'utilisateur,
-             * TOUJOURS servi et identique pour tous les fils (kaizen conv-835, tour
+             * TOUJOURS servi et identique pour tous les fils (kaizen, tour
              * ac1d0434-51c7-4dee-adf9-a8cb0a8e41f8 : « envoi un message teams… » n'avait aucun mot
              * visuel, le chat n'a donc pas recu la regle et a ouvert Teams sur l'ecran reel), puis les
-             * regles de travail visuel, conditionnelles (conv-614) — image jointe comprise (conv-742).
+             * regles de travail visuel, conditionnelles — image jointe comprise.
              *
              * En DERNIER a dessein : le cache du provider vaut par son PREFIXE. Seule la queue
              * visuelle apparait ou disparait d'un tour a l'autre.
@@ -185,8 +185,8 @@ export function systemeDuTour(entree: {
   // les outils directs ne démarrent pas — le texte `<cmd>` est alors le seul chemin du modèle.
   const { system, systemBlocks } = assemblerSysteme(pilotage)
   /**
-   * LISTE DES COMMANDES SANS DOUBLON (conv-1229, 2026-10-28). Mesure sur le texte réellement envoyé
-   * (prompt-observability, conv-1229) : 46 des 55 commandes de la liste étaient AUSSI servies en
+   * LISTE DES COMMANDES SANS DOUBLON (2026-10-28). Mesure sur le texte réellement envoyé
+   * (prompt-observability) : 46 des 55 commandes de la liste étaient AUSSI servies en
    * outils directs, avec la même description et des arguments plus détaillés
    * (`outilsPublies`, skill-node-mcp.ts) — 18 830 caractères payés deux fois à chaque requête.
    * Quand les outils directs sont servis, la consigne ne détaille plus que les commandes texte seul.

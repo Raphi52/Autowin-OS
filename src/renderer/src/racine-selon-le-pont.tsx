@@ -2,7 +2,7 @@ import type { ReactElement } from 'react'
 import { HorsElectron } from './components/HorsElectron'
 
 /**
- * L'INTERFACE OUVERTE HORS DE L'APPLICATION (conv-1286, 2026-10-29).
+ * L'INTERFACE OUVERTE HORS DE L'APPLICATION (2026-10-29).
  *
  * `http://localhost:5173` ouvert dans un navigateur ordinaire (le navigateur intégré du chat compris)
  * montrait un écran NOIR : le pont `window.api`, posé par le preload d'Electron, y est absent, et le

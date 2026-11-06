@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 
 /**
- * Le code de ChatView.tsx a été découpé en fichiers voisins, déplacé tel quel (conv-1508). Les tests
+ * Le code de ChatView.tsx a été découpé en fichiers voisins, déplacé tel quel. Les tests
  * qui vérifient la SOURCE du composant lisent donc le composant ET ses morceaux : un invariant
  * déplacé reste vérifié là où il vit maintenant, au lieu d'être perdu ou recopié.
  */

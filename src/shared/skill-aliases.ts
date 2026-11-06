@@ -11,7 +11,7 @@
 export const SKILL_ALIASES: Readonly<Record<string, string>> = {
   // `/design` a été retiré sur demande de l'utilisateur (03/09/2026) : `draft` s'invoque par son
   // seul nom de dossier.
-  // Même alias que Claude Code, qui documente `/checkup` pour `/doctor` (conv-1368) :
+  // Même alias que Claude Code, qui documente `/checkup` pour `/doctor` :
   // https://code.claude.com/docs/en/commands
   checkup: 'doctor'
 }
@@ -24,7 +24,7 @@ export function resolveSkillAlias(id: string): string {
 /**
  * Une SEULE faute de frappe sépare-t-elle `a` de `b` ? (insertion, suppression ou substitution)
  *
- * Défaut vécu le 2026-09-04 (conv-257) : `/draf` — une lettre manquante — n'a résolu AUCUNE skill.
+ * Défaut vécu le 2026-09-04 : `/draf` — une lettre manquante — n'a résolu AUCUNE skill.
  * `skillInstruction` rend alors la chaîne vide EN SILENCE : le corps de `draft` n'a jamais été
  * injecté, l'agent a improvisé une maquette hors de toutes les règles de la skill, et personne —
  * ni l'utilisateur ni l'agent — n'a su que la commande n'avait pas pris. Un `/` mal tapé doit

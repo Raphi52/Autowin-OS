@@ -42,9 +42,9 @@ async function syncGateHooksHandler(ctx: HookContext): Promise<HookResult> {
 }
 
 /**
- * Un fichier édité par le run vit-il dans un dépôt git ? (conv-1149, 2026-10-25)
+ * Un fichier édité par le run vit-il dans un dépôt git ? (2026-10-25)
  *
- * fix-ok: conv-1146 (run-ec2036c0932d-1) — le contrôle « sans cause » comptait les brouillons hors
+ * fix-ok: (run-ec2036c0932d-1) — le contrôle « sans cause » comptait les brouillons hors
  * dépôt : trois réparations complètes relancées pour `D:/tmp/langue-outils/codemod2.cjs` (lu dans
  * `activity/conv-1146.jsonl`, réparations 5, 6 et 10). On ne se borne
  * PAS au dossier du run : un run peut travailler sur un AUTRE projet (D:/GIT/..., cas réel de
@@ -84,7 +84,7 @@ export function estDansUnDepotGit(cwd?: string): (chemin: string) => boolean {
 /**
  * APPUI SUR LES SOURCES NEUVES — contrôle hors modèle d'un rendu de /kaizen.
  *
- * Mesuré sur conv-105 : le dossier de preuve joignait les appels modèle, le journal des tours et
+ * Mesuré : le dossier de preuve joignait les appels modèle, le journal des tours et
  * les saisies, l'exigence de s'en servir était écrite dans la consigne, et le rendu n'en citait
  * aucun — les corrections portaient sur le mécanisme qui fabrique le dossier. Une exigence
  * seulement écrite ne tient pas : elle est donc VÉRIFIÉE ici, sur le texte produit. Le contrôle ne
@@ -114,7 +114,7 @@ export function fichiersEditesParLeRun(
   cwd?: string
 ): Record<string, number> {
   const compte: Record<string, number> = {}
-  // fix-ok: conv-539 tour 24e29815 — le meme fichier compte sous son chemin relatif ET absolu.
+  // fix-ok: tour 24e29815 — le meme fichier compte sous son chemin relatif ET absolu.
   const racine = cwd ? cwd.replace(/\\/g, '/').replace(/\/+$/, '') + '/' : ''
   const normalise = (brut: string): string => {
     const chemin = brut.replace(/\\/g, '/').trim()
@@ -123,7 +123,7 @@ export function fichiersEditesParLeRun(
       : chemin
   }
   /*
-   * fix-ok: conv-981 — UNE EDITION = UN COMPTE (run-52d36e67e4de-1 : 9 fichiers modifies une fois,
+   * fix-ok: UNE EDITION = UN COMPTE (run-52d36e67e4de-1 : 9 fichiers modifies une fois,
    * refuses comme 3 fois). Deux causes mesurees dans sa trace :
    *  - la preuve d'un `Edit` nomme le fichier en relatif (`paths`) ET en absolu (`path`) : on
    *    dedoublonne APRES normalisation, sinon une edition compte deux fois ;
@@ -183,7 +183,7 @@ export async function jetonsDeCauseParFichier(
   // Source 1 — le jeton depose DANS le fichier, vu par le diff (ou resume) de sa mutation.
   for (const item of evidence ?? []) {
     if (item.kind !== 'mutation') continue
-    // fix-ok: conv-540 tour 4dfe2821 — la preuve reelle (workspace_delta) n a jamais de `diff`, seulement les empreintes des lignes ecrites : le jeton depose dans le fichier etait invisible et le refus revenait
+    // fix-ok: tour 4dfe2821 — la preuve reelle (workspace_delta) n a jamais de `diff`, seulement les empreintes des lignes ecrites : le jeton depose dans le fichier etait invisible et le refus revenait
     for (const [chemin, empreintes] of Object.entries(item.writtenLineFingerprintsByPath ?? {})) {
       if (!item.workspaceRoot || !norm(chemin) || !empreintes.length) continue
       let contenu = ''
@@ -222,8 +222,8 @@ export async function jetonsDeCauseParFichier(
     // la regex de chemin ci-dessous exige une extension, il ne pouvait donc JAMAIS etre nomme (recupere de run-febaa41f9647-1).
     const ligneNorm = norm(ligne)
     for (const f of connus) if (f.endsWith('/') && ligneNorm.includes(f)) jetons[f] = true
-    // fix-ok: la classe excluait « : » — un chemin absolu Windows (D:/...) perdait sa lettre de lecteur et ne pouvait jamais desarmer le fichier (conv-526, refus « 5 edits de D:/AutoWinOS/scripts/ui-capture.mjs »)
-    // fix-ok: l'extension exigeait des lettres seules — un « .ps1 » ne pouvait jamais desarmer son fichier (conv-528, refus « 7 edits de resources/hdesk-tv.ps1 » malgre le jeton ; recupere de run-0e76c99a3021-1)
+    // fix-ok: la classe excluait « : » — un chemin absolu Windows (D:/...) perdait sa lettre de lecteur et ne pouvait jamais desarmer le fichier (refus « 5 edits de D:/AutoWinOS/scripts/ui-capture.mjs »)
+    // fix-ok: l'extension exigeait des lettres seules — un « .ps1 » ne pouvait jamais desarmer son fichier (refus « 7 edits de resources/hdesk-tv.ps1 » malgre le jeton ; recupere de run-0e76c99a3021-1)
     // fix-ok: run-36461be778d0-1 reparations 1-4 — l'extension etait bornee a 5 caracteres : un « .csproj » (6) ne pouvait jamais desarmer son fichier
     const candidats = ligne.match(/(?:\b[A-Za-z]:)?[\w./\\-]+\.[A-Za-z][A-Za-z0-9]{0,9}\b/g) ?? []
     for (const brut of candidats) {
@@ -239,14 +239,14 @@ export async function jetonsDeCauseParFichier(
   }
 
   // Source 3 — le jeton depose dans le fichier par un tour PRECEDENT de la meme session.
-  // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — le compte d'edits est cumule
+  // fix-ok: tour 4e502786-4887-4101-85b3-ea2dee304091 — le compte d'edits est cumule
   // sur la session, mais la source 1 ne creditait le jeton que s'il figurait parmi les lignes
   // ecrites par CE run : le `fix-ok:` depose a la reparation 1 (commit a9126f34) ne desarmait
   // pas la reparation 2, et le meme refus revenait a l'identique. Portee etroite : seul un jeton
   // AJOUTE par le dernier changement du fichier (non commite, ou dernier commit qui le touche)
   // compte — un vieux `fix-ok:` sans rapport ne vaut pas laissez-passer perpetuel.
   for (const f of connus) {
-    // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — le filtre excluait « : », donc
+    // fix-ok: tour 4e502786-4887-4101-85b3-ea2dee304091 — le filtre excluait « : », donc
     // un chemin absolu Windows (D:/AutoWinOS/src/main/x.ts), forme sous laquelle editsByFile
     // remonte souvent, ne pouvait JAMAIS etre credite : meme refus fix-gate rejoue 3 fois.
     if (jetons[f] || !/^(?:[A-Za-z]:)?[\w./-]+$/.test(f)) continue
@@ -263,7 +263,7 @@ export async function jetonsDeCauseParFichier(
 async function lignesAjouteesAuDernierChangement(fichier: string): Promise<string[]> {
   // fix-ok: gels.jsonl — 17 gels du process principal venaient de ce `execFileSync('git')` (jusqu a
   // 4 appels git par fichier edite, sur le fil principal) : git passe desormais par `execFile`.
-  // fix-ok: conv-597 tour 4e502786-4887-4101-85b3-ea2dee304091 — un run s'execute dans un worktree
+  // fix-ok: tour 4e502786-4887-4101-85b3-ea2dee304091 — un run s'execute dans un worktree
   // en HEAD DETACHE anterieur au commit qui depose le jeton : `git log -1 -- <fichier>` y renvoie
   // l'ancien commit et le jeton reste invisible (meme refus fix-gate rejoue 4 fois). On interroge
   // donc le depot QUI CONTIENT le fichier (-C), et toutes les refs (--all), pas le seul HEAD local.
@@ -288,7 +288,7 @@ async function lignesAjouteesAuDernierChangement(fichier: string): Promise<strin
       .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
       .map((l) => l.slice(1))
   const enCours = ajoutees(await git(['diff', 'HEAD', '--', cible]))
-  // fix-ok: kaizen conv-113 reparation 3 — lire l'attente ET le dernier commit (d1b97289, annule)
+  // fix-ok: kaizen reparation 3 — lire l'attente ET le dernier commit (d1b97289, annule)
   // laissait un vieux `fix-ok:` commite crediter de NOUVELLES lignes en attente sans jeton : un
   // laissez-passer perpetuel. Des qu'il y a de l'attente, elle seule date le jeton
   // (jeton-de-cause-perime.test.ts : rouge sous d1b97289, vert ici).
@@ -348,7 +348,7 @@ export function attribuablesAuRun(
  * requireVisualProof src/main` ne rendait que sa propre définition. L'exigence ne vivait donc qu'en
  * PROSE (pipeline-discipline.ts), et une prose ne refuse rien.
  *
- * Mesure (conv-512, tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`) : un run modifie
+ * Mesure (tour `24bf5294-7ab1-4104-aa0c-1c0f62009fb8`) : un run modifie
  * `ModelActivityLogPane.tsx` + `.css`, se clôture VERT, et l'agent écrit lui-même « je ne l'ai pas
  * observé à l'écran — aucune capture, aucun verdict visuel de ma part ».
  *
@@ -487,7 +487,7 @@ export function creerPreuveMouvementHandler(
 }
 
 /**
- * PROMOTION D'UN MOD (conv-419, 2026-11-02). Un run qui modifie `mods/autowin/**` promeut une
+ * PROMOTION D'UN MOD (2026-11-02). Un run qui modifie `mods/autowin/**` promeut une
  * modification du harnais partagé : chaque agent la chargera. Pratique reprise d'arXiv 2608.10178 —
  * la modif annonce ce qu'elle corrige et ce qu'elle risque de casser, et n'est retenue que sans
  * régression. Refus tant que (a) `.autowin/mod-run/PROMOTION.md` ne porte pas les lignes

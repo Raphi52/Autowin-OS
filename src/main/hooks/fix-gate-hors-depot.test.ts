@@ -6,9 +6,9 @@ import { createDefaultHookBus } from './default-gate-hooks'
 import type { HookContext } from './hook-bus'
 
 /**
- * LE CONTRÔLE « SANS CAUSE » NE COMPTE QUE LES FICHIERS D'UN DÉPÔT (conv-1149, 2026-10-25).
+ * LE CONTRÔLE « SANS CAUSE » NE COMPTE QUE LES FICHIERS D'UN DÉPÔT (2026-10-25).
  *
- * Défaut vécu sur conv-1146 (run-ec2036c0932d-1) : 7 des 17 réparations ne venaient QUE de ce
+ * Défaut vécu (run-ec2036c0932d-1) : 7 des 17 réparations ne venaient QUE de ce
  * contrôle, dont trois pour des scripts jetables écrits hors du dépôt
  * (« 3 édits de D:/tmp/langue-outils/codemod2.cjs sans cause vérifiée »). Chaque refus relançait
  * build + nettoyage + juge, et poussait le run à semer des `fix-ok:` dans le code du produit.

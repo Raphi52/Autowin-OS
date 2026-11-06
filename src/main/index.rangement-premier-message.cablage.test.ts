@@ -6,9 +6,9 @@ import { sourceProcessPrincipal } from './app/source-process-principal.test-help
  * closure locale de index.ts. L'EFFET du rangement, lui, est joue pour de vrai dans
  * rangement-premier-message.effet.test.ts — ce fichier ne porte plus que le cablage.
  *
- * CONTRAT DEPUIS LE 2026-09-26 (conv-867) : la reponse part TOUT DE SUITE, le rangement se fait a
+ * CONTRAT DEPUIS LE 2026-09-26 : la reponse part TOUT DE SUITE, le rangement se fait a
  * cote. Le tour attendait avant l'appel au modele qui range la conversation (~5 s au premier
- * message), et ce trou affichait un faux « Reponse interrompue avant la fin » (conv-809, conv-862).
+ * message), et ce trou affichait un faux « Reponse interrompue avant la fin ».
  * Si quelqu'un remet un `await` devant le rangement, l'attente revient : ce test doit tomber.
  */
 const source = sourceProcessPrincipal()
@@ -34,7 +34,7 @@ describe('rangement automatique au premier message', () => {
 
   it('apprend la vraie fin du tour, meme quand le tour echoue', () => {
     const essai = corps.slice(corps.indexOf('try {'))
-    // Le resultat est garde pour l'enchainement du chat (conv-871) avant d'etre rendu : le contrat
+    // Le resultat est garde pour l'enchainement du chat avant d'etre rendu : le contrat
     // reste que la fin du tour est signalee dans le `finally` du MEME `try` que l'appel au tour.
     expect(essai).toMatch(
       /try \{\s*const resultat = await lancerTour\(\.\.\.args\)[^]*?return resultat\s*\} finally \{\s*finirTour\(\)/
@@ -46,7 +46,7 @@ describe('rangement automatique au premier message', () => {
     const bloc = rangement.slice(0, rangement.indexOf('const tourCompteDesReception'))
     expect(bloc).toContain('toujoursNonRangee: () =>')
     expect(bloc).toContain('avantLaReponseEnCours: true')
-    // conv-23 : ecrite APRES la fin du tour, l'annonce doit AUSSI passer au-dessus d'une reponse
+    // Ecrite APRES la fin du tour, l'annonce doit AUSSI passer au-dessus d'une reponse
     // finie, sinon elle masque la suite proposee (effet joue dans
     // store/conversations.avis-rangement-garde-la-suite.test.ts).
     expect(bloc).toContain('auDessusDeLaReponseDuTour: true')

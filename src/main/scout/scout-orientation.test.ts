@@ -57,7 +57,7 @@ describe('demande d orientation d un scout', () => {
   /*
    * SKILL.md n'est PAS ce que recoit un scout lance par l'app : le pipeline in-app ne lit que
    * `PHASE_BRIEFS.scout` (`orchestrator.ts`, `phasePrompt`). Le premier test restait vert alors
-   * qu'aucune de ces formules n'agissait sur une regle dans l'app (conv-890). Les memes leviers
+   * qu'aucune de ces formules n'agissait sur une regle dans l'app. Les memes leviers
    * doivent donc exister dans la consigne reellement envoyee.
    */
   it('active les memes leviers dans la consigne que l app envoie reellement', () => {
@@ -74,7 +74,7 @@ describe('demande d orientation d un scout', () => {
     expect(b).toMatch(/## cible|cible:/)
   })
 
-  // Candidats scout conv-41 : la skill se contredisait, et ne disait pas la meme chose que le brief.
+  // Candidats scout : la skill se contredisait, et ne disait pas la meme chose que le brief.
   describe('SKILL.md coherente avec elle-meme et avec le brief de l app', () => {
     const brut = () => readFileSync(skill, 'utf8')
     it('n interdit plus la note /100 qu elle exige', () => {

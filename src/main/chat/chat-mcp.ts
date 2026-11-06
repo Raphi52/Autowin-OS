@@ -115,7 +115,7 @@ export async function ouvrirOutilsNatifsDuChat(
       /*
        * MEME BORNE QU'UN `<cmd>` (`bornerResultatDeCommande`, 120 000 car. par defaut). Sans elle, un
        * `conversation_read` geant partait entier dans la conversation du modele — le defaut qui a
-       * tue conv-312 sur le chemin texte (« Prompt is too long »).
+       * tue sur le chemin texte (« Prompt is too long »).
        */
       const texte = resultatEnTexte(r.data)
       const borne = bornerResultatDeCommande(nom, texte)
@@ -124,7 +124,7 @@ export async function ouvrirOutilsNatifsDuChat(
   }
   const perimetre: PerimetreOutils = {
     outils,
-    // Sûr depuis le 2026-10-31 (conv-1370, lot 8) : chaque résultat se rattache à SA commande dans la
+    // Sûr depuis le 2026-10-31 (lot 8) : chaque résultat se rattache à SA commande dans la
     // trace (`run-pilot-chat.ts`) et dans le détail de l'Observatoire (`appelsDeLOutil`). Les cartes,
     // le compteur d'appels en vol et le bilan des échecs passaient déjà par `actionId`.
     lecturesSimultanees: true,

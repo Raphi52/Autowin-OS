@@ -1,5 +1,5 @@
 /**
- * Les deux boutons de la carte de suppression des fils, dans TOUS les thèmes (conv-1078, 2026-10-22 :
+ * Les deux boutons de la carte de suppression des fils, dans TOUS les thèmes (2026-10-22 :
  * « applique a tous les themes mais avec des couleurs en fonction du theme »).
  *
  * Ce que ce test verrouille :
@@ -76,7 +76,7 @@ describe('carte de suppression des fils — boutons dans tous les thèmes', () =
   })
 
   // Un thème peut viser ces boutons pour y poser des RÉGLAGES -- propriétés personnalisées et
-  // mouvement -- jamais une propriété qui peint (fond, couleur, bord, ombre). Depuis conv-1163
+  // mouvement -- jamais une propriété qui peint (fond, couleur, bord, ombre).
   // (2026-10-27, « a mettre aussi sur ces boutons ») Holographique y pose sa lampe à lave : ses
   // gouttes ont des positions animées propres à chaque bouton, qui ne peuvent pas venir de la carte.
   it('aucune feuille de thème ne repeint ces boutons : elles n’y posent que des réglages', () => {

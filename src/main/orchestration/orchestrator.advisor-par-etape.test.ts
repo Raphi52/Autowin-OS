@@ -15,7 +15,7 @@ import { decodeRoleBinding } from '../profil/role-store'
 import { TrustLedger } from '../trust/ledger'
 
 /**
- * L'ADVISOR DE L'ÉTAPE ARRIVE AU FOURNISSEUR, ET SEULEMENT À SON ÉTAPE (conv-1083, 2026-10-22).
+ * L'ADVISOR DE L'ÉTAPE ARRIVE AU FOURNISSEUR, ET SEULEMENT À SON ÉTAPE (2026-10-22).
  *
  * Réglage : `phaseModel.build.advisorModel`. Entrée qui ferait échouer ce banc si le branchement
  * était faux : un advisor posé sur `build` qui partirait aussi sur `clean` ou `frame` (il hériterait

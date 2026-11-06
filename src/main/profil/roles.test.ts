@@ -282,7 +282,7 @@ describe('role-store Autowin OS', () => {
     expect(Object.keys(JSON.parse(readFileSync(path, 'utf8')))).not.toContain('petitesTaches')
   })
 
-  // conv-1097 : l'interrupteur du build trivial sur Haiku — `false` le coupe, et il survit au disque.
+  // L'interrupteur du build trivial sur Haiku — `false` le coupe, et il survit au disque.
   it('garde l’interrupteur du build trivial sur Haiku, et le relit', () => {
     saveRoleBindings(bindings, undefined, false)
     const relus = loadRoleBindings()
@@ -321,7 +321,7 @@ describe('role-store Autowin OS', () => {
 describe('modèle des petites tâches', () => {
   const chat = { provider: 'claude', model: 'claude-opus-5-5', reasoningEffort: 'xhigh' as const }
 
-  // conv-1097 : les petites tâches non réglées partent sur l'alias Haiku du CLI, plus sur le chat.
+  // Les petites tâches non réglées partent sur l'alias Haiku du CLI, plus sur le chat.
   it('non réglé, chat sur Claude : alias haiku en effort low, quel que soit le modèle du chat', () => {
     const cfg = new RoleModelConfig({ orchestrator: chat })
     expect(cfg.getPetitesTaches()).toBeUndefined()

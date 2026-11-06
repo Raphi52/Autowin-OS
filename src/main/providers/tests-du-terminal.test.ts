@@ -13,10 +13,10 @@ import {
 import { COMMANDE_DE_TEST_MAX, lireTestsDuTerminal } from '../../shared/chat-turn'
 
 /**
- * TESTS DU TERMINAL (conv-1059, 2026-10-22) — lire, dans UNE ligne shell lancée par l'agent, les
+ * TESTS DU TERMINAL (2026-10-22) — lire, dans UNE ligne shell lancée par l'agent, les
  * tests qu'elle a joués et LEUR code de sortie, pour que la carte du fil les compte comme preuve.
  *
- * Les entrées qui font échouer une version naïve, toutes vues dans les tours réels de conv-1038 :
+ * Les entrées qui font échouer une version naïve, toutes vues dans les tours réels :
  *   - `… | tail -20` : le code rendu est celui de `tail` (`false | cat` rend 0, mesuré dans ce
  *     terminal le 2026-10-22) — compter ce 0 serait un FAUX VERT ;
  *   - `npm run typecheck > log 2>&1; echo EXIT=$?` : le code rendu est celui d'`echo` (0), le vrai
@@ -53,7 +53,7 @@ describe('testsDuTerminal — le code rendu par l’outil est celui du test', ()
   })
 
   /*
-   * LE `cd` ÉTAIT PERDU (conv-1423, objection du contrôle final) : le libellé ne garde que le maillon
+   * LE `cd` ÉTAIT PERDU (objection du contrôle final) : le libellé ne garde que le maillon
    * du test, donc `cd ../autre-projet && npm test` se lisait `npm test` et rachetait un rouge du
    * projet courant. Le libellé ne change pas : l'information voyage à côté.
    */
@@ -194,7 +194,7 @@ describe('testsDuTerminal — le code rendu par l’outil est celui du test', ()
     ])
   })
 
-  // Objection du contrôle final (conv-1423) : l'option de lanceur était lue brute et le verbe par `nu`,
+  // Objection du contrôle final : l'option de lanceur était lue brute et le verbe par `nu`,
   // qui ne retire que les guillemets du bord : `command "-p" cd`, `c'd'` et `c\d` effaçaient un rouge.
   // Le shell joue ces mots sans leurs guillemets ni leurs barres : on les lit pareil.
   it.each([
@@ -665,7 +665,7 @@ describe('testsDuTerminal — le code écrit par `echo …=$?` juste après le t
 })
 
 /*
- * conv-1221 (2026-10-28) : sur 6 jours, 251 tests lancés au terminal, 25 comptés par le Board ; 190
+ * 2026-10-28 : sur 6 jours, 251 tests lancés au terminal, 25 comptés par le Board ; 190
  * passaient par un tube (`| tail`, `| grep`) et 12 imprimaient pourtant leur vrai code par
  * `echo "exit ${PIPESTATUS[0]}"`. Sur 103 vitest raccourcis, 79 laissaient voir leur bilan.
  */

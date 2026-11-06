@@ -10,7 +10,7 @@
 /**
  * Un run rouge COUPÉ — par le bouton Stop du chat, ou par le quota de l'abonnement — et non raté.
  * `publication` : validé, mais sa fusion a été refusée par une base occupée ; il attend la reprise
- * automatique de sa publication (conv-1455, cas conv-1431).
+ * automatique de sa publication.
  */
 export type RunInterruption = 'stop' | 'quota' | 'publication'
 
@@ -35,7 +35,7 @@ export const ATTENTE_DE_PUBLICATION = 'en attente de publication'
  * Un run `red` COUPÉ (`interruption`, lue dans sa clôture par `parseRun`) ne bloque pas, DoD
  * incomplète comprise : arrêté par le Stop, il est annulé ; coupé par le quota, il est suspendu.
  * Aucun des deux ne dit que le travail a échoué — les compter ici remplissait la liste servie à
- * chaque tour de runs sans rien à réparer (15 entrées le 2026-10-22, conv-1069).
+ * chaque tour de runs sans rien à réparer (15 entrées le 2026-10-22).
  */
 export function isBlocked(s: {
   status: string
@@ -43,13 +43,13 @@ export function isBlocked(s: {
   dodChecked: number
   interruption?: RunInterruption
 }): boolean {
-  // INTERROMPU (piste 4, conv-1070) : coupé par Stop, la limite de session ou une panne en face.
+  // INTERROMPU (piste 4) : coupé par Stop, la limite de session ou une panne en face.
   // Seule exception à la règle de DoD, et elle est forcée : un run arrêté avant sa fin a TOUJOURS
   // une DoD incomplète, donc le garder « bloqué » à ce titre le bloquait pour toujours. Il n'a pas
   // échoué ; l'interface le montre comme reprenable, à part des runs bloqués.
   if (s.status === 'interrupted') return false
   // Même cas pour un RUN.md écrit AVANT `status: interrupted` (d7d3765c) : il porte `red`, et
-  // seule sa ligne de clôture dit qu'il a été coupé (conv-1069 : 10 Stop et 29 quotas sur le poste).
+  // seule sa ligne de clôture dit qu'il a été coupé (10 Stop et 29 quotas sur le poste).
   if (s.status === 'red' && s.interruption) return false
   return (
     ['pending', 'running', 'open', 'failed', 'red', 'unknown'].includes(s.status) ||
@@ -59,8 +59,8 @@ export function isBlocked(s: {
 
 /**
  * Run à traiter dont la suite appartient à l'utilisateur : il ne se débloque pas, il attend sa
- * réponse. conv-1199 s'affichait « green · bloqué » pour une publication que lui seul pouvait
- * décider (scout conv-1332).
+ * réponse. Un fil s'affichait « green · bloqué » pour une publication que lui seul pouvait
+ * décider.
  *
  * `isBlocked` reste vrai pour ce run, et c'est voulu : une question écrite dans un bilan ne doit
  * pas suffire à faire sortir un run de la liste à traiter. Les écrans qui montrent une PANNE (compteur
@@ -78,7 +78,7 @@ export function attendUneDecision(s: {
 
 /**
  * La mention écrite à côté du statut d'un run (rail de l'Observatoire). Un run INTERROMPU n'est
- * pas bloqué : on peut le relancer, et la limite de session le reprend seule (piste 4, conv-1070).
+ * pas bloqué : on peut le relancer, et la limite de session le reprend seule (piste 4).
  */
 export function mentionDEtatDuRun(s: {
   status: string

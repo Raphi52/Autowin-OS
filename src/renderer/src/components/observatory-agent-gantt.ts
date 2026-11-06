@@ -4,7 +4,7 @@ import { langueCourante } from '../langue'
 import { traduireObservatory } from '../textes-ecrans/observatory'
 
 /**
- * DÉROULÉ PAR AGENT de la Chronologie Observatory — demande utilisateur du 2026-10-11 (conv-232) :
+ * DÉROULÉ PAR AGENT de la Chronologie Observatory — demande utilisateur du 2026-10-11 :
  * « j'aimerais une vue comme ça dans observatory chronology », capture à l'appui d'un diagramme en
  * barres — une ligne par agent (orchestrateur, scout-1, judge-2…), une barre par exécution posée
  * sur un axe en minutes, le refus du juge en rouge, une bulle au survol (modèle, tokens, coût,
@@ -67,7 +67,7 @@ export interface AgentLane {
   model?: string
   /**
    * Sous-titre de la ligne quand ce n'est pas un modèle : une ligne d'OUTIL (`outil · 3 appels`),
-   * qui n'a pas de modèle à afficher (conv-1105).
+   * qui n'a pas de modèle à afficher.
    */
   detail?: string
   /** Seulement sur la ligne de l'orchestrateur : le tour entier, sous ses propres réponses. */
@@ -161,7 +161,7 @@ export function blockedReason(
   )?.[1]
   if (!first) return firstLine(reason, 220)
   const rest = count - 1
-  // Deux phrases entières (singulier, pluriel) : l'accord ne se recolle pas mot à mot (conv-1170).
+  // Deux phrases entières (singulier, pluriel) : l'accord ne se recolle pas mot à mot.
   const reste =
     rest > 1
       ? traduireObservatory('ganttModele.autresObjections', langue, { n: rest })
@@ -264,8 +264,8 @@ function buildLaneSpans(
   }
 
   // Actions réelles : les appels d'outil du même agent qui tombent dans la barre. Ils sont écrits
-  // dans la trace À LA FIN de l'agent, quelques ms APRÈS sa délégation terminée (mesuré sur
-  // conv-222 : fin 21:35:00.148, outils 21:35:00.150 → .160) — d'où la tolérance après la fin.
+  // dans la trace À LA FIN de l'agent, quelques ms APRÈS sa délégation terminée (mesuré
+  // Fin 21:35:00.148, outils 21:35:00.150 → .160) — d'où la tolérance après la fin.
   const toolTimes = laneEvents
     .filter((event) => event.kind === 'tool-call')
     .map(time)
@@ -279,7 +279,7 @@ function buildLaneSpans(
 }
 
 /**
- * LIGNES D'OUTILS (conv-1105) : « observatory doit ressembler au graph timeline des bilans de runs ».
+ * LIGNES D'OUTILS : « observatory doit ressembler au graph timeline des bilans de runs ».
  * Un tour de chat n'a qu'un agent, l'orchestrateur ; ce sont ses OUTILS qui font le déroulé. Seuls
  * ses propres appels ont une ligne : ceux d'un agent de run restent comptés dans SA barre (actions).
  */
@@ -380,7 +380,7 @@ export function buildGanttTicks(start: number, end: number): AgentGanttTick[] {
  * Déroulé par agent d'un tour, ou null s'il n'y a rien à mettre en barres. Un tour de simple
  * conversation n'a qu'un couloir (l'orchestrateur) : `minLanes` permet de ne montrer le diagramme
  * que quand il apprend quelque chose que la liste ne dit pas déjà. `outils` ajoute une ligne par outil
- * de l'orchestrateur (conv-1105) : l'Observatory s'en sert pour donner aux tours de chat le même
+ * de l'orchestrateur : l'Observatory s'en sert pour donner aux tours de chat le même
  * graphe que le bilan d'un run ; le bilan, lui, garde ses seuls agents.
  */
 export function buildAgentGantt(
@@ -488,7 +488,7 @@ function isSupervisor(event: HarnessTimelineEvent): boolean {
 
 /**
  * Enveloppe du tour : le superviseur écrit plusieurs bilans par tour, chacun avec la durée écoulée
- * DEPUIS LE DÉBUT du tour (mesuré sur conv-106 : 20 364 089, puis 20 390 088, puis 21 602 780 ms).
+ * DEPUIS LE DÉBUT du tour (mesuré : 20 364 089, puis 20 390 088, puis 21 602 780 ms).
  * Ils se recouvrent donc : on garde le début le plus tôt et la fin la plus tardive, et l'issue du
  * DERNIER bilan.
  */
@@ -526,13 +526,13 @@ export function spanGeometry(
   return { left: Math.max(0, left), width: Math.min(100 - Math.max(0, left), width) }
 }
 
-/** Duree du rejeu d'un run depuis son bilan (conv-981) : 10 s, quel que soit le nombre d'etapes. */
+/** Duree du rejeu d'un run depuis son bilan : 10 s, quel que soit le nombre d'etapes. */
 export const DUREE_REJEU_MS = 10_000
 /** Une barre tres courte reste visible pendant le rejeu. */
 const DUREE_MIN_REJEU_MS = 160
 
 /**
- * Minutage d'une barre pendant « Rejouer ce run » (conv-981) : elle s'allume a son heure, a
+ * Minutage d'une barre pendant « Rejouer ce run » : elle s'allume a son heure, a
  * l'echelle du run ramene a 10 s. Deduit de `spanGeometry` (gauche et largeur en %) — aucun second
  * modele. Une barre tres courte dure au moins 160 ms, sans jamais depasser la fin du rejeu.
  */

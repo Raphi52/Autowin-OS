@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { memeRefus } from './stopgate'
 
 /**
- * conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : 20 reparations payees pour le meme refus.
+ * Tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 : 20 reparations payees pour le meme refus.
  * Le motif « Promis mais pas fait » recopie les objections du juge, et ces objections contiennent
  * elles-memes des guillemets francais. La paire «…» la plus courte s'arrete donc au premier »
  * INTERIEUR, et tout le texte qui suit reste compare mot pour mot alors qu'il est reformule a

@@ -13,21 +13,21 @@ import { POSTIT_H } from './carte-riviere'
 import { CLE_ETATS_MANUELS_CARTE } from './etats-manuels-carte'
 
 /**
- * LA RIVIÈRE DE LA CARTE DU PROJET (/draft conv-1113, « implémente 1+2 »). ENTRÉES QUI DOIVENT
+ * LA RIVIÈRE DE LA CARTE DU PROJET (« implémente 1+2 »). ENTRÉES QUI DOIVENT
  * FAIRE ÉCHOUER : une colonne la plus large qui ne suit pas la molette (proposition 2), une souris
  * qui déplace encore la loupe (proposition 1 retirée : « laisse que la roulette »), une molette qui
  * bloque le défilement de la page en butée, une loupe qui bouge quand la fiche est ouverte, un
  * post-it glissé qui ne change pas d'étage ou dont l'état n'est pas gardé. Remonter le temps
- * (conv-1131, « enlève le filtre 2 semaines, on doit pouvoir remonter à l'infini ») : un bouton de
+ * (« enlève le filtre 2 semaines, on doit pouvoir remonter à l'infini ») : un bouton de
  * période qui reste, une molette qui bute avant le plus vieux fil, une frise qui s'allonge au lieu
  * de glisser, une loupe qui sort du tableau, un retour au présent absent ou qui laisse la fiche figer
  * la molette.
  * Seule dans sa vue, et « tout doit rentrer dans l'écran en hauteur » : un tableau plus haut que la
  * place offerte, un post-it sous son bas, une molette qui ferait défiler quoi que ce soit.
  * Puis : un jour chargé sous la loupe qui reste à 3 de front.
- * Enfin (conv-1130, « quand je click sur une colonne du board ca doit me scroll dessus ») : un clic
+ * Enfin (« quand je click sur une colonne du board ca doit me scroll dessus ») : un clic
  * sur une colonne qui n'y amène pas la loupe, ou un clic sur un post-it qui la déplace. Puis
- * (conv-1135) : une colonne cliquée laissée au bord au lieu d'être posée au milieu de la frise.
+ * Une colonne cliquée laissée au bord au lieu d'être posée au milieu de la frise.
  */
 
 const MAINTENANT = new Date(2026, 9, 23, 15, 0).getTime()
@@ -162,8 +162,8 @@ describe('RiviereDuProjet', () => {
     }
     // Le fond d'un étage couvre les colonnes : c'est lui que la souris touche sur le tableau.
     const etage = el.querySelector('[data-testid="riviere-etage"]') as HTMLElement
-    // conv-3 vit au jour 4 (9 jours avant) : un clic sur sa colonne la pose au MILIEU de la frise
-    // (conv-1135), la frise reculant de 3 jours — pas au bord, où elle restait avant.
+    // vit au jour 4 (9 jours avant) : un clic sur sa colonne la pose au MILIEU de la frise
+    // La frise reculant de 3 jours — pas au bord, où elle restait avant.
     expect(postit(el, 'conv-3').dataset.jour).toBe('4')
     await act(async () => clic(etage, milieu(el, 4)))
     expect(Number(tableau(el).dataset.recul)).toBe(3)
@@ -177,7 +177,7 @@ describe('RiviereDuProjet', () => {
     expect(Number(tableau(el).dataset.recul)).toBe(10)
     expect(plusLarge(el)).toBe(7)
     expect(postit(el, 'conv-5').dataset.jour).toBe('3')
-    // conv-5 : son clic ouvre sa fiche, la loupe et la frise restent où elles étaient.
+    // Son clic ouvre sa fiche, la loupe et la frise restent où elles étaient.
     await act(async () => postit(el, 'conv-5').click())
     expect(el.querySelector('[data-testid="riviere-fiche"]')).not.toBeNull()
     expect(plusLarge(el)).toBe(7)
@@ -297,7 +297,7 @@ describe('RiviereDuProjet', () => {
     expect(postit(el, 'conv-1').dataset.estompe).toBe('true')
   })
 
-  // conv-1329 : « filtre par projet dans le board en plus du filtre par personne ».
+  // « filtre par projet dans le board en plus du filtre par personne ».
   it('filtre par projet, en plus du filtre par personne', async () => {
     const menu = (el: HTMLElement): HTMLSelectElement | null =>
       el.querySelector('[data-testid="riviere-projet"]')
@@ -352,7 +352,7 @@ describe('RiviereDuProjet', () => {
     expect(noms()).toEqual(['Raph', 'Léa'])
 
     await choisir('zoxv3')
-    // Seule Léa a un post-it sur ZOX-V3 (conv-1329) : Raph quitte la liste des noms.
+    // Seule Léa a un post-it sur ZOX-V3 : Raph quitte la liste des noms.
     expect(noms()).toEqual(['Léa'])
     expect(postit(el, 'conv-7').dataset.estompe).toBeUndefined()
     expect(postit(el, 'conv-1').dataset.estompe).toBe('true')
@@ -366,7 +366,7 @@ describe('RiviereDuProjet', () => {
       expect(postit(el, id).dataset.estompe).toBeUndefined()
     expect(postit(el, 'conv-7').dataset.estompe).toBe('true')
 
-    // Les deux filtres se cumulent : Léa sur AutoWinOS = conv-4 seul.
+    // Les deux filtres se cumulent : Léa sur AutoWinOS = seul.
     const lea = [...el.querySelectorAll<HTMLElement>('[data-testid="riviere-personne"]')].find(
       (b) => b.textContent === 'Léa'
     )!
@@ -426,7 +426,7 @@ describe('RiviereDuProjet', () => {
           new WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true })
         )
     })
-  // La ligne de compte en tête a été retirée (conv-1226) : la fenêtre se lit dans l'aria-label.
+  // La ligne de compte en tête a été retirée : la fenêtre se lit dans l'aria-label.
   const fenetre = (el: HTMLElement): string =>
     el.querySelector('[data-testid="riviere"]')?.getAttribute('aria-label') ?? ''
   const auJourdhui = (el: HTMLElement): HTMLElement | null =>
@@ -442,7 +442,7 @@ describe('RiviereDuProjet', () => {
     expect(fenetre(el)).toBe('La rivière, les 14 derniers jours')
     expect(auJourdhui(el)).toBeNull()
 
-    // 40 crans d'une demi-journée : 20 jours en arrière, le jour de conv-5.
+    // 40 crans d'une demi-journée : 20 jours en arrière, le jour.
     await molette(el, 40)
     expect(largeurs(el)).toHaveLength(14)
     expect(Number(tableau(el).dataset.recul)).toBe(10)

@@ -3,7 +3,7 @@ import { traduireChatPanneaux } from '../textes-ecrans/chat-panneaux'
 
 // Etapes git proposees par l'onglet Git. Hors de SourceControlPane.tsx : un fichier de composant
 // ne doit exporter que des composants (react-refresh/only-export-components).
-// `label` et `detail` suivent la langue de l'interface (conv-1170) : appelés pendant le rendu du
+// `label` et `detail` suivent la langue de l'interface : appelés pendant le rendu du
 // panneau, qui lit la langue. `prompt` reste en français : c'est la consigne envoyée à l'agent.
 export type EtapeGit = { label: string; detail: string; prompt: string }
 

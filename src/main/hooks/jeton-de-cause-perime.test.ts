@@ -7,7 +7,7 @@ import { jetonsDeCauseParFichier } from './default-gate-hooks'
 
 /**
  * UN VIEUX `fix-ok:` NE VAUT PAS LAISSEZ-PASSER PERPETUEL (default-gate-hooks.ts, commentaire de
- * `jetonsDeCauseParFichier`). La regle n'etait ecrite qu'en prose : kaizen conv-113 (reparation 2,
+ * `jetonsDeCauseParFichier`). La regle n'etait ecrite qu'en prose : kaizen (reparation 2,
  * commit d1b97289) l'a cassee avec tous les tests au vert, en lisant l'attente ET le dernier
  * commit ensemble. Effet : un run qui modifie a l'aveugle un fichier dont le dernier commit porte
  * une cause etait credite par cette vieille cause. Ce test la rend deterministe.

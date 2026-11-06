@@ -8,7 +8,7 @@ import { attendreEcrituresConversations, persistConversations } from './conversa
 /**
  * UN SEUL message « Reprise du fil » PAR CHANTIER, mis à jour au lieu d'être empilé.
  *
- * Vécu dans conv-913 (2026-10-13) : le chantier run-4e20c71a5f68-1 a traversé deux redémarrages de
+ * Vécu (2026-10-13) : le chantier run-4e20c71a5f68-1 a traversé deux redémarrages de
  * l'app (10:17 puis 10:26). À chacun, le processus principal a AJOUTÉ un nouveau récapitulatif en bas
  * du fil. Deux bulles « Reprise du fil… » pour le même chantier, dont la seconde cachait à l'écran le
  * tour encore vivant.
@@ -70,7 +70,7 @@ describe('ConversationStore — reprise du fil d’un chantier', () => {
     expect(apres.get(c.id)!.messages.map((m) => m.content)).toEqual(['reprise 1 + 2'])
 
     // Et la mise à jour elle-même est écrite : un troisième démarrage la relit. Les écritures de la
-    // session précédente sont posées d'abord (compaction de démarrage hors du fil principal, conv-359).
+    // session précédente sont posées d'abord (compaction de démarrage hors du fil principal).
     await attendreEcrituresConversations()
     const encoreApres = new ConversationStore(() => 3000)
     persistConversations(encoreApres, p)

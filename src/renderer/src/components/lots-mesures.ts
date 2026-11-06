@@ -15,7 +15,7 @@ import {
 import { formatDuration, summarizeConversationCost, type CostRow } from './conversation-cost'
 
 /*
- * LES MESURES D'UN PLAN DE LOTS, PARTAGÉES PAR SES DEUX ÉCRANS (conv-1305, 2026-10-30) : le tableau
+ * LES MESURES D'UN PLAN DE LOTS, PARTAGÉES PAR SES DEUX ÉCRANS (2026-10-30) : le tableau
  * des lots au-dessus de la saisie du chef (`TableauDesLots.tsx`) et la frise de la super conv dans
  * la mosaïque (`SuperConvMosaique.tsx`). Déplacées telles quelles depuis TableauDesLots.tsx — un
  * fichier de composant ne peut exporter que des composants (react-refresh/only-export-components) —
@@ -23,7 +23,7 @@ import { formatDuration, summarizeConversationCost, type CostRow } from './conve
  */
 
 /*
- * RÉDUIRE LE TABLEAU (conv-1283, 2026-10-29) : posé au-dessus de la zone de saisie, il prenait
+ * RÉDUIRE LE TABLEAU (2026-10-29) : posé au-dessus de la zone de saisie, il prenait
  * jusqu'à 340 px pendant tout le plan, sans moyen de le replier. Réduit, il ne garde que sa ligne
  * de titre et de statut. Retenu sur le poste, par plan : sans cela, il se rouvrait à chaque
  * changement de fil ou rechargement.
@@ -49,7 +49,7 @@ export function retenirReduits(ids: string[]): void {
 }
 
 /*
- * DURÉE ET COÛT DE CHAQUE LOT (conv-1151, lot 4 — constat d'origine conv-1146 : plus de 20 $ dans un
+ * DURÉE ET COÛT DE CHAQUE LOT (lot 4 — constat d'origine : plus de 20 $ dans un
  * seul fil, sans que rien ne le montre). Le coût d'un lot est celui de SON fil, lu par le même canal
  * `costBreakdown` et résumé par le même `summarizeConversationCost` que la pastille de coût du fil
  * (ConversationCostIndicator) : un second calcul serait une seconde vérité. Un fil sans appel mesuré,
@@ -159,7 +159,7 @@ export function useCoutsDesLots(plan: PlanDeLots | null): CoutsParFil {
 }
 
 /**
- * CE QUE DIT CHAQUE LOT (conv-1315, 2026-10-30), lu par le processus principal, qui tient tous les
+ * CE QUE DIT CHAQUE LOT (2026-10-30), lu par le processus principal, qui tient tous les
  * fils : un lot jamais ouvert a donc sa phrase comme les autres. Relu quand un lot change d'état ou
  * se termine, et à chaque `releve` de l'horloge de la frise, qui ne bouge que si un lot tourne : un
  * plan immobile ne redemande rien.
@@ -207,7 +207,7 @@ export function coutTotalDesLots(plan: PlanDeLots, couts: CoutsParFil, langue: L
 }
 
 /*
- * RELANCER UN LOT AU CLIC (conv-1151, lot 3). Avant ce bouton, seul l'agent du chef relançait un lot
+ * RELANCER UN LOT AU CLIC (lot 3). Avant ce bouton, seul l'agent du chef relançait un lot
  * en échec (`plan_de_lots`, action « relancer ») : l'utilisateur, qui voyait l'échec ici, devait lui
  * écrire. La décision « permis » est celle de `relancerLot` — la règle même que le geste exécutera
  * dans le coordinateur, jamais une seconde copie.
@@ -215,7 +215,7 @@ export function coutTotalDesLots(plan: PlanDeLots, couts: CoutsParFil, langue: L
 
 /*
  * ARRÊTER ET REPRENDRE UN PLAN AU CLIC : les mêmes statuts pour le tableau des lots et la case de
- * mosaïque (conv-1315), pour qu'un bouton n'existe pas ici et manque là.
+ * mosaïque, pour qu'un bouton n'existe pas ici et manque là.
  */
 const STATUTS_REPRENABLES = new Set<PlanDeLots['statut']>([
   'suspendu-quota',
@@ -244,7 +244,7 @@ export function relanceAuClic(
   lot: LotDuPlan,
   langue: Langue
 ): { possible: true } | { possible: false; raison: string } | null {
-  // conv-1284 : un lot qui attend le chef se relance aussi (même règle que `relancerLot`).
+  // Un lot qui attend le chef se relance aussi (même règle que `relancerLot`).
   if (lot.etat !== 'echec' && lot.etat !== 'interrompu' && lot.etat !== 'attend-chef') return null
   if (relancerLot(plan, lot.rang).ok) return { possible: true }
   // Le seul refus qui garde un bouton : sans lui, l'utilisateur ne saurait pas pourquoi rien ne
@@ -322,7 +322,7 @@ export function usePlanDuChef(chef: string | null): PlanDeLots | null {
 const AUCUN_ANCIEN: readonly PlanDeLots[] = []
 
 /**
- * Les plans de `chef` qu'il ne montre plus et dont un lot a un fil (geste « anciens », conv-1394),
+ * Les plans de `chef` qu'il ne montre plus et dont un lot a un fil (geste « anciens »),
  * le plus récent d'abord, relus aux mêmes signaux que `usePlanDuChef`. Liste vide sans chef, si le
  * canal manque ou si l'app ne connaît pas encore ce geste (processus principal pas redémarré).
  */

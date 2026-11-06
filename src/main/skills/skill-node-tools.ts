@@ -71,13 +71,13 @@ export interface AppelOutil {
 }
 
 /**
- * LE LANCEUR QUI COMPTE LES NOTES DÉPOSÉES AU BRAIN (conv-339).
+ * LE LANCEUR QUI COMPTE LES NOTES DÉPOSÉES AU BRAIN.
  *
  * L'étape `learn` écrit ses notes par `remember`, à travers ce lanceur (outils natifs ou repli
  * texte), SANS conversation ni tour : le suivi des leçons (`outcome-learning-supervisor.ts`) n'en
  * voit donc rien, et la bulle disait « Brain : aucune leçon proposée » sous un run qui venait d'en
  * déposer deux en revue. Seule une écriture CONFIRMÉE (`stored: true`) compte.
- * fix-ok: conv-339, notes du 18/10 22:34 dans inbox/ (source « session:current », jamais rattachée
+ * fix-ok: notes du 18/10 22:34 dans inbox/ (source « session:current », jamais rattachée
  * au tour) et trace « remember (learn) : ok — ecrit » ×3 du kaizen suivant, sous « aucune leçon ».
  */
 export function lanceurQuiCompteLesNotes(
@@ -177,7 +177,7 @@ export function compteRenduDesOutils(appels: readonly AppelOutil[]): string {
  * POURQUOI ENGENDRE ET NON ECRIT A LA MAIN. La premiere version listait les arguments de memoire :
  * elle annoncait `brain_query {"query": ...}` quand la commande attend `question`, et `remember`
  * sans `scope` ni `source` alors que les deux sont OBLIGATOIRES. Consequence mesuree sur le run
- * reel `conv-1339` : le nœud a bien emis sa commande, le bus l'a bien recue, et elle est revenue
+ * reel : le nœud a bien emis sa commande, le bus l'a bien recue, et elle est revenue
  * « question manquante ou invalide ». L'outil etait branche, teste, et inutilisable — parce que la
  * documentation que le modele lit ne decrivait pas la fonction qu'il appelle.
  *

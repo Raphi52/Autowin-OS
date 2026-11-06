@@ -14,16 +14,16 @@ import { isAbsolute, resolve } from 'node:path'
  * Ce lecteur extrait ces objections pour que la boucle de réparation B5 (déjà en place) s'en
  * saisisse comme de n'importe quel refus : corriger, puis rejuger.
  *
- * fix-ok: conv-539 tour 24e29815-0cbd-4310-8cda-93207e237015 — juge « VALIDE SCORE 68 » avec objections
+ * fix-ok: tour 24e29815-0cbd-4310-8cda-93207e237015 — juge « VALIDE SCORE 68 » avec objections
  * jamais remises a la reparation ; puis « Aucune capture... » jete comme liste vide (e8da1596, a1243dbe).
  */
 
 /**
  * LE CONTRAT DES OBJECTIONS, ÉCRIT UNE SEULE FOIS, À CÔTÉ DE LA RÈGLE QUI LE LIT.
  *
- * fix-ok: run-85d8e7f57af2-1 (conv-892, 2026-10-01) — trois VALIDE (84, 86, 88) ont chacun relancé
+ * fix-ok: run-85d8e7f57af2-1 (2026-10-01) — trois VALIDE (84, 86, 88) ont chacun relancé
  * une réparation. Cause : le contrat était recopié à quatre endroits (phase-briefs.ts, trois prompts
- * d'orchestrator.ts), qui définissait MINEUR comme une « réserve non bloquante », alors que depuis conv-844 (2026-09-24)
+ * d'orchestrator.ts), qui définissait MINEUR comme une « réserve non bloquante », alors que depuis le 2026-09-24
  * `objectionsDuJuge` bloque sur tout MINEUR (seul OK passe) : aucune copie n'avait suivi. Les juges y
  * rangeaient des réserves qu'aucune réparation ne lève (publication faite par l'app APRÈS le VALIDE,
  * mesure qui attend 10 runs après la fusion). Le texte et la règle vivent donc ici, ensemble.
@@ -36,7 +36,7 @@ Un défaut corrigeable dans ce run n'est jamais OK. Une puce OK ne bloque pas et
 Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que sur la première ligne (le lecteur machine le prendrait pour un rejet).`
 
 /**
- * LA SECTION FACULTATIVE DES QUESTIONS AU BUILD (conv-1139, 2026-10-25, étape 2 de l'option A du
+ * LA SECTION FACULTATIVE DES QUESTIONS AU BUILD (2026-10-25, étape 2 de l'option A du
  * cadrage forum-agents-partie2-juge-build), écrite ici, à côté de `questionsDuJuge` qui la lit.
  *
  * fix-ok: phase-briefs.test.ts:14 (mesuré le 2026-10-25) — ajoutée à CONTRAT_OBJECTIONS, elle portait
@@ -47,11 +47,11 @@ Aucune objection → une seule puce « - aucune ». N'écris le mot DEFAUT que s
 export const CONTRAT_QUESTIONS_AU_BUILD = `Facultatif, APRÈS les objections et seulement quand tu refuses : une section « QUESTIONS AU BUILD: », une puce par question (3 au plus, 2 000 caractères au plus chacune), pour une INFORMATION que le build détient et que tu ne peux pas établir toi-même (« as-tu lancé … et avec quel code de sortie ? », « d'où vient … ? ») — jamais « corrige X », qui est une objection. Si ton refus ne porte aucune objection MAJEUR ou MINEUR, l'app pose ces questions au build AVANT toute réparation, puis te fait rejuger avec sa réponse : cette réponse est une donnée rapportée, pas une preuve — rejuge sur tes propres preuves. Sinon, elles partent avec la réparation. Sans question, n'écris pas cette section.`
 
 /**
- * LA LEÇON REFUSÉE, réserve NON bloquante (conv-1149, 2026-10-25). Sur conv-1146, cinq refus
+ * LA LEÇON REFUSÉE, réserve NON bloquante (2026-10-25). Cinq refus
  * d'affilée du juge (réparations 11 à 15) ne portaient que sur la leçon proposée en fin de résultat :
  * chacun relançait build + nettoyage + juge. La consigne du juge (`phase-briefs.ts`) range désormais
  * ce défaut en « OK: leçon refusée — <raison> » ; ce lecteur dit au code de ne pas l'enregistrer.
- * Un « MINEUR » n'aurait rien changé : depuis conv-844, il bloque la clôture.
+ * Un « MINEUR » n'aurait rien changé : il bloque la clôture.
  */
 const PUCE_LECON_REFUSEE =
   /^\s*(?:[-*•]|\d+[.)])?\s*\**\s*OK\s*\**\s*:\s*\**\s*le[çc]on\s+refus[ée]e\b/im
@@ -63,7 +63,7 @@ export function leconRefuseeParLeJuge(texteDuJuge: string): boolean {
 
 const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
 /**
- * La section facultative des questions au build (conv-1139, étape 2 de l'option A du cadrage
+ * La section facultative des questions au build (étape 2 de l'option A du cadrage
  * forum-agents-partie2-juge-build). Insensible à la casse : « Questions au build: » n'est pas une
  * `AUTRE_SECTION` (majuscules seules), et sans cette entête ses puces seraient lues comme des
  * objections non étiquetées, donc MAJEUR — la question deviendrait un refus.
@@ -79,7 +79,7 @@ const PUCE = /^\s*(?:[-*•]|\d+[.)])\s+/
 const PUCE_MAJEUR = /^\s*(?:[-*•]|\d+[.)])\s+\**\s*MAJEUR\s*\**\s*:/im
 const ETIQUETTE = /^\**\s*(MAJEUR|MINEUR|OK)\s*\**\s*:\s*\**\s*/i
 /** « aucune », « aucun », « rien à signaler », « n/a », « néant » — la forme contractuelle du vide. */
-// Ligne ENTIÈRE seulement : « Aucune capture du mode sombre » est une objection (conv-539).
+// Ligne ENTIÈRE seulement : « Aucune capture du mode sombre » est une objection.
 const VIDE =
   /^(aucune?(\s+(objections?|ecarts?|defauts?|reserves?))?|rien(\s+a\s+signaler)?|neant|n\/?a|non|ras)\s*[.!]?$/
 
@@ -107,7 +107,7 @@ function objectionsClassees(
   /*
    * DANS UN VERDICT QUI PORTE DEJA UNE PUCE `MAJEUR:`, UNE PUCE NUE N'EST PAS UN DEFAUT MAJEUR.
    *
-   * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f - verdict AGREGE d'un panel :
+   * fix-ok: tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f - verdict AGREGE d'un panel :
    * `verdictPanelValide` etiquette MAJEUR les seules puces du membre qui vote DEFAUT, et laisse
    * NUES celles des membres APPROBATEURS. La regle "non etiquete = majeur" retenait alors TOUT :
    * le controle de 09:53:28.450 a recopie en "Promis mais pas fait" des verifications REUSSIES
@@ -120,7 +120,7 @@ function objectionsClassees(
   const objections: Array<{ gravite: string | null; texte: string }> = []
   let dansLaSection = false
   /*
-   * fix-ok: run-0940cc5e0fcd-1 (conv-857, 2026-09-26) reparation 13 — le juge rend VALIDE 86 ; sa puce
+   * fix-ok: run-0940cc5e0fcd-1 (2026-09-26) reparation 13 — le juge rend VALIDE 86 ; sa puce
    * « OK: Chaque correction annoncee existe dans le code : » porte 9 sous-puces indentees, sans etiquette
    * propre, donc retenues comme objections : le controle final en a recite 8 en « Promis mais pas fait »
    * et masque les 4 MINEUR. Mesure : objections.mineur.test.ts rouge (2/5) avant, vert apres.
@@ -151,7 +151,7 @@ function objectionsClassees(
     const contenu = ligne.replace(PUCE, '').trim()
     if (!contenu) continue
     if (VIDE.test(normaliser(contenu))) continue
-    // fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (reparation 3) — un VALIDE 74 dont les puces
+    // fix-ok: tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (reparation 3) — un VALIDE 74 dont les puces
     // etaient des constats (« 54 sur 54 passent ») ou des reserves mineures devenait « Promis mais pas fait ».
     // Saisie ts 1789462078031 : le tour finit quand il n'y a plus de defaut MAJEUR. Non etiquete = majeur.
     const etiquette = ETIQUETTE.exec(contenu)
@@ -160,7 +160,7 @@ function objectionsClassees(
     const gravite = etiquette ? etiquette[1] : sousPuce && parente ? parente.etiquette : null
     if (!sousPuce) parente = { retrait, etiquette: etiquette ? etiquette[1] : null }
     // Etiquette bornee au VALIDE : sur un refus, MINEUR/OK ne masquent pas les raisons (reparation 4).
-    // fix-ok: conv-844 (2026-09-24) — run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont
+    // fix-ok: (2026-09-24) — run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont
     // une puce MINEUR etait un vrai trou (drapeau `orientation` jamais transmis par run-pilot-chat.ts).
     // Decision utilisateur : tout defaut du juge, meme MINEUR, bloque la cloture verte. Seul OK passe.
     if (gravite && !toutesGravites && /^ok$/i.test(gravite)) continue
@@ -176,15 +176,15 @@ function objectionsClassees(
 /**
  * UN /scout NOMMÉ NE PAIE PAS UN NOUVEAU PASSAGE POUR DES OBJECTIONS MINEUR SEULES.
  *
- * fix-ok: conv-976 tour a0d81c84 (2026-10-15, run scout-nouvelles-ameliorations-induites-mv9ia9nw) —
+ * fix-ok: tour a0d81c84 (2026-10-15, run scout-nouvelles-ameliorations-induites-mv9ia9nw) —
  * 7 juges et 6 passages de scout, 23 min, ~8,8 $. Seul le 1er verdict portait un MAJEUR ; les
  * verdicts 2 à 6 ne portaient QUE des MINEUR (« 10 fichiers » au lieu de 22, « cinq vérifications »
  * au lieu de six) et relançaient chacun scout + juge (~5,6 $). Une liste de pistes est un livrable
  * OUVERT : chaque correction ajoute des ancres `fichier:ligne`, donc de nouvelles prises pour un
  * MINEUR, et le frein « même refus » ne mord jamais puisque l'objection change à chaque passage.
  *
- * Décision utilisateur (conv-977) : sur un `/scout` nommé, des MINEUR seuls deviennent des RÉSERVES
- * ajoutées au résultat (`resultatAvecReservesDuJuge`). La règle conv-844 (« tout MINEUR bloque »)
+ * Décision utilisateur : sur un `/scout` nommé, des MINEUR seuls deviennent des RÉSERVES
+ * ajoutées au résultat (`resultatAvecReservesDuJuge`). La règle (« tout MINEUR bloque »)
  * reste entière partout ailleurs, et d'abord sur build.
  *
  * Rend les textes des MINEUR quand TOUTES les objections bloquantes sont étiquetées MINEUR, `[]`
@@ -199,9 +199,9 @@ export function reservesMineuresDuScout(phaseNommee: string | undefined, text: s
 }
 
 /**
- * UNE RELECTURE SEULE QUI A NOMMÉ CE QU'ELLE A VU EST LIVRÉE (piste 5, conv-1070).
+ * UNE RELECTURE SEULE QUI A NOMMÉ CE QU'ELLE A VU EST LIVRÉE (piste 5).
  *
- * Mesuré : conv-955, conv-984, conv-1043 et conv-1056 — quatre `/judge` sans autre phase ont fini
+ * Mesuré : quatre `/judge` sans autre phase ont fini
  * « Gate BLOQUÉ: Promis mais pas fait : « Objection du juge : … » » et `status: red`. Or la demande
  * était la relecture, et l'orchestrateur le dit déjà (« aucune réparation : la demande nomme le juge
  * seul, son verdict est la réponse »). Ses objections ne sont pas des promesses non tenues : elles
@@ -228,7 +228,7 @@ export function defautsDeLaRelectureSeule(
 
 /**
  * La ligne de Journal du RUN.md d'une relecture livrée avec défauts : elle remplace « Juge: validé
- * — clôture autorisée », qui contredisait le verdict affiché (objection du juge, conv-1070).
+ * — clôture autorisée », qui contredisait le verdict affiché (objection du juge).
  */
 export function ligneDeJournalDeRelecture(defauts: readonly string[], cout: string): string {
   const nombre = `${defauts.length} objection${defauts.length > 1 ? 's' : ''}`
@@ -262,7 +262,7 @@ const SUFFIXE_TEST = /\|?\s*\bTEST:\s*([^|]+?)\s*\|\s*(.+?)\s*$/
 
 /**
  * Les tests exécutables joints par le juge (`| TEST: <fichier> | <commande>`) à ses objections
- * BLOQUANTES seulement : le `TEST:` d'une puce OK ne relance rien. Piste 2 /build (conv-44) :
+ * BLOQUANTES seulement : le `TEST:` d'une puce OK ne relance rien. Piste 2 /build :
  * la réparation repartait d'une prose ; elle reçoit désormais l'échec à faire passer.
  */
 export function testsDuJuge(text: string): { fichier: string; commande: string }[] {
@@ -286,7 +286,7 @@ export function consigneTestsDuJuge(text: string): string {
 /** Début du motif de refus « test du juge retouché » — reconnu par `arretDeLaReparation` (stopgate). */
 export const PREFIXE_TEST_MODIFIE = 'Réparation refusée : le fichier de test désigné par le juge a été modifié'
 
-/** Clé stable d'un fichier `TEST:` : relatif ou absolu, `\` ou `/`, même clé (piège conv-539). */
+/** Clé stable d'un fichier `TEST:` : relatif ou absolu, `\` ou `/`, même clé. */
 function cleDuTest(fichier: string, racine: string): string {
   const abs = isAbsolute(fichier) ? fichier : resolve(racine, fichier)
   return abs.replace(/\\/g, '/').replace(/^([a-z]):/, (_, l: string) => `${l.toUpperCase()}:`)
@@ -294,7 +294,7 @@ function cleDuTest(fichier: string, racine: string): string {
 
 /**
  * Empreinte (sha256) de chaque fichier `TEST:` désigné par le juge ; `null` si le fichier n'existe pas.
- * Piste 2 /build (conv-44) : la consigne « SANS modifier le fichier de test » n'était qu'une phrase.
+ * Piste 2 /build : la consigne « SANS modifier le fichier de test » n'était qu'une phrase.
  */
 // fix-ok: la consigne « SANS modifier le fichier de test » (consigneTestsDuJuge) n'était qu'une phrase de prompt ; aucun code ne la faisait respecter (grep testsDuJuge = 1 seul site). Empreinte sha256 avant/après la réparation.
 export function empreintesTestsDuJuge(text: string, racine: string): Record<string, string | null> {
@@ -338,7 +338,7 @@ export function motifsTestModifie(
 /**
  * La DoD que le contrôle final reçoit d'un verdict : UNE case par objection, libellée.
  *
- * Mesuré conv-539, tour 24e29815-0cbd-4310-8cda-93207e237015 : le juge rendait « VALIDE / SCORE 70 /
+ * Mesuré, tour 24e29815-0cbd-4310-8cda-93207e237015 : le juge rendait « VALIDE / SCORE 70 /
  * OBJECTIONS: … » (donc rouge), mais le contrôle recevait une case muette. Ses motifs restaient
  * « Échec déjà déclaré ; Promis mais pas fait : 1 point(s) » : le build de réparation (08:45:37) a
  * lu ces motifs comme « mes propres réserves » et n'a rien changé, puis l'arrêt « même refus 2 fois »
@@ -362,7 +362,7 @@ export function dodDuVerdict(
    * de verification REUSSIE. Les recopier une a une dans « Promis mais pas fait » accuse le travail
    * de defauts que le juge n'a pas retenus, et noie le VRAI motif (ici : echec amont).
    *
-   * fix-ok: conv-540 tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — les 4 appels du juge (ts 09:44:57.329,
+   * fix-ok: tour 8bc214db-8c48-4a29-880d-1ef4c4391d1f — les 4 appels du juge (ts 09:44:57.329,
    * 09:48:05.122, 09:51:14.024, 09:53:28.437) rendent VALIDE 72-74, et le controle de 09:53:28.450
    * affiche 6 « Objection du juge » en promesses non tenues, dont « les 11 commits existent bien…
    * 240 sur 240, code de sortie 0 » et « les 7 tests passent maintenant ». Le blocage reste (une case
@@ -390,7 +390,7 @@ export function dodDuVerdict(
 /**
  * Le juge a-t-il étiqueté AU MOINS UNE de ses puces (MAJEUR/MINEUR/OK) ?
  *
- * fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (réparations 17 à 19) — le juge rend
+ * fix-ok: tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb (réparations 17 à 19) — le juge rend
  * « VALIDE / SCORE 72 » avec des puces NON étiquetées, dont de purs constats (« 284 tests, tous
  * verts »). Règle « non étiqueté = MAJEUR » : son propre VALIDE était retourné en DEFAUT, donc un
  * juge qui ignore le format ne pouvait JAMAIS clore, et le refus « Promis mais pas fait » recitait
@@ -418,7 +418,7 @@ export function verdictAvecObjectionsPortees(text: string): string {
 /**
  * LE VERDICT AGRÉGÉ D'UN PANEL QUI PASSE NE JETTE PLUS LES OBJECTIONS DE SES MEMBRES.
  *
- * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — quatre passages de juge
+ * fix-ok: tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — quatre passages de juge
  * (promptCalls ts 09:47:42.375, 09:50:30.425, 09:55:17.497, 09:58:16.977) rendent des objections
  * concrètes ; le chemin panel d'`orchestrator.ts` réduisait un quorum atteint au seul mot
  * « VALIDE ». Les objections des membres n'arrivaient donc NI à la réparation NI à l'utilisateur :
@@ -432,7 +432,7 @@ export type MembreDuPanel = string | { text: string; ok: boolean }
 /**
  * UN MEMBRE QUI VOTE `DEFAUT:` RESTE UN DEFAUT, MEME MINORITAIRE.
  *
- * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — sur les 4 appels juge, celui de
+ * fix-ok: tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — sur les 4 appels juge, celui de
  * promptCalls ts 09:55:17.497 rend « DEFAUT: le tour n'est pas fini en reussite / SCORE: 66 », les
  * 3 autres « VALIDE ». Le quorum passait et les puces du dissident etaient recopiees NUES : non
  * etiquetees = verdict clos (regle de PUCE_ETIQUETEE). Le tour se terminait donc sur un DEFAUT
@@ -441,7 +441,7 @@ export type MembreDuPanel = string | { text: string; ok: boolean }
  * repart, et un panel sans dissident garde le comportement precedent (pas de boucle sans fin).
  */
 /*
- * fix-ok: conv-539 tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — les puces d'un membre APPROBATEUR
+ * fix-ok: tour 6ba33167-9b16-4dbb-8a5f-fd40207ed80e — les puces d'un membre APPROBATEUR
  * restaient nues, et la regle « non etiquete = MAJEUR » les retenait comme defauts : le controle
  * final recopiait en « Promis mais pas fait » des CONSTATS de verification reussie (reparation 2 :
  * « Les deux corrections existent et tiennent… 6 verts, code 0 »). Le vote du membre est connu ici :
@@ -449,7 +449,7 @@ export type MembreDuPanel = string | { text: string; ok: boolean }
  */
 function etiqueterSelonLeVote(puce: string, ok: boolean): string {
   if (PUCE_ETIQUETEE.test(`- ${puce}`)) return puce
-  // conv-844 : MINEUR bloque desormais ; une puce NUE d'un approbateur est un constat -> OK.
+  // MINEUR bloque desormais ; une puce NUE d'un approbateur est un constat -> OK.
   return ok ? `OK: ${puce}` : `MAJEUR: ${puce}`
 }
 
@@ -499,7 +499,7 @@ function objectionsBrutesDuJuge(text: string): string[] {
 }
 
 /**
- * LES QUESTIONS AU BUILD D'UN VERDICT, telles que le juge les a écrites (conv-1139, étape 2).
+ * LES QUESTIONS AU BUILD D'UN VERDICT, telles que le juge les a écrites (étape 2).
  *
  * Section `QUESTIONS AU BUILD:` seulement, close par l'entête suivante comme OBJECTIONS. « aucune »
  * (ligne entière) vaut une section absente ; une puce vide ou faite d'espaces est COMPTÉE dans

@@ -17,7 +17,7 @@ import { parseTeamsItemId, stripHtml, teamsItemId } from './watchdog-teams'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
- * Teams SANS connexion Microsoft (demande conv-854, 2026-09-25 : l'utilisateur ne peut pas se
+ * Teams SANS connexion Microsoft (demande, 2026-09-25 : l'utilisateur ne peut pas se
  * connecter lui-meme ; voie 1 + voie 2).
  *
  * Voie 1 — LECTURE : le client Teams deja connecte garde ses messages dans son IndexedDB
@@ -50,7 +50,7 @@ export function teamsLocalStoreDir(): string {
 
 /**
  * Voie de lecture Teams du watchdog. Graph seulement s'il est configure ET deja connecte (jeton
- * present) ; sinon, sous Windows, le stockage local du client Teams deja connecte. Avant (conv-770,
+ * present) ; sinon, sous Windows, le stockage local du client Teams deja connecte. Avant (
  * 2026-09-26) : un AUTOWIN_TEAMS_CLIENT_ID defini suffisait a choisir Graph, jamais connecte faute
  * de pouvoir saisir le code — le watchdog Teams restait « en pause » et la lecture locale ne servait jamais.
  */

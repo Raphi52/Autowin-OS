@@ -127,7 +127,7 @@ describe('navigation humaine synchronisée avec le main', () => {
     await act(async () => root.unmount())
   })
 
-  // conv-1126 : la vue `besoins` s'appelle « Board ». conv-1217 (2026-10-28) : son tableau à
+  // La vue `besoins` s'appelle « Board ». (2026-10-28) : son tableau à
   // post-it dessiné se fondait dans la pilule active violet-rose ; remplacé par l'émoji 📌
   // (proposition 5), plein comme ses voisins Tickets et Maintenance.
   it('affiche le Board avec la punaise 📌, sans l’ancien dessin', async () => {

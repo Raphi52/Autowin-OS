@@ -11,7 +11,7 @@ import {
 } from './session-memory-echo'
 
 /**
- * CORRIGER CE QUE L'AGENT A RETENU (conv-1038, 2026-10-21 — « carnet vivant du fil »).
+ * CORRIGER CE QUE L'AGENT A RETENU (2026-10-21 — « carnet vivant du fil »).
  *
  * La mémoire du fil n'existait que pour l'agent : l'utilisateur ne la voyait pas et ne pouvait pas
  * la corriger. Le carnet la montre ; barrer une ligne doit RETIRER le fait de l'écho, sinon l'agent

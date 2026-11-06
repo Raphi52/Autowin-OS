@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 /**
  * RENDRE UN LONG FIL PAR TRANCHES — cause des gels `vue-chat` (gels.jsonl : 859 gels, p95 ≈ 10 s).
  *
- * Mesuré le 2026-09-18 : ouvrir conv-526 (164 messages, 1,3 Mo) rendait tout le fil dans UN SEUL
+ * Mesuré le 2026-09-18 : ouvrir (164 messages, 1,3 Mo) rendait tout le fil dans UN SEUL
  * rendu React, 3,3 s pendant lesquelles la fenêtre ne répond plus. Une mise à jour en streaming,
  * elle, ne coûte que 2 ms : le gel vient bien de l'OUVERTURE du fil, pas du flux.
  *

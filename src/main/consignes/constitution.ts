@@ -12,7 +12,7 @@
  * elle vit dans `pipeline-discipline.ts` (addendum de phase), pour éviter la duplication qui a
  * tué l'ancien kit-soul.
  *
- * RÉÉCRITURE conv-1142 (2026-10-25) — demande « fais le nécessaire pour que la constitution soit
+ * RÉÉCRITURE (2026-10-25) — demande « fais le nécessaire pour que la constitution soit
  * parfaite aujourd'hui ». Le texte injecté passe de 19 879 à 18 172 caractères (remesuré le
  * 2026-10-25 après le retrait de la reprise après un Stop et la correction de « dis la fin ») : mêmes
  * 14 réflexes, mêmes numéros (le code, les consignes et les skills y renvoient par numéro). La
@@ -34,43 +34,43 @@
  *
  * ANCRAGE de la relance silencieuse (Autonomie, « dis la fin ») — l'ancien texte disait « mesuré 49
  * fois » et attribuait la relance à « Continue from where you left off. ». Recompté le 2026-10-25
- * (conv-1142) sur les 5 060 sessions du CLI : les 75 « Continue from where you left off. » suivent
+ * sur les 5 060 sessions du CLI : les 75 « Continue from where you left off. » suivent
  * TOUS un tour coupé (50 après un résultat d'outil sans réponse, 19 après un message sans réponse,
  * 6 après une erreur d'API), aucun un tour fini sans texte ; ce cas-là relève de
  * `reprise-apres-arret.ts`. Un tour fini sans texte visible (pensée seule) est relancé par un AUTRE
  * message méta du CLI, « [Your previous response had no visible output. Please continue and
  * produce a user-visible response.] », envoyé moins de 0,1 s après : 6 fois sur ces 5 060 sessions.
  * « No response requested. » est toujours une réponse synthétique du CLI (91 fois), jamais le modèle.
- * REPRISE APRÈS UN STOP — plus ici depuis conv-1142 (2026-10-25). Le CLI insère lui-même une
- * réponse synthétique « No response requested. » après un tour coupé (conv-798, tour
+ * REPRISE APRÈS UN STOP — plus ici depuis le 2026-10-25. Le CLI insère lui-même une
+ * réponse synthétique « No response requested. » après un tour coupé (tour
  * 556f1923-e1d1-403b-b43b-56dbf9248428). La phrase qui l'expliquait à CHAQUE tour est remplacée par
  * une note jointe au SEUL message qui suit un tour arrêté : `reprise-apres-arret.ts`.
  *
- * ANCRAGE du symptôme nu : demande utilisateur du 2026-09-02 dans conv-138 (saisie ts=1788375433820) —
+ * ANCRAGE du symptôme nu : demande utilisateur du 2026-09-02 (saisie ts=1788375433820) —
  * « je vais toujours faire que de lister des symptomes […] c'est a toi de t'adapter pour pas perdre
  * trop de temps et de token ». Elle ANNULE la préférence inverse posée à ts=1788351936324. Mesure qui
- * a fait naître l'escalier (commit 21036155, conv-138, tour 1fbd4d70-64fa-4086-80b3-bbf42259edd6) :
+ * a fait naître l'escalier (commit 21036155, tour 1fbd4d70-64fa-4086-80b3-bbf42259edd6) :
  * 3 471 481 tokens d'entrée, 181 s et 2,26 $ pour localiser une cause tenue dans UN fichier.
- * Revérifié le 2026-10-25 (conv-1142) : l'ancien texte disait « 3,4 M de tokens et 3 minutes pour un
+ * Revérifié le 2026-10-25 : l'ancien texte disait « 3,4 M de tokens et 3 minutes pour un
  * défaut d'une ligne » — la source parle d'un fichier, pas d'une ligne.
  *
- * ANCRAGE du réflexe 6 (« une PROMESSE n'est PAS une leçon ») : conv-335, 2026-10-18. Tour
+ * ANCRAGE du réflexe 6 (« une PROMESSE n'est PAS une leçon ») : 2026-10-18. Tour
  * ff240730-2bbf-49e3-9923-5db1839772ba : « écrire la leçon AVANT de continuer » a produit une leçon
  * fausse, que la saisie ts=1792363511920 a fait corriger. Tour d5bf24a1-958a-4c94-ad13-80b67a3a1fe0 :
  * ni elle ni sa correction n'étaient déposées — l'outil de mémoire refuse une règle de comportement,
  * et le repli « ÉCRIS-la dans ton livrable » finissait dans un texte que rien ne relit dans le chat.
- * Revérifié le 2026-10-25 (conv-1142) : source introuvable hors du commit 562d24d1 qui la cite.
- * conv-335 n'a aucun message ni événement après le 2026-09-07, et ces deux tours ne figurent dans
+ * Revérifié le 2026-10-25 : source introuvable hors du commit 562d24d1 qui la cite.
+ * Un fil n'a aucun message ni événement après le 2026-09-07, et ces deux tours ne figurent dans
  * aucune donnée conservée (conversations, archives, activité, journaux de tour).
  *
- * ANCRAGE du réflexe 14 (dépôt git partagé) : demande utilisateur conv-1024, 2026-10-20. Causes
- * mesurées : la mise à jour 45780edd (conv-1023) a tranché 10 fichiers en conflit, regroupés en 6
+ * ANCRAGE du réflexe 14 (dépôt git partagé) : demande utilisateur, 2026-10-20. Causes
+ * mesurées : la mise à jour 45780edd a tranché 10 fichiers en conflit, regroupés en 6
  * sujets dans son message de commit, dont 2 fonctions faites en double en local et sur le distant
  * (l'ancien texte disait « 6 conflits » ; recompté par git merge-tree le 2026-10-25) ; un stash du dossier partagé n'a pas pu être réappliqué (8
  * fichiers bougés entre-temps, Brain 2026-09-24) ; un add puis commit a publié l'état à moitié écrit
  * d'un autre run (Brain 2026-09-03, skills/arena/SKILL.md amputé de 67 lignes).
  *
- * ANCRAGE de la limite destructive : diagnostic conv-475 (2026-09-11). Le filtre de commandes laisse
+ * ANCRAGE de la limite destructive : diagnostic (2026-09-11). Le filtre de commandes laisse
  * passer `rm -rf /` (autorisation-commande.ts, AUTORISATION_GENERALE_PAR_DEFAUT) : la retenue d'un
  * geste irréversible vit ici et dans les gardes d'écriture, nulle part ailleurs.
  *

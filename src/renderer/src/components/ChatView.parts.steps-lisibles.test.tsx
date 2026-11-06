@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AssistantActivityGroup } from './ChatView.parts'
 
 /**
- * GRIEF UTILISATEUR (conv-1536) : « on sait pas ce que le model est en train de faire au premier
+ * GRIEF UTILISATEUR : « on sait pas ce que le model est en train de faire au premier
  * coup d'oeil » + « je veux un bouton pour extend et voir le detail de chaque step » + « l'actuel
  * n'a pas les degrades ».
  *
@@ -69,7 +69,7 @@ describe('les etages disent ce que le modele fait, un par un', () => {
   })
 
   it('un outil sans cible lisible reste affiche par son libelle, sans mentir', () => {
-    // Une orchestration seule est une capsule depuis conv-194 : l'etage se teste sur un autre outil.
+    // Une orchestration seule est une capsule : l'etage se teste sur un autre outil.
     render([action({ name: 'get_state', ok: true, args: {} })])
     expect(etages()[0]?.textContent).toContain('Lecture d’état')
   })
@@ -112,6 +112,6 @@ describe("chaque etage a son bouton d'extension", () => {
 
 /*
  * Les DEGRADES de la carte teintee (« l'actuel n'a pas les degrades ») ne sont plus verifies ici :
- * la barre a quitte la carte teintee pour le cadre « grand, deux lignes » (conv-904, 2026-10-12),
+ * la barre a quitte la carte teintee pour le cadre « grand, deux lignes » (2026-10-12),
  * dont le dessin est verrouille par anneau-activite.test.tsx.
  */

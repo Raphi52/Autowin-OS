@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MessageDuDecor, MessageVersDecor } from './decor-avenue-messages'
 
 /**
- * Le côté page du fond avenue dessiné dans un Worker (decor-avenue-hote.ts, conv-323). Mesure qui le
+ * Le côté page du fond avenue dessiné dans un Worker (decor-avenue-hote.ts). Mesure qui le
  * motive : 36 à 45 ms de fil principal par image de l'avenue, à 30 images/s — plus que le fil entier.
  */
 const repli = vi.hoisted(() => ({

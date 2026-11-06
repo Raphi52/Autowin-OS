@@ -3,7 +3,7 @@ import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 import { ESSAIS_AUTOMATIQUES_MAX } from './repechage-automatique'
 
 /**
- * LA VÉRIFICATION DE FOND NE TIENT PLUS LA FENÊTRE (conv-1055).
+ * LA VÉRIFICATION DE FOND NE TIENT PLUS LA FENÊTRE.
  *
  * Mesuré le 2026-10-21 à 20:14 (`gels.jsonl`) : un `execFileSync git status` de la base a figé la
  * fenêtre 60,1 s. Sa pile remontait à `baseDirtyFiles` (worktree-manager), dont le seul appelant

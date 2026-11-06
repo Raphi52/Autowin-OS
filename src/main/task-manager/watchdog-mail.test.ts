@@ -149,7 +149,7 @@ describe('Watchdog mail — agent en mode auto puis réponse au mail', () => {
 
 /**
  * fix-ok: rouge avant (porte absente, index.ts sans le drapeau), vert après : 10 tests.
- * Mesuré le 30/09 (conv-890) : une copie de TEST cachée, lancée sur un profil vierge
+ * Mesuré le 30/09 : une copie de TEST cachée, lancée sur un profil vierge
  * (`%TEMP%/awi/scoutsrep5b`), a posé elle-même « Assistant mails Outlook » et « Assistant Teams »
  * à 16:47:24, puis a déclenché 2 fois sur des messages Teams de l'utilisateur. Cause : le réglage
  * personnel est relu dans HKCU, que l'instance isolée hérite comme toute autre.

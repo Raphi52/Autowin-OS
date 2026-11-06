@@ -3,7 +3,7 @@ import { BILAN_MAX, extraireBilan } from './bilan-d-etape'
 import { formatOrchestrationOutcome } from './orchestration-outcome'
 
 /**
- * LE BLOC FIXE DE FIN D'ETAPE (conv-989, 2026-10-16) : une etape termine sa sortie par
+ * LE BLOC FIXE DE FIN D'ETAPE (2026-10-16) : une etape termine sa sortie par
  * `### Bilan de l'étape` (verdict, fichiers touches, preuves, reste a faire). Le code le reconnait
  * et le remonte EN ENTIER quand il coupe la sortie — bulle affichee, agregat du juge.
  */

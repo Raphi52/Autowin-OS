@@ -1,5 +1,5 @@
 /**
- * LES CLASSES QUE L'APP FOURNIT AUX PAGES `html-render` — source UNIQUE de la liste (conv-1074,
+ * LES CLASSES QUE L'APP FOURNIT AUX PAGES `html-render` — source UNIQUE de la liste (
  * 2026-10-22).
  *
  * Avant : trois prompts (le chat, le chat en lecture seule, le scout interne) dictaient au modele des

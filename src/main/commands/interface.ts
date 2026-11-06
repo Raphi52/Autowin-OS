@@ -1,4 +1,4 @@
-// Groupe de commandes « navigation, question cliquable, envoi au chat », sorti de AppCommandBus.run (conv-1508, lot 2).
+// Groupe de commandes « navigation, question cliquable, envoi au chat », sorti de AppCommandBus.run (lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import { resolveAppLocation } from '../../shared/navigation'
@@ -8,7 +8,7 @@ import { optionsQuiPresupposentUneSolution } from '../chat/option-lecture-ou-sol
 import type { Role } from '../profil/roles'
 import type { Message } from '../providers/types'
 
-/** Cas de `AppCommandBus.run` : navigation, question cliquable, envoi au chat. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
+/** Cas de `AppCommandBus.run` : navigation, question cliquable, envoi au chat. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerInterface(
   bus: AppCommandBus,
   name: string,
@@ -20,7 +20,7 @@ export async function executerInterface(
     case 'desktop_act': {
       if (!bus.desktop) throw new Error('Controle desktop indisponible')
       // Pendant une confirmation de production, le modèle ne clique pas « continuer » à la place
-      // de l'utilisateur (conv-738) : la confirmation doit venir d'un vrai clic humain.
+      // de l'utilisateur : la confirmation doit venir d'un vrai clic humain.
       if ((bus.guichetProd?.enAttente().length ?? 0) > 0)
         throw new Error('desktop_act refusé : une confirmation de production attend la réponse de l’utilisateur.')
       return await bus.desktop.act(a.actions)
@@ -38,7 +38,7 @@ export async function executerInterface(
       return {
         tab: location.destination,
         section: location.section,
-        // Sans lui, « hdesk » répondrait `chat` : l'agent croirait la demande mal comprise (conv-1378).
+        // Sans lui, « hdesk » répondrait `chat` : l'agent croirait la demande mal comprise.
         ...(location.panneau ? { panneau: location.panneau } : {})
       }
     }
@@ -55,7 +55,7 @@ export async function executerInterface(
       if (options.length < 2) throw new Error('Une question cliquable demande 2 a 10 reponses')
       // SIGNAL, JAMAIS REFUS. Quand le fil part d'un symptome et que l'utilisateur n'a nomme
       // aucune cible, une option qui envoie deja un chemin de fichier lui fait ACCEPTER une
-      // solution qu'il n'a pas choisie — mesure conv-1376 du 2026-08-23 : le texte clique devient
+      // solution qu'il n'a pas choisie — mesure du 2026-08-23 : le texte clique devient
       // le message de l'utilisateur, puis l'objectif du run. On le trace pour pouvoir le compter.
       // Aucun refus : le precedent du 2026-08-18 (`conversation-task-contract.ts`) a montre qu'une
       // heuristique locale qui BLOQUE produit onze faux blocages sur du travail legitime.
@@ -78,7 +78,7 @@ export async function executerInterface(
       // Une commande `/xxx` est un chemin d'INTERFACE : la zone de saisie reconnait la skill et
       // construit la tache. `chat_send` n'a AUCUNE destination — son texte part en echange
       // ponctuel avec le modele, qui repond « Unknown command ». Mesure le 2026-09-05
-      // (conv-297 -> conv-300 « /curate ») : le fil est reste vide, la skill n'a jamais tourne.
+      // (« /curate ») : le fil est reste vide, la skill n'a jamais tourne.
       // Refus DETERMINISTE, qui nomme la commande capable de cibler une conversation.
       // Un chemin de fichier absolu (`/home/x/y.txt`) commence AUSSI par `/` : le premier mot
       // d'une commande de skill ne contient ni second `/` ni point, ce qui separe les deux.

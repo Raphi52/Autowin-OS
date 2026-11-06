@@ -4,7 +4,7 @@ import { decideRemember } from './brain-remember'
 /**
  * UN REFUS QUI NE DIT PAS CE QU'IL A REÇU SE REPRODUIT, et c'est mesuré : deux fois.
  *
- * Le 2026-08-20 (conv-1086) puis le 2026-08-26, `remember` a rendu « type invalide — attendu l'un
+ * Le 2026-08-20 puis le 2026-08-26, `remember` a rendu « type invalide — attendu l'un
  * de : lesson, decision, preference, domain ». La première fois, l'agent avait passé `cause-racine`.
  * La seconde, personne ne sait — le message ne le dit pas.
  *

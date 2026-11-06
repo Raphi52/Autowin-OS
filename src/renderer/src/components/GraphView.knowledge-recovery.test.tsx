@@ -138,7 +138,7 @@ describe('GraphView — chantier 2 : la boîte de réception est visible sans ou
   })
 
   it('la pastille reprend le compte relu par le panneau quand la file a été vidée hors écran', async () => {
-    // Constaté le 2026-10-06 (conv-583) : file vidée par /curate en ligne de commande, la pastille
+    // Constaté le 2026-10-06 : file vidée par /curate en ligne de commande, la pastille
     // gardait « 12 » alors que le panneau ouvert affichait « 0 candidats ».
     const twelve = Array.from({ length: 12 }, (_, i) => inboxCandidate(`inbox/c${i}`))
     let drained = false

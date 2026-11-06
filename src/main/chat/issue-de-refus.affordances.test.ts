@@ -24,10 +24,10 @@ const COMPOSANT = join(__dirname, '../../renderer/src/components/BureauxConserve
 
 /**
  * Les libellés que les sorties promettent, et la clé de la table de textes qui les rend.
- * Depuis la traduction anglaise (lot « Worktrees et Bureaux cachés », conv-1186, 2026-10-27), le
+ * Depuis la traduction anglaise (lot « Worktrees et Bureaux cachés », 2026-10-27), le
  * composant ne porte plus le libellé en dur : il rend `t('<clé>')`, et le français fait foi dans
  * `textes-ecrans/worktrees-et-bureaux.ts`. Le lien TEXTE ↔ PRODUIT se vérifie donc en deux temps :
- * le bouton rend bien cette clé, et cette clé dit bien, en français, le geste promis (salvage conv-1211).
+ * le bouton rend bien cette clé, et cette clé dit bien, en français, le geste promis.
  */
 const GESTES_PROMIS = [
   ['Voir le diff', 'conserves.voirDiff'],

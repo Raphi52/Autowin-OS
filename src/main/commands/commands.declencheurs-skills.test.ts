@@ -34,7 +34,7 @@ describe('skillsInvocables — declencheur remis au modele', () => {
 })
 
 /**
- * FRONTIERE, pas seulement DECLENCHEUR (conv-1033, 2026-10-21).
+ * FRONTIERE, pas seulement DECLENCHEUR (2026-10-21).
  *
  * `kit-cliquets.test.ts` exige que chaque description dise ce pour quoi la skill ne sert PAS, pour
  * qu'elle ne soit pas choisie a la place d'une voisine (heal qui CORRIGE pour un audit de `judge`).

@@ -340,7 +340,7 @@ export function traceActionEventId(input: {
 /**
  * Ordinal de DÉPART d'un tour qui reprend un `turnId` existant.
  *
- * Mesuré le 2026-08-13 sur conv-1147 (campagne de fixes, 3,19 $ perdus) : un tour RÉCUPÉRÉ réutilise
+ * Mesuré le 2026-08-13 (campagne de fixes, 3,19 $ perdus) : un tour RÉCUPÉRÉ réutilise
  * son `turnId` (voulu — la corrélation durable en dépend) mais `traceActionOrdinal` repartait à 0
  * dans la nouvelle invocation. La trace portait déjà `…:action:0-0:command` de la première vie du
  * tour ; le premier `command` de la reprise a produit le MÊME identifiant, `TraceStore.append` a

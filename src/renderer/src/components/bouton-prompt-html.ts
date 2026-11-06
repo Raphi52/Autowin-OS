@@ -1,5 +1,5 @@
 /**
- * BOUTON « PROMPTER » D'UN BLOC ```html-render``` (conv-302, 2026-10-17 : « et faut un bouton pour
+ * BOUTON « PROMPTER » D'UN BLOC ```html-render``` (2026-10-17 : « et faut un bouton pour
  * prompter au lieu du bloc ask »).
  *
  * Une galerie /draft montre ses propositions dans un carrousel (scripts/draft-carrousel.mjs). Le choix

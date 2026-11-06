@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * UNE SURVEILLANCE OUVERTE GARDE LE CLI EN VIE (conv-1370, lot 5, 2026-10-31).
+ * UNE SURVEILLANCE OUVERTE GARDE LE CLI EN VIE (lot 5, 2026-10-31).
  *
  * Mesuré sur le CLI 2.1.314 (sondes `claude -p --model haiku`, drapeaux du chat) : le modèle lance
  * `Monitor`, finit son tour par « j'attends », et le CLI émet `result`. Il reste alors en vie : à

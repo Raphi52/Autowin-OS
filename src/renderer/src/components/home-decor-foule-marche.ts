@@ -1,5 +1,5 @@
 /*
- * LA MARCHE DES PASSANTS : CHACUN VOIT LES AUTRES (conv-331, /draft « Croisement anticipé »).
+ * LA MARCHE DES PASSANTS : CHACUN VOIT LES AUTRES (/draft « Croisement anticipé »).
  *
  * Avant, la place d'un passant ne dépendait que de l'heure (`positionZ`) : chacun suivait sa file
  * sans voir personne, et les corps se traversaient. Mesuré sur le vrai décor (banc du 2026-10-18,
@@ -44,7 +44,7 @@ export const MARCHE = {
    * des passants : sans écart, un corps la traversait et remplissait l'écran (constaté le 2026-10-17,
    * capture de l'Accueil à 16 s). À hauteur de la caméra (`plein` mètres le long de la rue), personne
    * ne passe à moins de `distance` de son axe ; l'écart s'ouvre en douceur à partir de `portee`.
-   * C'est la MARCHE qui le tient, avec les autres corps (conv-1054) : appliqué après elle sur l'image,
+   * C'est la MARCHE qui le tient, avec les autres corps : appliqué après elle sur l'image,
    * l'écart rechoisissait son côté à chaque image (saut de 1,90 m) et plaquait les passants les uns
    * sur les autres.
    * `derriere` : la caméra regarde vers -z et coupe à 0,1 m ; un corps centré à plus de 0,4 m derrière
@@ -239,7 +239,7 @@ export function creerMarche(options: {
 
   /**
    * Quelqu'un d'autre approche la bande (ou la longe) : elle se serre ; une fois seule, elle se rouvre.
-   * La caméra compte : ses couloirs sont trop étroits pour deux de front (mesuré, conv-1054).
+   * La caméra compte : ses couloirs sont trop étroits pour deux de front (mesuré).
    */
   function serrer(h: number): void {
     for (const g of options.bandes ?? []) {
@@ -382,7 +382,7 @@ export function creerMarche(options: {
         const devant = ps * f > 0
         if (memeSens && devant && n.b && n.b.vitesse > 0.15) continue
         // la caméra : on la passe sur sa droite, comme quelqu'un qu'on croise de face. Ses deux couloirs
-        // (MARCHE.camera) sont trop étroits pour s'y croiser : chaque sens prend le sien (conv-1054).
+        // (MARCHE.camera) sont trop étroits pour s'y croiser : chaque sens prend le sien.
         if (n.cam) cote = a.sens === 1 ? 1 : -1
         // un corps immobile (figurant) : on le contourne du côté où il y a la place
         else if (!n.b || n.b.vitesse < 0.15) {
@@ -405,7 +405,7 @@ export function creerMarche(options: {
     }
 
     // UNE BANDE S'ÉCARTE D'UN BLOC : chaque membre prend l'écart moyen des siens. Sinon chacun
-    // s'écarte de son côté, la bande s'ouvre et celui qui arrive passe au milieu (mesuré, conv-331).
+    // s'écarte de son côté, la bande s'ouvre et celui qui arrive passe au milieu (mesuré).
     for (const g of options.bandes ?? []) {
       const membres = desirs.filter((d) => d.a.bande === g)
       const moyen = membres.reduce((t, d) => t + d.vxEvite, 0) / membres.length

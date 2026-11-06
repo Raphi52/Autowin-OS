@@ -120,7 +120,7 @@ export class ProviderStateStore {
   }
 
   /**
-   * UN APPEL RÉEL RÉUSSI VAUT PREUVE D'AUTHENTIFICATION (conv-1240, 2026-10-28).
+   * UN APPEL RÉEL RÉUSSI VAUT PREUVE D'AUTHENTIFICATION (2026-10-28).
    *
    * Le seul écrivain du statut était le bouton « Tester ». Mesuré : un test du 13/10 resté
    * « expired » a bloqué QUINZE JOURS tout choix de modèle Claude (petites tâches, Routage), alors

@@ -8,8 +8,8 @@ import {
 } from './relais-prefill'
 
 /**
- * Le message d'un bouton « lance la skill » était perdu quand le chat n'avait jamais été affiché
- * (mesuré conv-1101). Ce qui doit faire échouer ce fichier : un relais qui ne garde rien (le
+ * Le message d'un bouton « lance la skill » était perdu quand le chat n'avait jamais été affiché.
+ * Ce qui doit faire échouer ce fichier : un relais qui ne garde rien (le
  * défaut revient), qui garde AUSSI quand le chat écoute (le message serait rejoué une seconde fois
  * au prochain montage — une skill lancée deux fois), ou qui rend deux fois la même demande.
  */

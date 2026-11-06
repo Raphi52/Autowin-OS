@@ -1,5 +1,5 @@
 /**
- * LES LOTS DU WORKFLOW INTELLIGENT DANS LA MÉMOIRE DU SCOUT (conv-1080, 2026-10-22).
+ * LES LOTS DU WORKFLOW INTELLIGENT DANS LA MÉMOIRE DU SCOUT (2026-10-22).
  *
  * Le panneau des candidats découpe une sélection en lots, un message par lot. La mémoire du scout lit
  * chaque message (`noterChoixScout`) : sans la règle des lots, le lot 2 marquait « laissee » les
@@ -91,7 +91,7 @@ describe('lots du workflow intelligent → mémoire du scout', () => {
   })
 
   /*
-   * EN PARALLÈLE (conv-1333) : les lots partent ensemble, rien ne garantit que le lot 1 s'enregistre
+   * EN PARALLÈLE : les lots partent ensemble, rien ne garantit que le lot 1 s'enregistre
    * le premier. Il remettait le scout à plat : les pistes du lot 2, déjà notées, redevenaient
    * « laissées » et perdaient le run qui les traitait.
    */

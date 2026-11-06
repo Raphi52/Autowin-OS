@@ -1,5 +1,5 @@
 /**
- * QUESTION À CÔTÉ — le panneau au-dessus de la saisie (conv-1362, lot 1/3, 2026-10-31).
+ * QUESTION À CÔTÉ — le panneau au-dessus de la saisie (lot 1/3, 2026-10-31).
  *
  * Une question qui s'appuie sur tout le fil, et dont rien n'y est ajouté : pas de message, pas de
  * journal de tour, rien au Board. Elle marche pendant qu'un tour tourne. Le moteur est dans

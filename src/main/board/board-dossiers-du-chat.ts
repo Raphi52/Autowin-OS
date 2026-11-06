@@ -1,5 +1,5 @@
 /**
- * LA LISTE DES DOSSIERS DU CHAT, GARDÉE PAR LE PROCESSUS PRINCIPAL (conv-1212, 2026-10-28).
+ * LA LISTE DES DOSSIERS DU CHAT, GARDÉE PAR LE PROCESSUS PRINCIPAL (2026-10-28).
  *
  * Le Board ne montre que les dossiers de travail du Chat (`shared/board-dossiers-du-chat.ts`). Cette
  * liste vit dans la vue (`autowin.conv-folders.connus`, stockage local) : le Chat la transmet à

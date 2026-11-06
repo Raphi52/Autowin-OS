@@ -181,7 +181,7 @@ export function supprimerArbre(chemin: string, options: OptionsSuppression = {})
 }
 
 /*
- * LA MÊME SUPPRESSION, SANS TENIR LA BOUCLE — heal conv-1115, 2026-10-23.
+ * LA MÊME SUPPRESSION, SANS TENIR LA BOUCLE — heal, 2026-10-23.
  *
  * Mesuré dans `gels.jsonl` (2026-10-22) : 273,7 s de fenêtre figée, dont un gel de 153,8 s, pour
  * 10 190 `unlinkSync` d'une copie d'agent retirée par le balayage horaire. Chaque appel synchrone

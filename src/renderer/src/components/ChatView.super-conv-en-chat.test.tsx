@@ -12,8 +12,8 @@ const { chatApi, conversation, installRafShim, mountChat } = await import('./Cha
 type Harness = Awaited<ReturnType<typeof mountChat>>
 
 /*
- * conv-1315 (« quand je suis sur une conv chef ça doit l'afficher comme la vue mosaïque dans la vue
- * chat ») : en vue chat, un fil chef montre ce que montre sa case de mosaïque — un onglet par fil,
+ * « quand je suis sur une conv chef ça doit l'afficher comme la vue mosaïque dans la vue
+ * chat » : en vue chat, un fil chef montre ce que montre sa case de mosaïque — un onglet par fil,
  * frise pleine sous l'onglet du chef, seule piste du lot sous l'onglet d'un lot. Le fil et la saisie
  * restent ceux du panneau de chat : c'est là, et là seulement, que vivent l'autorisation de
  * production, Ctrl+F, Reprendre et le dépôt de fichiers. Montage réel de ChatView.
@@ -122,7 +122,7 @@ describe('ChatView — une conv chef en vue chat s’affiche comme dans la mosa�
   it('le chef montre la frise pleine, sans aucun onglet, dans le vrai panneau de chat', async () => {
     await monter([planLance()], 'C')
 
-    // conv-1387 : le bloc mène aux conv de lot, plus rien en haut de la fenêtre.
+    // Le bloc mène aux conv de lot, plus rien en haut de la fenêtre.
     expect(trouver('.scm-chat [role="tablist"]')).toBeNull()
     expect(trouver('.scm-chat [role="tab"]')).toBeNull()
     // Le chef est le point de départ : il n'a nulle part où revenir.
@@ -176,7 +176,7 @@ describe('ChatView — une conv chef en vue chat s’affiche comme dans la mosa�
     expect(filOuvert()).toBe('L2')
     expect(trouver('[data-testid="scm-retour"]')).not.toBeNull()
     expect(trouver('[data-testid="scm-piste-reduite"]')?.textContent).toContain('Bouton Relancer')
-    // Le lot n'a pas de ligne (conv-1381) : c'est son chef qui dit où l'on est. Dédoublonné : un
+    // Le lot n'a pas de ligne : c'est son chef qui dit où l'on est. Dédoublonné : un
     // fil récent a aussi sa ligne dans « Récent ».
     const surlignes = [...h!.container.querySelectorAll('.conv-list .conv-item.active')].map((l) =>
       l.getAttribute('data-conversation-id')

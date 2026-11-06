@@ -48,7 +48,7 @@ export const CAUSES_REESSAYABLES: ReadonlySet<string> = new Set([
  *
  * Le plafond de trois essais protege un defaut mesure (2026-08-24 : vingt-et-un travaux impubliables
  * repeches sans fin, 682 Mo de copies restaurees pour rien). Mais il ferme aussi la porte au cas vecu
- * le 2026-08-27 (conv-1450) : un `base-dirty` sur un arbre partage, ou la cause ne disparait pas en
+ * le 2026-08-27 : un `base-dirty` sur un arbre partage, ou la cause ne disparait pas en
  * trente minutes — trois essais a l'aveugle, puis un echec DEFINITIF, alors que le travail attendait
  * seulement que l'utilisateur committe son fichier.
  *
@@ -154,7 +154,7 @@ export function travauxARepecher(
        *
        * Cause toujours la -> on ne tente RIEN : c'est ce qui evite les 682 Mo de copies restaurees
        * pour rien, et cela ne brule aucun essai. Cause disparue -> on tente TOUT DE SUITE, sans
-       * plafond ni delai : c'est ce qui empeche l'echec definitif de conv-1450.
+       * plafond ni delai : c'est ce qui empeche l'echec definitif.
        */
       if (causeEncoreLa && CAUSES_OBSERVABLES.has(candidat.attentionReason ?? '')) {
         try {

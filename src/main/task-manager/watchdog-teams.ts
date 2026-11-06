@@ -2,7 +2,7 @@ import type { InboxMail } from './watchdog-mail'
 // fix-ok: module NOUVEAU ecrit en plusieurs pas (pas un correctif) ; comportement fixe par watchdog-teams.test.ts, defaut reinjecte = rouge.
 
 /**
- * Teams pour le watchdog « Assistant mails », par Microsoft Graph (demande conv-839, 2026-09-24).
+ * Teams pour le watchdog « Assistant mails », par Microsoft Graph (2026-09-24).
  *
  * Le client Teams installe n'expose aucune interface pilotable ; l'utilisateur enregistre donc une
  * application Microsoft (droits delegues Chat.Read + ChatMessage.Send). Configuration PERSONNELLE,

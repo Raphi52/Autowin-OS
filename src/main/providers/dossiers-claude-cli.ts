@@ -6,7 +6,7 @@ import { canonicalProjectPath, estCheminDeDossier } from '../../shared/project-p
 /**
  * LES PROJETS DÉJÀ OUVERTS DANS claude.exe, pour pré-remplir la liste des dossiers du Chat.
  *
- * Demande d'origine (conv-5, 2026-09-23) : « ajoute à ma liste de CWD tous les projets sur
+ * Demande d'origine (2026-09-23) : « ajoute à ma liste de CWD tous les projets sur
  * lesquels je travaillais sur claude.exe ». Le CLI Claude tient cette liste dans le champ
  * `projects` de son profil `~/.claude.json` — chaque CLÉ est un dossier où il a été lancé.
  *

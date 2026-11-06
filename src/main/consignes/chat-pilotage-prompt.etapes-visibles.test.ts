@@ -3,7 +3,7 @@ import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { CATALOG } from '../commands/commands'
 
 /**
- * ÉTAPES VISIBLES (conv-304, 2026-10-17). Le bloc Étapes du fil se nourrit des appels
+ * ÉTAPES VISIBLES (2026-10-17). Le bloc Étapes du fil se nourrit des appels
  * TaskCreate/TaskUpdate du modèle. Mesuré en A/B sur le CLI 2.1.302 (Opus, même demande en trois
  * gestes) : sans cette consigne, 0 étape — elle vit dans le prompt par défaut de Claude Code, que le
  * chat remplace ; avec elle, 3 étapes passées une à une en cours puis terminées.

@@ -6,7 +6,7 @@ import { formatOrchestrationOutcome } from './orchestration-outcome'
  *
  * MESURE DU 2026-09-02 (journee entiere, `.autowin-data/<profil>/activity/conv-*.jsonl`) : les
  * tours de rattrapage « kaizen … » ont coute 19,38 $ sur 156,51 $, et deux d'entre eux disent la
- * meme chose — « j'etais en mode auto et t'as pas enchaine le workflow » (conv-131, 12:05 puis
+ * meme chose — « j'etais en mode auto et t'as pas enchaine le workflow » (05 puis
  * 12:15, 6,66 $ a eux deux pour 0,11 $ de travail utile).
  *
  * REJOUE LE DEFAUT, mesure sur la chaine complete : le mode auto renvoie la ligne

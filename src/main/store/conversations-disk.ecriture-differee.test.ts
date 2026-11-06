@@ -10,7 +10,7 @@ import {
 } from './conversations-disk'
 
 /**
- * conv-717, point 4 — conversations.json s'écrit PEU APRÈS chaque changement, et à la fermeture.
+ * Point 4 — conversations.json s'écrit PEU APRÈS chaque changement, et à la fermeture.
  * Cas limites : rafale, fermeture pendant l'attente, fichier verrouillé à la fermeture.
  */
 const dir = mkdtempSync(join(tmpdir(), 'aos-convs-differe-'))

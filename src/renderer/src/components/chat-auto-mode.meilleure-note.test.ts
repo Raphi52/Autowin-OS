@@ -3,8 +3,8 @@ import type { Msg } from './chat-view-types'
 import { deciderRelanceAuto } from './chat-auto-mode'
 
 /**
- * LE MODE AUTO ENVOIE TOUTES LES SUITES AFFICHÉES (conv-1125, 2026-10-23 : « le mode auto doit
- * lancer toutes les suggestions de préprompt pas une seule »). Avant (conv-1005), seule la mieux
+ * LE MODE AUTO ENVOIE TOUTES LES SUITES AFFICHÉES (2026-10-23 : « le mode auto doit
+ * lancer toutes les suggestions de préprompt pas une seule »). Avant, seule la mieux
  * notée partait. Désormais toutes celles que le champ montre en boutons partent dans UN message,
  * la mieux notée en tête ; une suite sous le plancher d'affichage (60) n'est pas montrée, donc
  * pas envoyée non plus.

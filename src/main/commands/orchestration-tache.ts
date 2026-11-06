@@ -1,5 +1,5 @@
 // Préambule du cas `orchestrate` : la tâche envoyée et le contexte collecté, sortis de
-// `executerOrchestration` tels quels (conv-1580, suite du plan) pour ramener orchestration.ts sous
+// `executerOrchestration` tels quels (suite du plan) pour ramener orchestration.ts sous
 // 800 lignes. Seul le TYPE du bus vient de '../commands' : une valeur y créerait un cycle d'import.
 import type { AppCommandBus } from './commands'
 import { ORCHESTRATE_PHASES, isolateWatchdogPromptPaths } from './orchestration-entrees'
@@ -49,7 +49,7 @@ export function composerTacheDOrchestration(
   // reprise sans objet nomme (« reprend », « go », « lancer terrain. ») transporte aussi la
   // cible contextualisee par le pilote — voir shared/relance-sans-objet.ts pour la mesure.
   // Un message de reprise composé par Autowin non plus : il ne nomme aucun objet, et le
-  // prendre tel quel lancerait un run sans vraie cible (conv-1423).
+  // prendre tel quel lancerait un run sans vraie cible.
   const rootNeedsContext =
     suppliedRootTask !== undefined &&
     (estRelanceSansObjet(suppliedRootTask) || estUneRepriseAutomatique(suppliedRootTask))
@@ -74,8 +74,8 @@ export function composerTacheDOrchestration(
   const phasePrefix = modelPhaseAllowed ? `/${requestedPhase} ` : ''
   const requestedTask = `${phasePrefix}${authoritativeTask}`
   const conversation = bus.os.conversations.get(convId)
-  // fix-ok: tour 93905e01-f715-4aab-aff8-40c7216dfc0c (conv-63) — le dossier etait construit depuis la conversation courante, jamais depuis conv-N nomme dans la commande.
-  // `/kaizen conv-61 …` vise conv-61, pas la conversation ou la commande est tapee.
+  // fix-ok: tour 93905e01-f715-4aab-aff8-40c7216dfc0c — le dossier etait construit depuis la conversation courante, jamais depuis conv-N nomme dans la commande.
+  // `/kaizen conv-61 …` vise, pas la conversation ou la commande est tapee.
   const kaizenNamedId = kaizenNamedConversationId(authoritativeTask)
   const kaizenNamed = kaizenNamedId ? bus.os.conversations.get(kaizenNamedId) : undefined
   // Ni conversation nommee ni analyse Auto-Kaizen : une COMMANDE citee (« /draft ne me render
@@ -92,7 +92,7 @@ export function composerTacheDOrchestration(
       ? (bus.os.conversations.get(conversation.autoKaizen.sourceConversationId) ?? conversation)
       : ((kaizenParCommande && bus.os.conversations.get(kaizenParCommande.conversationId)) ??
         conversation)
-  // fix-ok: conv-258 — le dossier visait conv-243 (tour cb786c88-9d33-413c-8faf-dc3a31b785f6) alors que la phrase citee avait ete tapee dans conv-253 ; le numero tape n'etait jamais confronte a la citation.
+  // fix-ok: le dossier visait (tour cb786c88-9d33-413c-8faf-dc3a31b785f6) alors que la phrase citee avait ete tapee ; le numero tape n'etait jamais confronte a la citation.
   const kaizenDemande = /^\/kaizen(?=\s|$)/i.test(requestedTask) && kaizenEvidenceConversation
   const kaizenCible = kaizenDemande
     ? localiserMessageCite(
@@ -154,7 +154,7 @@ export async function collecterContexteDOrchestration(
     unavailable.push('état application')
   }
   if (!conversation) unavailable.push('conversation')
-  // MÉMOIRE INTER-RUNS (conv-1405) : les objections du juge sont intra-run et mouraient
+  // MÉMOIRE INTER-RUNS : les objections du juge sont intra-run et mouraient
   // avec leur run ; les tours antérieurs à la fenêtre disparaissaient sans trace. Lecture
   // best-effort — une mémoire illisible ne bloque jamais le lancement.
   let runsPrecedents: ReturnType<typeof memoireDesRunsPrecedents> = []

@@ -15,7 +15,7 @@ import { describe, expect, it } from 'vitest'
  * `chat-ipc-contract.test.ts`) — on le reprend plutôt que d'inventer une troisième façon.
  *
  * LA VITESSE, ELLE, EST PROUVÉE PAR UN TEST DE COMPORTEMENT (`DecorDeFond.vitesse.test.tsx`, préférence
- * active, scène factice) : depuis le 2026-10-19 (conv-1018), la préférence ne ralentit plus le décor.
+ * active, scène factice) : depuis le 2026-10-19, la préférence ne ralentit plus le décor.
  * Ce test-ci empêche seulement qu'on revienne au tout-ou-rien sans s'en apercevoir.
  */
 

@@ -10,7 +10,7 @@ import { testsDuTerminal } from '../main/providers/tests-du-terminal'
 import { ALLOWED_COMMANDS } from '../main/commands/verify-command'
 
 /**
- * LA COUVERTURE D'UN ROUGE (conv-1423). La même règle sert au Board et à la relance de fin de tour :
+ * LA COUVERTURE D'UN ROUGE. La même règle sert au Board et à la relance de fin de tour :
  * si elle se trompe vers le vert, un test cassé passe pour prouvé. Chaque refus a donc son jumeau
  * accepté, à la même borne.
  *
@@ -20,7 +20,7 @@ import { ALLOWED_COMMANDS } from '../main/commands/verify-command'
  */
 
 /*
- * LE VRAI CHEMIN DE LA LIGNE AU CONSTAT (conv-1423, objection du contrôle final). `npm test` lu dans
+ * LE VRAI CHEMIN DE LA LIGNE AU CONSTAT (objection du contrôle final). `npm test` lu dans
  * `cd ../autre-projet && npm test` paraissait complet, et effaçait le rouge du projet courant. Ces
  * essais passent par le lecteur du terminal : c'est là que le `cd` se perdait, pas dans la règle.
  */
@@ -131,7 +131,7 @@ describe('un test lancé après un changement de dossier ne couvre rien, et n’
 })
 
 /*
- * LE LIBELLÉ D'UN `verify` CIBLÉ (conv-1423, objection du contrôle final). La relance propose cette
+ * LE LIBELLÉ D'UN `verify` CIBLÉ (objection du contrôle final). La relance propose cette
  * voie, et 291 `verify` sur 551 l'empruntent depuis le 20/10 : tant que la règle la lisait « inconnue »,
  * l'agent obéissait et le faux « Bloqué » restait. Les libellés viennent de la liste des commandes que
  * `verify` peut jouer, et non d'une copie : un script ajouté là échoue ici.
@@ -384,7 +384,7 @@ describe('vertCouvreRouge — le vert a rejoué tout ce que le rouge visait', ()
     ['eslint partiel', 'npx eslint src/a.ts', 'npx eslint src/a.ts src/b.ts'],
     ['nom de dossier voisin', 'npx vitest run src/ma', 'npx vitest run src/main/a.test.ts'],
     ['outils différents', 'npx jest a.ts', 'npx vitest run a.ts'],
-    // `--bail` n'avale pas la cible : lue comme sa valeur, elle laissait « tout l'outil » (conv-1423).
+    // `--bail` n'avale pas la cible : lue comme sa valeur, elle laissait « tout l'outil ».
     ['--bail ne rend pas la commande complète', 'npx jest --bail a.test.ts', 'npx jest'],
     ['--bail garde sa cible', 'npx jest --bail a.test.ts', 'npx jest b.test.ts'],
     ['--bail suivi d’un nombre garde sa cible', 'npx jest --bail 1 a.ts', 'npx jest b.ts'],

@@ -97,7 +97,7 @@ describe('déclencheur de curation Brain', () => {
   })
 
   it('une instance de TEST ne cure jamais le Brain partagé', () => {
-    // Mesuré le 2026-09-29 à 09:04:21 : une instance isolée lancée par un autre fil (conv-881) a
+    // Mesuré le 2026-09-29 à 09:04:21 : une instance isolée lancée par un autre fil a
     // démarré sa propre maintenance du Brain de production, en parallèle de l'app principale.
     const { root, tooling, python } = fauxBrain(['a.md'])
     const spawnFn = vi.fn(() => ({ unref: vi.fn() }))

@@ -1,5 +1,5 @@
 /**
- * UN ROUGE RACHETÉ PAR UN VERT QUI LE COUVRE (conv-1423, 2026-11-01).
+ * UN ROUGE RACHETÉ PAR UN VERT QUI LE COUVRE (2026-11-01).
  *
  * Mesuré du 29/10 au 01/11 sur les demandes qui ont écrit du code : 66 % finissent « Bloqué » sur un
  * test rouge, et une partie a pourtant rejoué ce test, vert, dans une ligne plus large. Le Board
@@ -22,14 +22,14 @@
  * lecture a des limites, listées sur `dossierAvant` (`tests-du-terminal.ts`) : ce qu'elle ne voit pas
  * passe pour un test du dossier courant.
  *
- * `npm test` vert couvre les rouges de TEST, jamais le typage ni le lint. C'est la règle de conv-76,
+ * `npm test` vert couvre les rouges de TEST, jamais le typage ni le lint. C'est la règle,
  * verrouillée dans `carte-du-fil.test.ts` (`typecheck exit 1` puis `npm test exit 0` reste refusé) :
  * dans ce dépôt `npm test` joue les trois, mais rien ne le dit pour un autre projet ouvert dans le chat.
  *
  * Pas de lecture du `package.json` : l'interface n'a pas accès au disque, et le verdict d'une étape
  * passée ne doit pas changer parce qu'un script a changé depuis.
  *
- * fix-ok: trois faux verts mesurés par des essais exécutés sur `vertCouvreRouge` (conv-1423) :
+ * fix-ok: trois faux verts mesurés par des essais exécutés sur `vertCouvreRouge` :
  * `--bail` avalait la cible suivante comme sa valeur, ce qui laissait « tout l'outil » ; le nom des
  * options passait en minuscules, donc `pytest -V` (la version, aucun test) se lisait `-v` ; la
  * longueur de coupure se mesurait après le `trim` de `lireTestsDuTerminal`, qui retire l'espace
@@ -43,7 +43,7 @@
  */
 import { COMMANDE_DE_TEST_MAX } from './chat-turn'
 
-/** Plafond de la commande gardée avant conv-1423 : une commande de CETTE longueur a pu être coupée. */
+/** Plafond de la commande gardée : une commande de CETTE longueur a pu être coupée. */
 const ANCIEN_PLAFOND_DE_COMMANDE = 300
 
 /**
@@ -74,7 +74,7 @@ interface CommandeLue {
   filtres: string[]
 }
 
-/** Les familles qu'un `npm test` vert rachète : des TESTS, pas le typage ni le lint (conv-76). */
+/** Les familles qu'un `npm test` vert rachète : des TESTS, pas le typage ni le lint. */
 const FAMILLES_DE_TESTS: ReadonlySet<Famille> = new Set([
   'vitest',
   'jest',

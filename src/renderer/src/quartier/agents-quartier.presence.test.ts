@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /**
- * L'envoi de l'instantané des tanukis au processus principal (plan « Village commun », conv-1429) :
+ * L'envoi de l'instantané des tanukis au processus principal (plan « Village commun ») :
  * regroupé sur 2 s, et seulement quand il change — un tour envoie des dizaines d'événements par
  * seconde, et la plupart ne changent ni la phase ni le poste d'un tanuki.
  */

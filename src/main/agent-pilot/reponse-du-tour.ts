@@ -2,7 +2,7 @@
 // commandes : directive arrivée pendant l'appel, artefacts et vidéos livrés, jetons et texte
 // parlé, refus d'une commande dans un tour en lecture seule, affichage d'une réponse sans commande
 // et signalement de ses blocs `<cmd>` illisibles. Sorti tel quel de AgentPilot.chat()
-// (conv-1580, lot 4).
+// (lot 4).
 import { motsUtilisateur } from '../chat/chat-turn-messages'
 import type { SendResult } from '../providers/types'
 import { cleDeVideo, videosLivreesDuTour } from '../media/videos-livrees'
@@ -25,14 +25,14 @@ export function reinjecterLesDirectivesTardives(tour: ContexteDuTour, res: SendR
   /**
    * UNE DIRECTIVE TARDIVE NE JETTE RIEN : NI LE TEXTE, NI LES ACTIONS.
    *
-   * Mesure (conv-65) : l'utilisateur repond pendant que le tour finit, et sa
+   * Mesure : l'utilisateur repond pendant que le tour finit, et sa
    * reponse jetait la reponse ENTIERE du modele — y compris les `<cmd>` qu'elle portait. Le tour
    * contenait un `ask` : la question n'a donc JAMAIS ete posee, aucun bouton n'est apparu, et
    * l'utilisateur a vecu « quand je reponds ca marche pas ». Un `remember` du meme souffle a
    * disparu pareil. Trace : aucun `tool-call` pour ces deux commandes dans conv-65.jsonl.
    *
    * Regle : une ACTION deja decidee s'execute, la directive entrant au point d'iteration suivant.
-   * Le TEXTE deja ecrit n'est pas efface non plus (conv-99, tour
+   * Le TEXTE deja ecrit n'est pas efface non plus (tour
    * 5ef60fbb-1b39-45c9-a173-418feb595345) : il reste affiche et il est rendu au modele ; la
    * reponse a la directive s'y AJOUTE, elle ne le remplace pas.
    *
@@ -44,7 +44,7 @@ export function reinjecterLesDirectivesTardives(tour: ContexteDuTour, res: SendR
     parseOrderedPilotTokens(res.text ?? '').some((token) => token.kind === 'command')
   if (lateDirectives.length) {
     /*
-     * LE BLOC DÉJÀ ÉCRIT N'EST PAS EFFACÉ (conv-99, tour 5ef60fbb-1b39-45c9-a173-418feb595345,
+     * LE BLOC DÉJÀ ÉCRIT N'EST PAS EFFACÉ (tour 5ef60fbb-1b39-45c9-a173-418feb595345,
      * saisie ts 1791186255017) : une réponse complète et vérifiée était retirée de l'écran
      * (`stream-reset`) dès qu'une consigne arrivait, et le modèle ne la revoyait pas non plus.
      * Si la consigne rate, ce qu'elle a remplacé est perdu. Le texte reste affiché, il est rendu
@@ -153,7 +153,7 @@ export function fermerSiLectureSeuleEnfreinte(
   // lecture-seule, seule une commande de LECTURE (readOnlyHint du catalogue) atteint le bus :
   // les commandes mutantes n'y arrivent JAMAIS, meme si le modele ignore son system prompt.
   // (Avant read_file/find_in_files, TOUT etait bloque — une analyse ne pouvait alors rien lire,
-  // mesure sur 4 runs reels du scout de veille, conv-1154→1157.)
+  // mesure sur 4 runs reels du scout de veille.)
   const nomsLectureSeule = new Set(catalogueLectureSeule.map((commande) => commande.name))
   const commandeMutante = ordered.some(
     (token) => token.kind === 'command' && !nomsLectureSeule.has(token.name)
@@ -226,7 +226,7 @@ export function afficherLaReponseSansCommande(
   )
   if (blocsIllisibles.length) {
     // Le bloc BRUT a deja ete diffuse en direct : sans token `command` survivant,
-    // `hasCommand` est faux et rien ne le retirait. Vecu le 2026-09-01 (conv-46) : du JSON
+    // `hasCommand` est faux et rien ne le retirait. Vecu le 2026-09-01 : du JSON
     // entier affiche en plein fil. On efface le diffuse et on republie le SEUL texte parle.
     if (iter.successfulStreamedPrefix) {
       emit({ kind: 'stream-reset', streamId: `${i}:${iter.successfulAttempt}`, iteration: i })

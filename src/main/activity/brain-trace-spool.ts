@@ -130,7 +130,7 @@ export interface BrainTrace {
    *  - `pousse`     : contexte Brain poussé dans le prompt d'un tour de chat, HORS run (arrivée le
    *                   2026-09-06 : ce chemin injectait sans écrire aucune trace).
    *  - `lecture`    : `brain_read` (note entière) ou `brain_graph` (liens) demandés par le modèle
-   *                   (conv-1303, 2026-10-30 : 148 notes entières, 347 000 caractères injectés du
+   *                   (2026-10-30 : 148 notes entières, 347 000 caractères injectés du
    *                   22 au 30/10 sans aucune trace — le plus gros flux Brain, invisible).
    */
   kind?: 'automatic' | 'query' | 'empreinte' | 'recherche' | 'depot' | 'pousse' | 'lecture'
@@ -145,7 +145,7 @@ export interface BrainTrace {
   found?: boolean
   status?: 'found' | 'empty' | 'invalid' | 'unavailable'
   /**
-   * POURQUOI `unavailable`, et combien de temps l'appel a pris — conv-1053 (2026-10-22). Sans eux,
+   * POURQUOI `unavailable`, et combien de temps l'appel a pris — (2026-10-22). Sans eux,
    * départager un délai dépassé d'un refus du serveur a demandé de recouper chaque trace avec
    * l'heure de début de son tour. Absents sur les traces historiques et sur les points qui ne les
    * renseignent pas encore.
@@ -155,7 +155,7 @@ export interface BrainTrace {
   injectedChars: number
   navigation?: BrainNavigation
   /**
-   * CHEMINS EXACTS des notes injectées (conv-1303, 2026-10-30) : servies par les notes proches du
+   * CHEMINS EXACTS des notes injectées (2026-10-30) : servies par les notes proches du
    * tour, ouvertes par `brain_read`. Sans eux, savoir quelle note a été servie puis ouverte
    * obligeait à rejouer les seuils de sélection sur `navigation` — faux dès que la sélection change.
    */
@@ -169,7 +169,7 @@ export function brainSpoolRoot(base = ensureAutowinAppData()): string {
 }
 
 /**
- * ÉCRIRE UNE TRACE SANS TENIR LA FENÊTRE (conv-1598, 2026-11-05).
+ * ÉCRIRE UNE TRACE SANS TENIR LA FENÊTRE (2026-11-05).
  *
  * `gels.jsonl`, matinée du 05/11 : `appendFileSync` de la ligne d'une trace a figé la fenêtre 29 s,
  * quatre appels disque bloquants par trace, sur un SSD inactif à 93 % — le mur est au-dessus du disque
@@ -266,7 +266,7 @@ export function appendBrainTrace(
     const identified = trace.id ? trace : { ...trace, id: randomUUID() }
     const redacted = boundedRedactedTrace(identified)
     const line = `${JSON.stringify(redacted)}\n`
-    // Aucun appel disque ici : le dossier se crée dans l'écriture, hors du fil (conv-1598).
+    // Aucun appel disque ici : le dossier se crée dans l'écriture, hors du fil.
     const root = join(base, 'brain-trace-spool')
     const path = join(root, 'events.jsonl')
     enAttente.set(path, [...lignesEnAttente(path), line])

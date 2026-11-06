@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { destinationDuPush, titreDuBandeau } from './titre-bandeau-git'
 
-// conv-1573 : le titre du bloc git est un statut, « 1 commit et push origin main réussi ».
+// Le titre du bloc git est un statut, « 1 commit et push origin main réussi ».
 describe('titreDuBandeau', () => {
   it('commit et push vers main : la phrase demandée', () => {
     const ligne =

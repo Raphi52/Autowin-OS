@@ -78,7 +78,7 @@ const QUESTION_PREFIX =
  *
  * Une commande ne s'ajoute jamais a un tour en cours (`os:pilotChat:inject`) : elle doit repartir
  * en message normal pour que la skill soit chargee. Ce refus est VOLONTAIRE ; le rendre sans motif
- * faisait afficher « ⚠ Échec » a l'ecran (conv-891, 2026-09-30). Le nom rendu ici sert au reçu.
+ * faisait afficher « ⚠ Échec » a l'ecran (2026-09-30). Le nom rendu ici sert au reçu.
  */
 export function commandeNonInjectable(directive: string): string | undefined {
   const route = routeSkillRequest(directive)
@@ -90,9 +90,9 @@ export function commandeNonInjectable(directive: string): string | undefined {
  * Phases qu'une commande tapée DANS LE CHAT ne confie pas à un run : le modèle les joue dans le fil,
  * avec le corps de leur skill, comme `/look` ou `/remake`.
  *
- * `/kaizen` partait en orchestration avant toute lecture par un modèle (conv-1332, tour
+ * `/kaizen` partait en orchestration avant toute lecture par un modèle (tour
  * c7de932e-abac-4f8b-ba34-1b6335b62653) : fil muet, alors que la consigne du chat promettait déjà
- * « se joue avec tes propres outils » et que « kaizen » sans barre le faisait. Saisie de conv-1334 :
+ * « se joue avec tes propres outils » et que « kaizen » sans barre le faisait. Saisie :
  * « kaizen lance une orchestration un peu opaque c'est naze ca pourrait le faire comme une conv
  * normale ». `explicitPhase` reste posé : l'orchestrateur et `task-regime.ts` le lisent pour le run
  * que le profil de workflow Kaizen, ou un `orchestrate` demandé nommément, lance encore.
@@ -144,7 +144,7 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
 
   // « scout » NU en tete de message nomme la phase, comme `/scout` le fait avec le slash.
   //
-  // Defaut vecu le 2026-08-18 (conv-1297) : « scout des ameliorations de l'experience utilisateur » a
+  // Defaut vecu le 2026-08-18 : « scout des ameliorations de l'experience utilisateur » a
   // produit un rapport de BUILD — trois lignes « Implemente » au lieu d'une shortlist. Seule la forme
   // avec slash etait routee ; le mot nu partait au modele, qui a choisi build.
   //
@@ -158,7 +158,7 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
   // Deux formes, mesurees sur des prompts REELS :
   //  - en TETE (« scout des fix de autowin ») ;
   //  - apres un preambule (« en te basant sur la derniere conversation ... scout des ameliorations »),
-  //    le cas de conv-1298, ou la regle ancree ne tirait pas et le modele a choisi build.
+  //    le cas, ou la regle ancree ne tirait pas et le modele a choisi build.
   // Le DETERMINANT qui suit distingue l'ORDRE du simple nom : « le scout est pas score » et
   // « regarde le dernier scout » ne portent pas de determinant apres le mot, donc ne declenchent rien.
   // En TETE, quelle que soit la suite (« Scout LECTURE SEULE : dans src/main/ ... »).
@@ -186,10 +186,10 @@ export function routeSkillRequest(message: string): SkillRoute | undefined {
     return { task: text, explicitPhase: 'scout', reason: 'explicit-skill' }
   }
 
-  // « judge » / « juge » NU en tete : meme defaut que scout (conv-738, 2026-09-21) — seul `/judge`
+  // « judge » / « juge » NU en tete : meme defaut que scout (2026-09-21) — seul `/judge`
   // etait route. Phase READ-ONLY, memes bornes : tete + frontiere de mot, pas de question, pas de
   // mutation composee. « jugement », « le judge a refuse » ne declenchent rien.
-  // Apres un court ACCUSE (« ok c bon judge mon watchdog », saisie ts 1790275012499, conv-843,
+  // Apres un court ACCUSE (« ok c bon judge mon watchdog », saisie ts 1790275012499
   // turn aa0c6735-a883-4f14-a93f-992e6840669e) : l'ancre stricte ratait, le modele a juge seul.
   const JUGE_APRES_ACCUSE =
     /^(?:(?:ok|okay|oui|ouai|ouais|bon|bien|parfait|super|go|vas-y|c|c'est|est|bon|alors|maintenant|et)[\s,.!]+){1,4}(?:judge|juge)\s+(?:mon|ma|mes|le|la|les|l'|ce|cette|ces|ça|ca|du|des|tout)(?=\s|$)/i

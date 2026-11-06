@@ -14,7 +14,7 @@ describe('runsWithGate ne paie pas le scan complet des runs', () => {
     expect(corps).toContain('scanRunsPourSnapshot(')
   })
 
-  // Kaizen conv-253 : sans la racine des conversations, la liste était vide sur le poste
+  // Kaizen : sans la racine des conversations, la liste était vide sur le poste
   // (`~/.claude/runs` n'existe pas) — l'agent ne voyait aucun run, même en cours.
   it('lit la racine où Autowin écrit ses runs', () => {
     expect(corps).toContain('convRunsRoot()')

@@ -91,7 +91,7 @@ export interface BrainReglageState {
   erreur?: string
 }
 
-/** Le Brain PERSO (conv-1233, 2026-10-28) : privé, à côté de celui de l'équipe. */
+/** Le Brain PERSO (2026-10-28) : privé, à côté de celui de l'équipe. */
 export interface BrainPersoState {
   /** Le réglage enregistré, ou `null` : aucun Brain perso. */
   choisi: { chemin?: string; depot?: string } | null

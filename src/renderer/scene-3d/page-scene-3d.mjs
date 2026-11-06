@@ -1,5 +1,5 @@
 /*
- * LA PAGE DES SCENES 3D DU FIL (`scene-3d.html`) — demande conv-299, 2026-10-16 : « un bloc
+ * LA PAGE DES SCENES 3D DU FIL (`scene-3d.html`) — demande, 2026-10-16 : « un bloc
  * three.js dans le fil : scene en direct, qu'on peut faire pivoter, isolee sans reseau ni acces a
  * l'app ».
  *
@@ -116,7 +116,7 @@ async function construireGraphiques(dossier) {
 /**
  * La page complete, prete a servir.
  *
- * MOTEUR A LA DEMANDE (conv-1304, 2026-10-30). La meme page servait les scenes ```threejs ET les
+ * MOTEUR A LA DEMANDE (2026-10-30). La meme page servait les scenes ```threejs ET les
  * pages ```html-interactif ; elle executait three.js (~750 Ko) a chaque cadre, meme pour une page
  * sans 3D. Mesure Electron 44, 8 cadres : ~100 ms et ~68 Mo avec le moteur execute, ~30 ms et
  * ~37 Mo sans. Le moteur est donc pose en TEXTE (`type="text/plain"`, jamais execute par le
@@ -124,7 +124,7 @@ async function construireGraphiques(dossier) {
  * si son HTML nomme `THREE` ou `OrbitControls`. L'amorce reste le SEUL script autorise par
  * empreinte ; le moteur passe par `eval`, deja permis pour le code des scenes.
  *
- * DEUX PAGES (conv-1304, meme jour). Meme non execute, ce texte etait encore telecharge et lu par
+ * DEUX PAGES (meme jour). Meme non execute, ce texte etait encore telecharge et lu par
  * chaque cadre. `avecMoteur: false` construit `page-interactive.html` : la meme amorce, la meme
  * politique, sans le bloc du moteur ; le fil y envoie toute page qui ne nomme pas `THREE`
  * (`pageIsoleePour`, page-interactive.ts). Le filtre de navigation de la fenetre accepte ces deux
@@ -164,7 +164,7 @@ const PAGES = [
  *   - en developpement, le serveur repond a `/scene-3d.html` et `/page-interactive.html` ;
  *   - au build, les deux pages sont emises a cote de `index.html` (out/renderer/).
  * Chaque page est construite une fois, puis RECONSTRUITE quand l'amorce ou le moteur changent.
- * Mesure du 2026-10-30 (conv-1304) : construite une seule fois par processus, la page servie gardait
+ * Mesure du 2026-10-30 : construite une seule fois par processus, la page servie gardait
  * l'ancienne amorce apres chaque modification de `amorce.js` — l'app de dev montrait un
  * comportement que le code ne portait plus, jusqu'au redemarrage du serveur (seule une modification
  * de CE fichier, dependance de la configuration Vite, le provoquait).

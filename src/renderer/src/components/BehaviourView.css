@@ -4,16 +4,16 @@
   display: flex;
   flex-direction: column;
   /* Aucun retrait LATERAL ici : le cadre `.view-page` pose le retrait du contenu (`--view-retrait`),
-     le meme dans toutes les vues (conv-160, ViewPage.gabarit.test.ts). */
-  /* PAS DE `height: 100%` (conv-244) : figee a la hauteur du cadre et sans defilement, la vue
+     le meme dans toutes les vues (ViewPage.gabarit.test.ts). */
+  /* PAS DE `height: 100%` : figee a la hauteur du cadre et sans defilement, la vue
      coupait tout le bas de la page (composition, phases). C'est le conteneur de Settings qui defile. */
   padding: 4px 0 20px;
   color: var(--text);
-  /* GABARIT DES VUES (conv-160, ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
+  /* GABARIT DES VUES (ViewPage.gabarit.test.ts) : cette racine ne peint RIEN — ni fond,
      ni rayon de page, ni reflet, ni flou. Elle recopiait le cadre de `.view-page` et apparaissait
      comme une page dans la page. Le cadre est peint une fois, par `.view-page`. */
 }
-/* L'EN-TETE (conv-244) : titre a gauche, choix du chemin a droite, puis une ligne par reglage
+/* L'EN-TETE : titre a gauche, choix du chemin a droite, puis une ligne par reglage
    (workspace, apprentissage Brain). Avant, les quatre blocs etaient serres sur UNE ligne : la
    description du titre passait sous le texte du workspace et la liste de mode etait grise brute. */
 .behaviour-view > header {

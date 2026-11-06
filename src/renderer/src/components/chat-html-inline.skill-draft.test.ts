@@ -7,7 +7,7 @@ import { prepareChatHtml } from './chat-html-inline'
 /**
  * La procedure /draft (skills/draft/SKILL.md) dit a l'agent avec quelles balises dessiner ses
  * maquettes dans le fil. Elle avait derive du filtre : elle annoncait `<svg>` et `<input>` retires
- * (ils sont acceptes) et taisait `<use>`, qui l'est — conv-139, tour
+ * (ils sont acceptes) et taisait `<use>`, qui l'est, tour
  * 1d9c0c1d-e6c2-4794-a927-191c11f2aaf8 : 21 icones `<use>` disparues de la maquette montree.
  * Ce test lie la procedure au code : une balise annoncee retiree doit l'etre vraiment.
  */

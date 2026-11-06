@@ -6,7 +6,7 @@ import { MAX_PERSISTED_ARTIFACT_BYTES } from '../store/chat-artifact-store'
 import { mesurerVideo } from '../media/video-ffprobe'
 
 /**
- * `show_video` — MONTRER DANS LE FIL UNE VIDÉO DU DOSSIER DE TRAVAIL (conv-253, 2026-10-11).
+ * `show_video` — MONTRER DANS LE FIL UNE VIDÉO DU DOSSIER DE TRAVAIL (2026-10-11).
  *
  * Cause : une carte du fil ne naît que d'un bloc image/fichier d'un outil natif (`claude.ts`) ou
  * d'une capture IMAGE de commande (`agent-pilot.ts`). Un MP4 rendu par ffmpeg dans un shell ne
@@ -66,7 +66,7 @@ export async function preparerVideoAMontrer(
   const mesure = await mesurerVideo(absolu)
   // ffprobe a FONCTIONNÉ et dit « pas une vidéo » (son seul, ou fichier illisible comme vidéo :
   // texte, JSON, octets renommés) : refus nommé ; « 30 supposé » ne vaut que quand ffprobe échoue.
-  // fix-ok: conv-253 — ffprobe 8.0.1 (mesuré) rend code 0 et `streams: []` sur un .mp4 son seul, et
+  // fix-ok: ffprobe 8.0.1 (mesuré) rend code 0 et `streams: []` sur un .mp4 son seul, et
   // code 1 + « Invalid data found when processing input » sur un texte renommé ; les deux partaient
   // en « 30 supposé » avec un lecteur vide. Sans ce refus, commands.show-video.test.ts « ffprobe
   // répond SANS flux vidéo » est rouge (code 1), vert avec.

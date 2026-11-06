@@ -7,7 +7,7 @@ import {
   type ConstellationInputNode
 } from './graph-constellation-layout'
 
-/** Le run de la maquette retenue (conv-234) : demande, copie, build fini, judge en cours, Git. */
+/** Le run de la maquette retenue : demande, copie, build fini, judge en cours, Git. */
 const RUN: ConstellationInputNode[] = [
   { id: 'demande', depth: 0 },
   { id: 'copie', parentId: 'demande', depth: 1, durationMs: 2_100 },
@@ -105,7 +105,7 @@ describe('placement de la constellation', () => {
   })
 
   /**
-   * conv-108 (run réel, 2026-10-11) : 9 phases passaient à la ligne sur 3 rangées, et leurs agents
+   * run réel, 2026-10-11 : 9 phases passaient à la ligne sur 3 rangées, et leurs agents
    * étaient posés APRÈS toutes les phases — chaque lien traversait toute la constellation. Chaque
    * rangée de phases est désormais suivie de ses propres agents.
    */

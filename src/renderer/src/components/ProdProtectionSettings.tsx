@@ -32,7 +32,7 @@ import './ProdProtectionSettings.css'
  * l'écran se contente de demander le champ correspondant.
  */
 export function ProdProtectionSettings(): React.JSX.Element {
-  // Textes dans la langue de Settings · Interface (conv-1170). Les messages posés par un rappel le
+  // Textes dans la langue de Settings · Interface. Les messages posés par un rappel le
   // sont dans la langue du moment (`dire`) ; ce qui vient du processus principal (`porte.raison`,
   // `reponse.erreur`, `proposition.erreur`) reste tel quel : les messages du cœur ne sont pas traduits.
   const { t } = useTextesSettings()

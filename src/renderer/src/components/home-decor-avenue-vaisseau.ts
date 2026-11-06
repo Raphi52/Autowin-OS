@@ -3,7 +3,7 @@ import * as THREE from 'three'
 /**
  * LE VAISSEAU MÈRE : UNE CITÉ SUR LE MOYEU D'UNE ROUE, ET SES ANNEAUX D'APPROCHE.
  *
- * Demandes de l'utilisateur (conv-319) : « implémente la 5 et met un vaisseau mere », deux /draft de la
+ * Demandes de l'utilisateur : « implémente la 5 et met un vaisseau mere », deux /draft de la
  * coque, puis « /draft des variantes du vaisseau spatial » ; il y garde la 5 · Moyeu-cité « mais j'aime
  * pas le dessous de la ville et j'aimerais que le dessus de la ville ait quelques lumieres », et choisit
  * enfin « Implémenter la 6 · Anneaux d'approche ». Brouillon : `.autowin-tmp/draft-vaisseau-v2/t2/`
@@ -16,7 +16,7 @@ import * as THREE from 'three'
  * Plus aucune tour ne pend sous la ville : c'est le « dessous » que l'utilisateur n'aimait pas.
  *
  * CE QU'IL N'A PAS LE DROIT DE FAIRE, parce qu'un fond passe derrière les widgets :
- *   - ajouter une lumière : chaque lumière de plus alourdit toutes les matières de la rue (conv-301,
+ *   - ajouter une lumière : chaque lumière de plus alourdit toutes les matières de la rue (
  *     22 lumières → 8) ; son éclat est dans ses nuanceurs, ses feux et ses halos ;
  *   - cacher la lune : il reste hors de son disque et de son halo proche (le test voisin tire des
  *     rayons vers elle, tours et mâts compris) ;
@@ -26,7 +26,7 @@ import * as THREE from 'three'
 /**
  * Où il est, vu de la rue. Azimut compté depuis −z vers +x, hauteur en radians, distance en mètres.
  *
- * Demandes de l'utilisateur (conv-319, 2026-10-18) : « agrandis le vaisseau mère […] d'environ 40 % »,
+ * Demandes de l'utilisateur (2026-10-18) : « agrandis le vaisseau mère […] d'environ 40 % »,
  * puis « plus grandes plus belle et au centre en fait pas a gauche », et enfin, devant les captures :
  * « Au centre en haut, en grand : je déplace la lune à gauche au-dessus de la ville et j'éclaircis les
  * câbles devant le vaisseau ». Il était à 2 900 m (195 px de large en 1600 × 900), puis à gauche à
@@ -88,7 +88,7 @@ export const GROSSISSEMENT_FEUX = 1.7
 export const MOYENNE_FENETRES_LOIN = 0.04
 
 /**
- * L'éclat du vaisseau. Demande de l'utilisateur (conv-319) : « plus grandes plus belle ». La forme
+ * L'éclat du vaisseau. Demande de l'utilisateur : « plus grandes plus belle ». La forme
  * reste celle qu'il a choisie (la 6 · Anneaux d'approche) ; sont plus vifs : les feux de la jante,
  * du bord du disque, des tramways et des toits (tailles), la vague des cercles d'atterrissage (au repos,
  * puis au passage de la vague), et la lueur bleue sous le disque. Avant, dans l'ordre ci-dessous :
@@ -149,7 +149,7 @@ export interface VaisseauMere {
   feux: THREE.Points
   /**
    * Les feux des TOITS de la cité, au bout de leur mât, et les balises des plus hautes tours : un groupe
-   * à part, pour que le reflet de l'eau les retire (conv-1037 : « les lumieres sur le toit des immeubles
+   * à part, pour que le reflet de l'eau les retire (« les lumieres sur le toit des immeubles
    * de la ville flottante […] ne devaient pas se refléter dans l'eau »). Dans le reflet, la plaque ne les
    * cachait pas : voir `dessinerReflet` dans home-decor-avenue.ts.
    */
@@ -497,7 +497,7 @@ export function monterVaisseau(ctx: ContexteVaisseau): VaisseauMere {
   // ---------- DESSUS : quelques lumières sur la ville, chacune au bout d'un mât ----------
   // Vu d'en dessous, un feu posé à ras du toit serait caché par le toit lui-même : le mât dépasse
   // d'environ la demi-largeur du toit, plus quelques mètres.
-  // Un groupe à part (`feuxToits`), que le reflet de l'eau retire (conv-1037).
+  // Un groupe à part (`feuxToits`), que le reflet de l'eau retire.
   const feuxDesToits: Feu[] = []
   const toitFeu = (t: Toit, c: number, taille: number, plus: number): void => {
     const hauteurMat = Math.max(t.w, t.d) * 0.5 + plus

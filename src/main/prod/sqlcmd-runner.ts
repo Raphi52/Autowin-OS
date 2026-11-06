@@ -37,7 +37,7 @@ const OUTPUT_CODEPAGE = '65001'
 /**
  * DEUX BINAIRES PORTENT LE NOM `sqlcmd`, et un seul connaît `-f`.
  *
- * DEFAUT VECU (conv-152, 2026-09-02) : le poste n'avait aucun sqlcmd. Une fois `go-sqlcmd`
+ * DEFAUT VECU (2026-09-02) : le poste n'avait aucun sqlcmd. Une fois `go-sqlcmd`
  * installe (le portage moderne, distribue par Microsoft sous le nom `Microsoft.Sqlcmd`), CHAQUE
  * lecture echouait sur « Sqlcmd: 'f': Unknown Option » — l'option `-f 65001` n'existe QUE dans le
  * sqlcmd historique livre avec les outils ODBC. Le module etait ecrit pour cette seule variante.
@@ -183,7 +183,7 @@ function parseJsonRows(colle: string): {
     } catch {
       // SQL Server peut écrire APRÈS le JSON un message d'information (gravité ≤ 10, code 0) :
       // « Warning: Null value is eliminated by an aggregate… » sur un agrégat d'une colonne à NULL
-      // (conv-1168, 27/10/2026). On isole la valeur JSON entière ; le reste n'est accepté que s'il
+      // (27/10/2026). On isole la valeur JSON entière ; le reste n'est accepté que s'il
       // ne peut pas être la suite d'un JSON coupé (ni virgule en tête, ni crochet, ni accolade).
       const fin = finDeValeurJson(colle, i)
       const reste = fin < 0 ? '' : colle.slice(fin + 1).trim()

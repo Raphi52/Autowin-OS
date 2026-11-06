@@ -7,8 +7,8 @@ import { shortModelLabel } from './model-display-label'
 import { LIBELLES_FOURNISSEURS } from './provider-labels'
 
 /**
- * ONGLETS PAR FOURNISSEUR (2026-11-04, conv-1496) : chaque fournisseur devient un onglet, comme la
- * barre de quotas (OpenRouter retiré, conv-1520).
+ * ONGLETS PAR FOURNISSEUR (2026-11-04) : chaque fournisseur devient un onglet, comme la
+ * barre de quotas (OpenRouter retiré).
  */
 const LIBELLES_FOURNISSEUR = LIBELLES_FOURNISSEURS
 // eslint-disable-next-line react-refresh/only-export-components -- helper pur testé avec la matrice

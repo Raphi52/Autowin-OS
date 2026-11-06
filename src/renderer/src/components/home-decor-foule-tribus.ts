@@ -4,7 +4,7 @@ import type { CodeAvatar } from './home-decor-foule'
 import { nouvelleToile } from './decor-toile'
 
 /*
- * LES DEUX TRIBUS DE LA FOULE : « SURVÊT' ET CAGOULE » ET « PUNKS À CRÊTE » (conv-312).
+ * LES DEUX TRIBUS DE LA FOULE : « SURVÊT' ET CAGOULE » ET « PUNKS À CRÊTE ».
  *
  * Demandes de l'utilisateur, dans l'ordre : « les humains sont trop sobre par rapport a l'univers dans
  * lequel ils sont », puis « ils doivent tous avoir l'air de voyous du futur ». Six tribus ont été

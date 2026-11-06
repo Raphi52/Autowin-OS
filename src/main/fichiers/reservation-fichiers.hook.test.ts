@@ -7,7 +7,7 @@ import { scriptHookGardes } from '../../shared/garde-git-destructeur'
 import { refusReglageProd } from '../prod/prod-run-guard'
 
 /*
- * LE VRAI SCRIPT DU HOOK REFUSE L'ÉDITION D'UN FICHIER RÉSERVÉ PAR UN AUTRE FIL (conv-1083).
+ * LE VRAI SCRIPT DU HOOK REFUSE L'ÉDITION D'UN FICHIER RÉSERVÉ PAR UN AUTRE FIL.
  *
  * Deux lancements d'agent = deux dossiers de réglages, chacun avec son `reservation.json` (le fil
  * qui écrit) ; un seul registre partagé. Entrée qui ferait échouer ce banc si le branchement était

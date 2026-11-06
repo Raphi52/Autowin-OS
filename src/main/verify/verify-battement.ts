@@ -1,7 +1,7 @@
 /**
  * LE SIGNE DE VIE D'UNE VERIFICATION EN COURS.
  *
- * DEFAUT VECU le 2026-08-25 (conv-1400). Un tour a lance `verify`, qui rejoue la suite unitaire.
+ * DEFAUT VECU le 2026-08-25. Un tour a lance `verify`, qui rejoue la suite unitaire.
  * Elle a tourne dix minutes puis a ete coupee au plafond. Pendant tout ce temps le fil n'affichait
  * que « 1 action en cours » — pas une ligne de plus. L'utilisateur a demande « ca me met une action
  * en cours mais je le vois rien faire » : rien, a l'ecran, ne distinguait une suite qui TRAVAILLE
@@ -37,7 +37,7 @@ function derniereLigneUtile(sortie: string): string | undefined {
   /*
    * DEPOUILLER D'ABORD, MESURER ENSUITE.
    *
-   * DEFAUT VECU le 2026-08-25 (conv-1404) : le fil affichait « 9 min 27 s · <ESC>[33m<ESC>[2m … ».
+   * DEFAUT VECU le 2026-08-25 : le fil affichait « 9 min 27 s · <ESC>[33m<ESC>[2m … ».
    * Deux degats et non un : les codes salissent la ligne, ET ils sont COMPTES dans la largeur max,
    * donc le texte utile etait coupe bien avant sa vraie longueur. Depouiller avant le decoupage
    * traite les deux d'un coup — et une ligne qui ne contenait QUE des codes redevient vide, donc
@@ -88,7 +88,7 @@ export const VERIFY_BATTEMENT_MS = 5_000
  * Ce que la ligne de vie d'une orchestration dit pendant que le sous-agent REFLECHIT.
  *
  * Son raisonnement arrive par fragments de quelques mots ; les afficher tels quels donnait une ligne
- * illisible qui changeait chaque seconde (conv-918, 2026-10-13). Le texte complet se lit en depliant
+ * illisible qui changeait chaque seconde (2026-10-13). Le texte complet se lit en depliant
  * le bloc ; la ligne, elle, ne dit que l'activite.
  */
 export const EN_REFLEXION = 'réfléchit…'
@@ -96,7 +96,7 @@ export const EN_REFLEXION = 'réfléchit…'
 /**
  * LE SIGNE DE VIE D'UNE ORCHESTRATION EN COURS.
  *
- * DEFAUT MESURE le 2026-09-07 (conv-42). Un run d'orchestration a travaille de 09:45 a 10:08 sans
+ * DEFAUT MESURE le 2026-09-07. Un run d'orchestration a travaille de 09:45 a 10:08 sans
  * qu'UNE seule ligne n'arrive dans le fil : l'utilisateur a signale « arret depuis 9:45 » sur un run
  * qui a fini VERT. La cause n'est pas l'absence de source -- la note d'activite existe deja
  * (`commands.ts`, evenement `orchestrate-delta`) -- mais l'absence d'HORLOGE : cette note ne part
@@ -117,7 +117,7 @@ export function battementDOrchestration(
   /*
    * LA PHASE PASSE AVANT LE DERNIER FAIT, et ce n'est pas un gout de mise en page.
    *
-   * Mesure du 2026-09-16 (conv-63) : le dernier fait connu etait « Bash · cd
+   * Mesure du 2026-09-16 : le dernier fait connu etait « Bash · cd
    * "C:/…/worktrees/846afeda47fa9e64/agent__run-c295e4061094-1" && cp /tmp/pee… ». Un chemin absolu
    * mange a lui seul la largeur utile, donc TOUT ce qui le suivrait serait coupe. Le nom de la
    * phase est le seul fait qui reponde a « ou en est-on ? » : il tient devant, ou il ne tient pas.

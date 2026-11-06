@@ -1,5 +1,5 @@
 /**
- * L'ANIMAL DE MES AGENTS (demande utilisateur du 2026-11-04, conv-1537).
+ * L'ANIMAL DE MES AGENTS (demande utilisateur du 2026-11-04).
  *
  * Demande : « je veux qu'on puisse choisir dans les settings de l'accueil quel animal on veut pour
  * représenter nos agents ; notre setting doit affecter ce que les autres voient ». Le choix vit dans
@@ -21,7 +21,7 @@ import {
   type TenueAgent
 } from '../../../shared/quartier-presence'
 
-/** Ce que rend le pont : le réglage du poste, dont l'animal et la couleur de tenue (conv-1633). */
+/** Ce que rend le pont : le réglage du poste, dont l'animal et la couleur de tenue. */
 type EtatRelu = { animal?: unknown; tenue?: unknown } | null | undefined
 
 interface ApiMonAnimal {
@@ -32,7 +32,7 @@ interface ApiMonAnimal {
 
 let actuel: AnimalAgent = ANIMAL_PAR_DEFAUT
 /**
- * La couleur de tenue de MES agents (conv-1633), relue du même réglage que l'animal ; `null` = la tenue
+ * La couleur de tenue de MES agents, relue du même réglage que l'animal ; `null` = la tenue
  * d'origine de l'animal. Mêmes règles : un choix non enregistré ne change pas l'affichage.
  */
 let tenueActuelle: TenueAgent | null = null
@@ -108,7 +108,7 @@ export function useMonAnimal(): AnimalAgent {
   return useSyncExternalStore(abonnerMonAnimal, lireMonAnimal, lireMonAnimal)
 }
 
-/** La couleur de tenue de mes agents, `null` = d'origine (conv-1633). La scène la lit à chaque image. */
+/** La couleur de tenue de mes agents, `null` = d'origine. La scène la lit à chaque image. */
 export function lireMaTenue(): TenueAgent | null {
   return tenueActuelle
 }

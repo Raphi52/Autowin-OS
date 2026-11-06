@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { CoordinateurDesPlans, type DepsPlans } from './plans-de-lots-app'
 
 /*
- * LE BOUTON DU WORKFLOW INTELLIGENT (conv-1333, 2026-10-30) — ce qu'un clic NE doit PAS repayer. Un
- * lot coûte un run entier (11 $ pour une correction, conv-1199) ; le panneau perd son état « lancé »
+ * LE BOUTON DU WORKFLOW INTELLIGENT (2026-10-30) — ce qu'un clic NE doit PAS repayer. Un
+ * lot coûte un run entier (11 $ pour une correction) ; le panneau perd son état « lancé »
  * dès qu'il remonte, donc la garde vit ici, avec le plan.
  */
 function banc(): { coord: CoordinateurDesPlans; lots: () => string[] } {

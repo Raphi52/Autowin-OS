@@ -8,7 +8,7 @@ import {
 } from './home-decor-scene'
 
 /**
- * Demande conv-1455 : « le container du nuage est un cercle c moche, faut qu'il soit plus chaotique
+ * Demande : « le container du nuage est un cercle c moche, faut qu'il soit plus chaotique
  * et plus coloré », puis « bord encore plus déchiqueté + saturation des couleurs montée ».
  *
  * Le masque du nuage était `1.0 - smoothstep(0.10, 0.5, length(c))` : un disque PARFAIT, donc un

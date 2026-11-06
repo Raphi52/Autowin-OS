@@ -36,7 +36,7 @@ import type { NodePhase } from '../skills/skill-pipeline'
 /**
  * À LA REPRISE, LE VERDICT REJOUÉ EST CELUI QUI A JUGÉ LE TEXTE FINAL, PAS LE PREMIER ENREGISTRÉ.
  *
- * Mesuré sur run-7b7d533c318e-1 (conv-1324, 2026-10-30). Seul un juge fini pendant un redémarrage
+ * Mesuré sur run-7b7d533c318e-1 (2026-10-30). Seul un juge fini pendant un redémarrage
  * entre dans les étapes enregistrées (`settleCompletedDetachedPhase`, run-reattach.ts) ; un juge
  * joué en direct n'y entre jamais. L'état enregistré portait donc deux verdicts au milieu des builds :
  * un refus à 84, puis une validation à 92, suivie d'un build. À chaque reprise, le premier contrôle

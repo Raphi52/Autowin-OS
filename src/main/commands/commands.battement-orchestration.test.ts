@@ -131,7 +131,7 @@ describe('orchestrate — la note d’activité devient le battement de l’acti
 })
 
 /**
- * LE TROU NOIR QUAND LE MODELE NE PARLE PAS -- mesure le 2026-09-07 (conv-42).
+ * LE TROU NOIR QUAND LE MODELE NE PARLE PAS -- mesure le 2026-09-07.
  *
  * Les battements ci-dessus sont tous EVENEMENTIELS : ils supposent qu'un fait arrive (fin de phase,
  * fragment de raisonnement). Un run a travaille de 09:45 a 10:08 SANS aucun fait, parce que les
@@ -191,7 +191,7 @@ describe('orchestrate -- le signe de vie ne depend pas du modele', () => {
 })
 
 /**
- * LA PHASE QUI DEMARRE DOIT ARRIVER DANS LE FIL -- mesure le 2026-09-16 (conv-63, run
+ * LA PHASE QUI DEMARRE DOIT ARRIVER DANS LE FIL -- mesure le 2026-09-16 (run
  * c295e4061094).
  *
  * L'utilisateur a demande « la conv semble a l'arret, c'est juste une impression ? » apres dix
@@ -286,7 +286,7 @@ describe('orchestrate -- le battement nomme la phase en cours', () => {
 })
 
 /**
- * LE RAISONNEMENT N'EST PAS UNE LIGNE D'ETAT -- conv-918, 2026-10-13.
+ * LE RAISONNEMENT N'EST PAS UNE LIGNE D'ETAT --, 2026-10-13.
  *
  * Capture de l'utilisateur : la 2e ligne du bloc Orchestration affichait « and now 1/2 could ».
  * C'etaient des fragments du raisonnement du sous-agent, passes par le canal des NOTES : chacun

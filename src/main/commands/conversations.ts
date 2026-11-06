@@ -1,4 +1,4 @@
-// Groupe de commandes « fils de conversation et tri des travaux », sorti de AppCommandBus.run (conv-1508, lot 2).
+// Groupe de commandes « fils de conversation et tri des travaux », sorti de AppCommandBus.run (lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import { entierEnvoye, listeEnvoyee, booleenEnvoye } from './arguments'
@@ -10,7 +10,7 @@ import { porteDesPiecesJointes, referencesDesPiecesJointes } from '../store/piec
 import { questionPoseeDuMessage } from '../chat/question-posee'
 import { LOT_SUPPRESSION_MAX } from '../store/conversations'
 
-/** Cas de `AppCommandBus.run` : fils de conversation et tri des travaux. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
+/** Cas de `AppCommandBus.run` : fils de conversation et tri des travaux. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerConversations(
   bus: AppCommandBus,
   name: string,
@@ -24,7 +24,7 @@ export async function executerConversations(
       // desormais le seul champ persiste, `provider`.
       const provider = s('category') || 'claude'
       // Le titre n'est plus INVENTE par le modele : a defaut d'un titre explicite, on reprend
-      // les mots que l'utilisateur vient d'ecrire (defaut conv-71 du 2026-09-01).
+      // les mots que l'utilisateur vient d'ecrire (defaut du 2026-09-01).
       const dernierMessageUtilisateur = [
         ...(bus.os.conversations.get?.(conversationId ?? '')?.messages ?? [])
       ]
@@ -35,7 +35,7 @@ export async function executerConversations(
         typeof dernierMessageUtilisateur === 'string' ? dernierMessageUtilisateur : ''
       )
       // Un second envoi identique a quelques secondes d'intervalle est le MEME geste : il rend
-      // la conversation deja creee au lieu d'en empiler une vide (conv-72 / conv-73).
+      // la conversation deja creee au lieu d'en empiler une vide.
       const dejaCreee = conversationRecenteEquivalente(bus.os.conversations.list?.() ?? [], {
         title,
         provider,
@@ -47,7 +47,7 @@ export async function executerConversations(
       return c
     }
     case 'classer_conversation': {
-      // fix-ok: conv-81 — la commande classer_conversation écrivait le libellé dans le dossier de travail ; elle route désormais sur la forme de la valeur et rend les DEUX champs.
+      // fix-ok: la commande classer_conversation écrivait le libellé dans le dossier de travail ; elle route désormais sur la forme de la valeur et rend les DEUX champs.
       const dossier = typeof a.dossier === 'string' ? a.dossier.trim() : ''
       const c = bus.os.conversations.rangerDansDossier(s('id'), dossier || null)
       if (!c) throw new Error(`conversation introuvable: ${s('id')}`)
@@ -76,7 +76,7 @@ export async function executerConversations(
        * muet de son propre echantillonnage.
        */
       const dossier = collectAutowinKaizenEvidence(conversation, undefined, PLAFONDS_AMPLES)
-      // Renvois « identique au tour N » puis pages de ~20 000 caracteres : conv-703 passait de
+      // Renvois « identique au tour N » puis pages de ~20 000 caracteres : un fil passait de
       // 363 064 caracteres a un dossier lisible en quelques pages (retrospective-compacte.ts).
       const decoupe = paginerDossier(
         JSON.stringify(dedupliquerDossier(resumerAppelsOutils(dossier))),
@@ -104,7 +104,7 @@ export async function executerConversations(
       const limite = Math.min(50, entierEnvoye(a.limite, 'limite', 1) ?? 10)
       const decalage = entierEnvoye(a.decalage, 'decalage', 0) ?? 0
       // Le store plafonne à 50 et classe tout avant de couper : lui demander ce plafond ne coûte
-      // rien de plus, et c'est ce qui permet de dire ce qui n'est pas rendu (conv-1370).
+      // rien de plus, et c'est ce qui permet de dire ce qui n'est pas rendu.
       const toutes = bus.os.conversations.search(terme, {
         limite: 50,
         extraitsParConversation: entierEnvoye(a.extraits, 'extraits', 1)
@@ -156,7 +156,7 @@ export async function executerConversations(
       const positionLue = entierEnvoye(a.message, 'message', 0)
       const depuis = entierEnvoye(a.depuis, 'depuis', 0)
       /*
-       * LIRE UN MESSAGE EN ENTIER (conv-1370, 2026-10-31) : un message coupé à 4 000 caractères
+       * LIRE UN MESSAGE EN ENTIER (2026-10-31) : un message coupé à 4 000 caractères
        * n'avait aucune suite atteignable. Même raison pour `avant` plus bas : au-delà des N
        * derniers, le début d'un fil était hors de portée, et il fallait fouiller le disque.
        */
@@ -217,7 +217,7 @@ export async function executerConversations(
         /*
          * L'ECHEC D'UN TOUR TRAVERSE LA LECTURE — il ne la traversait pas.
          *
-         * Mesure le 2026-09-03 (conv-181) : trois tours coupes sur `error_during_execution`. Le
+         * Mesure le 2026-09-03 : trois tours coupes sur `error_during_execution`. Le
          * store portait bien `status: 'failed'` et `error` (ecrits par `terminalDuTour`), mais
          * cette projection ne rendait que `role`/`ts`/`text` : un tour EN ECHEC se relisait comme
          * une reponse VIDE, indiscernable d'un silence du modele. Toute retrospective partait
@@ -225,7 +225,7 @@ export async function executerConversations(
          */
         const statut = (message as { status?: string }).status
         const erreur = (message as { error?: string }).error
-        // conv-1144 : un tour fini sur une question ATTEND l'utilisateur — ça doit se lire.
+        // Un tour fini sur une question ATTEND l'utilisateur — ça doit se lire.
         const questionPosee = questionPoseeDuMessage(message)
         return {
           position,
@@ -261,7 +261,7 @@ export async function executerConversations(
         createdAt: conversation.createdAt,
         updatedAt: conversation.updatedAt,
         messageCount: tous.length,
-        // conv-1144 : un script qui attend la fin de SON tour n'avait que `get_state` (tous les
+        // Un script qui attend la fin de SON tour n'avait que `get_state` (tous les
         // fils). Même autorité et même forme que là-bas : présent seulement quand ça tourne.
         ...(bus.tourDeChatActif?.(conversation.id) ? { tourEnCours: true } : {}),
         messages,
@@ -292,7 +292,7 @@ export async function executerConversations(
     }
     case 'remove_conversation': {
       const id = s('id')
-      // Comme le Stop : le tour et le run du fil s'arrêtent AVANT qu'il disparaisse (conv-1060).
+      // Comme le Stop : le tour et le run du fil s'arrêtent AVANT qu'il disparaisse.
       await bus.arreterAvantSuppression(id, conversationId)
       const removed = bus.os.conversations.remove(id)
       if (removed) {

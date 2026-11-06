@@ -166,7 +166,7 @@ describe('identifiant d action — l unicite ne doit pas dependre d un compteur 
 })
 
 describe('seedTraceActionOrdinal — reprise d’un tour sans dupliquer la trace', () => {
-  // Mesuré sur conv-1147 (13/08, 3,19 $ perdus) : un tour récupéré réutilise son turnId, l'ordinal
+  // Mesuré (13/08, 3,19 $ perdus) : un tour récupéré réutilise son turnId, l'ordinal
   // repartait à 0, et le premier command de la reprise dupliquait `…:action:0-0:command` — le
   // TraceStore jetait, le tour entier échouait.
   const turn = 'b63542e4-f7bb-4c6a-ada3-237f579d793e'

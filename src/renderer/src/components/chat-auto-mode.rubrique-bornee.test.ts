@@ -3,7 +3,7 @@ import type { Msg } from './chat-view-types'
 import { deciderRelanceAuto, lignesDeRubrique } from './chat-auto-mode'
 
 /*
- * BORNAGE DE LA RUBRIQUE « ⏳ Reste à faire » (conv-787, sondage sur 2970 clotures reelles).
+ * BORNAGE DE LA RUBRIQUE « ⏳ Reste à faire » (sondage sur 2970 clotures reelles).
  *
  * Trois defauts mesures, corriges ensemble : la rubrique debordait sur le texte des etapes
  * suivantes ; une seule ligne de fin suffisait a arreter une rubrique qui listait encore du
@@ -42,7 +42,7 @@ describe('rubrique « Reste à faire » — bornée à elle-même', () => {
     })
   })
   /*
-   * L'INTITULÉ « Recommandé » N'ÉTAIT JAMAIS RECONNU (conv-1038, 2026-10-21) : l'expression des
+   * L'INTITULÉ « Recommandé » N'ÉTAIT JAMAIS RECONNU (2026-10-21) : l'expression des
    * intitulés finit par \b, qui ne connaît que les lettres SANS accent — après le « é » final,
    * aucune frontière de mot. La rubrique « Reste à faire » avale donc « 👉 Recommandé » et sa suite.
    * La lecture EXACTE (celle du carnet du fil) la borne. Entrées qui font échouer une version fausse :
@@ -79,7 +79,7 @@ describe('rubrique « Reste à faire » — bornée à elle-même', () => {
 })
 
 /*
- * PORTE « ✅ Fait » — remesuree apres le bornage (conv-787) : 1 arret sur 2970 clotures reelles, et
+ * PORTE « ✅ Fait » — remesuree apres le bornage : 1 arret sur 2970 clotures reelles, et
  * c'est le bon. Le tour concerne n'avait RIEN produit (« ✅ Fait — rien », un travail anterieur
  * occupait la place). Ses autres lignes sont des CONSTATS (« Aucun fichier modifie », « Rien n'est
  * publie ») qui ne doivent pas arreter la chaine : cette porte reste volontairement au mot NU.

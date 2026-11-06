@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chatApi, installRafShim, mountChat, type ChatHarness } from './ChatView.harness'
 
 /**
- * PERTE DE DONNÉES UTILISATEUR — mesure du 2026-09-01 (conv-30).
+ * PERTE DE DONNÉES UTILISATEUR — mesure du 2026-09-01.
  *
  * L'utilisateur a écrit deux messages pendant un tour ; ils ont disparu de l'écran quand il a écrit
  * le troisième, et les QUATRE sources de persistance (conversations.json, son journal, causal-trace,

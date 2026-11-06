@@ -259,7 +259,7 @@ function phraseMesures(nom: string, duels: Record<string, AgregatDuels>): string
 }
 
 /**
- * CE QUE LE WORKFLOW A RÉELLEMENT DONNÉ EN USAGE (piste 1, conv-1070), relu dans la trace causale
+ * CE QUE LE WORKFLOW A RÉELLEMENT DONNÉ EN USAGE (piste 1), relu dans la trace causale
  * par `resultats-reels-workflows.ts`. Les runs INTERROMPUS (Stop, limite de session, panne en
  * face) sont dits, mais hors du taux de réussite et des médianes : l'abonnement qui dit non ne rend
  * pas un workflow mauvais. Rapprochement EXACT par nom : c'est le nom écrit dans la trace au départ
@@ -331,7 +331,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
   const [file, setFile] = useState<ProfilesFile>({ profiles: [], activeId: null })
   /** Duels deja mesures, par nom de workflow. Lecture seule : rien n'est rejoue ici. */
   const [duels, setDuels] = useState<Record<string, AgregatDuels>>({})
-  /** Résultats réels par nom de workflow, relus dans la trace causale (piste 1, conv-1070). */
+  /** Résultats réels par nom de workflow, relus dans la trace causale (piste 1). */
   const [reels, setReels] = useState<Record<string, ResultatsReels>>({})
   /**
    * Un noeud peut porter une SKILL du disque et non une phase du pipeline. Sans cet inventaire, la
@@ -612,7 +612,7 @@ export function WorkflowProfilesView({ active }: { active: boolean }): React.JSX
         ) : null
       })()}
 
-      {/* CE QUE « ACTIF » VEUT DIRE (piste 3, conv-1070). Le workflow actif n'est plus qu'une
+      {/* CE QUE « ACTIF » VEUT DIRE (piste 3). Le workflow actif n'est plus qu'une
           VALEUR PAR DÉFAUT (choix de l'utilisateur, 2026-10-22) : le choix automatique passe avant
           lui, et il ne pilote que les demandes pour lesquelles ce choix n'en propose aucun
           (`os.ts`, `poseConversationWorkflow`). Avant, il passait avant tout : 39 démarrages sur 39

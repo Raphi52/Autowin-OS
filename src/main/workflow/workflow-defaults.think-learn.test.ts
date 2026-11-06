@@ -93,9 +93,9 @@ describe('`learn` ferme le travail substantiel', () => {
 
       expect(learn).toHaveLength(1)
       /*
-       * CHANGEMENT DE CONTRAT DU 2026-08-29 (conv-1521) : `learn` n est plus le DERNIER maillon,
-       * il est le PREMIER de la chaine d apres-gate. Sa seule sortie va vers `git` (`salvage` avant
-       * conv-1252), qui trie le travail au lieu de rendre la main sur « veux-tu que je commit ? ».
+       * CHANGEMENT DE CONTRAT DU 2026-08-29 : `learn` n est plus le DERNIER maillon,
+       * il est le PREMIER de la chaine d apres-gate. Sa seule sortie va vers `git` (`salvage`),
+       * qui trie le travail au lieu de rendre la main sur « veux-tu que je commit ? ».
        * Ce qui reste vrai :
        * la chaine ne se traverse pas pendant la marche, et son dernier maillon est terminal
        * (`git-fin-de-run.test.ts`).
@@ -154,8 +154,8 @@ describe('ce qui ne doit PAS changer', () => {
     /*
      * fix-ok: rouge depuis e58cc386 (2026-10-13) — ce contrat se lisait par une DISTANCE : l'appel
      * devait tomber à moins de 2200 caractères de `if (!gate.blocked) {`. La branche a grossi pour de
-     * bonnes raisons (résultat remis avant learn, conv-914 : 2122 -> 2367 ; réserves du juge sur un
-     * /scout, conv-977 : -> 2463) et le test rougissait sans qu'aucun défaut n'existe ; à l'inverse,
+     * bonnes raisons (résultat remis avant learn, : 2122 -> 2367 ; réserves du juge sur un
+     * /scout, : -> 2463) et le test rougissait sans qu'aucun défaut n'existe ; à l'inverse,
      * un second appel sorti de la branche passait inaperçu. On lit donc la STRUCTURE : chaque appel
      * `executePipelinePhase(phaseApresGate)` doit vivre dans la branche ALORS d'un `if (!gate.blocked)`.
      */

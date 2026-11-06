@@ -14,7 +14,7 @@ import {
 } from '../../../shared/plan-de-lots'
 
 /*
- * conv-1150 : le fil chef montre l'avancement de ses lots, et c'est là — et seulement là — que
+ * Le fil chef montre l'avancement de ses lots, et c'est là — et seulement là — que
  * l'utilisateur lance le plan d'un clic.
  */
 let ecouteur: ((e: { type: string; scope?: string }) => void) | undefined
@@ -128,7 +128,7 @@ describe('TableauDesLots', () => {
     fin()
   })
 
-  // conv-1284 (2026-10-29) : le lot qui a posé sa question au chef s'affiche « attend le chef », en
+  // 2026-10-29 : le lot qui a posé sa question au chef s'affiche « attend le chef », en
   // pointillé d'alerte et non en rouge, le bilan le compte à part, et « Relancer » reste possible.
   it('un lot qui attend la réponse du chef : son état à lui, compté à part, relançable', async () => {
     let p: PlanDeLots = { ...plan(), statut: 'en-cours' }
@@ -157,14 +157,14 @@ describe('TableauDesLots', () => {
   })
 
   /*
-   * conv-1151, lot 3 : seul l'agent du chef relançait un lot en échec ; l'utilisateur, qui voit
+   * Lot 3 : seul l'agent du chef relançait un lot en échec ; l'utilisateur, qui voit
    * l'échec ici, devait lui écrire. Chaque lot en échec porte maintenant son bouton « Relancer ».
    */
   describe('relancer un lot en échec', () => {
     const bouton = (hote: HTMLElement, rang: number): HTMLButtonElement | null =>
       hote.querySelector(`[data-testid="tdl-lot-${rang}-relancer"]`)
 
-    /** Lot 1 en échec dans conv-100, lot 2 en cours dans conv-101, lot 3 à faire. */
+    /** Lot 1 en échec, lot 2 en cours, lot 3 à faire. */
     function planAvecEchec(base: PlanDeLots = plan()): PlanDeLots {
       let p: PlanDeLots = { ...base, statut: 'en-cours' }
       p = marquerLance(p, 1, 'conv-100', 2)
@@ -227,7 +227,7 @@ describe('TableauDesLots', () => {
   })
 
   /*
-   * conv-1171 : 36 avertissements dépliés poussaient la zone de saisie hors de l'écran. Ils sont
+   * 36 avertissements dépliés poussaient la zone de saisie hors de l'écran. Ils sont
    * repliés derrière un compte, et restent lisibles une fois le plan parti (plus de phase d'accord).
    */
   it('avertissements repliés derrière leur nombre, aussi pendant que le plan tourne', async () => {
@@ -249,7 +249,7 @@ describe('TableauDesLots', () => {
   })
 
   /*
-   * conv-1284 : ce que chaque lot reçoit en plus de sa demande se lit dans le tableau — le contexte
+   * Ce que chaque lot reçoit en plus de sa demande se lit dans le tableau — le contexte
    * commun et les décisions prises en route, repliés comme les avertissements — et le modèle d'un
    * lot s'affiche à côté de son titre.
    */
@@ -301,7 +301,7 @@ describe('TableauDesLots', () => {
   })
 
   /*
-   * conv-1283 : après « Refuser », le tableau restait posé au-dessus de la saisie avec ses lots qui
+   * Après « Refuser », le tableau restait posé au-dessus de la saisie avec ses lots qui
    * ne partiront jamais. Il se ferme au clic, sans attendre le signal de rafraîchissement.
    */
   describe('plan refusé', () => {
@@ -334,7 +334,7 @@ describe('TableauDesLots', () => {
   })
 
   /*
-   * conv-1283 : le tableau prenait jusqu'à 340 px au-dessus de la saisie pendant tout le plan.
+   * Le tableau prenait jusqu'à 340 px au-dessus de la saisie pendant tout le plan.
    * « Réduire » ne garde que la ligne de titre ; le choix est retenu par plan, au remontage aussi.
    */
   describe('réduire le tableau', () => {
@@ -386,7 +386,7 @@ describe('TableauDesLots', () => {
   })
 
   /*
-   * Constat d'origine (conv-1146) : plus de 20 $ dans un seul fil sans que rien ne le montre. Chaque
+   * Constat d'origine : plus de 20 $ dans un seul fil sans que rien ne le montre. Chaque
    * lot dit donc sa durée et son coût, et le bilan le coût des lots — lu par `costBreakdown` et
    * résumé par le MÊME calcul que la pastille de coût du fil. Un coût inconnu se lit « — », jamais 0.
    */
@@ -406,7 +406,7 @@ describe('TableauDesLots', () => {
     it('chaque lot porte sa durée et son coût ; inconnu = « — » ; le bilan somme les lots mesurés', async () => {
       poserApi(
         { 'conv-1': { plan: planMesure(), role: 'chef' } },
-        // conv-101 tourne encore : son journal n'a aucun appel → coût inconnu, pas 0.
+        // tourne encore : son journal n'a aucun appel → coût inconnu, pas 0.
         { 'conv-100': [ligneDeCout(1.5)], 'conv-101': [] }
       )
       const { hote, fin } = await monter('conv-1')
@@ -479,7 +479,7 @@ describe('TableauDesLots', () => {
   })
 
   /*
-   * conv-1315 : en vue chat, la frise de la super conv montre déjà les lots. Le tableau ne garde que
+   * En vue chat, la frise de la super conv montre déjà les lots. Le tableau ne garde que
    * ce qu'elle n'a pas — et surtout les gestes sur le plan, qu'aucun autre endroit ne porte.
    */
   describe('à côté de la frise', () => {

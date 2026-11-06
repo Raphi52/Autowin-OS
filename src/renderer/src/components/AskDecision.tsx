@@ -35,7 +35,7 @@ import {
 const ATTENTE_SECOND_CHIFFRE = 600
 
 /*
- * LA CROIX DU MESSAGE DU RUN (conv-1008) : parite avec la carte « Message from subagent » de
+ * LA CROIX DU MESSAGE DU RUN : parite avec la carte « Message from subagent » de
  * claude.exe, qu'on ferme sans repondre. Fermer n'est PAS repondre — rien ne part, la question
  * reste close a la saisie comme avant. La fermeture est retenue sur le poste (par tour et par
  * question) : sans cela, la carte revenait au moindre remontage du fil.
@@ -103,7 +103,7 @@ export function AskDecisionBlock({
   dejaRepondu?: boolean
   /**
    * Le TEXTE du message du fil qui a repondu (`askReponseDuFil`). Il dit QUELLE reponse a ete
-   * retenue apres un remontage ou un redemarrage, quand l'etat local du clic est perdu (conv-240 :
+   * retenue apres un remontage ou un redemarrage, quand l'etat local du clic est perdu (
    * « apres avoir repondu ca doit me highlight celui qui a ete choisi par un cadre »).
    */
   reponseDuFil?: string
@@ -163,7 +163,7 @@ export function AskDecisionBlock({
     : new Set<number>()
   const repondre = (prompt: string): void => {
     /*
-     * AUCUN DESTINATAIRE = AUCUNE REPONSE (conv-50, 2026-09-01).
+     * AUCUN DESTINATAIRE = AUCUNE REPONSE (2026-09-01).
      *
      * `ChatMosaic` rendait la ligne de message sans `onAnswerAsk` : le bloc recevait `onPick`
      * indefini, armait quand meme son verrou, et le pied passait a « Répondu » alors qu'aucun
@@ -414,7 +414,7 @@ export function AskDecisionBlock({
               disabled={selection.length === 0 || verrouille}
               data-testid="ask-decision-envoyer"
             >
-              {/* Le compte en pastille, plus « (1) » (conv-209, variante 6). L'espace garde un nom
+              {/* Le compte en pastille, plus « (1) » (variante 6). L'espace garde un nom
                   lisible (« Envoyer 2 ») ; dans le flex du bouton, il ne se dessine pas. */}
               {t('ask.envoyer')}{' '}
               {selection.length > 0 && (

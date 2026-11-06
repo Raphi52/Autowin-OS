@@ -16,7 +16,7 @@ import { type ContexteStatique } from '../../../shared/contexte-detaille'
 import { occupationDeFenetre } from '../../../shared/occupation-fenetre'
 import { contextGauge, doitCompacterAutomatiquement } from '../../../shared/context-gauge'
 
-// Extrait de ChatView.tsx tel quel, sans changement de comportement (conv-1508).
+// Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type FluxDuPiloteCtx = {
   busyConversationsRef: React.RefObject<Set<string>>
   compactionAutoRef: React.RefObject<Set<string>>
@@ -107,15 +107,15 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
       if (!conversationId) return
       // TOUR INITIÉ CÔTÉ MAIN (scout de veille, tâche planifiée) : la vue ne l'a pas lancé, donc il
       // n'est pas dans `busyConversationsRef` — et ses événements étaient JETÉS : la conversation
-      // s'ouvrait sur un panneau vide pendant que l'agent travaillait (mesuré le 14/08,
-      // conv-1164→1166). Le premier événement pilote PROUVE qu'un tour tourne : on marque la
+      // s'ouvrait sur un panneau vide pendant que l'agent travaillait (mesuré le 14/08).
+      // Le premier événement pilote PROUVE qu'un tour tourne : on marque la
       // conversation occupée et on amorce un fil live pour que les patchs aient une cible.
       if (!busyConversationsRef.current.has(conversationId)) {
         if (e.kind === 'done' || e.kind === 'error') return
         setConversationBusy(conversationId, true)
         // Le cache live fait AUTORITÉ à la réouverture (`loadConv` le préfère au store). S'il est
         // ABSENT ici, l'amorce ci-dessous en ferait un fil réduit au seul tour en cours : la
-        // conversation rouvrait TRONQUÉE de tout son historique (conv-1376). D'où l'amorce du cache
+        // conversation rouvrait TRONQUÉE de tout son historique. D'où l'amorce du cache
         // depuis le store, faite AVANT d'y écrire l'amorce du tour.
         const cacheAbsent = !liveMessagesRef.current.has(conversationId)
         const fil = liveMessagesRef.current.get(conversationId) ?? []
@@ -129,7 +129,7 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
         }
         // L'HISTORIQUE — dont le MESSAGE ENVOYÉ du tour — vit dans le store, pas dans les événements :
         // sans ce rattrapage, le fil montrait la réponse sans la demande (« j'ai pas vu le message
-        // envoyé », 14/08), et le cache tronquait la conversation à la réouverture (conv-1376).
+        // envoyé », 14/08), et le cache tronquait la conversation à la réouverture.
         // On met le fil persisté en tête du fil adopté, sans écraser les patchs déjà arrivés.
         if (cacheAbsent) {
           void window.api
@@ -144,11 +144,11 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
               )
               const avant = liveMessagesRef.current.get(conversationId) ?? []
               // ... mais ce tour persisté porte ce que l'amorce n'a pas (réponse écrite, action
-              // `orchestrate` que visent les battements) : il DEVIENT l'amorce (conv-1146).
+              // `orchestrate` que visent les battements) : il DEVIENT l'amorce.
               const courant = adopterLeTourPersiste(duStore, avant)
               // Decide sur l'IDENTITE, pas sur « il y a un message utilisateur » : cette heuristique
               // abandonnait l'historique des qu'un message etait tape pendant la lecture du store, et
-              // le fil restait tronque a son dernier tour (conv-152, saisie ts=1788413114634).
+              // le fil restait tronque a son dernier tour (saisie ts=1788413114634).
               const complet = completerAvecHistorique(historique, courant)
               if (complet === avant) return
               liveMessagesRef.current.set(conversationId, complet)
@@ -165,7 +165,7 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
         `usage.inputTokens` somme toutes les iterations : juste pour la depense, faux pour la
         fenetre, car le prefixe est renvoye a chaque appel. Un tour de neuf appels rendait
         578 207 tokens pour une fenetre de 200 000 et la jauge restait collee a 100 %
-        (mesure du 2026-09-04, journal d'activite de conv-240). `derniereEntree` porte donc ce que
+        (mesure du 2026-09-04, journal d'activite). `derniereEntree` porte donc ce que
         le DERNIER appel a recu.
 
         AUCUN REPLI SUR LE CUMUL ICI. Cette vue repliait sur `inputTokens` quand le fournisseur
@@ -181,7 +181,7 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
           derniereEntreeCache?: number
           model?: string
           provider?: string
-          /** Partie fixe du contexte mesuree par le CLI pendant le tour (agent-pilot, conv-1000). */
+          /** Partie fixe du contexte mesuree par le CLI pendant le tour (agent-pilot). */
           contexte?: ContexteStatique
         }
         const contexteMesure = usage.contexte
@@ -227,7 +227,7 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
           if (!compactionAutoRef.current.has(conversationId)) {
             compactionAutoRef.current.add(conversationId)
             // Ce `done` arrive AVANT la réponse de `pilotChat` : le verrou d'envoi tient encore, la
-            // compaction l'attend au lieu d'être refusée sans un mot (conv-1080).
+            // compaction l'attend au lieu d'être refusée sans un mot.
             lancerCompactionAuto(conversationId)
           }
         } else if (jauge && jauge.level !== 'critique') {
@@ -246,7 +246,7 @@ export function useFluxDuPilote(ctx: FluxDuPiloteCtx): void {
       }
       pilotBatcher.flush()
       // Battement et verdict VISENT une action deja posee : ils rejoignent la bulle qui la porte,
-      // meme au-dessus d'une orientation (conv-955). Le reste s'ecrit en fin de fil, comme avant.
+      // meme au-dessus d'une orientation. Le reste s'ecrit en fin de fil, comme avant.
       patchLast(
         conversationId,
         (message) => Object.assign(message, reduceAssistantPilotEvent(message, e)),

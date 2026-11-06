@@ -5,7 +5,7 @@
  * jamais (départ déjà passé, semaine sans jour coché) ou partirait de travers, sans que rien ne le
  * dise. On refuse donc à la saisie plutôt qu'au réveil.
  *
- * Le message suit la langue de l'interface (traduction anglaise, conv-1170) : il est lu au moment de
+ * Le message suit la langue de l'interface (traduction anglaise) : il est lu au moment de
  * l'appel, pendant le rendu ou l'enregistrement de TaskManagerView.
  */
 

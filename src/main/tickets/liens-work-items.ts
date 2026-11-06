@@ -1,5 +1,5 @@
 /**
- * LIER UN PROMPT À UN WORK ITEM — option E du cadrage conv-1127 (2026-10-23).
+ * LIER UN PROMPT À UN WORK ITEM — option E du cadrage (2026-10-23).
  *
  * Demande : « la vue carte du projet j'aimerais rattacher les prompts a des work-items […] pour
  * qu'un prompt soit lié a une task », puis « construis l'option E : lien automatique quand il est sûr
@@ -245,7 +245,7 @@ function workItemsPropres(
 /**
  * Pose `workItems` sur les demandes d'UN fil. Une demande `suite` (ligne de besoin de l'agent) sans
  * lien à elle reprend ceux de la demande précédente du même fil, marqués `herite` — hypothèse du
- * cadrage conv-1127. Copie, jamais mutation : les demandes viennent de la mémoire du calculateur.
+ * cadrage. Copie, jamais mutation : les demandes viennent de la mémoire du calculateur.
  */
 export function lierLesDemandesDuFil(
   conversationId: string,
@@ -293,7 +293,7 @@ function sourcePour(
   if (!sources.length)
     return {
       ok: false,
-      // L'écran Tickets est devenu l'onglet « Tickets » du Board (conv-1397).
+      // L'écran Tickets est devenu l'onglet « Tickets » du Board.
       raison: 'Aucune source de tickets configurée : ajoute-la dans l’onglet Tickets du Board.'
     }
   if (typeof sourceId === 'string' && sourceId.trim()) {

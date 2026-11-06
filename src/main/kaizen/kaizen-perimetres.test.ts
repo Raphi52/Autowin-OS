@@ -50,7 +50,7 @@ function normalise(t: string): string {
 }
 
 /**
- * La fixture est l'ancien fichier AU DOMAINE METIER PRES : un mot y est ecrit `<métier>` (conv-916,
+ * La fixture est l'ancien fichier AU DOMAINE METIER PRES : un mot y est ecrit `<métier>` (
  * aucun terme d'entreprise hors de `entreprise/`). Chaque `<métier>` vaut UN mot de l'ancien fichier,
  * tout le reste doit etre identique — avec ou sans profil d'entreprise.
  */

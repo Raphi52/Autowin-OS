@@ -1,6 +1,6 @@
 /**
  * Carte de confirmation « Supprimer la conversation ? » / « Supprimer N conversations ? »
- * (conv-1078, 2026-10-22 : /draft « une plus jolie popup pour quand je supprime les convs », puis
+ * (2026-10-22 : /draft « une plus jolie popup pour quand je supprime les convs », puis
  * « 4 et 5 mais adapté en fonction du theme », puis « Implémenter la 2 · En-tête en ligne »).
  *
  * Ce qu'elle montre, et pourquoi :
@@ -19,8 +19,8 @@
  * Rendue dans `body` (portail) : posée dans le panneau du chat, elle restait SOUS la poignée de
  * largeur de la liste des fils (`.conv-pane-resizer`, z-index 4 dans la couche de la coque, quand la
  * carte, z-index 90, n'en avait que dans celle du chat) — un filet clair traversait la carte, et un
- * clic sur ces 9 px de « Supprimer » tombait sur la poignée (mesuré par `elementsFromPoint`,
- * conv-1078). Ses couleurs viennent toutes de `:root` : le portail ne lui fait rien perdre.
+ * clic sur ces 9 px de « Supprimer » tombait sur la poignée (mesuré par `elementsFromPoint`).
+ * Ses couleurs viennent toutes de `:root` : le portail ne lui fait rien perdre.
  */
 
 import { createPortal } from 'react-dom'

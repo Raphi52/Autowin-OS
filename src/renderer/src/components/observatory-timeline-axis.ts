@@ -1,5 +1,5 @@
 /**
- * Axe temporel de la Chronologie Observatory — demande utilisateur du 2026-10-11 (conv-226) :
+ * Axe temporel de la Chronologie Observatory — demande utilisateur du 2026-10-11 :
  * « mon observatory je le veux en mode timeline dans chronologie ». La vue empilait des cartes
  * numérotées sans aucune heure : on ne voyait ni QUAND un événement avait eu lieu, ni le temps
  * écoulé entre deux d'entre eux — c'est-à-dire précisément ce qu'une frise montre.

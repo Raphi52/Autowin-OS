@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 /*
- * « ENREGISTRER EN .HTML » (conv-1304) — ce que le fichier emporte. Verrouille surtout ce qui ne se
+ * « ENREGISTRER EN .HTML » — ce que le fichier emporte. Verrouille surtout ce qui ne se
  * voit pas a l'oeil : le fichier reste hors ligne, et sa politique passe AVANT tout script (une
  * politique posee apres n'arrete pas ce qui a deja tourne). Le rendu du fichier dans un vrai
  * navigateur est joue par amorce.page.test.ts.

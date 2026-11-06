@@ -147,7 +147,7 @@
 .sc-btn:hover {
   border-color: var(--accent, #4b9fff);
 }
-/* Onglet Git, maquette 5B1 (conv-844) : l'interrupteur à droite de la branche, puis le flux. */
+/* Onglet Git, maquette 5B1 : l'interrupteur à droite de la branche, puis le flux. */
 .sc-branch-row {
   align-items: center;
 }
@@ -423,7 +423,7 @@
 /* Base de 160 px, pas 0 : avec `flex: 1` (base nulle), le compte ne faisait jamais passer les
    boutons a la ligne. Dans le panneau Details il retrecissait a une colonne d'un mot (« · 3 /
    comment / sur 1 / fichier ») et « commentaires » passait sous « Envoyer a l'agent » (capture du
-   2026-10-11, conv-245). Trop etroit pour 160 px a cote des boutons, il prend sa propre ligne. */
+   2026-10-11). Trop etroit pour 160 px a cote des boutons, il prend sa propre ligne. */
 .sc-relecture-compte {
   flex: 1 1 160px;
   min-width: 0;

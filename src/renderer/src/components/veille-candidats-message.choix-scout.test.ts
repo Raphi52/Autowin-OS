@@ -10,7 +10,7 @@ import {
 } from './veille-candidats-message'
 
 /*
- * Piste 7 de conv-890 : les choix de pistes sont notés dans le processus principal en LISANT le
+ * Piste 7 : les choix de pistes sont notés dans le processus principal en LISANT le
  * message que le panneau de sélection envoie (`noterChoixScout`). Le test de `scout-memoire` en
  * recopie le gabarit à la main : un changement du VRAI gabarit le laisserait vert, et les choix
  * cesseraient d'être notés sans bruit. Ici, la chaîne réelle du chat : tableau du scout → panneau

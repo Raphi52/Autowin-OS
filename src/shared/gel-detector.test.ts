@@ -109,7 +109,7 @@ describe('classerGel — distinguer la boucle TENUE du process PRIVE de CPU', ()
 })
 
 /*
- * ENTREE-SORTIE BLOQUANTE — le trou de l'heuristique CPU, mesure sur conv-1539.
+ * ENTREE-SORTIE BLOQUANTE — le trou de l'heuristique CPU, mesure.
  *
  * Journal du 2026-08-30 : cinq gels de 11,7 a 14,9 s, espaces d'environ une minute, tous rendus
  * `process-prive-de-cpu` donc « pas notre code ». Une lecture SYNCHRONE sur le partage reseau

@@ -27,7 +27,7 @@ import {
 } from './home-decor-foule-tribus'
 
 /*
- * LA FOULE DU FOND D'ACCUEIL : DES HUMAINS RÉELS, DIRECTION « HEURE DE POINTE » (conv-312).
+ * LA FOULE DU FOND D'ACCUEIL : DES HUMAINS RÉELS, DIRECTION « HEURE DE POINTE ».
  *
  * Demande de l'utilisateur : « /draft les humains les plus realiste possible pour le fond decran
  * d'accueil », puis, devant les six directions rendues dans le vrai décor, « Implémenter la 6 · Heure
@@ -47,7 +47,7 @@ import {
  *     décodés HORS du fil principal par `createImageBitmap` ;
  *   - chaque matière porte dans ses `extras` glTF le nom de ses fichiers de texture.
  *
- * DES VOYOUS DU FUTUR DEPUIS LA FIN DE conv-312 : « ils doivent tous avoir l'air de voyous du futur »,
+ * DES VOYOUS DU FUTUR DEPUIS LA FIN : « ils doivent tous avoir l'air de voyous du futur »,
  * puis « implémente survet et punk ». Chaque personne appartient à une tribu, survêt' et cagoule ou
  * punk à crête : ses matières en prennent les couleurs, ses os en portent les accessoires (crête,
  * épaulettes, collier, chaîne en or). Voir `home-decor-foule-tribus.ts`.
@@ -187,7 +187,7 @@ export const HEURE_DE_POINTE: readonly Passant[] = [
 ]
 
 /**
- * LES BANDES (conv-331, proposition 3 du /draft) : des duos et des trios de HEURE_DE_POINTE qui
+ * LES BANDES (proposition 3 du /draft) : des duos et des trios de HEURE_DE_POINTE qui
  * marchent ensemble, côte à côte, et se parlent ; les autres les contournent. Rangs dans
  * HEURE_DE_POINTE, le premier donne le sens ; chaque bande tient sur un seul trottoir.
  * 12 passants sur 18 en bande, 6 seuls.
@@ -227,7 +227,7 @@ export function enrouler(z: number): number {
  * Où serait un passant dans sa file fixe : sa position de référence, plus le défilement de la rue
  * (la caméra « marche »), moins son propre pas. `defile` = mètres parcourus par la rue depuis
  * l'instant de référence. C'est sa place de DÉPART : ensuite, la marche (home-decor-foule-marche.ts)
- * le fait avancer en voyant les autres — en file fixe, les corps se traversaient (conv-331).
+ * le fait avancer en voyant les autres — en file fixe, les corps se traversaient.
  */
 export function positionZ(p: Passant, vitesse: number, t: number, defile: number): number {
   return enrouler(p.zf + defile - p.sens * vitesse * (t - FOULE.tRef))
@@ -337,7 +337,7 @@ function matiere(
  * REMPLACE LES MATIÈRES D'UN MODÈLE, UNE MATIÈRE NEUVE PAR MATIÈRE D'ORIGINE. Le chargeur glTF découpe
  * une matière d'origine en plusieurs morceaux de maillage : 157 morceaux de corps pour 40 matières
  * d'origine dans la foule. Une matière neuve par morceau en faisait 140 ; elles sont 40 (54 avec les
- * accessoires, au lieu de 154 ; banc du 2026-10-18, conv-312). Mesuré dans l'Accueil : la tâche la plus
+ * accessoires, au lieu de 154 ; banc du 2026-10-18). Mesuré dans l'Accueil : la tâche la plus
  * longue après l'entrée de la foule n'a PAS baissé (77 à 154 ms, contre 62 à 102 ms avant). Elle
  * est surtout une image ordinaire du décor : à chaque image, `setProgram` coûte 34 ms même 5 à 9 s
  * après l'entrée de la foule, parce que le reflet de la Spirale dessine la rue en espace linéaire puis
@@ -486,7 +486,7 @@ function copier(modele: THREE.Group): { racine: THREE.Object3D; bassin: THREE.Ob
     /*
      * LA SPHÈRE ENGLOBANTE EST POSÉE D'AVANCE, celle de la pose de repos. Le moteur ne s'en sert que
      * pour trier les objets ; absente, il la calcule à la première image en déformant chaque sommet
-     * par ses os : 261 ms sur le fil principal pour 18 passants (profil du 2026-10-17, conv-312,
+     * par ses os : 261 ms sur le fil principal pour 18 passants (profil du 2026-10-17
      * `applyBoneTransform`), dans la tâche de 0,6 à 0,9 s qui suivait l'entrée de la foule.
      */
     if (mesh.isSkinnedMesh) {
@@ -887,7 +887,7 @@ export async function chargerFoule(
         const z = marche!.z(m)
         // Garde-fou de toujours, par-dessus la marche : on passe côté chaussée d'un figurant. La marche
         // les a déjà contournés : il ne joue qu'en dernier recours. La caméra, elle, est contournée DANS
-        // la marche (MARCHE.camera, conv-1054) : écartée ici, sur l'image, elle faisait sauter les passants.
+        // la marche (MARCHE.camera) : écartée ici, sur l'image, elle faisait sauter les passants.
         let x = m.x
         for (const o of obstacles) x = ecarter(x, z, o)
         g.racine.position.set(x, sol, z)

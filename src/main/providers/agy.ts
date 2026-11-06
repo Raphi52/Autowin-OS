@@ -1,6 +1,6 @@
 /**
  * Moteur `agy` (Antigravity CLI de Google) — Gemini par l'ABONNEMENT ou le compte Google, sans clé
- * (2026-11-04, conv-1499). Depuis juin 2026, Gemini CLI ne sert plus que par clé ; la connexion par
+ * (2026-11-04). Depuis juin 2026, Gemini CLI ne sert plus que par clé ; la connexion par
  * compte passe par agy. Calqué sur Codex : un processus par tour, `-p … --output-format stream-json`.
  *
  * Format mesuré (agy 1.5.0, sans connexion) : la fin du tour est UNE ligne JSON
@@ -64,7 +64,7 @@ export function lireLigneAgy(ligne: string): LigneAgy {
   if (evt.event === 'result' && evt.result && typeof evt.result === 'object') {
     return { kind: 'resultat', resultat: evt.result as AgyResultat }
   }
-  // Format réel mesuré (agy 1.5.0, connecté, conv-1499) : le texte arrive en
+  // Format réel mesuré (agy 1.5.0, connecté) : le texte arrive en
   // step_update.text_delta sur les étapes « agent_response ».
   const etape = evt.step_update as Record<string, unknown> | undefined
   if (evt.event === 'step_update' && etape && typeof etape === 'object') {
@@ -132,7 +132,7 @@ export class AgyAdapter implements ProviderAdapter {
     const model = opts.model && opts.model !== 'default' ? opts.model : undefined
     // Le fil part par stdin (une ligne NDJSON), jamais en argument : un long fil dépassait la
     // limite de 32 767 caractères de la ligne de commande Windows → spawn ENAMETOOLONG
-    // (conv-1499, 2026-11-04). `-p=` vide + --input-format stream-json : accepté par agy 1.5.0.
+    // (2026-11-04). `-p=` vide + --input-format stream-json : accepté par agy 1.5.0.
     const args = ['--input-format', 'stream-json', '--output-format', 'stream-json', '-p=']
     if (model) args.push('--model', model)
     if (opts.execution?.cwd) args.push('--dangerously-skip-permissions')

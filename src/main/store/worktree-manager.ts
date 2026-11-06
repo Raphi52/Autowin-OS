@@ -22,7 +22,7 @@ export type {
   WorktreeRecoveryContext,
   WorktreeRunContext
 } from './worktree-manager-types'
-// Outils de module et méthodes de la classe découpés en modules voisins (conv-1508, lot 3).
+// Outils de module et méthodes de la classe découpés en modules voisins (lot 3).
 import {
   attacherMethodes,
   GIT_COMMAND_TIMEOUT_MS,
@@ -494,7 +494,7 @@ export class WorktreeManager {
    * `salvage` archive tout travail qu'il JETTE sur `autowin/recovery/salvage-<date>-<id>` avant de
    * nettoyer le bureau : c'est ce qui rend le verdict reversible. Comme le recensement enumere
    * `refs/heads/autowin/recovery/*` sans regarder l'origine de la branche, il recomptait ces
-   * archives comme du travail a trier. Mesure du 2026-08-29 (conv-1521) : trier 2 travaux faisait
+   * archives comme du travail a trier. Mesure du 2026-08-29 : trier 2 travaux faisait
    * passer le compteur de 2 a CINQ — le tri produisait plus qu'il ne resolvait, et la liste ne
    * pouvait jamais se vider.
    *

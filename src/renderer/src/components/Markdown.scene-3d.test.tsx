@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"disableIframePageLoading":true}}
 /*
- * LA FENCE ```threejs DEVIENT UNE SCENE VIVANTE DANS LE FIL (Bloc3D.tsx, conv-299) — dans un cadre
+ * LA FENCE ```threejs DEVIENT UNE SCENE VIVANTE DANS LE FIL (Bloc3D.tsx) — dans un cadre
  * isole, et seulement une fois la fence close. Ce qui est verrouille ici :
  *   - le decoupage (fermee -> scene ; ouverte, vide ou trop grosse -> code) ;
  *   - l'ISOLEMENT du cadre : `sandbox="allow-scripts"` exactement, jamais `allow-same-origin` ;

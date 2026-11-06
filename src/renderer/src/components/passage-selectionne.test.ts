@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { ajouterAuBrouillon, passageDuFil, texteDeLActionSurPassage } from './passage-selectionne'
 
 /**
- * RÉPONDRE À UN PASSAGE (conv-1038, 2026-10-21) : pour contester un point d'une longue réponse,
+ * RÉPONDRE À UN PASSAGE (2026-10-21) : pour contester un point d'une longue réponse,
  * l'utilisateur le RETAPAIT — le fil ne gérait aucune sélection. Ces tests tiennent ce qui est
  * reconnu comme un passage du fil, et le texte que chaque action pose dans la saisie.
  */
@@ -91,7 +91,7 @@ describe('passageDuFil', () => {
     expect(passageDuFil(window.getSelection(), fil)).toBeNull()
   })
 
-  // conv-1228 (2026-10-28) : plus de coupe à 4 000 caractères (passage-selectionne.entier.test.ts).
+  // 2026-10-28 : plus de coupe à 4 000 caractères (passage-selectionne.entier.test.ts).
   it('passage géant : posé entier, sans « … »', () => {
     const fil = poser(`<div class="msg assistant"><p>${'a'.repeat(5000)}</p></div>`)
     selectionner(fil.querySelector('p')!.firstChild!, 0, 5000)

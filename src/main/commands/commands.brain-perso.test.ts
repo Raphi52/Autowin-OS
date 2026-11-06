@@ -8,7 +8,7 @@ import type { BrainRetrievalOptions, BrainRetrievalResult } from '../brain/brain
 import { AppCommandBus } from './commands'
 
 /**
- * DEUX BRAINS DANS LE BUS (conv-1233, 2026-10-28) : `brain_query` cherche dans les deux,
+ * DEUX BRAINS DANS LE BUS (2026-10-28) : `brain_query` cherche dans les deux,
  * `brain_read` ouvre une note `perso:` sur le serveur perso, et `remember` range selon `portee`
  * — jamais un fait perso rabattu sur le Brain d'équipe.
  *

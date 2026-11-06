@@ -1,5 +1,5 @@
 /**
- * LA SORTIE D'UN TERMINAL EN TEXTE LISIBLE — ce que `terminal_lire` rend à l'agent (conv-1362, lot 3/3).
+ * LA SORTIE D'UN TERMINAL EN TEXTE LISIBLE — ce que `terminal_lire` rend à l'agent (lot 3/3).
  *
  * Retirer les séquences (`shared/ansi.ts`) ne suffit pas ici. Un vrai terminal Windows ne produit pas
  * un flux de lignes : il REPEINT un écran. Capture du 2026-10-31 (PowerShell 5.1, 80 colonnes) :

@@ -23,7 +23,7 @@ import {
   issueDesLecturesPourLaTrace
 } from './deux-lectures'
 
-/** La demande RÉELLE de conv-767 (premier message, 2026-09-22) — 2,47 $ sur une mauvaise lecture. */
+/** La demande RÉELLE (premier message, 2026-09-22) — 2,47 $ sur une mauvaise lecture. */
 const DEMANDE_767 =
   '/scout une task (toujours la meme) qui est pratique pour etre évaluée via /arena'
 /** La réponse du petit modèle : chaque lecture et sa probabilité, en %. */
@@ -213,7 +213,7 @@ describe('une seule lecture : annoncée quand même (conv-1240, « met le tout l
     expect(annonceDeLaLectureRetenue('zoom de la frise')).toBe(
       'Compréhension : « zoom de la frise »'
     )
-    // Le modèle nomme la ligne comme l'étiquette du fil (conv-1280).
+    // Le modèle nomme la ligne comme l'étiquette du fil.
     for (const consigne of [consigneDeLectureRetenue('a'), consigneDeLectureRetenue('a', 'b')]) {
       expect(consigne).toContain('« compréhension »')
       expect(consigne).not.toMatch(/^L'utilisateur a déjà vu la ligne : /m)
@@ -304,7 +304,7 @@ describe('les filtres déterministes, avant tout appel de modèle', () => {
   })
 
   it('une demande de changement d’affichage est repérée ; une question ne l’est pas', () => {
-    // conv-542 : la barre de défilement a été SUPPRIMÉE au lieu d'écarter le contenu.
+    // La barre de défilement a été SUPPRIMÉE au lieu d'écarter le contenu.
     expect(
       demandeDeChangementDeRendu(
         'la barre de scroll dans les widgets elle masque un peu le contenu'
@@ -335,7 +335,7 @@ describe('les filtres déterministes, avant tout appel de modèle', () => {
     expect(charge).toContain('nan pas ça')
   })
 
-  // conv-1263, tour 60eda4d2-c6e0-491d-8b34-116257bf3766 : « fais une super conv » lu « améliorer
+  // Tour 60eda4d2-c6e0-491d-8b34-116257bf3766 : « fais une super conv » lu « améliorer
   // ses dialogues ». Sans le vocabulaire d'Autowin, rejeu Haiku : 0 lecture « plan de lots » sur 3.
   it('la consigne donne le sens des mots d’Autowin qui ne sont pas des commandes (kaizen conv-1266)', () => {
     expect(CONSIGNE_DEUX_LECTURES).toContain('Autowin OS')
@@ -345,7 +345,7 @@ describe('les filtres déterministes, avant tout appel de modèle', () => {
 })
 
 /**
- * LA TRACE DIT CE QUE LE CONTRÔLE A DÉCIDÉ, PAS LA RÉPONSE BRUTE COUPÉE (conv-1431, 2026-11-02).
+ * LA TRACE DIT CE QUE LE CONTRÔLE A DÉCIDÉ, PAS LA RÉPONSE BRUTE COUPÉE (2026-11-02).
  *
  * Mesuré sur `cost.jsonl` : 527 lignes `deuxLectures` sur 696 coupées à 160 caractères AVANT la
  * deuxième lecture, donc impossibles à classer. Entrée qui ferait échouer une correction fausse :
@@ -364,7 +364,7 @@ describe('issueDesLecturesPourLaTrace — une ligne lisible dans cost.jsonl', ()
   })
 
   /*
-   * L'OBJECTION DU CONTRÔLE FINAL (conv-1431) : sur un tour ordinaire, la lecture court EN PARALLÈLE
+   * L'OBJECTION DU CONTRÔLE FINAL : sur un tour ordinaire, la lecture court EN PARALLÈLE
    * du modèle et le tour ANNONCE la plus probable ; la question n'est posée que si un run suit.
    * Entrée qui ferait échouer une correction fausse : `LECTURES_767` lue `en-parallele` — l'ancienne
    * étiquette y écrivait « question » sans qu'aucune question ne parte.
@@ -420,7 +420,7 @@ describe('chargeDeuxLectures — skill nommée sans barre oblique (conv-412)', (
 })
 
 /**
- * Le fil RÉEL de conv-1558 (2026-11-05, positions 83 à 90) : quatre messages d'affilée, chacun
+ * Le fil RÉEL (2026-11-05, positions 83 à 90) : quatre messages d'affilée, chacun
  * coupant le tour d'avant, qui n'a laissé que sa ligne compréhension. Lu sur le seul dernier
  * message, « améliore tout fait un lot » est devenu « tout ce qui a été évoqué sur le kimono ».
  */

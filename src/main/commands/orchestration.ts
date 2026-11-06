@@ -1,4 +1,4 @@
-// Groupe de commandes « lancement d’un workflow », sorti de AppCommandBus.run (conv-1508, lot 2).
+// Groupe de commandes « lancement d’un workflow », sorti de AppCommandBus.run (lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import { watchdogEvidenceIdentity } from './orchestration-entrees'
@@ -31,7 +31,7 @@ import { ligneDeJournalDeRelecture } from '../juge/objections-juge'
 import { messageDuRun } from '../../shared/message-du-run'
 import { classeTerminaleDEchec, causeDInterruption } from '../orchestration/classe-terminale-echec'
 
-/** Cas de `AppCommandBus.run` : lancement d’un workflow. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
+/** Cas de `AppCommandBus.run` : lancement d’un workflow. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerOrchestration(
   bus: AppCommandBus,
   name: string,
@@ -127,7 +127,7 @@ export async function executerOrchestration(
       /*
        * L'HORLOGE DU SIGNE DE VIE. Sans elle, le fil ne parlait que quand le modele parlait.
        *
-       * DEFAUT MESURE le 2026-09-07 (conv-42) : un run a travaille de 09:45 a 10:08 sans une
+       * DEFAUT MESURE le 2026-09-07 : un run a travaille de 09:45 a 10:08 sans une
        * ligne dans le fil, et l'utilisateur l'a signale comme un « arret » alors qu'il a fini
        * VERT. Les signes de vie existants sont tous EVENEMENTIELS (fin de phase, fragment de
        * raisonnement) : pendant qu'un sous-agent passe vingt minutes dans ses outils, il ne se
@@ -139,7 +139,7 @@ export async function executerOrchestration(
       /**
        * LA PHASE EN COURS, gardee a part du dernier fait.
        *
-       * DEFAUT MESURE le 2026-09-16 (conv-63, run c295e4061094) : releve du DOM de l'app reelle
+       * DEFAUT MESURE le 2026-09-16 (run c295e4061094) : releve du DOM de l'app reelle
        * pendant que l'utilisateur demandait « la conv semble a l'arret ? », le battement affichait
        * « 23 min 53 s · Bash · cd "C:/…/agent__run-c295e4061094-1" && cp /tmp/pee… ». Il TOURNAIT
        * donc, mais la seule source qui l'alimentait etait la note d'outil : la moindre commande
@@ -172,8 +172,8 @@ export async function executerOrchestration(
             bindingOverride,
             runtimeSnapshot
           ) ?? null
-        // fix-ok: checkpoint conv-691 lu sur disque : activeCalls=1 avec agent build PID 28028 mort ; test commands.test.ts rouge sur HEAD, vert avec ce correctif.
-        // UN VERROU LAISSE PAR UN PROCESS MORT SE RECONCILIE AUSSI DEPUIS LE CHAT (conv-691,
+        // fix-ok: checkpoint lu sur disque : activeCalls=1 avec agent build PID 28028 mort ; test commands.test.ts rouge sur HEAD, vert avec ce correctif.
+        // UN VERROU LAISSE PAR UN PROCESS MORT SE RECONCILIE AUSSI DEPUIS LE CHAT (
         // 2026-09-18). Un agent qui survit a la fermeture de l app garde activeCalls=1 dans le
         // checkpoint : seul le process qui l a lance pouvait le regler. Le demarrage reconcilie
         // (relaunch-resumable-run.ts) ; ce chemin reprenait le compteur tel quel, et chaque relance
@@ -186,14 +186,14 @@ export async function executerOrchestration(
                 defaultProcessIdentity
               ) ?? trouve)
             : trouve
-        // UN RUN VIVANT NE SE REPREND PAS, IL SE REJOINT (mesure conv-691, 2026-09-18) : le mode
+        // UN RUN VIVANT NE SE REPREND PAS, IL SE REJOINT (2026-09-18) : le mode
         // auto avait lance le run avec le prompt suggere, puis le meme texte revenait en tour
         // utilisateur. La cle de reprise designait ce run encore en cours dans CE process ; la
         // reprise attendait 60 s puis rendait « Reprise refusee » alors que le run travaillait.
         if (resumable && bus.os.isOrchestrationLive?.(resumable.runId)) {
           return { runId: resumable.runId, status: 'running', reused: true }
         }
-        // LE MEME TOUR SE REJOINT AUSSI QUAND SA TACHE A ETE REECRITE (conv-890, 2026-09-30) : le
+        // LE MEME TOUR SE REJOINT AUSSI QUAND SA TACHE A ETE REECRITE (2026-09-30) : le
         // tour de chat restaure apres un redemarrage relance `orchestrate` avec un autre libelle,
         // pendant que la reprise de demarrage fait deja tourner le run de ce tour. Sans ce
         // rattachement, un second run repart de zero et repaie `think` (run-66d6d5bdfc5a-1, 1,94 $).
@@ -202,7 +202,7 @@ export async function executerOrchestration(
         const vivantDuTour = bus.os.liveOrchestrationForTurn?.(convId, orchestrationTurnId)
         if (vivantDuTour) return { runId: vivantDuTour, status: 'running', reused: true }
         // Publication Git DÉJÀ acquise pour ce checkpoint → le tour se clôt en SUCCÈS, sans
-        // repayer aucun provider. Mesuré sur conv-1145 (13/08) : le run avait publié — verdict
+        // repayer aucun provider. Mesuré (13/08) : le run avait publié — verdict
         // green, publication complete, SHA poussé sur origin/auto/… — puis la reprise du
         // checkpoint encore présent a été refusée (« publication complete déjà engagée ») et ce
         // refus marquait le TOUR ENTIER failed : une réussite à 10 $ affichée comme un échec.
@@ -229,7 +229,7 @@ export async function executerOrchestration(
         }
         // Repli quand aucune reprise STRICTE n'existe (le libellé a changé entre deux tours) :
         // on récupère quand même l'analyse en lecture seule déjà produite dans CETTE
-        // conversation, plutôt que de la repayer. Mesuré sur conv-1061 : « scout … vue Chat »
+        // conversation, plutôt que de la repayer. Mesuré : « scout … vue Chat »
         // puis « Fais tout … » ne s'apparient pas, et le scout est intégralement rejoué.
         // Aucun checkpoint n'est repris ici : seuls des textes de phase sont réinjectés.
         // Le tour et le dossier du run : `think` n'est repris que pour la même demande, et si les
@@ -257,7 +257,7 @@ export async function executerOrchestration(
              * `onProgress` n'etait branche que sur `run` et `verify` : une orchestration
              * n'emettait RIEN pendant tout son travail. Le veilleur d'inactivite du tour
              * (`run-pilot-chat.ts`, plafond 20 min) la prenait donc pour morte et coupait le tour
-             * pendant qu'elle tournait encore. Mesure conv-136 (2026-09-02) : run de 25 min, tour
+             * pendant qu'elle tournait encore. Mesure (2026-09-02) : run de 25 min, tour
              * coupe a 20, compte-rendu perdu alors que le run a fini VERT. Chaque phase battue ici
              * remet le veilleur a zero — il distingue enfin « long » de « mort ».
              */
@@ -304,17 +304,17 @@ export async function executerOrchestration(
                 }))
               populateConvRunSections(runPath, livePhases)
             }
-            // Le plan du build découpé, relisible AVANT le code et suivi sous-tâche par sous-tâche
-            // (conv-1083). Sans découpage, aucune lecture du RUN.md.
+            // Le plan du build découpé, relisible AVANT le code et suivi sous-tâche par sous-tâche.
+            // Sans découpage, aucune lecture du RUN.md.
             if (runPath) mettreAJourPlanDuRun(runPath, steps)
             /*
-             * LA TRACE SUR DISQUE SUIT LE RUN ÉTAPE PAR ÉTAPE (conv-1021, 2026-10-19).
+             * LA TRACE SUR DISQUE SUIT LE RUN ÉTAPE PAR ÉTAPE (2026-10-19).
              *
-             * Elle n'était écrite qu'à la fin du run : une interface rechargée en plein run (conv-1019,
+             * Elle n'était écrite qu'à la fin du run : une interface rechargée en plein run (
              * 2 h de boucle juge → réparation) avait perdu tout ce qui précédait, et rien sur disque ne
              * pouvait le lui rendre. Écrite AVANT la diffusion de l'étape et en synchrone : quand
              * l'interface reçoit `orchestrate-step` et relit le fichier, il porte déjà cette étape.
-             * Coût mesuré sur la plus grosse trace du poste (2,9 Mo, 54 étapes, conv-1019) : 14 ms
+             * Coût mesuré sur la plus grosse trace du poste (2,9 Mo, 54 étapes) : 14 ms
              * par réécriture, 0,45 s cumulées sur tout le run.
              */
             if (runPath) saveConvRunTrace(runPath, steps)
@@ -422,7 +422,7 @@ export async function executerOrchestration(
               onProgress?.(dernierSigneDeVie)
             }
             /*
-             * LE RAISONNEMENT N'EST PAS UNE LIGNE D'ETAT (conv-918, 2026-10-13).
+             * LE RAISONNEMENT N'EST PAS UNE LIGNE D'ETAT (2026-10-13).
              *
              * Ses fragments arrivaient comme des notes : chacun ECRASAIT la ligne de vie, qui
              * affichait trois mots de reflexion en anglais (« and now 1/2 could ») au lieu de ce
@@ -504,7 +504,7 @@ export async function executerOrchestration(
               if (runPath && lifecycle.closure.status !== 'open') {
                 closeConvRun(
                   runPath,
-                  // Coupé par Stop, quota ou panne : `interrupted`, pas `red` (piste 4, conv-1070).
+                  // Coupé par Stop, quota ou panne : `interrupted`, pas `red` (piste 4).
                   statutDuRunMd(lifecycle.closure),
                   ligneDeClotureDuMoteur(lifecycle.closure)
                 )
@@ -555,7 +555,7 @@ export async function executerOrchestration(
           // La correction du 2026-09-16 n'avait rebranche que les commandes de fichier et
           // `verify` : `orchestrate` laissait l'orchestrateur lire `deps.executionWorkspace`,
           // fige au demarrage de l'app. Une conversation rangee sur un AUTRE depot lancait donc
-          // son run dans le depot d'Autowin. Mesure conv-649 : une demande visant
+          // son run dans le depot d'Autowin. Mesure : une demande visant
           // D:/ContosoV3Desktop a produit un run analysant D:/AutoWinOS, 11,65 $ perdus.
           { workspace: bus.workspaceDuTour }
         )
@@ -591,7 +591,7 @@ export async function executerOrchestration(
           role: lessonStep?.role ?? 'orchestrator',
           proposalAttestations: r.learningAttestations
         })
-        // conv-339 : les notes que l'étape learn a déposées au Brain comptent dans l'état affiché.
+        // Les notes que l'étape learn a déposées au Brain comptent dans l'état affiché.
         const learningDuRun = avecNotesDeposees(learning, r.notesBrainDeposees)
         const terminalStatus =
           r.gateBlocked || !r.valid
@@ -604,7 +604,7 @@ export async function executerOrchestration(
           : !r.valid
             ? 'Livrable refusé par le juge.'
             : undefined
-        // conv-989 : la sortie ENTIÈRE des étapes, à côté du RUN.md. Le panneau du run la lit par
+        // La sortie ENTIÈRE des étapes, à côté du RUN.md. Le panneau du run la lit par
         // ce nom, et la bulle coupée la nomme (copie permanente, contrairement à `run-livrables`).
         const livrableDuRun =
           runPath && r.phaseOutputs.some((sortie) => sortie.text.trim())
@@ -629,7 +629,7 @@ export async function executerOrchestration(
             }
           }
           // J2 — RUN.md peuplé du vrai livrable, VERDICT DU JUGE COMPRIS : c'est la seule
-          // source que `orchestration-memoire` sait relire au run suivant (conv-1405).
+          // source que `orchestration-memoire` sait relire au run suivant.
           populateConvRunSections(runPath, phasesAvecJuge(r.phaseOutputs, r.judgeText), {
             publishedCommitSha
           })
@@ -637,7 +637,7 @@ export async function executerOrchestration(
             runPath,
             terminalStatus,
             terminalDetail ??
-              // Piste 5 (conv-1070) : une relecture livrée avec défauts ne s'écrit pas « validé ».
+              // Piste 5 : une relecture livrée avec défauts ne s'écrit pas « validé ».
               (r.defautsDuTravailRelu?.length
                 ? ligneDeJournalDeRelecture(
                     r.defautsDuTravailRelu,
@@ -687,7 +687,7 @@ export async function executerOrchestration(
           turnId: orchestrationTurnId,
           runId: runPath ?? orchestrationTurnId,
           runPath,
-          // conv-989 : la bulle coupée nomme la copie entière des sorties d'étapes — la voisine du
+          // La bulle coupée nomme la copie entière des sorties d'étapes — la voisine du
           // RUN.md quand elle existe (permanente), sinon celle de `run-livrables`.
           ...((livrableDuRun ?? r.livrableEntier)
             ? { livrableEntier: livrableDuRun ?? r.livrableEntier }
@@ -701,7 +701,7 @@ export async function executerOrchestration(
            * phase voyagent : le texte vit deja dans `result` et dans RUN.md, l'y remettre
            * doublerait le poids de l'issue sur l'IPC.
            */
-          // Le JUGE joue compte aussi (conv-981) : son verdict vit a part (`judgeText`), et sans
+          // Le JUGE joue compte aussi : son verdict vit a part (`judgeText`), et sans
           // lui la cloture d'un run deja juge recommandait « lancer judge » -- un juge paye de trop.
           phaseOutputs: phasesAvecJuge(r.phaseOutputs, r.judgeText).map((output) => ({
             phase: output.phase,
@@ -715,7 +715,7 @@ export async function executerOrchestration(
           workRetained: r.retainedWorkspace !== undefined,
           ...(learningDuRun ? { learning: learningDuRun } : {}),
           /*
-           * LE RUN PARLE LUI-MEME A LA FIN (conv-1008) : la question du bilan de sa derniere
+           * LE RUN PARLE LUI-MEME A LA FIN : la question du bilan de sa derniere
            * etape devient une carte « Message du run » dans le fil (ask-choices.ts). Seulement
            * sur un run LIVRE : apres un refus du juge ou du controle final, une question comme
            * « je publie ? » porterait sur un travail que personne n'a accepte.

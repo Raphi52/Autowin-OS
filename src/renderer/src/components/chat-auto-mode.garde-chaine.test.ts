@@ -16,7 +16,7 @@ import {
 import { TEXTES_EN, TEXTES_FR } from '../textes-ecrans/chat-fil'
 
 /*
- * GARDE-FOU DE LA CHAINE ∞ (demande du 2026-10-02, conv-38) : conv-44 a consomme 226 M tokens
+ * GARDE-FOU DE LA CHAINE ∞ (demande du 2026-10-02) : un fil a consomme 226 M tokens
  * d'entree en tours enchaines juste avant le plafond hebdomadaire de Claude du 30/09. La chaine
  * s'arrete quand le quota hebdomadaire Claude atteint 80 %, OU apres 6 tours automatiques
  * d'affilee sans message de l'utilisateur. Seuils reglables, arret DIT dans le fil.
@@ -192,7 +192,7 @@ describe('le message d’arrêt ne promet que ce que le code permet', () => {
     const arret = arretChaineAuto({ quotaHebdoPct: 10, toursAutoDAffilee: 6 })
     expect(arret?.message).not.toMatch(/rallume ∞ pour continuer/i)
     expect(arret?.message).toContain('écris un message')
-    // La section Budget a été retirée le 2026-10-23 : le seuil se relève dans Behaviour (conv-1602).
+    // La section Budget a été retirée le 2026-10-23 : le seuil se relève dans Behaviour.
     expect(arret?.message).toContain('Settings › Behaviour')
     expect(arret?.message).not.toContain('Budget')
     const filApres = [...filAvecToursAuto(6), humain('continue sur le point 2')]
@@ -222,7 +222,7 @@ describe('le message d’arrêt ne promet que ce que le code permet', () => {
       })
     ).toBeNull()
   })
-  // La version anglaise disait aussi « Settings › Budget », section retirée le 2026-10-23 (conv-1602).
+  // La version anglaise disait aussi « Settings › Budget », section retirée le 2026-10-23.
   it('en anglais aussi, les deux arrêts renvoient à Settings › Behaviour', () => {
     for (const cle of ['autoArret.quotaHebdo', 'autoArret.toursAutoMax'] as const) {
       expect(TEXTES_EN[cle]).toContain('Settings › Behaviour')
@@ -233,7 +233,7 @@ describe('le message d’arrêt ne promet que ce que le code permet', () => {
 
 /*
  * Le bandeau ne garde que le TEXTE de l'arrêt : le bouton « Ouvrir Settings › Behaviour » ne doit
- * s'afficher que pour les deux arrêts dont le seuil se règle là (conv-1602). Un arrêt « terminé »
+ * s'afficher que pour les deux arrêts dont le seuil se règle là. Un arrêt « terminé »
  * ou une pause n'a rien à régler : y mettre ce bouton enverrait l'utilisateur dans le vide.
  */
 describe('arrêt dont le seuil se règle dans Behaviour', () => {

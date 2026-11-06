@@ -3,7 +3,7 @@ import { AgentPilot } from './agent-pilot'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
- * DEFAUT VECU (conv-1450) : la capture lue par le modele pour VALIDER une modif front partait bien
+ * DEFAUT VECU : la capture lue par le modele pour VALIDER une modif front partait bien
  * dans son prochain prompt, mais n'atteignait jamais le fil de l'utilisateur — l'evenement `result`
  * porte `attachments`, et le chemin de rendu ne connait que `artifact`. L'utilisateur ne voyait donc
  * jamais l'image sur laquelle le verdict s'appuyait.

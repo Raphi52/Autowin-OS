@@ -9,7 +9,7 @@ import { decouperHeredocs } from './heredocs'
  * Python en mode texte remplace chaque `\n` par `os.linesep` (`\r\n`) ; `newline=''` le garde.
  * `.gitattributes` (`* text=auto eol=lf`) normalise au commit : `git status` reste propre et le CRLF ne
  * vit que dans la copie de travail — jusqu'à casser un test qui lit les octets bruts
- * (`moteur-perime-cablage.test.ts` sur `App.tsx`, réécrit ainsi par conv-817 le 23/09 à 19:13:13).
+ * (`moteur-perime-cablage.test.ts` sur `App.tsx`, réécrit ainsi le 23/09 à 19:13:13).
  * La leçon existait en prose dans le Brain ; elle n'a pas tenu. Ce garde refuse le geste.
  *
  * PORTÉE VOLONTAIREMENT ÉTROITE : seule une écriture EN MODE TEXTE, SANS `newline=` explicite, dans
@@ -41,7 +41,7 @@ export function refusEcriturePythonCrlf(
   const lanceShell =
     /(?:^|[\n;&(]|(?<!\\)\|)\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:(?:sudo|env|exec|time|nohup|do|then|else|elif|if|while|until|!|\{)\s+)*["']?(?:[^\s"';&|<>]*[\\/])?(?:bash|sh|zsh|dash|ksh|source|\.)(?:\.exe)?["']?(?=\s|$)/i
 
-  // CORPS DE HEREDOC : une DONNÉE, sauf s'il est exécuté. Vécu le 2026-10-01 (conv-770) :
+  // CORPS DE HEREDOC : une DONNÉE, sauf s'il est exécuté. Vécu le 2026-10-01 :
   // `cat > sonde.cjs <<'EOF'` dont le TEXTE contenait `; python - <<'E'` et `open(p,'w')`, suivi de
   // `node sonde.cjs`, était refusé alors que Python n'était jamais lancé. Le corps reste lu comme du
   // code quand le tube qui le reçoit lance Python ou un shell (`python - <<E`, `cat <<E | python -`,

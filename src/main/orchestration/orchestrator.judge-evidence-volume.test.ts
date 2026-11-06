@@ -17,7 +17,7 @@ import { makeTestWorktrees } from './orchestrator.test-helpers'
 /**
  * LE PROMPT DU JUGE NE DOIT PAS TRANSPORTER LA CHARGE D'AFFICHAGE DU CHAT.
  *
- * Mesuré sur le run réel conv-1102 (vue Worktrees, campagne dogfood du 11/08) : le prompt du juge
+ * Mesuré sur le run réel (vue Worktrees, campagne dogfood du 11/08) : le prompt du juge
  * pesait 422 504 caractères, dont 44,7 % de `stdout` bruts, 26,6 % d'empreintes SHA-256
  * (1 652 hashes) et 9,9 % de commandes recopiées. La cause : `JSON.stringify(executionEvidence)`
  * sérialisait la structure entière, alors que `stdout`/`diff`/`writtenLineFingerprints` n'existent

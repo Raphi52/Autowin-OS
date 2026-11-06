@@ -14,7 +14,7 @@ import {
  */
 export type CapabilityItem = RegistryItem
 export type CapabilityKind = RegistryKind
-/** Ce que la vue peut LISTER : le registre, plus les gates (lecture seule, conv-58). */
+/** Ce que la vue peut LISTER : le registre, plus les gates (lecture seule). */
 export type CapabilityListKind = RegistryKind | 'gates'
 
 /** Lecture synchrone du verrou runtime. `undefined` signifie que la capacité n'est pas cataloguée. */
@@ -25,7 +25,7 @@ export function capabilityEnabled(kind: CapabilityKind, id: string): boolean | u
 /** Inventaire d'un type de capacité (lecture locale). */
 export async function listCapabilities(kind: CapabilityListKind): Promise<CapabilityItem[]> {
   if (kind === 'gates') return gatesAutowin()
-  // Le mod Autowin chargé dans chaque run (conv-58), en lecture seule.
+  // Le mod Autowin chargé dans chaque run, en lecture seule.
   if (kind === 'plugins') return [...modsAutowin(), ...listNativeRegistry(kind)]
   return listNativeRegistry(kind)
 }

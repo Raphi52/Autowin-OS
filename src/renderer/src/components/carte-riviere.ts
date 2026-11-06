@@ -1,5 +1,5 @@
 /**
- * LA RIVIÈRE À ÉTAGES DE LA CARTE DU PROJET — le calcul PUR (/draft conv-1113, 2026-10-23).
+ * LA RIVIÈRE À ÉTAGES DE LA CARTE DU PROJET — le calcul PUR (2026-10-23).
  *
  * Demande : « implémente 1+2 », sur le tour 9 du /draft : la « Rivière à étages d'état » (le temps de
  * gauche à droite sur 14 jours, un étage par état, glisser un post-it vers un autre étage change son
@@ -7,7 +7,7 @@
  * Proposition 2 : chaque cran de molette avance ou recule la loupe d'une demi-journée. (La 1, la
  * colonne sous la souris, a été retirée le même jour : « laisse que la roulette ».)
  *
- * Le choix de période « 2 semaines / 1 mois / 3 mois » (même jour) a été RETIRÉ (conv-1131) : « enlève
+ * Le choix de période « 2 semaines / 1 mois / 3 mois » (même jour) a été RETIRÉ : « enlève
  * le filtre 2 semaines, on doit pouvoir remonter à l'infini en lazy load ». La frise garde 14 colonnes,
  * mais elle GLISSE : le `recul` (en jours) recule sa fin, et la molette le fait grandir sans butée,
  * jusqu'au plus vieux fil daté (`loupeApresMolette`). Seuls les 14 jours affichés sont calculés et
@@ -24,7 +24,7 @@
  * 3, 4 et 5 de front ; `disposerEtages` garde le choix qui laisse ses plus petits post-it les plus
  * grands. Un jour peu chargé reste donc à 3 : là, c'est la largeur qui borne, pas la hauteur.
  *
- * Un post-it = une TÂCHE, c'est-à-dire un RUN.md léger et ses suites (conv-1456, avant : un FIL),
+ * Un post-it = une TÂCHE, c'est-à-dire un RUN.md léger et ses suites (avant : un FIL),
  * posé au moment de sa dernière demande, à l'étage de l'état de cette dernière demande. Le
  * regroupement est `tachesDuBoard` (src/shared/taches-du-board.ts), le même que la copie du Board.
  * Un état posé à la main (glisser) passe devant tant que la tâche n'a pas bougé depuis ; il ne compte
@@ -51,7 +51,7 @@ import { tachesDuBoard } from '../../../shared/taches-du-board'
 export type EtageDeLaRiviere = 'a-faire' | StatutDemande
 
 /**
- * Un étage : son nom et son aide sont lus dans la langue COURANTE à chaque lecture (conv-1170),
+ * Un étage : son nom et son aide sont lus dans la langue COURANTE à chaque lecture,
  * `cle` reste l'identifiant que relisent les états manuels (`etats-manuels-carte.ts`).
  */
 function etage(
@@ -118,7 +118,7 @@ export interface EtatManuel {
 
 export interface PostItDeLaRiviere {
   /**
-   * Son identité (conv-1456) : celle de son RUN.md léger, sinon l'id de son fil. C'est sous elle que
+   * Son identité : celle de son RUN.md léger, sinon l'id de son fil. C'est sous elle que
    * l'état posé à la main est rangé ; un post-it de fil garde donc ceux d'avant le changement.
    */
   cle: string
@@ -142,7 +142,7 @@ export interface PostItDeLaRiviere {
   t: number
   /** Ses demandes de la plus ancienne à la plus récente, d'un ou de plusieurs fils. */
   demandes: DemandeDeLaCarte[]
-  /** Le collègue dont vient ce post-it (conv-1210) : lecture seule, à l'étage de SON Board. */
+  /** Le collègue dont vient ce post-it : lecture seule, à l'étage de SON Board. */
   collegue?: CollegueDeLaDemande
   /** Son rang dans sa case (son étage, son jour), dans l'ordre des heures : sa colonne et sa ligne
    *  en découlent, d'après le nombre de post-it de front que `disposerEtages` donne à la case. */
@@ -293,7 +293,7 @@ export function riviereDe(
       continue
     }
     const etatPreuve = tache.derniere.statut
-    // Un post-it de collègue (conv-1210) est posé à l'étage de SON Board : nos états posés à la
+    // Un post-it de collègue est posé à l'étage de SON Board : nos états posés à la
     // main ne le touchent pas (il ne se glisse pas d'ici).
     const collegue = tache.derniere.collegue
     const manuel = collegue ? undefined : manuelValable(manuels[tache.cle], instant, etatPreuve)
@@ -341,7 +341,7 @@ export const foyerDAujourdhui = (n = JOURS): number => n - 0.5
 const LARGEUR_CLOCHE = 0.75
 /**
  * 9 jusqu'au 2026-10-28 (le foyer prenait ~38 % de la largeur) ; 15 depuis (~47 %) : « le post-it
- * doit être plus grand, on optimise mal l'espace » (conv-1204) — les post-it de la loupe sont bornés
+ * doit être plus grand, on optimise mal l'espace » — les post-it de la loupe sont bornés
  * par la largeur de sa colonne, et les jours voisins n'y portent que des pastilles.
  */
 const AMPLITUDE_2_SEMAINES = 15
@@ -388,27 +388,27 @@ export function bordsDesColonnes(poids: readonly number[]): number[] {
 /**
  * Largeur d'un post-it à l'échelle 1, en pixels ; sa hauteur suit. 84 de haut depuis le 2026-10-28
  * (54, puis 62 pour la bande de la punaise) : « il doit y avoir plus de texte par post it », puis
- * « réduis un peu la taille de la police et passe à 4 lignes » (conv-1204) — le titre, coupé à 2
+ * « réduis un peu la taille de la police et passe à 4 lignes » — le titre, coupé à 2
  * lignes en 12 px, en tient 4 en 11 px (RiviereDuProjet.css). La largeur gagnée vient d'ETIREMENT_MAX.
  */
 export const POSTIT_L = 124
 export const POSTIT_H = 84
 /**
  * La place gardée sous un post-it « À vérifier » pour ses boutons « vérifier / à la main », à
- * l'échelle 1 : 3 d'écart, 20 de boutons (mesurés dans Chromium), 1 de jeu. Sans elle (conv-1214,
+ * l'échelle 1 : 3 d'écart, 20 de boutons (mesurés dans Chromium), 1 de jeu. Sans elle (
  * 2026-10-28), les boutons tombaient sur le haut du post-it du dessous — l'écart entre deux lignes
  * n'est que de 8 — et la souris, plus bas dans sa carte, ne les voyait plus.
  */
 export const PLACE_DES_GESTES = 24
 /**
  * L'échelle la plus grande d'un post-it. Plafonnée à 1 jusqu'au 2026-10-28, quand l'utilisateur a
- * constaté (conv-1204) : « le post it doit être plus grand, on optimise mal l'espace » — la colonne
+ * constaté : « le post it doit être plus grand, on optimise mal l'espace » — la colonne
  * de la loupe gardait des post-it de 124 px au-dessus d'un tiers de tableau vide. Ils grandissent
  * désormais jusqu'à ce que la largeur de leur colonne ou la hauteur de l'écran les arrête.
  */
 export const ECHELLE_MAX = 1.5
 /**
- * Le plus large qu'un post-it s'étire, en multiple de POSTIT_L. Depuis le 2026-10-28 (conv-1204,
+ * Le plus large qu'un post-it s'étire, en multiple de POSTIT_L. Depuis le 2026-10-28 (
  * « il doit y avoir plus de texte par post it ») : quand c'est la HAUTEUR de l'écran qui fixe son
  * échelle, il gardait 124 de large au milieu d'une case deux fois plus large — mesuré sur la capture
  * de l'utilisateur, la moitié de la colonne du jour restait vide entre les post-it. Il s'élargit donc
@@ -441,7 +441,7 @@ export function placer(
   const l = (bords[j + 1] - bords[j]) * largeurPx
   const ajuste = ajusteALaColonne(l, colonnes)
   const k = Math.min(ECHELLE_MAX, Math.max(0.09, ajuste), echelleMax)
-  // Sous l'échelle 1, le texte garde sa taille à l'écran (texteDuPostit, conv-1242) : il grossit de
+  // Sous l'échelle 1, le texte garde sa taille à l'écran (texteDuPostit) : il grossit de
   // 1/k dans le papier, et le papier peut s'élargir d'autant pour garder ses mots par ligne — sans
   // quoi, à 80 fils par jour, un post-it de 89 px coupait son titre à 11 lettres dans une case de 130.
   const largeur = POSTIT_L * Math.min(ETIREMENT_MAX / Math.min(1, k), Math.max(1, ajuste / k))
@@ -496,7 +496,7 @@ export interface TexteDuPostIt extends CadreDuTexte {
 
 /**
  * Ce qu'un post-it à l'échelle `k` (largeur `largeur` avant l'échelle) écrit, ou `null` : une
- * pastille. Depuis le 2026-10-28 (conv-1242, « elle casse quand ya trop d'éléments et quand je fais
+ * pastille. Depuis le 2026-10-28 (« elle casse quand ya trop d'éléments et quand je fais
  * ctrl molette les textes disparaissent, et c'est illisible ») : le texte suivait l'échelle (11 px
  * × k) et se cachait sous k = 0,55. Or k baisse dès que le board se charge (« tout tient dans
  * l'écran ») et dès que l'app zoome (Ctrl + molette réduit la place en pixels CSS) : mesuré à 40 fils
@@ -527,7 +527,7 @@ function ajusteALaColonne(l: number, colonnes: number): number {
 /**
  * La loupe après un cran de molette (vers le bas = vers aujourd'hui), ou `null` en butée : au milieu
  * d'aujourd'hui, ou au jour du plus vieux fil daté (`joursEnArriere`) — au-delà, la frise ne
- * montrerait plus que des jours vides. Entre les deux, aucune butée (conv-1131, « remonter à
+ * montrerait plus que des jours vides. Entre les deux, aucune butée (« remonter à
  * l'infini ») : la loupe recule d'une demi-journée par cran et, arrivée à MARGE_DE_LA_LOUPE jours du
  * bord, c'est la FRISE qui glisse d'un jour (le `recul`), pas la loupe qui sort du tableau. Même
  * chose vers aujourd'hui, jusqu'à ce que la frise y revienne (`recul` 0).
@@ -558,7 +558,7 @@ export function loupeApresMolette(
 }
 
 /**
- * La loupe après un clic sur la colonne `jour` de la frise affichée (conv-1135, 2026-10-23 : « quand
+ * La loupe après un clic sur la colonne `jour` de la frise affichée (2026-10-23 : « quand
  * je click sur une colonne du passé elle doit se mettre au centre et faire apparaître les plus
  * anciennes ou plus récentes ») : la FRISE glisse pour poser ce jour à la colonne du milieu, avec
  * ses voisins des deux côtés. Avant, seule la loupe bougeait : un clic sur la colonne de gauche la
@@ -661,7 +661,7 @@ interface MesureDeDisposition {
 
 /**
  * Les nombres de post-it de front essayés au jour de la loupe. 1 et 2 depuis le 2026-10-28
- * (conv-1204, « on optimise mal l'espace ») : une case peu chargée était tenue à 3 de front, donc à
+ * (« on optimise mal l'espace ») : une case peu chargée était tenue à 3 de front, donc à
  * des post-it du tiers de la colonne, alors que la hauteur restait vide sous les étages.
  */
 export const COLONNES_DE_LA_LOUPE: readonly number[] = [1, 2, 3, 4, 5]
@@ -678,8 +678,8 @@ export interface OptionsDeDisposition {
   marge: number
   sousLigne: number
   /**
-   * Le pas d'un étage qui garde de la place sous ses post-it (« À vérifier » et ses boutons,
-   * conv-1214), à l'échelle 1 ; les autres étages prennent `sousLigne`.
+   * Le pas d'un étage qui garde de la place sous ses post-it (« À vérifier » et ses boutons),
+   * à l'échelle 1 ; les autres étages prennent `sousLigne`.
    */
   sousLigneParEtage?: Readonly<Partial<Record<string, number>>>
   vide: number
@@ -695,12 +695,12 @@ export interface OptionsDeDisposition {
  * d'une pastille dans une colonne serrée) ; un étage demande la hauteur de sa case la plus exigeante —
  * d'ordinaire celle de la loupe. Si la somme dépasse, toutes les demandes sont tassées du même
  * facteur, cherché par dichotomie (un étage vide garde `vide`, sa cible de dépôt), et chaque case
- * prend le pas qui lui reste. « tout doit rentrer dans l'écran en hauteur » (conv-1113) : la somme
+ * prend le pas qui lui reste. « tout doit rentrer dans l'écran en hauteur » : la somme
  * ne dépasse jamais.
  *
  * Au jour de la loupe, chaque case occupée essaie de 1 à 5 de front, sans dépasser son nombre de
  * post-it (au plus 5^5 combinaisons, chacune ne coûte qu'une dichotomie) ; moins de colonnes
- * échange de la largeur contre la hauteur restée libre (conv-1204). Gagne le choix dont le plus petit post-it du jour
+ * échange de la largeur contre la hauteur restée libre. Gagne le choix dont le plus petit post-it du jour
  * est le plus grand — jamais plus petit qu'avec 3 partout ; à égalité (ECART_SANS_EFFET), celui dont
  * les post-it du jour sont en tout les plus grands, puis celui qui a le moins de colonnes.
  */

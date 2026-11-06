@@ -269,7 +269,7 @@ export class WatchdogEngine {
         !source.events.includes(event)
       )
         continue
-      // Fil surveillé (conv-1069) : l'événement d'un AUTRE fil ne concerne pas cette règle.
+      // Fil surveillé : l'événement d'un AUTRE fil ne concerne pas cette règle.
       if (source.conversationId && source.conversationId !== sourceConversationId) continue
       const destinationConversationId = task.destination.conversationId
       if (
@@ -325,9 +325,9 @@ export class WatchdogEngine {
      */
     onDecision?: (taskId: string, outcome: string) => void
   }): Promise<Array<{ taskId: string; issue: string }>> {
-    // Bilan par regle (conv-770, 2026-09-26) : le journal du watchdog Teams doit dire POURQUOI un
+    // Bilan par regle (2026-09-26) : le journal du watchdog Teams doit dire POURQUOI un
     // message detecte n'a pas eu de reponse, pas seulement qu'il n'en a pas eu. Il est RENDU apres
-    // coup (fin de l'agent comprise) ; `onDecision` (conv-857) le dit AU MOMENT de la decision.
+    // coup (fin de l'agent comprise) ; `onDecision` le dit AU MOMENT de la decision.
     // Salvage 2026-09-26 : les deux voies etaient ecrites en parallele, les deux sont gardees.
     const bilan: Array<{ taskId: string; issue: string }> = []
     for (const task of this.watchdogTasks()) {

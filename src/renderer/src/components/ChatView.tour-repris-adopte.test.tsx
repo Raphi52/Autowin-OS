@@ -12,7 +12,7 @@ import {
 /**
  * TOUR REPRIS APRÈS REDÉMARRAGE : l'écran l'ADOPTE au lieu de croire le fil libre.
  *
- * Vécu le 2026-10-11 (conv-260) : le main redémarre à 22:43 pendant un tour lancé à 22:29. Le CLI
+ * Vécu le 2026-10-11 : le main redémarre à 22:43 pendant un tour lancé à 22:29. Le CLI
  * survit et le main le reprend, mais n'émet aucun événement pilote pendant l'attente. L'écran ne
  * passait un fil en « occupé » que sur un tel événement : bulle figée, aucun bouton Stop, et le
  * message suivant lançait un SECOND agent sur la même session.
@@ -73,7 +73,7 @@ describe('ChatView — adopter un tour repris après redémarrage', () => {
   })
 
   /*
-   * UN RÉCAPITULATIF DE REPRISE POSÉ APRÈS LE TOUR VIVANT (conv-913, 2026-10-13). Au redémarrage de
+   * UN RÉCAPITULATIF DE REPRISE POSÉ APRÈS LE TOUR VIVANT (2026-10-13). Au redémarrage de
    * 10:26:39, le main a rattaché l'orchestration du fil et AJOUTÉ en bas un message « Reprise du fil… »
    * sans statut, donc relu comme terminé. L'écran ne sondait que si la DERNIÈRE bulle assistant était
    * non close : il ne demandait rien, croyait le fil libre, et « reprend » (10:28:29 puis 10:28:59)

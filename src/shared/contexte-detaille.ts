@@ -1,5 +1,5 @@
 /**
- * LE CONTEXTE PAR CATEGORIE — comme le panneau « Contexte » de claude.exe (demande conv-1000,
+ * LE CONTEXTE PAR CATEGORIE — comme le panneau « Contexte » de claude.exe (demande,
  * 2026-10-16 : « fais un truc comme claude.exe pour le contexte popup »).
  *
  * La jauge (`context-gauge.ts`) ne disait que COMBIEN le fil occupe. Ce module dit DE QUOI : prompt

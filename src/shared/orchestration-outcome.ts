@@ -9,7 +9,7 @@ import { localiserTableauScout } from './scout-table'
 /**
  * CARTE DE LIVRAISON d'une orchestration — les faits, pas une formule.
  *
- * Défaut mesuré sur conv-76 (2026-07-29) : 18 appels de sous-agents, 10,05 $ dépensés, et le fil
+ * Défaut mesuré (2026-07-29) : 18 appels de sous-agents, 10,05 $ dépensés, et le fil
  * affichait « Workflow Autowin exécuté. » L'orchestrateur retourne pourtant statut, validité, blocage
  * de gate, coût, chemin du RUN et résultat — tout était jeté. C'est 92 % de la dépense d'une
  * conversation dont l'utilisateur ne voyait strictement rien.
@@ -20,7 +20,7 @@ import { localiserTableauScout } from './scout-table'
 
 export interface OrchestrationOutcome {
   status?: unknown
-  /** Fichier de la copie ENTIÈRE des sorties d'étapes du run (conv-989) : la bulle coupée le nomme. */
+  /** Fichier de la copie ENTIÈRE des sorties d'étapes du run : la bulle coupée le nomme. */
   livrableEntier?: unknown
   valid?: unknown
   gateBlocked?: unknown
@@ -63,7 +63,7 @@ export interface OrchestrationOutcome {
   retainedWorkspace?: unknown
   result?: unknown
   /**
-   * La question que le run adresse LUI-MEME a l'utilisateur (conv-1008), lue dans le bilan de sa
+   * La question que le run adresse LUI-MEME a l'utilisateur, lue dans le bilan de sa
    * derniere etape (`messageDuRun`, message-du-run.ts). Le fil en fait une carte cliquable.
    */
   messageDuRun?: unknown
@@ -73,7 +73,7 @@ export interface OrchestrationOutcome {
     detail?: unknown
     candidateId?: unknown
     knowledgeId?: unknown
-    /** Notes écrites au Brain par les étapes du run, en revue (`avecNotesDeposees`, conv-339). */
+    /** Notes écrites au Brain par les étapes du run, en revue (`avecNotesDeposees`). */
     notesEnRevue?: unknown
   }
   error?: unknown
@@ -165,7 +165,7 @@ interface BlocDeCodeMarkdown {
 }
 
 /**
- * LES BLOCS DE CODE D'UN TEXTE, CALCULES UNE FOIS (heal conv-1013, 2026-10-16).
+ * LES BLOCS DE CODE D'UN TEXTE, CALCULES UNE FOIS (2026-10-16).
  *
  * Mesure : 15 rendus de la vue chat au-dela de 1 s (jusqu'a 5,5 s) dans `gels.jsonl` du 14 au
  * 16/10. Profil de l'ouverture d'un fil (vrai ChatView, 882 conversations) : ~20 % du rendu dans
@@ -185,7 +185,7 @@ const blocsDeCodeMemoire = new Map<string, readonly BlocDeCodeMarkdown[] | null>
 let blocsDeCodeCaracteres = 0
 
 /**
- * AUCUN BLOC DE CODE POSSIBLE (conv-1248, 2026-10-28) : en CommonMark (le parseur sans extension
+ * AUCUN BLOC DE CODE POSSIBLE (2026-10-28) : en CommonMark (le parseur sans extension
  * d'ici), un nœud `code` naît d'une clôture ``` ou ~~~, ou d'une indentation de 4 colonnes — donc
  * 4 espaces d'affilée ou une tabulation, puces et citations comprises. Sans aucun des quatre, la
  * réponse est sûre sans parseur. Mesure : la première ouverture du Board relit 11 385 messages,
@@ -818,14 +818,14 @@ function boundedMarkdownResult(
 ): string {
   if (result.length <= maxLength) return result
   const label = runLabelFromPath(runPath)
-  // conv-989 : un CHEMIN quand la copie entiere existe — « dans le run » ne disait pas ou la lire.
+  // Un CHEMIN quand la copie entiere existe — « dans le run » ne disait pas ou la lire.
   const ou = livrableEntier
     ? ` — sortie entière : \`${livrableEntier}\``
     : label
       ? ` — livrable entier dans le run « ${label} »`
       : ''
   /*
-   * LE BILAN DE FIN D'ETAPE RESTE LISIBLE (conv-989) : il est en FIN de sortie, donc exactement ce
+   * LE BILAN DE FIN D'ETAPE RESTE LISIBLE : il est en FIN de sortie, donc exactement ce
    * qu'une coupe par le debut perdait. On coupe le corps un peu plus tot pour lui laisser sa place ;
    * les lignes techniques qui le suivent (`SUITE:`, `AUTOWIN_…`) ne s'affichent pas.
    */
@@ -834,17 +834,17 @@ function boundedMarkdownResult(
   const corps = bilan && trouve ? trouve.avant : result
   const piedBilan = bilan ? `\n\n${bilan}` : ''
   /*
-   * LA COUPE NE TOMBE JAMAIS AU MILIEU D'UNE LIGNE DE TABLEAU (conv-339) : le /scout y rendait 9
+   * LA COUPE NE TOMBE JAMAIS AU MILIEU D'UNE LIGNE DE TABLEAU : le /scout y rendait 9
    * pistes, la bulle en montrait une ligne et demie — or pour un scout, le tableau EST le résultat.
    *  - le tableau du SCOUT traversé par la borne est gardé ENTIER, quelle que soit sa longueur ;
-   *  - tout autre tableau perd des lignes ENTIÈRES : la bulle reste bornée (conv-914, voir
+   *  - tout autre tableau perd des lignes ENTIÈRES : la bulle reste bornée (voir
    *    `agent-pilot.resultat-entier-au-modele.test.ts`), le modèle reçoit tout par ailleurs.
-   * fix-ok: sortie réelle de conv-339 (fixture scout-conv-339-sortie.md) : 2 lignes sur 9 affichées
+   * fix-ok: sortie réelle (fixture scout-conv-339-sortie.md) : 2 lignes sur 9 affichées
    * avant, 9 après (orchestration-outcome.tableau-entier.test.ts).
-   * PAS DE PLAFOND POUR LE SCOUT (conv-348, choix de l'utilisateur) : l'ancien plafond à 3 × la borne
-   * coupait le scout de conv-344 après 13 pistes sur 21, et la liste de choix sous la bulle, construite
+   * PAS DE PLAFOND POUR LE SCOUT (choix de l'utilisateur) : l'ancien plafond à 3 × la borne
+   * coupait le scout après 13 pistes sur 21, et la liste de choix sous la bulle, construite
    * sur ce texte, perdait les pistes suivantes. Seul ce qui ENTOURE le tableau reste borné.
-   * fix-ok: sortie réelle de conv-344 (fixture scout-conv-344-sortie.md) : 13 lignes sur 21 avant,
+   * fix-ok: sortie réelle (fixture scout-conv-344-sortie.md) : 13 lignes sur 21 avant,
    * 21 après (orchestration-outcome.tableau-entier.test.ts).
    */
   const tableaux = tableauxMarkdown(corps)
@@ -1004,7 +1004,7 @@ export function demoteUnvalidatedSuccessClaims(
     if (marker === 'fait') {
       return line.replace('✅', '⚠️').replace('Fait', `Fait — AUTO-DÉCLARÉ, non validé (${cause})`)
     }
-    // La ligne `✅ Fait` n'etait pas la seule a pretendre la fin. Defaut vecu (conv-1302,
+    // La ligne `✅ Fait` n'etait pas la seule a pretendre la fin. Defaut vecu (
     // 2026-08-18) : sous un en-tete `⛔ BLOQUÉ`, le meme message affichait encore
     // « ⏳ Reste à faire : rien » et « 👉 Recommandé : aucune action ». Le lecteur y lit la fin,
     // redemande, et le tour recommence — neuf relances mesurees sur la meme demande.
@@ -1123,7 +1123,7 @@ export function reconcileClosedOrchestrationText(
   report: string,
   outcome: OrchestrationOutcome
 ): string {
-  // Defaut vecu le 2026-08-17 (conv-1286) : sur SEPT tours, l'en-tete disait « ⛔ Workflow BLOQUE par
+  // Defaut vecu le 2026-08-17 : sur SEPT tours, l'en-tete disait « ⛔ Workflow BLOQUE par
   // le gate » et le rapport du worker, imprime juste dessous, disait « ✅ Fait … verifie via 74 tests ».
   // Le message affirmait l'echec et le succes en meme temps, donc l'utilisateur redemandait la meme
   // chose : 21 tours pour une demande d'un tour. Le rapport du worker est capture AVANT la gate, donc
@@ -1244,7 +1244,7 @@ export function phasesJouees(outcome: OrchestrationOutcome | undefined): string[
 /**
  * Les phases jouees ET abouties : on retire celle dont la sortie demande a etre REFAITE (sa
  * derniere ligne `SUITE:` la designe elle-meme). C'est la forme d'un cadrage refuse par
- * `frame-cas-limites` (conv-687, 18/09) : le compter comme acquis faisait recommander « lancer
+ * `frame-cas-limites` (18/09) : le compter comme acquis faisait recommander « lancer
  * terrain », et le mode auto sautait le cadrage.
  */
 export function phasesAbouties(outcome: OrchestrationOutcome | undefined): string[] {
@@ -1293,7 +1293,7 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome, faits: string[] =
     `${faits.length + 1}. ${validation}`
   ]
   /*
-   * DE QUOI parle cette cloture — defaut rapporte le 23/08 (conv-1376) : « ce bloc est trop
+   * DE QUOI parle cette cloture — defaut rapporte le 23/08 : « ce bloc est trop
    * generique il ne me donne pas d'info sur la task ». Le sujet du travail est deja porte par
    * l'issue (`runPath`) et deja lu ailleurs ici (mention du livrable tronque) ; il n'etait
    * simplement pas rendu dans le pied. On ne le DEVINE jamais : sans chemin de run, pas de sujet.
@@ -1331,7 +1331,7 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome, faits: string[] =
    *
    * MESURE DU 2026-09-02 (journaux de la journee) : les tours de rattrapage « kaizen … » ont coute
    * 19,38 $ sur 156,51 $, dont deux fois la meme phrase — « j'etais en mode auto et t'as pas
-   * enchaine le workflow » (conv-131, 6,66 $ pour 0,11 $ de travail utile). Le mode auto renvoie la
+   * enchaine le workflow » (6,66 $ pour 0,11 $ de travail utile). Le mode auto renvoie la
    * ligne « 👉 Recommande » de ce bloc : en rejouant scout → frame → terrain → build → clean →
    * judge, la chaine QUITTAIT le pipeline apres `build` (« Reste a faire : rien », « passer a la
    * prochaine demande ») et, apres `judge`, tournait sur « lancer la phase suivante » — un ordre
@@ -1373,7 +1373,7 @@ function deliveredClosingBlock(outcome?: OrchestrationOutcome, faits: string[] =
 /**
  * La recommandation qu'Autowin écrit après le DERNIER maillon d'un run fini. Le mode auto la lit
  * comme un arrêt (`chat-auto-mode.ts`) : une seule source, sinon un mot changé ici rallumerait la
- * relève en silence (conv-1575).
+ * relève en silence.
  */
 export const RECOMMANDATION_FIN_DE_CHAINE = 'passer à la prochaine demande'
 
@@ -1408,7 +1408,7 @@ function authoritativeDeliveredClosingBlockSpan(
   const formeAnalyse = /^\d+\. Le livrable de la phase .+ a été produit et validé( — sujet : .+)?\.$/u
   /*
    * Le SUJET du travail est desormais suffixe a cette premiere ligne (« … validé — sujet : « X ». »),
-   * parce qu'un pied identique pour tout travail ne disait pas de QUOI il parlait (conv-1376, 23/08).
+   * parce qu'un pied identique pour tout travail ne disait pas de QUOI il parlait (23/08).
    * Une egalite stricte ne reconnaitrait plus le bloc enrichi et `reconcileClosedOrchestrationText`
    * le RETIRERAIT au rechargement — exactement la regression deja vecue le 21/08.
    */
@@ -1462,7 +1462,7 @@ const STATUTS_LISIBLES: Record<string, string> = {
   open: 'pas terminé',
   cancelled: 'annulé',
   'degraded-closed': 'clos en connaissance de cause',
-  // Stop, limite de session ou panne en face : le travail n'a pas échoué (piste 4, conv-1070).
+  // Stop, limite de session ou panne en face : le travail n'a pas échoué (piste 4).
   interrupted: 'interrompu'
 }
 
@@ -1474,7 +1474,7 @@ function statutLisible(statut: string): string {
  * CE QUE LE BLOCAGE VEUT DIRE, ET CE QU'IL FAUT EN FAIRE.
  *
  * « ⛔ Workflow ARRÊTÉ au contrôle final — résultat non validé » ne dit rien à personne. Vécu le
- * 2026-08-27 (conv-1425) : l'utilisateur lit ça après 3,22 $ de travail, et répond « ça m'a encore
+ * 2026-08-27 : l'utilisateur lit ça après 3,22 $ de travail, et répond « ça m'a encore
  * bloqué au lieu de finir le travail ». Il n'avait ni la cause, ni le geste, ni l'information
  * qu'une reprise allait se faire toute seule.
  *
@@ -1536,7 +1536,7 @@ function lireLeBlocage(
   const [causePart, fichiersPart] = apres.split('— fichiers en cause:')
   /*
    * Le code interne arrive maintenant AVEC son sens en clair (« base-dirty — cause: des fichiers
-   * non committés … », cf. `raison-de-blocage.ts`, ajouté après conv-158). La table `BLOCAGES` est
+   * non committés … », cf. `raison-de-blocage.ts`). La table `BLOCAGES` est
    * indexée par le CODE seul : on lit donc le code jusqu'au premier tiret cadratin, sinon la
    * lecture retombe en « cause inconnue » et l'utilisateur reperd l'action et la reprise.
    */
@@ -1571,7 +1571,7 @@ export function formatOrchestrationOutcome(
 /**
  * LE MEME COMPTE-RENDU, MAIS POUR L'AGENT DU CHAT : le résultat du run y est ENTIER.
  *
- * Vécu dans conv-914 (2026-10-16) : le scout avait rendu 6 pistes, et l'agent du chat n'en voyait
+ * Vécu (2026-10-16) : le scout avait rendu 6 pistes, et l'agent du chat n'en voyait
  * qu'une. La coupe à 4 000 caractères, faite pour la bulle, servait AUSSI de résultat officiel du run
  * remis au modèle (`agent-pilot.ts`) : il ne pouvait ni citer ni enchaîner sur ce qui suivait.
  * L'utilisateur avait déjà posé la règle le 2026-09-27 pour le passage d'une étape à l'autre
@@ -1586,7 +1586,7 @@ export function formatOrchestrationOutcomePourLeModele(
   closingNotice?: string
 ): string {
   const issue = composerLIssue(ok, data, errorMessage, closingNotice, undefined)
-  // La question du run est DEJA a l'ecran (conv-1008) : sans cet avis, l'agent du chat la
+  // La question du run est DEJA a l'ecran : sans cet avis, l'agent du chat la
   // reposait avec `ask` et la meme decision s'affichait deux fois. Pour le modele seulement : la
   // bulle, elle, a la carte.
   const avis = ok ? avisMessageDuRun(lireMessageDuRun(data?.messageDuRun)) : undefined
@@ -1620,7 +1620,7 @@ function composerLIssue(
   /*
    * UNE CAUSE REPARABLE N'EST PAS UN ECHEC — c'est une ATTENTE.
    *
-   * Vecu le 2026-08-27 (conv-1450) : « ⛔ Travail NON integre — ton arbre principal a une base sale
+   * Vecu le 2026-08-27 : « ⛔ Travail NON integre — ton arbre principal a une base sale
    * · statut echoue · cout 1,32 $ », et la reponse de l'utilisateur : « je ne veux plus jamais voir
    * ce panneau sens interdit », « on ne finit jamais un tour sur un echec comme ca ». Le message
    * disait VRAI, mais il le disait comme un point final — alors que la cause se repare, que la
@@ -1682,7 +1682,7 @@ function composerLIssue(
       unknown: 'état de la leçon inconnu'
     }
     /*
-     * LES NOTES DES ÉTAPES SE COMPTENT (conv-339) : « aucune leçon proposée » s'affichait sous un run
+     * LES NOTES DES ÉTAPES SE COMPTENT : « aucune leçon proposée » s'affichait sous un run
      * dont l'étape learn venait d'en déposer deux. `inbox` sans détail = les seules notes du run
      * (`avecNotesDeposees`) : leur nombre EST le libellé ; sinon il s'ajoute à celui de l'état.
      */
@@ -1732,7 +1732,7 @@ function composerLIssue(
   /*
    * UN ARRET REND LA MAIN, IL NE COUPE PAS LA CHAINE.
    *
-   * Mesure conv-597, tour `ac411810-571a-4a7c-ae59-86be8c15e759` (saisie ts 1789564941442 :
+   * Mesure, tour `ac411810-571a-4a7c-ae59-86be8c15e759` (saisie ts 1789564941442 :
    * « yavais pas de preprompt le mode auto a pas pu continuer ») : sur `gateBlocked`, ce texte
    * s'arretait au panneau d'arret, sans rubrique « Recommande ». Le mode auto lit exactement cette
    * rubrique comme repli de suite (`deciderRelanceAuto`, chat-auto-mode.ts) : sans elle il rend

@@ -5,7 +5,7 @@ import { physicalDisplayLayout, selectDisplayEntries } from './electron-desktop-
 /**
  * GARDE : quand la capture d'ECRAN echoue, le repli sur la fenetre active doit DIRE pourquoi.
  *
- * Pourquoi ce cas existe. Mesure du 2026-09-07 (conv-49) : `desktop_observe` a rendu trois fois
+ * Pourquoi ce cas existe. Mesure du 2026-09-07 : `desktop_observe` a rendu trois fois
  * « Capture de la fenetre active noire ou protegee » alors que la situation reelle etait « l'ecran
  * demande n'avait aucun pixel visible, l'application venait de redemarrer ». Le repli etait MUET :
  * il perdait l'etape fautive en route, donc le diagnostic est parti lire le code de la capture de

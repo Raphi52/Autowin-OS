@@ -4,11 +4,11 @@ import { kaizenConversationParCommande } from './autowin-kaizen-context'
 /**
  * /kaizen TAPÉ DANS UNE CONVERSATION NEUVE : son dossier est vide par construction.
  *
- * Mesuré le 2026-10-17, conv-318, tour 5b0c4fcb-e354-410e-99b6-567740e86db1, saisie ts
+ * Mesuré le 2026-10-17, tour 5b0c4fcb-e354-410e-99b6-567740e86db1, saisie ts
  * 2026-10-17T15:40:06.421Z : « /kaizen le bloc 3d doit etre dans le bloc draft », premier message
  * d'une conversation neuve. Ni « conv N », ni citation, ni « /draft » avec sa barre : le dossier a
- * été construit sur conv-318 elle-même — promptCalls, turnEvents et saisies VIDES. Le /draft visé
- * était celui de conv-315 (tour a6fcfb6e-c5ce-41c9-86c8-dcde195c67f2, tapé à 15:10:38Z).
+ * été construit elle-même — promptCalls, turnEvents et saisies VIDES. Le /draft visé
+ * était celui (tour a6fcfb6e-c5ce-41c9-86c8-dcde195c67f2, tapé à 15:10:38Z).
  */
 const ts = (iso: string): number => Date.parse(iso)
 const DEMANDE = '/kaizen le bloc 3d doit etre dans le bloc draft'
@@ -57,7 +57,7 @@ const NEUVE = {
 const COMMANDES = ['draft', 'build', 'kaizen', 'look']
 /*
  * Rejoue sur les vraies conversations du poste, le mot « dans » de la demande etait d'abord lu comme
- * une commande : « /dans … » avait ete tape une fois, en conv-254. Seul un NOM DE PROCEDURE compte.
+ * une commande : « /dans … » avait ete tape une fois. Seul un NOM DE PROCEDURE compte.
  */
 const DANS = {
   id: 'conv-254',

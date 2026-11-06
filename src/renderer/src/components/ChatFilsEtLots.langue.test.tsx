@@ -19,7 +19,7 @@ import { appliquerLangue } from '../langue'
 import { texteDuBilan, traduireChatFilsEtLots } from '../textes-ecrans/chat-fils-et-lots'
 
 /**
- * LE PLAN DE LOTS ET LA CARTE DES FILS PROPOSÉS SUIVENT LA LANGUE (traduction anglaise, conv-1170,
+ * LE PLAN DE LOTS ET LA CARTE DES FILS PROPOSÉS SUIVENT LA LANGUE (traduction anglaise
  * lot 16). Entrée qui doit faire échouer ce test : un libellé du tableau ou de la carte laissé en dur,
  * un composant qui ne se redessine pas au changement de langue, ou un libellé d'état du plan dont le
  * français diverge de celui du moteur (`shared/plan-de-lots.ts`, que l'agent lit aussi).

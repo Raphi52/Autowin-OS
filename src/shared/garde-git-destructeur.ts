@@ -18,7 +18,7 @@ import { BORNES_RAPPELS, rappelsDeLAppel } from './rappels-outils'
 /**
  * GARDE : UN `git reset --hard` N'EFFACE PAS LE TRAVAIL EN COURS DE L'UTILISATEUR.
  *
- * Mesure conv-587 (2026-09-16, saisie ts=1789550244094) : pour nettoyer un `git revert -n` d'essai,
+ * Mesure (2026-09-16, saisie ts=1789550244094) : pour nettoyer un `git revert -n` d'essai,
  * l'agent a lance `git reset --hard`. La commande porte sur TOUT l'arbre de travail : elle a detruit
  * trois fichiers modifies non commites et sans rapport avec la tache (skills/kaizen/SKILL.md,
  * src/main/providers/claude.ts, src/main/providers/claude-bin-resolution.test.ts). Perte
@@ -91,7 +91,7 @@ export function refusGitDestructeur(commande: string): string | undefined {
   }
 
   /*
-   * REFORMATAGE DE TOUT LE DÉPÔT (conv-1577, 2026-11-05) : `npm run format` (= `prettier --write .`)
+   * REFORMATAGE DE TOUT LE DÉPÔT (2026-11-05) : `npm run format` (= `prettier --write .`)
    * réécrit AUSSI les fichiers non commités des autres fils du même dossier. La règle vivait en prose
    * dans AGENTS.md (« AUCUN contrôle ne les bloque ») et avait déjà été enfreinte. Une cible de
    * prettier est LARGE quand elle est un dossier ou un motif : pas d'extension de fichier, ou `*`/`?`.
@@ -103,7 +103,7 @@ export function refusGitDestructeur(commande: string): string | undefined {
     'que tu as modifiés — npx prettier --write <chemin> [<chemin>…].'
   const valeurDOptionPrettier =
     /^--(config|ignore-path|log-level|loglevel|plugin|parser|stdin-filepath|cache-location|cache-strategy|end-of-line|trailing-comma|arrow-parens|prose-wrap|quote-props|print-width|tab-width|html-whitespace-sensitivity|embedded-language-formatting|object-wrap)$/i
-  // Une REDIRECTION du shell n'est pas une cible de prettier (conv-1580, 2026-11-05) : `>/dev/null`
+  // Une REDIRECTION du shell n'est pas une cible de prettier (2026-11-05) : `>/dev/null`
   // était lu comme un chemin sans extension, donc « large », et refusait un formatage de deux
   // fichiers nommés. Opérateur collé à sa cible (`>/dev/null`, `2>&1`) : un seul mot ; opérateur
   // seul (`>`, `2>`, `>>`) : il emporte le mot suivant.
@@ -147,7 +147,7 @@ export function refusGitDestructeur(commande: string): string | undefined {
   }
 
   /*
-   * SEUL UN APPEL EST REFUSE, jamais une simple MENTION (conv-770, 2026-09-28). L'ancienne lecture
+   * SEUL UN APPEL EST REFUSE, jamais une simple MENTION (2026-09-28). L'ancienne lecture
    * coupait la ligne sur `;` `|` `&&` MEME ENTRE GUILLEMETS : `grep -o 'x\|git stash [a-z]' f` y
    * devenait un segment `git stash [a-z]'` et etait refuse, comme `git commit -m "a; git reset
    * --hard"`. Elle laissait pourtant passer de vrais appels : `bash -c "git reset --hard"`,
@@ -303,8 +303,8 @@ export function refusGitDestructeur(commande: string): string | undefined {
 }
 
 /**
- * INVENTAIRE des gardes portées par le script de hook — ce que la vue Settings › Hooks affiche
- * (conv-58). Un test vérifie que cette liste et la ligne `const motif = …` du script nomment
+ * INVENTAIRE des gardes portées par le script de hook — ce que la vue Settings › Hooks affiche.
+ * Un test vérifie que cette liste et la ligne `const motif = …` du script nomment
  * EXACTEMENT les mêmes fonctions : ajouter une garde sans l'inscrire ici fait échouer le test.
  * `tousOutils` : la garde voit aussi les outils hors terminal/édition (2e entrée du réglage).
  */
@@ -373,8 +373,8 @@ export const GARDES_DU_HOOK: readonly { fn: string; label: string; description: 
  * Porte aussi, depuis le 2026-10-01, l'écriture Python en mode texte qui passe un fichier en CRLF
  * (`refusEcriturePythonCrlf`, garde-python-crlf.ts : 47 fichiers du dépôt réécrits ainsi).
  *
- * NE PORTE PLUS QUE L'EFFACEMENT DE TRAVAIL (conv-587). Le refus des lancements graphiques au
- * premier plan a ete RETIRE le 2026-09-17 sur demande explicite de l'utilisateur (conv-631) : il
+ * NE PORTE PLUS QUE L'EFFACEMENT DE TRAVAIL. Le refus des lancements graphiques au
+ * premier plan a ete RETIRE le 2026-09-17 sur demande explicite de l'utilisateur : il
  * bloquait l'ouverture d'un simple fichier sur son propre ecran, qu'il demandait nommement, et
  * aucun chemin de contournement ne restait. Le bureau cache (`scripts/hdesk-lancer.ps1`) reste la
  * VOIE PAR DEFAUT, portee par la consigne en prose du prompt de pilotage — plus par un blocage.
@@ -390,8 +390,8 @@ export function scriptHookGardes(
   // Dossier du mod Autowin CHARGÉ par les runs (`dossierModsAutowin`, providers/claude.ts) : un agent
   // de run n'y écrit pas (garde-mod-autowin.ts). Absent → garde muette.
   dossierModProtege?: string,
-  // fix-ok: fonctionnalité neuve (conv-1457), pas un correctif : 4 édits = import, paramètre, sérialisation, appel ; banc rappels-outils.test.ts rouge avant (module absent).
-  // RAPPELS AU BON MOMENT (conv-1457, shared/rappels-outils.ts) : chemin complet de
+  // fix-ok: fonctionnalité neuve, pas un correctif : 4 édits = import, paramètre, sérialisation, appel ; banc rappels-outils.test.ts rouge avant (module absent).
+  // RAPPELS AU BON MOMENT (shared/rappels-outils.ts) : chemin complet de
   // `mods/autowin/rappels-outils.json`, relu à chaque appel d'outil. Absent → aucun rappel.
   fichierRappels?: string
 ): string {

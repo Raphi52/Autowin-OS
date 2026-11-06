@@ -8,7 +8,7 @@ import {
 } from '../../shared/langue'
 
 /**
- * LA LANGUE DE L'INTERFACE — Settings · Interface, liste « Langue » (conv-1146, 2026-10-26).
+ * LA LANGUE DE L'INTERFACE — Settings · Interface, liste « Langue » (2026-10-26).
  *
  * Même forme que le thème (`theme-mode.ts`) : mémorisée sur le poste, posée AVANT le premier rendu
  * (`main.tsx`), changée sans redémarrage. Un SEUL point de vérité pendant la session : la langue
@@ -18,7 +18,7 @@ import {
  * Le moteur reçoit la langue (`window.api.setLangue`) pour que l'agent réponde dans la même : au
  * démarrage, puis à chaque CHANGEMENT — jamais pour une simple réouverture de Settings, ni pour la
  * même langue choisie deux fois (l'effet de `InterfaceView` qui rejoue le thème à chaque ouverture
- * est précisément le piège à ne pas reproduire, conv-981).
+ * est précisément le piège à ne pas reproduire).
  */
 export const LANGUE_STORAGE_KEY = 'autowin-langue.v1'
 
@@ -49,7 +49,7 @@ export function appliquerLangue(langue: Langue): void {
 }
 
 /**
- * LE DERNIER ENVOI AU MOTEUR QUI A ÉCHOUÉ, pour que l'écran le DISE (conv-1146, 2026-10-26). Avant,
+ * LE DERNIER ENVOI AU MOTEUR QUI A ÉCHOUÉ, pour que l'écran le DISE (2026-10-26). Avant,
  * l'échec était avalé : l'écran passait en anglais, l'agent continuait en français, et rien ne le
  * signalait. `undefined` : rien à signaler. Seul le DERNIER envoi compte (`dernierEnvoi`) : un refus
  * arrivé en retard ne recouvre pas un succès plus récent.
@@ -129,7 +129,7 @@ export function useLangue(): Langue {
 }
 
 /**
- * LES DATES ET LES NOMBRES DANS LA LANGUE DE L'INTERFACE (traduction complète, conv-1170,
+ * LES DATES ET LES NOMBRES DANS LA LANGUE DE L'INTERFACE (traduction complète
  * 2026-10-27). Les écrans écrivaient `toLocaleString('fr-FR', …)` en dur : ces deux fonctions
  * prennent la locale de la langue courante (`localeDeLangue`, `shared/langue.ts`).
  *

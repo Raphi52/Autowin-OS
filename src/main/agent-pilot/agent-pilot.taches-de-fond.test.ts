@@ -93,7 +93,7 @@ describe('câblage — le tour de chat relance, index.ts ouvre le tour de repris
     expect(index).toContain('const relanceurTachesDeFond = creerRelanceurSurDisque(')
     expect(index).toContain('relanceTachesDeFond.relanceur = relanceurTachesDeFond')
     expect(index).toMatch(/relanceurTachesDeFond\s*\.reprendreAuDemarrage\(\)/)
-    // Le tour de reprise passe HORS du devis du tour appelant, comme chat_send (conv-53 -> conv-93).
+    // Le tour de reprise passe HORS du devis du tour appelant, comme chat_send.
     const bloc = index.slice(index.indexOf('relanceurTachesDeFond = creerRelanceurSurDisque('))
     expect(bloc.slice(0, 800)).toMatch(
       /runOutsideCurrent\(\(\) =>\s*scheduledChatRuntime\.runPrompt\(conversationId, prompt\)/

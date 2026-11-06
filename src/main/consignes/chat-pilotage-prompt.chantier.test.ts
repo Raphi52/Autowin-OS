@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 
 /**
- * Gros chantier (conv-1362, lot conv-1366) : le modèle doit savoir QUAND prendre `Workflow` plutôt
+ * Gros chantier : le modèle doit savoir QUAND prendre `Workflow` plutôt
  * que `plan_de_lots` ou `orchestrate`, et qu'il ne le prend jamais de lui-même. Entrée qui doit faire
  * rougir : la suppression du paragraphe, ou la perte de l'échantillon, qui protège le quota.
  */

@@ -3,18 +3,18 @@ import { AGGREGATE_MAX_CHARS } from '../verify/evidence-digest'
 /**
  * CE QUI A CHANGÉ ENTRE DEUX PASSAGES DU JUGE.
  *
- * fix-ok: conv-914 (2026-10-13) — cause lue dans le code : le prompt du juge renvoyait à CHAQUE
+ * fix-ok: (2026-10-13) — cause lue dans le code : le prompt du juge renvoyait à CHAQUE
  * passage le livrable agrégé entier (`clampAggregateForJudge(exec.text)`, orchestrator.ts), sans
  * jamais garder le texte déjà jugé (`memoire-juge.ts` ne garde que le verdict). Le juge d'une
  * réparation ne pouvait donc pas savoir ce que la réparation avait touché : il revérifiait tout
- * (passages de conv-914, ~25 min pour 4 juges d'après l'analyse de ce run, non re-mesuré).
+ * (~25 min pour 4 juges d'après l'analyse de ce run, non re-mesuré).
  *
  * On compare par LIGNES, en multiensemble : une ligne présente une fois de plus qu'avant est
  * « ajoutée », une fois de moins « retirée ». Aucune dépendance de diff dans package.json, et
  * `etat-diff.ts` ne compare que du JSON.
  *
  * LE BLOC NE FAIT JAMAIS DÉPASSER LA TAILLE MAXIMALE ACTUELLE DU PROMPT DU JUGE. Le livrable agrégé
- * y est borné à `AGGREGATE_MAX_CHARS` (evidence-digest.ts, choix de coût de conv-1120) ; le bloc ne
+ * y est borné à `AGGREGATE_MAX_CHARS` (evidence-digest.ts, choix de coût) ; le bloc ne
  * prend que la place que le livrable laisse libre sous ce plafond, et au plus
  * `MAX_CARACTERES_CHANGEMENTS`. Sans place, il n'y a pas de bloc.
  */

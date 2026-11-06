@@ -18,7 +18,7 @@ import { dirname, join, relative, resolve, sep } from 'node:path'
  * dossier. Ordre : `AGENTS.md` (Codex/OpenAI) → `CLAUDE.md` (Claude) → `.cursorrules` (Cursor).
  * On accepte les variantes de casse usuelles.
  *
- * ENTRE LES DOSSIERS (conv-1067, 2026-10-22) : on EMPILE, de la racine du dépôt git jusqu'au dossier
+ * ENTRE LES DOSSIERS (2026-10-22) : on EMPILE, de la racine du dépôt git jusqu'au dossier
  * de travail, le plus proche en dernier. Avant, seul le dossier de travail était lu : un fil rangé sur
  * `App/front` perdait les consignes de `App/AGENTS.md`, que Codex (racine git → cwd) et Claude Code
  * (remontée depuis le cwd) chargent tous les deux nativement — et que nous leur interdisons de lire.
@@ -129,7 +129,7 @@ function gagnantDuDossier(dir: string, chain: string[]): Gagnant | null {
 }
 
 /**
- * L'avis de coupe (conv-1067) : ce qui manque, et où lire la suite. « …[tronqué] » seul laissait
+ * L'avis de coupe : ce qui manque, et où lire la suite. « …[tronqué] » seul laissait
  * l'agent croire qu'il avait toutes les consignes du projet.
  */
 function avisDeCoupe(path: string, bytes: number, kept: number, maxBytes: number): string {

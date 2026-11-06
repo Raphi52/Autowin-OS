@@ -13,7 +13,7 @@ import {
 } from './relance-auto-moteur'
 
 /**
- * Relance automatique du moteur en dev (conv-918) : « l'app recompile le moteur et ne se relance
+ * Relance automatique du moteur en dev : « l'app recompile le moteur et ne se relance
  * que quand aucun agent ne tourne ». Chaque test vise une façon de relancer À TORT (agent coupé,
  * code cassé, modification sans effet) ou de NE PAS relancer alors qu'il le fallait.
  */
@@ -225,7 +225,7 @@ describe('relance automatique du moteur', () => {
 
 /**
  * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : l'agent devait redémarrer
- * pendant que conv-303 tournait. Son seul outil coupait conv-303 : il a posé un `ask` (« attends, je
+ * pendant qu'un fil tournait. Son seul outil coupait : il a posé un `ask` (« attends, je
  * relancerai moi-même » / « redémarre et coupe conv-303 »). L'utilisateur : « j'ai un système pour
  * mettre le redémarrage en queue, tu aurais dû l'utiliser ». La demande entre dans CETTE file.
  */
@@ -262,9 +262,9 @@ describe('redémarrage demandé, mis en file', () => {
   })
 
   /*
-   * conv-1306, 2026-10-30 : conv-1306 met un redémarrage en file à 15:31, conv-1329 à 15:50. La
+   * 2026-10-30 : un fil met un redémarrage en file à 15:31, :50. La
    * seconde demande REMPLAÇAIT la première : une seule consigne reposée à la relance, et la
-   * vérification promise à conv-1306 (« rejouera la consigne dans cette conversation ») perdue.
+   * vérification promise (« rejouera la consigne dans cette conversation ») perdue.
    */
   it('deux fils en file : UNE relance, et la consigne de CHACUN reposée avant elle', async () => {
     const h = harnais()
@@ -395,7 +395,7 @@ describe('empreinteDuCodeCompile', () => {
     expect(await empreinteDuCodeCompile(dossier)).not.toBe(avant)
   })
 
-  // Valeur figée le 2026-10-22 avec la version SYNCHRONE (conv-1077) : passer en lecture asynchrone
+  // Valeur figée le 2026-10-22 avec la version SYNCHRONE : passer en lecture asynchrone
   // ne doit pas changer l'empreinte, sinon la première compilation après la mise à jour verrait un
   // « moteur changé » qui n'existe pas et relancerait l'app pour rien.
   it('garde exactement l’empreinte de la version synchrone (ordre, séparateurs, sous-dossiers)', async () => {
@@ -410,7 +410,7 @@ describe('empreinteDuCodeCompile', () => {
     expect(await empreinteDuCodeCompile(dossier)).toBe('fa5c7119302fd9c84129a06fb9e9dcd7bddeaca4')
   })
 
-  // Gels conv-1077 : la lecture synchrone de tout le code compilé, faite dans le `close` de la
+  // Gels : la lecture synchrone de tout le code compilé, faite dans le `close` de la
   // compilation, figeait la fenêtre (22 lectures lentes, 56,6 s du 15 au 22/10, gels.jsonl). Une
   // lecture qui rend la main laisse passer la boucle d'événements avant d'avoir fini.
   it('rend la main à la boucle d’événements pendant le calcul', async () => {

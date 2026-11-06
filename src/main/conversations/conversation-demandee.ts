@@ -1,11 +1,11 @@
 /**
  * Ce qu'une demande « lance une conversation test » doit VRAIMENT produire.
  *
- * Defaut vecu conv-71 (2026-09-01), deux fautes dans le meme tour :
+ * Defaut vecu (2026-09-01), deux fautes dans le meme tour :
  *  1. la conversation creee s'appelait « Test — conversation de verification » alors que
  *     l'utilisateur avait ecrit « lance une conversation test. » — le modele a INVENTE un titre
  *     au lieu de reprendre les mots recus ;
- *  2. l'appel est parti DEUX fois (conv-72 puis conv-73, vide), parce que rien cote code
+ *  2. l'appel est parti DEUX fois (vide), parce que rien cote code
  *     n'empeche un second envoi identique.
  *
  * Une consigne de prompt ne corrige ni l'un ni l'autre : les deux se tranchent ici, en code

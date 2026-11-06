@@ -5,10 +5,10 @@ import postcss from 'postcss'
 import { describe, expect, it } from 'vitest'
 
 /**
- * AUCUN EFFET DE FLOU DANS L'INTERFACE (2026-11-05, conv-1623 : « enleve les effets de flou »).
+ * AUCUN EFFET DE FLOU DANS L'INTERFACE (2026-11-05, « enleve les effets de flou »).
  * Le flou de fond (`backdrop-filter`) et le flou d'un calque (`filter: blur`) se recalculent sur la
  * carte graphique à chaque image où quelque chose bouge derrière eux : c'est le coût que
- * l'utilisateur voulait retirer pour alléger le GPU. Les thèmes l'avaient déjà perdu (conv-124) ;
+ * l'utilisateur voulait retirer pour alléger le GPU. Les thèmes l'avaient déjà perdu ;
  * il en restait quinze dans les écrans eux-mêmes.
  *
  * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER CE TEST : un `backdrop-filter` autre que `none` dans n'importe

@@ -1,5 +1,5 @@
 // Frontière d'apprentissage de AppCommandBus (`observeOutcomeLearning`), sortie de commands.ts telle quelle
-// (conv-1580, lot 6).
+// (lot 6).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 import type { AppCommandBus } from './commands'
 import { appendBrainTrace } from '../activity/brain-trace-spool'

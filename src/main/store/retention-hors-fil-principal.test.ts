@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
 
 /*
- * LA PASSE DE RETENTION NE CREE PLUS AUCUN PROCESSUS SUR LE FIL PRINCIPAL (heal conv-1013).
+ * LA PASSE DE RETENTION NE CREE PLUS AUCUN PROCESSUS SUR LE FIL PRINCIPAL.
  *
  * Mesure du 2026-10-16 : `gels.jsonl` porte 3 gels `spawn git cherry` de 3,7 a 8,8 s (14-16/10),
  * tous 25 a 31 s apres un demarrage — la passe de retention lancee au demarrage (index.ts,

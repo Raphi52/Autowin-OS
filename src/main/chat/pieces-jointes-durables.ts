@@ -1,5 +1,5 @@
 /**
- * LES PIÈCES JOINTES SURVIVENT À LEUR TOUR (conv-1147, 2026-10-25).
+ * LES PIÈCES JOINTES SURVIVENT À LEUR TOUR (2026-10-25).
  *
  * Constat : « Lancer en N fils » fait le travail au tour SUIVANT celui qui a reçu le message. Une
  * image y arrivait (son original était écrit à l'envoi, puis rechargé), mais un fichier texte ou un

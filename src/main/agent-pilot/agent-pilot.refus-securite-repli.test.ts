@@ -9,7 +9,7 @@ import { ProviderCallError } from '../providers/types'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 
 /**
- * Message REEL du tour `d9a2ca62-65b1-498d-ad32-32c45d4f3558` (conv-239, 2026-10-11 06:46) : appel
+ * Message REEL du tour `d9a2ca62-65b1-498d-ad32-32c45d4f3558` (2026-10-11 06:46) : appel
  * claude-opus-5-5 en reprise de session, facture 3,70 USD, et le fil s'arretait la. L'adaptateur le
  * rend NON rejouable (`retryable: false`) parce qu'il a ete facture.
  */

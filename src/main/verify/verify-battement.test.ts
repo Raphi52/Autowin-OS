@@ -4,7 +4,7 @@ import { battementDeVerification } from './verify-battement'
 /**
  * LA LIGNE DE VIE d'une vérification en cours — ce que le fil affiche pendant l'attente.
  *
- * DÉFAUT VÉCU le 2026-08-25 (conv-1400) : dix minutes de « 1 action en cours » sans une ligne de
+ * DÉFAUT VÉCU le 2026-08-25 : dix minutes de « 1 action en cours » sans une ligne de
  * plus. Le signal doit répondre à la seule question que l'utilisateur se pose devant l'écran :
  * « est-ce que ça avance, et depuis combien de temps ? ».
  */
@@ -36,7 +36,7 @@ describe('battementDeVerification', () => {
     expect(battementDeVerification(sortie, 60_000)).toBe('1 min · Tests 412/900')
   })
   /*
-   * DEFAUT VECU le 2026-08-25 (conv-1404). Le fil affichait « 9 min 27 s · <ESC>[33m<ESC>[2m … e2e —
+   * DEFAUT VECU le 2026-08-25. Le fil affichait « 9 min 27 s · <ESC>[33m<ESC>[2m … e2e —
    * du message de chat a la mutation prouvee » : les codes de couleur de vitest s'affichaient TELS
    * QUELS. Deux degats, pas un : ils salissent la ligne, ET ils consomment le budget de largeur,
    * donc le texte utile est coupe bien avant sa vraie longueur.

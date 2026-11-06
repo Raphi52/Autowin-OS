@@ -18,7 +18,7 @@ import {
 } from './liens-work-items'
 
 /**
- * LIER UN PROMPT À UN WORK ITEM (option E du cadrage conv-1127, 2026-10-23) : lien automatique
+ * LIER UN PROMPT À UN WORK ITEM (option E du cadrage, 2026-10-23) : lien automatique
  * quand il est sûr (fil ouvert par la vue Tickets, mention `#1234` lue à la source), rattachement à
  * la main depuis la fiche de la Carte du projet.
  *

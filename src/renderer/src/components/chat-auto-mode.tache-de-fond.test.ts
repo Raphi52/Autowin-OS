@@ -6,7 +6,7 @@ const agent = (texte: string): Msg =>
   ({ role: 'assistant', content: texte, parts: [{ kind: 'text', text: texte }] }) as unknown as Msg
 const base = { actif: true, occupe: false, dernierTourTraite: null, dernierPromptEnvoye: null, brouillonPresent: false }
 
-// Réponse réelle de conv-42, tour 8268dddb-dfcc-4415-92d8-764b812603eb (aucune ligne AUTOWIN_PROMPT_V1).
+// Réponse réelle, tour 8268dddb-dfcc-4415-92d8-764b812603eb (aucune ligne AUTOWIN_PROMPT_V1).
 const REPONSE_CONV42 = [
   "Je relance l'essai sur une copie du banc (`bench/risques-rejeu/`), pour ne pas écraser les preuves de la mesure publiée.",
   '',
@@ -26,7 +26,7 @@ describe('mode auto — tour coupé pendant une tâche de fond (conv-42)', () =>
     expect(deciderRelanceAuto({ ...base, fil: [agent(texte)] })).toMatchObject({ action: 'envoyer' })
   })
   /*
-   * conv-113, tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 (fin réelle ci-dessous) : cette décision a
+   * Tour 27bdd9f2-d301-468f-9204-8b943e7e3c54 (fin réelle ci-dessous) : cette décision a
    * ÉTEINT ∞ à 20:18:54 (`desarmerAuto` au premier plan), mais disait « en pause ». Neuf minutes plus
    * tard, l'utilisateur a vu ∞ décoché et a conclu « ça a enchaîné alors qu'il était pas coché ».
    */

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { REGLES_VISUELLES } from './chat-pilotage-prompt'
 
 /**
- * DEFAUT VECU (conv-1450) : l'utilisateur a demande de VOIR la capture qui sert a valider une modif
+ * DEFAUT VECU : l'utilisateur a demande de VOIR la capture qui sert a valider une modif
  * front. Le canal a ete cable (agent-pilot republie les pieces jointes image en artefact), mais
  * RIEN dans le prompt n'obligeait a observer avant de dire « valide » — donc aucune image n'arrivait
  * jamais, canal ou pas. Le tuyau sans l'obligation ne montre rien.

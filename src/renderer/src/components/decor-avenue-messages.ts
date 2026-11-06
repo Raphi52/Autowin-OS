@@ -17,7 +17,7 @@ export type MessageVersDecor =
   | { type: 'liberer' }
   /**
    * INTERNE AU WORKER : le reflet de l'image suivante, dans sa propre tâche juste après l'image
-   * (decor-avenue.worker.ts, conv-347). Il passe par le même point d'entrée que les messages de la
+   * (decor-avenue.worker.ts). Il passe par le même point d'entrée que les messages de la
    * page pour que les sondes (scripts/banc-decor-budget.mjs) le comptent avec son image.
    */
   | { type: 'reflet' }

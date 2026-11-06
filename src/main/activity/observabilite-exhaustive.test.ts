@@ -29,11 +29,11 @@ import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
 const RACINE = join(__dirname, '..')
 
 function lire(chemin: string): string[] {
-  // orchestrator.ts découpé en modules voisins (conv-1508) : la source lue est leur ensemble, dans l'ordre d'origine.
+  // orchestrator.ts découpé en modules voisins : la source lue est leur ensemble, dans l'ordre d'origine.
   const parties = chemin === 'orchestration/orchestrator.ts' ? ['orchestration/orchestrator-contrats.ts', 'orchestration/orchestrator.ts', 'orchestration/orchestrator-run.ts', 'orchestration/orchestrator-parcours-glouton.ts', 'orchestration/orchestrator-parcours-sequentiel.ts'] : [chemin]
-  // commands.ts découpé de même (conv-1508, conv-1580) : la source lue est la famille du bus.
+  // commands.ts découpé de même : la source lue est la famille du bus.
   if (chemin === 'commands/commands.ts') return sourceDuBus().split(/\r?\n/)
-  // agent-pilot.ts découpé de même (conv-1580) : la source lue est la famille du pilote.
+  // agent-pilot.ts découpé de même : la source lue est la famille du pilote.
   if (chemin === 'agent-pilot/agent-pilot.ts') return sourceDuPilote().split(/\r?\n/)
   return parties.map((f) => readFileSync(join(RACINE, f), 'utf8')).join(String.fromCharCode(10)).split(/\r?\n/)
 }

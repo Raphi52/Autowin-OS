@@ -10,13 +10,13 @@ import type { FinalizeResult } from './worktree-manager'
  * 1. Le manifeste du run vécu (`.runs/run-f42d9a79ad99-1.json`) : `verdict: green`,
  *    `publication: "blocked"`, `conflictFile: JarvisWidget.tsx`. La finalisation AVAIT une cause —
  *    elle est simplement arrivée APRÈS le verdict du run.
- * 2. `commands.ts:3390`, vécu conv-1404 : « Le coordinateur rend `undefined` quand la copie a
+ * 2. `commands.ts:3390`, vécu : « Le coordinateur rend `undefined` quand la copie a
  *    encore des processus actifs — typiquement les workers `vitest` que la vérification vient
  *    elle-même de lancer : elle passe en attente et `retryRecovery` la publie ensuite. »
  *
  * `undefined` disait donc DEUX choses incompatibles : « rien à faire » et « pas encore ». `edit_file`
  * a reçu un correctif local ; l'orchestrateur, non — le même différé y devenait un rouge SANS cause,
- * et face à un faux échec l'agent RECOMMENCE (2,13 $ sur conv-1, 16 fichiers verts jamais publiés).
+ * et face à un faux échec l'agent RECOMMENCE (2,13 $, 16 fichiers verts jamais publiés).
  *
  * On nomme donc l'attente à sa SOURCE, une seule fois, au lieu de la deviner chez chaque appelant.
  */

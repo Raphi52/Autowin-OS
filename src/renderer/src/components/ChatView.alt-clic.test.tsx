@@ -11,7 +11,7 @@ import {
 } from './ChatView.harness'
 
 /**
- * ALT+CLIC, DE BOUT EN BOUT (conv-1038, 2026-10-21 ; toute l'app, conv-1338, 2026-10-30) : Alt+clic
+ * ALT+CLIC, DE BOUT EN BOUT (2026-10-21 ; toute l'app, 2026-10-30) : Alt+clic
  * sur un élément pose dans la saisie une référence exacte (texte affiché, bloc, source, fil, tour),
  * joint sa capture, sans envoyer et sans déclencher l'élément cliqué.
  */
@@ -235,7 +235,7 @@ describe('ChatView — Alt+clic sur une ligne du menu de mentions', () => {
     await cliquer(element, altKey)
   }
 
-  // fix-ok: conv-1338 — la ligne agit à l'appui (`acceptMention`, ChatComposer.tsx) : absorber le
+  // fix-ok: la ligne agit à l'appui (`acceptMention`, ChatComposer.tsx) : absorber le
   // seul clic la laissait s'accepter.
   it('la ligne est désignée, et la mention N’EST PAS acceptée', async () => {
     await h!.type('débloque @work')
@@ -279,7 +279,7 @@ describe('ChatView — l’élément arrive quand le chat n’était pas encore 
       conversation: vi.fn(async (id: string) => conversation(id, historique))
     })
 
-  // fix-ok: conv-1338 — au démarrage, le chat rouvre le dernier fil : écouter dès le montage posait le
+  // fix-ok: au démarrage, le chat rouvre le dernier fil : écouter dès le montage posait le
   // texte dans le brouillon « nouveau fil », que cette ouverture cachait aussitôt (saisie vide à
   // l'écran ; écoute remise au montage : 3 tests de ce bloc rouges).
   it('le chat rouvre le dernier fil au démarrage : le texte arrive dans CE fil, visible', async () => {

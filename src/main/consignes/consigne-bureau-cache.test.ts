@@ -29,7 +29,7 @@ describe('consigne du bureau caché injectée aux agents de run', () => {
     expect(texte).toContain('-t:Compile')
     expect(texte).toMatch(/MSB3021/)
     expect(texte.toLowerCase()).toContain('ne ferme jamais')
-    // Le refus des lancements au premier plan a ete retire (conv-631) : la consigne
+    // Le refus des lancements au premier plan a ete retire : la consigne
     // ne doit plus s appuyer sur un garde-fou qui n existe pas.
     expect(texte).not.toContain('garde-fou refuse')
   })

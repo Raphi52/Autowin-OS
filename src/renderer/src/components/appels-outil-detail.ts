@@ -4,7 +4,7 @@
  *
  * Une charge `tool-call` ouvre un appel. Un `tool-result` ou une `error` revient à l'appel de la
  * même ACTION : les lectures d'un message se chevauchent, et « le dernier appel ouvert » laissait
- * a.md sans résultat et donnait les deux notes à b.md (conv-1370, lot 8, 2026-10-31). Sans action
+ * a.md sans résultat et donnait les deux notes à b.md (lot 8, 2026-10-31). Sans action
  * connue — trace d'avant, geste propre de l'agent —, il revient au dernier appel ouvert, comme
  * avant : dans une trace écrite en file, c'est le même appel. Un appel sans aucun contenu — un geste
  * propre écrit avant le 2026-10-15, ou par un modèle IA qui ne rend pas ses arguments

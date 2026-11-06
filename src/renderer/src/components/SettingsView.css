@@ -1,5 +1,5 @@
 /*
- * SETTINGS — mise en page commune de ses sept onglets (conv-244, 2026-10-11 : « refais tous les tabs
+ * SETTINGS — mise en page commune de ses sept onglets (2026-10-11 : « refais tous les tabs
  * de la view settings en mode propre responsive et joli en theme holo »).
  *
  * Constats mesurés avant cette feuille (instance cachée, thème Holographique, 1280 / 1000 / 820 px) :
@@ -31,7 +31,7 @@
   --st-titre: var(--text);
 }
 
-/* 1. LES SECTIONS, EN LISTE À GAUCHE (conv-1109, 2026-10-23 : « je veux que les noms des sections
+/* 1. LES SECTIONS, EN LISTE À GAUCHE (2026-10-23 : « je veux que les noms des sections
    soient une liste à gauche des views comme les convs »). Elles étaient des pastilles dans la barre
    du haut (ViewTopBar.css) ; la barre ne garde plus que le titre. La colonne reprend la carte de la
    liste des conversations (`.conv-pane`, ChatView.css) et chaque ligne celle d'un fil
@@ -117,7 +117,7 @@
   overflow-y: auto;
   container: settings / inline-size;
 }
-/* Les cinq registres de capacités (une section chacun depuis conv-1109) gardent la hauteur pleine. */
+/* Les cinq registres de capacités (une section chacun) gardent la hauteur pleine. */
 .settings-view
   .settings-content:is(
     [data-section='capabilities'],
@@ -221,7 +221,7 @@
   accent-color: var(--accent);
 }
 
-/* 4. Le pilote shadow (section Routage depuis le retrait de Budget, conv-1119) garde le rythme des
+/* 4. Le pilote shadow (section Routage depuis le retrait de Budget) garde le rythme des
    autres panneaux (grille, écart de 14 px) : sans cela son titre collait à son texte. */
 .settings-content .shadow-routing-pilot {
   display: grid;
@@ -363,13 +363,13 @@
  *
  * Le vocabulaire est celui que l'utilisateur a déjà validé ailleurs dans ce thème, rien d'inventé :
  *   - ONGLET ACTIF = texte blanc souligné d'un trait de 2 px bleu -> rose, sans capsule ni lueur
- *     (onglets du panneau de droite, conv-180 : « la capsule ça va pas bien avec le border très
+ *     (onglets du panneau de droite, « la capsule ça va pas bien avec le border très
  *     angulaire » — le cadre de Settings est le même cadre à coins coupés) ;
- *   - BLOCS INTÉRIEURS ARRONDIS, gris neutres, sans bord visible (conv-211 : le chanfrein est réservé
- *     aux grands panneaux ; conv-191 : aucune teinte froide dans les fonds) ;
+ *   - BLOCS INTÉRIEURS ARRONDIS, gris neutres, sans bord visible (le chanfrein est réservé
+ *     aux grands panneaux ; : aucune teinte froide dans les fonds) ;
  *   - le HOLO tient dans un filet d'1 px « nacre », un seul cycle bleu > rose > argent > rose clair
- *     (cadre du bloc ASK, conv-240) — ici en haut de chaque panneau, à la place du filet doré ;
- *   - bleu #3c6eeb toujours PLEIN (conv-182) ; aucun halo autour d'un élément choisi (conv-198).
+ *     (cadre du bloc ASK) — ici en haut de chaque panneau, à la place du filet doré ;
+ *   - bleu #3c6eeb toujours PLEIN ; aucun halo autour d'un élément choisi.
  * ================================================================================================= */
 :root[data-theme='nebuleuse-verre'] .settings-view {
   --st-panneau: rgba(255, 255, 255, 0.035);
@@ -449,7 +449,7 @@
 
 /* Skills · Hooks · … : la coque est un panneau (même filet nacre), ses colonnes ne repeignent pas
    par-dessus ; les lignes sont des aplats et la ligne INSPECTÉE prend le cadre nacre de la réponse
-   retenue du bloc ASK (conv-240). Le violet froid de la sélection de base disparaît. */
+   retenue du bloc ASK. Le violet froid de la sélection de base disparaît. */
 :root[data-theme='nebuleuse-verre'] .settings-view .cockpit-shell {
   border-radius: 16px;
   background:

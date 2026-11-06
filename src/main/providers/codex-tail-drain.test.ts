@@ -45,7 +45,7 @@ afterEach(() => {
 
 describe('Codex CLI — barrière de drain du journal', () => {
   it('ne coupe plus un appel sur sa DURÉE : le drain va jusqu’à la dernière ligne', async () => {
-    // Même cause que côté Claude (conv-729, turn aa90027e-01c1-4d39-9645-7e5d01619323) : le cap de
+    // Même cause que côté Claude (turn aa90027e-01c1-4d39-9645-7e5d01619323) : le cap de
     // durée totale tuait des tours vivants. Supprimé.
     process.env.CODEX_BIN = 'codex-test'
     relay.tailDelayMs = 60

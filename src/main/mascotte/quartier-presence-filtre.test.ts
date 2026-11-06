@@ -1,5 +1,5 @@
 /**
- * Le filtre des titres publiés sur le partage (D-9, conv-1429) : il retire ce qui est sensible ET
+ * Le filtre des titres publiés sur le partage (D-9) : il retire ce qui est sensible ET
  * laisse intactes les phrases ordinaires — un filtre qui mange tout ne serait plus une présence.
  */
 import { describe, expect, it } from 'vitest'

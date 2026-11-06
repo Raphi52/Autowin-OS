@@ -52,7 +52,7 @@ export const PERSONAS: Partial<Record<PipelinePhase, Persona[]>> = {
         'Tu remets en cause la PRÉMISSE : et si ce module ne devait pas exister sous cette forme ? Propose la ré-imagination la plus ambitieuse défendable, pas l’amélioration incrémentale.'
     },
     {
-      // Piste 6 de conv-890 : l'angle « web » manquait au catalogue ; mesuré sur 31 runs avec un
+      // Piste 6 : l'angle « web » manquait au catalogue ; mesuré sur 31 runs avec un
       // scout, 2 recherches web lancées et 0 URL citée.
       id: 'externe',
       label: 'Veille externe',
@@ -150,7 +150,7 @@ ou hors sujet.
  * scout non encore pris (on reboucle au-delà) ; un angle déjà posé est gardé. Un membre seul n'a
  * personne avec qui se partager le terrain : il reste tel quel.
  * ORDRE : d'abord ce que la consigne de base couvre le MOINS — le web (0 URL citée sur 31 runs avec
- * un scout, conv-890), la rupture, l'usage ; la dette et la fragilité sont déjà dans ses « Angles ».
+ * un scout), la rupture, l'usage ; la dette et la fragilité sont déjà dans ses « Angles ».
  */
 export const ORDRE_ANGLES_PANEL_SCOUT = [
   'externe',
@@ -181,7 +181,7 @@ export function anglesDuPanelScout<T extends { persona?: string }>(membres: read
  * canevas n'en compose : d'abord un angle libre (écrit à la main, donc voulu), puis les angles du
  * catalogue dans l'ordre `ORDRE_ANGLES_PANEL_SCOUT`, puis un membre sans angle. Tri stable.
  *
- * fix-ok: conv-339, tour b6150a1a-6518-4d4b-99b4-3218b5efb501 — le régime « trivial » plafonne la
+ * fix-ok: tour b6150a1a-6518-4d4b-99b4-3218b5efb501 — le régime « trivial » plafonne la
  * concurrence à 2 (`execution-quote.ts`), et `.slice(0, 2)` gardait les DEUX PREMIERS du canevas
  * Exploration : « dette » puis « fragilité » (appels du 22:21:58 et du 22:22:37). Ce sont les deux
  * angles que la consigne de base couvre déjà, et « fragilité » dit « tu ignores l'esthétique » à une

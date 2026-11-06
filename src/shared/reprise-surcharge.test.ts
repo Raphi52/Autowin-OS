@@ -109,7 +109,7 @@ describe('libellés', () => {
 })
 
 /**
- * SURCHARGE LIVRÉE COMME RÉPONSE (mesuré le 2026-09-03, conv-28) : le CLI n'a pas échoué, il a
+ * SURCHARGE LIVRÉE COMME RÉPONSE (mesuré le 2026-09-03) : le CLI n'a pas échoué, il a
  * « répondu » le texte de l'incident (« API Error: 529 Overloaded. This is a server-side issue… »).
  * Le tour comptait donc pour un SUCCÈS, aucune reprise ne partait, et l'utilisateur devait retaper
  * sa demande à la main. La décision doit voir le TEXTE RENDU, pas seulement le champ d'erreur.

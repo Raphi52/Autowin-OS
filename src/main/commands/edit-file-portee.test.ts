@@ -17,7 +17,7 @@ import { WorktreeManager } from '../store/worktree-manager'
 import { RunWorktreeCoordinator } from '../store/run-worktree-coordinator'
 
 /**
- * DEFAUT VECU le 22/08 (conv-1363) : `edit_file` conditionnait sa publication a un verdict GLOBAL —
+ * DEFAUT VECU le 22/08 : `edit_file` conditionnait sa publication a un verdict GLOBAL —
  * la suite ENTIERE devait sortir a 0. Ce verdict repond « le depot est-il vert ? », jamais « cette
  * edition a-t-elle casse quelque chose ? ». Une edition SAINE de `orchestration-outcome.ts` a donc
  * ete jetee parce que `Markdown.test.tsx` echouait — 11 tests sur 62, sur le commit COMMITTE et
@@ -69,7 +69,7 @@ const RACINE = realpathSync.native(mkdtempSync(join(tmpdir(), 'autowin-portee-')
  *
  * Un juge externe a mesure la suite FLAKY : un run a 5 echecs / 2 passes, puis cinq runs a 7/7, avec
  * le md5 des fichiers de production verifie IDENTIQUE avant chaque lancement. Les sept tests
- * employaient le meme `conversationId` ('conv-1') et la meme cible ('sujet.ts') — or le produit
+ * employaient le meme `conversationId` et la meme cible ('sujet.ts') — or le produit
  * REUTILISE les bureaux par (conversation, cible) : deux tests concurrents se partageaient donc le
  * MEME bureau isole. Un identifiant distinct par test supprime ce partage.
  */
@@ -286,7 +286,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
   /*
    * CE TEST NE CONCLUT QUE SUR LA VOIE QU'IL VISE : la portee CIBLEE.
    *
-   * DEFAUT MESURE le 2026-09-02 (conv-131), 1 echec sur 1104 fichiers en suite complete, 5 verts
+   * DEFAUT MESURE le 2026-09-02, 1 echec sur 1104 fichiers en suite complete, 5 verts
    * hors charge : `expect(baselines()).toBe(0)` a recu 1. Ce n'etait NI un bug du produit NI une
    * assertion trop stricte. Sous charge, `vitest related` collecte 0 test par intermittence ; le
    * produit BASCULE alors sur la suite complete (comportement voulu, teste plus bas), celle-ci est
@@ -684,7 +684,7 @@ describe('edit_file — le verdict juge l’ÉDITION, pas l’état général du
    * editee est pourtant PUREMENT ASCII — l'edition « reussissait » et detruisait le reste.
    */
   /*
-   * DEFAUT VECU le 2026-09-03 (conv-21) : une correction de couleur dans `ChatView.css` faisait
+   * DEFAUT VECU le 2026-09-03 : une correction de couleur dans `ChatView.css` faisait
    * rejouer la SUITE ENTIERE — donc plafond de temps, donc edition refusee sans aucun verdict. La
    * derivation de portee existait, mais `EXTENSIONS_DE_CODE` excluait les feuilles de style : plus
    * rien a cibler, repli global, chronometre. Mesure hors modele du meme jour, dans ce depot :

@@ -6,7 +6,7 @@ import { getTicketFromCommand } from '../commands/ticket-get-command'
 import { formatTicketTreatmentPrompt } from '../../renderer/src/components/ticket-treatment'
 
 /**
- * PLAFOND MUET n°1 (conv-1228, 2026-10-28 : « cherche d'autres plafonds a la con comme ca ») : la
+ * PLAFOND MUET n°1 (2026-10-28 : « cherche d'autres plafonds a la con comme ca ») : la
  * discussion d'une fiche était coupée à TROIS endroits sans que personne le sache —
  *  - Azure : `$top=20`, seuls 20 commentaires étaient demandés, sans suivre la page suivante ;
  *  - la frontière (`normalizeTicketItem`) : 20 commentaires, 2 000 caractères chacun, sans marque ;

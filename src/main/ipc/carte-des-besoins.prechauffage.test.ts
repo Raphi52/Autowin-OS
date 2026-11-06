@@ -1,5 +1,5 @@
 /**
- * LE BOARD CALCULÉ AVANT SA PREMIÈRE OUVERTURE (conv-1248, « accélère un max le loading du board »).
+ * LE BOARD CALCULÉ AVANT SA PREMIÈRE OUVERTURE (« accélère un max le loading du board »).
  *
  * Mesure du 2026-10-28 sur le poste : la première ouverture relisait 1 083 fils en 2,0 s (1,0 s après
  * le raccourci Markdown) pendant que la vue affichait « Chargement… », puis 18 ms aux suivantes. Le

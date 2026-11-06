@@ -37,8 +37,8 @@ export type ChatArtifactsIpcDeps = {
 export function registerChatArtifactsIpc({ os }: ChatArtifactsIpcDeps): void {
   const chatArtifactPreviewBudget = new ChatArtifactPreviewBudget()
   const budgetedArtifactRenderers = new Set<number>()
-  // Vidéo et son du fil : lus depuis le stockage par plages, hors du budget base64 de 16 Mo
-  // (kaizen conv-260). Même résolution par identité que `os:chatArtifact:reveal` ci-dessous.
+  // Vidéo et son du fil : lus depuis le stockage par plages, hors du budget base64 de 16 Mo.
+  // Même résolution par identité que `os:chatArtifact:reveal` ci-dessous.
   brancherMediaDuFil((identite) =>
     resoudreMediaConserve(os.conversations.get(identite.conversationId), identite)
   )

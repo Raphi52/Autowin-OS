@@ -7,10 +7,10 @@ import { populateConvRunSections } from '../runs/conv-runs'
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
 
 /**
- * LE CHAÎNON MANQUANT (mesuré sur conv-1405, 2026-08-25).
+ * LE CHAÎNON MANQUANT (2026-08-25).
  *
- * `orchestration-memoire.ts` lit la section `### phase judge` du RUN.md. Or AUCUN RUN.md de
- * conv-1405 n'en contient : les 5 RUN.md du dossier ne portent que `### phase build` / `think`.
+ * `orchestration-memoire.ts` lit la section `### phase judge` du RUN.md. Or AUCUN RUN.md
+ * n'en contient : les 5 RUN.md du dossier ne portent que `### phase build` / `think`.
  * Cause : `orchestrator.ts` garde le verdict dans `lastJudgeText` et ne le pousse JAMAIS dans
  * `phaseOutputs`, seul tableau passé à `populateConvRunSections` (`commands.ts:1807`). La mémoire
  * inter-runs est donc structurellement TOUJOURS vide en production — preuve directe : le bloc

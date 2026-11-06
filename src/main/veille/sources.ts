@@ -30,9 +30,9 @@ export const SOURCES_VEILLE: readonly SourceVeille[] = [
   {
     concurrent: 'Cursor',
     url: 'https://cursor.com/changelog',
-    // Ajoutée le 2026-10-21 (conv-1032) après récupération : 200, page rendue côté serveur (texte
+    // Ajoutée le 2026-10-21 après récupération : 200, page rendue côté serveur (texte
     // lisible sans JavaScript), entrées datées — la plus récente lue : « Oct 16, 2026 ». Absente
-    // jusque-là alors que le scout de conv-1032 citait trois nouveautés Cursor d'octobre 2026.
+    // jusque-là alors que le scout citait trois nouveautés Cursor d'octobre 2026.
     note: 'entrees datees en anglais (« Oct 16, 2026 ») ; flux RSS aussi a /changelog/rss.xml'
   },
   { concurrent: 'OpenCode', url: 'https://github.com/sst/opencode/releases' },

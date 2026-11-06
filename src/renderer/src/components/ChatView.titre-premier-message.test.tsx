@@ -14,7 +14,7 @@ type Harness = Awaited<ReturnType<typeof mountChat>>
  * Bug constate le 30/08 : « toutes mes nouvelles conversations s'appellent Nouvelle conversation ».
  * La vue renommait alors le fil provisoire au premier envoi.
  *
- * Depuis conv-999 (2026-10-16), c'est le STOCKAGE qui titre le fil, a CHAQUE message qui lance un
+ * Depuis le 2026-10-16, c'est le STOCKAGE qui titre le fil, a CHAQUE message qui lance un
  * tour (conversations.titre-dernier-message.test.ts couvre le provisoire), et `conversationsRename`
  * est le renommage MANUEL : il marque le titre comme choisi par l'utilisateur. Si la vue l'appelait
  * encore a l'envoi, le titre se figerait sur le premier message — exactement ce qui est corrige.

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { decouperMarkdownSansReprise, oublierRepriseMarkdown } from './markdown-blocs'
 
 /**
- * BLOCS DE DONNEES DANS LE DECOUPAGE DU FIL (conv-1074, 2026-10-22).
+ * BLOCS DE DONNEES DANS LE DECOUPAGE DU FIL (2026-10-22).
  *
  * Une fence ```aw-tableau / ```aw-comparaison / ```aw-etapes FERMEE et lisible devient un bloc
  * `donnees`, que l'app met en page. Tout le reste reste du code, lisible et copiable : une fence

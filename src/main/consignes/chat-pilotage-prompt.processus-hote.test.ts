@@ -1,5 +1,5 @@
 /**
- * DEFAUT VECU (31/08, conv-1569) : sur « relance l'app », l'agent a planifie un script detache qui
+ * DEFAUT VECU (31/08) : sur « relance l'app », l'agent a planifie un script detache qui
  * arretait TOUS les processus electron puis relancait `npm run dev`. Il vit DANS cette app : il a
  * donc tue sa propre session au milieu de son tour. Cote utilisateur : « kaizen t'as plante » — la
  * reponse n'est jamais arrivee, et l'arret large emportait des fenetres etrangeres au travail.
@@ -7,7 +7,7 @@
  * Le prompt de pilotage doit porter l'interdit ET l'issue de remplacement, sans quoi rien n'empeche
  * le geste de se rejouer.
  *
- * CORRECTION (02/09, conv-103) : l'issue de remplacement etait « le redemarrage revient a
+ * CORRECTION (02/09) : l'issue de remplacement etait « le redemarrage revient a
  * l'utilisateur ». Depuis l'arrivee de `restart_app` (redemarrage par le lanceur officiel + consigne
  * de reprise rejouee dans la conversation), cette issue est FAUSSE : l'utilisateur a mesure la gene
  * (« ca doit jamais me dire de redemarer l'app, ca doit le faire »). L'agent redemarre donc lui-meme,
@@ -45,15 +45,15 @@ describe('prompt de pilotage — processus hote', () => {
   })
 
   /*
-   * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : conv-303 tournait ; le
+   * Conv-304 (2026-10-17, tour 48eb0f5b-a0df-4028-876a-557d9c7e88eb) : un fil tournait ; le
    * paragraphe ne disait rien de ce cas, l'agent s'est invente une exception (« an ask is justified
    * despite the usual rule ») et a demande « je redemarre ? ». Saisie ts 1792232135771 : « j'ai un
    * systeme pour mettre le redemarrage en queue tu aurais du l'utiliser ».
    */
   /*
-   * RACCOURCI le 2026-10-28 (conv-1229) : la mecanique de la file (`enFile: true`, preavis, repos)
+   * RACCOURCI le 2026-10-28 : la mecanique de la file (`enFile: true`, preavis, repos)
    * est dite par la description de `restart_app`, servie avec la commande ; le prompt garde le
-   * COMPORTEMENT que conv-304 a manque : redemarrer quand meme, sans poser la question.
+   * COMPORTEMENT qu'un fil a manque : redemarrer quand meme, sans poser la question.
    */
   it('d autres agents tournent : restart_app QUAND MEME (mise en file), jamais la question', () => {
     expect(prompt).toMatch(/MEME si d'autres agents tournent \(il se met en file\)/)

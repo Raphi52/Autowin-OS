@@ -1,4 +1,4 @@
-// fix-ok: le vocabulaire du domaine metier de l entreprise (categorie, projets, mots-cles) etait ecrit en dur dans le catalogue et les regles du graphe ; il vient desormais du profil (identiteMetier), constate par la garde separation-entreprise.test.ts (conv-916).
+// fix-ok: le vocabulaire du domaine metier de l entreprise (categorie, projets, mots-cles) etait ecrit en dur dans le catalogue et les regles du graphe ; il vient desormais du profil (identiteMetier), constate par la garde separation-entreprise.test.ts.
 import {
   closeSync,
   existsSync,
@@ -39,7 +39,7 @@ export interface BrainGraphRef {
   path: string
   sizeMb: number
   kind: 'vault'
-  /** Le Brain PERSO de l'utilisateur (conv-1233) : la vue marque ses notes « perso ». */
+  /** Le Brain PERSO de l'utilisateur : la vue marque ses notes « perso ». */
   perso?: true
   themes?: BrainTheme[]
   /** Domaine metier de l'entreprise (profil), pour classer ses fiches dans la vue ; absent = neutre. */
@@ -245,7 +245,7 @@ function retrievalRootsMatch(navigationRoot: string, expectedRoot: string): bool
 
 /**
  * LES VAULTS QUE LA VUE KNOWLEDGE PEUT OUVRIR : le Brain d'équipe et, s'il est réglé, le Brain
- * PERSO de l'utilisateur (conv-1233, 2026-10-28, demande : « affiche le Brain perso dans la vue
+ * PERSO de l'utilisateur (2026-10-28, demande : « affiche le Brain perso dans la vue
  * Knowledge, à côté du Brain d'équipe »). Relu à chaque appel : un Brain perso réglé dans les
  * Réglages s'ouvre sans redémarrer. Une racine imposée par l'appelant (`allowedRoot`) reste la
  * SEULE autorisée, comme avant.
@@ -460,7 +460,7 @@ export async function applyBrainRetrievalScoresAsync(
 export const SHARED_BRAIN_ROOT = sharedBrainRoot()
 /**
  * Catalogue des categories du graphe : les categories generiques, plus celles du DOMAINE METIER de
- * l'entreprise (profil `metier`, conv-916) — sa categorie juste apres `Brain`, ses projets de code a
+ * l'entreprise (profil `metier`) — sa categorie juste apres `Brain`, ses projets de code a
  * la fin. Sans profil (version publique), aucune categorie metier. L'ordre sert aussi au tri des
  * themes d'une note (`noteThemes`).
  */
@@ -531,7 +531,7 @@ export function scanBrainGraphs(
 }
 
 /**
- * Le Brain PERSO dans la liste des graphes de la vue, à côté de celui de l'équipe (conv-1233).
+ * Le Brain PERSO dans la liste des graphes de la vue, à côté de celui de l'équipe.
  * Vide sans Brain perso réglé, ou si son dossier n'existe pas encore. Pas de domaine métier : ses
  * notes ne sont rangées par aucun projet de l'entreprise.
  */
@@ -753,7 +753,7 @@ export async function loadBrainGraphAsync(
 export const PREFIXE_NOEUD_PERSO = 'perso:'
 
 /**
- * LES DEUX BRAINS DANS UN SEUL GRAPHE (conv-1262, 2026-10-29, demande : « ajoute les ponts et un
+ * LES DEUX BRAINS DANS UN SEUL GRAPHE (2026-10-29, demande : « ajoute les ponts et un
  * filtre pour voir que les nodes de l'un ou l'autre dans la vue knowledge »).
  *
  * Les notes d'équipe gardent leur id ; celles du Brain perso prennent le préfixe `perso:` et la
@@ -1095,7 +1095,7 @@ function vaultThemeCatalog(root: string, corpus?: readonly string[]): BrainTheme
 }
 
 /**
- * LECTURE PARALLELE, mesuree le 2026-10-28 (conv-1219) sur le Brain reseau de 1931 notes : la
+ * LECTURE PARALLELE, mesuree le 2026-10-28 sur le Brain reseau de 1931 notes : la
  * lecture bloquante prenait 13,7 a 16,3 s et figeait le worker, donc l'apercu du graphe — demande
  * en meme temps par la vue Knowledge — attendait derriere elle. La lecture parallele prend ~4 s,
  * et partage sa promesse en vol avec `loadBrainGraphAsync` : une seule passe sur le reseau.
@@ -1318,7 +1318,7 @@ function allowedReadRoots(): string[] {
     join(appData, 'autowin-os', 'runs'), // RUN.md créés par les conversations Autowin
     ...(effectiveAppDataRoot ? [join(effectiveAppDataRoot, 'runs')] : []),
     // Les RUN.md LÉGERS, une fiche par demande (`fiches-de-demande.ts`) : le panneau RUN.md du fil
-    // et le lien du post-it du Board les ouvrent (conv-1441). Seul ce dossier, jamais la racine.
+    // et le lien du post-it du Board les ouvrent. Seul ce dossier, jamais la racine.
     join(appData, 'autowin-os', 'demandes'),
     ...(effectiveAppDataRoot ? [join(effectiveAppDataRoot, 'demandes')] : []),
     ...(executionWorkspace ? [executionWorkspace] : []),

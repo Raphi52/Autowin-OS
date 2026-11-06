@@ -24,10 +24,10 @@ describe('hauteur des schemas mermaid dans le fil', () => {
 
   /*
    * CE TEST CITAIT UN CHOIX ABANDONNE. Le commit 5534d939 (« un schema trop haut est mis a
-   * l echelle au lieu de derouler », conv-590, 2026-09-16) a deplace le plafond du CADRE vers le
+   * l echelle au lieu de derouler », 2026-09-16) a deplace le plafond du CADRE vers le
    * DESSIN : le cadre borne a 300 px faisait apparaitre une barre de defilement pour quelques
    * dizaines de pixels manquants. Le test n'a pas suivi et laissait la feuille de style ROUGE en
-   * permanence, ce qui bloquait toute autre edition (conv-79, 2026-09-17). L'exigence testee est
+   * permanence, ce qui bloquait toute autre edition (2026-09-17). L'exigence testee est
    * inchangee — un schema du fil tient sous les yeux — seul l'endroit qui la porte a bouge.
    * FUSION 2026-09-17 : la branche fix/scout-interne-5-candidats portait EXACTEMENT la meme
    * correction, ecrite de son cote (meme assertion `overflow-y: visible`, meme retrait de
@@ -42,8 +42,8 @@ describe('hauteur des schemas mermaid dans le fil', () => {
   })
 
   /*
-   * PLAFOND RELEVE DE 420 A 1200 PX (conv-1322, 2026-10-30, demande de l'utilisateur). A 420 px, le
-   * schema de conv-1321 (710 x 1053 naturels) sortait en 283 x 420 : texte de 11,5 px ramene a 4,6 px,
+   * PLAFOND RELEVE DE 420 A 1200 PX (2026-10-30, demande de l'utilisateur). A 420 px, le
+   * schema (710 x 1053 naturels) sortait en 283 x 420 : texte de 11,5 px ramene a 4,6 px,
    * illisible. L'exigence reste qu'un schema tres long ne mange pas tout le fil, mais le plafond ne
    * doit plus reduire un schema d'une taille courante. Le bouton Agrandir couvre les plus grands.
    */
@@ -56,7 +56,7 @@ describe('hauteur des schemas mermaid dans le fil', () => {
   })
 
   /*
-   * FINS DE MOTS COUPEES (conv-1322, 2026-10-30). Mermaid mesure ses textes hors de la page, puis les
+   * FINS DE MOTS COUPEES (2026-10-30). Mermaid mesure ses textes hors de la page, puis les
    * enferme dans des cadres a cette largeur exacte. Le fil leur transmettait son espacement entre
    * lettres (0,0675 px) : 108,53 px de texte pour un cadre de 107,31, derniere lettre rognee. Sans cet
    * espacement, le texte fait 107,31 px. Invisible a 420 px de haut, flagrant a taille reelle.

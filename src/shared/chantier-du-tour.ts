@@ -1,7 +1,7 @@
 /**
  * CHANTIER DU TOUR — le format de ligne partagé entre le processus principal qui l'ÉCRIT
  * (`main/providers/claude-workflow.ts`, à chaque avancée d'un outil Workflow du CLI) et le fil qui le
- * RELIT pour dessiner la carte du chantier (conv-1362, lot conv-1366 : « une carte vivante dans le
+ * RELIT pour dessiner la carte du chantier (lot : « une carte vivante dans le
  * fil, avec les phases, le nombre d'agents en cours, finis et en échec, et les jetons »).
  *
  * Même transport que les étapes du tour (`etapes-du-tour.ts`) : une ligne de statut, le seul canal

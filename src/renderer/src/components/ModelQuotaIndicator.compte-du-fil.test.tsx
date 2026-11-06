@@ -6,9 +6,9 @@ import { ModelQuotaIndicator } from './ModelQuotaIndicator'
 import type { OrchestratorAccounts } from './OrchestratorModelSelector'
 
 /**
- * LA BARRE DE QUOTA PARLE DU MÊME COMPTE QUE LA PUCE (conv-1416, 2026-11-01).
+ * LA BARRE DE QUOTA PARLE DU MÊME COMPTE QUE LA PUCE (2026-11-01).
  *
- * Constat de conv-1403 : puce sur le compte pro, barre sur gmail. La puce suit le choix du fil, la barre
+ * Constat : puce sur le compte pro, barre sur gmail. La puce suit le choix du fil, la barre
  * suivait le compte actif de l'application. L'indicateur demande désormais le quota du compte du fil.
  */
 const instantane = {

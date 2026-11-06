@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ProjetsPartagesDuBoard, type ProjetAffiche } from './ProjetsPartagesDuBoard'
 
 /**
- * Le menu « Projets » du Board (conv-1211). Entrée qui doit faire échouer ce fichier : un projet
+ * Le menu « Projets » du Board. Entrée qui doit faire échouer ce fichier : un projet
  * décoché depuis « tous » qui rendrait encore `null` (tout repartirait sur le partage), ou un bouton
  * qui annonce « tous » alors qu'une liste est retenue.
  */

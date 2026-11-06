@@ -117,7 +117,7 @@ export function AgentsTopologyView({
   /**
    * LA VUE RESTE MONTÉE QUAND ON LA QUITTE (App.tsx, `visitedTabs`) et n'écoute les changements de
    * rôles que visible. Un orchestrateur changé ailleurs pendant ce temps — depuis l'en-tête d'un
-   * chat, conv-1529 — était donc manqué : en revenant, l'utilisateur voyait l'ANCIEN modèle (vécu le
+   * chat, — était donc manqué : en revenant, l'utilisateur voyait l'ANCIEN modèle (vécu le
    * 2026-11-04 : « high » posé à 16:11:08, Agents Studio affichait encore « xhigh »). Chaque RETOUR
    * à l'écran relit donc la topologie ; le premier montage la lit déjà par l'effet ci-dessus.
    */

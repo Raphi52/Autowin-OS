@@ -9,7 +9,7 @@ import {
 /**
  * LE MODÈLE DOIT SAVOIR QU'AUTOWIN SURVEILLE ENCORE SA TÂCHE DE FOND.
  *
- * conv-253, tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e (« ? », saisie ts 1791731223359) : à la
+ * Tour bdfe38d3-5ba5-4693-bad2-f70b39bc845e (« ? », saisie ts 1791731223359) : à la
  * reprise de session, le CLI dit au modèle que sa surveillance `bmaye5d39` s'est arrêtée « before
  * the previous session ended ». Son raisonnement : « The background watcher process ended with the
  * session, so I should decide whether to relaunch one » — il en relance une seconde (`biiy5js9b`).
