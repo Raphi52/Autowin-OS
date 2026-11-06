@@ -181,7 +181,11 @@ import { depotCiteDansLeMessage } from '../depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from '../rangement-premier-message'
 import { noterAppelCourt, signalerPanneAppelCourt } from '../petites-taches-trace'
 import { condenseurDuBrain } from '../brain-condenseur'
-import { photographierDebutDeTour, verifierCeQuiPart } from '../chat-turn-publication'
+import {
+  partageLeDepot,
+  photographierDebutDeTour,
+  verifierCeQuiPart
+} from '../chat-turn-publication'
 import { publierSansTour, redacteurDeCommit } from '../git-apres-fil-sans-tour'
 import { lireProprietairesDeFichiers } from '../proprietaire-fichier'
 import {
@@ -3064,6 +3068,11 @@ Le fil reprend ensuite normalement.`
               bus.verifierAvantPublication(racine, liste)
             ),
           rediger: (charge) => redigerUnCommit(charge, fil),
+          // Un tour d'un autre fil du dépôt en cours : ce qu'il écrit n'a pas encore d'auteur (conv-1641).
+          autreTourEnCours: () =>
+            activeChatTurns
+              .inFlightConversations()
+              .some((id) => !passe.fils.includes(id) && partageLeDepot(repo, dossierDuTour(id))),
           commiter: (message, fichiers, runGitTrace) =>
             autoCloseRun({
               repo,
