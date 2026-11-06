@@ -127,7 +127,7 @@ export function ConversationCostIndicator({
    */
   useEffect(() => {
     // Chargement asynchrone déclenché par l'état externe du journal, pas état dérivé du rendu.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Chargement externe dont le témoin « en cours » doit s’allumer dès l’appel (bouton grisé)
     void refresh()
   }, [refresh])
   const etaitOccupe = useRef(busy)

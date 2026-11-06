@@ -62,11 +62,11 @@ export function CandidatsPickPanel({
   autoLancer?: boolean
   /**
    * Le lancement dans le fil : le message du PREMIER lot, et ceux des lots suivants quand aucun plan
-   * ne peut les porter (conv-1080). Une sélection d'un seul lot n'a pas de `suite`.
+   * ne peut les porter. Une sélection d'un seul lot n'a pas de `suite`.
    */
   onPick?: (prompt: string, suite?: readonly string[]) => void
   /**
-   * Le lancement en super conversation (conv-1333) : dès deux lots, la sélection devient un plan,
+   * Le lancement en super conversation : dès deux lots, la sélection devient un plan,
    * chaque lot dans son fil. Absent : les lots s'enchaînent dans le fil.
    */
   onPlan?: (selection: SelectionAPlanifier) => Promise<IssuePlanDeSelection>
@@ -81,7 +81,7 @@ export function CandidatsPickPanel({
    * « enchaîne sur tout », décocher est l'exception). Le bouton, lui, reste toujours à cliquer.
    */
   const auto = selectionAutoDepuisScout(candidats, texteScout)
-  // Le numéro du tableau du scout — celui que sa cible désigne, même sur un tableau retrié (conv-1074).
+  // Le numéro du tableau du scout — celui que sa cible désigne, même sur un tableau retrié.
   const numeros = numerosDesCandidats(candidats)
   const [coches, setCoches] = useState<ReadonlySet<number>>(
     auto ?? new Set(candidats.map((_, i) => i))
@@ -107,10 +107,10 @@ export function CandidatsPickPanel({
   const retenus = candidats.flatMap((_, index) => (coches.has(index) ? [index] : []))
   const selection = retenus.map((index) => candidats[index]!)
   /*
-   * UN SEUL BOUTON, LE WORKFLOW INTELLIGENT (conv-1080) : « ça doit retenir les candidats puis lancer
+   * UN SEUL BOUTON, LE WORKFLOW INTELLIGENT : « ça doit retenir les candidats puis lancer
    * le workflow intelligent ». Le choix se fait PISTE PAR PISTE (« fais le truc parfait », même fil) :
    * chaque ligne porte sa voie et sa raison, les pistes d'une même voie partent ensemble par lots de
-   * `MAX_PISTES_PAR_LOT`, en super conversation dès deux lots (conv-1333). Le bloc au-dessus du bouton
+   * `MAX_PISTES_PAR_LOT`, en super conversation dès deux lots. Le bloc au-dessus du bouton
    * dit le plan en direct — un choix fait à la place de l'utilisateur ne doit jamais être invisible.
    */
   const voies = candidats.map(voieDeLaPiste)
@@ -122,7 +122,7 @@ export function CandidatsPickPanel({
     else onPick?.(premier)
   }
   /*
-   * LE PLAN D'ABORD (conv-1333, 2026-10-30). Dès deux lots, la sélection part en super conversation :
+   * LE PLAN D'ABORD (2026-10-30). Dès deux lots, la sélection part en super conversation :
    * dans la file du fil, en mémoire de la vue, 8 lots sur 12 n'ont jamais quitté l'écran. L'issue reste
    * visible ici : un plan refusé ne s'avale pas, et le bouton ne relance pas un plan parti.
    */
@@ -154,14 +154,23 @@ export function CandidatsPickPanel({
   const choixAuto = auto === null ? [] : candidats.filter((_, index) => auto.has(index))
   const planAuto = planDeLancement(choixAuto)
   const lanceRef = useRef(false)
-  useEffect(() => {
-    if (!autoLancer || lanceRef.current) return
+  const lancerAuto = (): void => {
+    if (lanceRef.current) return
     if (choixAuto.length === 0) return
     lanceRef.current = true
     // Le plan pose son état « envoi » : hors de l'effet, un rendu en cascade ne sert à rien.
     if (planAuto.length > 1 && onPlan) queueMicrotask(() => demarrer(planAuto))
     else lancer(redigerPromptsDuPlan(planAuto))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }
+  // fix-ok: exhaustive-deps mesuré — l'effet ne doit se jouer qu'au passage de `autoLancer`, mais lire
+  // le choix et les rappels DU RENDU en cours : ils passent par une ref « dernière valeur » posée
+  // avant lui (les effets d'un même rendu s'exécutent dans l'ordre).
+  const lancerAutoRef = useRef(lancerAuto)
+  useEffect(() => {
+    lancerAutoRef.current = lancerAuto
+  })
+  useEffect(() => {
+    if (autoLancer) lancerAutoRef.current()
   }, [autoLancer])
   return (
     <div className="cpick" data-testid="candidats-pick">
@@ -243,7 +252,7 @@ export function CandidatsPickPanel({
             </span>
             {/* La valeur de la ligne : une note quand le scout en donne une, sinon les deux
                 pastilles Impact/Effort — un scout au format Impact/Effort n'a AUCUN nombre.
-                Le chiffre seul : la jauge qui le doublait est retirée (« ça sert à rien », conv-1198). */}
+                Le chiffre seul : la jauge qui le doublait est retirée (« ça sert à rien »). */}
             {candidat.pertinence !== undefined && (
               <span className="cpick-score">{candidat.pertinence}</span>
             )}

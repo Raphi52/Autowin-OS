@@ -236,7 +236,7 @@ describe('TraceStore append-only', () => {
     new TraceStore(root).append(event('evt-0', 0))
     // CommonJS, comme le depot (pas de "type": "module") : avec tsx 4.23 sous Node 20.20, un
     // `import { TraceStore }` en mode module ne voit plus que `default` (constate le 2026-10-11,
-    // conv-246, meme sur un fichier de deux lignes) et le processus enfant mourait avant de reserver.
+    // Meme sur un fichier de deux lignes) et le processus enfant mourait avant de reserver.
     const script = [
       "const { TraceStore } = require('./src/main/activity/trace-store.ts')",
       "const { existsSync } = require('node:fs')",
@@ -475,7 +475,7 @@ describe('cache de relecture borne et non partage', () => {
     }
     expect(interne.readCursorsStrict.size).toBeLessThanOrEqual(32)
     expect(interne.readCursorsVue.size).toBeLessThanOrEqual(32)
-    // La correction doit rester correcte apres eviction : conv-0 est sortie du cache.
+    // La correction doit rester correcte apres eviction : `conv-0` est sortie du cache.
     expect(store.readConversation('conv-0').map((e) => e.id)).toEqual(['evt-a-0', 'evt-b-0'])
     expect(store.readConversationBestEffort('conv-199').map((e) => e.id)).toEqual(['evt-a-199'])
   })
@@ -595,7 +595,7 @@ describe('compteur de sequence — lectures disque', () => {
 })
 
 /*
- * UN STORE SE REFERME (conv-246, 2026-10-11). `append` garde le descripteur d'ecriture ouvert, et
+ * UN STORE SE REFERME (2026-10-11). `append` garde le descripteur d'ecriture ouvert, et
  * rien ne permettait de le relacher. Sous Windows, effacer un fichier encore ouvert le laisse « en
  * attente de suppression » : son dossier ne se vide plus, et `supprimerArbre` echoue en EPERM. C'est
  * ce qui rendait `commands.test.ts` et `e2e-chaine.test.ts` rouges a la suppression de leur dossier.

@@ -130,7 +130,7 @@ const LIBELLE_BASCULE: Record<GraphLayoutMode, CleKnowledge> = {
 
 /**
  * Un message posé dans un état (erreur, invite) hors du rendu : il prend la langue du moment où il
- * naît, comme le reste du message d'erreur (conv-1170).
+ * naît, comme le reste du message d'erreur.
  */
 const texteDuMoment = (cle: CleKnowledge): string => traduireKnowledge(cle, langueCourante())
 
@@ -182,7 +182,7 @@ export function GraphView({
   const [brainsLoading, setBrainsLoading] = useState(true)
   const [selected, setSelected] = useState('')
   /**
-   * LES DEUX BRAINS DANS UN GRAPHE (conv-1262, 2026-10-29, demande : « un filtre pour voir que les
+   * LES DEUX BRAINS DANS UN GRAPHE (2026-10-29, demande : « un filtre pour voir que les
    * nodes de l'un ou l'autre dans la vue knowledge »). Vrai = le graphe montre l'équipe ET le perso,
    * reliés par leurs ponts ; `selected` reste alors le Brain d'équipe, pour tout ce qui lui est
    * propre (recherche, thèmes, boîte de réception).
@@ -235,6 +235,25 @@ export function GraphView({
   const [themeNodesReload, setThemeNodesReload] = useState(0)
   /** Candidats en attente dans `inbox/` — comptés SANS ouvrir le poste de travail. */
   const [inboxPending, setInboxPending] = useState(0)
+  // REMISES À ZÉRO PENDANT LE RENDU (set-state-in-effect) : au passage à « inapplicable »,
+  // le compte de la boîte, les anciens résultats de recherche et leur verdict de retrieval sont
+  // retirés immédiatement — sans effet, donc sans rendu intermédiaire avec les valeurs périmées.
+  const brainDuMoment = brains.find((candidate) => candidate.path === selected)
+  const inboxApplicable = Boolean(selected) && brainDuMoment?.kind === 'vault' && !brainDuMoment.perso
+  const rechercheApplicable = themeQuery.trim() !== '' && brainDuMoment?.kind === 'vault'
+  const [inboxApplicableVu, setInboxApplicableVu] = useState(inboxApplicable)
+  if (inboxApplicableVu !== inboxApplicable) {
+    setInboxApplicableVu(inboxApplicable)
+    if (!inboxApplicable) setInboxPending(0)
+  }
+  const [rechercheApplicableVue, setRechercheApplicableVue] = useState(rechercheApplicable)
+  if (rechercheApplicableVue !== rechercheApplicable) {
+    setRechercheApplicableVue(rechercheApplicable)
+    if (!rechercheApplicable) {
+      setVaultSearch([])
+      setSearchRetrieval(null)
+    }
+  }
   const [expandingNodeId, setExpandingNodeId] = useState<string | null>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<HTMLElement>(null)
@@ -417,10 +436,8 @@ export function GraphView({
   // poste de travail : sinon la revue humaine s'accumule sans que rien ne la réclame.
   useEffect(() => {
     const brain = brains.find((candidate) => candidate.path === selected)
-    // Le Brain PERSO n'a pas de revue humaine : ses faits sont promus seuls (conv-1233).
+    // Le Brain PERSO n'a pas de revue humaine : ses faits sont promus seuls.
     if (!selected || brain?.kind !== 'vault' || brain.perso) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setInboxPending(0)
       return
     }
     let current = true
@@ -442,11 +459,7 @@ export function GraphView({
     const query = themeQuery.trim()
     const selectedBrain = brains.find((brain) => brain.path === selected)
     if (!query || !selectedBrain || selectedBrain.kind !== 'vault') {
-      // Une recherche devenue inapplicable doit retirer immédiatement ses anciens résultats.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setVaultSearch([])
-      // …et son ancien verdict de retrieval avec eux, sinon la note survit à la question.
-      setSearchRetrieval(null)
+      // Le retrait des anciens résultats se fait pendant le rendu (transition vers « inapplicable »).
       return
     }
     let current = true
@@ -485,7 +498,7 @@ export function GraphView({
     [brains, selected]
   )
   /**
-   * BRAIN PERSO OUVERT (conv-1233, 2026-10-28, demande : « affiche le Brain perso dans la vue
+   * BRAIN PERSO OUVERT (2026-10-28, demande : « affiche le Brain perso dans la vue
    * Knowledge, à côté du Brain d'équipe, avec ses notes marquées perso »). Ses notes portent la
    * marque « perso » partout où la vue les liste ; retrait, remplacement et revue de la boîte de
    * réception restent propres au Brain d'équipe (le processus principal les borne à sa racine).
@@ -540,7 +553,7 @@ export function GraphView({
       setLoading(true)
       setErr('')
     })
-    // Les deux Brains (conv-1262) : un seul appel, sans aperçu — les ponts demandent les deux index.
+    // Les deux Brains : un seul appel, sans aperçu — les ponts demandent les deux index.
     const complet = reunisActif
       ? window.api.loadBrainGraphReunis(settings.lod)
       : window.api.loadBrainGraphPreview(selected, Math.min(settings.lod, 100)).then((loaded) => {
@@ -960,7 +973,6 @@ export function GraphView({
 
   // react-force-graph-3d positionne ses nœuds par mutation. `renderedGraph` est une copie profonde
   // dédiée au moteur impératif : `graph` et `displayGraph`, détenus par React, restent immuables.
-  /* eslint-disable react-hooks/immutability */
   useEffect(() => {
     const instance = graphRef.current
     if (!instance) return
@@ -983,7 +995,6 @@ export function GraphView({
     chargeForce?.strength?.(chargeStrength)
     if (positionRatio !== 1) instance.d3ReheatSimulation()
   }, [renderedGraph, settings.nodeSpacing])
-  /* eslint-enable react-hooks/immutability */
 
   useEffect(() => {
     saveGraphVisibilitySettings(localStorage, settings)
@@ -1113,6 +1124,12 @@ export function GraphView({
     }
     void openNode(nextNode)
   }
+  // Dernière version de `activateGraphNode` pour la poignée ci-dessous : elle ne doit pas se
+  // reposer à chaque rendu (exhaustive-deps).
+  const activateGraphNodeRef = useRef(activateGraphNode)
+  useEffect(() => {
+    activateGraphNodeRef.current = activateGraphNode
+  })
 
   // POIGNEE DE PILOTAGE (developpement seulement) : rend observables les noeuds rendus et leur
   // position ecran, pour reproduire un clic 3D sans balayer le canvas point par point.
@@ -1136,7 +1153,7 @@ export function GraphView({
         ouvrir: (id) => {
           const cible = renderedGraph.nodes.find((n) => n.id === id)
           if (!cible) return false
-          activateGraphNode(cible)
+          activateGraphNodeRef.current(cible)
           return true
         }
       },
@@ -1239,7 +1256,7 @@ export function GraphView({
   /*
    * LA MEME GARDE POUR TOUS LES DECLENCHEURS.
    *
-   * Mesure du 2026-09-08 (conv-353) : la boucle par image etait bien gardee par la signature de
+   * Mesure du 2026-09-08 : la boucle par image etait bien gardee par la signature de
    * pose, mais la SIMULATION du graphe rappelait `syncThemeClusterLabels` A NU, a chaque tick
    * (`onEngineTick`). Une synchro a nu lit la geometrie de TOUTE la page puis reecrit sur le
    * conteneur du canvas : l'ecriture peut renotifier l'observateur de taille, qui redimensionne,
@@ -1307,7 +1324,7 @@ export function GraphView({
     }
     frame = requestAnimationFrame(followCamera)
     return () => cancelAnimationFrame(frame)
-  }, [active, showThemeClusterLabels, syncThemeClusterLabels])
+  }, [active, showThemeClusterLabels, synchroniserSiPoseChange])
 
   useEffect(() => {
     if (resizingColumn) return
@@ -1547,7 +1564,7 @@ export function GraphView({
     setFile(null)
     setFileErr('')
     setExpandingNodeId(nextNode.id)
-    // Vue des deux Brains (conv-1262) : une note perso y est déjà entière avec ses ponts, et son id
+    // Vue des deux Brains : une note perso y est déjà entière avec ses ponts, et son id
     // préfixé n'existe pas dans le Brain d'équipe — on ne lui cherche pas de voisinage là-bas.
     const noteDuPerso = reunisActif && nextNode.perso === true
     ;(noteDuPerso
@@ -1641,7 +1658,7 @@ export function GraphView({
     },
     [healthRelationByNode, settings.health]
   )
-  // Santé d'abord ; puis, dans la vue des deux Brains (conv-1262), la couleur propre aux notes perso.
+  // Santé d'abord ; puis, dans la vue des deux Brains, la couleur propre aux notes perso.
   const couleurImposee = useCallback(
     (nextNode: GraphNode): string | undefined =>
       healthColor(nextNode) ?? (reunisActif && nextNode.perso ? COULEUR_NOEUD_PERSO : undefined),
@@ -1781,8 +1798,8 @@ export function GraphView({
     ]
   )
   /**
-   * Quitter le graphe affiché pour un autre — par le sélecteur ou par le filtre des Brains
-   * (conv-1262). `deux` = les deux Brains reliés par leurs ponts, `chemin` restant celui de l'équipe.
+   * Quitter le graphe affiché pour un autre — par le sélecteur ou par le filtre des Brains.
+   * `deux` = les deux Brains reliés par leurs ponts, `chemin` restant celui de l'équipe.
    */
   function changerDeBrain(chemin: string, deux = false): void {
     // Les résultats appartiennent au vault quitté : les garder jusqu'à la recherche suivante

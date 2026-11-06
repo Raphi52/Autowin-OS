@@ -149,8 +149,8 @@ describe('conversation_read — lire une AUTRE conversation', () => {
    * Defaut vecu le 2026-08-18 : l'utilisateur demande « scout en te basant sur la derniere
    * conversation (cite-la) ». L'agent a repondu qu'il ne pouvait pas, et il disait VRAI :
    * `get_state` n'expose que des titres tronques, aucun outil ne rend les messages d'une
-   * conversation voisine, et le store sur disque avait 1h41 de retard (id max conv-1290 pour une
-   * conv-1291 demandee) — le contenu ne vivait qu'en memoire et dans le journal. Autowin garde 31
+   * conversation voisine, et le store sur disque avait 1h41 de retard (id max `conv-1290` pour une
+   * `conv-1291` demandee) — le contenu ne vivait qu'en memoire et dans le journal. Autowin garde 31
    * modules de retrospective, exposes a l'INTERFACE par 9 canaux IPC et a l'agent par AUCUN outil.
    */
   it('rend les messages reels de la conversation demandee', async () => {
@@ -481,7 +481,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
   })
 
   it('écrit trace.json à CHAQUE étape, avant de la diffuser — pas seulement à la fin du run', async () => {
-    // conv-1021 : une interface rechargée en plein run doit pouvoir relire le fil déjà joué.
+    // Une interface rechargée en plein run doit pouvoir relire le fil déjà joué.
     const os = fakeOs()
     let runPath: string | undefined
     const lireTrace = (chemin: string): Array<{ step: string }> | null => {
@@ -524,7 +524,7 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
   })
 
   it('pose le plan découpé dans le RUN.md AVANT le build, puis l’état de chaque sous-tâche', async () => {
-    // conv-1083 (objection du contrôle final) : l'appel `mettreAJourPlanDuRun` du suivi d'étapes
+    // objection du contrôle final : l'appel `mettreAJourPlanDuRun` du suivi d'étapes
     // n'avait aucun test au site d'appel. Entrée qui fait échouer ce test si l'appel manque : une
     // étape de découpage à 2 sous-tâches (b après a) → aucune section « ## Plan » dans le RUN.md.
     const os = fakeOs()
@@ -720,12 +720,12 @@ describe('AppCommandBus orchestration cancel (#2)', () => {
     expect(collected).toMatch(/^\[COLLECTE DE CONTEXTE — effectuée avant RUN.md et délégation\]/)
     expect(collected).toContain('Conversation: conv-1 — A garder')
     // Le FIL, pas seulement l'étiquette de la conversation : sans lui le sous-agent recevait la
-    // phrase-tâche nue et devait DEVINER l'intention (défaut mesuré le 2026-08-23, conv-1376).
+    // phrase-tâche nue et devait DEVINER l'intention (défaut mesuré le 2026-08-23).
     expect(collected).toContain('le worktree est resté ouvert')
   })
 
   /*
-   * conv-344 (saisie ts 1792393145414) : « /scout comment améliorer la feature overall » a été
+   * saisie ts 1792393145414 : « /scout comment améliorer la feature overall » a été
    * classé trivial, donc lancé SANS le fil. Le scout n'a reçu que la phrase et a deviné « la
    * feature » : le fond 3D de l'Accueil, alors que la conversation parlait des bureaux cachés.
    */
@@ -1303,9 +1303,9 @@ describe('AppCommandBus command execution policy', () => {
   })
 
   /*
-   * Depuis la réservation des fichiers entre fils (conv-1083) : deux tours du MÊME fil s'enchaînent
+   * Depuis la réservation des fichiers entre fils : deux tours du MÊME fil s'enchaînent
    * sur le même fichier, un AUTRE fil est refusé en nommant le premier tant que le fichier reste
-   * modifié et non commité. Avant, ce test faisait passer conv-2 derrière conv-1 sur `target.txt`
+   * modifié et non commité. Avant, ce test faisait passer derrière sur `target.txt`
    * encore modifié : exactement le cas qui bloquait ensuite la publication des deux fils.
    */
   it('sérialise deux edit_file réellement concurrents et conserve leur chaîne causale', async () => {
@@ -1400,8 +1400,7 @@ describe('AppCommandBus command execution policy', () => {
 
   it('/kaizen vise la conversation qui contient la phrase citée, pas un numéro mal tapé (conv-258)', async () => {
     // Réel : « dans la conv 243 … "utiliser remotion ou hyperframes c'est utile?" » recevait le
-    // dossier de conv-243 (tour cb786c88-9d33-413c-8faf-dc3a31b785f6, sans la phrase) ; elle était
-    // dans conv-253.
+    // dossier (tour cb786c88-9d33-413c-8faf-dc3a31b785f6, sans la phrase) ; elle était.
     const previousAppData = process.env.APPDATA
     const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-citation-'))
     process.env.APPDATA = appData
@@ -1530,7 +1529,7 @@ describe('AppCommandBus command execution policy', () => {
   })
 
   /**
-   * Defaut mesure conv-1291 (2026-08-18) : `get_state` ne rendait que `id`, `title` et `category`.
+   * Defaut mesure (2026-08-18) : `get_state` ne rendait que `id`, `title` et `category`.
    * « Quelle est la derniere conversation ? » n'avait donc AUCUNE reponse dans cet etat — l'ordre du
    * tableau portait la recence de facon implicite, ce qui invitait a la deviner puis a raconter un
    * protocole qui n'avait pas eu lieu. Les deux dates repondent, et se distinguent.
@@ -1912,7 +1911,7 @@ describe('AppCommandBus command execution policy', () => {
       }),
       act: vi.fn().mockResolvedValue({ executed: 1 })
     }
-    // L'utilisateur demande son ecran : seule cette demande autorise un geste reel (kaizen conv-854).
+    // L'utilisateur demande son ecran : seule cette demande autorise un geste reel.
     const os = fakeOs()
     os.conversations.get('conv-1').messages.push({ role: 'user', content: 'clique sur mon ecran', ts: 2 })
     const bus = new AppCommandBus(
@@ -1931,13 +1930,13 @@ describe('AppCommandBus command execution policy', () => {
     expect(bus.catalog().map(({ name }) => name)).toEqual(
       expect.arrayContaining(['desktop_observe', 'desktop_act'])
     )
-    // `ecran_utilisateur` : la garde non-invasive (conv-586) refuse sinon le premier appel du tour.
+    // `ecran_utilisateur` : la garde non-invasive refuse sinon le premier appel du tour.
     await expect(bus.exec('desktop_observe', { ecran_utilisateur: true })).resolves.toMatchObject({
       ok: true,
       data: { width: 1280, height: 720 },
       attachments: [image]
     })
-    // Premier geste du tour toujours refuse, meme drapeau pose (kaizen conv-854).
+    // Premier geste du tour toujours refuse, meme drapeau pose.
     await bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true }, 'conv-1')
     await expect(
       bus.exec('desktop_act', { actions: [{ type: 'click', x: 10, y: 20 }], ecran_utilisateur: true }, 'conv-1')
@@ -2030,8 +2029,8 @@ describe('AppCommandBus command execution policy', () => {
   })
 
   /**
-   * UN RUN COUPÉ DE L'EXTÉRIEUR S'ÉCRIT `interrupted`, PAS `red` (piste 4, conv-1070). Mesuré le
-   * 2026-10-22 : `judge-carnet-fil` (conv-1058), coupé par Stop, porte `status: red` et reste
+   * UN RUN COUPÉ DE L'EXTÉRIEUR S'ÉCRIT `interrupted`, PAS `red` (piste 4). Mesuré le
+   * 2026-10-22 : `judge-carnet-fil`, coupé par Stop, porte `status: red` et reste
    * bloqué pour toujours. Deux chemins écrivent le statut : la clôture du moteur (en premier) et,
    * à défaut, le `catch`. L'entrée qui ferait échouer ce test si le correctif était faux : la
    * clôture `red` SANS cause suivie d'une vraie erreur (`TypeError: boom`) — elle doit rester `red`.
@@ -2092,8 +2091,8 @@ describe('AppCommandBus command execution policy', () => {
   })
 
   /**
-   * UNE RELECTURE LIVRÉE AVEC DÉFAUTS NE S'ÉCRIT PAS « Juge: validé » (piste 5, objection du juge,
-   * conv-1070). Le statut reste `green` — la relecture est livrée —, mais le Journal du RUN.md doit
+   * UNE RELECTURE LIVRÉE AVEC DÉFAUTS NE S'ÉCRIT PAS « Juge: validé » (piste 5, objection du juge).
+   * Le statut reste `green` — la relecture est livrée —, mais le Journal du RUN.md doit
    * dire que le travail RELU a des défauts. Entrée qui fait rougir ce test si la correction est
    * fausse : le résultat porteur de `defautsDuTravailRelu` journalisé « Juge: validé ». Jumeau : le
    * même résultat SANS défauts garde « Juge: validé ».
@@ -2127,7 +2126,7 @@ describe('AppCommandBus command execution policy', () => {
   })
 
   it('« REPREND » reprend le point de reprise de la tâche que le pilote délègue mot pour mot', async () => {
-    // conv-1038, 2026-10-21, 14 h 19 : l'utilisateur tape « REPREND », le pilote délègue la tâche
+    // 2026-10-21, 14 h 19 : l'utilisateur tape « REPREND », le pilote délègue la tâche
     // d'origine telle que le point de reprise la porte. L'objectif devient « REPREND » + marqueur +
     // tâche, que la recherche comparait en entier au point de reprise : aucune reprise, run complet
     // repayé (2 h, ~36 $). La vraie recherche tourne ici, pas un double qui dirait oui à tout.
@@ -2176,7 +2175,7 @@ describe('AppCommandBus command execution policy', () => {
   })
 
   it('clot en SUCCES un checkpoint dont la publication Git est deja acquise, sans repayer', async () => {
-    // Mesure sur conv-1145 (13/08) : le run run-5f5a75a0208d-1 avait PUBLIE — verdict green,
+    // Mesure (13/08) : le run run-5f5a75a0208d-1 avait PUBLIE — verdict green,
     // publication complete, SHA 30a1b368 pousse sur origin/auto/… — puis la reprise du checkpoint
     // encore present a ete refusee (« publication complete deja engagee ») et ce refus a marque le
     // TOUR ENTIER failed. L'utilisateur voyait rouge la ou git disait vert : une reussite a 10 $
@@ -2252,7 +2251,7 @@ describe('AppCommandBus command execution policy', () => {
   })
 
   it('reconcilie un appel actif laisse par un process mort avant de reprendre depuis le chat', async () => {
-    // conv-691 (2026-09-18) : l'agent build d'un run survit a la fermeture de l'app, finit, mais le
+    // 2026-09-18 : l'agent build d'un run survit a la fermeture de l'app, finit, mais le
     // checkpoint garde activeCalls=1. Seul le demarrage le reconciliait ; le chemin du chat reprenait
     // le verrou tel quel et chaque relance etait refusee « appel(s) provider encore actif(s) ».
     const os = fakeOs()
@@ -2295,7 +2294,7 @@ describe('AppCommandBus command execution policy', () => {
 
 
   it('rattache la demande au run VIVANT au lieu de tenter une reprise refusee', async () => {
-    // Mesure conv-691 (2026-09-18, 06:41 puis 06:45) : le mode auto lance run-1c4e103133ad-1 avec
+    // Mesure (2026-09-18, 06:41 puis 06:45) : le mode auto lance run-1c4e103133ad-1 avec
     // le prompt suggere ; le MEME texte arrive ensuite comme tour utilisateur et le chat relance
     // `orchestrate`. La cle de reprise tombe sur le checkpoint du run encore en cours dans CE process
     // (activeCalls=1 : sa phase build tourne) -> 60 s d'attente puis « Reprise refusee », alors que
@@ -2329,7 +2328,7 @@ describe('AppCommandBus command execution policy', () => {
   })
 
   it('rejoint le run vivant du MEME tour meme quand la tache a ete reecrite (conv-890)', async () => {
-    // Mesure conv-890 (2026-09-30) : au redemarrage, run-3180eec71b06-1 repart a 13:36:17.850 sur le
+    // Mesure (2026-09-30) : au redemarrage, run-3180eec71b06-1 repart a 13:36:17.850 sur le
     // tour 386f4c48 ; le tour de chat restaure relance `orchestrate` avec une tache REECRITE
     // (« Depot : D:\AutoWinOS (...). Traite ENSEMBLE... » contre « raite ENSEMBLE... »). La reprise
     // stricte compare les textes, ne trouve rien, et run-66d6d5bdfc5a-1 part a 13:36:21.030 sur le
@@ -2538,7 +2537,7 @@ describe('issue d’orchestration', () => {
   })
 
   /*
-   * LE JUGE JOUE COMPTE PARMI LES PHASES (conv-981, 2026-10-15). L'orchestrateur garde le verdict
+   * LE JUGE JOUE COMPTE PARMI LES PHASES (2026-10-15). L'orchestrateur garde le verdict
    * du juge a part (`judgeText`), jamais dans `phaseOutputs`. Le run
    * traite-ensemble-5-candidats-issus-scout-mv9lnufa, valide a 85 par le juge, a donc recu la
    * cloture « Reste a faire : judge » et « Recommande : lancer judge » : en mode auto, un second
@@ -2607,7 +2606,7 @@ describe('issue d’orchestration', () => {
 })
 
 /**
- * conv-989 : cette lignée recompose l'issue champ par champ. Un champ ajouté au résultat de
+ * Cette lignée recompose l'issue champ par champ. Un champ ajouté au résultat de
  * l'orchestrateur n'atteint donc la bulle que s'il est recopié ICI.
  */
 describe('orchestrate transmet le fichier de la sortie entière', () => {
@@ -2642,7 +2641,7 @@ describe('orchestrate transmet le fichier de la sortie entière', () => {
 })
 
 /*
- * conv-339 : « Brain : aucune leçon proposée » sous un run dont l'étape learn venait d'écrire 2
+ * « Brain : aucune leçon proposée » sous un run dont l'étape learn venait d'écrire 2
  * notes au Brain. Le suivi des leçons n'en voyait rien (aucune leçon de fin de run) : le nombre
  * compté par le run (`notesBrainDeposees`) doit atteindre la ligne affichée.
  */

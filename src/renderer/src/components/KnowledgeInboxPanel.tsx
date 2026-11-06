@@ -69,7 +69,7 @@ async function promptCurate(pending: number): Promise<void> {
   if (!provider) return
   const conversation = await window.api.conversationsCreate?.({
     // Le TITRE du fil s'affiche dans la liste : il suit la langue. La commande envoyée plus bas, elle,
-    // est la consigne d'un agent et reste en français (conv-1170).
+    // est la consigne d'un agent et reste en français.
     title: traduireKnowledge('boite.curate.conversation', langueCourante()),
     category: provider,
     provider
@@ -103,7 +103,7 @@ export function KnowledgeInboxPanel({
   /**
    * Compte RELU par le panneau. La pastille du bouton ✦ ne lit la file qu'au chargement de la vue :
    * une curation faite hors écran (`/curate` en ligne de commande) la laissait à « 12 » pendant que
-   * ce panneau affichait « 0 candidats » (constaté le 2026-10-06, conv-583). Le panneau porte la
+   * ce panneau affichait « 0 candidats » (constaté le 2026-10-06). Le panneau porte la
    * lecture la plus fraîche : il la remonte pour qu'un seul chiffre s'affiche.
    */
   onPendingCountChange?: (count: number) => void
@@ -140,7 +140,7 @@ export function KnowledgeInboxPanel({
     brainPathRef.current = brainPath
     scopeGenerationRef.current += 1
     readGenerationRef.current += 1
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- remise à zéro de tout l'état local au changement de Brain, avec invalidation des lectures en vol par des refs : le parent ne fournit pas de `key`
     setCandidates([])
     setError('')
     setDecisionErrors(new Map())
@@ -204,7 +204,7 @@ export function KnowledgeInboxPanel({
 
   // Le montage doit LIRE la boîte : `reload` pose un état de chargement puis résout hors du rendu.
   // Même dérogation que la recherche de GraphView, pour la même raison — la donnée vit côté main.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- lecture de la boîte côté main au montage : `reload` pose son état de chargement puis résout hors du rendu
   useEffect(() => reload(), [reload])
 
   const decide = useCallback(

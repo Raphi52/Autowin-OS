@@ -15,9 +15,9 @@ import { Spinner } from './Spinner'
 import { largeursDeLaBarre } from './tests-barre'
 
 /**
- * Vue Maintenance (ex-« Tests », renommée le 2026-10-22, conv-1101) : en tête, les boutons qui
+ * Vue Maintenance (ex-« Tests », renommée le 2026-10-22) : en tête, les boutons qui
  * lancent les skills d'entretien d'Autowin (MaintenanceSkillsPanel) ; puis les tickets d'Autowin OS
- * (la veille, venue de l'ancien écran Tickets, conv-1397) ; dessous, les suites de tests.
+ * (la veille, venue de l'ancien écran Tickets) ; dessous, les suites de tests.
  *
  * Les suites restent MULTI-PROJETS par construction.
  *
@@ -113,14 +113,20 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   const [projets, setProjets] = useState<Projet[]>([])
   const [selection, setSelection] = useState<string>('')
   const [filtre, setFiltre] = useState('')
-  const [resultats, setResultats] = useState<Record<string, Resultat>>({})
+  // fix-ok: derogations-lint mesurait 3 set-state-in-effect dans ce fichier (restauration memoire,
+  // chrono remis a 0, chargement) ; corriges par initialiseurs, reset dans `lancer`, microtache.
+  // MEMOIRE : le dernier run connu est restaure au montage et ETIQUETE (`memorises`), jamais
+  // presente comme frais.
+  const [resultats, setResultats] = useState<Record<string, Resultat>>(lireMemoire)
   const [encours, setEncours] = useState<string>('')
   const [erreur, setErreur] = useState<string>('')
   const [seulsEchecs, setSeulsEchecs] = useState(false)
   const [replies, setReplies] = useState<Record<string, boolean>>({})
-  const [memorises, setMemorises] = useState<Record<string, boolean>>({})
+  const [memorises, setMemorises] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(Object.keys(lireMemoire()).map((id) => [id, true]))
+  )
   const [chrono, setChrono] = useState(0)
-  // LE RESULTAT QUI ARRIVE (conv-981, 2026-10-16) : le projet dont le run VIENT de finir. Sa barre se
+  // LE RESULTAT QUI ARRIVE (2026-10-16) : le projet dont le run VIENT de finir. Sa barre se
   // remplit, ses compteurs montent, ses echecs arrivent en cascade — une fois. La marque tombe a la
   // fin du remplissage : une animation CSS repart a chaque retour sur l'onglet (display:none -> flex),
   // et un run memorise rouvert n'a rien a annoncer.
@@ -129,25 +135,10 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   // latence ne monte qu'au clic — sa sonde ne doit rien couter tant qu'on ne la demande pas.
   const [onglet, setOnglet] = useState<'suites' | 'latence'>('suites')
 
-  // MEMOIRE : le dernier run connu est restaure au montage et ETIQUETE, jamais presente comme frais.
-  useEffect(() => {
-    const memoire = lireMemoire()
-    const ids = Object.keys(memoire)
-    if (ids.length === 0) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setResultats((prev) => ({ ...memoire, ...prev }))
-
-    setMemorises(Object.fromEntries(ids.map((id) => [id, true])))
-  }, [])
-
   // Progression VIVANTE : sans flux du harnais, le chrono est le signal honnete que le run avance.
   // Il nait et meurt avec le run - aucun bandeau code en dur.
   useEffect(() => {
-    if (!encours) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setChrono(0)
-      return
-    }
+    if (!encours) return
     const debut = Date.now()
     const t = setInterval(() => setChrono(Date.now() - debut), 200)
     return () => clearInterval(t)
@@ -170,7 +161,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- chargement IPC à l'activation de l'onglet : `charger` pose projets/erreur après l'appel asynchrone, rien à dériver au rendu
     if (active) void charger()
   }, [active, charger])
 
@@ -184,6 +175,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
     async (cible?: string) => {
       if (!projetActif) return
       setEncours(projetActif.id)
+      setChrono(0)
       setErreur('')
       try {
         // Relance CIBLEE : la cible passee prime ; le filtre global reste INTACT.
@@ -264,7 +256,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
 
       <MaintenanceSkillsPanel />
 
-      {/* LES TICKETS D'AUTOWIN OS (conv-1397, 2026-10-31 : « garde que la partie ticket de autowin OS
+      {/* LES TICKETS D'AUTOWIN OS (2026-10-31 : « garde que la partie ticket de autowin OS
         met-la dans maintenance entre les skills et les tests ») : la veille, qui était l'onglet
         « Autowin OS » de l'ancien écran Tickets. Hauteur bornée : ses colonnes défilent seules, les
         tests gardent leur place dessous. */}
@@ -278,7 +270,7 @@ export function TestsView({ active }: { active: boolean }): React.JSX.Element {
       </section>
 
       {/* Les commandes des SUITES vivent sur la rangée de leurs onglets, plus dans la barre du titre :
-        elles y repoussaient « Maintenance » sous le champ de filtre (capture du 2026-10-22, conv-1101),
+        elles y repoussaient « Maintenance » sous le champ de filtre (capture du 2026-10-22),
         et elles ne commandent que l'onglet Suites. */}
       <div className="tests-rangee-onglets">
         <div className="tests-tabs" role="tablist">

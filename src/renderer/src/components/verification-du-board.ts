@@ -1,5 +1,5 @@
 /**
- * VÉRIFIER DEPUIS LE BOARD — le calcul PUR (conv-1136, 2026-10-23).
+ * VÉRIFIER DEPUIS LE BOARD — le calcul PUR (2026-10-23).
  *
  * Demande : « dans le board faut un bouton pour tout vérifier et un bouton vérifier sur un post it
  * pour le faire quitter la ligne à vérifier », « et vérifier manuellement », « et faire une skill
@@ -29,8 +29,8 @@ export const COMMANDE_DE_VERIFICATION = '/check'
 /**
  * Les post-its que « Tout vérifier » vise : ceux de la ligne « À vérifier » (l'étage AFFICHÉ, état
  * manuel compris), et seulement ceux de la personne et du projet choisis quand un filtre est posé
- * (projet : conv-1329) — les autres sont estompés à l'écran, l'utilisateur ne les vise pas. Jamais
- * un post-it de collègue (conv-1210) : son fil vit sur SON poste, un `/check` envoyé d'ici n'y
+ * Les autres sont estompés à l'écran, l'utilisateur ne les vise pas. Jamais
+ * un post-it de collègue : son fil vit sur SON poste, un `/check` envoyé d'ici n'y
  * arriverait pas.
  */
 export function postitsAVerifier(
@@ -44,7 +44,7 @@ export function postitsAVerifier(
       p.etage === 'sans-preuve' &&
       !p.collegue &&
       // Un `/check` vise la dernière demande du fil : une tâche que son fil a laissée derrière lui
-      // ne se vérifie qu'à la main (conv-1456).
+      // ne se vérifie qu'à la main.
       p.derniereDuFil &&
       (personne === null || p.demandeur?.cle === personne) &&
       dansLeProjet(p)
@@ -178,7 +178,7 @@ export function useVerificationDuBoard(
   // boucle pas (même motif que le chargement de la vue).
   useEffect(() => {
     if (!carte) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Purge des suivis d’après la carte reçue du parent, avec l’heure courante : pas calculable pendant le rendu
     setSuivis((avant) => {
       if (Object.keys(avant).length === 0) return avant
       const restants = suivisRestants(carte, avant, Date.now())

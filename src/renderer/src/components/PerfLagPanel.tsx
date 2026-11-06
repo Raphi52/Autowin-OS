@@ -16,8 +16,8 @@ import {
 } from '../textes-ecrans/board-et-maintenance'
 import { formaterOctets } from './formater-octets'
 
-/** Rôle Electron → mot courant (conv-1077) : « Tab » ne dit rien à qui regarde ses processus. */
-// Traduits à l'affichage (conv-1170).
+/** Rôle Electron → mot courant : « Tab » ne dit rien à qui regarde ses processus. */
+// Traduits à l'affichage.
 const ROLE_PROCESSUS: Record<string, CleBoardEtMaintenance> = {
   Browser: 'perf.role.principal',
   Tab: 'perf.role.fenetre'
@@ -47,7 +47,7 @@ interface RapportGels extends ResumeGels {
   disponible: boolean
   source: string
   // fix-ok: cause mesurée 2026-10-22 — section absente (PerfLagPanel.memoire.test.tsx rouge) ; joint à perf:gels car un canal de plus portait à 236 le compte de security-critical-fixes.test.ts.
-  /** Memoire et CPU par processus, joint a la reponse de `perf:gels` (conv-1077). */
+  /** Memoire et CPU par processus, joint a la reponse de `perf:gels`. */
   memoire?: EtatReleveMemoire
 }
 
@@ -119,7 +119,7 @@ export function PerfLagPanel(): React.JSX.Element {
   useEffect(() => {
     // Première lecture au montage. Le canal ABSENT est signalé de façon synchrone (message
     // d'erreur), comme le fait déjà `TestsView.charger` — d'où la même exception locale.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Lecture du canal : son absence est signalée tout de suite (message d’erreur), sans attendre
     void charger()
   }, [charger])
 

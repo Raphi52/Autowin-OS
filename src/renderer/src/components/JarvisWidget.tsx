@@ -237,14 +237,14 @@ export function JarvisWidget(): React.JSX.Element {
   }, [])
   const essayerVoix = useCallback((): void => {
     oublierVoixChoisie()
-    // RESTE EN FRANÇAIS (conv-1170) : c'est la voix française choisie d'office qui le prononce.
+    // RESTE EN FRANÇAIS : c'est la voix française choisie d'office qui le prononce.
     void parler('Bonjour, je suis a votre ecoute.')
   }, [])
   const [ecoute, setEcoute] = useState<JarvisEcoute>(ecouteInitiale)
   /**
    * L'ETAT D'ECOUTE LU HORS RENDU — parce qu'un envoi ne doit JAMAIS partir d'un updater.
    *
-   * DEFAUT VECU le 2026-09-01 (conv-46) : une phrase dictee UNE fois lancait jusqu'a 6 tours en
+   * DEFAUT VECU le 2026-09-01 : une phrase dictee UNE fois lancait jusqu'a 6 tours en
    * 1,5 s. `reagirAParole` etait appelee DANS l'updater de `setEcoute`, et l'ordre partait de la.
    * Or React reexecute un updater a sa guise — deux fois d'office sous StrictMode, davantage
    * quand la file d'updates est rejouee — et chaque rejeu renvoyait la meme phrase au pilote.
@@ -468,7 +468,7 @@ export function JarvisWidget(): React.JSX.Element {
    * ouvrait DEUX micros, chacun entendait la phrase, et chacun envoyait son ordre. Ici tout est
    * calcule sur `ecouteRef` et `setEcoute` ne recoit qu'une VALEUR : un clic = un moteur.
    *
-   * LA MESURE : conv-45 et conv-46 ont ete creees a 2 ms d'ecart (11:46:06.602 et .604) avec le
+   * LA MESURE : deux conversations ont ete creees a 2 ms d'ecart (11:46:06.602 et .604) avec le
    * meme ordre dicte une seule fois. Meme motif pour conv-12/13 et conv-36/37.
    */
   const basculer = useCallback(

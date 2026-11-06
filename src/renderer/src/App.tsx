@@ -10,7 +10,7 @@ declare const __BUILD_NUMBER__: string
 declare const __BUILD_SHA__: string
 const buildNumber = typeof __BUILD_NUMBER__ === 'string' ? __BUILD_NUMBER__ : 'dev'
 const buildSha = typeof __BUILD_SHA__ === 'string' ? __BUILD_SHA__ : 'local'
-// Le logo anneau de l'en-tete, EN RELIEF comme dans le film de l'ecran « nouveau fil » (conv-1535) :
+// Le logo anneau de l'en-tete, EN RELIEF comme dans le film de l'ecran « nouveau fil » :
 // image animee generee par `scripts/logo_anneau_relief.py`, couleurs de `scripts/logo_anneau.py`.
 import logoAnneau from './assets/autowin-logo-anneau-relief.webp'
 import { ChatView } from './components/ChatView'
@@ -55,7 +55,7 @@ import './assets/app-shell.css'
 import './assets/cosmic-outline.css'
 // AVANT la base claire (theme-modes.css) : la couche generee d'Holographique blanc ne traduit que
 // ce que la base claire et la feuille du theme ne repeignent pas. Placee apres, elle les ecrasait a
-// specificite egale (decor etoile revenu, menu actif efface -- captures du 2026-10-11, conv-212).
+// specificite egale (decor etoile revenu, menu actif efface -- captures du 2026-10-11).
 import './assets/theme-holographique-clair.genere.css'
 import './assets/theme-modes.css'
 import '@fontsource/atkinson-hyperlegible/400.css'
@@ -67,18 +67,18 @@ import './assets/theme-nebuleuse-verre.genere.css'
 import './assets/theme-nebuleuse-verre.css'
 import './assets/theme-holographique-clair.css'
 // fix-ok: imports ajoutes apres le rouge de theme-ninja-claude.test.ts (« import absent ») ; ordre genere puis main.
-// Ninja Claude (conv-269) : la couche generee AVANT la feuille ecrite a la main, comme Holographique.
+// Ninja Claude : la couche generee AVANT la feuille ecrite a la main, comme Holographique.
 import './assets/theme-ninja-claude.genere.css'
 import './assets/theme-ninja-claude.css'
-// Vanilla Claude (conv-269) : la version claire de Ninja Claude. APRES la base claire, a l'inverse
+// Vanilla Claude : la version claire de Ninja Claude. APRES la base claire, a l'inverse
 // d'Holographique blanc : sa couche generee ne traduit pas les feuilles de nuit, elle RECOLORE les
 // regles de la base claire elles-memes (un attribut de plus, elle gagne sur elles).
 import './assets/theme-vanilla-claude.genere.css'
 import './assets/theme-vanilla-claude.css'
-// NieR:Automata (conv-281) : meme mecanique que Vanilla Claude, genere puis feuille a la main.
+// NieR:Automata : meme mecanique que Vanilla Claude, genere puis feuille a la main.
 import './assets/theme-nier-automata.genere.css'
 import './assets/theme-nier-automata.css'
-// Enseignes (conv-1586) : feuille ecrite a la main, sans couche generee — la base claire est deja
+// Enseignes : feuille ecrite a la main, sans couche generee — la base claire est deja
 // gris bleu, la teinte du ciel de ce theme ; elle n'a rien a transposer.
 import './assets/theme-enseignes.css'
 import { importMigratedStorage, migrateAutowinStorage } from './storage-keys'
@@ -95,7 +95,7 @@ const NAV = APP_DESTINATIONS
 
 /**
  * Délai, depuis le lancement, avant que le « ! » de Settings n'annonce un prérequis en échec — la
- * valeur demandée par l'utilisateur (conv-963 : « juste 30 secondes après »). Exporté pour les tests.
+ * valeur demandée par l'utilisateur (« juste 30 secondes après »). Exporté pour les tests.
  */
 export const DELAI_ALERTE_DEMARRAGE_MS = 30_000
 
@@ -171,14 +171,14 @@ export function MainApp(): React.JSX.Element {
   // d'oeil. Le repli d'une destination INCONNUE reste `chat` (voir `normalizeDestination`) : un agent
   // qui se trompe de nom doit atterrir la ou il peut parler, pas sur un tableau de bord.
   const [tab, setTab] = useState<Tab>('accueil')
-  // La barre de navigation suit la langue de Settings · Interface, sans redémarrage (conv-1146).
+  // La barre de navigation suit la langue de Settings · Interface, sans redémarrage.
   const { langue, t } = useTextes()
   // Le fond 3D reste en veille (caché, sans dessiner) quelques minutes hors de l'Accueil : un retour
-  // ne le reconstruit plus (decor-veille.ts, conv-337).
+  // ne le reconstruit plus (decor-veille.ts).
   const decorMonte = useDecorEnVeille(tab === 'accueil')
-  // Sur un écran de téléphone, menu replié d'office et gros boutons (conv-1442,
+  // Sur un écran de téléphone, menu replié d'office et gros boutons (
   // affichage-session.css). Connecté par Windows App sur un écran de PC, l'interface reste ENTIÈRE,
-  // animations comprises : la version allégée a été retirée (conv-1538, 2026-11-04).
+  // animations comprises : la version allégée a été retirée (2026-11-04).
   const affichage = useAffichageSession()
   const [driven, setDriven] = useState(false) // un agent pilote → halo sur la vue
   // #11 — l'état replié/déplié de la rail est PERSISTÉ (comme le zoom), pour ne pas re-replier à
@@ -196,7 +196,7 @@ export function MainApp(): React.JSX.Element {
   const [moteurPerime, setMoteurPerime] = useState<string | null>(null)
   const [visitedTabs, setVisitedTabs] = useState<Set<Tab>>(() => new Set(['accueil']))
   /**
-   * « Va sur les bureaux cachés » : un panneau du chat (conv-1378). Un compteur et pas un booléen :
+   * « Va sur les bureaux cachés » : un panneau du chat. Un compteur et pas un booléen :
    * redemander rouvre un panneau refermé. Une prop et pas un événement de fenêtre : chat jamais monté,
    * l'événement n'aurait aucun auditeur.
    */
@@ -207,8 +207,8 @@ export function MainApp(): React.JSX.Element {
     chatMonteRef.current = visitedTabs.has('chat')
   }, [visitedTabs])
   // Un bouton qui lance une skill dans une conversation (Maintenance, /curate, mise à jour…) émet
-  // son message juste après avoir ouvert le chat : chat jamais affiché, il était PERDU (mesuré
-  // conv-1101). Le relais le garde jusqu'à ce que le chat l'écoute.
+  // son message juste après avoir ouvert le chat : chat jamais affiché, il était PERDU (mesuré).
+  // Le relais le garde jusqu'à ce que le chat l'écoute.
   useEffect(() => installerRelaisPrefill(), [])
   useEffect(() => {
     // Un pied de page ne fait jamais tomber l'interface : toute panne laisse l'avertissement absent
@@ -225,7 +225,7 @@ export function MainApp(): React.JSX.Element {
   // derrière deux clics dans l'onglet Diagnostic.
   const [preflightAlert, setPreflightAlert] = useState(false)
   /**
-   * Le « ! » de Settings ne parle qu'APRÈS le délai de démarrage (conv-963, 2026-10-15 : « je veux
+   * Le « ! » de Settings ne parle qu'APRÈS le délai de démarrage (2026-10-15 : « je veux
    * plus l'avoir cette popup, juste 30 secondes après si y a une étape qui a foiré tu mets un point
    * d'exclamation à côté de l'icône Settings »). La popup de démarrage est retirée ; pendant les
    * premières secondes, un service qui chauffe encore (brain_server, ~30-40 s) n'est pas une panne.
@@ -237,7 +237,7 @@ export function MainApp(): React.JSX.Element {
   // Planification par défaut : c'est le contenu historique de Task Manager. Le Watchdog est le second
   // écran, atteignable par le sélecteur ou par un deep-link d'agent (« va sur le watchdog »).
   const [taskManagerSection, setTaskManagerSection] = useState<TaskManagerSection>('planification')
-  // Onglet du Board (conv-1397) : « tickets » y mène depuis que l'écran Tickets en est un onglet.
+  // Onglet du Board : « tickets » y mène depuis que l'écran Tickets en est un onglet.
   const [boardSection, setBoardSection] = useState<BoardSection>('demandes')
   const [navigationOrigin] = useState(() => `renderer-${globalThis.crypto.randomUUID()}`)
   const navigationGeneration = useRef(0)
@@ -246,7 +246,7 @@ export function MainApp(): React.JSX.Element {
     document.title = testInstance ? 'Autowin OS Test' : 'Autowin OS'
   }, [testInstance])
 
-  // La souris éclaire les panneaux (conv-191) : le script ne pose que sa position, le thème
+  // La souris éclaire les panneaux : le script ne pose que sa position, le thème
   // Nébuleuse de verre peint la lumière ; les autres thèmes ne la lisent pas.
   useEffect(() => installerLumiereDesPanneaux(window), [])
 
@@ -317,7 +317,7 @@ export function MainApp(): React.JSX.Element {
   useEffect(() => {
     localStorage.setItem('autowin:rail-collapsed', railCollapsed ? '1' : '0')
   }, [railCollapsed])
-  // LE MENU QUI SE REDUIT OU SE DEPLIE DESSINE SES BORDS (conv-987, 2026-10-16 : « et quand je
+  // LE MENU QUI SE REDUIT OU SE DEPLIE DESSINE SES BORDS (2026-10-16 : « et quand je
   // reduis deploi la left bar aussi ») : la meme entree que le panneau Details (entree-cascade.ts).
   // Rien a l'ouverture de l'app, seulement au clic : on compare a l'etat precedent, ce qui tient
   // aussi sous le double appel des effets du mode strict. Le nettoyage coupe l'entree d'un clic
@@ -335,7 +335,7 @@ export function MainApp(): React.JSX.Element {
   useEffect(() => {
     tabAffiche.current = tab
   }, [tab])
-  // LA CASCADE D'ENTREE (conv-987, 2026-10-16) : a chaque changement de vue, ses blocs entrent l'un
+  // LA CASCADE D'ENTREE (2026-10-16) : a chaque changement de vue, ses blocs entrent l'un
   // apres l'autre (entree-cascade.ts). Effet de MISE EN PAGE : il s'execute dans le `flushSync` de la
   // bascule, donc avant que la transition prenne l'image de la nouvelle vue — aucun bloc ne s'y montre
   // a sa place finale. Rien a l'ouverture de l'app : l'entree est demandee « quand je change de vue ».
@@ -349,8 +349,8 @@ export function MainApp(): React.JSX.Element {
     if (vue) jouerEntreeCascade(vue)
   }, [tab])
   const activateTab = useCallback((nextTab: Tab): void => {
-    // Surlignage du menu qui glisse (conv-981) ; bascule directe sans l'API. L'entree des blocs de
-    // la vue est jouee par l'effet de mise en page ci-dessus (conv-987).
+    // Surlignage du menu qui glisse ; bascule directe sans l'API. L'entree des blocs de
+    // la vue est jouee par l'effet de mise en page ci-dessus.
     basculerVue(document, nextTab === tabAffiche.current, () => {
       setVisitedTabs((visited) => {
         if (visited.has(nextTab)) return visited
@@ -444,7 +444,7 @@ export function MainApp(): React.JSX.Element {
     [activateTab, navigationOrigin]
   )
 
-  // Alt+clic sur n'importe quel élément (conv-1338) : le chat s'ouvre une fois la capture prise.
+  // Alt+clic sur n'importe quel élément : le chat s'ouvre une fois la capture prise.
   useEffect(
     () =>
       installerAltClic(() => {
@@ -502,8 +502,7 @@ export function MainApp(): React.JSX.Element {
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [navigate])
 
   function openBrainwashConversation(brainLabel: string): void {
     navigate('chat')
@@ -519,12 +518,17 @@ export function MainApp(): React.JSX.Element {
   }
 
   /** Preuve d'une occurrence : on ouvre la conversation réelle, le tour n'est transmis que s'il existe. */
-  function openTaskConversation(target: { conversationId: string; turnId?: string }): void {
-    navigate('chat')
-    window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: target }))
-    }, 0)
-  }
+  // fix-ok: exhaustive-deps mesuré par derogations-lint — `navigate` est stable (useCallback sur
+  // activateTab + origine fixe), donc l'ajouter aux dépendances ne relance aucun effet de plus.
+  const openTaskConversation = useCallback(
+    (target: { conversationId: string; turnId?: string }): void => {
+      navigate('chat')
+      window.setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('autowin:open-conversation', { detail: target }))
+      }, 0)
+    },
+    [navigate]
+  )
 
   function inspectTurn(target: InspectTurnTarget): void {
     setObservatoryFocus({ ...target, requestId: Date.now() })
@@ -538,7 +542,7 @@ export function MainApp(): React.JSX.Element {
     let disposed = false
     const off = window.api.onAppEvent((e) => {
       /*
-       * CLIC SUR LA NOTIFICATION DE FIN DE TOUR (conv-1038) : ouvrir le fil du tour. Chat jamais
+       * CLIC SUR LA NOTIFICATION DE FIN DE TOUR : ouvrir le fil du tour. Chat jamais
        * monté → la demande est DÉPOSÉE, il la réclamera à son montage (l'événement n'aurait aucun
        * auditeur). Chat déjà monté → l'événement seul : un dépôt resterait en attente et volerait
        * la sélection au prochain montage.
@@ -549,7 +553,7 @@ export function MainApp(): React.JSX.Element {
         return
       }
       /*
-       * BOUTON DE SUITE DE LA NOTIFICATION (conv-1038) : le chat monté l'envoie lui-même
+       * BOUTON DE SUITE DE LA NOTIFICATION : le chat monté l'envoie lui-même
        * (`ChatView`). Chat jamais monté, personne ne peut l'envoyer : la suite attend dans le
        * brouillon de CE fil, après ce qui y était écrit, et le fil s'ouvre au montage du chat.
        */
@@ -596,12 +600,12 @@ export function MainApp(): React.JSX.Element {
       disposed = true
       off()
     }
-  }, [applyLocation, navigationOrigin])
+  }, [applyLocation, navigationOrigin, openTaskConversation])
 
   return (
     <div
       className="shell cosmic-outline theme-serious"
-      // L'ecran affiche, pour les themes qui teintent la zone ouverte (Enseignes, conv-1586).
+      // L'ecran affiche, pour les themes qui teintent la zone ouverte (Enseignes).
       data-zone={tab}
       data-automation-instance={testInstance ? 'test' : 'user'}
     >
@@ -617,7 +621,7 @@ export function MainApp(): React.JSX.Element {
        * et une boucle rAF permanente pour un decor que les panneaux recouvrent.
        */}
       {/*
-       * Depuis conv-337, il reste MONTE en veille quelques minutes apres qu'on a quitte l'Accueil :
+       * Il reste MONTE en veille quelques minutes apres qu'on a quitte l'Accueil :
        * cache, boucle arretee, il ne dessine rien ailleurs, mais un retour ne paie plus sa
        * reconstruction (2,2 a 3,7 s sans rue, mesure du banc). Voir `decor-veille.ts`.
        */}
@@ -628,7 +632,7 @@ export function MainApp(): React.JSX.Element {
       )}
       {/*
        * La POPUP de démarrage (« Bienvenue dans Autowin OS », connexion au Brain et aux modèles)
-       * n'existe plus : retirée à la demande de l'utilisateur le 2026-10-15 (conv-963). Un prérequis
+       * n'existe plus : retirée à la demande de l'utilisateur le 2026-10-15. Un prérequis
        * en échec s'annonce désormais par le « ! » de Settings, 30 s après le lancement, et se répare
        * depuis Settings > Diagnostic.
        */}
@@ -636,7 +640,7 @@ export function MainApp(): React.JSX.Element {
        * L'écran d'autorisation de production n'est PLUS monté ici. Il vivait à la racine de
        * l'application, en fenêtre flottante par-dessus tout le reste ; il vit désormais DANS LE FIL
        * de la conversation (`ChatView`, juste au-dessus de la zone de saisie), à la demande de
-       * l'utilisateur le 2026-09-16 (conv-626) : « ça doit pas être une popup, ça doit être dans le
+       * l'utilisateur le 2026-09-16 : « ça doit pas être une popup, ça doit être dans le
        * fil de la conv ». Le voile plein écran qu'il posait rendait le fil et la question illisibles
        * l'un à travers l'autre.
        */}
@@ -645,7 +649,7 @@ export function MainApp(): React.JSX.Element {
         className={`rail${railCollapsed || affichage.telephone ? ' is-collapsed' : ''}`}
       >
         <div className="brand">
-          {/* LE LOGO, plus le spinner (2026-10-11, conv-228) : « je garde mon spinner je veux juste
+          {/* LE LOGO, plus le spinner (2026-10-11) : « je garde mon spinner je veux juste
               changer le logo ici ». L'atome reste l'indicateur de chargement partout ailleurs. */}
           <img className="brand-logo" src={logoAnneau} alt="" draggable={false} />
           <span className="brand-name">Autowin OS</span>

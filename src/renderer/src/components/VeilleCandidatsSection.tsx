@@ -37,7 +37,7 @@ export interface VeilleCandidatsSectionProps {
   ouvrirConversationScout?: () => Promise<string | undefined>
 }
 
-/** Le libellé de chaque statut, traduit au rendu (`textes-ecrans/tickets.ts`, conv-1170). */
+/** Le libellé de chaque statut, traduit au rendu (`textes-ecrans/tickets.ts`). */
 const CLE_STATUT: Record<CandidatVeille['statut'], CleTickets> = {
   nouveau: 'veille.statut.nouveau',
   prompte: 'veille.statut.prompte',
@@ -60,7 +60,7 @@ async function ouvrirConversationScoutParDefaut(): Promise<string | undefined> {
   if (!provider) return undefined
   const conversation = await window.api.conversationsCreate({
     // Titre de conversation, pas un libellé de l'écran : il garde la forme française que pose aussi
-    // le main (`veille/scout-visible.ts`) ; seule la date suit la langue (conv-1170).
+    // le main (`veille/scout-visible.ts`) ; seule la date suit la langue.
     title: `[veille] scout interne ${formaterDate(new Date())}`.slice(0, 80),
     category: provider,
     provider
@@ -204,6 +204,23 @@ function LigneCandidat({
   )
 }
 
+type LectureVeille = { stock: StockVeille } | { erreur: string }
+
+/**
+ * Lit le stock sans jamais lever : une lecture en échec est NOMMÉE, sinon la vue afficherait une
+ * liste vide, donc « rien de neuf ».
+ */
+async function lireLeStock(
+  charger: (() => Promise<StockVeille>) | undefined
+): Promise<LectureVeille> {
+  const lecteur = charger ?? ((): Promise<StockVeille> => window.api.veilleSnapshot())
+  try {
+    return { stock: await lecteur() }
+  } catch (cause) {
+    return { erreur: cause instanceof Error ? cause.message : String(cause) }
+  }
+}
+
 export function VeilleCandidatsSection({
   charger,
   marquer,
@@ -220,21 +237,27 @@ export function VeilleCandidatsSection({
   // Par défaut on trie par pertinence : la vue existe pour décider quoi reprendre en premier.
   const [tri, setTri] = useState<TriVeille>('pertinence')
 
-  const lire = useCallback(async (): Promise<void> => {
-    const lecteur = charger ?? ((): Promise<StockVeille> => window.api.veilleSnapshot())
-    try {
-      setStock(await lecteur())
+  const appliquerLecture = useCallback((lecture: LectureVeille): void => {
+    if ('stock' in lecture) {
+      setStock(lecture.stock)
       setErreur(undefined)
-    } catch (cause) {
-      // Une lecture en échec est NOMMÉE : sans ça, la vue afficherait une liste vide, donc « rien de neuf ».
-      setErreur(cause instanceof Error ? cause.message : String(cause))
-    }
-  }, [charger])
+    } else setErreur(lecture.erreur)
+  }, [])
+  const lire = useCallback(async (): Promise<void> => {
+    appliquerLecture(await lireLeStock(charger))
+  }, [charger, appliquerLecture])
 
+  // Lecture au montage (et si le lecteur change) : le résultat n'arrive qu'après l'attente, et la
+  // réponse d'un lecteur périmé est écartée.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void lire()
-  }, [lire])
+    let vivant = true
+    void lireLeStock(charger).then((lecture) => {
+      if (vivant) appliquerLecture(lecture)
+    })
+    return () => {
+      vivant = false
+    }
+  }, [charger, appliquerLecture])
 
   const [generation, setGeneration] = useState(false)
   const genererPlus = useCallback(async (): Promise<void> => {
@@ -298,7 +321,7 @@ export function VeilleCandidatsSection({
   /**
    * Prompter RE-LIT le stock d'abord : c'est cette lecture qui re-vérifie, côté main, que la ligne
    * citée est encore dans son fichier. La vue peut être ouverte depuis des heures — le défaut a pu
-   * être corrigé entre l'affichage et le clic (cas réel : conv-947, servi trois semaines après).
+   * être corrigé entre l'affichage et le clic (cas réel, servi trois semaines après).
    */
   const lancerPrompt = async (candidat: CandidatVeille): Promise<void> => {
     const lecteur = charger ?? ((): Promise<StockVeille> => window.api.veilleSnapshot())

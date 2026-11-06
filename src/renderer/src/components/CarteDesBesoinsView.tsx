@@ -1,13 +1,13 @@
 /**
- * VUE « CARTE DU PROJET » — la carte des besoins (conv-1089, 2026-10-22).
+ * VUE « CARTE DU PROJET » — la carte des besoins (2026-10-22).
  *
  * Demande d'origine : « une vue qui agrège les étapes de la carte du fil de toutes les conversations,
  * avec l'état prouvé de chaque demande et les runs bloqués, sans aucun appel de modèle ». Le calcul
  * vit dans le processus principal (`src/main/board/carte-des-besoins.ts`) ; ici, l'en-tête et la rivière.
  *
- * Depuis le 23/10 (conv-1113) : « il doit y avoir que ce board dans la view, supprime tout ce qui
+ * Depuis le 23/10 : « il doit y avoir que ce board dans la view, supprime tout ce qui
  * est en dessous, et la vue n'est pas scrollable verticalement, on peut scroll que le kanban ». La
- * fiche d'un dépôt (/draft conv-1102), la liste « Toutes les demandes », ses filtres et son pied
+ * fiche d'un dépôt, la liste « Toutes les demandes », ses filtres et son pied
  * sont retirés ; la vue ne défile plus, seul le tableau de la rivière défile (`RiviereDuProjet`).
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
@@ -70,12 +70,12 @@ export function CarteDesBesoinsView({
 }: {
   active: boolean
   onOpenConversation: (target: { conversationId: string }) => void
-  /** L'onglet affiché (conv-1397) : piloté par App pour qu'un agent puisse naviguer vers « tickets ». */
+  /** L'onglet affiché : piloté par App pour qu'un agent puisse naviguer vers « tickets ». */
   section?: BoardSection
   onSectionChange?: (section: BoardSection) => void
 }): React.JSX.Element {
   const { t, langue } = useTextesBoardEtMaintenance()
-  // LES DEUX ONGLETS DU BOARD (conv-1397, 2026-10-31) : les post-it des demandes, et les tickets des
+  // LES DEUX ONGLETS DU BOARD (2026-10-31) : les post-it des demandes, et les tickets des
   // sources externes (l'ancien écran Tickets). Sans `section` fournie, la vue tient le sien.
   const [sectionLocale, setSectionLocale] = useState<BoardSection>('demandes')
   const section = sectionDemandee ?? sectionLocale
@@ -92,14 +92,14 @@ export function CarteDesBesoinsView({
   const [ticketsOuverts, setTicketsOuverts] = useState(section === 'tickets')
   if (section === 'tickets' && !ticketsOuverts) setTicketsOuverts(true)
   const [carte, setCarte] = useState<CarteDesBesoins | null>(null)
-  // La fiche RUN.md de chaque demande (conv-1441) : le lien « RUN.md » des post-it.
+  // La fiche RUN.md de chaque demande : le lien « RUN.md » des post-it.
   const [fiches, setFiches] = useState<FichesDesDemandes>({})
   const [erreur, setErreur] = useState<string | null>(null)
   const [chargement, setChargement] = useState(false)
-  // Les dossiers de travail du Chat (conv-1212) : les seuls projets du Board. Relus à chaque calcul,
+  // Les dossiers de travail du Chat : les seuls projets du Board. Relus à chaque calcul,
   // donc à chaque retour sur l'onglet — un dossier retiré dans le Chat sort aussi d'ici.
   const [dossiersDuChat, setDossiersDuChat] = useState<string[]>(() => lireDossiersDuChat())
-  // « This computer » (conv-1231) : jamais retirable, donc sans croix et gardé malgré un retrait.
+  // « This computer » : jamais retirable, donc sans croix et gardé malgré un retrait.
   const [dossierPersonnel, setDossierPersonnel] = useState<string | null>(null)
 
   const charger = useCallback(async () => {
@@ -115,7 +115,7 @@ export function CarteDesBesoinsView({
         lireDossierPersonnel()
       ])
       setDossierPersonnel(personnel)
-      // Les états posés à la main vivent ici : joints pour que la copie du dossier (conv-1206)
+      // Les états posés à la main vivent ici : joints pour que la copie du dossier
       // range chaque post-it à l'étage qu'il a À L'ÉCRAN.
       const calculee = await window.api.carteDesBesoins({
         etatsManuels: lireEtatsManuels(window.localStorage)
@@ -134,13 +134,13 @@ export function CarteDesBesoinsView({
       setChargement(false)
     }
   }, [])
-  // « Vérifier » / « Tout vérifier » du Board (conv-1136) : `/check` dans le fil, carte relue pendant le tour.
+  // « Vérifier » / « Tout vérifier » du Board : `/check` dans le fil, carte relue pendant le tour.
   const verifier = useVerificationDuBoard(active, carte, charger)
 
   // Relue à chaque retour sur l'onglet : le calcul ne refait que les fils qui ont bougé.
-  // Work items (conv-1127) : ce que la passe de lecture des `#1234` n'a pas pu faire, dit en clair.
+  // Work items : ce que la passe de lecture des `#1234` n'a pas pu faire, dit en clair.
   const [avisTaches, setAvisTaches] = useState<string | null>(null)
-  // Les sources de tickets configurées (conv-1127) : à partir de deux, « + task » propose de choisir.
+  // Les sources de tickets configurées : à partir de deux, « + task » propose de choisir.
   const [sourcesDesTaches, setSourcesDesTaches] = useState<SourceDeTache[]>([])
 
   useEffect(() => {
@@ -187,8 +187,8 @@ export function CarteDesBesoinsView({
 
   useEffect(() => {
     // Même chargement à l'activation que la vue Tests : l'état posé par `charger` vient d'un appel
-    // asynchrone, il ne boucle pas. Puis la lecture des `#1234` (conv-1127), après le calcul.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // asynchrone, il ne boucle pas. Puis la lecture des `#1234`, après le calcul.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- chargement à l'activation : `charger` appelle des setState après des appels IPC asynchrones (aucune valeur dérivable au rendu), ne boucle pas
     if (active) void charger().then(verifierLesTaches)
   }, [active, charger, verifierLesTaches])
 
@@ -220,7 +220,7 @@ export function CarteDesBesoinsView({
     [charger]
   )
 
-  // LE DOSSIER DU BOARD (conv-1206) : où le Board est recopié à chaque calcul. Relu à l'activation,
+  // LE DOSSIER DU BOARD : où le Board est recopié à chaque calcul. Relu à l'activation,
   // puis toutes les 3 s tant qu'une copie attend ou tourne, pour dire quand elle a abouti.
   const [dossier, setDossier] = useState<EtatDuDossierDuBoard | null>(null)
   const relireDossier = useCallback(async () => {
@@ -233,7 +233,7 @@ export function CarteDesBesoinsView({
   }, [])
   useEffect(() => {
     // Même motif que le chargement : l'état vient d'un appel asynchrone, il ne boucle pas.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- relecture IPC asynchrone à l'activation ; setDossier arrive après la réponse du processus principal
     if (active) void relireDossier()
   }, [active, carte, relireDossier])
   useEffect(() => {
@@ -251,7 +251,7 @@ export function CarteDesBesoinsView({
   const oublierDossier = useCallback(async () => {
     setDossier(await window.api.boardDossierEffacer())
   }, [])
-  // Les projets recopiés (conv-1211, « choisir quel CWD on partage ») : choix gardé sur le poste,
+  // Les projets recopiés (« choisir quel CWD on partage ») : choix gardé sur le poste,
   // puis un calcul recopie aussitôt le Board avec les seuls projets cochés.
   const choisirProjets = useCallback(
     async (projets: string[] | null) => {
@@ -261,7 +261,7 @@ export function CarteDesBesoinsView({
     [charger]
   )
 
-  // La croix d'une ligne du menu « Projets » (conv-1212) : retire le dossier de la liste du Chat —
+  // La croix d'une ligne du menu « Projets » : retire le dossier de la liste du Chat —
   // la même que la croix du Chat —, puis recalcule le Board sans lui.
   const retirerDuChat = useCallback(
     async (chemin: string) => {
@@ -271,7 +271,7 @@ export function CarteDesBesoinsView({
     [charger]
   )
 
-  // LES POST-IT DES COLLÈGUES (conv-1210) : les Boards que les autres postes recopient dans le même
+  // LES POST-IT DES COLLÈGUES : les Boards que les autres postes recopient dans le même
   // dossier, relus APRÈS la carte et à part, pour qu'un partage lent ne retarde jamais le nôtre ; le
   // processus principal espace lui-même les relectures. Mêlés à la carte AFFICHÉE seulement.
   const [collegues, setCollegues] = useState<BoardsDesCollegues | null>(null)
@@ -316,7 +316,7 @@ export function CarteDesBesoinsView({
     },
     [onOpenConversation]
   )
-  // Le lien « RUN.md » d'une demande (conv-1441) : le fil s'ouvre, puis son panneau RUN.md se déplie
+  // Le lien « RUN.md » d'une demande : le fil s'ouvre, puis son panneau RUN.md se déplie
   // sur cette fiche dès qu'il a lu les siennes (`refreshFiches`, ChatView).
   const ouvrirFiche = useCallback(
     (conversationId: string, chemin: string) => {
@@ -377,7 +377,7 @@ export function CarteDesBesoinsView({
                 </span>
               )}
               {/* Les boutons passent à la ligne ENSEMBLE, sous les compteurs, quand l'en-tête est
-                  étroit : sans ce groupe, « Actualiser » restait seul sur une ligne (conv-1211). */}
+                  étroit : sans ce groupe, « Actualiser » restait seul sur une ligne. */}
               <span className="besoins-boutons">
                 <span className="besoins-dossier" data-testid="besoins-dossier">
                   <button
@@ -420,7 +420,7 @@ export function CarteDesBesoinsView({
                       ×
                     </button>
                   )}
-                  {/* Le rouage (conv-1230) : « Actualiser », le nom de ce poste sur le Board, puis
+                  {/* Le rouage : « Actualiser », le nom de ce poste sur le Board, puis
                       la liste des projets — qui n'existe qu'une fois un dossier choisi. */}
                   <RouageDuBoard
                     chargement={chargement}
@@ -428,7 +428,7 @@ export function CarteDesBesoinsView({
                     onNomEnregistre={() => void charger()}
                   >
                     {/* NOS projets seulement (`carte`, pas `carteAffichee`) : les post-it des
-                        collègues ne repartent pas d'ici (conv-1211, conv-1210). */}
+                        collègues ne repartent pas d'ici. */}
                     {dossier?.dossier && carte && (
                       <ProjetsPartagesDuBoard
                         projets={lignesDuMenuDesProjets(
@@ -469,7 +469,7 @@ export function CarteDesBesoinsView({
 
         {!carte && !erreur && <p className="besoins-vide">{t('vue.chargement')}</p>}
 
-        {/* LA RIVIÈRE (/draft conv-1113) : seule dans son onglet ; elle prend toute la hauteur
+        {/* LA RIVIÈRE : seule dans son onglet ; elle prend toute la hauteur
             restante et son tableau est le seul endroit qui défile. */}
         {carteAffichee && (
           <RiviereDuProjet

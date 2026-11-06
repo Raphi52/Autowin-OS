@@ -33,7 +33,7 @@ import {
 type CleDuPanneau = Parameters<typeof traduireChatPanneaux>[0]
 
 /**
- * Nature de chaque ligne, par sa CLÉ de texte (conv-1170) : le menu de filtre retient la clé, pas le
+ * Nature de chaque ligne, par sa CLÉ de texte : le menu de filtre retient la clé, pas le
  * mot affiché, pour qu'un changement de langue ne vide pas un filtre posé.
  */
 const KIND_LABEL: Record<ModelActivityKind, CleDuPanneau> = {
@@ -107,7 +107,7 @@ function duree(ms: number): string {
 }
 
 /**
- * RELIRE N'EST PAS RECALCULER (conv-252, 2026-10-11 : « corrige l'onglet Logs pour qu'il ne
+ * RELIRE N'EST PAS RECALCULER (2026-10-11 : « corrige l'onglet Logs pour qu'il ne
  * recalcule plus tout le journal toutes les 2 à 4 s quand rien n'a changé »).
  *
  * Mesure du 2026-10-11 12:00-12:02 (`gels.jsonl`) : pendant un tour vivant, le panneau droit tenait
@@ -176,7 +176,7 @@ export function ModelActivityLogPane({
   const [sourceMasquee, setSourceMasquee] = useState<ModelActivitySource | ''>('')
   const [erreursSeules, setErreursSeules] = useState(false)
   // Vue PISTES : chaque source occupe une voie fixe à gauche de l'heure. MASQUÉE d'office
-  // (conv-247, 2026-10-11 : « enlève la colonne tout à gauche ») — la ligne unique commence à
+  // (2026-10-11 : « enlève la colonne tout à gauche ») — la ligne unique commence à
   // l'heure ; le bouton Pistes la réaffiche, et la source reste lisible dans la carte dépliée.
   const [pistes, setPistes] = useState(false)
   // La SIXIEME source, et la seule qui disait ce que le modele avait LU avant de repondre : les
@@ -326,9 +326,9 @@ export function ModelActivityLogPane({
         bureaux: conversationId ? bureaux : [],
         fichiers: conversationId ? fichiers : []
       }),
-    // `langue` : les libellés des lignes s'écrivent dans la langue courante (conv-1170) ; la
+    // `langue` : les libellés des lignes s'écrivent dans la langue courante ; la
     // changer refait les lignes sans attendre une relecture des sources.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `langue` est lue hors des dépendances, par `langueCourante()` dans model-activity-log.ts
     [causal, activity, brain, promptCalls, bureaux, fichiers, conversationId, langue]
   )
   const lignesFil = useMemo(
@@ -452,7 +452,7 @@ export function ModelActivityLogPane({
           </span>
         )}
       </div>
-      {/* Plus de LÉGENDE des voies en tête (conv-247, 2026-10-11 : « enlève la légende en haut
+      {/* Plus de LÉGENDE des voies en tête (2026-10-11 : « enlève la légende en haut
           des logs ») : la source se lit dans la carte dépliée et s'isole par le menu des sources. */}
       <div
         ref={listRef}
@@ -487,7 +487,7 @@ export function ModelActivityLogPane({
               <summary className="model-log-tour__head">
                 <strong>{t('journal.tour', { n: tour.index })}</strong>
                 {/* Sans heure de début, pas de case « — » : elle se lisait comme un tiret
-                    entre le rang et les chiffres (conv-247, 2026-10-11). */}
+                    entre le rang et les chiffres (2026-10-11). */}
                 {heure(tour.debut) ? <span>{heure(tour.debut)}</span> : null}
                 <span>{t('journal.gestes', { n: tour.entries.length })}</span>
                 {typeof tour.dureeMs === 'number' && <span>{duree(tour.dureeMs)}</span>}
@@ -499,7 +499,7 @@ export function ModelActivityLogPane({
                 {tour.erreur && <span className="model-log-tour__ko">{t('journal.echec')}</span>}
               </summary>
               {/* La FRISE : un trait continu traverse le tour, une perle par geste — ou par rafale
-                  de gestes semblables qui se suivent, repliée en un groupe (conv-270). */}
+                  de gestes semblables qui se suivent, repliée en un groupe. */}
               <div className="model-log-frise">
                 {grouperSemblables(tour.entries).map((bloc) =>
                   bloc.genre === 'ligne' ? (
@@ -530,7 +530,7 @@ export function ModelActivityLogPane({
 }
 
 /**
- * GROUPE de lignes SEMBLABLES qui se suivent (conv-270, 2026-10-11 : « dans les logs groupe les
+ * GROUPE de lignes SEMBLABLES qui se suivent (2026-10-11 : « dans les logs groupe les
  * trucs qui se ressemblent qui se suivent » ; règle dans `grouperSemblables`). Replié, il tient sur
  * UNE ligne : nature, nombre, et le titre de la PREMIÈRE ligne — par où la rafale commence. Déplié,
  * il rend ses lignes telles quelles, chacune avec son heure et sa carte dépliable.
@@ -669,7 +669,7 @@ function LogRow({
         : entry.kind === 'error'
           ? 'st-err'
           : ''
-  // LIGNE UNIQUE (conv-247, 2026-10-11, maquette « tour 4 » pistes 2 + 3 + 4) : au repos, nature +
+  // LIGNE UNIQUE (2026-10-11, maquette « tour 4 » pistes 2 + 3 + 4) : au repos, nature +
   // titre COURT + résumé gris tiennent sur une ligne ; le texte complet, la source, l'écart et les
   // champs bruts clé par clé vivent dans la carte dépliée. Le filtre et l'export lisent toujours
   // l'entrée complète : seul l'affichage est raccourci.
@@ -697,7 +697,7 @@ function LogRow({
       {/* L'heure SEULE, à gauche de la frise : les heures s'alignent en colonne et la carte garde
           toute sa largeur pour le contenu. */}
       {/* Sans heure, la colonne reste (alignement) mais VIDE : un « — » par ligne faisait un trait
-          horizontal sur toute la colonne (conv-247, 2026-10-11). */}
+          horizontal sur toute la colonne (2026-10-11). */}
       <time className="model-log-time">{heure(entry.at) ?? ''}</time>
       <span className="model-log-perle" aria-hidden="true" />
       <div className="model-log-carte">

@@ -1,8 +1,8 @@
 /**
  * Blocs « Raisonnement » et « Actions » du fil — DEUX blocs repliables, écrits en direct.
  *
- * DISPOSITION (conv-303, 2026-10-17, « A · Côte à côte ») : les deux blocs se partagent une ligne,
- * dans un cadre centré ; le bloc « Étapes » (conv-304) prend toute la largeur de ce cadre DESSOUS.
+ * DISPOSITION (2026-10-17, « A · Côte à côte ») : les deux blocs se partagent une ligne,
+ * dans un cadre centré ; le bloc « Étapes » prend toute la largeur de ce cadre DESSOUS.
  * Avant : trois blocs empilés pleine largeur, Étapes entre Raisonnement et Actions.
  *
  * Avant le 2026-09-12 un seul bloc « Réflexion » portait les deux : la pensée du modèle ET les
@@ -14,12 +14,12 @@
  * Ouverture : PLIÉS par défaut, en cours comme terminés (demande du 2026-09-01) — l'en-tête dit
  * déjà ce qui se passe. Un clic de l'utilisateur reprend TOUJOURS la main.
  *
- * EN-TETE « R5 · Sous la ligne » (choix de l'utilisateur sur maquettes, conv-162, 2026-10-10 :
+ * EN-TETE « R5 · Sous la ligne » (choix de l'utilisateur sur maquettes, 2026-10-10 :
  * « la gueule du 1, la barre avec les actions du 3, pas les mots de raisonnement, seulement un
  * compteur de secondes », puis « go R5 ») : chaque titre est une CAPSULE à bord dégradé (icône
  * ronde, libellé, compteurs, chevron DEDANS) ; le signe de vie reste dehors, en gris.
  *
- * Habillage « Fumé net » (conv-173, 2026-10-10, maquettes .autowin-tmp/draft-capsules, « Agent
+ * Habillage « Fumé net » (2026-10-10, maquettes .autowin-tmp/draft-capsules, « Agent
  * assorti implémente c magnifique », puis « reflet bombé ») : la capsule est en verre fumé (reflet
  * en arc, bord dégradé de 2 px). La barre de temps des actions reste SOUS la ligne, hors de la
  * capsule, et déborde sous le signe de vie : un essai l'avait mise dans la capsule, refusé
@@ -79,7 +79,7 @@ const ICONE_RAISONNEMENT = (
 )
 
 /**
- * DEUX LIGNES (conv-904, 2026-10-12 : « je veux aussi 2 lignes pour les boutons raisonnement et
+ * DEUX LIGNES (2026-10-12 : « je veux aussi 2 lignes pour les boutons raisonnement et
  * actions », a la suite du cadre choisi pour la barre d'activite). Le bloc prend le meme cadre que
  * la barre : un grand rond degrade a gauche (le NOMBRE d'actions et la pastille de leur exception,
  * ou l'icone de la pensee — « Rond de verre »), puis deux lignes : le libelle et ses compteurs, et
@@ -127,7 +127,7 @@ function BlocRepliable({
   const [manuel, setManuel] = useState<boolean | null>(null)
   const ouvert = manuel ?? ouvertParDefaut
   const ref = useRef<HTMLElement | null>(null)
-  // Stable : une fonction neuve à chaque rendu défaisait le `memo` de la frise (conv-1413).
+  // Stable : une fonction neuve à chaque rendu défaisait le `memo` de la frise.
   const poserCorps = useCallback((el: HTMLElement | null) => {
     ref.current = el
   }, [])
@@ -135,7 +135,7 @@ function BlocRepliable({
   useEffect(() => {
     const el = ref.current
     if (el && ouvert) el.scrollTop = el.scrollHeight
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- liste de longueur libre fournie par l'appelant (ce qui fait grandir le corps) : le défilement doit suivre exactement ces valeurs, que le linter ne peut pas vérifier
   }, [...dependances, ouvert])
   return (
     <details
@@ -161,7 +161,7 @@ function BlocRepliable({
             </span>
             {(legende || entete) && (
               <span className="anneau-l2">
-                {/* Enveloppe de la legende : bloc plie = DEUX lignes, jamais plus (conv-910). Elle
+                {/* Enveloppe de la legende : bloc plie = DEUX lignes, jamais plus. Elle
                     se coupe en « … » au lieu de passer a la ligne. */}
                 {legende && <span className="anneau-legende">{legende}</span>}
                 {entete && (
@@ -180,11 +180,7 @@ function BlocRepliable({
       ) : frise ? (
         <FriseDesActions actions={frise} testid={`${testid}-body`} refCorps={poserCorps} />
       ) : (
-        <pre
-          className="thinking-body"
-          ref={poserCorps}
-          data-testid={`${testid}-body`}
-        >
+        <pre className="thinking-body" ref={poserCorps} data-testid={`${testid}-body`}>
           {corps}
         </pre>
       )}
@@ -193,7 +189,7 @@ function BlocRepliable({
 }
 
 /**
- * CORPS DÉPLIÉ DU RAISONNEMENT — « Liseuse + Fil de pensée » (conv-335, 2026-10-18, /draft « un
+ * CORPS DÉPLIÉ DU RAISONNEMENT — « Liseuse + Fil de pensée » (2026-10-18, /draft « un
  * meilleur bloc raisonnement pour mieux voir le texte quand il est déplié », puis « Implémenter
  * 1 + 3 »). Remplace un <pre> gris de 13 px dans une fenêtre de 240 px à ascenseur, dont la
  * première ligne était coupée en haut.
@@ -216,8 +212,8 @@ function FilDePensee({ texte }: { texte: string }): React.JSX.Element {
   // Coupé : calé sur la FIN et mesuré. Déplié en entier, rien à caler ni à mesurer.
   // Bloc PLIÉ (le cas de tout l'historique) : rien à mesurer non plus. Lire `scrollHeight` y force
   // quand même la mise en page du fil ENTIER dès qu'un autre code l'a salie entre deux blocs. Mesuré
-  // le 2026-10-22 (conv-1055, ouverture de conv-826 en instance cachée) : 4,6 à 5,3 s de temps
-  // propre ici quand la carte du fil (état intermédiaire de conv-1059) la salissait, 0 après. Sans
+  // le 2026-10-22 (ouverture en instance cachée) : 4,6 à 5,3 s de temps
+  // propre ici quand la carte du fil (état intermédiaire) la salissait, 0 après. Sans
   // cascade, le coût d'UNE mise en page (~0,8 s) passe simplement au lecteur suivant. Au dépliage,
   // l'événement `toggle` (ci-dessous) et l'observateur de taille font la mesure.
   const mesurer = useEffectEvent(() => {
@@ -291,7 +287,7 @@ function FilDePensee({ texte }: { texte: string }): React.JSX.Element {
 }
 
 /**
- * LISTE DES ÉTAPES (conv-304, 2026-10-17 : « un bloc avec les étapes de la task et leur
+ * LISTE DES ÉTAPES (2026-10-17 : « un bloc avec les étapes de la task et leur
  * progression, ils ont mis ça dans claude.exe »). Une case par étape, comme claude.exe : vide à
  * faire, pleine en cours, cochée terminée (barrée). Cases en CSS, pas en glyphes : ◻ ◼ ✔ sortent en
  * émoji sous Windows et débordent de la ligne.
@@ -319,7 +315,7 @@ const ICONE_CHANTIER = (
 )
 
 /**
- * CARTE D'UN GROS CHANTIER (outil Workflow du CLI, conv-1362, lot conv-1366) : les phases et, pour
+ * CARTE D'UN GROS CHANTIER (outil Workflow du CLI) : les phases et, pour
  * chacune, une jauge de ses agents. Vivante tant que le chantier tourne, repliée ensuite comme le
  * bloc Étapes. Les alertes restent à relire après coup : un quota atteint explique un résultat
  * partiel.
@@ -394,10 +390,10 @@ function CarteDuChantier({
 }
 
 /**
- * RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (conv-326, 2026-10-18, /draft « des meilleures barres
+ * RAIL À PASTILLES NUMÉROTÉES + PIED AU TEMPS (2026-10-18, /draft « des meilleures barres
  * de progression pour ce bloc », trois tours : « le 3 et 4 », « Affiner la 6 · Pastilles
  * numérotées », « Implémenter la 5 · Pied au temps »). Remplace la case et la barre de dix blocs par
- * étape (conv-303) : claude.exe ne donne que trois états, jamais un pourcentage, et la barre d'une
+ * étape : claude.exe ne donne que trois états, jamais un pourcentage, et la barre d'une
  * étape en cours ne disait rien de plus que sa couleur.
  *   - à gauche, un RAIL : vert jusqu'aux étapes finies, flux rose sur l'étape en cours, gris ensuite ;
  *     chaque étape y pose sa PASTILLE — la coche une fois finie, son numéro sinon ;
@@ -531,7 +527,7 @@ const FriseDesActions = memo(function FriseDesActions({
 })
 
 /**
- * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE, sous sa ligne (conv-341, 2026-10-19 : « c'est possible
+ * LE MESSAGE D'ERREUR D'UNE ACTION ROUGE, sous sa ligne (2026-10-19 : « c'est possible
  * d'avoir le message d'erreur que l'action a rencontré ? […] un truc qui coûte pas de token »). C'est
  * le texte que l'outil a RENDU, déjà reçu par l'app : aucun appel au modèle.
  */
@@ -545,7 +541,7 @@ function ErreurDeLAction({ action }: { action: ActionFrise }): React.JSX.Element
 }
 
 /**
- * UNE COMMANDE NOMMEE, DEPLIABLE « comme une orchestration » (conv-910) : la ligne dit ce que fait
+ * UNE COMMANDE NOMMEE, DEPLIABLE « comme une orchestration » : la ligne dit ce que fait
  * la commande (sa description), le chevron ouvre la liste des commandes qu'elle enchaine. Pliee par
  * defaut ; le detail n'est rendu qu'ouvert, comme le corps de la capsule d'orchestration.
  */
@@ -610,17 +606,17 @@ function TacheDeLaFrise({ action }: { action: ActionFrise }): React.JSX.Element 
  * Le compteur vu en direct garde la priorité : le chiffre ne saute pas sous les yeux de
  * l'utilisateur à l'arrivée de la valeur conservée. Ni l'un ni l'autre : aucun chiffre inventé.
  *
- * UN TOUR RALLUMÉ RECOMPTE (conv-916, 2026-10-13 : « le timer du bloc raisonnement ne bouge même
+ * UN TOUR RALLUMÉ RECOMPTE (2026-10-13 : « le timer du bloc raisonnement ne bouge même
  * plus »). Un tour peut être vu clos à l'écran puis repartir — son orchestration tournait encore, une
  * nouvelle bulle l'adopte. La `fin` mémorisée de cette clôture ne vaut plus : la garder figeait le
  * compteur à 15 min 9 s sous le libellé « Raisonnement » d'un tour en cours. Il reprend donc depuis le
  * DÉBUT du tour, au montage comme sous les yeux.
  *
- * LE DÉBUT, C'EST CELUI DU TOUR (conv-1084, 2026-10-22) : quand le message porte `debutDuTour`, le
+ * LE DÉBUT, C'EST CELUI DU TOUR (2026-10-22) : quand le message porte `debutDuTour`, le
  * compteur part de là et non du montage du bloc — sinon un tour lancé pendant qu'on regardait un
  * autre fil ne comptait qu'à partir du retour sur la conversation.
  *
- * UNE PENSÉE RELAYÉE S'ARRÊTE (conv-1547, 2026-11-04 : « le premier bloc de raisonnement a un timer
+ * UNE PENSÉE RELAYÉE S'ARRÊTE (2026-11-04 : « le premier bloc de raisonnement a un timer
  * qui continue de grimper alors que plus rien ne s'écrit dans le bloc »). Après une orientation, la
  * suite du tour pense dans une bulle neuve ; celle du dessus reste en cours, mais sa pensée a fini à
  * `finDuRaisonnement`. Le compteur s'y fige sans toucher à la mémoire du tour : elle est PARTAGÉE
@@ -675,7 +671,7 @@ function useChronoDuRaisonnement(
 
 /**
  * Durée de chaque étape, MESURÉE à l'écran et rafraîchie chaque seconde tant qu'une étape est en
- * cours — voir `avancerChronosDesEtapes` (conv-313 : « le timer est fix dans ce bloc »). Mémorisée par
+ * cours — voir `avancerChronosDesEtapes` (« le timer est fix dans ce bloc »). Mémorisée par
  * tour, comme le chrono du raisonnement : un bloc démonté puis remonté ne repart pas de zéro.
  */
 function useSecondesDesEtapes(
@@ -733,24 +729,24 @@ export function ThinkingBlock({
   turnId?: string
   /** Durée du raisonnement CONSERVÉE par le tour (ms) : le compteur d'un tour relu du disque. */
   reasoningMs?: number
-  /** Heure de DÉBUT du tour (ms epoch), posée par le main : le zéro du chrono (conv-1084). */
+  /** Heure de DÉBUT du tour (ms epoch), posée par le main : le zéro du chrono. */
   debutDuTour?: number
   /**
-   * Heure où cette pensée est passée à une bulle suivante du même tour (orientation, conv-1547) :
+   * Heure où cette pensée est passée à une bulle suivante du même tour (orientation) :
    * le raisonnement est clos ici, même si le tour — et ses actions — continuent.
    */
   finDuRaisonnement?: number
 }): React.JSX.Element {
   const { t } = useTextesChatDecisions()
   const pensee = corpsDuBloc(text)
-  // MÉMORISÉ (conv-1413, 2026-10-31) : le chrono bat chaque seconde et redessine ce composant. Tout
+  // MÉMORISÉ (2026-10-31) : le chrono bat chaque seconde et redessine ce composant. Tout
   // recalculer depuis le journal à chaque battement faisait de ce bloc la première source d'allocations
   // de l'interface (2 Go en 90 s pendant un tour, dont environ 1 Go ici).
   const frise = useMemo(() => actionsDuTour(statusLog, status, done), [statusLog, status, done])
   const actions = useMemo(() => frise.map((a) => a.texte).join('\n'), [frise])
   // Plie, le bloc doit quand meme dire OU en est la pensee : sa derniere ligne, en gris, comme le
   // bloc Actions montre l'action courante (demande de l'utilisateur, 2026-09-12). DEUX LIGNES
-  // (conv-904) : tour fini, la seconde ligne garde la DERNIERE ligne de la pensee — sa conclusion.
+  // Tour fini, la seconde ligne garde la DERNIERE ligne de la pensee — sa conclusion.
   // Une pensee chiffree par le modele (corps vide) n'invente rien : le bloc reste sur une ligne.
   const dernierePensee = useMemo(() => derniereLigneDuRaisonnement(pensee), [pensee])
   const secondesPensee = useChronoDuRaisonnement(
@@ -775,7 +771,7 @@ export function ThinkingBlock({
     [statusLog, status, frise]
   )
   const secondesEtapes = useSecondesDesEtapes(turnId, etapes, avancement, done)
-  // DISPOSITION « A · Côte à côte » (conv-303, 2026-10-17 : « centrer actions et raisonnement et en
+  // DISPOSITION « A · Côte à côte » (2026-10-17 : « centrer actions et raisonnement et en
   // dessous un bloc qui montre comment la tâche est décomposée », puis « les 2 du haut font la même
   // largeur que le bloc étapes ») : un CADRE centré ; Raisonnement et Actions se partagent sa ligne
   // du haut, Étapes prend toute sa largeur dessous. Le CSS fait le reste (ChatView.css, .tour-blocs).

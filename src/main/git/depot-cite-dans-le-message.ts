@@ -16,13 +16,13 @@ import { estUneConsigneDeRedemarrage } from '../app/redemarrage-reprise'
  * projet ne suffit pas — ce serait une supposition, et basculer a tort est pire que ne pas basculer.
  *
  * Un depot IMBRIQUE dans le depot de travail ne fait pas basculer non plus. Mesure du 2026-09-28
- * (conv-770) : une consigne de reprise citait `git -C D:/AutoWinOS/.autowin-data/essai-garde stash`,
+ * Une consigne de reprise citait `git -C D:/AutoWinOS/.autowin-data/essai-garde stash`,
  * un depot jetable ; la conversation est partie travailler DEDANS, puis a rebascule au tour suivant.
  * Meme risque pour une copie de travail d'agent (`.autowin-data/autowin-os/worktrees/…`, `.git` fichier).
  *
- * Un message ECRIT PAR UN AGENT ne fait pas basculer (conv-1306, 2026-10-30) : un ordre de conv-1306
- * a conv-1329 citait D:/ContosoApp-arena/depart dans la liste des dossiers a RETIRER du Board, et
- * conv-1329 est partie travailler dedans. Un ordre d'un autre fil et une reprise automatique arrivent
+ * Un message ECRIT PAR UN AGENT ne fait pas basculer (2026-10-30) : un ordre
+ * citait D:/ContosoApp-arena/depart dans la liste des dossiers a RETIRER du Board, et
+ * le fil est parti travailler dedans. Un ordre d'un autre fil et une reprise automatique arrivent
  * pourtant avec le role `user` ; on les reconnait a leur en-tete, comme le controle des deux lectures
  * (agent-pilot.ts). La consigne de `restart_app`, envoyee telle quelle sans en-tete, se reconnait a
  * l'egalite avec une consigne que ce processus a rendue (`estUneConsigneDeRedemarrage`).

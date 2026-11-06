@@ -102,9 +102,13 @@ function ResumeChefDeProjet({
   recuEvenement: boolean
 }): React.JSX.Element {
   const { t } = useTextesWorktreesEtBureaux()
-  // La fraîcheur est intentionnellement évaluée au rendu : elle dépend de l'heure murale.
-  // eslint-disable-next-line react-hooks/purity
-  const maintenant = Date.now()
+  // La fraîcheur dépend de l'heure murale : elle vit en state (lue à l'init, rafraîchie par un
+  // minuteur) au lieu d'un Date.now() pendant le rendu.
+  const [maintenant, setMaintenant] = useState(() => Date.now())
+  useEffect(() => {
+    const minuteur = window.setInterval(() => setMaintenant(Date.now()), 5_000)
+    return () => window.clearInterval(minuteur)
+  }, [])
   const flux = useMemo(() => resumerFlux(agents, maintenant), [agents, maintenant])
   const chantiers = useMemo(() => regrouperParChantier(agents, maintenant), [agents, maintenant])
   const attente = formatAttente(flux.plusVieilleAttenteMs)
@@ -642,7 +646,7 @@ export function WorktreeView({ active }: { active: boolean }): React.JSX.Element
   }, [load, propositionGeste, repoPath, t])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- chargement IPC à l'activation : `load` pose son état après l'appel asynchrone, rien à dériver au rendu
     if (active) void load()
     return () => {
       requestId.current += 1

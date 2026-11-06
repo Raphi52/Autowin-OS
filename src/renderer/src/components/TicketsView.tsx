@@ -44,7 +44,7 @@ import type { ValeursDeTexte } from '../textes'
 import { traduireTickets, useTextesTickets, type CleTickets } from '../textes-ecrans/tickets'
 
 /**
- * Un texte de l'écran HORS rendu (traduction anglaise, conv-1170) : messages d'erreur et statuts du
+ * Un texte de l'écran HORS rendu (traduction anglaise) : messages d'erreur et statuts du
  * mode auto, posés dans un état au moment où ils arrivent, donc dans la langue de cet instant.
  */
 const texte = (cle: CleTickets, valeurs?: ValeursDeTexte): string =>
@@ -104,7 +104,7 @@ function hueOf(label: string): number {
 
 /**
  * Date relative courte — repère temporel plus lisible qu'un ISO brut dans la liste. Appelée pendant
- * le rendu de la vue, elle suit la langue de l'interface (conv-1170).
+ * le rendu de la vue, elle suit la langue de l'interface.
  */
 function relativeDate(iso: string | undefined): string {
   if (!iso) return '—'
@@ -453,7 +453,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   useEffect(() => {
     if (!active || typeof window.api?.ticketSources !== 'function') return
     // Charge la source externe dès l'activation de la vue.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Chargement externe dont le témoin « en cours » doit s’allumer dès l’appel
     void loadSources()
     return () => {
       requestGeneration.current += 1
@@ -867,48 +867,48 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   // ou un SEUL ticket (petit bouton de ligne), même chemin pour les deux.
   const openConversationForItems = useCallback(
     async (selected: TicketItem[]) => {
-    if (!selected.length) return
-    // Le prompt NOMME les fiches au lieu d'en recopier le contenu : l'agent les lit lui-même avec
-    // `ticket_get`. Plus aucune relecture distante n'est donc nécessaire ici — le prompt s'ouvre
-    // instantanément, et il ne peut pas porter un contenu déjà périmé.
-    const selection = selected
-    const prompt = formatTicketReferencePrompt(selection, activeSourceRef.current)
-    if (!prompt) return
-    let provider: string | undefined
-    try {
-      const roleMap = await window.api.roles()
-      provider =
-        roleMap.orchestrator?.provider ??
-        roleMap.subagent?.provider ??
-        Object.values(roleMap)[0]?.provider
-    } catch {
-      provider = undefined
-    }
-    if (!provider) return
-    const conv = await window.api.conversationsCreate({
-      title: ticketSelectionTitle(selection),
-      category: provider,
-      provider
-    })
-    for (const item of selection) {
-      recordTreatment(item, {
-        conversationId: conv.id,
-        status: sendDirectly ? 'running' : 'prepared',
-        updatedAt: new Date().toISOString()
+      if (!selected.length) return
+      // Le prompt NOMME les fiches au lieu d'en recopier le contenu : l'agent les lit lui-même avec
+      // `ticket_get`. Plus aucune relecture distante n'est donc nécessaire ici — le prompt s'ouvre
+      // instantanément, et il ne peut pas porter un contenu déjà périmé.
+      const selection = selected
+      const prompt = formatTicketReferencePrompt(selection, activeSourceRef.current)
+      if (!prompt) return
+      let provider: string | undefined
+      try {
+        const roleMap = await window.api.roles()
+        provider =
+          roleMap.orchestrator?.provider ??
+          roleMap.subagent?.provider ??
+          Object.values(roleMap)[0]?.provider
+      } catch {
+        provider = undefined
+      }
+      if (!provider) return
+      const conv = await window.api.conversationsCreate({
+        title: ticketSelectionTitle(selection),
+        category: provider,
+        provider
       })
-    }
-    // On amène l'utilisateur SUR le Chat : préparer un prompt qu'il ne voit pas serait inutile.
-    // Le main reste l'autorité de navigation (même chemin que la rail), puis le Chat pré-remplit.
-    try {
-      await window.api.appCommand?.('navigate', { tab: 'chat' })
-    } catch {
-      /* navigation refusée : le prompt est quand même préparé dans la conversation */
-    }
-    window.dispatchEvent(
-      new CustomEvent('autowin:prefill-conversation', {
-        detail: { conversationId: conv.id, prompt, send: sendDirectly }
-      })
-    )
+      for (const item of selection) {
+        recordTreatment(item, {
+          conversationId: conv.id,
+          status: sendDirectly ? 'running' : 'prepared',
+          updatedAt: new Date().toISOString()
+        })
+      }
+      // On amène l'utilisateur SUR le Chat : préparer un prompt qu'il ne voit pas serait inutile.
+      // Le main reste l'autorité de navigation (même chemin que la rail), puis le Chat pré-remplit.
+      try {
+        await window.api.appCommand?.('navigate', { tab: 'chat' })
+      } catch {
+        /* navigation refusée : le prompt est quand même préparé dans la conversation */
+      }
+      window.dispatchEvent(
+        new CustomEvent('autowin:prefill-conversation', {
+          detail: { conversationId: conv.id, prompt, send: sendDirectly }
+        })
+      )
     },
     [recordTreatment, sendDirectly]
   )
@@ -991,7 +991,7 @@ export function TicketsView({ active }: { active: boolean }): React.JSX.Element 
   }
 
   return (
-    // L'ONGLET « TICKETS » DU BOARD (conv-1397, 2026-10-31) : ce n'est plus un écran. Sa barre de
+    // L'ONGLET « TICKETS » DU BOARD (2026-10-31) : ce n'est plus un écran. Sa barre de
     // titre et sa section « Autowin OS » (la veille, partie dans Maintenance) sont retirées ; le
     // Board porte le titre et l'onglet. Racine sans `view-page` : le cadre est celui du Board.
     <div className="tickets-view" data-testid="tickets-view" data-active={active}>

@@ -1,17 +1,17 @@
 /**
- * NAVIGATEUR INTÉGRÉ DU CHAT — le panneau (conv-1286, lot 3/5, 2026-10-29).
+ * NAVIGATEUR INTÉGRÉ DU CHAT — le panneau (lot 3/5, 2026-10-29).
  *
  * Un navigateur posé à côté du fil : la barre d'adresse, les onglets toujours visibles juste dessous,
  * Choisir un élément (un clic, inséré tout de suite dans la saisie), barre d'accord par site quand
  * l'agent veut écrire dans une page.
  *
- * LE CADRE DE PAGE (/draft de conv-1306, « Cadre de page ») : la page prend un cadre ambre quand
+ * LE CADRE DE PAGE (« Cadre de page ») : la page prend un cadre ambre quand
  * l'agent pilote OU attend un accord, avec sa bande en haut et la barre d'accord au pied. La bande
  * est RÉSERVÉE en permanence et vide au repos : elle ne dit que l'état de l'agent, le titre se lit déjà
- * sur l'onglet (conv-1306, 2026-10-30).
+ * sur l'onglet (2026-10-30).
  *
  * LE HAUT DE LA PAGE NE BOUGE JAMAIS : tout ce qui apparaît avec l'agent (accord, boutons du
- * pas-à-pas, frise) vit SOUS la page. Mesuré au-dessus (conv-1306, 2026-10-30, 520 px) : la page
+ * pas-à-pas, frise) vit SOUS la page. Mesuré au-dessus (2026-10-30, 520 px) : la page
  * descendait de 115 px à l'arrivée de l'agent et remontait de 44 px quand le bandeau partait.
  *
  * LA PAGE N'EST PAS DANS LE DOM : c'est une vue Electron posée PAR-DESSUS la fenêtre, au cadre que
@@ -21,7 +21,7 @@
  *
  * Contrat : `src/shared/navigateur.ts` ; API : `window.api.navigateur` (`src/preload/index.d.ts`).
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   ElementChoisiNavigateur,
   EtatNavigateur,
@@ -31,7 +31,7 @@ import type {
 } from '../../../shared/navigateur'
 import { useLangue } from '../langue'
 import { FriseGestesNavigateur } from './FriseGestesNavigateur'
-// fix-ok: cause mesurée (conv-1286) — une fonction exportée par ce fichier fait échouer `eslint`
+// fix-ok: cause mesurée — une fonction exportée par ce fichier fait échouer `eslint`
 // (react-refresh/only-export-components, code 1) : textes et outils vivent dans navigateur-integre-outils.ts.
 import {
   adresseDeLaSaisie,
@@ -49,7 +49,7 @@ import './NavigateurIntegre.css'
 
 // ── Icônes ──────────────────────────────────────────────────────────────────────────────────────
 
-/** Tracés de la maquette Nacre (conv-1306) : trait fin, couleur du texte qui les porte. */
+/** Tracés de la maquette Nacre : trait fin, couleur du texte qui les porte. */
 const TRACES = {
   reculer: <path d="M10 3.5L5.5 8l4.5 4.5" />,
   avancer: <path d="M6 3.5L10.5 8 6 12.5" />,
@@ -163,13 +163,15 @@ export function NavigateurIntegre({
   }
 
   // Un élément choisi part tout de suite dans la saisie.
-  async function livrerElementsChoisis(): Promise<void> {
+  // fix-ok: exhaustive-deps mesuré — ne lit que `rappelsRef` et `conversationId` : stable tant que le
+  // fil ne change pas, donc l'effet d'abonnement qui s'en sert ne se relance pas plus souvent.
+  const livrerElementsChoisis = useCallback(async (): Promise<void> => {
     const elements = (await apiNavigateur()?.prendreElementsChoisis(conversationId)) ?? []
     if (elements.length === 0) return
     for (const element of elements) rappelsRef.current.onElementChoisi(element)
     // Le composer est caché en plein cadre : on revient côte à côte pour montrer l'insertion.
     setPleinCadre(false)
-  }
+  }, [conversationId])
 
   // État du fil : relu à l'ouverture, puis poussé par le processus principal à chaque changement.
   // Un autre fil = un autre montage (`key` posée par la vue chat) : rien à remettre à zéro ici.
@@ -190,9 +192,7 @@ export function NavigateurIntegre({
       vivant = false
       desabonner()
     }
-    // `livrerElementsChoisis` ne lit que des refs et `conversationId`.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId])
+  }, [conversationId, livrerElementsChoisis])
 
   // Le fil à l'écran côté principal : seul l'onglet actif de CE fil peut être visible.
   useEffect(() => {
@@ -607,7 +607,7 @@ export function NavigateurIntegre({
               </div>
             )}
           </div>
-          {/* LA CROIX QUITTE LA BARRE D'ADRESSE (conv-1317, 2026-10-30 : « pas dans la barre d'url la
+          {/* LA CROIX QUITTE LA BARRE D'ADRESSE (2026-10-30 : « pas dans la barre d'url la
               crois dans la barre d'url enleve la ») : dans la capsule, elle semblait effacer
               l'adresse. Au bout de la rangée, elle ferme le panneau, sans doute possible. */}
           <button
@@ -620,7 +620,7 @@ export function NavigateurIntegre({
             <Icone nom="fermer" />
           </button>
         </div>
-        {/* TOUJOURS VISIBLES, juste sous l'adresse (conv-1306, 2026-10-30 : repliés dans un compteur, on
+        {/* TOUJOURS VISIBLES, juste sous l'adresse (2026-10-30 : repliés dans un compteur, on
             ne les trouvait pas). Le « + » reste hors de ce qui défile : quand les onglets débordent, il
             reste à portée. Pas de barre de défilement : la molette verticale fait défiler la rangée. */}
         <div className="navigateur-onglets">

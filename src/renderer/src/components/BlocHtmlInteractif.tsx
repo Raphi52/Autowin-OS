@@ -1,6 +1,6 @@
 /**
  * BLOC ```html-interactif DU FIL — une page HTML dont les scripts TOURNENT (graphique qu'on survole,
- * calculateur, filtre, simulation). Demande conv-1292, 2026-10-29 : « pages visuelles avec du
+ * calculateur, filtre, simulation). Demande, 2026-10-29 : « pages visuelles avec du
  * JavaScript », ce que T3 Code fait et que le ```html-render (rendu dans la page de l'app, sans
  * script) ne peut pas faire.
  *
@@ -14,19 +14,19 @@
  * signale et se pose sans bord sur le fond du fil, comme un ```html-render. Il est monte a sa
  * premiere apparition a l'ecran.
  *
- * LIBERATION (conv-1304, 2026-10-30). Une page qui fait de la 3D tient un contexte WebGL — Chromium
+ * LIBERATION (2026-10-30). Une page qui fait de la 3D tient un contexte WebGL — Chromium
  * en retire au-dela d'une quinzaine — et une animation qui tourne pour rien : elle n'est montee que
  * pres de l'ecran, comme une scene (Bloc3D.tsx). Une page sans 3D (~5 Mo) est liberee plus loin, et
  * seulement si l'utilisateur ne l'a pas touchee : la demonter perdrait ce qu'il y a saisi, que la
  * page n'a pas forcement sauvegarde. Son localStorage, garde par le fil, survit au demontage.
  *
- * MATURITE (conv-1304, 2026-10-30) : une barre discrete sous la page (voir le code, relancer,
+ * MATURITE (2026-10-30) : une barre discrete sous la page (voir le code, relancer,
  * copier le code, agrandir, enregistrer), les avis de la page empiles sans doublon (erreur avec sa
  * ligne DANS LE BLOC et bouton « Corriger », alerte, avertissement), l'avis d'une page figee, et les
  * demandes de la page — copie, lien, ancre, stockage — servies par le fil apres validation
  * (`lireMessagePage`).
  */
-import { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { TYPE_MESSAGE_SCENE_3D } from '../../../shared/scene-3d'
 import { useTextesArtefactsEtBandeaux } from '../textes-ecrans/artefacts-et-bandeaux'
 import {
@@ -65,7 +65,7 @@ const MARGE_LIBERATION = '1500px 0px'
  * Les distances se mesurent depuis le FIL. Depuis la fenetre, `rootMargin` n'agit que sur elle et
  * `scrollMargin` n'elargit que les zones qui defilent : `.chat` et `.chat-layout` sont en
  * `overflow: clip`, la marge s'arretait donc au bord du panneau. Mesure en vrai Chromium
- * (conv-1395) : un carrousel a 686 px de la zone visible etait libere, au lieu de 1500 px.
+ * Un carrousel a 686 px de la zone visible etait libere, au lieu de 1500 px.
  * Hors d'un fil, on garde la fenetre. `scrollMargin` n'est pas encore dans le type de TypeScript.
  */
 const marges = (hote: HTMLElement, marge: string): IntersectionObserverInit => {
@@ -109,14 +109,14 @@ function telecharger(contenu: string, nom: string): void {
 
 export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Element {
   const { t } = useTextesArtefactsEtBandeaux()
-  // Boutons de choix `#autowin-prompt` (conv-1304) : ils REMPLISSENT la saisie, jamais n'envoient.
+  // Boutons de choix `#autowin-prompt` : ils REMPLISSENT la saisie, jamais n'envoient.
   const remplirSaisie = useContext(RemplirSaisieDuFil)
   const hoteRef = useRef<HTMLElement>(null)
   const cadreRef = useRef<HTMLIFrameElement>(null)
   const [monte, setMonte] = useState(() => typeof IntersectionObserver === 'undefined')
   const [hauteur, setHauteur] = useState(HAUTEUR_INITIALE_PAGE)
   const [avis, setAvis] = useState<AvisPage[]>([])
-  // Barre du bloc (conv-1304) : voir le code, relancer la page, copier son code. Le cadre reste
+  // Barre du bloc : voir le code, relancer la page, copier son code. Le cadre reste
   // monte quand on lit le code : ce que l'utilisateur a fait dans la page n'est pas perdu.
   const [voirCode, setVoirCode] = useState(false)
   const [version, setVersion] = useState(0)
@@ -189,20 +189,25 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
     }
   }, [monte, version])
 
-  const enregistrerAvec = (ressources: RessourcesPage): void => {
-    const hote = hoteRef.current
-    if (!hote) return
-    telecharger(
-      pageAutonome({
-        html,
-        style: STYLE_PAGE_INTERACTIVE,
-        theme: lireThemePourPage(hote),
-        titre: titreDePage(html) || t('pageInteractive.cadre'),
-        ressources
-      }),
-      nomFichierDePage(html)
-    )
-  }
+  // fix-ok: exhaustive-deps mesuré — `enregistrerAvec` ne dépend que de `html` et `t`, déjà dans les
+  // dépendances de l'écouteur : la stabiliser ne le réabonne pas plus souvent.
+  const enregistrerAvec = useCallback(
+    (ressources: RessourcesPage): void => {
+      const hote = hoteRef.current
+      if (!hote) return
+      telecharger(
+        pageAutonome({
+          html,
+          style: STYLE_PAGE_INTERACTIVE,
+          theme: lireThemePourPage(hote),
+          titre: titreDePage(html) || t('pageInteractive.cadre'),
+          ressources
+        }),
+        nomFichierDePage(html)
+      )
+    },
+    [html, t]
+  )
 
   useEffect(() => {
     if (!monte) return
@@ -323,9 +328,7 @@ export function BlocHtmlInteractif({ html }: { html: string }): React.JSX.Elemen
     }
     window.addEventListener('message', ecouter)
     return () => window.removeEventListener('message', ecouter)
-    // `enregistrerAvec` ne lit que `html` et `t`, deja dans les dependances.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monte, html, cle, version, t, remplirSaisie])
+  }, [monte, html, cle, version, t, remplirSaisie, enregistrerAvec])
 
   // Vue agrandie : le bloc passe dans la couche superieure du navigateur (`popover`) SANS bouger
   // dans la page. Le deplacer rechargerait le cadre et perdrait ce que l'utilisateur y a fait. Le

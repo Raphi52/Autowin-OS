@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createChatTurn, reduceChatTurn } from './chat-turn'
 
 /**
- * DEFAUT MESURE (capture du 2026-09-04, conv-262 puis conv-246 persistee) : le fil affichait DEUX
+ * DEFAUT MESURE (capture du 2026-09-04, deux conversations persistees) : le fil affichait DEUX
  * blocs « Orchestration » pour UNE seule action — meme `actionId`, meme cible —, l'un muet (aucun
  * detail, aucun chevron), l'autre portant l'issue. Cause : une commande RE-EMISE avec le meme
  * `actionId` (reprise d'un tour dont l'action n'etait pas resolue) etait AJOUTEE au lieu d'etre
