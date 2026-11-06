@@ -1,7 +1,7 @@
 import { appendFileSync, closeSync, existsSync, fstatSync, openSync, readSync } from 'node:fs'
 import { appendFile, open, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 
 /**
  * JOURNAL DES SAISIES — le filet de sécurité du texte tapé par l'utilisateur.

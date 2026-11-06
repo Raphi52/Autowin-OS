@@ -1,5 +1,5 @@
 // fix-ok: cause mesuree - l'en-tete du banc (et la lecon capitalisee) affirmaient qu'une tache simple
-// "ne declenche pas orchestrate" ; lu dans src/main/agent-pilot.ts:1066-1083, seule une phase tapee
+// "ne declenche pas orchestrate" ; lu dans src/main/agent-pilot/agent-pilot.ts:1066-1083, seule une phase tapee
 // explicitement (/scout, /build...) part en orchestration, la difficulte n'entre pas dans la decision
 // (detection auto "verbe + cible" retiree, 25% de justesse sur 251 messages). Le test ci-dessous
 // interdit la reapparition de cette phrase : reinjectee -> 1 echec, retiree -> 5 passes, code 0.
@@ -75,7 +75,7 @@ describe('banc orchestration vs appel nu — la premisse du banc', () => {
   })
 
   it('l en-tete du banc n attribue pas le declenchement de l orchestration a la difficulte', () => {
-    // Lu dans src/main/agent-pilot.ts (~l.1078) : SEULE une phase nommee explicitement
+    // Lu dans src/main/agent-pilot/agent-pilot.ts (~l.1078) : SEULE une phase nommee explicitement
     // (`/scout`, `/build`...) court-circuite vers `orchestrate`. La difficulte de la tache
     // n entre pas dans la decision ; l ancienne heuristique « verbe + cible » est RETIREE.
     const entete = readFileSync(path.join(racine, 'scripts/banc-orchestration-vs-nu.mjs'), 'utf8')
@@ -85,13 +85,13 @@ describe('banc orchestration vs appel nu — la premisse du banc', () => {
 
   it('la tache traverse plusieurs fichiers de code — une tache triviale rend la comparaison vide', () => {
     expect(FICHIERS_CODE.length).toBeGreaterThanOrEqual(3)
-    for (const f of FICHIERS_CODE) expect(existsSync(path.join(racine, f))).toBe(true)
+    for (const f of FICHIERS_CODE) expect(gitDans(racine, ['cat-file', '-t', `${BASE}:${f}`]).trim(), f).toBe('blob')
   })
 
   it('l oracle existe, est distinct du code, et n est pas donne au bras', () => {
     expect(FICHIERS_ORACLE.length).toBeGreaterThan(0)
     for (const f of FICHIERS_ORACLE) {
-      expect(existsSync(path.join(racine, f))).toBe(true)
+      expect(gitDans(racine, ['cat-file', '-t', `${BASE}:${f}`]).trim(), f).toBe('blob')
       expect(FICHIERS_CODE).not.toContain(f)
       expect(ENONCE).not.toContain(path.basename(f))
     }

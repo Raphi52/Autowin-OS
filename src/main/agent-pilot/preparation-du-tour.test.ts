@@ -45,7 +45,7 @@ const DEPLACES: Array<[string, Record<string, unknown>, string, string]> = [
 const lire = (chemin: string): string => readFileSync(chemin, 'utf8').replace(/\r\n/g, '\n')
 
 describe('préparation du tour sortie de chat() (conv-1580, lot 2)', () => {
-  const pilote = lire(join(__dirname, '..', 'agent-pilot.ts'))
+  const pilote = lire(join(__dirname, 'agent-pilot.ts'))
 
   it.each(DEPLACES)(
     '%s porte %s, et chat() n’en garde aucune copie',

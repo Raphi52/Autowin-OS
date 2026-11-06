@@ -150,7 +150,7 @@ export function ligneEtatLancement(actions: ChatActionPart[]): string | undefine
 /**
  * BATTEMENT D'UNE ORCHESTRATION, decoupe pour la capsule (conv-194, 2026-10-10, capsule 2 « Phase
  * dans la capsule »). Le processus principal l'ecrit `<duree> · <phase> · <dernier fait>`
- * (`battementDOrchestration`, src/main/verify-battement.ts), la duree au format de `dureeCourte` :
+ * (`battementDOrchestration`, src/main/verify/verify-battement.ts), la duree au format de `dureeCourte` :
  * « 45 s », « 3 min », « 4 min 12 s ».
  *
  * La capsule affiche deja la duree (pastille) et la phase (en rose) : les laisser en tete de la

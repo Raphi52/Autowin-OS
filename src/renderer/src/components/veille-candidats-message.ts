@@ -691,7 +691,7 @@ function sansAccents(texte: string): string {
 /**
  * Les déclarations de cible d'un scout ; `null` s'il n'en pose aucune.
  *
- * DEUX formes, les mêmes que `lireCibleScout` (src/main/scout-cible.ts) : une ligne `CIBLE:`/
+ * DEUX formes, les mêmes que `lireCibleScout` (src/main/scout/scout-cible.ts) : une ligne `CIBLE:`/
  * `CIBLES:`, ou une section `## Cible` non vide. N'en reconnaître qu'une rendait le pont inerte sur
  * la forme la plus courante — le scout déclarait, le panneau restait « tout coché ».
  *

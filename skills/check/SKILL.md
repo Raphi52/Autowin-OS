@@ -30,7 +30,7 @@ aucune preuve, il **reste** en « À vérifier » : l'utilisateur tranche alors 
      langage en a un ;
    - interface → le test du composant ; dans Autowin, plus une capture `node scripts/ui-capture.mjs
      --code-dev` que tu LIS ;
-   - skill, document, réglage → le test qui le garde (ex. `src/main/kit-cliquets.test.ts` pour une
+   - skill, document, réglage → le test qui le garde (ex. `src/main/skills/kit-cliquets.test.ts` pour une
      skill), sinon un script de contrôle qui rend un code de sortie ;
    - réponse sans artefact (question, avis, explication) → **rien à rejouer**. Dis-le en une ligne
      et ne fabrique pas de preuve : le post-it reste « À vérifier ».

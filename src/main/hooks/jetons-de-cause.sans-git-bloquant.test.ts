@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolve, sep } from 'node:path'
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, sep } from 'node:path'
 
 // Gel mesuré (gels.jsonl) : 17 gels du process principal dans `lignesAjouteesAuDernierChangement`,
 // qui lançait git en `execFileSync`. Le jeton doit toujours être trouvé, sans appel git bloquant.
@@ -13,7 +15,11 @@ import { jetonsDeCauseParFichier } from './default-gate-hooks'
 
 describe('jetonsDeCauseParFichier — source 3 sans git bloquant', () => {
   it('credite le jeton sur disque sans execFileSync', async () => {
-    const cible = resolve(process.cwd(), 'src/main/hooks/default-gate-hooks.ts').split(sep).join('/')
+    // Fichier jetable non suivi : ne dépend pas du dernier commit du vrai fichier.
+    const dossier = realpathSync.native(mkdtempSync(join(tmpdir(), 'aw-jeton-')))
+    cp.execFileSync('git', ['init', '-q'], { cwd: dossier, windowsHide: true })
+    const cible = join(dossier, 'corrige.ts').split(sep).join('/')
+    writeFileSync(cible, '// fix-ok: essai, la cause est nommee\nexport const x = 1\n', 'utf8')
     vi.mocked(cp.execFileSync).mockClear()
     expect(await jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
     expect(vi.mocked(cp.execFileSync)).not.toHaveBeenCalled()

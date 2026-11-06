@@ -1,7 +1,7 @@
 // Émission des évènements d'un tour de chat : rappel protégé, lien de reprise des échecs et
 // anti-collage des deltas. Sorti tel quel de AgentPilot.chat() (conv-1580, lot 2).
-import { cleDEchec } from '../chat-turn-messages'
-import { protegerRappel } from '../observabilite-non-bloquante'
+import { cleDEchec } from '../chat/chat-turn-messages'
+import { protegerRappel } from '../gel/observabilite-non-bloquante'
 import { DeltaCollageTracker, detacherFenceCollee } from './collage-des-deltas'
 import type { PilotEvent, PilotEventVariant } from './evenements'
 

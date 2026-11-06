@@ -10,7 +10,7 @@ $manifest = Get-Content -Raw (Join-Path $projectRoot 'package.json') | ConvertFr
 $devCommand = $manifest.scripts.dev
 # --watch a ete RETIRE volontairement du script `dev` au commit 447b85d4 : il redemarrait le
 # processus principal en pleine session et tuait Electron pendant le travail (2 runs utilisateur
-# perdus). Ce controle s'aligne donc sur le comportement voulu, comme src/main/dev-sans-watch.test.ts.
+# perdus). Ce controle s'aligne donc sur le comportement voulu, comme src/main/app/dev-sans-watch.test.ts.
 Assert-True ($devCommand -eq 'electron-vite dev') 'dev must start electron-vite without any watch loop'
 Assert-True (-not ($devCommand -match '--watch')) 'dev must not carry --watch: it kills the running main process'
 

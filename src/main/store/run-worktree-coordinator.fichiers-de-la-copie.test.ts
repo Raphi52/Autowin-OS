@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
-import type { RunWorktrees } from '../orchestrator'
+import type { RunWorktrees } from '../orchestration/orchestrator'
 
 /*
  * La porte « livraison par Git externe » de l'orchestrateur exige une copie SANS fichier. Elle lisait
@@ -59,7 +59,7 @@ describe('coordinateur — fichiers réellement changés dans la copie', () => {
     const mesure: RunWorktrees['fichiersChangesDeLaCopie'] =
       coordinateur({}).fichiersChangesDeLaCopie
     expect(typeof mesure).toBe('function')
-    const os = readFileSync(new URL('../os.ts', import.meta.url), 'utf8')
+    const os = readFileSync(new URL('../app/os.ts', import.meta.url), 'utf8')
     expect(os).toMatch(/readonly worktrees\?: RunWorktreeCoordinator/)
     expect(os).toMatch(/worktrees: this\.worktrees/)
   })

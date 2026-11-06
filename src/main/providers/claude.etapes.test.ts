@@ -19,8 +19,8 @@ const spawnCapture = vi.hoisted(() => ({
 }))
 // Le dossier de config du tour vient du COMPTE actif (withClaudeAccountEnv), pas de process.env :
 // sans ce double, le test lirait le vrai `~/.claude/tasks` du poste.
-vi.mock('../claude-accounts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../claude-accounts')>()),
+vi.mock('./claude-accounts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./claude-accounts')>()),
   withClaudeAccountEnv: (base: Record<string, string | undefined>) => ({
     ...base,
     CLAUDE_CONFIG_DIR: spawnCapture.configDir

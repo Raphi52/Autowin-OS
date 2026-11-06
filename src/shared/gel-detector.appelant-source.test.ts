@@ -48,7 +48,7 @@ describe('le build du process principal emet des cartes de sources', () => {
     const cibleMain = config.slice(config.indexOf('main:'), config.indexOf('preload:'))
     expect(cibleMain).toContain('sourcemap: true')
 
-    const gelMain = readFileSync('src/main/gel-main.ts', 'utf8')
+    const gelMain = readFileSync('src/main/gel/gel-main.ts', 'utf8')
     expect(gelMain).toContain('setSourceMapsEnabled')
   })
 })

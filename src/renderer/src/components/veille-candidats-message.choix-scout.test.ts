@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { lireMemoireScout, noterChoixScout, noterPistesScout } from '../../../main/scout-memoire'
+import { lireMemoireScout, noterChoixScout, noterPistesScout } from '../../../main/scout/scout-memoire'
 import { parseScoutTable } from '../../../shared/scout-table'
 import {
   candidatsDepuisScoutTable,

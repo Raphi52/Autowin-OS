@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolve, sep } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve, sep } from 'node:path'
 import { jetonsDeCauseParFichier, createDefaultHookBus } from './default-gate-hooks'
 import type { HookContext } from './hook-bus'
 import type { ExecutionEvidence } from '../providers/types'
@@ -155,7 +158,7 @@ describe('fix-gate — ARME, et un run iteratif LEGITIME passe', () => {
 
   /*
    * conv-540, tour 4dfe2821-f6da-4cd9-8cb8-7afba10d3df4 (puis ses reparations) : la ligne
-   * `// fix-ok:` etait bien DANS src/main/orchestrator.ts, et le refus « 6 edits sans cause
+   * `// fix-ok:` etait bien DANS src/main/orchestration/orchestrator.ts, et le refus « 6 edits sans cause
    * verifiee » revenait quand meme. La preuve de mutation reelle (workspace_delta) ne porte
    * jamais `diff` : seulement les empreintes des lignes ecrites. Le jeton se lit donc sur le
    * disque, et ne compte que si SA ligne fait partie des lignes ecrites par le run.
@@ -164,7 +167,7 @@ describe('fix-gate — ARME, et un run iteratif LEGITIME passe', () => {
     const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs')
     const { tmpdir } = await import('node:os')
     const { join } = await import('node:path')
-    const { exactLineFingerprint } = await import('../exact-line-fingerprint')
+    const { exactLineFingerprint } = await import('../fichiers/exact-line-fingerprint')
     const root = mkdtempSync(join(tmpdir(), 'autowin-jeton-disque-'))
     mkdirSync(join(root, 'src/main'), { recursive: true })
     const ancien = '// fix-ok: jeton d un AUTRE run, deja present'
@@ -196,7 +199,7 @@ describe('fix-gate — ARME, et un run iteratif LEGITIME passe', () => {
 describe('fix-gate — la boucle refus -> geste dicte -> levee se referme', () => {
   it('appliquer a la lettre le geste nomme par le refus leve le refus', async () => {
     const { detectBlindFixLoop } = await import('../gates/hooks')
-    const edits = { 'src/main/objections-juge.ts': 4 }
+    const edits = { 'src/main/juge/objections-juge.ts': 4 }
     const [refus] = detectBlindFixLoop(edits, {})
     expect(refus).toBeDefined()
     const geste = /dépose dans (\S+) un commentaire `(fix-ok:)/.exec(refus.detail)
@@ -212,15 +215,28 @@ describe('fix-gate — la boucle refus -> geste dicte -> levee se referme', () =
  * SOURCE 3 — le jeton DEJA present dans le fichier edite.
  *
  * Mesure conv-597, tour 4e502786-4887-4101-85b3-ea2dee304091 : le refus fix-gate demandait
- * « depose dans src/main/root-execution-contract.ts un commentaire `fix-ok:` ». Le jeton a ete
+ * « depose dans src/main/gardes/root-execution-contract.ts un commentaire `fix-ok:` ». Le jeton a ete
  * depose (commit a9126f34), et le MEME refus est revenu au tour suivant : le compte d'edits est
  * CUMULE sur la session, alors que la source 1 ne credite le jeton que s'il fait partie des
  * lignes ecrites par CE run-ci. Un jeton depose a une reparation ne desarmait donc jamais la
  * suivante — la porte de sortie promise par le message du refus etait murée.
  */
+/**
+ * Un fichier NON SUIVI d'un dépôt jetable qui porte un `fix-ok:` — toutes ses lignes comptent comme
+ * ajoutées. Lire le vrai `default-gate-hooks.ts` liait ces tests à son dernier commit : le rangement
+ * de src/main, qui n’y change qu’un import, les faisait rougir.
+ */
+function fichierAvecJeton(): string {
+  const dossier = realpathSync.native(mkdtempSync(join(tmpdir(), 'aw-jeton-')))
+  execFileSync('git', ['init', '-q'], { cwd: dossier, windowsHide: true })
+  const fichier = join(dossier, 'corrige.ts')
+  writeFileSync(fichier, '// fix-ok: essai, la cause est nommee\nexport const x = 1\n', 'utf8')
+  return fichier.split(sep).join('/')
+}
+
 describe('jetonsDeCauseParFichier — source 3 : le jeton deja dans le fichier edite', () => {
   it('credite un fichier edite qui porte deja son jeton sur disque', async () => {
-    const cible = 'src/main/hooks/default-gate-hooks.ts'
+    const cible = fichierAvecJeton()
     expect(await jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
   })
   it('ne credite pas un fichier edite sans jeton', async () => {
@@ -230,7 +246,7 @@ describe('jetonsDeCauseParFichier — source 3 : le jeton deja dans le fichier e
     expect(await jetonsDeCauseParFichier(undefined, [], ['src/main/neant-xyz.ts'])).toEqual({})
   })
   it('credite le MEME fichier nomme par son chemin ABSOLU Windows (conv-597)', async () => {
-    const cible = resolve(process.cwd(), 'src/main/hooks/default-gate-hooks.ts').split(sep).join('/')
+    const cible = resolve(fichierAvecJeton()).split(sep).join('/')
     expect(await jetonsDeCauseParFichier(undefined, [], [cible])).toEqual({ [cible]: true })
   })
 })

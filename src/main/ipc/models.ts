@@ -14,14 +14,14 @@
  * comme lecteurs, jamais comme valeurs.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { assertRuntimeTopologyAvailable } from '../runtime-topology'
-import { buildModelQuotaSnapshot, getModelQuotaSnapshot, invalidateModelQuotaCache } from '../model-quotas'
-import { claimClaudeReset, readClaudeResets } from '../claude-resets'
-import { guardString } from '../ipc-guards'
-import type { AgentTopology } from '../topology'
-import type { ImportedModel } from '../models'
-import type { AutowinOS } from '../os'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { assertRuntimeTopologyAvailable } from '../topologie/runtime-topology'
+import { buildModelQuotaSnapshot, getModelQuotaSnapshot, invalidateModelQuotaCache } from '../modeles/model-quotas'
+import { claimClaudeReset, readClaudeResets } from '../providers/claude-resets'
+import { guardString } from './ipc-guards'
+import type { AgentTopology } from '../topologie/topology'
+import type { ImportedModel } from '../modeles/models'
+import type { AutowinOS } from '../app/os'
 
 /** Ce que les canaux du catalogue prenaient dans `index.ts` — désormais passé explicitement. */
 export type ModelsIpcDeps = {

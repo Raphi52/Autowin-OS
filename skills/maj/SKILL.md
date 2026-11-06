@@ -22,7 +22,7 @@ traite ce préfixe comme un travail d'agent à publier).
 
 ## Contrôle d'entrée
 
-- La raison citée vient de `src/main/git-update.ts`. Elle peut proposer `git stash` : cette phrase
+- La raison citée vient de `src/main/git/git-update.ts`. Elle peut proposer `git stash` : cette phrase
   s'adresse à un humain. Pour toi, la mise de côté passe par l'étape 3.
 - Le dépôt est Autowin OS, branche `main`. Un autre dépôt n'est pas le sujet de cette skill.
 

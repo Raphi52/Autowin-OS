@@ -13,9 +13,9 @@ Un bras pourrait donc etre declare gagnant par un vert qu il n a pas produit. Ec
 raison, PAS parce que le defaut serait faux : il reste a corriger (la falsification de
 `realCanonique` doit cesser de parier sur un crash de la plateforme).
 
-## 2. `src/main/run-autoclose.test.ts` — 3 rouges dans la suite, VERT en isolation
+## 2. `src/main/runs/run-autoclose.test.ts` — 3 rouges dans la suite, VERT en isolation
 
-`npx vitest run src/main/run-autoclose.test.ts` : 29/29 verts, exit 0. Les 3 rouges de la suite
+`npx vitest run src/main/runs/run-autoclose.test.ts` : 29/29 verts, exit 0. Les 3 rouges de la suite
 complete viennent de la contention et du nettoyeur de dossiers temporaires (`git init -b travail`
 echoue sur « .git/refs: No such file or directory »), pas du code teste. Reproduire ce rouge
 demanderait les 272 s de la suite entiere : inutilisable comme critere.

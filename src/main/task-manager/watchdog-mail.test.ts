@@ -12,7 +12,7 @@ import {
   seedMailWatchdogTask
 } from './watchdog-mail'
 import type { ScheduledTask, TaskOccurrence } from './types'
-import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 const mail = (id: string, nonLu = true) => ({ id, nonLu, sujet: 's', corps: 'c' })
 const snap = (...mails: unknown[]) => ({ ok: true, mails })

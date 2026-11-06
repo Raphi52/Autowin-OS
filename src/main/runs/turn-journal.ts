@@ -18,7 +18,7 @@ import {
   type GestesDesTours,
   type GestesDuTour
 } from '../../shared/gestes-agent'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * Journal de TOUR (append-only, une ligne JSON par événement) — socle de la survie niveau 2 :

@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs'
-import type { OrchestrationStep } from '../orchestrator'
+import type { OrchestrationStep } from '../orchestration/orchestrator'
 
 /**
  * LE PLAN DU BUILD, RELISIBLE DANS LE RUN.md (conv-1083, 2026-10-22).

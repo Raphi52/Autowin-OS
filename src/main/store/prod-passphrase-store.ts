@@ -23,7 +23,7 @@
  */
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { EmpreintePhrase } from '../prod-passphrase'
+import type { EmpreintePhrase } from '../prod/prod-passphrase'
 
 export function cheminEmpreinteProd(racine: string): string {
   return join(racine, 'prod-passphrase.json')

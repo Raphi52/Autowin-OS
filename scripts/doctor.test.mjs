@@ -95,7 +95,7 @@ beforeEach(() => {
   poser('.claude/settings.json', {
     hooks: { PreToolUse: [{ hooks: [{ args: ['${CLAUDE_PROJECT_DIR}/scripts/existe.mjs'] }] }] }
   })
-  poser('src/main/context-files.ts', 'export const PROJECT_CONTEXT_MAX_BYTES = 32_768\n')
+  poser('src/main/consignes/context-files.ts', 'export const PROJECT_CONTEXT_MAX_BYTES = 32_768\n')
   poser('skills/build/SKILL.md', '---\nname: build\ndescription: >-\n  Répare un défaut.\n---\n')
   poser('src/main/providers/claude.ts', "const mode = 'bypassPermissions'\n")
   poser('src/main/gates/stopgate.ts', '')
@@ -454,7 +454,7 @@ describe('doctor — un poste qu’on ne peut pas mesurer n’est pas un poste s
   })
 
   it('plafond de AGENTS.md introuvable : inconnu, pas un « ok » calculé sur NaN', () => {
-    poser('src/main/context-files.ts', 'export const AUTRE = 1\n')
+    poser('src/main/consignes/context-files.ts', 'export const AUTRE = 1\n')
     expect(constat(diagnostic(), 'charge-permanente').statut).toBe('inconnu')
   })
 

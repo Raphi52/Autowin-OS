@@ -25,7 +25,7 @@ function record(root: string, overrides: Partial<WorktreeRunRecord> = {}): Workt
     baseSha: '1'.repeat(40),
     verdict: 'red',
     publication: 'not-requested',
-    files: [{ path: 'src/main/os.ts', kind: 'mod' }],
+    files: [{ path: 'src/main/app/os.ts', kind: 'mod' }],
     createdAtMs: 10,
     updatedAtMs: 20,
     ...overrides

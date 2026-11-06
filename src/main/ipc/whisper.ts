@@ -17,8 +17,8 @@
  * rien n'est téléchargé ni lu sur le disque tant que personne ne dicte.
  */
 import { ipcMain } from 'electron'
-import type { ServiceWhisper } from '../whisper-local'
-import { assertTrustedRendererSender } from '../ipc-senders'
+import type { ServiceWhisper } from '../media/whisper-local'
+import { assertTrustedRendererSender } from './ipc-senders'
 
 export type WhisperIpcDeps = {
   /** Lecteur, pas valeur : le service n'est construit qu'au premier appel. */

@@ -25,7 +25,7 @@ param(
   [int]$SurvieSecondes = 6,
   # RELIE LE BUREAU A SON TRAVAIL : la petite TV de la conversation affiche ce libelle et filtre
   # sur la conversation. Ecrit dans %LOCALAPPDATA%\autowin-hdesk\<id>.json — hors du depot : un agent lance depuis
-  # une copie de travail doit etre vu par l'app (voir src/main/hdesk-tv.ts).
+  # une copie de travail doit etre vu par l'app (voir src/main/bureau/hdesk-tv.ts).
   # OBLIGATOIRES (2026-09-13) : optionnels, ils etaient oublies et la TV montrait des onglets
   # « travail non relie ». Un bureau sans fil n'est plus lancable.
   [Parameter(Mandatory = $true)][ValidateNotNullOrEmpty()][string]$Travail,

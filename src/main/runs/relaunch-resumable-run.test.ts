@@ -5,9 +5,9 @@ import { join } from 'node:path'
 import { admitAutomaticResumeRuntime, type OrchestrationRunState } from './orchestration-state'
 import { creerRelanceDeRunReprenable, type DependancesDeRelance } from './relaunch-resumable-run'
 import { loadConvRunTrace, saveConvRunTrace, statutDuRunMd } from './conv-runs'
-import { causeDInterruption } from '../classe-terminale-echec'
-import { supprimerArbre } from '../fs-supprimer'
-import { CoordinateurDesPlans, type DepsPlans } from '../plans-de-lots-app'
+import { causeDInterruption } from '../orchestration/classe-terminale-echec'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { CoordinateurDesPlans, type DepsPlans } from '../orchestration/plans-de-lots-app'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
 
 /**

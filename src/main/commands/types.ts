@@ -7,11 +7,11 @@
  */
 
 import type { Message } from '../providers/types'
-import type { SchemaArgument } from '../skill-node-mcp'
+import type { SchemaArgument } from '../skills/skill-node-mcp'
 import type { ChatArtifact } from '../../shared/artifacts'
 import type { AppDestination } from '../../shared/navigation'
 import type { HypotheseDeCadrage } from '../../shared/cadrage-confiance'
-import type { OrchestrationStep, OrchestrationPhase } from '../orchestrator'
+import type { OrchestrationStep, OrchestrationPhase } from '../orchestration/orchestrator'
 
 /**
  * Bus de commandes de l'app — le PLAN DE CONTRÔLE que les agents pilotent.

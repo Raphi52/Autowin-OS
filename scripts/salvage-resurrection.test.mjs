@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { detecterResurrection } from './salvage-resurrection.mjs'
-import { supprimerArbre } from '../src/main/fs-supprimer'
+import { supprimerArbre } from '../src/main/fichiers/fs-supprimer'
 
 const aNettoyer = []
 afterEach(() => {

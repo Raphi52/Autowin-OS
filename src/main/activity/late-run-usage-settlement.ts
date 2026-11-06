@@ -1,5 +1,5 @@
 import type { RunLifecycleEvent } from '../../shared/run-execution'
-import { sameExecutionUsage, type ExecutionUsageSnapshot } from '../execution-supervisor'
+import { sameExecutionUsage, type ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 
 type ClosureLifecycle = Extract<RunLifecycleEvent, { stage: 'closure' }>
 

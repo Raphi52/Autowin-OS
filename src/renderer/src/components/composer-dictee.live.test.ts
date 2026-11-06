@@ -16,7 +16,7 @@ import { mkdirSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { creerServiceWhisper } from '../../../main/whisper-local'
+import { creerServiceWhisper } from '../../../main/media/whisper-local'
 import { Dictee, type DependancesDictee } from './composer-dictee'
 
 const RACINE = join(tmpdir(), 'autowin-whisper-live')

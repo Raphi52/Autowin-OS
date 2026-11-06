@@ -1258,14 +1258,14 @@ describe('sous-agent de run — prompt, retour et cause d’échec', () => {
           outcome: 'blocked',
           rawOutcome: 'blocked',
           reason: 'base-dirty',
-          files: ['src/main/orchestrator.ts']
+          files: ['src/main/orchestration/orchestrator.ts']
         }
       }
     })
     const events = projeter([workspace, cleanEnEchec, git, cloture(4)])
     const noeudGit = events.find((event) => event.display?.kind === 'git')
     const attendu =
-      'Travail non publié : des fichiers non committés de la base bloquent la publication — fichiers en cause : src/main/orchestrator.ts'
+      'Travail non publié : des fichiers non committés de la base bloquent la publication — fichiers en cause : src/main/orchestration/orchestrator.ts'
 
     expect(noeudGit?.status).toBe('failed')
     expect(noeudGit?.display?.failure).toBe(attendu)

@@ -3,7 +3,7 @@
 // agent-pilot.ts (conv-1580, lot 1).
 import type { Message } from '../providers/types'
 import { captureMutationTraceBase } from '../activity/trace-workspace-mutation'
-import { nativeSkills } from '../native-registry'
+import { nativeSkills } from '../app/native-registry'
 
 /**
  * CAP D'ITÉRATIONS d'un tour de chat — UNE seule valeur par défaut, exportée.

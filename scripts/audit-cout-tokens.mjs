@@ -38,7 +38,7 @@ const fichiersConv = (sous) => {
 
 // --- Mesures -----------------------------------------------------------------
 const roles = JSON.parse(readFileSync(join(dataDir, 'roles.json'), 'utf8'))
-const sourceRoles = readFileSync(join(repoDir, 'src/main/roles.ts'), 'utf8')
+const sourceRoles = readFileSync(join(repoDir, 'src/main/profil/roles.ts'), 'utf8')
 const defautCode = /claude:\s*\{[^}]*model:\s*'([^']+)'/.exec(sourceRoles)?.[1] ?? null
 
 let routeOpus = 0
@@ -125,7 +125,7 @@ const constats = [
       roles.orchestrator?.model === 'claude-opus-5' &&
       defautCode !== null &&
       defautCode !== 'claude-opus-5',
-    vu: `roles.json=${roles.orchestrator?.model} / défaut src/main/roles.ts=${defautCode}`
+    vu: `roles.json=${roles.orchestrator?.model} / défaut src/main/profil/roles.ts=${defautCode}`
   },
   {
     nom: 'le classement des conversations pèse ≥ 1000 appels opus-5 et ≥ 25 $',

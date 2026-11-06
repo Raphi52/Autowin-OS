@@ -1,5 +1,5 @@
 /**
- * BANC DE LA REQUÊTE des notes Brain proches (src/main/brain-titres-du-tour.ts), sur le Brain VIVANT.
+ * BANC DE LA REQUÊTE des notes Brain proches (src/main/brain/brain-titres-du-tour.ts), sur le Brain VIVANT.
  *
  * Pourquoi (conv-1303, 2026-10-30) : `scripts/banc-notes-proches-usage.mjs` a montré que le TRI n'est
  * pas en cause — sur 75 notes ouvertes hors du bloc, 57 n'étaient même pas parmi les candidats, et 54
@@ -25,9 +25,9 @@
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { retrieveBrainContext, type BrainRetrievalResult } from '../src/main/brain-retrieval'
-import { brainCorpusForWorkspace, scopeBrainRetrieval } from '../src/main/brain-corpus-scope'
-import { POINT_TITRES_DU_TOUR, selectionnerTitres } from '../src/main/brain-titres-du-tour'
+import { retrieveBrainContext, type BrainRetrievalResult } from '../src/main/brain/brain-retrieval'
+import { brainCorpusForWorkspace, scopeBrainRetrieval } from '../src/main/brain/brain-corpus-scope'
+import { POINT_TITRES_DU_TOUR, selectionnerTitres } from '../src/main/brain/brain-titres-du-tour'
 import { replierComplet } from '../src/shared/mots'
 
 const args = process.argv.slice(2)

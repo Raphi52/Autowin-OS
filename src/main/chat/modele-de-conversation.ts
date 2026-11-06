@@ -10,9 +10,9 @@
  * On le revalide donc au départ du tour. Un choix devenu indisponible n'est PAS avalé : l'appelant
  * reçoit le motif et l'écrit dans le fil avant de partir sur le modèle par défaut.
  */
-import type { ImportedModel } from '../models'
-import type { ReasoningEffort, RoleBinding } from '../roles'
-import { assertRuntimeBindingAvailable } from '../runtime-topology'
+import type { ImportedModel } from '../modeles/models'
+import type { ReasoningEffort, RoleBinding } from '../profil/roles'
+import { assertRuntimeBindingAvailable } from '../topologie/runtime-topology'
 import type { ModeleDeConversation } from '../store/conversations'
 
 export type ModeleDuTour =

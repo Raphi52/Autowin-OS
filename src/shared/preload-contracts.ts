@@ -69,7 +69,7 @@ export interface NativePreflightTrace {
 
 /** Le dossier de travail : le dépôt sur lequel les runs s'exécutent (vu depuis l'interface). */
 /**
- * Le Brain renseigné dans les Réglages : un chemin et/ou un dépôt git (`src/main/brain-reglage.ts`).
+ * Le Brain renseigné dans les Réglages : un chemin et/ou un dépôt git (`src/main/brain/brain-reglage.ts`).
  * Sans dépôt, c'est un simple dossier : Autowin n'y lance aucune commande git.
  */
 export interface BrainReglageState {

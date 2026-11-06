@@ -15,14 +15,14 @@
  * catalogue serait validé contre le catalogue du démarrage.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { topologyWithRuntimeRole } from '../runtime-topology'
-import type { AgentTopology } from '../topology'
-import type { ImportedModel } from '../models'
-import type { PetitesTachesEtat, Role, ReasoningEffort } from '../roles'
-import type { AutowinOS } from '../os'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { topologyWithRuntimeRole } from '../topologie/runtime-topology'
+import type { AgentTopology } from '../topologie/topology'
+import type { ImportedModel } from '../modeles/models'
+import type { PetitesTachesEtat, Role, ReasoningEffort } from '../profil/roles'
+import type { AutowinOS } from '../app/os'
 import { bindingDeModele, validerModeleDeConversation } from '../chat/modele-de-conversation'
-import { assertRuntimeBindingAvailable } from '../runtime-topology'
+import { assertRuntimeBindingAvailable } from '../topologie/runtime-topology'
 
 /** Ce que les canaux des rôles prenaient dans `index.ts` — désormais passé explicitement. */
 export type RolesIpcDeps = {

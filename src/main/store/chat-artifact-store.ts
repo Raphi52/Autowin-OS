@@ -11,8 +11,8 @@ import { createHash } from 'node:crypto'
 import { basename, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import type { ArtifactEncoding, ChatArtifact } from '../../shared/artifacts'
 import type { Conversation } from './conversations'
-import { ensureAutowinAppData } from '../app-data'
-import { supprimerArbre } from '../fs-supprimer'
+import { ensureAutowinAppData } from '../app/app-data'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 export const MAX_PERSISTED_ARTIFACT_BYTES = 256 * 1024 * 1024
 export const MAX_ARTIFACT_PREVIEW_BYTES = 16 * 1024 * 1024

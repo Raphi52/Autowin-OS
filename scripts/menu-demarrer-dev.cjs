@@ -4,7 +4,7 @@
  *
  * Constaté le 2026-10-15 (conv-954) : l'icône Autowin du menu Démarrer ouvrait la page d'accueil
  * d'Electron au lieu d'Autowin OS. Ce raccourci, l'app le pose elle-même au démarrage
- * (src/main/raccourci-demarrer-dev.ts) parce qu'Electron l'exige pour les notifications et que la
+ * (src/main/app/raccourci-demarrer-dev.ts) parce qu'Electron l'exige pour les notifications et que la
  * barre des tâches lui prend son icône. Electron le contrôle (`ExistingShortcutValid`) : sa CIBLE
  * doit rester l'exe qui fait tourner l'app, sinon il le réécrit, sans icône. Or cet exe, lancé SANS
  * argument, ouvre l'application par défaut d'Electron (`resources/default_app.asar`).

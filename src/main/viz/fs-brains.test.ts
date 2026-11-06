@@ -27,7 +27,7 @@ import {
   scanBrainGraphs,
   searchVaultBrainNotesAsync
 } from './fs-brains'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * Domaine metier FICTIF (conv-916), de la meme forme que celui d'un profil d'entreprise : le code ne

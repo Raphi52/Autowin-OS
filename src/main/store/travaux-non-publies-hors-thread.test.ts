@@ -12,7 +12,7 @@ describe('travaux non publies — hors du thread main', () => {
     const recensement = vi.fn(async () => ({
       ids: ['a'],
       apercu: [
-        { agentId: 'a', date: '2026-09-03', fichiers: ['src/main/os.ts'] },
+        { agentId: 'a', date: '2026-09-03', fichiers: ['src/main/app/os.ts'] },
         { agentId: 'deja-trie', date: '', fichiers: [] }
       ]
     }))
@@ -28,7 +28,7 @@ describe('travaux non publies — hors du thread main', () => {
 
     expect(recensement).toHaveBeenCalledWith('HEAD', 100)
     expect(apercuSync).not.toHaveBeenCalled()
-    expect(rendu).toEqual([{ agentId: 'a', date: '2026-09-03', fichiers: ['src/main/os.ts'] }])
+    expect(rendu).toEqual([{ agentId: 'a', date: '2026-09-03', fichiers: ['src/main/app/os.ts'] }])
   })
 
   it('sans worker, rend la meme reponse par la voie synchrone', async () => {

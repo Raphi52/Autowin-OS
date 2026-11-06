@@ -49,7 +49,7 @@ describe('run suspendu par le mur de quota', () => {
 
   it('copie PLEINE : ni libérée ni classée triée, et le motif est dit (sync et async)', async () => {
     for (const asynchrone of [false, true]) {
-      const { manager, preserverEtLiberer, marquerTravailTrie } = managerDouble(['src/main/os.ts'])
+      const { manager, preserverEtLiberer, marquerTravailTrie } = managerDouble(['src/main/app/os.ts'])
       const co = new RunWorktreeCoordinator({ manager, nowFn: () => 1 })
       co.begin('run-mur', 'Run coupé en phase clean', true)
       if (asynchrone) await co.endAsync('run-mur', { merge: false, suspendu: true })

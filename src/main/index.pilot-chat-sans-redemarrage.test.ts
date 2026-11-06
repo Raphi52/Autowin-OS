@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from './app/source-process-principal.test-helpers'
 
 /*
  * LE TOUR DE CHAT NE REDEMARRE PLUS L'APP POUR CHANGER DE DOSSIER.

@@ -79,8 +79,8 @@ describe('la garde de vivacité a besoin de l’empreinte pour garder quoi que c
        * Ce test vidait `process.env.PATH` pour faire echouer la sonde PowerShell. Mais `process.env`
        * est PARTAGE par tous les fichiers de test qui tournent dans le meme worker vitest : pendant
        * cette fenetre, les voisins ne trouvaient plus leurs binaires. Mesure du 2026-09-07
-       * (conv-336) : `src/main/e2e-chaine.test.ts` echouait sur `spawnSync git ENOENT` et
-       * `src/main/e2e-chaine.harness.test.ts` sur `git rev-parse refs/heads/HEAD` dans la suite
+       * (conv-336) : `src/main/orchestration/e2e-chaine.test.ts` echouait sur `spawnSync git ENOENT` et
+       * `src/main/orchestration/e2e-chaine.harness.test.ts` sur `git rev-parse refs/heads/HEAD` dans la suite
        * complete, alors que les deux passent en isolation. La copie de travail isolee naissait donc
        * ROUGE, ce qui refusait toute edition verifiee sans aucun rapport avec elle.
        *
@@ -112,7 +112,7 @@ describe('la garde de vivacité a besoin de l’empreinte pour garder quoi que c
  * Elle est volontairement étroite — elle échoue si la dépendance disparaît, et rien d'autre.
  */
 describe('câblage — l’orchestrateur capture bien l’empreinte au lancement', () => {
-  const source = readFileSync('src/main/os.ts', 'utf8')
+  const source = readFileSync('src/main/app/os.ts', 'utf8')
 
   it('les dépendances de l’orchestrateur incluent `processIdentity`', () => {
     expect(source).toMatch(/processIdentity:\s*defaultProcessIdentity/)
@@ -120,7 +120,7 @@ describe('câblage — l’orchestrateur capture bien l’empreinte au lancement
 
   it('et la sonde est bien importée, pas seulement nommée', () => {
     expect(source).toMatch(
-      /import\s*\{[^}]*defaultProcessIdentity[^}]*\}\s*from\s*'\.\/store\/worktree-manager'/
+      /import\s*\{[^}]*defaultProcessIdentity[^}]*\}\s*from\s*'\.\.\/store\/worktree-manager'/
     )
   })
 })

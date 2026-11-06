@@ -2,7 +2,7 @@
 /**
  * PILOTER AUTOWIN DEPUIS UN SCRIPT DU POSTE (conv-1144).
  *
- * Parle au point d'entrée local de l'app (`src/main/point-entree-local.ts`), par le même protocole
+ * Parle au point d'entrée local de l'app (`src/main/app/point-entree-local.ts`), par le même protocole
  * que les outils du chat (JSON-RPC MCP sur HTTP, en loopback, jeton obligatoire). L'adresse et le
  * jeton sont lus dans `point-entree-local.json`, dans le dossier de données de l'instance visée.
  *
@@ -43,7 +43,7 @@ export const CODES = Object.freeze({
   questionPosee: 10
 })
 
-/** Statuts d'un tour arrêté sans panne (src/main/chat-turn-arret.ts : Stop → cancelled). */
+/** Statuts d'un tour arrêté sans panne (src/main/chat/chat-turn-arret.ts : Stop → cancelled). */
 const STATUTS_ARRETES = new Set(['cancelled', 'interrupted'])
 
 /** Même plafond que celui d'un résultat d'outil (`PLAFOND_RESULTAT_OUTIL_CAR`, skill-node-mcp.ts). */

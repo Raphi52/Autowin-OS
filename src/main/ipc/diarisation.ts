@@ -10,8 +10,8 @@
  * pas un téléchargement de cette taille.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { etatDiarisation, installerDiarisation, type EtatDiarisation } from '../diarisation'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { etatDiarisation, installerDiarisation, type EtatDiarisation } from '../media/diarisation'
 
 export type DiarisationIpcDeps = {
   /** Injectables pour les tests ; en production, les implémentations réelles du module. */

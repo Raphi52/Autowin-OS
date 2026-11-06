@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ROUTED_PROVIDERS } from '../routed-providers'
+import { ROUTED_PROVIDERS } from './routed-providers'
 import { ProviderRegistry } from './registry'
 import { adaptateursServicesHttp, modelesServicesHttp, SERVICES_HTTP } from './services-http'
 

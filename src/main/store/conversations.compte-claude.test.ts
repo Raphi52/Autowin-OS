@@ -44,7 +44,7 @@ describe('ConversationStore — compte Claude par conversation', () => {
     )
     expect(index).not.toContain('appliquerCompteDeConversation')
 
-    const os = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
+    const os = readFileSync(join(process.cwd(), 'src/main/app/os.ts'), 'utf8')
     expect(os).toContain("(providerId === 'claude' ? claudeCompteDuFil(fil) : undefined)")
   })
 })

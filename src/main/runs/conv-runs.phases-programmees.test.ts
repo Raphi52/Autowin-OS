@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createConvRun } from './conv-runs'
 import { parseRun } from '../dashboards/runs'
-import { rootDodLabels, rootExecutionRequirements } from '../root-execution-contract'
+import { rootDodLabels, rootExecutionRequirements } from '../gardes/root-execution-contract'
 
 /**
  * UNE OBLIGATION SE CROISE AVEC LES PHASES REELLEMENT PROGRAMMEES.

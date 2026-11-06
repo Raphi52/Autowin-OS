@@ -10,7 +10,7 @@
  * (`board-dossier.ts`). Le Board s'écrit au plus toutes les 30 s et pèse des mégaoctets : trop lent et
  * trop lourd pour dire qui tourne À L'INSTANT. D'où ce petit fichier à part.
  *
- * Types et bornes seuls : partagés par l'écrivain (`src/main/quartier-presence.ts`), le lecteur des
+ * Types et bornes seuls : partagés par l'écrivain (`src/main/mascotte/quartier-presence.ts`), le lecteur des
  * collègues, le pont et la vue.
  */
 

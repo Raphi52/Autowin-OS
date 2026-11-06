@@ -1,4 +1,4 @@
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import { creerIndexStore } from './json-index-store'
 
 /**

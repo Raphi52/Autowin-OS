@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { invokedSkillId } from '../../../main/skill-pipeline'
+import { invokedSkillId } from '../../../main/skills/skill-pipeline'
 import { MaintenanceSkillsPanel } from './MaintenanceSkillsPanel'
 import { GROUPES_MAINTENANCE, SKILLS_MAINTENANCE } from './maintenance-skills'
 

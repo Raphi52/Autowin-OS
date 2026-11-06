@@ -4,7 +4,7 @@
  * afficherait « Lecture retenue : » en double.
  */
 import { describe, expect, it } from 'vitest'
-import { annonceDeLaLectureRetenue } from '../main/deux-lectures'
+import { annonceDeLaLectureRetenue } from '../main/chat/deux-lectures'
 import { DEBUT_LECTURE_RETENUE, ceQuiAEteCompris, texteDeLaLectureRetenue } from './lecture-retenue'
 
 describe('texte de la ligne « Lecture retenue »', () => {

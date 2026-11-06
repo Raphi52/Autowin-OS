@@ -14,7 +14,7 @@ import { latestValues, readLog, readTable, type LevelEntry } from './leveldb-lit
 import { decodeIndexedDbValue } from './v8-value-lite'
 import type { InboxMail } from './watchdog-mail'
 import { parseTeamsItemId, stripHtml, teamsItemId } from './watchdog-teams'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * Teams SANS connexion Microsoft (demande conv-854, 2026-09-25 : l'utilisateur ne peut pas se

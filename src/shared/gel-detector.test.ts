@@ -186,13 +186,13 @@ describe('appelantApplicatif — NOMMER qui lance l’appel bloquant', () => {
   it('garde les frames applicatives, en chemin ouvrable depuis la racine du depot', () => {
     const pile = [
       'Error: gel',
-      '    at instrumentee (D:\\AutoWinOS\\src\\main\\gel-main.ts:427:20)',
+      '    at instrumentee (D:\\AutoWinOS\\src\\main\\gel\\gel-main.ts:427:20)',
       '    at travauxNonPublies (D:\\AutoWinOS\\src\\main\\store\\worktree-manager.ts:1272:24)',
       '    at Object.handler (node:internal/process/task_queues:95:5)',
-      '    at snapshot (D:\\AutoWinOS\\src\\main\\commands.ts:1710:7)'
+      '    at snapshot (D:\\AutoWinOS\\src\\main\\commands\\commands.ts:1710:7)'
     ].join('\n')
     expect(appelantApplicatif(pile)).toBe(
-      'src/main/store/worktree-manager.ts:1272:24 < src/main/commands.ts:1710:7'
+      'src/main/store/worktree-manager.ts:1272:24 < src/main/commands/commands.ts:1710:7'
     )
   })
   it('rend undefined quand aucune frame applicative ne subsiste', () => {

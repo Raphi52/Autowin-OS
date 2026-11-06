@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
-import type { ReponseServeursMcp, ServeurMcpUtilisateur } from '../main/mcp-servers'
+import type { ReponseServeursMcp, ServeurMcpUtilisateur } from '../main/providers/mcp-servers'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
-import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/messages-entre-fils-app'
+import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/conversations/messages-entre-fils-app'
 import type {
   GestePlanDeLots,
   ReponsePlansDeLots,
@@ -11,13 +11,13 @@ import type {
   EtatPhraseProd,
   ReponseAutorisation as ReponseAutorisationProd,
   ReponseDefinition as ReponseDefinitionPhrase
-} from '../main/prod-passphrase-ipc'
+} from '../main/prod/prod-passphrase-ipc'
 import type {
   EtatPorteProd,
   NiveauProtectionProd,
   PropositionAutoriteProd
 } from '../shared/prod-protection'
-import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
+import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod/prod-guichet'
 import type { GitGraphSnapshot } from '../shared/git-graph'
 import type {
   ChatAttachment,
@@ -49,7 +49,7 @@ import type {
   ProjectListResult,
   ProjectReadResult,
   ProjectWriteResult
-} from '../main/project-files'
+} from '../main/fichiers/project-files'
 import type {
   TicketItem,
   TicketSourceSummary,
@@ -57,7 +57,7 @@ import type {
   TicketListRequest,
   TicketPage
 } from '../shared/tickets'
-import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets-ipc'
+import type { TicketGetIpcRequest, TicketUpdateIpcRequest } from '../main/tickets/tickets-ipc'
 import type { Conversation, ConversationSummary } from '../main/store/conversations'
 import type {
   BilanDesMentions,
@@ -74,22 +74,22 @@ import type {
   TenueAgent
 } from '../shared/quartier-presence'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
-import type { EtatWhisper } from '../main/whisper-local'
-import type { EtatDiarisation } from '../main/diarisation'
-import type { EtatPiper } from '../main/piper-local'
-import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
+import type { EtatWhisper } from '../main/media/whisper-local'
+import type { EtatDiarisation } from '../main/media/diarisation'
+import type { EtatPiper } from '../main/media/piper-local'
+import type { OrchestrationStep, OrchestrationResult } from '../main/orchestration/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
 import type { BrainGraphRef, BrainTheme } from '../main/viz/fs-brains'
-import type { BrainSearchEnvelope } from '../main/brain-search-envelope'
-import type { InboxCandidate, InboxMove } from '../main/brain-inbox'
+import type { BrainSearchEnvelope } from '../main/brain/brain-search-envelope'
+import type { InboxCandidate, InboxMove } from '../main/brain/brain-inbox'
 import type { RunEntry } from '../main/dashboards/runs-scan'
-import type { CapabilityItem } from '../main/capability-controls'
-import type { SkillRegistryItem } from '../main/skill-registry'
-import type { BehaviourFile } from '../main/behaviour-files'
-import type { PendingModelQuestion } from '../main/model-questions'
-import type { ImportedModel } from '../main/models'
+import type { CapabilityItem } from '../main/gardes/capability-controls'
+import type { SkillRegistryItem } from '../main/skills/skill-registry'
+import type { BehaviourFile } from '../main/behaviour/behaviour-files'
+import type { PendingModelQuestion } from '../main/modeles/model-questions'
+import type { ImportedModel } from '../main/modeles/models'
 import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
-import type { ProviderDisplayStatus, ProviderStatus } from '../main/provider-status'
+import type { ProviderDisplayStatus, ProviderStatus } from '../main/providers/provider-status'
 import type { SemanticTemporalProjectionV1 } from '../main/knowledge/semantic-temporal-projection'
 
 export interface ClaudeAccountEntry {
@@ -104,29 +104,29 @@ export interface ClaudeAccountsPayload {
   activeId: string
   accounts: ClaudeAccountEntry[]
 }
-import type { BehaviourComposition } from '../main/behaviour-composition'
+import type { BehaviourComposition } from '../main/behaviour/behaviour-composition'
 import type { BrainTrace } from '../main/activity/brain-trace-spool'
 import type { ConversationFileTrace } from '../main/activity/conversation-file-trace-spool'
 import type { BrainInjectionInventory } from '../main/activity/brain-injection-inventory'
-import type { PreflightResult } from '../main/preflight'
-import type { PreflightRepairOutcome } from '../main/preflight-repair'
+import type { PreflightResult } from '../main/preflight/preflight'
+import type { PreflightRepairOutcome } from '../main/preflight/preflight-repair'
 import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
-import type { AutoCloseReport } from '../main/run-autoclose'
+import type { AutoCloseReport } from '../main/runs/run-autoclose'
 import type { FabricNodeSummary } from '../main/compute-fabric/control-plane'
-import type { PetitesTachesEtat, Role, RoleBinding } from '../main/roles'
-import type { WorkflowProfilesFile } from '../main/workflow-profiles'
-import type { AutowinProfile } from '../main/profile-store'
-import type { ShadowRouteResult } from '../main/shadow-router'
-import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setting'
-import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
+import type { PetitesTachesEtat, Role, RoleBinding } from '../main/profil/roles'
+import type { WorkflowProfilesFile } from '../main/workflow/workflow-profiles'
+import type { AutowinProfile } from '../main/profil/profile-store'
+import type { ShadowRouteResult } from '../main/modeles/shadow-router'
+import type { ShadowRoutingPilotState } from '../main/modeles/model-routing-shadow-setting'
+import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/topologie/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
-import type { CommandResult, AppSnapshot } from '../main/commands'
+import type { CommandResult, AppSnapshot } from '../main/commands/commands'
 import type { TraceEventV1, TracePayload } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
-import type { ClaudeHookItem } from '../main/claude-hooks'
+import type { ClaudeHookItem } from '../main/providers/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
 import type { ChatArtifact, ArtifactEncoding } from '../shared/artifacts'
-import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/hdesk-tv'
+import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/bureau/hdesk-tv'
 import type {
   DemandeCreationBureau,
   ResultatChoixExe,

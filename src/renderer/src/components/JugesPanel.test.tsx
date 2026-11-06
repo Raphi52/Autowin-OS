@@ -86,7 +86,7 @@ describe('JugesPanel — bloc Nacre', () => {
     ])
     expect(
       [...objections[1].querySelectorAll('[data-testid="jpan-adresses"] code')].map(texte)
-    ).toEqual(['src/main/video-ffprobe.ts', 'l.11-12'])
+    ).toEqual(['src/main/media/video-ffprobe.ts', 'l.11-12'])
     expect(objections[0].querySelectorAll('.jpan-corrige-ligne')).toHaveLength(2)
     expect(objections[1].querySelector('[data-testid="jpan-corrige"]')).toBeNull()
   })

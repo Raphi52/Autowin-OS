@@ -7,7 +7,7 @@ import { dureeLisible, secondesDe } from './thinking-block-corps'
  * Signale le 2026-10-15 (conv-982) : « le timer de raisonnement s'actualise toutes les secondes et
  * celui de actions toutes les 5 ». La pastille de duree d'une action en cours (orchestration,
  * verify) n'est pas une horloge : c'est le debut du TEXTE du battement que le processus principal
- * envoie toutes les `VERIFY_BATTEMENT_MS` (5 s, src/main/verify-battement.ts). Entre deux
+ * envoie toutes les `VERIFY_BATTEMENT_MS` (5 s, src/main/verify/verify-battement.ts). Entre deux
  * battements, rien ne la faisait avancer — pendant que « Raisonnement », a cote, avancait a 1 s.
  *
  * Le battement reste la SOURCE de la duree (le processus principal connait le vrai depart de

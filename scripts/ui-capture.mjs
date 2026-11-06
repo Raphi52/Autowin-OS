@@ -1104,7 +1104,7 @@ const main = async () => {
   await envoyer('Log.enable')
 
   // --largeur <px> [--hauteur <px>] : REGARDER UNE MISE EN PAGE LARGE. L'instance cachee s'ouvre
-  // toujours en 900 x 670 (src/main/window.ts) : sous 1180 px, le chat replie le panneau Details
+  // toujours en 900 x 670 (src/main/app/window.ts) : sous 1180 px, le chat replie le panneau Details
   // en tiroir et la disposition en colonnes, celle d'un ecran 1920 px, n'etait jamais capturable
   // (constate le 2026-10-09, conv-124). On emule la taille demandee sur la page elle-meme : les
   // media queries et la mise en page voient cette largeur, la capture la rend a l'echelle 1.

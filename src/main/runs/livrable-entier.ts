@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 
 /**
  * LA COPIE ENTIERE ET DURABLE DES SORTIES D'ETAPES D'UN RUN (conv-989, 2026-10-16).

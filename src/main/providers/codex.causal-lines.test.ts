@@ -4,8 +4,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { exactLineFingerprint } from '../exact-line-fingerprint'
-import { supprimerArbre } from '../fs-supprimer'
+import { exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 vi.mock('../runs/survivable-spawn', () => ({
   spawnSurvivable: (input: { cwd: string }) => {

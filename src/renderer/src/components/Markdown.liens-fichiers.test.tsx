@@ -33,16 +33,16 @@ function render(text: string): void {
 
 describe('Markdown — les liens vers des fichiers sont cliquables', () => {
   it('rend un lien fichier en <a> et l’ouvre au clic avec sa ligne', () => {
-    render('preuve : [orchestrator.ts:80](src/main/orchestrator.ts:80)')
+    render('preuve : [orchestrator.ts:80](src/main/orchestration/orchestrator.ts:80)')
     const lien = container.querySelector('a.md-ref') as HTMLAnchorElement | null
     expect(lien).not.toBeNull()
     expect(lien?.textContent).toBe('orchestrator.ts:80')
-    expect(lien?.dataset.path).toBe('src/main/orchestrator.ts')
+    expect(lien?.dataset.path).toBe('src/main/orchestration/orchestrator.ts')
     expect(lien?.dataset.line).toBe('80')
     act(() => {
       lien?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
     })
-    expect(ouvertures).toEqual([{ path: 'src/main/orchestrator.ts', line: 80 }])
+    expect(ouvertures).toEqual([{ path: 'src/main/orchestration/orchestrator.ts', line: 80 }])
   })
 
   it('rend un lien fichier sans ligne', () => {

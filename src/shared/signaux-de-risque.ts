@@ -1,7 +1,7 @@
 /**
  * LES SIGNAUX DE RISQUE d'une tâche — source UNIQUE, lue par deux côtés qui doivent dire la même chose.
  *
- * Côté processus principal, `classifyRegime` (src/main/task-regime.ts) classe en régime `critical`
+ * Côté processus principal, `classifyRegime` (src/main/orchestration/task-regime.ts) classe en régime `critical`
  * toute tâche qui porte l'un de ces mots, et lui fait jouer le pipeline complet. Côté interface, le
  * panneau des candidats scout (`voieRecommandee`, veille-candidats-message.ts) refuse de choisir
  * une correction directe sur une piste qui en porte un. Déplacé ici le 2026-10-22 (conv-1080) : une

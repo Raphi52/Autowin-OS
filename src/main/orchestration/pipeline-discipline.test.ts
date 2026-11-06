@@ -1,0 +1,364 @@
+// fix-ok: cause mesurée — la même règle vivait en double (constitution + consignes d'étape/style), redites relevées dans le prompt injecté ; fusion vers la constitution
+import { readFileSync } from 'node:fs'
+import { CONSTITUTION } from '../consignes/constitution'
+import { describe, expect, it } from 'vitest'
+import { VUES_CONNUES } from '../../../scripts/ui-capture.mjs'
+import { PIPELINE_DISCIPLINE_INSTRUCTION } from './pipeline-discipline'
+import { JUDGE_PHASE_CAP, porterVersPhaseSuivante, sandboxForPhase } from './orchestrator'
+import { AGGREGATE_MAX_CHARS } from '../verify/evidence-digest'
+import { PHASE_BRIEFS } from '../consignes/phase-briefs'
+
+describe('discipline de pipeline canonique', () => {
+  it('annonce la preuve UI dans une instance cachée par défaut (conv-526)', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain("PAR DÉFAUT il travaille dans une instance CACHÉE")
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('--fenetre-reelle')
+  })
+
+  // 2026-10-15 : terrain a quitté la chaîne par défaut (constitution, « Le pipeline »). Le texte
+  // injecté à chaque agent l'annonçait encore comme l'étape 3 — il contredisait la constitution.
+  it('ne présente plus TERRAIN comme une étape de la chaîne par défaut', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/^\d\. TERRAIN/mu)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/^3\. BUILD/mu)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/^5\. JUDGE/mu)
+    // Il reste lançable à la demande : son résultat attendu est toujours décrit.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('terrain, seulement si on le nomme = ## SOP')
+  })
+
+  it('nomme les cinq phases dans l ordre et reste autonome', () => {
+    const phases = ['SCOUT', 'FRAME', 'BUILD', 'CLEAN', 'JUDGE']
+    const positions = phases.map((phase) => PIPELINE_DISCIPLINE_INSTRUCTION.indexOf(phase))
+
+    expect(positions.every((position) => position >= 0)).toBe(true)
+    expect(positions).toEqual([...positions].sort((a, b) => a - b))
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(
+      /~\/[.]claude|Audit\/workspaces|fingerprint[.]py/i
+    )
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('capacités réellement disponibles')
+  })
+
+  /**
+   * Principe d'Autowin, énoncé par l'utilisateur le 2026-08-04 : « en UN prompt, on a un truc en
+   * prod, parfait ». Un agent avait rendu la main sur « baseline rouge, 48 fichiers, remake
+   * impossible » et proposé un choix voie A / voie B — alors que la suite était VERTE dans le
+   * dépôt réel (3479/3479, exit 0) : le rouge venait de son environnement d'exécution. Deux fautes
+   * en une : il a attribué une panne d'environnement au produit, et il s'est arrêté sur un
+   * obstacle réparable. La consigne vit ici parce que ce bloc est injecté à TOUS les agents.
+   */
+  it('distingue un obstacle de chemin d un vrai blocage, et impose de le réparer', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/OBSTACLE ≠ BLOCAGE/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/répare-le et poursuis/i)
+    // Fusion 2026-09-18 : la partie générale vit dans « Autonomie » de la CONSTITUTION
+    // (injectée avec ce bloc) ; ici ne reste que ce qui dépend de la phase.
+    expect(CONSTITUTION).toMatch(/n'est pas la tâche/iu)
+    // Les motifs d'arrêt LÉGITIMES restent nommés : sans eux la consigne dirait « ne t'arrête
+    // jamais », ce qui pousserait un agent à forcer une action destructrice.
+    expect(CONSTITUTION).toMatch(/destructrice ou irréversible/)
+    expect(CONSTITUTION).toMatch(/droit dont tu ne disposes pas/)
+  })
+
+  it('ne relâche AUCUNE exigence de preuve en levant le blocage', () => {
+    // Le risque de cette consigne est qu'un agent lise « ne t'arrête pas » comme « passe outre la
+    // preuve ». Elle doit dire l'inverse, explicitement.
+    expect(CONSTITUTION).toMatch(/ne relâche aucune preuve/iu)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/déguiser reste interdit|ne déguise JAMAIS/)
+  })
+
+  it('impose de vérifier que le rouge vient du dépôt, pas de l environnement du run', () => {
+    expect(CONSTITUTION).toMatch(/vient du dépôt et non de ton environnement/iu)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/vient du DÉPÔT et non de ton environnement/)
+  })
+
+  /**
+   * Première rédaction RÉFUTÉE par l'audit : elle ordonnait à TOUTE phase de réparer l'obstacle,
+   * alors que la ligne OUTILLAGE RÉEL du même bloc dit qu'une phase de lecture seule n'a ni Bash ni
+   * Edit ni Write. Un scout recevait donc l'ordre de rendre une baseline verte sans aucun outil de
+   * mutation — poussé vers un blocage muet ou un vert non prouvé. Et la phase JUDGE recevait deux
+   * ordres opposés : « dis bloqué en cas d'échec » et « ne rends pas la main ».
+   */
+  it('ne demande de réparer QU aux phases outillées, et laisse une issue aux autres', () => {
+    // conv-1582 : « DISPOSE DES OUTILS DE MUTATION » laissait croire que les autres ne les ont pas ;
+    // toutes les phases les ont (`sandboxForPhase`), seul l'usage distingue BUILD et CLEAN.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
+      /SI TA PHASE EST UNE PHASE DE MUTATION \(BUILD, CLEAN\)/
+    )
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/SI TA PHASE EST EN LECTURE SEULE/)
+    // L'issue de la lecture seule : nommer l'obstacle dans le livrable, ni réparer ni taire.
+    // Mais Bash lui reste ouvert (conv-155, tour 20f856a2-8dd5-4e78-b98b-f7c7319afd12 : un juge
+    // sans shell a note du texte au lieu de lancer les tests) : la consigne doit dire que toute
+    // phase peut EXECUTER, et que seule l'ECRITURE de fichiers distingue build/clean.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
+      /TOUTES les phases disposent de Read, Grep, Glob ET Bash/
+    )
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/Read\/Grep\/Glob uniquement/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/tu NOMMES l'obstacle/)
+  })
+
+  /**
+   * La consigne annoncait « Tu n'as PAS d'acces web » alors que `claude.ts` charge WebFetch et
+   * WebSearch sur TOUTES les branches de spawn (`const OUTILS_WEB`, verrouille par
+   * `providers/claude.web.test.ts`). Un agent qui croit ne pas avoir le web devine au lieu d'aller
+   * lire : exactement le defaut que l'ouverture du web visait a supprimer.
+   */
+  it('ne nie pas une capacite reellement servie : le web', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/n'as PAS d'accès web/i)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/WebFetch et WebSearch/)
+  })
+
+  it('ne transforme pas le contrat read-only de scout frame terrain en faux blocage', () => {
+    // conv-1582 : même garde, sans prétendre Write/Edit absents (ils sont chargés partout).
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
+      /ne rien écrire n'est ni un obstacle ni un droit manquant/i
+    )
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/ne le mentionne pas comme un blocage/i)
+  })
+
+  it('reconcilie la regle avec la phase JUDGE au lieu de la contredire', () => {
+    // Le « bloqué » de JUDGE doit rester un cas de rendu de main EXPLICITEMENT autorisé.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(
+      /échec du résultat que ta phase n'a pas à réparer/
+    )
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/JUDGE dit « bloqué », et il reste obligatoire/)
+  })
+
+  /**
+   * Mesure du 2026-08-28 (chantier « spinner », conv-1507 puis conv-1498) : le prompt annoncait un
+   * harnais de capture FIXE comme LA preuve UI. Le producteur s'en est servi, l'a cite, et a
+   * declare correcte une animation qui ne bougeait pas — une image immobile ne peut pas dire si ce
+   * qu'elle montre tourne. L'utilisateur a du le signaler lui-meme.
+   *
+   * Un outil que le prompt ne nomme pas n'est jamais appele : le gate `motion-proof` serait un mur
+   * sans porte si l'instrument qui le leve n'etait pas annonce ici.
+   */
+  it('annonce l instrument qui prouve le MOUVEMENT, pas seulement la capture fixe', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toContain('--motion')
+    // Et il doit dire POURQUOI, sinon il sera lu comme une option decorative.
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/capture fixe ne (?:peut|prouve)/i)
+  })
+
+  /**
+   * LA LISTE DES VUES ANNONCEE DOIT ETRE CELLE QUE LE HARNAIS ACCEPTE.
+   *
+   * Defaut mesure le 2026-09-09 : la consigne annoncait 8 vues (`chat, agent-studio, knowledge,
+   * observatory, task-manager, worktree, tickets, settings`) la ou `scripts/ui-capture.mjs` en
+   * accepte 10 — `accueil` et `tests` manquaient. Consequence directe et non theorique : le gate
+   * `visual-proof-missing` (src/main/gates/hooks.ts) TUE un run qui touche `src/renderer/**` sans
+   * capture lue, et un agent ne demande jamais une vue que son prompt ne nomme pas. Un run sur
+   * l'Accueil etait donc condamne a un refus pour une preuve declaree hors de portee alors qu'elle
+   * etait a portee — c'est exactement le reproche emis par le controle final de conv-46
+   * (« aucune preuve visuelle, alors qu'elle etait possible »).
+   *
+   * La cause n'est pas « l'agent n'y a pas pense » : c'est une liste DUPLIQUEE en prose, qui a
+   * deja derive une fois (cf. le commentaire de `VUES_CONNUES`, ligne 52 du harnais). Ce test est
+   * le garde-fou : il croise le TEXTE injecte avec la source de verite executable, donc toute
+   * vue ajoutee au harnais sans etre annoncee rend ce test rouge.
+   */
+  it('annonce EXACTEMENT les vues que le harnais de capture accepte', () => {
+    const enumeration = PIPELINE_DISCIPLINE_INSTRUCTION.match(/vues\s*:\s*([^.]+)\./)
+    expect(enumeration, 'la consigne doit enumerer les vues capturables').not.toBeNull()
+
+    const annoncees = String(enumeration?.[1] ?? '')
+      .split(',')
+      .map((vue) => vue.trim())
+      .filter(Boolean)
+
+    // Egalite d'ENSEMBLE : ni vue manquante (preuve declaree hors de portee), ni vue inventee
+    // (l'agent la demanderait et le harnais la refuserait).
+    expect([...annoncees].sort()).toEqual([...VUES_CONNUES].sort())
+  })
+  /**
+   * MEME CAUSE, AUTRE SYMPTOME : les OPTIONS du harnais aussi doivent etre annoncees.
+   *
+   * Le correctif des vues ne traitait qu'une moitie de la duplication. Mesure du 2026-09-09 :
+   * `scripts/ui-capture.mjs` lit DIX options et la consigne n'en nommait que TROIS (`--view`,
+   * `--out`, `--motion`). Manquaient `--click` (l.503), `--state` (l.476) et `--css` (l.390) :
+   * trois preuves qu'AUCUNE navigation ne donne, rendues invisibles a tous les agents.
+   *
+   * Le cout est deja paye et trace : `phase-briefs.instrument-de-preuve.test.ts` documente un
+   * producteur qui, faute de savoir `--click` disponible, a RECOMMANDE a quelqu'un d'autre
+   * « d'etendre scripts/ui-capture.mjs d'un --click » — l'option existait deja.
+   *
+   * Le classement ci-dessous est EXHAUSTIF par construction : l'union des deux ensembles doit
+   * egaler ce que le source lit. Une option ajoutee au harnais n'appartient donc a aucun des
+   * deux et rend ce test rouge — c'est le seul moyen d'empecher la liste de rederiver.
+   */
+  it('annonce les options de PREUVE du harnais, et classe toutes les autres', () => {
+    const source = readFileSync(new URL('../../../scripts/ui-capture.mjs', import.meta.url), 'utf8')
+    const optionsLues = [
+      ...new Set(
+        // `valeurApres(...)` (choixDeListe, conv-981) est le TROISIEME idiome de lecture : `--tour`
+        // y a demenage et sortait du classement sans bruit (rouge constate le 2026-10-22, conv-1056).
+        // `mot === '--click'` est le QUATRIEME : depuis f641c8b2 (conv-1530) chaque --click est lu
+        // en parcourant argv, et l'option sortait du classement (rouge constate le 2026-11-05, conv-1582).
+        [
+          ...source.matchAll(
+            /(?:(?:argument|drapeau|valeurApres)\(|mot === )(?:'|")(--[a-z-]+)(?:'|")/g
+          )
+        ].map((m) => m[1])
+      )
+    ].sort()
+
+    // Ouvrent une preuve que rien d'autre ne donne : doivent etre NOMMEES dans la consigne, sinon
+    // l'agent ne les appellera jamais.
+    // `--theme` (arrive par la mise a jour amont du 2026-09-22, classe le 2026-09-23) : il ouvre
+    //   une preuve qu'AUCUNE navigation ne donne — la liste deroulante des themes est un <select>
+    //   natif Windows, qui s'ouvre HORS de la page : aucun clic scriptable n'y choisit une option,
+    //   donc un theme n'etait tout simplement pas capturable. Il appartient au contrat.
+    // `--code-dev` (2026-09-26, conv-863) : sans lui l'instance cachee lance l'application
+    //   EMPAQUETEE, qui ne contient pas la modification a prouver ; depuis une copie de travail il la
+    //   reconstruit et lance ses fichiers. C'est la seule preuve d'un changement d'interface non publie.
+    //   Lu par `drapeau(...)` (option sans valeur) : le motif ci-dessus le repere aussi.
+    // fix-ok: rouge depuis 712c6107 (2026-10-10) — quatre options lues par le harnais sans classement :
+    //   `--largeur`/`--hauteur` (128ffd16, conv-124), `--attendre`/`--retraits` (712c6107, conv-160).
+    // `--largeur` : l'instance cachee s'ouvre en 900 x 670, ou le chat replie panneau et colonnes ; la
+    //   mise en page d'un ecran large n'etait capturable par AUCUNE autre option. Il appartient au contrat.
+    // `--attendre` : une vue qui charge ses donnees (Worktrees, « Lecture… ») etait capturee sur son
+    //   indicateur de chargement ; sans lui, la vue chargee n'est jamais prouvee. Contrat.
+    // `--retraits` : MESURE au rendu le retrait du contenu dans le cadre de page — un ecart de 18 a
+    //   38 px ne se lit pas sur une image. Aucune capture ne donne ce chiffre. Contrat.
+    // `--choisir <selecteur> --valeur <v>` (conv-981, classe le 2026-10-22, conv-1056) : choisir une
+    //   valeur dans N'IMPORTE QUELLE liste <select> — le meme mur que `--theme` : le menu natif
+    //   s'ouvre hors de la page, aucun clic n'y choisit. Il ouvre une preuve : contrat.
+    const CONTRAT_DE_PREUVE = [
+      '--attendre',
+      '--choisir',
+      '--click',
+      '--code-dev',
+      '--css',
+      '--largeur',
+      '--motion',
+      '--out',
+      '--retraits',
+      '--state',
+      '--theme',
+      '--valeur',
+      '--view'
+    ]
+    // Reglages a valeur par defaut suffisante : ils affinent une preuve deja accessible, ils n'en
+    // ouvrent aucune. Les annoncer allongerait une consigne injectee a chaque appel pour rien.
+    // `--scroll` (arrive par la mise a jour amont du 2026-09-21) : il AMENE la cible dans le
+    //   cadre avant la capture — il affine une preuve deja accessible, il n'en ouvre aucune.
+    // `--donnees` et `--tour` (2026-10-15, conv-966, avec `--conversation`) : ils ne servent
+    //   qu'avec `--conversation`, qui ouvre la preuve (une conversation reelle dans l'instance
+    //   cachee). `--donnees` dit OU la lire, et son defaut (.autowin-data/autowin-os) est le bon ;
+    //   `--tour` choisit QUELLE demande le graphe affiche, et son defaut (la derniere) suffit a
+    //   prouver un changement frais. Ils affinent cette preuve, ils n'en ouvrent aucune.
+    // `--hauteur` (128ffd16) : ne sert qu'avec `--largeur`, qui ouvre la preuve ; son defaut (largeur
+    //   x 9/16, un ecran courant) suffit. Il affine cette preuve, il n'en ouvre aucune.
+    // `--stockage-local` (b49ce52a, conv-1000) : seme des cles localStorage, REFUSE hors de
+    //   l'instance cachee ou `--conversation` a copie un fil. Comme `--donnees` et `--tour`, il
+    //   affine la preuve que `--conversation` ouvre ; il n'en ouvre aucune.
+    const REGLAGES = [
+      '--donnees',
+      '--frames',
+      '--hauteur',
+      '--interval',
+      '--port',
+      '--scroll',
+      '--state-selector',
+      '--stockage-local',
+      '--tour'
+    ]
+
+    // Sans cette borne, la disparition du motif de lecture ferait passer le test a vide.
+    expect(optionsLues.length).toBeGreaterThanOrEqual(6)
+    // Classement exhaustif : aucune option lue n'echappe au verdict.
+    expect(optionsLues).toEqual([...CONTRAT_DE_PREUVE, ...REGLAGES].sort())
+
+    const nonAnnoncees = CONTRAT_DE_PREUVE.filter(
+      (option) => !PIPELINE_DISCIPLINE_INSTRUCTION.includes(option)
+    )
+    expect(nonAnnoncees).toEqual([])
+  })
+})
+
+describe('fusion 2026-09-18 — chaque regle a un seul endroit', () => {
+  it('LECTURE CIBLÉE renvoie au réflexe 11 au lieu de le redire', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/LECTURE CIBLÉE : réflexes 6 et 11/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/jamais un dump de l'arbre entier/)
+    expect(CONSTITUTION).toMatch(/lecture ciblée/iu)
+    // Seul apport propre à la phase, gardé ici :
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/scout DOIT survoler la cible/)
+  })
+
+  it('la preuve hors-modèle de BUILD renvoie au réflexe 2 sans le recopier', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/3\. BUILD — .*réflexe 2/)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/3\. BUILD — .*test rouge→vert, exit-code, capture lue/)
+  })
+
+  it('n impose plus le mot « livrable » que le profil de réponse interdit', () => {
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/livrable/i)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).toMatch(/RÉSULTAT : produis EXACTEMENT/)
+  })
+})
+
+/**
+ * LE TEXTE INJECTÉ DIT CE QUE LE CODE FAIT (conv-1582, lot 2 du plan de conv-1576).
+ *
+ * Mesuré le 2026-11-05 : la consigne annonçait « ton résultat porté à la phase suivante est
+ * tronqué à ~2000 caractères », alors que `porterVersPhaseSuivante` passe la sortie ENTIÈRE depuis
+ * le 2026-09-27 (règle de l'utilisateur : pas de budget). Elle annonçait aussi que scout, frame,
+ * terrain et juge n'ont « ni Edit ni Write », alors que `sandboxForPhase` donne à TOUTES les phases
+ * les droits du chat depuis le 2026-09-04. Un agent qui croit son résultat coupé le rogne lui-même.
+ *
+ * fix-ok: conv-1582 — cause mesurée : porterVersPhaseSuivante(50 000 car.) rend 50 000 car. et
+ * sandboxForPhase('…', 'scout') rend 'danger-full-access', alors que la consigne disait l'inverse ;
+ * les gardes plus haut verrouillaient ces phrases fausses mot pour mot, elles suivent le nouveau texte.
+ *
+ * Entrées qui rendent ces tests rouges : la phrase « tronqué à ~2000 caractères » remise dans
+ * la consigne ; une coupe remise dans `porterVersPhaseSuivante` ; un plafond du juge changé sans
+ * le texte ; « mais ni Edit ni Write » remis, tant que `sandboxForPhase` ouvre l'écriture.
+ */
+describe('la consigne et le code disent la même chose (conv-1582)', () => {
+  const budget = PIPELINE_DISCIPLINE_INSTRUCTION.match(/BUDGET : ([^\n]+)/u)?.[1] ?? ''
+
+  it('le portage phase → phase n est annoncé coupé que si porterVersPhaseSuivante coupe', () => {
+    const long = 'x'.repeat(50_000)
+    // Le code ne coupe pas : remettre une coupe ici sans corriger le texte rend ce test rouge.
+    expect(porterVersPhaseSuivante(long)).toBe(long)
+    expect(budget, 'la phrase BUDGET doit exister').not.toBe('')
+    expect(budget).not.toMatch(/tronqu|2000/iu)
+    expect(budget).toMatch(/ENTIER/u)
+  })
+
+  it('le chiffre lu par le juge est JUDGE_PHASE_CAP, et le total est AGGREGATE_MAX_CHARS', () => {
+    const nombres = [...budget.matchAll(/(\d[\d\s]*\d)\s*caractères/gu)].map((m) =>
+      Number(m[1]!.replace(/\s/gu, ''))
+    )
+    expect(nombres).toContain(JUDGE_PHASE_CAP)
+    expect(nombres).toContain(AGGREGATE_MAX_CHARS)
+  })
+
+  it('ne dit pas Edit/Write absents tant que sandboxForPhase les donne aux phases de lecture', () => {
+    for (const phase of ['scout', 'frame', 'terrain', 'judge'] as const) {
+      expect(sandboxForPhase('tâche', phase), phase).not.toBe('read-only')
+    }
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/ni Edit ni Write/u)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(/absence de Write\/Edit/u)
+    expect(PIPELINE_DISCIPLINE_INSTRUCTION).not.toMatch(
+      /SI TA PHASE DISPOSE DES OUTILS DE MUTATION/u
+    )
+  })
+})
+
+/**
+ * Piste 14 du scout du 05/11 (conv-1602) : la ligne RÉSULTAT annonçait « frame = ## Besoin /
+ * ## Contraintes / ## Options », alors que la consigne de frame (`PHASE_BRIEFS.frame`, ligne
+ * « Livrable (sections Markdown) ») exige aussi `## Confiance`, que le code lit
+ * (`src/shared/cadrage-confiance.ts`). Deux listes écrites à la main dérivent : on les compare.
+ *
+ * Entrée qui rend ce test rouge : une section ajoutée, retirée ou déplacée d'un seul côté — par
+ * exemple `## Confiance` retiré de la ligne RÉSULTAT de `pipeline-discipline.ts`.
+ */
+describe('les sections du résultat de frame sont celles de sa consigne (conv-1602)', () => {
+  const titres = (texte: string): string[] => [...texte.matchAll(/## (\p{L}+)/gu)].map((m) => m[1]!)
+
+  it('la ligne RÉSULTAT nomme les sections de la ligne « Livrable » de PHASE_BRIEFS.frame, dans le même ordre', () => {
+    const consigne =
+      PHASE_BRIEFS.frame.match(/^Livrable \(sections Markdown\) : ([^\n]+)/mu)?.[1] ?? ''
+    const annonce = PIPELINE_DISCIPLINE_INSTRUCTION.match(/frame = ([^;]+);/u)?.[1] ?? ''
+    expect(consigne, 'ligne « Livrable (sections Markdown) » de la consigne de frame').not.toBe('')
+    expect(annonce, 'segment « frame = … ; » de la ligne RÉSULTAT').not.toBe('')
+    expect(titres(consigne)).toContain('Confiance')
+    expect(titres(annonce)).toEqual(titres(consigne))
+  })
+})

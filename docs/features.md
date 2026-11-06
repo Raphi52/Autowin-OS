@@ -53,7 +53,7 @@
   réécrire octet pour octet, et un caractère non représentable dans l'encodage cible est refusé au lieu
   d'être tronqué silencieusement. *Avant ce correctif, `edit_file` lisait et écrivait en UTF-8 codé en
   dur : sur une ULT VB6, `oldText` ne correspondait jamais, et une écriture aurait remplacé chaque accent
-  du fichier entier par `EF BF BD`. Détail : en-tête de `src/main/file-encoding.ts`.*
+  du fichier entier par `EF BF BD`. Détail : en-tête de `src/main/fichiers/file-encoding.ts`.*
 
 ## Robustesse & mises à jour
 

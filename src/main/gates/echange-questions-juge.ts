@@ -1,5 +1,5 @@
-import { TEXTE_MAX_MESSAGE_FIL } from '../messages-entre-fils-app'
-import { questionsDuJuge } from '../objections-juge'
+import { TEXTE_MAX_MESSAGE_FIL } from '../conversations/messages-entre-fils-app'
+import { questionsDuJuge } from '../juge/objections-juge'
 
 /**
  * ÉCHANGE AVANT RÉPARATION — questions explicites du juge (conv-1139, 2026-10-25, étape 2 de

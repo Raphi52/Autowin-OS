@@ -1,6 +1,6 @@
 import { open, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * Ramasse-miettes DATÉ des workspaces de runs de conversation

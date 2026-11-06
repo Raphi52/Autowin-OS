@@ -56,23 +56,23 @@ const MUTANT = (() => {
  */
 const MUTANTS = {
   filtre: [
-    'src/main/quartier-presence-filtre.ts',
+    'src/main/mascotte/quartier-presence-filtre.ts',
     '  return couper(t, max)',
     "  return String(brut ?? '')"
   ],
   prive: [
-    'src/main/quartier-presence.ts',
+    'src/main/mascotte/quartier-presence.ts',
     "const titre = a.prive ? '' : filtrerTitre(a.titre)",
     'const titre = filtrerTitre(a.titre)'
   ],
-  coupe: ['src/main/quartier-presence.ts', 'if (!reglage.partager)', 'if (false)'],
+  coupe: ['src/main/mascotte/quartier-presence.ts', 'if (!reglage.partager)', 'if (false)'],
   perime: [
-    'src/main/quartier-presence-collegues.ts',
+    'src/main/mascotte/quartier-presence-collegues.ts',
     'if (Math.abs(a - lu.enregistreA) > PRESENCE_PERIMEE_MS) continue',
     ''
   ],
   piege: [
-    'src/main/quartier-presence-collegues.ts',
+    'src/main/mascotte/quartier-presence-collegues.ts',
     'if (!id || id.length > ID_MAX) return null',
     'if (!id) return null'
   ],
@@ -104,9 +104,9 @@ function pluginMutant(nom) {
 
 const ENTREE = `
 export { registerQuartierPresenceIpc } from './src/main/ipc/quartier-presence.ts'
-export { creerPublicationDeLaPresence } from './src/main/quartier-presence.ts'
-export { creerDossierDuBoard, sousDossierDuPoste } from './src/main/board-dossier.ts'
-export { creerLecteurDePresence } from './src/main/quartier-presence-collegues.ts'
+export { creerPublicationDeLaPresence } from './src/main/mascotte/quartier-presence.ts'
+export { creerDossierDuBoard, sousDossierDuPoste } from './src/main/board/board-dossier.ts'
+export { creerLecteurDePresence } from './src/main/mascotte/quartier-presence-collegues.ts'
 export * as presence from './src/shared/quartier-presence.ts'
 export { appliquerResumes, agentAPublier } from './src/renderer/src/quartier/agents-quartier.ts'
 export {

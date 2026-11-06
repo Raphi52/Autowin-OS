@@ -2,12 +2,12 @@
 // poids du fil), session connue, session périmée oubliée. Sortie telle quelle de AgentPilot.chat()
 // (conv-1580, lot 2).
 import { loadConvActivity } from '../activity/conv-activity'
-import { coupesParPoids } from '../chat-session-poids'
-import { compactionsAbouties } from '../chat-turn-messages'
-import { claudeActiveAccountId, claudeCompteDuFil } from '../claude-accounts'
+import { coupesParPoids } from '../chat/chat-session-poids'
+import { compactionsAbouties } from '../chat/chat-turn-messages'
+import { claudeActiveAccountId, claudeCompteDuFil } from '../providers/claude-accounts'
 import type { ProviderRegistry } from '../providers/registry'
 import type { Message } from '../providers/types'
-import type { RoleBinding } from '../roles'
+import type { RoleBinding } from '../profil/roles'
 
 export type SessionDuTour = {
   /** Clé de session pour un compte donné (conv-1063). */

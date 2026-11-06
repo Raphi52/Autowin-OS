@@ -60,7 +60,7 @@ JOURNAL = RACINE / ".autowin-data" / "launch-dev.log"
 SORTIE_APP = RACINE / ".autowin-data" / "dev-app-stdout.log"
 BUNDLE = RACINE / "out" / "main" / "index.js"
 # Cache du catalogue de modeles du profil DEV (racine portable `.autowin-data/autowin-os`, voir
-# src/main/app-data.ts). Sur un profil VIERGE il est absent, `loadCachedImportedModels` rend une liste
+# src/main/app/app-data.ts). Sur un profil VIERGE il est absent, `loadCachedImportedModels` rend une liste
 # vide et `createDefaultTopology([])` leve : l'app sort en code 78 AVANT toute fenetre (constate le
 # 2026-09-22 sur une machine neuve). On l'amorce alors avec la semence verifiee du depot, exactement
 # comme `scripts/autowin-headless.ps1` ; un cache existant n'est JAMAIS remplace, et le rafraichisseur

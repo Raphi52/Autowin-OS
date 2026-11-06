@@ -6,21 +6,21 @@ import {
   buildTurnMessageBlocks,
   type TurnMessageBlock,
   type TurnMessageParts
-} from '../chat-turn-messages'
-import type { AppCommandBus } from '../commands'
-import { consigneDeLectureRetenue } from '../deux-lectures'
-import { boucleDraftEnCours } from '../draft-choix-par-boutons'
-import { noteSkillDesactivee } from '../etapes-desactivees'
-import { nativeSkills } from '../native-registry'
+} from '../chat/chat-turn-messages'
+import type { AppCommandBus } from '../commands/commands'
+import { consigneDeLectureRetenue } from '../chat/deux-lectures'
+import { boucleDraftEnCours } from '../skills/draft-choix-par-boutons'
+import { noteSkillDesactivee } from '../orchestration/etapes-desactivees'
+import { nativeSkills } from '../app/native-registry'
 import type { Message } from '../providers/types'
-import { rappelSansDejaEnvoye } from '../rappel-conversations'
-import { evictedCount, rememberedFacts, sessionMemoryBlock } from '../session-memory-echo'
+import { rappelSansDejaEnvoye } from '../consignes/rappel-conversations'
+import { evictedCount, rememberedFacts, sessionMemoryBlock } from '../brain/session-memory-echo'
 import {
   invokedSkillId,
   noteSkillInconnue,
   skillInstruction,
   skillNommeeSansBarre
-} from '../skill-pipeline'
+} from '../skills/skill-pipeline'
 import type { LectureRetenue } from './lectures-du-tour'
 
 export type MessageDuTour = {

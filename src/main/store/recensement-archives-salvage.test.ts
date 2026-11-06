@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
 import { git, roots, tempRepo } from './worktree-manager.test-helpers'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * LE DÉFAUT, mesuré le 2026-08-29 (conv-1521).

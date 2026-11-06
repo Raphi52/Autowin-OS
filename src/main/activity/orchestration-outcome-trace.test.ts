@@ -8,7 +8,7 @@ import {
   outcomeToTraceEvent
 } from './orchestration-outcome-trace'
 import { TraceStore } from './trace-store'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * MANQUE CONSTATE LE 2026-08-07 : l'issue d'une orchestration (`OrchestrationOutcome`) etait rendue

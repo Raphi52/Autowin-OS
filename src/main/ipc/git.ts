@@ -16,17 +16,17 @@
  *  - `git:conversationDiff` normalise le chemin reçu (antislashs, `./` en tête) AVANT de le lire.
  */
 import { ipcMain } from 'electron'
-import { readGitGraph } from '../git-graph-main'
-import { readGitState, readGitDiff, readGitBranches, readGitBranch } from '../git-read-main'
-import { checkoutBranch } from '../git-checkout-main'
-import { executerActionGit, type DemandeActionGit } from '../git-action-main'
+import { readGitGraph } from '../git/git-graph-main'
+import { readGitState, readGitDiff, readGitBranches, readGitBranch } from '../git/git-read-main'
+import { checkoutBranch } from '../git/git-checkout-main'
+import { executerActionGit, type DemandeActionGit } from '../git/git-action-main'
 import {
   readConversationGitDiff,
   readConversationGitState
 } from '../activity/conversation-git-state'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
-import type { AutowinOS } from '../os'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
+import type { AutowinOS } from '../app/os'
 
 /** Ce que les canaux git prenaient dans `index.ts` — désormais passé explicitement. */
 export type GitIpcDeps = {

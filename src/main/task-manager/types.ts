@@ -1,5 +1,5 @@
 import type { StructuredSchedule } from './schedule'
-import type { ReasoningEffort } from '../roles'
+import type { ReasoningEffort } from '../profil/roles'
 
 export type TaskExecutionMode = 'windows' | 'active-only'
 

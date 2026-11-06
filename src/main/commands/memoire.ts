@@ -1,14 +1,14 @@
 // Groupe de commandes « dépôt d’une leçon ou d’une préférence », sorti de AppCommandBus.run (conv-1508, lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import type { AppCommandBus } from '../commands'
-import type { RoleBinding } from '../roles'
-import { retenirPreferenceAuProfil } from '../profil-utilisateur'
-import { envDuBrainPerso, origineBrainPerso, depotsBrainPerso, promouvoirBrainPerso } from '../brain-perso'
-import { rememberFact } from '../brain-remember'
-import type { OutcomeLearningResult } from '../outcome-learning-supervisor'
-import { brainServiceToken } from '../brain-retrieval'
+import type { AppCommandBus } from './commands'
+import type { RoleBinding } from '../profil/roles'
+import { retenirPreferenceAuProfil } from '../profil/profil-utilisateur'
+import { envDuBrainPerso, origineBrainPerso, depotsBrainPerso, promouvoirBrainPerso } from '../brain/brain-perso'
+import { rememberFact } from '../brain/brain-remember'
+import type { OutcomeLearningResult } from '../brain/outcome-learning-supervisor'
+import { brainServiceToken } from '../brain/brain-retrieval'
 import { appendBrainTrace } from '../activity/brain-trace-spool'
-import { noteRemembered } from '../session-memory-echo'
+import { noteRemembered } from '../brain/session-memory-echo'
 
 /** Cas de `AppCommandBus.run` : dépôt d’une leçon ou d’une préférence. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
 export async function executerMemoire(

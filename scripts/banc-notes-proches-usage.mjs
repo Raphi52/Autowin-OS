@@ -1,5 +1,5 @@
 /**
- * BANC D'USAGE des notes Brain proches (src/main/brain-titres-du-tour.ts), sur les VRAIS tours.
+ * BANC D'USAGE des notes Brain proches (src/main/brain/brain-titres-du-tour.ts), sur les VRAIS tours.
  *
  * Pourquoi (conv-1303, 2026-10-30) : `scripts/sonde-titres-brain.mts` mesure le tri sur 27 questions
  * d'évaluation. Ce banc-ci le mesure sur l'usage réel : pour chaque tour servi, il rejoue plusieurs

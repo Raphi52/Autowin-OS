@@ -9,9 +9,9 @@
  * contrat est fermée par `question-a-cote.test.ts`.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
-import { QuestionsACote, type DependancesQuestionACote } from '../question-a-cote'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
+import { QuestionsACote, type DependancesQuestionACote } from '../chat/question-a-cote'
 import { QUESTION_A_COTE_MAX, type IssueQuestionACote } from '../../shared/question-a-cote'
 
 /** Le nom donné au contrôle d'expéditeur : c'est lui qu'un refus affiche. */

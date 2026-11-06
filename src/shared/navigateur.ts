@@ -4,8 +4,8 @@
  *
  * Pourquoi un fichier à part : quatre lots s'appuient dessus en parallèle (IPC, panneau, commandes de
  * l'agent, élément choisi envoyé au chat). Tout ce qu'ils échangent est décrit ICI, une seule fois ;
- * le moteur vit dans `src/main/navigateur-integre.ts`, les scripts de page dans
- * `src/main/navigateur-page-script.ts`.
+ * le moteur vit dans `src/main/bureau/navigateur-integre.ts`, les scripts de page dans
+ * `src/main/bureau/navigateur-page-script.ts`.
  *
  * Ce fichier ne dépend de rien (ni Electron, ni Node, ni React) : il est importé des deux côtés.
  */

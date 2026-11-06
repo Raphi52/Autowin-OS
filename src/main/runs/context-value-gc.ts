@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 
 /**
  * Entretien legacy du cache `context-values` créé par l'ancien prototype RLM.

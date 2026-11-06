@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
-import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
  * LE GEL DE 11,7 s AU DEMARRAGE (mesure du 2026-09-08, `gels.jsonl` a 10:23:55).

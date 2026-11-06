@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import * as pilote from '../agent-pilot'
+import * as pilote from './agent-pilot'
 import * as aides from './aides-du-tour'
 import * as collage from './collage-des-deltas'
 import * as issue from './issue-des-commandes'
@@ -17,7 +17,7 @@ import * as jetons from './jetons-de-commande'
  *   `export function parseOrderedPilotTokens` encore écrit dans `agent-pilot.ts`.
  * - un module du dossier qui importe une VALEUR par `'../agent-pilot'` : cycle d'import réel, dont
  *   l'ordre d'évaluation décide si la valeur existe déjà. Entrée qui fait échouer le second test :
- *   `import { AgentPilot } from '../agent-pilot'` dans l'un des modules.
+ *   `import { AgentPilot } from './agent-pilot'` dans l'un des modules.
  */
 const DEPLACES: Array<[string, Record<string, unknown>, string[]]> = [
   [

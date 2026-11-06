@@ -1,8 +1,8 @@
 // Groupe de commandes « messages entre fils et plans de lots », sorti de AppCommandBus.run (conv-1508, lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import type { AppCommandBus } from '../commands'
-import { ecrireAUnFil, reveillerSurOrdre, lireMesMessages } from '../messages-entre-fils-app'
-import { arreterUnFil } from '../arreter-un-fil'
+import type { AppCommandBus } from './commands'
+import { ecrireAUnFil, reveillerSurOrdre, lireMesMessages } from '../conversations/messages-entre-fils-app'
+import { arreterUnFil } from '../conversations/arreter-un-fil'
 
 /** Cas de `AppCommandBus.run` : messages entre fils et plans de lots. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
 export async function executerFils(

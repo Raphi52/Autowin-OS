@@ -26,12 +26,12 @@ import {
   type ClaudeAccountsStore,
   type ClaudeIdentity,
   withClaudeAccountEnv
-} from '../claude-accounts'
+} from '../providers/claude-accounts'
 import { resolveClaudeBin } from '../providers/claude'
-import { invalidateModelQuotaCache } from '../model-quotas'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
-import type { AutowinOS } from '../os'
+import { invalidateModelQuotaCache } from '../modeles/model-quotas'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
+import type { AutowinOS } from '../app/os'
 
 /** Ce que les canaux des comptes Claude prenaient dans `index.ts` — desormais passe explicitement. */
 export type ClaudeAccountsIpcDeps = {

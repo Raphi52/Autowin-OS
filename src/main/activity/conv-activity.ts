@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 
 /**
  * Journal d'activité PAR CONVERSATION — chaque appel modèle facturé (tour de chat de

@@ -13,7 +13,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import {
   buildSemanticTemporalProjection,
   semanticTemporalInputDigest,

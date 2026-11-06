@@ -59,7 +59,7 @@ const FAMILLES: Array<[string, Record<string, unknown>, string[]]> = [
   ]
 ]
 
-const source = readFileSync(join(__dirname, '..', 'commands.ts'), 'utf8')
+const source = readFileSync(join(__dirname, 'commands.ts'), 'utf8')
 const fichier = ts.createSourceFile('commands.ts', source, ts.ScriptTarget.Latest, true)
 const classe = fichier.statements.find(
   (s): s is ts.ClassDeclaration => ts.isClassDeclaration(s) && s.name?.text === 'AppCommandBus'
@@ -69,7 +69,7 @@ const classe = fichier.statements.find(
 function aliasDuModule(module: string): string | undefined {
   for (const s of fichier.statements) {
     if (!ts.isImportDeclaration(s) || !ts.isStringLiteral(s.moduleSpecifier)) continue
-    if (s.moduleSpecifier.text !== `./commands/${module}`) continue
+    if (s.moduleSpecifier.text !== `./${module}`) continue
     const liaisons = s.importClause?.namedBindings
     if (liaisons && ts.isNamespaceImport(liaisons)) return liaisons.name.text
   }

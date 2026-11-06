@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { act, createElement } from 'react'
 import { Markdown } from './Markdown'
 import { ClaudeCliAdapter } from '../../../main/providers/claude'
-import { buildChatPilotagePrompt } from '../../../main/chat-pilotage-prompt'
+import { buildChatPilotagePrompt } from '../../../main/consignes/chat-pilotage-prompt'
 import type { SendResult } from '../../../main/providers/types'
 
 /**

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { arretDeLaReparation } from './stopgate'
-import { PREFIXE_TEST_MODIFIE } from '../objections-juge'
+import { PREFIXE_TEST_MODIFIE } from '../juge/objections-juge'
 
 // conv-844 (2026-09-24) : « que ça s'arrête que quand y a plus de défauts ».
 describe('reparation jusqu au vert', () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { InboxCandidate } from '../../../main/brain-inbox'
+import type { InboxCandidate } from '../../../main/brain/brain-inbox'
 import { brainBusinessError } from './graph-view-model'
 import { Spinner } from './Spinner'
 import { langueCourante } from '../langue'

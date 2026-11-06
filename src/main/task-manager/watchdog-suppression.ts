@@ -11,7 +11,7 @@
  * que l'agent va justement rappeler pour echouer pareil.
  */
 
-import { classifyProviderFailure } from '../provider-failure-diagnosis'
+import { classifyProviderFailure } from '../providers/provider-failure-diagnosis'
 import { isUpstreamOutage } from '../../shared/panne-amont'
 
 /**

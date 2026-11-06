@@ -35,8 +35,8 @@ describe('refusGitDestructeur', () => {
 
   it('laisse passer les voies de secours et les lectures', () => {
     expect(refusGitDestructeur('git revert --abort')).toBeUndefined()
-    expect(refusGitDestructeur('git checkout HEAD -- src/main/orchestrator.ts')).toBeUndefined()
-    expect(refusGitDestructeur('git restore src/main/commands.ts')).toBeUndefined()
+    expect(refusGitDestructeur('git checkout HEAD -- src/main/orchestration/orchestrator.ts')).toBeUndefined()
+    expect(refusGitDestructeur('git restore src/main/commands/commands.ts')).toBeUndefined()
     expect(refusGitDestructeur('git status --short')).toBeUndefined()
     expect(refusGitDestructeur('git clean -n')).toBeUndefined()
     expect(refusGitDestructeur('git log -S "reset --hard"')).toBeUndefined()
@@ -104,7 +104,7 @@ describe('refusGitDestructeur', () => {
   })
 
   it.each([
-    'npx prettier --write src/main/chat-pilotage-prompt.ts',
+    'npx prettier --write src/main/consignes/chat-pilotage-prompt.ts',
     'npx prettier --write src/main/a.ts src/main/b.test.ts',
     'npx prettier --write --end-of-line lf src/main/a.ts',
     'npx prettier --write ./src/x.ts',

@@ -18,8 +18,8 @@ import {
   writeFileSync
 } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
-import { isSameProcessIdentity } from '../process-identity'
-import { supprimerArbre } from '../fs-supprimer'
+import { isSameProcessIdentity } from '../app/process-identity'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 import type {
   CompensationIndexLock,
   CompensationIndexLockOwner,

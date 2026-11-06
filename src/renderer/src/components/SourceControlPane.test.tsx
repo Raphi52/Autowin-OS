@@ -404,14 +404,14 @@ describe('SourceControlPane (prompt-first)', () => {
             {
               path: 'src/main/index.ts',
               motif: 'tests-rouges',
-              testsEnEchec: ['src/main/chat-ipc-contract.test.ts']
+              testsEnEchec: ['src/main/chat/chat-ipc-contract.test.ts']
             }
           ],
           verification: {
             statut: 'echec',
             commande: 'vitest related src/main/index.ts --run',
             detail: '2 test(s) en échec',
-            testsEnEchec: ['src/main/chat-ipc-contract.test.ts']
+            testsEnEchec: ['src/main/chat/chat-ipc-contract.test.ts']
           }
         }
       })
@@ -422,7 +422,7 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(last).toContain('Projet · non publié · tests rouges')
     expect(last).not.toContain('poussé')
     expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
-      'Laissé en attente · src/main/index.ts (tests rouges : src/main/chat-ipc-contract.test.ts)'
+      'Laissé en attente · src/main/index.ts (tests rouges : src/main/chat/chat-ipc-contract.test.ts)'
     )
     expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
       'Tests rejoués avant de pousser · 2 test(s) en échec'
@@ -451,7 +451,7 @@ describe('SourceControlPane (prompt-first)', () => {
           },
           exclus: [
             {
-              path: 'src/main/raccourci-demarrer-dev.ts',
+              path: 'src/main/app/raccourci-demarrer-dev.ts',
               motif: 'typage-rouge',
               erreursDeTypage: [erreur]
             }
@@ -471,7 +471,7 @@ describe('SourceControlPane (prompt-first)', () => {
     expect(last).toContain('Projet · non publié · typage rouge')
     expect(last).not.toContain('poussé')
     expect(container.querySelector('[data-testid="sc-autoclose-exclus"]')?.textContent).toBe(
-      `Laissé en attente · src/main/raccourci-demarrer-dev.ts (ne compile pas sans ce qui reste en attente : ${erreur})`
+      `Laissé en attente · src/main/app/raccourci-demarrer-dev.ts (ne compile pas sans ce qui reste en attente : ${erreur})`
     )
     expect(container.querySelector('[data-testid="sc-autoclose-typage"]')?.textContent).toBe(
       'Typage de ce qui part · 1 erreur nouvelle (tsc --noEmit -p tsconfig.node.json --composite false)'
@@ -579,7 +579,7 @@ describe('SourceControlPane (prompt-first)', () => {
             statut: 'vert',
             commande: 'vitest related src/main/index.ts --run',
             testsJoues: 1555,
-            instablesSousCharge: ['src/main/moteur-perime-cablage.test.ts']
+            instablesSousCharge: ['src/main/providers/moteur-perime-cablage.test.ts']
           }
         }
       })
@@ -587,7 +587,7 @@ describe('SourceControlPane (prompt-first)', () => {
     await openWorkspaceView()
     expect(container.querySelector('[data-testid="sc-autoclose-verification"]')?.textContent).toBe(
       'Tests rejoués avant de pousser · 1555 verts — rouge sous charge, vert seul : ' +
-        'src/main/moteur-perime-cablage.test.ts'
+        'src/main/providers/moteur-perime-cablage.test.ts'
     )
   })
 
@@ -607,7 +607,7 @@ describe('SourceControlPane (prompt-first)', () => {
           project: { status: 'pushed', branch: 'main', files: 1, mode: 'direct' },
           verification: {
             statut: 'vert',
-            commande: 'vitest related src/main/commands.ts --run',
+            commande: 'vitest related src/main/commands/commands.ts --run',
             testsJoues: 300,
             dejaRouges: ['src/renderer/src/spinner-partout.test.ts'],
             rougesDAilleurs: ['src/renderer/src/components/ViewPage.gabarit.test.ts']

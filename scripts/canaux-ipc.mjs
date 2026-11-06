@@ -2,7 +2,7 @@
 /**
  * NOMME les canaux `ipcMain.handle` ajoutés ou retirés entre deux états de `src/main`.
  *
- * Pourquoi (conv-1451, 2026-11-03) : le compte de `src/main/security-critical-fixes.test.ts` est un
+ * Pourquoi (conv-1451, 2026-11-03) : le compte de `src/main/gardes/security-critical-fixes.test.ts` est un
  * fil-piège qui dérive à chaque fusion de fils. Chaque mise à jour du compte doit dire QUELS canaux
  * sont arrivés, et ce comparatif se refaisait à la main (archive du commit, grep, comm). Une ligne
  * grep rate les appels écrits sur plusieurs lignes (`ipcMain.handle(\n  'canal'`) : 262 au lieu de 291
@@ -11,7 +11,7 @@
  *
  * Usage : node scripts/canaux-ipc.mjs <ref-avant> [ref-après]
  *   ref = un commit, une branche, ou `.` pour l'arbre de travail (défaut de ref-après).
- *   Ex. : node scripts/canaux-ipc.mjs $(git log -1 --format=%h -S"toHaveLength(291)" -- src/main/security-critical-fixes.test.ts)
+ *   Ex. : node scripts/canaux-ipc.mjs $(git log -1 --format=%h -S"toHaveLength(291)" -- src/main/gardes/security-critical-fixes.test.ts)
  * Sortie : JSON { avant, apres, ajoutes: [{canal, fichier}], retires: [...] } ; code 0.
  */
 import { execFileSync } from 'node:child_process'

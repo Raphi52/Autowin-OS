@@ -2,7 +2,7 @@ import { createReadStream } from 'node:fs'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
-import { causeDInterruption } from '../classe-terminale-echec'
+import { causeDInterruption } from '../orchestration/classe-terminale-echec'
 import { isDeliberateAbort } from '../task-manager/watchdog-suppression'
 
 /**

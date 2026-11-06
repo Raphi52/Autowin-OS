@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { supprimerArbre } from '../src/main/fs-supprimer'
+import { supprimerArbre } from '../src/main/fichiers/fs-supprimer'
 
 /**
  * NETTOYAGE DES DOSSIERS TEMPORAIRES DE LA SUITE DE TESTS.

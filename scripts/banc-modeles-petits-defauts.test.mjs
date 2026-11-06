@@ -35,7 +35,7 @@ describe('banc-modeles-petits-defauts (conv-1097)', () => {
   })
 
   it('donne au modèle le fichier et le symptôme, jamais le correctif ni le nom du test caché', () => {
-    expect(prompt('poids')).toContain('src/main/chat-session-poids.ts')
+    expect(prompt('poids')).toContain('src/main/chat/chat-session-poids.ts')
     expect(prompt('poids')).not.toContain('chat-usage')
     expect(prompt('animation')).not.toContain('ANIMATION_DECLAREE')
     expect(prompt('secret')).toContain('src/main/activity/trace-redact.ts')

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ExecutionUsageSnapshot } from '../execution-supervisor'
+import type { ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 import { taskUsageMetricsFromExecution } from './task-usage-metrics'
 
 const usage = (overrides: Partial<ExecutionUsageSnapshot> = {}): ExecutionUsageSnapshot => ({

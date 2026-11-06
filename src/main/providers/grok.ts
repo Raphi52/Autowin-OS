@@ -16,7 +16,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { planProviderLogin, spawnLoginTerminal } from '../provider-login'
+import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk, Usage } from './types'
 
 export const GROK_PROVIDER_ID = 'grok'

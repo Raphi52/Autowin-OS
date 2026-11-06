@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { Entry } from '@napi-rs/keyring'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 
 const nodeRequire = createRequire(__filename)
 

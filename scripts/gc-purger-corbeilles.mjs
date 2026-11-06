@@ -22,7 +22,7 @@
  *    corbeille est gardée et repart à la question habituelle du `/gc`.
  *  - UNE JONCTION n'est jamais suivie. `supprimerArbre` la retire sans toucher sa cible, là où `rmSync`
  *    peut vider le `node_modules` du dépôt selon la version de Node (pas sous 24.19, mesuré le 30/10 ;
- *    voir `src/main/fs-supprimer.ts`).
+ *    voir `src/main/fichiers/fs-supprimer.ts`).
  *  - LE JOURNAL est écrit AVANT de supprimer : une purge impossible à tracer n'a pas lieu.
  *
  * Usage, depuis le dépôt Autowin :
@@ -35,7 +35,7 @@ import { appendFileSync, lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { supprimerArbre } from '../src/main/fs-supprimer.ts'
+import { supprimerArbre } from '../src/main/fichiers/fs-supprimer.ts'
 
 const JOURS_DE_GARDE = 14
 const NOM_DE_LA_RACINE = 'gc-corbeille'

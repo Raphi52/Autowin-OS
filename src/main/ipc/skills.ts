@@ -11,8 +11,8 @@
  * l'application, contrairement aux dépendances qui, elles, sont reçues comme lecteurs.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { discoverConfiguredSkillRegistry } from '../skill-registry'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { discoverConfiguredSkillRegistry } from '../skills/skill-registry'
 
 /** Ce que le canal des skills prenait dans `index.ts` — désormais passé explicitement. */
 export type SkillsIpcDeps = {

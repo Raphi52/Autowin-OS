@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { git, manager, nettoyerRacines, tempRepo } from './worktree-manager.test-helpers'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
-import { preparerCopie } from '../scripts-copie-main'
+import { preparerCopie } from '../app/scripts-copie-main'
 
 afterEach(nettoyerRacines)
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })

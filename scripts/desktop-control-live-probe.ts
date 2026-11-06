@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { app, BrowserWindow } from 'electron'
-import { WindowsDesktopController } from '../src/main/desktop-control'
-import { captureElectronDesktop } from '../src/main/electron-desktop-capture'
+import { WindowsDesktopController } from '../src/main/bureau/desktop-control'
+import { captureElectronDesktop } from '../src/main/bureau/electron-desktop-capture'
 
 app.commandLine.appendSwitch('disable-logging')
 

@@ -153,8 +153,8 @@ describe('l’oracle déclaré dans le dépôt atteste la commande réelle', () 
   it('atteste la commande que le gate ciblé lance réellement', () => {
     // La forme EXACTE produite par `decideRelatedVerify` : `vitest related <chemins> --run`.
     const evidence = [
-      mutation('src/main/verify-command.ts'),
-      preuve({ command: 'vitest related src/main/verify-command.ts --run', exitCode: 1 })
+      mutation('src/main/commands/verify-command.ts'),
+      preuve({ command: 'vitest related src/main/commands/verify-command.ts --run', exitCode: 1 })
     ]
 
     const [, verification] = attestIsolatedVerificationEvidence(evidence, true, oracles)
@@ -165,7 +165,7 @@ describe('l’oracle déclaré dans le dépôt atteste la commande réelle', () 
 
   it('la suite COMPLÈTE garde son attestation — élargir n’a rien retiré', () => {
     const evidence = [
-      mutation('src/main/verify-command.ts'),
+      mutation('src/main/commands/verify-command.ts'),
       preuve({ command: 'npm run test:unit', exitCode: 1 })
     ]
 
@@ -177,7 +177,7 @@ describe('l’oracle déclaré dans le dépôt atteste la commande réelle', () 
   it('`typecheck` et `build` restent SANS attestation', () => {
     for (const commande of ['npm run typecheck', 'npm run build']) {
       const evidence = [
-        mutation('src/main/verify-command.ts'),
+        mutation('src/main/commands/verify-command.ts'),
         preuve({ command: commande, exitCode: 1 })
       ]
       const [, verification] = attestIsolatedVerificationEvidence(evidence, true, oracles)

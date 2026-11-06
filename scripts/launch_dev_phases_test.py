@@ -374,7 +374,7 @@ verifie("Transform failed" in _detail_casse, "et il porte la LIGNE fautive, pas 
 # Ce correctif avait deja ete ecrit puis PERDU par un autostash concurrent avant d'etre committe —
 # c'est pourquoi il est ici, teste ET committe cette fois.
 _rollup = ('src/main/index.ts (278:9): "abortUpdateConflict" is not exported by '
-           '"src/main/git-update.ts", imported by "src/main/index.ts".')
+           '"src/main/git/git-update.ts", imported by "src/main/index.ts".')
 _c = classer_ligne(_rollup)
 verifie(_c is not None and _c[0] == "erreur", "un import non resolu est un ECHEC, pas un retard")
 verifie(_c[1] == "Compilation en ECHEC", "le libelle reste COURT pour l'etiquette d'etape")

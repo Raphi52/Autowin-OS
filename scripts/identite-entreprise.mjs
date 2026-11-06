@@ -1,5 +1,5 @@
 /**
- * Identite d'entreprise pour les SCRIPTS du depot — meme contrat que `src/main/identite-entreprise.ts`
+ * Identite d'entreprise pour les SCRIPTS du depot — meme contrat que `src/main/profil/identite-entreprise.ts`
  * (application) et `brain/tooling/brain_identite.py` (Brain).
  *
  * Le depot ne nomme aucune entreprise. Un profil `entreprise/<nom>/identite.json` (absent de la
@@ -110,7 +110,7 @@ export function racineDesProfils(racine = RACINE_DEPOT) {
 /**
  * Noms qu'aucun fichier hors de `entreprise/` ne doit porter : le nom de chaque dossier de profil et
  * le champ `nom` de son `identite.json`, en minuscules. Meme regle que la garde
- * `src/main/separation-entreprise.test.ts`.
+ * `src/main/gardes/separation-entreprise.test.ts`.
  */
 export function nomsDesProfils(racine = RACINE_DEPOT) {
   const dossier = join(racine, 'entreprise')
@@ -158,7 +158,7 @@ const MOTS_TEMOINS = Object.freeze([
  * `termesInterdits` de chaque profil — le metier, les serveurs, les collegues, les chemins
  * personnels. Ce sont des MOTIFS (expressions regulieres, `ignorerCasse` en option) et non des
  * sous-chaines : un sigle de trois lettres cherche en sous-chaine toucherait `origine`. Meme source
- * pour la garde `src/main/separation-entreprise.test.ts` et l'export `export-public.mjs`.
+ * pour la garde `src/main/gardes/separation-entreprise.test.ts` et l'export `export-public.mjs`.
  *
  * Rend `{ termes, erreurs }`. Une liste mal formee (pas une liste, motif absent, vide, illisible ou
  * trop large) est une ERREUR nommee, jamais une liste vide : une faute de frappe ne doit pas

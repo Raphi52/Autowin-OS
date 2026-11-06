@@ -70,16 +70,16 @@ describe('blocDesJuges — le dernier passage, suivi par le précédent', () => 
     expect(premiere.adresses).toEqual([
       { chemin: 'ArtifactVideoPlayer.tsx', affiche: 'ArtifactVideoPlayer.tsx' },
       {
-        chemin: 'src/main/video-ffprobe.ts',
-        affiche: 'src/main/video-ffprobe.ts',
+        chemin: 'src/main/media/video-ffprobe.ts',
+        affiche: 'src/main/media/video-ffprobe.ts',
         lieu: 'lireSortieFfprobe',
         lignes: 'l.60-81'
       }
     ])
     expect(deuxieme.adresses).toEqual([
       {
-        chemin: 'src/main/video-ffprobe.ts',
-        affiche: 'src/main/video-ffprobe.ts',
+        chemin: 'src/main/media/video-ffprobe.ts',
+        affiche: 'src/main/media/video-ffprobe.ts',
         lignes: 'l.11-12'
       }
     ])
@@ -87,10 +87,10 @@ describe('blocDesJuges — le dernier passage, suivi par le précédent', () => 
     expect(troisieme.adresses.map((a) => a.affiche)).toEqual([
       'causal-trace/conv-253.jsonl',
       'commands.ts',
-      'src/main/orchestrator.ts'
+      'src/main/orchestration/orchestrator.ts'
     ])
     expect(troisieme.adresses[2]).toMatchObject({
-      chemin: 'D:/Autowin/src/main/orchestrator.ts',
+      chemin: 'D:/Autowin/src/main/orchestration/orchestrator.ts',
       lignes: 'l.5680'
     })
   })

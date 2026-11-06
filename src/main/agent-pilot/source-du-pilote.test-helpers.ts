@@ -9,10 +9,10 @@ import { join } from 'node:path'
 export function sourceDuPilote(): string {
   const dossier = join(__dirname, '..')
   const modules = readdirSync(join(dossier, 'agent-pilot'))
-    .filter((nom) => nom.endsWith('.ts') && !nom.includes('.test'))
+    .filter((nom) => nom.endsWith('.ts') && !nom.includes('.test') && nom !== 'agent-pilot.ts')
     .sort()
     .map((nom) => readFileSync(join(dossier, 'agent-pilot', nom), 'utf8'))
-  return [readFileSync(join(dossier, 'agent-pilot.ts'), 'utf8'), ...modules]
+  return [readFileSync(join(dossier, 'agent-pilot/agent-pilot.ts'), 'utf8'), ...modules]
     .join('\n')
     .replace(/\r\n/g, '\n')
 }

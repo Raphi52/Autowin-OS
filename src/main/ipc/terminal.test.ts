@@ -44,7 +44,7 @@ vi.mock('electron', () => ({
   },
   webFrame: { getZoomFactor: () => 1, setZoomFactor: () => undefined }
 }))
-vi.mock('../ipc-senders', () => ({
+vi.mock('./ipc-senders', () => ({
   assertTrustedRendererSender: (event: { nonFiable?: boolean }, portee: string) => {
     simule.gardes.push(portee)
     if (event?.nonFiable) throw new Error(`Origine renderer non autorisée pour ${portee}`)
@@ -52,7 +52,7 @@ vi.mock('../ipc-senders', () => ({
 }))
 
 import { registerTerminalIpc } from './terminal'
-import { gestionnaireTerminal, type FabriquePty, type PtyLocal } from '../terminal-integre'
+import { gestionnaireTerminal, type FabriquePty, type PtyLocal } from '../bureau/terminal-integre'
 import {
   CANAUX_TERMINAL,
   type ApiTerminal,

@@ -8,7 +8,7 @@ import {
 } from './orchestration-state'
 import { MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared/relance-sans-objet'
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
-import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
  * REPRENDRE SANS REPAYER.
@@ -199,7 +199,7 @@ describe('pickResumeForTask — « reprend » compare aussi la tâche délégué
  */
 describe('câblage — la commande du chat reprend et rattache la conversation', () => {
   const source = sourceDuBus()
-  const osSource = readFileSync(join(__dirname, '..', 'os.ts'), 'utf8')
+  const osSource = readFileSync(join(__dirname, '../app/os.ts'), 'utf8')
 
   it('elle cherche un acquis pour CETTE tâche et CETTE conversation', () => {
     expect(source).toMatch(

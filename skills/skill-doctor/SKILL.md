@@ -68,7 +68,7 @@ L'utilisateur tranche. S'il demande de couper une skill, deux voies existent :
   `.autowin-data/autowin-os/registry/enablement.v1.json`. Sans redémarrage, elle sort de la liste dès le
   tour suivant (un tour déjà lancé garde la sienne) et `skill_charger` la refuse. Le reste continue : un
   `/nom` tapé charge encore la procédure
-  (`src/main/agent-pilot.ts` ne lit pas ce réglage), et une phase du pipeline tourne sous son brief.
+  (`src/main/agent-pilot/agent-pilot.ts` ne lit pas ce réglage), et une phase du pipeline tourne sous son brief.
 - **Définitive :** retirer son dossier. Son contenu reste dans git seulement si elle y était suivie.
 
 Réglages › Skills n'a pas d'interrupteur : la vue est en lecture seule
@@ -80,12 +80,12 @@ Réglages › Skills n'a pas d'interrupteur : la vue est en lecture seule
   `skill_charger` ni ses runs.
 - **`usages` compte les fois où la skill a servi, pas des demandes.** Un `/build` qui lance un run
   compte deux fois : le message, puis l'étape. Seules `tapee` et `modele` lisent le `SKILL.md` : une
-  étape de run joue la phase sous son brief (`src/main/phase-briefs.ts`). `--json` donne le détail.
+  étape de run joue la phase sous son brief (`src/main/consignes/phase-briefs.ts`). `--json` donne le détail.
 - **`jetons 7 j` compte des tours entiers, cache compris.** claude.exe additionne aussi le cache, mais
   requête par requête. Ici, c'est ce qui a tourné autour de la skill, pas son poids : un seul gros run
   peut faire tout le chiffre.
 - **`contexte` est une estimation** (caractères divisés par 4). Le rapport recalcule la ligne avec une
-  copie de `ligneDeSkill` (`src/main/commands.ts`), comparée à l'original par un test.
+  copie de `ligneDeSkill` (`src/main/commands/commands.ts`), comparée à l'original par un test.
 - **La date d'une étape de run** est celle de son fichier : une copie ou une restauration la décale.
 - **La lecture seule a un accroc.** `nativeSkills` crée `registry/` s'il manque sous `--data`, et peut
   réparer ou migrer un réglage illisible ou ancien.

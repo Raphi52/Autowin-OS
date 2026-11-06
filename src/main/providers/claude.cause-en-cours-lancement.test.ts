@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { sandboxForPhase } from '../orchestrator'
+import { sandboxForPhase } from '../orchestration/orchestrator'
 import { ClaudeCliAdapter, signalDeCauseDuLancement } from './claude'
 import { OUTILS_D_EDITION } from './cause-en-cours'
 
@@ -108,7 +108,7 @@ describe('lancement réel — le signal de cause suit l’agent de run', () => {
 
   it('le script posé tourne vraiment, à la racine du run, et son état reste dans ses réglages', async () => {
     const cwd = dossierDuRun()
-    const fichier = join(cwd, 'src', 'main', 'navigateur-integre.ts')
+    const fichier = join(cwd, 'src', 'main', 'bureau', 'navigateur-integre.ts')
     let sorties: string[] = []
     let etat = false
     capture.apresLancement = (l) => {
@@ -128,7 +128,7 @@ describe('lancement réel — le signal de cause suit l’agent de run', () => {
     }
     await lancer({ execution: { cwd, sandbox: sandboxForPhase('tâche', 'build') } })
     expect(sorties.slice(0, 2)).toEqual(['', ''])
-    expect(sorties[2]).toContain('3 édits de src/main/navigateur-integre.ts')
+    expect(sorties[2]).toContain('3 édits de src/main/bureau/navigateur-integre.ts')
     expect(etat).toBe(true)
   })
 

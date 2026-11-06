@@ -106,8 +106,8 @@ describe('preuve visuelle — le diff du run PRIME sur la soustraction git', () 
 
 /**
  * UN FICHIER, UNE CLE. conv-539, tour 24e29815 (reparation 1) : le fix-gate a refuse DEUX fois le
- * meme fichier — « 4 edits de src/main/orchestrator.ts » ET « 4 edits de
- * D:/AutoWinOS/src/main/orchestrator.ts ». Les mutations nomment le fichier tantot en relatif,
+ * meme fichier — « 4 edits de src/main/orchestration/orchestrator.ts » ET « 4 edits de
+ * D:/AutoWinOS/src/main/orchestration/orchestrator.ts ». Les mutations nomment le fichier tantot en relatif,
  * tantot en absolu ; sans le dossier de travail, les deux formes devenaient deux cles, et un jeton
  * de cause pose sur l'une laissait l'autre bloquee.
  */

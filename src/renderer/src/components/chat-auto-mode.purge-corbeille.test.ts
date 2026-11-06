@@ -300,7 +300,7 @@ describe('mode auto — ce qui n’est pas une purge de corbeille continue', () 
 
   // Phrases réelles de la passe du 24/10 (conv-1047, message 5) : le geste n'est pas en tête.
   it.each([
-    'Cherche pourquoi la copie %TEMP%\\aw-base-PaV9he\\copie du 23/10 16:10 (src/main/comparaison-a-la-base.ts) n’a pas été effacée par fermer(), puis retire-la proprement',
+    'Cherche pourquoi la copie %TEMP%\\aw-base-PaV9he\\copie du 23/10 16:10 (src/main/git/comparaison-a-la-base.ts) n’a pas été effacée par fermer(), puis retire-la proprement',
     'Relis le bilan de la corbeille du 16/10'
   ])('une passe /gc garde ses suites de lecture : %s', (suite) => {
     expect(decider(passeGc(suite))).toMatchObject({ action: 'envoyer' })

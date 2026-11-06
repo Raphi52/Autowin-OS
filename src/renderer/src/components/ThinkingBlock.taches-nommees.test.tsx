@@ -93,7 +93,7 @@ describe('bloc Actions — une tâche nomme la commande qu’elle enveloppe', ()
     // disait « Bash ×6 » au lieu de ×5, et le fetch prenait le nom de la tâche des tests.
     const paralleles = [
       'Bash · cd /d/AutoWinOS; git fetch origin 2>&1 | tail -2; git fetch github 2>&1 | tail -2; echo "local/origin:"; git rev-list --',
-      'Bash · cd /d/AutoWinOS; npx vitest run src/main/separation-entreprise.test.ts src/renderer/src/components/ChatView.joindre-pend',
+      'Bash · cd /d/AutoWinOS; npx vitest run src/main/gardes/separation-entreprise.test.ts src/renderer/src/components/ChatView.joindre-pend',
       'Bash terminé - 2 s',
       'tache de fond en cours - Run targeted tests including enterprise separation',
       'tache de fond terminee - Run targeted tests including enterprise separation',

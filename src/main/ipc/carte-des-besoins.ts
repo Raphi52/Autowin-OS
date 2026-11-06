@@ -24,9 +24,9 @@
  * rendu à `index.ts`, recopie le Board à chaque fin de tour, vue fermée.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { creerCalculateurDeCarte, type ConversationPourLaCarte } from '../carte-des-besoins'
-import { creerIdentitesEnCache, type EntreeDuJournal } from '../journal-des-besoins'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { creerCalculateurDeCarte, type ConversationPourLaCarte } from '../board/carte-des-besoins'
+import { creerIdentitesEnCache, type EntreeDuJournal } from '../board/journal-des-besoins'
 import {
   creerLiensWorkItems,
   detacher,
@@ -34,19 +34,19 @@ import {
   rattacherALaMain,
   verifierLesMentions,
   type EtatDesLiens
-} from '../liens-work-items'
+} from '../tickets/liens-work-items'
 import type { BilanDesMentions, ResultatDuRattachement } from '../../shared/carte-des-besoins'
 import { etatManuelLisible, type EtatManuelDuBoard } from '../../shared/board-dossier'
-import type { DossierDuBoard } from '../board-dossier'
-import { creerLecteurDesCollegues, lireFicheDUnCollegue } from '../board-collegues'
-import { creerCopieDeFinDeTour } from '../board-copie-fin-de-tour'
+import type { DossierDuBoard } from '../board/board-dossier'
+import { creerLecteurDesCollegues, lireFicheDUnCollegue } from '../board/board-collegues'
+import { creerCopieDeFinDeTour } from '../board/board-copie-fin-de-tour'
 import { projetsPartagesLisibles } from '../../shared/board-projets-partages'
 import {
   carteDesDossiersDuChat,
   dossiersDuBoard,
   dossiersDuChatLisibles
 } from '../../shared/board-dossiers-du-chat'
-import { creerDossiersDuChat } from '../board-dossiers-du-chat'
+import { creerDossiersDuChat } from '../board/board-dossiers-du-chat'
 import { carteAuNomDuPoste, nomDuPosteLisible } from '../../shared/board-nom-du-poste'
 import type { CarteDesBesoins } from '../../shared/carte-des-besoins'
 import { homedir } from 'node:os'
@@ -54,8 +54,8 @@ import { basename } from 'node:path'
 import type { BoardsDesCollegues } from '../../shared/board-collegues'
 import type { TicketItem, TicketSourceProfile } from '../../shared/tickets'
 import type { TicketGetRequest } from '../ticket-providers/provider-contract'
-import type { AutowinOS } from '../os'
-import { interfaceVisible } from '../startup-gate'
+import type { AutowinOS } from '../app/os'
+import { interfaceVisible } from '../app/startup-gate'
 
 /** La lecture des fiches, et elle seule : le type n'offre aucune écriture chez le fournisseur. */
 export interface LectureDesTickets {

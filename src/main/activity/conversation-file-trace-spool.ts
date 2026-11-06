@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { appendFile, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import type { ExecutionEvidence } from '../providers/types'
 
 const SPOOL_MAX_BYTES = 4 * 1024 * 1024
@@ -550,7 +550,7 @@ function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
         return vue && (!deja || deja.vuSeulement) ? { vuSeulement: true } : {}
       }
       /*
-       * fix-ok: conv-1142 (25/10/2026) — `src/main/reprise-apres-arret.ts`, écrit par conv-1142
+       * fix-ok: conv-1142 (25/10/2026) — `src/main/app/reprise-apres-arret.ts`, écrit par conv-1142
        * (trace de son Write à 13:36:07 UTC), était rendu à conv-1143 : la comparaison de fin de tour
        * de conv-1143 (13:40:57), ouverte AVANT la création, a vu le fichier apparaître et, sa base
        * ne chaînant pas, a remplacé l'auteur. Or elle retombe sur l'état DÉJÀ enregistré, au même

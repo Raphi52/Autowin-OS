@@ -3,9 +3,9 @@
 // parlé, refus d'une commande dans un tour en lecture seule, affichage d'une réponse sans commande
 // et signalement de ses blocs `<cmd>` illisibles. Sorti tel quel de AgentPilot.chat()
 // (conv-1580, lot 4).
-import { motsUtilisateur } from '../chat-turn-messages'
+import { motsUtilisateur } from '../chat/chat-turn-messages'
 import type { SendResult } from '../providers/types'
-import { cleDeVideo, videosLivreesDuTour } from '../videos-livrees'
+import { cleDeVideo, videosLivreesDuTour } from '../media/videos-livrees'
 import { consumeStreamedPrefix, retirerConclusionBloquantePrematuree } from './collage-des-deltas'
 import type { ContexteDuTour } from './contexte-du-tour'
 import type { IterationDuTour } from './iteration-du-tour'

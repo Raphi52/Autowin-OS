@@ -30,7 +30,7 @@ import { constatsRetenus } from '../../../shared/preuve-du-tour'
 export type StatutEtape = 'prouve' | 'refuse' | 'en-cours' | 'sans-preuve' | 'a-venir'
 
 // Textes laissés en français (traduction anglaise, conv-1170) : ce module tourne dans le processus
-// principal (`src/main/carte-des-besoins.ts`), qui garde la carte en cache, et
+// principal (`src/main/board/carte-des-besoins.ts`), qui garde la carte en cache, et
 // `carte-des-besoins-branches.ts` compare le constat « une question t’attend » mot pour mot. Le
 // Board traduit constats, titres de repli et états à l'AFFICHAGE (`RiviereDuProjet.tsx`).
 

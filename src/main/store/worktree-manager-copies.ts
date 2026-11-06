@@ -16,9 +16,9 @@ import {
   writeFileSync
 } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
-import { isSameProcessIdentity } from '../process-identity'
-import { parsePorcelainPaths } from '../run-autoclose'
-import { supprimerArbre } from '../fs-supprimer'
+import { isSameProcessIdentity } from '../app/process-identity'
+import { parsePorcelainPaths } from '../runs/run-autoclose'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { LIGNES, defaultProcessIdentity, empreinteConnue } from './worktree-manager-empreintes'
 import type { FinalizeResult } from './worktree-manager-types'
 import {

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { WorktreeManager } from './worktree-manager'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * COPIES ORPHELINES — des dossiers que git ne connaît plus, et que rien ne pouvait supprimer.

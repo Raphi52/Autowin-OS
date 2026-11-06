@@ -10,8 +10,8 @@
  * service reste construit PARESSEUSEMENT côté `index.ts` et n'est reçu ici que comme lecteur.
  */
 import { ipcMain, shell } from 'electron'
-import type { ServiceTranscripts } from '../transcripts'
-import { assertTrustedRendererSender } from '../ipc-senders'
+import type { ServiceTranscripts } from '../media/transcripts'
+import { assertTrustedRendererSender } from './ipc-senders'
 
 export type TranscriptsIpcDeps = {
   /** Lecteur, pas valeur : aucun dossier n'est créé tant que personne n'appuie sur « Enregistrer ». */

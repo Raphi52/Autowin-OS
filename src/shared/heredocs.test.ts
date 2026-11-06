@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { refusGitDestructeur, scriptHookGardes } from './garde-git-destructeur'
-import { refusReglageProd, refusSqlAgent } from '../main/prod-run-guard'
+import { refusReglageProd, refusSqlAgent } from '../main/prod/prod-run-guard'
 import { decouperHeredocs, sansHeredocsDeDonnees } from './heredocs'
 
 /**
@@ -24,7 +24,7 @@ describe('sansHeredocsDeDonnees — le texte d’un heredoc n’est pas du shell
     [
       'SQL : un test ajouté par cat >> qui nomme sqlcmd',
       [
-        "cat >> src/main/sql-read-command.porte-prod.test.ts <<'EOF'",
+        "cat >> src/main/commands/sql-read-command.porte-prod.test.ts <<'EOF'",
         'sqlcmd -S \'SRV-PROD\\PROD\' -d CATALOGUE -Q "SELECT 1"',
         'EOF'
       ].join(SAUT),

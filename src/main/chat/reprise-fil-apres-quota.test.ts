@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CONTINUATION_INSTRUCTION } from '../chat-continuation'
+import { CONTINUATION_INSTRUCTION } from './chat-continuation'
 import { MARGE_APRES_RETOUR_MS, PLAFOND_ATTENTE_MS } from '../runs/reveil-apres-quota'
 import { StartupResumeQueue } from '../runs/startup-resume-queue'
 import { ENTETE_REPRISE_AUTOMATIQUE, estUneRepriseAutomatique } from './relance-taches-de-fond'

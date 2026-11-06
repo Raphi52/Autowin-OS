@@ -1,21 +1,21 @@
 // Groupe de commandes « état, run, redémarrage, bureau caché, environnement », sorti de AppCommandBus.run (conv-1508, lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import type { AppCommandBus } from '../commands'
+import type { AppCommandBus } from './commands'
 import { argumentAbsent } from './arguments'
-import { etatPourOutil, type ArgsEtat } from '../etat-outil'
-import { ensureAutowinAppData } from '../app-data'
+import { etatPourOutil, type ArgsEtat } from '../chat/etat-outil'
+import { ensureAutowinAppData } from '../app/app-data'
 import { memoriserAutorisations } from '../store/autorisations-permanentes'
-import { autorisationsLuesDans, decisionDeCommande, decouperArguments } from '../autorisation-commande'
+import { autorisationsLuesDans, decisionDeCommande, decouperArguments } from '../gardes/autorisation-commande'
 import { sansHeredocsDeDonnees } from '../../shared/heredocs'
 import { refusGitDestructeur } from '../../shared/garde-git-destructeur'
 import { refusTacheWindows } from '../../shared/garde-tache-windows'
 import { refusEcriturePythonCrlf } from '../../shared/garde-python-crlf'
-import { refusReglageProd, cibleSqlDeCommande } from '../prod-run-guard'
-import { refusCommitDeFichierReserve } from '../reservation-fichiers-app'
-import { poserReprise } from '../redemarrage-reprise'
-import { annoncerFermeture } from '../journal-arrets'
-import { identifiantBureauCacheChat } from '../consigne-bureau-cache'
-import { rechargerEnv } from '../env-reload'
+import { refusReglageProd, cibleSqlDeCommande } from '../prod/prod-run-guard'
+import { refusCommitDeFichierReserve } from '../fichiers/reservation-fichiers-app'
+import { poserReprise } from '../app/redemarrage-reprise'
+import { annoncerFermeture } from '../app/journal-arrets'
+import { identifiantBureauCacheChat } from '../consignes/consigne-bureau-cache'
+import { rechargerEnv } from '../app/env-reload'
 
 /** Cas de `AppCommandBus.run` : état, run, redémarrage, bureau caché, environnement. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */
 export async function executerApplication(

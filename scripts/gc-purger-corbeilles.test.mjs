@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { supprimerArbre } from '../src/main/fs-supprimer.ts'
+import { supprimerArbre } from '../src/main/fichiers/fs-supprimer.ts'
 import { estCibleDestructrice } from '../src/shared/scout-cible-lecture.ts'
 import { purgerLesCorbeilles } from './gc-purger-corbeilles.mjs'
 

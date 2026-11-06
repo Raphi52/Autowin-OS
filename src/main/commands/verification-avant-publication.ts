@@ -2,7 +2,7 @@
 // sorties de commands.ts telles quelles (conv-1580, lot 6). À part de verification.ts pour qu'aucun module
 // ne dépasse ~800 lignes.
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import type { AppCommandBus } from '../commands'
+import type { AppCommandBus } from './commands'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -16,12 +16,12 @@ import {
   decouperEnLots,
   fusionnerRapportsVitest,
   BUDGET_CHEMINS_PAR_LANCEMENT
-} from '../verify-command'
-import { refusAvecIssue } from '../issue-de-refus'
-import { readTestsCitant } from '../git-read-main'
-import type { VerificationAvantPublication } from '../run-autoclose'
-import { supprimerArbre } from '../fs-supprimer'
-import { comparerALaBase } from '../comparaison-a-la-base'
+} from './verify-command'
+import { refusAvecIssue } from '../chat/issue-de-refus'
+import { readTestsCitant } from '../git/git-read-main'
+import type { VerificationAvantPublication } from '../runs/run-autoclose'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { comparerALaBase } from '../git/comparaison-a-la-base'
 import { restaurer } from './publication'
 import type { MesureVerifiee } from './publication'
 

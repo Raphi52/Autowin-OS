@@ -2,7 +2,7 @@
 # Deux garde-fous :
 #   1. Anti-fuite (pour tous) : refuse tout push vers GitHub dont un commit contient `entreprise/`,
 #      ou qui envoie un nom ou un terme d'entreprise (conv-1457) — sections « DÉPÔT PUBLIC » plus
-#      bas, prouvées par src/main/githooks-pre-push.test.ts.
+#      bas, prouvées par src/main/git/githooks-pre-push.test.ts.
 #   2. Anti-collision : interdit le push direct sur la branche par défaut — AUX AGENTS, et seulement
 #      sans `ALLOW_MAIN_PUSH=1`.
 #
@@ -116,11 +116,11 @@ EOF
 fi
 
 # ─── DÉPÔT PUBLIC : AUCUN NOM NI TERME D'ENTREPRISE DANS CE QUI PART ────────────────────────────
-# Ajouté le 2026-11-03 (conv-1457). La garde `src/main/separation-entreprise.test.ts` ne jouait
+# Ajouté le 2026-11-03 (conv-1457). La garde `src/main/gardes/separation-entreprise.test.ts` ne jouait
 # qu'avec `npm test` : quatre commentaires portant un terme métier sont partis sur GitHub. Les MÊMES
 # règles s'appliquent ici aux objets que le push envoie (fichiers de chaque commit, messages), pas à
 # l'arbre de travail — script `scripts/separation-avant-push.mjs`, prouvé par
-# src/main/githooks-pre-push.test.ts. Node seul, sans node_modules : les copies qui publient
+# src/main/git/githooks-pre-push.test.ts. Node seul, sans node_modules : les copies qui publient
 # (`scripts/publier-isole.ps1`) n'en ont pas. Sans profil d'entreprise sur le poste (version
 # publique), le script laisse passer. Il refuse aussi quand il ne peut pas vérifier.
 if [ "$est_public" = "1" ] && [ -n "$envois" ]; then

@@ -10,9 +10,9 @@ import {
 import { appendFile, mkdir, stat } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import { redactTrace } from './trace-redact'
-import type { BrainNavigation, BrainUnavailableReason } from '../brain-retrieval'
+import type { BrainNavigation, BrainUnavailableReason } from '../brain/brain-retrieval'
 
 /**
  * SPOOL DE TRACES BRAIN (observabilité Observatory) — Autowin enregistre, par run, ce que le Brain

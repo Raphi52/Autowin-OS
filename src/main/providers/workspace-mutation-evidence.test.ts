@@ -8,8 +8,8 @@ import {
   captureWorkspaceMutationSnapshot
 } from './workspace-mutation-evidence'
 import type { ExecutionEvidence } from './types'
-import { exactLineFingerprint } from '../exact-line-fingerprint'
-import { supprimerArbre } from '../fs-supprimer'
+import { exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 const roots: string[] = []
 

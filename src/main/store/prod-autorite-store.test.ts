@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { classerCible } from '../prod-guard'
+import { classerCible } from '../prod/prod-guard'
 import { chargerAutoriteProd, cheminAutoriteProd } from './prod-autorite-store'
 
 /**

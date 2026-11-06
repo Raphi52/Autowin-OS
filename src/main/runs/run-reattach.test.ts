@@ -14,10 +14,10 @@ import {
   waitUntilRunCanResume
 } from './run-reattach'
 import { loadOrchestrationStates, saveOrchestrationState } from './orchestration-state'
-import { compileExecutionQuote } from '../execution-quote'
-import { ExecutionSupervisor } from '../execution-supervisor'
+import { compileExecutionQuote } from '../orchestration/execution-quote'
+import { ExecutionSupervisor } from '../orchestration/execution-supervisor'
 import { writeSurvivableExit } from './stdout-journal'
-import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 describe('fin réussie pendant le rattachement', () => {
   let root = ''
@@ -2807,7 +2807,7 @@ describe('câblage : les deux attentes de rattachement suivent le journal', () =
  * quatre fois « l'agent … travaille encore ». Le run ne pouvait JAMAIS être déclaré terminé.
  */
 describe('câblage — l’empreinte du processus est réellement capturée au lancement', () => {
-  const source = readFileSync(join(__dirname, '..', 'os.ts'), 'utf8')
+  const source = readFileSync(join(__dirname, '../app/os.ts'), 'utf8')
 
   it('os.ts fournit la sonde d’empreinte à l’orchestrateur', () => {
     expect(source).toContain('processIdentity: defaultProcessIdentity')

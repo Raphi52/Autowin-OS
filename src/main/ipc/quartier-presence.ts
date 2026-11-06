@@ -27,10 +27,10 @@ import {
   type EtatDeLaPresence,
   type PresencesDesCollegues
 } from '../../shared/quartier-presence'
-import type { DossierDuBoard } from '../board-dossier'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import type { PublicationDeLaPresence } from '../quartier-presence'
-import { creerLecteurDePresence } from '../quartier-presence-collegues'
+import type { DossierDuBoard } from '../board/board-dossier'
+import { assertTrustedRendererSender } from './ipc-senders'
+import type { PublicationDeLaPresence } from '../mascotte/quartier-presence'
+import { creerLecteurDePresence } from '../mascotte/quartier-presence-collegues'
 
 export function registerQuartierPresenceIpc(deps: {
   publication: PublicationDeLaPresence

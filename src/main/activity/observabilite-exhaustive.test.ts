@@ -3,7 +3,7 @@ import { basename } from 'node:path'
 import {
   fichiersDuTourDeChat,
   sourceProcessPrincipal
-} from '../source-process-principal.test-helpers'
+} from '../app/source-process-principal.test-helpers'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
@@ -30,11 +30,11 @@ const RACINE = join(__dirname, '..')
 
 function lire(chemin: string): string[] {
   // orchestrator.ts découpé en modules voisins (conv-1508) : la source lue est leur ensemble, dans l'ordre d'origine.
-  const parties = chemin === 'orchestrator.ts' ? ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'] : [chemin]
+  const parties = chemin === 'orchestration/orchestrator.ts' ? ['orchestration/orchestrator-contrats.ts', 'orchestration/orchestrator.ts', 'orchestration/orchestrator-run.ts', 'orchestration/orchestrator-parcours-glouton.ts', 'orchestration/orchestrator-parcours-sequentiel.ts'] : [chemin]
   // commands.ts découpé de même (conv-1508, conv-1580) : la source lue est la famille du bus.
-  if (chemin === 'commands.ts') return sourceDuBus().split(/\r?\n/)
+  if (chemin === 'commands/commands.ts') return sourceDuBus().split(/\r?\n/)
   // agent-pilot.ts découpé de même (conv-1580) : la source lue est la famille du pilote.
-  if (chemin === 'agent-pilot.ts') return sourceDuPilote().split(/\r?\n/)
+  if (chemin === 'agent-pilot/agent-pilot.ts') return sourceDuPilote().split(/\r?\n/)
   return parties.map((f) => readFileSync(join(RACINE, f), 'utf8')).join(String.fromCharCode(10)).split(/\r?\n/)
 }
 
@@ -70,7 +70,7 @@ function codeSeulementDuProcessPrincipal(): string {
  * Fichiers qui DÉCIDENT d'un envoi provider (par opposition à ceux qui ne font que retransporter un
  * `system` déjà composé : adaptateurs, registre, copies d'observabilité).
  */
-const FICHIERS_DE_DECISION = ['orchestrator.ts', 'agent-pilot.ts']
+const FICHIERS_DE_DECISION = ['orchestration/orchestrator.ts', 'agent-pilot/agent-pilot.ts']
 
 /** Valeurs qui ne COMPOSENT pas une injection : elles recopient un `system` construit ailleurs. */
 const RETRANSPORTS =
@@ -117,8 +117,8 @@ describe("exhaustivité de l'inventaire des injections", () => {
     // Trou trouvé le 2026-08-31 APRÈS la première passe : seule l'orchestration avait été nommée.
     // Le CHAT poussait cinq blocs (état de l'app, Brain, mémoire, rappel, skill) dans le message
     // utilisateur sans aucun nom — et c'est le chemin le plus emprunté des deux.
-    expect(codeSeulement('orchestrator.ts')).toMatch(/contextBlocks:/)
-    expect(codeSeulement('agent-pilot.ts')).toMatch(/contextBlocks/)
+    expect(codeSeulement('orchestration/orchestrator.ts')).toMatch(/contextBlocks:/)
+    expect(codeSeulement('agent-pilot/agent-pilot.ts')).toMatch(/contextBlocks/)
   })
 
   it("aucun site de persistance d'appel ne JETTE une décomposition déjà calculée", () => {
@@ -162,11 +162,11 @@ describe("exhaustivité de l'inventaire des injections", () => {
  * Modules qui manipulent un récupérateur Brain sans en être l'APPELANT métier : ils reçoivent la
  * fonction, la bornent, la transportent. Tracer ici doublerait la trace de l'appelant réel.
  */
-const PLOMBERIE_BRAIN = new Set(['brain-retrieval.ts', 'brain-corpus-scope.ts'])
+const PLOMBERIE_BRAIN = new Set(['brain/brain-retrieval.ts', 'brain/brain-corpus-scope.ts'])
 
 describe('exhaustivité des appels au Brain', () => {
   it('chaque fichier qui appelle le Brain écrit une trace, ou figure dans la plomberie déclarée', () => {
-    const fichiers = ['orchestrator.ts', 'commands.ts', 'index.ts', 'brain-corpus-scope.ts']
+    const fichiers = ['orchestration/orchestrator.ts', 'commands/commands.ts', 'index.ts', 'brain/brain-corpus-scope.ts']
     const sansTrace: string[] = []
     for (const fichier of fichiers) {
       const source = codeSeulement(fichier)
@@ -184,7 +184,7 @@ describe('exhaustivité des appels au Brain', () => {
   it('la commande `remember` trace son ÉCRITURE vers le Brain, pas seulement les lectures', () => {
     // Le spool ne connaissait que la lecture : un dépôt réussi et un dépôt tombé dans un service
     // injoignable étaient également invisibles dans la vue qui prétend montrer l'activité Brain.
-    expect(codeSeulement('commands.ts')).toMatch(/kind: 'depot'/)
+    expect(codeSeulement('commands/commands.ts')).toMatch(/kind: 'depot'/)
   })
 
   it('la recherche lancée depuis la vue Knowledge laisse une trace', () => {
@@ -194,7 +194,7 @@ describe('exhaustivité des appels au Brain', () => {
   it("l'empreinte à question figée n'est plus chargée à chaque run", () => {
     // Retirée le 2026-09-27 : sa question figée ramenait 82 % du temps la même note hors sujet. Si
     // elle revenait, ce serait de nouveau ~2 000 caractères de bruit en tête de chaque phase.
-    const code = codeSeulement('orchestrator.ts')
+    const code = codeSeulement('orchestration/orchestrator.ts')
     expect(code).not.toMatch(/kind: 'empreinte'/)
     expect(code).not.toMatch(/empreinteQuery/)
   })

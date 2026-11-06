@@ -48,7 +48,7 @@ describe('manifest des oracles d’apprentissage', () => {
         expect.objectContaining({
           command:
             'powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-brain-outcome-writeback.ps1',
-          covers: expect.arrayContaining(['src/main/outcome-learning-policy.ts']),
+          covers: expect.arrayContaining(['src/main/brain/outcome-learning-policy.ts']),
           attestedFiles: expect.arrayContaining(['scripts/verify-brain-outcome-writeback.ps1'])
         })
       ])

@@ -7,7 +7,7 @@ import { CLOSURE_UPSTREAM_REFUSAL, arretDeLaReparation, memeRefus } from './stop
  * Défaut VÉCU, conv-470, tour `52fbe05f-0086-4806-8f07-c8762e8caa35` (demande `/kaizen j'ai rien en
  * préprompt`, saisie `ts=1789192601300`) : QUATRE passages `[RÉPARATION 1..4]`, chacun suivi du même
  * refus mot pour mot — « Échec déjà déclaré … ; Promis mais pas fait : "Cible nommee …
- * src/main/model-quotas.ts" ». `doitArreterLaReparation` n'a pas mordu parce qu'elle exige que TOUS
+ * src/main/modeles/model-quotas.ts" ». `doitArreterLaReparation` n'a pas mordu parce qu'elle exige que TOUS
  * les motifs soient hors de portée de build : la promesse non tenue passait pour réparable. Elle ne
  * l'était pas — le fichier exigé venait du dossier de preuve joint, pas de la demande — et quatre
  * builds + panels de juge ont été payés pour un refus qui ne bougeait pas.
@@ -19,7 +19,7 @@ import { CLOSURE_UPSTREAM_REFUSAL, arretDeLaReparation, memeRefus } from './stop
 describe('réparation — refus mixte figé', () => {
   const refusMixte = [
     CLOSURE_UPSTREAM_REFUSAL,
-    'Promis mais pas fait : « Cible nommee dans la demande reellement modifiee : src/main/model-quotas.ts ».'
+    'Promis mais pas fait : « Cible nommee dans la demande reellement modifiee : src/main/modeles/model-quotas.ts ».'
   ]
 
   it('laisse passer le premier refus identique mixte (il reste peut-être réparable)', () => {

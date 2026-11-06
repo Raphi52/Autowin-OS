@@ -1,12 +1,12 @@
 // Commande `verify` : choix de la copie, lancement du script et portée du vert — méthodes de AppCommandBus
 // sorties de commands.ts telles quelles (conv-1580, lot 6).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import type { AppCommandBus } from '../commands'
+import type { AppCommandBus } from './commands'
 import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import { spawn } from 'node:child_process'
-import { suivreArbre, tuerArbre } from '../verify-extinction'
-import { decoderSortieConsole, pageDeCodeConsole } from '../console-encoding'
+import { suivreArbre, tuerArbre } from '../verify/verify-extinction'
+import { decoderSortieConsole, pageDeCodeConsole } from '../app/console-encoding'
 import {
   capVerifyOutput,
   decideRelatedVerify,
@@ -21,8 +21,8 @@ import {
   verifyTimeoutMs,
   verifyTimeoutOutcome,
   type VerifyOutcome
-} from '../verify-command'
-import { battementDeVerification, VERIFY_BATTEMENT_MS } from '../verify-battement'
+} from './verify-command'
+import { battementDeVerification, VERIFY_BATTEMENT_MS } from '../verify/verify-battement'
 import {
   bureauUtilisable,
   cleDuBureauDeVerification,
@@ -30,9 +30,9 @@ import {
   fichiersRestesDansLaCopie,
   synchroniserBureauDeVerification,
   VERIFY_SANS_ISOLATION
-} from '../verification-isolee'
-import { readLastCommitFiles } from '../git-read-main'
-import { readGitState } from '../git-read-main'
+} from '../verify/verification-isolee'
+import { readLastCommitFiles } from '../git/git-read-main'
+import { readGitState } from '../git/git-read-main'
 import { SAUT_PORTEE, archiverSortie } from './publication'
 
 /**

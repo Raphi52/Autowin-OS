@@ -6,8 +6,8 @@
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AutowinOS } from '../src/main/os'
-import { AppCommandBus } from '../src/main/commands'
+import { AutowinOS } from '../src/main/app/os'
+import { AppCommandBus } from '../src/main/commands/commands'
 
 // AutowinOS construit SES adaptateurs (claude.exe résolu via le VRAI %APPDATA%) →
 // on isole APPDATA APRÈS la construction ; conv-runs/roles y écrivent alors en temp.

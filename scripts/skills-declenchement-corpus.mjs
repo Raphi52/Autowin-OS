@@ -7,14 +7,14 @@
  * Ce script en tire le jeu : le texte SANS sa commande, étiqueté par la skill.
  *
  * Il ne mesure PAS le déclenchement : sans `/` en tête, c'est le modèle du chat qui choisit une skill
- * dans le catalogue des descriptions (aucun aiguillage déterministe, src/main/skill-routing.ts ne
+ * dans le catalogue des descriptions (aucun aiguillage déterministe, src/main/skills/skill-routing.ts ne
  * reconnaît que la commande explicite). La mesure coûte donc un tour de chat par demande. Ce jeu
  * dit, gratuitement, sur quoi elle peut porter : une skill invoquée 60 fois toujours SANS texte
  * (« /salvage » seul) ne peut pas être évaluée sur son déclencheur.
  *
  * Même règle d'invocation que l'app : la commande EN TÊTE du message (`invokedSkillId`,
- * src/main/skill-pipeline.ts) ; une mention au fil du texte n'en est pas une. Mêmes racines de
- * skills que `skillRoots()` (src/main/native-registry.ts) : `skills/` et
+ * src/main/skills/skill-pipeline.ts) ; une mention au fil du texte n'en est pas une. Mêmes racines de
+ * skills que `skillRoots()` (src/main/app/native-registry.ts) : `skills/` et
  * `%LOCALAPPDATA%/autowin-os/skills`.
  *
  * Lit l'instantané `conversations.json` et ses archives (scripts/conversations-sur-disque.mjs) ; les

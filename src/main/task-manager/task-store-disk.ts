@@ -1,11 +1,11 @@
 import { join } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import {
   attendreFichier,
   deposerFichier,
   relireFichier,
   viderFichiersEnAttente
-} from '../ecriture-hors-fil'
+} from '../gel/ecriture-hors-fil'
 import type { TaskStoreSnapshot } from './types'
 import type { TaskStore } from './task-store'
 

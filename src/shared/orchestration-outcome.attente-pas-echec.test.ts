@@ -34,7 +34,7 @@ describe('formatOrchestrationOutcome — attente active plutot qu echec terminal
   })
 
   it('base sale : plus de panneau d interdiction, plus de statut echoue', () => {
-    const texte = formatOrchestrationOutcome(true, issue('base-dirty', ['src/main/agent-pilot.ts']))
+    const texte = formatOrchestrationOutcome(true, issue('base-dirty', ['src/main/agent-pilot/agent-pilot.ts']))
 
     expect(texte).not.toContain('⛔')
     expect(texte).not.toContain('Travail NON intégré')
@@ -44,7 +44,7 @@ describe('formatOrchestrationOutcome — attente active plutot qu echec terminal
     expect(texte).toContain('EN ATTENTE')
     // La franchise reste : la cause et les fichiers sont toujours nommes.
     expect(texte).toContain('base sale')
-    expect(texte).toContain('src/main/agent-pilot.ts')
+    expect(texte).toContain('src/main/agent-pilot/agent-pilot.ts')
     // Et surtout : jamais present comme livre.
     expect(texte).not.toMatch(/✅|Workflow terminé/)
   })

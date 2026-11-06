@@ -6,7 +6,7 @@
  *     sur l'écran de l'utilisateur ;
  *  2. le compte à rebours `<total_tokens>… tokens left</total_tokens>` que Claude Code glisse à
  *     chaque requête est retiré : il contredit la règle de l'utilisateur « pas de budget, on récupère
- *     le nécessaire » (src/main/orchestrator.ts, src/main/brain-protocol.ts) ;
+ *     le nécessaire » (src/main/orchestration/orchestrator.ts, src/main/brain/brain-protocol.ts) ;
  *  3. la règle du bureau caché est écrite DANS la description de l'outil shell, là où elle sert ;
  *     la même description y perd sa promesse fausse sur les tâches de fond (conv-1602).
  *
@@ -241,7 +241,7 @@ export const REGLE_BUREAU_CACHE =
  * are re-invoked ». Dans Autowin, chaque tour est une session `-p` distincte : le CLI arrête la tâche
  * à la fin du tour. Ensuite, deux chemins : un tour de CHAT relance la commande depuis le début, hors du
  * tour, et rouvre un tour de reprise avec son résultat (src/main/chat/relance-taches-de-fond.ts,
- * `relancerTachesDeFond` posé par src/main/agent-pilot.ts) ; une étape de RUN ne relance rien, le
+ * `relancerTachesDeFond` posé par src/main/agent-pilot/agent-pilot.ts) ; une étape de RUN ne relance rien, le
  * résultat est perdu (avis « Son résultat ne reviendra pas tout seul », src/main/providers/claude.ts).
  * L'ancien hooks/logique.mjs, que hooks.json ne chargeait pas, disait « never comes back » partout.
  * Appliquée AVANT le test « déjà complétée », pour qu'un second passage rende le même texte.

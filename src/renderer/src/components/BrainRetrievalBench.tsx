@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { BrainSearchEnvelope } from '../../../main/brain-search-envelope'
+import type { BrainSearchEnvelope } from '../../../main/brain/brain-search-envelope'
 import { brainBusinessError } from './graph-view-model'
 import { BrainNavigationCard, type BrainTraceView } from './BrainNavigationCard'
 import { formaterNombre, langueCourante } from '../langue'

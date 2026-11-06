@@ -3,7 +3,7 @@ import { Spinner } from './Spinner'
 import { fabriqueMoteur } from './jarvis-moteur'
 import type { MoteurVocal } from './jarvis-moteur-whisper'
 import { messageErreurMoteur } from './jarvis-voice'
-import type { EtatWhisper } from '../../../main/whisper-local'
+import type { EtatWhisper } from '../../../main/media/whisper-local'
 import {
   ajouterLigneAffichee,
   formaterDuree,

@@ -53,7 +53,7 @@ export const TEXTES_FR = {
     'Le choix n’a pas pu être enregistré : le partage reste comme avant.',
 
   // Boutons « réparer » du diagnostic (preflight-repair-affordance.ts). Le français est AUSSI celui
-  // du plan du moteur (`src/main/preflight-repair.ts`), que le test de contrat compare.
+  // du plan du moteur (`src/main/preflight/preflight-repair.ts`), que le test de contrat compare.
   'reparation.claudeSession.libelle': 'Se connecter',
   'reparation.claudeSession.note':
     'Une console s’ouvre : le CLI est installé s’il manque, puis le login Anthropic s’y fait. Rien n’est saisi dans Autowin.',

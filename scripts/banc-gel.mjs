@@ -2,7 +2,7 @@
  * BANC DE GEL — capter, nommer, et repartir SANS fermer l'application.
  *
  * Boucle autonome : ouvre une vue, mesure si la fenetre repond, et si elle est morte, ATTEND la
- * reanimation automatique du processus principal (src/main/gel-reanimation.ts) au lieu d'exiger un
+ * reanimation automatique du processus principal (src/main/gel/gel-reanimation.ts) au lieu d'exiger un
  * redemarrage complet. Rend un verdict chiffre et le motif lu dans le journal des gels.
  *
  * Usage, dans une instance CACHÉE (jamais l'app ouverte de l'utilisateur par défaut) :

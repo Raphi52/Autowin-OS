@@ -11,7 +11,7 @@ index afadeb0d..19494b82 100644
 +# `dev` NE DOIT PAS PORTER `--watch`. Avec ce drapeau, electron-vite redemarrait Electron des qu'un
 +# module `main` ou `preload` changeait, ce qui TUAIT l'orchestration en cours (demande `conv-1267`,
 +# corrige au commit 447b85d4). Le rechargement a chaud du RENDERER est conserve : il passe par le
-+# dev-server, pas par ce drapeau. Contrat miroir de `src/main/dev-sans-watch.test.ts`, qui garde la
++# dev-server, pas par ce drapeau. Contrat miroir de `src/main/app/dev-sans-watch.test.ts`, qui garde la
 +# meme regle cote produit.
 +Assert-True ($devCommand -eq 'electron-vite dev') 'dev must delegate to electron-vite WITHOUT restarting the main process'
 +Assert-True (($devCommand -split '--watch').Count -eq 1) 'dev must carry NO --watch flag: it killed the runs in progress'

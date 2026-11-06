@@ -12,11 +12,11 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { listProjectDir, readProjectFile, writeProjectFile } from '../project-files'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
-import { dossierDeTravailDuTour } from '../bascule-dossier-conversation'
-import type { AutowinOS } from '../os'
+import { listProjectDir, readProjectFile, writeProjectFile } from '../fichiers/project-files'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
+import { dossierDeTravailDuTour } from '../conversations/bascule-dossier-conversation'
+import type { AutowinOS } from '../app/os'
 
 export function registerProjectFilesIpc({ os }: { os: AutowinOS }): void {
   const racine = (rawConv: unknown): string =>

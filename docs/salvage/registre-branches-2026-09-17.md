@@ -86,7 +86,7 @@ de travail absent de la base. Trois motifs, du plus simple au moins évident :
 ### Les six cas qui méritaient une lecture, pas un `git cherry`
 
 **Les 13 copies « diagnostic de sortie du modèle »** (`copie-run-*`,
-`transport-exit-codes-20260806`). `main` porte `src/main/provider-failure-diagnosis.ts` en
+`transport-exit-codes-20260806`). `main` porte `src/main/providers/provider-failure-diagnosis.ts` en
 311 lignes là où les copies en ont 192, avec `describeExitCode`, `isTransportExitCode` et
 `describeProviderExit` réellement câblés dans `providers/claude.ts` (l. 56-59 et 1882-1895).
 Les copies apportaient `crashExitCode` et `uncoveredSendSites` : deux noms que `main` n'a

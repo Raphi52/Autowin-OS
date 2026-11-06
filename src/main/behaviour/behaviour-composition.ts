@@ -1,0 +1,423 @@
+/**
+ * COMPOSITION DU COMPORTEMENT (config statique) — la source de vérité de la vue « Behaviour ».
+ *
+ * Assemble, depuis les modules SOURCES réels, TOUT ce qui VA influer sur le comportement du chat
+ * Autowin — et RIEN d'autre. Trois chemins DISTINCTS :
+ *  - `cockpit` : le chat visible (AgentPilot) — pilotage, contexte projet et RAG Brain.
+ *  - `orchestrated` : le pipeline (os:orchestrate → Orchestrator.run) — phases, Brain, modèle/rôle,
+ *    régime, garde-fous.
+ *  - `direct` : os.chat — beaucoup plus simple (CONSTITUTION + binding de rôle, aucun garde-fou/phase).
+ *
+ * INVARIANT (testé, pas jugé) :
+ *  - COMPLÉTUDE : chaque catégorie A-E de l'orchestré est peuplée et tracée à sa source.
+ *  - EXCLUSIVITÉ : l'objet ne décrit QUE des influenceurs réels — jamais un non-influenceur
+ *    (capabilities activables, hooks natifs Claude, rôle `scout` scalaire),
+ *    qui sont découplés de l'orchestrateur et ne changent RIEN au prompt/comportement d'un tour.
+ *
+ * Ce module ne DÉCIDE rien du comportement : il le DÉCRIT fidèlement. Les valeurs volatiles
+ * (modèles découverts, caps env non définis) sont exposées comme RÈGLE, pas comme valeur figée.
+ */
+import { PHASE_BRIEFS } from '../consignes/phase-briefs'
+import { PIPELINE_DISCIPLINE_INSTRUCTION } from '../orchestration/pipeline-discipline'
+import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from '../consignes/response-style'
+import { CONSTITUTION } from '../consignes/constitution'
+import { PROJECT_CONTEXT_CHAIN, PROJECT_CONTEXT_MAX_BYTES } from '../consignes/context-files'
+import { phasesForRegime, type TaskRegime } from '../orchestration/task-regime'
+import {
+  effortParDefautDeLEtape,
+  resolvePhaseBinding,
+  ALL_ROLES,
+  type Role,
+  type RoleBinding,
+  type RoleModelConfig
+} from '../profil/roles'
+import { effortsDeclaresDuModele, type ImportedModel } from '../modeles/models'
+import type { PipelinePhase } from '../skills/skill-pipeline'
+import type { AgentTopology } from '../topologie/topology'
+
+/** Un influenceur réel : ce qu'il fait, sa valeur/règle actuelle, et sa source dans le code. */
+export interface InfluencerField {
+  /** Nom lisible de l'influenceur. */
+  label: string
+  /** Valeur ACTUELLE ou RÈGLE (si volatile), en clair. */
+  value: string
+  /** Citation `file:line` prouvant l'effet réel sur un tour. */
+  source: string
+  /** Extrait du texte réellement injecté, quand l'influenceur EST un bloc de prompt. */
+  excerpt?: string
+}
+
+/** Les blocs du system prompt d'une phase orchestrée (catégorie A). */
+export interface PhaseSystemPrompt {
+  phase: PipelinePhase
+  blocks: InfluencerField[]
+}
+
+export interface OrchestratedBehaviour {
+  /** A — composition du system prompt, VARIE par phase. */
+  systemPrompt: PhaseSystemPrompt[]
+  /** B — contexte injecté dans le message user (hors system). */
+  injectedContext: InfluencerField[]
+  /** C — sélection modèle / rôle / effort (qui répond, avec quoi). */
+  modelSelection: InfluencerField[]
+  /** C2 — fan-out vivant issu de la topologie. */
+  topology: InfluencerField[]
+  /** D — régime → sous-ensemble de phases joué. */
+  regime: InfluencerField[]
+  /** E — garde-fous déterministes. */
+  guardrails: InfluencerField[]
+}
+
+export interface DirectBehaviour {
+  /** Chat direct : system = CONSTITUTION par défaut, partagé avec les phases orchestrées. */
+  systemPrompt: InfluencerField[]
+  modelSelection: InfluencerField[]
+}
+
+export interface CockpitBehaviour {
+  systemPrompt: InfluencerField[]
+  retrievedContext: InfluencerField[]
+  turnContext: InfluencerField[]
+  modelSelection: InfluencerField[]
+}
+
+export interface BehaviourComposition {
+  cockpit: CockpitBehaviour
+  orchestrated: OrchestratedBehaviour
+  direct: DirectBehaviour
+}
+
+/**
+ * Texte injecté COMPLET pour le panneau dépliable « texte injecté ». Le rendu est un <pre>
+ * qui scrolle (pre-wrap + max-height + overflow:auto) → on montre l'intégralité, retours à la
+ * ligne préservés (ne pas collapser les espaces : ce texte EST le prompt réellement injecté).
+ */
+function injectedText(text: string): string {
+  return text.trim()
+}
+
+/** Phases orchestrées dont on décrit la composition (le juge/synthèse/réparation dérivent de celles-ci). */
+const ORCHESTRATED_PHASES: PipelinePhase[] = [
+  'scout',
+  'frame',
+  'terrain',
+  'build',
+  'clean',
+  'judge',
+  'kaizen'
+]
+
+/** Compte annoncé par le titre « ## Les N réflexes » de la constitution, testé égal au compte réel. */
+const NOMBRE_DE_REFLEXES = /## Les (\d+) réflexes/u.exec(CONSTITUTION)?.[1] ?? '?'
+
+function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
+  const brief = PHASE_BRIEFS[phase] ?? ''
+  const blocks: InfluencerField[] = []
+  // La CONSTITUTION (soul/réflexes) est la source UNIQUE partagée, injectée en tête de chaque
+  // phase de TRAVAIL (le juge garde sa composition stricte séparée, sans constitution).
+  if (phase !== 'judge') {
+    blocks.push({
+      label: 'constitution',
+      // Nombre LU dans le titre de la constitution : le chiffre figé « 13 » a dérivé à l'ajout du
+      // réflexe 14 (conv-1024).
+      value: `Constitution (${NOMBRE_DE_REFLEXES} réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.`,
+      source: 'src/main/consignes/constitution.ts:14',
+      excerpt: injectedText(CONSTITUTION)
+    })
+  }
+  blocks.push({
+    label: `consigne:${phase}`,
+    value: brief
+      ? 'Brief de phase purpose-built injecté en tête du system.'
+      : 'Aucun brief (retombe sur la discipline générique).',
+    source: 'src/main/consignes/phase-briefs.ts:10',
+    excerpt: brief ? injectedText(brief) : undefined
+  })
+  // La synthèse fan-out et le juge n'injectent PAS la discipline de pipeline (orchestrator.ts:306,527).
+  if (phase !== 'judge') {
+    blocks.push({
+      label: 'discipline',
+      value: 'Discipline de pipeline (scout→frame→build→clean→judge) ajoutée au system.',
+      source: 'src/main/orchestration/pipeline-discipline.ts:6',
+      excerpt: injectedText(PIPELINE_DISCIPLINE_INSTRUCTION)
+    })
+  }
+  blocks.push(
+    {
+      label: 'style',
+      value: 'Profil de réponse concis-structuré.',
+      source: 'src/main/consignes/response-style.ts:2',
+      excerpt: injectedText(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
+    },
+    {
+      label: 'projectContext',
+      value: `Dans chaque dossier, premier trouvé de ${PROJECT_CONTEXT_CHAIN.join(' → ')} ; empilés de la racine du dépôt git au workspace d'exécution, le plus proche en dernier (plafond partagé ${PROJECT_CONTEXT_MAX_BYTES.toLocaleString('fr-FR')} octets, coupe signalée), lus par Autowin.`,
+      source: 'src/main/consignes/context-files.ts:211'
+    }
+  )
+  return { phase, blocks }
+}
+
+/** Ordre d'affichage de l'effort d'une étape qui dépend de la difficulté de la demande. */
+const DIFFICULTES_AFFICHEES: TaskRegime[] = ['critical', 'standard', 'trivial']
+
+/**
+ * L'effort qui part pour une étape. Pour le rôle subagent, quand il hérite du réglage du rôle, il suit
+ * `effortParDefautDeLEtape` (roles.ts) : il dépend alors de la difficulté de la demande, affichée
+ * difficile|standard|triviale. Un `phaseModel` de l'étape, ou un autre rôle, part tel quel.
+ */
+function effortAffiche(
+  role: Role,
+  binding: RoleBinding,
+  phase: PipelinePhase,
+  resolu: { model?: string; reasoningEffort?: RoleBinding['reasoningEffort'] },
+  catalogue: ImportedModel[] | undefined
+): string {
+  const reglage = resolu.reasoningEffort ?? binding.reasoningEffort
+  if (role !== 'subagent' || binding.phaseModel?.[phase]?.reasoningEffort)
+    return reglage ?? 'défaut'
+  const efforts = effortsDeclaresDuModele(
+    catalogue,
+    binding.provider,
+    resolu.model ?? binding.model
+  )
+  const parDifficulte = DIFFICULTES_AFFICHEES.map(
+    (difficulte) => effortParDefautDeLEtape(phase, difficulte, reglage, efforts) ?? 'défaut'
+  )
+  return new Set(parDifficulte).size === 1 ? parDifficulte[0] : parDifficulte.join('|')
+}
+
+/** Décrit le binding effectif d'un rôle (modèle/effort par défaut + overrides de phase). */
+function roleField(role: Role, binding: RoleBinding, catalogue?: ImportedModel[]): InfluencerField {
+  const phaseOverrides = binding.phaseModel
+    ? Object.entries(binding.phaseModel)
+        .map(([ph, o]) => `${ph}:${o?.model ?? '—'}/${o?.reasoningEffort ?? '—'}`)
+        .join(', ')
+    : ''
+  const perPhase = ALL_ROLES.includes(role)
+    ? ORCHESTRATED_PHASES.map((ph) => {
+        const r = resolvePhaseBinding(binding, ph)
+        return `${ph}:${r.model ?? binding.model ?? 'défaut'}/${effortAffiche(role, binding, ph, r, catalogue)}`
+      }).join(', ')
+    : ''
+  const selonDifficulte = perPhase.includes('|') ? ' (difficile|standard|triviale)' : ''
+  return {
+    label: `rôle ${role}`,
+    value: `${binding.provider} · ${binding.model ?? 'défaut provider'} · ${binding.reasoningEffort ?? 'défaut'}${phaseOverrides ? ` — overrides phase: ${phaseOverrides}` : ''}${perPhase ? ` — effectif/phase${selonDifficulte}: ${perPhase}` : ''}`,
+    source: 'src/main/profil/roles.ts:65'
+  }
+}
+
+/**
+ * Construit la composition statique. `roles` = la config de rôles VIVANTE (reflète les bindings
+ * réellement actifs) ; `env` = pour les caps du circuit-breaker (règle si non défini).
+ */
+export function buildBehaviourComposition(
+  roles: Pick<RoleModelConfig, 'all'> & Partial<Pick<RoleModelConfig, 'getCatalog'>>,
+  env: NodeJS.ProcessEnv = process.env,
+  topology?: Pick<AgentTopology, 'panels'>,
+  budgetUsd: number | null = null
+): BehaviourComposition {
+  const bindings = roles.all()
+
+  const modelSelection: InfluencerField[] = [
+    ...ALL_ROLES.filter((r) => r !== 'scout').map((r) =>
+      roleField(r, bindings[r], roles.getCatalog?.())
+    ),
+    {
+      label: 'redirection exécution',
+      value:
+        "En exécution, si le provider ciblé ne supporte pas l'exécution, le registre REDIRIGE vers un exécuteur local outillé (codex prioritaire) en écrasant le modèle demandé — le rôle configuré n'est alors PAS celui qui exécute.",
+      source: 'src/main/providers/registry.ts:69'
+    },
+    {
+      label: 'défauts provider',
+      value:
+        'claude→claude-fable-5/high · codex→gpt-5.6-terra/medium · kimi→…/none (appliqués si modèle/effort absents).',
+      source: 'src/main/profil/roles.ts:37'
+    }
+  ]
+
+  const regime: InfluencerField[] = [
+    {
+      label: 'régime → phases',
+      value: (['trivial', 'standard', 'critical'] as TaskRegime[])
+        .map((rg) => `${rg}: [${phasesForRegime(rg).join(', ')}]`)
+        .join(' · '),
+      source: 'src/main/orchestration/task-regime.ts:18'
+    },
+    {
+      label: 'signaux déclencheurs',
+      value:
+        'RegEx déterministe (aucun appel modèle) : signaux CRITICAL (architect/refactor/migrat/sécurité/pipeline/prod…) → critical ; signaux TRIVIAL (typo/rename/lint/format…) + tâche courte → trivial ; sinon standard.',
+      source: 'src/main/orchestration/task-regime.ts:25'
+    }
+  ]
+
+  const tokenCap = env.AUTOWIN_RUN_TOKEN_CAP
+  const guardrails: InfluencerField[] = [
+    {
+      label: 'circuit-breaker coût',
+      value: `Coupe le run (abort réel) au dépassement des caps. USD cap: ${budgetUsd === null ? 'aucune limite (désactivé)' : `$${budgetUsd.toFixed(2)}`} · Token cap: ${tokenCap ?? 'non défini (désactivé)'} — relus avant chaque run.`,
+      source: 'src/main/orchestration/orchestration-budget.ts:32'
+    },
+    {
+      label: 'exigence de preuve (mutation)',
+      value:
+        'Une tâche de MUTATION exige une preuve (evidence mutation+verification) avant le vert, et tourne en sandbox danger-full-access ; sinon read-only. isMutationTask (regex) pilote les deux.',
+      source: 'src/main/orchestration/orchestrator.ts:177'
+    },
+    {
+      label: 'gate de clôture',
+      value:
+        'evaluateClosure (pur, model-agnostic) bloque sur statut open/red, DoD non cochée, ou signal exit≠0 ; degraded-closed ne bloque jamais.',
+      source: 'src/main/gates/stopgate.ts:31'
+    },
+    {
+      label: 'réparation bornée',
+      value: '2 tentatives pour une mutation (la 2e réinjecte les raisons du gate), 1 sinon.',
+      source: 'src/main/orchestration/orchestrator.ts:1088'
+    }
+  ]
+
+  const injectedContext: InfluencerField[] = [
+    {
+      label: 'RAG Brain',
+      value:
+        'Récupéré 1×/run (POST 127.0.0.1:8765/query, Bearer token), préfixé en tête du contexte + consigne « priorise le Brain ». Dégrade silencieusement à vide (timeout 5 s / pas de token / serveur absent).',
+      source: 'src/main/brain/brain-retrieval.ts:92'
+    },
+    {
+      label: 'TÂCHE',
+      value: 'La demande brute, toujours présente en 1ʳᵉ phase.',
+      source: 'src/main/orchestration/orchestrator.ts:541'
+    },
+    {
+      label: 'portage phase→phase',
+      // conv-1582 : affichait « tronquée à 2000 caractères » ; plus aucune coupe depuis le 2026-09-27.
+      value: 'La sortie de chaque phase est portée entière à la suivante, sans coupe.',
+      source: 'src/main/orchestration/orchestrator-contrats.ts:1140'
+    },
+    {
+      label: 'session-resume chaîné',
+      value:
+        "Si le provider rend un sessionId, les phases suivantes n'envoient QUE leur consigne (le reste est déjà dans l'historique de session) — contenu réellement envoyé variable/opaque ; cassé dès un fan-out.",
+      source: 'src/main/orchestration/orchestrator.ts:544'
+    },
+    {
+      label: 'agrégat juge',
+      value:
+        "Le juge reçoit la concaténation des sorties de phases : chaque bloc a une part de 6000 caractères, la place laissée par les courtes revient aux longues, 60 000 au total ; le bilan de fin d'étape passe entier.",
+      source: 'src/main/juge/agregat-juge.ts:113'
+    }
+  ]
+
+  const panelValue = (target: 'scout' | 'frame' | 'terrain' | 'judge'): string => {
+    const members = topology?.panels[target]
+    if (!members) return 'Topologie non transmise.'
+    if (members.length === 0) return '0 membre : exécution mono-modèle.'
+    return `${members.length} membre(s) : ${members
+      .map((member) => `${member.provider}/${member.modelId}/${member.reasoningEffort}`)
+      .join(' · ')}`
+  }
+  const topologyFields: InfluencerField[] = [
+    {
+      label: 'panel scout',
+      value: `${panelValue('scout')} À partir de 2 membres, divergence parallèle puis synthèse.`,
+      source: 'src/main/orchestration/orchestrator.ts:554'
+    },
+    {
+      label: 'panel frame',
+      value: `${panelValue('frame')} À partir de 2 membres, divergence parallèle puis synthèse.`,
+      source: 'src/main/orchestration/orchestrator.ts:554'
+    },
+    {
+      label: 'panel terrain',
+      value: `${panelValue('terrain')} À partir de 2 membres, préparation parallèle puis synthèse.`,
+      source: 'src/main/orchestration/orchestrator.ts:1191'
+    },
+    {
+      label: 'panel judge + quorum',
+      value: `${panelValue('judge')} Les votes valides sont agrégés ; le seuil de quorum est calculé sur le nombre de votants valides.`,
+      source: 'src/main/orchestration/orchestrator.ts:941'
+    }
+  ]
+
+  const direct: DirectBehaviour = {
+    systemPrompt: [
+      {
+        label: 'constitution',
+        value:
+          "os.chat (commande chat_send) utilise la CONSTITUTION comme system par défaut du registre. C'est désormais la MÊME source que les phases orchestrées et le chat cockpit — plus de doublon kit-soul.",
+        source: 'src/main/consignes/constitution.ts:14',
+        excerpt: injectedText(CONSTITUTION)
+      }
+    ],
+    modelSelection: [
+      {
+        label: 'provider explicite ou binding de rôle',
+        value: `Sans provider explicite, le chat direct utilise provider, modèle et effort du rôle demandé (défaut orchestrator: ${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}). Avec un provider explicite, il remplace le provider et envoie les options modèle/effort vides : le binding du rôle est alors ignoré. Aucune phase, aucun Brain, aucun garde-fou.`,
+        source: 'src/main/app/os.ts:184'
+      }
+    ]
+  }
+
+  const cockpit: CockpitBehaviour = {
+    systemPrompt: [
+      {
+        label: 'composition cockpit',
+        value:
+          'Le chat visible assemble CONSTITUTION + consigne de pilotage + style + contexte projet, puis ajoute le contexte RAG récupéré pour le dernier message utilisateur.',
+        source: 'src/main/agent-pilot/agent-pilot.ts:245'
+      }
+    ],
+    retrievedContext: [
+      {
+        label: 'Brain signé',
+        value:
+          'Une récupération est lancée au début de chaque tour cockpit sur le dernier message utilisateur. La réponse Brain est vérifiée par signature, bornée, et une panne dégrade ce bloc à vide.',
+        source: 'src/main/agent-pilot/agent-pilot.ts:216'
+      }
+    ],
+    turnContext: [
+      {
+        label: 'catalogue de commandes + état courant',
+        value:
+          "À chaque tour, le system prompt reçoit le catalogue vivant des commandes ; le message reçoit un snapshot courant de l'application.",
+        source: 'src/main/agent-pilot/agent-pilot.ts:213'
+      },
+      {
+        label: 'historique + pièces jointes',
+        value:
+          "L'historique complet est reconstruit dans le message. Les pièces jointes du dernier message sont envoyées uniquement à la première itération.",
+        source: 'src/main/agent-pilot/agent-pilot.ts:257'
+      },
+      {
+        label: "exécution + directives + cap d'itérations",
+        value:
+          "Toutes les commandes du catalogue sont exécutées directement. Les directives reçues pendant le tour sont drainées avant l'itération suivante. Le cockpit est borné à 12 itérations et termine en erreur explicite si le cap est atteint.",
+        source: 'src/main/agent-pilot/agent-pilot.ts:274'
+      }
+    ],
+    modelSelection: [
+      {
+        label: 'binding orchestrator',
+        value: `Le cockpit utilise le binding orchestrator (${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}) puis peut piloter l'application par commandes.`,
+        source: 'src/main/agent-pilot/agent-pilot.ts:211'
+      }
+    ]
+  }
+
+  return {
+    cockpit,
+    orchestrated: {
+      systemPrompt: ORCHESTRATED_PHASES.map(phaseSystemPrompt),
+      injectedContext,
+      modelSelection,
+      topology: topologyFields,
+      regime,
+      guardrails
+    },
+    direct
+  }
+}

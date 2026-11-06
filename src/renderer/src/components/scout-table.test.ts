@@ -193,7 +193,7 @@ describe('colonne facultative Commande : la preuve que la machine lancera', () =
   const AVEC_COMMANDE = [
     '| # | Score | Type | What | Why | How | Commande |',
     '|---|---|---|---|---|---|---|',
-    '| 1 | 82 | 🔧 fix | Statistiques dédoublonnées | 93 lignes pour 9 vues | `scout-memoire.ts:193` | `npx vitest run src/main/scout-memoire.test.ts` |',
+    '| 1 | 82 | 🔧 fix | Statistiques dédoublonnées | 93 lignes pour 9 vues | `scout-memoire.ts:193` | `npx vitest run src/main/scout/scout-memoire.test.ts` |',
     '| 2 | 70 | 🆕 new | Sans preuve lançable | une raison | un pas | — |'
   ].join('\n')
 
@@ -202,7 +202,7 @@ describe('colonne facultative Commande : la preuve que la machine lancera', () =
     expect(rows[0]).toMatchObject({
       why: '93 lignes pour 9 vues',
       how: '`scout-memoire.ts:193`',
-      commande: '`npx vitest run src/main/scout-memoire.test.ts`'
+      commande: '`npx vitest run src/main/scout/scout-memoire.test.ts`'
     })
     // Une cellule vide ou un tiret ne sont pas une commande.
     expect(rows[1].commande).toBeUndefined()

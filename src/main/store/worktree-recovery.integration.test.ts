@@ -1,7 +1,7 @@
 import { ESSAIS_MAX } from './delai-de-reprise'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * Vrais dépôts git en tmp : le budget vitest par défaut (5 s) ne couvre pas ces cas.
@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 import { messageCommitAgent, WorktreeManager } from './worktree-manager'
-import { annonceCommitLocal } from '../annonce-commit-local'
+import { annonceCommitLocal } from '../chat/annonce-commit-local'
 import { WorktreeRunStateStore } from './worktree-run-state'
 
 const roots: string[] = []

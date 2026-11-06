@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Critère du banc /arena « watch » — défaut : `scripts/launch-dev.test.ps1:11` exige
- * `electron-vite dev --watch` alors que `package.json` et `src/main/dev-sans-watch.test.ts`
+ * `electron-vite dev --watch` alors que `package.json` et `src/main/app/dev-sans-watch.test.ts`
  * (VERT) exigent l'inverse, pour une cause documentée (commit 447b85d4 : --watch tuait les runs).
  *
  * Usage : node check.mjs <racine-de-la-copie>
@@ -51,7 +51,7 @@ check('(b) le produit n’a PAS régressé : scripts.dev reste `electron-vite de
   if (!manifest) return 'package.json introuvable'
   const dev = JSON.parse(manifest).scripts?.dev
   if (dev !== 'electron-vite dev') return `scripts.dev = ${JSON.stringify(dev)} — le --watch qui tuait les runs est de retour`
-  const t = 'src/main/dev-sans-watch.test.ts'
+  const t = 'src/main/app/dev-sans-watch.test.ts'
   if (!lire(t)) return `${t} introuvable`
   const vitest = path.join(racine, 'node_modules', 'vitest', 'vitest.mjs')
   if (!existsSync(vitest)) return `vitest introuvable dans la copie (${vitest}) — environnement, pas correctif`
@@ -65,11 +65,11 @@ check('(b) le produit n’a PAS régressé : scripts.dev reste `electron-vite de
 })
 
 check('(c) cas limite — aucun juge désarmé (test vitest intact, contrôle .ps1 non vidé)', () => {
-  const g = spawnSync('git', ['-C', racine, 'diff', '--name-only', '--', 'src/main/dev-sans-watch.test.ts'], {
+  const g = spawnSync('git', ['-C', racine, 'diff', '--name-only', '--', 'src/main/app/dev-sans-watch.test.ts'], {
     encoding: 'utf8'
   })
   if (g.status !== 0) return `git diff a échoué : ${g.stderr}`
-  if (g.stdout.trim()) return `src/main/dev-sans-watch.test.ts a été MODIFIÉ : ${g.stdout.trim()}`
+  if (g.stdout.trim()) return `src/main/app/dev-sans-watch.test.ts a été MODIFIÉ : ${g.stdout.trim()}`
   const ps = lire(path.join('scripts', 'launch-dev.test.ps1'))
   if (!ps) return 'scripts/launch-dev.test.ps1 introuvable'
   const n = (ps.match(/Assert-True/g) || []).length

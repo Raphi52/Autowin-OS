@@ -1,0 +1,385 @@
+import { createHash, randomUUID } from 'node:crypto'
+import { classifyRegime, regimePhases, type TaskRegime } from './task-regime'
+import type { PipelinePhase, NodePhase } from '../skills/skill-pipeline'
+
+export type DecompositionPolicy =
+  { mode: 'disabled'; maxNodes: 1 } | { mode: 'build-only'; maxNodes: number }
+
+/**
+ * Ce que le devis fait des plafonds de DÉPENSE (tokens et USD).
+ *
+ * `blocking` est le défaut : une consommation réglée ne détruit jamais son livrable, mais elle
+ * interdit l'admission de l'appel suivant. `metering-only` reste l'opt-out explicite pour mesurer
+ * sans refuser. Les deux modes alimentent Observatory avec les mêmes compteurs.
+ *
+ * Le nombre d'appels/agents, la concurrence et la durée sont des invariantes structurelles : ils
+ * ne relèvent pas de ce réglage et restent toujours enforcés.
+ */
+export type SpendEnforcement = 'blocking' | 'metering-only'
+
+export interface ExecutionLimits {
+  maxProviderCalls: number
+  maxFreshTokens: number
+  maxTotalTokens: number
+  maxAgents: number
+  maxConcurrency: number
+  maxDurationMs: number
+  maxRecoveries: number
+  maxUsd: number | null
+  spendEnforcement: SpendEnforcement
+}
+
+export interface ExecutionQuote {
+  schema: 'autowin.execution-quote/v1'
+  id: string
+  createdAt: string
+  taskFingerprint: string
+  regime: TaskRegime
+  phases: NodePhase[]
+  decomposition: DecompositionPolicy
+  limits: ExecutionLimits
+  /** Allocation ex-ante de la topologie, finalisée avant le premier appel provider. */
+  allocation?: ExecutionTopologyAllocation
+}
+
+export interface ExecutionTopologyAllocation {
+  phaseMembers: Partial<Record<PipelinePhase, number>>
+  judgeMembers: number
+  maxGreedyNodes: number
+  reservedMandatoryAgents: number
+  plannedMaxAgents: number
+  plannedMaxCalls: number
+}
+
+export interface ExecutionTopologyRequest {
+  phases: NodePhase[]
+  completedPhases: NodePhase[]
+  startedAgents: number
+  startedCalls: number
+  mutation: boolean
+  hasDecomposer: boolean
+  phaseFanOut: Partial<Record<PipelinePhase, number>>
+  judgeFanOut: number
+  /**
+   * Exécutions de nœuds à provisionner quand le workflow est un GRAPHE : un nœud dans une boucle bornée tourne
+   * plusieurs fois, et `phases.length` sous-provisionne alors le devis. Absent = pipeline linéaire, on compte
+   * les phases comme avant.
+   *
+   * Ce nombre est exact, pas prudentiel : toute arête de retour porte une borne, donc le pire cas est fini et
+   * calculable (`workflow-graph.ts:worstCaseNodeExecutions`). C'est ce qui permet de garder un devis ex-ante
+   * avec des boucles au lieu de renoncer à la garantie de clôture.
+   */
+  worstCaseNodeExecutions?: number
+  /**
+   * Appels provider exacts du graphe après expansion des panels, synthèses et reprises. Quand il
+   * est fourni, ce total est déjà complet : l'allocateur ne doit ni lui ajouter un juge fantôme,
+   * ni recompter seulement le fan-out de la première visite d'un nœud rejoué.
+   */
+  worstCaseProviderCalls?: number
+}
+
+export interface ExecutionQuoteCaps {
+  maxProviderCalls?: number | null
+  maxTotalTokens?: number | null
+  maxUsd?: number | null
+  /** `blocking` réarme les refus de dépense ; absent = `metering-only` (décision utilisateur du
+   * 2026-08-12 : « le blocage détruit du travail payé » — un défaut `blocking` a été réintroduit
+   * une fois par un agent le 13/08 et a re-tué une campagne ; la doctrine prime). */
+  spendEnforcement?: SpendEnforcement
+}
+
+interface RegimePreset {
+  maxProviderCalls: number
+  maxFreshTokens: number
+  maxTotalTokens: number
+  maxAgents: number
+  maxConcurrency: number
+  maxDurationMs: number
+  maxRecoveries: number
+  decomposition: DecompositionPolicy
+}
+
+/*
+ * PLAFONDS D'APPELS — ils comptent des ETAPES, jamais de la depense.
+ *
+ * Releves le 2026-08-25 (4/12/24 -> 10/40/80) apres DEUX tours tues dans la meme journee :
+ * conv-1397 coupe sur « Budget d'appels provider atteint (6) » apres cinq editions reussies, juste
+ * avant sa verification ; conv-1404 coupe sur « (12) » apres 3 reussites et 8 echecs. Les deux ont
+ * rendu la pire issue possible : paye, et rien de fini.
+ *
+ * Ces valeurs datent de l'epoque ou un tour valait UN appel provider. Un tour agentique en consomme
+ * un PAR ETAPE — lire, editer, verifier, corriger — donc le compteur mesurait des COUPS, un mauvais
+ * proxy de la depense.
+ *
+ * DECISION UTILISATEUR DU 2026-09-12 : ces compteurs de COUPS sont DESACTIVES de fait. Demande
+ * explicite apres un enieme run tue — un fan-out build coupe sur « Budget d'agents atteint (10) »
+ * alors que le travail etait en cours. Un plafond qui interrompt un run A MI-CHEMIN rend la pire
+ * issue possible : paye, et rien de fini. Les valeurs ci-dessous sont si hautes qu'aucun run reel
+ * ne les atteint ; elles restent des NOMBRES (et non `Infinity`) pour que la telemetrie, les
+ * allocations et l'arithmetique de `stricter` continuent de fonctionner sans cas particulier.
+ *
+ * CE QUI FREINE ENCORE LA DEPENSE, et c'est voulu : `maxUsd` (pose a la main, `null` par defaut) et
+ * les compteurs de tokens, eux aussi tres larges. `stricter` fait toujours gagner tout cap pose
+ * explicitement : relever un prereglage n'ouvre aucune porte a un budget que l'utilisateur a fixe.
+ */
+const PRESETS: Record<TaskRegime, RegimePreset> = {
+  trivial: {
+    maxProviderCalls: 1_000,
+    maxFreshTokens: 20_000_000,
+    maxTotalTokens: 100_000_000,
+    maxAgents: 100,
+    // La CONCURRENCE n'est pas un plafond de budget : c'est le nombre de fronts menes en meme
+    // temps. Elle reste modeste par regime, sinon un fan-out large sature le fournisseur et se
+    // fait refuser — ce serait remplacer un mur par un autre.
+    maxConcurrency: 2,
+    maxDurationMs: 4 * 60 * 60_000,
+    maxRecoveries: 5,
+    decomposition: { mode: 'disabled', maxNodes: 1 }
+  },
+  standard: {
+    maxProviderCalls: 5_000,
+    maxFreshTokens: 50_000_000,
+    maxTotalTokens: 250_000_000,
+    maxAgents: 500,
+    maxConcurrency: 4,
+    maxDurationMs: 12 * 60 * 60_000,
+    // La réparation promise après un juge rouge : la retirer casse « 1 prompt = 1 réussite ».
+    maxRecoveries: 10,
+    decomposition: { mode: 'disabled', maxNodes: 1 }
+  },
+  critical: {
+    maxProviderCalls: 20_000,
+    maxFreshTokens: 200_000_000,
+    maxTotalTokens: 1_000_000_000,
+    maxAgents: 2_000,
+    maxConcurrency: 8,
+    maxDurationMs: 24 * 60 * 60_000,
+    maxRecoveries: 20,
+    decomposition: { mode: 'build-only', maxNodes: 20 }
+  }
+}
+
+function positiveInteger(value: number | null | undefined): number | undefined {
+  return Number.isSafeInteger(value) && (value as number) > 0 ? (value as number) : undefined
+}
+
+function positiveNumber(value: number | null | undefined): number | undefined {
+  return Number.isFinite(value) && (value as number) > 0 ? (value as number) : undefined
+}
+
+function stricter(defaultValue: number, proposed: number | null | undefined): number {
+  const cap = positiveInteger(proposed)
+  return cap === undefined ? defaultValue : Math.min(defaultValue, cap)
+}
+
+function boundedCount(value: number | undefined): number {
+  return Number.isSafeInteger(value) && (value as number) > 0 ? (value as number) : 0
+}
+
+/**
+ * Réserve d'abord le chemin qui doit encore pouvoir se fermer : phases mono-modèle et juge, puis
+ * uniquement les reprises explicitement prévues. Le DAG et les panels reçoivent la capacité restante.
+ * Une configuration impossible est refusée ici, avant que le premier provider ne soit touché.
+ */
+export function allocateExecutionTopology(
+  quote: ExecutionQuote,
+  request: ExecutionTopologyRequest
+): ExecutionTopologyAllocation {
+  const completed = new Set(request.completedPhases)
+  const remainingPhases = request.phases.filter((phase) => !completed.has(phase))
+  const startedAgents = Math.max(0, Math.floor(request.startedAgents))
+  const startedCalls = Math.max(0, Math.floor(request.startedCalls))
+  const available = Math.min(
+    Math.max(0, quote.limits.maxAgents - startedAgents),
+    Math.max(0, quote.limits.maxProviderCalls - startedCalls)
+  )
+  /**
+   * Les reparations sont provisionnees pour TOUTE tache, mutation ou non.
+   *
+   * `request.mutation` conditionnait ce provisionnement, en miroir d'une regle de l'orchestrateur qui
+   * refusait toute reparation a une tache non-mutation. Cette regle etait un defaut (mesure du
+   * 2026-08-20 : un run d'analyse refuse pour « analyse absente » ou « DoD non cochee » est
+   * parfaitement reparable, et le contrat racine adapte deja ses exigences a un run en lecture
+   * seule). Depuis que `reparationsAutorisees` accorde ces passages, les laisser hors du devis
+   * produirait une depense NON PROVISIONNEE : le run serait coupe en plein milieu au lieu d'etre
+   * refuse proprement avant de depenser.
+   */
+  /**
+   * Les reparations sont provisionnees pour TOUTE tache, mutation ou non — mais on provisionne ce qui
+   * est ACCORDE, pas le plafond dur.
+   *
+   * `request.mutation` conditionnait ce provisionnement, en miroir d'une regle de l'orchestrateur qui
+   * refusait toute reparation a une tache non-mutation. C'etait un defaut (mesure du 2026-08-20 : un
+   * run d'analyse refuse pour « analyse absente » ou « DoD non cochee » est parfaitement reparable,
+   * et le contrat racine adapte deja ses exigences a un run en lecture seule).
+   *
+   * EN REVANCHE, provisionner le PLAFOND DUR de la boucle a ete essaye puis ANNULE, sur mesure :
+   *  - en mode `blocking`, la politique n'accorde AUCUNE reparation, donc ce plafond ne peut jamais
+   *    mordre ; provisionner pour lui ne protegeait de rien et faisait REFUSER des runs avant leur
+   *    premier appel (« Plan d'execution impossible », 4 tests tombes) ;
+   *  - en `metering-only` (le defaut), un depassement ne coupe pas le run : le devis S'AGRANDIT a la
+   *    demande, et la depense reste visible par l'agregateur de cout.
+   * Le devis dit donc le cas ACCORDE, et la marge de progres se paie a la demande — c'est la lecture
+   * juste de « le devis dit le vrai ».
+   */
+  const recoveries = quote.limits.maxRecoveries
+  const judgePasses = 1 + recoveries
+  // Un graphe à boucles rejoue des nœuds : provisionner sa liste de phases reviendrait à laisser le run se faire
+  // couper en plein milieu au lieu d'être refusé proprement avant de dépenser quoi que ce soit.
+  const nodeExecutions = Math.max(
+    remainingPhases.length,
+    Math.floor(request.worstCaseNodeExecutions ?? 0)
+  )
+  // Dans un graphe, chaque visite de nœud est déjà un appel complet : les retours incluent donc les
+  // builds de réparation et les nouveaux juges. Les rajouter une seconde fois créait un juge
+  // fantôme dans le devis. Le pipeline plat conserve son calcul historique explicite.
+  const exactWorkflowCalls = positiveInteger(request.worstCaseProviderCalls)
+  const mandatory =
+    exactWorkflowCalls ??
+    (request.worstCaseNodeExecutions === undefined
+      ? nodeExecutions + judgePasses + recoveries
+      : nodeExecutions)
+  /*
+   * UNE PHASE EN FAN-OUT LANCE UN AGENT PAR MEMBRE — mesure du 2026-09-09 (conv-46).
+   *
+   * `mandatory` compte des APPELS : une visite de noeud, plus les passages de juge et les reprises.
+   * Le plafond de TETES, lui, restait celui du regime. Trace du run run-3f7459905786-1 : devis
+   * `maxProviderCalls: 24` pour `maxAgents: 5` — vingt-quatre appels autorises, cinq tetes pour les
+   * servir. Le run a donc consomme ses cinq places sur frame et sur le fan-out de build, puis le
+   * juge FINAL a ete refuse sur « Budget d'agents atteint (5) » sans avoir rien consomme : travail
+   * fait, verifie, et jamais publie — la pire issue possible, payee et perdue.
+   *
+   * C'est le defaut deja corrige le 2026-08-31 (conv-1587) dans l'orchestrateur, mais UNIQUEMENT
+   * pour les workflows EXPLICITES du canevas : un run lance depuis le chat n'y passait pas. La
+   * correction vit donc ICI, sur le chemin commun, ou le devis est compile pour TOUS les runs.
+   *
+   * On provisionne le pire cas de tetes : chaque visite de noeud peut etre servie par un panel
+   * borne par `maxConcurrency`, plus les passages de juge et les reprises. En mesure seule
+   * seulement — en mode bloquant le plafond est un contrat, il garde son refus. Aucun frein reel
+   * ne bouge : jetons, USD, duree et concurrence bornent exactement ce qu'ils bornaient.
+   */
+  if (quote.limits.spendEnforcement === 'metering-only') {
+    const tetesFanOut =
+      nodeExecutions * Math.max(1, quote.limits.maxConcurrency) + judgePasses + recoveries
+    quote.limits.maxAgents = Math.max(quote.limits.maxAgents, tetesFanOut + startedAgents)
+  }
+  if (mandatory > available) {
+    // En mesure seule (défaut depuis la décision utilisateur du 12/08), un workflow DÉTERMINISTE
+    // au pire cas fini ne se refuse pas : le devis S'AGRANDIT à sa demande. Mesuré sur conv-1148 :
+    // « 12 agent(s) obligatoires pour 10 place(s) restante(s) » tuait le run avant le premier
+    // appel — le régime servait de plafond de dépense déguisé. En mode bloquant, le refus reste :
+    // là, le plafond est un contrat.
+    if (quote.limits.spendEnforcement === 'metering-only') {
+      const requis = mandatory + Math.max(0, startedAgents, startedCalls)
+      quote.limits.maxAgents = Math.max(quote.limits.maxAgents, requis)
+      quote.limits.maxProviderCalls = Math.max(quote.limits.maxProviderCalls, requis)
+    } else {
+      throw new Error(
+        `Plan d’exécution impossible : ${mandatory} agent(s) obligatoires pour ${available} place(s) restante(s).`
+      )
+    }
+  }
+
+  if (exactWorkflowCalls !== undefined) {
+    const phaseMembers: Partial<Record<PipelinePhase, number>> = {}
+    for (const phase of remainingPhases) {
+      const configured = boundedCount(request.phaseFanOut[phase])
+      if (configured > 0) phaseMembers[phase] = Math.min(configured, quote.limits.maxConcurrency)
+    }
+    const configuredJudges = boundedCount(request.judgeFanOut)
+    const judgeMembers =
+      configuredJudges > 0 ? Math.min(configuredJudges, quote.limits.maxConcurrency) : 1
+    return {
+      phaseMembers,
+      judgeMembers,
+      // Le graphe décrit déjà ses nœuds parallèles. Lui superposer un DAG dynamique rendrait le
+      // nombre d'appels impossible à déduire du canevas qui vient d'être accepté.
+      maxGreedyNodes: 1,
+      reservedMandatoryAgents: mandatory,
+      plannedMaxAgents: startedAgents + mandatory,
+      plannedMaxCalls: startedCalls + mandatory
+    }
+  }
+
+  let optional = available - mandatory
+  let maxGreedyNodes = 1
+  const canDecompose =
+    request.hasDecomposer &&
+    quote.decomposition.mode === 'build-only' &&
+    remainingPhases.includes('build')
+  // Activer un DAG de deux nœuds coûte deux places au-delà du pipeline mono : le décomposeur
+  // lui-même, puis le second worker. En dessous, ne pas payer un plan que l'on jetterait.
+  if (canDecompose && optional >= 2) {
+    maxGreedyNodes = Math.min(quote.decomposition.maxNodes, optional)
+    optional -= maxGreedyNodes
+  }
+
+  const phaseMembers: Partial<Record<PipelinePhase, number>> = {}
+  for (const phase of remainingPhases) {
+    const configured = boundedCount(request.phaseFanOut[phase])
+    if (configured === 0) continue
+    // Un build déjà découpé ne cumule jamais DAG × panel : cette multiplication rendrait le devis
+    // non bornable sans sacrifier la clôture.
+    if (phase === 'build' && maxGreedyNodes >= 2) {
+      phaseMembers[phase] = 1
+      continue
+    }
+    if (configured >= 2 && optional >= 2) {
+      const admitted = Math.min(configured, optional, quote.limits.maxConcurrency)
+      phaseMembers[phase] = admitted
+      // N membres + une synthèse remplacent un worker mono : surcoût net = N.
+      optional -= admitted
+    } else {
+      phaseMembers[phase] = 1
+    }
+  }
+
+  const configuredJudges = boundedCount(request.judgeFanOut)
+  let judgeMembers = 1
+  if (configuredJudges >= 2) {
+    const maxByCapacity = 1 + Math.floor(optional / judgePasses)
+    judgeMembers = Math.min(configuredJudges, maxByCapacity, quote.limits.maxConcurrency)
+    if (judgeMembers >= 2) optional -= (judgeMembers - 1) * judgePasses
+    else judgeMembers = 1
+  }
+
+  const used = available - optional
+  return {
+    phaseMembers,
+    judgeMembers,
+    maxGreedyNodes,
+    reservedMandatoryAgents: mandatory,
+    plannedMaxAgents: startedAgents + used,
+    plannedMaxCalls: startedCalls + used
+  }
+}
+
+/**
+ * Compile le devis avant tout appel provider. Le modele ne choisit jamais ses propres caps : ils
+ * viennent du regime deterministe et d'eventuels plafonds utilisateur qui ne peuvent que resserrer.
+ */
+export function compileExecutionQuote(task: string, caps: ExecutionQuoteCaps = {}): ExecutionQuote {
+  const regime = classifyRegime(task)
+  const preset = PRESETS[regime]
+  const taskFingerprint = createHash('sha256').update(task.trim()).digest('hex').slice(0, 16)
+  return {
+    schema: 'autowin.execution-quote/v1',
+    id: `quote-${randomUUID()}`,
+    createdAt: new Date().toISOString(),
+    taskFingerprint,
+    regime,
+    phases: regimePhases(task),
+    decomposition: { ...preset.decomposition },
+    limits: {
+      maxProviderCalls: stricter(preset.maxProviderCalls, caps.maxProviderCalls),
+      maxFreshTokens: preset.maxFreshTokens,
+      maxTotalTokens: stricter(preset.maxTotalTokens, caps.maxTotalTokens),
+      maxAgents: preset.maxAgents,
+      maxConcurrency: preset.maxConcurrency,
+      maxDurationMs: preset.maxDurationMs,
+      maxRecoveries: preset.maxRecoveries,
+      maxUsd: positiveNumber(caps.maxUsd) ?? null,
+      spendEnforcement: caps.spendEnforcement ?? 'metering-only'
+    }
+  }
+}

@@ -21,7 +21,7 @@ vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 })
  * Vecu le 2026-08-27 (conv-1450, 1,32 $) : « ⛔ Travail NON integre — ton arbre principal a une base
  * sale », statut echoue, fin du tour. Le travail existait, n'etait pas perdu, et n'atterrissait pas.
  * Sur cet arbre partage par plusieurs sessions, la cause ne disparait pas d'elle-meme : le fichier en
- * cause etait `src/main/agent-pilot.ts`, qu'une autre session editait — le repechage a rejoue trois
+ * cause etait `src/main/agent-pilot/agent-pilot.ts`, qu'une autre session editait — le repechage a rejoue trois
  * fois la MEME publication, puis l'echec est devenu definitif.
  *
  * Ce que ce barreau fait, et ce qu'il ne fait pas : il pose une ADRESSE git durable sur le commit que

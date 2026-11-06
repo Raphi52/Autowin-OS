@@ -19,13 +19,13 @@
  * canaux enregistrés soient EXACTEMENT ceux de `CANAUX_NAVIGATEUR`.
  */
 import { ipcMain, type BrowserWindow } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardBoolean, guardString, guardStringOrNull } from '../ipc-guards'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardBoolean, guardString, guardStringOrNull } from './ipc-guards'
 import {
   creerFabriqueElectron,
   GestionnaireNavigateur,
   type FabriqueVueNavigateur
-} from '../navigateur-integre'
+} from '../bureau/navigateur-integre'
 import {
   CANAUX_NAVIGATEUR,
   type ModeNavigateur,

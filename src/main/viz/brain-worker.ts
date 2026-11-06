@@ -1,6 +1,6 @@
 import { parentPort } from 'node:worker_threads'
-import { listInboxCandidates, readInboxCandidateBody } from '../brain-inbox'
-import { resolveHeadShas } from '../brain-source-sha'
+import { listInboxCandidates, readInboxCandidateBody } from '../brain/brain-inbox'
+import { resolveHeadShas } from '../brain/brain-source-sha'
 import {
   applyBrainRetrievalScoresAsync,
   assertAuthorizedBrainVaultAsync,
@@ -17,7 +17,7 @@ import {
   searchVaultBrainNotesAsync,
   SHARED_BRAIN_ROOT
 } from './fs-brains'
-import { racineBrainPerso } from '../brain-perso-racine'
+import { racineBrainPerso } from '../brain/brain-perso-racine'
 import type { BrainWorkerRequest } from './brain-worker-contract'
 import { CacheParSignature } from './brain-worker-cache'
 

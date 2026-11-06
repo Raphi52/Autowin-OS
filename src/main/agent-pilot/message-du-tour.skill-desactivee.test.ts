@@ -7,8 +7,8 @@ import { describe, expect, it, vi } from 'vitest'
  * de Settings › Skills ; seul `skill_charger` refusait une skill désactivée. Ici, le vrai assemblage
  * du message d'ouverture, avec un registre où `terrain` est désactivée et `clean` active.
  */
-vi.mock('../native-registry', async (importOriginal) => {
-  const reel = await importOriginal<typeof import('../native-registry')>()
+vi.mock('../app/native-registry', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('../app/native-registry')>()
   return {
     ...reel,
     nativeSkills: () =>

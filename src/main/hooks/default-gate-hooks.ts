@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { exactLineFingerprint } from '../exact-line-fingerprint'
+import { exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
 import { HookBus, type HookContext, type HookResult } from './hook-bus'
 import { createVerifyReplayHook, type VerifyRunner } from './verify-replay-hook'
 import {
@@ -11,7 +11,7 @@ import {
 } from '../gates/hooks'
 import type { HookHandler } from './hook-bus'
 import type { ExecutionEvidence } from '../providers/types'
-import { exigenceAppuiSourcesNeuves } from '../autowin-kaizen-context'
+import { exigenceAppuiSourcesNeuves } from '../kaizen/autowin-kaizen-context'
 
 /**
  * Un handler pre-green qui RÉUTILISE les hooks synchrones existants (gates/hooks.ts :

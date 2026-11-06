@@ -22,7 +22,7 @@ pas. Seul le lanceur s'en sert : instances de test et copies d'agent gardent l'E
 Le NOM DE PRODUIT compte : Electron nomme son raccourci du menu Demarrer d'apres lui
 (`GetApplicationName`, windows_toast_activator.cc) — preuve sur ce poste : l'app appelle
 `app.setName("Autowin OS")` et son raccourci s'appelle pourtant `Electron.lnk` —, et le Gestionnaire
-des taches affiche la description du fichier. `src/main/raccourci-demarrer-dev.ts` reconnait l'exe de
+des taches affiche la description du fichier. `src/main/app/raccourci-demarrer-dev.ts` reconnait l'exe de
 dev a son DOSSIER (`electron-dev`) et nomme le raccourci « Autowin OS Dev.lnk ».
 
 LES LIENS DURS ONT UN PRIX, ASSUME : quand l'app tourne sur l'exe de dev, elle tient les DLL d'npm

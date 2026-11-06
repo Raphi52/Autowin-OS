@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach, vi } from 'vitest'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
 import { execFileSync } from 'node:child_process'

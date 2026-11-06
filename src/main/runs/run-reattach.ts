@@ -16,7 +16,7 @@ import type { ExecutionEvidence } from '../providers/types'
 import { normalizeClaudeUsage } from '../providers/claude'
 import { coutDuTourDepuisCumul } from '../providers/claude-session-cost'
 import { codexExecutionEvidenceFromItem, type CodexExecItem } from '../providers/codex'
-import { isSameProcessIdentity } from '../process-identity'
+import { isSameProcessIdentity } from '../app/process-identity'
 import { separationEntreBlocsTexte } from '../../shared/collage-blocs-texte'
 
 /**

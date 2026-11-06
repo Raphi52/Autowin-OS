@@ -14,10 +14,10 @@
  * figée au démarrage — d'où une fonction et non une valeur.
  */
 import { BrowserWindow, ipcMain } from 'electron'
-import { appPreflightProbes, getLastAppPreflightResult, runAppPreflight } from '../preflight-probes'
-import { repairPreflightCheck } from '../preflight-repair'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import type { RoutedProvider } from '../routed-providers'
+import { appPreflightProbes, getLastAppPreflightResult, runAppPreflight } from '../preflight/preflight-probes'
+import { repairPreflightCheck } from '../preflight/preflight-repair'
+import { assertTrustedRendererSender } from './ipc-senders'
+import type { RoutedProvider } from '../providers/routed-providers'
 
 /** Ce que les canaux de prérequis prenaient dans `index.ts` — désormais passé explicitement. */
 export type PreflightIpcDeps = {

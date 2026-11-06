@@ -62,8 +62,8 @@ export const DEFAUTS = {
   poids: {
     libelle: 'coupe de session par poids jamais déclenchée (abe7c21e)',
     correctif: 'abe7c21e',
-    oracle: ['src/main/chat-session-poids.test.ts'],
-    enonce: `Défaut signalé : la coupe automatique de session « par poids » (src/main/chat-session-poids.ts,
+    oracle: ['src/main/chat/chat-session-poids.test.ts'],
+    enonce: `Défaut signalé : la coupe automatique de session « par poids » (src/main/chat/chat-session-poids.ts,
 fonction \`coupesParPoids\`) ne s'est JAMAIS déclenchée en usage réel. Un fil de chat a enchaîné six
 tours sur la même session CLI avec une occupation de contexte de 260 866 puis jusqu'à 582 617 tokens
 au dernier appel, alors que le seuil de coupe est 200 000. Les tests du fichier passent pourtant.
@@ -88,7 +88,7 @@ Trouve la cause, corrige-la à sa source, et couvre-la par un test qui l'aurait 
     enonce: `Défaut signalé : le contrôle \`requireMotionProofForAnimationDiff\` (src/main/gates/hooks.ts) refuse
 à tort des runs qui n'animent rien, en exigeant une preuve de mouvement. Deux lignes ajoutées l'ont
 déclenché :
-1. dans src/main/pipeline-discipline.ts, la phrase de consigne
+1. dans src/main/orchestration/pipeline-discipline.ts, la phrase de consigne
    \`PREUVE DE MOUVEMENT : si ce que tu changes est ANIME (@keyframes, animation:, transition:), cette capture ne suffit PAS\` ;
 2. dans src/main/gates/hooks.ts, une retouche de la ligne qui définit le motif de détection lui-même.
 Une vraie déclaration d'animation (règle CSS, ou style en objet dans un fichier .ts) doit toujours

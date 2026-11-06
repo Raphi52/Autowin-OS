@@ -4,6 +4,6 @@ $ErrorActionPreference = 'Stop'
 Set-Location -Path (Join-Path $PSScriptRoot '..')
 & npx vitest run `
   src/main/store/run-worktree-coordinator.test.ts `
-  src/main/os.readiness.test.ts `
-  src/main/orchestrator.worktree-flip.test.ts
+  src/main/app/os.readiness.test.ts `
+  src/main/orchestration/orchestrator.worktree-flip.test.ts
 exit $LASTEXITCODE

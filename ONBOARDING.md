@@ -67,7 +67,7 @@ npm run lint
 
 Le `userData` d'Electron est **remplacé** par un stockage **portable** : tout l'état applicatif vit
 dans **`.autowin-data/`, à la racine du dépôt** — pas dans `%APPDATA%\Roaming`. La constante est
-`PORTABLE_APP_DATA_DIR` (`src/main/app-data.ts`), appliquée via `portableAppDataBase()` depuis
+`PORTABLE_APP_DATA_DIR` (`src/main/app/app-data.ts`), appliquée via `portableAppDataBase()` depuis
 `src/main/index.ts`. Motif : supprimer le dossier du projet laissait 1,8 Go derrière lui.
 
 Conséquence pratique : chercher un modèle, un cache ou un JSON de session sous `AppData/Roaming`

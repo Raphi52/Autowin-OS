@@ -12,7 +12,7 @@ exit=1
 CRITERE DU BANC (script externe que les deux bras ont recu, et que J'AI rejoue moi-meme apres coup) :
 /**
  * Critère du banc /arena « watch » — défaut : `scripts/launch-dev.test.ps1:11` exige
- * `electron-vite dev --watch` alors que `package.json` et `src/main/dev-sans-watch.test.ts`
+ * `electron-vite dev --watch` alors que `package.json` et `src/main/app/dev-sans-watch.test.ts`
  * (VERT) exigent l'inverse, pour une cause documentée (commit 447b85d4 : --watch tuait les runs).
  *
  * Usage : node check.mjs <racine-de-la-copie>
@@ -55,7 +55,7 @@ index afadeb0d..19494b82 100644
 +# `dev` NE DOIT PAS PORTER `--watch`. Avec ce drapeau, electron-vite redemarrait Electron des qu'un
 +# module `main` ou `preload` changeait, ce qui TUAIT l'orchestration en cours (demande `conv-1267`,
 +# corrige au commit 447b85d4). Le rechargement a chaud du RENDERER est conserve : il passe par le
-+# dev-server, pas par ce drapeau. Contrat miroir de `src/main/dev-sans-watch.test.ts`, qui garde la
++# dev-server, pas par ce drapeau. Contrat miroir de `src/main/app/dev-sans-watch.test.ts`, qui garde la
 +# meme regle cote produit.
 +Assert-True ($devCommand -eq 'electron-vite dev') 'dev must delegate to electron-vite WITHOUT restarting the main process'
 +Assert-True (($devCommand -split '--watch').Count -eq 1) 'dev must carry NO --watch flag: it killed the runs in progress'
@@ -225,7 +225,7 @@ index afadeb0d..8e446aa3 100644
 +# `--watch` A ÉTÉ RETIRÉ DU SCRIPT dev (commit 447b85d4) : il redémarrait Electron dès qu'un module
 +# de `main` ou `preload` changeait sur le disque, ce qui tuait les runs d'orchestration en cours
 +# (`conv-1267`). Le rechargement à chaud du RENDERER, lui, est conservé — il vient du dev-server et
-+# ne redémarre pas le processus principal. `src/main/dev-sans-watch.test.ts` verrouille cette
++# ne redémarre pas le processus principal. `src/main/app/dev-sans-watch.test.ts` verrouille cette
 +# absence côté produit ; les deux assertions ci-dessous la verrouillent au même endroit que le reste
 +# de la chaîne de lancement, pour qu'aucun des deux contrôles ne contredise l'autre.
 +$devCommand = $manifest.scripts.dev

@@ -11,8 +11,8 @@
 
 import { tachesDeFondEnCours } from '../providers/taches-de-fond-suivies'
 import type { AppSnapshot, PromptSnapshot } from './types'
-import type { AppCommandBus } from '../commands'
-import { pendantOperation } from '../gel-main'
+import type { AppCommandBus } from './commands'
+import { pendantOperation } from '../gel/gel-main'
 import { lastUserMessageAt } from '../store/conversations'
 import { skillsInvocables } from './skills'
 

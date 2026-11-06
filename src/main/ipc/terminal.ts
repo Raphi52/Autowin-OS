@@ -15,13 +15,13 @@
  * dérive avec le contrat est fermée par `terminal.test.ts`.
  */
 import { ipcMain, type BrowserWindow } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
 import {
   GestionnaireTerminal,
   poserGestionnaireTerminal,
   type DependancesTerminal
-} from '../terminal-integre'
+} from '../bureau/terminal-integre'
 import { CANAUX_TERMINAL, type TailleTerminal } from '../../shared/terminal'
 
 /** Ce que le module prend de l'extérieur. */

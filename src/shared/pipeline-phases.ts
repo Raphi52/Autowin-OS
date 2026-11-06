@@ -2,7 +2,7 @@
  * LES PHASES DU PIPELINE — une seule liste, partagée par le moteur et l'interface.
  *
  * Il y en avait DEUX, et la seconde était périmée :
- *  - `src/main/skill-pipeline.ts` en déclarait huit, dont `remake` ;
+ *  - `src/main/skills/skill-pipeline.ts` en déclarait huit, dont `remake` ;
  *  - `src/renderer/src/components/workflow-executability.ts` en recopiait sept à la main, SANS
  *    `remake`.
  *

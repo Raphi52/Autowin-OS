@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { lireMemoireScout, noterPistesScout } from '../scout-memoire'
+import { lireMemoireScout, noterPistesScout } from '../scout/scout-memoire'
 import { ConversationStore } from '../store/conversations'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 
@@ -24,10 +24,10 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: () => '', isPackaged: false, getVersion: () => '0.0.0' }
 }))
-vi.mock('../renderer-emit', () => ({ emitToLiveWindows: () => undefined }))
+vi.mock('../app/renderer-emit', () => ({ emitToLiveWindows: () => undefined }))
 // La vraie fonction, sur un fichier jetable : seul le chemin de la mémoire change.
-vi.mock('../scout-memoire', async (origine) => {
-  const vrai = await origine<typeof import('../scout-memoire')>()
+vi.mock('../scout/scout-memoire', async (origine) => {
+  const vrai = await origine<typeof import('../scout/scout-memoire')>()
   return {
     ...vrai,
     noterChoixScout: (entree: Parameters<typeof vrai.noterChoixScout>[0]) => {

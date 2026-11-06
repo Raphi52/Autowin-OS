@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { zoneDuTourDeChat } from '../../../main/source-process-principal.test-helpers'
+import { zoneDuTourDeChat } from '../../../main/app/source-process-principal.test-helpers'
 import {
   callsLabel,
   formatDuration,

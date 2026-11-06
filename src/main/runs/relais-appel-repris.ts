@@ -20,8 +20,8 @@ import { stat } from 'node:fs/promises'
 import { bornerJournalDActions, cibleEntiereDe, statutComplet } from '../../shared/chat-turn'
 import { ligneDErreurDAction } from '../../shared/erreur-d-action'
 import { redactTrace } from '../activity/trace-redact'
-import { claudeCompteDuFil, withClaudeAccountEnv } from '../claude-accounts'
-import { estUnOutilDirectDuChat } from '../chat-mcp'
+import { claudeCompteDuFil, withClaudeAccountEnv } from '../providers/claude-accounts'
+import { estUnOutilDirectDuChat } from '../chat/chat-mcp'
 import {
   dossierDesEtapes,
   estOutilDEtapes,

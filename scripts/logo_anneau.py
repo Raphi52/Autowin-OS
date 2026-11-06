@@ -178,7 +178,7 @@ def generer(racine: Path = _RACINE) -> list[Path]:
     # Chaque taille est DESSINEE a sa taille, pas reduite depuis le 512 : a 16 px, une reduction
     # bicubique d'un grand dessin bave ; un rendu natif sur-echantillonne garde un bord net.
     ico = _ico([dessiner_anneau(cote, sur=max(8, 2048 // cote)) for cote in TAILLES_ICO])
-    # `resources/icon.ico` : l'icone de la zone de notification de l'app INSTALLEE (src/main/window.ts).
+    # `resources/icon.ico` : l'icone de la zone de notification de l'app INSTALLEE (src/main/app/window.ts).
     # `build/` ne part pas dans le paquet, seul `resources/` y est extrait (electron-builder.yml).
     # TOUT autre .ico de ces deux dossiers recoit aussi le logo : le 2026-10-11 (conv-266), deux
     # copies a nom unique (`*-c3735beb.ico`, ancien contournement du cache d'icones) portaient encore
@@ -212,7 +212,7 @@ def _raccourcis_connus() -> list[Path]:
 
 def dossier_icones_versionnees() -> Path:
     """`%LOCALAPPDATA%\\autowin-os\\icones` : hors du depot, une copie de travail supprimee n'emporte
-    pas l'icone d'un raccourci. Meme dossier que src/main/raccourci-demarrer-dev.ts."""
+    pas l'icone d'un raccourci. Meme dossier que src/main/app/raccourci-demarrer-dev.ts."""
     import os
 
     return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "autowin-os" / "icones"

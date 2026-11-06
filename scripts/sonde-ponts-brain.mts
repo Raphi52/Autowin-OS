@@ -5,13 +5,13 @@
  * lui-même, en traitant un échantillon de ses notes comme des notes « perso » (chacune exclue de
  * ses propres voisines). Trois chiffres : la similarité de la 1re et de la 3e voisine (ce qu'un
  * vrai voisin atteint) et celle de paires TIRÉES AU HASARD (le bruit de fond). Le seuil
- * `PONTS_SIMILARITE_MIN` de `src/main/brain-ponts.ts` doit laisser passer la plupart des vraies
+ * `PONTS_SIMILARITE_MIN` de `src/main/brain/brain-ponts.ts` doit laisser passer la plupart des vraies
  * voisines et presque aucune paire au hasard.
  *
  * Usage : npx tsx scripts/sonde-ponts-brain.mts [taille d'échantillon, défaut 400]
  */
-import { sharedBrainRoot } from '../src/main/brain-paths'
-import { calculerPonts, lireIndexBrain } from '../src/main/brain-ponts'
+import { sharedBrainRoot } from '../src/main/brain/brain-paths'
+import { calculerPonts, lireIndexBrain } from '../src/main/brain/brain-ponts'
 
 const taille = Number(process.argv[2] ?? 400)
 const racine = sharedBrainRoot()

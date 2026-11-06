@@ -81,7 +81,7 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
      que le lien) et VÉRIFIER qu'elle a disparu ; (2) seulement alors `git worktree remove <copie>`.
      Lancé avec la jonction en place, `git worktree remove` la traverse et efface le `node_modules`
      du dépôt (constaté le 2026-10-10, conv-207). Une copie avec des modifications → `/git`, pas `/gc`.
-     Exception : `command-verify-<conversation>` (`src/main/verification-isolee.ts`) est UNE copie
+     Exception : `command-verify-<conversation>` (`src/main/verify/verification-isolee.ts`) est UNE copie
      par conversation, réutilisée, qui reçoit l'état courant de l'arbre partagé avant chaque
      vérification — ses « modifications » sont ce miroir, pas du travail (le recensement des travaux
      non publiés l'écarte déjà, motif `EDITION_OUTIL` de `src/main/store/worktree-manager.ts`).

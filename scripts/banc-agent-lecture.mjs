@@ -174,7 +174,7 @@ export const SUJETS = {
             id: 'garde-ipc',
             dit: 'le processus principal revalide les pièces à l’entrée (guardAttachments)',
             accepte: /guardattachments|ipc-guards|revalid|refait les controles|second controle/,
-            source: ['src/main/ipc-guards.ts', 'export function guardAttachments']
+            source: ['src/main/ipc/ipc-guards.ts', 'export function guardAttachments']
           },
           {
             id: 'original-durable',
@@ -191,7 +191,7 @@ export const SUJETS = {
             dit: 'agent-pilot reprend les pièces de tout le fil, pas seulement du dernier message',
             accepte:
               /currentattachments|max_pieces_jointes_du_fil|tout le fil|fil entier|tout l'historique|tours? (anterieurs?|precedents?)|messages? (passes?|precedents?)/,
-            source: ['src/main/agent-pilot.ts', 'const MAX_PIECES_JOINTES_DU_FIL = 8']
+            source: ['src/main/agent-pilot/agent-pilot.ts', 'const MAX_PIECES_JOINTES_DU_FIL = 8']
           },
           {
             id: 'dossier-temporaire',
@@ -254,14 +254,14 @@ export const SUJETS = {
             dit: 'repli sur la miniature si l’original a disparu',
             accepte:
               /(repli|replie|retombe|efface|absent|introuvable|manquant|disparu|sinon|supprime)[^\n]{0,160}miniature|miniature[^\n]{0,160}(repli|secours|efface|absent|introuvable|manquant|disparu|si l'original|degrade)/,
-            source: ['src/main/agent-pilot.ts', 'replierSurLaMiniature(brute)']
+            source: ['src/main/agent-pilot/agent-pilot.ts', 'replierSurLaMiniature(brute)']
           },
           {
             id: 'provenance',
             dit: 'elle est marquée comme venant d’un message précédent',
             accepte:
               /jointe a un message precedent|tour-precedent-|message-precedent|tour anterieur|message precedent/,
-            source: ['src/main/agent-pilot.ts', '(jointe a un message precedent)']
+            source: ['src/main/agent-pilot/agent-pilot.ts', '(jointe a un message precedent)']
           }
         ],
         faux: [
@@ -281,7 +281,7 @@ export const SUJETS = {
             dit: 'huit au plus',
             accepte: /\b8\b|huit/,
             source: [
-              'src/main/agent-pilot.ts',
+              'src/main/agent-pilot/agent-pilot.ts',
               'if (retenues.length >= MAX_PIECES_JOINTES_DU_FIL) return retenues'
             ]
           },
@@ -289,20 +289,20 @@ export const SUJETS = {
             id: 'recentes',
             dit: 'les plus récentes d’abord',
             accepte: /plus recente?s?|les dernieres|en partant de la fin|du plus recent/,
-            source: ['src/main/agent-pilot.ts', "Le plus RECENT d'abord, puis on borne"]
+            source: ['src/main/agent-pilot/agent-pilot.ts', "Le plus RECENT d'abord, puis on borne"]
           },
           {
             id: 'anciennes-sacrifiees',
             dit: 'les plus anciennes sont sacrifiées',
             accepte:
               /(anciennes?|ancien)[^\n]{0,100}(sacrifi|perdu|ecart|jet|laiss|tomb|exclu|ignor|abandonn|coup|retir|ne partent pas|hors)|(sacrifi|ecart|jet|laiss|exclu|ignor|abandonn|coup)[^\n]{0,100}(anciennes?|ancien)/,
-            source: ['src/main/agent-pilot.ts', 'Sacrifier la plus ancienne est']
+            source: ['src/main/agent-pilot/agent-pilot.ts', 'Sacrifier la plus ancienne est']
           },
           {
             id: 'doublons',
             dit: 'dédoublonnage par nom et contenu',
             accepte: /dedoublonn|doublon|en double|meme nom et (le )?meme contenu/,
-            source: ['src/main/agent-pilot.ts', 'Dedoublonnage par (nom, contenu)']
+            source: ['src/main/agent-pilot/agent-pilot.ts', 'Dedoublonnage par (nom, contenu)']
           }
         ],
         faux: []
@@ -353,7 +353,7 @@ export const SUJETS = {
             dit: 'registre unique reservations-fichiers.json',
             accepte: /reservations-fichiers\.json|cheminregistrereservations/,
             source: [
-              'src/main/reservation-fichiers-app.ts',
+              'src/main/fichiers/reservation-fichiers-app.ts',
               "join(racine, 'reservations-fichiers.json')"
             ]
           },
@@ -396,7 +396,7 @@ export const SUJETS = {
             dit: 'la commande edit_file de l’app applique la même règle',
             accepte: /edit_file|runtracededitfile|refusreservationedition/,
             source: [
-              'src/main/commands.ts',
+              'src/main/commands/commands.ts',
               'refusReservationEdition(conversationId, baseDecision.absolutePath)'
             ]
           },

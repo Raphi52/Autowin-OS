@@ -13,7 +13,7 @@
  * Un hook et pas un état de ChatView : une lecture sans nouveauté ne re-rend pas tout le fil.
  */
 import { useEffect, useRef } from 'react'
-import type { BureauTv } from '../../../main/hdesk-tv'
+import type { BureauTv } from '../../../main/bureau/hdesk-tv'
 
 export interface GuetBureauxApi {
   hdeskTvBureaux: (conversationId?: string) => Promise<BureauTv[]>

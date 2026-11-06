@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: () => '', isPackaged: false, getVersion: () => '0.0.0' }
 }))
-vi.mock('../renderer-emit', () => ({ emitToLiveWindows: () => {} }))
+vi.mock('../app/renderer-emit', () => ({ emitToLiveWindows: () => {} }))
 
 function souple(): never {
   const fn = (): unknown => souple()

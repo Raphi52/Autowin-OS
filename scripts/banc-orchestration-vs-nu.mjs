@@ -3,7 +3,7 @@
  * banc-orchestration-vs-nu - prepare et arbitre un banc "orchestration vs appel nu".
  *
  * Pourquoi : ce qui declenche l'orchestration, c'est une PHASE nommee explicitement
- * (/scout, /build...) - src/main/agent-pilot.ts ~l.1078. La difficulte de la tache
+ * (/scout, /build...) - src/main/agent-pilot/agent-pilot.ts ~l.1078. La difficulte de la tache
  * n'entre PAS dans la decision : l'ancienne heuristique verbe + cible a ete retiree
  * (precision 25 % sur 251 messages). Le banc, lui, force les deux regimes a la main.
  * Mais sur une tache TRIVIALE la comparaison est vide : l'orchestration n'est plus que du
@@ -58,8 +58,8 @@ export const FICHIERS_ORACLE = [
 /** L'enonce remis aux DEUX bras, mot pour mot. */
 export const ENONCE = `Le prompt systeme du chat a regresse : l'escalier de localisation d'un symptome,
 l'ordre de priorite des consignes et le profil de reponse ne sont plus coherents entre
-src/main/constitution.ts, src/main/chat-pilotage-prompt.ts, src/main/behaviour-composition.ts et
-src/main/response-style.ts. Retrouve le defaut, corrige-le a sa cause, et couvre-le par un test.
+src/main/consignes/constitution.ts, src/main/consignes/chat-pilotage-prompt.ts, src/main/behaviour/behaviour-composition.ts et
+src/main/consignes/response-style.ts. Retrouve le defaut, corrige-le a sa cause, et couvre-le par un test.
 Ne modifie aucun fichier hors de src/main.`
 
 const git = (racine, args) =>

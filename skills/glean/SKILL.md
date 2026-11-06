@@ -91,7 +91,7 @@ en attente, **4 paires de doublons** déposées à une ou deux heures d'interval
 1. `brain_query` sur le sujet. Une note le couvre → écarté ; elle est fausse ou incomplète → dépôt avec
    `supersedes` = son `uid` (lu par `brain_read`).
 2. La file : `grep -il "<deux ou trois mots du sujet>" <racine>/inbox/*.md`, la racine étant celle que
-   rend `sharedBrainRoot()` (`src/main/brain-paths.ts`), la même que `curate`. Un candidat proche attend
+   rend `sharedBrainRoot()` (`src/main/brain/brain-paths.ts`), la même que `curate`. Un candidat proche attend
    déjà → écarté « doublon en attente », en citant son fichier.
 
 ### 6. Déposer — un `remember` par fait
@@ -112,7 +112,7 @@ remember(
   `session:conv-NNN`. JAMAIS `session:current` : il désignerait CE tour de récolte, pas le fil d'origine
   (mesuré : 10 des 53 candidats en attente le portent brut, sans rattachement).
 - **Pas de `learningOutcome`** : ces faits ne sont pas une leçon du tour courant. Avec lui, l'app n'accepte
-  qu'UNE proposition par tour (`reserveProposal`, `src/main/commands.ts`) et refuse les suivantes en
+  qu'UNE proposition par tour (`reserveProposal`, `src/main/commands/commands.ts`) et refuse les suivantes en
   « duplicate ».
 - **Portée écrite à la main** : une seule forme par projet. Mesuré : le même jour, `autowinos` et
   `autowin-os` pour le même dépôt — deux portées, deux vérités.

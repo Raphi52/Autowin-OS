@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Identite d'entreprise du Brain, lue en option -- jamais ecrite dans le code.
 
-Meme contrat que `src/main/identite-entreprise.ts` cote application. Le code ne connait que des
+Meme contrat que `src/main/profil/identite-entreprise.ts` cote application. Le code ne connait que des
 valeurs NEUTRES ; un profil `entreprise/<nom>/identite.json` leur ajoute ce que les postes de cette
 entreprise ont deja sur disque : nom de service signe dans chaque echange, dossier d'installation,
 anciens noms de variables lus en secours. Sans profil (version publique), tout reste neutre.
@@ -98,7 +98,7 @@ _LIBELLE = re.compile(r"^[^\r\n]{1,80}$")
 def _normaliser_metier(brut: str):
     """Domaine metier du profil (conv-916), ou None : sans cle ni libelle valides, aucun domaine.
 
-    Meme contrat que `normaliserMetier` de `src/main/identite-entreprise.ts`. Le Brain d'une
+    Meme contrat que `normaliserMetier` de `src/main/profil/identite-entreprise.ts`. Le Brain d'une
     entreprise range son metier a part : scope `<cle>`, theme `theme/<cle>`, carte
     `knowledge/_maps/<cle>.md`, documentation source sous `knowledge/domain/<documentation>/`.
     """

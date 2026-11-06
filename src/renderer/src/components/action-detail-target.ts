@@ -197,7 +197,7 @@ export function localActionDetail(action: ActionLike): LocalActionDetail | undef
      */
     /**
      * Ce qu'un `remember` a REELLEMENT retenu. `rememberFact` rend `{ stored, detail, fact:{…} }`
-     * (src/main/brain-remember.ts:531-544) : aucun de ces champs n'etait lu ici, donc un remember
+     * (src/main/brain/brain-remember.ts:531-544) : aucun de ces champs n'etait lu ici, donc un remember
      * REUSSI n'avait ni `reason`, ni `error`, ni `output` — il etait SAUTE, et le clic sur « 1 action
      * terminee » ne depliait rien. Un refus, lui, portait `reason` et s'affichait deja : le trou etait
      * specifique au succes, precisement le cas ou l'utilisateur veut relire ce qui a ete memorise.

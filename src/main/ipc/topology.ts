@@ -12,10 +12,10 @@
  * paire que celle des profils — `index.ts` garde la seule autorité sur cette variable.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
-import { migrateTopologyShape } from '../topology'
-import type { AgentTopology } from '../topology'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
+import { migrateTopologyShape } from '../topologie/topology'
+import type { AgentTopology } from '../topologie/topology'
 
 /** Ce que les canaux de topologie prenaient dans `index.ts` — désormais passé explicitement. */
 export type TopologyIpcDeps = {

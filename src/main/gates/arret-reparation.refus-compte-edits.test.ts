@@ -9,13 +9,13 @@ import { memeRefus } from './stopgate'
  */
 describe('memeRefus — refus fix-gate dont le nombre d edits grandit', () => {
   it('reconnait deux refus fix-gate identiques sur le meme fichier', () => {
-    const avant = ['hook fix-gate: 4 édits de src/main/orchestrator.ts sans cause vérifiée (CausalHypothesis/fix-ok/check:)']
-    const apres = ['hook fix-gate: 6 édits de src/main/orchestrator.ts sans cause vérifiée (CausalHypothesis/fix-ok/check:)']
+    const avant = ['hook fix-gate: 4 édits de src/main/orchestration/orchestrator.ts sans cause vérifiée (CausalHypothesis/fix-ok/check:)']
+    const apres = ['hook fix-gate: 6 édits de src/main/orchestration/orchestrator.ts sans cause vérifiée (CausalHypothesis/fix-ok/check:)']
     expect(memeRefus(apres, avant)).toBe(true)
   })
 
   it('distingue toujours deux fichiers differents', () => {
-    const avant = ['hook fix-gate: 4 édits de src/main/orchestrator.ts sans cause vérifiée']
+    const avant = ['hook fix-gate: 4 édits de src/main/orchestration/orchestrator.ts sans cause vérifiée']
     const apres = ['hook fix-gate: 6 édits de scripts/hdesk-lancer.ps1 sans cause vérifiée']
     expect(memeRefus(apres, avant)).toBe(false)
   })

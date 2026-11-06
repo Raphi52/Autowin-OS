@@ -7,8 +7,8 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AutowinOS } from '../src/main/os'
-import { AppCommandBus, type AppEvent } from '../src/main/commands'
+import { AutowinOS } from '../src/main/app/os'
+import { AppCommandBus, type AppEvent } from '../src/main/commands/commands'
 import { loadConvRunTrace } from '../src/main/runs/conv-runs'
 
 const os = new AutowinOS()

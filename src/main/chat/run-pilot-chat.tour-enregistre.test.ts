@@ -30,7 +30,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: () => '', isPackaged: false, getVersion: () => '0.0.0' }
 }))
-vi.mock('../renderer-emit', () => ({
+vi.mock('../app/renderer-emit', () => ({
   emitToLiveWindows: (_fenetres: unknown, canal: string, payload: Record<string, unknown>) => {
     capture.emis.push({ canal, payload })
     capture.disqueAuMoment.push(structuredClone(capture.lireDisque()))

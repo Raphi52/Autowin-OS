@@ -4,7 +4,7 @@ import {
   claudeToolEvidenceKind,
   claudeWrittenLineFingerprints
 } from './claude'
-import { exactLineFingerprint } from '../exact-line-fingerprint'
+import { exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
 
 describe('claudeToolResultText', () => {
   it('string brute → retournée telle quelle', () => {

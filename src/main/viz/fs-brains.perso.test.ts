@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { brainReglageFile } from '../brain-reglage'
-import { estRacineBrainPerso } from '../brain-perso-racine'
+import { brainReglageFile } from '../brain/brain-reglage'
+import { estRacineBrainPerso } from '../brain/brain-perso-racine'
 import {
   SHARED_BRAIN_ROOT,
   brainPersoGraphRefs,

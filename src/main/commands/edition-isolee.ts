@@ -2,11 +2,11 @@
 // AppCommandBus sorties de commands.ts telles quelles (conv-1580, lot 6). Elles s'appellent entre elles par
 // `bus.<méthode>()` : un test en remplace une sur l'instance (edit-file-portee.test.ts).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import type { AppCommandBus } from '../commands'
-import { applyEdit, decideEdit, editDiff, refusRacineSysteme } from '../edit-file-command'
-import { refusReservationEdition } from '../reservation-fichiers-app'
-import { encodeFile, readFileText, unrepresentableCharacters } from '../file-encoding'
-import { decisionDeSynchronisation } from '../synchronisation-cible-bureau'
+import type { AppCommandBus } from './commands'
+import { applyEdit, decideEdit, editDiff, refusRacineSysteme } from './edit-file-command'
+import { refusReservationEdition } from '../fichiers/reservation-fichiers-app'
+import { encodeFile, readFileText, unrepresentableCharacters } from '../fichiers/file-encoding'
+import { decisionDeSynchronisation } from '../bureau/synchronisation-cible-bureau'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import {
@@ -19,11 +19,11 @@ import {
   echecsDuRapport,
   verdictDifferentiel,
   noteDeDifferentiel
-} from '../verify-command'
-import { natureDeLEchec } from '../verify-echec-nature'
-import { refusAvecIssue, refusPourOutcome, type OutcomeDePublication } from '../issue-de-refus'
-import { cleDeBureau, decisionDeReutilisation } from '../bureau-reutilisable'
-import { readTestsCitant } from '../git-read-main'
+} from './verify-command'
+import { natureDeLEchec } from '../verify/verify-echec-nature'
+import { refusAvecIssue, refusPourOutcome, type OutcomeDePublication } from '../chat/issue-de-refus'
+import { cleDeBureau, decisionDeReutilisation } from '../bureau/bureau-reutilisable'
+import { readTestsCitant } from '../git/git-read-main'
 import {
   appendConversationFileTrace,
   normalizeWorkspaceTracePath,
@@ -34,7 +34,7 @@ import {
   captureWorkspacePathGenerationMarker
 } from '../providers/workspace-mutation-evidence'
 import { randomUUID } from 'node:crypto'
-import { addedLineFingerprints } from '../exact-line-fingerprint'
+import { addedLineFingerprints } from '../fichiers/exact-line-fingerprint'
 import {
   SAUT_NATURE,
   PUBLICATION_DIFFEREE,

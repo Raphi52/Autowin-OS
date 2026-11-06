@@ -3,7 +3,7 @@
  *
  * Demande d'origine : « une vue qui agrège les étapes de la carte du fil de toutes les conversations,
  * avec l'état prouvé de chaque demande et les runs bloqués, sans aucun appel de modèle ». Le calcul
- * vit dans le processus principal (`src/main/carte-des-besoins.ts`) ; ici, l'en-tête et la rivière.
+ * vit dans le processus principal (`src/main/board/carte-des-besoins.ts`) ; ici, l'en-tête et la rivière.
  *
  * Depuis le 23/10 (conv-1113) : « il doit y avoir que ce board dans la view, supprime tout ce qui
  * est en dessous, et la vue n'est pas scrollable verticalement, on peut scroll que le kanban ». La

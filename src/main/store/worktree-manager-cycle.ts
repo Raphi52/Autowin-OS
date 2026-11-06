@@ -7,7 +7,7 @@ import { copiesVivantes, supprimerHistoriqueCli } from './historique-cli-copie'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import type { WorktreeConflictDiffResult } from '../../shared/worktree-activity-model'
-import { parsePorcelainPaths } from '../run-autoclose'
+import { parsePorcelainPaths } from '../runs/run-autoclose'
 import { delierLesDependances, lierLesDependances, messageLiaison } from './dependances-copie-agent'
 import type { WorktreeRecoveryContext, WorktreeRunContext } from './worktree-manager-types'
 import {

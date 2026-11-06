@@ -24,7 +24,7 @@ import { racineDepot } from './racine-depot.mjs'
  *
  * Elle appelait `workflowProfileSelect('correctif')`. Le catalogue en compte sept — eclair,
  * correctif, feature, chantier-autowin, panel-critique, exploration, remake
- * (`src/main/workflow-defaults.ts`) — et `memoire-depot` n'en fait pas partie : la sélection ne
+ * (`src/main/workflow/workflow-defaults.ts`) — et `memoire-depot` n'en fait pas partie : la sélection ne
  * pouvait qu'échouer, donc le run tournait sur un profil non voulu.
  *
  * Elle vise désormais `correctif`, qui EXISTE et porte ce qu'elle observe : depuis le 2026-08-25,

@@ -54,7 +54,7 @@ describe('preuve de mouvement : le hook est branché sur le vrai diff', () => {
 
   it('tâche non mutante, dossier inconnu ou diff sans animation : inchangé', async () => {
     expect((await handler({ event: 'pre-green', task: 'q', cwd: '/w' })).block).toBeFalsy()
-    const h = creerPreuveMouvementHandler(() => '+++ b/src/main/orchestrator.ts\n+const a = 1')
+    const h = creerPreuveMouvementHandler(() => '+++ b/src/main/orchestration/orchestrator.ts\n+const a = 1')
     expect(
       (await h({ event: 'pre-green', task: 'build', cwd: '/w', requireProof: true })).block
     ).toBeFalsy()

@@ -12,12 +12,12 @@
  * l'enregistrement figerait la topologie du démarrage.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardProfile, guardString } from '../ipc-guards'
-import { migrateTopologyShape } from '../topology'
-import type { AgentTopology } from '../topology'
-import type { AutowinOS } from '../os'
-import type { ProfileStore, AutowinProfile } from '../profile-store'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardProfile, guardString } from './ipc-guards'
+import { migrateTopologyShape } from '../topologie/topology'
+import type { AgentTopology } from '../topologie/topology'
+import type { AutowinOS } from '../app/os'
+import type { ProfileStore, AutowinProfile } from '../profil/profile-store'
 
 /** Ce que les canaux de profils prenaient dans `index.ts` — désormais passé explicitement. */
 export type ProfilesIpcDeps = {

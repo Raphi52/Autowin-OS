@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { HAUTEUR_BOUTONS_FENETRE } from './barre-fenetre'
-import { sourceProcessPrincipal } from '../main/source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../main/app/source-process-principal.test-helpers'
 
 /**
  * Le gris de survol des boutons de fenêtre (dessinés par Windows) débordait de 4 px sur le haut
@@ -58,7 +58,7 @@ describe('hauteur des boutons de fenêtre', () => {
   })
 
   it('est la même valeur à la création de la fenêtre et au changement de thème', () => {
-    const fenetre = lire('src/main/window.ts')
+    const fenetre = lire('src/main/app/window.ts')
     const index = sourceProcessPrincipal()
     expect(fenetre).toMatch(/titleBarOverlay:\s*\{[^}]*height:\s*HAUTEUR_BOUTONS_FENETRE\b/)
     expect(index).toMatch(/setTitleBarOverlay\(\{[^}]*height:\s*HAUTEUR_BOUTONS_FENETRE\b/)

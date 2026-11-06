@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ClaudeAccountsStore, DEFAULT_ACCOUNT_ID } from '../claude-accounts'
+import { ClaudeAccountsStore, DEFAULT_ACCOUNT_ID } from './claude-accounts'
 import { ProviderRegistry, basculeApresQuota } from './registry'
 import {
   ProviderCallError,

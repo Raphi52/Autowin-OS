@@ -1,5 +1,5 @@
 import { estVerrouGitTenu, motifDeBlocagePublication } from '../../shared/blocage-git-verrou'
-import { pendantOperation } from '../gel-main'
+import { pendantOperation } from '../gel/gel-main'
 import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import type { VerdictBureau } from './verdict-bureau'

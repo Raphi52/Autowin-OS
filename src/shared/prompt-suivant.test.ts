@@ -200,9 +200,9 @@ describe('publication → /git (conv-1250)', () => {
     expect(estPromptDePublication('Lance /git pour publier le lot.')).toBe(false)
   })
   it('un chemin qui contient /git ou /salvage n’est pas un ordre de tri', () => {
-    expect(ordreDeTriDejaJoue('regarde src/main/git-read-main.ts')).toBe(false)
+    expect(ordreDeTriDejaJoue('regarde src/main/git/git-read-main.ts')).toBe(false)
     expect(ordreDeTriDejaJoue('lance scripts/salvage-resurrection.mjs')).toBe(false)
-    const publier = 'Pousse sur main la correction de src/main/git-read-main.ts.'
+    const publier = 'Pousse sur main la correction de src/main/git/git-read-main.ts.'
     expect(estPromptDePublication(publier)).toBe(true)
   })
 })

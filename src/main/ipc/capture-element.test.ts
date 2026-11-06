@@ -18,7 +18,7 @@ vi.mock('electron', () => ({
     handle: (canal: string, fn: (...args: unknown[]) => unknown) => simule.handlers.set(canal, fn)
   }
 }))
-vi.mock('../ipc-senders', () => ({
+vi.mock('./ipc-senders', () => ({
   assertTrustedRendererSender: (_event: unknown, portee: string) => {
     simule.gardes.push(portee)
     if (simule.refuser) throw new Error(`Origine renderer non autorisée pour ${portee}`)

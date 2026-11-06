@@ -14,8 +14,8 @@ import {
   dodDuVerdict,
   objectionsDuJuge,
   questionsDuJuge
-} from '../objections-juge'
-import { TEXTE_MAX_MESSAGE_FIL } from '../messages-entre-fils-app'
+} from '../juge/objections-juge'
+import { TEXTE_MAX_MESSAGE_FIL } from '../conversations/messages-entre-fils-app'
 
 /*
  * Étape 2 de l'option A du cadrage forum-agents-partie2-juge-build (conv-1139, 2026-10-25) : la

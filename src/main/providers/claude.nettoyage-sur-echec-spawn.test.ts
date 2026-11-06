@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isolerTemp, type TempIsole } from '../temp-isole.test-helpers'
+import { isolerTemp, type TempIsole } from '../fichiers/temp-isole.test-helpers'
 import { ClaudeCliAdapter } from './claude'
 
 /*

@@ -14,9 +14,9 @@ import { projectLatestRequestExecution } from '../../renderer/src/components/req
 import { allegerTracePourGraphe, chargesDesEvenements } from '../activity/trace-allegee'
 import { TraceStore } from '../activity/trace-store'
 import type { TraceEventV1 } from '../activity/trace-event'
-import { AgentPilot, type PilotEvent } from '../agent-pilot'
-import { configureAutowinAppDataBase } from '../app-data'
-import type { CommandSpec } from '../commands'
+import { AgentPilot, type PilotEvent } from '../agent-pilot/agent-pilot'
+import { configureAutowinAppDataBase } from '../app/app-data'
+import type { CommandSpec } from '../commands/commands'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 import { ConversationStore } from '../store/conversations'
 import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
@@ -36,7 +36,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: () => '', isPackaged: false, getVersion: () => '0.0.0' }
 }))
-vi.mock('../renderer-emit', () => ({ emitToLiveWindows: () => {} }))
+vi.mock('../app/renderer-emit', () => ({ emitToLiveWindows: () => {} }))
 
 /** Accepte tout appel et rend un objet du même genre : les dépendances non observées. */
 function souple(): never {

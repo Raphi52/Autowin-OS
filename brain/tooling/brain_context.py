@@ -251,7 +251,7 @@ def _candidate_title(hit: dict, note: Path) -> str:
 
 
 # VÉRIFICATIONS DISQUE EN PARALLÈLE (conv-1053, 2026-10-22). Le chat demande la liste de candidates
-# à CHAQUE tour avec un délai de 1,5 s (`TITRES_DELAI_MS`, src/main/brain-titres-du-tour.ts), et un
+# à CHAQUE tour avec un délai de 1,5 s (`TITRES_DELAI_MS`, src/main/brain/brain-titres-du-tour.ts), et un
 # tour sur trois rendait « unavailable ». Mesure sur le serveur vivant : /query-secure en mode
 # candidates prenait 0,87 à 1,56 s (médiane 1,27 s, 3 appels sur 20 au-delà de 1,5 s), et décrire
 # 30 notes du partage réseau coûtait À LUI SEUL 1,3 s — `resolve()` 30 × ≈ 0,9 s, `is_file()` puis

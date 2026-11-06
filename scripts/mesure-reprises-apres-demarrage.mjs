@@ -7,11 +7,11 @@
  * pas sans risque : il donne les chiffres qui décident du chantier, et il les rejoue après coup pour
  * savoir si une correction a payé. Il répond à trois questions :
  *   - où part la durée d'un démarrage : le moteur, ou le rechargement de la fenêtre ?
- *     (jalons de `demarrages.jsonl`, `src/main/gel-main.ts`) ;
+ *     (jalons de `demarrages.jsonl`, `src/main/gel/gel-main.ts`) ;
  *   - combien de tours repartent juste après un démarrage ?
  *     (événements `kind: resumed` de `turn-journals/<fil>/<tour>.jsonl`) ;
  *   - qui a demandé les fermetures ? (`fermeture demandee-par=` de `app-exits.log`, rangé À CÔTÉ de
- *     la racine de données, voir `src/main/journal-arrets.ts`).
+ *     la racine de données, voir `src/main/app/journal-arrets.ts`).
  *
  * CE QU'IL NE MESURE PAS : une reprise n'est pas forcément causée par le démarrage qui la précède.
  * D'où le compte à part de celles qui suivent dans les 120 secondes.

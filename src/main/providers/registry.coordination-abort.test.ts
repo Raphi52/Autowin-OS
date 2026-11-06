@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { compileExecutionQuote } from '../execution-quote'
-import { ExecutionSupervisor, type ExecutionUsageSnapshot } from '../execution-supervisor'
+import { compileExecutionQuote } from '../orchestration/execution-quote'
+import { ExecutionSupervisor, type ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk } from './types'
 
 describe('ProviderRegistry — expiration de coordination', () => {

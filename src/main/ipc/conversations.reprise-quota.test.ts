@@ -4,7 +4,7 @@ const canaux = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>
 vi.mock('electron', () => ({
   ipcMain: { handle: (canal: string, fn: (...args: unknown[]) => unknown) => canaux.set(canal, fn) }
 }))
-vi.mock('../ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
+vi.mock('./ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
 
 import { registerConversationsIpc, resumesAvecReprise } from './conversations'
 import type { Conversation, ConversationSummary } from '../store/conversations'

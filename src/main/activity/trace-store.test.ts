@@ -11,7 +11,7 @@ import {
   TraceStore
 } from './trace-store'
 import type { TraceEventV1 } from './trace-event'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 function event(id: string, sequence: number, content = id): TraceEventV1 {
   return {

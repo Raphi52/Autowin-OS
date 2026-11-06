@@ -66,7 +66,7 @@ describe('preuve visuelle : le hook est branché sur le vrai état du dépôt', 
   })
 
   it('aucun fichier de rendu touché : rien à exiger', async () => {
-    const h = creerPreuveVisuelleHandler(() => ['src/main/orchestrator.ts'])
+    const h = creerPreuveVisuelleHandler(() => ['src/main/orchestration/orchestrator.ts'])
     expect(
       (await h({ event: 'pre-green', task: 'build', cwd: '/w', requireProof: true })).block
     ).toBeFalsy()

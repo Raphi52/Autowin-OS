@@ -35,7 +35,7 @@ describe('un run qui finit ROUGE se trie lui-meme, a chaud', () => {
   it('marque le travail refuse — sans rien supprimer', () => {
     const marquer = vi.fn().mockReturnValue(true)
     const co = new RunWorktreeCoordinator({
-      manager: managerDouble(marquer, ['src/main/os.ts']),
+      manager: managerDouble(marquer, ['src/main/app/os.ts']),
       nowFn: () => 1
     })
 
@@ -50,7 +50,7 @@ describe('un run qui finit ROUGE se trie lui-meme, a chaud', () => {
   it('un travail RETENU par un tournoi continue d’attendre une vraie decision', () => {
     const marquer = vi.fn().mockReturnValue(true)
     const co = new RunWorktreeCoordinator({
-      manager: managerDouble(marquer, ['src/main/os.ts']),
+      manager: managerDouble(marquer, ['src/main/app/os.ts']),
       nowFn: () => 1
     })
 

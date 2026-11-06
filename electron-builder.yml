@@ -35,7 +35,7 @@ asarUnpack:
   - scripts/outlook-local-corps.ps1
   # Ouverture d'une piece jointe RECUE depuis la tuile Interlocuteurs (conv-1220), meme raison.
   - scripts/outlook-local-piece.ps1
-  # Même contrainte pour la petite TV du bureau caché (src/main/hdesk-tv.ts).
+  # Même contrainte pour la petite TV du bureau caché (src/main/bureau/hdesk-tv.ts).
   - scripts/hdesk-tv.ps1
   # Mods d'Autowin (conv-58) : chargés par le CLI via --plugin-dir, et le lanceur qu'ils appellent.
   - mods/**

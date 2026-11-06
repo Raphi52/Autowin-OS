@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from './app/source-process-principal.test-helpers'
 
 /**
  * LE BRANCHEMENT DE LA REPRISE D'UN FIL (conv-1423). `index.ts` ne se charge pas dans un test : il

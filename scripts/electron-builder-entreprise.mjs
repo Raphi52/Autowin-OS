@@ -7,7 +7,7 @@
  * entreprise garde pourtant SON identifiant d'application (raccourcis, notifications, installateur
  * deja poses sur ses postes) et son nom d'auteur : ils vivent dans `entreprise/<nom>/identite.json`
  * et sont passes ici en surcharges de ligne de commande (`-c.appId=...`). Le processus principal
- * lit le meme fichier au demarrage (`src/main/identite-entreprise.ts`) : application et paquet
+ * lit le meme fichier au demarrage (`src/main/profil/identite-entreprise.ts`) : application et paquet
  * gardent ainsi la MEME identite.
  *
  * Sans profil, electron-builder tourne exactement comme avant, avec les valeurs du depot.

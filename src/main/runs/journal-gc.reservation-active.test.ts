@@ -9,7 +9,7 @@ import {
   type JournalEntry
 } from './journal-gc'
 import { loadOrchestrationStates, saveOrchestrationState } from './orchestration-state'
-import { compileExecutionQuote } from '../execution-quote'
+import { compileExecutionQuote } from '../orchestration/execution-quote'
 
 const NOW = 1_800_000_000_000
 const VIEUX_DE_43_H = NOW - 43 * 60 * 60 * 1000

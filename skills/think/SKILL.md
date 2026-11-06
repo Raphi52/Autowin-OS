@@ -60,7 +60,7 @@ filtre qui empêche `think` de devenir un déballage.
   questions de l'étape 1 : tu les as déjà. Relis aussi les blocs précédents du fil. Puis lance un
   `brain_query` par question que ces chemins ne couvrent pas. Un bloc absent ou court ne prouve
   jamais que le Brain est vide : mesuré, la bonne note n'y figure que 15 fois sur 24
-  (`src/main/brain-titres-du-tour.ts`). Dans un run, ce bloc n'existe pas : la liste des candidates
+  (`src/main/brain/brain-titres-du-tour.ts`). Dans un run, ce bloc n'existe pas : la liste des candidates
   de la tâche, en tête de ton contexte, est plus large.
 - **Le code lui-même** — pour l'état ACTUEL. La mémoire dit où regarder et pourquoi ; elle ne dit pas
   ce que le fichier contient aujourd'hui.

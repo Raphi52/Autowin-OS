@@ -1,4 +1,4 @@
-import type { CapabilityItem, CapabilityKind } from '../capability-controls'
+import type { CapabilityItem, CapabilityKind } from '../gardes/capability-controls'
 
 interface PromptConfigChange {
   kind: CapabilityKind

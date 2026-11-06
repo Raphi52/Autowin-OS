@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from './app/source-process-principal.test-helpers'
 
 /**
  * CÂBLAGE de l'enchaînement auto du CHAT dans `runPilotChat` (closure locale de index.ts, que

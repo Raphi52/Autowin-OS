@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { closeConvRun, createConvRun, populateConvRunSections } from './conv-runs'
 import { parseRun, isBlocked } from '../dashboards/runs'
-import { rootExecutionRequirements } from '../root-execution-contract'
+import { rootExecutionRequirements } from '../gardes/root-execution-contract'
 
 /**
  * LA DoD AUTO-GÉNÉRÉE NE DOIT PAS POSER UN CRITÈRE QUI N'EN EST PAS UN.

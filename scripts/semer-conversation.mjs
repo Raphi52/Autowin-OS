@@ -126,7 +126,7 @@ const lireJson = (chemin) => JSON.parse(readFileSync(chemin, 'utf8'))
 /** Même nom que `NOM_JOURNAL_MESSAGES_FILS` (src/shared/messages-entre-fils.ts, conv-1139). */
 const NOM_MESSAGES_FILS = 'messages-entre-fils.jsonl'
 
-/** Même nom que `NOM_FICHIER_PLANS` (src/main/plans-de-lots-app.ts, conv-1150). */
+/** Même nom que `NOM_FICHIER_PLANS` (src/main/orchestration/plans-de-lots-app.ts, conv-1150). */
 const NOM_PLANS_DE_LOTS = 'plans-de-lots.json'
 
 /**

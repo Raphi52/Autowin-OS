@@ -7,8 +7,8 @@
  * langue ne change pas. Rend la langue telle que le moteur l'a enregistrée.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { ecrireLangueReglee, lireLangueReglee } from '../langue-reglage'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { ecrireLangueReglee, lireLangueReglee } from '../profil/langue-reglage'
 
 export function registerLangueIpc(): void {
   ipcMain.handle('app:langue:ecrire', (event, langue: unknown) => {

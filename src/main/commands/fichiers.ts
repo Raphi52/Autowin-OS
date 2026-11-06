@@ -2,18 +2,18 @@
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
 // En fin de fichier, les commandes de fichiers tracées (créer, déplacer, supprimer, état d'une copie) :
 // méthodes de AppCommandBus sorties telles quelles (conv-1580, lot 6).
-import type { AppCommandBus } from '../commands'
-import { decideRead, executeRead, enumererFichiersLisibles, enumererFichiersLisiblesDetail, rechercherDansFichiers } from '../read-file-command'
-import { decoderUtf8, refusRacineSysteme } from '../edit-file-command'
+import type { AppCommandBus } from './commands'
+import { decideRead, executeRead, enumererFichiersLisibles, enumererFichiersLisiblesDetail, rechercherDansFichiers } from './read-file-command'
+import { decoderUtf8, refusRacineSysteme } from './edit-file-command'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve, join, sep, isAbsolute } from 'node:path'
-import { lireProprietairesDeFichiers } from '../proprietaire-fichier'
+import { lireProprietairesDeFichiers } from '../fichiers/proprietaire-fichier'
 import {
   decideCreateFile,
   decideDeleteFile,
   decideMoveFile,
   identifiantDeBureauValide
-} from '../file-ops-command'
+} from './file-ops-command'
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {

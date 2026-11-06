@@ -98,7 +98,7 @@ function gelerProfond<T>(valeur: T): T {
 /**
  * NOMME l'attente, pour que le detecteur de gel cesse de rendre 'inconnu'.
  *
- * instrumenterEntreesSortiesDuMain (src/main/gel-main.ts) ne patche que node:fs et
+ * instrumenterEntreesSortiesDuMain (src/main/gel/gel-main.ts) ne patche que node:fs et
  * node:child_process : Atomics.wait lui est invisible. Sans cette declaration, le plus gros gel du
  * journal reste anonyme — l'instrument prouve le gel sans jamais nommer le coupable. La liaison est
  * best-effort et sans import : la trace ne doit jamais dependre du detecteur.

@@ -6,7 +6,7 @@
  * conv ». Le Board ne vivait que dans l'app ; un dossier choisi sur ce poste en reçoit désormais une
  * copie — un post-it par fil, chacun portant l'identifiant de sa conversation — à chaque calcul.
  *
- * Types seuls : partagés par le processus principal (`src/main/board-dossier.ts`), le pont et la vue.
+ * Types seuls : partagés par le processus principal (`src/main/board/board-dossier.ts`), le pont et la vue.
  */
 import type { AnimalAgent, TenueAgent } from './quartier-presence'
 

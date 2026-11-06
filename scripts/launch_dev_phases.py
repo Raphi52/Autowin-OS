@@ -45,7 +45,7 @@ ERREURS = (
     # l'ecran annoncait « Compilation en ECHEC » sur un demarrage qui aboutissait.
     (r"Transform failed with|Unexpected \"<<|(?:esbuild|vite|rollup)[^\n]{0,40}ERROR", "Compilation en ECHEC"),
     # ROLLUP N'ECRIT PAS TOUJOURS « ERROR ». Un import qui ne resout pas sort sous la forme
-    #   src/main/index.ts (278:9): "abortUpdateConflict" is not exported by "src/main/git-update.ts"
+    #   src/main/index.ts (278:9): "abortUpdateConflict" is not exported by "src/main/git/git-update.ts"
     # Aucun motif ci-dessus ne l'attrapait : le lanceur rendait alors 6 « bundle perime » — vrai mais
     # INERTE — la ou 7 « compilation en echec » existe justement pour ca. Vecu le 2026-08-13 : le
     # build etait casse par un export manquant, la ligne etait DANS le journal, l'alerte n'en disait

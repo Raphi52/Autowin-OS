@@ -1,6 +1,6 @@
 // Champs et phrases partagés par plusieurs familles du catalogue des commandes, sortis tels quels
 // de commands/catalogue.ts (conv-1580) pour que chaque famille les importe sans cycle.
-import type { SchemaArgument } from '../skill-node-mcp'
+import type { SchemaArgument } from '../skills/skill-node-mcp'
 
 /**
  * Pas-à-pas du navigateur intégré (conv-1286, 2026-10-30) : chaque geste de l'agent (ouvrir, lire,

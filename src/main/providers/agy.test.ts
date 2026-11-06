@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 import { AGY_CONNEXION_REQUISE, AgyAdapter, lireLigneAgy, modelesAgy, resolveAgyBin } from './agy'
-import { planProviderLogin } from '../provider-login'
+import { planProviderLogin } from './provider-login'
 
 // Sortie RÉELLE d'agy 1.5.0 sans connexion (mesurée le 2026-11-04, conv-1499).
 const ERREUR_CONNEXION =

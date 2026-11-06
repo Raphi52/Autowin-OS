@@ -21,8 +21,8 @@ import { randomUUID } from 'node:crypto'
 
 import { resolveClaudeBin } from '../src/main/providers/claude'
 import { claudeToolResultText } from '../src/main/providers/claude'
-import { demarrerServeurOutilsNoeudSkill } from '../src/main/skill-node-mcp'
-import type { LanceurCommandeSkill } from '../src/main/skill-node-tools'
+import { demarrerServeurOutilsNoeudSkill } from '../src/main/skills/skill-node-mcp'
+import type { LanceurCommandeSkill } from '../src/main/skills/skill-node-tools'
 
 const TAILLES = (process.argv[2] ?? '30000,120000,600000').split(',').map(Number)
 

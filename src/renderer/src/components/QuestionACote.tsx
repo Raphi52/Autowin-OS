@@ -3,7 +3,7 @@
  *
  * Une question qui s'appuie sur tout le fil, et dont rien n'y est ajouté : pas de message, pas de
  * journal de tour, rien au Board. Elle marche pendant qu'un tour tourne. Le moteur est dans
- * `src/main/question-a-cote.ts`.
+ * `src/main/chat/question-a-cote.ts`.
  *
  * Tout l'état vit ICI et non dans `ChatView` : taper dans ce champ ne doit pas re-rendre la vue du chat.
  * Les échanges vivent en mémoire seulement, dans `question-a-cote-outils.ts`.

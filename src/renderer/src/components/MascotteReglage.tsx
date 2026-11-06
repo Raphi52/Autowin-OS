@@ -13,7 +13,7 @@ const STYLES: readonly StyleMascotte[] = ['magicien', 'basique', 'machine']
 /**
  * Settings · Interface — « Mascotte du bureau » (conv-1145, 2026-10-25).
  *
- * La bille au-dessus de l'horloge (`src/main/mascotte.ts`) vit HORS de la fenêtre : c'est le
+ * La bille au-dessus de l'horloge (`src/main/mascotte/mascotte.ts`) vit HORS de la fenêtre : c'est le
  * moteur qui garde le choix (`mascotte-reglage.ts`), pas le stockage de la page. L'interrupteur
  * affiche donc ce que le moteur RÉPOND, jamais ce qu'il a supposé : un enregistrement refusé ne
  * laisse pas un interrupteur dans la mauvaise position.

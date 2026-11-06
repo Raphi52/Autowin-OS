@@ -37,12 +37,12 @@ réussite » — il ne peut même pas savoir que ça a raté.
 C'est la même classe de faute que deux autres corrigées le même jour :
 
 - le message d'échec de mise à jour accusait le travail non committé alors que git parlait de
-  divergence de branche (corrigé : `diagnostiquerEchecMaj`, `src/main/git-update.ts`) ;
+  divergence de branche (corrigé : `diagnostiquerEchecMaj`, `src/main/git/git-update.ts`) ;
 - le balayage annonçait « copies conservées » sans dire qu'elles l'étaient définitivement.
 
 ## Ce que le dépôt SAVAIT déjà
 
-`src/main/agent-pilot.mute-turn.test.ts` documente le cas depuis le 2026-07-29 (conv-76 : trois
+`src/main/agent-pilot/agent-pilot.mute-turn.test.ts` documente le cas depuis le 2026-07-29 (conv-76 : trois
 messages de 40 à 64 caractères, 18 appels de sous-agents pour 10,05 $, aucun texte de l'agent). Une
 relance mécanique existe — `grantRecoveryIteration('muted-turn')` dans `src/main/index.ts` — et elle
 est **bornée à une fois**.

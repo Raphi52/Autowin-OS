@@ -12,8 +12,8 @@ import {
   skillDuMessage,
   valeurDOption
 } from './skill-doctor.mjs'
-import { ligneDeSkill } from '../src/main/commands.ts'
-import { nativeSkills } from '../src/main/native-registry.ts'
+import { ligneDeSkill } from '../src/main/commands/commands.ts'
+import { nativeSkills } from '../src/main/app/native-registry.ts'
 
 const NOMS = ['build', 'clean', 'draft', 'git', 'judge', 'look', 'graft']
 const MAINTENANT = Date.parse('2026-10-31T12:00:00Z')

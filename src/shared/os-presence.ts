@@ -4,10 +4,10 @@
  * Pourquoi : avant ce fichier, l'icône de barre des tâches restait inerte pendant un run de
  * plusieurs minutes (`setProgressBar` : aucune occurrence dans `src`) et l'icône de la zone de
  * notification portait un texte FIGÉ. Le seul bruit du produit était la notification d'abandon
- * (`src/main/os.ts:451`). Un travail en cours ne se voyait donc nulle part hors de la fenêtre.
+ * (`src/main/app/os.ts:451`). Un travail en cours ne se voyait donc nulle part hors de la fenêtre.
  *
  * Fonction PURE, sans Electron : le calcul est testable, l'application des valeurs vit dans
- * `src/main/os-presence-main.ts`.
+ * `src/main/app/os-presence-main.ts`.
  */
 
 /** Ce que le renderer sait des runs vivants — seul lui tient cette liste. */
@@ -47,7 +47,7 @@ export function presenceSysteme(etat: EtatRunsVivants): PresenceSysteme {
   return { progression: faites / total, mode: 'normal', infobulle }
 }
 
-/** Les fichiers d'icône du produit (chemins résolus par `?asset` dans `src/main/window.ts`). */
+/** Les fichiers d'icône du produit (chemins résolus par `?asset` dans `src/main/app/window.ts`). */
 export type FichiersIcone = { png: string; devPng: string; ico: string; devIco: string }
 
 /**

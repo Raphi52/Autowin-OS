@@ -2,7 +2,7 @@ import type { GitReadResult, GitDiffResult } from '../../shared/git-read'
 import { execFile } from 'node:child_process'
 import { resolve } from 'node:path'
 import { promisify } from 'node:util'
-import { readGitDiff, readGitState } from '../git-read-main'
+import { readGitDiff, readGitState } from '../git/git-read-main'
 import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker

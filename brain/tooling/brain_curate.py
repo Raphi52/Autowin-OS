@@ -152,7 +152,7 @@ def _list_field(raw: str | None) -> list[str]:
 def _cle_metier_du_scope(folded: str):
     """Cle du domaine metier (profil `metier`) si le scope en releve : `<cle>`, `<cle>-...` ou
     `<cle>/...`. Sans profil (version publique), aucun scope n'est metier. Meme regle que
-    `defaultTheme` de `src/main/brain-inbox.ts`."""
+    `defaultTheme` de `src/main/brain/brain-inbox.ts`."""
     metier = brain_identite.metier()
     cle = metier["cle"] if metier else None
     if cle and (folded == cle or folded.startswith(cle + "-") or folded.startswith(cle + "/")):

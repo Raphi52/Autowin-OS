@@ -1,0 +1,117 @@
+import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+
+/**
+ * L'écran d'attente du démarrage et le découplage qui le rend utile.
+ *
+ * MESURÉ AU CHRONOMÈTRE, en développement, cache chaud : 30 à 44 secondes s'écoulaient sans AUCUNE
+ * fenêtre, puis l'interface apparaissait vers 70-80 s. Pendant ce trou, on relance l'application
+ * plusieurs fois en croyant qu'elle n'a pas démarré.
+ *
+ * La cause n'était pas le rendu : `readLegacyRendererStorage` ouvre une fenêtre CACHÉE et y charge le
+ * renderer entier — juste pour relire quelques clés de `localStorage` — et la création de la fenêtre
+ * principale attendait ce résultat. En développement, cela payait la compilation complète du bundle
+ * avant que la moindre fenêtre existe.
+ *
+ * Ces tests lisent la SOURCE parce que le sujet est un ordonnancement au démarrage d'Electron :
+ * l'exécuter demanderait un vrai lancement, et chaque propriété vérifiée ici est une façon dont le
+ * trou noir de 44 secondes reviendrait sans bruit.
+ */
+
+// La ZONE du process principal, pas un chemin : le fenetrage a quitte `index.ts` pour
+// `window.ts` le 2026-09-02 et ces controles rougissaient sans qu'aucun cablage n'ait change.
+const source = sourceProcessPrincipal()
+
+describe('démarrage — la fenêtre n’attend plus la migration', () => {
+  it('la lecture historique n’est PAS attendue avant la création de la fenêtre', () => {
+    // C'est LE correctif. Un `await` réintroduit ici et les 44 secondes d'écran vide reviennent.
+    expect(source).toContain('const lectureHistorique: Promise<LectureHistorique>')
+    expect(source).not.toMatch(/const legacyRead = await readLegacyRendererStorage/)
+  })
+
+  it('l’IPC reçoit une PROMESSE, attendue seulement quand le renderer demande', () => {
+    expect(source).toMatch(/registerStorageMigrationIpc\(lectureHistorique\)/)
+    expect(source).toMatch(
+      /function registerStorageMigrationIpc\(\s*lecture: Promise<LectureHistorique>/
+    )
+    expect(source).toMatch(/const \{ values \} = await lecture/)
+    expect(source).toMatch(/const \{ canWriteMarker \} = await lecture/)
+  })
+
+  /**
+   * CONSTATÉ À L'ÉCRAN le 2026-09-12 : l'écran « Préparation de l'interface… » occupait tout le
+   * moniteur pendant que l'application, derrière, répondait normalement. Une SECONDE fenêtre
+   * principale avait été construite sur une première encore vivante : elle charge l'écran d'attente
+   * puis s'affiche maximisée par-dessus la vraie.
+   *
+   * Le test porte sur la SOURCE comme le reste du fichier — le sujet est l'ordonnancement au
+   * démarrage d'Electron, qu'on ne rejoue pas sans lancer l'application pour de bon.
+   */
+  it('ne construit JAMAIS une seconde fenêtre principale sur une première vivante', () => {
+    // La garde est la PREMIÈRE chose que fait createWindow : placée après, la fenêtre est déjà née.
+    const debut = source.indexOf('function createWindow(): void {')
+    const construction = source.indexOf('new BrowserWindow({', debut)
+    expect(debut).toBeGreaterThan(-1)
+    expect(source.slice(debut, construction)).toMatch(
+      /if \(mainWindowVivante && !mainWindowVivante\.isDestroyed\(\)\)/
+    )
+    // …et elle réveille l'existante au lieu de ne rien faire, sinon « Ouvrir Autowin » serait muet.
+    expect(source.slice(debut, construction)).toMatch(/mainWindowVivante\.focus\(\)/)
+    // La référence est relâchée à la fermeture : sans cela, rouvrir depuis la barre d'état échoue.
+    expect(source).toMatch(/if \(mainWindowVivante === mainWindow\) mainWindowVivante = null/)
+  })
+
+  it('un échec de migration ne bloque pas le démarrage', () => {
+    // La promesse a une branche de rejet qui repart sur « rien à importer », et n'écrit pas le
+    // marqueur — la prochaine ouverture réessaiera.
+    expect(source).toMatch(/\(\) => \(\{ values: \{\}, canWriteMarker: false \}\)/)
+  })
+})
+
+describe('écran d’attente', () => {
+  it('est chargé par le processus principal depuis un FICHIER, jamais par une URL `data:`', () => {
+    // MESURÉ : avec `data:text/html,…`, le document se chargeait mais son contenu était VIDE —
+    // Chromium bloque les navigations de premier niveau vers `data:`. L'écran n'était donc jamais
+    // visible pendant les 44 secondes qu'il devait couvrir.
+    // On vise le CODE, pas la documentation : le commentaire qui explique l'ancienne approche cite
+    // forcément `data:text/html`, et une garde qui l'interdit partout se déclencherait sur lui.
+    expect(source).not.toMatch(/loadURL\([`'"]data:/)
+    expect(source).toContain("join(app.getPath('temp'), 'autowin-boot.html')")
+    expect(source).toContain('writeFileSync(cheminAttente, BOOT_SPLASH_DOCUMENT')
+  })
+
+  it('est PEINT AVANT que le vrai document soit demandé', () => {
+    // Enchaîner deux chargements sans attendre ANNULE le premier : l'écran ne s'affichait jamais.
+    // Cette erreur a été commise puis corrigée ; ce test est là pour qu'elle ne revienne pas.
+    expect(source).toMatch(
+      /loadFile\(cheminAttente\)\.then\(chargerInterfaceUneFois, chargerInterfaceUneFois\)/
+    )
+  })
+
+  it('charge l’interface même si l’écran d’attente échoue', () => {
+    // Les deux arguments de `then` sont le même appel, ET l'écriture du fichier est enveloppée : ni un
+    // chargement raté ni un disque en lecture seule ne doivent empêcher l'application de démarrer.
+    expect(source).toContain('.then(chargerInterfaceUneFois, chargerInterfaceUneFois)')
+    expect(source).toMatch(/else chargerInterface\(\)/)
+  })
+
+  it('charge l’interface même si le chargement de l’attente ne se termine JAMAIS', () => {
+    // CONSTATÉ le 2026-10-17 : service réseau planté pendant ce chargement, page restée sur
+    // `about:blank`, promesse jamais réglée → aucune interface, aucune fenêtre visible.
+    expect(source).toMatch(
+      /const filetAttente = setTimeout\(chargerInterfaceUneFois, DELAI_MAX_ECRAN_ATTENTE_MS\)/
+    )
+    // Une seule demande, quel que soit l'ordre d'arrivée : un second `loadURL` annulerait le premier.
+    const garde = source.indexOf('const chargerInterfaceUneFois = (): void => {')
+    expect(garde).toBeGreaterThan(-1)
+    expect(source.slice(garde, garde + 200)).toMatch(
+      /if \(interfaceDemandee\) return\s+interfaceDemandee = true\s+clearTimeout\(filetAttente\)/
+    )
+  })
+
+  it('vient du module PARTAGÉ, pas d’une chaîne recopiée ici', () => {
+    // L'apparence et l'accessibilité sont vérifiées dans `src/shared/boot-splash.test.ts`, au même
+    // endroit que leur définition. Les dupliquer ici les ferait diverger en silence.
+    expect(source).toContain("import { BOOT_SPLASH_DOCUMENT } from '../../shared/boot-splash'")
+  })
+})

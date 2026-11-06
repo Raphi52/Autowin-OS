@@ -37,7 +37,7 @@ const RAPPORT_STEAL = [
   ENTETE_CANDIDATS,
   '|---|---|---|---|---|---|',
   '| 1 | 82 | 🆕 nouveauté | Mode advisor sur les phases de production | coût ◐→✅ [P3] 🟡 | appels du build, effort petit |',
-  '| 2 | 78 | 🆕 nouveauté | Réservation des fichiers entre fils | conflits vécus ◐→✅ [P2] 🟡 | registre lu par `src/main/commands.ts:4545`, effort moyen |',
+  '| 2 | 78 | 🆕 nouveauté | Réservation des fichiers entre fils | conflits vécus ◐→✅ [P2] 🟡 | registre lu par `src/main/commands/commands.ts:4545`, effort moyen |',
   '',
   '## 7. Écartés',
   '- Barrière de l’OS sur les commandes : indisponible sous Windows natif.',

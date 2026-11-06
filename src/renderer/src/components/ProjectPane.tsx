@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { ProjectEntry } from '../../../main/project-files'
+import type { ProjectEntry } from '../../../main/fichiers/project-files'
 import { langueCourante } from '../langue'
 import { traduireChatPanneaux, useTextesChatPanneaux } from '../textes-ecrans/chat-panneaux'
 import './ProjectPane.css'

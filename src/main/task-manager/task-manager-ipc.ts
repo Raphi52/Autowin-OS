@@ -14,7 +14,7 @@ import type {
 import type { StructuredRecurrence, StructuredSchedule } from './schedule'
 import { watchdogRegexProblem } from '../../shared/watchdog-regex'
 import { setMailSender, type MailRuleDiagnostics } from './watchdog-mail'
-import { isReasoningEffort, type ReasoningEffort } from '../roles'
+import { isReasoningEffort, type ReasoningEffort } from '../profil/roles'
 
 interface RegisterTaskManagerIpcOptions {
   ipc: IpcMain

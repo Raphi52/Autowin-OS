@@ -23,11 +23,11 @@
  * le Brain, et `os:brainTraces`, qui lit les traces d'une conversation avec ses voisines.
  */
 import { ipcMain } from 'electron'
-import { brainScopeForWorkspace, scopeBrainRetrieval } from '../brain-corpus-scope'
-import { envDuBrainPerso, estRacineBrainPerso } from '../brain-perso'
-import { retrieveBrainContext } from '../brain-retrieval'
+import { brainScopeForWorkspace, scopeBrainRetrieval } from '../brain/brain-corpus-scope'
+import { envDuBrainPerso, estRacineBrainPerso } from '../brain/brain-perso'
+import { retrieveBrainContext } from '../brain/brain-retrieval'
 import { SHARED_BRAIN_ROOT } from '../viz/fs-brains'
-import { buildBrainSearchEnvelope } from '../brain-search-envelope'
+import { buildBrainSearchEnvelope } from '../brain/brain-search-envelope'
 import {
   assertBrainVaultRoot,
   promoteInboxCandidate,
@@ -35,18 +35,18 @@ import {
   restoreTrashedKnowledge,
   retractKnowledgeCandidate,
   supersedeKnowledgeCandidate
-} from '../brain-inbox'
-import { teamWorkspaces } from '../brain-paths'
-import { executeCurationTransaction } from '../outcome-learning-curation-transaction'
+} from '../brain/brain-inbox'
+import { teamWorkspaces } from '../brain/brain-paths'
+import { executeCurationTransaction } from '../brain/outcome-learning-curation-transaction'
 import { appendBrainTrace, readBrainTraces } from '../activity/brain-trace-spool'
 import { buildBrainInjectionInventory } from '../activity/brain-injection-inventory'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
-import type { AutowinOS } from '../os'
-import type { AppCommandBus } from '../commands'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
+import type { AutowinOS } from '../app/os'
+import type { AppCommandBus } from '../commands/commands'
 import type { BrainWorkerClient } from '../viz/brain-worker-client'
 import type { BrainSearchCoordinator } from '../viz/brain-search-coordinator'
-import type { OutcomeLearningSupervisor } from '../outcome-learning-supervisor'
+import type { OutcomeLearningSupervisor } from '../brain/outcome-learning-supervisor'
 
 /** Frontiere de la RECHERCHE : au-dela, on rend la main plutot que de geler la vue. */
 const BRAIN_SEARCH_BOUNDARY_TIMEOUT_MS = 2_500

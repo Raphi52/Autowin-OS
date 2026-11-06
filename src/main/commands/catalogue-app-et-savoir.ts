@@ -1,9 +1,9 @@
 // Catalogue des commandes — commandes, redémarrage, vérification, mémoire, Brain, skills, tâches, SQL et fiches.
 // Entrées sorties telles quelles de commands/catalogue.ts (conv-1580), dans le même ordre :
 // catalogue.ts les remet bout à bout dans CATALOG. Seuls des TYPES viennent de '../commands'.
-import type { CommandSpec } from '../commands'
+import type { CommandSpec } from './commands'
 import { MODELE_PROMPT_TACHE_COURT } from '../../shared/modele-prompt-tache'
-import { PROFIL_UTILISATEUR_MAX_BYTES } from '../profil-utilisateur'
+import { PROFIL_UTILISATEUR_MAX_BYTES } from '../profil/profil-utilisateur'
 import { CHAMPS_DE_TACHE } from './catalogue-champs'
 
 export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [

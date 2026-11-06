@@ -16,9 +16,9 @@
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { resolveClaudeBin } from '../src/main/providers/claude'
-import { demarrerServeurOutilsNoeudSkill } from '../src/main/skill-node-mcp'
-import type { AppelMcpObserve } from '../src/main/skill-node-mcp'
-import type { LanceurCommandeSkill } from '../src/main/skill-node-tools'
+import { demarrerServeurOutilsNoeudSkill } from '../src/main/skills/skill-node-mcp'
+import type { AppelMcpObserve } from '../src/main/skills/skill-node-mcp'
+import type { LanceurCommandeSkill } from '../src/main/skills/skill-node-tools'
 
 const TEMOIN = `TEMOIN-${randomUUID().slice(0, 12)}`
 

@@ -9,8 +9,8 @@ import { join } from 'node:path'
 export function sourceDuBus(): string {
   const dossier = join(__dirname, '..')
   const modules = readdirSync(join(dossier, 'commands'))
-    .filter((nom) => nom.endsWith('.ts') && !nom.includes('.test'))
+    .filter((nom) => nom.endsWith('.ts') && !nom.includes('.test') && nom !== 'commands.ts')
     .sort()
     .map((nom) => readFileSync(join(dossier, 'commands', nom), 'utf8'))
-  return [readFileSync(join(dossier, 'commands.ts'), 'utf8'), ...modules].join('\n').replace(/\r\n/g, '\n')
+  return [readFileSync(join(dossier, 'commands/commands.ts'), 'utf8'), ...modules].join('\n').replace(/\r\n/g, '\n')
 }

@@ -94,7 +94,7 @@ describe('ChatView — note d’activité d’un run repris sans tour de chat', 
         convId: 'A',
         deltaStep: 'exec',
         delta: '',
-        note: 'Bash en cours — 2 min · npx vitest run src/main/navigateur-integre.test.ts'
+        note: 'Bash en cours — 2 min · npx vitest run src/main/bureau/navigateur-integre.test.ts'
       })
     })
     await act(async () => {
@@ -104,7 +104,7 @@ describe('ChatView — note d’activité d’un run repris sans tour de chat', 
     const bulles = [...h.container.querySelectorAll('.msg.assistant')]
     expect(bulles).toHaveLength(2)
     // La note est dans la bulle du travail en cours…
-    expect(bulles[0].textContent).toContain('npx vitest run src/main/navigateur-integre.test.ts')
+    expect(bulles[0].textContent).toContain('npx vitest run src/main/bureau/navigateur-integre.test.ts')
     // … pas dans le récapitulatif du dessous.
     expect(bulles[1].textContent).not.toContain('npx vitest run')
     // Et le fil n'est pas pris pour un tour de chat en cours.

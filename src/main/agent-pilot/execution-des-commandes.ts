@@ -3,14 +3,14 @@
 // par les deux lectures et par le verrou du tour, résultats comptés et bornés. Sortie telle quelle
 // de la boucle de AgentPilot.chat() (conv-1580, lot 4) : rend les résultats à réinjecter au modèle.
 import { refusDeRepriseEstTransitoire, classifierRefusDeReprise } from '../runs/resume-refusal'
-import type { CommandResult } from '../commands'
+import type { CommandResult } from '../commands/commands'
 import {
   askFaitChoisirUneProposition,
   REFUS_ASK_DRAFT,
   STATUT_REFUS_ASK_DRAFT
-} from '../draft-choix-par-boutons'
-import { cleDEchec } from '../chat-turn-messages'
-import { tacheAvecLectureRetenue } from '../deux-lectures'
+} from '../skills/draft-choix-par-boutons'
+import { cleDEchec } from '../chat/chat-turn-messages'
+import { tacheAvecLectureRetenue } from '../chat/deux-lectures'
 import {
   formatOrchestrationOutcome,
   formatOrchestrationOutcomePourLeModele,
@@ -19,10 +19,10 @@ import {
   ORCHESTRATION_ALREADY_ISSUED_REFUSAL,
   type OrchestrationOutcome
 } from '../../shared/orchestration-outcome'
-import { bornerResultatDeCommande } from '../resultat-de-commande-borne'
-import { cleAppelNatif } from '../chat-mcp'
-import { cleDeVideo } from '../videos-livrees'
-import { fluxDuBloc, texteDuBlocDansLeFil } from '../montrer-bloc-command'
+import { bornerResultatDeCommande } from '../chat/resultat-de-commande-borne'
+import { cleAppelNatif } from '../chat/chat-mcp'
+import { cleDeVideo } from '../media/videos-livrees'
+import { fluxDuBloc, texteDuBlocDansLeFil } from '../commands/montrer-bloc-command'
 import { consumeStreamedPrefix, retirerConclusionBloquantePrematuree } from './collage-des-deltas'
 import type { ContexteDuTour } from './contexte-du-tour'
 import { commandResultSucceeded, failedOrchestrationOutcome } from './issue-des-commandes'

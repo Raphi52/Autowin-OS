@@ -1,6 +1,6 @@
 import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * LA VRAIE USINE A RESIDUS : `git worktree remove` laisse la coquille derriere lui.

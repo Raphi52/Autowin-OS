@@ -10,7 +10,7 @@ import {
   modelesGrok,
   resolveGrokBin
 } from './grok'
-import { planProviderLogin } from '../provider-login'
+import { planProviderLogin } from './provider-login'
 
 // Sortie RÉELLE de grok 1.0.70 sans connexion (mesurée le 2026-11-04, conv-1499).
 const PAS_CONNECTE =

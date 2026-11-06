@@ -20,11 +20,11 @@ describe('le moteur qui tourne est-il encore celui des sources', () => {
   it('signale une source écrite APRÈS le démarrage — le cas mesuré', () => {
     const demarrage = 1_000_000
     const etat = etatDuMoteur(demarrage, [
-      { chemin: 'src/main/agent-pilot.ts', modifieeMs: demarrage + 10 * MINUTE }
+      { chemin: 'src/main/agent-pilot/agent-pilot.ts', modifieeMs: demarrage + 10 * MINUTE }
     ])
 
     expect(etat.perime).toBe(true)
-    expect(etat.fichier).toBe('src/main/agent-pilot.ts')
+    expect(etat.fichier).toBe('src/main/agent-pilot/agent-pilot.ts')
   })
 
   it('NOMME la source la plus récente, pas la première venue', () => {
@@ -42,7 +42,7 @@ describe('le moteur qui tourne est-il encore celui des sources', () => {
   it('ne signale RIEN quand les sources sont antérieures au démarrage', () => {
     const demarrage = 1_000_000
     const etat = etatDuMoteur(demarrage, [
-      { chemin: 'src/main/agent-pilot.ts', modifieeMs: demarrage - 5 * MINUTE }
+      { chemin: 'src/main/agent-pilot/agent-pilot.ts', modifieeMs: demarrage - 5 * MINUTE }
     ])
 
     expect(etat.perime).toBe(false)
@@ -92,11 +92,11 @@ describe('le moteur qui tourne est-il encore celui des sources', () => {
     const demarrage = 1_000_000
     const message = messageMoteurPerime(
       etatDuMoteur(demarrage, [
-        { chemin: 'src/main/agent-pilot.ts', modifieeMs: demarrage + 12 * MINUTE }
+        { chemin: 'src/main/agent-pilot/agent-pilot.ts', modifieeMs: demarrage + 12 * MINUTE }
       ])
     )
 
-    expect(message).toContain('src/main/agent-pilot.ts')
+    expect(message).toContain('src/main/agent-pilot/agent-pilot.ts')
     expect(message).toContain('12 min')
     expect(message).toMatch(/relance/i)
   })

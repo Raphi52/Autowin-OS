@@ -1,9 +1,9 @@
 // Catalogue brut des commandes de l'app, extrait tel quel de commands.ts (conv-1508, lot 2).
 // commands.ts le ré-exporte : les appelants gardent leur import. Découpé par familles en modules
 // voisins `catalogue-*.ts` (conv-1580) ; CATALOG les remet bout à bout, dans l'ordre d'avant.
-import type { CommandSpec } from '../commands'
-import { TEXTE_MAX_MESSAGE_FIL } from '../messages-entre-fils-app'
-import { MOTIF_MAX_ARRET_FIL } from '../arreter-un-fil'
+import type { CommandSpec } from './commands'
+import { TEXTE_MAX_MESSAGE_FIL } from '../conversations/messages-entre-fils-app'
+import { MOTIF_MAX_ARRET_FIL } from '../conversations/arreter-un-fil'
 import { APP_DESTINATIONS } from '../../shared/navigation'
 import { LISTE_DE_TEXTES } from './catalogue-champs'
 import { CATALOGUE_CONVERSATIONS } from './catalogue-conversations'

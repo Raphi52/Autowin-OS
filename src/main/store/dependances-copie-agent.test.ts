@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { delierLesDependances, lierLesDependances, messageLiaison } from './dependances-copie-agent'
 
 /**
@@ -160,7 +160,7 @@ describe('le lien est retiré avant qu’une copie ne soit supprimée', () => {
  *
  * CE FAIT N'EST PLUS VRAI SOUS NODE 24, mesuré le 2026-10-05 avec Electron 44.5.1 (conv-108) :
  * `fs.rmSync({recursive})` TRAVERSE la jonction et VIDE sa cible (3 essais sur 3). C'est pourquoi
- * toute suppression récursive de l'app passe par `supprimerArbre` (`src/main/fs-supprimer.ts`), qui
+ * toute suppression récursive de l'app passe par `supprimerArbre` (`src/main/fichiers/fs-supprimer.ts`), qui
  * lit chaque entrée avec `lstat` et retire un lien sans jamais le suivre. Ce test verrouille CE
  * comportement-là : remis sur un `rmSync` brut, il rougit sous Node 24.
  *

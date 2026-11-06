@@ -235,7 +235,7 @@ describe('WatchdogEngine — observer, filtrer, deleguer', () => {
       'orchestration-red',
       "Une orchestration s'est terminée en ROUGE. RUN : runs/conv-14/x Conversation : conv-14\n" +
         'Cause terminale : Le contrôle final a refusé le livrable : 3 tests rouges dans ' +
-        'src/main/models.test.ts — expected 3 to be 4.',
+        'src/main/modeles/models.test.ts — expected 3 to be 4.',
       'conv-14'
     )
 

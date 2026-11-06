@@ -2,7 +2,7 @@
  * Le vocabulaire des évènements du pilote — SOURCE UNIQUE, partagée par le main et le renderer.
  *
  * Pourquoi ce fichier existe : la liste des `kind` était écrite DEUX FOIS à la main, dans
- * `src/main/agent-pilot.ts` et dans `src/renderer/src/components/ChatView.tsx`, et elle avait déjà
+ * `src/main/agent-pilot/agent-pilot.ts` et dans `src/renderer/src/components/ChatView.tsx`, et elle avait déjà
  * DÉRIVÉ — le main émettait `reasoning` et `prompt-call`, absents de la liste du renderer. Comme la
  * frontière IPC fait un cast non vérifié (`raw as PilotEvent`), rien ne signalait l'écart : le
  * renderer se contentait de ne jamais reconnaître ces deux évènements.

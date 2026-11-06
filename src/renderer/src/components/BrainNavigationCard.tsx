@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { formaterNombre } from '../langue'
 import { useTextesObservatory } from '../textes-ecrans/observatory'
 import type { BrainTrace } from '../../../main/activity/brain-trace-spool'
-import type { BrainNavigationCandidate } from '../../../main/brain-retrieval'
+import type { BrainNavigationCandidate } from '../../../main/brain/brain-retrieval'
 import { brainBusinessError } from './graph-view-model'
 import { Spinner } from './Spinner'
 

@@ -1,6 +1,6 @@
 import type { ChatTurnEvent, ChatTurnRuntime } from '../../shared/chat-turn'
 import type { Conversation } from '../store/conversations'
-import type { OrchestrationStep } from '../orchestrator'
+import type { OrchestrationStep } from '../orchestration/orchestrator'
 import type { ChatArtifact } from '../../shared/artifacts'
 import { classifierRefusDeReprise, refusDeRepriseRaconteDuTravail } from './resume-refusal'
 import { ligneDePropositionGrowDuResultat } from '../chat/proposition-grow'

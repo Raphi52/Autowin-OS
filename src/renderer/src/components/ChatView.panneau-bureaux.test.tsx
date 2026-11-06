@@ -11,7 +11,7 @@
 import { act, createElement, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BureauTv } from '../../../main/hdesk-tv'
+import type { BureauTv } from '../../../main/bureau/hdesk-tv'
 import type { BureauGere } from '../../../shared/hdesk-gestion'
 import { ChatView } from './ChatView'
 import { chatApi, conversation, installRafShim } from './ChatView.harness'

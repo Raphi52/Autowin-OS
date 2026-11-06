@@ -13,7 +13,7 @@ describe('arretDeLaReparation — bundle plus vieux que le code du gate', () => 
     tentative: 1,
     reparationsAccordees: 5,
     plafondDur: 24,
-    motifsCourants: ['hook fix-gate: 4 edits de src/main/objections-juge.ts sans cause verifiee'],
+    motifsCourants: ['hook fix-gate: 4 edits de src/main/juge/objections-juge.ts sans cause verifiee'],
     motifsPrecedents: [] as string[]
   }
 

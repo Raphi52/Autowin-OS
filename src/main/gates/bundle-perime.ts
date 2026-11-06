@@ -6,8 +6,8 @@ import { join } from 'node:path'
  * recents que le bundle execute, rejouer une reparation ne peut rien changer au refus.
  */
 const SOURCES_DU_GATE = [
-  'src/main/objections-juge.ts',
-  'src/main/orchestrator.ts'
+  'src/main/juge/objections-juge.ts',
+  'src/main/orchestration/orchestrator.ts'
 ]
 
 /**

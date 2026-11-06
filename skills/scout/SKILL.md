@@ -48,11 +48,11 @@ UN tableau, classé **le plus fort IMPACT d'abord** (PAS « le plus facile à pr
 - **LIGNE DE CLÔTURE OBLIGATOIRE — `CIBLE:`.** Après le tableau, la DERNIÈRE ligne de la sortie est
   `CIBLE: <la ligne que tu engages> — POURQUOI: <la raison>`, ou `CIBLE: aucune` quand aucun candidat n'est
   défendable. Cette ligne est LUE PAR LA MACHINE : le mode auto d'Autowin l'analyse pour porter le candidat
-  choisi vers l'étape suivante (`chat-auto-mode.ts`), et `src/main/scout-cible.ts` doit injecter un
+  choisi vers l'étape suivante (`chat-auto-mode.ts`), et `src/main/scout/scout-cible.ts` doit injecter un
   rappel de rattrapage dès qu'elle manque. **Exactly ONE `CIBLE:` line** — la PREMIÈRE est lue et
   toute autre ensuite est ignorée, donc une seconde n'est pas un choix, c'est du bruit. Nommer la ligne n'est PAS la
   classer deux fois : le tableau propose, cette ligne en ENGAGE une.
-- **Deux formes équivalentes.** Une section `## Cible` en tête (1 à 3 lignes : la piste retenue et pourquoi, la forme que demande la consigne envoyée par l'app) vaut cette ligne `CIBLE:` finale : `src/main/scout-cible.ts` lit les deux. Aucune piste défendable → dis-le et termine par `SUITE: fin` (ou `CIBLE: aucune`).
+- **Deux formes équivalentes.** Une section `## Cible` en tête (1 à 3 lignes : la piste retenue et pourquoi, la forme que demande la consigne envoyée par l'app) vaut cette ligne `CIBLE:` finale : `src/main/scout/scout-cible.ts` lit les deux. Aucune piste défendable → dis-le et termine par `SUITE: fin` (ou `CIBLE: aucune`).
 - **PLUSIEURS lignes à jouer ENSEMBLE — `CIBLES:` (au pluriel).** Quand les lignes de la liste n'ont de sens que
   comme UN seul lot, écris plutôt `CIBLES: <ligne A>, <ligne B>, <ligne C>` — séparées par une virgule, un point-virgule ou un `·`.
   N'empile PAS plusieurs lignes `CIBLE:` : le lecteur garde la PREMIÈRE et jette les autres en silence, donc
@@ -72,7 +72,7 @@ UN tableau, classé **le plus fort IMPACT d'abord** (PAS « le plus facile à pr
 - **CORRIGER / exécuter** — scout PROPOSE, ne touche à rien (lecture seule).
 - Se contenter de **LOCALISER** du code connu → c'est l'agent `Explore` (scout CLASSE des opportunités, il ne localise pas).
 - **Cadrer** un besoin déjà choisi → `frame` · relire un diff → code-review · juger un livrable → `judge` · auditer un comportement ou un workflow → `kaizen`.
-- **Répondre à une question purement CONSULTATIVE** (« laquelle est la meilleure / c'est quoi X / pourquoi » — elle attend une réponse directe et ne nomme aucune cible à scanner) → réponds directement (hard-gate CONSULTATIF de la constitution, `src/main/constitution.ts`). (Une question « quoi faire / par où commencer sur une CIBLE » EST le travail de scout — dérive-la, ne la renvoie pas à l'utilisateur.)
+- **Répondre à une question purement CONSULTATIVE** (« laquelle est la meilleure / c'est quoi X / pourquoi » — elle attend une réponse directe et ne nomme aucune cible à scanner) → réponds directement (hard-gate CONSULTATIF de `src/main/consignes/constitution.ts`). (Une question « quoi faire / par où commencer sur une CIBLE » EST le travail de scout — dérive-la, ne la renvoie pas à l'utilisateur.)
 - Émettre des notes par lentille, des bandes Impact/Effort ou du jargon interne dans le tableau de sortie.
 
 ## Moteur et réflexes

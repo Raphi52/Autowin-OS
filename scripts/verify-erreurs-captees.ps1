@@ -9,14 +9,14 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 
 $cibles = @(
-  'src/main/erreur-captee-en-cours-de-tour.test.ts',
-  'src/main/chat-turn-messages.test.ts',
-  'src/main/agent-pilot.correction-apres-echec.test.ts',
-  'src/main/agent-pilot.murs-persistants.test.ts',
-  'src/main/annulation-motivee.test.ts',
+  'src/main/chat/erreur-captee-en-cours-de-tour.test.ts',
+  'src/main/chat/chat-turn-messages.test.ts',
+  'src/main/agent-pilot/agent-pilot.correction-apres-echec.test.ts',
+  'src/main/agent-pilot/agent-pilot.murs-persistants.test.ts',
+  'src/main/chat/annulation-motivee.test.ts',
   'src/main/gates/stopgate.travaux-non-livres.test.ts',
   'src/main/gates/stopgate.test.ts',
-  'src/main/orchestrator.greedy.test.ts'
+  'src/main/orchestration/orchestrator.greedy.test.ts'
 )
 
 & npx vitest run @cibles --reporter=dot

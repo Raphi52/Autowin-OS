@@ -1,0 +1,1058 @@
+import { describe, expect, it } from 'vitest'
+import { COMPACT_REQUEST } from '../../shared/context-gauge'
+import {
+  depuisDerniereCompaction,
+  compactionsAbouties,
+  boundedContinuationHistory,
+  boundedTurnHistory,
+  buildTurnMessages,
+  exigeAgirPasAnnoncer,
+  consigneApresEchec,
+  exigeCorrigerEtPoursuivre,
+  signatureDEchec,
+  exigeDireLEchec,
+  exigeUnChiffreVerifie,
+  commandeAObserveLeReel,
+  exigePreuveAvantDePromettre,
+  blocVisuelNonFerme,
+  nommerPiecesJointes
+} from './chat-turn-messages'
+
+describe('boundedTurnHistory', () => {
+  it('retire la réponse assistant orpheline créée par la limite de 40 messages', () => {
+    const history = Array.from({ length: 20 }, (_, index) => [
+      { role: 'user' as const, content: `question-${index + 1}` },
+      { role: 'assistant' as const, content: `réponse-${index + 1}` }
+    ]).flat()
+    history.push({ role: 'user', content: 'question-courante' })
+
+    const bounded = boundedTurnHistory(history, 40)
+
+    // 39 messages retenus + l'AVIS DE COUPE en tete : ce qui a ete retire est DIT.
+    expect(bounded).toHaveLength(40)
+    expect(bounded[0]?.content).toContain('HISTORIQUE TRONQUE')
+    expect(bounded[0]?.content).toContain('2 message(s)')
+    expect(bounded[1]).toEqual({ role: 'user', content: 'question-2' })
+    expect(bounded.at(-1)).toEqual({ role: 'user', content: 'question-courante' })
+    expect(bounded.some((message) => message.content === 'réponse-1')).toBe(false)
+  })
+
+  it('laisse intacte une fenêtre déjà bornée, objets et pièces jointes compris', () => {
+    const history = [
+      { role: 'user' as const, content: 'question', attachments: [{ name: 'preuve.txt' }] },
+      { role: 'assistant' as const, content: 'réponse' },
+      { role: 'user' as const, content: 'suite' }
+    ]
+
+    const bounded = boundedTurnHistory(history, 40)
+
+    expect(bounded).toEqual(history)
+    expect(bounded[0]).toBe(history[0])
+  })
+
+  it('coupe sur le VOLUME quand 40 messages pesent trop lourd, et garde le dernier', () => {
+    // 4 caracteres par token : 40 000 caracteres = 10 000 tokens par message.
+    const gros = (nom: string): { role: 'user'; content: string } => ({
+      role: 'user',
+      content: `${nom}:${'x'.repeat(40_000)}`
+    })
+    const history = [gros('a'), gros('b'), gros('c'), gros('d')]
+
+    // Budget de 25 000 tokens : deux messages tiennent, pas trois.
+    const bounded = boundedTurnHistory(history, { maxMessages: 40, maxTokens: 25_000 })
+
+    expect(bounded).toHaveLength(3) // avis + 2 messages
+    expect(bounded[0]?.content).toContain('HISTORIQUE TRONQUE')
+    expect(bounded[1]?.content.startsWith('c:')).toBe(true)
+    expect(bounded.at(-1)?.content.startsWith('d:')).toBe(true)
+  })
+
+  it('ne coupe jamais le dernier message, meme s il depasse a lui seul le budget', () => {
+    const history = [
+      { role: 'user' as const, content: 'ancien' },
+      { role: 'user' as const, content: 'x'.repeat(400_000) }
+    ]
+
+    const bounded = boundedTurnHistory(history, { maxMessages: 40, maxTokens: 1_000 })
+
+    expect(bounded).toHaveLength(2) // avis + le dernier message, intact
+    expect(bounded.at(-1)?.content).toHaveLength(400_000)
+  })
+
+  it('n annonce aucune coupe quand rien n a ete ecarte', () => {
+    const history = [
+      { role: 'user' as const, content: 'question' },
+      { role: 'assistant' as const, content: 'reponse' }
+    ]
+
+    expect(boundedTurnHistory(history, 40)).toEqual(history)
+  })
+
+  it('ne transmet pas un historique malformé composé uniquement de réponses assistant', () => {
+    expect(
+      boundedTurnHistory(
+        [
+          { role: 'assistant', content: 'orpheline-1' },
+          { role: 'assistant', content: 'orpheline-2' }
+        ],
+        40
+      )
+    ).toEqual([])
+  })
+})
+
+describe('boundedContinuationHistory', () => {
+  it('conserve le dernier vrai prompt et du contexte apres plus de 40 messages assistant', () => {
+    const history = [
+      { role: 'user' as const, content: 'Analyse ce depot en lecture seule' },
+      ...Array.from({ length: 39 }, (_, index) => ({
+        role: 'assistant' as const,
+        content: `continuation-${index + 1}`
+      })),
+      { role: 'user' as const, content: 'INSTRUCTION INTERNE DE CONTINUATION' }
+    ]
+
+    const result = boundedContinuationHistory(history, 40)
+
+    expect(result.routingUserMessage?.content).toBe('Analyse ce depot en lecture seule')
+    expect(result.history).toHaveLength(41)
+    expect(result.history[0]?.content).toContain('HISTORIQUE TRONQUE')
+    expect(result.history[1]?.content).toBe('Analyse ce depot en lecture seule')
+    expect(result.history.some((message) => message.role === 'assistant')).toBe(true)
+    expect(result.history.at(-1)?.content).toBe('INSTRUCTION INTERNE DE CONTINUATION')
+  })
+})
+
+describe('buildTurnMessages', () => {
+  it("serialise l'etat de l'app en JSON dans la premiere entree", () => {
+    const entries = buildTurnMessages({
+      snapshot: { foo: 'bar', n: 2 },
+      brainContext: '',
+      memoryEcho: '',
+      history: []
+    })
+    expect(entries[0]).toBe(`ÉTAT DE L'APP:\n${JSON.stringify({ foo: 'bar', n: 2 })}`)
+  })
+
+  it("filtre le contexte Brain et l'echo memoire quand ils sont vides (aucun trou dans les entrees)", () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '   ',
+      history: [{ role: 'user', content: 'salut' }]
+    })
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      'UTILISATEUR: <message_utilisateur>salut</message_utilisateur>'
+    ])
+  })
+
+  it("conserve le contexte Brain et l'echo memoire quand ils sont non vides, dans l'ordre", () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: 'CONTEXTE BRAIN',
+      memoryEcho: 'ECHO MEMOIRE',
+      history: []
+    })
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      'CONTEXTE BRAIN',
+      'ECHO MEMOIRE'
+    ])
+  })
+
+  it("prefixe les messages utilisateur par UTILISATEUR et les autres roles par TOI, dans l'ordre de l'historique", () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [
+        { role: 'user', content: 'question' },
+        { role: 'assistant', content: 'reponse' },
+        { role: 'system', content: 'note systeme' }
+      ]
+    })
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      'UTILISATEUR: <message_utilisateur>question</message_utilisateur>',
+      'TOI: reponse',
+      'TOI: note systeme'
+    ])
+  })
+
+  it("sans resumeSessionId, ignore lastUserMessage et rend tout l'historique", () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [{ role: 'user', content: 'A' }],
+      lastUserMessage: 'B ne doit pas apparaitre seul'
+    })
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      'UTILISATEUR: <message_utilisateur>A</message_utilisateur>'
+    ])
+  })
+
+  it("avec resumeSessionId, ignore tout l'historique et ne rend que le dernier message utilisateur", () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [
+        { role: 'user', content: 'ancien message 1' },
+        { role: 'assistant', content: 'ancienne reponse' }
+      ],
+      resumeSessionId: 'sess-123',
+      lastUserMessage: 'dernier message'
+    })
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est " +
+        'PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que ' +
+        'tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle ' +
+        'conversation_search sur les mots de la demande, puis conversation_read sur ' +
+        "l'identifiant rendu. L'identifiant de la conversation courante est " +
+        "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
+      'UTILISATEUR: <message_utilisateur>dernier message</message_utilisateur>'
+    ])
+  })
+
+  it('avec resumeSessionId, INJECTE un compte-rendu que le modele n’a jamais vu', () => {
+    /*
+      LE TROU DE SESSION, constate par l'utilisateur le 2026-08-14. Dans son fil, l'agent a repondu :
+      « je vois bien qu'un orchestrate a ete lance dans cette conversation, mais la trace fournie ne
+      contient ni son runId, ni ses phases, ni son resultat ».
+
+      Cause : la route `explicit-skill` d'`agent-pilot` execute l'orchestration ELLE-MEME puis `return`
+      AVANT tout appel au modele. La bulle affichee est redigee par du code. Le tour suivant reprend la
+      session CLI et n'envoie que le dernier message — donc ce tour est ABSENT du transcript du modele.
+
+      Pire que l'absence : on lui AFFIRMAIT « tu en connais deja l'historique par ta session ». C'est
+      exactement la faute que le commentaire « RESUME FANTOME » corrige plus haut dans `agent-pilot`
+      (mesure du 2026-08-04 : 0 appel reellement repris, 31 prompts amputes) — ici sur son cas frere.
+    */
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [],
+      resumeSessionId: 'sess-123',
+      compteRenduNonVu: 'Workflow termine — run r-42, 3 phases, 0,12 $',
+      lastUserMessage: 'on a bien fait tout le processus ?'
+    })
+    const injecte = entries.find((entry) => entry.includes('run r-42'))
+    expect(injecte).toBeDefined()
+    // La position compte : le compte-rendu doit precer la question qui l'interroge.
+    expect(entries.indexOf(injecte!)).toBeLessThan(
+      entries.findIndex((entry) => entry.startsWith('UTILISATEUR:'))
+    )
+  })
+
+  it('avec un compte-rendu non vu, ne PRETEND PLUS que la session contient tout', () => {
+    // Laisser l'affirmation intacte serait garder le mensonge tout en ajoutant le remede : le modele
+    // lirait « tu connais deja l'historique » juste au-dessus d'un tour qu'il n'a jamais vu.
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [],
+      resumeSessionId: 'sess-123',
+      compteRenduNonVu: 'Workflow termine — run r-42',
+      lastUserMessage: 'et alors ?'
+    })
+    expect(entries.some((entry) => entry.includes("tu en connais déjà l'historique"))).toBe(false)
+  })
+
+  it('sans compte-rendu non vu, le chemin de reprise reste INCHANGE', () => {
+    // Le cas courant ne doit pas payer ce correctif : aucune entree en plus, aucun mot en moins.
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [],
+      resumeSessionId: 'sess-123',
+      lastUserMessage: 'ok'
+    })
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est " +
+        'PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que ' +
+        'tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle ' +
+        'conversation_search sur les mots de la demande, puis conversation_read sur ' +
+        "l'identifiant rendu. L'identifiant de la conversation courante est " +
+        "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
+      'UTILISATEUR: <message_utilisateur>ok</message_utilisateur>'
+    ])
+  })
+
+  it('avec resumeSessionId sans lastUserMessage, rend une entree UTILISATEUR vide qui est filtree', () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [],
+      resumeSessionId: 'sess-123'
+    })
+    // Demande absente : la balise vide reste (contenu non vide), la place de la demande est visible.
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est " +
+        'PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que ' +
+        'tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle ' +
+        'conversation_search sur les mots de la demande, puis conversation_read sur ' +
+        "l'identifiant rendu. L'identifiant de la conversation courante est " +
+        "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
+      'UTILISATEUR: <message_utilisateur></message_utilisateur>'
+    ])
+  })
+
+  it('avec resumeSessionId, insere le message de continuation avant UTILISATEUR meme si Brain et memoire sont vides', () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [],
+      resumeSessionId: 'sess-1',
+      lastUserMessage: 'ok'
+    })
+    expect(entries).toEqual([
+      `ÉTAT DE L'APP:\n${JSON.stringify({})}`,
+      "Suite de NOTRE conversation en cours. Ta session en porte normalement l'historique. Si ce n'est " +
+        'PAS le cas -- tu ne sais plus de quoi parle la demande, ou elle refere a un echange que ' +
+        'tu ne retrouves pas --, ne devine pas et ne fouille pas le code : appelle ' +
+        'conversation_search sur les mots de la demande, puis conversation_read sur ' +
+        "l'identifiant rendu. L'identifiant de la conversation courante est " +
+        "activeConversationId, dans l'ETAT DE L'APP ci-dessus.",
+      'UTILISATEUR: <message_utilisateur>ok</message_utilisateur>'
+    ])
+  })
+
+  it("un historique vide sans reprise ne rend que la ligne état de l'app", () => {
+    const entries = buildTurnMessages({
+      snapshot: null,
+      brainContext: '',
+      memoryEcho: '',
+      history: []
+    })
+    expect(entries).toEqual([`ÉTAT DE L'APP:\n${JSON.stringify(null)}`])
+  })
+})
+
+describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', () => {
+  const Q = 'Combien de fichiers .test.ts dans src/main ?'
+
+  it('mord quand un NOMBRE est avancé SANS aucune lecture', () => {
+    // Le cas mesuré : réponse en 3 s, chiffre faux, zéro outil appelé.
+    expect(exigeUnChiffreVerifie(Q, 'Il y en a 42.', false)).toBe(true)
+  })
+
+  it('ne mord PAS quand une lecture a eu lieu', () => {
+    // C'est le cas nominal des 19 réussites : l'agent a listé, son chiffre est fondé.
+    expect(exigeUnChiffreVerifie(Q, 'Il y en a 220.', true)).toBe(false)
+  })
+
+  it('ne mord PAS sur une question qui ne demande aucun compte', () => {
+    // Un faux positif coûterait une itération, et surtout du temps sur chaque tour ordinaire.
+    expect(
+      exigeUnChiffreVerifie('Explique-moi ce module en 3 lignes.', 'Il fait 2 choses.', false)
+    ).toBe(false)
+  })
+
+  it('mord AUSSI sur un refus : list_files sait désormais trancher', () => {
+    expect(exigeUnChiffreVerifie(Q, 'Je ne peux pas le déterminer.', false)).toBe(true)
+  })
+
+  it('mord sur une ANNONCE sans action — le cas mesuré le 2026-08-15', () => {
+    // « Je vais vérifier directement le dossier src/main » : ni chiffre, ni action, tour terminé.
+    // La première version de cette garde exigeait un nombre : elle ne pouvait pas voir ce cas.
+    expect(
+      exigeUnChiffreVerifie(Q, 'Je vais vérifier directement le dossier src/main.', false)
+    ).toBe(true)
+  })
+
+  it('ne mord PAS sur une réponse vide', () => {
+    expect(exigeUnChiffreVerifie(Q, '   ', false)).toBe(false)
+  })
+
+  // Cas RÉEL de conv-879 (2026-09-30 → 2026-10-12) : le gabarit des tâches « Assistant mails
+  // Outlook » et « Assistant Teams » finit par « <le compte rendu : …> ». La garde y lisait une
+  // demande de compte et relançait chaque tri de notification conclu sans lecture — 3 fois dans
+  // ce fil, un appel au modèle payé pour rien à chaque fois.
+  const GABARIT_MAIL =
+    'Termine OBLIGATOIREMENT par le texte exact du mail de réponse, entre ces deux lignes :\n' +
+    '--- RÉPONSE MAIL ---\n' +
+    '<le compte rendu : ce que tu as fait, ou la réponse à la question, en français, poli et court>\n' +
+    '--- FIN RÉPONSE MAIL ---'
+
+  it('ne mord PAS sur « compte rendu » — le gabarit réel des tâches mail', () => {
+    expect(
+      exigeUnChiffreVerifie(GABARIT_MAIL, 'Notification automatique, aucune réponse.', false)
+    ).toBe(false)
+  })
+
+  it('ne mord PAS sur les autres formes de « compte rendu » et « rendre compte »', () => {
+    for (const demande of [
+      'Fais-moi un compte-rendu de la réunion.',
+      'Relis les comptes rendus de la semaine.',
+      'Rends compte de ce que tu as fait.',
+      'Je dois rendre compte au client demain.',
+      'Je me suis rendu compte que le build casse.'
+    ]) {
+      expect(exigeUnChiffreVerifie(demande, 'Voici le résumé.', false), demande).toBe(false)
+    }
+  })
+
+  it('mord TOUJOURS sur le verbe compter, et sur un vrai compte de comptes rendus', () => {
+    expect(exigeUnChiffreVerifie('Compte les fichiers de src/main.', 'Il y en a 12.', false)).toBe(
+      true
+    )
+    // Retirer l'expression ne doit pas masquer la vraie demande qui l'accompagne.
+    expect(
+      exigeUnChiffreVerifie('Combien de comptes rendus dans docs/ ?', 'Il y en a 4.', false)
+    ).toBe(true)
+  })
+
+  // Cas RÉEL de conv-1095 (2026-10-22, tour 1e32407a) : un calcul posé dans la question a été relancé
+  // comme un compte à aller lire — un second appel au modèle payé, et une réponse alourdie d'un
+  // paragraphe sur « cette relance automatique ». Les opérandes sont DANS la question : rien à lire.
+  it('ne mord PAS sur un calcul posé dans la question (phrase réelle de conv-1095)', () => {
+    expect(
+      exigeUnChiffreVerifie(
+        'Question rapide, sans rien lancer : combien font 2 + 2 ? Réponds en une ligne.',
+        '2 + 2 = 4.\n\nAUTOWIN_BESOIN_V1: aucun',
+        false
+      )
+    ).toBe(false)
+    for (const demande of [
+      'combien fait 12 × 7 ?',
+      'Combien font 3 fois 4',
+      'combien vaut 10/4 ?',
+      'combien font 1,5 + 2,25 - 0,75 ?'
+    ])
+      expect(exigeUnChiffreVerifie(demande, 'Le résultat.', false), demande).toBe(false)
+  })
+
+  it('mord TOUJOURS sur un vrai compte, même avec des chiffres ou le verbe « faire »', () => {
+    for (const demande of [
+      'Combien de fichiers font plus de 2 Ko dans src/main ?',
+      'Combien font les tests de src/main en tout ?',
+      'combien font 2 + 2, et combien de fichiers dans src/main ?'
+    ])
+      expect(exigeUnChiffreVerifie(demande, 'Il y en a 12.', false), demande).toBe(true)
+  })
+
+  it('ne mord PAS sur un calcul écrit en toutes lettres', () => {
+    for (const demande of [
+      'combien font deux plus deux ?',
+      'Combien fait sept fois huit',
+      'combien font vingt et un moins trois ?',
+      'combien font dix-sept + 4 ?'
+    ])
+      expect(exigeUnChiffreVerifie(demande, 'Le résultat.', false), demande).toBe(false)
+  })
+
+  it('mord TOUJOURS quand les mots-nombres comptent des choses du dépôt', () => {
+    for (const demande of [
+      'combien font deux fichiers plus trois tests dans src/main ?',
+      'Combien de fichiers font plus de deux Ko ?'
+    ])
+      expect(exigeUnChiffreVerifie(demande, 'Il y en a 5.', false), demande).toBe(true)
+  })
+})
+
+describe('exigeUnChiffreVerifie — le texte RECOLLÉ d’une réponse de l’agent n’est pas la demande', () => {
+  // Cas RÉEL de conv-335 (2026-10-19) : l'utilisateur recolle la réponse précédente de l'agent, telle
+  // que le fil l'affiche (gras, code et numéros de liste perdus au copier), et n'ajoute qu'UNE
+  // question à lui : « Ca sert vraiment ces lecons? ». Le texte recollé contient deux fois
+  // « liste » ; la garde y lisait une demande de compte et forçait une relance — un Glob de 25 s
+  // tombé en délai dépassé, puis 2 minutes de vérifications payées pour une question sans chiffre.
+  const CONV_335_REPONSE_PRECEDENTE = `Je regarde d'où vient ce « 0/1 » : ce que le bloc a reçu au dernier tour, puis la fonction qui en tire les étapes.
+
+Ce fil n'est pas encore écrit dans \`conversations.json\` : le fichier sur disque a du retard sur l'app. Je lis donc directement la fonction qui fabrique les étapes.
+
+C'est corrigé. L'étape #12 est retirée, et il ne reste plus aucune étape ouverte dans ce fil : toutes les autres sont terminées. La mesure elle-même n'est pas abandonnée : elle vit maintenant dans le Task Manager (tâche \`c79cca66\`, le 22/10 à 9 h).
+
+Ce tour-ci ne devrait plus afficher de bloc Étapes : l'étape reprise a été supprimée juste après.
+
+**Leçon** : quand le travail d'une étape est confié à une tâche programmée, je retire l'étape de la liste du fil à ce moment-là. Sinon, le prochain tour qui touche aux étapes la ressort comme « à faire », alors que plus rien n'est en attente dans le fil.
+
+
+Tu as raison, j'ai mal lu ton reproche. Au tour « fais une tâche planifiée », l'étape à afficher était **« Créer la tâche planifiée de mesure »**. Je l'ai faite, mais je ne l'ai jamais posée dans la liste. À la place, j'ai juste retouché la description de l'ancienne étape #12, et c'est elle que le bloc a ressortie, à faire : d'où **0/1** sur un tour pourtant fini.
+
+Ce que j'aurais dû faire à ce tour-là :
+1. créer l'étape « Créer la tâche planifiée de mesure » ;
+2. la passer en cours puis terminée : le bloc aurait affiché **1/1** ;
+3. retirer #12 en même temps, puisque son travail venait d'être confié au Task Manager.
+
+Le bloc de ce tour reste tel quel dans l'historique. Je ne réécris pas le journal d'un tour passé. L'état actuel, lui, est propre : #12 est retirée et aucune étape ne reste ouverte.
+
+**Leçon corrigée** : pour une demande d'action, les étapes du bloc sont celles de ce que **ce tour** fait, créées au début et cochées à la fin. On ne recycle jamais une étape d'un tour précédent pour en tenir lieu.`
+
+  const CONV_335_MESSAGE = `Ce fil n'est pas encore écrit dans conversations.json : le fichier sur disque a du retard sur l'app. Je lis donc directement la fonction qui fabrique les étapes.
+C'est corrigé. L'étape #12 est retirée, et il ne reste plus aucune étape ouverte dans ce fil : toutes les autres sont terminées. La mesure elle-même n'est pas abandonnée : elle vit maintenant dans le Task Manager (tâche c79cca66, le 22/10 à 9 h).
+Ce tour-ci ne devrait plus afficher de bloc Étapes : l'étape reprise a été supprimée juste après.
+Leçon : quand le travail d'une étape est confié à une tâche programmée, je retire l'étape de la liste du fil à ce moment-là. Sinon, le prochain tour qui touche aux étapes la ressort comme « à faire », alors que plus rien n'est en attente dans le fil.
+Tu as raison, j'ai mal lu ton reproche. Au tour « fais une tâche planifiée », l'étape à afficher était « Créer la tâche planifiée de mesure ». Je l'ai faite, mais je ne l'ai jamais posée dans la liste. À la place, j'ai juste retouché la description de l'ancienne étape #12, et c'est elle que le bloc a ressortie, à faire : d'où 0/1 sur un tour pourtant fini.
+Ce que j'aurais dû faire à ce tour-là :
+créer l'étape « Créer la tâche planifiée de mesure » ;
+la passer en cours puis terminée : le bloc aurait affiché 1/1 ;
+retirer #12 en même temps, puisque son travail venait d'être confié au Task Manager.
+Le bloc de ce tour reste tel quel dans l'historique. Je ne réécris pas le journal d'un tour passé. L'état actuel, lui, est propre : #12 est retirée et aucune étape ne reste ouverte.
+Leçon corrigée : pour une demande d'action, les étapes du bloc sont celles de ce que ce tour fait, créées au début et cochées à la fin. On ne recycle jamais une étape d'un tour précédent pour en tenir lieu.
+
+Ca sert vraiment ces lecons?`
+
+  const REPONSE = 'Les deux « leçons » que tu as recollées n’ont servi à rien.'
+
+  it('ne mord PAS sur le message réel de conv-335 : seule « Ca sert vraiment ces lecons? » est à lui', () => {
+    expect(
+      exigeUnChiffreVerifie(CONV_335_MESSAGE, REPONSE, false, [CONV_335_REPONSE_PRECEDENTE])
+    ).toBe(false)
+  })
+
+  it('mord TOUJOURS sur une vraie demande de compte écrite sous le texte recollé', () => {
+    const message = `${CONV_335_MESSAGE}\nCombien de fichiers .test.ts dans src/main ?`
+    expect(exigeUnChiffreVerifie(message, REPONSE, false, [CONV_335_REPONSE_PRECEDENTE])).toBe(true)
+  })
+
+  it('mord TOUJOURS sur la suggestion de l’agent renvoyée telle quelle, ou complétée', () => {
+    // Le champ de saisie est prégarni par la ligne AUTOWIN_PROMPT_V1 : l'envoyer, c'est la DEMANDER.
+    const reponseAvecSuggestion =
+      'Je n’ai rien compté.\n\nAUTOWIN_PROMPT_V1: Compte les fichiers .test.ts de src/main et donne le total'
+    const suggestion = 'Compte les fichiers .test.ts de src/main et donne le total'
+    expect(exigeUnChiffreVerifie(suggestion, 'Il y en a 42.', false, [reponseAvecSuggestion])).toBe(
+      true
+    )
+    expect(
+      exigeUnChiffreVerifie(`${suggestion}\nfais vite`, 'Il y en a 42.', false, [
+        reponseAvecSuggestion
+      ])
+    ).toBe(true)
+  })
+
+  it('mord TOUJOURS quand le message n’est que du texte de l’agent, sans un mot de l’utilisateur', () => {
+    const reponse = 'Je liste les fichiers du dossier src/main un par un pour les compter.'
+    expect(exigeUnChiffreVerifie(reponse, 'Il y en a 42.', false, [reponse])).toBe(true)
+  })
+
+  it('ne retire PAS une ligne courte qui se trouve aussi par hasard dans une réponse', () => {
+    // « liste les fichiers » est dans la réponse précédente, mais c'est sa demande à lui.
+    const precedente = 'Je liste les fichiers du dossier quand tu veux.'
+    expect(
+      exigeUnChiffreVerifie('ok\nliste les fichiers', 'Il y en a 42.', false, [precedente])
+    ).toBe(true)
+  })
+})
+
+describe('exigeDireLEchec — un « Fait » posé sur un échec', () => {
+  const AVEC_ECHEC = true
+
+  it('mord sur le cas RÉEL de conv-1178 : edit_file en ok:false, texte qui dit « ✅ Fait »', () => {
+    const vecu = '### ✅ Fait\nLe défaut reste confirmé dans `src/main/commands/commands.ts`.'
+    expect(exigeDireLEchec(AVEC_ECHEC, vecu)).toBe(true)
+  })
+
+  it('ne mord PAS quand la réponse NOMME l’échec', () => {
+    expect(exigeDireLEchec(AVEC_ECHEC, 'La modification a échoué : le motif était ambigu.')).toBe(
+      false
+    )
+  })
+
+  it('ne mord PAS quand aucune action n’a échoué', () => {
+    // Réclamer un aveu d'échec là où tout a réussi produirait un doute injustifié.
+    expect(exigeDireLEchec(false, '### ✅ Fait\nTout est passé.')).toBe(false)
+  })
+})
+
+describe('exigeAgirPasAnnoncer — il parle sans agir', () => {
+  const DEMANDE = 'ranges moi mes conversations dans des sous categories adequates'
+  const VECU =
+    'Je vais d’abord identifier le comportement actuel, écrire un test rouge…\nJe cible maintenant le flux réel de classement.'
+
+  it('mord sur le cas RÉEL de conv-1242 : un plan au futur, zéro action', () => {
+    expect(exigeAgirPasAnnoncer(DEMANDE, VECU, false)).toBe(true)
+  })
+
+  it('ne mord PAS si une action a réellement eu lieu', () => {
+    // Annoncer PUIS faire est legitime : c'est l'absence d'acte qui est en cause, pas la phrase.
+    expect(exigeAgirPasAnnoncer(DEMANDE, VECU, true)).toBe(false)
+  })
+
+  it('ne mord PAS sur une QUESTION : on n’exige pas d’agir pour répondre', () => {
+    expect(exigeAgirPasAnnoncer('combien de fichiers dans src ?', VECU, false)).toBe(false)
+  })
+
+  it('ne mord PAS sur un refus argumenté, qui n’annonce rien au futur', () => {
+    // Dire « je ne peux pas, voici pourquoi » est une reponse honnete, pas un plan recite.
+    expect(
+      exigeAgirPasAnnoncer(
+        DEMANDE,
+        'Je ne peux pas ranger ces conversations : aucune catégorie n’existe.',
+        false
+      )
+    ).toBe(false)
+  })
+})
+
+describe('exigeCorrigerEtPoursuivre — il voit son erreur, la raconte, et abandonne', () => {
+  const ECHEC_NON_CORRIGE = true
+
+  it('mord quand la dernière action a échoué et que le tour se termine sur le constat', () => {
+    const vecu =
+      'La commande a échoué : le test `pari-liaison` est rouge. ✅ Fait\n📍 Maintenant : le test ne passe pas.'
+    expect(exigeCorrigerEtPoursuivre(ECHEC_NON_CORRIGE, vecu)).toBe(true)
+  })
+
+  it('ne mord PAS quand la dernière itération a réussi — la reprise a fonctionné', () => {
+    // Le discriminant : un échec RATTRAPÉ ne doit plus rien réclamer, sinon la garde harcèle.
+    expect(exigeCorrigerEtPoursuivre(false, 'La deuxième tentative est passée : test vert.')).toBe(
+      false
+    )
+  })
+
+  it('ne mord PAS quand la reprise dépend VRAIMENT de l’utilisateur', () => {
+    const bloque =
+      'La suppression a échoué : il me faut ton autorisation explicite pour toucher la base de prod.'
+    expect(exigeCorrigerEtPoursuivre(ECHEC_NON_CORRIGE, bloque)).toBe(false)
+  })
+
+  it('ne mord PAS sur une réponse vide — le tour muet a sa propre garde', () => {
+    expect(exigeCorrigerEtPoursuivre(ECHEC_NON_CORRIGE, '   ')).toBe(false)
+  })
+})
+
+describe('auto-kaizen en cours de tour — la MÊME erreur ne se rejoue pas', () => {
+  it('normalise chemins, nombres et casse : deux occurrences du même mur ont une seule signature', () => {
+    // Antislashs DOUBLES a dessein : `\\A` n'est pas un echappement valide, JS le lisait `A` et la
+    // chaine ne portait donc AUCUN antislash -- ce test passait sans jamais exercer un chemin Windows.
+    const a = signatureDEchec('edit_file', 'ENOENT: C:\\Travail\\Autowin OS\\src\\a.ts introuvable')
+    const b = signatureDEchec('edit_file', 'enoent: C:\\Travail\\Autowin OS\\src\\b.ts introuvable')
+    expect(a).toBe(b)
+  })
+
+  it('deux murs DIFFÉRENTS gardent des signatures distinctes', () => {
+    const enoent = signatureDEchec('edit_file', 'ENOENT: chemin introuvable')
+    const droits = signatureDEchec('edit_file', 'EACCES: permission refusée')
+    expect(enoent).not.toBe(droits)
+  })
+
+  it('la même erreur sur DEUX outils différents reste distincte', () => {
+    expect(signatureDEchec('edit_file', 'ENOENT: x')).not.toBe(
+      signatureDEchec('run_tests', 'ENOENT: x')
+    )
+  })
+
+  it('la consigne ESCALADE à la deuxième rencontre du même mur', () => {
+    const sig = signatureDEchec('edit_file', 'ENOENT: chemin introuvable')
+    const premiere = consigneApresEchec([], sig)
+    const seconde = consigneApresEchec([sig], sig)
+    expect(premiere).not.toBe(seconde)
+    // La première demande de corriger ; la seconde interdit de rejouer et EXIGE de capitaliser.
+    expect(premiere).toContain('CAUSE')
+    expect(seconde).toContain('DÉJÀ')
+    expect(seconde).toContain('remember')
+  })
+
+  it('un mur JAMAIS vu ne déclenche pas l’escalade', () => {
+    const vu = signatureDEchec('edit_file', 'ENOENT: chemin introuvable')
+    const neuf = signatureDEchec('run_tests', 'assertion rouge')
+    expect(consigneApresEchec([vu], neuf)).toBe(consigneApresEchec([], neuf))
+  })
+})
+
+describe('signatureDEchec — les pieges de normalisation trouves par l’audit', () => {
+  it('deux occurrences du MÊME mur differant par un segment de CHEMIN non numerique fusionnent', () => {
+    // Trouve par l'audit du 2026-08-21 : la regle de chemin ne matchait jamais (un antislash au
+    // lieu de deux), et le test d'origine passait grace a la regle de NOM DE FICHIER ajoutee
+    // ensuite — vert pour la mauvaise raison. Ici aucun nom de fichier ne peut masquer la panne.
+    // L'antislash est construit, jamais ecrit en litteral : un echappement mal transmis a
+    // DEJA fabrique ce defaut une fois, il ne doit pas pouvoir le refabriquer dans le test.
+    const SEP = String.fromCharCode(92)
+    const chemin = (run: string): string =>
+      `ENOENT: dossier absent C:${SEP}tmp${SEP}${run}${SEP}sortie`
+    const a = signatureDEchec('fs', chemin('runA'))
+    const b = signatureDEchec('fs', chemin('runB'))
+    expect(a).toBe(b)
+  })
+
+  it('deux erreurs DIFFERENTES a long prefixe commun ne fusionnent PAS', () => {
+    // La troncature a 80 caracteres jetait le suffixe DISCRIMINANT : une coupure reseau transitoire
+    // et une panne de destination devenaient le meme mur, donc « interdit de rejouer » sur un
+    // diagnostic faux.
+    const prefixe =
+      'Erreur reseau lors de la connexion au service distant apres plusieurs tentatives, motif: '
+    expect(signatureDEchec('net', prefixe + 'ECONNRESET')).not.toBe(
+      signatureDEchec('net', prefixe + 'ETIMEDOUT')
+    )
+  })
+
+  it('la signature reste bornee en longueur', () => {
+    const enorme = 'x'.repeat(5000)
+    expect(signatureDEchec('outil', enorme).length).toBeLessThanOrEqual(120)
+  })
+})
+
+describe('exigeCorrigerEtPoursuivre — le mur humain doit etre une VRAIE attente, pas un mot-clé', () => {
+  it('ne se tait PAS quand l’agent annonce qu’il corrige, meme si le mot « autorise » apparait', () => {
+    // Trouve par l'audit : la co-occurrence lexicale suffisait a desarmer la garde, donc l'agent
+    // pouvait abandonner sans etre relance — exactement le defaut qu'elle devait supprimer.
+    const texte =
+      'La commande a échoué car le fichier de configuration n’autorise pas ce caractère.'
+    expect(exigeCorrigerEtPoursuivre(true, texte)).toBe(true)
+  })
+
+  it('se tait sur une vraie question suspensive adressee a l’utilisateur', () => {
+    expect(exigeCorrigerEtPoursuivre(true, 'Échec : veux-tu que je force la suppression ?')).toBe(
+      false
+    )
+  })
+
+  it('se tait quand l’agent declare la tache HORS DE SA PORTEE, sans mot-clé de permission', () => {
+    // Signale par l'audit « nuisance » : un agent qui a RAISON de s'arreter se faisait relancer
+    // deux fois puis accuser de tourner en rond, et devait polluer `remember` pour rien.
+    const horsPerimetre =
+      'La commande a échoué : cette fonctionnalité n’existe pas dans cette application, je ne peux pas le faire.'
+    expect(exigeCorrigerEtPoursuivre(true, horsPerimetre)).toBe(false)
+  })
+})
+
+describe('exigeUnChiffreVerifie — « total » demande un compte comme « combien »', () => {
+  it('mord quand le compte est demandé comme un total', () => {
+    // Recupere du bureau `autowin/recovery/run-80f9ddeb5982-1` (2026-08-18). Le garde reconnaissait
+    // combien / nombre / compte / liste / inventaire, mais PAS « total » : la question passait au
+    // travers et un chiffre devine pouvait sortir sans lecture pour l'etayer.
+    expect(
+      exigeUnChiffreVerifie(
+        'Quel est le total de fichiers .test.ts dans src/main ?',
+        'Le total est indisponible.',
+        false
+      )
+    ).toBe(true)
+  })
+
+  it('une lecture EFFECTUEE desarme le garde, « total » ou pas', () => {
+    // L'entree qui doit faire echouer une garde trop large : le garde existe pour reclamer une
+    // lecture, pas pour bloquer une reponse qui en a deja une.
+    expect(exigeUnChiffreVerifie('Quel est le total de fichiers ?', 'Il y en a 42.', true)).toBe(
+      false
+    )
+  })
+})
+
+describe('buildTurnMessages — pieces jointes nommees dans le fil', () => {
+  const base = { snapshot: { tab: 'chat' }, brainContext: '', memoryEcho: '' }
+
+  it('nomme la piece jointe du message qui la portait', () => {
+    const entries = buildTurnMessages({
+      ...base,
+      history: [
+        {
+          role: 'user',
+          content: 'Voici la maquette',
+          attachments: [{ name: 'maquette.png', kind: 'image' }]
+        },
+        { role: 'assistant', content: 'Bien recu.' },
+        { role: 'user', content: 'reprends la palette' }
+      ]
+    } as never)
+
+    const maquette = entries.find((e) => e.includes('Voici la maquette'))
+    expect(maquette).toContain('[pieces jointes de ce message: maquette.png]')
+    // Un message sans piece jointe ne recoit AUCUNE mention : pas de crochet vide dans le fil.
+    expect(entries.find((e) => e.includes('reprends la palette'))).not.toContain('pieces jointes')
+  })
+
+  it('ne rend rien pour un tableau vide ou des noms vides', () => {
+    expect(nommerPiecesJointes([])).toBe('')
+    expect(nommerPiecesJointes(undefined)).toBe('')
+    expect(nommerPiecesJointes([{ name: '  ' }])).toBe('')
+  })
+})
+
+describe('exigePreuveAvantDePromettre — la clôture qui promet un message futur', () => {
+  it('mord quand le tour a lancé une action et promet de rendre compte plus tard', () => {
+    expect(
+      exigePreuveAvantDePromettre(
+        'Run lancé. Je te rends le résultat vérifié — exit codes réels — dès qu’il rend la main.',
+        true
+      )
+    ).toBe(true)
+  })
+
+  it('mord sur « je reviens avec » et « je te tiens au courant »', () => {
+    expect(exigePreuveAvantDePromettre('Je reviens avec le compte-rendu.', true)).toBe(true)
+    expect(exigePreuveAvantDePromettre('Je te tiens au courant du résultat.', true)).toBe(true)
+  })
+
+  it('laisse passer une clôture qui rend compte au PASSÉ', () => {
+    expect(exigePreuveAvantDePromettre('Run terminé : exit code 0, 12 tests verts.', true)).toBe(
+      false
+    )
+  })
+
+  it('laisse passer si aucune action n’a eu lieu (autre garde) et si le texte est vide', () => {
+    expect(exigePreuveAvantDePromettre('Je te rends le résultat dès que possible.', false)).toBe(
+      false
+    )
+    expect(exigePreuveAvantDePromettre('', true)).toBe(false)
+  })
+
+  it('ne mord pas sur un « dès que » qui ne promet aucun compte-rendu de l’agent', () => {
+    expect(
+      exigePreuveAvantDePromettre(
+        'Le cache est invalidé dès que le fichier change ; relance-le quand tu veux.',
+        true
+      )
+    ).toBe(false)
+  })
+})
+
+describe('blocVisuelNonFerme — la fence html-render jamais refermée', () => {
+  it('mord sur une fence fermée par une pseudo-balise au lieu de ```', () => {
+    expect(blocVisuelNonFerme('Voici :\n```html-render\n<p>x</p>\n</html-render\n')).toBe(true)
+  })
+
+  it('ne mord pas sur une fence correctement refermée', () => {
+    expect(blocVisuelNonFerme('```html-render\n<p>x</p>\n```\n')).toBe(false)
+  })
+
+  it('ne mord pas sans bloc html-render, ni sur un bloc de code ordinaire', () => {
+    expect(blocVisuelNonFerme('texte simple')).toBe(false)
+    expect(blocVisuelNonFerme('```ts\nconst a = 1\n```')).toBe(false)
+  })
+
+  it('gère plusieurs blocs : le dernier non fermé suffit à mordre', () => {
+    expect(
+      blocVisuelNonFerme('```html-render\n<p>a</p>\n```\ntexte\n```html-render\n<p>b</p>\n')
+    ).toBe(true)
+  })
+})
+
+/**
+ * LE BOUTON « COMPACTER » DOIT ALLEGER POUR DE VRAI.
+ *
+ * Mesure du 2026-09-06 : « Compacter » n'envoie qu'un message demandant un resume
+ * (`COMPACT_REQUEST`, `shared/context-gauge.ts:182`). Le resume s'ajoute au fil — et RIEN d'autre
+ * ne change : les tours suivants renvoient le meme historique borne, plus le resume. La jauge de
+ * contexte, qui lit les `inputTokens` du dernier tour, ne redescend donc PAS. Le bouton promet un
+ * allegement qu'il ne produit pas.
+ *
+ * Le resume est ecrit pour qu'un agent « qui n'aurait PAS lu les messages precedents » reprenne le
+ * travail : c'est exactement le contrat qui autorise a couper avant lui. L'historique renvoye
+ * DEMARRE donc au resume — sinon on paie deux fois, le fil ET son resume.
+ */
+describe('compaction — le fil renvoye repart du resume', () => {
+  const compact = COMPACT_REQUEST
+  const fil = [
+    { role: 'user' as const, content: 'vieille demande' },
+    { role: 'assistant' as const, content: 'vieille reponse' },
+    { role: 'user' as const, content: compact },
+    { role: 'assistant' as const, content: 'RESUME DENSE du fil' },
+    { role: 'user' as const, content: 'et maintenant ?' }
+  ]
+
+  it('coupe tout ce qui precede la compaction, en GARDANT sa demande', () => {
+    // La demande reste : elle ne coute presque rien, elle donne son sens au resume, et elle est la
+    // MARQUE que `compactionsAbouties` cherche en aval pour perimer la session (conv-342).
+    const retenus = depuisDerniereCompaction(fil)
+    expect(retenus.map((m) => m.content)).toEqual([
+      compact,
+      'RESUME DENSE du fil',
+      'et maintenant ?'
+    ])
+    // Et la marque SURVIT a la coupe : sans ca, la session n est jamais perimee.
+    expect(compactionsAbouties(retenus)).toBe(1)
+  })
+
+  it('ne coupe rien tant que le resume n a pas ete produit', () => {
+    // La demande vient d'etre postee : le tour EN COURS doit voir tout le fil, sinon il resumerait
+    // le vide. On ne coupe qu'une fois le resume ecrit.
+    const enCours = fil.slice(0, 3)
+    expect(depuisDerniereCompaction(enCours)).toEqual(enCours)
+  })
+
+  it('compte les compactions ABOUTIES — la cle de session en depend', () => {
+    /*
+     Sur un provider qui reprend sa session, Autowin n envoie que le dernier message : couper le fil
+     ici n allege RIEN, tout l historique vit chez le fournisseur. Mesure le 2026-09-08 : la jauge
+     n a pas bouge d un point apres un « Compacter ». Ce compte entre dans la cle de session pour
+     qu une nouvelle compaction la PERIME et fasse repartir le tour a blanc.
+    */
+    expect(compactionsAbouties(fil)).toBe(1)
+    // Demande postee mais resume pas encore ecrit : rien n est abouti, la session ne doit PAS etre
+    // perimee — le tour qui doit resumer perdrait le fil a resumer.
+    expect(compactionsAbouties(fil.slice(0, 3))).toBe(0)
+    expect(compactionsAbouties([])).toBe(0)
+    expect(compactionsAbouties([...fil, { role: 'user' as const, content: compact }])).toBe(1)
+    expect(
+      compactionsAbouties([
+        ...fil,
+        { role: 'user' as const, content: compact },
+        { role: 'assistant' as const, content: 'SECOND RESUME' }
+      ])
+    ).toBe(2)
+  })
+
+  it('repart de la DERNIERE compaction quand il y en a eu plusieurs', () => {
+    const deux = [
+      ...fil,
+      { role: 'user' as const, content: compact },
+      { role: 'assistant' as const, content: 'SECOND RESUME' },
+      { role: 'user' as const, content: 'suite' }
+    ]
+    expect(depuisDerniereCompaction(deux).map((m) => m.content)).toEqual([
+      compact,
+      'SECOND RESUME',
+      'suite'
+    ])
+  })
+
+  it('laisse un fil sans compaction intact', () => {
+    const sans = fil.slice(0, 2)
+    expect(depuisDerniereCompaction(sans)).toEqual(sans)
+  })
+})
+
+/**
+ * REGRESSION conv-312 (2026-09-06) : deux tours consecutifs morts sur « Prompt is too long », et
+ * chaque relance rejouait le MEME prompt — le fil devenait un cul-de-sac.
+ *
+ * Cause : `bornerParVolume` pesait `content.length` seulement. Les PIECES JOINTES (captures
+ * `desktop_observe`), rehydratees en pleine taille dans le fil renvoye, pesaient ZERO pour la
+ * borne. Un fil charge d'images depassait donc la fenetre du modele sans que le budget de 60 k
+ * ne s'en apercoive.
+ */
+describe('borne en volume — les pieces jointes comptent', () => {
+  const avecImage = (n: number) =>
+    Array.from({ length: n }, (_, index) => ({
+      role: (index % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `tour ${index}`,
+      attachments: [{ name: 'desktop-current.jpg', mimeType: 'image/jpeg', size: 180_000 }]
+    }))
+
+  it('ecarte les tours anciens quand seules les images pesent', () => {
+    const fil = avecImage(30)
+    const retenus = boundedTurnHistory(fil, { maxMessages: 40, maxTokens: 60_000 })
+    const sansAvis = retenus.filter((m) => !m.content.startsWith('[HISTORIQUE TRONQUE'))
+    // 60 000 / 5 000 par image => une douzaine de tours au plus, jamais les 30.
+    expect(sansAvis.length).toBeLessThanOrEqual(13)
+    expect(sansAvis.length).toBeGreaterThan(0)
+    expect(sansAvis[sansAvis.length - 1]?.content).toBe('tour 29')
+  })
+
+  it('laisse un fil sans piece jointe inchange', () => {
+    const fil = Array.from({ length: 6 }, (_, index) => ({
+      role: (index % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `court ${index}`
+    }))
+    expect(boundedTurnHistory(fil, { maxMessages: 40, maxTokens: 60_000 })).toHaveLength(6)
+  })
+})
+
+/*
+ * conv-267 (2026-10-12) : sur un vrai tour, « combien de réponses le ping a-t-il reçues ? » a été
+ * relancé alors que le nombre venait de la sortie de `run` — la garde ne comptait comme lecture que
+ * list_files / read_file / find_in_files. La sortie d'une commande qui a VRAIMENT tourné observe le
+ * réel autant qu'une lecture de dossier.
+ */
+describe('commandeAObserveLeReel — run et verify qui ont tourné valent une lecture', () => {
+  it('run lancé : oui, quel que soit son code de sortie (un grep sans résultat a observé)', () => {
+    expect(
+      commandeAObserveLeReel('run', {
+        ok: true,
+        data: { lance: true, exitCode: 0, detail: 'reçus = 91' }
+      })
+    ).toBe(true)
+    expect(commandeAObserveLeReel('run', { ok: true, data: { lance: true, exitCode: 1 } })).toBe(
+      true
+    )
+  })
+
+  it('run refusé ou en panne : non, rien n’a tourné', () => {
+    expect(
+      commandeAObserveLeReel('run', {
+        ok: true,
+        data: { lance: false, detail: 'Commande refusée' }
+      })
+    ).toBe(false)
+    expect(commandeAObserveLeReel('run', { ok: false, error: 'bus indisponible' })).toBe(false)
+  })
+
+  it('verify qui a tourné : oui, même coupé au plafond ; verify refusé : non', () => {
+    expect(
+      commandeAObserveLeReel('verify', { ok: true, data: { allowed: true, exitCode: 1 } })
+    ).toBe(true)
+    expect(
+      commandeAObserveLeReel('verify', { ok: true, data: { allowed: true, exitCode: null } })
+    ).toBe(true)
+    expect(
+      commandeAObserveLeReel('verify', { ok: true, data: { allowed: false, exitCode: null } })
+    ).toBe(false)
+  })
+
+  it('aucune autre commande : get_state reste un aperçu, pas une observation', () => {
+    expect(commandeAObserveLeReel('get_state', { ok: true, data: { tab: 'chat' } })).toBe(false)
+    expect(commandeAObserveLeReel('remember', { ok: true, data: { stored: true } })).toBe(false)
+  })
+})
+
+/**
+ * conv-1074 (2026-10-22) : une session NEUVE relit l'historique du fil. Chaque page `html-render`
+ * d'une reponse y repartait en CODE — balises et `<style>` — a chaque tour. Le modele relit
+ * desormais le texte visible de la page ; les mots de l'utilisateur, eux, restent intacts.
+ * Entree qui ferait echouer une mauvaise correction : la couleur `#d4a94f` du `<style>`.
+ */
+describe('buildTurnMessages — une page html-render de l’agent revient en texte visible', () => {
+  const page =
+    'Voici la page.\n```html-render\n<style>.c{color:#d4a94f}</style>\n<div class="c">TEXTE-VU</div>\n```'
+
+  it('la réponse de l’agent n’emporte ni balise ni style dans l’historique', () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [
+        { role: 'user', content: 'montre' },
+        { role: 'assistant', content: page }
+      ]
+    })
+    const toi = entries.find((entry) => entry.startsWith('TOI: ')) ?? ''
+    expect(toi).toContain('Voici la page.')
+    expect(toi).toContain('TEXTE-VU')
+    expect(toi).not.toContain('#d4a94f')
+    expect(toi).not.toMatch(/<\/?[a-z]/i)
+  })
+
+  it('jumeau : un message de l’UTILISATEUR garde son texte mot pour mot', () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [{ role: 'user', content: page }]
+    })
+    expect(entries.join('\n')).toContain('<div class="c">TEXTE-VU</div>')
+  })
+
+  // conv-1316 : une session neuve relisait les 141 000 caractères du jeu posé par `montrer_bloc`.
+  it('une page html-interactif de l’agent ne repart pas en code non plus', () => {
+    const entries = buildTurnMessages({
+      snapshot: {},
+      brainContext: '',
+      memoryEcho: '',
+      history: [
+        { role: 'user', content: 'montre' },
+        {
+          role: 'assistant',
+          content:
+            'Le jeu est là.\n\n```html-interactif\n<h1>TEXTE-VU</h1><script>MOTEUR_3D()</script>\n```\n'
+        }
+      ]
+    })
+    const toi = entries.find((entry) => entry.startsWith('TOI: ')) ?? ''
+    expect(toi).toContain('Le jeu est là.')
+    expect(toi).toContain('TEXTE-VU')
+    expect(toi).not.toContain('MOTEUR_3D')
+    expect(toi).not.toMatch(/<\/?[a-z]/i)
+  })
+})

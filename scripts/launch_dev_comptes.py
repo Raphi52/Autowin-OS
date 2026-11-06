@@ -8,7 +8,7 @@ compte le rend actif AVANT que l'application ne demarre.
 
 LA SOURCE : le fichier de l'APPLICATION, jamais une copie
 ---------------------------------------------------------
-`ClaudeAccountsStore` (src/main/claude-accounts.ts) persiste ses comptes dans
+`ClaudeAccountsStore` (src/main/providers/claude-accounts.ts) persiste ses comptes dans
 `.autowin-data/autowin-os/claude-accounts.json` (racine portable du profil DEV, cf. app-data.ts).
 Le lanceur relit CE fichier et ne garde rien de son cote : une seconde liste divergerait.
 

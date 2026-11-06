@@ -1,11 +1,11 @@
 // Outils du bureau caché, du navigateur et du terminal de l'agent : méthodes de AppCommandBus sorties de
 // commands.ts telles quelles (conv-1580, lot 6).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import type { AppCommandBus } from '../commands'
+import type { AppCommandBus } from './commands'
 import type { Message } from '../providers/types'
-import type { GesteTv } from '../hdesk-tv'
-import { ELEMENT_MAX } from '../hdesk-tv'
-import { identifiantBureauCacheChat } from '../consigne-bureau-cache'
+import type { GesteTv } from '../bureau/hdesk-tv'
+import { ELEMENT_MAX } from '../bureau/hdesk-tv'
+import { identifiantBureauCacheChat } from '../consignes/consigne-bureau-cache'
 import type { ActionAgentNavigateur, CibleAgentNavigateur } from '../../shared/navigateur'
 import { argumentAbsent, booleenEnvoye } from './arguments'
 import type { OutilNavigateur } from './navigateur-terminal'

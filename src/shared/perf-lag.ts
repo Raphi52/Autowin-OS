@@ -2,7 +2,7 @@
  * Noyau PUR de l'outillage « ou passe le temps ? ».
  *
  * Deux sources de FAITS, aucune supposition :
- *  · les jalons de tour ecrits par `src/main/turn-timing.ts` (une ligne JSONL par tour de chat) ;
+ *  · les jalons de tour ecrits par `src/main/chat/turn-timing.ts` (une ligne JSONL par tour de chat) ;
  *  · une sonde de reactivite du renderer (retard des ticks + taches longues du navigateur).
  *
  * Le rapport ne conclut jamais « c'est lent » : il NOMME un seuil et designe les segments qui le

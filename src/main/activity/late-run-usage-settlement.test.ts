@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ExecutionUsageSnapshot } from '../execution-supervisor'
+import type { ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
 import { reconcileLateRunLifecycle } from './late-run-usage-settlement'
 

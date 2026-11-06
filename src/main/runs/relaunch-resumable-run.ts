@@ -13,8 +13,8 @@
  * `os` et OBSERVER les effets reels (le RUN.md rattache avant `runTask`, la trace sauvee sur le
  * succes comme sur l'echec, le run clos, les sections peuplees) au lieu de relire du texte.
  */
-import type { AppCommandBus, AppEvent } from '../commands'
-import type { AutowinOS } from '../os'
+import type { AppCommandBus, AppEvent } from '../commands/commands'
+import type { AutowinOS } from '../app/os'
 import type { TraceStore } from '../activity/trace-store'
 import type { ExecutionEvidence } from '../providers/types'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
@@ -104,18 +104,18 @@ export type DependancesDeRelance = {
   createOrchestrateTurnPersistence: typeof import('./orchestrate-turn-persistence').createOrchestrateTurnPersistence
   appendTurnEvent: typeof import('./turn-journal').appendTurnEvent
   reuseOrCreateConvRun: typeof import('./conv-runs').reuseOrCreateConvRun
-  regimePhases: typeof import('../task-regime').regimePhases
+  regimePhases: typeof import('../orchestration/task-regime').regimePhases
   saveConvRunTrace: typeof import('./conv-runs').saveConvRunTrace
   loadConvRunTrace: typeof import('./conv-runs').loadConvRunTrace
   populateConvRunSections: typeof import('./conv-runs').populateConvRunSections
   closeConvRun: typeof import('./conv-runs').closeConvRun
-  phasesAvecJuge: typeof import('../orchestration-memoire').phasesAvecJuge
+  phasesAvecJuge: typeof import('../orchestration/orchestration-memoire').phasesAvecJuge
   persistOrchestrationStep: typeof import('../activity/orchestration-observability').persistOrchestrationStep
   persistOrchestrationPhaseStart: typeof import('../activity/orchestration-observability').persistOrchestrationPhaseStart
   persistRunLifecycle: typeof import('../activity/orchestration-observability').persistRunLifecycle
   materializeChatArtifact: typeof import('../store/chat-artifact-store').materializeChatArtifact
   artifactsFromExecutionEvidence: typeof import('../providers/artifacts').artifactsFromExecutionEvidence
-  emitToLiveWindows: typeof import('../renderer-emit').emitToLiveWindows
+  emitToLiveWindows: typeof import('../app/renderer-emit').emitToLiveWindows
   appendBrainTrace: typeof import('../activity/brain-trace-spool').appendBrainTrace
   appendExecutionEvidenceFileTrace: typeof import('../activity/conversation-file-trace-spool').appendExecutionEvidenceFileTrace
   appendObservedOrchestrationOutcome: typeof import('../activity/orchestration-outcome-trace').appendObservedOrchestrationOutcome
@@ -125,7 +125,7 @@ export type DependancesDeRelance = {
   /** Clôture `red` qui nomme une cause extérieure → `interrupted` (piste 4, conv-1070). */
   statutDuRunMd: typeof import('./conv-runs').statutDuRunMd
   /** Stop, quota, panne en face : la cause d'un arrêt étranger au travail (piste 4, conv-1070). */
-  causeDInterruption: typeof import('../classe-terminale-echec').causeDInterruption
+  causeDInterruption: typeof import('../orchestration/classe-terminale-echec').causeDInterruption
   randomUUID: () => string
   /** Fenetres vivantes a notifier. Injecte pour que le module ne depende pas d'`electron`. */
   fenetresVivantes: () => { webContents: { send: (canal: string, charge: unknown) => void } }[]

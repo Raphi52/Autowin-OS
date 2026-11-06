@@ -3,7 +3,7 @@
  *
  * Demande : « fais afficher dans mon Board les post-it des collègues qui écrivent dans le même
  * dossier de la GED, avec leur nom sur chaque post-it et en lecture seule ». Le processus principal
- * relit leurs `board.json` (`src/main/board-collegues.ts`) ; ici, on les mêle à la carte AFFICHÉE :
+ * relit leurs `board.json` (`src/main/board/board-collegues.ts`) ; ici, on les mêle à la carte AFFICHÉE :
  * un projet de plus par collègue et par projet, des fils dont l'identifiant est préfixé de son poste
  * (son `conv-12` n'est pas le nôtre), chaque demande marquée `collegue`.
  *

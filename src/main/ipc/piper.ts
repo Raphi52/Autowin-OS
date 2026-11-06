@@ -11,9 +11,9 @@
  * service reste construit PARESSEUSEMENT côté `index.ts` et n'est reçu ici que comme lecteur.
  */
 import { ipcMain } from 'electron'
-import type { ServicePiper } from '../piper-local'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
+import type { ServicePiper } from '../media/piper-local'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
 
 export type PiperIpcDeps = {
   /** Lecteur, pas valeur : le service n'est construit qu'au premier appel. */

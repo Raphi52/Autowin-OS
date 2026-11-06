@@ -23,7 +23,7 @@ import { etatInitialDuTour } from './etat-du-tour'
  * encore écrit dans `agent-pilot.ts`.
  */
 const lire = (chemin: string): string => readFileSync(chemin, 'utf8').replace(/\r\n/g, '\n')
-const pilote = (): string => lire(join(__dirname, '..', 'agent-pilot.ts'))
+const pilote = (): string => lire(join(__dirname, 'agent-pilot.ts'))
 
 const snapshot = { runs: [] } as unknown as Parameters<typeof etatInitialDuTour>[0]['snapshot']
 const entree = (conversationId: string | undefined): Parameters<typeof etatInitialDuTour>[0] => ({

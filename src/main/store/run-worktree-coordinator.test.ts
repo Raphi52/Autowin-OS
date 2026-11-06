@@ -1527,7 +1527,7 @@ describe('RunWorktreeCoordinator (flip live)', () => {
       manager: fakeManager({
         listAgentIds: () => ['run-old', 'run-conflict'],
         finalize,
-        changedFiles: (id) => (id === 'run-conflict' ? ['src/main/os.ts'] : [])
+        changedFiles: (id) => (id === 'run-conflict' ? ['src/main/app/os.ts'] : [])
       }),
       nowFn: () => 42
     })
@@ -1544,7 +1544,7 @@ describe('RunWorktreeCoordinator (flip live)', () => {
         agentId: 'run-conflict',
         state: 'blocked',
         attentionReason: 'merge-failed',
-        files: [{ path: 'src/main/os.ts', kind: 'mod' }],
+        files: [{ path: 'src/main/app/os.ts', kind: 'mod' }],
         endedAtMs: 42
       })
     ])

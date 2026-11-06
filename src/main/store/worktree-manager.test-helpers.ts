@@ -16,7 +16,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { WorktreeManager } from './worktree-manager'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /** Les dossiers temporaires à supprimer après chaque test. Certains tests en enregistrent eux-mêmes. */
 export const roots: string[] = []

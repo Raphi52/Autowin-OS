@@ -18,16 +18,16 @@
  * avec les canaux plutôt que de rester des variables de module dans le fichier de démarrage.
  */
 import { ipcMain, shell } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
 import {
   ChatArtifactPreviewBudget,
   MAX_ARTIFACT_PREVIEW_BYTES,
   readConversationArtifact,
   revealableConversationArtifactPath
 } from '../store/chat-artifact-store'
-import type { AutowinOS } from '../os'
-import { brancherMediaDuFil, resoudreMediaConserve } from '../chat-media-protocol'
+import type { AutowinOS } from '../app/os'
+import { brancherMediaDuFil, resoudreMediaConserve } from '../chat/chat-media-protocol'
 
 /** Ce que les canaux des artefacts prenaient dans `index.ts` — désormais passé explicitement. */
 export type ChatArtifactsIpcDeps = {

@@ -1,8 +1,8 @@
 // Catalogue des commandes — conversations, retrospective, verdicts et travaux triés, état de l’app.
 // Entrées sorties telles quelles de commands/catalogue.ts (conv-1580), dans le même ordre :
 // catalogue.ts les remet bout à bout dans CATALOG. Seuls des TYPES viennent de '../commands'.
-import type { CommandSpec } from '../commands'
-import { AIDE_ARGS_ETAT, LIMITE_MAX } from '../etat-outil'
+import type { CommandSpec } from './commands'
+import { AIDE_ARGS_ETAT, LIMITE_MAX } from '../chat/etat-outil'
 import { LISTE_DE_TEXTES, TRANCHE_MESSAGE_LU } from './catalogue-champs'
 
 export const CATALOGUE_CONVERSATIONS: CommandSpec[] = [

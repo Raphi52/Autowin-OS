@@ -137,7 +137,7 @@ describe('classerGels — trois familles, jamais additionnées', () => {
 })
 
 /*
- * Un bundle factice et sa carte : ligne 1 -> src/main/a.ts:1, ligne 2 -> src/main/gel-main.ts
+ * Un bundle factice et sa carte : ligne 1 -> src/main/a.ts:1, ligne 2 -> src/main/gel/gel-main.ts
  * (l'instrument, à sauter), ligne 3 -> src/main/a.ts:3. VLQ : AAAA, ACAA (source +1), ADEA
  * (source -1, ligne +2).
  */
@@ -149,7 +149,7 @@ function bundleFactice() {
     carte,
     JSON.stringify({
       version: 3,
-      sources: ['../../src/main/a.ts', '../../src/main/gel-main.ts'],
+      sources: ['../../src/main/a.ts', '../../src/main/gel/gel-main.ts'],
       names: [],
       mappings: 'AAAA;ACAA;ADEA'
     })

@@ -9,7 +9,7 @@ import {
   persistRunLifecycle
 } from './orchestration-observability'
 import { TraceStore } from './trace-store'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 describe('observabilite orchestration', () => {
   it('persiste le workspace, le sort Git et la clôture d’un run sans perdre son identité', () => {

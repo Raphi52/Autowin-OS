@@ -1,5 +1,5 @@
-import type { ModelQuestion } from '../model-questions'
-import { objectionsDuJuge } from '../objections-juge'
+import type { ModelQuestion } from '../modeles/model-questions'
+import { objectionsDuJuge } from '../juge/objections-juge'
 
 /**
  * OBJECTION D'ÉTENDUE RÉPÉTÉE EN MODE JUSQU'AU VERT → PAUSE ET QUESTION (conv-1149, 2026-10-25).

@@ -21,11 +21,11 @@ Invoke-Checked 'Tests lifecycle A2' {
     src/main/store/worktree-run-state.test.ts `
     src/main/store/run-worktree-coordinator.test.ts `
     src/main/store/worktree-recovery.integration.test.ts `
-    src/main/commands.test.ts `
-    src/main/orchestrator.mutation-negation.test.ts `
-    src/main/orchestrator.worktree-flip.test.ts `
-    src/main/os.execution-workspace.test.ts `
-    src/main/os.readiness.test.ts
+    src/main/commands/commands.test.ts `
+    src/main/orchestration/orchestrator.mutation-negation.test.ts `
+    src/main/orchestration/orchestrator.worktree-flip.test.ts `
+    src/main/app/os.execution-workspace.test.ts `
+    src/main/app/os.readiness.test.ts
 }
 
 Invoke-Checked 'Tests Hub A2' {

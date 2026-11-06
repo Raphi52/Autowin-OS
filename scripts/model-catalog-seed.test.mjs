@@ -8,7 +8,7 @@ import { racineDepot } from './racine-depot.mjs'
  * par defaut est VIDE cote code (DEFAULT_IMPORTED_MODELS = []), donc la topologie par defaut ne peut
  * pas etre creee et le demarrage s'arrete AVANT l'ouverture du port CDP. `autowin-headless.ps1` seme
  * donc `scripts/fixtures/model-catalog-seed.json`. Si cette semence cesse de satisfaire le contrat
- * de lecture du cache (src/main/models.ts : isValidCachedModel / readCatalogCache), elle est
+ * de lecture du cache (src/main/modeles/models.ts : isValidCachedModel / readCatalogCache), elle est
  * SILENCIEUSEMENT ignoree et l'instance redevient indemarrable. Ce test rend cet echec bruyant.
  */
 const racine = racineDepot()

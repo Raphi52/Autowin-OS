@@ -57,7 +57,7 @@ function sectionBesoin(texte) {
  */
 /*
  * UNE LIGNE DE TABLEAU EST UN CAS (conv-981, 2026-10-15) : meme regle que
- * `src/main/frame-cas-limites.ts` (test de contrat). La separation `|---|` et la ligne d'en-tete
+ * `src/main/orchestration/frame-cas-limites.ts` (test de contrat). La separation `|---|` et la ligne d'en-tete
  * qui la precede ne sont pas des cas.
  */
 const SEPARATION_DE_TABLEAU = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/

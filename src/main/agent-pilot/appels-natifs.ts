@@ -2,16 +2,16 @@
 // toute commande exécutée — texte `<cmd>` comme appel direct. Sortis tels quels de
 // AgentPilot.chat() (conv-1580, lot 3) : ils lisent et écrivent l'état du tour qu'on leur passe
 // (`etat-du-tour.ts`) au lieu de capturer ses `let`.
-import { cleAppelNatif } from '../chat-mcp'
+import { cleAppelNatif } from '../chat/chat-mcp'
 import {
   COMMANDES_DE_CAPTURE,
   cleDEchec,
   commandeAObserveLeReel,
   issueDuVerify,
   signatureDEchec
-} from '../chat-turn-messages'
-import type { CommandResult } from '../commands'
-import { fluxDuBloc, texteDuBlocDansLeFil } from '../montrer-bloc-command'
+} from '../chat/chat-turn-messages'
+import type { CommandResult } from '../commands/commands'
+import { fluxDuBloc, texteDuBlocDansLeFil } from '../commands/montrer-bloc-command'
 import { enregistrerMur } from '../runs/murs-store'
 import type { ExecutionDeCommande } from './commandes-du-tour'
 import type { EtatDuTour } from './etat-du-tour'

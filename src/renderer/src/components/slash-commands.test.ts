@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SLASH_COMMANDS, matchSlashCommands, skillSlashCommands } from './chat-view-model'
-import { PIPELINE_PHASES } from '../../../main/skill-pipeline'
-import { nativeSkills } from '../../../main/native-registry'
+import { PIPELINE_PHASES } from '../../../main/skills/skill-pipeline'
+import { nativeSkills } from '../../../main/app/native-registry'
 
 /**
  * Ce test gardait la DÉCOUVRABILITÉ du kit contre une liste écrite à la main dans le renderer. Il

@@ -38,10 +38,10 @@ Trois idées directrices :
 1. **Multi-fournisseurs, un seul plan de contrôle.** Claude (CLI), Codex/ChatGPT (Responses API),
    Kimi… sont interchangeables derrière une interface commune. Le renderer envoie des *intentions* ;
    le process `main` détient les accès et exécute.
-2. **Des workflows choisis, pas un prompt géant.** Un *mode dynamique* (`src/main/workflow-dynamic.ts`)
+2. **Des workflows choisis, pas un prompt géant.** Un *mode dynamique* (`src/main/workflow/workflow-dynamic.ts`)
    choisit pour chaque demande un profil existant, invente un petit graphe (12 exécutions au plus
    dans le pire cas), ou n'en prend **aucun** et répond directement. Les profils livrés
-   (`src/main/workflow-defaults.ts`) : *Éclair*, *Correctif*, *Feature*, *Chantier Autowin*,
+   (`src/main/workflow/workflow-defaults.ts`) : *Éclair*, *Correctif*, *Feature*, *Chantier Autowin*,
    *Panel critique*, *Exploration*, *Remake*. Le juge est **séparé** du producteur.
 3. **L'enforcement vit dans le code, pas dans le prompt.** Un `HookBus` interne applique des
    garde-fous déterministes (dont un *verify-replay* qui **rejoue** réellement la vérification au lieu
@@ -49,7 +49,7 @@ Trois idées directrices :
 
 ## Workflow « Chantier Autowin »
 
-Profil livré d'origine (`chantier-autowin`, dans `src/main/workflow-defaults.ts`), le plus complet des
+Profil livré d'origine (`chantier-autowin`, dans `src/main/workflow/workflow-defaults.ts`), le plus complet des
 workflows par défaut.
 
 **Quand l'utiliser** — une mission menée de bout en bout, quand la tâche n'est pas encore choisie ou

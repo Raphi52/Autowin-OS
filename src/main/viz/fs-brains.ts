@@ -10,12 +10,12 @@ import {
 } from 'node:fs'
 import { readFile, readdir, realpath as realpathAsync, stat as statAsync } from 'node:fs/promises'
 import { dirname, extname, join, posix, relative, resolve, win32 } from 'node:path'
-import { sharedBrainRoot, teamWorkspaces } from '../brain-paths'
-import { racineBrainPerso } from '../brain-perso-racine'
-import { identiteMetier, type IdentiteMetier } from '../identite-entreprise'
-import { brainSourcePathAllowed } from '../brain-corpus-scope'
-import { pontsEntreBrains } from '../brain-ponts'
-import type { BrainNavigation } from '../brain-retrieval'
+import { sharedBrainRoot, teamWorkspaces } from '../brain/brain-paths'
+import { racineBrainPerso } from '../brain/brain-perso-racine'
+import { identiteMetier, type IdentiteMetier } from '../profil/identite-entreprise'
+import { brainSourcePathAllowed } from '../brain/brain-corpus-scope'
+import { pontsEntreBrains } from '../brain/brain-ponts'
+import type { BrainNavigation } from '../brain/brain-retrieval'
 import { openVaultNoteDescriptor, readVaultNote, readVaultNoteSync } from './brain-file-reader'
 import {
   normalize,

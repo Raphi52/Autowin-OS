@@ -6,7 +6,7 @@
  * vit dans `skills/<nom>/SKILL.md` : un bouton ne fait que l'INVOQUER, il ne la réécrit pas — deux
  * procédures concurrentes, c'est la moins tenue qui gagne.
  *
- * L'INVOCATION EST EN TÊTE de chaque consigne : `invokedSkillId` (src/main/skill-pipeline.ts) ne
+ * L'INVOCATION EST EN TÊTE de chaque consigne : `invokedSkillId` (src/main/skills/skill-pipeline.ts) ne
  * reconnaît une skill qu'en début de message. La consigne n'ajoute que ce que la skill ne peut pas
  * deviner : qu'elle part d'un clic, et sur quelle fenêtre de temps.
  *

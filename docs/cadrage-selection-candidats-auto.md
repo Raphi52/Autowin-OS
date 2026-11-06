@@ -54,7 +54,7 @@ sans obliger à rester devant l'écran.
 ## Réserve qui doit être levée AVANT de construire
 
 La skill `scout` **n'exige nulle part** d'écrire une ligne `CIBLE:` — aucune consigne dans
-`skills/scout/SKILL.md`. L'app rattrape après coup : `src/main/scout-cible.ts:77-85`
+`skills/scout/SKILL.md`. L'app rattrape après coup : `src/main/scout/scout-cible.ts:77-85`
 injecte un rappel quand la ligne manque. Bâtir la sélection multi-pistes sur ce format
 repose donc sur une sortie que le scout n'est pas tenu de produire.
 

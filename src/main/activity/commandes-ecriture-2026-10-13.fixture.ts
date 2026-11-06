@@ -5,11 +5,11 @@
 
 /** conv-932, tour 861aad09 : le test, créé par Write, est reformaté par prettier (d7af3730). */
 export const COMMANDE_CONV_932 =
-  'cd /d/AutoWinOS; npx prettier --write src/main/githooks-pre-push.test.ts >/dev/null; npx eslint src/main/githooks-pre-push.test.ts vitest.config.ts; echo "lint=$?"; npx tsc --noEmit -p tsconfig.node.json 2>&1 | grep -n "githooks-pre-push\\|vitest.config" | head; echo "tsc-fichiers-touches-erreurs=$(npx tsc --noEmit -p tsconfig.node.json 2>&1 | grep -c \'githooks-pre-push\\|vitest.config\')"'
+  'cd /d/AutoWinOS; npx prettier --write src/main/git/githooks-pre-push.test.ts >/dev/null; npx eslint src/main/git/githooks-pre-push.test.ts vitest.config.ts; echo "lint=$?"; npx tsc --noEmit -p tsconfig.node.json 2>&1 | grep -n "githooks-pre-push\\|vitest.config" | head; echo "tsc-fichiers-touches-erreurs=$(npx tsc --noEmit -p tsconfig.node.json 2>&1 | grep -c \'githooks-pre-push\\|vitest.config\')"'
 
 /** conv-933, tour f24b1b7e : le test est complété par un here-document puis `sed -i` (dd0c3d6a). */
 export const COMMANDE_CONV_933 = [
-  "cat >> src/main/relance-auto-moteur.test.ts <<'EOF'",
+  "cat >> src/main/providers/relance-auto-moteur.test.ts <<'EOF'",
   '',
   "describe('resumerErreurDeCompilation', () => {",
   "  // Sortie RÉELLE d'un `electron-vite build` en échec, capturée le 13/10 : picocolors force les",
@@ -55,5 +55,5 @@ export const COMMANDE_CONV_933 = [
   '  })',
   '})',
   'EOF',
-  "sed -i 's/^  relanceAutoMoteurPermise,$/  relanceAutoMoteurPermise,\\n  resumerErreurDeCompilation,/' src/main/relance-auto-moteur.test.ts && sed -n 5,13p src/main/relance-auto-moteur.test.ts"
+  "sed -i 's/^  relanceAutoMoteurPermise,$/  relanceAutoMoteurPermise,\\n  resumerErreurDeCompilation,/' src/main/providers/relance-auto-moteur.test.ts && sed -n 5,13p src/main/providers/relance-auto-moteur.test.ts"
 ].join('\n')

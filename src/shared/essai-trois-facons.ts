@@ -3,7 +3,7 @@
  * (conv-1038, 2026-10-21 — idée 6 : la carte de comparaison et « Garder celle-ci »).
  *
  * LE NOM DE LA COPIE relie les branches d'un même essai : `ouvrirCopiesDEssai`
- * (`src/main/photo-du-code.ts`) les ouvre sous `essai__<fil>-<instant>-<rang>`. Le fil peut porter
+ * (`src/main/git/photo-du-code.ts`) les ouvre sous `essai__<fil>-<instant>-<rang>`. Le fil peut porter
  * des tirets (`conv-1038`) : seuls les deux derniers nombres sont l'instant et le rang.
  *
  * LA MARQUE DE LA DEMANDE est la phrase que `demandePourLaFacon` (`trois-facons.ts`) ajoute au texte
@@ -44,7 +44,7 @@ export function nomDeCopieDEssai(chemin: string | undefined): CopieDEssai | null
 
 /**
  * LA RESSEMBLANCE d'une façon avec la plus proche des autres (conv-1057, 2026-10-22 — calculée par
- * `src/main/ressemblance-des-facons.ts`). `identique` : même état du code que cette autre façon.
+ * `src/main/orchestration/ressemblance-des-facons.ts`). `identique` : même état du code que cette autre façon.
  * `part` : lignes changées en commun sur l'ensemble des lignes changées par les deux (0 à 1).
  * `avec` : le rang de cette autre façon (1 à 3).
  */

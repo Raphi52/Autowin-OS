@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { BrainRetrievalResult } from '../brain-retrieval'
-import { buildBrainSearchEnvelope } from '../brain-search-envelope'
+import type { BrainRetrievalResult } from '../brain/brain-retrieval'
+import { buildBrainSearchEnvelope } from '../brain/brain-search-envelope'
 import type { BrainNoteSearchResult } from './fs-brains'
 import { BrainSearchCoordinator, type BrainSearchOperations } from './brain-search-coordinator'
 

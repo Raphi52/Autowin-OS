@@ -12,8 +12,8 @@ vi.mock('electron', () => ({
   app: {},
   ipcMain: { handle: (canal: string, f: (...a: unknown[]) => unknown) => canaux.set(canal, f) }
 }))
-vi.mock('../ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
-vi.mock('../gel-main', () => ({
+vi.mock('./ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
+vi.mock('../gel/gel-main', () => ({
   journaliserGel: (gel: Record<string, unknown>) => ecrits.push(gel),
   lireGels: () => ({})
 }))

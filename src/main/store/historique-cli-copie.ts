@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 /**
  * Suppression de l'HISTORIQUE CLI laissé derrière une copie de travail effacée.

@@ -1,4 +1,4 @@
-export { exactLineFingerprint as lineFingerprint } from '../exact-line-fingerprint'
+export { exactLineFingerprint as lineFingerprint } from '../fichiers/exact-line-fingerprint'
 
 /**
  * Normalise le bruit variable d'une ligne sans perdre la nature de l'incident.

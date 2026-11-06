@@ -45,7 +45,7 @@
  * fix-ok: mesuré sur 30 jours dans les conversations : 21 tours coupés, 16 suivis d'un « reprend »
  * tapé à la main, parce qu'aucun réveil ne visait les fils (seuls les runs en avaient un).
  */
-import { CONTINUATION_INSTRUCTION } from '../chat-continuation'
+import { CONTINUATION_INSTRUCTION } from './chat-continuation'
 import {
   MARGE_APRES_RETOUR_MS,
   creerReveilApresQuota,

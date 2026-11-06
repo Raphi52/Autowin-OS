@@ -19,13 +19,13 @@ vi.mock('electron', () => ({
 }))
 
 const runAppPreflight = vi.fn(async () => ({ ok: true, summary: 'OK', checks: [] }))
-vi.mock('../preflight-probes', () => ({
+vi.mock('../preflight/preflight-probes', () => ({
   runAppPreflight: (...a: unknown[]) => runAppPreflight(...(a as [])),
   getLastAppPreflightResult: () => null,
   appPreflightProbes: () => ({ pingBrain: async () => true })
 }))
-vi.mock('../preflight-repair', () => ({ repairPreflightCheck: () => ({ started: false }) }))
-vi.mock('../ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
+vi.mock('../preflight/preflight-repair', () => ({ repairPreflightCheck: () => ({ started: false }) }))
+vi.mock('./ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
 
 import { registerPreflightIpc } from './preflight'
 

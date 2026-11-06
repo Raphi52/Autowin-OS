@@ -1,4 +1,4 @@
-import type { ImportedModel } from '../models'
+import type { ImportedModel } from '../modeles/models'
 import type { FabricNodeSummary } from './control-plane'
 
 export interface FabricProductBindings {

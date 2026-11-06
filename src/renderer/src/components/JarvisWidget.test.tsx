@@ -611,7 +611,7 @@ describe('widget Jarvis', () => {
 
     it('MONTRE l’échec du moteur au lieu d’afficher « écoute en cours » sur un moteur mort', async () => {
       // LE DÉFAUT MESURÉ : sur cette application, `webkitSpeechRecognition` rend `error: network`
-      // (capture datée du 2026-08-31, chemin dans l'en-tête de `src/main/whisper-local.ts`) ; la
+      // (capture datée du 2026-08-31, chemin dans l'en-tête de `src/main/media/whisper-local.ts`) ; la
       // cause de ce code n'est pas établie et n'est pas testée ici. L'erreur était avalée, donc le
       // widget restait allumé sans rien entendre. L'entrée qui casserait un faux fix : `no-speech`,
       // qui doit LAISSER l'écoute vivre.

@@ -2,7 +2,7 @@
  * LE MOTEUR D'ÉCOUTE LOCAL — même contrat que `webkitSpeechRecognition`, mais qui FONCTIONNE ici.
  *
  * MESURÉ sur cette application : le moteur de Chromium rend le code `network` (capture datée du
- * 2026-08-31, chemin cité dans l'en-tête de `src/main/whisper-local.ts`) — le micro s'ouvrait, et
+ * 2026-08-31, chemin cité dans l'en-tête de `src/main/media/whisper-local.ts`) — le micro s'ouvrait, et
  * rien n'était jamais reconnu. La CAUSE de ce code n'est pas établie ici, et n'a pas besoin de
  * l'être pour décider : le moteur natif ne rend rien. Ce moteur-ci lit le micro
  * lui-même, découpe sur le silence (`whisper-audio.ts`), et fait transcrire chaque phrase par la CLI
@@ -337,7 +337,7 @@ export function fabriqueWhisper(deps: DependancesWhisper): FabriqueMoteur {
  * `haut-parleurs` sert au mode conversation téléphonique : pour transcrire l'INTERLOCUTEUR (Teams,
  * Meet, un téléphone en haut-parleur), il faut capter la sortie audio du système, pas le micro. Sous
  * Windows, Electron le rend via `getDisplayMedia` : le processus principal répond à la demande avec
- * `audio: 'loopback'` (voir `src/main/audio-loopback.ts`). La piste VIDÉO qui accompagne la réponse
+ * `audio: 'loopback'` (voir `src/main/media/audio-loopback.ts`). La piste VIDÉO qui accompagne la réponse
  * est coupée immédiatement — on ne filme pas l'écran, on n'en veut que le son.
  */
 export type SourceAudio = 'micro' | 'haut-parleurs'

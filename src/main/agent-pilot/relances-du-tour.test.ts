@@ -24,7 +24,7 @@ import { RELANCE_CONCLUSION_ABSENTE } from './issue-des-commandes'
  *   deuxième : `const repartirSansSession = (): void => {` encore écrit dans agent-pilot.ts.
  */
 const lire = (chemin: string): string => readFileSync(chemin, 'utf8').replace(/\r\n/g, '\n')
-const pilote = (): string => lire(join(__dirname, '..', 'agent-pilot.ts'))
+const pilote = (): string => lire(join(__dirname, 'agent-pilot.ts'))
 const relances = (): string => lire(join(__dirname, 'relances-du-tour.ts'))
 
 /** Motif rendu par chaque contrôle, lu dans son corps (`motif: '…'` ou `return '…'`). */

@@ -74,7 +74,7 @@ une couverture strictement meilleure : A est dominé sur les quatre dimensions m
 critère rejoué par l'orchestrateur dans les 4 copies (exit 0 partout, `verif-<bras>.txt`) ; jugement
 externe `out-judge.json` `session_id` 99bc8cc6-04b4-4008-ab64-1b4dce9b5a22, qui a départagé par
 mutation testing (12 exécutions vitest : défaut remis au site d'appel → SEUL le bras C rougit).
-**Installé où** : `src/main/phase-briefs.ts` (consigne BUILD in-app, fondu dans la garde « reproduis le
+**Installé où** : `src/main/consignes/phase-briefs.ts` (consigne BUILD in-app, fondu dans la garde « reproduis le
 rouge AVANT de fixer ») et `skills/build/SKILL.md` étape 5. Le brief BUILD est plafonné à 2600
 caractères par son propre test : la clause a été payée en resserrant la prose la plus faible, aucune
 des 12 exigences listées par le test n'a été retirée (2595 → 2597 caractères, 37 tests verts).

@@ -1,4 +1,4 @@
-import type { ExecutionUsageSnapshot } from '../execution-supervisor'
+import type { ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 
 interface TaskUsageMetrics {
   knownCostUsd?: number

@@ -92,7 +92,7 @@ describe('acquis d’analyse réutilisable dans une conversation', () => {
       phaseOutputs: [
         {
           phase: 'think',
-          text: '## Localisation\n- src/main/orchestrator.ts:3643',
+          text: '## Localisation\n- src/main/orchestration/orchestrator.ts:3643',
           codeSha: 'a'.repeat(40)
         },
         { phase: 'frame', text: '## Besoin\nfiltrer SUITE' }

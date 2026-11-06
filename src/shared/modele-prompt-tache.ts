@@ -1,6 +1,6 @@
 /**
  * Le MODÈLE de prompt d'une tâche du Task Manager — une seule source, lue par deux publics :
- *  - l'agent, dans la description de la commande `task_create` (src/main/commands.ts), forme courte ;
+ *  - l'agent, dans la description de la commande `task_create` (src/main/commands/commands.ts), forme courte ;
  *  - l'utilisateur, en exemple grisé du champ « Prompt envoyé » (TaskManagerView.tsx), forme longue.
  *
  * Demande de l'utilisateur (conv-983, 2026-10-16) : « dans autowin utilise-la dès que possible ».

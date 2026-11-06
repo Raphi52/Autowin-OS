@@ -7,7 +7,7 @@ import {
 
 /**
  * Deux lecteurs, un seul compte-rendu (conv-914) : la bulle est bornée, le modèle lit tout.
- * Le test de bout en bout est `src/main/agent-pilot.resultat-entier-au-modele.test.ts`.
+ * Le test de bout en bout est `src/main/agent-pilot/agent-pilot.resultat-entier-au-modele.test.ts`.
  */
 const long = `debut ${'x'.repeat(CARACTERES_MAX_RESULTAT_AFFICHE + 2_000)} FIN-DU-RESULTAT`
 const issue = {

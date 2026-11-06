@@ -1,7 +1,7 @@
 // Exécution des commandes d'un tour de chat sur le bus, et sa variante qui rend un échec au lieu
 // de jeter. Sortie telle quelle de AgentPilot.chat() (conv-1580, lot 2).
-import type { AppCommandBus, CommandResult } from '../commands'
-import type { RoleBinding } from '../roles'
+import type { AppCommandBus, CommandResult } from '../commands/commands'
+import type { RoleBinding } from '../profil/roles'
 
 export type ExecutionDeCommande = (
   name: string,

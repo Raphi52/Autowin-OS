@@ -1,23 +1,23 @@
 // Préambule du cas `orchestrate` : la tâche envoyée et le contexte collecté, sortis de
 // `executerOrchestration` tels quels (conv-1580, suite du plan) pour ramener orchestration.ts sous
 // 800 lignes. Seul le TYPE du bus vient de '../commands' : une valeur y créerait un cycle d'import.
-import type { AppCommandBus } from '../commands'
+import type { AppCommandBus } from './commands'
 import { ORCHESTRATE_PHASES, isolateWatchdogPromptPaths } from './orchestration-entrees'
 import { estRelanceSansObjet, MARQUEUR_CIBLE_CONTEXTUALISEE } from '../../shared/relance-sans-objet'
 import { estUneRepriseAutomatique } from '../chat/relance-taches-de-fond'
-import { classifyRegime } from '../task-regime'
+import { classifyRegime } from '../orchestration/task-regime'
 import {
   kaizenNamedConversationId,
   kaizenConversationParCommande,
   localiserMessageCite,
   buildAutowinKaizenTask,
   collectAutowinKaizenEvidence
-} from '../autowin-kaizen-context'
+} from '../kaizen/autowin-kaizen-context'
 import { piecesJointesDuDernierTour } from '../store/pieces-jointes-orchestration'
-import { memoireDesRunsPrecedents, resumeDesTours } from '../orchestration-memoire'
+import { memoireDesRunsPrecedents, resumeDesTours } from '../orchestration/orchestration-memoire'
 import { convRunsRoot } from '../runs/conv-runs'
-import { collectOrchestrationContext } from '../orchestration-context'
-import { CONTEXT_MESSAGE_LIMIT } from '../conversation-window'
+import { collectOrchestrationContext } from '../orchestration/orchestration-context'
+import { CONTEXT_MESSAGE_LIMIT } from '../conversations/conversation-window'
 
 type ConversationDuRun = ReturnType<AppCommandBus['os']['conversations']['get']>
 

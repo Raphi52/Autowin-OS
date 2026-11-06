@@ -3,5 +3,5 @@ $ErrorActionPreference = 'Stop'
 Set-Location -Path (Join-Path $PSScriptRoot '..')
 & npx vitest run `
   src/shared/stream-markup-filter.test.ts `
-  src/main/agent-pilot.streaming.test.ts
+  src/main/agent-pilot/agent-pilot.streaming.test.ts
 exit $LASTEXITCODE

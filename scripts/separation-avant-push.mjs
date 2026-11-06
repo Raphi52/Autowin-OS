@@ -2,7 +2,7 @@
 /**
  * GARDE « SEPARATION » AU MOMENT DU PUSH — appelee par `.githooks/pre-push` pour un distant public.
  *
- * Pourquoi (2026-11-03, conv-1457) : `src/main/separation-entreprise.test.ts` ne joue qu'avec
+ * Pourquoi (2026-11-03, conv-1457) : `src/main/gardes/separation-entreprise.test.ts` ne joue qu'avec
  * `npm test`. Ni le hook, ni `npm run publier:main`, ni la publication automatique ne le lancent :
  * quatre commentaires portant un terme metier sont partis sur le depot public. Ce script applique les
  * MEMES regles (`identite-entreprise.mjs` : `nomTrouve`, `termeTrouve`, `texteDuFichier`) a ce que le
@@ -170,7 +170,7 @@ async function principal() {
       [...new Set(fautes)].map((f) => `    ${f}`).join('\n') +
       `\n\n  Retirer le terme, puis refaire le commit qui l'a introduit : un terme ajoute puis retire\n` +
       `  part quand meme dans l'historique. Verifier l'arbre entier : npx vitest run\n` +
-      `  src/main/separation-entreprise.test.ts\n`
+      `  src/main/gardes/separation-entreprise.test.ts\n`
   )
   return 1
 }

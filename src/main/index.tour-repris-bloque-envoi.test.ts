@@ -1,6 +1,6 @@
 
 import { describe, expect, it } from 'vitest'
-import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from './app/source-process-principal.test-helpers'
 
 /*
  * UN SEUL AGENT PAR FIL APRÈS UN REDÉMARRAGE (conv-260, 2026-10-11).

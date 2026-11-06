@@ -11,7 +11,7 @@ import {
   SUBAGENT_INACTIVITY_MS
 } from './watchdog'
 import { contextWindowFor } from '../../shared/context-gauge'
-import { verifyTimeoutMs } from '../verify-command'
+import { verifyTimeoutMs } from '../commands/verify-command'
 import { spawn } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { StringDecoder } from 'node:string_decoder'
@@ -38,10 +38,10 @@ import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
 import { NOM_FICHIER_RAPPELS } from '../../shared/rappels-outils'
-import { refusReglageProd, refusSqlAgent } from '../prod-run-guard'
+import { refusReglageProd, refusSqlAgent } from '../prod/prod-run-guard'
 import { chargerAutoriteProd } from '../store/prod-autorite-store'
-import { autowinAppDataRoot } from '../app-data'
-import { fusionnerServeursMcp, serveursMcpActifs, type ServeurMcpUtilisateur } from '../mcp-servers'
+import { autowinAppDataRoot } from '../app/app-data'
+import { fusionnerServeursMcp, serveursMcpActifs, type ServeurMcpUtilisateur } from './mcp-servers'
 import { isAbsolute, join } from 'node:path'
 import { executionEvidencePath } from './execution-evidence-path'
 import { balayerTemporairesOrphelins } from './temporaires-orphelins'
@@ -75,9 +75,9 @@ import {
   type Usage
 } from './types'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
-import { addedLineFingerprints, exactLineFingerprint } from '../exact-line-fingerprint'
+import { addedLineFingerprints, exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
-import { claudeCompteDuFil, withClaudeAccountEnv } from '../claude-accounts'
+import { claudeCompteDuFil, withClaudeAccountEnv } from './claude-accounts'
 import { coutDuTourDepuisCumul } from './claude-session-cost'
 import { sonderContexte, type IssueSonde } from './claude-sonde-contexte'
 import {
@@ -100,15 +100,15 @@ import {
 } from './claude-workflow'
 import { abortFailure } from './abort-diagnostic'
 import { advisorAccepte } from './claude-advisor'
-import { cheminRegistreReservations } from '../reservation-fichiers-app'
-import { gardeEveil } from '../garder-eveille'
-import { creerCoupeBoucle } from '../coupe-boucle'
+import { cheminRegistreReservations } from '../fichiers/reservation-fichiers-app'
+import { gardeEveil } from '../app/garder-eveille'
+import { creerCoupeBoucle } from '../chat/coupe-boucle'
 import { avancementDepuisCommande } from './arene-avancement'
 import {
   describeExitCode,
   describeProviderExit,
   isTransportExitCode
-} from '../provider-failure-diagnosis'
+} from './provider-failure-diagnosis'
 
 /**
  * NETTOYAGE DE FIN D'APPEL — sans tenir la boucle principale.

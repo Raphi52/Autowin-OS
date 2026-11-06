@@ -46,7 +46,7 @@ export interface ModelQuotaSnapshot {
 /**
  * L'HEURE À LAQUELLE ÇA REDEVIENT POSSIBLE — la seule utile pour PLANIFIER quelque chose.
  *
- * Constat du 2026-09-11 : `resetsAt` est calculé (src/main/model-quotas.ts:62) et stocké, mais hors
+ * Constat du 2026-09-11 : `resetsAt` est calculé (src/main/modeles/model-quotas.ts:62) et stocké, mais hors
  * tests ses seuls lecteurs l'AFFICHENT (ModelQuotaIndicator). Aucune décision ne s'appuie dessus,
  * alors que 136 messages utilisateur ne disent que « reprend » / « go » — l'attente du retour de
  * quota est faite à la main. Ce sélecteur est le premier consommateur qui AGIT sur la donnée.

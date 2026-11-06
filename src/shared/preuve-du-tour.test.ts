@@ -7,7 +7,7 @@ import {
   vertCouvreRouge
 } from './preuve-du-tour'
 import { testsDuTerminal } from '../main/providers/tests-du-terminal'
-import { ALLOWED_COMMANDS } from '../main/verify-command'
+import { ALLOWED_COMMANDS } from '../main/commands/verify-command'
 
 /**
  * LA COUVERTURE D'UN ROUGE (conv-1423). La même règle sert au Board et à la relance de fin de tour :

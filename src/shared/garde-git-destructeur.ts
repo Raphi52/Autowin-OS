@@ -156,7 +156,7 @@ export function refusGitDestructeur(commande: string): string | undefined {
    * code passe a `bash -c` / `cmd /c` / `powershell -Command` / `eval`, prefixes (`sudo`, `env`,
    * `xargs`, `VAR=x`…). DANS LE DOUTE — guillemet non ferme, imbrication trop profonde —
    * l'ancienne lecture s'applique : elle coupe partout, donc elle refuse PLUS, jamais moins.
-   * Meme construction que `refusSqlAgent` (src/main/prod-run-guard.ts). Limite : le texte d'un
+   * Meme construction que `refusSqlAgent` (src/main/prod/prod-run-guard.ts). Limite : le texte d'un
    * heredoc est lu ligne a ligne comme avant (refus en trop possible, jamais en moins).
    */
   const lectureLarge = (texte: string): string | undefined => {
@@ -380,7 +380,7 @@ export const GARDES_DU_HOOK: readonly { fn: string; label: string; description: 
  * VOIE PAR DEFAUT, portee par la consigne en prose du prompt de pilotage — plus par un blocage.
  */
 export function scriptHookGardes(
-  // Garde des réglages de la protection de prod (`refusReglageProd`, src/main/prod-run-guard.ts),
+  // Garde des réglages de la protection de prod (`refusReglageProd`, src/main/prod/prod-run-guard.ts),
   // passée par l'appelant : shared/ n'importe pas main/. Fonction autoportée, sérialisée telle quelle.
   refusReglageProd: (texte: string) => string | undefined,
   // Garde SQL des agents (`refusSqlAgent`, même module) et bases déclarées non-prod : sans elles,

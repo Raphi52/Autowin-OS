@@ -30,10 +30,10 @@ C'est exactement ce que fait déjà le chat : `src/main/chat/run-pilot-chat.ts` 
 ### Les deux coutures existent déjà
 
 1. **Le registre de fournisseurs** est une dépendance de l'orchestrateur
-   (`OrchestratorCollaboratorDeps.registry`, `src/main/orchestrator.ts`). Toutes les phases y
+   (`OrchestratorCollaboratorDeps.registry`, `src/main/orchestration/orchestrator.ts`). Toutes les phases y
    passent : `registry.send(...)` pour le juge (l.2528), pour les sous-agents (l.2820), pour la
    synthèse (l.3016).
-2. **Le point de substitution est déjà nommé** : `OS.orchestrateurPour()` (`src/main/os.ts` l.220),
+2. **Le point de substitution est déjà nommé** : `OS.orchestrateurPour()` (`src/main/app/os.ts` l.220),
    dont le commentaire dit textuellement que c'est *« le seul endroit qu'un harnais doit remplacer
    pour tester le chemin sans lancer un vrai orchestrateur »*.
 
@@ -80,7 +80,7 @@ suppression est triviale. La sonde vérifierait qu'un cas sans enjeu ne laisse p
 verte par construction. Les orphelins n'apparaissent que là où il y a **quelque chose à perdre**.
 
 **Mais surtout pas ici.** Le plan de travail se résout en cascade (`resolveExecutionWorkspace`,
-`src/main/os.ts` l.130) et son avant-dernier repli est le dépôt git **du dossier de l'exécutable**.
+`src/main/app/os.ts` l.130) et son avant-dernier repli est le dépôt git **du dossier de l'exécutable**.
 Pour un paquet dans `dist/win-unpacked`, cela remonte au dépôt RÉEL. Ce n'est pas une crainte
 théorique : `scripts/cdp-relance-jusquau-vert-proof.mjs` porte déjà l'avertissement dans son
 en-tête — « cet instrument laisse une trace dans le dépôt » — et un agent y a réellement écrit un
@@ -160,7 +160,7 @@ sondes observent**. Tout le reste bouge, et c'est normal.
 **Une substitution de plus, qui découle de cette règle.** Le contexte Brain injecté dans le prompt
 dépend d'un index et d'un corpus qui vivent hors du dépôt : deux runs identiques n'y trouvent pas
 forcément la même chose. Le retriever est déjà une dépendance substituable
-(`OrchestratorCollaboratorDeps.retrieveBrain`, `src/main/orchestrator.ts` l.649, prévue pour
+(`OrchestratorCollaboratorDeps.retrieveBrain`, `src/main/orchestration/orchestrator.ts` l.649, prévue pour
 « prouver les frontières d'injection sans serveur global »). La fixture le remplace donc **aussi**,
 par un retour vide et constant — sinon le déterminisme s'arrête au premier appel au Brain.
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
-import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
  * LE BALAYAGE NE TOURNAIT QU'AU DÉMARRAGE.

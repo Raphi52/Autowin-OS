@@ -6,7 +6,7 @@ import { LatestRequestGate } from './observatory-reliability'
 import type {
   ShadowRouteInsufficientData,
   ShadowRouteRecommendation
-} from '../../../main/shadow-router'
+} from '../../../main/modeles/shadow-router'
 import type { PromptCall } from './observatory-view-types'
 import { injectionInventory } from './observatory-injection-inventory'
 import { Spinner } from './Spinner'

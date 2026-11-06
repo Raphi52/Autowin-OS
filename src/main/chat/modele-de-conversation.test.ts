@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ImportedModel } from '../models'
+import type { ImportedModel } from '../modeles/models'
 import { ConversationStore } from '../store/conversations'
 import { modeleDuTour, validerModeleDeConversation } from './modele-de-conversation'
-import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
  * LE MODÈLE APPARTIENT À LA CONVERSATION (conv-239, 2026-10-11).

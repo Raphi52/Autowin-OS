@@ -1,5 +1,5 @@
-import type { BrainNavigation, BrainRetrievalResult } from '../brain-retrieval'
-import { decideBrainQuery } from '../brain-query-command'
+import type { BrainNavigation, BrainRetrievalResult } from '../brain/brain-retrieval'
+import { decideBrainQuery } from '../commands/brain-query-command'
 import type { BrainNoteSearchResult } from './fs-brains'
 import { GenerationFence } from './generation-cache'
 

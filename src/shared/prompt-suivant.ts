@@ -353,7 +353,7 @@ export const PROMPT_SALVAGE =
  */
 /*
  * `/git` est l'ordre de tri au même titre que `/salvage` (conv-1250). Les bords excluent un chemin :
- * `src/main/git-read-main.ts` ou `scripts/salvage-resurrection.mjs` nomment un fichier, ils
+ * `src/main/git/git-read-main.ts` ou `scripts/salvage-resurrection.mjs` nomment un fichier, ils
  * n'ordonnent aucun tri.
  */
 const ORDRE_DE_TRI = /(?<![\w./\\-])\/(?:salvage|git)(?![\w./\\-])/i

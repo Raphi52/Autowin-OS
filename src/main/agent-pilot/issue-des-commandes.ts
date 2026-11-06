@@ -1,6 +1,6 @@
 // Issue réelle d'une commande du bus (réussite, mémoire non déposée, orchestration en échec),
 // sortie telle quelle de agent-pilot.ts (conv-1580, lot 1).
-import type { CommandResult } from '../commands'
+import type { CommandResult } from '../commands/commands'
 
 /** Réussite visible de l'action, distincte de la seule réussite du transport IPC. */
 export function commandResultSucceeded(result: CommandResult): boolean {

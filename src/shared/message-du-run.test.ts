@@ -14,8 +14,8 @@ const bilan = (question: string, reste = 'aucun reste'): string =>
   [
     '### Bilan de l’étape',
     '- Verdict : fait — Tests ajoutés pour orchestrator (19) et pour 4 fichiers de src/main (15)',
-    '- Fichiers touchés : src/main/orchestrator.test.ts',
-    '- Preuves : npx vitest run src/main/orchestrator.test.ts → 0',
+    '- Fichiers touchés : src/main/orchestration/orchestrator.test.ts',
+    '- Preuves : npx vitest run src/main/orchestration/orchestrator.test.ts → 0',
     `- Reste à faire : ${reste}`,
     `- Question : ${question}`
   ].join('\n')

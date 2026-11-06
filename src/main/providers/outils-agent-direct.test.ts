@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
-import { refusReglageProd, refusSqlAgent } from '../prod-run-guard'
+import { refusReglageProd, refusSqlAgent } from '../prod/prod-run-guard'
 import { OpenAICompatAdapter } from './openai-compat'
 import { creerOutilsAgentDirect } from './outils-agent-direct'
 import type { SendOptions, SendResult, StreamChunk } from './types'

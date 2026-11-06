@@ -8,14 +8,14 @@ import {
   readGitDiffHeadBatch,
   readGitState,
   readNoIndexGitDiff
-} from '../git-read-main'
-import { realCanonique, surveillerDossier } from '../surveiller-dossier'
+} from '../git/git-read-main'
+import { realCanonique, surveillerDossier } from '../fichiers/surveiller-dossier'
 import { decoderCheminGit, type GitDiffResult } from '../../shared/git-read'
 import type { ExecutionEvidence } from './types'
 import {
   addedLineFingerprintsFromUnifiedDiff,
   exactLineFingerprint
-} from '../exact-line-fingerprint'
+} from '../fichiers/exact-line-fingerprint'
 import {
   beginAtEnd,
   captureFileGenerationMarker,

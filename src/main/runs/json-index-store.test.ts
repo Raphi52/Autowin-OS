@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { attendreFichier } from '../ecriture-hors-fil'
+import { attendreFichier } from '../gel/ecriture-hors-fil'
 import { creerIndexStore } from './json-index-store'
 
 const estTexte = (v: unknown): v is string => typeof v === 'string' && !!v

@@ -84,7 +84,7 @@ Elle compte quand le constat a disparu. Le bilan ne se relit pas sur parole.
 | Copies de travail orphelines | Renvoi vers `gc`, ou `git` s'il y a du travail à trier |
 | Retard de version | Renvoi vers `maj` ou `git` |
 | Refus récurrent d'un geste légitime | Assouplir sa garde dans `src/main/gates`, ou l'exception de la garde qui l'a refusé, par `build` |
-| Refus récurrent d'une erreur d'agent | Corriger la description de l'outil dans `src/main/chat-mcp.ts`, par `build` |
+| Refus récurrent d'une erreur d'agent | Corriger la description de l'outil dans `src/main/chat/chat-mcp.ts`, par `build` |
 | Quota du forfait haut | `rendement` pour trouver ce qui consomme, puis modèle plus léger sur les lots simples |
 | Planificateur en panne | `restart_app`, puis `doctor --zone extensions` |
 | Consigne trop lourde | Proposition de déplacement vers une skill, à relire par l'utilisateur |
@@ -98,8 +98,8 @@ node scripts/doctor.mjs --zone instructions
 ```
 
 Puis lis la cible : `AGENTS.md` et `skills/*/SKILL.md`, ou le seul chemin donné. Pour les consignes
-permanentes, va à leur source unique : `src/main/constitution.ts`, `src/main/chat-pilotage-prompt.ts`,
-`src/main/phase-briefs.ts`. Garde trois sortes de constats :
+permanentes, va à leur source unique : `src/main/consignes/constitution.ts`, `src/main/consignes/chat-pilotage-prompt.ts`,
+`src/main/consignes/phase-briefs.ts`. Garde trois sortes de constats :
 
 - **périmé** : commande, outil, vue ou fichier qui n'existe plus, vérifié par un grep négatif ;
 - **contradictoire** : deux consignes opposées pour le même moment, chacune citée `fichier:ligne` ;

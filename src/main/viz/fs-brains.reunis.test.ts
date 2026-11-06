@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { brainReglageFile } from '../brain-reglage'
+import { brainReglageFile } from '../brain/brain-reglage'
 
 /**
  * LES DEUX BRAINS DANS UN SEUL GRAPHE (conv-1262, 2026-10-29, demande utilisateur : « ajoute les
@@ -66,7 +66,7 @@ async function chargerFsBrains(): Promise<typeof import('./fs-brains')> {
   writeFileSync(fichier, JSON.stringify({ chemin: perso }), 'utf8')
   vi.resetModules()
   const module = await import('./fs-brains')
-  ;(await import('../brain-ponts')).oublierIndexEnCache()
+  ;(await import('../brain/brain-ponts')).oublierIndexEnCache()
   return module
 }
 

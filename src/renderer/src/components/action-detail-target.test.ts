@@ -267,7 +267,7 @@ describe('localActionDetails — la sortie brute devient lisible', () => {
 })
 
 describe('localActionDetails — un remember REUSSI se deplie', () => {
-  /** Forme reelle rendue par rememberFact (src/main/brain-remember.ts:531-544). */
+  /** Forme reelle rendue par rememberFact (src/main/brain/brain-remember.ts:531-544). */
   const REMEMBER_OK = {
     name: 'remember',
     ok: true,

@@ -102,7 +102,7 @@
       "mode": "full"
     },
     {
-      "path": "src/main/agent-pilot.ts",
+      "path": "src/main/agent-pilot/agent-pilot.ts",
       "why": "Boucle locale, bridge cmd et réinjection des résultats",
       "ranges": [
         { "start": 54, "end": 89 },
@@ -112,7 +112,7 @@
       ]
     },
     {
-      "path": "src/main/commands.ts",
+      "path": "src/main/commands/commands.ts",
       "why": "Catalogue applicatif, niveaux d’autorité et orchestrate à exclure",
       "ranges": [
         { "start": 26, "end": 101 },
@@ -125,17 +125,17 @@
       "mode": "full"
     },
     {
-      "path": "src/main/bounded-file-read.ts",
+      "path": "src/main/fichiers/bounded-file-read.ts",
       "why": "Confinement réel, O_NOFOLLOW, inode et lecture bornée",
       "mode": "full"
     },
     {
-      "path": "src/main/orchestrator.ts",
+      "path": "src/main/orchestration/orchestrator.ts",
       "why": "ExecutionWorkspace et danger-full-access du chemin orchestrate",
       "ranges": [{ "start": 190, "end": 243 }]
     },
     {
-      "path": "src/main/models.ts",
+      "path": "src/main/modeles/models.ts",
       "why": "Projection ImportedModel et catalogue actuel",
       "ranges": [
         { "start": 1, "end": 40 },
@@ -143,7 +143,7 @@
       ]
     },
     {
-      "path": "src/main/topology.ts",
+      "path": "src/main/topologie/topology.ts",
       "why": "Binding Compute conservé dans la topologie",
       "ranges": [{ "start": 1, "end": 95 }]
     },
@@ -157,7 +157,7 @@
       ]
     },
     {
-      "path": "src/main/os.ts",
+      "path": "src/main/app/os.ts",
       "why": "Adaptateurs actuellement enregistrés",
       "ranges": [
         { "start": 69, "end": 77 },
@@ -165,7 +165,7 @@
       ]
     },
     {
-      "path": "src/main/profile-store.ts",
+      "path": "src/main/profil/profile-store.ts",
       "why": "Schéma profil actuel à migrer sans perte",
       "ranges": [{ "start": 1, "end": 35 }]
     },

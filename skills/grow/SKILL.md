@@ -20,7 +20,7 @@ est la PREMIÈRE à en profiter. L'ajout reste ensuite dans le kit pour toutes l
   bloc de données `aw-*` — ou un nouveau rendu dans l'interface (`src/renderer/`) ;
 - **un contrôle** : un test ou une sonde qui prouve le résultat au lieu d'une vérification à l'œil ;
 - **un savoir** : une note (`remember`) ou une injection de contexte, quand c'est une information qui a manqué ;
-- **un outil natif du chat ou un hook** (`src/main/chat-mcp.ts`, `mods/autowin`) — voir ci-dessous quand il sert.
+- **un outil natif du chat ou un hook** (`src/main/chat/chat-mcp.ts`, `mods/autowin`) — voir ci-dessous quand il sert.
 
 Le choix se fait sur une seule question : **qu'est-ce qui rend CETTE demande mieux traitée ou mieux rendue ?**
 
@@ -29,7 +29,7 @@ Le choix se fait sur une seule question : **qu'est-ce qui rend CETTE demande mie
 | Ajout | Utilisable dans ce tour ? |
 |---|---|
 | script | oui, tout de suite (Bash) |
-| skill | oui : `skill_charger` relit le disque à chaque appel (`dossiersDeSkills`, `src/main/skill-pipeline.ts`) |
+| skill | oui : `skill_charger` relit le disque à chaque appel (`dossiersDeSkills`, `src/main/skills/skill-pipeline.ts`) |
 | rendu dans le fil (html-interactif, mermaid, `aw-*`) | oui : c'est la réponse elle-même — contrôle-le d'abord avec `scripts/html-interactif-apercu.mjs` |
 | changement d'interface (`src/renderer/`) | oui en dev : l'interface se recharge à chaud. Une erreur casse l'écran de TOUS les fils : test et typecheck avant d'enregistrer |
 | outil natif, hook, code du processus principal | non : il faut un redémarrage (`restart_app`, dont la consigne reprend la demande). Pour ce tour, fais le même geste en script ; l'outil natif devient la suite |

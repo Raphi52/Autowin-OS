@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from './app/source-process-principal.test-helpers'
 
 /**
  * LE SEUL POINT que l'execution ne peut pas atteindre : l'ORDRE d'appel dans `runPilotChat`, une

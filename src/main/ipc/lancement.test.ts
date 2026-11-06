@@ -32,7 +32,7 @@ vi.mock('electron', () => ({
     ]
   }
 }))
-vi.mock('../ipc-senders', () => ({
+vi.mock('./ipc-senders', () => ({
   assertTrustedRendererSender: (_event: unknown, scope: string) => gardes.push(scope)
 }))
 

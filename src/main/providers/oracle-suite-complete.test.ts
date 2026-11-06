@@ -3,12 +3,12 @@ import { join } from 'node:path'
 import { loadTrustedLearningOracles } from './learning-oracle-manifest'
 import { attestIsolatedVerificationEvidence } from './causal-verification-evidence'
 import type { ExecutionEvidence } from './types'
-import { evidenceRefs } from '../outcome-learning-supervisor'
-import { decideOutcomeLearning } from '../outcome-learning-policy'
+import { evidenceRefs } from '../brain/outcome-learning-supervisor'
+import { decideOutcomeLearning } from '../brain/outcome-learning-policy'
 import {
   createIndependentLearningAttestation,
   learningProposalAttestation
-} from '../outcome-learning-proposal'
+} from '../brain/outcome-learning-proposal'
 import {
   OUTCOME_LEARNING_SCHEMA,
   type LearningEvidenceRef,
@@ -85,7 +85,7 @@ describe('ce que la suite complète atteste vraiment', () => {
 
   it('atteste une vérification qui suit une mutation de `src/`', () => {
     const evidence: ExecutionEvidence[] = [
-      preuve({ kind: 'mutation', ok: true, path: 'src/main/agent-pilot.ts' }),
+      preuve({ kind: 'mutation', ok: true, path: 'src/main/agent-pilot/agent-pilot.ts' }),
       preuve({ command: 'npm run test:unit', exitCode: 1 })
     ]
 
@@ -114,8 +114,8 @@ describe('ce que la suite complète atteste vraiment', () => {
     // la forme la plus courante dans les traces. Lui accorder la portée `src/**` ferait attester une
     // couverture qui n'a pas eu lieu.
     const evidence: ExecutionEvidence[] = [
-      preuve({ kind: 'mutation', ok: true, path: 'src/main/agent-pilot.ts' }),
-      preuve({ command: 'npx vitest run src/main/agent-pilot.test.ts', exitCode: 1 })
+      preuve({ kind: 'mutation', ok: true, path: 'src/main/agent-pilot/agent-pilot.ts' }),
+      preuve({ command: 'npx vitest run src/main/agent-pilot/agent-pilot.test.ts', exitCode: 1 })
     ]
 
     const [, verification] = attestIsolatedVerificationEvidence(evidence, true, oracles)
@@ -125,7 +125,7 @@ describe('ce que la suite complète atteste vraiment', () => {
 
   it('n’atteste RIEN quand le run n’est pas causalement isolé', () => {
     const evidence: ExecutionEvidence[] = [
-      preuve({ kind: 'mutation', ok: true, path: 'src/main/agent-pilot.ts' }),
+      preuve({ kind: 'mutation', ok: true, path: 'src/main/agent-pilot/agent-pilot.ts' }),
       preuve({ command: 'npm run test:unit', exitCode: 1 })
     ]
 
@@ -154,8 +154,8 @@ const runOrdinairePartage = (commande: string): ExecutionEvidence[] => [
   preuve({
     kind: 'mutation',
     ok: true,
-    path: 'src/main/agent-pilot.ts',
-    pathFingerprints: { 'src/main/agent-pilot.ts': 'sha256:apres-la-mutation' }
+    path: 'src/main/agent-pilot/agent-pilot.ts',
+    pathFingerprints: { 'src/main/agent-pilot/agent-pilot.ts': 'sha256:apres-la-mutation' }
   }),
   preuve({ command: commande, exitCode: 0, ok: true }),
   preuve({ command: commande, exitCode: 0, ok: true })
@@ -231,7 +231,7 @@ describe('la chaîne causale complète, sur un run ordinaire', () => {
   })
 
   it('une suite PARTIELLE reste bloquée', () => {
-    expect(motifs('npx vitest run src/main/agent-pilot.test.ts')).toContain('causality-not-proven')
+    expect(motifs('npx vitest run src/main/agent-pilot/agent-pilot.test.ts')).toContain('causality-not-proven')
   })
 })
 

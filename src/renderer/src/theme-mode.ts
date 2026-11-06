@@ -171,7 +171,7 @@ function accorderMascotte(mode: ThemeId): void {
 /**
  * LA CARTE DE FIN DE TOUR (conv-1090, 2026-10-22) — « fais suivre à la carte de fin de tour le
  * thème choisi dans Réglages · Interface ». La carte vit dans SA fenêtre, en bas à droite de
- * l'écran (`src/main/notification-popup.ts`) : aucune feuille de style ne l'atteint. Même chemin
+ * l'écran (`src/main/app/notification-popup.ts`) : aucune feuille de style ne l'atteint. Même chemin
  * que les boutons de fenêtre : on lit les jetons CALCULÉS du thème appliqué et on les envoie.
  * Un thème ajouté demain n'a rien à déclarer : ces huit jetons sont posés par `theme.css`.
  *

@@ -7,7 +7,7 @@ import {
 } from '../../../shared/perf-lag'
 import { SEUIL_GEL_MS, type ResumeGels } from '../../../shared/gel-detector'
 import type { InventaireDisque } from '../../../main/store/inventaire-disque'
-import type { EtatReleveMemoire } from '../../../main/releve-memoire'
+import type { EtatReleveMemoire } from '../../../main/brain/releve-memoire'
 import { formaterDate, langueCourante } from '../langue'
 import {
   traduireBoardEtMaintenance,

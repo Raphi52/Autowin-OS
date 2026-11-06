@@ -4,7 +4,7 @@
  * Pourquoi ce script (conv-1036, 2026-10-21) : 13 fils « /heal j'ai eu un freeze » ont tous refait
  * la même enquête à la main — découvrir `gels.jsonl`, l'agréger avec un `node -e` jetable, puis
  * chercher dans `src/` d'où venait `main/index.js:16278`. Les deux outils existaient déjà sans
- * procédure : le journal (src/main/gel-main.ts) et les cartes `.map` à côté du bundle
+ * procédure : le journal (src/main/gel/gel-main.ts) et les cartes `.map` à côté du bundle
  * (electron.vite.config.ts, `sourcemap: true`).
  *
  * TROIS FAMILLES, jamais additionnées entre elles :

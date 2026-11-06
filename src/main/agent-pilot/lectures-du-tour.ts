@@ -22,8 +22,8 @@ import {
   type IssueDesLectures,
   type MomentDeLaLecture,
   type TraceDesLectures
-} from '../deux-lectures'
-import { estUnPromptDOrdre } from '../messages-entre-fils-app'
+} from '../chat/deux-lectures'
+import { estUnPromptDOrdre } from '../conversations/messages-entre-fils-app'
 import type { Message } from '../providers/types'
 import { descriptionsDesCommandes } from './aides-du-tour'
 import type { ExecutionDeCommande } from './commandes-du-tour'

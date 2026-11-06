@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { NON_INTERACTIVE_ENV, claudeToolEvidenceKind } from '../providers/claude'
-import { evidenceSatisfiesTask } from '../orchestrator'
+import { evidenceSatisfiesTask } from '../orchestration/orchestrator'
 import type { ExecutionEvidence } from '../providers/types'
 
 /**

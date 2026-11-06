@@ -544,7 +544,7 @@ function renderTextBlock(block: string): React.ReactNode[] {
  * `code` inline, **gras**, *italique*, ~~barre~~, liens markdown et auto-liens http(s) dans une ligne.
  *
  * La cible d'un lien markdown n'est plus restreinte a http(s). Les skills citent leurs preuves en
- * `[orchestrator.ts:80](src/main/orchestrator.ts:80)` : le motif http-seul ne matchait pas, donc la
+ * `[orchestrator.ts:80](src/main/orchestration/orchestrator.ts:80)` : le motif http-seul ne matchait pas, donc la
  * ligne sortait LITTERALEMENT, crochets et parentheses compris, encombrant chaque cellule de tableau.
  * Une cible qui DESIGNE un fichier (`parseFileRef`) est maintenant cliquable : le clic passe par
  * `window.api.revealFile`, qui resout le chemin contre la racine du workspace COTE MAIN et ouvre le

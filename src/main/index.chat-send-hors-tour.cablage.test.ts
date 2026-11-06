@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from './app/source-process-principal.test-helpers'
 
 /**
  * CÂBLAGE de `chat_send` vers une AUTRE conversation (closure locale de index.ts, que l'exécution ne

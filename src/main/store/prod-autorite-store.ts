@@ -34,7 +34,7 @@ import {
   type AutoriteProd,
   type EntreeAutorite,
   type NatureCible
-} from '../prod-guard'
+} from '../prod/prod-guard'
 
 const NATURES: readonly NatureCible[] = ['base', 'serveur', 'chemin', 'branche', 'service']
 

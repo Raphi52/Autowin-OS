@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { codexExecutionEvidenceKind, structuredEvidenceFields } from './codex'
-import { exactLineFingerprint } from '../exact-line-fingerprint'
+import { exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
 
 describe('structuredEvidenceFields', () => {
   it('command_execution → command + exitCode + stdout (sortie brute conservée)', () => {

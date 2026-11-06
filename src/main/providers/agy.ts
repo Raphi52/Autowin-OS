@@ -11,7 +11,7 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { planProviderLogin, spawnLoginTerminal } from '../provider-login'
+import { planProviderLogin, spawnLoginTerminal } from './provider-login'
 import type { Message, ProviderAdapter, SendOptions, SendResult, StreamChunk, Usage } from './types'
 
 export const AGY_PROVIDER_ID = 'agy'

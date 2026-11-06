@@ -3,14 +3,14 @@ import { parseFileRef, resolveFileRef } from './file-ref'
 
 describe('parseFileRef — une cible de lien markdown est-elle un fichier ?', () => {
   it('reconnaît un chemin relatif avec ligne', () => {
-    expect(parseFileRef('src/main/orchestrator.ts:80')).toEqual({
-      path: 'src/main/orchestrator.ts',
+    expect(parseFileRef('src/main/orchestration/orchestrator.ts:80')).toEqual({
+      path: 'src/main/orchestration/orchestrator.ts',
       line: 80
     })
   })
   it('reconnaît un chemin relatif sans ligne', () => {
-    expect(parseFileRef('src/main/orchestrator.ts')).toEqual({
-      path: 'src/main/orchestrator.ts',
+    expect(parseFileRef('src/main/orchestration/orchestrator.ts')).toEqual({
+      path: 'src/main/orchestration/orchestrator.ts',
       line: undefined
     })
   })

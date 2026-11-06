@@ -12,7 +12,7 @@
  * commité, pas l'arbre de travail) un `import … from`, `export … from`, `import(…)` ou `require(…)`
  * relatif qui le désigne encore. S'il en reste un, refus (code 1) avec la liste.
  *
- * Lancé par `.githooks/pre-commit` ; testé par `src/main/githooks-pre-commit.test.ts`.
+ * Lancé par `.githooks/pre-commit` ; testé par `src/main/git/githooks-pre-commit.test.ts`.
  * Usage direct : `node scripts/garde-commit-module-supprime.mjs` dans un dépôt git.
  */
 import { execFileSync } from 'node:child_process'

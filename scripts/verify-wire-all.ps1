@@ -1,12 +1,12 @@
 $ErrorActionPreference = 'Stop'
 
 $tests = @(
-  'src/main/wire-provider-routing.test.ts',
-  'src/main/wire-capabilities-runtime.test.ts',
-  'src/main/wire-skill-runtime.test.ts',
-  'src/main/wire-compute-fabric.test.ts',
-  'src/main/wire-checkpoint-fork.test.ts',
-  'src/main/shadow-router.test.ts',
+  'src/main/topologie/wire-provider-routing.test.ts',
+  'src/main/topologie/wire-capabilities-runtime.test.ts',
+  'src/main/topologie/wire-skill-runtime.test.ts',
+  'src/main/topologie/wire-compute-fabric.test.ts',
+  'src/main/topologie/wire-checkpoint-fork.test.ts',
+  'src/main/modeles/shadow-router.test.ts',
   'src/renderer/src/components/wire-chat-events.test.tsx',
   'src/renderer/src/components/CapabilitiesView.test.tsx',
   'src/renderer/src/components/ObservatoryConnections.test.tsx',

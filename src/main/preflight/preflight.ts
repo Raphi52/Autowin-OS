@@ -1,0 +1,225 @@
+/**
+ * Diagnostic de démarrage (#4) : AVANT que l'utilisateur lance un run, on vérifie que les dépendances
+ * externes sont là (brain_server joignable, CLI providers présents, token Brain). Sinon l'utilisateur
+ * découvre les pannes EN PLEIN run (auth expirée, brain down) au lieu d'un signal clair au lancement.
+ *
+ * Module PUR (checks injectables) → testable sans Electron ni réseau réel. L'appelant (index.ts)
+ * exécute les checks au démarrage et pousse le résultat au renderer comme bannière.
+ */
+import type { ClaudeSessionState } from '../providers/claude-session'
+import type { RoutedProvider } from '../providers/routed-providers'
+import { traduireCoeur } from '../consignes/textes-coeur'
+
+export interface PreflightCheck {
+  id:
+    | 'brain'
+    | 'brain-venv'
+    | 'claude'
+    | 'claude-session'
+    | 'brain-token'
+    /*
+     * Pas une dependance externe, mais un ETAT que l'utilisateur doit connaitre AVANT de croire ses
+     * conversations perdues : au demarrage precedent, un store illisible a ete mis de cote et
+     * l'application s'est ouverte sur un historique vide. Le fichier existe toujours, a cote.
+     * Sans cette ligne, l'avertissement ne vivait que dans la console — invisible pour lui.
+     */
+    | 'conversations-ecartees'
+  label: string
+  ok: boolean
+  detail?: string
+  standby?: boolean
+  /**
+   * Fichier a REVELER dans l'explorateur depuis ce controle, quand un geste concret existe.
+   *
+   * Un chemin ecrit dans `detail` est une information ; ici c'est une ACTION. Ajoute le 2026-09-06
+   * pour l'historique mis de cote : lire « votre fichier est en D:\… » sans pouvoir l'ouvrir laisse
+   * l'utilisateur recopier un chemin a la main. Le champ reste optionnel : aucun autre controle n'a
+   * de fichier a montrer, et l'interface n'affiche le bouton que s'il est renseigne.
+   */
+  revealPath?: string
+}
+
+export interface PreflightResult {
+  ok: boolean
+  checks: PreflightCheck[]
+  /** Résumé court prêt à afficher en bannière si dégradé. */
+  summary: string
+}
+
+export interface PreflightProbes {
+  /** brain_server joignable (POST/GET /health ou /query). */
+  pingBrain: () => Promise<boolean>
+  /** Un exécutable CLI est résolvable dans le PATH / la config. */
+  /** Claude seul : ChatGPT (`codex`) est facultatif, son absence ne doit jamais bloquer le démarrage. */
+  hasBin: (which: 'claude') => Promise<boolean>
+  /**
+   * État de la session du CLI claude. Tri-état volontaire : `unknown` (sonde ratée) ne doit ni
+   * passer pour un vert, ni pour une session prouvée absente.
+   */
+  claudeSession: () => ClaudeSessionState | Promise<ClaudeSessionState>
+  /** Token Brain présent (env ou fichier). */
+  hasBrainToken: () => boolean
+  /**
+   * Le runtime Python du Brain est POSÉ sur cette machine (le `python.exe` que le lancement ira
+   * chercher). Sondé à part du ping : « injoignable » et « jamais installé » demandent deux gestes
+   * opposés — redémarrer un service, ou l'installer. Les confondre en un seul rouge « brain_server
+   * injoignable » offrait un bouton « Démarrer » qui ne pouvait pas aboutir, faute de python.
+   */
+  hasBrainRuntime: () => boolean
+}
+
+export interface PreflightOptions {
+  standbyProviders?: RoutedProvider[]
+  /** Chemins des fichiers de conversations mis de cote au demarrage ; vide en marche normale. */
+  conversationsEcartees?: readonly string[]
+}
+
+/**
+ * Détail affiché sous « Session claude ».
+ *
+ * Le cas `binaire absent` mérite son propre message : prescrire « claude auth login » quand le CLI
+ * n'est pas installé envoie l'utilisateur ouvrir une console qui répondra « claude : terme non
+ * reconnu ». On le renvoie donc vers le check qui porte la vraie cause.
+ */
+function claudeSessionDetail(state: ClaudeSessionState, binPresent: boolean): string | undefined {
+  if (state === 'authenticated') return undefined
+  if (!binPresent)
+    return traduireCoeur('diagnostic.claudeSession.cliAbsent', {
+      cli: traduireCoeur('diagnostic.claude.label')
+    })
+  // `unknown` couvre DEUX causes qu'on ne sait pas distinguer ici : un `auth status` muet, et un
+  // binaire que le run ne sait pas résoudre (PATH n'exposant que des shims). Le message ne doit donc
+  // pas affirmer la première — il enverrait diagnostiquer l'auth alors que c'est l'installation.
+  return state === 'absent'
+    ? traduireCoeur('diagnostic.claudeSession.absente')
+    : traduireCoeur('diagnostic.claudeSession.indeterminee')
+}
+
+/** Lance les checks en parallèle et agrège. Ne throw jamais : un check qui casse = ko, pas un crash. */
+export async function runPreflight(
+  probes: PreflightProbes,
+  options: PreflightOptions = {}
+): Promise<PreflightResult> {
+  const safe = async (fn: () => Promise<boolean>): Promise<boolean> => {
+    try {
+      return await fn()
+    } catch {
+      return false
+    }
+  }
+  const standby = new Set(options.standbyProviders ?? [])
+  const providerProbe = (provider: 'claude'): Promise<boolean> =>
+    standby.has(provider) ? Promise.resolve(true) : safe(() => probes.hasBin(provider))
+  const [brain, claude] = await Promise.all([safe(probes.pingBrain), providerProbe('claude')])
+  let token = false
+  try {
+    token = probes.hasBrainToken()
+  } catch {
+    token = false
+  }
+  // Un provider en standby n'est pas diagnostiqué. Une sonde qui jette
+  // vaut `unknown`, jamais `authenticated` — on ne ment pas sur une session qu'on n'a pas pu lire.
+  let claudeSession: ClaudeSessionState = 'unknown'
+  if (standby.has('claude')) {
+    claudeSession = 'authenticated'
+  } else if (!claude) {
+    // Binaire absent : inutile de sonder une session, et le rouge « CLI claude » porte déjà le motif.
+    claudeSession = 'absent'
+  } else {
+    try {
+      claudeSession = await probes.claudeSession()
+    } catch {
+      claudeSession = 'unknown'
+    }
+  }
+  const cliCheck = (
+    id: 'claude',
+    label: string,
+    ok: boolean,
+    missing: string
+  ): PreflightCheck =>
+    standby.has(id)
+      ? { id, label, ok: true, standby: true, detail: traduireCoeur('diagnostic.standby') }
+      : { id, label, ok, detail: ok ? undefined : missing }
+  let brainRuntime = false
+  try {
+    brainRuntime = probes.hasBrainRuntime()
+  } catch {
+    // Fail-closed, comme le token juste au-dessus : une sonde muette ne vaut pas un vert. Le coût de
+    // l'erreur est asymétrique — un faux rouge propose une installation IDEMPOTENTE (elle répond
+    // « déjà installé »), un faux vert laisse un bouton « Démarrer » qui ne peut pas aboutir.
+    brainRuntime = false
+  }
+  const checks: PreflightCheck[] = [
+    {
+      id: 'brain',
+      // Nom technique du service, le même dans les deux langues : pas d'entrée dans la table.
+      label: 'brain_server (:8765)',
+      ok: brain,
+      detail: brain ? undefined : traduireCoeur('diagnostic.brain.injoignable')
+    },
+    // Placé APRÈS le brain et AVANT le token : c'est l'ordre du geste. Sans runtime, le serveur ne
+    // peut pas démarrer ; sans token, il démarre mais le RAG reste fermé.
+    {
+      id: 'brain-venv',
+      label: traduireCoeur('diagnostic.brainVenv.label'),
+      ok: brainRuntime,
+      detail: brainRuntime ? undefined : traduireCoeur('diagnostic.brainVenv.absent')
+    },
+    {
+      id: 'brain-token',
+      label: traduireCoeur('diagnostic.brainToken.label'),
+      ok: token,
+      detail: token ? undefined : traduireCoeur('diagnostic.brainToken.absent')
+    },
+    cliCheck(
+      'claude',
+      traduireCoeur('diagnostic.claude.label'),
+      claude,
+      traduireCoeur('diagnostic.claude.absent')
+    ),
+    standby.has('claude')
+      ? {
+          id: 'claude-session',
+          label: traduireCoeur('diagnostic.claudeSession.label'),
+          ok: true,
+          standby: true,
+          detail: traduireCoeur('diagnostic.standby')
+        }
+      : {
+          id: 'claude-session',
+          label: traduireCoeur('diagnostic.claudeSession.label'),
+          ok: claudeSession === 'authenticated',
+          detail: claudeSessionDetail(claudeSession, claude)
+        }
+  ]
+  /*
+   * L'AVERTISSEMENT LE PLUS IMPORTANT QUAND IL EXISTE — et il n'existe presque jamais.
+   * Ajoute en TETE : un utilisateur qui retrouve un historique vide doit lire OU sont ses
+   * conversations avant tout le reste. Le chemin est affiche en entier, c'est le geste de
+   * restauration lui-meme.
+   */
+  if (options.conversationsEcartees?.length) {
+    checks.unshift({
+      id: 'conversations-ecartees',
+      label: traduireCoeur('diagnostic.historique.label'),
+      ok: false,
+      detail: traduireCoeur('diagnostic.historique.ecarte', {
+        fichiers: options.conversationsEcartees.join(', ')
+      }),
+      // Le premier : le snapshot, celui qui porte les conversations. Le journal part avec lui,
+      // dans le MEME dossier — reveler l'un montre l'autre.
+      revealPath: options.conversationsEcartees[0]
+    })
+  }
+  const failed = checks.filter((c) => !c.ok)
+  return {
+    ok: failed.length === 0,
+    checks,
+    summary: failed.length
+      ? traduireCoeur('diagnostic.resume.incomplet', {
+          liste: failed.map((c) => c.label).join(', ')
+        })
+      : traduireCoeur('diagnostic.resume.ok')
+  }
+}

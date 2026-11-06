@@ -1,7 +1,7 @@
 /**
  * CE QUE L'INTERFACE VOIT DES RUN.md LÉGERS (conv-1441, 2026-11-02).
  *
- * Les fiches s'écrivaient depuis le 01/11 (`src/main/fiches-de-demande.ts`, conv-1418), mais aucun
+ * Les fiches s'écrivaient depuis le 01/11 (`src/main/board/fiches-de-demande.ts`, conv-1418), mais aucun
  * écran ne les lisait : « je vois dans mes dernières convs que ça a pas spécialement généré plus de
  * run.md ». Elles s'affichent désormais à deux endroits : le panneau RUN.md du fil, et un lien sur
  * chaque demande d'un post-it du Board.

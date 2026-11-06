@@ -5,7 +5,7 @@ vi.mock('../runs/murs-store', () => ({
   enregistrerMur: vi.fn()
 }))
 
-import type { CommandResult } from '../commands'
+import type { CommandResult } from '../commands/commands'
 import { appelsNatifsDuTour } from './appels-natifs'
 import { etatInitialDuTour, type EtatDuTour } from './etat-du-tour'
 

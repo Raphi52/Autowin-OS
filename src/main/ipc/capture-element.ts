@@ -10,7 +10,7 @@
  * vide) rend `null` : la référence texte part sans image, elle ne casse pas le geste.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
+import { assertTrustedRendererSender } from './ipc-senders'
 
 /** Borne choisie très au-dessus de tout écran : au-delà, ce n'est plus une mesure de fenêtre. */
 const COTE_MAX = 32768

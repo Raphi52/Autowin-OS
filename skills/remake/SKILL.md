@@ -42,7 +42,7 @@ où le contrôle en exige un.
 **Déclencheurs** : `/remake` · « si tu devais le refaire » · « que ferais-tu différemment » · « refais-le mieux » · « avec le recul, comment tu l'aurais construit » · « remake this » · « rebuild it knowing what you know now » · ou juste après qu'un livrable est VÉRIFIÉ et qu'on veut solder les compromis accumulés. Unifie « si tu devais le refaire en analysant le produit fini, que ferais-tu différemment ? » suivi de « fais-le ».
 **REFUS — un « refais-le mieux » NU, sans cible finie et vérifiée en vue, ne se route PAS** : demande D'ABORD DE QUEL livrable il s'agit. Les mêmes mots désignent aussi bien l'allure d'un écran (→ `draft`) que la conception d'un module (→ ici).
 **PAS pour** : auditer si un livrable est correct ou fini → `judge` (sa barre est le DÉFAUT, pas le regret de conception) · choisir quoi faire quand le livrable n'est PAS fini → `scout` seul · refaire l'ALLURE visuelle d'un écran (→ `draft`), même si l'utilisateur dit « refais » · retirer les résidus de tentatives ratées → `clean` · améliorer le comportement de Claude ou les règles du kit → `kaizen`.
-**Si la CIBLE est le kit, les garde-fous de code, `src/main/constitution.ts` ou la mémoire** : remake liste les regrets et S'ARRÊTE — il n'y écrit jamais tout seul (périmètre gelé, § 0).
+**Si la CIBLE est le kit, les garde-fous de code, `src/main/consignes/constitution.ts` ou la mémoire** : remake liste les regrets et S'ARRÊTE — il n'y écrit jamais tout seul (périmètre gelé, § 0).
 
 ## Procédure
 
@@ -53,7 +53,7 @@ le dépôt implicitement** — cela donne un balayage superficiel à un coût ru
 quelle tranche ; ne survole pas.
 
 **PÉRIMÈTRE GELÉ — contrôlé ICI, avant de dépenser quoi que ce soit.** Cible = le kit (`skills/**/SKILL.md`, `skills/_engine/ENGINE.md`),
-les garde-fous de code (`src/main/gates/*.ts`), la constitution injectée (`src/main/constitution.ts`), ou la mémoire : produis la liste classée et **ARRÊTE-TOI**. Aucun `frame`, aucune phase, aucune
+les garde-fous de code (`src/main/gates/*.ts`), la constitution injectée (`src/main/consignes/constitution.ts`), ou la mémoire : produis la liste classée et **ARRÊTE-TOI**. Aucun `frame`, aucune phase, aucune
 écriture. PREMIER contrôle, avant la salve de `scout`, parce que le kit est la cible `/remake` la plus probable :
 placé plus tard, le garde-fou est falsifié par les agents déjà payés. Une skill qui réécrit ses propres
 règles de façon autonome est ce que `kaizen` interdit, et l'interdiction ne se lève pas parce qu'une autre
@@ -121,7 +121,7 @@ garantie, et là qu'elle est le plus facilement creuse. `stop-gate.ps1` applique
     `regime: critical`** : critical est le SEUL régime où le contrôle EXIGE une preuve hors modèle, donc
     un signal attestable porté en `standard` n'est vérifié par personne. Attestable mais pas critical → le
     refus s'applique, exactement comme s'il n'y avait aucun signal.
-  - **Le plafond de vérification est réel.** Autowin arrête une vérification à `AUTOWIN_VERIFY_TIMEOUT_MS` (défaut **600 000 ms**, soit 10 min — `src/main/verify-command.ts:75`) et rend alors
+  - **Le plafond de vérification est réel.** Autowin arrête une vérification à `AUTOWIN_VERIFY_TIMEOUT_MS` (défaut **600 000 ms**, soit 10 min — `src/main/commands/verify-command.ts:75`) et rend alors
     `exitCode: null` avec « vérification arrêtée après N s (plafond) » — PAS un code d'échec ordinaire. Durée mesurée au-dessus du plafond → le choix autonome par défaut est un SOUS-ENSEMBLE rejouable sous
     le plafond dans `signal-cmd:`, la suite complète portée en `signal:` attesté. Relever la variable n'est
     PAS une option autonome — c'est la variable d'environnement `AUTOWIN_VERIFY_TIMEOUT_MS`, persistée par l'UTILISATEUR
@@ -422,7 +422,7 @@ avant et après, et la poignée de retour arrière unique. Écrit dans le RUN.md
 - **Tourner sans un signal que le contrôle vérifie vraiment** — le refus est la fonctionnalité. Un `signal-cmd`
   hors liste blanche n'est jamais rejoué, un qui échoue à la règle de preuve bloque tout vert, et un
   signal attesté sous `critical` n'est vérifié par personne. Les trois sont « pas de signal ».
-- **Réécrire le périmètre gelé** — kit, garde-fous de code, `src/main/constitution.ts`, mémoire : proposer seulement.
+- **Réécrire le périmètre gelé** — kit, garde-fous de code, `src/main/consignes/constitution.ts`, mémoire : proposer seulement.
 - **Présenter un regret comme un défaut** — c'est la barre de `judge`, et l'emprunter fait mentir la skill.
 - **Laisser `disposable` sur un RUN de remake, laisser `frame` enchaîner sur `build`, ou en laisser une toucher le parent** —
   trois façons silencieuses de perdre les garanties que ce fichier revendique.

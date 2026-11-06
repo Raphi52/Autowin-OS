@@ -3,7 +3,7 @@
  * EXPORT PUBLIC — la version publique du depot est CE depot, SANS le dossier `entreprise/`.
  *
  * Pourquoi (2026-10-13, conv-913) : tout ce qui est propre a une entreprise vit dans
- * `entreprise/<nom>/`, et la garde `src/main/separation-entreprise.test.ts` interdit son nom partout
+ * `entreprise/<nom>/`, et la garde `src/main/gardes/separation-entreprise.test.ts` interdit son nom partout
  * ailleurs. Exporter n'est donc plus remplacer des mots : c'est retirer un dossier. Le contenu de
  * chaque fichier publie est celui du depot, octet pour octet (aucune copie : l'arbre est construit
  * par git a partir des memes objets).

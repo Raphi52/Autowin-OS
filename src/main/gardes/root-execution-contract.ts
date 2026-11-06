@@ -1,0 +1,528 @@
+import type { ExecutionEvidence } from '../providers/types'
+import { attributedPaths, normalized } from '../providers/causal-verification-evidence'
+import { classifyMutationConfidence } from '../orchestration/task-mutation-classifier'
+import { cadrageRefuse } from '../orchestration/frame-cas-limites'
+import { grilleCleanEnDefaut, libelleGrilleEnDefaut } from '../orchestration/grille-clean'
+
+export const ROOT_DOD = {
+  analysis: 'Analyse demandee presente dans le livrable',
+  mutation: 'Mutation demandee produite avec une preuve executable',
+  tests: 'Tests demandes executes avec un code de sortie 0',
+  commit: 'Commit demande publie avec une identite Git verifiable'
+} as const
+
+export interface RootExecutionRequirements {
+  analysis: boolean
+  mutation: boolean
+  tests: boolean
+  commit: boolean
+}
+
+const ANALYSIS_REQUEST = /\b(?:scout|audit|analys|inspect|cherche|trouve|repere|explore)\w*/i
+const TEST_REQUEST =
+  /\b(?:tests?|test(?:e|er|ez|s)?|vitest|verification|verifi\w*|rouge\s*(?:vers|->|→)\s*vert|exit\s*0)\b/i
+/**
+ * « PUBLIER » TOUT SEUL N'EST PAS UN COMMIT — mesure du 2026-09-16, conv-597,
+ * turnId 4e502786-4887-4101-85b3-ea2dee304091.
+ *
+ * La demande etait « ... online ready a etre PUBLIE SUR LE MARKET » : une mise en vente sur une
+ * boutique (Roblox, Steam, itch.io, App Store). Le mot `publie\w*` seul suffisait pourtant a exiger
+ * « Commit demande publie avec une identite Git verifiable ». Lu dans le RUN.md de ce run : la case
+ * est restee `- [ ]` alors qu'aucun commit n'avait jamais ete demande, et le run a ferme
+ * `status: green` avec cette obligation non tenue — une DoD qui ment des deux cotes (elle reclame ce
+ * qui n'est pas demande, puis se laisse fermer quand meme).
+ *
+ * Le verbe garde sa valeur par defaut — « repare puis publie » reste un commit demande — mais il
+ * PERD cette valeur des que la phrase nomme une BOUTIQUE dans les trois mots qui suivent (market,
+ * store, boutique, Steam, itch, Roblox, magasin, plateforme). Le changement est volontairement
+ * borne a cette levee : tout le reste du motif est inchange. Sens d'erreur impose par ce fichier :
+ * faux negatif tolere, faux positif JAMAIS.
+ */
+// fix-ok: le motif COMMIT_REQUEST prenait le verbe « publier » d'une mise en vente sur boutique
+// (« online ready a etre publie sur le market », conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091)
+// pour une demande de commit git : la DoD exigeait alors un commit jamais demande, case laissee
+// `- [ ]` dans le RUN.md et run ferme `status: green` malgre tout. Cause mesuree, correctif borne
+// a la seule levee « publie + boutique dans les 3 mots suivants ».
+const COMMIT_REQUEST =
+  /\b(?:publie\w*(?!(?:[\s-]+[\w'’]+){0,3}[\s-]+(?:markets?|marketplaces?|stores?|boutiques?|magasins?|plateformes?|steam|itch|roblox|epic|(?:app|play)\s*stores?)\b)(?:\s+(?:les?|un|une|ces|mes|nos|vos)\s+(?:changements?|commit|branche))?|push(?:e|er|ez|ons)?|(?:fais|fait|faire|cree|realise)\w*\s+(?:un\s+)?commit|(?:puis|ensuite|et)\s+commit(?:e|er|ez)?|commit(?:e|er|ez)?\s+(?:les?\s+)?(?:changements?|modifications?|code|branche))\b/i
+
+const CLAUSE_BOUNDARY = /(?:[.;:!?,]|\b(?:mais|puis|ensuite|cependant|toutefois)\b)/gi
+const NEGATED_MENTION_PREFIX =
+  /(?:\b(?:sans|ni|aucun(?:e|s|es)?|zero|pas\s+de|interdi\w*\s+de|evit\w*\s+de|without|no)\b(?:\s+\w+){0,6}\s*|\b(?:ne|n['’]\w*)(?:\s+\w+){0,6}\s+(?:pas|jamais|aucun(?:e|s|es)?|rien)\b(?:\s+\w+){0,4}\s*|\b(?:do\s+not|don't)(?:\s+\w+){0,4}\s*)$/i
+const DIRECT_NEGATION_PREFIX = /\b(?:ne|n['’]\w*|not)\s*$/i
+const DIRECT_NEGATION_SUFFIX = /^\s*(?:\w+\s+){0,3}(?:pas|jamais|rien|aucun(?:e|s|es)?|not)\b/i
+
+function clauseBefore(text: string, index: number): string {
+  const prefix = text.slice(Math.max(0, index - 120), index)
+  let boundaryEnd = 0
+  for (const boundary of prefix.matchAll(new RegExp(CLAUSE_BOUNDARY.source, 'gi'))) {
+    boundaryEnd = (boundary.index ?? 0) + boundary[0].length
+  }
+  return prefix.slice(boundaryEnd)
+}
+
+/** Une mention interdite décrit une non-action ; elle ne doit jamais devenir une case de DoD. */
+function hasRequestedAction(text: string, request: RegExp): boolean {
+  const matcher = new RegExp(request.source, request.flags.includes('i') ? 'gi' : 'g')
+  for (const match of text.matchAll(matcher)) {
+    const start = match.index ?? 0
+    const before = /^(?:puis|ensuite|et)\b/i.test(match[0]) ? '' : clauseBefore(text, start)
+    const after = text.slice(start + match[0].length, start + match[0].length + 48)
+    const negated =
+      NEGATED_MENTION_PREFIX.test(before) ||
+      (DIRECT_NEGATION_PREFIX.test(before) && DIRECT_NEGATION_SUFFIX.test(after))
+    if (!negated) return true
+  }
+  return false
+}
+
+/**
+ * Compile uniquement les obligations explicites et falsifiables du prompt. Une demande de lecture
+ * seule conserve une DoD vide ; une demande composee analyse + mutation ne peut plus etre fermee par
+ * le seul sous-run d'analyse.
+ */
+export function rootExecutionRequirements(
+  task: string,
+  phasesProgrammees?: readonly string[]
+): RootExecutionRequirements {
+  const normalized = task.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  const confiance = classifyMutationConfidence(task)
+  const demandee = confiance !== 'read-only'
+  // Le TEXTE dit ce que l'utilisateur envisage ; le PROGRAMME dit ce que le run va jouer. Un run
+  // limite a frame/scout/terrain n'ecrit rien : lui demander une mutation, un test ou un commit est
+  // insatisfaisable par construction. L'ANALYSE, elle, reste due : il peut la tenir.
+  const ecrit = !programmeSansEcriture(phasesProgrammees)
+  return {
+    analysis: demandee && hasRequestedAction(normalized, ANALYSIS_REQUEST),
+    // La MUTATION exige la confiance PLEINE, pas la simple absence de lecture seule. `uncertain`
+    // veut dire « on ne sait pas » : en tirer une obligation prouvable est un faux rouge garanti
+    // (mesure du 2026-08-22, deux mesures perdues sur ce refus). On desarme l'OBLIGATION, jamais la
+    // CAPACITE : `isMutationTask` reste vrai sur `uncertain`, donc worktree isole et catalogue de
+    // commandes sont conserves — meme compromis que celui documente pour `verifi`.
+    mutation: confiance === 'mutation' && ecrit,
+    tests: demandee && ecrit && hasRequestedAction(normalized, TEST_REQUEST),
+    commit: demandee && ecrit && hasRequestedAction(normalized, COMMIT_REQUEST)
+  }
+}
+
+export function rootDodLabels(task: string, phasesProgrammees?: readonly string[]): string[] {
+  const required = rootExecutionRequirements(task, phasesProgrammees)
+  const labels: string[] = []
+  if (required.analysis) labels.push(ROOT_DOD.analysis)
+  if (required.mutation) labels.push(ROOT_DOD.mutation)
+  if (required.tests) labels.push(ROOT_DOD.tests)
+  if (required.commit) labels.push(ROOT_DOD.commit)
+  return labels
+}
+
+export interface RootExecutionProofs {
+  phases: Array<{ phase: string; text?: string; executionEvidence?: ExecutionEvidence[] }>
+  publishedCommitSha?: string
+}
+
+function successfulEvidence(item: ExecutionEvidence): boolean {
+  return item.ok && !/^(?:failed|error|cancelled|aborted)$/i.test(item.status)
+}
+
+function verificationTargetsRequest(task: string, item: ExecutionEvidence): boolean {
+  if (item.kind !== 'verification' || !successfulEvidence(item) || (item.exitCode ?? 0) !== 0) {
+    return false
+  }
+  const requested = task
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+  const observed = `${item.command ?? ''} ${item.summary ?? ''}`.toLowerCase()
+  if (/\bnpm\s+(?:run\s+)?test\b/.test(requested)) {
+    return /\bnpm\s+(?:run\s+)?test\b/.test(observed)
+  }
+  if (/\bvitest\b/.test(requested)) return /\bvitest\b/.test(observed)
+  if (/\bpytest\b/.test(requested)) return /\bpytest\b/.test(observed)
+  if (/\bdotnet\s+test\b/.test(requested)) return /\bdotnet\s+test\b/.test(observed)
+  if (/\btests?\b/.test(requested)) {
+    return /\b(?:tests?|vitest|jest|pytest|ctest)\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?test\b|\b(?:dotnet|cargo|go)\s+test\b/.test(
+      observed
+    )
+  }
+  return true
+}
+
+export function rootRequirementChecks(
+  task: string,
+  proofs: RootExecutionProofs
+): Array<{ label: string; checked: boolean }> {
+  const required = rootExecutionRequirements(task)
+  const evidence = proofs.phases.flatMap((phase) => phase.executionEvidence ?? [])
+  const checks: Array<{ label: string; checked: boolean }> = []
+  if (required.analysis) {
+    checks.push({
+      label: ROOT_DOD.analysis,
+      // TOUTE phase porteuse d'un livrable TEXTUEL coche l'analyse — y compris `build` et `clean`.
+      //
+      // Ce predicat filtrait sur `noeudSansEcriture` (scout/frame/terrain + noeuds skill). Defaut
+      // MESURE le 2026-09-03 (run-90383ebef541-1, conv-21) : un run qui n'a joue que `build` — six
+      // fois, 4 607 a 9 803 caracteres de livrable chacune, lu dans
+      // `.autowin-data/autowin-os/run-state/run-90383ebef541-1.json` — a ete bloque SIX fois de
+      // suite par « Promis mais pas fait : "Analyse demandee presente dans le livrable" », avec un
+      // verdict de juge vide. `build` ecrit, donc la case n'etait cochable a AUCUN prix : meme
+      // pathologie que celle deja documentee ici pour la MUTATION le 2026-08-18, en miroir. Et
+      // `rootExecutionRequirements` l'annonce pourtant : « L'ANALYSE, elle, reste due : il peut la
+      // tenir » — elle ne pouvait pas la tenir.
+      //
+      // REGLE, en deux temps, et le second temps n'est PAS un assouplissement du premier :
+      //   1. Le run a JOUE au moins une phase d'analyse (scout/frame/terrain ou noeud skill) ->
+      //      c'est ELLE qui doit rendre l'analyse. Une phase d'analyse MUETTE n'est pas blanchie par
+      //      le texte du build : intention deja testee (`conv-runs.dod-honnete.test.ts:122` « ne
+      //      confond ni une phase scout vide ni un lint avec les livrables demandes », et
+      //      `root-execution-contract.lecture-seule.test.ts:142` « pas de blanchiment par la forme »).
+      //   2. Le run n'a joue AUCUNE phase d'analyse -> le livrable textuel d'une phase ecrivante la
+      //      porte. Sans ce second temps l'exigence est insatisfaisable, et c'est le defaut mesure.
+      //
+      // Le texte reste OBLIGATOIRE dans les deux cas : un livrable vide, ou aucune phase jouee, ne
+      // coche pas. Ce gate ne juge jamais le CONTENU de l'analyse (c'est le travail du juge), il
+      // constate qu'un livrable textuel existe la ou il pouvait exister. Les trois falsificateurs de
+      // `root-execution-contract.analyse-phase-ecrivante.test.ts` tiennent ces trois bords.
+      checked: (() => {
+        const phasesDAnalyse = proofs.phases.filter((phase) => noeudSansEcriture(phase.phase))
+        const porteuses = phasesDAnalyse.length > 0 ? phasesDAnalyse : proofs.phases
+        return porteuses.some((phase) => Boolean(phase.text?.trim()))
+      })()
+    })
+  }
+  if (required.mutation) {
+    checks.push({
+      label: ROOT_DOD.mutation,
+      checked: evidence.some((item) => item.kind === 'mutation' && successfulEvidence(item))
+    })
+  }
+  if (required.tests) {
+    checks.push({
+      label: ROOT_DOD.tests,
+      checked: evidence.some((item) => verificationTargetsRequest(task, item))
+    })
+  }
+  if (required.commit) {
+    checks.push({ label: ROOT_DOD.commit, checked: Boolean(proofs.publishedCommitSha?.trim()) })
+  }
+  return checks
+}
+
+/** Phases qui n'ECRIVENT rien : leur livrable est un texte, pas une mutation. */
+const PHASES_LECTURE_SEULE = new Set(['scout', 'frame', 'terrain'])
+
+/** Les huit phases du pipeline. Tout autre identifiant de noeud designe une SKILL du disque. */
+const PHASES_PIPELINE = new Set([
+  'scout',
+  'frame',
+  'terrain',
+  'build',
+  'clean',
+  'judge',
+  'kaizen',
+  'remake'
+])
+
+/**
+ * Ce noeud produit-il un texte plutot qu'une mutation ?
+ *
+ * Les trois phases d'analyse, PLUS tout noeud SKILL. Leur LIVRABLE est un texte : exiger d'eux une
+ * preuve de mutation a la cloture ferait sortir rouge un run correct — defaut vecu le 2026-08-18
+ * sur scout. Ce classement porte sur ce que la phase DOIT produire, pas sur ses droits : depuis le
+ * 2026-09-04 toutes les phases ont les memes droits que le chat (`sandboxForPhase`), donc une phase
+ * d'analyse PEUT ecrire si la tache l'exige — on ne le lui RECLAME simplement pas.
+ *
+ * Les huit phases gardent leur classement d'origine : `judge`, `kaizen` et `remake` ne sont PAS
+ * ajoutes ici, ce serait un changement de comportement hors sujet.
+ */
+function noeudSansEcriture(phase: string): boolean {
+  return PHASES_LECTURE_SEULE.has(phase) || !PHASES_PIPELINE.has(phase)
+}
+
+/**
+ * Le run n'a joué QUE des phases de lecture — il n'a donc aucune mutation à prouver.
+ *
+ * Défaut vécu le 2026-08-18 : « Statut "red" : la clôture a été refusée en amont » sur un scout qui
+ * avait pourtant rendu sa shortlist. Le prompt était classé MUTATION (`isMutationTask` → true) et,
+ * depuis que « scout » nomme déterministement la phase, le run ne jouait QUE scout. La clôture
+ * exigeait alors une preuve d'exécution mutante qu'un run en lecture seule ne peut pas produire :
+ * exigence structurellement insatisfaisable, donc rouge à chaque fois.
+ *
+ * Un run se juge sur ce qu'on lui a demandé de JOUER, pas sur ce que la phrase de l'utilisateur
+ * laissait entrevoir pour la suite. Un tableau vide n'est PAS blanchi : sans phase, il n'y a rien à
+ * déclarer en lecture seule.
+ */
+/**
+ * Le PROGRAMME du run ne comporte aucune phase qui ecrit — pendant a `runEnLectureSeule`, mais en
+ * AMONT : celui-ci se prononce sur les phases PROGRAMMEES (avant execution, ce que connaissent
+ * `regimePhases`/`effectivePhases`), celui-la sur les phases JOUEES (apres execution).
+ *
+ * `undefined` ou tableau vide = « on ne sait pas » → aucune obligation n'est levee. Un programme
+ * inconnu ne blanchit rien : c'est ce qui rend le parametre sur derriere un appelant non migre.
+ */
+export function programmeSansEcriture(phases?: readonly string[]): boolean {
+  return (
+    Array.isArray(phases) && phases.length > 0 && phases.every((p) => noeudSansEcriture(p))
+  )
+}
+
+export function runEnLectureSeule(phases: readonly { phase: string }[]): boolean {
+  return phases.length > 0 && phases.every((entree) => noeudSansEcriture(entree.phase))
+}
+
+/**
+ * Une CIBLE NOMMEE est un chemin de fichier porte par un ANCRAGE `chemin:ligne` dans la demande.
+ *
+ * Defaut vecu (conv-1302) : quatre runs d'affilee ont ferme `succeeded`, gate vert, juges 96/100,
+ * en corrigeant un AUTRE fichier que celui que l'utilisateur avait nomme. Le gate evalue la QUALITE
+ * de ce qui est produit ; personne n'evaluait la CORRESPONDANCE avec ce qui etait demande.
+ *
+ * Le numero de ligne est le discriminant, pas la mention : une reference documentaire, un exemple,
+ * un `.test.ts` cite en passant n'en portent pas. Sens d'erreur IMPOSE : faux negatif tolere, faux
+ * positif JAMAIS — un faux blocage rendrait l'app inutilisable.
+ */
+const EXTENSIONS_CIBLE =
+  'ts|tsx|js|jsx|mjs|cjs|json|md|ps1|psm1|py|cs|sql|css|scss|html|yml|yaml|sh|rs|go|java|xml'
+const CIBLE_ANCREE = new RegExp(
+  `((?:[\\w.@~-]+[/\\\\])+[\\w.@-]+\\.(?:${EXTENSIONS_CIBLE}))\\s*:\\s*(\\d{1,6})(?!\\d)`,
+  'gu'
+)
+/**
+ * Un chemin cité comme MODÈLE ou comme POINT DE COMPARAISON n'est pas une cible.
+ *
+ * Défaut vécu conv-1618 (2026-11-05, correctif conv-1626) : la demande citait deux fichiers au format
+ * `chemin:ligne` comme références (« utilise le TimeProvider déjà employé dans X:77 », « alors que le
+ * verrou V2 prend celle du serveur de base (Y:31) »). Le contrôle final a exigé leur modification et
+ * refusé 202 fois de suite un travail juste et publié (364 $).
+ *
+ * Le marqueur doit être PROCHE du chemin : 5 mots au plus, sans « et / puis / ou » entre les deux.
+ * « Utilise X déjà employé dans le service et corrige src/x.ts:12 » garde donc sa cible. Lu sur le
+ * texte sans accents (voir `ciblesNommees`).
+ */
+const MENTION_DE_REFERENCE = new RegExp(
+  String.raw`\b(?:deja\s+(?:employ|utilis|present|en\s+place|appliqu|fait)\w*|(?:alors|tandis)\s+qu\w*|(?:celle|celui|celles|ceux)\s+d\w*|comme\s+(?:dans|chez)|a\s+l['’]image\s+d\w*|sur\s+le\s+modele\s+d\w*|already\s+(?:used|done|present)\w*|as\s+(?:in|done\s+in))\b` +
+    String.raw`(?:\s+(?!(?:et|puis|ou|and|then|or)\b)[\w'’.\x60-]+){0,5}[\s(\x60"'«]*$`,
+  'i'
+)
+
+/**
+ * La proposition qui PRÉCÈDE un chemin, lettre de lecteur comprise.
+ *
+ * `CIBLE_ANCREE` commence APRÈS `D:` (le deux-points n'est pas un caractère de chemin), et `:` est
+ * une frontière de proposition (`CLAUSE_BOUNDARY`) : sans ce recul, la proposition d'un chemin
+ * `D:\…` se réduisait à `\`, et rien de ce qui le précède n'était lu (conv-1618).
+ */
+function clauseAvantChemin(texte: string, index: number): string {
+  const lecteur = /(?<![A-Za-z])[A-Za-z]:[\\/]?$/.exec(texte.slice(Math.max(0, index - 3), index))
+  return clauseBefore(texte, lecteur ? index - lecteur[0].length : index)
+}
+
+/**
+ * Un chemin cité ENTRE PARENTHÈSES pour illustrer une question de LECTURE désigne un endroit à
+ * observer, pas un fichier à modifier.
+ *
+ * Défaut vécu conv-1613 (2026-11-05, correctif conv-1625) : « Mesure d'abord qui lit encore ces
+ * SKILL.md (skill_charger, appel par le nom sans barre dans X:107, …) ». Le contrôle final a exigé la
+ * modification de X et refusé 220 fois un lot juste (402 $). La question doit porter un verbe de
+ * MESURE suivi de « qui / où … lit, appelle, utilise… » : « Corrige le module qui lit la config
+ * (x.ts:12) » garde sa cible. Même garde de conjonction que `MENTION_DE_REFERENCE`.
+ */
+const QUESTION_DE_LECTURE = new RegExp(
+  String.raw`\b(?:mesur|verifi|regard|cherch|list|compt|trouv|identifi|recens|measur|check|find)\w*\s+(?:d['’]abord\s+|first\s+)?(?:qui|ou|who|where)\s+(?:\w+\s+){0,2}?(?:lit|lisent|appel\w*|utilis\w*|charg\w*|import\w*|depend\w*|reads?|calls?|uses?|loads?|imports?)\b` +
+    String.raw`(?:\s+(?!(?:et|puis|ou|and|then|or)\b)[^\s()]*[^\s().;!?,]){0,8}\s*$`,
+  'i'
+)
+
+/** Le texte qui précède la parenthèse encore ouverte où tombe ce chemin ; absent hors parenthèse. */
+function avantParentheseOuverte(texte: string, index: number): string | undefined {
+  const debut = Math.max(0, index - 200)
+  let fermees = 0
+  for (let i = index - 1; i >= debut; i--) {
+    if (texte[i] === ')') fermees++
+    else if (texte[i] === '(') {
+      if (fermees === 0) return texte.slice(Math.max(0, i - 160), i)
+      fermees--
+    }
+  }
+  return undefined
+}
+
+/** Une clause « hors perimetre » decrit ce qu'il ne faut PAS toucher : jamais une obligation. */
+const HORS_PERIMETRE =
+  /\b(?:perimetre\s+out|out\s+of\s+scope|hors\s+perimetre|reste\s+intacts?|touche\w*\s+pas|sans\s+toucher|pas\s+toucher|ne\s+pas\s+modifier|exclu\w*)\b/i
+
+/**
+ * Le dossier de preuve joint est une DONNEE rapportee, jamais une demande.
+ *
+ * Defaut vecu (conv-470, tour 52fbe05f-0086-4806-8f07-c8762e8caa35) : la demande `/kaizen j'ai
+ * rien en preprompt` ne nommait aucun fichier, mais le dossier joint recopiait un message anterieur
+ * portant « Ancrage : src/main/modeles/model-quotas.ts:62 ». Le gate a exige la mutation de ce fichier et a
+ * refuse un travail juste — exactement le faux positif que ce garde s'interdit.
+ */
+const MARQUEUR_DOSSIER_JOINT = '=== DOSSIER DE PREUVE AUTOWIN OS ==='
+
+export function ciblesNommees(task: string): string[] {
+  const demande = task.split(MARQUEUR_DOSSIER_JOINT)[0]
+  const texte = demande.normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  const cibles: string[] = []
+  for (const match of texte.matchAll(CIBLE_ANCREE)) {
+    const index = match.index ?? 0
+    // Une URL (`http://host:8080/x.ts:3`) n'est pas un chemin du depot.
+    if (/(?:https?|file|ftp):\/\/\S*$/i.test(texte.slice(Math.max(0, index - 200), index))) continue
+    const large = texte.slice(Math.max(0, index - 120), index)
+    if (HORS_PERIMETRE.test(large)) continue
+    if (NEGATED_MENTION_PREFIX.test(clauseBefore(texte, index))) continue
+    if (MENTION_DE_REFERENCE.test(clauseAvantChemin(texte, index))) continue
+    const avantParenthese = avantParentheseOuverte(texte, index)
+    if (avantParenthese !== undefined && QUESTION_DE_LECTURE.test(avantParenthese)) continue
+    const chemin = normalized(match[1])
+    if (!cibles.includes(chemin)) cibles.push(chemin)
+  }
+  return cibles
+}
+
+function memeChemin(a: string, b: string): boolean {
+  if (a === b) return true
+  return a.length > b.length ? a.endsWith(`/${b}`) : b.endsWith(`/${a}`)
+}
+
+/**
+ * Croise les cibles nommees avec les chemins REELLEMENT mutes, rapportes par `ExecutionEvidence`.
+ *
+ * La source n'est PAS `git diff` : `worktrees.end()` (`orchestrator.ts:1887`) est POSTERIEUR au
+ * gate, donc un controle base sur le diff serait structurellement aveugle.
+ *
+ * FAIL-OPEN a deux endroits : aucune cible nommee, ou aucune preuve ne portant de chemin attribue
+ * (un provider qui ne renseigne pas `paths` ne doit jamais produire un faux rouge).
+ */
+/**
+ * Une valeur attribuee est-elle vraiment un CHEMIN ?
+ *
+ * Regression VECUE le 2026-08-18 sur conv-1304 : une preuve d'execution portait `path: "0"`. Le garde
+ * l'a comptee comme un fichier modifie, le repli « aucun chemin attribue → sans-objet » n'a donc pas
+ * joue, et un run qui avait POURTANT modifie et committe la cible nommee a ete bloque. Un faux
+ * blocage est pire que le defaut que ce garde corrige : il refuse du travail juste.
+ *
+ * Un chemin porte un separateur ou une extension de fichier. Tout le reste est une valeur de
+ * remplissage a laquelle on ne doit accorder aucune confiance — dans le doute, on NE BLOQUE PAS.
+ */
+function ressembleAUnChemin(valeur: string): boolean {
+  const propre = valeur.trim()
+  if (propre.length < 3) return false
+  return /[\\/]/u.test(propre) || /\.[A-Za-z0-9]{1,8}$/u.test(propre)
+}
+
+export function cibleNommeeTouchee(
+  task: string,
+  evidence: readonly ExecutionEvidence[]
+): 'sans-objet' | 'touchee' | 'manquee' {
+  const cibles = ciblesNommees(task)
+  if (cibles.length === 0) return 'sans-objet'
+  const touches = evidence
+    .filter((item) => item.kind === 'mutation' && successfulEvidence(item))
+    .flatMap((item) => attributedPaths(item))
+    .filter(ressembleAUnChemin)
+    .map((chemin) => normalized(chemin))
+  if (touches.length === 0) return 'sans-objet'
+  // Decision cadree : le gate ne bloque que le MISS TOTAL. Une couverture PARTIELLE part au juge,
+  // non bloquante — un `every` en dur ici interdirait la relocalisation causale legitime.
+  return cibles.some((cible) => touches.some((chemin) => memeChemin(chemin, cible)))
+    ? 'touchee'
+    : 'manquee'
+}
+
+function libelleCibleNommee(cibles: readonly string[]): string {
+  return `Cible nommee dans la demande reellement modifiee : ${cibles.join(', ')}`
+}
+
+/*
+ * AUTORITÉS DE CLÔTURE — pathologie CONNUE, garde RETIRÉE, à ne pas retenter à l'identique.
+ * (Commentaire de bloc et non JSDoc : il ne documente aucun symbole, il documente une ABSENCE.)
+ *
+ * Défaut réel (conv-1302, 2026-08-18) : bloqué par le gate, un run a réparé LE GATE quatre fois
+ * d'affilée au lieu de la tâche demandée, puis a fermé `succeeded` avec un juge à 96/100. L'agent
+ * modifiait la chose qui l'évaluait.
+ *
+ * Une garde a été écrite le même jour : rougir un run dont TOUTES les mutations tombent dans
+ * `root-execution-contract.ts` / `phase-briefs.ts` alors que la demande ne parle pas du gate. Un
+ * juge adversarial l'a réfutée par exécution — onze faux blocages sur du travail légitime :
+ * corriger une faute dans un brief de phase, raccourcir un prompt, ajouter une extension à la liste
+ * des cibles, extraire une fonction, toute demande en anglais, et même une demande qui NOMMAIT le
+ * fichier autrement que par son basename exact (`phase-briefs`, `src\main\phase-briefs`). Le
+ * contrat que la garde s'était fixé — « faux négatif toléré, faux positif JAMAIS » — n'était pas
+ * tenu, et un faux blocage refuse du travail juste : c'est pire que le défaut visé.
+ *
+ * Ce qui manquait n'est pas une meilleure regex : c'est le CONTRAT DE LA TÂCHE au niveau de la
+ * CONVERSATION. Sur le tour « finis », le texte courant ne nomme plus rien, donc aucune heuristique
+ * locale ne peut distinguer une échappatoire d'un travail légitime. Une garde correcte devrait
+ * s'appuyer sur un signal POSITIF d'échappatoire — le run précédent était bloqué ET la cible
+ * héritée du fil n'est pas touchée — et non sur l'absence d'un vocabulaire. Tant que ce contrat
+ * hérité n'existe pas, il n'y a pas de garde honnête à écrire ici.
+ */
+
+/**
+ * L'état de clôture d'un run : ce que le gate doit évaluer, calculé EN UN SEUL ENDROIT.
+ *
+ * Cette décision vivait en ligne dans l'orchestrateur, donc hors de portée des tests — une mutation
+ * de sa garde ne faisait rougir aucun test (vérifié le 2026-08-18). C'est la leçon de
+ * `orchestrator.verdict-gate.test.ts` appliquée une fois de plus : un fait, un seul lecteur.
+ */
+export function etatDeCloture(
+  task: string,
+  phases: readonly { phase: string; text?: string; executionEvidence?: ExecutionEvidence[] }[],
+  evidenceOk: boolean,
+  mutationDemandee: boolean
+): { status: 'green' | 'red'; dod: Array<{ label: string; checked: boolean }> } {
+  const lectureSeule = runEnLectureSeule(phases)
+  const checks = rootRequirementChecks(task, { phases: [...phases] }).filter(
+    (check) =>
+      check.label !== ROOT_DOD.commit &&
+      // Un run en lecture seule ne porte que l'obligation d'ANALYSE : exiger de lui une preuve de
+      // mutation ou de test est structurellement insatisfaisable, donc un rouge garanti.
+      !(lectureSeule && check.label !== ROOT_DOD.analysis)
+  )
+  if (
+    !lectureSeule &&
+    mutationDemandee &&
+    !checks.some((check) => check.label === ROOT_DOD.mutation)
+  ) {
+    checks.push({ label: ROOT_DOD.mutation, checked: evidenceOk })
+  }
+  // Garde « cible nommee » : un run qui a mute des fichiers SANS toucher aucune des cibles que la
+  // demande ancrait (`chemin:ligne`) ne peut pas fermer vert. Seul le MISS TOTAL bloque ; une
+  // couverture partielle passe et part au juge (`phase-briefs.ts`), non bloquante.
+  const cibleManquee =
+    !lectureSeule &&
+    cibleNommeeTouchee(
+      task,
+      phases.flatMap((phase) => phase.executionEvidence ?? [])
+    ) === 'manquee'
+  if (cibleManquee) {
+    checks.push({ label: libelleCibleNommee(ciblesNommees(task)), checked: false })
+  }
+  // Garde « cadrage refusé » (conv-687, 18/09) : si le DERNIER frame porte encore le refus des cas
+  // limites, le run n'a pas de cadrage valide — il ne ferme pas vert. Un frame refait après passe.
+  // Portee (conv-710, 19/09) : la garde ne vaut que pour un run dont le cadrage EST le resultat
+  // (scout → frame, conv-687). Si un `build` a joue APRES le dernier frame, le travail a ete produit
+  // et prouve par ses propres preuves ; la reparation ne rejoue que `build` et ne peut plus refaire
+  // le cadrage — le refus devenait insatisfaisable, affiche en « Promis mais pas fait » a l'agent.
+  const indexDernierFrame = phases.map((p) => p.phase).lastIndexOf('frame')
+  const dernierFrame = indexDernierFrame >= 0 ? phases[indexDernierFrame] : undefined
+  const buildApresCadrage = phases.slice(indexDernierFrame + 1).some((p) => p.phase === 'build')
+  const cadrageEnRefus =
+    indexDernierFrame >= 0 && !buildApresCadrage && cadrageRefuse(dernierFrame?.text ?? '')
+  if (cadrageEnRefus) {
+    checks.push({ label: 'Cadrage accepté par le contrôle des cas limites', checked: false })
+  }
+  // Garde « grille qualité » (conv-1035, 21/10) : tant que le dernier clean déclare un ❌ restant,
+  // le run ne ferme pas vert. Une case non cochée, et PAS le statut `red` : ce refus se répare
+  // (build puis clean rejoués), alors que `red` le présenterait comme un échec qu'aucune
+  // réparation ne lève (`CLOSURE_UPSTREAM_REFUSAL`, gates/stopgate.ts).
+  const grilleEnDefaut = grilleCleanEnDefaut(phases)
+  if (grilleEnDefaut) {
+    checks.push({ label: libelleGrilleEnDefaut(grilleEnDefaut), checked: false })
+  }
+  return {
+    status: !cibleManquee && !cadrageEnRefus && (lectureSeule || evidenceOk) ? 'green' : 'red',
+    dod: checks
+  }
+}

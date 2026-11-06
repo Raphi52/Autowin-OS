@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { attendreFichier } from '../ecriture-hors-fil'
+import { attendreFichier } from '../gel/ecriture-hors-fil'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

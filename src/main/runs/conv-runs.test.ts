@@ -13,7 +13,7 @@ import {
   saveConvRunTrace,
   loadConvRunTrace
 } from './conv-runs'
-import type { OrchestrationStep } from '../orchestrator'
+import type { OrchestrationStep } from '../orchestration/orchestrator'
 import { isBlocked } from '../../shared/run-blocked'
 
 const root = mkdtempSync(join(tmpdir(), 'aos-convruns-'))

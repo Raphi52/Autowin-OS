@@ -8,7 +8,7 @@ import {
   taskOccurrenceFromAdditionalData,
   windowsRelayTaskName
 } from './windows-relay'
-import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 function probeLegacyDisarm(
   legacyArguments: string,

@@ -92,7 +92,7 @@ interface Exclusion {
   erreursDeTypage?: string[]
 }
 
-/** Miroir de `TypageAvantPublication` (src/main/typage-avant-publication.ts), `sans-objet` exclu. */
+/** Miroir de `TypageAvantPublication` (src/main/verify/typage-avant-publication.ts), `sans-objet` exclu. */
 type Typage =
   | { statut: 'vert'; projets: string[]; dejaRouges?: number }
   | { statut: 'echec'; projets: string[]; commande: string; erreurs: string[] }

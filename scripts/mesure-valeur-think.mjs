@@ -421,7 +421,7 @@ function briefingsDesSessions(projets) {
  * PISTE 2 : LE COUT DE `think` SUR LES 10 RUNS QUI SUIVENT LES NIVEAUX DE PROFONDEUR.
  * La mise en service est la date du commit qui ajoute la marque a skills/think/SKILL.md sur la
  * branche courante du DEPOT PRINCIPAL : l'app lit sa skill dans le depot (`skillRoots`,
- * src/main/native-registry.ts), et une fusion reecrit la date de commit (mesure : les 3 commits
+ * src/main/app/native-registry.ts), et une fusion reecrit la date de commit (mesure : les 3 commits
  * de run-3180eec71b06-1 portent tous 2026-09-30T15:48:06, l'heure de leur arrivee sur main).
  */
 export const MARQUE_PROFONDEUR = 'Choisis la profondeur AVANT de chercher'

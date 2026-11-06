@@ -17,8 +17,8 @@ import {
   resolveListedSessionAsync,
   resolveListedSessionImage
 } from '../activity/transcripts'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
 
 export function registerActivityIpc(): void {
   ipcMain.handle('os:activity:sessions', (event) => {

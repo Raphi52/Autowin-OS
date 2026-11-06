@@ -26,9 +26,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { ajouterArchives, texteDuMessage } from './conversations-sur-disque.mjs'
-import { nativeSkills, skillRoots } from '../src/main/native-registry.ts'
-import { invokedSkillId } from '../src/main/skill-pipeline.ts'
-import { nomDeSkillDemande } from '../src/main/skill-charger-command.ts'
+import { nativeSkills, skillRoots } from '../src/main/app/native-registry.ts'
+import { invokedSkillId } from '../src/main/skills/skill-pipeline.ts'
+import { nomDeSkillDemande } from '../src/main/commands/skill-charger-command.ts'
 import { corrigeSkillMalTapee, resolveSkillAlias } from '../src/shared/skill-aliases.ts'
 import { skillNommeeEnTete } from '../src/shared/skill-nommee.ts'
 
@@ -187,7 +187,7 @@ function jetonsParTour(data, depuis) {
 }
 
 /**
- * Chaque run joue ses étapes sous leur brief (`src/main/phase-briefs.ts`), sans lire le SKILL.md :
+ * Chaque run joue ses étapes sous leur brief (`src/main/consignes/phase-briefs.ts`), sans lire le SKILL.md :
  * l'ancien chargeur `phaseInstruction`, sans appelant (/judge conv-1369), est retiré le 05/11
  * (conv-1602). `trace.json` les nomme et porte leurs jetons ; les runs
  * plus anciens n'ont que les titres `### phase x` de leur RUN.md. Une étape rejouée dans le même run
@@ -296,7 +296,7 @@ export function mesurerUsages({ data, noms, conversations, maintenant = Date.now
 }
 
 /**
- * COPIE de `ligneDeSkill` (`src/main/commands.ts`) : ce module tire tout le processus principal et
+ * COPIE de `ligneDeSkill` (`src/main/commands/commands.ts`) : ce module tire tout le processus principal et
  * Electron, un script ne peut pas l'importer. Le test `skill-doctor.test.mjs` compare les deux sur
  * tout le kit : si la règle change là-bas, il passe au rouge ici.
  */

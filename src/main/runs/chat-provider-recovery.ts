@@ -1,9 +1,9 @@
 import { statSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { Attachment, SendResult } from '../providers/types'
-import { guardAttachments } from '../ipc-guards'
-import { decodeRoleBinding } from '../role-store'
-import { isReasoningEffort, type RoleBinding } from '../roles'
+import { guardAttachments } from '../ipc/ipc-guards'
+import { decodeRoleBinding } from '../profil/role-store'
+import { isReasoningEffort, type RoleBinding } from '../profil/roles'
 import { recoverDetachedProviderResult } from './run-reattach'
 import { survivableExitCode, survivableExitCodeAsync } from './stdout-journal'
 import {

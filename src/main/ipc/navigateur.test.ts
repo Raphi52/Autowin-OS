@@ -50,7 +50,7 @@ vi.mock('electron', () => ({
   },
   webFrame: { getZoomFactor: () => 1, setZoomFactor: () => undefined }
 }))
-vi.mock('../ipc-senders', () => ({
+vi.mock('./ipc-senders', () => ({
   assertTrustedRendererSender: (event: { nonFiable?: boolean }, portee: string) => {
     simule.gardes.push(portee)
     if (event?.nonFiable) throw new Error(`Origine renderer non autorisée pour ${portee}`)
@@ -63,8 +63,8 @@ import type {
   EcouteursVue,
   FabriqueVueNavigateur,
   VueNavigateur
-} from '../navigateur-integre'
-import { PARTITION_EPHEMERE, PARTITION_PERSISTANTE } from '../navigateur-integre'
+} from '../bureau/navigateur-integre'
+import { PARTITION_EPHEMERE, PARTITION_PERSISTANTE } from '../bureau/navigateur-integre'
 import { CANAUX_NAVIGATEUR, type ApiNavigateur, type EtatNavigateur } from '../../shared/navigateur'
 
 class FausseVue implements VueNavigateur {

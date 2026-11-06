@@ -42,8 +42,8 @@ import {
   verdictMicro,
   type VerdictMicro
 } from './whisper-audio'
-import type { EtatWhisper } from '../../../main/whisper-local'
-import type { EtatPiper } from '../../../main/piper-local'
+import type { EtatWhisper } from '../../../main/media/whisper-local'
+import type { EtatPiper } from '../../../main/media/piper-local'
 import {
   basculerEcoute,
   ecouteInitiale,

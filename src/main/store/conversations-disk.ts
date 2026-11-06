@@ -25,7 +25,7 @@ import {
   reponseAuDessusDesConsignes
 } from './conversations'
 import type { Conversation, ConversationChange, Msg } from './conversations'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import type { FinishedRunOutcome } from '../runs/run-interruption'
 
 /**

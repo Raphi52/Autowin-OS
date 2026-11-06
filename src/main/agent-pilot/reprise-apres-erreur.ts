@@ -8,7 +8,7 @@ import {
   deciderRepliApresRefus,
   dormirAnnulable,
   estCrashDExecutionDuCli
-} from '../chat-rejeu-surcharge'
+} from '../chat/chat-rejeu-surcharge'
 import { basculeApresQuota } from '../providers/registry'
 import { ProviderCallError, type PromptEnvelope, type SendOptions } from '../providers/types'
 import type { ContexteDuTour } from './contexte-du-tour'

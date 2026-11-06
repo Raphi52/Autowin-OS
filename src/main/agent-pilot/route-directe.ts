@@ -6,9 +6,9 @@ import {
   type OrchestrationOutcome
 } from '../../shared/orchestration-outcome'
 import { pagesHtmlEnTexte } from '../../shared/pages-html-pour-le-modele'
-import { tacheAvecLectureRetenue } from '../deux-lectures'
-import { avecAvisEnTete, avisOrientationsTardives } from '../orientations-tardives'
-import { bornerResultatDeCommande } from '../resultat-de-commande-borne'
+import { tacheAvecLectureRetenue } from '../chat/deux-lectures'
+import { avecAvisEnTete, avisOrientationsTardives } from '../conversations/orientations-tardives'
+import { bornerResultatDeCommande } from '../chat/resultat-de-commande-borne'
 import type { ExecutionDeCommande } from './commandes-du-tour'
 import type { PilotEventVariant } from './evenements'
 import { commandResultSucceeded, failedOrchestrationOutcome } from './issue-des-commandes'

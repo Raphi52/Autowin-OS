@@ -1,6 +1,6 @@
 import { join } from 'node:path'
-import { deposerFichier, relireFichier } from '../ecriture-hors-fil'
-import { ensureAutowinAppData } from '../app-data'
+import { deposerFichier, relireFichier } from '../gel/ecriture-hors-fil'
+import { ensureAutowinAppData } from '../app/app-data'
 import { loadChatSessions } from '../runs/chat-session-store'
 
 /**

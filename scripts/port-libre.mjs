@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process'
  *
  * DEFAUT MESURE le 2026-09-06 : le port fixe 9280 du lanceur de la sonde etait tenu en LISTENING
  * par un processus DEJA MORT (PID 42372 introuvable). Un enfant de l'application herite du socket
- * d'ecoute et le garde apres la fin du parent — cas deja documente cote `src/main/cdp-port.ts`.
+ * d'ecoute et le garde apres la fin du parent — cas deja documente cote `src/main/bureau/cdp-port.ts`.
  * Le harnais refusait donc de demarrer (« port deja occupe »), et la verification automatique
  * branchee sur `build:desktop` tombait a chaque construction pour une raison SANS AUCUN RAPPORT
  * avec le produit. Un socket fantome ne se tue pas : on prend le suivant.

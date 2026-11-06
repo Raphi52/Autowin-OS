@@ -336,7 +336,7 @@ try {
        *
        * La reparation n'est pas de desserrer cette ligne — ce serait un faux vert — mais de faire
        * construire l'index par la fixture. Or reindexer coute PLUSIEURS MINUTES (voir
-       * src/main/brain-index-refresh.ts) : inacceptable a chaque construction. Tant que ce cout
+       * src/main/brain/brain-index-refresh.ts) : inacceptable a chaque construction. Tant que ce cout
        * n'est pas resolu, la sonde reste MANUELLE. Sa jumelle cdp-knowledge-circular-proof, elle,
        * est verte en 28 s et branchee.
        */

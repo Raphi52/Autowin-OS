@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest'
  * sur des identifiants litteraux est ici l'oracle le plus direct -- pas une approximation.
  */
 const dossierScripts = join(process.cwd(), 'scripts')
-const SOURCE_CATALOGUE = join(process.cwd(), 'src', 'main', 'workflow-defaults.ts')
+const SOURCE_CATALOGUE = join(process.cwd(), 'src/main/workflow/workflow-defaults.ts')
 
 /** Les identifiants de profil que le catalogue par defaut declare. */
 function profilsDuCatalogue() {

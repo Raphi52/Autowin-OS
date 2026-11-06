@@ -15,7 +15,7 @@
  */
 import { readFileSync, statSync, type FSWatcher } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
-import { surveillerDossier } from '../surveiller-dossier'
+import { surveillerDossier } from '../fichiers/surveiller-dossier'
 
 /**
  * Le répertoire git COMMUN d'un dépôt (celui qui porte `refs/` et `packed-refs`), sans lancer git.

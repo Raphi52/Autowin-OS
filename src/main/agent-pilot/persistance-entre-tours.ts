@@ -7,7 +7,7 @@ import {
   lireCompteRenduNonVu,
   oublierCompteRenduNonVu
 } from '../runs/compte-rendu-non-vu-store'
-import { bornerResultatDeCommande } from '../resultat-de-commande-borne'
+import { bornerResultatDeCommande } from '../chat/resultat-de-commande-borne'
 
 /**
  * AJOUTE la note a celle qui attend encore, au lieu de la remplacer (conv-989) : un `/scout` suivi

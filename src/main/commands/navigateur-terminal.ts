@@ -7,8 +7,8 @@
  */
 
 // Import de TYPE seulement : le moteur charge Electron, le bus ne doit pas (tests sans Electron).
-import type { GestionnaireNavigateur } from '../navigateur-integre'
-import type { GestionnaireTerminal } from '../terminal-integre'
+import type { GestionnaireNavigateur } from '../bureau/navigateur-integre'
+import type { GestionnaireTerminal } from '../bureau/terminal-integre'
 import type { RefusActionNavigateur } from '../../shared/navigateur'
 
 /**

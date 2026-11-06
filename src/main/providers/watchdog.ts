@@ -11,7 +11,7 @@
  * Les timers sont `unref()` : ils ne retiennent jamais l'event loop (pas de fuite au quit).
  */
 
-import { tuerArbre } from '../verify-extinction'
+import { tuerArbre } from '../verify/verify-extinction'
 
 const envMs = (name: string, fallback: number): number => {
   const raw = Number(process.env[name])

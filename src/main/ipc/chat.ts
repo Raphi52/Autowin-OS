@@ -1,25 +1,25 @@
-import { commandeNonInjectable } from '../skill-routing'
+import { commandeNonInjectable } from '../skills/skill-routing'
 import { isAppDestination } from '../../shared/view-tabs'
-import { observerLeMoteur } from '../observer-les-sources'
+import { observerLeMoteur } from '../app/observer-les-sources'
 import { MOTIF_STOP_DU_CHAT } from '../../shared/arret-par-stop'
 import { HAUTEUR_BOUTONS_FENETRE } from '../../shared/barre-fenetre'
-import { nomUtilisateurCourant } from '../identite-utilisateur'
+import { nomUtilisateurCourant } from '../profil/identite-utilisateur'
 import { spawn } from 'node:child_process'
 import { registerPiperIpc } from './piper'
 import { registerActivityIpc } from './activity'
 import { registerWorktreeIpc, type WorktreeFixtureDeTest } from './worktree'
 import { registerConversationsIpc } from './conversations'
 import { registerCarteDesBesoinsIpc } from './carte-des-besoins'
-import { creerDossierDuBoard, sousDossierDuPoste } from '../board-dossier'
-import { creerPublicationDeLaPresence } from '../quartier-presence'
+import { creerDossierDuBoard, sousDossierDuPoste } from '../board/board-dossier'
+import { creerPublicationDeLaPresence } from '../mascotte/quartier-presence'
 import { ANIMAL_PAR_DEFAUT } from '../../shared/quartier-presence'
 import { registerQuartierPresenceIpc } from './quartier-presence'
 import { registerLangueIpc } from './langue'
 import { registerCaptureElementIpc } from './capture-element'
-import { creerMesureDesEcarts } from '../ecarts-des-fiches'
-import type { ConversationPourLaCarte } from '../carte-des-besoins'
-import { messagesRecopies, type BranchePourLaFiche } from '../fiches-de-demande'
-import { lireDossiersProjetsClaude } from '../dossiers-claude-cli'
+import { creerMesureDesEcarts } from '../board/ecarts-des-fiches'
+import type { ConversationPourLaCarte } from '../board/carte-des-besoins'
+import { messagesRecopies, type BranchePourLaFiche } from '../board/fiches-de-demande'
+import { lireDossiersProjetsClaude } from '../providers/dossiers-claude-cli'
 import { registerTranscriptsIpc } from './transcripts'
 import { registerPreflightIpc } from './preflight'
 import { registerGitIpc } from './git'
@@ -41,8 +41,8 @@ import { registerChatArtifactsIpc } from './chat-artifacts'
 import { registerSkillsIpc } from './skills'
 import { registerWhisperIpc } from './whisper'
 import { registerDiarisationIpc } from './diarisation'
-import { pendantOperation } from '../gel-main'
-import { emitToLiveWindows } from '../renderer-emit'
+import { pendantOperation } from '../gel/gel-main'
+import { emitToLiveWindows } from '../app/renderer-emit'
 import {
   app,
   shell,
@@ -60,11 +60,11 @@ import {
   clearExecutionWorkspacePreference,
   readExecutionWorkspacePreference,
   writeExecutionWorkspacePreference
-} from '../execution-workspace-preference'
+} from '../orchestration/execution-workspace-preference'
 import { execFileSync } from 'node:child_process'
-import { estDansUnDepotGit } from '../depot-git'
-import { readBrainHealth } from '../brain-index-refresh'
-import { appliquerBrainReglage, effacerBrainReglage, lireBrainReglage } from '../brain-reglage'
+import { estDansUnDepotGit } from '../git/depot-git'
+import { readBrainHealth } from '../brain/brain-index-refresh'
+import { appliquerBrainReglage, effacerBrainReglage, lireBrainReglage } from '../brain/brain-reglage'
 import {
   defaultBrainPersoRoot,
   demarrerBrainPerso,
@@ -73,14 +73,14 @@ import {
   pingBrainPerso,
   preparerDossierBrainPerso,
   racineBrainPerso
-} from '../brain-perso'
-import { defaultBrainRoot } from '../brain-paths'
+} from '../brain/brain-perso'
+import { defaultBrainRoot } from '../brain/brain-paths'
 import type { BrainPersoState, BrainReglageState } from '../../shared/preload-contracts'
-import { restoreTrashedKnowledge, retractKnowledgeCandidate } from '../brain-inbox'
-import { DEFAULT_ORCHESTRATION_BUDGET } from '../orchestration-budget'
-import { type AppEvent } from '../commands'
-import { compensateOutcomeCuration } from '../outcome-learning-curation'
-import { executeCurationTransaction } from '../outcome-learning-curation-transaction'
+import { restoreTrashedKnowledge, retractKnowledgeCandidate } from '../brain/brain-inbox'
+import { DEFAULT_ORCHESTRATION_BUDGET } from '../orchestration/orchestration-budget'
+import { type AppEvent } from '../commands/commands'
+import { compensateOutcomeCuration } from '../brain/outcome-learning-curation'
+import { executeCurationTransaction } from '../brain/outcome-learning-curation-transaction'
 import { resumerMesure, traiterStepPourPari } from '../activity/pari-step'
 import {
   annoncerLaFinDuTour,
@@ -93,20 +93,20 @@ import {
 import { anciensPlansDuChef, plansPourLaListe, type IssueDuTour } from '../../shared/plan-de-lots'
 import { phrasesDesLots } from '../../shared/phrase-du-fil'
 import { lancerSansAttendre } from '../chat/lancer-sans-attendre'
-import { demarrerPointEntreeLocal } from '../point-entree-local'
+import { demarrerPointEntreeLocal } from '../app/point-entree-local'
 import { modeleDuTour } from '../chat/modele-de-conversation'
 import { creerRelanceurSurDisque, type RelanceurTachesDeFond } from '../chat/relance-taches-de-fond'
-import { enregistrerDirectiveDansLeFil } from '../directive-dans-le-fil'
-import { buildContinuationProviderHistory } from '../chat-continuation'
+import { enregistrerDirectiveDansLeFil } from '../chat/directive-dans-le-fil'
+import { buildContinuationProviderHistory } from '../chat/chat-continuation'
 import { parseFileRef, resolveFileRef } from '../../shared/file-ref'
-import { commandeEditeur, ligneDemandee, racinesRevelation } from '../reveal-file'
+import { commandeEditeur, ligneDemandee, racinesRevelation } from '../fichiers/reveal-file'
 import { type ChatTurnEvent } from '../../shared/chat-turn'
 import type { RunLifecycleEvent } from '../../shared/run-execution'
 import { evenementRefusIntegration } from '../activity/ledger'
-import { classeTerminaleDEchec } from '../classe-terminale-echec'
+import { classeTerminaleDEchec } from '../orchestration/classe-terminale-echec'
 import { pruneLegacyContextValues } from '../runs/context-value-gc'
 import { deleteConvRun, listConvRuns, loadConvRunTrace } from '../runs/conv-runs'
-import { phasesAvecJuge } from '../orchestration-memoire'
+import { phasesAvecJuge } from '../orchestration/orchestration-memoire'
 import { deleteListedRun } from '../dashboards/runs-scan'
 import { createOrchestrateTurnPersistence } from '../runs/orchestrate-turn-persistence'
 import { StartupResumeQueue } from '../runs/startup-resume-queue'
@@ -149,45 +149,45 @@ import {
   persistRunLifecycle
 } from '../activity/orchestration-observability'
 import { aggregateToolUsage } from '../activity/tool-usage'
-import { listBehaviourFiles, readBehaviourFileFromManifest } from '../behaviour-files'
-import { assertTrustedBehaviourSender, assertTrustedRendererSender } from '../ipc-senders'
+import { listBehaviourFiles, readBehaviourFileFromManifest } from '../behaviour/behaviour-files'
+import { assertTrustedBehaviourSender, assertTrustedRendererSender } from './ipc-senders'
 import { type FabricNodeSummary } from '../compute-fabric/control-plane'
 import { createFabricProductBindings } from '../compute-fabric/product-bridge'
-import { createCheckpointForkManifest } from '../wire-checkpoint-fork'
-import { recommendShadowRoute } from '../shadow-router'
-import { createShadowRoutingRuntime } from '../model-routing-shadow'
-import { saveShadowRoutingPilotSetting } from '../model-routing-shadow-setting'
+import { createCheckpointForkManifest } from '../topologie/wire-checkpoint-fork'
+import { recommendShadowRoute } from '../modeles/shadow-router'
+import { createShadowRoutingRuntime } from '../modeles/model-routing-shadow'
+import { saveShadowRoutingPilotSetting } from '../modeles/model-routing-shadow-setting'
 import { rebuildSemanticTemporalProjection } from '../knowledge/semantic-temporal-store'
-import { saveAgentTopology } from '../topology-disk'
-import type { AgentTopology } from '../topology'
-import { autowinAppDataRoot, ensureAutowinAppData } from '../app-data'
-import { typerCeQuiPart, typeurTsc } from '../typage-avant-publication'
+import { saveAgentTopology } from '../topologie/topology-disk'
+import type { AgentTopology } from '../topologie/topology'
+import { autowinAppDataRoot, ensureAutowinAppData } from '../app/app-data'
+import { typerCeQuiPart, typeurTsc } from '../verify/typage-avant-publication'
 import { materializeClaudeAttachments } from '../providers/claude'
 import { homedir } from 'node:os'
 import { canonicalProjectPath } from '../../shared/project-path'
-import { guardAttachments, guardString, guardStringOrNull } from '../ipc-guards'
-import { messagesAAfficher } from '../messages-entre-fils-app'
-import { CoordinateurDesPlans } from '../plans-de-lots-app'
-import { abortUpdateConflict, checkForUpdate, applyUpdate } from '../git-update'
+import { guardAttachments, guardString, guardStringOrNull } from './ipc-guards'
+import { messagesAAfficher } from '../conversations/messages-entre-fils-app'
+import { CoordinateurDesPlans } from '../orchestration/plans-de-lots-app'
+import { abortUpdateConflict, checkForUpdate, applyUpdate } from '../git/git-update'
 import type { UpdateAction } from '../../shared/update-contract'
-import { restartApplication } from '../app-restart'
-import { annoncerFermeture } from '../journal-arrets'
-import { consommerReprise } from '../redemarrage-reprise'
+import { restartApplication } from '../app/app-restart'
+import { annoncerFermeture } from '../app/journal-arrets'
+import { consommerReprise } from '../app/redemarrage-reprise'
 import {
   avertissementDossierConversation,
   diagnostiqueDossierConversation
-} from '../bascule-dossier-conversation'
-import { depotCiteDansLeMessage } from '../depot-cite-dans-le-message'
-import { rangerConversationSurLePremierMessage } from '../rangement-premier-message'
-import { noterAppelCourt, signalerPanneAppelCourt } from '../petites-taches-trace'
-import { condenseurDuBrain } from '../brain-condenseur'
+} from '../conversations/bascule-dossier-conversation'
+import { depotCiteDansLeMessage } from '../git/depot-cite-dans-le-message'
+import { rangerConversationSurLePremierMessage } from '../conversations/rangement-premier-message'
+import { noterAppelCourt, signalerPanneAppelCourt } from '../orchestration/petites-taches-trace'
+import { condenseurDuBrain } from '../brain/brain-condenseur'
 import {
   partageLeDepot,
   photographierDebutDeTour,
   verifierCeQuiPart
-} from '../chat-turn-publication'
-import { publierSansTour, redacteurDeCommit } from '../git-apres-fil-sans-tour'
-import { lireProprietairesDeFichiers } from '../proprietaire-fichier'
+} from '../chat/chat-turn-publication'
+import { publierSansTour, redacteurDeCommit } from '../git/git-apres-fil-sans-tour'
+import { lireProprietairesDeFichiers } from '../fichiers/proprietaire-fichier'
 import {
   blocDuTour,
   commitsPublies,
@@ -200,19 +200,19 @@ import {
   publicationInterditeDans,
   travauxParFil,
   travauxTentesSurDisque
-} from '../git-apres-fil'
+} from '../git/git-apres-fil'
 import {
   autoCloseBranch,
   autoCloseRun,
   defaultGitRunner,
   type AutoCloseReport
-} from '../run-autoclose'
+} from '../runs/run-autoclose'
 import {
   creerNotifieurDeFinDeTour,
   libelleDeBouton,
   type ContenuNotification
-} from '../notification-fin-de-tour'
-import { creerPopupsDeFinDeTour, definirPaletteDeCarte } from '../notification-popup-fenetre'
+} from '../app/notification-fin-de-tour'
+import { creerPopupsDeFinDeTour, definirPaletteDeCarte } from '../app/notification-popup-fenetre'
 import {
   cssDeLAccueil,
   HAUTEUR_MASCOTTE,
@@ -220,15 +220,15 @@ import {
   htmlDeMascotte,
   LARGEUR_MASCOTTE,
   type HumeurAccueil
-} from '../mascotte'
+} from '../mascotte/mascotte'
 import {
   ecrireMascotteAffichee,
   ecrireStyleMascotte,
   lireMascotteAffichee,
   lireStyleMascotte,
   styleAffiche
-} from '../mascotte-reglage'
-import { photographierLeCode } from '../photo-du-code'
+} from '../mascotte/mascotte-reglage'
+import { photographierLeCode } from '../git/photo-du-code'
 import { materializeChatArtifact } from '../store/chat-artifact-store'
 import { filterNativePreflight, readNativePreflight } from '../activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from '../activity/native-trace-spool'
@@ -238,9 +238,9 @@ import {
   seedDefaultWorkflows,
   WorkflowRefusalMailbox,
   type WorkflowProfilesFile
-} from '../workflow-profiles'
-import { overrideFor } from '../workflow-run-override'
-import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from '../workflow-graph'
+} from '../workflow/workflow-profiles'
+import { overrideFor } from '../workflow/workflow-run-override'
+import { graphDefects, worstCaseNodeExecutions, type WorkflowGraph } from '../workflow/workflow-graph'
 import { journaliserSaisie, lireOrientationsRattachees } from '../store/journal-saisie'
 import { inventorierDisque, menageDemarrage } from '../store/inventaire-disque'
 import { jouerPasseDeRetention } from '../store/balayage-retention'
@@ -251,9 +251,9 @@ import {
   readConversationTurnFileMutations,
   readConversationTurnFilePaths
 } from '../activity/conversation-file-trace-spool'
-import { buildBehaviourComposition } from '../behaviour-composition'
+import { buildBehaviourComposition } from '../behaviour/behaviour-composition'
 import { artifactsFromExecutionEvidence } from '../providers/artifacts'
-import { sharedBrainRoot } from '../brain-context'
+import { sharedBrainRoot } from '../brain/brain-context'
 import { TaskScheduler } from '../task-manager/task-scheduler'
 import { WatchdogEngine } from '../task-manager/watchdog-engine'
 import { seedWatchdogTasks } from '../task-manager/watchdog-seeds'
@@ -307,7 +307,7 @@ import { unePasseALaFois } from '../veille/une-passe-a-la-fois'
 import { lancerScoutVeille } from '../veille/scout-claude'
 import { candidatsInternesDuDepot } from '../veille/audit-depot'
 import { dispatcherAvecVeille } from '../veille/dispatch-veille'
-import { deposerOrientationDuFil } from '../orientations-en-cours-app'
+import { deposerOrientationDuFil } from '../conversations/orientations-en-cours-app'
 import type { ContexteIpcChat } from '../index'
 
 // Extrait tel quel d’index.ts (conv-1508, lot 5) : l’enregistrement des IPC du chat pesait ~3 500 lignes

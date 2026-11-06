@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { compileExecutionQuote } from '../execution-quote'
+import { compileExecutionQuote } from '../orchestration/execution-quote'
 import {
   clearOrchestrationState,
   DatesDesCheckpoints,
@@ -611,7 +611,7 @@ describe('état reprenable d’orchestration (survie niveau 3)', () => {
   })
 
   it('branche le callback de spawn sur le snapshot actif du superviseur', () => {
-    const source = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
+    const source = readFileSync(join(process.cwd(), 'src/main/app/os.ts'), 'utf8')
     const start = source.indexOf('onAgentsChanged:')
     const end = source.indexOf('onRunSettled:', start)
     const callback = source.slice(start, end)
@@ -1174,7 +1174,7 @@ describe('admission de la reprise automatique au démarrage', () => {
    * faire. Reste ici la moitie qui vit dans `os.ts`, hors du module extrait.
    */
   it('persiste le snapshot avec l acquis a chaque phase terminee', () => {
-    const osSource = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
+    const osSource = readFileSync(join(process.cwd(), 'src/main/app/os.ts'), 'utf8')
     expect(osSource).toMatch(
       /onPhaseCompleted:[\s\S]*runtimeSnapshot,[\s\S]*saveOrchestrationState/
     )
@@ -1344,7 +1344,7 @@ describe('dates d’un checkpoint : premier départ et dernière activité réel
    * chaque écriture de maintenant et le défaut renaîtrait sans qu'un test le voie.
    */
   it('os.ts date ses checkpoints par DatesDesCheckpoints, reprise comprise', () => {
-    const osSource = readFileSync(join(process.cwd(), 'src/main/os.ts'), 'utf8')
+    const osSource = readFileSync(join(process.cwd(), 'src/main/app/os.ts'), 'utf8')
     expect(osSource).toMatch(/onPhaseCompleted:[\s\S]*datesDesCheckpoints\.pourEcriture\(runId/)
     expect(osSource).toMatch(/datesDesCheckpoints\.reprendre\(resumeControl\)/)
     expect(osSource).not.toContain('orchestrationStartedAt')

@@ -91,7 +91,7 @@ else:
             ico = Image.open(RACINE / relatif)
     verifie((RACINE / "build/icon.ico").read_bytes() == (RACINE / "resources/autowin-os-dev.ico").read_bytes(),
             "l'icone Dev et l'icone du paquet sont le MEME fichier")
-    # L'icone de la zone de notification de l'app installee (src/main/window.ts) : sans elle, la
+    # L'icone de la zone de notification de l'app installee (src/main/app/window.ts) : sans elle, la
     # notification retomberait sur le PNG 512 reduit par Windows, flou a 16-24 px.
     icone_notification = RACINE / "resources/icon.ico"
     verifie(icone_notification.is_file()

@@ -62,7 +62,7 @@ describe('Markdown — les trous qui rendaient les tableaux de skill illisibles'
   })
 
   it("(b) ne laisse plus fuiter la syntaxe brute d'un lien de preuve fichier:ligne", () => {
-    const container = render('voir [orchestrator.ts:80](src/main/orchestrator.ts:80)')
+    const container = render('voir [orchestrator.ts:80](src/main/orchestration/orchestrator.ts:80)')
 
     // Le symptome exact rapporte : les crochets et la cible s'affichaient litteralement.
     expect(container.textContent).not.toContain('](')
@@ -72,7 +72,7 @@ describe('Markdown — les trous qui rendaient les tableaux de skill illisibles'
     const ref = byText('orchestrator.ts:80')
     expect(ref.tagName).toBe('A')
     expect(ref.getAttribute('href')).toBe('#')
-    expect(ref.getAttribute('data-path')).toBe('src/main/orchestrator.ts')
+    expect(ref.getAttribute('data-path')).toBe('src/main/orchestration/orchestrator.ts')
   })
 
   it('(b-bis) laisse un vrai lien http cliquable et externe', () => {

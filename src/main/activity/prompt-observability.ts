@@ -10,9 +10,9 @@ import {
 import { appendFile } from 'node:fs/promises'
 import { createHash, randomUUID } from 'node:crypto'
 import { join, sep } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import type { Message, Usage } from '../providers/types'
-import type { PipelinePhase } from '../skill-pipeline'
+import type { PipelinePhase } from '../skills/skill-pipeline'
 import type { TokenUsage } from '../../shared/token-usage'
 import { remplacerContenuJoint } from './pieces-jointes-journal'
 

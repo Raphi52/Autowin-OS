@@ -7,12 +7,12 @@
  * Conductor, sinon `package.json`) : le renderer ne peut pas faire exécuter une ligne de son choix.
  */
 import { BrowserWindow, ipcMain } from 'electron'
-import { dossierDeTravailDuTour } from '../bascule-dossier-conversation'
-import { guardString } from '../ipc-guards'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { emitToLiveWindows } from '../renderer-emit'
-import { LancementsParDossier } from '../scripts-copie-main'
-import type { AutowinOS } from '../os'
+import { dossierDeTravailDuTour } from '../conversations/bascule-dossier-conversation'
+import { guardString } from './ipc-guards'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { emitToLiveWindows } from '../app/renderer-emit'
+import { LancementsParDossier } from '../app/scripts-copie-main'
+import type { AutowinOS } from '../app/os'
 
 export function registerLancementIpc({ os }: { os: AutowinOS }): {
   arreterTout: () => Promise<void>

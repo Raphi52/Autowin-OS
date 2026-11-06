@@ -4,7 +4,7 @@ import { detailRefusFixGate, SEUIL_FIX_GATE } from '../gates/hooks'
  * LE CONTRÔLE « CAUSE VÉRIFIÉE » SE SIGNALE PENDANT LE TRAVAIL (conv-1353, 2026-10-31).
  *
  * Mesure : conv-1324 (run-7b7d533c318e-1) a appris à la 134e minute, au contrôle final, que 14
- * modifications de src/main/navigateur-integre.ts n'avaient pas de cause vérifiée. Ce refus a rejoué
+ * modifications de src/main/bureau/navigateur-integre.ts n'avaient pas de cause vérifiée. Ce refus a rejoué
  * un passage complet, alors que l'agent aurait pu noter sa cause dès la 3e modification.
  *
  * `detectBlindFixLoop` ne change pas et refuse toujours pareil. Ce module ajoute seulement un hook

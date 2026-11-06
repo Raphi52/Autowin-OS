@@ -7,9 +7,9 @@
  */
 import { ProviderRegistry } from '../src/main/providers/registry'
 import { ClaudeCliAdapter } from '../src/main/providers/claude'
-import { AppCommandBus } from '../src/main/commands'
-import { AgentPilot } from '../src/main/agent-pilot'
-import { AutowinOS } from '../src/main/os'
+import { AppCommandBus } from '../src/main/commands/commands'
+import { AgentPilot } from '../src/main/agent-pilot/agent-pilot'
+import { AutowinOS } from '../src/main/app/os'
 
 const registry = new ProviderRegistry()
 registry.register(new ClaudeCliAdapter())

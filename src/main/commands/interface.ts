@@ -1,11 +1,11 @@
 // Groupe de commandes « navigation, question cliquable, envoi au chat », sorti de AppCommandBus.run (conv-1508, lot 2).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import type { AppCommandBus } from '../commands'
+import type { AppCommandBus } from './commands'
 import { resolveAppLocation } from '../../shared/navigation'
-import { normaliserReponsesAsk, choixMultipleDemande } from '../ask-options'
-import { CONTEXT_MESSAGE_LIMIT } from '../conversation-window'
-import { optionsQuiPresupposentUneSolution } from '../option-lecture-ou-solution'
-import type { Role } from '../roles'
+import { normaliserReponsesAsk, choixMultipleDemande } from '../chat/ask-options'
+import { CONTEXT_MESSAGE_LIMIT } from '../conversations/conversation-window'
+import { optionsQuiPresupposentUneSolution } from '../chat/option-lecture-ou-solution'
+import type { Role } from '../profil/roles'
 import type { Message } from '../providers/types'
 
 /** Cas de `AppCommandBus.run` : navigation, question cliquable, envoi au chat. Corps déplacé tel quel depuis commands.ts (conv-1508, lot 2). */

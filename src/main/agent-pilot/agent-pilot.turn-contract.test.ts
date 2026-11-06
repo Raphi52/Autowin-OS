@@ -1,0 +1,1211 @@
+import { describe, expect, it, vi } from 'vitest'
+import { AgentPilot, type PilotEvent } from './agent-pilot'
+import type { PromptSnapshot } from '../commands/commands'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from '../consignes/response-style'
+import { forgetEcho, noteRemembered } from '../brain/session-memory-echo'
+
+/*
+ * LES N PREMIERS ARGUMENTS, et non l'appel EXACT.
+ *
+ * `bus.exec` a gagne un parametre optionnel `onProgress` le 2026-08-25 (signe de vie d'une action
+ * longue). Onze assertions `toHaveBeenCalledWith` sont alors passees au rouge d'un coup : elles
+ * figeaient l'ARITE de l'appel, alors que leur intention est le nom de la commande, ses arguments et
+ * sa conversation. Une assertion d'arite sur une signature qui grandit recassera au prochain
+ * parametre optionnel -- c'est deja arrive une fois, autant ne pas le reprogrammer.
+ *
+ * On compare donc le DEBUT de chaque appel. Aucune assertion n'est desserree : les valeurs verifiees
+ * sont exactement les memes, seule la queue non specifiee cesse de compter.
+ */
+/** Le N-ieme appel, compare sur ses premiers arguments. Meme raison que `appeleAvec`. */
+const nieme = (
+  spy: { mock: { calls: unknown[][] } },
+  rang: number,
+  ...attendus: unknown[]
+): void => {
+  expect(spy.mock.calls[rang - 1]?.slice(0, attendus.length)).toEqual(attendus)
+}
+
+const appeleAvec = (
+  spy: { mock: { calls: unknown[][] } },
+  ...attendus: unknown[]
+): void => {
+  expect(spy.mock.calls.map((appel) => appel.slice(0, attendus.length))).toContainEqual(attendus)
+}
+
+
+const snapshotForPrompt = async (): Promise<PromptSnapshot> => ({
+  tab: 'chat',
+  providers: [],
+  runsBlocked: [],
+  conversationsCount: 0
+})
+
+/**
+ * Le corps du tour de chat a ete SORTI de `src/main/index.ts` vers `src/main/chat/run-pilot-chat.ts`
+ * (deplacement mecanique, comportement inchange). Ces contrats lisent donc les DEUX fichiers : le
+ * cablage reste dans `index.ts`, la logique du tour vit dans le module extrait.
+ */
+const sourceDuTourDeChat = (): string =>
+  [
+    readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8'),
+    readFileSync(join(process.cwd(), 'src/main/chat/run-pilot-chat.ts'), 'utf8')
+  ].join('\n')
+
+describe('AgentPilot turn contract', () => {
+  it('reinjecte une capture de commande comme image ephemere a iteration suivante', async () => {
+    const calls: Array<Array<{ role: string; content: string; attachments?: unknown[] }>> = []
+    const responses = [
+      '<cmd>{"name":"desktop_observe","args":{}}</cmd>',
+      'Je vois maintenant le bureau.'
+    ]
+    const registry = {
+      send: vi.fn(async (_provider: string, messages: (typeof calls)[number]) => {
+        calls.push(structuredClone(messages))
+        return { text: responses.shift()!, provider: 'codex' }
+      }),
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const image = {
+      name: 'desktop.jpg',
+      mimeType: 'image/jpeg',
+      size: 3,
+      kind: 'image' as const,
+      content: 'YWJj'
+    }
+    const bus = {
+      catalog: () => [{ name: 'desktop_observe', args: {}, description: 'observe' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { width: 1280, height: 720 },
+        attachments: [image]
+      })
+    }
+
+    await new AgentPilot(
+      registry as never,
+      {
+        getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    ).chat([{ role: 'user', content: 'regarde mon ecran' }], () => undefined, undefined, 2)
+
+    expect(calls).toHaveLength(2)
+    expect(calls[0][0].attachments).toBeUndefined()
+    expect(calls[1][0].attachments).toEqual([image])
+    expect(calls[1][0].content).not.toContain('YWJj')
+  })
+
+  it('autorise au plus une orchestration par tour, meme si le modele en emet deux', async () => {
+    const responses = [
+      '<cmd>{"name":"orchestrate","args":{"task":"premier run"}}</cmd>' +
+        '<cmd>{"name":"orchestrate","args":{"task":"second run"}}</cmd>',
+      'Le run unique est termine.'
+    ]
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'run' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { status: 'succeeded' } })
+    }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'fais la tache' }],
+      () => undefined,
+      undefined,
+      2,
+      'conv-unique',
+      undefined,
+      undefined,
+      undefined,
+      'turn-unique'
+    )
+
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    appeleAvec(bus.exec, 
+      'orchestrate',
+      { task: 'premier run', rootTask: 'fais la tache' },
+      'conv-unique',
+      undefined,
+      'turn-unique'
+    )
+  })
+
+  it('transporte le prompt utilisateur racine sans laisser le modele le reduire a un scout', async () => {
+    const rootTask =
+      'Scout les defauts du workflow puis corrige-les, prouve le rouge vers vert et publie un commit.'
+    const registry = {
+      send: vi.fn(async () => ({
+        text: '<cmd>{"name":"orchestrate","args":{"task":"liste les defauts","phase":"scout"}}</cmd>',
+        provider: 'codex'
+      })),
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'run' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { status: 'succeeded', valid: true, gateBlocked: false }
+      })
+    }
+
+    await new AgentPilot(
+      registry as never,
+      { getBinding: () => ({ provider: 'codex', model: 'gpt-test' }) } as never,
+      bus as never
+    ).chat([{ role: 'user', content: rootTask }], () => undefined, undefined, 2, 'conv-root')
+
+    appeleAvec(bus.exec, 
+      'orchestrate',
+      { task: 'liste les defauts', phase: 'scout', rootTask },
+      'conv-root'
+    )
+  })
+
+  it('route un /skill vers orchestrate avant tout appel au modèle conversationnel', async () => {
+    const registry = {
+      send: vi.fn(),
+      describePrompt: vi.fn()
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+      })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: '/scout trouve les risques du repo' }],
+      (event) => events.push(event),
+      undefined,
+      2,
+      'conv-1'
+    )
+
+    expect(registry.send).not.toHaveBeenCalled()
+    appeleAvec(bus.exec, 
+      'orchestrate',
+      { task: '/scout trouve les risques du repo' },
+      'conv-1'
+    )
+    expect(events.map((event) => event.kind)).toEqual(['command', 'result', 'done'])
+    const done = events.at(-1)
+    expect(done?.kind === 'done' ? done.text : '').toMatch(
+      /✅ Fait[\s\S]*📍 Maintenant[\s\S]*⏳ Reste à faire[\s\S]*👉 Recommandé/u
+    )
+  })
+
+  it('ne relance pas un second run quand une orientation arrive pendant un /skill', async () => {
+    const bus = {
+      catalog: () => [],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+      })
+    }
+    const directives = [['resserre le correctif'], []] as string[][]
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(
+      { send: vi.fn(), describePrompt: vi.fn() } as never,
+      {
+        getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    ).chat(
+      [{ role: 'user', content: '/build corrige le bug' }],
+      (event) => events.push(event),
+      undefined,
+      2,
+      'conv-directive',
+      undefined,
+      () => directives.shift() ?? []
+    )
+
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(events.at(-1)).toMatchObject({ kind: 'done' })
+    expect((events.at(-1) as { text?: string }).text).toMatch(
+      /^⚠️ Question[\s\S]*PAS ENCORE TRAIT[\s\S]*aucun second travail relanc/u
+    )
+    expect((events.at(-1) as { text?: string }).text?.trimEnd()).toMatch(/👉 Recommandé : .+\.$/u)
+  })
+
+  it('termine aussi le chemin orchestrate du modèle par Recommandé', async () => {
+    const events: PilotEvent[] = []
+    const registry = {
+      send: vi.fn().mockResolvedValue({
+        text: '<cmd>{"name":"orchestrate","args":{"task":"corrige le bug"}}</cmd>',
+        provider: 'codex'
+      }),
+      describePrompt: vi.fn().mockReturnValue({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({
+        ok: true,
+        data: { status: 'succeeded', valid: true, gateBlocked: false, reused: false }
+      })
+    }
+
+    await new AgentPilot(
+      registry as never,
+      { getBinding: () => ({ provider: 'codex', model: 'gpt-test' }) } as never,
+      bus as never
+    ).chat(
+      [{ role: 'user', content: 'corrige le bug' }],
+      (event) => events.push(event),
+      undefined,
+      1
+    )
+
+    expect((events.at(-1) as { text?: string }).text?.trimEnd()).toMatch(/👉 Recommandé : .+\.$/u)
+  })
+
+  it('propage le binding par tour à un /skill explicite', async () => {
+    const bus = {
+      catalog: () => [],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { valid: true } })
+    }
+    const binding = {
+      provider: 'claude',
+      model: 'claude-sonnet',
+      reasoningEffort: 'high' as const
+    }
+
+    await new AgentPilot(
+      { send: vi.fn(), describePrompt: vi.fn() } as never,
+      { getBinding: vi.fn() } as never,
+      bus as never
+    ).chat(
+      [{ role: 'user', content: '/build corrige puis teste' }],
+      () => undefined,
+      undefined,
+      1,
+      'conv-task',
+      undefined,
+      undefined,
+      binding
+    )
+
+    appeleAvec(bus.exec, 
+      'orchestrate',
+      { task: '/build corrige puis teste' },
+      'conv-task',
+      binding
+    )
+  })
+
+  it('utilise le snapshot runtime du tour meme si le role global change ensuite', async () => {
+    const snapshot = {
+      provider: 'codex',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'low' as const
+    }
+    const roles = {
+      getBinding: vi.fn(() => ({
+        provider: 'gemini',
+        model: 'gemini-2.5-pro',
+        reasoningEffort: 'none' as const
+      }))
+    }
+    const registry = {
+      send: vi.fn(async () => ({ text: 'termine', provider: 'codex', systemInjected: true })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'continue' }],
+      () => undefined,
+      undefined,
+      1,
+      'conv-snapshot',
+      undefined,
+      undefined,
+      undefined,
+      'turn-snapshot',
+      snapshot
+    )
+
+    expect(registry.send).toHaveBeenCalledWith(
+      'codex',
+      expect.any(Array),
+      expect.objectContaining({ model: 'gpt-5.6-sol', reasoningEffort: 'low' }),
+      expect.any(Function)
+    )
+    expect(roles.getBinding).not.toHaveBeenCalled()
+  })
+
+  it('does not pass an authority mode from the real pilotChat IPC path', () => {
+    const source = sourceDuTourDeChat()
+    expect(source).toContain(
+      'const supervisedSignal = os.executionSupervisor.currentSignal() ?? controller.signal'
+    )
+    expect(source).not.toContain('authorityMode')
+  })
+
+  it('journals the routed model and reasoning effort used by pilotChat', () => {
+    const source = sourceDuTourDeChat()
+    expect(source).toContain('turnPromptIdentity ??= {')
+    const activityBlock = source.match(
+      /appendConvActivity\(conversationId, \{[\s\S]*?kind: 'chat',[\s\S]*?\}\)/
+    )?.[0]
+
+    const normalizedActivityBlock = activityBlock?.replace(/\s+/g, ' ')
+    expect(normalizedActivityBlock).toContain(
+      'model: turnResolvedModel ?? turnPromptIdentity?.model ?? turnRuntimeBinding.model'
+    )
+    expect(normalizedActivityBlock).toContain(
+      'reasoningEffort: turnPromptIdentity?.reasoningEffort ?? turnRuntimeBinding.reasoningEffort'
+    )
+  })
+
+  it('journalise aussi le modele concret rapporte par le provider', () => {
+    const source = sourceDuTourDeChat()
+    const promptCallBlock = source.match(
+      /const promptCall = appendPromptCall\(\{[\s\S]*?\n\s*\}\)/
+    )?.[0]
+
+    expect(promptCallBlock).toContain('resolvedModel: pilotEvent.resolvedModel')
+  })
+
+  it('dispatches every command without an authority mode', async () => {
+    const responses = [
+      '<cmd>{"name":"remove_conversation","args":{"id":"conv-1"}}</cmd>',
+      'Refus confirmé'
+    ]
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'remove_conversation', args: { id: 'id' }, description: 'remove' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: true })
+    }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'supprime' }],
+      () => undefined,
+      undefined,
+      2,
+      'conv-1'
+    )
+
+    appeleAvec(bus.exec, 'remove_conversation', { id: 'conv-1' }, 'conv-1')
+  })
+
+  it('does not interrupt the user for a structured question without an admitted blocker', async () => {
+    const ask = vi.fn()
+    const events: PilotEvent[] = []
+    const responses = [
+      '<question>{"text":"Quel nom donner ?","options":["A","B"]}</question>',
+      'Je choisis un nom raisonnable et je poursuis.'
+    ]
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'avance avec un nom raisonnable' }],
+      (event) => events.push(event),
+      ask,
+      2,
+      'conv-1'
+    )
+
+    expect(ask).not.toHaveBeenCalled()
+    expect(registry.send).toHaveBeenCalledTimes(2)
+    expect(events.at(-1)).toMatchObject({
+      kind: 'done',
+      text: 'Je choisis un nom raisonnable et je poursuis.'
+    })
+  })
+
+  it('keeps one bounded autonomous recovery when an invalid question uses the last iteration', async () => {
+    const ask = vi.fn()
+    const events: PilotEvent[] = []
+    const responses = [
+      '<question>{"text":"Quel nom donner ?","options":["A","B"],"reason":"material-ambiguity"}</question>',
+      'Je choisis A et je poursuis.'
+    ]
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'choisis un nom raisonnable' }],
+      (event) => events.push(event),
+      ask,
+      1,
+      'conv-1'
+    )
+
+    expect(ask).not.toHaveBeenCalled()
+    expect(registry.send).toHaveBeenCalledTimes(2)
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Je choisis A et je poursuis.' })
+  })
+
+  it('does not transport missing credentials through the observable chat channel', async () => {
+    const responses = [
+      '<question>{"text":"Le token sk-test-123 est-il correct ?","options":[],"reason":"secret-or-personal-data"}</question>',
+      'Configure le credential du provider dans les réglages, puis relance.'
+    ]
+    const ask = vi.fn().mockResolvedValue('secret-value')
+    const events: PilotEvent[] = []
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'prépare le déploiement' }],
+      (event) => events.push(event),
+      ask,
+      1,
+      'conv-1'
+    )
+
+    expect(ask).not.toHaveBeenCalled()
+    expect(registry.send).toHaveBeenCalledTimes(2)
+    expect(events.find((event) => event.kind === 'prompt-call')?.response).not.toContain(
+      'sk-test-123'
+    )
+    expect(JSON.stringify(registry.send.mock.calls[1][1])).not.toContain('sk-test-123')
+    expect(JSON.stringify(registry.send.mock.calls[1][1])).toContain(
+      '[question modèle refusée et masquée]'
+    )
+  })
+
+  it('masks and recovers from an unclosed question before any observable event', async () => {
+    const responses = ['<question>sk-test-123', 'Je poursuis sans question.']
+    const registry = {
+      send: vi
+        .fn()
+        .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' })),
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'continue' }],
+      (event) => events.push(event),
+      vi.fn(),
+      1,
+      'conv-1'
+    )
+
+    expect(registry.send).toHaveBeenCalledTimes(2)
+    expect(JSON.stringify(events)).not.toContain('sk-test-123')
+    expect(JSON.stringify(registry.send.mock.calls[1][1])).not.toContain('sk-test-123')
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Je poursuis sans question.' })
+  })
+
+  it('injecte une directive utilisateur au prochain point d’itération du tour', async () => {
+    const responses = ['<cmd>{"name":"get_state","args":{}}</cmd>', 'Terminé']
+    const send = vi
+      .fn()
+      .mockImplementation(async () => ({ text: responses.shift()!, provider: 'codex' }))
+    const registry = {
+      send,
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const queue: string[] = []
+    const bus = {
+      catalog: () => [{ name: 'get_state', args: {}, description: 'état' }],
+      snapshotForPrompt,
+      // La directive arrive PENDANT l'itération 1 (l'utilisateur tape pendant que l'agent agit).
+      exec: vi.fn().mockImplementation(async () => {
+        queue.push('priorise le module X')
+        return { ok: true, data: {} }
+      })
+    }
+    const drain = (): string[] => queue.splice(0, queue.length)
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'go' }],
+      () => undefined,
+      undefined,
+      6,
+      'conv-1',
+      undefined,
+      drain
+    )
+
+    expect(send).toHaveBeenCalledTimes(2)
+    const firstPrompt = (send.mock.calls[0][1] as Array<{ content: string }>)[0].content
+    const secondPrompt = (send.mock.calls[1][1] as Array<{ content: string }>)[0].content
+    expect(firstPrompt).not.toContain('DIRECTIVE INJECTÉE')
+    expect(secondPrompt).toContain('DIRECTIVE INJECTÉE EN COURS DE TOUR')
+    expect(secondPrompt).toContain('priorise le module X')
+  })
+
+  it('ne perd pas une directive arrivée pendant la réponse finale', async () => {
+    const queue: string[] = []
+    const send = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        queue.push('corrige aussi le module Y')
+        return { text: 'Réponse devenue obsolète', provider: 'codex' }
+      })
+      .mockResolvedValueOnce({ text: 'Réponse orientée', provider: 'codex' })
+    const registry = {
+      send,
+      describePrompt: () => ({ provider: 'codex', transport: 'fixture', messages: [], options: {} })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const events: Array<{ kind: string; text?: string }> = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'go' }],
+      (event) => events.push(event as { kind: string; text?: string }),
+      undefined,
+      6,
+      'conv-1',
+      undefined,
+      () => queue.splice(0, queue.length)
+    )
+
+    expect(send).toHaveBeenCalledTimes(2)
+    expect((send.mock.calls[1][1] as Array<{ content: string }>)[0].content).toContain(
+      'corrige aussi le module Y'
+    )
+    expect(events.at(-1)).toMatchObject({ kind: 'done', text: 'Réponse orientée' })
+  })
+
+  it('keeps the provider and model binding immutable for the whole chat turn', async () => {
+    const responses = ['<cmd>{"name":"get_state","args":{}}</cmd>', 'RÃ©ponse finale']
+    const send = vi.fn().mockImplementation(async () => ({
+      text: responses.shift()!,
+      provider: 'fixture'
+    }))
+    const describePrompt = vi.fn().mockReturnValue({
+      provider: 'codex',
+      transport: 'fixture',
+      messages: [],
+      options: {},
+      limitation: 'test'
+    })
+    const initialBinding = {
+      provider: 'codex',
+      model: 'gpt-initial',
+      reasoningEffort: 'low'
+    }
+    const mutatedBinding = {
+      provider: 'native',
+      model: 'model-mutated',
+      reasoningEffort: 'high'
+    }
+    let bindingReadCount = 0
+    const roles = {
+      getBinding: vi.fn(() => (bindingReadCount++ === 0 ? initialBinding : mutatedBinding))
+    }
+    const bus = {
+      catalog: () => [{ name: 'get_state', args: {}, description: 'state' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: {} })
+    }
+
+    await new AgentPilot({ send, describePrompt } as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'test' }],
+      () => undefined
+    )
+
+    expect(roles.getBinding).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledTimes(2)
+    for (const call of send.mock.calls) {
+      expect(call[0]).toBe('codex')
+      expect(call[2]).toMatchObject({ model: 'gpt-initial', reasoningEffort: 'low' })
+      expect(call[2].system).toMatch(/ne dis jamais que tu ne peux pas modifier le code/i)
+      expect(call[2].system).toContain(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
+    }
+    for (const call of describePrompt.mock.calls) {
+      expect(call[3]).toBe('gpt-initial')
+    }
+  })
+
+  it('uses a per-turn binding without mutating the orchestrator role', async () => {
+    const send = vi.fn().mockResolvedValue({ text: 'Réponse finale', provider: 'claude' })
+    const describePrompt = vi.fn().mockReturnValue({
+      provider: 'claude',
+      transport: 'fixture',
+      messages: [],
+      options: {},
+      limitation: 'test'
+    })
+    const roles = {
+      getBinding: vi.fn(() => ({
+        provider: 'codex',
+        model: 'gpt-global',
+        reasoningEffort: 'medium'
+      }))
+    }
+    const bus = {
+      catalog: () => [],
+      snapshotForPrompt,
+      exec: vi.fn()
+    }
+
+    await new AgentPilot({ send, describePrompt } as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'test planifié' }],
+      () => undefined,
+      undefined,
+      1,
+      'conv-task',
+      undefined,
+      undefined,
+      { provider: 'claude', model: 'claude-sonnet', reasoningEffort: 'high' }
+    )
+
+    expect(roles.getBinding).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledWith(
+      'claude',
+      expect.any(Array),
+      expect.objectContaining({ model: 'claude-sonnet', reasoningEffort: 'high' }),
+      expect.any(Function)
+    )
+    expect(describePrompt).toHaveBeenCalledWith(
+      'claude',
+      expect.any(Array),
+      expect.objectContaining({ model: 'claude-sonnet', reasoningEffort: 'high' }),
+      'claude-sonnet'
+    )
+  })
+
+  it('injects Brain evidence into the exact provider prompt', async () => {
+    const send = vi.fn().mockResolvedValue({ text: 'Réponse finale', provider: 'codex' })
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const retrieveContext = vi
+      .fn()
+      .mockResolvedValue('[ACME BRAIN REFERENCE DATA]\nknowledge evidence')
+
+    // L'IDENTITE DU TOUR EST PASSEE POUR DE VRAI : sans elle, l'assertion sur la trace ci-dessous
+    // ne vaudrait rien (elle verifierait deux `undefined`). conversationId est le 5e parametre,
+    // turnId le 9e.
+    await new AgentPilot(registry as never, roles as never, bus as never, retrieveContext).chat(
+      [{ role: 'user', content: 'Explique AgentPilot' }],
+      () => undefined,
+      undefined,
+      undefined,
+      'conv-preuve',
+      undefined,
+      undefined,
+      undefined,
+      'turn-preuve'
+    )
+
+    expect(retrieveContext).toHaveBeenCalledOnce()
+    /*
+     * LA QUESTION, ET L'IDENTITE DU TOUR AVEC ELLE.
+     *
+     * Cette assertion attendait le seul texte de la question. Le 2026-09-06, la voie poussee du
+     * chat s'est mise a transmettre aussi `{ conversationId, turnId }` — commit c99f6a39, « la voie
+     * poussee du chat laisse enfin une trace » : sans cette identite, le contexte injecte au modele
+     * n'etait rattachable a aucun tour, donc illisible dans l'Observatory. Le test est reste sur
+     * l'ancienne forme et rougissait depuis. Son message de commit affirmait que ce rouge
+     * PREEXISTAIT ; verification faite sur le parent du commit, c'est faux — l'appel n'y portait
+     * qu'un argument et le test passait.
+     *
+     * On ne se contente donc pas de tolerer le second argument : on EXIGE qu'il porte l'identite,
+     * puisque c'est exactement ce que ce changement a apporte.
+     */
+    expect(retrieveContext).toHaveBeenCalledWith('Explique AgentPilot', {
+      conversationId: 'conv-preuve',
+      turnId: 'turn-preuve'
+    })
+    // La connaissance récupérée doit ARRIVER au modèle — c'est l'invariant. Elle voyage désormais
+    // dans le MESSAGE et non dans le `system` : le contexte Brain dépend de la question, donc le
+    // laisser dans le system rendait le préfixe différent à chaque tour et interdisait tout cache
+    // (mesuré le 2026-07-28 : cache_read = 0 sur 100 % des appels, ~16 k réécrits par tour).
+    const system = send.mock.calls[0][2].system as string
+    const userContent = (send.mock.calls[0][1] as Array<{ content: string }>).at(-1)?.content ?? ''
+    expect(userContent).toContain('[ACME BRAIN REFERENCE DATA]')
+    expect(userContent).toContain('knowledge evidence')
+    // Le préfixe system ne doit PLUS porter de contenu dépendant de la question.
+    expect(system).not.toContain('[ACME BRAIN REFERENCE DATA]')
+  })
+
+  it('injects only current-workspace and global provisional memories into direct chat', async () => {
+    forgetEcho()
+    noteRemembered('conv-workspace-memory', {
+      title: 'Compilation CONTOSO',
+      body: 'Utiliser gacRig avant le build.',
+      scope: 'contosoapp',
+      workspace: 'D:\\DevSrc\\ContosoApp'
+    })
+    noteRemembered('conv-workspace-memory', {
+      title: 'Préférence globale',
+      body: 'Répondre de façon concise.',
+      scope: 'global',
+      workspace: 'global'
+    })
+    const send = vi.fn().mockResolvedValue({ text: 'Réponse finale', provider: 'codex' })
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+
+    try {
+      await new AgentPilot(
+        registry as never,
+        roles as never,
+        bus as never,
+        undefined,
+        () => '',
+        () => 'C:\\Travail\\Autowin OS'
+      ).chat(
+        [{ role: 'user', content: 'Continue ici' }],
+        () => undefined,
+        undefined,
+        2,
+        'conv-workspace-memory'
+      )
+
+      const userContent =
+        (send.mock.calls[0][1] as Array<{ content: string }>).at(-1)?.content ?? ''
+      expect(userContent).not.toContain('gacRig')
+      expect(userContent).toContain('Répondre de façon concise.')
+    } finally {
+      forgetEcho()
+    }
+  })
+
+  it('reports the iteration cap as an error terminal event, never as done', async () => {
+    const registry = {
+      send: vi.fn().mockResolvedValue({
+        text: '<cmd>{"name":"get_state","args":{}}</cmd>',
+        provider: 'codex'
+      }),
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'get_state', args: {}, description: 'state' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: {} })
+    }
+    const events: PilotEvent[] = []
+
+    await expect(
+      new AgentPilot(registry as never, roles as never, bus as never).chat(
+        [{ role: 'user', content: 'boucle' }],
+        (event) => events.push(event),
+        undefined,
+        1
+      )
+    ).rejects.toThrow("Cap d'itérations (1) atteint sans réponse finale")
+
+    expect(events.at(-1)?.kind).toBe('error')
+    expect(events.at(-1)?.text).toMatch(/^Cap d'.*\(1\).*sans r.*ponse finale$/)
+    expect(events.some((event) => event.kind === 'done')).toBe(false)
+  })
+  it('never waits on the disabled model-question channel', async () => {
+    const controller = new AbortController()
+    const registry = {
+      send: vi.fn().mockResolvedValue({
+        text: '<question>{"text":"Publier ?","options":["Oui"],"reason":"external-effect"}</question>',
+        provider: 'codex'
+      }),
+      describePrompt: () => ({
+        provider: 'codex',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'codex', model: 'gpt-test', reasoningEffort: 'low' })
+    }
+    const bus = { catalog: () => [], snapshotForPrompt }
+    const ask = vi.fn(() => new Promise<string>(() => undefined))
+    const pending = new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [{ role: 'user', content: 'question' }],
+      () => undefined,
+      ask,
+      6,
+      'conv-1',
+      controller.signal
+    )
+
+    controller.abort('conversation-deleted')
+    const result = await Promise.race([
+      pending.then(
+        () => 'resolved',
+        () => 'rejected'
+      ),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 30))
+    ])
+    expect(result).toBe('resolved')
+    expect(ask).not.toHaveBeenCalled()
+  })
+
+  it('OPEN BAR : une demande d’analyse d’utilisateur reçoit le catalogue COMPLET, jamais un profil bridé', async () => {
+    // Choix utilisateur 2026-08-14 : plus AUCUNE classification « lecture seule » sur un tour piloté
+    // par l'utilisateur. Ce test asseyait l'inverse (`toolProfile: 'watchdog-read-only'` + exec
+    // bloqué sur un message d'analyse) ; il verifie maintenant que l'analyse recoit tous les outils.
+    // Le profil watchdog RESTE teste, mais sur le SYSTEME (`agent-pilot.retry.test.ts`), pas sur un
+    // message utilisateur.
+    const send = vi.fn(
+      async (_provider: string, _messages: unknown, _options: { toolProfile?: string }) => ({
+        text: '<cmd>{"name":"orchestrate","args":{"task":"analyse package.json"}}</cmd>',
+        provider: 'claude'
+      })
+    )
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const roles = {
+      getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { status: 'succeeded' } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(registry as never, roles as never, bus as never).chat(
+      [
+        {
+          role: 'user',
+          content: 'Analyse package.json puis dis-moi ce qu’il faut corriger. Ne modifie rien.'
+        }
+      ],
+      (event) => events.push(event),
+      undefined,
+      12,
+      'conv-open-bar'
+    )
+
+    // AUCUN profil bridé sur un tour utilisateur, et la commande ATTEINT le bus.
+    expect(send.mock.calls[0][2].toolProfile).not.toBe('watchdog-read-only')
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(bus.exec.mock.calls[0][0]).toBe('orchestrate')
+    expect(bus.exec.mock.calls[0][1]).toMatchObject({ task: 'analyse package.json' })
+    expect(events.some((event) => event.kind === 'command')).toBe(true)
+  })
+
+  it('un tour lecture seule garde les commandes de LECTURE et execute read_file', async () => {
+    // Mesure sur 4 runs reels du scout de veille (conv-1154→1157) : classe read-only, l'agent
+    // recevait ZERO commande et repondait « je n'ai pas pu executer les lectures obligatoires ».
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: '<cmd>{"name":"read_file","args":{"path":"src/a.ts"}}</cmd>',
+        provider: 'claude'
+      })
+      .mockResolvedValue({ text: 'Synthese apres lecture.', provider: 'claude' })
+    const registry = {
+      send,
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [
+        { name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' },
+        {
+          name: 'read_file',
+          args: { path: 'string' },
+          description: 'lire',
+          annotations: {
+            readOnlyHint: true,
+            destructiveHint: false,
+            idempotentHint: true,
+            openWorldHint: false
+          }
+        }
+      ],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { lu: true, contenu: '1→x' } })
+    }
+    const events: PilotEvent[] = []
+    await new AgentPilot(
+      registry as never,
+      {
+        getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    ).chat([{ role: 'user', content: 'Analyse package.json sans rien modifier.' }], (event) =>
+      events.push(event)
+    )
+    // Le pilotage est present (il porte read_file) et la lecture a REELLEMENT atteint le bus.
+    expect(String(send.mock.calls[0][2].system)).toContain('read_file')
+    appeleAvec(bus.exec, 'read_file', { path: 'src/a.ts' }, undefined)
+    expect(events.some((event) => event.kind === 'command' && event.name === 'read_file')).toBe(
+      true
+    )
+  })
+
+  it('OPEN BAR : une commande generee dans un tour d’analyse EXECUTE, elle n’est plus bloquee', async () => {
+    // Ce test asseyait le blocage mecanique d'une commande sur un message classe « lecture seule ».
+    // Open bar (choix utilisateur 2026-08-14) : plus de blocage sur un tour utilisateur — la commande
+    // atteint le bus. Le blocage mecanique RESTE, mais uniquement sur le profil systeme watchdog.
+    /*
+     * LE MOCK DOIT SAVOIR S'ARRETER — sinon c'est la MACHINE qui s'arrete.
+     *
+     * Il rendait la MEME commande a chaque appel. Or le cap d'iterations d'un tour vaut
+     * `Number.POSITIVE_INFINITY` : en production plus aucune borne de cout n'arrete un tour depuis
+     * la suppression du budget du tour (2026-09-16). Rien n'arretait donc ce mock : la boucle tournait jusqu'a epuiser la memoire. Mesure du
+     * 2026-09-06 : ce seul test faisait tomber tout le fichier sur « JavaScript heap out of
+     * memory » en 2,5 s, AVANT meme qu'aucun test n'ait pu rendre son verdict — les 27 autres
+     * etaient emportes avec lui.
+     *
+     * Son voisin immediat porte deja la bonne forme, avec sa raison : « DEUX appels par tour depuis
+     * le 2026-08-27 : apres une orchestration, le modele reprend la parole pour ecrire la
+     * cloture ». Celui-ci etait reste sur l'ancienne. Il repond donc desormais comme un modele
+     * reel : la commande, PUIS la cloture.
+     */
+    let appelsAuModele = 0
+    const registry = {
+      send: vi.fn().mockImplementation(async () => {
+        appelsAuModele += 1
+        return appelsAuModele === 1
+          ? {
+              text: '<cmd>{"name":"orchestrate","args":{"task":"appel autorise"}}</cmd>',
+              provider: 'claude'
+            }
+          : { text: 'Analyse terminée.', provider: 'claude' }
+      }),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { status: 'succeeded' } })
+    }
+    const events: PilotEvent[] = []
+
+    await new AgentPilot(
+      registry as never,
+      {
+        getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    ).chat([{ role: 'user', content: 'Analyse package.json sans rien modifier.' }], (event) =>
+      events.push(event)
+    )
+
+    expect(bus.exec).toHaveBeenCalledTimes(1)
+    expect(bus.exec.mock.calls[0][0]).toBe('orchestrate')
+    expect(bus.exec.mock.calls[0][1]).toMatchObject({ task: 'appel autorise' })
+    expect(events.some((event) => event.kind === 'command')).toBe(true)
+    // Plus de message « bloqué » : la commande a joué.
+    expect(events.at(-1)?.text ?? '').not.toMatch(/bloqu/i)
+  })
+
+  it('conserve le pilotage et les commandes pour une demande qui modifie le workspace', async () => {
+    /*
+     * DEUX appels par tour depuis le 2026-08-27 : apres une orchestration, le modele reprend la
+     * parole pour ecrire la cloture (elle n'est plus un gabarit). Le mock repond donc la commande
+     * PUIS la cloture, comme un modele reel. Ce que ce test verrouille est inchange : le profil
+     * d'outils reste complet, et chaque tour joue exactement une orchestration.
+     */
+    let appels = 0
+    const registry = {
+      send: vi.fn(async (_provider: string, _messages: unknown, _options: { toolProfile?: string }) => {
+        appels += 1
+        return {
+          text:
+            appels % 2 === 1
+              ? '<cmd>{"name":"orchestrate","args":{"task":"corrige package.json"}}</cmd>'
+              : 'Scripts corrigés.',
+          provider: 'claude'
+        }
+      }),
+      describePrompt: () => ({
+        provider: 'claude',
+        transport: 'fixture',
+        messages: [],
+        options: {},
+        limitation: 'test'
+      })
+    }
+    const bus = {
+      catalog: () => [{ name: 'orchestrate', args: { task: 'string' }, description: 'pipeline' }],
+      snapshotForPrompt,
+      exec: vi.fn().mockResolvedValue({ ok: true, data: { status: 'succeeded' } })
+    }
+
+    const pilot = new AgentPilot(
+      registry as never,
+      {
+        getBinding: () => ({ provider: 'claude', model: 'claude-test', reasoningEffort: 'low' })
+      } as never,
+      bus as never
+    )
+
+    for (const content of [
+      'Analyse package.json puis corrige ses scripts obsoletes.',
+      "Documente l'API dans README.md",
+      'Analyse package.json sans le modifier puis publie une release.',
+      'Analyse package.json sans rien modifier puis ecrase le script obsolete.'
+    ]) {
+      await pilot.chat([{ role: 'user', content }], () => undefined)
+    }
+
+    // 4 tours x 2 appels : la commande, puis la cloture ecrite par le modele.
+    expect(registry.send).toHaveBeenCalledTimes(8)
+    expect(
+      registry.send.mock.calls.every((call) => call[2].toolProfile !== 'watchdog-read-only')
+    ).toBe(true)
+    expect(bus.exec).toHaveBeenCalledTimes(4)
+    nieme(bus.exec, 1,
+      'orchestrate',
+      {
+        task: 'corrige package.json',
+        rootTask: 'Analyse package.json puis corrige ses scripts obsoletes.'
+      },
+      undefined
+    )
+    nieme(bus.exec, 2,
+      'orchestrate',
+      { task: 'corrige package.json', rootTask: "Documente l'API dans README.md" },
+      undefined
+    )
+    nieme(bus.exec, 3,
+      'orchestrate',
+      {
+        task: 'corrige package.json',
+        rootTask: 'Analyse package.json sans le modifier puis publie une release.'
+      },
+      undefined
+    )
+    nieme(bus.exec, 4,
+      'orchestrate',
+      {
+        task: 'corrige package.json',
+        rootTask: 'Analyse package.json sans rien modifier puis ecrase le script obsolete.'
+      },
+      undefined
+    )
+  })
+})

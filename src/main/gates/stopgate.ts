@@ -1,5 +1,5 @@
-import { MOTIF_RESERVES_MINEURES_FIGEES } from '../memoire-juge'
-import { PREFIXE_TEST_MODIFIE } from '../objections-juge'
+import { MOTIF_RESERVES_MINEURES_FIGEES } from '../juge/memoire-juge'
+import { PREFIXE_TEST_MODIFIE } from '../juge/objections-juge'
 // Reproduction TS pure, model-agnostic, du "stop-gate" du kit autowin.
 // Fonction pure évaluant si une clôture "done/green" est légitime.
 

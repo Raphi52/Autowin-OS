@@ -6,7 +6,7 @@
  * jamais par `'../commands'` (cycle d'import) : `commands/code-libre.test.ts` le garde.
  */
 
-import { nativeSkills } from '../native-registry'
+import { nativeSkills } from '../app/native-registry'
 
 /**
  * Longueur du declencheur remis au modele : assez pour reconnaitre le MOMENT, pas le contrat.

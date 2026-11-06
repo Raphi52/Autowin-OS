@@ -16,7 +16,7 @@ description: >-
 Chaque « /heal j'ai eu un freeze » refaisait la même enquête à la main : découvrir le journal des gels,
 l'agréger avec un script jetable, puis chercher dans `src/` d'où venait `main/index.js:16278`
 (13 fils entre conv-63 et conv-842). Les instruments existent : le journal, écrit par le battement du
-processus principal (`src/main/gel-main.ts`), et les cartes `.map` à côté du bundle. Cette skill les
+processus principal (`src/main/gel/gel-main.ts`), et les cartes `.map` à côté du bundle. Cette skill les
 enchaîne et rend UNE cible : un `fichier:ligne`, un chiffre avant, et une façon de reproduire.
 
 ## Contrôle d'entrée
@@ -102,7 +102,7 @@ vient d'une CASCADE supprimée (écriture entre deux lectures : plusieurs mises 
 ou d'un fil moins coûteux à mettre en page — pas d'une lecture de moins. Compare avant/après sur le
 MÊME arbre : un autre fil peut avoir ajouté du code au fil entre deux mesures.
 Pour un gel du processus principal sans vue précise, la reproduction est un test `src/main/*.test.ts`
-qui prouve l'appel synchrone sur le chemin nommé (`src/main/behaviour-files.sans-gel.test.ts` en est le modèle).
+qui prouve l'appel synchrone sur le chemin nommé (`src/main/behaviour/behaviour-files.sans-gel.test.ts` en est le modèle).
 
 ### 4. PASSER LA MAIN
 

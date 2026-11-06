@@ -6,7 +6,7 @@ import type { WorktreeConflictDiffResult } from '../../shared/worktree-activity-
 import { WorktreeOperationClient } from './worktree-operation-client'
 import type { WorktreeRecoveryInventory } from './worktree-operation-protocol'
 import type { LiaisonDependances } from './dependances-copie-agent'
-import { supprimerArbre, supprimerArbreAsync } from '../fs-supprimer'
+import { supprimerArbre, supprimerArbreAsync } from '../fichiers/fs-supprimer'
 import { defaultProcessIdentity, prechargerEmpreintesProcessus } from './worktree-manager-empreintes'
 import type { FinalizeResult, WorktreeRecoveryContext, WorktreeRunContext } from './worktree-manager-types'
 export {

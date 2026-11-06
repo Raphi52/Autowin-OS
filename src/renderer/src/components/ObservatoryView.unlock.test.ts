@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { sourceProcessPrincipal } from '../../../main/source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../../../main/app/source-process-principal.test-helpers'
 
 describe('Observatory Native diagnostics default access', () => {
   it('loads global diagnostics automatically without a popup or unlock button', () => {

@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentAPublier } from '../../../shared/quartier-presence'
-import { presenceAEcrire } from '../../../main/quartier-presence'
+import { presenceAEcrire } from '../../../main/mascotte/quartier-presence'
 import {
   agentAPublier,
   agentsEnScene,

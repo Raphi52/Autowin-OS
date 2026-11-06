@@ -18,7 +18,7 @@ import { structuredEvidenceFields } from './codex'
  */
 describe('codex file_change — la forme REELLE est un tableau', () => {
   const cwd = 'C:\\Travail\\Autowin OS\\.autowin-data\\autowin-os\\worktrees\\abc\\agent__run-1'
-  const fichier = `${cwd}\\src\\main\\task-regime.test.ts`
+  const fichier = `${cwd}\\src\\main\\orchestration\\task-regime.test.ts`
 
   it('un tableau [{path, kind}] rend le CHEMIN, jamais un indice', () => {
     const preuve = structuredEvidenceFields(
@@ -31,7 +31,7 @@ describe('codex file_change — la forme REELLE est un tableau', () => {
   })
 
   it('deux entrees rendent deux chemins, pas « 0, 1 »', () => {
-    const second = `${cwd}\\src\\main\\task-regime.ts`
+    const second = `${cwd}\\src\\main\\orchestration\\task-regime.ts`
     const preuve = structuredEvidenceFields(
       {
         type: 'file_change',

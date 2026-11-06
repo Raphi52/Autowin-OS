@@ -1,6 +1,6 @@
 import { gesteDeLaLigne, type GesteAgent } from '../../shared/gestes-agent'
 import { demandeHumaineEntiere } from '../../shared/balise-message-utilisateur'
-import { motsUtilisateur } from '../chat-turn-messages'
+import { motsUtilisateur } from '../chat/chat-turn-messages'
 import { evidencePayloads } from './evidence-payloads'
 import { assertTraceEvent, type TraceEventV1, type TracePayload } from './trace-event'
 import { redactTrace } from './trace-redact'

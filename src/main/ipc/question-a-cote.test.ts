@@ -40,14 +40,14 @@ vi.mock('electron', () => ({
   webUtils: { getPathForFile: () => '' }
 }))
 
-vi.mock('../ipc-senders', () => ({
+vi.mock('./ipc-senders', () => ({
   assertTrustedRendererSender: (_event: unknown, portee: string) => {
     simule.gardes.push(portee)
     if (simule.refuser) throw new Error('expéditeur refusé')
   }
 }))
 
-vi.mock('../question-a-cote', () => ({
+vi.mock('../chat/question-a-cote', () => ({
   QuestionsACote: class {
     poser(...args: unknown[]): Promise<unknown> {
       simule.poser.push(args)

@@ -9,16 +9,16 @@ import {
   readGitDiffHeadBatch,
   readGitState,
   readNoIndexGitDiff
-} from '../git-read-main'
-import { addedLineFingerprintsFromUnifiedDiff } from '../exact-line-fingerprint'
-import { supprimerArbre } from '../fs-supprimer'
+} from '../git/git-read-main'
+import { addedLineFingerprintsFromUnifiedDiff } from '../fichiers/exact-line-fingerprint'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 import {
   captureWorkspaceMutationSnapshot,
   captureWorkspacePathGenerationMarker
 } from './workspace-mutation-evidence'
 
-vi.mock('../git-read-main', async (importOriginal) => {
-  const reel = await importOriginal<typeof import('../git-read-main')>()
+vi.mock('../git/git-read-main', async (importOriginal) => {
+  const reel = await importOriginal<typeof import('../git/git-read-main')>()
   return {
     ...reel,
     readGitState: vi.fn(reel.readGitState),

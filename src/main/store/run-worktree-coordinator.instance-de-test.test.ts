@@ -72,7 +72,7 @@ describe('instance de test isolée — aucune récupération sur le dépôt part
   })
 
   it('os.ts branche bien le réglage sur le mode de lancement réel', () => {
-    const source = readFileSync(join(__dirname, '..', 'os.ts'), 'utf8')
+    const source = readFileSync(join(__dirname, '../app/os.ts'), 'utf8')
     expect(source).toMatch(
       /sansRecuperation:\s*resolveAutomationInstanceMode\(process\.argv, process\.env, app\.isPackaged\)\s*\.isolated/
     )

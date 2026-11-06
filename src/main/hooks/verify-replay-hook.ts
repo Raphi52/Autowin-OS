@@ -1,4 +1,4 @@
-import { isMutationTask } from '../orchestrator'
+import { isMutationTask } from '../orchestration/orchestrator'
 import type { HookContext, HookHandler, HookResult } from './hook-bus'
 
 /** Rejoue une commande de vérification et rend son exit code (injecté → testable sans exec réel). */

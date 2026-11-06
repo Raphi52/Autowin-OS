@@ -20,9 +20,9 @@ describe('avertissementCollisionProbable', () => {
   })
 
   it('nomme les fichiers et dit « SI », jamais « ca va bloquer »', () => {
-    const texte = avertissementCollisionProbable(['src/main/agent-pilot.ts', 'notes.md'])
+    const texte = avertissementCollisionProbable(['src/main/agent-pilot/agent-pilot.ts', 'notes.md'])
 
-    expect(texte).toContain('src/main/agent-pilot.ts')
+    expect(texte).toContain('src/main/agent-pilot/agent-pilot.ts')
     expect(texte).toContain('notes.md')
     expect(texte).toContain('2 changements non committés')
     // La nuance qui fait tout : conditionnel, parce que les fichiers du run sont inconnus a ce stade.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { workspaceIsolationNotice } from '../orchestrator'
+import { workspaceIsolationNotice } from '../orchestration/orchestrator'
 
 /**
  * Régression du 2026-08-04 : un agent a réussi un `git stash` sur le dépôt réel, puis a conclu
@@ -85,7 +85,7 @@ describe('le bloc « où tu travailles »', () => {
 
 describe('le bloc est réellement CÂBLÉ dans les prompts', () => {
   // Un bloc parfait mais jamais injecté est du théâtre : on vérifie les points de montage.
-  const source = ['orchestrator-contrats.ts', 'orchestrator.ts', 'orchestrator-run.ts', 'orchestrator-parcours-glouton.ts', 'orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, '..', f), 'utf8')).join(String.fromCharCode(10))
+  const source = ['orchestration/orchestrator-contrats.ts', 'orchestration/orchestrator.ts', 'orchestration/orchestrator-run.ts', 'orchestration/orchestrator-parcours-glouton.ts', 'orchestration/orchestrator-parcours-sequentiel.ts'].map((f) => readFileSync(join(__dirname, '..', f), 'utf8')).join(String.fromCharCode(10))
 
   it('est monté partout où un cwd de travail isolé est connu', () => {
     const mounts = [...source.matchAll(/name: 'workspaceIsolation'/g)]

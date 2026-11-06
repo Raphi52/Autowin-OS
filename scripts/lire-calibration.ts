@@ -16,7 +16,7 @@ import {
   SEUIL_ECHANTILLON
 } from '../src/shared/pari-calibration'
 import { PariPhaseStore } from '../src/main/activity/pari-phase-store'
-import { autowinAppDataRoot, portableAppDataBase } from '../src/main/app-data'
+import { autowinAppDataRoot, portableAppDataBase } from '../src/main/app/app-data'
 
 /*
  * LA MEME RACINE QUE L'APPLICATION. Le defaut pointait sur `%APPDATA%\autowin-os`, un emplacement

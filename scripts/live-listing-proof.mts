@@ -1,7 +1,7 @@
 // PREUVE LIVE — exécute la découverte réelle (APIs providers) + résolution des alias.
 // Sortie : JSON brut sur stdout (capturé dans le fichier de preuve).
-import { discoverImportedModelsDetailed } from '../src/main/models'
-import { MODEL_ALIASES, resolveModelAlias } from '../src/main/model-aliases'
+import { discoverImportedModelsDetailed } from '../src/main/modeles/models'
+import { MODEL_ALIASES, resolveModelAlias } from '../src/main/modeles/model-aliases'
 import { loadTokens } from '../src/main/providers/codex-auth'
 
 const rawCaptures: Record<string, unknown> = {}

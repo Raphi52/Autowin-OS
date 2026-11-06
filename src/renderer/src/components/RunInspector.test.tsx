@@ -118,7 +118,7 @@ describe('RunInspector — aperçu en tête', () => {
       root.render(
         createElement(RunInspector, {
           content:
-            '## Besoin\njuger la skill curate\n\nCritère de succès (DoD cochable) :\n- [x] fait\n- [ ] le verdict est publié\n\n## Journal\n[2026-09-04] touche src/main/commands.ts\n\n## Défauts\n- Aucun',
+            '## Besoin\njuger la skill curate\n\nCritère de succès (DoD cochable) :\n- [x] fait\n- [ ] le verdict est publié\n\n## Journal\n[2026-09-04] touche src/main/commands/commands.ts\n\n## Défauts\n- Aucun',
           summary: { status: 'green', dodChecked: 1, dodTotal: 2, journalEvents: 1, defauts: 0 }
         })
       )
@@ -128,7 +128,7 @@ describe('RunInspector — aperçu en tête', () => {
     expect(apercu).not.toBeNull()
     expect(apercu?.textContent).toContain('juger la skill curate')
     expect(apercu?.textContent).toContain('le verdict est publié')
-    expect(apercu?.textContent).toContain('src/main/commands.ts')
+    expect(apercu?.textContent).toContain('src/main/commands/commands.ts')
     expect(apercu?.textContent).not.toContain('Aucun')
   })
 

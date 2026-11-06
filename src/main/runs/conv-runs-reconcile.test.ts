@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cheminMemoReconciliation, createConvRun, reconcileAbandonedConvRuns } from './conv-runs'
 import { parseRun } from '../dashboards/runs'
 import { isBlocked } from '../../shared/run-blocked'
-import { contratDepuisRuns } from '../conversation-task-contract'
+import { contratDepuisRuns } from '../conversations/conversation-task-contract'
 
 /**
  * UN RUN QUI MEURT EN COURS RESTE `open` POUR TOUJOURS.

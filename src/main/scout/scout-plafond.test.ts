@@ -1,0 +1,493 @@
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+import { parseScoutTable } from '../../shared/scout-table'
+import {
+  ajusterNotesSurChoix,
+  lecteurAncrageDepuisDisque,
+  marquerDejaFait,
+  plafonnerNotesScout,
+  sujetDeCommit,
+  sujetsDejaFaits,
+  sujetsDesCommitsRecents,
+  type EtatAncrage
+} from './scout-plafond'
+
+// Ce poste a un dépôt git dans C:/Users/User (le dossier personnel), au-dessus du dossier temporaire.
+// Sans plafond, git y remonte : il voit ce dépôt et peut même y écrire ses commits de test.
+// GIT_CEILING_DIRECTORIES interdit à git de chercher un dépôt dans tmpdir() ou au-dessus.
+process.env.GIT_CEILING_DIRECTORIES = tmpdir()
+
+const ENTETE = '| # | Score | Type | What | Why | How |\n|---|---|---|---|---|---|\n'
+
+function lecteur(etats: Record<string, EtatAncrage>) {
+  return (chemin: string, ligne: number): EtatAncrage =>
+    etats[`${chemin}:${ligne}`] ?? 'incontrolable'
+}
+
+describe('plafond de preuve appliqué en code sur la sortie du scout', () => {
+  /*
+   * Le plafond n'existait qu'en texte (`phase-briefs.ts`, bloc PLAFOND DE PREUVE). Relu le 30/09 dans
+   * les traces : conv-812 note 72 une piste dont le Pourquoi dit « Sous réserve : je n'ai cherché que
+   * les minuteurs », conv-775 note 60 une piste dont le Pourquoi dit « la cause exacte n'est pas
+   * vérifiée ». Les deux lignes réelles sont rejouées plus bas, telles quelles.
+   */
+  it('ramène à 50 une piste dont le Pourquoi avoue ne pas avoir vérifié, et retrie', () => {
+    const texte =
+      ENTETE +
+      "| 1 | 72 | 🔧 fix | Cache périmé | je n'ai pas vérifié l'appelant | cache.ts:10 |\n" +
+      '| 2 | 64 | 🔧 fix | Tri instable | ouvert, la ligne trie en place | tri.ts:4 |\n'
+    const sortie = plafonnerNotesScout(texte)
+    const lignes = parseScoutTable(sortie)!
+    expect(lignes.map((l) => [l.num, l.score])).toEqual([
+      ['2', 64],
+      ['1', 50]
+    ])
+    // La raison est dite, sous le tableau.
+    expect(sortie).toMatch(/ramenée à 50/u)
+    expect(sortie).toMatch(/pas vérifié/u)
+  })
+
+  it('reconnaît « non vérifié » et « pas encore vérifié »', () => {
+    for (const aveu of ['impact non vérifié', 'pas encore vérifié sur le disque']) {
+      const sortie = plafonnerNotesScout(`${ENTETE}| 1 | 80 | 🆕 new | X | ${aveu} | a faire |\n`)
+      expect(parseScoutTable(sortie)![0]!.score, aveu).toBe(50)
+    }
+  })
+
+  it('rattrape les aveux RÉELS de conv-812 et conv-775, recopiés de leurs traces', () => {
+    // Recopiées des traces `runs/conv-812/…mue82xnq-workspace` et `runs/conv-775/…mucgijeo-workspace`.
+    const conv812 =
+      "| 1 | 72 | 🆕 feature | Relevé mémoire/processeur par processus (principal, fenêtre, workers) | Les gels de la boucle sont mesurés (`event-loop-stalls.ts:69`, `gel-main.ts:338`), mais je n'ai vu aucun relevé de mémoire ni de processeur. Sous réserve : je n'ai cherché que les minuteurs, pas `app.getAppMetrics` dans tout le dépôt. | 1er pas : appeler `app.getAppMetrics()` toutes les 60 s dans `gel-main.ts` (déjà un minuteur), l'écrire dans le même journal et l'afficher dans `PerfLagPanel`. C'est fait quand on peut lire un chiffre en Mo et en % par type de processus. |\n"
+    const conv775 =
+      "| 2 | 60 | 🔧 fix | `src/main/dashboards/runs.ts:66-80` : un statut `unknown` reste affiché tel quel | `status` démarre à `'unknown'`. Il n'est remplacé que par une ligne `status:` placée avant le premier `## ` et présente dans `STATUSES`. Les 8 runs sont `unknown` + bloqués. Je n'ai pas lu leurs RUN.md : la cause exacte n'est pas vérifiée (en-tête absent ? valeur hors liste ?). Score plafonné pour cette raison. | Ouvrir un RUN.md clash-royale et comparer son en-tête au parseur. Ensuite, soit accepter la valeur trouvée, soit rendre « statut illisible » visible dans le tableau de bord. |\n"
+    for (const [nom, ligne] of [
+      ['conv-812', conv812],
+      ['conv-775', conv775]
+    ] as const) {
+      expect(parseScoutTable(plafonnerNotesScout(ENTETE + ligne))![0]!.score, nom).toBe(50)
+    }
+  })
+
+  it('un Pourquoi qui se dit DÉDUCTIF est plafonné, comme le dit la consigne', () => {
+    // Formulation relevée dans conv-775 (piste 3) et conv-812 (piste 4), notées 45 : ici portée à 70.
+    const texte = `${ENTETE}| 1 | 70 | 🆕 feature | Archiver les runs bloqués | C'est une déduction : je n'ai pas mesuré leur âge. | archiver |
+`
+    expect(parseScoutTable(plafonnerNotesScout(texte))![0]!.score).toBe(50)
+  })
+
+  it('ne touche pas un Pourquoi qui décrit le défaut sans avouer de doute', () => {
+    // « le test vérifie SKILL.md, pas la consigne » : un constat, pas un aveu.
+    const texte = `${ENTETE}| 1 | 88 | 🔧 fix | Consigne amputée | le test vérifie SKILL.md, pas la consigne | a.ts:3 |\n`
+    expect(plafonnerNotesScout(texte)).toBe(texte)
+  })
+
+  it('garde la note quand le Pourquoi NOMME ses chemins fermés, comme le dit la consigne (règle 4)', () => {
+    // Piste 4 du vrai scout du 30/09 (demande de conv-382), recopiée de artifacts/scout-reel-382-resultat.md.
+    // Son « Non vérifié » porte sur un point annexe ; l'absence qu'elle affirme est « vérifié[e] dans
+    // `gates/hooks.ts`, `orchestrator.ts` et `hooks/` ». La garde la ramenait de 70 à 50.
+    const conv382 =
+      "| 4 | 70 | 🔧 fix | Empêcher un agent de BUILD d'affaiblir le test qui le juge | `verify-replay-hook.ts:19` rejoue la vérification dans le dossier de l'agent, donc sur des tests qu'il a pu modifier. Aucune détection de `.skip`/`.only` ni d'assertion supprimée : vérifié dans `gates/hooks.ts` (qui lit déjà le diff à `:128-133`), `orchestrator.ts` et `hooks/`. L'interdiction n'existe qu'en texte (`constitution.ts:52`). Non vérifié : le juge, qui lui est un modèle, peut parfois le repérer. | Dans `gates/hooks.ts`, bloquer le passage au vert si le diff d'un `*.test.*` retire des `expect` ou ajoute `skip`/`only`. C'est fait quand un test simulé où le build ajoute `it.skip` est bien refusé. |\n"
+    expect(parseScoutTable(plafonnerNotesScout(ENTETE + conv382))![0]!.score).toBe(70)
+  })
+
+  it('un chemin NIÉ n est pas un chemin fermé : « je n ai pas vérifié dans a.ts » reste plafonné', () => {
+    for (const aveu of [
+      "je n'ai pas vérifié dans `a.ts` ni ailleurs",
+      "C'est une déduction : pas encore cherché dans `src/main/`",
+      'non vérifié dans `b.ts`'
+    ]) {
+      const sortie = plafonnerNotesScout(`${ENTETE}| 1 | 80 | 🆕 new | X | ${aveu} | a faire |\n`)
+      expect(parseScoutTable(sortie)![0]!.score, aveu).toBe(50)
+    }
+  })
+
+  it('une note déjà à 50 ou moins ne bouge pas ; un texte sans tableau non plus', () => {
+    const bas = `${ENTETE}| 1 | 45 | 🔧 fix | X | non vérifié | a.ts:3 |\n`
+    expect(plafonnerNotesScout(bas)).toBe(bas)
+    expect(plafonnerNotesScout('rien ici, non vérifié')).toBe('rien ici, non vérifié')
+  })
+
+  /*
+   * conv-602 : la piste n°1, notée 88, était fausse — son ancrage `Program.cs:300-304` dit lui-même
+   * que la classe citée a disparu (relevé par le run suivant, dans sa trace). Mais un
+   * commentaire cité n'est PAS toujours faux : la piste 1 de conv-890 (vraie) citait
+   * `orchestrator.ts:1371`, un commentaire qui documente une décision, avec `phase-briefs.ts:18-27`,
+   * du code. Le plafond ne mord donc que si AUCUN ancrage contrôlable d'un correctif ne tombe sur du
+   * code vivant.
+   */
+  it('plafonne un correctif dont aucun ancrage ne tombe sur du code vivant', () => {
+    const cas: Array<[EtatAncrage, RegExp]> = [
+      ['commentaire', /commentaire/u],
+      ['vide', /ligne vide/u],
+      ['hors-fichier', /après la fin/u],
+      ['absent', /introuvable/u]
+    ]
+    for (const [etat, raison] of cas) {
+      const texte = `${ENTETE}| 1 | 88 | 🔧 fix | Garde null | manque | Program.cs:300 |\n`
+      const sortie = plafonnerNotesScout(texte, lecteur({ 'Program.cs:300': etat }))
+      expect(parseScoutTable(sortie)![0]!.score, etat).toBe(50)
+      expect(sortie, etat).toMatch(raison)
+    }
+  })
+
+  it('garde la note quand un des ancrages tombe sur du code', () => {
+    const texte = `${ENTETE}| 1 | 88 | 🔧 fix | Consigne | voir o.ts:1371 | p.ts:18-27 |\n`
+    const sortie = plafonnerNotesScout(
+      texte,
+      lecteur({ 'o.ts:1371': 'commentaire', 'p.ts:18': 'code' })
+    )
+    expect(sortie).toBe(texte)
+  })
+
+  it('lit aussi l’ancrage porté par la colonne What (vrai scout du 30/09, piste 4)', () => {
+    // Le scout réel rejoué le 30/09 sur la demande de conv-812 mettait son code dans What
+    // (`conversations-disk.ts:512`) et citait dans Why une ligne du fichier CONSTRUIT
+    // (`index.js:45784`, ignoré par git, donc lu « introuvable ») : sans What, la piste tombait à 50.
+    const texte = `${ENTETE}| 4 | 66 | 🔧 fix | Démarrage : lu de façon synchrone (\`conversations-disk.ts:512\`) | La ligne \`index.js:45784\` du fichier construit apparaît dans le gel | Chargement asynchrone |\n`
+    const sortie = plafonnerNotesScout(
+      texte,
+      lecteur({ 'conversations-disk.ts:512': 'code', 'index.js:45784': 'absent' })
+    )
+    expect(sortie).toBe(texte)
+  })
+
+  it('un nom de méthode suivi d un numéro n est pas un fichier (sortie réelle conv-607)', () => {
+    const texte = `${ENTETE}| 1 | 88 | 🔧 fix | X | manque | Economie.sauver:170, voir a.lua:3. |\n`
+    const vus: string[] = []
+    plafonnerNotesScout(texte, (chemin, ligne) => {
+      vus.push(`${chemin}:${ligne}`)
+      return 'code'
+    })
+    expect(vus).toEqual(['a.lua:3'])
+  })
+
+  it('un ancrage incontrôlable (hors du dossier, nom ambigu) ne plafonne rien', () => {
+    const texte = `${ENTETE}| 1 | 88 | 🔧 fix | X | manque | ailleurs.ts:9 |\n`
+    expect(plafonnerNotesScout(texte, lecteur({}))).toBe(texte)
+  })
+
+  it('une nouveauté sans code existant n est pas plafonnée pour son ancrage', () => {
+    const texte = `${ENTETE}| 1 | 80 | 🆕 new | X | valeur | brancher dans os.ts:566 |\n`
+    expect(plafonnerNotesScout(texte, lecteur({ 'os.ts:566': 'commentaire' }))).toBe(texte)
+  })
+
+  it('le tableau de la skill (colonne Note, Comment) est plafonné pareil', () => {
+    const texte =
+      '| # | Note | Type | Quoi | Pourquoi | Comment |\n|---|---|---|---|---|---|\n' +
+      '| 1 | 90 | 🔧 correctif | X | non vérifié | a.ts:3 |\n'
+    expect(parseScoutTable(plafonnerNotesScout(texte))![0]!.score).toBe(50)
+  })
+})
+
+// fix-ok: rouge avant (ajusterNotesSurChoix absent) ; le plafond doit passer APRÈS l’ajustement.
+describe('note ajustée sur les choix réels de l’utilisateur (piste 7, conv-890)', () => {
+  const tableau =
+    ENTETE + '| 1 | 80 | 🆕 new | A | mesuré | x |\n| 2 | 70 | 🔧 fix | B | relu | a.ts:3 |\n'
+
+  it('chaque note suit le facteur de son type ; tableau retrié, raison écrite', () => {
+    const sortie = ajusterNotesSurChoix(tableau, { new: 0.5 })
+    expect(parseScoutTable(sortie)!.map((l) => [l.what, l.score])).toEqual([
+      ['B', 70],
+      ['A', 40]
+    ])
+    expect(sortie).toMatch(/Note ajustée sur tes choix réels par Autowin : 🆕 new ×0,5/u)
+  })
+
+  it('sans facteur, ou déjà ajusté : texte inchangé', () => {
+    expect(ajusterNotesSurChoix(tableau, {})).toBe(tableau)
+    const une = ajusterNotesSurChoix(tableau, { new: 0.5 })
+    expect(ajusterNotesSurChoix(une, { new: 0.5 })).toBe(une)
+  })
+
+  it('borné à 100, et le plafond de preuve passe APRÈS : un aveu reste à 50', () => {
+    const texte =
+      ENTETE +
+      "| 1 | 80 | 🆕 new | A | je n'ai pas vérifié | x |\n| 2 | 90 | 🆕 new | B | mesuré | x |\n"
+    const sortie = plafonnerNotesScout(ajusterNotesSurChoix(texte, { new: 1.5 }))
+    expect(parseScoutTable(sortie)!.map((l) => [l.what, l.score])).toEqual([
+      ['B', 100],
+      ['A', 50]
+    ])
+  })
+})
+
+function dossier(avecGit: boolean): string {
+  const racine = mkdtempSync(join(tmpdir(), 'autowin-plafond-'))
+  mkdirSync(join(racine, 'src', 'profond'), { recursive: true })
+  writeFileSync(
+    join(racine, 'src', 'a.ts'),
+    'const x = 1\n// ancien défaut réparé\n\n  * suite de doc\n'
+  )
+  writeFileSync(join(racine, 'src', 'profond', 'Program.cs'), 'int y = 2;\n')
+  if (avecGit) execFileSync('git', ['init', '-q'], { cwd: racine, windowsHide: true })
+  return racine
+}
+
+describe('lecture réelle des ancrages sur le disque', () => {
+  const lire = lecteurAncrageDepuisDisque(dossier(true))
+
+  it('distingue code, commentaire, ligne vide, fin de fichier et fichier absent', () => {
+    expect(lire('src/a.ts', 1)).toBe('code')
+    expect(lire('src/a.ts', 2)).toBe('commentaire')
+    expect(lire('src/a.ts', 3)).toBe('vide')
+    expect(lire('src/a.ts', 4)).toBe('commentaire')
+    expect(lire('src/a.ts', 40)).toBe('hors-fichier')
+    expect(lire('src/absent.ts', 1)).toBe('absent')
+  })
+
+  it('un chemin qui sort du dossier de travail est incontrôlable', () => {
+    expect(lire('../../etc/passwd', 1)).toBe('incontrolable')
+    expect(lire('C:/Windows/win.ini', 1)).toBe('incontrolable')
+  })
+
+  it('un nom nu se résout par la liste des fichiers du dépôt (conv-602 : `Program.cs:300`)', () => {
+    expect(lire('Program.cs', 1)).toBe('code')
+    expect(lire('profond/Program.cs', 1)).toBe('code')
+    expect(lire('Inconnu.cs', 1)).toBe('absent')
+  })
+
+  it('sans dépôt git, un nom qui n est pas à la racine reste incontrôlable', () => {
+    const sansGit = lecteurAncrageDepuisDisque(dossier(false))
+    expect(sansGit('src/a.ts', 2)).toBe('commentaire')
+    expect(sansGit('Program.cs', 1)).toBe('incontrolable')
+  })
+})
+
+/**
+ * LA LISTE DES FICHIERS SE LIT SANS GIT SYNCHRONE — heal conv-204, mesure du 2026-10-10.
+ *
+ * `gels.jsonl`, 12:30:43 : `git ls-files --cached --others` lance en `execFileSync` depuis ce
+ * lecteur, 1 502 ms de fenetre figee. Le lecteur est cree au debut de l'orchestration et ne sert
+ * qu'a la fin d'une phase scout : il a tout le temps de lire la liste en tache de fond.
+ */
+describe('liste des fichiers du dépôt : pré-lecture asynchrone', () => {
+  it('une fois la pré-lecture revenue, un nom nu se résout sans aucun appel synchrone', async () => {
+    let appelsSynchrones = 0
+    const lire = lecteurAncrageDepuisDisque(dossier(false), {
+      sync: () => {
+        appelsSynchrones += 1
+        return null
+      },
+      async: async () => ['src/a.ts', 'src/profond/Program.cs']
+    })
+    await lire.pret
+    expect(lire('Program.cs', 1)).toBe('code')
+    expect(appelsSynchrones).toBe(0)
+  })
+
+  it('si la pré-lecture n’est pas encore revenue, le secours synchrone répond comme avant', () => {
+    let appelsSynchrones = 0
+    const lire = lecteurAncrageDepuisDisque(dossier(false), {
+      sync: () => {
+        appelsSynchrones += 1
+        return ['src/profond/Program.cs']
+      },
+      async: () => new Promise<string[] | null>(() => {})
+    })
+    expect(lire('Program.cs', 1)).toBe('code')
+    expect(lire('profond/Program.cs', 1)).toBe('code')
+    expect(appelsSynchrones).toBe(1)
+  })
+})
+
+/*
+ * AFFIRMER UNE ABSENCE SANS LA MONTRER (conv-339). Le juge a refusé deux fois le tableau du /scout
+ * « humains comme dans Cyberpunk » (notes 66 et 70) pour des absences affirmées à tort — « three.js
+ * n'a rien de tout fait », « aucun test n'impose ce choix » : deux tours de jugement payés. Les
+ * lignes ci-dessous sont RECOPIÉES de ses sorties (`run-livrables/run-f085fcccbb82-1.md`).
+ */
+describe('plafond de preuve : une absence affirmée doit être montrée', () => {
+  const ENTETE_A =
+    '| # | Score | Vu par | Type | Quoi | Pourquoi | Comment |\n|---|---|---|---|---|---|---|\n'
+  const ENTETE_B = '| # | Score | Type | Quoi | Pourquoi | Comment |\n|---|---|---|---|---|---|\n'
+  const PEAU_68 =
+    "| 8 | 68 | B (A le cite à part) | 🆕 feature | Une peau moins « plastique » | La peau est une matière standard de rugosité 0,55 (`FOULE.rugositePeau`). Elle ne simule pas la lumière qui traverse la peau. three.js n'a rien de tout fait pour ça ([fil three.js](https://discourse.threejs.org/t/skin-shading-with-screen-space-sub-surface-scattering/83939)). A le classe comme un chantier séparé. | Ajouter un léger éclairage enveloppant dans le code de rendu de `nuancer()`, que `home-decor-foule-tribus.ts:205` modifie déjà. |"
+  const PEAU_100 =
+    "| 5 | 100 | 🆕 feature | Une peau moins « plastique » | La peau est une matière standard de rugosité 0,55 (`FOULE.rugositePeau`). Elle ne simule pas la lumière qui traverse la peau, et three.js n'a rien de tout fait pour ça ([fil three.js](https://discourse.threejs.org/t/skin-shading-with-screen-space-sub-surface-scattering/83939)). | Ajouter un éclairage enveloppant léger dans `nuancer()`, que `home-decor-foule-tribus.ts:205` modifie déjà. |"
+  const COMMENTAIRE_73 =
+    "| 7 | 73 | 🔧 fix | Un commentaire périmé annonce 34 ms par image et fait croire qu'il ne reste aucune marge de calcul | `home-decor-foule.ts:356-362` parle encore au présent d'un coût de 34 ms par image. Ce défaut est pourtant corrigé par les matières en double (« jumelles »). Elles sont branchées par `matieresDuReflet` dans `home-decor-avenue-spirale.ts:958`, et le test « LE REFLET DESSINE DES JUMELLES » les vérifie (`spirale.test.ts:383`). | Réécrire ce paragraphe avec le coût mesuré aujourd'hui. |"
+  const notes = (texte: string): Array<[string, number | undefined]> =>
+    parseScoutTable(texte)!.map((ligne) => [ligne.num, ligne.score])
+
+  it('la ligne réelle notée 68 (« three.js n’a rien de tout fait », une URL pour seule preuve) tombe à 50', () => {
+    const sortie = plafonnerNotesScout(`${ENTETE_A}${PEAU_68}\n`)
+    expect(notes(sortie)).toEqual([['8', 50]])
+    expect(sortie).toMatch(/ramenée à 50/u)
+    expect(sortie).toContain("three.js n'a rien de tout fait")
+    expect(sortie).toMatch(/absence/u)
+  })
+
+  it('la ligne réelle notée 100 tombe à 50 ; la ligne notée 73, qui montre son fichier, reste à 73', () => {
+    const sortie = plafonnerNotesScout(`${ENTETE_B}${PEAU_100}\n${COMMENTAIRE_73}\n`)
+    expect(notes(sortie)).toEqual([
+      ['7', 73],
+      ['5', 50]
+    ])
+  })
+
+  it('jumeau : une absence citée avec son grep ou son fichier garde sa note', () => {
+    const texte =
+      ENTETE_B +
+      '| 1 | 80 | 🆕 feature | Des ombres portées | Aucune ombre portée dans le décor (`grep -rn castShadow src/renderer` : 0 résultat). | Activer les ombres |\n' +
+      '| 2 | 76 | 🆕 feature | Un clignement des yeux | Rien ne lit les formes du visage dans `src/renderer/src/components/home-decor-foule.ts`. | Ajouter |\n'
+    const sortie = plafonnerNotesScout(texte)
+    expect(sortie).toBe(texte)
+  })
+
+  it('jumeau : une note déjà au plafond ou en dessous ne bouge pas, et rien n’est écrit', () => {
+    const texte = `${ENTETE_B}| 1 | 50 | 🆕 feature | Peau | three.js n'a rien de tout fait. | Ajouter |\n`
+    expect(plafonnerNotesScout(texte)).toBe(texte)
+  })
+})
+
+/*
+ * PISTE 4 (conv-1033) — « réfute avant de rendre » n'était que du texte (`phase-briefs.ts`). Une piste
+ * dont le sujet redit un commit récent, ou une piste déjà livrée, reçoit une MARQUE sous le tableau.
+ * Une marque, pas un plafond : la ressemblance de mots est un indice, pas une preuve.
+ * Sujets réels de `git log --since=30.days` (21/10).
+ */
+describe('déjà fait ? : une piste qui redit un commit récent ou une piste livrée est marquée', () => {
+  const tableau = (...titres: string[]): string =>
+    '## Cible\nligne 1\n\n' +
+    ENTETE +
+    titres.map((t, i) => `| ${i + 1} | ${80 - i} | 🆕 new | ${t} | p | \`a.ts:1\` |`).join('\n') +
+    '\n\nSUITE: fin'
+
+  it('nettoie le sujet d’un commit : préfixe de type, auto(conv-N), agent run-…, (conv-N)', () => {
+    expect(
+      sujetDeCommit(
+        "auto(conv-1030): Ajoute un raciniseur français (PyStemmer) et l'insensibilité aux accents à la recherche BM25 de brai"
+      )
+    ).toBe(
+      "Ajoute un raciniseur français (PyStemmer) et l'insensibilité aux accents à la recherche BM25 de brai"
+    )
+    expect(
+      sujetDeCommit('feat(hdesk): vue Bureaux cachés en disposition « Console » (conv-1025)')
+    ).toBe('vue Bureaux cachés en disposition « Console »')
+    // En-tête d'un message de sélection, sans aucune piste : il ne dit rien de ce qui a été fait.
+    expect(
+      sujetDeCommit(
+        "agent run-3180eec71b06-1: raite ENSEMBLE ces 8 candidats issus du scout interne d'Autowin :"
+      )
+    ).toBe('')
+    // Commit réel 56800c14 : un run d'agent sans sujet, sans deux-points.
+    expect(sujetDeCommit('agent run-2cbeb058350e-1')).toBe('')
+  })
+
+  it('la piste qui redit le commit 398a1b7e est marquée ; sa voisine sur BM25 ne l’est pas', () => {
+    const faits = [
+      {
+        origine: 'commit 398a1b7e',
+        texte: sujetDeCommit(
+          "auto(conv-1030): Ajoute un raciniseur français (PyStemmer) et l'insensibilité aux accents à la recherche BM25 de brai"
+        )
+      }
+    ]
+    const sortie = marquerDejaFait(
+      tableau(
+        '**Raciniseur français et insensibilité aux accents dans la recherche BM25**',
+        '**Recherche BM25 : pondérer les titres des notes**'
+      ),
+      faits
+    )
+    expect(sortie).toMatch(
+      /> Déjà fait \? Autowin a trouvé un sujet voisin : ligne 1 ↔ commit 398a1b7e/u
+    )
+    expect(sortie).not.toMatch(/ligne 2 ↔/u)
+    // Les notes et l'ordre ne bougent pas : c'est une marque, pas un plafond.
+    expect(sortie).toContain('| 1 | 80 | 🆕 new | **Raciniseur')
+    expect(sortie).toContain('| 2 | 79 | 🆕 new | **Recherche BM25')
+    expect(marquerDejaFait(sortie, faits)).toBe(sortie)
+  })
+
+  /*
+   * Entrée qui tue une correction fausse : l'en-tête brut d'un commit de sélection. Comparé tel quel,
+   * il partage 4 racines sur 5 (ensemble, candidats, issus, interne) avec une vraie piste sur la
+   * sélection groupée, et la marquerait « déjà faite » à chaque nouveau commit de sélection.
+   */
+  it('jumeau : l’en-tête nettoyé d’un commit de sélection ne marque pas une piste sur ce sujet', () => {
+    const brut =
+      "agent run-3180eec71b06-1: raite ENSEMBLE ces 8 candidats issus du scout interne d'Autowin :"
+    const piste = tableau('**Traiter ensemble les candidats issus du scout interne**')
+    expect(marquerDejaFait(piste, [{ origine: 'commit 3927ddf1', texte: brut }])).toMatch(
+      /ligne 1 ↔/u
+    )
+    expect(
+      marquerDejaFait(piste, [{ origine: 'commit 3927ddf1', texte: sujetDeCommit(brut) }])
+    ).toBe(piste)
+  })
+
+  it('une piste déjà livrée par un run précédent est marquée avec ce run', () => {
+    const sortie = marquerDejaFait(
+      tableau('**Une piste livrée, pas seulement prise** — relier au résultat du run'),
+      [
+        {
+          origine: 'piste livrée par run-ef173fb3c45b-1',
+          texte: '**Une piste « livrée », pas seulement « prise ».**'
+        }
+      ]
+    )
+    expect(sortie).toMatch(/ligne 1 ↔ piste livrée par run-ef173fb3c45b-1/u)
+  })
+
+  it('sans fait connu ou sans tableau, la sortie ne change pas', () => {
+    expect(marquerDejaFait(tableau('**A b c**'), [])).toBe(tableau('**A b c**'))
+    expect(
+      marquerDejaFait('pas de tableau', [{ origine: 'commit x', texte: 'pas de tableau' }])
+    ).toBe('pas de tableau')
+  })
+
+  it('les sujets déjà faits réunissent les commits récents et les pistes livrées de la mémoire', async () => {
+    const chemin = join(mkdtempSync(join(tmpdir(), 'autowin-dejafait-')), 'scout-pistes.json')
+    writeFileSync(
+      chemin,
+      JSON.stringify({
+        entrees: [
+          {
+            depot: 'd:/w',
+            titre: 'Piste livrée',
+            vuLe: 't1',
+            run: 's1',
+            choix: 'prise',
+            traitePar: 'run-ok'
+          },
+          {
+            depot: 'd:/w',
+            titre: 'Piste ratée',
+            vuLe: 't1',
+            run: 's1',
+            choix: 'prise',
+            traitePar: 'run-ko'
+          }
+        ]
+      })
+    )
+    const faits = await sujetsDejaFaits({
+      depot: 'D:/w',
+      chemin,
+      resultatDuRun: (run) => (run === 'run-ok' ? 'delivered' : 'defect'),
+      lancer: async () => '398a1b7e	auto(conv-1030): Ajoute un raciniseur français'
+    })
+    expect(faits).toEqual([
+      { origine: 'commit 398a1b7e', texte: 'Ajoute un raciniseur français' },
+      { origine: 'piste livrée par run-ok', texte: 'Piste livrée' }
+    ])
+    // Sans lecteur de résultats, seuls les commits comptent.
+    expect(await sujetsDejaFaits({ depot: 'D:/w', chemin, lancer: async () => null })).toEqual([])
+  })
+
+  it('les sujets de commit sont lus par git log, nettoyés ; un échec de git ne rend rien', async () => {
+    const lus = await sujetsDesCommitsRecents('D:/w', async () =>
+      [
+        '398a1b7e\tauto(conv-1030): Ajoute un raciniseur français',
+        "3927ddf1\tagent run-3180eec71b06-1: raite ENSEMBLE ces 8 candidats issus du scout interne d'Autowin :",
+        ''
+      ].join('\n')
+    )
+    expect(lus).toEqual([{ origine: 'commit 398a1b7e', texte: 'Ajoute un raciniseur français' }])
+    expect(await sujetsDesCommitsRecents('D:/w', async () => null)).toEqual([])
+  })
+})

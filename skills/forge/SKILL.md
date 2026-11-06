@@ -59,8 +59,8 @@ même impasse que celle pour laquelle forge a été invoqué, une couche plus ba
 
 **Autowin OS a DEUX surfaces d'enregistrement, et le bus seul ne suffit pas.**
 1. **Le bus de commandes** — y publier rend l'outil visible à l'agent du CHAT, dont le prompt est
-   généré depuis le catalogue vivant (`src/main/chat-pilotage-prompt.ts`). Rien d'autre à faire de ce côté.
-2. **`OUTILS_NOEUD_SKILL`** dans `src/main/skill-node-tools.ts` — une liste blanche EN DUR. Elle filtre
+   généré depuis le catalogue vivant (`src/main/consignes/chat-pilotage-prompt.ts`). Rien d'autre à faire de ce côté.
+2. **`OUTILS_NOEUD_SKILL`** dans `src/main/skills/skill-node-tools.ts` — une liste blanche EN DUR. Elle filtre
    le prompt du nœud de skill, le chemin d'exécution `<cmd>` (un nom non listé est RENDU en `refuse`), les
    outils natifs `mcp__autowin__*`, et le câblage du bus dans `src/main/index.ts`. Un outil absent de
    ce tableau est invisible ET refusé dans chaque nœud de workflow — l'orchestrateur qui joue les

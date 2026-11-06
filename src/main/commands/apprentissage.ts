@@ -1,20 +1,20 @@
 // Frontière d'apprentissage de AppCommandBus (`observeOutcomeLearning`), sortie de commands.ts telle quelle
 // (conv-1580, lot 6).
 // Les membres du bus lus ici sont publics et marqués @internal : ce module fait partie du bus.
-import type { AppCommandBus } from '../commands'
+import type { AppCommandBus } from './commands'
 import { appendBrainTrace } from '../activity/brain-trace-spool'
 import { createHash } from 'node:crypto'
-import { rememberFact } from '../brain-remember'
-import { brainServiceToken } from '../brain-retrieval'
-import { classeTerminaleDuControle } from '../classe-terminale-echec'
-import { type OutcomeLearningResult } from '../outcome-learning-supervisor'
+import { rememberFact } from '../brain/brain-remember'
+import { brainServiceToken } from '../brain/brain-retrieval'
+import { classeTerminaleDuControle } from '../orchestration/classe-terminale-echec'
+import { type OutcomeLearningResult } from '../brain/outcome-learning-supervisor'
 import {
   learningProposalAttestation,
   porteeDeLecon,
   parseAttestedLearningProposal,
   verifyIndependentLearningAttestation,
   type IndependentLearningAttestation
-} from '../outcome-learning-proposal'
+} from '../brain/outcome-learning-proposal'
 
 /** Frontière terminale unique, réutilisée par le bus chat et l'IPC direct. */
 export async function observeOutcomeLearning(bus: AppCommandBus, input: {

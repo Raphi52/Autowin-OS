@@ -1,0 +1,58 @@
+import { describe, expect, it } from 'vitest'
+import { sourceProcessPrincipal } from './source-process-principal.test-helpers'
+import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
+
+/**
+ * LE DRAPEAU D'EXPÉRIENCE DOIT ÊTRE RÉELLEMENT PASSÉ — sinon les gardes sont inertes.
+ *
+ * MESURÉ le 2026-08-16 : 8 sondes, exactitude 8/8, et pourtant **0 conforme** au juge d'expérience,
+ * avec « bloc de clôture absent » sur chacune. Les trois gardes existaient, étaient testées, et ne
+ * s'armaient jamais : `index.ts` ne passait pas `exigerExperienceSoignee`, qui vaut `false` par
+ * défaut. Du code juste, entièrement inerte.
+ *
+ * Ce n'est pas la première fois sur cet arbre partagé : le paramètre du tour coupé, son passage à
+ * `buildTurnMessages` et son champ de type avaient déjà disparu la veille, chacun repéré par le
+ * typecheck. Ici RIEN ne le signalait — un argument optionnel non passé compile parfaitement.
+ *
+ * D'où ce test : il vérifie le CÂBLAGE, pas la logique. C'est le seul défaut de la famille
+ * « exposé mais jamais appelé » qu'aucun test de comportement ne peut attraper.
+ */
+// La ZONE du process principal, pas un chemin : ce cablage a quitte `index.ts` pour
+// `src/main/chat/`. Un demenagement de code n'est pas une regression (mesure du 2026-09-02).
+const main = sourceProcessPrincipal()
+// Les gardes vivent dans agent-pilot/relances-du-tour.ts depuis conv-1580 (lot 4) : on lit la famille.
+const pilot = sourceDuPilote()
+
+describe('câblage de l’expérience soignée', () => {
+  it('le pilote OFFRE le drapeau', () => {
+    expect(pilot).toContain('exigerExperienceSoignee')
+  })
+
+  it('les gardes d’expérience le CONSULTENT vraiment', () => {
+    // Trois gardes : conclusion absente, echec tu, annonce sans action.
+    const occurrences = pilot.split('exigerExperienceSoignee &&').length - 1
+    expect(occurrences).toBeGreaterThanOrEqual(3)
+  })
+
+  it('le CHAT le passe — sans quoi tout ce qui précède est inerte', () => {
+    /*
+      LE test qui manquait. Sans cet argument, les gardes ne s'arment jamais et l'utilisateur reçoit
+      exactement ce qu'il a décrit : des réponses sans conclusion, marquées réussies.
+    */
+    // L'APPEL ENTIER, jusqu'a sa parenthese fermante — plus une fenetre fixe de 1200 caracteres :
+    // l'appel a grossi (journal du fournisseur, bornes du tour) et le `true` final en sortait,
+    // alors qu'il etait toujours passe (rouge constate le 2026-10-22, conv-1056).
+    const sansCommentaires = main.replace(/\/\/[^\n]*/g, '')
+    const debut = sansCommentaires.indexOf('turnPilot.chat(')
+    expect(debut).toBeGreaterThan(-1)
+    let profondeur = 0
+    let fin = debut + 'turnPilot.chat'.length
+    for (; fin < sansCommentaires.length; fin++) {
+      if (sansCommentaires[fin] === '(') profondeur++
+      else if (sansCommentaires[fin] === ')' && --profondeur === 0) break
+    }
+    const appel = sansCommentaires.slice(debut, fin + 1).replace(/\s+/g, ' ')
+    // `routingUserMessageOverride`, le tour coupe (`undefined`), puis le drapeau en DERNIER argument.
+    expect(appel).toMatch(/routingUserMessageOverride, [^,]+, true \)$/)
+  })
+})

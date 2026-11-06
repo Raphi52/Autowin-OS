@@ -26,7 +26,7 @@ const appelsAsync: string[] = []
  */
 const appelsHorsFil: string[] = []
 
-vi.mock('../execution-hors-fil', () => ({
+vi.mock('../gel/execution-hors-fil', () => ({
   execFileHorsFil: (fichier: string) => {
     appelsHorsFil.push(fichier)
     return Promise.resolve({ stdout: '', stderr: '' })

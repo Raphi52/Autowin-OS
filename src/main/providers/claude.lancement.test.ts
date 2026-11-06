@@ -22,8 +22,8 @@ const cap = vi.hoisted(() => ({
   compteActif: undefined as string | undefined
 }))
 
-vi.mock('../claude-accounts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../claude-accounts')>()),
+vi.mock('./claude-accounts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./claude-accounts')>()),
   // Même contrat que le vrai : la variable héritée part toujours, celle du compte actif est posée.
   // Un compte passé par l'appelant (fil au compte choisi) prime, comme dans le vrai.
   withClaudeAccountEnv: (
@@ -174,7 +174,7 @@ describe('environnement du relais Windows', () => {
   it('fil au compte choisi : le CLI part dans le dossier de CE compte, pas dans celui du compte actif', async () => {
     process.env.AUTOWIN_RUN_JOURNAL_ROOT = racineJournal
     cap.compteActif = 'C:/compte-actif'
-    const { configureClaudeCompteDuFil } = await import('../claude-accounts')
+    const { configureClaudeCompteDuFil } = await import('./claude-accounts')
     configureClaudeCompteDuFil((fil) =>
       fil === 'conv-A'
         ? { id: 'compte-2', nom: 'Deux', env: { CLAUDE_CONFIG_DIR: 'C:/compte-du-fil' } }
@@ -194,7 +194,7 @@ describe('environnement du relais Windows', () => {
   it('fil choisi sur le compte par défaut : aucune variable, même si un autre compte est actif', async () => {
     process.env.AUTOWIN_RUN_JOURNAL_ROOT = racineJournal
     cap.compteActif = 'C:/compte-actif'
-    const { configureClaudeCompteDuFil } = await import('../claude-accounts')
+    const { configureClaudeCompteDuFil } = await import('./claude-accounts')
     configureClaudeCompteDuFil(() => ({ id: 'default', nom: 'Défaut', env: {} }))
     try {
       await drainer(

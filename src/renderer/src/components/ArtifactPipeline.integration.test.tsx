@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
-import { AgentPilot } from '../../../main/agent-pilot'
+import { AgentPilot } from '../../../main/agent-pilot/agent-pilot'
 import { CodexAdapter } from '../../../main/providers/codex'
 import type { Message, SendOptions, SendResult, StreamChunk } from '../../../main/providers/types'
 import {

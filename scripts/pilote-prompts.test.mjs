@@ -113,7 +113,7 @@ describe('sonde pilote — le gros oeuvre du projet', () => {
       '> But : tourner sans hermes.exe.',
       '',
       '## 2. Chantier 1 — Registre natif (VERROU)',
-      'Le verrou vit dans `src/main/skill-registry.ts`.',
+      'Le verrou vit dans `src/main/skills/skill-registry.ts`.',
       '- [ ] brancher le registre natif',
       '- [x] cartographier les appels',
       '',
@@ -130,7 +130,7 @@ describe('sonde pilote — le gros oeuvre du projet', () => {
     const chantier = o.find((x) => x.titre.startsWith('Chantier 1'))
     expect(chantier.designe).toBe(true)
     expect(chantier.restes).toEqual(['brancher le registre natif'])
-    expect(chantier.citations).toEqual(['src/main/skill-registry.ts'])
+    expect(chantier.citations).toEqual(['src/main/skills/skill-registry.ts'])
     expect(o[0].but).toBe('tourner sans hermes.exe.')
   })
 

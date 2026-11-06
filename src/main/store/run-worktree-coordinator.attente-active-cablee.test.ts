@@ -74,7 +74,7 @@ describe('balayage — l attente active est cablee sur l etat REEL de la base', 
   }
 
   it('le fichier en cause est TOUJOURS sale → aucune tentative, et aucun essai brule', async () => {
-    const { c, reprises } = coordinateur(['src/main/agent-pilot.ts'], ['src/main/agent-pilot.ts'])
+    const { c, reprises } = coordinateur(['src/main/agent-pilot/agent-pilot.ts'], ['src/main/agent-pilot/agent-pilot.ts'])
 
     const tentes = await c.repecherLesTravauxEnAttente()
 
@@ -85,7 +85,7 @@ describe('balayage — l attente active est cablee sur l etat REEL de la base', 
   it('le fichier est redevenu propre → on retente, MEME au-dela du plafond', async () => {
     const { c, reprises } = coordinateur(
       ['un/autre/fichier.ts'],
-      ['src/main/agent-pilot.ts'],
+      ['src/main/agent-pilot/agent-pilot.ts'],
       ESSAIS_AUTOMATIQUES_MAX + 2
     )
 
@@ -98,7 +98,7 @@ describe('balayage — l attente active est cablee sur l etat REEL de la base', 
   it('une base sale sur un fichier SANS RAPPORT ne fait pas attendre ce run', async () => {
     // Le piege symetrique de l'attente : si on regardait « la base est-elle sale ? » au lieu de
     // « MES fichiers sont-ils sales ? », ce run attendrait indefiniment pour rien.
-    const { c, reprises } = coordinateur(['docs/notes.md'], ['src/main/agent-pilot.ts'])
+    const { c, reprises } = coordinateur(['docs/notes.md'], ['src/main/agent-pilot/agent-pilot.ts'])
 
     expect(await c.repecherLesTravauxEnAttente()).toEqual(['run-bloque'])
     expect(reprises).toEqual(['run-bloque'])

@@ -1,0 +1,140 @@
+import type { ExecutionEvidence } from '../providers/types'
+
+/**
+ * Projection des preuves d'exécution vers un prompt de juge.
+ *
+ * `ExecutionEvidence` sert DEUX consommateurs aux besoins opposés : le Chat, qui affiche
+ * `stdout`/`diff` bruts inline, et le juge LLM, qui n'a besoin que des champs porteurs de verdict.
+ * Sérialiser la structure entière (`JSON.stringify(evidence)`) faisait payer au juge la charge
+ * d'affichage du Chat. Mesuré sur le run conv-1102 (vue Worktrees, 11/08) : prompt juge de
+ * 422 504 caractères dont 44,7 % de `stdout` bruts, 26,6 % d'empreintes SHA-256 (1 652 hashes)
+ * et 9,9 % de commandes recopiées — soit ~81 % de charge qu'aucun juge ne peut exploiter.
+ * Le run mourait ensuite sur « Budget tokens total dépassé (9 639 639 / 2 500 000) ».
+ *
+ * On garde ce qui fonde un verdict — quoi, réussi ou non, quelle commande, quel code de sortie,
+ * et les BORDS du stdout (l'écho de la commande en tête, la ligne de résultat en queue) — et on
+ * laisse au Chat ce qui ne sert qu'à l'affichage.
+ */
+
+/**
+ * Bornes du LIVRABLE agrégé transmis au juge.
+ *
+ * Levier n°1 du scout coût joué dans Autowin le 2026-08-12 (conv-1120), adossé aux conversations
+ * réelles : sur `conv-101`, un appel juge porte 1 540 000 caractères de messages pour 6,36 $, et
+ * trois passes juge du même fil totalisent 10,56 $. Le chemin greedy injecte l'agrégat ENTIER,
+ * sans le plafond que les autres phases appliquent.
+ *
+ * On coupe au milieu, jamais aux extrémités : un livrable porte sa substance en tête (ce qui a été
+ * fait) et ses preuves en queue (tests, exit codes, verdicts). Amputer un bord rendrait le juge
+ * incapable de juger ; amputer le ventre lui coûte des redites.
+ */
+const AGGREGATE_HEAD = 40_000
+const AGGREGATE_TAIL = 20_000
+/** Taille maximale du livrable agrégé non coupé : ce qui s'ajoute au prompt du juge s'y mesure (changements-juge.ts). */
+// fix-ok: conv-914 (13/10) — le bloc « CE QUI A CHANGÉ » ajouté au prompt du juge n'avait aucune
+// borne : sans elle il faisait dépasser les 40 000 + 20 000 ci-dessus. Mesuré : borne remplacée par
+// Infinity → test « ne fait jamais dépasser la taille maximale » de changements-juge.test.ts rouge ;
+// avec AGGREGATE_MAX_CHARS → vert.
+export const AGGREGATE_MAX_CHARS = AGGREGATE_HEAD + AGGREGATE_TAIL
+
+/** Borne le livrable agrégé soumis au juge sans lui retirer ses deux bords porteurs. */
+export const clampAggregateForJudge = (text: string | undefined): string =>
+  text ? clampMiddle(text, AGGREGATE_HEAD, AGGREGATE_TAIL) : ''
+
+/** Bornes : têtes/queues de `stdout`, longueur de commande, nombre de preuves. */
+const EVIDENCE_STDOUT_HEAD = 400
+const EVIDENCE_STDOUT_TAIL = 800
+const EVIDENCE_COMMAND_MAX = 300
+export const EVIDENCE_MAX_ITEMS = 60
+/**
+ * Plafond de VOLUME, distinct du plafond de NOMBRE.
+ *
+ * Mesure du 2026-09-16 sur 348 prompts de juge reels (prompt-observability) : message median
+ * 119 007 caracteres, dont 93 169 (78 %) de preuves, 15 533 de livrable, ~4 800 de blocs systeme.
+ * Le plafond par item ne bornait que le nombre : 60 preuves bornees chacune pesaient encore ~90 k
+ * caracteres, re-payes a CHAQUE appel juge (aucune ligne `judge` n'a de cacheCreationTokens, et
+ * l'uncached median mesure sur 273 appels vaut 62 102 tokens). On borne donc le total, en gardant
+ * les preuves les plus porteuses de verdict.
+ */
+export const EVIDENCE_TOTAL_CHARS = 40_000
+
+export interface JudgeEvidence {
+  type: string
+  kind: ExecutionEvidence['kind']
+  status: string
+  ok: boolean
+  summary: string
+  command?: string
+  exitCode?: number
+  path?: string
+  pathCount?: number
+  stdout?: string
+  diffLines?: number
+  oracleStable?: boolean
+}
+
+/** Coupe au milieu en conservant les deux bords, qui portent l'information de verdict. */
+export const clampMiddle = (text: string, head: number, tail: number): string => {
+  if (text.length <= head + tail) return text
+  const omitted = text.length - head - tail
+  return `${text.slice(0, head)}\n… [${omitted} caractères omis] …\n${text.slice(-tail)}`
+}
+
+const countLines = (text: string): number => (text ? text.split('\n').length : 0)
+
+/** Réduit une preuve à ses champs porteurs de verdict. */
+export const evidenceForJudge = (item: ExecutionEvidence): JudgeEvidence => {
+  const digest: JudgeEvidence = {
+    type: item.type,
+    kind: item.kind,
+    status: item.status,
+    ok: item.ok,
+    summary: item.summary
+  }
+  if (item.command) digest.command = clampMiddle(item.command, EVIDENCE_COMMAND_MAX, 0)
+  if (item.exitCode !== undefined) digest.exitCode = item.exitCode
+  // `path` et `paths` répètent le même chemin absolu ; on n'en garde qu'un, plus le compte.
+  const firstPath = item.path ?? item.paths?.[0]
+  if (firstPath) digest.path = firstPath
+  const pathCount = item.paths?.length ?? (item.path ? 1 : 0)
+  if (pathCount > 1) digest.pathCount = pathCount
+  if (item.stdout) digest.stdout = clampMiddle(item.stdout, EVIDENCE_STDOUT_HEAD, EVIDENCE_STDOUT_TAIL)
+  // Le diff intégral ne fonde aucun verdict que le résumé ne porte déjà ; son volume, si.
+  if (item.diff) digest.diffLines = countLines(item.diff)
+  if (item.oracleStable !== undefined) digest.oracleStable = item.oracleStable
+  return digest
+}
+
+/**
+ * Sérialise les preuves pour un prompt de juge, bornées en nombre et en volume.
+ * Les mutations et vérifications priment sur les inspections quand il faut couper.
+ */
+export const serializeEvidenceForJudge = (
+  evidence: readonly ExecutionEvidence[] | undefined
+): string => {
+  const items = evidence ?? []
+  if (items.length === 0) return '[]'
+  // Priorité de verdict, commune aux DEUX coupes (nombre puis volume) : une mutation fonde un
+  // verdict, une vérification aussi, une simple lecture beaucoup moins.
+  const rang = (item: ExecutionEvidence): number =>
+    item.kind === 'mutation' ? 0 : item.kind === 'verification' ? 1 : 2
+  // Tri stable par intérêt, puis on coupe la queue la moins porteuse.
+  const parPriorite = [...items].sort((a, b) => rang(a) - rang(b))
+  const kept = parPriorite.slice(0, EVIDENCE_MAX_ITEMS)
+  let dropped = parPriorite.length - kept.length
+  const retenues: JudgeEvidence[] = []
+  // Deux caractères pour les crochets du tableau JSON, un par virgule ajoutée ensuite.
+  let volume = 2
+  for (const item of kept) {
+    const digest = evidenceForJudge(item)
+    const cout = JSON.stringify(digest).length + 1
+    if (retenues.length > 0 && volume + cout > EVIDENCE_TOTAL_CHARS) {
+      dropped += 1
+      continue
+    }
+    retenues.push(digest)
+    volume += cout
+  }
+  const serialized = JSON.stringify(retenues)
+  return dropped > 0 ? `${serialized}\n[${dropped} preuves de moindre portée omises]` : serialized
+}

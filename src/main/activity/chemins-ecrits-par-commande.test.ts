@@ -9,14 +9,14 @@ const ecrits = (commande: string, dossier = DEPOT): string[] =>
 describe('cheminsEcritsParCommande — les deux commandes réelles du 2026-10-13', () => {
   it('conv-932 : `prettier --write` nomme le test ; eslint sans --fix, tsc et /dev/null ne nomment rien', () => {
     expect(ecrits(COMMANDE_CONV_932, 'C:\\ailleurs')).toEqual([
-      'D:\\AutoWinOS\\src\\main\\githooks-pre-push.test.ts'
+      'D:\\AutoWinOS\\src\\main\\git\\githooks-pre-push.test.ts'
     ])
   })
 
   it('conv-933 : `cat >>` et `sed -i` nomment le test une fois ; le corps du here-document n’est pas lu', () => {
     // Le corps contient `=>`, `|`, des guillemets et des chemins : aucun n'est une redirection.
     expect(ecrits(COMMANDE_CONV_933)).toEqual([
-      'D:\\AutoWinOS\\src\\main\\relance-auto-moteur.test.ts'
+      'D:\\AutoWinOS\\src\\main\\providers\\relance-auto-moteur.test.ts'
     ])
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lireDecisionScoutTexte } from '../../../main/scout-cible'
+import { lireDecisionScoutTexte } from '../../../main/scout/scout-cible'
 // Les deux lecteurs d'une même règle (runs orchestrés / mode auto du chat) doivent décider pareil.
 import { lireCiblesScout } from './chat-auto-mode'
 import { lireDecisionScout } from '../../../shared/scout-cible-lecture'

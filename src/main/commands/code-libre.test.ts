@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import * as bus from '../commands'
+import * as bus from './commands'
 import * as argumentsDuBus from './arguments'
 import * as orchestrationEntrees from './orchestration-entrees'
 import * as publication from './publication'
@@ -19,7 +19,7 @@ import * as skills from './skills'
  *   `export function listeEnvoyee` encore écrit dans `commands.ts` (référence différente).
  * - un module du dossier qui importe une VALEUR par `'../commands'` : cycle d'import réel, dont
  *   l'ordre d'évaluation décide si la valeur existe déjà. Entrée qui fait échouer le second test :
- *   `import { type AppCommandBus, argumentAbsent } from '../commands'` (application.ts avant ce lot).
+ *   `import { type AppCommandBus, argumentAbsent } from './commands'` (application.ts avant ce lot).
  */
 const DEPLACES: Array<[string, Record<string, unknown>, string[]]> = [
   ['skills.ts', skills, ['ligneDeSkill', 'skillsInvocables']],

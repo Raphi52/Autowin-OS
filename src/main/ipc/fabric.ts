@@ -14,8 +14,8 @@
  * donc reçue comme lecteur, pas comme valeur.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
 import type { FabricNodeSummary } from '../compute-fabric/control-plane'
 
 /** Ce que les canaux de Compute Fabric prenaient dans `index.ts` — désormais passé explicitement. */

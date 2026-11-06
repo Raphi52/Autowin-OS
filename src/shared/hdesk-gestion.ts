@@ -1,12 +1,12 @@
 /**
  * VUE « BUREAUX CACHÉS » (conv-951, 2026-10-16) : « j'aimerais une view dédiée pour gérer tous mes
  * Hdesk, pouvoir les fermer, les créer et tout ». Types et validation partagés par le processus
- * principal (src/main/hdesk-gestion.ts), le pont et l'écran (HdeskGestionView.tsx) : la même règle
+ * principal (src/main/bureau/hdesk-gestion.ts), le pont et l'écran (HdeskGestionView.tsx) : la même règle
  * refuse une saisie invalide AVANT tout lancement, côté écran, et de nouveau côté processus principal,
  * qui ne fait jamais confiance à l'écran.
  */
 
-/** Même motif que scripts/hdesk-lancer.ps1 (`ValidatePattern`) et ID_BUREAU de src/main/hdesk-tv.ts. */
+/** Même motif que scripts/hdesk-lancer.ps1 (`ValidatePattern`) et ID_BUREAU de src/main/bureau/hdesk-tv.ts. */
 export const MOTIF_IDENTIFIANT = /^[a-zA-Z0-9_-]+$/
 
 /**

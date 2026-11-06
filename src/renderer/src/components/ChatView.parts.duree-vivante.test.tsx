@@ -14,7 +14,7 @@ import { recalerAncre } from './duree-vivante'
  * action en cours 27 min 7 s » sautait de cinq en cinq.
  *
  * CAUSE : la pastille de duree n'etait pas une horloge mais le TEXTE du battement envoye par le
- * processus principal toutes les `VERIFY_BATTEMENT_MS` (5 s, src/main/verify-battement.ts). Entre
+ * processus principal toutes les `VERIFY_BATTEMENT_MS` (5 s, src/main/verify/verify-battement.ts). Entre
  * deux battements, rien ne la faisait avancer. Le bloc Raisonnement, lui, a son propre tic a 1 s.
  */
 let container: HTMLDivElement

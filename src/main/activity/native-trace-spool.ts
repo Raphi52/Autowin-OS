@@ -1,6 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, renameSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import { PREFLIGHT_SCHEMA } from './native-preflight'
 import { redactTrace } from './trace-redact'
 import { NATIVE_TRACE_SOURCE, type NativePreflightWireV1 } from '../../shared/native-trace-contract'

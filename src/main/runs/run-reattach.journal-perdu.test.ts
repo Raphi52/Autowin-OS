@@ -8,7 +8,7 @@ import {
   saveOrchestrationState,
   type OrchestrationRunState
 } from './orchestration-state'
-import { compileExecutionQuote } from '../execution-quote'
+import { compileExecutionQuote } from '../orchestration/execution-quote'
 import { writeSurvivableExit } from './stdout-journal'
 
 /**

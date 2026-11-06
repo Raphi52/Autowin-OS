@@ -9,12 +9,12 @@ $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath (Split-Path -Parent $PSScriptRoot)
 
 $cibles = @(
-  'src/main/skill-routing.phases-canoniques.test.ts',
-  'src/main/intent-phase-routing.test.ts',
-  'src/main/skill-invocation.test.ts',
+  'src/main/skills/skill-routing.phases-canoniques.test.ts',
+  'src/main/orchestration/intent-phase-routing.test.ts',
+  'src/main/skills/skill-invocation.test.ts',
   'src/renderer/src/components/HomeView.css.test.ts',
-  'src/main/workflow-walk.juge-terminal.test.ts',
-  'src/main/security-critical-fixes.test.ts'
+  'src/main/workflow/workflow-walk.juge-terminal.test.ts',
+  'src/main/gardes/security-critical-fixes.test.ts'
 )
 
 Write-Host ("Signal deblocage - " + $cibles.Count + " fichiers de test")

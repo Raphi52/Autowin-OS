@@ -43,7 +43,7 @@ async function render(): Promise<{ root: Root; container: HTMLElement }> {
             {
               label: 'constitution',
               value: 'CONSTITUTION injectée comme system par défaut.',
-              source: 'src/main/constitution.ts:16'
+              source: 'src/main/consignes/constitution.ts:16'
             }
           ],
           modelSelection: []

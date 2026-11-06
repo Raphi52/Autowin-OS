@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: () => '', isPackaged: false, getVersion: () => '0.0.0' }
 }))
-vi.mock('../renderer-emit', () => ({ emitToLiveWindows: () => undefined }))
+vi.mock('../app/renderer-emit', () => ({ emitToLiveWindows: () => undefined }))
 
 /** Un objet qui accepte tout appel et rend un autre objet du même genre (dépendances non observées). */
 function souple(): never {

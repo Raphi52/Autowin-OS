@@ -3,14 +3,14 @@
 // (conv-1580, lot 2).
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { CONSIGNE_CLASSES_PAGES_HTML } from '../../shared/classes-pages-html'
-import { blocsSystemeEcran, buildChatPilotagePrompt } from '../chat-pilotage-prompt'
+import { blocsSystemeEcran, buildChatPilotagePrompt } from '../consignes/chat-pilotage-prompt'
 import type { CommandSpec } from '../commands/types'
-import { CONSTITUTION } from '../constitution'
-import { blocLangueDeReponse } from '../langue-reglage'
-import { blocMemoireDeTete } from '../memoire-de-tete'
-import { blocProfilUtilisateur } from '../profil-utilisateur'
+import { CONSTITUTION } from '../consignes/constitution'
+import { blocLangueDeReponse } from '../profil/langue-reglage'
+import { blocMemoireDeTete } from '../brain/memoire-de-tete'
+import { blocProfilUtilisateur } from '../profil/profil-utilisateur'
 import type { Message, SendOptions } from '../providers/types'
-import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from '../response-style'
+import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from '../consignes/response-style'
 
 export type SystemeAssemble = {
   system: string

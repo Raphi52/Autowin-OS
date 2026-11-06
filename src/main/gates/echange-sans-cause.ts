@@ -3,7 +3,7 @@ import {
   cheminJournalMessagesFils,
   ioJournalNode,
   TEXTE_MAX_MESSAGE_FIL
-} from '../messages-entre-fils-app'
+} from '../conversations/messages-entre-fils-app'
 import type { IoJournalFils, LivraisonDeFil, MessageDeFil } from '../../shared/messages-entre-fils'
 
 /**

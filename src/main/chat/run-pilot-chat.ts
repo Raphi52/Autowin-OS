@@ -13,28 +13,28 @@
  */
 import { occupationDeFenetre } from '../../shared/occupation-fenetre'
 import { seedTraceActionOrdinal, traceActionEventId } from '../activity/trace-event'
-import { emitToLiveWindows } from '../renderer-emit'
+import { emitToLiveWindows } from '../app/renderer-emit'
 import { BrowserWindow, type WebContents } from 'electron'
 import {} from 'path'
 import { randomUUID } from 'node:crypto'
 import type { Message, ProviderAdapter, SendResult, StreamChunk } from '../providers/types'
 import { ProviderRegistry } from '../providers/registry'
 import { ChatTurnCostRecorder } from './chat-cost-recording'
-import { motifInactivite, terminalDuTour } from '../chat-turn-arret'
-import { RoleModelConfig, type RoleBinding } from '../roles'
-import { AppCommandBus } from '../commands'
+import { motifInactivite, terminalDuTour } from './chat-turn-arret'
+import { RoleModelConfig, type RoleBinding } from '../profil/roles'
+import { AppCommandBus } from '../commands/commands'
 import {
   CAP_ITERATIONS_TOUR,
   AgentPilot,
   type PilotEvent,
   type RecoveredPilotProviderCall
-} from '../agent-pilot'
+} from '../agent-pilot/agent-pilot'
 import type { RecoverableChatProviderCall } from '../runs/chat-provider-recovery'
 import {
   boundedContinuationHistory,
   boundedTurnHistory,
   depuisDerniereCompaction
-} from '../chat-turn-messages'
+} from './chat-turn-messages'
 import {
   cibleEntiereDe,
   lireTestsDuTerminal,
@@ -52,7 +52,7 @@ import { closingTurnDelivery } from '../runs/turn-closing'
 import { ligneDePropositionGrow } from './proposition-grow'
 import { appendTurnEvent } from '../runs/turn-journal'
 import { evenementResultatDurable } from './durable-result-event'
-import { ouvrirTourDeChat } from '../gel-main'
+import { ouvrirTourDeChat } from '../gel/gel-main'
 import {
   closingJournalEvents,
   journalDuPiloteRegroupe,
@@ -61,15 +61,15 @@ import {
 } from '../runs/turn-journal-enrich'
 import { appendConvActivity } from '../activity/conv-activity'
 import { rattacherSaisieAuTour } from '../store/journal-saisie'
-import { dossierDeTravailDuTour } from '../bascule-dossier-conversation'
-import { noterChoixScout } from '../scout-memoire'
+import { dossierDeTravailDuTour } from '../conversations/bascule-dossier-conversation'
+import { noterChoixScout } from '../scout/scout-memoire'
 import {
   persistChatUsageSettlement,
   persistRecoveredChatProviderUsage
 } from '../activity/chat-usage-settlement'
 import { taskUsageMetricsFromExecution } from '../activity/task-usage-metrics'
-import { describeChatTurnFailure } from '../provider-failure-diagnosis'
-import { sameExecutionUsage, type ExecutionUsageSnapshot } from '../execution-supervisor'
+import { describeChatTurnFailure } from '../providers/provider-failure-diagnosis'
+import { sameExecutionUsage, type ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 import { appendPromptCall } from '../activity/prompt-observability'
 import { promptCallToTraceEvents } from '../activity/prompt-call-trace'
 import { pilotActionToTraceEvent } from '../activity/pilot-action-trace'
@@ -83,29 +83,29 @@ import {
   gesteDeLaLigne
 } from '../activity/chat-turn-trace'
 import { rebaseTraceSequence } from '../activity/trace-store'
-import { guardAttachments, guardString } from '../ipc-guards'
+import { guardAttachments, guardString } from '../ipc/ipc-guards'
 import { materializeChatArtifact } from '../store/chat-artifact-store'
 import { metasDurablesDesPieces, piecesJointesPourLeModele } from './pieces-jointes-durables'
 import { latestBrainTraceId } from '../activity/brain-trace-spool'
 import type { TaskUsageSettlementSink } from '../task-manager/types'
-import { incidentFromPilotEvent } from '../pilot-incident'
+import { incidentFromPilotEvent } from './pilot-incident'
 
-import type { AutowinOS } from '../os'
-import type { ActiveChatTurns } from '../active-chat-turns'
+import type { AutowinOS } from '../app/os'
+import type { ActiveChatTurns } from './active-chat-turns'
 import type { TaskStore } from '../task-manager/task-store'
 import type { WatchdogEngine } from '../task-manager/watchdog-engine'
 import type { TraceStore } from '../activity/trace-store'
 import type { TraceLedger } from '../activity/ledger'
-import type { AppEvent } from '../commands'
-import type { ModelQuestion } from '../model-questions'
+import type { AppEvent } from '../commands/commands'
+import type { ModelQuestion } from '../modeles/model-questions'
 import { collerTexteParle } from './coller-texte-parle'
 import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
-import { contenusDesToursArretes } from '../reprise-apres-arret'
-import { contenusDesAvisDeLApp } from '../deux-lectures'
+import { contenusDesToursArretes } from '../app/reprise-apres-arret'
+import { contenusDesAvisDeLApp } from './deux-lectures'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
-import { solderOrientationsDuFil } from '../orientations-en-cours-app'
-import { estUnFluxDeBloc } from '../montrer-bloc-command'
+import { solderOrientationsDuFil } from '../conversations/orientations-en-cours-app'
+import { estUnFluxDeBloc } from '../commands/montrer-bloc-command'
 
 /** Ce que le tour de chat capturait dans `index.ts` — désormais passé explicitement. */
 export type RunPilotChatDeps = {

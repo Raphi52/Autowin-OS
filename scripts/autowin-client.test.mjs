@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { demarrerPointEntreeLocal, MARQUE_SCRIPT } from '../src/main/point-entree-local.ts'
+import { demarrerPointEntreeLocal, MARQUE_SCRIPT } from '../src/main/app/point-entree-local.ts'
 import {
   attendreFinDuTour,
   CODES,

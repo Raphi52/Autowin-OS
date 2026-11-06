@@ -65,7 +65,7 @@ const SEUILS = {
   demarrageMs: 15_000,
   // Même marge que `kit-cliquets.test.ts` : le plafond dur du modèle est 1024.
   descriptionMax: 950,
-  // Plafond de `profil_ajouter` (src/main/profil-utilisateur.test.ts).
+  // Plafond de `profil_ajouter` (src/main/profil/profil-utilisateur.test.ts).
   profilOctets: 2_000
 }
 
@@ -595,7 +595,7 @@ function sondeAttente({ data, maintenant }) {
 /* ── instructions ─────────────────────────────────────────────────────────────────────────── */
 
 function sondeChargePermanente({ racine, data }) {
-  const source = readFileSync(join(racine, 'src', 'main', 'context-files.ts'), 'utf8')
+  const source = readFileSync(join(racine, 'src', 'main', 'consignes', 'context-files.ts'), 'utf8')
   const plafond = Number(
     /PROJECT_CONTEXT_MAX_BYTES = ([\d_]+)/u.exec(source)?.[1].replace(/_/gu, '')
   )
@@ -756,7 +756,7 @@ function sondeCout({ data, maintenant }) {
 
 /*
  * Le forfait, pas les dollars : un compte à 95 % de sa semaine se voit ici même si le coût ne bouge
- * pas. Même relevé local, sans réseau, que `src/main/model-quotas.ts` : Claude Desktop y note
+ * pas. Même relevé local, sans réseau, que `src/main/modeles/model-quotas.ts` : Claude Desktop y note
  * l'usage du forfait (`sd` sur 7 jours, `fh` sur 5 heures, en %). Il ne couvre que son compte.
  */
 function sondeQuota({ appData, maintenant }) {

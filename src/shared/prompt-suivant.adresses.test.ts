@@ -16,7 +16,7 @@ import { estPromptDePublication, extrairePropositionsSuite, PROMPT_SALVAGE } fro
  * publication ne l'était par ce seul biais.
  */
 const RECOMMANDEE =
-  "Corrige src/main/chat-turn-publication.ts pour que verifierAvantPublication rejoue les tests dans la même copie propre que typerAvantPublication, avec un test qui reproduit d'abord le cas 973b70e2 (test de style publié sans le CSS qu'il lit) ; vérifie avant que conv-1086 ne travaille pas déjà dessus."
+  "Corrige src/main/chat/chat-turn-publication.ts pour que verifierAvantPublication rejoue les tests dans la même copie propre que typerAvantPublication, avec un test qui reproduit d'abord le cas 973b70e2 (test de style publié sans le CSS qu'il lit) ; vérifie avant que conv-1086 ne travaille pas déjà dessus."
 const DIFFEREE =
   'Lance /salvage all origin main quand conv-1070, conv-1075 et conv-1090 auront fini leur tour, pour publier leurs 3 commits restés sur main local.'
 
@@ -32,7 +32,7 @@ describe('une adresse ou un aparté ne fait pas passer une suite pour une public
 
   it.each([
     'Corrige le message du hook pre-push et garde les tickets.',
-    'Vérifie src/main/chat-turn-publication.ts ligne 476.',
+    'Vérifie src/main/chat/chat-turn-publication.ts ligne 476.',
     'Supprime la branche public/version-github.',
     'Lance un banc /arena à 2 bras — A avec la skill allégée (commit 6a690851).',
     'Rends le champ reason obligatoire sur toute issue non-merged.'
@@ -43,7 +43,7 @@ describe('une adresse ou un aparté ne fait pas passer une suite pour une public
   it('un vrai acte de publication reste attrapé, y compris à côté d’une adresse', () => {
     for (const prompt of [
       'Publie-le sur main.',
-      'Commit et push src/main/chat-turn-publication.ts sur main.',
+      'Commit et push src/main/chat/chat-turn-publication.ts sur main.',
       'Ouvre la PR de salvage/reprise-conv-629 vers main.',
       'Dans conv-987, commite et pousse ta cascade (app-shell.css restés non commités).',
       'Fais le push.'

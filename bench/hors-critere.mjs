@@ -47,13 +47,13 @@ for (const [nom, d] of [
 const VOISINS = {
   'src/renderer/index.html': [
     'src/shared/boot-splash.test.ts',
-    'src/main/startup-splash.test.ts',
-    'src/main/renderer-storage-migration.test.ts'
+    'src/main/app/startup-splash.test.ts',
+    'src/main/app/renderer-storage-migration.test.ts'
   ],
   'src/shared/boot-splash.ts': [
     'src/shared/boot-splash.test.ts',
-    'src/main/startup-splash.test.ts',
-    'src/main/renderer-storage-migration.test.ts'
+    'src/main/app/startup-splash.test.ts',
+    'src/main/app/renderer-storage-migration.test.ts'
   ],
   'src/renderer/src/components/ChatComposer.tsx': [
     'src/renderer/src/components/ChatComposer.dictee.test.tsx',

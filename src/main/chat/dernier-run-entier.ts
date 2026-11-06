@@ -9,7 +9,7 @@ import {
   formatOrchestrationOutcomePourLeModele,
   type OrchestrationOutcome
 } from '../../shared/orchestration-outcome'
-import { bornerResultatDeCommande } from '../resultat-de-commande-borne'
+import { bornerResultatDeCommande } from './resultat-de-commande-borne'
 import { pagesHtmlEnTexte } from '../../shared/pages-html-pour-le-modele'
 import { readTurnJournal } from '../runs/turn-journal'
 

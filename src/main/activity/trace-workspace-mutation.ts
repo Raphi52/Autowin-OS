@@ -4,7 +4,7 @@ import {
   captureWorkspacePathGenerationMarker
 } from '../providers/workspace-mutation-evidence'
 import type { ExecutionEvidence } from '../providers/types'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import { cheminsEcritsParCommande } from './chemins-ecrits-par-commande'
 import {
   appendConversationFileTrace,

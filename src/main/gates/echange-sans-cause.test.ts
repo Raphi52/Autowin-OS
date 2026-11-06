@@ -8,7 +8,7 @@ import {
   lignesDeCause,
   questionSansCause
 } from './echange-sans-cause'
-import { blocMessagesPourTour, messagesAAfficher } from '../messages-entre-fils-app'
+import { blocMessagesPourTour, messagesAAfficher } from '../conversations/messages-entre-fils-app'
 import { jetonsDeCauseParFichier } from '../hooks/default-gate-hooks'
 import type { IoJournalFils } from '../../shared/messages-entre-fils'
 

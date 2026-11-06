@@ -1,6 +1,6 @@
 import { ChildProcess } from 'node:child_process'
 import { afterAll, describe, expect, it, vi } from 'vitest'
-import { arreterFilDExecution } from '../execution-hors-fil'
+import { arreterFilDExecution } from '../gel/execution-hors-fil'
 import { empreinteConnue, oublierEmpreintesProcessus } from './worktree-manager-empreintes'
 
 /**

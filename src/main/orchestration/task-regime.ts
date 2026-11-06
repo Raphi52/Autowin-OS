@@ -1,0 +1,190 @@
+/**
+ * Classification de RÉGIME d'une tâche → sous-ensemble de phases du pipeline (proportionnalité).
+ *
+ * Aujourd'hui l'orchestrateur joue les 4 phases (scout→frame→build→clean) + juge pour TOUTE
+ * tâche, même triviale — coût et latence inutiles. Ce module applique la proportionnalité du kit :
+ * une tâche triviale ne mérite pas un pipeline complet.
+ *
+ * HEURISTIQUE DÉTERMINISTE (pas d'appel modèle) : coût nul, testable sans réseau, générique tous
+ * modèles. En cas de DOUTE on remonte au régime supérieur (conservateur) — jamais sous-traiter une
+ * tâche complexe. Le sous-ensemble de phases est volontairement prudent : on ne coupe que ce qui est
+ * clairement superflu pour le régime.
+ */
+import type { PipelinePhase } from '../skills/skill-pipeline'
+import { matchIntentPhase } from './intent-phase-routing'
+import { routeSkillRequest } from '../skills/skill-routing'
+import { porteUnSignalDeRisque } from '../../shared/signaux-de-risque'
+import { estSelectionDeScout } from '../../shared/selection-scout'
+
+export type TaskRegime = 'trivial' | 'standard' | 'critical'
+
+/**
+ * Définit les phases que l'orchestrateur exécute avant le juge pour chaque régime de tâche :
+ * trivial : exécute uniquement build pour une modification directe ;
+ * standard : cadre le besoin avec frame, puis exécute build ;
+ * critical : exécute le pipeline complet, de scout à clean. Sans `terrain` depuis le 2026-10-15 :
+ *   même note 26/26 au banc « Snake à écrans », 1,21 $ avec contre 0,94 $ sans (skills/terrain/SKILL.md) ;
+ *   terrain ne se joue plus que si on le nomme.
+ * Le juge reste TOUJOURS actif : il est ajouté séparément par l'orchestrateur.
+ */
+const REGIME_PHASES: Record<TaskRegime, PipelinePhase[]> = {
+  trivial: ['build'],
+  standard: ['frame', 'build'],
+  critical: ['scout', 'frame', 'build', 'clean']
+}
+
+// Signaux de COMPLEXITÉ (→ critical) et leurs négations : `src/shared/signaux-de-risque.ts`, source
+// unique partagée avec le panneau des candidats scout, qui ne doit pas recommander une correction
+// directe là où ce classement verrait un chantier (conv-1080).
+
+/**
+ * Signaux de TRIVIALITÉ (→ trivial) : micro-édition ciblée, déjà précise.
+ * Inclut les RETOUCHES D'APPARENCE (couleur, pastille, icône, alignement, espacement) : les mots
+ * AMBIGUS restent HORS de la liste nue — `taille`, `fond`, `background`, `border`, `contour`,
+ * `format` désignent aussi du vrai code (« taille du cache LRU », « fond de secours si le provider
+ * tombe », « border case du parseur »). Ils ne comptent que sous une forme sans équivoque visuelle
+ * (`taille de la police`, `border-radius`, `background-color`…), listée à part.
+ *
+ * Mesuré sur conv-210 : chacune de ces demandes d'une ligne partait en pipeline complet alors qu'un
+ * seul pas de build suffit. La rétrogradation reste bornée : `critical` est testé AVANT, et la tâche
+ * doit rester courte et mono-clause.
+ *
+ * `comment` NU N'Y EST PLUS — conv-344, saisie ts 1792393145414 : en français « comment » veut dire
+ * « how ». « /scout comment améliorer la feature overall », « comment faire pour lancer les tests »
+ * partaient en trivial. Le commentaire de code reste couvert par `commentaire` et, en anglais, par
+ * un déterminant devant `comment(s)` (« the comment », « a comment »), qu'aucune question française
+ * ne porte.
+ */
+const TRIVIAL_SIGNALS =
+  /\b(typo|renomm\w*|rename|corrige la faute|coquille|commentaire|reformul\w*|un mot|one word|bump\w*|version|lint|pastille|badge|ic[oôö]ne|icon|couleur|color|gris|grey|gray|blanc|white|noir|black|police|font|padding|marge|margin|align\w*|gras|bold|italique|majuscule|uppercase|css|arrondi|bordure|bo[iî]te|encadr\w*|ombre|shadow|espacement|plus gros|plus petit)\b|\b(?:a|an|the|this|that|code|inline)\s+comments?\b|\b(?:taille|couleur)\s+(?:de\s+)?(?:la\s+|du\s+|des\s+)?(?:police|texte|titre|fond|font)\b|\b(?:border-radius|border-color|background-color|font-size|line-height|box-shadow|text-align)\b/i
+
+/**
+ * UN SCOUT N'EST JAMAIS TRIVIAL. Le régime trivial veut dire « micro-édition déjà précise, un seul
+ * pas de build » ; un scout demande « quoi faire ? », c'est l'inverse. Or ce régime décide aussi de
+ * ce que le scout reçoit : sans lui, pas de fil de conversation (`commands.ts`, `substantial`),
+ * 2 éclaireurs au lieu de 4 (`execution-quote.ts`, `maxConcurrency`) et un cran de réflexion en
+ * moins (`roles.ts`, `CRANS_RENDUS_PAR_DIFFICULTE`). Un mot d'apparence (« couleur », « noir »)
+ * suffisait à l'y faire tomber.
+ */
+function demandeDeScout(task: string): boolean {
+  return routeSkillRequest(task)?.explicitPhase === 'scout' || matchExplicitPhase(task) === 'scout'
+}
+
+/**
+ * Classe une tâche. Ordre : critical d'abord (prudence), puis trivial (signal FORT + tâche courte),
+ * sinon standard (défaut sûr). Une tâche longue OU multi-clauses ne peut PAS être triviale.
+ */
+export function classifyRegime(task: string): TaskRegime {
+  const t = task.trim()
+  if (!t) return 'standard'
+  if (porteUnSignalDeRisque(t)) return 'critical'
+  // Multi-clause = vraie coupure de phrase (`;`, retour ligne, `. ` suivi de texte, « puis/then »),
+  // PAS n'importe quel point (« 1.0.1 » n'est pas multi-clause).
+  const hasClauseBreak = /[;\n]|\.\s+\S|\b(puis|ensuite|then|and then)\b/i.test(t)
+  const isShort = t.length <= 120 && !hasClauseBreak
+  if (TRIVIAL_SIGNALS.test(t) && isShort && !demandeDeScout(t)) return 'trivial'
+  return 'standard'
+}
+
+/**
+ * Phases demandées EXPLICITEMENT en tête de message. Une demande nommée est autoritaire : quand
+ * l'utilisateur écrit « scout le routing », il veut la phase scout — pas le pipeline complet déduit
+ * d'un signal de complexité. Variantes tolérées : suffixe verbal FR (`scoute`, `scouter`, `framez`)
+ * et séparateur (`scout:`, `scout-moi`, `scout — …`).
+ */
+const PHASE_KEYWORDS: Record<string, PipelinePhase> = {
+  scout: 'scout',
+  frame: 'frame',
+  terrain: 'terrain',
+  build: 'build',
+  clean: 'clean',
+  judge: 'judge'
+}
+
+/**
+ * `\b` après le suffixe optionnel garantit qu'on ne matche PAS un mot qui englobe la phase
+ * (`framework`, `cleanup`, `building`) ; l'ancre `^` garantit le DÉBUT du message (une phase citée
+ * au milieu d'une phrase n'est pas une demande de phase).
+ */
+const PHASE_PREFIX = new RegExp(`^(${Object.keys(PHASE_KEYWORDS).join('|')})(e|es|er|ez)?\\b`, 'i')
+
+/** Phase demandée explicitement en tête de message, sinon `null`. */
+export function matchExplicitPhase(task: string): PipelinePhase | null {
+  const m = PHASE_PREFIX.exec(task.trim())
+  return m ? PHASE_KEYWORDS[m[1].toLowerCase()] : null
+}
+
+/**
+ * Sous-ensemble de phases pour une tâche. Une phase NOMMÉE en tête court-circuite le régime
+ * (consultée AVANT `classifyRegime`) ; sinon on retombe sur l'heuristique de proportionnalité.
+ */
+/**
+ * LA CAPITALISATION SURVIT A UNE PHASE NOMMEE — defaut mesure le 2026-09-12 :
+ * sur 84 cloturees vertes, 34 portaient « aucun noeud learn declare par le profil (run mono-phase) »,
+ * soit 40 % des runs verts qui n'ecrivent AUCUNE lecon.
+ *
+ * Cause : une phase nommee (`/build ...`) court-circuite le graphe du profil — c'est voulu, elle ne
+ * doit pas rejouer les autres phases — mais elle emportait avec elle le noeud `learn` de l'apres-gate,
+ * qui n'est pas une phase d'execution. Reduire le TRAVAIL ne doit pas supprimer la MEMOIRE.
+ *
+ * `learn` n'est pas une `PipelinePhase` (type ferme, cf. shared/pipeline-phases.ts) : c'est un noeud
+ * d'apres-gate. Il ne peut donc pas etre rendu par `regimePhases` — d'ou cette fonction separee, lue
+ * par l'orchestrateur quand AUCUN graphe ne pilote le run.
+ *
+ * `/judge` reste vide : il ne joue aucune phase, il n'y a rien a capitaliser.
+ */
+export function phasesApresJugeHorsGraphe(task: string): string[] {
+  const explicitSlashPhase = routeSkillRequest(task)?.explicitPhase
+  if (!explicitSlashPhase || explicitSlashPhase === 'judge') return []
+  return ['learn']
+}
+
+export function regimePhases(task: string): PipelinePhase[] {
+  // Ordre : une phase NOMMEE prime (autorite maximale), puis l'INTENTION en langage naturel. Cette
+  // derniere ne fait que RESTREINDRE les phases d'une tache deja partie en orchestration — elle ne
+  // decide jamais d'orchestrer, precisement pour ne pas rejouer la regression du 2026-07-28.
+  // Une phase NOMMÉE est AUTORITAIRE : l'utilisateur (ou le modèle) l'a désignée, on ne discute pas.
+  const explicitSlashPhase = routeSkillRequest(task)?.explicitPhase
+  if (explicitSlashPhase === 'judge') return []
+  if (explicitSlashPhase) return [explicitSlashPhase]
+
+  const namedPhase = matchExplicitPhase(task) ?? undefined
+  const naturalIntent = matchIntentPhase(task)?.phase
+  if (namedPhase && naturalIntent === namedPhase) {
+    return namedPhase === 'judge' ? [] : [namedPhase]
+  }
+
+  const regime = classifyRegime(task)
+  // AMPUTATION D'UN RÉGIME CRITIQUE — défaut relevé par l'audit du 2026-07-29 :
+  // `regimePhases("il faut refactorer toute l'architecture")` rendait `['frame']` au lieu des cinq
+  // phases, parce que « il faut » déclenche l'intention `frame`. Une INTENTION est un indice de
+  // registre, pas une autorisation de réduire une tâche à risque. Mon test anti-régression passait à
+  // côté : il exerçait une tâche critique SANS intention en tête.
+  // Une phase NOMMÉE, elle, garde le droit de réduire (au-dessus) : c'est une décision explicite.
+  // UNE SÉLECTION DE CANDIDATS SCOUT NE REJOUE PAS LE SCOUT (conv-1080, « le doublon enlève-le ») :
+  // la demande sort d'un scout qui vient d'éclairer et de localiser ces pistes ; le régime critique
+  // le relançait en tête (4 runs de sélection sur 43 mesurés). La vérification que le besoin tient
+  // toujours est demandée au cadrage par le message lui-même.
+  if (regime === 'critical') {
+    return estSelectionDeScout(task)
+      ? REGIME_PHASES.critical.filter((phase) => phase !== 'scout')
+      : [...REGIME_PHASES[regime]]
+  }
+
+  const intentPhase = naturalIntent
+  // `judge` est la closure externe permanente de l'orchestrateur, pas une phase worker : une demande
+  // d'audit saute donc les phases d'exécution et lance ce juge une seule fois.
+  if (intentPhase === 'judge') return []
+  if (intentPhase) return [intentPhase]
+  const fallback = [...REGIME_PHASES[regime]]
+  // Une phase naturelle suivie d'une seconde action n'est pas une commande de reduction. Elle reste
+  // visible, puis le regime poursuit le travail demande (ex. scout -> correction).
+  return namedPhase && namedPhase !== 'judge'
+    ? [namedPhase, ...fallback.filter((phase) => phase !== namedPhase)]
+    : fallback
+}
+
+/** Exposé pour test/observabilité : phases d'un régime donné. */
+export function phasesForRegime(regime: TaskRegime): PipelinePhase[] {
+  return [...REGIME_PHASES[regime]]
+}

@@ -3,7 +3,7 @@ import config from './electron.vite.config'
 /**
  * LE MOTEUR SEUL — processus principal + preload, sans l'interface.
  *
- * Sert à `src/main/relance-auto-moteur.ts` : en développement, l'app recompile le moteur dans un
+ * Sert à `src/main/providers/relance-auto-moteur.ts` : en développement, l'app recompile le moteur dans un
  * dossier temporaire pour savoir, AVANT de se relancer, si le code modifié compile et s'il diffère
  * vraiment de celui qui tourne. electron-vite ne construit que les cibles présentes dans la
  * configuration (main → preload → renderer) : sans `renderer`, la compilation prend ~3 s au lieu

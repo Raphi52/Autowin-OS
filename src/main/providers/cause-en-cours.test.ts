@@ -23,7 +23,7 @@ import { OUTILS_D_EDITION, scriptHookCauseEnCours } from './cause-en-cours'
  * LE CONTRÔLE « CAUSE VÉRIFIÉE » SE SIGNALE PENDANT LE TRAVAIL (conv-1353, 2026-10-31).
  *
  * Mesure : conv-1324 (lot 3 de plan-b4358910, run-7b7d533c318e-1) a appris à la 134e minute, au
- * contrôle final, que 14 modifications de src/main/navigateur-integre.ts n'avaient pas de cause
+ * contrôle final, que 14 modifications de src/main/bureau/navigateur-integre.ts n'avaient pas de cause
  * vérifiée. Ce refus a rejoué un passage complet, alors que l'agent aurait pu noter sa cause dès la
  * 3e modification. Le contrôle final ne change pas : seul l'avertissement arrive à temps.
  *
@@ -31,7 +31,7 @@ import { OUTILS_D_EDITION, scriptHookCauseEnCours } from './cause-en-cours'
  * déjà 21 `fix-ok:`. Le jeton compté doit donc être celui que l'agent ÉCRIT, jamais un ancien.
  */
 
-const FICHIER = 'src/main/navigateur-integre.ts'
+const FICHIER = 'src/main/bureau/navigateur-integre.ts'
 const dossiers: string[] = []
 afterAll(() => {
   for (const d of dossiers) rmSync(d, { recursive: true, force: true })

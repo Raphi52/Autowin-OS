@@ -11,8 +11,8 @@ $expectedTests = @(
   "src/main/task-manager/task-scheduler.test.ts",
   "src/main/task-manager/windows-relay.test.ts",
   "src/main/task-manager/chat-dispatch.test.ts",
-  "src/main/headless-instance.test.ts",
-  "src/main/app-data.test.ts",
+  "src/main/app/headless-instance.test.ts",
+  "src/main/app/app-data.test.ts",
   "src/shared/navigation.test.ts",
   "src/renderer/src/components/TaskManagerView.test.tsx"
 )

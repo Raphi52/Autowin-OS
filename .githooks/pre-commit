@@ -3,7 +3,7 @@
 # Mesuré le 2026-10-17 (conv-318, commit 06c5ede1) : `git add <3 fichiers> && git commit` dans
 # l'arbre partagé a emporté les suppressions stagées d'une autre session sans leurs importeurs ;
 # HEAD ne compilait plus. Détail et règle : scripts/garde-commit-module-supprime.mjs.
-# Testé par src/main/githooks-pre-commit.test.ts. Échappatoire native et visible : --no-verify.
+# Testé par src/main/git/githooks-pre-commit.test.ts. Échappatoire native et visible : --no-verify.
 # Le défaut naît de l'index PARTAGÉ du checkout principal : une copie de travail d'agent a son propre
 # index, et ses commits automatiques (worktree-manager, commitCopyIfDirty) ne doivent pas changer.
 # Les copies d'« Essaie 3 façons » (`essai__*`, photo-du-code.ts) aussi : chacune a son index (conv-1583).

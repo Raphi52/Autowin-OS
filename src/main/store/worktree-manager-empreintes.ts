@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, readlinkSync } from 'node:fs'
 import { platform } from 'node:os'
-import { execFileHorsFil, type ErreurHorsFil, type OptionsHorsFil } from '../execution-hors-fil'
+import { execFileHorsFil, type ErreurHorsFil, type OptionsHorsFil } from '../gel/execution-hors-fil'
 
 /**
  * Empreintes de processus (pid recyclé ou non) et leur sondage système, synchrone ou en lot.

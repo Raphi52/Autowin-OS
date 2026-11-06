@@ -14,19 +14,19 @@
  * La sonde `probeProviderConnection` vient avec eux : le canal de test en était le seul appelant.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
-import { ROUTED_PROVIDERS, type RoutedProvider } from '../routed-providers'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
+import { ROUTED_PROVIDERS, type RoutedProvider } from '../providers/routed-providers'
 import {
   buildProviderStatuses,
   probePresenceUnlessStandby,
   probeResultStatus,
   statutsServicesHttp
-} from '../provider-status'
+} from '../providers/provider-status'
 import { SERVICES_HTTP } from '../providers/services-http'
-import { compileExecutionQuote } from '../execution-quote'
-import type { AutowinOS } from '../os'
-import type { ProviderStateStore, ProviderMode } from '../provider-state-store'
+import { compileExecutionQuote } from '../orchestration/execution-quote'
+import type { AutowinOS } from '../app/os'
+import type { ProviderStateStore, ProviderMode } from '../providers/provider-state-store'
 
 /** Ce que les canaux des fournisseurs prenaient dans `index.ts` — désormais passé explicitement. */
 export type ProvidersIpcDeps = {

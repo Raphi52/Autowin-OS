@@ -8,7 +8,7 @@ import {
   persistRecoveredChatProviderUsage
 } from './chat-usage-settlement'
 import { TraceStore } from './trace-store'
-import type { ExecutionUsageSnapshot } from '../execution-supervisor'
+import type { ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 
 function usage(overrides: Partial<ExecutionUsageSnapshot> = {}): ExecutionUsageSnapshot {
   return {

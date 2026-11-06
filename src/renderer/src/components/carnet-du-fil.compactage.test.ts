@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { compactageDuFil, lignesDuCarnet } from './carnet-du-fil'
-import { depuisDerniereCompaction } from '../../../main/chat-turn-messages'
+import { depuisDerniereCompaction } from '../../../main/chat/chat-turn-messages'
 import { COMPACT_REQUEST } from '../../../shared/context-gauge'
 import type { Msg } from './chat-view-types'
 

@@ -14,7 +14,7 @@
  */
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ConversationStore } from '../store/conversations'
-import { ActiveChatTurns } from '../active-chat-turns'
+import { ActiveChatTurns } from '../chat/active-chat-turns'
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>()
 vi.mock('electron', () => ({
@@ -22,7 +22,7 @@ vi.mock('electron', () => ({
     handle: (channel: string, fn: (...args: unknown[]) => unknown) => handlers.set(channel, fn)
   }
 }))
-vi.mock('../ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
+vi.mock('./ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
 // Les satellites disque ne sont pas le sujet : rien ne doit être effacé hors du test.
 vi.mock('../store/chat-artifact-store', () => ({ removeConversationArtifacts: () => undefined }))
 vi.mock('../runs/turn-journal', () => ({ removeConversationTurnJournals: () => true }))

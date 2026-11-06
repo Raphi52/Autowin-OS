@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { ConversationStore } from '../store/conversations'
 import { createOrchestrateTurnPersistence } from './orchestrate-turn-persistence'
-import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 function storeWithConversation(): { store: ConversationStore; id: string } {
   const store = new ConversationStore(() => 1)

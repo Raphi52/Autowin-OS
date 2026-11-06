@@ -1,21 +1,21 @@
 
-import { enregistrerIpcServeursMcp } from './mcp-servers'
-import { registerProdPassphraseIpc } from './prod-passphrase-ipc'
-import { PorteProd } from './prod-gate'
-import { GuichetProd } from './prod-guichet'
+import { enregistrerIpcServeursMcp } from './providers/mcp-servers'
+import { registerProdPassphraseIpc } from './prod/prod-passphrase-ipc'
+import { PorteProd } from './prod/prod-gate'
+import { GuichetProd } from './prod/prod-guichet'
 import { chargerAutoriteProd, cheminAutoriteProd } from './store/prod-autorite-store'
-import { CoffreAutorisationProd, definirPhrase } from './prod-passphrase'
+import { CoffreAutorisationProd, definirPhrase } from './prod/prod-passphrase'
 import { ecrireEmpreinteProd, lireEmpreinteProd } from './store/prod-passphrase-store'
 import { ecrireNiveauProd, lireNiveauProd } from './store/prod-niveau-store'
 import { estNiveauProtection } from '../shared/prod-protection'
-import { nomUtilisateurCourant } from './identite-utilisateur'
-import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './whisper-local'
-import { creerServicePiper, racinePiper, type ServicePiper } from './piper-local'
-import { ServiceTranscripts, dossierTranscripts } from './transcripts'
+import { nomUtilisateurCourant } from './profil/identite-utilisateur'
+import { creerServiceWhisper, racineWhisper, type ServiceWhisper } from './media/whisper-local'
+import { creerServicePiper, racinePiper, type ServicePiper } from './media/piper-local'
+import { ServiceTranscripts, dossierTranscripts } from './media/transcripts'
 import { registerChatIpc } from './ipc/chat'
-import { creerIdentitesEnCache, creerJournalDesBesoins } from './journal-des-besoins'
-import { creerFichesDeDemande, type BranchePourLaFiche } from './fiches-de-demande'
-import type { ConversationPourLaCarte } from './carte-des-besoins'
+import { creerIdentitesEnCache, creerJournalDesBesoins } from './board/journal-des-besoins'
+import { creerFichesDeDemande, type BranchePourLaFiche } from './board/fiches-de-demande'
+import type { ConversationPourLaCarte } from './board/carte-des-besoins'
 import { gestionnaireNavigateur, registerNavigateurIpc } from './ipc/navigateur'
 import { registerQuestionACoteIpc } from './ipc/question-a-cote'
 import { registerTerminalIpc } from './ipc/terminal'
@@ -23,8 +23,8 @@ import {
   environnementDuTerminal,
   fermerTerminauxAvantSortie,
   gestionnaireTerminal
-} from './terminal-integre'
-import { declarerSchemaMediaDuFil } from './chat-media-protocol'
+} from './bureau/terminal-integre'
+import { declarerSchemaMediaDuFil } from './chat/chat-media-protocol'
 /**
  * CHRONOLOGIE DU DÉMARRAGE — ces jalons ont trouvé la cause, ils restent pour la surveiller.
  *
@@ -48,7 +48,7 @@ import {
   instrumenterCanauxIpc,
   pendantOperation,
   marquerOperation as marquerOperationDemarrage
-} from './gel-main'
+} from './gel/gel-main'
 
 const T0_DEMARRAGE = Date.now()
 function jalonDemarrage(etape: string): void {
@@ -58,7 +58,7 @@ function jalonDemarrage(etape: string): void {
   marquerOperationDemarrage(`demarrage:${etape}`)
 }
 jalonDemarrage('module principal évalué')
-import { emitToLiveWindows } from './renderer-emit'
+import { emitToLiveWindows } from './app/renderer-emit'
 import {
   ClaudeAccountsStore,
   configureClaudeAccountEnv,
@@ -66,7 +66,7 @@ import {
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation,
   withClaudeAccountEnv
-} from './claude-accounts'
+} from './providers/claude-accounts'
 import {
   app,
   shell,
@@ -75,41 +75,41 @@ import {
   globalShortcut,
   ipcMain
 } from 'electron'
-import { installerRaccourciCapture, type RaccourciInstalle } from './raccourci-global'
+import { installerRaccourciCapture, type RaccourciInstalle } from './app/raccourci-global'
 import { dirname, join } from 'path'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { devTargets, lireBasesExploitees, loadSqlCatalogConfigFile } from './sql-read-catalog'
-import { propositionPourEcran } from './prod-autorite-depuis-catalogue'
+import { devTargets, lireBasesExploitees, loadSqlCatalogConfigFile } from './prod/sql-read-catalog'
+import { propositionPourEcran } from './prod/prod-autorite-depuis-catalogue'
 import { randomUUID } from 'node:crypto'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
-import { guardBrokenProcessPipes } from './process-stream-guards'
-import { AutowinOS } from './os'
-import { projectContextBlock } from './context-files'
+import { guardBrokenProcessPipes } from './app/process-stream-guards'
+import { AutowinOS } from './app/os'
+import { projectContextBlock } from './consignes/context-files'
 import {
   DEFAULT_CDP_PORT,
   listeningPorts,
   resolveCdpPort,
   resolveRemoteDebuggingPort
-} from './cdp-port'
+} from './bureau/cdp-port'
 import { execFileSync } from 'node:child_process'
-import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain-server-launch'
-import { superviseBrainServer } from './brain-server-supervision'
-import { startBrainCuration } from './brain-curation-run'
-import { ensureBrainIndexFresh, reindexerApresMutation } from './brain-index-refresh'
+import { ensureBrainServerStarted, resetBrainLaunchAttempt } from './brain/brain-server-launch'
+import { superviseBrainServer } from './brain/brain-server-supervision'
+import { startBrainCuration } from './brain/brain-curation-run'
+import { ensureBrainIndexFresh, reindexerApresMutation } from './brain/brain-index-refresh'
 import {
   demarrerBrainPerso,
   demarrerBrainPersoAuLancement,
   envDuBrainPerso
-} from './brain-perso'
-import { configureSessionMemoryEcho } from './session-memory-echo'
-import { configureRememberDepositStore } from './brain-remember'
+} from './brain/brain-perso'
+import { configureSessionMemoryEcho } from './brain/session-memory-echo'
+import { configureRememberDepositStore } from './brain/brain-remember'
 import {
   promoteOutcomeLearningCandidate,
   restoreTrashedKnowledge,
   retractKnowledgeCandidate,
   supersedeKnowledgeCandidate
-} from './brain-inbox'
-import { installCrashHandlers } from './crash-handlers'
+} from './brain/brain-inbox'
+import { installCrashHandlers } from './app/crash-handlers'
 import {
   CapteurHdesk,
   racineScriptsHorsArchive,
@@ -118,43 +118,43 @@ import {
   fermerHdesk,
   lireRegistre,
   type GesteTv
-} from './hdesk-tv'
-import { lireArbreHdesk, outilsBureauCacheDuChat } from './hdesk-arbre'
+} from './bureau/hdesk-tv'
+import { lireArbreHdesk, outilsBureauCacheDuChat } from './bureau/hdesk-arbre'
 import {
   bureauxGeres,
   choisirExecutable,
   creerBureau,
   fermerBureauGere,
   registreParDefaut
-} from './hdesk-gestion'
+} from './bureau/hdesk-gestion'
 import type { DemandeCreationBureau } from '../shared/hdesk-gestion'
-import { configureClaudeSessionRenewal, invalidateModelQuotaCache } from './model-quotas'
-import { renouvelerSessionClaude } from './claude-session-renewal'
-import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
-import { type ReasoningEffort, type Role, type RoleBinding } from './roles'
-import { AppCommandBus, type AppEvent } from './commands'
-import { compensateOutcomeCuration } from './outcome-learning-curation'
+import { configureClaudeSessionRenewal, invalidateModelQuotaCache } from './modeles/model-quotas'
+import { renouvelerSessionClaude } from './providers/claude-session-renewal'
+import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight/preflight-probes'
+import { type ReasoningEffort, type Role, type RoleBinding } from './profil/roles'
+import { AppCommandBus, type AppEvent } from './commands/commands'
+import { compensateOutcomeCuration } from './brain/outcome-learning-curation'
 import {
   reconcileCurationIntents
-} from './outcome-learning-curation-transaction'
+} from './brain/outcome-learning-curation-transaction'
 import { OutcomeLearningLedger } from './activity/outcome-learning-ledger'
-import { resultatsDesEvenements } from './scout-memoire'
+import { resultatsDesEvenements } from './scout/scout-memoire'
 import { PariPhaseStore } from './activity/pari-phase-store'
-import { OutcomeLearningSupervisor, parseOutcomeLearningMode } from './outcome-learning-supervisor'
-import { WindowsDesktopController } from './desktop-control'
-import { captureElectronDesktop } from './electron-desktop-capture'
-import { AgentPilot } from './agent-pilot'
-import { ActiveChatTurns } from './active-chat-turns'
-import { type PointEntreeLocal } from './point-entree-local'
+import { OutcomeLearningSupervisor, parseOutcomeLearningMode } from './brain/outcome-learning-supervisor'
+import { WindowsDesktopController } from './bureau/desktop-control'
+import { captureElectronDesktop } from './bureau/electron-desktop-capture'
+import { AgentPilot } from './agent-pilot/agent-pilot'
+import { ActiveChatTurns } from './chat/active-chat-turns'
+import { type PointEntreeLocal } from './app/point-entree-local'
 import { TraceLedger } from './activity/ledger'
 import { ecarterStoreIllisible, persistConversations } from './store/conversations-disk'
-import { causeDInterruption } from './classe-terminale-echec'
+import { causeDInterruption } from './orchestration/classe-terminale-echec'
 import { collectStdoutJournals, journauxReferencesParUneReservation } from './runs/journal-gc'
 import { collectCausalTraces } from './activity/causal-trace-gc'
 import { loadOrchestrationStates } from './runs/orchestration-state'
 import { collectRunWorkspaces } from './runs/workspace-gc'
-import { balayerCopiesDeBaseOrphelines } from './comparaison-a-la-base'
-import { interfaceVisible } from './startup-gate'
+import { balayerCopiesDeBaseOrphelines } from './git/comparaison-a-la-base'
+import { interfaceVisible } from './app/startup-gate'
 import {
   closeConvRun,
   statutDuRunMd,
@@ -165,8 +165,8 @@ import {
   reuseOrCreateConvRun,
   saveConvRunTrace
 } from './runs/conv-runs'
-import { phasesAvecJuge } from './orchestration-memoire'
-import { regimePhases } from './task-regime'
+import { phasesAvecJuge } from './orchestration/orchestration-memoire'
+import { regimePhases } from './orchestration/task-regime'
 import { createOrchestrateTurnPersistence } from './runs/orchestrate-turn-persistence'
 import { StartupResumeQueue } from './runs/startup-resume-queue'
 import { creerReprendreTout } from './runs/resume-all-interrupted-runs'
@@ -213,48 +213,48 @@ import {
   persistRunLifecycle
 } from './activity/orchestration-observability'
 
-import { ProfileStore } from './profile-store'
-import { capabilityEnabled } from './capability-controls'
-import { amorcerRegistreOutils } from './registre-outils'
-import { ROUTED_PROVIDERS, type RoutedProvider } from './routed-providers'
+import { ProfileStore } from './profil/profile-store'
+import { capabilityEnabled } from './gardes/capability-controls'
+import { amorcerRegistreOutils } from './chat/registre-outils'
+import { ROUTED_PROVIDERS, type RoutedProvider } from './providers/routed-providers'
 import {
   defaultBehaviourWorkspace
-} from './behaviour-files'
-import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour-access'
+} from './behaviour/behaviour-files'
+import { ApprovedBehaviourWorkspaces, isTrustedRendererUrl } from './behaviour/behaviour-access'
 import {
   assertTrustedRendererSender,
   behaviourRendererOptions
-} from './ipc-senders'
-import { createWindowing } from './window'
-import { ModelQuestionHub, type ModelQuestion } from './model-questions'
-import { claudeExeEnCours, maybeUpdateClaudeCli } from './claude-cli-update'
-import { hydraterClesFournisseurs } from './env-reload'
+} from './ipc/ipc-senders'
+import { createWindowing } from './app/window'
+import { ModelQuestionHub, type ModelQuestion } from './modeles/model-questions'
+import { claudeExeEnCours, maybeUpdateClaudeCli } from './providers/claude-cli-update'
+import { hydraterClesFournisseurs } from './app/env-reload'
 import {
   CLES_FOURNISSEURS,
   discoverImportedModels,
   findModel,
   loadCachedImportedModels,
   type ImportedModel
-} from './models'
+} from './modeles/models'
 import { FabricControlPlane, type FabricNodeSummary } from './compute-fabric/control-plane'
 import { FetchFabricManifestClient } from './compute-fabric/manifest-client'
 import { createFabricNodeTransportStore } from './compute-fabric/node-transport-store'
 import { createFabricProductBindings } from './compute-fabric/product-bridge'
-import { createShadowRoutingRuntime, shadowRoutingEnvOverride } from './model-routing-shadow'
+import { createShadowRoutingRuntime, shadowRoutingEnvOverride } from './modeles/model-routing-shadow'
 import {
   loadShadowRoutingPilotSetting,
   type ShadowRoutingPilotState
-} from './model-routing-shadow-setting'
+} from './modeles/model-routing-shadow-setting'
 import { causalLearningContext } from './knowledge/semantic-temporal-projection'
-import { ModelCatalogRefresher } from './model-refresh'
-import { loadAgentTopology, type IncidentTopologie } from './topology-disk'
-import type { AgentTopology, SlotBinding } from './topology'
+import { ModelCatalogRefresher } from './modeles/model-refresh'
+import { loadAgentTopology, type IncidentTopologie } from './topologie/topology-disk'
+import type { AgentTopology, SlotBinding } from './topologie/topology'
 import {
   assertRuntimeTopologyAvailable,
   runtimeRoleBinding,
   runtimeRoleSlots,
   UnresolvedRuntimeModelError
-} from './runtime-topology'
+} from './topologie/runtime-topology'
 import {
   configureAutowinAppDataBase,
   createAutowinAppDataRoot,
@@ -262,11 +262,11 @@ import {
   legacyAppDataRoot,
   portableAppDataBase,
   resolveAutowinAppDataBase
-} from './app-data'
-import { configureTurnTiming } from './turn-timing'
-import { demarrerDetecteurDeGel, instrumenterEntreesSortiesDuMain } from './gel-main'
+} from './app/app-data'
+import { configureTurnTiming } from './chat/turn-timing'
+import { demarrerDetecteurDeGel, instrumenterEntreesSortiesDuMain } from './gel/gel-main'
 import { AUTOWIN_APP_ID, AUTOWIN_DISPLAY_NAME } from '../shared/app-identity'
-import { identiteEntreprise } from './identite-entreprise'
+import { identiteEntreprise } from './profil/identite-entreprise'
 import {
   aligneIconeRaccourciBureauDev,
   aligneArgumentsRaccourciDemarrerDev,
@@ -280,30 +280,30 @@ import {
   iconeRaccourciDev,
   poserIconeVersionnee,
   racineDepotDeLExeDev
-} from './raccourci-demarrer-dev'
+} from './app/raccourci-demarrer-dev'
 import {
   createStorageMigrationReadHandler,
   isRendererStorageMigrationComplete,
   markRendererStorageMigrationComplete,
   readLegacyRendererStorage,
   type MigratedRendererStorage
-} from './renderer-storage-migration'
+} from './app/renderer-storage-migration'
 import { definirDossierModsAutowin, scriptDesGardesCourant } from './providers/claude'
 import { rafraichirGardesDesAgents } from './providers/rafraichir-gardes'
 import { tmpdir } from 'node:os'
-import { guardString } from './ipc-guards'
+import { guardString } from './ipc/ipc-guards'
 import { azureTicketProvider, listAzurePeople } from './ticket-providers/azure'
 import { getAzureDevOpsAadToken } from './ticket-providers/azure-cli-auth'
-import { TicketSourceStore } from './ticket-source-store'
-import { createTicketCredentialStore } from './ticket-credential-store'
-import { TicketService } from './tickets-service'
+import { TicketSourceStore } from './tickets/ticket-source-store'
+import { createTicketCredentialStore } from './tickets/ticket-credential-store'
+import { TicketService } from './tickets/tickets-service'
 import { createTicketProviderRegistry } from './ticket-providers/provider-contract'
 import { githubTicketProvider } from './ticket-providers/github'
 import { gitlabTicketProvider } from './ticket-providers/gitlab'
-import { loadAzureDevOpsCliToken } from './azure-cli-token'
-import { loadForgeCliToken } from './forge-cli-token'
-import { registerTicketsIpc } from './tickets-ipc'
-import { restartApplication } from './app-restart'
+import { loadAzureDevOpsCliToken } from './providers/azure-cli-token'
+import { loadForgeCliToken } from './git/forge-cli-token'
+import { registerTicketsIpc } from './tickets/tickets-ipc'
+import { restartApplication } from './app/app-restart'
 import {
   armerRelanceAutoMoteur,
   compilerLeMoteur,
@@ -311,15 +311,15 @@ import {
   sourcesDuMoteurPlusRecentesQue,
   surveillerSourcesDuMoteur,
   type RelanceMoteurArmee
-} from './relance-auto-moteur'
-import { creerSuiviDesPublications } from './publications-en-vol'
-import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './journal-arrets'
+} from './providers/relance-auto-moteur'
+import { creerSuiviDesPublications } from './git/publications-en-vol'
+import { annoncerFermeture, cheminJournalArrets, journaliserCauseFermeture } from './app/journal-arrets'
 import {
   dossierDeTravailDuTour
-} from './bascule-dossier-conversation'
-import { lecteurDeDeuxLectures } from './deux-lectures-appel'
-import { creerMascotteDuBureau } from './mascotte-fenetre'
-import { brancherAffichageSession } from './affichage-session'
+} from './conversations/bascule-dossier-conversation'
+import { lecteurDeDeuxLectures } from './chat/deux-lectures-appel'
+import { creerMascotteDuBureau } from './mascotte/mascotte-fenetre'
+import { brancherAffichageSession } from './chat/affichage-session'
 import { materializeChatArtifact, removeConversationArtifacts } from './store/chat-artifact-store'
 
 import { BrainWorkerClient } from './viz/brain-worker-client'
@@ -337,7 +337,7 @@ import {
   DEFAULT_BRAIN_GRACE_MS,
   decidePreflightAnnouncement,
   type BrainLaunchOutcome
-} from './preflight-announce'
+} from './preflight/preflight-announce'
 import { fusionnerRepriseDuFil, recapMessage, summarizeJournal } from './runs/journal-replay'
 import type { FinishedRunOutcome } from './runs/run-interruption'
 import { tailJournalOnce } from './runs/stdout-journal'
@@ -350,20 +350,20 @@ import {
   appendExecutionEvidenceFileTrace,
   flushConversationFileTraces
 } from './activity/conversation-file-trace-spool'
-import { ProviderStateStore } from './provider-state-store'
+import { ProviderStateStore } from './providers/provider-state-store'
 import { artifactsFromExecutionEvidence } from './providers/artifacts'
 
-import { sharedBrainRoot, createBrainContextProvider } from './brain-context'
-import { createBrainTitresDuTour } from './brain-titres-du-tour'
+import { sharedBrainRoot, createBrainContextProvider } from './brain/brain-context'
+import { createBrainTitresDuTour } from './brain/brain-titres-du-tour'
 import {
   automationAppIdentity,
   resolveAutomationInstanceMode,
   resolveExplicitUserDataDir,
   resolveInstanceAppDataBase
-} from './headless-instance'
+} from './app/headless-instance'
 import { TaskStore } from './task-manager/task-store'
 import { persistTaskStore } from './task-manager/task-store-disk'
-import { viderFichiersEnAttente } from './ecriture-hors-fil'
+import { viderFichiersEnAttente } from './gel/ecriture-hors-fil'
 import { TaskScheduler } from './task-manager/task-scheduler'
 import { WatchdogEngine } from './task-manager/watchdog-engine'
 import type { WatchdogAppEvent } from './task-manager/types'
@@ -371,8 +371,8 @@ import {
   taskOccurrenceFromAdditionalData,
   taskOccurrenceFromArgs
 } from './task-manager/windows-relay'
-import { OUTILS_NOEUD_SKILL } from './skill-node-tools'
-import { solderOrientationsDuFil } from './orientations-en-cours-app'
+import { OUTILS_NOEUD_SKILL } from './skills/skill-node-tools'
+import { solderOrientationsDuFil } from './conversations/orientations-en-cours-app'
 
 /**
  * ATTRIBUTION du démarrage. Le jalon « module principal évalué » est posé AVANT les 167 imports
@@ -1180,7 +1180,7 @@ function drainPendingDirectives(conversationId: string): string[] {
   const queued = solderOrientationsDuFil(conversationId, enFile, 'tour')
   return queued
 }
-// Le fenetrage vit dans src/main/window.ts : il ne prenait ici que les valeurs listees ci-dessous.
+// Le fenetrage vit dans src/main/app/window.ts : il ne prenait ici que les valeurs listees ci-dessous.
 const fenetres = createWindowing({
   T0_DEMARRAGE,
   jalonDemarrage,

@@ -84,7 +84,7 @@ try {
 # ICONE A NOM VERSIONNE. Mesure du 2026-10-11 (conv-266) : le logo anneau ecrit SOUS LE MEME CHEMIN
 # que l'ancien atome, l'Explorateur dessinait toujours l'atome sur le Bureau (il range ses icones par
 # chemin) ; le meme raccourci pointe vers un chemin NEUF a montre l'anneau aussitot. Le raccourci vise
-# donc une copie dont le nom porte l'empreinte du contenu. MEME REGLE que src/main/raccourci-demarrer-dev.ts
+# donc une copie dont le nom porte l'empreinte du contenu. MEME REGLE que src/main/app/raccourci-demarrer-dev.ts
 # (`cheminIconeVersionnee`) et scripts/logo_anneau.py (`icone_versionnee`) : SHA-256, 12 premiers hexa.
 $empreinte = (Get-FileHash -LiteralPath $ico -Algorithm SHA256).Hash.Substring(0, 12).ToLowerInvariant()
 $dossierIcones = Join-Path $env:LOCALAPPDATA 'autowin-os\icones'

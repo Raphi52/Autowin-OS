@@ -9,7 +9,7 @@ import { defineConfig } from 'vitest/config'
 uns\conv-1` contenait 6 396 dossiers de run et
  * 14 146 fichiers, accumulés depuis le 18 juillet. La cause n'était pas l'application : c'est la SUITE
  * DE TESTS qui écrivait dans les données réelles de l'utilisateur. Preuve par avant/après autour d'un
- * seul fichier — `src/main/commands.test.ts` crée +12 dossiers à chaque exécution (6 384 → 6 396), et
+ * seul fichier — `src/main/commands/commands.test.ts` crée +12 dossiers à chaque exécution (6 384 → 6 396), et
  * une première hypothèse (une boucle auto-kaizen en production) a été RÉFUTÉE par la même mesure sur un
  * autre fichier, qui n'en créait aucun.
  *
@@ -133,15 +133,15 @@ const GIT_LOURDS = [
   'src/main/store/bureau-publie-ne-revient-pas.test.ts',
   'src/main/store/travail-detache-*.test.ts',
   'src/main/store/balayage-*.test.ts',
-  'src/main/edit-file-portee.test.ts',
-  'src/main/run-autoclose.test.ts',
-  'src/main/githooks-pre-push.test.ts',
-  'src/main/e2e-chaine*.test.ts',
+  'src/main/commands/edit-file-portee.test.ts',
+  'src/main/runs/run-autoclose.test.ts',
+  'src/main/git/githooks-pre-push.test.ts',
+  'src/main/orchestration/e2e-chaine*.test.ts',
   // Vrai dépôt, vraie copie propre (`git worktree add`), vrai `tsc` (conv-954).
-  'src/main/typage-avant-publication-reel.test.ts',
+  'src/main/verify/typage-avant-publication-reel.test.ts',
   // Copie propre de 4 000 fichiers ET une mesure de boucle en ms : seule, pour ne pas mesurer la
   // charge des autres workers (/gel conv-1118).
-  'src/main/comparaison-a-la-base.sans-gel.test.ts'
+  'src/main/git/comparaison-a-la-base.sans-gel.test.ts'
 ]
 
 export default defineConfig({

@@ -7,7 +7,7 @@
  * 74,6 Mo : aucun lecteur n'aurait pu l'ouvrir, la carte aurait affiché « Aperçu limité à 16 Mo ».
  *
  * Désormais une vidéo ou un son CONSERVÉ dans le stockage du fil se lit par cette adresse, servie
- * par morceaux (requêtes `Range`) par `src/main/chat-media-protocol.ts`. La fenêtre ne donne
+ * par morceaux (requêtes `Range`) par `src/main/chat/chat-media-protocol.ts`. La fenêtre ne donne
  * toujours AUCUN chemin : seulement le triplet conversation · tour · artefact, que le processus
  * principal résout lui-même dans le stockage du fil.
  */

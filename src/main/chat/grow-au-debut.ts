@@ -17,8 +17,8 @@
  * COÛT : la procédure pèse quelques Ko, côté message (hors cache). Elle part UNE fois par session
  * du modèle ; une session reprise n'en reçoit qu'un rappel d'une ligne (`agent-pilot.ts`).
  */
-import { messageSansSujetPropre } from '../brain-titres-du-tour'
-import { normalizeIntent } from '../intent-phase-routing'
+import { messageSansSujetPropre } from '../brain/brain-titres-du-tour'
+import { normalizeIntent } from '../orchestration/intent-phase-routing'
 
 /**
  * Skills invoquées qui MODIFIENT par nature : leur nom est le verbe (« /draft une page d'accueil »).

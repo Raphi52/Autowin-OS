@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { appendTurnEvent, type TurnJournalEvent } from './turn-journal'
 import { listRecoverableChatProviderCallsAsync, reglagesDeReprise } from './chat-provider-recovery'
-import { sourceProcessPrincipal } from '../source-process-principal.test-helpers'
+import { sourceProcessPrincipal } from '../app/source-process-principal.test-helpers'
 
 /**
  * UN TOUR REPRIS NE FIGE PAS LES RUNS QU'IL LANCE (conv-955, 2026-10-15).

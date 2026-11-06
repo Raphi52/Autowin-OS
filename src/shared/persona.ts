@@ -1,6 +1,6 @@
 // Import de TYPE uniquement : effacé à la compilation, donc ce module reste utilisable des deux
 // côtés (main et renderer) sans jamais tirer une dépendance Node dans le bundle du renderer.
-import type { PipelinePhase } from '../main/skill-pipeline'
+import type { PipelinePhase } from '../main/skills/skill-pipeline'
 import type { NodePhase } from './pipeline-phases'
 
 /**

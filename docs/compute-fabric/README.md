@@ -213,10 +213,10 @@ Le fichier `context-sources.json` définit les documents, sources, plages et tes
 - `src/main/compute-fabric/resource-adapter.ts` — transport d’inférence actuel ;
 - `src/main/providers/types.ts` — frontière provider à étendre de façon additive ;
 - `src/main/providers/registry.ts` — hard-deny Fabric hors du bridge legacy ;
-- `src/main/agent-pilot.ts` — boucle locale existante ;
-- `src/main/commands.ts` — commandes applicatives, pas gateway machine ;
+- `src/main/agent-pilot/agent-pilot.ts` — boucle locale existante ;
+- `src/main/commands/commands.ts` — commandes applicatives, pas gateway machine ;
 - `src/main/conversation-capabilities.ts` — sémantique d’autorité à conserver ;
-- `src/main/bounded-file-read.ts` — primitives de confinement à généraliser.
+- `src/main/fichiers/bounded-file-read.ts` — primitives de confinement à généraliser.
 
 ## Règles pour une future IA
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const noterQuota = vi.hoisted(() => vi.fn())
-vi.mock('../model-quotas', () => ({ noterQuotaServiceHttp: noterQuota }))
+vi.mock('../modeles/model-quotas', () => ({ noterQuotaServiceHttp: noterQuota }))
 import { OpenAICompatAdapter, type OutilAgent } from './openai-compat'
 import type { SendResult, StreamChunk } from './types'
 

@@ -175,12 +175,12 @@ describe('redigerPromptWorkflowSelection', () => {
         what: 'Statistiques dédoublonnées',
         why: 'p',
         how: 'h',
-        commande: '`npx vitest run src/main/scout-memoire.test.ts`'
+        commande: '`npx vitest run src/main/scout/scout-memoire.test.ts`'
       }
     ])
-    expect(candidat!.commande).toBe('`npx vitest run src/main/scout-memoire.test.ts`')
+    expect(candidat!.commande).toBe('`npx vitest run src/main/scout/scout-memoire.test.ts`')
     const prompt = redigerPromptWorkflowSelection([candidat!])
-    expect(prompt).toContain('   Preuve à lancer : `npx vitest run src/main/scout-memoire.test.ts`')
+    expect(prompt).toContain('   Preuve à lancer : `npx vitest run src/main/scout/scout-memoire.test.ts`')
     // La ligne ajoutée ne devient pas une piste prise de plus (`titresChoisisDansLaDemande`).
     expect(prompt.match(/^ {3}Quoi : /gmu)).toHaveLength(1)
   })

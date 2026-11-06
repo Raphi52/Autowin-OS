@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { describeChatTurnFailure } from '../provider-failure-diagnosis'
+import { describeChatTurnFailure } from '../providers/provider-failure-diagnosis'
 
 /**
  * fix-ok: run-pilot-chat.ts rendait l'erreur brute (`e.message`) sans appeler

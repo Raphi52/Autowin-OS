@@ -2,7 +2,7 @@
 // de AgentPilot.chat() partage avec ses closures. Sortis tels quels de chat() — noms, valeurs
 // initiales et commentaires — (conv-1580, lot 3) : chat() les lit et les écrit sous `etat.<nom>`,
 // et les modules voisins prennent cet objet en paramètre au lieu de capturer une soixantaine de `let`.
-import type { EtatPrompt } from '../etat-diff'
+import type { EtatPrompt } from '../chat/etat-diff'
 import type { ExecutionEvidence, Message } from '../providers/types'
 import { chargerMurs } from '../runs/murs-store'
 import type { TurnUsage } from './evenements'

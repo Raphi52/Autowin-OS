@@ -14,7 +14,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 import type { EditionLocaleNonRemise, FinalizeResult } from './worktree-manager-types'
 import {
   SAFE_ID,
@@ -503,7 +503,7 @@ export function remettreEditionLocale(
  * `base-dirty` refuse la publication parce que l'utilisateur a du travail non committe sur les
  * MEMES fichiers. Jusqu'ici le tour s'arretait la, sur un echec. Sur un arbre partage par plusieurs
  * sessions la cause ne disparait pas d'elle-meme : mesure du 2026-08-27, le fichier en cause etait
- * `src/main/agent-pilot.ts`, qu'une autre session editait, et le repechage a rejoue trois fois la
+ * `src/main/agent-pilot/agent-pilot.ts`, qu'une autre session editait, et le repechage a rejoue trois fois la
  * MEME publication avant de renoncer.
  *
  * Ce que fait ce barreau : `update-ref` sur le commit que la copie a DEJA produit. Aucun fichier

@@ -1,5 +1,5 @@
 # Identite d'entreprise du Brain, lue en option -- meme contrat que tooling/brain_identite.py et
-# src/main/identite-entreprise.ts. Sans profil `entreprise/<nom>/identite.json` (version publique),
+# src/main/profil/identite-entreprise.ts. Sans profil `entreprise/<nom>/identite.json` (version publique),
 # tout reste neutre. Avec un profil, l'installation garde les noms deja poses sur les postes :
 # dossier d'installation, nom de service (relais, greffon Hermes) et anciens noms de variables.
 

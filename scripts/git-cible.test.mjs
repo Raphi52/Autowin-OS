@@ -16,7 +16,7 @@ import {
   normaliserIdentite,
   retenirHabitude
 } from './git-cible.mjs'
-import { supprimerArbre } from '../src/main/fs-supprimer'
+import { supprimerArbre } from '../src/main/fichiers/fs-supprimer'
 
 const aNettoyer = []
 afterEach(() => {

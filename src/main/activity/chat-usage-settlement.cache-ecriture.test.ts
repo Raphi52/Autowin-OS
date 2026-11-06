@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { loadConvActivity } from './conv-activity'
 import { persistChatUsageSettlement } from './chat-usage-settlement'
 import { TraceStore } from './trace-store'
-import type { ExecutionUsageSnapshot } from '../execution-supervisor'
+import type { ExecutionUsageSnapshot } from '../orchestration/execution-supervisor'
 
 /**
  * LE PRIX DU CACHE N'ETAIT JAMAIS ECRIT. `scripts/audit-cout-tokens.mjs` mesure

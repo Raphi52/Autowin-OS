@@ -17,7 +17,7 @@ import { createRunPilotChat, type RunPilotChatDeps } from './run-pilot-chat'
 const solde = vi.hoisted(() => ({
   appels: [] as Array<{ fil: string; textes: string[]; par: string }>
 }))
-vi.mock('../orientations-en-cours-app', () => ({
+vi.mock('../conversations/orientations-en-cours-app', () => ({
   solderOrientationsDuFil: (fil: string, textes: string[], par: string) => {
     solde.appels.push({ fil, textes: [...textes], par })
     return textes.filter((t) => t !== 'déjà remise par le contrôle')
@@ -27,7 +27,7 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: () => '', isPackaged: false, getVersion: () => '0.0.0' }
 }))
-vi.mock('../renderer-emit', () => ({ emitToLiveWindows: () => {} }))
+vi.mock('../app/renderer-emit', () => ({ emitToLiveWindows: () => {} }))
 
 function souple(): never {
   const fn = (): unknown => souple()

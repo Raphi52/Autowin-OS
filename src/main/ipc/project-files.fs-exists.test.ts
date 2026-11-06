@@ -13,8 +13,8 @@ vi.mock('electron', () => ({
     handle: (channel: string, fn: (...args: unknown[]) => unknown) => handlers.set(channel, fn)
   }
 }))
-vi.mock('../ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
-vi.mock('../project-files', () => ({
+vi.mock('./ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
+vi.mock('../fichiers/project-files', () => ({
   listProjectDir: () => [],
   readProjectFile: () => '',
   writeProjectFile: () => undefined

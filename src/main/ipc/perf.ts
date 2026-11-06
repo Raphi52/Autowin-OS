@@ -14,15 +14,15 @@
  * bornes. La racine des données est reçue telle quelle et résolue à CHAQUE appel, comme avant.
  */
 import { app, ipcMain } from 'electron'
-import { ensureAutowinAppData } from '../app-data'
-import { lireLatenceTours } from '../perf-lag-main'
-import { journaliserGel, lireGels } from '../gel-main'
-import { demarrerReleveMemoire, releveMemoireFrais } from '../releve-memoire'
+import { ensureAutowinAppData } from '../app/app-data'
+import { lireLatenceTours } from '../gel/perf-lag-main'
+import { journaliserGel, lireGels } from '../gel/gel-main'
+import { demarrerReleveMemoire, releveMemoireFrais } from '../brain/releve-memoire'
 import { lireListeDeGel, lireMessagesDeGel } from '../../shared/gel-detector'
-import { lireDuelsParWorkflow } from '../arena-duels'
+import { lireDuelsParWorkflow } from '../orchestration/arena-duels'
 import { lireResultatsReelsParWorkflow } from '../activity/resultats-reels-workflows'
 import { join } from 'node:path'
-import { assertTrustedRendererSender } from '../ipc-senders'
+import { assertTrustedRendererSender } from './ipc-senders'
 
 /** Ce que les canaux de latence prenaient dans `index.ts` — désormais passé explicitement. */
 export type PerfIpcDeps = {

@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { scriptHookGardes } from '../../shared/garde-git-destructeur'
-import { refusReglageProd } from '../prod-run-guard'
+import { refusReglageProd } from '../prod/prod-run-guard'
 import { resoudreBash } from '../chat/relance-taches-de-fond'
 import { findClaudeExecutable, gardeNpmDuDepot, gardeNpmDuLancement, reglagesCliAutowin } from './claude'
 

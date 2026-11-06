@@ -23,8 +23,8 @@ import {
 const TABLEAU = [
   '| # | Score | Type | What | Why | How |',
   '|---|---|---|---|---|---|',
-  '| 1 | 78 | 🔧 fix | **Le mode `/draft` se perd.** | `src/main/draft-choix-par-boutons.ts:46` ne regarde que 2 messages. | Remonter au dernier /draft.<br>**Effort :** faible.<br>**Preuve :** `npx vitest run src/main/draft-choix-par-boutons.test.ts` |',
-  '| 2 | 70 | 🆕 feature | **Alt+clic sur un élément** | 163 retouches | Réutiliser `src/main/navigateur-integre.ts:1464`.<br>**Effort :** moyen. |',
+  '| 1 | 78 | 🔧 fix | **Le mode `/draft` se perd.** | `src/main/skills/draft-choix-par-boutons.ts:46` ne regarde que 2 messages. | Remonter au dernier /draft.<br>**Effort :** faible.<br>**Preuve :** `npx vitest run src/main/skills/draft-choix-par-boutons.test.ts` |',
+  '| 2 | 70 | 🆕 feature | **Alt+clic sur un élément** | 163 retouches | Réutiliser `src/main/bureau/navigateur-integre.ts:1464`.<br>**Effort :** moyen. |',
   '| 3 | 60 | 🔧 fix | **Grosse reprise** | a | Reprendre `src/main/a.ts:3`.<br>**Effort :** élevé. |'
 ].join('\n')
 
@@ -42,11 +42,11 @@ describe('l’effort et la preuve écrits dans le « Comment » comptent', () =>
   })
 
   it('la commande citée dans « Preuve : » devient la preuve de la piste', () => {
-    expect(candidats()[0]!.commande).toBe('npx vitest run src/main/draft-choix-par-boutons.test.ts')
+    expect(candidats()[0]!.commande).toBe('npx vitest run src/main/skills/draft-choix-par-boutons.test.ts')
   })
 
   it('jumeau : une commande sans fichier visé ne prouve rien', () => {
-    const lignes = parseScoutTable(TABLEAU.replace('src/main/draft-choix-par-boutons.test.ts', ''))
+    const lignes = parseScoutTable(TABLEAU.replace('src/main/skills/draft-choix-par-boutons.test.ts', ''))
     expect(candidatsDepuisScoutTable(lignes!)[0]!.commande).toBeUndefined()
   })
 
@@ -60,7 +60,7 @@ describe('l’effort et la preuve écrits dans le « Comment » comptent', () =>
 
   it('un chemin n’est pas un signal de risque : `orchestrator.ts:12` reste une adresse', () => {
     const base: CandidatAffiche = { titre: 'x', type: 'fix', url: 'src/main/a.ts:1' }
-    expect(voieDeLaPiste({ ...base, how: 'Borner `src/main/orchestrator.ts:12`.' }).voie).toBe(
+    expect(voieDeLaPiste({ ...base, how: 'Borner `src/main/orchestration/orchestrator.ts:12`.' }).voie).toBe(
       'directe'
     )
     // Jumeau : le même mot en prose garde le workflow complet.
@@ -80,10 +80,10 @@ describe('selectionAPlanifier — la sélection devient un plan lisible', () => 
       'À cadrer — Alt+clic sur un élément (+1)'
     ])
     expect(plan.lots[0]!.fichiers).toEqual([
-      'src/main/draft-choix-par-boutons.ts',
-      'src/main/draft-choix-par-boutons.test.ts'
+      'src/main/skills/draft-choix-par-boutons.ts',
+      'src/main/skills/draft-choix-par-boutons.test.ts'
     ])
-    expect(plan.lots[1]!.fichiers).toContain('src/main/navigateur-integre.ts')
+    expect(plan.lots[1]!.fichiers).toContain('src/main/bureau/navigateur-integre.ts')
   })
 
   it('les pistes aux fichiers communs sont annoncées : le plan les fera passer l’une après l’autre', () => {

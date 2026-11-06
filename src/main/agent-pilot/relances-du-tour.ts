@@ -3,7 +3,7 @@
 // motif de l'itération accordée en plus du cap, réponse affichée à remplacer —, ou rien ; quand il
 // mord, il consomme lui-même son crédit. AgentPilot.chat() garde l'ORDRE des contrôles et l'envoi.
 // Sortis tels quels de la boucle de chat(), textes compris (conv-1580, lot 4).
-import { cheminsRelatifsCites, relanceCheminsComplets } from '../chemins-complets'
+import { cheminsRelatifsCites, relanceCheminsComplets } from '../fichiers/chemins-complets'
 import {
   blocVisuelNonFerme,
   consigneApresEchec,
@@ -22,7 +22,7 @@ import {
   RELANCE_FAIRE_LE_GESTE,
   RELANCE_PREUVE_AVANT_DE_PROMETTRE,
   RELANCE_QUESTION_SANS_LECTURE
-} from '../chat-turn-messages'
+} from '../chat/chat-turn-messages'
 import {
   conversationPretendueInaccessible,
   correctionConversationLisible,

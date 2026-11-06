@@ -1,5 +1,5 @@
 /**
- * SONDE du bloc « titres Brain du tour » (src/main/brain-titres-du-tour.ts) sur le Brain VIVANT.
+ * SONDE du bloc « titres Brain du tour » (src/main/brain/brain-titres-du-tour.ts) sur le Brain VIVANT.
  *
  * Rejoue les 27 questions du jeu d'évaluation de l'entreprise (`entreprise/<nom>/brain/eval/rag-golden.json`,
  * il dépend du contenu de SON Brain) par le chemin réel du chat
@@ -10,9 +10,9 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { retrieveBrainContext } from '../src/main/brain-retrieval'
-import { scopeBrainRetrieval, brainCorpusForWorkspace } from '../src/main/brain-corpus-scope'
-import { rendreTitres, selectionnerTitres } from '../src/main/brain-titres-du-tour'
+import { retrieveBrainContext } from '../src/main/brain/brain-retrieval'
+import { scopeBrainRetrieval, brainCorpusForWorkspace } from '../src/main/brain/brain-corpus-scope'
+import { rendreTitres, selectionnerTitres } from '../src/main/brain/brain-titres-du-tour'
 
 type Cas = { id: string; query: string; expected_paths?: string[] }
 /** Premier `entreprise/<nom>/brain/eval/rag-golden.json` (ordre alphabetique), absent du depot public. */

@@ -80,7 +80,7 @@ const ENTETE = /^\s*\**\s*OBJECTIONS\s*\**\s*:\s*/i
 const PUCE = /^(\s*)(?:[-*•]|\d+[.)])\s+(.*)$/
 const ETIQUETTE = /^\**\s*(MAJEUR|MINEUR|OK)\s*\**\s*:\s*\**\s*/i
 const AUTRE_SECTION = /^[A-ZÉÈÀ_ ]{3,}\s*:/
-// Ligne ENTIÈRE seulement, comme src/main/objections-juge.ts : « Aucune capture » est une objection.
+// Ligne ENTIÈRE seulement, comme src/main/juge/objections-juge.ts : « Aucune capture » est une objection.
 const VIDE =
   /^(aucune?(\s+(objections?|ecarts?|defauts?|reserves?))?|rien(\s+a\s+signaler)?|neant|n\/?a|non|ras)\s*[.!]?$/
 

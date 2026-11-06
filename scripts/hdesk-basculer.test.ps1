@@ -37,7 +37,7 @@ try {
   if (-not $l.pid) { Write-Output "BANC IMPOSSIBLE : bureau du banc non lance ($($l.erreur))"; exit 2 }
   $lancements += [int]$l.pid
 
-  # LE MEME LANCEMENT QUE L'APP (src/main/hdesk-tv.ts, argumentsLancementBascule) : par WMI, fenetre cachee.
+  # LE MEME LANCEMENT QUE L'APP (src/main/bureau/hdesk-tv.ts, argumentsLancementBascule) : par WMI, fenetre cachee.
   $script = Join-Path $Dossier 'hdesk-basculer.ps1'
   $commande = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$script`" -InstanceId $id -MaxSecondes 5 -Statut `"$statut`" -Essai"
   $d = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Dossier 'lancer-detache.ps1') -Commande $commande -Dossier $travail | ConvertFrom-Json

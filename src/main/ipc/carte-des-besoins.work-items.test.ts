@@ -20,7 +20,7 @@ vi.mock('electron', () => ({
     handle: (channel: string, fn: (...args: unknown[]) => unknown) => handlers.set(channel, fn)
   }
 }))
-vi.mock('../ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
+vi.mock('./ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
 
 import { registerCarteDesBesoinsIpc } from './carte-des-besoins'
 

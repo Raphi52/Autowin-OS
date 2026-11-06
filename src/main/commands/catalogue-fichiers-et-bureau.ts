@@ -1,7 +1,7 @@
 // Catalogue des commandes — fichiers, vidéo et blocs, runs, bureau caché, navigateur intégré et terminal.
 // Entrées sorties telles quelles de commands/catalogue.ts (conv-1580), dans le même ordre :
 // catalogue.ts les remet bout à bout dans CATALOG. Seuls des TYPES viennent de '../commands'.
-import type { CommandSpec } from '../commands'
+import type { CommandSpec } from './commands'
 import { PHRASE_PAS_A_PAS_NAVIGATEUR, LISTE_DE_TEXTES } from './catalogue-champs'
 
 export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
@@ -228,7 +228,7 @@ export const CATALOGUE_FICHIERS_ET_BUREAU: CommandSpec[] = [
       'À qui est ce fichier ? AVANT d’éditer un fichier d’un dossier partagé : dit s’il est modifié et non commité par un AUTRE fil (conversation, tour, heure), s’il est en cours dans la copie d’un run, et s’il a changé en amont (sans git fetch : `dernierFetch` date la réponse). Remplace git status / git log HEAD..@{u} faits à la main. Lecture seule',
     args: {
       chemins:
-        'chemin ou liste de chemins, relatifs au dossier de travail (50 au plus) — ex. ["src/main/commands.ts"]'
+        'chemin ou liste de chemins, relatifs au dossier de travail (50 au plus) — ex. ["src/main/commands/commands.ts"]'
     },
     argsTypes: { chemins: LISTE_DE_TEXTES },
     annotations: {

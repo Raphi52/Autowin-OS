@@ -9,7 +9,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 
 /** Deux sauts de ligne, sans séquence d'échappement — même règle que `SAUT` dans verify-command.ts. */
 export const SAUT_PORTEE = String.fromCharCode(10, 10)

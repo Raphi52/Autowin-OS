@@ -32,7 +32,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import type { ProviderArtifactCandidate } from '../../shared/artifacts'
 import { artifactsFromExecutionEvidence, normalizeProviderArtifacts } from './artifacts'
-import { addedLineFingerprintsFromUnifiedDiff } from '../exact-line-fingerprint'
+import { addedLineFingerprintsFromUnifiedDiff } from '../fichiers/exact-line-fingerprint'
 import { attestIsolatedVerificationEvidence } from './causal-verification-evidence'
 
 /**

@@ -4,7 +4,7 @@
  * tableau markdown brut. PUR (aucune dépendance) → testable directement.
  *
  * Reconnaît un tableau markdown dont l'en-tête contient « Impact » ET « Effort », OU « Score » avec
- * « What »/« Type » (format du brief scout src/main/phase-briefs.ts), OU « Note » avec « Type »
+ * « What »/« Type » (format du brief scout src/main/consignes/phase-briefs.ts), OU « Note » avec « Type »
  * (ancien format de skills/scout/SKILL.md : `# | Note | Type | Quoi | Pourquoi | Comment`, encore lu). Chaque ligne →
  * { num, impact, effort, type, what, why, how } ; un Score /100 est mappé en pastille impact
  * (≥70 vert, ≥40 jaune, sinon rouge) et effort reste null.

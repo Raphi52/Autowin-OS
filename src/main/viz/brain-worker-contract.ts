@@ -1,5 +1,5 @@
-import type { InboxCandidate } from '../brain-inbox'
-import type { BrainNavigation } from '../brain-retrieval'
+import type { InboxCandidate } from '../brain/brain-inbox'
+import type { BrainNavigation } from '../brain/brain-retrieval'
 import type { BrainNoteSearchResult } from './fs-brains'
 
 type AsyncResult<T extends (...args: never[]) => unknown> = Awaited<ReturnType<T>>
@@ -57,7 +57,7 @@ export interface BrainWorkerContract {
   }
   readInboxCandidateBody: {
     args: [root: string, id: string]
-    result: ReturnType<typeof import('../brain-inbox').readInboxCandidateBody>
+    result: ReturnType<typeof import('../brain/brain-inbox').readInboxCandidateBody>
   }
 }
 

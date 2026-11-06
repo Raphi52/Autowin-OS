@@ -2,7 +2,7 @@
 # depuis $env:USERPROFILE.claude (plus bas), or ce dossier ne contient ni skills ni hooks, et
 # stop-gate.ps1 n existe nulle part dans le depot (le stop-gate vit en TypeScript,
 # src/main/gates/stopgate.ts). Il echoue donc sur « fichier absent » AVANT sa premiere assertion.
-# La part verifiable dans ce depot a ete portee en test vivant : src/main/kit-cliquets.test.ts
+# La part verifiable dans ce depot a ete portee en test vivant : src/main/skills/kit-cliquets.test.ts
 # (regles du corps, re-derivations interdites, plafond de lignes, renvois croises). Ce fichier est
 # garde pour une machine ou le kit Claude Code externe EXISTE — il n y est pas a jour du francais.
 #

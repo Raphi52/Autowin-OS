@@ -14,9 +14,9 @@
  * `poserFixtureDeTest` au lieu de partager une variable.
  */
 import { ipcMain } from 'electron'
-import type { AutowinOS } from '../os'
+import type { AutowinOS } from '../app/os'
 import { scopeWorktreeActivity } from '../../shared/worktree-activity-model'
-import { assertTrustedRendererSender } from '../ipc-senders'
+import { assertTrustedRendererSender } from './ipc-senders'
 
 /** Ce que le canal de fixture de test injecte, en INSTANCE ISOLÉE uniquement. */
 export type WorktreeFixtureDeTest = {

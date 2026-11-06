@@ -7,7 +7,7 @@ import { extraireBilan } from './bilan-d-etape'
  * « Message from subagent › » — deux lignes de resume, une question, deux reponses cliquables et
  * une croix. Jusqu'ici un run orchestre ne pouvait RIEN demander a l'utilisateur : son texte
  * remontait a l'agent du chat, qui seul posait une question (`ask`). Le canal `<question>` des
- * runs est desactive (`src/main/model-questions.ts`).
+ * runs est desactive (`src/main/modeles/model-questions.ts`).
  *
  * La question du run vit dans la ligne `- Question :` du bilan de fin d'etape (consigne
  * `CONSIGNE_BILAN`, phase-briefs.ts). Ce module la lit, au meme endroit que `extraireBilan`, dans

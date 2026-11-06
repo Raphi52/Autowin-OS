@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { zoneDuTourDeChat } from '../source-process-principal.test-helpers'
-import { motifInactivite, terminalDuTour } from '../chat-turn-arret'
+import { zoneDuTourDeChat } from '../app/source-process-principal.test-helpers'
+import { motifInactivite, terminalDuTour } from '../chat/chat-turn-arret'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

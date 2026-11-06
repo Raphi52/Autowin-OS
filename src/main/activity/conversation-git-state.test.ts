@@ -10,7 +10,7 @@ import {
 } from '../providers/workspace-mutation-evidence'
 import { appendConversationFileTrace } from './conversation-file-trace-spool'
 import { readConversationGitDiff, readConversationGitState } from './conversation-git-state'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 const roots: string[] = []
 

@@ -8,7 +8,7 @@ import type {
   Usage
 } from './types'
 import { creerOutilsAgentDirect } from './outils-agent-direct'
-import { noterQuotaServiceHttp } from '../model-quotas'
+import { noterQuotaServiceHttp } from '../modeles/model-quotas'
 
 /**
  * Moteur NATIF « compatible OpenAI » : parle HTTP directement à `/chat/completions`, SANS aucun CLI.

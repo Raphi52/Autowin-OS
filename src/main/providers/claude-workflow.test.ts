@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { chantiersDuJournal, lireLigneDeChantier } from '../../shared/chantier-du-tour'
-import { statusEstUneAction, statusEstUneLecture } from '../chat-turn-messages'
+import { statusEstUneAction, statusEstUneLecture } from '../chat/chat-turn-messages'
 import {
   SuiviDesChantiers,
   avisDeChantierPrecedent,

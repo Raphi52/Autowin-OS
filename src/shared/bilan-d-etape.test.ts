@@ -11,7 +11,7 @@ const BILAN = [
   '### Bilan de l’étape',
   '- Verdict : fait — 6 pistes classées',
   '- Fichiers touchés : aucun',
-  '- Preuves : src/main/orchestrator.ts:1141 lu',
+  '- Preuves : src/main/orchestration/orchestrator.ts:1141 lu',
   '- Reste à faire : choisir la piste'
 ].join('\n')
 

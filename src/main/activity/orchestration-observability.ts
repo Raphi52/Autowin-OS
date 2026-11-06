@@ -1,6 +1,6 @@
-import type { OrchestrationPhase, OrchestrationStep } from '../orchestrator'
+import type { OrchestrationPhase, OrchestrationStep } from '../orchestration/orchestrator'
 import { join } from 'node:path'
-import { ensureAutowinAppData } from '../app-data'
+import { ensureAutowinAppData } from '../app/app-data'
 import {
   appendPromptCall,
   promptObservabilityRoot,
@@ -13,7 +13,7 @@ import type { RunLifecycleEvent } from '../../shared/run-execution'
 import { evidencePayloads } from './evidence-payloads'
 import { stepPayloads } from './step-reasoning-payloads'
 import { latestBrainTraceId } from './brain-trace-spool'
-import type { PipelinePhase } from '../skill-pipeline'
+import type { PipelinePhase } from '../skills/skill-pipeline'
 
 interface OrchestrationTraceContext {
   conversationId: string

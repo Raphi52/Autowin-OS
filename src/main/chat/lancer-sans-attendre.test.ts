@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ActiveChatTurns } from '../active-chat-turns'
+import { ActiveChatTurns } from './active-chat-turns'
 import { lancerSansAttendre } from './lancer-sans-attendre'
 
 /** Un faux tour : s'enregistre actif apres un court delai, puis ne finit QUE sur ordre du test. */

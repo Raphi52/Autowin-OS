@@ -1,6 +1,6 @@
 // Le texte d'un tour de chat qui se termine. Sorti tel quel de AgentPilot.chat() (conv-1580,
 // lot 3) : il lit l'état du tour (`etat-du-tour.ts`) au lieu de capturer ses `let`.
-import { avertirSiLeconNonRetenue } from '../lecon-non-retenue'
+import { avertirSiLeconNonRetenue } from '../brain/lecon-non-retenue'
 import type { EtatDuTour } from './etat-du-tour'
 import type { PilotEventVariant } from './evenements'
 import { texteCmdIlisible } from './jetons-de-commande'

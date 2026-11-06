@@ -20,9 +20,9 @@ import {
   loadTestProjects,
   runProjectTests,
   saveTestProjects
-} from '../tests-view-main'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import type { AutowinOS } from '../os'
+} from '../verify/tests-view-main'
+import { assertTrustedRendererSender } from './ipc-senders'
+import type { AutowinOS } from '../app/os'
 
 /** Ce que les canaux de la vue Tests prenaient dans `index.ts` — désormais passé explicitement. */
 export type TestsViewIpcDeps = {

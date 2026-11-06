@@ -145,21 +145,21 @@ export default defineConfig(
   },
   {
     // Mocks IPC dynamiques : leurs signatures imitent l'API Electron sans propager `any` au produit.
-    files: ['src/main/commands.test.ts'],
+    files: ['src/main/commands/commands.test.ts'],
     rules: { '@typescript-eslint/no-explicit-any': 'off' }
   },
   {
     // Doubles de flux asynchrones volontairement vides pour tester les branches sans événement.
     files: [
-      'src/main/orchestrator.context-dedup.test.ts',
-      'src/main/orchestrator.execution.test.ts',
-      'src/main/orchestrator.hooks.test.ts',
-      'src/main/orchestrator.lean-fast.test.ts',
-      'src/main/orchestrator.overload-retry.test.ts',
-      'src/main/orchestrator.provider-identity.test.ts',
-      'src/main/orchestrator.resume-skips-paid-phases.test.ts',
-      'src/main/orchestrator.workflow-override.test.ts',
-      'src/main/orchestrator.worktree-flip.test.ts'
+      'src/main/orchestration/orchestrator.context-dedup.test.ts',
+      'src/main/orchestration/orchestrator.execution.test.ts',
+      'src/main/orchestration/orchestrator.hooks.test.ts',
+      'src/main/orchestration/orchestrator.lean-fast.test.ts',
+      'src/main/orchestration/orchestrator.overload-retry.test.ts',
+      'src/main/orchestration/orchestrator.provider-identity.test.ts',
+      'src/main/orchestration/orchestrator.resume-skips-paid-phases.test.ts',
+      'src/main/orchestration/orchestrator.workflow-override.test.ts',
+      'src/main/orchestration/orchestrator.worktree-flip.test.ts'
     ],
     rules: { 'require-yield': 'off' }
   },

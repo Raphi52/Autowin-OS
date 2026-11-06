@@ -141,7 +141,7 @@ export function phraseDuCout(cout: { usd: number; partiel: boolean } | null): st
 }
 
 /*
- * LA RESSEMBLANCE (conv-1057, 2026-10-22 — calculée par `src/main/ressemblance-des-facons.ts`).
+ * LA RESSEMBLANCE (conv-1057, 2026-10-22 — calculée par `src/main/orchestration/ressemblance-des-facons.ts`).
  * Les arrondis ne mentent pas : un code qui n'est pas identique ne s'affiche jamais « 100 % », et
  * une ligne commune ne s'affiche jamais « 0 % ».
  */

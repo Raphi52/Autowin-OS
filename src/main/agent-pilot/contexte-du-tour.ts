@@ -3,12 +3,12 @@
 // les paramètres de AgentPilot.chat() dont elle se sert. Construit une seule fois par chat(), juste
 // avant la boucle (conv-1580, lot 4) : les modules de la boucle le reçoivent au lieu de capturer
 // les locales de chat().
-import type { OuvertureOutilsNatifs } from '../chat-mcp'
+import type { OuvertureOutilsNatifs } from '../chat/chat-mcp'
 import type { CommandSpec } from '../commands/types'
 import type { ProviderRegistry } from '../providers/registry'
 import type { Message } from '../providers/types'
-import type { RoleBinding } from '../roles'
-import type { TurnTimer } from '../turn-timing'
+import type { RoleBinding } from '../profil/roles'
+import type { TurnTimer } from '../chat/turn-timing'
 import type { MotifDeRallonge } from './aides-du-tour'
 import type { AppelsNatifsDuTour } from './appels-natifs'
 import type { ExecutionDeCommande } from './commandes-du-tour'

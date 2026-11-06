@@ -11,7 +11,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ ipcMain: { handle: () => undefined } }))
-vi.mock('../ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
+vi.mock('./ipc-senders', () => ({ assertTrustedRendererSender: () => undefined }))
 
 import { registerCarteDesBesoinsIpc } from './carte-des-besoins'
 

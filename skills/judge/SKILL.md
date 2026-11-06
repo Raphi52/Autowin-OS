@@ -147,7 +147,7 @@ Recettes : **skill** → test de déclenchement (routeur en contexte vierge sur 
 >
 > ***Exemples** pour `defects[].description` — ✅ « ligne 42 : pas de null-guard sur `user.id` → TypeError sur appel anonyme » (lieu + déclencheur) · ❌ « le code est fragile » (rejeté : ni lieu ni déclencheur = non falsifiable).*
 >
-> ***Test joint (facultatif)** : en fin d'une objection MAJEUR ou MINEUR, ajoute `| TEST: <fichier de test> | <commande>` — le test qui échoue aujourd'hui et que la réparation doit faire passer SANS le modifier (contrat `CONTRAT_OBJECTIONS`, `src/main/objections-juge.ts:30`). Ignoré sur une puce OK.*
+> ***Test joint (facultatif)** : en fin d'une objection MAJEUR ou MINEUR, ajoute `| TEST: <fichier de test> | <commande>` — le test qui échoue aujourd'hui et que la réparation doit faire passer SANS le modifier (contrat `CONTRAT_OBJECTIONS`, `src/main/juge/objections-juge.ts:30`). Ignoré sur une puce OK.*
 >
 > *Réponds UNIQUEMENT en JSON :
 > `{"schema_version":"je-1","dimension":"...","note":0-100,"interval":"...","unstable":bool,"unstable_reason":"...","artifact_based":bool,"defects":[{"severity":"major|minor","nature":"fixable|intrinsic|wont_fix","type":"new|incomplete_fix|regression","description":"...","to_reach_100":"..."}]}`

@@ -10,7 +10,7 @@ import {
   appendWorkspaceMutationTrace,
   captureMutationTraceBase
 } from '../activity/trace-workspace-mutation'
-import { estUnOutilDirectDuChat, ouvrirOutilsNatifsDuChat } from '../chat-mcp'
+import { estUnOutilDirectDuChat, ouvrirOutilsNatifsDuChat } from '../chat/chat-mcp'
 import {
   baliserRelanceAutomatique,
   bilanDesOutilsNatifsRecuperes,
@@ -18,8 +18,8 @@ import {
   statusEstUneAction,
   statusEstUneLecture,
   statutComplet
-} from '../chat-turn-messages'
-import { ecritUnFichierDeMemoire } from '../lecon-non-retenue'
+} from '../chat/chat-turn-messages'
+import { ecritUnFichierDeMemoire } from '../brain/lecon-non-retenue'
 import type { Message, SendOptions, SendResult } from '../providers/types'
 import { captureSaufAnnulation } from './aides-du-tour'
 import type { ContexteDuTour } from './contexte-du-tour'

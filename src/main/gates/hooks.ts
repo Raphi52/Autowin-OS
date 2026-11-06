@@ -111,7 +111,7 @@ export function detectBlindFixLoop(
  * Un chemin de fichier, quel que soit son separateur ET qu'il soit absolu ou relatif au depot,
  * designe le meme fichier.
  * fix-ok: conv-539 tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — le refus comptait
- * « D:/AutoWinOS/src/main/orchestrator.ts » (08:52:58) et « src/main/objections-juge.ts »
+ * « D:/AutoWinOS/src/main/orchestration/orchestrator.ts » (08:52:58) et « src/main/juge/objections-juge.ts »
  * (09:06:41) sous deux cles distinctes ; un jeton fix-ok depose sous le chemin court ne
  * dedouanait donc pas le compte enregistre sous le chemin absolu.
  */

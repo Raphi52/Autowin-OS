@@ -8,7 +8,7 @@ import type {
   WatchdogMutationClaimsSink,
   WatchdogOrchestrationRequest
 } from './types'
-import type { ReasoningEffort } from '../roles'
+import type { ReasoningEffort } from '../profil/roles'
 import {
   AGENT_STUDIO_DEFAULT_MODEL_LABEL,
   usesAgentStudioDefault

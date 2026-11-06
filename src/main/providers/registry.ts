@@ -10,7 +10,7 @@ import {
 } from './types'
 import { resolveProviderTimeoutMs, withIdleDeadline } from './watchdog'
 import { estMurDeQuota, instantDeRetourAnnonce } from '../../shared/reprise-quota'
-import type { ExecutionSupervisor } from '../execution-supervisor'
+import type { ExecutionSupervisor } from '../orchestration/execution-supervisor'
 
 /**
  * Plafond DUR de coordination : même si un adaptateur défaille (promesse jamais réglée, event `close`

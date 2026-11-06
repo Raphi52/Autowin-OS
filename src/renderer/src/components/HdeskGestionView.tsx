@@ -47,7 +47,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Spinner } from './Spinner'
-import type { GesteTv, ImageTv, ResultatGeste } from '../../../main/hdesk-tv'
+import type { GesteTv, ImageTv, ResultatGeste } from '../../../main/bureau/hdesk-tv'
 import {
   CREATION_ATTENTE_MS,
   FIL_MANUEL,

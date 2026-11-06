@@ -1,6 +1,6 @@
-import type { ReponseServeursMcp, ServeurMcpUtilisateur } from '../main/mcp-servers'
+import type { ReponseServeursMcp, ServeurMcpUtilisateur } from '../main/providers/mcp-servers'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
-import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/messages-entre-fils-app'
+import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/conversations/messages-entre-fils-app'
 import type {
   GestePlanDeLots,
   ReponsePlansDeLots,
@@ -10,8 +10,8 @@ import type {
   EtatPhraseProd,
   ReponseAutorisation as ReponseAutorisationProd,
   ReponseDefinition as ReponseDefinitionPhrase
-} from '../main/prod-passphrase-ipc'
-import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod-guichet'
+} from '../main/prod/prod-passphrase-ipc'
+import type { DemandeProdPubliee as DemandeAutorisationProd } from '../main/prod/prod-guichet'
 import type {
   EtatPorteProd,
   NiveauProtectionProd,
@@ -58,44 +58,44 @@ import type {
   TenueAgent
 } from '../shared/quartier-presence'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
-import type { EtatWhisper } from '../main/whisper-local'
-import type { EtatPiper } from '../main/piper-local'
-import type { OrchestrationStep, OrchestrationResult } from '../main/orchestrator'
+import type { EtatWhisper } from '../main/media/whisper-local'
+import type { EtatPiper } from '../main/media/piper-local'
+import type { OrchestrationStep, OrchestrationResult } from '../main/orchestration/orchestrator'
 import type { VizGraph } from '../main/viz/graph'
 import type { BrainGraphRef, BrainTheme } from '../main/viz/fs-brains'
-import type { BrainSearchEnvelope } from '../main/brain-search-envelope'
-import type { InboxCandidate, InboxMove } from '../main/brain-inbox'
+import type { BrainSearchEnvelope } from '../main/brain/brain-search-envelope'
+import type { InboxCandidate, InboxMove } from '../main/brain/brain-inbox'
 import type { RunEntry } from '../main/dashboards/runs-scan'
-import type { CapabilityItem } from '../main/capability-controls'
-import type { SkillRegistryItem } from '../main/skill-registry'
-import type { BehaviourFile } from '../main/behaviour-files'
-import type { PendingModelQuestion } from '../main/model-questions'
-import type { ImportedModel } from '../main/models'
+import type { CapabilityItem } from '../main/gardes/capability-controls'
+import type { SkillRegistryItem } from '../main/skills/skill-registry'
+import type { BehaviourFile } from '../main/behaviour/behaviour-files'
+import type { PendingModelQuestion } from '../main/modeles/model-questions'
+import type { ImportedModel } from '../main/modeles/models'
 import type { PromptCallRecord, CostBreakdownRow } from '../main/activity/prompt-observability'
-import type { ProviderDisplayStatus, ProviderStatus } from '../main/provider-status'
+import type { ProviderDisplayStatus, ProviderStatus } from '../main/providers/provider-status'
 import type { SemanticTemporalProjectionV1 } from '../main/knowledge/semantic-temporal-projection'
-import type { BehaviourComposition } from '../main/behaviour-composition'
+import type { BehaviourComposition } from '../main/behaviour/behaviour-composition'
 import type { BrainTrace } from '../main/activity/brain-trace-spool'
 import type { ConversationFileTrace } from '../main/activity/conversation-file-trace-spool'
 import type { BrainInjectionInventory } from '../main/activity/brain-injection-inventory'
-import type { PreflightResult } from '../main/preflight'
-import type { PreflightRepairOutcome } from '../main/preflight-repair'
+import type { PreflightResult } from '../main/preflight/preflight'
+import type { PreflightRepairOutcome } from '../main/preflight/preflight-repair'
 import type { TaskManagerSnapshot, ScheduledTask } from '../main/task-manager/types'
-import type { AutoCloseReport } from '../main/run-autoclose'
+import type { AutoCloseReport } from '../main/runs/run-autoclose'
 import type { FabricNodeSummary } from '../main/compute-fabric/control-plane'
-import type { PetitesTachesEtat, Role, RoleBinding } from '../main/roles'
-import type { WorkflowProfilesFile } from '../main/workflow-profiles'
-import type { AutowinProfile } from '../main/profile-store'
-import type { ShadowRouteResult } from '../main/shadow-router'
-import type { ShadowRoutingPilotState } from '../main/model-routing-shadow-setting'
-import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/wire-checkpoint-fork'
+import type { PetitesTachesEtat, Role, RoleBinding } from '../main/profil/roles'
+import type { WorkflowProfilesFile } from '../main/workflow/workflow-profiles'
+import type { AutowinProfile } from '../main/profil/profile-store'
+import type { ShadowRouteResult } from '../main/modeles/shadow-router'
+import type { ShadowRoutingPilotState } from '../main/modeles/model-routing-shadow-setting'
+import type { PersistedCheckpoint, CheckpointForkManifest } from '../main/topologie/wire-checkpoint-fork'
 import type { OrchestrationRunState } from '../main/runs/orchestration-state'
-import type { CommandResult, AppSnapshot } from '../main/commands'
+import type { CommandResult, AppSnapshot } from '../main/commands/commands'
 import type { TraceEventV1, TracePayload } from '../main/activity/trace-event'
 import type { SessionMeta, SessionActivity } from '../main/activity/transcripts'
-import type { ClaudeHookItem } from '../main/claude-hooks'
+import type { ClaudeHookItem } from '../main/providers/claude-hooks'
 import type { ConvActivityEntry } from '../main/activity/conv-activity'
-import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/hdesk-tv'
+import type { BureauTv, GesteTv, ImageTv, ResultatGeste } from '../main/bureau/hdesk-tv'
 import type {
   DemandeCreationBureau,
   ResultatChoixExe,
@@ -236,13 +236,13 @@ interface ChatApi {
   openProjectInVscode: (conversationId?: string) => Promise<{ ok: true; installe: boolean } | { ok: false; raison: string }>
   /** Lecture seule : le fichier existe-t-il ? `null` = chemin relatif sans base connue. */
   fichierExiste?: (path: string, base?: string) => Promise<boolean | null>
-  listProjectDir: (path?: string, conversationId?: string) => Promise<import('../main/project-files').ProjectListResult>
-  readProjectFile: (path: string, conversationId?: string) => Promise<import('../main/project-files').ProjectReadResult>
+  listProjectDir: (path?: string, conversationId?: string) => Promise<import('../main/fichiers/project-files').ProjectListResult>
+  readProjectFile: (path: string, conversationId?: string) => Promise<import('../main/fichiers/project-files').ProjectReadResult>
   writeProjectFile: (
     path: string,
     content: string,
     conversationId?: string
-  ) => Promise<import('../main/project-files').ProjectWriteResult>
+  ) => Promise<import('../main/fichiers/project-files').ProjectWriteResult>
   testProjects: () => Promise<
     Array<
       import('../shared/test-projects').TestProject & {
@@ -281,13 +281,13 @@ interface ChatApi {
       disponible: boolean
       source: string
       /** Memoire et CPU de chaque processus : dernier releve, total et pic (conv-1077). */
-      memoire?: import('../main/releve-memoire').EtatReleveMemoire
+      memoire?: import('../main/brain/releve-memoire').EtatReleveMemoire
     }
   >
   /** Duels d'arene deja mesures, agreges par nom de workflow. Aucun duel n'est rejoue. */
   arenaDuelsParWorkflow: (
     derniers?: number
-  ) => Promise<Record<string, import('../main/arena-duels').AgregatDuels>>
+  ) => Promise<Record<string, import('../main/orchestration/arena-duels').AgregatDuels>>
   /** Ce que chaque workflow a réellement donné (runs aboutis, en échec, interrompus), par nom. */
   workflowResultatsReels: () => Promise<
     Record<string, import('../main/activity/resultats-reels-workflows').ResultatsReelsWorkflow>
@@ -364,10 +364,10 @@ interface ChatApi {
     request: import('../shared/tickets').TicketListRequest
   ) => Promise<import('../shared/tickets').TicketPage>
   getTicket: (
-    request: import('../main/tickets-ipc').TicketGetIpcRequest
+    request: import('../main/tickets/tickets-ipc').TicketGetIpcRequest
   ) => Promise<import('../shared/tickets').TicketItem>
   updateTicket: (
-    request: import('../main/tickets-ipc').TicketUpdateIpcRequest
+    request: import('../main/tickets/tickets-ipc').TicketUpdateIpcRequest
   ) => Promise<import('../shared/tickets').TicketItem>
   cancelTickets: (requestId: string) => Promise<boolean>
   listTicketPeople: (source: unknown) => Promise<string[]>
@@ -534,12 +534,12 @@ interface ChatApi {
   executionWorkspace: () => Promise<ExecutionWorkspaceState>
   chooseExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
   resetExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
-  /** Le Brain renseigné dans les Réglages : chemin et/ou dépôt git (`src/main/brain-reglage.ts`). */
+  /** Le Brain renseigné dans les Réglages : chemin et/ou dépôt git (`src/main/brain/brain-reglage.ts`). */
   brainReglage: () => Promise<BrainReglageState>
   choisirDossierBrain: () => Promise<string | null>
   enregistrerBrainReglage: (entree: { chemin?: string; depot?: string }) => Promise<BrainReglageState>
   resetBrainReglage: () => Promise<BrainReglageState>
-  /** Le Brain PERSO, privé, à côté de celui de l'équipe (conv-1233, `src/main/brain-perso.ts`). */
+  /** Le Brain PERSO, privé, à côté de celui de l'équipe (conv-1233, `src/main/brain/brain-perso.ts`). */
   brainPerso: () => Promise<BrainPersoState>
   // Serveurs MCP de l'utilisateur (conv-1558) : le preload les exposait sans type (lot 1).
   mcpServersList: () => Promise<ReponseServeursMcp>

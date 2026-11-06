@@ -22,7 +22,7 @@ import {
 
 const BRIEFING = [
   '## Localisation',
-  '| 3 | `src/main/orchestrator.ts:3643` | lecture |',
+  '| 3 | `src/main/orchestration/orchestrator.ts:3643` | lecture |',
   '- `orchestration-state.ts:1116` et `skills/think/SKILL.md` §2',
   '## Cartographie',
   '- `src/main/autre-fichier.ts` cité hors Localisation',
@@ -33,7 +33,7 @@ const BRIEFING = [
 describe('fichiers cités par un texte', () => {
   it('lit les chemins complets, les noms nus et retire le numéro de ligne', () => {
     const cites = fichiersCites(section(BRIEFING, 'Localisation'))
-    expect([...cites.chemins].sort()).toEqual(['skills/think/SKILL.md', 'src/main/orchestrator.ts'])
+    expect([...cites.chemins].sort()).toEqual(['skills/think/SKILL.md', 'src/main/orchestration/orchestrator.ts'])
     expect([...cites.noms].sort()).toEqual([
       'orchestration-state.ts',
       'orchestrator.ts',
@@ -55,7 +55,7 @@ describe('appariement aux fichiers modifiés', () => {
   const cites = fichiersCites(section(BRIEFING, 'Localisation'))
 
   it('par chemin complet, par nom nu, et rien d’autre', () => {
-    expect(estCite('src/main/orchestrator.ts', cites)).toBe(true)
+    expect(estCite('src/main/orchestration/orchestrator.ts', cites)).toBe(true)
     expect(estCite('src/main/runs/orchestration-state.ts', cites)).toBe(true)
     expect(estCite('src/main/autre-fichier.ts', cites)).toBe(false)
   })
@@ -65,7 +65,7 @@ describe('appariement aux fichiers modifiés', () => {
       tache: 'corrige orchestrator.ts',
       briefing: BRIEFING,
       modifies: [
-        'src/main/orchestrator.ts',
+        'src/main/orchestration/orchestrator.ts',
         'src/main/runs/orchestration-state.ts',
         'src/main/autre-fichier.ts'
       ]
@@ -121,19 +121,19 @@ describe('règle de décision « sauter think »', () => {
 describe('« Trous » du briefing, sans modèle', () => {
   const avecTrous = [
     '## Localisation',
-    '- `src/main/orchestrator.ts:3643`',
+    '- `src/main/orchestration/orchestrator.ts:3643`',
     '## Trous',
-    '- je n’ai pas lu `src/main/commands.ts` ni vérifié `pickResumeForTask`',
+    '- je n’ai pas lu `src/main/commands/commands.ts` ni vérifié `pickResumeForTask`',
     '- Brain indisponible'
   ].join('\n')
 
   it('compte les trous portant sur un fichier modifié ensuite', () => {
     const m = mesurerTrous({
       briefing: avecTrous,
-      modifies: ['src/main/commands.ts', 'src/main/orchestrator.ts'],
+      modifies: ['src/main/commands/commands.ts', 'src/main/orchestration/orchestrator.ts'],
       suite: ''
     })
-    expect(m.fichiersTrouModifies).toEqual(['src/main/commands.ts'])
+    expect(m.fichiersTrouModifies).toEqual(['src/main/commands/commands.ts'])
   })
 
   it('compte les repères d’un trou repris par une étape suivante', () => {
@@ -323,7 +323,7 @@ describe('chaque trou annoncé : rencontré plus tard ou non, sans modèle', () 
     '## Trous',
     '- je n’ai pas vérifié `pickResumeForTask`',
     '  - ni son appelant `os.ts:1385`',
-    '- `src/main/commands.ts` non lu',
+    '- `src/main/commands/commands.ts` non lu',
     '- le chiffre `9,6 %` non revérifié',
     '- Brain indisponible',
     '## Autre',
@@ -333,7 +333,7 @@ describe('chaque trou annoncé : rencontré plus tard ou non, sans modèle', () 
   it('classe chaque puce : repère repris, fichier modifié, aucun retour, rien de vérifiable', () => {
     const r = trousRencontres({
       briefing,
-      modifies: ['src/main/commands.ts'],
+      modifies: ['src/main/commands/commands.ts'],
       suite: 'NON VÉRIFIÉ : pourquoi `pickResumeForTask` a rendu null'
     })
     expect(r).toMatchObject({ annonces: 4, rencontres: 2, pasRencontres: 1, sansRepere: 1 })

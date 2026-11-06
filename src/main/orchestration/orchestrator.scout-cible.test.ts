@@ -1,0 +1,347 @@
+import { describe, expect, it } from 'vitest'
+import { CostAggregator } from '../dashboards/cost'
+import { Orchestrator } from './orchestrator'
+import { ProviderRegistry } from '../providers/registry'
+import type {
+  Message,
+  ProviderAdapter,
+  SendOptions,
+  SendResult,
+  StreamChunk
+} from '../providers/types'
+import { RoleModelConfig } from '../profil/roles'
+import { TrustLedger } from '../trust/ledger'
+import { makeTestWorktrees } from './orchestrator.test-helpers'
+
+/**
+ * LE SITE D'APPEL de la garde « un scout engage une cible » (`scout-cible.ts`).
+ *
+ * Le module pur peut rester vert alors que PERSONNE ne l'appelle : ce test-ci echoue si la ligne de
+ * cablage disparait de `recordPhase`, parce qu'il lit ce que la phase SUIVANTE recoit reellement.
+ */
+class Faux implements ProviderAdapter {
+  readonly id = 'faux'
+  constructor(private readonly avecCible: boolean) {}
+  readonly supportsExecution = true
+  readonly prompts: string[] = []
+
+  // eslint-disable-next-line require-yield
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const prompt = messages.map((m) => m.content).join('\n')
+    this.prompts.push(prompt)
+    const estJuge = prompt.includes('Tu es un juge')
+    // Une shortlist SANS cible engagee : exactement le defaut que la garde doit rendre visible.
+    const shortlist =
+      (this.avecCible ? '## Cible\nligne 1 — corriger X, score le plus haut\n\n' : '') +
+      '## Constats\n| # | Score | Type | What |\n| 1 | 82 | fix | corriger X |'
+    return {
+      text: estJuge ? 'VALIDE' : shortlist,
+      provider: this.id,
+      systemInjected: Boolean(options.system)
+    }
+  }
+
+  async auth(): Promise<boolean> {
+    return true
+  }
+}
+
+const promptsDuRun = async (tache: string, avecCible = false): Promise<string[]> => {
+  const provider = new Faux(avecCible)
+  const orch = new Orchestrator({
+    registry: new ProviderRegistry().register(provider),
+    roles: new RoleModelConfig({
+      subagent: { provider: provider.id, model: 'ouvrier' },
+      judge: { provider: provider.id, model: 'juge' }
+    }),
+    cost: new CostAggregator(),
+    trust: new TrustLedger(),
+    executionWorkspace: 'C:\base',
+    classifyPhases: () => ['scout', 'frame'],
+    worktrees: makeTestWorktrees('C:\base'),
+    execPhases: []
+  })
+  await orch.run(tache, undefined, undefined, undefined, undefined, undefined, [])
+  return provider.prompts
+}
+
+describe('cablage : un scout sans cible ne passe pas en silence', () => {
+  it('la phase suivante recoit l’avertissement en tete', async () => {
+    const prompts = await promptsDuRun('améliore la vue Knowledge')
+    const suite = prompts.filter((p) => p.includes("Le scout n'a engagé aucune piste"))
+    expect(suite.length).toBeGreaterThan(0)
+  })
+
+  it('LE TEST SYMETRIQUE — un scout QUI engage sa cible n’est pas averti', async () => {
+    const prompts = await promptsDuRun('améliore la vue Knowledge', true)
+    expect(prompts.some((p) => p.includes("Le scout n'a engagé aucune piste"))).toBe(false)
+    // et la cible choisie, elle, arrive bien a la phase suivante
+    expect(prompts.some((p) => p.includes('ligne 1 — corriger X, score le plus haut'))).toBe(true)
+  })
+})
+
+/**
+ * LE SITE D'APPEL du plafond de preuve (`scout-plafond.ts`) : meme accroche que la cible. Une piste
+ * notee 72 dont le Pourquoi avoue « je n'ai pas verifie » doit arriver a la phase suivante a 50.
+ * fix-ok: run-3180eec71b06-1 — 3 editions = un test au site d'appel par branchement neuf de
+ * orchestrator.ts (plafond des notes, memoire des pistes, choix et bilan) ; chacun tombe (code 1)
+ * quand son branchement est retire. Aucun rouge corrige ici : ce fichier ne recoit que ces tests.
+ */
+class ScoutQuiAvoue implements ProviderAdapter {
+  readonly id = 'aveu'
+  readonly supportsExecution = true
+  readonly prompts: string[] = []
+  readonly systemes: string[] = []
+
+  // eslint-disable-next-line require-yield
+  async *send(
+    messages: Message[],
+    options: SendOptions = {}
+  ): AsyncGenerator<StreamChunk, SendResult, void> {
+    const prompt = messages.map((m) => m.content).join('\n')
+    this.prompts.push(prompt)
+    this.systemes.push(options.system ?? '')
+    const shortlist =
+      '## Cible\nligne 1 — cache périmé\n\n| # | Score | Type | What | Why | How |\n|---|---|---|---|---|---|\n' +
+      "| 1 | 72 | 🔧 fix | cache périmé | je n'ai pas vérifié l'appelant | cache.ts:10 |"
+    return {
+      text: prompt.includes('Tu es un juge') ? 'VALIDE' : shortlist,
+      provider: this.id,
+      systemInjected: Boolean(options.system)
+    }
+  }
+
+  async auth(): Promise<boolean> {
+    return true
+  }
+}
+
+describe('cablage : le plafond de preuve mord sur la sortie reelle du scout', () => {
+  it('la note non verifiee arrive a 50 dans le texte enregistre et a la phase suivante', async () => {
+    const provider = new ScoutQuiAvoue()
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'ouvrier' },
+        judge: { provider: provider.id, model: 'juge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\base',
+      classifyPhases: () => ['scout', 'frame'],
+      worktrees: makeTestWorktrees('C:\base'),
+      execPhases: []
+    })
+    const result = await orch.run(
+      'améliore la vue Knowledge',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      []
+    )
+    const scout = result.phaseOutputs.find((output) => output.phase === 'scout')?.text ?? ''
+    expect(scout).toMatch(/\| 1 \| 50 \|/u)
+    expect(scout).not.toMatch(/\| 72 \|/u)
+    expect(provider.prompts.some((p) => p.includes('Note ramenée à 50 par Autowin'))).toBe(true)
+  })
+})
+
+/**
+ * LE SITE D'APPEL de la memoire des pistes (`scout-memoire.ts`) : la consigne REELLEMENT envoyee au
+ * scout porte les titres deja proposes, et les pistes de ce scout sont notees sous l'identifiant du
+ * run — celui-la meme que la lecture exclut.
+ */
+describe('cablage : le scout recoit les pistes deja proposees et note les siennes', () => {
+  it('consigne enrichie, pistes notees, run en cours exclu', async () => {
+    const provider = new ScoutQuiAvoue()
+    const lectures: Array<{ depot: string; sauf: string; demande?: string }> = []
+    const notes: Array<{ depot: string; texte: string; run: string }> = []
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'ouvrier' },
+        judge: { provider: provider.id, model: 'juge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\base',
+      classifyPhases: () => ['scout'],
+      worktrees: makeTestWorktrees('C:\base'),
+      execPhases: [],
+      memoireScout: {
+        connues: (depot, sauf, demande) => {
+          lectures.push({ depot, sauf, demande })
+          return ['Écriture du cache', 'Tri des conversations']
+        },
+        noter: (depot, texte, run) => notes.push({ depot, texte, run })
+      }
+    })
+    await orch.run(
+      'améliore la vue Knowledge',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      []
+    )
+    const consigneScout =
+      [...provider.systemes, ...provider.prompts].find((p) => p.includes('phase SCOUT')) ?? ''
+    expect(consigneScout).toMatch(/DÉJÀ PROPOSÉ/u)
+    expect(consigneScout).toContain('- Écriture du cache')
+    expect(lectures).toHaveLength(1)
+    // conv-339 : la mémoire filtre ses titres sur la demande — encore faut-il qu'elle la reçoive.
+    expect(lectures[0]!.demande).toBe('améliore la vue Knowledge')
+    expect(notes).toHaveLength(1)
+    expect(notes[0]!.texte).toMatch(/cache périmé/u)
+    expect(notes[0]!.run).toBe(lectures[0]!.sauf)
+    expect(notes[0]!.run).not.toBe('')
+  })
+
+  // Piste 7 de conv-890 : la demande du run (le message de sélection) est lue AVANT la mémoire, pour
+  // que le bilan des choix réels arrive dans la consigne du scout de CE run.
+  it('la demande du run part au noteur de choix, et le bilan arrive dans la consigne du scout', async () => {
+    const provider = new ScoutQuiAvoue()
+    const ordre: string[] = []
+    const demandes: string[] = []
+    const runsDuChoix: string[] = []
+    const runsExclus: string[] = []
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'ouvrier' },
+        judge: { provider: provider.id, model: 'juge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\base',
+      classifyPhases: () => ['scout'],
+      worktrees: makeTestWorktrees('C:\base'),
+      execPhases: [],
+      memoireScout: {
+        connues: (_depot, sauf) => {
+          ordre.push('connues')
+          runsExclus.push(sauf)
+          return ['Écriture du cache']
+        },
+        noter: () => undefined,
+        choisir: (_depot, demande, run) => {
+          ordre.push('choisir')
+          demandes.push(demande)
+          runsDuChoix.push(run)
+        },
+        bilan: () => 'TES CHOIX RÉELS sur ce dépôt (6 pistes jugées) : 5 prises sur 6'
+      }
+    })
+    await orch.run(
+      'améliore la vue Knowledge',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      []
+    )
+    const consigneScout =
+      [...provider.systemes, ...provider.prompts].find((p) => p.includes('phase SCOUT')) ?? ''
+    expect(demandes[0]).toContain('améliore la vue Knowledge')
+    // Piste 1 de conv-1033 : le run qui porte la sélection est celui qui TRAITE les pistes prises.
+    // Rouge avant le branchement : `choisir` ne recevait pas le run (undefined).
+    expect(runsDuChoix[0]).toBeTruthy()
+    expect(runsDuChoix[0]).toBe(runsExclus[0])
+    expect(ordre.slice(0, 2)).toEqual(['choisir', 'connues'])
+    expect(consigneScout).toContain('TES CHOIX RÉELS sur ce dépôt (6 pistes jugées)')
+  })
+
+  // fix-ok: rouge avant le branchement (72 au lieu de 36), vert après.
+  // Piste 7 de conv-890, à la lettre : la NOTE du tableau suit les choix réels, en code. Le facteur
+  // est lu une fois au début du run et appliqué au texte que la phase suivante reçoit.
+  it('le facteur des choix réels réécrit la note dans le texte enregistré du scout', async () => {
+    const provider = new ScoutQuiAvoue()
+    const depots: string[] = []
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'ouvrier' },
+        judge: { provider: provider.id, model: 'juge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\base',
+      classifyPhases: () => ['scout'],
+      worktrees: makeTestWorktrees('C:\base'),
+      execPhases: [],
+      memoireScout: {
+        connues: () => [],
+        noter: () => undefined,
+        facteurs: (depot) => {
+          depots.push(depot)
+          return { fix: 0.5 }
+        }
+      }
+    })
+    const result = await orch.run(
+      'améliore la vue Knowledge',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      []
+    )
+    const scout = result.phaseOutputs.find((output) => output.phase === 'scout')?.text ?? ''
+    // 72 × 0,5 = 36 : sous le plafond de preuve, qui ne le remonte pas.
+    expect(scout).toMatch(/\| 1 \| 36 \|/u)
+    expect(scout).toContain('Note ajustée sur tes choix réels par Autowin : 🔧 fix ×0,5')
+    expect(depots).toEqual(['C:\base'])
+  })
+
+  // Piste 4 de conv-1033 : les sujets déjà traités sont lus au début du run (en tâche de fond, comme
+  // la liste des fichiers) et la marque « déjà fait ? » arrive dans le texte que la suite reçoit.
+  // Rouge avant le branchement : le texte du scout ne portait aucune marque.
+  it('une piste qui redit un sujet déjà traité arrive marquée « déjà fait ? » à la suite', async () => {
+    const provider = new ScoutQuiAvoue()
+    const depots: string[] = []
+    const orch = new Orchestrator({
+      registry: new ProviderRegistry().register(provider),
+      roles: new RoleModelConfig({
+        subagent: { provider: provider.id, model: 'ouvrier' },
+        judge: { provider: provider.id, model: 'juge' }
+      }),
+      cost: new CostAggregator(),
+      trust: new TrustLedger(),
+      executionWorkspace: 'C:\base',
+      classifyPhases: () => ['scout', 'frame'],
+      worktrees: makeTestWorktrees('C:\base'),
+      execPhases: [],
+      memoireScout: {
+        connues: () => [],
+        noter: () => undefined,
+        dejaFaits: async (depot) => {
+          depots.push(depot)
+          return [{ origine: 'commit abc1234', texte: 'le cache périmé du graphe est relu' }]
+        }
+      }
+    })
+    const result = await orch.run(
+      'améliore la vue Knowledge',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      []
+    )
+    const scout = result.phaseOutputs.find((output) => output.phase === 'scout')?.text ?? ''
+    expect(scout).toContain(
+      'Déjà fait ? Autowin a trouvé un sujet voisin : ligne 1 ↔ commit abc1234'
+    )
+    expect(provider.prompts.some((p) => p.includes('ligne 1 ↔ commit abc1234'))).toBe(true)
+    expect(depots).toEqual(['C:\base'])
+  })
+})

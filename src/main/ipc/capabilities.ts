@@ -13,14 +13,14 @@
  *     sont prévenus — sinon la vue continuerait d'afficher l'ancien état.
  */
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardBoolean, guardString } from '../ipc-guards'
-import { listCapabilities, setCapabilityEnabled } from '../capability-controls'
-import { listClaudeHooks, listCodexHooks } from '../claude-hooks'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardBoolean, guardString } from './ipc-guards'
+import { listCapabilities, setCapabilityEnabled } from '../gardes/capability-controls'
+import { listClaudeHooks, listCodexHooks } from '../providers/claude-hooks'
 import { promptConfigChange } from '../activity/prompt-config-change'
 import { appendPromptConfigActivity } from '../activity/prompt-config-store'
 import { appendConvActivity } from '../activity/conv-activity'
-import type { AppEvent } from '../commands'
+import type { AppEvent } from '../commands/commands'
 
 /** Ce que les canaux des capacités prenaient dans `index.ts` — désormais passé explicitement. */
 export type CapabilitiesIpcDeps = {

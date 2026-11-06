@@ -3,9 +3,9 @@ import { appendFileSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { exactLineFingerprint } from '../exact-line-fingerprint'
+import { exactLineFingerprint } from '../fichiers/exact-line-fingerprint'
 import { preparedCommitMutationEvidence } from './workspace-mutation-evidence'
-import { supprimerArbre } from '../fs-supprimer'
+import { supprimerArbre } from '../fichiers/fs-supprimer'
 
 const roots: string[] = []
 

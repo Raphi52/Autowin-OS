@@ -6,8 +6,8 @@ import { OutcomeLearningLedger } from '../activity/outcome-learning-ledger'
 import {
   createIndependentLearningAttestation,
   learningProposalAttestation
-} from '../outcome-learning-proposal'
-import { OutcomeLearningSupervisor } from '../outcome-learning-supervisor'
+} from '../brain/outcome-learning-proposal'
+import { OutcomeLearningSupervisor } from '../brain/outcome-learning-supervisor'
 import { attestIsolatedVerificationEvidence } from './causal-verification-evidence'
 import { codexExecutionEvidenceFromItem } from './codex'
 import type { ExecutionEvidence } from './types'

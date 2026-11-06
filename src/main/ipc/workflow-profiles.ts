@@ -18,8 +18,8 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs'
 import { ipcMain } from 'electron'
-import { assertTrustedRendererSender } from '../ipc-senders'
-import { guardString } from '../ipc-guards'
+import { assertTrustedRendererSender } from './ipc-senders'
+import { guardString } from './ipc-guards'
 import {
   loadWorkflowProfiles,
   removeWorkflowProfile,
@@ -28,9 +28,9 @@ import {
   upsertWorkflowProfile,
   type WorkflowProfile,
   type WorkflowProfilesFile
-} from '../workflow-profiles'
-import { buildExport, readImport, suggestedFileName } from '../workflow-transfer'
-import type { AppEvent } from '../commands'
+} from '../workflow/workflow-profiles'
+import { buildExport, readImport, suggestedFileName } from '../workflow/workflow-transfer'
+import type { AppEvent } from '../commands/commands'
 
 /** Ce que les canaux des workflows prenaient dans `index.ts` — désormais passé explicitement. */
 export type WorkflowProfilesIpcDeps = {
