@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readdirSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { bundledSkillsRoot, nativeSkills, skillRoots } from '../app/native-registry'
-// `skillInstruction` et non plus `phaseInstructionFromRoots`, retirée sans appelant (conv-1602) :
+// `skillInstruction` et non plus `phaseInstructionFromRoots`, retirée sans appelant :
 // c'est elle qui charge le corps d'une skill demandée dans le fil, depuis les mêmes racines.
 // fix-ok: cause mesurée — l'import visait une fonction retirée de skill-pipeline.ts (typage rouge).
 import { skillInstruction, PIPELINE_PHASES } from './skill-pipeline'
@@ -34,14 +34,16 @@ describe('skills embarquées dans la code base', () => {
   it('le dépôt porte bien les skills, avec _engine', () => {
     const root = bundledSkillsRoot()
     expect(root).toBeTruthy()
-    for (const phase of ['scout', 'frame', 'terrain', 'build', 'clean', 'judge', 'remake']) {
+    // `terrain` n'y est plus : sa skill a été retirée le 2026-11-06 à la demande de l'utilisateur ;
+    // l'étape du pipeline garde sa consigne dans phase-briefs.ts, sans SKILL.md.
+    for (const phase of ['scout', 'frame', 'build', 'clean', 'judge', 'remake']) {
       expect(existsSync(join(root!, phase, 'SKILL.md'))).toBe(true)
     }
     expect(existsSync(join(root!, '_engine', 'ENGINE.md'))).toBe(true)
   })
 
   /**
-   * Décision utilisateur du 2026-09-26 (conv-16) : « je garde que les skills d'autowin ». Les kits
+   * Décision utilisateur du 2026-09-26 : « je garde que les skills d'autowin ». Les kits
    * externes `~/.claude/skills` et `~/.codex/skills` ne sont plus lus : c'est par là qu'entraient
    * `_engine`, `autowin-setup` et `capafy-publisher` dans la palette `/` et dans l'état du modèle.
    */
@@ -117,6 +119,9 @@ describe('skills embarquées dans la code base', () => {
     const root = bundledSkillsRoot()
     for (const phase of PIPELINE_PHASES) {
       if (phase === 'kaizen') continue // workflow natif Autowin, pas de SKILL.md embarquée
+      // skill retirée du kit le 2026-11-06 (demande utilisateur) ; la phase tourne sous sa consigne
+      // de phase-briefs.ts, et un « /terrain » tapé ne charge plus de procédure.
+      if (phase === 'terrain') continue
       expect(existsSync(join(root!, phase, 'SKILL.md'))).toBe(true)
     }
   })

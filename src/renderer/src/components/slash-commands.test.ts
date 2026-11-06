@@ -17,7 +17,13 @@ const noms = (): string[] => palette().map((command) => command.name)
 
 describe('commandes slash — découvrabilité du kit', () => {
   it('chaque phase du pipeline est atteignable au clavier', () => {
-    expect(PIPELINE_PHASES.filter((phase) => !noms().includes(phase))).toEqual([])
+    // `terrain` est la seule exception, et elle est voulue : sa skill a été retirée du kit le
+    // 2026-11-06 à la demande de l'utilisateur. L'étape reste dans le pipeline avec sa consigne
+    // de phase-briefs.ts, mais sans commande `/terrain`.
+    const sansCommandeVoulue = new Set(['terrain'])
+    expect(
+      PIPELINE_PHASES.filter((phase) => !sansCommandeVoulue.has(phase) && !noms().includes(phase))
+    ).toEqual([])
   })
 
   it('TOUTE skill présente sur disque est proposée — plus aucune liste à tenir à jour', () => {

@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
 /**
- * « /nom » D'UNE SKILL DÉSACTIVÉE N'INJECTE PLUS SA PROCÉDURE (conv-1602, 2026-11-05).
+ * « /nom » D'UNE SKILL DÉSACTIVÉE N'INJECTE PLUS SA PROCÉDURE (2026-11-05).
  *
  * Avant : `messageDuTour` chargeait le corps du SKILL.md tapé en « /nom » sans lire l'interrupteur
  * de Settings › Skills ; seul `skill_charger` refusait une skill désactivée. Ici, le vrai assemblage
- * du message d'ouverture, avec un registre où `terrain` est désactivée et `clean` active.
+ * du message d'ouverture, avec un registre où `steal` est désactivée et `clean` active.
+ * (`steal` et non plus `terrain` : la skill `terrain` a été retirée du kit le 2026-11-06.)
  */
 vi.mock('../app/native-registry', async (importOriginal) => {
   const reel = await importOriginal<typeof import('../app/native-registry')>()
@@ -15,7 +16,7 @@ vi.mock('../app/native-registry', async (importOriginal) => {
       reel
         .nativeSkills()
         .map((skill) =>
-          skill.id === 'terrain'
+          skill.id === 'steal'
             ? { ...skill, enabled: false }
             : skill.id === 'clean'
               ? { ...skill, enabled: true }
@@ -47,10 +48,10 @@ const ouverture = (demande: string): string => {
 
 describe('« /nom » et l’interrupteur des skills', () => {
   it('une skill désactivée donne la note, pas sa procédure', () => {
-    const texte = ouverture('/terrain prépare le harnais du module rail')
+    const texte = ouverture('/steal recense les éditeurs de cockpits d’agents')
     expect(texte).toContain('=== SKILL DÉSACTIVÉE ===')
-    expect(texte).toContain('« /terrain »')
-    expect(texte).not.toContain('=== SKILL TERRAIN')
+    expect(texte).toContain('« /steal »')
+    expect(texte).not.toContain('=== SKILL STEAL')
   })
 
   it('une skill active garde sa procédure (témoin)', () => {
