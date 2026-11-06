@@ -41,7 +41,11 @@ export interface InfluencerField {
   label: string
   /** Valeur ACTUELLE ou RÈGLE (si volatile), en clair. */
   value: string
-  /** Citation `file:line` prouvant l'effet réel sur un tour. */
+  /**
+   * Fichier et symbole qui produisent l'effet, `src/main/x.ts#nom` ou `#Classe.methode`. Un nom
+   * plutôt qu'un numéro de ligne : une ligne citée se décale dès qu'on écrit au-dessus d'elle, et
+   * plus rien ne signale qu'elle pointe ailleurs ; un nom disparu, le test le voit.
+   */
   source: string
   /** Extrait du texte réellement injecté, quand l'influenceur EST un bloc de prompt. */
   excerpt?: string
@@ -119,9 +123,9 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     blocks.push({
       label: 'constitution',
       // Nombre LU dans le titre de la constitution : le chiffre figé « 13 » a dérivé à l'ajout du
-      // réflexe 14 (conv-1024).
+      // réflexe 14.
       value: `Constitution (${NOMBRE_DE_REFLEXES} réflexes + limite honnête) — source UNIQUE partagée, injectée aussi au chat cockpit et à os.chat.`,
-      source: 'src/main/consignes/constitution.ts:14',
+      source: 'src/main/consignes/constitution.ts#CONSTITUTION',
       excerpt: injectedText(CONSTITUTION)
     })
   }
@@ -130,15 +134,15 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     value: brief
       ? 'Brief de phase purpose-built injecté en tête du system.'
       : 'Aucun brief (retombe sur la discipline générique).',
-    source: 'src/main/consignes/phase-briefs.ts:10',
+    source: 'src/main/consignes/phase-briefs.ts#PHASE_BRIEFS',
     excerpt: brief ? injectedText(brief) : undefined
   })
-  // La synthèse fan-out et le juge n'injectent PAS la discipline de pipeline (orchestrator.ts:306,527).
+  // La synthèse fan-out et le juge n'injectent PAS la discipline de pipeline.
   if (phase !== 'judge') {
     blocks.push({
       label: 'discipline',
       value: 'Discipline de pipeline (scout→frame→build→clean→judge) ajoutée au system.',
-      source: 'src/main/orchestration/pipeline-discipline.ts:6',
+      source: 'src/main/orchestration/pipeline-discipline.ts#PIPELINE_DISCIPLINE_INSTRUCTION',
       excerpt: injectedText(PIPELINE_DISCIPLINE_INSTRUCTION)
     })
   }
@@ -146,13 +150,13 @@ function phaseSystemPrompt(phase: PipelinePhase): PhaseSystemPrompt {
     {
       label: 'style',
       value: 'Profil de réponse concis-structuré.',
-      source: 'src/main/consignes/response-style.ts:2',
+      source: 'src/main/consignes/response-style.ts#CONCISE_STRUCTURED_RESPONSE_INSTRUCTION',
       excerpt: injectedText(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION)
     },
     {
       label: 'projectContext',
       value: `Dans chaque dossier, premier trouvé de ${PROJECT_CONTEXT_CHAIN.join(' → ')} ; empilés de la racine du dépôt git au workspace d'exécution, le plus proche en dernier (plafond partagé ${PROJECT_CONTEXT_MAX_BYTES.toLocaleString('fr-FR')} octets, coupe signalée), lus par Autowin.`,
-      source: 'src/main/consignes/context-files.ts:211'
+      source: 'src/main/consignes/context-files.ts#projectContextBlock'
     }
   )
   return { phase, blocks }
@@ -204,7 +208,7 @@ function roleField(role: Role, binding: RoleBinding, catalogue?: ImportedModel[]
   return {
     label: `rôle ${role}`,
     value: `${binding.provider} · ${binding.model ?? 'défaut provider'} · ${binding.reasoningEffort ?? 'défaut'}${phaseOverrides ? ` — overrides phase: ${phaseOverrides}` : ''}${perPhase ? ` — effectif/phase${selonDifficulte}: ${perPhase}` : ''}`,
-    source: 'src/main/profil/roles.ts:65'
+    source: 'src/main/profil/roles.ts#resolvePhaseBinding'
   }
 }
 
@@ -228,13 +232,13 @@ export function buildBehaviourComposition(
       label: 'redirection exécution',
       value:
         "En exécution, si le provider ciblé ne supporte pas l'exécution, le registre REDIRIGE vers un exécuteur local outillé (codex prioritaire) en écrasant le modèle demandé — le rôle configuré n'est alors PAS celui qui exécute.",
-      source: 'src/main/providers/registry.ts:69'
+      source: 'src/main/providers/registry.ts#ProviderRegistry.resolve'
     },
     {
       label: 'défauts provider',
       value:
         'claude→claude-fable-5/high · codex→gpt-5.6-terra/medium · kimi→…/none (appliqués si modèle/effort absents).',
-      source: 'src/main/profil/roles.ts:37'
+      source: 'src/main/profil/roles.ts#PROVIDER_DEFAULT_SELECTIONS'
     }
   ]
 
@@ -244,13 +248,13 @@ export function buildBehaviourComposition(
       value: (['trivial', 'standard', 'critical'] as TaskRegime[])
         .map((rg) => `${rg}: [${phasesForRegime(rg).join(', ')}]`)
         .join(' · '),
-      source: 'src/main/orchestration/task-regime.ts:18'
+      source: 'src/main/orchestration/task-regime.ts#phasesForRegime'
     },
     {
       label: 'signaux déclencheurs',
       value:
         'RegEx déterministe (aucun appel modèle) : signaux CRITICAL (architect/refactor/migrat/sécurité/pipeline/prod…) → critical ; signaux TRIVIAL (typo/rename/lint/format…) + tâche courte → trivial ; sinon standard.',
-      source: 'src/main/orchestration/task-regime.ts:25'
+      source: 'src/main/orchestration/task-regime.ts#classifyRegime'
     }
   ]
 
@@ -259,24 +263,25 @@ export function buildBehaviourComposition(
     {
       label: 'circuit-breaker coût',
       value: `Coupe le run (abort réel) au dépassement des caps. USD cap: ${budgetUsd === null ? 'aucune limite (désactivé)' : `$${budgetUsd.toFixed(2)}`} · Token cap: ${tokenCap ?? 'non défini (désactivé)'} — relus avant chaque run.`,
-      source: 'src/main/orchestration/orchestration-budget.ts:32'
+      source:
+        'src/main/orchestration/execution-supervisor.ts#ExecutionSupervisor.reserveProviderCall'
     },
     {
       label: 'exigence de preuve (mutation)',
       value:
         'Une tâche de MUTATION exige une preuve (evidence mutation+verification) avant le vert, et tourne en sandbox danger-full-access ; sinon read-only. isMutationTask (regex) pilote les deux.',
-      source: 'src/main/orchestration/orchestrator.ts:177'
+      source: 'src/main/orchestration/task-mutation-classifier.ts#isMutationTask'
     },
     {
       label: 'gate de clôture',
       value:
         'evaluateClosure (pur, model-agnostic) bloque sur statut open/red, DoD non cochée, ou signal exit≠0 ; degraded-closed ne bloque jamais.',
-      source: 'src/main/gates/stopgate.ts:31'
+      source: 'src/main/gates/stopgate.ts#evaluateClosure'
     },
     {
       label: 'réparation bornée',
       value: '2 tentatives pour une mutation (la 2e réinjecte les raisons du gate), 1 sinon.',
-      source: 'src/main/orchestration/orchestrator.ts:1088'
+      source: 'src/main/gates/stopgate.ts#plafondDurReparations'
     }
   ]
 
@@ -285,30 +290,30 @@ export function buildBehaviourComposition(
       label: 'RAG Brain',
       value:
         'Récupéré 1×/run (POST 127.0.0.1:8765/query, Bearer token), préfixé en tête du contexte + consigne « priorise le Brain ». Dégrade silencieusement à vide (timeout 5 s / pas de token / serveur absent).',
-      source: 'src/main/brain/brain-retrieval.ts:92'
+      source: 'src/main/brain/brain-retrieval.ts#retrieveBrainContext'
     },
     {
       label: 'TÂCHE',
       value: 'La demande brute, toujours présente en 1ʳᵉ phase.',
-      source: 'src/main/orchestration/orchestrator.ts:541'
+      source: 'src/main/orchestration/orchestrator-contrats.ts#taskForPipelineContext'
     },
     {
       label: 'portage phase→phase',
-      // conv-1582 : affichait « tronquée à 2000 caractères » ; plus aucune coupe depuis le 2026-09-27.
+      // Affichait « tronquée à 2000 caractères » ; plus aucune coupe depuis le 2026-09-27.
       value: 'La sortie de chaque phase est portée entière à la suivante, sans coupe.',
-      source: 'src/main/orchestration/orchestrator-contrats.ts:1140'
+      source: 'src/main/orchestration/orchestrator-contrats.ts#porterVersPhaseSuivante'
     },
     {
       label: 'session-resume chaîné',
       value:
         "Si le provider rend un sessionId, les phases suivantes n'envoient QUE leur consigne (le reste est déjà dans l'historique de session) — contenu réellement envoyé variable/opaque ; cassé dès un fan-out.",
-      source: 'src/main/orchestration/orchestrator.ts:544'
+      source: 'src/main/orchestration/orchestrator-parcours-sequentiel.ts#executePipelinePhase'
     },
     {
       label: 'agrégat juge',
       value:
         "Le juge reçoit la concaténation des sorties de phases : chaque bloc a une part de 6000 caractères, la place laissée par les courtes revient aux longues, 60 000 au total ; le bilan de fin d'étape passe entier.",
-      source: 'src/main/juge/agregat-juge.ts:113'
+      source: 'src/main/juge/agregat-juge.ts#agregerPhasesPourLeJuge'
     }
   ]
 
@@ -324,22 +329,22 @@ export function buildBehaviourComposition(
     {
       label: 'panel scout',
       value: `${panelValue('scout')} À partir de 2 membres, divergence parallèle puis synthèse.`,
-      source: 'src/main/orchestration/orchestrator.ts:554'
+      source: 'src/main/orchestration/orchestrator-parcours-sequentiel.ts#executePipelinePhase'
     },
     {
       label: 'panel frame',
       value: `${panelValue('frame')} À partir de 2 membres, divergence parallèle puis synthèse.`,
-      source: 'src/main/orchestration/orchestrator.ts:554'
+      source: 'src/main/orchestration/orchestrator-parcours-sequentiel.ts#executePipelinePhase'
     },
     {
       label: 'panel terrain',
       value: `${panelValue('terrain')} À partir de 2 membres, préparation parallèle puis synthèse.`,
-      source: 'src/main/orchestration/orchestrator.ts:1191'
+      source: 'src/main/orchestration/orchestrator-parcours-sequentiel.ts#executePipelinePhase'
     },
     {
       label: 'panel judge + quorum',
       value: `${panelValue('judge')} Les votes valides sont agrégés ; le seuil de quorum est calculé sur le nombre de votants valides.`,
-      source: 'src/main/orchestration/orchestrator.ts:941'
+      source: 'src/main/orchestration/quorum.ts#seuilDuPanel'
     }
   ]
 
@@ -349,7 +354,7 @@ export function buildBehaviourComposition(
         label: 'constitution',
         value:
           "os.chat (commande chat_send) utilise la CONSTITUTION comme system par défaut du registre. C'est désormais la MÊME source que les phases orchestrées et le chat cockpit — plus de doublon kit-soul.",
-        source: 'src/main/consignes/constitution.ts:14',
+        source: 'src/main/consignes/constitution.ts#CONSTITUTION',
         excerpt: injectedText(CONSTITUTION)
       }
     ],
@@ -357,7 +362,7 @@ export function buildBehaviourComposition(
       {
         label: 'provider explicite ou binding de rôle',
         value: `Sans provider explicite, le chat direct utilise provider, modèle et effort du rôle demandé (défaut orchestrator: ${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}). Avec un provider explicite, il remplace le provider et envoie les options modèle/effort vides : le binding du rôle est alors ignoré. Aucune phase, aucun Brain, aucun garde-fou.`,
-        source: 'src/main/app/os.ts:184'
+        source: 'src/main/app/os.ts#AutowinOS.chat'
       }
     ]
   }
@@ -368,7 +373,7 @@ export function buildBehaviourComposition(
         label: 'composition cockpit',
         value:
           'Le chat visible assemble CONSTITUTION + consigne de pilotage + style + contexte projet, puis ajoute le contexte RAG récupéré pour le dernier message utilisateur.',
-        source: 'src/main/agent-pilot/agent-pilot.ts:245'
+        source: 'src/main/agent-pilot/systeme-du-tour.ts#systemeDuTour'
       }
     ],
     retrievedContext: [
@@ -376,7 +381,7 @@ export function buildBehaviourComposition(
         label: 'Brain signé',
         value:
           'Une récupération est lancée au début de chaque tour cockpit sur le dernier message utilisateur. La réponse Brain est vérifiée par signature, bornée, et une panne dégrade ce bloc à vide.',
-        source: 'src/main/agent-pilot/agent-pilot.ts:216'
+        source: 'src/main/agent-pilot/agent-pilot.ts#AgentPilot.chat'
       }
     ],
     turnContext: [
@@ -384,26 +389,26 @@ export function buildBehaviourComposition(
         label: 'catalogue de commandes + état courant',
         value:
           "À chaque tour, le system prompt reçoit le catalogue vivant des commandes ; le message reçoit un snapshot courant de l'application.",
-        source: 'src/main/agent-pilot/agent-pilot.ts:213'
+        source: 'src/main/agent-pilot/systeme-du-tour.ts#systemeDuTour'
       },
       {
         label: 'historique + pièces jointes',
         value:
           "L'historique complet est reconstruit dans le message. Les pièces jointes du dernier message sont envoyées uniquement à la première itération.",
-        source: 'src/main/agent-pilot/agent-pilot.ts:257'
+        source: 'src/main/agent-pilot/message-du-tour.ts#messageDuTour'
       },
       {
         label: "exécution + directives + cap d'itérations",
         value:
           "Toutes les commandes du catalogue sont exécutées directement. Les directives reçues pendant le tour sont drainées avant l'itération suivante. Le cockpit est borné à 12 itérations et termine en erreur explicite si le cap est atteint.",
-        source: 'src/main/agent-pilot/agent-pilot.ts:274'
+        source: 'src/main/agent-pilot/agent-pilot.ts#AgentPilot.chat'
       }
     ],
     modelSelection: [
       {
         label: 'binding orchestrator',
         value: `Le cockpit utilise le binding orchestrator (${bindings.orchestrator.provider}/${bindings.orchestrator.model ?? 'défaut'}) puis peut piloter l'application par commandes.`,
-        source: 'src/main/agent-pilot/agent-pilot.ts:211'
+        source: 'src/main/agent-pilot/agent-pilot.ts#AgentPilot.chat'
       }
     ]
   }

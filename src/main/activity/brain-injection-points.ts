@@ -65,16 +65,19 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     emission: 'spool',
     sites: [
       {
-        file: 'src/main/orchestration/orchestrator.ts',
+        file: 'src/main/orchestration/orchestrator-parcours-sequentiel.ts',
         anchor: ': await (this.deps.retrieveBrain ?? retrieveBrainContext)(task, {'
       },
-      // Brain PERSO (conv-1233) : interrogé en même temps, une seule trace pour les deux.
+      // Brain PERSO : interrogé en même temps, une seule trace pour les deux.
       {
-        file: 'src/main/orchestration/orchestrator.ts',
+        file: 'src/main/orchestration/orchestrator-parcours-sequentiel.ts',
         anchor: '? (this.deps.retrieveBrain ?? retrieveBrainContext)(task, {'
       }
     ],
-    trace: { file: 'src/main/orchestration/orchestrator.ts', anchor: 'onBrainRetrieved?.({' },
+    trace: {
+      file: 'src/main/orchestration/orchestrator-parcours-sequentiel.ts',
+      anchor: 'onBrainRetrieved?.({'
+    },
     pourquoi:
       "Liste des notes candidates (titre, chemin, taille) injectée en tête de contexte de chaque phase du run ; chaque phase ouvre en entier celles qu'elle juge nécessaires. Avec un Brain perso réglé, ses notes s'ajoutent, préfixées perso:."
   },
@@ -92,7 +95,7 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
         file: 'src/main/commands/commands.ts',
         anchor: "this.retrieveBrain(decision.query, { corpus, mode: 'candidates' })"
       },
-      // Brain PERSO (conv-1233) : interrogé en même temps, une seule trace pour les deux.
+      // Brain PERSO : interrogé en même temps, une seule trace pour les deux.
       {
         file: 'src/main/commands/commands.ts',
         anchor: "this.retrieveBrain(decision.query, { env: envPerso, mode: 'candidates' })"
@@ -109,9 +112,15 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     injecte: true,
     emission: 'spool',
     sites: [
-      // Brain PERSO (conv-1233) : chemin `perso:`, ouvert sur son propre serveur.
-      { file: 'src/main/commands/outils-metier.ts', anchor: '? await runBrainGraph(argsPerso, depsPerso)' },
-      { file: 'src/main/commands/outils-metier.ts', anchor: ': await runBrainRead(argsPerso, depsPerso)' },
+      // Brain PERSO : chemin `perso:`, ouvert sur son propre serveur.
+      {
+        file: 'src/main/commands/outils-metier.ts',
+        anchor: '? await runBrainGraph(argsPerso, depsPerso)'
+      },
+      {
+        file: 'src/main/commands/outils-metier.ts',
+        anchor: ': await runBrainRead(argsPerso, depsPerso)'
+      },
       {
         file: 'src/main/commands/outils-metier.ts',
         anchor:
@@ -129,7 +138,10 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     injecte: true,
     emission: 'spool',
     sites: [
-      { file: 'src/main/brain/brain-context.ts', anchor: '? retrieveBrain(boundedQuery, meta?.conversationId)' },
+      {
+        file: 'src/main/brain/brain-context.ts',
+        anchor: '? retrieveBrain(boundedQuery, meta?.conversationId)'
+      },
       { file: 'src/main/brain/brain-context.ts', anchor: '${origin}/query`' }
     ],
     trace: { file: 'src/main/brain/brain-context.ts', anchor: "kind: 'pousse'" },
@@ -144,14 +156,17 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     emission: 'spool',
     sites: [
       { file: 'src/main/brain/brain-titres-du-tour.ts', anchor: ': await retrieve(requete, {' },
-      // Brain PERSO (conv-1233) : interrogé en même temps que celui de l'équipe.
+      // Brain PERSO : interrogé en même temps que celui de l'équipe.
       {
         file: 'src/main/brain/brain-titres-du-tour.ts',
         anchor:
           "retrieve(requete, { env: envPerso, mode: 'candidates', timeoutMs: TITRES_DELAI_MS })"
       }
     ],
-    trace: { file: 'src/main/brain/brain-titres-du-tour.ts', anchor: 'point: POINT_TITRES_DU_TOUR' },
+    trace: {
+      file: 'src/main/brain/brain-titres-du-tour.ts',
+      anchor: 'point: POINT_TITRES_DU_TOUR'
+    },
     pourquoi:
       "Chaque tour de chat reçoit le chemin des 3 notes les plus proches au plus (jamais leur contenu), rien quand aucune n'est proche ; le modèle ouvre les utiles avec `brain_read`. Avec un Brain perso réglé, jusqu'à 3 notes perso en plus, préfixées perso:."
   },
@@ -167,7 +182,7 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
       // sources. Une liste d'inventaire ne doit pas se faire prendre pour la surface qu'elle decrit.
       { file: 'src/main/ipc/brain.ts', anchor: "handle('os:searchBrain'" },
       { file: 'src/preload/index.ts', anchor: "ipcRenderer.invoke('os:searchBrain'" },
-      // Brain PERSO ouvert dans la vue Knowledge (conv-1233) : cherché sur son propre serveur.
+      // Brain PERSO ouvert dans la vue Knowledge : cherché sur son propre serveur.
       {
         file: 'src/main/ipc/brain.ts',
         anchor: 'await retrieveBrainContext(query, { env: envPerso })'
@@ -193,8 +208,16 @@ export const BRAIN_INJECTION_POINTS: readonly BrainInjectionPoint[] = [
     kind: 'write',
     injecte: false,
     emission: 'spool',
-    sites: [{ file: 'src/main/commands/apprentissage.ts', anchor: 'const deposited = await rememberFact(' }],
-    trace: { file: 'src/main/commands/apprentissage.ts', anchor: 'query: `promotion: ${trustedProposal.title}`' },
+    sites: [
+      {
+        file: 'src/main/commands/apprentissage.ts',
+        anchor: 'const deposited = await rememberFact('
+      }
+    ],
+    trace: {
+      file: 'src/main/commands/apprentissage.ts',
+      anchor: 'query: `promotion: ${trustedProposal.title}`'
+    },
     pourquoi: 'Dépôt automatique d’une leçon validée par les preuves du run.'
   },
   {

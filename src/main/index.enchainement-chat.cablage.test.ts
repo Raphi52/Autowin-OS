@@ -6,7 +6,7 @@ import { sourceProcessPrincipal } from './app/source-process-principal.test-help
  * l'exécution ne peut pas atteindre). Le comportement lui-même — quels fichiers partent, lesquels
  * restent — est joué sur de vrais dépôts git dans chat-turn-publication.test.ts.
  *
- * Avant conv-871 (2026-09-26), l'interrupteur « Enchaînement auto » ne publiait QUE les tâches
+ * (2026-09-26), l'interrupteur « Enchaînement auto » ne publiait QUE les tâches
  * d'agent : 1 commit sur 64 poussé tout seul en deux jours, tout le travail du chat attendait un clic.
  */
 const source = sourceProcessPrincipal()
@@ -26,19 +26,25 @@ describe('enchaînement auto du chat — câblage de fin de tour', () => {
   it('publie seulement un tour réussi et non arrêté, sans faire attendre la réponse', () => {
     const apres = corps.slice(corps.indexOf('await lancerTour(...args)'))
     expect(apres).toMatch(/if \(debutPublication && resultat\.ok && !resultat\.cancelled\)/)
-    expect(apres).toMatch(/void os\s*\.publishChatTurn\(/)
-    expect(apres).not.toMatch(/await os\s*\.publishChatTurn\(/)
+    // La promesse est gardée pour le bloc git de fin de tour, puis consommée par `void` : la
+    // réponse n'attend ni la publication, ni ce bloc.
+    expect(apres).toMatch(/const rapportDuTour = os\s*\.publishChatTurn\(/)
+    expect(apres).toMatch(/void rapportDuTour\b/)
+    expect(apres).toMatch(/void Promise\.all\(\[amontAuDebut, publicationDuTour\]\)/)
+    expect(apres).not.toMatch(
+      /await os\s*\.publishChatTurn\(|await (rapportDuTour|publicationDuTour)\b/
+    )
     expect(apres).toContain('turnId: resultat.turnId')
   })
 
-  // conv-1339 : la condition elle-même est jouée dans git-apres-fil.test.ts ; ici, qu'elle reçoive
+  // La condition elle-même est jouée dans git-apres-fil.test.ts ; ici, qu'elle reçoive
   // le VRAI rapport de la publication, et qu'aucun tour ne parte hors de sa décision.
   it('passe le rapport de publication à la décision /git, sans lancer de tour hors d elle', () => {
     const apres = corps.slice(corps.indexOf('.publishChatTurn('))
     expect(apres).toMatch(/\.then\(\(rapport\) => \{\s*const decision = decisionGitApresFil\(\{/)
     expect(apres).toContain('accord: os.gitApresFilActif()')
     expect(apres).toContain('rapport\n')
-    // conv-1544 : un lot de plan est rendu au chef (`filDeLaPasse`), le fil d'origine suit.
+    // Un lot de plan est rendu au chef (`filDeLaPasse`), le fil d'origine suit.
     expect(apres).toMatch(
       /if \(decision\.lancer\)\s*suiviGitApresFil\.file\?\.ajouter\(\s*filDeLaPasse\(\s*conversationId,[^;]*decision\.fichiers,\s*conversationId\s*\)/
     )
@@ -58,7 +64,7 @@ describe('enchaînement auto du chat — câblage de fin de tour', () => {
     expect(source).not.toMatch(/runPrompt\([^)]*promptGitDuFil/)
   })
 
-  // conv-1569 : « je veux pas que ça envoie un message à ma place » — aucun tour dans la passe.
+  // « je veux pas que ça envoie un message à ma place » — aucun tour dans la passe.
   it('la passe publie par l’app et le petit modèle, sans ouvrir de tour dans le fil', () => {
     const debut = source.indexOf('suiviGitApresFil.file = new FileGitApresFil({')
     const bloc = source.slice(debut, source.indexOf('noterTravauxTentes', debut))

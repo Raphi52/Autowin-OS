@@ -22,6 +22,44 @@ const allFields = (c: ReturnType<typeof buildBehaviourComposition>): InfluencerF
   ...c.direct.modelSelection
 ]
 
+/**
+ * La ligne qui DÉCLARE le symbole cité par `fichier.ts#nom` (fonction, constante, classe, ou
+ * fonction nommée locale) ou `fichier.ts#Classe.methode`, vide s'il n'est pas déclaré là.
+ *
+ * Une méthode ne compte qu'indentée d'un cran sous sa classe : un simple appel `resolve(...)` dans
+ * le corps d'une autre méthode ne doit pas passer pour la déclaration.
+ */
+const declarationCitee = (source: string): string => {
+  const [, fichier, symbole] =
+    /^(src\/[\w./-]+\.tsx?)#([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)?)$/u.exec(source) ?? []
+  if (!fichier || !symbole) return ''
+  const lignes = readFileSync(new URL(`../../../${fichier}`, import.meta.url), 'utf8').split(
+    /\r?\n/u
+  )
+  const [premier, membre] = symbole.split('.')
+  const motifs = membre
+    ? [
+        new RegExp(`^(?:export\\s+)?(?:abstract\\s+)?class\\s+${premier}\\b`, 'u'),
+        new RegExp(
+          `^ {2}(?:(?:private|public|protected|static|async|readonly|override)\\s+)*${membre}\\s*[(<]`,
+          'u'
+        )
+      ]
+    : [
+        new RegExp(
+          `^(?:export\\s+)?(?:(?:async\\s+)?function\\*?\\s+${premier}\\s*[(<]|(?:const|let)\\s+${premier}\\s*[=:]|(?:abstract\\s+)?class\\s+${premier}\\b)|^\\s+(?:const|let)\\s+${premier}\\s*=\\s*(?:async\\s*)?\\(`,
+          'u'
+        )
+      ]
+  let depart = 0
+  for (const motif of motifs) {
+    const trouvee = lignes.findIndex((ligne, n) => n >= depart && motif.test(ligne))
+    if (trouvee < 0) return ''
+    depart = trouvee + 1
+  }
+  return lignes[depart - 1] ?? ''
+}
+
 describe('buildBehaviourComposition — COMPLÉTUDE', () => {
   it('couvre les 7 phases orchestrées, chacune avec ≥1 bloc de system prompt', () => {
     const c = build()
@@ -40,12 +78,28 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
     expect(c.direct.systemPrompt.length).toBeGreaterThan(0)
   })
 
-  it('trace CHAQUE influenceur à une source file:line', () => {
+  it('trace CHAQUE influenceur à un symbole déclaré dans le fichier cité', () => {
     for (const f of allFields(build())) {
-      expect(f.source, `champ "${f.label}" sans source`).toMatch(/\.ts:\d+$/)
+      expect(f.source, `champ "${f.label}" : source sans fichier#nom`).toMatch(/\.ts#[\w$.]+$/u)
+      expect(
+        declarationCitee(f.source),
+        `champ "${f.label}" : ${f.source} n'est déclaré nulle part`
+      ).not.toBe('')
       expect(f.label.length).toBeGreaterThan(0)
       expect(f.value.length).toBeGreaterThan(0)
     }
+  })
+
+  it('refuse un nom absent, un ancien fichier:ligne, et un appel pris pour une méthode', () => {
+    expect(declarationCitee('src/main/juge/agregat-juge.ts#agregerPhasesPourLeJuge')).toMatch(
+      /export function agregerPhasesPourLeJuge\(/u
+    )
+    expect(declarationCitee('src/main/juge/agregat-juge.ts#fonctionQuiNExistePas')).toBe('')
+    expect(declarationCitee('src/main/juge/agregat-juge.ts:113')).toBe('')
+    // `executerLesCommandes` est APPELÉE dans AgentPilot.chat, mais déclarée ailleurs.
+    expect(
+      declarationCitee('src/main/agent-pilot/agent-pilot.ts#AgentPilot.executerLesCommandes')
+    ).toBe('')
   })
 
   it('reflète les influenceurs clés : Brain, redirection exécution, régime, circuit-breaker, constitution', () => {
@@ -134,7 +188,7 @@ describe('buildBehaviourComposition — COMPLÉTUDE', () => {
     expect(direct).toContain('binding du rôle est alors ignoré')
   })
 
-  it('le juge n’injecte PAS la discipline de pipeline (fidèle à orchestrator.ts:527)', () => {
+  it('le juge n’injecte PAS la discipline de pipeline', () => {
     const judge = build().orchestrated.systemPrompt.find((p) => p.phase === 'judge')!
     expect(judge.blocks.some((b) => b.label === 'discipline')).toBe(false)
     const build_ = build().orchestrated.systemPrompt.find((p) => p.phase === 'build')!
@@ -224,12 +278,12 @@ describe("buildBehaviourComposition — l'effort par étape affiché suit la rè
 })
 
 /**
- * PORTAGE ET AGRÉGAT DU JUGE : la valeur affichée et la ligne citée sont celles du code (conv-1582).
+ * PORTAGE ET AGRÉGAT DU JUGE : la valeur affichée et la fonction citée sont celles du code.
  *
  * Mesuré le 2026-11-05 : « portage phase→phase » affichait « tronquée à 2000 caractères » avec la
  * source `orchestrator.ts:844`, alors que `porterVersPhaseSuivante` ne coupe plus rien depuis le
  * 2026-09-27 et vit dans `orchestrator-contrats.ts`. Entrées qui rendent ce test rouge : le mot
- * « tronquée » remis dans la valeur, ou une source qui ne pointe plus sur la ligne de la fonction.
+ * « tronquée » remis dans la valeur, ou une source qui ne nomme plus la fonction là où elle est déclarée.
  */
 describe('buildBehaviourComposition — portage et agrégat du juge (conv-1582)', () => {
   const champ = (label: string): InfluencerField => {
@@ -237,23 +291,18 @@ describe('buildBehaviourComposition — portage et agrégat du juge (conv-1582)'
     expect(trouve, label).toBeDefined()
     return trouve!
   }
-  const ligneCitee = (source: string): string => {
-    const [, fichier, ligne] = /^(.+\.ts):(\d+)$/u.exec(source) ?? []
-    const texte = readFileSync(new URL(`../../../${fichier}`, import.meta.url), 'utf8')
-    return texte.split(/\r?\n/u)[Number(ligne) - 1] ?? ''
-  }
 
   it('le portage phase→phase est annoncé ENTIER et cite porterVersPhaseSuivante', () => {
     const portage = champ('portage phase→phase')
     expect(portage.value).not.toMatch(/tronqu|2000/iu)
     expect(portage.value).toMatch(/entière/iu)
-    expect(ligneCitee(portage.source)).toMatch(/export function porterVersPhaseSuivante\(/u)
+    expect(declarationCitee(portage.source)).toMatch(/export function porterVersPhaseSuivante\(/u)
   })
 
   it("l'agrégat du juge cite la fonction qui le borne", () => {
     const agregat = champ('agrégat juge')
     expect(agregat.value).toMatch(/6000/u)
     expect(agregat.value).toMatch(/60 000/u)
-    expect(ligneCitee(agregat.source)).toMatch(/export function agregerPhasesPourLeJuge\(/u)
+    expect(declarationCitee(agregat.source)).toMatch(/export function agregerPhasesPourLeJuge\(/u)
   })
 })

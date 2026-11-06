@@ -5,7 +5,7 @@ import { INTERVALLE_BALAYAGE_MS } from './repechage-automatique'
 import { RunWorktreeCoordinator } from './run-worktree-coordinator'
 
 /**
- * UNE INSTANCE DE TEST NE RÉCUPÈRE RIEN (bulletin de maintenance du 2026-10-31, conv-1048).
+ * UNE INSTANCE DE TEST NE RÉCUPÈRE RIEN (bulletin de maintenance du 2026-10-31).
  *
  * Vécu deux fois : `lot5nav` le 29/10 à 19:26 et `sonde-fondu-conv-1322` le 30/10 à 14:00. Une
  * instance a son propre dossier de données, mais elle partage le `.git` du vrai dépôt. Sa
@@ -74,7 +74,8 @@ describe('instance de test isolée — aucune récupération sur le dépôt part
   it('os.ts branche bien le réglage sur le mode de lancement réel', () => {
     const source = readFileSync(join(__dirname, '../app/os.ts'), 'utf8')
     expect(source).toMatch(
-      /sansRecuperation:\s*resolveAutomationInstanceMode\(process\.argv, process\.env, app\.isPackaged\)\s*\.isolated/
+      // `app?.isPackaged === true` : hors d'Electron (bancs e2e), `app` n'existe pas.
+      /sansRecuperation:\s*resolveAutomationInstanceMode\(\s*process\.argv,\s*process\.env,\s*app\?\.isPackaged === true\s*\)\s*\.isolated/
     )
   })
 })
