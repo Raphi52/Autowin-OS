@@ -9,6 +9,7 @@
  */
 import { appendFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { masquerValeurs } from './coffre-cles'
 
 export interface CrashHandlerOptions {
   /** Répertoire où append le journal des crashes non fatals (créé si absent). */
@@ -28,12 +29,23 @@ export interface CrashHandlerOptions {
  * Redaction best-effort de secrets courants (token Bearer, clés, URL avec credentials) : une lib
  * tierce peut insérer un token dans un message/stack d'erreur (ex. dump d'une requête HTTP) qui
  * finirait en clair dans crash.log. On masque avant d'écrire. (Guardian.)
+ *
+ * Les valeurs du coffre à clés passent EN PREMIER (`[secret:NOM]`) : elles sont connues exactement,
+ * alors que les motifs ne voient une clé que derrière « Bearer » ou « token= ». Coffre vide ou pas
+ * encore lisible (avant `app.whenReady`) : le texte ressort tel quel, le masquage ne lève jamais.
  */
 export function redactSecrets(text: string): string {
-  return text
-    .replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi, '$1***')
-    .replace(/((?:authorization|api[-_]?key|token|secret|password)["']?\s*[:=]\s*["']?)[^\s"',}]+/gi, '$1***')
-    .replace(/(https?:\/\/[^:/\s]+:)[^@\s/]+(@)/gi, '$1***$2')
+  return (
+    masquerValeurs(text)
+      .replace(/(Bearer\s+)[A-Za-z0-9._-]+/gi, '$1***')
+      // Le repère `[secret:NOM]` posé par le coffre n'est pas une clé : sans l'exclure, à gauche comme à
+      // droite, le motif « secret: » en effacerait le nom (« [secret:*** »).
+      .replace(
+        /((?<!\[)(?:authorization|api[-_]?key|token|secret|password)["']?\s*[:=]\s*["']?)(?!\[secret:)[^\s"',}]+/gi,
+        '$1***'
+      )
+      .replace(/(https?:\/\/[^:/\s]+:)[^@\s/]+(@)/gi, '$1***$2')
+  )
 }
 
 /** JSON.stringify infaillible (valeurs circulaires → placeholder au lieu de throw). */

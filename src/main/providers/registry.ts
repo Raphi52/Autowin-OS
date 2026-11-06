@@ -11,6 +11,7 @@ import {
 import { resolveProviderTimeoutMs, withIdleDeadline } from './watchdog'
 import { estMurDeQuota, instantDeRetourAnnonce } from '../../shared/reprise-quota'
 import type { ExecutionSupervisor } from '../orchestration/execution-supervisor'
+import { masquerErreur, masquerSortie } from './sortie-masquee'
 
 /**
  * Plafond DUR de coordination : même si un adaptateur défaille (promesse jamais réglée, event `close`
@@ -565,15 +566,17 @@ export class ProviderRegistry {
         if (!effectiveOptions.signal.aborted && !spawnFailure) {
           chunksLivres += 1
           battreCoordination()
-          onChunk?.(step.value)
+          // Entrée unique de la sortie des moteurs : une valeur du coffre n'atteint ni le fil ni le
+          // journal de tour (`sortie-masquee.ts`).
+          onChunk?.(masquerSortie(step.value))
         }
         step = await nextStep()
       }
       // `spawnIntent(false)` est terminal par contrat. Même un adaptateur défaillant qui retourne
       // ensuite un résultat ne peut donc faire valider un succès déjà persisté comme échec.
       if (spawnFailure) throw spawnFailure
-      // Valeur de retour du generator = SendResult final.
-      return step.value
+      // Valeur de retour du generator = SendResult final, masqué comme les morceaux.
+      return masquerSortie(step.value)
     })()
     // La réservation suit la vraie fin pendant une grâce bornée. Au-delà, elle est réglée en échec
     // conservateur et la pompe du registre est coupée, même si un provider tiers ignore encore l'abort.
@@ -586,6 +589,8 @@ export class ProviderRegistry {
           return result
         },
         (error) => {
+          // L'erreur d'un moteur cite souvent la fin de sa sortie : masquée avant tout lecteur.
+          masquerErreur(error)
           // La coupure de la pompe de coordination ne prouve pas que le provider/CLI est mort. Sa
           // réservation reste active jusqu'à ce que le `next()` réel ou `return()` du générateur
           // termine ; le checkpoint continue ainsi de verrouiller toute reprise concurrente.
