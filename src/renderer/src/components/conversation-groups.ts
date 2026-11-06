@@ -45,6 +45,18 @@ export interface ConversationLike {
    */
   categorie?: string
   autoKaizen?: unknown
+  /** La copie de travail du fil : tant qu'il y travaille, il se groupe sous son dossier d'avant. */
+  copieDuFil?: { chemin?: string; dossierAvant?: string }
+}
+
+/** Le dossier qui groupe le fil : celui d'avant sa copie quand il travaille dedans. */
+function dossierQuiGroupe(conversation: ConversationLike): string | undefined {
+  const chemin = conversation.projectPath?.trim()
+  const copie = conversation.copieDuFil
+  const cle = (dossier: string): string => dossier.replace(/[\\/]+$/, '').toLowerCase()
+  if (chemin && typeof copie?.chemin === 'string' && cle(copie.chemin) === cle(chemin))
+    return copie.dossierAvant?.trim() || undefined
+  return chemin
 }
 
 /**
@@ -121,7 +133,8 @@ export function groupeDe(
   // fix-ok: cause mesurée dans groupeDe : le groupement lisait projectPath, donc classer = écrire un dossier de travail. La catégorie passe devant, et elle seule groupe quand elle est là.
   const libelle = conversation.categorie?.trim()
   if (libelle) return { key: libelle, label: libelle, kind: 'categorie' }
-  const chemin = conversation.projectPath?.trim()
+  // Un fil passé dans sa copie reste là où il était : sans cela, chaque copie formait son groupe.
+  const chemin = dossierQuiGroupe(conversation)
   if (chemin) {
     const key = chemin.replace(/[\\/]+$/, '') || chemin
     return { key, label: nomDeDossier(key), kind: 'dossier' }

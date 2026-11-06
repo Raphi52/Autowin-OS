@@ -75,7 +75,11 @@ import {
   racineBrainPerso
 } from '../brain/brain-perso'
 import { defaultBrainRoot } from '../brain/brain-paths'
-import type { BrainPersoState, BrainReglageState } from '../../shared/preload-contracts'
+import type {
+  BrainPersoState,
+  BrainReglageState,
+  ExecutionWorkspaceState
+} from '../../shared/preload-contracts'
 import { restoreTrashedKnowledge, retractKnowledgeCandidate } from '../brain/brain-inbox'
 import { DEFAULT_ORCHESTRATION_BUDGET } from '../orchestration/orchestration-budget'
 import { type AppEvent } from '../commands/commands'
@@ -175,6 +179,10 @@ import { annoncerFermeture } from '../app/journal-arrets'
 import { consommerReprise } from '../app/redemarrage-reprise'
 import {
   avertissementDossierConversation,
+  copieOuTravailleLeFil,
+  ecrireReglageCopieParFil,
+  lireReglageCopieParFil,
+  preparerLeDossierDuTour,
   refuserTourSiDossierDisparu,
   diagnostiqueDossierConversation
 } from '../conversations/bascule-dossier-conversation'
@@ -229,7 +237,8 @@ import {
   lireStyleMascotte,
   styleAffiche
 } from '../mascotte/mascotte-reglage'
-import { photographierLeCode } from '../git/photo-du-code'
+import { ouvrirLaCopieDuFil, photographierLeCode } from '../git/photo-du-code'
+import { messageLiaison } from '../store/dependances-copie-agent'
 import { materializeChatArtifact } from '../store/chat-artifact-store'
 import { filterNativePreflight, readNativePreflight } from '../activity/native-preflight'
 import { nativeSpoolRoot, appendNativeTrace } from '../activity/native-trace-spool'
@@ -1453,19 +1462,18 @@ Le fil reprend ensuite normalement.`
   // Le DOSSIER DE TRAVAIL : le depot sur lequel les runs s'executent. Distinct du selecteur de
   // BehaviourView juste en dessous, qui ne sert qu'a INSPECTER les fichiers d'instructions d'un
   // dossier sans rien changer a l'execution.
-  const executionWorkspaceState = (): {
-    path: string
-    chosen: string | null
-    isGitRepo: boolean
-    restartRequired: boolean
-  } => {
+  /** Le réglage « une copie par fil », relu au début de chaque tour (`passerLeFilDansSaCopie`). */
+  const reglageCopieParFil = (): string =>
+    join(ensureAutowinAppData(appDataRoot), 'copie-par-fil.json')
+  const executionWorkspaceState = (): ExecutionWorkspaceState => {
     const chosen = readExecutionWorkspacePreference() ?? null
     return {
       path: os.executionWorkspace,
       chosen,
       isGitRepo: estDansUnDepotGit(os.executionWorkspace),
       // Le workspace est fige au demarrage : un choix different de l'actif exige un redemarrage.
-      restartRequired: chosen !== null && chosen !== os.executionWorkspace
+      restartRequired: chosen !== null && chosen !== os.executionWorkspace,
+      copieParFil: lireReglageCopieParFil(reglageCopieParFil())
     }
   }
 
@@ -1549,6 +1557,15 @@ Le fil reprend ensuite normalement.`
   ipcMain.handle('os:execution-workspace:reset', (event) => {
     assertTrustedRendererSender(event, 'Dossier de travail')
     clearExecutionWorkspacePreference()
+    return executionWorkspaceState()
+  })
+
+  // Éteindre « une copie par fil » ramène les tours SUIVANTS au dossier partagé ; un tour en cours
+  // garde le sien. Un disque qui refuse l'écriture lève : l'écran le dit au lieu de mentir.
+  ipcMain.handle('os:execution-workspace:copie-par-fil', (event, actif: unknown) => {
+    assertTrustedRendererSender(event, 'Dossier de travail')
+    if (!ecrireReglageCopieParFil(actif === true, reglageCopieParFil()))
+      throw new Error('Impossible d’enregistrer le réglage « Une copie par fil ».')
     return executionWorkspaceState()
   })
 
@@ -1707,6 +1724,11 @@ Le fil reprend ensuite normalement.`
     }
     return rattacherLaBrancheAuxFiches(branche, source)
   }
+  /**
+   * Où s'ouvre la copie de chaque fil : le MÊME dossier que les essais et les retours à un tour
+   * (canal ci-dessous), parce que « Garder » ne reconnaît une copie que directement dedans.
+   */
+  const dossierDesRetours = (): string => join(ensureAutowinAppData(appDataRoot), 'retours-de-tour')
   // Les canaux des conversations vivent dans src/main/ipc/conversations.ts.
   registerConversationsIpc({
     os,
@@ -2140,7 +2162,11 @@ Le fil reprend ensuite normalement.`
   const alignerDossierSurLaDemande = (conversationId: string, messages: Message[]): void => {
     const dernier = [...messages].reverse().find((m) => m.role === 'user')?.content
     if (typeof dernier !== 'string') return
-    const actif = dossierDuTour(conversationId)
+    // Un fil dans SA copie travaille sur le dépôt de cette copie : citer un fichier de ce dépôt
+    // (D:\AutoWinOS\src\…) ne le fait pas sortir de sa copie, seul un AUTRE projet le fait.
+    const actif =
+      copieOuTravailleLeFil(os.conversations.get(conversationId))?.depot ??
+      dossierDuTour(conversationId)
     const cite = depotCiteDansLeMessage(dernier, actif)
     if (!cite) return
     try {
@@ -2183,15 +2209,27 @@ Le fil reprend ensuite normalement.`
       : typeof dernierUtilisateur === 'string'
         ? [{ role: 'user', content: dernierUtilisateur }]
         : conversation.messages
-    const actif = dossierDuTour(conversationId)
+    /*
+     * Un fil dans SA copie se range comme le fil qu'il était : né sans dossier, il reste rangeable
+     * dans un autre projet au premier message ; rangé, il ne l'est pas. Le dossier actif est le dépôt
+     * de la copie, et la copie d'un fil n'est jamais proposée comme projet connu.
+     */
+    const saCopie = copieOuTravailleLeFil(conversation)
+    const actif = saCopie?.depot ?? dossierDuTour(conversationId)
     const applique = await rangerConversationSurLePremierMessage({
-      conversation: { projectPath: conversation.projectPath, messages: messagesConversation },
+      conversation: {
+        projectPath: saCopie ? saCopie.dossierAvant : conversation.projectPath,
+        messages: messagesConversation
+      },
       categorie: conversation.categorie,
       dossiersConnus: [
         ...new Set(
           os.conversations
             .list()
-            .map((c) => c.projectPath?.trim())
+            .map((c) => {
+              const copie = copieOuTravailleLeFil(c)
+              return (copie ? copie.dossierAvant : c.projectPath)?.trim()
+            })
             .filter((chemin): chemin is string => Boolean(chemin))
         )
       ],
@@ -2238,9 +2276,16 @@ Le fil reprend ensuite normalement.`
       finDuTour,
       toujoursNonRangee: () => {
         const actuelle = os.conversations.get(conversationId)
-        return Boolean(actuelle && !actuelle.projectPath?.trim() && !actuelle.categorie?.trim())
+        const copie = copieOuTravailleLeFil(actuelle)
+        const range = copie ? copie.dossierAvant : actuelle?.projectPath
+        return Boolean(actuelle && !range?.trim() && !actuelle.categorie?.trim())
       },
-      ranger: (chemin) => os.conversations.rangerDansDossier(conversationId, chemin),
+      // Le dépôt de sa copie : le fil y travaille déjà, par elle. Le ranger dans le dépôt lui-même
+      // le sortirait de sa copie pour l'y faire revenir au tour suivant.
+      ranger: (chemin) => {
+        if (saCopie && memeDossier(chemin, saCopie.depot)) return undefined
+        return os.conversations.rangerDansDossier(conversationId, chemin)
+      },
       // Le tour est deja parti : l'annonce passe AU-DESSUS de sa reponse, vierge, en cours OU finie.
       // Un rangement differe l'ecrit APRES la fin du tour : en fin de fil, elle masquait la suite
       // proposee au champ pre-rempli et au mode auto (tour 2fefb532-3b2c-489c-9bc4-ef90c6ee4eba).
@@ -2255,6 +2300,46 @@ Le fil reprend ensuite normalement.`
     if (!applique) return
     broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
     broadcast({ type: 'refresh', scope: 'conversations' })
+  }
+
+  /**
+   * LE FIL PASSE DANS SA COPIE AU DÉBUT DE SON TOUR (`preparerLeDossierDuTour`). Le dépôt partagé est
+   * celui d'où tourne l'app, et seulement s'il est le dépôt d'Autowin : ailleurs, rien ne change.
+   * Une copie qui ne s'ouvre pas, même par une panne de git, est DITE dans le fil, et le tour part
+   * là où il était : le passage ne coûte jamais la réponse.
+   */
+  const passerLeFilDansSaCopie = async (conversationId: string): Promise<void> => {
+    const depot = os.executionWorkspace
+    const annoncer = (ligne: string): void => {
+      os.conversations.append(conversationId, { role: 'assistant', content: ligne })
+      broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
+    }
+    const issue = await preparerLeDossierDuTour({
+      fil: os.conversations.get(conversationId),
+      depotPartage: estDepotAutowin(depot) ? depot : null,
+      actif: lireReglageCopieParFil(reglageCopieParFil()),
+      ouvrirCopie: async () => {
+        const copie = await ouvrirLaCopieDuFil({
+          dossier: dossierDuTour(conversationId),
+          conversationId,
+          dossierDesRetours: dossierDesRetours()
+        }).catch((erreur: unknown) => ({
+          ok: false as const,
+          raison: erreur instanceof Error ? erreur.message : String(erreur)
+        }))
+        if (copie.ok && copie.dependances.fait === 'echec')
+          annoncer(`⚠️ ${messageLiaison(copie.dependances)}`)
+        return copie
+      },
+      passer: (copie) => {
+        os.conversations.passerDansLaCopie(conversationId, copie)
+      },
+      revenir: () => {
+        os.conversations.revenirDeLaCopie(conversationId)
+      },
+      annoncer
+    })
+    if (issue !== 'rien') broadcast({ type: 'refresh', scope: 'conversations' })
   }
 
   /*
@@ -2378,6 +2463,15 @@ Le fil reprend ensuite normalement.`
       })
       alignerDossierSurLaDemande(conversationId, args[1])
       avertirDossierSansEffet(conversationId, os.conversations.get(conversationId)?.projectPath)
+      /*
+       * UNE COPIE PAR FIL D'AUTOWINOS, décidée ICI : après la bascule par chemin cité (qui prime),
+       * avant que le dossier du tour soit lu (photos, cwd du CLI, clé de session). Un tour REPRIS
+       * après un redémarrage (`args[4]`) a commencé avant : il ne change jamais de dossier en route.
+       * fix-ok: cause mesurée — rien ne faisait passer un fil dans sa copie : les 10 cas de
+       * `preparerLeDossierDuTour` (bascule-dossier-conversation.test.ts) et le passage sans reprise de
+       * session (agent-pilot.session-resume.test.ts) étaient rouges sur le code d'avant.
+       */
+      if (args[4] === undefined) await passerLeFilDansSaCopie(conversationId)
       /*
        * LE MODÈLE DU FIL (2026-10-11) : une conversation peut porter son propre modèle.
        * Un modèle imposé par l'appelant (reprise d'un tour coupé, qui rejoue SON modèle d'origine)

@@ -23,6 +23,7 @@ import { copyFileSync, existsSync, mkdtempSync, rmSync, statSync } from 'node:fs
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
+import { lierLesDependances, type LiaisonDependances } from '../store/dependances-copie-agent'
 
 export const PREFIXE_PHOTOS = 'refs/autowin/tour/'
 
@@ -420,7 +421,14 @@ export async function revenirAuCodeDuTour(entree: {
 }
 
 export type CopiesDEssai =
-  { ok: true; quand: number; chemins: string[] } | { ok: false; raison: string }
+  { ok: true; quand: number; sha: string; chemins: string[] } | { ok: false; raison: string }
+
+/**
+ * Git pour Windows refuse une copie dont le dossier fait 216 caractères ou plus (voir
+ * `CAUSES_D_ECHEC_DE_COPIE`). Le refus se décide AVANT la photo : sinon il tombe après coup, une
+ * photo déjà rangée et un dossier de copie à moitié créé.
+ */
+export const LONGUEUR_MAX_CHEMIN_DE_COPIE = 215
 
 /**
  * « ESSAIE 3 FAÇONS » (2026-10-21) : UNE photo du code maintenant, puis `nombre` copies
@@ -436,6 +444,15 @@ export async function ouvrirCopiesDEssai(entree: {
   runGit?: GitRunner
 }): Promise<CopiesDEssai> {
   const quand = entree.quand ?? Date.now()
+  const destinations = Array.from({ length: entree.nombre }, (_, index) =>
+    join(entree.dossierDesRetours, `essai__${entree.conversationId}-${quand}-${index + 1}`)
+  )
+  const tropLong = destinations.find((chemin) => chemin.length > LONGUEUR_MAX_CHEMIN_DE_COPIE)
+  if (tropLong)
+    return {
+      ok: false,
+      raison: `Le dossier de la copie ferait ${tropLong.length} caractères (${tropLong}) : git pour Windows en accepte ${LONGUEUR_MAX_CHEMIN_DE_COPIE} caractères au plus. Aucune copie n’a été ouverte.`
+    }
   const photo = await photographierLeCode({
     dossier: entree.dossier,
     conversationId: entree.conversationId,
@@ -450,19 +467,60 @@ export async function ouvrirCopiesDEssai(entree: {
         'Impossible de photographier le code de ce fil : son dossier n’est pas un dépôt git, ou la photo n’a pas pu être prise à temps. Aucune copie n’a été ouverte.'
     }
   const chemins: string[] = []
-  for (let rang = 1; rang <= entree.nombre; rang += 1) {
+  for (const destination of destinations) {
     const copie = await ouvrirCopieDeLaPhoto({
       dossier: entree.dossier,
       sha: photo.sha,
-      destination: join(
-        entree.dossierDesRetours,
-        `essai__${entree.conversationId}-${quand}-${rang}`
-      ),
+      destination,
       runGit: entree.runGit
     })
     chemins.push(copie.chemin)
   }
-  return { ok: true, quand, chemins }
+  return { ok: true, quand, sha: photo.sha, chemins }
+}
+
+export type CopieDuFilOuverte =
+  | { ok: true; chemin: string; base: string; dependances: LiaisonDependances }
+  | { ok: false; raison: string }
+
+/**
+ * LA COPIE D'UN FIL D'AUTOWINOS : la copie d'« Essaie 3 façons » à une seule façon, au nom que
+ * « Garder » lit (`essai__<fil>-<instant>-1`), puis deux gestes que la porte exige :
+ *  - la BASE du fil posée à la photo d'ouverture : la porte publie l'écart depuis elle, et refuse
+ *    sans elle. Une base déjà là (copie précédente effacée) avance jusqu'à la nouvelle photo, sinon
+ *    le premier passage republierait ce que l'ancienne copie a déjà fait entrer dans main ;
+ *  - `node_modules` RELIÉ au dépôt (décision 2-A) : sans lui, le fil ne lance aucun test. Les copies
+ *    d'essai n'en ont pas (en-tête de ce fichier) ; celle d'un fil, si. Un lien raté n'empêche pas
+ *    la copie : il est rendu, pour être dit dans le fil.
+ * La photo prend le dossier partagé tel quel, travail non commité des autres fils compris : la porte
+ * ne publie donc que ce que CE fil a changé depuis.
+ * fix-ok: cause mesurée — aucune copie de fil n'existait (4 rouges de photo-du-code.test.ts sur le code
+ * d'avant : fonction absente), et le refus des 216 caractères ne tombait qu'après la photo.
+ */
+export async function ouvrirLaCopieDuFil(entree: {
+  dossier: string
+  conversationId: string
+  dossierDesRetours: string
+  quand?: number
+  runGit?: GitRunner
+}): Promise<CopieDuFilOuverte> {
+  const git = entree.runGit ?? (await defaultGitRunner())
+  const copies = await ouvrirCopiesDEssai({ ...entree, nombre: 1, runGit: git })
+  if (!copies.ok) return copies
+  const chemin = copies.chemins[0]
+  const depot = await racineDuDepot(entree.dossier, git)
+  const fil = { dossier: chemin, conversationId: entree.conversationId, runGit: git }
+  const lue = await lireLaBaseDuFil(fil)
+  const base = await avancerLaBaseDuFil({ ...fil, depuis: lue, vers: copies.sha })
+  if (!base.ok)
+    return {
+      ok: false,
+      raison: `La copie ${chemin} est ouverte, mais la base du fil n’a pas pu être posée (${base.raison}) : la porte refuserait tout passage.`
+    }
+  const dependances: LiaisonDependances = depot
+    ? lierLesDependances(depot, chemin)
+    : { fait: 'rien-a-lier', raison: 'le dépôt du fil est introuvable' }
+  return { ok: true, chemin, base: base.sha, dependances }
 }
 
 /*

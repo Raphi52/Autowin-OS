@@ -535,6 +535,8 @@ interface ChatApi {
   executionWorkspace: () => Promise<ExecutionWorkspaceState>
   chooseExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
   resetExecutionWorkspace: () => Promise<ExecutionWorkspaceState>
+  /** Optionnel : un preload plus ancien que l'écran n'a pas ce canal. */
+  choisirCopieParFil?: (actif: boolean) => Promise<ExecutionWorkspaceState>
   /** Le Brain renseigné dans les Réglages : chemin et/ou dépôt git (`src/main/brain/brain-reglage.ts`). */
   brainReglage: () => Promise<BrainReglageState>
   choisirDossierBrain: () => Promise<string | null>

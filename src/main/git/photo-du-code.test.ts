@@ -12,12 +12,14 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { lireNomDEssai } from '../orchestration/garder-un-essai'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import {
   avancerLaBaseDuFil,
   lireLaBaseDuFil,
   ouvrirCopieDeLaPhoto,
   ouvrirCopiesDEssai,
+  ouvrirLaCopieDuFil,
   photoDuTour,
   photographierLeCode as photographierAvecBudgetDuTour,
   refDeBaseDuFil,
@@ -913,5 +915,132 @@ describe('base du fil en copie — elle survit au ménage des photos et avance �
       ok: true,
       sha: commit
     })
+  })
+})
+
+/*
+ * LA COPIE D'UN FIL. Un fil d'AutoWinOS travaille dans SA copie, ouverte par le même chemin
+ * qu'« Essaie 3 façons » (une photo, une copie détachée), puis sa porte vers main la publie depuis
+ * sa BASE. Les entrées qui font échouer une version fausse :
+ *  - un nom de copie que « Garder » ne lit pas : la porte et la carte ne la reconnaîtraient pas ;
+ *  - une copie ouverte sans base : la porte refuserait au premier tour (« base absente ») ;
+ *  - une copie sans `node_modules` : le fil ne pourrait lancer aucun test (décision 2-A, lien partagé) ;
+ *  - un chemin de 216 caractères : git pour Windows le refuse après coup, la photo déjà prise.
+ */
+describe('ouvrirLaCopieDuFil — un fil d’AutoWinOS dans sa propre copie', () => {
+  it('ouvre une copie au nom que « Garder » reconnaît, pose sa première base et relie les dépendances', async () => {
+    const repo = await depot()
+    mkdirSync(join(repo, 'node_modules', 'paquet'), { recursive: true })
+    writeFileSync(join(repo, 'node_modules', 'paquet', 'index.js'), 'module.exports = 1\n')
+    writeFileSync(join(repo, '.gitignore'), 'ignore/\nnode_modules/\n')
+    writeFileSync(join(repo, 'a.txt'), 'travail non commité d’un autre fil\n')
+    const retours = join(repo, '..', 'retours-de-tour')
+
+    const copie = await ouvrirLaCopieDuFil({
+      dossier: repo,
+      conversationId: 'conv-7',
+      dossierDesRetours: retours,
+      quand: 9_000
+    })
+
+    expect(copie).toMatchObject({ ok: true })
+    const { chemin, base } = copie as { chemin: string; base: string }
+    expect(lireNomDEssai(chemin, retours)).toMatchObject({ fil: 'conv-7', quand: 9_000 })
+    expect(await lireLaBaseDuFil({ dossier: repo, conversationId: 'conv-7' })).toBe(base)
+    expect((await git(chemin, 'rev-parse', 'HEAD')).trim()).toBe(base)
+    expect(readFileSync(join(chemin, 'node_modules', 'paquet', 'index.js'), 'utf8')).toContain(
+      'module.exports'
+    )
+    // Le travail non commité du dossier partagé est dans la copie : la copie part de ce que tu vois.
+    expect(readFileSync(join(chemin, 'a.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe(
+      'travail non commité d’un autre fil\n'
+    )
+    // Le lien ne se voit pas dans la copie : rien à publier au premier passage de la porte.
+    expect(await git(chemin, 'status', '--porcelain')).toBe('')
+  })
+
+  it('une base déjà posée (copie précédente disparue) avance jusqu’à la nouvelle copie', async () => {
+    const repo = await depot()
+    const commit = (await git(repo, 'rev-parse', 'HEAD')).trim()
+    const fil = { dossier: repo, conversationId: 'conv-8' }
+    expect(await avancerLaBaseDuFil({ ...fil, depuis: null, vers: commit })).toMatchObject({
+      ok: true
+    })
+    writeFileSync(join(repo, 'a.txt'), 'plus récent\n')
+
+    const copie = await ouvrirLaCopieDuFil({
+      ...fil,
+      dossierDesRetours: join(repo, '..', 'retours-de-tour'),
+      quand: 9_500
+    })
+
+    expect(copie).toMatchObject({ ok: true })
+    expect(await lireLaBaseDuFil(fil)).toBe((copie as { base: string }).base)
+    expect((copie as { base: string }).base).not.toBe(commit)
+  })
+
+  it('deux fils modifient le même fichier dans leurs copies : le dépôt partagé ne bouge pas', async () => {
+    const repo = await depot()
+    const retours = join(repo, '..', 'retours-de-tour')
+    const statut = await git(repo, 'status', '--porcelain')
+    const neuf = await ouvrirLaCopieDuFil({
+      dossier: repo,
+      conversationId: 'conv-neuf',
+      dossierDesRetours: retours,
+      quand: 10_000
+    })
+    const ancien = await ouvrirLaCopieDuFil({
+      dossier: repo,
+      conversationId: 'conv-ancien',
+      dossierDesRetours: retours,
+      quand: 10_001
+    })
+    const copies = [neuf, ancien].map((copie) => (copie as { chemin: string }).chemin)
+
+    writeFileSync(join(copies[0], 'a.txt'), 'écrit par le fil neuf\n')
+    writeFileSync(join(copies[1], 'a.txt'), 'écrit par le fil ancien\n')
+
+    expect(new Set(copies).size).toBe(2)
+    expect(await git(repo, 'status', '--porcelain')).toBe(statut)
+    expect(readFileSync(join(repo, 'a.txt'), 'utf8').replace(/\r\n/g, '\n')).toBe(
+      'version commitée\n'
+    )
+  })
+
+  it('chemin de copie au-delà de 215 caractères : refus clair, ni photo ni copie', async () => {
+    const repo = await depot()
+    const longueurDuNom = 'essai__conv-9-9999-1'.length + 1
+    const retours = join(repo, '..', 'r'.repeat(216 - longueurDuNom - join(repo, '..').length - 1))
+    const attendu = join(retours, 'essai__conv-9-9999-1')
+    expect(attendu.length).toBe(216)
+
+    const copie = await ouvrirLaCopieDuFil({
+      dossier: repo,
+      conversationId: 'conv-9',
+      dossierDesRetours: retours,
+      quand: 9_999
+    })
+
+    expect(copie).toMatchObject({ ok: false })
+    expect((copie as { raison: string }).raison).toContain('215 caractères')
+    expect((copie as { raison: string }).raison).toContain(attendu)
+    expect(existsSync(retours)).toBe(false)
+    expect(await git(repo, 'for-each-ref', 'refs/autowin/')).toBe('')
+  })
+
+  it('jumeau accepté : un chemin de 215 caractères tout juste s’ouvre', async () => {
+    const repo = await depot()
+    const longueurDuNom = 'essai__conv-9-9999-1'.length + 1
+    const retours = join(repo, '..', 'r'.repeat(215 - longueurDuNom - join(repo, '..').length - 1))
+    expect(join(retours, 'essai__conv-9-9999-1').length).toBe(215)
+
+    const copie = await ouvrirLaCopieDuFil({
+      dossier: repo,
+      conversationId: 'conv-9',
+      dossierDesRetours: retours,
+      quand: 9_999
+    })
+
+    expect(copie).toMatchObject({ ok: true })
   })
 })

@@ -118,4 +118,9 @@ export interface ExecutionWorkspaceState {
   isGitRepo: boolean
   /** Vrai quand le choix enregistré diffère de l'actif : il faut redémarrer. */
   restartRequired: boolean
+  /**
+   * « Une copie par fil » : chaque fil d'AutoWinOS travaille dans sa copie. Absent = processus
+   * principal antérieur au réglage, l'écran ne montre alors pas l'interrupteur.
+   */
+  copieParFil?: boolean
 }

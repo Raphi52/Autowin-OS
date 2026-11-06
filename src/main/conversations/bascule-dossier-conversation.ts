@@ -1,5 +1,5 @@
-import { existsSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, isAbsolute, resolve } from 'node:path'
 
 function memeDossier(a: string, b: string): boolean {
   const normaliser = (chemin: string): string =>
@@ -155,4 +155,139 @@ export function dossierDeLectureDuFil(
   dossierExiste: (chemin: string) => boolean = existsSync
 ): string {
   return dossierRangeUtilisable(projectPath, dossierExiste) ?? repli
+}
+
+/*
+ * UNE COPIE PAR FIL D'AUTOWINOS. Tous les fils écrivaient dans le dépôt d'où tourne l'app de dev :
+ * il fallait prouver, fichier par fichier, quel fil avait écrit quoi, et cette preuve échouait
+ * souvent. Dans sa copie, tout ce qu'un fil écrit est à lui ; son travail entre dans main par la
+ * porte de fin de tour (« Garder », fusion à trois voies depuis la base du fil).
+ *
+ * LE PASSAGE SE FAIT AU DÉBUT D'UN TOUR, jamais au milieu : un fil déjà commencé y passe à son tour
+ * suivant, un fil neuf à son premier. Le dossier rangé DEVIENT la copie (le dossier rangé et le
+ * dossier de travail ne diffèrent jamais). Changer de dossier change la clé de session
+ * (`session-du-tour.ts`) : ce tour part sans reprise de session, avec l'historique du fil.
+ *
+ * Seuls les fils du dépôt partagé (rangés dedans, ou sans dossier) sont concernés. Un fil rangé
+ * ailleurs — un autre projet, la copie d'un essai, celle d'un retour à un tour — ne change pas.
+ */
+
+/** La copie qu'un fil a déjà reçue (voir `Conversation.copieDuFil`). */
+export interface CopieDuFilNotee {
+  chemin: string
+  depot: string
+  dossierAvant?: string
+}
+
+/** La copie notée sur un fil, si elle a une forme utilisable ; tout le reste vaut « aucune ». */
+function copieNotee(fil: { copieDuFil?: unknown } | undefined): CopieDuFilNotee | null {
+  const copie = fil?.copieDuFil as Partial<CopieDuFilNotee> | undefined
+  if (!copie || typeof copie.chemin !== 'string' || typeof copie.depot !== 'string') return null
+  if (!isAbsolute(copie.chemin) || !isAbsolute(copie.depot)) return null
+  return {
+    chemin: copie.chemin,
+    depot: copie.depot,
+    ...(typeof copie.dossierAvant === 'string' ? { dossierAvant: copie.dossierAvant } : {})
+  }
+}
+
+/**
+ * Le fil travaille DANS SA copie : sa copie notée, ou `null`. Sert à tout ce qui doit voir, à
+ * travers la copie, le projet dont elle est la copie (bascule par chemin cité, rangement au premier
+ * message).
+ */
+export function copieOuTravailleLeFil(
+  fil: { projectPath?: string; copieDuFil?: unknown } | undefined
+): CopieDuFilNotee | null {
+  const copie = copieNotee(fil)
+  const range = fil?.projectPath?.trim()
+  return copie && range && memeDossier(range, copie.chemin) ? copie : null
+}
+
+export type IssueDuPassage = 'rien' | 'ouverte' | 'reprise' | 'revenu' | 'refusee'
+
+/**
+ * LE DOSSIER DU FIL, DÉCIDÉ AU DÉBUT DE SON TOUR, avant que le dossier du tour soit lu.
+ *  - réglage allumé, fil du dépôt partagé : il reprend sa copie si elle existe encore, sinon il en
+ *    reçoit une (`ouvrirCopie`) ; une ouverture refusée le laisse où il était, raison dite ;
+ *  - réglage éteint, fil dans sa copie : il revient à son dossier d'avant, la copie reste intacte ;
+ *  - tout autre cas : rien ne change.
+ * `depotPartage` : le dépôt d'Autowin d'où tourne l'app, ou `null` quand l'app travaille sur un autre
+ * dépôt (le mécanisme ne vise que le sien). Chaque geste fait est annoncé en UNE ligne.
+ */
+export async function preparerLeDossierDuTour(entree: {
+  fil: { projectPath?: string; copieDuFil?: unknown } | undefined
+  depotPartage: string | null
+  actif: boolean
+  ouvrirCopie: () => Promise<{ ok: true; chemin: string } | { ok: false; raison: string }>
+  passer: (copie: { chemin: string; depot: string }) => void
+  revenir: () => void
+  annoncer: (ligne: string) => void
+  dossierExiste?: (chemin: string) => boolean
+}): Promise<IssueDuPassage> {
+  const { fil, depotPartage } = entree
+  if (!fil || !depotPartage) return 'rien'
+  const existe = entree.dossierExiste ?? existsSync
+  const dansSaCopie = copieOuTravailleLeFil(fil)
+  if (!entree.actif) {
+    if (!dansSaCopie) return 'rien'
+    entree.revenir()
+    entree.annoncer(
+      `📂 La copie par fil est éteinte : ce fil revient au dossier partagé ${dansSaCopie.dossierAvant ?? depotPartage}. Sa copie reste intacte : ${dansSaCopie.chemin}.`
+    )
+    return 'revenu'
+  }
+  if (dansSaCopie) return 'rien'
+  const range = fil.projectPath?.trim()
+  if (range && !(isAbsolute(range) && memeDossier(range, depotPartage))) return 'rien'
+  const notee = copieNotee(fil)
+  if (notee && memeDossier(notee.depot, depotPartage) && existe(notee.chemin)) {
+    entree.passer({ chemin: notee.chemin, depot: depotPartage })
+    entree.annoncer(
+      `📂 Ce fil reprend sa copie de travail : ${notee.chemin}. Son travail entre dans ${depotPartage} par la porte en fin de tour.`
+    )
+    return 'reprise'
+  }
+  const ouverte = await entree.ouvrirCopie()
+  if (!ouverte.ok) {
+    entree.annoncer(
+      `⚠️ La copie de travail de ce fil n'a pas pu être ouverte : ${ouverte.raison} Ce tour travaille dans le dossier partagé ${depotPartage}.`
+    )
+    return 'refusee'
+  }
+  entree.passer({ chemin: ouverte.chemin, depot: depotPartage })
+  entree.annoncer(
+    `📂 Ce fil travaille désormais dans sa propre copie : ${ouverte.chemin}. Son travail entre dans ${depotPartage} par la porte en fin de tour ; ce tour repart avec l'historique du fil, sans la session interne de l'outil.`
+  )
+  return 'ouverte'
+}
+
+/**
+ * LE RÉGLAGE « UNE COPIE PAR FIL ». Allumé par défaut : c'est le fonctionnement voulu. Seul un choix
+ * écrit l'éteint ; un fichier absent ou illisible le laisse allumé. Relu au début de CHAQUE tour :
+ * l'éteindre suffit à ce que les tours suivants reviennent au dossier partagé.
+ */
+export function lireReglageCopieParFil(fichier: string): boolean {
+  try {
+    if (!existsSync(fichier)) return true
+    // Le BOM d'un fichier écrit à la main sous Windows ferait échouer `JSON.parse`.
+    // fix-ok: cause mesurée — la 1re écriture posait le BOM en caractère brut dans l'expression
+    // (eslint no-irregular-whitespace, ligne relue en octets EF BB BF) : comparé par son code ici.
+    const lu = readFileSync(fichier, 'utf8')
+    const brut = lu.charCodeAt(0) === 0xfeff ? lu.slice(1) : lu
+    return (JSON.parse(brut) as { actif?: unknown } | null)?.actif !== false
+  } catch {
+    return true
+  }
+}
+
+/** Écrit le réglage ; `false` si le disque ne le porte pas (l'appelant le dit, rien ne change). */
+export function ecrireReglageCopieParFil(actif: boolean, fichier: string): boolean {
+  try {
+    mkdirSync(dirname(fichier), { recursive: true })
+    writeFileSync(fichier, `${JSON.stringify({ actif }, null, 2)}\n`, 'utf8')
+    return true
+  } catch {
+    return false
+  }
 }

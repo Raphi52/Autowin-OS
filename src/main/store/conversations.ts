@@ -159,6 +159,13 @@ export interface ModeleDeConversation {
   reasoningEffort?: string
 }
 
+/** La copie de travail d'un fil (voir `Conversation.copieDuFil`). */
+export interface CopieDuFil {
+  chemin: string
+  depot: string
+  dossierAvant?: string
+}
+
 /** Une conversation, rattachée à un provider et rangée dans un dossier de travail. */
 export interface Conversation {
   schemaVersion?: 2 | 3
@@ -256,6 +263,16 @@ export interface Conversation {
    * (`os:conversations:setModel`) et rejouée au départ de chaque tour (`chat/modele-de-conversation`).
    */
   modeleChoisi?: ModeleDeConversation
+  /**
+   * LA COPIE DE TRAVAIL PROPRE À CE FIL (un fil d'AutoWinOS travaille dans la sienne, jamais dans le
+   * dépôt d'où tourne l'app). `chemin` : la copie ; `depot` : le dépôt dont elle est la copie ;
+   * `dossierAvant` : le dossier rangé avant le passage, absent pour un fil qui n'en avait pas.
+   *
+   * Noté une fois, gardé même quand le fil revient au dépôt (réglage éteint) : le rallumer le fait
+   * reprendre CETTE copie, avec son travail, au lieu d'en ouvrir une autre. OPTIONNEL : un ancien
+   * `conversations.json` se relit sans lui.
+   */
+  copieDuFil?: CopieDuFil
   /** RUN.md externes (Claude Code) attachés à cette conversation. */
   runPaths?: string[]
   createdAt: number
@@ -2211,6 +2228,46 @@ export class ConversationStore {
   }
 
   /**
+   * LE FIL PASSE DANS SA COPIE : son dossier rangé DEVIENT la copie, pour que le dossier rangé et le
+   * dossier de travail ne diffèrent jamais. Pas par `rangerDansDossier` : il effacerait la catégorie
+   * posée à la main, et la copie n'est pas un nouveau rangement, c'est le même projet. Le dossier
+   * d'avant n'est noté qu'au PREMIER passage : reprendre sa copie après un retour ne l'écrase pas.
+   * Ne touche pas `updatedAt`, comme tout rangement. `undefined` sur un id inconnu ou un chemin
+   * qui n'en est pas un.
+   */
+  passerDansLaCopie(
+    id: string,
+    copie: { chemin: string; depot: string }
+  ): Conversation | undefined {
+    const conversation = this.conversations.get(id)
+    const chemin = canonicalProjectPath(copie.chemin)
+    const depot = canonicalProjectPath(copie.depot)
+    if (!conversation || !chemin || !depot) return undefined
+    const dejaNotee =
+      conversation.copieDuFil?.chemin === chemin ? conversation.copieDuFil : undefined
+    const avant = dejaNotee ? dejaNotee.dossierAvant : conversation.projectPath
+    conversation.copieDuFil = { chemin, depot, ...(avant ? { dossierAvant: avant } : {}) }
+    conversation.projectPath = chemin
+    this.changed(id)
+    return conversation
+  }
+
+  /**
+   * LE FIL QUITTE SA COPIE (réglage « une copie par fil » éteint) : il retrouve son dossier d'avant,
+   * ou aucun s'il n'en avait pas. La copie reste notée, et sur le disque : la supprimer est un geste
+   * destructeur que seul l'utilisateur décide.
+   */
+  revenirDeLaCopie(id: string): Conversation | undefined {
+    const conversation = this.conversations.get(id)
+    const copie = conversation?.copieDuFil
+    if (!conversation || !copie) return undefined
+    if (copie.dossierAvant) conversation.projectPath = copie.dossierAvant
+    else delete conversation.projectPath
+    this.changed(id)
+    return conversation
+  }
+
+  /**
    * Pose ou retire le repère visuel d'une conversation. Rend la conversation, ou `undefined` si
    * l'id est inconnu (même contrat que `rangerDansDossier` : un menu ouvert sur une conversation
    * supprimée entre-temps ne doit pas faire tomber l'application).
@@ -2344,6 +2401,13 @@ export class ConversationStore {
    * d'« essaie 3 façons ») : un second appel de rangement pouvait échouer sans être lu, et la
    * branche écrivait alors dans le dossier partagé. Un dossier imposé qui n'est pas un chemin refuse
    * la branche ENTIÈRE, avant toute création.
+   *
+   * La branche d'un fil qui travaille dans SA copie repart du dossier rangé AVANT la copie (aucun
+   * si la source n'en avait pas), jamais de la copie elle-même :
+   * tout ce qu'une copie porte appartient à son fil, et la porte de la source publierait le travail
+   * de la branche comme le sien. Elle reçoit sa propre copie à son premier tour.
+   * fix-ok: cause mesurée — `fork` recopiait `source.projectPath`, donc la copie de la source
+   * (conversations.copie-du-fil.test.ts, « une branche d'un fil en copie… », rouge sur le code d'avant).
    */
   fork(id: string, fromMessageId: string, options: { dossier?: string } = {}): Conversation {
     const source = this.conversations.get(id)
@@ -2354,10 +2418,15 @@ export class ConversationStore {
     if (options.dossier !== undefined && !estCheminDeDossier(options.dossier))
       throw new Error(`Dossier de la branche invalide (chemin absolu attendu) : ${options.dossier}`)
 
+    const copieDeLaSource =
+      source.copieDuFil && source.projectPath === source.copieDuFil.chemin
+        ? source.copieDuFil
+        : undefined
     const forked = this.create({
       title: forkTitle(source.title),
       provider: source.provider,
-      projectPath: options.dossier ?? source.projectPath
+      projectPath:
+        options.dossier ?? (copieDeLaSource ? copieDeLaSource.dossierAvant : source.projectPath)
     })
     // Copie jusqu'au point de fork INCLUS. Les identifiants de message sont régénérés : deux
     // conversations ne doivent jamais partager un messageId (le fork suivant viserait les deux).

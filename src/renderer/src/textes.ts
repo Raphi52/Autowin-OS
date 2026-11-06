@@ -80,6 +80,9 @@ export const TEXTES_FR = {
   'dossierTravail.pasGit':
     'Ce dossier n’est pas un dépôt git : les copies de travail isolées sont désactivées.',
   'dossierTravail.redemarrer': 'Redémarre Autowin pour que ce dossier devienne actif.',
+  'dossierTravail.copieParFil': 'Une copie de travail par fil',
+  'dossierTravail.copieParFilAide':
+    'Chaque fil d’AutoWinOS travaille dans sa propre copie ; son travail entre dans le dépôt en fin de tour. Éteint, les tours suivants reviennent au dossier partagé, et les copies restent intactes.',
   'brain.description':
     'Le dossier où Autowin lit et dépose ce qu’il retient. **Sans dépôt**, c’est un simple dossier (un partage réseau, par exemple) : Autowin n’y lance **aucune commande git**. **Avec un dépôt**, il le clone s’il manque et y commite les notes de ses runs.',
   'brain.erreurLecture': 'Impossible de lire le réglage du Brain.',
@@ -206,6 +209,9 @@ export const TEXTES_EN: Record<CleDeTexte, string> = {
   'dossierTravail.pasGit':
     'This folder is not a git repository: isolated working copies are turned off.',
   'dossierTravail.redemarrer': 'Restart Autowin for this folder to become active.',
+  'dossierTravail.copieParFil': 'One working copy per thread',
+  'dossierTravail.copieParFilAide':
+    'Each AutoWinOS thread works in its own copy; its work enters the repository at the end of the turn. Turned off, the next turns go back to the shared folder, and the copies stay intact.',
   'brain.description':
     'The folder where Autowin reads and stores what it remembers. **Without a repository**, it is a plain folder (a network share, for example): Autowin runs **no git command** there. **With a repository**, it clones it if missing and commits its runs’ notes to it.',
   'brain.erreurLecture': 'Could not read the Brain setting.',

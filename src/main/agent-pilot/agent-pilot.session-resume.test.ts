@@ -5,6 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentPilot } from './agent-pilot'
 import { configureAutowinAppDataBase } from '../app/app-data'
 import { configureClaudeActiveAccountId } from '../providers/claude-accounts'
+import {
+  dossierDeTravailDuTour,
+  preparerLeDossierDuTour
+} from '../conversations/bascule-dossier-conversation'
+import { ConversationStore } from '../store/conversations'
 import type { Message, SendOptions, SendResult, StreamChunk } from '../providers/types'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 
@@ -358,5 +363,75 @@ describe('chat() — le dossier de travail fait partie de l’identite de sessio
     // Discriminant : sans cette assertion, retirer le workspace de la cle passerait le test du haut
     // en cassant la reprise pour TOUT LE MONDE — le levier de cout disparaitrait en silence.
     expect(captured[1].options.resumeSessionId).toBe('sess-1')
+  })
+
+  /*
+   * LE PASSAGE D'UN FIL DANS SA COPIE, au début de son tour suivant : son dossier rangé devient la
+   * copie, donc le dossier du tour aussi. La session de l'outil, rangée sous l'ancien dossier, n'est
+   * pas reprise ; le fil repart avec son historique. Le dossier vient ici du VRAI magasin et de la
+   * VRAIE résolution du tour, comme dans l'app, pas d'une variable posée à la main.
+   * fix-ok: cause mesurée — rouge sur le code d'avant (`preparerLeDossierDuTour` absent), vert
+   * ensuite ; la 3e édition n'est que la mise en forme signalée par `npx prettier --check`.
+   */
+  it('un fil passé dans sa copie entre deux tours → PAS de resume, historique du fil envoyé', async () => {
+    const captured: Captured[] = []
+    const store = new ConversationStore(() => 1000)
+    const DEPOT = join('D:', 'AutoWinOS')
+    const COPIE = join(DEPOT, '.autowin-data', 'autowin-os', 'retours-de-tour', 'essai__conv-P-5-1')
+    const id = store.create({ title: 'T', provider: 'claude', projectPath: DEPOT }).id
+    const dossierDuTour = (conversationId?: string): string =>
+      dossierDeTravailDuTour(store.get(conversationId ?? '')?.projectPath, DEPOT, () => true)
+    const registry = {
+      send: vi.fn(async (_p: string, messages: Message[], options: SendOptions) => {
+        captured.push({ options, content: messages.at(-1)?.content ?? '' })
+        return { text: 'ok', sessionId: 'sess-1' } as SendResult
+      }),
+      describePrompt: vi.fn(() => ({ provider: 'claude', messages: [], transport: 't' })),
+      honoursSessionResume: vi.fn(() => true)
+    }
+    const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }
+    const bus = {
+      catalog: vi.fn(() => []),
+      snapshotForPrompt: vi.fn(async () => ({ tab: 'chat' })),
+      exec: vi.fn()
+    }
+    type Parametres = ConstructorParameters<typeof AgentPilot>
+    const p = new AgentPilot(
+      registry as unknown as Parametres[0],
+      roles as unknown as Parametres[1],
+      bus as unknown as Parametres[2],
+      undefined,
+      () => '',
+      dossierDuTour
+    )
+    await p.chat(history('le code secret est 4417'), () => {}, undefined, 1, id)
+
+    await preparerLeDossierDuTour({
+      fil: store.get(id),
+      depotPartage: DEPOT,
+      actif: true,
+      ouvrirCopie: async () => ({ ok: true, chemin: COPIE }),
+      passer: (copie) => {
+        store.passerDansLaCopie(id, copie)
+      },
+      revenir: () => {
+        store.revenirDeLaCopie(id)
+      },
+      annoncer: () => {},
+      dossierExiste: () => true
+    })
+    await p.chat(
+      history('le code secret est 4417', 'noté', 'quel est le code ?'),
+      () => {},
+      undefined,
+      1,
+      id
+    )
+
+    expect(captured).toHaveLength(2)
+    expect(captured[0].options.workspaceCwd).toBe(DEPOT)
+    expect(captured[1].options.workspaceCwd).toBe(COPIE)
+    expect(captured[1].options.resumeSessionId).toBeUndefined()
+    expect(captured[1].content).toContain('le code secret est 4417')
   })
 })

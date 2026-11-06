@@ -103,6 +103,29 @@ export function ExecutionWorkspaceSettings(): React.JSX.Element {
               {t('dossierTravail.redemarrer')}
             </p>
           )}
+          {/* Absent d'un processus principal plus ancien : l'interrupteur ne se montre pas. */}
+          {state.copieParFil !== undefined && window.api.choisirCopieParFil && (
+            <>
+              <label>
+                <input
+                  type="checkbox"
+                  data-testid="execution-workspace-copie-par-fil"
+                  checked={state.copieParFil}
+                  disabled={busy}
+                  onChange={(event) => {
+                    const actif = event.target.checked
+                    void run(async () => {
+                      const choisir = window.api.choisirCopieParFil
+                      if (!choisir) throw new Error('canal absent')
+                      return choisir(actif)
+                    })
+                  }}
+                />
+                <span>{t('dossierTravail.copieParFil')}</span>
+              </label>
+              <p className="domain-hint">{t('dossierTravail.copieParFilAide')}</p>
+            </>
+          )}
         </>
       )}
     </section>

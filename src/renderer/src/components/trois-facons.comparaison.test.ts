@@ -58,6 +58,15 @@ describe('faconsDuMemeEssai', () => {
     expect(faconsDuMemeEssai(convs, 'E')).toEqual([])
     expect(faconsDuMemeEssai(convs, 'inconnu')).toEqual([])
   })
+  it('un fil dans SA propre copie n’est pas une façon : ni carte, ni « Garder celle-ci »', () => {
+    // La copie d'un fil porte le nom d'un essai à son propre identifiant ; une façon, elle, est une
+    // AUTRE conversation que le fil dont l'essai porte le nom.
+    const avecCopie = [...convs, conv('conv-7', `${RETOURS}\\essai__conv-7-3000-1`)]
+    expect(faconsDuMemeEssai(avecCopie, 'conv-7')).toEqual([])
+    // Jumeau : la façon d'un essai lancé DEPUIS ce fil garde sa carte.
+    const essaiDuFil = [...avecCopie, conv('F1', `${RETOURS}\\essai__conv-7-4000-1`)]
+    expect(faconsDuMemeEssai(essaiDuFil, 'F1').map((facon) => facon.id)).toEqual(['F1'])
+  })
 })
 
 describe('les colonnes de la carte, en mots', () => {

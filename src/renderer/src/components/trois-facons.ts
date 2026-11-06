@@ -70,11 +70,13 @@ export function faconsDuMemeEssai(
   id: string
 ): FaconDUnEssai[] {
   const nom = nomDeCopieDEssai(convs.find((conv) => conv.id === id)?.projectPath)
-  if (!nom) return []
+  // La copie d'un fil porte le nom d'un essai À SON PROPRE identifiant : ce fil n'est pas une
+  // façon. Une façon est toujours une AUTRE conversation que le fil qui a lancé l'essai.
+  if (!nom || nom.fil === id) return []
   return convs
     .flatMap((conv) => {
       const autre = nomDeCopieDEssai(conv.projectPath)
-      return autre && autre.fil === nom.fil && autre.quand === nom.quand
+      return autre && autre.fil !== conv.id && autre.fil === nom.fil && autre.quand === nom.quand
         ? [{ id: conv.id, titre: conv.title, rang: autre.rang }]
         : []
     })

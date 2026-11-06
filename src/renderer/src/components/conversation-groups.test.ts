@@ -47,6 +47,28 @@ describe('à quel groupe appartient une conversation', () => {
     expect(groupeDe(conv('a', { projectPath: '   ' })).key).toBe(GROUPE_DIVERS)
     expect(groupeDe(conv('b', { projectPath: '' })).key).toBe(GROUPE_DIVERS)
   })
+
+  it('un fil dans SA copie reste dans le groupe de son dossier d’avant', () => {
+    // Sans cette règle, chaque fil passé en copie formait son propre groupe « essai__conv-… ».
+    const copie = 'D:\\AutoWinOS\\.autowin-data\\autowin-os\\retours-de-tour\\essai__conv-7-5-1'
+    const range = conv('conv-7', {
+      projectPath: copie,
+      copieDuFil: { chemin: copie, depot: 'D:\\AutoWinOS', dossierAvant: 'D:\\AutoWinOS' }
+    })
+    expect(groupeDe(range)).toMatchObject({ key: 'D:\\AutoWinOS', label: 'AutoWinOS' })
+    const sansDossier = conv('conv-8', {
+      projectPath: copie,
+      copieDuFil: { chemin: copie, depot: 'D:\\AutoWinOS' }
+    })
+    expect(groupeDe(sansDossier, 'D:\\AutoWinOS').key).toBe('D:\\AutoWinOS')
+    expect(groupeDe(sansDossier).key).toBe(GROUPE_DIVERS)
+    // Jumeau : rangé AILLEURS que sa copie, le fil suit son dossier réel.
+    const ailleurs = conv('conv-9', {
+      projectPath: 'D:\\AutreProjet',
+      copieDuFil: { chemin: copie, depot: 'D:\\AutoWinOS' }
+    })
+    expect(groupeDe(ailleurs).key).toBe('D:\\AutreProjet')
+  })
 })
 
 describe('le nom lisible d’un dossier', () => {

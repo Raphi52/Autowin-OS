@@ -797,6 +797,8 @@ const api = {
     ipcRenderer.invoke('os:execution-workspace:choose'),
   resetExecutionWorkspace: (): Promise<ExecutionWorkspaceState> =>
     ipcRenderer.invoke('os:execution-workspace:reset'),
+  choisirCopieParFil: (actif: boolean): Promise<ExecutionWorkspaceState> =>
+    ipcRenderer.invoke('os:execution-workspace:copie-par-fil', actif),
   brainReglage: (): Promise<BrainReglageState> => ipcRenderer.invoke('os:brain-reglage'),
   choisirDossierBrain: (): Promise<string | null> =>
     ipcRenderer.invoke('os:brain-reglage:choisir-dossier'),
