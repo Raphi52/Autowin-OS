@@ -277,4 +277,19 @@ describe('STYLE_CLOTURE_CHAT — critère « a agi »', () => {
       /sans commande ni outil direct, n'ajoute aucun bloc de clôture/u
     )
   })
+
+  // 2026-11-06 : après un `/git`, chaque tour suivant du fil finissait sur « lance `/git` » alors
+  // que l'app publie elle-même le travail du tour. ENTRÉE QUI DOIT FAIRE ÉCHOUER : la seule
+  // condition « l'utilisateur a parlé de publier » pour recommander `/git`.
+  it('ne fait pas recommander /git pour le travail du tour, que l app publie elle-même', () => {
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /le travail de CE tour, l'app le commite et le pousse elle-même à la fin du tour.*ne recommande jamais `\/git` pour lui/u
+    )
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+      /`\/git` ne se recommande que si l'utilisateur a lui-même parlé de publier ET qu'il reste ce que l'app ne publie pas seule/u
+    )
+    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).not.toMatch(
+      /ne recommande un commit, un push ou un tri de travaux non publiés que si l'utilisateur a lui-même parlé de publier, et alors en `\/git`/u
+    )
+  })
 })
