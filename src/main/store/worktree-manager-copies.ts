@@ -88,24 +88,66 @@ export async function reconcileResiduesAsync(
  * naturellement le critere de surete du balayage (« contenu dans une reference »). Rien n'est
  * publie non plus : cette branche n'est ni `main` ni une branche de travail.
  */
-export function preserverEtLiberer(
+export function preserverEtLiberer(this: WorktreeManager, agentId: string): IssueDePreservation {
+  assertSafeId(agentId, 'agentId')
+  const path = this.pathFor(agentId)
+  const garde = gardesDePreservation.call(this, agentId, path)
+  if (garde) return garde
+  const ownership = this.ownershipIssue(path)
+  if (ownership) return { outcome: 'refuse', detail: ownership }
+  return preserverPuisLiberer.call(this, agentId, path)
+}
+
+/**
+ * `preserverEtLiberer` du balayage horaire : le controle d'appartenance, refait JUSTE AVANT
+ * `switch -C` et `add -A`, est attendu sans tenir la boucle. Sa forme synchrone figeait la fenetre le
+ * temps d'une sonde git (~400 ms simulees, `balayage-disque-async.test.ts`) pour chaque copie de
+ * plus de 24 h qui portait du travail non publie.
+ */
+export async function preserverEtLibererAsync(
   this: WorktreeManager,
   agentId: string
-): {
+): Promise<IssueDePreservation> {
+  assertSafeId(agentId, 'agentId')
+  const path = this.pathFor(agentId)
+  const garde = gardesDePreservation.call(this, agentId, path)
+  if (garde) return garde
+  // fix-ok: test de battement rouge a 418 ms — `preserverEtLiberer` appelait `ownershipIssue`
+  // (sonde `tryGitFn`, donc `execFileSync`) depuis le balayage horaire asynchrone.
+  const ownership = await this.ownershipIssueAsync(path)
+  if (ownership) return { outcome: 'refuse', detail: ownership }
+  // L'attente laisse la boucle libre : la copie a pu disparaitre ou etre reprise par un run.
+  const gardeApresAttente = gardesDePreservation.call(this, agentId, path)
+  if (gardeApresAttente) return gardeApresAttente
+  return preserverPuisLiberer.call(this, agentId, path)
+}
+
+type IssueDePreservation = {
   outcome: 'libere' | 'preserve-et-libere' | 'refuse' | 'absente'
   branche?: string
   detail?: string
-} {
-  assertSafeId(agentId, 'agentId')
-  const path = this.pathFor(agentId)
+}
+
+/** Les gardes sans git de la preservation, partagees par la forme sync et async. */
+function gardesDePreservation(
+  this: WorktreeManager,
+  agentId: string,
+  path: string
+): IssueDePreservation | undefined {
   if (!existsSync(path)) return { outcome: 'absente' }
   // Un run qui tourne encore garde sa copie : la liberer sous ses pieds casserait le run vivant.
   if (this.hasActiveProcesses(agentId)) {
     return { outcome: 'refuse', detail: 'des processus utilisent encore cette copie' }
   }
-  const ownership = this.ownershipIssue(path)
-  if (ownership) return { outcome: 'refuse', detail: ownership }
+  return undefined
+}
 
+/** Les ecritures de la preservation, une fois l'appartenance prouvee — partagees sync/async. */
+function preserverPuisLiberer(
+  this: WorktreeManager,
+  agentId: string,
+  path: string
+): IssueDePreservation {
   const branche = `autowin/recovery/${agentId}`
   const aDuTravail = this.unpublishedFiles(path).length > 0
   if (aDuTravail) {
@@ -344,23 +386,62 @@ export async function balayerUneCopieAsync(
   this: WorktreeManager,
   entry: Dirent
 ): Promise<string | undefined> {
-  const decision = this.deciderBalayageDUneCopie(entry)
+  const decision = await this.deciderBalayageDUneCopieAsync(entry)
   if (decision?.etape !== 'retirer') return decision?.agentId
   return (await this.balayerLeCheminAsync(decision.path)) ? decision.agentId : undefined
 }
+
+type DecisionDeBalayage =
+  | { etape: 'fait'; agentId: string }
+  | { etape: 'retirer'; agentId: string; path: string }
+  | undefined
 
 /**
  * TOUTES les gardes du balayage, sans le retrait final — partagees par la forme sync et async.
  * `fait` : la copie est deja traitee (preservee puis liberee) ; `retirer` : il ne reste qu'a la
  * supprimer ; `undefined` : on n'y touche pas.
  */
-export function deciderBalayageDUneCopie(
+export function deciderBalayageDUneCopie(this: WorktreeManager, entry: Dirent): DecisionDeBalayage {
+  const candidate = copieAgeeEtInactive.call(this, entry)
+  if (!candidate || this.ownershipIssue(candidate.path)) return undefined
+  const decision = deciderApresAppartenance.call(this, candidate)
+  if (decision?.etape !== 'preserver') return decision
+  return conclurePreservation(decision.agentId, this.preserverEtLiberer(decision.agentId))
+}
+
+/**
+ * La meme decision pour le balayage horaire : le controle d'appartenance (deux sondes git) est
+ * attendu sans tenir la boucle. Mesure du 2026-11-06 (`gels.jsonl`) : sa forme synchrone figeait la
+ * fenetre 4,5 a 4,9 s a chaque passe horaire.
+ */
+export async function deciderBalayageDUneCopieAsync(
   this: WorktreeManager,
   entry: Dirent
-):
-  | { etape: 'fait'; agentId: string }
-  | { etape: 'retirer'; agentId: string; path: string }
-  | undefined {
+): Promise<DecisionDeBalayage> {
+  const candidate = copieAgeeEtInactive.call(this, entry)
+  if (!candidate || (await this.ownershipIssueAsync(candidate.path))) return undefined
+  // L'attente laisse la boucle libre, donc un run peut reprendre la copie pendant ce temps : les baux
+  // sont relus avant toute preservation ou suppression, comme la forme synchrone les lisait d'un trait.
+  if (this.hasActiveProcesses(candidate.agentId)) return undefined
+  const decision = deciderApresAppartenance.call(this, candidate)
+  if (decision?.etape !== 'preserver') return decision
+  return conclurePreservation(
+    decision.agentId,
+    await this.preserverEtLibererAsync(decision.agentId)
+  )
+}
+
+/** Une copie preservee puis liberee est traitee ; tout autre issue la laisse en place. */
+function conclurePreservation(agentId: string, issue: IssueDePreservation): DecisionDeBalayage {
+  return issue.outcome === 'preserve-et-libere' || issue.outcome === 'libere'
+    ? { etape: 'fait', agentId }
+    : undefined
+}
+
+type CopieCandidate = { agentId: string; path: string; ageMs: number }
+
+/** Les gardes sans git, les moins cheres : forme du dossier, age, processus actifs. */
+function copieAgeeEtInactive(this: WorktreeManager, entry: Dirent): CopieCandidate | undefined {
   if (!entry.isDirectory() || !entry.name.startsWith('agent__')) return undefined
   const agentId = entry.name.slice('agent__'.length)
   if (!SAFE_ID.test(agentId)) return undefined
@@ -376,8 +457,17 @@ export function deciderBalayageDUneCopie(
   if (!(ageMs >= RESIDU_SANS_ENJEU_MIN_AGE_MS)) return undefined
 
   if (this.hasActiveProcesses(agentId)) return undefined
-  if (this.ownershipIssue(path)) return undefined
+  return { agentId, path, ageMs }
+}
 
+/**
+ * Les gardes qui suivent l'appartenance prouvee : travail non publie, HEAD, reference.
+ * `preserver` : la copie retient du travail, chaque forme appelle SA preservation (sync ou async).
+ */
+function deciderApresAppartenance(
+  this: WorktreeManager,
+  { agentId, path, ageMs }: CopieCandidate
+): DecisionDeBalayage | { etape: 'preserver'; agentId: string } {
   /**
    * Du travail non publie ne bloque plus le balayage : il est PRESERVE, puis la copie est liberee.
    *
@@ -409,12 +499,7 @@ export function deciderBalayageDUneCopie(
      * La marge de 24 h, elle, demeure : `verify` ne pose aucun lease, l'age seul protege un test
      * en cours.
      */
-    if (!WorktreeManager.COPIE_DE_VERIFICATION.test(agentId)) {
-      const preserve = this.preserverEtLiberer(agentId)
-      return preserve.outcome === 'preserve-et-libere' || preserve.outcome === 'libere'
-        ? { etape: 'fait', agentId }
-        : undefined
-    }
+    if (!WorktreeManager.COPIE_DE_VERIFICATION.test(agentId)) return { etape: 'preserver', agentId }
   }
 
   const head = this.tryGitFn(path, ['rev-parse', 'HEAD'])

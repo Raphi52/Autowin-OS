@@ -104,7 +104,7 @@ export function classifierRefusDeReprise(message: string): RefusDeReprise | unde
   ) {
     return 'copie-durable-absente'
   }
-  // Même verdict, TROISIÈME phrase : `worktree-manager.ts:459` (`copieSansRacinePropre`) refuse un
+  // Même verdict, TROISIÈME phrase : `verdictAppartenance` (`worktree-manager.ts`) refuse un
   // dossier qui a perdu son `.git` — git remonte sur le dépôt principal. Le dossier existe encore,
   // mais ce n'est plus une copie : aucun redémarrage ne la refera. Mesuré le 2026-11-05
   // Non classé, ce refus a rejoué la reprise à chacun des 33 démarrages, 33 runs
