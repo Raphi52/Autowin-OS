@@ -123,13 +123,19 @@ describe('consigne du chat — commandes déjà servies en outils directs', () =
     expect(remember.description).toMatch(/règle de comportement ni ce qui ne vaut que ce tour-ci/u)
   })
 
-  it('remember servi : les règles que l’outil ne porte pas restent dans la prose', () => {
-    for (const texte of [complet, court]) {
-      expect(texte).toContain('`lesson` — une leçon réutilisable')
-      expect(texte).toContain('Un refus « aucun Brain perso » se dit tel quel')
-      expect(texte).toContain('garde ce préfixe pour `brain_read`')
-      expect(texte).toContain('prends `session:` comme source')
-    }
+  it('remember : son mode d’emploi arrive par sa description, avec ou sans outils directs', () => {
+    const remember = CATALOG.find((c) => c.name === 'remember')!
+    // Sans outils directs, la description est recopiée dans la liste texte ; avec, l'outil la porte.
+    expect(complet).toContain(remember.description)
+    expect(remember.description).toContain('`lesson` — une leçon réutilisable')
+    expect(remember.description).toContain('prends `session:` comme source')
+    // Pas en double : la consigne courte ne redéfinit pas les types que l'outil porte déjà.
+    expect(court).not.toContain('`lesson` — une leçon réutilisable')
+    // Le préfixe `perso:` est dit par `brain_read`, dans les deux chemins ; le refus « aucun Brain
+    // perso » par le compte-rendu de la commande (commands.brain-perso.test.ts).
+    const brainRead = CATALOG.find((c) => c.name === 'brain_read')!
+    expect(brainRead.description).toContain('garde le préfixe perso:')
+    expect(complet).toContain(brainRead.description)
   })
 
   it('allège réellement la consigne envoyée avec les outils directs', () => {

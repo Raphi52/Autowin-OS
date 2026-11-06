@@ -7,7 +7,7 @@ import { outilsPublies } from '../skills/skill-node-mcp'
 import type { PipelinePhase } from '../skills/skill-pipeline'
 
 /**
- * PLAFOND DE TAILLE DES CONSIGNES DU CHAT (conv-1649, lot 1 du plan « Alléger les consignes du
+ * PLAFOND DE TAILLE DES CONSIGNES DU CHAT (lot 1 du plan « Alléger les consignes du
  * chat, avec un plafond qui baisse », 2026-11-06).
  *
  * POURQUOI. Les règles envoyées au modèle à CHAQUE message du chat sont passées de 14 Ko en août à
@@ -19,7 +19,7 @@ import type { PipelinePhase } from '../skills/skill-pipeline'
  * (agent-pilot/systeme-du-tour.ts) AVEC les outils directs servis (`systemeAvecOutilsDirects`,
  * le cas courant : modèle Claude, serveur d'outils démarré). Ce sont les mêmes `systemBlocks` que
  * ceux écrits dans `prompt-observability/<conv>.jsonl`. Contrôle du 2026-11-06 sur le dernier
- * envoi de conv-1648 : pilotage 36 938, constitution 18 207, style 9 193 — retrouvés au caractère
+ * envoi : pilotage 36 938, constitution 18 207, style 9 193 — retrouvés au caractère
  * près. La version SANS outils directs (repli `<cmd>`) fait 66 814 pour le pilotage : la mesurer
  * par erreur ferait rougir ce fichier, elle n'est donc jamais confondue avec celle-ci.
  *
@@ -40,20 +40,22 @@ import type { PipelinePhase } from '../skills/skill-pipeline'
  * ABAISSE à sa nouvelle mesure arrondie au 500 supérieur. Ne jamais en monter un : un test rouge ici
  * se règle en retirant du texte ailleurs.
  */
-// Plafond conv-1649 (2026-11-06) — on ne le monte JAMAIS. Mesure : 36 938 car. ; lot 2 (redites
-// de la constitution et règles déjà tenues par le code retirées) : 33 304 car.
-const PLAFOND_PILOTAGE = 33_500
-// Plafond conv-1649 (2026-11-06) — on ne le monte JAMAIS. Mesure : 18 207 car. ; lot 2 : 18 484
+// Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 36 938 car. ; lot 2 (redites
+// de la constitution et règles déjà tenues par le code retirées) : 33 304 car. ; lot 3 (mode
+// d'emploi de la mémoire et du plan de lots passé dans la description de leurs outils) : 29 108.
+const PLAFOND_PILOTAGE = 29_500
+// Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 18 207 car. ; lot 2 : 18 484
 // (cinq parts que seules les copies portaient, reportées en une phrase chacune, payées par des
 // redites internes retirées). Marge : 16 car. — un report de plus se paie par un retrait ici même.
 const PLAFOND_CONSTITUTION = 18_500
-// Plafond conv-1649 (2026-11-06) — on ne le monte JAMAIS. Mesure : 9 193 car. ; lot 2 : 7 275 car.
+// Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 9 193 car. ; lot 2 : 7 275 car.
 // « Dire vrai » y reste en une phrase : les deux appels du juge reçoivent ce ton sans la constitution.
 const PLAFOND_STYLE = 7_500
-// Plafond conv-1649 (2026-11-06) — on ne le monte JAMAIS. Mesure : 39 158 car. (56 outils :
-// 23 988 de descriptions, 15 170 de descriptions d'arguments).
+// Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 39 158 car. (56 outils :
+// 23 988 de descriptions, 15 170 de descriptions d'arguments). Lot 3 : 39 422 — la consigne y a
+// versé le mode d'emploi de `remember` et `plan_de_lots` (+255 ici, −4 196 dans la consigne).
 const PLAFOND_DESCRIPTIONS_OUTILS_DIRECTS = 39_500
-// Plafond conv-1649 (2026-11-06) — on ne le monte JAMAIS. Mesure : 25 954 car. (8 étapes, garde
+// Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 25 954 car. (8 étapes, garde
 // de tâche et bilan compris). Plafond seul : aucune réduction n'est prévue sur ces consignes.
 // Le déménagement vers des sous-dossiers a allongé les chemins des leviers de Kaizen (+77, exigés
 // par phase-briefs.kaizen-leviers.test.ts), payé par une redite de la constitution retirée : 25 969.

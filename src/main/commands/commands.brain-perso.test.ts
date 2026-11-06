@@ -79,6 +79,10 @@ describe('remember range selon la portée', () => {
     expect(data.stored).toBe(false)
     expect(data.rangement).toBe('rien')
     expect(String(data.detail)).toMatch(/aucun Brain perso/)
+    // La consigne du chat ne le redit plus : c'est ce compte-rendu qui dit de ne pas ranger ailleurs.
+    expect(String(data.detail)).toMatch(
+      /Dis-le à l’utilisateur ; ne le range pas dans le Brain d’équipe/u
+    )
     expect(espion.appels).toHaveLength(0)
   })
 

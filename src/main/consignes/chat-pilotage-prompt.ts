@@ -875,126 +875,49 @@ export function buildChatPilotagePrompt(
     // decision reste la regle ci-dessus. Il evite que le code DEVINE la phase a ta place : l'heuristique
     // de regime, mesuree sur 251 messages reels, decidait juste 2 fois quand le modele decidait 101 fois.
     // Nommer la phase joue CETTE phase SEULE, donc moins cher et plus previsible qu'un pipeline complet.
-    // MÉMOIRE : la seule régression mécanique face a claude.exe etait l'ECRITURE. La lecture a la
-    // demande existait deja (`brain_query`) ; l'injection automatique des fiches a ete coupee (552 Ko,
-    // ~9 200 tokens par appel). `remember` ferme le trou — mais une capacite sans mode d'emploi est une
-    // facade, defaut rencontre trois fois le 2026-07-29. D'ou ce bloc, et sa PARTIE HONNETE : ce qui est
-    // retenu n'est PAS relu au tour suivant, contrairement a claude.exe.
+    // MÉMOIRE — ici, seulement QUAND retenir. Le COMMENT (valeurs de `type`, retenir à la demande,
+    // compte-rendu en deux portées) vit dans la description de `remember`
+    // (commands/catalogue-app-et-savoir.ts) : elle part dans les deux chemins, outil direct et liste
+    // texte. Trois déclencheurs : un fait établi, une demande, et le fait énoncé en passant — sans ce
+    // dernier, le cas le plus fréquent n'était jamais retenu et se reperdait au fil suivant.
     horsLecture(
-      `MÉMOIRE : tu peux RETENIR un fait avec \`remember\`, et RELIRE l'acquis avec \`brain_query\`. ` +
-        // LA PROSE SOUFFLAIT UN MOT ILLEGAL. Elle enumerait « une cause racine verifiee, une decision
-        // technique tranchee, une CONTRAINTE d'un systeme, un chiffre mesure » — quatre situations en
-        // francais, dont AUCUNE n'est une valeur de `REMEMBER_TYPES`. Le modele y prenait le mot le plus
-        // proche de son fait (`contrainte`, `cause-racine`) et se faisait refuser : trois fois mesure,
-        // 2026-08-20, 2026-08-26, 2026-08-27. La signature du catalogue porte
-        // desormais l'enumeration (`signatureDeCommande`), mais elle DISPARAIT quand `remember` n'est pas
-        // dans le catalogue courant — et surtout, deux vocabulaires concurrents dans un meme prompt
-        // laissent le choix au modele. On rattache donc chaque situation a SON type legal.
-        `Retiens quand tu viens d'établir quelque chose de DURABLE et de partageable, en prenant le ` +
-        `\`type\` dans ces QUATRE valeurs et jamais un mot à toi : \`lesson\` — une leçon réutilisable, ` +
-        `y compris une cause racine vérifiée · \`decision\` — un choix technique tranché et son motif · ` +
-        // `remember` type `preference` écrit dans le profil LOCAL (commands.ts, cas
-        // 'remember' → `retenirPreferenceAuProfil`), jamais au Brain : la prose doit le dire, sinon
-        // l'agent annonce un « candidat » partagé qui n'existe pas.
-        `\`preference\` — un goût ou une règle de l'utilisateur, le sien : écrit dans SON profil ` +
-        `local (comme \`profil_ajouter\`), relu en entier à chaque tour et jamais partagé (pas au ` +
-        `Brain) ; une règle qui vaut ` +
-        `pour l'équipe se retient en \`decision\` · ` +
-        `\`domain\` — un fait du système : une ` +
-        `contrainte, un invariant, un chiffre mesuré. ` +
-        // PORTEE (2026-09-02) : ce bloc detaillait les quatre `type` et les sept formes de
-        // `source`, et ne disait RIEN de `scope` — pourtant OBLIGATOIRE. Le depot a ete refuse « portee
-        // manquante », rien n'a ete ecrit, et le modele l'avait deja annonce a l'utilisateur. Le champ
-        // n'apparaissait que comme NOM NU dans la signature du catalogue (aucune enumeration a exposer),
-        // donc invisible comme exigence. Autowin remplit desormais la portee avec le projet courant
-        // (`projectScopeFromWorkspace`) : la prose dit ce defaut, pour que `global` reste un choix.
-        `\`scope\` — la portée : omets-la et Autowin la remplit avec le projet courant ; écris ` +
-        `\`global\` seulement quand le fait vaut au-delà de ce projet. ` +
-        // DEUX BRAINS (2026-10-28) : l'utilisateur a choisi que l'agent range lui-même et
-        // dise où. Le compte-rendu porte `rangement` (commands.ts, cas 'remember').
-        // SANS DOUBLON (2026-10-28) : quand `remember` est servi en outil direct, ses
-        // arguments arrivent au modèle avec leur description entière (commands.ts : `portee`, `fact`
-        // « autoporté… 3 mois », `source` et ses formes) et sa description dit déjà « pas une règle de
-        // comportement ni ce qui ne vaut que ce tour-ci ». Ces phrases ne partent donc QUE sur le
-        // chemin texte, où la liste ne montre que les noms d'arguments.
+      `MÉMOIRE : retiens avec \`remember\` ce que tu viens d'établir de DURABLE et de partageable, ` +
+        `et ce que l'utilisateur te demande de retenir, sans lui réclamer les détails. INFORMATIF ` +
+        `SPONTANÉ : un fait qu'il t'énonce en passant, sans te demander de le retenir (« on push ` +
+        `direct sur main »), se retient tout de suite s'il vaudra encore dans 3 mois ; rien pour un ` +
+        `statut du moment ou une consigne de ce tour. Quand tu retiens, dis-le en une ligne.\n` +
+        // Sans outils directs, la liste texte ne montre que les NOMS des arguments : ce que portent
+        // sinon les arguments de `remember` ne part que sur ce chemin-là, jamais en double.
         horsOutilRemember(
-          `\`portee\` — OÙ ranger : \`equipe\` (défaut) si le fait touche un projet, un outil ou un ` +
-            `système de l'équipe ; \`perso\` pour tout le reste (notes personnelles, projets perso) — le ` +
-            `Brain perso est privé, jamais partagé. Dis ensuite en une ligne où tu l'as rangé, d'après le ` +
-            `champ \`rangement\` du compte-rendu. `
-        ) +
-        `Un refus « aucun Brain perso » se dit tel quel, sans ` +
-        `ranger à l'équipe à la place. Dans \`brain_query\`, les notes perso arrivent sous BRAIN PERSO, ` +
-        `chemins préfixés \`perso:\` : garde ce préfixe pour \`brain_read\`. ` +
-        horsOutilRemember(
-          `Ne retiens PAS une règle de comportement te concernant, ni ce qui ne vaut que ce tour-ci, ni une ` +
-            `hypothèse non vérifiée. Le fait doit être AUTOPORTÉ (relisible dans 3 mois sans cette ` +
-            `conversation) et porter une source traçable. Les formes acceptées, en ENTIER : ` +
-            `\`git:<chemin>@<sha>\` pour un fait de code (la forme par défaut) · \`url:https://…\` · ` +
+          `\`scope\` — omets-le et Autowin met le projet courant ; \`global\` seulement si le fait ` +
+            `vaut au-delà. \`portee\` — OÙ ranger : \`equipe\` (défaut) si le fait touche un projet, ` +
+            `un outil ou un système de l'équipe, \`perso\` sinon (privé, jamais partagé) ; dis ensuite ` +
+            `où tu l'as rangé (champ \`rangement\`). Le fait est AUTOPORTÉ (relisible dans 3 mois ` +
+            `sans cette conversation), avec une source traçable. Les formes acceptées, en ENTIER : ` +
+            `\`git:<chemin>@<sha>\` pour du code (par défaut) · \`url:https://…\` · ` +
             `\`ticket:ABC-123\` · \`email:qui@ex.fr\` · \`meeting:AAAA-MM-JJ\` · ` +
-            `\`session:<id de cette conversation>\` quand le fait vient de la conversation elle-même et qu'aucun ` +
-            `artefact ne l'atteste — c'est le cas quand l'utilisateur te dit simplement « retiens ça » · ` +
-            `\`file:<chemin ABSOLU existant côté serveur>\` en dernier recours : un chemin de dépôt relatif est ` +
-            `REFUSÉ, préfère \`git:\`.`
-        ) +
-        `\n` +
-        `Si l'utilisateur te demande de retenir quelque chose, fais-le sans réclamer les détails : déduis le ` +
-        `titre, le type et la portée de la conversation, et prends \`session:\` comme source si tu n'as rien ` +
-        `de mieux — ne renonce jamais à retenir faute de source.\n`
+            `\`session:<id de cette conversation>\` quand seul ce fil l'atteste (« retiens ça ») · ` +
+            `\`file:<chemin ABSOLU existant côté serveur>\` en dernier recours, un chemin relatif ` +
+            `est REFUSÉ.\n`
+        )
     ) +
-    // INFORMATIF SPONTANE : les deux declencheurs ci-dessus — « tu viens d'etablir » et
-    // « l'utilisateur te DEMANDE de retenir » — laissaient dehors le cas le plus frequent :
-    // l'utilisateur ENONCE un fait durable en passant, sans rien demander. Rien n'etait retenu, et le
-    // fait etait reperdu au fil suivant.
-    horsLecture(
-      `INFORMATIF SPONTANÉ : quand l'utilisateur t'énonce un fait en passant, sans te demander de le ` +
-        `retenir (« on est en dev, on push direct sur main », « le client X impose Y »), demande-toi s'il ` +
-        `vaudra encore dans 3 mois : si oui, retiens-le tout de suite, avec \`session:\` comme source si ` +
-        `aucun artefact ne l'atteste. Si c'est un statut du moment ou une consigne qui ne vaut que ce ` +
-        `tour-ci, ne retiens rien. Quand tu retiens, dis-le en une ligne plutôt que de le faire en ` +
-        `silence.\n`
-    ) +
-    `POUR RELIRE : \`brain_query\` interroge le savoir déjà curé (décisions, leçons, contraintes ` +
-    `établies). Préfère-le à une exploration du dépôt quand la question porte sur un ACQUIS (« pourquoi ` +
-    `a-t-on choisi X ? », « quelle contrainte a Y ? ») ; pour l'état du code courant, lis les fichiers. ` +
-    `Un silence n'est pas une réponse négative : c'est souvent que personne ne l'a encore retenu — donc ` +
-    `l'occasion d'un \`remember\`.\n` +
-    // LE BRAIN A CHAQUE TOUR (2026-09-30) : « a la demande » avait donne 8 appels sur 824
-    // tours, jamais spontanes. Chaque tour recoit donc les CHEMINS des notes proches
-    // (`brain-titres-du-tour.ts`). Le mode d'emploi vit ICI, dans le prefixe mis en cache, et non
-    // dans le bloc du tour : le repeter a chaque tour le ferait payer a chaque tour.
-    `NOTES PROCHES À CHAQUE TOUR : sous « CONNAISSANCE RÉCUPÉRÉE », un bloc « BRAIN — notes proches » ` +
-    `donne le CHEMIN des notes du Brain les plus proches de la demande, sans leur contenu, et seulement ` +
-    `celles pas encore listées dans ce fil. Ce sont des candidates trouvées par proximité, pas une ` +
-    `réponse : environ une sur trois est hors sujet. Celle dont le nom touche vraiment la demande, ` +
-    `ouvre-la avec \`brain_read\` AVANT de répondre ou de fouiller le dépôt ; ignore les autres. Pas de ` +
-    `bloc = aucune note assez proche, pas un Brain vide : \`brain_query\` reste là pour un autre angle. ` +
-    // 2026-10-28 : le Brain perso y verse aussi ses notes (`brain-titres-du-tour.ts`).
-    `Une ligne \`perso:knowledge/…\` vient du Brain PERSO de l'utilisateur : ouvre-la avec ` +
-    `\`brain_read\` en gardant le préfixe \`perso:\`.\n` +
-    // AVANT DE CONSEILLER (saisie ts=1788375124082 : « t'avais tout ce qu'il fallait pour
-    // reflechir dans le brain »). Une question d'ARCHITECTURE sur un systeme maison (CONTOSO) a recu une
-    // reponse detaillee et assuree sans UNE SEULE interrogation du Brain : la regle ci-dessus ne
-    // couvrait que les questions sur un ACQUIS (« pourquoi a-t-on choisi X »), pas les demandes de
-    // CONSEIL — pourtant celles ou une reponse generique coute le plus cher.
-    `AVANT DE CONSEILLER SUR UN SYSTÈME MAISON : une demande d'avis, d'architecture, de refonte ou ` +
-    `de choix technique portant sur un système nommé de l'entreprise (une application, un projet, un ` +
-    `client) commence par un \`brain_query\`, AVANT d'écrire le conseil. Conseiller de mémoire sur un ` +
-    `système dont le savoir est déjà curé produit du générique là où l'utilisateur attend du réel. ` +
-    `Si le Brain ne répond pas, c'est une panne à traiter (voir la note de la commande), pas une ` +
-    `autorisation à répondre quand même.
-` +
-    horsLecture(
-      `À DIRE HONNÊTEMENT quand tu retiens, en distinguant les deux portées, et en te fiant au COMPTE-RENDU ` +
-        `de la commande plutôt qu'à une supposition. DANS CETTE CONVERSATION : le fait te sera remis aux tours ` +
-        `suivants (tu le retrouveras sous « CE QUE TU AS RETENU DANS CETTE CONVERSATION »), donc tu peux dire ` +
-        `que tu t'en souviendras ICI — sauf si le compte-rendu signale un refus, car alors rien n'a été ` +
-        `retenu. POUR LES AUTRES : le fait part comme CANDIDAT, un humain le promeut, et il ne devient ` +
-        `trouvable par \`brain_query\` qu'après réindexation ; ne promets donc jamais une mémoire partagée ` +
-        `immédiate. Trois limites à ne pas cacher : l'écho est local à ce poste et il SURVIT au redémarrage (il est relu sur disque au démarrage), mais il retombe à zéro si son fichier devient illisible ou dépasse sa taille maximale ; ` +
-        `il ne garde que la douzaine de faits les plus récents du fil (au-delà, il te dit combien il a écarté) ; ` +
-        `et un fait marqué « non déposé au Brain » n'existe QUE dans ce fil — redis-le plus tard si ça compte.\n`
-    ) +
+    // NOTES PROCHES : chaque tour reçoit les CHEMINS des notes du Brain proches de la demande
+    // (`brain-titres-du-tour.ts`) — « à la demande » n'avait donné que 8 appels sur 824 tours. Le
+    // QUAND vit ici, dans le préfixe mis en cache : dans le bloc du tour, il se paierait à chaque
+    // tour. Le préfixe `perso:` est dit par la description de `brain_read`, et « un acquis se cherche
+    // au Brain avant le dépôt » par celle de `brain_query`.
+    `NOTES PROCHES : sous « CONNAISSANCE RÉCUPÉRÉE », le bloc « BRAIN — notes proches » donne le ` +
+    `CHEMIN de notes trouvées par proximité, sans leur contenu, et environ une sur trois est hors ` +
+    `sujet : celle dont le nom touche vraiment la demande, ouvre-la avec \`brain_read\` AVANT de ` +
+    `répondre ou de fouiller le dépôt ; ignore les autres. Pas de bloc ne veut pas dire Brain vide : ` +
+    `\`brain_query\` reste là pour un autre angle.\n` +
+    // AVANT DE CONSEILLER : une question d'ARCHITECTURE sur un système maison a reçu une réponse
+    // détaillée et assurée sans une seule interrogation du Brain. La relecture ne couvrait que les
+    // questions sur un ACQUIS, pas les demandes de CONSEIL, où une réponse générique coûte le plus.
+    `AVANT DE CONSEILLER SUR UN SYSTÈME MAISON (avis, architecture, refonte ou choix technique sur ` +
+    `une application, un projet ou un client de l'entreprise) : un \`brain_query\` AVANT d'écrire ` +
+    `le conseil. Si le Brain ne répond pas, c'est une panne à traiter, pas une autorisation à ` +
+    `répondre quand même.\n` +
     horsLecture(
       `PHASE : quand tu lances \`orchestrate\`, tu peux passer \`phase\` pour ne jouer QUE celle-là — ` +
         `c'est moins cher et plus prévisible que le pipeline entier, et ça évite que l'app devine à ta ` +

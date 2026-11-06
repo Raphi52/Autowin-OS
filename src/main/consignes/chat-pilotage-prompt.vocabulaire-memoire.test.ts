@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { REMEMBER_TYPES } from '../brain/brain-remember'
+import { outilsDuChat } from '../chat/chat-mcp'
+import { CATALOG } from '../commands/commands'
 
 /**
  * LA PROSE DU BLOC MÉMOIRE NE DOIT PAS SOUFFLER UN VOCABULAIRE ILLÉGAL.
@@ -11,37 +13,44 @@ import { REMEMBER_TYPES } from '../brain/brain-remember'
  * faisait refuser : `cause-racine` le 2026-08-20, à nouveau le 2026-08-26, puis
  * `contrainte` le 2026-08-27.
  *
- * `signatureDeCommande` porte désormais l'énumération dans la signature du catalogue, mais cela ne
- * suffit pas : elle DISPARAÎT quand `remember` est absent du catalogue courant (cas du catalogue en
- * lecture seule), et deux vocabulaires concurrents dans un même prompt laissent le choix au modèle.
+ * `signatureDeCommande` porte l'énumération dans la signature du catalogue, mais un mot nu ne dit pas
+ * ce qu'il couvre, et deux vocabulaires concurrents laissent le choix au modèle. Les valeurs et leur
+ * sens vivent donc à UN endroit : la description de `remember`, qui part dans les deux chemins — outil
+ * direct, et liste texte quand les outils directs ne sont pas servis. La consigne ne les redit pas.
  *
- * D'où le banc : on construit le prompt avec un catalogue VIDE, ce qui isole la prose — la signature
- * ne peut pas répondre à sa place. Sans cette précaution, le test se validerait lui-même.
+ * D'où le banc : les phrases exigées ne figurent pas dans la signature (`type: lesson|decision|…`,
+ * sans accents graves ni définition) — elle ne peut pas répondre à leur place.
  */
-const proseSeule = (): string => buildChatPilotagePrompt([])
+const remember = (): { description: string; args: Record<string, unknown> } =>
+  CATALOG.find((c) => c.name === 'remember')!
+/** Ce que le modèle reçoit sur `remember`, dans chacun des deux chemins. */
+const recus = (): string[] => [
+  buildChatPilotagePrompt(CATALOG),
+  `${buildChatPilotagePrompt(CATALOG, { outilsDirects: outilsDuChat(CATALOG) })}\n${remember().description}`
+]
 
-describe('la prose du bloc MÉMOIRE parle le vocabulaire de `remember`', () => {
+describe('le vocabulaire de `remember` arrive avec son sens, outils directs servis ou non', () => {
   it('nomme les quatre valeurs légales, sans l’aide de la signature du catalogue', () => {
-    const prompt = proseSeule()
-
-    for (const type of REMEMBER_TYPES) {
-      expect(prompt).toContain('`' + type + '`')
+    for (const prompt of recus()) {
+      for (const type of REMEMBER_TYPES) {
+        expect(prompt).toContain('`' + type + '` — ')
+      }
     }
   })
 
   it('ne souffle plus « contrainte » comme s’il s’agissait d’un type', () => {
     // Le mot reste légitime pour DÉCRIRE un fait (« une contrainte, un invariant, un chiffre
     // mesuré »), mais plus comme item d'une liste de catégories : il s'y lisait comme une valeur.
-    expect(proseSeule()).not.toContain("une contrainte d'un système")
+    for (const prompt of recus()) expect(prompt).not.toContain("une contrainte d'un système")
   })
 
   it('rattache chaque type à ce qu’il couvre, plutôt que de les lister à sec', () => {
-    const prompt = proseSeule()
-
-    expect(prompt).toContain('`lesson` — une leçon réutilisable')
-    expect(prompt).toContain('`decision` — un choix technique tranché')
-    expect(prompt).toContain("`preference` — un goût ou une règle de l'utilisateur")
-    expect(prompt).toContain('`domain` — un fait du système')
+    for (const prompt of recus()) {
+      expect(prompt).toContain('`lesson` — une leçon réutilisable')
+      expect(prompt).toContain('`decision` — un choix technique tranché')
+      expect(prompt).toContain('`preference` — un goût ou une règle de l’utilisateur')
+      expect(prompt).toContain('`domain` — un fait du système')
+    }
   })
 })
 
@@ -54,10 +63,12 @@ describe('la prose du bloc MÉMOIRE parle le vocabulaire de `remember`', () => {
  */
 describe('la prose du bloc MÉMOIRE nomme la portée', () => {
   it('dit que la portée est remplie par défaut, et à quoi sert `global`', () => {
-    const prompt = proseSeule()
-
-    expect(prompt).toContain('`scope`')
-    expect(prompt).toContain('le projet courant')
-    expect(prompt).toContain('`global`')
+    // Sans outils directs, la liste texte ne montre que le NOM de l'argument : la consigne le dit.
+    const texte = buildChatPilotagePrompt(CATALOG)
+    expect(texte).toContain('`scope`')
+    expect(texte).toContain('le projet courant')
+    expect(texte).toContain('`global`')
+    // Avec outils directs, c'est l'argument lui-même qui le dit.
+    expect(remember().args.scope).toMatch(/« global »[\s\S]*le projet courant/u)
   })
 })

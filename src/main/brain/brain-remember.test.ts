@@ -19,6 +19,8 @@ import {
   truncateFact
 } from './brain-remember'
 import { buildChatPilotagePrompt } from '../consignes/chat-pilotage-prompt'
+import { outilsDuChat } from '../chat/chat-mcp'
+import { CATALOG } from '../commands/commands'
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
 
 /**
@@ -583,24 +585,37 @@ describe('câblage — la commande existe et le prompt enseigne quand l’employ
     expect(source).toContain('rememberFact(a, {')
   })
 
+  /**
+   * Ce que le modèle reçoit sur `remember`, dans les deux chemins : la liste texte (sa description y
+   * est recopiée) et, outils directs servis, la consigne courte suivie de la description de l'outil.
+   * Le mode d'emploi vit dans cette description, la consigne ne garde que le QUAND.
+   */
+  const recusSurRemember = (): string[] => {
+    const description = CATALOG.find((c) => c.name === 'remember')!.description
+    const court = buildChatPilotagePrompt(CATALOG, { outilsDirects: outilsDuChat(CATALOG) })
+    return [buildChatPilotagePrompt(CATALOG), `${court}\n${description}`]
+  }
+
   it('le prompt dit QUAND retenir et QUAND ne pas', () => {
-    const prompt = buildChatPilotagePrompt([])
-    expect(prompt).toContain('`remember`')
-    expect(prompt).toMatch(/durable/i)
-    expect(prompt).toMatch(/Ne retiens PAS/)
-    expect(prompt).toMatch(/r.gle de comportement/i)
+    for (const prompt of recusSurRemember()) {
+      expect(prompt).toContain('`remember`')
+      expect(prompt).toMatch(/durable/i)
+      expect(prompt).toMatch(/Ne retiens PAS/)
+      expect(prompt).toMatch(/r.gle de comportement/i)
+    }
   })
 
   it('le prompt annonce la MÉCANIQUE réelle, pas une mémoire immédiate', () => {
-    const prompt = buildChatPilotagePrompt([])
-    expect(prompt).toMatch(/candidat/i)
-    expect(prompt).toMatch(/r.indexation/i)
-    // fix-ok: cette assertion exigeait « pas au tour suivant ». C'ETAIT vrai, et ce ne l'est plus : l'echo
-    // de session (fonctionnalite livree apres l'audit du 2026-07-30, defaut D9) rend le fait relisible
-    // DANS CE FIL. L'exigence ne baisse pas — le prompt doit toujours dire la mecanique reelle — mais
-    // celle-ci a desormais DEUX portees, et c'est la confusion entre les deux qui serait le mensonge.
-    expect(prompt).toMatch(/DANS CETTE CONVERSATION/)
-    expect(prompt).toMatch(/POUR LES AUTRES/)
+    for (const prompt of recusSurRemember()) {
+      expect(prompt).toMatch(/candidat/i)
+      expect(prompt).toMatch(/r.indexation/i)
+      // fix-ok: cette assertion exigeait « pas au tour suivant ». C'ETAIT vrai, et ce ne l'est plus : l'echo
+      // de session (fonctionnalite livree apres l'audit du 2026-07-30, defaut D9) rend le fait relisible
+      // DANS CE FIL. L'exigence ne baisse pas — le prompt doit toujours dire la mecanique reelle — mais
+      // celle-ci a desormais DEUX portees, et c'est la confusion entre les deux qui serait le mensonge.
+      expect(prompt).toMatch(/DANS CETTE CONVERSATION/)
+      expect(prompt).toMatch(/POUR LES AUTRES/)
+    }
   })
 
   it('la LECTURE reste couverte par `brain_query` — pas de régression', () => {
@@ -1136,7 +1151,15 @@ describe('câblage — le prompt enseigne toutes les formes, dont le repli sessi
   })
 
   it('le prompt dit QUAND relire avec brain_query, pas seulement qu’il existe', () => {
-    expect(prompt()).toMatch(/POUR RELIRE/)
+    // « Un acquis se cherche au Brain avant le dépôt » vit dans la description de `brain_query`,
+    // recopiée dans la liste texte et servie telle quelle en outil direct ; la consigne garde le
+    // cas du conseil sur un système maison.
+    const description = CATALOG.find((c) => c.name === 'brain_query')!.description
+    expect(description).toMatch(
+      /à préférer à une exploration du repo quand la question porte sur un acquis/u
+    )
+    expect(buildChatPilotagePrompt(CATALOG)).toContain(description)
+    expect(prompt()).toMatch(/AVANT DE CONSEILLER SUR UN SYSTÈME MAISON/)
   })
 })
 

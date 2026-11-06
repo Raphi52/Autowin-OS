@@ -27,6 +27,9 @@
  * décide donc plus : seuls comptent le lien entre les tâches et leur sujet, qui se lisent dans le
  * message.
  */
+// Ici, seulement QUAND lancer un plan. Le COMMENT (déposer part sans clic, « apres », contexte,
+// actions) vit dans la description de `plan_de_lots` (commands/catalogue.ts) : elle part aussi dans
+// la liste texte quand les outils directs ne sont pas servis, et la redire ici la payait deux fois.
 export const CONSIGNE_PLAN_DE_LOTS =
   `UNE TÂCHE LONGUE → LANCE UN PLAN DE LOTS. Au moment où UNE demande d'action est un chantier ` +
   `qui se découpe en au moins TROIS parties sur des fichiers séparés (une refonte, « rends X ` +
@@ -34,16 +37,8 @@ export const CONSIGNE_PLAN_DE_LOTS =
   `seul fil y passerait plusieurs tours, lance-le toi-même avec \`plan_de_lots\` (action ` +
   // 2026-11-05 : le cas « plusieurs tâches indépendantes → un lot par tâche » est dit
   // par PLUSIEURS TÂCHES DANS UN MESSAGE, servi dans le même prompt ; il n'est plus répété ici.
-  `« deposer ») au lieu de tout faire ici ou de lancer \`orchestrate\`. Déposer LANCE le plan aussitôt, ` +
-  `sans clic de l'utilisateur (il peut l'arrêter dans le tableau) : ne dépose qu'un plan prêt. Avant de déposer, une lecture ` +
-  `ciblée (le même escalier que pour un symptôme) estime les fichiers de chaque lot ; un lot qui a ` +
-  `besoin du RÉSULTAT d'un autre l'attend par « apres ». Donne un « contexte » commun (le but, les ` +
-  `décisions et contraintes déjà prises) : le fil d'un lot ne sait RIEN d'autre que sa demande et ce ` +
-  `contexte. Un lot simple part sur un modèle léger (« modele »: « haiku » ou « sonnet »). Pendant le ` +
-  `plan, une nouvelle demande qui prolonge le chantier s'AJOUTE au plan (action « ajouter »), et une ` +
-  `décision qui vaut pour les lots à venir se NOTE (action « noter »). Chaque lot coûte un tour : vise 3 à 8 lots ` +
-  `pour un chantier, pas plus qu'il n'en demande. Dis en une ligne pourquoi tu découpes et que les lots sont ` +
-  `partis, puis rends la main : l'app te réveille à chaque fin de lot. AUCUN plan pour : UNE tâche qui tient en un ou deux fichiers, une correction ` +
-  `ponctuelle, une question ou une analyse (RÈGLE PREMIÈRE), des gestes dont tu connais déjà le ` +
-  `fichier et la ligne, des tâches qui touchent les mêmes fichiers, un message qui demande de tout faire ici. Si ` +
-  `l'utilisateur demande lui-même une « super conversation » ou un « plan de lots », lance-le.`
+  `« deposer ») au lieu de tout faire ici ou de lancer \`orchestrate\` ; de même quand l'utilisateur ` +
+  `demande lui-même une « super conversation » ou un « plan de lots ». AUCUN plan pour : UNE tâche ` +
+  `qui tient en un ou deux fichiers, une correction ponctuelle, une question ou une analyse ` +
+  `(RÈGLE PREMIÈRE), des gestes dont tu connais déjà le fichier et la ligne, des tâches qui touchent ` +
+  `les mêmes fichiers, un message qui demande de tout faire ici.`

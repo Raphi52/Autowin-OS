@@ -247,13 +247,17 @@ describe('profil utilisateur — commandes du bus', () => {
     }
   })
 
-  it('la prose MÉMOIRE envoie un goût personnel au profil, pas au Brain', () => {
-    const prose = buildChatPilotagePrompt([])
-    expect(prose).toContain('`profil_ajouter`')
-    // Depuis la redirection de `remember` type `preference` vers le profil.
-    expect(prose).toContain("`preference` — un goût ou une règle de l'utilisateur, le sien")
-    expect(prose).toContain('jamais partagé (pas au Brain)')
-    expect(prose).toContain("une règle qui vaut pour l'équipe se retient en `decision`")
+  it('la description de `remember` envoie un goût personnel au profil, pas au Brain', () => {
+    // Le sens des types vit dans la description de `remember` : recopiée dans la liste texte, servie
+    // telle quelle en outil direct. Depuis la redirection du type `preference` vers le profil.
+    const description = CATALOG.find((c) => c.name === 'remember')!.description
+    expect(buildChatPilotagePrompt(CATALOG)).toContain(description)
+    expect(description).toContain(
+      '`preference` — un goût ou une règle de l’utilisateur (SON profil local, jamais le Brain)'
+    )
+    expect(description).toContain(
+      '`decision` — un choix technique tranché et son motif, ou une règle d’équipe'
+    )
   })
 })
 

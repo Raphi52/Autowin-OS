@@ -111,8 +111,12 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
   },
   {
     name: 'remember',
+    // Le mode d'emploi vit ICI, pas dans la consigne du chat : la description part dans les deux
+    // chemins (outil direct, et liste texte quand les outils directs ne sont pas servis). Les
+    // valeurs de `type` y sont rattachées à ce qu'elles couvrent : la prose d'avant soufflait des
+    // mots illégaux (« contrainte », « cause-racine ») que le dépôt refusait.
     description:
-      'Retenir DURABLEMENT un fait vérifié ou proposer UNE SEULE LEÇON réutilisable issue du succès ou de l’échec du run courant. Dépose d’abord un candidat Brain ; Autowin ne le publie seul que si les preuves causales externes sont fortes, sinon il reste en revue. Pas pour un statut brut, une auto-évaluation, une règle de comportement ni ce qui ne vaut que ce tour-ci',
+      'Retenir DURABLEMENT un fait vérifié ou UNE SEULE LEÇON née du succès ou de l’échec du run courant. Ne retiens PAS un statut, une auto-évaluation, une règle de comportement ni ce qui ne vaut que ce tour-ci. `type`, rien d’autre : `lesson` — une leçon réutilisable (cause racine vérifiée comprise) · `decision` — un choix technique tranché et son motif, ou une règle d’équipe · `preference` — un goût ou une règle de l’utilisateur (SON profil local, jamais le Brain) · `domain` — un fait du système (contrainte, invariant, mesure). Faute de mieux, prends `session:` comme source, sans renoncer. DANS CETTE CONVERSATION, il te revient à chaque tour (écho local à ce poste : il SURVIT au redémarrage sauf fichier illisible ou trop gros, ne garde qu’une douzaine de faits ; un fait « non déposé au Brain » n’existe QUE dans ce fil, redis-le s’il compte) ; POUR LES AUTRES, c’est un CANDIDAT au Brain, publié seul sur preuve externe forte, sinon en revue humaine, trouvable après réindexation',
     args: {
       title: 'titre court et retrouvable',
       fact: 'le fait, autoporté — compréhensible dans 3 mois sans cette conversation',
@@ -134,7 +138,7 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
         'facultatif — uid(s) des notes que ce fait REMPLACE (lus via brain_read) ; la note ancienne ne passe « remplacée » qu’à la revue',
       // 2026-10-28 : deux Brains, et c'est l'agent qui range (choix de l'utilisateur).
       portee:
-        'equipe | perso — OÙ ranger le fait. equipe : il touche un projet, un outil ou un système de l’équipe. perso : tout le reste (notes personnelles, projets perso, vie hors équipe) — privé, jamais partagé. Défaut : equipe. Dis ensuite en une ligne où tu l’as rangé (champ `rangement` du résultat)'
+        'equipe | perso — OÙ ranger le fait. equipe : il touche un projet, un outil ou un système de l’équipe. perso : tout le reste — privé, jamais partagé. Défaut : equipe. Dis ensuite en une ligne où tu l’as rangé (champ `rangement` du résultat)'
     },
     // `scope` est rempli depuis le projet (`rememberFact`), `portee` vaut `equipe` par
     // défaut et `runId` se déduit de l'issue du tour. Les exiger coûtait un refus pour rien.
@@ -219,10 +223,10 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
   {
     name: 'brain_query',
     description:
-      'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis. Rend la LISTE des notes candidates (titre, chemin, taille), sans contenu ; une longue liste arrive réduite par le modèle des petites tâches aux 3 à 8 notes utiles à ta question (entier: true = liste complète). Ouvre ensuite avec brain_read celles qui servent ta tâche',
+      'Interroger le savoir curé du Brain (décisions, leçons, contraintes déjà établies) — à préférer à une exploration du repo quand la question porte sur un acquis. Rend la LISTE des notes candidates (titre, chemin, taille), sans contenu ; une longue liste arrive réduite aux 3 à 8 notes utiles à ta question. Ouvre ensuite avec brain_read celles qui servent ta tâche',
     args: {
       question: 'la question, en langage naturel',
-      entier: 'facultatif — true pour la liste complète, sans le filtre du petit modèle'
+      entier: 'facultatif — true pour la liste complète'
     },
     annotations: {
       readOnlyHint: true,
@@ -251,9 +255,9 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
   {
     name: 'brain_read',
     description:
-      'Ouvrir une note curée du Brain nommée par brain_query ou brain_graph. Une note longue revient CONDENSÉE par le modèle des petites tâches sur ton besoin (conv-1469) ; entier: true rend la note brute, nécessaire pour la remplacer via remember (supersedes)',
+      'Ouvrir une note curée du Brain nommée par brain_query ou brain_graph ; garde le préfixe perso: d’une note du Brain perso. Une note longue revient CONDENSÉE sur ton besoin ; entier: true rend la note brute, nécessaire pour la remplacer via remember (supersedes)',
     args: {
-      path: 'chemin de la note, knowledge/…/nom.md — garde le préfixe perso: d’une note du Brain perso',
+      path: 'chemin de la note, knowledge/…/nom.md',
       besoin: 'ce que tu cherches dans cette note, en une phrase — sert au condensé',
       entier: 'facultatif — true pour la note brute, sans condensé'
     },

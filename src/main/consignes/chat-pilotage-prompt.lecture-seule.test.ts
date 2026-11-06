@@ -17,9 +17,9 @@ const SECTIONS_RETIREES = [
   'tu le FAIS toi-meme avec `restart_app`',
   '1 bis. `edit_file`',
   'Une ECRITURE DANS UN SYSTEME EXTERNE',
-  'MÉMOIRE : tu peux RETENIR',
+  'MÉMOIRE : retiens avec `remember`',
   'INFORMATIF SPONTANÉ',
-  'À DIRE HONNÊTEMENT quand tu retiens',
+  'POUR LES AUTRES, c’est un CANDIDAT',
   'PHASE : quand tu lances',
   'DEMANDE SANS OBJET'
 ]
@@ -30,7 +30,8 @@ const SECTIONS_GARDEES = [
   'PÉRIMÈTRE DE LECTURE',
   'RÈGLE ABSOLUE',
   'EXPRESSION VISUELLE',
-  'POUR RELIRE',
+  'NOTES PROCHES',
+  'à préférer à une exploration du repo quand la question porte sur un acquis',
   'AVANT DE CONSEILLER SUR UN SYSTÈME MAISON'
 ]
 

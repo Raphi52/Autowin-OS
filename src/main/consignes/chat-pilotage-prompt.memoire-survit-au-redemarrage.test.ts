@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { outilsDuChat } from '../chat/chat-mcp'
+import { CATALOG } from '../commands/commands'
 import {
   configureSessionMemoryEcho,
   forgetEcho,
@@ -49,8 +51,13 @@ describe('mémoire du fil : le prompt dit ce que le code fait', () => {
   })
 
   it('le prompt n’annonce plus une disparition au redémarrage', () => {
-    const prompt = buildChatPilotagePrompt([])
-    expect(prompt).not.toContain("disparaît si l'application redémarre")
-    expect(prompt).toContain('il SURVIT au redémarrage')
+    // La limite se dit dans la description de `remember`, recopiée dans la liste texte et servie
+    // telle quelle en outil direct : les deux chemins la reçoivent.
+    const description = CATALOG.find((c) => c.name === 'remember')!.description
+    const court = buildChatPilotagePrompt(CATALOG, { outilsDirects: outilsDuChat(CATALOG) })
+    for (const prompt of [buildChatPilotagePrompt(CATALOG), `${court}\n${description}`]) {
+      expect(prompt).not.toContain("disparaît si l'application redémarre")
+      expect(prompt).toContain('il SURVIT au redémarrage')
+    }
   })
 })

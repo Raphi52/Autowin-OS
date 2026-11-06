@@ -15,6 +15,9 @@ import {
   type RememberedFact
 } from './session-memory-echo'
 import { buildChatPilotagePrompt } from '../consignes/chat-pilotage-prompt'
+import { CATALOG } from '../commands/commands'
+import { outilsDuChat } from '../chat/chat-mcp'
+import { outilsPublies } from '../skills/skill-node-mcp'
 import { buildTurnMessages } from '../chat/chat-turn-messages'
 import { sourceDuPilote } from '../agent-pilot/source-du-pilote.test-helpers'
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
@@ -381,7 +384,11 @@ describe('câblage — l’écho est réellement alimenté et réellement relu',
   })
 
   it('le prompt distingue les DEUX portées : ce fil, et les autres', () => {
-    const prompt = buildChatPilotagePrompt([])
+    // Le compte-rendu en deux portées vit dans la description de `remember`, qui part dans les deux
+    // chemins : recopiée dans la liste texte, servie telle quelle en outil direct.
+    const description = CATALOG.find((c) => c.name === 'remember')!.description
+    expect(buildChatPilotagePrompt(CATALOG)).toContain(description)
+    const prompt = description
     expect(prompt).toMatch(/DANS CETTE CONVERSATION/)
     expect(prompt).toMatch(/CANDIDAT/)
     // L'honnetete qui manquait : la PORTEE de l'echo. Il est local a ce poste -- mais il SURVIT au
@@ -392,5 +399,37 @@ describe('câblage — l’écho est réellement alimenté et réellement relu',
     expect(prompt).toMatch(/local à ce poste/i)
     expect(prompt).toMatch(/SURVIT au redémarrage/)
     expect(prompt).not.toMatch(/disparaît si l'application redémarre/)
+  })
+
+  /*
+   * LES TROIS LIMITES DE L'ÉCHO, à ne pas cacher à l'utilisateur. Quand « À DIRE HONNÊTEMENT » a
+   * quitté la consigne pour la description de `remember`, elles ont disparu en route, et aucun test
+   * ne les tenait. Chacune est liée au code qui la produit : le store relu au démarrage est ignoré
+   * s'il est illisible ou trop gros (`MAX_STORE_BYTES`), le bloc garde `ECHO_MAX_FACTS` faits, et
+   * un fait non publié porte la marque que `sessionMemoryBlock` écrit.
+   * fix-ok: la description de `remember` avait perdu les trois limites (rouge mesuré sur
+   * /illisible ou trop gros/ avant correction) ; la 3e édition ne fait que mettre une ligne en forme.
+   * ENTRÉE QUI DOIT FAIRE ÉCHOUER CE TEST : une description de `remember` sans l'une des trois
+   * limites (celle du run précédent les avait perdues toutes les trois).
+   */
+  it('la description de `remember` dit les trois limites de l’écho, dans les deux chemins', () => {
+    expect(ECHO_MAX_FACTS).toBeGreaterThanOrEqual(10)
+    expect(ECHO_MAX_FACTS).toBeLessThanOrEqual(14)
+    noteRemembered('conv-limites', { title: 'Fait local', body: 'établi ici', state: 'local' })
+    const marque = /\[([^\]]+)\]$/u.exec(
+      sessionMemoryBlock(rememberedFacts('conv-limites')).split('\n')[1]
+    )
+    expect(marque?.[1]).toBe('non déposé au Brain')
+
+    const direct = outilsPublies(
+      { catalogue: () => CATALOG, exec: async () => ({ ok: true }) },
+      { outils: outilsDuChat(CATALOG), refus: () => '' }
+    ).find((o) => o.name === 'remember')!.description
+    const texte = buildChatPilotagePrompt(CATALOG)
+    for (const chemin of [direct, texte]) {
+      expect(chemin).toMatch(/illisible ou trop gros/u)
+      expect(chemin).toMatch(/douzaine de faits/u)
+      expect(chemin).toContain(`« ${marque![1]} » n’existe QUE dans ce fil`)
+    }
   })
 })
