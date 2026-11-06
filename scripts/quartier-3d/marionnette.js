@@ -117,8 +117,7 @@ function poseMarche(c, ph, k = 1, pente = 0) {
 // Gestes de travail : on repart d'une pose debout, puis les bras disent ce qu'il fait.
 const GESTES = {
   marteau(c, t) {
-    const u = (t * 1.5) % 1, f = u < .62 ? douce(u / .62) : 1 - douce((u - .62) / .38) * .08
-    const k = u < .62 ? 1 - f : (u - .62) / .38
+    const u = (t * 1.5) % 1
     c.o.epD.rotation.set(-2.75 + 1.75 * (u < .72 ? douce(Math.min(1, u / .22)) * 0 + Math.pow(Math.min(1, Math.max(0, (u - .45) / .27)), 2) : 1 - douce((u - .72) / .28)), 0, .1)
     c.o.coD.rotation.x = -.45
     c.o.epG.rotation.set(-.3, 0, -.25)
