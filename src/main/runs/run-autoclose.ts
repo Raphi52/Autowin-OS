@@ -78,6 +78,12 @@ export type AutoCloseResult =
       mode?: 'direct' | 'pr'
       /** Pourquoi le push direct a été refusé (règle du dépôt, retard sur le distant…). */
       directRefused?: string
+      /**
+       * Push direct de la branche refusé, puis le travail seul rejoué au-dessus du distant et poussé
+       * (voir `rejouerSurLeDistant`). `brancheLocaleRattachee` : la branche locale contient le commit
+       * publié ; faux = elle a bougé entre-temps, le prochain `/git` la rattache.
+       */
+      rejoue?: { distantAvant: string; sha: string; brancheLocaleRattachee: boolean }
       /** Lien ou numéro de la PR ouverte. */
       pr?: string
       /** PR non ouverte : motif (CLI absente, hébergeur inconnu…). La branche reste poussée. */
@@ -246,6 +252,123 @@ export interface GitPublicationRange {
   publishedSha: string
 }
 
+const lignesDe = (sortie: string): string[] =>
+  sortie
+    .split(/\r?\n/u)
+    .map((ligne) => ligne.trim())
+    .filter(Boolean)
+
+/**
+ * LE TRAVAIL SEUL, REJOUÉ AU-DESSUS DU DISTANT. Le push direct envoie toute la branche locale : un
+ * commit local que le dépôt refuse (terme d'entreprise, secret, run fusionné en local et pas encore
+ * publiable) faisait échouer la publication de CHAQUE tour suivant, tous fils confondus, et le repli
+ * sur la branche dédiée portait le même historique, donc le même refus. Mesuré le 2026-11-06 : un
+ * run fusionné à 21:11 bloquait toutes les publications, seul un `/git` manuel en sortait.
+ *
+ * Ici, sans copie de travail ni changement de l'arbre : chaque commit de `baseSha..publishedSha` est
+ * reposé sur la pointe du distant (`merge-tree` à trois voies, base = son parent), poussé, puis la
+ * branche locale le reçoit par une fusion dont l'arbre est STRICTEMENT le sien (`update-ref`
+ * conditionnel : un commit arrivé entre-temps n'est jamais écrasé).
+ *
+ * Refus, et repli sur le chemin d'avant, dès que le rejeu changerait le sens du travail : rien
+ * d'autre que le travail au-dessus du distant (le refus vise alors le travail lui-même), un fichier
+ * du travail aussi modifié par les commits locaux non publiés (il en dépend peut-être), une fusion
+ * dans la plage, un conflit avec ce que le distant a reçu, ou un push du rejeu refusé à son tour.
+ */
+async function rejouerSurLeDistant(input: {
+  repo: string
+  runGit: GitRunner
+  branche: string
+  baseSha: string
+  publishedSha: string
+}): Promise<
+  { distantAvant: string; sha: string; brancheLocaleRattachee: boolean } | { refus: string }
+> {
+  const { repo, runGit, branche, baseSha, publishedSha } = input
+  const texte = (erreur: unknown): string =>
+    (erreur instanceof Error ? erreur.message : String(erreur)).slice(0, 300)
+  let distantAvant: string
+  try {
+    const suivi = `refs/remotes/origin/${branche}`
+    await runGit(['fetch', '--quiet', 'origin', `+refs/heads/${branche}:${suivi}`], repo)
+    distantAvant = (await runGit(['rev-parse', suivi], repo)).trim()
+  } catch (erreur) {
+    return { refus: `branche distante illisible : ${texte(erreur)}` }
+  }
+  if (distantAvant === baseSha) return { refus: 'le refus vise le travail lui-même' }
+
+  const base = (await runGit(['merge-base', distantAvant, baseSha], repo)).trim()
+  const nonPublies = new Set(lignesDe(await runGit(['diff', '--name-only', base, baseSha], repo)))
+  const travail = lignesDe(await runGit(['diff', '--name-only', baseSha, publishedSha], repo))
+  const meles = travail.filter((fichier) => nonPublies.has(fichier))
+  if (meles.length > 0) {
+    return {
+      refus: `fichiers aussi modifiés par des commits locaux non publiés : ${meles.slice(0, 5).join(', ')}`
+    }
+  }
+
+  let pointe = distantAvant
+  for (const commit of lignesDe(
+    await runGit(['rev-list', '--reverse', `${baseSha}..${publishedSha}`], repo)
+  )) {
+    const parents = (await runGit(['rev-list', '--parents', '-n', '1', commit], repo))
+      .trim()
+      .split(/\s+/u)
+      .slice(1)
+    if (parents.length !== 1) return { refus: `fusion dans la plage à publier (${commit})` }
+    let arbre: string
+    try {
+      const sortie = await runGit(
+        ['merge-tree', '--write-tree', `--merge-base=${parents[0]}`, pointe, commit],
+        repo
+      )
+      arbre = (sortie.split(/\r?\n/u)[0] ?? '').trim()
+    } catch (erreur) {
+      return { refus: `conflit avec le distant : ${texte(erreur)}` }
+    }
+    const message = (await runGit(['log', '-1', '--format=%B', commit], repo)).trim()
+    pointe = (await runGit(['commit-tree', arbre, '-p', pointe, '-m', message], repo)).trim()
+  }
+
+  try {
+    await runGit(['push', 'origin', `${pointe}:refs/heads/${branche}`], repo, {
+      env: ACCORD_PUSH_DIRECT
+    })
+  } catch (erreur) {
+    return { refus: `push du rejeu refusé : ${texte(erreur)}` }
+  }
+
+  let brancheLocaleRattachee = false
+  try {
+    const arbreLocal = (await runGit(['rev-parse', `${publishedSha}^{tree}`], repo)).trim()
+    const fusion = (await runGit(['merge-tree', '--write-tree', publishedSha, pointe], repo))
+      .split(/\r?\n/u)[0]
+      ?.trim()
+    if (fusion === arbreLocal) {
+      const rattache = (
+        await runGit(
+          [
+            'commit-tree',
+            arbreLocal,
+            '-p',
+            publishedSha,
+            '-p',
+            pointe,
+            '-m',
+            `Merge origin/${branche} : travail publié seul, au-dessus du distant`
+          ],
+          repo
+        )
+      ).trim()
+      await runGit(['update-ref', `refs/heads/${branche}`, rattache, publishedSha], repo)
+      brancheLocaleRattachee = true
+    }
+  } catch {
+    // Publié quand même : la branche locale a bougé entre-temps, le rapport le dit (faux).
+  }
+  return { distantAvant, sha: pointe, brancheLocaleRattachee }
+}
+
 async function publishRunCommits(input: {
   repo: string
   /** Plage exacte attestée par la finalisation du worktree. */
@@ -333,6 +456,27 @@ async function publishRunCommits(input: {
         } catch (error) {
           directRefused = (error instanceof Error ? error.message : String(error)).slice(0, 300)
         }
+        const rejeu = await rejouerSurLeDistant({
+          repo,
+          runGit,
+          branche: courante,
+          baseSha,
+          publishedSha
+        })
+        if ('sha' in rejeu) {
+          return {
+            status: 'pushed',
+            branch: courante,
+            files: files.length,
+            mode: 'direct',
+            directRefused,
+            rejoue: rejeu
+          }
+        }
+        directRefused = `${directRefused} ; rejeu sur le distant impossible : ${rejeu.refus}`.slice(
+          0,
+          600
+        )
       }
     }
     await runGit(['push', 'origin', `${publishedSha}:refs/heads/${branch}`], repo)

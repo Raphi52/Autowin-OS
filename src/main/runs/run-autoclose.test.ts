@@ -837,6 +837,87 @@ describe('enchaînement générique : push direct si le dépôt l’accepte, sin
   })
 })
 
+/*
+ * UN COMMIT LOCAL REFUSÉ NE BLOQUE PLUS TOUS LES FILS (2026-11-06). Le push direct envoyait toute
+ * la branche locale : un run fusionné en local, que le contrôle d'envoi refusait (terme d'entreprise),
+ * faisait échouer la publication de CHAQUE tour de chat suivant, tous fils confondus. Le repli sur la
+ * branche dédiée portait le même historique, donc le même refus. Seul un `/git` manuel en sortait.
+ * ENTRÉES QUI DOIVENT FAIRE ÉCHOUER : le commit refusé poussé avec le tour, le tour pas publié, la
+ * branche locale non rattachée au distant, le fichier du commit refusé retiré du disque.
+ */
+describe('push direct refusé par un commit local non publié : le tour part seul, rejoué sur le distant', () => {
+  const HOOK_TERME =
+    '#!/bin/sh\nz=0000000000000000000000000000000000000000\n' +
+    'while read l ls r rs; do\n' +
+    '  if [ "$rs" = "$z" ]; then plage="$ls --not --remotes=origin"; else plage="$rs..$ls"; fi\n' +
+    '  git log -p $plage | grep -q TERME_REFUSE && { echo "terme refuse" >&2; exit 1; }\n' +
+    'done\nexit 0\n'
+
+  async function depotAvecCommitBloque(): Promise<{ repo: string; remote: string }> {
+    const { repo, remote } = await repoWithRemote()
+    await realGit(['push', 'origin', 'travail'], repo)
+    writeFileSync(join(repo, '.git', 'hooks', 'pre-push'), HOOK_TERME, { mode: 0o755 })
+    writeFileSync(join(repo, 'bloque.ts'), 'export const b = "TERME_REFUSE"\n')
+    await realGit(['add', 'bloque.ts'], repo)
+    await realGit(['commit', '-m', 'run local refusé'], repo)
+    return { repo, remote }
+  }
+
+  it('publie le seul tour au-dessus du distant, puis rattache la branche locale', async () => {
+    const { repo, remote } = await depotAvecCommitBloque()
+    const distantAvant = (await realGit(['rev-parse', 'travail'], remote)).trim()
+    writeFileSync(join(repo, 'tour.ts'), 'export const t = 1\n')
+    writeFileSync(join(repo, 'autre-fil.ts'), 'en cours\n')
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/r-rejeu',
+      message: 'travail du tour',
+      paths: ['tour.ts'],
+      runGit: await defaultGitRunner(),
+      direct: true,
+      openPr: vi.fn(async () => 'PR inutile')
+    })
+
+    expect(res).toMatchObject({ status: 'pushed', branch: 'travail', mode: 'direct' })
+    const publie = (await realGit(['rev-parse', 'travail'], remote)).trim()
+    expect((await realGit(['rev-parse', `${publie}^`], remote)).trim()).toBe(distantAvant)
+    const fichiersPublies = await realGit(['ls-tree', '--name-only', publie], remote)
+    expect(fichiersPublies).toContain('tour.ts')
+    expect(fichiersPublies).not.toContain('bloque.ts')
+    expect((await realGit(['log', '-1', '--format=%s', publie], remote)).trim()).toBe(
+      'travail du tour'
+    )
+    // La branche locale garde le commit refusé ET contient ce qui est publié : le prochain push
+    // direct ne repartira pas en arrière.
+    await realGit(['merge-base', '--is-ancestor', publie, 'travail'], repo)
+    expect(await realGit(['log', '--format=%s', 'travail'], repo)).toContain('run local refusé')
+    // Arbre et travail d'un autre fil intacts.
+    expect(readFileSync(join(repo, 'bloque.ts'), 'utf8')).toContain('TERME_REFUSE')
+    expect(await realGit(['status', '--porcelain', '--', 'autre-fil.ts'], repo)).toMatch(/^\?\?/)
+    expect(await realGit(['status', '--porcelain', '--', 'tour.ts', 'bloque.ts'], repo)).toBe('')
+  })
+
+  it('ne rejoue pas un tour qui touche un fichier du commit refusé : le refus reste rapporté', async () => {
+    const { repo, remote } = await depotAvecCommitBloque()
+    const distantAvant = (await realGit(['rev-parse', 'travail'], remote)).trim()
+    writeFileSync(join(repo, 'bloque.ts'), 'export const b = "TERME_REFUSE"\nexport const c = 2\n')
+
+    const res = await autoCloseRun({
+      repo,
+      branch: 'auto/r-melange',
+      message: 'tour mêlé',
+      paths: ['bloque.ts'],
+      runGit: await defaultGitRunner(),
+      direct: true,
+      openPr: vi.fn(async () => 'PR')
+    })
+
+    expect(res.status).toBe('failed')
+    expect((await realGit(['rev-parse', 'travail'], remote)).trim()).toBe(distantAvant)
+  })
+})
+
 // 2026-10-11 16:06, run-2be0320894d3-1 : « stdout maxBuffer length exceeded » — le diff lu pour
 // chercher un secret dépassait le plafond par défaut d'execFile (1 Mo) et toute la publication tombait.
 describe('defaultGitRunner — gros changement', () => {
