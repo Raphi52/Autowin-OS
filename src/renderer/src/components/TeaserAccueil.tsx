@@ -26,7 +26,7 @@ import type { MomentDuFilm } from './teaser-accueil-calcul'
  * première image de la boucle (50 s). La boucle attend sous l'intro, déjà
  * chargée. Le film se refait depuis le projet du film de présentation :
  * `%LOCALAPPDATA%/autowin-video/film/teaser-fil/` (scène et rendu, voir son
- * `scene.js`). L'ancien film du magicien se refait toujours avec `scripts/teaser-accueil/`.
+ * `scene.js`).
  *
  * Les phrases sont calées sur le temps réel du film, pas sur une minuterie : quand il accélère,
  * elles le suivent.
