@@ -15,7 +15,9 @@ describe('paragraphe COFFRE de la consigne du chat', () => {
 
   it("explique clesDuCoffre et l'usage par le nom", () => {
     expect(paragraphe).toContain('clesDuCoffre')
-    expect(paragraphe).toContain("variable d'environnement")
+    // Forme courte imposée par le plafond de la consigne du chat (marge de 71 caractères) : le sens
+    // reste « ces noms sont des variables d'environnement ».
+    expect(paragraphe).toContain("variables d'env")
     expect(paragraphe).toContain('$NOM')
     expect(paragraphe).toContain('$env:NOM')
   })

@@ -483,9 +483,10 @@ export function buildChatPilotagePrompt(
       )
     ) +
     // COFFRE À CLÉS — l'état ne pousse que des NOMS (`clesDuCoffre`) : sans cette ligne, l'agent ne
-    // sait pas que la clé est déjà dans l'environnement de ses commandes. La règle (valeur jamais
-    // recopiée, clé absente → réglage) vit dans la constitution, pas ici.
-    `COFFRE À CLÉS — \`clesDuCoffre\` (état) liste les noms des clés que l'utilisateur a rangées dans le coffre d'Autowin, jamais leurs valeurs. Chacune est déjà une variable d'environnement de tes commandes : sers-t'en par son nom, \`$NOM\` en bash, \`$env:NOM\` en PowerShell, sans la demander. Pour savoir si elle est là, teste sa présence (\`[ -n "$NOM" ]\`), ne l'affiche pas.\n` +
+    // sait pas que ces noms sont des variables d'environnement de ses commandes. Le reste n'est pas
+    // redit ici : l'usage par le nom sans demander et la valeur jamais recopiée sont dans la
+    // constitution, et la garde des agents refuse d'afficher une valeur (`garde-secret-coffre.ts`).
+    `COFFRE À CLÉS — \`clesDuCoffre\` : variables d'env ($NOM, $env:NOM).\n` +
     `Commandes disponibles :\n` +
     enTexte.map((c) => `- ${signatureDeCommande(c)} : ${c.description}`).join('\n') +
     (enOutils.length > 0
