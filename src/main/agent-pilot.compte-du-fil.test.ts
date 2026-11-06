@@ -60,7 +60,6 @@ function monter(
       etat.actif = mure === 'gmail' ? 'autre' : 'gmail'
       return etat.actif
     },
-    undefined,
     (_provider, fil) => claudeCompteDuFil(fil)
   ).register(claude)
   const roles = { getBinding: vi.fn(() => ({ provider: 'claude', model: 'opus-5' })) }

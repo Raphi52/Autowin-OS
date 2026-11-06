@@ -24,7 +24,6 @@ import {
 import {
   claudeActiveAccountId,
   claudeCompteDuFil,
-  claudePreventiveSwitch,
   claudeRotateAccount,
   claudeAccountEnv
 } from './claude-accounts'
@@ -580,11 +579,7 @@ export class AutowinOS {
       // un autre. Seul `claude` est multi-comptes ; les autres providers rendent `undefined` et
       // gardent donc exactement le comportement d'avant (l'echec de quota remonte tel quel).
       (providerId, walled) => (providerId === 'claude' ? claudeRotateAccount(walled) : undefined),
-      // 5e argument : la BASCULE AVANT LANCEMENT (conv-1069). Quitter un compte presque epuise avant
-      // l'appel plutot qu'apres son refus ; seul `claude` a plusieurs comptes.
-      (providerId, actif) =>
-        providerId === 'claude' ? claudePreventiveSwitch(actif) : Promise.resolve(undefined),
-      // 6e argument : le compte CHOISI pour le fil de l'appel (conv-1416), jamais remplacé tout seul.
+      // 5e argument : le compte CHOISI pour le fil de l'appel (conv-1416), jamais remplacé tout seul.
       (providerId, fil) => (providerId === 'claude' ? claudeCompteDuFil(fil) : undefined)
     )
       // Claude d'abord : il reste l'exécuteur par défaut (`executors[0]` du registre). ChatGPT se

@@ -257,28 +257,6 @@ export function claudeRotateAccount(walledAccountId: string): string | undefined
 }
 
 /**
- * BASCULE AVANT LE LANCEMENT (conv-1069, 2026-10-22), injectee comme la rotation : quitte le compte
- * actif presque epuise AVANT l'appel (`bascule-quota.ts`). Par defaut elle ne fait RIEN : un module
- * non configure — les tests — garde exactement le comportement d'avant, sans aucune sonde.
- */
-let preventiveSwitchProvider: (activeAccountId: string) => Promise<string | undefined> = async () =>
-  undefined
-
-export function configureClaudePreventiveSwitch(
-  provider: (activeAccountId: string) => Promise<string | undefined>
-): void {
-  preventiveSwitchProvider = provider
-}
-
-export async function claudePreventiveSwitch(activeAccountId: string): Promise<string | undefined> {
-  try {
-    return await preventiveSwitchProvider(activeAccountId)
-  } catch {
-    return undefined // une bascule impossible laisse l'appel partir sur le compte actif
-  }
-}
-
-/**
  * LE COMPTE CHOISI POUR UN FIL (conv-1416, 2026-11-01), injecte comme les accesseurs ci-dessus.
  *
  * Ce choix voyage avec l'appel au lieu de passer par le compte ACTIF, global a l'application. Avant,
@@ -409,7 +387,7 @@ export class ClaudeAccountsStore {
 
   /**
    * Prévenu à CHAQUE changement du compte actif, quel que soit le chemin : bascule demandée par
-   * l'interface, bascule avant lancement, rotation sur quota épuisé, retrait du compte actif. Sans
+   * l'interface, rotation sur quota épuisé, retrait du compte actif. Sans
    * ce signal, seule la bascule faite depuis l'interface rafraîchissait la barre de quota : les
    * autres laissaient afficher le quota de l'ANCIEN compte.
    */

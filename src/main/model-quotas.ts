@@ -797,9 +797,9 @@ export function invalidateModelQuotaCache(): void {
 }
 
 /**
- * QUOTA D'UN COMPTE NOMME, pour la bascule avant lancement (conv-1069, `bascule-quota.ts`) : savoir
- * si l'AUTRE compte a de la marge avant d'y partir. Indexe par dossier de compte, donc jamais perime
- * par une bascule, a l'inverse du snapshot ci-dessus. Une mesure ratee est memorisee aussi : un
+ * QUOTA D'UN COMPTE NOMME, lu par dossier de compte (servi d'abord a la bascule avant lancement,
+ * conv-1069, retiree depuis) : la mesure ne depend pas du compte actif. Indexe par dossier de
+ * compte, donc jamais perime par une bascule, a l'inverse du snapshot ci-dessus. Une mesure ratee est memorisee aussi : un
  * compte non connecte ne doit pas etre resonde a chaque tour.
  */
 const quotasParCompte = new Map<

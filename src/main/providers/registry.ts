@@ -210,19 +210,10 @@ export class ProviderRegistry {
       walledAccountId: string
     ) => string | undefined,
     /**
-     * BASCULE AVANT LE LANCEMENT (conv-1069, 2026-10-22). Appelé une fois par envoi, avant l'appel :
-     * quitte le compte presque épuisé pour un compte qui a de la marge, au lieu d'attendre le refus.
-     * Même partage des rôles que la rotation : la politique (seuil, sonde) vit hors du registre.
-     */
-    private readonly switchBeforeLaunch?: (
-      providerId: string,
-      activeAccountId: string
-    ) => Promise<string | undefined>,
-    /**
      * LE COMPTE CHOISI POUR LE FIL DE L'APPEL (conv-1416, 2026-11-01). Présent, il prime sur le
-     * compte actif et coupe les deux changements automatiques ci-dessus : l'utilisateur a nommé son
-     * compte, s'il est vide le tour s'arrête et le dit (`messageCompteChoisiVide`). Absent, rien ne
-     * change : la bascule et la rotation restent la règle des fils sans compte choisi.
+     * compte actif et coupe la rotation automatique : l'utilisateur a nommé son compte, s'il est vide
+     * le tour s'arrête et le dit (`messageCompteChoisiVide`). Absent, rien ne change : la rotation
+     * reste la règle des fils sans compte choisi.
      */
     private readonly compteChoisiDuFil?: (
       providerId: string,
@@ -410,12 +401,6 @@ export class ProviderRegistry {
     // Publier la route AVANT tout spawn garantit que pid/journal portent l'exécuteur causal réel.
     route.opts.execution?.onExecutorResolved?.(route.id)
     const compteChoisi = this.compteChoisiDuFil?.(route.id, filDeLAppel(route.opts))
-    // Bascule préventive : une seule fois par envoi (les relances de la rotation partent d'un compte
-    // déjà choisi), et jamais bloquante — une sonde en panne laisse partir l'appel comme avant.
-    if (!compteChoisi && mayRotate && visitedWalls.size === 0 && this.switchBeforeLaunch) {
-      const actif = this.activeAccountOf?.(route.id)
-      if (actif) await this.switchBeforeLaunch(route.id, actif).catch(() => undefined)
-    }
     // Figer le compte au départ : une autre requête peut faire tourner le pool pendant que celle-ci
     // attend sa réponse. Le mur et la rotation doivent viser le compte qui a réellement été appelé.
     const accountAtStart = compteChoisi?.id ?? this.activeAccountOf?.(route.id)

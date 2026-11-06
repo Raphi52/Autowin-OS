@@ -65,10 +65,8 @@ import {
   configureClaudeCompteDuFil,
   configureClaudeActiveAccountId,
   configureClaudeAccountRotation,
-  configureClaudePreventiveSwitch,
   withClaudeAccountEnv
 } from './claude-accounts'
-import { basculerAvantLancement, utilisationDuCompte } from './bascule-quota'
 import {
   app,
   shell,
@@ -130,11 +128,7 @@ import {
   registreParDefaut
 } from './hdesk-gestion'
 import type { DemandeCreationBureau } from '../shared/hdesk-gestion'
-import {
-  configureClaudeSessionRenewal,
-  invalidateModelQuotaCache,
-  quotaClaudeDuCompte
-} from './model-quotas'
+import { configureClaudeSessionRenewal, invalidateModelQuotaCache } from './model-quotas'
 import { renouvelerSessionClaude } from './claude-session-renewal'
 import { appPreflightProbes, resolveBinOnPath, watchAppPreflight } from './preflight-probes'
 import { type ReasoningEffort, type Role, type RoleBinding } from './roles'
@@ -1248,25 +1242,6 @@ configureClaudeCompteDuFil((conversationId) => {
 // Rotation d'abonnement : quand le quota du compte actif est epuise, le registre demande une bascule
 // vers un compte encore vivant. Sans ce cablage, la rotation existerait sans jamais se declencher.
 configureClaudeAccountRotation((walled) => claudeAccounts.rotateAwayFrom(walled))
-// Bascule AVANT le lancement (conv-1069) : au-dela de 85 % sur le compte actif, on part sur le compte
-// qui a le plus de marge, sans file ni plafond (« rien plafonner, juste basculer »). Un seul compte
-// = aucune sonde. La bascule passe par `switchTo`, donc la barre de quota et les puces suivent.
-configureClaudePreventiveSwitch(async (actifId) => {
-  const cible = await basculerAvantLancement({
-    actifId,
-    comptes: claudeAccounts.current().accounts.map((compte) => compte.id),
-    mesurer: async (id) => {
-      const compte = claudeAccounts.find(id)
-      if (!compte) return undefined // retire entre-temps : pas un refuge
-      const fenetres = await quotaClaudeDuCompte(compte.dir)
-      return fenetres ? utilisationDuCompte(fenetres) : undefined
-    },
-    actifCourant: () => claudeAccounts.active().id,
-    basculer: (id) => void claudeAccounts.switchTo(id)
-  })
-  if (cible) console.info(`[claude-accounts] bascule avant lancement : ${actifId} -> ${cible}`)
-  return cible
-})
 // La sonde de quota fait renouveler par le CLI la session expiree du compte qu'elle lit : sans ce
 // cablage, la barre restait sur les chiffres d'avant la bascule jusqu'au prochain message (conv-1031).
 configureClaudeSessionRenewal((configDir) => renouvelerSessionClaude(configDir))

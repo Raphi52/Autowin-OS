@@ -60,10 +60,10 @@ class FauxClaude implements ProviderAdapter {
 function monter(choisis: Record<string, string> = { 'conv-A': 'pro' }): {
   claude: FauxClaude
   registry: ProviderRegistry
-  etat: { actif: string; rotations: number; bascules: number }
+  etat: { actif: string; rotations: number }
 } {
   const claude = new FauxClaude()
-  const etat = { actif: 'gmail', rotations: 0, bascules: 0 }
+  const etat = { actif: 'gmail', rotations: 0 }
   const registry = new ProviderRegistry(
     undefined,
     undefined,
@@ -72,10 +72,6 @@ function monter(choisis: Record<string, string> = { 'conv-A': 'pro' }): {
       etat.rotations += 1
       etat.actif = mure === 'gmail' ? 'pro' : 'gmail'
       return etat.actif
-    },
-    async () => {
-      etat.bascules += 1
-      return undefined
     },
     (_provider, fil) => {
       const id = fil ? choisis[fil] : undefined
@@ -97,7 +93,6 @@ describe('registre — fil au compte choisi', () => {
   it('aucun changement de compte avant le lancement, même si le compte actif est un autre', async () => {
     const { registry, etat } = monter()
     await registry.send('claude', UN_TOUR, { conversationId: 'conv-A' })
-    expect(etat.bascules).toBe(0)
     expect(etat.actif).toBe('gmail')
   })
 
@@ -165,7 +160,6 @@ describe('registre — fil au compte choisi', () => {
 
     expect(claude.appels).toBe(1)
     expect(etat.rotations).toBe(0)
-    expect(etat.bascules).toBe(0)
   })
 
   it('le compte vide d’un fil ne ferme pas la porte du compte actif aux autres fils', async () => {
@@ -180,14 +174,13 @@ describe('registre — fil au compte choisi', () => {
     expect(claude.appels).toBe(2)
   })
 
-  it('témoin — fil SANS compte choisi : le changement automatique continue', async () => {
+  it('témoin — fil SANS compte choisi : la rotation automatique continue', async () => {
     const { claude, registry, etat } = monter()
     claude.refuser = () => etat.actif === 'gmail'
 
     await expect(registry.send('claude', UN_TOUR, { conversationId: 'conv-B' })).resolves.toEqual(
       expect.objectContaining({ text: 'ok' })
     )
-    expect(etat.bascules).toBe(1)
     expect(etat.rotations).toBe(1)
     expect(etat.actif).toBe('pro')
   })
