@@ -469,10 +469,36 @@ export function suitUneQuestionDesLectures(
  * `run-pilot-chat.ts` depuis le statut du store, conv-1142), ou quand il ne porte que sa ligne
  * compréhension et des marques d'artefact (un appelant qui ne transmet pas le statut).
  */
-type MessageDuFil = { role: string; content?: unknown; arrete?: boolean }
+type MessageDuFil = { role: string; content?: unknown; arrete?: boolean; avisDeLApp?: boolean }
+
+/*
+ * UN AVIS DE L'APP N'EST PAS UNE RÉPONSE DE L'AGENT (conv-1641, 2026-11-06).
+ *
+ * « ya des concurrents gratuits ? », envoyé deux fois après une réponse sur les voix d'ElevenLabs :
+ * la première ligne compréhension a dit « concurrents d'ElevenLabs » (tour 87e4b765), la seconde
+ * « concurrents gratuits à Autowin OS » (tour 8fa1a909). Entre les deux, l'app avait posé SOUS la
+ * réponse sa carte « GIT : rien publié … tests rouges src/main/… » (`noteATrier`, git-apres-fil.ts),
+ * un message `assistant` comme les autres. Pris pour le dernier message de l'agent, il a remplacé
+ * la conversation sur les voix dans le contexte du petit modèle.
+ *
+ * Le store tient déjà la règle : la réponse d'un tour porte son `turnId` dès `beginTurn`, un avis
+ * n'en a pas (`store/conversations.ts`, `append`). Mesuré le 2026-11-06 sur les fils actifs :
+ * 1 775 réponses avec `turnId` ; les 49 messages sans sont tous des avis (31 cartes Git,
+ * 10 bascules de dossier, 8 « Reprise du fil »). Le renderer ne transmet pas `turnId` : le marquage
+ * se fait là où l'historique rejoint le store (`run-pilot-chat.ts`), comme `arrete`.
+ */
+export function contenusDesAvisDeLApp(
+  stockes: ReadonlyArray<{ role: string; content?: unknown; turnId?: string }>
+): Set<string> {
+  const contenus = new Set<string>()
+  for (const m of stockes)
+    if (m.role === 'assistant' && !m.turnId && typeof m.content === 'string' && m.content.trim())
+      contenus.add(m.content)
+  return contenus
+}
 
 function neRepondARien(message: MessageDuFil): boolean {
-  if (message.arrete) return true
+  if (message.arrete || message.avisDeLApp) return true
   if (typeof message.content !== 'string') return true
   const reste = message.content
     .split('\n')

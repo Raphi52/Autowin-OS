@@ -6,6 +6,7 @@ import {
   annonceDeLaLectureRetenue,
   chargeDeuxLectures,
   consigneDeLectureRetenue,
+  contenusDesAvisDeLApp,
   demandesResteesSansReponse,
   dernierMessageAgent,
   extraitDuContexte,
@@ -502,5 +503,70 @@ describe('tours coupés : les messages restés sans réponse font partie de la d
       'sans réponse'
     )
     expect(dernierMessageAgent(fil)).toContain('Voici la forme corrigée.')
+  })
+})
+
+describe('un avis de l’app n’est pas la réponse de l’agent (conv-1641)', () => {
+  /** Début réel de la réponse du tour 87e4b765 et de la carte Git posée dessous (`noteATrier`). */
+  const REPONSE_VOIX =
+    'Compréhension : « Lister des concurrents d’ElevenLabs gratuits pour la synthèse vocale »\n\n' +
+    '**Oui. Le plus sérieux, c’est Google Gemini, gratuit dans la limite d’un quota par jour.**\n' +
+    '```aw-tableau\n{"titre":"Alternatives gratuites à ElevenLabs"}\n```'
+  const CARTE_GIT = [
+    '```html-render',
+    '<div class="aw-kicker">GIT : rien publié</div>',
+    '<div><b>Publication auto arrêtée</b> : ce travail demande un <b>tri par contenu</b>.</div>',
+    '<div>· tests rouges (vitest related src/main/board-dossier.ts src/main/ipc/chat.ts)</div>',
+    '```'
+  ].join('\n')
+  const STOCKES = [
+    { role: 'user', content: 'on pourrait avoir plein de comptes gmail?' },
+    {
+      role: 'assistant',
+      turnId: 'ed669d0d',
+      content: 'Non : un compte par personne chez ElevenLabs.'
+    },
+    { role: 'user', content: 'ya des concurrents gratuits?' },
+    { role: 'assistant', turnId: '87e4b765', content: REPONSE_VOIX },
+    { role: 'assistant', content: CARTE_GIT },
+    { role: 'user', content: 'ya des concurrents gratuits?' }
+  ]
+  const avis = contenusDesAvisDeLApp(STOCKES)
+  const fil = STOCKES.map(({ role, content }) => ({
+    role,
+    content,
+    ...(role === 'assistant' && avis.has(content) ? { avisDeLApp: true } : {})
+  }))
+
+  it('repère l’avis par l’absence de turnId, jamais une réponse de tour', () => {
+    expect([...avis]).toEqual([CARTE_GIT])
+  })
+
+  it('reproduction : sans le marquage, le contexte du petit modèle était la carte Git', () => {
+    const nu = STOCKES.map(({ role, content }) => ({ role, content }))
+    expect(dernierMessageAgent(nu)).toBe(CARTE_GIT)
+  })
+
+  it('le contexte est la réponse sur les voix, la carte Git n’y entre pas', () => {
+    expect(dernierMessageAgent(fil)).toBe(REPONSE_VOIX)
+    const charge = chargeDeuxLectures('ya des concurrents gratuits?', dernierMessageAgent(fil))
+    expect(charge).toContain('ElevenLabs')
+    expect(charge).not.toContain('Publication auto')
+  })
+
+  it('un avis ne répond à rien : la question d’avant reste dans la demande si seul un avis suit', () => {
+    const sansReponse = [
+      { role: 'assistant', content: 'Voici les prix.' },
+      { role: 'user', content: 'faut payer elevenlabs?' },
+      { role: 'assistant', avisDeLApp: true, content: CARTE_GIT },
+      { role: 'user', content: 'et les concurrents ?' }
+    ]
+    expect(demandesResteesSansReponse(sansReponse)).toEqual(['faut payer elevenlabs?'])
+    // Après la réponse de l'agent, l'avis posé dessous ne rend pas la question orpheline.
+    expect(demandesResteesSansReponse(fil)).toEqual([])
+  })
+
+  it('un message vide sans turnId n’est pas un avis à repérer', () => {
+    expect(contenusDesAvisDeLApp([{ role: 'assistant', content: '  ' }]).size).toBe(0)
   })
 })

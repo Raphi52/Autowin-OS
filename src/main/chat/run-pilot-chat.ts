@@ -102,6 +102,7 @@ import { collerTexteParle } from './coller-texte-parle'
 import { ecrivainDeRaisonnement } from './raisonnement-au-fil-du-tour'
 import type { TacheDeFondARelancer } from '../providers/types'
 import { contenusDesToursArretes } from '../reprise-apres-arret'
+import { contenusDesAvisDeLApp } from '../deux-lectures'
 import type { IssueDuTour } from '../../shared/plan-de-lots'
 import { solderOrientationsDuFil } from '../orientations-en-cours-app'
 import { estUnFluxDeBloc } from '../montrer-bloc-command'
@@ -506,6 +507,11 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const toursArretes = contenusDesToursArretes(
         conversationId ? (os.conversations.get(conversationId)?.messages ?? []) : []
       )
+      /** Avis posés par l'app (carte Git, bascule de dossier) : sans `turnId`, ils ne répondent à
+       *  rien — la ligne compréhension ne doit pas les lire comme la réponse de l'agent (conv-1641). */
+      const avisDeLApp = contenusDesAvisDeLApp(
+        conversationId ? (os.conversations.get(conversationId)?.messages ?? []) : []
+      )
       if (conversationId) {
         for (const stocke of os.conversations.get(conversationId)?.messages ?? []) {
           if (stocke.role === 'user' && stocke.orientation && typeof stocke.content === 'string') {
@@ -570,6 +576,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // Tour arrete : le message suivant explique les deux lignes que le CLI insere a la reprise
           // (`reprise-apres-arret.ts`, conv-1142). Le renderer n'envoie pas le statut, le store l'a.
           ...(m.role === 'assistant' && toursArretes.has(m.content) ? { arrete: true } : {}),
+          ...(m.role === 'assistant' && avisDeLApp.has(m.content) ? { avisDeLApp: true } : {}),
           ...(pieces.length ? { attachments: guardAttachments(pieces) } : {})
         }
       })
