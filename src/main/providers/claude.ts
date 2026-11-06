@@ -1362,6 +1362,72 @@ export async function gardeNpmDuLancement(
   }
 }
 
+/**
+ * GARDE D'ÉCRITURE HORS COPIE (`scripts/garde-ecriture-hors-copie.mjs`) : un fil qui travaille dans
+ * sa copie n'écrit pas dans le dossier partagé d'où tourne l'app. Ajoutée au groupe shell + édition
+ * des réglages, après la garde principale et la garde npm, avec le même échec fermé.
+ * fix-ok: un 3e argument de `reglagesCliAutowin` cassait claude.garde-onfailure.test.ts:223, et
+ * l'habillage posé sous `avecAvertissementDesTests` cassait claude.tests-non-comptes.test.ts:215
+ * (mesurés : tous deux figent cet appel dans la source) ; d'où cet habillage, posé autour.
+ */
+export function avecGardeEcriture(
+  reglages: Record<string, unknown>,
+  hookEcriture: string | undefined
+): Record<string, unknown> {
+  if (!hookEcriture) return reglages
+  type Groupe = { matcher?: string; hooks?: unknown[] }
+  const hooks = reglages.hooks as Record<string, unknown> & { PreToolUse?: Groupe[] }
+  const garde = {
+    type: 'command',
+    command: `node "${hookEcriture.split('\\').join('/')}"`,
+    onFailure: 'block'
+  }
+  const estShellEtEdition = (g: Groupe): boolean => {
+    const noms = (g.matcher ?? '').split('|')
+    return noms.includes('Bash') && noms.includes('Write')
+  }
+  return {
+    ...reglages,
+    hooks: {
+      ...hooks,
+      PreToolUse: (hooks.PreToolUse ?? []).map((g) =>
+        estShellEtEdition(g) ? { ...g, hooks: [...(g.hooks ?? []), garde] } : g
+      )
+    }
+  }
+}
+
+/** La garde d'écriture hors copie du dépôt, à côté de la garde npm. Absente → `undefined`. */
+export function gardeEcritureDuDepot(
+  modAutowin: string | undefined,
+  existe: (chemin: string) => boolean = existsSync
+): string | undefined {
+  if (!modAutowin) return undefined
+  const script = join(modAutowin, '..', '..', 'scripts', 'garde-ecriture-hors-copie.mjs')
+  return existe(script) ? script : undefined
+}
+
+/**
+ * La garde d'écriture qu'exécutera le hook d'UN lancement : une copie figée dans son dossier de
+ * réglages, pour la même raison que la garde npm (`gardeNpmDuLancement`) — un script du dépôt en
+ * erreur de syntaxe refuserait tous les outils de tous les agents en cours. Le script n'importe que
+ * des modules `node:` : il se copie seul. Copie impossible → `undefined`, lancement sans elle.
+ */
+export async function gardeEcritureDuLancement(
+  dossierReglages: string,
+  modAutowin: string | undefined
+): Promise<string | undefined> {
+  const source = gardeEcritureDuDepot(modAutowin)
+  if (!source) return undefined
+  const copie = join(dossierReglages, 'garde-ecriture-hors-copie.mjs')
+  try {
+    await copyFileAsync(source, copie)
+    return copie
+  } catch {
+    return undefined
+  }
+}
+
 export function argumentsMcpNoeudSkill(
   opts: SendOptions,
   // Serveurs MCP déclarés par l'utilisateur dans Autowin : fusionnés ici, seul point
@@ -1936,10 +2002,13 @@ export class ClaudeCliAdapter implements ProviderAdapter {
         JSON.stringify(
           avecHooksTourDuProjet(
             avecSignalDeCause(
-            avecAvertissementDesTests(
-              reglagesCliAutowin(hookGarde, await gardeNpmDuLancement(settingsDir, modAutowin)),
-              hookTests
-            ),
+              avecGardeEcriture(
+                avecAvertissementDesTests(
+                  reglagesCliAutowin(hookGarde, await gardeNpmDuLancement(settingsDir, modAutowin)),
+                  hookTests
+                ),
+                await gardeEcritureDuLancement(settingsDir, modAutowin)
+              ),
               await signalDeCauseDuLancement(settingsDir, execution)
             ),
             execution?.cwd ?? readOnlyCwd

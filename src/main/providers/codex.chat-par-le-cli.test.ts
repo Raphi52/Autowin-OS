@@ -1,5 +1,8 @@
 import { EventEmitter } from 'node:events'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const flux = vi.hoisted(() => ({
   lignes: [] as Array<Record<string, unknown>>,
@@ -66,12 +69,35 @@ const finDeTour = [
   { type: 'item.completed', item: { type: 'agent_message', text: 'pong' } }
 ]
 const precedentBin = process.env.CODEX_BIN
+const precedentHome = process.env.CODEX_HOME
+
+/*
+ * Un tour Codex relit `$CODEX_HOME/hooks.json` avant de partir (`verifierControlesCodex`). Sans
+ * dossier à lui, ce fichier lirait celui du poste, et ses avertissements varieraient d'une machine
+ * à l'autre : ici, la garde npm de l'app est installée, comme sur un poste prêt.
+ * fix-ok: « relaie les messages intermédiaires » rouge mesuré (2 entrées au lieu d'1) : le tour lisait le vrai ~/.codex/hooks.json, sans garde npm, et son avertissement s'ajoutait au fil.
+ */
+beforeEach(() => {
+  process.env.CODEX_HOME = mkdtempSync(join(tmpdir(), 'codex-home-'))
+  const garde = resolve(__dirname, '..', '..', '..', 'scripts', 'garde-npm-modules.mjs')
+  writeFileSync(
+    join(process.env.CODEX_HOME, 'hooks.json'),
+    JSON.stringify({
+      hooks: {
+        PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: `node "${garde}"` }] }]
+      }
+    })
+  )
+})
 
 afterEach(() => {
   flux.lignes = []
   flux.lancements = []
   if (precedentBin === undefined) delete process.env.CODEX_BIN
   else process.env.CODEX_BIN = precedentBin
+  if (process.env.CODEX_HOME) rmSync(process.env.CODEX_HOME, { recursive: true, force: true })
+  if (precedentHome === undefined) delete process.env.CODEX_HOME
+  else process.env.CODEX_HOME = precedentHome
 })
 
 async function tour(

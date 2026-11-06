@@ -1,9 +1,11 @@
 /**
  * GARDE NPM — refuse une commande npm qui MODIFIE `node_modules` pendant que l'Electron qui en vit
- * tourne. Hook PreToolUse (Bash|PowerShell) de Claude Code, branché à DEUX endroits :
+ * tourne. Contrôle « avant commande » (PreToolUse), branché à QUATRE endroits :
  *  - `.claude/settings.json` du dépôt : les sessions Claude ouvertes dans D:\Autowin ;
  *  - `reglagesCliAutowin` (src/main/providers/claude.ts) : les agents lancés par Autowin OS, qui
- *    tournent avec `--setting-sources ''` et ne lisent donc PAS le réglage du dépôt.
+ *    tournent avec `--setting-sources ''` et ne lisent donc PAS le réglage du dépôt ;
+ *  - `~/.grok/hooks/garde-npm.json` et `$CODEX_HOME/hooks.json`, contrôles personnels de Grok et de
+ *    Codex (src/main/providers/hooks-des-cli.ts). Même entrée sur stdin, même refus sur stdout.
  *
  * LA PANNE, mesurée le 2026-10-05 (journal npm 2026-10-04T22_35_39_739Z) : un agent a lancé
  * `npm install` dans D:\Autowin pendant qu'Autowin OS tournait. npm a commencé à déplacer les
@@ -176,7 +178,9 @@ function principal() {
   } catch {
     return
   }
-  const commande = entree?.tool_input?.command
+  // `toolInput` : la clé propre de Grok. Il envoie aussi l'alias `tool_input` de Claude (trace du
+  // 2026-11-06), mais sa doc ne montre que la sienne : sans elle, une version sans alias passerait.
+  const commande = (entree?.tool_input ?? entree?.toolInput)?.command
   if (typeof commande !== 'string' || !/\bnpm/i.test(commande)) return
   let motif
   try {

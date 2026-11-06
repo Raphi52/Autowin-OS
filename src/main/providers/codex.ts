@@ -24,7 +24,13 @@ import {
 } from './watchdog'
 import { spawnSurvivable } from '../runs/survivable-spawn'
 import { findNpmGlobalFile } from './npm-global-resolve'
-import { materializeClaudeAttachments } from './claude'
+import { dossierModAutowin, gardeNpmDuDepot, materializeClaudeAttachments } from './claude'
+import {
+  FICHIER_CONTROLES_DE_CONFIANCE,
+  fichierHooksCodex,
+  verifierControlesCodex
+} from './hooks-des-cli'
+import { autowinAppDataRoot } from '../app/app-data'
 import { envDuCoffre } from './cles-du-coffre'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { spawn } from 'node:child_process'
@@ -137,6 +143,22 @@ export interface CodexExecItem {
   exit_code?: number
   aggregated_output?: string
   changes?: unknown
+  message?: string
+}
+
+/**
+ * Codex annonce `--dangerously-bypass-hook-trust` par deux éléments de type « error » au début de
+ * chaque tour (sortie lue le 2026-11-06, Codex 0.166.0). L'app ne passe l'option qu'après avoir
+ * vérifié les contrôles : ce n'est ni une panne ni une action. Relayé comme un outil, cet avis
+ * mettait deux « error — terminé » dans le fil de chaque tour normal.
+ */
+// fix-ok: avis « --dangerously-bypass-hook-trust is enabled » (item.type=error) relayé comme un outil ; rouge mesuré : codex.test.ts « expected 'error — terminé\nerror — terminé' not to match ».
+function estAvisDuContournementDesControles(item: { type?: string; message?: string }): boolean {
+  return (
+    item.type === 'error' &&
+    typeof item.message === 'string' &&
+    item.message.startsWith('`--dangerously-bypass-hook-trust` is enabled')
+  )
 }
 
 /**
@@ -234,7 +256,13 @@ export function codexExecutionEvidenceFromItem(
   item: CodexExecItem,
   executionCwd?: string
 ): ExecutionEvidence[] {
-  if (!item.type || item.type === 'agent_message' || item.type === 'reasoning') return []
+  if (
+    !item.type ||
+    item.type === 'agent_message' ||
+    item.type === 'reasoning' ||
+    estAvisDuContournementDesControles(item)
+  )
+    return []
   const command = item.command ?? ''
   const ok =
     item.type === 'file_change'
@@ -347,8 +375,15 @@ export function codexExecSpec(
   // On coupe donc l'auto-load AGENTS.md du CLI Codex (`project_doc_max_bytes=0`) → source UNIQUE,
   // pas de double-chargement. Switch explicite (défaut ON) ; le repasser à false rendrait la main au CLI.
   suppressProjectDoc = true,
-  /** Options de ce seul appel : images jointes, outils Autowin servis (`optionsMcpCodex`). */
-  extras: { images?: readonly string[]; config?: readonly string[] } = {}
+  /**
+   * Options de ce seul appel : images jointes, outils Autowin servis (`optionsMcpCodex`), et la
+   * relecture des contrôles personnels levée quand `verifierControlesCodex` les a tous reconnus.
+   */
+  extras: {
+    images?: readonly string[]
+    config?: readonly string[]
+    controlesVerifies?: boolean
+  } = {}
 ): CodexExecSpec {
   const commonArgs = [
     'exec',
@@ -363,6 +398,12 @@ export function codexExecSpec(
      * La session du CLI, elle, reste lue : cette option n'écarte que `config.toml`.
      */
     '--ignore-user-config',
+    /*
+     * La validation des contrôles personnels vit dans ce `config.toml` écarté : sans cette option, la
+     * garde npm de `hooks.json` ne tourne pas, et rien ne le signale (mesuré le 2026-11-06, Codex
+     * 0.166.0). Elle fait tourner TOUS les contrôles activés sans relecture : jamais sans vérification.
+     */
+    ...(extras.controlesVerifies ? ['--dangerously-bypass-hook-trust'] : []),
     // Sans `config.toml`, plus aucune commande ne passe sous Windows, même une lecture (mesuré le
     // 2026-10-31) : ce réglage vivait dans la configuration du poste.
     '-c',
@@ -577,6 +618,21 @@ async function executerCodex(
   onProgress?: (chunk: StreamChunk) => void
 ): Promise<SendResult> {
   const mcp = opts.skillNodeTools ? optionsMcpCodex(opts.skillNodeTools) : undefined
+  // fix-ok: branchement neuf en 3 édits (import, option de codexExecSpec, cet appel) ; rouge mesuré avant : codex.test.ts « expected [...] to include '--dangerously-bypass-hook-trust' ».
+  // Un appel en lecture seule ne peut pas lancer `npm install` : la garde n'a rien à y protéger.
+  const controles =
+    execution.sandbox === 'read-only'
+      ? { contourner: false }
+      : verifierControlesCodex({
+          fichierHooks: fichierHooksCodex(),
+          // Le script du dépôt de l'app, jamais celui d'une copie : c'est lui que `hooks.json` nomme.
+          script: gardeNpmDuDepot(
+            dossierModAutowin([typeof __dirname === 'string' ? __dirname : undefined])
+          ),
+          cwd: execution.cwd,
+          // Les contrôles tiers que le poste déclare de confiance : une donnée hors git, jamais le code.
+          controlesDeConfiance: join(autowinAppDataRoot(), FICHIER_CONTROLES_DE_CONFIANCE)
+        })
   const spec = codexExecSpec(
     execution.cwd,
     model,
@@ -585,13 +641,16 @@ async function executerCodex(
     undefined,
     undefined,
     undefined,
-    { images, config: [...(mcp?.config ?? [])] }
+    { images, config: [...(mcp?.config ?? [])], controlesVerifies: controles.contourner }
   )
   const mutationBefore =
     execution.causallyIsolated && execution.sandbox !== 'read-only'
       ? await captureWorkspaceMutationSnapshot(spec.cwd, execution.causalWatchPaths)
       : undefined
   opts.signal?.throwIfAborted()
+  // Seulement pour un lancement qui a vraiment lieu : un tour annulé avant n'a rien à signaler.
+  if (controles.avertissement)
+    onProgress?.({ delta: '', reasoning: `⚠️ ${controles.avertissement}` })
   const prompt = [
     opts.system,
     ...messages.filter((message) => message.role !== 'system').map((m) => m.content),
@@ -714,6 +773,7 @@ async function executerCodex(
                   aggregated_output?: string
                   exit_code?: number
                   changes?: unknown
+                  message?: string
                 }
               | undefined
             // Le message final part par `delta` a la fin du generateur : le relayer ici aussi
@@ -729,7 +789,7 @@ async function executerCodex(
                 reasoningFragments.push(item.text)
                 onProgress?.({ delta: '', reasoning: item.text })
               }
-            } else if (item?.type) {
+            } else if (item?.type && !estAvisDuContournementDesControles(item)) {
               const itemEvidence = codexExecutionEvidenceFromItem(item, spec.cwd)
               executionEvidence.push(...itemEvidence)
               const ok = itemEvidence.every((entry) => entry.ok)

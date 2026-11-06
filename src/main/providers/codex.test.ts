@@ -1,13 +1,65 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+
+// Les lancements de `codex exec`, rejoués sans processus : on lit les arguments remis au CLI.
+const lancements = vi.hoisted(() => [] as Array<{ args: string[] }>)
+vi.mock('../runs/survivable-spawn', () => ({
+  spawnSurvivable: (entree: { args: string[] }) => {
+    lancements.push(entree)
+    const child = new EventEmitter() as EventEmitter & Record<string, unknown>
+    child.pid = 4242
+    child.exitCode = null
+    child.kill = () => true
+    return {
+      child,
+      pid: child.pid,
+      release: () => undefined,
+      tail: async (onLine: (line: string) => void) => {
+        // Le vrai CLI annonce l'option par DEUX éléments « error » avant le tour (sortie lue le
+        // 2026-11-06, Codex 0.166.0) : le faux les rejoue pour qu'un tour normal soit fidèle.
+        if (entree.args.includes('--dangerously-bypass-hook-trust')) {
+          for (const id of ['item_0', 'item_1']) {
+            onLine(
+              JSON.stringify({
+                type: 'item.completed',
+                item: {
+                  id,
+                  type: 'error',
+                  message:
+                    '`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.'
+                }
+              })
+            )
+          }
+        }
+        onLine(
+          JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'pong' } })
+        )
+        queueMicrotask(() => {
+          child.exitCode = 0
+          child.emit('close', 0)
+        })
+        return { offset: 1, stopped: false }
+      }
+    }
+  }
+}))
+
 import {
   CodexAdapter,
   CodexStructuralFailure,
   codexExecSpec,
   codexApiEffort,
+  codexExecutionEvidenceFromItem,
   codexStructuralFailure,
   structuredEvidenceFields
 } from './codex'
 import { startDeviceLogin, pollForToken, refreshTokens, CODEX_CLIENT_ID } from './codex-auth'
+import { FICHIER_CONTROLES_DE_CONFIANCE } from './hooks-des-cli'
+import { autowinAppDataRoot, configureAutowinAppDataBase } from '../app/app-data'
 import type { Message } from './types'
 
 describe('codexApiEffort — clamp au set Responses réel (live 2026-07-24)', () => {
@@ -420,5 +472,153 @@ describe('codexExecSpec — recherche web vive', () => {
     expect(i).toBeGreaterThan(0)
     expect(args[i - 1]).toBe('-c')
     expect(args).not.toContain('--search')
+  })
+})
+
+/*
+ * LA GARDE NPM DE CODEX. Codex lit `$CODEX_HOME/hooks.json` malgré `--ignore-user-config`, mais pas
+ * la validation des contrôles, rangée dans `config.toml` : sans `--dangerously-bypass-hook-trust`,
+ * la garde ne tourne pas (mesuré le 2026-11-06, Codex 0.166.0). L'option fait tourner TOUS les
+ * contrôles activés sans relecture : l'app ne la passe qu'après avoir vérifié qu'il n'y a que les siens.
+ */
+describe('Codex — la relecture des contrôles levée seulement pour des contrôles connus', () => {
+  const GARDE = resolve(__dirname, '..', '..', '..', 'scripts', 'garde-npm-modules.mjs')
+  // fix-ok: le nom de l'entreprise était recopié dans la commande du contrôle tiers ; rouge mesuré : separation-entreprise.test.ts listait ce fichier. Nom fictif désormais, la confiance vient de la liste du poste.
+  const COMMANDE_DU_POSTE =
+    'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "C:\\Outils\\CerveauFictif\\cerveau-fictif-hook.ps1"'
+  const DU_POSTE = {
+    matcher: '',
+    hooks: [{ type: 'command', command: COMMANDE_DU_POSTE, timeout: 15 }]
+  }
+  const GARDE_NPM = {
+    matcher: 'Bash',
+    hooks: [{ type: 'command', command: `node "${GARDE}"`, timeout: 10 }]
+  }
+  const avant = { home: process.env.CODEX_HOME, bin: process.env.CODEX_BIN }
+  let dossier: string
+
+  beforeEach(() => {
+    dossier = mkdtempSync(join(tmpdir(), 'codex-controles-'))
+    mkdirSync(join(dossier, 'depot', '.git'), { recursive: true })
+    // Le chemin du fichier des contrôles vient de CODEX_HOME, comme pour Codex : jamais le vrai.
+    process.env.CODEX_HOME = join(dossier, 'maison')
+    process.env.CODEX_BIN = 'codex-test'
+    mkdirSync(process.env.CODEX_HOME)
+    // La liste de confiance du poste vit dans le dossier de données de l'app : celui du test.
+    configureAutowinAppDataBase(join(dossier, 'donnees'))
+    mkdirSync(autowinAppDataRoot(), { recursive: true })
+    lancements.length = 0
+  })
+  afterEach(() => {
+    for (const [cle, valeur] of [
+      ['CODEX_HOME', avant.home],
+      ['CODEX_BIN', avant.bin]
+    ] as const) {
+      if (valeur === undefined) delete process.env[cle]
+      else process.env[cle] = valeur
+    }
+    configureAutowinAppDataBase(undefined)
+    rmSync(dossier, { recursive: true, force: true })
+  })
+
+  const controles = (hooks: Record<string, unknown>): void =>
+    writeFileSync(join(process.env.CODEX_HOME!, 'hooks.json'), JSON.stringify({ hooks }))
+  const listeDuPoste = (commandes: string[] = [COMMANDE_DU_POSTE]): void =>
+    writeFileSync(
+      join(autowinAppDataRoot(), FICHIER_CONTROLES_DE_CONFIANCE),
+      JSON.stringify({
+        controles: commandes.map((command) => ({ evenement: 'UserPromptSubmit', command }))
+      })
+    )
+
+  async function tourDeChat(): Promise<{
+    args: string[]
+    fil: string[]
+    preuves: Array<{ type: string }>
+  }> {
+    const adapter = new CodexAdapter({ loadTokensFn: () => null })
+    const flux = adapter.send([{ role: 'user', content: 'ping' }], {
+      conversationId: 'conv-1',
+      workspaceCwd: join(dossier, 'depot')
+    })
+    const fil: string[] = []
+    let pas = await flux.next()
+    for (; !pas.done; pas = await flux.next()) {
+      if (pas.value.reasoning) fil.push(pas.value.reasoning)
+    }
+    return {
+      args: lancements.at(-1)!.args,
+      fil,
+      preuves: (pas.value.executionEvidence ?? []) as Array<{ type: string }>
+    }
+  }
+
+  it('le contrôle listé par le poste et la garde npm seuls : Codex part avec l’option, et --ignore-user-config reste', async () => {
+    listeDuPoste()
+    controles({ UserPromptSubmit: [DU_POSTE], PreToolUse: [GARDE_NPM] })
+    const { args, fil } = await tourDeChat()
+    expect(args).toContain('--dangerously-bypass-hook-trust')
+    expect(args).toContain('--ignore-user-config')
+    expect(fil.join('\n')).not.toMatch(/Garde npm/)
+  })
+
+  it('un contrôle absent de la liste du poste : option absente, et le contrôle est nommé au fil', async () => {
+    // Sans liste, puis avec une liste qui en nomme un autre : jamais de confiance par défaut.
+    for (const liste of [undefined, ['powershell.exe -File "C:\\Outils\\autre-hook.ps1"']]) {
+      if (liste) listeDuPoste(liste)
+      controles({ UserPromptSubmit: [DU_POSTE], PreToolUse: [GARDE_NPM] })
+      const { args, fil } = await tourDeChat()
+      expect(args).not.toContain('--dangerously-bypass-hook-trust')
+      expect(args).toContain('--ignore-user-config')
+      expect(fil.join('\n')).toContain(`UserPromptSubmit : ${COMMANDE_DU_POSTE}`)
+    }
+  })
+
+  it('l’avis que Codex émet pour l’option n’apparaît ni comme « error — terminé » ni comme preuve', async () => {
+    listeDuPoste()
+    controles({ UserPromptSubmit: [DU_POSTE], PreToolUse: [GARDE_NPM] })
+    const { args, fil, preuves } = await tourDeChat()
+    expect(args).toContain('--dangerously-bypass-hook-trust')
+    expect(fil.join('\n')).not.toMatch(/error — terminé/)
+    expect(fil).toEqual([])
+    expect(preuves.filter((preuve) => preuve.type === 'error')).toEqual([])
+  })
+
+  it('jumeau : un autre élément « error » reste une preuve, la reprise après plantage comprise', () => {
+    const avis = {
+      type: 'error',
+      message:
+        '`--dangerously-bypass-hook-trust` is enabled. Enabled hooks may run without review for this invocation.'
+    }
+    expect(codexExecutionEvidenceFromItem(avis)).toEqual([])
+    const autre = { type: 'error', message: 'stream disconnected before completion' }
+    expect(codexExecutionEvidenceFromItem(autre)).toHaveLength(1)
+  })
+
+  it('un contrôle inconnu : option absente, et l’avertissement remonte dans le fil', async () => {
+    listeDuPoste()
+    controles({
+      UserPromptSubmit: [DU_POSTE],
+      PreToolUse: [GARDE_NPM, { hooks: [{ type: 'command', command: 'node C:\\inconnu.mjs' }] }]
+    })
+    const { args, fil } = await tourDeChat()
+    expect(args).not.toContain('--dangerously-bypass-hook-trust')
+    expect(args).toContain('--ignore-user-config')
+    expect(fil.join('\n')).toMatch(/Garde npm inactive.*node C:\\inconnu\.mjs/)
+  })
+
+  it('un appel en lecture seule (« Tester ») n’a rien à protéger : ni option, ni avertissement', async () => {
+    controles({ PreToolUse: [GARDE_NPM] })
+    const adapter = new CodexAdapter({ loadTokensFn: () => null })
+    const flux = adapter.send([{ role: 'user', content: 'ping' }], {
+      workspaceCwd: join(dossier, 'depot')
+    })
+    const fil: string[] = []
+    for (let pas = await flux.next(); !pas.done; pas = await flux.next()) {
+      if (pas.value.reasoning) fil.push(pas.value.reasoning)
+    }
+    expect(lancements.at(-1)!.args).toContain('read-only')
+    expect(lancements.at(-1)!.args).not.toContain('--dangerously-bypass-hook-trust')
+    expect(fil).toEqual([])
   })
 })
