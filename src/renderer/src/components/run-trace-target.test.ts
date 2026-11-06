@@ -99,7 +99,10 @@ describe('cablage du clic « action avec erreur » → trace', () => {
   it('le Chat OUVRE la trace du run resolu (et ne se contente plus de cadrer la liste)', () => {
     const chat = read('ChatView.tsx')
     expect(chat).toContain('pickRunForTrace(runsRef.current, runId)')
-    expect(chat).toContain('void viewRun(target)')
+    // `viewRun` vient d'un hook appelé plus bas dans le composant : le clic le lit par sa ref,
+    // tenue à jour à chaque rendu. Les deux moitiés comptent : un appel sans ref nourrie n'ouvre rien.
+    expect(chat).toContain('void viewRunRef.current?.(target)')
+    expect(chat).toContain('useTenirRefAJour(viewRunRef, viewRun)')
     // Degradation preservee : sans run resolu, on garde le cadrage d'origine. Ce cadrage est
     // desormais STRUCTUREL — le selecteur de portee a ete retire, la liste est toujours celle de
     // la conversation. Reintroduire un setter de portee redonnerait au repli un sens a re-verifier.

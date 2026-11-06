@@ -1,7 +1,7 @@
-/* eslint-disable react-hooks/refs, react-hooks/immutability, react-hooks/purity, react-hooks/set-state-in-effect -- (conv-1508) le code de ce fichier vient de ChatView.tsx, déplacé tel quel. Ces règles du compilateur React ne s'y appliquaient pas : il renonçait à analyser le composant de 10 000 lignes (lint vert sur le même code avant la découpe). Les rendre vraies demande de CHANGER le code, hors de cette découpe sans changement de comportement. */
 import {
   useCallback,
   useEffect,
+  useInsertionEffect,
   useMemo,
   useRef,
   useState
@@ -209,6 +209,18 @@ import { useRenduMosaique } from './chat-view-mosaique'
 import { useRepriseDeLecture } from './chat-view-defilement'
 import { useFluxDuPilote } from './chat-view-flux-pilote'
 
+/**
+ * Miroir « dernière valeur » d'une donnée du rendu, pour les écouteurs posés une fois et les appels
+ * asynchrones. Écrire `ref.current` PENDANT le rendu (forme d'avant) est refusé par le compilateur
+ * React : un rendu abandonné y laissait une valeur jamais affichée. L'effet d'insertion la pose
+ * au commit, avant tout effet de mise en page des enfants.
+ */
+function useTenirRefAJour<T>(ref: React.RefObject<T>, valeur: T): void {
+  useInsertionEffect(() => {
+    ref.current = valeur
+  })
+}
+
 export function ChatView({
   isActive = true,
   onInspectTurn,
@@ -231,7 +243,7 @@ export function ChatView({
   const [compteError, setCompteError] = useState<string | null>(null)
   /** Miroir stable de `convs` pour les écouteurs d'événements (pas de re-abonnement à chaque render). */
   const convsRef = useRef<Conv[]>([])
-  convsRef.current = convs
+  useTenirRefAJour(convsRef, convs)
   const [convQuery, setConvQuery] = useState('')
   const conversationDateOrder: 'desc' | 'asc' = 'desc'
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -241,7 +253,7 @@ export function ChatView({
   const [messages, setMessages] = useState<Msg[]>([])
   /** Le fil courant pour la carte du fil, dont le clic peut attendre quelques images (conv-1059). */
   const messagesRef = useRef<Msg[]>(messages)
-  messagesRef.current = messages
+  useTenirRefAJour(messagesRef, messages)
   /**
    * Le TEXTE en cours de frappe ne vit plus ici : il appartient à `ChatComposer` (conv-1466).
    * ChatView ne garde que la carte des brouillons (`composerDraftsRef`, source de vérité) et ce
@@ -317,7 +329,7 @@ export function ChatView({
    */
   const [autoNouveauFil, setAutoNouveauFil] = useState(false)
   const autoNouveauFilRef = useRef(false)
-  autoNouveauFilRef.current = autoNouveauFil
+  useTenirRefAJour(autoNouveauFilRef, autoNouveauFil)
   /**
    * DOSSIER DE TRAVAIL ARME SUR UN FIL PAS ENCORE CREE. Meme defaut que le mode auto : le dossier
    * ne se choisissait que sur une conversation EXISTANTE (menu ⋮), donc le premier tour d'un fil
@@ -337,7 +349,7 @@ export function ChatView({
     }
   })
   const dossierNouveauFilRef = useRef<string | null>(null)
-  dossierNouveauFilRef.current = dossierNouveauFil
+  useTenirRefAJour(dossierNouveauFilRef, dossierNouveauFil)
   useEffect(() => {
     if (dossierNouveauFil) window.localStorage.setItem(CLE_DOSSIER_NOUVEAU_FIL, dossierNouveauFil)
     else window.localStorage.removeItem(CLE_DOSSIER_NOUVEAU_FIL)
@@ -364,14 +376,14 @@ export function ChatView({
    */
   const [modeleNouveauFil, setModeleNouveauFil] = useState<ModeleDuFil | null>(null)
   const modeleNouveauFilRef = useRef<ModeleDuFil | null>(null)
-  modeleNouveauFilRef.current = modeleNouveauFil
+  useTenirRefAJour(modeleNouveauFilRef, modeleNouveauFil)
   /**
    * LE COMPTE ARMÉ POUR LE FIL QUI VA NAÎTRE (conv-1416), même chemin que le modèle ci-dessus : un clic
    * sur une puce avant le premier message vaut pour ce fil, qui ne changera pas de compte tout seul.
    */
   const [compteNouveauFil, setCompteNouveauFil] = useState<string | null>(null)
   const compteNouveauFilRef = useRef<string | null>(null)
-  compteNouveauFilRef.current = compteNouveauFil
+  useTenirRefAJour(compteNouveauFilRef, compteNouveauFil)
   /** Pose le compte armé sur le fil qui vient de naître, puis le vide. Un échec se dit, sans bloquer. */
   async function poserCompteArme(conversationId: string): Promise<void> {
     const arme = compteNouveauFilRef.current
@@ -850,13 +862,16 @@ export function ChatView({
     // faire tomber tout le fil. Meme motif defensif que `PerfLagPanel` sur `perfGels`.
     if (typeof window.api?.orientationsDeConversation !== 'function') return
     let vivant = true
+    // Le fil tel qu'il est a l'OUVERTURE, lu par sa ref : `messages` en dependance relancerait la
+    // relecture a chaque delta de flux, donc a chaque token recu.
+    const filALOuverture = messagesRef.current
     void window.api
       .orientationsDeConversation(activeId)
       .then((orientations) => {
         if (!vivant || orientations.length === 0) return
         setDirectiveReceipts((current) => {
           if (current[activeId]?.length) return current
-          const rejoues = rejouerOrientations(orientations, messages)
+          const rejoues = rejouerOrientations(orientations, filALOuverture)
           return rejoues.length ? { ...current, [activeId]: rejoues } : current
         })
       })
@@ -866,9 +881,6 @@ export function ChatView({
     return () => {
       vivant = false
     }
-    // `messages` volontairement hors dependances : la relecture se fait a l'OUVERTURE du fil, pas a
-    // chaque delta de flux -- sinon elle rejouerait a chaque token recu.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId])
   const activeDirectiveReceipts = useMemo(
     () => (activeId ? (directiveReceipts[activeId] ?? []) : []),
@@ -944,12 +956,18 @@ export function ChatView({
    * au remontage, les fenetres revenaient avec leur titre mais un fil VIDE (« Aucun message. »),
    * indiscernable d'une perte de donnees. On recharge donc le fil de toute fenetre non peinte.
    */
-  useEffect(() => {
-    for (const id of mosaicIds) {
-      if (mosaicFils[id]) continue
+  function repeindreLesFenetresVides(ids: string[], fils: Record<string, Msg[]>): void {
+    for (const id of ids) {
+      if (fils[id]) continue
       void ouvrirDansMosaique(id)
     }
-  }, [mosaicIds, mosaicFils])
+  }
+  const repeindreLesFenetresVidesRef = useRef(repeindreLesFenetresVides)
+  // Corps posé en fin de composant : voir `useTenirRefAJour(repeindreLesFenetresVidesRef, …)`.
+  useEffect(
+    () => repeindreLesFenetresVidesRef.current(mosaicIds, mosaicFils),
+    [mosaicIds, mosaicFils]
+  )
   const [convViewMode, setConvViewMode] = useState<'list' | 'mosaic'>(() =>
     window.localStorage.getItem('autowin.chat.conversationsViewMode') === 'mosaic'
       ? 'mosaic'
@@ -1009,7 +1027,7 @@ export function ChatView({
   const fichesRequestRef = useRef(0)
   /** Miroir stable : `revealLiveAction` lit la liste courante sans se recreer a chaque chargement. */
   const runsRef = useRef<RunEntry[]>([])
-  runsRef.current = runs
+  useTenirRefAJour(runsRef, runs)
   /**
    * Cibles mentionnables, dérivées de l'état DÉJÀ chargé (aucun nouvel IPC, aucun balayage disque).
    * Ne dépend PAS de `input` : taper dans le composer ne recalcule donc rien ici.
@@ -1027,7 +1045,7 @@ export function ChatView({
     [runs, attachments, messages]
   )
   const mentionSourcesRef = useRef(mentionSources)
-  mentionSourcesRef.current = mentionSources
+  useTenirRefAJour(mentionSourcesRef, mentionSources)
   /**
    * Suggestions d'accueil dérivées de l'état RÉEL (runs bloqués, brouillon repris) ; repli
    * statique si rien à dire. `AnimationAccueilChat` les écrit une à une.
@@ -1070,27 +1088,34 @@ export function ChatView({
   const liveRunCardRef = useRef<HTMLDivElement>(null)
   /** Onglet a imposer au panneau droit (voir `revealLiveAction`). */
   const [ongletPanneau, setOngletPanneau] = useState<{ tab: 'runs'; jeton: number } | null>(null)
+  /** `viewRun` vient de `useRepriseDesTours`, appele plus bas : le clic le lit par sa ref. */
+  const viewRunRef = useRef<((run: RunEntry) => Promise<void>) | null>(null)
   // Clic sur le bloc d'activité d'un message → Workflows, à l'endroit qui montre RÉELLEMENT ce qui
   // s'est passé : la section Sous-agents pour le fil du run, l'onglet Activité (historique) quand on
   // veut la trace d'un run précis (elle survit au redémarrage, l'écho de session non).
-  const revealLiveAction = useCallback((mode: 'live' | 'history' = 'live', runId?: string) => {
-    setShowRuns(true)
-    // Le fil des sous-agents et les RUN.md vivent tous deux dans l'onglet Runs : ouvrir le panneau
-    // sur le graphe laisserait l'utilisateur a un clic de ce qu'il vient justement de demander.
-    setOngletPanneau((precedent) => ({ tab: 'runs', jeton: (precedent?.jeton ?? 0) + 1 }))
-    if (mode === 'history') {
-      // Action déjà terminée/interrompue : sa carte live n'existe plus. On OUVRE LA TRACE du run
-      // concerné — cadrer la seule liste laissait l'utilisateur chercher lequel regarder.
-      // `pickRunForTrace` dégrade proprement : chemin portant le runId → sinon le plus récent →
-      // sinon rien, et dans ce dernier cas on retombe sur le cadrage d'origine (aucune régression).
-      const target = pickRunForTrace(runsRef.current, runId)
-      if (target) void viewRun(target)
-      return
-    }
-    requestAnimationFrame(() =>
-      liveRunCardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    )
-  }, [])
+  const revealLiveAction = useCallback(
+    (mode: 'live' | 'history' = 'live', runId?: string) => {
+      setShowRuns(true)
+      // Le fil des sous-agents et les RUN.md vivent tous deux dans l'onglet Runs : ouvrir le panneau
+      // sur le graphe laisserait l'utilisateur a un clic de ce qu'il vient justement de demander.
+      setOngletPanneau((precedent) => ({ tab: 'runs', jeton: (precedent?.jeton ?? 0) + 1 }))
+      if (mode === 'history') {
+        // Action déjà terminée/interrompue : sa carte live n'existe plus. On OUVRE LA TRACE du run
+        // concerné — cadrer la seule liste laissait l'utilisateur chercher lequel regarder.
+        // `pickRunForTrace` dégrade proprement : chemin portant le runId → sinon le plus récent →
+        // sinon rien, et dans ce dernier cas on retombe sur le cadrage d'origine (aucune régression).
+        const target = pickRunForTrace(runsRef.current, runId)
+        if (target) void viewRunRef.current?.(target)
+        return
+      }
+      requestAnimationFrame(() =>
+        liveRunCardRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      )
+      // `setShowRuns` est stable (setter de useState) : le nommer ne recrée jamais ce rappel. Sans
+      // lui, le compilateur React, qui le déduit comme dépendance, renonce à optimiser le composant.
+    },
+    [setShowRuns]
+  )
   const [deleteCandidate, setDeleteCandidate] = useState<Conv | null>(null)
   /**
    * Renommage d'une conversation. Le DÉFAUT corrigé : le menu appelait `window.prompt`, qu'Electron
@@ -1479,6 +1504,16 @@ export function ChatView({
     // affiche pourtant les pieces jointes de N brouillons a la fois : ce compteur est le SEUL
     // signal de rendu, et il ne bouge que sur une piece jointe, jamais sur une frappe.
     setDraftsVersion((n) => n + 1)
+  }
+
+  /**
+   * Croix d'une pièce jointe du composer plein. La clé du brouillon se lit AU CLIC, comme avant la
+   * mise en commun : le brouillon courant peut avoir changé depuis le rendu.
+   */
+  function retirerPieceJointeDuBrouillonCourant(fileIndex: number): void {
+    setDraftAttachments(composerDraftKeyRef.current, (current) =>
+      current.filter((_, index) => index !== fileIndex)
+    )
   }
 
   function setDraftError(key: string, error: string | null): void {
@@ -1978,9 +2013,8 @@ export function ChatView({
    * mémoïsé (`filRendu`) n'a pas à se recalculer.
    */
   const addFilesRef = useRef(addFiles)
-  addFilesRef.current = addFiles
-  const recevoirElementCibleRef = useRef(recevoirElementCible)
-  recevoirElementCibleRef.current = recevoirElementCible
+  useTenirRefAJour(addFilesRef, addFiles)
+  const recevoirElementCibleRef = useRef<((element: ElementCible) => void) | null>(null)
   const pointerMomentVideo = useCallback((moment: MomentPointe): void => {
     composerRef.current?.insererAuCurseur(moment.reference)
     // Doublon par NOM seul : `<vidéo>-i<N>.png` désigne une image précise ; deux encodages PNG du
@@ -1989,18 +2023,6 @@ export function ChatView({
   }, [])
 
   /* --- données latérales --- */
-
-  async function refreshConvs(): Promise<void> {
-    // Les fils inchangés gardent leur objet : seules leurs lignes modifiées se redessinent (gel
-    // `renderer:vue-chat-liste`, conv-1115 — l'IPC rend des copies neuves, ~1 000 lignes refaites).
-    const loaded = reutiliserConversationsInchangees(
-      convsRef.current,
-      (await window.api.conversations()) as Conv[]
-    )
-    convsRef.current = loaded // dispo IMMÉDIATEMENT pour la reprise auto (sans attendre le render)
-    setConvs(loaded)
-    repriseDemarrageRef.current ??= autoResumeOnce(loaded)
-  }
 
   /**
    * Survie niveau 2 — REPRISE AUTOMATIQUE, déclenchée ICI (et pas dans App) parce que c'est ChatView
@@ -2093,6 +2115,20 @@ export function ChatView({
         traceSilentFailure('relance-gratuite', error)
       }
     }
+  }
+
+  // Declaree SOUS `autoResumeOnce`, qu'elle appelle : appelee avant sa declaration, le compilateur
+  // React rattachait au rendu le `Date.now()` de la reprise.
+  async function refreshConvs(): Promise<void> {
+    // Les fils inchangés gardent leur objet : seules leurs lignes modifiées se redessinent (gel
+    // `renderer:vue-chat-liste` — l'IPC rend des copies neuves, ~1 000 lignes refaites).
+    const loaded = reutiliserConversationsInchangees(
+      convsRef.current,
+      (await window.api.conversations()) as Conv[]
+    )
+    convsRef.current = loaded // dispo IMMÉDIATEMENT pour la reprise auto (sans attendre le render)
+    setConvs(loaded)
+    repriseDemarrageRef.current ??= autoResumeOnce(loaded)
   }
   // File d'attente LOCALE (renderer) : messages tapés pendant un tour, envoyés comme des tours
   // NORMAUX un par un à la fin du tour courant → chaque message = sa propre paire Q/R (rendu propre).
@@ -2291,10 +2327,13 @@ export function ChatView({
     setOngletPanneau((precedent) => ({ tab: 'runs', jeton: (precedent?.jeton ?? 0) + 1 }))
     void viewRun(runDeLaFiche(fiche))
   }
-  useEffect(() => {
+  function rechargerRunsEtFiches(): void {
     void Promise.resolve().then(refreshRuns)
     void Promise.resolve().then(refreshFiches)
-  }, [activeId])
+  }
+  const rechargerRunsEtFichesRef = useRef(rechargerRunsEtFiches)
+  // À chaque changement de fil. Corps posé en fin de composant, comme les effets suivants.
+  useEffect(() => rechargerRunsEtFichesRef.current(), [activeId])
   // Tient le bus au courant de la conversation active → les orchestrations s'y rattachent.
   useEffect(() => {
     window.api.setActiveConversation(activeId)
@@ -2309,7 +2348,7 @@ export function ChatView({
     const restaure = getComposerDraft(composerDraftKeyRef.current).input
     if (restaure) composerRef.current?.setInput(restaure)
   }, [convViewMode])
-  useEffect(() => {
+  function brancherLeChatAuMontage(): () => void {
     let disposed = false
     const selectionInitiale = Promise.resolve().then(async () => {
       await refreshConvs()
@@ -2358,7 +2397,7 @@ export function ChatView({
     const ecouterLesElements = (): void => {
       if (disposed) return
       couperElementsCibles = ecouterElementsCibles((element) =>
-        recevoirElementCibleRef.current(element)
+        recevoirElementCibleRef.current?.(element)
       )
     }
     void selectionInitiale
@@ -2814,7 +2853,9 @@ export function ChatView({
       raisonnementBatcher.cancel()
       offApp()
     }
-  }, [])
+  }
+  const brancherLeChatAuMontageRef = useRef(brancherLeChatAuMontage)
+  useEffect(() => brancherLeChatAuMontageRef.current(), [])
 
   useEffect(() => {
     if (isActive) void Promise.resolve().then(() => refreshRuntimeIdentity())
@@ -3288,7 +3329,7 @@ export function ChatView({
     void refreshRuntimeIdentity(true)
   }
 
-  useEffect(() => {
+  function ecouterPrefillEtBrainwash(): () => void {
     const openBrainwash = (event: Event): void => {
       const prompt = (event as CustomEvent<{ prompt?: string }>).detail?.prompt
       if (!prompt) return
@@ -3386,7 +3427,9 @@ export function ChatView({
       window.removeEventListener('autowin:prefill-conversation', prefill)
       window.removeEventListener('autowin:brainwash', openBrainwash)
     }
-  }, [])
+  }
+  const ecouterPrefillEtBrainwashRef = useRef(ecouterPrefillEtBrainwash)
+  useEffect(() => ecouterPrefillEtBrainwashRef.current(), [])
 
   /**
    * Survie niveau 2 — REJEU : reconstruit, depuis le journal fichier du tour, ce que le CLI a produit
@@ -3450,7 +3493,7 @@ export function ChatView({
 
   // Survie niveau 2 : « Reprendre » depuis le bandeau de démarrage ouvre la conversation dont le
   // tour a été interrompu par la fermeture de l'app (son fil est rechargé depuis le store).
-  useEffect(() => {
+  function ecouterOuvertureDeConversation(): () => void {
     const openConversation = (event: Event): void => {
       // DEUX FORMES acceptées : l'objet `{ conversationId }` (bandeau de reprise) et l'id NU en
       // chaîne, envoyé par l'écran des fiches et l'accueil. Avant, la chaîne tombait dans
@@ -3479,8 +3522,9 @@ export function ChatView({
     }
     window.addEventListener('autowin:open-conversation', openConversation)
     return () => window.removeEventListener('autowin:open-conversation', openConversation)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }
+  const ecouterOuvertureDeConversationRef = useRef(ecouterOuvertureDeConversation)
+  useEffect(() => ecouterOuvertureDeConversationRef.current(), [])
 
   function renameConv(c: Conv): void {
     setRenameCandidate({ conv: c, value: c.title })
@@ -3954,6 +3998,7 @@ export function ChatView({
     setRunDetailTab,
     tourEncoreVivant
   })
+  useTenirRefAJour(viewRunRef, viewRun)
   const {
     active, resumeAvailable, composersMosaiqueRef, rendrePiecesJointesEnAttente, faconsDuFilActif,
     faconsDeLaMosaique, signatureDesFacons, fenetresMosaique, ouvrirFilMosaiqueStable,
@@ -3971,6 +4016,7 @@ export function ChatView({
     sendRef, setDraftAttachments, setDraftInput, setOpenImage, skillCommands, stopPilotTurn,
     submitBtw, submitBtwRef
   })
+  useTenirRefAJour(recevoirElementCibleRef, recevoirElementCible)
   const {
     marquerInactive, marquerPrive, surligner, appliquerRangement, dossierPersonnel,
     estDossierPersonnel, dossiersConversations, categoriesConnues, saisieCategorie,
@@ -3989,6 +4035,21 @@ export function ChatView({
     setDossiersMemorises, setOpenImage, setPanneauOutil, setSelectedConvIds, setSurvole, showRuns,
     surviole, toggleConvSelection
   })
+  /*
+   * CORPS DES EFFETS de plus haut, posés ICI, sous les hooks dont ils appellent les fonctions
+   * (`send`, `viewRun`, `composersMosaiqueRef`…).
+   * fix-ok: cause mesurée — le compilateur React refusait ces effets (« Cannot access variable
+   * before it is declared ») : leur corps lit des noms que ces hooks ne rendent que plus bas.
+   * Les effets eux-mêmes restent À LEUR PLACE : descendus ici, ils auraient tourné après une
+   * vingtaine d'autres effets, dont ceux des hooks d'envoi, et le pré-remplissage gardé au montage
+   * (`ouvrirEcouteurPrefill`) aurait changé de rang. L'effet d'insertion pose chaque corps avant
+   * tout effet du même rendu : chacun appelle donc les fonctions de son rendu, comme avant.
+   */
+  useTenirRefAJour(repeindreLesFenetresVidesRef, repeindreLesFenetresVides)
+  useTenirRefAJour(rechargerRunsEtFichesRef, rechargerRunsEtFiches)
+  useTenirRefAJour(brancherLeChatAuMontageRef, brancherLeChatAuMontage)
+  useTenirRefAJour(ecouterPrefillEtBrainwashRef, ecouterPrefillEtBrainwash)
+  useTenirRefAJour(ecouterOuvertureDeConversationRef, ecouterOuvertureDeConversation)
 
   return (
     <div
@@ -5554,12 +5615,10 @@ export function ChatView({
               }}
               onResume={() => void resumePilotTurn()}
               onPaste={(files) => void addFiles(files)}
-              attachmentsNode={rendrePiecesJointesEnAttente(attachments, (fileIndex) =>
-                // Clé lue AU CLIC, comme avant la mise en commun : le brouillon courant peut avoir
-                // changé depuis le rendu.
-                setDraftAttachments(composerDraftKeyRef.current, (current) =>
-                  current.filter((_, index) => index !== fileIndex)
-                )
+              attachmentsNode={rendrePiecesJointesEnAttente(
+                attachments,
+                // eslint-disable-next-line react-hooks/refs -- faux positif : `rendrePiecesJointesEnAttente` (chat-view-mosaique.tsx) n'appelle `retirer` que dans le onClick de la croix, jamais au rendu ; le compilateur ne voit pas dans cette fonction de rendu qui n'est pas un composant.
+                retirerPieceJointeDuBrouillonCourant
               )}
               errorNode={
                 attachmentError ? <div className="attachment-error">{attachmentError}</div> : null
