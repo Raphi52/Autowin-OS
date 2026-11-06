@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { langueCourante, formaterDate, formaterNombre } from '../langue'
 import {
   useTextesObservatory,
@@ -109,6 +109,31 @@ function PayloadContent({ content }: { content: string }): React.JSX.Element {
   )
 }
 
+/**
+ * Un chargement = les entrées qui l'ont déclenché, dans un objet NEUF à chaque changement. Une
+ * réponse porte le chargement qui l'a demandée : elle ne s'affiche que s'il est encore le courant.
+ */
+type ChargementCausal = {
+  conversationId: string
+  refreshKey: number
+  turnFocus: ObservatoryFocus | null
+}
+/**
+ * Même principe pour les sources propres à la conversation. Une PORTÉE change quand la vue perd
+ * la source (Brain : onglet masqué ou plus de conversation ; appels : plus de conversation) et ne
+ * rouvre jamais : une réponse arrivée après, même avant que l'effet l'invalide, ne s'affiche plus.
+ */
+type ChargementConversation = {
+  active: boolean
+  conversationId: string
+  refreshKey: number
+  porteeBrain: number
+  porteeAppels: number
+}
+type ReponseDeConversation<T> = { pour: ChargementConversation; valeur: T; erreur?: string }
+const AUCUN_APPEL: PromptCall[] = []
+const AUCUNE_TRACE_BRAIN: BrainTraceView[] = []
+
 export function ObservatoryView({
   active,
   focus = null,
@@ -123,12 +148,8 @@ export function ObservatoryView({
   const { t, langue } = useTextesObservatory()
   const [conversations, setConversations] = useState<ConversationItem[]>([])
   const [conversationId, setConversationId] = useState('')
-  const [timeline, setTimeline] = useState<HarnessTimeline>(EMPTY)
-  const [promptCalls, setPromptCalls] = useState<PromptCall[]>([])
   const [selectedCall, setSelectedCall] = useState<PromptCall | null>(null)
   const [nativeMetadata, setNativeMetadata] = useState<NativeTraceSummaryInput[]>([])
-  const [brainTraces, setBrainTraces] = useState<BrainTraceView[]>([])
-  const [brainInventory, setBrainInventory] = useState<BrainInjectionInventoryView | null>(null)
   const [selected, setSelected] = useState<HarnessTimelineEvent | null>(null)
   const [compare, setCompare] = useState<HarnessTimelineEvent[]>([])
   const [query, setQuery] = useState('')
@@ -138,8 +159,6 @@ export function ObservatoryView({
   const [causalScope, setCausalScope] = useState<CausalScope>('all')
   const [conversationQuery, setConversationQuery] = useState('')
   const [conversationLimit, setConversationLimit] = useState(CONVERSATION_PAGE)
-  const [callsLoading, setCallsLoading] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number>()
   const [refreshKey, setRefreshKey] = useState(0)
@@ -206,31 +225,154 @@ export function ObservatoryView({
     setCausalScope('all')
   }, [resetTimelineFilters])
 
+  /*
+   * Ce qui suit, jusqu'aux effets, s'AJUSTE PENDANT LE RENDU en gardant les entrées précédentes en
+   * state : une remise à zéro faite dans un effet laisse passer un rendu avec l'état d'avant (l'ancien
+   * tour ciblé, la trace de l'autre conversation, un flux « au repos » qui charge pourtant).
+   */
+
+  // Un focus externe neuf, l'onglet qui revient ou une actualisation repartent d'une vue vierge.
+  const [entreesFocus, setEntreesFocus] = useState<{
+    active: boolean
+    refreshKey: number
+    focus: ObservatoryFocus | null
+  }>(() => ({ active, refreshKey, focus: null }))
+  if (
+    entreesFocus.active !== active ||
+    entreesFocus.refreshKey !== refreshKey ||
+    entreesFocus.focus !== focus
+  ) {
+    setEntreesFocus({ active, refreshKey, focus })
+    if (active && focus) {
+      setTurnFocus(focus)
+      resetConversationFilters()
+      setFocusUnavailable('source')
+      setCausalTracePartial(false)
+      setConversationId('')
+      setSelected(null)
+      setSelectedCall(null)
+      setCompare([])
+    }
+  }
+
+  // Trace causale : la trace affichée et le « en cours » se DÉDUISENT du chargement courant.
+  const [chargementCausal, setChargementCausal] = useState<ChargementCausal>(() => ({
+    conversationId,
+    refreshKey,
+    turnFocus
+  }))
+  const [traceChargee, setTraceChargee] = useState<{
+    pour: ChargementCausal | null
+    timeline: HarnessTimeline
+  }>({ pour: null, timeline: EMPTY })
+  const [causalReglePour, setCausalReglePour] = useState<ChargementCausal | null>(null)
+  if (
+    chargementCausal.conversationId !== conversationId ||
+    chargementCausal.refreshKey !== refreshKey ||
+    chargementCausal.turnFocus !== turnFocus
+  ) {
+    setChargementCausal({ conversationId, refreshKey, turnFocus })
+    setSelected(null)
+    setSelectedCall(null)
+    setCompare([])
+    if (!conversationId) setRefreshing(false)
+  }
+  const timeline = traceChargee.pour === chargementCausal ? traceChargee.timeline : EMPTY
+  const loading = Boolean(chargementCausal.conversationId) && causalReglePour !== chargementCausal
+
+  // Sources propres à la conversation, toutes DÉDUITES de leur dernière réponse : les appels de
+  // leur seul chargement (vides pendant la relecture), Brain et les erreurs de leur portée (gardés
+  // pendant une relecture, effacés dès que la portée se ferme).
+  const [chargementConversation, setChargementConversation] = useState<ChargementConversation>(
+    () => ({ active, conversationId, refreshKey, porteeBrain: 0, porteeAppels: 0 })
+  )
+  const [appelsRecus, setAppelsRecus] = useState<ReponseDeConversation<PromptCall[]> | null>(null)
+  const [appelsReglesPour, setAppelsReglesPour] = useState<ChargementConversation | null>(null)
+  const [tracesBrainRecues, setTracesBrainRecues] = useState<ReponseDeConversation<
+    BrainTraceView[]
+  > | null>(null)
+  const [inventaireRecu, setInventaireRecu] =
+    useState<ReponseDeConversation<BrainInjectionInventoryView | null> | null>(null)
+  if (
+    chargementConversation.active !== active ||
+    chargementConversation.conversationId !== conversationId ||
+    chargementConversation.refreshKey !== refreshKey
+  ) {
+    setChargementConversation({
+      active,
+      conversationId,
+      refreshKey,
+      porteeBrain: chargementConversation.porteeBrain + (active && conversationId ? 0 : 1),
+      porteeAppels: chargementConversation.porteeAppels + (conversationId ? 0 : 1)
+    })
+  }
+  const promptCalls =
+    appelsRecus?.pour === chargementConversation ? appelsRecus.valeur : AUCUN_APPEL
+  const callsLoading =
+    Boolean(chargementConversation.conversationId) && appelsReglesPour !== chargementConversation
+  const tracesBrainAJour =
+    tracesBrainRecues?.pour.porteeBrain === chargementConversation.porteeBrain
+      ? tracesBrainRecues
+      : null
+  const inventaireAJour =
+    inventaireRecu?.pour.porteeBrain === chargementConversation.porteeBrain ? inventaireRecu : null
+  const brainTraces = tracesBrainAJour?.valeur ?? AUCUNE_TRACE_BRAIN
+  const brainInventory = inventaireAJour?.valeur ?? null
+  const erreurAppels =
+    appelsRecus?.pour.porteeAppels === chargementConversation.porteeAppels
+      ? appelsRecus.erreur
+      : undefined
+  const erreurTracesBrain = tracesBrainAJour?.erreur
+  const erreurInventaire = inventaireAJour?.erreur
+  const erreursSources = useMemo(() => {
+    if (!erreurAppels && !erreurTracesBrain && !erreurInventaire) return sourceErrors
+    const erreurs = { ...sourceErrors }
+    if (erreurAppels) erreurs.promptCalls = erreurAppels
+    if (erreurTracesBrain) erreurs.brainTraces = erreurTracesBrain
+    if (erreurInventaire) erreurs.brainInventory = erreurInventaire
+    return erreurs
+  }, [erreurAppels, erreurInventaire, erreurTracesBrain, sourceErrors])
+
+  // Tour ciblé introuvable / trace partielle : jugés sur les deux preuves une fois la trace lue.
+  // En state, pas dérivés : le bandeau garde son verdict pendant la lecture suivante.
+  if (
+    turnFocus &&
+    focusUnavailable !== 'conversation' &&
+    focusUnavailable !== 'source' &&
+    !loading &&
+    turnFocus.conversationId === conversationId
+  ) {
+    const hasCausalProof = timeline.turns.some((turn) => turn.id === turnFocus.turnId)
+    const hasPromptProof = promptCalls.some(
+      (call) => call.conversationId === turnFocus.conversationId && call.turnId === turnFocus.turnId
+    )
+    const indisponible = hasCausalProof || hasPromptProof ? null : 'turn'
+    const partielle = !hasCausalProof && hasPromptProof
+    if (focusUnavailable !== indisponible) setFocusUnavailable(indisponible)
+    if (causalTracePartial !== partielle) setCausalTracePartial(partielle)
+  }
+
+  /**
+   * Rang des entrées du catalogue, avancé à la POSE du rendu qui les change. Le focus est remis à
+   * zéro pendant ce rendu ; si l'ancien catalogue était invalidé seulement par le nettoyage de
+   * l'effet, une réponse arrivée entre-temps rétablirait l'ancien tour ciblé.
+   */
+  const rangCatalogue = useRef(0)
+  useLayoutEffect(() => {
+    rangCatalogue.current += 1
+  }, [active, refreshKey, focus])
+
   useEffect(() => {
     if (!active) return
     let disposed = false
-    if (focus) {
-      causalRequestGate.current.begin()
-      // Réinitialisation atomique requise avant le chargement asynchrone d'un focus externe :
-      // faite en microtâche (avant toute réponse réseau), pas en setState synchrone d'effet.
-      queueMicrotask(() => {
-        if (disposed) return
-        setTurnFocus(focus)
-        resetConversationFilters()
-        setFocusUnavailable('source')
-        setCausalTracePartial(false)
-        setConversationId('')
-        setTimeline(EMPTY)
-        setSelected(null)
-        setSelectedCall(null)
-        setCompare([])
-      })
-    }
+    const rang = rangCatalogue.current
+    // La vue a été remise à zéro au rendu : une trace causale encore en vol ne doit plus s'appliquer.
+    if (focus) causalRequestGate.current.begin()
     void settleObservatorySources({
       conversations: window.api.conversations(),
       native: window.api.promptTraceSummary()
     }).then(({ values, errors }) => {
-      if (disposed) return
+      if (disposed || rang !== rangCatalogue.current) return
       const items = values.conversations
       if (items) {
         const sorted = [...items].sort((a, b) => b.updatedAt - a.updatedAt)
@@ -264,28 +406,24 @@ export function ObservatoryView({
   }, [active, refreshKey, focus, resetConversationFilters, updateSourceError])
 
   useEffect(() => {
+    const chargement = chargementConversation
     const request = brainRequestGate.current.begin()
-    if (!active || !conversationId) {
-      // Efface explicitement la source de la conversation precedente quand aucun scope n'est actif.
-      queueMicrotask(() => {
-        if (!brainRequestGate.current.isCurrent(request)) return
-        setBrainTraces([])
-        updateSourceError('brainTraces')
-      })
-      return
-    }
-    void (window.api.brainTraces?.(conversationId) ?? Promise.resolve([]))
+    // Hors portée, rien à lire : la source est déjà vide au rendu, la réponse en vol est invalidée.
+    if (!chargement.active || !chargement.conversationId) return
+    void (window.api.brainTraces?.(chargement.conversationId) ?? Promise.resolve([]))
       .then((traces) => {
         if (!brainRequestGate.current.isCurrent(request)) return
-        setBrainTraces(traces)
-        updateSourceError('brainTraces')
+        setTracesBrainRecues({ pour: chargement, valeur: traces })
       })
       .catch((error: unknown) => {
         if (!brainRequestGate.current.isCurrent(request)) return
-        setBrainTraces([])
-        updateSourceError('brainTraces', error instanceof Error ? error.message : String(error))
+        setTracesBrainRecues({
+          pour: chargement,
+          valeur: AUCUNE_TRACE_BRAIN,
+          erreur: error instanceof Error ? error.message : String(error)
+        })
       })
-  }, [active, conversationId, refreshKey, updateSourceError])
+  }, [chargementConversation])
 
   /**
    * INVENTAIRE EXHAUSTIF des points d'appel Brain. Il ne dérive PAS des traces affichées : il vient
@@ -293,101 +431,70 @@ export function ObservatoryView({
    * Une chronologie ne peut pas dire « ce point n'a pas servi » ; cet inventaire le peut.
    */
   useEffect(() => {
+    const chargement = chargementConversation
     const request = inventoryRequestGate.current.begin()
-    if (!active || !conversationId) {
-      queueMicrotask(() => {
-        if (!inventoryRequestGate.current.isCurrent(request)) return
-        setBrainInventory(null)
-        updateSourceError('brainInventory')
-      })
-      return
-    }
-    void (window.api.brainInjectionInventory?.(conversationId) ?? Promise.resolve(null))
+    // Hors portée, rien à lire : l'inventaire est déjà vide au rendu, la réponse en vol est invalidée.
+    if (!chargement.active || !chargement.conversationId) return
+    void (window.api.brainInjectionInventory?.(chargement.conversationId) ?? Promise.resolve(null))
       .then((inventaire) => {
         if (!inventoryRequestGate.current.isCurrent(request)) return
-        setBrainInventory(inventaire ?? null)
-        updateSourceError('brainInventory')
+        setInventaireRecu({ pour: chargement, valeur: inventaire ?? null })
       })
       .catch((error: unknown) => {
         if (!inventoryRequestGate.current.isCurrent(request)) return
-        setBrainInventory(null)
-        updateSourceError('brainInventory', error instanceof Error ? error.message : String(error))
+        setInventaireRecu({
+          pour: chargement,
+          valeur: null,
+          erreur: error instanceof Error ? error.message : String(error)
+        })
       })
-  }, [active, conversationId, refreshKey, updateSourceError])
+  }, [chargementConversation])
 
   useEffect(() => {
-    if (!conversationId) {
-      const requestId = promptRequestGate.current.begin()
-      queueMicrotask(() => {
-        if (!promptRequestGate.current.isCurrent(requestId)) return
-        setPromptCalls([])
-        setCallsLoading(false)
-        updateSourceError('promptCalls')
-      })
-      return
-    }
+    const chargement = chargementConversation
     const requestId = promptRequestGate.current.begin()
+    // Sans conversation, la liste vide et l'erreur effacée viennent du rendu.
+    if (!chargement.conversationId) return
     // Chargement PROPRE a cette section du rail : `loading` ne couvre que la trace causale.
-    queueMicrotask(() => {
-      if (!promptRequestGate.current.isCurrent(requestId)) return
-      setCallsLoading(true)
-      setPromptCalls([])
-    })
     void window.api
-      .promptCalls(conversationId)
+      .promptCalls(chargement.conversationId)
       .then((calls) => {
         if (!promptRequestGate.current.isCurrent(requestId)) return
-        setPromptCalls(calls as PromptCall[])
-        updateSourceError('promptCalls')
+        setAppelsRecus({ pour: chargement, valeur: calls as PromptCall[] })
       })
       .catch((error: unknown) => {
         if (!promptRequestGate.current.isCurrent(requestId)) return
-        setPromptCalls([])
-        updateSourceError('promptCalls', error instanceof Error ? error.message : String(error))
+        setAppelsRecus({
+          pour: chargement,
+          valeur: AUCUN_APPEL,
+          erreur: error instanceof Error ? error.message : String(error)
+        })
       })
       .finally(() => {
-        if (promptRequestGate.current.isCurrent(requestId)) setCallsLoading(false)
+        if (promptRequestGate.current.isCurrent(requestId)) setAppelsReglesPour(chargement)
       })
-  }, [active, conversationId, refreshKey, updateSourceError])
+  }, [chargementConversation])
 
   useEffect(() => {
-    if (!conversationId) {
-      // Évite d'afficher la timeline de la conversation précédente hors contexte.
-      const idVide = causalRequestGate.current.begin()
-      queueMicrotask(() => {
-        if (!causalRequestGate.current.isCurrent(idVide)) return
-        setTimeline(EMPTY)
-        setSelected(null)
-        setSelectedCall(null)
-        setCompare([])
-        setLoading(false)
-        setRefreshing(false)
-      })
-      return
-    }
+    const chargement = chargementCausal
     const requestId = causalRequestGate.current.begin()
+    // Sans conversation, la trace vide et la fin du « en cours » viennent du rendu : la réponse en
+    // vol est seulement invalidée, pour ne pas afficher la conversation précédente hors contexte.
+    if (!chargement.conversationId) return
     const etaitEnActualisation = refreshingRef.current
-    queueMicrotask(() => {
-      if (!causalRequestGate.current.isCurrent(requestId)) return
-      setLoading(true)
-      setTimeline(EMPTY)
-      setSelected(null)
-      setSelectedCall(null)
-      setCompare([])
-    })
     let requestSucceeded = false
     void window.api
-      .causalTrace(conversationId)
+      .causalTrace(chargement.conversationId)
       .then((events) => {
         if (!causalRequestGate.current.isCurrent(requestId)) return
         const nextTimeline = buildHarnessTimelineFromTrace(events as HarnessTraceEvent[])
-        setTimeline(nextTimeline)
+        setTraceChargee({ pour: chargement, timeline: nextTimeline })
         updateSourceError('causalTrace')
         requestSucceeded = true
       })
       .catch((error: unknown) => {
         if (!causalRequestGate.current.isCurrent(requestId)) return
-        setTimeline(EMPTY)
+        setTraceChargee({ pour: chargement, timeline: EMPTY })
         updateSourceError('causalTrace', error instanceof Error ? error.message : String(error))
       })
       .finally(async () => {
@@ -397,13 +504,13 @@ export function ObservatoryView({
         if (remainingBusyTime)
           await new Promise((resolve) => setTimeout(resolve, remainingBusyTime))
         if (causalRequestGate.current.isCurrent(requestId)) {
-          setLoading(false)
+          setCausalReglePour(chargement)
           setRefreshing(false)
           if (requestSucceeded) setLastRefreshedAt(Date.now())
         }
       })
     // A tab change must not reload or clear Observatory's local state : `active` n'est donc pas une dépendance.
-  }, [conversationId, refreshKey, turnFocus, updateSourceError])
+  }, [chargementCausal, updateSourceError])
 
   useEffect(() => {
     if (!conversationId || !window.api.onAppEvent) return
@@ -421,31 +528,6 @@ export function ObservatoryView({
       liveRefreshTimer.current = null
     }
   }, [conversationId])
-
-  useEffect(() => {
-    if (
-      !turnFocus ||
-      focusUnavailable === 'conversation' ||
-      focusUnavailable === 'source' ||
-      loading
-    )
-      return
-    if (turnFocus.conversationId !== conversationId) return
-    const hasCausalProof = timeline.turns.some((turn) => turn.id === turnFocus.turnId)
-    const hasPromptProof = promptCalls.some(
-      (call) => call.conversationId === turnFocus.conversationId && call.turnId === turnFocus.turnId
-    )
-    // État dérivé synchronisé après résolution des deux sources de preuve asynchrones.
-    let disposed = false
-    queueMicrotask(() => {
-      if (disposed) return
-      setFocusUnavailable(hasCausalProof || hasPromptProof ? null : 'turn')
-      setCausalTracePartial(!hasCausalProof && hasPromptProof)
-    })
-    return () => {
-      disposed = true
-    }
-  }, [conversationId, focusUnavailable, loading, promptCalls, timeline, turnFocus])
 
   const conversationCalls = useMemo(
     () => promptCalls.filter((call) => call.conversationId === conversationId),
@@ -975,11 +1057,15 @@ export function ObservatoryView({
             data-testid="observatory-freshness"
             data-refreshed-at={lastRefreshedAt ?? ''}
             data-refresh-status={
-              lastRefreshedAt ? (Object.keys(sourceErrors).length ? 'partial' : 'complete') : 'idle'
+              lastRefreshedAt
+                ? Object.keys(erreursSources).length
+                  ? 'partial'
+                  : 'complete'
+                : 'idle'
             }
           >
             {lastRefreshedAt
-              ? Object.keys(sourceErrors).length
+              ? Object.keys(erreursSources).length
                 ? t('vue.actualisationPartielle', {
                     heure: formaterDate(lastRefreshedAt, { timeStyle: 'medium' })
                   })
@@ -1195,12 +1281,12 @@ export function ObservatoryView({
           </button>
         </aside>
       )}
-      {Object.keys(sourceErrors).length > 0 && (
+      {Object.keys(erreursSources).length > 0 && (
         <aside className="observatory-source-errors" role="alert">
           <div>
             <strong>{t('vue.certainesSourcesTelemetrieSont')}</strong>
             <small>
-              {Object.entries(sourceErrors)
+              {Object.entries(erreursSources)
                 .map(([source, message]) => `${source} : ${message}`)
                 .join(' · ')}
             </small>

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createElement, useState } from 'react'
+import { act, createElement, Profiler, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ObservatoryView } from './ObservatoryView'
@@ -437,5 +437,129 @@ describe('Observatory turn focus', () => {
     expect(causalMode.classList.contains('is-active')).toBe(true)
     expect(view.querySelector('.observatory-causal-detail')).not.toBeNull()
     expect(stream.scrollTop).toBe(240)
+  })
+
+  type Rendu = { texte: string; fluxOccupe: string | null; appelsOccupes: string | null }
+
+  /**
+   * Relevé du DOM à CHAQUE rendu posé à l'écran. Un état remis à zéro dans un effet (ou une
+   * microtâche) laisse passer UN rendu avec l'état d'avant : une assertion faite après coup ne le
+   * voit plus, ce relevé le garde.
+   */
+  function monterAvecReleve(mockApi: ReturnType<typeof api>): {
+    rendus: Rendu[]
+    afficher: (props: Parameters<typeof ObservatoryView>[0]) => Promise<void>
+  } {
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const rendus: Rendu[] = []
+    const relever = (): void => {
+      rendus.push({
+        texte: container?.textContent ?? '',
+        fluxOccupe:
+          container
+            ?.querySelector('[data-testid="observatory-stream"]')
+            ?.getAttribute('aria-busy') ?? null,
+        appelsOccupes:
+          container?.querySelector('.observatory-calls')?.getAttribute('aria-busy') ?? null
+      })
+    }
+    const afficher = async (props: Parameters<typeof ObservatoryView>[0]): Promise<void> => {
+      await act(async () => {
+        root?.render(
+          createElement(
+            Profiler,
+            { id: 'observatory', onRender: relever },
+            createElement(ObservatoryView, props)
+          )
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+    }
+    return { rendus, afficher }
+  }
+
+  it('montre le chargement de B dès le premier rendu, jamais la trace ni le repos de A', async () => {
+    const traceB = deferred<HarnessTraceEvent[]>()
+    const appelsB = deferred<unknown[]>()
+    const mockApi = api([])
+    mockApi.conversations.mockResolvedValue([
+      { id: 'conv-1', title: 'Conversation A', provider: 'codex', updatedAt: 2 },
+      { id: 'conv-2', title: 'Conversation B', provider: 'claude', updatedAt: 1 }
+    ])
+    mockApi.causalTrace.mockImplementation((id: string) =>
+      id === 'conv-1' ? Promise.resolve([trace('turn-A', 'preuve de A', 1)]) : traceB.promise
+    )
+    mockApi.promptCalls.mockImplementation((id: string) =>
+      id === 'conv-1' ? Promise.resolve([]) : appelsB.promise
+    )
+    const { rendus, afficher } = monterAvecReleve(mockApi)
+    await afficher({ active: true })
+    expect(container?.textContent).toContain('preuve de A')
+
+    const conversationB = [
+      ...(container?.querySelectorAll('.observatory-conversations button') ?? [])
+    ].find((button) => button.textContent?.includes('Conversation B')) as HTMLButtonElement
+    rendus.length = 0
+    await act(async () => {
+      conversationB.click()
+      await Promise.resolve()
+    })
+
+    // Entrée qui fait échouer une correction fausse : le clic sur B alors que la trace de A est
+    // affichée. Une remise à zéro différée laisse un rendu « preuve de A », flux au repos.
+    expect(rendus.length).toBeGreaterThan(0)
+    for (const rendu of rendus) {
+      expect(rendu.texte).not.toContain('preuve de A')
+      expect(rendu.fluxOccupe).toBe('true')
+      expect(rendu.appelsOccupes).toBe('true')
+    }
+  })
+
+  it('remet la vue à zéro dans le rendu même qui reçoit un nouveau focus', async () => {
+    const mockApi = api([trace('turn-A', 'ancienne preuve A', 1)])
+    const { rendus, afficher } = monterAvecReleve(mockApi)
+    await afficher({
+      active: true,
+      focus: { conversationId: 'conv-1', turnId: 'turn-A', requestId: 1 }
+    })
+    expect(container?.textContent).toContain('ancienne preuve A')
+
+    const catalogue = deferred<unknown[]>()
+    mockApi.conversations.mockReturnValue(catalogue.promise)
+    rendus.length = 0
+    await afficher({
+      active: true,
+      focus: { conversationId: 'conv-new', turnId: 'turn-new', requestId: 2 }
+    })
+
+    // Entrée qui fait échouer une correction fausse : un focus NEUF pendant que l'ancien est
+    // affiché. Un rendu qui garde « Tour ciblé · turn-A » et sa preuve est un rendu en trop.
+    expect(rendus.length).toBeGreaterThan(0)
+    for (const rendu of rendus) {
+      expect(rendu.texte).not.toContain('ancienne preuve A')
+      expect(rendu.texte).not.toContain('Tour ciblé · turn-A')
+      expect(rendu.texte).toContain('Conversation ciblée indisponible')
+    }
+  })
+
+  it('ne montre jamais « Tour ciblé » pour un tour absent une fois la trace lue', async () => {
+    const mockApi = api([trace('turn-1', 'autre tour', 1)])
+    const { rendus, afficher } = monterAvecReleve(mockApi)
+    await afficher({
+      active: true,
+      focus: { conversationId: 'conv-1', turnId: 'deleted-turn', requestId: 1 }
+    })
+    expect(container?.textContent).toContain('Tour deleted-turn introuvable')
+
+    // Entrée qui fait échouer une correction fausse : un tour ciblé ABSENT de la trace chargée.
+    // Calculé après coup, le bandeau passe un rendu par « Tour ciblé » alors que la lecture est finie.
+    const rendusLus = rendus.filter((rendu) => rendu.fluxOccupe === 'false')
+    expect(rendusLus.length).toBeGreaterThan(0)
+    for (const rendu of rendusLus) expect(rendu.texte).not.toContain('Tour ciblé · deleted-turn')
   })
 })

@@ -5,7 +5,7 @@
  * servi. Ce test verrouille le panneau d'inventaire — la liste vient du registre du main, un point
  * à zéro appel reste VISIBLE, et les traces non rattachables sont comptées à part.
  */
-import { act, createElement } from 'react'
+import { act, createElement, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ObservatoryView } from './ObservatoryView'
@@ -123,5 +123,71 @@ describe('Observatory — inventaire exhaustif des appels Brain', () => {
   it('un preload sans cet inventaire ne casse pas la vue', async () => {
     const view = await mount(api())
     expect(view.querySelector('[data-testid="brain-injection-inventory"]')).toBeNull()
+  })
+
+  /**
+   * Relevé du DOM à CHAQUE rendu posé à l'écran : un effacement fait dans un effet (ou une
+   * microtâche) laisse passer UN rendu avec la valeur d'avant, qu'une assertion après coup ne voit plus.
+   */
+  async function monterAvecReleve(
+    mockApi: Record<string, unknown>
+  ): Promise<{ rendus: string[]; masquer: () => Promise<void> }> {
+    Object.defineProperty(window, 'api', { configurable: true, value: mockApi })
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+    const rendus: string[] = []
+    const relever = (): void => {
+      const vue = container
+      if (!vue) return
+      const inventaireAffiche = vue.querySelector('[data-testid="brain-injection-inventory"]')
+      rendus.push(`${inventaireAffiche ? '[inventaire] ' : ''}${vue.textContent ?? ''}`)
+    }
+    const afficher = async (active: boolean): Promise<void> => {
+      await act(async () => {
+        root?.render(
+          createElement(
+            Profiler,
+            { id: 'observatory', onRender: relever },
+            createElement(ObservatoryView, { active })
+          )
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+    }
+    await afficher(true)
+    return { rendus, masquer: () => afficher(false) }
+  }
+
+  it('retire l’inventaire dans le rendu même où l’onglet se masque', async () => {
+    const { rendus, masquer } = await monterAvecReleve(
+      api({ brainInjectionInventory: vi.fn(async () => inventaire) })
+    )
+    expect(rendus.at(-1)).toContain('[inventaire]')
+    rendus.length = 0
+    await masquer()
+    // Entrée qui fait échouer une correction fausse : l'onglet masqué avec un inventaire affiché.
+    // Un effacement différé laisse un rendu qui montre encore le panneau.
+    expect(rendus.length).toBeGreaterThan(0)
+    for (const rendu of rendus) expect(rendu).not.toContain('[inventaire]')
+  })
+
+  it('efface l’erreur des traces Brain dans le rendu même où l’onglet se masque', async () => {
+    const { rendus, masquer } = await monterAvecReleve(
+      api({
+        brainTraces: vi.fn(async () => {
+          throw new Error('brain hors ligne')
+        })
+      })
+    )
+    expect(rendus.at(-1)).toContain('brainTraces : brain hors ligne')
+    rendus.length = 0
+    await masquer()
+    // Entrée qui fait échouer une correction fausse : l'onglet masqué pendant qu'une erreur des
+    // traces Brain est affichée. Un effacement différé laisse un rendu avec le bandeau d'erreur.
+    expect(rendus.length).toBeGreaterThan(0)
+    for (const rendu of rendus) expect(rendu).not.toContain('brain hors ligne')
   })
 })
