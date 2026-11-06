@@ -1,6 +1,6 @@
 import { CONSTITUTION } from './constitution'
 import { describe, expect, it } from 'vitest'
-import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION } from './response-style'
+import { CONCISE_STRUCTURED_RESPONSE_INSTRUCTION, STYLE_TON } from './response-style'
 
 describe('concise structured response policy', () => {
   it('requires the exact compact closing block for substantial work', () => {
@@ -108,15 +108,21 @@ describe('prompt suivant prérempli dans le composer', () => {
  */
 describe('agir plutot que recommander — la cloture ne sert pas a rendre le travail', () => {
   // Règle fusionnée le 2026-09-18 : elle vit UNE fois, au réflexe 10 de la CONSTITUTION (injectée
-  // avec ce profil à chaque appel). Le profil ne garde qu'un renvoi, placé avant la rubrique.
+  // avec ce profil à chaque appel). Le profil ne garde qu'un renvoi, posé sur la phrase qui dit ce
+  // que contient « 👉 Recommandé » : la ligne « AGIR PLUTÔT QUE RECOMMANDER » du ton, servie aussi
+  // aux étapes de run qui n'ont pas cette rubrique, n'était qu'une redite du réflexe.
   const consigne = CONSTITUTION
 
-  it('pose un renvoi AVANT la rubrique Recommandé, la ou la decision se prend', () => {
+  it('pose un renvoi sur la phrase de la rubrique Recommandé, la ou la decision se prend', () => {
     const style = CONCISE_STRUCTURED_RESPONSE_INSTRUCTION
-    const regle = style.search(/AGIR PLUT[ÔO]T QUE RECOMMANDER/u)
-    expect(regle).toBeGreaterThanOrEqual(0)
-    expect(regle).toBeLessThan(style.indexOf('👉 Recommandé'))
-    expect(style).toMatch(/réflexe 10/u)
+    const renvoi = style.search(
+      /« 👉 Recommandé » contient une seule prochaine action, que tu ne peux pas faire toi-même \(réflexe 10\)/u
+    )
+    expect(renvoi).toBeGreaterThanOrEqual(0)
+    // Dans le paragraphe CLÔTURE, avant que la relance « go » n'exécute cette rubrique.
+    expect(renvoi).toBeGreaterThan(style.indexOf('CLÔTURE'))
+    expect(renvoi).toBeLessThan(style.indexOf('RELANCE SANS CIBLE'))
+    expect(style).not.toMatch(/AGIR PLUT[ÔO]T QUE RECOMMANDER/u)
   })
 
   it('ne recopie plus la regle dans le profil : un seul endroit', () => {
@@ -227,10 +233,15 @@ describe('langage simple — le vocabulaire, pas seulement la longueur', () => {
     expect(consigne).toMatch(/nom de fichier.*reste tel quel|adresse, pas du jargon/iu)
   })
 
+  // Ce contrepoids vit dans STYLE_TON, pas dans la CONSTITUTION : les deux appels du juge
+  // (orchestrator-parcours-glouton.ts, orchestrator-parcours-sequentiel.ts) reçoivent ce ton SANS
+  // la constitution. Placé là seulement, il ne les atteignait plus, alors qu'ils gardent l'ordre
+  // de simplifier.
   it('interdit de simplifier au prix de la verite : reserves et echecs restent dits', () => {
-    expect(consigne).toMatch(/DIRE VRAI PRIME SUR SIMPLIFIER/u)
-    expect(consigne).toMatch(/ne supprime jamais une r[ée]serve/iu)
-    expect(consigne).toMatch(/[ée]chec/iu)
+    expect(STYLE_TON).toMatch(/Simplifier porte sur les mots, jamais sur la preuve/u)
+    expect(STYLE_TON).toMatch(/une r[ée]serve, une incertitude ou un [ée]chec/iu)
+    // Un seul endroit : la constitution, servie avec ce ton au chat et aux étapes, ne le redit pas.
+    expect(CONSTITUTION).not.toMatch(/Simplifier (les mots|porte sur les mots)/u)
   })
 
   it('place la regle AVANT le bloc de cloture, la ou le ton se decide', () => {

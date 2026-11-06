@@ -16,6 +16,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
 import { CATALOG } from '../commands/commands'
+import { refusArretHote } from '../../shared/garde-hote-et-boucle'
 
 describe('prompt de pilotage — processus hote', () => {
   const prompt = buildChatPilotagePrompt([])
@@ -65,7 +66,13 @@ describe('prompt de pilotage — processus hote', () => {
     expect(restart?.description).toMatch(/ne demande donc pas à l.utilisateur s.il faut attendre/u)
   })
 
+  // L'arret large PAR NOM est refuse par le code (`refusArretHote`, branche sur le hook des agents
+  // par shared/garde-git-destructeur.ts) et son refus s'explique lui-meme : le prompt ne l'annonce
+  // plus. Le test suit la regle a sa nouvelle place, avec son jumeau accepte (arret par PID).
   it('interdit l arret large d un nom de processus entier', () => {
-    expect(prompt).toMatch(/arreter TOUS les processus/)
+    expect(refusArretHote('taskkill /F /IM electron.exe')).toMatch(/restart_app/)
+    expect(refusArretHote('Stop-Process -Name node -Force')).toMatch(/restart_app/)
+    expect(refusArretHote('taskkill /PID 4242 /F')).toBeUndefined()
+    expect(prompt).not.toMatch(/arreter TOUS les processus/)
   })
 })

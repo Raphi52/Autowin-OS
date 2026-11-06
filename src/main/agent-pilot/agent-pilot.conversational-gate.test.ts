@@ -61,17 +61,25 @@ describe('chat() — gate conversationnel', () => {
     // Constate en usage reel (2026-07-29) : 4 `edit_file` rates, verify impossible a mettre au vert,
     // cap atteint -> « je n'y arrive pas » ET un workspace a moitie modifie.
     expect(prompt).toContain('FACE A UN BLOCAGE')
-    expect(prompt).toContain('NETTOIE AVANT DE PARLER')
+    // « Nettoie avant de parler » vit dans Autonomie (constitution, servie avec ce prompt) ; le
+    // titre du bloc garde le mot comme renvoi.
+    expect(prompt).toContain('NETTOIE, PUIS SEULEMENT PARLE')
+    expect(prompt).not.toContain('NETTOIE AVANT DE PARLER')
+    expect(CONSTITUTION).toMatch(/après avoir annulé tes modifications inutiles/u)
     // « La meme approche qui echoue deux fois, arrete-la » vit dans la CONSTITUTION (reflexe 7),
     // injectee dans le meme prompt systeme ; le doublon du pilotage est parti le 2026-10-28 (conv-1229).
     expect(prompt).toContain("CHANGE D'APPROCHE (réflexe 7)")
     expect(CONSTITUTION).toMatch(/change d'approche, ne répète pas la même/u)
-    // Un echec doit NOMMER ce qui a ete essaye et ce qui manque.
-    expect(prompt).toContain('NOMMANT ce que tu as essaye')
+    // Un echec doit NOMMER ce qui a ete essaye et ce qui manque : la phrase du pilotage redisait
+    // Autonomie (« un blocage nommé »), ce detail y vit desormais, une seule fois.
+    expect(CONSTITUTION).toMatch(/blocage nommé \(essais, résultats, ce qui manque\)/u)
+    expect(prompt).toContain('PUIS SEULEMENT PARLE (réflexe 8)')
   })
 
   it('distingue son propre echec du BRUIT ambiant (lint preexistant, etc.)', () => {
-    expect(prompt).toContain('SANS RAPPORT avec ton changement')
+    // La phrase vit dans Autonomie (2) de la constitution, une seule fois.
+    expect(CONSTITUTION).toMatch(/Un rouge sans rapport avec ton changement se dit comme tel/u)
+    expect(prompt).not.toContain('SANS RAPPORT avec ton changement')
   })
 
   it('oriente vers la LECTURE avant l’ecriture (cause n°1 des edit_file rates)', () => {

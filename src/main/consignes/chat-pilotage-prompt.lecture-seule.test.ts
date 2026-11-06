@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt, catalogueLectureSeule } from './chat-pilotage-prompt'
 import { CATALOG } from '../commands/commands'
+import { CONSTITUTION } from './constitution'
 
 /**
  * TOUR LECTURE SEULE : les règles d'écriture, d'orchestration, de mémoire et de redémarrage sont
@@ -15,7 +16,6 @@ const SECTIONS_RETIREES = [
   "TU VIS DANS L'APP QUE TU PILOTES",
   'tu le FAIS toi-meme avec `restart_app`',
   '1 bis. `edit_file`',
-  '2. NETTOIE AVANT DE PARLER',
   'Une ECRITURE DANS UN SYSTEME EXTERNE',
   'MÉMOIRE : tu peux RETENIR',
   'INFORMATIF SPONTANÉ',
@@ -27,7 +27,6 @@ const SECTIONS_RETIREES = [
 /** Ce qui sert à une simple question : ne doit JAMAIS disparaître. */
 const SECTIONS_GARDEES = [
   'RÈGLE PREMIÈRE',
-  'FAIT EXTERNE INCONNU',
   'PÉRIMÈTRE DE LECTURE',
   'RÈGLE ABSOLUE',
   'EXPRESSION VISUELLE',
@@ -48,6 +47,13 @@ describe('buildChatPilotagePrompt — tour lecture seule', () => {
     const prompt = buildChatPilotagePrompt(lecture)
     for (const section of SECTIONS_RETIREES) expect(prompt).not.toContain(section)
     for (const section of SECTIONS_GARDEES) expect(prompt).toContain(section)
+  })
+
+  // « Fait externe inconnu » vit au réflexe 8 de la constitution, servie à chaque tour du chat,
+  // lecture seule comprise : une simple question garde la recherche web avant de conclure.
+  it('garde la recherche web d’un fait public, désormais dans la constitution', () => {
+    expect(CONSTITUTION).toMatch(/Un fait public[^\n]*se cherche sur le web avant de conclure/u)
+    expect(buildChatPilotagePrompt(lecture)).not.toContain('FAIT EXTERNE INCONNU')
   })
 
   it('garde toutes les sections pour le catalogue complet', () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { CONSTITUTION } from './constitution'
 
 /**
  * LA QUESTION QUI SURVIT À SA RÉPONSE — mesuré le 2026-09-02, conv-128, tour 2.
@@ -43,6 +44,9 @@ describe('chat-pilotage-prompt — une question à laquelle le travail a répond
   it('garde intacte la règle d’appel de `ask`', () => {
     const prompt = buildChatPilotagePrompt([])
     expect(prompt).toContain('boutons cliquables')
-    expect(prompt).toMatch(/valider ce que tu allais faire de toute facon/u)
+    // « Pas de `ask` pour faire valider ce que tu allais faire de toute façon » redisait le réflexe 1
+    // de la constitution, servie dans le même système : la règle vit là, une seule fois.
+    expect(CONSTITUTION).toMatch(/Un QCM dont tu prendrais l'option recommandée de toute façon/u)
+    expect(prompt).not.toMatch(/valider ce que tu allais faire de toute facon/u)
   })
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { outilsDuChat } from '../chat/chat-mcp'
 import { CATALOG } from '../commands/commands'
 
 /**
@@ -10,15 +11,28 @@ import { CATALOG } from '../commands/commands'
  * portaient la procédure « ne pose PAS de bloc ask sous le carrousel ». Mais le paragraphe QUESTION A
  * L'UTILISATEUR, injecté en dernier, disait « un choix entre approches → `ask` » et citait la
  * « galerie de maquettes » comme ce qui accompagne la question ; la description de `ask` aussi.
- * Les trois tours ont fini par un `ask`, sans bloc de choix. Entrée qui DOIT faire rougir : l'une
- * des deux exceptions retirée.
+ * Les trois tours ont fini par un `ask`, sans bloc de choix. Entrée qui DOIT faire rougir :
+ * l'exception retirée de la description de `ask`, ou cette description absente du texte servi.
+ *
+ * Le paragraphe QUESTION A L'UTILISATEUR redisait cette exception : le `ask` d'un /draft est refusé
+ * par le code (`askFaitChoisirUneProposition`, prouvé par agent-pilot.draft-sans-ask.test.ts) et la
+ * description de `ask` la dit, servie dans la liste des commandes texte du même système (`ask`
+ * n'est pas un outil direct). Une seule phrase suffit donc, celle de la description.
  */
 describe('le texte de `ask` nomme l’exception /draft', () => {
-  it('le paragraphe QUESTION A L’UTILISATEUR renvoie le choix d’un /draft aux boutons du bloc', () => {
-    const prompt = buildChatPilotagePrompt(CATALOG)
-    expect(prompt).toMatch(/EXCEPTION \/draft/u)
-    expect(prompt).toMatch(/draft-carrousel\.mjs/u)
-    expect(prompt).toMatch(/JAMAIS par `ask`/u)
+  it('le texte servi renvoie le choix d’un /draft aux boutons du bloc, une seule fois', () => {
+    const outils = outilsDuChat(CATALOG)
+    expect(outils).not.toContain('ask')
+    for (const prompt of [
+      buildChatPilotagePrompt(CATALOG),
+      buildChatPilotagePrompt(CATALOG, { outilsDirects: outils })
+    ]) {
+      expect(prompt).toMatch(
+        /propositions d’un \/draft : ce choix passe par les boutons de son bloc/u
+      )
+      expect(prompt).toMatch(/draft-carrousel\.mjs/u)
+      expect(prompt).not.toMatch(/EXCEPTION \/draft/u)
+    }
   })
 
   it('la description de la commande `ask` le dit au moment de l’appeler', () => {

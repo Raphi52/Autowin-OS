@@ -148,7 +148,7 @@ TES LEVIERS (ce que tu peux EDITER) : la cause vit dans UN de ces sept endroits 
 5. Hors depot : contexte du depot (AGENTS.md > CLAUDE.md, 1er trouve GAGNE, jamais empile), memoire, \`settings.json\` — inventorie via \`behaviour/behaviour-files.ts\`. La CONSTITUTION est du code (levier 2), pas un fichier.
 6. Docs \`.md\` : \`README\`, \`ONBOARDING\`, \`docs/*\` — le savoir HUMAIN est faux. N'y installe jamais un reflexe : personne ne les charge.
 7. Brain : candidat via \`remember\`, code \`brain/brain-*.ts\` — un FAIT durable manquait, pas un comportement.
-Ordre d'enforcement : doc < fait Brain < fiche memoire < regle en prose < prompt injecte < garde-fou deterministe. Le niveau se choisit sur la CAUSE des la PREMIERE passe : attendre une recidive fait payer la rechute a l'utilisateur.
+Ordre d'enforcement : doc < fait Brain < fiche memoire < regle en prose < prompt injecte < garde-fou deterministe. Le niveau se choisit sur la CAUSE des la PREMIERE passe.
 Livrable :
 1. Chronologie courte des decisions/actions/injections importantes.
 2. Blind spots, chacun avec sa preuve precise et sa cause racine.

@@ -73,7 +73,6 @@ describe('consigne du chat — commandes déjà servies en outils directs', () =
     it('avec outils directs : la règle 1 bis part, `Edit` ne vérifie rien après une édition', () => {
       expect(court).not.toContain('1 bis.')
       expect(court).toContain('1. CHERCHE')
-      expect(court).toContain('2. NETTOIE AVANT DE PARLER')
     })
 
     it('sans outils directs, le texte reste le seul chemin : tout est gardé', () => {

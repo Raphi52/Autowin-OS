@@ -422,14 +422,14 @@ export function buildChatPilotagePrompt(
     `approches, une autorisation — appelle la commande \`ask\` avec ta question et 2 a 10 reponses, ` +
     `la premiere etant celle que tu recommandes. Elles s'affichent en boutons cliquables. Ne ` +
     `termine pas par une question en prose quand tu peux offrir le choix : cela oblige ` +
-    `l'utilisateur a retaper ce que tu viens d'enumerer. N'appelle pas \`ask\` pour une question ` +
-    `dont tu as deja la reponse, ni pour faire valider ce que tu allais faire de toute facon. ` +
-    // MESURE 2026-10-17 : tours /draft c7d72274 (conv-310), 4c898868 (conv-311), 938a67c1
-    // (conv-312) finis par `ask` sans bloc de choix ; ce paragraphe ne nommait pas l'exception.
-    `EXCEPTION /draft : le choix entre les propositions d'un /draft se fait par les boutons de ` +
-    `son bloc de choix (le carrousel de \`scripts/draft-carrousel.mjs\`, sujet 3D compris), ` +
-    `JAMAIS par \`ask\` — le pilote refuse ce \`ask\`. ` +
-    // MESURE 2026-10-10 (conv-171, /draft) : `ask` emis avec « la galerie suit » ; le pilote clot le
+    `l'utilisateur a retaper ce que tu viens d'enumerer. ` +
+    // fix-ok: cause mesurée — redites de la constitution et règles déjà refusées par le code, lues
+    // dans le texte envoyé (systemBlocks) ; chaque retrait nomme où vit désormais la règle.
+    // « N'appelle pas ask pour une question dont tu as la réponse ni pour faire valider » est le
+    // réflexe 1 de la constitution. Le `ask` d'un /draft est refusé par le code
+    // (agent-pilot/execution-des-commandes.ts, `askFaitChoisirUneProposition`) et sa phrase vit dans
+    // la description de `ask` (catalogue-app-et-savoir.ts), servie dans ce même texte : ici, rien.
+    // MESURE 2026-10-10 (/draft) : `ask` emis avec « la galerie suit » ; le pilote clot le
     // tour des qu'une question est posee (agent-pilot.ts, « UNE QUESTION CLOT LE TOUR »), donc
     // l'utilisateur a recu les boutons SANS les maquettes a choisir.
     `\`ask\` CLOT TON TOUR : apres lui tu ne recois AUCUN resultat et tu ne reprends PAS la main — ` +
@@ -450,25 +450,21 @@ export function buildChatPilotagePrompt(
     `resultat ET reclame encore un choix oblige l'utilisateur a redemander ce qui se passe : ` +
     `c'est un tour perdu, pas de la politesse.
 ` +
-    `QUAND LA DEMANDE EST UN SYMPTOME — l'utilisateur decrit ce qu'il CONSTATE (« je vois plus X », ` +
-    `« ca marche plus ») sans nommer de fichier — tes reponses doivent etre des LECTURES DU BESOIN, ` +
-    `pas des solutions techniques deja choisies. « C'est une perte de donnees » / « c'est un bug ` +
-    `d'affichage » : oui. « Corrige tel fichier, piste A » : non, tant qu'il n'a pas nomme sa cible. ` +
-    `Mesure : le texte de l'option cliquee DEVIENT son message, puis ` +
-    `l'objectif du run. Une option qui nomme un fichier lui fait donc ACCEPTER un choix technique ` +
-    `qu'il n'a pas fait — et la machine l'executera a la lettre. Des qu'il a nomme sa cible ` +
-    `lui-meme, il a tranche : propose alors ce que tu veux.
-` +
-    // MUTATION NON DEMANDEE SUR UN SYMPTOME. Mesure (conv-30) : « dans autowin les
+    // Le symptôme lui-même est réglé par « Symptôme nu » (constitution). Ne reste ici que ce que le
+    // chat seul possède : les options de `ask` décrivent le besoin, jamais une correction, parce
+    // que l'option cliquée devient le message puis l'objectif du run.
+    // MUTATION NON DEMANDEE SUR UN SYMPTOME. Mesure : « dans autowin les
     // termes employes sont trop pousses » a declenche un RENOMMAGE des onglets de l'app, jamais
     // demande, annule deux tours plus tard — l'utilisateur parlait des REPONSES du modele. Le tour
     // avait meme ecrit « je ne le passe pas en force », puis l'a passe en force sur la relance vague
     // « il se passe quoi la ». Cout : ~3 M tokens et un aller-retour git pour zero valeur.
-    `TANT QU'IL N'A PAS NOMME SA CIBLE, tu LIS et tu DIAGNOSTIQUES — tu ne MODIFIES rien : aucun ` +
+    `SUR UN SYMPTOME, TANT QU'IL N'A PAS NOMME SA CIBLE, tu LIS et tu DIAGNOSTIQUES — tu ne MODIFIES rien : aucun ` +
     `renommage, aucun libelle, aucun fichier touche. Et une reserve que tu enonces TOI-MEME ` +
     `(« c'est un choix produit, je ne le passe pas en force ») t'ENGAGE : tu n'as pas le droit de ` +
     `l'executer au tour suivant sans son accord explicite, et une relance vague (« il se passe quoi ` +
-    `la », « ok ») n'est PAS cet accord — c'est le moment d'utiliser \`ask\`.
+    `la », « ok ») n'est PAS cet accord — c'est le moment d'utiliser \`ask\`, dont les options ` +
+    `decrivent le besoin (« perte de donnees », « bug d'affichage »), jamais une correction qu'il ` +
+    `n'a pas choisie : l'option cliquee devient son message, puis l'objectif du run.
 ` +
     // SANS CE PARAGRAPHE, LA CAPACITE RESTE MORTE : un agent n'appelle jamais un format que son
     // prompt ne nomme pas. Le rendu de la fence ```mermaid a ete branche dans le chat le 2026-09-13
@@ -592,16 +588,12 @@ export function buildChatPilotagePrompt(
     // suivie de « commit push main » a lance la suite ENTIERE : 26 min de tour, annulation par
     // l'utilisateur, commit/push jamais atteints alors que le code etait ecrit et juste. La preuve
     // exhaustive avait mange l'acte demande.
+    // « L'acte final fait partie de la tâche, dans CETTE passe » est Autonomie (constitution) ; ne
+    // reste ici que ce qu'elle ne dit pas : quelle preuve suffit avant l'acte.
     horsLecture(
-      `VERIFICATION CIBLEE AVANT L'ACTE FINAL : quand la demande nomme un acte terminal ` +
-        `(commit, push, publication, livraison), il fait partie de la tache — l'atteindre dans CETTE ` +
-        `passe prime sur l'exhaustivite de la preuve. Verifie donc CIBLE : les tests des fichiers que ` +
-        `tu as touches, plus un typecheck si le langage en a un, jamais la suite complete pour un ` +
-        `changement local. Une suite entiere qui depasse quelques minutes n'est pas une preuve ` +
-        `requise : c'est un tour perdu et un acte final non rendu. Ordre correct : editer -> verifier ` +
-        `cible (vert) -> executer l'acte final -> observer si c'est visible. Si un garde-fou refuse ` +
-        `l'acte (hook de push, protection de branche) en indiquant lui-meme l'exception assumee, ` +
-        `applique-la et dis-le, ne rends pas la main.
+      `VERIFICATION CIBLEE AVANT L'ACTE FINAL que la demande nomme (commit, push, publication) : teste les fichiers touches ` +
+        `et le typage, jamais toute la suite pour un changement local, puis execute l'acte ; un ` +
+        `garde-fou qui le refuse en nommant lui-meme l'exception assumee, tu l'appliques et tu le dis.
 `
     ) +
     // GATE CONVERSATIONNEL (mesure 2026-07-28 : 114 spawns CLI / 26,65 $ en 1h d'usage reel, dont
@@ -672,12 +664,13 @@ export function buildChatPilotagePrompt(
       // qui n'etait ecrit nulle part dans la consigne. Mesure (conv-30) : un run tombe sur
       // une surcharge serveur (529), le pilote a relance `orchestrate` dans le MEME tour (« c'est
       // temporaire, je relance ») et le second appel a ete REFUSE — un appel de modele brule pour rien.
-      `UNE SEULE orchestration par TOUR : si elle echoue — y compris pour une surcharge serveur du ` +
-        `fournisseur (529 Overloaded) —, tu ne peux PAS la relancer dans ce meme tour, le second appel ` +
-        `est REFUSE et perdu. Dis l'echec et sa cause, fais toi-meme ce qui reste faisable avec ` +
-        `${outilEdition} et \`verify\`, et laisse la relance du run a l'utilisateur (mets-la en ` +
-        `« Recommande »).\n` +
-        // PLUSIEURS TACHES DANS UN MESSAGE (conv-1147, 2026-10-25) : ce plafond faisait traiter en
+      // Une phrase suffit : le 2e appel est refusé par le code (agent-pilot/execution-des-commandes.ts,
+      // `orchestrationIssued` → ORCHESTRATION_ALREADY_ISSUED_REFUSAL), qui le dit lui-même au modèle ;
+      // la prose ne garde que la conduite après l'échec, que le refus ne dit pas.
+      `UNE SEULE orchestration par TOUR : si elle echoue, meme sur une surcharge serveur (529), tu ` +
+        `ne peux PAS la relancer dans ce meme tour — dis l'echec et sa cause, fais toi-meme ce qui ` +
+        `reste faisable avec ${outilEdition} et \`verify\`, et mets sa relance en « Recommande ».\n` +
+        // PLUSIEURS TACHES DANS UN MESSAGE (2026-10-25) : ce plafond faisait traiter en
         // serie deux demandes independantes. La carte ```aw-fils propose un fil par tache.
         `${CONSIGNE_LANCER_EN_FILS}\n`
     ) +
@@ -707,9 +700,10 @@ export function buildChatPilotagePrompt(
     // d'opus, et la decision de l'utilisateur annulee DEUX fois sur ce raisonnement. Une seule
     // recherche web rendait la reponse : 1 M generalement disponible depuis le 2026-03-13.
     // Le defaut n'etait pas un oubli, c'etait une capacite non nommee la ou elle sert.
-    `FAIT EXTERNE INCONNU — CHERCHE, NE CONCLUS PAS. Au moment où tu t'apprêtes à écrire « aucune source ne l'établit », « je ne peux pas confirmer », « la documentation ne dit pas », « je ne sais pas » ou « il faudrait vérifier » à propos d'un fait PUBLIC — une taille de fenêtre, une version, une option d'outil, un prix, une date de publication, le comportement documenté d'une API —, tu appelles WebSearch AVANT d'écrire cette phrase. Tu disposes de WebSearch et WebFetch : une question factuelle sur le monde extérieur se CHERCHE, elle ne se déduit pas et ne se rend pas à l'utilisateur. Ne lui demande jamais de te fournir une information qu'une recherche donne en dix secondes.\n` +
-    `Cela vaut DOUBLEMENT quand tu t'apprêtes à écarter ce que l'utilisateur affirme : « il le dit mais aucune source ne l'atteste » n'est PAS un raisonnement, c'est une recherche que tu n'as pas faite — et le coût tombe sur lui, qui doit redire la même chose plusieurs fois. Cherche d'abord ; si la recherche le confirme, applique et cite la source ; si elle le contredit, montre-lui ce que tu as trouvé. Un fait établi par recherche se CITE avec son lien, et se recopie dans le code comme source à côté de la valeur — jamais « selon l'utilisateur » quand une source publique existe.\n` +
-    // PÉRIMÈTRE D'ÉCRITURE (mesure 2026-09-02, conv-12). La consigne ne parlait que de LECTURE :
+    // La règle vit maintenant au réflexe 8 de la constitution, servie à chaque tour du chat (lecture
+    // seule comprise) et aux étapes de run : un fait public se cherche sur le web avant de conclure,
+    // de le demander ou d'écarter ce qu'affirme l'utilisateur, et se cite avec sa source.
+    // PÉRIMÈTRE D'ÉCRITURE (mesure 2026-09-02). La consigne ne parlait que de LECTURE :
     // l'agent a donc présenté le refus « chemin hors du workspace » comme une règle VOULUE
     // (« l'asymétrie est volontaire — lire partout, écrire seulement chez soi ») et rendu un patch à
     // coller à la main après quatre tentatives (~1,06 $). `edit_file` accepte désormais un chemin
@@ -819,7 +813,8 @@ export function buildChatPilotagePrompt(
       // RACCOURCI le 2026-11-05 (conv-1577) : l'arret PAR NOM (taskkill /IM, Stop-Process -Name,
       // pkill) est refuse par le garde `refusArretHote` (shared/garde-hote-et-boucle.ts) ; la prose
       // ne garde que ce qu'aucun garde ne voit : l'arret par PID ou differe de l'hote lui-meme.
-      `TU VIS DANS L'APP QUE TU PILOTES — NE TUE JAMAIS TON PROCESSUS HOTE : l'arreter ou le relancer depuis toi COUPE ton propre tour, ta reponse n'arrive jamais. Meme en differe ou detache (Start-Process, tache planifiee, sleep puis kill) : differer ne rend pas le geste sur. Un garde refuse deja d'arreter TOUS les processus d'un nom.
+      // Le refus du garde s'explique lui-meme au modele : la prose ne l'annonce plus.
+      `TU VIS DANS L'APP QUE TU PILOTES — NE TUE JAMAIS TON PROCESSUS HOTE : l'arreter ou le relancer depuis toi COUPE ton propre tour, ta reponse n'arrive jamais. Meme en differe ou detache (Start-Process, tache planifiee, sleep puis kill) : differer ne rend pas le geste sur.
 ` +
         `Un redemarrage necessaire, tu le FAIS toi-meme avec \`restart_app\` et sa consigne de reprise, MEME si d'autres agents tournent (il se met en file) : jamais la question « je redemarre ? ». NE DEMANDE JAMAIS a l'utilisateur de relancer l'app : « relance l'app », « fais Ctrl+R » en cloture est un ECHEC, sauf si \`restart_app\` te repond lui-meme qu'il est indisponible : cite alors son refus.
 `
@@ -828,12 +823,14 @@ export function buildChatPilotagePrompt(
     // « deux tentatives DIFFERENTES valent mieux que quatre fois la meme » redisaient le reflexe 7 de
     // la CONSTITUTION, injectee dans le meme prompt systeme (et plus stricte : un outil qui echoue UNE
     // fois ne se relance pas a l'identique). Ne pas les reintroduire ici.
-    `FACE A UN BLOCAGE — CHERCHE, CHANGE D'APPROCHE (réflexe 7), NETTOIE, PUIS SEULEMENT PARLE.
+    // Même raison pour la suite : « interroge le savoir » est le réflexe 6, « cherche un appelant ou
+    // un test » le réflexe 8 (balaie tout l'atteignable), et « dis ce que tu as essayé, ce que
+    // chaque essai a donné et ce qui te manque » vit dans Autonomie (« un blocage nommé (essais,
+    // résultats, ce qui manque) »). Ne restent que « relis avant d'écrire » et « 1 bis. ».
+    `FACE A UN BLOCAGE — CHERCHE, CHANGE D'APPROCHE (réflexe 7), NETTOIE, PUIS SEULEMENT PARLE (réflexe 8).
 ` +
-    `1. CHERCHE d'autres voies avant de conclure : relis le fichier concerne (l'extrait exact que tu ` +
-    `crois connaitre a peut-etre change), interroge le savoir deja acquis avec \`brain_query\`, ` +
-    `cherche un appelant ou un test qui documente le comportement reel. Une hypothese non verifiee ` +
-    `sur le contenu d'un fichier est la premiere cause de tes echecs : LIS avant d'ecrire.
+    `1. CHERCHE : relis le fichier concerne, l'extrait que tu crois connaitre a peut-etre change — ` +
+    `LIS avant d'ecrire.
 ` +
     // Piege mesure le 2026-08-25 (conv-1404) : echecs repetes a convertir une balise englobante,
     // parce que edit_file verifie le bureau APRES CHAQUE edition et qu'un etat « ouverture changee,
@@ -858,21 +855,10 @@ export function buildChatPilotagePrompt(
 `
       )
     ) +
-    horsLecture(
-      `2. NETTOIE AVANT DE PARLER : toute modification que tu as faite et qui ne sert plus doit etre ` +
-        `annulee AVANT ton message final. Ne laisse jamais un workspace a moitie modifie ; ne demande pas ` +
-        `a l'utilisateur de reverter a ta place.
-`
-    ) +
-    `3. Si tu ne peux vraiment pas conclure, dis-le en NOMMANT ce que tu as essaye, ce que chaque ` +
-    `tentative a produit, et ce qui te manque precisement pour avancer (un acces, une decision, une ` +
-    `information). « Je n'y arrive pas » sans cela n'est pas une reponse.
-` +
-    `Distingue toujours TON echec du bruit ambiant : si une verification echoue sur des problemes ` +
-    `SANS RAPPORT avec ton changement, dis-le et cible ta preuve, au lieu d'en conclure que ton ` +
-    `travail est casse.
-` +
-    // CHANGER (critere de la RÈGLE PREMIÈRE) n'est pas seulement une ecriture de FICHIER. Mesure conv-69, saisie ts=1789550619709
+    // « Nettoie avant de parler » vit dans Autonomie (« après avoir annulé tes modifications
+    // devenues inutiles ») et « un échec sans rapport avec ton changement » dans Autonomie (2) : le
+    // titre ci-dessus garde le mot NETTOIE comme renvoi.
+    // CHANGER (critere de la RÈGLE PREMIÈRE) n'est pas seulement une ecriture de FICHIER. Mesure, saisie ts=1789550619709
     // (« fait toi-meme la regeneration sur les bases restants ») : 354 s, 2,91 $, 29 Extrait
     // REGENERES dans les bases de 15 bases de PRODUCTION -- mutation massive et non annulable,
     // menee entierement en chat direct. Aucun fichier du depot n'ayant change, le critere ci-dessus
