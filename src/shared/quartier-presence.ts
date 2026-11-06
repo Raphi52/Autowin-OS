@@ -81,6 +81,32 @@ export function animalLisible(v: unknown): AnimalAgent | null {
 }
 
 /**
+ * La couleur de la tenue des agents d'un poste (demande utilisateur du 2026-11-06, conv-1633) : « je veux
+ * un settings pour choisir la couleur de leur tenue en dessous du setting où je choisis l'animal ». Comme
+ * l'animal : choisie dans les réglages de l'Accueil, rangée dans le réglage du Board du poste, écrite dans
+ * `presence.json`, et chaque collègue dessine la même. Absente = la tenue d'origine de l'animal. La
+ * teinte de chacune est un choix de rendu : `TEINTE_DES_TENUES` (src/renderer/src/quartier/quartier-tenue.ts).
+ */
+export const TENUES_AGENTS = [
+  'rouge',
+  'orange',
+  'jaune',
+  'vert',
+  'turquoise',
+  'bleu',
+  'violet',
+  'rose'
+] as const
+export type TenueAgent = (typeof TENUES_AGENTS)[number]
+
+/** Une couleur de tenue connue, ou `null` : la valeur vient d'un fichier ou de la vue, jamais d'une source sûre. */
+export function tenueLisible(v: unknown): TenueAgent | null {
+  return typeof v === 'string' && (TENUES_AGENTS as readonly string[]).includes(v)
+    ? (v as TenueAgent)
+    : null
+}
+
+/**
  * « Afficher mes agents à » (demande utilisateur du 2026-11-05, conv-1599) : les postes à qui CE poste
  * masque ses agents, écrits dans `presence.json`. L'Autowin d'un poste nommé n'affiche alors pas ces
  * agents. C'est un réglage d'AFFICHAGE, pas une protection : le fichier reste lisible sur le partage.
@@ -141,6 +167,8 @@ export interface PresenceDuPoste {
    * le réglage : le lecteur garde alors l'animal tiré du nom du poste (`animalDuPoste`).
    */
   animal?: AnimalAgent
+  /** La couleur de tenue choisie sur ce poste (conv-1633). Absente = la tenue d'origine de l'animal. */
+  tenue?: TenueAgent
   /**
    * Les postes (en minuscules) à qui ce poste masque ses agents (conv-1599). Absent = visibles pour
    * tous ; un lecteur nommé ici ne les affiche pas.
@@ -171,6 +199,8 @@ export interface PresenceDUnCollegue {
   prenom: string
   /** L'animal qu'il a choisi (conv-1537) ; absent = fichier d'une version d'avant le réglage. */
   animal?: AnimalAgent
+  /** La couleur de tenue qu'il a choisie (conv-1633) ; absente = la tenue d'origine de son animal. */
+  tenue?: TenueAgent
   agents: AgentPublie[]
 }
 

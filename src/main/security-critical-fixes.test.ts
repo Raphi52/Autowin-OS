@@ -825,7 +825,14 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   garde que des chaines, 50 au plus, 64 caracteres au plus, sans caractere de controle ou
     //   invisible ni `<>:"/\|?*`, sans doublon. Ecrit seulement `board-dossier.json` (userData), puis
     //   `presence.json` au rythme deja borne. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(300)
+    // MISE A JOUR 2026-11-06 (conv-1633) — 300 -> 301, MESURE par ce test (rouge a 301). UN canal dans
+    //   `ipc/quartier-presence.ts`, garde 'Présence du quartier' des sa PREMIERE ligne :
+    //   `os:quartier-presence:tenue` — la couleur de tenue des agents du poste, choisie sous l'animal
+    //   dans les reglages de l'Accueil. `null` revient a la tenue d'origine ; toute autre valeur passe
+    //   par `tenueLisible` (liste fermee `TENUES_AGENTS`) et une valeur inconnue ne fait que relire
+    //   l'etat. Ecrit seulement `board-dossier.json` (userData), puis `presence.json` au rythme deja
+    //   borne. `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(301)
     expect(unguarded).toEqual([])
   })
 

@@ -216,6 +216,23 @@ describe("présence des collègues — l'animal choisi (conv-1537)", () => {
   })
 })
 
+describe('présence des collègues — la couleur de tenue choisie (conv-1633)', () => {
+  it('rend la tenue écrite par le collègue', async () => {
+    ecrire('collegue.a', presence({ animal: 'panda', tenue: 'violet' }))
+    const { collegues } = await lecteur().lire()
+    expect(collegues[0]).toMatchObject({ animal: 'panda', tenue: 'violet' })
+  })
+
+  it('un fichier sans tenue, ou avec une couleur inconnue, garde le collègue, sans tenue', async () => {
+    ecrire('collegue.a', presence())
+    ecrire('collegue.b', presence({ tenue: '#ff0000' }))
+    const { collegues, erreur } = await lecteur().lire()
+    expect(erreur).toBeUndefined()
+    expect(collegues.map((c) => c.poste)).toEqual(['collegue.a', 'collegue.b'])
+    expect(collegues.every((c) => !('tenue' in c))).toBe(true)
+  })
+})
+
 describe('prénom', () => {
   it('rend le premier mot du nom', () => {
     expect(prenomDe('Alice Martin')).toBe('Alice')

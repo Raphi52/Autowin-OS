@@ -55,8 +55,20 @@ import {
 } from './fond-accueil'
 import { piloteQuartier } from '../quartier/quartier-pont'
 import { useQuartierAccueil } from '../quartier/useQuartierAccueil'
-import { choisirMonAnimal, choixDeLAnimalDisponible, useMonAnimal } from '../quartier/mon-animal'
-import { ANIMAUX_AGENTS, animalLisible } from '../../../shared/quartier-presence'
+import {
+  choisirMaTenue,
+  choisirMonAnimal,
+  choixDeLaTenueDisponible,
+  choixDeLAnimalDisponible,
+  useMaTenue,
+  useMonAnimal
+} from '../quartier/mon-animal'
+import {
+  ANIMAUX_AGENTS,
+  animalLisible,
+  TENUES_AGENTS,
+  tenueLisible
+} from '../../../shared/quartier-presence'
 import {
   instantaneConversationsEnAttente,
   retirerConversationEnAttente,
@@ -98,6 +110,18 @@ const CLE_TEXTE_ANIMAL: Readonly<Record<(typeof ANIMAUX_AGENTS)[number], CleAccu
   renard: 'animal.renard',
   panda: 'animal.panda',
   'panda-roux': 'animal.pandaRoux'
+}
+
+/** Le libellé de chaque couleur de tenue du réglage (conv-1633). */
+const CLE_TEXTE_TENUE: Readonly<Record<(typeof TENUES_AGENTS)[number], CleAccueil>> = {
+  rouge: 'tenue.rouge',
+  orange: 'tenue.orange',
+  jaune: 'tenue.jaune',
+  vert: 'tenue.vert',
+  turquoise: 'tenue.turquoise',
+  bleu: 'tenue.bleu',
+  violet: 'tenue.violet',
+  rose: 'tenue.rose'
 }
 
 const LAYOUT_STORAGE_KEY = autowinStorageKey('home.layout.v1')
@@ -342,6 +366,9 @@ export function HomeView({
    */
   const monAnimal = useMonAnimal()
   const [animalNonEnregistre, setAnimalNonEnregistre] = useState(false)
+  /** LA COULEUR DE LEUR TENUE (conv-1633), sous l'animal : même chemin, mêmes règles. `null` = d'origine. */
+  const maTenue = useMaTenue()
+  const [tenueNonEnregistree, setTenueNonEnregistree] = useState(false)
   /**
    * LE NOM DE L'ASSISTANT, RELU EN DIRECT.
    *
@@ -1281,6 +1308,40 @@ export function HomeView({
                     : animalNonEnregistre
                       ? 'reglages.animalErreur'
                       : 'reglages.animalAide'
+                )}
+              </p>
+            </section>
+            {/* La couleur de leur tenue, juste sous l'animal (conv-1633) : elle remplace le foulard. */}
+            <section className="home-settings__bloc">
+              <h3>{t('reglages.tenue')}</h3>
+              <label className="home-settings__champ">
+                <select
+                  value={maTenue ?? ''}
+                  aria-label={t('reglages.ariaTenue')}
+                  data-testid="home-tenue"
+                  disabled={!choixDeLaTenueDisponible()}
+                  onChange={(event) => {
+                    const choix =
+                      event.target.value === '' ? null : tenueLisible(event.target.value)
+                    if (event.target.value !== '' && !choix) return
+                    void choisirMaTenue(choix).then((ok) => setTenueNonEnregistree(!ok))
+                  }}
+                >
+                  <option value="">{t('tenue.origine')}</option>
+                  {TENUES_AGENTS.map((tenue) => (
+                    <option key={tenue} value={tenue}>
+                      {t(CLE_TEXTE_TENUE[tenue])}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="home-settings__note" role={tenueNonEnregistree ? 'status' : undefined}>
+                {t(
+                  !choixDeLaTenueDisponible()
+                    ? 'reglages.animalIndisponible'
+                    : tenueNonEnregistree
+                      ? 'reglages.animalErreur'
+                      : 'reglages.tenueAide'
                 )}
               </p>
             </section>

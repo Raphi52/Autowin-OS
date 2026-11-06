@@ -30,7 +30,8 @@ import {
   creerDossierDuBoard,
   FICHIER_DU_REGLAGE,
   lireAnimalDuPoste,
-  lirePartageDeLaPresence
+  lirePartageDeLaPresence,
+  lireTenueDuPoste
 } from './board-dossier'
 
 /** Horloge et minuteurs à la main : `avancer` déclenche ce qui est dû, dans l'ordre. */
@@ -403,5 +404,66 @@ describe("l'animal des agents du poste (conv-1537)", () => {
   it('un animal inconnu dans le réglage se lit comme aucun choix', () => {
     writeFileSync(join(racine, FICHIER_DU_REGLAGE), JSON.stringify({ animal: 'dragon' }), 'utf8')
     expect(lireAnimalDuPoste(racine)).toBeNull()
+  })
+})
+
+describe('la couleur de tenue des agents du poste (conv-1633)', () => {
+  it('écrit dans presence.json la tenue du réglage, que les collègues dessinent', async () => {
+    const { publication, lire, r, h } = montage({ animal: 'panda', tenue: 'bleu' })
+    publication.recevoir([agent(1)])
+    await publication.attendre()
+    expect(lire().tenue).toBe('bleu')
+    // Un changement de choix repart à la prochaine écriture permise, même sans agent qui bouge.
+    r.tenue = 'rose'
+    publication.reglageChange()
+    h.avancer(5_000)
+    await publication.attendre()
+    expect(lire().tenue).toBe('rose')
+    // Revenir à la tenue d'origine retire la clé : le collègue redessine la tenue peinte.
+    delete r.tenue
+    publication.reglageChange()
+    h.avancer(5_000)
+    await publication.attendre()
+    expect(lire()).not.toHaveProperty('tenue')
+  })
+
+  it('n’écrit ni une tenue quand le partage est coupé, ni une couleur inconnue', () => {
+    expect(
+      presenceAEcrire([agent(1)], { nom: 'Alice', partager: false, tenue: 'rouge' }, 'alice')
+    ).not.toHaveProperty('tenue')
+    const piegee = 'noir<script>' as unknown as 'rouge'
+    expect(
+      presenceAEcrire([agent(1)], { nom: 'Alice', partager: true, tenue: piegee }, 'alice')
+    ).not.toHaveProperty('tenue')
+  })
+
+  it('retenue sur le poste, relue au démarrage, et préservée par les autres réglages', async () => {
+    expect(lireTenueDuPoste(racine)).toBeNull()
+    const board = creerDossierDuBoard({ racine, utilisateur: 'alice' })
+    expect(board.etat().tenue).toBeUndefined()
+    expect((await board.choisirTenue('vert')).tenue).toBe('vert')
+    expect(lireTenueDuPoste(racine)).toBe('vert')
+    // L'animal, le nom, les masques, le partage coupé ou l'oubli du dossier ne font pas perdre la tenue.
+    await board.choisirAnimal('renard')
+    await board.choisirNom('Alice M.')
+    await board.choisirMasquesPresence(['bob'])
+    await board.choisirPartagePresence(false)
+    await board.effacer()
+    expect(lireTenueDuPoste(racine)).toBe('vert')
+    expect(lireAnimalDuPoste(racine)).toBe('renard')
+    expect(creerDossierDuBoard({ racine, utilisateur: 'alice' }).etat().tenue).toBe('vert')
+    // Et choisir la tenue ne fait pas perdre l'animal.
+    await board.choisirTenue('jaune')
+    expect(lireAnimalDuPoste(racine)).toBe('renard')
+    // Revenir à la tenue d'origine retire la clé du fichier.
+    expect((await board.choisirTenue(null)).tenue).toBeUndefined()
+    expect(JSON.parse(readFileSync(join(racine, FICHIER_DU_REGLAGE), 'utf8'))).not.toHaveProperty(
+      'tenue'
+    )
+  })
+
+  it('une couleur inconnue dans le réglage se lit comme aucun choix', () => {
+    writeFileSync(join(racine, FICHIER_DU_REGLAGE), JSON.stringify({ tenue: 'noir' }), 'utf8')
+    expect(lireTenueDuPoste(racine)).toBeNull()
   })
 })

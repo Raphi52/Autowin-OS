@@ -6,8 +6,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   abonnerMonAnimal,
+  choisirMaTenue,
   choisirMonAnimal,
+  choixDeLaTenueDisponible,
   choixDeLAnimalDisponible,
+  lireMaTenue,
   lireMonAnimal,
   reinitialiserMonAnimal
 } from './mon-animal'
@@ -83,5 +86,61 @@ describe("l'animal de mes agents", () => {
     })
     await expect(choisirMonAnimal('renard')).resolves.toBe(false)
     expect(lireMonAnimal()).toBe('tanuki')
+  })
+})
+
+describe('la couleur de tenue de mes agents (conv-1633)', () => {
+  it('vaut la tenue d’origine tant que le réglage n’est pas relu', () => {
+    expect(lireMaTenue()).toBeNull()
+  })
+
+  it('se relit avec l’animal, du même réglage, et prévient la scène', async () => {
+    const boardDossier = vi.fn(async () => ({ animal: 'panda', tenue: 'rose' }))
+    poserApi({ boardDossier })
+    const vu = vi.fn()
+    abonnerMonAnimal(vu)
+    await attendre()
+    expect(boardDossier).toHaveBeenCalledTimes(1)
+    expect(lireMonAnimal()).toBe('panda')
+    expect(lireMaTenue()).toBe('rose')
+    expect(vu).toHaveBeenCalled()
+  })
+
+  it('une couleur inconnue dans le réglage vaut la tenue d’origine', async () => {
+    poserApi({ boardDossier: async () => ({ tenue: '#ff0000' }) })
+    abonnerMonAnimal(() => undefined)
+    await attendre()
+    expect(lireMaTenue()).toBeNull()
+  })
+
+  it('enregistre le choix, l’affiche une fois enregistré, et revient à l’origine avec null', async () => {
+    const quartierPresenceTenue = vi.fn(async (tenue: unknown) => (tenue === null ? {} : { tenue }))
+    poserApi({ quartierPresenceTenue })
+    expect(choixDeLaTenueDisponible()).toBe(true)
+    await expect(choisirMaTenue('vert')).resolves.toBe(true)
+    expect(quartierPresenceTenue).toHaveBeenCalledWith('vert')
+    expect(lireMaTenue()).toBe('vert')
+    await expect(choisirMaTenue(null)).resolves.toBe(true)
+    expect(quartierPresenceTenue).toHaveBeenLastCalledWith(null)
+    expect(lireMaTenue()).toBeNull()
+  })
+
+  it('un choix non enregistré ne change pas l’affichage', async () => {
+    poserApi({})
+    expect(choixDeLaTenueDisponible()).toBe(false)
+    await expect(choisirMaTenue('vert')).resolves.toBe(false)
+    expect(lireMaTenue()).toBeNull()
+    poserApi({
+      quartierPresenceTenue: async () => {
+        throw new Error('partage injoignable')
+      }
+    })
+    await expect(choisirMaTenue('vert')).resolves.toBe(false)
+    expect(lireMaTenue()).toBeNull()
+    // Une valeur hors liste ne part même pas au processus principal.
+    const quartierPresenceTenue = vi.fn()
+    poserApi({ quartierPresenceTenue })
+    await expect(choisirMaTenue('noir' as unknown as 'vert')).resolves.toBe(false)
+    expect(quartierPresenceTenue).not.toHaveBeenCalled()
   })
 })

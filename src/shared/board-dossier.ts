@@ -8,7 +8,7 @@
  *
  * Types seuls : partagés par le processus principal (`src/main/board-dossier.ts`), le pont et la vue.
  */
-import type { AnimalAgent } from './quartier-presence'
+import type { AnimalAgent, TenueAgent } from './quartier-presence'
 
 /** Les étages du Board : « à faire » (posé à la main seulement) et les états prouvés d'une demande. */
 export const ETAGES_DU_BOARD = ['a-faire', 'refuse', 'en-cours', 'sans-preuve', 'prouve'] as const
@@ -57,6 +57,11 @@ export interface EtatDuDossierDuBoard {
    * les collègues voient aussi (conv-1537). Absent = aucun choix : le tanuki (`ANIMAL_PAR_DEFAUT`).
    */
   animal?: AnimalAgent
+  /**
+   * La couleur de la tenue de ces agents (conv-1633), choisie sous l'animal dans les réglages de
+   * l'Accueil et vue aussi par les collègues. Absente = la tenue d'origine de l'animal.
+   */
+  tenue?: TenueAgent
   /**
    * « Afficher mes agents à » (conv-1599) : les postes, en minuscules, à qui ce poste masque ses
    * agents. Absent = visibles pour tous, le défaut.

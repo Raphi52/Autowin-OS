@@ -99,7 +99,28 @@ describe('l’animal d’une personne (conv-1446)', () => {
     expect(lire()).toEqual(lire())
   })
 
-  it('suit l’agent du collègue jusque dans la scène, à côté de son foulard', () => {
+  it('prend la couleur de tenue que le collègue a choisie, et la tenue d’origine sinon (conv-1633)', () => {
+    const lu = agentsDesCollegues(
+      {
+        collegues: [
+          { ...presences({ poste: 'claire.d', agents: 1 }).collegues[0], tenue: 'violet' },
+          {
+            ...presences({ poste: 'bob', agents: 1 }).collegues[0],
+            tenue: '#ff0000' as unknown as 'violet'
+          },
+          presences({ poste: 'zoe', agents: 1 }).collegues[0]
+        ]
+      },
+      MAINTENANT
+    )
+    expect(lu.map((a) => [a.collegue.poste, a.collegue.tenue])).toEqual([
+      ['claire.d', 'violet'],
+      ['bob', null],
+      ['zoe', null]
+    ])
+  })
+
+  it('suit l’agent du collègue jusque dans la scène, avec son animal et sa couleur', () => {
     const [a] = agentsDesCollegues(presences({ poste: 'claire.d', agents: 1 }), MAINTENANT)
     expect(a.collegue).toMatchObject({
       animal: animalDuPoste('claire.d'),

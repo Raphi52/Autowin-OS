@@ -166,10 +166,12 @@ export interface Tanuki {
   /** Ce qu'il fera une fois relevé. */
   apres: (() => void) | null
   /**
-   * L'agent d'un collègue (D9, conv-1429) : la couleur de son foulard. Elle vit sur le tanuki et non
-   * sur l'agent, car il la garde en repartant, quand son agent a déjà quitté la liste. Absent = le mien.
+   * L'agent d'un collègue (D9, conv-1429) : ni lueur « t'attend » ni étiquette au-dessus de la tête.
+   * Le repère vit sur le tanuki et non sur l'agent, car il le garde en repartant, quand son agent a déjà
+   * quitté la liste. Absent = le mien. C'était la couleur de son foulard, retiré en conv-1633 : sa tenue
+   * à la couleur qu'il a choisie le distingue désormais (`quartier-tenue.ts`).
    */
-  foulard?: string
+  collegue?: true
 }
 
 /** Au moins ce temps à un poste : une action plus courte ne le fait pas bouger (D15). */
@@ -213,7 +215,7 @@ export type EscalierEnMarche = EscalierQuartier & { i: number; dx: number; dy: n
 export interface MarcheQuartier {
   T: Tanuki[]
   avance(dt: number): void
-  ajouter(id: string, consigne: Consigne, foulard?: string): Tanuki
+  ajouter(id: string, consigne: Consigne, collegue?: boolean): Tanuki
   libre(px: number, py: number): boolean
   taille(px: number, py: number): number
   chemin(a: number[], b: number[], moi: Tanuki | null, sansGene?: boolean): Point[]
@@ -948,9 +950,9 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
 
   /**
    * Un nouvel agent entre par le sable, et attend là sa première action (D14). Celui d'un collègue entre
-   * par le même chemin et suit les mêmes règles : seul son foulard le distingue (D-8, D9).
+   * par le même chemin et suit les mêmes règles : seuls son animal et sa tenue le distinguent (D-8, D9).
    */
-  function ajouter(id: string, consigne: Consigne, foulard?: string): Tanuki {
+  function ajouter(id: string, consigne: Consigne, collegue = false): Tanuki {
     const p = placePres(ENTREE[0], ENTREE[1], null)
     const [i, j] = proche(p.x, p.y)
     const X = i * G.pas + G.x0
@@ -994,7 +996,7 @@ export function creerMarche(D: DonneesMarche, alea: () => number = Math.random):
       duree: 0,
       dernier: '',
       apres: null,
-      ...(foulard ? { foulard } : {})
+      ...(collegue ? { collegue: true as const } : {})
     }
     T.push(w)
     return w

@@ -9,6 +9,8 @@
  *    rend l'état du dossier du Board, que les réglages affichent déjà ;
  *  - `os:quartier-presence:animal` (conv-1537) : l'animal des agents du poste, choisi dans les
  *    réglages de l'Accueil, rangé dans le réglage du Board et écrit dans `presence.json` ;
+ *  - `os:quartier-presence:tenue` (conv-1633) : la couleur de leur tenue, choisie sous l'animal, rangée
+ *    et écrite de la même façon ;
  *  - `os:quartier-presence:masques` (conv-1599) : « afficher mes agents à », les postes à qui ce poste
  *    masque ses agents, choisis dans les réglages de l'Accueil, rangés dans le réglage du Board ;
  *  - `os:quartier-presence:etat` : où et quand le fichier a été écrit, et le dernier échec ;
@@ -21,6 +23,7 @@ import type { EtatDuDossierDuBoard } from '../../shared/board-dossier'
 import {
   animalLisible,
   postesLisibles,
+  tenueLisible,
   type EtatDeLaPresence,
   type PresencesDesCollegues
 } from '../../shared/quartier-presence'
@@ -33,7 +36,7 @@ export function registerQuartierPresenceIpc(deps: {
   publication: PublicationDeLaPresence
   dossierDuBoard: Pick<
     DossierDuBoard,
-    'etat' | 'choisirPartagePresence' | 'choisirAnimal' | 'choisirMasquesPresence'
+    'etat' | 'choisirPartagePresence' | 'choisirAnimal' | 'choisirTenue' | 'choisirMasquesPresence'
   >
 }): void {
   const { publication, dossierDuBoard } = deps
@@ -79,6 +82,20 @@ export function registerQuartierPresenceIpc(deps: {
       if (animal !== null && !choix) return dossierDuBoard.etat()
       const etat = await dossierDuBoard.choisirAnimal(choix)
       // Les collègues voient le nouvel animal à la prochaine écriture permise (5 s au plus).
+      publication.reglageChange()
+      return etat
+    }
+  )
+
+  ipcMain.handle(
+    'os:quartier-presence:tenue',
+    async (event, tenue: unknown): Promise<EtatDuDossierDuBoard> => {
+      assertTrustedRendererSender(event, 'Présence du quartier')
+      // `null` = revenir à la tenue d'origine ; toute autre valeur inconnue est refusée sans rien changer.
+      const choix = tenue === null ? null : tenueLisible(tenue)
+      if (tenue !== null && !choix) return dossierDuBoard.etat()
+      const etat = await dossierDuBoard.choisirTenue(choix)
+      // Les collègues voient la nouvelle tenue à la prochaine écriture permise (5 s au plus).
       publication.reglageChange()
       return etat
     }

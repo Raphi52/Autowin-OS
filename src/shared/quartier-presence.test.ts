@@ -30,7 +30,15 @@ describe('un atlas par animal choisi', () => {
       const fichier = a === 'tanuki' ? 'atlas.avif' : `atlas-${a}.avif`
       expect(existsSync(join(dossier, fichier))).toBe(true)
       expect(scene).toContain(`../assets/quartier/${fichier}`)
-      expect(scene).toMatch(new RegExp(`['"]?${a}['"]?: peindreAtlas[(]`))
+      // Depuis conv-1558, les atlas se préparent à la demande : chaque animal a son adresse dans
+      // `URL_ATLAS`, et c'est elle que la scène charge puis peint (`peindreAtlas`). L'ancienne forme
+      // `tanuki: peindreAtlas(` n'existe plus ; ce test la cherchait encore (rouge relevé en conv-1633).
+      const adresses = scene.slice(
+        scene.indexOf('const URL_ATLAS'),
+        scene.indexOf('}', scene.indexOf('const URL_ATLAS'))
+      )
+      expect(adresses).toMatch(new RegExp(`['"]?${a}['"]?: urlAtlas`))
+      expect(scene).toMatch(/image\(URL_ATLAS\[animal\]\)[\s\S]{0,120}peindreAtlas\(animal,/)
     }
   )
 })

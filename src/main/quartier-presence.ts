@@ -26,12 +26,14 @@ import {
   PRESENCE_DELAI_ECRITURE_MS,
   PRESENCE_TAILLE_MAX,
   postesLisibles,
+  tenueLisible,
   type AgentAPublier,
   type AgentPublie,
   type AnimalAgent,
   type EtatDeLaPresence,
   type PhasePresence,
-  type PresenceDuPoste
+  type PresenceDuPoste,
+  type TenueAgent
 } from '../shared/quartier-presence'
 import { filtrerTitre } from './quartier-presence-filtre'
 
@@ -48,6 +50,11 @@ export interface ReglageDeLaPresence {
    * dessinent le même. Absent = non écrit : le lecteur garde l'animal tiré du nom du poste.
    */
   animal?: AnimalAgent
+  /**
+   * La couleur de tenue des agents du poste (conv-1633), écrite dans `presence.json` pour que les
+   * collègues dessinent la même. Absente = non écrite : la tenue d'origine de l'animal.
+   */
+  tenue?: TenueAgent
   /**
    * « Afficher mes agents à » (conv-1599) : les postes à qui ce poste masque ses agents. Écrits dans
    * `presence.json` ; l'Autowin de chacun d'eux ne les affiche pas. Absent ou vide = visibles pour tous.
@@ -111,7 +118,7 @@ export function agentPublie(a: AgentAPublier): AgentPublie {
  */
 export function presenceAEcrire(
   agents: readonly AgentAPublier[],
-  reglage: Pick<ReglageDeLaPresence, 'nom' | 'partager' | 'animal' | 'masquesPour'>,
+  reglage: Pick<ReglageDeLaPresence, 'nom' | 'partager' | 'animal' | 'masquesPour' | 'tenue'>,
   poste: string
 ): Omit<PresenceDuPoste, 'enregistreA'> {
   if (!reglage.partager)
@@ -119,11 +126,13 @@ export function presenceAEcrire(
   const publies = agents.slice(0, PRESENCE_AGENTS_MAX).map(agentPublie)
   // Relue ici aussi : le réglage vient d'un fichier du poste, et ce qui part sur le partage est borné.
   const masquesPour = postesLisibles(reglage.masquesPour)
+  const tenue = tenueLisible(reglage.tenue)
   const presence: Omit<PresenceDuPoste, 'enregistreA'> = {
     format: FORMAT_PRESENCE,
     poste,
     nom: reglage.nom,
     ...(reglage.animal ? { animal: reglage.animal } : {}),
+    ...(tenue ? { tenue } : {}),
     ...(masquesPour.length ? { masquesPour } : {}),
     agents: publies
   }

@@ -33,7 +33,13 @@ import type {
 import type { EtageDuBoard, EtatDuDossierDuBoard, EtatManuelDuBoard } from '../shared/board-dossier'
 import { carteDesProjetsPartages, projetsPartagesLisibles } from '../shared/board-projets-partages'
 import { nomDuPosteLisible } from '../shared/board-nom-du-poste'
-import { animalLisible, postesLisibles, type AnimalAgent } from '../shared/quartier-presence'
+import {
+  animalLisible,
+  postesLisibles,
+  tenueLisible,
+  type AnimalAgent,
+  type TenueAgent
+} from '../shared/quartier-presence'
 import { tachesDuBoard } from '../shared/taches-du-board'
 import { DOSSIER_DES_FICHES } from './fiches-de-demande'
 
@@ -393,6 +399,21 @@ export function lireAnimalDuPoste(racine: string): AnimalAgent | null {
 }
 
 /**
+ * La couleur de tenue des agents du poste (conv-1633), choisie sous l'animal ; `null` = aucun choix (la
+ * tenue d'origine), ou une valeur inconnue. Rangée à part pour la même raison que `lireAnimalDuPoste`.
+ */
+export function lireTenueDuPoste(racine: string): TenueAgent | null {
+  try {
+    const lu = JSON.parse(readFileSync(join(racine, FICHIER_DU_REGLAGE), 'utf8')) as {
+      tenue?: unknown
+    }
+    return tenueLisible(lu.tenue)
+  } catch {
+    return null
+  }
+}
+
+/**
  * « Afficher mes agents à » (conv-1599) : les postes à qui ce poste masque ses agents. Illisible = aucun :
  * un réglage abîmé laisse les agents visibles, comme avant le réglage. Rangé à part pour la même
  * raison que `lirePartageDeLaPresence`.
@@ -462,6 +483,11 @@ export interface DossierDuBoard {
    */
   choisirAnimal: (animal: AnimalAgent | null) => Promise<EtatDuDossierDuBoard>
   /**
+   * Retient la couleur de tenue des agents du poste (`null` = la tenue d'origine), conv-1633. Le
+   * réglage seul : `quartier-presence.ts` l'écrit dans `presence.json`, que les collègues relisent.
+   */
+  choisirTenue: (tenue: TenueAgent | null) => Promise<EtatDuDossierDuBoard>
+  /**
    * « Afficher mes agents à » (conv-1599) : retient les postes à qui ce poste masque ses agents (liste
    * vide = visibles pour tous). Le réglage seul : `quartier-presence.ts` l'écrit dans `presence.json`.
    */
@@ -504,6 +530,7 @@ export function creerDossierDuBoard(deps: {
   let nomChoisi = reglage.nom
   let partagerPresence = lirePartageDeLaPresence(deps.racine)
   let animal = lireAnimalDuPoste(deps.racine)
+  let tenue = lireTenueDuPoste(deps.racine)
   let masquesPresence = lireMasquesDeLaPresence(deps.racine)
   const nomDuPoste = (): { compte: string; nom: string } => ({ compte, nom: nomChoisi ?? compte })
   let dernier: EtatDuDossierDuBoard['dernier']
@@ -535,6 +562,7 @@ export function creerDossierDuBoard(deps: {
     // Absent = actif, le défaut (D-9) : seul un partage coupé se dit (conv-1429).
     ...(partagerPresence ? {} : { partagerPresence: false }),
     ...(animal ? { animal } : {}),
+    ...(tenue ? { tenue } : {}),
     // Absent = mes agents visibles pour tous (conv-1599).
     ...(masquesPresence.length ? { masquerPresencePour: [...masquesPresence] } : {})
   })
@@ -597,9 +625,9 @@ export function creerDossierDuBoard(deps: {
   }
 
   /**
-   * Le dossier, le choix des projets, le nom, le partage de la présence, l'animal et les postes à qui
-   * mes agents sont masqués : changer l'un ne doit jamais effacer les autres (conv-1211, conv-1230,
-   * conv-1429, conv-1537, conv-1599).
+   * Le dossier, le choix des projets, le nom, le partage de la présence, l'animal, les postes à qui
+   * mes agents sont masqués et la couleur de leur tenue : changer l'un ne doit jamais effacer les
+   * autres (conv-1211, conv-1230, conv-1429, conv-1537, conv-1599, conv-1633).
    */
   async function ecrireLeReglage(
     nouveauDossier: string | null,
@@ -607,7 +635,8 @@ export function creerDossierDuBoard(deps: {
     nouveauNom: string | null = nomChoisi,
     nouveauPartage: boolean = partagerPresence,
     nouvelAnimal: AnimalAgent | null = animal,
-    nouveauxMasques: readonly string[] = masquesPresence
+    nouveauxMasques: readonly string[] = masquesPresence,
+    nouvelleTenue: TenueAgent | null = tenue
   ): Promise<void> {
     await mkdir(deps.racine, { recursive: true })
     await writeFile(
@@ -619,7 +648,8 @@ export function creerDossierDuBoard(deps: {
           ...(nouveauNom ? { nom: nouveauNom } : {}),
           ...(nouveauPartage ? {} : { partagerPresence: false }),
           ...(nouvelAnimal ? { animal: nouvelAnimal } : {}),
-          ...(nouveauxMasques.length ? { masquerPresencePour: nouveauxMasques } : {})
+          ...(nouveauxMasques.length ? { masquerPresencePour: nouveauxMasques } : {}),
+          ...(nouvelleTenue ? { tenue: nouvelleTenue } : {})
         },
         null,
         2
@@ -647,6 +677,20 @@ export function creerDossierDuBoard(deps: {
       const retenu = animalLisible(choix)
       await ecrireLeReglage(dossier, projets, nomChoisi, partagerPresence, retenu)
       animal = retenu
+      return etat()
+    },
+    async choisirTenue(choix) {
+      const retenue = tenueLisible(choix)
+      await ecrireLeReglage(
+        dossier,
+        projets,
+        nomChoisi,
+        partagerPresence,
+        animal,
+        masquesPresence,
+        retenue
+      )
+      tenue = retenue
       return etat()
     },
     async choisirMasquesPresence(choix) {
@@ -683,8 +727,8 @@ export function creerDossierDuBoard(deps: {
       // Le choix des projets survit à l'oubli du dossier (conv-1211) : en rechoisir un ne doit pas
       // repartager d'un coup ce qu'on avait décoché. Le nom choisi survit aussi (conv-1230), et un
       // partage de présence coupé reste coupé (conv-1429), l'animal choisi reste (conv-1537), et mes
-      // agents restent masqués à ceux que j'avais décochés (conv-1599).
-      if (projets || nomChoisi || !partagerPresence || animal || masquesPresence.length)
+      // agents restent masqués à ceux que j'avais décochés (conv-1599), dans la tenue choisie (conv-1633).
+      if (projets || nomChoisi || !partagerPresence || animal || masquesPresence.length || tenue)
         await ecrireLeReglage(null, projets)
       else await rm(join(deps.racine, FICHIER_DU_REGLAGE), { force: true })
       dossier = null

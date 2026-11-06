@@ -6,7 +6,8 @@
  *  - D-10 : un seul quartier commun, une couleur par personne ;
  *  - D8 : un bouton « Mes agents / Toute l'équipe » les masque quand il y a foule ;
  *  - D9 : foulard à la couleur de la personne, prénom au survol ; sa question ou son plantage restent
- *    discrets, car l'or veut dire « t'attend » et ce n'est pas moi qu'il attend ;
+ *    discrets, car l'or veut dire « t'attend » et ce n'est pas moi qu'il attend. Le foulard est retiré
+ *    en conv-1633 (« vire le foulard ») : ses agents portent la tenue à la couleur qu'IL a choisie ;
  *  - D10 : un clic montre sa carte, jamais l'ouverture d'un fil (le fil vit sur un autre poste).
  *
  * La relecture du partage est faite par le processus principal (`quartier-presence-collegues.ts`,
@@ -23,8 +24,10 @@ import {
   PHASES_PRESENCE,
   PRESENCE_TITRE_MAX,
   postesLisibles,
+  tenueLisible,
   type AnimalAgent,
-  type PresencesDesCollegues
+  type PresencesDesCollegues,
+  type TenueAgent
 } from '../../../shared/quartier-presence'
 import { consigneDe, type AgentQuartier, type PhaseAgent } from './agents-quartier'
 import type { Consigne } from './quartier-marche'
@@ -39,9 +42,9 @@ const TEXTE_COURT_MAX = 64
 const PRENOM_MAX = 40
 
 /**
- * La couleur d'une personne : son foulard. Huit teintes fixes, loin de l'orange du kimono (le foulard
- * disparaîtrait dessus), du bleu marine de mes propres tanukis, de l'or (« t'attend ») et du rouge
- * (« planté »). Peintes sur le décor, elles ne suivent pas le thème de l'app.
+ * La couleur d'une personne, en pastille dans la liste des réglages. C'était celle de son foulard sur la
+ * scène, d'où ces huit teintes loin de l'orange du kimono, de l'or (« t'attend ») et du rouge
+ * (« planté ») ; le foulard est retiré depuis conv-1633. Elles ne suivent pas le thème de l'app.
  */
 export const PALETTE_COLLEGUES = [
   '#22a884', // couleur-fixe: foulard d'un collègue peint sur le décor (jade)
@@ -71,9 +74,11 @@ export interface InfosCollegue {
   couleur: string
   /**
    * L'atlas dont la scène le dessine : celui que le collègue a choisi (conv-1537), sinon celui tiré de
-   * son poste. Le foulard à sa couleur le distingue d'un autre du même animal.
+   * son poste.
    */
   animal: AnimalAgent
+  /** La couleur de tenue qu'il a choisie (conv-1633) ; `null` = la tenue d'origine de son animal. */
+  tenue: TenueAgent | null
   /** L'identifiant du fil sur SON poste : il ne s'ouvre jamais ici (D10). */
   idFil: string
 }
@@ -174,6 +179,8 @@ export function agentsDesCollegues(
     const couleur = couleurDuPoste(poste)
     // Son choix d'abord (conv-1537) ; un fichier d'une version d'avant le réglage n'en porte pas.
     const animal = animalLisible(c.animal) ?? animalDuPoste(poste)
+    // Sa couleur de tenue (conv-1633) : revalidée, la valeur vient d'un autre poste.
+    const tenue = tenueLisible(c.tenue)
     const siens: AgentCollegue[] = []
     for (const a of Array.isArray(c.agents) ? c.agents : []) {
       const idFil = identifiant(a?.id)
@@ -197,7 +204,7 @@ export function agentsDesCollegues(
         metier,
         actions: [],
         depuis,
-        collegue: { poste, prenom, couleur, animal, idFil }
+        collegue: { poste, prenom, couleur, animal, tenue, idFil }
       })
     }
     siens.sort((x, y) => ORDRE[x.phase] - ORDRE[y.phase] || x.depuis - y.depuis)
@@ -266,7 +273,7 @@ export interface PersonneDuVillage {
   /** Le sous-dossier de son poste, tel quel ; la casse ne compte pas pour les choix. */
   poste: string
   prenom: string
-  /** Son foulard : la même couleur que ses agents sur la scène. */
+  /** Sa couleur de personne (`couleurDuPoste`), en pastille dans la liste. */
   couleur: string
   /** Ses agents peuvent apparaître ici maintenant (fichier récent, partage ouvert, pas masqués pour moi). */
   enLigne: boolean

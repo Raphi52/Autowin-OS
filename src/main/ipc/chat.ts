@@ -1751,6 +1751,8 @@ Le fil reprend ensuite normalement.`
           // Toujours écrit, même sans choix (conv-1537) : le réglage de l'Accueil montre l'animal que
           // les collègues voient, pas celui d'un tirage sur le nom du poste.
           animal: etat.animal ?? ANIMAL_PAR_DEFAUT,
+          // La couleur de leur tenue (conv-1633) ; absente = la tenue d'origine, rien à écrire.
+          ...(etat.tenue ? { tenue: etat.tenue } : {}),
           // « Afficher mes agents à » des réglages de l'Accueil (conv-1599).
           masquesPour: etat.masquerPresencePour ?? []
         }

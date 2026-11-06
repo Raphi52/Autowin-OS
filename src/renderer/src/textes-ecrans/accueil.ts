@@ -37,6 +37,10 @@ export const TEXTES_FR = {
   'reglages.animalAide': 'Vos collègues voient aussi cet animal.',
   'reglages.animalErreur': 'Choix non enregistré : réessayez.',
   'reglages.animalIndisponible': "Choix possible après le prochain redémarrage d'Autowin.",
+  // La couleur de leur tenue, sous l'animal, vue aussi par les collègues (conv-1633).
+  'reglages.tenue': 'Couleur de leur tenue',
+  'reglages.ariaTenue': 'Couleur de la tenue de mes agents, vue aussi par mes collègues',
+  'reglages.tenueAide': 'Vos collègues voient aussi cette couleur.',
   // Les personnes du village : qui je vois, et qui me voit (conv-1599) — un seul tableau compact,
   // une ligne par personne, pour tenir quand l'équipe grandit.
   'reglages.personnes': 'Agents des collègues',
@@ -55,6 +59,15 @@ export const TEXTES_FR = {
   'animal.renard': 'Renard',
   'animal.panda': 'Panda',
   'animal.pandaRoux': 'Panda roux',
+  'tenue.origine': 'D’origine',
+  'tenue.rouge': 'Rouge',
+  'tenue.orange': 'Orange',
+  'tenue.jaune': 'Jaune',
+  'tenue.vert': 'Vert',
+  'tenue.turquoise': 'Turquoise',
+  'tenue.bleu': 'Bleu',
+  'tenue.violet': 'Violet',
+  'tenue.rose': 'Rose',
   'reglages.widgets': 'Widgets affichés',
   'reglages.disposition': 'Disposition',
   'reglages.annulerTitre': 'Défaire le dernier déplacement ou redimensionnement',
@@ -378,6 +391,9 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'reglages.animalAide': 'Your colleagues see this animal too.',
   'reglages.animalErreur': 'Choice not saved: try again.',
   'reglages.animalIndisponible': 'You can choose after Autowin next restarts.',
+  'reglages.tenue': 'Colour of their outfit',
+  'reglages.ariaTenue': 'Outfit colour of my agents, also seen by my colleagues',
+  'reglages.tenueAide': 'Your colleagues see this colour too.',
   'reglages.personnes': 'Colleagues’ agents',
   'reglages.personnesColonne': 'Person',
   'reglages.jeVois': 'I see',
@@ -394,6 +410,15 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'animal.renard': 'Fox',
   'animal.panda': 'Panda',
   'animal.pandaRoux': 'Red panda',
+  'tenue.origine': 'Original',
+  'tenue.rouge': 'Red',
+  'tenue.orange': 'Orange',
+  'tenue.jaune': 'Yellow',
+  'tenue.vert': 'Green',
+  'tenue.turquoise': 'Turquoise',
+  'tenue.bleu': 'Blue',
+  'tenue.violet': 'Purple',
+  'tenue.rose': 'Pink',
   'reglages.widgets': 'Widgets shown',
   'reglages.disposition': 'Layout',
   'reglages.annulerTitre': 'Undo the last move or resize',
@@ -691,7 +716,9 @@ export const IDENTIQUES_AU_FRANCAIS: Readonly<Partial<Record<keyof typeof TEXTES
   'inter.messagesPlusieurs': 'le même mot en anglais',
   'enreg.mode': 'le même mot en anglais',
   'animal.tanuki': 'le même mot en anglais',
-  'animal.panda': 'le même mot en anglais'
+  'animal.panda': 'le même mot en anglais',
+  'tenue.orange': 'le même mot en anglais',
+  'tenue.turquoise': 'le même mot en anglais'
 }
 
 export const { useTextes: useTextesAccueil, traduire: traduireAccueil } = tableDeTextes(

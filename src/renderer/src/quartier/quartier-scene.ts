@@ -42,8 +42,9 @@ import {
   lireAgentsCollegues,
   type AgentCollegue
 } from './agents-collegues'
-import { abonnerMonAnimal, lireMonAnimal } from './mon-animal'
-import type { AnimalAgent } from '../../../shared/quartier-presence'
+import { abonnerMonAnimal, lireMaTenue, lireMonAnimal } from './mon-animal'
+import { caseDeTenue, creerCasesDeTenue, FENETRES_DE_TENUE, masqueDeTenue } from './quartier-tenue'
+import type { AnimalAgent, TenueAgent } from '../../../shared/quartier-presence'
 import {
   creerMarche,
   estAuBain,
@@ -70,7 +71,7 @@ import { adresseBatiment, composerFalaise, nomDuBatiment } from './quartier-calq
 import { jouerGong } from './quartier-son'
 import { lireTuilesSorties, TOUR_DU_WIDGET, widgetDeLaTour } from './quartier-tuiles'
 import { contexte, creerVie, image, toile, type VieDecor } from './quartier-vie'
-import { bornerVue, MARGE_BORD, rapprocherZoom, zoomSur } from './quartier-zoom'
+import { bornerVue, MARGE_BORD, rapprocherZoom, sourcesDesBords, zoomSur } from './quartier-zoom'
 
 const LARGEUR = 1344
 const HAUTEUR = 768
@@ -164,19 +165,20 @@ export interface DonneesQuartier extends DonneesMarche {
 }
 
 /**
- * Un atlas prêt à dessiner : l'image filtrée, sa silhouette d'ombre, et le cou de chaque case, mesuré une
- * fois au premier foulard. Le cou dépend de la silhouette : celui du renard n'est pas celui du tanuki.
+ * Un atlas prêt à dessiner : l'image filtrée, sa silhouette d'ombre, et le masque de sa tenue, lu une fois
+ * à la première tenue recolorée (conv-1633). La tenue dépend de l'animal : la veste turquoise du renard
+ * n'a pas la teinte du kimono du tanuki.
  */
 interface AtlasPeint {
+  animal: AnimalAgent
   A: HTMLCanvasElement
   AO: HTMLCanvasElement
   /** L'original puis sa moitié, son quart, son huitième : de quoi dessiner sans réduction à refaire (conv-1526). */
   niveaux: NiveauPlanche[]
   parts: number[]
-  /** Le niveau aux cases de `donnees.json` (126 × 170) : le foulard s'y mesure et s'y découpe (conv-1558). */
+  /** Le niveau aux cases de `donnees.json` (126 × 170) : la tenue s'y mesure et s'y teint (conv-1633). */
   base: NiveauPlanche
-  cous: Float32Array | null
-  colonnes: number
+  masqueTenue: Uint8Array | null
 }
 
 interface Monde {
@@ -236,7 +238,11 @@ function lueurDe(o: ObjetCoupe): HTMLCanvasElement {
 }
 
 /** Les filtres de toile coûtent cher à chaque image : on les applique UNE fois, à l'atlas entier. */
-function peindreAtlas(atlas: HTMLImageElement, an: { cw: number; ch: number }): AtlasPeint {
+function peindreAtlas(
+  animal: AnimalAgent,
+  atlas: HTMLImageElement,
+  an: { cw: number; ch: number }
+): AtlasPeint {
   // Le tanuki v3 est rendu en ×2 (conv-1558) : ses niveaux partent de ses cases de 252 × 340, et le
   // flou de l'ombre double avec lui pour rester le même une fois réduit.
   const f = finesseDePlanche(atlas.naturalWidth, an.cw)
@@ -250,7 +256,15 @@ function peindreAtlas(atlas: HTMLImageElement, an: { cw: number; ch: number }): 
   gO.drawImage(atlas, 0, 0)
   const niveaux = niveauxDePlanche(A, AO, an.cw * f, an.ch * f)
   const base = niveaux.find((n) => n.cw === an.cw && n.ch === an.ch) ?? niveaux[0]
-  return { A, AO, niveaux, parts: niveaux.map((n) => n.cw / an.cw), base, cous: null, colonnes: 0 }
+  return {
+    animal,
+    A,
+    AO,
+    niveaux,
+    parts: niveaux.map((n) => n.cw / an.cw),
+    base,
+    masqueTenue: null
+  }
 }
 
 const URL_ATLAS: Readonly<Record<AnimalAgent, string>> = {
@@ -278,7 +292,7 @@ function atlasALaDemande(an: { cw: number; ch: number }): AtlasALaDemande {
     let p = enCours.get(animal)
     if (!p) {
       p = image(URL_ATLAS[animal]).then((i) => {
-        const peint = peindreAtlas(i, an)
+        const peint = peindreAtlas(animal, i, an)
         prets.set(animal, peint)
         return peint
       })
@@ -348,61 +362,6 @@ const pied = (o: ObjetCoupe, px: number): number => {
 const couvre = (o: ObjetCoupe, w: Tanuki): boolean =>
   w.x + w.u * 0.4 > o.x && w.x - w.u * 0.4 < o.x + o.w && w.y + 4 > o.y && w.y - w.u < o.y + o.h
 
-/** La part de la hauteur du corps où tombe le cou : mesurée sur le foulard peint des cases de face (0,52 à 0,59). */
-const COU = 0.56
-
-/**
- * Le cou de chaque case de l'atlas (conv-1429) : `[x, y, demi-largeur]` en pixels de la case, `NaN` pour
- * une case vide. Le foulard peint n'est visible que de face — aucun pixel de dos, en méditation ni au
- * sabre, mesuré sur l'atlas : on le place donc d'après la silhouette, à `COU` de sa hauteur, au milieu de
- * la plus longue bande opaque (la queue, vue de profil, en est séparée).
- */
-export function cousDeLAtlas(
-  rgba: Uint8ClampedArray,
-  largeur: number,
-  cw: number,
-  ch: number,
-  colonnes: number,
-  rangees: number
-): Float32Array {
-  const cous = new Float32Array(colonnes * rangees * 3).fill(NaN)
-  const opaque = (px: number, py: number): boolean => rgba[(py * largeur + px) * 4 + 3] > 128
-  const ligneOpaque = (x0: number, py: number): boolean => {
-    for (let u = 0; u < cw; u++) if (opaque(x0 + u, py)) return true
-    return false
-  }
-  for (let r = 0; r < rangees; r++)
-    for (let c = 0; c < colonnes; c++) {
-      const x0 = c * cw
-      const y0 = r * ch
-      let haut = 0
-      while (haut < ch && !ligneOpaque(x0, y0 + haut)) haut++
-      if (haut >= ch) continue
-      let bas = ch - 1
-      while (bas > haut && !ligneOpaque(x0, y0 + bas)) bas--
-      const y = Math.round(haut + (bas - haut) * COU)
-      let meilleur = 0
-      let debut = 0
-      let suite = 0
-      for (let u = 0; u <= cw; u++) {
-        if (u < cw && opaque(x0 + u, y0 + y)) suite++
-        else {
-          if (suite > meilleur) {
-            meilleur = suite
-            debut = u - suite
-          }
-          suite = 0
-        }
-      }
-      if (!meilleur) continue
-      const i = (r * colonnes + c) * 3
-      cous[i] = debut + meilleur / 2
-      cous[i + 1] = y
-      cous[i + 2] = meilleur / 2
-    }
-  return cous
-}
-
 /** D19 : les premiers mots du fil ; pour un lot, ce qui suit « Lot 8/8 — ». */
 export function etiquetteDuFil(titre: string): string {
   const t = titre.replace(/^\s*Lot\s+\d+\s*\/\s*\d+\s*[—–-]\s*/i, '').trim()
@@ -450,19 +409,30 @@ export function creerSceneQuartier(): DecorScene | null {
   const desabonnerCollegues = abonnerAgentsCollegues(() => {
     collegues = lireAgentsCollegues()
   })
-  // L'animal de MES agents (conv-1537), lu à chaque image : un nouveau choix les redessine aussitôt.
+  // L'animal de MES agents (conv-1537) et la couleur de leur tenue (conv-1633), lus à chaque image :
+  // un nouveau choix les redessine aussitôt.
   let monAnimal: AnimalAgent = lireMonAnimal()
+  let maTenue: TenueAgent | null = lireMaTenue()
   const desabonnerMonAnimal = abonnerMonAnimal(() => {
     monAnimal = lireMonAnimal()
+    maTenue = lireMaTenue()
   })
   /**
-   * L'animal d'un tanuki de collègue (conv-1446). Comme son foulard, il reste sur le tanuki et non sur
-   * l'agent : en repartant, son agent a déjà quitté la liste, et il ne doit pas redevenir tanuki en route.
+   * L'animal d'un tanuki de collègue (conv-1446). Il reste sur le tanuki et non sur l'agent : en
+   * repartant, son agent a déjà quitté la liste, et il ne doit pas redevenir tanuki en route.
    */
   const animalDuTanuki = new WeakMap<Tanuki, AnimalAgent>()
   const atlasDe = (M: Monde, w: Tanuki): AtlasPeint | null =>
     M.animaux.lire(animalDuTanuki.get(w) ?? monAnimal)
-  const etoffe = toile(1, 1)
+  /**
+   * La couleur de tenue d'un tanuki de collègue (conv-1633), mise à jour à chaque relecture tant que son
+   * agent est là, puis gardée pour qu'il reparte dans la même tenue. Absente = la tenue d'origine.
+   */
+  const tenueDuTanuki = new WeakMap<Tanuki, TenueAgent | null>()
+  const tenueDe = (w: Tanuki): TenueAgent | null =>
+    w.collegue ? (tenueDuTanuki.get(w) ?? null) : maTenue
+  /** Les cases déjà teintes, toutes couleurs et tous animaux confondus (`quartier-tenue.ts`). */
+  const casesDeTenue = creerCasesDeTenue()
 
   /** Le cadrage au repos : calé sur la largeur de l'Accueil, posé en bas. */
   const cadrer = (): void => {
@@ -586,17 +556,18 @@ export function creerSceneQuartier(): DecorScene | null {
       if (w) w.consigne = consigne
       else m.ajouter(a.id, consigne)
     }
-    // Ceux des collègues : mêmes lieux selon le métier et la phase (D-8), un foulard à leur couleur (D9),
-    // dessinés avec l'atlas de leur animal (conv-1446).
+    // Ceux des collègues : mêmes lieux selon le métier et la phase (D-8), dessinés avec l'atlas de leur
+    // animal (conv-1446), dans la tenue à la couleur qu'ils ont choisie (conv-1633).
     for (const a of collegues) {
       const consigne = consigneDuCollegue(a, maintenant)
       const w = m.T.find((q) => q.id === a.id)
       if (w) w.consigne = consigne
-      else {
-        const nouveau = m.ajouter(a.id, consigne, a.collegue.couleur)
+      const lui = w ?? m.ajouter(a.id, consigne, true)
+      if (!w) {
         const animal = animalDeLAgent(a)
-        if (animal) animalDuTanuki.set(nouveau, animal)
+        if (animal) animalDuTanuki.set(lui, animal)
       }
+      tenueDuTanuki.set(lui, a.collegue.tenue)
     }
     for (const w of m.T)
       if (!agents.some((a) => a.id === w.id) && !collegues.some((a) => a.id === w.id))
@@ -667,14 +638,16 @@ export function creerSceneQuartier(): DecorScene | null {
     const n = planche.niveaux[niveauPourEchelle(e, planche.parts)]
     const atlas = ombre ? n.AO : n.A
     const qualite = x.imageSmoothingQuality
+    // La tenue à la couleur choisie (conv-1633), posée sur chaque image lue, celle de la respiration
+    // comprise. L'ombre n'a pas de couleur.
+    const tenue = ombre ? null : tenueDe(w)
     const lire = (c: number): void => {
       if (e < 1) x.imageSmoothingQuality = 'low'
       x.drawImage(atlas, c * n.cw, cl.r * n.ch, n.cw, n.ch, ox, -an.ay, an.cw, an.ch)
+      if (tenue) poserTenue(M, planche, tenue, c, cl.r, ox)
       x.imageSmoothingQuality = qualite
     }
     lire(cl.c)
-    // Le foulard reste peint sur la case d'origine : sa petite toile ne coûte rien (mesuré, conv-1526).
-    if (!ombre && w.foulard) poserFoulard(M, planche, w.foulard, cl.c, cl.r, ox)
     // Une respiration de douze images en six secondes : l'image suivante se fond par-dessus, sans à-coup.
     if (!ombre && cl.f && cl.n) {
       const a = x.globalAlpha
@@ -686,63 +659,34 @@ export function creerSceneQuartier(): DecorScene | null {
   }
 
   /**
-   * Le foulard d'un collègue (D9, conv-1429) : une écharpe à sa couleur, découpée sur la silhouette de
-   * l'image en cours, à hauteur du cou. Posé dans le repère du personnage, il suit le miroir, le pas et
-   * la marche sans calcul de plus. Trois gestes sur une petite toile : 15 collègues au plus, c'est peu.
-   * Le cou et la découpe viennent de l'atlas de SON animal (conv-1446).
+   * La tenue à la couleur choisie (conv-1633), posée sur le personnage déjà dessiné, en mode « color » :
+   * teinte et saturation de la couleur, luminosité de la peinture. Posée dans le repère du personnage,
+   * elle suit le miroir, le pas et la marche sans calcul de plus. Un seul dessin d'une petite case, gardée
+   * une fois teinte : le coût de l'ancien foulard (mesuré négligeable, conv-1526). Le masque de la tenue
+   * se lit une fois par animal, à sa première tenue recolorée, sur sa planche de base.
    */
-  function poserFoulard(
+  function poserTenue(
     M: Monde,
     P: AtlasPeint,
-    couleur: string,
+    tenue: TenueAgent,
     c: number,
     r: number,
     ox: number
   ): void {
     const { an } = M.D
-    const B = P.base.A
-    if (!P.cous) {
-      P.colonnes = Math.floor(B.width / an.cw)
-      const rangees = Math.floor(B.height / an.ch)
-      const rgba = contexte(B).getImageData(0, 0, B.width, B.height).data
-      P.cous = cousDeLAtlas(rgba, B.width, an.cw, an.ch, P.colonnes, rangees)
+    const B = P.base
+    if (!P.masqueTenue) {
+      const rgba = contexte(B.A).getImageData(0, 0, B.A.width, B.A.height).data
+      P.masqueTenue = masqueDeTenue(rgba, FENETRES_DE_TENUE[P.animal])
     }
-    const cous = P.cous
-    const i = (r * P.colonnes + c) * 3
-    const cx = cous[i]
-    if (!Number.isFinite(cx)) return
-    const cy = cous[i + 1]
-    const rx = Math.max(9, Math.min(20, cous[i + 2] * 0.8))
-    const ry = 7.5
-    if (etoffe.width !== an.cw || etoffe.height !== an.ch) {
-      etoffe.width = an.cw
-      etoffe.height = an.ch
-    }
-    const g = contexte(etoffe)
-    g.globalCompositeOperation = 'source-over'
-    g.clearRect(0, 0, an.cw, an.ch)
-    g.fillStyle = couleur
-    g.beginPath()
-    g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
-    g.fill()
-    // La pointe, sous le menton : c'est elle qui le fait lire comme un foulard, et non comme un col.
-    g.beginPath()
-    g.moveTo(cx - rx * 0.45, cy + ry * 0.4)
-    g.lineTo(cx + rx * 0.45, cy + ry * 0.4)
-    g.lineTo(cx, cy + ry * 2.1)
-    g.closePath()
-    g.fill()
-    // Un reflet en haut, un pli d'ombre en bas : un aplat de couleur se lirait comme un autocollant.
-    const d = g.createLinearGradient(0, cy - ry, 0, cy + ry * 2.1)
-    d.addColorStop(0, 'rgba(255,255,255,.2)') // couleur-fixe: reflet du foulard peint sur le décor
-    d.addColorStop(0.45, 'rgba(0,0,0,0)') // couleur-fixe: milieu du foulard peint sur le décor
-    d.addColorStop(1, 'rgba(0,0,0,.34)') // couleur-fixe: pli d'ombre du foulard peint sur le décor
-    g.globalCompositeOperation = 'source-atop'
-    g.fillStyle = d
-    g.fillRect(0, cy - ry, an.cw, ry * 3.2)
-    g.globalCompositeOperation = 'destination-in'
-    g.drawImage(B, c * an.cw, r * an.ch, an.cw, an.ch, 0, 0, an.cw, an.ch)
-    x.drawImage(etoffe, ox, -an.ay, an.cw, an.ch)
+    const masque = P.masqueTenue
+    const k = casesDeTenue.lire(`${P.animal}|${tenue}|${c}|${r}`, () =>
+      caseDeTenue(masque, B.A.width, c, r, B.cw, B.ch, tenue)
+    )
+    const mode = x.globalCompositeOperation
+    x.globalCompositeOperation = 'color'
+    x.drawImage(k, ox, -an.ay, an.cw, an.ch)
+    x.globalCompositeOperation = mode
   }
 
   function dessinerOmbre(M: Monde, w: Tanuki): void {
@@ -824,7 +768,7 @@ export function creerSceneQuartier(): DecorScene | null {
     for (const w of M.m.T) {
       // fix-ok: la lueur rouge testait la pose 'pl' (grep : 3 sites, signaux/étiquettes) ; planté = pr, fu ou bi (conv-1554).
       // L'agent d'un collègue n'attend pas après moi : ni or ni rouge (D9, conv-1429).
-      if ((w.nom !== 'at' && !estPlante(w.nom)) || w.foulard) continue
+      if ((w.nom !== 'at' && !estPlante(w.nom)) || w.collegue) continue
       const v = 0.5 + 0.5 * Math.sin(t * 3 + w.x)
       const r = w.u * (0.34 + v * 0.06)
       if (w.nom === 'at') {
@@ -855,7 +799,7 @@ export function creerSceneQuartier(): DecorScene | null {
     for (const w of [...T].sort((a, b) => b.y - a.y)) {
       if (foule && w.nom !== 'at' && !estPlante(w.nom)) continue
       // Un collègue n'a pas d'étiquette au-dessus de la tête : son prénom et son titre vont au survol (D9).
-      if (w.foulard) continue
+      if (w.collegue) continue
       const a = agents.find((q) => q.id === w.id)
       const t = a ? etiquetteDuFil(a.titre) : ''
       if (!t) continue
@@ -968,14 +912,15 @@ export function creerSceneQuartier(): DecorScene | null {
     // Les bords prolongés : à gauche, ils remplacent peu à peu le reflet à mesure que le zoom s'approche.
     const { B } = M
     const mb = MARGE_BORD
+    // Lus d'après la taille de `bords.avif`, pas l'échelle de la peinture (conv-1644, `sourcesDesBords`).
+    const bord = sourcesDesBords(B.naturalWidth, B.naturalHeight)
     if (gaucheMonde < 0 && m > 0) {
       x.globalAlpha = m
-      x.drawImage(B, 0, 0, mb * S, HAUTEUR * S, -mb, 0, mb, HAUTEUR)
+      x.drawImage(B, bord.gauche.x, 0, bord.gauche.l, bord.gauche.h, -mb, 0, mb, HAUTEUR)
       x.globalAlpha = 1
     }
-    // 16 px de tampon séparent les deux bords dans l'image : le lissage y lit sans prendre un filet de l'autre.
     if (sx + vw > LARGEUR)
-      x.drawImage(B, mb * S + 16, 0, mb * S, HAUTEUR * S, LARGEUR, 0, mb, HAUTEUR)
+      x.drawImage(B, bord.droite.x, 0, bord.droite.l, bord.droite.h, LARGEUR, 0, mb, HAUTEUR)
     x.drawImage(F, 0, 0, LARGEUR, HAUTEUR)
     M.vie.ciel(x)
     tours(M, dt)

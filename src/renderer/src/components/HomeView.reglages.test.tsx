@@ -423,3 +423,50 @@ describe('l animal de mes agents dans les reglages', () => {
     expect(menu.value).toBe('panda-roux')
   })
 })
+
+// La couleur de leur tenue (conv-1633) : « un settings pour choisir la couleur de leur tenue en dessous
+// du setting où je choisis l'animal ». D'origine par défaut, huit couleurs, le choix part au processus
+// principal, qui le publie aux collègues ; revenir à « D'origine » envoie `null`.
+describe('la couleur de tenue de mes agents dans les reglages', () => {
+  afterEach(() => reinitialiserMonAnimal())
+
+  it('se tient juste sous l’animal, propose d’origine puis huit couleurs, et transmet le choix', async () => {
+    const choisir = vi.fn(async (tenue: unknown) => (tenue === null ? {} : { tenue }))
+    Object.assign((window as unknown as { api: Record<string, unknown> }).api, {
+      boardDossier: vi.fn(async () => ({})),
+      quartierPresenceAnimal: vi.fn(async (animal: unknown) => ({ animal })),
+      quartierPresenceTenue: choisir
+    })
+    const container = await mount()
+    await ouvrirReglages(container)
+    const animal = q<HTMLSelectElement>(container, '[data-testid="home-animal"]')!
+    const menu = q<HTMLSelectElement>(container, '[data-testid="home-tenue"]')!
+    // Le bloc de la tenue suit immédiatement celui de l'animal.
+    expect(animal.closest('section')?.nextElementSibling).toBe(menu.closest('section'))
+    expect(menu.disabled).toBe(false)
+    expect(menu.value).toBe('')
+    expect(Array.from(menu.options, (o) => [o.value, o.textContent])).toEqual([
+      ['', 'D’origine'],
+      ['rouge', 'Rouge'],
+      ['orange', 'Orange'],
+      ['jaune', 'Jaune'],
+      ['vert', 'Vert'],
+      ['turquoise', 'Turquoise'],
+      ['bleu', 'Bleu'],
+      ['violet', 'Violet'],
+      ['rose', 'Rose']
+    ])
+    await act(async () => {
+      menu.value = 'bleu'
+      menu.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(choisir).toHaveBeenCalledWith('bleu')
+    expect(menu.value).toBe('bleu')
+    await act(async () => {
+      menu.value = ''
+      menu.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(choisir).toHaveBeenLastCalledWith(null)
+    expect(menu.value).toBe('')
+  })
+})

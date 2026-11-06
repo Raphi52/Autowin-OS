@@ -31,12 +31,14 @@ import {
   PRESENCE_TITRE_MAX,
   animalLisible,
   postesLisibles,
+  tenueLisible,
   type AgentPublie,
   type AnimalAgent,
   type PersonneDuPartage,
   type PhasePresence,
   type PresenceDUnCollegue,
-  type PresencesDesCollegues
+  type PresencesDesCollegues,
+  type TenueAgent
 } from '../shared/quartier-presence'
 
 /** Au plus 100 sous-dossiers parcourus : un partage encombré ne transforme pas la relecture en scan. */
@@ -53,6 +55,8 @@ type FichierLu =
       coupe: boolean
       /** L'animal choisi par le collègue (conv-1537) ; `null` = absent ou inconnu. */
       animal: AnimalAgent | null
+      /** La couleur de tenue qu'il a choisie (conv-1633) ; `null` = absente ou inconnue (d'origine). */
+      tenue: TenueAgent | null
       /** Les postes à qui il masque ses agents (conv-1599), en minuscules ; vide = visibles pour tous. */
       masquesPour: string[]
       agents: AgentPublie[]
@@ -147,6 +151,8 @@ export function presenceLue(contenu: string): FichierLu {
     enregistreA,
     coupe: o.coupe === true,
     animal: animalLisible(o.animal),
+    // Une couleur inconnue (version plus récente) laisse la tenue d'origine, sans écarter le collègue.
+    tenue: tenueLisible(o.tenue),
     // Une liste abîmée ne masque rien de plus : seuls les noms lisibles comptent.
     masquesPour: postesLisibles(o.masquesPour),
     agents
@@ -232,6 +238,7 @@ export function creerLecteurDePresence(deps: {
           poste: posteDuCollegue,
           nom: lu.nom,
           ...(lu.animal ? { animal: lu.animal } : {}),
+          ...(lu.tenue ? { tenue: lu.tenue } : {}),
           prenom: prenomDe(lu.nom),
           agents: lu.agents
         })

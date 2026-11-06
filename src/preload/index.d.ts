@@ -54,7 +54,8 @@ import type {
   AgentAPublier,
   AnimalAgent,
   EtatDeLaPresence,
-  PresencesDesCollegues
+  PresencesDesCollegues,
+  TenueAgent
 } from '../shared/quartier-presence'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
@@ -595,6 +596,9 @@ interface ChatApi {
   /** L'animal des agents du poste, vu aussi par les collègues (`null` = le défaut, conv-1537) ;
    *  absent = preload d'avant redémarrage. */
   quartierPresenceAnimal?: (animal: AnimalAgent | null) => Promise<EtatDuDossierDuBoard>
+  /** La couleur de tenue des agents du poste, vue aussi par les collègues (`null` = d'origine,
+   *  conv-1633) ; absent = preload d'avant redémarrage. */
+  quartierPresenceTenue?: (tenue: TenueAgent | null) => Promise<EtatDuDossierDuBoard>
   /** « Afficher mes agents à » : les postes à qui ce poste masque ses agents (conv-1599) ; absent =
    *  preload d'avant redémarrage. */
   quartierPresenceMasques?: (postes: string[]) => Promise<EtatDuDossierDuBoard>

@@ -70,7 +70,8 @@ import type {
   AgentAPublier,
   AnimalAgent,
   EtatDeLaPresence,
-  PresencesDesCollegues
+  PresencesDesCollegues,
+  TenueAgent
 } from '../shared/quartier-presence'
 import type { ComparaisonDUneFacon, ResultatGarderUneFacon } from '../shared/essai-trois-facons'
 import type { EtatWhisper } from '../main/whisper-local'
@@ -873,6 +874,9 @@ const api = {
   /** L'animal des agents du poste, vu aussi par les collègues (`null` = le défaut, conv-1537). */
   quartierPresenceAnimal: (animal: AnimalAgent | null): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:quartier-presence:animal', animal),
+  /** La couleur de tenue des agents du poste, vue aussi par les collègues (`null` = d'origine, conv-1633). */
+  quartierPresenceTenue: (tenue: TenueAgent | null): Promise<EtatDuDossierDuBoard> =>
+    ipcRenderer.invoke('os:quartier-presence:tenue', tenue),
   /** « Afficher mes agents à » : les postes à qui ce poste masque ses agents (conv-1599). */
   quartierPresenceMasques: (postes: string[]): Promise<EtatDuDossierDuBoard> =>
     ipcRenderer.invoke('os:quartier-presence:masques', postes),
