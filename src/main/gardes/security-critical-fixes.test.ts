@@ -832,7 +832,19 @@ describe('critique #2 — handlers IPC agentiques gardés', () => {
     //   par `tenueLisible` (liste fermee `TENUES_AGENTS`) et une valeur inconnue ne fait que relire
     //   l'etat. Ecrit seulement `board-dossier.json` (userData), puis `presence.json` au rythme deja
     //   borne. `unguarded` reste VIDE.
-    expect(handlers).toHaveLength(301)
+    // MISE A JOUR 2026-11-06 — 301 -> 305, MESURE par ce test (rouge a 305) et NOMME par
+    //   `node scripts/canaux-ipc.mjs b306e4fb9 HEAD` : quatre ajouts, aucun retrait, tous dans
+    //   `ipc/coffre-cles.ts` (coffre à clés, section « Clés » des réglages), garde 'Coffre à clés'
+    //   des leur PREMIERE ligne. Aucune reponse ne porte une valeur de cle : nom, origine, date et
+    //   longueur seulement (`EtatCoffre`).
+    //   `coffre:lister` — LECTURE seule, aucun argument.
+    //   `coffre:ajouter` — nom passe par la validation du coffre (`ajouterCle`), valeur prise
+    //     seulement si c'est une chaine ; ecrit le seul `coffre-cles.bin`, chiffre par `safeStorage`.
+    //   `coffre:retirer` — retire UNE cle par son nom ; nom inconnu → erreur lisible, rien d'ecrit.
+    //   `coffre:reimporter` — aucun argument : relit les variables du poste (meme regle de noms
+    //     qu'au demarrage), sans jamais ecraser une cle saisie par l'utilisateur.
+    //   `unguarded` reste VIDE.
+    expect(handlers).toHaveLength(305)
     expect(unguarded).toEqual([])
   })
 
