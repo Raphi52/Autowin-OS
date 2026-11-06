@@ -27,6 +27,8 @@ import { claudeToolEvidenceKind } from '../providers/claude'
 import type { ExecutionEvidence } from '../providers/types'
 import type { GitRunner } from '../runs/run-autoclose'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { avancerLaBaseDuFil } from '../git/photo-du-code'
+import { WorktreeManager } from '../store/worktree-manager'
 
 /** Vrais dépôts git en tmp : sous charge parallèle, le budget vitest par défaut (5 s) est trop court. */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 })
@@ -1406,5 +1408,206 @@ describe('enchaînement auto du chat — fichier seulement VU changer par le tou
     })
 
     expect(report?.project).toMatchObject({ status: 'pushed', files: 1 })
+  })
+})
+
+/**
+ * UN FIL PASSÉ EN COPIE : sa fin de tour passe par la PORTE (« Garder », `garder-un-essai.ts`), jamais
+ * par une branche du tour poussée vers le distant. Avant, la copie détachée (`--detach`) n'avait pas
+ * de branche courante, et `autoCloseRun` poussait `auto/<fil>-<tour>` sur GitHub.
+ *
+ * La copie est rangée DANS le dépôt, comme celles de l'app (`.autowin-data\…`, ignoré par git) : un
+ * tour en cours dans le dossier partagé la « contient », ce qui mettait son travail de côté
+ * (`autre-fil-en-cours`). Tout ce que la copie porte appartient au fil : aucun motif d'attribution
+ * ne s'applique. La publication est la vraie (`WorktreeManager`).
+ * fix-ok: cause mesurée — sur le code d'avant, ces tests rougissent par `push origin
+ * <sha>:refs/heads/auto/conv-A-tour-A-0` (copie détachée envoyée à `autoCloseRun`) et par trois
+ * fichiers mis de côté (modifie-avant-le-tour, touche-par-un-autre-fil, autre-fil-en-cours).
+ */
+describe('fil passé en copie — la porte vers la branche locale, jamais une branche poussée', () => {
+  async function filEnCopie(): Promise<{
+    repo: string
+    remote: string
+    copie: string
+    porte: NonNullable<Parameters<typeof publierTourDeChat>[0]['porte']>
+  }> {
+    const { repo, remote } = await depot()
+    await run('git', ['config', 'commit.gpgsign', 'false'], { cwd: repo })
+    appendFileSync(join(repo, '.git', 'info', 'exclude'), '.copies/\n')
+    const copie = join(repo, '.copies', 'conv-A')
+    await run('git', ['worktree', 'add', '--detach', copie, 'travail'], { cwd: repo })
+    const base = await avancerLaBaseDuFil({
+      dossier: copie,
+      conversationId: 'conv-A',
+      depuis: null,
+      vers: 'HEAD'
+    })
+    if (!base.ok) throw new Error(base.raison)
+    const racine = mkdtempSync(join(tmpdir(), 'autowin-chat-porte-'))
+    dirs.push(racine)
+    const wm = new WorktreeManager({ baseRepo: repo, worktreeRoot: racine })
+    return {
+      repo,
+      remote,
+      copie,
+      porte: {
+        depot: repo,
+        publication: {
+          ouvrir: async (runId) => wm.acquire(runId),
+          fermer: async (runId, publier) => {
+            if (publier) return wm.finalize(runId)
+            wm.discard(runId)
+            return undefined
+          }
+        }
+      }
+    }
+  }
+
+  /** Le runner réel, qui note chaque commande : un `push`, même refusé, se verrait ici. */
+  function gitEspion(): { runGit: GitRunner; pushs: () => string[][] } {
+    const commandes: string[][] = []
+    return {
+      runGit: async (args, cwd) => {
+        commandes.push(args)
+        return realGit(args, cwd)
+      },
+      pushs: () => commandes.filter((args) => args.includes('push'))
+    }
+  }
+
+  const brancheDistantes = async (repo: string): Promise<string[]> =>
+    (await run('git', ['ls-remote', '--heads', 'origin'], { cwd: repo })).stdout
+      .split('\n')
+      .map((ligne) => ligne.split('\t')[1]?.trim())
+      .filter((ref): ref is string => Boolean(ref))
+
+  it('fin de tour : le travail entre dans la branche locale par la porte, sans aucun git push', async () => {
+    const { repo, copie, porte } = await filEnCopie()
+    const debut = await photographierDebutDeTour(copie, realGit, DEBUT)
+    writeFileSync(join(copie, 'mine.ts'), 'export const a = 1\n')
+    const espion = gitEspion()
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute la constante a',
+      debut,
+      runGit: espion.runGit,
+      traces: [
+        trace(copie, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ],
+      porte
+    })
+
+    expect(espion.pushs()).toEqual([])
+    expect(await brancheDistantes(repo)).toEqual(['refs/heads/travail'])
+    expect(report?.project).toMatchObject({ status: 'committed', files: 1 })
+    expect((await run('git', ['show', 'travail:mine.ts'], { cwd: repo })).stdout).toBe(
+      'export const a = 1\n'
+    )
+    const corps = (await run('git', ['log', '-1', '--format=%B', 'travail'], { cwd: repo })).stdout
+    expect(corps.split('\n')[0]).toBe('feat(mine): ajoute la constante a (conv-A)')
+    expect(corps.trimEnd().split('\n').at(-1)).toBe('Porte: conv-A')
+  })
+
+  it('copie dont la base a disparu : refus nommé, rien de poussé ni de commité', async () => {
+    const { repo, copie, porte } = await filEnCopie()
+    await run('git', ['update-ref', '-d', 'refs/autowin/base-de-fil/conv-A'], { cwd: repo })
+    const avant = (await run('git', ['rev-parse', 'travail'], { cwd: repo })).stdout.trim()
+    const debut = await photographierDebutDeTour(copie, realGit, DEBUT)
+    writeFileSync(join(copie, 'mine.ts'), 'export const a = 1\n')
+    const espion = gitEspion()
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute la constante a',
+      debut,
+      runGit: espion.runGit,
+      traces: [
+        trace(copie, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ],
+      porte
+    })
+
+    expect(espion.pushs()).toEqual([])
+    expect(await brancheDistantes(repo)).toEqual(['refs/heads/travail'])
+    expect(report?.project).toMatchObject({ status: 'skipped', reason: 'porte-refusee' })
+    expect(report?.project.status === 'skipped' ? report.project.detail : '').toContain('base')
+    expect((await run('git', ['rev-parse', 'travail'], { cwd: repo })).stdout.trim()).toBe(avant)
+    // Le travail reste dans la copie, non commité : rien n'a été emporté à sa place.
+    expect(await enAttente(copie)).toContain('mine.ts')
+    expect((await run('git', ['rev-parse', 'HEAD'], { cwd: copie })).stdout.trim()).toBe(avant)
+  })
+
+  it('aucun fichier mis de côté pour touche-par-un-autre-fil, autre-fil-en-cours ou modifie-avant-le-tour', async () => {
+    const { repo, copie, porte } = await filEnCopie()
+    // Laissé par un tour précédent du fil, dans SA copie : modifié avant ce tour.
+    writeFileSync(join(copie, 'base.txt'), 'base\nd’un tour précédent\n')
+    const debut = await photographierDebutDeTour(copie, realGit, DEBUT)
+    writeFileSync(join(copie, 'partage.ts'), 'export const partage = 1\n')
+    writeFileSync(join(copie, 'libre.txt'), 'écrit en ligne de commande\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'modifie partage',
+      debut,
+      runGit: realGit,
+      // Un autre fil tourne dans le dossier partagé, qui CONTIENT la copie.
+      autresToursEnCours: [repo],
+      traces: [
+        // La comparaison avant/après du tour, sans lignes : aucune preuve par contenu.
+        trace(copie, { paths: ['base.txt', 'partage.ts', 'libre.txt'] }),
+        trace(copie, {
+          conversationId: 'conv-B',
+          turnId: 'tour-B',
+          paths: ['partage.ts'],
+          pathLineFingerprints: { 'partage.ts': lignes('export const partage = 1') }
+        })
+      ],
+      porte
+    })
+
+    expect(report?.exclus).toBeUndefined()
+    expect(report?.project).toMatchObject({ status: 'committed', files: 3 })
+    expect(
+      (await run('git', ['show', '--name-only', '--format=', 'travail'], { cwd: repo })).stdout
+        .split('\n')
+        .filter(Boolean)
+        .sort()
+    ).toEqual(['base.txt', 'libre.txt', 'partage.ts'])
+  })
+
+  // Le jumeau accepté : la porte branchée ne change rien au tour d'un fil resté dans le dossier partagé.
+  it('le dossier partagé lui-même garde la publication d’avant, porte branchée ou non', async () => {
+    const { repo, remote, porte } = await filEnCopie()
+    const debut = await photographierDebutDeTour(repo, realGit, DEBUT)
+    writeFileSync(join(repo, 'mine.ts'), 'export const a = 1\n')
+
+    const report = await publierTourDeChat({
+      conversationId: 'conv-A',
+      turnId: 'tour-A-0001',
+      request: 'ajoute la constante a',
+      debut,
+      runGit: realGit,
+      traces: [
+        trace(repo, {
+          paths: ['mine.ts'],
+          pathLineFingerprints: { 'mine.ts': lignes('export const a = 1') }
+        })
+      ],
+      porte
+    })
+
+    expect(report?.project).toMatchObject({ status: 'pushed', mode: 'direct', branch: 'travail' })
+    expect(await fichiersDuDernierCommitDistant(remote)).toEqual(['mine.ts'])
   })
 })

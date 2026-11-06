@@ -83,6 +83,7 @@ import {
   type VerificationAvantPublication
 } from '../runs/run-autoclose'
 import { publierTourDeChat, type ChatTurnStart } from '../chat/chat-turn-publication'
+import { estUnPassageDePorte } from '../orchestration/garder-un-essai'
 import type { TypageAvantPublication } from '../verify/typage-avant-publication'
 import { sharedBrainRoot } from '../brain/brain-context'
 import { brainEstUnDepot } from '../brain/brain-paths'
@@ -677,7 +678,11 @@ export class AutowinOS {
             }, 2000)
           },
           onRecoveredPublication: async (publication) => {
-            if (this.autoClose) {
+            // Un passage de porte fait entrer le travail d'un fil dans main LOCAL, sans plus : l'envoi
+            // vers le distant reste celui de la publication après le fil, jamais un effet de la porte.
+            // fix-ok: cause mesurée — `endAsync({ merge: true })` sans `onPublished` appelle ce rappel
+            // (`runId: porte-conv-1-x`, coordinateur et WorktreeManager réels), qui poussait main.
+            if (this.autoClose && !estUnPassageDePorte(publication.runId)) {
               this.lastAutoClose = await closeGreenRunOnDisk({
                 runId: publication.runId,
                 direct: true,
@@ -1054,10 +1059,30 @@ export class AutowinOS {
       if (!this.autoClose) return undefined
       // Relevé AVANT la lecture du journal : un tour fini entre les deux y a déjà tout écrit.
       const enCours = autresToursEnCours?.() ?? []
+      const worktrees = this.worktrees
+      const depot = this.worktreeManager?.baseRepo
       const report = await publierTourDeChat({
         ...tour,
         autresToursEnCours: enCours,
-        traces: await readRecentConversationFileTraces()
+        traces: await readRecentConversationFileTraces(),
+        // La porte d'un fil en copie : la publication d'une copie, la même que « Garder ».
+        ...(worktrees && depot
+          ? {
+              porte: {
+                depot,
+                publication: {
+                  ouvrir: (runId: string) =>
+                    worktrees.beginAsync(runId, 'Porte du fil', true, {
+                      task: `porte du fil ${tour.conversationId}`,
+                      role: 'command',
+                      conversationId: tour.conversationId
+                    }),
+                  fermer: (runId: string, publier: boolean) =>
+                    worktrees.endAsync(runId, { merge: publier })
+                }
+              }
+            }
+          : {})
       })
       if (report) {
         this.lastAutoClose = report

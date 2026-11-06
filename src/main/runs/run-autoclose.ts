@@ -89,7 +89,12 @@ export type AutoCloseResult =
       /** PR non ouverte : motif (CLI absente, hébergeur inconnu…). La branche reste poussée. */
       prError?: string
     }
-  | { status: 'committed'; files: number }
+  | {
+      status: 'committed'
+      files: number
+      /** Tour d'un fil en copie : ce que la porte dit de plus (sa base qui n'a pas pu avancer). */
+      detail?: string
+    }
   | {
       status: 'skipped'
       reason:
@@ -110,6 +115,13 @@ export type AutoCloseResult =
         | 'tests-rouges'
         /** Tour de chat : ce qui part ne se type pas (erreur nouvelle, voir typage-avant-publication). */
         | 'typage-rouge'
+        /**
+         * Tour d'un fil en copie : la porte vers main a refusé (conflit, base du fil absente…), rien
+         * n'est entré dans main ni n'a été poussé ; `detail` dit pourquoi et nomme les fichiers.
+         */
+        | 'porte-refusee'
+        /** Tour d'un fil en copie : la porte attend (fichier non commité dans le dossier partagé…). */
+        | 'porte-en-attente'
       detail?: string
     }
   | { status: 'failed'; error: string }

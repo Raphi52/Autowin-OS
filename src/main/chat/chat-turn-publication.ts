@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { ConversationFileTrace } from '../activity/conversation-file-trace-spool'
@@ -17,6 +18,11 @@ import {
   type PrOpener,
   type VerificationAvantPublication
 } from '../runs/run-autoclose'
+import {
+  garderLeTravailDuFil,
+  type PublicationDUneCopie,
+  type ResultatGarder
+} from '../orchestration/garder-un-essai'
 
 /**
  * ENCHAÎNEMENT AUTO DU CHAT.
@@ -107,13 +113,32 @@ function dansLeDepot(repo: string, absolu: string): boolean {
   return Boolean(rel) && !rel.startsWith('..') && !isAbsolute(rel)
 }
 
-/** Le dossier d'un tour peut écrire dans le dépôt : il est le dépôt, en est un sous-dossier, ou le contient. */
+function contient(parent: string, enfant: string): boolean {
+  const rel = relative(parent, enfant)
+  return !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+/**
+ * Le dossier d'un tour peut écrire dans le dépôt : il est le dépôt, en est un sous-dossier, ou le
+ * contient. SAUF s'il appartient à un AUTRE arbre de travail rangé sous le dépôt : la copie d'un fil
+ * vit sous `.autowin-data`, ignoré par git, mais git et le tour y travaillent dans la copie, dont le
+ * travail n'entre dans le dépôt que par la porte. Comptée comme le dépôt, la copie dont un tour
+ * tourne faisait mettre de côté (`autre-fil-en-cours`) le travail des fils restés dans le dépôt.
+ * fix-ok: cause mesurée — `relative(dépôt, <dépôt>/.autowin-data/…/essai__…)` ne sort pas du dépôt, donc
+ * `partageLeDepot` rendait vrai pour une copie liée (rouge : `partage.ts` exclu `autre-fil-en-cours`).
+ */
 export function partageLeDepot(repo: string, dossier: string): boolean {
-  const contient = (parent: string, enfant: string): boolean => {
-    const rel = relative(parent, enfant)
-    return !rel.startsWith('..') && !isAbsolute(rel)
-  }
-  return contient(repo, dossier) || contient(dossier, repo)
+  if (contient(dossier, repo)) return true
+  if (!contient(repo, dossier)) return false
+  // Un `.git` entre le dossier et le dépôt (fichier d'une copie liée, dossier d'un dépôt imbriqué)
+  // est l'endroit où git s'arrête de remonter : en dessous, ce n'est plus l'arbre du dépôt.
+  for (
+    let courant = resolve(dossier);
+    relative(repo, courant) && dirname(courant) !== courant;
+    courant = dirname(courant)
+  )
+    if (existsSync(join(courant, '.git'))) return false
+  return true
 }
 
 /**
@@ -325,10 +350,18 @@ export async function publierTourDeChat(input: {
   typerAvantPublication?: (repo: string, fichiers: readonly string[]) => Promise<TypageAvantPublication>
   runGit?: GitRunner
   openPr?: PrOpener
+  /**
+   * LA PORTE VERS MAIN d'un fil qui travaille dans SA copie (`garderLeTravailDuFil`) : `depot` est le
+   * dépôt que `publication` fait avancer. Un tour dont le dossier est une copie détachée de ce dépôt
+   * passe par elle, et par elle seule. Absent = publication d'avant pour tous les dossiers.
+   */
+  porte?: { depot: string; publication: PublicationDUneCopie }
 }): Promise<AutoCloseReport | undefined> {
   const { conversationId, turnId, debut } = input
   if (!debut.repo) return undefined
   const runGit = input.runGit ?? (await defaultGitRunner())
+  if (input.porte && (await estUneCopieDetacheeDuDepot(debut.repo, input.porte.depot, runGit)))
+    return passerLaPorte(input, debut.repo, input.porte.publication, runGit)
   const autresToursEnCours = (input.autresToursEnCours ?? []).filter((dossier) => dossier.trim())
   const racines = await cheminsReels([
     debut.repo,
@@ -686,4 +719,101 @@ function rapport(
     // `sans-objet` (aucun fichier TypeScript) ne dit rien d'utile : il n'encombre pas le rapport.
     ...(typage && typage.statut !== 'sans-objet' ? { typage } : {})
   }
+}
+
+/**
+ * Le dossier du tour est-il une COPIE DÉTACHÉE de `depot` : copie git liée (`worktree`), sans
+ * branche courante, qui partage les objets du dépôt ? C'est la copie d'un fil : sans branche, la
+ * publication d'avant poussait une branche du tour vers le distant. Le dépôt lui-même, une copie qui
+ * a sa branche ou la copie d'un autre dépôt gardent la publication d'avant. Un git illisible vaut
+ * « non » : la publication d'avant relit le dépôt elle-même, et refuse seule ce qu'elle ne lit pas.
+ */
+async function estUneCopieDetacheeDuDepot(
+  dossier: string,
+  depot: string,
+  runGit: GitRunner
+): Promise<boolean> {
+  try {
+    const [gitDir, commun, tete] = (
+      await runGit(
+        [
+          'rev-parse',
+          '--path-format=absolute',
+          '--git-dir',
+          '--git-common-dir',
+          '--abbrev-ref',
+          'HEAD'
+        ],
+        dossier
+      )
+    )
+      .split(/\r?\n/u)
+      .map((ligne) => ligne.trim())
+    if (!gitDir || !commun || tete !== 'HEAD') return false
+    const communDuDepot = (
+      await runGit(['rev-parse', '--path-format=absolute', '--git-common-dir'], depot)
+    ).trim()
+    const reels = await cheminsReels([gitDir, commun, communDuDepot])
+    const reel = (chemin: string): string => cle(reels.get(chemin) ?? chemin)
+    return reel(gitDir) !== reel(commun) && reel(commun) === reel(communDuDepot)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * FIN DE TOUR D'UN FIL EN COPIE. Tout ce que sa copie porte est à lui : aucune preuve fichier par
+ * fichier, aucun fichier mis de côté pour un autre fil. Son travail entre dans main LOCAL par la
+ * porte (« Garder », fusion à trois voies depuis la base du fil). Rien n'est poussé : l'envoi vers le
+ * distant reste celui de la publication après le fil. Un passage sans changement rend `undefined`,
+ * comme un tour qui n'a rien laissé en attente.
+ * fix-ok: cause mesurée — la copie détachée allait à `autoCloseRun`, qui faute de branche courante
+ * poussait `auto/<fil>-<tour>` (rouge : `push origin <sha>:refs/heads/auto/conv-A-tour-A-0`), et
+ * l'attribution du dossier partagé mettait de côté son travail (trois motifs, même rouge).
+ */
+async function passerLaPorte(
+  input: {
+    conversationId: string
+    turnId: string
+    request: string
+    compteRendu?: string
+    langueDuCompteRendu?: Langue
+  },
+  copie: string,
+  publication: PublicationDUneCopie,
+  runGit: GitRunner
+): Promise<AutoCloseReport | undefined> {
+  let issue: ResultatGarder
+  try {
+    issue = await garderLeTravailDuFil({
+      copie,
+      conversationId: input.conversationId,
+      titre: (fichiers) =>
+        messageDeCommit(
+          input.conversationId,
+          input.request,
+          input.compteRendu,
+          fichiers,
+          input.langueDuCompteRendu ?? lireLangueReglee()
+        ),
+      publication,
+      runGit
+    })
+  } catch (error) {
+    return rapport(input, {
+      status: 'failed',
+      error: error instanceof Error ? error.message : String(error)
+    })
+  }
+  if (!issue.ok)
+    return issue.motif === 'rien-a-garder'
+      ? undefined
+      : rapport(input, { status: 'skipped', reason: 'porte-refusee', detail: issue.raison })
+  if (issue.etat !== 'publie')
+    return rapport(input, { status: 'skipped', reason: 'porte-en-attente', detail: issue.detail })
+  return rapport(input, {
+    status: 'committed',
+    files: issue.fichiers.length,
+    ...(issue.base && !issue.base.ok ? { detail: issue.base.raison } : {})
+  })
 }
