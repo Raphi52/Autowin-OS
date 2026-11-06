@@ -1,12 +1,5 @@
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync
-} from 'node:fs'
+import { existsSync } from 'node:fs'
+import { copyFile, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
@@ -60,12 +53,12 @@ export function cleDuBureauDeVerification(conversationId: string | undefined): s
  * de distinguer un fichier SUPPRIME dans l'espace de travail (present dans la copie : on l'enleve)
  * d'un chemin absent des deux cotes (rien a faire).
  */
-export function gestesDeVerification(
+export async function gestesDeVerification(
   changements: readonly string[],
   workspace: string | undefined,
   bureau: string | undefined,
-  lireOctets: (chemin: string) => Uint8Array | undefined
-): GesteDeVerification[] {
+  lireOctets: (chemin: string) => Uint8Array | undefined | Promise<Uint8Array | undefined>
+): Promise<GesteDeVerification[]> {
   if (!workspace?.trim() || !bureau?.trim()) return []
   const racineWorkspace = resolve(workspace)
   const racineBureau = resolve(bureau)
@@ -91,8 +84,8 @@ export function gestesDeVerification(
       continue
     }
     const destination = resolve(racineBureau, relatif)
-    const octetsWorkspace = lireOctets(absolu)
-    const octetsBureau = lireOctets(destination)
+    const octetsWorkspace = await lireOctets(absolu)
+    const octetsBureau = await lireOctets(destination)
     if (!octetsWorkspace) {
       if (octetsBureau) gestes.push({ action: 'supprimer', relatif, destination })
       else gestes.push({ action: 'ignorer', relatif, raison: 'absent des deux côtés' })
@@ -108,11 +101,11 @@ export function gestesDeVerification(
 }
 
 /** Lecture qui ne jette jamais : un dossier, un lien casse ou un droit manquant valent « absent ». */
-function octetsOuRien(chemin: string): Uint8Array | undefined {
+async function octetsOuRien(chemin: string): Promise<Uint8Array | undefined> {
   try {
-    const infos = statSync(chemin)
+    const infos = await stat(chemin)
     if (!infos.isFile()) return undefined
-    return readFileSync(chemin)
+    return await readFile(chemin)
   } catch {
     return undefined
   }
@@ -126,18 +119,18 @@ function octetsOuRien(chemin: string): Uint8Array | undefined {
  * Bornee : au-dela de `plafond` fichiers on s'arrete, un dossier non suivi enorme (build, cache)
  * ne doit pas transformer une verification en copie de disque.
  */
-function fichiersDeLEtatCourant(
+async function fichiersDeLEtatCourant(
   workspace: string,
   changements: readonly string[],
   plafond = 2000
-): string[] {
+): Promise<string[]> {
   const sortie: string[] = []
-  const empiler = (relatif: string): void => {
+  const empiler = async (relatif: string): Promise<void> => {
     if (sortie.length >= plafond) return
     const absolu = resolve(workspace, relatif)
-    let infos: ReturnType<typeof statSync>
+    let infos: Awaited<ReturnType<typeof stat>>
     try {
-      infos = statSync(absolu)
+      infos = await stat(absolu)
     } catch {
       // Chemin disparu (fichier supprime dans l'espace de travail) : il reste dans la liste, c'est
       // lui qui produira le geste « supprimer » cote copie.
@@ -152,30 +145,59 @@ function fichiersDeLEtatCourant(
     if (isForbidden(relatif)) return
     let entrees: string[] = []
     try {
-      entrees = readdirSync(absolu)
+      entrees = await readdir(absolu)
     } catch {
       return
     }
-    for (const entree of entrees) empiler(`${relatif.replace(/\/+$/, '')}/${entree}`)
+    for (const entree of entrees) await empiler(`${relatif.replace(/\/+$/, '')}/${entree}`)
   }
   for (const chemin of changements) {
     const propre = (chemin ?? '').trim()
-    if (propre) empiler(propre)
+    if (propre) await empiler(propre)
   }
   return sortie
 }
 
+type RapportDeReport = { copies: string[]; supprimes: string[]; ignores: string[] }
+
+/** Dernier report de chaque copie : voir `synchroniserBureauDeVerification`. */
+const reportsParBureau = new Map<string, Promise<void>>()
+
 /**
  * Reporte l'etat courant dans la copie et rend ce qui a REELLEMENT ete fait. Les gestes ignores
  * sont rendus aussi : une synchronisation muette empecherait de comprendre un verdict surprenant.
+ *
+ * Tout passe par des lectures ASYNCHRONES : la copie nait sur `origin`, donc un `main` local en
+ * retard nomme des centaines de fichiers, et les relire en synchrone gelait toute l'app (11,5 s
+ * mesurees le 2026-10-31). En contrepartie, deux `verify` simultanes du meme fil pourraient ecrire
+ * les memes fichiers : les reports d'une meme copie passent donc l'un apres l'autre.
  */
 export function synchroniserBureauDeVerification(
   workspace: string,
   bureau: string,
   changements: readonly string[]
-): { copies: string[]; supprimes: string[]; ignores: string[] } {
-  const gestes = gestesDeVerification(
-    fichiersDeLEtatCourant(workspace, changements),
+): Promise<RapportDeReport> {
+  const precedent = reportsParBureau.get(bureau) ?? Promise.resolve()
+  const report = precedent.then(() => reporterEtatCourant(workspace, bureau, changements))
+  // La file ne garde ni un echec (rendu a son appelant) ni une entree par copie deja servie.
+  const fin = report.then(
+    () => undefined,
+    () => undefined
+  )
+  reportsParBureau.set(bureau, fin)
+  void fin.then(() => {
+    if (reportsParBureau.get(bureau) === fin) reportsParBureau.delete(bureau)
+  })
+  return report
+}
+
+async function reporterEtatCourant(
+  workspace: string,
+  bureau: string,
+  changements: readonly string[]
+): Promise<RapportDeReport> {
+  const gestes = await gestesDeVerification(
+    await fichiersDeLEtatCourant(workspace, changements),
     workspace,
     bureau,
     octetsOuRien
@@ -185,11 +207,11 @@ export function synchroniserBureauDeVerification(
   const ignores: string[] = []
   for (const geste of gestes) {
     if (geste.action === 'copier') {
-      mkdirSync(dirname(geste.destination), { recursive: true })
-      copyFileSync(geste.source, geste.destination)
+      await mkdir(dirname(geste.destination), { recursive: true })
+      await copyFile(geste.source, geste.destination)
       copies.push(geste.relatif)
     } else if (geste.action === 'supprimer') {
-      rmSync(geste.destination, { force: true })
+      await rm(geste.destination, { force: true })
       supprimes.push(geste.relatif)
     } else {
       ignores.push(`${geste.relatif} (${geste.raison})`)
