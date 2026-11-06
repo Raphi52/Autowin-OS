@@ -108,7 +108,7 @@ function dansLeDepot(repo: string, absolu: string): boolean {
 }
 
 /** Le dossier d'un tour peut écrire dans le dépôt : il est le dépôt, en est un sous-dossier, ou le contient. */
-function partageLeDepot(repo: string, dossier: string): boolean {
+export function partageLeDepot(repo: string, dossier: string): boolean {
   const contient = (parent: string, enfant: string): boolean => {
     const rel = relative(parent, enfant)
     return !rel.startsWith('..') && !isAbsolute(rel)

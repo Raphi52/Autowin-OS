@@ -336,6 +336,51 @@ describe('publierSansTour', () => {
     expect(issue.publie).toBe(true)
     expect(commiter.mock.calls[0]![1]).toEqual(['src/a.ts'])
   })
+
+  /*
+   * VRAI CAS (conv-1641, 06/11/2026) : conv-1641 ne fait que répondre à des questions sur
+   * ElevenLabs. Pendant son premier tour, conv-1633 (le Quartier, un tour de 20 min encore en cours)
+   * écrit `quartier-tenue.ts`, `board-dossier.ts`… Ses Edit/Write n'arrivent au journal des fichiers
+   * qu'à la FIN de son appel : la comparaison de fin de tour de conv-1641 est donc la seule trace, et
+   * la passe lit « conv-1641 seul, diff inchangé ». Typage, tests de 42 fichiers, puis une note
+   * « GIT : rien publié » posée au milieu d'une réponse sur les voix — et, tests verts, le travail
+   * inachevé de conv-1633 serait parti sous le nom de conv-1641.
+   */
+  it('un fichier seulement VU pendant qu’un autre fil du dépôt a un tour en cours n’est pas au fil (conv-1641)', async () => {
+    const typer = vi.fn<DepsSansTour['typer']>(async () => ({ statut: 'sans-objet' }))
+    const { d, commiter } = deps({
+      typer,
+      proprietaires: async (chemins) => ({
+        fichiers: chemins.map((chemin) =>
+          fichier({ chemin, fils: [vuAFinDeTour('conv-1641', true)] })
+        ),
+        copiesDeRunLues: 1,
+        copiesDeRunIllisibles: 0
+      }),
+      autreTourEnCours: () => true
+    })
+
+    const issue = await publierSansTour(d, {
+      fil: 'conv-1641',
+      fichiers: ['src/renderer/src/quartier/quartier-tenue.ts', 'src/main/board-dossier.ts'],
+      fils: ['conv-1641'],
+      travaux: 0
+    })
+
+    // aTrier vide = aucune note `/git` dans le fil ; rien typé, rien commité sous son nom.
+    expect(issue).toEqual({ publie: false, lignesShell: [], notes: [], aTrier: [] })
+    expect(typer).not.toHaveBeenCalled()
+    expect(commiter).not.toHaveBeenCalled()
+  })
+
+  it('un fichier ÉCRIT par le fil part encore, même si un autre fil a un tour en cours', async () => {
+    const { d, commiter } = deps({ autreTourEnCours: () => true })
+
+    const issue = await publierSansTour(d, passe)
+
+    expect(issue.publie).toBe(true)
+    expect(commiter.mock.calls[0]![1]).toEqual(['src/a.ts'])
+  })
 })
 
 describe('redacteurDeCommit — le modèle des petites tâches d’Agent Studio', () => {

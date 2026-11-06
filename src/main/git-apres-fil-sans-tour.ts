@@ -58,6 +58,12 @@ export interface DepsSansTour {
   /** Le petit modèle : la charge (fichiers + diff) en entrée, sa réponse brute en sortie. */
   rediger(charge: string): Promise<string>
   commiter(message: string, fichiers: string[], runGit: GitRunner): Promise<AutoCloseResult>
+  /**
+   * Un AUTRE fil du même dépôt a-t-il un tour en cours ? Ses Edit/Write n'arrivent au journal des
+   * fichiers qu'à la fin de son appel : ce qu'il écrit n'a pas encore d'auteur (conv-1641).
+   * Absent = aucun.
+   */
+  autreTourEnCours?(): boolean
 }
 
 export const CONSIGNE_MESSAGE_DE_COMMIT = [
@@ -99,16 +105,21 @@ export function refusDAppartenance(
  * (05/11/2026) : 18 fichiers écrits par un script à 08:13:00, vus par trois fils, et une note
  * `/git` dans chacun pour conclure « rien à publier ». Seul vu sans autre refus, il part encore :
  * c'est une commande du fil qui l'a écrit sans le nommer.
+ *
+ * SAUF SI UN AUTRE FIL DU DÉPÔT A UN TOUR EN COURS (`autreTourEnCours`, conv-1641, 06/11/2026) : ses
+ * écritures ne sont pas encore au journal (traces posées en fin d'appel), donc « vu, sans autre
+ * auteur » ne prouve plus rien. Le fichier reste dans l'arbre, à son vrai auteur.
  */
 export function vuSeulementEtRefuse(
   fichier: ProprietaireDeFichier,
-  fils: ReadonlySet<string>
+  fils: ReadonlySet<string>,
+  autreTourEnCours = false
 ): boolean {
   const liens = fichier.fils.filter((f) => fils.has(f.conversation))
   return (
     liens.length > 0 &&
     liens.every((f) => f.vuSeulement) &&
-    refusDAppartenance(fichier, fils) !== undefined
+    (autreTourEnCours || refusDAppartenance(fichier, fils) !== undefined)
   )
 }
 
@@ -187,9 +198,13 @@ export async function publierSansTour(
   if (passe.fichiers.length === 0) return issue
 
   const autorises = new Set(passe.fils)
+  // Relevé AVANT de lire le journal : un tour fini avant ce relevé y a déjà tout écrit.
+  const autreTourEnCours = deps.autreTourEnCours?.() ?? false
   const lus = await lireLesProprietaires(deps, passe.fichiers)
   // Un fichier déjà commité (par le fil lui-même, ou à la main) n'a plus rien à publier.
-  const sales = lus.filter((f) => (f.nonCommite || f.refus) && !vuSeulementEtRefuse(f, autorises))
+  const sales = lus.filter(
+    (f) => (f.nonCommite || f.refus) && !vuSeulementEtRefuse(f, autorises, autreTourEnCours)
+  )
   const refus = sales.flatMap((f) => {
     const motif = refusDAppartenance(f, autorises)
     return motif ? [`${f.chemin} : ${motif}`] : []
