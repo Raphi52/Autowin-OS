@@ -1,6 +1,5 @@
-/* eslint-disable react-hooks/refs, react-hooks/immutability, react-hooks/purity, react-hooks/set-state-in-effect -- (conv-1508) le code de ce fichier vient de ChatView.tsx, déplacé tel quel. Ces règles du compilateur React ne s'y appliquaient pas : il renonçait à analyser le composant de 10 000 lignes (lint vert sur le même code avant la découpe). Les rendre vraies demande de CHANGER le code, hors de cette découpe sans changement de comportement. */
 import type { AsstMsg, ChatAttachment } from './chat-view-types'
-import { useRef, useMemo, useCallback, useState, useEffect } from 'react'
+import { useRef, useMemo, useCallback, useState, useEffect, useLayoutEffect } from 'react'
 import { type ChatComposerHandle, ChatComposer } from './ChatComposer'
 import {
   texteFil,
@@ -29,7 +28,26 @@ import { cleDeDossier } from '../../../shared/board-dossiers-du-chat'
 import { estCheminDeDossier } from '../../../shared/project-path'
 import { sansDossierRetire, avecDossierRetire } from './chat-dossiers-import'
 
-// Extrait de ChatView.tsx tel quel, sans changement de comportement (conv-1508).
+/**
+ * Un numéro par OBJET, toujours le même pour le même objet. La signature des saisies
+ * de la mosaïque doit changer quand les sources `@` changent d'identité, et seulement alors. Un
+ * compteur gardé dans une ref et incrémenté pendant le rendu le faisait, mais muter une ref pendant
+ * le rendu est refusé par les règles React ; un compteur en state coûterait un rendu de plus de
+ * ChatView à chaque morceau de réponse (les sources suivent `messages`, ChatView.tsx).
+ */
+const numerosDesObjets = new WeakMap<object, number>()
+let dernierNumero = 0
+function numeroDIdentite(objet: object): number {
+  let numero = numerosDesObjets.get(objet)
+  if (numero === undefined) {
+    dernierNumero += 1
+    numero = dernierNumero
+    numerosDesObjets.set(objet, numero)
+  }
+  return numero
+}
+
+// Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type RenduMosaiqueCtx = {
   activeId: string | null
   addFiles: (
@@ -89,7 +107,7 @@ export type RenduMosaiqueCtx = {
   submitBtwRef: React.RefObject<(prompt: string, cible: string) => void>
 }
 
-// Type de retour inféré : l'objet des valeurs que ChatView.tsx relit après l'appel (conv-1508).
+// Type de retour inféré : l'objet des valeurs que ChatView.tsx relit après l'appel.
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   const {
@@ -154,16 +172,6 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   const composersMosaiqueRef = useRef(new Map<string, ChatComposerHandle>())
 
   /**
-   * Pieces jointes de CHAQUE brouillon ouvert en mosaique. Recalculees sur `draftsVersion` : la
-   * source de verite reste `composerDraftsRef`, on n'en duplique pas une seconde copie.
-   */
-  const piecesJointesMosaique = useMemo<Record<string, ChatAttachment[]>>(
-    () => Object.fromEntries(mosaicIds.map((id) => [id, getComposerDraft(id).attachments])),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mosaicIds, draftsVersion]
-  )
-
-  /**
    * LE VRAI composer, une instance par fenetre — c'est ce qui garantit zero divergence entre la
    * mosaique et le chat plein : memes palettes `/` et `@`, memes pieces jointes, meme brouillon
    * (`composerDraftsRef` est deja indexe par conversation).
@@ -177,7 +185,7 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   /**
    * Pièces jointes EN ATTENTE d'un composer — UN seul rendu pour le chat plein et la mosaïque.
    * Deux copies avaient divergé : la mosaïque montrait l'icône ▤ pour une image collée, là où le
-   * chat plein montre sa miniature cliquable (demande du 2026-10-10, conv-167).
+   * chat plein montre sa miniature cliquable (demande du 2026-10-10).
    * `retirer` reçoit l'index du fichier à enlever du brouillon de CE composer.
    */
   function rendrePiecesJointesEnAttente(
@@ -232,7 +240,11 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
 
   function rendreComposerMosaique(id: string): React.ReactNode {
     const occupe = busyConversations.has(id)
-    const fichiers = piecesJointesMosaique[id] ?? []
+    // Lues au brouillon lui-même, comme son erreur plus bas. Une table mémoïsée sur
+    // `draftsVersion` les recopiait ; `getComposerDraft` est une fonction neuve à chaque rendu de
+    // ChatView, donc la mémoïser exactement revenait à la recalculer à chaque rendu. La fenêtre ne
+    // redessine sa saisie que quand `signatureComposerMosaique` (qui porte `draftsVersion`) change.
+    const fichiers: ChatAttachment[] = getComposerDraft(id).attachments
     return (
       <ChatComposer
         ref={(handle) => {
@@ -316,7 +328,7 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
 
   /** Fenetres de la mosaique, dans l'ordre d'ouverture, avec leur fil peint et leur etat occupe. */
   /*
-   * « ESSAIE 3 FAÇONS » — LA CARTE DE COMPARAISON (conv-1038, 2026-10-21 — idée 6). Elle s'affiche en
+   * « ESSAIE 3 FAÇONS » — LA CARTE DE COMPARAISON (2026-10-21 — idée 6). Elle s'affiche en
    * haut d'un fil qui est une façon (sa copie s'appelle `essai__…`), et au-dessus de la mosaïque dès
    * qu'une de ses fenêtres en est une. La signature change quand une façon démarre ou finit un tour :
    * la carte relit alors l'écart, les vérifications et le coût.
@@ -354,7 +366,7 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   )
 
   /**
-   * RAPPELS STABLES POUR LA MOSAIQUE (conv-1581, le gel).
+   * RAPPELS STABLES POUR LA MOSAIQUE (le gel).
    *
    * `ChatMosaic` memoise chaque fenetre : le memo ne mord QUE si les rappels gardent la meme
    * reference d'un rendu a l'autre. Ces trois-la sont redefinis a chaque rendu de ChatView — d'ou
@@ -364,17 +376,30 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
     fermer: fermerFenetreMosaique,
     ouvrirSeule: ouvrirSeuleDepuisMosaique,
     nouvelle: nouvelleFenetreMosaique,
-    composer: rendreComposerMosaique,
     ouvrirFil: ouvrirDansMosaique
   })
-  rappelsMosaiqueRef.current = {
-    fermer: fermerFenetreMosaique,
-    ouvrirSeule: ouvrirSeuleDepuisMosaique,
-    nouvelle: nouvelleFenetreMosaique,
-    composer: rendreComposerMosaique,
-    ouvrirFil: ouvrirDansMosaique
-  }
-  /** Onglet d'un lot pas encore peint dans la case de sa super conv (conv-1305) : on l'ouvre. */
+  // Ces quatre-là ne servent qu'à des CLICS (ChatMosaic.tsx) : posés après le rendu, avant tout
+  // événement, ils restent à jour sans écrire une ref pendant le rendu.
+  useLayoutEffect(() => {
+    rappelsMosaiqueRef.current = {
+      fermer: fermerFenetreMosaique,
+      ouvrirSeule: ouvrirSeuleDepuisMosaique,
+      nouvelle: nouvelleFenetreMosaique,
+      ouvrirFil: ouvrirDansMosaique
+    }
+  })
+  const rendreComposerRef = useRef(rendreComposerMosaique)
+  /*
+   * LA SEULE ÉCRITURE DE REF PENDANT LE RENDU, et voulue. ChatMosaic appelle ce rendu PENDANT le
+   * rendu de ses fenêtres mémorisées (`rendreComposer(fenetre.id)`). Posée dans un effet, la version
+   * du rendu en cours arriverait APRÈS elles : la fenêtre afficherait la saisie du rendu précédent
+   * (bouton Stop absent quand son fil démarre). Passée en identité neuve, elle redessinerait TOUTES
+   * les fenêtres à chaque morceau de réponse (le gel que mesure ChatMosaic.cout-stream.test.tsx).
+   * check: chat-view-mosaique.test.tsx, cas 4 — rouge pour l'une comme pour l'autre variante.
+   */
+  // eslint-disable-next-line react-hooks/refs -- ChatMosaic appelle ce rendu pendant le rendu de ses fenêtres mémorisées : un effet arriverait trop tard, une identité neuve les redessinerait toutes
+  rendreComposerRef.current = rendreComposerMosaique
+  /** Onglet d'un lot pas encore peint dans la case de sa super conv : on l'ouvre. */
   const ouvrirFilMosaiqueStable = useCallback(
     (id: string) => void rappelsMosaiqueRef.current.ouvrirFil(id),
     []
@@ -385,37 +410,41 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
     []
   )
   const nouvelleFenetreStable = useCallback(() => void rappelsMosaiqueRef.current.nouvelle(), [])
-  const rendreComposerStable = useCallback(
-    (id: string) => rappelsMosaiqueRef.current.composer(id),
-    []
-  )
+  const rendreComposerStable = useCallback((id: string) => rendreComposerRef.current(id), [])
   /**
-   * REPONDRE A UNE QUESTION DEPUIS UNE FENETRE DE MOSAIQUE (conv-50, 2026-09-01).
+   * REPONDRE A UNE QUESTION DEPUIS UNE FENETRE DE MOSAIQUE (2026-09-01).
    *
    * Meme chemin que la vue plein ecran (`answerAsk`), mais CIBLE sur la conversation de la fenetre :
    * sans ce rappel, la ligne de message etait rendue sans destinataire et le clic ne partait pas.
    */
-  const repondreAskMosaiqueStable = useCallback((prompt: string, cible: string) => {
-    if (busyConversationsRef.current.has(cible)) void submitBtwRef.current(prompt, cible)
-    else void sendRef.current(prompt, { targetConversationId: cible })
-  }, [])
+  // Les trois refs viennent de `useRef` (ChatView.tsx, chat-view-envoi.ts) : stables, le rappel aussi.
+  const repondreAskMosaiqueStable = useCallback(
+    (prompt: string, cible: string) => {
+      if (busyConversationsRef.current.has(cible)) void submitBtwRef.current(prompt, cible)
+      else void sendRef.current(prompt, { targetConversationId: cible })
+    },
+    [busyConversationsRef, sendRef, submitBtwRef]
+  )
   /**
-   * Bouton de choix d'une page interactive (conv-1304, voir saisie-du-fil.ts) : il REMPLIT la
+   * Bouton de choix d'une page interactive (voir saisie-du-fil.ts) : il REMPLIT la
    * saisie, comme « Reprendre en précisant… », et ne l'envoie jamais.
    */
   const remplirSaisieRef = useRef<(texte: string, cible?: string) => void>(() => {})
-  remplirSaisieRef.current = (texte, cible) => {
-    if (cible === undefined) {
-      setDraftInput(composerDraftKeyRef.current, texte)
-      requestAnimationFrame(() => composerRef.current?.focusAt(-1))
-      return
+  // Appelé par un clic seulement : posé après le rendu, avant tout événement.
+  useLayoutEffect(() => {
+    remplirSaisieRef.current = (texte, cible) => {
+      if (cible === undefined) {
+        setDraftInput(composerDraftKeyRef.current, texte)
+        requestAnimationFrame(() => composerRef.current?.focusAt(-1))
+        return
+      }
+      // Fenêtre de mosaïque : c'est SA saisie qui reçoit le texte (brouillon indexé par fil).
+      setDraftInput(cible, texte)
+      const composer = composersMosaiqueRef.current.get(cible)
+      composer?.setInput(texte)
+      requestAnimationFrame(() => composer?.focusAt(-1))
     }
-    // Fenêtre de mosaïque : c'est SA saisie qui reçoit le texte (brouillon indexé par fil).
-    setDraftInput(cible, texte)
-    const composer = composersMosaiqueRef.current.get(cible)
-    composer?.setInput(texte)
-    requestAnimationFrame(() => composer?.focusAt(-1))
-  }
+  })
   const remplirSaisie = useCallback((texte: string) => remplirSaisieRef.current(texte), [])
   const remplirSaisieMosaique = useCallback(
     (texte: string, cible: string) => remplirSaisieRef.current(texte, cible),
@@ -426,13 +455,7 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
    * jointes (`draftsVersion`), palettes `@` et `/`. Le fil et l'etat occupe, eux, sont deja dans
    * `fenetre` — donc absents d'ici a dessein.
    */
-  const versionMentionsRef = useRef(0)
-  const mentionsPrecedentesRef = useRef(mentionSources)
-  if (mentionsPrecedentesRef.current !== mentionSources) {
-    mentionsPrecedentesRef.current = mentionSources
-    versionMentionsRef.current += 1
-  }
-  const signatureComposerMosaique = `${draftsVersion}|${versionMentionsRef.current}|${skillCommands.length}`
+  const signatureComposerMosaique = `${draftsVersion}|${numeroDIdentite(mentionSources)}|${skillCommands.length}`
 
   /**
    * Ce que le RENDERER ne peut pas savoir : quelles conversations CONTIENNENT le terme.
@@ -444,12 +467,16 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   const [correspondancesContenu, setCorrespondancesContenu] = useState<Map<string, string>>(
     () => new Map()
   )
+  /*
+   * fix-ok: vider la recherche effaçait les correspondances DANS un effet, donc après un affichage
+   * qui montrait encore celles de l'ancienne recherche (mesuré : chat-view-mosaique.test.tsx, cas 1,
+   * la requête vide montrait encore la correspondance de « abc ») ; la règle set-state-in-effect le
+   * cachait. Ajusté pendant le rendu : React recommence le rendu avant tout affichage.
+   */
+  if (!convQuery.trim() && correspondancesContenu.size > 0) setCorrespondancesContenu(new Map())
   useEffect(() => {
     const terme = convQuery.trim()
-    if (!terme) {
-      setCorrespondancesContenu(new Map())
-      return
-    }
+    if (!terme) return
     // Le pont peut ne pas exposer ce canal (preload ancien, harnais de test) : la liste doit alors
     // rester utilisable en recherche locale, pas jeter une exception depuis un timer.
     const chercherContenu = window.api?.conversationsSearchContent
@@ -478,7 +505,7 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   /**
    * FILTRE PAR STATUT (demande du 2026-09-23) : statut MANUEL posé par le menu « Archiver /
    * Désarchiver » (`Conversation.inactive`, absent = active). Libellés renommés le 2026-10-13
-   * (conv-926) ; la valeur interne `inactives` reste pour ne pas perdre le choix déjà mémorisé.
+   * La valeur interne `inactives` reste pour ne pas perdre le choix déjà mémorisé.
    * Memorise comme la densite : c'est une preference d'affichage locale.
    */
   const [convStatusFilter, setConvStatusFilter] = useState<'toutes' | 'actives' | 'inactives'>(
@@ -541,7 +568,7 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
    * les dossiers deja choisis, et on les retire seulement sur un geste EXPLICITE (la croix).
    * `localStorage` et non le store disque : c'est une preference d'affichage locale.
    *
-   * SEULS DES CHEMINS Y ENTRENT (conv-81, 2026-09-16). La liste memorisait tout ce qui avait servi
+   * SEULS DES CHEMINS Y ENTRENT (2026-09-16). La liste memorisait tout ce qui avait servi
    * a classer, et classer ecrivait dans le meme champ que le dossier de travail : des libelles
    * (« Perso », « Clients/Acme ») se retrouvaient donc proposes comme dossiers de travail, et les
    * choisir renvoyait le tour dans le depot d'Autowin. Le filtre est pose a la LECTURE autant qu'a
@@ -551,9 +578,9 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   const [dossiersMemorises, setDossiersMemorises] = useState<string[]>(() => lireDossiersDuChat())
   /*
     Les retraits, aussi en mémoire : la croix du Board retire même le dépôt par défaut
-    (conv-1212, 2e demande : « ils n'ont pas la petite croix »), que ce menu propose toujours — il
+    (2e demande : « ils n'ont pas la petite croix »), que ce menu propose toujours — il
     doit le cacher à son tour, la liste est commune. « This computer » n'en tient JAMAIS compte
-    (conv-1231 : « j'ai perdu le this computer, il doit être impossible à supprimer »).
+    (« j'ai perdu le this computer, il doit être impossible à supprimer »).
   */
   const [dossiersRetires, setDossiersRetires] = useState<string[]>(() => lireDossiersRetires())
   const estRetire = useCallback(
@@ -583,13 +610,13 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   }, [])
   useEffect(() => {
     window.localStorage.setItem(CLE_DOSSIERS_CONNUS, JSON.stringify(dossiersMemorises))
-    // Le Board ne montre que ces dossiers (conv-1212) : le processus principal en garde la copie,
+    // Le Board ne montre que ces dossiers : le processus principal en garde la copie,
     // pour que sa recopie de fin de tour suive aussi un retrait fait ici, Board fermé.
     void transmettreDossiersDuChat(dossiersMemorises).catch((error) =>
       traceSilentFailure('dossiers-du-chat:transmettre', error)
     )
   }, [dossiersMemorises])
-  // La croix du Board retire de la MÊME liste (conv-1212) : relue ici, sinon la copie en mémoire du
+  // La croix du Board retire de la MÊME liste : relue ici, sinon la copie en mémoire du
   // Chat réécrirait le dossier retiré à son prochain changement.
   useEffect(() => {
     const relire = (): void => {
