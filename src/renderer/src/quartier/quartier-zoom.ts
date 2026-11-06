@@ -32,6 +32,23 @@ export function rapprocherZoom(zv: number, z: number, dt: number): number {
  */
 export const MARGE_BORD = 160
 
+/** Les pixels d'image qui séparent les deux bords dans `bords.avif` : le lissage n'y prend pas un filet de l'autre. */
+export const TAMPON_BORDS = 16
+
+/**
+ * Où lire chaque bord dans `bords.avif`, en pixels de l'IMAGE, d'après sa propre taille. Son échelle ne se
+ * déduit pas de la peinture : le 04/11, la peinture est repassée de ×4 à ×2 (16104dda8) et les bords sont
+ * restés en ×4 ; lus à l'échelle de la peinture, ils ne donnaient que le quart haut gauche du bord gauche, le
+ * ciel, étiré sur toute la hauteur : la bande bleue à gauche au zoom sur le robot (conv-1644).
+ */
+export function sourcesDesBords(
+  largeur: number,
+  hauteur: number
+): { gauche: { x: number; l: number; h: number }; droite: { x: number; l: number; h: number } } {
+  const l = (largeur - TAMPON_BORDS) / 2
+  return { gauche: { x: 0, l, h: hauteur }, droite: { x: l + TAMPON_BORDS, l, h: hauteur } }
+}
+
 /**
  * Le début de la vue sur un axe : centrée sur `centre`, bornée à la peinture [`debut`, `fin`], avec `marge`
  * de débord permis de chaque côté. La marge suit le zoom (0 au repos) : quand le zoom se défait, la vue
