@@ -53,6 +53,34 @@ describe('ChatView — veille sur le tour vivant', () => {
     expect(harness.container.textContent).not.toContain('action en cours')
   })
 
+  /*
+   * La veille ne doit PAS repartir à chaque rendu du chat : la relancer remet à zéro son minuteur
+   * et son compte de sondes négatives. Entrée qui fait échouer une correction fausse (la fonction
+   * de libération mise dans les dépendances de l'effet, recréée à chaque rendu) : l'utilisateur
+   * tape puis efface pendant le tour bloqué — la saisie passe de vide à remplie toutes les deux
+   * secondes, le chat se redessine plus souvent qu'il ne sonde, et le tour ne serait jamais clos.
+   */
+  it('un tour mort est CLOS même si le chat se redessine entre deux sondes', async () => {
+    const sonde = vi.fn().mockResolvedValue({ active: false })
+    harness = await mountChat(
+      chatApi({ pilotChatActive: sonde, pilotChat: vi.fn(() => new Promise(() => {})) })
+    )
+    await harness.type('lance quelque chose')
+    await harness.click('[data-testid="composer-send"]')
+    const stop = (): Element | null =>
+      harness!.container.querySelector('[data-testid="composer-stop"]')
+    expect(stop()).not.toBeNull()
+
+    for (let tick = 0; tick < 6; tick += 1) {
+      await harness.type(tick % 2 === 0 ? 'je tape pendant le tour' : '')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000)
+      })
+    }
+    expect(sonde).toHaveBeenCalledTimes(2)
+    expect(stop()).toBeNull()
+  })
+
   it('un tour VIVANT n’est jamais coupé par la veille', async () => {
     harness = await mountChat(
       chatApi({
