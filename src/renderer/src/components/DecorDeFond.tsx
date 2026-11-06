@@ -235,7 +235,11 @@ function monterDecor(
     // Dessinee dans un Worker et l'image precedente pas encore finie : on attend le battement
     // suivant SANS consommer le tour de la cadence. Avant (conv-347), la demande etait perdue en
     // silence par l'hote et la suivante attendait un intervalle entier : 33 / 67 ms en alternance.
-    if (scene.pret && !scene.pret()) return
+    // Ce battement compte quand meme pour apprendre la periode de l'ecran (conv-1643).
+    if (scene.pret && !scene.pret()) {
+      cadence.battement(time)
+      return
+    }
     // La scene derive lentement : au-dela de 30 images/s la difference ne se voit pas, la facture
     // d'une fenetre qui reste ouverte toute la journee, si.
     if (!cadence.doitDessiner(time)) return

@@ -23,11 +23,14 @@ const imagesParSeconde = (hz: number, cout = 0): number => {
 
 describe('la cadence du décor de fond', () => {
   it('vise 30 images/s sur TOUS les écrans — l ancien seuil de 25 ms donnait 30, 30 ou 36 selon l écran', () => {
-    for (const hz of [60, 75, 120, 144, 165, 240]) {
+    // conv-1643 : régulier d'abord. 30 images/s pile n'existe qu'en alternant les écarts là où 30
+    // ne divise pas la fréquence (75 Hz : 2 puis 3 battements) — l'à-coup qu'on corrige. On exige
+    // donc le nombre entier de battements le plus proche : au plus un demi-battement d'écart.
+    for (const hz of [60, 66.2, 75, 120, 144, 165, 240]) {
       const ips = imagesParSeconde(hz)
-      expect(ips, `${hz} Hz`).toBeGreaterThanOrEqual(26)
-      expect(ips, `${hz} Hz`).toBeLessThanOrEqual(31)
+      expect(Math.abs(hz / ips - hz / 30), `${hz} Hz : ${ips} images/s`).toBeLessThanOrEqual(0.51)
     }
+    for (const hz of [60, 120, 240]) expect(imagesParSeconde(hz), `${hz} Hz`).toBeCloseTo(30, 0)
   })
 
   it('à 60 Hz, une image sur deux exactement malgré le tremblement de l horloge', () => {
@@ -50,6 +53,38 @@ describe('la cadence du décor de fond', () => {
     expect(c.doitDessiner(10_000)).toBe(true)
     expect(c.doitDessiner(10_016.7)).toBe(false)
     expect(c.doitDessiner(10_033.4)).toBe(true)
+  })
+})
+
+/**
+ * conv-1643, « quand je clique sur un élément de l'accueil et que ça zoome dessus, ça fait saccadé ».
+ * Mesuré sur le poste de l'utilisateur : il regarde l'app par le Bureau à distance, dont l'écran
+ * virtuel bat toutes les 15,1 ms (66 Hz). La cadence visait 16,7 ms : elle sautait un battement sur
+ * dix environ, un trou de 30 ms six fois par seconde — invisible au repos, net pendant un zoom.
+ */
+describe('une cadence RÉGULIÈRE sur tout écran (conv-1643)', () => {
+  /** Les écarts entre deux images dessinées, en battements d'écran, une fois le battement appris. */
+  const ecartsEnBattements = (hz: number, cible?: number): number[] => {
+    const c = cible === undefined ? creerCadence() : creerCadence(cible)
+    const dessinees: number[] = []
+    battements(hz, 5).forEach((b, i) => {
+      if (c.doitDessiner(b)) dessinees.push(i)
+    })
+    return dessinees
+      .slice(1)
+      .map((v, i) => v - dessinees[i])
+      .slice(5)
+  }
+
+  it('Bureau à distance, 66 Hz (15,1 ms mesurés chez l utilisateur) : une image à CHAQUE battement', () => {
+    expect([...new Set(ecartsEnBattements(1000 / 15.1))]).toEqual([1])
+  })
+
+  it('quel que soit l écran, les images tombent à intervalle constant (pas d accordéon 1-2 ou 2-3)', () => {
+    for (const hz of [50, 60, 66.2, 75, 90, 100, 120, 144, 165, 240]) {
+      expect(new Set(ecartsEnBattements(hz)).size, `${hz} Hz`).toBe(1)
+      expect(new Set(ecartsEnBattements(hz, 30)).size, `${hz} Hz, cible 30`).toBe(1)
+    }
   })
 })
 

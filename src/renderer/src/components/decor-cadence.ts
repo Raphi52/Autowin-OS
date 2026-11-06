@@ -15,6 +15,15 @@
  *   3. un PLAFOND DE CHARGE : une image qui coûte cher au fil principal espace les suivantes, pour
  *      qu'il reste au moins la moitié du fil à l'interface. Mesuré le 2026-10-18 : le fond avenue
  *      coûtait 36 à 45 ms par image au fil principal — à 30 images/s, plus que le fil tout entier.
+ *
+ * DÉFAUT CORRIGÉ (2026-11-06, conv-1643, « chaque zoom in and out est laggy »). Les points 1 et 2
+ * supposaient un écran à 60 Hz. Celui de l'utilisateur, vu par le Bureau à distance, bat toutes les
+ * 15,1 ms (66 Hz, mesuré par requestAnimationFrame dans l'app ouverte) : la phase de 16,7 ms prenait
+ * du retard et sautait un battement sur dix — un trou de 30 ms six fois par seconde, invisible quand
+ * seuls les tanukis marchent, net quand tout le décor glisse pendant le zoom. Même accordéon à 75,
+ * 90, 100, 144 ou 165 Hz (écarts de 1 puis 2, ou 2 puis 3 battements). Désormais l'intervalle est un
+ * nombre ENTIER de battements RÉELS de l'écran, appris des appels successifs : le plus proche de la
+ * cadence visée, arrondi au-dessus pour le plafond de charge. Les images tombent à écart constant.
  */
 
 /** La cadence visée, en images par seconde. */
@@ -70,8 +79,11 @@ const HYSTERESE = 0.85
 /** Le plus petit nombre entier de battements qui couvre `ms`. */
 const enBattements = (ms: number): number => Math.ceil(ms / BATTEMENT_MS - 1e-6) * BATTEMENT_MS
 
-/** Un battement d'écran peut arriver jusqu'à cette avance (ms) et compter comme à l'heure. */
-const TOLERANCE_MS = 4
+/** Combien d'écarts récents entre deux appels servent à apprendre la période de l'écran (conv-1643). */
+const FENETRE_PERIODE = 15
+/** Hors de ces bornes (ms), un écart n'est pas un battement : fenêtre cachée, veille, horloge figée. */
+const PERIODE_MIN_MS = 3
+const PERIODE_MAX_MS = 70
 
 /** Lissage de la mesure du coût d'une image (moyenne glissante exponentielle). */
 const LISSAGE = 0.1
@@ -85,6 +97,11 @@ export type FilDuDecor = 'interface' | 'dedie'
 export interface Cadence {
   /** Faut-il dessiner au battement `maintenant` (ms, horloge de requestAnimationFrame) ? */
   doitDessiner(maintenant: number): boolean
+  /**
+   * Un battement où la boucle ne consulte pas `doitDessiner` (fil du décor encore occupé) : il sert
+   * quand même à apprendre la période de l'écran, sinon elle paraîtrait double (conv-1643).
+   */
+  battement(maintenant: number): void
   /** Ce qu'a coûté l'image qu'on vient de dessiner, en ms, et sur quel fil (défaut : l'interface). */
   noterCout(ms: number, fil?: FilDuDecor): void
   /** L'intervalle courant entre deux images, en ms. */
@@ -98,8 +115,21 @@ export function creerCadence(
   partMax = PART_MAX_DU_FIL
 ): Cadence {
   const base = 1000 / imagesParSeconde
-  let prochaine: number | null = null
   let coutMoyen = 0
+  /** Le battement de la dernière image dessinée, et celui du dernier appel (ms). */
+  let dernierDessin: number | null = null
+  let dernierAppel: number | null = null
+  /** Les derniers écarts entre deux appels : la boucle appelle à chaque battement de l'écran. */
+  const ecartsAppels: number[] = []
+  /**
+   * La période réelle de l'écran : la médiane BASSE des derniers écarts. Un battement que le fil
+   * occupé a laissé passer compte double ; tant qu'il n'est pas majoritaire, il ne fausse rien.
+   */
+  const periode = (): number => {
+    if (ecartsAppels.length === 0) return BATTEMENT_MS
+    const tries = [...ecartsAppels].sort((a, b) => a - b)
+    return tries[Math.floor((tries.length - 1) / 2)]
+  }
 
   const baseRepos = 1000 / Math.min(imagesParSeconde, IMAGES_PAR_SECONDE_REPOS)
   let auRepos = false
@@ -118,17 +148,35 @@ export function creerCadence(
     else if (haut / PART_MAX_FIL_DEDIE < (palier - BATTEMENT_MS) * HYSTERESE) palier = besoin
   }
 
+  const battement = (maintenant: number): void => {
+    if (dernierAppel !== null) {
+      const ecart = maintenant - dernierAppel
+      if (ecart >= PERIODE_MIN_MS && ecart <= PERIODE_MAX_MS) {
+        ecartsAppels.push(ecart)
+        if (ecartsAppels.length > FENETRE_PERIODE) ecartsAppels.shift()
+      }
+    }
+    dernierAppel = maintenant
+  }
+
   return {
+    battement,
     doitDessiner(maintenant) {
-      if (prochaine === null) {
-        prochaine = maintenant + intervalle()
+      battement(maintenant)
+      if (dernierDessin === null) {
+        dernierDessin = maintenant
         return true
       }
-      if (maintenant < prochaine - TOLERANCE_MS) return false
-      // La phase avance d'un intervalle ; après une longue absence (fenêtre cachée, onglet quitté)
-      // elle repart de maintenant au lieu de rattraper les images manquées d'un coup.
-      prochaine += intervalle()
-      if (prochaine < maintenant) prochaine = maintenant + intervalle()
+      // Un nombre ENTIER de battements entre deux images (conv-1643) : le plus proche de la cadence
+      // visée (égalité : le plus fluide), au moins ce qu'exige le plafond de charge. Le seuil à un
+      // demi-battement absorbe le tremblement de l'horloge ; après une longue absence, l'image part
+      // aussitôt, sans rattrapage.
+      const p = periode()
+      const vise = Math.max(1, Math.round((auRepos ? baseRepos : base) / p - 1e-6))
+      const charge = Math.ceil(Math.max(coutMoyen / partMax, palier) / p - 1e-6)
+      const n = Math.max(vise, charge)
+      if (maintenant - dernierDessin < (n - 0.5) * p) return false
+      dernierDessin = maintenant
       return true
     },
     noterCout(ms, fil = 'interface') {
@@ -138,10 +186,9 @@ export function creerCadence(
     },
     intervalle,
     repos(r) {
-      if (r === auRepos) return
+      // Le nombre de battements est recalculé à chaque appel : au réveil, l'image suivante
+      // n'attend pas la fin d'un intervalle de repos.
       auRepos = r
-      // Au réveil, l'image suivante ne doit pas attendre la fin d'un intervalle de repos.
-      if (!r && prochaine !== null) prochaine = Math.min(prochaine, prochaine - baseRepos + base)
     }
   }
 }
