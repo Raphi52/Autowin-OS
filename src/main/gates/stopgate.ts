@@ -264,6 +264,27 @@ export function memeRefus(
   )
 }
 
+/**
+ * Le juge a-t-il rendu une note MEILLEURE que toutes celles des passages précédents ?
+ *
+ * Défaut vécu le 06/11/2026, sur un cadrage en mode jusqu'au vert : notes 66, 68 puis 80,
+ * objections bloquantes 4, 5 puis 2, aucune en commun d'un passage au suivant — et pourtant « le
+ * même refus est revenu 3 fois de suite ». `memeRefus` replie le texte des objections (le juge les
+ * reformulait à chaque passage, 16 réparations payées pour rien), donc un refus qui progresse et un
+ * refus figé y ont la même forme. La note les départage sans lire le texte : seule une note qui
+ * DÉPASSE la meilleure précédente compte ; une note qui oscille (70, 68, 70) laisse le frein mordre.
+ * Le fichier de test jamais restauré est un constat de code : la note n'y change rien.
+ */
+export function refusEnProgres(entree: {
+  motifsCourants: readonly string[]
+  note?: number
+  meilleureNote?: number
+}): boolean {
+  if (entree.note === undefined || entree.meilleureNote === undefined) return false
+  if (entree.motifsCourants.some((m) => m.startsWith(PREFIXE_TEST_MODIFIE))) return false
+  return entree.note > entree.meilleureNote
+}
+
 export function arretDeLaReparation(entree: {
   /** Nombre de réparations DÉJÀ tentées. */
   tentative: number
@@ -312,6 +333,8 @@ export function arretDeLaReparation(entree: {
    * plus ne ferait pas répondre les juges : constat de CODE, il mord même jusqu'au vert.
    */
   panneDesJuges?: string
+  /** La note du juge dépasse sa meilleure note précédente (`refusEnProgres`) : pas un refus répété. */
+  noteEnProgres?: boolean
 }): string | undefined {
   const b = entree.bundlePerime
   // fix-ok: tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — comparer le bundle a la seule
@@ -341,9 +364,10 @@ export function arretDeLaReparation(entree: {
     // plafond. Choix utilisateur : « le même refus revenu 3 fois de suite arrête la
     // boucle, même en mode jusqu'au vert ». Le compteur transmis par la boucle est compté AVANT le
     // refus courant (`deciderDuPassage`) : on ajoute donc ici le refus courant et le premier.
-    const apparitions = memeRefus(entree.motifsCourants, entree.motifsPrecedents)
-      ? (entree.refusIdentiquesConsecutifs ?? 0) + 2
-      : 1
+    const apparitions =
+      !entree.noteEnProgres && memeRefus(entree.motifsCourants, entree.motifsPrecedents)
+        ? (entree.refusIdentiquesConsecutifs ?? 0) + 2
+        : 1
     if (apparitions >= REFUS_FIGE_JUSQU_AU_VERT) {
       return `Réparation interrompue : le même refus est revenu ${apparitions} fois de suite, même en mode jusqu'au vert — rejouer ne le fait plus bouger. Lis le refus avant de relancer : il vient peut-être du contrôle lui-même.`
     }
@@ -352,7 +376,7 @@ export function arretDeLaReparation(entree: {
   if (entree.tentative >= entree.plafondDur) {
     return `Réparation interrompue : plafond dur de ${entree.plafondDur} passage(s) atteint (réparations accordées : ${entree.reparationsAccordees}).`
   }
-  const repetitions = entree.refusIdentiquesConsecutifs ?? 0
+  const repetitions = entree.noteEnProgres ? 0 : (entree.refusIdentiquesConsecutifs ?? 0)
   // tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb : un refus fix-gate se lève par UNE ligne
   // `fix-ok:` que le build peut écrire ; il garde un passage de plus avant d'être déclaré figé.
   // Seulement si TOUS les motifs sont réparables ainsi (le relais d'échec amont excepté) : un refus

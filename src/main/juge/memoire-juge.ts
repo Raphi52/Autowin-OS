@@ -98,3 +98,18 @@ export function verdictPanelPourMemoire(textesDesMembres: string[], texteAgrege:
 export function reservesMineuresFigees(attempt: number, courant: string, precedent: string): boolean {
   return attempt > 0 && precedent.trim() !== '' && memesReservesMineures(courant, precedent)
 }
+
+/**
+ * La note que le juge a rendue sur sa ligne `SCORE: N` (contrat de sortie du juge, 0 à 100).
+ *
+ * Sert au frein du refus répété : il replie le texte des objections, reformulées d'un passage à
+ * l'autre, et ne distingue donc pas un refus qui progresse d'un refus figé. La note se compare
+ * sans interpréter le texte. Plusieurs lignes (panel de juges, juge qui se corrige) : la plus
+ * basse compte, pour ne jamais prendre pour un progrès ce qu'un seul juge accorde.
+ */
+export function noteDuJuge(texte: string): number | undefined {
+  const notes = [...(texte ?? '').matchAll(/^[\s>*_#-]*SCORE[\s*_]*:[\s*_]*(\d{1,3})\b/gim)]
+    .map((m) => Number(m[1]))
+    .filter((n) => n <= 100)
+  return notes.length > 0 ? Math.min(...notes) : undefined
+}

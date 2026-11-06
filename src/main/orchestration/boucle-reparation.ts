@@ -1,7 +1,8 @@
 import {
   arretDeLaReparation,
   libelleDuPassageDeReparation,
-  memeRefus
+  memeRefus,
+  refusEnProgres
 } from '../gates/stopgate'
 
 /**
@@ -18,6 +19,8 @@ import {
 export type EtatDeBoucleDeReparation = {
   motifsPrecedents: string[]
   refusIdentiquesConsecutifs: number
+  /** La meilleure note rendue par le juge depuis le début de la boucle (absente : aucune lue). */
+  meilleureNote?: number
 }
 
 export type PassageDeReparation = {
@@ -56,8 +59,19 @@ export function deciderDuPassage(entree: {
   reservesMineuresFigees?: boolean
   /** Le panel de juges est en panne, voir `arretDeLaReparation`. */
   panneDesJuges?: string
+  /** La note rendue par le juge DANS ce passage (absente : refus avant le juge, ou note illisible). */
+  noteDuJuge?: number
 }): PassageDeReparation {
   const { attempt, reparationsAccordees, plafondDur, motifsCourants, etat } = entree
+  const enProgres = refusEnProgres({
+    motifsCourants,
+    note: entree.noteDuJuge,
+    meilleureNote: etat.meilleureNote
+  })
+  const meilleureNote =
+    entree.noteDuJuge === undefined
+      ? etat.meilleureNote
+      : Math.max(entree.noteDuJuge, etat.meilleureNote ?? entree.noteDuJuge)
   const arret = arretDeLaReparation({
     tentative: attempt + 1,
     reparationsAccordees,
@@ -68,7 +82,8 @@ export function deciderDuPassage(entree: {
     bundlePerime: entree.bundlePerime,
     jusquAuVert: entree.jusquAuVert,
     reservesMineuresFigees: entree.reservesMineuresFigees,
-    ...(entree.panneDesJuges ? { panneDesJuges: entree.panneDesJuges } : {})
+    ...(entree.panneDesJuges ? { panneDesJuges: entree.panneDesJuges } : {}),
+    noteEnProgres: enProgres
   })
   const trace = traceDuPassage(attempt, plafondDur, entree.jusquAuVert)
   if (arret) return { ...(trace ? { trace } : {}), arret, etatSuivant: etat }
@@ -76,9 +91,12 @@ export function deciderDuPassage(entree: {
     ...(trace ? { trace } : {}),
     etatSuivant: {
       motifsPrecedents: [...motifsCourants],
-      refusIdentiquesConsecutifs: memeRefus(motifsCourants, etat.motifsPrecedents)
-        ? etat.refusIdentiquesConsecutifs + 1
-        : 0
+      // Une note en hausse ouvre une nouvelle série : le refus suivant repart de un.
+      refusIdentiquesConsecutifs:
+        !enProgres && memeRefus(motifsCourants, etat.motifsPrecedents)
+          ? etat.refusIdentiquesConsecutifs + 1
+          : 0,
+      ...(meilleureNote === undefined ? {} : { meilleureNote })
     }
   }
 }
