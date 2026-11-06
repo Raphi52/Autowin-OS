@@ -6,9 +6,10 @@
  * résultat final et l'erreur. Masquer à ce seul endroit couvre tous les moteurs et tous leurs lecteurs
  * sans semer `masquerValeurs` dans chacun. Une valeur du coffre y devient `[secret:NOM]`.
  *
- * Ce que ce point ne voit PAS : le fichier `run-stdout/` est rempli par le processus de l'agent
- * lui-même (sa sortie y est redirigée pour survivre à l'app), Autowin ne fait que le relire ; et une
- * valeur coupée entre deux morceaux de texte en flux échappe au masquage morceau par morceau.
+ * Ce que ce point ne voit PAS : les fichiers que le processus de l'agent écrit lui-même (journal
+ * `run-stdout/`, copie de session du CLI Claude) — `runs/masquage-sur-disque.ts` les corrige sur
+ * place ; et une valeur coupée entre deux morceaux de texte en flux échappe au masquage morceau par
+ * morceau.
  *
  * Parcours : chaînes, tableaux et objets simples seulement — un tampon binaire, une date ou une
  * instance de classe ressort tel quel. Rien à masquer → la MÊME référence, sans copie.

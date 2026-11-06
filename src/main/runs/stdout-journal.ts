@@ -18,6 +18,12 @@ import {
 } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import {
+  contientUneValeur,
+  masquerFichierSansEchec,
+  motifsDuCoffre,
+  type MotifsDeMasquage
+} from './masquage-sur-disque'
 
 const SURVIVABLE_EXIT_EVENT_TYPE = 'autowin.survivable-exit'
 
@@ -294,9 +300,21 @@ export function splitCompleteLines(buffered: string): { lines: string[]; rest: s
   return { lines: parts.filter((line) => line.trim().length > 0), rest }
 }
 
+/** Les deux noms de la sortie d'erreur rangée à côté d'un journal (relais Windows, lancement survivable). */
+function sortiesDErreurDuJournal(path: string): string[] {
+  const chemins = [`${path}.stderr.log`]
+  if (path.endsWith('.stdout.jsonl')) chemins.push(path.replace(/\.stdout\.jsonl$/, '.stderr.log'))
+  return chemins
+}
+
 /**
  * Suit le journal et livre chaque ligne complète à `onLine`. S'arrête quand `isComplete()` est vrai
  * (après avoir drainé ce qui restait) ou sur abort. Rend l'offset atteint pour une reprise.
+ *
+ * C'est aussi là que le journal perd les valeurs du coffre (`masquage-sur-disque.ts`) : c'est le
+ * processus de l'agent qui l'écrit, et ce suivi est le seul endroit d'Autowin qui voit passer chacune
+ * de ses lignes, pour tous les moteurs. Une ligne qui porte une valeur fait corriger le fichier sur
+ * place dès sa lecture, sans changer sa taille ; la sortie d'erreur l'est à la fin de l'appel.
  */
 export async function tailJsonLines(
   path: string,
@@ -306,6 +324,20 @@ export async function tailJsonLines(
   const pollMs = Math.min(Math.max(options.pollMs ?? 120, 20), 500)
   let offset = options.from ?? 0
   let buffered = ''
+  // Octet du journal où commence `buffered` : la zone à corriger quand une ligne porte une valeur.
+  let debutTampon = offset
+  const livrer = async (lines: string[], reste: string): Promise<void> => {
+    let motifs: MotifsDeMasquage | undefined
+    let aMasquer = false
+    for (const line of lines) {
+      onLine(line)
+      if (aMasquer) continue
+      motifs ??= motifsDuCoffre()
+      aMasquer = contientUneValeur(line, motifs)
+    }
+    if (aMasquer && motifs) await masquerFichierSansEchec(path, motifs, debutTampon)
+    debutTampon = offset - Buffer.byteLength(reste, 'utf8')
+  }
   for (;;) {
     if (options.signal?.aborted) return { offset, stopped: true }
     const { text, next } = await readChunkFromAsync(path, offset)
@@ -314,7 +346,7 @@ export async function tailJsonLines(
       buffered += text
       const { lines, rest } = splitCompleteLines(buffered)
       buffered = rest
-      for (const line of lines) onLine(line)
+      await livrer(lines, rest)
     }
     // Fin : on drainait déjà ci-dessus, donc si le producteur a fini ET qu'il ne reste rien → stop.
     if (options.isComplete?.()) {
@@ -323,9 +355,15 @@ export async function tailJsonLines(
       if (tailEnd.text) {
         const { lines, rest } = splitCompleteLines(buffered + tailEnd.text)
         buffered = rest
-        for (const line of lines) onLine(line)
+        await livrer(lines, rest)
       }
-      if (buffered.trim()) onLine(buffered.trim()) // dernière ligne sans `\n` (process tué net)
+      // Dernière ligne sans `\n` (process tué net).
+      if (buffered.trim()) await livrer([buffered.trim()], '')
+      const motifs = motifsDuCoffre()
+      if (motifs.liste.length > 0) {
+        for (const sortie of sortiesDErreurDuJournal(path))
+          await masquerFichierSansEchec(sortie, motifs)
+      }
       return { offset, stopped: false }
     }
     await new Promise((resolve) => setTimeout(resolve, pollMs)) // sleep-ok: poll borné ≤500ms
@@ -347,6 +385,11 @@ export function tailJournalOnce(
   if (!text) return { offset: next, lines: 0 }
   const { lines, rest } = splitCompleteLines(text)
   for (const line of lines) onLine(line)
+  // Même correction que le suivi (`tailJsonLines`), sans faire attendre ce rattrapage synchrone :
+  // ces lignes ont été écrites pendant que l'app était fermée, personne ne les a encore nettoyées.
+  const motifs = lines.length > 0 ? motifsDuCoffre() : undefined
+  if (motifs && lines.some((line) => contientUneValeur(line, motifs)))
+    void masquerFichierSansEchec(path, motifs, from)
   // La ligne partielle n'est PAS consommée : son offset reste devant elle, pour que la prochaine
   // lecture la reprenne entière plutôt que coupée en deux.
   return { offset: next - Buffer.byteLength(rest, 'utf8'), lines: lines.length }

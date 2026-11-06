@@ -130,12 +130,15 @@ function entreeValide(brute: unknown): brute is EntreeCoffre {
   )
 }
 
-const nodeRequire = createRequire(__filename)
-
-/** `safeStorage` chargé à la demande : un import d'`electron` en tête casserait les tests unitaires. */
+/**
+ * `safeStorage` chargé à la demande : un import d'`electron` en tête casserait les tests unitaires.
+ * `createRequire` est appelé ICI et pas au chargement du module : le suivi des journaux d'agent
+ * (`runs/stdout-journal.ts`) importe le coffre, et il est aussi emballé en module ES autonome
+ * (`survivable-spawn.test.ts`), où `__filename` n'existe pas. Hors d'Electron, le coffre reste vide.
+ */
 function safeStorageElectron(): ChiffrementCoffre | undefined {
   try {
-    const mod = nodeRequire('electron') as { safeStorage?: ChiffrementCoffre }
+    const mod = createRequire(__filename)('electron') as { safeStorage?: ChiffrementCoffre }
     return typeof mod?.safeStorage?.encryptString === 'function' ? mod.safeStorage : undefined
   } catch {
     return undefined
