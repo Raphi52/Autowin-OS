@@ -7,6 +7,7 @@ import { CapabilitiesView, type CapabilityKind } from './CapabilitiesView'
 import { ExecutionWorkspaceSettings } from './ExecutionWorkspaceSettings'
 import { BrainSettings } from './BrainSettings'
 import { McpServersSettings } from './McpServersSettings'
+import { CoffreClesSettings } from './CoffreClesSettings'
 import { BrainPersoSettings } from './BrainPersoSettings'
 import { RulesView } from './RulesView'
 import { InterfaceView } from './InterfaceView'
@@ -152,6 +153,7 @@ export function SettingsView({
     },
     { id: 'rules', label: 'Rules' },
     { id: 'mcp', label: 'MCP' },
+    { id: 'cles', label: 'Clés' },
     {
       id: 'preflight',
       label: t('settings.section.preflight'),
@@ -218,6 +220,8 @@ export function SettingsView({
           {section === 'preflight' && <BrainPersoSettings />}
           {/* Serveurs MCP : section à part depuis le 2026-11-05 (conv-1558) — enfouis dans Diagnostic, introuvables. */}
           {section === 'mcp' && <McpServersSettings />}
+          {/* Coffre à clés : sa propre ligne, comme MCP — un panneau enfoui dans une autre section ne se trouve pas. */}
+          {section === 'cles' && <CoffreClesSettings />}
           {section === 'preflight' && (
             <section
               className="settings-preflight surface-panel"
