@@ -10,8 +10,7 @@
  * le tour passerait de l'abonnement à la facturation à la clé (ou échouerait sur une clé d'une autre
  * organisation) sans que personne l'ait choisi.
  *
- * `AUTOWIN_COFFRE_NOMS` nomme ce qui a été injecté : les gardes de l'agent (hook PreToolUse) savent
- * ainsi quels noms surveiller et relisent les valeurs dans leur propre environnement, jamais ailleurs.
+ * `AUTOWIN_COFFRE_NOMS` nomme ce qui a été injecté : l'agent y lit les noms dont il peut se servir.
  */
 import { valeursPourAgent } from '../app/coffre-cles'
 

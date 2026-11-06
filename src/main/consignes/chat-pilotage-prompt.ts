@@ -485,7 +485,7 @@ export function buildChatPilotagePrompt(
     // COFFRE À CLÉS — l'état ne pousse que des NOMS (`clesDuCoffre`) : sans cette ligne, l'agent ne
     // sait pas que ces noms sont des variables d'environnement de ses commandes. Le reste n'est pas
     // redit ici : l'usage par le nom sans demander et la valeur jamais recopiée sont dans la
-    // constitution, et la garde des agents refuse d'afficher une valeur (`garde-secret-coffre.ts`).
+    // constitution, et la sortie des agents est masquée à son entrée dans Autowin.
     `COFFRE À CLÉS — \`clesDuCoffre\` : variables d'env ($NOM, $env:NOM).\n` +
     `Commandes disponibles :\n` +
     enTexte.map((c) => `- ${signatureDeCommande(c)} : ${c.description}`).join('\n') +

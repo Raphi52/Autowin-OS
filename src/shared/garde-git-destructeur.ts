@@ -5,7 +5,6 @@ import { decouperHeredocs, sansHeredocsDeDonnees } from './heredocs'
 import { refusArretHote, refusBoucle } from './garde-hote-et-boucle'
 import { refusTacheWindows } from './garde-tache-windows'
 import { refusEcritureModAutowin } from './garde-mod-autowin'
-import { refusSecretDuCoffre } from './garde-secret-coffre'
 import { refusCommitReserve, reserverOuRefuser } from './reservation-fichiers'
 import {
   MESSAGES_PAR_LIVRAISON,
@@ -348,12 +347,6 @@ export const GARDES_DU_HOOK: readonly { fn: string; label: string; description: 
       "Refuse à un agent de run toute écriture dans le mods/autowin chargé par tous les runs, par les outils d'édition comme par le terminal : il travaille dans le mods/autowin de sa copie (plan-387b99e7)."
   },
   {
-    fn: 'refusSecretDuCoffre',
-    label: 'Valeur d’une clé du coffre',
-    description:
-      "Refuse d'afficher la valeur d'une clé du coffre ou tout l'environnement (echo $NOM, printenv, env, Get-ChildItem env:…) et de l'écrire dans un fichier : l'agent s'en sert par son nom dans ses commandes."
-  },
-  {
     fn: 'refusSqlAgent',
     label: 'Client SQL vers la prod',
     description: 'Refuse un client SQL lancé par un agent, sauf vers une base déclarée non-prod.'
@@ -411,7 +404,6 @@ const refusEcriturePythonCrlf = ${refusEcriturePythonCrlf.toString()};
 const refusArretHote = ${refusArretHote.toString()};
 const refusBoucle = ${refusBoucle.toString()};
 const refusTacheWindows = ${refusTacheWindows.toString()};
-const refusSecretDuCoffre = ${refusSecretDuCoffre.toString()};
 const refusReglageProd = ${refusReglageProd.toString()};
 const refusSqlAgent = ${refusSqlAgent ? refusSqlAgent.toString() : '() => undefined'};
 const basesNonProd = ${JSON.stringify(basesNonProd)};
@@ -591,7 +583,7 @@ process.stdin.on('end', () => {
       fs.writeFileSync(p, JSON.stringify(h.concat([cle]).slice(-20)));
     }
   } catch {}
-  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusTacheWindows(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusEcritureModAutowin({ outil: String(j.tool_name || ''), chemin, shell, cwd: String(j.cwd || process.cwd()), estUnRun: !!process.env.AUTOWIN_HDESK_ID }, dossierModProtege) || refusSecretDuCoffre(String(j.tool_name || ''), j.tool_input, shell, process.env) || refusSqlAgent(shell, basesNonProd) || refusFichierReserve(j, chemin) || refusCommitDeFichierReserve(j, shell);
+  const motif = motifBoucle || refusArretHote(shell) || refusGitDestructeur(shell) || refusTacheWindows(shell) || refusEcriturePythonCrlf(cmd, decouperHeredocs) || refusReglageProd(shell) || refusReglageProd(chemin) || refusEcritureModAutowin({ outil: String(j.tool_name || ''), chemin, shell, cwd: String(j.cwd || process.cwd()), estUnRun: !!process.env.AUTOWIN_HDESK_ID }, dossierModProtege) || refusSqlAgent(shell, basesNonProd) || refusFichierReserve(j, chemin) || refusCommitDeFichierReserve(j, shell);
   if (motif) {
     // Refus structure documente (hooks PreToolUse) : le motif est rendu a l'agent.
     process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: motif } }));
