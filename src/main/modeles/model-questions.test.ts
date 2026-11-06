@@ -12,7 +12,7 @@ describe('model questions', () => {
     expect(buildChatPilotagePrompt(CATALOG)).not.toMatch(/Avance de façon autonome/u)
     expect(CONSTITUTION).toMatch(/réversible ne se re-confirme pas/u)
     expect(CONSTITUTION).toMatch(/Irréversible = arrêt/u)
-    expect(CONSTITUTION).toMatch(/jamais sa valeur, et ne la réclame pas dans le chat/u)
+    expect(CONSTITUTION).toMatch(/Clé absente : nomme Réglages > Clés, ne la réclame pas\./u)
   })
 
   it('désactive le canal de question tant qu’aucune preuve applicative sécurisée ne l’autorise', () => {
