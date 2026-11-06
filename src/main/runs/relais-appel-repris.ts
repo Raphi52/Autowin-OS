@@ -30,6 +30,8 @@ import {
   type EtapeConnue
 } from '../providers/claude-etapes'
 import { claudeToolResultText } from '../providers/claude'
+import { masquerSortie } from '../providers/sortie-masquee'
+import { masquerValeurs } from '../app/coffre-cles'
 import type { RecoverableChatProviderCall } from './chat-provider-recovery'
 import { tailJsonLines } from './stdout-journal'
 import { appendTurnEvent, readTurnJournal, type TurnJournalEvent } from './turn-journal'
@@ -328,11 +330,16 @@ export function relayerAppelRepris(options: {
   // Seul le flux `stream-json` de Claude est lu ici ; un autre fournisseur garde l'attente seule.
   if (options.provider !== 'claude') return { arreter: async () => undefined }
   const lecteur = new LignesDuFluxClaude(options.lireEtapes)
-  const deja = new DejaAuFil(options.dejaAuFil.map((ligne) => ligne.text))
-  const journal = options.dejaAuFil.map((ligne) => statutComplet(ligne.text, ligne.target))
+  // Ce relais relit `run-stdout/` sur le disque : sa sortie ne passe pas par la pompe du routeur qui
+  // masque celle des moteurs (`sortie-masquee.ts`). Il masque donc lui-même, comme elle : une valeur
+  // du coffre devient `[secret:NOM]`, au fil comme au journal du tour. Les lignes d'avant le
+  // redémarrage aussi, car un relais plus ancien a pu les enregistrer en clair.
+  const dejaAuFil = options.dejaAuFil.map((ligne) => masquerSortie(ligne))
+  const deja = new DejaAuFil(dejaAuFil.map((ligne) => ligne.text))
+  const journal = dejaAuFil.map((ligne) => statutComplet(ligne.text, ligne.target))
   // Les lignes d'avant le redémarrage partent aussi : l'écran relancé ne les a jamais reçues, sauf
   // celles qu'un relais précédent a déjà enregistrées (second redémarrage pendant le même tour).
-  let enAttente: LigneDAction[] = options.dejaAuFil
+  let enAttente: LigneDAction[] = dejaAuFil
     .slice(options.dejaEnregistrees ?? 0)
     .map((ligne) => ({ ...ligne, rejouee: true }))
   let fini = false
@@ -370,7 +377,12 @@ export function relayerAppelRepris(options: {
         (ligne) => {
           octetsLus += Buffer.byteLength(ligne, 'utf8') + 1
           try {
-            for (const produite of lecteur.recevoir(ligne, octetsLus > tailleInitiale)) {
+            // Masquée AVANT la lecture : le libellé est rogné à 120 caractères, et une valeur coupée
+            // par ce rognage ne serait plus reconnue ensuite. La ligne produite l'est encore, pour une
+            // valeur que l'échappement JSON aurait cachée dans la ligne brute.
+            const lue = masquerValeurs(ligne)
+            for (const brute of lecteur.recevoir(lue, octetsLus > tailleInitiale)) {
+              const produite = masquerSortie(brute)
               if (deja.contient(produite.text)) continue
               journal.push(statutComplet(produite.text, produite.target))
               enAttente.push(produite)

@@ -9,6 +9,7 @@
  * réécrire son analyseur. On extrait ce qui répond à la question « qu'est-ce qui s'est passé ? » —
  * le texte produit par l'agent — en tolérant les deux formats et tout ce qu'on ne comprend pas.
  */
+import { masquerValeurs } from '../app/coffre-cles'
 
 export interface JournalRecap {
   /** Texte produit par l'agent pendant l'absence, dans l'ordre. */
@@ -248,20 +249,27 @@ function corpsDeReprise(message: string): string {
  * reste ; le nouveau s'ajoute dessous, daté par `heure`. Chaque récapitulatif ne porte que ce qui a
  * été produit DEPUIS le précédent (l'offset du journal est repersisté), donc rien n'est répété et rien
  * d'une absence précédente ne disparaît.
+ *
+ * Le texte rendu est celui qui s'écrit dans le fil : il est masqué ici, car il vient d'un journal
+ * relu sur le disque, hors de la pompe du routeur qui masque la sortie des moteurs. Le message
+ * précédent aussi : une reprise plus ancienne a pu l'écrire en clair.
  */
 export function fusionnerRepriseDuFil(
   precedent: string | undefined,
   nouveau: string,
-  heure: string
+  heure: string,
+  masquer: (texte: string) => string = masquerValeurs
 ): string {
-  if (!precedent?.trim()) return nouveau
+  if (!precedent?.trim()) return masquer(nouveau)
   const entete = nouveau.startsWith(ENTETE_A_PRODUIT) ? ENTETE_A_PRODUIT : ENTETE_TRAVAILLE_ENCORE
-  return [
-    entete,
-    corpsDeReprise(precedent),
-    `---\n\n**Après le redémarrage de ${heure}**`,
-    corpsDeReprise(nouveau)
-  ].join('\n\n')
+  return masquer(
+    [
+      entete,
+      corpsDeReprise(precedent),
+      `---\n\n**Après le redémarrage de ${heure}**`,
+      corpsDeReprise(nouveau)
+    ].join('\n\n')
+  )
 }
 
 /**
