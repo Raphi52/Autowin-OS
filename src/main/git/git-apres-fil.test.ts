@@ -311,6 +311,18 @@ describe('bandeauPublie', () => {
     expect(promptsDesBoutons(note)[0]!.length).toBeLessThanOrEqual(LONGUEUR_MAX_PROMPT)
   })
 
+  /*
+   * Vécu le 06/11/2026 : « GIT : rien publié » puis, trois minutes plus tard dans le même fil,
+   * « 1 commit et push origin main réussi ». La note ne parle que des changements qu'elle liste :
+   * un commit du même fil peut partir à côté (publication du tour, ou travail d'agent de la passe).
+   */
+  it('la note ne dit pas « rien publié » : elle ne parle que des changements qu’elle liste', () => {
+    const note = noteATrier('conv-9', ['scripts/a.mjs : aussi touché par conv-2'])
+    expect(note).not.toMatch(/rien publié|Publication auto arrêtée/u)
+    expect(note).toContain('GIT : reste à trier')
+    expect(note).toContain('ces changements')
+  })
+
   it('échappe les sujets de commit : ils ne fixent pas le HTML du fil', () => {
     expect(bandeauPublie(commits)).toContain('le bouton &lt;revient&gt;')
   })

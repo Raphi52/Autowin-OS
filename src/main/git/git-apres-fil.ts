@@ -195,14 +195,18 @@ const MOTIFS_CITES = 12
  * LA NOTE QUAND RIEN NE PEUT PARTIR SEUL : ce qui reste à trier, et un bouton `/git` que
  * l'utilisateur clique LUI-MÊME. Avant, la passe envoyait ce `/git` dans le fil à sa place ; il l'a
  * refusé (« je veux pas que ça envoie un message à ma place »).
+ *
+ * ELLE NE PARLE QUE DES CHANGEMENTS QU'ELLE LISTE : un commit du même fil peut partir à côté (la
+ * publication du tour, ou le travail d'agent de cette passe). « GIT : rien publié » posé près d'un
+ * « 1 commit et push réussi » faisait deux blocs qui se contredisaient.
  */
 export function noteATrier(conversationId: string, motifs: readonly string[]): string {
   const lignes = motifs.slice(0, MOTIFS_CITES).map((motif) => `<div>· ${echapper(motif)}</div>`)
   return [
     '```html-render',
     '<style>.awp-git{display:inline-block;margin-top:6px;color:inherit;font-weight:600;text-decoration:none;cursor:pointer}</style>',
-    '<div class="aw-kicker">GIT : rien publié</div>',
-    `<div><b>Publication auto arrêtée</b> : ce travail demande un <b>tri par contenu</b>.</div>`,
+    '<div class="aw-kicker">GIT : reste à trier</div>',
+    `<div><b>Pas publiés</b> : ces changements demandent un <b>tri par contenu</b>.</div>`,
     ...lignes,
     ...(motifs.length > MOTIFS_CITES
       ? [`<div class="aw-discret">… et ${motifs.length - MOTIFS_CITES} autres.</div>`]

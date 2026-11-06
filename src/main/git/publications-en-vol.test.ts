@@ -59,6 +59,17 @@ describe('câblage dans le processus principal', () => {
     expect(source).toContain('bus.conversationsEnVol = conversationsOccupees')
   })
 
+  /*
+   * Vécu le 06/11/2026 : tour fini à 19:39:47, passe « publier les fils finis » à 19:41:55 qui
+   * conclut « rien publié », puis la publication du même tour pousse son commit à 19:44:33. Deux
+   * blocs git qui se contredisent dans le fil : la passe n'attendait que le TOUR, pas sa publication.
+   */
+  it('la passe git après un fil attend aussi la publication de ce fil', () => {
+    const file = source.slice(source.indexOf('suiviGitApresFil.file = new FileGitApresFil({'))
+    const occupe = file.slice(file.indexOf('filOccupe: (fil) =>'), file.indexOf('lireAmont:'))
+    expect(occupe).toContain('publicationsEnVol.conversations().includes(fil)')
+  })
+
   it('la publication du tour est comptée, et sa fin l’est quoi qu’il arrive', () => {
     const debut = source.indexOf('const finPublication = publicationsEnVol.debut(conversationId)')
     const lancement = source.indexOf('.publishChatTurn({')
