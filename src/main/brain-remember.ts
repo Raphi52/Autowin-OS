@@ -534,7 +534,9 @@ export interface RememberOutcome {
  * fois 200 et créent deux fichiers. Observé le 2026-07-30 (deux POST identiques → deux candidats), et
  * corroboré par deux fiches quasi jumelles déposées à 09:47 et 09:48 le même jour.
  * On garde donc durablement l'empreinte de ce qui a déjà été déposé, sans fusionner deux scopes ou deux
- * workspaces. Une portée `global` forme volontairement un seul namespace partagé.
+ * workspaces. Une portée `global` forme volontairement un seul namespace partagé : un fait global vaut
+ * pour tous les projets, donc retenu depuis deux workspaces il ne doit être déposé qu'une fois
+ * (`durableFingerprint`).
  */
 const depositedThisSession = new Map<string, string>()
 const SESSION_MEMO_MAX = 200

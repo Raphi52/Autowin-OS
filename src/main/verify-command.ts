@@ -196,7 +196,11 @@ const SCRIPTS_DE_PREUVE: Readonly<Record<'lint' | 'typecheck', string>> = {
 /** Types acceptes, rendus a l'appelant pour composer un refus qui ENSEIGNE. */
 export const TYPES_DE_VERIFICATION: readonly TypeDeVerification[] = ['test', 'lint', 'typecheck']
 
-/** Liste blanche EXHAUSTIVE des commandes de preuve NON-test. Volontairement minuscule. */
+/**
+ * Liste blanche EXHAUSTIVE des commandes de preuve NON-test. Volontairement minuscule, comme
+ * `ALLOWED_COMMANDS` : c'est un modèle qui demande l'exécution, donc chaque entrée ajoutée est une
+ * commande de plus qu'il peut faire tourner.
+ */
 export const ALLOWED_SCRIPT_COMMANDS: ReadonlySet<string> = new Set([
   'npm run lint',
   'npm run typecheck'

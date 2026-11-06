@@ -754,13 +754,21 @@ let mailWatchdogReplier:
 const pendingScheduledOccurrences = new Set<string>()
 
 /** Diffuse un événement d'app à toutes les fenêtres (UI live quand un agent pilote). */
-/** Réveille les règles Watchdog sur un incident interne. Volontairement best-effort. */
+/**
+ * Réveille les règles Watchdog sur un incident interne. Best-effort : un réveil raté ne doit rien
+ * casser de plus que l'incident qui l'a déclenché. D'où le `.catch` (conv-1658) : sans lui, un rejet
+ * de `notifyAppEvent` (son `fire` n'a qu'un `try/finally`) devenait un `unhandledRejection`, dont le
+ * gestionnaire global coupe TOUTES les orchestrations en vol (`onFatal` de `installCrashHandlers`).
+ * Même garde que `annoncerFinDeTour` (`chat/run-pilot-chat.ts`).
+ */
 function wakeWatchdog(
   event: WatchdogAppEvent,
   context: string,
   sourceConversationId?: string
 ): void {
-  void watchdogEngine?.notifyAppEvent(event, context, sourceConversationId)
+  void watchdogEngine
+    ?.notifyAppEvent(event, context, sourceConversationId)
+    .catch((erreur: unknown) => console.warn('[watchdog] réveil non délivré', event, erreur))
 }
 
 /**
@@ -865,7 +873,9 @@ function broadcast(e: AppEvent): void {
   // endroit où brancher un incident sans risquer d'en rater une source. Seuls les incidents dont
   // l'émission a été vérifiée dans le code sont branchés — pas un catalogue souhaité.
   if (e.type === 'orchestrate-end' && e.status === 'red') {
-    void watchdogEngine?.notifyAppEvent(
+    // Par `wakeWatchdog`, qui rattrape le rejet (conv-1658) : un `void` nu laissait un échec du
+    // réveil couper toutes les orchestrations en vol via le gestionnaire `unhandledRejection`.
+    wakeWatchdog(
       'orchestration-red',
       `Une orchestration s'est terminée en ROUGE.${e.runPath ? ` RUN : ${e.runPath}` : ''}${
         e.convId ? ` Conversation : ${e.convId}` : ''

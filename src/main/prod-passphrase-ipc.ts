@@ -23,7 +23,8 @@ import type { CoffreAutorisationProd, Demande, EmpreintePhrase } from './prod-pa
 import { definirPhrase, LONGUEUR_MINIMALE_PHRASE, phraseCorrespond } from './prod-passphrase'
 
 export interface ProdPassphraseIpcRegistrar {
-  // La signature d'`invoke` d'Electron est volontairement variadique d'un canal à l'autre.
+  // Même signature que `ipcMain.handle` d'Electron (`...args: any[]`) : le vrai `ipcMain` doit
+  // pouvoir être passé tel quel (`index.ts`).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handle(channel: string, handler: (event: any, ...args: any[]) => unknown): void
 }

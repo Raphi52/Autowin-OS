@@ -120,7 +120,11 @@ export interface WorktreeRunContext {
   sourceSha?: string
   /** Base distante fraîche dont sourceSha contient l'historique, par ex. origin/main. */
   canonicalBaseRef?: string
-  /** Changements du workspace volontairement exclus du snapshot commité. */
+  /**
+   * Changements non commités du workspace, absents de la copie : elle part d'une révision commitée
+   * (`sourceSha`). La liste les NOMME pour que l'exclusion soit visible, jamais silencieuse
+   * (`describeForLaunch`).
+   */
   excludedDirtyFiles?: string[]
   /** Total réel, conservé même si la liste d'affichage est bornée. */
   excludedDirtyFileCount?: number

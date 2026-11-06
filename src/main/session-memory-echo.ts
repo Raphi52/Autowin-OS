@@ -26,7 +26,10 @@
 export interface RememberedFact {
   title: string
   body: string
-  /** Portée métier validée par `remember` (`global` reste volontairement inter-workspaces). */
+  /**
+   * Portée métier validée par `remember` (`global` reste volontairement inter-workspaces : un fait
+   * global vaut pour tous les projets).
+   */
   scope?: string
   /** Identité du workspace actif au moment où le fait a été retenu. */
   workspace?: string

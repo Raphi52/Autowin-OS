@@ -38,7 +38,10 @@ export interface SpecCommandeSkill {
   args: Record<string, unknown>
 }
 
-/** Ce dont ce module a besoin du bus de commandes — volontairement minuscule. */
+/**
+ * Ce dont ce module a besoin du bus de commandes — volontairement minuscule : il ne dépend que
+ * d'`exec`, et un test le simule en une ligne sans monter le bus.
+ */
 export interface LanceurCommandeSkill {
   exec(
     name: string,

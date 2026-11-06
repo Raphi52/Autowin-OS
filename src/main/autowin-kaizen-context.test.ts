@@ -226,7 +226,8 @@ describe('dossier de preuve /kaizen — intégrité', () => {
 
   it('garde les RUN natifs les plus récents, pas les premiers par ordre alphabétique', () => {
     const appData = mkdtempSync(join(tmpdir(), 'autowin-kaizen-recents-'))
-    // Ordre alphabétique volontairement INVERSE de l'ordre chronologique.
+    // Ordre alphabétique volontairement INVERSE de l'ordre chronologique : sinon garder les derniers
+    // par NOM garderait aussi les plus récents, et le test ne distinguerait pas les deux tris.
     const noms = ['a-recent', 'b-plus', 'c-moyen', 'd-ancien', 'e-vieux']
     noms.forEach((nom, index) => {
       const dossier = join(appData, 'runs', 'conv-4', `${nom}-workspace`)
