@@ -14,10 +14,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
 import { defaultGitRunner, type GitRunner } from '../runs/run-autoclose'
 import {
+  avancerLaBaseDuFil,
+  lireLaBaseDuFil,
   ouvrirCopieDeLaPhoto,
   ouvrirCopiesDEssai,
   photoDuTour,
   photographierLeCode as photographierAvecBudgetDuTour,
+  refDeBaseDuFil,
   revenirAuCodeDuTour,
   refDePhoto
 } from './photo-du-code'
@@ -682,5 +685,233 @@ describe('ouvrirCopiesDEssai — « Essaie 3 façons » : une photo, trois copie
     })
     expect(essai).toMatchObject({ ok: false })
     expect(existsSync(join(hors, 'essais'))).toBe(false)
+  })
+})
+
+/*
+ * LA BASE D'UN FIL EN COPIE. Un fil qui travaille dans sa copie publie par une porte (« Garder ») ce
+ * qu'il a changé depuis sa BASE. Cette base était la photo d'ouverture de la copie, rangée parmi les
+ * photos des tours : le ménage ordinaire (10 par fil, 14 jours) l'emportait, et la porte refusait
+ * faute de base. Les entrées qui font échouer une version fausse :
+ *  - 11 tours de plus du même fil (11 photos nouvelles) : la photo d'ouverture sort des 10 gardées ;
+ *  - une horloge avancée de 15 jours : elle sort par l'âge, et le ramasse-miettes de git emporte
+ *    ensuite tout commit que plus rien ne nomme ;
+ *  - un second passage de la porte : s'il repart de la base d'ouverture, il republie le premier.
+ * fix-ok: rouges sur le code d'avant (5 sur 5, fonctions absentes), puis verts ; chacun de trois
+ * défauts réinjectés — base rangée parmi les photos, base lue non vérifiée, base qui n'avance pas —
+ * rend son test rouge. Les éditions suivantes n'ont touché que la mise en forme (prettier/prettier).
+ */
+describe('base du fil en copie — elle survit au ménage des photos et avance à chaque passage', () => {
+  const JOUR_MS = 24 * 60 * 60 * 1000
+
+  const photosDuFil = async (repo: string, fil: string): Promise<string[]> =>
+    (await git(repo, 'for-each-ref', '--format=%(refname)', `refs/autowin/tour/${fil}/`))
+      .split(/\r?\n/u)
+      .filter(Boolean)
+
+  const lignes = (sortie: string): string[] => sortie.split(/\r?\n/u).filter(Boolean)
+
+  /** L'arbre de ce que porte la copie maintenant, par une copie de son index : comme la porte. */
+  async function arbreDeLaCopie(copie: string): Promise<string> {
+    const temporaire = mkdtempSync(join(tmpdir(), 'autowin-porte-'))
+    dossiers.push(temporaire)
+    const env = { ...process.env, GIT_INDEX_FILE: join(temporaire, 'index') }
+    await run('git', ['add', '-A', '--', '.'], { cwd: copie, env })
+    return (await run('git', ['write-tree'], { cwd: copie, env })).stdout.trim()
+  }
+
+  /**
+   * UN PASSAGE DE LA PORTE, réduit à ce qu'elle fait du dépôt : l'écart de la copie depuis la base,
+   * fusionné à trois voies dans main (base de fusion = la base du fil), puis commité dans main.
+   * Rend le commit de ce qui a été publié (l'arbre de la copie au passage) et les fichiers de l'écart.
+   */
+  async function passerLaPorte(
+    repo: string,
+    copie: string,
+    base: string
+  ): Promise<{ publie: string; fichiers: string[] }> {
+    const arbre = await arbreDeLaCopie(copie)
+    const fichiers = lignes(await git(copie, 'diff', '--name-only', '--no-renames', base, arbre))
+    const publie = (
+      await git(copie, 'commit-tree', arbre, '-p', base, '-m', 'passage de la porte')
+    ).trim()
+    const fusion = lignes(
+      await git(repo, 'merge-tree', '--write-tree', `--merge-base=${base}`, 'HEAD', publie)
+    )[0]
+    await git(repo, 'read-tree', '-m', '-u', 'HEAD', fusion)
+    await git(repo, 'commit', '-q', '-m', 'porte')
+    return { publie, fichiers }
+  }
+
+  it('nomme la base sous refs/autowin/base-de-fil/<fil>, hors des photos que le ménage vise', () => {
+    expect(refDeBaseDuFil('conv-1038')).toBe('refs/autowin/base-de-fil/conv-1038')
+    expect(refDeBaseDuFil('conv/1038')).toBeNull()
+    expect(refDeBaseDuFil('..')).toBeNull()
+    expect(refDeBaseDuFil('')).toBeNull()
+  })
+
+  it('un fil qui a une base de copie la garde après 11 tours, puis avec une horloge avancée de 15 jours', async () => {
+    const repo = await depot()
+    writeFileSync(join(repo, 'a.txt'), 'état à l’ouverture de la copie\n')
+    let quand = 1_000
+    const ouverture = await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand })
+    expect(
+      await avancerLaBaseDuFil({
+        dossier: repo,
+        conversationId: 'conv-1',
+        depuis: null,
+        vers: ouverture!.sha
+      })
+    ).toEqual({ ok: true, sha: ouverture!.sha })
+
+    for (let tour = 1; tour <= 11; tour += 1) {
+      quand += 60_000
+      writeFileSync(join(repo, 'a.txt'), `tour ${tour}\n`)
+      const photo = await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand })
+      // Une photo NOUVELLE à chaque tour : le code a changé, rien n'est réutilisé.
+      expect(photo?.ref).toBe(refDePhoto('conv-1', quand))
+    }
+    // Le ménage ordinaire n'a pas changé : 10 photos gardées, celle de l'ouverture est sortie.
+    const apresOnzeTours = await photosDuFil(repo, 'conv-1')
+    expect(apresOnzeTours).toHaveLength(10)
+    expect(apresOnzeTours).not.toContain(refDePhoto('conv-1', 1_000))
+    expect(await lireLaBaseDuFil({ dossier: repo, conversationId: 'conv-1' })).toBe(ouverture!.sha)
+
+    quand += 15 * JOUR_MS
+    writeFileSync(join(repo, 'a.txt'), 'quinze jours plus tard\n')
+    await photographierLeCode({ dossier: repo, conversationId: 'conv-1', quand })
+    expect(await photosDuFil(repo, 'conv-1')).toEqual([refDePhoto('conv-1', quand)])
+    // Plus rien d'autre que la base ne nomme le commit d'ouverture : git ne doit pas l'emporter.
+    await git(repo, 'gc', '--prune=now', '--quiet')
+    expect(await lireLaBaseDuFil({ dossier: repo, conversationId: 'conv-1' })).toBe(ouverture!.sha)
+    expect(await git(repo, 'show', `${ouverture!.sha}:a.txt`)).toBe(
+      'état à l’ouverture de la copie\n'
+    )
+  })
+
+  it('après un passage de la porte, la base avance à l’état publié : la porte suivante ne publie que l’écart depuis ce passage', async () => {
+    const repo = await depot()
+    const ouverture = await photographierLeCode({
+      dossier: repo,
+      conversationId: 'conv-1',
+      quand: 1_000
+    })
+    const copie = join(repo, '..', 'copie-conv-1')
+    await ouvrirCopieDeLaPhoto({ dossier: repo, sha: ouverture!.sha, destination: copie })
+    // La copie lit et fait avancer la même base que le dépôt : les références sont partagées.
+    await avancerLaBaseDuFil({
+      dossier: copie,
+      conversationId: 'conv-1',
+      depuis: null,
+      vers: ouverture!.sha
+    })
+
+    writeFileSync(join(copie, 'a.txt'), 'changé avant le premier passage\n')
+    const base1 = await lireLaBaseDuFil({ dossier: copie, conversationId: 'conv-1' })
+    expect(base1).toBe(ouverture!.sha)
+    const passage1 = await passerLaPorte(repo, copie, base1!)
+    expect(passage1.fichiers).toEqual(['a.txt'])
+    expect(
+      await avancerLaBaseDuFil({
+        dossier: copie,
+        conversationId: 'conv-1',
+        depuis: base1,
+        vers: passage1.publie
+      })
+    ).toEqual({ ok: true, sha: passage1.publie })
+    expect(await lireLaBaseDuFil({ dossier: repo, conversationId: 'conv-1' })).toBe(passage1.publie)
+
+    // Entre les deux passages, main reçoit le travail d'un autre fil, que la copie n'a pas.
+    writeFileSync(join(repo, 'autre.txt'), 'travail d’un autre fil\n')
+    await git(repo, 'add', 'autre.txt')
+    await git(repo, 'commit', '-q', '-m', 'autre fil')
+    writeFileSync(join(copie, 'b.txt'), 'ajouté avant le second passage\n')
+
+    const base2 = await lireLaBaseDuFil({ dossier: copie, conversationId: 'conv-1' })
+    // Depuis la base d'ouverture, l'écart republierait le premier passage avec le second.
+    expect(
+      lignes(await git(copie, 'diff', '--name-only', ouverture!.sha, await arbreDeLaCopie(copie)))
+    ).toEqual(['a.txt', 'b.txt'])
+    const avantPassage2 = (await git(repo, 'rev-parse', 'HEAD')).trim()
+    const passage2 = await passerLaPorte(repo, copie, base2!)
+
+    expect(passage2.fichiers).toEqual(['b.txt'])
+    expect(lignes(await git(repo, 'diff', '--name-only', avantPassage2, 'HEAD'))).toEqual(['b.txt'])
+    // Le travail de l'autre fil, absent de la copie, n'est pas défait par la fusion.
+    expect(await git(repo, 'show', 'HEAD:autre.txt')).toBe('travail d’un autre fil\n')
+    expect(await git(repo, 'show', 'HEAD:a.txt')).toBe('changé avant le premier passage\n')
+  })
+
+  it('une base déjà posée ne se repose pas ; une base lue périmée n’avance pas — la base reste intacte', async () => {
+    const repo = await depot()
+    const premiere = (await git(repo, 'rev-parse', 'HEAD')).trim()
+    writeFileSync(join(repo, 'a.txt'), 'seconde\n')
+    await git(repo, 'commit', '-q', '-am', 'seconde')
+    const seconde = (await git(repo, 'rev-parse', 'HEAD')).trim()
+    const fil = { dossier: repo, conversationId: 'conv-1' }
+
+    // Jumeau accepté : aucune base encore, la première se pose.
+    expect(await avancerLaBaseDuFil({ ...fil, depuis: null, vers: premiere })).toEqual({
+      ok: true,
+      sha: premiere
+    })
+    const reposee = await avancerLaBaseDuFil({ ...fil, depuis: null, vers: seconde })
+    expect(reposee).toMatchObject({ ok: false })
+    expect((reposee as { raison: string }).raison).toMatch(/déjà une base/u)
+    expect(await lireLaBaseDuFil(fil)).toBe(premiere)
+
+    // Refus : la porte a lu `seconde`, mais la base est encore `premiere`.
+    const perimee = await avancerLaBaseDuFil({ ...fil, depuis: seconde, vers: seconde })
+    expect(perimee).toMatchObject({ ok: false })
+    expect((perimee as { raison: string }).raison).toContain(premiere)
+    expect(await lireLaBaseDuFil(fil)).toBe(premiere)
+    // Jumeau accepté : la base lue est bien la base actuelle.
+    expect(await avancerLaBaseDuFil({ ...fil, depuis: premiere, vers: seconde })).toEqual({
+      ok: true,
+      sha: seconde
+    })
+  })
+
+  it('refuse ce qui n’est pas un commit, et un fil au nom invalide ; sans base, la lecture rend null', async () => {
+    const repo = await depot()
+    const commit = (await git(repo, 'rev-parse', 'HEAD')).trim()
+    const arbre = (await git(repo, 'rev-parse', 'HEAD^{tree}')).trim()
+    const fil = { dossier: repo, conversationId: 'conv-1' }
+
+    expect(await lireLaBaseDuFil(fil)).toBeNull()
+    expect(await avancerLaBaseDuFil({ ...fil, depuis: null, vers: arbre })).toMatchObject({
+      ok: false
+    })
+    expect(await avancerLaBaseDuFil({ ...fil, depuis: null, vers: 'pas-un-sha' })).toMatchObject({
+      ok: false
+    })
+    expect(
+      await avancerLaBaseDuFil({
+        dossier: repo,
+        conversationId: '../conv',
+        depuis: null,
+        vers: commit
+      })
+    ).toMatchObject({ ok: false })
+    expect(await lireLaBaseDuFil({ dossier: repo, conversationId: '../conv' })).toBeNull()
+    expect(await lireLaBaseDuFil(fil)).toBeNull()
+    expect(await git(repo, 'for-each-ref', 'refs/autowin/')).toBe('')
+
+    const hors = mkdtempSync(join(tmpdir(), 'autowin-base-hors-'))
+    dossiers.push(hors)
+    expect(await lireLaBaseDuFil({ dossier: hors, conversationId: 'conv-1' })).toBeNull()
+    expect(
+      await avancerLaBaseDuFil({
+        dossier: hors,
+        conversationId: 'conv-1',
+        depuis: null,
+        vers: commit
+      })
+    ).toMatchObject({ ok: false })
+    // Jumeau accepté : le même commit, dans le dépôt, se pose.
+    expect(await avancerLaBaseDuFil({ ...fil, depuis: null, vers: commit })).toEqual({
+      ok: true,
+      sha: commit
+    })
   })
 })

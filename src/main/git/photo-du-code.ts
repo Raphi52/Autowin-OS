@@ -464,3 +464,112 @@ export async function ouvrirCopiesDEssai(entree: {
   }
   return { ok: true, quand, chemins }
 }
+
+/*
+ * LA BASE D'UN FIL QUI TRAVAILLE DANS SA COPIE. Son travail entre dans main par une porte
+ * (« Garder », fusion à trois voies) qui publie l'écart entre la copie et cette BASE. La base n'est
+ * pas rangée parmi les photos : leur ménage (10 par fil, 14 jours) l'emporterait au 11e tour ou au
+ * bout de deux semaines, et la porte refuserait faute de base. Elle a son propre préfixe, UNE
+ * référence par fil, que `elaguer` ne voit pas : le ménage des photos reste celui d'avant.
+ *
+ * Elle AVANCE à chaque passage de la porte, jusqu'au commit de ce que la porte vient de publier :
+ * l'arbre de la COPIE à ce passage, jamais main après la fusion. Main porte aussi le travail des
+ * autres fils, absent de la copie : pris pour base, la fusion suivante le déferait.
+ */
+export const PREFIXE_BASES_DE_FIL = 'refs/autowin/base-de-fil/'
+
+export function refDeBaseDuFil(conversationId: string): string | null {
+  if (!ID_SUR.test(conversationId) || conversationId.includes('..')) return null
+  return `${PREFIXE_BASES_DE_FIL}${conversationId}`
+}
+
+/**
+ * Le commit que nomme `quoi`, ou `null` s'il n'y en a pas. `rev-parse --verify -q` sort en 1, sans
+ * rien dire, pour un nom inconnu comme pour un objet qui n'est pas un commit (mesuré, git 2.54) ;
+ * toute autre panne de git remonte telle quelle, pour ne jamais passer pour une base absente.
+ */
+async function commitOuNull(git: GitRunner, repo: string, quoi: string): Promise<string | null> {
+  try {
+    return (await git(['rev-parse', '--verify', '-q', `${quoi}^{commit}`], repo)).trim() || null
+  } catch (erreur) {
+    if ((erreur as { code?: unknown } | null)?.code === 1) return null
+    throw erreur
+  }
+}
+
+/**
+ * LIRE LA BASE DU FIL : le sha de son commit, ou `null` — aucune base posée, nom de fil invalide,
+ * dossier hors git. `dossier` est la copie du fil ou le dépôt : toutes les copies d'un dépôt
+ * partagent ses références.
+ */
+export async function lireLaBaseDuFil(entree: {
+  dossier: string
+  conversationId: string
+  runGit?: GitRunner
+}): Promise<string | null> {
+  const ref = refDeBaseDuFil(entree.conversationId)
+  if (!ref) return null
+  const git = entree.runGit ?? (await defaultGitRunner())
+  const repo = await racineDuDepot(entree.dossier, git)
+  if (!repo) return null
+  return commitOuNull(git, repo, ref)
+}
+
+export type AvanceeDeLaBase = { ok: true; sha: string } | { ok: false; raison: string }
+
+/**
+ * POSER OU FAIRE AVANCER LA BASE DU FIL, en un seul geste que git vérifie
+ * (`update-ref <base> <vers> <depuis>`) :
+ *  - `depuis: null` pose la PREMIÈRE base, à l'ouverture de la copie ; refusé si le fil en a déjà une ;
+ *  - `depuis: <sha>` la fait avancer après un passage de la porte, seulement si elle est encore celle
+ *    que cette porte a lue. Sinon un passage plus lent ramènerait la base en arrière, et le suivant
+ *    republierait ce qui est déjà dans main.
+ * `vers` : le commit de ce que la porte vient de publier (l'arbre de la copie à ce passage).
+ * Un refus laisse la base telle qu'elle était, et dit pourquoi.
+ */
+export async function avancerLaBaseDuFil(entree: {
+  dossier: string
+  conversationId: string
+  depuis: string | null
+  vers: string
+  runGit?: GitRunner
+}): Promise<AvanceeDeLaBase> {
+  const ref = refDeBaseDuFil(entree.conversationId)
+  if (!ref)
+    return {
+      ok: false,
+      raison: `« ${entree.conversationId} » ne peut pas nommer la base d’un fil : la base n’a pas bougé.`
+    }
+  const git = entree.runGit ?? (await defaultGitRunner())
+  const repo = await racineDuDepot(entree.dossier, git)
+  if (!repo)
+    return {
+      ok: false,
+      raison: 'Le dossier de ce fil n’est pas un dépôt git : aucune base à poser.'
+    }
+  const vers = await commitOuNull(git, repo, entree.vers)
+  if (!vers)
+    return {
+      ok: false,
+      raison: `« ${entree.vers} » n’est pas un commit de ce dépôt : la base du fil n’a pas bougé.`
+    }
+  try {
+    // L'ancienne valeur vide demande à git que la référence n'existe pas encore.
+    await git(['update-ref', ref, vers, entree.depuis ?? ''], repo)
+    return { ok: true, sha: vers }
+  } catch (erreur) {
+    const actuelle = await commitOuNull(git, repo, ref)
+    if (entree.depuis === null && actuelle)
+      return {
+        ok: false,
+        raison: `Ce fil a déjà une base (${actuelle}) : elle ne se repose pas, elle avance depuis la base lue par la porte.`
+      }
+    if (entree.depuis !== null && actuelle !== entree.depuis)
+      return {
+        ok: false,
+        raison: `La base du fil a changé depuis que la porte l’a lue (lue : ${entree.depuis}, actuelle : ${actuelle ?? 'aucune'}) : elle n’a pas bougé.`
+      }
+    const message = erreur instanceof Error ? erreur.message : String(erreur)
+    return { ok: false, raison: `La base du fil n’a pas pu avancer : ${message}` }
+  }
+}
