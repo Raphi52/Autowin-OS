@@ -7,9 +7,9 @@ import { ConversationStore } from '../store/conversations'
 import { createRunPilotChat, issueDuResultat, type RunPilotChatDeps } from './run-pilot-chat'
 
 /**
- * UN LOT COUPÉ PAR LA LIMITE D'USAGE N'EST PLUS « FAIT » (conv-1236, plan-c21413ba, 2026-10-28).
+ * UN LOT COUPÉ PAR LA LIMITE D'USAGE N'EST PLUS « FAIT » (plan-c21413ba, 2026-10-28).
  *
- * Le tour du lot 1 du thème Golden (conv-1237, tour 5bdd19cc) a fini SANS erreur : son
+ * Le tour du lot 1 du thème Golden (tour 5bdd19cc) a fini SANS erreur : son
  * `orchestrate` avait buté sur la limite, le tour a répondu « Échec du workflow : … ». Le journal
  * du tour portait l'issue `failed`, mais le résultat du tour ne la transmettait pas : le plan de
  * lots n'en voyait que `ok: true` et notait le lot « fait ». Ici, le VRAI tour de chat tourne
@@ -106,6 +106,51 @@ describe('tour de chat → plan de lots : l’orchestration coupée par la limit
     expect(note.lot?.etat).toBe('echec')
     expect(note.plan.statut).toBe('suspendu-quota')
     expect(note.plan.toursLances).toBe(0)
+  })
+
+  /*
+   * Refus du contrôle final : l'issue est `failed` SANS `error`, les motifs sont dans `gateReasons`
+   * (forme recopiée du journal du lot 4 du plan du coffre à clés). Le lot était noté « fait », donc
+   * impossible à relancer, alors que son travail était resté dans sa copie.
+   */
+  it('un refus du contrôle final, sans champ error, met aussi le lot en échec', async () => {
+    const motif =
+      'Promis mais pas fait : « Cible nommee dans la demande reellement modifiee : src/main/ipc/chat.ts ».'
+    const { fil, resultat } = await tourQuiFinitSur({
+      status: 'failed',
+      valid: false,
+      gateBlocked: true,
+      gateReasons: [motif]
+    })
+    const issue = issueDuResultat(resultat)
+    expect(issue.echecOrchestration).toContain(motif)
+    const note = noterFinDeTour(planAvecLeLotDans(fil), fil, issue, 3)
+    expect(note.lot?.etat).toBe('echec')
+    expect(note.lot?.raison).toMatch(/Promis mais pas fait/)
+  })
+
+  /*
+   * Blocage à l'intégration : le travail est vérifié dans sa copie, mais le report dans le dossier
+   * principal est refusé parce que d'autres fils y ont des fichiers non commités. Issue recopiée du
+   * journal du lot 1 du plan des dérogations du linter (06/11, 10:31). Le lot ne doit être ni
+   * « fait » (son travail n'est pas arrivé) ni pris pour une coupure de quota. Depuis le 06/11 au
+   * soir, il ATTEND SA PUBLICATION au lieu d'échouer : relancé, il refaisait tout pour le même refus.
+   */
+  it('un blocage d’intégration, sans champ error, n’est pas noté fait : le lot attend sa publication', async () => {
+    const blocage =
+      'blocage d’intégration: base-dirty — cause: des fichiers non committés de la base bloquent la publication — fichiers en cause: src/renderer/src/components/ChatView.tsx'
+    const { fil, resultat } = await tourQuiFinitSur({
+      status: 'failed',
+      valid: false,
+      gateBlocked: true,
+      gateReasons: ['intégration locale non terminée', blocage]
+    })
+    const issue = issueDuResultat(resultat)
+    expect(issue.echecOrchestration).toContain('base-dirty')
+    const note = noterFinDeTour(planAvecLeLotDans(fil), fil, issue, 3)
+    expect(note.lot?.etat).toBe('attend-publication')
+    expect(note.lot?.raison).toMatch(/src\/renderer\/src\/components\/ChatView\.tsx/)
+    expect(note.plan.statut).not.toBe('suspendu-quota')
   })
 
   it('une orchestration réussie ne porte aucune erreur : le lot est fait', async () => {

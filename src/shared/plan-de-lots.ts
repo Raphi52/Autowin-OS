@@ -2,9 +2,9 @@ import { retirerLignePromptSuivant } from './prompt-suivant'
 import { estMurDeQuota } from './reprise-quota'
 
 /**
- * SUPER CONVERSATION — LE PLAN DE LOTS D'UN FIL CHEF (conv-1150, 2026-10-26).
+ * SUPER CONVERSATION — LE PLAN DE LOTS D'UN FIL CHEF (2026-10-26).
  *
- * Constat qui motive : conv-1146 a confié 113 écrans à UN seul agent (plus de 20 $, refus du
+ * Constat qui motive : un fil a confié 113 écrans à UN seul agent (plus de 20 $, refus du
  * contrôle final, réparations en boucle). Lancer plusieurs fils existait déjà, mais personne ne
  * les suivait : aucun fil ne savait quand ses fils enfants avaient fini.
  *
@@ -28,7 +28,7 @@ export const TOURS_PAR_LOT_DEFAUT = 2
 /** Au-delà, un plafond n'est plus une borne. */
 export const TOURS_PAR_LOT_MAX = 10
 /**
- * CONTEXTE COMMUN D'UN PLAN (conv-1284, 2026-10-29) — repris des « side sessions » de claude.exe
+ * CONTEXTE COMMUN D'UN PLAN (2026-10-29) — repris des « side sessions » de claude.exe
  * (app 4.29.0) : un brief y est REFUSÉ sous 80 caractères de contexte (« the overall goal, decisions
  * and constraints so far, how this piece fits — the new session knows nothing else »). Le fil d'un
  * lot ne sait rien d'autre que ce qu'on lui envoie.
@@ -36,7 +36,7 @@ export const TOURS_PAR_LOT_MAX = 10
 export const CONTEXTE_MIN = 80
 export const CONTEXTE_MAX = 3_000
 /**
- * DÉCISIONS PRISES EN ROUTE (conv-1284) — la mémoire partagée des « Projects » de Claude (chaque
+ * DÉCISIONS PRISES EN ROUTE — la mémoire partagée des « Projects » de Claude (chaque
  * thread y écrit et y lit), bornée au plan et visible dans son tableau.
  */
 export const DECISIONS_MAX = 30
@@ -49,11 +49,19 @@ const RAISON_MAX = 300
 const TITRE_MAX = 80
 
 /**
- * `attend-chef` (conv-1284, 2026-10-29) : le lot a posé sa question au chef et s'est arrêté sur
+ * `attend-chef` (2026-10-29) : le lot a posé sa question au chef et s'est arrêté sur
  * MARQUEUR_ATTENTE_CHEF. Ni fini ni cassé : sa reprise vient de la réponse du chef (ordre), ou d'une
  * relance.
  */
-export type EtatDuLot = 'a-faire' | 'en-cours' | 'fait' | 'echec' | 'interrompu' | 'attend-chef'
+/**
+ * `attend-publication` (2026-11-06) : le travail du lot est fini et vérifié, mais son intégration a
+ * été refusée parce que ses fichiers portent le travail non commité d'un AUTRE fil dans le dossier
+ * partagé. Ni fini ni cassé : le travail est gardé de côté et republié seul dès que ces fichiers
+ * sont commités (`repechage-automatique.ts`). Le relancer referait tout pour le même mur — mesuré le
+ * 06/11 : 27 essais refusés sur 58, dont 9 sur 12 pour un seul lot.
+ */
+export type EtatDuLot =
+  'a-faire' | 'en-cours' | 'fait' | 'echec' | 'interrompu' | 'attend-chef' | 'attend-publication'
 export type StatutDuPlan =
   | 'attente-accord'
   | 'en-cours'
@@ -62,7 +70,7 @@ export type StatutDuPlan =
   | 'plafond-atteint'
   /**
    * Plus rien ne tourne et les lots restants attendent un lot en échec (« apres »). Distinct de
-   * « plafond atteint » : ici la relance du lot fautif reste permise (conv-1151, lot 2).
+   * « plafond atteint » : ici la relance du lot fautif reste permise (lot 2).
    */
   | 'bloque'
   | 'interrompu'
@@ -77,12 +85,12 @@ export interface LotDuPlan {
   demande: string
   fichiers: string[]
   /**
-   * Rangs des lots qui doivent être FAITS avant que celui-ci parte (conv-1151, lot 2). Facultatif :
+   * Rangs des lots qui doivent être FAITS avant que celui-ci parte (lot 2). Facultatif :
    * un plan écrit sur disque avant ce champ n'en porte pas.
    */
   apres?: number[]
   /**
-   * Modèle du fil de ce lot (conv-1284, comme le choix par thread des « Projects » de Claude) :
+   * Modèle du fil de ce lot (comme le choix par thread des « Projects » de Claude) :
    * un lot simple part sur un modèle léger. Absent : le modèle du fil, comme avant.
    */
   modele?: string
@@ -94,6 +102,12 @@ export interface LotDuPlan {
   raison?: string
   debut?: number
   fin?: number
+  /**
+   * Lot qui attend sa publication : les runs de son fil vus BLOQUÉS après la note. Seule la
+   * publication de l'un d'eux le fait passer « fait » — un ancien run déjà publié du même fil ne
+   * prouve rien sur ce travail-ci.
+   */
+  runsAPublier?: string[]
 }
 
 export interface PlanDeLots {
@@ -112,7 +126,7 @@ export interface PlanDeLots {
   avertissements: string[]
   creeLe: number
   lots: LotDuPlan[]
-  /** Le but d'ensemble, les décisions et contraintes : envoyé à CHAQUE lot (conv-1284). */
+  /** Le but d'ensemble, les décisions et contraintes : envoyé à CHAQUE lot. */
   contexte?: string
   /** Décisions notées en route par le chef ou un lot ; les lots lancés ensuite les reçoivent. */
   decisions?: DecisionDuPlan[]
@@ -152,7 +166,8 @@ const LIBELLE_ETAT: Record<EtatDuLot, string> = {
   fait: 'fait',
   echec: 'échec',
   interrompu: 'interrompu',
-  'attend-chef': 'attend le chef'
+  'attend-chef': 'attend le chef',
+  'attend-publication': 'attend sa publication'
 }
 
 export const LIBELLE_STATUT: Record<StatutDuPlan, string> = {
@@ -295,8 +310,8 @@ export function lirePlanDeLots(brut: unknown): LecturePlan {
         `plafond de ${t} tours : ${TOURS_PAR_LOT_MAX} par lot au plus (${n * TOURS_PAR_LOT_MAX}).`
       )
     // Refus, plus un simple avertissement : les chefs lisaient « 2 par lot » et donnaient 2 pour
-    // tout le plan (conv-1256 : 2 tours pour 5 lots ; conv-1236 : 3 pour 6). Le budget épuisé
-    // faisait partir les lots UN PAR UN puis arrêtait le plan à mi-chemin (conv-1273).
+    // tout le plan (2 tours pour 5 lots ; 3 pour 6). Le budget épuisé
+    // faisait partir les lots UN PAR UN puis arrêtait le plan à mi-chemin.
     if (t < n)
       return refus(
         `plafond de ${t} tours pour ${n} lots : plafondTours est le TOTAL du plan, pas un nombre par lot — mets au moins ${n} (un tour par lot), ou omets-le (défaut ${n * TOURS_PAR_LOT_DEFAUT}).`
@@ -334,7 +349,7 @@ function refusDeCycle(apresParRang: readonly (readonly number[])[]): string | un
 
 /**
  * Lecture STRICTE de lots bruts, numérotés à partir de `premierRang` dans un plan qui en comptera
- * `total` : au dépôt (rang 1), et à l'ajout en route (`ajouterLots`, conv-1284), où « apres » peut
+ * `total` : au dépôt (rang 1), et à l'ajout en route (`ajouterLots`), où « apres » peut
  * viser un lot déjà présent.
  */
 function lireLots(
@@ -426,7 +441,7 @@ export function empreintePlan(plan: PlanLu): string {
   const lots = plan.lots.map((l) => {
     const base: unknown[] = [l.titre, l.demande, l.fichiers.map(normaliserChemin)]
     // Sans dépendance ni modèle, l'empreinte reste celle d'avant ces champs : un plan sur disque
-    // garde sa clé (même règle pour le contexte, conv-1284).
+    // garde sa clé (même règle pour le contexte).
     if (l.apres.length || l.modele) base.push(l.apres)
     if (l.modele) base.push(l.modele)
     return base
@@ -516,7 +531,7 @@ const AJOUT_PERMIS: ReadonlySet<StatutDuPlan> = new Set([
 ])
 
 /**
- * AJOUTER DES LOTS À UN PLAN LANCÉ (conv-1284) — le coordinateur des « Projects » de Claude range
+ * AJOUTER DES LOTS À UN PLAN LANCÉ — le coordinateur des « Projects » de Claude range
  * chaque nouvelle demande dans un thread existant ou nouveau ; ici, une demande de l'utilisateur
  * qui prolonge le chantier rejoint le plan au lieu d'en exiger un second (refusé tant que le
  * premier tourne). Les nouveaux lots prennent les rangs suivants ; « apres » peut viser un lot déjà
@@ -626,7 +641,7 @@ export function decisionDeDepot(
  *
  * `filOccupe` : un lot qui repart dans SON fil (relance, reprise) attend tant qu'un tour y tourne,
  * sans prendre de place. Sinon un agent repris après un redémarrage et un nouvel agent écriraient
- * dans la même session (conv-260 ; objection du juge, conv-1150).
+ * dans la même session (objection du juge).
  */
 export function lotsAPartir(plan: PlanDeLots, filOccupe?: (fil: string) => boolean): number[] {
   if (plan.statut !== 'en-cours') return []
@@ -663,7 +678,7 @@ export function marquerLance(
   fil: string,
   maintenant: number
 ): PlanDeLots {
-  // Une relance garde l'heure du PREMIER départ (conv-1353 : plan-59c9ac57, lot 3 portait 12:19
+  // Une relance garde l'heure du PREMIER départ (plan-59c9ac57, lot 3 portait 12:19
   // au lieu de 09:15). La durée compte donc l'attente entre deux passages.
   const premierDebut = plan.lots.find((l) => l.rang === rang)?.debut
   const p = avecLot(plan, rang, {
@@ -723,10 +738,20 @@ function statutApres(plan: PlanDeLots): PlanDeLots {
   const enCours = plan.lots.some((l) => l.etat === 'en-cours')
   const restants = plan.lots.filter((l) => l.etat === 'a-faire').length
   // Un lot qui attend la réponse du chef n'est pas fini : le plan reste en cours tant qu'une relance
-  // est possible, et le DIT (conv-1284). Ni « terminé », ni « bloqué : un lot attendu a échoué ».
+  // est possible, et le DIT. Ni « terminé », ni « bloqué : un lot attendu a échoué ».
   const attendent = plan.lots.filter((l) => l.etat === 'attend-chef').map((l) => l.rang)
-  if (!enCours && restants === 0 && attendent.length === 0)
+  const aPublier = plan.lots.filter((l) => l.etat === 'attend-publication').map((l) => l.rang)
+  if (!enCours && restants === 0 && attendent.length === 0 && aPublier.length === 0)
     return { ...plan, statut: 'termine', raison: undefined }
+  // Un lot qui attend sa publication n'a besoin d'aucun tour : le plan reste en cours, plafond
+  // épuisé ou non, et ses dépendants partiront quand son travail sera dans la base.
+  if (!enCours && aPublier.length && attendent.length === 0 && lotsAPartir(plan).length === 0) {
+    const qui = `${listeDeLots(aPublier)} ${aPublier.length > 1 ? 'attendent leur' : 'attend sa'}`
+    return {
+      ...plan,
+      raison: `${qui} publication : travail vérifié, gardé de côté jusqu’au commit des fichiers qui le bloquent.`
+    }
+  }
   if (!enCours && attendent.length && plan.toursLances < plan.plafondTours) {
     const qui = `${listeDeLots(attendent)} ${attendent.length > 1 ? 'attendent' : 'attend'}`
     return {
@@ -738,7 +763,7 @@ function statutApres(plan: PlanDeLots): PlanDeLots {
   }
   if (!enCours && lotsAPartir(plan).length === 0) {
     // Sans ce cas, un prérequis en échec faisait tomber le plan en « plafond atteint », où la
-    // relance du lot fautif est refusée (conv-1151, lot 2).
+    // relance du lot fautif est refusée (lot 2).
     const blocages = plan.toursLances < plan.plafondTours ? blocagesParPrerequis(plan) : []
     if (blocages.length) {
       const qui = blocages.map(
@@ -769,24 +794,30 @@ export interface IssueDuTour {
   perdu?: boolean
   /**
    * L'erreur de l'`orchestrate` du tour quand il a échoué (`outcome.status === 'failed'`). Le tour
-   * de chat, lui, finit `ok` : il a bien répondu « Échec du workflow : … » (conv-1237, 2026-10-28).
+   * de chat, lui, finit `ok` : il a bien répondu « Échec du workflow : … » (2026-10-28).
    */
   echecOrchestration?: string
   /**
+   * Un `orchestrate` du tour a été VALIDÉ par le contrôle final (`outcome.status === 'succeeded'`).
+   * Seul signe qu'un tour dans le fil d'un lot en échec a rattrapé son travail : une simple réponse
+   * dans ce fil finit `ok` elle aussi.
+   */
+  orchestrationReussie?: boolean
+  /**
    * Le tour n'a JAMAIS démarré : son lancement a été refusé ou a levé (`#lancerUnLot`,
-   * `lancerParOrdre`). Le tour compté au lancement (`marquerLance`) est rendu (conv-1284).
+   * `lancerParOrdre`). Le tour compté au lancement (`marquerLance`) est rendu.
    */
   nonDemarre?: boolean
 }
 
 /**
- * LA RÉPONSE DU FIL TELLE QUE L'UTILISATEUR LA VOIT (conv-1153, lot 1 du plan conv-1151,
+ * LA RÉPONSE DU FIL TELLE QUE L'UTILISATEUR LA VOIT (lot 1 du plan,
  * 2026-10-26). `issue.texte` vient de `issueDuResultat` (`resultat.text`) : le texte parlé du tour,
  * lignes techniques comprises. Mesure sur `turn-journals/` : 380 tours sur 471 finissent par
  * `AUTOWIN_BESOIN_V1` / `AUTOWIN_FIN_V1`. Les blocs `<cmd>` n'y arrivent pas : le pilote les retire
  * déjà (`agent-pilot.ts`, `parseOrderedPilotTokens`), et aucun des 471 n'en garde. Même retrait que
  * l'affichage (`Markdown.tsx`) : un marqueur cité dans un bloc de code reste.
- * fix-ok: conv-1153 — compte rendu coupé par la fin sur un texte brut (lignes AUTOWIN mesurées) et
+ * fix-ok: compte rendu coupé par la fin sur un texte brut (lignes AUTOWIN mesurées) et
  * blocage déclaré ignoré par noterFinDeTour (`etat: issue.ok ? 'fait' : …`) ; rouge puis vert.
  */
 export function reponseVisible(texte?: string): string {
@@ -802,7 +833,7 @@ const BLOCAGE_DECLARE = /^.*(?:⛔\uFE0F?\s*Bloqué|⚠\uFE0F?\s*Non résolu).*$
 const MARQUEUR_SEUL = /^(?:⛔\uFE0F?\s*Bloqué|⚠\uFE0F?\s*Non résolu)[\s:.—–-]*$/u
 
 /**
- * LE LOT QUI ATTEND LE CHEF (conv-1284, 2026-10-29). La consigne du lot (`promptDuLot`) lui fait
+ * LE LOT QUI ATTEND LE CHEF (2026-10-29). La consigne du lot (`promptDuLot`) lui fait
  * finir sur MARQUEUR_ATTENTE_CHEF après sa question ; la ligne de blocage qui le porte vaut
  * « attend le chef », pas « échec ». L'apostrophe droite est tolérée : l'agent réécrit le marqueur.
  */
@@ -838,22 +869,64 @@ function blocageDeclare(texte: string): string | undefined {
 }
 
 /**
+ * Le motif écrit par `raisonDeBlocageIntegration` (shared/raison-de-blocage.ts) quand la base porte
+ * le travail non commité d'un autre : « blocage d’intégration: base-dirty — cause: … — fichiers en
+ * cause: a, b ». Les motifs du contrôle final sont joints par « ; » : la liste s'arrête au suivant.
+ * Seul `base-dirty` compte — un conflit de contenu (`merge-failed`) reste un échec à arbitrer.
+ */
+const BLOCAGE_PAR_LA_BASE = /blocage d[’']intégration:\s*base-dirty\b/u
+const FICHIERS_EN_CAUSE = /—\s*fichiers en cause:\s*([^;]*)/u
+
+/** Les fichiers d'un refus d'intégration par la base (au plus 5, nommés par le motif), sinon `undefined`. */
+export function fichiersBloquesParLaBase(echec: string): string[] | undefined {
+  const m = BLOCAGE_PAR_LA_BASE.exec(echec)
+  if (!m) return undefined
+  const fichiers = FICHIERS_EN_CAUSE.exec(echec.slice(m.index))?.[1] ?? ''
+  return fichiers
+    .split(',')
+    .map((f) => f.trim())
+    .filter(Boolean)
+}
+
+/**
+ * La raison d'un lot qui attend sa publication. `fils` : les fils à qui l'app a demandé le commit
+ * (`[]` : aucun fil connu ne tient ces fichiers) ; absent : la demande n'est pas encore partie.
+ */
+export function raisonDAttenteDePublication(
+  fichiers: readonly string[],
+  fils?: readonly string[]
+): string {
+  const quoi = fichiers.length
+    ? `${fichiers.join(', ')} ${fichiers.length > 1 ? 'sont modifiés' : 'est modifié'}`
+    : 'des fichiers sont modifiés'
+  const suite =
+    fils === undefined
+      ? ''
+      : fils.length
+        ? ` Commit demandé à ${fils.join(', ')}.`
+        : ' À commiter par l’utilisateur : aucun fil connu ne les tient.'
+  const tete = `travail vérifié, pas encore publié : ${quoi} sans commit dans le dossier partagé. Il partira seul dès qu’ils seront commités.`
+  return `${tete.slice(0, RAISON_MAX - suite.length)}${suite}`
+}
+
+/**
  * Fin d'un tour dans le fil `fil`. Seule la fin du tour d'un lot EN COURS compte : une seconde
  * annonce, un fil hors plan ou un autre tour du même fil ne changent rien (plan rendu tel quel).
+ * Exception : dans le fil d'un lot en ÉCHEC, un tour dont l'`orchestrate` est validé le rattrape.
  * Un échec ne relance rien. Un mur de QUOTA suspend le plan entier : aucun lot ne repart seul.
  *
  * Exception : la fin du tour REPRIS d'un lot interrompu (son agent a survécu au redémarrage) est
- * notée — sinon son résultat et son compte rendu étaient perdus (objection du juge, conv-1150).
+ * notée — sinon son résultat et son compte rendu étaient perdus (objection du juge).
  * Le plan reste interrompu (rien ne repart seul), et se termine si plus aucun lot n'attend. Un
  * agent PERDU (mort avec l'app) n'apporte rien : le lot reste interrompu, « Reprendre » le relance.
  *
  * Un tour fini sans erreur dont la réponse se déclare bloquée (« ⛔ Bloqué », « ⚠️ Non résolu »)
- * est un ÉCHEC, avec sa ligne de blocage pour raison : noté « fait », le chef ne le relançait pas
- * (conv-1153). Seule la réponse visible compte, pas une suggestion invisible qui citerait le marqueur.
- * Même chose pour un `orchestrate` en échec hors quota (copie de travail expirée, conv-1595) : le
+ * est un ÉCHEC, avec sa ligne de blocage pour raison : noté « fait », le chef ne le relançait pas.
+ * Seule la réponse visible compte, pas une suggestion invisible qui citerait le marqueur.
+ * Même chose pour un `orchestrate` en échec hors quota (copie de travail expirée) : le
  * tour finit `ok` sur « Échec du workflow », et « fait » rendait le lot impossible à relancer.
  *
- * LIMITE D'USAGE (conv-1236, plan-c21413ba, 2026-10-28) : un lot coupé par le mur — erreur du tour
+ * LIMITE D'USAGE (plan-c21413ba, 2026-10-28) : un lot coupé par le mur — erreur du tour
  * OU de son `orchestrate` — est en ÉCHEC et REND son tour au plafond, qu'il n'a pas pu dépenser.
  * Sans cela, 3 lots coupés étaient notés « fait » et épuisaient un plafond de 3 tours sans une
  * ligne écrite. Le mur se lit sur ces erreurs seulement, jamais dans la réponse : un lot qui
@@ -869,8 +942,14 @@ export function noterFinDeTour(
   if (!lot) return { plan, effet: 'hors-plan' }
   const reprisApresRedemarrage =
     lot.etat === 'interrompu' && issue.repris === true && issue.perdu !== true
-  if (lot.etat !== 'en-cours' && !reprisApresRedemarrage) return { plan, effet: 'deja-note', lot }
-  if (issue.tour && lot.tour && issue.tour !== lot.tour) return { plan, effet: 'autre-tour', lot }
+  // Lot en échec repris À LA MAIN dans son fil (hors « Relancer ») : un travail validé par le
+  // contrôle final le rattrape. Sans cela le tableau le gardait en échec et proposait de tout refaire.
+  const rattrapage = lot.etat === 'echec' && issue.orchestrationReussie === true
+  if (lot.etat !== 'en-cours' && !reprisApresRedemarrage && !rattrapage)
+    return { plan, effet: 'deja-note', lot }
+  // Le tour du rattrapage n'est jamais celui du premier essai : ce contrôle ne vaut que pour l'essai.
+  if (!rattrapage && issue.tour && lot.tour && issue.tour !== lot.tour)
+    return { plan, effet: 'autre-tour', lot }
   const erreur = (issue.erreur ?? '').trim()
   const echecOrchestration = (issue.echecOrchestration ?? '').trim()
   const mur = [issue.ok ? '' : erreur, echecOrchestration].find(estMurDeQuota)
@@ -879,8 +958,19 @@ export function noterFinDeTour(
   const blocage =
     issue.ok && !mur && !orchestrationRatee ? blocageDeclare(reponseVisible(issue.texte)) : undefined
   const reussi = issue.ok && !blocage && !mur && !orchestrationRatee
-  // conv-1284 : un blocage sur la question posée au chef n'est pas un échec — le lot attend.
+  if (rattrapage) {
+    // Un rattrapage qui ne réussit pas laisse le lot tel quel : son échec d'origine reste la raison.
+    if (!reussi) return { plan, effet: 'deja-note', lot }
+    // Aucun tour rendu ni compté : le plan ne l'a pas lancé. Un plan bloqué par ce seul lot repart,
+    // ses dépendants peuvent partir ; arrêté par le plafond, il le reste.
+    const fait = avecLot(plan, lot.rang, { etat: 'fait', raison: undefined, fin: maintenant })
+    const suivant = statutApres(plan.statut === 'bloque' ? { ...fait, statut: 'en-cours' } : fait)
+    return { plan: suivant, effet: 'note', lot: suivant.lots.find((l) => l.rang === lot.rang) }
+  }
+  // Un blocage sur la question posée au chef n'est pas un échec — le lot attend.
   const attendChef = blocage !== undefined && ATTENTE_DU_CHEF.test(blocage)
+  // Refusé à l'intégration par le travail non commité d'un autre fil : vérifié, gardé de côté.
+  const bloquants = orchestrationRatee ? fichiersBloquesParLaBase(echecOrchestration) : undefined
   const raison = mur
     ? // La ligne du mur en tête : `reprendrePlan` la relit (`estMurDeQuota`) après la coupe.
       (ligneDuMur(mur) ?? mur).slice(0, RAISON_MAX)
@@ -888,19 +978,22 @@ export function noterFinDeTour(
       ? `question posée au chef ${plan.chef} : le lot attend sa réponse.`
       : blocage
         ? `le fil se déclare bloqué : ${blocage}`.slice(0, RAISON_MAX)
-        : orchestrationRatee
-          ? `le travail lancé a échoué : ${echecOrchestration}`.slice(0, RAISON_MAX)
-          : issue.ok
-          ? undefined
-          : issue.annule
-            ? 'tour arrêté avant la fin'
-            : (erreur || 'le tour a échoué sans message').slice(0, RAISON_MAX)
+        : bloquants
+          ? raisonDAttenteDePublication(bloquants)
+          : orchestrationRatee
+            ? `le travail lancé a échoué : ${echecOrchestration}`.slice(0, RAISON_MAX)
+            : issue.ok
+              ? undefined
+              : issue.annule
+                ? 'tour arrêté avant la fin'
+                : (erreur || 'le tour a échoué sans message').slice(0, RAISON_MAX)
   let suivant = avecLot(plan, lot.rang, {
-    etat: reussi ? 'fait' : attendChef ? 'attend-chef' : 'echec',
+    etat: reussi ? 'fait' : attendChef ? 'attend-chef' : bloquants ? 'attend-publication' : 'echec',
     raison,
-    fin: maintenant
+    fin: maintenant,
+    runsAPublier: undefined
   })
-  // TOUR RENDU (conv-1284, 2026-10-29, demande de l'utilisateur) : le mur de quota (conv-1236), et
+  // TOUR RENDU (2026-10-29, demande de l'utilisateur) : le mur de quota, et
   // tout lancement qui n'a jamais démarré — premier départ ou relance par le chef, l'utilisateur ou
   // un ordre. `marquerLance` compte le tour AVANT le lancement ; il n'a rien coûté. Une seule fois,
   // même quand le refus de lancement vient lui-même du mur.
@@ -933,6 +1026,88 @@ export function marquerEchec(
   )
 }
 
+/** La demande de commit est partie (ou personne ne tient les fichiers) : la raison le dit. */
+export function noterDemandeDeCommit(
+  plan: PlanDeLots,
+  rang: number,
+  fichiers: readonly string[],
+  fils: readonly string[]
+): PlanDeLots {
+  const lot = plan.lots.find((l) => l.rang === rang)
+  if (!lot || lot.etat !== 'attend-publication') return plan
+  return avecLot(plan, rang, { raison: raisonDAttenteDePublication(fichiers, fils) })
+}
+
+/** Ce que le plan lit de l'activité des runs (`WorktreeAgentActivity`, sans en dépendre). */
+export interface ActiviteDeRun {
+  agentId: string
+  conversationId?: string
+  publication?: string
+  verdict?: string
+}
+
+/** Les états d'un run dont le travail est entré dans la base (`run-worktree-coordinator.ts`). */
+const RUN_PUBLIE: ReadonlySet<string> = new Set(['published', 'complete', 'cleanup-pending'])
+
+/**
+ * LE LOT SUIT SON TRAVAIL GARDÉ DE CÔTÉ. Pour chaque lot qui attend sa publication : un run de son
+ * fil vu BLOQUÉ (jugé autrement que rouge) est retenu ; la publication d'un run retenu fait passer
+ * le lot « fait ». Rend les rangs publiés, et le plan tel quel si rien ne change.
+ */
+export function suivreLesPublications(
+  plan: PlanDeLots,
+  activites: readonly ActiviteDeRun[],
+  maintenant: number
+): { plan: PlanDeLots; publies: number[] } {
+  let suivant = plan
+  const publies: number[] = []
+  for (const lot of plan.lots) {
+    if (lot.etat !== 'attend-publication' || !lot.fil) continue
+    const duFil = activites.filter((a) => a.conversationId === lot.fil)
+    if (!duFil.length) continue
+    const retenus = lot.runsAPublier ?? []
+    if (duFil.some((a) => retenus.includes(a.agentId) && RUN_PUBLIE.has(a.publication ?? ''))) {
+      suivant = avecLot(suivant, lot.rang, {
+        etat: 'fait',
+        raison: undefined,
+        runsAPublier: undefined,
+        fin: maintenant
+      })
+      publies.push(lot.rang)
+      continue
+    }
+    const nouveaux = duFil
+      .filter((a) => a.publication === 'blocked' && a.verdict !== 'red')
+      .map((a) => a.agentId)
+      .filter((id) => !retenus.includes(id))
+    if (nouveaux.length)
+      suivant = avecLot(suivant, lot.rang, { runsAPublier: [...retenus, ...nouveaux] })
+  }
+  return { plan: publies.length ? statutApres(suivant) : suivant, publies }
+}
+
+/**
+ * LA DEMANDE DE COMMIT AU FIL QUI BLOQUE (2026-11-06, accord de l'utilisateur : « oui elle peut »).
+ * Le 06/11, l'utilisateur l'a faite lui-même à plusieurs reprises (« demande à … de commiter tout
+ * son ménage lui-même, puis relance le lot 3 »). Le geste reste borné : SES chemins seulement, sans
+ * pousser, et seulement si son travail est terminé — sinon il prévient le chef.
+ */
+export function messageDeDemandeDeCommit(
+  plan: PlanDeLots,
+  lot: LotDuPlan,
+  fichiers: readonly string[]
+): string {
+  const quoi = fichiers.length ? fichiers.join(', ') : 'des fichiers du dossier partagé'
+  return [
+    `Le lot ${lot.rang} du plan « ${plan.titre} » (${plan.id}, chef ${plan.chef}) a fini son travail, vérifié, mais il ne peut pas entrer dans le dossier partagé : ${quoi} y portent des modifications non commitées, et elles sont à toi.`,
+    'Demande permise par l’utilisateur : règle du dépôt « Commit demandé par l’app », écrite dans AGENTS.md (section « Règles du dépôt ») et relue en tête de chacun de tes tours — vérifie-la là, pas sur la foi de ce message.',
+    `- Ton travail sur ces fichiers est terminé et vérifié : commite-le maintenant, tes chemins seulement (git commit -- <tes chemins>), sans pousser. Le travail du lot partira alors seul.`,
+    `- Il n’est pas terminé : ne commite rien, et écris au chef ${plan.chef} (ecrire_a_un_fil) quand il le sera.`
+  ]
+    .join('\n')
+    .slice(0, COMPTE_RENDU_MAX)
+}
+
 /** Le statut du plan après des lancements (un plafond bas peut l'arrêter sans fin de lot). */
 export function statutApresLancements(plan: PlanDeLots): PlanDeLots {
   return statutApres(plan)
@@ -945,9 +1120,14 @@ export function statutApresLancements(plan: PlanDeLots): PlanDeLots {
 export function interrompreAuDemarrage(plan: PlanDeLots): PlanDeLots {
   const tournait = plan.lots.some((l) => l.etat === 'en-cours')
   if (plan.statut !== 'en-cours' && !tournait) return plan
-  // conv-1284 : aucun lot ne tournait et un lot attend le chef — rien n'a été interrompu. Le plan
+  // Aucun lot ne tournait et un lot attend le chef — rien n'a été interrompu. Le plan
   // reste en cours : la réponse du chef (un ordre) relance le lot sans clic « Reprendre ».
-  if (!tournait && plan.lots.some((l) => l.etat === 'attend-chef')) return plan
+  // Même chose pour un lot qui attend sa publication : sa suite vient de la base, pas d'un agent.
+  if (
+    !tournait &&
+    plan.lots.some((l) => l.etat === 'attend-chef' || l.etat === 'attend-publication')
+  )
+    return plan
   return {
     ...plan,
     statut: plan.statut === 'en-cours' ? 'interrompu' : plan.statut,
@@ -964,7 +1144,7 @@ export function interrompreAuDemarrage(plan: PlanDeLots): PlanDeLots {
 }
 
 /**
- * LE PLAN SUIT L'AGENT QUI A SURVÉCU (conv-1308, 2026-10-30, demande de l'utilisateur). Vécu sur
+ * LE PLAN SUIT L'AGENT QUI A SURVÉCU (2026-10-30, demande de l'utilisateur). Vécu sur
  * plan-b4358910 : l'app redémarre, l'agent du lot 1 continue, et le chef affiche « interrompu » à côté
  * d'un fil qui tourne. Dès qu'un travail est reconnu dans le fil d'un lot (tour de chat repris, run
  * rattaché ou relancé), ce lot redevient en cours, sans nouveau tour. Le plan repart avec lui SAUF
@@ -987,7 +1167,7 @@ export function adopterLotRepris(plan: PlanDeLots, fil: string, tour?: string): 
  *
  * `filOccupe` : un lot interrompu dont le fil tourne encore (agent repris après le redémarrage) est
  * ADOPTÉ — remis en cours sans nouveau tour, sa fin le notera. Le relancer aurait mis un second
- * agent dans la même session (objection du juge, conv-1150).
+ * agent dans la même session (objection du juge).
  */
 export function reprendrePlan(
   plan: PlanDeLots,
@@ -1031,7 +1211,14 @@ export function relancerLot(
     }
   if (!['en-cours', 'termine', 'bloque'].includes(plan.statut))
     return { ok: false, erreur: `plan ${LIBELLE_STATUT[plan.statut]} : relance impossible.` }
-  if (lot.etat !== 'echec' && lot.etat !== 'interrompu' && lot.etat !== 'attend-chef')
+  // `attend-publication` reste relançable : c'est la sortie de l'utilisateur si personne ne commite
+  // les fichiers qui bloquent. Le chef, lui, en est empêché par son outil (`plans-de-lots-app.ts`).
+  if (
+    lot.etat !== 'echec' &&
+    lot.etat !== 'interrompu' &&
+    lot.etat !== 'attend-chef' &&
+    lot.etat !== 'attend-publication'
+  )
     return { ok: false, erreur: `le lot ${rang} est ${LIBELLE_ETAT[lot.etat]} : rien à relancer.` }
   if (plan.toursLances >= plan.plafondTours)
     return {
@@ -1049,8 +1236,10 @@ export interface BilanDuPlan {
   enCours: number
   aFaire: number
   interrompus: number
-  /** Lots qui attendent la réponse du chef (conv-1284). */
+  /** Lots qui attendent la réponse du chef. */
   attendChef: number
+  /** Lots au travail vérifié, gardé de côté jusqu'au commit des fichiers qui le bloquent. */
+  attendPublication: number
   texte: string
 }
 
@@ -1063,12 +1252,16 @@ export function bilanDuPlan(plan: PlanDeLots): BilanDuPlan {
     enCours: compte('en-cours'),
     aFaire: compte('a-faire'),
     interrompus: compte('interrompu'),
-    attendChef: compte('attend-chef')
+    attendChef: compte('attend-chef'),
+    attendPublication: compte('attend-publication')
   }
   const texte =
     `${pluriel(b.faits, 'fait')}, ${b.echecs} en échec, ${b.enCours} en cours, ${b.aFaire} à faire` +
     (b.interrompus ? `, ${pluriel(b.interrompus, 'interrompu')}` : '') +
     (b.attendChef ? `, ${b.attendChef} ${b.attendChef > 1 ? 'attendent' : 'attend'} le chef` : '') +
+    (b.attendPublication
+      ? `, ${b.attendPublication} ${b.attendPublication > 1 ? 'attendent leur' : 'attend sa'} publication`
+      : '') +
     ` sur ${b.total} — ${pluriel(plan.toursLances, 'tour')} sur ${plan.plafondTours}`
   return { ...b, texte }
 }
@@ -1087,12 +1280,19 @@ function fratrie(plan: PlanDeLots, lot: LotDuPlan): string[] {
 /**
  * Le message que reçoit le fil d'un lot. La demande reste EN TÊTE : un `/build …` y est reconnu.
  *
- * conv-1284 (2026-10-29), repris des « side sessions » de claude.exe : le contexte commun du plan,
+ * (2026-10-29), repris des « side sessions » de claude.exe : le contexte commun du plan,
  * les décisions prises en route, et la liste des autres lots (« Linked sessions now » : nom,
  * identifiant, état). Une question bloquante part au CHEF, une seule, puis le lot se déclare
  * bloqué : sans ce marqueur, son tour fini était noté « fait » et personne ne lui répondait
- * (lot 19 de plan-5e2a57e7, conv-1192).
+ * (lot 19 de plan-5e2a57e7).
  */
+/**
+ * Tout ce qui suit cet en-tête dans la demande d'un lot (contexte commun, décisions, autres lots)
+ * est une donnée du plan, recopiée dans chaque lot : le contrôle final (`ciblesNommees`) n'y lit
+ * aucun fichier exigé, sinon un exemple cité par le chef bloque tous les lots.
+ */
+export const ENTETE_CONTEXTE_COMMUN = 'Contexte commun du plan (le même pour tous les lots) :'
+
 export function promptDuLot(plan: PlanDeLots, lot: LotDuPlan): string {
   const fichiers = lot.fichiers.length
     ? `Fichiers prévus pour ce lot : ${lot.fichiers.join(', ')}. N’en touche pas d’autres sans nécessité : d’autres fils travaillent en même temps dans ce dossier.`
@@ -1104,8 +1304,7 @@ export function promptDuLot(plan: PlanDeLots, lot: LotDuPlan): string {
     `Lot ${lot.rang} sur ${plan.lots.length} du plan « ${plan.titre} », confié par le fil chef ${plan.chef} (${plan.id}).`,
     fichiers
   ]
-  if (plan.contexte)
-    lignes.push('', 'Contexte commun du plan (le même pour tous les lots) :', plan.contexte)
+  if (plan.contexte) lignes.push('', ENTETE_CONTEXTE_COMMUN, plan.contexte)
   const decisions = plan.decisions ?? []
   if (decisions.length)
     lignes.push(
@@ -1132,7 +1331,7 @@ export function promptDuLot(plan: PlanDeLots, lot: LotDuPlan): string {
 /**
  * Ce message est-il composé par le plan (`promptDuLot` dans le fil d'un lot, `promptDeReveil` dans
  * le fil chef), et non tapé par l'utilisateur ? Le 2026-10-27, le lot 19 de plan-5e2a57e7
- * (conv-1192) s'est arrêté sur la question des deux lectures : personne pour y répondre, le plan l'a
+ * s'est arrêté sur la question des deux lectures : personne pour y répondre, le plan l'a
  * compté « fait » sans une ligne écrite, et sa relance a été refusée.
  */
 export function estUnMessageDuPlan(message: string | undefined): boolean {
@@ -1147,7 +1346,7 @@ export function estUnMessageDuPlan(message: string | undefined): boolean {
  * Le compte rendu d'un lot, écrit au chef dans le journal des messages entre fils. Il tient dans
  * la borne du journal ; une réponse longue est coupée par le DÉBUT (le résumé demandé est à la fin)
  * et renvoie au fil enfant. Les lignes techniques invisibles sont retirées AVANT la coupe : elles
- * finissent la réponse et mangeaient la place du résumé (conv-1153, `reponseVisible`).
+ * finissent la réponse et mangeaient la place du résumé (`reponseVisible`).
  */
 export function compteRenduDuLot(plan: PlanDeLots, lot: LotDuPlan, reponse?: string): string {
   const tete =
@@ -1164,7 +1363,7 @@ export function compteRenduDuLot(plan: PlanDeLots, lot: LotDuPlan, reponse?: str
 }
 
 /**
- * LA DÉCISION NOTÉE, ENVOYÉE AUX LOTS DÉJÀ EN COURS (conv-1284, 2026-10-29, demande de
+ * LA DÉCISION NOTÉE, ENVOYÉE AUX LOTS DÉJÀ EN COURS (2026-10-29, demande de
  * l'utilisateur). Avant, une décision n'arrivait que dans la demande des lots partis ENSUITE : un
  * lot déjà en route travaillait sur une consigne périmée jusqu'à sa fin. Le message part par le
  * journal des messages entre fils ; le lot le lit à son prochain appel d'outil.
@@ -1180,7 +1379,7 @@ export function messageDeDecision(
 }
 
 /**
- * Ce qui suit l'ordre du chef quand il réveille un lot bloqué (conv-1284) : le lot repart dans SON
+ * Ce qui suit l'ordre du chef quand il réveille un lot bloqué : le lot repart dans SON
  * fil, sa réponse finale redevient le compte rendu remis au chef par l'app — sans cette ligne,
  * l'ordre lui demandait d'écrire au chef EN PLUS, et le chef recevait deux comptes rendus.
  */
@@ -1202,7 +1401,7 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
       (l) =>
         `lot ${l.rang} « ${l.titre} » : ${LIBELLE_ETAT[l.etat]}${l.raison ? ` (${l.raison})` : ''}, fil ${l.fil ?? '?'}`
     )
-  // Les décisions notées par les LOTS : le chef ne les a pas écrites, il doit les voir (conv-1284).
+  // Les décisions notées par les LOTS : le chef ne les a pas écrites, il doit les voir.
   const desLots = (plan.decisions ?? []).filter((d) => d.de !== 'chef')
   return [
     `RÉVEIL DU PLAN DE LOTS « ${plan.titre} » (${plan.id}) — message de l’app, pas de l’utilisateur.`,
@@ -1216,12 +1415,26 @@ export function promptDeReveil(plan: PlanDeLots, rangs: readonly number[]): stri
     'Les comptes rendus détaillés sont dans les messages de tes fils (en tête de ce tour, ou par lire_mes_messages).',
     'Ce que tu fais maintenant :',
     '- vérifie le résultat des lots finis (conversation_read sur leur fil) sans refaire leur travail ;',
-    '- un lot qui attend ta réponse (état « attend le chef ») : réponds-lui avec ecrire_a_un_fil, nature « ordre » — sa réponse relance son fil et l’app le suit comme une relance (un tour du plafond) ; ne le relance pas en plus ;',
-    '- un lot en échec dont la cause se corrige : relance-le avec plan_de_lots (action « relancer », lot N) ; sinon dis-le ;',
-    '- une décision qui vaut pour les lots à venir : note-la (action « noter ») ; du travail qui manque au chantier : ajoute des lots (action « ajouter ») plutôt qu’un second plan ;',
-    '- les lots suivants partent seuls : n’en lance aucun à la main ;',
-    '- quand le plan est terminé ou arrêté, rends à l’utilisateur le bilan assemblé : ce qui est fait, avec quelle preuve, ce qui reste.',
-    'Si rien n’est à faire, réponds en une ligne.'
+    // `relancerLot` et `ajouterLots` refusent un plan suspendu par le quota : sans cette branche, le
+    // réveil disait « relance-le » et le chef attendait la fin de la limite pour un refus certain.
+    ...(plan.statut === 'suspendu-quota'
+      ? [
+          '- plan suspendu par la limite de quota : seul l’utilisateur le reprend (bouton « Reprendre » du tableau) ; « relancer » et « ajouter » sont refusés jusque-là, et n’attends pas la fin de la limite : aucune action de ta part ne lève la suspension ;',
+          '- rends-lui le bilan tout de suite : ce qui est fait, avec quelle preuve, ce qui reste, l’heure de fin de la limite si le compte rendu la donne, et le geste « Reprendre ».'
+        ]
+      : [
+          '- un lot qui attend ta réponse (état « attend le chef ») : réponds-lui avec ecrire_a_un_fil, nature « ordre » — sa réponse relance son fil et l’app le suit comme une relance (un tour du plafond) ; ne le relance pas en plus ;',
+          ...(plan.lots.some((l) => l.etat === 'attend-publication')
+            ? [
+                '- un lot qui attend sa publication : son travail est fini et vérifié, gardé de côté ; il entrera seul dans le dossier dès que les fichiers nommés seront commités, et l’app a déjà demandé ce commit au fil qui les tient : ne le relance pas (il referait tout pour le même refus), et ne reporte pas son travail à la main (le dossier se salirait pour les lots suivants). Si aucun fil connu ne tient les fichiers, dis-le à l’utilisateur ;'
+              ]
+            : []),
+          '- un lot en échec dont la cause se corrige : relance-le avec plan_de_lots (action « relancer », lot N) ; sinon dis-le ;',
+          '- une décision qui vaut pour les lots à venir : note-la (action « noter ») ; du travail qui manque au chantier : ajoute des lots (action « ajouter ») plutôt qu’un second plan ;',
+          '- les lots suivants partent seuls : n’en lance aucun à la main ;',
+          '- quand le plan est terminé ou arrêté, rends à l’utilisateur le bilan assemblé : ce qui est fait, avec quelle preuve, ce qui reste.',
+          'Si rien n’est à faire, réponds en une ligne.'
+        ])
   ].join('\n')
 }
 
@@ -1232,15 +1445,15 @@ export interface VuePlanDeLots {
   rang?: number
 }
 /**
- * « relancer » porte aussi le numéro du lot (4e argument du canal os:plansDeLots) : conv-1151, lot 3.
- * « phrases » (conv-1315) : ce que dit chaque lot, lecture seule, lots jamais ouverts compris.
+ * « relancer » porte aussi le numéro du lot (4e argument du canal os:plansDeLots) : lot 3.
+ * « phrases » : ce que dit chaque lot, lecture seule, lots jamais ouverts compris.
  */
 export type GestePlanDeLots =
   'voir' | 'anciens' | 'phrases' | 'accepter' | 'refuser' | 'arreter' | 'reprendre' | 'relancer'
 
 /**
  * La sélection de candidats scout que le bouton du workflow intelligent confie au plan (geste
- * « lancer-selection », conv-1333). Lue aussi strictement qu'un plan d'agent (`lirePlanDeLots`).
+ * « lancer-selection »). Lue aussi strictement qu'un plan d'agent (`lirePlanDeLots`).
  */
 export interface SelectionAPlanifier {
   titre: string
@@ -1255,19 +1468,19 @@ export type ReponsePlansDeLots =
       plan?: PlanDeLots
       detail?: string
       deja?: boolean
-      /** Réponse du geste « tous » (conv-1158). */
+      /** Réponse du geste « tous ». */
       plans?: PlanDansLaListe[]
-      /** Réponse du geste « anciens » (conv-1394) : voir `anciensPlansDuChef`. */
+      /** Réponse du geste « anciens » : voir `anciensPlansDuChef`. */
       anciens?: PlanDeLots[]
-      /** Réponse du geste « phrases » (conv-1315) : rang du lot → ce que dit son fil. */
+      /** Réponse du geste « phrases » : rang du lot → ce que dit son fil. */
       phrases?: Record<number, string>
     }
-  /** `repli` (conv-1333) : ce fil ne mène pas de plan, l'écran enchaîne les lots dans le fil. */
+  /** `repli` : ce fil ne mène pas de plan, l'écran enchaîne les lots dans le fil. */
   | { ok: false; erreur: string; repli?: boolean }
 
 /**
  * Un plan tel que la liste des conversations le range (geste « tous » du canal os:plansDeLots,
- * conv-1158, 2026-10-26) : son chef et le fil de chaque lot déjà ouvert, avec son rang et le nombre
+ * 2026-10-26) : son chef et le fil de chaque lot déjà ouvert, avec son rang et le nombre
  * total de lots. Sans les demandes ni les titres : jusqu'à 50 plans gardés de 20 lots, dont chaque
  * demande pèse jusqu'à 4 000 caractères, n'ont pas à traverser le canal pour un rangement.
  */
@@ -1278,7 +1491,7 @@ export interface PlanDansLaListe {
   total: number
   /**
    * Vrai si c'est le plan que montre son chef (`planDuFil`). Il décidait du masquage des lots dans
-   * la liste (conv-1381) ; depuis conv-1394, les lots de TOUS les plans d'un chef présent sont
+   * la liste ; les lots de TOUS les plans d'un chef présent sont
    * masqués, et ceux des autres plans se rejoignent par le bloc du chef (geste « anciens »).
    */
   actuel: boolean
@@ -1293,7 +1506,7 @@ export interface PlanDansLaListe {
 /**
  * Pur : les plans d'un chef qu'il ne montre pas (même règle que `planDuFil` : le dernier plan non
  * remplacé est le sien) et dont au moins un lot a un fil, le plus récent d'abord. Geste « anciens »
- * du canal os:plansDeLots (conv-1394) : depuis que leurs lots n'ont plus de ligne dans la liste,
+ * du canal os:plansDeLots : depuis que leurs lots n'ont plus de ligne dans la liste,
  * le bloc de la conv chef est le seul chemin vers ces fils.
  */
 export function anciensPlansDuChef(plans: readonly PlanDeLots[], chef: string): PlanDeLots[] {

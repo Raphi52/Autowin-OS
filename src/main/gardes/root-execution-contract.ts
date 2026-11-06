@@ -1,8 +1,10 @@
+import { existsSync } from 'node:fs'
 import type { ExecutionEvidence } from '../providers/types'
 import { attributedPaths, normalized } from '../providers/causal-verification-evidence'
 import { classifyMutationConfidence } from '../orchestration/task-mutation-classifier'
 import { cadrageRefuse } from '../orchestration/frame-cas-limites'
 import { grilleCleanEnDefaut, libelleGrilleEnDefaut } from '../orchestration/grille-clean'
+import { ENTETE_CONTEXTE_COMMUN } from '../../shared/plan-de-lots'
 
 export const ROOT_DOD = {
   analysis: 'Analyse demandee presente dans le livrable',
@@ -22,7 +24,7 @@ const ANALYSIS_REQUEST = /\b(?:scout|audit|analys|inspect|cherche|trouve|repere|
 const TEST_REQUEST =
   /\b(?:tests?|test(?:e|er|ez|s)?|vitest|verification|verifi\w*|rouge\s*(?:vers|->|→)\s*vert|exit\s*0)\b/i
 /**
- * « PUBLIER » TOUT SEUL N'EST PAS UN COMMIT — mesure du 2026-09-16, conv-597,
+ * « PUBLIER » TOUT SEUL N'EST PAS UN COMMIT — mesure du 2026-09-16
  * turnId 4e502786-4887-4101-85b3-ea2dee304091.
  *
  * La demande etait « ... online ready a etre PUBLIE SUR LE MARKET » : une mise en vente sur une
@@ -39,7 +41,7 @@ const TEST_REQUEST =
  * faux negatif tolere, faux positif JAMAIS.
  */
 // fix-ok: le motif COMMIT_REQUEST prenait le verbe « publier » d'une mise en vente sur boutique
-// (« online ready a etre publie sur le market », conv-597, turnId 4e502786-4887-4101-85b3-ea2dee304091)
+// (« online ready a etre publie sur le market », turnId 4e502786-4887-4101-85b3-ea2dee304091)
 // pour une demande de commit git : la DoD exigeait alors un commit jamais demande, case laissee
 // `- [ ]` dans le RUN.md et run ferme `status: green` malgre tout. Cause mesuree, correctif borne
 // a la seule levee « publie + boutique dans les 3 mots suivants ».
@@ -48,7 +50,7 @@ const COMMIT_REQUEST =
 
 const CLAUSE_BOUNDARY = /(?:[.;:!?,]|\b(?:mais|puis|ensuite|cependant|toutefois)\b)/gi
 const NEGATED_MENTION_PREFIX =
-  /(?:\b(?:sans|ni|aucun(?:e|s|es)?|zero|pas\s+de|interdi\w*\s+de|evit\w*\s+de|without|no)\b(?:\s+\w+){0,6}\s*|\b(?:ne|n['’]\w*)(?:\s+\w+){0,6}\s+(?:pas|jamais|aucun(?:e|s|es)?|rien)\b(?:\s+\w+){0,4}\s*|\b(?:do\s+not|don't)(?:\s+\w+){0,4}\s*)$/i
+  /(?:\b(?:sans|ni|aucun(?:e|s|es)?|zero|pas(?:\s+de)?|jamais|interdi\w*\s+de|evit\w*\s+de|without|no)\b(?:\s+\w+){0,6}\s*|\b(?:ne|n['’]\w*)(?:\s+\w+){0,6}\s+(?:pas|jamais|aucun(?:e|s|es)?|rien)\b(?:\s+\w+){0,4}\s*|\b(?:do\s+not|don't)(?:\s+\w+){0,4}\s*)$/i
 const DIRECT_NEGATION_PREFIX = /\b(?:ne|n['’]\w*|not)\s*$/i
 const DIRECT_NEGATION_SUFFIX = /^\s*(?:\w+\s+){0,3}(?:pas|jamais|rien|aucun(?:e|s|es)?|not)\b/i
 
@@ -133,13 +135,17 @@ function verificationTargetsRequest(task: string, item: ExecutionEvidence): bool
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
   const observed = `${item.command ?? ''} ${item.summary ?? ''}`.toLowerCase()
-  if (/\bnpm\s+(?:run\s+)?test\b/.test(requested)) {
+  // Une commande INTERDITE (« pas npm test entier », « jamais npm test ») n'est pas demandée : même
+  // lecture des négations que la DoD (`hasRequestedAction`). Avant, un simple `.test()` faisait de
+  // l'interdiction la SEULE preuve acceptée (plan-a53e62ac, lot 1, conv-1655, 2026-11-06).
+  const demande = (commande: RegExp): boolean => hasRequestedAction(requested, commande)
+  if (demande(/\bnpm\s+(?:run\s+)?test\b/)) {
     return /\bnpm\s+(?:run\s+)?test\b/.test(observed)
   }
-  if (/\bvitest\b/.test(requested)) return /\bvitest\b/.test(observed)
-  if (/\bpytest\b/.test(requested)) return /\bpytest\b/.test(observed)
-  if (/\bdotnet\s+test\b/.test(requested)) return /\bdotnet\s+test\b/.test(observed)
-  if (/\btests?\b/.test(requested)) {
+  if (demande(/\bvitest\b/)) return /\bvitest\b/.test(observed)
+  if (demande(/\bpytest\b/)) return /\bpytest\b/.test(observed)
+  if (demande(/\bdotnet\s+test\b/)) return /\bdotnet\s+test\b/.test(observed)
+  if (demande(/\btests?\b/)) {
     return /\b(?:tests?|vitest|jest|pytest|ctest)\b|\b(?:npm|pnpm|yarn)\s+(?:run\s+)?test\b|\b(?:dotnet|cargo|go)\s+test\b/.test(
       observed
     )
@@ -160,7 +166,7 @@ export function rootRequirementChecks(
       // TOUTE phase porteuse d'un livrable TEXTUEL coche l'analyse — y compris `build` et `clean`.
       //
       // Ce predicat filtrait sur `noeudSansEcriture` (scout/frame/terrain + noeuds skill). Defaut
-      // MESURE le 2026-09-03 (run-90383ebef541-1, conv-21) : un run qui n'a joue que `build` — six
+      // MESURE le 2026-09-03 (run-90383ebef541-1) : un run qui n'a joue que `build` — six
       // fois, 4 607 a 9 803 caracteres de livrable chacune, lu dans
       // `.autowin-data/autowin-os/run-state/run-90383ebef541-1.json` — a ete bloque SIX fois de
       // suite par « Promis mais pas fait : "Analyse demandee presente dans le livrable" », avec un
@@ -272,7 +278,7 @@ export function runEnLectureSeule(phases: readonly { phase: string }[]): boolean
 /**
  * Une CIBLE NOMMEE est un chemin de fichier porte par un ANCRAGE `chemin:ligne` dans la demande.
  *
- * Defaut vecu (conv-1302) : quatre runs d'affilee ont ferme `succeeded`, gate vert, juges 96/100,
+ * Defaut vecu : quatre runs d'affilee ont ferme `succeeded`, gate vert, juges 96/100,
  * en corrigeant un AUTRE fichier que celui que l'utilisateur avait nomme. Le gate evalue la QUALITE
  * de ce qui est produit ; personne n'evaluait la CORRESPONDANCE avec ce qui etait demande.
  *
@@ -289,7 +295,7 @@ const CIBLE_ANCREE = new RegExp(
 /**
  * Un chemin cité comme MODÈLE ou comme POINT DE COMPARAISON n'est pas une cible.
  *
- * Défaut vécu conv-1618 (2026-11-05, correctif conv-1626) : la demande citait deux fichiers au format
+ * Défaut vécu (2026-11-05) : la demande citait deux fichiers au format
  * `chemin:ligne` comme références (« utilise le TimeProvider déjà employé dans X:77 », « alors que le
  * verrou V2 prend celle du serveur de base (Y:31) »). Le contrôle final a exigé leur modification et
  * refusé 202 fois de suite un travail juste et publié (364 $).
@@ -309,7 +315,7 @@ const MENTION_DE_REFERENCE = new RegExp(
  *
  * `CIBLE_ANCREE` commence APRÈS `D:` (le deux-points n'est pas un caractère de chemin), et `:` est
  * une frontière de proposition (`CLAUSE_BOUNDARY`) : sans ce recul, la proposition d'un chemin
- * `D:\…` se réduisait à `\`, et rien de ce qui le précède n'était lu (conv-1618).
+ * `D:\…` se réduisait à `\`, et rien de ce qui le précède n'était lu.
  */
 function clauseAvantChemin(texte: string, index: number): string {
   const lecteur = /(?<![A-Za-z])[A-Za-z]:[\\/]?$/.exec(texte.slice(Math.max(0, index - 3), index))
@@ -320,7 +326,7 @@ function clauseAvantChemin(texte: string, index: number): string {
  * Un chemin cité ENTRE PARENTHÈSES pour illustrer une question de LECTURE désigne un endroit à
  * observer, pas un fichier à modifier.
  *
- * Défaut vécu conv-1613 (2026-11-05, correctif conv-1625) : « Mesure d'abord qui lit encore ces
+ * Défaut vécu (2026-11-05) : « Mesure d'abord qui lit encore ces
  * SKILL.md (skill_charger, appel par le nom sans barre dans X:107, …) ». Le contrôle final a exigé la
  * modification de X et refusé 220 fois un lot juste (402 $). La question doit porter un verbe de
  * MESURE suivi de « qui / où … lit, appelle, utilise… » : « Corrige le module qui lit la config
@@ -353,7 +359,7 @@ const HORS_PERIMETRE =
 /**
  * Le dossier de preuve joint est une DONNEE rapportee, jamais une demande.
  *
- * Defaut vecu (conv-470, tour 52fbe05f-0086-4806-8f07-c8762e8caa35) : la demande `/kaizen j'ai
+ * Defaut vecu (tour 52fbe05f-0086-4806-8f07-c8762e8caa35) : la demande `/kaizen j'ai
  * rien en preprompt` ne nommait aucun fichier, mais le dossier joint recopiait un message anterieur
  * portant « Ancrage : src/main/modeles/model-quotas.ts:62 ». Le gate a exige la mutation de ce fichier et a
  * refuse un travail juste — exactement le faux positif que ce garde s'interdit.
@@ -361,7 +367,7 @@ const HORS_PERIMETRE =
 const MARQUEUR_DOSSIER_JOINT = '=== DOSSIER DE PREUVE AUTOWIN OS ==='
 
 export function ciblesNommees(task: string): string[] {
-  const demande = task.split(MARQUEUR_DOSSIER_JOINT)[0]
+  const demande = task.split(MARQUEUR_DOSSIER_JOINT)[0].split(ENTETE_CONTEXTE_COMMUN)[0]
   const texte = demande.normalize('NFD').replace(/\p{Diacritic}/gu, '')
   const cibles: string[] = []
   for (const match of texte.matchAll(CIBLE_ANCREE)) {
@@ -386,6 +392,39 @@ function memeChemin(a: string, b: string): boolean {
 }
 
 /**
+ * Le fichier modifié est-il la cible nommée, DÉPLACÉE dans un sous-dossier de son ancien dossier ?
+ *
+ * Une demande écrite avant un rangement de dossiers cite l'ancien chemin (`src/main/x.ts:32`) alors
+ * que le fichier vit désormais en `src/main/app/x.ts`. Exiger l'ancien chemin rendait la cible
+ * insatisfaisable : seul un faux fichier recréé à l'ancien endroit aurait levé le refus. Le même nom
+ * sous l'ancien dossier ne vaut que si l'ancien chemin n'existe PLUS dans la copie qui porte la
+ * modification : tant qu'il existe, un homonyme dans un sous-dossier reste un autre fichier.
+ */
+// fix-ok: memeChemin ne compare que les fins de chemin ; une demande citant src/main/crash-handlers.ts:32
+// (déplacé en src/main/app/crash-handlers.ts, absent de HEAD) rendait « manquee » sur le fichier réel
+// modifié, mesuré par le test « cible déplacée » rouge avant ce correctif.
+function cibleDeplacee(
+  touche: string,
+  cible: string,
+  existe: (chemin: string) => boolean
+): boolean {
+  const coupure = cible.lastIndexOf('/')
+  if (coupure <= 0) return false
+  const dossier = cible.slice(0, coupure + 1)
+  if (!touche.endsWith(cible.slice(coupure))) return false
+  let racine: string
+  if (touche.startsWith(dossier)) racine = ''
+  else {
+    const position = touche.lastIndexOf(`/${dossier}`)
+    if (position < 0) return false
+    racine = touche.slice(0, position + 1)
+  }
+  // Au moins un dossier de plus entre l'ancien dossier et le nom : sinon c'est la cible elle-même.
+  if (!touche.slice(racine.length + dossier.length).includes('/')) return false
+  return !existe(`${racine}${cible}`)
+}
+
+/**
  * Croise les cibles nommees avec les chemins REELLEMENT mutes, rapportes par `ExecutionEvidence`.
  *
  * La source n'est PAS `git diff` : `worktrees.end()` (`orchestrator.ts:1887`) est POSTERIEUR au
@@ -397,7 +436,7 @@ function memeChemin(a: string, b: string): boolean {
 /**
  * Une valeur attribuee est-elle vraiment un CHEMIN ?
  *
- * Regression VECUE le 2026-08-18 sur conv-1304 : une preuve d'execution portait `path: "0"`. Le garde
+ * Regression VECUE le 2026-08-18 : une preuve d'execution portait `path: "0"`. Le garde
  * l'a comptee comme un fichier modifie, le repli « aucun chemin attribue → sans-objet » n'a donc pas
  * joue, et un run qui avait POURTANT modifie et committe la cible nommee a ete bloque. Un faux
  * blocage est pire que le defaut que ce garde corrige : il refuse du travail juste.
@@ -413,7 +452,8 @@ function ressembleAUnChemin(valeur: string): boolean {
 
 export function cibleNommeeTouchee(
   task: string,
-  evidence: readonly ExecutionEvidence[]
+  evidence: readonly ExecutionEvidence[],
+  existe: (chemin: string) => boolean = existsSync
 ): 'sans-objet' | 'touchee' | 'manquee' {
   const cibles = ciblesNommees(task)
   if (cibles.length === 0) return 'sans-objet'
@@ -425,7 +465,9 @@ export function cibleNommeeTouchee(
   if (touches.length === 0) return 'sans-objet'
   // Decision cadree : le gate ne bloque que le MISS TOTAL. Une couverture PARTIELLE part au juge,
   // non bloquante — un `every` en dur ici interdirait la relocalisation causale legitime.
-  return cibles.some((cible) => touches.some((chemin) => memeChemin(chemin, cible)))
+  return cibles.some((cible) =>
+    touches.some((chemin) => memeChemin(chemin, cible) || cibleDeplacee(chemin, cible, existe))
+  )
     ? 'touchee'
     : 'manquee'
 }
@@ -438,7 +480,7 @@ function libelleCibleNommee(cibles: readonly string[]): string {
  * AUTORITÉS DE CLÔTURE — pathologie CONNUE, garde RETIRÉE, à ne pas retenter à l'identique.
  * (Commentaire de bloc et non JSDoc : il ne documente aucun symbole, il documente une ABSENCE.)
  *
- * Défaut réel (conv-1302, 2026-08-18) : bloqué par le gate, un run a réparé LE GATE quatre fois
+ * Défaut réel (2026-08-18) : bloqué par le gate, un run a réparé LE GATE quatre fois
  * d'affilée au lieu de la tâche demandée, puis a fermé `succeeded` avec un juge à 96/100. L'agent
  * modifiait la chose qui l'évaluait.
  *
@@ -499,10 +541,10 @@ export function etatDeCloture(
   if (cibleManquee) {
     checks.push({ label: libelleCibleNommee(ciblesNommees(task)), checked: false })
   }
-  // Garde « cadrage refusé » (conv-687, 18/09) : si le DERNIER frame porte encore le refus des cas
+  // Garde « cadrage refusé » (18/09) : si le DERNIER frame porte encore le refus des cas
   // limites, le run n'a pas de cadrage valide — il ne ferme pas vert. Un frame refait après passe.
-  // Portee (conv-710, 19/09) : la garde ne vaut que pour un run dont le cadrage EST le resultat
-  // (scout → frame, conv-687). Si un `build` a joue APRES le dernier frame, le travail a ete produit
+  // Portee (19/09) : la garde ne vaut que pour un run dont le cadrage EST le resultat
+  // (scout → frame). Si un `build` a joue APRES le dernier frame, le travail a ete produit
   // et prouve par ses propres preuves ; la reparation ne rejoue que `build` et ne peut plus refaire
   // le cadrage — le refus devenait insatisfaisable, affiche en « Promis mais pas fait » a l'agent.
   const indexDernierFrame = phases.map((p) => p.phase).lastIndexOf('frame')
@@ -513,7 +555,7 @@ export function etatDeCloture(
   if (cadrageEnRefus) {
     checks.push({ label: 'Cadrage accepté par le contrôle des cas limites', checked: false })
   }
-  // Garde « grille qualité » (conv-1035, 21/10) : tant que le dernier clean déclare un ❌ restant,
+  // Garde « grille qualité » (21/10) : tant que le dernier clean déclare un ❌ restant,
   // le run ne ferme pas vert. Une case non cochée, et PAS le statut `red` : ce refus se répare
   // (build puis clean rejoués), alors que `red` le présenterait comme un échec qu'aucune
   // réparation ne lève (`CLOSURE_UPSTREAM_REFUSAL`, gates/stopgate.ts).

@@ -90,7 +90,8 @@ export const CLE_ETAT: Record<EtatDuLot, CleChatFilsEtLots> = {
   fait: 'lots.etat.fait',
   echec: 'lots.etat.echec',
   interrompu: 'lots.etat.interrompu',
-  'attend-chef': 'lots.etat.attend-chef'
+  'attend-chef': 'lots.etat.attend-chef',
+  'attend-publication': 'lots.etat.attend-publication'
 }
 
 /** Durée du DERNIER lancement du lot (une relance remet `debut` à zéro). */
@@ -244,8 +245,15 @@ export function relanceAuClic(
   lot: LotDuPlan,
   langue: Langue
 ): { possible: true } | { possible: false; raison: string } | null {
-  // Un lot qui attend le chef se relance aussi (même règle que `relancerLot`).
-  if (lot.etat !== 'echec' && lot.etat !== 'interrompu' && lot.etat !== 'attend-chef') return null
+  // Un lot qui attend le chef ou sa publication se relance aussi (même règle que `relancerLot`) :
+  // pour le second, c'est la sortie de l'utilisateur si personne ne commite les fichiers bloquants.
+  if (
+    lot.etat !== 'echec' &&
+    lot.etat !== 'interrompu' &&
+    lot.etat !== 'attend-chef' &&
+    lot.etat !== 'attend-publication'
+  )
+    return null
   if (relancerLot(plan, lot.rang).ok) return { possible: true }
   // Le seul refus qui garde un bouton : sans lui, l'utilisateur ne saurait pas pourquoi rien ne
   // repart. Les autres (quota, redémarrage, arrêt) ont déjà leur bouton « Reprendre ».

@@ -11,6 +11,7 @@ import {
   creerPlan,
   decisionDeDepot,
   empreintePlan,
+  fichiersBloquesParLaBase,
   interrompreAuDemarrage,
   libelleEtat,
   lirePlanDeLots,
@@ -18,7 +19,9 @@ import {
   marquerEchec,
   marquerLance,
   messageDeDecision,
+  messageDeDemandeDeCommit,
   noterDecision,
+  noterDemandeDeCommit,
   noterFinDeTour,
   noterTourDuLot,
   promptDeReveil,
@@ -27,6 +30,8 @@ import {
   reprendrePlan,
   statutApresLancements,
   suiteDeLOrdreAuLot,
+  suivreLesPublications,
+  type ActiviteDeRun,
   type IssueDuTour,
   type LotDuPlan,
   type PlanDeLots,
@@ -72,6 +77,16 @@ export interface DepsPlans {
   existe: (fil: string) => boolean
   /** Écrit au fil `a` comme le fil `de` (journal des messages entre fils). Lève sur refus. */
   ecrire: (de: string, a: string, texte: string) => void
+  /**
+   * Les fils qui ont écrit ces fichiers et ne les ont pas commités, dans le dossier du chef (traces
+   * de fichiers des fils). Absent : aucune demande de commit ne part.
+   */
+  proprietaires?: (chef: string, fichiers: readonly string[]) => readonly string[]
+  /**
+   * Envoie un ORDRE au fil `a` comme le fil `de` — même voie que `ecrire_a_un_fil` nature
+   * « ordre » : un fil inactif reçoit un tour, un fil occupé le lit à son prochain outil. Lève sur refus.
+   */
+  ordonner?: (de: string, a: string, texte: string) => Promise<unknown>
   /** Prévient l'écran (tableau d'avancement). */
   signaler?: () => void
   stockage?: { lire: () => string; ecrire: (contenu: string) => void }
@@ -98,7 +113,15 @@ export function stockageFichier(chemin = cheminFichierPlans()): NonNullable<Deps
   }
 }
 
-const ETATS = new Set(['a-faire', 'en-cours', 'fait', 'echec', 'interrompu', 'attend-chef'])
+const ETATS = new Set([
+  'a-faire',
+  'en-cours',
+  'fait',
+  'echec',
+  'interrompu',
+  'attend-chef',
+  'attend-publication'
+])
 /** Un plan dont les lots peuvent encore tourner : son fil de lot n'en lance pas un autre. */
 const PLAN_VIVANT: ReadonlySet<StatutDuPlan> = new Set([
   'attente-accord',
@@ -547,6 +570,13 @@ export class CoordinateurDesPlans {
       const rang = Number(args.lot)
       if (!Number.isInteger(rang) || rang < 1)
         throw new Error('plan_de_lots : « lot » — numéro du lot à relancer attendu (1, 2…).')
+      // Le chef relançait chaque lot refusé par la base : tout était refait pour le même refus.
+      // L'utilisateur garde sa relance (bouton du tableau), sa sortie si personne ne commite.
+      const vise = this.planDuFil(chef)?.plan.lots.find((l) => l.rang === rang)
+      if (vise?.etat === 'attend-publication')
+        throw new Error(
+          `plan_de_lots : le lot ${rang} attend sa publication — son travail est fini et vérifié, il entrera seul dans le dossier dès que les fichiers qui le bloquent seront commités. Ne le relance pas : il referait tout pour le même refus.${vise.raison ? ` (${vise.raison})` : ''}`
+        )
       const r = await this.relancer(chef, rang)
       if (!r.ok) throw new Error(`plan_de_lots : ${r.erreur}`)
       return { ok: true, plan: resume(r.plan), detail: r.detail }
@@ -564,11 +594,15 @@ export class CoordinateurDesPlans {
     try {
       // 1. Le fil est un chef : son tour vient de finir, les comptes rendus en attente partent.
       if (this.#reveilEnCours.delete(fil) || this.#enAttente.has(fil)) await this.#reveiller(fil)
-      // 2. Le fil fait un lot : en cours, ou interrompu dont l'agent a survécu au redémarrage.
+      // 2. Le fil fait un lot : en cours, interrompu dont l'agent a survécu au redémarrage, ou en
+      //    échec et rattrapé par un travail validé dans son fil (`noterFinDeTour`).
       const plan = this.#plans.find((p) =>
         p.lots.some(
           (l) =>
-            l.fil === fil && (l.etat === 'en-cours' || (l.etat === 'interrompu' && issue.repris))
+            l.fil === fil &&
+            (l.etat === 'en-cours' ||
+              (l.etat === 'interrompu' && issue.repris) ||
+              (l.etat === 'echec' && issue.orchestrationReussie === true))
         )
       )
       if (!plan) {
@@ -582,20 +616,27 @@ export class CoordinateurDesPlans {
       }
       const note = noterFinDeTour(plan, fil, issue, this.#maintenant())
       if (note.effet !== 'note' || !note.lot) return
-      const suivant = note.plan
+      let suivant = note.plan
       if (!this.#deps.existe(plan.chef)) {
         this.#poser(this.#arretChefSupprime(suivant))
         return
       }
+      if (note.lot.etat === 'attend-publication')
+        suivant = await this.#demanderLeCommit(
+          suivant,
+          note.lot,
+          fichiersBloquesParLaBase(issue.echecOrchestration ?? '') ?? []
+        )
       this.#poser(suivant)
+      const lotNote = suivant.lots.find((l) => l.rang === note.lot?.rang) ?? note.lot
       try {
-        this.#deps.ecrire(fil, plan.chef, compteRenduDuLot(suivant, note.lot, issue.texte))
+        this.#deps.ecrire(fil, plan.chef, compteRenduDuLot(suivant, lotNote, issue.texte))
       } catch (e) {
         // Le tableau et le réveil portent l'essentiel : le compte rendu manque, rien d'autre.
-        this.#journal(`compte rendu du lot ${note.lot.rang} non écrit au chef ${plan.chef}`, e)
+        this.#journal(`compte rendu du lot ${lotNote.rang} non écrit au chef ${plan.chef}`, e)
       }
       await this.#lancerLesSuivants(plan.id)
-      this.#noterAttente(plan.chef, plan.id, note.lot.rang)
+      this.#noterAttente(plan.chef, plan.id, lotNote.rang)
       await this.#reveiller(plan.chef)
     } catch (e) {
       this.#journal(`fin de tour de ${fil} non traitée`, e)
@@ -682,6 +723,81 @@ export class CoordinateurDesPlans {
       nonDemarre: true
     })
     return r
+  }
+
+  /**
+   * LE COMMIT DEMANDÉ AU FIL QUI BLOQUE (2026-11-06, accord de l'utilisateur). Un ordre par fil
+   * qui tient les fichiers refusés, au nom du lot ; jamais au fil du lot lui-même. Un envoi refusé
+   * (plafond horaire, fil disparu) n'empêche ni la note du lot ni le réveil du chef. Rend le plan
+   * dont la raison du lot dit à qui le commit a été demandé — ou que personne de connu ne les tient.
+   */
+  async #demanderLeCommit(
+    plan: PlanDeLots,
+    lot: LotDuPlan,
+    fichiers: readonly string[]
+  ): Promise<PlanDeLots> {
+    if (!this.#deps.proprietaires || !this.#deps.ordonner || !lot.fil) return plan
+    let fils: string[]
+    try {
+      fils = [...new Set(this.#deps.proprietaires(plan.chef, fichiers))].filter(
+        (f) => f !== lot.fil && this.#deps.existe(f)
+      )
+    } catch (e) {
+      this.#journal(`propriétaires des fichiers du lot ${lot.rang} illisibles`, e)
+      return plan
+    }
+    const demandes: string[] = []
+    for (const a of fils) {
+      try {
+        await this.#deps.ordonner(lot.fil, a, messageDeDemandeDeCommit(plan, lot, fichiers))
+        demandes.push(a)
+      } catch (e) {
+        this.#journal(`commit non demandé à ${a} pour le lot ${lot.rang}`, e)
+      }
+    }
+    // Personne de connu, ou aucun envoi parti : la raison le dit, le chef le relaie.
+    return noterDemandeDeCommit(plan, lot.rang, fichiers, demandes)
+  }
+
+  /**
+   * L'ACTIVITÉ DES RUNS, à chaque changement (`os.onWorktreeActivity`, `ipc/chat.ts`). Un lot qui
+   * attend sa publication retient les runs bloqués de son fil, puis passe « fait » quand l'un d'eux
+   * est publié — par la republication automatique, une fois les fichiers commités. Ne lève jamais :
+   * appelé sur le chemin de l'affichage. Sans lot en attente, rien n'est lu.
+   */
+  surActiviteDesRuns(activites: readonly ActiviteDeRun[]): void {
+    try {
+      for (const plan of [...this.#plans]) {
+        if (!plan.lots.some((l) => l.etat === 'attend-publication')) continue
+        const r = suivreLesPublications(plan, activites, this.#maintenant())
+        if (r.plan === plan) continue
+        this.#poser(r.plan)
+        if (!r.publies.length) continue
+        for (const rang of r.publies) {
+          const lot = r.plan.lots.find((l) => l.rang === rang)
+          if (!lot?.fil) continue
+          try {
+            this.#deps.ecrire(
+              lot.fil,
+              plan.chef,
+              compteRenduDuLot(
+                r.plan,
+                lot,
+                'Le travail vérifié de ce lot est entré dans le dossier partagé : les fichiers qui le bloquaient ont été commités, et l’app l’a republié.'
+              )
+            )
+          } catch (e) {
+            this.#journal(`compte rendu de publication du lot ${rang} non écrit`, e)
+          }
+          this.#noterAttente(plan.chef, plan.id, rang)
+        }
+        void this.#lancerLesSuivants(plan.id)
+          .then(() => this.#reveiller(plan.chef))
+          .catch((e) => this.#journal(`suite du plan ${plan.id} après publication`, e))
+      }
+    } catch (e) {
+      this.#journal('activité des runs non suivie', e)
+    }
   }
 
   #arretChefSupprime(plan: PlanDeLots): PlanDeLots {

@@ -250,7 +250,8 @@ import {
   appendExecutionEvidenceFileTrace,
   readConversationFileTraces,
   readConversationTurnFileMutations,
-  readConversationTurnFilePaths
+  readConversationTurnFilePaths,
+  readCurrentPathOwners
 } from '../activity/conversation-file-trace-spool'
 import { buildBehaviourComposition } from '../behaviour/behaviour-composition'
 import { artifactsFromExecutionEvidence } from '../providers/artifacts'
@@ -1152,6 +1153,8 @@ Le fil reprend ensuite normalement.`
   os.onWorktreeActivity((activity) => {
     for (const w of BrowserWindow.getAllWindows())
       w.webContents.send('worktree:activity-changed', activity)
+    // Un lot qui attend sa publication passe « fait » quand son travail gardé de côté est publié.
+    suiviDesPlans.coordinateur?.surActiviteDesRuns(activity)
   })
   // COMPTER les refus d'intégration. Rien ne les comptait : `trace.json` n'a pas de champ `reason`
   // (ses occurrences du mot sont du code source cité par des agents), les 1995 RUN.md n'en gardent
@@ -3010,6 +3013,19 @@ Le fil reprend ensuite normalement.`
     tourActif: (fil) => activeChatTurns.isInFlight(fil),
     existe: (fil) => Boolean(os.conversations.get(fil)),
     ecrire: (de, a, texte) => bus.ecrireDepuisLeFil(de, a, texte),
+    // Les fils qui tiennent les fichiers d'un lot refusé par la base : leurs traces de fichiers
+    // (celles de `proprietaire_fichier`), hors fils qui les ont seulement VUS changer.
+    proprietaires: (chef, fichiers) =>
+      readCurrentPathOwners(dossierDuTour(chef), fichiers)
+        .flat()
+        .filter((p) => !p.vuSeulement)
+        .map((p) => p.conversationId),
+    // Même voie qu'un agent qui envoie un ordre : un fil inactif reçoit un tour.
+    ordonner: async (de, a, texte) => {
+      const r = await bus.exec('ecrire_a_un_fil', { destinataire: a, texte, nature: 'ordre' }, de)
+      if (!r.ok) throw new Error(r.error ?? 'ordre refusé')
+      return r.data
+    },
     signaler: () => {
       broadcast({ type: 'refresh', scope: 'plans-de-lots' })
       broadcast({ type: 'refresh', scope: 'conversations' })
@@ -3096,9 +3112,12 @@ Le fil reprend ensuite normalement.`
         { fil, fichiers: passe.fichiers, fils: passe.fils, travaux: passe.travaux.length }
       )
     },
-    // Le chef d'un plan qui tourne encore attend : ses lots écrivent toujours.
+    // Le chef d'un plan qui tourne encore attend : ses lots écrivent toujours. La publication du
+    // dernier tour aussi (typage, tests, push : plusieurs minutes) : passée avant elle, la passe
+    // concluait « rien à publier » juste avant que ce tour pousse son commit.
     filOccupe: (fil) =>
       activeChatTurns.isInFlight(fil) ||
+      publicationsEnVol.conversations().includes(fil) ||
       planTourneEncore(suiviDesPlans.coordinateur?.planDuFil(fil)),
     lireAmont: async (fil) => lireAmont(await defaultGitRunner(), dossierDuTour(fil)),
     commitsDepuis: async (fil, depuis, fils) =>

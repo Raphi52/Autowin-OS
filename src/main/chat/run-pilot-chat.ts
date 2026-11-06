@@ -137,14 +137,14 @@ export type RunPilotChatDeps = {
   /**
    * Relance HORS DU TOUR les commandes shell que le CLI a coupées en fin de tour, puis rouvre un tour
    * de reprise dans la même conversation (`chat/relance-taches-de-fond.ts`). Sans elle, le résultat
-   * était perdu et l'utilisateur devait relancer lui-même (conv-528, conv-42).
+   * était perdu et l'utilisateur devait relancer lui-même.
    */
   relancerTachesDeFond?: (conversationId: string, taches: TacheDeFondARelancer[]) => void
 }
 
 /**
  * Fin de CHAQUE tour de chat, avec son issue — le coordinateur des plans de lots d'un fil chef
- * (`plans-de-lots-app.ts`, conv-1150) y note le lot d'un fil enfant et réveille le chef.
+ * (`plans-de-lots-app.ts`) y note le lot d'un fil enfant et réveille le chef.
  */
 export type ObservateurFinDeTour = (
   conversationId: string,
@@ -185,6 +185,8 @@ export type RunPilotChat = (
   verification?: { complete: boolean; evidence: string }
   /** Erreur de l'`orchestrate` du tour quand il a échoué (le tour, lui, reste `ok`). */
   echecOrchestration?: string
+  /** Un `orchestrate` du tour a été validé par le contrôle final (`outcome.status === 'succeeded'`). */
+  orchestrationReussie?: boolean
   resolvedModel?: string
   knownCostUsd?: number
   totalTokens?: number
@@ -197,7 +199,7 @@ export type DirectChatRecovery = {
   providerCall: RecoveredPilotProviderCall
   /**
    * Modèle et effort du CHAT d'origine, rejoués pour le chat seulement — jamais imposés aux
-   * commandes du tour (voir `reglagesDeReprise`, conv-955).
+   * commandes du tour (voir `reglagesDeReprise`).
    */
   runtimeBinding?: RoleBinding
 }
@@ -224,7 +226,7 @@ export function verdictVeilleurInactivite(etat: {
 
 /**
  * Annonce la FIN d'un tour aux règles `task_create` « quand le tour de conv-N est terminé »
- * (conv-1069 : sur conv-1065, attendre un autre fil a coûté 5 envois et 2 tours payés pour lire
+ * (attendre un autre fil a coûté 5 envois et 2 tours payés pour lire
  * « pas terminé »). L'issue (réussi, arrêté, échec) n'est pas connue ici : le contexte renvoie au
  * fil plutôt que d'en inventer une. Best-effort : un réveil raté ne casse jamais la fin d'un tour.
  * Garde : `run-pilot-chat.test.ts`.
@@ -310,7 +312,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
      * Les etiquettes d'action, TENUES A PART du vrai texte — et c'est un COUPLE de garanties.
      *
      * Elles existent comme dernier recours : un tour qui n'a fait qu'agir ne doit JAMAIS afficher une
-     * bulle vide (defaut documente, conv-1141). Mais melangees au texte, elles se retrouvaient EN TETE
+     * bulle vide (defaut documente). Mais melangees au texte, elles se retrouvaient EN TETE
      * de reponses parfaitement redigees. Mesure le 2026-08-15 sur les conversations de sonde : 36 sur
      * 39 commencaient par « [a execute ...] », et l'utilisateur a tranche — « c'est pas du tout
      * l'experience que je veux offrir ».
@@ -330,7 +332,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
      * produirait des centaines de lignes pour un seul tour et rendrait la chronologie illisible.
      * La TRACE causale le recoit donc en une fois, a la cloture. Le TOUR, lui, le recoit par rafale
      * (a chaque pause du modele) : ecrit seulement a la cloture, il ne vivait que dans la memoire de
-     * l'ecran, et un rechargement de la vue en plein tour peignait un bloc vide (conv-1110,
+     * l'ecran, et un rechargement de la vue en plein tour peignait un bloc vide (
      * `raisonnement-au-fil-du-tour.ts`).
      */
     const raisonnementDuTour = ecrivainDeRaisonnement((portion) => {
@@ -341,8 +343,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         })
     })
     /**
-     * Le reste du pilote vers le JOURNAL fichier, la pensée regroupée par rafale (conv-1431 :
-     * 355 683 lignes d'un ou deux mots sur les journaux conv-14*, 55 % de leur poids).
+     * Le reste du pilote vers le JOURNAL fichier, la pensée regroupée par rafale (
+     * 355 683 lignes d'un ou deux mots sur les journaux *, 55 % de leur poids).
      */
     const journalDuPilote = journalDuPiloteRegroupe((journalEvent) => {
       if (conversationId) appendTurnEvent(turnJournalRoot, conversationId, turnId, journalEvent)
@@ -364,8 +366,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     let completedText = ''
     let verification: { complete: boolean; evidence: string } | undefined
     // L'erreur de l'`orchestrate` du tour s'il a échoué : le tour finit `ok` malgré elle, et un
-    // plan de lots notait « fait » un lot coupé par la limite d'usage (conv-1236, 2026-10-28).
+    // plan de lots notait « fait » un lot coupé par la limite d'usage (2026-10-28).
     let echecOrchestration: string | undefined
+    // Sa réussite, elle, rattrape un lot de plan en échec repris dans son fil (`noterFinDeTour`).
+    let orchestrationReussie = false
     let turnUsage: { inputTokens: number; outputTokens: number; costUsd?: number } | undefined
     let turnPromptIdentity:
       { provider: string; model?: string; reasoningEffort?: string } | undefined
@@ -462,7 +466,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
     /*
      * TOUR CLOS ⇒ PLUS RIEN EN DIRECT VERS L'ÉCRAN.
      *
-     * DEFAUT VECU (conv-978, 2026-10-15) : « mon bouton stop relance 3x le tour ». Apres Stop, le
+     * DEFAUT VECU (2026-10-15) : « mon bouton stop relance 3x le tour ». Apres Stop, le
      * tour etait clos (`cancelled` ecrit), mais une action encore vivante (`verify`) a emis trois
      * battements puis son resultat. L'ecran recevait ces evenements pour un fil qu'il venait de
      * liberer, et son adoption des tours lances cote moteur (ChatView, fil non occupe ⇒ « un tour
@@ -503,12 +507,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       const orientations = new Set<string>()
       /** Ou relire le run d'un message de l'agent : le journal de son tour. */
       const tourParContenu = new Map<string, SourceDuRun>()
-      /** Messages de l'agent dont le tour s'est arrete avant sa fin (statut du store, conv-1142). */
+      /** Messages de l'agent dont le tour s'est arrete avant sa fin (statut du store). */
       const toursArretes = contenusDesToursArretes(
         conversationId ? (os.conversations.get(conversationId)?.messages ?? []) : []
       )
       /** Avis posés par l'app (carte Git, bascule de dossier) : sans `turnId`, ils ne répondent à
-       *  rien — la ligne compréhension ne doit pas les lire comme la réponse de l'agent (conv-1641). */
+       *  rien — la ligne compréhension ne doit pas les lire comme la réponse de l'agent. */
       const avisDeLApp = contenusDesAvisDeLApp(
         conversationId ? (os.conversations.get(conversationId)?.messages ?? []) : []
       )
@@ -520,7 +524,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           const parts = (stocke as { parts?: PersistedChatPart[] }).parts
           if (stocke.role === 'assistant' && parts?.length && typeof stocke.content === 'string') {
             partsParContenu.set(stocke.content, parts)
-            // Le journal du tour garde l'issue ENTIERE d'un run, que le fil coupe (conv-989).
+            // Le journal du tour garde l'issue ENTIERE d'un run, que le fil coupe.
             if (stocke.turnId)
               tourParContenu.set(stocke.content, {
                 journalRoot: turnJournalRoot,
@@ -545,13 +549,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         continuationWindow?.history ?? boundedTurnHistory(depuisDerniereCompaction(rawMessages), 40)
       const partsDuMessage = (m: (typeof fenetre)[number]): PersistedChatPart[] | undefined =>
         m.role === 'assistant' ? partsParContenu.get(m.content) : undefined
-      // Le DERNIER run seulement : relire chaque run en entier ferait grossir tout le fil (conv-989).
+      // Le DERNIER run seulement : relire chaque run en entier ferait grossir tout le fil.
       const rangDernierRun = rangDuDernierRun(fenetre, partsDuMessage)
       const safe = fenetre.map((m, rang) => {
         const parts = partsDuMessage(m)
         // L'original d'une pièce passée vient du disque, et une pièce que le renderer ne transmet
         // pas (texte, PDF) y est rajoutée : le travail d'une branche « Lancer en N fils » part au
-        // tour SUIVANT celui du message (conv-1147, `pieces-jointes-durables.ts`).
+        // tour SUIVANT celui du message (`pieces-jointes-durables.ts`).
         const pieces =
           m.role === 'user'
             ? piecesJointesPourLeModele(m.attachments, metasParContenu.get(m.content), {
@@ -571,10 +575,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           content: guardString(pourLeModele, 'content'),
           // fix-ok: sans ce drapeau, `orientationsDuTourPrecedent` (7459e8cd) ne voyait jamais une
           // consigne envoyee pendant un tour : le renderer ne transmet pas le drapeau, on le relit dans le
-          // store (conv-844).
+          // store.
           ...(m.role === 'user' && orientations.has(m.content) ? { orientation: true } : {}),
           // Tour arrete : le message suivant explique les deux lignes que le CLI insere a la reprise
-          // (`reprise-apres-arret.ts`, conv-1142). Le renderer n'envoie pas le statut, le store l'a.
+          // (`reprise-apres-arret.ts`). Le renderer n'envoie pas le statut, le store l'a.
           ...(m.role === 'assistant' && toursArretes.has(m.content) ? { arrete: true } : {}),
           ...(m.role === 'assistant' && avisDeLApp.has(m.content) ? { avisDeLApp: true } : {}),
           ...(pieces.length ? { attachments: guardAttachments(pieces) } : {})
@@ -582,7 +586,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       })
       let traceParentId: string | undefined
       /**
-       * `actionId` -> identifiant de SA `command` dans la trace (conv-1370, lot 8, 2026-10-31). Les
+       * `actionId` -> identifiant de SA `command` dans la trace (lot 8, 2026-10-31). Les
        * lectures d'un même message se chevauchent : command, command, result, result. Rattaché à
        * l'événement précédent, le second `result` tombait sous un autre appel, et l'Observatoire
        * montrait une lecture sans résultat et la suivante avec deux notes.
@@ -601,7 +605,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
        */
       // Un tour RÉCUPÉRÉ réutilise son turnId : l'ordinal doit repartir d'où la trace s'était
       // arrêtée, sinon le premier événement de la reprise duplique `…:action:0-0:…` et
-      // `TraceStore.append` fait échouer le tour entier (mesuré sur conv-1147, 3,19 $ perdus).
+      // `TraceStore.append` fait échouer le tour entier (3,19 $ perdus).
       let traceActionOrdinal =
         recovery && conversationId
           ? seedTraceActionOrdinal(causalTrace.readConversationBestEffort(conversationId), turnId)
@@ -631,7 +635,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         }
       }
       /*
-       * UNE SÉLECTION DE PISTES SE NOTE ICI, PAS SEULEMENT DANS UN RUN (conv-1341, 2026-10-30). Seul
+       * UNE SÉLECTION DE PISTES SE NOTE ICI, PAS SEULEMENT DANS UN RUN (2026-10-30). Seul
        * l'orchestrateur l'écrivait : une sélection traitée dans le fil restait invisible, son scout
        * passait pour « sans aucune piste prise » ou ses pistes pour « laissées », et le taux de prise
        * qui ajuste les notes du scout suivant s'en trouvait faussé.
@@ -753,7 +757,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           durableEvent = {
             kind: 'stream-reset',
             streamId: pilotEvent.streamId,
-            // conv-1401 : une relance ne retire que la conclusion — le fil enregistré aussi.
+            // Une relance ne retire que la conclusion — le fil enregistré aussi.
             ...(pilotEvent.conclusionSeule ? { conclusionSeule: true as const } : {})
           }
         else if (pilotEvent.kind === 'think' && pilotEvent.text)
@@ -788,7 +792,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           durableEvent = { kind: 'artifact', artifact: pilotEvent.artifact }
         else if (pilotEvent.kind === 'tests-du-terminal') {
           // Écrits DÈS le résultat, pas à la clôture : un tour qui plante après ses tests garde
-          // leur preuve sur la carte du fil (conv-1059).
+          // leur preuve sur la carte du fil.
           const tests = lireTestsDuTerminal(pilotEvent.data)
           if (tests.length > 0) durableEvent = { kind: 'tests-du-terminal', tests, ...heure }
         } else if (pilotEvent.kind === 'done') {
@@ -804,8 +808,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
            * Condition stricte pour ne JAMAIS dupliquer : on ne persiste ce texte que si aucun delta
            * n'a ete emis pendant le tour (sinon le texte du `done` reprend ce qui a deja ete dit).
            *
-           * ET IL FAUT LE LIVRER AU FIL LIVE, pas seulement l'ecrire. Mesure du 2026-08-17 sur
-           * `conv-1276` : tout le texte du tour tenait dans cette seule part `<turnId>:closing`, et
+           * ET IL FAUT LE LIVRER AU FIL LIVE, pas seulement l'ecrire. Mesure du 2026-08-17
+           * Tout le texte du tour tenait dans cette seule part `<turnId>:closing`, et
            * l'utilisateur ne l'a vu qu'apres avoir envoye le message SUIVANT — qui relit le store. Le
            * renderer ne recoit que `done`, dont son reducteur jette le texte (par construction, pour ne
            * pas dupliquer le streame) : un texte porte par le seul `done` n'atteignait donc JAMAIS le
@@ -830,7 +834,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
               /* journal best-effort */
             }
           }
-          // GROW PROPOSEE PAR LE CODE (conv-417) : une demande d'action LIVREE finit sur un bouton
+          // GROW PROPOSEE PAR LE CODE : une demande d'action LIVREE finit sur un bouton
           // `/grow`, decide ici sur l'issue structuree du run, jamais sur les mots du modele.
           // Proposee seulement : la ligne est un bouton du champ de saisie, rien n'est lance.
           const ligneGrow = ligneDePropositionGrow(
@@ -871,7 +875,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
               lines: streamedActions
             })
           // ... et la DUREE DU RAISONNEMENT, que la capsule « Raisonnement » affiche en secondes
-          // (R5, conv-162) : la meme mesure que son compteur en direct, du debut du tour a sa
+          // (R5) : la meme mesure que son compteur en direct, du debut du tour a sa
           // cloture. Sans elle, un tour relu montrait « Raisonnement terminé » sans aucun chiffre.
           // Ecrite meme sans texte de pensee : sur un modele dont la pensee arrive chiffree, la
           // capsule compte quand meme. Un tour REPRIS apres un crash compte depuis sa reprise.
@@ -901,8 +905,8 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           // L'issue d'orchestration entre dans la trace comme verdict de CONTROLE type, au lieu de
           // rester du texte libre que rien ne peut filtrer ni compter.
           const issue = pilotEvent.outcome
-          if (issue?.status === 'failed' && typeof issue.error === 'string')
-            echecOrchestration = issue.error
+          if (issue?.status === 'failed') echecOrchestration = raisonDeLEchec(issue)
+          if (issue?.status === 'succeeded') orchestrationReussie = true
           if (conversationId && issue && Object.keys(issue).length > 0) {
             try {
               const outcomeEvent = appendObservedOrchestrationOutcome(causalTrace, {
@@ -963,7 +967,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       /**
        * VEILLEUR D'INACTIVITE — un tour qui ne finit jamais ne doit pas rester SILENCIEUX.
        *
-       * Vecu par l'utilisateur : `conv-1181` le matin, `conv-1242` le soir — toutes deux figees en
+       * Vecu par l'utilisateur : un fil le matin, un fil le soir — toutes deux figees en
        * statut `streaming`, contenu « [a execute orchestrate] », action `ok: null`. Ni reponse, ni
        * erreur, ni moyen de savoir que c'est mort. Sa demande : « ma derniere convers in app a encore
        * foire, repare pour les prochains prompts ».
@@ -982,13 +986,13 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       /*
        * UNE COMMANDE QUI TOURNE EST UN SIGNE DE VIE — MEME QUAND ELLE N'EMET RIEN.
        *
-       * Defaut vecu le 2026-09-04 (conv-233) : entre `command` (le depart) et `result` (l'arrivee),
+       * Defaut vecu le 2026-09-04 : entre `command` (le depart) et `result` (l'arrivee),
        * une commande longue n'emet AUCUN evenement. Une suite de tests de 233 s, deux editions
        * coupees a 182 s et l'attente du modele ont suffi a franchir le plafond : le tour a ete tue
        * avec « aucun signe de vie depuis 20 minutes » ALORS QU'IL TRAVAILLAIT.
        *
-       * On ne relache pas la garde — elle existe pour les tours REELLEMENT morts (conv-1181,
-       * conv-1242 : figes sur « [a execute orchestrate] »). On la rend EXACTE. La decision elle-meme
+       * On ne relache pas la garde — elle existe pour les tours REELLEMENT morts (
+       * Figes sur « [a execute orchestrate] »). On la rend EXACTE. La decision elle-meme
        * vit dans `verdictVeilleurInactivite`, pour etre testable sans horloge : voir
        * `veilleur-inactivite.test.ts`.
        */
@@ -1007,14 +1011,14 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         if (veilleur) clearInterval(veilleur)
         // Un motif NOMME, jamais un arret muet : l'utilisateur doit lire pourquoi son tour s'arrete.
         // Le motif porte le PREFIXE qui le requalifie en ECHEC plus bas — sans lui, cet arret
-        // repassait pour une annulation volontaire et le motif etait jete (conv-136, 2026-09-02).
+        // repassait pour une annulation volontaire et le motif etait jete (2026-09-02).
         controller.abort(motifInactivite(PLAFOND_INACTIVITE_MS))
       }, 60_000)
       veilleur.unref()
 
       const handlePilotEvent = (incomingPilotEvent: PilotEvent): void => {
         dernierSigneDeVie = Date.now()
-        // UNE SEULE HEURE par evenement, posee ICI (rail du tour, conv-338) : la meme valeur part
+        // UNE SEULE HEURE par evenement, posee ICI (rail du tour) : la meme valeur part
         // au fil en direct (`pilot:event`) et a l'enregistrement (`applyDurableEvent`, qui ne la
         // garde que sur le texte et les commandes), donc le tour relu apres un redemarrage affiche
         // les memes heures que le direct. Le fil date aussi le DEBUT du tour au premier evenement.
@@ -1081,7 +1085,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
             }
           }
         }
-        // Un bloc posé par `montrer_bloc` (conv-1306) n'est pas du texte DIT par le modèle : compté
+        // Un bloc posé par `montrer_bloc` n'est pas du texte DIT par le modèle : compté
         // ici, il s'intercalerait dans le déjà-dit (avant + bloc + après) ; `resteADire` n'y
         // retrouverait plus le texte de clôture « avant + après » et le republierait en entier.
         if (pilotEvent.kind === 'delta' && pilotEvent.text && !estUnFluxDeBloc(pilotEvent.streamId)) {
@@ -1096,10 +1100,10 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           iterationDuDernierDelta = pilotEvent.iteration
         }
         // Accumule la pensee ; un evenement d'une autre sorte (action, commande, texte, fin) ecrit
-        // dans le tour la rafale qui vient de finir (conv-1110).
+        // dans le tour la rafale qui vient de finir.
         raisonnementDuTour.recevoir(pilotEvent)
         if (pilotEvent.kind === 'provider-status' && pilotEvent.text) {
-          // Le tour ENREGISTRÉ garde la commande entière, comme le direct (conv-1228) : relu, le
+          // Le tour ENREGISTRÉ garde la commande entière, comme le direct : relu, le
           // bloc Actions ne montrait sinon qu'une commande coupée à 120 caractères.
           const ligneEntiere = statutComplet(pilotEvent.text, cibleEntiereDe(pilotEvent.data))
           if (streamedActions.at(-1) !== ligneEntiere) streamedActions.push(ligneEntiere)
@@ -1188,7 +1192,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
          * par iteration n'atteignaient donc AUCUN fichier — produits, puis jetes a la frontiere
          * d'ecriture. Aucun affichage ne peut montrer ce qui n'est pas ecrit : c'est ici la cause
          * du journal ou « on ne voit rien ». Un `kind` inconnu est ecrit tel quel, jamais perdu.
-         * AVANT `applyDurableEvent` (conv-1431) : la rafale de pensée en attente part au disque
+         * AVANT `applyDurableEvent` : la rafale de pensée en attente part au disque
          * avant la commande, le texte ou la fin que celui-ci écrit — la pensée reste à sa place.
          * Les deux écritures ne portent jamais le même `kind` : l'ordre d'un même événement tient.
          */
@@ -1639,7 +1643,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
                       ? { systemProfile: 'watchdog-read-only' as const }
                       : {}),
                     // Tâche planifiée ou veille : personne ne répondrait à la question des deux
-                    // lectures (deux-lectures.ts, conv-1092).
+                    // lectures (deux-lectures.ts).
                     ...(policy?.background ? { tourDeFond: true } : {})
                   }
                 : undefined
@@ -1752,6 +1756,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
           etiquettesAction.join('\n').trim(),
         verification,
         ...(echecOrchestration ? { echecOrchestration } : {}),
+        ...(orchestrationReussie && !echecOrchestration ? { orchestrationReussie } : {}),
         ...(turnResolvedModel ? { resolvedModel: turnResolvedModel } : {}),
         ...taskUsageMetricsFromExecution(supervisedUsage)
       }
@@ -1769,7 +1774,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
        * TOUT ARRET QUI PORTE UNE CAUSE MACHINE EST UN ECHEC, pas une annulation.
        *
        * Seule la coupure du VEILLEUR d'inactivite porte encore une cause machine ; elle tombait dans
-       * `cancelled`, et son motif — pourtant redige — etait jete. Mesure conv-136 (2026-09-02) : un
+       * `cancelled`, et son motif — pourtant redige — etait jete. Mesure (2026-09-02) : un
        * run de 25 min, tour coupe a 20, fil reduit a « [a execute orchestrate] », ni reponse ni
        * erreur. La decision vit maintenant dans `terminalDuTour`, pure et testee.
        */
@@ -1779,9 +1784,9 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         erreur: e
       })
       const coupureMotivee = terminal.kind === 'failed' && controller.signal.aborted
-      // Un tour qui echoue ou est coupe en pleine pensee garde la rafale en cours (conv-1110).
+      // Un tour qui echoue ou est coupe en pleine pensee garde la rafale en cours.
       raisonnementDuTour.vider()
-      // ... dans le journal fichier aussi, AVANT son état terminal (conv-1431).
+      // ... dans le journal fichier aussi, AVANT son état terminal.
       journalDuPilote.vider()
       if (conversationId && os.conversations.get(conversationId)) {
         os.conversations.applyTurnEvent(conversationId, turnId, terminal)
@@ -1825,12 +1830,12 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         }
       /**
        * fix-ok: le retour d'échec du chat direct rendait `e.message` BRUT sans passer par
-       * provider-failure-diagnosis — mesuré conv-5, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a
+       * provider-failure-diagnosis — mesuré, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a
        * (2026-09-23T09:41:45Z, « tool call could not be parsed », message assistant vide).
        *
        * DIAGNOSTIC AVANT AFFICHAGE. L'erreur brute seule laissait l'utilisateur sans geste :
        * `provider-failure-diagnosis` n'était branché que sur l'orchestrateur et le watchdog, jamais
-       * sur le chat direct (mesuré conv-737 puis conv-5, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a :
+       * sur le chat direct (mesuré, tour d98b3e44-bc1c-4d37-8495-d64f4bea225a :
        * « tool call could not be parsed », 0,0956 USD, message assistant vide, aucun conseil).
        * Le message d'origine reste en tête, intact : la reprise surcharge et la détection de
        * session expirée le lisent par inclusion.
@@ -1849,7 +1854,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
       }
     } finally {
       tourClos = true
-      // Aucun minuteur de rafale ne survit au tour (conv-1431).
+      // Aucun minuteur de rafale ne survit au tour.
       journalDuPilote.vider()
       // Le veilleur ne survit JAMAIS a son tour : un minuteur orphelin couperait un tour suivant.
       if (veilleur) clearInterval(veilleur)
@@ -1860,7 +1865,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
         activeChatTurns.delete(conversationId, controller)
         broadcast({ type: 'refresh', scope: 'conversations' })
         // APRÈS la sortie des tours actifs : l'agent réveillé lit alors `pilotChatActive` à faux.
-        // fix-ok: conv-1069 — aucun événement « fin de tour » n'était émis : une règle task_create ne pouvait pas attendre un autre fil (rouge : run-pilot-chat.test.ts).
+        // fix-ok: aucun événement « fin de tour » n'était émis : une règle task_create ne pouvait pas attendre un autre fil (rouge : run-pilot-chat.test.ts).
         annoncerFinDeTour(deps.watchdogEngine(), conversationId, turnId)
         /*
          * ORIENTATIONS NON CONSOMMEES : rendues, jamais jetees.
@@ -1874,7 +1879,7 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
          * On les remonte a l'ecran, qui les remet en file : elles repartent comme un tour normal,
          * exactement comme le chemin `/skill` annonce deja sa directive tardive au lieu de la taire.
          */
-        // fix-ok: conv-1241 (tour 6e6212f1) — le finally rendait à l'écran une orientation déjà lue par le modèle (rouge sur 33c44fc0 : run-pilot-chat.orientations-remises.test.ts).
+        // fix-ok: (tour 6e6212f1) — le finally rendait à l'écran une orientation déjà lue par le modèle (rouge sur 33c44fc0 : run-pilot-chat.orientations-remises.test.ts).
         // Une orientation déjà remise au modèle par le contrôle avant outil n'est pas
         // orpheline : la rendre la renverrait comme un tour de plus après un arrêt sur erreur.
         const orphelines = solderOrientationsDuFil(
@@ -1897,14 +1902,14 @@ export function createRunPilotChat(deps: RunPilotChatDeps): RunPilotChat {
 }
 
 /**
- * LA FIN DU TOUR, AVEC SON ISSUE (conv-1150, 2026-10-26). `annoncerFinDeTour` ne dit que « fini » ;
+ * LA FIN DU TOUR, AVEC SON ISSUE (2026-10-26). `annoncerFinDeTour` ne dit que « fini » ;
  * le plan de lots d'un fil chef doit savoir si le lot a réussi, échoué, buté sur le quota, et ce
  * que l'agent a répondu (la matière du compte rendu).
  *
  * À poser AUTOUR du tour tel que l'app le compte (`trackPreparation`, index.ts), jamais sur la
  * fabrique ci-dessus : sortir des tours actifs (`finally` du tour) ne suffit pas, la demande reste
  * comptée « en cours » jusqu'à la fin de `trackPreparation`. Annoncée avant, un chef réveillé tout
- * de suite était pris pour occupé et son réveil perdu (objection du juge, conv-1150). Même règle
+ * de suite était pris pour occupé et son réveil perdu (objection du juge). Même règle
  * pour un tour REPRIS après redémarrage : sa réservation (`setRecovered`) n'est relâchée qu'à la fin
  * de `reprendreAppelChat`, qui annonce donc lui-même, après, avec `repris`.
  *
@@ -1931,6 +1936,20 @@ export function suivreLaFinDuTour(tour: RunPilotChat, surFin?: ObservateurFinDeT
   }
 }
 
+/**
+ * Pourquoi une orchestration `failed` a échoué. Un refus du contrôle final n'a pas de champ `error` :
+ * ses motifs sont dans `gateReasons`. Sans eux, l'échec passait inaperçu et un lot de plan resté
+ * dans sa copie était noté « fait », donc impossible à relancer.
+ */
+function raisonDeLEchec(issue: Record<string, unknown>): string {
+  if (typeof issue.error === 'string' && issue.error.trim()) return issue.error
+  const motifs = Array.isArray(issue.gateReasons)
+    ? issue.gateReasons.filter((m): m is string => typeof m === 'string' && m.trim() !== '')
+    : []
+  if (motifs.length) return `refusé par le contrôle final : ${motifs.join(' ; ')}`
+  return 'le travail lancé a échoué sans message'
+}
+
 /** L'issue d'un tour lue dans son résultat — tour ordinaire comme tour repris après redémarrage. */
 export function issueDuResultat(resultat: Awaited<ReturnType<RunPilotChat>>): IssueDuTour {
   return {
@@ -1939,14 +1958,15 @@ export function issueDuResultat(resultat: Awaited<ReturnType<RunPilotChat>>): Is
     ...(resultat.cancelled ? { annule: true } : {}),
     ...(resultat.error ? { erreur: resultat.error } : {}),
     ...(resultat.text ? { texte: resultat.text } : {}),
-    ...(resultat.echecOrchestration ? { echecOrchestration: resultat.echecOrchestration } : {})
+    ...(resultat.echecOrchestration ? { echecOrchestration: resultat.echecOrchestration } : {}),
+    ...(resultat.orchestrationReussie ? { orchestrationReussie: true } : {})
   }
 }
 
 /**
  * L'issue d'un tour REPRIS que l'app clôt sans le rejouer (`closeWithoutRecovery` dans
  * `reprendreAppelChat`, index.ts), ou dont le journal est déjà clos. Sans elle, un lot adopté par
- * « Reprendre » restait en cours à jamais quand l'agent survivant mourait (conv-1150).
+ * « Reprendre » restait en cours à jamais quand l'agent survivant mourait.
  */
 export function issueDeCloture(evenement: { kind: string; error?: unknown }): IssueDuTour {
   if (evenement.kind === 'done') return { ok: true }

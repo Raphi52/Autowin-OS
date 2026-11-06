@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   cibleNommeeTouchee,
   ciblesNommees,
@@ -170,5 +173,81 @@ describe('cibleNommeeTouchee — une valeur degeneree n est pas un chemin', () =
       { kind: 'mutation', status: 'ok', ok: true, path: 'src/main/orchestration/task-regime.ts' }
     ] as unknown as Parameters<typeof cibleNommeeTouchee>[1]
     expect(cibleNommeeTouchee(demande, preuve)).toBe('touchee')
+  })
+})
+
+/**
+ * Une demande écrite AVANT un rangement de dossiers cite l'ancien chemin : le fichier a été déplacé
+ * dans un sous-dossier, la cible nommée n'existe plus. Le contrôle exigeait la modification d'un
+ * fichier absent, donc un travail juste fait sur le fichier déplacé était refusé à chaque réparation.
+ */
+describe('cibleNommeeTouchee — cible déplacée dans un sous-dossier', () => {
+  const demande =
+    'Étends aussi `redactSecrets` (`src/main/crash-handlers.ts:32`, utilisé par crash.log)'
+  const deplace = ['D:', 'Depot', 'copie', 'src', 'main', 'app', 'crash-handlers.ts'].join(SEP)
+  const absente = (): boolean => false
+  const presente = (): boolean => true
+
+  it('ancien chemin absent, même fichier modifié dans un sous-dossier → touchee', () => {
+    expect(cibleNommeeTouchee(demande, [mutation([deplace])], absente)).toBe('touchee')
+  })
+
+  it('jumeau : ancien chemin TOUJOURS présent → le fichier homonyme ne compte pas, manquee', () => {
+    expect(cibleNommeeTouchee(demande, [mutation([deplace])], presente)).toBe('manquee')
+  })
+
+  it('ancien chemin absent, mais AUTRE fichier modifié dans le sous-dossier → manquee', () => {
+    const autre = ['D:', 'Depot', 'copie', 'src', 'main', 'app', 'app-data.ts'].join(SEP)
+    expect(cibleNommeeTouchee(demande, [mutation([autre])], absente)).toBe('manquee')
+  })
+
+  it('ancien chemin absent, homonyme HORS du dossier cité → manquee', () => {
+    const ailleurs = ['D:', 'Depot', 'copie', 'src', 'renderer', 'crash-handlers.ts'].join(SEP)
+    expect(cibleNommeeTouchee(demande, [mutation([ailleurs])], absente)).toBe('manquee')
+  })
+
+  it('l’existence est sondée à la racine de la copie qui porte la modification', () => {
+    const sondes: string[] = []
+    cibleNommeeTouchee(demande, [mutation([deplace])], (chemin) => {
+      sondes.push(chemin)
+      return false
+    })
+    expect(sondes).toEqual(['d:/depot/copie/src/main/crash-handlers.ts'])
+  })
+
+  describe('etatDeCloture sur un vrai dossier', () => {
+    let racine = ''
+    beforeEach(() => {
+      racine = mkdtempSync(join(tmpdir(), 'cible-deplacee-'))
+      mkdirSync(join(racine, 'src', 'main', 'app'), { recursive: true })
+      writeFileSync(join(racine, 'src', 'main', 'app', 'crash-handlers.ts'), 'export {}\n')
+    })
+    afterEach(() => {
+      rmSync(racine, { recursive: true, force: true })
+    })
+    const phases = (chemin: string) => [
+      { phase: 'build', text: 'ok', executionEvidence: [mutation([chemin])] }
+    ]
+
+    it('fichier déplacé et modifié ⇒ green', () => {
+      const etat = etatDeCloture(
+        demande,
+        phases(join(racine, 'src', 'main', 'app', 'crash-handlers.ts')),
+        true,
+        true
+      )
+      expect(etat.status).toBe('green')
+    })
+
+    it('jumeau : l’ancien fichier existe encore ⇒ red, la cible reste exigée', () => {
+      writeFileSync(join(racine, 'src', 'main', 'crash-handlers.ts'), 'export {}\n')
+      const etat = etatDeCloture(
+        demande,
+        phases(join(racine, 'src', 'main', 'app', 'crash-handlers.ts')),
+        true,
+        true
+      )
+      expect(etat.status).toBe('red')
+    })
   })
 })
