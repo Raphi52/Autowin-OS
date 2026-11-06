@@ -34,17 +34,17 @@ import {
 } from './plan-de-lots'
 
 /*
- * SUPER CONVERSATION (conv-1150, 2026-10-26) — le plan de lots d'un fil chef, calcul pur.
+ * SUPER CONVERSATION (2026-10-26) — le plan de lots d'un fil chef, calcul pur.
  * Cas limites du cadrage : vide, un seul lot, mal typé, hors bornes, répété, fichiers partagés,
  * fin en double, fin hors plan, quota, plafond, redémarrage.
  *
- * fix-ok: conv-1150 (2026-10-26) — les ajouts au bloc « redémarrage » suivent des causes mesurées
+ * fix-ok: (2026-10-26) — les ajouts au bloc « redémarrage » suivent des causes mesurées
  * dans plan-de-lots.ts, rouge puis vert : `noterFinDeTour` refusait la fin d'un lot `interrompu`
  * (garde `etat !== 'en-cours'`), `lotsAPartir`/`reprendrePlan` ignoraient un fil encore occupé
  * (5 rouges), et un agent mort avec l'app comptait comme une fin (2 rouges, d'où `perdu`).
  */
 
-/** Un contexte commun valide (au moins `CONTEXTE_MIN` caractères), conv-1284. */
+/** Un contexte commun valide (au moins `CONTEXTE_MIN` caractères). */
 const CONTEXTE =
   'Traduire les 113 écrans de l’app en anglais. Décidé : clés i18n en kebab-case, un fichier par écran, aucune chaîne en dur ne reste.'
 
@@ -67,7 +67,7 @@ function planAccepte(brut: unknown): PlanDeLots {
 
 /**
  * Plafond posé APRÈS lecture : un plan déjà sur disque peut avoir moins de tours que de lots (déposé
- * avant le refus de la lecture, conv-1273) ; le mécanisme « plafond atteint » doit rester juste.
+ * avant le refus de la lecture) ; le mécanisme « plafond atteint » doit rester juste.
  */
 const avecPlafond = (plan: PlanDeLots, plafondTours: number): PlanDeLots => ({
   ...plan,
@@ -181,7 +181,7 @@ describe('lirePlanDeLots — lecture stricte du plan déposé par le chef', () =
   })
 
   it('refuse un plafond sous le nombre de lots : c’est un TOTAL, pas un nombre par lot', () => {
-    // Cas réels (29/10) : 2 tours pour 5 lots (conv-1256), 3 pour 6 (conv-1236). Le chef croyait
+    // Cas réels (29/10) : 2 tours pour 5 lots, 3 pour 6. Le chef croyait
     // donner « 2 par lot » : un seul lot partait à la fois, puis le plan s'arrêtait à mi-chemin.
     const r = lirePlanDeLots({ plafondTours: 2, lots: [lot(1), lot(2), lot(3), lot(4), lot(5)] })
     expect(r.ok).toBe(false)
@@ -314,12 +314,31 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
   })
 
   /*
-   * LIMITE D'USAGE PRISE POUR UN LOT « FAIT » (conv-1236, plan-c21413ba, 2026-10-28). Les lots 1,
+   * Le réveil d'un plan suspendu par le quota disait « relance-le » alors que `relancerLot` refuse
+   * ce cas : le chef attendait la fin de la limite pour une relance qui ne pouvait pas partir.
+   */
+  it('limite de quota : le réveil ne demande aucune relance, il renvoie au bouton « Reprendre »', () => {
+    const r = noterFinDeTour(
+      deuxEnCours(),
+      'conv-110',
+      { ok: false, erreur: "You've hit your session limit · resets 2am" },
+      3000
+    )
+    expect(relancerLot(r.plan, 1).ok).toBe(false)
+    const reveil = promptDeReveil(r.plan, [1])
+    expect(reveil).not.toContain('relance-le avec plan_de_lots')
+    expect(reveil).toMatch(/seul l’utilisateur le reprend/)
+    expect(reveil).toMatch(/« Reprendre »/)
+    expect(reveil).toMatch(/n’attends pas la fin de la limite/)
+  })
+
+  /*
+   * LIMITE D'USAGE PRISE POUR UN LOT « FAIT » (plan-c21413ba, 2026-10-28). Les lots 1,
    * 2 et 5 du thème Golden ont été notés « fait » sans une ligne écrite, et le plafond de 3 tours
    * s'est épuisé sur eux. Deux formes réelles, recopiées de turn-journals/ :
-   *  - le tour du lot finit sans erreur, mais son `orchestrate` a buté sur la limite (conv-1237,
+   *  - le tour du lot finit sans erreur, mais son `orchestrate` a buté sur la limite (
    *    tour 5bdd19cc : événement `outcome` « failed », réponse « Échec du workflow : … ») ;
-   *  - le tour lui-même échoue sur la limite des 5 heures (conv-1236, tour 98f5030c), une forme que
+   *  - le tour lui-même échoue sur la limite des 5 heures (tour 98f5030c), une forme que
    *    `estMurDeQuota` ne connaissait pas.
    */
   const murHebdo =
@@ -349,7 +368,7 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
     expect(r.plan.toursLances).toBe(avant.toursLances - 1)
   })
 
-  // conv-1595 (plan-cf775786, lots 2 et 3) : copie de travail expirée, lots notés « fait », relance refusée.
+  // plan-cf775786, lots 2 et 3 : copie de travail expirée, lots notés « fait », relance refusée.
   it('tour ok dont l’orchestration a échoué hors quota : échec relançable, plan toujours en cours', () => {
     const avant = deuxEnCours()
     const delai = 'WorktreeOperationTimeoutError: Opération worktree interrompue après 182000 ms'
@@ -366,7 +385,7 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
     expect(relancerLot(r.plan, 1).ok).toBe(true)
   })
 
-  // conv-1284 (2026-10-29, demande de l'utilisateur) : un tour qui n'a jamais démarré ne coûte rien.
+  // 2026-10-29, demande de l'utilisateur : un tour qui n'a jamais démarré ne coûte rien.
   it('lancement qui n’a pas démarré : échec noté, tour rendu — une seule fois même s’il bute aussi sur la limite', () => {
     const avant = deuxEnCours()
     const r = noterFinDeTour(
@@ -421,7 +440,7 @@ describe('noterFinDeTour — fin d’un fil enfant', () => {
   })
 
   /*
-   * UN TOUR « OK » QUI SE DÉCLARE BLOQUÉ (conv-1153, lot 1 du plan conv-1151, 2026-10-26) : le tour
+   * UN TOUR « OK » QUI SE DÉCLARE BLOQUÉ (lot 1 du plan, 2026-10-26) : le tour
    * finit sans erreur, mais l'agent écrit « ⛔ Bloqué » ou « ⚠️ Non résolu » (consigne de
    * `response-style.ts`). Noté « fait », le chef ne le relançait pas. Même lecture que la carte du
    * fil (`carte-du-fil.ts`, BLOCAGE_DECLARE).
@@ -584,7 +603,7 @@ describe('décisions de dépôt, relance, reprise et redémarrage', () => {
 })
 
 /*
- * Un agent qui a SURVÉCU au redémarrage (objection du juge, conv-1150) : l'app reprend son tour
+ * Un agent qui a SURVÉCU au redémarrage (objection du juge) : l'app reprend son tour
  * (`reprendreAppelChat`, index.ts). Sa fin doit encore compter, et « Reprendre » ne doit jamais
  * lancer un second agent dans un fil encore occupé.
  */
@@ -705,7 +724,7 @@ describe('redémarrage : lot dont l’agent a survécu', () => {
 })
 
 /*
- * DÉPENDANCE EXPLICITE « apres » (conv-1151, lot 2 du plan « Rendre la super conversation
+ * DÉPENDANCE EXPLICITE « apres » (lot 2 du plan « Rendre la super conversation
  * parfaite », 2026-10-26). Avant : les lots étaient supposés indépendants, seul un fichier partagé
  * les ordonnait. Un lot qui a besoin du RÉSULTAT d'un autre l'annonce par « apres » : [rangs].
  * Sans ce champ, un prérequis en échec laissait le plan tomber en « plafond atteint » — faux, et
@@ -881,11 +900,11 @@ describe('textes remis aux fils', () => {
   })
 
   /*
-   * LIGNES TECHNIQUES INVISIBLES (conv-1153, lot 1 du plan conv-1151, 2026-10-26). Le texte du lot
+   * LIGNES TECHNIQUES INVISIBLES (lot 1 du plan, 2026-10-26). Le texte du lot
    * vient de `issueDuResultat` (`resultat.text` : le texte parlé du tour, commandes `<cmd>` déjà
    * retirées par le pilote, `agent-pilot.ts`). Mesure sur `turn-journals/` : 380 tours sur 471
    * finissent par une ligne `AUTOWIN_…_V1`, aucun ne garde un bloc `<cmd>`. Fin réelle ci-dessous,
-   * copiée de conv-1139 (tour 6751c52b). Coupé par la FIN, le compte rendu gardait ce bruit.
+   * copiée (tour 6751c52b). Coupé par la FIN, le compte rendu gardait ce bruit.
    */
   const finReelle = [
     'J’ai traduit l’écran 1 et relu les captures dans les deux thèmes.',
@@ -976,7 +995,7 @@ describe('plansPourLaListe — le geste « tous » du canal os:plansDeLots (conv
       ['plan-1', false],
       ['plan-2', true]
     ])
-    // Un plan neuf sans fil n'est pas rendu, mais c'est lui que montre le chef (conv-1381).
+    // Un plan neuf sans fil n'est pas rendu, mais c'est lui que montre le chef.
     const neuf = { ...planAccepte({ lots: [lot(1), lot(2)] }), id: 'plan-3' }
     expect(plansPourLaListe([ancien, neuf]).map((p) => [p.id, p.actuel])).toEqual([
       ['plan-1', false]
@@ -996,7 +1015,7 @@ describe('plansPourLaListe — le geste « tous » du canal os:plansDeLots (conv
 })
 
 /*
- * conv-1394 (2026-10-31) — « masque aussi les lots des anciens plans d'un même chef, et rends-les
+ * 2026-10-31 — « masque aussi les lots des anciens plans d'un même chef, et rends-les
  * accessibles depuis le bloc de la conv chef » : le geste « anciens » rend au bloc du chef les plans
  * qu'il ne montre pas et dont un lot a un fil, seul chemin vers ces fils depuis qu'ils n'ont plus de
  * ligne dans la liste.
@@ -1035,7 +1054,7 @@ describe('anciensPlansDuChef — le geste « anciens » du canal os:plansDeLots 
 })
 
 /*
- * conv-1284 (2026-10-29) — le meilleur des threads de claude.exe dans le plan de lots : contexte
+ * 2026-10-29 — le meilleur des threads de claude.exe dans le plan de lots : contexte
  * commun (brief des « side sessions », refusé sous 80 caractères), décisions partagées (mémoire
  * des « Projects »), fratrie dans le message d'un lot (« Linked sessions now »), modèle par lot,
  * et lots ajoutés à un plan lancé (le coordinateur range une nouvelle demande dans le chantier).
@@ -1065,7 +1084,7 @@ describe('contexte commun et modèle par lot (conv-1284)', () => {
   })
 
   it('un plan sans contexte ni modèle garde l’empreinte d’avant ces champs', () => {
-    // Formule d'avant conv-1284, recopiée : un plan déjà sur disque ne doit pas changer de clé.
+    // Formule d'avant, recopiée : un plan déjà sur disque ne doit pas changer de clé.
     const avant = (plan: ReturnType<typeof lu>['plan']): string => {
       const texte = JSON.stringify([
         plan.titre,
@@ -1115,11 +1134,11 @@ describe('promptDuLot — ce que sait le fil d’un lot (conv-1284)', () => {
     expect(texte).not.toContain('- lot 3 «')
     expect(texte).toMatch(/UNE question courte avec ecrire_a_un_fil \(destinataire conv-1\)/)
     expect(texte).toContain('« ⛔ Bloqué : j’attends la réponse du chef »')
-    // conv-1284 (2026-10-29) : la réponse du chef arrive en ordre, les décisions par message.
+    // 2026-10-29 : la réponse du chef arrive en ordre, les décisions par message.
     expect(texte).toContain('sa réponse arrivera comme un ordre qui relance ce fil')
     expect(texte).toContain('les lots en cours la reçoivent par message')
     expect(texte).toMatch(/action « noter »/)
-    // Le message reste reconnu comme composé par le plan (garde des deux lectures, conv-1192).
+    // Le message reste reconnu comme composé par le plan (garde des deux lectures).
     expect(estUnMessageDuPlan(texte)).toBe(true)
   })
 
@@ -1132,9 +1151,9 @@ describe('promptDuLot — ce que sait le fil d’un lot (conv-1284)', () => {
   })
 
   /*
-   * conv-1284 (2026-10-29, demande de l'utilisateur) : un lot qui a posé sa question au chef
+   * 2026-10-29, demande de l'utilisateur : un lot qui a posé sa question au chef
    * « attend le chef » — un état à part. Noté « échec » jusque-là, il passait pour un lot cassé
-   * (bilan du chef dans le test réel de conv-1299 : « il attendait seulement, il n'avait pas échoué »).
+   * (bilan du chef dans le test réel : « il attendait seulement, il n'avait pas échoué »).
    */
   it('la question bloquante d’un lot le met en « attend le chef », relançable (ni « fait » ni « échec »)', () => {
     const plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
@@ -1191,7 +1210,7 @@ describe('promptDuLot — ce que sait le fil d’un lot (conv-1284)', () => {
     expect(enAttente.lots[1].etat).toBe('a-faire')
   })
 
-  // conv-1284 : rien ne tournait, rien n'est interrompu — le plan attend toujours le chef, dont la
+  // Rien ne tournait, rien n'est interrompu — le plan attend toujours le chef, dont la
   // réponse (un ordre) doit pouvoir relancer le lot sans clic « Reprendre ».
   it('redémarrage pendant que le plan attend le chef : le plan reste en cours, l’ordre relance', () => {
     const plan = lancerCeQuiPart(planAccepte({ lots: [lot(1), lot(2)] }))
@@ -1272,7 +1291,7 @@ describe('noterDecision — la mémoire partagée du plan (conv-1284)', () => {
     )
     expect(reveil).not.toContain('port 5173')
     expect(reveil).toMatch(/action « ajouter »/)
-    // conv-1284 : la réponse à un lot bloqué part en ordre, sans « relancer » en plus.
+    // La réponse à un lot bloqué part en ordre, sans « relancer » en plus.
     expect(reveil).toMatch(/réponds-lui avec ecrire_a_un_fil, nature « ordre »/)
     expect(reveil).toContain('ne le relance pas en plus')
   })

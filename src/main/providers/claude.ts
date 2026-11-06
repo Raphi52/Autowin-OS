@@ -33,6 +33,7 @@ import {
   backgroundSurvivalInvocationAsync,
   type InvocationSurvivable
 } from '../runs/survivable-spawn'
+import { masquerSessionClaude } from '../runs/masquage-sur-disque'
 import { AUTOWIN_WORKSPACE_ENV } from '../../shared/app-identity'
 import { findNpmGlobalFile, npmPrefixCandidates } from './npm-global-resolve'
 import { tmpdir } from 'node:os'
@@ -3273,6 +3274,15 @@ export class ClaudeCliAdapter implements ProviderAdapter {
     const nettoyerFinDAppel = async (): Promise<void> => {
       if (nettoyageFait) return
       nettoyageFait = true
+      // La copie de session que garde le CLI : il l'écrit lui-même, hors de la pompe qui masque sa
+      // sortie, donc une valeur du coffre affichée par une commande y restait en clair. Attendu
+      // avant la fin du tour : le tour suivant qui reprend la session la relit déjà masquée.
+      await masquerSessionClaude({
+        configDir: envDuTour?.CLAUDE_CONFIG_DIR,
+        // Sans dossier donné, le CLI tourne dans celui du processus : c'est lui qui nomme la session.
+        cwd: execution?.cwd ?? readOnlyCwd ?? process.cwd(),
+        sessionId: sessionId ?? sessionDesEtapes
+      }).catch(() => 0)
       const nettoyer = async (): Promise<void> => {
         await nettoyerTemporairesDeLAppel({
           systemPromptDir,
