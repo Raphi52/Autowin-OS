@@ -2,6 +2,7 @@ import { ESSAIS_MAX } from './delai-de-reprise'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { supprimerArbre } from '../fichiers/fs-supprimer'
+import { attendreFichier } from '../gel/ecriture-hors-fil'
 
 /**
  * Vrais dépôts git en tmp : le budget vitest par défaut (5 s) ne couvre pas ces cas.
@@ -79,7 +80,9 @@ function authorizeGreenRecovery(
   })
 }
 
-afterEach(() => {
+afterEach(async () => {
+  // Un manifeste encore en vol recréerait des fichiers pendant l'effacement.
+  await attendreFichier()
   for (const root of roots.splice(0)) supprimerArbre(root)
 })
 

@@ -1,16 +1,8 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { isAbsolute, join, resolve } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import type { WorktreeFileChange } from '../../shared/worktree-activity-model'
+import { cheminsEnCoursDans, deposerFichier, depotEnCours } from '../gel/ecriture-hors-fil'
 
 const SAFE_ID = /^[A-Za-z0-9_-]+$/
 const VERDICTS = new Set<WorktreeRunVerdict>([
@@ -237,9 +229,15 @@ function isRecord(value: unknown, worktreeRoot: string): value is WorktreeRunRec
 /**
  * Journal durable fail-closed du cycle d'un bureau agent.
  *
- * Chaque écriture garde l'ancienne version en `.bak` jusqu'à ce que la nouvelle soit en place.
- * Après un crash, une entrée illisible ou étrangère est exposée comme `unknown/blocked` : elle
- * reste visible et ne peut jamais autoriser une publication.
+ * Chaque écriture passe par un temporaire renommé par-dessus l'ancienne version : le fichier est
+ * toujours l'ancienne version ou la nouvelle, jamais un morceau. Les `.bak` de l'ancienne écriture
+ * restent relus en secours. Après un crash, une entrée illisible ou étrangère est exposée comme
+ * `unknown/blocked` : elle reste visible et ne peut jamais autoriser une publication.
+ *
+ * HORS DU FIL PRINCIPAL (2026-11-05) : `save` et `remove` déposent par
+ * `ecriture-hors-fil.ts`. Toute relecture voit d'abord la valeur déposée et pas encore posée
+ * (`depotEnCours`), puis le disque. La limite est celle de `ecriture-hors-fil.ts` : un plantage
+ * brutal perd la dernière valeur pas encore posée, et le fichier garde sa version d'avant.
  */
 export class WorktreeRunStateStore {
   private readonly stateRoot: string
@@ -262,6 +260,8 @@ export class WorktreeRunStateStore {
 
   get(runId: string): WorktreeRunRecord | undefined {
     const path = this.pathFor(runId)
+    const depot = depotEnCours(path)
+    if (depot !== undefined) return depot === null ? undefined : this.interpreter(depot, runId)
     const backup = `${path}.bak`
     if (!existsSync(path) && !existsSync(backup)) return undefined
     try {
@@ -278,6 +278,8 @@ export class WorktreeRunStateStore {
    */
   async getAsync(runId: string): Promise<WorktreeRunRecord | undefined> {
     const path = this.pathFor(runId)
+    const depot = depotEnCours(path)
+    if (depot !== undefined) return depot === null ? undefined : this.interpreter(depot, runId)
     for (const source of [path, `${path}.bak`]) {
       let texte: string
       try {
@@ -318,11 +320,21 @@ export class WorktreeRunStateStore {
   }
 
   list(): WorktreeRunRecord[] {
-    if (!existsSync(this.stateRoot)) return []
-    const ids = readdirSync(this.stateRoot)
-      .map((name) => name.match(/^([A-Za-z0-9_-]+)\.json(?:\.bak)?$/)?.[1])
-      .filter((id): id is string => Boolean(id))
-    return [...new Set(ids)].sort().map((id) => this.get(id) ?? this.blocked(id))
+    // Un manifeste déposé par ce processus peut ne pas être encore sur le disque. On le demande à
+    // l'écriture différée, pas à `derniers` : un second magasin sur le même dossier ne l'a pas vu.
+    const noms = [
+      ...(existsSync(this.stateRoot) ? readdirSync(this.stateRoot) : []),
+      ...cheminsEnCoursDans(this.stateRoot).map((chemin) => basename(chemin))
+    ]
+    const ids = new Set<string>()
+    for (const name of noms) {
+      const id = name.match(/^([A-Za-z0-9_-]+)\.json(?:\.bak)?$/)?.[1]
+      if (id) ids.add(id)
+    }
+    return [...ids]
+      .sort()
+      .filter((id) => depotEnCours(this.pathFor(id)) !== null)
+      .map((id) => this.get(id) ?? this.blocked(id))
   }
 
   save(record: WorktreeRunRecord): void {
@@ -331,29 +343,18 @@ export class WorktreeRunStateStore {
     if (!isRecord(localRecord, this.worktreeRoot)) {
       throw new Error(`Manifeste de bureau invalide: ${record.runId}`)
     }
-    mkdirSync(this.stateRoot, { recursive: true })
-    const path = this.pathFor(record.runId)
-    const backup = `${path}.bak`
-    const temporary = `${path}.${randomUUID()}.tmp`
-    writeFileSync(temporary, `${JSON.stringify(localRecord, null, 2)}\n`, 'utf8')
-    try {
-      rmSync(backup, { force: true })
-      if (existsSync(path)) renameSync(path, backup)
-      renameSync(temporary, path)
-      rmSync(backup, { force: true })
-    } catch (error) {
-      rmSync(temporary, { force: true })
-      if (!existsSync(path) && existsSync(backup)) renameSync(backup, path)
-      throw error
-    }
+    // `ecarter` : l'ancienne version passe en `.bak` avant d'être remplacée, comme l'écriture d'avant.
+    // Remplacer un manifeste créé l'instant d'avant tient 20 à 28 s sur ce poste.
+    deposerFichier(this.pathFor(record.runId), `${JSON.stringify(localRecord, null, 2)}\n`, {
+      ecarter: true
+    })
     this.derniers.set(record.runId, localRecord)
   }
 
   remove(runId: string): void {
-    const path = this.pathFor(runId)
     this.derniers.delete(runId)
-    rmSync(path, { force: true })
-    rmSync(`${path}.bak`, { force: true })
+    // Avec `ecarter`, la suppression retire aussi `.bak` : un run retiré ne revient pas par sa copie.
+    deposerFichier(this.pathFor(runId), null, { ecarter: true })
   }
 
   /**

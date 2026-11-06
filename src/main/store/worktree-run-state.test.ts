@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { attendreFichier } from '../gel/ecriture-hors-fil'
 import { WorktreeRunStateStore, type WorktreeRunRecord } from './worktree-run-state'
 
 const roots: string[] = []
@@ -32,7 +33,9 @@ function record(root: string, overrides: Partial<WorktreeRunRecord> = {}): Workt
   }
 }
 
-afterEach(() => {
+afterEach(async () => {
+  // Une écriture encore en vol recréerait le dossier après son effacement.
+  await attendreFichier()
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
@@ -52,6 +55,20 @@ describe('WorktreeRunStateStore', () => {
       verdict: 'red',
       publication: 'not-requested'
     })
+  })
+
+  it('inventorie un manifeste déposé par un autre magasin et pas encore posé', async () => {
+    const root = tempRoot()
+    const ecrivain = new WorktreeRunStateStore(root, 'repo-a')
+    ecrivain.save(record(root))
+    ecrivain.save(record(root, { runId: 'run-gone', worktreePath: join(root, 'agent__run-gone') }))
+    ecrivain.remove('run-gone')
+
+    // Même processus, autre instance : c'est ce que fait un redémarrage simulé, ou un second lecteur.
+    const relecteur = new WorktreeRunStateStore(root, 'repo-a')
+    expect(relecteur.list().map((r) => r.runId)).toEqual(['run-red'])
+    await attendreFichier()
+    expect(relecteur.list().map((r) => r.runId)).toEqual(['run-red'])
   })
 
   it('refuse fail-closed un manifeste corrompu ou attribué à un autre dépôt', () => {
