@@ -26,7 +26,7 @@ import type {
   SendOptions
 } from './chat-view-types'
 import { texteDeLaTache } from '../../../shared/lancer-en-fils'
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useEffectEvent } from 'react'
 import {
   attendreAvantReprise,
   deciderRepriseSurcharge,
@@ -69,7 +69,7 @@ import { titreDepuisPremierMessage } from './titre-conversation'
 import { resolveMentionsForSend } from './chat-mentions'
 import { filDeLaVueMontee } from './vue-chat-montee'
 
-// Extrait de ChatView.tsx tel quel, sans changement de comportement (conv-1508).
+// Extrait de ChatView.tsx tel quel, sans changement de comportement.
 export type ToursEtEnvoiCtx = {
   activeId: string | null
   activeRef: React.RefObject<string | null>
@@ -207,7 +207,7 @@ export type ToursEtEnvoiCtx = {
   vueMonteeRef: React.RefObject<boolean>
 }
 
-// Type de retour inféré : l'objet des valeurs que ChatView.tsx relit après l'appel (conv-1508).
+// Type de retour inféré : l'objet des valeurs que ChatView.tsx relit après l'appel.
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
   const {
@@ -305,7 +305,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     vueMonteeRef
   } = ctx
   /**
-   * « LANCER EN N FILS » (conv-1147, 2026-10-25 — option A du cadrage
+   * « LANCER EN N FILS » (2026-10-25 — option A du cadrage
    * `fork-automatique-taches-independantes`). Le message de l'utilisateur portait plusieurs tâches
    * d'action. L'agent les a regroupées par fichiers communs (```aw-fils, `PropositionDeFils.tsx`),
    * et l'utilisateur a cliqué.
@@ -323,7 +323,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     suivi: SuiviDuLancement = { fils: [], confirme: false }
   ): Promise<void> {
     const source = demande.conversationId ?? activeRef.current
-    // `rienNestParti` : refus AVANT toute dépense, la carte rend ses boutons (conv-1147).
+    // `rienNestParti` : refus AVANT toute dépense, la carte rend ses boutons.
     const confirmer = (fils: FilLance[], refus: string[], rienNestParti = false): void => {
       const detail: ConfirmationDeLancement = {
         cle: demande.cle,
@@ -355,7 +355,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     }
     // Le point de départ se lit dans le fil STOCKÉ, pas dans la copie à l'écran : une réponse
     // peinte en direct dans une fenêtre que rien n'a relue n'a pas d'identifiant de message, ni la
-    // demande qui la précède (relecture externe du 2026-10-25, conv-1147). Le TOUR, lui, est le
+    // demande qui la précède (relecture externe du 2026-10-25). Le TOUR, lui, est le
     // même à l'écran et sur disque.
     let filStocke: Array<{ role: string; messageId?: string; turnId?: string }>
     try {
@@ -377,7 +377,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
         : filStocke.findIndex(
             (message) => message.role === 'assistant' && message.turnId === demande.turnId
           )
-    // Réponse introuvable sur disque = RIEN NE PART (3e relecture externe, conv-1147). Avant, le
+    // Réponse introuvable sur disque = RIEN NE PART (3e relecture externe). Avant, le
     // lancement repartait en silence du DERNIER message de l'utilisateur de tout le fil, peut-être
     // écrit après la carte (« attends, ne fais rien »).
     if (rangCarte < 0) {
@@ -404,7 +404,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
           continue
         }
         // Le titre est un confort : la branche EXISTE déjà. Un renommage refusé ne doit pas la
-        // laisser vide dans la barre latérale, sans tâche (défaut 4 du juge, conv-1147).
+        // laisser vide dans la barre latérale, sans tâche (défaut 4 du juge).
         try {
           await window.api.conversationsRename?.(branche.id, titre)
         } catch {
@@ -424,7 +424,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     if (lances.length > 0) {
       // Rafraîchir la liste est un confort, pas une condition : les branches existent déjà. Une
       // liste en panne laissait les branches vides et la carte figée sur « Lancement demandé… »
-      // (défaut 3 du juge, conv-1147).
+      // (défaut 3 du juge).
       try {
         const fraiches = (await window.api.conversations()) as Conv[]
         convsRef.current = fraiches
@@ -434,7 +434,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       }
       setConvViewMode('mosaic')
       // Le fil d'ORIGINE reste sous les yeux, à gauche des branches : sa carte y montre le reçu et
-      // les liens (demande du 2026-10-25, conv-1147). Déjà ouvert en mosaïque = laissé à sa place.
+      // les liens (demande du 2026-10-25). Déjà ouvert en mosaïque = laissé à sa place.
       await ouvrirDansMosaique(source)
     }
     for (const { id, textes } of envois) {
@@ -445,7 +445,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     confirmer(lances, refus, lances.length === 0)
     // L'avis compte ce qui est PARTI, pas ce qui était prévu : il annonçait « 0 fil lancé… Coût :
     // N tours » quand toutes les branches étaient refusées, et le coût des branches refusées lors d'un
-    // lancement partiel (4e relecture externe, conv-1147). Il dit la même chose que la carte.
+    // lancement partiel (4e relecture externe). Il dit la même chose que la carte.
     const parties = envois.reduce((somme, envoi) => somme + envoi.textes.length, 0)
     const texte =
       lances.length === 0
@@ -556,7 +556,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
   /**
    * Le tour tourne-t-il ENCORE cote processus principal alors que sa promesse d'envoi est revenue ?
    *
-   * Symptome vecu (conv-809, 2026-09-23) : « Reponse interrompue avant la fin » s'affichait, puis la
+   * Symptome vecu (2026-09-23) : « Reponse interrompue avant la fin » s'affichait, puis la
    * reponse repartait toute seule. Cause : les `finally` d'envoi et de reprise marquaient le tour
    * `interrupted` sur la seule fin de la promesse, sans demander a l'autorite (`pilotChatActive`)
    * si le tour vivait encore — puis `resumed`/les deltas le rallumaient. Choix utilisateur : garder
@@ -612,7 +612,12 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
    * DEUX sondes negatives consecutives sont exigees avant de clore : le renderer passe `busy` AVANT
    * que le main ait enregistre le controleur du tour (meme course que le `waitForActive(500)` de
    * l'injection), donc une seule sonde pourrait tuer un tour qui demarre.
+   *
+   * La liberation passe par un `useEffectEvent` : elle lit la DERNIERE version de
+   * `libererTourFantome` sans relancer la veille a chaque rendu — la relancer remettrait a zero le
+   * compte des sondes negatives, et un fil qui se redessine souvent ne serait jamais libere.
    */
+  const libererTourFantomeDepuisLaVeille = useEffectEvent((id: string) => libererTourFantome(id))
   useEffect(() => {
     if (!busyConversations.size) return
     const manques = new Map<string, number>()
@@ -637,12 +642,12 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
           manques.set(id, negatives)
           if (negatives < 2) return
           manques.delete(id)
-          libererTourFantome(id)
+          libererTourFantomeDepuisLaVeille(id)
         })()
       }
     }, TOUR_VIVANT_SONDE_MS)
     return () => window.clearInterval(timer)
-  }, [busyConversations])
+  }, [busyConversations, busyConversationsRef])
 
   /**
    * BORNE le libelle « Arret... ».
@@ -700,7 +705,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     /*
      * STOP DESARME AUSSI LA CHAINE AUTO — sinon le bouton relance ce qu'il vient de couper.
      *
-     * Mesure du 2026-09-03 : quatre fils (conv-210, 214, 215, 221) portent mot pour mot « kaizen je
+     * Mesure du 2026-09-03 : quatre fils (214, 215, 221) portent mot pour mot « kaizen je
      * click sur stop et ca fait que de relancer la task ». Ce geste ne posait qu'un gel sur la FILE
      * des messages en attente ; l'interrupteur auto, lui, restait arme. Le tour coupe arrivait donc
      * dans le fil comme un tour TERMINE, `deciderRelanceAuto` y lisait une suite a envoyer, et
@@ -804,9 +809,9 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     let injected = false
     // Le main ECRIT desormais un vrai message pour la directive acceptee et rend son identifiant.
     // C'est ce qui manquait : le recu ne vivait qu'en memoire de l'ecran, un rechargement l'effacait
-    // et le texte disparaissait (conv-38, 2026-09-01).
+    // et le texte disparaissait (2026-09-01).
     let messageEcrit = false
-    // REFUS VOULU ≠ PANNE (conv-891) : l'app principale refuse EXPRÈS d'ajouter une commande de skill
+    // REFUS VOULU ≠ PANNE : l'app principale refuse EXPRÈS d'ajouter une commande de skill
     // à un tour en cours, et le dit. Seule une exception de l'IPC est une vraie erreur d'envoi.
     let erreurDEnvoi = false
     let attente: Pick<DirectiveReceipt, 'attenteMotif' | 'commande'> = {}
@@ -847,7 +852,14 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
   // À la libération de `busy` (render frais, busy=false), on draine la FILE D'ATTENTE — un message
   // par tour (chacun = sa propre paire Q/R). Vaut aussi bien pour l'auto-drain fin de tour que pour
   // une interruption manuelle (les deux passent par une transition busy→false).
-  useEffect(() => {
+  /*
+   * fix-ok: 9 alertes exhaustive-deps mesurées (scripts/derogations-lint.mjs) : ces
+   * effets lisaient des fonctions que ChatView recrée à chaque rendu (`send`, `gardeChaine`…). Les
+   * mettre en dépendances relancerait un effet payant à chaque rendu ; les taire figeait la version
+   * du rendu déclencheur. Le corps passe dans un `useEffectEvent` : il lit la dernière version, et
+   * l'effet ne se relance que sur ses déclencheurs d'origine, listés à l'identique.
+   */
+  const drainerLaFileDuFilAffiche = useEffectEvent(() => {
     const id = activeRef.current
     if (!id) return
     if (busy) return
@@ -855,9 +867,9 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     if (stoppedQueueDrainRef.current.delete(id)) return
     const queued = queueRef.current.get(id)
     if (!queued || queued.length === 0) return
-    // Le lot d'avant a buté sur la limite de quota : le suivant attend la reprise (conv-1080).
+    // Le lot d'avant a buté sur la limite de quota : le suivant attend la reprise.
     if (lotsRetenusDansLeFil(id)) return
-    // `done` est arrivé, la réponse de `pilotChat` pas encore : la tête attend le verrou (conv-1080).
+    // `done` est arrivé, la réponse de `pilotChat` pas encore : la tête attend le verrou.
     if (teteRetenueParLeVerrou(id)) return
     const [nextMessage, ...rest] = queued
     setConversationQueue(id, rest)
@@ -867,12 +879,14 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       automatique: true,
       ...(nextMessage.attachments?.length ? { piecesJointesImposees: nextMessage.attachments } : {})
     })
+  })
+  useEffect(() => {
+    drainerLaFileDuFilAffiche()
     // `activeId` AUTANT que `busy` : une file remplie pendant le tour de A survit à un aller-retour
     // vers une autre conversation. Le tour de A se terminant PENDANT l'absence, la transition
     // busy→false ne concerne plus A — sans `activeId` la file restait échouée là, et il fallait
     // renvoyer les messages à la main. Sûr par construction : les files vivent dans un `useRef` (rien
     // sur disque), donc un redémarrage ne peut pas ressusciter une file oubliée et envoyer à l'insu.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy, activeId])
 
   /**
@@ -934,13 +948,13 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
             ? messagesAfficheAutoRef.current
             : (liveMessagesRef.current.get(id) ?? [])
         if (signatureTour(fil) !== decision.signature) return
-        // fix-ok: conv-1069 — « quand le tour de conv-N est terminé » n'était pas une suite différée
+        // fix-ok: « quand le tour de conv-N est terminé » n'était pas une suite différée
         // (`suiteEstDifferee` rendait false sur ef5762bf) : elle partait aussitôt et payait un tour.
         if (decision.filAttendu) {
           /*
-           * « quand le tour de conv-N est terminé » (conv-1069) : l'état du fil est demandé au
+           * « quand le tour de conv-N est terminé » : l'état du fil est demandé au
            * processus principal, gratuitement, AVANT de payer un tour. SEUL `active === false`
-           * envoie : une réponse inconnue ne prouve rien. Mesuré sur conv-1065 : 2 tours payés pour
+           * envoie : une réponse inconnue ne prouve rien. Mesuré : 2 tours payés pour
            * lire « pas terminé », fin vue 51 min en retard.
            */
           const filAttendu = decision.filAttendu
@@ -978,7 +992,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
         // fix-ok: la relance « quand X existe » payait un tour même fichier absent (sendAutoRef appelé sans sonde) — on sonde fs:exists avant.
         if (decision.fichier && !window.api.fichierExiste) {
           // Sans vérificateur, « existe » est invérifiable : payer un tour pour le constater est le
-          // défaut mesuré conv-826 (14:38:57, fin.txt absent). On attend l'utilisateur, en le disant.
+          // défaut mesuré (14:38:57, fin.txt absent). On attend l'utilisateur, en le disant.
           setAppNotice({
             text: texteFil('auto.verifFichierIndisponible', { fichier: decision.fichier })
           })
@@ -990,7 +1004,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
            * payer un tour. Absent → on revient voir toutes les DELAI_SONDAGE_FICHIER, sans consommer
            * de relance payée, jusqu'à DUREE_MAX_SONDAGE_FICHIER (48 h) : au-delà, on arrête et on le dit.
            * SEUL un `true` envoie : `null` ou une erreur ne prouvent rien et ne paient donc pas de tour
-           * (conv-826 : la relance partait sur tout ce qui n'était pas `false`).
+           * (La relance partait sur tout ce qui n'était pas `false`).
            */
           const base = convsRef.current.find((c) => c.id === id)?.projectPath?.trim() || undefined
           const fichier = decision.fichier
@@ -1028,7 +1042,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       if (busyConversationsRef.current.has(id)) return
       // Des messages attendent dans la file de CE fil (lots suivants d'une sélection scout, textes
       // tapés pendant le tour) : ils passent avant la suite du mode auto, qui reprendra sur leur fin
-      // de tour (conv-1080). Sinon la suite proposée par l'agent s'intercalait entre deux lots.
+      // de tour. Sinon la suite proposée par l'agent s'intercalait entre deux lots.
       if ((queueRef.current.get(id)?.length ?? 0) > 0) return
       // Le minuteur sonne parfois des heures plus tard : le garde-fou de la chaîne est relu ICI.
       const g = gardeChaine(id)
@@ -1070,7 +1084,9 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     autoEtatsRef.current.set(conversationId, neuf)
     return neuf
   }
-  useEffect(() => {
+  // Corps en `useEffectEvent` (voir le vidage de file) : un envoi automatique coûte un
+  // tour payant, l'effet ne doit se relancer que sur ses déclencheurs, jamais sur un rendu de plus.
+  const avancerLaBoucleDuFilAffiche = useEffectEvent(() => {
     if (!autoActif || !activeId) return
     /*
      * PREMIER PASSAGE DANS CE FIL : on prend le tour déjà là comme point de départ, sans l'envoyer.
@@ -1091,7 +1107,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       const allumageManuel = premierPassageLaisseSortirLeTour({
         allumageManuel: autoAllumageManuelRef.current,
         repriseApresRedemarrage: autoRepriseApresRedemarrageRef.current,
-        // ATTENTE DE FICHIER (conv-826, 2026-09-26) : un redémarrage tuait sa surveillance et ce gel la
+        // ATTENTE DE FICHIER (2026-09-26) : un redémarrage tuait sa surveillance et ce gel la
         // rendait définitive, ∞ affiché allumé. Déjà surveillée (fil rouvert) → on ne la relance pas.
         attenteFichier:
           !autoProgrammeesRef.current.has(activeId) &&
@@ -1132,7 +1148,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       // N'eteint QUE le fil affiche : les autres fils armes gardent leur reglage.
       desarmerAuto(activeId)
       // L'arret DIT sa raison : sans elle, le bouton ∞ s'allumait puis s'eteignait sans un mot.
-      // Rangé dans CE fil : affiché seulement quand il est à l'écran (conv-891).
+      // Rangé dans CE fil : affiché seulement quand il est à l'écran.
       if (decision.raison === 'quota-hebdo' || decision.raison === 'tours-auto-max')
         noterArretChaine(window.localStorage, activeId, decision.message)
       setArretsAuto((courant) => ({ ...courant, [activeId]: decision.message }))
@@ -1154,7 +1170,9 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     etat.prompt = decision.texte
     // Comme le vidage de file : ce n'est pas un geste de l'utilisateur, le composer n'est pas touché.
     void send(decision.texte, { keepComposerDraft: true, automatique: true, suiteDuModeAuto: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+  useEffect(() => {
+    avancerLaBoucleDuFilAffiche()
   }, [autoActif, activeId, busy, messages, brouillonPresent])
 
   /*
@@ -1184,13 +1202,14 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       vivant = false
       window.clearInterval(minuteur)
     }
-  }, [busyConversations])
+    // Ref (`useRef`) et setter (`useState`) de ChatView.tsx : stables, ils ne relancent rien.
+  }, [busyConversations, quotaHebdoRef, setQuotaHebdoConnu])
 
   /**
    * LES AUTRES FILS — la boucle ne doit pas s'arrêter parce qu'on regarde ailleurs.
    *
-   * Mesure du 2026-09-02 (journaux de tours) : conv-131 a fini son tour à 11:53:59 pendant que
-   * conv-133 était à l'écran depuis 11:53:17. La suite proposée n'est jamais partie, et au retour
+   * Mesure du 2026-09-02 (journaux de tours) : un fil a fini son tour à 11:53:59 pendant que
+   * un fil était à l'écran depuis 11:53:17. La suite proposée n'est jamais partie, et au retour
    * dans le fil la règle du premier passage marquait ce tour comme « déjà traité » — donc il ne
    * pouvait PLUS jamais repartir. La chaîne mourait en silence.
    *
@@ -1198,7 +1217,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
    * tourner pendant que l'interrupteur était armé. Une vieille réponse d'un fil qu'on rouvre n'est
    * jamais relancée — c'est un tour que personne n'a demandé.
    */
-  useEffect(() => {
+  const enchainerLesFilsNonAffiches = useEffectEvent(() => {
     if (autoConvs.size === 0) return
     for (const id of busyConversations) if (autoArmePour(id)) autoSuiviesRef.current.add(id)
     for (const id of [...autoSuiviesRef.current]) {
@@ -1210,7 +1229,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       autoSuiviesRef.current.delete(id)
       // Le fil affiché a son propre effet, qui sait en plus respecter un brouillon en cours.
       if (id === activeId) continue
-      // Sa file passe d'abord (lots suivants d'une sélection scout, conv-1080) : le mode auto
+      // Sa file passe d'abord (lots suivants d'une sélection scout) : le mode auto
       // reprendra sur la fin de tour du dernier message en attente.
       if ((queueRef.current.get(id)?.length ?? 0) > 0) continue
       const etat = autoEtat(id)
@@ -1276,11 +1295,13 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
         targetConversationId: id
       })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+  useEffect(() => {
+    enchainerLesFilsNonAffiches()
   }, [autoConvs, autoArmePour, activeId, busyConversations, autoTic])
 
   /**
-   * LES LOTS CONTINUENT QUAND ON REGARDE AILLEURS (conv-1080). Le drain de la file ne sert que le fil
+   * LES LOTS CONTINUENT QUAND ON REGARDE AILLEURS. Le drain de la file ne sert que le fil
    * AFFICHÉ (transition `busy→false`) : un fil quitté pendant le lot 1 gardait les lots 2 et 3 en
    * file jusqu'à ce qu'on y revienne — « lancés à la suite » ne tenait que les yeux sur l'écran.
    *
@@ -1290,7 +1311,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
    */
   const filsAvecLotsRef = useRef(new Set<string>())
   const lotsEnCoursRef = useRef(new Set<string>())
-  useEffect(() => {
+  const relacherLesLotsDesFilsNonAffiches = useEffectEvent(() => {
     for (const id of [...filsAvecLotsRef.current]) {
       if ((queueRef.current.get(id)?.length ?? 0) === 0) {
         filsAvecLotsRef.current.delete(id)
@@ -1305,7 +1326,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       if (stoppedQueueDrainRef.current.has(id) || stopDemandeRef.current.has(id)) continue
       lotsEnCoursRef.current.delete(id)
       // Retenus par la limite de quota : rien ne part, et seul un NOUVEAU tour vu dans ce fil (la
-      // reprise) les relâchera à sa fin (conv-1080).
+      // reprise) les relâchera à sa fin.
       if (lotsRetenusDansLeFil(id)) continue
       if (teteRetenueParLeVerrou(id)) continue
       const [tete, ...reste] = queueRef.current.get(id) ?? []
@@ -1317,7 +1338,9 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
         targetConversationId: id
       })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+  useEffect(() => {
+    relacherLesLotsDesFilsNonAffiches()
   }, [busyConversations, activeId])
 
   /** Bascule du mode auto : à l'allumage, l'anti-doublon et l'anti-boucle repartent de zéro. */
@@ -1393,7 +1416,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
   /**
    * Un choix cliqué se comporte comme un message TAPÉ, tour en cours ou non.
    *
-   * DÉFAUT VÉCU le 22/08 (conv-1363) : `ask` ne SUSPEND pas le tour — le pilote enchaîne son
+   * DÉFAUT VÉCU le 22/08 : `ask` ne SUSPEND pas le tour — le pilote enchaîne son
    * itération suivante sans attendre la réponse. Le bloc reste donc affiché pendant que la
    * conversation est occupée, et le clic partait dans `send()`, qui sort EN SILENCE sur `busy` :
    * ni file, ni reçu, ni message. « Je clique dans le bloc ask, il se passe rien » — littéralement.
@@ -1405,7 +1428,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
   const sendRef = useRef(send)
   sendRef.current = send
   /**
-   * LES ATTENTES DE FICHIER DES FILS ARMÉS NON AFFICHÉS, reprises au démarrage (conv-826, 2026-09-26 :
+   * LES ATTENTES DE FICHIER DES FILS ARMÉS NON AFFICHÉS, reprises au démarrage (2026-09-26 :
    * « après un redémarrage, ∞ reprend tout seul l'attente d'un fichier encore attendu »).
    *
    * La surveillance d'un « quand X existe » est un minuteur de l'écran : un redémarrage l'efface,
@@ -1415,9 +1438,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
    * suite que si le fichier existe.
    */
   const attentesReprisesRef = useRef(false)
-  useEffect(() => {
-    if (attentesReprisesRef.current || convs.length === 0) return
-    attentesReprisesRef.current = true
+  const reprendreLesAttentesDesFilsArmes = useEffectEvent(() => {
     for (const id of autoConvs) {
       if (id === '*' || id === activeIdAutoRef.current || !convs.some((c) => c.id === id)) continue
       void (async () => {
@@ -1450,7 +1471,11 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
         if (decision) programmerRelanceAuto(id, decision)
       })()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+  useEffect(() => {
+    if (attentesReprisesRef.current || convs.length === 0) return
+    attentesReprisesRef.current = true
+    reprendreLesAttentesDesFilsArmes()
   }, [convs])
   /**
    * REPRISE APRES UN REDEMARRAGE DEMANDE PAR L'AGENT (`restart_app`).
@@ -1460,9 +1485,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
    * tentative par demarrage (`repriseTenteeRef`) — le main a deja efface la consigne en la rendant.
    */
   const repriseTenteeRef = useRef(false)
-  useEffect(() => {
-    if (repriseTenteeRef.current || convs.length === 0) return
-    repriseTenteeRef.current = true
+  const reprendreApresRedemarrage = useEffectEvent(() => {
     void reprendreToutesApresRedemarrage({
       lire: async () => (await window.api.repriseEnAttente?.()) ?? null,
       ouvrir: async (conversationId) => {
@@ -1472,7 +1495,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
         return true
       },
       /*
-       * L'AUTORITE, pas l'ecran (conv-1127, 2026-10-23) : `loadConv` lance sa sonde sans l'attendre,
+       * L'AUTORITE, pas l'ecran (2026-10-23) : `loadConv` lance sa sonde sans l'attendre,
        * donc le fil paraissait libre alors que le main y tenait encore le tour qui avait appele
        * `restart_app`. La consigne partait, etait refusee, et se perdait.
        */
@@ -1505,12 +1528,16 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
         await sendRef.current(consigne, { targetConversationId: conversationId })
       }
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+  useEffect(() => {
+    if (repriseTenteeRef.current || convs.length === 0) return
+    repriseTenteeRef.current = true
+    reprendreApresRedemarrage()
   }, [convs])
   const pickRef = useRef<(prompt: string, suite?: readonly string[]) => void>(() => {})
   pickRef.current = (prompt: string, suite?: readonly string[]) => {
     /*
-     * LES LOTS D'UNE SÉLECTION SCOUT (conv-1080) : le panneau découpe la sélection en lots courts, qui
+     * LES LOTS D'UNE SÉLECTION SCOUT : le panneau découpe la sélection en lots courts, qui
      * passent par la FILE du fil — un lot par tour, chacun sa paire question/réponse, jamais deux runs
      * en même temps sur le dépôt. Pendant un tour, TOUS attendent sa fin : un lot injecté dans le run
      * en cours deviendrait une consigne de ce run, pas son propre travail. Stop rend la file au
@@ -1550,12 +1577,16 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
   // data-only de `ChatMessageRow`). Seul le fil actif montre ses reçus (`activeDirectiveReceipts`).
   const annulerEnvoiRef = useRef(annulerEnvoiEnAttente)
   annulerEnvoiRef.current = annulerEnvoiEnAttente
-  const annulerEnvoi = useCallback((receipt: DirectiveReceipt) => {
-    const id = activeRef.current
-    if (id) annulerEnvoiRef.current(id, receipt)
-  }, [])
+  // `activeRef` vient de `useRef` (ChatView.tsx) : stable, le rappel le reste aussi.
+  const annulerEnvoi = useCallback(
+    (receipt: DirectiveReceipt) => {
+      const id = activeRef.current
+      if (id) annulerEnvoiRef.current(id, receipt)
+    },
+    [activeRef]
+  )
   /**
-   * UNE SÉLECTION EN PLUSIEURS LOTS PART EN SUPER CONVERSATION (conv-1333, 2026-10-30). Depuis le
+   * UNE SÉLECTION EN PLUSIEURS LOTS PART EN SUPER CONVERSATION (2026-10-30). Depuis le
    * 22/10, 4 sélections ont prévu 12 lots dans la file du fil (`pickRef`) : 4 sont partis, jamais un
    * lot 2. Cette file vit dans la vue : Stop, un redémarrage ou un remontage l'effacent sans trace.
    * Le plan, lui, est sur disque (`plans-de-lots-app.ts`), fait 3 lots à la fois et se reprend.
@@ -1589,7 +1620,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     []
   )
   /**
-   * « 1 et 12 » TAPÉ SOUS LE PANNEAU VAUT LE CLIC (conv-1333). Un lot part en message, comme le
+   * « 1 et 12 » TAPÉ SOUS LE PANNEAU VAUT LE CLIC. Un lot part en message, comme le
    * bouton ; plusieurs lots partent en plan. Plan refusé : le texte reste dans la saisie, le refus se
    * lit dans le bandeau, rien ne part en silence.
    */
@@ -1808,9 +1839,9 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
      * Le mode auto ne retenait comme « traite » que ce qu'il envoyait lui-meme. Tant que le message
      * reste dans ce fil, le tour suivant change la signature et rien ne se voit. Mais quand le routeur
      * l'EMPORTE dans un fil neuf, ce fil-ci retrouve exactement son dernier tour : le mode auto le
-     * croyait encore a traiter et renvoyait la meme suite. Vecu le 2026-10-15 (conv-961 -> conv-968,
-     * 09:58:13) : la suite acceptee par Tab est partie dans conv-968, puis le mode auto l'a renvoyee
-     * dans conv-961 32 ms plus tard — deux bancs identiques sur le meme Bureau.
+     * croyait encore a traiter et renvoyait la meme suite. Vecu le 2026-10-15 (
+     * 58:13) : la suite acceptee par Tab est partie, puis le mode auto l'a renvoyee
+     * 32 ms plus tard — deux bancs identiques sur le meme Bureau.
      * Temoin : `ChatView.mode-auto-reste-dans-le-fil.test.tsx`.
      */
     if (sourceConversationId && !options?.automatique) {
@@ -1819,7 +1850,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
     }
     // Même filet que l'orientation : le composer va être vidé, ce texte doit exister sur disque
     // AVANT — y compris si la création de la conversation ou l'envoi échoue juste après.
-    // conv-113 (saisies ts 1791317725882 vs 1791317691042) : un envoi de ∞ se distingue d'un texte tapé.
+    // saisies ts 1791317725882 vs 1791317691042 : un envoi de ∞ se distingue d'un texte tapé.
     if (value)
       journaliserSaisie(
         sourceConversationId ?? 'nouvelle-conversation',
@@ -1835,7 +1866,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       null
     /**
      * Le tour a-t-il « réussi » en ne rendant QUE l'incident du fournisseur ? Mesuré le 2026-09-03
-     * (conv-28) : la surcharge est arrivée dans le TEXTE de la réponse, pas dans `error`. Le tour
+     * La surcharge est arrivée dans le TEXTE de la réponse, pas dans `error`. Le tour
      * comptait pour un succès, la porte de reprise répondait « succès », et l'utilisateur devait
      * retaper sa demande. Le texte rendu n'est connu qu'après la clôture : on garde donc de quoi
      * rejuger là-bas.
@@ -1924,7 +1955,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
        *     l'effet, qui depend de `messages`, ne se rejouait jamais et personne ne descendait.
        * Envoyer un message dit sans ambiguite ou le lecteur veut etre : en bas, sur ce qu'il envoie.
        *
-       * ... ET LA POSITION RETENUE SUR LE DISQUE PART AVEC (conv-1128, 2026-10-23 : « quand j'envoie
+       * ... ET LA POSITION RETENUE SUR LE DISQUE PART AVEC (2026-10-23 : « quand j'envoie
        * le message ca doit me scroll down la conv »). Annuler la seule reprise EN ATTENTE ne suffisait
        * pas : le `refresh` du fil emis juste apres l'envoi (il est retitre a chaque message) repasse
        * par `loadConv`, qui relisait la position retenue avant l'envoi et y REMONTAIT le fil ~1 s
@@ -1938,7 +1969,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
 
     try {
       // Le message part dans le fil OU IL A ETE ECRIT : plus aucun tri ne le deplace vers un fil
-      // neuf quand le sujet change (retire le 2026-10-17, conv-305 : « c invasif je sais gerer »).
+      // neuf quand le sujet change (retire le 2026-10-17, « c invasif je sais gerer »).
       // Pas de conversation active → on en crée une (titre = début du message).
       if (!convId) {
         const identity = await refreshRuntimeIdentity()
@@ -1984,7 +2015,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       /*
        * Conversation CREEE D'AVANCE (fenetre mosaique, ouverture directe) : elle porte le titre
        * provisoire « Nouvelle conversation ». Elle n'est plus renommee ICI : le stockage retitre
-       * le fil a CHAQUE message de l'utilisateur (`ConversationStore.beginTurn`, conv-999), et
+       * le fil a CHAQUE message de l'utilisateur (`ConversationStore.beginTurn`), et
        * `conversationsRename` est desormais le renommage MANUEL — l'appeler d'ici figerait le
        * titre comme s'il avait ete choisi.
        */
@@ -2171,7 +2202,7 @@ export function useToursEtEnvoi(ctx: ToursEtEnvoiCtx) {
       // comme quand elle partait directement au `done` ; la file attendra la fin du résumé.
       if (convId && compactionEnAttenteRef.current.has(convId)) lancerCompactionAuto(convId)
       // Même raison : un drain a vu le fil libre pendant que CET envoi tenait encore son verrou ;
-      // la tête de file l'a attendu, elle part maintenant (`teteRetenueParLeVerrou`, conv-1080).
+      // la tête de file l'a attendu, elle part maintenant (`teteRetenueParLeVerrou`).
       if (convId && drainApresVerrouRef.current.delete(convId)) drainerApresVerrou(convId)
     }
   }
