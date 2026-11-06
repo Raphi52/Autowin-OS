@@ -19,6 +19,7 @@ import type { ConversationPourLaCarte } from './board/carte-des-besoins'
 import { gestionnaireNavigateur, registerNavigateurIpc } from './ipc/navigateur'
 import { registerQuestionACoteIpc } from './ipc/question-a-cote'
 import { registerTerminalIpc } from './ipc/terminal'
+import { importerLeCoffreAuDemarrage, registerCoffreClesIpc } from './ipc/coffre-cles'
 import {
   environnementDuTerminal,
   fermerTerminauxAvantSortie,
@@ -2201,6 +2202,8 @@ app.whenReady().then(async () => {
     catalogue: () => bus.catalog(),
     comptes: () => claudeAccounts.current().accounts
   })
+  // Coffre à clés (réglages « Clés ») : lister, ajouter, retirer, réimporter — jamais une valeur.
+  registerCoffreClesIpc()
   // Mods d'Autowin chargés par chaque run : hors archive, comme les scripts du bureau caché.
   definirDossierModsAutowin(join(racineScriptsHorsArchive(app.getAppPath()), 'mods', 'autowin'))
   registerProdPassphraseIpc(ipcMain, {
@@ -2342,6 +2345,9 @@ app.whenReady().then(async () => {
   void interfaceVisible.then(() =>
     pendantOperation('menage:apres-affichage', menagesApresAffichage)
   )
+  // Import des clés du poste dans le coffre APRÈS l'affichage : deux lectures du registre et un
+  // déchiffrement n'ont rien à faire dans le démarrage. Le journal donne des nombres, jamais une valeur.
+  void interfaceVisible.then(() => importerLeCoffreAuDemarrage((ligne) => console.log(ligne)))
   setImmediate(() => {
     // COPIES ISOLÉES ORPHELINES. Un run tué avec l'app laisse son bureau isolé sur le disque ;
     // il est déjà marqué `interrupted` par le coordinateur, mais restait introuvable. On les NOMME

@@ -1,4 +1,5 @@
 import type { ReponseServeursMcp, ServeurMcpUtilisateur } from '../main/providers/mcp-servers'
+import type { EtatCoffre, ReponseGesteCoffre } from '../main/app/coffre-cles'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
 import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/conversations/messages-entre-fils-app'
 import type {
@@ -546,6 +547,14 @@ interface ChatApi {
   mcpServersSave: (serveur: ServeurMcpUtilisateur) => Promise<ReponseServeursMcp>
   mcpServersDelete: (id: string) => Promise<ReponseServeursMcp>
   mcpServersToggle: (id: string, actif: boolean) => Promise<ReponseServeursMcp>
+  /** Coffre à clés : noms, origines, dates et longueurs — jamais une valeur (`src/main/coffre-cles.ts`). */
+  coffreLister: () => Promise<EtatCoffre>
+  /** Ajoute ou remplace une clé saisie par l'utilisateur ; l'import du poste ne l'écrasera plus. */
+  coffreAjouter: (nom: string, valeur: string) => Promise<ReponseGesteCoffre>
+  /** Retire une clé ; l'import du poste ne la ramène pas. */
+  coffreRetirer: (nom: string) => Promise<ReponseGesteCoffre>
+  /** Relit les clés du poste (HKCU, HKLM, environnement) ; le bilan donne des nombres. */
+  coffreReimporter: () => Promise<ReponseGesteCoffre>
   enregistrerBrainPerso: (entree: { chemin?: string; depot?: string }) => Promise<BrainPersoState>
   resetBrainPerso: () => Promise<BrainPersoState>
   pendingModelQuestion: () => Promise<PendingModelQuestion | null>

@@ -61,23 +61,58 @@ export interface RechargeEnv {
   detail: string
 }
 
+/** Les variables persistées de l'utilisateur, et celles du système (lues pour tous les comptes). */
+export const CLE_ENV_UTILISATEUR = String.raw`HKCU\Environment`
+export const CLE_ENV_SYSTEME = String.raw`HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment`
+
+/**
+ * `    NOM    REG_SZ    valeur` — la valeur peut contenir des espaces, pas les deux colonnes qui la
+ * precedent. Partagé par les deux lectures ci-dessous pour qu'elles ne divergent jamais.
+ */
+function valeurDeLigneReg(ligne: string): string | undefined {
+  return ligne.split(/\s+REG_[A-Z_]+\s+/i)[1]?.trim() || undefined
+}
+
 /** Lecture de la valeur PERSISTEE par l'utilisateur (Windows : `HKCU\Environment`). */
 export const lecteurWindows: LecteurEnvSysteme = (nom) => {
   try {
-    const sortie = execFileSync('reg', ['query', String.raw`HKCU\Environment`, '/v', nom], {
+    const sortie = execFileSync('reg', ['query', CLE_ENV_UTILISATEUR, '/v', nom], {
       encoding: 'utf8',
       windowsHide: true
     })
-    // `    NOM    REG_SZ    valeur` — la valeur peut contenir des espaces, pas les deux colonnes
-    // qui la precedent.
     const ligne = sortie
       .split(/\r?\n/)
       .find((l) => new RegExp(String.raw`\s${nom}\s+REG_`, 'i').test(l))
-    const valeur = ligne?.split(/\s+REG_[A-Z_]+\s+/i)[1]
-    return valeur?.trim() || undefined
+    return ligne === undefined ? undefined : valeurDeLigneReg(ligne)
   } catch {
     return undefined
   }
+}
+
+/**
+ * TOUTES les variables persistées sous une clé, en un seul appel à `reg` : le coffre à clés doit
+ * découvrir des NOMS qu'il ne connaît pas d'avance, ce que `lecteurWindows` (un nom donné) ne fait pas.
+ * Clé illisible ou hors Windows → table vide, jamais d'exception.
+ */
+export function variablesDuRegistre(cle: string): Map<string, string> {
+  const variables = new Map<string, string>()
+  try {
+    const sortie = execFileSync('reg', ['query', cle], {
+      encoding: 'utf8',
+      windowsHide: true,
+      timeout: 5_000,
+      // Une clé absente est un cas normal : son message d'erreur n'a rien à faire dans la console.
+      stdio: ['ignore', 'pipe', 'ignore']
+    })
+    for (const ligne of sortie.split(/\r?\n/)) {
+      const nom = /^\s+(\S+)\s+REG_[A-Z_]+/i.exec(ligne)?.[1]
+      const valeur = nom ? valeurDeLigneReg(ligne) : undefined
+      if (nom && valeur) variables.set(nom, valeur)
+    }
+  } catch {
+    // Clé absente, droit refusé ou `reg` introuvable : rien à importer de cette source.
+  }
+  return variables
 }
 
 export function rechargerEnv(

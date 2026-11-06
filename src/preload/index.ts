@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webFrame } from 'electron'
 import type { ReponseServeursMcp, ServeurMcpUtilisateur } from '../main/providers/mcp-servers'
+import type { EtatCoffre, ReponseGesteCoffre } from '../main/app/coffre-cles'
 import type { InventaireDisque } from '../main/store/inventaire-disque'
 import type { MessageAffiche as MessageEntreFilsAffiche } from '../main/conversations/messages-entre-fils-app'
 import type {
@@ -724,6 +725,13 @@ const api = {
     ipcRenderer.invoke('os:mcpServers:delete', id),
   mcpServersToggle: (id: string, actif: boolean): Promise<ReponseServeursMcp> =>
     ipcRenderer.invoke('os:mcpServers:toggle', id, actif),
+  // Coffre à clés (réglages « Clés ») : la valeur part vers le moteur, aucune réponse ne la rend.
+  coffreLister: (): Promise<EtatCoffre> => ipcRenderer.invoke('coffre:lister'),
+  coffreAjouter: (nom: string, valeur: string): Promise<ReponseGesteCoffre> =>
+    ipcRenderer.invoke('coffre:ajouter', nom, valeur),
+  coffreRetirer: (nom: string): Promise<ReponseGesteCoffre> =>
+    ipcRenderer.invoke('coffre:retirer', nom),
+  coffreReimporter: (): Promise<ReponseGesteCoffre> => ipcRenderer.invoke('coffre:reimporter'),
   brainTraces: (conversationId: string): Promise<BrainTrace[]> =>
     ipcRenderer.invoke('os:brainTraces', conversationId),
   conversationFileTraces: (conversationId: string): Promise<ConversationFileTrace[]> =>
