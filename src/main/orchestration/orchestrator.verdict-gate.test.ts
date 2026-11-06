@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { evaluateClosure } from '../gates/stopgate'
 import { lireVerdictJuge } from './orchestrator'
+import { dodDuVerdict, verdictAvecObjectionsPortees } from '../juge/objections-juge'
 
 /**
  * TROIS DÉFAUTS D'UN MÊME SYMPTÔME, observés sur un run réel de l'utilisateur
@@ -182,5 +183,68 @@ describe('faux vert du juge qui se corrige — un seul lecteur, sur TOUS les che
     expect(source).not.toContain(LECTEUR_FAIBLE)
     // Et les sites de decision passent bien par le lecteur canonique.
     expect((source.match(/lireVerdictJuge\(/g) ?? []).length).toBeGreaterThanOrEqual(4)
+  })
+})
+
+/**
+ * UN MOT DE REFUS CITÉ ENTRE ACCENTS GRAVES N'EST PAS UN REFUS.
+ *
+ * Mesuré le 2026-11-06 (réparation 1 du run run-3d41b4963994-1) : le juge rend « VALIDE / SCORE: 90 »,
+ * toutes ses puces OK. Une sous-puce cite une limite du livrable : « un refus `DEFAUT:` du juge reste
+ * un refus ». `REJET_FORME_CONTRAT` compte le mot en majuscules OÙ QU'IL SOIT : le verdict est lu
+ * rouge, `dodDuVerdict` y voit un refus et recopie TOUTES les puces OK en « Promis mais pas fait ».
+ *
+ * Entrées qui feraient échouer ce bloc si la correction était fausse :
+ * - retirer `REJET_FORME_CONTRAT` au lieu d'ignorer les citations → « Le livrable présente un
+ *   DEFAUT: preuve absente » (plus haut) et le refus en prose ci-dessous redeviennent verts ;
+ * - corriger le seul lecteur sans `verdictAvecObjectionsPortees` → le VALIDE qui porte un MINEUR
+ *   et une citation passe vert, et le MINEUR est perdu.
+ */
+describe('citation du mot de refus — entre accents graves, elle ne retourne pas un VALIDE', () => {
+  const VALIDE_90_REEL = [
+    'Tout est vert de mon côté.',
+    '',
+    'VALIDE',
+    'SCORE: 90',
+    'OBJECTIONS:',
+    '- OK: Le cadrage repris est vérifié. `node scripts/frame-cas-limites-check.mjs` rend « CADRAGE TENU — 13 cas » (code 0).',
+    "- OK: Limites annoncées, que j'ai vérifiées dans le code :",
+    '  - un refus `DEFAUT:` du juge reste un refus, même quand le rejeu lève son seul reproche ;',
+    "  - le rejeu n'est branché que sur le parcours principal.",
+    "- OK: hors run — Rien n'est commité ni publié."
+  ].join('\n')
+
+  const cloture = (texte: string): ReturnType<typeof evaluateClosure> => {
+    // La chaîne du parcours principal (`orchestrator-parcours-sequentiel.ts`), sans rien d'autre.
+    const ok = lireVerdictJuge(verdictAvecObjectionsPortees(texte))
+    return evaluateClosure({ status: ok ? 'green' : 'red', dod: dodDuVerdict(ok, texte) })
+  }
+
+  it('le VALIDE 90 réel reste une approbation, et la clôture n est pas bloquée', () => {
+    expect(lireVerdictJuge(VALIDE_90_REEL)).toBe(true)
+    const evaluation = cloture(VALIDE_90_REEL)
+    expect(evaluation.reasons.join(' ')).not.toMatch(/Promis mais pas fait/)
+    expect(evaluation.blocked).toBe(false)
+  })
+
+  it('jumeau refusé : le même mot HORS accents graves reste un refus, en tête ou en prose', () => {
+    expect(lireVerdictJuge(VALIDE_90_REEL.replace('`DEFAUT:`', 'DEFAUT:'))).toBe(false)
+    expect(
+      lireVerdictJuge('DEFAUT: le test `objections-juge.rejeu.test.ts` est rouge\nSCORE: 40')
+    ).toBe(false)
+    expect(
+      lireVerdictJuge('Le code `x` présente un DEFAUT: preuve absente. VALIDE pour le reste')
+    ).toBe(false)
+  })
+
+  it('un VALIDE qui porte un MINEUR ET une citation reste bloqué, sur le MINEUR seul', () => {
+    const avecMineur = VALIDE_90_REEL.replace(
+      '- OK: hors run',
+      '- MINEUR: le rejeu n est pas branché sur la reprise d un verdict\n- OK: hors run'
+    )
+    expect(lireVerdictJuge(verdictAvecObjectionsPortees(avecMineur))).toBe(false)
+    const raisons = cloture(avecMineur).reasons.join(' ')
+    expect(raisons).toContain('le rejeu n est pas branché sur la reprise')
+    expect(raisons).not.toContain('Le cadrage repris est vérifié')
   })
 })

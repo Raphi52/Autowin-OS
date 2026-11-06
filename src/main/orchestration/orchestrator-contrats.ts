@@ -2,9 +2,7 @@
 // orchestrator.ts pour alléger ce fichier ; orchestrator.ts les ré-exporte.
 import { resolve } from 'node:path'
 import type { ProviderRegistry } from '../providers/registry'
-import {
-  leconRefuseeParLeJuge
-} from '../juge/objections-juge'
+import { horsCitations, leconRefuseeParLeJuge } from '../juge/objections-juge'
 import type { Role, RoleBinding, RoleModelConfig, ReasoningEffort } from '../profil/roles'
 import { type CostAggregator } from '../dashboards/cost'
 import type { TrustLedger } from '../trust/ledger'
@@ -274,7 +272,10 @@ export function verdictDePhase(phase: NodePhase, text: string): NodeVerdict {
   if (!propre) return 'red'
   if (
     REJET_EN_TETE.test(propre) ||
-    REJET_FORME_CONTRAT.test(propre) ||
+    // fix-ok: un VALIDE 90 dont une puce OK citait le mot de refus entre accents graves était lu
+    // rouge (orchestrator.verdict-gate.test.ts rouge 1/17 avant, vert après) : une citation n'est
+    // pas un verdict (voir `horsCitations`).
+    REJET_FORME_CONTRAT.test(horsCitations(propre)) ||
     REJET_EN_TETE_DE_LIGNE.test(propre)
   ) {
     return 'red'

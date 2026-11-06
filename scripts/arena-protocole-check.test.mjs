@@ -1095,3 +1095,112 @@ describe('banc a repliques : out-<bras>-<replique>.json et P22 dispersion', () =
     ).toBe(false)
   })
 })
+
+/*
+ * P24 — LES CANDIDATS A, B ET C NE VOIENT PAS QU'ILS SONT COMPARES.
+ * Mesure du 2026-11-06 : 9 consignes de candidats sous `.arena` disent « CRITÈRE QUI TE JUGERA »
+ * et citent leur critere sous `.arena/banc-<sujet>/`. Chaque cas nomme l'ENTREE qui ferait echouer
+ * le test si le controle etait faux.
+ */
+describe('P24 — aucune consigne de A, B ou C ne dit au candidat qu_il est compare', () => {
+  const preVol = (f) =>
+    verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine, avantLancement: true })
+  const avecLigne = (f, bras, ligne) =>
+    writeFileSync(
+      join(f.bench, `prompt-${bras}.txt`),
+      `${readFileSync(join(f.bench, `prompt-${bras}.txt`), 'utf8')}${ligne}\n`
+    )
+
+  it('le banc conforme passe le pre-vol, P24 compris', () => {
+    const res = preVol(bancConforme())
+    expect(point(res, 'P24').ok).toBe(true)
+    expect(res.ok).toBe(true)
+  })
+
+  // Entree qui ferait echouer : les deux lignes reelles de .arena/banc-couleurs/prompt-a.txt:13-14.
+  it('refuse la consigne reelle de banc-couleurs (phrase ET chemin du critere)', () => {
+    const f = bancConforme()
+    avecLigne(
+      f,
+      'a',
+      'CRITÈRE QUI TE JUGERA (script externe, lecture seule, tu peux le lancer autant que tu veux) :\n  node "C:/Sources/AutoWinOS/.arena/banc-couleurs/check.mjs" <racine de ta copie>'
+    )
+    const res = preVol(f)
+    expect(res.ok).toBe(false)
+    expect(point(res, 'P24').detail).toMatch(/prompt-a\.txt/)
+    expect(point(res, 'P24').detail).toMatch(/te jug/)
+    expect(point(res, 'P24').detail).toMatch(/arena/)
+    expect(point(res, 'P24').detail).toMatch(/banc/)
+  })
+
+  // C11 — chaque entree ci-dessous ferait echouer le test si le controle ignorait la casse ou les accents.
+  const refuses = [
+    ['Arena', 'Tu es dans une Arena.'],
+    ['BANC', 'Ce BANC mesure ton travail.'],
+    ['bench', 'voir out/bench/notes.md'],
+    ['bras', 'Tu es le bras B.'],
+    ['candidat', 'Tu es un candidat parmi d_autres.'],
+    ['candidats', 'Les candidats recoivent la meme tache.'],
+    ['comparatif', 'Ceci est un Comparatif.'],
+    ['te jug', 'CRITÈRE QUI TE JUGERA : node check.mjs'],
+    ['te jug', 'le script qui te juge est node check.mjs'],
+    ["t'evalu", 'Un script t’évaluera.'],
+    ["t'evalu", "Le juge t'evalue sur trois points."],
+    ['te not', 'Le juge te notera sur 100.'],
+    ['arena', 'node .arena/x/check.mjs'],
+    ['arena', 'node arena_x/check.mjs']
+  ]
+  for (const [mot, ligne] of refuses) {
+    it(`refuse « ${ligne} » (${mot}) dans prompt-b.txt`, () => {
+      const f = bancConforme()
+      avecLigne(f, 'b', ligne)
+      const res = preVol(f)
+      expect(point(res, 'P24').ok).toBe(false)
+      expect(point(res, 'P24').detail).toMatch(/prompt-b\.txt/)
+      expect(res.ok).toBe(false)
+    })
+  }
+
+  // C10 — entree qui ferait echouer : un controle par sous-chaine (« arenas » contient « arena »).
+  // C12 — entree qui ferait echouer : un controle qui refuserait « juge » seul.
+  const acceptes = [
+    'Les arenas romaines sont un decor.',
+    'Le code est bancal.',
+    'Porte un brassard.',
+    'Passe ensuite a l_etape JUDGE.',
+    'Le juge relit ton travail.',
+    'Critère de fin (script, lecture seule) : node .verif/couleurs/check.mjs <racine>'
+  ]
+  for (const ligne of acceptes) {
+    it(`accepte « ${ligne} » dans prompt-c.txt`, () => {
+      const f = bancConforme()
+      avecLigne(f, 'c', ligne)
+      expect(point(preVol(f), 'P24').ok).toBe(true)
+    })
+  }
+
+  // X est l'appel nu, tenu par P17 : P24 ne lit que A, B et C.
+  it('ne lit pas prompt-x.txt', () => {
+    const f = bancConforme()
+    avecLigne(f, 'x', 'Tu es le bras X.')
+    expect(point(preVol(f), 'P24').ok).toBe(true)
+  })
+
+  // C13 — entree qui ferait echouer : P24 qui doublerait le refus de P21 sur un prompt absent.
+  it('consigne absente ou vide : P24 ne s_en mele pas, le refus P21 reste celui d_avant', () => {
+    const f = bancConforme()
+    rmSync(join(f.bench, 'prompt-c.txt'))
+    writeFileSync(join(f.bench, 'prompt-b.txt'), '')
+    expect(point(preVol(f), 'P24').ok).toBe(true)
+    const complet = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(complet, 'P21').ok).toBe(false)
+  })
+
+  // Entree qui ferait echouer : un P24 joue hors pre-vol, qui ferait rougir les bancs deja joues.
+  it('hors pre-vol, P24 n_est pas joue : un banc deja paye ne change pas de statut', () => {
+    const f = bancConforme()
+    avecLigne(f, 'a', 'CRITÈRE QUI TE JUGERA : node check.mjs')
+    const complet = verifierProtocole({ run: f.run, bench: f.bench, racineDuels: f.racine })
+    expect(point(complet, 'P24')).toBeUndefined()
+  })
+})

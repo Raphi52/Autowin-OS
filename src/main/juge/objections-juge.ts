@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { existsSync, readFileSync } from 'node:fs'
+import { isAbsolute, join, resolve } from 'node:path'
+import { execFileHorsFil, type ErreurHorsFil } from '../gel/execution-hors-fil'
 
 /**
  * LES OBJECTIONS DU JUGE NE SE PERDENT PAS DANS UN VERT.
@@ -61,6 +62,25 @@ export function leconRefuseeParLeJuge(texteDuJuge: string): boolean {
   return PUCE_LECON_REFUSEE.test(texteDuJuge ?? '')
 }
 
+/**
+ * UN MOT DE REFUS CITÉ ENTRE ACCENTS GRAVES EST UNE CITATION, PAS UN VERDICT.
+ *
+ * fix-ok: run-3d41b4963994-1 réparation 1 (2026-11-06) — le juge rend « VALIDE / SCORE: 90 », puces
+ * toutes OK ; une sous-puce cite une limite du livrable (« un refus `DEFAUT:` du juge reste un
+ * refus »). Le mot en majuscules comptait où qu'il soit : verdict lu rouge, puis `dodDuVerdict`
+ * recopiait toutes les puces OK en « Promis mais pas fait ». Mesure :
+ * orchestrator.verdict-gate.test.ts rouge (1 sur 17) avant, vert après.
+ * Seul un passage de code d'UNE ligne est retiré ; un mot de refus en prose reste un refus.
+ */
+export function horsCitations(text: string): string {
+  return (text ?? '').replace(/`[^`\n]+`/g, ' ')
+}
+
+/** Le juge a-t-il écrit un refus (hors citations) ? Le même test pour tous les lecteurs de ce fichier. */
+function refusEcritParLeJuge(text: string): boolean {
+  return /\bDEFAUT\s*:/i.test(horsCitations(text))
+}
+
 const ENTETE_OBJECTIONS = /^\s*objections?\s*:/i
 /**
  * La section facultative des questions au build (étape 2 de l'option A du cadrage
@@ -99,11 +119,27 @@ export function objectionsDuJuge(text: string, toutesGravites = false): string[]
   return objectionsClassees(text, toutesGravites).map((o) => o.texte)
 }
 
+/**
+ * Une puce de la section `OBJECTIONS:`. `index` = sa ligne dans le texte ; `enLigne` = la forme
+ * « OBJECTIONS: X » ; `bloquante` = retenue par `objectionsDuJuge` sans `toutesGravites`.
+ */
+interface PuceDuJuge {
+  gravite: string | null
+  texte: string
+  index: number
+  enLigne: boolean
+  retrait: number
+  bloquante: boolean
+}
+
 /** Les objections de `objectionsDuJuge`, avec la gravité retenue (MAJEUR/MINEUR/OK, ou `null` = puce nue). */
-function objectionsClassees(
-  text: string,
-  toutesGravites: boolean
-): Array<{ gravite: string | null; texte: string }> {
+function objectionsClassees(text: string, toutesGravites: boolean): PuceDuJuge[] {
+  const puces = pucesDuJuge(text)
+  return toutesGravites ? puces : puces.filter((p) => p.bloquante)
+}
+
+/** Toutes les puces de la section `OBJECTIONS:`, chacune avec ce qui la rend bloquante ou non. */
+function pucesDuJuge(text: string): PuceDuJuge[] {
   /*
    * DANS UN VERDICT QUI PORTE DEJA UNE PUCE `MAJEUR:`, UNE PUCE NUE N'EST PAS UN DEFAUT MAJEUR.
    *
@@ -117,7 +153,7 @@ function objectionsClassees(
    */
   const aUnMajeur = PUCE_MAJEUR.test(text ?? '')
   const lignes = (text ?? '').split(/\r?\n/)
-  const objections: Array<{ gravite: string | null; texte: string }> = []
+  const objections: PuceDuJuge[] = []
   let dansLaSection = false
   /*
    * fix-ok: run-0940cc5e0fcd-1 (2026-09-26) reparation 13 — le juge rend VALIDE 86 ; sa puce
@@ -127,7 +163,7 @@ function objectionsClassees(
    * Une sous-puce (plus indentee que la puce precedente) herite donc de l'etiquette de sa parente.
    */
   let parente: { retrait: number; etiquette: string | null } | null = null
-  for (const ligne of lignes) {
+  for (const [index, ligne] of lignes.entries()) {
     // Les questions au build ne sont pas des objections : leur entête ferme la section.
     if (ENTETE_QUESTIONS.test(ligne)) {
       dansLaSection = false
@@ -138,7 +174,15 @@ function objectionsClassees(
       parente = null
       // Forme en ligne : « OBJECTIONS: aucune » ou « OBJECTIONS: X ».
       const reste = ligne.replace(ENTETE_OBJECTIONS, '').trim()
-      if (reste && !VIDE.test(normaliser(reste))) objections.push({ gravite: null, texte: reste })
+      if (reste && !VIDE.test(normaliser(reste)))
+        objections.push({
+          gravite: null,
+          texte: reste,
+          index,
+          enLigne: true,
+          retrait: 0,
+          bloquante: true
+        })
       continue
     }
     if (!dansLaSection) continue
@@ -163,11 +207,14 @@ function objectionsClassees(
     // fix-ok: (2026-09-24) — run kaizen-…-mufvgag5 clos « succeeded » sur un VALIDE 82 dont
     // une puce MINEUR etait un vrai trou (drapeau `orientation` jamais transmis par run-pilot-chat.ts).
     // Decision utilisateur : tout defaut du juge, meme MINEUR, bloque la cloture verte. Seul OK passe.
-    if (gravite && !toutesGravites && /^ok$/i.test(gravite)) continue
-    if (!gravite && !toutesGravites && aUnMajeur) continue
+    const bloquante = gravite ? !/^ok$/i.test(gravite) : !aUnMajeur
     objections.push({
       gravite: gravite ? gravite.toUpperCase() : null,
-      texte: etiquette ? contenu.slice(etiquette[0].length).trim() : contenu
+      texte: etiquette ? contenu.slice(etiquette[0].length).trim() : contenu,
+      index,
+      enLigne: false,
+      retrait,
+      bloquante
     })
   }
   return objections
@@ -220,7 +267,7 @@ export function defautsDeLaRelectureSeule(
   text: string
 ): string[] {
   if (phaseNommee !== 'judge' || phasesExecutees > 0) return []
-  if (!/\bDEFAUT\s*:/i.test(text ?? '')) return []
+  if (!refusEcritParLeJuge(text)) return []
   return objectionsClassees(text, false).map((o) =>
     o.gravite ? `${o.gravite}: ${o.texte}` : o.texte
   )
@@ -258,7 +305,29 @@ export function resultatAvecReservesDuJuge(resultat: string, reserves: readonly 
   return `${resultat}\n\n## Réserves du juge (non corrigées)\nLe juge les a classées MINEUR. Sur un \`/scout\`, elles ne relancent pas l'analyse : vérifie-les avant d'agir sur la piste concernée.\n${puces.join('\n')}`
 }
 
-const SUFFIXE_TEST = /\|?\s*\bTEST:\s*([^|]+?)\s*\|\s*(.+?)\s*$/
+const MARQUE_TEST = /\bTEST:/g
+
+/**
+ * Les `| TEST: <fichier> | <commande>` d'UNE objection, dans l'ordre. Un reproche peut en porter
+ * plusieurs : le lecteur d'avant n'en gardait qu'un et collait le suivant dans sa commande.
+ * La commande garde tout ce qui la suit jusqu'au prochain `TEST:` (un `| rm …` final compris), pour
+ * que la vérification de forme du rejeu le voie.
+ */
+export function testsDeLObjection(objection: string): { fichier: string; commande: string }[] {
+  const marques = [...objection.matchAll(MARQUE_TEST)]
+  const tests: { fichier: string; commande: string }[] = []
+  for (const [rang, marque] of marques.entries()) {
+    const debut = (marque.index ?? 0) + marque[0].length
+    const fin = marques[rang + 1]?.index ?? objection.length
+    const segment = objection.slice(debut, fin).replace(/\s*\|?\s*$/, '')
+    const separateur = segment.indexOf('|')
+    if (separateur < 0) continue
+    const fichier = segment.slice(0, separateur).trim()
+    const commande = segment.slice(separateur + 1).trim()
+    if (fichier && commande) tests.push({ fichier, commande })
+  }
+  return tests
+}
 
 /**
  * Les tests exécutables joints par le juge (`| TEST: <fichier> | <commande>`) à ses objections
@@ -266,12 +335,284 @@ const SUFFIXE_TEST = /\|?\s*\bTEST:\s*([^|]+?)\s*\|\s*(.+?)\s*$/
  * la réparation repartait d'une prose ; elle reçoit désormais l'échec à faire passer.
  */
 export function testsDuJuge(text: string): { fichier: string; commande: string }[] {
-  const tests: { fichier: string; commande: string }[] = []
-  for (const objection of objectionsDuJuge(text)) {
-    const m = SUFFIXE_TEST.exec(objection)
-    if (m) tests.push({ fichier: m[1].trim(), commande: m[2].trim() })
+  return objectionsDuJuge(text).flatMap((objection) => testsDeLObjection(objection))
+}
+
+/**
+ * LE JUGE REJOUE SES PROPRES REPROCHES AVANT QU'ILS NE BLOQUENT.
+ *
+ * Un `TEST:` joint à un reproche n'était qu'une consigne transmise à la réparation : personne ne
+ * lançait la commande. Un juge pouvait donc bloquer la clôture, et relancer build + nettoyage +
+ * juge, sur un test qui passe déjà. Le rejeu la lance en trois temps, dans la copie du run :
+ *  1. la forme : exactement `npx vitest run <chemins>`, sans option, chaque chemin relatif, sans
+ *     `..`, finissant par `.test.ts` ou `.test.mjs`, le fichier du `TEST:` parmi eux. La commande
+ *     est écrite par le juge, donc c'est une donnée : `refusGitDestructeur` ne bloque pas un `rm`,
+ *     seule cette forme protège. Les scripts `node …` sont exclus : rien ne dit s'ils écrivent ;
+ *  2. la liste exacte : `vitest list --filesOnly <chemins>` doit rendre ces chemins, ni plus ni
+ *     moins. vitest prend un chemin pour un morceau de nom (mesuré : `juge.test.ts` → 11 fichiers ;
+ *     un fichier absent → sortie vide, code 0). Sans ce temps, `run` sur un fichier absent sort en
+ *     code 1 et « confirme » un reproche que rien n'a reproduit ;
+ *  3. le rejeu, avec `CI=1` : vitest n'écrit alors aucun instantané.
+ * Code 0 pour TOUS les `TEST:` d'un reproche → « non reproduit » : sa puce passe en `OK:`, reste
+ * affichée, et ne bloque plus. Tout autre cas → le reproche reste bloquant comme avant, et son
+ * étiquette part dans le résultat du rejeu.
+ * Un `DEFAUT:` écrit par le juge n'est pas levé : le code écarte un reproche que son propre test
+ * dément, il ne renverse pas un vote.
+ *
+ * fix-ok: un TEST: du juge n'était jamais exécuté (seuls `consigneTestsDuJuge` et les empreintes le
+ * lisaient) ; objections-juge.rejeu.test.ts rouge 41/41 avant ce code, vert après.
+ */
+export type EtiquetteDuRejeu =
+  | 'confirmé'
+  | 'non reproduit'
+  | 'non rejoué — aucune commande'
+  | 'non rejoué — commande refusée'
+  | 'non rejoué — fichier absent'
+  | 'non rejoué — chemin ambigu'
+  | 'non rejoué — délai dépassé'
+  | 'non rejoué — lancement impossible'
+  | 'non rejoué — liste impossible'
+  | 'non rejoué — trop de tests'
+
+export interface SortieDuRejeu {
+  /** Faux = vitest n'a pas pu démarrer. */
+  lancee: boolean
+  code: number | null
+  sortie: string
+  delaiDepasse: boolean
+}
+
+/** Lance vitest avec ces arguments (`list …` ou `run …`) dans `racine`, coupé après `delaiMs`. */
+export type ExecuteurDuRejeu = (
+  args: readonly string[],
+  racine: string,
+  delaiMs: number
+) => Promise<SortieDuRejeu>
+
+export interface RejeuDuReproche {
+  objection: string
+  etiquette: EtiquetteDuRejeu
+}
+
+/** Délais fixes : le démarrage de vitest, plus 20 s par test (`vitest.config.ts`). */
+export const DELAI_LISTE_MS = 60_000
+export const DELAI_REJEU_MS = 120_000
+/** Au-delà, un verdict ferait attendre la clôture plusieurs minutes : les suivants restent bloquants. */
+export const REJEUX_MAX = 8
+
+const COMMANDE_REJOUABLE = /^npx\s+vitest\s+run\s+(\S.*)$/
+/** Enchaînement, redirection, substitution, joker, guillemet : rien de tout cela n'est un chemin. */
+const CARACTERE_INTERDIT = /[;&|$`<>(){}[\]*?!~%^"'\r\n]/
+const CHEMIN_DE_TEST = /\.test\.(?:ts|mjs)$/
+/** Une ligne de `vitest list --filesOnly` : « [projet] chemin ». Le reste (avertissements) est ignoré. */
+const LIGNE_DE_LISTE = /^\s*(?:\[[^\]]*\]\s*)?(\S.*\.(?:test|spec)\.[cm]?[jt]sx?)\s*$/
+
+function versBarres(chemin: string): string {
+  return chemin
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^(?:\.\/)+/, '')
+}
+
+function estAbsolu(chemin: string): boolean {
+  return /^[a-z]:/i.test(chemin) || chemin.startsWith('/')
+}
+
+/** Le fichier du `TEST:`, relatif à la racine ; un absolu n'est admis que DANS la racine. */
+function fichierDuTest(brut: string, racine: string): string | null {
+  const fichier = versBarres(brut)
+  if (!estAbsolu(fichier)) return fichier
+  const base = versBarres(racine).replace(/\/+$/, '')
+  if (!fichier.toLowerCase().startsWith(`${base.toLowerCase()}/`)) return null
+  return fichier.slice(base.length + 1)
+}
+
+/** Les chemins à rejouer si la commande a la forme unique permise ; `null` sinon (jamais lancée). */
+export function cheminsRejouables(
+  fichier: string,
+  commande: string,
+  racine: string
+): string[] | null {
+  if (CARACTERE_INTERDIT.test(commande)) return null
+  const forme = COMMANDE_REJOUABLE.exec(commande.trim())
+  if (!forme) return null
+  const chemins: string[] = []
+  for (const brut of forme[1].trim().split(/\s+/)) {
+    if (brut.startsWith('-')) return null
+    const chemin = versBarres(brut)
+    if (estAbsolu(chemin)) return null
+    if (chemin.split('/').some((segment) => segment === '..' || segment === '')) return null
+    if (!CHEMIN_DE_TEST.test(chemin)) return null
+    if (!chemins.includes(chemin)) chemins.push(chemin)
   }
-  return tests
+  const cible = fichierDuTest(fichier, racine)
+  if (cible === null || !chemins.includes(cible)) return null
+  return chemins
+}
+
+/** L'environnement du rejeu : `CI=1` (aucun instantané écrit), l'exécutable de l'app en mode Node. */
+export function environnementDuRejeu(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...base, CI: '1', ELECTRON_RUN_AS_NODE: '1', NO_COLOR: '1' }
+  // Sous CI, vitest n'écrit d'instantané que si UPDATE_SNAPSHOT est posé.
+  delete env.UPDATE_SNAPSHOT
+  return env
+}
+
+/**
+ * Le vitest de la copie du run, lancé avec l'exécutable de l'app en mode Node et hors du fil
+ * principal, comme le typage d'avant publication (`typage-avant-publication.ts`) : aucun shell, aucun
+ * `node` attendu sur le PATH.
+ */
+export const executeurVitest: ExecuteurDuRejeu = async (args, racine, delaiMs) => {
+  const entree = join(racine, 'node_modules', 'vitest', 'vitest.mjs')
+  if (!existsSync(entree)) {
+    return {
+      lancee: false,
+      code: null,
+      sortie: `vitest introuvable : ${entree}`,
+      delaiDepasse: false
+    }
+  }
+  try {
+    const { stdout, stderr } = await execFileHorsFil(process.execPath, [entree, ...args], {
+      cwd: racine,
+      env: environnementDuRejeu(),
+      windowsHide: true,
+      timeout: delaiMs,
+      maxBuffer: 16 * 1024 * 1024
+    })
+    return { lancee: true, code: 0, sortie: `${stdout}${stderr}`, delaiDepasse: false }
+  } catch (erreur) {
+    const e = erreur as ErreurHorsFil
+    const sortie = `${e.stdout ?? ''}${e.stderr ?? ''}`
+    if (e.killed) return { lancee: true, code: null, sortie, delaiDepasse: true }
+    // Un code TEXTE (ENOENT, EACCES…) : le processus n'a jamais démarré.
+    if (typeof e.code === 'string' && e.code !== 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
+      return { lancee: false, code: null, sortie: `${sortie}${e.message}`, delaiDepasse: false }
+    }
+    return { lancee: true, code: Number(e.code ?? 1) || 1, sortie, delaiDepasse: false }
+  }
+}
+
+function fichiersListes(sortie: string): string[] {
+  const fichiers = new Set<string>()
+  for (const ligne of sortie.split(/\r?\n/)) {
+    const m = LIGNE_DE_LISTE.exec(ligne)
+    if (m) fichiers.add(versBarres(m[1]))
+  }
+  return [...fichiers]
+}
+
+/** Un `TEST:` de forme permise : la liste exacte, puis le rejeu. */
+async function rejouerUnTest(
+  chemins: readonly string[],
+  racine: string,
+  executer: ExecuteurDuRejeu
+): Promise<EtiquetteDuRejeu> {
+  try {
+    const liste = await executer(['list', '--filesOnly', ...chemins], racine, DELAI_LISTE_MS)
+    if (liste.delaiDepasse) return 'non rejoué — délai dépassé'
+    if (!liste.lancee) return 'non rejoué — lancement impossible'
+    if (liste.code !== 0) return 'non rejoué — liste impossible'
+    const listes = fichiersListes(liste.sortie)
+    if (listes.some((f) => !chemins.includes(f))) return 'non rejoué — chemin ambigu'
+    if (chemins.some((c) => !listes.includes(c))) return 'non rejoué — fichier absent'
+    const rejeu = await executer(['run', ...chemins], racine, DELAI_REJEU_MS)
+    if (rejeu.delaiDepasse) return 'non rejoué — délai dépassé'
+    if (!rejeu.lancee) return 'non rejoué — lancement impossible'
+    return rejeu.code === 0 ? 'non reproduit' : 'confirmé'
+  } catch {
+    return 'non rejoué — lancement impossible'
+  }
+}
+
+/** Un reproche est confirmé si un de ses tests échoue, non reproduit seulement si TOUS passent. */
+function etiquetteDuReproche(resultats: readonly EtiquetteDuRejeu[]): EtiquetteDuRejeu {
+  if (resultats.includes('confirmé')) return 'confirmé'
+  if (resultats.every((r) => r === 'non reproduit')) return 'non reproduit'
+  return resultats.find((r) => r !== 'non reproduit') ?? 'non rejoué — aucune commande'
+}
+
+/**
+ * Rejoue les `TEST:` des reproches BLOQUANTS (voir `EtiquetteDuRejeu`) et rend le verdict où les
+ * reproches non reproduits sont passés en `OK:`. Sans reproche levé, le texte rendu est l'original.
+ */
+export async function rejouerTestsDuJuge(
+  text: string,
+  racine: string,
+  executer: ExecuteurDuRejeu = executeurVitest
+): Promise<{ texte: string; rejeux: RejeuDuReproche[] }> {
+  const puces = pucesDuJuge(text)
+  const bloquantes = puces.filter((p) => p.bloquante)
+  if (bloquantes.length === 0) return { texte: text, rejeux: [] }
+  // Déjà passant (VALIDE, puces nues seules) : rejouer ne changerait rien.
+  if (!refusEcritParLeJuge(text) && verdictAvecObjectionsPortees(text) === text) {
+    return { texte: text, rejeux: [] }
+  }
+  const dejaJoues = new Map<string, EtiquetteDuRejeu>()
+  const rejeux: RejeuDuReproche[] = []
+  const levees = new Map<number, string>()
+  for (const puce of bloquantes) {
+    const tests = testsDeLObjection(puce.texte)
+    if (tests.length === 0) {
+      rejeux.push({ objection: puce.texte, etiquette: 'non rejoué — aucune commande' })
+      continue
+    }
+    const resultats: EtiquetteDuRejeu[] = []
+    for (const test of tests) {
+      const chemins = cheminsRejouables(test.fichier, test.commande, racine)
+      if (!chemins) {
+        resultats.push('non rejoué — commande refusée')
+        continue
+      }
+      const cle = chemins.join(' ')
+      let resultat = dejaJoues.get(cle)
+      if (resultat === undefined) {
+        if (dejaJoues.size >= REJEUX_MAX) {
+          resultats.push('non rejoué — trop de tests')
+          continue
+        }
+        resultat = await rejouerUnTest(chemins, racine, executer)
+        dejaJoues.set(cle, resultat)
+      }
+      resultats.push(resultat)
+    }
+    const etiquette = etiquetteDuReproche(resultats)
+    rejeux.push({ objection: puce.texte, etiquette })
+    if (etiquette === 'non reproduit') {
+      levees.set(
+        puce.index,
+        `OK: non reproduit — le test du juge passe déjà (${tests.map((t) => `\`${t.commande}\``).join(', ')} rend 0) — `
+      )
+    }
+  }
+  if (levees.size === 0) return { texte: text, rejeux }
+  /*
+   * Chaque puce reçoit une étiquette EXPLICITE égale à son statut d'avant : lever le seul MAJEUR
+   * rendrait sinon bloquantes les puces nues, que « non étiquetée = majeur » ne compte que sans
+   * MAJEUR dans le verdict, et une sous-puce cesserait d'hériter de sa parente levée.
+   */
+  const lignes = text.split(/\r?\n/)
+  for (const puce of puces) {
+    const etiquette =
+      levees.get(puce.index) ?? (puce.bloquante ? `${puce.gravite ?? 'MAJEUR'}: ` : 'OK: ')
+    const ligne = `${' '.repeat(puce.retrait)}- ${etiquette}${puce.texte}`
+    lignes[puce.index] = puce.enLigne ? `OBJECTIONS:\n${ligne}` : ligne
+  }
+  return { texte: lignes.join('\n'), rejeux }
+}
+
+/** La ligne du journal du run qui dit ce que le rejeu a fait ; vide si aucun reproche n'avait de `TEST:`. */
+export function noteDuRejeuDuJuge(rejeux: readonly RejeuDuReproche[]): string {
+  const joues = rejeux.filter((r) => r.etiquette !== 'non rejoué — aucune commande')
+  if (joues.length === 0) return ''
+  const detail = joues
+    .map(
+      (r) =>
+        `« ${r.objection.length > 120 ? `${r.objection.slice(0, 120)}…` : r.objection} » → ${r.etiquette}`
+    )
+    .join(' ; ')
+  return `Tests du juge rejoués avant de compter son verdict : ${detail}.`
 }
 
 /** La consigne de réparation tirée de `testsDuJuge` ; chaîne vide sans test (comportement inchangé). */
@@ -354,7 +695,7 @@ export function dodDuVerdict(
   // Refus sans puce MAJEUR : les MINEUR/OK deviennent les raisons, jamais une case muette (reparation 4).
   // Fallback MINEUR/OK reserve au juge qui REFUSE : sur un VALIDE rouge pour une autre raison (preuve),
   // ses reserves mineures masquaient la vraie cause (tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb, reparation 8).
-  const jugeRefuse = /\bDEFAUT\s*:/i.test(text ?? '')
+  const jugeRefuse = refusEcritParLeJuge(text)
   const objections = (majeures.length ? majeures : jugeRefuse ? objectionsDuJuge(text, true) : []).slice(0, 8)
   if (objections.length === 0) return [{ checked: false, hasContent: true }]
   /*
@@ -409,7 +750,7 @@ function aucunePuceEtiquetee(text: string): boolean {
 export function verdictAvecObjectionsPortees(text: string): string {
   const objections = objectionsDuJuge(text)
   if (objections.length === 0) return text
-  if (/\bDEFAUT\s*:/i.test(text)) return text
+  if (refusEcritParLeJuge(text)) return text
   // Saisie ts 1789462078031 : le tour finit quand les juges n'ont plus de défaut MAJEUR.
   if (/\bVALIDE\b/i.test(text) && aucunePuceEtiquetee(text)) return text
   return `DEFAUT: objections du juge non levées (${objections.length})\n${text}`

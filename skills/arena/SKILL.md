@@ -297,9 +297,10 @@ et pas seulement quand la cible est une skill :
 npm run arena:protocole -- --run <RUN.md du banc> --bench <dossier du banc> --avant-lancement
 ```
 
-Ce mode ne lit que le RUN.md et les `prompt-<bras>.txt` : il tranche les huit points qui coûtent le
+Ce mode ne lit que le RUN.md et les `prompt-<bras>.txt` : il tranche les neuf points qui coûtent le
 plus cher à découvrir trop tard (candidats triés, rouge collé, cas limites, énoncé identique, B de
-texte, X réellement nu, **critère binaire + preuve rejouable**, **appel nu calibré**). Code de sortie ≠ 0 → **NE PAS LANCER** : on corrige le prompt, on relance le
+texte, X réellement nu, **critère binaire + preuve rejouable**, **appel nu calibré**, **A, B et C
+ne se savent pas comparés** — P24). Code de sortie ≠ 0 → **NE PAS LANCER** : on corrige le prompt, on relance le
 pré-vol. Motif mesuré, bancs `residus` et `dogfood` : X citait `/scout` et `/arena`
 dans son prompt — donc X n'était pas le plancher de mesure —, et le contrôle ne l'a dit qu'APRÈS que
 les quatre bras aient été payés (≈ 11 $ et 15 $ de tournoi rendus ininterprétables sur leur bras X).
@@ -311,6 +312,17 @@ Lancer les quatre en même temps (un sous-agent par bras). Chaque bras reçoit, 
   non-texte scouté · X : appel nu, aucune skill ni consigne),
 - l'obligation de rendre : le livrable, la preuve du critère (exit code / test / capture), la liste
   ordonnée de ce qu'il a fait, et **ce qui a échoué en route**.
+
+**A, B et C ne savent pas qu'ils sont comparés** (P24, refusé au pré-vol). Un candidat qui se sait
+mesuré ne travaille pas comme sur une vraie demande. Mesuré le 2026-11-06 : 9 consignes de candidats
+sous `.arena` disaient « CRITÈRE QUI TE JUGERA » et citaient leur critère sous `.arena/banc-<sujet>/`.
+- Le critère s'annonce par la formule **« Critère de fin (script, lecture seule) : »**, suivie de sa
+  commande.
+- Le dossier du banc porte un **nom neutre** (par exemple `.verif/<sujet>/`) : son chemin, cité dans
+  la consigne avec `check.mjs`, ne contient aucun des mots refusés.
+- Mots entiers refusés, sans casse ni accent : « arena », « banc », « bench », « bras », « candidat »,
+  « candidats », « comparatif » ; tournures refusées : « te jug… », « t'évalu… », « te not… ».
+  « juge » seul reste permis (JUDGE est une étape du circuit que suit A). X reste tenu par P17.
 
 Bras qui échoue = **résultat**, pas incident : il reste dans le tableau avec sa cause. Ne jamais
 relancer un bras « pour lui donner sa chance » — ce serait le favoriser.

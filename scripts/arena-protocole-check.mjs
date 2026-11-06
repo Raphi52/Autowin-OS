@@ -388,7 +388,29 @@ function mentionDuLancement(md, ancre) {
  * `dogfood` du 2026-09-05) : X n_etait pas l_appel nu et B n_etait pas un bras de texte — defauts
  * constates APRES coup, quand les quatre bras avaient deja ete payes.
  */
-export const POINTS_AVANT_LANCEMENT = ['P1', 'P2', 'P3', 'P5', 'P16', 'P17', 'P20', 'P23']
+export const POINTS_AVANT_LANCEMENT = ['P1', 'P2', 'P3', 'P5', 'P16', 'P17', 'P20', 'P23', 'P24']
+
+/**
+ * Mots ENTIERS qui disent au candidat qu'il est mesure, chemins cites compris (`.arena/banc-x/`).
+ * Une lettre ou un chiffre colle les prolonge : « arenas », « bancal », « brassard » passent.
+ */
+const MOTS_DE_LA_MESURE = ['arena', 'banc', 'bench', 'bras', 'candidat', 'candidats', 'comparatif']
+/** Tournures qui s'adressent au candidat en evaluateur : « te jugera », « t'évalue », « te notera ». */
+const TOURNURES_DE_LA_MESURE = [
+  ['te jug', /(?<![a-z0-9])te\s+jug/],
+  ["t'evalu", /(?<![a-z0-9])t['’]\s*evalu/],
+  ['te not', /(?<![a-z0-9])te\s+not/]
+]
+
+/** Les mots et tournures de la mesure presents dans `texte`, sans casse ni accent. */
+export function motsQuiTrahissentLaMesure(texte) {
+  const plat = texte.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  const trouves = MOTS_DE_LA_MESURE.filter((mot) =>
+    new RegExp(`(?<![a-z0-9])${mot}(?![a-z0-9])`).test(plat)
+  )
+  for (const [nom, motif] of TOURNURES_DE_LA_MESURE) if (motif.test(plat)) trouves.push(nom)
+  return trouves
+}
 
 export function verifierProtocole({
   run,
@@ -986,6 +1008,29 @@ export function verifierProtocole({
       return `${reussis}/${appels} appels nus au critere : la tache ne departage pas sur la qualite — la durcir, ou ecrire NON DISCRIMINANT dans la section pour lancer un banc de cout assume`
     return true
   })
+
+  /*
+   * P24 — LES CANDIDATS NE VOIENT PAS QU'ILS SONT COMPARES.
+   * Seul le juge recevait des livrables anonymes ; les consignes de A, B et C, elles, le disaient :
+   * 9 fichiers sous `.arena` portent « CRITÈRE QUI TE JUGERA » et le chemin du critere
+   * `.arena/banc-<sujet>/check.mjs`. Un candidat qui se sait mesure ne travaille pas comme en vrai.
+   * Joue AU PRE-VOL SEULEMENT : un banc deja paye ne change pas de statut. X est tenu par P17.
+   * « juge » seul reste permis : JUDGE est une etape normale du circuit que suit A.
+   */
+  if (avantLancement)
+    ajoute('P24', 'Aucune consigne de A, B ou C ne dit au candidat qu_il est compare', () => {
+      const fautes = []
+      for (const b of BRAS.filter((b) => b !== 'x')) {
+        const p = lire(path.join(bench, `prompt-${b}.txt`))
+        // Absente ou vide : P21 la refuse deja hors pre-vol, sans changement.
+        if (p === null || p.trim() === '') continue
+        const trouves = motsQuiTrahissentLaMesure(p)
+        if (trouves.length) fautes.push(`prompt-${b}.txt : ${trouves.join(', ')}`)
+      }
+      return fautes.length
+        ? `${fautes.join(' ; ')} — le candidat saurait qu_il est mesure ; ecrire « Critère de fin (script, lecture seule) : » et un dossier au nom neutre`
+        : true
+    })
 
   const jugements = [
     'X, appel nu : le bras a-t-il VRAIMENT travaille sans outillage ? (lecture de sa trace)',

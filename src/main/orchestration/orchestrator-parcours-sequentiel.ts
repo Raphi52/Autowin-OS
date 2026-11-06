@@ -12,7 +12,7 @@ import {
 import { noteChangementsPourJuge } from '../juge/changements-juge'
 import { noteTestsDejaJouesPourJuge } from '../verify/tests-deja-joues'
 import { etapeResultatValide } from '../../shared/resultat-valide'
-import { CONTRAT_OBJECTIONS, CONTRAT_QUESTIONS_AU_BUILD, dodDuVerdict, verdictAvecObjectionsPortees, verdictPanelValide, consigneTestsDuJuge, empreintesTestsDuJuge, empreintesDesFichiers, motifsTestModifie, reservesMineuresDuScout, resultatAvecReservesDuJuge, defautsDeLaRelectureSeule, objectionsDuJuge, resultatDeRelectureSeule } from '../juge/objections-juge'
+import { CONTRAT_OBJECTIONS, CONTRAT_QUESTIONS_AU_BUILD, dodDuVerdict, verdictAvecObjectionsPortees, verdictPanelValide, consigneTestsDuJuge, empreintesTestsDuJuge, empreintesDesFichiers, motifsTestModifie, reservesMineuresDuScout, resultatAvecReservesDuJuge, defautsDeLaRelectureSeule, objectionsDuJuge, resultatDeRelectureSeule, rejouerTestsDuJuge, noteDuRejeuDuJuge } from '../juge/objections-juge'
 import type { RoleBinding } from '../profil/roles'
 import { advisorAccepte } from '../providers/claude-advisor'
 import { issueDuPanel, motifPanneDesJuges, noteDesAbsents, verdictDuPanel } from './quorum'
@@ -2739,6 +2739,11 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
         })
       }
     }
+    // Un reproche dont le propre `TEST:` du juge passe déjà dans la copie du run ne bloque plus.
+    const rejeuDuJuge = await rejouerTestsDuJuge(verdict.text, workCwd)
+    const noteDuRejeu = noteDuRejeuDuJuge(rejeuDuJuge.rejeux)
+    if (noteDuRejeu) push({ step: 'gate', role: 'gate', detail: noteDuRejeu })
+    if (rejeuDuJuge.texte !== verdict.text) verdict = { ...verdict, text: rejeuDuJuge.texte }
     /*
      * UN SEUL LECTEUR DE VERDICT — mesure du 2026-09-03.
      *
