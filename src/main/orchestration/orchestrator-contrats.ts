@@ -1,5 +1,5 @@
 // Contrats, verdicts, types et utilitaires de l'orchestrateur, sortis tels quels de
-// orchestrator.ts pour alléger ce fichier ; orchestrator.ts les ré-exporte (conv-1508).
+// orchestrator.ts pour alléger ce fichier ; orchestrator.ts les ré-exporte.
 import { resolve } from 'node:path'
 import type { ProviderRegistry } from '../providers/registry'
 import {
@@ -78,8 +78,8 @@ import {
  * Ce que le PRODUCTEUR pouvait réellement faire — le juge l'ignorait.
  *
  * Mesuré le 2026-08-12 : deux builds sur quatre ont été rejetés pour une preuve hors de portée —
- * « aucune preuve UI live sur un binaire packagé frais » (conv-1135), « la capture/CDP de
- * l'application réelle est affirmée sans preuve d'exécution » (conv-1137). Asymétrie structurelle :
+ * « aucune preuve UI live sur un binaire packagé frais », « la capture/CDP de
+ * l'application réelle est affirmée sans preuve d'exécution ». Asymétrie structurelle :
  * le producteur reçoit `PIPELINE_DISCIPLINE_INSTRUCTION` qui énumère son outillage, le juge ne
  * reçoit que sa consigne de phase, le style et le contexte projet.
  *
@@ -88,7 +88,7 @@ import {
  * légitimement réclamer — ni plus, ni moins.
  */
 export const JUDGE_TOOLSET_CONTRACT =
-  // conv-1582 (2026-11-05) : disait Bash/Edit/Write « en phase de mutation » seulement et « pas
+  // 2026-11-05 : disait Bash/Edit/Write « en phase de mutation » seulement et « pas
   // d'accès web », contre `sandboxForPhase` et les outils web chargés par providers/claude.ts.
   `OUTILLAGE DU PRODUCTEUR : in-app, chaque phase dispose de Read/Grep/Glob/Bash et d'Edit/Write ` +
   `bornés au dossier de travail (seule une sous-tâche parallèle d'un build qui ne modifie rien est ` +
@@ -97,7 +97,7 @@ export const JUDGE_TOOLSET_CONTRACT =
   `preuve UI il dispose de \`node scripts/ui-capture.mjs --view <vue> --out <png>\`, qui, par défaut, ` +
   `ouvre une instance CACHÉE (écran de l'utilisateur intact), navigue par le vrai bouton, refuse une vue vide ou erronée, et rend un JSON + un exit-code. ` +
   `Une capture citée avec son exit-code 0 et son chemin EST une preuve recevable. ` +
-  // D'OU VIENT L'INTERFACE (2026-09-26, conv-863) : une capture verte de l'application empaquetee
+  // D'OU VIENT L'INTERFACE (2026-09-26) : une capture verte de l'application empaquetee
   // ne contient pas une modification non empaquetee ; le juge doit savoir la lire.
   `Son JSON dit d'où vient l'interface capturée (\`interfaceCapturee\`) : \`application-empaquetee\` = ` +
   `dernier empaquetage, qui ne contient PAS une modification d'interface non empaquetée (hors ` +
@@ -243,7 +243,7 @@ export function bindingDePhaseValide(
  * compte où qu'elle se trouve ; en toute casse, seulement en tête de ligne (puce, gras ou
  * « Verdict : » admis devant).
  *
- * fix-ok: run-9930e4959cf4-1 (conv-359, trace.json entrée 13) — le juge rend « VALIDE / SCORE: 92 »,
+ * fix-ok: run-9930e4959cf4-1 (trace.json entrée 13) — le juge rend « VALIDE / SCORE: 92 »,
  * puces toutes OK, dont « Les tests repèrent un vrai défaut : avec l'aléa… ». L'ancien motif unique,
  * insensible à la casse et valable partout, prenait ce « défaut : » de prose (espace typographique
  * avant les deux-points) pour le rejet du contrat : verdict lu rouge, case muette « Promis mais pas
@@ -290,7 +290,7 @@ export function verdictDePhase(phase: NodePhase, text: string): NodeVerdict {
  * Il y en avait DEUX, en désaccord dans ce fichier : `verdictDePhase` ci-dessus (durci le 2026-08-05
  * après quatre cas dégénérés mesurés) accepte « VALIDE » PARTOUT dans la réponse, tandis que le
  * chemin greedy testait `/^\s*valide/i` — donc exigeait que le mot OUVRE la phrase. Conséquence
- * observée sur un run réel de l'utilisateur (`conv-1136`) : un juge écrivant « Verdict : VALIDE »
+ * observée sur un run réel de l'utilisateur : un juge écrivant « Verdict : VALIDE »
  * voyait son APPROBATION jetée, le run passait `red`, et la vignette annonçait un échec sur un
  * livrable pourtant complet. Un faux négatif coûte ici un travail entier déclaré perdu.
  *
@@ -359,7 +359,7 @@ export const PHASES_APRES_VERDICT: ReadonlySet<string> = new Set(['learn', 'git'
  * Un juge joué en direct n'entre jamais dans les étapes enregistrées ; seul y entre celui qui a fini
  * pendant un redémarrage (`settleCompletedDetachedPhase`, run-reattach.ts). Un verdict enregistré
  * peut donc se trouver au MILIEU des builds, sur un texte dépassé. Mesuré sur run-7b7d533c318e-1
- * (conv-1324, 2026-10-30) : un refus à 84 entre deux builds, relu à chaque reprise comme verdict du
+ * (2026-10-30) : un refus à 84 entre deux builds, relu à chaque reprise comme verdict du
  * texte final, d'où trois boucles de réparation payées pour rien.
  */
 export function dernierJugeLitLeTexteFinal(acquis: ReadonlyArray<{ phase: NodePhase }>): boolean {
@@ -395,8 +395,8 @@ export function appelsRequisParWorkflow(
 }
 // Type SEUL (effacé à la compilation) : l'orchestrateur ne connaît pas le spool, il décrit
 // seulement la nature de l'appel pour celui qui écrira la trace.
-// Le profil personnel suit le contexte projet dans CHAQUE system de phase (conv-1098), puis la
-// mémoire de tête de l'entreprise, comme dans le chat (conv-1285).
+// Le profil personnel suit le contexte projet dans CHAQUE system de phase, puis la
+// mémoire de tête de l'entreprise, comme dans le chat.
 
 export function canonicalCausalPath(root: string, path: string): string {
   const normalized = resolve(root, path).replaceAll('\\', '/')
@@ -411,24 +411,36 @@ export function watchdogClaimsFromEvidence(
   const paths = new Set<string>()
   const mutatedLineFingerprints: Record<string, string[]> = {}
   const mutatedPathGenerationMarkers: Record<string, string> = {}
+  /*
+   * Valeurs par chemin rangées UNE fois par preuve, la première d'une clé gagnant comme le
+   * `Object.entries(...).find(...)` d'avant. Chercher chaque chemin parmi tous ceux de la preuve
+   * coûtait chemins² : 10,3 s de fenêtre figée pour une publication de 2 344 fichiers (mesuré le
+   * 06/11/2026). Garde : `orchestrator-contrats.sans-gel.test.ts`.
+   */
+  const parChemin = <T>(valeurs: Record<string, T> | undefined): Map<string, T> => {
+    const index = new Map<string, T>()
+    for (const [candidate, valeur] of Object.entries(valeurs ?? {})) {
+      const key = canonicalCausalPath(workspaceRoot, candidate)
+      if (!index.has(key)) index.set(key, valeur)
+    }
+    return index
+  }
   for (const item of evidence) {
     if (!item.ok || item.kind !== 'mutation') continue
+    const lignesParChemin = parChemin(item.writtenLineFingerprintsByPath)
+    const marqueursParChemin = parChemin(item.pathGenerationMarkers)
     for (const path of item.paths ?? (item.path ? [item.path] : [])) {
       const absolute = resolve(workspaceRoot, path)
       const canonical = canonicalCausalPath(workspaceRoot, path)
       paths.add(absolute)
-      const fingerprints = Object.entries(item.writtenLineFingerprintsByPath ?? {}).find(
-        ([candidate]) => canonicalCausalPath(workspaceRoot, candidate) === canonical
-      )?.[1]
+      const fingerprints = lignesParChemin.get(canonical)
       if (fingerprints?.length) {
         mutatedLineFingerprints[absolute] = [
           ...(mutatedLineFingerprints[absolute] ?? []),
           ...fingerprints
         ]
       }
-      const generationMarker = Object.entries(item.pathGenerationMarkers ?? {}).find(
-        ([candidate]) => canonicalCausalPath(workspaceRoot, candidate) === canonical
-      )?.[1]
+      const generationMarker = marqueursParChemin.get(canonical)
       if (generationMarker) mutatedPathGenerationMarkers[absolute] = generationMarker
     }
   }
@@ -495,7 +507,7 @@ export interface OrchestrationStep {
   thinking?: string
   /**
    * Étape de découpage seulement : les sous-tâches ADMISES et leurs dépendances, pour que le RUN.md
-   * montre le plan avant le build (`runs/plan-en-vagues.ts`, conv-1083).
+   * montre le plan avant le build (`runs/plan-en-vagues.ts`).
    */
   plan?: SousTachePlan[]
   /** Provenance causale stable utilisée par le graphe demande → phases → agents. */
@@ -553,19 +565,19 @@ export interface OrchestrationResult {
   /**
    * PRÉSENT seulement quand une relecture seule (`/judge`) est LIVRÉE en nommant des défauts du
    * travail relu (`defautsDeLaRelectureSeule`) : le Journal du RUN.md doit le dire, au lieu de
-   * « Juge: validé » (piste 5, conv-1070).
+   * « Juge: validé » (piste 5).
    */
   defautsDuTravailRelu?: string[]
   /**
    * Fichier de la copie ENTIÈRE des sorties d'étapes (`runs/livrable-entier.ts`), quand quelqu'un
-   * l'écrit : la bulle coupée le nomme au lieu de promettre un « livrable entier » introuvable (conv-989).
+   * l'écrit : la bulle coupée le nomme au lieu de promettre un « livrable entier » introuvable.
    */
   livrableEntier?: string
   /** Attestation locale émise uniquement depuis le retour d'un rôle judge distinct de l'auteur. */
   learningAttestations?: IndependentLearningAttestation[]
   /**
    * Notes que les nœuds du run (l'étape `learn` surtout) ont ÉCRITES au Brain par `remember` :
-   * elles partent en revue, et la bulle doit le dire au lieu de « aucune leçon proposée » (conv-339).
+   * elles partent en revue, et la bulle doit le dire au lieu de « aucune leçon proposée ».
    */
   notesBrainDeposees?: number
   /** Requête envoyée au Brain (RAG 1×/run) — pour la traçabilité Observatory. */
@@ -601,7 +613,7 @@ export function attestJudgeApprovedLearning(
   workspace: string,
   /**
    * Le texte du verdict : un livrable VALIDE dont le juge a refusé la LEÇON (« OK: leçon refusée »)
-   * n'atteste pas cette leçon (conv-1149 — sur conv-1146, refuser la leçon coûtait une réparation).
+   * n'atteste pas cette leçon (refuser la leçon coûtait une réparation).
    */
   texteDuJuge = ''
 ): IndependentLearningAttestation[] {
@@ -669,7 +681,7 @@ export interface OrchestratorCollaboratorDeps {
   /**
    * Environnement du Brain PERSO (`envDuBrainPerso`), relu à CHAQUE run : un Brain perso réglé dans
    * les Réglages sert dès le run suivant. Absent ou `undefined` : seul le Brain d'équipe est
-   * interrogé (conv-1233, 2026-10-28).
+   * interrogé (2026-10-28).
    */
   brainPerso?: () => NodeJS.ProcessEnv | undefined
   /** Le serveur perso n'écoute pas (connexion refusée) : l'appelant tente de le démarrer. */
@@ -681,12 +693,12 @@ export interface OrchestratorCollaboratorDeps {
    * `connues` est lu UNE fois au début du run, `sauf` = ce run ; `noter` à la fin de chaque scout.
    */
   memoireScout?: {
-    /** `demande` = la tâche du run : seuls les titres qui en touchent le sujet reviennent (conv-339). */
+    /** `demande` = la tâche du run : seuls les titres qui en touchent le sujet reviennent. */
     connues: (depot: string, sauf: string, demande?: string) => string[]
     noter: (depot: string, texteScout: string, run: string) => void
     /**
      * Les pistes prises/laissées, lues dans la demande du run (message de sélection). `run` = ce
-     * run, qui TRAITE les pistes prises : leur résultat se relit sur lui (piste 1, conv-1033).
+     * run, qui TRAITE les pistes prises : leur résultat se relit sur lui (piste 1).
      */
     choisir?: (depot: string, demande: string, run: string) => void
     /** Le bilan des choix réels sur ce dépôt ; '' tant qu'il y a trop peu de pistes jugées. */
@@ -695,7 +707,7 @@ export interface OrchestratorCollaboratorDeps {
     facteurs?: (depot: string) => FacteursChoix
     /**
      * Les sujets déjà traités sur ce dépôt (commits récents, pistes livrées) : une piste qui les
-     * redit est marquée « déjà fait ? » (`marquerDejaFait`, piste 4 de conv-1033). Lu en tâche de
+     * redit est marquée « déjà fait ? » (`marquerDejaFait`, piste 4). Lu en tâche de
      * fond au début du run, comme la liste des fichiers du plafond.
      */
     dejaFaits?: (depot: string) => Promise<readonly SujetDejaFait[]>
@@ -791,7 +803,7 @@ export interface OrchestratorLifecycleDeps {
   drainDirectives?: (conversationId: string) => string[]
   /**
    * POSER UNE QUESTION À L'UTILISATEUR ET ATTENDRE SA RÉPONSE — le run est en pause pendant ce temps
-   * (conv-1149, 2026-10-25). Branché par `index.ts` sur la fenêtre de question de l'app ; absent
+   * (2026-10-25). Branché par `index.ts` sur la fenêtre de question de l'app ; absent
    * (app sans interface, tests) = personne ne peut répondre. Deux usages : l'objection d'étendue
    * répétée en mode jusqu'au vert (`gates/etendue-repetee.ts`) et la question d'un cadrage repris
    * (`relecture-froide.ts`).
@@ -802,7 +814,7 @@ export interface OrchestratorLifecycleDeps {
     signal?: AbortSignal
   ) => Promise<string | undefined> | undefined
   /**
-   * FIN DE RUN (conv-222, lot 1 du RUN outils-agent-1-2-4-6-7) : ferme le bureau caché du run
+   * FIN DE RUN (lot 1 du RUN outils-agent-1-2-4-6-7) : ferme le bureau caché du run
    * (`identifiantBureauCache(runId)`), que le run soit vert, rouge ou planté. Une app laissée ouverte
    * par une phase occupait l'identifiant : hdesk-lancer refuse une relance tant qu'elle vit (exit 5).
    * Jamais attendu ni levé : la fermeture douce peut prendre jusqu'à 30 s et ne doit ni retarder ni
@@ -889,8 +901,7 @@ export interface OrchestratorDecompositionDeps {
   skillInstruction?: (phase: NodePhase, opts: { withFoundation: boolean }) => string
   /**
    * L'étape a-t-elle sa skill désactivée dans Settings › Skills ? Absent = aucune ne l'est (tests).
-   * En production : `etapeDesactiveeDansLesReglages` (os.ts) — une étape désactivée ne se joue pas
-   * (conv-1602).
+   * En production : `etapeDesactiveeDansLesReglages` (os.ts) — une étape désactivée ne se joue pas.
    */
   etapeDesactivee?: (phase: string) => boolean
   /**
@@ -909,7 +920,7 @@ export interface OrchestratorDecompositionDeps {
    * Le fichier ou la copie ENTIERE des sorties d'etapes de ce run est ecrite (`runs/livrable-entier.ts`,
    * a chaque `onPhaseCompleted`). La marque de coupe de l'agregat du juge le nomme ; absent, elle garde
    * son libelle d'avant. Fourni par celui qui ECRIT le fichier : jamais nommer une copie que personne
-   * n'ecrit (conv-989).
+   * n'ecrit.
    */
   cheminDuLivrableEntier?: (runId: string) => string | undefined
   /**
@@ -981,7 +992,7 @@ export interface GreedyTaskNode {
  * Le refus de quota qui a arrêté un run, ou rien.
  *
  * Seule l'EXCEPTION compte : c'est par elle que le mur arrive (« Phase clean — … : You've hit your
- * session limit · resets 1pm », RUN.md de conv-914). Un verdict rouge rendu normalement reste un
+ * session limit · resets 1pm »). Un verdict rouge rendu normalement reste un
  * verdict, jamais une suspension. Le vocabulaire est celui du disjoncteur (`estMurDeQuota`), qui
  * écarte déjà le rate-limit passager.
  */
@@ -999,7 +1010,7 @@ export const MOTIF_D_ARRET_MAX = 300
  *
  * `gateReasons` n'existe que dans le rapport du run (`produced`), écrit au bout du pipeline. Un run
  * arrêté par une exception — quota atteint, connexion expirée, phase en échec — n'en a pas : sa
- * clôture rouge ne disait donc RIEN (mesuré le 2026-10-15 sur conv-914 et conv-916, deux clôtures
+ * clôture rouge ne disait donc RIEN (mesuré le 2026-10-15, deux clôtures
  * rouges à « Raisons » vide). L'erreur qui a arrêté le run est cette raison.
  */
 export function raisonsDArretDuRun(erreur: unknown): string[] | undefined {
@@ -1100,7 +1111,7 @@ export interface RunWorktrees {
    * Fichiers RÉELLEMENT changés dans la copie du run, mesurés à l'instant de l'appel. La liste
    * `files` d'`activity()` ne convient pas pour cette question : le coordinateur ne la remplit qu'à
    * la finalisation, elle est donc vide pendant tout le run. Une erreur se PROPAGE : une mesure
-   * impossible ne doit jamais se lire « copie vide » (conv-914, 2026-10-13).
+   * impossible ne doit jamais se lire « copie vide » (2026-10-13).
    */
   fichiersChangesDeLaCopie?(runId: string): Promise<readonly string[]>
   /** Attache/détache un processus CLI réel au lease durable du run. */
@@ -1120,7 +1131,7 @@ export interface RunCloser {
   begin(runId: string): void
   /**
    * Rend le compte rendu de la publication du PROJET, ou rien si la clôture n'a rien publié
-   * (éteinte). L'annonce du commit en tire le vrai état du push (conv-1139, 2026-10-25).
+   * (éteinte). L'annonce du commit en tire le vrai état du push (2026-10-25).
    */
   close(context: {
     runId: string
@@ -1166,7 +1177,7 @@ export function consigneCandidatesBrain(racine?: string, perso?: { racine?: stri
     `Ignore les autres ; ne fouille le dépôt que pour ce que ce savoir ne couvre pas.`
   if (!perso) return base
   /*
-   * BRAIN PERSO (conv-1233) : ses notes vivent sous une AUTRE racine. Sans cette phrase, une phase
+   * BRAIN PERSO : ses notes vivent sous une AUTRE racine. Sans cette phrase, une phase
    * sans `brain_read` lirait `<racine de l'équipe>/perso:knowledge/…`, un fichier qui n'existe pas.
    */
   const ouvrirPerso = perso.racine
@@ -1181,7 +1192,7 @@ export function consigneCandidatesBrain(racine?: string, perso?: { racine?: stri
  * COMPLÈTES non tronquées → croissance linéaire du prompt juge avec le nb de phases. On borne chaque
  * bloc de phase (plus large que le portage : le juge doit voir la substance du livrable, pas juste
  * un aperçu). La sortie complète reste dans `phaseOutputs` + la trace des sous-agents.
- * Piste 5 de conv-914 : c'est la PART de chaque phase ; la place qu'une phase courte n'utilise pas
+ * Piste 5 : c'est la PART de chaque phase ; la place qu'une phase courte n'utilise pas
  * revient aux longues, sous 60 000 au total (`agregerPhasesPourLeJuge`, agregat-juge.ts).
  */
 export const JUDGE_PHASE_CAP = 6000

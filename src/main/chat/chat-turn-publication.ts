@@ -21,29 +21,29 @@ import {
 /**
  * ENCHAÎNEMENT AUTO DU CHAT.
  *
- * Choix de l'utilisateur (conv-871, 2026-09-26) : « aussi le travail du chat : à la fin de chaque tour
+ * Choix de l'utilisateur (2026-09-26) : « aussi le travail du chat : à la fin de chaque tour
  * qui a modifié des fichiers, commit de ces fichiers-là puis push ». Avant, l'interrupteur ne se
  * déclenchait qu'à la fin d'une tâche d'agent (`os.ts`, `closeGreenRun`). Mesuré du 24/09 20:13 au
  * 26/09 13:50 : 64 commits sur main, 1 seul publié tout seul, les 63 autres poussés à la main.
  *
  * LE DOSSIER EST PARTAGÉ PAR PLUSIEURS FILS, et le journal des fichiers attribue aussi à un tour ce
- * qu'un autre fil a écrit pendant qu'il tournait (mesuré le 2026-09-26 : `ChatComposer.tsx`, écrit par
- * conv-870, attribué aussi à conv-871 et conv-869 par la comparaison avant/après). Un fichier n'est
+ * qu'un autre fil a écrit pendant qu'il tournait (mesuré le 2026-09-26 : `ChatComposer.tsx`, écrit
+ * Attribué aussi par la comparaison avant/après). Un fichier n'est
  * donc publié que s'il est PROUVÉ au fil :
  *  1. par ses LIGNES : chaque ligne ajoutée de son diff a été écrite par un outil d'édition du fil ;
  *  2. à défaut, il était propre au début du tour ET le TOUR l'a nommé dans une commande shell
  *     d'écriture (`prettier --write`, `cat >>`, `sed -i`… — trace `nommeParCommande`) ET aucun
  *     autre fil ne l'a nommé ni réclamé par lignes pendant le tour. Qu'un autre fil l'ait seulement
  *     VU changer (sa comparaison avant/après, sans lignes), ou ait un tour en cours, n'y change rien.
- *     Mesuré le 2026-10-13 : d7af3730 (conv-932, test reformaté par `prettier --write`) et dd0c3d6a
- *     (conv-933, test complété par `cat >> … <<'EOF'`) ont publié le code sans son test, écarté
- *     parce que conv-931, puis conv-930 et conv-932, l'avaient vu changer pendant leur propre tour.
+ *     Mesuré le 2026-10-13 : d7af3730 (test reformaté par `prettier --write`) et dd0c3d6a
+ *     (test complété par `cat >> … <<'EOF'`) ont publié le code sans son test, écarté
+ *     parce que, puis, l'avaient vu changer pendant leur propre tour.
  *  3. à défaut (édition en ligne de commande non nommée, suppression, renommage) : il était propre
  *     au début du tour ET aucun autre fil ne l'a touché depuis ET aucun autre fil n'a de tour EN
  *     COURS dans le dépôt. Un tour en cours n'a encore rien écrit au journal : `agent-pilot.ts` n'y
  *     trace les éditions du modèle qu'à la FIN de son appel. Mesuré le 2026-09-30 (5fb0730d,
- *     bb8e6c0c) : conv-889 écrit ses fichiers pendant les tours de conv-891, ses traces arrivent à
- *     10:51:52, après les deux publications de conv-891 (10:32:31, 10:49:54) — qui ont donc commité
+ *     bb8e6c0c) : un fil écrit ses fichiers pendant les tours, ses traces arrivent à
+ *     10:51:52, après les deux publications (10:32:31, 10:49:54) — qui ont donc commité
  *     son travail.
  * Le reste est LAISSÉ en attente et nommé dans le rapport, avec le nombre de lignes que le fil ne
  * réclame pas (les réécrire avec l'outil d'édition suffit à le publier). Un faux négatif laisse un
@@ -260,7 +260,7 @@ async function importsAtteints(
   return { directs, indirects }
 }
 
-/** `type(zone): phrase (conv-N)` depuis ce que le tour a FAIT (`titre-de-commit.ts`, conv-1069). */
+/** `type(zone): phrase (conv-N)` depuis ce que le tour a FAIT (`titre-de-commit.ts`). */
 function messageDeCommit(
   conversationId: string,
   request: string,
@@ -289,11 +289,11 @@ export async function publierTourDeChat(input: {
   turnId: string
   /** Demande de l'utilisateur : repli du message de commit quand le tour n'a pas dit ce qu'il a fait. */
   request: string
-  /** Texte final du tour : son bloc « ✅ Fait » donne le titre du commit (conv-1069). */
+  /** Texte final du tour : son bloc « ✅ Fait » donne le titre du commit. */
   compteRendu?: string
   /**
    * Langue de `compteRendu` ; absent = celle réglée dans Settings · Interface, qui est celle de la
-   * réponse. Une réponse en anglais n'est pas recopiée dans le titre (conv-1581).
+   * réponse. Une réponse en anglais n'est pas recopiée dans le titre.
    */
   langueDuCompteRendu?: Langue
   debut: ChatTurnStart
@@ -307,7 +307,7 @@ export async function publierTourDeChat(input: {
   /**
    * Rejoue les tests des fichiers que le tour va publier, AVANT le commit, dans `racine` : une copie
    * propre de CE QUI PART (dernier commit + ces seuls fichiers), jamais l'arbre partagé — voir
-   * `verifierCeQuiPart`. Mesuré le 2026-10-01 : `b6d2a3fc` (conv-892) a été poussé sans aucun test
+   * `verifierCeQuiPart`. Mesuré le 2026-10-01 : `b6d2a3fc` a été poussé sans aucun test
    * et a laissé main rouge 20 h. Absent = comportement d'avant (aucune vérification).
    */
   verifierAvantPublication?: (
@@ -318,7 +318,7 @@ export async function publierTourDeChat(input: {
   ouvrirCopie?: (repo: string) => Promise<CopieDeBase>
   /**
    * Type ce qui PART (copie propre du dernier commit + fichiers du tour), AVANT les tests. Vécu le
-   * 2026-10-15 (`9d6bb850`, conv-954) : un fichier publié sans son appelant, écarté, a cassé la
+   * 2026-10-15 (`9d6bb850`) : un fichier publié sans son appelant, écarté, a cassé la
    * compilation de main ; les tests, rejoués dans l'arbre partagé où l'appelant était encore là,
    * étaient verts. Absent = aucun typage (voir `typage-avant-publication.ts`).
    */
@@ -347,7 +347,7 @@ export async function publierTourDeChat(input: {
   const duFil = new Set<string>()
   const revendiquees = new Map<string, Set<string>>()
   const concurrents = new Set<string>()
-  /** Pour chaque fichier touché par un autre fil pendant le tour : QUELS fils (conv-1083). */
+  /** Pour chaque fichier touché par un autre fil pendant le tour : QUELS fils. */
   const filsConcurrents = new Map<string, Set<string>>()
   /** Nommés par une commande shell d'écriture de CE tour. */
   const nommesParLeTour = new Set<string>()
@@ -373,22 +373,36 @@ export async function publierTourDeChat(input: {
     const racine = racines.get(trace.workspaceRoot) ?? trace.workspaceRoot
     const autreFil = trace.conversationId !== conversationId
     const pendantLeTour = Date.parse(trace.timestamp) >= debut.startedAt
+    // Ni la trace d'un autre fil d'avant le tour, ni celle de ce fil hors chat ne comptent ici.
+    if (autreFil ? !pendantLeTour : !SOURCES_DU_CHAT.has(trace.source)) continue
+    /*
+     * Valeurs par chemin rangées UNE fois par trace, la première d'une clé gagnant comme le
+     * `Object.entries(...).find(...)` d'avant. Chercher chaque chemin parmi tous ceux de la trace
+     * coûtait chemins² : six gels de 31 à 58 s de la fenêtre le 06/11/2026, à chaque fin de tour,
+     * sur un lot de 2 344 chemins. Garde : `chat-turn-publication.sans-gel.test.ts`.
+     */
+    const parChemin = <T>(valeurs: Record<string, T> | undefined): Map<string, T> => {
+      const index = new Map<string, T>()
+      for (const [candidate, valeur] of Object.entries(valeurs ?? {})) {
+        const key = cle(absoluDeTrace(racine, candidate))
+        if (!index.has(key)) index.set(key, valeur)
+      }
+      return index
+    }
+    const lignesParChemin = parChemin(trace.pathLineFingerprints)
+    const avantParChemin = parChemin(trace.pathBaseFingerprints)
+    const apresParChemin = parChemin(trace.pathFingerprints)
     for (const path of trace.paths) {
       const absolu = absoluDeTrace(racine, path)
       if (!dansLeDepot(repo, absolu)) continue
       const key = cle(absolu)
-      const duChemin = <T>(parChemin: Record<string, T> | undefined): T | undefined =>
-        Object.entries(parChemin ?? {}).find(
-          ([candidate]) => cle(absoluDeTrace(racine, candidate)) === key
-        )?.[1]
-      const lignes = duChemin(trace.pathLineFingerprints)
+      const lignes = lignesParChemin.get(key)
       const ecrit = Boolean(
         trace.nommeParCommande || lignes?.length || trace.source !== 'chat_tool'
       )
-      const avant = duChemin(trace.pathBaseFingerprints)
-      const apres = duChemin(trace.pathFingerprints)
+      const avant = avantParChemin.get(key)
+      const apres = apresParChemin.get(key)
       if (autreFil) {
-        if (!pendantLeTour) continue
         concurrents.add(key)
         filsConcurrents.set(key, (filsConcurrents.get(key) ?? new Set()).add(trace.conversationId))
         if (ecrit) {
@@ -402,7 +416,6 @@ export async function publierTourDeChat(input: {
           ])
         continue
       }
-      if (!SOURCES_DU_CHAT.has(trace.source)) continue
       duFil.add(key)
       if (trace.turnId === turnId) {
         duTour.add(key)
@@ -450,9 +463,9 @@ export async function publierTourDeChat(input: {
     return false
   }
   /*
-   * SEULEMENT VU CHANGER, ET L'AUTEUR EST CONNU (conv-1578, 2026-11-05). Le fil n'avait fait que
-   * lire ; pendant son appel, conv-1573 a publié sa part de `git-apres-fil.ts` (commande nommée,
-   * empreinte du diff 83a7a601 → bcb7dcce). La comparaison avant/après de conv-1578 a vu ce même
+   * SEULEMENT VU CHANGER, ET L'AUTEUR EST CONNU (2026-11-05). Le fil n'avait fait que
+   * lire ; pendant son appel, un fil a publié sa part de `git-apres-fil.ts` (commande nommée,
+   * empreinte du diff 83a7a601 → bcb7dcce). La comparaison avant/après a vu ce même
    * passage, le fichier est entré dans SES « laissés en attente », et un `/git` est parti dans un fil
    * qui n'avait rien écrit. Un fichier que le tour n'a pas écrit, qu'un autre fil a ÉCRIT pendant le
    * tour, et dont chaque passage vu est tracé de bout en bout par les autres fils n'est donc pas à ce
@@ -499,7 +512,7 @@ export async function publierTourDeChat(input: {
       exclus.push({
         path: gitPath,
         motif: 'touche-par-un-autre-fil',
-        // Le fil qui tient le fichier, nommé : c'est lui qu'il faut finir ou commiter (conv-1083).
+        // Le fil qui tient le fichier, nommé : c'est lui qu'il faut finir ou commiter.
         fils: [...(filsConcurrents.get(key) ?? [])].sort(),
         ...detail
       })
@@ -511,7 +524,7 @@ export async function publierTourDeChat(input: {
    * (a7602f5c) : `commands.ts` partait, `src/shared/heredocs.ts` qu'il importe restait non suivi —
    * main ne compilait plus. Point fixe : écarter un fichier peut laisser dehors ce qu'un autre importe.
    *
-   * NI, PAR UN INTERMÉDIAIRE, LE TRAVAIL DU FIL RESTÉ EN ATTENTE. Vécu le 2026-10-19 (conv-358,
+   * NI, PAR UN INTERMÉDIAIRE, LE TRAVAIL DU FIL RESTÉ EN ATTENTE. Vécu le 2026-10-19 (
    * ba71a03e) : `ChatView.cadrage-hypotheses.test.tsx` est parti seul ; `ChatView.tsx`, qu'il
    * vérifie, était le travail du même fil, écarté (« modifie-avant-le-tour »), et le test ne
    * l'atteint que par `ChatView.harness.tsx`, propre. main a reçu un test rouge sans son code.
@@ -611,10 +624,10 @@ export async function publierTourDeChat(input: {
  * fichiers publiés posés dessus (mêmes `ouvrirCopieDeBase` et `appliquerLeTour` que
  * `typerCeQuiPart`).
  *
- * Vécu le 2026-10-22 (salvage conv-1091) : `973b70e2` (conv-1078) a publié un test de style sans le
- * CSS qu'il lit, et `b86a144e` (conv-1087) du code sans son test. Les fichiers restés dehors avaient
+ * Vécu le 2026-10-22 : `973b70e2` a publié un test de style sans le
+ * CSS qu'il lit, et `b86a144e` du code sans son test. Les fichiers restés dehors avaient
  * aussi été modifiés par d'autres fils. Rejoués dans l'arbre partagé, où ces fichiers étaient encore
- * là, les tests étaient verts. Même défaut déjà vu le 2026-10-15 (`b0c4c099`, conv-969).
+ * là, les tests étaient verts. Même défaut déjà vu le 2026-10-15 (`b0c4c099`).
  *
  * Une copie impossible à ouvrir ne bloque pas la publication : comme pour le typage, elle part et le
  * rapport dit `non-verifie` avec la raison. Coût mesuré le 2026-10-22 : 1,7 s pour copier ce dépôt.

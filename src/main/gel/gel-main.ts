@@ -2,7 +2,7 @@ import { appendFile, mkdir } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { Worker } from 'node:worker_threads'
+import { Worker, isMainThread } from 'node:worker_threads'
 import {
   classerGel,
   nommerAccumulation,
@@ -17,6 +17,7 @@ import {
   type Gel,
   type ResumeGels
 } from '../../shared/gel-detector'
+import { demarrerProfilPendantGel } from './profil-pendant-gel'
 
 /**
  * BATTEMENT du process main — l'instrument qui attrape « ce programme ne repond pas ».
@@ -147,7 +148,7 @@ export function preleverAccesCumules(): AccesCumule[] {
 let demarrageClos = false
 
 /*
- * JALONS DU DEMARRAGE SUR DISQUE (conv-1077, 2026-10-22). 39 gels pour 103,8 s depuis le 15/10 sous
+ * JALONS DU DEMARRAGE SUR DISQUE (2026-10-22). 39 gels pour 103,8 s depuis le 15/10 sous
  * `demarrage:corps du module terminé, whenReady enregistré`, mais les jalons de `jalonDemarrage`
  * (index.ts, window.ts) ne vivaient que dans `console.log` : rien ne disait, lancement par lancement,
  * ou le temps passait ENTRE deux jalons. Ils passent tous par `marquerOperation('demarrage:…')` :
@@ -349,7 +350,7 @@ export function demarrerDetecteurDeGel(
   /*
    * LA PREMIERE LIGNE EST UN TEMOIN DE VIE, ecrite AVANT tout gel.
    *
-   * Sans elle, un journal muet est indecidable (defaut vecu le 2026-09-05, conv-303) : on ne sait
+   * Sans elle, un journal muet est indecidable (defaut vecu le 2026-09-05) : on ne sait
    * pas si l'application ne gele plus ou si la mesure est morte. Elle est ecrite par le MEME puits
    * que les gels, donc son absence prouve la panne du chemin d'ecriture lui-meme, pas seulement
    * celle du battement.
@@ -369,6 +370,14 @@ export function demarrerDetecteurDeGel(
    */
   let cpuPrecedent = process.cpuUsage()
   const temoin = temoinInjecte ?? demarrerTemoin(periodeMs)
+  /*
+   * PROFIL CPU PENDANT LES GELS LONGS (`profil-pendant-gel.ts`) : ce qui nomme les gels de pur
+   * calcul, que ce battement classe `inconnu`. Seulement sur le thread PRINCIPAL : le profileur
+   * observe toujours le principal du processus (`connectToMainThread`). Lancé depuis un worker
+   * — les tests Vitest tournent dans des workers —, il profilerait un autre thread que celui dont ce
+   * détecteur mesure le battement.
+   */
+  const arreterProfil = isMainThread ? demarrerProfilPendantGel(dir) : undefined
   minuteur = setInterval(() => {
     const maintenant = Date.now()
     const delta = process.cpuUsage(cpuPrecedent)
@@ -439,6 +448,7 @@ export function demarrerDetecteurDeGel(
     if (minuteur) clearInterval(minuteur)
     minuteur = undefined
     temoin?.arreter()
+    arreterProfil?.()
     puits = journaliser
   }
 }
@@ -447,7 +457,7 @@ export function demarrerDetecteurDeGel(
  * TEMOIN ORDONNANCE — ce qui permet enfin de distinguer « la machine ne nous donne pas de CPU » de
  * « NOTRE thread principal est coince dans un appel bloquant ».
  *
- * Mesure conv-1539 (2026-08-30) : cinq gels de 11,7 a 14,9 s, espaces d'environ une minute, tous
+ * Mesure (2026-08-30) : cinq gels de 11,7 a 14,9 s, espaces d'environ une minute, tous
  * classes `process-prive-de-cpu` — donc « pas notre code ». Or une lecture SYNCHRONE sur le partage
  * reseau //serveur produit exactement cette signature : la boucle est tenue par nous, sans bruler un
  * cycle. Le CPU seul ne peut pas trancher. Un second thread, lui, le peut : s'il bat A L'HEURE
@@ -521,7 +531,7 @@ export function instrumenterCanauxIpc(ipc: {
   ipc.handle = (canal: string, ecouteur: (...a: never[]) => unknown): void =>
     original(canal, (...args: never[]) => {
       /*
-       * SEUL LE SEGMENT SYNCHRONE COMPTE — mesure du 2026-08-28 (conv-1511).
+       * SEUL LE SEGMENT SYNCHRONE COMPTE — mesure du 2026-08-28.
        *
        * Un gel est, par definition, la boucle d'evenements TENUE : une promesse en attente ne tient
        * rien. La premiere version refermait l'operation au REGLEMENT de la promesse ; un handler
@@ -565,7 +575,7 @@ export function instrumenterCanauxIpc(ipc: {
 /**
  * INSTRUMENTE des appels SYNCHRONES d'entree-sortie sur un hote (module `fs`, `child_process`…).
  *
- * Le temoin ordonnance a prouve (conv-1539, gel de 22 652 ms) que nos gels sont des
+ * Le temoin ordonnance a prouve (gel de 22 652 ms) que nos gels sont des
  * `entree-sortie-bloquante` : la boucle est tenue par NOTRE code sans bruler de CPU. L'heuristique
  * ne peut pas aller plus loin ; seule une mesure DIRECTE du segment synchrone peut nommer l'appel.
  * On enrobe donc chaque fonction visee : au-dela du seuil, on journalise `io:<reseau|disque>:<api>
@@ -622,7 +632,7 @@ export function instrumenterAccesBloquants<H extends Record<string, unknown>>(
       }
     }
     /*
-     * L'ENROBAGE REND LA MEME SURFACE D'API — mesure du 2026-08-31 (conv-9).
+     * L'ENROBAGE REND LA MEME SURFACE D'API — mesure du 2026-08-31.
      *
      * `fs.realpathSync` porte une SOUS-FONCTION `realpathSync.native`. Un enrobage nu ne la
      * transporte pas : des l'appel de `instrumenterEntreesSortiesDuMain` au demarrage, les dix
@@ -665,7 +675,7 @@ export function instrumenterEntreesSortiesDuMain(
    * LES PILES DU BUNDLE, contrairement a ce que ce commentaire affirmait depuis le 2026-09-12 : la
    * doc Node le dit, « Only source maps in JavaScript files that are loaded after source maps has
    * been enabled will be parsed and loaded », et `index.js` comme ses morceaux statiques sont deja
-   * charges quand on arrive ici. Mesure du 2026-10-22 (conv-1055) : aucune des 11 887 lignes de
+   * charges quand on arrive ici. Mesure du 2026-10-22 : aucune des 11 887 lignes de
    * `gels.jsonl` ne porte un chemin `src/`. La traduction se fait donc APRES coup, par
    * `scripts/gels-classement.mjs`, avec les cartes que chaque build archive
    * (`scripts/gels-cartes-archive.mjs`). L'appel reste pour un code charge plus tard.
@@ -724,7 +734,7 @@ export function instrumenterEntreesSortiesDuMain(
     }
   }
   /*
-   * LA CREATION DE PROCESSUS — angle mort comble le 2026-10-10 (heal conv-204).
+   * LA CREATION DE PROCESSUS — angle mort comble le 2026-10-10.
    *
    * 982 gels sur 1 234 sortis en `inconnu` en un jour : 264 processus `git` crees par photo du
    * depot tenaient la boucle 4,6 s, et aucun appel ci-dessus ne les voyait — `execFile` est

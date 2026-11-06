@@ -21,7 +21,11 @@
  * Usage : node scripts/gels-classement.mjs [--jours 14 | --depuis <ISO>] [--journal <chemin>]
  *                                          [--out <dossier du bundle>] [--cartes <archive>]
  *                                          [--top 10] [--tranches <minutes>] [--json]
+ *                                          [--profils <dossier>]
  * `--tranches` : ajoute le découpage par tranches de temps (UTC), pour voir QUAND la fenêtre a figé.
+ * `--profils` : les profils CPU des gels longs (défaut : `gels-profils/` à côté du journal, écrits
+ * par src/main/gel/profil-pendant-gel.ts). Un gel `inconnu` couvert par un profil prend le nom de la
+ * fonction qui tenait la fenêtre (scripts/gels-profils.mjs).
  * `--cartes` : l'archive des cartes de chaque construction (défaut : `gels-cartes/` à côté du
  * journal, remplie par le build — scripts/gels-cartes-archive.mjs).
  * Sortie 0 = classement rendu ; 2 = journal absent ; 3 = ni gel ni démarrage de l'instrument dans la
@@ -32,6 +36,7 @@ import { dirname, join, resolve } from 'node:path'
 import { SourceMap } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { carteArchivee, lireArchive, lireCarteArchivee } from './gels-cartes-archive.mjs'
+import { lireProfils, nommerGelsParProfil } from './gels-profils.mjs'
 
 /** Une frame qui retombe dans l'instrument lui-même ne nomme pas le coupable : on la saute. */
 const SOURCES_DE_L_INSTRUMENT = /(^|\/)gel-(main|detector)\.ts$/
@@ -357,10 +362,14 @@ export function resoudreAppelant(
 }
 
 const secondes = (ms) => `${(ms / 1000).toFixed(1)} s`
+const pourcent = (part) => `${Math.round((part ?? 0) * 100)} %`
 const jour = (ts) => (typeof ts === 'string' ? ts.slice(0, 16).replace('T', ' ') : '')
 
 /** Le classement en Markdown, prêt à coller dans le fil. */
-export function rendreClassement(classement, { racineOut, archive, top = 10, periode = '' } = {}) {
+export function rendreClassement(
+  classement,
+  { racineOut, archive, top = 10, periode = '', nommes = [] } = {}
+) {
   const { totaux } = classement
   const cache = new Map()
   const l = []
@@ -417,6 +426,40 @@ export function rendreClassement(classement, { racineOut, archive, top = 10, per
         : '—'
     l.push(`| \`${a.operation}\` | ${a.appels} | ${secondes(a.cumulMs)} | ${source} | ${carte} |`)
   }
+  if (nommes.length) {
+    l.push(
+      '',
+      '### Gels longs — la fonction qui tenait la fenêtre (profil CPU)',
+      '',
+      '| Fin du gel | Durée | Fonction | Part | Source | Temps propre en tête | Ramasse-miettes | Carte |',
+      '|---|---|---|---|---|---|---|---|'
+    )
+    for (const { gel, analyse } of nommes.slice(-top).reverse()) {
+      const { sources, carte } = analyse.appelant
+        ? resoudreAppelant(analyse.appelant, {
+            racineOut,
+            gelTs: gel.ts,
+            demarrageMs: demarrageAvant(classement.demarragesMs, gel.ts),
+            archive,
+            cache
+          })
+        : { sources: [], carte: 'sans-objet' }
+      // Même prudence que pour les appelants : une carte postérieure rend la frame brute.
+      const source = CARTES_SUSPECTES.has(carte)
+        ? `\`${analyse.appelant}\` (non résolu)`
+        : sources.length
+          ? sources.map((s) => `\`${s}\``).join(' < ')
+          : '—'
+      const tete = (analyse.profil?.tete ?? [])
+        .slice(0, 2)
+        .map((t) => `\`${t.fonction}\` ${pourcent(t.part)}`)
+        .join(', ')
+      const par = analyse.source === 'piles' ? ` (${analyse.releves} piles)` : ' (profil)'
+      l.push(
+        `| ${jour(gel.ts)} | ${secondes(gel.blocageMs)} | \`${analyse.fonction ?? '—'}\` | ${pourcent(analyse.part)}${par} | ${source} | ${tete || '—'} | ${pourcent(analyse.profil?.ramasseMiettes)} | ${carte} |`
+      )
+    }
+  }
   l.push(
     '',
     '### Rendu (interface) — par opération',
@@ -472,13 +515,34 @@ export function principal(argv = process.argv.slice(2), sortie = console.log) {
     return 2
   }
   const { gels, illisibles } = lireJournal(readFileSync(journal, 'utf8'))
+  const profils = lireProfils(
+    resolve(argument(argv, '--profils') ?? join(dirname(journal), 'gels-profils'))
+  )
+  const nommes = nommerGelsParProfil(gels, profils, { depuisMs })
+  /*
+   * Un gel `inconnu` couvert par un profil prend le nom de sa fonction : le profil est une MESURE,
+   * là où l'indice (`piste:`) n'était qu'une opération ouverte au même moment. Un gel déjà nommé
+   * par l'instrumentation garde son nom ; son profil s'affiche à côté, dans sa propre section.
+   */
+  for (const { gel, analyse } of nommes) {
+    if ((gel.operation ?? 'inconnu') === 'inconnu' && analyse.fonction) {
+      gel.operation = `profil: ${analyse.fonction}`
+    }
+  }
   const classement = classerGels(gels, { depuisMs, trancheMin: argument(argv, '--tranches') })
   const periode = `depuis ${new Date(depuisMs).toISOString().slice(0, 16).replace('T', ' ')} (UTC)`
   if (argv.includes('--json')) {
-    sortie(JSON.stringify({ journal, periode, illisibles, ...classement }, null, 2))
+    const parProfil = nommes.map((n) => ({
+      ts: n.gel.ts,
+      blocageMs: n.gel.blocageMs,
+      ...n.analyse
+    }))
+    sortie(
+      JSON.stringify({ journal, periode, illisibles, ...classement, profils: parProfil }, null, 2)
+    )
   } else {
     const archive = { dossier: dossierArchive, entrees: lireArchive(dossierArchive) }
-    sortie(rendreClassement(classement, { racineOut, archive, top, periode }))
+    sortie(rendreClassement(classement, { racineOut, archive, top, periode, nommes }))
     if (illisibles) sortie(`\n${illisibles} ligne(s) illisible(s) dans le journal.`)
   }
   const { totaux } = classement

@@ -69,6 +69,13 @@ Lis la colonne **Carte** avant de croire une source :
   bundle actuel : attends un gel survenu après le dernier démarrage, ou reproduis (étape 3).
 - `absente` : aucune carte. Cherche l'appel nommé dans `src/main` avec grep, sans conclure sur une ligne.
 
+Un gel `inconnu` de 10 s et plus est du pur calcul : le détecteur en prend un profil CPU et des relevés
+de pile (`gels-profils/` à côté du journal, `src/main/gel/profil-pendant-gel.ts`). Le classement le
+renomme alors `profil: <fonction>` et lui donne une ligne dans « Gels longs — la fonction qui tenait
+la fenêtre », avec sa source (même règle de carte). La fonction vient des relevés de pile quand ils
+existent (`(N piles)`) : le profil seul, démarré pendant le gel, ne voit pas la boucle compilée avant
+lui et retombe sur son appelant. Le `.cpuprofile` s'ouvre aussi dans DevTools (onglet Performance).
+
 Puis cherche si ce coupable a DÉJÀ été traité : un `.test.ts` dont le commentaire cite `gels.jsonl`
 et le même appel (grep `gels.jsonl` dans `src/`). Un correctif déjà livré qui revient = une
 régression, à traiter comme telle.

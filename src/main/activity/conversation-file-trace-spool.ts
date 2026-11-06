@@ -1,4 +1,12 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync
+} from 'node:fs'
 import { appendFile, readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { ensureAutowinAppData } from '../app/app-data'
@@ -7,7 +15,7 @@ import type { ExecutionEvidence } from '../providers/types'
 const SPOOL_MAX_BYTES = 4 * 1024 * 1024
 
 /*
- * ÉCRIRE UNE TRACE SANS TENIR LA FENÊTRE — /gel conv-1118, 2026-10-23.
+ * ÉCRIRE UNE TRACE SANS TENIR LA FENÊTRE — /gel, 2026-10-23.
  *
  * `gels.jsonl`, le 23/10 de 09:44:09 à 09:44:57 UTC : quatre `appendFileSync` de `events.jsonl`, une
  * ligne de quelques Ko chacune, ont figé la fenêtre 8,2 s, 10,0 s, 9,8 s puis 7,6 s sur un disque
@@ -143,6 +151,28 @@ export function workspaceTracePathKey(path: string): string {
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
+/**
+ * Valeurs d'un enregistrement par chemin, rangées par clé de chemin. La PREMIÈRE entrée d'une clé
+ * gagne, comme le `Object.entries(...).find(...)` qu'elle remplace. Chercher chaque chemin d'une
+ * trace parmi tous ses chemins coûtait chemins² : une trace de 2 344 chemins, rejouée à chaque
+ * appel, a tenu la fenêtre 30 à 58 s (gels du 06/11/2026, `readCurrentPathGenerations` à 96 % du
+ * profil CPU). Garde : `conversation-file-trace-spool.sans-gel.test.ts`.
+ */
+function indexParChemin<T>(record: Record<string, T> | undefined): Map<string, T> {
+  const index = new Map<string, T>()
+  for (const [candidate, value] of Object.entries(record ?? {})) {
+    const key = workspaceTracePathKey(candidate)
+    if (!index.has(key)) index.set(key, value)
+  }
+  return index
+}
+
+/** `[[chemin, valeur]]` quand l'index a une entrée pour ce chemin, même `null` ; `[]` sinon. */
+function entreeDuChemin<T>(index: Map<string, T>, path: string): [string, T][] {
+  const key = workspaceTracePathKey(path)
+  return index.has(key) ? [[path, index.get(key) as T]] : []
+}
+
 function canonicalWorkspaceRoot(workspaceRoot: string): string {
   const normalized = resolve(workspaceRoot).replaceAll('\\', '/').replace(/\/+$/, '')
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
@@ -172,49 +202,37 @@ export function appendConversationFileTrace(
     const eventId = trace.eventId?.trim()
     if (
       eventId &&
-      ['events.archive.jsonl', 'events.previous.jsonl', 'events.jsonl'].some((name) =>
-        readFileTraces(join(root, name)).some((existing) => existing.eventId === eventId)
-      )
+      (resumeDesJournauxFiges(root).eventIds.has(eventId) ||
+        readFileTraces(path).some((existing) => existing.eventId === eventId))
     ) {
       return 'duplicate'
     }
+    const fingerprintsIndex = indexParChemin(trace.pathFingerprints)
+    const baseFingerprintsIndex = indexParChemin(trace.pathBaseFingerprints)
+    const generationMarkersIndex = indexParChemin(trace.pathGenerationMarkers)
+    const baseGenerationMarkersIndex = indexParChemin(trace.pathBaseGenerationMarkers)
+    const lineFingerprintsIndex = indexParChemin(trace.pathLineFingerprints)
     const normalizedFingerprints = Object.fromEntries(
       paths.flatMap((path) => {
-        const fingerprint = Object.entries(trace.pathFingerprints ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )?.[1]
+        const fingerprint = fingerprintsIndex.get(workspaceTracePathKey(path))
         return fingerprint ? [[path, fingerprint]] : []
       })
     )
     const normalizedBaseFingerprints = Object.fromEntries(
-      paths.flatMap((path) => {
-        const match = Object.entries(trace.pathBaseFingerprints ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )
-        return match ? [[path, match[1]]] : []
-      })
+      paths.flatMap((path) => entreeDuChemin(baseFingerprintsIndex, path))
     )
     const normalizedGenerationMarkers = Object.fromEntries(
       paths.flatMap((path) => {
-        const marker = Object.entries(trace.pathGenerationMarkers ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )?.[1]
+        const marker = generationMarkersIndex.get(workspaceTracePathKey(path))
         return marker ? [[path, marker]] : []
       })
     )
     const normalizedBaseGenerationMarkers = Object.fromEntries(
-      paths.flatMap((path) => {
-        const match = Object.entries(trace.pathBaseGenerationMarkers ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )
-        return match ? [[path, match[1]]] : []
-      })
+      paths.flatMap((path) => entreeDuChemin(baseGenerationMarkersIndex, path))
     )
     const normalizedLineFingerprints = Object.fromEntries(
       paths.flatMap((path) => {
-        const fingerprints = Object.entries(trace.pathLineFingerprints ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )?.[1]
+        const fingerprints = lineFingerprintsIndex.get(workspaceTracePathKey(path))
         return fingerprints?.length ? [[path, fingerprints]] : []
       })
     )
@@ -273,43 +291,32 @@ export function appendExecutionEvidenceFileTrace(
     const paths = (item.paths ?? (item.path ? [item.path] : []))
       .map((path) => normalizeWorkspaceTracePath(path, workspaceRoot))
       .filter((path): path is string => Boolean(path))
+    const fingerprintsIndex = indexParChemin(item.pathFingerprints)
+    const baseFingerprintsIndex = indexParChemin(item.pathBaseFingerprints)
+    const generationMarkersIndex = indexParChemin(item.pathGenerationMarkers)
+    const baseGenerationMarkersIndex = indexParChemin(item.pathBaseGenerationMarkers)
+    const writtenLinesIndex = indexParChemin(item.writtenLineFingerprintsByPath)
     const pathFingerprints = Object.fromEntries(
       paths.flatMap((path) => {
-        const fingerprint = Object.entries(item.pathFingerprints ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )?.[1]
+        const fingerprint = fingerprintsIndex.get(workspaceTracePathKey(path))
         return fingerprint ? [[path, fingerprint]] : []
       })
     )
     const pathBaseFingerprints = Object.fromEntries(
-      paths.flatMap((path) => {
-        const match = Object.entries(item.pathBaseFingerprints ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )
-        return match ? [[path, match[1]]] : []
-      })
+      paths.flatMap((path) => entreeDuChemin(baseFingerprintsIndex, path))
     )
     const pathGenerationMarkers = Object.fromEntries(
       paths.flatMap((path) => {
-        const marker = Object.entries(item.pathGenerationMarkers ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )?.[1]
+        const marker = generationMarkersIndex.get(workspaceTracePathKey(path))
         return marker ? [[path, marker]] : []
       })
     )
     const pathBaseGenerationMarkers = Object.fromEntries(
-      paths.flatMap((path) => {
-        const match = Object.entries(item.pathBaseGenerationMarkers ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )
-        return match ? [[path, match[1]]] : []
-      })
+      paths.flatMap((path) => entreeDuChemin(baseGenerationMarkersIndex, path))
     )
     const pathLineFingerprints = Object.fromEntries(
       paths.flatMap((path) => {
-        const pathSpecific = Object.entries(item.writtenLineFingerprintsByPath ?? {}).find(
-          ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-        )?.[1]
+        const pathSpecific = writtenLinesIndex.get(workspaceTracePathKey(path))
         const fingerprints = pathSpecific ?? item.writtenLineFingerprints
         return fingerprints?.length ? [[path, fingerprints]] : []
       })
@@ -372,9 +379,14 @@ export function readConversationFileTraces(
   base = ensureAutowinAppData()
 ): ConversationFileTrace[] {
   const root = spoolRoot(base)
+  const resume = resumeDesJournauxFiges(root)
   return [
-    ...readFileTraces(join(root, 'events.archive.jsonl')),
-    ...readFileTraces(join(root, 'events.previous.jsonl')),
+    ...(resume.filsArchive.has(conversationId)
+      ? readFileTraces(join(root, 'events.archive.jsonl'))
+      : []),
+    ...(resume.filsPrecedent.has(conversationId)
+      ? readFileTraces(join(root, 'events.previous.jsonl'))
+      : []),
     ...readFileTraces(join(root, 'events.jsonl'))
   ].filter((trace) => trace.conversationId === conversationId)
 }
@@ -435,34 +447,34 @@ export function readConversationTurnFileMutations(
   base = ensureAutowinAppData()
 ): ConversationTurnFileMutations {
   const root = spoolRoot(base)
+  const resume = resumeDesJournauxFiges(root)
+  const tour = cleDeTour(conversationId, turnId)
   const traces = [
-    ...readFileTraces(join(root, 'events.archive.jsonl')),
-    ...readFileTraces(join(root, 'events.previous.jsonl')),
+    ...(resume.toursArchive.has(tour) ? readFileTraces(join(root, 'events.archive.jsonl')) : []),
+    ...(resume.toursPrecedent.has(tour) ? readFileTraces(join(root, 'events.previous.jsonl')) : []),
     ...readFileTraces(join(root, 'events.jsonl'))
   ].filter((trace) => trace.conversationId === conversationId && trace.turnId === turnId)
   const lineFingerprintsByPath: Record<string, string[]> = {}
   const generationMarkersByPath: Record<string, string> = {}
-  const paths = traces.flatMap((trace) =>
-    trace.paths.map((path) => {
+  const paths = traces.flatMap((trace) => {
+    const lignesIndex = indexParChemin(trace.pathLineFingerprints)
+    const marqueursIndex = indexParChemin(trace.pathGenerationMarkers)
+    return trace.paths.map((path) => {
       const absolute = canonicalWorkspaceRoot(
         resolve(trace.workspaceRoot, normalizedStoredPath(path))
       )
-      const fingerprints = Object.entries(trace.pathLineFingerprints ?? {}).find(
-        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-      )?.[1]
+      const fingerprints = lignesIndex.get(workspaceTracePathKey(path))
       if (fingerprints?.length) {
         lineFingerprintsByPath[absolute] = [
           ...(lineFingerprintsByPath[absolute] ?? []),
           ...fingerprints
         ]
       }
-      const generationMarker = Object.entries(trace.pathGenerationMarkers ?? {}).find(
-        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-      )?.[1]
+      const generationMarker = marqueursIndex.get(workspaceTracePathKey(path))
       if (generationMarker) generationMarkersByPath[absolute] = generationMarker
       return absolute
     })
-  )
+  })
   return { paths: [...new Set(paths)], lineFingerprintsByPath, generationMarkersByPath }
 }
 
@@ -480,7 +492,7 @@ export interface CurrentPathOwner extends ConversationPathOwnership {
   timestamp: string
   /**
    * Ce fil n'a fait que VOIR ce chemin changer (`vueParComparaison`), sans l'écrire avec un outil
-   * dans cette génération. Lu par la publication auto (conv-1587, 05/11/2026) : 18 fichiers écrits
+   * dans cette génération. Lu par la publication auto (05/11/2026) : 18 fichiers écrits
    * par un script, vus par trois fils, renvoyaient une note `/git` à chacun.
    */
   vuSeulement?: true
@@ -503,12 +515,82 @@ function pathGenerationKey(workspaceRoot: string, path: string): string {
  * (`agent-pilot.ts`, `etatAvantEnvoi`), seule trace `chat_tool` qui ne revendique ni lignes écrites
  * ni commande d'écriture. Même partage que `chat-turn-publication.ts` (`ecritsParUnAutreFil`).
  */
-function vueParComparaison(trace: ConversationFileTrace, path: string): boolean {
+function vueParComparaison(
+  trace: ConversationFileTrace,
+  lignesIndex: Map<string, string[]>,
+  path: string
+): boolean {
   if (trace.source !== 'chat_tool' || trace.nommeParCommande) return false
-  const lignes = Object.entries(trace.pathLineFingerprints ?? {}).find(
-    ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(path)
-  )?.[1]
+  const lignes = lignesIndex.get(workspaceTracePathKey(path))
   return !lignes?.length
+}
+
+/*
+ * NE RELIRE QUE LE JOURNAL COURANT. L'archive (46 Mo au 06/11/2026) et le journal précédent ne
+ * changent qu'à la rotation, une fois tous les 4 Mo. Ils étaient relus et rejoués à chaque appel,
+ * dans le processus qui fait vivre la fenêtre : à chaque `proprietaire_fichier`, à chaque trace
+ * ajoutée (contrôle des doublons), trois fois par fin de tour. Leur résumé est gardé tant que leur
+ * taille et leurs dates n'ont pas bougé : générations après eux, identifiants d'événement, tours et
+ * fils présents. Seul `events.jsonl` (4 Mo au plus) et ses lignes en route sont relus.
+ */
+interface ResumeDesJournauxFiges {
+  signature: string
+  /** Générations après l'archive puis le précédent. PARTAGÉES : jamais modifiées après coup. */
+  generations: Map<string, PathGeneration>
+  eventIds: Set<string>
+  toursArchive: Set<string>
+  toursPrecedent: Set<string>
+  filsArchive: Set<string>
+  filsPrecedent: Set<string>
+}
+
+const RESUMES_MAX = 8
+const resumes = new Map<string, ResumeDesJournauxFiges>()
+
+function signatureDuFichier(path: string): string {
+  try {
+    const infos = statSync(path)
+    return `${infos.size}:${infos.mtimeMs}:${infos.ctimeMs}:${infos.ino}:${lignesEnAttente(path).length}`
+  } catch {
+    return `absent:${lignesEnAttente(path).length}`
+  }
+}
+
+function cleDeTour(conversationId: string, turnId: string | undefined): string {
+  return `${conversationId}\0${turnId ?? ''}`
+}
+
+function resumeDesJournauxFiges(root: string): ResumeDesJournauxFiges {
+  const archive = join(root, 'events.archive.jsonl')
+  const precedent = join(root, 'events.previous.jsonl')
+  const signature = `${signatureDuFichier(archive)}|${signatureDuFichier(precedent)}`
+  const connu = resumes.get(root)
+  if (connu?.signature === signature) return connu
+  const resume: ResumeDesJournauxFiges = {
+    signature,
+    generations: new Map(),
+    eventIds: new Set(),
+    toursArchive: new Set(),
+    toursPrecedent: new Set(),
+    filsArchive: new Set(),
+    filsPrecedent: new Set()
+  }
+  for (const [journal, tours, fils] of [
+    [archive, resume.toursArchive, resume.filsArchive],
+    [precedent, resume.toursPrecedent, resume.filsPrecedent]
+  ] as const) {
+    const traces = readFileTraces(journal)
+    for (const trace of traces) {
+      if (trace.eventId) resume.eventIds.add(trace.eventId)
+      tours.add(cleDeTour(trace.conversationId, trace.turnId))
+      fils.add(trace.conversationId)
+    }
+    appliquerLesTraces(resume.generations, traces)
+  }
+  resumes.delete(root)
+  resumes.set(root, resume)
+  if (resumes.size > RESUMES_MAX) resumes.delete(resumes.keys().next().value as string)
+  return resume
 }
 
 /**
@@ -518,41 +600,53 @@ function vueParComparaison(trace: ConversationFileTrace, path: string): boolean 
  */
 function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
   const root = spoolRoot(base)
-  const generations = new Map<string, PathGeneration>()
-  const traces = [
-    ...readFileTraces(join(root, 'events.archive.jsonl')),
-    ...readFileTraces(join(root, 'events.previous.jsonl')),
-    ...readFileTraces(join(root, 'events.jsonl'))
-  ]
+  const figees = resumeDesJournauxFiges(root).generations
+  const generations = new Map(figees)
+  appliquerLesTraces(generations, readFileTraces(join(root, 'events.jsonl')), figees)
+  return generations
+}
+
+/**
+ * Rejoue des traces, dans l'ordre, sur `generations`. Une génération encore PARTAGÉE avec
+ * `partagees` (le résumé des journaux figés) est copiée avant d'être touchée.
+ */
+function appliquerLesTraces(
+  generations: Map<string, PathGeneration>,
+  traces: readonly ConversationFileTrace[],
+  partagees?: ReadonlyMap<string, PathGeneration>
+): void {
   for (const trace of traces) {
     if (typeof trace.workspaceRoot !== 'string') continue
     const workspaceRoot = canonicalWorkspaceRoot(trace.workspaceRoot)
+    const fingerprintsIndex = indexParChemin(trace.pathFingerprints)
+    const baseFingerprintsIndex = indexParChemin(trace.pathBaseFingerprints)
+    const baseGenerationMarkersIndex = indexParChemin(trace.pathBaseGenerationMarkers)
+    const generationMarkersIndex = indexParChemin(trace.pathGenerationMarkers)
+    const lignesIndex = indexParChemin(trace.pathLineFingerprints)
     for (const path of trace.paths) {
       const normalized = normalizedStoredPath(path)
-      const fingerprint = Object.entries(trace.pathFingerprints ?? {}).find(
-        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(normalized)
-      )?.[1]
-      const baseMatch = Object.entries(trace.pathBaseFingerprints ?? {}).find(
-        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(normalized)
-      )
-      const baseGenerationMatch = Object.entries(trace.pathBaseGenerationMarkers ?? {}).find(
-        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(normalized)
-      )
-      const generationMarker = Object.entries(trace.pathGenerationMarkers ?? {}).find(
-        ([candidate]) => workspaceTracePathKey(candidate) === workspaceTracePathKey(normalized)
-      )?.[1]
+      const pathKey = workspaceTracePathKey(normalized)
+      const fingerprint = fingerprintsIndex.get(pathKey)
+      const aUneBase = baseFingerprintsIndex.has(pathKey)
+      const aUneBaseDeGeneration = baseGenerationMarkersIndex.has(pathKey)
+      const generationMarker = generationMarkersIndex.get(pathKey)
       const key = pathGenerationKey(workspaceRoot, normalized)
-      const generation: PathGeneration = generations.get(key) ?? { owners: new Map() }
-      const vue = vueParComparaison(trace, normalized)
+      let existante = generations.get(key)
+      if (existante && partagees?.get(key) === existante) {
+        existante = { ...existante, owners: new Map(existante.owners) }
+        generations.set(key, existante)
+      }
+      const generation: PathGeneration = existante ?? { owners: new Map() }
+      const vue = vueParComparaison(trace, lignesIndex, normalized)
       // Un fil qui a écrit avec un outil dans cette génération le reste, même revu ensuite.
       const vuSeulement = (): { vuSeulement?: true } => {
         const deja = generation.owners.get(trace.conversationId)
         return vue && (!deja || deja.vuSeulement) ? { vuSeulement: true } : {}
       }
       /*
-       * fix-ok: conv-1142 (25/10/2026) — `src/main/app/reprise-apres-arret.ts`, écrit par conv-1142
-       * (trace de son Write à 13:36:07 UTC), était rendu à conv-1143 : la comparaison de fin de tour
-       * de conv-1143 (13:40:57), ouverte AVANT la création, a vu le fichier apparaître et, sa base
+       * fix-ok: (25/10/2026) — `src/main/app/reprise-apres-arret.ts`, écrit
+       * (trace de son Write à 13:36:07 UTC), était rendu : la comparaison de fin de tour
+       * (13:40:57), ouverte AVANT la création, a vu le fichier apparaître et, sa base
        * ne chaînant pas, a remplacé l'auteur. Or elle retombe sur l'état DÉJÀ enregistré, au même
        * marqueur physique — qui change à toute réécriture, même à l'identique (mtime/ctime) : rien
        * n'a été écrit depuis. Elle n'apporte donc aucun auteur. Retiré, ce garde rend
@@ -582,10 +676,10 @@ function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
         continue
       }
       if (
-        !baseMatch ||
-        !baseGenerationMatch ||
-        baseMatch[1] !== generation.fingerprint ||
-        baseGenerationMatch[1] !== generation.generationMarker
+        !aUneBase ||
+        !aUneBaseDeGeneration ||
+        baseFingerprintsIndex.get(pathKey) !== generation.fingerprint ||
+        baseGenerationMarkersIndex.get(pathKey) !== generation.generationMarker
       ) {
         generation.owners.clear()
       }
@@ -605,7 +699,6 @@ function readCurrentPathGenerations(base: string): Map<string, PathGeneration> {
       generations.set(key, generation)
     }
   }
-  return generations
 }
 
 /** Empreinte et marqueur de la génération, qui priment sur ceux du dernier tour du fil. */
@@ -640,12 +733,12 @@ export function readCurrentConversationPathOwnership(
 
 /**
  * L'INVERSE de `readCurrentConversationPathOwnership` : pour chaque chemin d'un workspace, TOUS les
- * fils de sa génération courante, quel que soit le fil qui demande. Scout conv-1086 : l'agent
+ * fils de sa génération courante, quel que soit le fil qui demande. Scout : l'agent
  * refaisait le réflexe 14 à la main (514 appels git dans 143 journaux) alors que cette donnée
  * existait, lue seulement par l'interface et seulement pour le fil affiché.
  * Rendu aligné sur `paths` (même ordre, une liste — vide — par chemin).
  *
- * fix-ok: conv-1086 — `readCurrentConversationPathOwnership` filtre sur le fil qui DEMANDE, il ne
+ * fix-ok: `readCurrentConversationPathOwnership` filtre sur le fil qui DEMANDE, il ne
  * peut donc pas dire à conv-b que conv-a tient le fichier : ce filtre remis dans
  * proprietaire-fichier.ts donne 2 rouges sur 9 (« signale à conv-b… »). D'où la génération
  * factorisée, lue par chemin sans filtre de fil.
