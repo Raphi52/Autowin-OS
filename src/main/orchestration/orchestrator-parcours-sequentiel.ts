@@ -3,7 +3,12 @@
 import { deciderDuPassage, traceDuPassage } from './boucle-reparation'
 import { randomUUID } from 'node:crypto'
 import { clampAggregateForJudge, serializeEvidenceForJudge } from '../verify/evidence-digest'
-import { noteVerdictPrecedentPourJuge, reservesMineuresFigees, verdictPanelPourMemoire } from '../juge/memoire-juge'
+import {
+  noteDuJuge,
+  noteVerdictPrecedentPourJuge,
+  reservesMineuresFigees,
+  verdictPanelPourMemoire
+} from '../juge/memoire-juge'
 import { noteChangementsPourJuge } from '../juge/changements-juge'
 import { noteTestsDejaJouesPourJuge } from '../verify/tests-deja-joues'
 import { etapeResultatValide } from '../../shared/resultat-valide'
@@ -3049,6 +3054,8 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
   let motifsPrecedents: string[] = []
   /** Combien de fois DE SUITE le refus est revenu mot pour mot (tour 52fbe05f : 4). */
   let refusIdentiquesConsecutifs = 0
+  /** Meilleure note du juge sur le run : une note qui la dépasse n'est pas un refus répété. */
+  let meilleureNote: number | undefined
   /**
    * Empreintes d'ORIGINE de chaque fichier TEST: designe par un juge, accumulees sur TOUT le run :
    * jamais videes, un nouveau TEST: s'ajoute, un fichier deja releve garde sa premiere empreinte
@@ -3311,7 +3318,10 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
       reparationsAccordees: politique.reparations,
       plafondDur: PLAFOND_DUR,
       motifsCourants: gate.reasons,
-      etat: { motifsPrecedents, refusIdentiquesConsecutifs },
+      etat: { motifsPrecedents, refusIdentiquesConsecutifs, meilleureNote },
+      // Seule la note rendue DANS ce passage compte : un refus avant le juge laisse
+      // `lastJudgeText` sur le verdict précédent.
+      noteDuJuge: r.refusAvantJuge ? undefined : noteDuJuge(lastJudgeText),
       // fix-ok: tour 82a4f5d1-d92f-4d73-9f6f-cac70db65ecb — 14 reparations refusees
       // parce que out/main/index.js (11:06) etait plus ancien que les correctifs commites
       // (11:11-11:31) : le code qui jugeait n'etait pas celui qu'on reparait. La boucle le NOMME
@@ -3341,6 +3351,7 @@ ${CONTRAT_QUESTIONS_AU_BUILD}`
     }
     refusIdentiquesConsecutifs = passage.etatSuivant.refusIdentiquesConsecutifs
     motifsPrecedents = passage.etatSuivant.motifsPrecedents
+    meilleureNote = passage.etatSuivant.meilleureNote
   }
   if (gate.blocked) {
     const motifBloque = motifChaineApresJugeNonJouee({
