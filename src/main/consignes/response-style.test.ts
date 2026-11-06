@@ -20,7 +20,8 @@ describe('concise structured response policy', () => {
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
       /(?:sans|absence de|supprime).*(?:répétition|répéter)/iu
     )
-    expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).toMatch(
+    // Le FORMAT d'une consigne de phase ne vaut que pour les étapes de run (revue 2026-11-06).
+    expect(STYLE_TON).toMatch(
       /format imposée par ta tâche passe devant ce profil.*rang 3 contre rang 4/iu
     )
     expect(CONCISE_STRUCTURED_RESPONSE_INSTRUCTION).not.toMatch(/rubrique vide.*masqu/iu)
@@ -174,10 +175,6 @@ describe('relance sans cible — un accord execute la derniere recommandation', 
   it('ordonne d executer la rubrique Recommandé plutot que d inventer une action', () => {
     expect(consigne).toMatch(/RELANCE SANS CIBLE/u)
     expect(consigne).toMatch(/n['’]invente|ne substitue|sans inventer/iu)
-  })
-
-  it('traite le cas ou la derniere recommandation est « rien » : demander une cible', () => {
-    expect(consigne).toMatch(/derni[èe]re recommandation est «\s*rien\s*»/iu)
   })
 
   /**

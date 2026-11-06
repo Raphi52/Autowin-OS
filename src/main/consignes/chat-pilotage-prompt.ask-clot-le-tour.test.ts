@@ -18,16 +18,22 @@ import { CATALOG } from '../commands/commands'
  * le tour (la consigne deviendrait fausse dans l'autre sens).
  */
 describe('`ask` clôt le tour : tout ce qu’il faut voir va dans le même message', () => {
-  const prompt = buildChatPilotagePrompt(CATALOG)
-
-  it('le paragraphe QUESTION A L’UTILISATEUR dit que `ask` clôt le tour', () => {
-    expect(prompt).toMatch(/`ask` CLOT TON TOUR/u)
-    expect(prompt).toMatch(/MEME message/u)
-    expect(prompt).toMatch(/il n'y a pas de suite/u)
+  // Le chemin courant : outils directs servis, `ask` reste en texte et garde sa description.
+  const prompt = buildChatPilotagePrompt(CATALOG, {
+    outilsDirects: CATALOG.filter((c) => c.name !== 'ask' && c.name !== 'orchestrate').map(
+      (c) => c.name
+    )
   })
 
-  it('la règle « après une commande tu peux continuer » nomme l’exception', () => {
-    expect(prompt).toMatch(/tu peux continuer — SAUF après `ask`/u)
+  // Le paragraphe QUESTION A L'UTILISATEUR a quitté la consigne (revue règle par règle,
+  // 2026-11-06) : il redisait la description de `ask`, servie dans la liste des commandes.
+  it('la consigne du chat sert la description de `ask`, qui dit qu’elle clôt le tour', () => {
+    expect(prompt).toMatch(/- ask\([^)]*\) : [^\n]*`ask` CLOT TON TOUR/u)
+    expect(prompt).toMatch(/- ask\([^)]*\) : [^\n]*MEME message/u)
+  })
+
+  it('aucune règle ne dit plus qu’on reprend la main après une commande sans exclure `ask`', () => {
+    expect(prompt).not.toMatch(/tu peux continuer(?! — SAUF après `ask`)/u)
   })
 
   it('la description de la commande `ask` le dit aussi, au moment de l’appeler', () => {

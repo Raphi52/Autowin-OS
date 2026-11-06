@@ -63,16 +63,17 @@ describe('consigne du chat — commandes déjà servies en outils directs', () =
 
     it('avec outils directs : les règles pointent vers les outils du modèle', () => {
       expect(court).toContain('Oui → correction ponctuelle : `Edit` puis `verify`')
-      expect(court).toContain('faisable avec `Edit` et `verify`')
-      expect(court).toContain('les commandes de lecture — Read, Grep, Glob —')
       expect(court).toContain('Les fichiers passent par tes propres outils')
-      expect(court).toMatch(/PÉRIMÈTRE D'ÉCRITURE — `Edit` et `Write` acceptent un chemin ABSOLU/u)
-      expect(court).toContain("sans avoir TENTÉ l'édition")
+      // Retirés avec leurs règles (revue 2026-11-06) : `Edit` et `Write` écrivent un chemin absolu
+      // de fait, et lire avant de répondre est tenu par les relances de fin de tour.
+      expect(court).not.toContain("PÉRIMÈTRE D'ÉCRITURE")
     })
 
-    it('avec outils directs : la règle 1 bis part, `Edit` ne vérifie rien après une édition', () => {
+    // « Face à un blocage — relis avant d'écrire » part avec son « 1 bis » (revue 2026-11-06) :
+    // `Edit` refuse une édition sans lecture préalable et ne vérifie rien après.
+    it('avec outils directs : le bloc « face à un blocage » et sa règle 1 bis partent', () => {
       expect(court).not.toContain('1 bis.')
-      expect(court).toContain('1. CHERCHE')
+      expect(court).not.toContain('FACE A UN BLOCAGE')
     })
 
     it('sans outils directs, le texte reste le seul chemin : tout est gardé', () => {
@@ -80,7 +81,7 @@ describe('consigne du chat — commandes déjà servies en outils directs', () =
       expect(complet).toContain('Oui → correction ponctuelle : `edit_file` puis `verify`')
       expect(complet).toContain('1 bis. `edit_file`')
       expect(complet).toMatch(/création d[’']un fichier PAR `edit_file`/u)
-      expect(complet).toContain('list_files, read_file, find_in_files')
+      expect(complet).toContain('1. CHERCHE')
     })
   })
 

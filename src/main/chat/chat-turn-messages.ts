@@ -640,9 +640,19 @@ function demandeUnCompte(texte: string): boolean {
     // « le TOTAL de fichiers » demande un compte aussi surement que « combien ». Manquant
     // jusqu'au 2026-08-26 : la question passait au travers du garde, et un chiffre devine
     // pouvait sortir sans qu'aucune lecture ne l'etaye.
-    /\btotal\b/.test(q)
+    /\btotal\b/.test(q) ||
+    // L'EXISTENCE d'un fichier ou d'un dossier (2026-11-06) : la consigne du chat ne le dit plus,
+    // cette garde le tient seule. Le mot fichier/dossier est exigé : « il existe une meilleure
+    // manière ? » ne demande aucune lecture.
+    EXISTENCE_D_UN_FICHIER.test(q)
   )
 }
+
+const OBJET_DE_FICHIER = String.raw`(?:fichiers?|dossiers?|r[ée]pertoires?|files?|folders?|director(?:y|ies))`
+const VERBE_EXISTER = String.raw`(?:existe(?:nt)?|exists?)`
+const EXISTENCE_D_UN_FICHIER = new RegExp(
+  String.raw`\b${OBJET_DE_FICHIER}\b[^?!\n]{0,80}\b${VERBE_EXISTER}\b|\b${VERBE_EXISTER}\b[^?!\n]{0,40}\b${OBJET_DE_FICHIER}\b`
+)
 
 /** Une ligne plus courte ne se retire jamais : 3-4 mots repris par hasard restent SA demande. */
 const MOTS_MIN_LIGNE_RECOLLEE = 5
@@ -731,7 +741,8 @@ export function exigeUnChiffreVerifie(
  * allé « vérifier ses chiffres » — un Glob de 25 s en délai dépassé, puis 2 minutes de lectures.
  */
 export const RELANCE_CHIFFRE_NON_VERIFIE =
-  'SYSTÈME: la demande de l’utilisateur réclame un compte (combien, nombre, liste, total…) et ' +
+  'SYSTÈME: la demande de l’utilisateur réclame un compte ou un constat (combien, nombre, liste, ' +
+  'total, existence d’un fichier…) et ' +
   'tu n’as appelé AUCUNE commande de lecture dans ce tour. Sans lecture, ta réponse ne peut être ' +
   'qu’une supposition : un chiffre deviné, une vérification annoncée mais pas faite, ou un « je ne ' +
   'peux pas le savoir ». Appelle MAINTENANT `Glob` (ou `Grep`, `Read`) sur ce ' +

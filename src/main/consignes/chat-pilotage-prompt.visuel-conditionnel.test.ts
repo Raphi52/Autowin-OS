@@ -30,20 +30,13 @@ describe('regles visuelles conditionnelles', () => {
   })
 
   it('garde dans le bloc extrait chacune des regles deplacees', () => {
-    for (const regle of [
-      'MAQUETTE MONTRÉE = MAQUETTE TENUE',
-      'PREUVE VISUELLE FRONT',
-      'OBSERVE A LA TAILLE',
-      'BISSECTION VISUELLE'
-    ]) {
+    for (const regle of ['MAQUETTE MONTRÉE = MAQUETTE TENUE', 'PREUVE VISUELLE FRONT']) {
       expect(REGLES_VISUELLES).toContain(regle)
     }
     // kaizen : les regles de l'ecran de l'utilisateur ont quitte le bloc CONDITIONNEL pour
     // un bloc servi a chaque tour — elles ne sont pas perdues, elles sont ailleurs.
-    for (const regle of [
-      "ECRAN DE L'UTILISATEUR = SON ESPACE",
-      'ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR'
-    ]) {
+    // « Erreur du bureau caché » a quitté ce bloc (revue 2026-11-06) : description de l'outil.
+    for (const regle of ["ECRAN DE L'UTILISATEUR = SON ESPACE"]) {
       expect(REGLES_VISUELLES).not.toContain(regle)
       expect(REGLES_ECRAN_UTILISATEUR).toContain(regle)
     }

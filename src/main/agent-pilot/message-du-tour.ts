@@ -22,6 +22,7 @@ import {
   skillNommeeSansBarre
 } from '../skills/skill-pipeline'
 import type { LectureRetenue } from './lectures-du-tour'
+import { blocRelanceSansCible } from './relance-sans-cible'
 
 export type MessageDuTour = {
   /** /draft en cours : le choix passe par les boutons du bloc, jamais par `ask`. */
@@ -210,6 +211,9 @@ export function messageDuTour(entree: {
       name: 'lectureRetenue',
       text: consigneDeLectureRetenue(lectureRetenue.retenue, lectureRetenue.ecartee)
     })
+  // « go », « ok » : la suite désignée est jointe par le code (relance-sans-cible.ts).
+  const relanceSansCible = blocRelanceSansCible(history)
+  if (relanceSansCible) blocsDuTour.push({ name: 'relanceSansCible', text: relanceSansCible })
   // Ce qui vient detre pousse devient la reference du prochain tour de CETTE conversation.
   dernierEtatPousse.set(cleEtat, snapshot)
   const nomsDuTour = new Map(blocsDuTour.map((bloc) => [bloc.text, bloc.name]))

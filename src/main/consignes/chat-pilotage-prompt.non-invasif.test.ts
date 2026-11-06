@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { REGLES_ECRAN_UTILISATEUR } from './chat-pilotage-prompt'
+import { CATALOG } from '../commands/commands'
 
 /**
  * DEFAUT VECU (tour c14c2d28-f864-4ca5-ba3f-3dfe24e41d47, 2026-09-13) : le chat a lance
@@ -26,19 +27,20 @@ describe('pilotage non invasif par defaut', () => {
   })
 
   // kaizen, tour a3691bd9-88b8-4b86-bd0d-b21c34bae8f2 : un crash n'autorise plus la bascule.
-  it('traite un code non nul du bureau cache comme une erreur a corriger, pas un motif de bascule', () => {
+  // « Erreur du bureau caché = erreur du tour » a quitté ce bloc (revue 2026-11-06) : les codes
+  // d'échec sont dans la description de `bureau_cache_lancer`.
+  it('les outils dédiés du bureau caché passent avant les commandes recopiées', () => {
     const prompt = REGLES_ECRAN_UTILISATEUR
-    expect(prompt).toContain('ERREUR DU BUREAU CACHE = ERREUR DE TON TOUR')
-    // Code 2 du lanceur = app arrêtée AVANT sa fenêtre (instance unique, plantage).
-    expect(prompt).toMatch(/2 = l'app s'est arretee avant sa fenetre/)
     // scout n°4 : les outils dédiés passent AVANT les commandes recopiées.
     for (const outil of ['bureau_cache_lancer', 'bureau_cache_observer', 'bureau_cache_agir'])
       expect(prompt.indexOf(outil), outil).toBeGreaterThan(-1)
     expect(prompt.indexOf('bureau_cache_lancer')).toBeLessThan(
       prompt.indexOf('scripts/hdesk-lancer.ps1')
     )
-    expect(prompt).toContain('journalWindows')
     expect(prompt).not.toContain('pid disparu')
+    // Les codes d'échec du lanceur vivent dans la description de l'outil, servie à chaque tour.
+    const lancer = CATALOG.find((c) => c.name === 'bureau_cache_lancer')?.description ?? ''
+    expect(lancer).toMatch(/Codes d’échec : 2 = arrêtée avant sa fenêtre/u)
   })
 
   // kaizen, tour 78a0d7d3-6a84-4d86-a3a7-fd1b5cc1393f : ouvrir une page / taper un code

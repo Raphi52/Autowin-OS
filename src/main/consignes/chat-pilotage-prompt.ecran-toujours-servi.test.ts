@@ -22,13 +22,14 @@ describe("regles de l'ecran de l'utilisateur servies a chaque tour (conv-835)", 
     expect(tourTouchantAuVisuel(MESSAGE_DU_TOUR)).toBe(false)
   })
 
-  it('sert quand meme le bloc ecran, et dit comment nommer le bureau cache du fil', () => {
+  // Le nom du bureau (« chat-<id du fil> ») a quitté ce bloc (revue 2026-11-06, doublon) : les
+  // outils `bureau_cache_*` le fixent eux-mêmes, et un tour visuel reçoit l'identifiant réel du fil.
+  it('sert quand meme le bloc ecran, et dit que les outils fixent le bureau du fil', () => {
     const [ecran, visuel] = blocsSystemeEcran(MESSAGE_DU_TOUR, false, 'conv-835')
     expect(ecran.name).toBe('ecranUtilisateur')
     expect(ecran.text).toContain("ECRAN DE L'UTILISATEUR = SON ESPACE")
     expect(ecran.text).toContain("ORDRE : d'abord le bureau cache")
-    expect(ecran.text).toContain('chat-<id du fil>')
-    expect(ecran.text).toContain('activeConversationId')
+    expect(ecran.text).toContain('le fil et ton identifiant de bureau sont fixes pour toi')
     expect(visuel).toEqual({ name: 'visuel', text: '' })
   })
 

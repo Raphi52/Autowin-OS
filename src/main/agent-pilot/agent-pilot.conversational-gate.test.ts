@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from '../consignes/chat-pilotage-prompt'
 import { CONSTITUTION } from '../consignes/constitution'
+import { invokedSkillId, skillNommeeSansBarre } from '../skills/skill-pipeline'
 
 /**
  * Contrat du GATE CONVERSATIONNEL de `chat()`.
@@ -97,11 +98,12 @@ describe('chat() — gate conversationnel', () => {
   })
 
   it('ne lance pas build quand aucun livrable ni cible ne sont nommes', () => {
-    // Entrée discriminante : « fais un truc parfait ». Sans cette garde, le modèle peut inventer
-    // un livrable et lancer BUILD alors qu'aucun changement vérifiable n'a été demandé.
-    expect(prompt).toContain('AUCUN livrable ni aucune cible')
-    expect(prompt).toContain('ne lance PAS `orchestrate`')
-    expect(prompt).toContain('demande un choix concret')
+    // Entrée discriminante : « fais un truc parfait ». La règle « DEMANDE SANS OBJET → `ask` » a
+    // quitté la consigne (revue 2026-11-06) : elle contredisait la RÈGLE PREMIÈRE. Une demande
+    // ouverte se diverge dans la réponse, et le doute tranche pour répondre, pas pour orchestrer.
+    expect(prompt).not.toContain('DEMANDE SANS OBJET')
+    expect(prompt).toMatch(/En doute entre répondre et orchestrer : RÉPONDS/u)
+    expect(prompt).toContain("ne se renvoie JAMAIS à l'utilisateur")
   })
 
   it('n’exige jamais de renvoyer la question a l’utilisateur (divergence preservee)', () => {
@@ -124,20 +126,16 @@ describe('chat() — gate conversationnel', () => {
  * faire, et rien ne distinguait un livrable TEXTE d'une demande d'action.
  */
 describe('chat() — skill nommée et demande de texte', () => {
-  it('traite un nom de skill en tête de message comme une INVOCATION', () => {
-    expect(prompt).toContain('SKILL NOMMÉE = SKILL INVOQUÉE')
-    expect(prompt).toContain('avec ou sans barre oblique')
-    expect(prompt).toMatch(/skill d'ANALYSE[^`]*se rend dans le fil/)
+  // « SKILL NOMMÉE = SKILL INVOQUÉE » a quitté la consigne (revue 2026-11-06) : le code charge
+  // lui-même le corps d'une skill nommée en tête, avec ou sans barre oblique.
+  it('traite un nom de skill en tête de message comme une INVOCATION — tenu par le code', () => {
+    expect(skillNommeeSansBarre('kaizen pourquoi le tri casse')).toBe('kaizen')
+    expect(invokedSkillId('/arena compare les deux tris')).toBe('arena')
+    expect(prompt).not.toContain('SKILL NOMMÉE = SKILL INVOQUÉE')
   })
 
   it('exclut le pipeline quand le livrable demandé est du TEXTE', () => {
     expect(prompt).toMatch(/DEMANDE DE TEXTE[^.]*se rédige dans ta réponse, ZÉRO commande/u)
     expect(prompt).toContain('même si ce texte parle de lancer un run')
-  })
-
-  it('place ces deux règles APRÈS la RÈGLE PREMIÈRE dont elles précisent le tri', () => {
-    expect(prompt.indexOf('RÈGLE PREMIÈRE')).toBeLessThan(
-      prompt.indexOf('SKILL NOMMÉE = SKILL INVOQUÉE')
-    )
   })
 })

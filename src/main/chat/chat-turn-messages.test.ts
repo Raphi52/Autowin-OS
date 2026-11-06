@@ -375,6 +375,26 @@ describe('exigeUnChiffreVerifie — la relance mécanique du chiffre deviné', (
     expect(exigeUnChiffreVerifie(Q, '   ', false)).toBe(false)
   })
 
+  // L'EXISTENCE d'un fichier se lit aussi (2026-11-06) : la règle en prose qui le disait a quitté la
+  // consigne du chat, cette garde la tient seule.
+  it('mord sur l’EXISTENCE d’un fichier ou d’un dossier demandée sans lecture', () => {
+    const oui = 'Oui, il est là.'
+    expect(exigeUnChiffreVerifie('Est-ce que le fichier AGENTS.md existe ?', oui, false)).toBe(true)
+    expect(exigeUnChiffreVerifie('existe-t-il un dossier skills/look ?', oui, false)).toBe(true)
+    expect(exigeUnChiffreVerifie('Does the file src/main/x.ts exist?', oui, false)).toBe(true)
+    expect(exigeUnChiffreVerifie('Le fichier AGENTS.md existe ?', oui, true)).toBe(false)
+  })
+
+  it('ne mord PAS sur « il existe » sans fichier ni dossier (jumeau accepté)', () => {
+    expect(
+      exigeUnChiffreVerifie(
+        'Il existe une meilleure manière de faire ça ?',
+        'Oui : un index.',
+        false
+      )
+    ).toBe(false)
+  })
+
   // Cas RÉEL (2026-09-30 → 2026-10-12) : le gabarit des tâches « Assistant mails
   // Outlook » et « Assistant Teams » finit par « <le compte rendu : …> ». La garde y lisait une
   // demande de compte et relançait chaque tri de notification conclu sans lecture — 3 fois dans

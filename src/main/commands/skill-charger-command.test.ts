@@ -65,11 +65,13 @@ describe('skill_charger — le modèle charge une skill qu’il a choisie', () =
     expect(outilsDuChat(CATALOG)).toContain('skill_charger')
   })
 
-  it('la consigne du chat dit QUAND la charger de lui-même', () => {
-    const prompt = buildChatPilotagePrompt([])
-    expect(prompt).toContain('SKILL CHOISIE PAR TOI')
-    expect(prompt).toContain('skill_charger')
-    expect(prompt).toContain('sans que l’utilisateur la nomme')
+  // La règle « SKILL CHOISIE PAR TOI » a quitté la consigne du chat (revue 2026-11-06) : elle
+  // redisait cette description, servie à chaque tour avec l'outil.
+  it('la description de l’outil dit QUAND la charger de lui-même', () => {
+    const description = CATALOG.find((c) => c.name === 'skill_charger')?.description ?? ''
+    expect(description).toContain('sans que l’utilisateur l’ait tapée')
+    expect(description).toContain('dès que sa demande correspond au déclencheur')
+    expect(buildChatPilotagePrompt([])).not.toContain('SKILL CHOISIE PAR TOI')
   })
 
   /*

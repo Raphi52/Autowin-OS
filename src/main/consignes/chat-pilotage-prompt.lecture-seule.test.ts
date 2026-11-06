@@ -8,10 +8,12 @@ import { CONSTITUTION } from './constitution'
  * retirées quand le catalogue ne porte QUE des commandes `readOnlyHint` (mesure du 2026-09-23 :
  * ≈ 10 500 caractères payés à chaque question pour des gestes impossibles dans ce tour).
  */
+// Revue règle par règle (2026-11-06) : la vérification ciblée avant commit, l'orchestration
+// unique, la consigne de phase détaillée, la demande sans objet, le périmètre de lecture, la
+// « règle absolue » de lecture et le conseil sur un système maison ont quitté la consigne pour
+// tous les tours ; ces listes ne gardent que ce qui reste.
 const SECTIONS_RETIREES = [
-  "VERIFICATION CIBLEE AVANT L'ACTE FINAL",
   'Oui → correction ponctuelle',
-  'UNE SEULE orchestration par TOUR',
   "PÉRIMÈTRE D'ÉCRITURE",
   "TU VIS DANS L'APP QUE TU PILOTES",
   'tu le FAIS toi-meme avec `restart_app`',
@@ -20,19 +22,15 @@ const SECTIONS_RETIREES = [
   'MÉMOIRE : retiens avec `remember`',
   'INFORMATIF SPONTANÉ',
   'POUR LES AUTRES, c’est un CANDIDAT',
-  'PHASE : quand tu lances',
-  'DEMANDE SANS OBJET'
+  "PHASE d'`orchestrate`"
 ]
 
 /** Ce qui sert à une simple question : ne doit JAMAIS disparaître. */
 const SECTIONS_GARDEES = [
   'RÈGLE PREMIÈRE',
-  'PÉRIMÈTRE DE LECTURE',
-  'RÈGLE ABSOLUE',
   'EXPRESSION VISUELLE',
   'NOTES PROCHES',
-  'à préférer à une exploration du repo quand la question porte sur un acquis',
-  'AVANT DE CONSEILLER SUR UN SYSTÈME MAISON'
+  'à préférer à une exploration du repo quand la question porte sur un acquis'
 ]
 
 const lecture = CATALOG.filter((c) => c.annotations?.readOnlyHint)

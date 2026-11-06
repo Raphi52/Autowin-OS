@@ -1153,13 +1153,15 @@ describe('câblage — le prompt enseigne toutes les formes, dont le repli sessi
   it('le prompt dit QUAND relire avec brain_query, pas seulement qu’il existe', () => {
     // « Un acquis se cherche au Brain avant le dépôt » vit dans la description de `brain_query`,
     // recopiée dans la liste texte et servie telle quelle en outil direct ; la consigne garde le
-    // cas du conseil sur un système maison.
+    // NOTES PROCHES pour l'angle que les notes du tour ne couvrent pas. « Avant de conseiller sur un
+    // système maison » a quitté la consigne (revue 2026-11-06) : notes proches et mémoire de tête
+    // arrivent à chaque tour.
     const description = CATALOG.find((c) => c.name === 'brain_query')!.description
     expect(description).toMatch(
       /à préférer à une exploration du repo quand la question porte sur un acquis/u
     )
     expect(buildChatPilotagePrompt(CATALOG)).toContain(description)
-    expect(prompt()).toMatch(/AVANT DE CONSEILLER SUR UN SYSTÈME MAISON/)
+    expect(prompt()).toMatch(/Pas de bloc ne veut pas dire Brain vide : `brain_query` reste là/u)
   })
 })
 

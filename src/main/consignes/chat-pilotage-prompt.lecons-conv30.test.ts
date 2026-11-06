@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildChatPilotagePrompt } from './chat-pilotage-prompt'
+import { ORCHESTRATION_ALREADY_ISSUED_REFUSAL } from '../../shared/orchestration-outcome'
 import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
 
 /**
@@ -17,30 +20,26 @@ import { sourceDuBus } from '../commands/source-du-bus.test-helpers'
  * 3. `desktop_observe` EST 1-BASE. `display: 0` a ete emis, refuse, et l'iteration perdue ; la
  *    description de la commande ne disait pas ou commencait la numerotation.
  *
- * Entrees qui doivent faire rougir : une des trois clauses supprimee ou vidée de son interdit.
+ * Revue règle par règle (2026-11-06) : la clause 1 a quitté la consigne — elle contredisait
+ * « Symptôme nu » de la constitution (la localisation est le travail de l'agent), et aucune plainte
+ * « j'ai pas demandé » depuis le 16/10. La clause 2 est tenue par le code : le 2e `orchestrate` d'un
+ * tour est refusé, et le refus le dit lui-même au modèle.
+ *
+ * Entrees qui doivent faire rougir : le refus de la 2e orchestration retiré, ou la clause 3 retirée.
  */
 describe('chat-pilotage-prompt — lecons mesurees de conv-30', () => {
-  it('interdit de MODIFIER quoi que ce soit tant que l’utilisateur n’a pas nomme sa cible', () => {
-    const prompt = buildChatPilotagePrompt([])
-    expect(prompt).toMatch(/TANT QU'IL N'A PAS NOMME SA CIBLE/u)
-    // L'interdit doit porter sur la MUTATION, pas seulement sur le texte des options.
-    expect(prompt).toMatch(/tu ne MODIFIES rien/u)
-    expect(prompt).toMatch(/renommage/iu)
+  it('la clause « sur un symptôme, ne modifie rien » ne contredit plus la constitution', () => {
+    expect(buildChatPilotagePrompt([])).not.toMatch(/TANT QU'IL N'A PAS NOMME SA CIBLE/u)
   })
 
-  it('rend opposable la reserve que le modele s’est imposee lui-meme', () => {
-    const prompt = buildChatPilotagePrompt([])
-    expect(prompt).toMatch(/je ne le passe pas en force/u)
-    expect(prompt).toMatch(/t'ENGAGE/u)
-    // Une relance vague ne vaut pas accord — c'est exactement ce qui a derape.
-    expect(prompt).toMatch(/n'est PAS cet accord/u)
-  })
-
-  it('annonce le plafond d’UNE orchestration par tour, surcharge serveur comprise', () => {
-    const prompt = buildChatPilotagePrompt([])
-    expect(prompt).toMatch(/UNE SEULE orchestration par TOUR/u)
-    expect(prompt).toMatch(/529/u)
-    expect(prompt).toMatch(/tu ne peux PAS la relancer dans ce meme tour/u)
+  it('le plafond d’UNE orchestration par tour est tenu par le refus du code', () => {
+    expect(ORCHESTRATION_ALREADY_ISSUED_REFUSAL).toMatch(/deja ete lancee dans ce tour/u)
+    expect(ORCHESTRATION_ALREADY_ISSUED_REFUSAL).toMatch(/nouveau message utilisateur/u)
+    const source = readFileSync(
+      join(__dirname, '../agent-pilot/execution-des-commandes.ts'),
+      'utf8'
+    )
+    expect(source).toMatch(/const refusal = ORCHESTRATION_ALREADY_ISSUED_REFUSAL/u)
   })
 
   it('dit dans la description de desktop_observe que les ecrans commencent a 1', () => {

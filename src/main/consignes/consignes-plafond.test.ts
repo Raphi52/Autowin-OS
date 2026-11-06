@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { systemeDuTour } from '../agent-pilot/systeme-du-tour'
+import { blocsSystemeEcran } from './chat-pilotage-prompt'
 import { outilsDuChat } from '../chat/chat-mcp'
 import { CATALOG } from '../commands/commands'
 import { PHASE_BRIEFS, phaseBrief } from './phase-briefs'
@@ -44,15 +45,27 @@ import type { PipelinePhase } from '../skills/skill-pipeline'
 // de la constitution et règles déjà tenues par le code retirées) : 33 304 car. ; lot 3 (mode
 // d'emploi de la mémoire et du plan de lots passé dans la description de leurs outils) : 29 108 ;
 // lot 4 (détail des formats d'affichage — JSON des blocs aw-*, page interactive, types mermaid —
-// passé dans skills/mise-en-forme/SKILL.md, chargé par `skill_charger`) : 24 061.
-const PLAFOND_PILOTAGE = 24_500
+// passé dans skills/mise-en-forme/SKILL.md, chargé par `skill_charger`) : 24 061 ; lot 6 (revue
+// règle par règle : règles tenues par le code, une description d'outil ou la constitution, ou dont
+// le défaut ne revient plus, retirées ; deux garde-fous ajoutés) : 13 929.
+// fix-ok: mesure du texte envoyé par systemeDuTour après le lot 6 — pilotage 13 929, style 5 240,
+// écran 4 246, visuel 2 847 ; constitution, descriptions d'outils et consignes d'étape inchangées.
+const PLAFOND_PILOTAGE = 14_000
 // Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 18 207 car. ; lot 2 : 18 484
 // (cinq parts que seules les copies portaient, reportées en une phrase chacune, payées par des
 // redites internes retirées). Marge : 16 car. — un report de plus se paie par un retrait ici même.
 const PLAFOND_CONSTITUTION = 18_500
 // Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 9 193 car. ; lot 2 : 7 275 car.
 // « Dire vrai » y reste en une phrase : les deux appels du juge reçoivent ce ton sans la constitution.
-const PLAFOND_STYLE = 7_500
+// Lot 6 : 5 240 — le chat ne reçoit plus que sa part du ton (STYLE_TON reste entier pour les
+// étapes de run), et la relance « go » tient en une phrase, sa cible étant jointe par le code.
+const PLAFOND_STYLE = 5_500
+// Plafond (lot 6, 2026-11-06) — on ne le monte JAMAIS. Le bloc de l'écran de l'utilisateur, servi
+// à chaque tour : 5 046 car. avant le lot 6, 4 246 après.
+const PLAFOND_ECRAN = 4_500
+// Plafond (lot 6, 2026-11-06) — on ne le monte JAMAIS. Le bloc visuel, servi aux seuls tours qui
+// touchent à l'interface (41 % des appels) : 4 887 car. avant le lot 6, 2 847 après.
+const PLAFOND_VISUEL = 3_000
 // Plafond (2026-11-06) — on ne le monte JAMAIS. Mesure : 39 158 car. (56 outils :
 // 23 988 de descriptions, 15 170 de descriptions d'arguments). Lot 3 : 39 422 — la consigne y a
 // versé le mode d'emploi de `remember` et `plan_de_lots` (+255 ici, −4 196 dans la consigne).
@@ -154,7 +167,37 @@ describe('plafond des consignes envoyées au modèle (conv-1649)', () => {
   })
 
   it('bloc style', () => {
-    sousLePlafond('Bloc style', bloc('style'), PLAFOND_STYLE, 'src/main/consignes/response-style.ts')
+    sousLePlafond(
+      'Bloc style',
+      bloc('style'),
+      PLAFOND_STYLE,
+      'src/main/consignes/response-style.ts'
+    )
+  })
+
+  it('bloc de l’écran de l’utilisateur (servi à chaque tour)', () => {
+    sousLePlafond(
+      'Bloc écran',
+      bloc('ecranUtilisateur'),
+      PLAFOND_ECRAN,
+      'src/main/consignes/chat-pilotage-prompt.ts (REGLES_ECRAN_UTILISATEUR)'
+    )
+  })
+
+  it('bloc visuel (tours qui touchent à l’interface)', () => {
+    // « maquette » ouvre ce bloc conditionnel : `blocsSystemeEcran` est la fonction que
+    // `systemeDuTour` appelle telle quelle.
+    const visuel =
+      blocsSystemeEcran('fais une maquette du menu', false, 'conv-plafond').find(
+        (b) => b.name === 'visuel'
+      )?.text.length ?? 0
+    expect(visuel, 'bloc « visuel » vide : la mesure est aveugle').toBeGreaterThan(0)
+    sousLePlafond(
+      'Bloc visuel',
+      visuel,
+      PLAFOND_VISUEL,
+      'src/main/consignes/chat-pilotage-prompt.ts (REGLES_VISUELLES)'
+    )
   })
 
   it('descriptions des commandes servies en outils directs, arguments compris', () => {

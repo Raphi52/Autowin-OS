@@ -39,9 +39,9 @@ describe('chat HTML rendering contract', () => {
     // Le detail des maquettes (2026-10-28) ne part qu'aux tours visuels : il n'est plus
     // dans le corps, il est entier dans le bloc visuel, et une demande de maquette ouvre ce bloc.
     expect(prompt).not.toContain('html-render-apercu')
-    expect(REGLES_VISUELLES).toContain('LARGEUR DU BLOC')
-    expect(REGLES_VISUELLES).toMatch(/jamais une scène de taille fixe réduite par zoom/u)
-    expect(REGLES_VISUELLES).toContain('node scripts/html-render-apercu.mjs')
+    // Le détail des maquettes (html-render-apercu) a quitté le bloc visuel (revue 2026-11-06) :
+    // aucune plainte sur un bloc depuis le 10/10.
+    expect(REGLES_VISUELLES).not.toContain('LARGEUR DU BLOC')
     expect(tourTouchantAuVisuel('montre-moi six variantes de la maquette du menu')).toBe(true)
     expect(tourTouchantAuVisuel('/draft la page des réglages')).toBe(true)
   })

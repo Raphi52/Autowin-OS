@@ -595,20 +595,22 @@ describe('MAJEUR cycle 2 — « plus » est un quantificateur, pas une négation
 describe('le prompt enseigne le choix de phase, sans pousser vers l’orchestration', () => {
   const prompt = buildChatPilotagePrompt([])
 
-  it('les six phases sont décrites avec leur cas d’emploi', () => {
+  // Revue règle par règle (2026-11-06) : le mode d'emploi détaillé (exemples par phase) a quitté la
+  // consigne — 8 phases nommées sur 94 `orchestrate` depuis le 16/10 — ; restent les valeurs.
+  it('les six phases sont nommées, chacune avec son rôle en un mot', () => {
     for (const phase of ['scout', 'frame', 'terrain', 'build', 'clean', 'judge']) {
       expect(prompt).toContain(`\`${phase}\``)
     }
-    expect(prompt).toMatch(/aucune tache|aucune t.che/i)
-    expect(prompt).toContain('CADRER')
+    expect(prompt).toMatch(/`scout` \(chercher quoi faire\)/u)
+    expect(prompt).toMatch(/`frame` \(cadrer\)/u)
   })
 
   it('il dit d’OMETTRE la phase en cas de doute (pas de choix forcé)', () => {
-    expect(prompt).toMatch(/omets `phase` si tu n.es pas s.r/i)
+    expect(prompt).toMatch(/omets-la en doute/i)
   })
 
-  it('il avertit que `judge` ne joue AUCUNE phase d’exécution', () => {
-    expect(prompt).toMatch(/ne joue aucune phase d.ex.cution/i)
+  it('il réserve `judge` à un livrable qui existe déjà', () => {
+    expect(prompt).toMatch(/`judge` \(auditer un livrable existant\)/u)
   })
 
   it('la garde anti-biais reste INTACTE — ce bloc ne doit pas pousser à orchestrer', () => {
