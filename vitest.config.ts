@@ -98,8 +98,6 @@ const EXCLUSIONS = [
   // par une autre conversation pendant la passe. Meme panne que `.verif-index/` juste au-dessus.
   '.autowin-tmp/**',
   '**/.autowin-tmp/**',
-  // Harnais Node autonome, couvert par cdp-verdict-collection.test.mjs.
-  'scripts/cdp-verdict.test.mjs',
   /**
    * Tests `*.live.test.*` : ils consomment un VRAI provider (coût réel, réseau, authentification).
    * Ils répondent à une question qu'aucun mock ne tranche — « le modèle produit-il vraiment ce que

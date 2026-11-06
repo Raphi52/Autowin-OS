@@ -51,10 +51,14 @@ describe('sondes manuelles', () => {
      * deterministe. Son marqueur est donc RETIRE en connaissance de cause, ce qui est exactement la
      * porte prevue : « pour l'y mettre, il faut d'abord retirer le marqueur ».
      *
+     * UNE, ET NON PLUS TROIS — le 2026-11-06, cdp-flux-isole et cdp-monitor-10 ont ete SUPPRIMEES
+     * avec les scripts que plus rien n'appelait (demande de l'utilisateur) : la population a
+     * change, aucune sonde n'a ete branchee. Reste cdp-skill-node-brain-proof.
+     *
      * Ce compte n'est pas un objectif a tenir : c'est un garde-fou contre l'echantillon VIDE. Il
-     * descend quand une sonde est reellement affranchie, jamais pour faire taire un rouge.
+     * descend quand une sonde est reellement affranchie ou retiree, jamais pour faire taire un rouge.
      */
-    expect(sondesManuelles().length).toBeGreaterThanOrEqual(3)
+    expect(sondesManuelles().length).toBeGreaterThanOrEqual(1)
   })
 
   /*

@@ -5,7 +5,8 @@ description: >-
   « fais le ménage des données », « .autowin-data est trop gros »). Mesure ce qu'occupe
   `.autowin-data`, repère les DÉCHETS prouvés — satellites de conversations supprimées, sorties de
   runs anciennes, fichiers temporaires à la racine — et les DÉPLACE en corbeille datée
-  (réversible). Ne supprime jamais définitivement sans demande explicite de l'utilisateur.
+  (réversible). Signale aussi les SCRIPTS INUTILISÉS de `scripts/` (ni appelés, ni lancés).
+  Ne supprime jamais définitivement sans demande explicite de l'utilisateur.
   Ne pas utiliser pour le code mort de `src/` (→ `residus`) ni pour le travail non publié ou une
   copie de travail modifiée (→ `git`).
 ---
@@ -90,6 +91,19 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
    - **Branches `autowin/recovery/*` et remises de côté (`git stash list`)** : les COMPTER et les
      dater dans le bilan, rien de plus. Leur tri relève de `/git`.
    - **Chemins périmés** : `git worktree prune --dry-run` ; s'il liste quelque chose, le rapporter.
+2 ter. **Scripts inutilisés du dépôt — signaler, jamais déplacer.** Lancer, depuis le dépôt Autowin :
+   `node --no-warnings scripts/gc-scripts-inutilises.mjs` (30 s environ, lecture seule). Un script y
+   est inutilisé s'il n'est appelé par rien de vivant (npm, `src/`, `tests/`, hooks, skills, doc,
+   profils, tâches planifiées, test lancé par npm, script gardé ; une ligne de commentaire qui le
+   nomme n'est pas un appel), lancé par au plus 2 sessions d'agent en 30 jours et par
+   aucune depuis 7 jours, créé il y a plus de 14 jours et sans modification en cours. Mesuré le
+   2026-11-06 (conv-1657) : 53 scripts sur 247, que personne n'avait vus. Reporter dans « À purger »
+   le nombre et la liste de `inutilises`, chacun avec ses `tests` (ils partent avec lui) et
+   `aussiCiteDans` (commentaires et configuration qui le nomment, à retirer avec lui). Ces fichiers sont suivis par git dans un dossier
+   partagé : la passe ne les déplace PAS. La suppression se fait sur demande de l'utilisateur dans ce
+   fil : retirer les fichiers et leurs tests, nettoyer `aussiCiteDans`, puis jouer `npm run typecheck`
+   et les tests touchés. Code de sortie 1 (traces ou dépôt illisibles) → aucun script signalé ce
+   jour-là, et le dire.
 3. **Balayer = déplacer, pas supprimer.** Déplacer chaque candidat vers
    `.autowin-data/gc-corbeille/AAAA-MM-JJ/<chemin d'origine>` (`move_file`, ou `run` d'un `mv`
    unitaire). Écrire à côté `MANIFEST.txt` : chemin d'origine, taille, motif. C'est ce manifeste
@@ -130,7 +144,7 @@ de chaque catégorie), et ce qui est PROPOSÉ à la purge définitive. Rien de c
 .autowin-data : X Go → Y Go (corbeille du jour : Z Mo)
 ## Collecté        (catégorie · nombre · taille · motif)
 ## Purgé           (corbeille · âge · taille — journal gc-purges.jsonl)
-## À purger        (corbeille · âge · taille — attend ton accord)
+## À purger        (corbeille · âge · taille — attend ton accord ; scripts inutilisés · nombre · liste)
 ## À vérifier      (candidats sans preuve de mort suffisante, corbeilles gardées et leur motif)
 ```
 
