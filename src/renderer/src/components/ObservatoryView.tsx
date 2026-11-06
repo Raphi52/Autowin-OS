@@ -161,6 +161,11 @@ export function ObservatoryView({
   const brainRequestGate = useRef(new LatestRequestGate())
   const inventoryRequestGate = useRef(new LatestRequestGate())
   const refreshStartedAt = useRef(0)
+  /** Dernière valeur de `refreshing`, lue par l'effet de chargement sans le relancer. */
+  const refreshingRef = useRef(false)
+  useEffect(() => {
+    refreshingRef.current = refreshing
+  }, [refreshing])
   const liveRefreshTimer = useRef<number | null>(null)
 
   const updateSourceError = useCallback((source: string, message?: string): void => {
@@ -206,17 +211,20 @@ export function ObservatoryView({
     let disposed = false
     if (focus) {
       causalRequestGate.current.begin()
-      // Réinitialisation atomique requise avant le chargement asynchrone d'un focus externe.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTurnFocus(focus)
-      resetConversationFilters()
-      setFocusUnavailable('source')
-      setCausalTracePartial(false)
-      setConversationId('')
-      setTimeline(EMPTY)
-      setSelected(null)
-      setSelectedCall(null)
-      setCompare([])
+      // Réinitialisation atomique requise avant le chargement asynchrone d'un focus externe :
+      // faite en microtâche (avant toute réponse réseau), pas en setState synchrone d'effet.
+      queueMicrotask(() => {
+        if (disposed) return
+        setTurnFocus(focus)
+        resetConversationFilters()
+        setFocusUnavailable('source')
+        setCausalTracePartial(false)
+        setConversationId('')
+        setTimeline(EMPTY)
+        setSelected(null)
+        setSelectedCall(null)
+        setCompare([])
+      })
     }
     void settleObservatorySources({
       conversations: window.api.conversations(),
@@ -259,9 +267,11 @@ export function ObservatoryView({
     const request = brainRequestGate.current.begin()
     if (!active || !conversationId) {
       // Efface explicitement la source de la conversation precedente quand aucun scope n'est actif.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setBrainTraces([])
-      updateSourceError('brainTraces')
+      queueMicrotask(() => {
+        if (!brainRequestGate.current.isCurrent(request)) return
+        setBrainTraces([])
+        updateSourceError('brainTraces')
+      })
       return
     }
     void (window.api.brainTraces?.(conversationId) ?? Promise.resolve([]))
@@ -285,9 +295,11 @@ export function ObservatoryView({
   useEffect(() => {
     const request = inventoryRequestGate.current.begin()
     if (!active || !conversationId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setBrainInventory(null)
-      updateSourceError('brainInventory')
+      queueMicrotask(() => {
+        if (!inventoryRequestGate.current.isCurrent(request)) return
+        setBrainInventory(null)
+        updateSourceError('brainInventory')
+      })
       return
     }
     void (window.api.brainInjectionInventory?.(conversationId) ?? Promise.resolve(null))
@@ -316,10 +328,10 @@ export function ObservatoryView({
     }
     const requestId = promptRequestGate.current.begin()
     // Chargement PROPRE a cette section du rail : `loading` ne couvre que la trace causale.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCallsLoading(true)
     queueMicrotask(() => {
-      if (promptRequestGate.current.isCurrent(requestId)) setPromptCalls([])
+      if (!promptRequestGate.current.isCurrent(requestId)) return
+      setCallsLoading(true)
+      setPromptCalls([])
     })
     void window.api
       .promptCalls(conversationId)
@@ -340,23 +352,29 @@ export function ObservatoryView({
 
   useEffect(() => {
     if (!conversationId) {
-      causalRequestGate.current.begin()
       // Évite d'afficher la timeline de la conversation précédente hors contexte.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+      const idVide = causalRequestGate.current.begin()
+      queueMicrotask(() => {
+        if (!causalRequestGate.current.isCurrent(idVide)) return
+        setTimeline(EMPTY)
+        setSelected(null)
+        setSelectedCall(null)
+        setCompare([])
+        setLoading(false)
+        setRefreshing(false)
+      })
+      return
+    }
+    const requestId = causalRequestGate.current.begin()
+    const etaitEnActualisation = refreshingRef.current
+    queueMicrotask(() => {
+      if (!causalRequestGate.current.isCurrent(requestId)) return
+      setLoading(true)
       setTimeline(EMPTY)
       setSelected(null)
       setSelectedCall(null)
       setCompare([])
-      setLoading(false)
-      setRefreshing(false)
-      return
-    }
-    setLoading(true)
-    setTimeline(EMPTY)
-    setSelected(null)
-    setSelectedCall(null)
-    setCompare([])
-    const requestId = causalRequestGate.current.begin()
+    })
     let requestSucceeded = false
     void window.api
       .causalTrace(conversationId)
@@ -373,7 +391,7 @@ export function ObservatoryView({
         updateSourceError('causalTrace', error instanceof Error ? error.message : String(error))
       })
       .finally(async () => {
-        const remainingBusyTime = refreshing
+        const remainingBusyTime = etaitEnActualisation
           ? Math.max(0, 300 - (Date.now() - refreshStartedAt.current))
           : 0
         if (remainingBusyTime)
@@ -384,9 +402,8 @@ export function ObservatoryView({
           if (requestSucceeded) setLastRefreshedAt(Date.now())
         }
       })
-    // A tab change must not reload or clear Observatory's local state.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, refreshKey, turnFocus])
+    // A tab change must not reload or clear Observatory's local state : `active` n'est donc pas une dépendance.
+  }, [conversationId, refreshKey, turnFocus, updateSourceError])
 
   useEffect(() => {
     if (!conversationId || !window.api.onAppEvent) return
@@ -419,9 +436,15 @@ export function ObservatoryView({
       (call) => call.conversationId === turnFocus.conversationId && call.turnId === turnFocus.turnId
     )
     // État dérivé synchronisé après résolution des deux sources de preuve asynchrones.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setFocusUnavailable(hasCausalProof || hasPromptProof ? null : 'turn')
-    setCausalTracePartial(!hasCausalProof && hasPromptProof)
+    let disposed = false
+    queueMicrotask(() => {
+      if (disposed) return
+      setFocusUnavailable(hasCausalProof || hasPromptProof ? null : 'turn')
+      setCausalTracePartial(!hasCausalProof && hasPromptProof)
+    })
+    return () => {
+      disposed = true
+    }
   }, [conversationId, focusUnavailable, loading, promptCalls, timeline, turnFocus])
 
   const conversationCalls = useMemo(
