@@ -55,6 +55,64 @@ export type {
   WorktreeManagerOptions
 } from './worktree-manager-outils'
 
+/** La sonde d'appartenance d'une copie : `--git-common-dir` et `--show-toplevel` en UN lancement. */
+const ARGS_SONDE_APPARTENANCE = ['rev-parse', '--git-common-dir', '--show-toplevel']
+
+/**
+ * LE VERDICT D'APPARTENANCE, sans aucune E/S : la forme synchrone (`ownershipIssue`) et la forme
+ * asynchrone (`ownershipIssueAsync`) le partagent mot pour mot, seules leurs sondes diffèrent.
+ * Il ne relance JAMAIS git : une sonde ratée est un refus, pas une invitation à resonder.
+ *
+ * 1. IDENTITÉ — la copie appartient-elle bien à CE dépôt de base ? Un worktree légitime partage
+ *    l'object-store de la base : son `--git-common-dir` résout vers le MÊME `.git`. Une copie laissée
+ *    par un autre workspace (le dossier de copies est partagé) a son propre `.git` — écrire dedans
+ *    muterait l'index et le HEAD d'un dépôt tiers, aspirant au passage le travail non commité d'un
+ *    développeur dans un commit `agent <id>` sur un HEAD détaché. Vérification d'IDENTITÉ et non de
+ *    révision : `cat-file -e` ne se déclenche qu'APRÈS le commit, donc trop tard.
+ *
+ * 2. RACINE PROPRE — la copie est-elle SA PROPRE racine de travail, et non un simple dossier DANS le
+ *    dépôt ? MESURE le 2026-08-21 : une copie `agent__command-edit-*` s'est retrouvée SANS fichier
+ *    `.git` (création interrompue, ou balayage partiel). Un répertoire sans `.git` fait remonter git
+ *    dans l'arborescence, et comme la racine des copies vit DANS le dépôt
+ *    (`.autowin-data/autowin-os/worktrees/...`), le dépôt trouvé est l'arbre principal PARTAGÉ. Le
+ *    contrôle d'identité ne peut rien voir : les `--git-common-dir` sont identiques par construction.
+ *    Dégât réel constaté : `switch -C` a fait basculer la branche de l'utilisateur sur
+ *    `autowin/recovery/<agentId>`, puis `add -A` a committé le travail non committé de TROIS sessions
+ *    concurrentes dans un seul commit « travail préservé » (32849a15) — rendant tout push contaminant.
+ *    Le discriminant : pour une copie légitime, `--show-toplevel` rend la copie elle-même ; pour un
+ *    dossier amputé, il rend le dépôt de base.
+ *
+ * 3. Indéterminable (git muet, chemin absent) → refus : le code appelant bloque avant toute écriture.
+ *
+ * Les libellés sont lus par `resume-refusal.ts` : ne pas les reformuler.
+ */
+function verdictAppartenance(
+  path: string,
+  baseCommon: string | undefined,
+  sonde: { code: number; stdout: string }
+): string | undefined {
+  const [commonBrut, topBrut] =
+    sonde.code === 0 ? sonde.stdout.split(String.fromCharCode(10)).map((l) => l.trim()) : []
+  const copyCommon = commonBrut
+    ? isAbsolute(commonBrut)
+      ? commonBrut
+      : resolve(path, commonBrut)
+    : undefined
+  if (baseCommon && copyCommon && canonicalPath(baseCommon) !== canonicalPath(copyCommon)) {
+    return `La copie appartient à un autre dépôt (${copyCommon}) que la base (${baseCommon}) : aucune écriture n’y est faite.`
+  }
+  if (!topBrut) {
+    return `Impossible de prouver la racine de travail de la copie ${path} : aucune écriture n’y est faite.`
+  }
+  const racine = canonicalPath(topBrut)
+  if (racine !== canonicalPath(path)) {
+    return `La copie ${path} n’est pas une racine de travail : git remonte sur ${racine} (arbre partagé) — aucune écriture n’y est faite.`
+  }
+  if (!copyCommon || !baseCommon) {
+    return `Impossible de prouver l’appartenance Git de la copie ${path} : aucune écriture n’y est faite.`
+  }
+  return undefined
+}
 
 /**
  * Moteur worktree "par défaut, sans intervention" (volet B du cockpit worktree).
@@ -391,7 +449,18 @@ export class WorktreeManager {
    */
   gitCommonDir(repo: string): string | undefined {
     if (repo === this.baseRepo && this.baseCommonDir !== undefined) return this.baseCommonDir.valeur
-    const probe = this.tryGitFn(repo, ['rev-parse', '--git-common-dir'])
+    return this.retenirCommonDir(repo, this.tryGitFn(repo, ['rev-parse', '--git-common-dir']))
+  }
+
+  /** `gitCommonDir` de la base sans tenir la boucle : même mémoire, même règle (succès seul). */
+  async gitCommonDirDeLaBaseAsync(): Promise<string | undefined> {
+    if (this.baseCommonDir !== undefined) return this.baseCommonDir.valeur
+    const probe = await this.tryGitAsyncFn(this.baseRepo, ['rev-parse', '--git-common-dir'])
+    return this.retenirCommonDir(this.baseRepo, probe)
+  }
+
+  /** Lit la sonde `--git-common-dir` et mémorise le succès de la base — partagé sync/async. */
+  retenirCommonDir(repo: string, probe: { code: number; stdout: string }): string | undefined {
     const resultat = ((): string | undefined => {
       if (probe.code !== 0) return undefined
       const raw = probe.stdout.trim()
@@ -409,71 +478,38 @@ export class WorktreeManager {
   }
 
   /**
-   * La copie appartient-elle bien à CE dépôt de base ? Un worktree légitime partage l'object-store
-   * de la base : son `--git-common-dir` résout vers le MÊME `.git`. Une copie laissée par un autre
-   * workspace (le dossier de copies est partagé) a son propre `.git` — écrire dedans muterait
-   * l'index et le HEAD d'un dépôt tiers, aspirant au passage le travail non commité d'un
-   * développeur dans un commit `agent <id>` sur un HEAD détaché. Vérification d'IDENTITÉ et non de
-   * révision : `cat-file -e` ne se déclenche qu'APRÈS le commit, donc trop tard.
-   * Indéterminable (git muet, chemin absent) → le code appelant bloque avant toute écriture.
+   * La copie appartient-elle au dépôt de base, et est-elle sa propre racine de travail ? Rend la
+   * raison du refus, ou `undefined` si l'écriture est permise. Le verdict est {@link verdictAppartenance}.
    */
-  foreignCopyDetail(
-    path: string,
-    copyCommon: string | undefined = this.gitCommonDir(path)
-  ): string | undefined {
-    const baseCommon = this.gitCommonDir(this.baseRepo)
-    if (!baseCommon || !copyCommon) return undefined
-    if (canonicalPath(baseCommon) === canonicalPath(copyCommon)) return undefined
-    return `La copie appartient à un autre dépôt (${copyCommon}) que la base (${baseCommon}) : aucune écriture n’y est faite.`
-  }
-
-  /**
-   * La copie est-elle bien SA PROPRE racine de travail — et non un simple dossier DANS le depot ?
-   *
-   * MESURE le 2026-08-21 : une copie `agent__command-edit-*` s'est retrouvee SANS fichier `.git`
-   * (creation interrompue, ou balayage partiel). Un repertoire sans `.git` fait remonter git dans
-   * l'arborescence, et comme la racine des copies vit DANS le depot
-   * (`.autowin-data/autowin-os/worktrees/...`), le depot trouve est l'arbre principal PARTAGE.
-   * `foreignCopyDetail` ne pouvait rien voir : il compare les `--git-common-dir`, identiques par
-   * construction dans ce cas precis.
-   *
-   * Degat reel constate : `switch -C` a fait basculer la branche de l'utilisateur sur
-   * `autowin/recovery/<agentId>`, puis `add -A` a committe le travail non committe de TROIS sessions
-   * concurrentes dans un seul commit « travail preserve » (32849a15) — rendant tout push contaminant.
-   *
-   * Le discriminant est la racine de travail : pour une copie legitime, `--show-toplevel` rend la
-   * copie elle-meme ; pour un dossier ampute, il rend le depot de base.
-   */
-  copieSansRacinePropre(
-    path: string,
-    topLue: string | undefined = ((): string | undefined => {
-      const top = this.tryGitFn(path, ['rev-parse', '--show-toplevel'])
-      return top.code === 0 ? top.stdout.trim() : undefined
-    })()
-  ): string | undefined {
-    if (!topLue) {
-      return `Impossible de prouver la racine de travail de la copie ${path} : aucune écriture n’y est faite.`
-    }
-    const racine = canonicalPath(topLue)
-    if (racine === canonicalPath(path)) return undefined
-    return `La copie ${path} n’est pas une racine de travail : git remonte sur ${racine} (arbre partagé) — aucune écriture n’y est faite.`
-  }
-
   ownershipIssue(path: string): string | undefined {
     // fix-ok: gels.jsonl 2026-09-23/24 : `execFileSync git rev-parse` x3 par appel depuis
     // ownershipIssue (jusqu'a 2,3 s). `--git-common-dir` et `--show-toplevel` de la copie sont lus
     // par UN SEUL lancement git ; la base est deja memorisee par gitCommonDir.
-    const sonde = this.tryGitFn(path, ['rev-parse', '--git-common-dir', '--show-toplevel'])
-    const [commonBrut, topBrut] = sonde.code === 0 ? sonde.stdout.split(String.fromCharCode(10)).map((l) => l.trim()) : []
-    const copyCommon = commonBrut ? (isAbsolute(commonBrut) ? commonBrut : resolve(path, commonBrut)) : undefined
-    const foreign = this.foreignCopyDetail(path, copyCommon)
-    if (foreign) return foreign
-    const sansRacine = this.copieSansRacinePropre(path, topBrut || undefined)
-    if (sansRacine) return sansRacine
-    if (!copyCommon || !this.gitCommonDir(this.baseRepo)) {
-      return `Impossible de prouver l’appartenance Git de la copie ${path} : aucune écriture n’y est faite.`
-    }
-    return undefined
+    const sonde = this.tryGitFn(path, ARGS_SONDE_APPARTENANCE)
+    return verdictAppartenance(path, this.gitCommonDir(this.baseRepo), sonde)
+  }
+
+  /**
+   * `ownershipIssue` SANS TENIR LA BOUCLE — la forme du balayage horaire des copies.
+   *
+   * Mesuré dans `gels.jsonl` le 2026-11-06 (heures UTC, démarrage à 10:44:52) : 4 465 ms à 11:44:50
+   * et 4 900 ms à 12:44:53, deux passes horaires, chacune avec 3 `execFileSync git rev-parse` venus
+   * de la sonde d'`ownershipIssue` (1,5 à 1,7 s par sonde). Le balayage était asynchrone entre deux
+   * copies, mais la décision de chaque copie attendait git sur le fil principal. Mêmes sondes, même
+   * verdict (`verdictAppartenance`), attendues dans des processus fils. Les deux sondes partent
+   * ensemble : elles sont indépendantes.
+   *
+   * Limite : la CRÉATION de chaque processus reste synchrone sous Windows. Au repos, sur 29 copies
+   * sans `.git`, elle coûte 247 à 303 ms quand la forme synchrone en coûte 701 à 926 ms. Les 1,5 s
+   * par sonde des gels n'ont pas été décomposées : si elles venaient de la création, cette forme ne
+   * les retire pas, et seul le worker d'arrière-plan le ferait (comme `recenserRetentionAsync`).
+   */
+  async ownershipIssueAsync(path: string): Promise<string | undefined> {
+    const [sonde, baseCommon] = await Promise.all([
+      this.tryGitAsyncFn(path, ARGS_SONDE_APPARTENANCE),
+      this.gitCommonDirDeLaBaseAsync()
+    ])
+    return verdictAppartenance(path, baseCommon, sonde)
   }
   declare refTravailTrie: typeof travaux.refTravailTrie
   declare shaTravailTrie: OmitThisParameter<typeof travaux.shaTravailTrie>
@@ -624,10 +660,12 @@ export class WorktreeManager {
   declare listAgentIds: OmitThisParameter<typeof copies.listAgentIds>
   declare reconcileResiduesAsync: OmitThisParameter<typeof copies.reconcileResiduesAsync>
   declare preserverEtLiberer: OmitThisParameter<typeof copies.preserverEtLiberer>
+  declare preserverEtLibererAsync: OmitThisParameter<typeof copies.preserverEtLibererAsync>
   declare reconcileResidues: OmitThisParameter<typeof copies.reconcileResidues>
   declare balayerUneCopie: typeof copies.balayerUneCopie
   declare balayerUneCopieAsync: typeof copies.balayerUneCopieAsync
   declare deciderBalayageDUneCopie: typeof copies.deciderBalayageDUneCopie
+  declare deciderBalayageDUneCopieAsync: typeof copies.deciderBalayageDUneCopieAsync
   declare balayerLeChemin: typeof copies.balayerLeChemin
   declare balayerLeCheminAsync: typeof copies.balayerLeCheminAsync
   declare tenterRetraitDisque: typeof copies.tenterRetraitDisque
