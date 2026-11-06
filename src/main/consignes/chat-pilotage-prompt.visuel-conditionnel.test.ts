@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { CLASSES_PAGES_HTML } from '../../shared/classes-pages-html'
+import { chargerSkillPourLeModele } from '../commands/skill-charger-command'
 import {
   REGLES_ECRAN_UTILISATEUR,
   REGLES_VISUELLES,
+  SKILL_MISE_EN_FORME,
   buildChatPilotagePrompt,
   tourTouchantAuVisuel
 } from './chat-pilotage-prompt'
@@ -49,12 +52,42 @@ describe('regles visuelles conditionnelles', () => {
   /**
    * Ce qui regit la FORME de TOUTE reponse reste inconditionnel : le bloc html-render, les
    * diagrammes mermaid et les controles natifs servent aussi a expliquer un bug de base de donnees.
+   * L'utilisateur veut ces blocs SPONTANEMENT : le declencheur de chacun, la direction et les
+   * classes restent donc dans le corps servi a chaque tour.
    */
   it('laisse les regles de FORME de reponse dans le corps inconditionnel', () => {
     const prompt = buildChatPilotagePrompt([])
     expect(prompt).toContain('EXPRESSION VISUELLE')
     expect(prompt).toContain('DIAGRAMMES')
     expect(prompt).toContain('INTERACTIF SANS JAVASCRIPT')
+    for (const bloc of [
+      '```html-render',
+      '```aw-tableau',
+      '```aw-comparaison',
+      '```aw-etapes',
+      '```mermaid',
+      '```html-interactif'
+    ])
+      expect(prompt).toContain(bloc)
+    expect(prompt).toContain('« transparence totale »')
+    for (const { classe } of CLASSES_PAGES_HTML) expect(prompt).toContain(classe)
+  })
+
+  /**
+   * Le DETAIL des formats (JSON des blocs, page interactive et son apercu, types de diagrammes) ne
+   * passe pas par ce bloc conditionnel : il dependrait d'un mot du message, alors que c'est le choix
+   * de format du MODELE qui le demande. Il part par `skill_charger`, que la consigne nomme, et
+   * n'entre dans aucun bloc systeme — le systeme reste identique d'un tour a l'autre.
+   */
+  it('sert le detail des formats par skill_charger, jamais dans un bloc systeme', () => {
+    const prompt = buildChatPilotagePrompt([])
+    expect(prompt).toContain(`\`skill_charger\` (${SKILL_MISE_EN_FORME})`)
+    const detail = chargerSkillPourLeModele({ nom: SKILL_MISE_EN_FORME }).procedure
+    for (const marque of ['"colonnes"', 'html-interactif-apercu', 'sankey-beta', '<meter>']) {
+      expect(detail).toContain(marque)
+      expect(prompt).not.toContain(marque)
+      expect(REGLES_VISUELLES).not.toContain(marque)
+    }
   })
 
   it('reconnait un tour qui touche a l interface ou a une capture', () => {

@@ -1,9 +1,15 @@
 import { consigneBureauCacheChat } from './consigne-bureau-cache'
 import { CONSIGNE_CLASSES_PAGES_HTML } from '../../shared/classes-pages-html'
-import { CONSIGNE_BLOCS_DONNEES } from '../../shared/blocs-donnees'
 import { FORME_PAGE_INTERACTIVE } from '../../shared/scene-3d'
 import { CONSIGNE_LANCER_EN_FILS } from '../../shared/lancer-en-fils'
 import { CONSIGNE_PLAN_DE_LOTS } from './consigne-plan-de-lots'
+
+/**
+ * La skill qui porte le DÉTAIL des formats de réponse (skills/mise-en-forme/SKILL.md) : schémas JSON
+ * des blocs aw-*, page interactive et son aperçu, types de diagrammes. Le modèle la charge avec
+ * `skill_charger` au moment d'écrire un de ces blocs ; la consigne n'en garde que le déclencheur.
+ */
+export const SKILL_MISE_EN_FORME = 'mise-en-forme'
 
 /**
  * Prompt de PILOTAGE du chat, extrait de `AgentPilot.chat()`.
@@ -62,10 +68,12 @@ export function signatureDeCommande(commande: {
  * ce qui suit et forcerait la reecriture complete du cache a chaque bascule — plus cher que ce
  * qu on economise. Place en DERNIER bloc systeme (voir agent-pilot.ts), seule la queue diverge.
  *
- * Ce qui RESTE inconditionnel a dessein : INTERACTIF SANS JAVASCRIPT, DIAGRAMMES et EXPRESSION
- * VISUELLE regissent la FORME de TOUTE reponse, pas le travail sur l'interface — avec la regle de
- * base de LARGEUR (colonne, bloc fluide). Les SCENES 3D et le detail de largeur propre aux maquettes
- * ont rejoint ce bloc le 2026-10-28 : 1 700 caracteres qui ne servent qu'a un tour visuel.
+ * Ce qui RESTE inconditionnel a dessein : le DECLENCHEUR des formats de reponse (EXPRESSION
+ * VISUELLE : quel bloc, direction, classes, LARGEUR de base) regit la FORME de TOUTE reponse, pas
+ * le travail sur l'interface. Son detail ne passe pas par ce bloc mais par `skill_charger`
+ * (`SKILL_MISE_EN_FORME`) : c'est le choix de format du modele qui le demande, pas un mot du
+ * message. Les SCENES 3D et le detail de largeur propre aux maquettes ont rejoint ce bloc le
+ * 2026-10-28 : 1 700 caracteres qui ne servent qu'a un tour visuel.
  */
 export const REGLES_VISUELLES: string =
   // Defaut vecu (2026-09-16) : maquettes d'un pas de frise montrees avec une coche,
@@ -407,13 +415,6 @@ export function buildChatPilotagePrompt(
     `pour décider s'il faut orchestrer, et pour cela SEULEMENT. Et dans tous les cas, ` +
     `la priorité règle la FORME, jamais la vérité de ce que tu rends : aucun rang n'autorise ` +
     `à taire une preuve manquante, une réserve ou un échec.\n` +
-    // EXPRESSION VISUELLE — desserree le 2026-08-07 a la demande de l'utilisateur (« je veux que le
-    // modele puisse me repondre du HTML pour que les reponses soient plus belles et plus lisibles »).
-    // La capacite existait deja et fonctionnait ; c'est CE texte qui l'etouffait, avec trois freins
-    // successifs : « le Markdown reste le format par defaut », « quand une surface rend REELLEMENT
-    // plus clair », « n'utilise JAMAIS ». Un modele lisant cela choisit le Markdown a tous les coups.
-    // Le declencheur devient une FORME DE REPONSE observable (comparaison, etapes, statuts, chiffres),
-    // pas un jugement subjectif sur la clarte. Les contraintes de securite sont inchangees.
     // QUESTION CLIQUABLE. Mesure du 2026-08-10 sur 883 conversations : quand une decision
     // appartient a l'utilisateur, le modele termine en PROSE (« Veux-tu que je le fasse ? »),
     // ce qui l'oblige a retaper sa reponse. Les options doivent etre DECLAREES : une lecture du
@@ -466,124 +467,55 @@ export function buildChatPilotagePrompt(
     `decrivent le besoin (« perte de donnees », « bug d'affichage »), jamais une correction qu'il ` +
     `n'a pas choisie : l'option cliquee devient son message, puis l'objectif du run.
 ` +
-    // SANS CE PARAGRAPHE, LA CAPACITE RESTE MORTE : un agent n'appelle jamais un format que son
-    // prompt ne nomme pas. Le rendu de la fence ```mermaid a ete branche dans le chat le 2026-09-13
-    // (Markdown.tsx -> ArtifactDiagramPreview) ; c'est ici qu'on le lui apprend.
-    // Ouvert le 2026-09-13 : cases a cocher, libelles et jauges natives sont desormais acceptes par
-    // le nettoyage du HTML (chat-html-inline.ts). Sans ce paragraphe, personne ne s'en servirait.
-    // 2026-10-28 : mermaid 11.16 dessine une trentaine de types, le prompt n'en nommait
-    // que 7. Les autres sont nommes ici, rendus un a un aux couleurs du theme (theme-mermaid.ts) ;
-    // les limites d'accents ont ete mesurees au rendu (sankey refuse tout accent, meme cite).
-    `INTERACTIF SANS JAVASCRIPT : le HTML du fil accepte \`<details>/<summary>\`, les cases a cocher ` +
-    `et boutons radio (\`<input type="checkbox">\`, \`<input type="radio">\`) avec leur \`<label for>\`, ` +
-    `les identifiants \`id\`, et les jauges \`<progress>\` et \`<meter>\`. Avec \`:checked\` en CSS, cela ` +
-    `donne de VRAIS onglets, des accordeons et des filtres sans une ligne de script — sers-t'en des ` +
-    `que ta reponse compare plusieurs options ou porte un avancement chiffre. Aucun autre champ ` +
-    `n'est accepte (ni texte, ni envoi) : ce qui se clique ne fait que changer l'affichage.
-` +
-    // Bloc ```html-interactif branche le 2026-10-29 (BlocHtmlInteractif.tsx) : sans ce
-    // paragraphe, aucun agent ne l'ecrirait. Servi a chaque tour comme le paragraphe ci-dessus : le
-    // choix entre une page figee et une page qui tourne se fait sur la FORME de toute reponse.
-    `PAGES INTERACTIVES : quand la reponse gagne a etre MANIPULEE — graphique qu'on survole, ` +
-    `calculateur, simulation, tri ou filtre sur des donnees —, ecris un bloc ferme ` +
-    `\`\`\`${FORME_PAGE_INTERACTIVE} : meme HTML/CSS et memes classes \`aw-*\` que html-render, pose ` +
-    `sans fond sur le fil, mais ses \`<script>\` et ses \`onclick\` TOURNENT, dans un cadre isole SANS ` +
-    `reseau ni acces a Autowin. Tout en ligne : un \`<script src>\`, une police ou une image ` +
-    `externe sont refuses — dessine en \`<canvas>\` ou en SVG ; \`THREE\` est disponible. La hauteur ` +
-    `suit le contenu. Garde html-render quand rien ne bouge. ` +
-    // Boite a outils (graphiques.js) : chaque modele redessinait axes, graduations,
-    // survol et legende a la main. Annoncee ici, sinon personne ne s'en sert.
-    `Pour un graphique, n'ecris NI axes NI survol : \`autowin.graphique('#zone', {type, titre, ` +
-    `categories, valeurs, unite})\` les fait, avec bulle au survol et au clavier, legende, couleurs ` +
-    `du theme et largeur fluide. \`type\` : barres (defaut), lignes, aires, secteurs, points. ` +
-    `Plusieurs series : \`series: [{nom, valeurs}]\` (points : \`points: [[x, y]]\`), \`empile: true\` ` +
-    `pour les empiler, \`format: (v) => texte\` pour les valeurs. Il rend \`{maj(options), detruire()}\` : ` +
-    `\`maj({valeurs})\` pour un simulateur. Bulle a verifier : \`.aw-graphique-bulle\`. ` +
-    // Compatibilites de l'amorce (2026-10-30) : ce qui marche et ce qui reste refuse,
-    // pour que le modele n'ecrive ni un contournement inutile ni un geste mort.
-    `Marchent comme dans un navigateur : localStorage (survit au redemarrage de l'app), formulaires, ` +
-    `alert, copie et lien http(s) APRES un clic ; l'evenement \`aw-theme\` signale un changement de ` +
-    `theme (redessine tes canvas). Ni confirm, ni prompt, ni telechargement : des boutons dans la ` +
-    `page. ` +
-    // Boutons de choix : dans une page qui execute du code, ce qui partirait pourrait
-    // differer de ce qu'on lit ; le choix remplit donc la saisie, l'utilisateur relit et envoie.
-    `Un lien \`<a href="#autowin-prompt">Libelle</a>\` y REMPLIT la saisie de l'utilisateur avec ` +
-    `son libelle, sans l'envoyer (\`autowin.remplirSaisie(texte)\` pour un message compose par la ` +
-    `page) ; il relit et envoie lui-meme. ` +
-    // Banc : 6 pages ecrites dans de vrais fils. Les 6 modeles ont relu l'outil pour
-    // connaitre ses options, 3 ont relu page-interactive.ts pour les couleurs d'un canvas, et 4 ont
-    // ecrit un banc prive parce que les clics ne remplissent aucun champ : jusqu'a 2,5 $ par page.
-    `Pour un canvas, lis les couleurs sur la page : ` +
-    `\`getComputedStyle(document.documentElement).getPropertyValue('--gold-clair')\` (--text, ` +
-    `--text-dim, --gold-doux, --gold-clair, --ok, --err, --warn, --line). Avant de montrer, ecris ` +
-    `la page dans \`.autowin-tmp/<id du fil>/\`, puis ` +
-    `\`node scripts/html-interactif-apercu.mjs <fichier>\` (depot Autowin) la fait tourner comme le ` +
-    `fil, en clique et en survole chaque element : code 0 exige ; 3 = erreur JavaScript (clic ` +
-    `compris) ou geste que le fil refuse, 4 = vide, 5 = deborde de la colonne, 6 = hauteur qui ` +
-    `grandit seule, 7 = fond peint, 8 = scenario rouge ; lis ses captures et \`texteFinal\`. Ces ` +
-    `clics ne remplissent aucun champ : des qu'une page calcule, filtre ou enchaine des etapes, ` +
-    `ajoute \`--scenario <fichier.json>\` plutot que d'ecrire ton propre banc d'essai. C'est un ` +
-    `tableau d'etapes jouees a la vraie souris et au vrai clavier, avec des valeurs attendues ` +
-    `calculees a part : \`{"remplir":"#montant","valeur":"200000"}\`, ` +
-    `\`{"choisir":"#type","valeur":"RTT"}\`, \`{"cliquer":"#calculer"}\` ou \`"texte=Calculer"\`, ` +
-    `\`{"survoler":"canvas","x":0.5,"y":0.5}\`, \`{"touche":"Enter"}\`, \`{"attendre":500}\`, ` +
-    `\`{"voir":"1 109,20","dans":"#mensualite"}\`, \`{"pasVoir":"NaN"}\`, ` +
-    `\`{"demande":"prompt","contient":"Conges"}\`.
-` +
-    `DIAGRAMMES : pour un ORGANIGRAMME, un enchainement d'etapes, une sequence d'echanges, un ` +
-    `arbre ou une machine a etats, ecris un bloc ferme \`\`\`mermaid — il est RENDU en diagramme ` +
-    `dans le fil, aux couleurs du theme (flowchart, sequenceDiagram, stateDiagram, classDiagram, ` +
-    `erDiagram, pie, gantt). Prends le type qui colle a la FORME de l'idee : mindmap (idees autour ` +
-    `d'un centre), timeline (dates), quadrantChart (matrice effort/valeur), xychart-beta (barres, ` +
-    `courbes), sankey-beta (flux ; AUCUNE lettre accentuee, meme entre guillemets), gitGraph ` +
-    `(branches), journey (parcours vecu), kanban, treeView-beta (arborescence de fichiers), ` +
-    `ishikawa-beta (causes d'un defaut), venn-beta, radar-beta, treemap-beta, block-beta, ` +
-    `architecture-beta (libelles accentues entre guillemets). ` +
-    `C'est bien plus court et plus lisible qu'un SVG dessine a la main. Une syntaxe invalide ` +
-    `retombe simplement sur le texte source : verifie ta syntaxe, elle n'est pas rattrapee. Garde ` +
-    `\`\`\`html-render pour la mise en page riche (tableaux, chiffres, comparaisons) et \`\`\`mermaid ` +
-    `pour les schemas de relations. Et des que tu EXPLIQUES un mecanisme (« pourquoi ca marche la et ` +
-    `pas ici », « comment ca se fait que… ») ou compares deux chemins, mets un petit schema ` +
-    `\`\`\`mermaid AVANT le texte : c'est la reponse, les puces ne font que la commenter.
-` +
-    // SCENES 3D et LARGEUR DU BLOC (maquettes) : dans REGLES_VISUELLES depuis le 2026-10-28.
-    // Blocs de donnees : l'app met en page un JSON. Source unique de la redaction et du
-    // lecteur : src/shared/blocs-donnees.ts.
-    `${CONSIGNE_BLOCS_DONNEES}\n` +
+    // FORMATS DE RÉPONSE — un déclencheur court ici, servi à chaque tour ; le détail (JSON des blocs
+    // aw-*, page interactive et son aperçu, types de diagrammes) dans skills/mise-en-forme/SKILL.md,
+    // chargé par le modèle avec `skill_charger`. Pas un bloc de fin de système : ce qui décide d'un
+    // bloc est le CHOIX de format du modèle, qu'aucun mot du message de l'utilisateur ne prédit
+    // (`tourTouchantAuVisuel` ne verrait ni « compare » ni « tableau »). Le système reste identique
+    // d'un tour à l'autre, fin comprise.
+    // L'utilisateur VEUT des réponses mises en forme spontanément (2026-08-07) : ce paragraphe garde
+    // donc, sans chargement, QUAND écrire chaque bloc, la direction et les classes — de quoi écrire un
+    // html-render complet sans rien charger. Trois freins l'avaient fait retomber sur le Markdown
+    // (« le Markdown reste le format par défaut », « quand une surface rend RÉELLEMENT plus clair »,
+    // « n'utilise JAMAIS ») : le déclencheur reste une FORME de réponse observable. Un format que la
+    // consigne ne nomme pas n'est jamais écrit : chaque bloc garde son nom ici.
     `EXPRESSION VISUELLE : tu peux répondre en HTML mis en forme, et c'est souvent le meilleur ` +
-    `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes numérotées, statuts, chiffres, ` +
-    `avant/après, récapitulatif, arborescence — préfère un bloc fermé \`\`\`html-render contenant une ` +
-    `mini-page autonome en HTML/CSS, puis ferme-le par \`\`\`. DIRECTION VISUELLE FIGÉE (choix ` +
-    `utilisateur, « transparence totale ») : AUCUN panneau ni carte ni fond de page — la ` +
-    `typographie se pose directement sur le fond de l'application (body transparent, ne peins ` +
-    `jamais un fond opaque) ; sections séparées par des filets fins dégradés or, kickers en petites ` +
-    `capitales monospace or, chiffres clés en or, chemins/valeurs techniques en chips monospace ` +
-    `discrètes — avec les CLASSES de l'app (liste plus bas) ; mise en page ` +
-    `COMPACTE — interlignes 1.45-1.55, marges de section ≤10px, padding de bloc ≤12px, aucun grand ` +
-    `vide vertical : la page doit se lire sans scroller des kilomètres —, corps 14px. ` +
-    `GRAS PORTEUR : dans chaque phrase de contenu, mets en \`<b>\` le mot qui porte l'information — ` +
-    `le verdict, le chiffre, le nom de la chose, la différence entre deux options — pour que la page ` +
-    `se lise en diagonale sans lire les phrases entières ; vise au moins un \`<b>\` par ligne de ` +
-    `contenu, jamais une phrase entière en gras, et garde le gras dans la couleur du texte ` +
-    `ou en \`aw-chiffre\` quand c'est un chiffre clé. Un tableau ou une liste sans aucun ` +
-    `\`<b>\` est une page ratée : le lecteur doit tout relire pour trouver l'essentiel. ` +
-    // Classes de l'app : la recette de couleurs en dur (#dde3ee, or #d4a94f-#e3ba55)
-    // etait ecrasee en theme clair. Source unique : src/shared/classes-pages-html.ts.
-    `${CONSIGNE_CLASSES_PAGES_HTML} ` +
-    `JAMAIS de halos, dégradés flous ou ombres décoratives. Garde le ` +
-    `texte ou le Markdown normal pour ce qui est court et purement conversationnel : une ou deux ` +
-    `phrases n'ont pas besoin d'une page. ` +
-    `Elle est rendue dans le fil, sans JavaScript, sans ` +
-    `réseau ni accès aux APIs Autowin : n'utilise aucune URL externe et inclus toutes les ressources ` +
-    `nécessaires. Pour interagir, utilise les contrôles HTML natifs comme \`details\` et \`summary\`. ` +
-    `Au-delà d'environ 1 Mo, fournis plutôt la page comme artefact \`.html\`. N'utilise jamais ce ` +
-    `bloc pour un simple exemple de code HTML.\n` +
-    // LARGEUR DE COLONNE (2026-10-10) : la regle de base reste servie a CHAQUE tour, car
-    // un tableau html-render d'une reponse ordinaire deborde aussi ; le detail propre aux maquettes
-    // (outil d'apercu, scene reduite par zoom) vit dans REGLES_VISUELLES depuis le 2026-10-28.
-    `LARGEUR : le bloc s'affiche dans la COLONNE de réponse (souvent 500 à 900 px), jamais à la ` +
-    `largeur de l'écran : dessine-le FLUIDE (largeur 100 %, flex-wrap, aucune largeur fixe au-delà ` +
-    `d'environ 480 px).\n` +
+    `format. Dès que ta réponse a une STRUCTURE — comparaison, étapes, statuts, chiffres, ` +
+    `avant/après, récapitulatif, arborescence —, écris un bloc fermé plutôt que du Markdown :\n` +
+    `· \`\`\`html-render : mini-page autonome en HTML/CSS, rendue dans le fil sans JavaScript, sans ` +
+    `réseau ni accès aux APIs Autowin — aucune URL externe, toutes les ressources incluses. ` +
+    `INTERACTIF SANS JAVASCRIPT : \`<details>/<summary>\`, cases et radios avec \`:checked\` en CSS ` +
+    `donnent de vrais onglets, accordéons et filtres.\n` +
+    `· \`\`\`aw-tableau, \`\`\`aw-comparaison, \`\`\`aw-etapes : un TABLEAU, une COMPARAISON d'options ` +
+    `ou des ÉTAPES en JSON seul, que l'app met en page dans le thème — à préférer à html-render ` +
+    `quand la forme s'y prête.\n` +
+    `· DIAGRAMMES : \`\`\`mermaid, RENDU en diagramme dans le fil aux couleurs du thème (flowchart, ` +
+    `sequenceDiagram…), pour les schemas de relations — organigramme, étapes, séquence, arbre, ` +
+    `machine à états. Dès que tu EXPLIQUES un mecanisme ou compares deux chemins, un petit schéma ` +
+    `AVANT le texte. Une syntaxe invalide retombe sur le texte source.\n` +
+    `· PAGES INTERACTIVES : \`\`\`${FORME_PAGE_INTERACTIVE} quand la réponse gagne à être MANIPULÉE ` +
+    `(graphique qu'on survole, calculateur, simulation, filtre) : ses scripts TOURNENT, dans un ` +
+    `cadre isole SANS reseau. Garde html-render quand rien ne bouge.\n` +
+    `DÉTAIL À CHARGER : avant d'écrire un bloc aw-*, ${FORME_PAGE_INTERACTIVE} ou un mermaid autre ` +
+    `que flowchart/sequenceDiagram, charge \`skill_charger\` (${SKILL_MISE_EN_FORME}) une fois dans ` +
+    `le tour : schémas JSON des blocs, page interactive et son aperçu exigé, types de diagrammes. ` +
+    `Sans lui, un JSON faux s'affiche en code brut.\n` +
+    `DIRECTION FIGÉE (choix utilisateur, « transparence totale ») : AUCUN panneau, carte ni fond ` +
+    `opaque, la typographie se pose sur le fond de l'app (body transparent) ; filets fins dégradés ` +
+    `or entre sections, kickers en petites capitales monospace or, chiffres clés en or, valeurs ` +
+    `techniques en chips monospace ; COMPACT : interlignes 1.45-1.55, marges de section ≤10px, ` +
+    `padding ≤12px, corps 14px, aucun grand vide vertical. GRAS PORTEUR : dans chaque ligne de ` +
+    `contenu, le mot qui porte l'information (verdict, chiffre, nom, différence) en \`<b>\`, jamais ` +
+    `une phrase entière ; un tableau sans \`<b>\` est une page ratée. JAMAIS de halos, dégradés ` +
+    `flous ni ombres décoratives. ` +
+    // Classes de l'app : la recette de couleurs en dur était écrasée en thème clair.
+    // Source unique : src/shared/classes-pages-html.ts.
+    `${CONSIGNE_CLASSES_PAGES_HTML}\n` +
+    `LARGEUR : le bloc s'affiche dans la COLONNE de réponse (souvent 500 à 900 px) : dessine-le ` +
+    `FLUIDE (largeur 100 %, flex-wrap, aucune largeur fixe au-delà d'environ 480 px). Au-delà ` +
+    `d'environ 1 Mo, fournis la page comme artefact \`.html\` ; jamais ce bloc pour un simple ` +
+    `exemple de code HTML. Garde le texte ou le Markdown normal pour ce qui est court et purement ` +
+    `conversationnel : une ou deux phrases n'ont pas besoin d'une page.\n` +
     // VERIFICATION CIBLEE AVANT L'ACTE FINAL (2026-08-29). Une modif d'UNE ligne d'UI
     // suivie de « commit push main » a lance la suite ENTIERE : 26 min de tour, annulation par
     // l'utilisateur, commit/push jamais atteints alors que le code etait ecrit et juste. La preuve
