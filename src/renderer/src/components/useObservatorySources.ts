@@ -76,21 +76,25 @@ export function useObservatorySources<TNativeTrace>({
   loadingRuns: boolean
 } {
   const [runs, setRuns] = useState<ObservatoryRunEntry[]>([])
-  const [loadingRuns, setLoadingRuns] = useState(false)
+  // Le « en cours » se DEDUIT de la derniere cle reglee : une requete est en vol tant que la cle
+  // courante n'a pas ete reglee (conv-1654 : plus de setState synchrone dans l'effet).
+  const [runsSettledKey, setRunsSettledKey] = useState<number | null>(null)
   const [activitySessions, setActivitySessions] = useState<ActivitySessionMeta[]>([])
   const [conversationActivity, setConversationActivity] = useState<ConversationActivity[]>([])
   const [nativeTraces, setNativeTraces] = useState<TNativeTrace[]>([])
   const [semanticTimeline, setSemanticTimeline] = useState<SemanticTemporalProjectionV1 | null>(
     null
   )
-  const [loadingActivitySessions, setLoadingActivitySessions] = useState(false)
-  const [loadingConversationActivity, setLoadingConversationActivity] = useState(false)
+  const [sessionsSettledKey, setSessionsSettledKey] = useState<number | null>(null)
+  const [activitySettledKey, setActivitySettledKey] = useState<string | null>(null)
+  const loadingActivitySessions = active && sessionsSettledKey !== refreshKey
+  const loadingRuns = active && runsSettledKey !== refreshKey
+  const loadingConversationActivity =
+    active && !!conversationId && activitySettledKey !== `${conversationId}|${refreshKey}`
 
   useEffect(() => {
     if (!active) return
     let disposed = false
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoadingActivitySessions(true)
     void (window.api.activitySessions?.() ?? Promise.resolve([]))
       .then((sessions) => {
         if (!disposed) {
@@ -105,7 +109,7 @@ export function useObservatorySources<TNativeTrace>({
         }
       })
       .finally(() => {
-        if (!disposed) setLoadingActivitySessions(false)
+        if (!disposed) setSessionsSettledKey(refreshKey)
       })
     return () => {
       disposed = true
@@ -119,8 +123,6 @@ export function useObservatorySources<TNativeTrace>({
   useEffect(() => {
     if (!active) return
     let disposed = false
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoadingRuns(true)
     void (window.api.listRuns?.() ?? Promise.resolve([]))
       .then((entries) => {
         if (!disposed) {
@@ -135,7 +137,7 @@ export function useObservatorySources<TNativeTrace>({
         }
       })
       .finally(() => {
-        if (!disposed) setLoadingRuns(false)
+        if (!disposed) setRunsSettledKey(refreshKey)
       })
     return () => {
       disposed = true
@@ -152,15 +154,12 @@ export function useObservatorySources<TNativeTrace>({
       queueMicrotask(() => {
         if (disposed) return
         setConversationActivity([])
-        setLoadingConversationActivity(false)
         onSourceError('conversationActivity')
       })
       return () => {
         disposed = true
       }
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoadingConversationActivity(true)
     void (window.api.conversationActivity?.(conversationId) ?? Promise.resolve([]))
       .then((entries) => {
         if (!disposed) {
@@ -178,7 +177,7 @@ export function useObservatorySources<TNativeTrace>({
         }
       })
       .finally(() => {
-        if (!disposed) setLoadingConversationActivity(false)
+        if (!disposed) setActivitySettledKey(`${conversationId}|${refreshKey}`)
       })
     return () => {
       disposed = true
