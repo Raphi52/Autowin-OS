@@ -16,6 +16,7 @@ import { poserReprise } from '../app/redemarrage-reprise'
 import { annoncerFermeture } from '../app/journal-arrets'
 import { identifiantBureauCacheChat } from '../consignes/consigne-bureau-cache'
 import { rechargerEnv } from '../app/env-reload'
+import { rangerDepuisPressePapier } from '../app/coffre-presse-papier'
 
 /** Cas de `AppCommandBus.run` : état, run, redémarrage, bureau caché, environnement. Corps déplacé tel quel depuis commands.ts (lot 2). */
 export async function executerApplication(
@@ -261,6 +262,8 @@ export async function executerApplication(
       // La valeur lue chez l'OS atterrit dans le `process.env` DU processus principal : le
       // reglage prend effet au prochain appel qui le lit, sans redemarrage.
       return rechargerEnv(a.nom)
+    case 'coffre_ranger_presse_papier':
+      return rangerDepuisPressePapier({ nom: s('nom'), conversationId })
     default:
       throw new Error(`commande inconnue: ${name}`)
   }

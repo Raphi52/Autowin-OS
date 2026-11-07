@@ -889,6 +889,7 @@ export class AppCommandBus {
       case 'restart_app':
       case 'bureau_cache_fermer':
       case 'reload_env':
+      case 'coffre_ranger_presse_papier':
         return executerApplication(this, name, a, conversationId, onProgress)
       case 'verify':
       case 'brain_query':
