@@ -33,10 +33,11 @@ afterEach(() => {
   rmSync(dossier, { recursive: true, force: true })
 })
 
+/** Comme celui d'Electron 44 : la lecture rend une promesse, le vidage est immédiat. */
 function pressePapier(contenu: string): PressePapier & { contenu: string } {
   const p = {
     contenu,
-    readText: () => p.contenu,
+    readText: async () => p.contenu,
     clear: () => {
       p.contenu = ''
     }
@@ -56,6 +57,20 @@ describe('ranger au coffre la clé copiée sur un site', () => {
     expect(r).toMatchObject({ ok: true, nom: 'OPENAI_API_KEY', longueur: CLE.length })
     expect(JSON.stringify(r)).not.toContain(CLE)
     expect(coffre.valeursPourAgent([])).toEqual({ OPENAI_API_KEY: CLE })
+    expect(copie.contenu).toBe('')
+  })
+
+  it('attend la lecture du presse-papier, qui rend une promesse dans Electron 44', async () => {
+    const copie = pressePapier(CLE)
+    expect(copie.readText()).toBeInstanceOf(Promise)
+    const r = await rangerDepuisPressePapier({
+      nom: 'MISTRAL_API_KEY',
+      pressePapier: copie,
+      coffre,
+      fichiersARepasser: async () => []
+    })
+    expect(r).toMatchObject({ ok: true, longueur: CLE.length })
+    expect(coffre.valeursPourAgent([])).toEqual({ MISTRAL_API_KEY: CLE })
     expect(copie.contenu).toBe('')
   })
 

@@ -19,6 +19,7 @@
 import { createRequire } from 'node:module'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { Clipboard } from 'electron'
 import { autowinAppDataRoot } from './app-data'
 import {
   ajouterCle as ajouterAuCoffre,
@@ -28,10 +29,11 @@ import {
 } from './coffre-cles'
 import { masquerFichierSansEchec, motifsDeMasquage } from '../runs/masquage-sur-disque'
 
-export interface PressePapier {
-  readText(): string
-  clear(): void
-}
+/**
+ * Tiré du type d'Electron, pas recopié : depuis Electron 44, `readText()` rend une promesse. Une
+ * interface écrite à la main l'avait gardé synchrone, et seul l'appel réel l'a révélé.
+ */
+export type PressePapier = Pick<Clipboard, 'readText' | 'clear'>
 
 export interface RangementDepuisPressePapier {
   ok: boolean
@@ -46,7 +48,7 @@ export interface RangementDepuisPressePapier {
 /** Chargé à la demande, comme `safeStorage` dans le coffre : les tests tournent hors d'Electron. */
 function pressePapierElectron(): PressePapier | undefined {
   try {
-    const mod = createRequire(__filename)('electron') as { clipboard?: PressePapier }
+    const mod = createRequire(__filename)('electron') as { clipboard?: Clipboard }
     return typeof mod?.clipboard?.readText === 'function' ? mod.clipboard : undefined
   } catch {
     return undefined
@@ -95,7 +97,7 @@ export async function rangerDepuisPressePapier(entree: {
       `${nom} est déjà au coffre : rien n’est remplacé. L’utilisateur la remplace lui-même dans ` +
         'Réglages > Clés, ou choisis un autre nom.'
     )
-  const valeur = pressePapier.readText().trim()
+  const valeur = (await pressePapier.readText()).trim()
   if (!valeur)
     return refus(
       'Le presse-papier est vide : clique d’abord le bouton « Copier » de la clé sur le site.'
@@ -116,7 +118,7 @@ export async function rangerDepuisPressePapier(entree: {
     return refus(erreur instanceof Error ? erreur.message : String(erreur))
   }
   try {
-    if (pressePapier.readText().trim() === valeur) pressePapier.clear()
+    if ((await pressePapier.readText()).trim() === valeur) pressePapier.clear()
   } catch {
     // Un presse-papier verrouillé ne défait pas le rangement : la clé est au coffre.
   }
