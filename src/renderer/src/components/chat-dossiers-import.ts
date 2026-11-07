@@ -1,4 +1,5 @@
-import { canonicalProjectPath, estCheminDeDossier } from '../../../shared/project-path'
+import { canonicalProjectPath } from '../../../shared/project-path'
+import { estDossierDuChat } from '../../../shared/board-dossiers-du-chat'
 
 /**
  * FUSION des projets claude.exe dans la liste des dossiers du Chat (2026-09-23).
@@ -23,7 +24,7 @@ export function fusionnerDossiersImportes(
   const ajouts: string[] = []
   for (const brut of importes) {
     // Défense en profondeur : le main filtre déjà, mais ce qui traverse un pont se revalide.
-    if (typeof brut !== 'string' || !estCheminDeDossier(brut)) continue
+    if (typeof brut !== 'string' || !estDossierDuChat(brut)) continue
     const canon = canonicalProjectPath(brut)
     if (!canon) continue
     const cle = canon.toLowerCase()

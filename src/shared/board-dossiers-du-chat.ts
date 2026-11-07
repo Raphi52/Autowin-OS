@@ -22,9 +22,20 @@
 import type { CarteDesBesoins } from './carte-des-besoins'
 import { carteDesProjetsPartages } from './board-projets-partages'
 import { canonicalProjectPath, estCheminDeDossier } from './project-path'
+import { nomDeCopieDEssai } from './essai-trois-facons'
 
 /** Au-delà, la liste est refusée : la barre latérale n'a jamais autant de dossiers. */
 export const DOSSIERS_DU_CHAT_MAX = 500
+
+/**
+ * Un dossier que la liste du Chat peut garder : un chemin, sauf la COPIE DE TRAVAIL d'un fil
+ * (`essai__<fil>-<instant>-<rang>`, `src/main/git/photo-du-code.ts`). L'app l'ouvre seule pour chaque
+ * fil, et le fil y passe seul : ce n'est pas un dossier de l'utilisateur. Sans cette règle, chaque
+ * fil ajoutait sa copie au menu « Ranger dans… » et au Board, par les dossiers des fils.
+ */
+export function estDossierDuChat(chemin: string | null | undefined): boolean {
+  return estCheminDeDossier(chemin) && !nomDeCopieDEssai(chemin ?? undefined)
+}
 
 /** La clé de comparaison d'un dossier : `d:/x/`, `D:\x` et `D:\X` sont le même dossier Windows. */
 export function cleDeDossier(chemin: string | null | undefined): string | undefined {
@@ -40,7 +51,7 @@ export function dossiersDuChatLisibles(valeur: unknown): string[] | undefined {
   const vus = new Map<string, string>()
   for (const brut of valeur) {
     if (typeof brut !== 'string') return undefined
-    if (!estCheminDeDossier(brut)) continue
+    if (!estDossierDuChat(brut)) continue
     const canon = canonicalProjectPath(brut)
     const cle = canon?.toLowerCase()
     if (canon && cle && !vus.has(cle)) vus.set(cle, canon)
@@ -83,7 +94,7 @@ export function dossiersDuBoard(
   )
   const proposes = toujoursProposes.filter(
     (chemin): chemin is string =>
-      estCheminDeDossier(chemin) && !exclus.has(cleDeDossier(chemin) ?? '')
+      estDossierDuChat(chemin) && !exclus.has(cleDeDossier(chemin) ?? '')
   )
   return dossiersDuChatLisibles([...dossiers, ...proposes]) ?? [...dossiers]
 }

@@ -48,3 +48,27 @@ describe('une copie par fil — au début du tour', () => {
     )
   })
 })
+
+/**
+ * LE MÉNAGE DES COPIES DE FIL (effet joué dans menage-des-copies-de-fil.test.ts). Ici, seul le
+ * branchement : une copie retirée doit faire revenir son fil AVANT le refus « dossier disparu », sans
+ * quoi le tour suivant d'un fil endormi serait refusé ; et le ménage ne voit un tour en cours que par
+ * la sonde qui compte aussi la préparation.
+ */
+describe('le ménage des copies de fil', () => {
+  it('fait revenir le fil dont la copie a disparu AVANT le refus du dossier disparu', () => {
+    const retour = corps.indexOf('revenirSiSaCopieADisparu(os.conversations.get(conversationId)')
+    expect(retour).toBeGreaterThan(-1)
+    expect(retour).toBeLessThan(corps.indexOf('refuserTourSiDossierDisparu('))
+    expect(corps.slice(retour - 80, retour)).toContain('args[4] === undefined')
+  })
+
+  it('passe toutes les heures, sur le dépôt d’Autowin, sans toucher un fil en cours', () => {
+    const passe = source.slice(source.indexOf('const passeDuMenageDesCopies = (): void => {'))
+    const bloc = passe.slice(0, passe.indexOf('setInterval(passeDuMenageDesCopies'))
+    expect(bloc).toContain('if (!estDepotAutowin(depot)) return')
+    expect(bloc).toContain('tourEnCours: (id) => activeChatTurns.isInFlight(id)')
+    expect(bloc).toContain('os.conversations.revenirDeLaCopie(id)')
+    expect(source).toContain('setInterval(passeDuMenageDesCopies, 60 * 60 * 1_000).unref()')
+  })
+})

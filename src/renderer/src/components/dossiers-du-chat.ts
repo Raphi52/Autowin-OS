@@ -28,7 +28,8 @@ import { estCheminDeDossier } from '../../../shared/project-path'
 import {
   carteDesDossiersDuChat,
   cleDeDossier,
-  dossiersDuBoard
+  dossiersDuBoard,
+  estDossierDuChat
 } from '../../../shared/board-dossiers-du-chat'
 import { avecDossierRetire } from './chat-dossiers-import'
 import { nomDeDossier } from './conversation-groups'
@@ -59,7 +60,7 @@ export function lireDossiersDuChat(stockage: Stockage = stockageParDefaut()): st
     const brut = stockage.getItem(CLE_DOSSIERS_CONNUS)
     const lu = brut ? (JSON.parse(brut) as unknown) : null
     if (Array.isArray(lu))
-      return lu.filter((x): x is string => typeof x === 'string' && estCheminDeDossier(x))
+      return lu.filter((x): x is string => typeof x === 'string' && estDossierDuChat(x))
   } catch {
     /* préférence illisible : on repart des dossiers réellement utilisés */
   }

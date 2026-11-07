@@ -2254,8 +2254,8 @@ export class ConversationStore {
 
   /**
    * LE FIL QUITTE SA COPIE (réglage « une copie par fil » éteint) : il retrouve son dossier d'avant,
-   * ou aucun s'il n'en avait pas. La copie reste notée, et sur le disque : la supprimer est un geste
-   * destructeur que seul l'utilisateur décide.
+   * ou aucun s'il n'en avait pas. La copie reste notée, et sur le disque : seul le ménage des copies
+   * de fil (`menage-des-copies-de-fil.ts`) la retire, une fois le fil fini et rien n'y restant à publier.
    */
   revenirDeLaCopie(id: string): Conversation | undefined {
     const conversation = this.conversations.get(id)

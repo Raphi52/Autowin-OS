@@ -174,7 +174,7 @@ function lireNumstat(sortie: string): FichierDeLEcart[] {
  * COPIE de l'index de la copie (`GIT_INDEX_FILE`) : son propre index n'est pas touché, et seuls les
  * fichiers modifiés sont relus.
  */
-async function arbreDeLaCopie(copie: string, git: GitRunner): Promise<string> {
+export async function arbreDeLaCopie(copie: string, git: GitRunner): Promise<string> {
   const indexBrut = (await git(['rev-parse', '--git-path', 'index'], copie)).trim()
   const indexReel = isAbsolute(indexBrut) ? indexBrut : resolve(copie, indexBrut)
   const temporaire = mkdtempSync(join(tmpdir(), 'autowin-ecart-'))

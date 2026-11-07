@@ -35,6 +35,16 @@ describe('lireDossiersDuChat', () => {
     ).toEqual(['D:\\A'])
     expect(lireDossiersDuChat(stockage({ [CLE_DOSSIERS_CONNUS]: '{pas du json' }))).toEqual([])
   })
+
+  it('vide les copies de travail des fils déjà mémorisées', () => {
+    const copie =
+      'D:\\AutoWinOS\\.autowin-data\\autowin-os\\retours-de-tour\\essai__conv-1701-1794038114185-1'
+    expect(
+      lireDossiersDuChat(
+        stockage({ [CLE_DOSSIERS_CONNUS]: JSON.stringify(['D:\\AutoWinOS', copie]) })
+      )
+    ).toEqual(['D:\\AutoWinOS'])
+  })
 })
 
 describe('retirerDossierDuChat — la croix du Board', () => {

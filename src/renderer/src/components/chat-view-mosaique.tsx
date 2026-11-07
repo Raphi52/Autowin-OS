@@ -24,8 +24,7 @@ import {
   CLE_DOSSIERS_RETIRES,
   EVT_DOSSIERS_DU_CHAT
 } from './dossiers-du-chat'
-import { cleDeDossier } from '../../../shared/board-dossiers-du-chat'
-import { estCheminDeDossier } from '../../../shared/project-path'
+import { cleDeDossier, estDossierDuChat } from '../../../shared/board-dossiers-du-chat'
 import { sansDossierRetire, avecDossierRetire } from './chat-dossiers-import'
 
 /**
@@ -592,7 +591,7 @@ export function useRenduMosaique(ctx: RenduMosaiqueCtx) {
   )
   const memoriserDossier = useCallback((chemin: string): void => {
     const propre = chemin.trim()
-    if (!estCheminDeDossier(propre)) return
+    if (!estDossierDuChat(propre)) return
     // Un ajout MANUEL efface le retrait : l'utilisateur vient de dire le contraire de la croix,
     // et l'import claude.exe redevient autorisé à maintenir ce dossier.
     const retires = sansDossierRetire(lireDossiersRetires(), propre)

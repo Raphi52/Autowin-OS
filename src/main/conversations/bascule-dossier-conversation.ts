@@ -204,6 +204,23 @@ export function copieOuTravailleLeFil(
   return copie && range && memeDossier(range, copie.chemin) ? copie : null
 }
 
+/**
+ * LA COPIE DU FIL A DISPARU — retirée par le ménage des copies de fil (`menage-des-copies-de-fil.ts`)
+ * pendant que le fil était archivé, ou effacée à la main. Le fil revient à son dossier d'avant AVANT
+ * le refus « dossier rangé disparu » : sa copie n'était pas un dossier de l'utilisateur, et le passage
+ * du début de tour lui en rouvre une neuve. Rend `true` quand il est revenu.
+ */
+export function revenirSiSaCopieADisparu(
+  fil: { projectPath?: string; copieDuFil?: unknown } | undefined,
+  revenir: () => void,
+  dossierExiste: (chemin: string) => boolean = existsSync
+): boolean {
+  const copie = copieOuTravailleLeFil(fil)
+  if (!copie || dossierExiste(resolve(copie.chemin))) return false
+  revenir()
+  return true
+}
+
 export type IssueDuPassage = 'rien' | 'ouverte' | 'reprise' | 'revenu' | 'refusee'
 
 /**

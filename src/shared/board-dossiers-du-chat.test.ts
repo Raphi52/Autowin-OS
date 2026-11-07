@@ -5,7 +5,8 @@ import {
   cleDeDossier,
   DOSSIERS_DU_CHAT_MAX,
   dossiersDuBoard,
-  dossiersDuChatLisibles
+  dossiersDuChatLisibles,
+  estDossierDuChat
 } from './board-dossiers-du-chat'
 
 /**
@@ -122,5 +123,28 @@ describe('dossiersDuBoard — même les dossiers que le Chat propose toujours se
         ['C:\\Users\\moi']
       )
     ).toEqual(['D:\\Factures', 'C:\\Users\\moi'])
+  })
+})
+
+/**
+ * La copie de travail qu'un fil reçoit tout seul (`essai__<fil>-<instant>-<rang>`) n'est pas un
+ * dossier de l'utilisateur : elle sortait dans « Ranger dans… » et sur le Board, une ligne par fil.
+ * Entrée qui doit faire échouer : une copie gardée dans la liste lue ou dans les dossiers du Board.
+ */
+describe('copies de travail des fils', () => {
+  const COPIE =
+    'D:\\AutoWinOS\\.autowin-data\\autowin-os\\retours-de-tour\\essai__conv-1700-1794038023563-1'
+
+  it('sont des chemins, mais pas des dossiers du Chat', () => {
+    expect(estDossierDuChat(COPIE)).toBe(false)
+    expect(estDossierDuChat('D:\\AutoWinOS')).toBe(true)
+    expect(estDossierDuChat('Perso')).toBe(false)
+    // Un nom qui contient « essai__ » sans être une copie reste un dossier.
+    expect(estDossierDuChat('D:\\projets\\mon-essai__depot')).toBe(true)
+  })
+
+  it('sortent de la liste relue et des dossiers du Board', () => {
+    expect(dossiersDuChatLisibles(['D:\\AutoWinOS', COPIE])).toEqual(['D:\\AutoWinOS'])
+    expect(dossiersDuBoard(['D:\\AutoWinOS'], [COPIE], [])).toEqual(['D:\\AutoWinOS'])
   })
 })

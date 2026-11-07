@@ -13,7 +13,8 @@ import {
   lireReglageCopieParFil,
   preparerLeDossierDuTour,
   refusDossierDuTour,
-  refuserTourSiDossierDisparu
+  refuserTourSiDossierDisparu,
+  revenirSiSaCopieADisparu
 } from './bascule-dossier-conversation'
 
 describe('avertissement quand le rangement ne pilote pas le dossier de travail', () => {
@@ -114,9 +115,7 @@ describe('refuserTourSiDossierDisparu (entrée des tours)', () => {
   it('écrit la raison dans le fil puis lève : le tour ne part pas', () => {
     const ecrit: string[] = []
     const chemin = resolve('/copies/fil-perdu')
-    expect(() => refuserTourSiDossierDisparu(chemin, (r) => ecrit.push(r), absent)).toThrow(
-      chemin
-    )
+    expect(() => refuserTourSiDossierDisparu(chemin, (r) => ecrit.push(r), absent)).toThrow(chemin)
     expect(ecrit).toHaveLength(1)
     expect(ecrit[0]).toContain(chemin)
   })
@@ -329,5 +328,39 @@ describe('le réglage « une copie par fil »', () => {
     const chemin = fichier()
     writeFileSync(chemin, '{ pas du json')
     expect(lireReglageCopieParFil(chemin)).toBe(true)
+  })
+})
+
+/**
+ * Une copie de fil retirée par le ménage, ou effacée à la main : le fil revient à son dossier d'avant
+ * au lieu d'être refusé (« dossier rangé disparu »). Entrée qui doit faire échouer : un fil qui reste
+ * rangé dans sa copie disparue, ou un fil rangé dans un VRAI dossier disparu qui en sort sans refus.
+ */
+describe('revenirSiSaCopieADisparu (entrée des tours)', () => {
+  const COPIE = 'D:/AutoWinOS/.autowin-data/autowin-os/retours-de-tour/essai__conv-7-1-1'
+  const dansSaCopie = {
+    projectPath: COPIE,
+    copieDuFil: { chemin: COPIE, depot: 'D:/AutoWinOS', dossierAvant: 'D:/AutoWinOS' }
+  }
+
+  it('fait revenir le fil quand sa copie a disparu', () => {
+    let revenu = 0
+    expect(
+      revenirSiSaCopieADisparu(
+        dansSaCopie,
+        () => revenu++,
+        () => false
+      )
+    ).toBe(true)
+    expect(revenu).toBe(1)
+  })
+
+  it('ne touche à rien quand la copie est là, ou quand le dossier disparu n’est pas une copie', () => {
+    const revenir = (): never => {
+      throw new Error('ne doit pas revenir')
+    }
+    expect(revenirSiSaCopieADisparu(dansSaCopie, revenir, () => true)).toBe(false)
+    expect(revenirSiSaCopieADisparu({ projectPath: 'D:/Perdu' }, revenir, () => false)).toBe(false)
+    expect(revenirSiSaCopieADisparu(undefined, revenir, () => false)).toBe(false)
   })
 })

@@ -185,8 +185,10 @@ import {
   lireReglageCopieParFil,
   preparerLeDossierDuTour,
   refuserTourSiDossierDisparu,
+  revenirSiSaCopieADisparu,
   diagnostiqueDossierConversation
 } from '../conversations/bascule-dossier-conversation'
+import { menageDesCopiesDeFil } from '../conversations/menage-des-copies-de-fil'
 import { depotCiteDansLeMessage } from '../git/depot-cite-dans-le-message'
 import { rangerConversationSurLePremierMessage } from '../conversations/rangement-premier-message'
 import { noterAppelCourt, signalerPanneAppelCourt } from '../orchestration/petites-taches-trace'
@@ -2465,6 +2467,16 @@ Le fil reprend ensuite normalement.`
        * l'erreur levée est celle des autres refus d'avant-tour (`suivreLaFinDuTour` la relaie), donc
        * sans plantage : l'issue du tour passe simplement en échec.
        */
+      // Sauf pour SA copie de fil disparue (retirée par le ménage pendant que le fil dormait) : le fil
+      // revient à son dossier d'avant, et son passage plus bas lui en rouvre une neuve. Un tour repris
+      // après un redémarrage ne change jamais de dossier en route : lui reste refusé.
+      if (
+        args[4] === undefined &&
+        revenirSiSaCopieADisparu(os.conversations.get(conversationId), () =>
+          os.conversations.revenirDeLaCopie(conversationId)
+        )
+      )
+        broadcast({ type: 'refresh', scope: 'conversations' })
       refuserTourSiDossierDisparu(os.conversations.get(conversationId)?.projectPath, (raison) => {
         os.conversations.append(conversationId, { role: 'assistant', content: raison })
         broadcast({ type: 'refresh', scope: 'chat', convId: conversationId })
@@ -2942,6 +2954,38 @@ Le fil reprend ensuite normalement.`
   passeDeRetention()
   const balayageRetentionTimer = setInterval(passeDeRetention, 60 * 60 * 1_000)
   balayageRetentionTimer.unref()
+
+  /*
+   * LE MÉNAGE DES COPIES DE FIL (`menage-des-copies-de-fil.ts`) : la copie d'un fil fini, identique à
+   * ce que sa porte a déjà publié, quitte le disque, et le fil revient au dossier partagé. Seulement
+   * sur le dépôt d'Autowin, le seul où les fils reçoivent une copie. Première passe 5 min après le
+   * démarrage et non au démarrage : les tours repris s'enregistrent d'abord, et un tour en cours ne
+   * perd jamais sa copie. Puis toutes les heures, comme les ménages voisins.
+   */
+  const passeDuMenageDesCopies = (): void => {
+    const depot = os.executionWorkspace
+    if (!estDepotAutowin(depot)) return
+    void pendantOperation('timer:balayage:copiesDeFil', async () => {
+      const bilan = await menageDesCopiesDeFil({
+        dossierDesRetours: dossierDesRetours(),
+        depot,
+        lireFils: () => os.conversations.list(),
+        tourEnCours: (id) => activeChatTurns.isInFlight(id),
+        decrocher: (id) => {
+          os.conversations.revenirDeLaCopie(id)
+        }
+      })
+      if (bilan.supprimees.length) broadcast({ type: 'refresh', scope: 'conversations' })
+      if (bilan.supprimees.length || bilan.echecs.length)
+        console.log(
+          `[copies de fil] ${bilan.supprimees.length} copie(s) de fil fini retirée(s), ${bilan.gardees.length} gardée(s), ${bilan.echecs.length} en échec`
+        )
+      for (const echec of bilan.echecs)
+        console.warn('[copies de fil] copie non retirée', echec.chemin, echec.raison)
+    })
+  }
+  setTimeout(passeDuMenageDesCopies, 5 * 60_000).unref()
+  setInterval(passeDuMenageDesCopies, 60 * 60 * 1_000).unref()
 
   ipcMain.handle('os:pilotChat', (event, messages, conversationId) => {
     assertTrustedRendererSender(event, 'PilotChat')

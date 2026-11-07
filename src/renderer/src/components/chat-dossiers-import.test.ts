@@ -11,6 +11,18 @@ import {
  * à chaque démarrage — la croix serait un bouton mort.
  */
 describe('fusionnerDossiersImportes', () => {
+  it("n'ajoute jamais la copie de travail d'un fil (amorçage par les dossiers des fils)", () => {
+    expect(
+      fusionnerDossiersImportes(
+        ['D:\\AutoWinOS'],
+        [
+          'D:\\AutoWinOS\\.autowin-data\\autowin-os\\retours-de-tour\\essai__conv-1702-1794057684868-1'
+        ],
+        []
+      )
+    ).toBeNull()
+  })
+
   it('ajoute les projets importés absents de la liste', () => {
     expect(
       fusionnerDossiersImportes(
