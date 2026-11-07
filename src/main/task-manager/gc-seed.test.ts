@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { TaskStore } from './task-store'
-import { gcSeed, seedGcTask } from './gc-seed'
+import { GC_PROMPT_SUR_AUTOWIN_DATA, GC_SEED_ID, gcSeed, seedGcTask } from './gc-seed'
 
 function store(): TaskStore {
   let counter = 0
@@ -25,6 +25,30 @@ describe('seedGcTask', () => {
     tasks.remove(id)
     expect(seedGcTask(tasks)).toBeUndefined()
     expect(tasks.listTasks()).toEqual([])
+  })
+
+  it('le libelle ne borne plus le menage a un seul dossier', () => {
+    expect(gcSeed().prompt).not.toContain('.autowin-data')
+  })
+
+  it('met a jour le libelle d une tache deja posee, si personne ne l a retouche', () => {
+    const tasks = store()
+    const ancienne = tasks.create({ ...gcSeed(), prompt: GC_PROMPT_SUR_AUTOWIN_DATA })
+    tasks.markSeeded(GC_SEED_ID)
+
+    expect(seedGcTask(tasks)).toBeUndefined()
+
+    expect(tasks.getTask(ancienne.id)?.prompt).toBe(gcSeed().prompt)
+  })
+
+  it('ne touche pas une tache dont l utilisateur a change le texte', () => {
+    const tasks = store()
+    const retouchee = tasks.create({ ...gcSeed(), prompt: '/gc seulement les captures' })
+    tasks.markSeeded(GC_SEED_ID)
+
+    seedGcTask(tasks)
+
+    expect(tasks.getTask(retouchee.id)?.prompt).toBe('/gc seulement les captures')
   })
 
   it('la skill invoquee existe dans le kit', () => {
