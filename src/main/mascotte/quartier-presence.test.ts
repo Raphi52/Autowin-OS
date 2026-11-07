@@ -94,7 +94,8 @@ afterEach(() => {
 
 function montage(
   reglage: Partial<ReglageDeLaPresence> = {},
-  ecrire?: (fichier: string, contenu: string) => Promise<void>
+  ecrire?: (fichier: string, contenu: string) => Promise<void>,
+  projetDuFil?: (id: string) => string | undefined
 ) {
   const h = horloge()
   const r: ReglageDeLaPresence = { dossier: partage, nom: 'Alice', partager: true, ...reglage }
@@ -103,7 +104,8 @@ function montage(
     poste: 'alice',
     maintenant: h.maintenant,
     planifier: h.planifier,
-    ...(ecrire ? { ecrire } : {})
+    ...(ecrire ? { ecrire } : {}),
+    ...(projetDuFil ? { projetDuFil } : {})
   })
   const fichier = join(partage, 'alice', 'presence.json')
   const lire = (): PresenceDuPoste => JSON.parse(readFileSync(fichier, 'utf8')) as PresenceDuPoste
@@ -193,6 +195,71 @@ describe('presence.json : le format', () => {
     await publication.attendre()
     const restes = readdirSync(join(partage, 'alice')).filter((f) => f.endsWith('.tmp'))
     expect(restes).toEqual([])
+  })
+})
+
+describe('presence.json : seuls les projets cochés dans le Board', () => {
+  const projetDe: Record<string, string> = {
+    'conv-1': 'D:\\AutoWinOS',
+    'conv-2': 'D:\\Perso',
+    'conv-3': 'Factures'
+  }
+  const projetDuFil = (id: string): string | undefined => projetDe[id]
+
+  it('« tous les projets » (null) : chaque tanuki part', async () => {
+    const { publication, lire } = montage({ projets: null }, undefined, projetDuFil)
+    publication.recevoir([agent(1), agent(2), agent(3)])
+    await publication.attendre()
+    expect(lire().agents.map((a) => a.id)).toEqual(['conv-1', 'conv-2', 'conv-3'])
+  })
+
+  it('une liste : seuls les tanukis des projets cochés partent, sans rien dire des autres', async () => {
+    const { publication, lire } = montage(
+      { projets: ['D:\\AutoWinOS', 'Factures'] },
+      undefined,
+      projetDuFil
+    )
+    publication.recevoir([agent(1), agent(2, { titre: 'Mes impôts' }), agent(3), agent(4)])
+    await publication.attendre()
+    // conv-4 n'a pas de projet connu : comme un projet nouveau, il ne part pas sans être coché.
+    expect(lire().agents.map((a) => a.id)).toEqual(['conv-1', 'conv-3'])
+    expect(JSON.stringify(lire())).not.toContain('impôts')
+  })
+
+  it('le choix change : la prochaine écriture le suit', async () => {
+    const { publication, lire, r, h } = montage({ projets: ['D:\\Perso'] }, undefined, projetDuFil)
+    publication.recevoir([agent(1), agent(2)])
+    await publication.attendre()
+    expect(lire().agents.map((a) => a.id)).toEqual(['conv-2'])
+    r.projets = ['D:\\AutoWinOS']
+    publication.reglageChange()
+    // Une écriture au plus toutes les 5 s : celle-ci part au bout du délai, pas au battement.
+    h.avancer(5_000)
+    await publication.attendre()
+    expect(lire().agents.map((a) => a.id)).toEqual(['conv-1'])
+  })
+
+  it('les 15 places vont aux tanukis partagés : un projet décoché ne les prend pas', () => {
+    const agents = [
+      ...Array.from({ length: 15 }, (_, i) => agent(100 + i)),
+      ...Array.from({ length: 3 }, (_, i) => agent(200 + i))
+    ]
+    const publies = presenceAEcrire(
+      agents,
+      { nom: 'Alice', partager: true, projets: ['D:\\AutoWinOS'] },
+      'alice',
+      (id) => (Number(id.slice(5)) >= 200 ? 'D:\\AutoWinOS' : 'D:\\Perso')
+    ).agents
+    expect(publies.map((a) => a.id)).toEqual(['conv-200', 'conv-201', 'conv-202'])
+  })
+
+  it('une liste sans moyen de lire le projet des fils : aucun tanuki ne part', () => {
+    const presence = presenceAEcrire(
+      [agent(1)],
+      { nom: 'Alice', partager: true, projets: ['D:\\AutoWinOS'] },
+      'alice'
+    )
+    expect(presence.agents).toEqual([])
   })
 })
 

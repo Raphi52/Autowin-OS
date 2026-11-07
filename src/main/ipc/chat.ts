@@ -12,6 +12,7 @@ import { registerConversationsIpc } from './conversations'
 import { registerCarteDesBesoinsIpc } from './carte-des-besoins'
 import { creerDossierDuBoard, sousDossierDuPoste } from '../board/board-dossier'
 import { creerPublicationDeLaPresence } from '../mascotte/quartier-presence'
+import { groupeDe } from '../../renderer/src/components/conversation-groups'
 import { ANIMAL_PAR_DEFAUT } from '../../shared/quartier-presence'
 import { registerQuartierPresenceIpc } from './quartier-presence'
 import { registerLangueIpc } from './langue'
@@ -1768,27 +1769,32 @@ Le fil reprend ensuite normalement.`
   })
   // La présence de ce poste dans le village commun : les tanukis de la vue, filtrés, dans
   // `<dossier du Board>\<compte>\presence.json`. Le réglage est relu à chaque écriture.
-  registerQuartierPresenceIpc({
-    dossierDuBoard,
-    publication: creerPublicationDeLaPresence({
-      poste: sousDossierDuPoste(nomUtilisateurCourant()),
-      reglage: () => {
-        const etat = dossierDuBoard.etat()
-        return {
-          dossier: etat.dossier,
-          nom: dossierDuBoard.nomDuPoste().nom,
-          partager: etat.partagerPresence !== false,
-          // Toujours écrit, même sans choix : le réglage de l'Accueil montre l'animal que
-          // les collègues voient, pas celui d'un tirage sur le nom du poste.
-          animal: etat.animal ?? ANIMAL_PAR_DEFAUT,
-          // La couleur de leur tenue ; absente = la tenue d'origine, rien à écrire.
-          ...(etat.tenue ? { tenue: etat.tenue } : {}),
-          // « Afficher mes agents à » des réglages de l'Accueil.
-          masquesPour: etat.masquerPresencePour ?? []
-        }
+  const publicationDeLaPresence = creerPublicationDeLaPresence({
+    poste: sousDossierDuPoste(nomUtilisateurCourant()),
+    reglage: () => {
+      const etat = dossierDuBoard.etat()
+      return {
+        dossier: etat.dossier,
+        nom: dossierDuBoard.nomDuPoste().nom,
+        partager: etat.partagerPresence !== false,
+        // Toujours écrit, même sans choix : le réglage de l'Accueil montre l'animal que
+        // les collègues voient, pas celui d'un tirage sur le nom du poste.
+        animal: etat.animal ?? ANIMAL_PAR_DEFAUT,
+        // La couleur de leur tenue ; absente = la tenue d'origine, rien à écrire.
+        ...(etat.tenue ? { tenue: etat.tenue } : {}),
+        // « Afficher mes agents à » des réglages de l'Accueil.
+        masquesPour: etat.masquerPresencePour ?? [],
+        // Les projets cochés dans le Board : seuls leurs tanukis partent. Absent = tous.
+        projets: etat.projets ?? null
       }
-    })
+    },
+    // Le projet du fil, calculé comme sur le Board (`carte-des-besoins.ts`) : même clé, même repli.
+    projetDuFil: (id) => {
+      const fil = os.conversations.get(id)
+      return fil ? groupeDe(fil, os.executionWorkspace).key : undefined
+    }
   })
+  registerQuartierPresenceIpc({ dossierDuBoard, publication: publicationDeLaPresence })
   // Rend la copie du Board de fin de tour, appelée par l'observateur de fin de tour.
   const boardDuPoste = registerCarteDesBesoinsIpc({
     os,
@@ -1803,7 +1809,9 @@ Le fil reprend ensuite normalement.`
     // Où la copie de fin de tour garde les états posés à la main.
     racineDuPoste: app.getPath('userData'),
     // Un post-it par RUN.md léger : la fiche de chaque demande rangée.
-    lireFiches: fichesDeDemande.fichesParDemande
+    lireFiches: fichesDeDemande.fichesParDemande,
+    // Un projet coché ou décoché : les tanukis suivent dans les 5 s, sans attendre le battement.
+    apresChoixDesProjets: () => publicationDeLaPresence.reglageChange()
   })
   // Les RUN.md légers comparés au Board : le Board est lu, jamais changé.
   const mesureDesEcarts = creerMesureDesEcarts({

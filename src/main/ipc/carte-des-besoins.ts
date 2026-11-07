@@ -118,7 +118,8 @@ export function registerCarteDesBesoinsIpc({
   choisirDossier,
   racineDuPoste,
   prechauffageApres,
-  lireFiches
+  lireFiches,
+  apresChoixDesProjets
 }: {
   os: Pick<AutowinOS, 'conversations' | 'runsWithGate' | 'executionWorkspace'>
   journal?: { lire: () => ReadonlyMap<string, EntreeDuJournal> }
@@ -137,6 +138,8 @@ export function registerCarteDesBesoinsIpc({
   prechauffageApres?: Promise<unknown>
   /** La fiche de chaque demande (`fiches-de-demande.ts`) : un post-it par RUN.md léger. */
   lireFiches?: () => Promise<ReadonlyMap<string, string>>
+  /** Les projets cochés ont changé : la présence des tanukis (`quartier-presence.ts`) les suit. */
+  apresChoixDesProjets?: () => void
 }): {
   /** Recopie le Board vers le dossier sans la vue : appelée à chaque fin de tour. */
   recopierLeBoard: () => void
@@ -274,7 +277,7 @@ export function registerCarteDesBesoinsIpc({
     return dossierDuBoard.choisirNom(nom)
   })
 
-  ipcMain.handle('os:board-dossier:projets', (event, brute: unknown) => {
+  ipcMain.handle('os:board-dossier:projets', async (event, brute: unknown) => {
     assertTrustedRendererSender(event, 'Dossier du Board')
     if (!dossierDuBoard) return { dossier: null, cible: null, enCours: false }
     const projets = projetsPartagesLisibles(brute)
@@ -283,7 +286,9 @@ export function registerCarteDesBesoinsIpc({
         ...dossierDuBoard.etat(),
         erreur: 'Choix des projets illisible : rien n’a changé.'
       }
-    return dossierDuBoard.choisirProjets(projets)
+    const etat = await dossierDuBoard.choisirProjets(projets)
+    apresChoixDesProjets?.()
+    return etat
   })
 
   // La liste des dossiers du Chat et ses retraits, transmis par la vue à chaque

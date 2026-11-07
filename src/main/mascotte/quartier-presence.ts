@@ -60,7 +60,15 @@ export interface ReglageDeLaPresence {
    * `presence.json` ; l'Autowin de chacun d'eux ne les affiche pas. Absent ou vide = visibles pour tous.
    */
   masquesPour?: readonly string[]
+  /**
+   * Les projets cochés dans le Board (`board-projets-partages.ts`) : les collègues ne voient que
+   * les tanukis de ces projets, comme ils ne voient que leurs demandes. `null` ou absent = tous.
+   */
+  projets?: readonly string[] | null
 }
+
+/** Le projet d'un fil, clé de `groupeDe` comme celle du Board ; `undefined` = fil inconnu. */
+export type ProjetDuFil = (id: string) => string | undefined
 
 // ———————————————————————————————————————————————————————————————— ce qui arrive de la vue
 
@@ -113,17 +121,42 @@ export function agentPublie(a: AgentAPublier): AgentPublie {
 }
 
 /**
+ * Les agents dont le fil appartient à un projet coché. Liste blanche, comme le Board : un fil
+ * dont on ne sait pas lire le projet ne part pas, pas plus qu'un projet nouveau non coché.
+ */
+export function agentsDesProjetsPartages(
+  agents: readonly AgentAPublier[],
+  projets: readonly string[] | null | undefined,
+  projetDuFil?: ProjetDuFil
+): readonly AgentAPublier[] {
+  if (projets === null || projets === undefined) return agents
+  if (!projetDuFil) return []
+  const coches = new Set(projets)
+  return agents.filter((a) => {
+    const projet = projetDuFil(a.id)
+    return projet !== undefined && coches.has(projet)
+  })
+}
+
+/**
  * Le contenu de `presence.json`, sans sa date d'écriture (posée au moment d'écrire). Coupé : aucun
  * agent. Au-delà de `PRESENCE_TAILLE_MAX`, les derniers agents (les moins pressants) sont retirés.
  */
 export function presenceAEcrire(
   agents: readonly AgentAPublier[],
-  reglage: Pick<ReglageDeLaPresence, 'nom' | 'partager' | 'animal' | 'masquesPour' | 'tenue'>,
-  poste: string
+  reglage: Pick<
+    ReglageDeLaPresence,
+    'nom' | 'partager' | 'animal' | 'masquesPour' | 'tenue' | 'projets'
+  >,
+  poste: string,
+  projetDuFil?: ProjetDuFil
 ): Omit<PresenceDuPoste, 'enregistreA'> {
   if (!reglage.partager)
     return { format: FORMAT_PRESENCE, poste, nom: reglage.nom, coupe: true, agents: [] }
-  const publies = agents.slice(0, PRESENCE_AGENTS_MAX).map(agentPublie)
+  // Filtré AVANT la limite : les 15 places vont aux tanukis que les collègues ont le droit de voir.
+  const publies = agentsDesProjetsPartages(agents, reglage.projets, projetDuFil)
+    .slice(0, PRESENCE_AGENTS_MAX)
+    .map(agentPublie)
   // Relue ici aussi : le réglage vient d'un fichier du poste, et ce qui part sur le partage est borné.
   const masquesPour = postesLisibles(reglage.masquesPour)
   const tenue = tenueLisible(reglage.tenue)
@@ -190,6 +223,8 @@ export function creerPublicationDeLaPresence(deps: {
   battementMs?: number
   /** L'écriture atomique ; remplacée par les tests pour simuler un partage en panne. */
   ecrire?: (fichier: string, contenu: string) => Promise<void>
+  /** Le projet du fil de chaque agent, lu à chaque écriture pour appliquer les projets cochés. */
+  projetDuFil?: ProjetDuFil
 }): PublicationDeLaPresence {
   const maintenant = deps.maintenant ?? Date.now
   const delaiMs = deps.delaiMs ?? PRESENCE_DELAI_ECRITURE_MS
@@ -247,7 +282,14 @@ export function creerPublicationDeLaPresence(deps: {
       if (!arrete) planifierBattement()
       return
     }
-    const presence = presenceAEcrire(agents, r, deps.poste)
+    let presence: Omit<PresenceDuPoste, 'enregistreA'>
+    try {
+      presence = presenceAEcrire(agents, r, deps.poste, deps.projetDuFil)
+    } catch {
+      // Les fils illisibles à cet instant : on n'écrit rien plutôt qu'un tanuki d'un projet non coché.
+      if (!arrete) planifierBattement()
+      return
+    }
     const corps = JSON.stringify(presence)
     if (!force && empreinte?.fichier === fichier && empreinte.corps === corps) return
     derniereEcriture = maintenant()
