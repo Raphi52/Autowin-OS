@@ -40,6 +40,37 @@ describe('skill-pipeline — corps de skill chargé par le fil', () => {
     }
   })
 
+  it('dit où est le dépôt du kit : un agent sur « This computer » y trouve les scripts de la skill', () => {
+    const depot = mkdtempSync(join(tmpdir(), 'depot-kit-'))
+    try {
+      mkdirSync(join(depot, 'skills', 'gc'), { recursive: true })
+      mkdirSync(join(depot, 'scripts'))
+      writeFileSync(
+        join(depot, 'skills', 'gc', 'SKILL.md'),
+        '# gc\nLancer `scripts/gc-disque.mjs`.'
+      )
+
+      const injected = skillInstruction('gc', [join(depot, 'skills')])
+
+      expect(injected).toContain(`Dépôt du kit : ${depot}`)
+      expect(injected.indexOf('Dépôt du kit')).toBeLessThan(injected.indexOf('# gc'))
+    } finally {
+      rmSync(depot, { recursive: true, force: true })
+    }
+  })
+
+  it('ne nomme aucun dépôt pour une racine de skills sans scripts à côté', () => {
+    const root = mkdtempSync(join(tmpdir(), 'skills-seules-'))
+    try {
+      mkdirSync(join(root, 'look'), { recursive: true })
+      writeFileSync(join(root, 'look', 'SKILL.md'), '# look\ncorps')
+
+      expect(skillInstruction('look', [root])).not.toContain('Dépôt du kit')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
   it('stripSkillFrontmatter est un no-op sans frontmatter', () => {
     expect(stripSkillFrontmatter('# build\nsans frontmatter')).toBe('# build\nsans frontmatter')
   })

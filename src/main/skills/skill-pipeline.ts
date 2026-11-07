@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { skillRoots } from '../app/native-registry'
 
 /**
@@ -179,7 +179,14 @@ export function skillInstruction(id: string, roots = skillRoots()): string {
   }
   if (!root) return ''
   const body = stripSkillFrontmatter(readIfExists(join(root, cible, 'SKILL.md')))
-  return body ? `\n=== SKILL ${cible.toUpperCase()} (kit) ===\n${body}\n` : ''
+  if (!body) return ''
+  // Une procédure lance ses scripts « depuis le dépôt Autowin ». Sans ce chemin, un fil rangé sur
+  // « This computer » (une tâche planifiée, par exemple) ne les trouverait pas.
+  const depot = dirname(root)
+  const ligneDepot = existsSync(join(depot, 'scripts'))
+    ? `Dépôt du kit : ${depot} — « depuis le dépôt Autowin » veut dire depuis ce dossier, quel que soit ton dossier de travail.\n`
+    : ''
+  return `\n=== SKILL ${cible.toUpperCase()} (kit) ===\n${ligneDepot}${body}\n`
 }
 
 /**

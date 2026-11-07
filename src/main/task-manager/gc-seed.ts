@@ -1,6 +1,10 @@
 import type { TaskStore } from './task-store'
 import type { ScheduledTaskInput } from './types'
 import { AGENT_STUDIO_DEFAULT_PROVIDER } from '../../shared/task-provider'
+import {
+  rangerLesTachesPoseesSurCetOrdinateur,
+  surCetOrdinateur
+} from './menage-sur-cet-ordinateur'
 
 /** Identifiant stable du semis : une fois pose (ou supprime par l'utilisateur), il ne revient plus. */
 export const GC_SEED_ID = 'gc-quotidien-v1'
@@ -39,15 +43,19 @@ export function gcSeed(): ScheduledTaskInput {
   }
 }
 
-/** Pose la tache une seule fois. Rend son id si elle vient d'etre creee. */
-export function seedGcTask(store: TaskStore): string | undefined {
+/**
+ * Pose la tache une seule fois, sur « This computer » (`dossierPersonnel`). Rend son id si elle vient
+ * d'etre creee.
+ */
+export function seedGcTask(store: TaskStore, dossierPersonnel?: string): string | undefined {
   const { title, prompt } = gcSeed()
   for (const tache of store.listTasks())
     if (tache.title === title && tache.prompt === GC_PROMPT_SUR_AUTOWIN_DATA)
       store.update(tache.id, { prompt })
+  rangerLesTachesPoseesSurCetOrdinateur(store, title, dossierPersonnel)
   if (store.hasSeed(GC_SEED_ID)) return undefined
   try {
-    return store.create(gcSeed()).id
+    return store.create(surCetOrdinateur(gcSeed(), dossierPersonnel)).id
   } finally {
     store.markSeeded(GC_SEED_ID)
   }

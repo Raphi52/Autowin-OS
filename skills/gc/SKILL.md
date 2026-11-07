@@ -27,6 +27,10 @@ par type, avec le motif), ce qui grossit, ce qui attend l'accord de purge. Rien 
 « rien à collecter — <place libre> » et s'arrêter : une passe vide doit coûter peu.
 
 ## Procédure
+La tâche quotidienne travaille sur « This computer » : son fil ne part pas avec un projet chez les
+collègues. Chaque commande ci-dessous se lance donc avec le dépôt comme dossier courant
+(`cd "<Dépôt du kit>"`, chemin donné en tête de cette procédure) : `npx tsx` y trouve ses modules, et
+`scripts/gc-scripts-inutilises.mjs` prend le dossier courant pour le dépôt.
 0. **Relire la veille.** `conversation_read` sur CETTE conversation : ne re-rapporte pas une
    proposition de purge déjà faite et restée sans réponse, rappelle-la en une ligne.
 1. **Inventaire du poste** (lecture seule, une minute environ), depuis le dépôt Autowin :

@@ -51,6 +51,19 @@ describe('seedGcTask', () => {
     expect(tasks.getTask(retouchee.id)?.prompt).toBe('/gc seulement les captures')
   })
 
+  it('range son fil sur « This computer », et y remet une tâche déjà posée sans dossier', () => {
+    const tasks = store()
+    const ancienne = tasks.create(gcSeed())
+    tasks.markSeeded(GC_SEED_ID)
+    expect(seedGcTask(tasks, 'C:\\Users\\moi')).toBeUndefined()
+    const avant = tasks.getTask(ancienne.id)?.destination
+    expect(avant?.kind === 'new' && avant.dossier).toBe('C:\\Users\\moi')
+
+    const neuve = store()
+    const destination = neuve.getTask(seedGcTask(neuve, 'C:\\Users\\moi')!)?.destination
+    expect(destination?.kind === 'new' && destination.dossier).toBe('C:\\Users\\moi')
+  })
+
   it('la skill invoquee existe dans le kit', () => {
     expect(gcSeed().prompt).toMatch(/^\/gc /)
     expect(existsSync(join(__dirname, '..', '..', '..', 'skills', 'gc', 'SKILL.md'))).toBe(true)

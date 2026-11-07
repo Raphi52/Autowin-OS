@@ -1,6 +1,10 @@
 import type { TaskStore } from './task-store'
 import type { ScheduledTaskInput } from './types'
 import { AGENT_STUDIO_DEFAULT_PROVIDER } from '../../shared/task-provider'
+import {
+  rangerLesTachesPoseesSurCetOrdinateur,
+  surCetOrdinateur
+} from './menage-sur-cet-ordinateur'
 
 /** Identifiant stable du semis : une fois pose (ou supprime par l'utilisateur), il ne revient plus. */
 export const CURATE_SEED_ID = 'curate-quotidien-v1'
@@ -13,7 +17,8 @@ export const CURATE_SEED_ID = 'curate-quotidien-v1'
 export function curateSeed(): ScheduledTaskInput {
   return {
     title: 'Curation quotidienne — /curate',
-    prompt: '/curate passe quotidienne : vide la file des candidats Brain et rends le bilan du jour.',
+    prompt:
+      '/curate passe quotidienne : vide la file des candidats Brain et rends le bilan du jour.',
     enabled: true,
     mode: 'active-only',
     destination: {
@@ -31,11 +36,15 @@ export function curateSeed(): ScheduledTaskInput {
   }
 }
 
-/** Pose la tache une seule fois. Rend son id si elle vient d'etre creee. */
-export function seedCurateTask(store: TaskStore): string | undefined {
+/**
+ * Pose la tache une seule fois, sur « This computer » (`dossierPersonnel`). Rend son id si elle vient
+ * d'etre creee.
+ */
+export function seedCurateTask(store: TaskStore, dossierPersonnel?: string): string | undefined {
+  rangerLesTachesPoseesSurCetOrdinateur(store, curateSeed().title, dossierPersonnel)
   if (store.hasSeed(CURATE_SEED_ID)) return undefined
   try {
-    return store.create(curateSeed()).id
+    return store.create(surCetOrdinateur(curateSeed(), dossierPersonnel)).id
   } finally {
     store.markSeeded(CURATE_SEED_ID)
   }

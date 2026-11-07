@@ -154,7 +154,12 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     const aligner = vi.fn()
     const target = runtime({ alignerSurDossierGlobal: aligner })
     const dispatcher = new ScheduledChatDispatcher(target)
-    const dest = { kind: 'new' as const, title: 'Maintenance', category: 'Qualite', provider: 'claude' }
+    const dest = {
+      kind: 'new' as const,
+      title: 'Maintenance',
+      category: 'Qualite',
+      provider: 'claude'
+    }
 
     await dispatcher.run(task({ destination: dest }), occurrence)
     await dispatcher.run(task({ destination: { ...dest, conversationId: 'conv-131' } }), {
@@ -205,12 +210,45 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     expect(store.get(id)?.projectPath).toBe(canonicalProjectPath('C:\\Users\\moi'))
   })
 
+  it('au démarrage, range tout de suite le fil existant sur le dossier choisi, sans attendre le réveil', () => {
+    const ranger = vi.fn()
+    const target = runtime({ alignerSurDossier: ranger })
+    const dispatcher = new ScheduledChatDispatcher(target)
+    const choisi = {
+      kind: 'new' as const,
+      title: 'Garbage collector',
+      category: 'Qualite',
+      provider: 'claude',
+      dossier: 'C:\\Users\\moi',
+      conversationId: 'conv-743'
+    }
+
+    dispatcher.alignerSurLeursDossiers([
+      task({ id: 'gc', destination: choisi }),
+      // Sans dossier choisi, ou sans fil encore créé : rien à ranger.
+      task({
+        id: 'maintenance',
+        destination: { ...choisi, dossier: undefined, conversationId: 'conv-9' }
+      }),
+      task({ id: 'neuve', destination: { ...choisi, conversationId: undefined } }),
+      task({ id: 'existante', destination: { kind: 'existing', conversationId: 'conv-1' } })
+    ])
+
+    expect(ranger.mock.calls).toEqual([['conv-743', canonicalProjectPath('C:\\Users\\moi')]])
+  })
+
   it('une tâche dont la catégorie est un CHEMIN garde son dossier (pas de réalignement)', async () => {
     const aligner = vi.fn()
     const dispatcher = new ScheduledChatDispatcher(runtime({ alignerSurDossierGlobal: aligner }))
     await dispatcher.run(
       task({
-        destination: { kind: 'new', title: 'P', category: 'D:\\GIT\\Projet', provider: 'claude', conversationId: 'conv-9' }
+        destination: {
+          kind: 'new',
+          title: 'P',
+          category: 'D:\\GIT\\Projet',
+          provider: 'claude',
+          conversationId: 'conv-9'
+        }
       }),
       occurrence
     )
@@ -325,9 +363,11 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
         reasoningEffort: 'high'
       })
       .mockReturnValueOnce({ provider: 'gemini', model: 'gemini-3-pro', reasoningEffort: 'medium' })
-    ;(target as ScheduledChatRuntime & {
-      agentStudioBinding: () => { provider: string; model: string; reasoningEffort: 'high' }
-    }).agentStudioBinding = agentStudioBinding
+    ;(
+      target as ScheduledChatRuntime & {
+        agentStudioBinding: () => { provider: string; model: string; reasoningEffort: 'high' }
+      }
+    ).agentStudioBinding = agentStudioBinding
     const dispatcher = new ScheduledChatDispatcher(target)
 
     await dispatcher.run(

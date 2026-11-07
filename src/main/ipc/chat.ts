@@ -3837,7 +3837,10 @@ Le fil reprend ensuite normalement.`
       if (seeded.length) console.log(`[watchdog] règles livrées posées : ${seeded.length}`)
       if (seedMaintenanceTask(scheduledTasks))
         console.log('[task-manager] tâche Maintenance quotidienne posée')
-      if (seedGcTask(scheduledTasks))
+      // Le ménage du poste travaille sur « This computer » : son fil n'est le travail d'aucun projet,
+      // et ne part donc pas avec le projet Autowin chez les collègues. Même calcul que le réveil.
+      const dossierPersonnel = canonicalProjectPath(homedir()) ?? homedir()
+      if (seedGcTask(scheduledTasks, dossierPersonnel))
         console.log('[task-manager] tâche Garbage collector quotidienne posée')
       // Regle PERSONNELLE : posee seulement sur le poste qui l'a demandee (`setx AUTOWIN_WATCHDOG_MAILS 1`),
       // jamais chez tout le monde — elle lit la boite de l'utilisateur et repond en son nom.
@@ -3873,8 +3876,10 @@ Le fil reprend ensuite normalement.`
         console.log('[watchdog] règle Teams : consigne Teams posée')
       if (liftLegacyMailWatchdogCaps(scheduledTasks))
         console.log('[watchdog] règles mails : plafond relevé à 240/h, sans plafond du jour')
-      if (seedCurateTask(scheduledTasks))
+      if (seedCurateTask(scheduledTasks, dossierPersonnel))
         console.log('[task-manager] tâche Curation quotidienne posée')
+      // Le fil déjà créé d'une tâche rejoint son dossier choisi dès maintenant, pas au réveil suivant.
+      taskDispatcher.alignerSurLeursDossiers(scheduledTasks.listTasks())
       // Sans elle, `dispatcherVeille` ne voyait jamais de tâche `veille` : aucun scout web n'avait
       // tourné sur ce poste (2026-10-21).
       if (seedVeilleTask(scheduledTasks))

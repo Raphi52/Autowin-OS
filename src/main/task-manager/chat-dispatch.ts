@@ -373,6 +373,22 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
     }
   }
 
+  /**
+   * Au démarrage, range sur son dossier choisi le fil déjà créé de chaque tâche. Le réveil le fait
+   * aussi, mais une fois par jour : un dossier qui vient de changer (réglage, semis mis à jour)
+   * laissait le fil dans l'ancien dossier, et dans le village des collègues, jusqu'au lendemain.
+   */
+  alignerSurLeursDossiers(tasks: readonly ScheduledTask[]): void {
+    for (const task of tasks) {
+      const destination = task.destination
+      if (destination.kind !== 'new' || !destination.conversationId) continue
+      if (!estCheminDeDossier(destination.dossier)) continue
+      const dossier = canonicalProjectPath(destination.dossier)
+      if (dossier && this.runtime.hasConversation(destination.conversationId))
+        this.runtime.alignerSurDossier?.(destination.conversationId, dossier)
+    }
+  }
+
   private resolveConversation(
     task: ScheduledTask,
     binding?: ScheduledTaskRoleBinding
