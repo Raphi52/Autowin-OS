@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { autowinAppDataRoot } from '../app/app-data'
+import { depotPrincipalSurDisque } from '../git/depot-git'
 import {
   NATURES_MESSAGE_FIL,
   MESSAGES_PAR_LIVRAISON,
@@ -58,13 +59,26 @@ export interface ContexteFils {
   filsActifs: () => string[]
 }
 
-const memeDossier = (a: string, b: string): boolean => {
-  const n = (d: string): string => {
-    const s = resolve(d).replace(/\\/g, '/').replace(/\/+$/, '')
-    return process.platform === 'win32' ? s.toLowerCase() : s
+/**
+ * Clé du dépôt d'un dossier de fil. Un fil peut travailler dans une COPIE SÉPARÉE du dépôt (copie
+ * liée rangée sous `.autowin-data/…/essai__<fil>-…`) : comparer les chemins tels quels la prenait
+ * pour un autre dépôt, et ses messages aux fils du dossier principal étaient refusés. La clé est donc
+ * le dépôt principal lu sur disque ; hors de tout dépôt, le dossier lui-même. Chemin réel : git écrit
+ * la forme longue, un dossier temporaire Windows peut arriver en nom court (`PRENOM~1.NOM`).
+ */
+const cleDuDepot = (d: string): string => {
+  const dossier = depotPrincipalSurDisque(d) ?? d
+  let reel = resolve(dossier)
+  try {
+    reel = realpathSync.native(dossier)
+  } catch {
+    /* dossier absent : son chemin résolu sert de clé */
   }
-  return n(a) === n(b)
+  const s = reel.replace(/\\/g, '/').replace(/\/+$/, '')
+  return process.platform === 'win32' ? s.toLowerCase() : s
 }
+
+const memeDepot = (a: string, b: string): boolean => cleDuDepot(a) === cleDuDepot(b)
 
 const champ = (args: Record<string, unknown>, cle: string): string =>
   typeof args[cle] === 'string' ? (args[cle] as string).trim() : ''
@@ -128,15 +142,10 @@ export function ecrireAUnFil(
   if (a === de) throw new Error(`ecrire_a_un_fil : ${a} est ton propre fil.`)
   const dossierDe = ctx.dossierDe(de)
   const filsDuMemeDepot = (): string => {
-    const memes = ctx
-      .filsActifs()
-      .filter(
-        (f) =>
-          f !== de &&
-          dossierDe !== undefined &&
-          ctx.dossierDe(f) !== undefined &&
-          memeDossier(ctx.dossierDe(f) as string, dossierDe)
-      )
+    const memes = ctx.filsActifs().filter((f) => {
+      const dossierF = f === de ? undefined : ctx.dossierDe(f)
+      return dossierDe !== undefined && dossierF !== undefined && memeDepot(dossierF, dossierDe)
+    })
     return memes.length ? memes.slice(0, 20).join(', ') : 'aucun'
   }
   if (!ctx.estActif(a))
@@ -144,7 +153,7 @@ export function ecrireAUnFil(
       `ecrire_a_un_fil : le fil « ${a} » est inconnu, archivé ou supprimé. Fils actifs du même dépôt : ${filsDuMemeDepot()}.`
     )
   const dossierA = ctx.dossierDe(a)
-  if (dossierDe === undefined || dossierA === undefined || !memeDossier(dossierDe, dossierA))
+  if (dossierDe === undefined || dossierA === undefined || !memeDepot(dossierDe, dossierA))
     throw new Error(
       `ecrire_a_un_fil : ${a} travaille dans un autre dossier (${dossierA ?? 'inconnu'}) que ton fil (${dossierDe ?? 'inconnu'}) ; les messages ne vont qu’à un fil du même dépôt.`
     )
