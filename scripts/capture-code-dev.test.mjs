@@ -207,8 +207,16 @@ describe('preparerCodeDev : une copie de travail d agent est reconstruite, puis 
     expect(
       estCopieDeTravail(String.raw`D:\AutoWinOS\.autowin-data\autowin-os\worktrees\x\agent__run-1`)
     ).toBe(true)
+    // La copie d'un tour du chat (`dossierDesRetours`, src/main/ipc/chat.ts) : sans elle, la capture
+    // montrait l'interface du dépôt principal, sans la modification de la copie.
+    expect(
+      estCopieDeTravail(
+        String.raw`D:\AutoWinOS\.autowin-data\autowin-os\retours-de-tour\essai__conv-1-17940-1`
+      )
+    ).toBe(true)
     expect(estCopieDeTravail('D:/AutoWinOS')).toBe(false)
     expect(estCopieDeTravail('D:/projets/worktrees/AutoWinOS')).toBe(false)
+    expect(estCopieDeTravail('D:/projets/retours-de-tour/AutoWinOS')).toBe(false)
   })
 })
 

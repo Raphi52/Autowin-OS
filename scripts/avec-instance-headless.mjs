@@ -294,9 +294,12 @@ function construireCopie(racine) {
   return true
 }
 
-/** Une copie de travail d'agent vit sous `<depot>/.autowin-data/.../worktrees/...`. Pure. */
+/**
+ * Une copie de travail d'agent vit sous `<depot>/.autowin-data/.../worktrees/...` (runs), ou
+ * `.../retours-de-tour/...` (tours du chat, `dossierDesRetours` de `src/main/ipc/chat.ts`). Pure.
+ */
 export function estCopieDeTravail(racine) {
-  return /[\\/]\.autowin-data[\\/](.*[\\/])?worktrees[\\/]/i.test(String(racine))
+  return /[\\/]\.autowin-data[\\/](.*[\\/])?(worktrees|retours-de-tour)[\\/]/i.test(String(racine))
 }
 
 /** Le port CDP de la fenetre de dev du depot, lu dans son `DevToolsActivePort`. */

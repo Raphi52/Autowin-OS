@@ -166,6 +166,45 @@ describe('Task Manager — dispatch par le vrai Chat', () => {
     expect(aligner).toHaveBeenNthCalledWith(2, 'conv-131')
   })
 
+  // Les tâches planifiées n'avaient aucun dossier de travail réglable : le GC, rangé de force sur le
+  // dépôt d'Autowin, partait sur le Board et dans le village avec ce projet.
+  it('un DOSSIER choisi : le fil est créé dedans, puis y est rangé à chaque réveil, sans dossier global', async () => {
+    const store = new ConversationStore()
+    const global = vi.fn()
+    const ranger = vi.fn((id: string, dossier: string) => {
+      store.rangerDansDossier(id, dossier)
+    })
+    const target = runtime({
+      createConversation: (input) => store.create(input),
+      dossierPersonnel: () => 'C:\\Users\\moi',
+      alignerSurDossierGlobal: global,
+      alignerSurDossier: ranger
+    })
+    const dispatcher = new ScheduledChatDispatcher(target)
+    const dest = {
+      kind: 'new' as const,
+      title: 'Garbage collector',
+      category: 'Qualite',
+      provider: 'claude',
+      dossier: 'C:\\Users\\moi'
+    }
+
+    const premier = await dispatcher.run(task({ destination: dest }), occurrence)
+    const id = premier.conversationId as string
+    expect(store.get(id)?.projectPath).toBe(canonicalProjectPath('C:\\Users\\moi'))
+
+    // Rangé ailleurs entre deux réveils (à la main, ou par l'ancien réalignement) : il revient.
+    store.rangerDansDossier(id, 'D:\\AutoWinOS')
+    await dispatcher.run(task({ destination: { ...dest, conversationId: id } }), {
+      ...occurrence,
+      id: 'task-1@2'
+    })
+
+    expect(global).not.toHaveBeenCalled()
+    expect(ranger).toHaveBeenCalledWith(id, 'C:\\Users\\moi')
+    expect(store.get(id)?.projectPath).toBe(canonicalProjectPath('C:\\Users\\moi'))
+  })
+
   it('une tâche dont la catégorie est un CHEMIN garde son dossier (pas de réalignement)', async () => {
     const aligner = vi.fn()
     const dispatcher = new ScheduledChatDispatcher(runtime({ alignerSurDossierGlobal: aligner }))

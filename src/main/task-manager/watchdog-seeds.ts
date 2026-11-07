@@ -211,7 +211,9 @@ function hasExactSeedDestination(task: ScheduledTask, expected: NewTaskDestinati
     task.destination.category === expected.category &&
     task.destination.provider === expected.provider &&
     task.destination.model === expected.model &&
-    task.destination.reasoningEffort === expected.reasoningEffort
+    task.destination.reasoningEffort === expected.reasoningEffort &&
+    // Un dossier de travail choisi est une édition : la migration d'un semis ne doit pas l'effacer.
+    task.destination.dossier === expected.dossier
   )
 }
 

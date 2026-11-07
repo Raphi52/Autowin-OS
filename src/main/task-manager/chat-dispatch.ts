@@ -13,7 +13,7 @@ import {
   AGENT_STUDIO_DEFAULT_MODEL_LABEL,
   usesAgentStudioDefault
 } from '../../shared/task-provider'
-import { estCheminDeDossier } from '../../shared/project-path'
+import { canonicalProjectPath, estCheminDeDossier } from '../../shared/project-path'
 
 type ScheduledTaskRoleBinding = {
   provider: string
@@ -45,6 +45,11 @@ export interface ScheduledChatRuntime {
    * (constat : maintenance sur un ancien clone au lieu du dépôt courant).
    */
   alignerSurDossierGlobal?(conversationId: string): void
+  /**
+   * Range la conversation dans le dossier de travail CHOISI pour la tâche (`destination.dossier`),
+   * à chaque déclenchement : il prime sur le dossier global, et le reprend s'il a été déplacé.
+   */
+  alignerSurDossier?(conversationId: string, dossier: string): void
   isConversationBusy(conversationId: string): boolean
   interruptAndWait(conversationId: string, reason: string): Promise<boolean>
   /** Attend sans interruption que le travail interactif se termine. `false` signifie timeout. */
@@ -378,20 +383,24 @@ export class ScheduledChatDispatcher implements TaskDispatcher {
         : undefined
     }
     const category = task.destination.category
-    const suitLeGlobal = !estCheminDeDossier(category)
+    // Le dossier choisi dans le formulaire de la tâche passe avant toute règle tirée de la catégorie.
+    const choisi = estCheminDeDossier(task.destination.dossier)
+      ? canonicalProjectPath(task.destination.dossier)
+      : undefined
+    const suitLeGlobal = !choisi && !estCheminDeDossier(category)
     if (
       task.destination.conversationId &&
       this.runtime.hasConversation(task.destination.conversationId)
     ) {
-      if (suitLeGlobal) this.runtime.alignerSurDossierGlobal?.(task.destination.conversationId)
+      if (choisi) this.runtime.alignerSurDossier?.(task.destination.conversationId, choisi)
+      else if (suitLeGlobal) this.runtime.alignerSurDossierGlobal?.(task.destination.conversationId)
       return task.destination.conversationId
     }
     // Sans chemin choisi, l'agent réveillé travaille sur « This computer », jamais dans le dépôt
     // d'Autowin qu'on ne lui a pas confié. Demande de l'utilisateur, (2026-10-28) :
     // « quand un agent se réveille il doit pas avoir de CWD il doit être sur this computer ».
-    const dossier = estCheminDeDossier(category)
-      ? category.trim()
-      : this.runtime.dossierPersonnel?.()
+    const dossier =
+      choisi ?? (estCheminDeDossier(category) ? category.trim() : this.runtime.dossierPersonnel?.())
     const created = this.runtime.createConversation({
       title: task.destination.title,
       category,

@@ -22,6 +22,11 @@ export type TaskDestination =
       reasoningEffort?: ReasoningEffort
       /** Conversation dédiée créée au premier déclenchement, puis réutilisée. */
       conversationId?: string
+      /**
+       * Le dossier de travail choisi pour la tâche (chemin canonique) : sa conversation y est rangée
+       * à chaque réveil. Absent = la règle d'avant, tirée de `category` (`chat-dispatch.ts`).
+       */
+      dossier?: string
     }
 
 /**

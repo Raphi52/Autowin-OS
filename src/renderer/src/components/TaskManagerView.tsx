@@ -17,6 +17,12 @@ import {
   type WatchdogTaskLike
 } from './watchdog-section-model'
 import { scheduleDraftProblem } from './task-schedule-draft'
+import {
+  lireDossierPersonnel,
+  lireDossiersDuChat,
+  NOM_DU_DOSSIER_PERSONNEL
+} from './dossiers-du-chat'
+import { dossiersProposesPourLaTache } from './task-dossiers-proposes'
 import type { RuntimeModel } from './chat-view-model'
 import { compareModelsByName, displayedModelName } from './model-name-order'
 import {
@@ -70,6 +76,8 @@ type TaskDestination =
       model?: string
       reasoningEffort?: string
       conversationId?: string
+      /** Dossier de travail choisi ; absent = celui d'Autowin, comme avant ce champ. */
+      dossier?: string
     }
 
 interface TaskDraft {
@@ -427,7 +435,9 @@ function followAgentStudioDefault(destination: TaskDestination): TaskDestination
     title: destination.title,
     category: destination.category,
     provider: AGENT_STUDIO_DEFAULT_PROVIDER,
-    ...(destination.conversationId ? { conversationId: destination.conversationId } : {})
+    ...(destination.conversationId ? { conversationId: destination.conversationId } : {}),
+    // Changer de modèle ne change pas le dossier où la tâche travaille.
+    ...(destination.dossier ? { dossier: destination.dossier } : {})
   }
 }
 
@@ -484,6 +494,12 @@ export function TaskManagerView({
   })
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [models, setModels] = useState<RuntimeModel[]>([])
+  /** Ce que propose le champ « Dossier de travail », relu à chaque ouverture de la vue. */
+  const [dossiersConnus, setDossiersConnus] = useState<{
+    personnel: string | null
+    depot: string | null
+    duChat: string[]
+  }>({ personnel: null, depot: null, duChat: [] })
   const [selectedId, setSelectedId] = useState<string>()
   const [draft, setDraft] = useState<TaskDraft>()
   const [editingId, setEditingId] = useState<string>()
@@ -630,6 +646,27 @@ export function TaskManagerView({
       off()
     }
   }, [active, load, refreshConversations, refreshModels, refreshSnapshot])
+
+  useEffect(() => {
+    if (!active) return
+    let annule = false
+    void (async () => {
+      const [personnel, depot] = await Promise.all([
+        lireDossierPersonnel(),
+        // Pont absent ou en panne : le menu propose ce qu'il a, jamais une erreur de la vue.
+        Promise.resolve()
+          .then(() => window.api.executionWorkspace?.())
+          .then(
+            (espace) => espace?.path ?? null,
+            () => null
+          )
+      ])
+      if (!annule) setDossiersConnus({ personnel, depot, duChat: lireDossiersDuChat() })
+    })()
+    return () => {
+      annule = true
+    }
+  }, [active])
 
   const selected = snapshot.tasks.find(({ id }) => id === selectedId)
   const selectableModels = useMemo(
@@ -1033,6 +1070,36 @@ export function TaskManagerView({
                     )
                   }}
                 />
+              </label>
+            )}
+            {draft.destination.kind === 'new' && (
+              <label className="task-manager-field" title={t('vue.editeur.dossierAide')}>
+                <span>{t('vue.editeur.dossier')}</span>
+                <select
+                  value={draft.destination.dossier ?? ''}
+                  data-testid="task-manager-dossier"
+                  onChange={(event) => {
+                    const dossier = event.target.value
+                    setDraft((current) => {
+                      if (current?.destination.kind !== 'new') return current
+                      const destination = { ...current.destination }
+                      if (dossier) destination.dossier = dossier
+                      else delete destination.dossier
+                      return { ...current, destination }
+                    })
+                  }}
+                >
+                  <option value="">{t('vue.editeur.dossierParDefaut')}</option>
+                  {dossiersProposesPourLaTache({
+                    ...dossiersConnus,
+                    choisi: draft.destination.dossier,
+                    nomDuPersonnel: NOM_DU_DOSSIER_PERSONNEL
+                  }).map((d) => (
+                    <option key={d.chemin} value={d.chemin}>
+                      {d.libelle}
+                    </option>
+                  ))}
+                </select>
               </label>
             )}
             <label className="task-manager-field">

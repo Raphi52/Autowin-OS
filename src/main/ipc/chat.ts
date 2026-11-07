@@ -3001,6 +3001,14 @@ Le fil reprend ensuite normalement.`
       if (os.conversations.rangerDansDossier(conversationId, global))
         broadcast({ type: 'refresh', scope: 'conversations' })
     },
+    // Le dossier choisi dans le formulaire de la tâche (déjà canonique) ; une catégorie posée à la
+    // main sur le fil cède, comme pour le dossier global : c'est le dossier que la tâche a demandé.
+    alignerSurDossier: (conversationId, dossier) => {
+      const fil = os.conversations.get(conversationId)
+      if (fil?.projectPath === dossier && !fil.categorie) return
+      if (os.conversations.rangerDansDossier(conversationId, dossier))
+        broadcast({ type: 'refresh', scope: 'conversations' })
+    },
     isConversationBusy: (conversationId) => Boolean(activeChatTurns.get(conversationId)),
     interruptAndWait: (conversationId, reason) =>
       activeChatTurns.abortAndWait(conversationId, reason),

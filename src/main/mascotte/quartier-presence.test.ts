@@ -221,7 +221,7 @@ describe('presence.json : seuls les projets cochés dans le Board', () => {
     )
     publication.recevoir([agent(1), agent(2, { titre: 'Mes impôts' }), agent(3), agent(4)])
     await publication.attendre()
-    // conv-4 n'a pas de projet connu : comme un projet nouveau, il ne part pas sans être coché.
+    // Le 4ᵉ fil n'a pas de projet connu : comme un projet nouveau, il ne part pas sans être coché.
     expect(lire().agents.map((a) => a.id)).toEqual(['conv-1', 'conv-3'])
     expect(JSON.stringify(lire())).not.toContain('impôts')
   })

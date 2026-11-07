@@ -168,3 +168,25 @@ describe('Task Manager IPC — remplacement du declencheur', () => {
     expect(onChanged).toHaveBeenCalledOnce()
   })
 })
+
+describe('Task Manager IPC — dossier de travail de la tâche', () => {
+  const nouvelle = (dossier: unknown): unknown => ({
+    destination: { kind: 'new', title: 'GC', category: 'Qualite', provider: 'claude', dossier }
+  })
+
+  it('garde un chemin, sous sa forme canonique', () => {
+    const lu = parseTaskUpdate(base, nouvelle('c:/Users/moi/'))
+    expect(lu.destination).toMatchObject({ kind: 'new', dossier: 'C:\\Users\\moi' })
+  })
+
+  it('vide ou absent = aucun choix : la règle d’avant s’applique', () => {
+    for (const dossier of [undefined, null, '', '   ']) {
+      expect(parseTaskUpdate(base, nouvelle(dossier)).destination).not.toHaveProperty('dossier')
+    }
+  })
+
+  it('refuse un libellé : ce n’est pas un dossier où faire travailler un agent', () => {
+    expect(() => parseTaskUpdate(base, nouvelle('Qualite'))).toThrow(/Dossier de travail invalide/)
+    expect(() => parseTaskUpdate(base, nouvelle(42))).toThrow(/Dossier de travail invalide/)
+  })
+})

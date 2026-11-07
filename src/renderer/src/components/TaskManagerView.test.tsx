@@ -647,6 +647,72 @@ describe('TaskManagerView', () => {
     )
   })
 
+  // Une tâche planifiée n'avait aucun dossier de travail réglable : son fil partait d'office dans le
+  // dossier d'Autowin, et avec lui sur le Board et dans le village des collègues.
+  it('règle le dossier de travail d’une conversation dédiée, et le garde quand le modèle change', async () => {
+    const { container, mockApi } = await mount({
+      ...api(),
+      dossierPersonnel: vi.fn().mockResolvedValue('C:\\Users\\moi'),
+      executionWorkspace: vi.fn().mockResolvedValue({ path: 'D:\\AutoWinOS' })
+    } as ReturnType<typeof api>)
+    const champ = (texte: string): HTMLSelectElement | null | undefined =>
+      [...container.querySelectorAll('label')]
+        .find((label) => label.querySelector('span')?.textContent === texte)
+        ?.querySelector('select')
+    const choisir = async (select: HTMLSelectElement | null | undefined, valeur: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set?.call(
+          select,
+          valeur
+        )
+        select?.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    const ecrire = async (element: HTMLInputElement | HTMLTextAreaElement, valeur: string) =>
+      act(async () => {
+        const proto =
+          element instanceof HTMLInputElement
+            ? HTMLInputElement.prototype
+            : HTMLTextAreaElement.prototype
+        Object.getOwnPropertyDescriptor(proto, 'value')?.set?.call(element, valeur)
+        element.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    const nouvelle = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('Nouvelle tâche')
+    )
+    await act(async () => nouvelle?.click())
+    await ecrire(container.querySelector<HTMLInputElement>('input[name="title"]')!, 'GC')
+    await ecrire(container.querySelector<HTMLTextAreaElement>('textarea[name="prompt"]')!, '/gc')
+
+    // Conversation existante : son dossier se règle dans le Chat, pas ici.
+    expect(champ('Dossier de travail')).toBeUndefined()
+    await choisir(champ('Destination'), 'new')
+    const dossier = champ('Dossier de travail')
+    expect(dossier?.value).toBe('')
+    expect([...dossier!.options].map((option) => [option.value, option.textContent])).toEqual([
+      ['', 'Par défaut · Autowin'],
+      ['C:\\Users\\moi', '💻 This computer'],
+      ['D:\\AutoWinOS', 'AutoWinOS · D:\\AutoWinOS']
+    ])
+
+    await choisir(dossier, 'C:\\Users\\moi')
+    await choisir(champ('Modèle'), 'claude:sonnet')
+    expect(champ('Dossier de travail')?.value).toBe('C:\\Users\\moi')
+    const creer = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Créer la tâche'
+    )
+    await act(async () => creer?.click())
+
+    expect(mockApi.taskManagerCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        destination: expect.objectContaining({
+          kind: 'new',
+          provider: 'claude',
+          dossier: 'C:\\Users\\moi'
+        })
+      })
+    )
+  })
+
   it('propose les répétitions en minutes et en heures', async () => {
     const { container } = await mount()
     const newButton = [...container.querySelectorAll('button')].find((button) =>

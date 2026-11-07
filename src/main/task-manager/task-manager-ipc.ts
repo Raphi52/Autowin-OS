@@ -13,6 +13,7 @@ import type {
 } from './types'
 import type { StructuredRecurrence, StructuredSchedule } from './schedule'
 import { watchdogRegexProblem } from '../../shared/watchdog-regex'
+import { canonicalProjectPath, estCheminDeDossier } from '../../shared/project-path'
 import { setMailSender, type MailRuleDiagnostics } from './watchdog-mail'
 import { isReasoningEffort, type ReasoningEffort } from '../profil/roles'
 
@@ -368,10 +369,22 @@ function destination(raw: unknown): TaskDestination {
         : { reasoningEffort: reasoningEffort(value.reasoningEffort) }),
       ...(typeof value.conversationId === 'string' && value.conversationId.trim()
         ? { conversationId: value.conversationId.trim() }
-        : {})
+        : {}),
+      ...dossierDeTravail(value.dossier)
     }
   }
   throw new Error('Destination Task Manager invalide')
+}
+
+/**
+ * Le dossier de travail reçu de la vue : absent ou vide = aucun choix ; un libellé n'est pas un
+ * dossier, il est refusé plutôt que de faire travailler l'agent ailleurs que prévu.
+ */
+function dossierDeTravail(raw: unknown): { dossier?: string } {
+  if (raw === undefined || raw === null || (typeof raw === 'string' && !raw.trim())) return {}
+  const dossier = typeof raw === 'string' && estCheminDeDossier(raw) && canonicalProjectPath(raw)
+  if (!dossier) throw new Error('Dossier de travail invalide : un chemin de dossier est attendu')
+  return { dossier }
 }
 
 function schedule(raw: unknown): StructuredSchedule {

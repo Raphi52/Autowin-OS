@@ -243,6 +243,10 @@ export const TEXTES_FR = {
   'vue.editeur.destinationNouvelle': 'Nouvelle conversation dédiée',
   'vue.editeur.conversationCiblee': 'Conversation ciblée',
   'vue.editeur.nomConversation': 'Nom de la conversation',
+  'vue.editeur.dossier': 'Dossier de travail',
+  'vue.editeur.dossierParDefaut': 'Par défaut · Autowin',
+  'vue.editeur.dossierAide':
+    'Le dossier où l’agent travaille à chaque réveil : son fil y est rangé, dans le Chat comme sur le Board.',
   'vue.editeur.modele': 'Modèle',
   'vue.editeur.modeleIndisponible': '{modele} · indisponible',
   'vue.editeur.choisirModele': 'Choisir un modèle',
@@ -571,6 +575,10 @@ export const TEXTES_EN: Record<keyof typeof TEXTES_FR, string> = {
   'vue.editeur.destinationNouvelle': 'New dedicated conversation',
   'vue.editeur.conversationCiblee': 'Target conversation',
   'vue.editeur.nomConversation': 'Conversation name',
+  'vue.editeur.dossier': 'Working folder',
+  'vue.editeur.dossierParDefaut': 'Default · Autowin',
+  'vue.editeur.dossierAide':
+    'The folder the agent works in each time it wakes up: its thread is filed there, in the Chat and on the Board.',
   'vue.editeur.modele': 'Model',
   'vue.editeur.modeleIndisponible': '{modele} · unavailable',
   'vue.editeur.choisirModele': 'Choose a model',
