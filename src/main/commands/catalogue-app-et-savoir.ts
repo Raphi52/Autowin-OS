@@ -83,12 +83,14 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
     /*
      * Un agent qui crée lui-même une clé API sur un site la range sans la recopier : la valeur va du
      * presse-papier au coffre DANS le processus principal (`app/coffre-presse-papier.ts`), et seuls
-     * le nom et la longueur reviennent au modèle.
+     * le nom et la longueur reviennent au modèle. La description reste courte : chaque refus
+     * (presse-papier vide ou qui n'est pas une clé seule, nom invalide ou déjà au coffre) est rendu
+     * par l'outil lui-même avec ce qu'il faut faire (`app/coffre-presse-papier.ts`).
      */
     description:
-      'Ranger au coffre la clé API que tu viens de COPIER sur un site (bouton « Copier » du navigateur intégré ou du bureau caché), sans jamais voir ni recopier sa valeur. Sur le site : crée la clé, clique son bouton « Copier », puis appelle cet outil avec le nom de variable voulu (ex. `MISTRAL_API_KEY`) — ne lis ni ne captures la page entre les deux si tu peux l’éviter. L’outil vide le presse-papier, masque après coup ce que ce tour avait déjà écrit, et rend le nom et la longueur seulement. La clé est servie aux agents lancés ENSUITE (une étape `orchestrate`, le prochain tour), pas à celui-ci. Refus : presse-papier vide ou qui n’est pas une clé seule, nom déjà au coffre (le remplacer reste à l’utilisateur, Réglages > Clés)',
+      'Ranger au coffre la clé API que tu viens de COPIER (bouton « Copier » d’un site), sans la voir : appelle-le juste après, sans relire la page. Rend le nom et la longueur. La clé sert aux agents lancés ENSUITE, pas à ce tour',
     args: {
-      nom: 'le nom de variable de la clé, fini par _API_KEY, _KEY, _TOKEN, _SECRET, _PAT ou _PASSWORD (ex. `MISTRAL_API_KEY`)'
+      nom: 'nom de variable de la clé (ex. `MISTRAL_API_KEY`)'
     },
     annotations: {
       readOnlyHint: false,
@@ -323,8 +325,10 @@ export const CATALOGUE_APP_ET_SAVOIR: CommandSpec[] = [
   },
   {
     name: 'task_create',
+    // Le Planificateur Windows n'est pas redit ici : la garde `refusTacheWindows`
+    // (shared/garde-git-destructeur.ts) refuse cette voie et son message renvoie vers task_create.
     description:
-      'Créer une tâche programmée (horaire) ou une règle de surveillance (réveil sur événement) dans le Task Manager d’Autowin — elle y est visible et l’utilisateur peut la désactiver ou la supprimer. C’est la SEULE voie : une tâche du Planificateur Windows (schtasks, Register-ScheduledTask) est refusée. ' +
+      'Créer une tâche programmée (horaire) ou une règle de surveillance (réveil sur événement) dans le Task Manager d’Autowin — elle y est visible et l’utilisateur peut la désactiver ou la supprimer. ' +
       `Le "prompt" part SEUL dans la conversation, sans le fil : rédige-le sur ce modèle, un bloc par ligne — ${MODELE_PROMPT_TACHE_COURT}. Ni limite de temps, ni « boucle jusqu’au vert » ; pour une surveillance, l’app ajoute elle-même l’événement et la ligne ISSUE.`,
     args: {
       task:

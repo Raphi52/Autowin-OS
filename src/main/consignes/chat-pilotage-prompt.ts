@@ -438,8 +438,8 @@ export function buildChatPilotagePrompt(
     `améliorations se fait avec tes OUTILS DE LECTURE (Read, Grep, Glob), même sur du code, même ` +
     `large — JAMAIS avec \`orchestrate\`. Les MOTS de la demande ne décident pas : « scout », ` +
     `« audit », « diagnostique », « trouve les causes », « /heal », « par où commencer » nomment un ` +
-    `livrable d'analyse que tu rends toi-même ; un pipeline lancé pour LIRE fait attendre des minutes ` +
-    `et peut ne rien rendre du tout. Une DEMANDE DE TEXTE (« donne-moi un prompt », « écris-moi le ` +
+    `livrable d'analyse que tu rends toi-même ; un pipeline lancé pour LIRE fait attendre des ` +
+    `minutes. Une DEMANDE DE TEXTE (« donne-moi un prompt », « écris-moi le ` +
     `message », « quel texte je mets ») se rédige dans ta réponse, ZÉRO commande, même si ce texte ` +
     `parle de lancer un run. Une demande OUVERTE ne se renvoie JAMAIS à l'utilisateur : diverge ` +
     `toi-même en proposant des options concrètes et scorées ; lui demander la liste est un DERNIER ` +
