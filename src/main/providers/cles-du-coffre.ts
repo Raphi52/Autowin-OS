@@ -8,7 +8,9 @@
  * Ce qui n'est JAMAIS injecté : la variable qui ferait changer au CLI lancé son mode de connexion. Une
  * clé du coffre portant ce nom ne servirait pas l'agent : c'est le CLI lui-même qui la prendrait, et
  * le tour passerait de l'abonnement à la facturation à la clé (ou échouerait sur une clé d'une autre
- * organisation) sans que personne l'ait choisi.
+ * organisation) sans que personne l'ait choisi. Pour TOUS les moteurs, `valeursPourAgent` écarte déjà
+ * un nom qui ne désigne pas une clé (PATH, CLAUDE_CONFIG_DIR) et le jeton de session de Claude Code
+ * (`estNomDeCle`, coffre-cles.ts).
  *
  * `AUTOWIN_COFFRE_NOMS` nomme ce qui a été injecté : l'agent y lit les noms dont il peut se servir.
  */

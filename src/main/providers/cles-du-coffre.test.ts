@@ -8,7 +8,7 @@
  * un nom de `EXCLUSIONS_COFFRE`.
  */
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -42,10 +42,22 @@ let dossier: string
 
 let rang = 0
 
-/** Un fichier neuf par coffre : un « coffre vide » ne doit pas relire celui de la préparation. */
+/**
+ * Un fichier neuf par coffre : un « coffre vide » ne doit pas relire celui de la préparation. Les clés
+ * sont ÉCRITES dans le fichier, pas ajoutées par `ajouterCle` : un coffre rempli avant les règles
+ * d'entrée peut contenir AGY_ADC_AUTH ou le jeton de session de Claude Code, et l'injection doit
+ * tenir quel que soit son contenu.
+ */
 function coffreAvec(cles: Record<string, string>): Coffre {
   const fichier = join(dossier, `coffre-${rang++}.bin`)
-  const coffre = creerCoffre({
+  const entrees = Object.entries(cles).map(([nom, valeur]) => ({
+    nom,
+    valeur,
+    origine: 'utilisateur',
+    ajouteLe: '2026-11-01T00:00:00.000Z'
+  }))
+  writeFileSync(fichier, JSON.stringify({ version: 1, entrees, ecartees: [] }), 'utf8')
+  return creerCoffre({
     chemin: () => fichier,
     chiffrement: () => ({
       isEncryptionAvailable: () => true,
@@ -55,12 +67,11 @@ function coffreAvec(cles: Record<string, string>): Coffre {
     lireRegistre: () => new Map(),
     env: {}
   })
-  for (const [nom, valeur] of Object.entries(cles)) coffre.ajouterCle(nom, valeur)
-  return coffre
 }
 
-/** Toutes les clés d'authentification connues, plus une clé ordinaire. */
+/** Toutes les clés d'authentification connues, le jeton de session de Claude Code, une clé ordinaire. */
 const TOUTES = {
+  CLAUDE_CODE_MESSAGING_TOKEN: 'valeur-session-claude-0123456789',
   MISTRAL_API_KEY: MISTRAL,
   ANTHROPIC_API_KEY: 'valeur-anthropic-0123456789',
   ANTHROPIC_AUTH_TOKEN: 'valeur-auth-token-0123456789',
@@ -111,6 +122,17 @@ async function jusquAuBout(tour: AsyncGenerator<unknown, unknown, void>): Promis
 
 const nomsInjectes = (env: NodeJS.ProcessEnv): string[] =>
   (env[COFFRE_NOMS_ENV] ?? '').split(',').filter(Boolean)
+
+describe('les quatre moteurs — envDuCoffre', () => {
+  it('le jeton de session de Claude Code n’est posé chez aucun agent, même présent au coffre', () => {
+    for (const moteur of ['claude', 'codex', 'agy', 'grok'] as const) {
+      const env = envDuCoffre(moteur)
+      expect(env.MISTRAL_API_KEY, moteur).toBe(MISTRAL)
+      expect(env.CLAUDE_CODE_MESSAGING_TOKEN, moteur).toBeUndefined()
+      expect(nomsInjectes(env), moteur).not.toContain('CLAUDE_CODE_MESSAGING_TOKEN')
+    }
+  })
+})
 
 describe('Claude (tour, run, nœud) — environnementAgent', () => {
   it('une clé du coffre arrive dans l’env, nommée dans AUTOWIN_COFFRE_NOMS', () => {

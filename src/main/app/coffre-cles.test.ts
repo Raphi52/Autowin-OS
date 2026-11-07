@@ -134,6 +134,18 @@ describe('coffre à clés — stockage chiffré', () => {
     expect(existsSync(fichier)).toBe(false)
   })
 
+  it('refuse un nom qui ne désigne pas une clé : PATH ou CLAUDE_CONFIG_DIR changeraient l’agent', () => {
+    const coffre = coffreDeTest()
+    for (const nom of ['PATH', 'Path', 'CLAUDE_CONFIG_DIR', 'NODE_OPTIONS', 'AGY_ADC_AUTH'])
+      expect(() => coffre.ajouterCle(nom, 'valeur-quelconque-0123'), nom).toThrow(
+        /ne désigne pas une clé/
+      )
+    expect(() =>
+      coffre.ajouterCle('CLAUDE_CODE_MESSAGING_TOKEN', 'valeur-quelconque-0123')
+    ).toThrow(/jeton de session/)
+    expect(existsSync(fichier)).toBe(false)
+  })
+
   it('invalide le cache à chaque écriture : un ajout se voit au prochain appel', () => {
     const chiffreur = chiffreurAes()
     const coffre = coffreDeTest({ chiffreur })
@@ -231,7 +243,9 @@ describe('coffre à clés — import du poste', () => {
       'KEY',
       'MONKEY',
       'TOKEN_URL',
-      'NOM AVEC ESPACE_KEY'
+      'NOM AVEC ESPACE_KEY',
+      'CLAUDE_CODE_MESSAGING_TOKEN',
+      'claude_code_messaging_token'
     ])
       expect(estNomDeCle(nom), nom).toBe(false)
   })
@@ -254,7 +268,9 @@ describe('coffre à clés — import du poste', () => {
         MISTRAL_API_KEY: VALEUR_MISTRAL,
         AUTOWIN_COFFRE_NOMS: 'X',
         USERPROFILE: 'C:\\Users\\moi',
-        VIDE_TOKEN: '   '
+        VIDE_TOKEN: '   ',
+        // Posé par Claude Code chez ses enfants : une app lancée depuis son terminal l'hérite.
+        CLAUDE_CODE_MESSAGING_TOKEN: 'jeton-session-claude-0123'
       }
     })
     expect(coffre.importerDuPoste()).toEqual({ ajoutees: 3, misesAJour: 0, ignorees: 0 })
@@ -318,6 +334,34 @@ describe('coffre à clés — injection et masquage', () => {
     expect(coffre.valeursPourAgent(['anthropic_api_key', 'XAI_API_KEY'])).toEqual({
       MISTRAL_API_KEY: VALEUR_MISTRAL
     })
+  })
+
+  it('un coffre écrit avant ces règles : PATH et le jeton de session restent listés, jamais injectés', () => {
+    const chiffreur = chiffreurAes()
+    const ajouteLe = '2026-11-01T00:00:00.000Z'
+    const ancien = {
+      version: 1,
+      entrees: [
+        { nom: 'PATH', valeur: 'C:\\outils-pieges', origine: 'utilisateur', ajouteLe },
+        {
+          nom: 'CLAUDE_CODE_MESSAGING_TOKEN',
+          valeur: 'jeton-session-claude-0123',
+          origine: 'poste',
+          ajouteLe
+        },
+        { nom: 'MISTRAL_API_KEY', valeur: VALEUR_MISTRAL, origine: 'utilisateur', ajouteLe }
+      ],
+      ecartees: []
+    }
+    writeFileSync(fichier, chiffreur.encryptString(JSON.stringify(ancien)))
+    const coffre = coffreDeTest({ chiffreur })
+    expect(coffre.valeursPourAgent([])).toEqual({ MISTRAL_API_KEY: VALEUR_MISTRAL })
+    // Toujours visibles dans Réglages > Clés : l'utilisateur peut les retirer.
+    expect(coffre.listerCles().map((c) => c.nom)).toEqual([
+      'CLAUDE_CODE_MESSAGING_TOKEN',
+      'MISTRAL_API_KEY',
+      'PATH'
+    ])
   })
 
   it('masque chaque valeur de 8 caractères ou plus, les plus longues d’abord', () => {

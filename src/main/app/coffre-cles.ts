@@ -101,6 +101,12 @@ const NOM_VALIDE = /^[A-Za-z_][A-Za-z0-9_]*$/
 const SUFFIXES_DE_CLE = /(?:_API_KEY|_APIKEY|_KEY|_TOKEN|_SECRET|_PAT|_PASSWORD)$/i
 /** Les réglages d'Autowin lui-même ne sont pas des clés d'agent ; `AUTOWIN_COFFRE_NOMS` y vit. */
 const PREFIXE_RESERVE = /^AUTOWIN_/i
+/**
+ * Claude Code pose ce jeton chez ses propres enfants : une app lancée depuis son terminal l'hérite.
+ * C'est la session d'un autre processus, pas une clé de l'utilisateur ; servi aux agents, il les
+ * rattacherait à cette session.
+ */
+const JETON_DE_SESSION = /^CLAUDE_CODE_MESSAGING_TOKEN$/i
 const LONGUEUR_MAX_VALEUR = 16_384
 
 const RAISON_SANS_CHIFFREMENT =
@@ -112,9 +118,18 @@ const RAISON_ILLISIBLE =
 const vide = (): ContenuCoffre => ({ version: 1, entrees: [], ecartees: [] })
 const memeNom = (a: string, b: string): boolean => a.toUpperCase() === b.toUpperCase()
 
-/** Le filtre de l'import du poste : un nom de variable qui DÉSIGNE une clé, hors réglages d'Autowin. */
+/**
+ * Un nom de variable qui DÉSIGNE une clé, hors réglages d'Autowin et jeton de session. La même règle
+ * filtre l'import du poste, la saisie et l'injection : une clé est posée PAR-DESSUS l'environnement
+ * de l'agent, et un nom comme PATH, NODE_OPTIONS ou CLAUDE_CONFIG_DIR changerait ce qu'il lance.
+ */
 export function estNomDeCle(nom: string): boolean {
-  return NOM_VALIDE.test(nom) && SUFFIXES_DE_CLE.test(nom) && !PREFIXE_RESERVE.test(nom)
+  return (
+    NOM_VALIDE.test(nom) &&
+    SUFFIXES_DE_CLE.test(nom) &&
+    !PREFIXE_RESERVE.test(nom) &&
+    !JETON_DE_SESSION.test(nom)
+  )
 }
 
 function entreeValide(brute: unknown): brute is EntreeCoffre {
@@ -254,6 +269,15 @@ export function creerCoffre(options: OptionsCoffre = {}): Coffre {
         )
       if (PREFIXE_RESERVE.test(nom))
         throw new Error('Les noms AUTOWIN_… sont réservés aux réglages d’Autowin.')
+      if (JETON_DE_SESSION.test(nom))
+        throw new Error(
+          `${nom} est le jeton de session de Claude Code, pas une clé : il ne va pas au coffre.`
+        )
+      if (!estNomDeCle(nom))
+        throw new Error(
+          `${nom} ne désigne pas une clé : le nom doit finir par _API_KEY, _APIKEY, _KEY, _TOKEN, ` +
+            '_SECRET, _PAT ou _PASSWORD. Une variable comme PATH changerait le fonctionnement des agents.'
+        )
       if (!valeur) throw new Error('La valeur de la clé est vide.')
       if (valeur.length > LONGUEUR_MAX_VALEUR)
         throw new Error(`Valeur trop longue (plus de ${LONGUEUR_MAX_VALEUR} caractères).`)
@@ -332,6 +356,8 @@ export function creerCoffre(options: OptionsCoffre = {}): Coffre {
     valeursPourAgent(exclusions) {
       const valeurs: Record<string, string> = {}
       for (const e of charger().contenu.entrees) {
+        // Un coffre rempli avant la règle de saisie peut contenir PATH : listé et masqué, jamais posé.
+        if (!estNomDeCle(e.nom)) continue
         if (!exclusions.some((x) => memeNom(x, e.nom))) valeurs[e.nom] = e.valeur
       }
       return valeurs
