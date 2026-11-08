@@ -8,6 +8,7 @@ import {
   diagnostiqueDossierConversation,
   dossierDeLectureDuFil,
   dossierDeTravailDuTour,
+  dossierDuFilOuvertPar,
   DossierRangeDisparuError,
   ecrireReglageCopieParFil,
   lireReglageCopieParFil,
@@ -393,5 +394,38 @@ describe('revenirSiSaCopieADisparu (entrée des tours)', () => {
     expect(revenirSiSaCopieADisparu(dansSaCopie, revenir, () => true)).toBe(false)
     expect(revenirSiSaCopieADisparu({ projectPath: 'D:/Perdu' }, revenir, () => false)).toBe(false)
     expect(revenirSiSaCopieADisparu(undefined, revenir, () => false)).toBe(false)
+  })
+})
+
+/**
+ * LE DOSSIER D'UN LOT, OUVERT PAR SON CHEF (2026-11-08). Le lot recevait le dossier rangé du
+ * chef, donc sa copie personnelle quand il y travaille : le lot y écrivait par-dessus son chef,
+ * sans copie à lui. Entrée qui doit faire échouer : un chef dans sa copie dont le lot hérite de
+ * cette copie au lieu du dépôt.
+ */
+describe('dossierDuFilOuvertPar (fil d’un lot)', () => {
+  const COPIE = 'D:/AutoWinOS/.autowin-data/autowin-os/copies-de-fil/conv-7'
+
+  it('rend le dépôt, pas la copie, quand le chef travaille dans sa copie', () => {
+    const chef = {
+      projectPath: COPIE,
+      copieDuFil: { chemin: COPIE, depot: 'D:/AutoWinOS', dossierAvant: 'D:/AutoWinOS' }
+    }
+    expect(dossierDuFilOuvertPar(chef)).toBe('D:/AutoWinOS')
+  })
+
+  it('garde le dossier rangé du chef quand il n’est pas dans sa copie', () => {
+    expect(dossierDuFilOuvertPar({ projectPath: 'D:/Projets/Contoso' })).toBe('D:/Projets/Contoso')
+    // Une copie notée mais quittée (le chef est revenu ailleurs) ne compte plus.
+    const revenu = {
+      projectPath: 'D:/Projets/Contoso',
+      copieDuFil: { chemin: COPIE, depot: 'D:/AutoWinOS' }
+    }
+    expect(dossierDuFilOuvertPar(revenu)).toBe('D:/Projets/Contoso')
+  })
+
+  it('aucun dossier quand le chef n’en a pas', () => {
+    expect(dossierDuFilOuvertPar({ projectPath: '  ' })).toBeUndefined()
+    expect(dossierDuFilOuvertPar(undefined)).toBeUndefined()
   })
 })

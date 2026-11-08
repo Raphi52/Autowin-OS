@@ -181,6 +181,7 @@ import { consommerReprise } from '../app/redemarrage-reprise'
 import {
   avertissementDossierConversation,
   copieOuTravailleLeFil,
+  dossierDuFilOuvertPar,
   ecrireReglageCopieParFil,
   lireReglageCopieParFil,
   preparerLeDossierDuTour,
@@ -3166,10 +3167,12 @@ Le fil reprend ensuite normalement.`
   const coordinateurDesPlans = new CoordinateurDesPlans({
     creerFil: (chef, titre) => {
       const source = os.conversations.get(chef)
+      // Le dépôt du chef, jamais sa copie : le lot y aurait écrit par-dessus son chef.
+      const dossier = dossierDuFilOuvertPar(source)
       return os.conversations.create({
         title: titre,
         provider: source?.provider ?? 'claude',
-        ...(source?.projectPath ? { projectPath: source.projectPath } : {})
+        ...(dossier ? { projectPath: dossier } : {})
       }).id
     },
     // Le modèle d'un lot passe par la même capacité que `chat_send` (« model »).

@@ -112,3 +112,19 @@ describe('le ménage après la fin d’un tour', () => {
     expect(bloc).toContain('passeDuMenageDesCopies()')
   })
 })
+
+/**
+ * LE FIL D'UN LOT s'ouvre dans le DÉPÔT de son chef, jamais dans la copie personnelle du chef :
+ * la règle est jouée dans bascule-dossier-conversation.test.ts (`dossierDuFilOuvertPar`), ici
+ * seulement son branchement dans la création du fil, fonction locale de `registerChatIpc`.
+ */
+describe('le fil d’un lot de plan', () => {
+  it('reçoit le dépôt du chef, pas sa copie', () => {
+    const debut = source.indexOf('creerFil: (chef, titre) => {')
+    expect(debut).toBeGreaterThan(-1)
+    const bloc = source.slice(debut, source.indexOf('}).id', debut))
+    expect(bloc).toContain('const source = os.conversations.get(chef)')
+    expect(bloc).toContain('dossierDuFilOuvertPar(source)')
+    expect(bloc).not.toContain('source.projectPath')
+  })
+})

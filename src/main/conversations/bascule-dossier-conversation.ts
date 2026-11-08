@@ -199,6 +199,19 @@ export function copieOuTravailleLeFil(
 }
 
 /**
+ * LE DOSSIER D'UN FIL OUVERT PAR UN AUTRE FIL (le lot d'un plan, ouvert par son chef). Un chef
+ * dans SA copie y garde son travail à lui : un lot rangé dans cette même copie écrirait par-dessus,
+ * sans copie à lui, car le passage du début de tour ne vise que les fils rangés dans le dépôt
+ * partagé. Le lot va donc dans le dépôt dont la copie du chef est la copie, et y reçoit la sienne
+ * à son premier tour. Un chef rangé ailleurs transmet son dossier tel quel.
+ */
+export function dossierDuFilOuvertPar(
+  parent: { projectPath?: string; copieDuFil?: unknown } | undefined
+): string | undefined {
+  return copieOuTravailleLeFil(parent)?.depot ?? (parent?.projectPath?.trim() || undefined)
+}
+
+/**
  * LA COPIE DU FIL A DISPARU — retirée par le ménage des copies de fil (`menage-des-copies-de-fil.ts`)
  * pendant que le fil était archivé, ou effacée à la main. Le fil revient à son dossier d'avant AVANT
  * le refus « dossier rangé disparu » : sa copie n'était pas un dossier de l'utilisateur, et le passage
